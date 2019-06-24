@@ -31,7 +31,7 @@ func TestNewMeshDB(t *testing.T) {
 	mdb := getMeshdb()
 	id := types.BlockID(123)
 	mdb.AddBlock(types.NewExistingBlock(123, 1, nil))
-	block, err := mdb.GetMiniBlock(123)
+	block, err := mdb.GetBlock(123)
 	assert.NoError(t, err)
 	assert.True(t, id == block.Id)
 }
@@ -43,17 +43,19 @@ func TestMeshDB_AddBlock(t *testing.T) {
 
 	block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data1"))
 
-	addTransactionsToBlock(block1, 4)
+	addTransactionsWithGas(mdb, block1, 4, rand.Int63n(100))
 
-	block1.AddAtx(types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")}, 1, types.AtxId{}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&common.Hash{}), true))
+	atx := types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")}, 1, types.AtxId{}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&common.Hash{}), true)
+
+	block1.AtxIds = append(block1.AtxIds, atx.Id())
 	err := mdb.AddBlock(block1)
 	assert.NoError(t, err)
 
-	rBlock1, err := mdb.GetMiniBlock(block1.Id)
+	rBlock1, err := mdb.GetBlock(block1.Id)
 	assert.NoError(t, err)
 
-	assert.True(t, len(rBlock1.TxIds) == len(block1.Txs), "block content was wrong")
-	assert.True(t, len(rBlock1.ATxIds) == len(block1.ATXs), "block content was wrong")
+	assert.True(t, len(rBlock1.TxIds) == len(block1.TxIds), "block content was wrong")
+	assert.True(t, len(rBlock1.AtxIds) == len(block1.AtxIds), "block content was wrong")
 	//assert.True(t, bytes.Compare(rBlock2.Data, []byte("data2")) == 0, "block content was wrong")
 }
 

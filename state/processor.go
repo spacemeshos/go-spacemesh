@@ -1,8 +1,11 @@
 package state
 
 import (
+	"bytes"
 	"container/list"
 	"fmt"
+	xdr "github.com/nullstyle/go-xdr/xdr3"
+	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -64,7 +67,56 @@ func NewTransactionProcessor(rnd PseudoRandomizer, db *StateDB, gasParams GasCon
 	}
 }
 
+func PublicKeyToAccountAddress(pub ed25519.PublicKey) address.Address {
+	var addr address.Address
+	addr.SetBytes(pub)
+	return addr
+}
+
+// Validate the signature by extracting the source account and validating its existence.
+// Return the src acount address and error in case of failure
+func (tp *TransactionProcessor) ValidateSignature(s types.Signed) (address.Address, error) {
+	var w bytes.Buffer
+	_, err := xdr.Marshal(&w, s.Obj())
+	if err != nil {
+		return address.Address{}, err
+	}
+
+	pubKey, err := ed25519.ExtractPublicKey(w.Bytes(), s.Sig())
+	if err != nil {
+		return address.Address{}, err
+	}
+
+	addr := PublicKeyToAccountAddress(pubKey)
+	if !tp.globalState.Exist(addr) {
+		return address.Address{}, fmt.Errorf("Failed to validate tx signature, unknown src account %v", addr)
+	}
+
+	return addr, nil
+}
+
+// Validate the tx's signature by extracting the source account and validating its existence.
+// Return the src acount address and error in case of failure
+func (tp *TransactionProcessor) ValidateTransactionSignature(tx types.SerializableSignedTransaction) (address.Address, error) {
+	buf, err := types.InterfaceToBytes(&tx.InnerSerializableSignedTransaction)
+	if err != nil {
+		return address.Address{}, err
+	}
+	pubKey, err := ed25519.ExtractPublicKey(buf, tx.Signature[:])
+	if err != nil {
+		return address.Address{}, err
+	}
+
+	addr := PublicKeyToAccountAddress(pubKey)
+	if !tp.globalState.Exist(addr) {
+		return address.Address{}, fmt.Errorf("Failed to validate tx signature, unknown src account %v", addr)
+	}
+
+	return addr, nil
+}
+
 //should receive sort predicate
+// ApplyTransaction receives a batch of transaction to apply on state. Returns the number of transaction that failed to apply.
 func (tp *TransactionProcessor) ApplyTransactions(layer types.LayerID, txs mesh.Transactions) (uint32, error) {
 	//todo: need to seed the mersenne twister with random beacon seed
 	if len(txs) == 0 {
@@ -191,7 +243,7 @@ func (tp *TransactionProcessor) Process(transactions mesh.Transactions, trnsBySe
 			err := tp.ApplyTransaction(trns)
 			if err != nil {
 				errors++
-				log.Error("transaction aborted: %v", err)
+				tp.Log.Error("transaction aborted: %v", err)
 			}
 
 		}

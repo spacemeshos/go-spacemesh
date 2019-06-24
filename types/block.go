@@ -49,21 +49,48 @@ type BlockHeader struct {
 	ViewEdges        []BlockID
 }
 
-type MiniBlock struct {
-	BlockHeader
-	TxIds  []TransactionId
-	ATxIds []AtxId
+type Signed interface {
+	Sig() []byte
+	Obj() interface{}
 }
 
 type Block struct {
+	MiniBlock
+	Signature []byte
+}
+
+type MiniBlock struct {
 	BlockHeader
-	Txs  []*SerializableTransaction
-	ATXs []*ActivationTx
+	TxIds  []TransactionId
+	AtxIds []AtxId
+}
+
+func (t *Block) Sig() []byte {
+	return t.Signature
+}
+
+func (t *Block) Data() interface{} {
+	return &t.MiniBlock
 }
 
 type BlockEligibilityProof struct {
 	J   uint32
 	Sig []byte
+}
+
+// TODO rename to SerializableTransaction once we remove the old SerializableTransaction
+type InnerSerializableSignedTransaction struct {
+	AccountNonce uint64
+	Recipient    address.Address
+	GasLimit     uint64
+	Price        uint64
+	Amount       uint64
+}
+
+// Once we support signed txs we should replace SerializableTransaction with this struct. Currently it is only used in the rpc server.
+type SerializableSignedTransaction struct {
+	InnerSerializableSignedTransaction
+	Signature [64]byte
 }
 
 type SerializableTransaction struct {
@@ -102,10 +129,6 @@ func newBlockHeader(id BlockID, layerID LayerID, minerID NodeId, coin bool, data
 	return b
 }
 
-func toBlockHeader(block *Block) *BlockHeader {
-	return newBlockHeader(block.ID(), block.Layer(), block.MinerID, block.Coin, block.Data, block.Timestamp, block.ViewEdges, block.BlockVotes)
-}
-
 func NewSerializableTransaction(nonce uint64, origin, recepient address.Address, amount, price *big.Int, gasLimit uint64) *SerializableTransaction {
 	return &SerializableTransaction{
 		AccountNonce: nonce,
@@ -126,18 +149,14 @@ func (b BlockHeader) Layer() LayerID {
 	return b.LayerIndex
 }
 
-func (b *Block) AddVote(id BlockID) {
+func (b *BlockHeader) AddVote(id BlockID) {
 	//todo: do this in a sorted manner
 	b.BlockVotes = append(b.BlockVotes, id)
 }
 
-func (b *Block) AddView(id BlockID) {
+func (b *BlockHeader) AddView(id BlockID) {
 	//todo: do this in a sorted manner
 	b.ViewEdges = append(b.ViewEdges, id)
-}
-
-func (b *Block) AddTransaction(sr *SerializableTransaction) {
-	b.Txs = append(b.Txs, sr)
 }
 
 func (b *Block) Compare(bl *Block) bool {
@@ -152,10 +171,6 @@ func (b *Block) Compare(bl *Block) bool {
 		return false
 	}
 	return bytes.Equal(bbytes, blbytes)
-}
-
-func (b *Block) AddAtx(sr *ActivationTx) {
-	b.ATXs = append(b.ATXs, sr)
 }
 
 type Layer struct {
@@ -194,13 +209,14 @@ func NewExistingLayer(idx LayerID, blocks []*Block) *Layer {
 
 func NewExistingBlock(id BlockID, layerIndex LayerID, data []byte) *Block {
 	b := Block{
-		BlockHeader: BlockHeader{
-			Id:         BlockID(id),
-			BlockVotes: make([]BlockID, 0, 10),
-			ViewEdges:  make([]BlockID, 0, 10),
-			LayerIndex: LayerID(layerIndex),
-			Data:       data},
-	}
+		MiniBlock: MiniBlock{
+			BlockHeader: BlockHeader{
+				Id:         BlockID(id),
+				BlockVotes: make([]BlockID, 0, 10),
+				ViewEdges:  make([]BlockID, 0, 10),
+				LayerIndex: LayerID(layerIndex),
+				Data:       data},
+		}}
 	return &b
 }
 

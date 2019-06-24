@@ -30,6 +30,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"reflect"
 	"runtime"
 	"runtime/pprof"
 	"time"
@@ -80,7 +81,7 @@ func init() {
 // SpacemeshApp is the cli app singleton
 type SpacemeshApp struct {
 	*cobra.Command
-	instanceName     string
+	nodeId           types.NodeId
 	P2P              p2p.Service
 	Config           *cfg.Config
 	NodeInitCallback chan bool
@@ -94,8 +95,9 @@ type SpacemeshApp struct {
 	clock            *timesync.Ticker
 	hare             *hare.Hare
 	atxBuilder       *activation.Builder
-	unregisterOracle func()
+	poetListener     *activation.PoetListener
 	edSgn            *signing.EdSigner
+	log              log.Log
 }
 
 type MiningEnabler interface {
@@ -253,9 +255,8 @@ func (app *SpacemeshApp) setupGenesis(cfg *apiCfg.GenesisConfig) {
 		app.state.SetNonce(id, acc.Nonce)
 	}
 
-	genesis := mesh.CreateGenesisBlock()
 	app.state.Commit(false)
-	app.mesh.AddBlock(genesis)
+	app.mesh.AddBlock(&mesh.GenesisBlock)
 }
 
 func (app *SpacemeshApp) setupTestFeatures() {
@@ -263,16 +264,9 @@ func (app *SpacemeshApp) setupTestFeatures() {
 	api.ApproveAPIGossipMessages(cmdp.Ctx, app.P2P)
 }
 
-type mockIdProvider struct {
-}
-
-func (mip *mockIdProvider) GetIdentity(edId string) (types.NodeId, error) {
-	return types.NodeId{Key: edId, VRFPublicKey: []byte{}}, nil
-}
-
 func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service, dbStorepath string, sgn hare.Signer, isFixedOracle bool, rolacle hare.Rolacle, layerSize uint32, postClient nipst.PostProverClient, poetClient nipst.PoetProvingServiceClient, vrfSigner *BLS381.BlsSigner, commitmentConfig nipst.PostParams, layersPerEpoch uint32) error {
 
-	app.instanceName = nodeID.Key
+	app.nodeId = nodeID
 	//todo: should we add all components to a single struct?
 
 	name := nodeID.Key
@@ -281,8 +275,9 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	}
 
 	lg := log.NewDefault(name).WithFields(log.String("nodeID", name))
+	app.log = lg.WithName("app")
 
-	db, err := database.NewLDBDatabase(dbStorepath, 0, 0)
+	db, err := database.NewLDBDatabase(dbStorepath, 0, 0, lg.WithName("stateDbStore"))
 	if err != nil {
 		return err
 	}
@@ -301,34 +296,44 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
 	clock := timesync.NewTicker(timesync.RealClock{}, ld, gTime)
 
-	atxdbstore, err := database.NewLDBDatabase(dbStorepath+"atx", 0, 0)
+	atxdbstore, err := database.NewLDBDatabase(dbStorepath+"atx", 0, 0, lg.WithName("atxDbStore"))
 	if err != nil {
 		return err
 	}
 
-	nipstStore, err := database.NewLDBDatabase(dbStorepath+"nipst", 0, 0)
+	nipstStore, err := database.NewLDBDatabase(dbStorepath+"nipst", 0, 0, lg.WithName("nipstDbStore"))
+	if err != nil {
+		return err
+	}
+
+	poetDbStore, err := database.NewLDBDatabase(dbStorepath+"poet", 0, 0, lg.WithName("poetDbStore"))
 	if err != nil {
 		return err
 	}
 
 	//todo: put in config
-	iddbstore, err := database.NewLDBDatabase(dbStorepath+"ids", 0, 0)
+	iddbstore, err := database.NewLDBDatabase(dbStorepath+"ids", 0, 0, lg.WithName("stateDbStore"))
 	if err != nil {
 		return err
 	}
 	idStore := activation.NewIdentityStore(iddbstore)
+	poetDb := activation.NewPoetDb(poetDbStore, lg.WithName("poetDb"))
 	//todo: this is initialized twice, need to refactor
-	validator := nipst.NewValidator(commitmentConfig)
-	mdb := mesh.NewPersistentMeshDB(dbStorepath, lg.WithName("meshdb"))
-	atxdb := activation.NewActivationDb(atxdbstore, nipstStore, idStore, mdb, uint64(app.Config.CONSENSUS.LayersPerEpoch), validator, lg.WithName("atxDb"))
+	validator := nipst.NewValidator(commitmentConfig, poetDb)
+	mdb := mesh.NewPersistentMeshDB(dbStorepath, lg.WithName("meshDb"))
+	atxdb := activation.NewActivationDb(atxdbstore, nipstStore, idStore, mdb, app.Config.CONSENSUS.LayersPerEpoch, validator, lg.WithName("atxDb"))
 	beaconProvider := &oracle.EpochBeaconProvider{}
 	blockValidator := oracle.NewBlockEligibilityValidator(int32(layerSize), uint16(layersPerEpoch), atxdb, beaconProvider, BLS381.Verify2, lg.WithName("blkElgValidator"))
 
 	trtl := tortoise.NewAlgorithm(int(1), mdb, lg.WithName("trtl"))
-	msh := mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, processor, lg.WithName("mesh")) //todo: what to do with the logger?
+
+	txpool := miner.NewMemPool(reflect.TypeOf([]*types.SerializableTransaction{}))
+	atxpool := miner.NewMemPool(reflect.TypeOf([]*types.ActivationTx{}))
+
+	msh := mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, txpool, atxpool, processor, lg.WithName("mesh")) //todo: what to do with the logger?
 
 	conf := sync.Configuration{Concurrency: 4, LayerSize: int(layerSize), RequestTimeout: 100 * time.Millisecond}
-	syncer := sync.NewSync(swarm, msh, blockValidator, sync.TxValidatorMock{}, conf, clock.Subscribe(), clock.GetCurrentLayer(), lg.WithName("sync"))
+	syncer := sync.NewSync(swarm, msh,txpool, atxpool, blockValidator, sync.TxValidatorMock{}, conf, clock.Subscribe(), clock.GetCurrentLayer(), lg.WithName("sync"))
 	blockOracle := oracle.NewMinerBlockOracle(layerSize, uint16(layersPerEpoch), atxdb, beaconProvider, vrfSigner, nodeID, syncer.IsLatest, lg.WithName("blockOracle"))
 
 	// TODO: we should probably decouple the apptest and the node (and duplicate as necessary)
@@ -342,11 +347,22 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 
 	ha := hare.New(app.Config.HARE, swarm, sgn, nodeID, msh, hOracle, app.Config.CONSENSUS.LayersPerEpoch, idStore, atxdb, clock.Subscribe(), syncer.IsLatest, lg.WithName("hare"))
 
-	blockProducer := miner.NewBlockBuilder(nodeID, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle, atxdb.ProcessAtx, lg.WithName("blockProducer"))
+	blockProducer := miner.NewBlockBuilder(nodeID, sgn, swarm, clock.Subscribe(), txpool, atxpool, coinToss, msh, ha, blockOracle, atxdb.ProcessAtx, lg.WithName("blockProducer"))
 	blockListener := sync.NewBlockListener(swarm, blockValidator, syncer, 4, lg.WithName("blockListener"))
 
-	nipstBuilder := nipst.NewNipstBuilder([]byte(nodeID.Key), commitmentConfig.SpaceUnit, commitmentConfig.Difficulty, 100, postClient, poetClient, lg.WithName("nipstBuilder")) // TODO: use both keys in the nodeID
-	atxBuilder := activation.NewBuilder(nodeID, atxdb, swarm, atxdb, msh, app.Config.CONSENSUS.LayersPerEpoch, nipstBuilder, clock.Subscribe(), syncer.IsLatest, lg.WithName("atxBuilder"))
+	poetListener := activation.NewPoetListener(swarm, poetDb, lg.WithName("poetListener"))
+
+	nipstBuilder := nipst.NewNipstBuilder(
+		common.Hex2Bytes(nodeID.Key), // TODO: use both keys in the nodeID
+		commitmentConfig.SpaceUnit,
+		commitmentConfig.Difficulty,
+		postClient,
+		poetClient,
+		poetDb,
+		lg.WithName("nipstBuilder"),
+	)
+	atxBuilder := activation.NewBuilder(nodeID, atxdb, swarm, atxdb, msh, app.Config.CONSENSUS.LayersPerEpoch,
+		nipstBuilder, clock.Subscribe(),  syncer.IsLatest, lg.WithName("atxBuilder"))
 
 	app.blockProducer = &blockProducer
 	app.blockListener = blockListener
@@ -356,6 +372,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	app.state = st
 	app.hare = ha
 	app.P2P = swarm
+	app.poetListener = poetListener
 	app.atxBuilder = atxBuilder
 	return nil
 }
@@ -371,43 +388,42 @@ func (app *SpacemeshApp) startServices() {
 	if err != nil {
 		log.Panic("cannot start block producer")
 	}
+	app.poetListener.Start()
 	app.atxBuilder.Start()
 	app.clock.Start()
 }
 
 func (app SpacemeshApp) stopServices() {
 
-	log.Info("%v closing services ", app.instanceName)
-
-	log.Info("%v closing clock", app.instanceName)
-	app.clock.Close()
-
-	log.Info("%v closing atx builder", app.instanceName)
-	app.atxBuilder.Stop()
-
-	log.Info("%v closing Hare", app.instanceName)
-	app.hare.Close() //todo: need to add this
-
-	log.Info("%v closing p2p", app.instanceName)
-	app.P2P.Shutdown()
+	log.Info("%v closing services ", app.nodeId.Key)
 
 	if err := app.blockProducer.Close(); err != nil {
 		log.Error("cannot stop block producer %v", err)
 	}
 
-	log.Info("%v closing blockListener", app.instanceName)
+	app.log.Info("closing PoET listener")
+	app.poetListener.Close()
+
+	app.log.Info("closing atx builder")
+	app.atxBuilder.Stop()
+
+	log.Info("%v closing blockListener", app.nodeId.Key)
 	app.blockListener.Close()
 
-	log.Info("%v closing mesh", app.instanceName)
-	app.mesh.Close()
-
-	log.Info("%v closing sync", app.instanceName)
+	log.Info("%v closing sync", app.nodeId.Key)
 	app.syncer.Close()
 
-	log.Info("unregister from oracle")
-	if app.unregisterOracle != nil {
-		app.unregisterOracle()
-	}
+	log.Info("%v closing Hare", app.nodeId.Key)
+	app.hare.Close() //todo: need to add this
+
+	log.Info("%v closing clock", app.nodeId.Key)
+	app.clock.Close()
+
+	log.Info("%v closing p2p", app.nodeId.Key)
+	app.P2P.Shutdown()
+
+	log.Info("%v closing mesh", app.nodeId.Key)
+	app.mesh.Close()
 
 }
 
@@ -499,17 +515,11 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	}
 
 	log.Info("connecting to POET on IP %v", app.Config.PoETServer)
-	poet, err := nipst.NewRemoteRPCPoetClient(app.Config.PoETServer, 2*time.Second)
+	poet, err := nipst.NewRemoteRPCPoetClient(app.Config.PoETServer, 30*time.Second)
 	if err != nil {
 		log.Error("poet server not found on addr %v, err: %v", app.Config.PoETServer, err)
 		return
 	}
-
-	oracle.SetServerAddress(app.Config.OracleServer)
-	oracleClient := oracle.NewOracleClientWithWorldID(uint64(app.Config.OracleServerWorldId))
-	oracleClient.Register(true, app.edSgn.PublicKey().String()) // todo: configure no faulty nodes
-
-	app.unregisterOracle = func() { oracleClient.Unregister(true, app.edSgn.PublicKey().String()) }
 
 	rng := amcl.NewRAND()
 	pub := app.edSgn.PublicKey().Bytes()
@@ -521,9 +531,6 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	apiConf := &app.Config.API
 
 	dbStorepath := app.Config.DataDir
-	if err != nil {
-		log.Panic("error starting atx db: %v", err)
-	}
 
 	npstCfg := nipst.PostParams{
 		Difficulty:           5,
@@ -563,7 +570,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	// start api servers
 	if apiConf.StartGrpcServer || apiConf.StartJSONServer {
 		// start grpc if specified or if json rpc specified
-		app.grpcAPIService = api.NewGrpcService(app.P2P, app.state)
+		app.grpcAPIService = api.NewGrpcService(app.P2P, app.state, app.mesh.StateApi())
 		app.grpcAPIService.StartService(nil)
 	}
 

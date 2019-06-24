@@ -11,18 +11,33 @@ todaydate = dt.strftime("%Y.%m.%d")
 current_index = 'kubernetes_cluster-' + todaydate
 
 
-def get_elastic_search_api():
-    # TODO: convert to a singleton, preferably from main test runner. (maybe just get the api as param for queries?)
-    ES_PASSWD = os.getenv("ES_PASSWD")
-    if not ES_PASSWD:
-        raise Exception("Unknown Elasticsearch password. Please check 'ES_PASSWD' environment variable")
-    es = Elasticsearch("http://elastic.spacemesh.io",
-                       http_auth=("spacemesh", ES_PASSWD), port=80, timeout=30)
-    return es
+def singleton(cls):
+    instance = [None]
+
+    def wrapper(*args, **kwargs):
+        if instance[0] is None:
+            instance[0] = cls(*args, **kwargs)
+        return instance[0]
+
+    return wrapper
+
+
+@singleton
+class ES:
+
+    def __init__(self):
+        ES_PASSWD = os.getenv("ES_PASSWD")
+        if not ES_PASSWD:
+            raise Exception("Unknown Elasticsearch password. Please check 'ES_PASSWD' environment variable")
+        self.es = Elasticsearch("http://elastic.spacemesh.io",
+                                http_auth=("spacemesh", ES_PASSWD), port=80, timeout=90)
+
+    def get_search_api(self):
+        return self.es
 
 
 def get_podlist(namespace, depname):
-    api = get_elastic_search_api()
+    api = ES().get_search_api()
     fltr = Q("match_phrase", kubernetes__pod_name=depname) & Q("match_phrase", kubernetes__namespace_name=namespace)
     s = Search(index=current_index, using=api).query('bool').filter(fltr)
     hits = list(s.scan())
@@ -31,7 +46,7 @@ def get_podlist(namespace, depname):
 
 
 def get_pod_logs(namespace, pod_name):
-    api = get_elastic_search_api()
+    api = ES().get_search_api()
     fltr = Q("match_phrase", kubernetes__pod_name=pod_name) & Q("match_phrase", kubernetes__namespace_name=namespace)
     s = Search(index=current_index, using=api).query('bool').filter(fltr).sort("time")
     res = s.execute()
@@ -57,7 +72,7 @@ def get_deployment_logs(namespace, depname):
 
 def query_message(indx, namespace, client_po_name, fields, findFails=False, startTime=None):
     # TODO : break this to smaller functions ?
-    es = get_elastic_search_api()
+    es = ES().get_search_api()
     fltr = Q("match_phrase", kubernetes__namespace_name=namespace) & \
            Q("match_phrase", kubernetes__pod_name=client_po_name)
     for f in fields:
@@ -73,7 +88,8 @@ def query_message(indx, namespace, client_po_name, fields, findFails=False, star
     if len(hits) > 0:
         ts = [hit["T"] for hit in hits]
 
-        first = startTime if startTime is not None else datetime.strptime(min(ts).replace("T", " ", ).replace("Z", ""), "%Y-%m-%d %H:%M:%S.%f")
+        first = startTime if startTime is not None else datetime.strptime(min(ts).replace("T", " ", ).replace("Z", ""),
+                                                                          "%Y-%m-%d %H:%M:%S.%f")
         last = datetime.strptime(max(ts).replace("T", " ", ).replace("Z", ""), "%Y-%m-%d %H:%M:%S.%f")
 
         delta = last - first
@@ -99,15 +115,15 @@ def query_message(indx, namespace, client_po_name, fields, findFails=False, star
             print(unsecpods)
         print("====================================================================")
 
-    s = list([(h.N, h.M) for h in hits])
+    s = list(hits)
     return s
 
 
 def parseAtx(log_messages):
     node2blocks = {}
     for x in log_messages:
-        nid = re.split(r'\.', x[0])[0]
-        m = re.findall(r'(?<=\b:\s)(\w+)|(?<=view\s)(\w+)', x[1])
+        nid = re.split(r'\.', x.N)[0]
+        m = re.findall(r'(?<=\b:\s)(\w+)|(?<=view\s)(\w+)', x.M)
         if nid in node2blocks:
             node2blocks[nid].append(m)
         else:
@@ -118,8 +134,8 @@ def parseAtx(log_messages):
 def sort_by_nodeid(log_messages):
     node2blocks = {}
     for x in log_messages:
-        id = re.split(r'\.', x[0])[0]
-        m = re.findall(r'\d+', x[1])
+        id = re.split(r'\.', x.N)[0]
+        m = re.findall(r'\d+', x.M)
         layer = m[0]
         # blocks - list of all blocks, layers - map of blocks per layer
         if id in node2blocks:
@@ -136,7 +152,7 @@ def sort_by_nodeid(log_messages):
 def sort_by_layer(log_messages):
     blocks_per_layer = {}
     for x in log_messages:
-        m = re.findall(r'\d+', x[1])
+        m = re.findall(r'\d+', x.M)
         layer = m[0]
         if layer in blocks_per_layer:
             blocks_per_layer[layer].append(m)
@@ -158,7 +174,7 @@ def print_layer_stat(layers):
 
 
 def get_blocks_per_node_and_layer(deployment):
-    # I've created a block in layer %v. id: %v, num of transactions: %v, votes: %d, viewEdges: %d atx %v, atxs:%v
+    # I've created a block in layer %v. id: %v, num of transactions: %v, votes: %d, viewEdges: %d, atx %v, atxs:%v
     block_fields = {"M": "I've created a block in layer"}
     blocks = query_message(current_index, deployment, deployment, block_fields, True)
     print("found " + str(len(blocks)) + " blocks")
@@ -171,7 +187,7 @@ def get_blocks_per_node_and_layer(deployment):
 def get_layers(deployment):
     block_fields = {"M": "release tick"}
     layers = query_message(current_index, deployment, deployment, block_fields, True)
-    ids = [int(re.findall(r'\d+', x[1])[0]) for x in layers]
+    ids = [int(re.findall(r'\d+', x.M)[0]) for x in layers]
     return ids
 
 
@@ -186,11 +202,11 @@ def get_latest_layer(deployment):
 def wait_for_latest_layer(deployment, layer_id):
     while True:
         lyr = get_latest_layer(deployment)
-        if lyr < layer_id:
-            print("current layer " + str(lyr))
-            time.sleep(10)
-        else:
+        if lyr >= layer_id:
             return
+
+        print("current layer " + str(lyr))
+        time.sleep(10)
 
 
 def get_atx_per_node(deployment):
@@ -199,7 +215,6 @@ def get_atx_per_node(deployment):
     atx_logs = query_message(current_index, deployment, deployment, block_fields, True)
     print("found " + str(len(atx_logs)) + " atxs")
     nodes = parseAtx(atx_logs)
-
     return nodes
 
 
@@ -208,19 +223,20 @@ def get_nodes_up(deployment):
     block_fields = {"M": "Starting Spacemesh"}
     logs = query_message(current_index, deployment, deployment, block_fields, True)
     print("found " + str(len(logs)) + " nodes up")
-
     return len(logs)
 
 
-# find_dups finds elasticsearch hits that are duplicates per kubernetes_pod_name. the max field represents the number of times the message
-# should show up if the indexing was functioning well.
-
 def find_dups(indx, namespace, client_po_name, fields, max=1):
+    """
+    finds elasticsearch hits that are duplicates per kubernetes_pod_name.
+    The max field represents the number of times the message
+    should show up if the indexing was functioning well.
 
-    # Usage : find_dups(current_index, "t7t9e", "client-t7t9e-28qj7",
-    # {'M':'new_gossip_message', 'protocol': 'api_test_gossip'}, 10)
+    Usage : find_dups(current_index, "t7t9e", "client-t7t9e-28qj7",
+    {'M':'new_gossip_message', 'protocol': 'api_test_gossip'}, 10)
+    """
 
-    es = get_elastic_search_api()
+    es = ES().get_search_api()
     fltr = Q("match_phrase", kubernetes__namespace_name=namespace) & \
            Q("match_phrase", kubernetes__pod_name=client_po_name)
     for f in fields:
@@ -232,7 +248,8 @@ def find_dups(indx, namespace, client_po_name, fields, max=1):
     counting = {}
 
     for hit in hits:
-        counting[hit.kubernetes.pod_name] = 1 if hit.kubernetes.pod_name not in counting else counting[hit.kubernetes.pod_name] + 1
+        counting[hit.kubernetes.pod_name] = 1 if hit.kubernetes.pod_name not in counting else counting[
+                                                                                                  hit.kubernetes.pod_name] + 1
         if counting[hit.kubernetes.pod_name] > max and hit.kubernetes.pod_name not in counting:
             dups.append(hit.kubernetes.pod_name)
 
@@ -242,11 +259,10 @@ def find_dups(indx, namespace, client_po_name, fields, max=1):
 
 
 def find_missing(indx, namespace, client_po_name, fields, min=1):
-
     # Usage : find_dups(current_index, "t7t9e", "client-t7t9e-28qj7",
     # {'M':'new_gossip_message', 'protocol': 'api_test_gossip'}, 10)
 
-    es = get_elastic_search_api()
+    es = ES().get_search_api()
     fltr = Q("match_phrase", kubernetes__namespace_name=namespace) & \
            Q("match_phrase", kubernetes__pod_name=client_po_name)
     for f in fields:
@@ -258,7 +274,8 @@ def find_missing(indx, namespace, client_po_name, fields, min=1):
     counting = {}
 
     for hit in hits:
-        counting[hit.kubernetes.pod_name] = 1 if hit.kubernetes.pod_name not in counting else counting[hit.kubernetes.pod_name] + 1
+        counting[hit.kubernetes.pod_name] = 1 if hit.kubernetes.pod_name not in counting else counting[
+                                                                                                  hit.kubernetes.pod_name] + 1
 
     for pod in counting:
         if counting[pod] < min:
@@ -267,3 +284,41 @@ def find_missing(indx, namespace, client_po_name, fields, min=1):
     print("Total hits: {0}".format(len(hits)))
     print("Missing count {0}".format(len(miss)))
     print(miss)
+
+
+def query_hare_output_set(indx, ns, layer):
+    hits = query_message(indx, ns, ns, {'M': 'Consensus process terminated', 'layer_id': str(layer)}, True)
+    lst = [h.set_values for h in hits]
+
+    return lst
+
+
+def query_round_1(indx, ns, layer):
+    return query_message(indx, ns, ns, {'M': 'Round 1 ended', 'is_svp_ready': 'true', 'layer_id': str(layer)}, True)
+
+
+def query_round_2(indx, ns, layer):
+    hits = query_message(indx, ns, ns, {'M': 'Round 2 ended', 'layer_id': str(layer)}, True)
+    filtered = list(filter(lambda x: x.proposed_set != "nil", hits))
+
+    return filtered
+
+
+def query_round_3(indx, ns, layer):
+    return query_message(indx, ns, ns, {'M': 'Round 3 ended: committing', 'layer_id': str(layer)}, True)
+
+
+def query_pre_round(indx, ns, layer):
+    return query_message(indx, ns, ns, {'M': 'Fatal: PreRound ended with empty set', 'layer_id': str(layer)}, False)
+
+
+def query_no_svp(indx, ns):
+    return query_message(indx, ns, ns, {'M': 'Round 1 ended', 'is_svp_ready': 'false'}, False)
+
+
+def query_empty_set(indx, ns):
+    return query_message(indx, ns, ns, {'M': 'Fatal: PreRound ended with empty set'}, False)
+
+
+def query_new_iteration(indx, ns):
+    return query_message(indx, ns, ns, {'M': 'Starting new iteration'}, False)

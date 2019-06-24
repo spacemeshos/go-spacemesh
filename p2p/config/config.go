@@ -49,6 +49,7 @@ type SwarmConfig struct {
 	RoutingTableAlpha      int      `mapstructure:"alpha"`
 	RandomConnections      int      `mapstructure:"randcon"`
 	BootstrapNodes         []string `mapstructure:"bootnodes"`
+	PeersFile              string   `mapstructure:"peers-file"`
 }
 
 // DefaultConfig defines the default p2p configuration
@@ -63,6 +64,7 @@ func DefaultConfig() Config {
 		RandomConnections:      5,
 		BootstrapNodes:         []string{ // these should be the spacemesh foundation bootstrap nodes
 		},
+		PeersFile: "peers.json", //  located under data-dir/<publickey>/<peer-file> not loaded or save if empty string is given.
 	}
 
 	return Config{

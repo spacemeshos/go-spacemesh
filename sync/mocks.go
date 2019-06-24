@@ -2,9 +2,9 @@ package sync
 
 import (
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/mesh"
-	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"math/big"
 )
@@ -55,7 +55,15 @@ func (MockState) ApplyTransactions(layer types.LayerID, txs mesh.Transactions) (
 	return 0, nil
 }
 
+func (MockState) ValidateSignature(signed types.Signed) (address.Address, error) {
+	return address.Address{}, nil
+}
+
 func (MockState) ApplyRewards(layer types.LayerID, miners []string, underQuota map[string]int, bonusReward, diminishedReward *big.Int) {
+}
+
+func (MockState) ValidateTransactionSignature(tx types.SerializableSignedTransaction) (address.Address, error) {
+	return address.Address{}, nil
 }
 
 func (s *StateMock) ApplyRewards(layer types.LayerID, miners []string, underQuota map[string]int, bonusReward, diminishedReward *big.Int) {
@@ -64,13 +72,13 @@ func (s *StateMock) ApplyRewards(layer types.LayerID, miners []string, underQuot
 
 type AtxDbMock struct {
 	db     map[types.AtxId]*types.ActivationTx
-	nipsts map[types.AtxId]*nipst.NIPST
+	nipsts map[types.AtxId]*types.NIPST
 }
 
 func NewAtxDbMock() *AtxDbMock {
 	return &AtxDbMock{
 		make(map[types.AtxId]*types.ActivationTx),
-		make(map[types.AtxId]*nipst.NIPST),
+		make(map[types.AtxId]*types.NIPST),
 	}
 }
 
@@ -86,14 +94,8 @@ func (t *AtxDbMock) ProcessAtx(atx *types.ActivationTx) {
 	t.nipsts[atx.Id()] = atx.Nipst
 }
 
-func (t *AtxDbMock) GetNipst(id types.AtxId) (*nipst.NIPST, error) {
+func (t *AtxDbMock) GetNipst(id types.AtxId) (*types.NIPST, error) {
 	return t.nipsts[id], nil
-}
-
-func (t *AtxDbMock) ProcessBlockATXs(block *types.Block) {
-	for _, atx := range block.ATXs {
-		t.ProcessAtx(atx)
-	}
 }
 
 type MockIStore struct {
@@ -109,6 +111,23 @@ func (*MockIStore) GetIdentity(id string) (types.NodeId, error) {
 
 type ValidatorMock struct{}
 
-func (*ValidatorMock) Validate(nipst *nipst.NIPST, expectedChallenge common.Hash) error {
+func (*ValidatorMock) Validate(nipst *types.NIPST, expectedChallenge common.Hash) error {
 	return nil
+}
+
+type MemPoolMock struct {
+}
+
+func (mem *MemPoolMock) Get(id interface{}) interface{} {
+	return nil
+}
+
+func (mem *MemPoolMock) PopItems(size int) interface{} {
+	return nil
+}
+
+func (mem *MemPoolMock) Put(id interface{}, item interface{}) {
+}
+
+func (mem *MemPoolMock) Invalidate(id interface{}) {
 }

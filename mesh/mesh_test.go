@@ -4,8 +4,9 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/google/uuid"
+	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/nipst"
+	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
 	"math/big"
@@ -24,6 +25,10 @@ func (mlg *MeshValidatorMock) ContextualValidity(id types.BlockID) bool   { retu
 
 type MockState struct{}
 
+func (MockState) ValidateSignature(signed types.Signed) (address.Address, error) {
+	return address.Address{}, nil
+}
+
 func (MockState) ApplyTransactions(layer types.LayerID, txs Transactions) (uint32, error) {
 	return 0, nil
 }
@@ -31,9 +36,13 @@ func (MockState) ApplyTransactions(layer types.LayerID, txs Transactions) (uint3
 func (MockState) ApplyRewards(layer types.LayerID, miners []string, underQuota map[string]int, bonusReward, diminishedReward *big.Int) {
 }
 
+func (MockState) ValidateTransactionSignature(tx types.SerializableSignedTransaction) (address.Address, error) {
+	return address.Address{}, nil
+}
+
 type AtxDbMock struct {
 	db     map[types.AtxId]*types.ActivationTx
-	nipsts map[types.AtxId]*nipst.NIPST
+	nipsts map[types.AtxId]*types.NIPST
 }
 
 func (t *AtxDbMock) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
@@ -52,23 +61,34 @@ func (t *AtxDbMock) AddAtx(id types.AtxId, atx *types.ActivationTx) {
 	t.nipsts[id] = atx.Nipst
 }
 
-func (t *AtxDbMock) GetNipst(id types.AtxId) (*nipst.NIPST, error) {
+func (t *AtxDbMock) GetNipst(id types.AtxId) (*types.NIPST, error) {
 	return t.nipsts[id], nil
-}
-
-func (t *AtxDbMock) ProcessBlockATXs(block *types.Block) {
-	for _, atx := range block.ATXs {
-		t.AddAtx(atx.Id(), atx)
-	}
 }
 
 func (AtxDbMock) ProcessAtx(atx *types.ActivationTx) {
 
 }
 
+type MemPoolMock struct {
+}
+
+func (mem *MemPoolMock) Get(id interface{}) interface{} {
+	return nil
+}
+
+func (mem *MemPoolMock) PopItems(size int) interface{} {
+	return nil
+}
+
+func (mem *MemPoolMock) Put(id interface{}, item interface{}) {
+}
+
+func (mem *MemPoolMock) Invalidate(id interface{}) {
+}
+
 func getMesh(id string) *Mesh {
 	lg := log.New(id, "", "")
-	layers := NewMesh(NewMemMeshDB(lg), &AtxDbMock{}, ConfigTst(), &MeshValidatorMock{}, &MockState{}, lg)
+	layers := NewMesh(NewMemMeshDB(lg), &AtxDbMock{}, ConfigTst(), &MeshValidatorMock{}, &MemPoolMock{}, &MemPoolMock{}, &MockState{}, lg)
 	return layers
 }
 
@@ -81,7 +101,7 @@ func TestLayers_AddBlock(t *testing.T) {
 	block2 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 2, []byte("data2"))
 	block3 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 3, []byte("data3"))
 
-	addTransactionsToBlock(block1, 4)
+	addTransactionsWithGas(layers.MeshDB, block1, 4, rand.Int63n(100))
 
 	err := layers.AddBlock(block1)
 	assert.NoError(t, err)
@@ -96,13 +116,9 @@ func TestLayers_AddBlock(t *testing.T) {
 	rBlock1, err := layers.GetBlock(block1.Id)
 	assert.NoError(t, err)
 
-	assert.True(t, len(rBlock1.Txs) == len(block1.Txs), "block content was wrong")
-	assert.True(t, bytes.Compare(rBlock2.Data, []byte("data2")) == 0, "block content was wrong")
-	assert.True(t, rBlock1.Txs[0].Origin == block1.Txs[0].Origin)
-
-	assert.True(t, bytes.Equal(rBlock1.Txs[0].Recipient.Bytes(), block1.Txs[0].Recipient.Bytes()))
-	assert.True(t, bytes.Equal(rBlock1.Txs[0].Price, block1.Txs[0].Price))
-	assert.True(t, len(rBlock1.ATXs) == len(block1.ATXs))
+	assert.True(t, len(rBlock1.TxIds) == len(block1.TxIds), "block content was wrong")
+	assert.True(t, bytes.Compare(rBlock2.MiniBlock.Data, []byte("data2")) == 0, "block content was wrong")
+	assert.True(t, len(rBlock1.AtxIds) == len(block1.AtxIds))
 }
 
 func TestLayers_AddLayer(t *testing.T) {
@@ -124,7 +140,7 @@ func TestLayers_AddLayer(t *testing.T) {
 	l, err = layers.GetLayer(id)
 	assert.NoError(t, err)
 	//assert.True(t, layers.VerifiedLayer() == 0, "wrong layer count")
-	assert.True(t, string(l.Blocks()[1].Data) == "data", "wrong block data ")
+	assert.True(t, string(l.Blocks()[1].MiniBlock.Data) == "data", "wrong block data ")
 }
 
 func TestLayers_AddWrongLayer(t *testing.T) {

@@ -9,6 +9,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	signing2 "github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/types"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"sort"
 	"sync"
@@ -208,6 +209,20 @@ func TestHare_collectOutput2(t *testing.T) {
 	_, ok = h.outputs[0]
 
 	require.False(t, ok)
+}
+
+func TestHare_OurputCollectionLoop(t *testing.T) {
+	sim := service.NewSimulator()
+	n1 := sim.NewNode()
+
+	h := createHare(n1)
+	h.Start()
+	mo := mockOutput{1, NewEmptySet(0)}
+	h.broker.Register(mo.Id())
+	time.Sleep(1 * time.Second)
+	h.outputChan <- mo
+	time.Sleep(1 * time.Second)
+	assert.True(t, len(h.broker.outbox) == 0)
 }
 
 func TestHare_onTick(t *testing.T) {

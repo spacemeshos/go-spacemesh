@@ -20,14 +20,15 @@ message TransferFunds {
 }
 
 message SignedTransaction {
-    string srcAddress   = 1;
-    string dstAddress   = 2;
-    string amount       = 3;
-    string nonce        = 4;
+    bytes tx = 1; // serialized with XDR
 }
 
 message BroadcastMessage {
     string data = 1;
+}
+
+message BinaryMessage {
+    bytes data = 1;
 }
 
 message CommitmentSizeMessage {
@@ -66,6 +67,12 @@ service SpacemeshService {
     rpc Broadcast(BroadcastMessage) returns (SimpleMessage) {
         option (google.api.http) = {
           post: "/v1/broadcast"
+          body: "*"
+        };
+    }
+    rpc BroadcastPoet(BinaryMessage) returns (SimpleMessage) {
+        option (google.api.http) = {
+          post: "/v1/broadcastpoet"
           body: "*"
         };
     }

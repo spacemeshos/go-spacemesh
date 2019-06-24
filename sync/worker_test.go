@@ -19,11 +19,7 @@ func TestNewPeerWorker(t *testing.T) {
 	err := syncObj1.AddBlock(types.NewExistingBlock(types.BlockID(123), lid, nil))
 	assert.NoError(t, err)
 
-	//todo(Almog): BlockReqFactory created a function that queries blockids from a single channel,
-	// each block id will be sent to a different peer, in case the peer does not have the block id it will not retry
-	// need to fix the logic and add retries or query blockid to all peers
-	// to make tests pass we've added 2 more blockids so that all peers will be queried for that id
-	wrk, output := NewPeersWorker(syncObj2, []p2p.Peer{nodes[3].PublicKey(), nodes[2].PublicKey(), nodes[0].PublicKey()}, &sync.Once{}, BlockReqFactory([]types.BlockID{123, 123, 123}))
+	wrk, output := NewPeersWorker(syncObj2, []p2p.Peer{nodes[3].PublicKey(), nodes[2].PublicKey(), nodes[0].PublicKey()}, &sync.Once{}, LayerIdsReqFactory(1))
 
 	go wrk.Work()
 	wrk.Wait()
@@ -31,7 +27,7 @@ func TestNewPeerWorker(t *testing.T) {
 	timeout := time.NewTimer(1 * time.Second)
 	select {
 	case item := <-output:
-		assert.Equal(t, types.BlockID(123), item.(*types.MiniBlock).Id, "wrong block")
+		assert.Equal(t, types.BlockID(123), item.([]types.BlockID)[0], "wrong ids")
 	case <-timeout.C:
 		assert.Fail(t, "no message received on channel")
 	}
@@ -56,7 +52,7 @@ func TestNewNeighborhoodWorker(t *testing.T) {
 
 	select {
 	case item := <-wrk.output:
-		assert.Equal(t, types.BlockID(123), item.(*types.MiniBlock).Id, "wrong block")
+		assert.Equal(t, types.BlockID(123), item.(*types.Block).Id, "wrong block")
 	case <-timeout.C:
 		assert.Fail(t, "no message received on channel")
 	}

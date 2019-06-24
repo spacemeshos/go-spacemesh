@@ -28,7 +28,7 @@ type nodeFileData struct {
 func (n *LocalNode) persistData() error {
 
 	data := nodeFileData{
-		PubKey:    n.pubKey.String(),
+		PubKey:    n.ID.String(),
 		PrivKey:   n.privKey.String(),
 		NetworkID: n.networkID,
 	}
@@ -43,12 +43,12 @@ func (n *LocalNode) persistData() error {
 		return err
 	}
 
-	_, err = filesystem.EnsureNodeDataDirectory(dataDir, n.pubKey.String())
+	_, err = filesystem.EnsureNodeDataDirectory(dataDir, n.ID.String())
 	if err != nil {
 		return err
 	}
 
-	path := filesystem.NodeDataFile(dataDir, config.NodeDataFileName, n.String())
+	path := filesystem.NodeDataFile(dataDir, config.NodeDataFileName, n.ID.String())
 
 	// make sure our node file is written to the os filesystem.
 	f, err := os.Create(path)
@@ -71,7 +71,7 @@ func (n *LocalNode) persistData() error {
 		return err
 	}
 
-	log.Info("Saved node information. NodeID %v", n.String())
+	log.Info("Saved node information. NodeID %v", n.ID.String())
 
 	return nil
 }

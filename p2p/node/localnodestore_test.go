@@ -31,33 +31,33 @@ func TestNodeLocalStore(t *testing.T) {
 	err = node.persistData()
 	assert.NoError(t, err, "failed to persist node data")
 
-	_, err = filesystem.EnsureNodeDataDirectory(p, node.String())
+	_, err = filesystem.EnsureNodeDataDirectory(p, node.ID.String())
 
 	assert.NoError(t, err, "could'nt get node path")
 
-	file := filesystem.NodeDataFile(p, config.NodeDataFileName, node.String())
+	file := filesystem.NodeDataFile(p, config.NodeDataFileName, node.NodeInfo.ID.String())
 	fmt.Println(file)
 	exists := filesystem.PathExists(file)
 
 	assert.True(t, exists, "File should exist")
 
-	data, err := readNodeData(node.String())
+	data, err := readNodeData(node.NodeInfo.ID.String())
 	assert.NoError(t, err, "failed to ensure node data directory")
 	assert.NotNil(t, data, "expected node data")
-	assert.Equal(t, data.PubKey, node.String(), "expected same node id")
+	assert.Equal(t, data.PubKey, node.ID.String(), "expected same node id")
 	assert.Equal(t, data.NetworkID, cfg.NetworkID, "Expected same network id")
 
 	// as we deleted all dirs - first node data in nodes folder should be this  node's data
 	data1, err := readFirstNodeData()
 	assert.NoError(t, err, "failed to ensure node data directory")
 	assert.NotNil(t, data1, "expected node data")
-	assert.Equal(t, data1.PubKey, node.String(), "expected same node id")
+	assert.Equal(t, data1.PubKey, node.NodeInfo.ID.String(), "expected same node id")
 	assert.Equal(t, data1.NetworkID, cfg.NetworkID, "Expected same network id")
 
 	// create a new local node from persisted node data
 	node1, err := NewLocalNode(cfg, address, true)
 	assert.NoError(t, err, "local node creation error")
-	assert.Equal(t, node.String(), node1.String(), "expected restored node")
+	assert.Equal(t, node.NodeInfo.ID.String(), node1.NodeInfo.ID.String(), "expected restored node")
 	assert.Equal(t, node.NetworkID(), cfg.NetworkID, "Expected same network id")
 
 	// cleanup

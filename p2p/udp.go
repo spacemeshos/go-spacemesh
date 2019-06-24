@@ -21,14 +21,14 @@ const maxMessageSize = 2048
 // todo : calculate real udp max message size
 
 // Lookuper is a service used to lookup for nodes we know already
-type Lookuper func(key p2pcrypto.PublicKey) (node.Node, error)
+type Lookuper func(key p2pcrypto.PublicKey) (*node.NodeInfo, error)
 
 type udpNetwork interface {
 	Start() error
 	Shutdown()
 
 	IncomingMessages() chan inet.UDPMessageEvent
-	Send(to node.Node, data []byte) error
+	Send(to *node.NodeInfo, data []byte) error
 }
 
 // UDPMux is a server for receiving and sending udp messages. through protocols.
@@ -123,7 +123,7 @@ func (mux *UDPMux) SendMessage(peerPubkey p2pcrypto.PublicKey, protocol string, 
 // sendMessageImpl finds the peer address, wraps the message as a protocol message with p2p metadata and sends it.
 func (mux *UDPMux) sendMessageImpl(peerPubkey p2pcrypto.PublicKey, protocol string, payload service.Data) error {
 	var err error
-	var peer node.Node
+	var peer *node.NodeInfo
 
 	peer, err = mux.lookuper(peerPubkey)
 
@@ -156,7 +156,7 @@ func (mux *UDPMux) sendMessageImpl(peerPubkey p2pcrypto.PublicKey, protocol stri
 	// TODO: node.address should have IP address, UDP and TCP PORT.
 	// 		 for now assuming it's the same port for both.
 
-	mux.logger.Debug("Sending udp message to %v, %v", peerPubkey, peer.Address())
+	mux.logger.Debug("Sending udp message to %v, %v", peer.String())
 
 	return mux.network.Send(peer, data)
 }

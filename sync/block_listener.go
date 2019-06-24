@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -13,10 +14,7 @@ import (
 
 type MessageServer server.MessageServer
 
-const NewBlockProtocol = "newBlock"
-
 type BlockListener struct {
-	*server.MessageServer
 	*Syncer
 	BlockValidator
 	log.Log
@@ -47,10 +45,6 @@ func (bl *BlockListener) Start() {
 	}
 }
 
-func (bl *BlockListener) OnNewBlock(b *types.Block) {
-	bl.addUnknownToQueue(b)
-}
-
 func NewBlockListener(net service.Service, bv BlockValidator, sync *Syncer, concurrency int, logger log.Log) *BlockListener {
 	bl := BlockListener{
 		BlockValidator:       bv,
@@ -59,7 +53,7 @@ func NewBlockListener(net service.Service, bv BlockValidator, sync *Syncer, conc
 		semaphore:            make(chan struct{}, concurrency),
 		unknownQueue:         make(chan types.BlockID, 200), //todo tune buffer size + get buffer from config
 		exit:                 make(chan struct{}),
-		receivedGossipBlocks: net.RegisterGossipProtocol(NewBlockProtocol),
+		receivedGossipBlocks: net.RegisterGossipProtocol(config.NewBlockProtocol),
 	}
 	return &bl
 }
@@ -77,41 +71,48 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 			}
 			bl.wg.Add(1)
 			go func() {
-				bl.handleBlock(data)
+				if data == nil {
+					bl.Error("got empty message while listening to gossip blocks")
+					return
+				}
+				var blk types.Block
+				err := types.BytesToInterface(data.Bytes(), &blk)
+				if err != nil {
+					bl.Error("received invalid block %v", data.Bytes(), err)
+					return
+				}
+
+				if bl.handleBlock(&blk) && bl.IsSynced() {
+					data.ReportValidation(config.NewBlockProtocol)
+				}
 				bl.wg.Done()
 			}()
+
 		}
 	}
 }
 
-func (bl *BlockListener) handleBlock(data service.GossipMessage) {
-	if data == nil {
-		bl.Error("got empty message while listening to gossip blocks")
-		return
-	}
-	blk := &types.Block{}
-	err := types.BytesToInterface(data.Bytes(), blk)
-	if err != nil {
-		bl.Error("received invalid block %v", data.Bytes())
-		return
-	}
-	bl.Log.With().Info("got new block", log.Uint64("id", uint64(blk.Id)), log.Int("txs", len(blk.Txs)), log.Int("atxs", len(blk.ATXs)))
+func (bl *BlockListener) handleBlock(blk *types.Block) bool {
+
+	bl.Log.With().Info("got new block", log.Uint64("id", uint64(blk.Id)), log.Int("txs", len(blk.TxIds)), log.Int("atxs", len(blk.AtxIds)))
 	eligible, err := bl.BlockEligible(&blk.BlockHeader)
 	if err != nil {
-		bl.Error("block eligible check failed %v", blk.ID())
-		return
+		bl.Error("block %v eligible check failed ", blk.ID())
+		return false
 	}
 	if !eligible {
-		bl.Error("block not eligible, %v", blk.ID())
-		return
+		bl.Error("block %v not eligible", blk.ID())
+		return false
 	}
-	if err := bl.AddBlock(blk); err != nil {
-		bl.Info("Block already received %v", blk.ID())
-		return
+
+	if err := bl.syncMissingContent(blk); err != nil {
+		bl.Error("handleBlock %v failed ", blk.ID(), err)
+		return false
 	}
-	bl.Info("added block to database %v", blk.ID())
-	data.ReportValidation(NewBlockProtocol)
-	bl.addUnknownToQueue(blk)
+
+	bl.Info("added block %v to database", blk.ID())
+	bl.addUnknownToQueue(&blk.BlockHeader)
+	return true
 }
 
 func (bl *BlockListener) run() {
@@ -131,7 +132,7 @@ func (bl *BlockListener) run() {
 	}
 }
 
-func (bl *BlockListener) addUnknownToQueue(b *types.Block) {
+func (bl *BlockListener) addUnknownToQueue(b *types.BlockHeader) {
 	for _, block := range b.ViewEdges {
 		//if unknown block
 		if _, err := bl.GetBlock(block); err != nil {

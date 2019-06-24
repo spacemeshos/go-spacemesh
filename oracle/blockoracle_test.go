@@ -27,8 +27,8 @@ type mockActivationDB struct {
 	atxPublicationLayer types.LayerID
 }
 
-func (a mockActivationDB) ActiveSetSize(epoch types.EpochId) uint32 {
-	return a.activeSetSize
+func (a mockActivationDB) ActiveSetSize(epochId types.EpochId) (uint32, error) {
+	return a.activeSetSize, nil
 }
 
 func (a mockActivationDB) GetNodeAtxIds(node types.NodeId) ([]types.AtxId, error) {
@@ -246,7 +246,5 @@ func TestBlockOracleValidatorInvalidProof3(t *testing.T) {
 
 func newBlockWithEligibility(layerID types.LayerID, nodeID types.NodeId, atxID types.AtxId,
 	proof types.BlockEligibilityProof) *types.Block {
-
-	return &types.Block{BlockHeader: types.BlockHeader{LayerIndex: layerID, MinerID: nodeID, ATXID: atxID,
-		EligibilityProof: proof}}
+	return &types.Block{MiniBlock: types.MiniBlock{BlockHeader: types.BlockHeader{LayerIndex: layerID, MinerID: nodeID, ATXID: atxID, EligibilityProof: proof}}}
 }

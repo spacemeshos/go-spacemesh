@@ -8,7 +8,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/crypto/sha3"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/rlp"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"math/big"
@@ -32,76 +31,54 @@ type MeshValidator interface {
 	ContextualValidity(id types.BlockID) bool
 }
 
-type StateUpdater interface {
+type StateApi interface {
 	ApplyTransactions(layer types.LayerID, transactions Transactions) (uint32, error)
 	ApplyRewards(layer types.LayerID, miners []string, underQuota map[string]int, bonusReward, diminishedReward *big.Int)
+	ValidateSignature(s types.Signed) (address.Address, error)
+	ValidateTransactionSignature(tx types.SerializableSignedTransaction) (address.Address, error) //todo use validate signature across the bord and remove this
+}
+
+type MemPoolInValidator interface {
+	Invalidate(id interface{})
 }
 
 type AtxDB interface {
-	ProcessBlockATXs(block *types.Block)
 	ProcessAtx(atx *types.ActivationTx)
 	GetAtx(id types.AtxId) (*types.ActivationTx, error)
-	GetNipst(id types.AtxId) (*nipst.NIPST, error)
+	GetNipst(id types.AtxId) (*types.NIPST, error)
 }
 
 type Mesh struct {
 	log.Log
 	*MeshDB
 	AtxDB
-	config        Config
-	verifiedLayer types.LayerID
-	latestLayer   types.LayerID
-	lastSeenLayer types.LayerID
-	lMutex        sync.RWMutex
-	lkMutex       sync.RWMutex
-	lcMutex       sync.RWMutex
-	lvMutex       sync.RWMutex
-	tortoise      MeshValidator
-	state         StateUpdater
-	orphMutex     sync.RWMutex
-	done          chan struct{}
+	txInvalidator  MemPoolInValidator
+	atxInvalidator MemPoolInValidator
+	config         Config
+	validatedLayer types.LayerID
+	latestLayer    types.LayerID
+	lMutex         sync.RWMutex
+	lkMutex        sync.RWMutex
+	lcMutex        sync.RWMutex
+	lvMutex        sync.RWMutex
+	tortoise       MeshValidator
+	state          StateApi
+	orphMutex      sync.RWMutex
+	done           chan struct{}
 }
 
-func NewPersistentMesh(path string, rewardConfig Config, mesh MeshValidator, state StateUpdater, atxdb AtxDB, logger log.Log) *Mesh {
+func NewMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh MeshValidator, txInvalidator MemPoolInValidator, atxInvalidator MemPoolInValidator, state StateApi, logger log.Log) *Mesh {
 	//todo add boot from disk
 	ll := &Mesh{
-		Log:      logger,
-		tortoise: mesh,
-		state:    state,
-		done:     make(chan struct{}),
-		MeshDB:   NewPersistentMeshDB(path, logger),
-		config:   rewardConfig,
-		AtxDB:    atxdb,
-	}
-
-	return ll
-}
-
-func NewMemMesh(rewardConfig Config, mesh MeshValidator, state StateUpdater, atxdb AtxDB, logger log.Log) *Mesh {
-	//todo add boot from disk
-	ll := &Mesh{
-		Log:      logger,
-		tortoise: mesh,
-		state:    state,
-		done:     make(chan struct{}),
-		MeshDB:   NewMemMeshDB(logger),
-		config:   rewardConfig,
-		AtxDB:    atxdb,
-	}
-
-	return ll
-}
-
-func NewMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh MeshValidator, state StateUpdater, logger log.Log) *Mesh {
-	//todo add boot from disk
-	ll := &Mesh{
-		Log:      logger,
-		tortoise: mesh,
-		state:    state,
-		done:     make(chan struct{}),
-		MeshDB:   db,
-		config:   rewardConfig,
-		AtxDB:    atxDb,
+		Log:            logger,
+		tortoise:       mesh,
+		txInvalidator:  txInvalidator,
+		atxInvalidator: atxInvalidator,
+		state:          state,
+		done:           make(chan struct{}),
+		MeshDB:         db,
+		config:         rewardConfig,
+		AtxDB:          atxDb,
 	}
 
 	return ll
@@ -168,10 +145,10 @@ func (m *Mesh) IsContexuallyValid(b types.BlockID) bool {
 	return true
 }
 
-func (m *Mesh) VerifiedLayer() types.LayerID {
+func (m *Mesh) ValidatedLayer() types.LayerID {
 	defer m.lvMutex.RUnlock()
 	m.lvMutex.RLock()
-	return m.verifiedLayer
+	return m.validatedLayer
 }
 
 func (m *Mesh) LatestLayer() types.LayerID {
@@ -189,60 +166,15 @@ func (m *Mesh) SetLatestLayer(idx types.LayerID) {
 	}
 }
 
-func (m *Mesh) GetBlock(id types.BlockID) (*types.Block, error) {
-
-	blk, err := m.GetMiniBlock(id)
-	if err != nil {
-		m.Error("could not retrieve block %v from database %v", id, err)
-		return nil, err
-	}
-
-	return m.MiniBlockToBlock(blk)
-}
-
-func (m *Mesh) MiniBlockToBlock(blk *types.MiniBlock) (*types.Block, error) {
-	txs, missingTxs := m.GetTransactions(blk.TxIds)
-	if missingTxs != nil {
-		return nil, errors.New("could not retrieve block %v transactions from database ")
-	}
-
-	var transactions []*types.SerializableTransaction
-	for _, value := range blk.TxIds {
-		transactions = append(transactions, txs[value])
-	}
-
-	atxs, missingATxs := m.GetATXs(blk.ATxIds)
-	if missingATxs != nil {
-		return nil, errors.New("could not retrieve block %v transactions from database ")
-	}
-
-	var activations []*types.ActivationTx
-	for _, value := range blk.ATxIds {
-		activations = append(activations, atxs[value])
-	}
-
-	res := blockFromMiniAndTxs(blk, transactions, activations)
-	return res, nil
-}
-
 func (m *Mesh) GetLayer(index types.LayerID) (*types.Layer, error) {
 
-	mBlocks, err := m.LayerMiniBlocks(index)
+	mBlocks, err := m.LayerBlocks(index)
 	if err != nil {
 		return nil, err
-	}
-
-	blocks := make([]*types.Block, 0, len(mBlocks))
-	for _, k := range mBlocks {
-		block, err := m.MiniBlockToBlock(k)
-		if err != nil {
-			return nil, errors.New("could not retrieve block " + fmt.Sprint(k) + " " + err.Error())
-		}
-		blocks = append(blocks, block)
 	}
 
 	l := types.NewLayer(types.LayerID(index))
-	l.SetBlocks(blocks)
+	l.SetBlocks(mBlocks)
 
 	return l, nil
 }
@@ -256,7 +188,7 @@ func (m *Mesh) ValidateLayer(lyr *types.Layer) {
 
 	oldPbase, newPbase := m.tortoise.HandleIncomingLayer(lyr)
 	m.lvMutex.Lock()
-	m.verifiedLayer = lyr.Index()
+	m.validatedLayer = lyr.Index()
 	m.lvMutex.Unlock()
 
 	if newPbase > oldPbase {
@@ -274,14 +206,33 @@ func (m *Mesh) ExtractUniqueOrderedTransactions(l *types.Layer) []*Transaction {
 	txs := make([]*Transaction, 0, layerSize)
 	sortedBlocks := SortBlocks(l.Blocks())
 
+	txids := make(map[types.TransactionId]struct{})
+
 	for _, b := range sortedBlocks {
 		if !m.tortoise.ContextualValidity(b.ID()) {
+			m.Info("block %v not Contextualy valid", b)
 			continue
 		}
-		for _, tx := range b.Txs {
-			//todo: think about these conversions.. are they needed?
-			txs = append(txs, SerializableTransaction2StateTransaction(tx))
+
+		for _, id := range b.TxIds {
+			txids[id] = struct{}{}
 		}
+	}
+
+	idSlice := make([]types.TransactionId, 0, len(txids))
+	for id := range txids {
+		idSlice = append(idSlice, id)
+	}
+
+	stxs, missing := m.GetTransactions(idSlice)
+	if len(missing) != 0 {
+		m.Error("could not find transactions %v from layer %v", missing, l.Index())
+		m.Panic("could not find transactions %v", missing)
+	}
+
+	for _, tx := range stxs {
+		//todo: think about these conversions.. are they needed?
+		txs = append(txs, SerializableTransaction2StateTransaction(tx))
 	}
 
 	return MergeDoubles(txs)
@@ -292,7 +243,7 @@ func (m *Mesh) PushTransactions(oldBase types.LayerID, newBase types.LayerID) {
 
 		l, err := m.GetLayer(i)
 		if err != nil || l == nil {
-			m.Error("") //todo handle error
+			m.Error("could not get layer %v  !!!!!!!!!!!!!!!! %v ", i, err) //todo handle error
 			return
 		}
 
@@ -308,7 +259,7 @@ func (m *Mesh) PushTransactions(oldBase types.LayerID, newBase types.LayerID) {
 //todo consider adding a boolean for layer validity instead error
 func (m *Mesh) GetVerifiedLayer(i types.LayerID) (*types.Layer, error) {
 	m.lMutex.RLock()
-	if i > types.LayerID(m.verifiedLayer) {
+	if i > types.LayerID(m.validatedLayer) {
 		m.lMutex.RUnlock()
 		m.Debug("failed to get layer  ", i, " layer not verified yet")
 		return nil, errors.New("layer not verified yet")
@@ -331,37 +282,67 @@ func (m *Mesh) GetLatestView() []types.BlockID {
 }
 
 func (m *Mesh) AddBlock(blk *types.Block) error {
-	m.Info("add block %d", blk.ID())
-	m.AtxDB.ProcessBlockATXs(blk) // change this to return error if process failed
+	m.Debug("add block %d", blk.ID())
 	if err := m.MeshDB.AddBlock(blk); err != nil {
-		m.Error("failed to add block %v  %v", blk.ID(), err)
+		m.Warning("failed to add block %v  %v", blk.ID(), err)
 		return err
 	}
 	m.SetLatestLayer(blk.Layer())
 	//new block add to orphans
-	m.handleOrphanBlocks(blk)
-	//m.tortoise.HandleLateblock.Block(block) //why this? todo should be thread safe?
+	m.handleOrphanBlocks(&blk.BlockHeader)
+
+	//invalidate txs and atxs from pool
+	m.invalidateFromPools(&blk.MiniBlock)
 	return nil
 }
 
-//todo this overwrites the previous value if it exists
-func (m *Mesh) AddLayer(layer *types.Layer) error {
-	if len(layer.Blocks()) == 0 {
-		m.layers.Put(layer.Index().ToBytes(), []byte{})
-		return nil
+func (m *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.SerializableTransaction, atxs []*types.ActivationTx) error {
+	m.Debug("add block %d", blk.ID())
+
+	atxids := make([]types.AtxId, 0, len(atxs))
+	for _, t := range atxs {
+		//todo this should return an error
+		m.AtxDB.ProcessAtx(t)
+		atxids = append(atxids, t.Id())
+
 	}
 
-	//add blocks to mDB
-	for _, bl := range layer.Blocks() {
-		if err := m.AddBlock(bl); err != nil {
-			return err
-		}
+	txids, err := m.writeTransactions(txs)
+	if err != nil {
+		return fmt.Errorf("could not write transactions of block %v database %v", blk.ID(), err)
 	}
+
+	blk.AtxIds = atxids
+	blk.TxIds = txids
+
+	if err := m.MeshDB.AddBlock(blk); err != nil {
+		m.Error("failed to add block %v  %v", blk.ID(), err)
+		return err
+	}
+
+	m.SetLatestLayer(blk.Layer())
+	//new block add to orphans
+	m.handleOrphanBlocks(&blk.BlockHeader)
+
+	//invalidate txs and atxs from pool
+	m.invalidateFromPools(&blk.MiniBlock)
+
+	m.Debug("added block %d", blk.ID())
 	return nil
+}
+
+func (m *Mesh) invalidateFromPools(blk *types.MiniBlock) {
+	for _, id := range blk.TxIds {
+		m.txInvalidator.Invalidate(id)
+	}
+	m.atxInvalidator.Invalidate(blk.ATXID)
+	for _, id := range blk.AtxIds {
+		m.atxInvalidator.Invalidate(id)
+	}
 }
 
 //todo better thread safety
-func (m *Mesh) handleOrphanBlocks(blk *types.Block) {
+func (m *Mesh) handleOrphanBlocks(blk *types.BlockHeader) {
 	m.orphMutex.Lock()
 	defer m.orphMutex.Unlock()
 	if _, ok := m.orphanBlocks[blk.Layer()]; !ok {
@@ -446,11 +427,11 @@ func (m *Mesh) AccumulateRewards(rewardLayer types.LayerID, params Config) {
 	for _, bl := range l.Blocks() {
 		atx, err := m.AtxDB.GetAtx(bl.ATXID)
 		if err != nil {
-			m.Log.Error("Atx not found %v layer %v block %v", bl.ATXID.String()[:5], bl.LayerIndex, bl.Id)
+			m.Error("Atx not found %v block %v", err, bl.Id)
 			continue
 		}
 		ids = append(ids, atx.NodeId.Key)
-		if uint32(len(bl.Txs)) < params.TxQuota {
+		if uint32(len(bl.TxIds)) < params.TxQuota {
 			//todo: think of giving out reward for unique txs as well
 			uq[bl.MinerID.Key] = uq[bl.MinerID.Key] + 1
 		}
@@ -482,18 +463,17 @@ func (m *Mesh) GetContextualValidity(id types.BlockID) (bool, error) {
 	return m.getContextualValidity(id)
 }
 
-func CreateGenesisBlock() *types.Block {
-	bl := &types.Block{
+var GenesisBlock = types.Block{
+	MiniBlock: types.MiniBlock{
 		BlockHeader: types.BlockHeader{Id: types.BlockID(GenesisId),
 			LayerIndex: 0,
 			Data:       []byte("genesis")},
-	}
-	return bl
+	},
 }
 
 func GenesisLayer() *types.Layer {
 	l := types.NewLayer(Genesis)
-	l.AddBlock(CreateGenesisBlock())
+	l.AddBlock(&GenesisBlock)
 	return l
 }
 
@@ -503,12 +483,19 @@ func (m *Mesh) GetATXs(atxIds []types.AtxId) (map[types.AtxId]*types.ActivationT
 	for _, id := range atxIds {
 		t, err := m.GetAtx(id)
 		if err != nil {
-			m.Error("could not get atx %v %v from database ", hex.EncodeToString(id.Bytes()), err)
+			m.Warning("could not get atx %v  from database, %v", hex.EncodeToString(id.Bytes()), err)
 			mIds = append(mIds, id)
 		} else {
+			if t.Nipst, err = m.GetNipst(t.Id()); err != nil {
+				m.Warning("could not get nipst %v from database, %v", hex.EncodeToString(id.Bytes()), err)
+				mIds = append(mIds, id)
+			}
 			atxs[t.Id()] = t
 		}
-
 	}
 	return atxs, mIds
+}
+
+func (m *Mesh) StateApi() StateApi {
+	return m.state
 }

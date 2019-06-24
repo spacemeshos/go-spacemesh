@@ -202,7 +202,7 @@ func (proc *ConsensusProcess) SetInbox(inbox chan *Msg) {
 func (proc *ConsensusProcess) eventLoop() {
 	proc.With().Info("Consensus Process Started",
 		log.Int("Hare-N", proc.cfg.N), log.Int("f", proc.cfg.F), log.String("duration", (time.Duration(proc.cfg.RoundDuration)*time.Second).String()),
-		log.Uint32("instance_id", uint32(proc.instanceId)), log.Int("exp_leaders", proc.cfg.ExpectedLeaders), log.String("set_values", proc.s.String()))
+		log.Uint64("layer_id", uint64(proc.instanceId)), log.Int("exp_leaders", proc.cfg.ExpectedLeaders), log.String("set_values", proc.s.String()))
 
 	// set pre-round InnerMsg and send
 	builder, err := proc.initDefaultBuilder(proc.s)
@@ -228,7 +228,7 @@ PreRound:
 	}
 	proc.preRoundTracker.FilterSet(proc.s)
 	if proc.s.Size() == 0 {
-		proc.Error("Fatal: PreRound ended with empty set")
+		proc.With().Error("Fatal: PreRound ended with empty set", log.Uint64("layer_id", uint64(proc.instanceId)))
 	}
 	proc.advanceToNextRound() // K was initialized to -1, K should be 0
 
@@ -350,7 +350,7 @@ func (proc *ConsensusProcess) sendMessage(msg *Msg) {
 }
 
 func (proc *ConsensusProcess) onRoundEnd() {
-	proc.With().Debug("End of round", log.Int32("K", proc.k))
+	proc.With().Debug("End of round", log.Int32("K", proc.k), log.Uint64("layer_id", uint64(proc.instanceId)))
 
 	// reset trackers
 	switch proc.currentRound() {
@@ -364,7 +364,8 @@ func (proc *ConsensusProcess) onRoundEnd() {
 		}
 		proc.With().Info("Round 2 ended",
 			log.String("proposed_set", sStr),
-			log.Bool("is_conflicting", proc.proposalTracker.IsConflicting()))
+			log.Bool("is_conflicting", proc.proposalTracker.IsConflicting()),
+			log.Uint64("layer_id", uint64(proc.instanceId)))
 	case Round3:
 		proc.endOfRound3()
 	}
@@ -372,6 +373,10 @@ func (proc *ConsensusProcess) onRoundEnd() {
 
 func (proc *ConsensusProcess) advanceToNextRound() {
 	proc.k++
+	if proc.k >= 4 && proc.k%4 == 0 {
+		proc.With().Warning("Starting new iteration", log.Int32("round_counter", proc.k),
+			log.Uint64("layer_id", uint64(proc.instanceId)))
+	}
 }
 
 func (proc *ConsensusProcess) beginRound1() {
@@ -520,7 +525,8 @@ func (proc *ConsensusProcess) processNotifyMsg(msg *Msg) {
 
 	// enough notifications, should terminate
 	proc.s = s // update to the agreed set
-	proc.With().Info("Consensus process terminated", log.String("set_values", proc.s.String()))
+	proc.With().Info("Consensus process terminated", log.String("set_values", proc.s.String()),
+		log.Uint64("layer_id", uint64(proc.instanceId)))
 	proc.terminationReport <- procOutput{proc.instanceId, proc.s}
 	proc.Close()
 	proc.terminating = true // ensures immediate termination
@@ -550,40 +556,42 @@ func (proc *ConsensusProcess) statusValidator() func(m *Msg) bool {
 
 func (proc *ConsensusProcess) endOfRound1() {
 	proc.statusesTracker.AnalyzeStatuses(proc.statusValidator())
-	proc.With().Info("Round 1 ended", log.Bool("is_svp_ready", proc.statusesTracker.IsSVPReady()))
+	proc.With().Info("Round 1 ended", log.Bool("is_svp_ready", proc.statusesTracker.IsSVPReady()),
+		log.Uint64("layer_id", uint64(proc.instanceId)))
 }
 
 func (proc *ConsensusProcess) endOfRound3() {
 	// notify already sent after committing, only one should be sent
 	if proc.notifySent {
-		proc.Info("End of round 3: notification already sent")
+		proc.Info("Round 3 ended: notification already sent")
 		return
 	}
 
 	if proc.proposalTracker.IsConflicting() {
-		proc.Warning("End of round 3: proposal is conflicting")
+		proc.Warning("Round 3 ended: proposal is conflicting")
 		return
 	}
 
 	if !proc.commitTracker.HasEnoughCommits() {
-		proc.Warning("End of round 3: not enough commits")
+		proc.Warning("Round 3 ended: not enough commits")
 		return
 	}
 
 	cert := proc.commitTracker.BuildCertificate()
 	if cert == nil {
-		proc.Error("Build certificate returned nil")
+		proc.Error("Round 3 ended: Build certificate returned nil")
 		return
 	}
 
 	s := proc.proposalTracker.ProposedSet()
 	if s == nil {
-		proc.Error("ProposedSet returned nil")
+		proc.Error("Round 3 ended: ProposedSet returned nil")
 		return
 	}
 
-	// commit & send notification InnerMsg
-	proc.Debug("end of round 3: committing on %v and sending notification message", s)
+	// commit & send notification msg
+	proc.With().Info("Round 3 ended: committing", log.String("committed_set", s.String()),
+		log.Uint64("layer_id", uint64(proc.instanceId)))
 	proc.s = s
 	proc.certificate = cert
 	builder, err := proc.initDefaultBuilder(proc.s)
@@ -603,7 +611,7 @@ func (proc *ConsensusProcess) isEligible() bool {
 
 // Returns the role matching the current round if eligible for this round, false otherwise
 func (proc *ConsensusProcess) currentRole() Role {
-	proof, err := proc.oracle.Proof(types.NodeId{Key: proc.signing.PublicKey().String(), VRFPublicKey: proc.nid.VRFPublicKey}, types.LayerID(proc.instanceId), proc.k)
+	proof, err := proc.oracle.Proof(proc.nid, types.LayerID(proc.instanceId), proc.k)
 	if err != nil {
 		proc.Error("Could not retrieve proof from oracle err=%v", err)
 		return Passive
