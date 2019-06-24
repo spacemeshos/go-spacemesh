@@ -14,8 +14,10 @@ import (
 const (
 	// HashLength is the expected length of the hash
 	HashLength = 32
-	// AddressLength is the expected length of the address
-	AddressLength = 20
+	// AddressShortLength is the length of the address as stored in the node's state
+	AddressShortLength = 20
+	// AddressFullLength is the actual length of the account's address
+	AddressFullLength = 32
 )
 
 func BytesToUint32(i []byte) uint32 { return binary.LittleEndian.Uint32(i) }

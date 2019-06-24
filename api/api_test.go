@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/address"
-	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -239,46 +238,24 @@ func createXdrSignedTransaction(params types.SerializableSignedTransaction, key 
 }
 
 func TestJsonWalletApi(t *testing.T) {
+	grpcServ, grpcStat, jsonServ, jsonStat := startServices(t)
+	// Without this running this on Travis CI might generate a connection refused error
+	// because the server may not be ready to accept connections just yet.
+	time.Sleep(3 * time.Second)
 
-	port1, err := node.GetUnboundedPort()
-	port2, err := node.GetUnboundedPort()
-	assert.NoError(t, err, "Should be able to establish a connection on a port")
-	addrBytes := []byte{0x01}
+	addrBytes := getFullAddress()
 	addr := address.BytesToAddress(addrBytes)
-	if config.ConfigValues.JSONServerPort == 0 {
-		config.ConfigValues.JSONServerPort = port1
-		config.ConfigValues.GrpcServerPort = port2
-	}
-	ap := NewNodeAPIMock()
-	net := NetworkMock{broadcasted: []byte{0x00}}
-	ap.nonces[addr] = 10
-	ap.balances[addr] = big.NewInt(100)
-	txApi := TxAPIMock{}
-	grpcService := NewGrpcService(&net, ap, &txApi)
-	jsonService := NewJSONHTTPServer()
 
-	jsonStatus := make(chan bool, 2)
-	grpcStatus := make(chan bool, 2)
-
-	// start grp and json server
-	grpcService.StartService(grpcStatus)
-	<-grpcStatus
-
-	jsonService.StartService(jsonStatus)
-	<-jsonStatus
+	grpcServ.Network.(*NetworkMock).broadcasted = []byte{0x00}
+	grpcServ.StateApi.(NodeAPIMock).nonces[addr] = 10
+	grpcServ.StateApi.(NodeAPIMock).balances[addr] = big.NewInt(100)
 
 	const message = "10"
 	const contentType = "application/json"
 
 	// generate request payload (api input params)
-	reqParams := pb.AccountId{Address: common.Bytes2Hex(addrBytes)}
-	var m jsonpb.Marshaler
-	payload, err := m.MarshalToString(&reqParams)
-	assert.NoError(t, err, "failed to marshal to string")
+	payload := createAccountId(t, addrBytes)
 
-	// Without this running this on Travis CI might generate a connection refused error
-	// because the server may not be ready to accept connections just yet.
-	time.Sleep(3 * time.Second)
 
 	url := fmt.Sprintf("http://127.0.0.1:%d/v1/nonce", config.ConfigValues.JSONServerPort)
 	resp, err := http.Post(url, contentType, strings.NewReader(payload))
@@ -325,7 +302,7 @@ func TestJsonWalletApi(t *testing.T) {
 	txParams := types.SerializableSignedTransaction{}
 	sPub, key, _ := ed25519.GenerateKey(crand.Reader)
 	sAddr := state.PublicKeyToAccountAddress(sPub)
-	txApi.setMockOrigin(sAddr)
+	grpcServ.Tx.(*TxAPIMock).setMockOrigin(sAddr)
 	rec := address.BytesToAddress([]byte{0xde, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa})
 	txParams.Recipient = rec
 	txParams.AccountNonce = 1111
@@ -337,6 +314,7 @@ func TestJsonWalletApi(t *testing.T) {
 	txToSend := pb.SignedTransaction{Tx: xdrTx}
 
 	var buf2 bytes.Buffer
+	var m jsonpb.Marshaler
 	err = m.Marshal(&buf2, &txToSend)
 	assert.NoError(t, err, "failed to marshal pb")
 
@@ -360,16 +338,144 @@ func TestJsonWalletApi(t *testing.T) {
 
 	val, err := types.SignedTransactionAsBytes(&txParams)
 	assert.NoError(t, err)
-	assert.Equal(t, val, net.broadcasted)
+	assert.Equal(t, val, grpcServ.Network.(*NetworkMock).broadcasted)
 
 	value = resp.Header.Get("Content-Type")
 	assert.Equal(t, value, contentType)
 
 	// stop the services
+	jsonServ.StopService()
+	<-jsonStat
+	grpcServ.StopService()
+	<-grpcStat
+}
+
+func startServices(t *testing.T) (*SpacemeshGrpcService, chan bool, *JSONHTTPServer, chan bool){
+	port1, err := node.GetUnboundedPort()
+	port2, err := node.GetUnboundedPort()
+	assert.NoError(t, err, "Should be able to establish a connection on a port")
+	if config.ConfigValues.JSONServerPort == 0 {
+		config.ConfigValues.JSONServerPort = port1
+		config.ConfigValues.GrpcServerPort = port2
+	}
+	ap := NewNodeAPIMock()
+	net := NetworkMock{}
+	tx := TxAPIMock{}
+	grpcService := NewGrpcService(&net, ap, &tx)
+	jsonService := NewJSONHTTPServer()
+
+	jsonStatus := make(chan bool, 2)
+	grpcStatus := make(chan bool, 2)
+
+	// start grp and json server
+	grpcService.StartService(grpcStatus)
+	<-grpcStatus
+
+	jsonService.StartService(jsonStatus)
+	<-jsonStatus
+
+	return grpcService, grpcStatus, jsonService, jsonStatus
+}
+
+func stopServices(grpcService *SpacemeshGrpcService, grpcStatus chan bool, jsonService *JSONHTTPServer, jsonStatus chan bool) {
+	// stop the services
 	jsonService.StopService()
 	<-jsonStatus
 	grpcService.StopService()
 	<-grpcStatus
+}
+
+func createAccountId(t *testing.T, addr []byte) string {
+	// generate request payload (api input params)
+	reqParams := pb.AccountId{Address: addr}
+	var m jsonpb.Marshaler
+	payload, err := m.MarshalToString(&reqParams)
+	assert.NoError(t, err, "failed to marshal to string")
+	return payload
+}
+
+func getFullAddress() []byte {
+	return []byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
+		0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
+		0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
+		0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08}
+}
+
+const contentType = "application/json"
+
+func TestGetNonceApi(t *testing.T) {
+	grpcServ, grpcStat, jsonServ, jsonStat := startServices(t)
+	// Without this running this on Travis CI might generate a connection refused error
+	// because the server may not be ready to accept connections just yet.
+	time.Sleep(3 * time.Second)
+
+	// Too short address
+	badAddr := []byte{0x01}
+	payload := createAccountId(t, badAddr)
+	url := fmt.Sprintf("http://127.0.0.1:%d/v1/nonce", config.ConfigValues.JSONServerPort)
+	resp, err := http.Post(url, contentType, strings.NewReader(payload))
+	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+	assert.NoError(t, err)
+
+	// Full address but unknown
+	fullAddr := getFullAddress()
+	payload = createAccountId(t, fullAddr)
+	resp, err = http.Post(url, contentType, strings.NewReader(payload))
+	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+	assert.NoError(t, err)
+
+	// Happy flow
+	grpcServ.StateApi.(NodeAPIMock).nonces[address.BytesToAddress(fullAddr)] = 30
+	resp, err = http.Post(url, contentType, strings.NewReader(payload))
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.NoError(t, err)
+
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	bodyString := string(body)
+	assert.NoError(t, err, "failed to read response body")
+	assert.Equal(t, "{\"value\":\"30\"}", bodyString)
+
+	stopServices(grpcServ, grpcStat, jsonServ, jsonStat)
+}
+
+func TestGetBalanceApi(t *testing.T) {
+	grpcServ, grpcStat, jsonServ, jsonStat := startServices(t)
+
+	badAddr := []byte{0x01}
+	payload := createAccountId(t, badAddr)
+
+	// Without this running this on Travis CI might generate a connection refused error
+	// because the server may not be ready to accept connections just yet.
+	time.Sleep(3 * time.Second)
+
+	// Too short address
+	url := fmt.Sprintf("http://127.0.0.1:%d/v1/balance", config.ConfigValues.JSONServerPort)
+	resp, err := http.Post(url, contentType, strings.NewReader(payload))
+	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+	assert.NoError(t, err)
+
+	// Full address but unknown
+	fullAddr := getFullAddress()
+	payload = createAccountId(t, fullAddr)
+	resp, err = http.Post(url, contentType, strings.NewReader(payload))
+	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+	assert.NoError(t, err)
+
+	// Happy flow
+	grpcServ.StateApi.(NodeAPIMock).nonces[address.BytesToAddress(fullAddr)] = 22
+	grpcServ.StateApi.(NodeAPIMock).balances[address.BytesToAddress(fullAddr)] = big.NewInt(55)
+	resp, err = http.Post(url, contentType, strings.NewReader(payload))
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.NoError(t, err)
+
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	bodyString := string(body)
+	assert.NoError(t, err, "failed to read response body")
+	assert.Equal(t, "{\"value\":\"55\"}", bodyString)
+
+	stopServices(grpcServ, grpcStat, jsonServ, jsonStat)
 }
 
 func TestJsonWalletApi_Errors(t *testing.T) {
@@ -399,7 +505,7 @@ func TestJsonWalletApi_Errors(t *testing.T) {
 	const contentType = "application/json"
 
 	// generate request payload (api input params)
-	reqParams := pb.AccountId{Address: common.Bytes2Hex(addrBytes)}
+	reqParams := pb.AccountId{Address: addrBytes}
 	var m jsonpb.Marshaler
 	payload, err := m.MarshalToString(&reqParams)
 	assert.NoError(t, err, "failed to marshal to string")

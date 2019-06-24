@@ -8,6 +8,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/api/pb"
+	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/types"
@@ -35,9 +36,13 @@ func (s SpacemeshGrpcService) Echo(ctx context.Context, in *pb.SimpleMessage) (*
 
 // Echo returns the response for an echo api request
 func (s SpacemeshGrpcService) GetBalance(ctx context.Context, in *pb.AccountId) (*pb.SimpleMessage, error) {
-	log.Info("GRPC GetBalance msg")
-	addr := address.HexToAddress(in.Address)
-	log.Info("GRPC GetBalance for address %x (len %v)", addr, len(addr))
+	len := len(in.Address)
+	log.Info("GRPC GetBalance msg, address - %v (len %v)", in.Address, len)
+	if len != common.AddressFullLength {
+		log.Error("GRPC GetBalance got address with wrong length, actual %v, expected %v", len, common.AddressFullLength)
+		return nil, fmt.Errorf("address has wrong length")
+	}
+	addr := address.BytesToAddress(in.Address)
 	if s.StateApi.Exist(addr) != true {
 		log.Error("GRPC GetBalance returned error msg: account does not exist, address %x", addr)
 		return nil, fmt.Errorf("account does not exist")
@@ -51,9 +56,13 @@ func (s SpacemeshGrpcService) GetBalance(ctx context.Context, in *pb.AccountId) 
 
 // Echo returns the response for an echo api request
 func (s SpacemeshGrpcService) GetNonce(ctx context.Context, in *pb.AccountId) (*pb.SimpleMessage, error) {
-	log.Info("GRPC GetNonce msg")
-	addr := address.HexToAddress(in.Address)
-
+	addrLen := len(in.Address)
+	log.Info("GRPC GetNonce msg, address - %v (addrLen %v)", in.Address, addrLen)
+	if addrLen != common.AddressFullLength {
+		log.Error("GRPC GetNonce got address with wrong length, actual %v, expected %v", addrLen, common.AddressFullLength)
+		return nil, fmt.Errorf("address has wrong length")
+	}
+	addr := address.BytesToAddress(in.Address)
 	if s.StateApi.Exist(addr) != true {
 		log.Error("GRPC GetNonce got error msg: account does not exist, %v", addr)
 		return nil, fmt.Errorf("account does not exist")

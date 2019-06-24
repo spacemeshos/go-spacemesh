@@ -37,6 +37,10 @@ func (s JSONHTTPServer) StopService() {
 func (s JSONHTTPServer) listenStop() {
 	<-s.stop
 	log.Debug("Shutting down json API server...")
+	if s.server == nil {
+		log.Warning("server already down")
+		return
+	}
 	if err := s.server.Shutdown(s.ctx); err != nil {
 		log.Error("Error during shutdown json API server : %v", err)
 	}

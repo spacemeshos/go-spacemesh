@@ -10,7 +10,7 @@ import (
 )
 
 // Address represents the 20 byte address of an spacemesh account.
-type Address [common.AddressLength]byte
+type Address [common.AddressShortLength]byte
 
 var addressT = reflect.TypeOf(Address{})
 
@@ -82,9 +82,9 @@ func (a Address) Format(s fmt.State, c rune) {
 // If b is larger than len(a) it will panic.
 func (a *Address) SetBytes(b []byte) {
 	if len(b) > len(a) {
-		b = b[len(b)-common.AddressLength:]
+		b = b[len(b)-common.AddressShortLength:]
 	}
-	copy(a[common.AddressLength-len(b):], b)
+	copy(a[common.AddressShortLength-len(b):], b)
 }
 
 /*
@@ -109,8 +109,8 @@ func (a *Address) Scan(src interface{}) error {
 	if !ok {
 		return fmt.Errorf("can't scan %T into Address", src)
 	}
-	if len(srcB) != AddressLength {
-		return fmt.Errorf("can't scan []byte of len %d into Address, want %d", len(srcB), AddressLength)
+	if len(srcB) != AddressShortLength {
+		return fmt.Errorf("can't scan []byte of len %d into Address, want %d", len(srcB), AddressShortLength)
 	}
 	copy(a[:], srcB)
 	return nil

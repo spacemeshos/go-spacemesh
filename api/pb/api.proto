@@ -9,14 +9,7 @@ message SimpleMessage {
 }
 
 message AccountId {
-    string address =1;
-}
-
-message TransferFunds {
-    AccountId sender =1;
-    AccountId receiver =2;
-    uint64 nonce =3;
-    uint64 amount =4;
+    bytes address =1;
 }
 
 message SignedTransaction {
