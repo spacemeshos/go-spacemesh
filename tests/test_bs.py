@@ -86,7 +86,9 @@ def setup_bootstrap_in_namespace(namespace, bs_deployment_info, bootstrap_config
         time.sleep(1)
 
     bs_pod['pod_ip'] = resp.status.pod_ip
-    bootstrap_pod_logs = client.CoreV1Api().read_namespaced_pod_log(name=bs_pod['name'], namespace=namespace)
+    bootstrap_pod_logs = client.CoreV1Api().read_namespaced_pod_log(name=bs_pod['name'],
+                                                                    namespace=namespace,
+                                                                    container='bootstrap')
     match = re.search(r"Local node identity >> (?P<bootstrap_key>\w+)", bootstrap_pod_logs)
     bs_pod['key'] = match.group('bootstrap_key')
     bs_deployment_info.pods = [bs_pod]
@@ -95,6 +97,7 @@ def setup_bootstrap_in_namespace(namespace, bs_deployment_info, bootstrap_config
 # ==============================================================================
 #    Fixtures
 # ==============================================================================
+
 
 def setup_server(deployment_name, deployment_file, namespace):
     deployment_name_prefix = deployment_name.split('-')[0]
@@ -183,7 +186,6 @@ def setup_bootstrap(request, init_session, setup_oracle, create_configmap):
                                         bootstrap_deployment_info,
                                         testconfig['bootstrap'],
                                         oracle=setup_oracle,
-                                        poet=setup_poet,
                                         dep_time_out=testconfig['deployment_ready_time_out'])
 
 
@@ -229,7 +231,7 @@ def setup_clients_in_namespace(namespace, bs_deployment_info, client_deployment_
 
 
 @pytest.fixture(scope='module')
-def setup_clients(request, init_session, setup_oracle, setup_poet, setup_bootstrap):
+def setup_clients(request, init_session, setup_oracle, setup_bootstrap):
 
     client_info = DeploymentInfo(dep_id=setup_bootstrap.deployment_id)
 
@@ -273,7 +275,7 @@ def setup_clients(request, init_session, setup_oracle, setup_poet, setup_bootstr
                                       client_info,
                                       testconfig['client'],
                                       oracle=setup_oracle,
-                                      poet=setup_poet,
+                                      poet=setup_bootstrap.pods[0],
                                       dep_time_out=testconfig['deployment_ready_time_out'])
 
 
