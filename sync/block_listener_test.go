@@ -4,15 +4,17 @@ import (
 	"github.com/google/uuid"
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"math/big"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -29,17 +31,15 @@ func (pm PeersMock) Close() {
 	return
 }
 
-func ListenerFactory(serv service.Service, peers p2p.Peers, name string) *BlockListener {
+func ListenerFactory(serv service.Service, peers p2p.Peers, name string, layer types.LayerID) *BlockListener {
 
-	tick := 200 * time.Millisecond
-	layout := "2006-01-02T15:04:05.000Z"
-	str := "2018-11-12T11:45:26.371Z"
-	start, _ := time.Parse(layout, str)
-	ts := timesync.NewTicker(MockTimer{}, tick, start)
-	tk := ts.Subscribe()
+	ch := make(chan types.LayerID, 1)
+	ch <- layer
 	l := log.New(name, "", "")
-	sync := NewSync(serv, getMesh(memoryDB, name+"_"+time.Now().String()), BlockValidatorMock{}, TxValidatorMock{}, conf, tk, l)
+	sync := NewSync(serv, getMesh(memoryDB, name+"_"+time.Now().String()), miner.NewMemPool(reflect.TypeOf(types.SerializableTransaction{})),
+		miner.NewMemPool(reflect.TypeOf(types.ActivationTx{})), BlockValidatorMock{}, TxValidatorMock{}, conf, ch, l)
 	sync.Peers = peers
+	sync.Start()
 	nbl := NewBlockListener(serv, BlockValidatorMock{}, sync, 2, log.New(name, "", ""))
 	return nbl
 }
@@ -48,9 +48,12 @@ func TestBlockListener(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
-	bl1 := ListenerFactory(n1, PeersMock{func() []p2p.Peer { return []p2p.Peer{n2.PublicKey()} }}, "1")
-	bl2 := ListenerFactory(n2, PeersMock{func() []p2p.Peer { return []p2p.Peer{n1.PublicKey()} }}, "2")
+	bl1 := ListenerFactory(n1, PeersMock{func() []p2p.Peer { return []p2p.Peer{n2.PublicKey()} }}, "1", 3)
+	bl2 := ListenerFactory(n2, PeersMock{func() []p2p.Peer { return []p2p.Peer{n1.PublicKey()} }}, "2", 3)
 	bl2.Start()
+	atx1 := atx()
+	atx2 := atx()
+	atx3 := atx()
 
 	bl1.ProcessAtx(atx1)
 	bl1.ProcessAtx(atx2)
@@ -91,11 +94,12 @@ func TestBlockListener2(t *testing.T) {
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
 
-	bl1 := ListenerFactory(n1, PeersMock{func() []p2p.Peer { return []p2p.Peer{n2.PublicKey()} }}, "TestBlockListener1")
-	bl2 := ListenerFactory(n2, PeersMock{func() []p2p.Peer { return []p2p.Peer{n1.PublicKey()} }}, "TestBlockListener2")
+	bl1 := ListenerFactory(n1, PeersMock{func() []p2p.Peer { return []p2p.Peer{n2.PublicKey()} }}, "TestBlockListener_1", 2)
+	bl2 := ListenerFactory(n2, PeersMock{func() []p2p.Peer { return []p2p.Peer{n1.PublicKey()} }}, "TestBlockListener_2", 2)
 
 	bl2.Start()
 
+	atx1 := atx()
 	bl1.ProcessAtx(atx1)
 	block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
 	block1.ATXID = atx1.Id()
@@ -171,24 +175,22 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 	n2 := sim.NewNode()
 	//n2.RegisterGossipProtocol(NewBlockProtocol)
 
-	bl1 := ListenerFactory(n1, PeersMock{func() []p2p.Peer { return []p2p.Peer{n2.PublicKey()} }}, "5")
-	bl2 := ListenerFactory(n2, PeersMock{func() []p2p.Peer { return []p2p.Peer{n1.PublicKey()} }}, "4")
+	bl1 := ListenerFactory(n1, PeersMock{func() []p2p.Peer { return []p2p.Peer{n2.PublicKey()} }}, "5", 1)
+	bl2 := ListenerFactory(n2, PeersMock{func() []p2p.Peer { return []p2p.Peer{n1.PublicKey()} }}, "5", 1)
 	bl1.Start()
-	bl2.Start()
 
 	blk := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data1"))
 	tx := types.NewSerializableTransaction(0, address.BytesToAddress([]byte{0x01}), address.BytesToAddress([]byte{0x02}), big.NewInt(10), big.NewInt(10), 10)
-	blk.AddTransaction(tx)
-	blk.AddAtx(types.NewActivationTx(types.NodeId{"whatwhatwhatwhat", []byte("bbb")}, 1, types.AtxId{}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&common.Hash{}), false))
+	atx := types.NewActivationTx(types.NodeId{"whatwhatwhatwhat", []byte("bbb")}, 1, types.AtxId{}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&common.Hash{}), false)
 
-	data, err := types.InterfaceToBytes(*blk)
-	require.NoError(t, err)
-	blk2 := &types.Block{}
-	err = types.BytesToInterface(data, blk2)
-	require.NoError(t, err)
-	require.True(t, blk.Compare(blk2))
+	bl2.AddBlockWithTxs(blk, []*types.SerializableTransaction{tx}, []*types.ActivationTx{atx})
 
-	err = n2.Broadcast(NewBlockProtocol, data)
+	mblk := types.Block{MiniBlock: types.MiniBlock{BlockHeader: blk.BlockHeader, TxIds: []types.TransactionId{types.GetTransactionId(tx)}, AtxIds: []types.AtxId{atx.Id()}}}
+
+	data, err := types.InterfaceToBytes(&mblk)
+	require.NoError(t, err)
+
+	err = n2.Broadcast(config.NewBlockProtocol, data)
 	assert.NoError(t, err)
 
 	time.Sleep(3 * time.Second)
@@ -208,7 +210,6 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 			}
 		}
 	}
-
 }
 
 //todo integration testing

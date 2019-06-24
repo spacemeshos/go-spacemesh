@@ -1,11 +1,11 @@
-=============== May 22, 2019 (IDT) ===============
-14:47:58.181215 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
-14:47:58.181760 db@open opening
-14:47:58.182179 version@stat F·[] S·0B[] Sc·[]
-14:47:58.182445 db@janitor F·2 G·0
-14:47:58.182464 db@open done T·687.41µs
-14:47:58.894314 memdb@flush N·9896 S·3MiB
-14:47:58.908548 memdb@flush created L0@3 N·9896 S·785KiB "\x00\x00\x00\x00\x00\x00\x00\x00,v1":"c\x00\x00\x00\x00\x00\x00\x00,v9802"
-14:47:58.908598 version@stat F·[1] S·785KiB[785KiB] Sc·[0.25]
-14:47:58.908851 memdb@flush committed F·1 T·14.478812ms
-14:47:58.909441 journal@remove removed @1
+=============== Jun 19, 2019 (IDT) ===============
+12:27:30.610492 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+12:27:30.611110 db@open opening
+12:27:30.611588 version@stat F·[] S·0B[] Sc·[]
+12:27:30.611933 db@janitor F·2 G·0
+12:27:30.611956 db@open done T·828.78µs
+12:29:15.914065 memdb@flush N·9896 S·3MiB
+12:29:15.926175 memdb@flush created L0@3 N·9896 S·785KiB "\x00\x00\x00\x00\x00\x00\x00\x00,v1":"c\x00\x00\x00\x00\x00\x00\x00,v9802"
+12:29:15.926211 version@stat F·[1] S·785KiB[785KiB] Sc·[0.25]
+12:29:15.926588 memdb@flush committed F·1 T·12.215874ms
+12:29:15.927070 journal@remove removed @1
