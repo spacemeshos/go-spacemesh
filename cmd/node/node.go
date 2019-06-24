@@ -333,7 +333,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	msh := mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, txpool, atxpool, processor, lg.WithName("mesh")) //todo: what to do with the logger?
 
 	conf := sync.Configuration{Concurrency: 4, LayerSize: int(layerSize), RequestTimeout: 100 * time.Millisecond}
-	syncer := sync.NewSync(swarm, msh,txpool, atxpool, blockValidator, sync.TxValidatorMock{}, conf, clock.Subscribe(), clock.GetCurrentLayer(), lg.WithName("sync"))
+	syncer := sync.NewSync(swarm, msh, txpool, atxpool, blockValidator, sync.TxValidatorMock{}, conf, clock.Subscribe(), clock.GetCurrentLayer(), lg.WithName("sync"))
 	blockOracle := oracle.NewMinerBlockOracle(layerSize, uint16(layersPerEpoch), atxdb, beaconProvider, vrfSigner, nodeID, syncer.IsLatest, lg.WithName("blockOracle"))
 
 	// TODO: we should probably decouple the apptest and the node (and duplicate as necessary)
@@ -362,7 +362,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 		lg.WithName("nipstBuilder"),
 	)
 	atxBuilder := activation.NewBuilder(nodeID, atxdb, swarm, atxdb, msh, app.Config.CONSENSUS.LayersPerEpoch,
-		nipstBuilder, clock.Subscribe(),  syncer.IsLatest, lg.WithName("atxBuilder"))
+		nipstBuilder, clock.Subscribe(), syncer.IsLatest, lg.WithName("atxBuilder"))
 
 	app.blockProducer = &blockProducer
 	app.blockListener = blockListener

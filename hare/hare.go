@@ -35,8 +35,6 @@ type orphanBlockProvider interface {
 	GetUnverifiedLayerBlocks(layerId types.LayerID) ([]types.BlockID, error)
 }
 
-
-
 // Hare is an orchestrator that shoots consensus processes and collects their termination output
 type Hare struct {
 	Closer
@@ -154,7 +152,7 @@ func (h *Hare) onTick(id types.LayerID) {
 		h.lastLayer = id
 	}
 	h.layerLock.Unlock()
-	if !h.isSynced(){
+	if !h.isSynced() {
 		h.Info("hare got tick, not synced")
 		return
 	}

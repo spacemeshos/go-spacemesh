@@ -485,7 +485,7 @@ func Test_TwoNodes_SyncIntegrationSuite(t *testing.T) {
 	sis.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
 		l := log.New(fmt.Sprintf("%s_%d", sis.name, atomic.LoadUint32(&i)), "", "")
 		msh := getMesh(memoryDB, fmt.Sprintf("%s_%s", sis.name, time.Now()))
-		sync := NewSync(s, msh, miner.NewMemPool(reflect.TypeOf(types.SerializableTransaction{})), miner.NewMemPool(reflect.TypeOf(types.ActivationTx{})), BlockValidatorMock{}, TxValidatorMock{}, conf, tk,0, l)
+		sync := NewSync(s, msh, miner.NewMemPool(reflect.TypeOf(types.SerializableTransaction{})), miner.NewMemPool(reflect.TypeOf(types.ActivationTx{})), BlockValidatorMock{}, TxValidatorMock{}, conf, tk, 0, l)
 		sis.syncers = append(sis.syncers, sync)
 		ts.Start()
 		atomic.AddUint32(&i, 1)
@@ -569,7 +569,7 @@ func Test_Multiple_SyncIntegrationSuite(t *testing.T) {
 	sis.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
 		l := log.New(fmt.Sprintf("%s_%d", sis.name, atomic.LoadUint32(&i)), "", "")
 		msh := getMesh(memoryDB, fmt.Sprintf("%s_%d", sis.name, atomic.LoadUint32(&i)))
-		sync := NewSync(s, msh, miner.NewMemPool(reflect.TypeOf(types.SerializableTransaction{})), miner.NewMemPool(reflect.TypeOf(types.ActivationTx{})), BlockValidatorMock{}, TxValidatorMock{}, conf, tk,0, l)
+		sync := NewSync(s, msh, miner.NewMemPool(reflect.TypeOf(types.SerializableTransaction{})), miner.NewMemPool(reflect.TypeOf(types.ActivationTx{})), BlockValidatorMock{}, TxValidatorMock{}, conf, tk, 0, l)
 		ts.Start()
 		sis.syncers = append(sis.syncers, sync)
 		atomic.AddUint32(&i, 1)

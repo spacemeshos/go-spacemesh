@@ -80,7 +80,7 @@ func (t *Ticker) notifyOnTick() {
 	t.currentLayer++
 }
 
-func (t *Ticker) GetCurrentLayer() types.LayerID{
+func (t *Ticker) GetCurrentLayer() types.LayerID {
 	t.m.RLock()
 	defer t.m.RUnlock()
 	return t.currentLayer
