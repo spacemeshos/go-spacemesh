@@ -23,6 +23,7 @@ const (
 	defaultDataDirName     = "spacemesh"
 	Genesis                = mesh.Genesis
 	GenesisId              = mesh.GenesisId
+	NewBlockProtocol       = "newBlock"
 )
 
 var (

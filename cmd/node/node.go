@@ -30,6 +30,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"reflect"
 	"runtime"
 	"runtime/pprof"
 	"time"
@@ -254,9 +255,8 @@ func (app *SpacemeshApp) setupGenesis(cfg *apiCfg.GenesisConfig) {
 		app.state.SetNonce(id, acc.Nonce)
 	}
 
-	genesis := mesh.CreateGenesisBlock()
 	app.state.Commit(false)
-	app.mesh.AddBlock(genesis)
+	app.mesh.AddBlock(&mesh.GenesisBlock)
 }
 
 func (app *SpacemeshApp) setupTestFeatures() {
@@ -327,10 +327,15 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	blockValidator := oracle.NewBlockEligibilityValidator(int32(layerSize), uint16(layersPerEpoch), atxdb, beaconProvider, BLS381.Verify2, lg.WithName("blkElgValidator"))
 
 	trtl := tortoise.NewAlgorithm(int(1), mdb, lg.WithName("trtl"))
-	msh := mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, processor, lg.WithName("mesh")) //todo: what to do with the logger?
+
+	txpool := miner.NewMemPool(reflect.TypeOf([]*types.SerializableTransaction{}))
+	atxpool := miner.NewMemPool(reflect.TypeOf([]*types.ActivationTx{}))
+
+	msh := mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, txpool, atxpool, processor, lg.WithName("mesh")) //todo: what to do with the logger?
 
 	conf := sync.Configuration{Concurrency: 4, LayerSize: int(layerSize), RequestTimeout: 100 * time.Millisecond}
-	syncer := sync.NewSync(swarm, msh, blockValidator, sync.TxValidatorMock{}, conf, clock.Subscribe(), lg.WithName("sync"))
+
+	syncer := sync.NewSync(swarm, msh, txpool, atxpool, blockValidator, sync.TxValidatorMock{}, conf, clock.Subscribe(), lg.WithName("sync"))
 
 	// TODO: we should probably decouple the apptest and the node (and duplicate as necessary)
 	var hOracle hare.Rolacle
@@ -343,7 +348,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 
 	ha := hare.New(app.Config.HARE, swarm, sgn, nodeID, msh, hOracle, app.Config.CONSENSUS.LayersPerEpoch, idStore, atxdb, clock.Subscribe(), lg.WithName("hare"))
 
-	blockProducer := miner.NewBlockBuilder(nodeID, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle, lg.WithName("blockProducer"))
+	blockProducer := miner.NewBlockBuilder(nodeID, sgn, swarm, clock.Subscribe(), txpool, atxpool, coinToss, msh, ha, blockOracle, atxdb.ProcessAtx, lg.WithName("blockProducer"))
 	blockListener := sync.NewBlockListener(swarm, blockValidator, syncer, 4, lg.WithName("blockListener"))
 
 	poetListener := activation.NewPoetListener(swarm, poetDb, lg.WithName("poetListener"))
@@ -391,10 +396,11 @@ func (app *SpacemeshApp) startServices() {
 
 func (app SpacemeshApp) stopServices() {
 
-	app.log.Info("closing services")
+	log.Info("%v closing services ", app.nodeId.Key)
 
-	app.log.Info("closing clock")
-	app.clock.Close()
+	if err := app.blockProducer.Close(); err != nil {
+		log.Error("cannot stop block producer %v", err)
+	}
 
 	app.log.Info("closing PoET listener")
 	app.poetListener.Close()
@@ -402,24 +408,24 @@ func (app SpacemeshApp) stopServices() {
 	app.log.Info("closing atx builder")
 	app.atxBuilder.Stop()
 
-	app.log.Info("closing Hare")
-	app.hare.Close() //todo: need to add this
-
-	app.log.Info("closing p2p")
-	app.P2P.Shutdown()
-
-	if err := app.blockProducer.Close(); err != nil {
-		app.log.Error("cannot stop block producer %v", err)
-	}
-
-	app.log.Info("closing blockListener")
+	log.Info("%v closing blockListener", app.nodeId.Key)
 	app.blockListener.Close()
 
-	app.log.Info("closing mesh")
+	log.Info("%v closing sync", app.nodeId.Key)
+	app.syncer.Close()
+
+	log.Info("%v closing Hare", app.nodeId.Key)
+	app.hare.Close() //todo: need to add this
+
+	log.Info("%v closing clock", app.nodeId.Key)
+	app.clock.Close()
+
+	log.Info("%v closing p2p", app.nodeId.Key)
+	app.P2P.Shutdown()
+
+	log.Info("%v closing mesh", app.nodeId.Key)
 	app.mesh.Close()
 
-	app.log.Info("closing sync")
-	app.syncer.Close()
 }
 
 func getEdIdentity() (*signing.EdSigner, error) {
@@ -510,7 +516,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	}
 
 	log.Info("connecting to POET on IP %v", app.Config.PoETServer)
-	poet, err := nipst.NewRemoteRPCPoetClient(app.Config.PoETServer, 5*time.Minute)
+	poet, err := nipst.NewRemoteRPCPoetClient(app.Config.PoETServer, 30*time.Second)
 	if err != nil {
 		log.Error("poet server not found on addr %v, err: %v", app.Config.PoETServer, err)
 		return
