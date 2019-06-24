@@ -1,5 +1,8 @@
 from pytest_testconfig import config as testconfig
-from tests.queries import query_hare_output_set, query_round_1, query_round_2, query_round_3, query_pre_round, query_message
+
+from tests.delayed_assert.delayed_assert import expect, assert_expectations
+from tests.queries import query_hare_output_set, query_round_1, query_round_2, query_round_3, query_pre_round, \
+    query_no_svp, query_empty_set, query_new_iteration
 
 
 class Set:
@@ -51,23 +54,70 @@ def assert_all(curr_idx, ns):
     total = testconfig['bootstrap']['replicas'] + testconfig['client']['replicas']
 
     # assert no node ended up with an empty set at the end of the pre-round
-    lst = query_pre_round(curr_idx, ns)
+    lst = query_pre_round(curr_idx, ns, 1)
     assert 0 == len(lst)
 
     # assert all nodes had SVP ready at the end of round 1
-    lst = query_round_1(curr_idx, ns)
+    lst = query_round_1(curr_idx, ns, 1)
     assert total == len(lst)
 
     # assert all nodes had a (non-nil) proposal at the end of round 2
-    lst = query_round_2(curr_idx, ns)
+    lst = query_round_2(curr_idx, ns, 1)
     assert total == len(lst)
 
     # assert at least f+1 has committed at the end of round 3
-    lst = query_round_3(curr_idx, ns)
+    lst = query_round_3(curr_idx, ns, 1)
     f = int(testconfig['client']['args']['hare-max-adversaries'])
     assert len(lst) >= f + 1
 
     # assert termination output set
-    lst = query_hare_output_set(curr_idx, ns)
+    lst = query_hare_output_set(curr_idx, ns, 1)
     assert total == len(lst)
     assert validate(lst)
+
+
+def expect_consensus_process(curr_idx, ns, layer, total):
+    msg = 'layer=%s' % layer
+    # assert no node ended up with an empty set at the end of the pre-round
+    lst = query_pre_round(curr_idx, ns, layer)
+    expect(0 == len(lst), msg)
+
+    # assert all nodes had SVP ready at the end of round 1
+    lst = query_round_1(curr_idx, ns, layer)
+    expect(total == len(lst), msg)
+
+    # assert all nodes had a (non-nil) proposal at the end of round 2
+    lst = query_round_2(curr_idx, ns, layer)
+    expect(total == len(lst), msg)
+
+    # assert at least f+1 has committed at the end of round 3
+    lst = query_round_3(curr_idx, ns, layer)
+    f = int(testconfig['client']['args']['hare-max-adversaries'])
+    expect(len(lst) >= f + 1, msg)
+
+    # assert termination output set
+    lst = query_hare_output_set(curr_idx, ns, layer)
+    expect(total == len(lst), msg)
+    expect(validate(lst), msg)
+
+
+def expect_hare(curr_idx, ns, min_l, max_l, total):
+    layer = min_l
+    while layer <= max_l:
+        expect_consensus_process(curr_idx, ns, layer, total)
+        layer = layer + 1
+
+    assert_expectations()
+
+
+def validate_hare(indx, ns):
+    lst = query_empty_set(indx, ns)
+    expect(0 == len(lst), 'query no empty set')
+
+    lst = query_no_svp(indx, ns)
+    expect(0 == len(lst), 'query no svp')
+
+    lst = query_new_iteration(indx, ns)
+    expect(0 == len(lst), 'query no new iteration')
+
+    assert_expectations()

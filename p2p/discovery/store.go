@@ -75,7 +75,7 @@ func (a *addrBook) savePeers(path string) {
 
 	w, err := os.Create(path)
 	if err != nil {
-		log.Error("Error opening file %s: %v", path, err)
+		log.Error("Error opening file: %v", err)
 		return
 	}
 	enc := json.NewEncoder(w)
@@ -117,7 +117,7 @@ func (a *addrBook) deserializePeers(filePath string) error {
 	}
 	r, err := os.Open(filePath)
 	if err != nil {
-		return fmt.Errorf("%s error opening file: %v", filePath, err)
+		return fmt.Errorf("error opening file: %v", err)
 	}
 	defer r.Close()
 
