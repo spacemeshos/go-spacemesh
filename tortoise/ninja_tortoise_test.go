@@ -3,7 +3,6 @@ package tortoise
 import (
 	"fmt"
 	"github.com/google/uuid"
-	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -11,10 +10,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
 	"math"
-	"math/big"
 	"os"
 	"runtime"
-	"strconv"
 	"testing"
 	"time"
 )
@@ -92,39 +89,39 @@ func TestNinjaTortoise_evict(t *testing.T) {
 	defer persistenceTeardown()
 	ni := sanity(getMeshForBench(), 150, 10, 100, badblocks)
 
-	for i := 0; i < 50; i++ {
-		for _, i := range ni.patterns[49] {
-			if _, ok := ni.tSupport[i]; ok {
+	for i := 1; i < 140; i++ {
+		for _, j := range ni.patterns[types.LayerID(i)] {
+			if _, ok := ni.tSupport[j]; ok {
 				t.Fail()
 			}
-			if _, ok := ni.tPattern[i]; ok {
+			if _, ok := ni.tPattern[j]; ok {
 				t.Fail()
 			}
-			if _, ok := ni.tTally[i]; ok {
+			if _, ok := ni.tTally[j]; ok {
 				t.Fail()
 			}
-			if _, ok := ni.tVote[i]; ok {
+			if _, ok := ni.tVote[j]; ok {
 				t.Fail()
 			}
-			if _, ok := ni.tEffectiveToBlocks[i]; ok {
+			if _, ok := ni.tEffectiveToBlocks[j]; ok {
 				t.Fail()
 			}
-			if _, ok := ni.tComplete[i]; ok {
+			if _, ok := ni.tComplete[j]; ok {
 				t.Fail()
 			}
-			if _, ok := ni.tPatSupport[i]; ok {
+			if _, ok := ni.tPatSupport[j]; ok {
 				t.Fail()
 			}
 		}
 		ids, _ := ni.LayerBlockIds(49)
-		for _, i := range ids {
-			if _, ok := ni.tEffective[i]; ok {
+		for _, j := range ids {
+			if _, ok := ni.tEffective[j]; ok {
 				t.Fail()
 			}
-			if _, ok := ni.tCorrect[i]; ok {
+			if _, ok := ni.tCorrect[j]; ok {
 				t.Fail()
 			}
-			if _, ok := ni.tExplicit[i]; ok {
+			if _, ok := ni.tExplicit[j]; ok {
 				t.Fail()
 			}
 
@@ -354,7 +351,6 @@ func createLayerWithRandVoting(index types.LayerID, prev []*types.Layer, blocksI
 	layerBlocks := make([]types.BlockID, 0, blocksInLayer)
 	for i := 0; i < blocksInLayer; i++ {
 		bl := types.NewExistingBlock(types.BlockID(uuid.New().ID()), index, []byte("data data data"))
-		addTransactionsToBlock(bl, 100)
 		layerBlocks = append(layerBlocks, bl.ID())
 		for idx, pat := range patterns {
 			for _, id := range pat {
@@ -379,22 +375,6 @@ func chooseRandomPattern(blocksInLayer int, patternSize int) []int {
 		indexes = append(indexes, r)
 	}
 	return indexes
-}
-
-func addTransactionsToBlock(bl *types.Block, numOfTxs int) int64 {
-	var totalRewards int64
-	for i := 0; i < numOfTxs; i++ {
-		gasPrice := rand.Int63n(100)
-		addr := rand.Int63n(1000000)
-		//log.Info("adding tx with gas price %v nonce %v", gasPrice, i)
-		bl.Txs = append(bl.Txs, types.NewSerializableTransaction(uint64(i), address.HexToAddress("1"),
-			address.HexToAddress(strconv.FormatUint(uint64(addr), 10)),
-			big.NewInt(10),
-			big.NewInt(gasPrice),
-			100))
-		totalRewards += gasPrice
-	}
-	return totalRewards
 }
 
 func AddLayer(m *mesh.MeshDB, layer *types.Layer) error {

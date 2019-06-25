@@ -1,0 +1,16 @@
+=============== Jun 19, 2019 (IDT) ===============
+12:27:30.615474 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+12:27:30.616143 db@open opening
+12:27:30.616366 version@stat F·[] S·0B[] Sc·[]
+12:27:30.616669 db@janitor F·2 G·0
+12:27:30.616693 db@open done T·535.177µs
+12:28:05.942940 memdb@flush N·17772 S·3MiB
+12:28:05.963586 memdb@flush created L0@3 N·17772 S·1MiB "\x00\x04\xa0..ebL,v376":"\xff\xff2..<\xe9l,v9735"
+12:28:05.963630 version@stat F·[1] S·1MiB[1MiB] Sc·[0.25]
+12:28:05.963887 memdb@flush committed F·1 T·20.902162ms
+12:28:05.964437 journal@remove removed @1
+12:28:45.691255 memdb@flush N·17772 S·3MiB
+12:28:45.718388 memdb@flush created L0@5 N·17772 S·1MiB "\x00\n\xa6..\xa8\xc6\x04,v18428":"\xff\xfd{..\xde\xd1\xce,v24441"
+12:28:45.718430 version@stat F·[2] S·2MiB[2MiB] Sc·[0.50]
+12:28:45.719164 memdb@flush committed F·1 T·27.843607ms
+12:28:45.719487 journal@remove removed @2
