@@ -81,7 +81,7 @@ func FromBlockToTortoiseBlock(blk *types.Block) *TortoiseBlock {
 		BlockVotes: make(map[types.BlockID]bool),
 		ViewEdges:  make(map[types.BlockID]struct{}),
 		Timestamp:  blk.Timestamp,
-		Data:       blk.Data,
+		Data:       blk.MiniBlock.Data,
 		Coin:       blk.Coin,
 		ProVotes:   0,
 		ConVotes:   0,

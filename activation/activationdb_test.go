@@ -19,12 +19,14 @@ func createLayerWithAtx(msh *mesh.Mesh, atxdb *ActivationDb, id types.LayerID, n
 	for i := 0; i < numOfBlocks; i++ {
 		block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), id, []byte("data1"))
 		block1.MinerID.Key = strconv.Itoa(i)
-		block1.ATXs = append(block1.ATXs, atxs...)
 		block1.BlockVotes = append(block1.BlockVotes, votes...)
+		for _, atx := range atxs {
+			block1.AtxIds = append(block1.AtxIds, atx.Id())
+		}
 		block1.ViewEdges = append(block1.ViewEdges, views...)
-		msh.AddBlock(block1)
+		msh.AddBlockWithTxs(block1, []*types.SerializableTransaction{}, atxs)
 		created = append(created, block1.Id)
-		for _, atx := range block1.ATXs {
+		for _, atx := range atxs {
 			atxdb.StoreAtx(atx.PubLayerIdx.GetEpoch(1000), atx)
 		}
 	}
@@ -53,10 +55,31 @@ func (MockState) ValidateTransactionSignature(tx types.SerializableSignedTransac
 	return address.Address{}, nil
 }
 
+func (MockState) ValidateSignature(signed types.Signed) (address.Address, error) {
+	return address.Address{}, nil
+}
+
 type AtxDbMock struct{}
 
 func (AtxDbMock) ProcessBlockATXs(block *types.Block) {
 
+}
+
+type MemPoolMock struct {
+}
+
+func (mem *MemPoolMock) Get(id interface{}) interface{} {
+	return nil
+}
+
+func (mem *MemPoolMock) PopItems(size int) interface{} {
+	return nil
+}
+
+func (mem *MemPoolMock) Put(id interface{}, item interface{}) {
+}
+
+func (mem *MemPoolMock) Invalidate(id interface{}) {
 }
 
 func ConfigTst() mesh.Config {
@@ -73,7 +96,7 @@ func getAtxDb(id string) (*ActivationDb, *mesh.Mesh) {
 	lg := log.NewDefault(id)
 	memesh := mesh.NewMemMeshDB(lg.WithName("meshDB"))
 	atxdb := NewActivationDb(database.NewMemDatabase(), database.NewMemDatabase(), NewIdentityStore(database.NewMemDatabase()), memesh, 1000, &ValidatorMock{}, lg.WithName("atxDB"))
-	layers := mesh.NewMesh(memesh, atxdb, ConfigTst(), &MeshValidatorMock{}, &MockState{}, lg.WithName("mesh"))
+	layers := mesh.NewMesh(memesh, atxdb, ConfigTst(), &MeshValidatorMock{}, &MemPoolMock{}, &MemPoolMock{}, &MockState{}, lg.WithName("mesh"))
 	return atxdb, layers
 }
 
@@ -120,10 +143,12 @@ func Test_CalcActiveSetFromView(t *testing.T) {
 
 	block2 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 2200, []byte("data1"))
 	block2.MinerID.Key = strconv.Itoa(1)
-	block2.ATXs = append(block2.ATXs, atxs2...)
 	block2.ViewEdges = blocks
-	layers.AddBlock(block2)
-	atxdb.ProcessBlockATXs(block2)
+	layers.AddBlockWithTxs(block2, nil, atxs2)
+
+	for _, t := range atxs2 {
+		atxdb.ProcessAtx(t)
+	}
 
 	atx2 := types.NewActivationTx(id3, 0, *types.EmptyAtxId, 1435, 0, *types.EmptyAtxId, 6, []types.BlockID{block2.Id}, &types.NIPST{}, true)
 	num, err = atxdb.CalcActiveSetFromView(atx2)
@@ -225,9 +250,16 @@ func TestMesh_processBlockATXs(t *testing.T) {
 
 	block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data1"))
 	block1.MinerID.Key = strconv.Itoa(1)
-	block1.ATXs = append(block1.ATXs, atxs...)
+	for _, t := range atxs {
+		atxdb.ProcessAtx(t)
+	}
+	i, err := atxdb.ActiveSetSize(1)
+	assert.NoError(t, err)
+	assert.Equal(t, uint32(3), i)
 
-	atxdb.ProcessBlockATXs(block1)
+	atxdb.ProcessAtx(atxs[0])
+	atxdb.ProcessAtx(atxs[1])
+	atxdb.ProcessAtx(atxs[2])
 	activeSetSize, err := atxdb.ActiveSetSize(1)
 	assert.NoError(t, err)
 	assert.Equal(t, 3, int(activeSetSize))
@@ -246,8 +278,9 @@ func TestMesh_processBlockATXs(t *testing.T) {
 
 	block2 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 2000, []byte("data1"))
 	block2.MinerID.Key = strconv.Itoa(1)
-	block2.ATXs = append(block2.ATXs, atxs2...)
-	atxdb.ProcessBlockATXs(block2)
+	for _, t := range atxs2 {
+		atxdb.ProcessAtx(t)
+	}
 
 	activeSetSize, err = atxdb.ActiveSetSize(1)
 	assert.NoError(t, err)
