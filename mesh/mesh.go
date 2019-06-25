@@ -31,7 +31,7 @@ type MeshValidator interface {
 	ContextualValidity(id types.BlockID) bool
 }
 
-type StateApi interface {
+type TxProcessor interface {
 	ApplyTransactions(layer types.LayerID, transactions Transactions) (uint32, error)
 	ApplyRewards(layer types.LayerID, miners []string, underQuota map[string]int, bonusReward, diminishedReward *big.Int)
 	ValidateSignature(s types.Signed) (address.Address, error)
@@ -52,6 +52,7 @@ type Mesh struct {
 	log.Log
 	*MeshDB
 	AtxDB
+	TxProcessor
 	txInvalidator  MemPoolInValidator
 	atxInvalidator MemPoolInValidator
 	config         Config
@@ -62,19 +63,18 @@ type Mesh struct {
 	lcMutex        sync.RWMutex
 	lvMutex        sync.RWMutex
 	tortoise       MeshValidator
-	state          StateApi
 	orphMutex      sync.RWMutex
 	done           chan struct{}
 }
 
-func NewMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh MeshValidator, txInvalidator MemPoolInValidator, atxInvalidator MemPoolInValidator, state StateApi, logger log.Log) *Mesh {
+func NewMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh MeshValidator, txInvalidator MemPoolInValidator, atxInvalidator MemPoolInValidator, pr TxProcessor, logger log.Log) *Mesh {
 	//todo add boot from disk
 	ll := &Mesh{
 		Log:            logger,
 		tortoise:       mesh,
 		txInvalidator:  txInvalidator,
 		atxInvalidator: atxInvalidator,
-		state:          state,
+		TxProcessor:    pr,
 		done:           make(chan struct{}),
 		MeshDB:         db,
 		config:         rewardConfig,
@@ -248,7 +248,7 @@ func (m *Mesh) PushTransactions(oldBase types.LayerID, newBase types.LayerID) {
 		}
 
 		merged := m.ExtractUniqueOrderedTransactions(l)
-		x, err := m.state.ApplyTransactions(types.LayerID(i), merged)
+		x, err := m.ApplyTransactions(types.LayerID(i), merged)
 		if err != nil {
 			m.Log.Error("cannot apply transactions %v", err)
 		}
@@ -454,7 +454,7 @@ func (m *Mesh) AccumulateRewards(rewardLayer types.LayerID, params Config) {
 	log.Info("fees reward: %v total processed %v total txs %v merged %v blocks: %v", rewards.Int64(), processed, len(merged), len(merged), numBlocks)
 
 	bonusReward, diminishedReward := calculateActualRewards(rewards, numBlocks, params, len(uq))
-	m.state.ApplyRewards(types.LayerID(rewardLayer), ids, uq, bonusReward, diminishedReward)
+	m.ApplyRewards(types.LayerID(rewardLayer), ids, uq, bonusReward, diminishedReward)
 	//todo: should miner id be sorted in a deterministic order prior to applying rewards?
 
 }
@@ -494,8 +494,4 @@ func (m *Mesh) GetATXs(atxIds []types.AtxId) (map[types.AtxId]*types.ActivationT
 		}
 	}
 	return atxs, mIds
-}
-
-func (m *Mesh) StateApi() StateApi {
-	return m.state
 }

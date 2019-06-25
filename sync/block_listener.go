@@ -34,8 +34,10 @@ type TickProvider interface {
 
 func (bl *BlockListener) Close() {
 	close(bl.exit)
-	bl.Debug("block listener closing, waiting for gorutines")
+	bl.Info("block listener closing, waiting for gorutines")
 	bl.wg.Wait()
+	bl.Syncer.Close()
+	bl.Info("block listener closed")
 }
 
 func (bl *BlockListener) Start() {
@@ -45,9 +47,8 @@ func (bl *BlockListener) Start() {
 	}
 }
 
-func NewBlockListener(net service.Service, bv BlockValidator, sync *Syncer, concurrency int, logger log.Log) *BlockListener {
+func NewBlockListener(net service.Service, sync *Syncer, concurrency int, logger log.Log) *BlockListener {
 	bl := BlockListener{
-		BlockValidator:       bv,
 		Syncer:               sync,
 		Log:                  logger,
 		semaphore:            make(chan struct{}, concurrency),
@@ -91,17 +92,7 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 func (bl *BlockListener) handleBlock(blk *types.Block) bool {
 
 	bl.Log.With().Info("got new block", log.Uint64("id", uint64(blk.Id)), log.Int("txs", len(blk.TxIds)), log.Int("atxs", len(blk.AtxIds)))
-	eligible, err := bl.BlockEligible(&blk.BlockHeader)
-	if err != nil {
-		bl.Error("block %v eligible check failed ", blk.ID())
-		return false
-	}
-	if !eligible {
-		bl.Error("block %v not eligible", blk.ID())
-		return false
-	}
-
-	if err := bl.syncMissingContent(blk); err != nil {
+	if err := bl.syncAndValidate(blk); err != nil {
 		bl.Error("handleBlock %v failed ", blk.ID(), err)
 		return false
 	}

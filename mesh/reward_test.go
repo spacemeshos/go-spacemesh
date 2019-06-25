@@ -51,7 +51,7 @@ func ConfigTst() Config {
 	}
 }
 
-func getMeshWithMapState(id string, s StateApi) (*Mesh, *AtxDbMock) {
+func getMeshWithMapState(id string, s TxProcessor) (*Mesh, *AtxDbMock) {
 	atxDb := &AtxDbMock{
 		db:     make(map[types.AtxId]*types.ActivationTx),
 		nipsts: make(map[types.AtxId]*types.NIPST),

@@ -9,18 +9,32 @@ import (
 	"math/big"
 )
 
-type BlockValidatorMock struct {
+type BlockEligibilityValidatorMock struct {
 }
 
-func (BlockValidatorMock) BlockEligible(block *types.BlockHeader) (bool, error) {
+func (BlockEligibilityValidatorMock) BlockEligible(block *types.BlockHeader) (bool, error) {
+	return true, nil
+}
+
+type SyntacticValidatorMock struct {
+}
+
+func (SyntacticValidatorMock) SyntacticallyValid(block *types.BlockHeader) (bool, error) {
 	return true, nil
 }
 
 type TxValidatorMock struct {
 }
 
-func (TxValidatorMock) TxValid(tx types.SerializableTransaction) bool {
-	return true
+func (TxValidatorMock) TxValid(tx *types.SerializableTransaction) (bool, error) {
+	return true, nil
+}
+
+type AtxValidatorMock struct {
+}
+
+func (AtxValidatorMock) AtxValid(atx *types.ActivationTx) (bool, error) {
+	return true, nil
 }
 
 type MeshValidatorMock struct{}

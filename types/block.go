@@ -51,7 +51,7 @@ type BlockHeader struct {
 
 type Signed interface {
 	Sig() []byte
-	Obj() interface{}
+	Data() interface{}
 }
 
 type Block struct {
