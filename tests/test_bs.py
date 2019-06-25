@@ -150,24 +150,36 @@ def node_string(key, ip, port, discport):
     return "spacemesh://{0}@{1}:{2}?disc={3}".format(key, ip, port, discport)
 
 
-def setup_clients_in_namespace(namespace, bs_deployment_info, client_deployment_info, client_config,
-                               oracle=None, poet=None, dep_time_out=120):
+def get_conf(bs_info, client_config, setup_oracle=None, setup_poet=None, args=None):
 
     client_args = {} if 'args' not in client_config else client_config['args']
+
+    if args is not None:
+        for arg in args:
+            client_args[arg] = args[arg]
 
     cspec = ContainerSpec(cname='client',
                           cimage=client_config['image'],
                           centry=[client_config['command']])
 
-    if oracle:
-        client_args['oracle_server'] = 'http://{0}:{1}'.format(oracle, ORACLE_SERVER_PORT)
+    if setup_oracle:
+        client_args['oracle_server'] = 'http://{0}:{1}'.format(setup_oracle, ORACLE_SERVER_PORT)
 
-    if poet:
-        client_args['poet_server'] = '{0}:{1}'.format(poet, POET_SERVER_PORT)
+    if setup_poet:
+        client_args['poet_server'] = '{0}:{1}'.format(setup_poet, POET_SERVER_PORT)
 
-    cspec.append_args(bootnodes=node_string(bs_deployment_info['key'], bs_deployment_info['pod_ip'], BOOTSTRAP_PORT, BOOTSTRAP_PORT),
-                      genesis_time=GENESIS_TIME.isoformat('T', 'seconds'),
-                      **client_args)
+    cspec.append_args(bootnodes=node_string(bs_info['key'], bs_info['pod_ip'], BOOTSTRAP_PORT, BOOTSTRAP_PORT),
+                      genesis_time=GENESIS_TIME.isoformat('T', 'seconds'))
+
+    if len(client_args) > 0:
+        cspec.append_args(**client_args)
+    return cspec
+
+
+def setup_clients_in_namespace(namespace, bs_deployment_info, client_deployment_info, client_config,
+                               oracle=None, poet=None, dep_time_out=120):
+
+    cspec = get_conf(bs_deployment_info, client_config, oracle, poet)
 
     resp = deployment.create_deployment(CLIENT_DEPLOYMENT_FILE, namespace,
                                         deployment_id=client_deployment_info.deployment_id,
@@ -239,28 +251,6 @@ def add_multi_clients(deployment_id, container_specs, size=2):
     return pods
 
 
-def get_conf(bs_info, setup_oracle=None, args=None):
-    client_args = {} if 'args' not in testconfig['client'] else testconfig['client']['args']
-
-    if args is not None:
-        for arg in args:
-            client_args[arg] = args[arg]
-
-    cspec = ContainerSpec(cname='client',
-                          cimage=testconfig['client']['image'],
-                          centry=[testconfig['client']['command']])
-    cspec.append_args(bootnodes=node_string(bs_info['key'], bs_info['pod_ip'], BOOTSTRAP_PORT, BOOTSTRAP_PORT),
-                      poet_server='{0}:{1}'.format(bs_info['pod_ip'], POET_SERVER_PORT),
-                      genesis_time=GENESIS_TIME.isoformat('T', 'seconds'))
-
-    if setup_oracle is not None:
-        cspec.append_args(oracle_server='http://{0}:{1}'.format(setup_oracle, ORACLE_SERVER_PORT))
-
-    if len(client_args) > 0:
-        cspec.append_args(**client_args)
-    return cspec
-
-
 # The following fixture should not be used if you wish to add many clients during test.
 # Instead you should call add_single_client directly
 @pytest.fixture()
@@ -274,7 +264,7 @@ def add_client(request, setup_oracle, setup_bootstrap, setup_clients):
 
         bs_info = setup_bootstrap.pods[0]
 
-        cspec = get_conf(bs_info, setup_oracle)
+        cspec = get_conf(bs_info, testconfig['client'], setup_oracle)
 
         client_name = add_single_client(setup_bootstrap.deployment_id, cspec)
         return client_name

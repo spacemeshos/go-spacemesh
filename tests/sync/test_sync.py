@@ -57,7 +57,7 @@ def search_pod_logs(namespace, pod_name, term):
 def test_sync_gradually_add_nodes(init_session, setup_bootstrap, save_log_on_exit):
     bs_info = setup_bootstrap.pods[0]
 
-    cspec = get_conf(bs_info)
+    cspec = get_conf(bs_info, testconfig['client'])
 
     inf = new_client_in_namespace(testconfig['namespace'], setup_bootstrap, cspec, 10)
 

@@ -66,7 +66,7 @@ def test_add_client(add_client):
 def test_add_many_clients(init_session, setup_bootstrap, setup_clients):
 
     bs_info = setup_bootstrap.pods[0]
-    cspec = get_conf(bs_info)
+    cspec = get_conf(bs_info, testconfig['client'])
 
     pods = add_multi_clients(setup_bootstrap.deployment_id, cspec, size=4)
     time.sleep(40)  # wait for the new clients to finish bootstrap and for logs to get to elasticsearch
@@ -169,7 +169,7 @@ def test_late_bootstraps(init_session, setup_bootstrap, setup_clients):
     testnames = []
 
     for i in range(TEST_NUM):
-        client = add_single_client(setup_bootstrap.deployment_id, get_conf(setup_bootstrap.pods[0]))
+        client = add_single_client(setup_bootstrap.deployment_id, get_conf(setup_bootstrap.pods[0], testconfig['client']))
         testnames.append((client, datetime.now()))
 
     time.sleep(TEST_NUM)

@@ -29,7 +29,6 @@ def setup_clients_for_hare(request, init_session, setup_oracle, setup_bootstrap_
                                       client_info,
                                       testconfig['client'],
                                       oracle=setup_oracle,
-                                      poet=setup_bootstrap_for_hare.pods[0]['pod_ip'],
                                       dep_time_out=testconfig['deployment_ready_time_out'])
 
 # ==============================================================================
