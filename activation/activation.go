@@ -234,7 +234,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) (bool, error) {
 	b.log.Info("active ids seen for epoch %v (pos atx epoch) is %v (cache) %v (from view)",
 		posEpoch, activeIds, activeSetSize)
 
-	if !atx.TargetEpoch(b.layersPerEpoch).IsGenesis() && activeSetSize == 0 {
+	if !atx.PubLayerIdx.GetEpoch(b.layersPerEpoch).IsGenesis() && activeSetSize == 0 {
 		b.log.Warning("empty active set size found! len(view): %d, view: %v", len(atx.View), atx.View)
 		return false, nil
 	}

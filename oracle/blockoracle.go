@@ -80,7 +80,7 @@ func (bo *MinerBlockOracle) calcEligibilityProofs(epochNumber types.EpochId) err
 		activeSetSize = bo.committeeSize
 	} else {
 		activeSetSize = atx.ActiveSetSize
-		if epochNumber.IsGenesis() && activeSetSize < bo.committeeSize {
+		if atx.PubLayerIdx.GetEpoch(bo.layersPerEpoch).IsGenesis() && activeSetSize < bo.committeeSize {
 			activeSetSize = bo.committeeSize
 		}
 		bo.atxID = atx.Id()

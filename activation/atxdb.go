@@ -48,13 +48,15 @@ func (db *ActivationDb) ProcessAtx(atx *types.ActivationTx) {
 	}
 	epoch := atx.PubLayerIdx.GetEpoch(db.LayersPerEpoch)
 	db.log.Info("processing atx id %v, pub-epoch %v node: %v layer %v", atx.ShortId(), epoch, atx.NodeId.Key[:5], atx.PubLayerIdx)
-	activeSet, err := db.CalcActiveSetFromView(atx)
-	if err != nil {
-		db.log.Error("could not calculate active set for ATX %v", atx.ShortId())
+	if !atx.PubLayerIdx.GetEpoch(db.LayersPerEpoch).IsGenesis() {
+		var err error
+		//todo: maybe there is a potential bug in this case if count for the view can change between calls to this function
+		atx.VerifiedActiveSet, err = db.CalcActiveSetFromView(atx)
+		if err != nil {
+			db.log.Error("could not calculate active set for ATX %v: %v", atx.ShortId(), err)
+		}
 	}
-	//todo: maybe there is a potential bug in this case if count for the view can change between calls to this function
-	atx.VerifiedActiveSet = activeSet
-	err = db.ValidateAtx(atx)
+	err := db.ValidateAtx(atx)
 	//todo: should we store invalid atxs
 	if err != nil {
 		db.log.Warning("ATX %v failed validation: %v", atx.ShortId(), err)

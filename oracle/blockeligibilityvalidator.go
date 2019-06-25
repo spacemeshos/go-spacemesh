@@ -42,6 +42,9 @@ func (v BlockEligibilityValidator) BlockEligible(block *types.BlockHeader) (bool
 			return false, err
 		}
 		activeSetSize = atx.ActiveSetSize
+		if atx.PubLayerIdx.GetEpoch(v.layersPerEpoch).IsGenesis() && activeSetSize < v.committeeSize {
+			activeSetSize = v.committeeSize
+		}
 	}
 
 	numberOfEligibleBlocks, err := getNumberOfEligibleBlocks(activeSetSize, v.committeeSize, v.layersPerEpoch, v.log)
