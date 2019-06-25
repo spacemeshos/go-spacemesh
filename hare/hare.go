@@ -152,10 +152,6 @@ func (h *Hare) onTick(id types.LayerID) {
 		h.lastLayer = id
 	}
 	h.layerLock.Unlock()
-	if !h.isSynced() {
-		h.Info("hare got tick, not synced")
-		return
-	}
 	h.Info("hare got tick, sleeping for %v", h.networkDelta)
 	ti := time.NewTimer(h.networkDelta)
 	select {

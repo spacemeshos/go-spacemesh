@@ -129,7 +129,7 @@ func (b *Builder) loop() {
 			return
 		case layer := <-b.timer:
 			if !b.isSynced() {
-				b.log.Error("cannot create atx : not synced")
+				b.log.Info("cannot create atx : not synced")
 				break
 			}
 			if b.working {
