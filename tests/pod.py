@@ -2,6 +2,7 @@ import yaml
 import time
 
 from os import path
+from urllib3.exceptions import NewConnectionError, MaxRetryError, ConnectTimeoutError
 from kubernetes import client
 from pytest_testconfig import config as testconfig
 from kubernetes.client.rest import ApiException
@@ -72,12 +73,16 @@ def delete_pod(pod_name, name_space):
 
 def check_for_restarted_pods(namespace, specific_deployment_name=''):
     pods=[]
-    if specific_deployment_name:
-        pods = CoreV1ApiClient().list_namespaced_pod(namespace,
-                                                     label_selector=(
-                                                         "name={0}".format(specific_deployment_name.split('-')[0]))).items
-    else:
-        pods = CoreV1ApiClient().list_namespaced_pod(namespace).items
+    try:
+        if specific_deployment_name:
+            pods = CoreV1ApiClient().list_namespaced_pod(namespace,
+                                                         label_selector=(
+                                                             "name={0}".format(specific_deployment_name.split('-')[0]))).items
+        else:
+            pods = CoreV1ApiClient().list_namespaced_pod(namespace).items
+    except (NewConnectionError, MaxRetryError, ConnectTimeoutError) as e:
+            print('Could not list restarted pods. API Error: {0}'.format(str(e)))
+            return pods
 
     restarted_pods = []
     for p in pods:
