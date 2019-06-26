@@ -63,10 +63,12 @@ type Hare struct {
 	outputs    map[types.LayerID][]types.BlockID
 
 	factory consensusFactory
+
+	isSynced func() bool
 }
 
 // New returns a new Hare struct.
-func New(conf config.Config, p2p NetworkService, sign Signer, nid types.NodeId, obp orphanBlockProvider, rolacle Rolacle, layersPerEpoch uint16, idProvider IdentityProvider, stateQ StateQuerier, beginLayer chan types.LayerID, logger log.Log) *Hare {
+func New(conf config.Config, p2p NetworkService, sign Signer, nid types.NodeId, obp orphanBlockProvider, rolacle Rolacle, layersPerEpoch uint16, idProvider IdentityProvider, stateQ StateQuerier, beginLayer chan types.LayerID, isSyncedFunc func() bool, logger log.Log) *Hare {
 	h := new(Hare)
 
 	h.Closer = NewCloser()
@@ -97,6 +99,8 @@ func New(conf config.Config, p2p NetworkService, sign Signer, nid types.NodeId, 
 	h.factory = func(conf config.Config, instanceId InstanceId, s *Set, oracle Rolacle, signing Signer, p2p NetworkService, terminationReport chan TerminationOutput) Consensus {
 		return NewConsensusProcess(conf, instanceId, s, oracle, stateQ, layersPerEpoch, signing, nid, p2p, terminationReport, logger)
 	}
+
+	h.isSynced = isSyncedFunc
 
 	return h
 }
