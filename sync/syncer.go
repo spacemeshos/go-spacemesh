@@ -80,7 +80,8 @@ const (
 )
 
 func (s *Syncer) IsSynced() bool {
-	return s.ValidatedLayer()+1 == s.maxSyncLayer()
+	s.Log.Info("latest: %v, maxSynced %v", s.LatestLayer(), s.maxSyncLayer())
+	return s.LatestLayer()+1 >= s.maxSyncLayer()
 }
 
 func (s *Syncer) Start() {
@@ -117,7 +118,7 @@ func (s *Syncer) run() {
 }
 
 //fires a sync every sm.syncInterval or on force space from outside
-func NewSync(srv service.Service, layers *mesh.Mesh, txpool MemPool, atxpool MemPool, bv BlockValidator, tv TxValidator, conf Configuration, clock timesync.LayerTimer, logger log.Log) *Syncer {
+func NewSync(srv service.Service, layers *mesh.Mesh, txpool MemPool, atxpool MemPool, bv BlockValidator, tv TxValidator, conf Configuration, clock timesync.LayerTimer, currentLayer types.LayerID, logger log.Log) *Syncer {
 	s := &Syncer{
 		BlockValidator: bv,
 		TxValidator:    tv,
@@ -130,6 +131,7 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool MemPool, atxpool Mem
 		txpool:         txpool,
 		atxpool:        atxpool,
 		startLock:      0,
+		currentLayer:   currentLayer,
 		forceSync:      make(chan bool),
 		clock:          clock,
 		exit:           make(chan struct{}),

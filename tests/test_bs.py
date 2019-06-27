@@ -346,7 +346,7 @@ current_index = 'kubernetes_cluster-' + todaydate
 
 def test_transaction(setup_network):
     ns = testconfig['namespace']
-    
+
     # choose client to run on
     client_ip = setup_network.clients.pods[0]['pod_ip']
 
