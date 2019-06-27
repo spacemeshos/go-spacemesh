@@ -31,9 +31,12 @@ func TestPoetDbHappyFlow(t *testing.T) {
 	copy(poetId[:], "poet id")
 	roundId := uint64(1337)
 
-	processingIssue, err := poetDb.ValidateAndStorePoetProof(poetProof, poetId, roundId, nil)
+	processingIssue, err := poetDb.ValidatePoetProof(poetProof, poetId, roundId, nil)
 	r.NoError(err)
 	r.False(processingIssue)
+
+	err = poetDb.storePoetProof(poetProof, poetId, roundId, nil)
+	r.NoError(err)
 
 	ref, err := poetDb.getPoetProofRef(makeKey(poetId, roundId))
 	r.NoError(err)
@@ -66,7 +69,7 @@ func TestPoetDbInvalidPoetProof(t *testing.T) {
 	roundId := uint64(1337)
 	poetProof.Root = []byte("some other root")
 
-	processingIssue, err := poetDb.ValidateAndStorePoetProof(poetProof, poetId, roundId, nil)
+	processingIssue, err := poetDb.ValidatePoetProof(poetProof, poetId, roundId, nil)
 	r.EqualError(err, fmt.Sprintf("failed to validate poet proof for poetId %x round 1337: merkle proof not valid",
 		poetId))
 	r.False(processingIssue)
@@ -82,10 +85,10 @@ func TestPoetDbNonExistingKeys(t *testing.T) {
 
 	key := makeKey(poetId, 0)
 	_, err := poetDb.getPoetProofRef(key)
-	r.EqualError(err, fmt.Sprintf("could not fetch poet proof for key %x: not found", key))
+	r.EqualError(err, fmt.Sprintf("could not fetch poet proof for key %x: leveldb: not found", key))
 
 	_, err = poetDb.GetMembershipByPoetProofRef([]byte("abc"))
-	r.EqualError(err, "could not fetch poet proof for ref 616263: not found")
+	r.EqualError(err, "could not fetch poet proof for ref 616263: leveldb: not found")
 }
 
 func TestPoetDb_SubscribeToPoetProofRef(t *testing.T) {
@@ -111,9 +114,12 @@ func TestPoetDb_SubscribeToPoetProofRef(t *testing.T) {
 	_, err = xdr.Unmarshal(file, &poetProof)
 	r.NoError(err)
 
-	processingIssue, err := poetDb.ValidateAndStorePoetProof(poetProof, poetId, 0, nil)
+	processingIssue, err := poetDb.ValidatePoetProof(poetProof, poetId, 0, nil)
 	r.NoError(err)
 	r.False(processingIssue)
+
+	err = poetDb.storePoetProof(poetProof, poetId, 0, nil)
+	r.NoError(err)
 
 	select {
 	case proofRef := <-ch:

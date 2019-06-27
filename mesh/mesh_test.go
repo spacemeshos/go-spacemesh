@@ -45,6 +45,12 @@ type AtxDbMock struct {
 	nipsts map[types.AtxId]*types.NIPST
 }
 
+var _ AtxDB = &AtxDbMock{}
+
+func (t *AtxDbMock) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
+	return nil
+}
+
 func (t *AtxDbMock) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
 	if id == *types.EmptyAtxId {
 		return nil, fmt.Errorf("trying to fetch empty atx id")
