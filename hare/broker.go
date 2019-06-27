@@ -131,6 +131,7 @@ func (b *Broker) eventLoop() {
 				// check synchronicity
 				if !b.isSynced(msgInstId) {
 					// not synced, we will ignore messages for this instance from now on
+					b.Info("layer %v is not synced, ignoring message", msgInstId)
 					continue
 				}
 
