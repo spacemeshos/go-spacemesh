@@ -2,7 +2,7 @@ import os
 import time
 import sys
 from kubernetes import config
-from kubernetes import client
+from tests.misc import CoreV1ApiClient
 
 
 def load_config():
@@ -13,9 +13,10 @@ def load_config():
     else:
         raise Exception("KUBECONFIG file not found: {0}".format(kube_config_path))
 
+
 # Usage : python3.7 k8s_tool.py restarts namespace_name 10
 def find_restarted_pods(namespace):
-    namespaced_pods = client.CoreV1Api().list_namespaced_pod(namespace=namespace, include_uninitialized=True).items
+    namespaced_pods = CoreV1ApiClient().list_namespaced_pod(namespace=namespace, include_uninitialized=True).items
     pods = {}
     for pod in namespaced_pods:
         if pod is not None and pod.status is not None and pod.status.container_statuses is not None:
@@ -27,6 +28,8 @@ def find_restarted_pods(namespace):
 
 # todo,we can use find_restarted_pods in out testing code.
 # todo: make this a better cli experience (help.. usage)
+
+
 if __name__ == '__main__':
     print("loading config")
     load_config()

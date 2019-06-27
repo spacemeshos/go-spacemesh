@@ -71,7 +71,7 @@ func NewMockConsensusProcess(cfg config.Config, instanceId InstanceId, s *Set, o
 }
 
 func createHare(n1 p2p.Service) *Hare {
-	return New(cfg, n1, signing2.NewEdSigner(), types.NodeId{}, new(orphanMock), eligibility.New(), 10, &mockIdProvider{}, NewMockStateQuerier(), make(chan types.LayerID), log.NewDefault("Hare"))
+	return New(cfg, n1, signing2.NewEdSigner(), types.NodeId{}, new(orphanMock), eligibility.New(), 10, &mockIdProvider{}, NewMockStateQuerier(), make(chan types.LayerID), func() bool { return true }, log.NewDefault("Hare"))
 }
 
 var _ Consensus = (*mockConsensusProcess)(nil)
@@ -246,7 +246,7 @@ func TestHare_onTick(t *testing.T) {
 		return blockset
 	}
 
-	h := New(cfg, n1, signing, types.NodeId{}, om, oracle, 10, &mockIdProvider{}, NewMockStateQuerier(), layerTicker, log.NewDefault("Hare"))
+	h := New(cfg, n1, signing, types.NodeId{}, om, oracle, 10, &mockIdProvider{}, NewMockStateQuerier(), layerTicker, func() bool { return true }, log.NewDefault("Hare"))
 	h.networkDelta = 0
 	h.bufferSize = 1
 
