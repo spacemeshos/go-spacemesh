@@ -65,6 +65,10 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 			bl.Log.Info("listening  stopped")
 			return
 		case data := <-bl.receivedGossipBlocks:
+			if !bl.IsSynced() {
+				bl.Info("ignoring gossip blocks - not synced yet")
+				break
+			}
 			bl.wg.Add(1)
 			go func() {
 				if data == nil {
@@ -78,7 +82,7 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 					return
 				}
 
-				if bl.handleBlock(&blk) && bl.IsSynced() {
+				if bl.handleBlock(&blk) {
 					data.ReportValidation(config.NewBlockProtocol)
 				}
 				bl.wg.Done()
