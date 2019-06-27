@@ -127,7 +127,9 @@ def setup_bootstrap(request, init_session, setup_oracle, create_configmap):
 
         bs_pod['pod_ip'] = resp.status.pod_ip
 
-        bootstrap_pod_logs = CoreV1ApiClient().read_namespaced_pod_log(name=bs_pod['name'], namespace=name_space)
+        bootstrap_pod_logs = CoreV1ApiClient().read_namespaced_pod_log(name=bs_pod['name'],
+                                                                       namespace=name_space,
+                                                                       container='bootstrap')
         match = re.search(r"Local node identity >> (?P<bootstrap_key>\w+)", bootstrap_pod_logs)
         bs_pod['key'] = match.group('bootstrap_key')
         bootstrap_deployment_info.pods = [bs_pod]
