@@ -197,14 +197,12 @@ func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error 
 	}
 
 	activeSet, err := db.CalcActiveSetFromView(atx)
-	if err != nil {
-		db.log.Error("could not calculate active set for ATX %v", atx.ShortId())
+	if err != nil && !atx.PubLayerIdx.GetEpoch(db.LayersPerEpoch).IsGenesis() {
+		return fmt.Errorf("could not calculate active set for ATX %v", atx.ShortId())
 	}
-	//todo: maybe there is a potential bug in this case if count for the view can change between calls to this function
-	atx.VerifiedActiveSet = activeSet
 
-	if atx.ActiveSetSize != atx.VerifiedActiveSet {
-		return fmt.Errorf("atx contains view with unequal active ids (%v) than seen (%v)", atx.ActiveSetSize, atx.VerifiedActiveSet)
+	if atx.ActiveSetSize != activeSet {
+		return fmt.Errorf("atx contains view with unequal active ids (%v) than seen (%v)", atx.ActiveSetSize, activeSet)
 	}
 
 	hash, err := atx.NIPSTChallenge.Hash()
