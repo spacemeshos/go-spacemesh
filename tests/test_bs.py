@@ -96,9 +96,7 @@ def setup_bootstrap(request, init_session, setup_oracle, create_configmap):
     def _setup_bootstrap_in_namespace(name_space):
         bootstrap_args = {} if 'args' not in testconfig['bootstrap'] else testconfig['bootstrap']['args']
 
-        cspec = ContainerSpec(cname='bootstrap',
-                              cimage=testconfig['bootstrap']['image'],
-                              centry=[testconfig['bootstrap']['command']])
+        cspec = ContainerSpec(cname='bootstrap', specs=testconfig['bootstrap'])
 
         cspec.append_args(oracle_server='http://{0}:{1}'.format(setup_oracle, ORACLE_SERVER_PORT),
                           genesis_time=GENESIS_TIME.isoformat('T', 'seconds'),
@@ -151,9 +149,7 @@ def setup_clients(request, init_session, setup_oracle, setup_bootstrap):
 
         client_args = {} if 'args' not in testconfig['client'] else testconfig['client']['args']
 
-        cspec = ContainerSpec(cname='client',
-                              cimage=testconfig['client']['image'],
-                              centry=[testconfig['client']['command']])
+        cspec = ContainerSpec(cname='client', specs=testconfig['client'])
 
         cspec.append_args(bootnodes=node_string(bs_info['key'], bs_info['pod_ip'], BOOTSTRAP_PORT, BOOTSTRAP_PORT),
                           oracle_server='http://{0}:{1}'.format(setup_oracle, ORACLE_SERVER_PORT),
@@ -232,9 +228,8 @@ def get_conf(bs_info, setup_oracle=None, args=None):
         for arg in args:
             client_args[arg] = args[arg]
 
-    cspec = ContainerSpec(cname='client',
-                          cimage=testconfig['client']['image'],
-                          centry=[testconfig['client']['command']])
+    cspec = ContainerSpec(cname='client', specs=testconfig['client'])
+
     cspec.append_args(bootnodes=node_string(bs_info['key'], bs_info['pod_ip'], BOOTSTRAP_PORT, BOOTSTRAP_PORT),
                       poet_server='{0}:{1}'.format(bs_info['pod_ip'], POET_SERVER_PORT),
                       genesis_time=GENESIS_TIME.isoformat('T', 'seconds'))
