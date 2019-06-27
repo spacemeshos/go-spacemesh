@@ -72,6 +72,10 @@ func (m *mockMsg) ReportValidation(protocol string, isValid bool) {
 	//m.c <- service.NewMessageValidation(m.msg, protocol, isValid)
 }
 
+type mockAtxValidator struct{}
+
+func (mockAtxValidator) SyntacticallyValidateAtx(atx *types.ActivationTx) error { return nil }
+
 func TestBlockBuilder_StartStop(t *testing.T) {
 
 	net := service.NewSimulator()
@@ -82,7 +86,6 @@ func TestBlockBuilder_StartStop(t *testing.T) {
 	hareRes := []types.BlockID{types.BlockID(0), types.BlockID(1), types.BlockID(2), types.BlockID(3)}
 	hare := MockHare{res: hareRes}
 
-	atxprocesing := func(tx *types.ActivationTx) {}
 	orphans := MockOrphans{st: []types.BlockID{1, 2, 3}}
 	builder := NewBlockBuilder(types.NodeId{}, &MockSigning{},
 		n,
@@ -93,7 +96,7 @@ func TestBlockBuilder_StartStop(t *testing.T) {
 		orphans,
 		hare,
 		mockBlockOracle{},
-		atxprocesing,
+		&mockAtxValidator{},
 		log.New(n.String(), "", ""))
 
 	err := builder.Start()
@@ -124,12 +127,10 @@ func TestBlockBuilder_BlockIdGeneration(t *testing.T) {
 	hareRes := []types.BlockID{types.BlockID(0), types.BlockID(1), types.BlockID(2), types.BlockID(3)}
 	hare := MockHare{res: hareRes}
 
-	atxprocesing := func(tx *types.ActivationTx) {}
-
 	builder1 := NewBlockBuilder(types.NodeId{Key: "a"}, &MockSigning{}, n1, beginRound, NewMemPool(reflect.TypeOf([]*types.SerializableTransaction{})),
-		NewMemPool(reflect.TypeOf([]*types.ActivationTx{})), MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare, mockBlockOracle{}, atxprocesing, log.New(n1.NodeInfo.ID.String(), "", ""))
+		NewMemPool(reflect.TypeOf([]*types.ActivationTx{})), MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare, mockBlockOracle{}, &mockAtxValidator{}, log.New(n1.NodeInfo.ID.String(), "", ""))
 	builder2 := NewBlockBuilder(types.NodeId{Key: "b"}, &MockSigning{}, n2, beginRound, NewMemPool(reflect.TypeOf(types.SerializableTransaction{})),
-		NewMemPool(reflect.TypeOf(types.ActivationTx{})), MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare, mockBlockOracle{}, atxprocesing, log.New(n2.NodeInfo.ID.String(), "", ""))
+		NewMemPool(reflect.TypeOf(types.ActivationTx{})), MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare, mockBlockOracle{}, &mockAtxValidator{}, log.New(n2.NodeInfo.ID.String(), "", ""))
 
 	b1, _ := builder1.createBlock(1, types.AtxId{}, types.BlockEligibilityProof{}, nil, nil)
 
@@ -148,7 +149,7 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 	hare := MockHare{res: hareRes}
 
 	builder := NewBlockBuilder(types.NodeId{"anton", []byte("anton")}, &MockSigning{}, n, beginRound, NewMemPool(reflect.TypeOf([]*types.SerializableTransaction{})),
-		NewMemPool(reflect.TypeOf([]*types.ActivationTx{})), MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare, mockBlockOracle{}, nil, log.New(n.String(), "", ""))
+		NewMemPool(reflect.TypeOf([]*types.ActivationTx{})), MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare, mockBlockOracle{}, &mockAtxValidator{}, log.New(n.String(), "", ""))
 
 	err := builder.Start()
 	assert.NoError(t, err)

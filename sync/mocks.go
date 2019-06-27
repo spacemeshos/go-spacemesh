@@ -75,6 +75,12 @@ type AtxDbMock struct {
 	nipsts map[types.AtxId]*types.NIPST
 }
 
+var _ mesh.AtxDB = &AtxDbMock{}
+
+func (t *AtxDbMock) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
+	return nil
+}
+
 func NewAtxDbMock() *AtxDbMock {
 	return &AtxDbMock{
 		make(map[types.AtxId]*types.ActivationTx),

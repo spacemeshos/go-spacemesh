@@ -46,6 +46,7 @@ type AtxDB interface {
 	ProcessAtx(atx *types.ActivationTx)
 	GetAtx(id types.AtxId) (*types.ActivationTx, error)
 	GetNipst(id types.AtxId) (*types.NIPST, error)
+	SyntacticallyValidateAtx(atx *types.ActivationTx) error
 }
 
 type Mesh struct {
@@ -304,7 +305,6 @@ func (m *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.SerializableTransa
 		//todo this should return an error
 		m.AtxDB.ProcessAtx(t)
 		atxids = append(atxids, t.Id())
-
 	}
 
 	txids, err := m.writeTransactions(txs)

@@ -17,7 +17,6 @@
 package database
 
 import (
-	"errors"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"sort"
 	"sync"
@@ -66,7 +65,7 @@ func (db *MemDatabase) Get(key []byte) ([]byte, error) {
 	if entry, ok := db.db[string(key)]; ok {
 		return common.CopyBytes(entry), nil
 	}
-	return nil, errors.New("not found")
+	return nil, ErrNotFound
 }
 
 func (db *MemDatabase) Keys() [][]byte {

@@ -665,5 +665,5 @@ func RandStringRunes(n int) string {
 }
 
 func atx() *types.ActivationTx {
-	return types.NewActivationTx(types.NodeId{Key: RandStringRunes(5), VRFPublicKey: []byte(RandStringRunes(5))}, 1, types.AtxId{}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&common.Hash{}), true)
+	return types.NewActivationTx(types.NodeId{Key: RandStringRunes(5), VRFPublicKey: []byte(RandStringRunes(5))}, 0, types.AtxId{}, 5, 1, types.AtxId{}, 0, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&common.Hash{}), true)
 }
