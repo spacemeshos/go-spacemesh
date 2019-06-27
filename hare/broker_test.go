@@ -436,7 +436,7 @@ func TestBroker_eventLoop2(t *testing.T) {
 	b.inbox <- msg
 	v, ok := b.layerState[instanceId4]
 	r.True(ok)
-	r.Equal(byte(invalid), v)
+	r.Equal(invalid, v)
 
 	// valid but not early
 	m.InnerMsg.InstanceId = instanceId6
