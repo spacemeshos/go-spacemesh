@@ -74,7 +74,7 @@ func (db *PoetDb) storePoetProof(proof types.PoetProof, poetId [types.PoetIdLeng
 	db.log.Info("stored proof (id: %x) for round %d PoET id %x", ref[:5], roundId, poetId)
 
 	// TODO: REMOVE THE FOLLOWING LINE ⬇⬇⬇
-	<-time.After(time.Millisecond * 50)
+	<-time.After(time.Millisecond * 500)
 
 	db.publishPoetProofRef(key, ref[:])
 	return nil

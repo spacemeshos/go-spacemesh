@@ -248,7 +248,7 @@ func (t *BlockBuilder) listenForAtx() {
 
 				//todo fetch from neighbour
 				if atx.Nipst == nil {
-					t.Error("nil nipst in gossip")
+					t.Panic("nil nipst in gossip")
 					break
 				}
 				err = t.atxValidator.SyntacticallyValidateAtx(atx)
