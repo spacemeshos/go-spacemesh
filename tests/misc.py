@@ -1,5 +1,22 @@
+from kubernetes import client
+from kubernetes.client import Configuration, ApiClient
 
-class ContainerSpec():
+
+class K8SApiClient(ApiClient):
+
+    def __init__(self):
+        client_config = Configuration()
+        client_config.connection_pool_maxsize = 32
+        super(K8SApiClient, self).__init__(configuration=client_config)
+
+
+class CoreV1ApiClient(client.CoreV1Api):
+
+    def __init__(self):
+        super(CoreV1ApiClient, self).__init__(api_client=K8SApiClient())
+
+
+class ContainerSpec:
 
     REPLACEABLE_ARGS = ['randcon', 'oracle_server', 'bootnodes', 'genesis_time']
 
@@ -19,7 +36,7 @@ class ContainerSpec():
             containers = dep['spec']['template']['spec']['containers']
         for c in containers:
             if c['name'] == self.name:
-                #update the container specs
+                # update the container specs
                 if self.image:
                     c['image'] = self.image
                 if self.entrypoint:

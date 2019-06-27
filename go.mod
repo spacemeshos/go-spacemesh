@@ -21,7 +21,7 @@ require (
 	github.com/seehuhn/mt19937 v0.0.0-20180715112136-cc7708819361
 	github.com/spacemeshos/ed25519 v0.0.0-20190316215305-5878e62449c1
 	github.com/spacemeshos/merkle-tree v0.0.0-20190508113057-1a71b988924a
-	github.com/spacemeshos/poet v0.0.0-20190623141935-102e8e9c5850
+	github.com/spacemeshos/poet v0.0.0-20190626121233-2418fe492709
 	github.com/spacemeshos/post v0.0.0-20190508113329-07bdc2589d98
 	github.com/spacemeshos/sha256-simd v0.0.0-20190111104731-8575aafc88c9
 	github.com/spf13/afero v1.2.0 // indirect

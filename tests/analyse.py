@@ -21,8 +21,10 @@ def analyze_mining(deployment, last_layer, layers_per_epoch, layer_avg_size, tot
     print("atx created " + str(total_atxs))
     print("blocks created " + str(total_blocks) + " first epoch blocks " + str(first_epoch_blocks))
 
-    assert queries.get_nodes_up(deployment) == total_pods, "not enough pods deployed or pods restarted"
-    assert total_pods == len(blockmap), "not all nodes created blocks"
+    # not enough pods deployed or pods restarted
+    assert queries.get_nodes_up(deployment) == total_pods
+    # not all nodes created blocks
+    assert total_pods == len(blockmap)
     # remove blocks created in first epoch since first epoch starts with layer 1
     assert ((total_blocks - first_epoch_blocks) / (last_layer - layers_per_epoch)) / layer_avg_size == 1
     # not all nodes produces atx in all epochs
