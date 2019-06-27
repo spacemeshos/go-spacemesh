@@ -59,10 +59,10 @@ func (l *PoetListener) handlePoetProofMessage(poetProof service.GossipMessage) {
 		l.Log.Error("failed to unmarshal PoET membership proof: %v", err)
 		return
 	}
-	if processingIssue, err := l.poetDb.ValidatePoetProof(proofMessage.PoetProof, proofMessage.PoetId,
+	if err := l.poetDb.ValidatePoetProof(proofMessage.PoetProof, proofMessage.PoetId,
 		proofMessage.RoundId, proofMessage.Signature); err != nil {
 
-		if processingIssue {
+		if _, ok := err.(processingError); ok {
 			l.Log.Error("failed to validate PoET proof: %v", err)
 		} else {
 			l.Log.Warning("PoET proof not valid: %v", err)

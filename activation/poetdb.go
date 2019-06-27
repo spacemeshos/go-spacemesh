@@ -29,21 +29,27 @@ func NewPoetDb(store database.Database, log log.Log) *PoetDb {
 	return &PoetDb{store: store, poetProofRefSubscriptions: make(map[poetProofKey][]chan []byte), log: log}
 }
 
+type processingError string
+
+func (s processingError) Error() string {
+	return string(s)
+}
+
 func (db *PoetDb) ValidatePoetProof(proof types.PoetProof, poetId [types.PoetIdLength]byte, roundId uint64,
-	signature []byte) (processingIssue bool, err error) {
+	signature []byte) error {
 
 	root, err := calcRoot(proof.Members)
 	if err != nil {
-		return true, fmt.Errorf("failed to calculate membership root for poetId %x round %d: %v",
-			poetId, roundId, err)
+		return processingError(fmt.Sprintf("failed to calculate membership root for poetId %x round %d: %v",
+			poetId, roundId, err))
 	}
 	if err := validatePoet(root, proof.MerkleProof, proof.LeafCount); err != nil {
-		return false, fmt.Errorf("failed to validate poet proof for poetId %x round %d: %v",
+		return fmt.Errorf("failed to validate poet proof for poetId %x round %d: %v",
 			poetId, roundId, err)
 	}
 	// TODO(noamnelke): validate signature (or extract public key and use for salting merkle hashes)
 
-	return false, nil
+	return nil
 }
 
 func (db *PoetDb) storePoetProof(proof types.PoetProof, poetId [types.PoetIdLength]byte, roundId uint64,
