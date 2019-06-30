@@ -255,22 +255,9 @@ func (s *Syncer) SyncAndValidate(blk *types.Block) error {
 		return errors.New(fmt.Sprintf("data availabilty failed for block %v", blk.ID()))
 	}
 
-	//check local block syntactic validity return true
-
-	var crawlView = false
-	for _, bid := range blk.BlockHeader.ViewEdges {
-		if _, err := s.GetBlock(bid); err != nil {
-			crawlView = true
-			break
-		}
-	}
-
-	//crawl mesh and check local block syntactic validity return true
-	if crawlView {
-		if bks := s.crwal(NewValidationQueue(blk)); len(bks) > 0 {
-			s.Warning(fmt.Sprintf("could not fetch all blocks in block %v view ", blk.ID()))
-			return nil
-		}
+	//validate blocks view
+	if valid := s.ValidateView(blk); valid == false {
+		return errors.New(fmt.Sprintf("could not validate for block %v view ", blk.ID()))
 	}
 
 	if err := s.AddBlockWithTxs(blk, txs, atxs); err != nil {
@@ -281,6 +268,28 @@ func (s *Syncer) SyncAndValidate(blk *types.Block) error {
 	s.Info(fmt.Sprintf("added block with txs to database %v", blk.ID()))
 
 	return nil
+}
+
+func (s *Syncer) ValidateView(blk *types.Block) bool {
+	var allBlocksInDb = true
+
+	//check local database for all blocks in view
+	for _, bid := range blk.BlockHeader.ViewEdges {
+		if _, err := s.GetBlock(bid); err != nil {
+			allBlocksInDb = false
+			break
+		}
+	}
+
+	//crawl mesh and check local block syntactic validity return true
+	if !allBlocksInDb {
+		if bks := s.crwal(NewValidationQueue(blk)); len(bks) > 0 {
+			s.Warning(fmt.Sprintf("could not validate %v blocks in block %v view ", len(bks) > 0, blk.ID()))
+			return false
+		}
+	}
+
+	return true
 }
 
 func (s *Syncer) syncMissingContent(blk *types.Block) ([]*types.SerializableTransaction, []*types.ActivationTx, error) {
