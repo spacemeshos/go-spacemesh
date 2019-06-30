@@ -72,10 +72,9 @@ func (challenge *NIPSTChallenge) String() string {
 
 type ActivationTx struct {
 	ActivationTxHeader
-	VerifiedActiveSet uint32
-	Valid             bool
-	id                *AtxId
-	Nipst             *NIPST
+	Valid bool
+	id    *AtxId
+	Nipst *NIPST
 	//todo: add sig
 }
 

@@ -161,10 +161,12 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) (bool, error) {
 		b.log.Info("starting build atx in epoch %v", epoch)
 		if b.prevATX == nil {
 			prevAtxId, err := b.GetPrevAtxId(b.nodeId)
-			if err == nil {
+			if err != nil {
+				b.log.Info("no prev ATX found, starting fresh")
+			} else {
 				b.prevATX, err = b.db.GetAtx(*prevAtxId)
 				if err != nil {
-					b.log.Info("no prev ATX found, starting fresh")
+					b.log.Panic("prevAtx (id: %v) not found in DB -- inconsistent state", prevAtxId.ShortId())
 				}
 			}
 		}

@@ -27,12 +27,12 @@ const DefaultGas = 1
 
 const IncomingTxProtocol = "TxGossip"
 
-type AtxProcessor interface {
-	ProcessAtx(atx *types.ActivationTx)
-}
-
 type Signer interface {
 	Sign(m []byte) []byte
+}
+
+type AtxValidator interface {
+	SyntacticallyValidateAtx(atx *types.ActivationTx) error
 }
 
 type BlockBuilder struct {
@@ -52,7 +52,7 @@ type BlockBuilder struct {
 	weakCoinToss     WeakCoinProvider
 	orphans          OrphanBlockProvider
 	blockOracle      oracle.BlockOracle
-	processAtx       func(atx *types.ActivationTx)
+	atxValidator     AtxValidator
 	started          bool
 }
 
@@ -64,7 +64,7 @@ func NewBlockBuilder(minerID types.NodeId, sgn Signer, net p2p.Service,
 	orph OrphanBlockProvider,
 	hare HareResultProvider,
 	blockOracle oracle.BlockOracle,
-	processAtx func(atx *types.ActivationTx),
+	atxValidator AtxValidator,
 	lg log.Log) BlockBuilder {
 
 	seed := binary.BigEndian.Uint64(md5.New().Sum([]byte(minerID.Key)))
@@ -86,6 +86,7 @@ func NewBlockBuilder(minerID types.NodeId, sgn Signer, net p2p.Service,
 		weakCoinToss:     weakCoin,
 		orphans:          orph,
 		blockOracle:      blockOracle,
+		atxValidator:     atxValidator,
 		started:          false,
 	}
 
@@ -238,21 +239,28 @@ func (t *BlockBuilder) listenForAtx() {
 			return
 		case data := <-t.atxGossipChannel:
 			if data != nil {
-				x, err := types.BytesAsAtx(data.Bytes())
+				atx, err := types.BytesAsAtx(data.Bytes())
 				if err != nil {
 					t.Error("cannot parse incoming ATX")
 					break
 				}
-				t.Info("got new ATX %v", x.ShortId())
+				t.Info("got new ATX %v", atx.ShortId())
 
 				//todo fetch from neighbour
-				if x.Nipst == nil {
-					t.Error("nill nipst in gossip")
+				if atx.Nipst == nil {
+					t.Panic("nil nipst in gossip")
+					break
+				}
+				err = t.atxValidator.SyntacticallyValidateAtx(atx)
+				if err != nil {
+					t.Warning("received syntactically invalid ATX %v: %v", atx.ShortId(), err)
+					// TODO: blacklist peer
 					break
 				}
 
-				t.AtxPool.Put(x.Id(), x)
+				t.AtxPool.Put(atx.Id(), atx)
 				data.ReportValidation(activation.AtxProtocol)
+				t.Info("stored and propagated new syntactically valid ATX: %v", atx.ShortId())
 			}
 		}
 	}

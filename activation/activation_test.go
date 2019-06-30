@@ -149,7 +149,7 @@ func TestBuilder_NoPrevATX(t *testing.T) {
 	activationDb := NewActivationDb(database.NewMemDatabase(), database.NewMemDatabase(), &MockIStore{}, mesh.NewMemMeshDB(log.NewDefault("")), layersPerEpoch, &ValidatorMock{}, lg.WithName("atxDB"))
 	b := NewBuilder(id, coinbase, activationDb, net, ActiveSetProviderMock{}, layers, layersPerEpoch, &NipstBuilderMock{}, nil, func() bool { return true }, lg.WithName("atxBuilder"), )
 	_, err := b.PublishActivationTx(2) // non genesis epoch
-	assert.EqualError(t, err, "cannot find pos atx: cannot find pos atx id: not found")
+	assert.EqualError(t, err, "cannot find pos atx: cannot find pos atx id: leveldb: not found")
 }
 
 func TestBuilder_PublishActivationTx(t *testing.T) {
@@ -221,7 +221,7 @@ func TestBuilder_PublishActivationTx(t *testing.T) {
 	activationDb3 := NewActivationDb(database.NewMemDatabase(), database.NewMemDatabase(), &MockIStore{}, mesh.NewMemMeshDB(log.NewDefault("")), layersPerEpoch, &ValidatorMock{}, lg.WithName("atxDB3"))
 	bt := NewBuilder(id, coinbase, activationDb3, net, ActiveSetProviderMock{}, layers, layersPerEpoch, &NipstBuilderMock{}, nil, func() bool { return true }, lg.WithName("atxBuilder"), )
 	_, err = bt.PublishActivationTx(2)
-	assert.EqualError(t, err, "cannot find pos atx: cannot find pos atx id: not found")
+	assert.EqualError(t, err, "cannot find pos atx: cannot find pos atx id: leveldb: not found")
 	activesetCache.Purge()
 }
 

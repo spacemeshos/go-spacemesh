@@ -365,9 +365,9 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 		hOracle = eligibility.New(beacon, atxdb, BLS381.Verify2, vrfSigner, app.Config.CONSENSUS.LayersPerEpoch)
 	}
 
-	ha := hare.New(app.Config.HARE, swarm, sgn, nodeID, msh, hOracle, app.Config.CONSENSUS.LayersPerEpoch, idStore, atxdb, clock.Subscribe(), syncer.IsSynced, lg.WithName("hare"))
+	ha := hare.New(app.Config.HARE, swarm, sgn, nodeID, syncer.IsSynced, msh, hOracle, app.Config.CONSENSUS.LayersPerEpoch, idStore, atxdb, clock.Subscribe(), lg.WithName("hare"))
 
-	blockProducer := miner.NewBlockBuilder(nodeID, sgn, swarm, clock.Subscribe(), txpool, atxpool, coinToss, msh, ha, blockOracle, atxdb.ProcessAtx, lg.WithName("blockProducer"))
+	blockProducer := miner.NewBlockBuilder(nodeID, sgn, swarm, clock.Subscribe(), txpool, atxpool, coinToss, msh, ha, blockOracle, atxdb, lg.WithName("blockBuilder"))
 	blockListener := sync.NewBlockListener(swarm, blockValidator, syncer, 4, lg.WithName("blockListener"))
 
 	poetListener := activation.NewPoetListener(swarm, poetDb, lg.WithName("poetListener"))
