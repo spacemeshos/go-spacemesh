@@ -113,7 +113,6 @@ func TestBuilder_BuildActivationTx(t *testing.T) {
 
 	challenge := types.NIPSTChallenge{
 		NodeId:         b.nodeId,
-		Coinbase:       coinbase,
 		Sequence:       b.GetLastSequence(b.nodeId) + 1,
 		PrevATXId:      atx.Id(),
 		PubLayerIdx:    atx.PubLayerIdx.Add(b.layersPerEpoch),
@@ -128,7 +127,7 @@ func TestBuilder_BuildActivationTx(t *testing.T) {
 	assert.NoError(t, err)
 	activeSetSize, err := b.activeSet.ActiveSetSize(1)
 	assert.NoError(t, err)
-	act := types.NewActivationTxWithChallenge(challenge, activeSetSize, view, npst2, true)
+	act := types.NewActivationTxWithChallenge(challenge, coinbase, activeSetSize, view, npst2, true)
 
 	_, err = b.PublishActivationTx(layers.LatestLayer().GetEpoch(layersPerEpoch))
 	assert.NoError(t, err)
@@ -174,7 +173,6 @@ func TestBuilder_PublishActivationTx(t *testing.T) {
 
 	challenge := types.NIPSTChallenge{
 		NodeId:         b.nodeId,
-		Coinbase:       coinbase,
 		Sequence:       b.GetLastSequence(b.nodeId) + 1,
 		PrevATXId:      atx.Id(),
 		PubLayerIdx:    atx.PubLayerIdx.Add(b.layersPerEpoch),

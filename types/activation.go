@@ -33,13 +33,13 @@ var EmptyAtxId = &AtxId{common.Hash{0}}
 
 type ActivationTxHeader struct {
 	NIPSTChallenge
+	Coinbase      address.Address
 	ActiveSetSize uint32
 	View          []BlockID
 }
 
 type NIPSTChallenge struct {
 	NodeId         NodeId
-	Coinbase       address.Address
 	Sequence       uint64
 	PrevATXId      AtxId
 	PubLayerIdx    LayerID
@@ -93,13 +93,13 @@ func NewActivationTx(NodeId NodeId,
 		ActivationTxHeader: ActivationTxHeader{
 			NIPSTChallenge: NIPSTChallenge{
 				NodeId:         NodeId,
-				Coinbase:       Coinbase,
 				Sequence:       Sequence,
 				PrevATXId:      PrevATX,
 				PubLayerIdx:    LayerIndex,
 				StartTick:      StartTick,
 				PositioningAtx: PositioningATX,
 			},
+			Coinbase:      Coinbase,
 			ActiveSetSize: ActiveSetSize,
 			View:          View,
 		},
@@ -109,12 +109,13 @@ func NewActivationTx(NodeId NodeId,
 
 }
 
-func NewActivationTxWithChallenge(poetChallenge NIPSTChallenge, ActiveSetSize uint32, View []BlockID, nipst *NIPST,
+func NewActivationTxWithChallenge(poetChallenge NIPSTChallenge, coinbase address.Address, ActiveSetSize uint32, View []BlockID, nipst *NIPST,
 	isValid bool) *ActivationTx {
 
 	return &ActivationTx{
 		ActivationTxHeader: ActivationTxHeader{
 			NIPSTChallenge: poetChallenge,
+			Coinbase:       coinbase,
 			ActiveSetSize:  ActiveSetSize,
 			View:           View,
 		},
