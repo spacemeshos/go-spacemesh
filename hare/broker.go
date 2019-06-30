@@ -162,7 +162,9 @@ func (b *Broker) eventLoop() {
 				if _, exist := b.pending[msgInstId]; !exist { // create buffer if first msg
 					b.pending[msgInstId] = make([]*Msg, 0)
 				}
-				if len(b.pending[msgInstId]) == InboxCapacity { // buffer is full
+				// we want to write all buffered messages to a chan with InboxCapacity len
+				// hence, we limit the buffer for pending messages
+				if len(b.pending[msgInstId]) == InboxCapacity {
 					b.Error("Reached %v pending messages. Ignoring message for layer %v sent from %v",
 						InboxCapacity, msgInstId, iMsg.PubKey.ShortString())
 					continue
@@ -172,10 +174,6 @@ func (b *Broker) eventLoop() {
 			}
 
 			// has instance, just send
-			if !ok {
-				b.Panic("registered but no outbox for %v", msgInstId)
-			}
-
 			c <- iMsg
 
 		case task := <-b.tasks:
@@ -265,6 +263,7 @@ func (b *Broker) Unregister(id InstanceId) {
 	b.tasks <- func() {
 		b.layerState[id] = invalid // mark unregistered (invalid)
 		delete(b.outbox, id)       // delete outbox for if
+		b.Info("Unregistered layer %v ", id)
 		wg.Done()
 	}
 
