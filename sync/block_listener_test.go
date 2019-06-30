@@ -76,7 +76,7 @@ func TestBlockListener(t *testing.T) {
 	bl1.AddBlock(block2)
 	bl1.AddBlock(block3)
 
-	_, err := bl2.fetchFullBlocks([]types.BlockID{block1.Id})
+	_, err := bl2.FetchFullBlocks([]types.BlockID{block1.Id})
 	if err != nil {
 		t.Error(err)
 	}
@@ -166,7 +166,7 @@ func TestBlockListener2(t *testing.T) {
 	bl1.AddBlock(block9)
 	bl1.AddBlock(block10)
 
-	_, err := bl2.fetchFullBlocks([]types.BlockID{block10.Id})
+	_, err := bl2.FetchFullBlocks([]types.BlockID{block10.Id})
 	if err != nil {
 		t.Error(err)
 	}

@@ -47,7 +47,10 @@ func TestNewNeighborhoodWorker(t *testing.T) {
 	pm1 := getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
 	syncObj2.Peers = pm1
 
-	wrk := NewNeighborhoodWorker(syncObj2, 1, BlockReqFactory([]types.BlockID{123}))
+	ch := make(chan types.BlockID, 3)
+	ch <- types.BlockID(123)
+
+	wrk := NewNeighborhoodWorker(syncObj2, 1, BlockReqFactory(ch))
 	go wrk.Work()
 
 	select {

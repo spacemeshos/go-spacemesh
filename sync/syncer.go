@@ -186,7 +186,7 @@ func (s *Syncer) getLayerFromNeighbors(currenSyncLayer types.LayerID) (*types.La
 		return nil, err
 	}
 
-	blocksArr, err := s.fetchFullBlocks(blockIds)
+	blocksArr, err := s.FetchFullBlocks(blockIds)
 	if err != nil {
 		s.Error("could not get layer blocks %v", currenSyncLayer, err)
 		return nil, err
@@ -195,27 +195,26 @@ func (s *Syncer) getLayerFromNeighbors(currenSyncLayer types.LayerID) (*types.La
 	return types.NewExistingLayer(types.LayerID(currenSyncLayer), blocksArr), nil
 }
 
-func (s *Syncer) fetchFullBlocks(blockIds []types.BlockID) ([]*types.Block, error) {
-	output := s.fetchWithFactory(BlockReqFactory(blockIds), s.Concurrency)
+func (s *Syncer) FetchFullBlocks(blockIds []types.BlockID) ([]*types.Block, error) {
+	output := s.fetchWithFactory(BlockReqFactory(blockSliceToChan(blockIds)), s.Concurrency)
 	blocksArr := make([]*types.Block, 0, len(blockIds))
 	for out := range output {
 		block := out.(*types.Block)
-		if err := s.syncAndValidate(block); err != nil {
+		if err := s.SyncAndValidate(block); err != nil {
 			s.Error(fmt.Sprintf("failed derefrencing block data %v %v", block.ID(), err))
 			continue
 		}
 
 		s.Info("added block to layer %v", block.Layer())
 		blocksArr = append(blocksArr, block)
-
 	}
 
 	return blocksArr, nil
 }
 
-func (s *Syncer) syncAndValidate(blk *types.Block) error {
+func (s *Syncer) SyncAndValidate(blk *types.Block) error {
 	//check block signature
-	s.Mesh.ValidateSignature(blk)
+	s.ValidateSignature(blk)
 
 	//associated atx data availability
 	if blk.ATXID != *types.EmptyAtxId {
@@ -235,9 +234,22 @@ func (s *Syncer) syncAndValidate(blk *types.Block) error {
 		return errors.New(fmt.Sprintf("data availabilty failed for block %v", blk.ID()))
 	}
 
-	//check block syntactic validity
-	if valid, err := s.SyntacticallyValid(&blk.BlockHeader); err != nil || !valid {
-		return errors.New(fmt.Sprintf("block %v not syntactically valid", blk.ID()))
+	//check local block syntactic validity return true
+
+	var crawlView = false
+	for _, bid := range blk.BlockHeader.ViewEdges {
+		if _, err := s.GetBlock(bid); err != nil {
+			crawlView = true
+			break
+		}
+	}
+
+	//crawl mesh and check local block syntactic validity return true
+	if crawlView {
+		if bks := s.crwal(NewValidationQueue(blk)); len(bks) > 0 {
+			s.Warning(fmt.Sprintf("could not fetch all blocks in block %v view ", blk.ID()))
+			return nil
+		}
 	}
 
 	if err := s.AddBlockWithTxs(blk, txs, atxs); err != nil {
@@ -357,12 +369,12 @@ func (s *Syncer) fetchWithFactory(refac RequestFactory, workers int) chan interf
 func (s *Syncer) syncTxs(txids []types.TransactionId) ([]*types.SerializableTransaction, error) {
 
 	//look in pool
-	txMap := make(map[types.TransactionId]*types.SerializableTransaction)
+	poolTxs := make(map[types.TransactionId]*types.SerializableTransaction)
 	missing := make([]types.TransactionId, 0)
 	for _, t := range txids {
 		if tx := s.txpool.Get(t); tx != nil {
 			s.Info("found tx, %v in tx pool", hex.EncodeToString(t[:]))
-			txMap[t] = tx.(*types.SerializableTransaction)
+			poolTxs[t] = tx.(*types.SerializableTransaction)
 		} else {
 			missing = append(missing, t)
 		}
@@ -381,19 +393,19 @@ func (s *Syncer) syncTxs(txids []types.TransactionId) ([]*types.SerializableTran
 					s.Warning("tx %v not valid %v", hex.EncodeToString(id[:]), err)
 					continue
 				}
-				txMap[types.GetTransactionId(&tx)] = &tx
+				poolTxs[types.GetTransactionId(&tx)] = &tx
 			}
 		}
 	}
 
 	txs := make([]*types.SerializableTransaction, 0, len(txids))
-	for _, t := range txids {
-		if tx, ok := txMap[t]; ok {
+	for _, id := range txids {
+		if tx, ok := poolTxs[id]; ok {
 			txs = append(txs, tx)
-		} else if tx, ok := dbTxs[t]; ok {
+		} else if tx, ok := dbTxs[id]; ok {
 			txs = append(txs, tx)
 		} else {
-			return nil, errors.New(fmt.Sprintf("could not fetch tx %v", hex.EncodeToString(t[:])))
+			return nil, errors.New(fmt.Sprintf("could not fetch tx %v", hex.EncodeToString(id[:])))
 		}
 	}
 	return txs, nil
@@ -402,21 +414,21 @@ func (s *Syncer) syncTxs(txids []types.TransactionId) ([]*types.SerializableTran
 func (s *Syncer) syncAtxs(atxIds []types.AtxId) (atxs []*types.ActivationTx, err error) {
 
 	//look in pool
-	atxMap := make(map[types.AtxId]*types.ActivationTx, len(atxs))
+	poolAtxs := make(map[types.AtxId]*types.ActivationTx, len(atxs))
 	missingInPool := make([]types.AtxId, 0, len(atxs))
 	for _, t := range atxIds {
 		id := t
 		if x := s.atxpool.Get(id); x != nil {
 			atx := x.(*types.ActivationTx)
 			if atx.Nipst == nil {
-				s.Warning("atx %v nipst not found ", hex.EncodeToString(id.Bytes()))
+				s.Warning("atx %v nipst not found ", id.ShortId())
 				missingInPool = append(missingInPool, id)
 				continue
 			}
-			s.Info("found atx, %v in atx pool", hex.EncodeToString(id.Bytes()))
-			atxMap[id] = atx
+			s.Info("found atx, %v in atx pool", id.ShortId())
+			poolAtxs[id] = atx
 		} else {
-			s.Warning("atx %v not in atx pool", hex.EncodeToString(id.Bytes()))
+			s.Warning("atx %v not in atx pool", id.ShortId())
 			missingInPool = append(missingInPool, id)
 		}
 	}
@@ -428,26 +440,70 @@ func (s *Syncer) syncAtxs(atxIds []types.AtxId) (atxs []*types.ActivationTx, err
 	if len(missing) > 0 {
 		output := s.fetchWithFactory(ATxReqFactory(missing), 1)
 		for out := range output {
-			ntxs := out.([]types.ActivationTx)
-			for _, atx := range ntxs {
+			atxs := out.([]types.ActivationTx)
+
+			for _, atx := range atxs {
 				if valid, err := s.AtxValid(&atx); !valid || err != nil {
-					s.Warning("tx %v not valid %v", hex.EncodeToString(atx.Id().Bytes()), err)
+					s.Warning("atx %v not valid %v", atx.ShortId(), err)
 					continue
 				}
-				atxMap[atx.Id()] = &atx
+				poolAtxs[atx.Id()] = &atx
 			}
 		}
 	}
 
 	atxs = make([]*types.ActivationTx, 0, len(atxIds))
-	for _, t := range atxIds {
-		if tx, ok := atxMap[t]; ok {
+	for _, id := range atxIds {
+		if tx, ok := poolAtxs[id]; ok {
 			atxs = append(atxs, tx)
-		} else if tx, ok := dbAtxs[t]; ok {
+		} else if tx, ok := dbAtxs[id]; ok {
 			atxs = append(atxs, tx)
 		} else {
-			return nil, errors.New(fmt.Sprintf("could not fetch atx %v", hex.EncodeToString(t.Bytes())))
+			return nil, errors.New(fmt.Sprintf("could not fetch atx %v", id.ShortId()))
 		}
 	}
 	return atxs, nil
+}
+
+func (s *Syncer) crwal(vq *validationQueue) []types.BlockID {
+	ch := make(chan types.BlockID, 10)
+	output := s.fetchWithFactory(BlockReqFactory(ch), 4)
+	go func() {
+		for out := range output {
+			block := out.(*types.Block)
+			if err := s.SyncAndValidate(block); err != nil {
+				s.Error(fmt.Sprintf("failed derefrencing block data %v %v", block.ID(), err))
+				continue
+			}
+			if vq.updateDependencies(&block.BlockHeader, s.GetBlock) {
+
+				//remove this block from all dependencies lists
+				for _, b := range vq.reverseDepMap[block.ID()] {
+
+					//we can update recursively all dependencies or just wait for the queue to finish processing
+					delete(vq.depMap[b], block.ID())
+				}
+
+				//remove this block from reverse dependency map
+				delete(vq.reverseDepMap, block.ID())
+			}
+		}
+	}()
+
+	for {
+		if vq.Size() == 0 {
+			s.Info("validation queue empty ")
+			break
+		}
+
+		b := vq.PopItem()
+		if b == nil {
+			close(ch)
+			s.Info(fmt.Sprintf("mesh crewler queue is empty"))
+		}
+		blk := b.(types.BlockID)
+		ch <- blk
+
+	}
+	return vq.getMissingBlocks()
 }

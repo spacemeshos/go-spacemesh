@@ -21,7 +21,6 @@ type BlockListener struct {
 	wg                   sync.WaitGroup
 	bufferSize           int
 	semaphore            chan struct{}
-	unknownQueue         chan types.BlockID //todo consider benefits of changing to stack
 	receivedGossipBlocks chan service.GossipMessage
 	startLock            uint32
 	timeout              time.Duration
@@ -42,7 +41,6 @@ func (bl *BlockListener) Close() {
 
 func (bl *BlockListener) Start() {
 	if atomic.CompareAndSwapUint32(&bl.startLock, 0, 1) {
-		go bl.run()
 		go bl.ListenToGossipBlocks()
 	}
 }
@@ -52,7 +50,6 @@ func NewBlockListener(net service.Service, sync *Syncer, concurrency int, logger
 		Syncer:               sync,
 		Log:                  logger,
 		semaphore:            make(chan struct{}, concurrency),
-		unknownQueue:         make(chan types.BlockID, 200), //todo tune buffer size + get buffer from config
 		exit:                 make(chan struct{}),
 		receivedGossipBlocks: net.RegisterGossipProtocol(config.NewBlockProtocol),
 	}
@@ -92,38 +89,10 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 func (bl *BlockListener) handleBlock(blk *types.Block) bool {
 
 	bl.Log.With().Info("got new block", log.Uint64("id", uint64(blk.Id)), log.Int("txs", len(blk.TxIds)), log.Int("atxs", len(blk.AtxIds)))
-	if err := bl.syncAndValidate(blk); err != nil {
+	if err := bl.SyncAndValidate(blk); err != nil {
 		bl.Error("handleBlock %v failed ", blk.ID(), err)
 		return false
 	}
-
 	bl.Info("added block %v to database", blk.ID())
-	bl.addUnknownToQueue(&blk.BlockHeader)
 	return true
-}
-
-func (bl *BlockListener) run() {
-	for {
-		select {
-		case <-bl.exit:
-			bl.Log.Info("Work stopped")
-			return
-		case id := <-bl.unknownQueue:
-			bl.Log.Debug("fetch block ", id, "buffer is at ", len(bl.unknownQueue)/cap(bl.unknownQueue), " capacity")
-			bl.semaphore <- struct{}{}
-			go func() {
-				bl.fetchFullBlocks([]types.BlockID{id})
-				<-bl.semaphore
-			}()
-		}
-	}
-}
-
-func (bl *BlockListener) addUnknownToQueue(b *types.BlockHeader) {
-	for _, block := range b.ViewEdges {
-		//if unknown block
-		if _, err := bl.GetBlock(block); err != nil {
-			bl.unknownQueue <- block
-		}
-	}
 }

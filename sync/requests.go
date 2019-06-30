@@ -42,12 +42,15 @@ func HashReqFactory(lyr types.LayerID) RequestFactory {
 
 }
 
-func BlockReqFactory(blockIds []types.BlockID) RequestFactory {
-	//convert to chan
+func blockSliceToChan(blockIds []types.BlockID) chan types.BlockID {
 	blockIdsCh := make(chan types.BlockID, len(blockIds))
 	for _, id := range blockIds {
 		blockIdsCh <- id
 	}
+	return blockIdsCh
+}
+
+func BlockReqFactory(blockIds chan types.BlockID) RequestFactory {
 
 	return func(s *server.MessageServer, peer p2p.Peer) (chan interface{}, error) {
 		ch := make(chan interface{}, 1)
@@ -61,7 +64,7 @@ func BlockReqFactory(blockIds []types.BlockID) RequestFactory {
 			}
 			ch <- &block
 		}
-		id, ok := <-blockIdsCh
+		id, ok := <-blockIds
 		if !ok {
 			return nil, errors.New("chan was closed, job done")
 		}

@@ -53,5 +53,6 @@ func updateMetrics(alg *Algorithm, ll *types.Layer) {
 }
 
 func (alg *Algorithm) ContextualValidity(id types.BlockID) bool {
+	//todo after each layer we should persist alg.getVote(id) in mesh
 	return alg.getVote(id) == Support
 }

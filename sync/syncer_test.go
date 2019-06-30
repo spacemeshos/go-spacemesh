@@ -184,7 +184,9 @@ func TestSyncProtocol_BlockRequest(t *testing.T) {
 	syncObj.AddBlockWithTxs(block, []*types.SerializableTransaction{tx1}, []*types.ActivationTx{atx1})
 	syncObj2.Peers = getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
 
-	output := syncObj2.fetchWithFactory(BlockReqFactory([]types.BlockID{block.ID()}), 1)
+	ch := make(chan types.BlockID, 1)
+	ch <- block.ID()
+	output := syncObj2.fetchWithFactory(BlockReqFactory(ch), 1)
 	timeout := time.NewTimer(2 * time.Second)
 
 	select {
@@ -298,10 +300,15 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	syncObj1.AddBlockWithTxs(block2, []*types.SerializableTransaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8}, []*types.ActivationTx{atx2})
 	syncObj1.AddBlockWithTxs(block3, []*types.SerializableTransaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8}, []*types.ActivationTx{atx3})
 
-	output := syncObj2.fetchWithFactory(BlockReqFactory([]types.BlockID{block1.ID(), block2.ID(), block3.ID()}), 1)
+	ch := make(chan types.BlockID, 3)
+	ch <- block1.ID()
+	ch <- block2.ID()
+	ch <- block3.ID()
+
+	output := syncObj2.fetchWithFactory(BlockReqFactory(ch), 1)
 	for out := range output {
 		block := out.(*types.Block)
-		txs, err := syncObj2.syncTxs(block)
+		txs, err := syncObj2.syncTxs(block.TxIds)
 		if err != nil {
 			t.Error("could not fetch all txs", err)
 		}

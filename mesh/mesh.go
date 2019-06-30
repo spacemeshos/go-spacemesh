@@ -1,7 +1,6 @@
 package mesh
 
 import (
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/address"
@@ -483,11 +482,11 @@ func (m *Mesh) GetATXs(atxIds []types.AtxId) (map[types.AtxId]*types.ActivationT
 	for _, id := range atxIds {
 		t, err := m.GetAtx(id)
 		if err != nil {
-			m.Warning("could not get atx %v  from database, %v", hex.EncodeToString(id.Bytes()), err)
+			m.Warning("could not get atx %v  from database, %v", id.ShortId(), err)
 			mIds = append(mIds, id)
 		} else {
 			if t.Nipst, err = m.GetNipst(t.Id()); err != nil {
-				m.Warning("could not get nipst %v from database, %v", hex.EncodeToString(id.Bytes()), err)
+				m.Warning("could not get nipst %v from database, %v", id.ShortId(), err)
 				mIds = append(mIds, id)
 			}
 			atxs[t.Id()] = t
