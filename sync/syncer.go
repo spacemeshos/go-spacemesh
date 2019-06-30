@@ -26,7 +26,6 @@ type MemPool interface {
 
 type BlockValidator interface {
 	BlockEligible(block *types.BlockHeader) (bool, error)
-	SyntacticallyValid(block *types.BlockHeader) (bool, error)
 	TxValid(tx *types.SerializableTransaction) (bool, error)
 	AtxValid(atx *types.ActivationTx) (bool, error)
 }

@@ -6,10 +6,6 @@ type EligibilityValidator interface {
 	BlockEligible(block *types.BlockHeader) (bool, error)
 }
 
-type ViewValidator interface {
-	SyntacticallyValid(block *types.BlockHeader) (bool, error)
-}
-
 type TxValidator interface {
 	TxValid(tx *types.SerializableTransaction) (bool, error)
 }
@@ -20,11 +16,10 @@ type AtxValidator interface {
 
 type blockValidator struct {
 	EligibilityValidator
-	ViewValidator
 	TxValidator
 	AtxValidator
 }
 
-func NewBlockValidator(bev EligibilityValidator, bsv ViewValidator, txv TxValidator, atxv AtxValidator) BlockValidator {
-	return &blockValidator{bev, bsv, txv, atxv}
+func NewBlockValidator(bev EligibilityValidator, txv TxValidator, atxv AtxValidator) BlockValidator {
+	return &blockValidator{bev, txv, atxv}
 }

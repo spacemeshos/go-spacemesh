@@ -328,7 +328,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 
 	eligibilityValidator := oracle.NewBlockEligibilityValidator(int32(layerSize), uint16(layersPerEpoch), atxdb, beaconProvider, BLS381.Verify2, lg.WithName("blkElgValidator"))
 
-	blockValidator := sync.NewBlockValidator(eligibilityValidator, sync.SyntacticValidatorMock{}, sync.TxValidatorMock{}, sync.AtxValidatorMock{})
+	blockValidator := sync.NewBlockValidator(eligibilityValidator, sync.TxValidatorMock{}, sync.AtxValidatorMock{})
 
 	trtl := tortoise.NewAlgorithm(int(1), mdb, lg.WithName("trtl"))
 
