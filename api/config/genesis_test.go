@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-func TestSaveLoadConfig(t *testing.T){
+func TestSaveLoadConfig(t *testing.T) {
 	cfg := GenesisConfig{}
 	cfg.InitialAccounts = map[string]GenesisAccount{
 		"0x1": {Balance: big.NewInt(10000), Nonce: 0},
@@ -31,7 +31,7 @@ func TestSaveLoadConfig(t *testing.T){
 	assert.Equal(t, gs, &cfg)
 }
 
-func TestSaveCfg(t *testing.T){
+func TestSaveCfg(t *testing.T) {
 	cfg := GenesisConfig{}
 	cfg.InitialAccounts = map[string]GenesisAccount{
 		"0x1": {Balance: big.NewInt(10000), Nonce: 0},
@@ -44,7 +44,7 @@ func TestSaveCfg(t *testing.T){
 	}
 	defer os.RemoveAll(tempDir)*/
 
-	filePath :=  "/tmp/genesis.cfg"
+	filePath := "/tmp/genesis.cfg"
 
 	SaveGenesisConfig(filePath, cfg)
 }

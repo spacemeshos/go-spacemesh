@@ -344,8 +344,8 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 		nonceTrack := make(map[*StateObj]int)
 		for j := 0; j < numOfTransactions; j++ {
 
-			srcAccount := accounts[int(rand.Uint32()%(uint32(len(accounts) - 1)))]
-			dstAccount := accounts[int(rand.Uint32()%(uint32(len(accounts) - 1)))]
+			srcAccount := accounts[int(rand.Uint32()%(uint32(len(accounts)-1)))]
+			dstAccount := accounts[int(rand.Uint32()%(uint32(len(accounts)-1)))]
 
 			if _, ok := nonceTrack[srcAccount]; !ok {
 				nonceTrack[srcAccount] = 0
@@ -354,7 +354,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 			}
 
 			for dstAccount == srcAccount {
-				dstAccount = accounts[int(rand.Uint32()%(uint32(len(accounts) - 1)))]
+				dstAccount = accounts[int(rand.Uint32()%(uint32(len(accounts)-1)))]
 			}
 			t := createTransaction(s.processor.globalState.GetNonce(srcAccount.address)+uint64(nonceTrack[srcAccount]),
 				srcAccount.address, dstAccount.address, int64(rand.Uint64()%srcAccount.Balance().Uint64())/100)

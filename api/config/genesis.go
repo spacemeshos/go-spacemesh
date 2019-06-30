@@ -17,7 +17,7 @@ type GenesisConfig struct {
 	InitialAccounts map[string]GenesisAccount
 }
 
-func SaveGenesisConfig(path string, config GenesisConfig) error{
+func SaveGenesisConfig(path string, config GenesisConfig) error {
 	w, err := os.Create(path)
 	if err != nil {
 		return err
@@ -30,18 +30,17 @@ func SaveGenesisConfig(path string, config GenesisConfig) error{
 	return nil
 }
 
-func LoadGenesisConfig(path string) (*GenesisConfig, error){
+func LoadGenesisConfig(path string) (*GenesisConfig, error) {
 	_, err := os.Stat(path)
 	if os.IsNotExist(err) {
 		log.Warning("genesis config not lodad since file does not exist. file=%v", path)
-		return nil ,err
+		return nil, err
 	}
 	r, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("error opening file: %v", err)
 	}
 	defer r.Close()
-
 
 	dec := json.NewDecoder(r)
 	cfg := &GenesisConfig{}
@@ -52,7 +51,6 @@ func LoadGenesisConfig(path string) (*GenesisConfig, error){
 
 	return cfg, nil
 }
-
 
 func DefaultGenesisConfig() *GenesisConfig {
 	g := GenesisConfig{}

@@ -82,7 +82,6 @@ type BaseConfig struct {
 	GenesisConfPath string `mapstructure:"genesis-conf"`
 
 	CoinbaseAccount string `mapstructure:"coinbase"`
-
 }
 
 // DefaultConfig returns the default configuration for a spacemesh node
