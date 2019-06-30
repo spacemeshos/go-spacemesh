@@ -353,7 +353,7 @@ func (s *Syncer) fetchLayerHashes(lyr types.LayerID) (map[string]p2p.Peer, error
 }
 
 func (s *Syncer) fetchWithFactory(refac RequestFactory, workers int) chan interface{} {
-	// each worker goroutine tries to fetch a block iteratively from each peer
+	// each worker goroutine tries to fetch data iteratively from each peer
 
 	wrk := NewNeighborhoodWorker(s, workers, refac)
 	go wrk.Work()

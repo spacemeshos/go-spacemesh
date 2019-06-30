@@ -88,7 +88,6 @@ func NewPeersWorker(s *Syncer, peers []p2p.Peer, mu *sync.Once, reqFactory Reque
 func NewNeighborhoodWorker(s *Syncer, count int, reqFactory RequestFactory) worker {
 	output := make(chan interface{}, count)
 	acount := int32(count)
-	mu := &sync.Once{}
 	workFunc := func() {
 		for _, p := range s.GetPeers() {
 			peer := p
@@ -110,6 +109,6 @@ func NewNeighborhoodWorker(s *Syncer, count int, reqFactory RequestFactory) work
 		}
 	}
 
-	return worker{Log: s.Log, Once: mu, workCount: &acount, output: output, work: workFunc}
+	return worker{Log: s.Log, Once: &sync.Once{}, workCount: &acount, output: output, work: workFunc}
 
 }

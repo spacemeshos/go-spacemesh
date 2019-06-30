@@ -32,7 +32,6 @@ func (pm PeersMock) Close() {
 }
 
 func ListenerFactory(serv service.Service, peers p2p.Peers, name string, layer types.LayerID) *BlockListener {
-
 	ch := make(chan types.LayerID, 1)
 	ch <- layer
 	l := log.New(name, "", "")
@@ -40,7 +39,6 @@ func ListenerFactory(serv service.Service, peers p2p.Peers, name string, layer t
 	sync := NewSync(serv, getMesh(memoryDB, name), miner.NewMemPool(reflect.TypeOf(types.SerializableTransaction{})),
 		miner.NewMemPool(reflect.TypeOf(types.ActivationTx{})), blockValidator, conf, ch, l)
 	sync.Peers = peers
-	sync.Start()
 	nbl := NewBlockListener(serv, sync, 2, log.New(name, "", ""))
 	return nbl
 }
@@ -49,8 +47,8 @@ func TestBlockListener(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
-	bl1 := ListenerFactory(n1, PeersMock{func() []p2p.Peer { return []p2p.Peer{n2.PublicKey()} }}, "1", 3)
-	bl2 := ListenerFactory(n2, PeersMock{func() []p2p.Peer { return []p2p.Peer{n1.PublicKey()} }}, "2", 3)
+	bl1 := ListenerFactory(n1, PeersMock{func() []p2p.Peer { return []p2p.Peer{n2.PublicKey()} }}, "listener1", 3)
+	bl2 := ListenerFactory(n2, PeersMock{func() []p2p.Peer { return []p2p.Peer{n1.PublicKey()} }}, "listener2", 3)
 	defer bl2.Close()
 	defer bl1.Close()
 	bl2.Start()
@@ -76,7 +74,12 @@ func TestBlockListener(t *testing.T) {
 	bl1.AddBlock(block2)
 	bl1.AddBlock(block3)
 
-	_, err := bl2.FetchFullBlocks([]types.BlockID{block1.Id})
+	_, err := bl1.GetBlock(block1.Id)
+	if err != nil {
+		t.Error(err)
+	}
+
+	_, err = bl2.FetchFullBlocks([]types.BlockID{block1.Id})
 	if err != nil {
 		t.Error(err)
 	}
