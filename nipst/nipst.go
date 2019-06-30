@@ -61,10 +61,6 @@ func initialNIPST(space uint64) *types.NIPST {
 	return &types.NIPST{Space: space}
 }
 
-type ActivationBuilder interface {
-	BuildActivationTx(proof *types.NIPST)
-}
-
 type builderState struct {
 	nipst *types.NIPST
 
