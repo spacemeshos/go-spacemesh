@@ -2,6 +2,7 @@ package activation
 
 import (
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/rand"
@@ -53,25 +54,26 @@ type NipstValidator interface {
 }
 
 type Builder struct {
-	nodeId         types.NodeId
-	db             *ActivationDb
-	net            Broadcaster
-	activeSet      ActiveSetProvider
-	mesh           MeshProvider
-	layersPerEpoch uint16
-	tickProvider   PoETNumberOfTickProvider
-	nipstBuilder   NipstBuilder
-	challenge      *types.NIPSTChallenge
-	nipst          *types.NIPST
-	posLayerID     types.LayerID
-	prevATX        *types.ActivationTx
-	timer          chan types.LayerID
-	stop           chan struct{}
-	finished       chan struct{}
-	working        bool
-	started        uint32
-	isSynced       func() bool
-	log            log.Log
+	nodeId          types.NodeId
+	coinbaseAccount address.Address
+	db              *ActivationDb
+	net             Broadcaster
+	activeSet       ActiveSetProvider
+	mesh            MeshProvider
+	layersPerEpoch  uint16
+	tickProvider    PoETNumberOfTickProvider
+	nipstBuilder    NipstBuilder
+	challenge       *types.NIPSTChallenge
+	nipst           *types.NIPST
+	posLayerID      types.LayerID
+	prevATX         *types.ActivationTx
+	timer           chan types.LayerID
+	stop            chan struct{}
+	finished        chan struct{}
+	working         bool
+	started         uint32
+	isSynced        func() bool
+	log             log.Log
 }
 
 type Processor struct {
@@ -80,22 +82,22 @@ type Processor struct {
 }
 
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
-func NewBuilder(nodeId types.NodeId, db *ActivationDb, net Broadcaster, activeSet ActiveSetProvider, mesh MeshProvider,
-	layersPerEpoch uint16, nipstBuilder NipstBuilder, layerClock chan types.LayerID, isSyncedFunc func() bool, log log.Log) *Builder {
+func NewBuilder(nodeId types.NodeId, coinbaseAccount address.Address, db *ActivationDb, net Broadcaster, activeSet ActiveSetProvider, mesh MeshProvider, layersPerEpoch uint16, nipstBuilder NipstBuilder, layerClock chan types.LayerID, isSyncedFunc func() bool, log log.Log) *Builder {
 
 	return &Builder{
-		nodeId:         nodeId,
-		db:             db,
-		net:            net,
-		activeSet:      activeSet,
-		mesh:           mesh,
-		layersPerEpoch: layersPerEpoch,
-		nipstBuilder:   nipstBuilder,
-		timer:          layerClock,
-		stop:           make(chan struct{}),
-		finished:       make(chan struct{}),
-		isSynced:       isSyncedFunc,
-		log:            log,
+		nodeId:          nodeId,
+		coinbaseAccount: coinbaseAccount,
+		db:              db,
+		net:             net,
+		activeSet:       activeSet,
+		mesh:            mesh,
+		layersPerEpoch:  layersPerEpoch,
+		nipstBuilder:    nipstBuilder,
+		timer:           layerClock,
+		stop:            make(chan struct{}),
+		finished:        make(chan struct{}),
+		isSynced:        isSyncedFunc,
+		log:             log,
 	}
 }
 
@@ -199,6 +201,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) (bool, error) {
 
 		b.challenge = &types.NIPSTChallenge{
 			NodeId:         b.nodeId,
+			Coinbase:       b.coinbaseAccount,
 			Sequence:       seq,
 			PrevATXId:      prevAtxId,
 			PubLayerIdx:    atxPubLayerID,

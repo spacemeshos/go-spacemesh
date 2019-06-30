@@ -243,7 +243,7 @@ func (t *BlockBuilder) listenForAtx() {
 					t.Error("cannot parse incoming ATX")
 					break
 				}
-				t.Info("got new ATX %v", hex.EncodeToString(x.Id().Bytes()))
+				t.Info("got new ATX %v", x.ShortId())
 
 				//todo fetch from neighbour
 				if x.Nipst == nil {

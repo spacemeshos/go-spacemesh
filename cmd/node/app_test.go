@@ -5,7 +5,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/amcl/BLS381"
 	"github.com/spacemeshos/go-spacemesh/api"
-	apiCfg "github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/miner"
@@ -20,6 +19,7 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -98,6 +98,7 @@ func (suite *AppTestSuite) initMultipleInstances(numOfInstances int, storeFormat
 		smApp.Config.HARE.RoundDuration = 3
 		smApp.Config.HARE.WakeupDelta = 15
 		smApp.Config.HARE.ExpectedLeaders = 5
+		smApp.Config.CoinbaseAccount = strconv.Itoa(i+1)
 
 		edSgn := signing.NewEdSigner()
 		pub := edSgn.PublicKey()
@@ -121,7 +122,7 @@ func (suite *AppTestSuite) initMultipleInstances(numOfInstances int, storeFormat
 		}
 		err = smApp.initServices(nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(layerSize), nipst.NewPostClient(), poet, vrfSigner, npstCfg, 3)
 		r.NoError(err)
-		smApp.setupGenesis(apiCfg.DefaultGenesisConfig())
+		smApp.setupGenesis()
 
 		suite.apps = append(suite.apps, smApp)
 		suite.dbs = append(suite.dbs, dbStorepath)

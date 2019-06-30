@@ -78,6 +78,11 @@ type BaseConfig struct {
 	CpuProfile string `mapstructure:"cpu-profile"`
 
 	PprofHttpServer bool `mapstructure:"pprof-server"`
+
+	GenesisConfPath string `mapstructure:"genesis-conf"`
+
+	CoinbaseAccount string `mapstructure:"coinbase"`
+
 }
 
 // DefaultConfig returns the default configuration for a spacemesh node

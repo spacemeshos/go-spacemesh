@@ -3,6 +3,7 @@ package types
 import (
 	"encoding/hex"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/poet/shared"
@@ -38,6 +39,7 @@ type ActivationTxHeader struct {
 
 type NIPSTChallenge struct {
 	NodeId         NodeId
+	Coinbase       address.Address
 	Sequence       uint64
 	PrevATXId      AtxId
 	PubLayerIdx    LayerID
@@ -77,12 +79,22 @@ type ActivationTx struct {
 	//todo: add sig
 }
 
-func NewActivationTx(NodeId NodeId, Sequence uint64, PrevATX AtxId, LayerIndex LayerID, StartTick uint64,
-	PositioningATX AtxId, ActiveSetSize uint32, View []BlockID, nipst *NIPST, isValid bool) *ActivationTx {
+func NewActivationTx(NodeId NodeId,
+	Coinbase address.Address,
+	Sequence uint64,
+	PrevATX AtxId,
+	LayerIndex LayerID,
+	StartTick uint64,
+	PositioningATX AtxId,
+	ActiveSetSize uint32,
+	View []BlockID,
+	nipst *NIPST,
+	isValid bool) *ActivationTx {
 	return &ActivationTx{
 		ActivationTxHeader: ActivationTxHeader{
 			NIPSTChallenge: NIPSTChallenge{
 				NodeId:         NodeId,
+				Coinbase:       Coinbase,
 				Sequence:       Sequence,
 				PrevATXId:      PrevATX,
 				PubLayerIdx:    LayerIndex,

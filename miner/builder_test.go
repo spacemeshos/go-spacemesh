@@ -143,6 +143,7 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 	beginRound := make(chan types.LayerID)
 	n := net.NewNode()
 	receiver := net.NewNode()
+	coinbase := address.HexToAddress("aaaa")
 
 	hareRes := []types.BlockID{types.BlockID(0), types.BlockID(1), types.BlockID(2), types.BlockID(3)}
 	hare := MockHare{res: hareRes}
@@ -169,9 +170,9 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 	builder.AddTransaction(trans[2])
 
 	atxs := []*types.ActivationTx{
-		types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")}, 1, types.AtxId{common.Hash{1}}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&common.Hash{}), true),
-		types.NewActivationTx(types.NodeId{"bbbb", []byte("bbb")}, 1, types.AtxId{common.Hash{2}}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&common.Hash{}), true),
-		types.NewActivationTx(types.NodeId{"cccc", []byte("bbb")}, 1, types.AtxId{common.Hash{3}}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&common.Hash{}), true),
+		types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")}, coinbase, 1, types.AtxId{common.Hash{1}}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&common.Hash{}), true, ),
+		types.NewActivationTx(types.NodeId{"bbbb", []byte("bbb")}, coinbase, 1, types.AtxId{common.Hash{2}}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&common.Hash{}), true, ),
+		types.NewActivationTx(types.NodeId{"cccc", []byte("bbb")}, coinbase, 1, types.AtxId{common.Hash{3}}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&common.Hash{}), true, ),
 	}
 
 	builder.AtxPool.Put(atxs[0].Id(), atxs[0])

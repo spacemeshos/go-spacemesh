@@ -179,7 +179,15 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_Errors()
 }
 
 func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyRewards() {
-	s.processor.ApplyRewards(1, []string{"aaa", "bbb", "ccc", "ddd", "bbb", "aaa"}, map[string]int{"aaa": 1, "bbb": 2}, big.NewInt(1000), big.NewInt(300))
+	s.processor.ApplyRewards(1, []address.Address{address.HexToAddress("aaa"),
+		address.HexToAddress("bbb"),
+		address.HexToAddress("ccc"),
+		address.HexToAddress("ddd"),
+		address.HexToAddress("bbb"),
+		address.HexToAddress("aaa")},
+		map[address.Address]int{address.HexToAddress("aaa"): 1, address.HexToAddress("bbb"): 2},
+		big.NewInt(1000), big.NewInt(300))
+
 	assert.Equal(s.T(), s.state.GetBalance(address.HexToAddress("aaa")), big.NewInt(1300))
 	assert.Equal(s.T(), s.state.GetBalance(address.HexToAddress("bbb")), big.NewInt(600))
 	assert.Equal(s.T(), s.state.GetBalance(address.HexToAddress("ccc")), big.NewInt(1000))
@@ -336,8 +344,8 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 		nonceTrack := make(map[*StateObj]int)
 		for j := 0; j < numOfTransactions; j++ {
 
-			srcAccount := accounts[int(rand.Uint32()%(uint32(len(accounts)-1)))]
-			dstAccount := accounts[int(rand.Uint32()%(uint32(len(accounts)-1)))]
+			srcAccount := accounts[int(rand.Uint32()%(uint32(len(accounts) - 1)))]
+			dstAccount := accounts[int(rand.Uint32()%(uint32(len(accounts) - 1)))]
 
 			if _, ok := nonceTrack[srcAccount]; !ok {
 				nonceTrack[srcAccount] = 0
@@ -346,7 +354,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 			}
 
 			for dstAccount == srcAccount {
-				dstAccount = accounts[int(rand.Uint32()%(uint32(len(accounts)-1)))]
+				dstAccount = accounts[int(rand.Uint32()%(uint32(len(accounts) - 1)))]
 			}
 			t := createTransaction(s.processor.globalState.GetNonce(srcAccount.address)+uint64(nonceTrack[srcAccount]),
 				srcAccount.address, dstAccount.address, int64(rand.Uint64()%srcAccount.Balance().Uint64())/100)
