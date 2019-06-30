@@ -3,6 +3,7 @@ package types
 import (
 	"encoding/hex"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/poet/shared"
@@ -32,6 +33,7 @@ var EmptyAtxId = &AtxId{common.Hash{0}}
 
 type ActivationTxHeader struct {
 	NIPSTChallenge
+	Coinbase      address.Address
 	ActiveSetSize uint32
 	View          []BlockID
 }
@@ -76,8 +78,17 @@ type ActivationTx struct {
 	//todo: add sig
 }
 
-func NewActivationTx(NodeId NodeId, Sequence uint64, PrevATX AtxId, LayerIndex LayerID, StartTick uint64,
-	PositioningATX AtxId, ActiveSetSize uint32, View []BlockID, nipst *NIPST, isValid bool) *ActivationTx {
+func NewActivationTx(NodeId NodeId,
+	Coinbase address.Address,
+	Sequence uint64,
+	PrevATX AtxId,
+	LayerIndex LayerID,
+	StartTick uint64,
+	PositioningATX AtxId,
+	ActiveSetSize uint32,
+	View []BlockID,
+	nipst *NIPST,
+	isValid bool) *ActivationTx {
 	return &ActivationTx{
 		ActivationTxHeader: ActivationTxHeader{
 			NIPSTChallenge: NIPSTChallenge{
@@ -88,6 +99,7 @@ func NewActivationTx(NodeId NodeId, Sequence uint64, PrevATX AtxId, LayerIndex L
 				StartTick:      StartTick,
 				PositioningAtx: PositioningATX,
 			},
+			Coinbase:      Coinbase,
 			ActiveSetSize: ActiveSetSize,
 			View:          View,
 		},
@@ -97,12 +109,13 @@ func NewActivationTx(NodeId NodeId, Sequence uint64, PrevATX AtxId, LayerIndex L
 
 }
 
-func NewActivationTxWithChallenge(poetChallenge NIPSTChallenge, ActiveSetSize uint32, View []BlockID, nipst *NIPST,
+func NewActivationTxWithChallenge(poetChallenge NIPSTChallenge, coinbase address.Address, ActiveSetSize uint32, View []BlockID, nipst *NIPST,
 	isValid bool) *ActivationTx {
 
 	return &ActivationTx{
 		ActivationTxHeader: ActivationTxHeader{
 			NIPSTChallenge: poetChallenge,
+			Coinbase:       coinbase,
 			ActiveSetSize:  ActiveSetSize,
 			View:           View,
 		},

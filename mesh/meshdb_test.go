@@ -3,6 +3,7 @@ package mesh
 import (
 	"fmt"
 	"github.com/google/uuid"
+	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/nipst"
@@ -40,12 +41,13 @@ func TestMeshDB_AddBlock(t *testing.T) {
 
 	mdb := NewMemMeshDB(log.New("TestForEachInView", "", ""))
 	defer mdb.Close()
+	coinbase := address.HexToAddress("aaaa")
 
 	block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data1"))
 
 	addTransactionsWithGas(mdb, block1, 4, rand.Int63n(100))
 
-	atx := types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")}, 1, types.AtxId{}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&common.Hash{}), true)
+	atx := types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")}, coinbase, 1, types.AtxId{}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&common.Hash{}), true)
 
 	block1.AtxIds = append(block1.AtxIds, atx.Id())
 	err := mdb.AddBlock(block1)

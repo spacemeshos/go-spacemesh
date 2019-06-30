@@ -77,11 +77,10 @@ func (db *PoetDb) storePoetProof(proof types.PoetProof, poetId [types.PoetIdLeng
 		return fmt.Errorf("failed to store poet proof and index for poetId %x round %d: %v",
 			poetId, roundId, err)
 	}
-	db.log.Info("stored proof (id: %x) for round %d PoET id %x", ref[:5], roundId, poetId)
+	db.log.Debug("stored proof (id: %x) for round %d PoET id %x", ref[:5], roundId, poetId)
 
 	// TODO: REMOVE THE FOLLOWING LINE ⬇⬇⬇
 	<-time.After(time.Millisecond * 500)
-
 	db.publishPoetProofRef(key, ref[:])
 	return nil
 }

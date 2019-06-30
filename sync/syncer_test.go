@@ -90,7 +90,7 @@ func (stateMock) ValidateSignature(signed types.Signed) (address.Address, error)
 	return address.Address{}, nil
 }
 
-func (s *stateMock) ApplyRewards(layer types.LayerID, miners []string, underQuota map[string]int, bonusReward, diminishedReward *big.Int) {
+func (s *stateMock) ApplyRewards(layer types.LayerID, miners []address.Address, underQuota map[address.Address]int, bonusReward, diminishedReward *big.Int) {
 
 }
 
@@ -665,5 +665,6 @@ func RandStringRunes(n int) string {
 }
 
 func atx() *types.ActivationTx {
-	return types.NewActivationTx(types.NodeId{Key: RandStringRunes(5), VRFPublicKey: []byte(RandStringRunes(5))}, 0, types.AtxId{}, 5, 1, types.AtxId{}, 0, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&common.Hash{}), true)
+	coinbase := address.HexToAddress("aaaa")
+	return types.NewActivationTx(types.NodeId{Key: RandStringRunes(5), VRFPublicKey: []byte(RandStringRunes(5))}, coinbase, 1, types.AtxId{}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&common.Hash{}), true)
 }

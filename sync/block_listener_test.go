@@ -173,6 +173,7 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
+	coinbase := address.HexToAddress("aaaa")
 	//n2.RegisterGossipProtocol(NewBlockProtocol)
 
 	bl1 := ListenerFactory(n1, PeersMock{func() []p2p.Peer { return []p2p.Peer{n2.PublicKey()} }}, "5", 1)
@@ -181,7 +182,7 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 
 	blk := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data1"))
 	tx := types.NewSerializableTransaction(0, address.BytesToAddress([]byte{0x01}), address.BytesToAddress([]byte{0x02}), big.NewInt(10), big.NewInt(10), 10)
-	atx := types.NewActivationTx(types.NodeId{"whatwhatwhatwhat", []byte("bbb")}, 0, types.AtxId{}, 5, 1, types.AtxId{}, 0, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&common.Hash{}), false)
+	atx := types.NewActivationTx(types.NodeId{"whatwhatwhatwhat", []byte("bbb")}, coinbase, 0, types.AtxId{}, 5, 1, types.AtxId{}, 0, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&common.Hash{}), false)
 
 	bl2.AddBlockWithTxs(blk, []*types.SerializableTransaction{tx}, []*types.ActivationTx{atx})
 

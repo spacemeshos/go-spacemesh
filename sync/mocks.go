@@ -59,7 +59,7 @@ func (MockState) ValidateSignature(signed types.Signed) (address.Address, error)
 	return address.Address{}, nil
 }
 
-func (MockState) ApplyRewards(layer types.LayerID, miners []string, underQuota map[string]int, bonusReward, diminishedReward *big.Int) {
+func (MockState) ApplyRewards(layer types.LayerID, miners []address.Address, underQuota map[address.Address]int, bonusReward, diminishedReward *big.Int) {
 }
 
 func (MockState) ValidateTransactionSignature(tx types.SerializableSignedTransaction) (address.Address, error) {
