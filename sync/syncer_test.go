@@ -29,7 +29,7 @@ import (
 	"time"
 )
 
-var conf = Configuration{1, 300, 150 * time.Millisecond}
+var conf = Configuration{1, 300, 500 * time.Millisecond}
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
@@ -76,7 +76,7 @@ func SyncMockFactory(number int, conf Configuration, name string, dbType string)
 		net := sim.NewNode()
 		name := fmt.Sprintf(name+"_%d", i)
 		l := log.New(name, "", "")
-		blockValidator := NewBlockValidator(BlockEligibilityValidatorMock{}, SyntacticValidatorMock{}, TxValidatorMock{}, AtxValidatorMock{})
+		blockValidator := NewBlockValidator(BlockEligibilityValidatorMock{}, TxValidatorMock{}, AtxValidatorMock{})
 		sync := NewSync(net, getMesh(dbType, Path+name+"_"+time.Now().String()), miner.NewMemPool(reflect.TypeOf(types.SerializableTransaction{})), miner.NewMemPool(reflect.TypeOf(types.ActivationTx{})), blockValidator, conf, tk, l)
 		ts.Start()
 		nodes = append(nodes, sync)
@@ -493,7 +493,7 @@ func Test_TwoNodes_SyncIntegrationSuite(t *testing.T) {
 	sis.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
 		l := log.New(fmt.Sprintf("%s_%d", sis.name, atomic.LoadUint32(&i)), "", "")
 		msh := getMesh(memoryDB, fmt.Sprintf("%s_%s", sis.name, time.Now()))
-		blockValidator := NewBlockValidator(BlockEligibilityValidatorMock{}, SyntacticValidatorMock{}, TxValidatorMock{}, AtxValidatorMock{})
+		blockValidator := NewBlockValidator(BlockEligibilityValidatorMock{}, TxValidatorMock{}, AtxValidatorMock{})
 		sync := NewSync(s, msh, miner.NewMemPool(reflect.TypeOf(types.SerializableTransaction{})), miner.NewMemPool(reflect.TypeOf(types.ActivationTx{})), blockValidator, conf, tk, l)
 		sis.syncers = append(sis.syncers, sync)
 		ts.Start()
@@ -578,7 +578,7 @@ func Test_Multiple_SyncIntegrationSuite(t *testing.T) {
 	sis.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
 		l := log.New(fmt.Sprintf("%s_%d", sis.name, atomic.LoadUint32(&i)), "", "")
 		msh := getMesh(memoryDB, fmt.Sprintf("%s_%d", sis.name, atomic.LoadUint32(&i)))
-		blockValidator := NewBlockValidator(BlockEligibilityValidatorMock{}, SyntacticValidatorMock{}, TxValidatorMock{}, AtxValidatorMock{})
+		blockValidator := NewBlockValidator(BlockEligibilityValidatorMock{}, TxValidatorMock{}, AtxValidatorMock{})
 		sync := NewSync(s, msh, miner.NewMemPool(reflect.TypeOf(types.SerializableTransaction{})), miner.NewMemPool(reflect.TypeOf(types.ActivationTx{})), blockValidator, conf, tk, l)
 		ts.Start()
 		sis.syncers = append(sis.syncers, sync)

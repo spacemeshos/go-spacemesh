@@ -7,11 +7,11 @@ type EligibilityValidator interface {
 }
 
 type TxValidator interface {
-	TxValid(tx *types.SerializableTransaction) (bool, error)
+	ValidateTx(tx *types.SerializableTransaction) (bool, error)
 }
 
 type AtxValidator interface {
-	AtxValid(atx *types.ActivationTx) (bool, error)
+	ValidateAtx(atx *types.ActivationTx) error
 }
 
 type blockValidator struct {

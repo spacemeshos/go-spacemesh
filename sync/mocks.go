@@ -26,15 +26,15 @@ func (SyntacticValidatorMock) SyntacticallyValid(block *types.BlockHeader) (bool
 type TxValidatorMock struct {
 }
 
-func (TxValidatorMock) TxValid(tx *types.SerializableTransaction) (bool, error) {
+func (TxValidatorMock) ValidateTx(tx *types.SerializableTransaction) (bool, error) {
 	return true, nil
 }
 
 type AtxValidatorMock struct {
 }
 
-func (AtxValidatorMock) AtxValid(atx *types.ActivationTx) (bool, error) {
-	return true, nil
+func (AtxValidatorMock) ValidateAtx(atx *types.ActivationTx) error {
+	return nil
 }
 
 type MeshValidatorMock struct{}

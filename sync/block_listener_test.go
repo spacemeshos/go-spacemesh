@@ -35,7 +35,7 @@ func ListenerFactory(serv service.Service, peers p2p.Peers, name string, layer t
 	ch := make(chan types.LayerID, 1)
 	ch <- layer
 	l := log.New(name, "", "")
-	blockValidator := NewBlockValidator(BlockEligibilityValidatorMock{}, SyntacticValidatorMock{}, TxValidatorMock{}, AtxValidatorMock{})
+	blockValidator := NewBlockValidator(BlockEligibilityValidatorMock{}, TxValidatorMock{}, AtxValidatorMock{})
 	sync := NewSync(serv, getMesh(memoryDB, name), miner.NewMemPool(reflect.TypeOf(types.SerializableTransaction{})),
 		miner.NewMemPool(reflect.TypeOf(types.ActivationTx{})), blockValidator, conf, ch, l)
 	sync.Peers = peers
@@ -192,8 +192,6 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 	bl1 := ListenerFactory(n1, PeersMock{func() []p2p.Peer { return []p2p.Peer{n2.PublicKey()} }}, "TestBlockListener_ListenToGossipBlocks1", 1)
 	bl2 := ListenerFactory(n2, PeersMock{func() []p2p.Peer { return []p2p.Peer{n1.PublicKey()} }}, "TestBlockListener_ListenToGossipBlocks2", 1)
 
-	defer bl2.Close()
-	defer bl1.Close()
 	bl1.Start()
 
 	blk := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data1"))
@@ -227,6 +225,10 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 			}
 		}
 	}
+
+	bl2.Close()
+	bl1.Close()
+	time.Sleep(1 * time.Second)
 }
 
 //todo integration testing

@@ -26,8 +26,8 @@ type MemPool interface {
 
 type BlockValidator interface {
 	BlockEligible(block *types.BlockHeader) (bool, error)
-	TxValid(tx *types.SerializableTransaction) (bool, error)
-	AtxValid(atx *types.ActivationTx) (bool, error)
+	ValidateTx(tx *types.SerializableTransaction) (bool, error)
+	ValidateAtx(atx *types.ActivationTx) error
 }
 
 type Configuration struct {
@@ -387,7 +387,7 @@ func (s *Syncer) syncTxs(txids []types.TransactionId) ([]*types.SerializableTran
 		for out := range s.fetchWithFactory(TxReqFactory(missinDB), 1) {
 			ntxs := out.([]types.SerializableTransaction)
 			for _, tx := range ntxs {
-				if valid, err := s.TxValid(&tx); !valid || err != nil {
+				if valid, err := s.ValidateTx(&tx); !valid || err != nil {
 					id := types.GetTransactionId(&tx)
 					s.Warning("tx %v not valid %v", hex.EncodeToString(id[:]), err)
 					continue
@@ -440,9 +440,8 @@ func (s *Syncer) syncAtxs(atxIds []types.AtxId) (atxs []*types.ActivationTx, err
 		output := s.fetchWithFactory(ATxReqFactory(missing), 1)
 		for out := range output {
 			atxs := out.([]types.ActivationTx)
-
 			for _, atx := range atxs {
-				if valid, err := s.AtxValid(&atx); !valid || err != nil {
+				if err := s.ValidateAtx(&atx); err != nil {
 					s.Warning("atx %v not valid %v", atx.ShortId(), err)
 					continue
 				}
