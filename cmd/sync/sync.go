@@ -98,7 +98,8 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	defer msh.Close()
 
 	ch := make(chan types.LayerID, 1)
-	app.sync = sync.NewSync(swarm, msh, txpool, atxpool, sync.BlockValidatorMock{BlockEligibilityValidator: sync.BlockEligibilityValidatorMock{}}, conf, ch, lg.WithName("sync"))
+	blockValidator := sync.NewBlockValidator(sync.BlockEligibilityValidatorMock{}, sync.TxValidatorMock{}, sync.AtxValidatorMock{})
+	app.sync = sync.NewSync(swarm, msh, txpool, atxpool, blockValidator, conf, ch, lg.WithName("sync"))
 	ch <- 101
 	if err = swarm.Start(); err != nil {
 		log.Panic("error starting p2p err=%v", err)
