@@ -52,6 +52,9 @@ func LoadGenesisConfig(path string) (*GenesisConfig, error) {
 	return cfg, nil
 }
 
+const Account1Pub = "0x7be017a967db77fd10ac7c891b3d6d946dea7e3e14756e2f0f9e09b9663f0d9c"
+const Account1Private = "0x81c90dd832e18d1cf9758254327cb3135961af6688ac9c2a8c5d71f73acc5ce57be017a967db77fd10ac7c891b3d6d946dea7e3e14756e2f0f9e09b9663f0d9c"
+
 func DefaultGenesisConfig() *GenesisConfig {
 	g := GenesisConfig{}
 
@@ -59,8 +62,6 @@ func DefaultGenesisConfig() *GenesisConfig {
 		"0x1": {Balance: big.NewInt(10000), Nonce: 0},
 		"0x7be017a967db77fd10ac7c891b3d6d946dea7e3e14756e2f0f9e09b9663f0d9c": {Balance: big.NewInt(10000), Nonce: 0},
 	}
-	// public  0x7be017a967db77fd10ac7c891b3d6d946dea7e3e14756e2f0f9e09b9663f0d9c
-	// private 0x81c90dd832e18d1cf9758254327cb3135961af6688ac9c2a8c5d71f73acc5ce57be017a967db77fd10ac7c891b3d6d946dea7e3e14756e2f0f9e09b9663f0d9c
 	return &g
 	//todo: implement reading from file
 }

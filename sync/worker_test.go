@@ -42,28 +42,32 @@ func TestNewNeighborhoodWorker(t *testing.T) {
 	defer syncObj2.Close()
 
 	block := types.NewExistingBlock(types.BlockID(333), 1, nil)
-	syncObj1.AddBlockWithTxs(block, []*types.SerializableTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
+	syncObj1.AddBlockWithTxs(block, []*types.AddressableSignedTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
 	timeout := time.NewTimer(2 * time.Second)
 	pm1 := getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
 	syncObj2.Peers = pm1
 
-	wrk := NewNeighborhoodWorker(syncObj2, 1, TxReqFactory([]types.TransactionId{types.GetTransactionId(tx1), types.GetTransactionId(tx2), types.GetTransactionId(tx3)}))
+	id1 := types.GetTransactionId(tx1.SerializableSignedTransaction)
+	id2 := types.GetTransactionId(tx2.SerializableSignedTransaction)
+	id3 := types.GetTransactionId(tx3.SerializableSignedTransaction)
+
+	wrk := NewNeighborhoodWorker(syncObj2, 1, TxReqFactory([]types.TransactionId{id1, id2, id3}))
 	go wrk.Work()
 
 	select {
 	case item := <-wrk.output:
-		txs := item.([]types.SerializableTransaction)
+		txs := item.([]types.SerializableSignedTransaction)
 		assert.Equal(t, 3, len(txs))
 		mp := make(map[types.TransactionId]struct{})
 		mp[types.GetTransactionId(&txs[0])] = struct{}{}
 		mp[types.GetTransactionId(&txs[1])] = struct{}{}
 		mp[types.GetTransactionId(&txs[2])] = struct{}{}
 
-		_, ok := mp[types.GetTransactionId(tx1)]
+		_, ok := mp[id1]
 		assert.True(t, ok)
-		_, ok = mp[types.GetTransactionId(tx2)]
+		_, ok = mp[id2]
 		assert.True(t, ok)
-		_, ok = mp[types.GetTransactionId(tx3)]
+		_, ok = mp[id3]
 		assert.True(t, ok)
 
 	case <-timeout.C:

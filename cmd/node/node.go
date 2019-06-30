@@ -348,15 +348,15 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 
 	trtl := tortoise.NewAlgorithm(int(1), mdb, lg.WithName("trtl"))
 
-	txpool := miner.NewMemPool(reflect.TypeOf([]*types.SerializableTransaction{}))
+	txpool := miner.NewMemPool(reflect.TypeOf([]*types.AddressableSignedTransaction{}))
 	atxpool := miner.NewMemPool(reflect.TypeOf([]*types.ActivationTx{}))
 
 	msh := mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, txpool, atxpool, processor, lg.WithName("mesh")) //todo: what to do with the logger?
 
 	conf := sync.Configuration{Concurrency: 4, LayerSize: int(layerSize), RequestTimeout: 100 * time.Millisecond}
 
-	blockValidator := sync.NewBlockValidator(eValidator, sync.TxValidatorMock{})
-	syncer := sync.NewSync(swarm, msh, txpool, atxpool, blockValidator, poetDb, conf, clock.Subscribe(), clock.GetCurrentLayer(), lg.WithName("sync"))
+	blockValidator := sync.NewBlockValidator(eValidator)
+	syncer := sync.NewSync(swarm, msh, txpool, atxpool, processor, blockValidator, poetDb, conf, clock.Subscribe(), clock.GetCurrentLayer(), lg.WithName("sync"))
 	blockOracle := oracle.NewMinerBlockOracle(layerSize, uint16(layersPerEpoch), atxdb, beaconProvider, vrfSigner, nodeID, syncer.IsSynced, lg.WithName("blockOracle"))
 
 	// TODO: we should probably decouple the apptest and the node (and duplicate as necessary)
@@ -370,7 +370,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 
 	ha := hare.New(app.Config.HARE, swarm, sgn, nodeID, syncer.IsSynced, msh, hOracle, app.Config.CONSENSUS.LayersPerEpoch, idStore, atxdb, clock.Subscribe(), lg.WithName("hare"))
 
-	blockProducer := miner.NewBlockBuilder(nodeID, sgn, swarm, clock.Subscribe(), txpool, atxpool, coinToss, msh, ha, blockOracle, atxdb, syncer, lg.WithName("blockBuilder"))
+	blockProducer := miner.NewBlockBuilder(nodeID, sgn, swarm, clock.Subscribe(), txpool, atxpool, coinToss, msh, ha, blockOracle, processor, atxdb, syncer, lg.WithName("blockBuilder"))
 	blockListener := sync.NewBlockListener(swarm, syncer, 4, lg.WithName("blockListener"))
 
 	poetListener := activation.NewPoetListener(swarm, poetDb, lg.WithName("poetListener"))
