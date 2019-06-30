@@ -124,7 +124,7 @@ func (b *Broker) eventLoop() {
 			if !ok { // unknown instance, maybe just an early msg
 				if b.latestLayer+1 != msgInstId { // not an early msg
 					// ignore msg
-					b.Warning("Message validation failed: InstanceId. Expected: %v Actual: %v", b.latestLayer+1, msgInstId)
+					b.Warning("Message validation failed: message for unknown layer is not an early message. Expected: %v Actual: %v", b.latestLayer+1, msgInstId)
 					continue
 				}
 
