@@ -234,8 +234,14 @@ func (s *Syncer) FetchFullBlocks(blockIds []types.BlockID) ([]*types.Block, erro
 }
 
 func (s *Syncer) SyncAndValidate(blk *types.Block) error {
+
 	//check block signature
 	s.ValidateSignature(blk)
+
+	//is identity active
+	if eligable, err := s.IsIdentityActive(blk.MinerID.Key, blk.Layer()); err != nil || !eligable {
+		return errors.New(fmt.Sprintf("block %v identity activation check failed ", blk.ID()))
+	}
 
 	//associated atx data availability
 	if blk.ATXID != *types.EmptyAtxId {
@@ -535,4 +541,8 @@ func (s *Syncer) crwal(vq *validationQueue) []types.BlockID {
 
 	}
 	return vq.getMissingBlocks()
+}
+
+func (s *Syncer) ValidateSignature(lyr *types.Block) bool {
+	return true
 }
