@@ -120,6 +120,14 @@ func (mct *mockCommitTracker) BuildCertificate() *Certificate {
 	return mct.certificate
 }
 
+type mockSyncer struct {
+	isSync bool
+}
+
+func (s *mockSyncer) IsSynced() bool {
+	return s.isSync
+}
+
 func generateSigning(t *testing.T) Signer {
 	return signing.NewEdSigner()
 }
@@ -128,9 +136,9 @@ func buildMessage(msg *Message) *Msg {
 	return &Msg{msg, nil}
 }
 
-func buildBroker(net NetworkService) *Broker {
-	return NewBroker(net, &mockEligibilityValidator{true}, MockStateQuerier{true, nil}, 10,
-		Closer{make(chan struct{})}, log.NewDefault("broker"))
+func buildBroker(net NetworkService, testName string) *Broker {
+	return NewBroker(net, &mockEligibilityValidator{true}, MockStateQuerier{true, nil},
+		(&mockSyncer{true}).IsSynced, 10, Closer{make(chan struct{})}, log.NewDefault(testName))
 }
 
 type mockEligibilityValidator struct {
@@ -156,11 +164,11 @@ func buildOracle(oracle Rolacle) Rolacle {
 func TestConsensusProcess_Start(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
-	broker := buildBroker(n1)
+	broker := buildBroker(n1, t.Name())
 	broker.Start()
 	proc := generateConsensusProcess(t)
 	proc.s = NewSmallEmptySet()
-	inbox := broker.Register(proc.Id())
+	inbox, _ := broker.Register(proc.Id())
 	proc.SetInbox(inbox)
 	err := proc.Start()
 	assert.Equal(t, "instance started with an empty set", err.Error())
@@ -173,14 +181,14 @@ func TestConsensusProcess_Start(t *testing.T) {
 
 func TestConsensusProcess_eventLoop(t *testing.T) {
 	net := &mockP2p{}
-	broker := buildBroker(net)
+	broker := buildBroker(net, t.Name())
 	broker.Start()
 	proc := generateConsensusProcess(t)
 	proc.network = net
 	oracle := &mockRolacle{}
 	oracle.isEligible = true
 	proc.oracle = oracle
-	proc.inbox = broker.Register(proc.Id())
+	proc.inbox, _ = broker.Register(proc.Id())
 	proc.s = NewSetFromValues(value1, value2)
 	proc.cfg.F = 2
 	go proc.eventLoop()
@@ -190,7 +198,7 @@ func TestConsensusProcess_eventLoop(t *testing.T) {
 
 func TestConsensusProcess_handleMessage(t *testing.T) {
 	net := &mockP2p{}
-	broker := buildBroker(net)
+	broker := buildBroker(net, t.Name())
 	broker.Start()
 	proc := generateConsensusProcess(t)
 	proc.network = net
@@ -199,7 +207,7 @@ func TestConsensusProcess_handleMessage(t *testing.T) {
 	mValidator := &mockMessageValidator{}
 	mValidator.firstK = proc.k
 	proc.validator = mValidator
-	proc.inbox = broker.Register(proc.Id())
+	proc.inbox, _ = broker.Register(proc.Id())
 	msg := BuildPreRoundMsg(generateSigning(t), NewSetFromValues(value1))
 	oracle.isEligible = true
 	mValidator.syntaxValid = false
@@ -223,10 +231,10 @@ func TestConsensusProcess_handleMessage(t *testing.T) {
 func TestConsensusProcess_nextRound(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
-	broker := buildBroker(n1)
+	broker := buildBroker(n1, t.Name())
 	broker.Start()
 	proc := generateConsensusProcess(t)
-	proc.inbox = broker.Register(proc.Id())
+	proc.inbox, _ = broker.Register(proc.Id())
 	proc.advanceToNextRound()
 	proc.advanceToNextRound()
 	assert.Equal(t, int32(1), proc.k)

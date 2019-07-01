@@ -41,6 +41,10 @@ func AddCommands(cmd *cobra.Command) {
 		config.CpuProfile, "output cpu profiling stat to filename")
 	cmd.PersistentFlags().BoolVar(&config.PprofHttpServer, "pprof-server",
 		config.PprofHttpServer, "enable http pprof server")
+	cmd.PersistentFlags().StringVar(&config.GenesisConfPath, "genesis-conf",
+		config.GenesisConfPath, "add genesis configuration")
+	cmd.PersistentFlags().StringVar(&config.CoinbaseAccount, "coinbase",
+		config.CoinbaseAccount, "coinbase account to accumulate rewards")
 	/** ======================== P2P Flags ========================== **/
 	cmd.PersistentFlags().IntVar(&config.P2P.TCPPort, "tcp-port",
 		config.P2P.TCPPort, "TCP Port to listen on")

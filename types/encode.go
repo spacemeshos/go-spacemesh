@@ -47,13 +47,6 @@ func BytesToView(blockIds []byte) ([]BlockID, error) {
 	return ids, nil
 }
 
-func (t ActivationTx) ActivesetValid() bool {
-	if t.VerifiedActiveSet > 0 {
-		return t.VerifiedActiveSet >= t.ActiveSetSize
-	}
-	return false
-}
-
 func AtxHeaderAsBytes(tx *ActivationTxHeader) ([]byte, error) {
 	var w bytes.Buffer
 	if _, err := xdr.Marshal(&w, &tx); err != nil {

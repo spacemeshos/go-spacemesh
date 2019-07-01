@@ -179,7 +179,15 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_Errors()
 }
 
 func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyRewards() {
-	s.processor.ApplyRewards(1, []string{"aaa", "bbb", "ccc", "ddd", "bbb", "aaa"}, map[string]int{"aaa": 1, "bbb": 2}, big.NewInt(1000), big.NewInt(300))
+	s.processor.ApplyRewards(1, []address.Address{address.HexToAddress("aaa"),
+		address.HexToAddress("bbb"),
+		address.HexToAddress("ccc"),
+		address.HexToAddress("ddd"),
+		address.HexToAddress("bbb"),
+		address.HexToAddress("aaa")},
+		map[address.Address]int{address.HexToAddress("aaa"): 1, address.HexToAddress("bbb"): 2},
+		big.NewInt(1000), big.NewInt(300))
+
 	assert.Equal(s.T(), s.state.GetBalance(address.HexToAddress("aaa")), big.NewInt(1300))
 	assert.Equal(s.T(), s.state.GetBalance(address.HexToAddress("bbb")), big.NewInt(600))
 	assert.Equal(s.T(), s.state.GetBalance(address.HexToAddress("ccc")), big.NewInt(1000))
