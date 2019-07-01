@@ -21,6 +21,7 @@ bootstrap:
     layer-duration-sec: '60'
     layer-average-size: '20'
     hare-wakeup-delta: '10'
+    coinbase: '0x4321'
 client:
   image: 'spacemeshos/go-spacemesh:develop'
   command: '/bin/go-spacemesh'
@@ -33,6 +34,7 @@ client:
     layer-duration-sec: '60'
     layer-average-size: '20'
     hare-wakeup-delta: '10'
+    coinbase: '0x1234'
 elastic:
   host: elastic.spacemesh.io
   port: 9200
