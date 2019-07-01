@@ -191,9 +191,8 @@ def setup_clients_in_namespace(namespace, bs_deployment_info, client_deployment_
     client_pods = (
         CoreV1ApiClient().list_namespaced_pod(namespace,
                                               include_uninitialized=True,
-                                              label_selector=(
-                                                   name={0}".format(
-                                                      client_deployment_info.deployment_name.split('-')[0]))).items)
+                                              label_selector=("name={0}".format(
+                                                  client_deployment_info.deployment_name.split('-')[0]))).items)
 
     client_deployment_info.pods = [{'name': c.metadata.name, 'pod_ip': c.status.pod_ip} for c in client_pods]
     return client_deployment_info
