@@ -236,7 +236,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 			break
 		}
 
-		time.Sleep(5 * time.Second)
+		time.Sleep(time.Duration(suite.apps[0].Config.LayerDurationSec/2) * time.Second)
 	}
 
 	for _, ap := range suite.apps {
@@ -249,7 +249,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 		for i := types.LayerID(0); i <= untilLayer; i++ {
 			lyr, err := ap.blockListener.GetLayer(i)
 			if err != nil {
-				log.Error("ERRORRROROROR ", err)
+				log.Error("ERROR: couldn't get a validated layer from db layer %v, %v", i, err)
 			}
 			for _, b := range lyr.Blocks() {
 				datamap[ap.nodeId.Key].layertoblocks[lyr.Index()] = append(datamap[ap.nodeId.Key].layertoblocks[lyr.Index()], b.ID())
@@ -258,7 +258,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 			if _, ok := datamap[ap.nodeId.Key].atxPerEpoch[epoch]; !ok {
 				atxs, err := ap.blockListener.AtxDB.GetEpochAtxIds(epoch)
 				if err != nil {
-					log.Error("EERRRO RWTWTFFF FFFF ")
+					log.Error("ERROR: couldn't get atxs for passed epoch: %v, err: %v", epoch, err)
 				}
 				datamap[ap.nodeId.Key].atxPerEpoch[epoch] = atxs
 			}
