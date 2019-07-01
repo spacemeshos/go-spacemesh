@@ -243,11 +243,13 @@ func (s *Syncer) SyncAndValidate(blk *types.Block) error {
 	}
 
 	//check block signature
-	s.ValidateSignature(blk)
+	if valid := s.ValidateSignature(blk); !valid {
+		s.Error(fmt.Sprintf("block %v identity activation check failed ", blk.ID()))
+	}
 
 	//is identity active
 	if eligable, err := s.IsIdentityActive(blk.MinerID.Key, blk.Layer()); err != nil || !eligable {
-		s.Error(fmt.Sprintf("block %v identity activation check failed ", blk.ID()))
+		return errors.New(fmt.Sprintf("block %v identity activation check failed ", blk.ID()))
 	}
 
 	//associated atx data availability

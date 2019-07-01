@@ -87,12 +87,6 @@ func newMsg(hareMsg *Message, querier StateQuerier, layersPerEpoch uint16) (*Msg
 	}
 	// query if identity is active
 	pub := signing.NewPublicKey(pubKey)
-	// TODO: genesis flow should decide what we want to do here
-	layer := types.LayerID(hareMsg.InnerMsg.InstanceId)
-	if layer.GetEpoch(layersPerEpoch).IsGenesis() {
-		return &Msg{hareMsg, pub}, nil
-	}
-
 	res, err := querier.IsIdentityActive(pub.String(), types.LayerID(hareMsg.InnerMsg.InstanceId))
 	if err != nil {
 		log.Error("error while checking if identity is active for %v err=%v", pub.String(), err)

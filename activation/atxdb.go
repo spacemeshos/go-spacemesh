@@ -483,6 +483,11 @@ func (db *ActivationDb) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
 // IsIdentityActive returns whether edId is active for the epoch of layer layer.
 // it returns error if no associated atx is found in db
 func (db *ActivationDb) IsIdentityActive(edId string, layer types.LayerID) (bool, error) {
+	// TODO: genesis flow should decide what we want to do here
+	if layer.GetEpoch(db.LayersPerEpoch).IsGenesis() {
+		return true, nil
+	}
+
 	epoch := layer.GetEpoch(db.LayersPerEpoch)
 	nodeId, err := db.ids.GetIdentity(edId)
 	if err != nil { // means there is no such identity
