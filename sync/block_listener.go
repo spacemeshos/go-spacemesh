@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
@@ -80,7 +81,7 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 					return
 				}
 
-				if bl.handleBlock(&blk) {
+				if bl.HandleNewBlock(&blk) {
 					data.ReportValidation(config.NewBlockProtocol)
 				}
 				bl.wg.Done()
@@ -90,13 +91,38 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 	}
 }
 
-func (bl *BlockListener) handleBlock(blk *types.Block) bool {
+func (bl *BlockListener) HandleNewBlock(blk *types.Block) bool {
 
 	bl.Log.With().Info("got new block", log.Uint64("id", uint64(blk.Id)), log.Int("txs", len(blk.TxIds)), log.Int("atxs", len(blk.AtxIds)))
-	if err := bl.SyncAndValidate(blk); err != nil {
-		bl.Error("handleBlock %v failed ", blk.ID(), err)
+	//check if known
+	if _, err := bl.GetBlock(blk.Id); err == nil {
+		bl.Info("we already know this block %v ", blk.ID())
+		return true
+	}
+
+	if err := bl.Validate(blk); err != nil {
+		bl.Error("HandleNewBlock %v failed ", blk.ID(), err)
 		return false
 	}
+
+	//data availability
+	txs, atxs, err := bl.DataAvailabilty(blk)
+	if err != nil {
+		bl.Error(fmt.Sprintf("data availabilty failed for block %v", blk.ID()))
+		return false
+	}
+
+	//validate blocks view
+	if valid := bl.ValidateView(blk); valid == false {
+		bl.Error(fmt.Sprintf("could not validate for block %v view ", blk.ID()))
+		return false
+	}
+
+	if err := bl.AddBlockWithTxs(blk, txs, atxs); err != nil {
+		bl.Error(fmt.Sprintf("failed to add block %v to database %v", blk.ID(), err))
+		return false
+	}
+
 	bl.Info("added block %v to database", blk.ID())
 	return true
 }

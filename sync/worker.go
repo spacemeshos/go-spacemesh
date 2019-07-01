@@ -81,7 +81,7 @@ func NewPeersWorker(s *Syncer, peers []p2p.Peer, mu *sync.Once, reqFactory Reque
 		wg.Wait()
 	}
 
-	worker := worker{Log: s.Log, Once: mu, workCount: &count, output: output, work: wrkFunc}
+	worker := worker{Log: s.Log.WithName("peersWrkr"), Once: mu, workCount: &count, output: output, work: wrkFunc}
 
 	return worker, output
 
@@ -122,6 +122,7 @@ func NewBlockWorker(s *Syncer, count int, reqFactory BlockRequestFactory, ids ch
 	mu := &sync.Once{}
 	workFunc := func() {
 		for id := range ids {
+			s.Info("worker work on %v", id)
 			for _, p := range s.GetPeers() {
 				peer := p
 				s.Info("send request Peer: %v", peer)
@@ -135,7 +136,6 @@ func NewBlockWorker(s *Syncer, count int, reqFactory BlockRequestFactory, ids ch
 						s.Info("Peer: %v responded ", peer)
 						s.Debug("Peer: %v response was  %v", v)
 						output <- v
-						return
 					}
 					s.Error("peer %v responded with nil", peer)
 				}

@@ -184,11 +184,7 @@ func TestSyncProtocol_BlockRequest(t *testing.T) {
 	syncObj.AddBlockWithTxs(block, []*types.SerializableTransaction{tx1}, []*types.ActivationTx{atx1})
 	syncObj2.Peers = getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
 
-	blockIdsCh := make(chan types.BlockID, 1)
-
-	blockIdsCh <- block.ID()
-
-	output := syncObj2.fetchWithFactory(NewBlockWorker(syncObj2, 1, BlockReqFactory(), blockIdsCh))
+	output := syncObj2.fetchWithFactory(NewBlockWorker(syncObj2, 1, BlockReqFactory(), blockSliceToChan([]types.BlockID{block.ID()})))
 
 	timeout := time.NewTimer(2 * time.Second)
 
@@ -307,7 +303,7 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	ch <- block2.ID()
 	ch <- block3.ID()
 
-	output := syncObj2.fetchWithFactory(NewBlockWorker(syncObj2, 1, BlockReqFactory(), ch))
+	output := syncObj2.fetchWithFactory(NewBlockWorker(syncObj2, 1, BlockReqFactory(), blockSliceToChan([]types.BlockID{block1.ID(), block2.ID(), block3.ID()})))
 
 	for out := range output {
 		block := out.(*types.Block)

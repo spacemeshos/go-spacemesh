@@ -221,10 +221,30 @@ func (s *Syncer) FetchFullBlocks(blockIds []types.BlockID) ([]*types.Block, erro
 	blocksArr := make([]*types.Block, 0, len(blockIds))
 	for out := range output {
 		block := out.(*types.Block)
-		if err := s.SyncAndValidate(block); err != nil {
+		if err := s.Validate(block); err != nil {
 			s.Error(fmt.Sprintf("failed derefrencing block data %v %v", block.ID(), err))
 			continue
 		}
+
+		//data availability
+		txs, atxs, err := s.DataAvailabilty(block)
+		if err != nil {
+			s.Error(fmt.Sprintf("data availabilty failed for block %v", block.ID()))
+			continue
+		}
+
+		//validate blocks view
+		if valid := s.ValidateView(block); valid == false {
+			s.Error(fmt.Sprintf("block %v not syntacticly valid", block.ID()))
+			continue
+		}
+
+		if err := s.AddBlockWithTxs(block, txs, atxs); err != nil {
+			s.Error(fmt.Sprintf("failed to add block %v to database %v", block.ID(), err))
+			continue
+		}
+
+		s.Info(fmt.Sprintf("added block with txs to database %v", block.ID()))
 
 		s.Info("added block to layer %v", block.Layer())
 		blocksArr = append(blocksArr, block)
@@ -233,17 +253,11 @@ func (s *Syncer) FetchFullBlocks(blockIds []types.BlockID) ([]*types.Block, erro
 	return blocksArr, nil
 }
 
-func (s *Syncer) SyncAndValidate(blk *types.Block) error {
-	s.Info("sync and validate block %v ", blk.ID())
-
-	//check if known
-	if _, err := s.GetBlock(blk.Id); err == nil {
-		s.Info("we already know this block %v ", blk.ID())
-		return nil
-	}
+func (s *Syncer) Validate(blk *types.Block) error {
+	s.Info("validate block %v ", blk.ID())
 
 	//check block signature and is identity active
-	if eligable, err := s.IsIdentityActive(blk.MinerID.Key, blk.Layer()); err != nil || !eligable {
+	if active, err := s.IsIdentityActive(blk.MinerID.Key, blk.Layer()); err != nil || !active {
 		return errors.New(fmt.Sprintf("block %v identity activation check failed ", blk.ID()))
 	}
 
@@ -259,41 +273,15 @@ func (s *Syncer) SyncAndValidate(blk *types.Block) error {
 		return errors.New(fmt.Sprintf("block %v eligablety check failed ", blk.ID()))
 	}
 
-	//data availability
-	txs, atxs, err := s.syncMissingContent(blk)
-	if err != nil {
-		return errors.New(fmt.Sprintf("data availabilty failed for block %v", blk.ID()))
-	}
-
-	//validate blocks view
-	if valid := s.ValidateView(blk); valid == false {
-		return errors.New(fmt.Sprintf("could not validate for block %v view ", blk.ID()))
-	}
-
-	if err := s.AddBlockWithTxs(blk, txs, atxs); err != nil {
-		s.Warning(fmt.Sprintf("failed to add block %v to database %v", blk.ID(), err))
-		return err
-	}
-
-	s.Info(fmt.Sprintf("added block with txs to database %v", blk.ID()))
-
 	return nil
 }
 
 func (s *Syncer) ValidateView(blk *types.Block) bool {
-	var allBlocksInDb = true
-
-	//check local database for all blocks in view
-	for _, bid := range blk.BlockHeader.ViewEdges {
-		if _, err := s.GetBlock(bid); err != nil {
-			allBlocksInDb = false
-			break
-		}
-	}
-
-	//crawl mesh and check local block syntactic validity return true
-	if !allBlocksInDb {
-		if bks := s.crwal(NewValidationQueue(blk)); len(bks) > 0 {
+	vq := NewValidationQueue(s.Log.WithName("validation queue"))
+	if vq.checkDependencies(&blk.BlockHeader, s.GetBlock) == false {
+		//traverse mesh and check local block syntactic validity return true
+		s.Info("traversing %v view for validation", blk.ID())
+		if bks := vq.traverse(s); len(bks) > 0 {
 			s.Warning(fmt.Sprintf("could not validate %v blocks in block %v view ", len(bks) > 0, blk.ID()))
 			return false
 		}
@@ -302,7 +290,7 @@ func (s *Syncer) ValidateView(blk *types.Block) bool {
 	return true
 }
 
-func (s *Syncer) syncMissingContent(blk *types.Block) ([]*types.SerializableTransaction, []*types.ActivationTx, error) {
+func (s *Syncer) DataAvailabilty(blk *types.Block) ([]*types.SerializableTransaction, []*types.ActivationTx, error) {
 	var txs []*types.SerializableTransaction
 	var txerr error
 	wg := sync.WaitGroup{}
@@ -489,49 +477,6 @@ func (s *Syncer) syncAtxs(atxIds []types.AtxId) (atxs []*types.ActivationTx, err
 		}
 	}
 	return atxs, nil
-}
-
-func (s *Syncer) crwal(vq *validationQueue) []types.BlockID {
-	ch := make(chan types.BlockID, 10)
-	output := s.fetchWithFactory(NewBlockWorker(s, s.Concurrency, BlockReqFactory(), ch))
-	go func() {
-		for out := range output {
-			block := out.(*types.Block)
-			if err := s.SyncAndValidate(block); err != nil {
-				s.Error(fmt.Sprintf("failed derefrencing block data %v %v", block.ID(), err))
-				continue
-			}
-			if vq.updateDependencies(&block.BlockHeader, s.GetBlock) {
-
-				//remove this block from all dependencies lists
-				for _, b := range vq.reverseDepMap[block.ID()] {
-
-					//we can update recursively all dependencies or just wait for the queue to finish processing
-					delete(vq.depMap[b], block.ID())
-				}
-
-				//remove this block from reverse dependency map
-				delete(vq.reverseDepMap, block.ID())
-			}
-		}
-	}()
-
-	for {
-		if vq.Size() == 0 {
-			s.Info("validation queue empty ")
-			break
-		}
-
-		b := vq.PopItem()
-		if b == nil {
-			close(ch)
-			s.Info(fmt.Sprintf("mesh crewler queue is empty"))
-		}
-		blk := b.(types.BlockID)
-		ch <- blk
-
-	}
-	return vq.getMissingBlocks()
 }
 
 func (s *Syncer) fetchWithFactory(wrk worker) chan interface{} {

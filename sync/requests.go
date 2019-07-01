@@ -46,6 +46,7 @@ func blockSliceToChan(blockIds []types.BlockID) chan types.BlockID {
 	for _, id := range blockIds {
 		blockIdsCh <- id
 	}
+	close(blockIdsCh)
 	return blockIdsCh
 }
 
