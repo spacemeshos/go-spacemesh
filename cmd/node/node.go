@@ -397,7 +397,6 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	if coinBase.Big().Uint64() == 0 {
 		app.log.Panic("invalid Coinbase account")
 	}
-
 	atxBuilder := activation.NewBuilder(nodeID, coinBase, atxdb, swarm, atxdb, msh, app.Config.CONSENSUS.LayersPerEpoch, nipstBuilder, clock.Subscribe(), syncer.IsSynced, lg.WithName("atxBuilder"))
 
 	app.txProcessor = processor
@@ -577,6 +576,9 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 		log.Error("cannot start services %v", err.Error())
 		return
 	}
+
+	app.setupGenesis()
+
 	if app.Config.TestMode {
 		app.setupTestFeatures()
 	}
@@ -584,7 +586,6 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	if app.Config.CollectMetrics {
 		metrics.StartCollectingMetrics(app.Config.MetricsPort)
 	}
-
 	app.startServices()
 
 	err = app.P2P.Start()
