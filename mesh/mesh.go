@@ -1,6 +1,7 @@
 package mesh
 
 import (
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/address"
@@ -32,7 +33,7 @@ type MeshValidator interface {
 
 type TxProcessor interface {
 	ApplyTransactions(layer types.LayerID, transactions Transactions) (uint32, error)
-	ApplyRewards(layer types.LayerID, miners []string, underQuota map[string]int, bonusReward, diminishedReward *big.Int)
+	ApplyRewards(layer types.LayerID, miners []address.Address, underQuota map[address.Address]int, bonusReward, diminishedReward *big.Int)
 	ValidateSignature(s types.Signed) (address.Address, error)
 	ValidateTransactionSignature(tx types.SerializableSignedTransaction) (address.Address, error) //todo use validate signature across the bord and remove this
 }
@@ -45,7 +46,7 @@ type AtxDB interface {
 	ProcessAtx(atx *types.ActivationTx)
 	GetAtx(id types.AtxId) (*types.ActivationTx, error)
 	GetNipst(id types.AtxId) (*types.NIPST, error)
-	IsIdentityActive(edId string, layer types.LayerID) (bool, error)
+	SyntacticallyValidateAtx(atx *types.ActivationTx) error
 }
 
 type Mesh struct {
@@ -248,7 +249,7 @@ func (m *Mesh) PushTransactions(oldBase types.LayerID, newBase types.LayerID) {
 		}
 
 		merged := m.ExtractUniqueOrderedTransactions(l)
-		x, err := m.ApplyTransactions(types.LayerID(i), merged)
+		x, err := m.state.ApplyTransactions(types.LayerID(i), merged)
 		if err != nil {
 			m.Log.Error("cannot apply transactions %v", err)
 		}
@@ -304,7 +305,6 @@ func (m *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.SerializableTransa
 		//todo this should return an error
 		m.AtxDB.ProcessAtx(t)
 		atxids = append(atxids, t.Id())
-
 	}
 
 	txids, err := m.writeTransactions(txs)
@@ -419,8 +419,8 @@ func (m *Mesh) AccumulateRewards(rewardLayer types.LayerID, params Config) {
 		return
 	}
 
-	ids := make([]string, 0, len(l.Blocks()))
-	uq := make(map[string]int)
+	ids := make([]address.Address, 0, len(l.Blocks()))
+	uq := make(map[address.Address]int)
 
 	// TODO: instead of the following code we need to validate the eligibility of each block individually using the
 	//  proof included in each block
@@ -430,10 +430,10 @@ func (m *Mesh) AccumulateRewards(rewardLayer types.LayerID, params Config) {
 			m.Error("Atx not found %v block %v", err, bl.Id)
 			continue
 		}
-		ids = append(ids, atx.NodeId.Key)
+		ids = append(ids, atx.Coinbase)
 		if uint32(len(bl.TxIds)) < params.TxQuota {
 			//todo: think of giving out reward for unique txs as well
-			uq[bl.MinerID.Key] = uq[bl.MinerID.Key] + 1
+			uq[atx.Coinbase] = uq[atx.Coinbase] + 1
 		}
 	}
 	//accumulate all blocks rewards
@@ -494,4 +494,8 @@ func (m *Mesh) GetATXs(atxIds []types.AtxId) (map[types.AtxId]*types.ActivationT
 		}
 	}
 	return atxs, mIds
+}
+
+func (m *Mesh) StateApi() StateApi {
+	return m.state
 }

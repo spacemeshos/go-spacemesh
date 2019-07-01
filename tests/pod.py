@@ -2,15 +2,17 @@ import yaml
 import time
 
 from os import path
+from urllib3.exceptions import NewConnectionError, MaxRetryError, ConnectTimeoutError
 from kubernetes import client
 from pytest_testconfig import config as testconfig
 from kubernetes.client.rest import ApiException
+from tests.misc import CoreV1ApiClient
 
 
 def wait_for_pod_to_be_ready(pod_name, name_space, time_out=None):
     total_sleep_time = 0
     while True:
-        resp = client.CoreV1Api().read_namespaced_pod(name=pod_name, namespace=name_space)
+        resp = CoreV1ApiClient().read_namespaced_pod(name=pod_name, namespace=name_space)
         if resp.status.phase == 'Running':
             print("Total time waiting for pod {0}: {1} sec".format(pod_name, total_sleep_time))
             break
@@ -25,7 +27,7 @@ def wait_to_pod_to_be_deleted(pod_name, name_space, time_out=None):
     total_sleep_time = 0
     while True:
         try:
-            resp = client.CoreV1Api().read_namespaced_pod(name=pod_name, namespace=name_space)
+            resp = CoreV1ApiClient().read_namespaced_pod(name=pod_name, namespace=name_space)
         except ApiException as e:
             if e.status == 404:
                 print("Total time waiting for delete pod {0}: {1} sec".format(pod_name, total_sleep_time))
@@ -48,14 +50,14 @@ def create_pod(file_name, name_space, deployment_id=None, container_specs=None):
         if container_specs:
             dep = container_specs.update_deployment(dep)
 
-        k8s_api = client.CoreV1Api()
+        k8s_api = CoreV1ApiClient()
         resp = k8s_api.create_namespaced_pod(namespace=name_space, body=dep)
         wait_for_pod_to_be_ready(resp.metadata._name, name_space, time_out=testconfig['single_pod_ready_time_out'])
         return resp
 
 
 def delete_pod(pod_name, name_space):
-    k8s_api = client.CoreV1Api()
+    k8s_api = CoreV1ApiClient()
     try:
         resp = k8s_api.delete_namespaced_pod(name=pod_name,
                                              namespace=name_space,
@@ -71,12 +73,16 @@ def delete_pod(pod_name, name_space):
 
 def check_for_restarted_pods(namespace, specific_deployment_name=''):
     pods=[]
-    if specific_deployment_name:
-        pods = client.CoreV1Api().list_namespaced_pod(namespace,
-                                                      label_selector=(
-                                                          "name={0}".format(specific_deployment_name.split('-')[0]))).items
-    else:
-        pods = client.CoreV1Api().list_namespaced_pod(namespace).items
+    try:
+        if specific_deployment_name:
+            pods = CoreV1ApiClient().list_namespaced_pod(namespace,
+                                                         label_selector=(
+                                                             "name={0}".format(specific_deployment_name.split('-')[0]))).items
+        else:
+            pods = CoreV1ApiClient().list_namespaced_pod(namespace).items
+    except (NewConnectionError, MaxRetryError, ConnectTimeoutError) as e:
+            print('Could not list restarted pods. API Error: {0}'.format(str(e)))
+            return pods
 
     restarted_pods = []
     for p in pods:

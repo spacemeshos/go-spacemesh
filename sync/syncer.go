@@ -81,12 +81,10 @@ func (s *Syncer) ForceSync() {
 }
 
 func (s *Syncer) Close() {
-	s.Info("syncer closing, waiting for gorutines")
 	close(s.exit)
 	close(s.forceSync)
 	s.MessageServer.Close()
 	s.Peers.Close()
-	s.Info("syncer closed")
 }
 
 const (
@@ -101,7 +99,8 @@ const (
 )
 
 func (s *Syncer) IsSynced() bool {
-	return s.ValidatedLayer()+1 == s.maxSyncLayer()
+	s.Log.Info("latest: %v, maxSynced %v", s.LatestLayer(), s.maxSyncLayer())
+	return s.LatestLayer()+1 >= s.maxSyncLayer()
 }
 
 func (s *Syncer) Start() {
@@ -150,6 +149,7 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool MemPool, atxpool Mem
 		txpool:         txpool,
 		atxpool:        atxpool,
 		startLock:      0,
+		currentLayer:   currentLayer,
 		forceSync:      make(chan bool),
 		clock:          clock,
 		exit:           make(chan struct{}),

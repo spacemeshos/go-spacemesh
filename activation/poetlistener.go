@@ -59,17 +59,24 @@ func (l *PoetListener) handlePoetProofMessage(poetProof service.GossipMessage) {
 		l.Log.Error("failed to unmarshal PoET membership proof: %v", err)
 		return
 	}
-	if processingIssue, err := l.poetDb.ValidateAndStorePoetProof(proofMessage.PoetProof, proofMessage.PoetId,
+	if err := l.poetDb.ValidatePoetProof(proofMessage.PoetProof, proofMessage.PoetId,
 		proofMessage.RoundId, proofMessage.Signature); err != nil {
 
-		if processingIssue {
-			l.Log.Error("failed to validate and store PoET proof: %v", err)
+		if _, ok := err.(processingError); ok {
+			l.Log.Error("failed to validate PoET proof: %v", err)
 		} else {
 			l.Log.Warning("PoET proof not valid: %v", err)
 		}
 		return
 	}
+
 	poetProof.ReportValidation(PoetProofProtocol)
+
+	if err := l.poetDb.storePoetProof(proofMessage.PoetProof, proofMessage.PoetId, proofMessage.RoundId,
+		proofMessage.Signature); err != nil {
+
+		l.Log.Error("failed to store PoET proof: %v", err)
+	}
 }
 
 func NewPoetListener(net service.Service, poetDb *PoetDb, logger log.Log) *PoetListener {

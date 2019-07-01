@@ -90,7 +90,6 @@ type SpacemeshApp struct {
 	syncer           *sync.Syncer
 	blockListener    *sync.BlockListener
 	state            *state.StateDB
-	txProcessor      *state.TransactionProcessor
 	blockProducer    *miner.BlockBuilder
 	mesh             *mesh.Mesh
 	clock            *timesync.Ticker
@@ -249,11 +248,30 @@ func (app *SpacemeshApp) Cleanup(cmd *cobra.Command, args []string) (err error) 
 	return nil
 }
 
-func (app *SpacemeshApp) setupGenesis(cfg *apiCfg.GenesisConfig) {
-	for id, acc := range cfg.InitialAccounts {
-		app.state.CreateAccount(id)
-		app.state.AddBalance(id, acc.Balance)
-		app.state.SetNonce(id, acc.Nonce)
+func (app *SpacemeshApp) setupGenesis() {
+	var conf *apiCfg.GenesisConfig
+	if app.Config.GenesisConfPath != "" {
+		var err error
+		conf, err = apiCfg.LoadGenesisConfig(app.Config.GenesisConfPath)
+		if err != nil {
+			app.log.Error("cannot load genesis config from file")
+		}
+	} else {
+		conf = apiCfg.DefaultGenesisConfig()
+	}
+	for id, acc := range conf.InitialAccounts {
+		bytes := common.FromHex(id)
+		if len(bytes) == 0 {
+			//todo: should we panic here?
+			log.Error("cannot read config entry for :%s", id)
+			continue
+		}
+
+		addr := address.BytesToAddress(bytes)
+		app.state.CreateAccount(addr)
+		app.state.AddBalance(addr, acc.Balance)
+		app.state.SetNonce(addr, acc.Nonce)
+		app.log.Info("Genesis account created: %s, Balance: %s", id, acc.Balance.Uint64())
 	}
 
 	app.state.Commit(false)
@@ -329,6 +347,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	eligibilityValidator := oracle.NewBlockEligibilityValidator(int32(layerSize), uint16(layersPerEpoch), atxdb, beaconProvider, BLS381.Verify2, lg.WithName("blkElgValidator"))
 
 	blockValidator := sync.NewBlockValidator(eligibilityValidator, sync.TxValidatorMock{}, sync.AtxValidatorMock{})
+	blockValidator := oracle.NewBlockEligibilityValidator(int32(layerSize), uint16(layersPerEpoch), atxdb, beaconProvider, BLS381.Verify2, lg.WithName("blkElgValidator"))
 
 	trtl := tortoise.NewAlgorithm(int(1), mdb, lg.WithName("trtl"))
 
@@ -340,6 +359,8 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	conf := sync.Configuration{Concurrency: 4, LayerSize: int(layerSize), RequestTimeout: 100 * time.Millisecond}
 
 	syncer := sync.NewSync(swarm, msh, txpool, atxpool, blockValidator, conf, clock.Subscribe(), lg.WithName("sync"))
+	syncer := sync.NewSync(swarm, msh, txpool, atxpool, blockValidator, sync.TxValidatorMock{}, conf, clock.Subscribe(), clock.GetCurrentLayer(), lg.WithName("sync"))
+	blockOracle := oracle.NewMinerBlockOracle(layerSize, uint16(layersPerEpoch), atxdb, beaconProvider, vrfSigner, nodeID, syncer.IsSynced, lg.WithName("blockOracle"))
 
 	// TODO: we should probably decouple the apptest and the node (and duplicate as necessary)
 	var hOracle hare.Rolacle
@@ -350,11 +371,13 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 		hOracle = eligibility.New(beacon, atxdb, BLS381.Verify2, vrfSigner, app.Config.CONSENSUS.LayersPerEpoch)
 	}
 
-	ha := hare.New(app.Config.HARE, swarm, sgn, nodeID, msh, hOracle, app.Config.CONSENSUS.LayersPerEpoch, idStore, atxdb, clock.Subscribe(), lg.WithName("hare"))
+	ha := hare.New(app.Config.HARE, swarm, sgn, nodeID, syncer.IsSynced, msh, hOracle, app.Config.CONSENSUS.LayersPerEpoch, idStore, atxdb, clock.Subscribe(), lg.WithName("hare"))
 
 	blockProducer := miner.NewBlockBuilder(nodeID, sgn, swarm, clock.Subscribe(), txpool, atxpool, coinToss, msh, ha, blockOracle, atxdb.ProcessAtx, lg.WithName("blockProducer"))
 
 	blockListener := sync.NewBlockListener(swarm, syncer, 4, lg.WithName("blockListener"))
+	blockProducer := miner.NewBlockBuilder(nodeID, sgn, swarm, clock.Subscribe(), txpool, atxpool, coinToss, msh, ha, blockOracle, atxdb, lg.WithName("blockBuilder"))
+	blockListener := sync.NewBlockListener(swarm, blockValidator, syncer, 4, lg.WithName("blockListener"))
 
 	poetListener := activation.NewPoetListener(swarm, poetDb, lg.WithName("poetListener"))
 
@@ -367,8 +390,18 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 		poetDb,
 		lg.WithName("nipstBuilder"),
 	)
-	atxBuilder := activation.NewBuilder(nodeID, atxdb, swarm, atxdb, msh, app.Config.CONSENSUS.LayersPerEpoch,
-		nipstBuilder, clock.Subscribe(), lg.WithName("atxBuilder"))
+
+	if app.Config.CoinbaseAccount == "" {
+		app.log.Panic("cannot start mining without Coinbase account")
+	}
+
+	coinBase := address.HexToAddress(app.Config.CoinbaseAccount)
+
+	if coinBase.Big().Uint64() == 0 {
+		app.log.Panic("invalid Coinbase account")
+	}
+
+	atxBuilder := activation.NewBuilder(nodeID, coinBase, atxdb, swarm, atxdb, msh, app.Config.CONSENSUS.LayersPerEpoch, nipstBuilder, clock.Subscribe(), syncer.IsSynced, lg.WithName("atxBuilder"))
 
 	app.txProcessor = processor
 	app.blockProducer = &blockProducer
@@ -547,7 +580,6 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 		log.Error("cannot start services %v", err.Error())
 		return
 	}
-	app.setupGenesis(apiCfg.DefaultGenesisConfig()) //todo: this is for debug, setup with other config when we have it
 	if app.Config.TestMode {
 		app.setupTestFeatures()
 	}
@@ -574,7 +606,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	// start api servers
 	if apiConf.StartGrpcServer || apiConf.StartJSONServer {
 		// start grpc if specified or if json rpc specified
-		app.grpcAPIService = api.NewGrpcService(app.P2P, app.state, app.txProcessor)
+		app.grpcAPIService = api.NewGrpcService(app.P2P, app.state, app.mesh.StateApi())
 		app.grpcAPIService.StartService(nil)
 	}
 

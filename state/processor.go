@@ -153,19 +153,19 @@ func (tp *TransactionProcessor) addStateToHistory(layer types.LayerID, newHash c
 
 }
 
-func (tp *TransactionProcessor) ApplyRewards(layer types.LayerID, miners []string, underQuota map[string]int, bonusReward, diminishedReward *big.Int) {
-	for _, minerId := range miners {
+func (tp *TransactionProcessor) ApplyRewards(layer types.LayerID, minersAccounts []address.Address, underQuota map[address.Address]int, bonusReward, diminishedReward *big.Int) {
+	for _, account := range minersAccounts {
 		//if we have 2 blocks in same layer, one of them can receive a diminished reward and the other cannot
-		if val, ok := underQuota[minerId]; ok {
+		if val, ok := underQuota[account]; ok {
 			if val > 0 {
-				tp.globalState.AddBalance(address.HexToAddress(minerId), diminishedReward)
-				underQuota[minerId] = underQuota[minerId] - 1
-				if underQuota[minerId] == 0 {
-					delete(underQuota, minerId)
+				tp.globalState.AddBalance(account, diminishedReward)
+				underQuota[account] = underQuota[account] - 1
+				if underQuota[account] == 0 {
+					delete(underQuota, account)
 				}
 			}
 		} else {
-			tp.globalState.AddBalance(address.HexToAddress(minerId), bonusReward)
+			tp.globalState.AddBalance(account, bonusReward)
 		}
 	}
 	newHash, err := tp.globalState.Commit(false)

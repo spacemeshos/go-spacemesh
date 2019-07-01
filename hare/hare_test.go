@@ -71,7 +71,7 @@ func NewMockConsensusProcess(cfg config.Config, instanceId InstanceId, s *Set, o
 }
 
 func createHare(n1 p2p.Service) *Hare {
-	return New(cfg, n1, signing2.NewEdSigner(), types.NodeId{}, new(orphanMock), eligibility.New(), 10, &mockIdProvider{}, NewMockStateQuerier(), make(chan types.LayerID), log.NewDefault("Hare"))
+	return New(cfg, n1, signing2.NewEdSigner(), types.NodeId{}, (&mockSyncer{true}).IsSynced, new(orphanMock), eligibility.New(), 10, &mockIdProvider{}, NewMockStateQuerier(), make(chan types.LayerID), log.NewDefault("Hare"))
 }
 
 var _ Consensus = (*mockConsensusProcess)(nil)
@@ -211,7 +211,7 @@ func TestHare_collectOutput2(t *testing.T) {
 	require.False(t, ok)
 }
 
-func TestHare_OurputCollectionLoop(t *testing.T) {
+func TestHare_OutputCollectionLoop(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 
@@ -222,7 +222,7 @@ func TestHare_OurputCollectionLoop(t *testing.T) {
 	time.Sleep(1 * time.Second)
 	h.outputChan <- mo
 	time.Sleep(1 * time.Second)
-	assert.True(t, len(h.broker.outbox) == 0)
+	assert.Nil(t, h.broker.outbox[mo.Id()])
 }
 
 func TestHare_onTick(t *testing.T) {
@@ -246,7 +246,7 @@ func TestHare_onTick(t *testing.T) {
 		return blockset
 	}
 
-	h := New(cfg, n1, signing, types.NodeId{}, om, oracle, 10, &mockIdProvider{}, NewMockStateQuerier(), layerTicker, log.NewDefault("Hare"))
+	h := New(cfg, n1, signing, types.NodeId{}, (&mockSyncer{true}).IsSynced, om, oracle, 10, &mockIdProvider{}, NewMockStateQuerier(), layerTicker, log.NewDefault("Hare"))
 	h.networkDelta = 0
 	h.bufferSize = 1
 

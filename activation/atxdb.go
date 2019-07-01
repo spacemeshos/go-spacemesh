@@ -35,8 +35,10 @@ func NewActivationDb(dbstore database.DB, nipstStore database.DB, idstore IdStor
 	return &ActivationDb{atxs: dbstore, nipsts: nipstStore, atxCache: NewAtxCache(20), meshDb: meshDb, nipstValidator: nipstValidator, LayersPerEpoch: layersPerEpoch, ids: idstore, log: log}
 }
 
-// ProcessAtx validates the active set size declared in the atx, and validates the atx according to atx validation rules
-// it then stores the atx with flag set to validity of the atx
+// ProcessAtx validates the active set size declared in the atx, and contextually validates the atx according to atx
+// validation rules it then stores the atx with flag set to validity of the atx.
+//
+// ATXs received as input must be already syntactically valid. Only contextual validation is performed.
 func (db *ActivationDb) ProcessAtx(atx *types.ActivationTx) {
 	db.processAtxMutex.Lock()
 	defer db.processAtxMutex.Unlock()
@@ -48,14 +50,7 @@ func (db *ActivationDb) ProcessAtx(atx *types.ActivationTx) {
 	}
 	epoch := atx.PubLayerIdx.GetEpoch(db.LayersPerEpoch)
 	db.log.Info("processing atx id %v, pub-epoch %v node: %v layer %v", atx.ShortId(), epoch, atx.NodeId.Key[:5], atx.PubLayerIdx)
-	activeSet, err := db.CalcActiveSetFromView(atx)
-	if err != nil {
-		db.log.Error("could not calculate active set for ATX %v", atx.ShortId())
-	}
-	//todo: maybe there is a potential bug in this case if count for the view can change between calls to this function
-	atx.VerifiedActiveSet = activeSet
-	err = db.ValidateAtx(atx)
-	//todo: should we store invalid atxs
+	err := db.ContextuallyValidateAtx(atx)
 	if err != nil {
 		db.log.Warning("ATX %v failed validation: %v", atx.ShortId(), err)
 	} else {
@@ -146,9 +141,8 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 
 }
 
-// ValidateAtx ensures the following conditions apply, otherwise it returns an error.
+// SyntacticallyValidateAtx ensures the following conditions apply, otherwise it returns an error.
 //
-// - No other ATX exists with the same MinerID and sequence number.
 // - If the sequence number is non-zero: PrevATX points to a valid ATX whose sequence number is one less than the
 //   current ATX's sequence number.
 // - If the sequence number is zero: PrevATX is empty.
@@ -157,11 +151,15 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 //   NodeID, SequenceNumber, PrevATXID, LayerID, StartTick, PositioningATX.
 // - ATX LayerID is NipstLayerTime or more after the PositioningATX LayerID.
 // - The ATX view of the previous epoch contains ActiveSetSize activations
-func (db *ActivationDb) ValidateAtx(atx *types.ActivationTx) error {
+func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 	if atx.PrevATXId != *types.EmptyAtxId {
 		prevATX, err := db.GetAtx(atx.PrevATXId)
 		if err != nil {
 			return fmt.Errorf("validation failed: prevATX not found: %v", err)
+		}
+		if prevATX.NodeId.Key != atx.NodeId.Key {
+			return fmt.Errorf("previous ATX belongs to different miner. atx.Id: %v, atx.NodeId: %v, prevAtx.NodeId: %v",
+				atx.ShortId(), atx.NodeId.Key, prevATX.NodeId.Key)
 		}
 		if !prevATX.Valid {
 			return fmt.Errorf("validation failed: prevATX not valid")
@@ -169,27 +167,9 @@ func (db *ActivationDb) ValidateAtx(atx *types.ActivationTx) error {
 		if prevATX.Sequence+1 != atx.Sequence {
 			return fmt.Errorf("sequence number is not one more than prev sequence number")
 		}
-
-		prevAtxIds, err := db.GetNodeAtxIds(atx.NodeId)
-		if len(prevAtxIds) > 0 {
-			lastAtx := prevAtxIds[len(prevAtxIds)-1]
-			// last atx is not the one referenced
-			if lastAtx != atx.PrevATXId {
-				return fmt.Errorf("last atx is not the one referenced")
-			}
-		}
-
 	} else {
 		if atx.Sequence != 0 {
 			return fmt.Errorf("no prevATX reported, but sequence number not zero")
-		}
-		prevAtxIds, err := db.GetNodeAtxIds(atx.NodeId)
-		if err == nil && len(prevAtxIds) > 0 {
-			var ids []string
-			for _, x := range prevAtxIds {
-				ids = append(ids, x.ShortString())
-			}
-			return fmt.Errorf("no prevATX reported, but other ATXs with same nodeID (%v) found, atxs: %v", atx.NodeId.Key[:5], ids)
 		}
 	}
 
@@ -201,8 +181,13 @@ func (db *ActivationDb) ValidateAtx(atx *types.ActivationTx) error {
 		if !posAtx.Valid {
 			return fmt.Errorf("positioning atx is not valid")
 		}
+		if atx.PubLayerIdx <= posAtx.PubLayerIdx {
+			return fmt.Errorf("atx layer (%v) must be after positioning atx layer (%v)",
+				atx.PubLayerIdx, posAtx.PubLayerIdx)
+		}
 		if uint64(atx.PubLayerIdx-posAtx.PubLayerIdx) > uint64(db.LayersPerEpoch) {
-			return fmt.Errorf("distance between pos atx invalid %v ", atx.PubLayerIdx-posAtx.PubLayerIdx)
+			return fmt.Errorf("expected distance of one epoch (%v layers) from pos ATX but found %v",
+				db.LayersPerEpoch, atx.PubLayerIdx-posAtx.PubLayerIdx)
 		}
 	} else {
 		publicationEpoch := atx.PubLayerIdx.GetEpoch(db.LayersPerEpoch)
@@ -211,8 +196,13 @@ func (db *ActivationDb) ValidateAtx(atx *types.ActivationTx) error {
 		}
 	}
 
-	if atx.ActiveSetSize != atx.VerifiedActiveSet {
-		return fmt.Errorf("atx conatins view with unequal active ids (%v) than seen (%v)", atx.ActiveSetSize, atx.VerifiedActiveSet)
+	activeSet, err := db.CalcActiveSetFromView(atx)
+	if err != nil && !atx.PubLayerIdx.GetEpoch(db.LayersPerEpoch).IsGenesis() {
+		return fmt.Errorf("could not calculate active set for ATX %v", atx.ShortId())
+	}
+
+	if atx.ActiveSetSize != activeSet {
+		return fmt.Errorf("atx contains view with unequal active ids (%v) than seen (%v)", atx.ActiveSetSize, activeSet)
 	}
 
 	hash, err := atx.NIPSTChallenge.Hash()
@@ -223,6 +213,43 @@ func (db *ActivationDb) ValidateAtx(atx *types.ActivationTx) error {
 
 	if err = db.nipstValidator.Validate(atx.Nipst, *hash); err != nil {
 		return fmt.Errorf("NIPST not valid: %v", err)
+	}
+
+	return nil
+}
+
+// ContextuallyValidateAtx ensures that the previous ATX referenced is the last known ATX for the referenced miner ID.
+// If a previous ATX is not referenced, it validates that indeed there's no previous known ATX for that miner ID.
+func (db *ActivationDb) ContextuallyValidateAtx(atx *types.ActivationTx) error {
+	if atx.PrevATXId != *types.EmptyAtxId {
+		prevAtxIds, err := db.GetNodeAtxIds(atx.NodeId)
+		if err != nil {
+			db.log.WithFields(
+				log.String("atx_id", atx.ShortId()), log.String("node_id", atx.NodeId.Key)).
+				Error("could not fetch node ATXs: %v", err)
+			return fmt.Errorf("could not fetch node ATXs: %v", err)
+		}
+		if len(prevAtxIds) == 0 {
+			return fmt.Errorf("ATX references a previous ATX, but no ATXs were found for this miner ID")
+		}
+		lastAtx := prevAtxIds[len(prevAtxIds)-1]
+		// last atx is not the one referenced
+		if lastAtx != atx.PrevATXId {
+			return fmt.Errorf("last atx is not the one referenced")
+		}
+	} else {
+		prevAtxIds, err := db.GetNodeAtxIds(atx.NodeId)
+		if err != nil && err != database.ErrNotFound {
+			db.log.Error("fetching ATX ids failed: %v", err)
+			return err
+		}
+		if len(prevAtxIds) > 0 {
+			var ids []string
+			for _, x := range prevAtxIds {
+				ids = append(ids, x.ShortString())
+			}
+			return fmt.Errorf("no prevATX reported, but other ATXs with same nodeID (%v) found, atxs: %v", atx.NodeId.Key[:5], ids)
+		}
 	}
 
 	return nil

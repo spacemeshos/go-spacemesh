@@ -2,6 +2,7 @@ package activation
 
 import (
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/rand"
@@ -53,24 +54,26 @@ type NipstValidator interface {
 }
 
 type Builder struct {
-	nodeId         types.NodeId
-	db             *ActivationDb
-	net            Broadcaster
-	activeSet      ActiveSetProvider
-	mesh           MeshProvider
-	layersPerEpoch uint16
-	tickProvider   PoETNumberOfTickProvider
-	nipstBuilder   NipstBuilder
-	challenge      *types.NIPSTChallenge
-	nipst          *types.NIPST
-	posLayerID     types.LayerID
-	prevATX        *types.ActivationTx
-	timer          chan types.LayerID
-	stop           chan struct{}
-	finished       chan struct{}
-	working        bool
-	started        uint32
-	log            log.Log
+	nodeId          types.NodeId
+	coinbaseAccount address.Address
+	db              *ActivationDb
+	net             Broadcaster
+	activeSet       ActiveSetProvider
+	mesh            MeshProvider
+	layersPerEpoch  uint16
+	tickProvider    PoETNumberOfTickProvider
+	nipstBuilder    NipstBuilder
+	challenge       *types.NIPSTChallenge
+	nipst           *types.NIPST
+	posLayerID      types.LayerID
+	prevATX         *types.ActivationTx
+	timer           chan types.LayerID
+	stop            chan struct{}
+	finished        chan struct{}
+	working         bool
+	started         uint32
+	isSynced        func() bool
+	log             log.Log
 }
 
 type Processor struct {
@@ -79,21 +82,22 @@ type Processor struct {
 }
 
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
-func NewBuilder(nodeId types.NodeId, db *ActivationDb, net Broadcaster, activeSet ActiveSetProvider, mesh MeshProvider,
-	layersPerEpoch uint16, nipstBuilder NipstBuilder, layerClock chan types.LayerID, log log.Log) *Builder {
+func NewBuilder(nodeId types.NodeId, coinbaseAccount address.Address, db *ActivationDb, net Broadcaster, activeSet ActiveSetProvider, mesh MeshProvider, layersPerEpoch uint16, nipstBuilder NipstBuilder, layerClock chan types.LayerID, isSyncedFunc func() bool, log log.Log) *Builder {
 
 	return &Builder{
-		nodeId:         nodeId,
-		db:             db,
-		net:            net,
-		activeSet:      activeSet,
-		mesh:           mesh,
-		layersPerEpoch: layersPerEpoch,
-		nipstBuilder:   nipstBuilder,
-		timer:          layerClock,
-		stop:           make(chan struct{}),
-		finished:       make(chan struct{}),
-		log:            log,
+		nodeId:          nodeId,
+		coinbaseAccount: coinbaseAccount,
+		db:              db,
+		net:             net,
+		activeSet:       activeSet,
+		mesh:            mesh,
+		layersPerEpoch:  layersPerEpoch,
+		nipstBuilder:    nipstBuilder,
+		timer:           layerClock,
+		stop:            make(chan struct{}),
+		finished:        make(chan struct{}),
+		isSynced:        isSyncedFunc,
+		log:             log,
 	}
 }
 
@@ -126,6 +130,10 @@ func (b *Builder) loop() {
 		case <-b.stop:
 			return
 		case layer := <-b.timer:
+			if !b.isSynced() {
+				b.log.Info("cannot create atx : not synced")
+				break
+			}
 			if b.working {
 				break
 			}
@@ -153,10 +161,12 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) (bool, error) {
 		b.log.Info("starting build atx in epoch %v", epoch)
 		if b.prevATX == nil {
 			prevAtxId, err := b.GetPrevAtxId(b.nodeId)
-			if err == nil {
+			if err != nil {
+				b.log.Info("no prev ATX found, starting fresh")
+			} else {
 				b.prevATX, err = b.db.GetAtx(*prevAtxId)
 				if err != nil {
-					b.log.Info("no prev ATX found, starting fresh")
+					b.log.Panic("prevAtx (id: %v) not found in DB -- inconsistent state", prevAtxId.ShortId())
 				}
 			}
 		}
@@ -229,7 +239,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	atx := types.NewActivationTxWithChallenge(*b.challenge, activeIds, view, b.nipst, true)
+	atx := types.NewActivationTxWithChallenge(*b.challenge, b.coinbaseAccount, activeIds, view, b.nipst, true)
 	activeSetSize, err := b.db.CalcActiveSetFromView(atx) // TODO: remove this assertion to improve performance
 	b.log.Info("active ids seen for epoch %v (pos atx epoch) is %v (cache) %v (from view)",
 		posEpoch, activeIds, activeSetSize)
