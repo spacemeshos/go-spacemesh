@@ -1,7 +1,6 @@
 package mesh
 
 import (
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/address"
@@ -46,6 +45,7 @@ type AtxDB interface {
 	ProcessAtx(atx *types.ActivationTx)
 	GetAtx(id types.AtxId) (*types.ActivationTx, error)
 	GetNipst(id types.AtxId) (*types.NIPST, error)
+	IsIdentityActive(edId string, layer types.LayerID) (bool, error)
 	SyntacticallyValidateAtx(atx *types.ActivationTx) error
 }
 
@@ -249,7 +249,7 @@ func (m *Mesh) PushTransactions(oldBase types.LayerID, newBase types.LayerID) {
 		}
 
 		merged := m.ExtractUniqueOrderedTransactions(l)
-		x, err := m.state.ApplyTransactions(types.LayerID(i), merged)
+		x, err := m.ApplyTransactions(types.LayerID(i), merged)
 		if err != nil {
 			m.Log.Error("cannot apply transactions %v", err)
 		}
@@ -494,8 +494,4 @@ func (m *Mesh) GetATXs(atxIds []types.AtxId) (map[types.AtxId]*types.ActivationT
 		}
 	}
 	return atxs, mIds
-}
-
-func (m *Mesh) StateApi() StateApi {
-	return m.state
 }
