@@ -47,6 +47,10 @@ type AtxDbMock struct {
 
 var _ AtxDB = &AtxDbMock{}
 
+func (t *AtxDbMock) GetEpochAtxIds(id types.EpochId) ([]types.AtxId, error) {
+	return []types.AtxId{}, nil /*todo: mock if needed */
+}
+
 func (t *AtxDbMock) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 	return nil
 }

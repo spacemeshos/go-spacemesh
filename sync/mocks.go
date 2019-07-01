@@ -100,6 +100,11 @@ func (t *AtxDbMock) ProcessAtx(atx *types.ActivationTx) {
 	t.nipsts[atx.Id()] = atx.Nipst
 }
 
+//todo: if this is used somewhere then impl some real mock
+func (t *AtxDbMock) GetEpochAtxIds(id types.EpochId) ([]types.AtxId, error) {
+	return []types.AtxId{}, nil
+}
+
 func (t *AtxDbMock) GetNipst(id types.AtxId) (*types.NIPST, error) {
 	return t.nipsts[id], nil
 }
