@@ -242,12 +242,7 @@ func (s *Syncer) SyncAndValidate(blk *types.Block) error {
 		return nil
 	}
 
-	//check block signature
-	if valid := s.ValidateSignature(blk); !valid {
-		s.Error(fmt.Sprintf("block %v identity activation check failed ", blk.ID()))
-	}
-
-	//is identity active
+	//check block signature and is identity active
 	if eligable, err := s.IsIdentityActive(blk.MinerID.Key, blk.Layer()); err != nil || !eligable {
 		return errors.New(fmt.Sprintf("block %v identity activation check failed ", blk.ID()))
 	}
@@ -537,10 +532,6 @@ func (s *Syncer) crwal(vq *validationQueue) []types.BlockID {
 
 	}
 	return vq.getMissingBlocks()
-}
-
-func (s *Syncer) ValidateSignature(lyr *types.Block) bool {
-	return true
 }
 
 func (s *Syncer) fetchWithFactory(wrk worker) chan interface{} {
