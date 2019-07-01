@@ -217,7 +217,7 @@ func (s *Syncer) getLayerFromNeighbors(currenSyncLayer types.LayerID) (*types.La
 }
 
 func (s *Syncer) FetchFullBlocks(blockIds []types.BlockID) ([]*types.Block, error) {
-	output := s.fetchWithFactory(BlockReqFactory(blockSliceToChan(blockIds)), s.Concurrency)
+	output := s.fetchWithFactory(NewBlockWorker(s, s.Concurrency, BlockReqFactory(), blockSliceToChan(blockIds)))
 	blocksArr := make([]*types.Block, 0, len(blockIds))
 	for out := range output {
 		block := out.(*types.Block)
@@ -234,13 +234,20 @@ func (s *Syncer) FetchFullBlocks(blockIds []types.BlockID) ([]*types.Block, erro
 }
 
 func (s *Syncer) SyncAndValidate(blk *types.Block) error {
+	s.Info("sync and validate block %v ", blk.ID())
+
+	//check if known
+	if _, err := s.GetBlock(blk.Id); err == nil {
+		s.Info("we already know this block %v ", blk.ID())
+		return nil
+	}
 
 	//check block signature
 	s.ValidateSignature(blk)
 
 	//is identity active
 	if eligable, err := s.IsIdentityActive(blk.MinerID.Key, blk.Layer()); err != nil || !eligable {
-		return errors.New(fmt.Sprintf("block %v identity activation check failed ", blk.ID()))
+		s.Error(fmt.Sprintf("block %v identity activation check failed ", blk.ID()))
 	}
 
 	//associated atx data availability
@@ -267,7 +274,7 @@ func (s *Syncer) SyncAndValidate(blk *types.Block) error {
 	}
 
 	if err := s.AddBlockWithTxs(blk, txs, atxs); err != nil {
-		s.Warning(fmt.Sprintf("failed fetching block %v activation transactions %v", blk.ID(), err))
+		s.Warning(fmt.Sprintf("failed to add block %v to database %v", blk.ID(), err))
 		return err
 	}
 
@@ -388,20 +395,6 @@ func (s *Syncer) fetchLayerHashes(lyr types.LayerID) (map[string]p2p.Peer, error
 	return m, nil
 }
 
-func (s *Syncer) fetchWithFactory(refac RequestFactory, workers int) chan interface{} {
-	// each worker goroutine tries to fetch data iteratively from each peer
-
-	wrk := NewNeighborhoodWorker(s, workers, refac)
-	go wrk.Work()
-
-	for i := 0; i < workers-1; i++ {
-		cloneWrk := wrk.Clone()
-		go cloneWrk.Work()
-	}
-
-	return wrk.output
-}
-
 func (s *Syncer) syncTxs(txids []types.TransactionId) ([]*types.SerializableTransaction, error) {
 
 	//look in pool
@@ -421,7 +414,7 @@ func (s *Syncer) syncTxs(txids []types.TransactionId) ([]*types.SerializableTran
 
 	//map and sort txs
 	if len(missing) > 0 {
-		for out := range s.fetchWithFactory(TxReqFactory(missinDB), 1) {
+		for out := range s.fetchWithFactory(NewNeighborhoodWorker(s, 1, TxReqFactory(missinDB))) {
 			ntxs := out.([]types.SerializableTransaction)
 			for _, tx := range ntxs {
 				if valid, err := s.ValidateTx(&tx); !valid || err != nil {
@@ -470,11 +463,12 @@ func (s *Syncer) syncAtxs(atxIds []types.AtxId) (atxs []*types.ActivationTx, err
 	}
 
 	//look in db
-	dbAtxs, missing := s.GetATXs(missingInPool)
+	dbAtxs, missingInDb := s.GetATXs(missingInPool)
 
 	//map and sort atxs
-	if len(missing) > 0 {
-		output := s.fetchWithFactory(ATxReqFactory(missing), 1)
+	if len(missingInDb) > 0 {
+
+		output := s.fetchWithFactory(NewNeighborhoodWorker(s, 1, ATxReqFactory(missingInDb)))
 		for out := range output {
 			atxs := out.([]types.ActivationTx)
 			for _, atx := range atxs {
@@ -502,7 +496,7 @@ func (s *Syncer) syncAtxs(atxIds []types.AtxId) (atxs []*types.ActivationTx, err
 
 func (s *Syncer) crwal(vq *validationQueue) []types.BlockID {
 	ch := make(chan types.BlockID, 10)
-	output := s.fetchWithFactory(BlockReqFactory(ch), 4)
+	output := s.fetchWithFactory(NewBlockWorker(s, s.Concurrency, BlockReqFactory(), ch))
 	go func() {
 		for out := range output {
 			block := out.(*types.Block)
@@ -545,4 +539,15 @@ func (s *Syncer) crwal(vq *validationQueue) []types.BlockID {
 
 func (s *Syncer) ValidateSignature(lyr *types.Block) bool {
 	return true
+}
+
+func (s *Syncer) fetchWithFactory(wrk worker) chan interface{} {
+	// each worker goroutine tries to fetch a block iteratively from each peer
+	go wrk.Work()
+	for i := 0; int32(i) < *wrk.workCount-1; i++ {
+		cloneWrk := wrk.Clone()
+		go cloneWrk.Work()
+	}
+
+	return wrk.output
 }

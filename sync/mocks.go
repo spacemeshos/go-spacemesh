@@ -108,6 +108,10 @@ func (t *AtxDbMock) ProcessAtx(atx *types.ActivationTx) {
 	t.nipsts[atx.Id()] = atx.Nipst
 }
 
+func (*AtxDbMock) IsIdentityActive(edId string, layer types.LayerID) (bool, error) {
+	return true, nil
+}
+
 func (t *AtxDbMock) GetNipst(id types.AtxId) (*types.NIPST, error) {
 	return t.nipsts[id], nil
 }
@@ -120,7 +124,7 @@ func (*MockIStore) StoreNodeIdentity(id types.NodeId) error {
 }
 
 func (*MockIStore) GetIdentity(id string) (types.NodeId, error) {
-	return types.NodeId{}, nil
+	return types.NodeId{Key: "some string ", VRFPublicKey: []byte("bytes")}, nil
 }
 
 type ValidatorMock struct{}

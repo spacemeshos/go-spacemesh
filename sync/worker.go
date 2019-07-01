@@ -4,12 +4,14 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
+	"github.com/spacemeshos/go-spacemesh/types"
 	"sync"
 	"sync/atomic"
 	"time"
 )
 
 type RequestFactory func(s *server.MessageServer, peer p2p.Peer) (chan interface{}, error)
+type BlockRequestFactory func(s *server.MessageServer, peer p2p.Peer, id types.BlockID) (chan interface{}, error)
 
 type worker struct {
 	*sync.Once
@@ -88,6 +90,7 @@ func NewPeersWorker(s *Syncer, peers []p2p.Peer, mu *sync.Once, reqFactory Reque
 func NewNeighborhoodWorker(s *Syncer, count int, reqFactory RequestFactory) worker {
 	output := make(chan interface{}, count)
 	acount := int32(count)
+	mu := &sync.Once{}
 	workFunc := func() {
 		for _, p := range s.GetPeers() {
 			peer := p
@@ -109,6 +112,37 @@ func NewNeighborhoodWorker(s *Syncer, count int, reqFactory RequestFactory) work
 		}
 	}
 
-	return worker{Log: s.Log, Once: &sync.Once{}, workCount: &acount, output: output, work: workFunc}
+	return worker{Log: s.Log, Once: mu, workCount: &acount, output: output, work: workFunc}
+
+}
+
+func NewBlockWorker(s *Syncer, count int, reqFactory BlockRequestFactory, ids chan types.BlockID) worker {
+	output := make(chan interface{}, count)
+	acount := int32(count)
+	mu := &sync.Once{}
+	workFunc := func() {
+		for id := range ids {
+			for _, p := range s.GetPeers() {
+				peer := p
+				s.Info("send request Peer: %v", peer)
+				ch, _ := reqFactory(s.MessageServer, peer, id)
+				timeout := time.After(s.RequestTimeout)
+				select {
+				case <-timeout:
+					s.Error("request to %v timed out", peer)
+				case v := <-ch:
+					if v != nil {
+						s.Info("Peer: %v responded ", peer)
+						s.Debug("Peer: %v response was  %v", v)
+						output <- v
+						return
+					}
+					s.Error("peer %v responded with nil", peer)
+				}
+			}
+		}
+	}
+
+	return worker{Log: s.Log, Once: mu, workCount: &acount, output: output, work: workFunc}
 
 }

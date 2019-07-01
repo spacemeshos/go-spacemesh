@@ -52,16 +52,19 @@ func TestBlockListener(t *testing.T) {
 	defer bl2.Close()
 	defer bl1.Close()
 	bl2.Start()
-	atx1 := atx()
-	atx2 := atx()
-	atx3 := atx()
+	atx1 := atx("sdfhfsg")
+	atx2 := atx("asdfsdvxbnu")
+	atx3 := atx("rtutyh")
 
 	bl1.ProcessAtx(atx1)
 	bl1.ProcessAtx(atx2)
 	bl1.ProcessAtx(atx3)
 
+	bl2.ProcessAtx(atx1)
+
 	block1 := types.NewExistingBlock(types.BlockID(123), 0, nil)
-	block1.AtxIds = append(block1.AtxIds, atx1.Id())
+	block1.ATXID = atx1.Id()
+	block1.MinerID.Key = "sdfhfsg"
 	block2 := types.NewExistingBlock(types.BlockID(321), 1, nil)
 	block2.AtxIds = append(block2.AtxIds, atx2.Id())
 	block3 := types.NewExistingBlock(types.BlockID(222), 2, nil)
@@ -106,7 +109,7 @@ func TestBlockListener2(t *testing.T) {
 	defer bl1.Close()
 	bl2.Start()
 
-	atx := atx()
+	atx := atx("rt6uuk")
 
 	byts, _ := types.InterfaceToBytes(atx)
 	var atx1 types.ActivationTx
@@ -219,7 +222,6 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 		default:
 			if b, err := bl1.GetBlock(blk.Id); err == nil {
 				assert.True(t, blk.Compare(b))
-				t.Log("  ", b)
 				t.Log("done!")
 				return
 			}

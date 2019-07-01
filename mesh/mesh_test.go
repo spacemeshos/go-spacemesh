@@ -45,6 +45,10 @@ type AtxDbMock struct {
 	nipsts map[types.AtxId]*types.NIPST
 }
 
+func (*AtxDbMock) IsIdentityActive(edId string, layer types.LayerID) (bool, error) {
+	return true, nil
+}
+
 func (t *AtxDbMock) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
 	if id == *types.EmptyAtxId {
 		return nil, fmt.Errorf("trying to fetch empty atx id")
