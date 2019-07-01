@@ -35,6 +35,10 @@ type AtxValidator interface {
 	SyntacticallyValidateAtx(atx *types.ActivationTx) error
 }
 
+type Syncer interface {
+	EnsurePoetProofAvailableAndValid(poetProofRef []byte) error
+}
+
 type BlockBuilder struct {
 	log.Log
 	Signer
@@ -53,6 +57,7 @@ type BlockBuilder struct {
 	orphans          OrphanBlockProvider
 	blockOracle      oracle.BlockOracle
 	atxValidator     AtxValidator
+	syncer           Syncer
 	started          bool
 }
 
@@ -65,6 +70,7 @@ func NewBlockBuilder(minerID types.NodeId, sgn Signer, net p2p.Service,
 	hare HareResultProvider,
 	blockOracle oracle.BlockOracle,
 	atxValidator AtxValidator,
+	syncer Syncer,
 	lg log.Log) BlockBuilder {
 
 	seed := binary.BigEndian.Uint64(md5.New().Sum([]byte(minerID.Key)))
@@ -87,6 +93,7 @@ func NewBlockBuilder(minerID types.NodeId, sgn Signer, net p2p.Service,
 		orphans:          orph,
 		blockOracle:      blockOracle,
 		atxValidator:     atxValidator,
+		syncer:           syncer,
 		started:          false,
 	}
 
@@ -251,6 +258,13 @@ func (t *BlockBuilder) listenForAtx() {
 					t.Panic("nil nipst in gossip")
 					break
 				}
+
+				if err := t.syncer.EnsurePoetProofAvailableAndValid(atx.GetPoetProofRef()); err != nil {
+					t.Warning("received ATX (%v) with syntactically invalid or missing PoET proof (%x): %v",
+						atx.ShortId(), atx.GetPoetProofRef()[:5], err)
+					break
+				}
+
 				err = t.atxValidator.SyntacticallyValidateAtx(atx)
 				if err != nil {
 					t.Warning("received syntactically invalid ATX %v: %v", atx.ShortId(), err)

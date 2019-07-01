@@ -101,6 +101,30 @@ func TxReqFactory(ids []types.TransactionId) RequestFactory {
 	}
 }
 
+func PoetReqFactory(poetProofRef []byte) RequestFactory {
+	return func(s *server.MessageServer, peer p2p.Peer) (chan interface{}, error) {
+		ch := make(chan interface{}, 1)
+		resHandler := func(msg []byte) {
+			s.Info("handle PoET proof response")
+			defer close(ch)
+			var proofMessage types.PoetProofMessage
+			err := types.BytesToInterface(msg, &proofMessage)
+			if err != nil {
+				s.Error("could not unmarshal PoET proof message: %v", err)
+				return
+			}
+
+			ch <- proofMessage
+		}
+
+		if err := s.SendRequest(POET, poetProofRef, peer, resHandler); err != nil {
+			return nil, err
+		}
+
+		return ch, nil
+	}
+}
+
 func ATxReqFactory(ids []types.AtxId) RequestFactory {
 	return func(s *server.MessageServer, peer p2p.Peer) (chan interface{}, error) {
 		ch := make(chan interface{}, 1)

@@ -33,10 +33,14 @@ func TestPoetDbHappyFlow(t *testing.T) {
 
 	err = poetDb.ValidatePoetProof(poetProof, poetId, roundId, nil)
 	r.NoError(err)
-	_, ok := err.(processingError)
-	r.False(ok)
+	r.False(types.IsProcessingError(err))
 
-	err = poetDb.storePoetProof(poetProof, poetId, roundId, nil)
+	err = poetDb.storePoetProof(types.PoetProofMessage{
+		PoetProof: poetProof,
+		PoetId:    poetId,
+		RoundId:   roundId,
+		Signature: nil,
+	})
 	r.NoError(err)
 
 	ref, err := poetDb.getPoetProofRef(makeKey(poetId, roundId))
@@ -73,8 +77,7 @@ func TestPoetDbInvalidPoetProof(t *testing.T) {
 	err = poetDb.ValidatePoetProof(poetProof, poetId, roundId, nil)
 	r.EqualError(err, fmt.Sprintf("failed to validate poet proof for poetId %x round 1337: merkle proof not valid",
 		poetId))
-	_, ok := err.(processingError)
-	r.False(ok)
+	r.False(types.IsProcessingError(err))
 }
 
 func TestPoetDbNonExistingKeys(t *testing.T) {
@@ -118,10 +121,14 @@ func TestPoetDb_SubscribeToPoetProofRef(t *testing.T) {
 
 	err = poetDb.ValidatePoetProof(poetProof, poetId, 0, nil)
 	r.NoError(err)
-	_, ok := err.(processingError)
-	r.False(ok)
+	r.False(types.IsProcessingError(err))
 
-	err = poetDb.storePoetProof(poetProof, poetId, 0, nil)
+	err = poetDb.storePoetProof(types.PoetProofMessage{
+		PoetProof: poetProof,
+		PoetId:    poetId,
+		RoundId:   0,
+		Signature: nil,
+	})
 	r.NoError(err)
 
 	select {
@@ -132,7 +139,7 @@ func TestPoetDb_SubscribeToPoetProofRef(t *testing.T) {
 	case <-time.After(2 * time.Millisecond):
 		r.Fail("timeout!")
 	}
-	_, ok = <-ch
+	_, ok := <-ch
 	r.False(ok, "channel should be closed")
 
 	newCh := poetDb.SubscribeToPoetProofRef(poetId, 0)

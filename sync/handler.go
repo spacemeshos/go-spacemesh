@@ -149,3 +149,15 @@ func newATxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 		return bbytes
 	}
 }
+
+func newPoetRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
+	return func(proofRef []byte) []byte {
+		proofMessage, err := s.poetDb.GetPoetProofMessage(proofRef)
+		if err != nil {
+			logger.Warning("unfamiliar PoET proof was requested (id: %x): %v", proofRef[:5], err)
+			return nil
+		}
+		logger.Info("returning PoET proof (id: %x) to neighbor", proofRef[:5])
+		return proofMessage
+	}
+}

@@ -30,13 +30,6 @@ func (l *PoetListener) Close() {
 	l.started = false
 }
 
-type poetProofMessage struct {
-	types.PoetProof
-	PoetId    [types.PoetIdLength]byte
-	RoundId   uint64
-	Signature []byte
-}
-
 func (l *PoetListener) loop() {
 	for {
 		select {
@@ -53,16 +46,16 @@ func (l *PoetListener) loop() {
 	}
 }
 
-func (l *PoetListener) handlePoetProofMessage(poetProof service.GossipMessage) {
-	var proofMessage poetProofMessage
-	if err := types.BytesToInterface(poetProof.Bytes(), &proofMessage); err != nil {
+func (l *PoetListener) handlePoetProofMessage(gossipMessage service.GossipMessage) {
+	var proofMessage types.PoetProofMessage
+	if err := types.BytesToInterface(gossipMessage.Bytes(), &proofMessage); err != nil {
 		l.Log.Error("failed to unmarshal PoET membership proof: %v", err)
 		return
 	}
 	if err := l.poetDb.ValidatePoetProof(proofMessage.PoetProof, proofMessage.PoetId,
 		proofMessage.RoundId, proofMessage.Signature); err != nil {
 
-		if _, ok := err.(processingError); ok {
+		if types.IsProcessingError(err) {
 			l.Log.Error("failed to validate PoET proof: %v", err)
 		} else {
 			l.Log.Warning("PoET proof not valid: %v", err)
@@ -70,11 +63,9 @@ func (l *PoetListener) handlePoetProofMessage(poetProof service.GossipMessage) {
 		return
 	}
 
-	poetProof.ReportValidation(PoetProofProtocol)
+	gossipMessage.ReportValidation(PoetProofProtocol)
 
-	if err := l.poetDb.storePoetProof(proofMessage.PoetProof, proofMessage.PoetId, proofMessage.RoundId,
-		proofMessage.Signature); err != nil {
-
+	if err := l.poetDb.storePoetProof(proofMessage); err != nil {
 		l.Log.Error("failed to store PoET proof: %v", err)
 	}
 }
