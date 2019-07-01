@@ -48,13 +48,25 @@ func NewSimulator() *Simulator {
 	return s
 }
 
-func (s *Simulator) SubscribeToPeerEvents() (chan p2pcrypto.PublicKey, chan p2pcrypto.PublicKey) {
-	newp := make(chan p2pcrypto.PublicKey)
-	delp := make(chan p2pcrypto.PublicKey)
+func (s *Simulator) SubscribeToPeerEvents(myid p2pcrypto.Key) (chan p2pcrypto.PublicKey, chan p2pcrypto.PublicKey) {
+	s.mutex.RLock()
+	var keys []p2pcrypto.PublicKey
+	for _, nd := range s.nodes {
+		if nd.PublicKey() == myid {
+			continue
+		}
+		keys = append(keys, nd.PublicKey())
+	}
+	s.mutex.RUnlock()
+	newp := make(chan p2pcrypto.PublicKey, len(keys)+1)
+	delp := make(chan p2pcrypto.PublicKey, len(keys)+1)
 	s.subLock.Lock()
 	s.newPeersSubs = append(s.newPeersSubs, newp)
 	s.delPeersSubs = append(s.delPeersSubs, delp)
 	s.subLock.Unlock()
+	for _, x := range keys {
+		newp <- x
+	}
 	return newp, delp
 }
 
@@ -249,19 +261,39 @@ func (sn *Node) Broadcast(protocol string, payload []byte) error {
 	go func() {
 		sn.sleep(sn.sndDelay)
 		sn.sim.mutex.RLock()
+		var mychan chan GossipMessage
+
+		if me, ok := sn.sim.protocolGossipHandler[sn.ID.String()][protocol]; ok {
+			mychan = me
+		}
+
+		sendees := make([]chan GossipMessage, 0, len(sn.sim.protocolGossipHandler))
+
 		for n := range sn.sim.protocolGossipHandler {
+			if n == sn.ID.String() {
+				continue
+			}
 			if c, ok := sn.sim.protocolGossipHandler[n][protocol]; ok {
-				c <- simGossipMessage{sn.NodeInfo.PublicKey(), DataBytes{Payload: payload}, nil}
+				sendees = append(sendees, c) // <- simGossipMessage{sn.NodeInfo.PublicKey(), DataBytes{Payload: payload}, nil}
 			}
 		}
 		sn.sim.mutex.RUnlock()
+
+		if mychan != nil {
+			mychan <- simGossipMessage{sn.NodeInfo.PublicKey(), DataBytes{Payload: payload}, nil}
+		}
+
+		for _, c := range sendees {
+			c <- simGossipMessage{sn.NodeInfo.PublicKey(), DataBytes{Payload: payload}, nil}
+		}
+
 		log.Debug("%v >> All ( Gossip ) (%v)", sn.NodeInfo.PublicKey(), payload)
 	}()
 	return nil
 }
 
 func (sn *Node) SubscribePeerEvents() (conn chan p2pcrypto.PublicKey, disc chan p2pcrypto.PublicKey) {
-	return sn.sim.SubscribeToPeerEvents()
+	return sn.sim.SubscribeToPeerEvents(sn.PublicKey())
 }
 
 // RegisterDirectProtocol creates and returns a channel for a given direct based protocol.
@@ -293,14 +325,9 @@ func (sn *Node) RegisterDirectProtocolWithChannel(protocol string, ingressChanne
 // Shutdown closes all node channels are remove it from the Simulator map
 func (sn *Node) Shutdown() {
 	sn.sim.mutex.Lock()
-	for _, c := range sn.sim.protocolDirectHandler[sn.NodeInfo.PublicKey().String()] {
-		close(c)
-	}
+	// TODO: close all chans, but that makes us send on nil chan.
 	delete(sn.sim.protocolDirectHandler, sn.NodeInfo.PublicKey().String())
-
-	for _, c := range sn.sim.protocolGossipHandler[sn.NodeInfo.PublicKey().String()] {
-		close(c)
-	}
 	delete(sn.sim.protocolGossipHandler, sn.NodeInfo.PublicKey().String())
 	sn.sim.mutex.Unlock()
+
 }
