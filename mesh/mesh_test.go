@@ -73,6 +73,10 @@ func (AtxDbMock) ProcessAtx(atx *types.ActivationTx) {
 
 }
 
+func (AtxDbMock) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
+	return nil
+}
+
 type MemPoolMock struct {
 }
 

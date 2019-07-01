@@ -228,10 +228,10 @@ func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 
 func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_LayerIdsRequest_", memoryDB)
-	atx1 := atx("ytdfghf")
-	atx2 := atx("tyhuruhefd")
-	atx3 := atx("Zxvc")
-	atx4 := atx("awet")
+	atx1 := atx("ytdfghdddddf")
+	atx2 := atx("tyhuruhefdfd")
+	atx3 := atx("Zxvasdfcasfd")
+	atx4 := atx("aweasdfasdft")
 	syncObj := syncs[0]
 	defer syncObj.Close()
 	syncObj1 := syncs[1]
@@ -245,7 +245,6 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 	syncObj1.AddBlockWithTxs(block2, []*types.SerializableTransaction{tx2}, []*types.ActivationTx{atx2})
 
 	block3 := types.NewExistingBlock(types.BlockID(153), lid, nil)
-
 	syncObj1.AddBlockWithTxs(block3, []*types.SerializableTransaction{tx3}, []*types.ActivationTx{atx3})
 
 	block4 := types.NewExistingBlock(types.BlockID(222), lid, nil)

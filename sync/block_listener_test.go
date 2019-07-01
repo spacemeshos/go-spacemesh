@@ -3,11 +3,9 @@ package sync
 import (
 	"github.com/google/uuid"
 	"github.com/spacemeshos/go-spacemesh/address"
-	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/miner"
-	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/types"
@@ -37,7 +35,7 @@ func ListenerFactory(serv service.Service, peers p2p.Peers, name string, layer t
 	l := log.New(name, "", "")
 	blockValidator := NewBlockValidator(BlockEligibilityValidatorMock{}, TxValidatorMock{}, AtxValidatorMock{})
 	sync := NewSync(serv, getMesh(memoryDB, name), miner.NewMemPool(reflect.TypeOf(types.SerializableTransaction{})),
-		miner.NewMemPool(reflect.TypeOf(types.ActivationTx{})), blockValidator, conf, ch, l)
+		miner.NewMemPool(reflect.TypeOf(types.ActivationTx{})), blockValidator, conf, ch, layer, l)
 	sync.Peers = peers
 	nbl := NewBlockListener(serv, sync, 2, log.New(name, "", ""))
 	return nbl
@@ -199,8 +197,7 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 
 	blk := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data1"))
 	tx := types.NewSerializableTransaction(0, address.BytesToAddress([]byte{0x01}), address.BytesToAddress([]byte{0x02}), big.NewInt(10), big.NewInt(10), 10)
-	atx := types.NewActivationTx(types.NodeId{"whatwhatwhatwhat", []byte("bbb")}, 1, types.AtxId{}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&common.Hash{}), false)
-
+	atx := atx("asdfdsf")
 	bl2.AddBlockWithTxs(blk, []*types.SerializableTransaction{tx}, []*types.ActivationTx{atx})
 
 	mblk := types.Block{MiniBlock: types.MiniBlock{BlockHeader: blk.BlockHeader, TxIds: []types.TransactionId{types.GetTransactionId(tx)}, AtxIds: []types.AtxId{atx.Id()}}}
