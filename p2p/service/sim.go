@@ -48,13 +48,25 @@ func NewSimulator() *Simulator {
 	return s
 }
 
-func (s *Simulator) SubscribeToPeerEvents() (chan p2pcrypto.PublicKey, chan p2pcrypto.PublicKey) {
-	newp := make(chan p2pcrypto.PublicKey)
-	delp := make(chan p2pcrypto.PublicKey)
+func (s *Simulator) SubscribeToPeerEvents(myid p2pcrypto.Key) (chan p2pcrypto.PublicKey, chan p2pcrypto.PublicKey) {
+	s.mutex.RLock()
+	var keys []p2pcrypto.PublicKey
+	for _, nd := range s.nodes {
+		if nd.PublicKey() == myid {
+			continue
+		}
+		keys = append(keys, nd.PublicKey())
+	}
+	s.mutex.RUnlock()
+	newp := make(chan p2pcrypto.PublicKey, len(keys)+1)
+	delp := make(chan p2pcrypto.PublicKey, len(keys)+1)
 	s.subLock.Lock()
 	s.newPeersSubs = append(s.newPeersSubs, newp)
 	s.delPeersSubs = append(s.delPeersSubs, delp)
 	s.subLock.Unlock()
+	for _, x := range keys {
+		newp <- x
+	}
 	return newp, delp
 }
 
@@ -281,7 +293,7 @@ func (sn *Node) Broadcast(protocol string, payload []byte) error {
 }
 
 func (sn *Node) SubscribePeerEvents() (conn chan p2pcrypto.PublicKey, disc chan p2pcrypto.PublicKey) {
-	return sn.sim.SubscribeToPeerEvents()
+	return sn.sim.SubscribeToPeerEvents(sn.PublicKey())
 }
 
 // RegisterDirectProtocol creates and returns a channel for a given direct based protocol.
