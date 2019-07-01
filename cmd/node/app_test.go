@@ -100,6 +100,8 @@ func (suite *AppTestSuite) initMultipleInstances(numOfInstances int, storeFormat
 		smApp.Config.HARE.WakeupDelta = 15
 		smApp.Config.HARE.ExpectedLeaders = 5
 		smApp.Config.CoinbaseAccount = strconv.Itoa(i + 1)
+		smApp.Config.LayerAvgSize = numOfInstances
+		smApp.Config.CONSENSUS.LayersPerEpoch = 3
 
 		edSgn := signing.NewEdSigner()
 		pub := edSgn.PublicKey()
@@ -121,7 +123,7 @@ func (suite *AppTestSuite) initMultipleInstances(numOfInstances int, storeFormat
 			NumberOfProvenLabels: 10,
 			SpaceUnit:            1024,
 		}
-		err = smApp.initServices(nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(layerSize), nipst.NewPostClient(), poet, vrfSigner, npstCfg, 3)
+		err = smApp.initServices(nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(layerSize), nipst.NewPostClient(), poet, vrfSigner, npstCfg, uint32(smApp.Config.CONSENSUS.LayersPerEpoch))
 		r.NoError(err)
 		smApp.setupGenesis()
 
@@ -157,6 +159,8 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	for _, a := range suite.apps {
 		a.startServices()
 	}
+
+	defer suite.gracefulShutdown()
 
 	_ = suite.apps[0].P2P.Broadcast(miner.IncomingTxProtocol, txbytes)
 	timeout := time.After(4.5 * 60 * time.Second)
@@ -323,11 +327,11 @@ func (suite *AppTestSuite) validateLastATXActiveSetSize(app *SpacemeshApp) {
 func (suite *AppTestSuite) gracefulShutdown() {
 	var wg sync.WaitGroup
 	for _, app := range suite.apps {
-		func(app SpacemeshApp) {
-			wg.Add(1)
-			defer wg.Done()
+		wg.Add(1)
+		go func(app *SpacemeshApp) {
 			app.stopServices()
-		}(*app)
+			wg.Done()
+		}(app)
 	}
 	wg.Wait()
 }
