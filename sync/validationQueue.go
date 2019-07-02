@@ -99,8 +99,11 @@ func (vq *validationQueue) checkDependencies(bHeader *types.BlockHeader, checkDa
 				vq.queue <- block
 
 				//init dependency set
-				dependencys = make(map[types.BlockID]struct{})
-				dependencys[block] = struct{}{}
+				if dependencys == nil {
+					dependencys = make(map[types.BlockID]struct{})
+				}
+				id := block
+				dependencys[id] = struct{}{}
 			}
 		}
 	}

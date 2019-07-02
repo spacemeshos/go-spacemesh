@@ -167,7 +167,7 @@ func TestBlockListener2(t *testing.T) {
 	block6.AddView(block4.ID())
 	block7.AddView(block6.ID())
 	block7.AddView(block5.ID())
-	block8.AddView(block6.ID())
+	block8.AddView(block7.ID())
 	block9.AddView(block5.ID())
 	block10.AddView(block8.ID())
 	block10.AddView(block9.ID())
