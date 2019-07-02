@@ -258,8 +258,17 @@ func (s *Syncer) ConfirmBlockValidity(blk *types.Block) error {
 		return errors.New(fmt.Sprintf("could not extract block %v public key %v ", blk.ID(), err))
 	}
 
-	if active, atx, err := s.IsIdentityActive(signing.NewPublicKey(pubKey).String(), blk.Layer()); err != nil || !active || atx != blk.ATXID {
+	active, atxid, err := s.IsIdentityActive(signing.NewPublicKey(pubKey).String(), blk.Layer())
+	if err != nil {
+		return errors.New(fmt.Sprintf("error while checking IsIdentityActive for %v %v ", blk.ID(), err))
+	}
+
+	if !active {
 		return errors.New(fmt.Sprintf("block %v identity activation check failed ", blk.ID()))
+	}
+
+	if atxid != blk.ATXID {
+		return errors.New(fmt.Sprintf("wrong associated atx got %v expected %v ", blk.ATXID, atxid))
 	}
 
 	//block eligibility
