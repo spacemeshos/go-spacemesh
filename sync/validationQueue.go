@@ -89,13 +89,13 @@ func (vq *validationQueue) checkDependencies(bHeader *types.BlockHeader, checkDa
 		//if unknown block
 
 		//	check queue
-		if !vq.InQueue(bHeader.ID()) {
+		if !vq.InQueue(block) {
 
 			//	check database
 			if _, err := checkDatabase(block); err != nil {
 
 				//add to queue
-				vq.Info("add %v to validation queue", block)
+				vq.Debug("add %v to validation queue", block)
 				vq.queue <- block
 
 				//init dependency set
@@ -103,6 +103,7 @@ func (vq *validationQueue) checkDependencies(bHeader *types.BlockHeader, checkDa
 					dependencys = make(map[types.BlockID]struct{})
 				}
 				id := block
+				vq.Debug("add block %v to %v dependencies", id, bHeader.ID())
 				dependencys[id] = struct{}{}
 			}
 		}

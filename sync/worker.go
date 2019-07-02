@@ -65,8 +65,6 @@ func NewPeersWorker(s *Syncer, peers []p2p.Peer, mu *sync.Once, reqFactory Reque
 				if v != nil {
 					s.Info("Peer: %v responded", peer)
 					output <- v
-				} else {
-					s.Error("peer %v responded with nil", peer)
 				}
 			}
 		}
@@ -107,7 +105,6 @@ func NewNeighborhoodWorker(s *Syncer, count int, reqFactory RequestFactory) work
 					output <- v
 					return
 				}
-				s.Error("peer %v responded with nil", peer)
 			}
 		}
 	}
@@ -137,7 +134,6 @@ func NewBlockWorker(s *Syncer, count int, reqFactory BlockRequestFactory, ids ch
 						s.Debug("Peer: %v response was  %v", v)
 						output <- v
 					}
-					s.Error("peer %v responded with nil", peer)
 				}
 			}
 		}

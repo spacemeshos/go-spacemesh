@@ -29,7 +29,6 @@ type MemPool interface {
 type BlockValidator interface {
 	BlockEligible(block *types.BlockHeader) (bool, error)
 	ValidateTx(tx *types.SerializableTransaction) (bool, error)
-	ValidateAtx(atx *types.ActivationTx) error
 }
 
 type EligibilityValidator interface {
@@ -40,18 +39,13 @@ type TxValidator interface {
 	ValidateTx(tx *types.SerializableTransaction) (bool, error)
 }
 
-type AtxValidator interface {
-	ValidateAtx(atx *types.ActivationTx) error
-}
-
 type blockValidator struct {
 	EligibilityValidator
 	TxValidator
-	AtxValidator
 }
 
-func NewBlockValidator(bev EligibilityValidator, txv TxValidator, atxv AtxValidator) BlockValidator {
-	return &blockValidator{bev, txv, atxv}
+func NewBlockValidator(bev EligibilityValidator, txv TxValidator) BlockValidator {
+	return &blockValidator{bev, txv}
 }
 
 type Configuration struct {
@@ -457,7 +451,7 @@ func (s *Syncer) syncAtxs(atxIds []types.AtxId) (atxs []*types.ActivationTx, err
 		for out := range output {
 			atxs := out.([]types.ActivationTx)
 			for _, atx := range atxs {
-				if err := s.ValidateAtx(&atx); err != nil {
+				if err := s.SyntacticallyValidateAtx(&atx); err != nil {
 					s.Warning("atx %v not valid %v", atx.ShortId(), err)
 					continue
 				}
