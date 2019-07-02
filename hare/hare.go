@@ -63,12 +63,10 @@ type Hare struct {
 	outputs    map[types.LayerID][]types.BlockID
 
 	factory consensusFactory
-
-	isSynced func() bool
 }
 
 // New returns a new Hare struct.
-func New(conf config.Config, p2p NetworkService, sign Signer, nid types.NodeId, obp orphanBlockProvider, rolacle Rolacle, layersPerEpoch uint16, idProvider IdentityProvider, stateQ StateQuerier, beginLayer chan types.LayerID, isSyncedFunc func() bool, logger log.Log) *Hare {
+func New(conf config.Config, p2p NetworkService, sign Signer, nid types.NodeId, syncState syncStateFunc, obp orphanBlockProvider, rolacle Rolacle, layersPerEpoch uint16, idProvider IdentityProvider, stateQ StateQuerier, beginLayer chan types.LayerID, logger log.Log) *Hare {
 	h := new(Hare)
 
 	h.Closer = NewCloser()
@@ -80,7 +78,7 @@ func New(conf config.Config, p2p NetworkService, sign Signer, nid types.NodeId, 
 	h.network = p2p
 	h.beginLayer = beginLayer
 
-	h.broker = NewBroker(p2p, NewEligibilityValidator(rolacle, layersPerEpoch, idProvider, conf.N, conf.ExpectedLeaders, logger), stateQ, layersPerEpoch, h.Closer, logger)
+	h.broker = NewBroker(p2p, NewEligibilityValidator(rolacle, layersPerEpoch, idProvider, conf.N, conf.ExpectedLeaders, logger), stateQ, syncState, layersPerEpoch, h.Closer, logger)
 
 	h.sign = sign
 
@@ -99,8 +97,6 @@ func New(conf config.Config, p2p NetworkService, sign Signer, nid types.NodeId, 
 	h.factory = func(conf config.Config, instanceId InstanceId, s *Set, oracle Rolacle, signing Signer, p2p NetworkService, terminationReport chan TerminationOutput) Consensus {
 		return NewConsensusProcess(conf, instanceId, s, oracle, stateQ, layersPerEpoch, signing, nid, p2p, terminationReport, logger)
 	}
-
-	h.isSynced = isSyncedFunc
 
 	return h
 }
@@ -176,13 +172,19 @@ func (h *Hare) onTick(id types.LayerID) {
 		set.Add(Value{b})
 	}
 
-	instid := InstanceId(id)
-
-	cp := h.factory(h.config, instid, set, h.rolacle, h.sign, h.network, h.outputChan)
-	cp.SetInbox(h.broker.Register(cp.Id()))
+	instId := InstanceId(id)
+	c, err := h.broker.Register(instId)
+	if err != nil {
+		h.Warning("Could not register CP for layer %v on broker err=%v", id, err)
+		return
+	}
+	cp := h.factory(h.config, instId, set, h.rolacle, h.sign, h.network, h.outputChan)
+	cp.SetInbox(c)
 	e := cp.Start()
 	if e != nil {
 		h.Error("Could not start consensus process %v", e.Error())
+		h.broker.Unregister(cp.Id())
+		return
 	}
 	metrics.TotalConsensusProcesses.Add(1)
 }

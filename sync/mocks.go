@@ -59,7 +59,7 @@ func (MockState) ValidateSignature(signed types.Signed) (address.Address, error)
 	return address.Address{}, nil
 }
 
-func (MockState) ApplyRewards(layer types.LayerID, miners []string, underQuota map[string]int, bonusReward, diminishedReward *big.Int) {
+func (MockState) ApplyRewards(layer types.LayerID, miners []address.Address, underQuota map[address.Address]int, bonusReward, diminishedReward *big.Int) {
 }
 
 func (MockState) ValidateTransactionSignature(tx types.SerializableSignedTransaction) (address.Address, error) {
@@ -73,6 +73,12 @@ func (s *StateMock) ApplyRewards(layer types.LayerID, miners []string, underQuot
 type AtxDbMock struct {
 	db     map[types.AtxId]*types.ActivationTx
 	nipsts map[types.AtxId]*types.NIPST
+}
+
+var _ mesh.AtxDB = &AtxDbMock{}
+
+func (t *AtxDbMock) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
+	return nil
 }
 
 func NewAtxDbMock() *AtxDbMock {
@@ -92,6 +98,11 @@ func (t *AtxDbMock) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
 func (t *AtxDbMock) ProcessAtx(atx *types.ActivationTx) {
 	t.db[atx.Id()] = atx
 	t.nipsts[atx.Id()] = atx.Nipst
+}
+
+//todo: if this is used somewhere then impl some real mock
+func (t *AtxDbMock) GetEpochAtxIds(id types.EpochId) ([]types.AtxId, error) {
+	return []types.AtxId{}, nil
 }
 
 func (t *AtxDbMock) GetNipst(id types.AtxId) (*types.NIPST, error) {

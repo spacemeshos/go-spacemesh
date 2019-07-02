@@ -6,6 +6,8 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/opt"
 )
 
+var ErrNotFound = leveldb.ErrNotFound
+
 type DB interface {
 	Put(key, value []byte) error
 	Get(key []byte) (value []byte, err error)
