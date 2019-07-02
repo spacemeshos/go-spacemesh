@@ -15,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/rand"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
@@ -331,14 +332,24 @@ func TestSyncProtocol_SyncTwoNodes(t *testing.T) {
 	syncObj2.Peers = pm2 //override peers with mock
 	defer syncObj2.Close()
 
+	signer := signing.NewEdSigner()
+
 	block3 := types.NewExistingBlock(types.BlockID(333), 1, nil)
+	block3.Signature = signer.Sign(block3.Bytes())
 	block4 := types.NewExistingBlock(types.BlockID(444), 1, nil)
+	block4.Signature = signer.Sign(block4.Bytes())
 	block5 := types.NewExistingBlock(types.BlockID(555), 2, nil)
+	block5.Signature = signer.Sign(block5.Bytes())
 	block6 := types.NewExistingBlock(types.BlockID(666), 2, nil)
+	block6.Signature = signer.Sign(block6.Bytes())
 	block7 := types.NewExistingBlock(types.BlockID(777), 3, nil)
+	block7.Signature = signer.Sign(block7.Bytes())
 	block8 := types.NewExistingBlock(types.BlockID(888), 3, nil)
+	block8.Signature = signer.Sign(block8.Bytes())
 	block9 := types.NewExistingBlock(types.BlockID(999), 4, nil)
+	block9.Signature = signer.Sign(block9.Bytes())
 	block10 := types.NewExistingBlock(types.BlockID(101), 5, nil)
+	block10.Signature = signer.Sign(block10.Bytes())
 
 	syncObj1.AddBlockWithTxs(block3, []*types.SerializableTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
 	syncObj1.AddBlockWithTxs(block4, []*types.SerializableTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
@@ -398,15 +409,34 @@ func syncTest(dpType string, t *testing.T) {
 	syncObj3.Peers = getPeersMock([]p2p.Peer{n1.PublicKey(), n2.PublicKey(), n4.PublicKey()})
 	syncObj4.Peers = getPeersMock([]p2p.Peer{n1.PublicKey(), n2.PublicKey()})
 
+	signer := signing.NewEdSigner()
+
 	block2 := types.NewExistingBlock(types.BlockID(222), 0, nil)
+	block2.Signature = signer.Sign(block2.Bytes())
+
 	block3 := types.NewExistingBlock(types.BlockID(333), 1, nil)
+	block3.Signature = signer.Sign(block3.Bytes())
+
 	block4 := types.NewExistingBlock(types.BlockID(444), 1, nil)
+	block4.Signature = signer.Sign(block4.Bytes())
+
 	block5 := types.NewExistingBlock(types.BlockID(555), 2, nil)
+	block5.Signature = signer.Sign(block5.Bytes())
+
 	block6 := types.NewExistingBlock(types.BlockID(666), 2, nil)
+	block6.Signature = signer.Sign(block6.Bytes())
+
 	block7 := types.NewExistingBlock(types.BlockID(777), 3, nil)
+	block7.Signature = signer.Sign(block7.Bytes())
+
 	block8 := types.NewExistingBlock(types.BlockID(888), 3, nil)
+	block8.Signature = signer.Sign(block8.Bytes())
+
 	block9 := types.NewExistingBlock(types.BlockID(999), 4, nil)
+	block9.Signature = signer.Sign(block9.Bytes())
+
 	block10 := types.NewExistingBlock(types.BlockID(101), 4, nil)
+	block10.Signature = signer.Sign(block10.Bytes())
 
 	syncObj1.ValidateLayer(mesh.GenesisLayer())
 	syncObj2.ValidateLayer(mesh.GenesisLayer())
@@ -588,14 +618,28 @@ func Test_Multiple_SyncIntegrationSuite(t *testing.T) {
 
 func (sis *syncIntegrationMultipleNodes) TestSyncProtocol_MultipleNodes() {
 	t := sis.T()
+	signer := signing.NewEdSigner()
 
 	block2 := types.NewExistingBlock(types.BlockID(222), 0, nil)
+	block2.Signature = signer.Sign(block2.Bytes())
+
 	block3 := types.NewExistingBlock(types.BlockID(333), 1, nil)
+	block3.Signature = signer.Sign(block3.Bytes())
+
 	block4 := types.NewExistingBlock(types.BlockID(444), 2, nil)
+	block4.Signature = signer.Sign(block4.Bytes())
+
 	block5 := types.NewExistingBlock(types.BlockID(555), 3, nil)
+	block5.Signature = signer.Sign(block5.Bytes())
+
 	block6 := types.NewExistingBlock(types.BlockID(666), 3, nil)
+	block6.Signature = signer.Sign(block6.Bytes())
+
 	block7 := types.NewExistingBlock(types.BlockID(777), 4, nil)
+	block7.Signature = signer.Sign(block7.Bytes())
+
 	block8 := types.NewExistingBlock(types.BlockID(888), 4, nil)
+	block8.Signature = signer.Sign(block8.Bytes())
 
 	syncObj1 := sis.syncers[0]
 	defer syncObj1.Close()

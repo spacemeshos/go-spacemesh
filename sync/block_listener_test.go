@@ -8,6 +8,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -43,6 +44,7 @@ func ListenerFactory(serv service.Service, peers p2p.Peers, name string, layer t
 
 func TestBlockListener(t *testing.T) {
 	sim := service.NewSimulator()
+	signer := signing.NewEdSigner()
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
 	bl1 := ListenerFactory(n1, PeersMock{func() []p2p.Peer { return []p2p.Peer{n2.PublicKey()} }}, "listener1", 3)
@@ -61,11 +63,13 @@ func TestBlockListener(t *testing.T) {
 	bl2.ProcessAtx(atx1)
 
 	block1 := types.NewExistingBlock(types.BlockID(123), 0, nil)
+	block1.Signature = signer.Sign(block1.Bytes())
 	block1.ATXID = atx1.Id()
-	block1.MinerID.Key = "sdfhfsg"
 	block2 := types.NewExistingBlock(types.BlockID(321), 1, nil)
+	block2.Signature = signer.Sign(block2.Bytes())
 	block2.AtxIds = append(block2.AtxIds, atx2.Id())
 	block3 := types.NewExistingBlock(types.BlockID(222), 2, nil)
+	block3.Signature = signer.Sign(block3.Bytes())
 	block3.AtxIds = append(block3.AtxIds, atx3.Id())
 
 	block1.AddView(block2.ID())
@@ -95,6 +99,8 @@ func TestBlockListener2(t *testing.T) {
 
 	t.Log("TestBlockListener2 start")
 	sim := service.NewSimulator()
+	signer := signing.NewEdSigner()
+
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
 
@@ -115,33 +121,43 @@ func TestBlockListener2(t *testing.T) {
 
 	block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
 	block1.ATXID = atx1.Id()
+	block1.Signature = signer.Sign(block1.Bytes())
 
 	block2 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
 	block2.ATXID = atx1.Id()
+	block2.Signature = signer.Sign(block2.Bytes())
 
 	block3 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
 	block3.ATXID = atx1.Id()
+	block3.Signature = signer.Sign(block3.Bytes())
 
 	block4 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
 	block4.ATXID = atx1.Id()
+	block4.Signature = signer.Sign(block4.Bytes())
 
 	block5 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
 	block5.ATXID = atx1.Id()
+	block5.Signature = signer.Sign(block5.Bytes())
 
 	block6 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
 	block6.ATXID = atx1.Id()
+	block6.Signature = signer.Sign(block6.Bytes())
 
 	block7 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
 	block7.ATXID = atx1.Id()
+	block7.Signature = signer.Sign(block7.Bytes())
 
 	block8 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
 	block8.ATXID = atx1.Id()
+	block8.Signature = signer.Sign(block8.Bytes())
 
 	block9 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
 	block9.ATXID = atx1.Id()
+	block9.Signature = signer.Sign(block9.Bytes())
 
 	block10 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
 	block10.ATXID = atx1.Id()
+	block10.Signature = signer.Sign(block10.Bytes())
 
 	block2.AddView(block1.ID())
 	block3.AddView(block2.ID())
@@ -196,6 +212,8 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 	bl2.AddBlockWithTxs(blk, []*types.SerializableTransaction{tx}, []*types.ActivationTx{atx})
 
 	mblk := types.Block{MiniBlock: types.MiniBlock{BlockHeader: blk.BlockHeader, TxIds: []types.TransactionId{types.GetTransactionId(tx)}, AtxIds: []types.AtxId{atx.Id()}}}
+	signer := signing.NewEdSigner()
+	mblk.Signature = signer.Sign(mblk.Bytes())
 
 	data, err := types.InterfaceToBytes(&mblk)
 	require.NoError(t, err)
@@ -213,7 +231,7 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 			return
 		default:
 			if b, err := bl1.GetBlock(blk.Id); err == nil {
-				assert.True(t, blk.Compare(b))
+				assert.True(t, mblk.Compare(b))
 				t.Log("done!")
 				return
 			}
