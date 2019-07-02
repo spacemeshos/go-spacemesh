@@ -108,13 +108,13 @@ func (bl *BlockListener) HandleNewBlock(blk *types.Block) bool {
 	//data availability
 	txs, atxs, err := bl.DataAvailabilty(blk)
 	if err != nil {
-		bl.Error(fmt.Sprintf("data availabilty failed for block %v", blk.ID()))
+		bl.Error("data availabilty failed for block %v", blk.ID())
 		return false
 	}
 
 	//validate blocks view
 	if valid := bl.ValidateView(blk); valid == false {
-		bl.Error(fmt.Sprintf("could not validate for block %v view ", blk.ID()))
+		bl.Error("could not validate for block %v view ", blk.ID())
 		return false
 	}
 

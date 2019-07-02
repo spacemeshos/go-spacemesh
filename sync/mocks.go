@@ -114,8 +114,8 @@ func (t *AtxDbMock) ProcessAtx(atx *types.ActivationTx) {
 	t.nipsts[atx.Id()] = atx.Nipst
 }
 
-func (*AtxDbMock) IsIdentityActive(edId string, layer types.LayerID) (bool, error) {
-	return true, nil
+func (*AtxDbMock) IsIdentityActive(edId string, layer types.LayerID) (bool, types.AtxId, error) {
+	return true, *types.EmptyAtxId, nil
 }
 
 //todo: if this is used somewhere then impl some real mock

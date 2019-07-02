@@ -258,7 +258,7 @@ func (s *Syncer) ConfirmBlockValidity(blk *types.Block) error {
 		return errors.New(fmt.Sprintf("could not extract block %v public key %v ", blk.ID(), err))
 	}
 
-	if active, err := s.IsIdentityActive(signing.NewPublicKey(pubKey).String(), blk.Layer()); err != nil || !active {
+	if active, atx, err := s.IsIdentityActive(signing.NewPublicKey(pubKey).String(), blk.Layer()); err != nil || !active || atx != blk.ATXID {
 		return errors.New(fmt.Sprintf("block %v identity activation check failed ", blk.ID()))
 	}
 

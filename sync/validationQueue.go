@@ -97,7 +97,7 @@ func (vq *validationQueue) checkDependencies(bHeader *types.BlockHeader, checkDa
 				//add to queue
 				vq.Debug("add %v to validation queue", block)
 				vq.queue <- block
-
+				vq.reverseDepMap[block] = append(vq.reverseDepMap[block], bHeader.ID())
 				//init dependency set
 				if dependencys == nil {
 					dependencys = make(map[types.BlockID]struct{})
