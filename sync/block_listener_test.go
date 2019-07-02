@@ -67,7 +67,7 @@ func TestBlockListener(t *testing.T) {
 
 	block1 := types.NewExistingBlock(types.BlockID(123), 0, nil)
 	block1.Signature = signer.Sign(block1.Bytes())
-	block1.ATXID = atx1.Id()
+	block1.ATXID = *types.EmptyAtxId
 	block2 := types.NewExistingBlock(types.BlockID(321), 1, nil)
 	block2.Signature = signer.Sign(block2.Bytes())
 	block2.AtxIds = append(block2.AtxIds, atx2.Id())
@@ -196,9 +196,14 @@ func TestBlockListener2(t *testing.T) {
 	bl1.AddBlock(block9)
 	bl1.AddBlock(block10)
 
-	bl2.GetFullBlocks([]types.BlockID{block2.Id})
+	bl2.GetFullBlocks([]types.BlockID{block10.Id})
 
-	b, err := bl2.GetBlock(block10.Id)
+	b, err := bl2.GetBlock(block2.Id)
+	if err != nil {
+		t.Error(err)
+	}
+
+	b, err = bl2.GetBlock(block10.Id)
 	if err != nil {
 		t.Error(err)
 	}

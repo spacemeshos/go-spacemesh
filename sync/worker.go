@@ -90,8 +90,8 @@ func NewNeighborhoodWorker(s *Syncer, count int, reqFactory RequestFactory) work
 	acount := int32(count)
 	mu := &sync.Once{}
 	workFunc := func() {
-		s.Info("asking to sync with %d peers", len(s.GetPeers()))
-		for _, p := range s.GetPeers() {
+		peers := s.GetPeers()
+		for _, p := range peers {
 			peer := p
 			s.Info("send request Peer: %v", peer)
 			ch, _ := reqFactory(s.MessageServer, peer)
@@ -120,10 +120,9 @@ func NewBlockWorker(s *Syncer, count int, reqFactory BlockRequestFactory, ids ch
 	mu := &sync.Once{}
 	workFunc := func() {
 		for id := range ids {
-			s.Info("worker work on %v", id)
 			for _, p := range s.GetPeers() {
 				peer := p
-				s.Info("send request Peer: %v", peer)
+				s.Info("send block request to Peer: %v", peer)
 				ch, _ := reqFactory(s.MessageServer, peer, id)
 				timeout := time.After(s.RequestTimeout)
 				select {

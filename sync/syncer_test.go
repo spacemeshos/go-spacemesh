@@ -339,6 +339,7 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_FetchBlocks_", memoryDB, newMockPoetDb)
 	atx1 := atx("trteyjuk")
+
 	atx2 := atx("he6gdsdf")
 	atx3 := atx("yturjasd")
 	syncObj1 := syncs[0]
@@ -783,5 +784,5 @@ func RandStringRunes(n int) string {
 
 func atx(key string) *types.ActivationTx {
 	coinbase := address.HexToAddress("aaaa")
-	return types.NewActivationTx(types.NodeId{Key: key, VRFPublicKey: []byte(RandStringRunes(5))}, coinbase, 1, types.AtxId{}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&common.Hash{}), true)
+	return types.NewActivationTx(types.NodeId{Key: key, VRFPublicKey: []byte(RandStringRunes(5))}, coinbase, 0, *types.EmptyAtxId, 5, 1, *types.EmptyAtxId, 0, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&common.Hash{}), true)
 }

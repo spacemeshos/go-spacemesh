@@ -165,6 +165,8 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool MemPool, atxpool Mem
 	s.RegisterBytesMsgHandler(LAYER_IDS, newLayerBlockIdsRequestHandler(layers, logger))
 	s.RegisterBytesMsgHandler(TX, newTxsRequestHandler(s, logger))
 	s.RegisterBytesMsgHandler(ATX, newATxsRequestHandler(s, logger))
+	s.RegisterBytesMsgHandler(POET, newPoetRequestHandler(s, logger))
+
 	return s
 }
 
@@ -227,34 +229,33 @@ func (s *Syncer) GetFullBlocks(blockIds []types.BlockID) []*types.Block {
 	for out := range output {
 		block := out.(*types.Block)
 		if err := s.ConfirmBlockValidity(block); err != nil {
-			s.Error(fmt.Sprintf("failed derefrencing block data %v %v", block.ID(), err))
+			s.Error("failed derefrencing block data %v %v", block.ID(), err)
 			continue
 		}
 
 		//data availability
 		txs, atxs, err := s.DataAvailabilty(block)
 		if err != nil {
-			s.Error(fmt.Sprintf("data availabilty failed for block %v", block.ID()))
+			s.Error("data availabilty failed for block %v", block.ID())
 			continue
 		}
 
 		//validate blocks view
 		if valid := s.ValidateView(block); valid == false {
-			s.Error(fmt.Sprintf("block %v not syntacticly valid", block.ID()))
+			s.Error("block %v not syntacticly valid", block.ID())
 			continue
 		}
 
 		if err := s.AddBlockWithTxs(block, txs, atxs); err != nil {
-			s.Error(fmt.Sprintf("failed to add block %v to database %v", block.ID(), err))
+			s.Error("failed to add block %v to database %v", block.ID(), err)
 			continue
 		}
 
-		s.Info(fmt.Sprintf("added block with txs to database %v", block.ID()))
-
-		s.Info("added block to layer %v", block.Layer())
+		s.Info("added block %v to layer %v", block.ID(), block.Layer())
 		blocksArr = append(blocksArr, block)
 	}
 
+	s.Info("done getting full blocks")
 	return blocksArr
 }
 
@@ -289,17 +290,11 @@ func (s *Syncer) ConfirmBlockValidity(blk *types.Block) error {
 }
 
 func (s *Syncer) ValidateView(blk *types.Block) bool {
-	vq := NewValidationQueue(s.Log.WithName("validation queue"))
-	if vq.checkDependencies(&blk.BlockHeader, s.GetBlock) == false {
-		//traverse mesh and check local block syntactic validity return true
-		s.Info("traversing %v view for validation", blk.ID())
-
-		if bks := vq.traverse(s); len(bks) > 0 {
-			s.Warning(fmt.Sprintf("could not validate %v blocks in block %v view ", len(bks) > 0, blk.ID()))
-			return false
-		}
+	vq := NewValidationQueue(s.Log.WithName("validQ"))
+	if err := vq.traverse(s, &blk.BlockHeader); err != nil {
+		s.Warning("could not validate %v view %v", blk.ID(), err)
+		return false
 	}
-
 	return true
 }
 
@@ -326,17 +321,17 @@ func (s *Syncer) DataAvailabilty(blk *types.Block) ([]*types.SerializableTransac
 	wg.Wait()
 
 	if txerr != nil {
-		s.Warning(fmt.Sprintf("failed fetching block %v transactions %v", blk.ID(), txerr))
+		s.Warning("failed fetching block %v transactions %v", blk.ID(), txerr)
 		return txs, atxs, txerr
 	}
 
 	if atxerr != nil {
-		s.Warning(fmt.Sprintf("failed fetching block %v activation transactions %v", blk.ID(), atxerr))
+		s.Warning("failed fetching block %v activation transactions %v", blk.ID(), atxerr)
 		return txs, atxs, atxerr
 	}
 
-	s.Info(fmt.Sprintf("fetched all txs for block %v", blk.ID()))
-	s.Info(fmt.Sprintf("fetched all atxs for block %v", blk.ID()))
+	s.Info("fetched all txs for block %v", blk.ID())
+	s.Info("fetched all atxs for block %v", blk.ID())
 
 	return txs, atxs, nil
 }
