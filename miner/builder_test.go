@@ -78,7 +78,7 @@ func (mockAtxValidator) SyntacticallyValidateAtx(atx *types.ActivationTx) error 
 
 type mockSyncer struct{}
 
-func (mockSyncer) EnsurePoetProofAvailableAndValid(poetProofRef []byte) error { return nil }
+func (mockSyncer) SyncPoetProof(poetProofRef []byte) error { return nil }
 
 func TestBlockBuilder_StartStop(t *testing.T) {
 

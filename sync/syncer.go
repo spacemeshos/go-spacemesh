@@ -39,9 +39,9 @@ type Configuration struct {
 }
 
 type PoetDb interface {
-	PoetProofAvailable(proofRef []byte) bool
-	ValidateAndStorePoetProof(proofMessage types.PoetProofMessage) error
-	GetPoetProofMessage(proofRef []byte) ([]byte, error)
+	HasProof(proofRef []byte) bool
+	ValidateAndStore(proofMessage types.PoetProofMessage) error
+	GetProofMessage(proofRef []byte) ([]byte, error)
 }
 
 type Syncer struct {
@@ -361,7 +361,7 @@ func (s *Syncer) ATXs(mb *types.Block) (atxs []*types.ActivationTx, associated *
 		for out := range output {
 			ntxs := out.([]types.ActivationTx)
 			for _, atx := range ntxs {
-				err := s.EnsurePoetProofAvailableAndValid(atx.GetPoetProofRef())
+				err := s.SyncPoetProof(atx.GetPoetProofRef())
 				if err != nil {
 					if types.IsProcessingError(err) {
 						s.Error("error while validating PoET proof: %v", err)
@@ -394,14 +394,14 @@ func (s *Syncer) ATXs(mb *types.Block) (atxs []*types.ActivationTx, associated *
 	return atxs, associated, nil
 }
 
-func (s *Syncer) EnsurePoetProofAvailableAndValid(poetProofRef []byte) error {
-	if !s.poetDb.PoetProofAvailable(poetProofRef) {
+func (s *Syncer) SyncPoetProof(poetProofRef []byte) error {
+	if !s.poetDb.HasProof(poetProofRef) {
 		out := <-s.fetchWithFactory(PoetReqFactory(poetProofRef), 1)
 		if out == nil {
 			return fmt.Errorf("could not find PoET proof with any neighbor")
 		}
 		proofMessage := out.(types.PoetProofMessage)
-		err := s.poetDb.ValidateAndStorePoetProof(proofMessage)
+		err := s.poetDb.ValidateAndStore(proofMessage)
 		if err != nil {
 			return err
 		}

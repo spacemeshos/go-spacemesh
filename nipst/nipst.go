@@ -105,8 +105,8 @@ type NIPSTBuilder struct {
 }
 
 type PoetDb interface {
-	SubscribeToPoetProofRef(poetId [types.PoetIdLength]byte, roundId uint64) chan []byte
-	GetMembershipByPoetProofRef(poetRoot []byte) (map[common.Hash]bool, error)
+	SubscribeToProofRef(poetId [types.PoetIdLength]byte, roundId uint64) chan []byte
+	GetMembershipMap(poetRoot []byte) (map[common.Hash]bool, error)
 }
 
 func NewNIPSTBuilder(
@@ -205,10 +205,10 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *common.Hash) (*types.NIPST, error)
 
 	// Phase 1: receive proofs from PoET service
 	if nb.state.PoetProofRef == nil {
-		proofRefChan := nb.poetDb.SubscribeToPoetProofRef(nb.state.PoetId, nb.state.PoetRound.Id)
+		proofRefChan := nb.poetDb.SubscribeToProofRef(nb.state.PoetId, nb.state.PoetRound.Id)
 		poetProofRef := <-proofRefChan // TODO(noamnelke): handle timeout
 
-		membership, err := nb.poetDb.GetMembershipByPoetProofRef(poetProofRef)
+		membership, err := nb.poetDb.GetMembershipMap(poetProofRef)
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch membership for PoET proof") // inconsistent state
 		}

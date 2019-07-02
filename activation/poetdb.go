@@ -28,23 +28,23 @@ func NewPoetDb(store database.Database, log log.Log) *PoetDb {
 	return &PoetDb{store: store, poetProofRefSubscriptions: make(map[poetProofKey][]chan []byte), log: log}
 }
 
-func (db *PoetDb) PoetProofAvailable(proofRef []byte) bool {
-	_, err := db.store.Get(proofRef)
+func (db *PoetDb) HasProof(proofRef []byte) bool {
+	_, err := db.GetProofMessage(proofRef)
 	return err == nil
 }
 
-func (db *PoetDb) ValidateAndStorePoetProof(proofMessage types.PoetProofMessage) error {
-	if err := db.ValidatePoetProof(proofMessage.PoetProof, proofMessage.PoetId,
+func (db *PoetDb) ValidateAndStore(proofMessage types.PoetProofMessage) error {
+	if err := db.Validate(proofMessage.PoetProof, proofMessage.PoetId,
 		proofMessage.RoundId, proofMessage.Signature); err != nil {
 
 		return err
 	}
 
-	err := db.storePoetProof(proofMessage)
+	err := db.storeProof(proofMessage)
 	return err
 }
 
-func (db *PoetDb) ValidatePoetProof(proof types.PoetProof, poetId [types.PoetIdLength]byte, roundId uint64,
+func (db *PoetDb) Validate(proof types.PoetProof, poetId [types.PoetIdLength]byte, roundId uint64,
 	signature []byte) error {
 
 	root, err := calcRoot(proof.Members)
@@ -61,7 +61,7 @@ func (db *PoetDb) ValidatePoetProof(proof types.PoetProof, poetId [types.PoetIdL
 	return nil
 }
 
-func (db *PoetDb) storePoetProof(proofMessage types.PoetProofMessage) error {
+func (db *PoetDb) storeProof(proofMessage types.PoetProofMessage) error {
 	poetProofBytes, err := types.InterfaceToBytes(&proofMessage.PoetProof)
 	if err != nil {
 		return fmt.Errorf("failed to marshal poet proof for poetId %x round %d: %v",
@@ -90,19 +90,19 @@ func (db *PoetDb) storePoetProof(proofMessage types.PoetProofMessage) error {
 			proofMessage.PoetId, proofMessage.RoundId, err)
 	}
 	db.log.Debug("stored proof (id: %x) for round %d PoET id %x", ref[:5], proofMessage.RoundId, proofMessage.PoetId)
-	db.publishPoetProofRef(key, ref[:])
+	db.publishProofRef(key, ref[:])
 	return nil
 }
 
-func (db *PoetDb) SubscribeToPoetProofRef(poetId [types.PoetIdLength]byte, roundId uint64) chan []byte {
+func (db *PoetDb) SubscribeToProofRef(poetId [types.PoetIdLength]byte, roundId uint64) chan []byte {
 	key := makeKey(poetId, roundId)
 	ch := make(chan []byte)
 
 	db.addSubscription(key, ch)
 
-	poetProofRef, err := db.getPoetProofRef(key)
+	poetProofRef, err := db.getProofRef(key)
 	if err == nil {
-		db.publishPoetProofRef(key, poetProofRef)
+		db.publishProofRef(key, poetProofRef)
 	}
 
 	return ch
@@ -115,7 +115,7 @@ func (db *PoetDb) addSubscription(key poetProofKey, ch chan []byte) {
 	db.poetProofRefSubscriptions[key] = append(db.poetProofRefSubscriptions[key], ch)
 }
 
-func (db *PoetDb) getPoetProofRef(key poetProofKey) ([]byte, error) {
+func (db *PoetDb) getProofRef(key poetProofKey) ([]byte, error) {
 	proofRef, err := db.store.Get(key[:])
 	if err != nil {
 		return nil, fmt.Errorf("could not fetch poet proof for key %x: %v", key, err)
@@ -123,7 +123,7 @@ func (db *PoetDb) getPoetProofRef(key poetProofKey) ([]byte, error) {
 	return proofRef, nil
 }
 
-func (db *PoetDb) publishPoetProofRef(key poetProofKey, poetProofRef []byte) {
+func (db *PoetDb) publishProofRef(key poetProofKey, poetProofRef []byte) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 
@@ -136,12 +136,12 @@ func (db *PoetDb) publishPoetProofRef(key poetProofKey, poetProofRef []byte) {
 	delete(db.poetProofRefSubscriptions, key)
 }
 
-func (db *PoetDb) GetPoetProofMessage(proofRef []byte) ([]byte, error) {
+func (db *PoetDb) GetProofMessage(proofRef []byte) ([]byte, error) {
 	return db.store.Get(proofRef)
 }
 
-func (db *PoetDb) GetMembershipByPoetProofRef(proofRef []byte) (map[common.Hash]bool, error) {
-	proofMessageBytes, err := db.store.Get(proofRef)
+func (db *PoetDb) GetMembershipMap(proofRef []byte) (map[common.Hash]bool, error) {
+	proofMessageBytes, err := db.GetProofMessage(proofRef)
 	if err != nil {
 		return nil, fmt.Errorf("could not fetch poet proof for ref %x: %v", proofRef, err)
 	}

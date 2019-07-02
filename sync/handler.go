@@ -152,7 +152,7 @@ func newATxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 
 func newPoetRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 	return func(proofRef []byte) []byte {
-		proofMessage, err := s.poetDb.GetPoetProofMessage(proofRef)
+		proofMessage, err := s.poetDb.GetProofMessage(proofRef)
 		if err != nil {
 			logger.Warning("unfamiliar PoET proof was requested (id: %x): %v", proofRef[:5], err)
 			return nil
