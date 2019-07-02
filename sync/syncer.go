@@ -209,7 +209,7 @@ func (s *Syncer) getLayerFromNeighbors(currenSyncLayer types.LayerID) (*types.La
 		return nil, err
 	}
 
-	blocksArr := s.FetchFullBlocks(blockIds)
+	blocksArr := s.GetFullBlocks(blockIds)
 	if len(blocksArr) == 0 {
 		s.Error("could not any blocks  for layer  %v", currenSyncLayer)
 		return nil, err
@@ -218,7 +218,7 @@ func (s *Syncer) getLayerFromNeighbors(currenSyncLayer types.LayerID) (*types.La
 	return types.NewExistingLayer(types.LayerID(currenSyncLayer), blocksArr), nil
 }
 
-func (s *Syncer) FetchFullBlocks(blockIds []types.BlockID) []*types.Block {
+func (s *Syncer) GetFullBlocks(blockIds []types.BlockID) []*types.Block {
 	output := s.fetchWithFactory(NewBlockWorker(s, s.Concurrency, BlockReqFactory(), blockSliceToChan(blockIds)))
 	blocksArr := make([]*types.Block, 0, len(blockIds))
 	for out := range output {
