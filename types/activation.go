@@ -72,7 +72,6 @@ func (challenge *NIPSTChallenge) String() string {
 
 type ActivationTx struct {
 	ActivationTxHeader
-	Valid bool
 	id    *AtxId
 	Nipst *NIPST
 	//todo: add sig
@@ -87,8 +86,7 @@ func NewActivationTx(NodeId NodeId,
 	PositioningATX AtxId,
 	ActiveSetSize uint32,
 	View []BlockID,
-	nipst *NIPST,
-	isValid bool) *ActivationTx {
+	nipst *NIPST) *ActivationTx {
 	return &ActivationTx{
 		ActivationTxHeader: ActivationTxHeader{
 			NIPSTChallenge: NIPSTChallenge{
@@ -103,14 +101,13 @@ func NewActivationTx(NodeId NodeId,
 			ActiveSetSize: ActiveSetSize,
 			View:          View,
 		},
-		Valid: isValid,
 		Nipst: nipst,
 	}
 
 }
 
-func NewActivationTxWithChallenge(poetChallenge NIPSTChallenge, coinbase address.Address, ActiveSetSize uint32, View []BlockID, nipst *NIPST,
-	isValid bool) *ActivationTx {
+func NewActivationTxWithChallenge(poetChallenge NIPSTChallenge, coinbase address.Address, ActiveSetSize uint32,
+	View []BlockID, nipst *NIPST) *ActivationTx {
 
 	return &ActivationTx{
 		ActivationTxHeader: ActivationTxHeader{
@@ -119,7 +116,6 @@ func NewActivationTxWithChallenge(poetChallenge NIPSTChallenge, coinbase address
 			ActiveSetSize:  ActiveSetSize,
 			View:           View,
 		},
-		Valid: isValid,
 		Nipst: nipst,
 	}
 

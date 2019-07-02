@@ -37,7 +37,7 @@ func (v BlockEligibilityValidator) BlockEligible(block *types.BlockHeader) (bool
 	// need to get active set size from previous epoch
 	activeSetSize := uint32(v.committeeSize)
 	if !epochNumber.IsGenesis() {
-		atx, err := v.getValidATX(epochNumber, block)
+		atx, err := v.getRelevantATX(epochNumber, block)
 		if err != nil {
 			return false, err
 		}
@@ -74,15 +74,11 @@ func (v BlockEligibilityValidator) BlockEligible(block *types.BlockHeader) (bool
 	return block.LayerIndex == eligibleLayer, nil
 }
 
-func (v BlockEligibilityValidator) getValidATX(blockEpoch types.EpochId, block *types.BlockHeader) (*types.ActivationTx, error) {
+func (v BlockEligibilityValidator) getRelevantATX(blockEpoch types.EpochId, block *types.BlockHeader) (*types.ActivationTx, error) {
 	atx, err := v.activationDb.GetAtx(block.ATXID)
 	if err != nil {
 		v.log.Error("getting ATX failed: %v %v ep(%v)", err, block.ATXID.ShortString(), blockEpoch)
 		return nil, fmt.Errorf("getting ATX failed: %v %v ep(%v)", err, block.ATXID.ShortString(), blockEpoch)
-	}
-	if !atx.Valid {
-		v.log.Error("ATX %v is invalid", atx.ShortId())
-		return nil, fmt.Errorf("ATX %v is invalid", atx.ShortId())
 	}
 	if atxTargetEpoch := atx.PubLayerIdx.GetEpoch(v.layersPerEpoch) + 1; atxTargetEpoch != blockEpoch {
 		v.log.Error("ATX target epoch (%d) doesn't match block publication epoch (%d)",
