@@ -35,6 +35,10 @@ type AtxValidator interface {
 	SyntacticallyValidateAtx(atx *types.ActivationTx) error
 }
 
+type Syncer interface {
+	FetchPoetProof(poetProofRef []byte) error
+}
+
 type BlockBuilder struct {
 	log.Log
 	Signer
@@ -53,6 +57,7 @@ type BlockBuilder struct {
 	orphans          OrphanBlockProvider
 	blockOracle      oracle.BlockOracle
 	atxValidator     AtxValidator
+	syncer           Syncer
 	started          bool
 }
 
@@ -65,6 +70,7 @@ func NewBlockBuilder(minerID types.NodeId, sgn Signer, net p2p.Service,
 	hare HareResultProvider,
 	blockOracle oracle.BlockOracle,
 	atxValidator AtxValidator,
+	syncer Syncer,
 	lg log.Log) BlockBuilder {
 
 	seed := binary.BigEndian.Uint64(md5.New().Sum([]byte(minerID.Key)))
@@ -87,6 +93,7 @@ func NewBlockBuilder(minerID types.NodeId, sgn Signer, net p2p.Service,
 		orphans:          orph,
 		blockOracle:      blockOracle,
 		atxValidator:     atxValidator,
+		syncer:           syncer,
 		started:          false,
 	}
 
@@ -238,32 +245,44 @@ func (t *BlockBuilder) listenForAtx() {
 		case <-t.stopChan:
 			return
 		case data := <-t.atxGossipChannel:
-			if data != nil {
-				atx, err := types.BytesAsAtx(data.Bytes())
-				if err != nil {
-					t.Error("cannot parse incoming ATX")
-					break
-				}
-				t.Info("got new ATX %v", atx.ShortId())
-
-				//todo fetch from neighbour
-				if atx.Nipst == nil {
-					t.Panic("nil nipst in gossip")
-					break
-				}
-				err = t.atxValidator.SyntacticallyValidateAtx(atx)
-				if err != nil {
-					t.Warning("received syntactically invalid ATX %v: %v", atx.ShortId(), err)
-					// TODO: blacklist peer
-					break
-				}
-
-				t.AtxPool.Put(atx.Id(), atx)
-				data.ReportValidation(activation.AtxProtocol)
-				t.Info("stored and propagated new syntactically valid ATX: %v", atx.ShortId())
-			}
+			go t.handleGossipAtx(data)
 		}
 	}
+}
+
+func (t *BlockBuilder) handleGossipAtx(data service.GossipMessage) {
+	if data == nil {
+		return
+	}
+	atx, err := types.BytesAsAtx(data.Bytes())
+	if err != nil {
+		t.Error("cannot parse incoming ATX")
+		return
+	}
+	t.Info("got new ATX %v", atx.ShortId())
+
+	//todo fetch from neighbour
+	if atx.Nipst == nil {
+		t.Panic("nil nipst in gossip")
+		return
+	}
+
+	if err := t.syncer.FetchPoetProof(atx.GetPoetProofRef()); err != nil {
+		t.Warning("received ATX (%v) with syntactically invalid or missing PoET proof (%x): %v",
+			atx.ShortId(), atx.GetPoetProofRef()[:5], err)
+		return
+	}
+
+	err = t.atxValidator.SyntacticallyValidateAtx(atx)
+	if err != nil {
+		t.Warning("received syntactically invalid ATX %v: %v", atx.ShortId(), err)
+		// TODO: blacklist peer
+		return
+	}
+
+	t.AtxPool.Put(atx.Id(), atx)
+	data.ReportValidation(activation.AtxProtocol)
+	t.Info("stored and propagated new syntactically valid ATX: %v", atx.ShortId())
 }
 
 func (t *BlockBuilder) acceptBlockData() {

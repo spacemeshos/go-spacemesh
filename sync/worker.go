@@ -90,6 +90,7 @@ func NewNeighborhoodWorker(s *Syncer, count int, reqFactory RequestFactory) work
 	acount := int32(count)
 	mu := &sync.Once{}
 	workFunc := func() {
+		s.Info("asking to sync with %d peers", len(s.GetPeers()))
 		for _, p := range s.GetPeers() {
 			peer := p
 			s.Info("send request Peer: %v", peer)
