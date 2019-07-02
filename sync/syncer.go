@@ -278,7 +278,7 @@ func (s *Syncer) ConfirmBlockValidity(blk *types.Block) error {
 	}
 
 	if atxid != blk.ATXID {
-		return errors.New(fmt.Sprintf("wrong associated atx got %v expected %v ", blk.ATXID, atxid))
+		return errors.New(fmt.Sprintf("wrong associated atx got %v expected %v ", blk.ATXID.ShortId(), atxid.ShortId()))
 	}
 
 	//block eligibility
