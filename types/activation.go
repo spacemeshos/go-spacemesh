@@ -147,10 +147,32 @@ func (t ActivationTx) TargetEpoch(layersPerEpoch uint16) EpochId {
 	return t.PubLayerIdx.GetEpoch(layersPerEpoch) + 1
 }
 
+func (t *ActivationTx) GetPoetProofRef() []byte {
+	return t.Nipst.PostProof.Challenge
+}
+
 type PoetProof struct {
 	shared.MerkleProof
 	Members   [][]byte
 	LeafCount uint64
+}
+
+type PoetProofMessage struct {
+	PoetProof
+	PoetId    [PoetIdLength]byte
+	RoundId   uint64
+	Signature []byte
+}
+
+func (proofMessage PoetProofMessage) Ref() ([]byte, error) {
+	poetProofBytes, err := InterfaceToBytes(&proofMessage.PoetProof)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal poet proof for poetId %x round %d: %v",
+			proofMessage.PoetId, proofMessage.RoundId, err)
+	}
+
+	ref := sha256.Sum256(poetProofBytes)
+	return ref[:], nil
 }
 
 type PoetRound struct {
@@ -189,4 +211,15 @@ func bytesToShortString(b []byte) string {
 		return "empty"
 	}
 	return fmt.Sprintf("\"%s…\"", hex.EncodeToString(b)[:common.Min(l, 5)])
+}
+
+type ProcessingError string
+
+func (s ProcessingError) Error() string {
+	return string(s)
+}
+
+func IsProcessingError(err error) bool {
+	_, ok := err.(ProcessingError)
+	return ok
 }

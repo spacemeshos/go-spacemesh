@@ -340,14 +340,11 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	idStore := activation.NewIdentityStore(iddbstore)
 	poetDb := activation.NewPoetDb(poetDbStore, lg.WithName("poetDb"))
 	//todo: this is initialized twice, need to refactor
-
 	validator := nipst.NewValidator(commitmentConfig, poetDb)
 	mdb := mesh.NewPersistentMeshDB(dbStorepath, lg.WithName("meshDb"))
 	atxdb := activation.NewActivationDb(atxdbstore, nipstStore, idStore, mdb, app.Config.CONSENSUS.LayersPerEpoch, validator, lg.WithName("atxDb"))
-
 	beaconProvider := &oracle.EpochBeaconProvider{}
-	eligibilityValidator := oracle.NewBlockEligibilityValidator(int32(layerSize), uint16(layersPerEpoch), atxdb, beaconProvider, BLS381.Verify2, lg.WithName("blkElgValidator"))
-	blockValidator := sync.NewBlockValidator(eligibilityValidator, sync.TxValidatorMock{})
+	blockValidator := oracle.NewBlockEligibilityValidator(int32(layerSize), uint16(layersPerEpoch), atxdb, beaconProvider, BLS381.Verify2, lg.WithName("blkElgValidator"))
 
 	trtl := tortoise.NewAlgorithm(int(1), mdb, lg.WithName("trtl"))
 
@@ -357,8 +354,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	msh := mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, txpool, atxpool, processor, lg.WithName("mesh")) //todo: what to do with the logger?
 
 	conf := sync.Configuration{Concurrency: 4, LayerSize: int(layerSize), RequestTimeout: 100 * time.Millisecond}
-
-	syncer := sync.NewSync(swarm, msh, txpool, atxpool, blockValidator, conf, clock.Subscribe(), clock.GetCurrentLayer(), lg.WithName("sync"))
+	syncer := sync.NewSync(swarm, msh, txpool, atxpool, blockValidator, sync.TxValidatorMock{}, poetDb, conf, clock.Subscribe(), clock.GetCurrentLayer(), lg.WithName("sync"))
 	blockOracle := oracle.NewMinerBlockOracle(layerSize, uint16(layersPerEpoch), atxdb, beaconProvider, vrfSigner, nodeID, syncer.IsSynced, lg.WithName("blockOracle"))
 
 	// TODO: we should probably decouple the apptest and the node (and duplicate as necessary)
@@ -372,9 +368,8 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 
 	ha := hare.New(app.Config.HARE, swarm, sgn, nodeID, syncer.IsSynced, msh, hOracle, app.Config.CONSENSUS.LayersPerEpoch, idStore, atxdb, clock.Subscribe(), lg.WithName("hare"))
 
-	blockProducer := miner.NewBlockBuilder(nodeID, sgn, swarm, clock.Subscribe(), txpool, atxpool, coinToss, msh, ha, blockOracle, atxdb, lg.WithName("blockProducer"))
-
-	blockListener := sync.NewBlockListener(swarm, syncer, 4, lg.WithName("blockListener"))
+	blockProducer := miner.NewBlockBuilder(nodeID, sgn, swarm, clock.Subscribe(), txpool, atxpool, coinToss, msh, ha, blockOracle, atxdb, syncer, lg.WithName("blockBuilder"))
+	blockListener := sync.NewBlockListener(swarm, blockValidator, syncer, 4, lg.WithName("blockListener"))
 
 	poetListener := activation.NewPoetListener(swarm, poetDb, lg.WithName("poetListener"))
 
@@ -399,7 +394,6 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	}
 	atxBuilder := activation.NewBuilder(nodeID, coinBase, atxdb, swarm, atxdb, msh, app.Config.CONSENSUS.LayersPerEpoch, nipstBuilder, clock.Subscribe(), syncer.IsSynced, lg.WithName("atxBuilder"))
 
-	app.txProcessor = processor
 	app.blockProducer = &blockProducer
 	app.blockListener = blockListener
 	app.mesh = msh
@@ -445,6 +439,9 @@ func (app SpacemeshApp) stopServices() {
 
 	log.Info("%v closing blockListener", app.nodeId.Key)
 	app.blockListener.Close()
+
+	log.Info("%v closing sync", app.nodeId.Key)
+	app.syncer.Close()
 
 	log.Info("%v closing Hare", app.nodeId.Key)
 	app.hare.Close() //todo: need to add this
@@ -604,7 +601,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	// start api servers
 	if apiConf.StartGrpcServer || apiConf.StartJSONServer {
 		// start grpc if specified or if json rpc specified
-		app.grpcAPIService = api.NewGrpcService(app.P2P, app.state, app.mesh.TxProcessor)
+		app.grpcAPIService = api.NewGrpcService(app.P2P, app.state, app.mesh.StateApi())
 		app.grpcAPIService.StartService(nil)
 	}
 

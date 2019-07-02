@@ -34,9 +34,7 @@ func ListenerFactory(serv service.Service, peers p2p.Peers, name string, layer t
 	ch := make(chan types.LayerID, 1)
 	ch <- layer
 	l := log.New(name, "", "")
-	blockValidator := NewBlockValidator(BlockEligibilityValidatorMock{}, TxValidatorMock{})
-	sync := NewSync(serv, getMesh(memoryDB, name), miner.NewMemPool(reflect.TypeOf(types.SerializableTransaction{})),
-		miner.NewMemPool(reflect.TypeOf(types.ActivationTx{})), blockValidator, conf, ch, layer, l)
+	sync := NewSync(serv, getMesh(memoryDB, name+"_"+time.Now().String()), miner.NewMemPool(reflect.TypeOf(types.SerializableTransaction{})), miner.NewMemPool(reflect.TypeOf(types.ActivationTx{})), BlockValidatorMock{}, TxValidatorMock{}, newMockPoetDb(), conf, ch, 0, l)
 	sync.Peers = peers
 	nbl := NewBlockListener(serv, sync, 2, log.New(name, "", ""))
 	return nbl

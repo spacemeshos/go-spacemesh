@@ -31,15 +31,19 @@ func TestPoetDbHappyFlow(t *testing.T) {
 	copy(poetId[:], "poet id")
 	roundId := uint64(1337)
 
-	err = poetDb.ValidatePoetProof(poetProof, poetId, roundId, nil)
+	err = poetDb.Validate(poetProof, poetId, roundId, nil)
 	r.NoError(err)
-	_, ok := err.(processingError)
-	r.False(ok)
+	r.False(types.IsProcessingError(err))
 
-	err = poetDb.storePoetProof(poetProof, poetId, roundId, nil)
+	err = poetDb.storeProof(&types.PoetProofMessage{
+		PoetProof: poetProof,
+		PoetId:    poetId,
+		RoundId:   roundId,
+		Signature: nil,
+	})
 	r.NoError(err)
 
-	ref, err := poetDb.getPoetProofRef(makeKey(poetId, roundId))
+	ref, err := poetDb.getProofRef(makeKey(poetId, roundId))
 	r.NoError(err)
 
 	proofBytes, err := types.InterfaceToBytes(poetProof)
@@ -47,7 +51,7 @@ func TestPoetDbHappyFlow(t *testing.T) {
 	expectedRef := sha256.Sum256(proofBytes)
 	r.Equal(expectedRef[:], ref)
 
-	membership, err := poetDb.GetMembershipByPoetProofRef(ref)
+	membership, err := poetDb.GetMembershipMap(ref)
 	r.NoError(err)
 	r.True(membership[common.BytesToHash([]byte("1"))])
 	r.False(membership[common.BytesToHash([]byte("5"))])
@@ -70,11 +74,10 @@ func TestPoetDbInvalidPoetProof(t *testing.T) {
 	roundId := uint64(1337)
 	poetProof.Root = []byte("some other root")
 
-	err = poetDb.ValidatePoetProof(poetProof, poetId, roundId, nil)
+	err = poetDb.Validate(poetProof, poetId, roundId, nil)
 	r.EqualError(err, fmt.Sprintf("failed to validate poet proof for poetId %x round 1337: merkle proof not valid",
-		poetId))
-	_, ok := err.(processingError)
-	r.False(ok)
+		poetId[:5]))
+	r.False(types.IsProcessingError(err))
 }
 
 func TestPoetDbNonExistingKeys(t *testing.T) {
@@ -86,11 +89,12 @@ func TestPoetDbNonExistingKeys(t *testing.T) {
 	copy(poetId[:], "abc")
 
 	key := makeKey(poetId, 0)
-	_, err := poetDb.getPoetProofRef(key)
-	r.EqualError(err, fmt.Sprintf("could not fetch poet proof for key %x: leveldb: not found", key))
+	_, err := poetDb.getProofRef(key)
+	r.EqualError(err, fmt.Sprintf("could not fetch poet proof for key %x: leveldb: not found", key[:5]))
 
-	_, err = poetDb.GetMembershipByPoetProofRef([]byte("abc"))
-	r.EqualError(err, "could not fetch poet proof for ref 616263: leveldb: not found")
+	ref := []byte("abc")
+	_, err = poetDb.GetMembershipMap(ref)
+	r.EqualError(err, fmt.Sprintf("could not fetch poet proof for ref %x: leveldb: not found", ref[:5]))
 }
 
 func TestPoetDb_SubscribeToPoetProofRef(t *testing.T) {
@@ -101,7 +105,7 @@ func TestPoetDb_SubscribeToPoetProofRef(t *testing.T) {
 	var poetId [types.PoetIdLength]byte
 	copy(poetId[:], "abc")
 
-	ch := poetDb.SubscribeToPoetProofRef(poetId, 0)
+	ch := poetDb.SubscribeToProofRef(poetId, 0)
 
 	select {
 	case <-ch:
@@ -116,30 +120,34 @@ func TestPoetDb_SubscribeToPoetProofRef(t *testing.T) {
 	_, err = xdr.Unmarshal(file, &poetProof)
 	r.NoError(err)
 
-	err = poetDb.ValidatePoetProof(poetProof, poetId, 0, nil)
+	err = poetDb.Validate(poetProof, poetId, 0, nil)
 	r.NoError(err)
-	_, ok := err.(processingError)
-	r.False(ok)
+	r.False(types.IsProcessingError(err))
 
-	err = poetDb.storePoetProof(poetProof, poetId, 0, nil)
+	err = poetDb.storeProof(&types.PoetProofMessage{
+		PoetProof: poetProof,
+		PoetId:    poetId,
+		RoundId:   0,
+		Signature: nil,
+	})
 	r.NoError(err)
 
 	select {
 	case proofRef := <-ch:
-		membership, err := poetDb.GetMembershipByPoetProofRef(proofRef)
+		membership, err := poetDb.GetMembershipMap(proofRef)
 		r.NoError(err)
 		r.Equal(membershipSliceToMap(poetProof.Members), membership)
 	case <-time.After(2 * time.Millisecond):
 		r.Fail("timeout!")
 	}
-	_, ok = <-ch
+	_, ok := <-ch
 	r.False(ok, "channel should be closed")
 
-	newCh := poetDb.SubscribeToPoetProofRef(poetId, 0)
+	newCh := poetDb.SubscribeToProofRef(poetId, 0)
 
 	select {
 	case proofRef := <-newCh:
-		membership, err := poetDb.GetMembershipByPoetProofRef(proofRef)
+		membership, err := poetDb.GetMembershipMap(proofRef)
 		r.NoError(err)
 		r.Equal(membershipSliceToMap(poetProof.Members), membership)
 	case <-time.After(2 * time.Millisecond):
