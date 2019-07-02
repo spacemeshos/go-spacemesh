@@ -33,7 +33,7 @@ func (db *PoetDb) HasProof(proofRef []byte) bool {
 	return err == nil
 }
 
-func (db *PoetDb) ValidateAndStore(proofMessage types.PoetProofMessage) error {
+func (db *PoetDb) ValidateAndStore(proofMessage *types.PoetProofMessage) error {
 	if err := db.Validate(proofMessage.PoetProof, proofMessage.PoetId,
 		proofMessage.RoundId, proofMessage.Signature); err != nil {
 
@@ -61,14 +61,11 @@ func (db *PoetDb) Validate(proof types.PoetProof, poetId [types.PoetIdLength]byt
 	return nil
 }
 
-func (db *PoetDb) storeProof(proofMessage types.PoetProofMessage) error {
-	poetProofBytes, err := types.InterfaceToBytes(&proofMessage.PoetProof)
+func (db *PoetDb) storeProof(proofMessage *types.PoetProofMessage) error {
+	ref, err := proofMessage.Ref()
 	if err != nil {
-		return fmt.Errorf("failed to marshal poet proof for poetId %x round %d: %v",
-			proofMessage.PoetId, proofMessage.RoundId, err)
+		return fmt.Errorf("failed to get PoET proof message refference: %v", err)
 	}
-
-	ref := sha256.Sum256(poetProofBytes)
 
 	messageBytes, err := types.InterfaceToBytes(proofMessage)
 	if err != nil {
@@ -76,12 +73,12 @@ func (db *PoetDb) storeProof(proofMessage types.PoetProofMessage) error {
 	}
 
 	batch := db.store.NewBatch()
-	if err := batch.Put(ref[:], messageBytes); err != nil {
+	if err := batch.Put(ref, messageBytes); err != nil {
 		return fmt.Errorf("failed to store poet proof for poetId %x round %d: %v",
 			proofMessage.PoetId, proofMessage.RoundId, err)
 	}
 	key := makeKey(proofMessage.PoetId, proofMessage.RoundId)
-	if err := batch.Put(key[:], ref[:]); err != nil {
+	if err := batch.Put(key[:], ref); err != nil {
 		return fmt.Errorf("failed to store poet proof index entry for poetId %x round %d: %v",
 			proofMessage.PoetId, proofMessage.RoundId, err)
 	}
@@ -90,7 +87,7 @@ func (db *PoetDb) storeProof(proofMessage types.PoetProofMessage) error {
 			proofMessage.PoetId, proofMessage.RoundId, err)
 	}
 	db.log.Debug("stored proof (id: %x) for round %d PoET id %x", ref[:5], proofMessage.RoundId, proofMessage.PoetId)
-	db.publishProofRef(key, ref[:])
+	db.publishProofRef(key, ref)
 	return nil
 }
 

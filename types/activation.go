@@ -164,6 +164,17 @@ type PoetProofMessage struct {
 	Signature []byte
 }
 
+func (proofMessage PoetProofMessage) Ref() ([]byte, error) {
+	poetProofBytes, err := InterfaceToBytes(&proofMessage.PoetProof)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal poet proof for poetId %x round %d: %v",
+			proofMessage.PoetId, proofMessage.RoundId, err)
+	}
+
+	ref := sha256.Sum256(poetProofBytes)
+	return ref[:], nil
+}
+
 type PoetRound struct {
 	Id uint64
 }

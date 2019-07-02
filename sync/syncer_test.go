@@ -72,7 +72,7 @@ func (poetDbMock) GetProofMessage(proofRef []byte) ([]byte, error) { return proo
 
 func (poetDbMock) HasProof(proofRef []byte) bool { return true }
 
-func (poetDbMock) ValidateAndStore(proofMessage types.PoetProofMessage) error { return nil }
+func (poetDbMock) ValidateAndStore(proofMessage *types.PoetProofMessage) error { return nil }
 
 func newMemPoetDb() PoetDb {
 	return activation.NewPoetDb(database.NewMemDatabase(), log.NewDefault("poetDb"))
@@ -253,14 +253,14 @@ func TestSyncer_EnsurePoetProofAvailableAndValid(t *testing.T) {
 
 	proofMessage := makePoetProofMessage(t)
 
-	err := s0.poetDb.ValidateAndStore(proofMessage)
+	err := s0.poetDb.ValidateAndStore(&proofMessage)
 	r.NoError(err)
 
 	poetProofBytes, err := types.InterfaceToBytes(&proofMessage.PoetProof)
 	r.NoError(err)
 	ref := sha256.Sum256(poetProofBytes)
 
-	err = s1.SyncPoetProof(ref[:])
+	err = s1.FetchPoetProof(ref[:])
 	r.NoError(err)
 }
 

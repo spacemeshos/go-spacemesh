@@ -36,7 +36,7 @@ type AtxValidator interface {
 }
 
 type Syncer interface {
-	SyncPoetProof(poetProofRef []byte) error
+	FetchPoetProof(poetProofRef []byte) error
 }
 
 type BlockBuilder struct {
@@ -259,7 +259,7 @@ func (t *BlockBuilder) listenForAtx() {
 					break
 				}
 
-				if err := t.syncer.SyncPoetProof(atx.GetPoetProofRef()); err != nil {
+				if err := t.syncer.FetchPoetProof(atx.GetPoetProofRef()); err != nil {
 					t.Warning("received ATX (%v) with syntactically invalid or missing PoET proof (%x): %v",
 						atx.ShortId(), atx.GetPoetProofRef()[:5], err)
 					break
