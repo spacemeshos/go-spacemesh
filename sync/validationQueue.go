@@ -27,6 +27,19 @@ func NewValidationQueue(lg log.Log) *validationQueue {
 	return vq
 }
 
+func (vq *validationQueue) InQueue(id types.BlockID) bool {
+	_, ok := vq.reverseDepMap[id]
+	if ok {
+		return true
+	}
+
+	_, ok = vq.callbacks[id]
+	if ok {
+		return true
+	}
+	return false
+}
+
 func (vq *validationQueue) Done() {
 	vq.Info("done")
 	close(vq.queue)
@@ -76,7 +89,7 @@ func (vq *validationQueue) checkDependencies(bHeader *types.BlockHeader, checkDa
 		//if unknown block
 
 		//	check queue
-		if _, ok := vq.reverseDepMap[block]; !ok {
+		if !vq.InQueue(bHeader.ID()) {
 
 			//	check database
 			if _, err := checkDatabase(block); err != nil {
