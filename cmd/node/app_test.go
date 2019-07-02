@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/spacemeshos/poet/integration"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	"math/big"
@@ -99,6 +100,8 @@ func (suite *AppTestSuite) initMultipleInstances(numOfInstances int, storeFormat
 		smApp.Config.HARE.WakeupDelta = 15
 		smApp.Config.HARE.ExpectedLeaders = 5
 		smApp.Config.CoinbaseAccount = strconv.Itoa(i + 1)
+		smApp.Config.LayerAvgSize = numOfInstances
+		smApp.Config.CONSENSUS.LayersPerEpoch = 3
 
 		edSgn := signing.NewEdSigner()
 		pub := edSgn.PublicKey()
@@ -120,7 +123,7 @@ func (suite *AppTestSuite) initMultipleInstances(numOfInstances int, storeFormat
 			NumberOfProvenLabels: 10,
 			SpaceUnit:            1024,
 		}
-		err = smApp.initServices(nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(layerSize), nipst.NewPostClient(), poet, vrfSigner, npstCfg, 3)
+		err = smApp.initServices(nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(layerSize), nipst.NewPostClient(), poet, vrfSigner, npstCfg, uint32(smApp.Config.CONSENSUS.LayersPerEpoch))
 		r.NoError(err)
 		smApp.setupGenesis()
 
@@ -157,10 +160,13 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 		a.startServices()
 	}
 
+	defer suite.gracefulShutdown()
+
 	_ = suite.apps[0].P2P.Broadcast(miner.IncomingTxProtocol, txbytes)
 	timeout := time.After(4.5 * 60 * time.Second)
 
 	stickyClientsDone := 0
+loop:
 	for {
 		select {
 		// Got a timeout! fail with a timeout error
@@ -182,8 +188,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 								clientsDone++
 								if clientsDone == len(suite.apps)-1 {
 									log.Info("%d roots confirmed out of %d", clientsDone, len(suite.apps))
-									suite.gracefulShutdown()
-									return
+									break loop
 								}
 							}
 						}
@@ -197,9 +202,118 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 				stickyClientsDone = maxClientsDone
 				log.Info("%d roots confirmed out of %d", maxClientsDone, len(suite.apps))
 			}
-			time.Sleep(10 * time.Second)
+			time.Sleep(30 * time.Second)
 		}
 	}
+
+	suite.validateBlocksAndATXs(8)
+
+}
+
+func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
+
+	type nodeData struct {
+		layertoblocks map[types.LayerID][]types.BlockID
+		atxPerEpoch   map[types.EpochId][]types.AtxId
+	}
+
+	datamap := make(map[string]*nodeData)
+
+	// wait until all nodes are in `untilLayer`
+	for {
+
+		count := 0
+		for _, ap := range suite.apps {
+			curNodeLastLayer := ap.blockListener.ValidatedLayer()
+			if curNodeLastLayer < untilLayer {
+				log.Info("layer for %v was %v, want %v", ap.nodeId.Key, curNodeLastLayer, 8)
+			} else {
+				count++
+			}
+		}
+
+		if count == len(suite.apps) {
+			break
+		}
+
+		time.Sleep(time.Duration(suite.apps[0].Config.LayerDurationSec/2) * time.Second)
+	}
+
+	for _, ap := range suite.apps {
+		if _, ok := datamap[ap.nodeId.Key]; !ok {
+			datamap[ap.nodeId.Key] = new(nodeData)
+			datamap[ap.nodeId.Key].atxPerEpoch = make(map[types.EpochId][]types.AtxId)
+			datamap[ap.nodeId.Key].layertoblocks = make(map[types.LayerID][]types.BlockID)
+		}
+
+		for i := types.LayerID(0); i <= untilLayer; i++ {
+			lyr, err := ap.blockListener.GetLayer(i)
+			if err != nil {
+				log.Error("ERROR: couldn't get a validated layer from db layer %v, %v", i, err)
+			}
+			for _, b := range lyr.Blocks() {
+				datamap[ap.nodeId.Key].layertoblocks[lyr.Index()] = append(datamap[ap.nodeId.Key].layertoblocks[lyr.Index()], b.ID())
+			}
+			epoch := lyr.Index().GetEpoch(ap.Config.CONSENSUS.LayersPerEpoch)
+			if _, ok := datamap[ap.nodeId.Key].atxPerEpoch[epoch]; !ok {
+				atxs, err := ap.blockListener.AtxDB.GetEpochAtxIds(epoch)
+				if err != nil {
+					log.Error("ERROR: couldn't get atxs for passed epoch: %v, err: %v", epoch, err)
+				}
+				datamap[ap.nodeId.Key].atxPerEpoch[epoch] = atxs
+			}
+		}
+	}
+
+	for i, d := range datamap {
+		log.Info("Node %v in len(layerstoblocks) %v", i, len(d.layertoblocks))
+		for i2, d2 := range datamap {
+			if i == i2 {
+				continue
+			}
+			assert.Equal(suite.T(), len(d.layertoblocks), len(d2.layertoblocks), "%v has not matching layer to %v. %v not %v", i, i2, len(d.layertoblocks), len(d2.layertoblocks))
+
+			for l, bl := range d.layertoblocks {
+				assert.Equal(suite.T(), len(bl), len(d2.layertoblocks[l]),
+					fmt.Sprintf("%v and %v had different block maps for layer: %v: %v: %v \r\n %v: %v", i, i2, l, i, bl, i2, d2.layertoblocks[l]))
+			}
+
+			for e, atx := range d.atxPerEpoch {
+				assert.Equal(suite.T(), len(atx), len(d2.atxPerEpoch[e]),
+					fmt.Sprintf("%v and %v had different atx maps for epoch: %v: %v: %v \r\n %v: %v", i, i2, e, i, atx, i2, d2.atxPerEpoch[e]))
+			}
+		}
+	}
+
+	// assuming all nodes have the same results
+	layers_per_epoch := int(suite.apps[0].Config.CONSENSUS.LayersPerEpoch)
+	layer_avg_size := suite.apps[0].Config.LayerAvgSize
+	patient := datamap[suite.apps[0].nodeId.Key]
+
+	lastlayer := len(patient.layertoblocks)
+
+	total_blocks := 0
+	for _, l := range patient.layertoblocks {
+		total_blocks += len(l)
+	}
+
+	first_epoch_blocks := 0
+
+	for i := 0; i < layers_per_epoch; i++ {
+		if l, ok := patient.layertoblocks[types.LayerID(i)]; ok {
+			first_epoch_blocks += len(l)
+		}
+	}
+
+	total_atxs := 0
+
+	for _, atxs := range patient.atxPerEpoch {
+		total_atxs += len(atxs)
+	}
+
+	assert.True(suite.T(), ((total_blocks-first_epoch_blocks)/(lastlayer-layers_per_epoch)) == layer_avg_size, fmt.Sprintf("not good num of blocks got: %v, want: %v. total_blocks: %v, first_epoch_blocks: %v, lastlayer: %v, layers_per_epoch: %v", (total_blocks-first_epoch_blocks)/(lastlayer-layers_per_epoch), layer_avg_size, total_blocks, first_epoch_blocks, lastlayer, layers_per_epoch))
+	assert.True(suite.T(), total_atxs == (lastlayer/layers_per_epoch)*len(suite.apps), fmt.Sprintf("not good num of atxs got: %v, want: %v", total_atxs, (lastlayer/layers_per_epoch)*len(suite.apps)))
+
 }
 
 func (suite *AppTestSuite) validateLastATXActiveSetSize(app *SpacemeshApp) {
@@ -213,11 +327,11 @@ func (suite *AppTestSuite) validateLastATXActiveSetSize(app *SpacemeshApp) {
 func (suite *AppTestSuite) gracefulShutdown() {
 	var wg sync.WaitGroup
 	for _, app := range suite.apps {
-		func(app SpacemeshApp) {
-			wg.Add(1)
-			defer wg.Done()
+		wg.Add(1)
+		go func(app *SpacemeshApp) {
 			app.stopServices()
-		}(*app)
+			wg.Done()
+		}(app)
 	}
 	wg.Wait()
 }
