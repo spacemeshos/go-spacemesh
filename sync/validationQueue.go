@@ -37,8 +37,8 @@ func (vq *validationQueue) traverse(s *Syncer) []types.BlockID {
 
 	for out := range output {
 		block := out.(*types.Block)
-		s.Info("Validating view ValidateBlock %v", block.ID())
-		if err := s.ValidateBlock(block); err != nil {
+		s.Info("Validating view Block %v", block.ID())
+		if err := s.ConfirmBlockValidity(block); err != nil {
 			s.Error("failed derefrencing block data %v %v", block.ID(), err)
 			continue
 		}

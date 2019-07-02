@@ -4,12 +4,14 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"sync"
@@ -221,7 +223,7 @@ func (s *Syncer) FetchFullBlocks(blockIds []types.BlockID) []*types.Block {
 	blocksArr := make([]*types.Block, 0, len(blockIds))
 	for out := range output {
 		block := out.(*types.Block)
-		if err := s.ValidateBlock(block); err != nil {
+		if err := s.ConfirmBlockValidity(block); err != nil {
 			s.Error(fmt.Sprintf("failed derefrencing block data %v %v", block.ID(), err))
 			continue
 		}
@@ -253,19 +255,17 @@ func (s *Syncer) FetchFullBlocks(blockIds []types.BlockID) []*types.Block {
 	return blocksArr
 }
 
-func (s *Syncer) ValidateBlock(blk *types.Block) error {
+func (s *Syncer) ConfirmBlockValidity(blk *types.Block) error {
 	s.Info("validate block %v ", blk.ID())
 
 	//check block signature and is identity active
-	if active, err := s.IsIdentityActive(blk.MinerID.Key, blk.Layer()); err != nil || !active {
-		return errors.New(fmt.Sprintf("block %v identity activation check failed ", blk.ID()))
+	pubKey, err := ed25519.ExtractPublicKey(blk.Bytes(), blk.Sig())
+	if err != nil {
+		return errors.New(fmt.Sprintf("could not extract block %v public key %v ", blk.ID(), err))
 	}
 
-	//associated atx data availability
-	if blk.ATXID != *types.EmptyAtxId {
-		if _, err := s.syncAtxs([]types.AtxId{blk.ATXID}); err != nil {
-			return errors.New(fmt.Sprintf("cannot fetch associated atx for block %v %v ", blk.ID(), err))
-		}
+	if active, err := s.IsIdentityActive(signing.NewPublicKey(pubKey).String(), blk.Layer()); err != nil || !active {
+		return errors.New(fmt.Sprintf("block %v identity activation check failed ", blk.ID()))
 	}
 
 	//block eligibility

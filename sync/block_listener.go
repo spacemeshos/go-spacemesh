@@ -100,7 +100,7 @@ func (bl *BlockListener) HandleNewBlock(blk *types.Block) bool {
 		return true
 	}
 
-	if err := bl.ValidateBlock(blk); err != nil {
+	if err := bl.ConfirmBlockValidity(blk); err != nil {
 		bl.Error("HandleNewBlock %v failed ", blk.ID(), err)
 		return false
 	}
