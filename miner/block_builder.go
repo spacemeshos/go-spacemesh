@@ -245,39 +245,44 @@ func (t *BlockBuilder) listenForAtx() {
 		case <-t.stopChan:
 			return
 		case data := <-t.atxGossipChannel:
-			if data != nil {
-				atx, err := types.BytesAsAtx(data.Bytes())
-				if err != nil {
-					t.Error("cannot parse incoming ATX")
-					break
-				}
-				t.Info("got new ATX %v", atx.ShortId())
-
-				//todo fetch from neighbour
-				if atx.Nipst == nil {
-					t.Panic("nil nipst in gossip")
-					break
-				}
-
-				if err := t.syncer.FetchPoetProof(atx.GetPoetProofRef()); err != nil {
-					t.Warning("received ATX (%v) with syntactically invalid or missing PoET proof (%x): %v",
-						atx.ShortId(), atx.GetPoetProofRef()[:5], err)
-					break
-				}
-
-				err = t.atxValidator.SyntacticallyValidateAtx(atx)
-				if err != nil {
-					t.Warning("received syntactically invalid ATX %v: %v", atx.ShortId(), err)
-					// TODO: blacklist peer
-					break
-				}
-
-				t.AtxPool.Put(atx.Id(), atx)
-				data.ReportValidation(activation.AtxProtocol)
-				t.Info("stored and propagated new syntactically valid ATX: %v", atx.ShortId())
-			}
+			go t.handleGossipAtx(data)
 		}
 	}
+}
+
+func (t *BlockBuilder) handleGossipAtx(data service.GossipMessage) {
+	if data == nil {
+		return
+	}
+	atx, err := types.BytesAsAtx(data.Bytes())
+	if err != nil {
+		t.Error("cannot parse incoming ATX")
+		return
+	}
+	t.Info("got new ATX %v", atx.ShortId())
+
+	//todo fetch from neighbour
+	if atx.Nipst == nil {
+		t.Panic("nil nipst in gossip")
+		return
+	}
+
+	if err := t.syncer.FetchPoetProof(atx.GetPoetProofRef()); err != nil {
+		t.Warning("received ATX (%v) with syntactically invalid or missing PoET proof (%x): %v",
+			atx.ShortId(), atx.GetPoetProofRef()[:5], err)
+		return
+	}
+
+	err = t.atxValidator.SyntacticallyValidateAtx(atx)
+	if err != nil {
+		t.Warning("received syntactically invalid ATX %v: %v", atx.ShortId(), err)
+		// TODO: blacklist peer
+		return
+	}
+
+	t.AtxPool.Put(atx.Id(), atx)
+	data.ReportValidation(activation.AtxProtocol)
+	t.Info("stored and propagated new syntactically valid ATX: %v", atx.ShortId())
 }
 
 func (t *BlockBuilder) acceptBlockData() {
