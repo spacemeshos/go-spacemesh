@@ -26,6 +26,12 @@ type MemPool interface {
 	Invalidate(id interface{})
 }
 
+type PoetDb interface {
+	HasProof(proofRef []byte) bool
+	ValidateAndStore(proofMessage *types.PoetProofMessage) error
+	GetProofMessage(proofRef []byte) ([]byte, error)
+}
+
 type BlockValidator interface {
 	BlockEligible(block *types.BlockHeader) (bool, error)
 	ValidateTx(tx *types.SerializableTransaction) (bool, error)
@@ -61,6 +67,7 @@ type Syncer struct {
 	Configuration
 	log.Log
 	*server.MessageServer
+	poetDb            PoetDb
 	txpool            MemPool
 	atxpool           MemPool
 	currentLayer      types.LayerID
@@ -91,6 +98,7 @@ const (
 	LAYER_IDS    server.MessageType = 3
 	TX           server.MessageType = 4
 	ATX          server.MessageType = 5
+	POET         server.MessageType = 6
 	syncProtocol                    = "/sync/1.0/"
 )
 
@@ -133,7 +141,7 @@ func (s *Syncer) run() {
 }
 
 //fires a sync every sm.syncInterval or on force space from outside
-func NewSync(srv service.Service, layers *mesh.Mesh, txpool MemPool, atxpool MemPool, bv BlockValidator, conf Configuration, clock timesync.LayerTimer, currentLayer types.LayerID, logger log.Log) *Syncer {
+func NewSync(srv service.Service, layers *mesh.Mesh, txpool MemPool, atxpool MemPool, bv BlockValidator, poetdb PoetDb, conf Configuration, clock timesync.LayerTimer, currentLayer types.LayerID, logger log.Log) *Syncer {
 	s := &Syncer{
 		BlockValidator: bv,
 		Configuration:  conf,
@@ -144,6 +152,7 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool MemPool, atxpool Mem
 		SyncLock:       0,
 		txpool:         txpool,
 		atxpool:        atxpool,
+		poetDb:         poetdb,
 		startLock:      0,
 		currentLayer:   currentLayer,
 		forceSync:      make(chan bool),
@@ -284,6 +293,7 @@ func (s *Syncer) ValidateView(blk *types.Block) bool {
 	if vq.checkDependencies(&blk.BlockHeader, s.GetBlock) == false {
 		//traverse mesh and check local block syntactic validity return true
 		s.Info("traversing %v view for validation", blk.ID())
+
 		if bks := vq.traverse(s); len(bks) > 0 {
 			s.Warning(fmt.Sprintf("could not validate %v blocks in block %v view ", len(bks) > 0, blk.ID()))
 			return false
@@ -383,6 +393,7 @@ func (s *Syncer) fetchLayerHashes(lyr types.LayerID) (map[string]p2p.Peer, error
 	return m, nil
 }
 
+//returns txs out of txids that are not in the local database
 func (s *Syncer) syncTxs(txids []types.TransactionId) ([]*types.SerializableTransaction, error) {
 
 	//look in pool
@@ -428,11 +439,12 @@ func (s *Syncer) syncTxs(txids []types.TransactionId) ([]*types.SerializableTran
 	return txs, nil
 }
 
-func (s *Syncer) syncAtxs(atxIds []types.AtxId) (atxs []*types.ActivationTx, err error) {
+//returns atxs out of txids that are not in the local database
+func (s *Syncer) syncAtxs(atxIds []types.AtxId) ([]*types.ActivationTx, error) {
 
 	//look in pool
-	unprocessedAtxs := make(map[types.AtxId]*types.ActivationTx, len(atxs))
-	missingInPool := make([]types.AtxId, 0, len(atxs))
+	unprocessedAtxs := make(map[types.AtxId]*types.ActivationTx, len(atxIds))
+	missingInPool := make([]types.AtxId, 0, len(atxIds))
 	for _, t := range atxIds {
 		id := t
 		if x := s.atxpool.Get(id); x != nil {
@@ -469,7 +481,7 @@ func (s *Syncer) syncAtxs(atxIds []types.AtxId) (atxs []*types.ActivationTx, err
 		}
 	}
 
-	atxs = make([]*types.ActivationTx, 0, len(atxIds))
+	atxs := make([]*types.ActivationTx, 0, len(atxIds))
 	for _, id := range atxIds {
 		if tx, ok := unprocessedAtxs[id]; ok {
 			atxs = append(atxs, tx)
@@ -491,4 +503,18 @@ func (s *Syncer) fetchWithFactory(wrk worker) chan interface{} {
 	}
 
 	return wrk.output
+}
+func (s *Syncer) FetchPoetProof(poetProofRef []byte) error {
+	if !s.poetDb.HasProof(poetProofRef) {
+		out := <-s.fetchWithFactory(NewNeighborhoodWorker(s, 1, PoetReqFactory(poetProofRef)))
+		if out == nil {
+			return fmt.Errorf("could not find PoET proof with any neighbor")
+		}
+		proofMessage := out.(types.PoetProofMessage)
+		err := s.poetDb.ValidateAndStore(&proofMessage)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

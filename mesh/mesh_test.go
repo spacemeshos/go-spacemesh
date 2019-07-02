@@ -45,8 +45,8 @@ type AtxDbMock struct {
 	nipsts map[types.AtxId]*types.NIPST
 }
 
-func (*AtxDbMock) IsIdentityActive(edId string, layer types.LayerID) (bool, error) {
-	return true, nil
+func (*AtxDbMock) IsIdentityActive(edId string, layer types.LayerID) (bool, types.AtxId, error) {
+	return true, *types.EmptyAtxId, nil
 }
 func (t *AtxDbMock) GetEpochAtxIds(id types.EpochId) ([]types.AtxId, error) {
 	return []types.AtxId{}, nil /*todo: mock if needed */

@@ -83,27 +83,17 @@ func (vq *validationQueue) traverse(s *Syncer) []types.BlockID {
 }
 
 func (vq *validationQueue) checkDependencies(bHeader *types.BlockHeader, checkDatabase func(id types.BlockID) (*types.Block, error)) bool {
-	var dependencys map[types.BlockID]struct{}
+	dependencys := make(map[types.BlockID]struct{})
 	for _, block := range bHeader.ViewEdges {
-
-		//if unknown block
-
 		//	check queue
 		if !vq.InQueue(block) {
-
 			//	check database
 			if _, err := checkDatabase(block); err != nil {
-
-				//add to queue
-				vq.Debug("add %v to validation queue", block)
+				//unknown block add to queue
 				vq.queue <- block
-				vq.reverseDepMap[block] = append(vq.reverseDepMap[block], bHeader.ID())
-				//init dependency set
-				if dependencys == nil {
-					dependencys = make(map[types.BlockID]struct{})
-				}
 				id := block
-				vq.Debug("add block %v to %v dependencies", id, bHeader.ID())
+				vq.reverseDepMap[id] = append(vq.reverseDepMap[id], bHeader.ID())
+				vq.Info("add block %v to %v dependencies map %v", id, bHeader.ID())
 				dependencys[id] = struct{}{}
 			}
 		}
@@ -113,20 +103,18 @@ func (vq *validationQueue) checkDependencies(bHeader *types.BlockHeader, checkDa
 
 		//remove this block from all dependencies lists
 		for _, b := range vq.reverseDepMap[bHeader.ID()] {
-
 			//we can update recursively all dependencies or just wait for the queue to finish processing
-			delete(vq.depMap[b], bHeader.ID())
-			if len(vq.depMap[b]) == 0 {
-				delete(vq.depMap, b)
-				callback := vq.callbacks[b]
+			delete(vq.depMap[bHeader.ID()], b)
+			if callback, ok := vq.callbacks[b]; ok {
 				callback()
 			}
 		}
 
 		//remove this block from reverse dependency map
-		vq.Info("remove %v from dependency map", bHeader.ID())
+		vq.Info("remove %v from dependency map, blocks left %v", bHeader.ID(), len(vq.depMap))
 		delete(vq.reverseDepMap, bHeader.ID())
-		vq.Info(" %v blocks in dependency map", len(vq.reverseDepMap))
+		delete(vq.depMap, bHeader.ID())
+		vq.Info(" %v blocks in dependency map", len(vq.depMap))
 		return true
 	}
 

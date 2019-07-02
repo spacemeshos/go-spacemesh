@@ -2,8 +2,10 @@ package sync
 
 import (
 	"github.com/google/uuid"
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/config"
+	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -34,7 +36,10 @@ func ListenerFactory(serv service.Service, peers p2p.Peers, name string, layer t
 	ch := make(chan types.LayerID, 1)
 	ch <- layer
 	l := log.New(name, "", "")
-	sync := NewSync(serv, getMesh(memoryDB, name+"_"+time.Now().String()), miner.NewMemPool(reflect.TypeOf(types.SerializableTransaction{})), miner.NewMemPool(reflect.TypeOf(types.ActivationTx{})), BlockValidatorMock{}, TxValidatorMock{}, newMockPoetDb(), conf, ch, 0, l)
+	poetDb := activation.NewPoetDb(database.NewMemDatabase(), l.WithName("poetDb"))
+	blockValidator := NewBlockValidator(BlockEligibilityValidatorMock{}, TxValidatorMock{})
+	sync := NewSync(serv, getMesh(memoryDB, name), miner.NewMemPool(reflect.TypeOf(types.SerializableTransaction{})),
+		miner.NewMemPool(reflect.TypeOf(types.ActivationTx{})), blockValidator, poetDb, conf, ch, layer, l)
 	sync.Peers = peers
 	nbl := NewBlockListener(serv, sync, 2, log.New(name, "", ""))
 	return nbl
@@ -119,51 +124,51 @@ func TestBlockListener2(t *testing.T) {
 
 	block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
 	block1.Id = 1
-	block1.ATXID = atx1.Id()
+	block1.ATXID = *types.EmptyAtxId
 	block1.Signature = signer.Sign(block1.Bytes())
 
 	block2 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
-	block2.ATXID = atx1.Id()
+	block2.ATXID = *types.EmptyAtxId
 	block2.Signature = signer.Sign(block2.Bytes())
 	block2.Id = 2
 
 	block3 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
-	block3.ATXID = atx1.Id()
+	block3.ATXID = *types.EmptyAtxId
 	block3.Signature = signer.Sign(block3.Bytes())
 	block3.Id = 3
 
 	block4 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
-	block4.ATXID = atx1.Id()
+	block4.ATXID = *types.EmptyAtxId
 	block4.Signature = signer.Sign(block4.Bytes())
 	block4.Id = 4
 
 	block5 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
-	block5.ATXID = atx1.Id()
+	block5.ATXID = *types.EmptyAtxId
 	block5.Signature = signer.Sign(block5.Bytes())
 	block5.Id = 5
 
 	block6 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
-	block6.ATXID = atx1.Id()
+	block6.ATXID = *types.EmptyAtxId
 	block6.Signature = signer.Sign(block6.Bytes())
 	block6.Id = 6
 
 	block7 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
-	block7.ATXID = atx1.Id()
+	block7.ATXID = *types.EmptyAtxId
 	block7.Signature = signer.Sign(block7.Bytes())
 	block7.Id = 7
 
 	block8 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
-	block8.ATXID = atx1.Id()
+	block8.ATXID = *types.EmptyAtxId
 	block8.Signature = signer.Sign(block8.Bytes())
 	block8.Id = 8
 
 	block9 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
-	block9.ATXID = atx1.Id()
+	block9.ATXID = *types.EmptyAtxId
 	block9.Signature = signer.Sign(block9.Bytes())
 	block9.Id = 9
 
 	block10 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
-	block10.ATXID = atx1.Id()
+	block10.ATXID = *types.EmptyAtxId
 	block10.Signature = signer.Sign(block10.Bytes())
 	block10.Id = 10
 
@@ -191,7 +196,7 @@ func TestBlockListener2(t *testing.T) {
 	bl1.AddBlock(block9)
 	bl1.AddBlock(block10)
 
-	bl2.GetFullBlocks([]types.BlockID{block10.Id})
+	bl2.GetFullBlocks([]types.BlockID{block2.Id})
 
 	b, err := bl2.GetBlock(block10.Id)
 	if err != nil {
