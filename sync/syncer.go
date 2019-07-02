@@ -207,21 +207,21 @@ func (s *Syncer) getLayerFromNeighbors(currenSyncLayer types.LayerID) (*types.La
 		return nil, err
 	}
 
-	blocksArr, err := s.FetchFullBlocks(blockIds)
-	if err != nil {
-		s.Error("could not get layer blocks %v", currenSyncLayer, err)
+	blocksArr := s.FetchFullBlocks(blockIds)
+	if len(blocksArr) == 0 {
+		s.Error("could not any blocks  for layer  %v", currenSyncLayer)
 		return nil, err
 	}
 
 	return types.NewExistingLayer(types.LayerID(currenSyncLayer), blocksArr), nil
 }
 
-func (s *Syncer) FetchFullBlocks(blockIds []types.BlockID) ([]*types.Block, error) {
+func (s *Syncer) FetchFullBlocks(blockIds []types.BlockID) []*types.Block {
 	output := s.fetchWithFactory(NewBlockWorker(s, s.Concurrency, BlockReqFactory(), blockSliceToChan(blockIds)))
 	blocksArr := make([]*types.Block, 0, len(blockIds))
 	for out := range output {
 		block := out.(*types.Block)
-		if err := s.Validate(block); err != nil {
+		if err := s.ValidateBlock(block); err != nil {
 			s.Error(fmt.Sprintf("failed derefrencing block data %v %v", block.ID(), err))
 			continue
 		}
@@ -250,10 +250,10 @@ func (s *Syncer) FetchFullBlocks(blockIds []types.BlockID) ([]*types.Block, erro
 		blocksArr = append(blocksArr, block)
 	}
 
-	return blocksArr, nil
+	return blocksArr
 }
 
-func (s *Syncer) Validate(blk *types.Block) error {
+func (s *Syncer) ValidateBlock(blk *types.Block) error {
 	s.Info("validate block %v ", blk.ID())
 
 	//check block signature and is identity active
@@ -383,12 +383,12 @@ func (s *Syncer) fetchLayerHashes(lyr types.LayerID) (map[string]p2p.Peer, error
 func (s *Syncer) syncTxs(txids []types.TransactionId) ([]*types.SerializableTransaction, error) {
 
 	//look in pool
-	poolTxs := make(map[types.TransactionId]*types.SerializableTransaction)
+	unprocessedTxs := make(map[types.TransactionId]*types.SerializableTransaction)
 	missing := make([]types.TransactionId, 0)
 	for _, t := range txids {
 		if tx := s.txpool.Get(t); tx != nil {
 			s.Info("found tx, %v in tx pool", hex.EncodeToString(t[:]))
-			poolTxs[t] = tx.(*types.SerializableTransaction)
+			unprocessedTxs[t] = tx.(*types.SerializableTransaction)
 		} else {
 			missing = append(missing, t)
 		}
@@ -407,17 +407,17 @@ func (s *Syncer) syncTxs(txids []types.TransactionId) ([]*types.SerializableTran
 					s.Warning("tx %v not valid %v", hex.EncodeToString(id[:]), err)
 					continue
 				}
-				poolTxs[types.GetTransactionId(&tx)] = &tx
+				unprocessedTxs[types.GetTransactionId(&tx)] = &tx
 			}
 		}
 	}
 
 	txs := make([]*types.SerializableTransaction, 0, len(txids))
 	for _, id := range txids {
-		if tx, ok := poolTxs[id]; ok {
+		if tx, ok := unprocessedTxs[id]; ok {
 			txs = append(txs, tx)
-		} else if tx, ok := dbTxs[id]; ok {
-			txs = append(txs, tx)
+		} else if _, ok := dbTxs[id]; ok {
+			continue
 		} else {
 			return nil, errors.New(fmt.Sprintf("could not fetch tx %v", hex.EncodeToString(id[:])))
 		}
@@ -428,7 +428,7 @@ func (s *Syncer) syncTxs(txids []types.TransactionId) ([]*types.SerializableTran
 func (s *Syncer) syncAtxs(atxIds []types.AtxId) (atxs []*types.ActivationTx, err error) {
 
 	//look in pool
-	poolAtxs := make(map[types.AtxId]*types.ActivationTx, len(atxs))
+	unprocessedAtxs := make(map[types.AtxId]*types.ActivationTx, len(atxs))
 	missingInPool := make([]types.AtxId, 0, len(atxs))
 	for _, t := range atxIds {
 		id := t
@@ -440,7 +440,7 @@ func (s *Syncer) syncAtxs(atxIds []types.AtxId) (atxs []*types.ActivationTx, err
 				continue
 			}
 			s.Info("found atx, %v in atx pool", id.ShortId())
-			poolAtxs[id] = atx
+			unprocessedAtxs[id] = atx
 		} else {
 			s.Warning("atx %v not in atx pool", id.ShortId())
 			missingInPool = append(missingInPool, id)
@@ -461,17 +461,17 @@ func (s *Syncer) syncAtxs(atxIds []types.AtxId) (atxs []*types.ActivationTx, err
 					s.Warning("atx %v not valid %v", atx.ShortId(), err)
 					continue
 				}
-				poolAtxs[atx.Id()] = &atx
+				unprocessedAtxs[atx.Id()] = &atx
 			}
 		}
 	}
 
 	atxs = make([]*types.ActivationTx, 0, len(atxIds))
 	for _, id := range atxIds {
-		if tx, ok := poolAtxs[id]; ok {
+		if tx, ok := unprocessedAtxs[id]; ok {
 			atxs = append(atxs, tx)
-		} else if tx, ok := dbAtxs[id]; ok {
-			atxs = append(atxs, tx)
+		} else if _, ok := dbAtxs[id]; ok {
+			continue
 		} else {
 			return nil, errors.New(fmt.Sprintf("could not fetch atx %v", id.ShortId()))
 		}
