@@ -40,19 +40,32 @@ func TestNewNeighborhoodWorker(t *testing.T) {
 	defer syncObj1.Close()
 	syncObj2 := syncs[1]
 	defer syncObj2.Close()
-	lid := types.LayerID(1)
-	syncObj1.AddBlock(types.NewExistingBlock(types.BlockID(123), lid, nil))
-	//syncObj1.ValidateLayer(l) //this is to simulate the approval of the tortoise...
+
+	block := types.NewExistingBlock(types.BlockID(333), 1, nil)
+	syncObj1.AddBlockWithTxs(block, []*types.SerializableTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
 	timeout := time.NewTimer(2 * time.Second)
 	pm1 := getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
 	syncObj2.Peers = pm1
 
-	wrk := NewNeighborhoodWorker(syncObj2, 1, BlockReqFactory([]types.BlockID{123}))
+	wrk := NewNeighborhoodWorker(syncObj2, 1, TxReqFactory([]types.TransactionId{types.GetTransactionId(tx1), types.GetTransactionId(tx2), types.GetTransactionId(tx3)}))
 	go wrk.Work()
 
 	select {
 	case item := <-wrk.output:
-		assert.Equal(t, types.BlockID(123), item.(*types.Block).Id, "wrong block")
+		txs := item.([]types.SerializableTransaction)
+		assert.Equal(t, 3, len(txs))
+		mp := make(map[types.TransactionId]struct{})
+		mp[types.GetTransactionId(&txs[0])] = struct{}{}
+		mp[types.GetTransactionId(&txs[1])] = struct{}{}
+		mp[types.GetTransactionId(&txs[2])] = struct{}{}
+
+		_, ok := mp[types.GetTransactionId(tx1)]
+		assert.True(t, ok)
+		_, ok = mp[types.GetTransactionId(tx2)]
+		assert.True(t, ok)
+		_, ok = mp[types.GetTransactionId(tx3)]
+		assert.True(t, ok)
+
 	case <-timeout.C:
 		assert.Fail(t, "no message received on channel")
 	}

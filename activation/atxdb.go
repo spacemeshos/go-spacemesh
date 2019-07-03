@@ -497,50 +497,55 @@ func (db *ActivationDb) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
 
 // IsIdentityActive returns whether edId is active for the epoch of layer layer.
 // it returns error if no associated atx is found in db
-func (db *ActivationDb) IsIdentityActive(edId string, layer types.LayerID) (bool, error) {
+func (db *ActivationDb) IsIdentityActive(edId string, layer types.LayerID) (bool, types.AtxId, error) {
+	// TODO: genesis flow should decide what we want to do here
+	if layer.GetEpoch(db.LayersPerEpoch) == 0 {
+		return true, *types.EmptyAtxId, nil
+	}
+
 	epoch := layer.GetEpoch(db.LayersPerEpoch)
 	nodeId, err := db.ids.GetIdentity(edId)
 	if err != nil { // means there is no such identity
 		db.log.Error("IsIdentityActive erred while getting identity err=%v", err)
-		return false, nil
+		return false, *types.EmptyAtxId, nil
 	}
 	ids, err := db.GetNodeAtxIds(nodeId)
 	if err != nil {
 		db.log.Error("IsIdentityActive erred while getting node atx ids err=%v", err)
-		return false, err
+		return false, *types.EmptyAtxId, err
 	}
 	if len(ids) == 0 { // GetIdentity succeeded but no ATXs, this is a fatal error
-		return false, fmt.Errorf("no active IDs for known node")
+		return false, *types.EmptyAtxId, fmt.Errorf("no active IDs for known node")
 	}
 
 	atx, err := db.GetAtx(ids[len(ids)-1])
 	if err != nil {
 		db.log.Error("IsIdentityActive erred while getting atx err=%v", err)
-		return false, nil
+		return false, *types.EmptyAtxId, nil
 	}
 
 	lastAtxTargetEpoch := atx.TargetEpoch(db.LayersPerEpoch)
 	if lastAtxTargetEpoch < epoch {
 		db.log.Info("IsIdentityActive latest atx is too old expected=%v actual=%v atxid=%v",
 			epoch, lastAtxTargetEpoch, atx.ShortId())
-		return false, nil
+		return false, *types.EmptyAtxId, nil
 	}
 
 	if lastAtxTargetEpoch > epoch {
 		// This could happen if we already published the ATX for the next epoch, so we check the previous one as well
 		if len(ids) < 2 {
 			db.log.Info("IsIdentityActive latest atx is too new but no previous atx len(ids)=%v", len(ids))
-			return false, nil
+			return false, *types.EmptyAtxId, nil
 		}
 		atx, err = db.GetAtx(ids[len(ids)-2])
 		if err != nil {
 			db.log.Error("IsIdentityActive erred while getting atx for second newest err=%v", err)
-			return false, nil
+			return false, *types.EmptyAtxId, nil
 		}
 	}
 
 	// lastAtxTargetEpoch = epoch
-	return atx.TargetEpoch(db.LayersPerEpoch) == epoch, nil
+	return atx.TargetEpoch(db.LayersPerEpoch) == epoch, atx.Id(), nil
 }
 
 func decodeAtxIds(idsBytes []byte) ([]types.AtxId, error) {

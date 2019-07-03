@@ -1,7 +1,6 @@
 package sync
 
 import (
-	"errors"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/types"
@@ -42,14 +41,18 @@ func HashReqFactory(lyr types.LayerID) RequestFactory {
 
 }
 
-func BlockReqFactory(blockIds []types.BlockID) RequestFactory {
-	//convert to chan
+func blockSliceToChan(blockIds []types.BlockID) chan types.BlockID {
 	blockIdsCh := make(chan types.BlockID, len(blockIds))
 	for _, id := range blockIds {
 		blockIdsCh <- id
 	}
+	close(blockIdsCh)
+	return blockIdsCh
+}
 
-	return func(s *server.MessageServer, peer p2p.Peer) (chan interface{}, error) {
+func BlockReqFactory() BlockRequestFactory {
+	//convert to chan
+	return func(s *server.MessageServer, peer p2p.Peer, id types.BlockID) (chan interface{}, error) {
 		ch := make(chan interface{}, 1)
 		foo := func(msg []byte) {
 			defer close(ch)
@@ -60,10 +63,6 @@ func BlockReqFactory(blockIds []types.BlockID) RequestFactory {
 				return
 			}
 			ch <- &block
-		}
-		id, ok := <-blockIdsCh
-		if !ok {
-			return nil, errors.New("chan was closed, job done")
 		}
 
 		if err := s.SendRequest(MINI_BLOCK, id.ToBytes(), peer, foo); err != nil {

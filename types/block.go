@@ -51,7 +51,8 @@ type BlockHeader struct {
 
 type Signed interface {
 	Sig() []byte
-	Obj() interface{}
+	Bytes() []byte
+	Data() interface{}
 }
 
 type Block struct {
@@ -71,6 +72,14 @@ func (t *Block) Sig() []byte {
 
 func (t *Block) Data() interface{} {
 	return &t.MiniBlock
+}
+
+func (t *Block) Bytes() []byte {
+	bytes, err := InterfaceToBytes(t.MiniBlock)
+	if err != nil {
+		log.Panic("could not extract block bytes, %v", err)
+	}
+	return bytes
 }
 
 type BlockEligibilityProof struct {
