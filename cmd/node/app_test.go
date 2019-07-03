@@ -136,7 +136,7 @@ func (suite *AppTestSuite) initMultipleInstances(numOfInstances int, storeFormat
 
 func activateGrpcServer(smApp *SpacemeshApp) {
 	smApp.Config.API.StartGrpcServer = true
-	smApp.grpcAPIService = api.NewGrpcService(smApp.P2P, smApp.state, smApp.mesh.StateApi())
+	smApp.grpcAPIService = api.NewGrpcService(smApp.P2P, smApp.state, smApp.txProcessor)
 	smApp.grpcAPIService.StartService(nil)
 }
 

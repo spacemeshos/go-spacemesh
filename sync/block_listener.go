@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
@@ -21,7 +22,6 @@ type BlockListener struct {
 	wg                   sync.WaitGroup
 	bufferSize           int
 	semaphore            chan struct{}
-	unknownQueue         chan types.BlockID //todo consider benefits of changing to stack
 	receivedGossipBlocks chan service.GossipMessage
 	startLock            uint32
 	timeout              time.Duration
@@ -34,24 +34,23 @@ type TickProvider interface {
 
 func (bl *BlockListener) Close() {
 	close(bl.exit)
-	bl.Debug("block listener closing, waiting for gorutines")
+	bl.Info("block listener closing, waiting for gorutines")
 	bl.wg.Wait()
+	bl.Syncer.Close()
+	bl.Info("block listener closed")
 }
 
 func (bl *BlockListener) Start() {
 	if atomic.CompareAndSwapUint32(&bl.startLock, 0, 1) {
-		go bl.run()
 		go bl.ListenToGossipBlocks()
 	}
 }
 
-func NewBlockListener(net service.Service, bv BlockValidator, sync *Syncer, concurrency int, logger log.Log) *BlockListener {
+func NewBlockListener(net service.Service, sync *Syncer, concurrency int, logger log.Log) *BlockListener {
 	bl := BlockListener{
-		BlockValidator:       bv,
 		Syncer:               sync,
 		Log:                  logger,
 		semaphore:            make(chan struct{}, concurrency),
-		unknownQueue:         make(chan types.BlockID, 200), //todo tune buffer size + get buffer from config
 		exit:                 make(chan struct{}),
 		receivedGossipBlocks: net.RegisterGossipProtocol(config.NewBlockProtocol),
 	}
@@ -82,7 +81,7 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 					return
 				}
 
-				if bl.handleBlock(&blk) {
+				if bl.HandleNewBlock(&blk) {
 					data.ReportValidation(config.NewBlockProtocol)
 				}
 				bl.wg.Done()
@@ -92,51 +91,26 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 	}
 }
 
-func (bl *BlockListener) handleBlock(blk *types.Block) bool {
+func (bl *BlockListener) HandleNewBlock(blk *types.Block) bool {
 
 	bl.Log.With().Info("got new block", log.Uint64("id", uint64(blk.Id)), log.Int("txs", len(blk.TxIds)), log.Int("atxs", len(blk.AtxIds)))
-	eligible, err := bl.BlockEligible(&blk.BlockHeader)
-	if err != nil {
-		bl.Error("block %v eligible check failed ", blk.ID())
-		return false
+	//check if known
+	if _, err := bl.GetBlock(blk.Id); err == nil {
+		bl.Info("we already know this block %v ", blk.ID())
+		return true
 	}
-	if !eligible {
-		bl.Error("block %v not eligible", blk.ID())
+
+	txs, atxs, err := bl.BlockSyntacticValidation(blk)
+	if err != nil {
+		bl.Error("failed to validate block %v %v", blk.ID(), err)
 		return false
 	}
 
-	if err := bl.syncMissingContent(blk); err != nil {
-		bl.Error("handleBlock %v failed ", blk.ID(), err)
+	if err := bl.AddBlockWithTxs(blk, txs, atxs); err != nil {
+		bl.Error(fmt.Sprintf("failed to add block %v to database %v", blk.ID(), err))
 		return false
 	}
 
 	bl.Info("added block %v to database", blk.ID())
-	bl.addUnknownToQueue(&blk.BlockHeader)
 	return true
-}
-
-func (bl *BlockListener) run() {
-	for {
-		select {
-		case <-bl.exit:
-			bl.Log.Info("Work stopped")
-			return
-		case id := <-bl.unknownQueue:
-			bl.Log.Debug("fetch block ", id, "buffer is at ", len(bl.unknownQueue)/cap(bl.unknownQueue), " capacity")
-			bl.semaphore <- struct{}{}
-			go func() {
-				bl.fetchFullBlocks([]types.BlockID{id})
-				<-bl.semaphore
-			}()
-		}
-	}
-}
-
-func (bl *BlockListener) addUnknownToQueue(b *types.BlockHeader) {
-	for _, block := range b.ViewEdges {
-		//if unknown block
-		if _, err := bl.GetBlock(block); err != nil {
-			bl.unknownQueue <- block
-		}
-	}
 }

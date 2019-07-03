@@ -2,14 +2,15 @@ package sync
 
 import (
 	"github.com/google/uuid"
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/address"
-	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/config"
+	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/miner"
-	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -32,38 +33,47 @@ func (pm PeersMock) Close() {
 }
 
 func ListenerFactory(serv service.Service, peers p2p.Peers, name string, layer types.LayerID) *BlockListener {
-
 	ch := make(chan types.LayerID, 1)
 	ch <- layer
 	l := log.New(name, "", "")
-	sync := NewSync(serv, getMesh(memoryDB, name+"_"+time.Now().String()), miner.NewMemPool(reflect.TypeOf(types.SerializableTransaction{})), miner.NewMemPool(reflect.TypeOf(types.ActivationTx{})), BlockValidatorMock{}, TxValidatorMock{}, newMockPoetDb(), conf, ch, 0, l)
+	poetDb := activation.NewPoetDb(database.NewMemDatabase(), l.WithName("poetDb"))
+	blockValidator := NewBlockValidator(BlockEligibilityValidatorMock{}, TxValidatorMock{})
+	sync := NewSync(serv, getMesh(memoryDB, name), miner.NewMemPool(reflect.TypeOf(types.SerializableTransaction{})),
+		miner.NewMemPool(reflect.TypeOf(types.ActivationTx{})), blockValidator, poetDb, conf, ch, layer, l)
 	sync.Peers = peers
-	sync.Start()
-	nbl := NewBlockListener(serv, BlockValidatorMock{}, sync, 2, log.New(name, "", ""))
+	nbl := NewBlockListener(serv, sync, 2, log.New(name, "", ""))
 	return nbl
 }
 
 func TestBlockListener(t *testing.T) {
 	sim := service.NewSimulator()
+	signer := signing.NewEdSigner()
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
-	bl1 := ListenerFactory(n1, PeersMock{func() []p2p.Peer { return []p2p.Peer{n2.PublicKey()} }}, "1", 3)
-	bl2 := ListenerFactory(n2, PeersMock{func() []p2p.Peer { return []p2p.Peer{n1.PublicKey()} }}, "2", 3)
+	bl1 := ListenerFactory(n1, PeersMock{func() []p2p.Peer { return []p2p.Peer{n2.PublicKey()} }}, "listener1", 3)
+	bl2 := ListenerFactory(n2, PeersMock{func() []p2p.Peer { return []p2p.Peer{n1.PublicKey()} }}, "listener2", 3)
+	defer bl2.Close()
+	defer bl1.Close()
 	bl2.Start()
-	atx1 := atx()
-	atx2 := atx()
-	atx3 := atx()
+	atx1 := atx("sdfhfsg")
+	atx2 := atx("asdfsdvxbnu")
+	atx3 := atx("rtutyh")
 
 	bl1.ProcessAtx(atx1)
 	bl1.ProcessAtx(atx2)
 	bl1.ProcessAtx(atx3)
 
+	bl2.ProcessAtx(atx1)
+
 	block1 := types.NewExistingBlock(types.BlockID(123), 0, nil)
-	block1.BlockHeader.ATXID = atx1.Id()
+	block1.Signature = signer.Sign(block1.Bytes())
+	block1.ATXID = *types.EmptyAtxId
 	block2 := types.NewExistingBlock(types.BlockID(321), 1, nil)
-	block1.BlockHeader.ATXID = atx2.Id()
+	block2.Signature = signer.Sign(block2.Bytes())
+	block2.AtxIds = append(block2.AtxIds, atx2.Id())
 	block3 := types.NewExistingBlock(types.BlockID(222), 2, nil)
-	block1.BlockHeader.ATXID = atx3.Id()
+	block3.Signature = signer.Sign(block3.Bytes())
+	block3.AtxIds = append(block3.AtxIds, atx3.Id())
 
 	block1.AddView(block2.ID())
 	block1.AddView(block3.ID())
@@ -72,10 +82,12 @@ func TestBlockListener(t *testing.T) {
 	bl1.AddBlock(block2)
 	bl1.AddBlock(block3)
 
-	_, err := bl2.fetchFullBlocks([]types.BlockID{block1.Id})
+	_, err := bl1.GetBlock(block1.Id)
 	if err != nil {
 		t.Error(err)
 	}
+
+	bl2.GetFullBlocks([]types.BlockID{block1.Id})
 
 	b, err := bl2.GetBlock(block1.Id)
 	if err != nil {
@@ -90,45 +102,75 @@ func TestBlockListener2(t *testing.T) {
 
 	t.Log("TestBlockListener2 start")
 	sim := service.NewSimulator()
+	signer := signing.NewEdSigner()
+
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
 
 	bl1 := ListenerFactory(n1, PeersMock{func() []p2p.Peer { return []p2p.Peer{n2.PublicKey()} }}, "TestBlockListener_1", 2)
 	bl2 := ListenerFactory(n2, PeersMock{func() []p2p.Peer { return []p2p.Peer{n1.PublicKey()} }}, "TestBlockListener_2", 2)
-
+	defer bl2.Close()
+	defer bl1.Close()
 	bl2.Start()
 
-	atx1 := atx()
-	bl1.ProcessAtx(atx1)
+	atx := atx("rt6uuk")
+
+	byts, _ := types.InterfaceToBytes(atx)
+	var atx1 types.ActivationTx
+	types.BytesToInterface(byts, &atx1)
+
+	bl1.ProcessAtx(atx)
+	bl2.ProcessAtx(&atx1)
+
 	block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
-	block1.ATXID = atx1.Id()
+	block1.Id = 1
+	block1.ATXID = *types.EmptyAtxId
+	block1.Signature = signer.Sign(block1.Bytes())
 
 	block2 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
-	block2.ATXID = atx1.Id()
+	block2.ATXID = *types.EmptyAtxId
+	block2.Signature = signer.Sign(block2.Bytes())
+	block2.Id = 2
 
 	block3 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
-	block3.ATXID = atx1.Id()
+	block3.ATXID = *types.EmptyAtxId
+	block3.Signature = signer.Sign(block3.Bytes())
+	block3.Id = 3
 
 	block4 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
-	block4.ATXID = atx1.Id()
+	block4.ATXID = *types.EmptyAtxId
+	block4.Signature = signer.Sign(block4.Bytes())
+	block4.Id = 4
 
 	block5 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
-	block5.ATXID = atx1.Id()
+	block5.ATXID = *types.EmptyAtxId
+	block5.Signature = signer.Sign(block5.Bytes())
+	block5.Id = 5
 
 	block6 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
-	block6.ATXID = atx1.Id()
+	block6.ATXID = *types.EmptyAtxId
+	block6.Signature = signer.Sign(block6.Bytes())
+	block6.Id = 6
 
 	block7 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
-	block7.ATXID = atx1.Id()
+	block7.ATXID = *types.EmptyAtxId
+	block7.Signature = signer.Sign(block7.Bytes())
+	block7.Id = 7
 
 	block8 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
-	block8.ATXID = atx1.Id()
+	block8.ATXID = *types.EmptyAtxId
+	block8.Signature = signer.Sign(block8.Bytes())
+	block8.Id = 8
 
 	block9 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
-	block9.ATXID = atx1.Id()
+	block9.ATXID = *types.EmptyAtxId
+	block9.Signature = signer.Sign(block9.Bytes())
+	block9.Id = 9
 
 	block10 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
-	block10.ATXID = atx1.Id()
+	block10.ATXID = *types.EmptyAtxId
+	block10.Signature = signer.Sign(block10.Bytes())
+	block10.Id = 10
 
 	block2.AddView(block1.ID())
 	block3.AddView(block2.ID())
@@ -138,7 +180,7 @@ func TestBlockListener2(t *testing.T) {
 	block6.AddView(block4.ID())
 	block7.AddView(block6.ID())
 	block7.AddView(block5.ID())
-	block8.AddView(block6.ID())
+	block8.AddView(block7.ID())
 	block9.AddView(block5.ID())
 	block10.AddView(block8.ID())
 	block10.AddView(block9.ID())
@@ -154,13 +196,91 @@ func TestBlockListener2(t *testing.T) {
 	bl1.AddBlock(block9)
 	bl1.AddBlock(block10)
 
-	_, err := bl2.fetchFullBlocks([]types.BlockID{block10.Id})
+	bl2.GetFullBlocks([]types.BlockID{block10.Id})
+
+	b, err := bl2.GetBlock(block2.Id)
 	if err != nil {
 		t.Error(err)
 	}
 
-	b, err := bl2.GetBlock(block10.Id)
+	b, err = bl2.GetBlock(block10.Id)
 	if err != nil {
+		t.Error(err)
+	}
+
+	t.Log("  ", b)
+	t.Log("done!")
+}
+
+func TestBlockListener_TraverseViewBadFlow(t *testing.T) {
+
+	t.Log("TestBlockListener2 start")
+	sim := service.NewSimulator()
+	signer := signing.NewEdSigner()
+
+	n1 := sim.NewNode()
+	n2 := sim.NewNode()
+
+	bl1 := ListenerFactory(n1, PeersMock{func() []p2p.Peer { return []p2p.Peer{n2.PublicKey()} }}, "TestBlockListener_1", 2)
+	bl2 := ListenerFactory(n2, PeersMock{func() []p2p.Peer { return []p2p.Peer{n1.PublicKey()} }}, "TestBlockListener_2", 2)
+	defer bl2.Close()
+	defer bl1.Close()
+	bl2.Start()
+
+	atx := atx("rt6uuk")
+
+	byts, _ := types.InterfaceToBytes(atx)
+	var atx1 types.ActivationTx
+	types.BytesToInterface(byts, &atx1)
+
+	bl1.ProcessAtx(atx)
+	bl2.ProcessAtx(&atx1)
+
+	block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	block1.Id = 1
+	block1.ATXID = *types.EmptyAtxId
+	block1.Signature = signer.Sign(block1.Bytes())
+
+	block2 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	block2.ATXID = *types.EmptyAtxId
+	block2.Signature = signer.Sign(block2.Bytes())
+	block2.Id = 2
+
+	block3 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	block3.ATXID = *types.EmptyAtxId
+	block3.Signature = signer.Sign(block3.Bytes())
+	block3.Id = 3
+
+	block4 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	block4.ATXID = *types.EmptyAtxId
+	block4.Signature = signer.Sign(block4.Bytes())
+	block4.Id = 4
+
+	block5 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	block5.ATXID = *types.EmptyAtxId
+	block5.Signature = signer.Sign(block5.Bytes())
+	block5.Id = 5
+
+	block2.AddView(block1.ID())
+	block3.AddView(block2.ID())
+	block4.AddView(block2.ID())
+	block5.AddView(block3.ID())
+	block5.AddView(block4.ID())
+
+	bl1.AddBlock(block2)
+	bl1.AddBlock(block3)
+	bl1.AddBlock(block4)
+	bl1.AddBlock(block5)
+
+	bl2.GetFullBlocks([]types.BlockID{block5.Id})
+
+	b, err := bl2.GetBlock(block2.Id)
+	if err == nil {
+		t.Error(err)
+	}
+
+	b, err = bl2.GetBlock(block5.Id)
+	if err == nil {
 		t.Error(err)
 	}
 
@@ -172,21 +292,22 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
-	coinbase := address.HexToAddress("aaaa")
 	//n2.RegisterGossipProtocol(NewBlockProtocol)
 
-	bl1 := ListenerFactory(n1, PeersMock{func() []p2p.Peer { return []p2p.Peer{n2.PublicKey()} }}, "5", 1)
-	bl2 := ListenerFactory(n2, PeersMock{func() []p2p.Peer { return []p2p.Peer{n1.PublicKey()} }}, "5", 1)
+	bl1 := ListenerFactory(n1, PeersMock{func() []p2p.Peer { return []p2p.Peer{n2.PublicKey()} }}, "TestBlockListener_ListenToGossipBlocks1", 1)
+	bl2 := ListenerFactory(n2, PeersMock{func() []p2p.Peer { return []p2p.Peer{n1.PublicKey()} }}, "TestBlockListener_ListenToGossipBlocks2", 1)
+
 	bl1.Start()
 	bl2.Start() // TODO: @almog make sure data is available without starting
 
 	blk := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data1"))
 	tx := types.NewSerializableTransaction(0, address.BytesToAddress([]byte{0x01}), address.BytesToAddress([]byte{0x02}), big.NewInt(10), big.NewInt(10), 10)
-	atx := types.NewActivationTx(types.NodeId{"whatwhatwhatwhat", []byte("bbb")}, coinbase, 0, types.AtxId{}, 5, 1, types.AtxId{}, 0, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&common.Hash{}), false)
-
+	atx := atx("asdfdsf")
 	bl2.AddBlockWithTxs(blk, []*types.SerializableTransaction{tx}, []*types.ActivationTx{atx})
 
 	mblk := types.Block{MiniBlock: types.MiniBlock{BlockHeader: blk.BlockHeader, TxIds: []types.TransactionId{types.GetTransactionId(tx)}, AtxIds: []types.AtxId{atx.Id()}}}
+	signer := signing.NewEdSigner()
+	mblk.Signature = signer.Sign(mblk.Bytes())
 
 	data, err := types.InterfaceToBytes(&mblk)
 	require.NoError(t, err)
@@ -204,13 +325,16 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 			return
 		default:
 			if b, err := bl1.GetBlock(blk.Id); err == nil {
-				assert.True(t, blk.Compare(b))
-				t.Log("  ", b)
+				assert.True(t, mblk.Compare(b))
 				t.Log("done!")
 				return
 			}
 		}
 	}
+
+	bl2.Close()
+	bl1.Close()
+	time.Sleep(1 * time.Second)
 }
 
 //todo integration testing
