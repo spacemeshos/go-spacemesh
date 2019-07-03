@@ -190,10 +190,10 @@ func (s *Syncer) Synchronise() {
 		}
 
 		mu.Lock()
-		go func() {
-			s.ValidateLayer(lyr) //run one at a time
+		go func(lyrToValidate types.Layer) {
+			s.ValidateLayer(&lyrToValidate) //run one at a time
 			mu.Unlock()
-		}()
+		}(*lyr)
 	}
 }
 
