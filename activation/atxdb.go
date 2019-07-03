@@ -52,11 +52,10 @@ func (db *ActivationDb) ProcessAtx(atx *types.ActivationTx) {
 	db.log.Info("processing atx id %v, pub-epoch %v node: %v layer %v", atx.ShortId(), epoch, atx.NodeId.Key[:5], atx.PubLayerIdx)
 	err := db.ContextuallyValidateAtx(atx)
 	if err != nil {
-		db.log.Warning("ATX %v failed validation: %v", atx.ShortId(), err)
+		db.log.Error("ATX %v failed contextual validation: %v", atx.ShortId(), err)
 	} else {
 		db.log.Info("ATX %v is valid", atx.ShortId())
 	}
-	atx.Valid = err == nil
 	err = db.StoreAtx(epoch, atx)
 	if err != nil {
 		db.log.Error("cannot store atx: %v", atx)
@@ -108,11 +107,8 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 			set[id] = struct{}{}
 			atx, err := db.GetAtx(id)
 			if err != nil {
-				return fmt.Errorf("error fetching atx %x from database -- inconsistent state", id)
-			}
-			if !atx.Valid {
-				db.log.Debug("atx %v found, but not valid", atx.ShortId())
-				continue
+				log.Panic("error fetching atx %v from database -- inconsistent state", id.ShortId()) // TODO: handle inconsistent state
+				return fmt.Errorf("error fetching atx %v from database -- inconsistent state", id.ShortId())
 			}
 			if atx.TargetEpoch(db.LayersPerEpoch) != pubEpoch {
 				db.log.Debug("atx %v found, but targeting epoch %v instead of publication epoch %v",
@@ -161,9 +157,6 @@ func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error 
 			return fmt.Errorf("previous ATX belongs to different miner. atx.Id: %v, atx.NodeId: %v, prevAtx.NodeId: %v",
 				atx.ShortId(), atx.NodeId.Key, prevATX.NodeId.Key)
 		}
-		if !prevATX.Valid {
-			return fmt.Errorf("validation failed: prevATX not valid")
-		}
 		if prevATX.Sequence+1 != atx.Sequence {
 			return fmt.Errorf("sequence number is not one more than prev sequence number")
 		}
@@ -177,9 +170,6 @@ func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error 
 		posAtx, err := db.GetAtx(atx.PositioningAtx)
 		if err != nil {
 			return fmt.Errorf("positioning atx not found")
-		}
-		if !posAtx.Valid {
-			return fmt.Errorf("positioning atx is not valid")
 		}
 		if atx.PubLayerIdx <= posAtx.PubLayerIdx {
 			return fmt.Errorf("atx layer (%v) must be after positioning atx layer (%v)",
@@ -278,11 +268,9 @@ func (db *ActivationDb) StoreAtx(ech types.EpochId, atx *types.ActivationTx) err
 		return err
 	}
 
-	if atx.Valid {
-		err := db.incValidAtxCounter(ech)
-		if err != nil {
-			return err
-		}
+	err = db.incValidAtxCounter(ech)
+	if err != nil {
+		return err
 	}
 	err = db.addAtxToNodeIdSorted(atx.NodeId, atx)
 	if err != nil {
@@ -557,7 +545,7 @@ func (db *ActivationDb) IsIdentityActive(edId string, layer types.LayerID) (bool
 	}
 
 	// lastAtxTargetEpoch = epoch
-	return atx.Valid && atx.TargetEpoch(db.LayersPerEpoch) == epoch, atx.Id(), nil
+	return atx.TargetEpoch(db.LayersPerEpoch) == epoch, atx.Id(), nil
 }
 
 func decodeAtxIds(idsBytes []byte) ([]types.AtxId, error) {
