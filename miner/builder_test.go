@@ -76,6 +76,10 @@ type mockAtxValidator struct{}
 
 func (mockAtxValidator) SyntacticallyValidateAtx(atx *types.ActivationTx) error { return nil }
 
+type mockSyncer struct{}
+
+func (mockSyncer) FetchPoetProof(poetProofRef []byte) error { return nil }
+
 func TestBlockBuilder_StartStop(t *testing.T) {
 
 	net := service.NewSimulator()
@@ -97,6 +101,7 @@ func TestBlockBuilder_StartStop(t *testing.T) {
 		hare,
 		mockBlockOracle{},
 		&mockAtxValidator{},
+		&mockSyncer{},
 		log.New(n.String(), "", ""))
 
 	err := builder.Start()
@@ -128,9 +133,9 @@ func TestBlockBuilder_BlockIdGeneration(t *testing.T) {
 	hare := MockHare{res: hareRes}
 
 	builder1 := NewBlockBuilder(types.NodeId{Key: "a"}, &MockSigning{}, n1, beginRound, NewMemPool(reflect.TypeOf([]*types.SerializableTransaction{})),
-		NewMemPool(reflect.TypeOf([]*types.ActivationTx{})), MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare, mockBlockOracle{}, &mockAtxValidator{}, log.New(n1.NodeInfo.ID.String(), "", ""))
+		NewMemPool(reflect.TypeOf([]*types.ActivationTx{})), MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare, mockBlockOracle{}, &mockAtxValidator{}, &mockSyncer{}, log.New(n1.NodeInfo.ID.String(), "", ""))
 	builder2 := NewBlockBuilder(types.NodeId{Key: "b"}, &MockSigning{}, n2, beginRound, NewMemPool(reflect.TypeOf(types.SerializableTransaction{})),
-		NewMemPool(reflect.TypeOf(types.ActivationTx{})), MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare, mockBlockOracle{}, &mockAtxValidator{}, log.New(n2.NodeInfo.ID.String(), "", ""))
+		NewMemPool(reflect.TypeOf(types.ActivationTx{})), MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare, mockBlockOracle{}, &mockAtxValidator{}, &mockSyncer{}, log.New(n2.NodeInfo.ID.String(), "", ""))
 
 	b1, _ := builder1.createBlock(1, types.AtxId{}, types.BlockEligibilityProof{}, nil, nil)
 
@@ -150,7 +155,7 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 	hare := MockHare{res: hareRes}
 
 	builder := NewBlockBuilder(types.NodeId{"anton", []byte("anton")}, &MockSigning{}, n, beginRound, NewMemPool(reflect.TypeOf([]*types.SerializableTransaction{})),
-		NewMemPool(reflect.TypeOf([]*types.ActivationTx{})), MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare, mockBlockOracle{}, &mockAtxValidator{}, log.New(n.String(), "", ""))
+		NewMemPool(reflect.TypeOf([]*types.ActivationTx{})), MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare, mockBlockOracle{}, &mockAtxValidator{}, &mockSyncer{}, log.New(n.String(), "", ""))
 
 	err := builder.Start()
 	assert.NoError(t, err)

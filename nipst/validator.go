@@ -42,7 +42,7 @@ func (v *Validator) Validate(nipst *types.NIPST, expectedChallenge common.Hash) 
 		return errors.New("NIPST challenge is not equal to expected challenge")
 	}
 
-	if membership, err := v.poetDb.GetMembershipByPoetProofRef(nipst.PostProof.Challenge); err != nil || !membership[*nipst.NipstChallenge] {
+	if membership, err := v.poetDb.GetMembershipMap(nipst.PostProof.Challenge); err != nil || !membership[*nipst.NipstChallenge] {
 		return fmt.Errorf("PoET proof chain invalid: %v", err)
 	}
 
