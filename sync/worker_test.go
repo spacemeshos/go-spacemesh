@@ -10,7 +10,7 @@ import (
 )
 
 func TestNewPeerWorker(t *testing.T) {
-	syncs, nodes := SyncMockFactory(4, conf, "TestNewPeerWorker", memoryDB)
+	syncs, nodes := SyncMockFactory(4, conf, "TestNewPeerWorker", memoryDB, newMockPoetDb)
 	syncObj1 := syncs[0]
 	defer syncObj1.Close()
 	syncObj2 := syncs[1]
@@ -35,7 +35,7 @@ func TestNewPeerWorker(t *testing.T) {
 }
 
 func TestNewNeighborhoodWorker(t *testing.T) {
-	syncs, nodes := SyncMockFactory(2, conf, "TestNewNeighborhoodWorker", memoryDB)
+	syncs, nodes := SyncMockFactory(2, conf, "TestNewNeighborhoodWorker", memoryDB, newMockPoetDb)
 	syncObj1 := syncs[0]
 	defer syncObj1.Close()
 	syncObj2 := syncs[1]

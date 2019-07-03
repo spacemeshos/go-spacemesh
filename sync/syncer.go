@@ -38,6 +38,12 @@ type Configuration struct {
 	RequestTimeout time.Duration
 }
 
+type PoetDb interface {
+	HasProof(proofRef []byte) bool
+	ValidateAndStore(proofMessage *types.PoetProofMessage) error
+	GetProofMessage(proofRef []byte) ([]byte, error)
+}
+
 type Syncer struct {
 	p2p.Peers
 	*mesh.Mesh
@@ -55,6 +61,7 @@ type Syncer struct {
 	clock             timesync.LayerTimer
 	exit              chan struct{}
 	currentLayerMutex sync.RWMutex
+	poetDb            PoetDb
 }
 
 func (s *Syncer) ForceSync() {
@@ -76,6 +83,7 @@ const (
 	LAYER_IDS    server.MessageType = 3
 	TX           server.MessageType = 4
 	ATX          server.MessageType = 5
+	POET         server.MessageType = 6
 	syncProtocol                    = "/sync/1.0/"
 )
 
@@ -118,7 +126,7 @@ func (s *Syncer) run() {
 }
 
 //fires a sync every sm.syncInterval or on force space from outside
-func NewSync(srv service.Service, layers *mesh.Mesh, txpool MemPool, atxpool MemPool, bv BlockValidator, tv TxValidator, conf Configuration, clock timesync.LayerTimer, currentLayer types.LayerID, logger log.Log) *Syncer {
+func NewSync(srv service.Service, layers *mesh.Mesh, txpool MemPool, atxpool MemPool, bv BlockValidator, tv TxValidator, poetDb PoetDb, conf Configuration, clock timesync.LayerTimer, currentLayer types.LayerID, logger log.Log) *Syncer {
 	s := &Syncer{
 		BlockValidator: bv,
 		TxValidator:    tv,
@@ -135,6 +143,7 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool MemPool, atxpool Mem
 		forceSync:      make(chan bool),
 		clock:          clock,
 		exit:           make(chan struct{}),
+		poetDb:         poetDb,
 	}
 
 	s.RegisterBytesMsgHandler(LAYER_HASH, newLayerHashRequestHandler(layers, logger))
@@ -142,6 +151,7 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool MemPool, atxpool Mem
 	s.RegisterBytesMsgHandler(LAYER_IDS, newLayerBlockIdsRequestHandler(layers, logger))
 	s.RegisterBytesMsgHandler(TX, newTxsRequestHandler(s, logger))
 	s.RegisterBytesMsgHandler(ATX, newATxsRequestHandler(s, logger))
+	s.RegisterBytesMsgHandler(POET, newPoetRequestHandler(s, logger))
 	return s
 }
 
@@ -351,6 +361,15 @@ func (s *Syncer) ATXs(mb *types.Block) (atxs []*types.ActivationTx, associated *
 		for out := range output {
 			ntxs := out.([]types.ActivationTx)
 			for _, atx := range ntxs {
+				err := s.FetchPoetProof(atx.GetPoetProofRef())
+				if err != nil {
+					if types.IsProcessingError(err) {
+						s.Error("error while validating PoET proof: %v", err)
+					} else {
+						s.Warning("received ATX with invalid or missing PoET proof: %v", err)
+					}
+					return nil, nil, fmt.Errorf("a referenced PoET proof is missing or invalid: %v", err)
+				}
 				atxMap[atx.Id()] = &atx
 			}
 		}
@@ -373,6 +392,21 @@ func (s *Syncer) ATXs(mb *types.Block) (atxs []*types.ActivationTx, associated *
 		}
 	}
 	return atxs, associated, nil
+}
+
+func (s *Syncer) FetchPoetProof(poetProofRef []byte) error {
+	if !s.poetDb.HasProof(poetProofRef) {
+		out := <-s.fetchWithFactory(PoetReqFactory(poetProofRef), 1)
+		if out == nil {
+			return fmt.Errorf("could not find PoET proof with any neighbor")
+		}
+		proofMessage := out.(types.PoetProofMessage)
+		err := s.poetDb.ValidateAndStore(&proofMessage)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Syncer) fetchLayerBlockIds(m map[string]p2p.Peer, lyr types.LayerID) ([]types.BlockID, error) {

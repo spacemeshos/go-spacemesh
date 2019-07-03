@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/google/uuid"
+	xdr "github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
@@ -17,10 +18,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/types"
+	"github.com/spacemeshos/sha256-simd"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	"math/big"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strconv"
 	"sync"
@@ -62,7 +66,23 @@ var (
 	tx8 = tx()
 )
 
-func SyncMockFactory(number int, conf Configuration, name string, dbType string) (syncs []*Syncer, p2ps []*service.Node) {
+type poetDbMock struct{}
+
+func (poetDbMock) GetProofMessage(proofRef []byte) ([]byte, error) { return proofRef, nil }
+
+func (poetDbMock) HasProof(proofRef []byte) bool { return true }
+
+func (poetDbMock) ValidateAndStore(proofMessage *types.PoetProofMessage) error { return nil }
+
+func newMemPoetDb() PoetDb {
+	return activation.NewPoetDb(database.NewMemDatabase(), log.NewDefault("poetDb"))
+}
+
+func newMockPoetDb() PoetDb {
+	return &poetDbMock{}
+}
+
+func SyncMockFactory(number int, conf Configuration, name string, dbType string, poetDb func() PoetDb) (syncs []*Syncer, p2ps []*service.Node) {
 	nodes := make([]*Syncer, 0, number)
 	p2ps = make([]*service.Node, 0, number)
 	sim := service.NewSimulator()
@@ -76,7 +96,10 @@ func SyncMockFactory(number int, conf Configuration, name string, dbType string)
 		net := sim.NewNode()
 		name := fmt.Sprintf(name+"_%d", i)
 		l := log.New(name, "", "")
-		sync := NewSync(net, getMesh(dbType, Path+name+"_"+time.Now().String()), miner.NewMemPool(reflect.TypeOf(types.SerializableTransaction{})), miner.NewMemPool(reflect.TypeOf(types.ActivationTx{})), BlockValidatorMock{}, TxValidatorMock{}, conf, tk, 0, l)
+		sync := NewSync(net, getMesh(dbType, Path+name+"_"+time.Now().String()),
+			miner.NewMemPool(reflect.TypeOf(types.SerializableTransaction{})),
+			miner.NewMemPool(reflect.TypeOf(types.ActivationTx{})),
+			BlockValidatorMock{}, TxValidatorMock{}, poetDb(), conf, tk, 0, l)
 		ts.Start()
 		nodes = append(nodes, sync)
 		p2ps = append(p2ps, net)
@@ -139,7 +162,7 @@ func getMesh(dbType, id string) *mesh.Mesh {
 }
 
 func TestSyncer_Start(t *testing.T) {
-	syncs, _ := SyncMockFactory(2, conf, "TestSyncer_Start_", memoryDB)
+	syncs, _ := SyncMockFactory(2, conf, "TestSyncer_Start_", memoryDB, newMockPoetDb)
 	sync := syncs[0]
 	defer sync.Close()
 	sync.SetLatestLayer(5)
@@ -160,7 +183,7 @@ func TestSyncer_Start(t *testing.T) {
 }
 
 func TestSyncer_Close(t *testing.T) {
-	syncs, _ := SyncMockFactory(2, conf, "TestSyncer_Close_", memoryDB)
+	syncs, _ := SyncMockFactory(2, conf, "TestSyncer_Close_", memoryDB, newMockPoetDb)
 	sync := syncs[0]
 	sync.Start()
 	sync.Close()
@@ -173,7 +196,7 @@ func TestSyncer_Close(t *testing.T) {
 
 func TestSyncProtocol_BlockRequest(t *testing.T) {
 	atx1 := atx()
-	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_BlockRequest_", memoryDB)
+	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_BlockRequest_", memoryDB, newMockPoetDb)
 	syncObj := syncs[0]
 	syncObj2 := syncs[1]
 	defer syncObj.Close()
@@ -196,7 +219,7 @@ func TestSyncProtocol_BlockRequest(t *testing.T) {
 }
 
 func TestSyncProtocol_LayerHashRequest(t *testing.T) {
-	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_LayerHashRequest_", memoryDB)
+	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_LayerHashRequest_", memoryDB, newMockPoetDb)
 	atx1 := atx()
 	syncObj1 := syncs[0]
 	defer syncObj1.Close()
@@ -220,8 +243,50 @@ func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 
 }
 
+func TestSyncer_EnsurePoetProofAvailableAndValid(t *testing.T) {
+	r := require.New(t)
+
+	syncs, nodes := SyncMockFactory(2, conf, "TestSyncer_EnsurePoetProofAvailableAndValid_", memoryDB, newMemPoetDb)
+	s0 := syncs[0]
+	s1 := syncs[1]
+	s1.Peers = getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
+
+	proofMessage := makePoetProofMessage(t)
+
+	err := s0.poetDb.ValidateAndStore(&proofMessage)
+	r.NoError(err)
+
+	poetProofBytes, err := types.InterfaceToBytes(&proofMessage.PoetProof)
+	r.NoError(err)
+	ref := sha256.Sum256(poetProofBytes)
+
+	err = s1.FetchPoetProof(ref[:])
+	r.NoError(err)
+}
+
+func makePoetProofMessage(t *testing.T) types.PoetProofMessage {
+	r := require.New(t)
+	file, err := os.Open(filepath.Join("..", "activation", "test_resources", "poet.proof"))
+	r.NoError(err)
+
+	var poetProof types.PoetProof
+	_, err = xdr.Unmarshal(file, &poetProof)
+	r.NoError(err)
+	r.EqualValues([][]byte{[]byte("1"), []byte("2"), []byte("3")}, poetProof.Members)
+	var poetId [types.PoetIdLength]byte
+	copy(poetId[:], "poet id")
+	roundId := uint64(1337)
+
+	return types.PoetProofMessage{
+		PoetProof: poetProof,
+		PoetId:    poetId,
+		RoundId:   roundId,
+		Signature: nil,
+	}
+}
+
 func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
-	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_LayerIdsRequest_", memoryDB)
+	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_LayerIdsRequest_", memoryDB, newMockPoetDb)
 	atx1 := atx()
 	atx2 := atx()
 	atx3 := atx()
@@ -273,7 +338,7 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 }
 
 func TestSyncProtocol_FetchBlocks(t *testing.T) {
-	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_FetchBlocks_", memoryDB)
+	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_FetchBlocks_", memoryDB, newMockPoetDb)
 	atx1 := atx()
 	atx2 := atx()
 	atx3 := atx()
@@ -314,7 +379,7 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 }
 
 func TestSyncProtocol_SyncTwoNodes(t *testing.T) {
-	syncs, nodes := SyncMockFactory(2, conf, "TestSyncer_Start_", memoryDB)
+	syncs, nodes := SyncMockFactory(2, conf, "TestSyncer_Start_", memoryDB, newMockPoetDb)
 	pm1 := getPeersMock([]p2p.Peer{nodes[1].PublicKey()})
 	pm2 := getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
 	syncObj1 := syncs[0]
@@ -373,7 +438,7 @@ func getPeersMock(peers []p2p.Peer) p2p.PeersImpl {
 
 func syncTest(dpType string, t *testing.T) {
 
-	syncs, nodes := SyncMockFactory(4, conf, "SyncMultipleNodes_", dpType)
+	syncs, nodes := SyncMockFactory(4, conf, "SyncMultipleNodes_", dpType, newMockPoetDb)
 	syncObj1 := syncs[0]
 	defer syncObj1.Close()
 	syncObj2 := syncs[1]
@@ -485,7 +550,8 @@ func Test_TwoNodes_SyncIntegrationSuite(t *testing.T) {
 	sis.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
 		l := log.New(fmt.Sprintf("%s_%d", sis.name, atomic.LoadUint32(&i)), "", "")
 		msh := getMesh(memoryDB, fmt.Sprintf("%s_%s", sis.name, time.Now()))
-		sync := NewSync(s, msh, miner.NewMemPool(reflect.TypeOf(types.SerializableTransaction{})), miner.NewMemPool(reflect.TypeOf(types.ActivationTx{})), BlockValidatorMock{}, TxValidatorMock{}, conf, tk, 0, l)
+		poetDb := &poetDbMock{}
+		sync := NewSync(s, msh, miner.NewMemPool(reflect.TypeOf(types.SerializableTransaction{})), miner.NewMemPool(reflect.TypeOf(types.ActivationTx{})), BlockValidatorMock{}, TxValidatorMock{}, poetDb, conf, tk, 0, l)
 		sis.syncers = append(sis.syncers, sync)
 		ts.Start()
 		atomic.AddUint32(&i, 1)
@@ -569,7 +635,8 @@ func Test_Multiple_SyncIntegrationSuite(t *testing.T) {
 	sis.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
 		l := log.New(fmt.Sprintf("%s_%d", sis.name, atomic.LoadUint32(&i)), "", "")
 		msh := getMesh(memoryDB, fmt.Sprintf("%s_%d", sis.name, atomic.LoadUint32(&i)))
-		sync := NewSync(s, msh, miner.NewMemPool(reflect.TypeOf(types.SerializableTransaction{})), miner.NewMemPool(reflect.TypeOf(types.ActivationTx{})), BlockValidatorMock{}, TxValidatorMock{}, conf, tk, 0, l)
+		poetDb := &poetDbMock{}
+		sync := NewSync(s, msh, miner.NewMemPool(reflect.TypeOf(types.SerializableTransaction{})), miner.NewMemPool(reflect.TypeOf(types.ActivationTx{})), BlockValidatorMock{}, TxValidatorMock{}, poetDb, conf, tk, 0, l)
 		ts.Start()
 		sis.syncers = append(sis.syncers, sync)
 		atomic.AddUint32(&i, 1)
