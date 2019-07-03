@@ -210,7 +210,7 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *common.Hash) (*types.NIPST, error)
 
 		membership, err := nb.poetDb.GetMembershipMap(poetProofRef)
 		if err != nil {
-			log.Panic("failed to fetch membership for PoET proof") // TODO: handle inconsistent state
+			log.Panic("failed to fetch membership for PoET proof")              // TODO: handle inconsistent state
 			return nil, fmt.Errorf("failed to fetch membership for PoET proof") // inconsistent state
 		}
 		if !membership[*nipst.NipstChallenge] {
