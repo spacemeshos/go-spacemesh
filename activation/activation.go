@@ -166,6 +166,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) (bool, error) {
 			} else {
 				b.prevATX, err = b.db.GetAtx(*prevAtxId)
 				if err != nil {
+					// TODO: handle inconsistent state
 					b.log.Panic("prevAtx (id: %v) not found in DB -- inconsistent state", prevAtxId.ShortId())
 				}
 			}

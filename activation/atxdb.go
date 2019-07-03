@@ -107,6 +107,7 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 			set[id] = struct{}{}
 			atx, err := db.GetAtx(id)
 			if err != nil {
+				log.Panic("error fetching atx %x from database -- inconsistent state", id) // TODO: handle inconsistent state
 				return fmt.Errorf("error fetching atx %x from database -- inconsistent state", id)
 			}
 			if atx.TargetEpoch(db.LayersPerEpoch) != pubEpoch {
