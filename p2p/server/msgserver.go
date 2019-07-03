@@ -159,7 +159,7 @@ func (p *MessageServer) handleRequestMessage(msg Message, data *service.DataMsgW
 	payload := foo(msg)
 
 	if payload == nil {
-		p.Error("handler returned this request type: %v payload %x", data.MsgType, msg.Data())
+		p.Error("handler returned nil this request type: %v payload %x", data.MsgType, msg.Data())
 		return
 	}
 
