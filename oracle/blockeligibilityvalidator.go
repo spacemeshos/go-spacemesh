@@ -35,13 +35,9 @@ func (v BlockEligibilityValidator) BlockEligible(block *types.BlockHeader) (bool
 	epochNumber := block.LayerIndex.GetEpoch(v.layersPerEpoch)
 
 	// need to get active set size from previous epoch
-	activeSetSize := uint32(v.committeeSize)
-	if !epochNumber.IsGenesis() {
-		atx, err := v.getRelevantATX(epochNumber, block)
-		if err != nil {
-			return false, err
-		}
-		activeSetSize = atx.ActiveSetSize
+	activeSetSize, err := v.getActiveSetSize(block)
+	if err != nil {
+		return false, err
 	}
 
 	numberOfEligibleBlocks, err := getNumberOfEligibleBlocks(activeSetSize, v.committeeSize, v.layersPerEpoch, v.log)
@@ -74,17 +70,21 @@ func (v BlockEligibilityValidator) BlockEligible(block *types.BlockHeader) (bool
 	return block.LayerIndex == eligibleLayer, nil
 }
 
-func (v BlockEligibilityValidator) getRelevantATX(blockEpoch types.EpochId, block *types.BlockHeader) (*types.ActivationTx, error) {
+func (v BlockEligibilityValidator) getActiveSetSize(block *types.BlockHeader) (uint32, error) {
+	blockEpoch := block.LayerIndex.GetEpoch(v.layersPerEpoch)
+	if blockEpoch.IsGenesis() {
+		return v.committeeSize, nil
+	}
 	atx, err := v.activationDb.GetAtx(block.ATXID)
 	if err != nil {
 		v.log.Error("getting ATX failed: %v %v ep(%v)", err, block.ATXID.ShortString(), blockEpoch)
-		return nil, fmt.Errorf("getting ATX failed: %v %v ep(%v)", err, block.ATXID.ShortString(), blockEpoch)
+		return 0, fmt.Errorf("getting ATX failed: %v %v ep(%v)", err, block.ATXID.ShortString(), blockEpoch)
 	}
 	if atxTargetEpoch := atx.PubLayerIdx.GetEpoch(v.layersPerEpoch) + 1; atxTargetEpoch != blockEpoch {
 		v.log.Error("ATX target epoch (%d) doesn't match block publication epoch (%d)",
 			atxTargetEpoch, blockEpoch)
-		return nil, fmt.Errorf("ATX target epoch (%d) doesn't match block publication epoch (%d)",
+		return 0, fmt.Errorf("ATX target epoch (%d) doesn't match block publication epoch (%d)",
 			atxTargetEpoch, blockEpoch)
 	}
-	return atx, nil
+	return atx.ActiveSetSize, nil
 }
