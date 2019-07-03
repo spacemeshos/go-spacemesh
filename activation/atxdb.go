@@ -52,7 +52,7 @@ func (db *ActivationDb) ProcessAtx(atx *types.ActivationTx) {
 	db.log.Info("processing atx id %v, pub-epoch %v node: %v layer %v", atx.ShortId(), epoch, atx.NodeId.Key[:5], atx.PubLayerIdx)
 	err := db.ContextuallyValidateAtx(atx)
 	if err != nil {
-		db.log.Warning("ATX %v failed validation: %v", atx.ShortId(), err)
+		db.log.Warning("ATX %v failed contextual validation: %v", atx.ShortId(), err)
 	} else {
 		db.log.Info("ATX %v is valid", atx.ShortId())
 	}
@@ -143,14 +143,15 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 
 // SyntacticallyValidateAtx ensures the following conditions apply, otherwise it returns an error.
 //
-// - If the sequence number is non-zero: PrevATX points to a valid ATX whose sequence number is one less than the
-//   current ATX's sequence number.
+// - If the sequence number is non-zero: PrevATX points to a syntactically valid ATX whose sequence number is one less
+//   than the current ATX's sequence number.
 // - If the sequence number is zero: PrevATX is empty.
-// - Positioning ATX points to a valid ATX.
+// - Positioning ATX points to a syntactically valid ATX.
 // - NIPST challenge is a hash of the serialization of the following fields:
 //   NodeID, SequenceNumber, PrevATXID, LayerID, StartTick, PositioningATX.
-// - ATX LayerID is NipstLayerTime or more after the PositioningATX LayerID.
-// - The ATX view of the previous epoch contains ActiveSetSize activations
+// - The NIPST is valid.
+// - ATX LayerID is NipstLayerTime or less after the PositioningATX LayerID.
+// - The ATX view of the previous epoch contains ActiveSetSize activations.
 func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 	if atx.PrevATXId != *types.EmptyAtxId {
 		prevATX, err := db.GetAtx(atx.PrevATXId)
