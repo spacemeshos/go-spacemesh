@@ -784,5 +784,5 @@ func RandStringRunes(n int) string {
 
 func atx(key string) *types.ActivationTx {
 	coinbase := address.HexToAddress("aaaa")
-	return types.NewActivationTx(types.NodeId{Key: key, VRFPublicKey: []byte(RandStringRunes(5))}, coinbase, 0, *types.EmptyAtxId, 5, 1, *types.EmptyAtxId, 0, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&common.Hash{}), true)
+	return types.NewActivationTx(types.NodeId{Key: key, VRFPublicKey: []byte(RandStringRunes(5))}, coinbase, 0, *types.EmptyAtxId, 5, 1, *types.EmptyAtxId, 0, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&common.Hash{}))
 }

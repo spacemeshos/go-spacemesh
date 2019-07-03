@@ -107,7 +107,7 @@ func TestBuilder_BuildActivationTx(t *testing.T) {
 	prevAtx := types.AtxId{Hash: common.HexToHash("0x111")}
 	chlng := common.HexToHash("0x3333")
 	npst := nipst.NewNIPSTWithChallenge(&chlng)
-	atx := types.NewActivationTx(types.NodeId{"aaaaaa", []byte("bbbbb")}, coinbase, 1, prevAtx, 5, 1, prevAtx, 5, []types.BlockID{1, 2, 3}, npst, true)
+	atx := types.NewActivationTx(types.NodeId{"aaaaaa", []byte("bbbbb")}, coinbase, 1, prevAtx, 5, 1, prevAtx, 5, []types.BlockID{1, 2, 3}, npst)
 	err = adb.StoreAtx(atx.PubLayerIdx.GetEpoch(layersPerEpoch), atx)
 	assert.NoError(t, err)
 
@@ -127,7 +127,7 @@ func TestBuilder_BuildActivationTx(t *testing.T) {
 	assert.NoError(t, err)
 	activeSetSize, err := b.activeSet.ActiveSetSize(1)
 	assert.NoError(t, err)
-	act := types.NewActivationTxWithChallenge(challenge, coinbase, activeSetSize, view, npst2, true)
+	act := types.NewActivationTxWithChallenge(challenge, coinbase, activeSetSize, view, npst2)
 
 	_, err = b.PublishActivationTx(layers.LatestLayer().GetEpoch(layersPerEpoch))
 	assert.NoError(t, err)
@@ -166,7 +166,7 @@ func TestBuilder_PublishActivationTx(t *testing.T) {
 	chlng := common.HexToHash("0x3333")
 	npst := nipst.NewNIPSTWithChallenge(&chlng)
 
-	atx := types.NewActivationTx(types.NodeId{"aaaaaa", []byte("bbbbb")}, coinbase, 1, prevAtx, 5, 1, prevAtx, 5, []types.BlockID{1, 2, 3}, npst, true)
+	atx := types.NewActivationTx(types.NodeId{"aaaaaa", []byte("bbbbb")}, coinbase, 1, prevAtx, 5, 1, prevAtx, 5, []types.BlockID{1, 2, 3}, npst)
 
 	err := adb.StoreAtx(atx.PubLayerIdx.GetEpoch(layersPerEpoch), atx)
 	assert.NoError(t, err)
@@ -196,7 +196,7 @@ func TestBuilder_PublishActivationTx(t *testing.T) {
 	assert.NoError(t, err)
 	activeSetSize, err := b.activeSet.ActiveSetSize(1)
 	assert.NoError(t, err)
-	act := types.NewActivationTx(b.nodeId, coinbase, b.GetLastSequence(b.nodeId)+1, atx.Id(), atx.PubLayerIdx+10, 0, atx.Id(), activeSetSize, view, npst2, true)
+	act := types.NewActivationTx(b.nodeId, coinbase, b.GetLastSequence(b.nodeId)+1, atx.Id(), atx.PubLayerIdx+10, 0, atx.Id(), activeSetSize, view, npst2)
 	_, err = b.PublishActivationTx(1)
 	assert.NoError(t, err)
 
@@ -238,7 +238,7 @@ func TestBuilder_PublishActivationTxSerialize(t *testing.T) {
 	challenge1 := common.HexToHash("0x222222")
 	npst := nipst.NewNIPSTWithChallenge(&challenge1)
 
-	atx := types.NewActivationTx(types.NodeId{"aaaaaa", []byte("bbb")}, coinbase, 1, prevAtx, 5, 1, prevAtx, 5, []types.BlockID{1, 2, 3}, npst, true)
+	atx := types.NewActivationTx(types.NodeId{"aaaaaa", []byte("bbb")}, coinbase, 1, prevAtx, 5, 1, prevAtx, 5, []types.BlockID{1, 2, 3}, npst)
 
 	err := adb.StoreAtx(atx.PubLayerIdx.GetEpoch(layersPerEpoch), atx)
 	assert.NoError(t, err)
@@ -249,7 +249,7 @@ func TestBuilder_PublishActivationTxSerialize(t *testing.T) {
 	assert.NoError(t, err)
 	activeSetSize, err := b.activeSet.ActiveSetSize(1)
 	assert.NoError(t, err)
-	act := types.NewActivationTx(b.nodeId, coinbase, b.GetLastSequence(b.nodeId)+1, atx.Id(), atx.PubLayerIdx+10, 0, atx.Id(), activeSetSize, view, npst, true)
+	act := types.NewActivationTx(b.nodeId, coinbase, b.GetLastSequence(b.nodeId)+1, atx.Id(), atx.PubLayerIdx+10, 0, atx.Id(), activeSetSize, view, npst)
 
 	bt, err := types.AtxAsBytes(act)
 	assert.NoError(t, err)
