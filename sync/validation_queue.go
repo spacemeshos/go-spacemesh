@@ -29,7 +29,7 @@ func NewValidationQueue(lg log.Log) *validationQueue {
 	return vq
 }
 
-func (vq *validationQueue) InQueue(id types.BlockID) bool {
+func (vq *validationQueue) inQueue(id types.BlockID) bool {
 	_, ok := vq.reverseDepMap[id]
 	if ok {
 		return true
@@ -42,7 +42,7 @@ func (vq *validationQueue) InQueue(id types.BlockID) bool {
 	return false
 }
 
-func (vq *validationQueue) Done() {
+func (vq *validationQueue) done() {
 	vq.Info("done")
 	close(vq.queue)
 }
@@ -64,16 +64,18 @@ func (vq *validationQueue) traverse(s *Syncer, blk *types.BlockHeader) error {
 		block := out.(*types.Block)
 		vq.visited[block.ID()] = struct{}{}
 		s.Info("Validating view Block %v", block.ID())
-		if err := s.ConfirmBlockValidity(block); err != nil {
+		if err := s.confirmBlockValidity(block); err != nil {
 			return err
 		}
 
 		vq.callbacks[block.ID()] = func() error {
 			//data availability
 			txs, atxs, err := s.DataAvailabilty(block)
+
 			if err != nil {
 				return err
 			}
+
 			if err := s.AddBlockWithTxs(block, txs, atxs); err != nil {
 				return err
 			}
@@ -84,17 +86,15 @@ func (vq *validationQueue) traverse(s *Syncer, blk *types.BlockHeader) error {
 			s.Debug("dependencies done for %v", block.ID())
 			doneBlocks := vq.updateDependencies(block.ID())
 			for _, bid := range doneBlocks {
-				if !vq.AddToDatabase(bid) {
+				if !vq.addToDatabase(bid) {
 					return errors.New(fmt.Sprintf("could not finalize block %v validation  ", blk.ID()))
 				}
 			}
-
-			//remove this block from reverse dependency map
 			vq.Debug(" %v blocks in dependency map", len(vq.depMap))
 		}
 
 		if len(vq.reverseDepMap) == 0 {
-			vq.Done()
+			vq.done()
 			return nil
 		}
 	}
@@ -134,7 +134,7 @@ func (vq *validationQueue) removefromDepMaps(block types.BlockID, queue []types.
 func (vq *validationQueue) addDependencies(blk *types.BlockHeader, checkDatabase func(id types.BlockID) (*types.Block, error)) bool {
 	dependencys := make(map[types.BlockID]struct{})
 	for _, id := range blk.ViewEdges {
-		if vq.InQueue(id) {
+		if vq.inQueue(id) {
 			vq.reverseDepMap[id] = append(vq.reverseDepMap[id], blk.ID())
 			vq.Debug("add block %v to %v dependencies map", id, blk.ID())
 			dependencys[id] = struct{}{}
@@ -154,7 +154,7 @@ func (vq *validationQueue) addDependencies(blk *types.BlockHeader, checkDatabase
 	return len(dependencys) > 0
 }
 
-func (vq *validationQueue) AddToDatabase(id types.BlockID) bool {
+func (vq *validationQueue) addToDatabase(id types.BlockID) bool {
 	if callback, ok := vq.callbacks[id]; ok {
 		if err := callback(); err != nil {
 			vq.Error("block %v failed validation %v", id, err)

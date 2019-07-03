@@ -249,7 +249,7 @@ func (s *Syncer) GetFullBlocks(blockIds []types.BlockID) []*types.Block {
 }
 
 func (s *Syncer) BlockSyntacticValidation(block *types.Block) ([]*types.SerializableTransaction, []*types.ActivationTx, error) {
-	if err := s.ConfirmBlockValidity(block); err != nil {
+	if err := s.confirmBlockValidity(block); err != nil {
 		s.Error("failed derefrencing block data %v %v", block.ID(), err)
 		return nil, nil, errors.New(fmt.Sprintf("failed derefrencing block data %v %v", block.ID(), err))
 	}
@@ -268,7 +268,7 @@ func (s *Syncer) BlockSyntacticValidation(block *types.Block) ([]*types.Serializ
 	return txs, atxs, nil
 }
 
-func (s *Syncer) ConfirmBlockValidity(blk *types.Block) error {
+func (s *Syncer) confirmBlockValidity(blk *types.Block) error {
 	s.Info("validate block %v ", blk.ID())
 
 	//check block signature and is identity active
