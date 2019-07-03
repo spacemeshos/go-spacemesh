@@ -100,21 +100,9 @@ func (bl *BlockListener) HandleNewBlock(blk *types.Block) bool {
 		return true
 	}
 
-	if err := bl.ConfirmBlockValidity(blk); err != nil {
-		bl.Error("HandleNewBlock %v failed ", blk.ID(), err)
-		return false
-	}
-
-	//data availability
-	txs, atxs, err := bl.DataAvailabilty(blk)
+	txs, atxs, err := bl.BlockSyntacticValidation(blk)
 	if err != nil {
-		bl.Error("data availabilty failed for block %v", blk.ID())
-		return false
-	}
-
-	//validate blocks view
-	if valid := bl.ValidateView(blk); valid == false {
-		bl.Error("could not validate for block %v view ", blk.ID())
+		bl.Error("failed to validate block %v %v", blk.ID(), err)
 		return false
 	}
 

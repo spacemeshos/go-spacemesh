@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/spacemeshos/sha256-simd"
@@ -59,7 +58,7 @@ func (bo *MinerBlockOracle) BlockEligible(layerID types.LayerID) (types.AtxId, [
 		err := bo.calcEligibilityProofs(epochNumber)
 		if err != nil {
 			bo.log.Error("failed to calculate eligibility proofs: %v", err)
-			return types.AtxId{common.HexToHash("EEEEEEEE")}, nil, err
+			return *types.EmptyAtxId, nil, err
 		}
 	}
 	bo.log.Info("miner %v found eligible for %d blocks in layer %d", bo.nodeID.Key[:5], len(bo.eligibilityProofs[layerID]), layerID)

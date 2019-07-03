@@ -228,21 +228,10 @@ func (s *Syncer) GetFullBlocks(blockIds []types.BlockID) []*types.Block {
 	blocksArr := make([]*types.Block, 0, len(blockIds))
 	for out := range output {
 		block := out.(*types.Block)
-		if err := s.ConfirmBlockValidity(block); err != nil {
-			s.Error("failed derefrencing block data %v %v", block.ID(), err)
-			continue
-		}
 
-		//data availability
-		txs, atxs, err := s.DataAvailabilty(block)
+		txs, atxs, err := s.BlockSyntacticValidation(block)
 		if err != nil {
-			s.Error("data availabilty failed for block %v", block.ID())
-			continue
-		}
-
-		//validate blocks view
-		if valid := s.ValidateView(block); valid == false {
-			s.Error("block %v not syntacticly valid", block.ID())
+			s.Error("failed to validate block %v %v", block.ID(), err)
 			continue
 		}
 
@@ -257,6 +246,26 @@ func (s *Syncer) GetFullBlocks(blockIds []types.BlockID) []*types.Block {
 
 	s.Info("done getting full blocks")
 	return blocksArr
+}
+
+func (s *Syncer) BlockSyntacticValidation(block *types.Block) ([]*types.SerializableTransaction, []*types.ActivationTx, error) {
+	if err := s.ConfirmBlockValidity(block); err != nil {
+		s.Error("failed derefrencing block data %v %v", block.ID(), err)
+		return nil, nil, errors.New(fmt.Sprintf("failed derefrencing block data %v %v", block.ID(), err))
+	}
+
+	//data availability
+	txs, atxs, err := s.DataAvailabilty(block)
+	if err != nil {
+		return nil, nil, errors.New(fmt.Sprintf("data availabilty failed for block %v", block.ID()))
+	}
+
+	//validate blocks view
+	if valid := s.ValidateView(block); valid == false {
+		return nil, nil, errors.New(fmt.Sprintf("block %v not syntacticly valid", block.ID()))
+	}
+
+	return txs, atxs, nil
 }
 
 func (s *Syncer) ConfirmBlockValidity(blk *types.Block) error {
