@@ -77,7 +77,7 @@ func PublicKeyToAccountAddress(pub ed25519.PublicKey) address.Address {
 // Return the src acount address and error in case of failure
 func (tp *TransactionProcessor) ValidateSignature(s types.Signed) (address.Address, error) {
 	var w bytes.Buffer
-	_, err := xdr.Marshal(&w, s.Obj())
+	_, err := xdr.Marshal(&w, s.Data())
 	if err != nil {
 		return address.Address{}, err
 	}

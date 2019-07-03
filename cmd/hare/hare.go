@@ -90,8 +90,8 @@ func (mip *mockIdProvider) GetIdentity(edId string) (types.NodeId, error) {
 type mockStateQuerier struct {
 }
 
-func (msq mockStateQuerier) IsIdentityActive(edId string, layer types.LayerID) (bool, error) {
-	return true, nil
+func (msq mockStateQuerier) IsIdentityActive(edId string, layer types.LayerID) (bool, types.AtxId, error) {
+	return true, *types.EmptyAtxId, nil
 }
 
 func (app *HareApp) Start(cmd *cobra.Command, args []string) {

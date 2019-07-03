@@ -52,11 +52,10 @@ func (db *ActivationDb) ProcessAtx(atx *types.ActivationTx) {
 	db.log.Info("processing atx id %v, pub-epoch %v node: %v layer %v", atx.ShortId(), epoch, atx.NodeId.Key[:5], atx.PubLayerIdx)
 	err := db.ContextuallyValidateAtx(atx)
 	if err != nil {
-		db.log.Warning("ATX %v failed validation: %v", atx.ShortId(), err)
+		db.log.Error("ATX %v failed contextual validation: %v", atx.ShortId(), err)
 	} else {
 		db.log.Info("ATX %v is valid", atx.ShortId())
 	}
-	atx.Valid = err == nil
 	err = db.StoreAtx(epoch, atx)
 	if err != nil {
 		db.log.Error("cannot store atx: %v", atx)
@@ -108,11 +107,8 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 			set[id] = struct{}{}
 			atx, err := db.GetAtx(id)
 			if err != nil {
-				return fmt.Errorf("error fetching atx %x from database -- inconsistent state", id)
-			}
-			if !atx.Valid {
-				db.log.Debug("atx %v found, but not valid", atx.ShortId())
-				continue
+				log.Panic("error fetching atx %v from database -- inconsistent state", id.ShortId()) // TODO: handle inconsistent state
+				return fmt.Errorf("error fetching atx %v from database -- inconsistent state", id.ShortId())
 			}
 			if atx.TargetEpoch(db.LayersPerEpoch) != pubEpoch {
 				db.log.Debug("atx %v found, but targeting epoch %v instead of publication epoch %v",
@@ -143,14 +139,15 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 
 // SyntacticallyValidateAtx ensures the following conditions apply, otherwise it returns an error.
 //
-// - If the sequence number is non-zero: PrevATX points to a valid ATX whose sequence number is one less than the
-//   current ATX's sequence number.
+// - If the sequence number is non-zero: PrevATX points to a syntactically valid ATX whose sequence number is one less
+//   than the current ATX's sequence number.
 // - If the sequence number is zero: PrevATX is empty.
-// - Positioning ATX points to a valid ATX.
+// - Positioning ATX points to a syntactically valid ATX.
 // - NIPST challenge is a hash of the serialization of the following fields:
 //   NodeID, SequenceNumber, PrevATXID, LayerID, StartTick, PositioningATX.
-// - ATX LayerID is NipstLayerTime or more after the PositioningATX LayerID.
-// - The ATX view of the previous epoch contains ActiveSetSize activations
+// - The NIPST is valid.
+// - ATX LayerID is NipstLayerTime or less after the PositioningATX LayerID.
+// - The ATX view of the previous epoch contains ActiveSetSize activations.
 func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 	if atx.PrevATXId != *types.EmptyAtxId {
 		prevATX, err := db.GetAtx(atx.PrevATXId)
@@ -160,9 +157,6 @@ func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error 
 		if prevATX.NodeId.Key != atx.NodeId.Key {
 			return fmt.Errorf("previous ATX belongs to different miner. atx.Id: %v, atx.NodeId: %v, prevAtx.NodeId: %v",
 				atx.ShortId(), atx.NodeId.Key, prevATX.NodeId.Key)
-		}
-		if !prevATX.Valid {
-			return fmt.Errorf("validation failed: prevATX not valid")
 		}
 		if prevATX.Sequence+1 != atx.Sequence {
 			return fmt.Errorf("sequence number is not one more than prev sequence number")
@@ -177,9 +171,6 @@ func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error 
 		posAtx, err := db.GetAtx(atx.PositioningAtx)
 		if err != nil {
 			return fmt.Errorf("positioning atx not found")
-		}
-		if !posAtx.Valid {
-			return fmt.Errorf("positioning atx is not valid")
 		}
 		if atx.PubLayerIdx <= posAtx.PubLayerIdx {
 			return fmt.Errorf("atx layer (%v) must be after positioning atx layer (%v)",
@@ -278,11 +269,9 @@ func (db *ActivationDb) StoreAtx(ech types.EpochId, atx *types.ActivationTx) err
 		return err
 	}
 
-	if atx.Valid {
-		err := db.incValidAtxCounter(ech)
-		if err != nil {
-			return err
-		}
+	err = db.incValidAtxCounter(ech)
+	if err != nil {
+		return err
 	}
 	err = db.addAtxToNodeIdSorted(atx.NodeId, atx)
 	if err != nil {
@@ -509,50 +498,55 @@ func (db *ActivationDb) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
 
 // IsIdentityActive returns whether edId is active for the epoch of layer layer.
 // it returns error if no associated atx is found in db
-func (db *ActivationDb) IsIdentityActive(edId string, layer types.LayerID) (bool, error) {
+func (db *ActivationDb) IsIdentityActive(edId string, layer types.LayerID) (bool, types.AtxId, error) {
+	// TODO: genesis flow should decide what we want to do here
+	if layer.GetEpoch(db.LayersPerEpoch) == 0 {
+		return true, *types.EmptyAtxId, nil
+	}
+
 	epoch := layer.GetEpoch(db.LayersPerEpoch)
 	nodeId, err := db.ids.GetIdentity(edId)
 	if err != nil { // means there is no such identity
 		db.log.Error("IsIdentityActive erred while getting identity err=%v", err)
-		return false, nil
+		return false, *types.EmptyAtxId, nil
 	}
 	ids, err := db.GetNodeAtxIds(nodeId)
 	if err != nil {
 		db.log.Error("IsIdentityActive erred while getting node atx ids err=%v", err)
-		return false, err
+		return false, *types.EmptyAtxId, err
 	}
 	if len(ids) == 0 { // GetIdentity succeeded but no ATXs, this is a fatal error
-		return false, fmt.Errorf("no active IDs for known node")
+		return false, *types.EmptyAtxId, fmt.Errorf("no active IDs for known node")
 	}
 
 	atx, err := db.GetAtx(ids[len(ids)-1])
 	if err != nil {
 		db.log.Error("IsIdentityActive erred while getting atx err=%v", err)
-		return false, nil
+		return false, *types.EmptyAtxId, nil
 	}
 
 	lastAtxTargetEpoch := atx.TargetEpoch(db.LayersPerEpoch)
 	if lastAtxTargetEpoch < epoch {
 		db.log.Info("IsIdentityActive latest atx is too old expected=%v actual=%v atxid=%v",
 			epoch, lastAtxTargetEpoch, atx.ShortId())
-		return false, nil
+		return false, *types.EmptyAtxId, nil
 	}
 
 	if lastAtxTargetEpoch > epoch {
 		// This could happen if we already published the ATX for the next epoch, so we check the previous one as well
 		if len(ids) < 2 {
 			db.log.Info("IsIdentityActive latest atx is too new but no previous atx len(ids)=%v", len(ids))
-			return false, nil
+			return false, *types.EmptyAtxId, nil
 		}
 		atx, err = db.GetAtx(ids[len(ids)-2])
 		if err != nil {
 			db.log.Error("IsIdentityActive erred while getting atx for second newest err=%v", err)
-			return false, nil
+			return false, *types.EmptyAtxId, nil
 		}
 	}
 
 	// lastAtxTargetEpoch = epoch
-	return atx.Valid && atx.TargetEpoch(db.LayersPerEpoch) == epoch, nil
+	return atx.TargetEpoch(db.LayersPerEpoch) == epoch, atx.Id(), nil
 }
 
 func decodeAtxIds(idsBytes []byte) ([]types.AtxId, error) {

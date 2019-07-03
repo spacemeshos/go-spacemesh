@@ -4,12 +4,14 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
+	"github.com/spacemeshos/go-spacemesh/types"
 	"sync"
 	"sync/atomic"
 	"time"
 )
 
 type RequestFactory func(s *server.MessageServer, peer p2p.Peer) (chan interface{}, error)
+type BlockRequestFactory func(s *server.MessageServer, peer p2p.Peer, id types.BlockID) (chan interface{}, error)
 
 type worker struct {
 	*sync.Once
@@ -63,8 +65,6 @@ func NewPeersWorker(s *Syncer, peers []p2p.Peer, mu *sync.Once, reqFactory Reque
 				if v != nil {
 					s.Info("Peer: %v responded", peer)
 					output <- v
-				} else {
-					s.Error("peer %v responded with nil", peer)
 				}
 			}
 		}
@@ -79,7 +79,7 @@ func NewPeersWorker(s *Syncer, peers []p2p.Peer, mu *sync.Once, reqFactory Reque
 		wg.Wait()
 	}
 
-	worker := worker{Log: s.Log, Once: mu, workCount: &count, output: output, work: wrkFunc}
+	worker := worker{Log: s.Log.WithName("peersWrkr"), Once: mu, workCount: &count, output: output, work: wrkFunc}
 
 	return worker, output
 
@@ -90,8 +90,8 @@ func NewNeighborhoodWorker(s *Syncer, count int, reqFactory RequestFactory) work
 	acount := int32(count)
 	mu := &sync.Once{}
 	workFunc := func() {
-		s.Info("asking to sync with %d peers", len(s.GetPeers()))
-		for _, p := range s.GetPeers() {
+		peers := s.GetPeers()
+		for _, p := range peers {
 			peer := p
 			s.Info("send request Peer: %v", peer)
 			ch, _ := reqFactory(s.MessageServer, peer)
@@ -106,7 +106,41 @@ func NewNeighborhoodWorker(s *Syncer, count int, reqFactory RequestFactory) work
 					output <- v
 					return
 				}
-				s.Error("peer %v responded with nil", peer)
+			}
+		}
+	}
+
+	return worker{Log: s.Log, Once: mu, workCount: &acount, output: output, work: workFunc}
+
+}
+
+func NewBlockWorker(s *Syncer, count int, reqFactory BlockRequestFactory, ids chan types.BlockID) worker {
+	output := make(chan interface{}, count)
+	acount := int32(count)
+	mu := &sync.Once{}
+	workFunc := func() {
+		for id := range ids {
+			retrived := false
+			for _, p := range s.GetPeers() {
+				peer := p
+				s.Info("send %v block request to Peer: %v", id, peer)
+				ch, _ := reqFactory(s.MessageServer, peer, id)
+				timeout := time.After(s.RequestTimeout)
+				select {
+				case <-timeout:
+					s.Error("request to %v timed out", peer)
+				case v := <-ch:
+					if v != nil {
+						retrived = true
+						s.Info("Peer: %v responded ", peer)
+						s.Debug("Peer: %v response was  %v", v)
+						output <- v
+						continue
+					}
+				}
+			}
+			if !retrived {
+				output <- nil
 			}
 		}
 	}
