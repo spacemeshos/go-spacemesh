@@ -80,6 +80,7 @@ func (v BlockEligibilityValidator) getActiveSetSize(block *types.BlockHeader) (u
 		v.log.Error("getting ATX failed: %v %v ep(%v)", err, block.ATXID.ShortString(), blockEpoch)
 		return 0, fmt.Errorf("getting ATX failed: %v %v ep(%v)", err, block.ATXID.ShortString(), blockEpoch)
 	}
+	// TODO: remove the following check, as it should be validated before calling BlockEligible
 	if atxTargetEpoch := atx.PubLayerIdx.GetEpoch(v.layersPerEpoch) + 1; atxTargetEpoch != blockEpoch {
 		v.log.Error("ATX target epoch (%d) doesn't match block publication epoch (%d)",
 			atxTargetEpoch, blockEpoch)
