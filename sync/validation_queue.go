@@ -58,7 +58,6 @@ func (vq *validationQueue) traverse(s *Syncer, blk *types.BlockHeader) error {
 	}
 
 	output := s.fetchWithFactory(NewBlockWorker(s, s.Concurrency, BlockReqFactory(), vq.queue))
-
 	for out := range output {
 
 		block := out.(*types.Block)
@@ -68,19 +67,7 @@ func (vq *validationQueue) traverse(s *Syncer, blk *types.BlockHeader) error {
 			return err
 		}
 
-		vq.callbacks[block.ID()] = func() error {
-			//data availability
-			txs, atxs, err := s.DataAvailabilty(block)
-
-			if err != nil {
-				return err
-			}
-
-			if err := s.AddBlockWithTxs(block, txs, atxs); err != nil {
-				return err
-			}
-			return nil
-		}
+		vq.callbacks[block.ID()] = vq.finishBlockCallback(s, block)
 
 		if vq.addDependencies(&block.BlockHeader, s.GetBlock) == false {
 			s.Debug("dependencies done for %v", block.ID())
@@ -100,6 +87,22 @@ func (vq *validationQueue) traverse(s *Syncer, blk *types.BlockHeader) error {
 	}
 
 	return nil
+}
+
+func (vq *validationQueue) finishBlockCallback(s *Syncer, block *types.Block) func() error {
+	return func() error {
+		//data availability
+		txs, atxs, err := s.DataAvailabilty(block)
+		if err != nil {
+			return err
+		}
+
+		if err := s.AddBlockWithTxs(block, txs, atxs); err != nil {
+			return err
+		}
+
+		return nil
+	}
 }
 
 func (vq *validationQueue) updateDependencies(block types.BlockID) []types.BlockID {
