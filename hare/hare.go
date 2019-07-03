@@ -148,7 +148,7 @@ func (h *Hare) onTick(id types.LayerID) {
 		h.lastLayer = id
 	}
 	h.layerLock.Unlock()
-	h.Info("hare got tick, sleeping for %v", h.networkDelta)
+	h.Debug("hare got tick, sleeping for %v", h.networkDelta)
 	ti := time.NewTimer(h.networkDelta)
 	select {
 	case <-ti.C:
@@ -166,7 +166,7 @@ func (h *Hare) onTick(id types.LayerID) {
 		return
 	}
 
-	h.Info("received %v new blocks ", len(blocks))
+	h.Debug("received %v new blocks ", len(blocks))
 	set := NewEmptySet(len(blocks))
 	for _, b := range blocks {
 		set.Add(Value{b})

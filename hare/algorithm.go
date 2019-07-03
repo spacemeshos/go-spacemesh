@@ -242,7 +242,7 @@ PreRound:
 			proc.advanceToNextRound()
 			proc.onRoundBegin()
 		case <-proc.CloseChannel(): // close event
-			proc.Info("Stop event loop, terminating")
+			proc.Debug("Stop event loop, terminating")
 			return
 		}
 	}
@@ -291,7 +291,7 @@ func (proc *ConsensusProcess) handleMessage(m *Msg) {
 			proc.Warning("message of type %v is not valid for either round, pubkey %v", mType, m.PubKey.ShortString())
 			return
 		} else { // a valid early InnerMsg, keep it for later
-			proc.Info("Early message of type %v detected. Keeping message, pubkey %v", mType, m.PubKey.ShortString())
+			proc.Debug("Early message of type %v detected. Keeping message, pubkey %v", mType, m.PubKey.ShortString())
 			proc.onEarlyMessage(m)
 			return
 		}
@@ -302,8 +302,7 @@ func (proc *ConsensusProcess) handleMessage(m *Msg) {
 }
 
 func (proc *ConsensusProcess) processMsg(m *Msg) {
-	proc.Info("Processing message of type %v", m.InnerMsg.Type.String())
-
+	proc.Debug("Processing message of type %v", m.InnerMsg.Type.String())
 	metrics.MessageTypeCounter.With("type_id", m.InnerMsg.Type.String()).Add(1)
 
 	switch m.InnerMsg.Type {
@@ -340,7 +339,7 @@ func (proc *ConsensusProcess) sendMessage(msg *Msg) {
 		return
 	}
 
-	proc.Info("message of type %v sent", msg.InnerMsg.Type.String())
+	proc.Debug("message of type %v sent", msg.InnerMsg.Type.String())
 }
 
 func (proc *ConsensusProcess) onRoundEnd() {
