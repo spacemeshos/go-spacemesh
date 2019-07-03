@@ -212,6 +212,82 @@ func TestBlockListener2(t *testing.T) {
 	t.Log("done!")
 }
 
+func TestBlockListener_TraverseViewBadFlow(t *testing.T) {
+
+	t.Log("TestBlockListener2 start")
+	sim := service.NewSimulator()
+	signer := signing.NewEdSigner()
+
+	n1 := sim.NewNode()
+	n2 := sim.NewNode()
+
+	bl1 := ListenerFactory(n1, PeersMock{func() []p2p.Peer { return []p2p.Peer{n2.PublicKey()} }}, "TestBlockListener_1", 2)
+	bl2 := ListenerFactory(n2, PeersMock{func() []p2p.Peer { return []p2p.Peer{n1.PublicKey()} }}, "TestBlockListener_2", 2)
+	defer bl2.Close()
+	defer bl1.Close()
+	bl2.Start()
+
+	atx := atx("rt6uuk")
+
+	byts, _ := types.InterfaceToBytes(atx)
+	var atx1 types.ActivationTx
+	types.BytesToInterface(byts, &atx1)
+
+	bl1.ProcessAtx(atx)
+	bl2.ProcessAtx(&atx1)
+
+	block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	block1.Id = 1
+	block1.ATXID = *types.EmptyAtxId
+	block1.Signature = signer.Sign(block1.Bytes())
+
+	block2 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	block2.ATXID = *types.EmptyAtxId
+	block2.Signature = signer.Sign(block2.Bytes())
+	block2.Id = 2
+
+	block3 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	block3.ATXID = *types.EmptyAtxId
+	block3.Signature = signer.Sign(block3.Bytes())
+	block3.Id = 3
+
+	block4 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	block4.ATXID = *types.EmptyAtxId
+	block4.Signature = signer.Sign(block4.Bytes())
+	block4.Id = 4
+
+	block5 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	block5.ATXID = *types.EmptyAtxId
+	block5.Signature = signer.Sign(block5.Bytes())
+	block5.Id = 5
+
+	block2.AddView(block1.ID())
+	block3.AddView(block2.ID())
+	block4.AddView(block2.ID())
+	block5.AddView(block3.ID())
+	block5.AddView(block4.ID())
+
+	bl1.AddBlock(block2)
+	bl1.AddBlock(block3)
+	bl1.AddBlock(block4)
+	bl1.AddBlock(block5)
+
+	bl2.GetFullBlocks([]types.BlockID{block5.Id})
+
+	b, err := bl2.GetBlock(block2.Id)
+	if err == nil {
+		t.Error(err)
+	}
+
+	b, err = bl2.GetBlock(block5.Id)
+	if err == nil {
+		t.Error(err)
+	}
+
+	t.Log("  ", b)
+	t.Log("done!")
+}
+
 func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()

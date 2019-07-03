@@ -120,9 +120,10 @@ func NewBlockWorker(s *Syncer, count int, reqFactory BlockRequestFactory, ids ch
 	mu := &sync.Once{}
 	workFunc := func() {
 		for id := range ids {
+			retrived := false
 			for _, p := range s.GetPeers() {
 				peer := p
-				s.Info("send block request to Peer: %v", peer)
+				s.Info("send %v block request to Peer: %v", id, peer)
 				ch, _ := reqFactory(s.MessageServer, peer, id)
 				timeout := time.After(s.RequestTimeout)
 				select {
@@ -130,11 +131,16 @@ func NewBlockWorker(s *Syncer, count int, reqFactory BlockRequestFactory, ids ch
 					s.Error("request to %v timed out", peer)
 				case v := <-ch:
 					if v != nil {
+						retrived = true
 						s.Info("Peer: %v responded ", peer)
 						s.Debug("Peer: %v response was  %v", v)
 						output <- v
+						continue
 					}
 				}
+			}
+			if !retrived {
+				output <- nil
 			}
 		}
 	}

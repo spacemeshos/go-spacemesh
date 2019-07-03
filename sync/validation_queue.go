@@ -60,6 +60,10 @@ func (vq *validationQueue) traverse(s *Syncer, blk *types.BlockHeader) error {
 	output := s.fetchWithFactory(NewBlockWorker(s, s.Concurrency, BlockReqFactory(), vq.queue))
 	for out := range output {
 
+		if out == nil {
+			return errors.New(fmt.Sprintf("could not retrieve a block in %v view ", blk.ID()))
+		}
+
 		block := out.(*types.Block)
 		vq.visited[block.ID()] = struct{}{}
 		s.Info("Validating view Block %v", block.ID())
@@ -70,14 +74,14 @@ func (vq *validationQueue) traverse(s *Syncer, blk *types.BlockHeader) error {
 		vq.callbacks[block.ID()] = vq.finishBlockCallback(s, block)
 
 		if vq.addDependencies(&block.BlockHeader, s.GetBlock) == false {
-			s.Debug("dependencies done for %v", block.ID())
+			s.Info("dependencies done for %v", block.ID())
 			doneBlocks := vq.updateDependencies(block.ID())
 			for _, bid := range doneBlocks {
 				if !vq.addToDatabase(bid) {
 					return errors.New(fmt.Sprintf("could not finalize block %v validation  ", blk.ID()))
 				}
 			}
-			vq.Debug(" %v blocks in dependency map", len(vq.depMap))
+			vq.Info(" %v blocks in dependency map", len(vq.depMap))
 		}
 
 		if len(vq.reverseDepMap) == 0 {
@@ -139,7 +143,7 @@ func (vq *validationQueue) addDependencies(blk *types.BlockHeader, checkDatabase
 	for _, id := range blk.ViewEdges {
 		if vq.inQueue(id) {
 			vq.reverseDepMap[id] = append(vq.reverseDepMap[id], blk.ID())
-			vq.Debug("add block %v to %v dependencies map", id, blk.ID())
+			vq.Info("add block %v to %v dependencies map", id, blk.ID())
 			dependencys[id] = struct{}{}
 		} else {
 			//	check database
@@ -147,7 +151,7 @@ func (vq *validationQueue) addDependencies(blk *types.BlockHeader, checkDatabase
 				//unknown block add to queue
 				vq.queue <- id
 				vq.reverseDepMap[id] = append(vq.reverseDepMap[id], blk.ID())
-				vq.Debug("add block %v to %v dependencies map", id, blk.ID())
+				vq.Info("add block %v to %v dependencies map", id, blk.ID())
 				dependencys[id] = struct{}{}
 			}
 		}

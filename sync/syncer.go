@@ -227,21 +227,23 @@ func (s *Syncer) GetFullBlocks(blockIds []types.BlockID) []*types.Block {
 	output := s.fetchWithFactory(NewBlockWorker(s, s.Concurrency, BlockReqFactory(), blockSliceToChan(blockIds)))
 	blocksArr := make([]*types.Block, 0, len(blockIds))
 	for out := range output {
-		block := out.(*types.Block)
+		//ignore blocks that we could not fetch
+		if out != nil {
+			block := out.(*types.Block)
+			txs, atxs, err := s.BlockSyntacticValidation(block)
+			if err != nil {
+				s.Error("failed to validate block %v %v", block.ID(), err)
+				continue
+			}
 
-		txs, atxs, err := s.BlockSyntacticValidation(block)
-		if err != nil {
-			s.Error("failed to validate block %v %v", block.ID(), err)
-			continue
+			if err := s.AddBlockWithTxs(block, txs, atxs); err != nil {
+				s.Error("failed to add block %v to database %v", block.ID(), err)
+				continue
+			}
+
+			s.Info("added block %v to layer %v", block.ID(), block.Layer())
+			blocksArr = append(blocksArr, block)
 		}
-
-		if err := s.AddBlockWithTxs(block, txs, atxs); err != nil {
-			s.Error("failed to add block %v to database %v", block.ID(), err)
-			continue
-		}
-
-		s.Info("added block %v to layer %v", block.ID(), block.Layer())
-		blocksArr = append(blocksArr, block)
 	}
 
 	s.Info("done getting full blocks")
