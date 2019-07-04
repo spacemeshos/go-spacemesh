@@ -15,7 +15,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"reflect"
 	"testing"
 	"time"
 )
@@ -50,8 +49,7 @@ func ListenerFactory(serv service.Service, peers p2p.Peers, name string, layer t
 	l := log.New(name, "", "")
 	poetDb := activation.NewPoetDb(database.NewMemDatabase(), l.WithName("poetDb"))
 	blockValidator := NewBlockValidator(BlockEligibilityValidatorMock{})
-	sync := NewSync(serv, getMesh(memoryDB, name), miner.NewMemPool(reflect.TypeOf(types.AddressableSignedTransaction{})),
-		miner.NewMemPool(reflect.TypeOf(types.ActivationTx{})), mockTxProcessor{}, blockValidator, poetDb, conf, ch, layer, l)
+	sync := NewSync(serv, getMesh(memoryDB, name), miner.NewTypesTransactionIdMemPool(), miner.NewTypesAtxIdMemPool(), mockTxProcessor{}, blockValidator, poetDb, conf, ch, layer, l)
 	sync.Peers = peers
 	nbl := NewBlockListener(serv, sync, 2, log.New(name, "", ""))
 	return nbl

@@ -54,8 +54,8 @@ type BlockBuilder struct {
 	txGossipChannel  chan service.GossipMessage
 	atxGossipChannel chan service.GossipMessage
 	hareResult       HareResultProvider
-	AtxPool          *MemPool
-	TransactionPool  *MemPool
+	AtxPool          *TypesAtxIdMemPool
+	TransactionPool  *TypesTransactionIdMemPool
 	mu               sync.Mutex
 	network          p2p.Service
 	weakCoinToss     WeakCoinProvider
@@ -69,8 +69,8 @@ type BlockBuilder struct {
 
 func NewBlockBuilder(minerID types.NodeId, sgn Signer, net p2p.Service,
 	beginRoundEvent chan types.LayerID,
-	txPool *MemPool,
-	atxPool *MemPool,
+	txPool *TypesTransactionIdMemPool,
+	atxPool *TypesAtxIdMemPool,
 	weakCoin WeakCoinProvider,
 	orph OrphanBlockProvider,
 	hare HareResultProvider,
@@ -171,7 +171,7 @@ func (t *BlockBuilder) AddTransaction(tx *types.AddressableSignedTransaction) er
 }
 
 func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibilityProof types.BlockEligibilityProof,
-	txs []*types.AddressableSignedTransaction, atx []*types.ActivationTx) (*types.Block, error) {
+	txs []types.AddressableSignedTransaction, atx []types.ActivationTx) (*types.Block, error) {
 
 	var votes []types.BlockID = nil
 	var err error
@@ -334,9 +334,9 @@ func (t *BlockBuilder) acceptBlockData() {
 			}
 			// TODO: include multiple proofs in each block and weigh blocks where applicable
 
-			txList := t.TransactionPool.PopItems(MaxTransactionsPerBlock).([]*types.AddressableSignedTransaction)
+			txList := t.TransactionPool.PopItems(MaxTransactionsPerBlock)
 
-			atxList := t.AtxPool.PopItems(MaxTransactionsPerBlock).([]*types.ActivationTx)
+			atxList := t.AtxPool.PopItems(MaxTransactionsPerBlock)
 
 			for _, eligibilityProof := range proofs {
 				blk, err := t.createBlock(types.LayerID(id), atxID, eligibilityProof, txList, atxList)
