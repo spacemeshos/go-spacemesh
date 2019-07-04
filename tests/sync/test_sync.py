@@ -83,7 +83,6 @@ def test_sync_gradually_add_nodes(init_session, setup_bootstrap, save_log_on_exi
     assert res3
     assert res4
 
-    print("fuuuuuuuuuuuuuuuuuuuuuck")
 
     time.sleep(3*60)
     delete_deployment(inf.deployment_name, testconfig['namespace'])
