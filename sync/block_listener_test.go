@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"errors"
 	"github.com/google/uuid"
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/address"
@@ -14,7 +15,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"math/big"
 	"reflect"
 	"testing"
 	"time"
@@ -32,14 +32,26 @@ func (pm PeersMock) Close() {
 	return
 }
 
+type mockTxProcessor struct {
+	notValid bool
+}
+
+func (m mockTxProcessor) ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (address.Address, error) {
+	if !m.notValid {
+
+		return address.HexToAddress("0xFFFF"), nil
+	}
+	return address.Address{}, errors.New("invalid sig for tx")
+}
+
 func ListenerFactory(serv service.Service, peers p2p.Peers, name string, layer types.LayerID) *BlockListener {
 	ch := make(chan types.LayerID, 1)
 	ch <- layer
 	l := log.New(name, "", "")
 	poetDb := activation.NewPoetDb(database.NewMemDatabase(), l.WithName("poetDb"))
-	blockValidator := NewBlockValidator(BlockEligibilityValidatorMock{}, TxValidatorMock{})
-	sync := NewSync(serv, getMesh(memoryDB, name), miner.NewMemPool(reflect.TypeOf(types.SerializableTransaction{})),
-		miner.NewMemPool(reflect.TypeOf(types.ActivationTx{})), blockValidator, poetDb, conf, ch, layer, l)
+	blockValidator := NewBlockValidator(BlockEligibilityValidatorMock{})
+	sync := NewSync(serv, getMesh(memoryDB, name), miner.NewMemPool(reflect.TypeOf(types.AddressableSignedTransaction{})),
+		miner.NewMemPool(reflect.TypeOf(types.ActivationTx{})), mockTxProcessor{}, blockValidator, poetDb, conf, ch, layer, l)
 	sync.Peers = peers
 	nbl := NewBlockListener(serv, sync, 2, log.New(name, "", ""))
 	return nbl
@@ -301,11 +313,11 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 	bl2.Start() // TODO: @almog make sure data is available without starting
 
 	blk := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data1"))
-	tx := types.NewSerializableTransaction(0, address.BytesToAddress([]byte{0x01}), address.BytesToAddress([]byte{0x02}), big.NewInt(10), big.NewInt(10), 10)
+	tx := types.NewAddressableTx(0, address.BytesToAddress([]byte{0x01}), address.BytesToAddress([]byte{0x02}), 10, 10, 10)
 	atx := atx("asdfdsf")
-	bl2.AddBlockWithTxs(blk, []*types.SerializableTransaction{tx}, []*types.ActivationTx{atx})
+	bl2.AddBlockWithTxs(blk, []*types.AddressableSignedTransaction{tx}, []*types.ActivationTx{atx})
 
-	mblk := types.Block{MiniBlock: types.MiniBlock{BlockHeader: blk.BlockHeader, TxIds: []types.TransactionId{types.GetTransactionId(tx)}, AtxIds: []types.AtxId{atx.Id()}}}
+	mblk := types.Block{MiniBlock: types.MiniBlock{BlockHeader: blk.BlockHeader, TxIds: []types.TransactionId{types.GetTransactionId(tx.SerializableSignedTransaction)}, AtxIds: []types.AtxId{atx.Id()}}}
 	signer := signing.NewEdSigner()
 	mblk.Signature = signer.Sign(mblk.Bytes())
 

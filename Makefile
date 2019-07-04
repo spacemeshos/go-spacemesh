@@ -163,7 +163,7 @@ endif
 	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
 		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
 		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
-		-it go-spacemesh-python:$(BRANCH) pytest -s p2p/test_p2p.py --tc-file=p2p/config.yaml --tc-format=yaml
+		-it go-spacemesh-python:$(BRANCH) pytest -s -v p2p/test_p2p.py --tc-file=p2p/config.yaml --tc-format=yaml
 .PHONY: dockerrun-p2p
 
 dockertest-p2p: dockerbuild-test dockerrun-p2p
@@ -176,7 +176,7 @@ endif
 	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
 		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
 		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
-		-it go-spacemesh-python:$(BRANCH) pytest -s test_bs.py --tc-file=config.yaml --tc-format=yaml
+		-it go-spacemesh-python:$(BRANCH) pytest -s -v test_bs.py --tc-file=config.yaml --tc-format=yaml
 .PHONY: dockerrun-mining
 
 dockertest-mining: dockerbuild-test dockerrun-mining
@@ -189,7 +189,7 @@ endif
 	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
 		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
 		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
-		-it go-spacemesh-python:$(BRANCH) pytest -s hare/test_hare.py --tc-file=hare/config.yaml --tc-format=yaml
+		-it go-spacemesh-python:$(BRANCH) pytest -s -v hare/test_hare.py --tc-file=hare/config.yaml --tc-format=yaml
 .PHONY: dockerrun-hare
 
 dockertest-hare: dockerbuild-test dockerrun-hare
@@ -203,7 +203,7 @@ endif
 	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
 		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
 		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
-		-it go-spacemesh-python:$(BRANCH) pytest -s sync/test_sync.py --tc-file=sync/config.yaml --tc-format=yaml
+		-it go-spacemesh-python:$(BRANCH) pytest -s -v sync/test_sync.py --tc-file=sync/config.yaml --tc-format=yaml
 
 .PHONY: dockerrun-sync
 
@@ -211,7 +211,7 @@ endif
 #.PHONY: dockertest-sync
 
 # The following is used to run tests one after the other locally
-dockerrun-test: dockerbuild-test dockerrun-p2p dockerrun-mining dockerrun-hare dockerrun-sync
+dockerrun-test: dockerbuild-test dockerrun-p2p dockerrun-mining dockerrun-hare
 .PHONY: dockerrun-test
 
 dockerrun-all: dockerpush dockerrun-test

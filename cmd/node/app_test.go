@@ -5,6 +5,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/amcl/BLS381"
 	"github.com/spacemeshos/go-spacemesh/api"
+	apiCfg "github.com/spacemeshos/go-spacemesh/api/config"
+	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/miner"
@@ -17,7 +19,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	"math/big"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -104,7 +105,7 @@ func (suite *AppTestSuite) initMultipleInstances(numOfInstances int, storeFormat
 		smApp.Config.HARE.N = numOfInstances
 		smApp.Config.HARE.F = numOfInstances / 2
 		smApp.Config.HARE.RoundDuration = 3
-		smApp.Config.HARE.WakeupDelta = 15
+		smApp.Config.HARE.WakeupDelta = 10
 		smApp.Config.HARE.ExpectedLeaders = 5
 		smApp.Config.CoinbaseAccount = strconv.Itoa(i + 1)
 		smApp.Config.LayerAvgSize = numOfInstances
@@ -149,16 +150,17 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	//EntryPointCreated <- true
 
 	const numberOfEpochs = 2 // first 2 epochs are genesis
-	addr := address.BytesToAddress([]byte{0x01})
+	//addr := address.BytesToAddress([]byte{0x01})
 	dst := address.BytesToAddress([]byte{0x02})
-	tx := types.SerializableTransaction{}
-	tx.Amount = big.NewInt(10).Bytes()
-	tx.GasLimit = 1
-	tx.Origin = addr
-	tx.Recipient = &dst
-	tx.Price = big.NewInt(1).Bytes()
-
-	txbytes, _ := types.TransactionAsBytes(&tx)
+	acc1Signer, err := signing.NewEdSignerFromBuffer(common.FromHex(apiCfg.Account1Private))
+	if err != nil {
+		log.Panic("Could not build ed signer err=%v", err)
+	}
+	tx, err := types.NewSignedTx(0, dst, 10, 1, 1, acc1Signer)
+	if err != nil {
+		log.Panic("panicked creating signed tx err=%v", err)
+	}
+	txbytes, _ := types.SignedTransactionAsBytes(tx)
 	path := "../tmp/test/state_" + time.Now().String()
 	suite.initMultipleInstances(5, path)
 	for _, a := range suite.apps {
@@ -180,7 +182,7 @@ loop:
 		default:
 			maxClientsDone := 0
 			for idx, app := range suite.apps {
-				if big.NewInt(10).Cmp(app.state.GetBalance(dst)) == 0 &&
+				if 10 == app.state.GetBalance(dst) &&
 					uint32(suite.apps[idx].mesh.LatestLayer()) == numberOfEpochs*uint32(suite.apps[idx].Config.CONSENSUS.LayersPerEpoch)+1 { // make sure all had 1 non-genesis layer
 
 					suite.validateLastATXActiveSetSize(app)

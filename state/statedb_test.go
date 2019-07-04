@@ -152,10 +152,10 @@ func TestCopyOfCopy(t *testing.T) {
 	addr := address.HexToAddress("aaaa")
 	sdb.SetBalance(addr, big.NewInt(42))
 
-	if got := sdb.Copy().GetBalance(addr).Uint64(); got != 42 {
+	if got := sdb.Copy().GetBalance(addr); got != 42 {
 		t.Fatalf("1st copy fail, expected 42, got %v", got)
 	}
-	if got := sdb.Copy().Copy().GetBalance(addr).Uint64(); got != 42 {
+	if got := sdb.Copy().Copy().GetBalance(addr); got != 42 {
 		t.Fatalf("2nd copy fail, expected 42, got %v", got)
 	}
 }

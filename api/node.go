@@ -4,7 +4,6 @@ import (
 	"context"
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"math/big"
 )
 
 const APIGossipProtocol = "api_test_gossip"
@@ -29,7 +28,7 @@ func ApproveAPIGossipMessages(ctx context.Context, s Service) {
 }
 
 type StateAPI interface {
-	GetBalance(address address.Address) *big.Int
+	GetBalance(address address.Address) uint64
 
 	GetNonce(address address.Address) uint64
 

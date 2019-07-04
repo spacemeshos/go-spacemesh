@@ -339,7 +339,7 @@ func (proc *ConsensusProcess) sendMessage(msg *Msg) {
 		return
 	}
 
-	proc.Debug("message of type %v sent", msg.InnerMsg.Type.String())
+	proc.Info("message of type %v sent", msg.InnerMsg.Type.String())
 }
 
 func (proc *ConsensusProcess) onRoundEnd() {

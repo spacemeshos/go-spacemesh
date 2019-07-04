@@ -10,7 +10,7 @@ from elasticsearch_dsl import Search, Q
 
 from tests.queries import ES, query_message
 from tests.fixtures import init_session, load_config, set_namespace, session_id, set_docker_images
-from tests.test_bs import setup_bootstrap, setup_oracle, create_configmap, setup_clients
+from tests.test_bs import setup_oracle, setup_bootstrap, create_configmap, setup_clients
 from tests.test_bs import save_log_on_exit, add_client, api_call, add_curl
 from tests.test_bs import add_single_client, add_multi_clients, get_conf
 
@@ -37,7 +37,7 @@ def query_bootstrap_es(indx, namespace, bootstrap_po_name):
     return None
 
 
-def test_bootstrap(setup_bootstrap):
+def test_bootstrap(init_session, setup_bootstrap):
     # wait for the bootstrap logs to be available in ElasticSearch
     time.sleep(10)
     assert setup_bootstrap.pods[0]['key'] == query_bootstrap_es(current_index,
@@ -45,7 +45,7 @@ def test_bootstrap(setup_bootstrap):
                                                                 setup_bootstrap.pods[0]['name'])
 
 
-def test_client(setup_clients, add_curl, save_log_on_exit):
+def test_client(init_session, setup_clients, add_curl, save_log_on_exit):
     fields = {'M':'discovery_bootstrap'}
     timetowait = len(setup_clients.pods)
     print("Sleeping " + str(timetowait) + " before checking out bootstrap results")
@@ -63,10 +63,10 @@ def test_add_client(add_client):
     assert len(hits) == 1, "Could not find new Client bootstrap message pod:{0}".format(add_client)
 
 
-def test_add_many_clients(setup_oracle, setup_bootstrap, setup_clients):
+def test_add_many_clients(init_session, setup_bootstrap, setup_clients):
 
     bs_info = setup_bootstrap.pods[0]
-    cspec = get_conf(bs_info, setup_oracle)
+    cspec = get_conf(bs_info, testconfig['client'])
 
     pods = add_multi_clients(setup_bootstrap.deployment_id, cspec, size=4)
     time.sleep(40)  # wait for the new clients to finish bootstrap and for logs to get to elasticsearch
@@ -76,7 +76,7 @@ def test_add_many_clients(setup_oracle, setup_bootstrap, setup_clients):
         assert len(hits) == 1, "Could not find new Client bootstrap message pod:{0}".format(p)
 
 
-def test_gossip(setup_clients, add_curl):
+def test_gossip(init_session, setup_clients, add_curl):
     fields = {'M':'new_gossip_message', 'protocol': 'api_test_gossip'}
     initial = len(query_message(current_index, testconfig['namespace'], setup_clients.deployment_name, fields))
     # *note*: this already waits for bootstrap so we can send the msg right away.
@@ -163,13 +163,13 @@ def test_many_gossip_sim(setup_clients, add_curl):
 # NOTE : this test is ran in the end because it affects the network structure,
 # it creates more pods and bootstrap them which will affect final query results
 # an alternative to that would be to kill the pods when the test ends.
-def test_late_bootstraps(setup_oracle, setup_bootstrap, setup_clients):
+def test_late_bootstraps(init_session, setup_bootstrap, setup_clients):
     # Sleep a while before checking the node is bootstarped
     TEST_NUM = 10
     testnames = []
 
     for i in range(TEST_NUM):
-        client = add_single_client(setup_bootstrap.deployment_id, get_conf(setup_bootstrap.pods[0], setup_oracle))
+        client = add_single_client(setup_bootstrap.deployment_id, get_conf(setup_bootstrap.pods[0], testconfig['client']))
         testnames.append((client, datetime.now()))
 
     time.sleep(TEST_NUM)
