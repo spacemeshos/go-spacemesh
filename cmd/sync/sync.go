@@ -158,7 +158,7 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	}
 
 	lg.Info("%v verified layers %v", app.BaseApp.Config.P2P.NodeID, app.sync.ValidatedLayer())
-	lg.Info("sync done")
+	lg.With().EventInfo("sync done")
 	for {
 		lg.Info("keep busy sleep for %v sec", 60)
 		time.Sleep(60 * time.Second)

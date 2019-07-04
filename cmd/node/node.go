@@ -503,7 +503,7 @@ func getEdIdentity() (*signing.EdSigner, error) {
 }
 
 func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
-	log.Info("Starting Spacemesh")
+	log.With().EventInfo("Starting Spacemesh")
 	if app.Config.MemProfile != "" {
 		log.Info("Starting mem profiling")
 		f, err := os.Create(app.Config.MemProfile)

@@ -148,6 +148,28 @@ func (l Log) WithOptions(opts ...zap.Option) Log {
 	}
 }
 
+const event_key = "event"
+
+func (fl fieldLogger) EventInfo(msg string, fields ...Field) {
+	fields = append(fields, Bool(event_key, true))
+	fl.l.Info(msg, unpack(fields...)...)
+}
+
+func (fl fieldLogger) EventDebug(msg string, fields ...Field) {
+	fields = append(fields, Bool(event_key, true))
+	fl.l.Debug(msg, unpack(fields...)...)
+}
+
+func (fl fieldLogger) EventError(msg string, fields ...Field) {
+	fields = append(fields, Bool(event_key, true))
+	fl.l.Error(msg, unpack(fields...)...)
+}
+
+func (fl fieldLogger) EventWarning(msg string, fields ...Field) {
+	fields = append(fields, Bool(event_key, true))
+	fl.l.Warn(msg, unpack(fields...)...)
+}
+
 // Info prints message with fields
 func (fl fieldLogger) Info(msg string, fields ...Field) {
 	fl.l.Info(msg, unpack(fields...)...)

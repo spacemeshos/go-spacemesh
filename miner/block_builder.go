@@ -226,8 +226,8 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 		atxstring += atx.ShortId() + ", "
 	}
 
-	t.Log.Info("I've created a block in layer %v (epoch %v). id: %v, num of transactions: %v, votes: %d, viewEdges: %d atx %v, atxs (%v): %v",
-		b.LayerIndex, b.LayerIndex.GetEpoch(t.layersPerEpoch), b.Id, len(b.TxIds), len(b.BlockVotes), len(b.ViewEdges), b.ATXID.String()[2:7], len(b.AtxIds), atxstring)
+	t.Log.With().EventInfo(fmt.Sprintf("I've created a block in layer %v (epoch %v). id: %v, num of transactions: %v, votes: %d, viewEdges: %d atx %v, atxs (%v): %v",
+		b.LayerIndex, b.LayerIndex.GetEpoch(t.layersPerEpoch), b.Id, len(b.TxIds), len(b.BlockVotes), len(b.ViewEdges), b.ATXID.String()[2:7], len(b.AtxIds), atxstring))
 
 	blockBytes, err := types.InterfaceToBytes(b)
 	if err != nil {
