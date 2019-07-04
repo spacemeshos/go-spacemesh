@@ -5,6 +5,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/hare/metrics"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/monitoring"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"sync"
 	"time"
@@ -63,6 +64,9 @@ type Hare struct {
 	outputs    map[types.LayerID][]types.BlockID
 
 	factory consensusFactory
+
+	updater *monitoring.MemoryUpdater
+	monitor *monitoring.Monitor
 }
 
 // New returns a new Hare struct.
@@ -97,6 +101,9 @@ func New(conf config.Config, p2p NetworkService, sign Signer, nid types.NodeId, 
 	h.factory = func(conf config.Config, instanceId InstanceId, s *Set, oracle Rolacle, signing Signer, p2p NetworkService, terminationReport chan TerminationOutput) Consensus {
 		return NewConsensusProcess(conf, instanceId, s, oracle, stateQ, layersPerEpoch, signing, nid, p2p, terminationReport, logger)
 	}
+
+	h.updater = monitoring.NewMemoryUpdater()
+	h.monitor = monitoring.NewMonitor(2, h.updater, make(chan struct{}))
 
 	return h
 }
@@ -237,6 +244,7 @@ func (h *Hare) outputCollectionLoop() {
 				h.Warning("Err collecting output from hare err: %v", err)
 			}
 			h.broker.Unregister(out.Id()) // unregister from broker after termination
+			h.Info("STATUS %v", h.updater.Status())
 			metrics.TotalConsensusProcesses.Add(-1)
 		case <-h.CloseChannel():
 			return
