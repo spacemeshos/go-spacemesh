@@ -74,7 +74,7 @@ func (s SpacemeshGrpcService) GetNonce(ctx context.Context, in *pb.AccountId) (*
 	return &msg, nil
 }
 
-func (s SpacemeshGrpcService) SubmitTransaction(ctx context.Context, in *pb.SignedTransaction) (*pb.SimpleMessage, error) {
+func (s SpacemeshGrpcService) SubmitTransaction(ctx context.Context, in *pb.SignedTransaction) (*pb.TxId, error) {
 	log.Info("GRPC SubmitTransaction msg")
 
 	signedTx := &types.SerializableSignedTransaction{}
@@ -91,8 +91,9 @@ func (s SpacemeshGrpcService) SubmitTransaction(ctx context.Context, in *pb.Sign
 	}
 	log.Info("GRPC SubmitTransaction BROADCAST tx. address %x (len %v), gaslimit %v, price %v", signedTx.Recipient, len(signedTx.Recipient), signedTx.GasLimit, signedTx.GasPrice)
 	go s.Network.Broadcast(miner.IncomingTxProtocol, in.Tx)
-	log.Info("GRPC SubmitTransaction returned msg ok")
-	return &pb.SimpleMessage{Value: "ok"}, nil
+	txId := types.GetTransactionId(signedTx)
+	log.Info("GRPC SubmitTransaction returned id: %x", txId)
+	return &pb.TxId{Id: txId[:]}, nil
 }
 
 // P2P API

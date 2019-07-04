@@ -32,6 +32,10 @@ message LogicalDriveMessage {
     string logicalDrive = 1;
 }
 
+message TxId {
+    bytes id = 1;
+}
+
 service SpacemeshService {
     rpc Echo(SimpleMessage) returns (SimpleMessage) {
         option (google.api.http) = {
@@ -51,7 +55,7 @@ service SpacemeshService {
           body: "*"
         };
     }
-    rpc SubmitTransaction(SignedTransaction) returns (SimpleMessage) {
+    rpc SubmitTransaction(SignedTransaction) returns (TxId) {
         option (google.api.http) = {
           post: "/v1/submittransaction"
           body: "*"

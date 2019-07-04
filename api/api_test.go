@@ -215,7 +215,7 @@ func TestJsonApi(t *testing.T) {
 	<-grpcStatus
 }
 
-func createXdrSignedTransaction(params types.SerializableSignedTransaction, key ed25519.PrivateKey) ([]byte, []byte) {
+func createXdrSignedTransaction(params types.SerializableSignedTransaction, key ed25519.PrivateKey) ([]byte, []byte, types.TransactionId) {
 	tx := types.SerializableSignedTransaction{}
 	tx.AccountNonce = params.AccountNonce
 	tx.Amount = params.Amount
@@ -234,7 +234,7 @@ func createXdrSignedTransaction(params types.SerializableSignedTransaction, key 
 	if err != nil {
 		log.Error("failed to marshal signed tx")
 	}
-	return buf, tx.Signature[:]
+	return buf, tx.Signature[:], types.GetTransactionId(&tx)
 }
 
 func TestJsonWalletApi(t *testing.T) {
@@ -309,7 +309,7 @@ func TestJsonWalletApi(t *testing.T) {
 	txParams.Amount = 1234
 	txParams.GasLimit = 11
 	txParams.GasPrice = 321
-	xdrTx, sig := createXdrSignedTransaction(txParams, key)
+	xdrTx, sig, txId := createXdrSignedTransaction(txParams, key)
 	copy(txParams.Signature[:], sig)
 	txToSend := pb.SignedTransaction{Tx: xdrTx}
 
@@ -330,11 +330,11 @@ func TestJsonWalletApi(t *testing.T) {
 		t.Errorf("resp.StatusCode = %d; want %d", got, want)
 	}
 
-	err = jsonpb.UnmarshalString(string(buf), &msg)
+	var txIdResp pb.TxId
+	err = jsonpb.UnmarshalString(string(buf), &txIdResp)
 	assert.NoError(t, err)
 
-	gotV, wantV = msg.Value, "ok"
-	assert.Equal(t, wantV, gotV)
+	assert.Equal(t, txId[:], txIdResp.Id)
 
 	val, err := types.SignedTransactionAsBytes(&txParams)
 	assert.NoError(t, err)
