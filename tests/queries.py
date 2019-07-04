@@ -122,12 +122,14 @@ def query_message(indx, namespace, client_po_name, fields, findFails=False, star
 def parseAtx(log_messages):
     node2blocks = {}
     for x in log_messages:
+        ls = re.findall(r'layer: \d+', x.M) # layer string
+        layer = int(re.findall(r'\d+', ls[0])[0])
         nid = re.split(r'\.', x.N)[0]
         m = re.findall(r'(?<=\b:\s)(\w+)|(?<=view\s)(\w+)', x.M)
         if nid in node2blocks:
-            node2blocks[nid].append(m)
+            node2blocks[nid].append((m, layer))
         else:
-            node2blocks[nid] = [m]
+            node2blocks[nid] = [(m, layer)]
     return node2blocks
 
 

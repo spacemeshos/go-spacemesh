@@ -37,7 +37,7 @@ func (s *MockMapState) ApplyRewards(layer types.LayerID, miners []address.Addres
 
 }
 
-func (s *MockMapState) ValidateTransactionSignature(tx types.SerializableSignedTransaction) (address.Address, error) {
+func (s *MockMapState) ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (address.Address, error) {
 	return address.Address{}, nil
 }
 
@@ -65,16 +65,16 @@ func getMeshWithMapState(id string, s TxProcessor) (*Mesh, *AtxDbMock) {
 
 func addTransactionsWithGas(mesh *MeshDB, bl *types.Block, numOfTxs int, gasPrice int64) int64 {
 	var totalRewards int64
-	var txs []*types.SerializableTransaction
+	var txs []*types.AddressableSignedTransaction
 	for i := 0; i < numOfTxs; i++ {
 		addr := rand.Int63n(10000)
 		//log.Info("adding tx with gas price %v nonce %v", gasPrice, i)
-		tx := types.NewSerializableTransaction(uint64(i), address.HexToAddress("1"),
+		tx := types.NewAddressableTx(uint64(i), address.HexToAddress("1"),
 			address.HexToAddress(strconv.FormatUint(uint64(addr), 10)),
-			big.NewInt(10),
-			big.NewInt(gasPrice),
-			100)
-		bl.TxIds = append(bl.TxIds, types.GetTransactionId(tx))
+			10,
+			100,
+			uint64(gasPrice))
+		bl.TxIds = append(bl.TxIds, types.GetTransactionId(tx.SerializableSignedTransaction))
 		totalRewards += gasPrice
 		txs = append(txs, tx)
 	}
@@ -94,8 +94,7 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 	atx := types.NewActivationTx(block1.MinerID, coinbase1, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 10, []types.BlockID{}, &types.NIPST{})
 	atxdb.AddAtx(atx.Id(), atx)
 	block1.ATXID = atx.Id()
-
-	totalRewards += addTransactionsWithGas(layers.MeshDB, block1, 15, rand.Int63n(100))
+	totalRewards += addTransactionsWithGas(layers.MeshDB, block1, 15, 7)
 
 	block2 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data2"))
 	block2.MinerID.Key = "2"
@@ -279,7 +278,7 @@ func TestMesh_MergeDoubles(t *testing.T) {
 			Recipient:    &dst,
 			Amount:       big.NewInt(10),
 			GasLimit:     100,
-			Price:        big.NewInt(1),
+			GasPrice:     big.NewInt(1),
 			Payload:      nil,
 		},
 		{
@@ -288,7 +287,7 @@ func TestMesh_MergeDoubles(t *testing.T) {
 			Recipient:    &dst,
 			Amount:       big.NewInt(10),
 			GasLimit:     100,
-			Price:        big.NewInt(1),
+			GasPrice:     big.NewInt(1),
 			Payload:      nil,
 		},
 		{
@@ -297,7 +296,7 @@ func TestMesh_MergeDoubles(t *testing.T) {
 			Recipient:    &dst,
 			Amount:       big.NewInt(10),
 			GasLimit:     100,
-			Price:        big.NewInt(1),
+			GasPrice:     big.NewInt(1),
 			Payload:      nil,
 		},
 	}

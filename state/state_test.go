@@ -92,8 +92,8 @@ func TestLookupPastState(t *testing.T) {
 
 	oldSt, err := New(oldState, sdb)
 	assert.NoError(t, err)
-	assert.Equal(t, oldSt.GetBalance(toAddr([]byte{0x01})), big.NewInt(22))
-	assert.Equal(t, s.state.GetBalance(toAddr([]byte{0x01})), big.NewInt(32))
+	assert.Equal(t, oldSt.GetBalance(toAddr([]byte{0x01})), uint64(22))
+	assert.Equal(t, s.state.GetBalance(toAddr([]byte{0x01})), uint64(32))
 
 }
 

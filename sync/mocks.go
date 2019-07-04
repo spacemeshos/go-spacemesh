@@ -23,20 +23,6 @@ func (SyntacticValidatorMock) SyntacticallyValid(block *types.BlockHeader) (bool
 	return true, nil
 }
 
-type TxValidatorMock struct {
-}
-
-func (TxValidatorMock) ValidateTx(tx *types.SerializableTransaction) (bool, error) {
-	return true, nil
-}
-
-type AtxValidatorMock struct {
-}
-
-func (AtxValidatorMock) ValidateAtx(atx *types.ActivationTx) error {
-	return nil
-}
-
 type MeshValidatorMock struct{}
 
 func (m *MeshValidatorMock) HandleLateBlock(bl *types.Block)              {}
@@ -76,7 +62,7 @@ func (MockState) ValidateSignature(signed types.Signed) (address.Address, error)
 func (MockState) ApplyRewards(layer types.LayerID, miners []address.Address, underQuota map[address.Address]int, bonusReward, diminishedReward *big.Int) {
 }
 
-func (MockState) ValidateTransactionSignature(tx types.SerializableSignedTransaction) (address.Address, error) {
+func (MockState) ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (address.Address, error) {
 	return address.Address{}, nil
 }
 

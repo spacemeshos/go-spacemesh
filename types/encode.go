@@ -103,7 +103,24 @@ func NIPSTChallengeAsBytes(challenge *NIPSTChallenge) ([]byte, error) {
 	return w.Bytes(), nil
 }
 
-func TransactionAsBytes(tx *SerializableTransaction) ([]byte, error) {
+func AddressableTransactionAsBytes(tx *AddressableSignedTransaction) ([]byte, error) {
+	var w bytes.Buffer
+	if _, err := xdr.Marshal(&w, tx); err != nil {
+		return nil, fmt.Errorf("error marshalling transaction: %v", err)
+	}
+	return w.Bytes(), nil
+}
+
+func BytesAsAddressableTransaction(buf []byte) (*AddressableSignedTransaction, error) {
+	b := AddressableSignedTransaction{}
+	_, err := xdr.Unmarshal(bytes.NewReader(buf), &b)
+	if err != nil {
+		return nil, err
+	}
+	return &b, nil
+}
+
+func SignedTransactionAsBytes(tx *SerializableSignedTransaction) ([]byte, error) {
 	var w bytes.Buffer
 	if _, err := xdr.Marshal(&w, &tx); err != nil {
 		return nil, fmt.Errorf("error marshalling transaction: %v", err)
@@ -111,11 +128,11 @@ func TransactionAsBytes(tx *SerializableTransaction) ([]byte, error) {
 	return w.Bytes(), nil
 }
 
-func BytesAsTransaction(buf []byte) (*SerializableTransaction, error) {
-	b := SerializableTransaction{}
+func BytesAsSignedTransaction(buf []byte) (*SerializableSignedTransaction, error) {
+	b := SerializableSignedTransaction{}
 	_, err := xdr.Unmarshal(bytes.NewReader(buf), &b)
 	if err != nil {
-		return &b, err
+		return nil, err
 	}
 	return &b, nil
 }
@@ -140,7 +157,7 @@ func InterfaceToBytes(i interface{}) ([]byte, error) {
 
 //todo standardized transaction id across project
 //todo replace panic
-func GetTransactionId(t *SerializableTransaction) TransactionId {
+func GetTransactionId(t *SerializableSignedTransaction) TransactionId {
 	tx, err := InterfaceToBytes(t)
 	if err != nil {
 		panic("could not Serialize transaction")

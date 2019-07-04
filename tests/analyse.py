@@ -16,6 +16,14 @@ def analyze_mining(deployment, last_layer, layers_per_epoch, layer_avg_size, tot
     total_blocks = sum([len(layermap[str(x)]) for x in range(last_layer) if str(x) in layermap])
 
     atxmap = queries.get_atx_per_node(deployment)
+    newmap = {}
+    for x in atxmap:
+        lst = []
+        for y in atxmap[x]:
+            if y[1] != 9:  # check layer
+                lst.append(y[0])  # append data
+        newmap[x] = lst  # remove layer 9
+    atxmap = newmap
     total_atxs = sum([len(atxmap[x]) for x in atxmap])
 
     print("atx created " + str(total_atxs))
