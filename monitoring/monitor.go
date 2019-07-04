@@ -25,12 +25,14 @@ func NewMonitor(refreshRate int, updater Updater, termChannel chan struct{}) *Mo
 
 func (m *Monitor) monitor() {
 	for {
-		<-time.After(m.interval)
 		m.tracker.Update()
+
 		select {
 		case <-m.term:
 			return
+		case <-time.After(m.interval):
 		}
+
 	}
 }
 
