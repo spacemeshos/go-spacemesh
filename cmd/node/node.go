@@ -529,8 +529,6 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 		}()
 	}
 
-	fmt.Printf("\n\n### %v\n\n", app.Config.POST.SpacePerUnit)
-
 	// start p2p services
 	log.Info("Initializing P2P services")
 	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P)
