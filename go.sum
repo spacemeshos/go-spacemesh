@@ -184,10 +184,6 @@ github.com/spacemeshos/poet v0.0.0-20190626121233-2418fe492709 h1:GPb1h071OYndqP
 github.com/spacemeshos/poet v0.0.0-20190626121233-2418fe492709/go.mod h1:SQpGYr/TTl3fvCyWEXRP1VDXkcgMN4G95ZJnMSdWFrc=
 github.com/spacemeshos/post v0.0.0-20190508113329-07bdc2589d98 h1:dB9yxkhtbDYGlW7tdp3PSGRXeuOq7kE/3sJqT8Nja+M=
 github.com/spacemeshos/post v0.0.0-20190508113329-07bdc2589d98/go.mod h1:n8EGjskKs9gKrxfCWqgrEH5zBiYFLZ70LezPb0CRXPg=
-github.com/spacemeshos/post v0.0.0-20190703135412-00ab0dd3b05c h1:tXgMKagPUEjWpG5OA+nQaKY28nkWjEoY00yAC2/rdBY=
-github.com/spacemeshos/post v0.0.0-20190703135412-00ab0dd3b05c/go.mod h1:id04H2vNFgprXVN3zU7qF2KlwlXmgr2II48M2SYkb4g=
-github.com/spacemeshos/post v0.0.0-20190704122147-df5316637915 h1:xyEab6KG61qCQOMlF24wgwuyBJVaXC90uLwu69nja3g=
-github.com/spacemeshos/post v0.0.0-20190704122147-df5316637915/go.mod h1:id04H2vNFgprXVN3zU7qF2KlwlXmgr2II48M2SYkb4g=
 github.com/spacemeshos/post v0.0.0-20190704124718-d5c802406ccc h1:ph/ixdooTAOYQsCNKb4SN2iWIZ1V662YwSFQUjp8Eqs=
 github.com/spacemeshos/post v0.0.0-20190704124718-d5c802406ccc/go.mod h1:id04H2vNFgprXVN3zU7qF2KlwlXmgr2II48M2SYkb4g=
 github.com/spacemeshos/sha256-simd v0.0.0-20190111104731-8575aafc88c9 h1:Cc+np6ORem5wrvO+YHQ1sdu71ItiQVRiYB4ugazpgxM=
