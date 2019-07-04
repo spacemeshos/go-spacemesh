@@ -104,6 +104,7 @@ func New(conf config.Config, p2p NetworkService, sign Signer, nid types.NodeId, 
 
 	h.updater = monitoring.NewMemoryUpdater()
 	h.monitor = monitoring.NewMonitor(2, h.updater, make(chan struct{}))
+	h.monitor.Start()
 
 	return h
 }
