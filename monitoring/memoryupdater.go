@@ -49,7 +49,7 @@ func (ma *MemoryUpdater) Update() {
 func (mu *MemoryUpdater) Status() string {
 	s := ""
 	for _, name := range names {
-		s += fmt.Sprintf("Name=%s Max=%v Min=%v Avg=%v\n",
+		s += fmt.Sprintf("Name=%s\tMax=%v\tMin=%v\tAvg=%v\n",
 			name,
 			mu.memTracker[name].Max(),
 			mu.memTracker[name].Min(),

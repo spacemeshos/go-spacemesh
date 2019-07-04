@@ -6,7 +6,7 @@ type Tracker struct {
 	data []uint64
 	max  uint64
 	min  uint64
-	avg  uint64
+	avg  float64
 }
 
 func NewTracker() *Tracker {
@@ -28,7 +28,7 @@ func (t *Tracker) Track(value uint64) {
 	}
 
 	count := uint64(len(t.data))
-	t.avg = (count*t.avg + value) / (count + 1)
+	t.avg = (float64)(count*uint64(t.avg)+value) / (float64)(count+1)
 
 	t.data = append(t.data, value)
 }
@@ -41,6 +41,10 @@ func (t *Tracker) Min() uint64 {
 	return t.min
 }
 
-func (t *Tracker) Avg() uint64 {
+func (t *Tracker) Avg() float64 {
 	return t.avg
+}
+
+func (t *Tracker) IsEmpty() bool {
+	return len(t.data) == 0
 }
