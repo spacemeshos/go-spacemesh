@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/ed25519"
+	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -34,24 +35,22 @@ type PoetDb interface {
 
 type BlockValidator interface {
 	BlockEligible(block *types.BlockHeader) (bool, error)
-	ValidateTx(tx *types.SerializableTransaction) (bool, error)
 }
 
 type EligibilityValidator interface {
 	BlockEligible(block *types.BlockHeader) (bool, error)
 }
 
-type TxValidator interface {
-	ValidateTx(tx *types.SerializableTransaction) (bool, error)
+type TxSigValidator interface {
+	ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (address.Address, error)
 }
 
 type blockValidator struct {
 	EligibilityValidator
-	TxValidator
 }
 
-func NewBlockValidator(bev EligibilityValidator, txv TxValidator) BlockValidator {
-	return &blockValidator{bev, txv}
+func NewBlockValidator(bev EligibilityValidator) BlockValidator {
+	return &blockValidator{bev}
 }
 
 type Configuration struct {
@@ -67,6 +66,7 @@ type Syncer struct {
 	Configuration
 	log.Log
 	*server.MessageServer
+	sigValidator      TxSigValidator
 	poetDb            PoetDb
 	txpool            MemPool
 	atxpool           MemPool
@@ -141,7 +141,7 @@ func (s *Syncer) run() {
 }
 
 //fires a sync every sm.syncInterval or on force space from outside
-func NewSync(srv service.Service, layers *mesh.Mesh, txpool MemPool, atxpool MemPool, bv BlockValidator, poetdb PoetDb, conf Configuration, clock timesync.LayerTimer, currentLayer types.LayerID, logger log.Log) *Syncer {
+func NewSync(srv service.Service, layers *mesh.Mesh, txpool MemPool, atxpool MemPool, sv TxSigValidator, bv BlockValidator, poetdb PoetDb, conf Configuration, clock timesync.LayerTimer, currentLayer types.LayerID, logger log.Log) *Syncer {
 	s := &Syncer{
 		BlockValidator: bv,
 		Configuration:  conf,
@@ -149,6 +149,7 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool MemPool, atxpool Mem
 		Mesh:           layers,
 		Peers:          p2p.NewPeers(srv, logger.WithName("peers")),
 		MessageServer:  server.NewMsgServer(srv.(server.Service), syncProtocol, conf.RequestTimeout, make(chan service.DirectMessage, config.ConfigValues.BufferSize), logger.WithName("srv")),
+		sigValidator:   sv,
 		SyncLock:       0,
 		txpool:         txpool,
 		atxpool:        atxpool,
@@ -250,7 +251,7 @@ func (s *Syncer) GetFullBlocks(blockIds []types.BlockID) []*types.Block {
 	return blocksArr
 }
 
-func (s *Syncer) BlockSyntacticValidation(block *types.Block) ([]*types.SerializableTransaction, []*types.ActivationTx, error) {
+func (s *Syncer) BlockSyntacticValidation(block *types.Block) ([]*types.AddressableSignedTransaction, []*types.ActivationTx, error) {
 	if err := s.confirmBlockValidity(block); err != nil {
 		s.Error("failed derefrencing block data %v %v", block.ID(), err)
 		return nil, nil, errors.New(fmt.Sprintf("failed derefrencing block data %v %v", block.ID(), err))
@@ -309,8 +310,8 @@ func (s *Syncer) ValidateView(blk *types.Block) bool {
 	return true
 }
 
-func (s *Syncer) DataAvailabilty(blk *types.Block) ([]*types.SerializableTransaction, []*types.ActivationTx, error) {
-	var txs []*types.SerializableTransaction
+func (s *Syncer) DataAvailabilty(blk *types.Block) ([]*types.AddressableSignedTransaction, []*types.ActivationTx, error) {
+	var txs []*types.AddressableSignedTransaction
 	var txerr error
 	wg := sync.WaitGroup{}
 	wg.Add(2)
@@ -399,16 +400,25 @@ func (s *Syncer) fetchLayerHashes(lyr types.LayerID) (map[string]p2p.Peer, error
 	return m, nil
 }
 
+func (s *Syncer) validateAndBuildTx(x *types.SerializableSignedTransaction) (*types.AddressableSignedTransaction, error) {
+	addr, err := s.sigValidator.ValidateTransactionSignature(x)
+	if err != nil {
+		return nil, err
+	}
+
+	return &types.AddressableSignedTransaction{SerializableSignedTransaction: x, Address: addr}, nil
+}
+
 //returns txs out of txids that are not in the local database
-func (s *Syncer) syncTxs(txids []types.TransactionId) ([]*types.SerializableTransaction, error) {
+func (s *Syncer) syncTxs(txids []types.TransactionId) ([]*types.AddressableSignedTransaction, error) {
 
 	//look in pool
-	unprocessedTxs := make(map[types.TransactionId]*types.SerializableTransaction)
+	unprocessedTxs := make(map[types.TransactionId]*types.AddressableSignedTransaction)
 	missing := make([]types.TransactionId, 0)
 	for _, t := range txids {
 		if tx := s.txpool.Get(t); tx != nil {
 			s.Info("found tx, %v in tx pool", hex.EncodeToString(t[:]))
-			unprocessedTxs[t] = tx.(*types.SerializableTransaction)
+			unprocessedTxs[t] = tx.(*types.AddressableSignedTransaction)
 		} else {
 			missing = append(missing, t)
 		}
@@ -420,19 +430,20 @@ func (s *Syncer) syncTxs(txids []types.TransactionId) ([]*types.SerializableTran
 	//map and sort txs
 	if len(missinDB) > 0 {
 		for out := range s.fetchWithFactory(NewNeighborhoodWorker(s, 1, TxReqFactory(missinDB))) {
-			ntxs := out.([]types.SerializableTransaction)
+			ntxs := out.([]types.SerializableSignedTransaction)
 			for _, tx := range ntxs {
-				if valid, err := s.ValidateTx(&tx); !valid || err != nil {
+				ast, err := s.validateAndBuildTx(&tx)
+				if err != nil {
 					id := types.GetTransactionId(&tx)
 					s.Warning("tx %v not valid %v", hex.EncodeToString(id[:]), err)
 					continue
 				}
-				unprocessedTxs[types.GetTransactionId(&tx)] = &tx
+				unprocessedTxs[types.GetTransactionId(&tx)] = ast
 			}
 		}
 	}
 
-	txs := make([]*types.SerializableTransaction, 0, len(txids))
+	txs := make([]*types.AddressableSignedTransaction, 0, len(txids))
 	for _, id := range txids {
 		if tx, ok := unprocessedTxs[id]; ok {
 			txs = append(txs, tx)

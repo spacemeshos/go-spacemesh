@@ -79,7 +79,7 @@ func TxReqFactory(ids []types.TransactionId) RequestFactory {
 		ch := make(chan interface{}, 1)
 		foo := func(msg []byte) {
 			defer close(ch)
-			var tx []types.SerializableTransaction
+			var tx []types.SerializableSignedTransaction
 			err := types.BytesToInterface(msg, &tx)
 			if err != nil {
 				s.Error("could not unmarshal tx data %v", err)

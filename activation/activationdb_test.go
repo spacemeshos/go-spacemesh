@@ -26,7 +26,7 @@ func createLayerWithAtx(t *testing.T, msh *mesh.Mesh, id types.LayerID, numOfBlo
 			block1.AtxIds = append(block1.AtxIds, atx.Id())
 		}
 		block1.ViewEdges = append(block1.ViewEdges, views...)
-		err := msh.AddBlockWithTxs(block1, []*types.SerializableTransaction{}, atxs)
+		err := msh.AddBlockWithTxs(block1, []*types.AddressableSignedTransaction{}, atxs)
 		require.NoError(t, err)
 		created = append(created, block1.Id)
 	}
@@ -51,7 +51,7 @@ func (MockState) ApplyTransactions(layer types.LayerID, txs mesh.Transactions) (
 func (MockState) ApplyRewards(layer types.LayerID, miners []address.Address, underQuota map[address.Address]int, bonusReward, diminishedReward *big.Int) {
 }
 
-func (MockState) ValidateTransactionSignature(tx types.SerializableSignedTransaction) (address.Address, error) {
+func (MockState) ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (address.Address, error) {
 	return address.Address{}, nil
 }
 

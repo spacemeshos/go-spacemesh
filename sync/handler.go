@@ -84,16 +84,16 @@ func newTxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 
 		for _, t := range missinDB {
 			if tx := s.txpool.Get(t); tx != nil {
-				txs[t] = tx.(*types.SerializableTransaction)
+				txs[t] = tx.(*types.AddressableSignedTransaction)
 			} else {
 				logger.Error("Error handling tx request message, with ids: %d", msg)
 				return nil
 			}
 		}
 
-		var transactions []types.SerializableTransaction
+		var transactions []types.SerializableSignedTransaction
 		for _, value := range txs {
-			tx := *value
+			tx := *value.SerializableSignedTransaction
 			transactions = append(transactions, tx)
 		}
 

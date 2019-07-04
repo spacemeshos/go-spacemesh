@@ -89,7 +89,7 @@ func (tp *TransactionProcessor) ValidateSignature(s types.Signed) (address.Addre
 
 	addr := PublicKeyToAccountAddress(pubKey)
 	if !tp.globalState.Exist(addr) {
-		return address.Address{}, fmt.Errorf("Failed to validate tx signature, unknown src account %v", addr)
+		return address.Address{}, fmt.Errorf("failed to validate tx signature, unknown src account %v", addr)
 	}
 
 	return addr, nil
@@ -97,7 +97,7 @@ func (tp *TransactionProcessor) ValidateSignature(s types.Signed) (address.Addre
 
 // Validate the tx's signature by extracting the source account and validating its existence.
 // Return the src acount address and error in case of failure
-func (tp *TransactionProcessor) ValidateTransactionSignature(tx types.SerializableSignedTransaction) (address.Address, error) {
+func (tp *TransactionProcessor) ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (address.Address, error) {
 	buf, err := types.InterfaceToBytes(&tx.InnerSerializableSignedTransaction)
 	if err != nil {
 		return address.Address{}, err
@@ -109,7 +109,7 @@ func (tp *TransactionProcessor) ValidateTransactionSignature(tx types.Serializab
 
 	addr := PublicKeyToAccountAddress(pubKey)
 	if !tp.globalState.Exist(addr) {
-		return address.Address{}, fmt.Errorf("Failed to validate tx signature, unknown src account %v", addr)
+		return address.Address{}, fmt.Errorf("failed to validate tx signature, unknown src account %v", addr)
 	}
 
 	return addr, nil
@@ -282,7 +282,7 @@ func (tp *TransactionProcessor) ApplyTransaction(trans *mesh.Transaction) error 
 
 	origin := tp.globalState.GetOrNewStateObj(trans.Origin)
 
-	gas := new(big.Int).Mul(trans.Price, tp.gasCost.BasicTxCost)
+	gas := new(big.Int).Mul(trans.GasPrice, tp.gasCost.BasicTxCost)
 
 	/*if gas < trans.GasLimit {
 

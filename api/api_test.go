@@ -2,7 +2,6 @@ package api
 
 import (
 	"bytes"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/ed25519"
@@ -59,8 +58,8 @@ func NewNodeAPIMock() NodeAPIMock {
 	}
 }
 
-func (n NodeAPIMock) GetBalance(address address.Address) *big.Int {
-	return n.balances[address]
+func (n NodeAPIMock) GetBalance(address address.Address) uint64 {
+	return n.balances[address].Uint64()
 }
 
 func (n NodeAPIMock) GetNonce(address address.Address) uint64 {
@@ -80,7 +79,7 @@ func (t *TxAPIMock) setMockOrigin(orig address.Address) {
 	t.mockOrigin = orig
 }
 
-func (t *TxAPIMock) ValidateTransactionSignature(tx types.SerializableSignedTransaction) (address.Address, error) {
+func (t *TxAPIMock) ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (address.Address, error) {
 	return t.mockOrigin, nil
 }
 
@@ -217,13 +216,13 @@ func TestJsonApi(t *testing.T) {
 	<-grpcStatus
 }
 
-func createXdrSignedTransaction(params types.SerializableTransaction, key ed25519.PrivateKey) []byte {
+func createXdrSignedTransaction(params types.SerializableSignedTransaction, key ed25519.PrivateKey) ([]byte, []byte) {
 	tx := types.SerializableSignedTransaction{}
 	tx.AccountNonce = params.AccountNonce
-	tx.Amount = binary.BigEndian.Uint64(params.Amount)
-	tx.Recipient = *params.Recipient
+	tx.Amount = params.Amount
+	tx.Recipient = params.Recipient
 	tx.GasLimit = params.GasLimit
-	tx.Price = binary.BigEndian.Uint64(params.Price)
+	tx.GasPrice = params.GasPrice
 
 	buf, err := types.InterfaceToBytes(&tx.InnerSerializableSignedTransaction)
 	if err != nil {
@@ -236,7 +235,7 @@ func createXdrSignedTransaction(params types.SerializableTransaction, key ed2551
 	if err != nil {
 		log.Error("failed to marshal signed tx")
 	}
-	return buf
+	return buf, tx.Signature[:]
 }
 
 func TestJsonWalletApi(t *testing.T) {
@@ -323,18 +322,18 @@ func TestJsonWalletApi(t *testing.T) {
 	value = resp.Header.Get("Content-Type")
 	assert.Equal(t, value, contentType)
 
-	txParams := types.SerializableTransaction{}
+	txParams := types.SerializableSignedTransaction{}
 	sPub, key, _ := ed25519.GenerateKey(crand.Reader)
 	sAddr := state.PublicKeyToAccountAddress(sPub)
 	txApi.setMockOrigin(sAddr)
-	txParams.Origin = sAddr
 	rec := address.BytesToAddress([]byte{0xde, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa})
-	txParams.Recipient = &rec
+	txParams.Recipient = rec
 	txParams.AccountNonce = 1111
-	txParams.Amount = []byte{0x01, 0x11, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01} //big.NewInt(1234).Bytes()
+	txParams.Amount = 1234
 	txParams.GasLimit = 11
-	txParams.Price = []byte{0x11, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01} //big.NewInt(321).Bytes()
-	xdrTx := createXdrSignedTransaction(txParams, key)
+	txParams.GasPrice = 321
+	xdrTx, sig := createXdrSignedTransaction(txParams, key)
+	copy(txParams.Signature[:], sig)
 	txToSend := pb.SignedTransaction{Tx: xdrTx}
 
 	var buf2 bytes.Buffer
@@ -359,7 +358,7 @@ func TestJsonWalletApi(t *testing.T) {
 	gotV, wantV = msg.Value, "ok"
 	assert.Equal(t, wantV, gotV)
 
-	val, err := types.TransactionAsBytes(&txParams)
+	val, err := types.SignedTransactionAsBytes(&txParams)
 	assert.NoError(t, err)
 	assert.Equal(t, val, net.broadcasted)
 

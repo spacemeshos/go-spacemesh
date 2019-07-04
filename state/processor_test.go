@@ -49,7 +49,7 @@ func createTransaction(nonce uint64,
 		Recipient:    &destination,
 		Amount:       big.NewInt(amount),
 		GasLimit:     100,
-		Price:        big.NewInt(1),
+		GasPrice:     big.NewInt(1),
 		Payload:      nil,
 	}
 }
@@ -75,7 +75,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction() {
 
 	got := string(s.state.Dump())
 
-	assert.Equal(s.T(), big.NewInt(15), s.state.GetBalance(obj1.address))
+	assert.Equal(s.T(), uint64(15), s.state.GetBalance(obj1.address))
 	assert.Equal(s.T(), uint64(1), s.state.GetNonce(obj1.address))
 
 	want := `{
@@ -188,10 +188,10 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyRewards() {
 		map[address.Address]int{address.HexToAddress("aaa"): 1, address.HexToAddress("bbb"): 2},
 		big.NewInt(1000), big.NewInt(300))
 
-	assert.Equal(s.T(), s.state.GetBalance(address.HexToAddress("aaa")), big.NewInt(1300))
-	assert.Equal(s.T(), s.state.GetBalance(address.HexToAddress("bbb")), big.NewInt(600))
-	assert.Equal(s.T(), s.state.GetBalance(address.HexToAddress("ccc")), big.NewInt(1000))
-	assert.Equal(s.T(), s.state.GetBalance(address.HexToAddress("ddd")), big.NewInt(1000))
+	assert.Equal(s.T(), s.state.GetBalance(address.HexToAddress("aaa")), uint64(1300))
+	assert.Equal(s.T(), s.state.GetBalance(address.HexToAddress("bbb")), uint64(600))
+	assert.Equal(s.T(), s.state.GetBalance(address.HexToAddress("ccc")), uint64(1000))
+	assert.Equal(s.T(), s.state.GetBalance(address.HexToAddress("ddd")), uint64(1000))
 }
 
 func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_OrderByNonce() {
@@ -212,8 +212,8 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_OrderByN
 
 	got := string(s.state.Dump())
 
-	assert.Equal(s.T(), big.NewInt(1), s.state.GetBalance(obj1.address))
-	assert.Equal(s.T(), big.NewInt(2), s.state.GetBalance(obj2.address))
+	assert.Equal(s.T(), uint64(1), s.state.GetBalance(obj1.address))
+	assert.Equal(s.T(), uint64(2), s.state.GetBalance(obj2.address))
 
 	want := `{
 	"root": "e5212ec1f253fc4d7f77a591f66770ccae676ece70823287638ad7c5f988bced",
@@ -288,7 +288,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Reset() {
 
 	got = string(s.processor.globalState.Dump())
 
-	assert.Equal(s.T(), big.NewInt(15), s.processor.globalState.GetBalance(obj1.address))
+	assert.Equal(s.T(), uint64(15), s.processor.globalState.GetBalance(obj1.address))
 
 	want = `{
 	"root": "351199c464a9be1b7c78aeecb6f83f04e38316fa98d7d45a2d9fc475d4c3b857",
@@ -423,13 +423,13 @@ func TestTransactionProcessor_randomSort(t *testing.T) {
 	assert.Equal(t, expected, trans)
 }
 
-func createXdrSignedTransaction(key ed25519.PrivateKey) types.SerializableSignedTransaction {
-	tx := types.SerializableSignedTransaction{}
+func createXdrSignedTransaction(key ed25519.PrivateKey) *types.SerializableSignedTransaction {
+	tx := &types.SerializableSignedTransaction{}
 	tx.AccountNonce = 1111
 	tx.Amount = 123
 	tx.Recipient = toAddr([]byte{0xde})
 	tx.GasLimit = 11
-	tx.Price = 456
+	tx.GasPrice = 456
 
 	buf, _ := types.InterfaceToBytes(&tx.InnerSerializableSignedTransaction)
 	copy(tx.Signature[:], ed25519.Sign2(key, buf))
