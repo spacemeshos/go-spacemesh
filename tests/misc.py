@@ -18,7 +18,7 @@ class CoreV1ApiClient(client.CoreV1Api):
 
 class ContainerSpec:
 
-    REPLACEABLE_ARGS = ['randcon', 'oracle_server', 'bootnodes', 'genesis_time']
+    REPLACEABLE_ARGS = ['randcon', 'oracle_server', 'bootnodes', 'genesis_time', 'poet_server']
 
     def __init__(self, cname, cimage, centry):
         self.name = cname
