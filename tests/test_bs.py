@@ -354,7 +354,7 @@ def test_transaction(setup_network):
     client_ip = setup_network.clients.pods[0]['pod_ip']
 
     api = 'v1/nonce'
-    data = '{"address":"1"}'
+    data = '{"address":"e+AXqWfbd/0QrHyJGz1tlG3qfj4UdW4vD54JuWY/DZw="}'
     print("checking nonce")
     out = api_call(client_ip, data, api, testconfig['namespace'])
     assert "{'value': '0'}" in out
@@ -369,11 +369,11 @@ def test_transaction(setup_network):
     print("submitting transaction")
     out = api_call(client_ip, data, api, testconfig['namespace'])
     print(out)
-    assert "{'value': 'ok'}" in out
+    assert "{'id': 'CpEt0kPaBDNtsRJD8rdeW1Inb6ZIMZtLbfkPs8RwmGA='}" in out
     print("submit transaction ok")
     print("wait for confirmation ")
     api = 'v1/balance'
-    data = '{"address":"0000000000000000000000000000000000002222"}'
+    data = '{"address":"0000000000000000000000000000000000000000000000000000000000002222"}'
     end = start = time.time()
 
     for x in range(7):
@@ -398,7 +398,7 @@ def test_mining(setup_network):
     client_ip = setup_network.clients.pods[0]['pod_ip']
 
     api = 'v1/nonce'
-    data = '{"address":"1"}'
+    data = '{"address":"e+AXqWfbd/0QrHyJGz1tlG3qfj4UdW4vD54JuWY/DZw="}'
     print("checking nonce")
     out = api_call(client_ip, data, api, testconfig['namespace'])
     # assert "{'value': '0'}" in out
@@ -406,16 +406,16 @@ def test_mining(setup_network):
 
     api = 'v1/submittransaction'
     txGen = tx_generator.TxGenerator()
-    txBytes = txGen.generate("0000000000000000000000000000000000002222", 0, 246, 642, 100)
+    txBytes = txGen.generate("0000000000000000000000000000000000000000000000000000000000002222", 0, 246, 642, 100)
     data = '{"tx":'+ str(list(txBytes)) + '}'
     print("submitting transaction")
     out = api_call(client_ip, data, api, testconfig['namespace'])
     print(out)
-    assert "{'value': 'ok'}" in out
+    assert "{'id': 'QZtJwRl8we7QVEZjvL8aw7t7uYGUMCRHD2pXkiIsomw='}" in out
     print("submit transaction ok")
     print("wait for confirmation ")
     api = 'v1/balance'
-    data = '{"address":"0000000000000000000000000000000000002222"}'
+    data = '{"address":"0000000000000000000000000000000000000000000000000000000000002222"}'
     end = start = time.time()
 
     layer_avg_size = testconfig['client']['args']['layer-average-size']
