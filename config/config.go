@@ -8,9 +8,11 @@ import (
 	hareConfig "github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/nipst"
 	p2pConfig "github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/state"
 	timeConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
+	postConfig "github.com/spacemeshos/post/config"
 	"github.com/spf13/viper"
 	"path/filepath"
 	"time"
@@ -45,6 +47,7 @@ type Config struct {
 	TIME       timeConfig.TimeConfig  `mapstructure:"time"`
 	GAS        state.GasConfig        `mapstructure:"gas"`
 	REWARD     mesh.Config            `mapstructure:"reward"`
+	POST       postConfig.Config      `mapstructure:"post"`
 }
 
 // BaseConfig defines the default configuration options for spacemesh app
@@ -95,6 +98,7 @@ func DefaultConfig() Config {
 		TIME:       timeConfig.DefaultConfig(),
 		GAS:        state.DefaultConfig(),
 		REWARD:     mesh.DefaultMeshConfig(),
+		POST:       nipst.DefaultConfig(),
 	}
 }
 

@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sync"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/types"
+	"github.com/spacemeshos/post/config"
 	"github.com/spf13/cobra"
 	"os"
 	"reflect"
@@ -35,11 +36,7 @@ var Cmd = &cobra.Command{
 //conf
 //////////////////////////////
 //todo get from configuration
-var npstCfg = nipst.PostParams{
-	Difficulty:           5,
-	NumberOfProvenLabels: 10,
-	SpaceUnit:            1024,
-}
+var postCfg config.Config
 
 //todo get from configuration
 var conf = sync.Configuration{
@@ -52,6 +49,12 @@ var conf = sync.Configuration{
 
 func init() {
 	cmdp.AddCommands(Cmd)
+
+	postCfg := config.DefaultConfig()
+	postCfg.Difficulty = 5
+	postCfg.NumProvenLabels = 10
+	postCfg.SpacePerUnit = 1 << 10 // 1KB.
+	postCfg.FileSize = 1 << 10     // 1KB.
 }
 
 type SyncApp struct {
@@ -85,7 +88,7 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	}
 
 	poetDb := activation.NewPoetDb(database.NewMemDatabase(), lg.WithName("poetDb"))
-	validator := nipst.NewValidator(npstCfg, poetDb)
+	validator := nipst.NewValidator(&postCfg, poetDb)
 
 	mshdb := mesh.NewPersistentMeshDB(app.Config.DataDir, lg)
 	atxdbStore, _ := database.NewLDBDatabase(app.Config.DataDir+"atx", 0, 0, lg)
