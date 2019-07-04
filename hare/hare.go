@@ -232,12 +232,12 @@ func (h *Hare) outputCollectionLoop() {
 	for {
 		select {
 		case out := <-h.outputChan:
-			h.broker.Unregister(out.Id()) // unregister from broker after termination
-			metrics.TotalConsensusProcesses.Add(-1)
 			err := h.collectOutput(out)
 			if err != nil {
 				h.Warning("Err collecting output from hare err: %v", err)
 			}
+			h.broker.Unregister(out.Id()) // unregister from broker after termination
+			metrics.TotalConsensusProcesses.Add(-1)
 		case <-h.CloseChannel():
 			return
 		}
