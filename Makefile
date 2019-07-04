@@ -207,11 +207,11 @@ endif
 
 .PHONY: dockerrun-sync
 
-dockertest-sync: dockerbuild-test dockerrun-sync
-.PHONY: dockertest-sync
+#dockertest-sync: dockerbuild-test dockerrun-sync
+#.PHONY: dockertest-sync
 
 # The following is used to run tests one after the other locally
-dockerrun-test: dockerbuild-test dockerrun-p2p dockerrun-mining dockerrun-hare dockerrun-sync
+dockerrun-test: dockerbuild-test dockerrun-p2p dockerrun-mining dockerrun-hare
 .PHONY: dockerrun-test
 
 dockerrun-all: dockerpush dockerrun-test

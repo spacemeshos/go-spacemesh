@@ -9,18 +9,18 @@ import (
 	"math/big"
 )
 
-type BlockValidatorMock struct {
+type BlockEligibilityValidatorMock struct {
 }
 
-func (BlockValidatorMock) BlockEligible(block *types.BlockHeader) (bool, error) {
+func (BlockEligibilityValidatorMock) BlockEligible(block *types.BlockHeader) (bool, error) {
 	return true, nil
 }
 
-type TxValidatorMock struct {
+type SyntacticValidatorMock struct {
 }
 
-func (TxValidatorMock) TxValid(tx types.SerializableTransaction) bool {
-	return true
+func (SyntacticValidatorMock) SyntacticallyValid(block *types.BlockHeader) (bool, error) {
+	return true, nil
 }
 
 type MeshValidatorMock struct{}
@@ -62,7 +62,7 @@ func (MockState) ValidateSignature(signed types.Signed) (address.Address, error)
 func (MockState) ApplyRewards(layer types.LayerID, miners []address.Address, underQuota map[address.Address]int, bonusReward, diminishedReward *big.Int) {
 }
 
-func (MockState) ValidateTransactionSignature(tx types.SerializableSignedTransaction) (address.Address, error) {
+func (MockState) ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (address.Address, error) {
 	return address.Address{}, nil
 }
 
@@ -100,6 +100,10 @@ func (t *AtxDbMock) ProcessAtx(atx *types.ActivationTx) {
 	t.nipsts[atx.Id()] = atx.Nipst
 }
 
+func (*AtxDbMock) IsIdentityActive(edId string, layer types.LayerID) (bool, types.AtxId, error) {
+	return true, *types.EmptyAtxId, nil
+}
+
 //todo: if this is used somewhere then impl some real mock
 func (t *AtxDbMock) GetEpochAtxIds(id types.EpochId) ([]types.AtxId, error) {
 	return []types.AtxId{}, nil
@@ -117,7 +121,7 @@ func (*MockIStore) StoreNodeIdentity(id types.NodeId) error {
 }
 
 func (*MockIStore) GetIdentity(id string) (types.NodeId, error) {
-	return types.NodeId{}, nil
+	return types.NodeId{Key: "some string ", VRFPublicKey: []byte("bytes")}, nil
 }
 
 type ValidatorMock struct{}

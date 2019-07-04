@@ -84,16 +84,16 @@ func newTxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 
 		for _, t := range missinDB {
 			if tx := s.txpool.Get(t); tx != nil {
-				txs[t] = tx.(*types.SerializableTransaction)
+				txs[t] = tx.(*types.AddressableSignedTransaction)
 			} else {
 				logger.Error("Error handling tx request message, with ids: %d", msg)
 				return nil
 			}
 		}
 
-		var transactions []types.SerializableTransaction
+		var transactions []types.SerializableSignedTransaction
 		for _, value := range txs {
-			tx := *value
+			tx := *value.SerializableSignedTransaction
 			transactions = append(transactions, tx)
 		}
 
@@ -129,11 +129,13 @@ func newATxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 
 		var transactions []types.ActivationTx
 		for _, value := range atxs {
-			//todo nipst should be a reference change after implemented in atx
-			value.Nipst, err = s.GetNipst(value.Id())
-			if err != nil || value.Nipst == nil {
-				logger.Error("Error handling atx request message, cannot find nipst for atx %v", hex.EncodeToString(value.Id().Bytes()))
-				return nil
+			if value.Nipst == nil {
+				//todo nipst should be a reference change after implemented in atx
+				value.Nipst, err = s.GetNipst(value.Id())
+				if err != nil || value.Nipst == nil {
+					logger.Error("Error handling atx request message, cannot find nipst for atx %v", hex.EncodeToString(value.Id().Bytes()))
+					return nil
+				}
 			}
 			tx := *value
 			transactions = append(transactions, tx)

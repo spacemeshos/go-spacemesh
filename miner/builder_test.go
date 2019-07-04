@@ -2,7 +2,8 @@ package miner
 
 import (
 	"bytes"
-	xdr "github.com/nullstyle/go-xdr/xdr3"
+	"errors"
+	"github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/config"
@@ -11,6 +12,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/rand"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
 	"math/big"
@@ -76,6 +78,18 @@ type mockAtxValidator struct{}
 
 func (mockAtxValidator) SyntacticallyValidateAtx(atx *types.ActivationTx) error { return nil }
 
+type mockTxProcessor struct {
+	notValid bool
+}
+
+func (m mockTxProcessor) ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (address.Address, error) {
+	if !m.notValid {
+
+		return address.HexToAddress("0xFFFF"), nil
+	}
+	return address.Address{}, errors.New("invalid sig for tx")
+}
+
 type mockSyncer struct{}
 
 func (mockSyncer) FetchPoetProof(poetProofRef []byte) error { return nil }
@@ -94,12 +108,13 @@ func TestBlockBuilder_StartStop(t *testing.T) {
 	builder := NewBlockBuilder(types.NodeId{}, &MockSigning{},
 		n,
 		beginRound,
-		NewMemPool(reflect.TypeOf(types.SerializableTransaction{})),
+		NewMemPool(reflect.TypeOf(types.AddressableSignedTransaction{})),
 		NewMemPool(reflect.TypeOf(types.ActivationTx{})),
 		MockCoin{},
 		orphans,
 		hare,
 		mockBlockOracle{},
+		mockTxProcessor{},
 		&mockAtxValidator{},
 		&mockSyncer{},
 		log.New(n.String(), "", ""))
@@ -118,7 +133,7 @@ func TestBlockBuilder_StartStop(t *testing.T) {
 
 	addr1 := address.BytesToAddress([]byte{0x02})
 	addr2 := address.BytesToAddress([]byte{0x01})
-	err = builder.AddTransaction(types.NewSerializableTransaction(1, addr1, addr2, big.NewInt(1), big.NewInt(DefaultGas), DefaultGasLimit))
+	err = builder.AddTransaction(types.NewAddressableTx(1, addr1, addr2, 1, DefaultGasLimit, DefaultGas))
 	assert.Error(t, err)
 }
 
@@ -132,10 +147,10 @@ func TestBlockBuilder_BlockIdGeneration(t *testing.T) {
 	hareRes := []types.BlockID{types.BlockID(0), types.BlockID(1), types.BlockID(2), types.BlockID(3)}
 	hare := MockHare{res: hareRes}
 
-	builder1 := NewBlockBuilder(types.NodeId{Key: "a"}, &MockSigning{}, n1, beginRound, NewMemPool(reflect.TypeOf([]*types.SerializableTransaction{})),
-		NewMemPool(reflect.TypeOf([]*types.ActivationTx{})), MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare, mockBlockOracle{}, &mockAtxValidator{}, &mockSyncer{}, log.New(n1.NodeInfo.ID.String(), "", ""))
-	builder2 := NewBlockBuilder(types.NodeId{Key: "b"}, &MockSigning{}, n2, beginRound, NewMemPool(reflect.TypeOf(types.SerializableTransaction{})),
-		NewMemPool(reflect.TypeOf(types.ActivationTx{})), MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare, mockBlockOracle{}, &mockAtxValidator{}, &mockSyncer{}, log.New(n2.NodeInfo.ID.String(), "", ""))
+	builder1 := NewBlockBuilder(types.NodeId{Key: "a"}, &MockSigning{}, n1, beginRound, NewMemPool(reflect.TypeOf([]*types.AddressableSignedTransaction{})),
+		NewMemPool(reflect.TypeOf([]*types.ActivationTx{})), MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare, mockBlockOracle{}, mockTxProcessor{}, &mockAtxValidator{}, &mockSyncer{}, log.New(n1.NodeInfo.ID.String(), "", ""))
+	builder2 := NewBlockBuilder(types.NodeId{Key: "b"}, &MockSigning{}, n2, beginRound, NewMemPool(reflect.TypeOf(types.AddressableSignedTransaction{})),
+		NewMemPool(reflect.TypeOf(types.ActivationTx{})), MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare, mockBlockOracle{}, mockTxProcessor{}, &mockAtxValidator{}, &mockSyncer{}, log.New(n2.NodeInfo.ID.String(), "", ""))
 
 	b1, _ := builder1.createBlock(1, types.AtxId{}, types.BlockEligibilityProof{}, nil, nil)
 
@@ -154,8 +169,8 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 	hareRes := []types.BlockID{types.BlockID(0), types.BlockID(1), types.BlockID(2), types.BlockID(3)}
 	hare := MockHare{res: hareRes}
 
-	builder := NewBlockBuilder(types.NodeId{"anton", []byte("anton")}, &MockSigning{}, n, beginRound, NewMemPool(reflect.TypeOf([]*types.SerializableTransaction{})),
-		NewMemPool(reflect.TypeOf([]*types.ActivationTx{})), MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare, mockBlockOracle{}, &mockAtxValidator{}, &mockSyncer{}, log.New(n.String(), "", ""))
+	builder := NewBlockBuilder(types.NodeId{"anton", []byte("anton")}, &MockSigning{}, n, beginRound, NewMemPool(reflect.TypeOf([]*types.AddressableSignedTransaction{})),
+		NewMemPool(reflect.TypeOf([]*types.ActivationTx{})), MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare, mockBlockOracle{}, mockTxProcessor{}, &mockAtxValidator{}, &mockSyncer{}, log.New(n.String(), "", ""))
 
 	err := builder.Start()
 	assert.NoError(t, err)
@@ -163,22 +178,22 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 	addr1 := address.BytesToAddress([]byte{0x02})
 	addr2 := address.BytesToAddress([]byte{0x01})
 
-	trans := []*types.SerializableTransaction{
+	trans := []*types.AddressableSignedTransaction{
 		Transaction2SerializableTransaction(mesh.NewTransaction(1, addr1, addr2, big.NewInt(1), DefaultGasLimit, big.NewInt(DefaultGas))),
 		Transaction2SerializableTransaction(mesh.NewTransaction(2, addr1, addr2, big.NewInt(1), DefaultGasLimit, big.NewInt(DefaultGas))),
 		Transaction2SerializableTransaction(mesh.NewTransaction(3, addr1, addr2, big.NewInt(1), DefaultGasLimit, big.NewInt(DefaultGas))),
 	}
 
-	transids := []types.TransactionId{types.GetTransactionId(trans[0]), types.GetTransactionId(trans[1]), types.GetTransactionId(trans[2])}
+	transids := []types.TransactionId{types.GetTransactionId(trans[0].SerializableSignedTransaction), types.GetTransactionId(trans[1].SerializableSignedTransaction), types.GetTransactionId(trans[2].SerializableSignedTransaction)}
 
 	builder.AddTransaction(trans[0])
 	builder.AddTransaction(trans[1])
 	builder.AddTransaction(trans[2])
 
 	atxs := []*types.ActivationTx{
-		types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")}, coinbase, 1, types.AtxId{common.Hash{1}}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&common.Hash{}), true),
-		types.NewActivationTx(types.NodeId{"bbbb", []byte("bbb")}, coinbase, 1, types.AtxId{common.Hash{2}}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&common.Hash{}), true),
-		types.NewActivationTx(types.NodeId{"cccc", []byte("bbb")}, coinbase, 1, types.AtxId{common.Hash{3}}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&common.Hash{}), true),
+		types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")}, coinbase, 1, types.AtxId{common.Hash{1}}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&common.Hash{})),
+		types.NewActivationTx(types.NodeId{"bbbb", []byte("bbb")}, coinbase, 1, types.AtxId{common.Hash{2}}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&common.Hash{})),
+		types.NewActivationTx(types.NodeId{"cccc", []byte("bbb")}, coinbase, 1, types.AtxId{common.Hash{3}}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&common.Hash{})),
 	}
 
 	builder.AtxPool.Put(atxs[0].Id(), atxs[0])
@@ -209,11 +224,11 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 }
 
 func TestBlockBuilder_SerializeTrans(t *testing.T) {
-	tx := types.NewSerializableTransaction(0, address.BytesToAddress([]byte{0x01}), address.BytesToAddress([]byte{0x02}), big.NewInt(10), big.NewInt(10), 10)
-	buf, err := types.TransactionAsBytes(tx)
+	tx := types.NewAddressableTx(0, address.BytesToAddress([]byte{0x01}), address.BytesToAddress([]byte{0x02}), 10, 10, 10)
+	buf, err := types.AddressableTransactionAsBytes(tx)
 	assert.NoError(t, err)
 
-	ntx, err := types.BytesAsTransaction(buf)
+	ntx, err := types.BytesAsAddressableTransaction(buf)
 	assert.NoError(t, err)
 
 	assert.Equal(t, *tx, *ntx)
@@ -235,4 +250,29 @@ func ContainsAtx(a []types.AtxId, x types.AtxId) bool {
 		}
 	}
 	return false
+}
+
+func TestBlockBuilder_Validation(t *testing.T) {
+	net := service.NewSimulator()
+	beginRound := make(chan types.LayerID)
+	n1 := net.NewNode()
+
+	hareRes := []types.BlockID{types.BlockID(0), types.BlockID(1), types.BlockID(2), types.BlockID(3)}
+	hare := MockHare{res: hareRes}
+
+	builder1 := NewBlockBuilder(types.NodeId{Key: "a"}, &MockSigning{}, n1, beginRound, NewMemPool(reflect.TypeOf([]*types.AddressableSignedTransaction{})),
+		NewMemPool(reflect.TypeOf([]*types.ActivationTx{})), MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare, mockBlockOracle{}, mockTxProcessor{true}, &mockAtxValidator{}, &mockSyncer{}, log.New(n1.NodeInfo.ID.String(), "", ""))
+	builder1.Start()
+	ed := signing.NewEdSigner()
+	tx, e := types.NewSignedTx(0, address.HexToAddress("0xFF"), 2, 3, 4, ed)
+	assert.Nil(t, e)
+	b, e := types.SignedTransactionAsBytes(tx)
+	assert.Nil(t, e)
+	n1.Broadcast(IncomingTxProtocol, b)
+	time.Sleep(300 * time.Millisecond)
+	assert.Equal(t, 0, len(builder1.TransactionPool.txMap))
+	builder1.txValidator = mockTxProcessor{false}
+	n1.Broadcast(IncomingTxProtocol, b)
+	time.Sleep(300 * time.Millisecond)
+	assert.Equal(t, 1, len(builder1.TransactionPool.txMap))
 }

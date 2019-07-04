@@ -4,12 +4,15 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/spacemeshos/ed25519"
+	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"sync"
@@ -24,12 +27,30 @@ type MemPool interface {
 	Invalidate(id interface{})
 }
 
+type PoetDb interface {
+	HasProof(proofRef []byte) bool
+	ValidateAndStore(proofMessage *types.PoetProofMessage) error
+	GetProofMessage(proofRef []byte) ([]byte, error)
+}
+
 type BlockValidator interface {
 	BlockEligible(block *types.BlockHeader) (bool, error)
 }
 
-type TxValidator interface {
-	TxValid(tx types.SerializableTransaction) bool
+type EligibilityValidator interface {
+	BlockEligible(block *types.BlockHeader) (bool, error)
+}
+
+type TxSigValidator interface {
+	ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (address.Address, error)
+}
+
+type blockValidator struct {
+	EligibilityValidator
+}
+
+func NewBlockValidator(bev EligibilityValidator) BlockValidator {
+	return &blockValidator{bev}
 }
 
 type Configuration struct {
@@ -38,20 +59,15 @@ type Configuration struct {
 	RequestTimeout time.Duration
 }
 
-type PoetDb interface {
-	HasProof(proofRef []byte) bool
-	ValidateAndStore(proofMessage *types.PoetProofMessage) error
-	GetProofMessage(proofRef []byte) ([]byte, error)
-}
-
 type Syncer struct {
 	p2p.Peers
 	*mesh.Mesh
-	BlockValidator //todo should not be here
-	TxValidator
+	BlockValidator
 	Configuration
 	log.Log
 	*server.MessageServer
+	sigValidator      TxSigValidator
+	poetDb            PoetDb
 	txpool            MemPool
 	atxpool           MemPool
 	currentLayer      types.LayerID
@@ -61,7 +77,6 @@ type Syncer struct {
 	clock             timesync.LayerTimer
 	exit              chan struct{}
 	currentLayerMutex sync.RWMutex
-	poetDb            PoetDb
 }
 
 func (s *Syncer) ForceSync() {
@@ -126,24 +141,24 @@ func (s *Syncer) run() {
 }
 
 //fires a sync every sm.syncInterval or on force space from outside
-func NewSync(srv service.Service, layers *mesh.Mesh, txpool MemPool, atxpool MemPool, bv BlockValidator, tv TxValidator, poetDb PoetDb, conf Configuration, clock timesync.LayerTimer, currentLayer types.LayerID, logger log.Log) *Syncer {
+func NewSync(srv service.Service, layers *mesh.Mesh, txpool MemPool, atxpool MemPool, sv TxSigValidator, bv BlockValidator, poetdb PoetDb, conf Configuration, clock timesync.LayerTimer, currentLayer types.LayerID, logger log.Log) *Syncer {
 	s := &Syncer{
 		BlockValidator: bv,
-		TxValidator:    tv,
 		Configuration:  conf,
 		Log:            logger,
 		Mesh:           layers,
 		Peers:          p2p.NewPeers(srv, logger.WithName("peers")),
 		MessageServer:  server.NewMsgServer(srv.(server.Service), syncProtocol, conf.RequestTimeout, make(chan service.DirectMessage, config.ConfigValues.BufferSize), logger.WithName("srv")),
+		sigValidator:   sv,
 		SyncLock:       0,
 		txpool:         txpool,
 		atxpool:        atxpool,
+		poetDb:         poetdb,
 		startLock:      0,
 		currentLayer:   currentLayer,
 		forceSync:      make(chan bool),
 		clock:          clock,
 		exit:           make(chan struct{}),
-		poetDb:         poetDb,
 	}
 
 	s.RegisterBytesMsgHandler(LAYER_HASH, newLayerHashRequestHandler(layers, logger))
@@ -152,6 +167,7 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool MemPool, atxpool Mem
 	s.RegisterBytesMsgHandler(TX, newTxsRequestHandler(s, logger))
 	s.RegisterBytesMsgHandler(ATX, newATxsRequestHandler(s, logger))
 	s.RegisterBytesMsgHandler(POET, newPoetRequestHandler(s, logger))
+
 	return s
 }
 
@@ -175,10 +191,10 @@ func (s *Syncer) Synchronise() {
 		}
 
 		mu.Lock()
-		go func() {
-			s.ValidateLayer(lyr) //run one at a time
+		go func(lyrToValidate types.Layer) {
+			s.ValidateLayer(&lyrToValidate) //run one at a time
 			mu.Unlock()
-		}()
+		}(*lyr)
 	}
 }
 
@@ -199,214 +215,137 @@ func (s *Syncer) getLayerFromNeighbors(currenSyncLayer types.LayerID) (*types.La
 		return nil, err
 	}
 
-	blocksArr, err := s.fetchFullBlocks(blockIds)
-	if err != nil {
-		s.Error("could not get layer blocks %v", currenSyncLayer, err)
+	blocksArr := s.GetFullBlocks(blockIds)
+	if len(blocksArr) == 0 {
+		s.Error("could not any blocks  for layer  %v", currenSyncLayer)
 		return nil, err
 	}
 
 	return types.NewExistingLayer(types.LayerID(currenSyncLayer), blocksArr), nil
 }
 
-func (s *Syncer) fetchFullBlocks(blockIds []types.BlockID) ([]*types.Block, error) {
-	output := s.fetchWithFactory(BlockReqFactory(blockIds), s.Concurrency)
+func (s *Syncer) GetFullBlocks(blockIds []types.BlockID) []*types.Block {
+	output := s.fetchWithFactory(NewBlockWorker(s, s.Concurrency, BlockReqFactory(), blockSliceToChan(blockIds)))
 	blocksArr := make([]*types.Block, 0, len(blockIds))
 	for out := range output {
-		block := out.(*types.Block)
+		//ignore blocks that we could not fetch
+		if out != nil {
+			block := out.(*types.Block)
+			txs, atxs, err := s.BlockSyntacticValidation(block)
+			if err != nil {
+				s.Error("failed to validate block %v %v", block.ID(), err)
+				continue
+			}
 
-		eligible, err := s.BlockEligible(&block.BlockHeader)
-		if err != nil {
-			s.Warning(fmt.Sprintf("failed checking eligiblety %v", block.ID()), err)
-			continue
+			if err := s.AddBlockWithTxs(block, txs, atxs); err != nil {
+				s.Error("failed to add block %v to database %v", block.ID(), err)
+				continue
+			}
+
+			s.Info("added block %v to layer %v", block.ID(), block.Layer())
+			blocksArr = append(blocksArr, block)
 		}
-		if !eligible {
-			s.Warning(fmt.Sprintf("block %v not eligible", block.ID()), err)
-			continue
-		}
-
-		if err := s.syncMissingContent(block); err != nil {
-			s.Error(fmt.Sprintf("failed derefrencing block data %v", block.ID()), err)
-			continue
-		}
-
-		s.Info("added block to layer %v", block.Layer())
-		blocksArr = append(blocksArr, block)
-
 	}
 
-	return blocksArr, nil
+	s.Info("done getting full blocks")
+	return blocksArr
 }
 
-func (s *Syncer) syncMissingContent(blk *types.Block) error {
-	var txs []*types.SerializableTransaction
+func (s *Syncer) BlockSyntacticValidation(block *types.Block) ([]*types.AddressableSignedTransaction, []*types.ActivationTx, error) {
+	if err := s.confirmBlockValidity(block); err != nil {
+		s.Error("failed derefrencing block data %v %v", block.ID(), err)
+		return nil, nil, errors.New(fmt.Sprintf("failed derefrencing block data %v %v", block.ID(), err))
+	}
+
+	//data availability
+	txs, atxs, err := s.DataAvailabilty(block)
+	if err != nil {
+		return nil, nil, errors.New(fmt.Sprintf("data availabilty failed for block %v", block.ID()))
+	}
+
+	//validate blocks view
+	if valid := s.ValidateView(block); valid == false {
+		return nil, nil, errors.New(fmt.Sprintf("block %v not syntacticly valid", block.ID()))
+	}
+
+	return txs, atxs, nil
+}
+
+func (s *Syncer) confirmBlockValidity(blk *types.Block) error {
+	s.Info("validate block %v ", blk.ID())
+
+	//check block signature and is identity active
+	pubKey, err := ed25519.ExtractPublicKey(blk.Bytes(), blk.Sig())
+	if err != nil {
+		return errors.New(fmt.Sprintf("could not extract block %v public key %v ", blk.ID(), err))
+	}
+
+	active, atxid, err := s.IsIdentityActive(signing.NewPublicKey(pubKey).String(), blk.Layer())
+	if err != nil {
+		return errors.New(fmt.Sprintf("error while checking IsIdentityActive for %v %v ", blk.ID(), err))
+	}
+
+	if !active {
+		return errors.New(fmt.Sprintf("block %v identity activation check failed ", blk.ID()))
+	}
+
+	if atxid != blk.ATXID {
+		return errors.New(fmt.Sprintf("wrong associated atx got %v expected %v ", blk.ATXID.ShortId(), atxid.ShortId()))
+	}
+
+	//block eligibility
+	if eligable, err := s.BlockEligible(&blk.BlockHeader); err != nil || !eligable {
+		return errors.New(fmt.Sprintf("block %v eligablety check failed ", blk.ID()))
+	}
+
+	return nil
+}
+
+func (s *Syncer) ValidateView(blk *types.Block) bool {
+	vq := NewValidationQueue(s.Log.WithName("validQ"))
+	if err := vq.traverse(s, &blk.BlockHeader); err != nil {
+		s.Warning("could not validate %v view %v", blk.ID(), err)
+		return false
+	}
+	return true
+}
+
+func (s *Syncer) DataAvailabilty(blk *types.Block) ([]*types.AddressableSignedTransaction, []*types.ActivationTx, error) {
+	var txs []*types.AddressableSignedTransaction
 	var txerr error
 	wg := sync.WaitGroup{}
 	wg.Add(2)
 	go func() {
 		//sync Transactions
-		txs, txerr = s.Txs(blk)
+		txs, txerr = s.syncTxs(blk.TxIds)
 		wg.Done()
 	}()
 
 	var atxs []*types.ActivationTx
-	//var associated *types.ActivationTx
 	var atxerr error
 
+	//sync ATxs
 	go func() {
-		//sync ATxs
-		atxs, _, atxerr = s.ATXs(blk)
+		atxs, atxerr = s.syncAtxs(blk.AtxIds)
 		wg.Done()
 	}()
 
 	wg.Wait()
 
 	if txerr != nil {
-		s.Warning(fmt.Sprintf("failed fetching block %v transactions %v", blk.ID(), txerr))
-		return txerr
+		s.Warning("failed fetching block %v transactions %v", blk.ID(), txerr)
+		return txs, atxs, txerr
 	}
 
 	if atxerr != nil {
-		s.Warning(fmt.Sprintf("failed fetching block %v activation transactions %v", blk.ID(), atxerr))
-		return atxerr
+		s.Warning("failed fetching block %v activation transactions %v", blk.ID(), atxerr)
+		return txs, atxs, atxerr
 	}
 
-	s.Info(fmt.Sprintf("fetched all txs for block %v", blk.ID()))
-	s.Info(fmt.Sprintf("fetched all atxs for block %v", blk.ID()))
+	s.Info("fetched all txs for block %v", blk.ID())
+	s.Info("fetched all atxs for block %v", blk.ID())
 
-	if err := s.AddBlockWithTxs(blk, txs, atxs); err != nil {
-		s.Warning(fmt.Sprintf("failed fetching block %v activation transactions %v", blk.ID(), err))
-		return err
-	}
-
-	s.Info(fmt.Sprintf("added block with txs to database %v", blk.ID()))
-	return nil
-}
-
-func (s *Syncer) Txs(mb *types.Block) ([]*types.SerializableTransaction, error) {
-
-	//look in pool
-	txMap := make(map[types.TransactionId]*types.SerializableTransaction)
-	missing := make([]types.TransactionId, 0)
-	for _, t := range mb.TxIds {
-		if tx := s.txpool.Get(t); tx != nil {
-			s.Info("found tx, %v in tx pool", hex.EncodeToString(t[:]))
-			txMap[t] = tx.(*types.SerializableTransaction)
-		} else {
-			missing = append(missing, t)
-		}
-	}
-
-	//look in db
-	dbTxs, missinDB := s.GetTransactions(missing)
-
-	//map and sort txs
-	if len(missing) > 0 {
-		for out := range s.fetchWithFactory(TxReqFactory(missinDB), 1) {
-			ntxs := out.([]types.SerializableTransaction)
-			for _, tx := range ntxs {
-				txMap[types.GetTransactionId(&tx)] = &tx
-			}
-		}
-	}
-
-	txs := make([]*types.SerializableTransaction, 0, len(mb.TxIds))
-	for _, t := range mb.TxIds {
-		if tx, ok := txMap[t]; ok {
-			txs = append(txs, tx)
-		} else if tx, ok := dbTxs[t]; ok {
-			txs = append(txs, tx)
-		} else {
-			return nil, errors.New(fmt.Sprintf("could not fetch tx %v", hex.EncodeToString(t[:])))
-		}
-	}
-	return txs, nil
-}
-
-func (s *Syncer) ATXs(mb *types.Block) (atxs []*types.ActivationTx, associated *types.ActivationTx, err error) {
-
-	//look in pool
-	atxMap := make(map[types.AtxId]*types.ActivationTx, len(atxs))
-	missingInPool := make([]types.AtxId, 0, len(atxs))
-	for _, t := range mb.AtxIds {
-		id := t
-		if x := s.atxpool.Get(id); x != nil {
-			atx := x.(*types.ActivationTx)
-			if atx.Nipst == nil {
-				s.Warning("atx %v nipst not found ", hex.EncodeToString(id.Bytes()))
-				missingInPool = append(missingInPool, id)
-				continue
-			}
-			s.Info("found atx, %v in atx pool", hex.EncodeToString(id.Bytes()))
-			atxMap[id] = atx
-		} else {
-			s.Warning("atx %v not in atx pool", hex.EncodeToString(id.Bytes()))
-			missingInPool = append(missingInPool, id)
-		}
-	}
-
-	//look in db
-	dbAtxs, missing := s.GetATXs(missingInPool)
-
-	fetchAssociated := false
-	if mb.ATXID != *types.EmptyAtxId {
-		if _, err := s.GetAtx(mb.ATXID); err != nil {
-			fetchAssociated = true
-			missing = append(missing, mb.ATXID)
-		}
-	}
-
-	//map and sort atxs
-	if len(missing) > 0 {
-		output := s.fetchWithFactory(ATxReqFactory(missing), 1)
-		for out := range output {
-			ntxs := out.([]types.ActivationTx)
-			for _, atx := range ntxs {
-				err := s.FetchPoetProof(atx.GetPoetProofRef())
-				if err != nil {
-					if types.IsProcessingError(err) {
-						s.Error("error while validating PoET proof: %v", err)
-					} else {
-						s.Warning("received ATX with invalid or missing PoET proof: %v", err)
-					}
-					return nil, nil, fmt.Errorf("a referenced PoET proof is missing or invalid: %v", err)
-				}
-				atxMap[atx.Id()] = &atx
-			}
-		}
-	}
-
-	if fetchAssociated {
-		if _, ok := atxMap[mb.BlockHeader.ATXID]; !ok {
-			return nil, nil, errors.New(fmt.Sprintf("could not fetch associated %v", hex.EncodeToString(mb.BlockHeader.ATXID.Bytes())))
-		}
-	}
-
-	atxs = make([]*types.ActivationTx, 0, len(mb.AtxIds))
-	for _, t := range mb.AtxIds {
-		if tx, ok := atxMap[t]; ok {
-			atxs = append(atxs, tx)
-		} else if tx, ok := dbAtxs[t]; ok {
-			atxs = append(atxs, tx)
-		} else {
-			return nil, nil, errors.New(fmt.Sprintf("could not fetch atx %v", hex.EncodeToString(t.Bytes())))
-		}
-	}
-	return atxs, associated, nil
-}
-
-func (s *Syncer) FetchPoetProof(poetProofRef []byte) error {
-	if !s.poetDb.HasProof(poetProofRef) {
-		out := <-s.fetchWithFactory(PoetReqFactory(poetProofRef), 1)
-		if out == nil {
-			return fmt.Errorf("could not find PoET proof with any neighbor")
-		}
-		proofMessage := out.(types.PoetProofMessage)
-		err := s.poetDb.ValidateAndStore(&proofMessage)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+	return txs, atxs, nil
 }
 
 func (s *Syncer) fetchLayerBlockIds(m map[string]p2p.Peer, lyr types.LayerID) ([]types.BlockID, error) {
@@ -461,16 +400,138 @@ func (s *Syncer) fetchLayerHashes(lyr types.LayerID) (map[string]p2p.Peer, error
 	return m, nil
 }
 
-func (s *Syncer) fetchWithFactory(refac RequestFactory, workers int) chan interface{} {
+func (s *Syncer) validateAndBuildTx(x *types.SerializableSignedTransaction) (*types.AddressableSignedTransaction, error) {
+	addr, err := s.sigValidator.ValidateTransactionSignature(x)
+	if err != nil {
+		return nil, err
+	}
+
+	return &types.AddressableSignedTransaction{SerializableSignedTransaction: x, Address: addr}, nil
+}
+
+//returns txs out of txids that are not in the local database
+func (s *Syncer) syncTxs(txids []types.TransactionId) ([]*types.AddressableSignedTransaction, error) {
+
+	//look in pool
+	unprocessedTxs := make(map[types.TransactionId]*types.AddressableSignedTransaction)
+	missing := make([]types.TransactionId, 0)
+	for _, t := range txids {
+		if tx := s.txpool.Get(t); tx != nil {
+			s.Info("found tx, %v in tx pool", hex.EncodeToString(t[:]))
+			unprocessedTxs[t] = tx.(*types.AddressableSignedTransaction)
+		} else {
+			missing = append(missing, t)
+		}
+	}
+
+	//look in db
+	dbTxs, missinDB := s.GetTransactions(missing)
+
+	//map and sort txs
+	if len(missing) > 0 {
+		for out := range s.fetchWithFactory(NewNeighborhoodWorker(s, 1, TxReqFactory(missinDB))) {
+			ntxs := out.([]types.SerializableSignedTransaction)
+			for _, tx := range ntxs {
+				ast, err := s.validateAndBuildTx(&tx)
+				if err != nil {
+					id := types.GetTransactionId(&tx)
+					s.Warning("tx %v not valid %v", hex.EncodeToString(id[:]), err)
+					continue
+				}
+				unprocessedTxs[types.GetTransactionId(&tx)] = ast
+			}
+		}
+	}
+
+	txs := make([]*types.AddressableSignedTransaction, 0, len(txids))
+	for _, id := range txids {
+		if tx, ok := unprocessedTxs[id]; ok {
+			txs = append(txs, tx)
+		} else if _, ok := dbTxs[id]; ok {
+			continue
+		} else {
+			return nil, errors.New(fmt.Sprintf("could not fetch tx %v", hex.EncodeToString(id[:])))
+		}
+	}
+	return txs, nil
+}
+
+//returns atxs out of txids that are not in the local database
+func (s *Syncer) syncAtxs(atxIds []types.AtxId) ([]*types.ActivationTx, error) {
+
+	//look in pool
+	unprocessedAtxs := make(map[types.AtxId]*types.ActivationTx, len(atxIds))
+	missingInPool := make([]types.AtxId, 0, len(atxIds))
+	for _, t := range atxIds {
+		id := t
+		if x := s.atxpool.Get(id); x != nil {
+			atx := x.(*types.ActivationTx)
+			if atx.Nipst == nil {
+				s.Warning("atx %v nipst not found ", id.ShortId())
+				missingInPool = append(missingInPool, id)
+				continue
+			}
+			s.Info("found atx, %v in atx pool", id.ShortId())
+			unprocessedAtxs[id] = atx
+		} else {
+			s.Warning("atx %v not in atx pool", id.ShortId())
+			missingInPool = append(missingInPool, id)
+		}
+	}
+
+	//look in db
+	dbAtxs, missingInDb := s.GetATXs(missingInPool)
+
+	//map and sort atxs
+	if len(missingInDb) > 0 {
+
+		output := s.fetchWithFactory(NewNeighborhoodWorker(s, 1, ATxReqFactory(missingInDb)))
+		for out := range output {
+			atxs := out.([]types.ActivationTx)
+			for _, atx := range atxs {
+				if err := s.SyntacticallyValidateAtx(&atx); err != nil {
+					s.Warning("atx %v not valid %v", atx.ShortId(), err)
+					continue
+				}
+				unprocessedAtxs[atx.Id()] = &atx
+			}
+		}
+	}
+
+	atxs := make([]*types.ActivationTx, 0, len(atxIds))
+	for _, id := range atxIds {
+		if tx, ok := unprocessedAtxs[id]; ok {
+			atxs = append(atxs, tx)
+		} else if _, ok := dbAtxs[id]; ok {
+			continue
+		} else {
+			return nil, errors.New(fmt.Sprintf("could not fetch atx %v", id.ShortId()))
+		}
+	}
+	return atxs, nil
+}
+
+func (s *Syncer) fetchWithFactory(wrk worker) chan interface{} {
 	// each worker goroutine tries to fetch a block iteratively from each peer
-
-	wrk := NewNeighborhoodWorker(s, workers, refac)
 	go wrk.Work()
-
-	for i := 0; i < workers-1; i++ {
+	for i := 0; int32(i) < *wrk.workCount-1; i++ {
 		cloneWrk := wrk.Clone()
 		go cloneWrk.Work()
 	}
 
 	return wrk.output
+}
+func (s *Syncer) FetchPoetProof(poetProofRef []byte) error {
+	if !s.poetDb.HasProof(poetProofRef) {
+		out := <-s.fetchWithFactory(NewNeighborhoodWorker(s, 1, PoetReqFactory(poetProofRef)))
+		if out == nil {
+			return fmt.Errorf("could not find PoET proof with any neighbor")
+		}
+		proofMessage := out.(types.PoetProofMessage)
+		err := s.poetDb.ValidateAndStore(&proofMessage)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }

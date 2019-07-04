@@ -5,7 +5,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"math/big"
+	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 type BlockID uint64
@@ -39,7 +39,7 @@ func (id NodeId) ToBytes() []byte {
 type BlockHeader struct {
 	Id               BlockID
 	LayerIndex       LayerID
-	MinerID          NodeId // TODO: store only one ID in the block
+	MinerID          NodeId // TODO: remove. The block has the ed id in the signature and should be able to fetch the bls id from the miner's ATXs
 	ATXID            AtxId
 	EligibilityProof BlockEligibilityProof
 	Data             []byte
@@ -51,7 +51,8 @@ type BlockHeader struct {
 
 type Signed interface {
 	Sig() []byte
-	Obj() interface{}
+	Bytes() []byte
+	Data() interface{}
 }
 
 type Block struct {
@@ -73,6 +74,14 @@ func (t *Block) Data() interface{} {
 	return &t.MiniBlock
 }
 
+func (t *Block) Bytes() []byte {
+	bytes, err := InterfaceToBytes(t.MiniBlock)
+	if err != nil {
+		log.Panic("could not extract block bytes, %v", err)
+	}
+	return bytes
+}
+
 type BlockEligibilityProof struct {
 	J   uint32
 	Sig []byte
@@ -83,7 +92,7 @@ type InnerSerializableSignedTransaction struct {
 	AccountNonce uint64
 	Recipient    address.Address
 	GasLimit     uint64
-	Price        uint64
+	GasPrice     uint64
 	Amount       uint64
 }
 
@@ -93,26 +102,51 @@ type SerializableSignedTransaction struct {
 	Signature [64]byte
 }
 
-type SerializableTransaction struct {
-	AccountNonce uint64
-	Recipient    *address.Address
-	Origin       address.Address //todo: remove this, should be calculated from sig.
-	GasLimit     uint64
-	Price        []byte
-	Amount       []byte
-	Payload      []byte
+func NewSignedTx(nonce uint64, rec address.Address, amount, gas, price uint64, signer *signing.EdSigner) (*SerializableSignedTransaction, error) {
+	inner := InnerSerializableSignedTransaction{
+		AccountNonce: nonce,
+		Recipient:    rec,
+		Amount:       amount,
+		GasLimit:     gas,
+		GasPrice:     price,
+	}
+
+	buf, err := InterfaceToBytes(&inner)
+	if err != nil {
+		log.Error("failed to marshal tx")
+		return nil, err
+	}
+
+	sst := &SerializableSignedTransaction{
+		InnerSerializableSignedTransaction: inner,
+	}
+
+	copy(sst.Signature[:], signer.Sign(buf))
+
+	return sst, nil
 }
 
-func (t *SerializableTransaction) AmountAsBigInt() *big.Int {
-	a := &big.Int{}
-	a.SetBytes(t.Amount)
-	return a
+// Used to hold a signed transaction along with its address
+type AddressableSignedTransaction struct {
+	*SerializableSignedTransaction
+	address.Address
 }
 
-func (t *SerializableTransaction) PriceAsBigInt() *big.Int {
-	a := &big.Int{}
-	a.SetBytes(t.Price)
-	return a
+func NewAddressableTx(nonce uint64, orig, rec address.Address, amount, gasLimit, gasPrice uint64) *AddressableSignedTransaction {
+	inner := InnerSerializableSignedTransaction{
+		AccountNonce: nonce,
+		Recipient:    rec,
+		Amount:       amount,
+		GasLimit:     gasLimit,
+		GasPrice:     gasPrice,
+	}
+	sst := &SerializableSignedTransaction{
+		InnerSerializableSignedTransaction: inner,
+	}
+	return &AddressableSignedTransaction{
+		SerializableSignedTransaction: sst,
+		Address:                       orig,
+	}
 }
 
 func newBlockHeader(id BlockID, layerID LayerID, minerID NodeId, coin bool, data []byte, ts int64, viewEdges []BlockID, blockVotes []BlockID) *BlockHeader {
@@ -127,18 +161,6 @@ func newBlockHeader(id BlockID, layerID LayerID, minerID NodeId, coin bool, data
 		Coin:       coin,
 	}
 	return b
-}
-
-func NewSerializableTransaction(nonce uint64, origin, recepient address.Address, amount, price *big.Int, gasLimit uint64) *SerializableTransaction {
-	return &SerializableTransaction{
-		AccountNonce: nonce,
-		Price:        price.Bytes(),
-		GasLimit:     gasLimit,
-		Recipient:    &recepient,
-		Origin:       origin, //todo: remove this, should be calculated from sig.
-		Amount:       amount.Bytes(),
-		Payload:      nil,
-	}
 }
 
 func (b BlockHeader) ID() BlockID {

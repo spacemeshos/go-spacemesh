@@ -16,6 +16,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/rand"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/spacemeshos/sha256-simd"
@@ -33,7 +34,7 @@ import (
 	"time"
 )
 
-var conf = Configuration{1, 300, 150 * time.Millisecond}
+var conf = Configuration{1, 300, 500 * time.Millisecond}
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
@@ -96,10 +97,8 @@ func SyncMockFactory(number int, conf Configuration, name string, dbType string,
 		net := sim.NewNode()
 		name := fmt.Sprintf(name+"_%d", i)
 		l := log.New(name, "", "")
-		sync := NewSync(net, getMesh(dbType, Path+name+"_"+time.Now().String()),
-			miner.NewMemPool(reflect.TypeOf(types.SerializableTransaction{})),
-			miner.NewMemPool(reflect.TypeOf(types.ActivationTx{})),
-			BlockValidatorMock{}, TxValidatorMock{}, poetDb(), conf, tk, 0, l)
+		blockValidator := NewBlockValidator(BlockEligibilityValidatorMock{})
+		sync := NewSync(net, getMesh(dbType, Path+name+"_"+time.Now().String()), miner.NewMemPool(reflect.TypeOf(types.AddressableSignedTransaction{})), miner.NewMemPool(reflect.TypeOf(types.ActivationTx{})), mockTxProcessor{}, blockValidator, poetDb(), conf, tk, 0, l)
 		ts.Start()
 		nodes = append(nodes, sync)
 		p2ps = append(p2ps, net)
@@ -121,7 +120,7 @@ func (s *stateMock) ApplyTransactions(id types.LayerID, tx mesh.Transactions) (u
 	return 0, nil
 }
 
-func (s *stateMock) ValidateTransactionSignature(tx types.SerializableSignedTransaction) (address.Address, error) {
+func (s *stateMock) ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (address.Address, error) {
 	return address.Address{}, nil
 }
 
@@ -195,7 +194,7 @@ func TestSyncer_Close(t *testing.T) {
 }
 
 func TestSyncProtocol_BlockRequest(t *testing.T) {
-	atx1 := atx()
+	atx1 := atx("hgfdsa")
 	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_BlockRequest_", memoryDB, newMockPoetDb)
 	syncObj := syncs[0]
 	syncObj2 := syncs[1]
@@ -203,10 +202,11 @@ func TestSyncProtocol_BlockRequest(t *testing.T) {
 	lid := types.LayerID(1)
 	block := types.NewExistingBlock(types.BlockID(uuid.New().ID()), lid, []byte("data data data"))
 
-	syncObj.AddBlockWithTxs(block, []*types.SerializableTransaction{tx1}, []*types.ActivationTx{atx1})
+	syncObj.AddBlockWithTxs(block, []*types.AddressableSignedTransaction{tx1}, []*types.ActivationTx{atx1})
 	syncObj2.Peers = getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
 
-	output := syncObj2.fetchWithFactory(BlockReqFactory([]types.BlockID{block.ID()}), 1)
+	output := syncObj2.fetchWithFactory(NewBlockWorker(syncObj2, 1, BlockReqFactory(), blockSliceToChan([]types.BlockID{block.ID()})))
+
 	timeout := time.NewTimer(2 * time.Second)
 
 	select {
@@ -220,14 +220,14 @@ func TestSyncProtocol_BlockRequest(t *testing.T) {
 
 func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_LayerHashRequest_", memoryDB, newMockPoetDb)
-	atx1 := atx()
+	atx1 := atx("adfghgjh")
 	syncObj1 := syncs[0]
 	defer syncObj1.Close()
 	syncObj2 := syncs[1]
 	defer syncObj2.Close()
 	lid := types.LayerID(1)
 	block := types.NewExistingBlock(types.BlockID(123), lid, nil)
-	syncObj1.AddBlockWithTxs(block, []*types.SerializableTransaction{tx1}, []*types.ActivationTx{atx1})
+	syncObj1.AddBlockWithTxs(block, []*types.AddressableSignedTransaction{tx1}, []*types.ActivationTx{atx1})
 	//syncObj1.ValidateLayer(l) //this is to simulate the approval of the tortoise...
 	timeout := time.NewTimer(2 * time.Second)
 
@@ -287,10 +287,10 @@ func makePoetProofMessage(t *testing.T) types.PoetProofMessage {
 
 func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_LayerIdsRequest_", memoryDB, newMockPoetDb)
-	atx1 := atx()
-	atx2 := atx()
-	atx3 := atx()
-	atx4 := atx()
+	atx1 := atx("ytdfghdddddf")
+	atx2 := atx("tyhuruhefdfd")
+	atx3 := atx("Zxvasdfcasfd")
+	atx4 := atx("aweasdfasdft")
 	syncObj := syncs[0]
 	defer syncObj.Close()
 	syncObj1 := syncs[1]
@@ -298,18 +298,17 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 	lid := types.LayerID(1)
 	layer := types.NewExistingLayer(lid, make([]*types.Block, 0, 10))
 	block1 := types.NewExistingBlock(types.BlockID(123), lid, nil)
-	syncObj1.AddBlockWithTxs(block1, []*types.SerializableTransaction{tx1}, []*types.ActivationTx{atx1})
+	syncObj1.AddBlockWithTxs(block1, []*types.AddressableSignedTransaction{tx1}, []*types.ActivationTx{atx1})
 
 	block2 := types.NewExistingBlock(types.BlockID(132), lid, nil)
-	syncObj1.AddBlockWithTxs(block2, []*types.SerializableTransaction{tx2}, []*types.ActivationTx{atx2})
+	syncObj1.AddBlockWithTxs(block2, []*types.AddressableSignedTransaction{tx2}, []*types.ActivationTx{atx2})
 
 	block3 := types.NewExistingBlock(types.BlockID(153), lid, nil)
-
-	syncObj1.AddBlockWithTxs(block3, []*types.SerializableTransaction{tx3}, []*types.ActivationTx{atx3})
+	syncObj1.AddBlockWithTxs(block3, []*types.AddressableSignedTransaction{tx3}, []*types.ActivationTx{atx3})
 
 	block4 := types.NewExistingBlock(types.BlockID(222), lid, nil)
 
-	syncObj1.AddBlockWithTxs(block4, []*types.SerializableTransaction{tx4}, []*types.ActivationTx{atx4})
+	syncObj1.AddBlockWithTxs(block4, []*types.AddressableSignedTransaction{tx4}, []*types.ActivationTx{atx4})
 
 	timeout := time.NewTimer(2 * time.Second)
 
@@ -339,9 +338,10 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 
 func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_FetchBlocks_", memoryDB, newMockPoetDb)
-	atx1 := atx()
-	atx2 := atx()
-	atx3 := atx()
+	atx1 := atx("trteyjuk")
+
+	atx2 := atx("he6gdsdf")
+	atx3 := atx("yturjasd")
 	syncObj1 := syncs[0]
 	defer syncObj1.Close()
 	syncObj2 := syncs[1]
@@ -358,18 +358,24 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	block3 := types.NewExistingBlock(types.BlockID(222), 2, nil)
 	block3.ATXID = atx3.Id()
 
-	syncObj1.AddBlockWithTxs(block1, []*types.SerializableTransaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8}, []*types.ActivationTx{atx1})
-	syncObj1.AddBlockWithTxs(block2, []*types.SerializableTransaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8}, []*types.ActivationTx{atx2})
-	syncObj1.AddBlockWithTxs(block3, []*types.SerializableTransaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8}, []*types.ActivationTx{atx3})
+	syncObj1.AddBlockWithTxs(block1, []*types.AddressableSignedTransaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8}, []*types.ActivationTx{atx1})
+	syncObj1.AddBlockWithTxs(block2, []*types.AddressableSignedTransaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8}, []*types.ActivationTx{atx2})
+	syncObj1.AddBlockWithTxs(block3, []*types.AddressableSignedTransaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8}, []*types.ActivationTx{atx3})
 
-	output := syncObj2.fetchWithFactory(BlockReqFactory([]types.BlockID{block1.ID(), block2.ID(), block3.ID()}), 1)
+	ch := make(chan types.BlockID, 3)
+	ch <- block1.ID()
+	ch <- block2.ID()
+	ch <- block3.ID()
+
+	output := syncObj2.fetchWithFactory(NewBlockWorker(syncObj2, 1, BlockReqFactory(), blockSliceToChan([]types.BlockID{block1.ID(), block2.ID(), block3.ID()})))
+
 	for out := range output {
 		block := out.(*types.Block)
-		txs, err := syncObj2.Txs(block)
+		txs, err := syncObj2.syncTxs(block.TxIds)
 		if err != nil {
 			t.Error("could not fetch all txs", err)
 		}
-		atxs, _, err := syncObj2.ATXs(block)
+		atxs, err := syncObj2.syncAtxs(block.AtxIds)
 		if err != nil {
 			t.Error("could not fetch all atxs", err)
 		}
@@ -389,23 +395,33 @@ func TestSyncProtocol_SyncTwoNodes(t *testing.T) {
 	syncObj2.Peers = pm2 //override peers with mock
 	defer syncObj2.Close()
 
-	block3 := types.NewExistingBlock(types.BlockID(333), 1, nil)
-	block4 := types.NewExistingBlock(types.BlockID(444), 1, nil)
-	block5 := types.NewExistingBlock(types.BlockID(555), 2, nil)
-	block6 := types.NewExistingBlock(types.BlockID(666), 2, nil)
-	block7 := types.NewExistingBlock(types.BlockID(777), 3, nil)
-	block8 := types.NewExistingBlock(types.BlockID(888), 3, nil)
-	block9 := types.NewExistingBlock(types.BlockID(999), 4, nil)
-	block10 := types.NewExistingBlock(types.BlockID(101), 5, nil)
+	signer := signing.NewEdSigner()
 
-	syncObj1.AddBlockWithTxs(block3, []*types.SerializableTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
-	syncObj1.AddBlockWithTxs(block4, []*types.SerializableTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
-	syncObj1.AddBlockWithTxs(block5, []*types.SerializableTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
-	syncObj1.AddBlockWithTxs(block6, []*types.SerializableTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
-	syncObj1.AddBlockWithTxs(block7, []*types.SerializableTransaction{tx4, tx5, tx6}, []*types.ActivationTx{})
-	syncObj1.AddBlockWithTxs(block8, []*types.SerializableTransaction{tx4, tx5, tx6}, []*types.ActivationTx{})
-	syncObj1.AddBlockWithTxs(block9, []*types.SerializableTransaction{tx7, tx8}, []*types.ActivationTx{})
-	syncObj1.AddBlockWithTxs(block10, []*types.SerializableTransaction{tx7, tx8}, []*types.ActivationTx{})
+	block3 := types.NewExistingBlock(types.BlockID(333), 1, nil)
+	block3.Signature = signer.Sign(block3.Bytes())
+	block4 := types.NewExistingBlock(types.BlockID(444), 1, nil)
+	block4.Signature = signer.Sign(block4.Bytes())
+	block5 := types.NewExistingBlock(types.BlockID(555), 2, nil)
+	block5.Signature = signer.Sign(block5.Bytes())
+	block6 := types.NewExistingBlock(types.BlockID(666), 2, nil)
+	block6.Signature = signer.Sign(block6.Bytes())
+	block7 := types.NewExistingBlock(types.BlockID(777), 3, nil)
+	block7.Signature = signer.Sign(block7.Bytes())
+	block8 := types.NewExistingBlock(types.BlockID(888), 3, nil)
+	block8.Signature = signer.Sign(block8.Bytes())
+	block9 := types.NewExistingBlock(types.BlockID(999), 4, nil)
+	block9.Signature = signer.Sign(block9.Bytes())
+	block10 := types.NewExistingBlock(types.BlockID(101), 5, nil)
+	block10.Signature = signer.Sign(block10.Bytes())
+
+	syncObj1.AddBlockWithTxs(block3, []*types.AddressableSignedTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
+	syncObj1.AddBlockWithTxs(block4, []*types.AddressableSignedTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
+	syncObj1.AddBlockWithTxs(block5, []*types.AddressableSignedTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
+	syncObj1.AddBlockWithTxs(block6, []*types.AddressableSignedTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
+	syncObj1.AddBlockWithTxs(block7, []*types.AddressableSignedTransaction{tx4, tx5, tx6}, []*types.ActivationTx{})
+	syncObj1.AddBlockWithTxs(block8, []*types.AddressableSignedTransaction{tx4, tx5, tx6}, []*types.ActivationTx{})
+	syncObj1.AddBlockWithTxs(block9, []*types.AddressableSignedTransaction{tx7, tx8}, []*types.ActivationTx{})
+	syncObj1.AddBlockWithTxs(block10, []*types.AddressableSignedTransaction{tx7, tx8}, []*types.ActivationTx{})
 
 	timeout := time.After(12 * time.Second)
 	syncObj2.SetLatestLayer(6)
@@ -456,15 +472,34 @@ func syncTest(dpType string, t *testing.T) {
 	syncObj3.Peers = getPeersMock([]p2p.Peer{n1.PublicKey(), n2.PublicKey(), n4.PublicKey()})
 	syncObj4.Peers = getPeersMock([]p2p.Peer{n1.PublicKey(), n2.PublicKey()})
 
+	signer := signing.NewEdSigner()
+
 	block2 := types.NewExistingBlock(types.BlockID(222), 0, nil)
+	block2.Signature = signer.Sign(block2.Bytes())
+
 	block3 := types.NewExistingBlock(types.BlockID(333), 1, nil)
+	block3.Signature = signer.Sign(block3.Bytes())
+
 	block4 := types.NewExistingBlock(types.BlockID(444), 1, nil)
+	block4.Signature = signer.Sign(block4.Bytes())
+
 	block5 := types.NewExistingBlock(types.BlockID(555), 2, nil)
+	block5.Signature = signer.Sign(block5.Bytes())
+
 	block6 := types.NewExistingBlock(types.BlockID(666), 2, nil)
+	block6.Signature = signer.Sign(block6.Bytes())
+
 	block7 := types.NewExistingBlock(types.BlockID(777), 3, nil)
+	block7.Signature = signer.Sign(block7.Bytes())
+
 	block8 := types.NewExistingBlock(types.BlockID(888), 3, nil)
+	block8.Signature = signer.Sign(block8.Bytes())
+
 	block9 := types.NewExistingBlock(types.BlockID(999), 4, nil)
+	block9.Signature = signer.Sign(block9.Bytes())
+
 	block10 := types.NewExistingBlock(types.BlockID(101), 4, nil)
+	block10.Signature = signer.Sign(block10.Bytes())
 
 	syncObj1.ValidateLayer(mesh.GenesisLayer())
 	syncObj2.ValidateLayer(mesh.GenesisLayer())
@@ -472,14 +507,14 @@ func syncTest(dpType string, t *testing.T) {
 	syncObj4.ValidateLayer(mesh.GenesisLayer())
 
 	syncObj1.AddBlock(block2)
-	syncObj1.AddBlockWithTxs(block3, []*types.SerializableTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
-	syncObj1.AddBlockWithTxs(block4, []*types.SerializableTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
-	syncObj1.AddBlockWithTxs(block5, []*types.SerializableTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
-	syncObj1.AddBlockWithTxs(block6, []*types.SerializableTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
-	syncObj1.AddBlockWithTxs(block7, []*types.SerializableTransaction{tx4, tx5, tx6}, []*types.ActivationTx{})
-	syncObj1.AddBlockWithTxs(block8, []*types.SerializableTransaction{tx4, tx5, tx6}, []*types.ActivationTx{})
-	syncObj1.AddBlockWithTxs(block9, []*types.SerializableTransaction{tx7, tx8}, []*types.ActivationTx{})
-	syncObj1.AddBlockWithTxs(block10, []*types.SerializableTransaction{tx7, tx8}, []*types.ActivationTx{})
+	syncObj1.AddBlockWithTxs(block3, []*types.AddressableSignedTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
+	syncObj1.AddBlockWithTxs(block4, []*types.AddressableSignedTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
+	syncObj1.AddBlockWithTxs(block5, []*types.AddressableSignedTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
+	syncObj1.AddBlockWithTxs(block6, []*types.AddressableSignedTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
+	syncObj1.AddBlockWithTxs(block7, []*types.AddressableSignedTransaction{tx4, tx5, tx6}, []*types.ActivationTx{})
+	syncObj1.AddBlockWithTxs(block8, []*types.AddressableSignedTransaction{tx4, tx5, tx6}, []*types.ActivationTx{})
+	syncObj1.AddBlockWithTxs(block9, []*types.AddressableSignedTransaction{tx7, tx8}, []*types.ActivationTx{})
+	syncObj1.AddBlockWithTxs(block10, []*types.AddressableSignedTransaction{tx7, tx8}, []*types.ActivationTx{})
 
 	syncObj2.Start()
 	syncObj2.SetLatestLayer(5)
@@ -550,8 +585,9 @@ func Test_TwoNodes_SyncIntegrationSuite(t *testing.T) {
 	sis.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
 		l := log.New(fmt.Sprintf("%s_%d", sis.name, atomic.LoadUint32(&i)), "", "")
 		msh := getMesh(memoryDB, fmt.Sprintf("%s_%s", sis.name, time.Now()))
-		poetDb := &poetDbMock{}
-		sync := NewSync(s, msh, miner.NewMemPool(reflect.TypeOf(types.SerializableTransaction{})), miner.NewMemPool(reflect.TypeOf(types.ActivationTx{})), BlockValidatorMock{}, TxValidatorMock{}, poetDb, conf, tk, 0, l)
+		blockValidator := NewBlockValidator(BlockEligibilityValidatorMock{})
+		poetDb := activation.NewPoetDb(database.NewMemDatabase(), l.WithName("poetDb"))
+		sync := NewSync(s, msh, miner.NewMemPool(reflect.TypeOf(types.AddressableSignedTransaction{})), miner.NewMemPool(reflect.TypeOf(types.ActivationTx{})), mockTxProcessor{}, blockValidator, poetDb, conf, tk, 0, l)
 		sis.syncers = append(sis.syncers, sync)
 		ts.Start()
 		atomic.AddUint32(&i, 1)
@@ -582,12 +618,12 @@ func (sis *syncIntegrationTwoNodes) TestSyncProtocol_TwoNodes() {
 	syncObj2.AddBlock(block1)
 	syncObj2.AddBlock(block2)
 
-	syncObj1.AddBlockWithTxs(block3, []*types.SerializableTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
-	syncObj1.AddBlockWithTxs(block4, []*types.SerializableTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
-	syncObj1.AddBlockWithTxs(block5, []*types.SerializableTransaction{tx4, tx5, tx6}, []*types.ActivationTx{})
-	syncObj1.AddBlockWithTxs(block6, []*types.SerializableTransaction{tx4, tx5, tx6}, []*types.ActivationTx{})
-	syncObj1.AddBlockWithTxs(block7, []*types.SerializableTransaction{tx7, tx8}, []*types.ActivationTx{})
-	syncObj1.AddBlockWithTxs(block8, []*types.SerializableTransaction{tx7, tx8}, []*types.ActivationTx{})
+	syncObj1.AddBlockWithTxs(block3, []*types.AddressableSignedTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
+	syncObj1.AddBlockWithTxs(block4, []*types.AddressableSignedTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
+	syncObj1.AddBlockWithTxs(block5, []*types.AddressableSignedTransaction{tx4, tx5, tx6}, []*types.ActivationTx{})
+	syncObj1.AddBlockWithTxs(block6, []*types.AddressableSignedTransaction{tx4, tx5, tx6}, []*types.ActivationTx{})
+	syncObj1.AddBlockWithTxs(block7, []*types.AddressableSignedTransaction{tx7, tx8}, []*types.ActivationTx{})
+	syncObj1.AddBlockWithTxs(block8, []*types.AddressableSignedTransaction{tx7, tx8}, []*types.ActivationTx{})
 	syncObj1.AddBlock(block9)
 	syncObj1.AddBlock(block10)
 
@@ -635,8 +671,9 @@ func Test_Multiple_SyncIntegrationSuite(t *testing.T) {
 	sis.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
 		l := log.New(fmt.Sprintf("%s_%d", sis.name, atomic.LoadUint32(&i)), "", "")
 		msh := getMesh(memoryDB, fmt.Sprintf("%s_%d", sis.name, atomic.LoadUint32(&i)))
-		poetDb := &poetDbMock{}
-		sync := NewSync(s, msh, miner.NewMemPool(reflect.TypeOf(types.SerializableTransaction{})), miner.NewMemPool(reflect.TypeOf(types.ActivationTx{})), BlockValidatorMock{}, TxValidatorMock{}, poetDb, conf, tk, 0, l)
+		blockValidator := NewBlockValidator(BlockEligibilityValidatorMock{})
+		poetDb := activation.NewPoetDb(database.NewMemDatabase(), l.WithName("poetDb"))
+		sync := NewSync(s, msh, miner.NewMemPool(reflect.TypeOf(types.AddressableSignedTransaction{})), miner.NewMemPool(reflect.TypeOf(types.ActivationTx{})), mockTxProcessor{}, blockValidator, poetDb, conf, tk, 0, l)
 		ts.Start()
 		sis.syncers = append(sis.syncers, sync)
 		atomic.AddUint32(&i, 1)
@@ -646,14 +683,28 @@ func Test_Multiple_SyncIntegrationSuite(t *testing.T) {
 
 func (sis *syncIntegrationMultipleNodes) TestSyncProtocol_MultipleNodes() {
 	t := sis.T()
+	signer := signing.NewEdSigner()
 
 	block2 := types.NewExistingBlock(types.BlockID(222), 0, nil)
+	block2.Signature = signer.Sign(block2.Bytes())
+
 	block3 := types.NewExistingBlock(types.BlockID(333), 1, nil)
+	block3.Signature = signer.Sign(block3.Bytes())
+
 	block4 := types.NewExistingBlock(types.BlockID(444), 2, nil)
+	block4.Signature = signer.Sign(block4.Bytes())
+
 	block5 := types.NewExistingBlock(types.BlockID(555), 3, nil)
+	block5.Signature = signer.Sign(block5.Bytes())
+
 	block6 := types.NewExistingBlock(types.BlockID(666), 3, nil)
+	block6.Signature = signer.Sign(block6.Bytes())
+
 	block7 := types.NewExistingBlock(types.BlockID(777), 4, nil)
+	block7.Signature = signer.Sign(block7.Bytes())
+
 	block8 := types.NewExistingBlock(types.BlockID(888), 4, nil)
+	block8.Signature = signer.Sign(block8.Bytes())
 
 	syncObj1 := sis.syncers[0]
 	defer syncObj1.Close()
@@ -667,12 +718,12 @@ func (sis *syncIntegrationMultipleNodes) TestSyncProtocol_MultipleNodes() {
 	defer syncObj5.Close()
 
 	syncObj1.AddBlock(block2)
-	syncObj1.AddBlockWithTxs(block3, []*types.SerializableTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
-	syncObj1.AddBlockWithTxs(block4, []*types.SerializableTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
-	syncObj1.AddBlockWithTxs(block5, []*types.SerializableTransaction{tx4, tx5, tx6}, []*types.ActivationTx{})
-	syncObj1.AddBlockWithTxs(block6, []*types.SerializableTransaction{tx4, tx5, tx6}, []*types.ActivationTx{})
-	syncObj1.AddBlockWithTxs(block7, []*types.SerializableTransaction{tx7, tx8}, []*types.ActivationTx{})
-	syncObj1.AddBlockWithTxs(block8, []*types.SerializableTransaction{tx7, tx8}, []*types.ActivationTx{})
+	syncObj1.AddBlockWithTxs(block3, []*types.AddressableSignedTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
+	syncObj1.AddBlockWithTxs(block4, []*types.AddressableSignedTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
+	syncObj1.AddBlockWithTxs(block5, []*types.AddressableSignedTransaction{tx4, tx5, tx6}, []*types.ActivationTx{})
+	syncObj1.AddBlockWithTxs(block6, []*types.AddressableSignedTransaction{tx4, tx5, tx6}, []*types.ActivationTx{})
+	syncObj1.AddBlockWithTxs(block7, []*types.AddressableSignedTransaction{tx7, tx8}, []*types.ActivationTx{})
+	syncObj1.AddBlockWithTxs(block8, []*types.AddressableSignedTransaction{tx7, tx8}, []*types.ActivationTx{})
 
 	timeout := time.After(30 * time.Second)
 	syncObj1.Start()
@@ -710,14 +761,12 @@ end:
 	return
 }
 
-func tx() *types.SerializableTransaction {
-	gasPrice := rand.Int63n(100)
+func tx() *types.AddressableSignedTransaction {
+	gasPrice := rand.Uint64()
 	addr := rand.Int63n(1000000)
-	tx := types.NewSerializableTransaction(1, address.HexToAddress("1"),
+	tx := types.NewAddressableTx(1, address.HexToAddress("1"),
 		address.HexToAddress(strconv.FormatUint(uint64(addr), 10)),
-		big.NewInt(10),
-		big.NewInt(gasPrice),
-		100)
+		10, 100, gasPrice)
 	return tx
 }
 
@@ -731,7 +780,30 @@ func RandStringRunes(n int) string {
 	return string(b)
 }
 
-func atx() *types.ActivationTx {
+func atx(key string) *types.ActivationTx {
 	coinbase := address.HexToAddress("aaaa")
-	return types.NewActivationTx(types.NodeId{Key: RandStringRunes(5), VRFPublicKey: []byte(RandStringRunes(5))}, coinbase, 1, types.AtxId{}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&common.Hash{}), true)
+	return types.NewActivationTx(types.NodeId{Key: key, VRFPublicKey: []byte(RandStringRunes(5))}, coinbase, 0, *types.EmptyAtxId, 5, 1, *types.EmptyAtxId, 0, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&common.Hash{}))
+}
+
+func TestSyncer_Txs(t *testing.T) {
+	// check tx validation
+	syncs, nodes := SyncMockFactory(2, conf, "TestSyncer_Start_", memoryDB, newMockPoetDb)
+	pm1 := getPeersMock([]p2p.Peer{nodes[1].PublicKey()})
+	pm2 := getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
+	syncObj1 := syncs[0]
+	syncObj1.Peers = pm1 //override peers with mock
+	defer syncObj1.Close()
+	syncObj2 := syncs[1]
+	syncObj2.Peers = pm2 //override peers with mock
+	defer syncObj2.Close()
+
+	block3 := types.NewExistingBlock(types.BlockID(333), 1, nil)
+
+	syncObj1.AddBlockWithTxs(block3, []*types.AddressableSignedTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
+	syncObj2.sigValidator = mockTxProcessor{true}
+	_, err := syncObj2.syncTxs(block3.TxIds)
+	assert.NotNil(t, err)
+	syncObj2.sigValidator = mockTxProcessor{false}
+	_, err = syncObj2.syncTxs(block3.TxIds)
+	assert.Nil(t, err)
 }

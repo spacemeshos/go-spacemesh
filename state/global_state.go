@@ -14,7 +14,7 @@ import (
 type GlobalStateDB interface {
 	Exist(addr address.Address) bool
 	Empty(addr address.Address) bool
-	GetBalance(addr address.Address) *big.Int
+	GetBalance(addr address.Address) uint64
 	GetNonce(addr address.Address) uint64
 	AddBalance(addr address.Address, amount *big.Int)
 	SubBalance(addr address.Address, amount *big.Int)
@@ -86,12 +86,12 @@ func (self *StateDB) Empty(addr address.Address) bool {
 }
 
 // Retrieve the balance from the given address or 0 if object not found
-func (self *StateDB) GetBalance(addr address.Address) *big.Int {
+func (self *StateDB) GetBalance(addr address.Address) uint64 {
 	StateObj := self.getStateObj(addr)
 	if StateObj != nil {
-		return StateObj.Balance()
+		return StateObj.Balance().Uint64()
 	}
-	return common.Big0
+	return 0
 }
 
 func (self *StateDB) GetNonce(addr address.Address) uint64 {

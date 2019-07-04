@@ -56,7 +56,7 @@ type State struct {
 }
 
 type StateQuerier interface {
-	IsIdentityActive(edId string, layer types.LayerID) (bool, error)
+	IsIdentityActive(edId string, layer types.LayerID) (bool, types.AtxId, error)
 }
 
 type Msg struct {
@@ -87,13 +87,7 @@ func newMsg(hareMsg *Message, querier StateQuerier, layersPerEpoch uint16) (*Msg
 	}
 	// query if identity is active
 	pub := signing.NewPublicKey(pubKey)
-	// TODO: genesis flow should decide what we want to do here
-	layer := types.LayerID(hareMsg.InnerMsg.InstanceId)
-	if layer.GetEpoch(layersPerEpoch).IsGenesis() {
-		return &Msg{hareMsg, pub}, nil
-	}
-
-	res, err := querier.IsIdentityActive(pub.String(), types.LayerID(hareMsg.InnerMsg.InstanceId))
+	res, _, err := querier.IsIdentityActive(pub.String(), types.LayerID(hareMsg.InnerMsg.InstanceId))
 	if err != nil {
 		log.Error("error while checking if identity is active for %v err=%v", pub.String(), err)
 		return nil, errors.New("is identity active query failed")
@@ -248,7 +242,7 @@ PreRound:
 			proc.advanceToNextRound()
 			proc.onRoundBegin()
 		case <-proc.CloseChannel(): // close event
-			proc.Info("Stop event loop, terminating")
+			proc.Debug("Stop event loop, terminating")
 			return
 		}
 	}
@@ -297,7 +291,7 @@ func (proc *ConsensusProcess) handleMessage(m *Msg) {
 			proc.Warning("message of type %v is not valid for either round, pubkey %v", mType, m.PubKey.ShortString())
 			return
 		} else { // a valid early InnerMsg, keep it for later
-			proc.Info("Early message of type %v detected. Keeping message, pubkey %v", mType, m.PubKey.ShortString())
+			proc.Debug("Early message of type %v detected. Keeping message, pubkey %v", mType, m.PubKey.ShortString())
 			proc.onEarlyMessage(m)
 			return
 		}
@@ -308,8 +302,7 @@ func (proc *ConsensusProcess) handleMessage(m *Msg) {
 }
 
 func (proc *ConsensusProcess) processMsg(m *Msg) {
-	proc.Info("Processing message of type %v", m.InnerMsg.Type.String())
-
+	proc.Debug("Processing message of type %v", m.InnerMsg.Type.String())
 	metrics.MessageTypeCounter.With("type_id", m.InnerMsg.Type.String()).Add(1)
 
 	switch m.InnerMsg.Type {

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -29,6 +30,10 @@ const IncomingTxProtocol = "TxGossip"
 
 type Signer interface {
 	Sign(m []byte) []byte
+}
+
+type TxValidator interface {
+	ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (address.Address, error)
 }
 
 type AtxValidator interface {
@@ -56,6 +61,7 @@ type BlockBuilder struct {
 	weakCoinToss     WeakCoinProvider
 	orphans          OrphanBlockProvider
 	blockOracle      oracle.BlockOracle
+	txValidator      TxValidator
 	atxValidator     AtxValidator
 	syncer           Syncer
 	started          bool
@@ -69,6 +75,7 @@ func NewBlockBuilder(minerID types.NodeId, sgn Signer, net p2p.Service,
 	orph OrphanBlockProvider,
 	hare HareResultProvider,
 	blockOracle oracle.BlockOracle,
+	txValidator TxValidator,
 	atxValidator AtxValidator,
 	syncer Syncer,
 	lg log.Log) BlockBuilder {
@@ -92,6 +99,7 @@ func NewBlockBuilder(minerID types.NodeId, sgn Signer, net p2p.Service,
 		weakCoinToss:     weakCoin,
 		orphans:          orph,
 		blockOracle:      blockOracle,
+		txValidator:      txValidator,
 		atxValidator:     atxValidator,
 		syncer:           syncer,
 		started:          false,
@@ -99,15 +107,20 @@ func NewBlockBuilder(minerID types.NodeId, sgn Signer, net p2p.Service,
 
 }
 
-func Transaction2SerializableTransaction(tx *mesh.Transaction) *types.SerializableTransaction {
-	return &types.SerializableTransaction{
+func Transaction2SerializableTransaction(tx *mesh.Transaction) *types.AddressableSignedTransaction {
+	inner := types.InnerSerializableSignedTransaction{
 		AccountNonce: tx.AccountNonce,
-		Origin:       tx.Origin,
-		Recipient:    tx.Recipient,
-		Amount:       tx.Amount.Bytes(),
-		Payload:      tx.Payload,
+		Recipient:    *tx.Recipient,
+		Amount:       tx.Amount.Uint64(),
 		GasLimit:     tx.GasLimit,
-		Price:        tx.Price.Bytes(),
+		GasPrice:     tx.GasPrice.Uint64(),
+	}
+	sst := &types.SerializableSignedTransaction{
+		InnerSerializableSignedTransaction: inner,
+	}
+	return &types.AddressableSignedTransaction{
+		SerializableSignedTransaction: sst,
+		Address:                       tx.Origin,
 	}
 }
 
@@ -149,16 +162,16 @@ type OrphanBlockProvider interface {
 }
 
 //used from external API call?
-func (t *BlockBuilder) AddTransaction(tx *types.SerializableTransaction) error {
+func (t *BlockBuilder) AddTransaction(tx *types.AddressableSignedTransaction) error {
 	if !t.started {
 		return fmt.Errorf("BlockBuilderStopped")
 	}
-	t.TransactionPool.Put(types.GetTransactionId(tx), tx)
+	t.TransactionPool.Put(types.GetTransactionId(tx.SerializableSignedTransaction), tx)
 	return nil
 }
 
 func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibilityProof types.BlockEligibilityProof,
-	txs []*types.SerializableTransaction, atx []*types.ActivationTx) (*types.Block, error) {
+	txs []*types.AddressableSignedTransaction, atx []*types.ActivationTx) (*types.Block, error) {
 
 	var votes []types.BlockID = nil
 	var err error
@@ -180,7 +193,7 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 
 	var txids []types.TransactionId
 	for _, t := range txs {
-		txids = append(txids, types.GetTransactionId(t))
+		txids = append(txids, types.GetTransactionId(t.SerializableSignedTransaction))
 	}
 
 	var atxids []types.AtxId
@@ -216,6 +229,15 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 	return &types.Block{MiniBlock: b, Signature: t.Signer.Sign(blockBytes)}, nil
 }
 
+func (t *BlockBuilder) validateAndBuildTx(x *types.SerializableSignedTransaction) (*types.AddressableSignedTransaction, error) {
+	addr, err := t.txValidator.ValidateTransactionSignature(x)
+	if err != nil {
+		return nil, err
+	}
+
+	return &types.AddressableSignedTransaction{SerializableSignedTransaction: x, Address: addr}, nil
+}
+
 func (t *BlockBuilder) listenForTx() {
 	t.Log.Info("start listening for txs")
 	for {
@@ -224,15 +246,23 @@ func (t *BlockBuilder) listenForTx() {
 			return
 		case data := <-t.txGossipChannel:
 			if data != nil {
-				x, err := types.BytesAsTransaction(data.Bytes())
+
+				x, err := types.BytesAsSignedTransaction(data.Bytes())
 				if err != nil {
 					t.Log.Error("cannot parse incoming TX")
-					break
+					continue
 				}
+
 				id := types.GetTransactionId(x)
+				fullTx, err := t.validateAndBuildTx(x)
+				if err != nil {
+					t.Log.Error("Transaction validation failed for id=%v, err=%v", id, err)
+					continue
+				}
+
 				t.Log.Info("got new tx %v", hex.EncodeToString(id[:]))
-				t.TransactionPool.Put(types.GetTransactionId(x), x)
 				data.ReportValidation(IncomingTxProtocol)
+				t.TransactionPool.Put(types.GetTransactionId(x), fullTx)
 			}
 		}
 	}
@@ -304,7 +334,7 @@ func (t *BlockBuilder) acceptBlockData() {
 			}
 			// TODO: include multiple proofs in each block and weigh blocks where applicable
 
-			txList := t.TransactionPool.PopItems(MaxTransactionsPerBlock).([]*types.SerializableTransaction)
+			txList := t.TransactionPool.PopItems(MaxTransactionsPerBlock).([]*types.AddressableSignedTransaction)
 
 			atxList := t.AtxPool.PopItems(MaxTransactionsPerBlock).([]*types.ActivationTx)
 

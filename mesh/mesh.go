@@ -1,7 +1,6 @@
 package mesh
 
 import (
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/address"
@@ -31,11 +30,11 @@ type MeshValidator interface {
 	ContextualValidity(id types.BlockID) bool
 }
 
-type StateApi interface {
+type TxProcessor interface {
 	ApplyTransactions(layer types.LayerID, transactions Transactions) (uint32, error)
 	ApplyRewards(layer types.LayerID, miners []address.Address, underQuota map[address.Address]int, bonusReward, diminishedReward *big.Int)
 	ValidateSignature(s types.Signed) (address.Address, error)
-	ValidateTransactionSignature(tx types.SerializableSignedTransaction) (address.Address, error) //todo use validate signature across the bord and remove this
+	ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (address.Address, error) //todo use validate signature across the bord and remove this
 }
 
 type MemPoolInValidator interface {
@@ -47,6 +46,7 @@ type AtxDB interface {
 	ProcessAtx(atx *types.ActivationTx)
 	GetAtx(id types.AtxId) (*types.ActivationTx, error)
 	GetNipst(id types.AtxId) (*types.NIPST, error)
+	IsIdentityActive(edId string, layer types.LayerID) (bool, types.AtxId, error)
 	SyntacticallyValidateAtx(atx *types.ActivationTx) error
 }
 
@@ -54,6 +54,7 @@ type Mesh struct {
 	log.Log
 	*MeshDB
 	AtxDB
+	TxProcessor
 	txInvalidator  MemPoolInValidator
 	atxInvalidator MemPoolInValidator
 	config         Config
@@ -64,19 +65,18 @@ type Mesh struct {
 	lcMutex        sync.RWMutex
 	lvMutex        sync.RWMutex
 	tortoise       MeshValidator
-	state          StateApi
 	orphMutex      sync.RWMutex
 	done           chan struct{}
 }
 
-func NewMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh MeshValidator, txInvalidator MemPoolInValidator, atxInvalidator MemPoolInValidator, state StateApi, logger log.Log) *Mesh {
+func NewMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh MeshValidator, txInvalidator MemPoolInValidator, atxInvalidator MemPoolInValidator, pr TxProcessor, logger log.Log) *Mesh {
 	//todo add boot from disk
 	ll := &Mesh{
 		Log:            logger,
 		tortoise:       mesh,
 		txInvalidator:  txInvalidator,
 		atxInvalidator: atxInvalidator,
-		state:          state,
+		TxProcessor:    pr,
 		done:           make(chan struct{}),
 		MeshDB:         db,
 		config:         rewardConfig,
@@ -89,7 +89,7 @@ func NewMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh MeshValidator, t
 //todo: this object should be splitted into two parts: one is the actual value serialized into trie, and an containig obj with caches
 type Transaction struct {
 	AccountNonce uint64
-	Price        *big.Int
+	GasPrice     *big.Int
 	GasLimit     uint64
 	Recipient    *address.Address
 	Origin       address.Address //todo: remove this, should be calculated from sig.
@@ -119,7 +119,7 @@ func NewTransaction(nonce uint64, origin address.Address, destination address.Ad
 		Recipient:    &destination,
 		Amount:       amount,
 		GasLimit:     gasLimit,
-		Price:        gasPrice,
+		GasPrice:     gasPrice,
 		hash:         nil,
 		Payload:      nil,
 	}
@@ -132,14 +132,13 @@ func rlpHash(x interface{}) (h common.Hash) {
 	return h
 }
 
-func SerializableTransaction2StateTransaction(tx *types.SerializableTransaction) *Transaction {
-	price := big.Int{}
-	price.SetBytes(tx.Price)
+func SerializableSignedTransaction2StateTransaction(tx *types.AddressableSignedTransaction) *Transaction {
+	price := &big.Int{}
+	price.SetUint64(tx.GasPrice)
 
-	amount := big.Int{}
-	amount.SetBytes(tx.Amount)
-
-	return NewTransaction(tx.AccountNonce, tx.Origin, *tx.Recipient, &amount, tx.GasLimit, &price)
+	amount := &big.Int{}
+	amount.SetUint64(tx.Amount)
+	return NewTransaction(tx.AccountNonce, tx.Address, tx.Recipient, amount, tx.GasLimit, price)
 }
 
 func (m *Mesh) IsContexuallyValid(b types.BlockID) bool {
@@ -234,7 +233,7 @@ func (m *Mesh) ExtractUniqueOrderedTransactions(l *types.Layer) []*Transaction {
 
 	for _, tx := range stxs {
 		//todo: think about these conversions.. are they needed?
-		txs = append(txs, SerializableTransaction2StateTransaction(tx))
+		txs = append(txs, SerializableSignedTransaction2StateTransaction(tx))
 	}
 
 	return MergeDoubles(txs)
@@ -250,7 +249,7 @@ func (m *Mesh) PushTransactions(oldBase types.LayerID, newBase types.LayerID) {
 		}
 
 		merged := m.ExtractUniqueOrderedTransactions(l)
-		x, err := m.state.ApplyTransactions(types.LayerID(i), merged)
+		x, err := m.ApplyTransactions(types.LayerID(i), merged)
 		if err != nil {
 			m.Log.Error("cannot apply transactions %v", err)
 		}
@@ -298,7 +297,7 @@ func (m *Mesh) AddBlock(blk *types.Block) error {
 	return nil
 }
 
-func (m *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.SerializableTransaction, atxs []*types.ActivationTx) error {
+func (m *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.AddressableSignedTransaction, atxs []*types.ActivationTx) error {
 	m.Debug("add block %d", blk.ID())
 
 	atxids := make([]types.AtxId, 0, len(atxs))
@@ -443,7 +442,7 @@ func (m *Mesh) AccumulateRewards(rewardLayer types.LayerID, params Config) {
 	rewards := &big.Int{}
 	processed := 0
 	for _, tx := range merged {
-		res := new(big.Int).Mul(tx.Price, params.SimpleTxCost)
+		res := new(big.Int).Mul(tx.GasPrice, params.SimpleTxCost)
 		processed++
 		rewards.Add(rewards, res)
 	}
@@ -452,10 +451,10 @@ func (m *Mesh) AccumulateRewards(rewardLayer types.LayerID, params Config) {
 	rewards.Add(rewards, layerReward)
 
 	numBlocks := big.NewInt(int64(len(l.Blocks())))
-	log.Info("fees reward: %v total processed %v total txs %v merged %v blocks: %v", rewards.Int64(), processed, len(merged), len(merged), numBlocks)
+	log.Info("fees reward: %v total processed %v total txs %v merged %v blocks: %v", rewards.Uint64(), processed, len(merged), len(merged), numBlocks)
 
 	bonusReward, diminishedReward := calculateActualRewards(rewards, numBlocks, params, len(uq))
-	m.state.ApplyRewards(types.LayerID(rewardLayer), ids, uq, bonusReward, diminishedReward)
+	m.ApplyRewards(types.LayerID(rewardLayer), ids, uq, bonusReward, diminishedReward)
 	//todo: should miner id be sorted in a deterministic order prior to applying rewards?
 
 }
@@ -484,19 +483,15 @@ func (m *Mesh) GetATXs(atxIds []types.AtxId) (map[types.AtxId]*types.ActivationT
 	for _, id := range atxIds {
 		t, err := m.GetAtx(id)
 		if err != nil {
-			m.Warning("could not get atx %v  from database, %v", hex.EncodeToString(id.Bytes()), err)
+			m.Warning("could not get atx %v  from database, %v", id.ShortId(), err)
 			mIds = append(mIds, id)
 		} else {
 			if t.Nipst, err = m.GetNipst(t.Id()); err != nil {
-				m.Warning("could not get nipst %v from database, %v", hex.EncodeToString(id.Bytes()), err)
+				m.Warning("could not get nipst %v from database, %v", id.ShortId(), err)
 				mIds = append(mIds, id)
 			}
 			atxs[t.Id()] = t
 		}
 	}
 	return atxs, mIds
-}
-
-func (m *Mesh) StateApi() StateApi {
-	return m.state
 }

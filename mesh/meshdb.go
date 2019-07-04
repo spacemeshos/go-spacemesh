@@ -71,7 +71,7 @@ func (m *MeshDB) Close() {
 
 func (m *MeshDB) AddBlock(bl *types.Block) error {
 	if _, err := m.getMiniBlockBytes(bl.ID()); err == nil {
-		log.Debug("block ", bl.ID(), " already exists in database")
+		log.Debug("block %v", bl.ID(), " already exists in database")
 		return errors.New("block " + string(bl.ID()) + " already exists in database")
 	}
 	if err := m.writeBlock(bl); err != nil {
@@ -276,16 +276,16 @@ func (m *MeshDB) getLayerMutex(index types.LayerID) *layerMutex {
 	return ll
 }
 
-func (m *MeshDB) writeTransactions(txs []*types.SerializableTransaction) ([]types.TransactionId, error) {
+func (m *MeshDB) writeTransactions(txs []*types.AddressableSignedTransaction) ([]types.TransactionId, error) {
 	txids := make([]types.TransactionId, 0, len(txs))
 	for _, t := range txs {
-		bytes, err := types.TransactionAsBytes(t)
+		bytes, err := types.AddressableTransactionAsBytes(t)
 		if err != nil {
 			m.Error("could not marshall tx %v to bytes ", err)
 			return nil, err
 		}
 
-		id := types.GetTransactionId(t)
+		id := types.GetTransactionId(t.SerializableSignedTransaction)
 		if err := m.transactions.Put(id[:], bytes); err != nil {
 			m.Error("could not write tx %v to database ", hex.EncodeToString(id[:]), err)
 			return nil, err
@@ -298,11 +298,11 @@ func (m *MeshDB) writeTransactions(txs []*types.SerializableTransaction) ([]type
 }
 
 func (m *MeshDB) GetTransactions(transactions []types.TransactionId) (
-	map[types.TransactionId]*types.SerializableTransaction,
+	map[types.TransactionId]*types.AddressableSignedTransaction,
 	[]types.TransactionId) {
 
 	var mIds []types.TransactionId
-	ts := make(map[types.TransactionId]*types.SerializableTransaction, len(transactions))
+	ts := make(map[types.TransactionId]*types.AddressableSignedTransaction, len(transactions))
 	for _, id := range transactions {
 		t, err := m.GetTransaction(id)
 		if err != nil {
@@ -315,13 +315,10 @@ func (m *MeshDB) GetTransactions(transactions []types.TransactionId) (
 	return ts, mIds
 }
 
-func (m *MeshDB) GetTransaction(id types.TransactionId) (*types.SerializableTransaction, error) {
+func (m *MeshDB) GetTransaction(id types.TransactionId) (*types.AddressableSignedTransaction, error) {
 	tBytes, err := m.transactions.Get(id[:])
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf("could not find transaction in database %v", hex.EncodeToString(id[:])))
+		return nil, fmt.Errorf("could not find transaction in database %v err=%v", hex.EncodeToString(id[:]), err)
 	}
-	if err != nil {
-		return nil, err
-	}
-	return types.BytesAsTransaction(tBytes)
+	return types.BytesAsAddressableTransaction(tBytes)
 }
