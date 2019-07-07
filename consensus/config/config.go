@@ -8,7 +8,7 @@ import (
 // Config is the main configuration of the dolev strong parameters
 type Config struct {
 	NodesPerLayer    int32         `mapstructure:"nodes-per-layer"`
-	LayersPerEpoch   uint16        `mapstructure:"layers-per-epoch"`
+	LayersPerEpoch   int           `mapstructure:"layers-per-epoch"`
 	RoundTime        time.Duration `mapstructure:"phase-time"`
 	StartTime        time.Time     `mapstructure:"start-time"`
 	NetworkDelayMax  time.Duration `mapstructure:"network-delay-time"`

@@ -126,6 +126,10 @@ func AddCommands(cmd *cobra.Command) {
 		config.HARE.ExpectedLeaders, "The expected number of leaders in the hare protocol")
 
 	/**========================Consensus Flags ========================== **/
+
+	cmd.PersistentFlags().IntVar(&config.CONSENSUS.LayersPerEpoch, "layers-per-epoch",
+		config.CONSENSUS.LayersPerEpoch, "Duration between layers in seconds")
+
 	//todo: add this here
 
 	// Bind Flags to config
