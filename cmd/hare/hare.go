@@ -29,7 +29,7 @@ var Cmd = &cobra.Command{
 
 		// monitor app
 		hareApp.updater = monitoring.NewMemoryUpdater()
-		hareApp.monitor = monitoring.NewMonitor(2, hareApp.updater, make(chan struct{}))
+		hareApp.monitor = monitoring.NewMonitor(1, hareApp.updater, make(chan struct{}))
 		hareApp.monitor.Start()
 
 		// start app
