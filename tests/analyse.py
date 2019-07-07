@@ -2,6 +2,12 @@ from tests import queries
 
 
 def analyze_mining(deployment, last_layer, layers_per_epoch, layer_avg_size, total_pods):
+
+    last_layer = int(last_layer)
+    layers_per_epoch = int(layers_per_epoch)
+    layer_avg_size = int(layer_avg_size)
+    total_pods = int(total_pods)
+
     # need to filter out blocks that have come from last layer
     blockmap, layermap = queries.get_blocks_per_node_and_layer(deployment)
     queries.print_node_stats(blockmap)
@@ -34,7 +40,7 @@ def analyze_mining(deployment, last_layer, layers_per_epoch, layer_avg_size, tot
     # not all nodes created blocks
     assert total_pods == len(blockmap)
     # remove blocks created in first epoch since first epoch starts with layer 1
-    assert ((total_blocks - first_epoch_blocks) / (last_layer - layers_per_epoch)) / layer_avg_size == 1
+    assert int((total_blocks - first_epoch_blocks) / (last_layer - layers_per_epoch)) / layer_avg_size == 1
     # not all nodes produces atx in all epochs
     assert total_atxs == int((last_layer / layers_per_epoch)) * total_pods
 
