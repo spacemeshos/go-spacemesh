@@ -43,8 +43,8 @@ func (mem *KeyTypeMemPool) PopItems(size int) []ValueType {
 
 func (mem *KeyTypeMemPool) Put(id KeyType, item *ValueType) {
 	mem.mu.Lock()
-	defer mem.mu.Unlock()
 	mem.txMap[id] = item
+	mem.mu.Unlock()
 }
 
 func (mem *KeyTypeMemPool) Invalidate(id KeyType) {

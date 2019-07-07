@@ -42,8 +42,8 @@ func (mem *TypesTransactionIdMemPool) PopItems(size int) []types.AddressableSign
 
 func (mem *TypesTransactionIdMemPool) Put(id types.TransactionId, item *types.AddressableSignedTransaction) {
 	mem.mu.Lock()
-	defer mem.mu.Unlock()
 	mem.txMap[id] = item
+	mem.mu.Unlock()
 }
 
 func (mem *TypesTransactionIdMemPool) Invalidate(id types.TransactionId) {

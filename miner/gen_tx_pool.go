@@ -42,8 +42,8 @@ func (mem *TypesAtxIdMemPool) PopItems(size int) []types.ActivationTx {
 
 func (mem *TypesAtxIdMemPool) Put(id types.AtxId, item *types.ActivationTx) {
 	mem.mu.Lock()
-	defer mem.mu.Unlock()
 	mem.txMap[id] = item
+	mem.mu.Unlock()
 }
 
 func (mem *TypesAtxIdMemPool) Invalidate(id types.AtxId) {
