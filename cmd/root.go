@@ -126,7 +126,9 @@ func AddCommands(cmd *cobra.Command) {
 		config.HARE.ExpectedLeaders, "The expected number of leaders in the hare protocol")
 
 	/**========================Consensus Flags ========================== **/
-	//todo: add this here
+
+	cmd.PersistentFlags().IntVar(&config.LayersPerEpoch, "layers-per-epoch",
+		config.LayersPerEpoch, "number of layers in epoch")
 
 	// Bind Flags to config
 	viper.BindPFlags(cmd.PersistentFlags())
