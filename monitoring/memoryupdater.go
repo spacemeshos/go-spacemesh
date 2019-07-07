@@ -5,19 +5,35 @@ import (
 	"runtime"
 )
 
+const formatStr = "Name=%20s\t\tMax=%12v\t\tMin=%12v\t\tAvg=%12v\n"
+
 var names = []string{"NumGoroutine", "Alloc", "TotalAlloc", "Sys", "Mallocs", "Frees", "LiveObjects", "PauseTotalNs", "NumGC"}
+
+type formatter func(uint64) string
+
+func bytesToMBFormmater(x uint64) string {
+	return fmt.Sprintf("%vMB", x/1024/1024)
+}
 
 type MemoryUpdater struct {
 	memTracker   map[string]*Tracker
+	formatters   map[string]formatter
 	recordsCount int
 }
 
 func NewMemoryUpdater() *MemoryUpdater {
 	mu := new(MemoryUpdater)
 	mu.memTracker = make(map[string]*Tracker)
+	mu.formatters = make(map[string]formatter)
 	for _, name := range names {
 		mu.memTracker[name] = NewTracker()
+		mu.formatters[name] = nil
 	}
+
+	mu.formatters["Alloc"] = bytesToMBFormmater
+	mu.formatters["TotalAlloc"] = bytesToMBFormmater
+	mu.formatters["Alloc"] = bytesToMBFormmater
+	mu.formatters["Alloc"] = bytesToMBFormmater
 
 	return mu
 }
@@ -48,10 +64,6 @@ func (mu *MemoryUpdater) Update() {
 	mu.recordsCount++
 }
 
-func bytesToMB(x uint64) uint64 {
-	return x / 1024 / 1024
-}
-
 // Status - returns a string description of the current status
 func (mu *MemoryUpdater) Status() string {
 	s := fmt.Sprintf("Records count=%v\n", mu.recordsCount)
@@ -61,14 +73,12 @@ func (mu *MemoryUpdater) Status() string {
 		min := mu.memTracker[name].Min()
 		avg := uint64(mu.memTracker[name].Avg())
 
-		if name == "Alloc" || name == "TotalAlloc" {
-			max = bytesToMB(max)
-			min = bytesToMB(min)
-			avg = bytesToMB(avg)
+		format := mu.formatters[name]
+		if format == nil {
+			s += fmt.Sprintf(formatStr, name, max, min, avg)
+		} else {
+			s += fmt.Sprintf(formatStr, name, format(max), format(min), format(avg))
 		}
-
-		s += fmt.Sprintf("Name=%20s\t\tMax=%12v\t\tMin=%12v\t\tAvg=%12v\n",
-			name, max, min, avg)
 	}
 
 	return s
