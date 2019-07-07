@@ -5,6 +5,8 @@ import (
 	"time"
 )
 
+// *NOTE* : this config is not used for anything but dolev strong. DO NOT USE
+
 // Config is the main configuration of the dolev strong parameters
 type Config struct {
 	NodesPerLayer    int32         `mapstructure:"nodes-per-layer"`
