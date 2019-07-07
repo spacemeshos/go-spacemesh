@@ -5,10 +5,12 @@ import (
 	"time"
 )
 
+// *NOTE* : this config is not used for anything but dolev strong. DO NOT USE
+
 // Config is the main configuration of the dolev strong parameters
 type Config struct {
 	NodesPerLayer    int32         `mapstructure:"nodes-per-layer"`
-	LayersPerEpoch   int           `mapstructure:"layers-per-epoch"`
+	LayersPerEpoch   uint16        `mapstructure:"layers-per-epoch"`
 	RoundTime        time.Duration `mapstructure:"phase-time"`
 	StartTime        time.Time     `mapstructure:"start-time"`
 	NetworkDelayMax  time.Duration `mapstructure:"network-delay-time"`

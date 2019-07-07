@@ -424,8 +424,9 @@ def test_mining(setup_network):
 
     layer_avg_size = testconfig['client']['args']['layer-average-size']
     layers_per_epoch = int(testconfig['client']['args']['layers-per-epoch'])
-    # count only third epoch
-    last_layer = 3*layers_per_epoch
+    # check only third epoch
+    epochs = 3
+    last_layer = epochs*layers_per_epoch
 
     queries.wait_for_latest_layer(testconfig["namespace"], last_layer)
     print("test took {:.3f} seconds ".format(end - start))

@@ -127,10 +127,8 @@ func AddCommands(cmd *cobra.Command) {
 
 	/**========================Consensus Flags ========================== **/
 
-	cmd.PersistentFlags().IntVar(&config.CONSENSUS.LayersPerEpoch, "layers-per-epoch",
-		config.CONSENSUS.LayersPerEpoch, "Duration between layers in seconds")
-
-	//todo: add this here
+	cmd.PersistentFlags().IntVar(&config.LayersPerEpoch, "layers-per-epoch",
+		config.LayersPerEpoch, "number of layers in epoch")
 
 	// Bind Flags to config
 	viper.BindPFlags(cmd.PersistentFlags())
