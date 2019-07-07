@@ -5,6 +5,7 @@ import (
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/monitoring"
 	"github.com/spacemeshos/go-spacemesh/oracle"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -25,9 +26,17 @@ var Cmd = &cobra.Command{
 		log.JSONLog(true)
 		hareApp := NewHareApp()
 		defer hareApp.Cleanup()
+
+		// monitor app
+		hareApp.updater = monitoring.NewMemoryUpdater()
+		hareApp.monitor = monitoring.NewMonitor(2, hareApp.updater, make(chan struct{}))
+		hareApp.monitor.Start()
+
+		// start app
 		hareApp.Initialize(cmd)
 		hareApp.Start(cmd, args)
 		<-hareApp.ha.CloseChannel()
+		hareApp.ha.Log.Info("%v", hareApp.updater.Status())
 	},
 }
 
@@ -50,11 +59,13 @@ func (mbp *mockBlockProvider) GetUnverifiedLayerBlocks(layerId types.LayerID) ([
 
 type HareApp struct {
 	*cmdp.BaseApp
-	p2p    p2p.Service
-	oracle *oracle.OracleClient
-	sgn    hare.Signer
-	ha     *hare.Hare
-	clock  *timesync.Ticker
+	p2p     p2p.Service
+	oracle  *oracle.OracleClient
+	sgn     hare.Signer
+	ha      *hare.Hare
+	clock   *timesync.Ticker
+	updater *monitoring.MemoryUpdater
+	monitor *monitoring.Monitor
 }
 
 func IsSynced() bool {

@@ -8,12 +8,13 @@ import (
 
 func work(term chan struct{}) {
 	m := 100
-	for i := 1; i < 100; i++ {
+	for i := 1; i < 10; i++ {
 		s := m * i
 		a := make([]uint64, s, s)
 		a[0] = 5
 		time.Sleep(2 * time.Second)
 		fmt.Printf("Done %v\n", i)
+		go func() { time.Sleep(5) }()
 	}
 	term <- struct{}{}
 	term <- struct{}{}

@@ -11,7 +11,7 @@ type Updater interface {
 type Monitor struct {
 	interval time.Duration
 	tracker  Updater
-	term chan struct{}
+	term     chan struct{}
 }
 
 func NewMonitor(refreshRate int, updater Updater, termChannel chan struct{}) *Monitor {
@@ -39,6 +39,3 @@ func (m *Monitor) monitor() {
 func (m *Monitor) Start() {
 	go m.monitor()
 }
-
-
-
