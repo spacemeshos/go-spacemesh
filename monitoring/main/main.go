@@ -23,7 +23,7 @@ func work(term chan struct{}) {
 func main() {
 	term := make(chan struct{})
 	u := monitoring.NewMemoryUpdater()
-	m := monitoring.NewMonitor(1, u, term)
+	m := monitoring.NewMonitor(1*time.Second, 1200*time.Millisecond, u, term)
 	m.Start()
 	go work(term)
 	<-term

@@ -16,8 +16,6 @@ import (
 	"time"
 )
 
-const defaultSetSize = 200
-
 // Hare cmd
 var Cmd = &cobra.Command{
 	Use:   "hare",
@@ -29,7 +27,7 @@ var Cmd = &cobra.Command{
 
 		// monitor app
 		hareApp.updater = monitoring.NewMemoryUpdater()
-		hareApp.monitor = monitoring.NewMonitor(1, hareApp.updater, make(chan struct{}))
+		hareApp.monitor = monitoring.NewMonitor(1*time.Second, 5*time.Second, hareApp.updater, make(chan struct{}))
 		hareApp.monitor.Start()
 
 		// start app
@@ -140,17 +138,6 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 		log.Panic("error starting p2p err=%v", err)
 	}
 	app.clock.Start()
-
-	go func() {
-		tk := time.NewTicker(5 * time.Second)
-		for {
-			select {
-			case <-tk.C:
-				app.ha.Log.Info("Status\n%v", app.updater.Status())
-			}
-		}
-
-	}()
 }
 
 func main() {

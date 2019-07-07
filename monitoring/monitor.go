@@ -1,23 +1,27 @@
 package monitoring
 
 import (
+	"github.com/spacemeshos/go-spacemesh/log"
 	"time"
 )
 
-type Updater interface {
+type recorder interface {
 	Update()
+	Status() string
 }
 
 type Monitor struct {
-	interval time.Duration
-	tracker  Updater
-	term     chan struct{}
+	updateTicker *time.Ticker
+	printTicker  *time.Ticker
+	recorder     recorder
+	term         chan struct{}
 }
 
-func NewMonitor(refreshRate int, updater Updater, termChannel chan struct{}) *Monitor {
+func NewMonitor(updateRate time.Duration, printRate time.Duration, updater recorder, termChannel chan struct{}) *Monitor {
 	m := new(Monitor)
-	m.interval = time.Duration(refreshRate) * time.Second
-	m.tracker = updater
+	m.updateTicker = time.NewTicker(updateRate)
+	m.printTicker = time.NewTicker(printRate)
+	m.recorder = updater
 	m.term = termChannel
 
 	return m
@@ -25,14 +29,14 @@ func NewMonitor(refreshRate int, updater Updater, termChannel chan struct{}) *Mo
 
 func (m *Monitor) monitor() {
 	for {
-		m.tracker.Update()
-
 		select {
 		case <-m.term:
 			return
-		case <-time.After(m.interval):
+		case <-m.updateTicker.C:
+			m.recorder.Update()
+		case <-m.printTicker.C:
+			log.Info("Status\n%v", m.recorder.Status())
 		}
-
 	}
 }
 
