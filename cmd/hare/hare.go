@@ -36,7 +36,8 @@ var Cmd = &cobra.Command{
 		hareApp.Initialize(cmd)
 		hareApp.Start(cmd, args)
 		<-hareApp.ha.CloseChannel()
-		hareApp.ha.Log.Info("%v", hareApp.updater.Status())
+		hareApp.ha.Log.Info("Status\n%v", hareApp.updater.Status())
+		time.Sleep(2 * time.Second)
 	},
 }
 
