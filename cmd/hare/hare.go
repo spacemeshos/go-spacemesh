@@ -36,8 +36,6 @@ var Cmd = &cobra.Command{
 		hareApp.Initialize(cmd)
 		hareApp.Start(cmd, args)
 		<-hareApp.ha.CloseChannel()
-		hareApp.ha.Log.Info("Status\n%v", hareApp.updater.Status())
-		time.Sleep(2 * time.Second)
 	},
 }
 
@@ -142,6 +140,17 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 		log.Panic("error starting p2p err=%v", err)
 	}
 	app.clock.Start()
+
+	go func() {
+		tk := time.NewTicker(5 * time.Second)
+		for {
+			select {
+			case <-tk.C:
+				app.ha.Log.Info("Status\n%v", app.updater.Status())
+			}
+		}
+
+	}()
 }
 
 func main() {
