@@ -141,10 +141,6 @@ func EnsureCLIFlags(cmd *cobra.Command, appcfg *bc.Config) {
 			elem = reflect.ValueOf(&appcfg.TIME).Elem()
 			assignFields(ff, elem, name)
 
-			ff = reflect.TypeOf(appcfg.CONSENSUS)
-			elem = reflect.ValueOf(&appcfg.CONSENSUS).Elem()
-			assignFields(ff, elem, name)
-
 			ff = reflect.TypeOf(appcfg.HARE)
 			elem = reflect.ValueOf(&appcfg.HARE).Elem()
 			assignFields(ff, elem, name)

@@ -3,7 +3,6 @@ package config
 import (
 	"fmt"
 	apiConfig "github.com/spacemeshos/go-spacemesh/api/config"
-	consensusConfig "github.com/spacemeshos/go-spacemesh/consensus/config"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 	hareConfig "github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -38,13 +37,12 @@ var (
 // Config defines the top level configuration for a spacemesh node
 type Config struct {
 	BaseConfig `mapstructure:"main"`
-	P2P        p2pConfig.Config       `mapstructure:"p2p"`
-	API        apiConfig.Config       `mapstructure:"api"`
-	CONSENSUS  consensusConfig.Config `mapstructure:"consensus"`
-	HARE       hareConfig.Config      `mapstructure:"hare"`
-	TIME       timeConfig.TimeConfig  `mapstructure:"time"`
-	GAS        state.GasConfig        `mapstructure:"gas"`
-	REWARD     mesh.Config            `mapstructure:"reward"`
+	P2P        p2pConfig.Config      `mapstructure:"p2p"`
+	API        apiConfig.Config      `mapstructure:"api"`
+	HARE       hareConfig.Config     `mapstructure:"hare"`
+	TIME       timeConfig.TimeConfig `mapstructure:"time"`
+	GAS        state.GasConfig       `mapstructure:"gas"`
+	REWARD     mesh.Config           `mapstructure:"reward"`
 }
 
 // BaseConfig defines the default configuration options for spacemesh app
@@ -70,6 +68,7 @@ type BaseConfig struct {
 	GenesisTime      string `mapstructure:"genesis-time"`
 	LayerDurationSec int    `mapstructure:"layer-duration-sec"`
 	LayerAvgSize     int    `mapstructure:"layer-average-size"`
+	LayersPerEpoch   int    `mapstructure:"layers-per-epoch"`
 
 	PoETServer string `mapstructure:"poet-server"`
 
@@ -90,7 +89,6 @@ func DefaultConfig() Config {
 		BaseConfig: defaultBaseConfig(),
 		P2P:        p2pConfig.DefaultConfig(),
 		API:        apiConfig.DefaultConfig(),
-		CONSENSUS:  consensusConfig.DefaultConfig(),
 		HARE:       hareConfig.DefaultConfig(),
 		TIME:       timeConfig.DefaultConfig(),
 		GAS:        state.DefaultConfig(),
@@ -113,6 +111,7 @@ func defaultBaseConfig() BaseConfig {
 		OracleServerWorldId: 0,
 		GenesisTime:         time.Now().Format(time.RFC3339),
 		LayerDurationSec:    30,
+		LayersPerEpoch:      3,
 		PoETServer:          "127.0.0.1",
 	}
 }

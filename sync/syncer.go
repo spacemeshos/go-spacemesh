@@ -435,7 +435,7 @@ func (s *Syncer) syncTxs(txids []types.TransactionId) ([]*types.AddressableSigne
 	dbTxs, missinDB := s.GetTransactions(missing)
 
 	//map and sort txs
-	if len(missing) > 0 {
+	if len(missinDB) > 0 {
 		for out := range s.fetchWithFactory(NewNeighborhoodWorker(s, 1, TxReqFactory(missinDB))) {
 			ntxs := out.([]types.SerializableSignedTransaction)
 			for _, tx := range ntxs {
