@@ -7,7 +7,7 @@ import (
 	"sync"
 )
 
-const InboxCapacity = 100
+const InboxCapacity = 1024 // inbox size per instance
 
 type StartInstanceError error
 
