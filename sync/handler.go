@@ -83,8 +83,8 @@ func newTxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 		txs, missinDB := s.GetTransactions(txids)
 
 		for _, t := range missinDB {
-			if tx := s.txpool.Get(t); tx != nil {
-				txs[t] = tx.(*types.AddressableSignedTransaction)
+			if tx, err := s.txpool.Get(t); err == nil {
+				txs[t] = &tx
 			} else {
 				logger.Error("Error handling tx request message, with ids: %d", msg)
 				return nil
@@ -119,8 +119,8 @@ func newATxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 		logger.Info("handle atx request ")
 		atxs, missinDB := s.GetATXs(atxids)
 		for _, t := range missinDB {
-			if tx := s.atxpool.Get(t); tx != nil {
-				atxs[t] = tx.(*types.ActivationTx)
+			if tx, err := s.atxpool.Get(t); err == nil {
+				atxs[t] = &tx
 			} else {
 				logger.Error("Error handling atx request message, with ids: %v", atxids)
 				return nil
