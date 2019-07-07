@@ -421,14 +421,15 @@ def test_mining(setup_network):
     api = 'v1/balance'
     data = '{"address":"0000000000000000000000000000000000002222"}'
     end = start = time.time()
-    layer_avg_size = 20
-    last_layer = 9
-    layers_per_epoch = 3
-    # deviation = 0.2
-    last_epoch = last_layer / layers_per_epoch
+
+    layer_avg_size = testconfig['client']['args']['layer-average-size']
+    layers_per_epoch = int(testconfig['client']['args']['layers-per-epoch'])
+    # count only third epoch
+    last_layer = 3*layers_per_epoch
 
     queries.wait_for_latest_layer(testconfig["namespace"], last_layer)
     print("test took {:.3f} seconds ".format(end - start))
+
     total_pods = len(setup_network.clients.pods) + len(setup_network.bootstrap.pods)
     analyse.analyze_mining(testconfig['namespace'], last_layer, layers_per_epoch, layer_avg_size, total_pods)
 
