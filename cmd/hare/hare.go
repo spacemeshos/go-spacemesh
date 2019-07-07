@@ -53,7 +53,7 @@ func (mbp *mockBlockProvider) GetUnverifiedLayerBlocks(layerId types.LayerID) ([
 	}
 
 	mbp.isPulled = true
-	return []types.BlockID{1, 2, 3}, nil
+	return buildSet(), nil
 }
 
 type HareApp struct {
@@ -80,11 +80,11 @@ func (app *HareApp) Cleanup() {
 	app.oracle.Unregister(true, app.sgn.PublicKey().String())
 }
 
-func buildSet() *hare.Set {
-	s := hare.NewEmptySet(defaultSetSize)
+func buildSet() []types.BlockID {
+	s := make([]types.BlockID, 200, 200)
 
-	for i := uint64(0); i < defaultSetSize; i++ {
-		s.Add(hare.NewValue(i))
+	for i := uint64(0); i < 200; i++ {
+		s = append(s, types.BlockID(i))
 	}
 
 	return s

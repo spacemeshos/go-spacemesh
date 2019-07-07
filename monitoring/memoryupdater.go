@@ -60,7 +60,7 @@ func (mu *MemoryUpdater) Status() string {
 		max := mu.memTracker[name].Max()
 		min := mu.memTracker[name].Min()
 		avg := uint64(mu.memTracker[name].Avg())
-		
+
 		if name == "Alloc" || name == "TotalAlloc" {
 			max = bytesToMB(max)
 			min = bytesToMB(min)
