@@ -48,16 +48,27 @@ func (mu *MemoryUpdater) Update() {
 	mu.recordsCount++
 }
 
+func bytesToMB(x uint64) uint64 {
+	return x / 1024 / 1024
+}
+
 // Status - returns a string description of the current status
 func (mu *MemoryUpdater) Status() string {
 	s := fmt.Sprintf("Records count=%v\n", mu.recordsCount)
 
 	for _, name := range names {
-		s += fmt.Sprintf("Name=%s\t\t\tMax=%v\t\tMin=%v\t\tAvg=%v\n",
-			name,
-			mu.memTracker[name].Max(),
-			mu.memTracker[name].Min(),
-			mu.memTracker[name].Avg())
+		max := mu.memTracker[name].Max()
+		min := mu.memTracker[name].Min()
+		avg := uint64(mu.memTracker[name].Avg())
+		
+		if name == "Alloc" || name == "TotalAlloc" {
+			max = bytesToMB(max)
+			min = bytesToMB(min)
+			avg = bytesToMB(avg)
+		}
+
+		s += fmt.Sprintf("Name=%20s\t\tMax=%12v\t\tMin=%12v\t\tAvg=%12v\n",
+			name, max, min, avg)
 	}
 
 	return s
