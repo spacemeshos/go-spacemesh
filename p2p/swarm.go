@@ -522,7 +522,7 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 	_, ok := s.gossipProtocolHandlers[pm.Metadata.NextProtocol]
 	s.protocolHandlerMutex.Unlock()
 
-	s.lNode.Info("Handle %v message from <<  %v", pm.Metadata.NextProtocol, msg.Conn.RemotePublicKey().String())
+	s.lNode.Debug("Handle %v message from <<  %v", pm.Metadata.NextProtocol, msg.Conn.RemotePublicKey().String())
 
 	if ok {
 		// pass to gossip relay chan
