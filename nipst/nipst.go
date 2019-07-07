@@ -172,6 +172,7 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *common.Hash) (*types.NIPST, error)
 			return nil, fmt.Errorf("not a member of this round (poetId: %x, roundId: %d)",
 				nb.state.PoetId, nb.state.PoetRound.Id) // TODO(noamnelke): handle this case!
 		}
+		nipst.PoetProofRef = poetProofRef
 		nb.state.PoetProofRef = poetProofRef
 		nb.state.persist()
 	}
