@@ -10,10 +10,11 @@ import (
 	"time"
 )
 
+// todo : calculate real udp max message size
+
 func (p *protocol) newGetAddressesRequestHandler() func(msg server.Message) []byte {
 	return func(msg server.Message) []byte {
-		start := time.Now()
-		p.logger.Debug("Got a find_node request at from ", msg.Sender().String())
+		p.logger.Debug("Got a get_address request from %v", msg.Sender().String())
 
 		// TODO: if we don't know who is that peer (a.k.a first time we hear from this address)
 		// 		 we must ensure that he's indeed listening on that address = check last pong
@@ -27,17 +28,17 @@ func (p *protocol) newGetAddressesRequestHandler() func(msg server.Message) []by
 				break
 			}
 		}
+
 		//todo: limit results to message size
 		//todo: what to do if we have no addresses?
 		resp, err := types.InterfaceToBytes(results)
 
 		if err != nil {
-			p.logger.Error("Error marshaling response message (Ping)")
+			p.logger.Error("Error marshaling response message (GetAddress)")
 			return nil
 		}
 
-		p.logger.Debug("responding a find_node request at from after", msg.Sender().String(), time.Now().Sub(start))
-
+		p.logger.Debug("responding a get_address request from %v", msg.Sender().String())
 		return resp
 	}
 }
@@ -56,6 +57,12 @@ func (p *protocol) GetAddresses(server p2pcrypto.PublicKey) ([]*node.NodeInfo, e
 		//todo: check that we're not pass max results ?
 		if err != nil {
 			p.logger.Warning("could not deserialize bytes to NodeInfo, skipping packet err=", err)
+			return
+		}
+
+		if len(nodes) > getAddrMax {
+			p.logger.Warning("addresses response from %v size is too large, ignoring. got: %v, expected: < %v", server.String(), len(nodes), getAddrMax)
+			return
 		}
 
 		ch <- nodes
