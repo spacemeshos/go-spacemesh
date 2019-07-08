@@ -61,7 +61,7 @@ func (p *protocol) GetAddresses(server p2pcrypto.PublicKey) ([]*node.NodeInfo, e
 		}
 
 		if len(nodes) > getAddrMax {
-			p.logger.Warning("Got a too big addresses messages from %v. skipping", server.String())
+			p.logger.Warning("addresses response from %v size is too large, ignoring. got: %v, expected: < %v", server.String(), len(nodes), getAddrMax)
 			return
 		}
 
