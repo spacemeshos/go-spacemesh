@@ -26,7 +26,6 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -98,7 +97,7 @@ func SyncMockFactory(number int, conf Configuration, name string, dbType string,
 		name := fmt.Sprintf(name+"_%d", i)
 		l := log.New(name, "", "")
 		blockValidator := NewBlockValidator(BlockEligibilityValidatorMock{})
-		sync := NewSync(net, getMesh(dbType, Path+name+"_"+time.Now().String()), miner.NewMemPool(reflect.TypeOf(types.AddressableSignedTransaction{})), miner.NewMemPool(reflect.TypeOf(types.ActivationTx{})), mockTxProcessor{}, blockValidator, poetDb(), conf, tk, 0, l)
+		sync := NewSync(net, getMesh(dbType, Path+name+"_"+time.Now().String()), miner.NewTypesTransactionIdMemPool(), miner.NewTypesAtxIdMemPool(), mockTxProcessor{}, blockValidator, poetDb(), conf, tk, 0, l)
 		ts.Start()
 		nodes = append(nodes, sync)
 		p2ps = append(p2ps, net)
@@ -138,7 +137,7 @@ func getMeshWithLevelDB(id string) *mesh.Mesh {
 	acdbStore, _ := database.NewLDBDatabase(id+"activation", 0, 0, lg)
 	atxdbStore, _ := database.NewLDBDatabase(id+"atx", 0, 0, lg)
 	atxdb := activation.NewActivationDb(atxdbStore, acdbStore, &MockIStore{}, mshdb, 10, &ValidatorMock{}, lg.WithName("atxDB"))
-	return mesh.NewMesh(mshdb, atxdb, rewardConf, &MeshValidatorMock{}, &MemPoolMock{}, &MemPoolMock{}, &stateMock{}, lg)
+	return mesh.NewMesh(mshdb, atxdb, rewardConf, &MeshValidatorMock{}, &MockTxMemPool{}, &MockAtxMemPool{}, &stateMock{}, lg)
 }
 
 func persistenceTeardown() {
@@ -149,7 +148,7 @@ func getMeshWithMemoryDB(id string) *mesh.Mesh {
 	lg := log.New(id, "", "")
 	mshdb := mesh.NewMemMeshDB(lg)
 	atxdb := activation.NewActivationDb(database.NewMemDatabase(), database.NewMemDatabase(), &MockIStore{}, mshdb, 10, &ValidatorMock{}, lg.WithName("atxDB"))
-	return mesh.NewMesh(mshdb, atxdb, rewardConf, &MeshValidatorMock{}, &MemPoolMock{}, &MemPoolMock{}, &stateMock{}, lg)
+	return mesh.NewMesh(mshdb, atxdb, rewardConf, &MeshValidatorMock{}, &MockTxMemPool{}, &MockAtxMemPool{}, &stateMock{}, lg)
 }
 
 func getMesh(dbType, id string) *mesh.Mesh {
@@ -587,7 +586,7 @@ func Test_TwoNodes_SyncIntegrationSuite(t *testing.T) {
 		msh := getMesh(memoryDB, fmt.Sprintf("%s_%s", sis.name, time.Now()))
 		blockValidator := NewBlockValidator(BlockEligibilityValidatorMock{})
 		poetDb := activation.NewPoetDb(database.NewMemDatabase(), l.WithName("poetDb"))
-		sync := NewSync(s, msh, miner.NewMemPool(reflect.TypeOf(types.AddressableSignedTransaction{})), miner.NewMemPool(reflect.TypeOf(types.ActivationTx{})), mockTxProcessor{}, blockValidator, poetDb, conf, tk, 0, l)
+		sync := NewSync(s, msh, miner.NewTypesTransactionIdMemPool(), miner.NewTypesAtxIdMemPool(), mockTxProcessor{}, blockValidator, poetDb, conf, tk, 0, l)
 		sis.syncers = append(sis.syncers, sync)
 		ts.Start()
 		atomic.AddUint32(&i, 1)
@@ -673,7 +672,7 @@ func Test_Multiple_SyncIntegrationSuite(t *testing.T) {
 		msh := getMesh(memoryDB, fmt.Sprintf("%s_%d", sis.name, atomic.LoadUint32(&i)))
 		blockValidator := NewBlockValidator(BlockEligibilityValidatorMock{})
 		poetDb := activation.NewPoetDb(database.NewMemDatabase(), l.WithName("poetDb"))
-		sync := NewSync(s, msh, miner.NewMemPool(reflect.TypeOf(types.AddressableSignedTransaction{})), miner.NewMemPool(reflect.TypeOf(types.ActivationTx{})), mockTxProcessor{}, blockValidator, poetDb, conf, tk, 0, l)
+		sync := NewSync(s, msh, miner.NewTypesTransactionIdMemPool(), miner.NewTypesAtxIdMemPool(), mockTxProcessor{}, blockValidator, poetDb, conf, tk, 0, l)
 		ts.Start()
 		sis.syncers = append(sis.syncers, sync)
 		atomic.AddUint32(&i, 1)

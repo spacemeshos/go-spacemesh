@@ -80,26 +80,42 @@ func (AtxDbMock) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 	return nil
 }
 
-type MemPoolMock struct {
+type MockTxMemPool struct{}
+
+func (MockTxMemPool) Get(id types.TransactionId) (types.AddressableSignedTransaction, error) {
+	return types.AddressableSignedTransaction{}, nil
+}
+func (MockTxMemPool) PopItems(size int) []types.AddressableSignedTransaction {
+	return nil
+}
+func (MockTxMemPool) Put(id types.TransactionId, item *types.AddressableSignedTransaction) {
+
+}
+func (MockTxMemPool) Invalidate(id types.TransactionId) {
+
 }
 
-func (mem *MemPoolMock) Get(id interface{}) interface{} {
+type MockAtxMemPool struct{}
+
+func (MockAtxMemPool) Get(id types.AtxId) (types.ActivationTx, error) {
+	return types.ActivationTx{}, nil
+}
+
+func (MockAtxMemPool) PopItems(size int) []types.ActivationTx {
 	return nil
 }
 
-func (mem *MemPoolMock) PopItems(size int) interface{} {
-	return nil
+func (MockAtxMemPool) Put(id types.AtxId, item *types.ActivationTx) {
+
 }
 
-func (mem *MemPoolMock) Put(id interface{}, item interface{}) {
-}
+func (MockAtxMemPool) Invalidate(id types.AtxId) {
 
-func (mem *MemPoolMock) Invalidate(id interface{}) {
 }
 
 func getMesh(id string) *Mesh {
 	lg := log.New(id, "", "")
-	layers := NewMesh(NewMemMeshDB(lg), &AtxDbMock{}, ConfigTst(), &MeshValidatorMock{}, &MemPoolMock{}, &MemPoolMock{}, &MockState{}, lg)
+	layers := NewMesh(NewMemMeshDB(lg), &AtxDbMock{}, ConfigTst(), &MeshValidatorMock{}, MockTxMemPool{}, MockAtxMemPool{}, &MockState{}, lg)
 	return layers
 }
 
