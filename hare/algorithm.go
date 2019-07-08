@@ -114,6 +114,7 @@ type ConsensusProcess struct {
 	isStarted         bool
 	inbox             chan *Msg
 	terminationReport chan TerminationOutput
+	stateQuerier      StateQuerier
 	validator         messageValidator
 	preRoundTracker   *PreRoundTracker
 	statusesTracker   *StatusTracker
@@ -136,6 +137,7 @@ func NewConsensusProcess(cfg config.Config, instanceId InstanceId, s *Set, oracl
 	proc.signing = signing
 	proc.nid = nid
 	proc.network = p2p
+	proc.stateQuerier = stateQuerier
 	proc.validator = newSyntaxContextValidator(signing, cfg.F+1, proc.statusValidator(), stateQuerier, layersPerEpoch, logger)
 	proc.preRoundTracker = NewPreRoundTracker(cfg.F+1, cfg.N)
 	proc.notifyTracker = NewNotifyTracker(cfg.N)
@@ -288,7 +290,8 @@ func (proc *ConsensusProcess) handleMessage(m *Msg) {
 	if !proc.validator.ContextuallyValidateMessage(m, proc.k) {
 		if !proc.validator.ContextuallyValidateMessage(m, proc.k+1) {
 			// TODO: should return error from InnerMsg validation to indicate what failed, should retry only for contextual failure
-			proc.Warning("message of type %v is not valid for either round, pubkey %v", mType, m.PubKey.ShortString())
+			proc.Warning("message of type %v is not valid for either round, pubkey %v. Expected: %v, Actual: %v",
+				mType, m.PubKey.ShortString(), proc.k+1, m.InnerMsg.K)
 			return
 		} else { // a valid early InnerMsg, keep it for later
 			proc.Debug("Early message of type %v detected. Keeping message, pubkey %v", mType, m.PubKey.ShortString())
@@ -328,9 +331,9 @@ func (proc *ConsensusProcess) sendMessage(msg *Msg) {
 		return
 	}
 
-	// check eligibility
-	if !proc.isEligible() {
-		proc.Info("Not eligible on round %v", proc.k)
+	// check participation
+	if !proc.shouldParticipate() {
+		proc.Info("Not participating on round %v", proc.k)
 		return
 	}
 
@@ -339,7 +342,8 @@ func (proc *ConsensusProcess) sendMessage(msg *Msg) {
 		return
 	}
 
-	proc.Info("message of type %v sent", msg.InnerMsg.Type.String())
+	proc.With().Info("message sent", log.String("msg_type", msg.InnerMsg.Type.String()),
+		log.Uint64("layer_id", uint64(proc.instanceId)))
 }
 
 func (proc *ConsensusProcess) onRoundEnd() {
@@ -390,7 +394,7 @@ func (proc *ConsensusProcess) beginRound2() {
 	// done with building proposal, reset statuses tracking
 	defer func() { proc.statusesTracker = nil }()
 
-	if proc.isEligible() && proc.statusesTracker.IsSVPReady() {
+	if proc.shouldParticipate() && proc.statusesTracker.IsSVPReady() {
 		builder, err := proc.initDefaultBuilder(proc.statusesTracker.ProposalSet(defaultSetSize))
 		if err != nil {
 			proc.Error("init default builder failed: %v", err)
@@ -598,7 +602,19 @@ func (proc *ConsensusProcess) endOfRound3() {
 	proc.notifySent = true
 }
 
-func (proc *ConsensusProcess) isEligible() bool {
+func (proc *ConsensusProcess) shouldParticipate() bool {
+	// query if identity is active
+	res, _, err := proc.stateQuerier.IsIdentityActive(proc.signing.PublicKey().String(), types.LayerID(proc.instanceId))
+	if err != nil {
+		proc.Error("Error checking for identity err=%v", err)
+		return false
+	}
+
+	if !res {
+		proc.Info("Should not participate in the protocol. Reason: identity not active")
+		return false
+	}
+
 	return proc.currentRole() != Passive
 }
 

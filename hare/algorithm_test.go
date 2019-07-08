@@ -297,9 +297,9 @@ func TestConsensusProcess_isEligible(t *testing.T) {
 	oracle := &mockRolacle{}
 	proc.oracle = oracle
 	oracle.isEligible = false
-	assert.False(t, proc.isEligible())
+	assert.False(t, proc.shouldParticipate())
 	oracle.isEligible = true
-	assert.True(t, proc.isEligible())
+	assert.True(t, proc.shouldParticipate())
 }
 
 func TestConsensusProcess_sendMessage(t *testing.T) {
