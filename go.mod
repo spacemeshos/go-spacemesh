@@ -1,6 +1,7 @@
 module github.com/spacemeshos/go-spacemesh
 
 require (
+	cloud.google.com/go v0.38.0
 	github.com/VividCortex/gohistogram v1.0.0 // indirect
 	github.com/btcsuite/btcd v0.0.0-20190213025234-306aecffea32
 	github.com/btcsuite/btcutil v0.0.0-20190207003914-4c204d697803
@@ -8,7 +9,7 @@ require (
 	github.com/go-kit/kit v0.8.0
 	github.com/gogo/protobuf v1.2.0
 	github.com/golang-collections/go-datastructures v0.0.0-20150211160725-59788d5eb259
-	github.com/golang/protobuf v1.3.0
+	github.com/golang/protobuf v1.3.1
 	github.com/google/uuid v1.1.0
 	github.com/grpc-ecosystem/grpc-gateway v1.8.4
 	github.com/hashicorp/golang-lru v0.5.1
@@ -30,11 +31,13 @@ require (
 	github.com/spf13/viper v1.3.1
 	github.com/stretchr/testify v1.3.0
 	github.com/syndtr/goleveldb v0.0.0-20181128100959-b001fa50d6b2
+	go.opencensus.io v0.22.0 // indirect
 	go.uber.org/zap v1.9.1
-	golang.org/x/crypto v0.0.0-20190131182504-b8fe1690c613
-	golang.org/x/net v0.0.0-20190206173232-65e2d4e15006
-	golang.org/x/sync v0.0.0-20181221193216-37e7f081c4d4
-	google.golang.org/genproto v0.0.0-20181221175505-bd9b4fb69e2f
-	google.golang.org/grpc v1.19.0
+	golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2
+	golang.org/x/net v0.0.0-20190503192946-f4e77d36d62c
+	golang.org/x/sync v0.0.0-20190423024810-112230192c58
+	google.golang.org/api v0.7.0
+	google.golang.org/genproto v0.0.0-20190502173448-54afdca5d873
+	google.golang.org/grpc v1.20.1
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 )
