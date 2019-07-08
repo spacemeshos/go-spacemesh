@@ -197,7 +197,7 @@ func (proc *ConsensusProcess) SetInbox(inbox chan *Msg) {
 
 func (proc *ConsensusProcess) eventLoop() {
 	proc.With().Info("Consensus Process Started",
-		log.Int("Hare-N", proc.cfg.N), log.Int("f", proc.cfg.F), log.String("duration", (time.Duration(proc.cfg.RoundDuration) * time.Second).String()),
+		log.Int("Hare-N", proc.cfg.N), log.Int("f", proc.cfg.F), log.String("duration", (time.Duration(proc.cfg.RoundDuration)*time.Second).String()),
 		log.Uint64("layer_id", uint64(proc.instanceId)), log.Int("exp_leaders", proc.cfg.ExpectedLeaders), log.String("set_values", proc.s.String()))
 
 	// set pre-round InnerMsg and send
@@ -607,12 +607,14 @@ func (proc *ConsensusProcess) shouldParticipate() bool {
 	// query if identity is active
 	res, _, err := proc.stateQuerier.IsIdentityActive(proc.signing.PublicKey().String(), types.LayerID(proc.instanceId))
 	if err != nil {
-		proc.Error("Error checking for identity err=%v", err)
+		proc.With().Error("Error checking our identity for activeness", log.String("err", err.Error()),
+			log.Uint64("layer_id", uint64(proc.instanceId)))
 		return false
 	}
 
 	if !res {
-		proc.Info("Should not participate in the protocol. Reason: identity not active")
+		proc.With().Info("Should not participate in the protocol. Reason: identity not active",
+			log.Uint64("layer_id", uint64(proc.instanceId)))
 		return false
 	}
 
