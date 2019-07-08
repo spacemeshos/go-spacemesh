@@ -134,7 +134,8 @@ func (o *Oracle) Eligible(layer types.LayerID, round int32, committeeSize int, i
 	if uint64(activeSetSize)*uint64(shaUint32) > uint64(committeeSize)*uint64(math.MaxUint32) {
 		o.With().Error("A node did not pass eligibility",
 			log.String("id", id.ShortString()), log.Int("committee_size", committeeSize),
-			log.Uint32("active_set_size", activeSetSize), log.Uint64("layer_id", uint64(layer)))
+			log.Uint32("active_set_size", activeSetSize), log.Int32("round", round),
+			log.Uint64("layer_id", uint64(layer)))
 		return false, nil
 	}
 
