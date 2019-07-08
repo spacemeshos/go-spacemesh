@@ -39,13 +39,13 @@ var (
 // Config defines the top level configuration for a spacemesh node
 type Config struct {
 	BaseConfig `mapstructure:"main"`
-	P2P        p2pConfig.Config       `mapstructure:"p2p"`
-	API        apiConfig.Config       `mapstructure:"api"`
-	HARE       hareConfig.Config      `mapstructure:"hare"`
-	TIME       timeConfig.TimeConfig  `mapstructure:"time"`
-	GAS        state.GasConfig        `mapstructure:"gas"`
-	REWARD     mesh.Config            `mapstructure:"reward"`
-	POST       postConfig.Config      `mapstructure:"post"`
+	P2P        p2pConfig.Config      `mapstructure:"p2p"`
+	API        apiConfig.Config      `mapstructure:"api"`
+	HARE       hareConfig.Config     `mapstructure:"hare"`
+	TIME       timeConfig.TimeConfig `mapstructure:"time"`
+	GAS        state.GasConfig       `mapstructure:"gas"`
+	REWARD     mesh.Config           `mapstructure:"reward"`
+	POST       postConfig.Config     `mapstructure:"post"`
 }
 
 // BaseConfig defines the default configuration options for spacemesh app
