@@ -16,10 +16,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 )
 
-const maxMessageSize = 2048
-
-// todo : calculate real udp max message size
-
 // Lookuper is a service used to lookup for nodes we know already
 type Lookuper func(key p2pcrypto.PublicKey) (*node.NodeInfo, error)
 
@@ -147,10 +143,6 @@ func (mux *UDPMux) sendMessageImpl(peerPubkey p2pcrypto.PublicKey, protocol stri
 	data, err := proto.Marshal(protomessage)
 	if err != nil {
 		return fmt.Errorf("failed to encode signed message err: %v", err)
-	}
-
-	if len(data) > maxMessageSize {
-		return errors.New(fmt.Sprintf("message too big (%v bytes). max allowed size = %d bytes", len(data), maxMessageSize))
 	}
 
 	// TODO: node.address should have IP address, UDP and TCP PORT.
