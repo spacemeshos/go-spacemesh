@@ -153,7 +153,9 @@ func AddCommands(cmd *cobra.Command) {
 		config.POST.MaxReadFilesParallelism, "Max degree of files read parallelism")
 
 	/**========================Consensus Flags ========================== **/
-	//todo: add this here
+
+	cmd.PersistentFlags().IntVar(&config.LayersPerEpoch, "layers-per-epoch",
+		config.LayersPerEpoch, "number of layers in epoch")
 
 	// Bind Flags to config
 	viper.BindPFlags(cmd.PersistentFlags())

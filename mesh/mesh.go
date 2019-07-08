@@ -37,8 +37,12 @@ type TxProcessor interface {
 	ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (address.Address, error) //todo use validate signature across the bord and remove this
 }
 
-type MemPoolInValidator interface {
-	Invalidate(id interface{})
+type TxMemPoolInValidator interface {
+	Invalidate(id types.TransactionId)
+}
+
+type AtxMemPoolInValidator interface {
+	Invalidate(id types.AtxId)
 }
 
 type AtxDB interface {
@@ -55,8 +59,8 @@ type Mesh struct {
 	*MeshDB
 	AtxDB
 	TxProcessor
-	txInvalidator  MemPoolInValidator
-	atxInvalidator MemPoolInValidator
+	txInvalidator  TxMemPoolInValidator
+	atxInvalidator AtxMemPoolInValidator
 	config         Config
 	validatedLayer types.LayerID
 	latestLayer    types.LayerID
@@ -69,7 +73,7 @@ type Mesh struct {
 	done           chan struct{}
 }
 
-func NewMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh MeshValidator, txInvalidator MemPoolInValidator, atxInvalidator MemPoolInValidator, pr TxProcessor, logger log.Log) *Mesh {
+func NewMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh MeshValidator, txInvalidator TxMemPoolInValidator, atxInvalidator AtxMemPoolInValidator, pr TxProcessor, logger log.Log) *Mesh {
 	//todo add boot from disk
 	ll := &Mesh{
 		Log:            logger,

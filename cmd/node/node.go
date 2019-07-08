@@ -31,7 +31,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"reflect"
 	"runtime"
 	"runtime/pprof"
 	"time"
@@ -285,7 +284,7 @@ func (app *SpacemeshApp) setupTestFeatures() {
 	api.ApproveAPIGossipMessages(cmdp.Ctx, app.P2P)
 }
 
-func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service, dbStorepath string, sgn hare.Signer, isFixedOracle bool, rolacle hare.Rolacle, layerSize uint32, postClient nipst.PostProverClient, poetClient nipst.PoetProvingServiceClient, vrfSigner *BLS381.BlsSigner, layersPerEpoch uint32) error {
+func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service, dbStorepath string, sgn hare.Signer, isFixedOracle bool, rolacle hare.Rolacle, layerSize uint32, postClient nipst.PostProverClient, poetClient nipst.PoetProvingServiceClient, vrfSigner *BLS381.BlsSigner, layersPerEpoch uint16) error {
 
 	app.nodeId = nodeID
 	//todo: should we add all components to a single struct?
@@ -344,14 +343,14 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	//todo: this is initialized twice, need to refactor
 	validator := nipst.NewValidator(&app.Config.POST, poetDb)
 	mdb := mesh.NewPersistentMeshDB(dbStorepath, lg.WithName("meshDb"))
-	atxdb := activation.NewActivationDb(atxdbstore, nipstStore, idStore, mdb, app.Config.CONSENSUS.LayersPerEpoch, validator, lg.WithName("atxDb"))
+	atxdb := activation.NewActivationDb(atxdbstore, nipstStore, idStore, mdb, layersPerEpoch, validator, lg.WithName("atxDb"))
 	beaconProvider := &oracle.EpochBeaconProvider{}
-	eValidator := oracle.NewBlockEligibilityValidator(int32(layerSize), uint16(layersPerEpoch), atxdb, beaconProvider, BLS381.Verify2, lg.WithName("blkElgValidator"))
+	eValidator := oracle.NewBlockEligibilityValidator(int32(layerSize), layersPerEpoch, atxdb, beaconProvider, BLS381.Verify2, lg.WithName("blkElgValidator"))
 
 	trtl := tortoise.NewAlgorithm(int(1), mdb, lg.WithName("trtl"))
 
-	txpool := miner.NewMemPool(reflect.TypeOf([]*types.AddressableSignedTransaction{}))
-	atxpool := miner.NewMemPool(reflect.TypeOf([]*types.ActivationTx{}))
+	txpool := miner.NewTypesTransactionIdMemPool()
+	atxpool := miner.NewTypesAtxIdMemPool()
 
 	msh := mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, txpool, atxpool, processor, lg.WithName("mesh")) //todo: what to do with the logger?
 
@@ -367,10 +366,10 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 		hOracle = rolacle
 	} else { // regular oracle, build and use it
 		beacon := eligibility.NewBeacon(trtl)
-		hOracle = eligibility.New(beacon, atxdb, BLS381.Verify2, vrfSigner, app.Config.CONSENSUS.LayersPerEpoch)
+		hOracle = eligibility.New(beacon, atxdb, BLS381.Verify2, vrfSigner, uint16(app.Config.LayersPerEpoch))
 	}
 
-	ha := hare.New(app.Config.HARE, swarm, sgn, nodeID, syncer.IsSynced, msh, hOracle, app.Config.CONSENSUS.LayersPerEpoch, idStore, atxdb, clock.Subscribe(), lg.WithName("hare"))
+	ha := hare.New(app.Config.HARE, swarm, sgn, nodeID, syncer.IsSynced, msh, hOracle, uint16(app.Config.LayersPerEpoch), idStore, atxdb, clock.Subscribe(), lg.WithName("hare"))
 
 	blockProducer := miner.NewBlockBuilder(nodeID, sgn, swarm, clock.Subscribe(), txpool, atxpool, coinToss, msh, ha, blockOracle, processor, atxdb, syncer, lg.WithName("blockBuilder"))
 	blockListener := sync.NewBlockListener(swarm, syncer, 4, lg.WithName("blockListener"))
@@ -395,7 +394,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	if coinBase.Big().Uint64() == 0 {
 		app.log.Panic("invalid Coinbase account")
 	}
-	atxBuilder := activation.NewBuilder(nodeID, coinBase, atxdb, swarm, atxdb, msh, app.Config.CONSENSUS.LayersPerEpoch, nipstBuilder, clock.Subscribe(), syncer.IsSynced, lg.WithName("atxBuilder"))
+	atxBuilder := activation.NewBuilder(nodeID, coinBase, atxdb, swarm, atxdb, msh, layersPerEpoch, nipstBuilder, clock.Subscribe(), syncer.IsSynced, lg.WithName("atxBuilder"))
 
 	app.blockProducer = &blockProducer
 	app.blockListener = blockListener

@@ -20,11 +20,18 @@ import (
 	"time"
 )
 
-type MemPool interface {
-	Get(id interface{}) interface{}
-	PopItems(size int) interface{}
-	Put(id interface{}, item interface{})
-	Invalidate(id interface{})
+type TxMemPool interface {
+	Get(id types.TransactionId) (types.AddressableSignedTransaction, error)
+	PopItems(size int) []types.AddressableSignedTransaction
+	Put(id types.TransactionId, item *types.AddressableSignedTransaction)
+	Invalidate(id types.TransactionId)
+}
+
+type AtxMemPool interface {
+	Get(id types.AtxId) (types.ActivationTx, error)
+	PopItems(size int) []types.ActivationTx
+	Put(id types.AtxId, item *types.ActivationTx)
+	Invalidate(id types.AtxId)
 }
 
 type PoetDb interface {
@@ -68,8 +75,8 @@ type Syncer struct {
 	*server.MessageServer
 	sigValidator      TxSigValidator
 	poetDb            PoetDb
-	txpool            MemPool
-	atxpool           MemPool
+	txpool            TxMemPool
+	atxpool           AtxMemPool
 	currentLayer      types.LayerID
 	SyncLock          uint32
 	startLock         uint32
@@ -141,7 +148,7 @@ func (s *Syncer) run() {
 }
 
 //fires a sync every sm.syncInterval or on force space from outside
-func NewSync(srv service.Service, layers *mesh.Mesh, txpool MemPool, atxpool MemPool, sv TxSigValidator, bv BlockValidator, poetdb PoetDb, conf Configuration, clock timesync.LayerTimer, currentLayer types.LayerID, logger log.Log) *Syncer {
+func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool AtxMemPool, sv TxSigValidator, bv BlockValidator, poetdb PoetDb, conf Configuration, clock timesync.LayerTimer, currentLayer types.LayerID, logger log.Log) *Syncer {
 	s := &Syncer{
 		BlockValidator: bv,
 		Configuration:  conf,
@@ -202,23 +209,19 @@ func (s *Syncer) getLayerFromNeighbors(currenSyncLayer types.LayerID) (*types.La
 
 	//fetch layer hash from each peer
 	m, err := s.fetchLayerHashes(currenSyncLayer)
-
 	if err != nil {
-		s.Error("could not get LayerHashes for layer: %v", currenSyncLayer)
 		return nil, err
 	}
 
 	//fetch ids for each hash
 	blockIds, err := s.fetchLayerBlockIds(m, currenSyncLayer)
 	if err != nil {
-		s.Error("could not get layer block ids %v", currenSyncLayer, err)
 		return nil, err
 	}
 
 	blocksArr := s.GetFullBlocks(blockIds)
 	if len(blocksArr) == 0 {
-		s.Error("could not any blocks  for layer  %v", currenSyncLayer)
-		return nil, err
+		return nil, fmt.Errorf("could not any blocks  for layer  %v", currenSyncLayer)
 	}
 
 	return types.NewExistingLayer(types.LayerID(currenSyncLayer), blocksArr), nil
@@ -416,9 +419,9 @@ func (s *Syncer) syncTxs(txids []types.TransactionId) ([]*types.AddressableSigne
 	unprocessedTxs := make(map[types.TransactionId]*types.AddressableSignedTransaction)
 	missing := make([]types.TransactionId, 0)
 	for _, t := range txids {
-		if tx := s.txpool.Get(t); tx != nil {
+		if tx, err := s.txpool.Get(t); err == nil {
 			s.Info("found tx, %v in tx pool", hex.EncodeToString(t[:]))
-			unprocessedTxs[t] = tx.(*types.AddressableSignedTransaction)
+			unprocessedTxs[t] = &tx
 		} else {
 			missing = append(missing, t)
 		}
@@ -464,15 +467,15 @@ func (s *Syncer) syncAtxs(atxIds []types.AtxId) ([]*types.ActivationTx, error) {
 	missingInPool := make([]types.AtxId, 0, len(atxIds))
 	for _, t := range atxIds {
 		id := t
-		if x := s.atxpool.Get(id); x != nil {
-			atx := x.(*types.ActivationTx)
+		if x, err := s.atxpool.Get(id); err == nil {
+			atx := x
 			if atx.Nipst == nil {
 				s.Warning("atx %v nipst not found ", id.ShortId())
 				missingInPool = append(missingInPool, id)
 				continue
 			}
 			s.Info("found atx, %v in atx pool", id.ShortId())
-			unprocessedAtxs[id] = atx
+			unprocessedAtxs[id] = &atx
 		} else {
 			s.Warning("atx %v not in atx pool", id.ShortId())
 			missingInPool = append(missingInPool, id)

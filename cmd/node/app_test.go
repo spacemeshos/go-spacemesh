@@ -109,7 +109,7 @@ func (suite *AppTestSuite) initMultipleInstances(numOfInstances int, storeFormat
 		smApp.Config.HARE.ExpectedLeaders = 5
 		smApp.Config.CoinbaseAccount = strconv.Itoa(i + 1)
 		smApp.Config.LayerAvgSize = numOfInstances
-		smApp.Config.CONSENSUS.LayersPerEpoch = 3
+		smApp.Config.LayersPerEpoch = 3
 
 		edSgn := signing.NewEdSigner()
 		pub := edSgn.PublicKey()
@@ -183,7 +183,7 @@ loop:
 			maxClientsDone := 0
 			for idx, app := range suite.apps {
 				if 10 == app.state.GetBalance(dst) &&
-					uint32(suite.apps[idx].mesh.LatestLayer()) == numberOfEpochs*uint32(suite.apps[idx].Config.CONSENSUS.LayersPerEpoch)+1 { // make sure all had 1 non-genesis layer
+					uint32(suite.apps[idx].mesh.LatestLayer()) == numberOfEpochs*uint32(suite.apps[idx].Config.LayersPerEpoch)+1 { // make sure all had 1 non-genesis layer
 
 					suite.validateLastATXActiveSetSize(app)
 					clientsDone := 0
@@ -261,7 +261,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 			for _, b := range lyr.Blocks() {
 				datamap[ap.nodeId.Key].layertoblocks[lyr.Index()] = append(datamap[ap.nodeId.Key].layertoblocks[lyr.Index()], b.ID())
 			}
-			epoch := lyr.Index().GetEpoch(ap.Config.CONSENSUS.LayersPerEpoch)
+			epoch := lyr.Index().GetEpoch(uint16(ap.Config.LayersPerEpoch))
 			if _, ok := datamap[ap.nodeId.Key].atxPerEpoch[epoch]; !ok {
 				atxs, err := ap.blockListener.AtxDB.GetEpochAtxIds(epoch)
 				if err != nil {
@@ -293,7 +293,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 	}
 
 	// assuming all nodes have the same results
-	layers_per_epoch := int(suite.apps[0].Config.CONSENSUS.LayersPerEpoch)
+	layers_per_epoch := int(suite.apps[0].Config.LayersPerEpoch)
 	layer_avg_size := suite.apps[0].Config.LayerAvgSize
 	patient := datamap[suite.apps[0].nodeId.Key]
 

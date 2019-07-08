@@ -60,7 +60,7 @@ func getMeshWithMapState(id string, s TxProcessor) (*Mesh, *AtxDbMock) {
 	lg := log.New(id, "", "")
 	mshdb := NewMemMeshDB(lg)
 
-	return NewMesh(mshdb, atxDb, ConfigTst(), &MeshValidatorMock{}, &MemPoolMock{}, &MemPoolMock{}, s, lg), atxDb
+	return NewMesh(mshdb, atxDb, ConfigTst(), &MeshValidatorMock{}, &MockTxMemPool{}, &MockAtxMemPool{}, s, lg), atxDb
 }
 
 func addTransactionsWithGas(mesh *MeshDB, bl *types.Block, numOfTxs int, gasPrice int64) int64 {
