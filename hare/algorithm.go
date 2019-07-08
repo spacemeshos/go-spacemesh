@@ -197,7 +197,7 @@ func (proc *ConsensusProcess) SetInbox(inbox chan *Msg) {
 
 func (proc *ConsensusProcess) eventLoop() {
 	proc.With().Info("Consensus Process Started",
-		log.Int("Hare-N", proc.cfg.N), log.Int("f", proc.cfg.F), log.String("duration", (time.Duration(proc.cfg.RoundDuration)*time.Second).String()),
+		log.Int("Hare-N", proc.cfg.N), log.Int("f", proc.cfg.F), log.String("duration", (time.Duration(proc.cfg.RoundDuration) * time.Second).String()),
 		log.Uint64("layer_id", uint64(proc.instanceId)), log.Int("exp_leaders", proc.cfg.ExpectedLeaders), log.String("set_values", proc.s.String()))
 
 	// set pre-round InnerMsg and send
@@ -333,7 +333,8 @@ func (proc *ConsensusProcess) sendMessage(msg *Msg) {
 
 	// check participation
 	if !proc.shouldParticipate() {
-		proc.Info("Not participating on round %v", proc.k)
+		proc.With().Info("Should not participate", log.Int32("round", proc.k),
+			log.Uint64("layer_id", uint64(proc.instanceId)))
 		return
 	}
 
