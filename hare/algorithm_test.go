@@ -1,6 +1,7 @@
 package hare
 
 import (
+	"errors"
 	"github.com/spacemeshos/go-spacemesh/amcl/BLS381"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
@@ -299,6 +300,12 @@ func TestConsensusProcess_isEligible(t *testing.T) {
 	oracle.isEligible = false
 	assert.False(t, proc.shouldParticipate())
 	oracle.isEligible = true
+	assert.True(t, proc.shouldParticipate())
+	proc.stateQuerier = MockStateQuerier{false, errors.New("some err")}
+	assert.False(t, proc.shouldParticipate())
+	proc.stateQuerier = MockStateQuerier{false, nil}
+	assert.False(t, proc.shouldParticipate())
+	proc.stateQuerier = MockStateQuerier{true, nil}
 	assert.True(t, proc.shouldParticipate())
 }
 
