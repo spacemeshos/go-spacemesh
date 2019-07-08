@@ -3,6 +3,7 @@ package main
 import (
 	"cloud.google.com/go/storage"
 	"context"
+	"crypto/tls"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/address"
@@ -18,6 +19,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/spf13/cobra"
 	"google.golang.org/api/iterator"
+	"google.golang.org/api/option"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -56,11 +58,16 @@ var conf = sync.Configuration{
 
 //////////////////////////////
 
-var myClient = &http.Client{Timeout: 10 * time.Second}
 var expectedLayers int
+var bucket string
 
 func init() {
-	Cmd.PersistentFlags().IntVar(&expectedLayers, "expected_layers", 101, "Layer Avg size")
+	//path to remote storage
+	Cmd.PersistentFlags().StringVarP(&bucket, "storage-path", "z", "spacemesh-sync-data", "Specify storage bucket name")
+
+	//expected layers
+	Cmd.PersistentFlags().IntVar(&expectedLayers, "expected-layers", 101, "expected number of layers")
+
 	cmdp.AddCommands(Cmd)
 }
 
@@ -89,9 +96,11 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	// start p2p services
 	lg := log.New("sync_test", "", "")
 	lg.Info("------------ Start sync test -----------")
+	lg.Info("data folder: ", app.Config.DataDir)
+	lg.Info("storage path: ", bucket)
+	lg.Info("expected layers: ", expectedLayers)
 
-	err := GetData(app.Config.DataDir)
-	if err != nil {
+	if err := GetData(app.Config.DataDir, lg); err != nil {
 		lg.Error("could not download data for test", err)
 		return
 	}
@@ -146,7 +155,7 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	for app.sync.ValidatedLayer() < types.LayerID(expectedLayers) {
 		lg.Info("sleep for %v sec", 30)
 		time.Sleep(30 * time.Second)
-		ch <- types.LayerID(expectedLayers - 1)
+		ch <- types.LayerID(expectedLayers + 1)
 	}
 
 	lg.Info("%v verified layers %v", app.BaseApp.Config.P2P.NodeID, app.sync.ValidatedLayer())
@@ -157,7 +166,7 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	}
 }
 
-func GetData(path string) error {
+func GetData(path string, lg log.Log) error {
 	dirs := []string{"activation", "atx", "blocks", "ids", "layers", "transactions", "validity"}
 	for _, dir := range dirs {
 		if err := os.MkdirAll(path+dir, 0777); err != nil {
@@ -165,14 +174,24 @@ func GetData(path string) error {
 		}
 	}
 
+	c := http.Client{
+		Transport: &http.Transport{
+			MaxIdleConnsPerHost: 10,
+			TLSClientConfig: &tls.Config{
+				MinVersion:         tls.VersionTLS11,
+				InsecureSkipVerify: true,
+			},
+		},
+		Timeout: 2 * time.Second,
+	}
+
 	ctx := context.TODO()
-	client, err := storage.NewClient(ctx)
+	client, err := storage.NewClient(ctx, option.WithoutAuthentication(), option.WithHTTPClient(&c))
 	if err != nil {
 		panic(err)
 	}
-	bucket := "spacemesh-sync-data"
 	it := client.Bucket(bucket).Objects(ctx, nil)
-
+	count := 0
 	for {
 		attrs, err := it.Next()
 		if err == iterator.Done {
@@ -181,7 +200,8 @@ func GetData(path string) error {
 		if err != nil {
 			return err
 		}
-		fmt.Println("downloading:", attrs.Name)
+
+		lg.Info("downloading:", attrs.Name)
 		rc, err := client.Bucket(bucket).Object(attrs.Name).NewReader(ctx)
 		if err != nil {
 			return err
@@ -198,9 +218,10 @@ func GetData(path string) error {
 		if err != nil {
 			return err
 		}
-
+		count++
 	}
 
+	lg.Info("downloaded: %v files ", count)
 	return nil
 }
 
