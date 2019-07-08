@@ -110,7 +110,8 @@ func (o *Oracle) Eligible(layer types.LayerID, round int32, committeeSize int, i
 		return false, err
 	}
 	if !res {
-		o.Warning("Id %v did not pass VRF verification", id.Key)
+		o.With().Warning("A node did not pass VRF verification",
+			log.String("id", id.ShortString()), log.Uint64("layer_id", uint64(layer)))
 		return false, nil
 	}
 
@@ -131,7 +132,9 @@ func (o *Oracle) Eligible(layer types.LayerID, round int32, committeeSize int, i
 	shaUint32 := binary.LittleEndian.Uint32(sha[:4])
 	// avoid division (no floating point) & do operations on uint64 to avoid overflow
 	if uint64(activeSetSize)*uint64(shaUint32) > uint64(committeeSize)*uint64(math.MaxUint32) {
-		o.Error("identity %v did not pass eligibility committeeSize=%v activeSetSize=%v", id, committeeSize, activeSetSize)
+		o.With().Error("A node did not pass eligibility",
+			log.String("id", id.ShortString()), log.Int("committee_size", committeeSize),
+			log.Uint32("active_set_size", activeSetSize), log.Uint64("layer_id", uint64(layer)))
 		return false, nil
 	}
 
