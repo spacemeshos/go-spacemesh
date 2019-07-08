@@ -1,6 +1,6 @@
 # Inspired by https://container-solutions.com/faster-builds-in-docker-with-go-1-11/
 # Base build image
-FROM golang:1.11.2-alpine3.8 AS build_base
+FROM golang:1.11.4-alpine3.8 AS build_base
 RUN apk add bash make git curl unzip rsync libc6-compat gcc musl-dev
 WORKDIR /go/src/github.com/spacemeshos/go-spacemesh
 
@@ -38,7 +38,7 @@ COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/go-
 COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/go-hare /bin/go-hare
 COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/go-p2p /bin/go-p2p
 COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/go-sync /bin/go-sync
-COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/tests/sync/data /bin/data
+
 
 
 ENTRYPOINT ["/bin/go-spacemesh"]
