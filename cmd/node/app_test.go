@@ -129,7 +129,7 @@ func (suite *AppTestSuite) initMultipleInstances(numOfInstances int, storeFormat
 
 		postClient := nipst.NewPostClient(&smApp.Config.POST)
 
-		err = smApp.initServices(nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(layerSize), postClient, poetClient, vrfSigner, uint32(smApp.Config.CONSENSUS.LayersPerEpoch))
+		err = smApp.initServices(nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(layerSize), postClient, poetClient, vrfSigner, uint16(smApp.Config.LayersPerEpoch))
 		r.NoError(err)
 		smApp.setupGenesis()
 
