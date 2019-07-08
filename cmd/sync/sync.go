@@ -16,7 +16,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/spf13/cobra"
 	"os"
-	"reflect"
 	"time"
 )
 
@@ -99,8 +98,8 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	atxdbStore, _ := database.NewLDBDatabase(app.Config.DataDir+"atx", 0, 0, lg)
 	atxdb := activation.NewActivationDb(atxdbStore, iddbstore, &sync.MockIStore{}, mshdb, 10, validator, lg.WithName("atxDB"))
 
-	txpool := miner.NewMemPool(reflect.TypeOf([]*types.AddressableSignedTransaction{}))
-	atxpool := miner.NewMemPool(reflect.TypeOf([]*types.ActivationTx{}))
+	txpool := miner.NewTypesTransactionIdMemPool()
+	atxpool := miner.NewTypesAtxIdMemPool()
 
 	msh := mesh.NewMesh(mshdb, atxdb, sync.ConfigTst(), &sync.MeshValidatorMock{}, txpool, atxpool, &sync.MockState{}, lg.WithOptions(log.Nop))
 	defer msh.Close()

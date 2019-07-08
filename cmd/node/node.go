@@ -31,7 +31,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"reflect"
 	"runtime"
 	"runtime/pprof"
 	"time"
@@ -348,8 +347,8 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 
 	trtl := tortoise.NewAlgorithm(int(1), mdb, lg.WithName("trtl"))
 
-	txpool := miner.NewMemPool(reflect.TypeOf([]*types.AddressableSignedTransaction{}))
-	atxpool := miner.NewMemPool(reflect.TypeOf([]*types.ActivationTx{}))
+	txpool := miner.NewTypesTransactionIdMemPool()
+	atxpool := miner.NewTypesAtxIdMemPool()
 
 	msh := mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, txpool, atxpool, processor, lg.WithName("mesh")) //todo: what to do with the logger?
 
