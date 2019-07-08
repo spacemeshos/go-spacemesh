@@ -342,9 +342,7 @@ func (s *Syncer) DataAvailabilty(blk *types.Block) ([]*types.AddressableSignedTr
 		return txs, atxs, atxerr
 	}
 
-	s.Info("fetched all txs for block %v", blk.ID())
-	s.Info("fetched all atxs for block %v", blk.ID())
-
+	s.Info("fetched all block data %v ", blk.ID(), len(txs), len(atxs))
 	return txs, atxs, nil
 }
 
@@ -417,7 +415,7 @@ func (s *Syncer) syncTxs(txids []types.TransactionId) ([]*types.AddressableSigne
 	missing := make([]types.TransactionId, 0)
 	for _, t := range txids {
 		if tx := s.txpool.Get(t); tx != nil {
-			s.Info("found tx, %v in tx pool", hex.EncodeToString(t[:]))
+			s.Debug("found tx, %v in tx pool", hex.EncodeToString(t[:]))
 			unprocessedTxs[t] = tx.(*types.AddressableSignedTransaction)
 		} else {
 			missing = append(missing, t)
@@ -471,7 +469,7 @@ func (s *Syncer) syncAtxs(atxIds []types.AtxId) ([]*types.ActivationTx, error) {
 				missingInPool = append(missingInPool, id)
 				continue
 			}
-			s.Info("found atx, %v in atx pool", id.ShortId())
+			s.Debug("found atx, %v in atx pool", id.ShortId())
 			unprocessedAtxs[id] = atx
 		} else {
 			s.Warning("atx %v not in atx pool", id.ShortId())

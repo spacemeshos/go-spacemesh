@@ -1,6 +1,8 @@
 package main
 
 import (
+	"cloud.google.com/go/storage"
+	"context"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/address"
@@ -15,6 +17,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/spf13/cobra"
+	"google.golang.org/api/iterator"
+	"io/ioutil"
+	"net/http"
 	"os"
 	"reflect"
 	"time"
@@ -51,7 +56,11 @@ var conf = sync.Configuration{
 
 //////////////////////////////
 
+var myClient = &http.Client{Timeout: 10 * time.Second}
+var expectedLayers int
+
 func init() {
+	Cmd.PersistentFlags().IntVar(&expectedLayers, "expected_layers", 101, "Layer Avg size")
 	cmdp.AddCommands(Cmd)
 }
 
@@ -80,6 +89,13 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	// start p2p services
 	lg := log.New("sync_test", "", "")
 	lg.Info("------------ Start sync test -----------")
+
+	err := GetData(app.Config.DataDir)
+	if err != nil {
+		lg.Error("could not download data for test", err)
+		return
+	}
+
 	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P)
 
 	if err != nil {
@@ -92,17 +108,17 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	poetDb := activation.NewPoetDb(database.NewMemDatabase(), lg.WithName("poetDb"))
+	poetDb := activation.NewPoetDb(database.NewMemDatabase(), lg.WithName("poetDb").WithOptions(log.Nop))
 	validator := nipst.NewValidator(npstCfg, poetDb)
 
 	mshdb := mesh.NewPersistentMeshDB(app.Config.DataDir, lg)
 	atxdbStore, _ := database.NewLDBDatabase(app.Config.DataDir+"atx", 0, 0, lg)
-	atxdb := activation.NewActivationDb(atxdbStore, iddbstore, &sync.MockIStore{}, mshdb, 10, validator, lg.WithName("atxDB"))
+	atxdb := activation.NewActivationDb(atxdbStore, iddbstore, &sync.MockIStore{}, mshdb, 10, validator, lg.WithName("atxDB").WithOptions(log.Nop))
 
 	txpool := miner.NewMemPool(reflect.TypeOf([]*types.AddressableSignedTransaction{}))
 	atxpool := miner.NewMemPool(reflect.TypeOf([]*types.ActivationTx{}))
 
-	msh := mesh.NewMesh(mshdb, atxdb, sync.ConfigTst(), &sync.MeshValidatorMock{}, txpool, atxpool, &sync.MockState{}, lg.WithOptions(log.Nop))
+	msh := mesh.NewMesh(mshdb, atxdb, sync.ConfigTst(), &sync.MeshValidatorMock{}, txpool, atxpool, &sync.MockState{}, lg)
 	defer msh.Close()
 
 	ch := make(chan types.LayerID, 1)
@@ -127,10 +143,10 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	time.Sleep(10 * time.Second)
 
 	app.sync.Start()
-	for app.sync.ValidatedLayer() < 100 {
+	for app.sync.ValidatedLayer() < types.LayerID(expectedLayers) {
 		lg.Info("sleep for %v sec", 30)
 		time.Sleep(30 * time.Second)
-		ch <- 101
+		ch <- types.LayerID(expectedLayers - 1)
 	}
 
 	lg.Info("%v verified layers %v", app.BaseApp.Config.P2P.NodeID, app.sync.ValidatedLayer())
@@ -141,11 +157,57 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	}
 }
 
+func GetData(path string) error {
+	dirs := []string{"activation", "atx", "blocks", "ids", "layers", "transactions", "validity"}
+	for _, dir := range dirs {
+		if err := os.MkdirAll(path+dir, 0777); err != nil {
+			return err
+		}
+	}
+
+	ctx := context.TODO()
+	client, err := storage.NewClient(ctx)
+	if err != nil {
+		panic(err)
+	}
+	bucket := "spacemesh-sync-data"
+	it := client.Bucket(bucket).Objects(ctx, nil)
+
+	for {
+		attrs, err := it.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return err
+		}
+		fmt.Println("downloading:", attrs.Name)
+		rc, err := client.Bucket(bucket).Object(attrs.Name).NewReader(ctx)
+		if err != nil {
+			return err
+		}
+
+		defer rc.Close()
+
+		data, err := ioutil.ReadAll(rc)
+		if err != nil {
+			return err
+		}
+
+		err = ioutil.WriteFile("bin/"+attrs.Name, data, 0644)
+		if err != nil {
+			return err
+		}
+
+	}
+
+	return nil
+}
+
 func main() {
 	if err := Cmd.Execute(); err != nil {
 		log.Info("error ", err)
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-
 }
