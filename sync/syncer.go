@@ -209,23 +209,19 @@ func (s *Syncer) getLayerFromNeighbors(currenSyncLayer types.LayerID) (*types.La
 
 	//fetch layer hash from each peer
 	m, err := s.fetchLayerHashes(currenSyncLayer)
-
 	if err != nil {
-		s.Error("could not get LayerHashes for layer: %v", currenSyncLayer)
 		return nil, err
 	}
 
 	//fetch ids for each hash
 	blockIds, err := s.fetchLayerBlockIds(m, currenSyncLayer)
 	if err != nil {
-		s.Error("could not get layer block ids %v", currenSyncLayer, err)
 		return nil, err
 	}
 
 	blocksArr := s.GetFullBlocks(blockIds)
 	if len(blocksArr) == 0 {
-		s.Error("could not any blocks  for layer  %v", currenSyncLayer)
-		return nil, err
+		return nil, fmt.Errorf("could not any blocks  for layer  %v", currenSyncLayer)
 	}
 
 	return types.NewExistingLayer(types.LayerID(currenSyncLayer), blocksArr), nil
