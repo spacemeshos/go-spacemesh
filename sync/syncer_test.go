@@ -66,20 +66,12 @@ var (
 	tx8 = tx()
 )
 
-type poetDbMock struct{}
-
-func (poetDbMock) GetProofMessage(proofRef []byte) ([]byte, error) { return proofRef, nil }
-
-func (poetDbMock) HasProof(proofRef []byte) bool { return true }
-
-func (poetDbMock) ValidateAndStore(proofMessage *types.PoetProofMessage) error { return nil }
-
 func newMemPoetDb() PoetDb {
 	return activation.NewPoetDb(database.NewMemDatabase(), log.NewDefault("poetDb"))
 }
 
 func newMockPoetDb() PoetDb {
-	return &poetDbMock{}
+	return &PoetDbMock{}
 }
 
 func SyncMockFactory(number int, conf Configuration, name string, dbType string, poetDb func() PoetDb) (syncs []*Syncer, p2ps []*service.Node) {
@@ -97,7 +89,7 @@ func SyncMockFactory(number int, conf Configuration, name string, dbType string,
 		name := fmt.Sprintf(name+"_%d", i)
 		l := log.New(name, "", "")
 		blockValidator := NewBlockValidator(BlockEligibilityValidatorMock{})
-		sync := NewSync(net, getMesh(dbType, Path+name+"_"+time.Now().String()), miner.NewTypesTransactionIdMemPool(), miner.NewTypesAtxIdMemPool(), mockTxProcessor{}, blockValidator, poetDb(), conf, tk, 0, l)
+		sync := NewSync(net, getMesh(dbType, Path+name+"_"+time.Now().String()), &MockTxMemPool{}, &MockAtxMemPool{}, mockTxProcessor{}, blockValidator, poetDb(), conf, tk, 0, l)
 		ts.Start()
 		nodes = append(nodes, sync)
 		p2ps = append(p2ps, net)
@@ -134,10 +126,10 @@ var rewardConf = mesh.Config{
 func getMeshWithLevelDB(id string) *mesh.Mesh {
 	lg := log.New(id, "", "")
 	mshdb := mesh.NewPersistentMeshDB(id, lg)
-	acdbStore, _ := database.NewLDBDatabase(id+"activation", 0, 0, lg)
-	atxdbStore, _ := database.NewLDBDatabase(id+"atx", 0, 0, lg)
-	atxdb := activation.NewActivationDb(atxdbStore, acdbStore, &MockIStore{}, mshdb, 10, &ValidatorMock{}, lg.WithName("atxDB"))
-	return mesh.NewMesh(mshdb, atxdb, rewardConf, &MeshValidatorMock{}, &MockTxMemPool{}, &MockAtxMemPool{}, &stateMock{}, lg)
+	nipstStore, _ := database.NewLDBDatabase(id+"nipst", 0, 0, lg.WithOptions(log.Nop))
+	atxdbStore, _ := database.NewLDBDatabase(id+"atx", 0, 0, lg.WithOptions(log.Nop))
+	atxdb := activation.NewActivationDb(atxdbStore, nipstStore, &MockIStore{}, mshdb, 10, &ValidatorMock{}, lg.WithOptions(log.Nop))
+	return mesh.NewMesh(mshdb, atxdb, rewardConf, &MeshValidatorMock{}, &MockTxMemPool{}, &MockAtxMemPool{}, &stateMock{}, lg.WithOptions(log.Nop))
 }
 
 func persistenceTeardown() {
@@ -193,7 +185,7 @@ func TestSyncer_Close(t *testing.T) {
 }
 
 func TestSyncProtocol_BlockRequest(t *testing.T) {
-	atx1 := atx("hgfdsa")
+	atx1 := atx()
 	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_BlockRequest_", memoryDB, newMockPoetDb)
 	syncObj := syncs[0]
 	syncObj2 := syncs[1]
@@ -219,7 +211,7 @@ func TestSyncProtocol_BlockRequest(t *testing.T) {
 
 func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_LayerHashRequest_", memoryDB, newMockPoetDb)
-	atx1 := atx("adfghgjh")
+	atx1 := atx()
 	syncObj1 := syncs[0]
 	defer syncObj1.Close()
 	syncObj2 := syncs[1]
@@ -286,10 +278,10 @@ func makePoetProofMessage(t *testing.T) types.PoetProofMessage {
 
 func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_LayerIdsRequest_", memoryDB, newMockPoetDb)
-	atx1 := atx("ytdfghdddddf")
-	atx2 := atx("tyhuruhefdfd")
-	atx3 := atx("Zxvasdfcasfd")
-	atx4 := atx("aweasdfasdft")
+	atx1 := atx()
+	atx2 := atx()
+	atx3 := atx()
+	atx4 := atx()
 	syncObj := syncs[0]
 	defer syncObj.Close()
 	syncObj1 := syncs[1]
@@ -337,10 +329,10 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 
 func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_FetchBlocks_", memoryDB, newMockPoetDb)
-	atx1 := atx("trteyjuk")
+	atx1 := atx()
 
-	atx2 := atx("he6gdsdf")
-	atx3 := atx("yturjasd")
+	atx2 := atx()
+	atx3 := atx()
 	syncObj1 := syncs[0]
 	defer syncObj1.Close()
 	syncObj2 := syncs[1]
@@ -779,9 +771,12 @@ func RandStringRunes(n int) string {
 	return string(b)
 }
 
-func atx(key string) *types.ActivationTx {
+func atx() *types.ActivationTx {
 	coinbase := address.HexToAddress("aaaa")
-	return types.NewActivationTx(types.NodeId{Key: key, VRFPublicKey: []byte(RandStringRunes(5))}, coinbase, 0, *types.EmptyAtxId, 5, 1, *types.EmptyAtxId, 0, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&common.Hash{}))
+	chlng := common.HexToHash("0x3333")
+	npst := nipst.NewNIPSTWithChallenge(&chlng)
+
+	return types.NewActivationTx(types.NodeId{Key: RandStringRunes(8), VRFPublicKey: []byte(RandStringRunes(8))}, coinbase, 0, *types.EmptyAtxId, 5, 1, *types.EmptyAtxId, 0, []types.BlockID{1, 2, 3}, npst)
 }
 
 func TestSyncer_Txs(t *testing.T) {

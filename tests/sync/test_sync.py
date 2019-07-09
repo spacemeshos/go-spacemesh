@@ -61,6 +61,8 @@ def test_sync_gradually_add_nodes(init_session, setup_bootstrap, save_log_on_exi
 
     inf = new_client_in_namespace(testconfig['namespace'], setup_bootstrap, cspec, 10)
 
+    # cspec.args['remote-data'] = False
+    del cspec.args['remote-data']
     cspec.args['data-folder'] = ""
 
     inf1 = new_client_in_namespace(testconfig['namespace'], setup_bootstrap, cspec, 1)

@@ -21,6 +21,10 @@ bootstrap:
     hare-round-duration-sec: '10'
     layer-duration-sec: '10'
     layer-average-size: '20'
+    data-folder: '/bin/data/'
+    expected-layers: '100'
+    storage-path: 'spacemesh-sync-data'
+    remote-data: 'true'
 client:
   image: 'spacemeshos/go-spacemesh:develop'
   command: '/bin/go-sync'
@@ -33,6 +37,9 @@ client:
     layer-duration-sec: '10'
     layer-average-size: '20'
     data-folder: '/bin/data/'
+    expected-layers: '100'
+    storage-path: 'spacemesh-sync-data'
+    remote-data: 'true'
 elastic:
   host: elastic.spacemesh.io
   port: 9200

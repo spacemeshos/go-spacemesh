@@ -59,6 +59,7 @@ var conf = sync.Configuration{
 
 var expectedLayers int
 var bucket string
+var remote bool
 
 func init() {
 	//path to remote storage
@@ -66,6 +67,9 @@ func init() {
 
 	//expected layers
 	Cmd.PersistentFlags().IntVar(&expectedLayers, "expected-layers", 101, "expected number of layers")
+
+	//fetch from remote
+	Cmd.PersistentFlags().BoolVar(&remote, "remote-data", false, "fetch from remote")
 
 	cmdp.AddCommands(Cmd)
 }
@@ -97,41 +101,43 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	lg.Info("------------ Start sync test -----------")
 	lg.Info("data folder: ", app.Config.DataDir)
 	lg.Info("storage path: ", bucket)
+	lg.Info("download from remote storage: ", remote)
 	lg.Info("expected layers: ", expectedLayers)
 
-	if err := GetData(app.Config.DataDir, lg); err != nil {
-		lg.Error("could not download data for test", err)
-		return
+	if remote {
+		if err := GetData(app.Config.DataDir, lg); err != nil {
+			lg.Error("could not download data for test", err)
+			return
+		}
 	}
-
 	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P)
 
 	if err != nil {
 		panic("something got fudged while creating p2p service ")
 	}
 
-	iddbstore, err := database.NewLDBDatabase(app.Config.DataDir+"ids", 0, 0, lg.WithName("idDbStore"))
+	nipstStore, err := database.NewLDBDatabase(app.Config.DataDir+"nipst", 0, 0, lg.WithName("nipstDbStore"))
 	if err != nil {
 		lg.Error("error: ", err)
 		return
 	}
 
-	poetDb := activation.NewPoetDb(database.NewMemDatabase(), lg.WithName("poetDb").WithOptions(log.Nop))
-	validator := nipst.NewValidator(npstCfg, poetDb)
+	poetDb := activation.NewPoetDb(database.NewMemDatabase(), lg.WithName("poetDb"))
 
 	mshdb := mesh.NewPersistentMeshDB(app.Config.DataDir, lg)
 	atxdbStore, _ := database.NewLDBDatabase(app.Config.DataDir+"atx", 0, 0, lg)
-	atxdb := activation.NewActivationDb(atxdbStore, iddbstore, &sync.MockIStore{}, mshdb, 10, validator, lg.WithName("atxDB").WithOptions(log.Nop))
+	atxdb := activation.NewActivationDb(atxdbStore, nipstStore, &sync.MockIStore{}, mshdb, 10, &sync.ValidatorMock{}, lg.WithName("atxDB"))
 
 	txpool := miner.NewTypesTransactionIdMemPool()
 	atxpool := miner.NewTypesAtxIdMemPool()
 
 	msh := mesh.NewMesh(mshdb, atxdb, sync.ConfigTst(), &sync.MeshValidatorMock{}, txpool, atxpool, &sync.MockState{}, lg)
 	defer msh.Close()
+	msh.AddBlock(&mesh.GenesisBlock)
 
 	ch := make(chan types.LayerID, 1)
 	app.sync = sync.NewSync(swarm, msh, txpool, atxpool, mockTxProcessor{}, sync.NewBlockValidator(sync.BlockEligibilityValidatorMock{}), poetDb, conf, ch, 0, lg.WithName("sync"))
-	ch <- 101
+	ch <- types.LayerID(expectedLayers)
 	if err = swarm.Start(); err != nil {
 		log.Panic("error starting p2p err=%v", err)
 	}
@@ -165,8 +171,9 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	}
 }
 
+//download data from remote storage
 func GetData(path string, lg log.Log) error {
-	dirs := []string{"activation", "atx", "blocks", "ids", "layers", "transactions", "validity"}
+	dirs := []string{"atx", "nipst", "blocks", "ids", "layers", "transactions", "validity"}
 	for _, dir := range dirs {
 		if err := os.MkdirAll(path+dir, 0777); err != nil {
 			return err
