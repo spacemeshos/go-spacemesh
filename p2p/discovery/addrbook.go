@@ -69,7 +69,7 @@ const (
 	// getAddrMax is the most addresses that we will send in response
 	// to a getAddr (in practise the most addresses we will return from a
 	// call to AddressCache()).
-	getAddrMax = 2500
+	getAddrMax = 300
 
 	// getAddrPercent is the percentage of total addresses known that we
 	// will share with a call to AddressCache.

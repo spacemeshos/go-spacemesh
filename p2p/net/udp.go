@@ -9,7 +9,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 )
 
-const maxMessageSize = 2048
+const maxMessageSize = 300*60 // @see 0getAddrMax
 
 // UDPMessageEvent is an event about a udp message. passed through a channel
 type UDPMessageEvent struct {
