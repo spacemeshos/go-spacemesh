@@ -62,6 +62,11 @@ func (n *NetMock) Broadcast(id string, d []byte) error {
 
 type NipstBuilderMock struct {
 	Challenge *common.Hash
+	poetRef   []byte
+}
+
+func (np *NipstBuilderMock) SetPoetRef(ref []byte) {
+	np.poetRef = ref
 }
 
 func (np *NipstBuilderMock) IsPostInitialized() bool {
@@ -74,7 +79,7 @@ func (np *NipstBuilderMock) InitializePost() (*types.PostProof, error) {
 
 func (np *NipstBuilderMock) BuildNIPST(challenge *common.Hash) (*types.NIPST, error) {
 	np.Challenge = challenge
-	return nipst.NewNIPSTWithChallenge(challenge), nil
+	return nipst.NewNIPSTWithChallenge(challenge, np.poetRef), nil
 }
 
 type NipstErrBuilderMock struct{}
@@ -113,24 +118,31 @@ func TestBuilder_BuildActivationTx(t *testing.T) {
 	//todo: implement test
 	id := types.NodeId{"aaaaaa", []byte("bbbbb")}
 	coinbase := address.HexToAddress("0xaaa")
-	net := &NetMock{}
-	layers := &MeshProviderMock{}
 	layersPerEpoch := uint16(10)
 	lg := log.NewDefault(id.Key[:5])
+
+	net := &NetMock{}
+	layers := &MeshProviderMock{}
 	activationDb := NewActivationDb(database.NewMemDatabase(), database.NewMemDatabase(), &MockIStore{}, mesh.NewMemMeshDB(log.NewDefault("")), layersPerEpoch, &ValidatorMock{}, lg.WithName("atxDB"))
+	asProvider := ActiveSetProviderMock{}
+	nipstBuilder := NipstBuilderMock{}
+
 	view, err := layers.GetOrphanBlocksBefore(layers.LatestLayer())
 	assert.NoError(t, err)
 	bt, err := types.ViewAsBytes(view)
 	assert.NoError(t, err)
 	activesetCache.put(common.BytesToHash(bt), 10)
-	b := NewBuilder(id, coinbase, activationDb, net, &ActiveSetProviderMock{}, layers, 10, &NipstBuilderMock{}, nil, func() bool { return true }, lg.WithName("atxBuilder"))
+	b := NewBuilder(id, coinbase, activationDb, net, &asProvider, layers, 10, &nipstBuilder, nil, func() bool { return true }, lg.WithName("atxBuilder"))
 	prevAtx := types.AtxId{Hash: common.HexToHash("0x111")}
 	chlng := common.HexToHash("0x3333")
-	npst := nipst.NewNIPSTWithChallenge(&chlng)
+	poetRef := []byte{0xde, 0xad}
+	nipstBuilder.SetPoetRef(poetRef)
+	npst := nipst.NewNIPSTWithChallenge(&chlng, poetRef)
 	atx := types.NewActivationTx(types.NodeId{"aaaaaa", []byte("bbbbb")}, coinbase, 1, prevAtx, 5, 1, prevAtx, 5, []types.BlockID{1, 2, 3}, npst)
 	err = activationDb.StoreAtx(atx.PubLayerIdx.GetEpoch(layersPerEpoch), atx)
 	assert.NoError(t, err)
 
+	// calc expected result
 	challenge := types.NIPSTChallenge{
 		NodeId:         b.nodeId,
 		Sequence:       b.GetLastSequence(b.nodeId) + 1,
@@ -140,14 +152,14 @@ func TestBuilder_BuildActivationTx(t *testing.T) {
 		EndTick:        b.tickProvider.NumOfTicks(), //todo: add provider when
 		PositioningAtx: atx.Id(),
 	}
-
 	bytes, err := challenge.Hash()
-	npst2 := nipst.NewNIPSTWithChallenge(bytes)
+	npst2 := nipst.NewNIPSTWithChallenge(bytes, poetRef)
 	view, err = b.mesh.GetOrphanBlocksBefore(layers.LatestLayer())
 	assert.NoError(t, err)
 	activeSetSize, err := b.activeSet.ActiveSetSize(1)
 	assert.NoError(t, err)
 	act := types.NewActivationTxWithChallenge(challenge, coinbase, activeSetSize, view, npst2)
+	assert.Equal(t, act.GetPoetProofRef(), npst2.PoetProofRef)
 
 	_, err = b.PublishActivationTx(layers.LatestLayer().GetEpoch(layersPerEpoch))
 	assert.NoError(t, err)
@@ -183,7 +195,9 @@ func TestBuilder_PublishActivationTx(t *testing.T) {
 	b := NewBuilder(id, coinbase, activationDb, net, &ActiveSetProviderMock{}, layers, layersPerEpoch, nipstBuilder, nil, func() bool { return true }, lg.WithName("atxBuilder"))
 	prevAtx := types.AtxId{Hash: common.HexToHash("0x111")}
 	chlng := common.HexToHash("0x3333")
-	npst := nipst.NewNIPSTWithChallenge(&chlng)
+	poetRef := []byte{0xbe, 0xef}
+	nipstBuilder.SetPoetRef(poetRef)
+	npst := nipst.NewNIPSTWithChallenge(&chlng, poetRef)
 
 	atx := types.NewActivationTx(types.NodeId{"aaaaaa", []byte("bbbbb")}, coinbase, 1, prevAtx, 5, 1, prevAtx, 5, []types.BlockID{1, 2, 3}, npst)
 
@@ -201,7 +215,7 @@ func TestBuilder_PublishActivationTx(t *testing.T) {
 	}
 
 	bytes, err := challenge.Hash()
-	npst2 := nipst.NewNIPSTWithChallenge(bytes)
+	npst2 := nipst.NewNIPSTWithChallenge(bytes, poetRef)
 	assert.NoError(t, err)
 
 	//ugly hack to set view size in db
@@ -255,7 +269,9 @@ func TestBuilder_PublishActivationTxActiveSetSize(t *testing.T) {
 	dbmock := &ATXDBMock{}
 	b := NewBuilder(id, coinbase, dbmock, net, aspm, layers, layersPerEpoch, nipstBuilder, nil, func() bool { return true }, lg.WithName("atxBuilder"))
 	chlng := common.HexToHash("0x3333")
-	npst := nipst.NewNIPSTWithChallenge(&chlng)
+	poetRef := []byte{0x66, 0x45}
+	nipstBuilder.SetPoetRef(poetRef)
+	npst := nipst.NewNIPSTWithChallenge(&chlng, poetRef)
 
 	b.challenge = &types.NIPSTChallenge{
 		PubLayerIdx: types.LayerID(1),
@@ -314,7 +330,8 @@ func TestBuilder_PublishActivationTxSerialize(t *testing.T) {
 	b := NewBuilder(id, coinbase, activationDb, net, &ActiveSetProviderMock{}, layers, layersPerEpoch, nipstBuilder, nil, func() bool { return true }, lg.WithName("atxBuilder"))
 	prevAtx := types.AtxId{Hash: common.HexToHash("0x111")}
 	challenge1 := common.HexToHash("0x222222")
-	npst := nipst.NewNIPSTWithChallenge(&challenge1)
+	poetRef := []byte{0xba, 0xbe}
+	npst := nipst.NewNIPSTWithChallenge(&challenge1, poetRef)
 
 	atx := types.NewActivationTx(types.NodeId{"aaaaaa", []byte("bbb")}, coinbase, 1, prevAtx, 5, 1, prevAtx, 5, []types.BlockID{1, 2, 3}, npst)
 

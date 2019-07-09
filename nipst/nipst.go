@@ -235,7 +235,7 @@ func (nb *NIPSTBuilder) InitializePost() (*types.PostProof, error) {
 	return commitment, nil
 }
 
-func NewNIPSTWithChallenge(challenge *common.Hash) *types.NIPST {
+func NewNIPSTWithChallenge(challenge *common.Hash, poetRef []byte) *types.NIPST {
 	return &types.NIPST{
 		Space:          0,
 		NipstChallenge: challenge,
@@ -246,5 +246,6 @@ func NewNIPSTWithChallenge(challenge *common.Hash) *types.NIPST {
 			ProofNodes:   [][]byte(nil),
 			ProvenLeaves: [][]byte(nil),
 		},
+		PoetProofRef: poetRef,
 	}
 }
