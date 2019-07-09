@@ -125,10 +125,10 @@ func (db *PoetDb) publishProofRef(key poetProofKey, poetProofRef []byte) {
 	defer db.mu.Unlock()
 
 	for _, ch := range db.poetProofRefSubscriptions[key] {
-		go func() {
-			ch <- poetProofRef
-			close(ch)
-		}()
+		go func(c chan []byte) {
+			c <- poetProofRef
+			close(c)
+		}(ch)
 	}
 	delete(db.poetProofRefSubscriptions, key)
 }

@@ -89,12 +89,19 @@ func (suite *AppTestSuite) initMultipleInstances(numOfInstances int, storeFormat
 	net := service.NewSimulator()
 	runningName := 'a'
 	rolacle := eligibility.New()
-	poet, err := NewRPCPoetHarnessClient()
+	poetClient, err := NewRPCPoetHarnessClient()
 	r.NoError(err)
-	suite.poetCleanup = poet.CleanUp
+	suite.poetCleanup = poetClient.CleanUp
 	rng := BLS381.DefaultSeed()
 	for i := 0; i < numOfInstances; i++ {
 		smApp := NewSpacemeshApp()
+
+		smApp.Config.POST = nipst.DefaultConfig()
+		smApp.Config.POST.Difficulty = 5
+		smApp.Config.POST.NumProvenLabels = 10
+		smApp.Config.POST.SpacePerUnit = 1 << 10 // 1KB.
+		smApp.Config.POST.FileSize = 1 << 10     // 1KB.
+
 		smApp.Config.HARE.N = numOfInstances
 		smApp.Config.HARE.F = numOfInstances / 2
 		smApp.Config.HARE.RoundDuration = 3
@@ -119,12 +126,10 @@ func (suite *AppTestSuite) initMultipleInstances(numOfInstances int, storeFormat
 		hareOracle.Register(true, pub.String())
 
 		layerSize := numOfInstances
-		npstCfg := nipst.PostParams{
-			Difficulty:           5,
-			NumberOfProvenLabels: 10,
-			SpaceUnit:            1024,
-		}
-		err = smApp.initServices(nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(layerSize), nipst.NewPostClient(), poet, vrfSigner, npstCfg, uint16(smApp.Config.LayersPerEpoch))
+
+		postClient := nipst.NewPostClient(&smApp.Config.POST)
+
+		err = smApp.initServices(nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(layerSize), postClient, poetClient, vrfSigner, uint16(smApp.Config.LayersPerEpoch))
 		r.NoError(err)
 		smApp.setupGenesis()
 
