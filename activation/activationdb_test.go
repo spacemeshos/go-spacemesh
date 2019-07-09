@@ -148,10 +148,11 @@ func Test_CalcActiveSetFromView(t *testing.T) {
 		types.NewActivationTx(id3, coinbase3, 0, *types.EmptyAtxId, 435, 0, *types.EmptyAtxId, 0, []types.BlockID{}, &types.NIPST{}),
 	}
 
+	poetRef := []byte{0xba, 0xb0}
 	for _, atx := range atxs {
 		hash, err := atx.NIPSTChallenge.Hash()
 		assert.NoError(t, err)
-		atx.Nipst = nipst.NewNIPSTWithChallenge(hash)
+		atx.Nipst = nipst.NewNIPSTWithChallenge(hash, poetRef)
 	}
 
 	blocks := createLayerWithAtx(t, layers, 1, 10, atxs, []types.BlockID{}, []types.BlockID{})
@@ -173,7 +174,7 @@ func Test_CalcActiveSetFromView(t *testing.T) {
 	for _, atx := range atxs2 {
 		hash, err := atx.NIPSTChallenge.Hash()
 		assert.NoError(t, err)
-		atx.Nipst = nipst.NewNIPSTWithChallenge(hash)
+		atx.Nipst = nipst.NewNIPSTWithChallenge(hash, poetRef)
 	}
 
 	block2 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 2200, []byte("data1"))
@@ -277,7 +278,8 @@ func TestMesh_processBlockATXs(t *testing.T) {
 	coinbase2 := address.HexToAddress("bbbb")
 	coinbase3 := address.HexToAddress("cccc")
 	chlng := common.HexToHash("0x3333")
-	npst := nipst.NewNIPSTWithChallenge(&chlng)
+	poetRef := []byte{0x76, 0x45}
+	npst := nipst.NewNIPSTWithChallenge(&chlng, poetRef)
 	posATX := types.NewActivationTx(types.NodeId{"aaaaaa", []byte("anton")}, coinbase1, 0, *types.EmptyAtxId, 1000, 0, *types.EmptyAtxId, 0, []types.BlockID{}, npst)
 	err := atxdb.StoreAtx(0, posATX)
 	assert.NoError(t, err)
@@ -289,7 +291,7 @@ func TestMesh_processBlockATXs(t *testing.T) {
 	for _, atx := range atxs {
 		hash, err := atx.NIPSTChallenge.Hash()
 		assert.NoError(t, err)
-		atx.Nipst = nipst.NewNIPSTWithChallenge(hash)
+		atx.Nipst = nipst.NewNIPSTWithChallenge(hash, poetRef)
 	}
 
 	block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data1"))
@@ -317,7 +319,7 @@ func TestMesh_processBlockATXs(t *testing.T) {
 	for _, atx := range atxs2 {
 		hash, err := atx.NIPSTChallenge.Hash()
 		assert.NoError(t, err)
-		atx.Nipst = nipst.NewNIPSTWithChallenge(hash)
+		atx.Nipst = nipst.NewNIPSTWithChallenge(hash, poetRef)
 	}
 
 	block2 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 2000, []byte("data1"))
@@ -350,10 +352,11 @@ func TestActivationDB_ValidateAtx(t *testing.T) {
 		types.NewActivationTx(id2, coinbase2, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 3, []types.BlockID{}, &types.NIPST{}),
 		types.NewActivationTx(id3, coinbase3, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 3, []types.BlockID{}, &types.NIPST{}),
 	}
+	poetRef := []byte{0x12, 0x21}
 	for _, atx := range atxs {
 		hash, err := atx.NIPSTChallenge.Hash()
 		assert.NoError(t, err)
-		atx.Nipst = nipst.NewNIPSTWithChallenge(hash)
+		atx.Nipst = nipst.NewNIPSTWithChallenge(hash, poetRef)
 	}
 
 	blocks := createLayerWithAtx(t, layers, 1, 10, atxs, []types.BlockID{}, []types.BlockID{})
@@ -364,12 +367,12 @@ func TestActivationDB_ValidateAtx(t *testing.T) {
 	prevAtx := types.NewActivationTx(idx1, coinbase1, 0, *types.EmptyAtxId, 100, 0, *types.EmptyAtxId, 3, blocks, &types.NIPST{})
 	hash, err := prevAtx.NIPSTChallenge.Hash()
 	assert.NoError(t, err)
-	prevAtx.Nipst = nipst.NewNIPSTWithChallenge(hash)
+	prevAtx.Nipst = nipst.NewNIPSTWithChallenge(hash, poetRef)
 
 	atx := types.NewActivationTx(idx1, coinbase1, 1, prevAtx.Id(), 1012, 0, prevAtx.Id(), 3, blocks, &types.NIPST{})
 	hash, err = atx.NIPSTChallenge.Hash()
 	assert.NoError(t, err)
-	atx.Nipst = nipst.NewNIPSTWithChallenge(hash)
+	atx.Nipst = nipst.NewNIPSTWithChallenge(hash, poetRef)
 	err = atxdb.StoreAtx(1, prevAtx)
 	assert.NoError(t, err)
 
@@ -401,7 +404,8 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 
 	//atx := types.NewActivationTx(id1, 1, atxs[0].Id(), 1000, 0, atxs[0].Id(), 3, blocks, &nipst.NIPST{})
 	chlng := common.HexToHash("0x3333")
-	npst := nipst.NewNIPSTWithChallenge(&chlng)
+	poetRef := []byte{0xba, 0xbe}
+	npst := nipst.NewNIPSTWithChallenge(&chlng, poetRef)
 	prevAtx := types.NewActivationTx(idx1, coinbase, 0, *types.EmptyAtxId, 100, 0, *types.EmptyAtxId, 3, blocks, npst)
 
 	err := atxdb.StoreAtx(1, prevAtx)
@@ -462,7 +466,8 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 
 	//atx := types.NewActivationTx(id1, 1, atxs[0].Id(), 1000, 0, atxs[0].Id(), 3, blocks, &nipst.NIPST{})
 	chlng := common.HexToHash("0x3333")
-	npst := nipst.NewNIPSTWithChallenge(&chlng)
+	poetRef := []byte{0x56, 0xbe}
+	npst := nipst.NewNIPSTWithChallenge(&chlng, poetRef)
 	prevAtx := types.NewActivationTx(idx1, coinbase, 0, *types.EmptyAtxId, 100, 0, *types.EmptyAtxId, 3, blocks, npst)
 
 	var nodeAtxIds []types.AtxId

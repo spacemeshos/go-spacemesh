@@ -172,6 +172,7 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *common.Hash) (*types.NIPST, error)
 			return nil, fmt.Errorf("not a member of this round (poetId: %x, roundId: %d)",
 				nb.state.PoetId, nb.state.PoetRound.Id) // TODO(noamnelke): handle this case!
 		}
+		nipst.PoetProofRef = poetProofRef
 		nb.state.PoetProofRef = poetProofRef
 		nb.state.persist()
 	}
@@ -234,7 +235,7 @@ func (nb *NIPSTBuilder) InitializePost() (*types.PostProof, error) {
 	return commitment, nil
 }
 
-func NewNIPSTWithChallenge(challenge *common.Hash) *types.NIPST {
+func NewNIPSTWithChallenge(challenge *common.Hash, poetRef []byte) *types.NIPST {
 	return &types.NIPST{
 		Space:          0,
 		NipstChallenge: challenge,
@@ -245,5 +246,6 @@ func NewNIPSTWithChallenge(challenge *common.Hash) *types.NIPST {
 			ProofNodes:   [][]byte(nil),
 			ProvenLeaves: [][]byte(nil),
 		},
+		PoetProofRef: poetRef,
 	}
 }
