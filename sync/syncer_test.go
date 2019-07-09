@@ -774,7 +774,8 @@ func RandStringRunes(n int) string {
 func atx() *types.ActivationTx {
 	coinbase := address.HexToAddress("aaaa")
 	chlng := common.HexToHash("0x3333")
-	npst := nipst.NewNIPSTWithChallenge(&chlng)
+	poetRef := []byte{0xde, 0xad}
+	npst := nipst.NewNIPSTWithChallenge(&chlng, poetRef)
 
 	return types.NewActivationTx(types.NodeId{Key: RandStringRunes(8), VRFPublicKey: []byte(RandStringRunes(8))}, coinbase, 0, *types.EmptyAtxId, 5, 1, *types.EmptyAtxId, 0, []types.BlockID{1, 2, 3}, npst)
 }
