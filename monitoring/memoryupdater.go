@@ -32,8 +32,6 @@ func NewMemoryUpdater() *MemoryUpdater {
 
 	mu.formatters["Alloc"] = bytesToMBFormmater
 	mu.formatters["TotalAlloc"] = bytesToMBFormmater
-	mu.formatters["Alloc"] = bytesToMBFormmater
-	mu.formatters["Alloc"] = bytesToMBFormmater
 
 	return mu
 }
