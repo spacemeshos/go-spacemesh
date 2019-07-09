@@ -53,10 +53,17 @@ type NipstValidator interface {
 	Validate(nipst *types.NIPST, expectedChallenge common.Hash) error
 }
 
+type ATXDBProvider interface {
+	GetAtx(id types.AtxId) (*types.ActivationTx, error)
+	CalcActiveSetFromView(a *types.ActivationTx) (uint32, error)
+	GetNodeAtxIds(nodeId types.NodeId) ([]types.AtxId, error)
+	GetEpochAtxIds(epochId types.EpochId) ([]types.AtxId, error)
+}
+
 type Builder struct {
 	nodeId          types.NodeId
 	coinbaseAccount address.Address
-	db              *ActivationDb
+	db              ATXDBProvider
 	net             Broadcaster
 	activeSet       ActiveSetProvider
 	mesh            MeshProvider
@@ -82,7 +89,7 @@ type Processor struct {
 }
 
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
-func NewBuilder(nodeId types.NodeId, coinbaseAccount address.Address, db *ActivationDb, net Broadcaster, activeSet ActiveSetProvider, mesh MeshProvider, layersPerEpoch uint16, nipstBuilder NipstBuilder, layerClock chan types.LayerID, isSyncedFunc func() bool, log log.Log) *Builder {
+func NewBuilder(nodeId types.NodeId, coinbaseAccount address.Address, db ATXDBProvider, net Broadcaster, activeSet ActiveSetProvider, mesh MeshProvider, layersPerEpoch uint16, nipstBuilder NipstBuilder, layerClock chan types.LayerID, isSyncedFunc func() bool, log log.Log) *Builder {
 
 	return &Builder{
 		nodeId:          nodeId,

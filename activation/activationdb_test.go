@@ -60,10 +60,41 @@ func (MockState) ValidateSignature(signed types.Signed) (address.Address, error)
 	return address.Address{}, nil
 }
 
-type AtxDbMock struct{}
+type ATXDBMock struct {
+	// CalcActiveSetFromViewFunc mocks the CalcActiveSetFromView method.
+	CalcActiveSetFromViewFunc func(a *types.ActivationTx) (uint32, error)
 
-func (AtxDbMock) ProcessBlockATXs(block *types.Block) {
+	// GetAtxFunc mocks the GetAtx method.
+	GetAtxFunc func(id types.AtxId) (*types.ActivationTx, error)
 
+	// GetEpochAtxIdsFunc mocks the GetEpochAtxIds method.
+	GetEpochAtxIdsFunc func(epochId types.EpochId) ([]types.AtxId, error)
+
+	// GetNodeAtxIdsFunc mocks the GetNodeAtxIds method.
+	GetNodeAtxIdsFunc func(nodeId types.NodeId) ([]types.AtxId, error)
+
+	// GetPrevAtxIdFunc mocks the GetPrevAtxId method.
+	GetPrevAtxIdFunc func(node types.NodeId) (*types.AtxId, error)
+}
+
+func (mock *ATXDBMock) CalcActiveSetFromView(a *types.ActivationTx) (uint32, error) {
+	return mock.CalcActiveSetFromViewFunc(a)
+}
+
+func (mock *ATXDBMock) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
+	return mock.GetAtxFunc(id)
+}
+
+func (mock *ATXDBMock) GetEpochAtxIds(epochId types.EpochId) ([]types.AtxId, error) {
+	return mock.GetEpochAtxIdsFunc(epochId)
+}
+
+func (mock *ATXDBMock) GetNodeAtxIds(nodeId types.NodeId) ([]types.AtxId, error) {
+	return mock.GetNodeAtxIds(nodeId)
+}
+
+func (mock *ATXDBMock) GetPrevAtxId(node types.NodeId) (*types.AtxId, error) {
+	return mock.GetPrevAtxIdFunc(node)
 }
 
 type MemPoolMock struct {
