@@ -251,7 +251,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) (bool, error) {
 	}
 
 	if atx.TargetEpoch(b.layersPerEpoch).IsGenesis() {
-		atx.ActiveSetSize = activeSetSize
+		atx.ActiveSetSize = 0
 	} else {
 		if activeSetSize != atx.ActiveSetSize {
 			b.log.Panic("active set size mismatch! size based on view: %d, size reported: %d",
