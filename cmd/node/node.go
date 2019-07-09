@@ -289,10 +289,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	app.nodeId = nodeID
 	//todo: should we add all components to a single struct?
 
-	name := nodeID.Key
-	if len(name) > 5 {
-		name = name[:5]
-	}
+	name := nodeID.ShortString()
 
 	lg := log.NewDefault(name).WithFields(log.String("nodeID", name))
 	app.log = lg.WithName("app")
@@ -366,7 +363,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 		hOracle = rolacle
 	} else { // regular oracle, build and use it
 		beacon := eligibility.NewBeacon(trtl)
-		hOracle = eligibility.New(beacon, atxdb, BLS381.Verify2, vrfSigner, uint16(app.Config.LayersPerEpoch))
+		hOracle = eligibility.New(beacon, atxdb, BLS381.Verify2, vrfSigner, uint16(app.Config.LayersPerEpoch), lg.WithName("hareOracle"))
 	}
 
 	ha := hare.New(app.Config.HARE, swarm, sgn, nodeID, syncer.IsSynced, msh, hOracle, uint16(app.Config.LayersPerEpoch), idStore, atxdb, clock.Subscribe(), lg.WithName("hare"))

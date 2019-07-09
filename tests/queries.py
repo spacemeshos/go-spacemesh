@@ -100,7 +100,7 @@ def query_message(indx, namespace, client_po_name, fields, findFails=False, star
         print("no hits")
     if findFails:
         print("Looking for pods that didn't hit:")
-        podnames = [hit.kubernetes.pod_name for hit in hits]
+        podnames = set([hit.kubernetes.pod_name for hit in hits])
         newfltr = Q("match_phrase", kubernetes__namespace_name=namespace) & \
                   Q("match_phrase", kubernetes__pod_name=client_po_name)
 
