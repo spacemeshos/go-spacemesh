@@ -6,34 +6,22 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/types"
-	"github.com/spacemeshos/post/proving"
+	"github.com/spacemeshos/post/config"
 )
 
-type verifyPostFunc func(proof *types.PostProof, space uint64, numberOfProvenLabels uint8, difficulty proving.Difficulty) (bool, error)
-type verifyPoetFunc func(p *PoetProof) (bool, error)
-type verifyPoetMatchesMembershipFunc func(membershipRoot *common.Hash, poetProof *PoetProof) bool
+type verifyPostFunc func(proof *types.PostProof, space uint64, numberOfProvenLabels uint, difficulty uint) (bool, error)
 
 type Validator struct {
-	PostParams
-	poetDb                      PoetDb
-	verifyPost                  verifyPostFunc
-	verifyPoet                  verifyPoetFunc
-	verifyPoetMatchesMembership verifyPoetMatchesMembershipFunc
+	postCfg    *config.Config
+	poetDb     PoetDb
+	verifyPost verifyPostFunc
 }
 
-type PostParams struct {
-	Difficulty           proving.Difficulty
-	NumberOfProvenLabels uint8
-	SpaceUnit            uint64
-}
-
-func NewValidator(params PostParams, poetDb PoetDb) *Validator {
+func NewValidator(postCfg *config.Config, poetDb PoetDb) *Validator {
 	return &Validator{
-		PostParams:                  params,
-		poetDb:                      poetDb,
-		verifyPost:                  verifyPost,
-		verifyPoet:                  verifyPoet,
-		verifyPoetMatchesMembership: verifyPoetMatchesMembership,
+		postCfg:    postCfg,
+		verifyPost: verifyPost,
+		poetDb:     poetDb,
 	}
 }
 
@@ -46,11 +34,11 @@ func (v *Validator) Validate(nipst *types.NIPST, expectedChallenge common.Hash) 
 		return fmt.Errorf("PoET proof chain invalid: %v", err)
 	}
 
-	if nipst.Space < v.SpaceUnit {
-		return fmt.Errorf("PoST space (%d) is less than a single space unit (%d)", nipst.Space, v.SpaceUnit)
+	if nipst.Space < v.postCfg.SpacePerUnit {
+		return fmt.Errorf("PoST space (%d) is less than a single space unit (%d)", nipst.Space, v.postCfg.SpacePerUnit)
 	}
 
-	if valid, err := v.verifyPost(nipst.PostProof, nipst.Space, v.NumberOfProvenLabels, v.Difficulty); err != nil || !valid {
+	if valid, err := v.verifyPost(nipst.PostProof, nipst.Space, v.postCfg.NumProvenLabels, v.postCfg.Difficulty); err != nil || !valid {
 		return fmt.Errorf("PoST proof invalid: %v", err)
 	}
 

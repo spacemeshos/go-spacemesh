@@ -6,7 +6,6 @@ import (
 	"github.com/spacemeshos/poet/integration"
 	"github.com/stretchr/testify/require"
 	"testing"
-	"time"
 )
 
 // newRPCPoetHarnessClient returns a new instance of RPCPoetClient
@@ -34,7 +33,6 @@ type rpcPoetTestCase struct {
 
 var rpcPoetTestCases = []*rpcPoetTestCase{
 	{name: "RPC poet client", test: testRPCPoetClient},
-	{name: "RPC poet client timeouts", test: testRPCPoetClientTimeouts},
 }
 
 func TestRPCPoet(t *testing.T) {
@@ -70,35 +68,4 @@ func testRPCPoetClient(c *RPCPoetClient, assert *require.Assertions) {
 	poetRound, err := c.submit(ch)
 	assert.NoError(err)
 	assert.NotNil(poetRound)
-
-	mProof, err := c.subscribeMembershipProof(poetRound, ch, 10*time.Second)
-	assert.NoError(err)
-	assert.NotNil(mProof)
-
-	proof, err := c.subscribeProof(poetRound, 10*time.Second)
-	assert.NoError(err)
-	assert.NotNil(proof)
-	res, err := verifyPoet(proof)
-	assert.NoError(err)
-	assert.True(res)
-
-	assert.True(verifyPoetMatchesMembership(&mProof.Root, proof))
-}
-
-func testRPCPoetClientTimeouts(c *RPCPoetClient, assert *require.Assertions) {
-	var ch common.Hash
-	_, err := rand.Read(ch[:])
-	assert.NoError(err)
-
-	poetRound, err := c.submit(ch)
-	assert.NoError(err)
-	assert.NotNil(poetRound)
-
-	mProof, err := c.subscribeMembershipProof(poetRound, ch, 1*time.Millisecond)
-	assert.EqualError(err, "deadline exceeded")
-	assert.Nil(mProof)
-
-	proof, err := c.subscribeProof(poetRound, 1*time.Millisecond)
-	assert.EqualError(err, "deadline exceeded")
-	assert.Nil(proof)
 }

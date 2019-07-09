@@ -284,18 +284,17 @@ func (app *SpacemeshApp) setupTestFeatures() {
 	api.ApproveAPIGossipMessages(cmdp.Ctx, app.P2P)
 }
 
-func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service, dbStorepath string, sgn hare.Signer, isFixedOracle bool, rolacle hare.Rolacle, layerSize uint32, postClient nipst.PostProverClient, poetClient nipst.PoetProvingServiceClient, vrfSigner *BLS381.BlsSigner, commitmentConfig nipst.PostParams, layersPerEpoch uint16) error {
+func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service, dbStorepath string, sgn hare.Signer, isFixedOracle bool, rolacle hare.Rolacle, layerSize uint32, postClient nipst.PostProverClient, poetClient nipst.PoetProvingServiceClient, vrfSigner *BLS381.BlsSigner, layersPerEpoch uint16) error {
 
 	app.nodeId = nodeID
 	//todo: should we add all components to a single struct?
 
-	name := nodeID.Key
-	if len(name) > 5 {
-		name = name[:5]
-	}
+	name := nodeID.ShortString()
 
 	lg := log.NewDefault(name).WithFields(log.String("nodeID", name))
 	app.log = lg.WithName("app")
+
+	postClient.SetLogger(lg.WithName("post"))
 
 	db, err := database.NewLDBDatabase(dbStorepath, 0, 0, lg.WithName("stateDbStore"))
 	if err != nil {
@@ -339,7 +338,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	idStore := activation.NewIdentityStore(iddbstore)
 	poetDb := activation.NewPoetDb(poetDbStore, lg.WithName("poetDb"))
 	//todo: this is initialized twice, need to refactor
-	validator := nipst.NewValidator(commitmentConfig, poetDb)
+	validator := nipst.NewValidator(&app.Config.POST, poetDb)
 	mdb := mesh.NewPersistentMeshDB(dbStorepath, lg.WithName("meshDb"))
 	atxdb := activation.NewActivationDb(atxdbstore, nipstStore, idStore, mdb, layersPerEpoch, validator, lg.WithName("atxDb"))
 	beaconProvider := &oracle.EpochBeaconProvider{}
@@ -364,7 +363,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 		hOracle = rolacle
 	} else { // regular oracle, build and use it
 		beacon := eligibility.NewBeacon(trtl)
-		hOracle = eligibility.New(beacon, atxdb, BLS381.Verify2, vrfSigner, uint16(app.Config.LayersPerEpoch))
+		hOracle = eligibility.New(beacon, atxdb, BLS381.Verify2, vrfSigner, uint16(app.Config.LayersPerEpoch), lg.WithName("hareOracle"))
 	}
 
 	ha := hare.New(app.Config.HARE, swarm, sgn, nodeID, syncer.IsSynced, msh, hOracle, uint16(app.Config.LayersPerEpoch), idStore, atxdb, clock.Subscribe(), lg.WithName("hare"))
@@ -374,10 +373,9 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 
 	poetListener := activation.NewPoetListener(swarm, poetDb, lg.WithName("poetListener"))
 
-	nipstBuilder := nipst.NewNipstBuilder(
+	nipstBuilder := nipst.NewNIPSTBuilder(
 		common.Hex2Bytes(nodeID.Key), // TODO: use both keys in the nodeID
-		commitmentConfig.SpaceUnit,
-		commitmentConfig.Difficulty,
+		app.Config.POST,
 		postClient,
 		poetClient,
 		poetDb,
@@ -543,11 +541,13 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	}
 
 	log.Info("connecting to POET on IP %v", app.Config.PoETServer)
-	poet, err := nipst.NewRemoteRPCPoetClient(app.Config.PoETServer, 30*time.Second)
+	poetClient, err := nipst.NewRemoteRPCPoetClient(app.Config.PoETServer, 30*time.Second)
 	if err != nil {
 		log.Error("poet server not found on addr %v, err: %v", app.Config.PoETServer, err)
 		return
 	}
+
+	postClient := nipst.NewPostClient(&app.Config.POST)
 
 	rng := amcl.NewRAND()
 	pub := app.edSgn.PublicKey().Bytes()
@@ -560,13 +560,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 
 	dbStorepath := app.Config.DataDir
 
-	npstCfg := nipst.PostParams{
-		Difficulty:           5,
-		NumberOfProvenLabels: 10,
-		SpaceUnit:            1024,
-	}
-
-	err = app.initServices(nodeID, swarm, dbStorepath, app.edSgn, false, nil, uint32(app.Config.LayerAvgSize), nipst.NewPostClient(), poet, vrfSigner, npstCfg, uint16(app.Config.LayersPerEpoch))
+	err = app.initServices(nodeID, swarm, dbStorepath, app.edSgn, false, nil, uint32(app.Config.LayerAvgSize), postClient, poetClient, vrfSigner, uint16(app.Config.LayersPerEpoch))
 	if err != nil {
 		log.Error("cannot start services %v", err.Error())
 		return
