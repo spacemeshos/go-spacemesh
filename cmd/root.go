@@ -13,6 +13,7 @@ var (
 func AddCommands(cmd *cobra.Command) {
 
 	/** ======================== BaseConfig Flags ========================== **/
+
 	cmd.PersistentFlags().StringVarP(&config.BaseConfig.ConfigFile,
 		"config", "c", config.BaseConfig.ConfigFile, "Set Load configuration from file")
 	cmd.PersistentFlags().StringVarP(&config.BaseConfig.DataDir, "data-folder", "d",
@@ -45,7 +46,9 @@ func AddCommands(cmd *cobra.Command) {
 		config.GenesisConfPath, "add genesis configuration")
 	cmd.PersistentFlags().StringVar(&config.CoinbaseAccount, "coinbase",
 		config.CoinbaseAccount, "coinbase account to accumulate rewards")
+
 	/** ======================== P2P Flags ========================== **/
+
 	cmd.PersistentFlags().IntVar(&config.P2P.TCPPort, "tcp-port",
 		config.P2P.TCPPort, "TCP Port to listen on")
 	cmd.PersistentFlags().DurationVar(&config.P2P.DialTimeout, "dial-timeout",
@@ -94,6 +97,7 @@ func AddCommands(cmd *cobra.Command) {
 		config.TIME.RefreshNtpInterval, "Refresh intervals to ntp")
 
 	/** ======================== API Flags ========================== **/
+
 	// StartJSONApiServerFlag determines if json api server should be started
 	cmd.PersistentFlags().BoolVar(&config.API.StartJSONServer, "json-server",
 		config.API.StartJSONServer, "StartService the json http server. "+
@@ -109,7 +113,7 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().IntVar(&config.API.GrpcServerPort, "grpc-port",
 		config.API.GrpcServerPort, "GRPC api server port")
 
-	/**========================Hare Flags ========================== **/
+	/**======================== Hare Flags ========================== **/
 
 	// N determines the size of the hare committee
 	cmd.PersistentFlags().IntVar(&config.HARE.N, "hare-committee-size",
@@ -124,6 +128,29 @@ func AddCommands(cmd *cobra.Command) {
 		config.HARE.WakeupDelta, "Wakeup delta after tick for hare protocol")
 	cmd.PersistentFlags().IntVar(&config.HARE.ExpectedLeaders, "hare-exp-leaders",
 		config.HARE.ExpectedLeaders, "The expected number of leaders in the hare protocol")
+
+	/**======================== PoST Flags ========================== **/
+
+	cmd.PersistentFlags().StringVar(&config.POST.DataDir, "post-datadir",
+		config.POST.DataDir, "The directory that contains post data files")
+	cmd.PersistentFlags().Uint64Var(&config.POST.SpacePerUnit, "post-space",
+		config.POST.SpacePerUnit, "Space per unit, in bytes")
+	cmd.PersistentFlags().Uint64Var(&config.POST.FileSize, "post-filesize",
+		config.POST.FileSize, "Space per file, in bytes")
+	cmd.PersistentFlags().UintVar(&config.POST.Difficulty, "post-difficulty",
+		config.POST.Difficulty, "Computational cost of the initialization")
+	cmd.PersistentFlags().UintVar(&config.POST.NumProvenLabels, "post-labels",
+		config.POST.NumProvenLabels, "Number of labels to prove in non-interactive proof (security parameter)")
+	cmd.PersistentFlags().UintVar(&config.POST.LowestLayerToCacheDuringProofGeneration, "post-cachelayer",
+		config.POST.LowestLayerToCacheDuringProofGeneration, "Lowest layer to cache in-memory during proof generation (optimization parameter)")
+	cmd.PersistentFlags().Uint64Var(&config.POST.LabelsLogRate, "post-lograte",
+		config.POST.LabelsLogRate, "Labels construction progress log rate")
+	cmd.PersistentFlags().UintVar(&config.POST.MaxWriteFilesParallelism, "post-parallel-files",
+		config.POST.MaxWriteFilesParallelism, "Max degree of files write parallelism")
+	cmd.PersistentFlags().UintVar(&config.POST.MaxWriteInFileParallelism, "post-parallel-infile",
+		config.POST.MaxWriteInFileParallelism, "Max degree of cpu work parallelism per file write")
+	cmd.PersistentFlags().UintVar(&config.POST.MaxReadFilesParallelism, "post-parallel-read",
+		config.POST.MaxReadFilesParallelism, "Max degree of files read parallelism")
 
 	/**========================Consensus Flags ========================== **/
 
