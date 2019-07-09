@@ -36,6 +36,14 @@ func (id NodeId) ToBytes() []byte {
 	return common.Hex2Bytes(id.String())
 }
 
+func (id NodeId) ShortString() string {
+	name := id.Key
+	if len(name) > 5 {
+		name = name[:5]
+	}
+	return name
+}
+
 type BlockHeader struct {
 	Id               BlockID
 	LayerIndex       LayerID

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/amcl/BLS381"
 	"github.com/spacemeshos/go-spacemesh/config"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
 	"math/rand"
@@ -47,14 +48,14 @@ func (s *signer) Sign(msg []byte) ([]byte, error) {
 }
 
 func TestOracle_BuildVRFMessage(t *testing.T) {
-	o := Oracle{}
+	o := Oracle{Log: log.NewDefault(t.Name())}
 	o.beacon = &mockValueProvider{1, someErr}
 	_, err := o.buildVRFMessage(types.NodeId{}, types.LayerID(1), 1)
 	assert.NotNil(t, err)
 }
 
 func TestOracle_IsEligible(t *testing.T) {
-	o := &Oracle{beacon: &mockValueProvider{1, nil}}
+	o := &Oracle{beacon: &mockValueProvider{1, nil}, Log: log.NewDefault(t.Name())}
 	o.layersPerEpoch = 10
 	o.vrfVerifier = buildVerifier(false, someErr)
 	res, err := o.Eligible(types.LayerID(1), 0, 1, types.NodeId{}, []byte{})
@@ -85,14 +86,14 @@ func Test_safeLayer(t *testing.T) {
 }
 
 func Test_ZeroParticipants(t *testing.T) {
-	o := New(&mockValueProvider{1, nil}, &mockActiveSetProvider{5}, buildVerifier(true, nil), &signer{}, 10)
+	o := New(&mockValueProvider{1, nil}, &mockActiveSetProvider{5}, buildVerifier(true, nil), &signer{}, 10, log.NewDefault(t.Name()))
 	res, err := o.Eligible(0, 0, 0, types.NodeId{Key: ""}, []byte{1})
 	assert.Nil(t, err)
 	assert.False(t, res)
 }
 
 func Test_AllParticipants(t *testing.T) {
-	o := New(&mockValueProvider{1, nil}, &mockActiveSetProvider{5}, buildVerifier(true, nil), &signer{}, 10)
+	o := New(&mockValueProvider{1, nil}, &mockActiveSetProvider{5}, buildVerifier(true, nil), &signer{}, 10, log.NewDefault(t.Name()))
 	res, err := o.Eligible(0, 0, 5, types.NodeId{Key: ""}, []byte{1})
 	assert.Nil(t, err)
 	assert.True(t, res)
@@ -109,7 +110,7 @@ func genBytes() []byte {
 func Test_ExpectedCommitteeSize(t *testing.T) {
 	setSize := uint32(1024)
 	commSize := 1000
-	o := New(&mockValueProvider{1, nil}, &mockActiveSetProvider{setSize}, buildVerifier(true, nil), &signer{}, 10)
+	o := New(&mockValueProvider{1, nil}, &mockActiveSetProvider{setSize}, buildVerifier(true, nil), &signer{}, 10, log.NewDefault(t.Name()))
 	count := 0
 	for i := uint32(0); i < setSize; i++ {
 		res, err := o.Eligible(0, 0, commSize, types.NodeId{Key: ""}, genBytes())
@@ -142,7 +143,7 @@ func Test_ActiveSetSize(t *testing.T) {
 	m[types.EpochId(0)] = 2
 	m[types.EpochId(1)] = 3
 	m[types.EpochId(2)] = 5
-	o := New(&mockValueProvider{1, nil}, &mockBufferedActiveSetProvider{m}, buildVerifier(true, nil), &signer{}, 10)
+	o := New(&mockValueProvider{1, nil}, &mockBufferedActiveSetProvider{m}, buildVerifier(true, nil), &signer{}, 10, log.NewDefault(t.Name()))
 	// TODO: remove this comment after inception problem is addressed
 	//assert.Equal(t, o.activeSetProvider.ActiveSetSize(0), o.activeSetSize(1))
 	l := 19 + k
@@ -160,7 +161,7 @@ func assertActiveSetSize(t *testing.T, o *Oracle, expected uint32, l types.Layer
 func Test_BlsSignVerify(t *testing.T) {
 	pr, pu := BLS381.GenKeyPair(BLS381.DefaultSeed())
 	sr := BLS381.NewBlsSigner(pr)
-	o := New(&mockValueProvider{1, nil}, &mockActiveSetProvider{10}, BLS381.Verify2, sr, 10)
+	o := New(&mockValueProvider{1, nil}, &mockActiveSetProvider{10}, BLS381.Verify2, sr, 10, log.NewDefault(t.Name()))
 	id := types.NodeId{Key: "abc", VRFPublicKey: pu}
 	proof, err := o.Proof(id, 1, 1)
 	assert.Nil(t, err)
@@ -170,7 +171,7 @@ func Test_BlsSignVerify(t *testing.T) {
 }
 
 func TestOracle_Proof(t *testing.T) {
-	o := New(&mockValueProvider{0, myErr}, &mockActiveSetProvider{10}, buildVerifier(true, nil), &signer{}, 10)
+	o := New(&mockValueProvider{0, myErr}, &mockActiveSetProvider{10}, buildVerifier(true, nil), &signer{}, 10, log.NewDefault(t.Name()))
 	sig, err := o.Proof(types.NodeId{}, 2, 3)
 	assert.Nil(t, sig)
 	assert.NotNil(t, err)
@@ -189,7 +190,7 @@ func TestOracle_Proof(t *testing.T) {
 }
 
 func TestOracle_Eligible(t *testing.T) {
-	o := New(&mockValueProvider{0, myErr}, &mockActiveSetProvider{10}, buildVerifier(true, nil), &signer{}, 10)
+	o := New(&mockValueProvider{0, myErr}, &mockActiveSetProvider{10}, buildVerifier(true, nil), &signer{}, 10, log.NewDefault(t.Name()))
 	res, err := o.Eligible(1, 2, 3, types.NodeId{}, []byte{})
 	assert.False(t, res)
 	assert.NotNil(t, err)
