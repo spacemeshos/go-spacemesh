@@ -12,7 +12,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/miner"
-	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/sync"
 	"github.com/spacemeshos/go-spacemesh/timesync"
@@ -39,27 +38,12 @@ var Cmd = &cobra.Command{
 	},
 }
 
-//conf
-//////////////////////////////
-//todo get from configuration
-var npstCfg = nipst.PostParams{
-	Difficulty:           5,
-	NumberOfProvenLabels: 10,
-	SpaceUnit:            1024,
-}
-
-//todo get from configuration
-var conf = sync.Configuration{
-	Concurrency:    4,
-	LayerSize:      int(100),
-	RequestTimeout: 200 * time.Millisecond,
-}
-
 //////////////////////////////
 
 var expectedLayers int
 var bucket string
 var remote bool
+var timeout int
 
 func init() {
 	//path to remote storage
@@ -70,6 +54,9 @@ func init() {
 
 	//fetch from remote
 	Cmd.PersistentFlags().BoolVar(&remote, "remote-data", false, "fetch from remote")
+
+	//request timeout
+	Cmd.PersistentFlags().IntVar(&timeout, "timeout", 500, "request timeout")
 
 	cmdp.AddCommands(Cmd)
 }
@@ -103,6 +90,14 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	lg.Info("storage path: ", bucket)
 	lg.Info("download from remote storage: ", remote)
 	lg.Info("expected layers: ", expectedLayers)
+	lg.Info("request timeout: ", timeout)
+	app.Config.DataDir = "bin/data/"
+
+	conf := sync.Configuration{
+		Concurrency:    4,
+		LayerSize:      int(100),
+		RequestTimeout: time.Duration(timeout) * time.Millisecond,
+	}
 
 	if remote {
 		if err := GetData(app.Config.DataDir, lg); err != nil {
@@ -126,7 +121,7 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 
 	mshdb := mesh.NewPersistentMeshDB(app.Config.DataDir, lg.WithOptions(log.Nop))
 	atxdbStore, _ := database.NewLDBDatabase(app.Config.DataDir+"atx", 0, 0, lg)
-	atxdb := activation.NewActivationDb(atxdbStore, nipstStore, &sync.MockIStore{}, mshdb, 10, &sync.ValidatorMock{}, lg.WithName("atxDB").WithOptions(log.Nop))
+	atxdb := activation.NewActivationDb(atxdbStore, nipstStore, &sync.MockIStore{}, mshdb, uint16(1000), &sync.ValidatorMock{}, lg.WithName("atxDB").WithOptions(log.Nop))
 
 	txpool := miner.NewTypesTransactionIdMemPool()
 	atxpool := miner.NewTypesAtxIdMemPool()
@@ -155,7 +150,6 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 
 	lg.Info("wait %v sec", 10)
 	time.Sleep(10 * time.Second)
-
 	app.sync.Start()
 	for app.sync.ValidatedLayer() < types.LayerID(expectedLayers) {
 		lg.Info("sleep for %v sec", 30)

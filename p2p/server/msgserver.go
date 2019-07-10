@@ -156,15 +156,8 @@ func (p *MessageServer) handleRequestMessage(msg Message, data *service.DataMsgW
 		return
 	}
 
-	payload := foo(msg)
-
-	if payload == nil {
-		p.Error("handler returned nil this request type: %v payload %x", data.MsgType, msg.Data())
-		return
-	}
-
 	p.Debug("handle request type %v", data.MsgType)
-	rmsg := &service.DataMsgWrapper{MsgType: data.MsgType, ReqID: data.ReqID, Payload: payload}
+	rmsg := &service.DataMsgWrapper{MsgType: data.MsgType, ReqID: data.ReqID, Payload: foo(msg)}
 	if sendErr := p.network.SendWrappedMessage(msg.Sender(), p.name, rmsg); sendErr != nil {
 		p.Error("Error sending response message, err:", sendErr)
 	}

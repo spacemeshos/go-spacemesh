@@ -89,7 +89,9 @@ func SyncMockFactory(number int, conf Configuration, name string, dbType string,
 		name := fmt.Sprintf(name+"_%d", i)
 		l := log.New(name, "", "")
 		blockValidator := NewBlockValidator(BlockEligibilityValidatorMock{})
-		sync := NewSync(net, getMesh(dbType, Path+name+"_"+time.Now().String()), &MockTxMemPool{}, &MockAtxMemPool{}, mockTxProcessor{}, blockValidator, poetDb(), conf, tk, 0, l)
+		txpool := miner.NewTypesTransactionIdMemPool()
+		atxpool := miner.NewTypesAtxIdMemPool()
+		sync := NewSync(net, getMesh(dbType, Path+name+"_"+time.Now().String()), txpool, atxpool, mockTxProcessor{}, blockValidator, poetDb(), conf, tk, 0, l)
 		ts.Start()
 		nodes = append(nodes, sync)
 		p2ps = append(p2ps, net)
@@ -588,16 +590,28 @@ func Test_TwoNodes_SyncIntegrationSuite(t *testing.T) {
 
 func (sis *syncIntegrationTwoNodes) TestSyncProtocol_TwoNodes() {
 	t := sis.T()
+	signer := signing.NewEdSigner()
+
 	block1 := types.NewExistingBlock(types.BlockID(111), 1, nil)
+	block1.Signature = signer.Sign(block1.Bytes())
 	block2 := types.NewExistingBlock(types.BlockID(222), 1, nil)
+	block2.Signature = signer.Sign(block2.Bytes())
 	block3 := types.NewExistingBlock(types.BlockID(333), 2, nil)
+	block3.Signature = signer.Sign(block3.Bytes())
 	block4 := types.NewExistingBlock(types.BlockID(444), 2, nil)
+	block4.Signature = signer.Sign(block4.Bytes())
 	block5 := types.NewExistingBlock(types.BlockID(555), 3, nil)
+	block5.Signature = signer.Sign(block5.Bytes())
 	block6 := types.NewExistingBlock(types.BlockID(666), 3, nil)
+	block6.Signature = signer.Sign(block6.Bytes())
 	block7 := types.NewExistingBlock(types.BlockID(777), 4, nil)
+	block7.Signature = signer.Sign(block7.Bytes())
 	block8 := types.NewExistingBlock(types.BlockID(888), 4, nil)
+	block8.Signature = signer.Sign(block8.Bytes())
 	block9 := types.NewExistingBlock(types.BlockID(999), 5, nil)
+	block9.Signature = signer.Sign(block9.Bytes())
 	block10 := types.NewExistingBlock(types.BlockID(101), 5, nil)
+	block10.Signature = signer.Sign(block10.Bytes())
 
 	syncObj0 := sis.syncers[0]
 	defer syncObj0.Close()
@@ -755,9 +769,10 @@ end:
 func tx() *types.AddressableSignedTransaction {
 	gasPrice := rand.Uint64()
 	addr := rand.Int63n(1000000)
-	tx := types.NewAddressableTx(1, address.HexToAddress("1"),
+	tx := types.NewAddressableTx(1, address.HexToAddress(RandStringRunes(8)),
 		address.HexToAddress(strconv.FormatUint(uint64(addr), 10)),
 		10, 100, gasPrice)
+
 	return tx
 }
 

@@ -256,7 +256,7 @@ func (s *Syncer) GetFullBlocks(blockIds []types.BlockID) []*types.Block {
 
 func (s *Syncer) BlockSyntacticValidation(block *types.Block) ([]*types.AddressableSignedTransaction, []*types.ActivationTx, error) {
 	if err := s.confirmBlockValidity(block); err != nil {
-		s.Error("failed derefrencing block data %v %v", block.ID(), err)
+		s.Error("block %v validity failed %v", block.ID(), err)
 		return nil, nil, errors.New(fmt.Sprintf("failed derefrencing block data %v %v", block.ID(), err))
 	}
 
@@ -345,7 +345,7 @@ func (s *Syncer) DataAvailabilty(blk *types.Block) ([]*types.AddressableSignedTr
 		return txs, atxs, atxerr
 	}
 
-	s.Info("fetched all block data %v ", blk.ID(), len(txs), len(atxs))
+	s.Info("fetched all block data %v %v txs %v atxs", blk.ID())
 	return txs, atxs, nil
 }
 
@@ -494,7 +494,8 @@ func (s *Syncer) syncAtxs(atxIds []types.AtxId) ([]*types.ActivationTx, error) {
 					s.Warning("atx %v not valid %v", atx.ShortId(), err)
 					continue
 				}
-				unprocessedAtxs[atx.Id()] = &atx
+				tmp := atx
+				unprocessedAtxs[atx.Id()] = &tmp
 			}
 		}
 	}
