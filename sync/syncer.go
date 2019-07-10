@@ -496,7 +496,8 @@ func (s *Syncer) syncAtxs(atxIds []types.AtxId) ([]*types.ActivationTx, error) {
 					s.Warning("atx %v not valid %v", atx.ShortId(), err)
 					continue
 				}
-				unprocessedAtxs[atx.Id()] = &atx
+				tmp := atx
+				unprocessedAtxs[atx.Id()] = &tmp
 			}
 		}
 	}
