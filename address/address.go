@@ -66,6 +66,12 @@ func (a Address) String() string {
 	return a.Hex()
 }
 
+// String implements fmt.Stringer.
+func (a Address) Short() string {
+	hx := a.Hex()
+	return hx[:common.Min(7, len(hx))]
+}
+
 // Format implements fmt.Formatter, forcing the byte slice to be formatted as is,
 // without going through the stringer interface used for logging.
 func (a Address) Format(s fmt.State, c rune) {

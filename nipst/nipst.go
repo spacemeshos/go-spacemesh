@@ -230,7 +230,7 @@ func (nb *NIPSTBuilder) InitializePost() (*types.PostProof, error) {
 		return nil, fmt.Errorf("failed to initialize PoST: %v", err)
 	}
 
-	nb.log.Info("finished PoST initialization (commitment: %v)", commitment)
+	nb.log.Info("finished PoST initialization (commitment: %v), space: %v", commitment, nb.space)
 
 	return commitment, nil
 }
