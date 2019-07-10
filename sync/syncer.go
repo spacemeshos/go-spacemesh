@@ -169,7 +169,7 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool A
 	}
 
 	s.RegisterBytesMsgHandler(LAYER_HASH, newLayerHashRequestHandler(layers, logger))
-	s.RegisterBytesMsgHandler(MINI_BLOCK, newMiniBlockRequestHandler(layers, logger))
+	s.RegisterBytesMsgHandler(MINI_BLOCK, newBlockRequestHandler(layers, logger))
 	s.RegisterBytesMsgHandler(LAYER_IDS, newLayerBlockIdsRequestHandler(layers, logger))
 	s.RegisterBytesMsgHandler(TX, newTxsRequestHandler(s, logger))
 	s.RegisterBytesMsgHandler(ATX, newATxsRequestHandler(s, logger))
@@ -232,8 +232,9 @@ func (s *Syncer) GetFullBlocks(blockIds []types.BlockID) []*types.Block {
 	blocksArr := make([]*types.Block, 0, len(blockIds))
 	for out := range output {
 		//ignore blocks that we could not fetch
-		if out != nil {
-			block := out.(*types.Block)
+
+		block, ok := out.(*types.Block)
+		if block != nil && ok {
 			txs, atxs, err := s.BlockSyntacticValidation(block)
 			if err != nil {
 				s.Error("failed to validate block %v %v", block.ID(), err)
@@ -389,11 +390,10 @@ func (s *Syncer) fetchLayerHashes(lyr types.LayerID) (map[string]p2p.Peer, error
 	go wrk.Work()
 	m := make(map[string]p2p.Peer)
 	for out := range output {
-		pair := out.(*peerHashPair)
-		if pair == nil { //do nothing on close channel
-			continue
+		pair, ok := out.(*peerHashPair)
+		if pair != nil && ok { //do nothing on close channel
+			m[string(pair.hash)] = pair.peer
 		}
-		m[string(pair.hash)] = pair.peer
 	}
 	if len(m) == 0 {
 		return nil, errors.New("could not get layer hashes from any peer")

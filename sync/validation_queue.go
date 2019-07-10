@@ -59,12 +59,11 @@ func (vq *validationQueue) traverse(s *Syncer, blk *types.BlockHeader) error {
 
 	output := s.fetchWithFactory(NewBlockWorker(s, s.Concurrency, BlockReqFactory(), vq.queue))
 	for out := range output {
-
-		if out == nil {
+		block, ok := out.(*types.Block)
+		if !ok || block == nil {
 			return errors.New(fmt.Sprintf("could not retrieve a block in %v view ", blk.ID()))
 		}
 
-		block := out.(*types.Block)
 		vq.visited[block.ID()] = struct{}{}
 		s.Info("Validating view Block %v", block.ID())
 		if err := s.confirmBlockValidity(block); err != nil {
