@@ -103,15 +103,39 @@ func parseConfig() (*bc.Config, error) {
 }
 
 func EnsureCLIFlags(cmd *cobra.Command, appcfg *bc.Config) {
-
 	assignFields := func(p reflect.Type, elem reflect.Value, name string) {
 		for i := 0; i < p.NumField(); i++ {
 			if p.Field(i).Tag.Get("mapstructure") == name {
-				elem.Field(i).Set(reflect.ValueOf(viper.Get(name)))
+				var val interface{}
+				switch p.Field(i).Type.String() {
+				case "bool":
+					val = viper.GetBool(name)
+				case "string":
+					val = viper.GetString(name)
+				case "int", "int8", "int16":
+					val = viper.GetInt(name)
+				case "int32":
+					val = viper.GetInt32(name)
+				case "int64":
+					val = viper.GetInt64(name)
+				case "uint", "uint8", "uint16":
+					val = viper.GetUint(name)
+				case "uint32":
+					val = viper.GetUint32(name)
+				case "uint64":
+					val = viper.GetUint64(name)
+				case "float64":
+					val = viper.GetFloat64(name)
+				default:
+					val = viper.Get(name)
+				}
+
+				elem.Field(i).Set(reflect.ValueOf(val))
 				return
 			}
 		}
 	}
+
 	// this is ugly but we have to do this because viper can't handle nested structs when deserialize
 	cmd.PersistentFlags().VisitAll(func(f *pflag.Flag) {
 		if f.Changed {
@@ -143,6 +167,10 @@ func EnsureCLIFlags(cmd *cobra.Command, appcfg *bc.Config) {
 
 			ff = reflect.TypeOf(appcfg.HARE)
 			elem = reflect.ValueOf(&appcfg.HARE).Elem()
+			assignFields(ff, elem, name)
+
+			ff = reflect.TypeOf(appcfg.POST)
+			elem = reflect.ValueOf(&appcfg.POST).Elem()
 			assignFields(ff, elem, name)
 		}
 	})
