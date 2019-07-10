@@ -284,105 +284,6 @@ func makePoetProofMessage(t *testing.T) types.PoetProofMessage {
 	}
 }
 
-func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
-	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_LayerIdsRequest_", memoryDB, newMockPoetDb)
-	atx1 := atx("ytdfghdddddf")
-	atx2 := atx("tyhuruhefdfd")
-	atx3 := atx("Zxvasdfcasfd")
-	atx4 := atx("aweasdfasdft")
-	syncObj := syncs[0]
-	defer syncObj.Close()
-	syncObj1 := syncs[1]
-	defer syncObj1.Close()
-	lid := types.LayerID(1)
-	layer := types.NewExistingLayer(lid, make([]*types.Block, 0, 10))
-	block1 := types.NewExistingBlock(types.BlockID(123), lid, nil)
-	syncObj1.AddBlockWithTxs(block1, []*types.AddressableSignedTransaction{tx1}, []*types.ActivationTx{atx1})
-
-	block2 := types.NewExistingBlock(types.BlockID(132), lid, nil)
-	syncObj1.AddBlockWithTxs(block2, []*types.AddressableSignedTransaction{tx2}, []*types.ActivationTx{atx2})
-
-	block3 := types.NewExistingBlock(types.BlockID(153), lid, nil)
-	syncObj1.AddBlockWithTxs(block3, []*types.AddressableSignedTransaction{tx3}, []*types.ActivationTx{atx3})
-
-	block4 := types.NewExistingBlock(types.BlockID(222), lid, nil)
-
-	syncObj1.AddBlockWithTxs(block4, []*types.AddressableSignedTransaction{tx4}, []*types.ActivationTx{atx4})
-
-	timeout := time.NewTimer(2 * time.Second)
-
-	wrk, output := NewPeersWorker(syncObj, []p2p.Peer{nodes[1].PublicKey()}, &sync.Once{}, LayerIdsReqFactory(lid))
-	go wrk.Work()
-
-	select {
-	case intr := <-output:
-		ids := intr.([]types.BlockID)
-		for _, a := range layer.Blocks() {
-			found := false
-			for _, id := range ids {
-				if a.ID() == types.BlockID(id) {
-					found = true
-					break
-				}
-			}
-			if !found {
-				t.Error(errors.New("id list did not match"))
-			}
-		}
-	case <-timeout.C:
-		assert.Fail(t, "no message received on channel")
-	}
-
-}
-
-func TestSyncProtocol_FetchBlocks(t *testing.T) {
-	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_FetchBlocks_", memoryDB, newMockPoetDb)
-	atx1 := atx("trteyjuk")
-
-	atx2 := atx("he6gdsdf")
-	atx3 := atx("yturjasd")
-	syncObj1 := syncs[0]
-	defer syncObj1.Close()
-	syncObj2 := syncs[1]
-	defer syncObj2.Close()
-	pm1 := getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
-	syncObj1.Log.Info("started fetch_blocks")
-	syncObj2.Peers = pm1 //override peers with
-
-	syncObj1.ProcessAtx(atx3)
-	block1 := types.NewExistingBlock(types.BlockID(123), 0, nil)
-	block1.ATXID = atx3.Id()
-	block2 := types.NewExistingBlock(types.BlockID(321), 1, nil)
-	block2.ATXID = atx3.Id()
-	block3 := types.NewExistingBlock(types.BlockID(222), 2, nil)
-	block3.ATXID = atx3.Id()
-
-	syncObj1.AddBlockWithTxs(block1, []*types.AddressableSignedTransaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8}, []*types.ActivationTx{atx1})
-	syncObj1.AddBlockWithTxs(block2, []*types.AddressableSignedTransaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8}, []*types.ActivationTx{atx2})
-	syncObj1.AddBlockWithTxs(block3, []*types.AddressableSignedTransaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8}, []*types.ActivationTx{atx3})
-
-	ch := make(chan types.BlockID, 3)
-	ch <- block1.ID()
-	ch <- block2.ID()
-	ch <- block3.ID()
-
-	output := syncObj2.fetchWithFactory(NewBlockWorker(syncObj2, 1, BlockReqFactory(), blockSliceToChan([]types.BlockID{block1.ID(), block2.ID(), block3.ID()})))
-
-	for out := range output {
-		block := out.(*types.Block)
-		txs, err := syncObj2.syncTxs(block.TxIds)
-		if err != nil {
-			t.Error("could not fetch all txs", err)
-		}
-		atxs, err := syncObj2.syncAtxs(block.AtxIds)
-		if err != nil {
-			t.Error("could not fetch all atxs", err)
-		}
-		syncObj2.Debug("add block to layer %v", block)
-		syncObj2.AddBlockWithTxs(block, txs, atxs)
-	}
-}
-
 func TestSyncProtocol_SyncTwoNodes(t *testing.T) {
 	syncs, nodes := SyncMockFactory(2, conf, "TestSyncer_Start_", memoryDB, newMockPoetDb)
 	pm1 := getPeersMock([]p2p.Peer{nodes[1].PublicKey()})
@@ -806,4 +707,143 @@ func TestSyncer_Txs(t *testing.T) {
 	syncObj2.sigValidator = mockTxProcessor{false}
 	_, err = syncObj2.syncTxs(block3.TxIds)
 	assert.Nil(t, err)
+}
+
+func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
+	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_LayerIdsRequest_", memoryDB, newMockPoetDb)
+	atx1 := atx("ytdfghdddddf")
+	atx2 := atx("tyhuruhefdfd")
+	atx3 := atx("Zxvasdfcasfd")
+	atx4 := atx("aweasdfasdft")
+	syncObj := syncs[0]
+	defer syncObj.Close()
+	syncObj1 := syncs[1]
+	defer syncObj1.Close()
+	lid := types.LayerID(1)
+	layer := types.NewExistingLayer(lid, make([]*types.Block, 0, 10))
+	block1 := types.NewExistingBlock(types.BlockID(123), lid, nil)
+	syncObj1.AddBlockWithTxs(block1, []*types.AddressableSignedTransaction{tx1}, []*types.ActivationTx{atx1})
+
+	block2 := types.NewExistingBlock(types.BlockID(132), lid, nil)
+	syncObj1.AddBlockWithTxs(block2, []*types.AddressableSignedTransaction{tx2}, []*types.ActivationTx{atx2})
+
+	block3 := types.NewExistingBlock(types.BlockID(153), lid, nil)
+	syncObj1.AddBlockWithTxs(block3, []*types.AddressableSignedTransaction{tx3}, []*types.ActivationTx{atx3})
+
+	block4 := types.NewExistingBlock(types.BlockID(222), lid, nil)
+
+	syncObj1.AddBlockWithTxs(block4, []*types.AddressableSignedTransaction{tx4}, []*types.ActivationTx{atx4})
+
+	timeout := time.NewTimer(2 * time.Second)
+
+	wrk, output := NewPeersWorker(syncObj, []p2p.Peer{nodes[1].PublicKey()}, &sync.Once{}, LayerIdsReqFactory(lid))
+	go wrk.Work()
+
+	select {
+	case intr := <-output:
+		ids := intr.([]types.BlockID)
+		for _, a := range layer.Blocks() {
+			found := false
+			for _, id := range ids {
+				if a.ID() == types.BlockID(id) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Error(errors.New("id list did not match"))
+			}
+		}
+	case <-timeout.C:
+		assert.Fail(t, "no message received on channel")
+	}
+
+}
+
+func TestSyncProtocol_FetchBlocks(t *testing.T) {
+	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_FetchBlocks_", memoryDB, newMockPoetDb)
+	atx1 := atx("trteyjuk")
+
+	atx2 := atx("he6gdsdf")
+	atx3 := atx("yturjasd")
+	syncObj1 := syncs[0]
+	defer syncObj1.Close()
+	syncObj2 := syncs[1]
+	defer syncObj2.Close()
+	pm1 := getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
+	syncObj1.Log.Info("started fetch_blocks")
+	syncObj2.Peers = pm1 //override peers with
+
+	syncObj1.ProcessAtx(atx3)
+	block1 := types.NewExistingBlock(types.BlockID(123), 0, nil)
+	block1.ATXID = atx3.Id()
+	block2 := types.NewExistingBlock(types.BlockID(321), 1, nil)
+	block2.ATXID = atx3.Id()
+	block3 := types.NewExistingBlock(types.BlockID(222), 2, nil)
+	block3.ATXID = atx3.Id()
+
+	syncObj1.AddBlockWithTxs(block1, []*types.AddressableSignedTransaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8}, []*types.ActivationTx{atx1})
+	syncObj1.AddBlockWithTxs(block2, []*types.AddressableSignedTransaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8}, []*types.ActivationTx{atx2})
+	syncObj1.AddBlockWithTxs(block3, []*types.AddressableSignedTransaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8}, []*types.ActivationTx{atx3})
+
+	ch := make(chan types.BlockID, 3)
+	ch <- block1.ID()
+	ch <- block2.ID()
+	ch <- block3.ID()
+
+	output := syncObj2.fetchWithFactory(NewBlockWorker(syncObj2, 1, BlockReqFactory(), blockSliceToChan([]types.BlockID{block1.ID(), block2.ID(), block3.ID()})))
+
+	for out := range output {
+		block := out.(*types.Block)
+		txs, err := syncObj2.syncTxs(block.TxIds)
+		if err != nil {
+			t.Error("could not fetch all txs", err)
+		}
+		atxs, err := syncObj2.syncAtxs(block.AtxIds)
+		if err != nil {
+			t.Error("could not fetch all atxs", err)
+		}
+		syncObj2.Debug("add block to layer %v", block)
+		syncObj2.AddBlockWithTxs(block, txs, atxs)
+	}
+}
+
+func TestSyncProtocol_syncAtxsWithAtxsInPoolNotInDb(t *testing.T) {
+	// test to verify the fix for bug #1128
+	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_syncAtxs_", memoryDB, newMockPoetDb)
+	syncObj1 := syncs[0]
+	defer syncObj1.Close()
+	syncObj2 := syncs[1]
+	defer syncObj2.Close()
+	pm1 := getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
+	syncObj2.Peers = pm1 //override peers with
+
+	atx1 := atx("trteyjuk")
+	atx2 := atx("he6gdsdf")
+	atx3 := atx("yturjasd")
+
+	atxPoolMock1 := miner.NewTypesAtxIdMemPool()
+	atxPoolMock1.Put(atx1.Id(), atx1)
+	atxPoolMock1.Put(atx2.Id(), atx2)
+	atxPoolMock1.Put(atx3.Id(), atx3)
+	syncObj1.atxpool = atxPoolMock1
+
+	atxs := make([]types.AtxId, 0, 3)
+	atxs = append(atxs, atx1.Id())
+	atxs = append(atxs, atx2.Id())
+	atxs = append(atxs, atx3.Id())
+
+	atxPoolMock2 := miner.NewTypesAtxIdMemPool()
+	syncObj2.atxpool = atxPoolMock2
+	res, err := syncObj2.syncAtxs(atxs)
+	assert.NoError(t, err)
+
+	cache := make(map[types.AtxId]struct{}, len(atxs))
+	for _, mis := range res {
+		if _, ok := cache[mis.Id()]; ok {
+			assert.True(t, false, "found duplicated atx in syncAtx result")
+		} else {
+			cache[mis.Id()] = struct{}{}
+		}
+	}
 }
