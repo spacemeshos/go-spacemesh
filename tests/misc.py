@@ -20,17 +20,18 @@ class ContainerSpec:
 
     REPLACEABLE_ARGS = ['randcon', 'oracle_server', 'bootnodes', 'genesis_time', 'poet_server']
 
-    def __init__(self, cname, cimage, centry):
+    def __init__(self, cname, specs):
         self.name = cname
-        self.image = cimage
-        self.entrypoint = centry
+        self.image = specs['image']
+        self.entrypoint = [specs['command']]
+        self.resources = None if 'resources' not in specs else specs['resources']
         self.args = {}
 
     def append_args(self, **kwargs):
         self.args.update(kwargs)
 
     def update_deployment(self, dep):
-        if dep['kind']=='Pod':
+        if dep['kind'] == 'Pod':
             containers = dep['spec']['containers']
         else:
             containers = dep['spec']['template']['spec']['containers']
@@ -41,6 +42,8 @@ class ContainerSpec:
                     c['image'] = self.image
                 if self.entrypoint:
                     c['command'] = self.entrypoint
+                if self.resources:
+                    c['resources'] = self.resources
                 c['args'] = self._update_args(c['args'], **(self.args))
                 break
         return dep
