@@ -6,7 +6,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
@@ -81,11 +80,42 @@ func (AtxDbMock) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 	return nil
 }
 
+type MockTxMemPool struct{}
+
+func (MockTxMemPool) Get(id types.TransactionId) (types.AddressableSignedTransaction, error) {
+	return types.AddressableSignedTransaction{}, nil
+}
+func (MockTxMemPool) PopItems(size int) []types.AddressableSignedTransaction {
+	return nil
+}
+func (MockTxMemPool) Put(id types.TransactionId, item *types.AddressableSignedTransaction) {
+
+}
+func (MockTxMemPool) Invalidate(id types.TransactionId) {
+
+}
+
+type MockAtxMemPool struct{}
+
+func (MockAtxMemPool) Get(id types.AtxId) (types.ActivationTx, error) {
+	return types.ActivationTx{}, nil
+}
+
+func (MockAtxMemPool) PopItems(size int) []types.ActivationTx {
+	return nil
+}
+
+func (MockAtxMemPool) Put(id types.AtxId, item *types.ActivationTx) {
+
+}
+
+func (MockAtxMemPool) Invalidate(id types.AtxId) {
+
+}
+
 func getMesh(id string) *Mesh {
 	lg := log.New(id, "", "")
-	txpool := miner.NewTypesTransactionIdMemPool()
-	atxpool := miner.NewTypesAtxIdMemPool()
-	layers := NewMesh(NewMemMeshDB(lg), &AtxDbMock{}, ConfigTst(), &MeshValidatorMock{}, txpool, atxpool, &MockState{}, lg)
+	layers := NewMesh(NewMemMeshDB(lg), &AtxDbMock{}, ConfigTst(), &MeshValidatorMock{}, MockTxMemPool{}, MockAtxMemPool{}, &MockState{}, lg)
 	return layers
 }
 
