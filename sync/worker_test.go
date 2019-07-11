@@ -75,3 +75,42 @@ func TestNewNeighborhoodWorker(t *testing.T) {
 	}
 	wrk.Wait()
 }
+
+func TestNewBlockWorker(t *testing.T) {
+	syncs, nodes := SyncMockFactory(3, conf, "TestNewNeighborhoodWorker", memoryDB, newMockPoetDb)
+	syncObj1 := syncs[0]
+	defer syncObj1.Close()
+	syncObj2 := syncs[1]
+	defer syncObj2.Close()
+	syncObj3 := syncs[2]
+	defer syncObj3.Close()
+
+	block := types.NewExistingBlock(types.BlockID(333), 1, nil)
+	syncObj1.AddBlockWithTxs(block, []*types.AddressableSignedTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
+	syncObj2.AddBlockWithTxs(block, []*types.AddressableSignedTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
+
+	timeout := time.NewTimer(10 * time.Second)
+	pm1 := getPeersMock([]p2p.Peer{nodes[0].PublicKey(), nodes[1].PublicKey()})
+	syncObj3.Peers = pm1
+
+	wrk := NewBlockWorker(syncObj3, 1, BlockReqFactory(), blockSliceToChan([]types.BlockID{block.Id}))
+	go wrk.Work()
+	count := 0
+	for {
+		select {
+		case item, ok := <-wrk.output:
+			if !ok {
+				goto finish
+			}
+
+			assert.True(t, item.(*types.Block).ID() == block.ID())
+			count++
+		case <-timeout.C:
+
+		}
+	}
+finish:
+
+	wrk.Wait()
+	assert.True(t, count == 1)
+}

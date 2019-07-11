@@ -128,20 +128,21 @@ func NewBlockWorker(s *Syncer, count int, reqFactory BlockRequestFactory, ids ch
 				timeout := time.After(s.RequestTimeout)
 				select {
 				case <-timeout:
-					s.Error("request to %v timed out", peer)
+					s.Error("block %v request to %v timed out", id, peer)
 				case v := <-ch:
-					if v != nil {
+					i, ok := v.(*types.Block)
+					if i != nil || ok {
 						retrived = true
-						s.Info("Peer: %v responded ", peer)
-						s.Debug("Peer: %v response was  %v", v)
+						s.Info("Peer: %v responded to %v block request ", peer, i.ID())
 						output <- v
-						continue
+						goto next
 					}
 				}
 			}
 			if !retrived {
 				output <- nil
 			}
+		next:
 		}
 	}
 
