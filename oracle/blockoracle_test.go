@@ -3,10 +3,10 @@ package oracle
 import (
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/amcl/BLS381"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/rand"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/require"
 	"testing"
@@ -16,11 +16,11 @@ var atxID = types.AtxId{Hash: [32]byte{1, 3, 3, 7}}
 var nodeID, vrfSigner = generateNodeIDAndSigner()
 var validateVrf = BLS381.Verify2
 var privateKey, publicKey = BLS381.GenKeyPair(BLS381.DefaultSeed())
+var ed = signing.NewEdSigner()
 
 func generateNodeIDAndSigner() (types.NodeId, Signer) {
-	edPrivate := ed25519.NewKeyFromSeed([]byte(RandStringRunes(32)))
 	return types.NodeId{
-		Key:          string(edPrivate),
+		Key:          ed.PublicKey().String(),
 		VRFPublicKey: publicKey,
 	}, BLS381.NewBlsSigner(privateKey)
 }
@@ -284,6 +284,6 @@ func TestBlockOracleValidatorInvalidProof3(t *testing.T) {
 func newBlockWithEligibility(layerID types.LayerID, nodeID types.NodeId, atxID types.AtxId,
 	proof types.BlockEligibilityProof) *types.Block {
 	block := &types.Block{MiniBlock: types.MiniBlock{BlockHeader: types.BlockHeader{LayerIndex: layerID, ATXID: atxID, EligibilityProof: proof}}}
-	block.Signature = ed25519.Sign2([]byte(nodeID.Key), block.Bytes())
+	block.Signature = ed.Sign(block.Bytes())
 	return block
 }
