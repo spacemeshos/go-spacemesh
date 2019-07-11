@@ -113,7 +113,7 @@ func defaultBaseConfig() BaseConfig {
 		MetricsPort:         1010,
 		OracleServer:        "http://localhost:3030",
 		OracleServerWorldId: 0,
-		GenesisTime:         time.Now().Format(time.RFC3339),
+		GenesisTime:         time.Now().Add(3*time.Second).Format(time.RFC3339),
 		LayerDurationSec:    30,
 		LayersPerEpoch:      3,
 		PoETServer:          "127.0.0.1",
