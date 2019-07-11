@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"runtime"
 )
 
@@ -84,16 +85,15 @@ func (mu *MemoryUpdater) Status() string {
 }
 
 // Status - returns a string description of the current status
-func (mu *MemoryUpdater) Json() string {
-	s := fmt.Sprintf("{count:%v,", mu.recordsCount)
-
+func (mu *MemoryUpdater) LogJson() {
 	for _, name := range names {
 		max := mu.memTracker[name].Max()
 		min := mu.memTracker[name].Min()
 		avg := uint64(mu.memTracker[name].Avg())
 
-		s += fmt.Sprintf(jsonFormat, name, max, min, avg)
+		log.With().Info("json_mem_data",
+			log.String(fmt.Sprintf("%v_max", name), fmt.Sprintf("%v", max)),
+			log.String(fmt.Sprintf("%v_min", name), fmt.Sprintf("%v", min)),
+			log.String(fmt.Sprintf("%v_avg", name), fmt.Sprintf("%v", avg)))
 	}
-
-	return s + "}"
 }

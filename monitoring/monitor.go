@@ -1,14 +1,13 @@
 package monitoring
 
 import (
-	"github.com/spacemeshos/go-spacemesh/log"
 	"time"
 )
 
 type recorder interface {
 	Update()
 	Status() string
-	Json() string
+	LogJson()
 }
 
 type Monitor struct {
@@ -36,7 +35,8 @@ func (m *Monitor) monitor() {
 		case <-m.updateTicker.C:
 			m.recorder.Update()
 		case <-m.printTicker.C:
-			log.Info("%v", m.recorder.Json())
+			//log.Info("%v", m.recorder.Status())
+			m.recorder.LogJson()
 		}
 	}
 }
