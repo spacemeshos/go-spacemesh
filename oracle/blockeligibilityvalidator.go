@@ -1,8 +1,11 @@
 package oracle
 
 import (
+	"errors"
 	"fmt"
+	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/spacemeshos/sha256-simd"
 )
@@ -31,11 +34,11 @@ func NewBlockEligibilityValidator(committeeSize int32, layersPerEpoch uint16, ac
 	}
 }
 
-func (v BlockEligibilityValidator) BlockEligible(block *types.BlockHeader) (bool, error) {
+func (v BlockEligibilityValidator) BlockEligible(block *types.Block) (bool, error) {
 	epochNumber := block.LayerIndex.GetEpoch(v.layersPerEpoch)
 
 	// need to get active set size from previous epoch
-	activeSetSize, err := v.getActiveSetSize(block)
+	activeSetSize, err := v.getActiveSetSize(&block.BlockHeader)
 	if err != nil {
 		return false, err
 	}
@@ -55,15 +58,28 @@ func (v BlockEligibilityValidator) BlockEligible(block *types.BlockHeader) (bool
 	epochBeacon := v.beaconProvider.GetBeacon(epochNumber)
 	message := serializeVRFMessage(epochBeacon, epochNumber, counter)
 	vrfSig := block.EligibilityProof.Sig
-	res, err := v.validateVRF(message, vrfSig, []byte(block.MinerID.VRFPublicKey))
+
+	pubKey, err := ed25519.ExtractPublicKey(block.Bytes(), block.Sig())
+	if err != nil {
+		return false, errors.New(fmt.Sprintf("could not extract block %v public key %v ", block.ID(), err))
+	}
+
+	nodeId, err := v.activationDb.GetIdentity(signing.NewPublicKey(pubKey).String())
+	if err != nil { // means there is no such identity
+		return false, errors.New(fmt.Sprintf("could not extract identity from block %v %v ", block.ID(), err))
+	}
+
+	res, err := v.validateVRF(message, vrfSig, []byte(nodeId.VRFPublicKey))
 	if err != nil {
 		v.log.Error("eligibility VRF validation erred: %v", err)
 		return false, fmt.Errorf("eligibility VRF validation failed: %v", err)
 	}
+
 	if !res {
 		v.log.Error("eligibility VRF validation failed")
 		return false, nil
 	}
+
 	vrfHash := sha256.Sum256(vrfSig)
 	eligibleLayer := calcEligibleLayer(epochNumber, v.layersPerEpoch, vrfHash)
 

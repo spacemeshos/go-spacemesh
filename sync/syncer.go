@@ -41,11 +41,11 @@ type PoetDb interface {
 }
 
 type BlockValidator interface {
-	BlockEligible(block *types.BlockHeader) (bool, error)
+	BlockEligible(block *types.Block) (bool, error)
 }
 
 type EligibilityValidator interface {
-	BlockEligible(block *types.BlockHeader) (bool, error)
+	BlockEligible(block *types.Block) (bool, error)
 }
 
 type TxSigValidator interface {
@@ -298,7 +298,7 @@ func (s *Syncer) confirmBlockValidity(blk *types.Block) error {
 	}
 
 	//block eligibility
-	if eligable, err := s.BlockEligible(&blk.BlockHeader); err != nil || !eligable {
+	if eligable, err := s.BlockEligible(blk); err != nil || !eligable {
 		return errors.New(fmt.Sprintf("block %v eligablety check failed ", blk.ID()))
 	}
 

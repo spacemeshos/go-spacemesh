@@ -47,7 +47,6 @@ func (id NodeId) ShortString() string {
 type BlockHeader struct {
 	Id               BlockID
 	LayerIndex       LayerID
-	MinerID          NodeId // TODO: remove. The block has the ed id in the signature and should be able to fetch the bls id from the miner's ATXs
 	ATXID            AtxId
 	EligibilityProof BlockEligibilityProof
 	Data             []byte
@@ -157,11 +156,10 @@ func NewAddressableTx(nonce uint64, orig, rec address.Address, amount, gasLimit,
 	}
 }
 
-func newBlockHeader(id BlockID, layerID LayerID, minerID NodeId, coin bool, data []byte, ts int64, viewEdges []BlockID, blockVotes []BlockID) *BlockHeader {
+func newBlockHeader(id BlockID, layerID LayerID, coin bool, data []byte, ts int64, viewEdges []BlockID, blockVotes []BlockID) *BlockHeader {
 	b := &BlockHeader{
 		Id:         id,
 		LayerIndex: layerID,
-		MinerID:    minerID,
 		BlockVotes: blockVotes,
 		ViewEdges:  viewEdges,
 		Timestamp:  ts,

@@ -33,7 +33,7 @@ func (*PoetDbMock) GetMembershipMap(poetRoot []byte) (map[common.Hash]bool, erro
 type BlockEligibilityValidatorMock struct {
 }
 
-func (BlockEligibilityValidatorMock) BlockEligible(block *types.BlockHeader) (bool, error) {
+func (BlockEligibilityValidatorMock) BlockEligible(block *types.Block) (bool, error) {
 	return true, nil
 }
 

@@ -12,6 +12,7 @@ import (
 type ActivationDb interface {
 	GetNodeAtxIds(node types.NodeId) ([]types.AtxId, error)
 	GetAtx(id types.AtxId) (*types.ActivationTx, error)
+	GetIdentity(edId string) (types.NodeId, error)
 }
 
 type Signer interface {
