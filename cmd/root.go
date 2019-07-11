@@ -129,11 +129,6 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().IntVar(&config.HARE.ExpectedLeaders, "hare-exp-leaders",
 		config.HARE.ExpectedLeaders, "The expected number of leaders in the hare protocol")
 
-	/**======================== Test Flags ========================== **/
-
-	// number of layers to run consensus on
-	cmd.PersistentFlags().IntVar(&config.TEST.LayersCount, "test-hare-layers-count",
-		config.TEST.LayersCount, "Number of layers in test")
 
 	/**======================== PoST Flags ========================== **/
 
