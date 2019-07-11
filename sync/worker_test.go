@@ -96,11 +96,12 @@ func TestNewBlockWorker(t *testing.T) {
 	wrk := NewBlockWorker(syncObj3, 1, BlockReqFactory(), blockSliceToChan([]types.BlockID{block.Id}))
 	go wrk.Work()
 	count := 0
+loop:
 	for {
 		select {
 		case item, ok := <-wrk.output:
 			if !ok {
-				goto finish
+				break loop
 			}
 
 			assert.True(t, item.(*types.Block).ID() == block.ID())
@@ -109,7 +110,6 @@ func TestNewBlockWorker(t *testing.T) {
 
 		}
 	}
-finish:
 
 	wrk.Wait()
 	assert.True(t, count == 1)
