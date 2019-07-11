@@ -146,5 +146,4 @@ func NewBlockWorker(s *Syncer, count int, reqFactory BlockRequestFactory, ids ch
 	}
 
 	return worker{Log: s.Log, Once: mu, workCount: &acount, output: output, work: workFunc}
-
 }

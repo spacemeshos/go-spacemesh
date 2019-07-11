@@ -51,9 +51,7 @@ def query_bootstrap_es(indx, namespace, bootstrap_po_name):
 def setup_bootstrap_in_namespace(namespace, bs_deployment_info, bootstrap_config, oracle=None, poet=None, dep_time_out=120):
 
     bootstrap_args = {} if 'args' not in bootstrap_config else bootstrap_config['args']
-    cspec = ContainerSpec(cname='bootstrap',
-                          cimage=bootstrap_config['image'],
-                          centry=[bootstrap_config['command']])
+    cspec = ContainerSpec(cname='bootstrap', specs=bootstrap_config)
 
     if oracle:
         bootstrap_args['oracle_server'] = 'http://{0}:{1}'.format(oracle, ORACLE_SERVER_PORT)
@@ -158,9 +156,7 @@ def get_conf(bs_info, client_config, setup_oracle=None, setup_poet=None, args=No
         for arg in args:
             client_args[arg] = args[arg]
 
-    cspec = ContainerSpec(cname='client',
-                          cimage=client_config['image'],
-                          centry=[client_config['command']])
+    cspec = ContainerSpec(cname='client', specs=client_config)
 
     if setup_oracle:
         client_args['oracle_server'] = 'http://{0}:{1}'.format(setup_oracle, ORACLE_SERVER_PORT)

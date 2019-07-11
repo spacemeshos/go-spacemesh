@@ -5,6 +5,7 @@ import (
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/monitoring"
 	"github.com/spacemeshos/go-spacemesh/oracle"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -15,8 +16,6 @@ import (
 	"time"
 )
 
-const defaultSetSize = 200
-
 // Hare cmd
 var Cmd = &cobra.Command{
 	Use:   "hare",
@@ -25,6 +24,13 @@ var Cmd = &cobra.Command{
 		log.JSONLog(true)
 		hareApp := NewHareApp()
 		defer hareApp.Cleanup()
+
+		// monitor app
+		hareApp.updater = monitoring.NewMemoryUpdater()
+		hareApp.monitor = monitoring.NewMonitor(1*time.Second, 5*time.Second, hareApp.updater, make(chan struct{}))
+		hareApp.monitor.Start()
+
+		// start app
 		hareApp.Initialize(cmd)
 		hareApp.Start(cmd, args)
 		<-hareApp.ha.CloseChannel()
@@ -45,16 +51,18 @@ func (mbp *mockBlockProvider) GetUnverifiedLayerBlocks(layerId types.LayerID) ([
 	}
 
 	mbp.isPulled = true
-	return []types.BlockID{1, 2, 3}, nil
+	return buildSet(), nil
 }
 
 type HareApp struct {
 	*cmdp.BaseApp
-	p2p    p2p.Service
-	oracle *oracle.OracleClient
-	sgn    hare.Signer
-	ha     *hare.Hare
-	clock  *timesync.Ticker
+	p2p     p2p.Service
+	oracle  *oracle.OracleClient
+	sgn     hare.Signer
+	ha      *hare.Hare
+	clock   *timesync.Ticker
+	updater *monitoring.MemoryUpdater
+	monitor *monitoring.Monitor
 }
 
 func IsSynced() bool {
@@ -70,11 +78,11 @@ func (app *HareApp) Cleanup() {
 	app.oracle.Unregister(true, app.sgn.PublicKey().String())
 }
 
-func buildSet() *hare.Set {
-	s := hare.NewEmptySet(defaultSetSize)
+func buildSet() []types.BlockID {
+	s := make([]types.BlockID, 200, 200)
 
-	for i := uint64(0); i < defaultSetSize; i++ {
-		s.Add(hare.NewValue(i))
+	for i := uint64(0); i < 200; i++ {
+		s = append(s, types.BlockID(i))
 	}
 
 	return s
