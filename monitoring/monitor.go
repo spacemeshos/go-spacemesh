@@ -8,6 +8,7 @@ import (
 type recorder interface {
 	Update()
 	Status() string
+	Json() string
 }
 
 type Monitor struct {
@@ -35,7 +36,7 @@ func (m *Monitor) monitor() {
 		case <-m.updateTicker.C:
 			m.recorder.Update()
 		case <-m.printTicker.C:
-			log.Info("Status\n%v", m.recorder.Status())
+			log.Info("%v", m.recorder.Json())
 		}
 	}
 }

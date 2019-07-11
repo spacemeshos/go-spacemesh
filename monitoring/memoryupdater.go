@@ -6,6 +6,7 @@ import (
 )
 
 const formatStr = "Name=%20s\t\tMax=%12v\t\tMin=%12v\t\tAvg=%12v\n"
+const jsonFormat = "%v:{max:%v, min:%v, avg:%v},"
 
 var names = []string{"NumGoroutine", "Alloc", "TotalAlloc", "Sys", "Mallocs", "Frees", "LiveObjects", "PauseTotalNs", "NumGC"}
 
@@ -80,4 +81,19 @@ func (mu *MemoryUpdater) Status() string {
 	}
 
 	return s
+}
+
+// Status - returns a string description of the current status
+func (mu *MemoryUpdater) Json() string {
+	s := fmt.Sprintf("{count:%v,", mu.recordsCount)
+
+	for _, name := range names {
+		max := mu.memTracker[name].Max()
+		min := mu.memTracker[name].Min()
+		avg := uint64(mu.memTracker[name].Avg())
+
+		s += fmt.Sprintf(jsonFormat, name, max, min, avg)
+	}
+
+	return s + "}"
 }
