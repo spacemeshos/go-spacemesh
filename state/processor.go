@@ -155,18 +155,23 @@ func (tp *TransactionProcessor) addStateToHistory(layer types.LayerID, newHash c
 
 func (tp *TransactionProcessor) ApplyRewards(layer types.LayerID, minersAccounts []address.Address, underQuota map[address.Address]int, bonusReward, diminishedReward *big.Int) {
 	for _, account := range minersAccounts {
+		reward := bonusReward
 		//if we have 2 blocks in same layer, one of them can receive a diminished reward and the other cannot
 		if val, ok := underQuota[account]; ok {
 			if val > 0 {
-				tp.globalState.AddBalance(account, diminishedReward)
+				reward = diminishedReward
 				underQuota[account] = underQuota[account] - 1
 				if underQuota[account] == 0 {
 					delete(underQuota, account)
 				}
 			}
-		} else {
-			tp.globalState.AddBalance(account, bonusReward)
 		}
+		tp.Log.Info("reward applied for account: %s reward: %s is diminished: %v layer: %v", account.Short(),
+			reward.String(),
+			reward == diminishedReward,
+			layer)
+
+		tp.globalState.AddBalance(account, reward)
 	}
 	newHash, err := tp.globalState.Commit(false)
 
@@ -306,7 +311,8 @@ func (tp *TransactionProcessor) ApplyTransaction(trans *mesh.Transaction) error 
 
 	//subtract gas from account, gas will be sent to miners in layers after
 	tp.globalState.SubBalance(trans.Origin, gas)
-
+	tp.Log.Info("transaction processed, s_account: %s d_account: %s, amount: %v shmekels tx nonce: %v, gas limit: %v gas price: %v",
+		trans.Origin.Short(), trans.Recipient.Short(), trans.Amount, trans.AccountNonce, trans.GasLimit, trans.GasPrice)
 	return nil
 }
 

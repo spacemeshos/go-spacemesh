@@ -73,7 +73,7 @@ func Test_MockOracleClientValidate(t *testing.T) {
 	oc.Register(true, id)
 	require.Equal(t, counter.reqCounter, 1)
 
-	mr.SetResult(Validate, validateQuery(oc.world, 0, 2),
+	mr.SetResult(Validate, validateQuery(oc.world, hashInstanceAndK(0, 0), 2),
 		[]byte(fmt.Sprintf(`{ "IDs": [ "%v" ] }`, id)))
 
 	valid, _ := oc.Eligible(0, 0, 2, types.NodeId{Key: id}, nil)
@@ -157,4 +157,23 @@ func Test_Concurrency(t *testing.T) {
 	}
 
 	assert.Equal(t, mc.reqCounter, 1)
+}
+
+func TestOracle_Eligible2(t *testing.T) {
+	o := NewOracleClient()
+	mr := &mockRequester{results: make(map[string][]byte)}
+	//id := generateID()
+	mr.SetResult(Register, "myid", []byte(`{ "message": "ok" }"`))
+	o.client = mr
+	o.Register(true, "myid")
+	mr.SetResult(Validate, validateQuery(o.world, hashInstanceAndK(1, 2), 0),
+		[]byte(fmt.Sprintf(`{ "IDs": [ "%v" ] }`, "sheker")))
+	res, err := o.Eligible(1, 2, 0, types.NodeId{}, []byte{})
+	assert.Nil(t, err)
+	assert.False(t, res)
+	mr.SetResult(Validate, validateQuery(o.world, hashInstanceAndK(1, 3), 1),
+		[]byte(fmt.Sprintf(`{ "IDs": [ "%v" ] }`, "sheker")))
+	res, err = o.Eligible(1, 3, 1, types.NodeId{}, []byte{})
+	assert.Nil(t, err)
+	assert.False(t, res)
 }

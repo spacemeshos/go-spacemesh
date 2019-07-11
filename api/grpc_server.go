@@ -74,7 +74,7 @@ func (s SpacemeshGrpcService) SubmitTransaction(ctx context.Context, in *pb.Sign
 		log.Error("failed to deserialize tx, error %v", err)
 		return nil, err
 	}
-	log.Info("GRPC SubmitTransaction to address %x (len %v), gaslimit %v, price %v", signedTx.Recipient, len(signedTx.Recipient), signedTx.GasLimit, signedTx.GasPrice)
+	log.Info("GRPC SubmitTransaction to address: %s (len: %v), amount: %v gaslimit: %v, price: %v", signedTx.Recipient.Short(), len(signedTx.Recipient), signedTx.Amount, signedTx.GasLimit, signedTx.GasPrice)
 	_, err = s.Tx.ValidateTransactionSignature(signedTx)
 	if err != nil {
 		log.Error("tx failed to validate signature, error %v", err)
