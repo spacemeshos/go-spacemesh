@@ -377,16 +377,22 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	}
 }
 
-func TestSyncProtocol_SyncTwoNodes(t *testing.T) {
-	syncs, nodes := SyncMockFactory(2, conf, "TestSyncer_Start_", memoryDB, newMockPoetDb)
+func TestSyncProtocol_SyncNodes(t *testing.T) {
+	syncs, nodes := SyncMockFactory(3, conf, "TestSyncer_Start_", memoryDB, newMockPoetDb)
 	pm1 := getPeersMock([]p2p.Peer{nodes[1].PublicKey()})
-	pm2 := getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
+	pm3 := getPeersMock([]p2p.Peer{nodes[1].PublicKey()})
+	pm2 := getPeersMock([]p2p.Peer{nodes[0].PublicKey(), nodes[2].PublicKey()})
 	syncObj1 := syncs[0]
 	syncObj1.Peers = pm1 //override peers with mock
 	defer syncObj1.Close()
-	syncObj2 := syncs[1]
-	syncObj2.Peers = pm2 //override peers with mock
+
+	syncObj2 := syncs[2]
+	syncObj2.Peers = pm3 //override peers with mock
 	defer syncObj2.Close()
+
+	syncObj3 := syncs[1]
+	syncObj3.Peers = pm2 //override peers with mock
+	defer syncObj3.Close()
 
 	signer := signing.NewEdSigner()
 
@@ -416,9 +422,18 @@ func TestSyncProtocol_SyncTwoNodes(t *testing.T) {
 	syncObj1.AddBlockWithTxs(block9, []*types.AddressableSignedTransaction{tx7, tx8}, []*types.ActivationTx{})
 	syncObj1.AddBlockWithTxs(block10, []*types.AddressableSignedTransaction{tx7, tx8}, []*types.ActivationTx{})
 
-	timeout := time.After(12 * time.Second)
-	syncObj2.SetLatestLayer(6)
-	syncObj2.Start()
+	syncObj2.AddBlockWithTxs(block3, []*types.AddressableSignedTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
+	syncObj2.AddBlockWithTxs(block4, []*types.AddressableSignedTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
+	syncObj2.AddBlockWithTxs(block5, []*types.AddressableSignedTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
+	syncObj2.AddBlockWithTxs(block6, []*types.AddressableSignedTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
+	syncObj2.AddBlockWithTxs(block7, []*types.AddressableSignedTransaction{tx4, tx5, tx6}, []*types.ActivationTx{})
+	syncObj2.AddBlockWithTxs(block8, []*types.AddressableSignedTransaction{tx4, tx5, tx6}, []*types.ActivationTx{})
+	syncObj2.AddBlockWithTxs(block9, []*types.AddressableSignedTransaction{tx7, tx8}, []*types.ActivationTx{})
+	syncObj2.AddBlockWithTxs(block10, []*types.AddressableSignedTransaction{tx7, tx8}, []*types.ActivationTx{})
+
+	timeout := time.After(3 * 60 * time.Second)
+	syncObj3.SetLatestLayer(6)
+	syncObj3.Start()
 	// Keep trying until we're timed out or got a result or got an error
 loop:
 	for {
@@ -428,7 +443,7 @@ loop:
 			t.Error("timed out ")
 			return
 		default:
-			if syncObj2.ValidatedLayer() == 5 {
+			if syncObj3.ValidatedLayer() == 5 {
 
 				t.Log("done!")
 				break loop

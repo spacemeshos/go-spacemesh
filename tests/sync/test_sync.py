@@ -73,7 +73,7 @@ def test_sync_gradually_add_nodes(init_session, setup_bootstrap, save_log_on_exi
     time.sleep(20)
     inf4 = new_client_in_namespace(testconfig['namespace'], setup_bootstrap, cspec, 1)
 
-    time.sleep(3*60)
+    time.sleep(5 * 60)
 
     fields = {"M": "sync done"}
     res1 = query_message(current_index, testconfig['namespace'], inf1.pods[0]['name'], fields, False)
