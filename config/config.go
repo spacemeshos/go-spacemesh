@@ -46,6 +46,11 @@ type Config struct {
 	GAS        state.GasConfig       `mapstructure:"gas"`
 	REWARD     mesh.Config           `mapstructure:"reward"`
 	POST       postConfig.Config     `mapstructure:"post"`
+	TEST       testConf              `mapstructure:"test"`
+}
+
+type testConf struct {
+	LayersCount int
 }
 
 // BaseConfig defines the default configuration options for spacemesh app

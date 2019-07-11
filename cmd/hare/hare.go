@@ -42,15 +42,16 @@ func init() {
 }
 
 type mockBlockProvider struct {
-	isPulled bool
+	pullMax   int
+	pullCount int
 }
 
 func (mbp *mockBlockProvider) GetUnverifiedLayerBlocks(layerId types.LayerID) ([]types.BlockID, error) {
-	if mbp.isPulled {
+	if mbp.pullCount >= mbp.pullMax {
 		return []types.BlockID{}, nil
 	}
 
-	mbp.isPulled = true
+	mbp.pullCount++
 	return buildSet(), nil
 }
 
@@ -127,7 +128,10 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
 	app.clock = timesync.NewTicker(timesync.RealClock{}, ld, gTime)
 
-	app.ha = hare.New(app.Config.HARE, app.p2p, app.sgn, types.NodeId{Key: app.sgn.PublicKey().String(), VRFPublicKey: []byte{}}, IsSynced, &mockBlockProvider{}, hareOracle, uint16(app.Config.LayersPerEpoch), &mockIdProvider{}, &mockStateQuerier{}, app.clock.Subscribe(), lg)
+	app.ha = hare.New(app.Config.HARE, app.p2p, app.sgn,
+		types.NodeId{Key: app.sgn.PublicKey().String(), VRFPublicKey: []byte{}}, IsSynced,
+		&mockBlockProvider{app.Config.TEST.LayersCount, 0}, hareOracle,
+		uint16(app.Config.LayersPerEpoch), &mockIdProvider{}, &mockStateQuerier{}, app.clock.Subscribe(), lg)
 	log.Info("Starting hare service")
 	err = app.ha.Start()
 	if err != nil {
