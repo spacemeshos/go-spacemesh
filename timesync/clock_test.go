@@ -68,7 +68,7 @@ func TestTicker_StartClock_LayerID(t *testing.T) {
 
 	ts := NewTicker(MockTimer{}, tick, start)
 	ts.updateLayerID()
-	assert.Equal(t, types.LayerID(7), ts.currentLayer)
+	assert.Equal(t, types.LayerID(8), ts.currentLayer)
 	ts.Close()
 }
 
@@ -109,5 +109,5 @@ func TestTicker_TickPastGenesis(t *testing.T) {
 	sub := ticker.Subscribe()
 	ticker.Start()
 	x := <-sub
-	assert.Equal(t, types.LayerID(3), x)
+	assert.Equal(t, types.LayerID(4), x)
 }
