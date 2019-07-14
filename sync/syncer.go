@@ -9,7 +9,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/p2p/config"
+	p2pconf "github.com/spacemeshos/go-spacemesh/p2p/config"
+
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -61,6 +62,7 @@ func NewBlockValidator(bev EligibilityValidator) BlockValidator {
 }
 
 type Configuration struct {
+	LayersPerEpoch uint16
 	Concurrency    int //number of workers for sync method
 	LayerSize      int
 	RequestTimeout time.Duration
@@ -73,6 +75,7 @@ type Syncer struct {
 	Configuration
 	log.Log
 	*server.MessageServer
+
 	sigValidator      TxSigValidator
 	poetDb            PoetDb
 	txpool            TxMemPool
@@ -155,7 +158,7 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool A
 		Log:            logger,
 		Mesh:           layers,
 		Peers:          p2p.NewPeers(srv, logger.WithName("peers")),
-		MessageServer:  server.NewMsgServer(srv.(server.Service), syncProtocol, conf.RequestTimeout, make(chan service.DirectMessage, config.ConfigValues.BufferSize), logger.WithName("srv")),
+		MessageServer:  server.NewMsgServer(srv.(server.Service), syncProtocol, conf.RequestTimeout, make(chan service.DirectMessage, p2pconf.ConfigValues.BufferSize), logger.WithName("srv")),
 		sigValidator:   sv,
 		SyncLock:       0,
 		txpool:         txpool,
@@ -256,8 +259,11 @@ func (s *Syncer) GetFullBlocks(blockIds []types.BlockID) []*types.Block {
 }
 
 func (s *Syncer) BlockSyntacticValidation(block *types.Block) ([]*types.AddressableSignedTransaction, []*types.ActivationTx, error) {
-	if err := s.confirmBlockValidity(block); err != nil {
-		return nil, nil, errors.New(fmt.Sprintf("Block validety failed  %v %v", block.ID(), err))
+	//todo remove this hack once identity genesis setup is implemented
+	if block.Layer().GetEpoch(s.LayersPerEpoch).IsGenesis() == false {
+		if err := s.confirmBlockValidity(block); err != nil {
+			return nil, nil, errors.New(fmt.Sprintf("Block validety failed  %v %v", block.ID(), err))
+		}
 	}
 
 	//data availability
@@ -298,7 +304,7 @@ func (s *Syncer) confirmBlockValidity(blk *types.Block) error {
 
 	//block eligibility
 	if eligable, err := s.BlockEligible(blk); err != nil || !eligable {
-		return errors.New(fmt.Sprintf("block %v eligablety check failed ", blk.ID()))
+		return errors.New(fmt.Sprintf("block %v eligablety check failed %v", blk.ID(), err))
 	}
 
 	return nil
