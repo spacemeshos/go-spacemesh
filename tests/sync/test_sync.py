@@ -76,7 +76,7 @@ def test_sync_gradually_add_nodes(init_session, setup_bootstrap, save_log_on_exi
 
     start = time.time()
 
-    for i in range(15):
+    for i in range(20):
         res = query_message(current_index, testconfig['namespace'], inf4.pods[0]['name'], fields, False)
         if res:
             print("last pod finished")
@@ -87,14 +87,22 @@ def test_sync_gradually_add_nodes(init_session, setup_bootstrap, save_log_on_exi
         time.sleep(sleep * 60)
 
     end = time.time()
+
+    assert res
+    print("pod " + inf4.pods[0]['name'] + " done")
+
     res1 = query_message(current_index, testconfig['namespace'], inf1.pods[0]['name'], fields, False)
-    res2 = query_message(current_index, testconfig['namespace'], inf2.pods[0]['name'], fields, False)
-    res3 = query_message(current_index, testconfig['namespace'], inf3.pods[0]['name'], fields, False)
-    res4 = query_message(current_index, testconfig['namespace'], inf4.pods[0]['name'], fields, False)
     assert res1
+    print("pod " + inf1.pods[0]['name'] + " done")
+
+    res2 = query_message(current_index, testconfig['namespace'], inf2.pods[0]['name'], fields, False)
     assert res2
+    print("pod " + inf2.pods[0]['name'] + " done")
+
+    res3 = query_message(current_index, testconfig['namespace'], inf3.pods[0]['name'], fields, False)
     assert res3
-    assert res4
+    print("pod " + inf3.pods[0]['name'] + " done")
+
     delete_deployment(inf.deployment_name, testconfig['namespace'])
 
     print("it took " + str(end - start) + "to sync all nodes with " + cspec.args['expected-layers'] + "layers")
