@@ -12,9 +12,14 @@ import (
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/spf13/cobra"
+	"net/http"
 	"os"
+	"runtime"
+	"runtime/pprof"
 	"time"
 )
+
+import _ "net/http/pprof"
 
 // Hare cmd
 var Cmd = &cobra.Command{
@@ -98,6 +103,30 @@ func (msq mockStateQuerier) IsIdentityActive(edId string, layer types.LayerID) (
 
 func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	log.Info("Starting hare main")
+
+	if app.Config.MemProfile != "" {
+		log.Info("Starting mem profiling")
+		f, err := os.Create(app.Config.MemProfile)
+		if err != nil {
+			log.Error("could not create memory profile: ", err)
+		}
+		defer f.Close()
+		runtime.GC() // get up-to-date statistics
+		if err := pprof.WriteHeapProfile(f); err != nil {
+			log.Error("could not write memory profile: ", err)
+		}
+	}
+
+	if app.Config.PprofHttpServer {
+		log.Info("Starting pprof server")
+		go func() {
+			err := http.ListenAndServe(":6060", nil)
+			if err != nil {
+				log.Error("cannot start http server", err)
+			}
+		}()
+	}
+
 	log.Info("Initializing P2P services")
 	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P)
 	app.p2p = swarm
