@@ -23,7 +23,6 @@ BOOT_DEPLOYMENT_FILE = './k8s/bootstrapoet-w-conf.yml'
 CLIENT_DEPLOYMENT_FILE = './k8s/client-w-conf.yml'
 CLIENT_POD_FILE = './k8s/single-client-w-conf.yml'
 CURL_POD_FILE = './k8s/curl.yml'
-ORACLE_DEPLOYMENT_FILE = './k8s/oracle.yml'
 
 BOOTSTRAP_PORT = 7513
 ORACLE_SERVER_PORT = 3030
@@ -127,11 +126,6 @@ def setup_server(deployment_name, deployment_file, namespace):
 
     return ip
 
-
-@pytest.fixture(scope='module')
-def setup_oracle(request):
-    oracle_deployment_name = 'oracle'
-    return setup_server(oracle_deployment_name, ORACLE_DEPLOYMENT_FILE, testconfig['namespace'])
 
 
 @pytest.fixture(scope='module')
