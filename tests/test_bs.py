@@ -241,7 +241,7 @@ def add_multi_clients(deployment_id, container_specs, size=2):
 # The following fixture should not be used if you wish to add many clients during test.
 # Instead you should call add_single_client directly
 @pytest.fixture()
-def add_client(request, setup_oracle, setup_bootstrap, setup_clients):
+def add_client(request, setup_bootstrap, setup_clients):
     global client_name
 
     def _add_single_client():
@@ -250,7 +250,7 @@ def add_client(request, setup_oracle, setup_bootstrap, setup_clients):
             raise Exception("Could not find bootstrap node")
 
         bs_info = setup_bootstrap.pods[0]
-        cspec = get_conf(bs_info, testconfig['client'], setup_oracle)
+        cspec = get_conf(bs_info, testconfig['client'])
         client_name = add_single_client(setup_bootstrap.deployment_id, cspec)
         return client_name
 
