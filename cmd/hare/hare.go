@@ -12,9 +12,14 @@ import (
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/spf13/cobra"
+	"net/http"
 	"os"
+	"runtime"
+	"runtime/pprof"
 	"time"
 )
+
+import _ "net/http/pprof"
 
 // Hare cmd
 var Cmd = &cobra.Command{
@@ -42,15 +47,9 @@ func init() {
 }
 
 type mockBlockProvider struct {
-	isPulled bool
 }
 
 func (mbp *mockBlockProvider) GetUnverifiedLayerBlocks(layerId types.LayerID) ([]types.BlockID, error) {
-	if mbp.isPulled {
-		return []types.BlockID{}, nil
-	}
-
-	mbp.isPulled = true
 	return buildSet(), nil
 }
 
@@ -104,6 +103,30 @@ func (msq mockStateQuerier) IsIdentityActive(edId string, layer types.LayerID) (
 
 func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	log.Info("Starting hare main")
+
+	if app.Config.MemProfile != "" {
+		log.Info("Starting mem profiling")
+		f, err := os.Create(app.Config.MemProfile)
+		if err != nil {
+			log.Error("could not create memory profile: ", err)
+		}
+		defer f.Close()
+		runtime.GC() // get up-to-date statistics
+		if err := pprof.WriteHeapProfile(f); err != nil {
+			log.Error("could not write memory profile: ", err)
+		}
+	}
+
+	if app.Config.PprofHttpServer {
+		log.Info("Starting pprof server")
+		go func() {
+			err := http.ListenAndServe(":6060", nil)
+			if err != nil {
+				log.Error("cannot start http server", err)
+			}
+		}()
+	}
+
 	log.Info("Initializing P2P services")
 	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P)
 	app.p2p = swarm
@@ -126,8 +149,10 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	}
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
 	app.clock = timesync.NewTicker(timesync.RealClock{}, ld, gTime)
-
-	app.ha = hare.New(app.Config.HARE, app.p2p, app.sgn, types.NodeId{Key: app.sgn.PublicKey().String(), VRFPublicKey: []byte{}}, IsSynced, &mockBlockProvider{}, hareOracle, uint16(app.Config.LayersPerEpoch), &mockIdProvider{}, &mockStateQuerier{}, app.clock.Subscribe(), lg)
+	app.ha = hare.New(app.Config.HARE, app.p2p, app.sgn,
+		types.NodeId{Key: app.sgn.PublicKey().String(), VRFPublicKey: []byte{}}, IsSynced,
+		&mockBlockProvider{}, hareOracle,
+		uint16(app.Config.LayersPerEpoch), &mockIdProvider{}, &mockStateQuerier{}, app.clock.Subscribe(), lg)
 	log.Info("Starting hare service")
 	err = app.ha.Start()
 	if err != nil {

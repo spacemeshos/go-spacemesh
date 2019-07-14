@@ -324,3 +324,7 @@ def query_empty_set(indx, ns):
 
 def query_new_iteration(indx, ns):
     return query_message(indx, ns, ns, {'M': 'Starting new iteration'}, False)
+
+
+def query_mem_usage(indx, ns):
+    return query_message(indx, ns, ns, {'M': 'json_mem_data'}, False)
