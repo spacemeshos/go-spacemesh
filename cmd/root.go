@@ -129,7 +129,6 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().IntVar(&config.HARE.ExpectedLeaders, "hare-exp-leaders",
 		config.HARE.ExpectedLeaders, "The expected number of leaders in the hare protocol")
 
-
 	/**======================== PoST Flags ========================== **/
 
 	cmd.PersistentFlags().StringVar(&config.POST.DataDir, "post-datadir",
