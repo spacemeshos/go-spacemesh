@@ -435,13 +435,14 @@ func (s *Syncer) syncTxs(txids []types.TransactionId) ([]*types.AddressableSigne
 		for out := range s.fetchWithFactory(NewNeighborhoodWorker(s, 1, TxReqFactory(missinDB))) {
 			ntxs := out.([]types.SerializableSignedTransaction)
 			for _, tx := range ntxs {
-				ast, err := s.validateAndBuildTx(&tx)
+				tmp := tx
+				ast, err := s.validateAndBuildTx(&tmp)
 				if err != nil {
-					id := types.GetTransactionId(&tx)
+					id := types.GetTransactionId(&tmp)
 					s.Warning("tx %v not valid %v", hex.EncodeToString(id[:]), err)
 					continue
 				}
-				unprocessedTxs[types.GetTransactionId(&tx)] = ast
+				unprocessedTxs[types.GetTransactionId(&tmp)] = ast
 			}
 		}
 	}
@@ -496,7 +497,8 @@ func (s *Syncer) syncAtxs(atxIds []types.AtxId) ([]*types.ActivationTx, error) {
 					s.Warning("atx %v not valid %v", atx.ShortId(), err)
 					continue
 				}
-				unprocessedAtxs[atx.Id()] = &atx
+				tmp := atx
+				unprocessedAtxs[atx.Id()] = &tmp
 			}
 		}
 	}
