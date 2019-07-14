@@ -257,8 +257,7 @@ func (s *Syncer) GetFullBlocks(blockIds []types.BlockID) []*types.Block {
 
 func (s *Syncer) BlockSyntacticValidation(block *types.Block) ([]*types.AddressableSignedTransaction, []*types.ActivationTx, error) {
 	if err := s.confirmBlockValidity(block); err != nil {
-		s.Error("block %v validity failed %v", block.ID(), err)
-		return nil, nil, errors.New(fmt.Sprintf("failed derefrencing block data %v %v", block.ID(), err))
+		return nil, nil, errors.New(fmt.Sprintf("Block validety failed  %v %v", block.ID(), err))
 	}
 
 	//data availability
