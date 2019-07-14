@@ -64,7 +64,7 @@ def test_hare_sanity(init_session, setup_bootstrap_for_hare, setup_clients_for_h
     assert_all(current_index, testconfig['namespace'])
 
 
-EXPECTED_MAX_MEM = 50*1024*1024  # MB
+EXPECTED_MAX_MEM = 300*1024*1024  # MB
 # scale test run for 3 layers
 def test_hare_scale(init_session, setup_bootstrap_for_hare, setup_clients_for_hare, wait_genesis):
     total = int(testconfig['client']['replicas']) + int(testconfig['bootstrap']['replicas'])
@@ -73,7 +73,7 @@ def test_hare_scale(init_session, setup_bootstrap_for_hare, setup_clients_for_ha
     round_duration = int(testconfig['client']['args']['hare-round-duration-sec'])
     wakeup_delta = int(testconfig['client']['args']['hare-wakeup-delta'])
     layer_duration = int(testconfig['client']['args']['layer-duration-sec'])
-    layers_count = int(5)
+    layers_count = int(10)
     print("Number of layers is ", layers_count)
     delay = layer_duration * layers_count + EFK_LOG_PROPAGATION_DELAY + wakeup_delta * (layers_count - 1) + round_duration
     print("Going to sleep for {0}".format(delay))
