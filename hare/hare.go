@@ -35,6 +35,9 @@ type orphanBlockProvider interface {
 	GetUnverifiedLayerBlocks(layerId types.LayerID) ([]types.BlockID, error)
 }
 
+// checks if the collected output is valid
+type outputValidationFunc func(s *Set) bool
+
 // Hare is an orchestrator that shoots consensus processes and collects their termination output
 type Hare struct {
 	Closer
@@ -63,10 +66,15 @@ type Hare struct {
 	outputs    map[types.LayerID][]types.BlockID
 
 	factory consensusFactory
+
+	validate outputValidationFunc
 }
 
 // New returns a new Hare struct.
-func New(conf config.Config, p2p NetworkService, sign Signer, nid types.NodeId, syncState syncStateFunc, obp orphanBlockProvider, rolacle Rolacle, layersPerEpoch uint16, idProvider IdentityProvider, stateQ StateQuerier, beginLayer chan types.LayerID, logger log.Log) *Hare {
+func New(conf config.Config, p2p NetworkService, sign Signer, nid types.NodeId, validate outputValidationFunc,
+	syncState syncStateFunc, obp orphanBlockProvider, rolacle Rolacle,
+	layersPerEpoch uint16, idProvider IdentityProvider, stateQ StateQuerier,
+	beginLayer chan types.LayerID, logger log.Log) *Hare {
 	h := new(Hare)
 
 	h.Closer = NewCloser()
@@ -98,6 +106,8 @@ func New(conf config.Config, p2p NetworkService, sign Signer, nid types.NodeId, 
 		return NewConsensusProcess(conf, instanceId, s, oracle, stateQ, layersPerEpoch, signing, nid, p2p, terminationReport, logger)
 	}
 
+	h.validate = validate
+
 	return h
 }
 
@@ -115,6 +125,11 @@ func (h *Hare) isTooLate(id InstanceId) bool {
 var ErrTooLate = errors.New("consensus process %v finished too late")
 
 func (h *Hare) collectOutput(output TerminationOutput) error {
+	// check validity of the collected output
+	if !h.validate(output.Set().) {
+		h.Panic("Failed to validate the collected output set")
+	}
+
 	id := output.Id()
 
 	if h.isTooLate(id) {
