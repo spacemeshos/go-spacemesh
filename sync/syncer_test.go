@@ -832,3 +832,43 @@ func TestSyncer_Txs(t *testing.T) {
 	_, err = syncObj2.syncTxs(block3.TxIds)
 	assert.Nil(t, err)
 }
+
+func TestFetchLayerBlockIds(t *testing.T) {
+	// check tx validation
+	syncs, nodes := SyncMockFactory(3, conf, "TestSyncer_Start_", memoryDB, newMockPoetDb)
+	pm1 := getPeersMock([]p2p.Peer{nodes[2].PublicKey()})
+	pm2 := getPeersMock([]p2p.Peer{nodes[2].PublicKey()})
+	pm3 := getPeersMock([]p2p.Peer{nodes[0].PublicKey(), nodes[1].PublicKey()})
+
+	block1 := types.NewExistingBlock(types.BlockID(111), 1, nil)
+	block2 := types.NewExistingBlock(types.BlockID(222), 1, nil)
+
+	syncObj1 := syncs[0]
+	syncObj1.Peers = pm1 //override peers with mock
+	defer syncObj1.Close()
+	syncObj2 := syncs[1]
+	syncObj2.Peers = pm2 //override peers with mock
+	defer syncObj2.Close()
+	syncObj3 := syncs[2]
+	syncObj3.Peers = pm3 //override peers with mock
+	defer syncObj3.Close()
+
+	syncObj1.AddBlock(block1)
+	syncObj2.AddBlock(block2)
+
+	mp := map[string]p2p.Peer{}
+	mp["1"] = nodes[0].PublicKey()
+	mp["2"] = nodes[1].PublicKey()
+	ids, _ := syncObj3.fetchLayerBlockIds(mp, 1)
+
+	assert.True(t, len(ids) == 2)
+
+	if ids[0] != 111 && ids[1] != 111 {
+		t.Error("did not get ids from all peers")
+	}
+
+	if ids[0] != 222 && ids[1] != 222 {
+		panic("did not get ids from all peers")
+	}
+
+}

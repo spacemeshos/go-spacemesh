@@ -187,7 +187,7 @@ func (s *Syncer) maxSyncLayer() types.LayerID {
 func (s *Syncer) Synchronise() {
 	mu := sync.Mutex{}
 	for currentSyncLayer := s.ValidatedLayer() + 1; currentSyncLayer < s.maxSyncLayer(); currentSyncLayer++ {
-		s.Info("syncing layer %v to layer %v current consensus layer is %d", s.ValidatedLayer(), currentSyncLayer, s.currentLayer)
+		s.Info("syncing layer %v current consensus layer is %d", currentSyncLayer, s.currentLayer)
 		lyr, err := s.GetLayer(types.LayerID(currentSyncLayer))
 		if err != nil {
 			s.Info("layer %v is not in the database", currentSyncLayer)
@@ -360,20 +360,24 @@ func (s *Syncer) fetchLayerBlockIds(m map[string]p2p.Peer, lyr types.LayerID) ([
 	wrk, output := NewPeersWorker(s, v, &sync.Once{}, LayerIdsReqFactory(lyr))
 	go wrk.Work()
 
-	out := <-output
-	if out == nil {
-		return nil, errors.New("could not get layer ids from any peer")
-	}
-
 	idSet := make(map[types.BlockID]struct{}, s.LayerSize)
 	ids := make([]types.BlockID, 0, s.LayerSize)
 
-	//filter double ids
-	for _, bid := range out.([]types.BlockID) {
-		if _, exists := idSet[bid]; !exists {
-			idSet[bid] = struct{}{}
-			ids = append(ids, bid)
+	//unify results
+	for out := range output {
+		if out != nil {
+			//filter double ids
+			for _, bid := range out.([]types.BlockID) {
+				if _, exists := idSet[bid]; !exists {
+					idSet[bid] = struct{}{}
+					ids = append(ids, bid)
+				}
+			}
 		}
+	}
+
+	if len(ids) == 0 {
+		return nil, errors.New("could not get layer ids from any peer")
 	}
 
 	return ids, nil

@@ -61,7 +61,6 @@ def test_sync_gradually_add_nodes(init_session, setup_bootstrap, save_log_on_exi
 
     inf = new_client_in_namespace(testconfig['namespace'], setup_bootstrap, cspec, 10)
 
-    # cspec.args['remote-data'] = False
     del cspec.args['remote-data']
     cspec.args['data-folder'] = ""
 
@@ -73,9 +72,21 @@ def test_sync_gradually_add_nodes(init_session, setup_bootstrap, save_log_on_exi
     time.sleep(20)
     inf4 = new_client_in_namespace(testconfig['namespace'], setup_bootstrap, cspec, 1)
 
-    time.sleep(5 * 60)
-
     fields = {"M": "sync done"}
+
+    start = time.time()
+
+    for i in range(15):
+        res = query_message(current_index, testconfig['namespace'], inf4.pods[0]['name'], fields, False)
+        if res:
+            print("last pod finished")
+            print("asserting all pods ...")
+            break
+        sleep = 1
+        print("not done yet sleep for " + str(sleep) + " minute")
+        time.sleep(sleep * 60)
+
+    end = time.time()
     res1 = query_message(current_index, testconfig['namespace'], inf1.pods[0]['name'], fields, False)
     res2 = query_message(current_index, testconfig['namespace'], inf2.pods[0]['name'], fields, False)
     res3 = query_message(current_index, testconfig['namespace'], inf3.pods[0]['name'], fields, False)
@@ -84,9 +95,7 @@ def test_sync_gradually_add_nodes(init_session, setup_bootstrap, save_log_on_exi
     assert res2
     assert res3
     assert res4
-
-
-    time.sleep(3*60)
     delete_deployment(inf.deployment_name, testconfig['namespace'])
 
+    print("it took " + str(end - start) + "to sync all nodes with " + cspec.args['expected-layers'] + "layers")
     print("done!!")
