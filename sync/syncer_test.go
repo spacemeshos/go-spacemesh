@@ -56,14 +56,14 @@ func (MockTimer) Now() time.Time {
 }
 
 var (
-	tx1 = tx()
-	tx2 = tx()
-	tx3 = tx()
-	tx4 = tx()
-	tx5 = tx()
-	tx6 = tx()
-	tx7 = tx()
-	tx8 = tx()
+	tx1 = tx(111)
+	tx2 = tx(222)
+	tx3 = tx(333)
+	tx4 = tx(444)
+	tx5 = tx(555)
+	tx6 = tx(666)
+	tx7 = tx(777)
+	tx8 = tx(888)
 )
 
 type poetDbMock struct{}
@@ -661,7 +661,8 @@ end:
 	return
 }
 
-func tx() *types.AddressableSignedTransaction {
+func tx(seed int64) *types.AddressableSignedTransaction {
+	rand.Seed(seed)
 	gasPrice := rand.Uint64()
 	addr := rand.Int63n(1000000)
 	tx := types.NewAddressableTx(1, address.HexToAddress("1"),
@@ -699,14 +700,28 @@ func TestSyncer_Txs(t *testing.T) {
 	defer syncObj2.Close()
 
 	block3 := types.NewExistingBlock(types.BlockID(333), 1, nil)
+	tx1 := tx1
+	tx2 := tx2
+	tx3 := tx3
 
 	syncObj1.AddBlockWithTxs(block3, []*types.AddressableSignedTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
 	syncObj2.sigValidator = mockTxProcessor{true}
 	_, err := syncObj2.syncTxs(block3.TxIds)
 	assert.NotNil(t, err)
 	syncObj2.sigValidator = mockTxProcessor{false}
-	_, err = syncObj2.syncTxs(block3.TxIds)
+	res, err := syncObj2.syncTxs(block3.TxIds)
 	assert.Nil(t, err)
+
+	// assert that the result list has only unique txs
+	cache := make(map[types.TransactionId]struct{}, 3)
+	for _, mis := range res {
+		id := types.GetTransactionId(mis.SerializableSignedTransaction)
+		if _, ok := cache[id]; ok {
+			assert.True(t, false, "found duplicated tx in syncTx result")
+		} else {
+			cache[id] = struct{}{}
+		}
+	}
 }
 
 func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
@@ -838,6 +853,7 @@ func TestSyncProtocol_syncAtxsWithAtxsInPoolNotInDb(t *testing.T) {
 	res, err := syncObj2.syncAtxs(atxs)
 	assert.NoError(t, err)
 
+	// assert that the result list has only unique atxs
 	cache := make(map[types.AtxId]struct{}, len(atxs))
 	for _, mis := range res {
 		if _, ok := cache[mis.Id()]; ok {
