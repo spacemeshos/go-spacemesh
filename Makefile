@@ -189,7 +189,7 @@ endif
 	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
 		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
 		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
-		-it go-spacemesh-python:$(BRANCH) pytest -s -v hare/test_hare.py --tc-file=hare/config.yaml --tc-format=yaml
+		-it go-spacemesh-python:$(BRANCH) pytest -s -v hare/test_hare.py::test_hare_sanity --tc-file=hare/config.yaml --tc-format=yaml
 .PHONY: dockerrun-hare
 
 dockertest-hare: dockerbuild-test dockerrun-hare
@@ -207,8 +207,8 @@ endif
 
 .PHONY: dockerrun-sync
 
-#dockertest-sync: dockerbuild-test dockerrun-sync
-#.PHONY: dockertest-sync
+dockertest-sync: dockerbuild-test dockerrun-sync
+.PHONY: dockertest-sync
 
 # The following is used to run tests one after the other locally
 dockerrun-test: dockerbuild-test dockerrun-p2p dockerrun-mining dockerrun-hare

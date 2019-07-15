@@ -27,5 +27,4 @@ func main() {
 	m.Start()
 	go work(term)
 	<-term
-	fmt.Println(u.Status())
 }

@@ -35,6 +35,9 @@ type orphanBlockProvider interface {
 	GetUnverifiedLayerBlocks(layerId types.LayerID) ([]types.BlockID, error)
 }
 
+// checks if the collected output is valid
+type outputValidationFunc func(blocks []types.BlockID) bool
+
 // Hare is an orchestrator that shoots consensus processes and collects their termination output
 type Hare struct {
 	Closer
@@ -63,10 +66,15 @@ type Hare struct {
 	outputs    map[types.LayerID][]types.BlockID
 
 	factory consensusFactory
+
+	validate outputValidationFunc
 }
 
 // New returns a new Hare struct.
-func New(conf config.Config, p2p NetworkService, sign Signer, nid types.NodeId, syncState syncStateFunc, obp orphanBlockProvider, rolacle Rolacle, layersPerEpoch uint16, idProvider IdentityProvider, stateQ StateQuerier, beginLayer chan types.LayerID, logger log.Log) *Hare {
+func New(conf config.Config, p2p NetworkService, sign Signer, nid types.NodeId, validate outputValidationFunc,
+	syncState syncStateFunc, obp orphanBlockProvider, rolacle Rolacle,
+	layersPerEpoch uint16, idProvider IdentityProvider, stateQ StateQuerier,
+	beginLayer chan types.LayerID, logger log.Log) *Hare {
 	h := new(Hare)
 
 	h.Closer = NewCloser()
@@ -98,6 +106,8 @@ func New(conf config.Config, p2p NetworkService, sign Signer, nid types.NodeId, 
 		return NewConsensusProcess(conf, instanceId, s, oracle, stateQ, layersPerEpoch, signing, nid, p2p, terminationReport, logger)
 	}
 
+	h.validate = validate
+
 	return h
 }
 
@@ -115,12 +125,6 @@ func (h *Hare) isTooLate(id InstanceId) bool {
 var ErrTooLate = errors.New("consensus process %v finished too late")
 
 func (h *Hare) collectOutput(output TerminationOutput) error {
-	id := output.Id()
-
-	if h.isTooLate(id) {
-		return ErrTooLate
-	}
-
 	set := output.Set()
 	blocks := make([]types.BlockID, len(set.values))
 	i := 0
@@ -128,6 +132,18 @@ func (h *Hare) collectOutput(output TerminationOutput) error {
 		blocks[i] = v.BlockID
 		i++
 	}
+
+	// check validity of the collected output
+	if !h.validate(blocks) {
+		h.Panic("Failed to validate the collected output set")
+	}
+
+	id := output.Id()
+
+	if h.isTooLate(id) {
+		return ErrTooLate
+	}
+
 	h.mu.Lock()
 	if len(h.outputs) == h.bufferSize {
 		for k := range h.outputs {
@@ -195,22 +211,6 @@ var (
 	// ErrTooEarly is what we return when the requested layer consensus is still in process
 	ErrTooEarly = errors.New("results for that layer haven't arrived yet")
 )
-
-// GetResults returns the hare output for a given LayerID. returns error if we don't have results yet.
-func (h *Hare) BlockingGetResult(id types.LayerID) ([]types.BlockID, error) {
-	if h.isTooLate(InstanceId(id)) {
-		return nil, ErrTooOld
-	}
-
-	h.mu.RLock()
-	blks, ok := h.outputs[id]
-	if !ok {
-		h.mu.RUnlock()
-		return nil, ErrTooEarly
-	}
-	h.mu.RUnlock()
-	return blks, nil
-}
 
 // GetResults returns the hare output for a given LayerID. returns error if we don't have results yet.
 func (h *Hare) GetResult(id types.LayerID) ([]types.BlockID, error) {

@@ -71,8 +71,7 @@ func (m *MeshDB) Close() {
 
 func (m *MeshDB) AddBlock(bl *types.Block) error {
 	if _, err := m.getMiniBlockBytes(bl.ID()); err == nil {
-		log.Debug("block %v", bl.ID(), " already exists in database")
-		return errors.New("block " + string(bl.ID()) + " already exists in database")
+		return errors.New(fmt.Sprintf("block %v already exists in database", bl.ID()))
 	}
 	if err := m.writeBlock(bl); err != nil {
 		return err

@@ -49,13 +49,13 @@ func newLayerBlockIdsRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg 
 	}
 }
 
-func newMiniBlockRequestHandler(msh *mesh.Mesh, logger log.Log) func(msg []byte) []byte {
+func newBlockRequestHandler(msh *mesh.Mesh, logger log.Log) func(msg []byte) []byte {
 	return func(msg []byte) []byte {
-		logger.Debug("handle block request")
 		blockid := types.BlockID(common.BytesToUint64(msg))
+		logger.Debug("handle block %v request", blockid)
 		blk, err := msh.GetBlock(blockid)
 		if err != nil {
-			logger.Error("Error handling MiniBlock request message, with BlockID: %d and err: %v", blockid, err)
+			logger.Error("Error handling block request message, with BlockID: %d and err: %v", blockid, err)
 			return nil
 		}
 

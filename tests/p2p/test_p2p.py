@@ -10,7 +10,7 @@ from elasticsearch_dsl import Search, Q
 
 from tests.queries import ES, query_message
 from tests.fixtures import init_session, load_config, set_namespace, session_id, set_docker_images
-from tests.test_bs import setup_oracle, setup_bootstrap, create_configmap, setup_clients
+from tests.test_bs import setup_bootstrap, create_configmap, setup_clients
 from tests.test_bs import save_log_on_exit, add_client, api_call, add_curl
 from tests.test_bs import add_single_client, add_multi_clients, get_conf
 
@@ -31,7 +31,7 @@ def query_bootstrap_es(indx, namespace, bootstrap_po_name):
     s = Search(index=indx, using=es).query('bool', filter=[fltr])
     hits = list(s.scan())
     for h in hits:
-        match = re.search(r"Local node identity \w+ (?P<bootstrap_key>\w+)", h.log)
+        match = re.search(r"Local node identity >> (?P<bootstrap_key>\w+)", h.log)
         if match:
             return match.group('bootstrap_key')
     return None

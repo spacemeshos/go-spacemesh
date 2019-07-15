@@ -65,9 +65,9 @@ func TestBlockListener(t *testing.T) {
 	defer bl2.Close()
 	defer bl1.Close()
 	bl2.Start()
-	atx1 := atx("sdfhfsg")
-	atx2 := atx("asdfsdvxbnu")
-	atx3 := atx("rtutyh")
+	atx1 := atx()
+	atx2 := atx()
+	atx3 := atx()
 
 	bl1.ProcessAtx(atx1)
 	bl1.ProcessAtx(atx2)
@@ -108,7 +108,7 @@ func TestBlockListener(t *testing.T) {
 	t.Log("done!")
 }
 
-func TestBlockListener2(t *testing.T) {
+func TestBlockListenerViewTraversal(t *testing.T) {
 
 	t.Log("TestBlockListener2 start")
 	sim := service.NewSimulator()
@@ -123,7 +123,7 @@ func TestBlockListener2(t *testing.T) {
 	defer bl1.Close()
 	bl2.Start()
 
-	atx := atx("rt6uuk")
+	atx := atx()
 
 	byts, _ := types.InterfaceToBytes(atx)
 	var atx1 types.ActivationTx
@@ -133,9 +133,9 @@ func TestBlockListener2(t *testing.T) {
 	bl2.ProcessAtx(&atx1)
 
 	block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
-	block1.Id = 1
 	block1.ATXID = *types.EmptyAtxId
 	block1.Signature = signer.Sign(block1.Bytes())
+	block1.Id = 1
 
 	block2 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
 	block2.ATXID = *types.EmptyAtxId
@@ -208,12 +208,32 @@ func TestBlockListener2(t *testing.T) {
 
 	bl2.GetFullBlocks([]types.BlockID{block10.Id})
 
-	b, err := bl2.GetBlock(block2.Id)
+	b, err := bl1.GetBlock(block1.Id)
 	if err != nil {
 		t.Error(err)
 	}
 
-	b, err = bl2.GetBlock(block10.Id)
+	b, err = bl2.GetBlock(block1.Id)
+	if err != nil {
+		t.Error(err)
+	}
+
+	_, err = bl2.GetBlock(block2.Id)
+	if err != nil {
+		t.Error(err)
+	}
+
+	_, err = bl2.GetBlock(block3.Id)
+	if err != nil {
+		t.Error(err)
+	}
+
+	_, err = bl2.GetBlock(block4.Id)
+	if err != nil {
+		t.Error(err)
+	}
+
+	b, err = bl2.GetBlock(block5.Id)
 	if err != nil {
 		t.Error(err)
 	}
@@ -237,7 +257,7 @@ func TestBlockListener_TraverseViewBadFlow(t *testing.T) {
 	defer bl1.Close()
 	bl2.Start()
 
-	atx := atx("rt6uuk")
+	atx := atx()
 
 	byts, _ := types.InterfaceToBytes(atx)
 	var atx1 types.ActivationTx
@@ -284,7 +304,22 @@ func TestBlockListener_TraverseViewBadFlow(t *testing.T) {
 
 	bl2.GetFullBlocks([]types.BlockID{block5.Id})
 
-	b, err := bl2.GetBlock(block2.Id)
+	b, err := bl2.GetBlock(block1.Id)
+	if err == nil {
+		t.Error(err)
+	}
+
+	_, err = bl2.GetBlock(block2.Id)
+	if err == nil {
+		t.Error(err)
+	}
+
+	_, err = bl2.GetBlock(block3.Id)
+	if err == nil {
+		t.Error(err)
+	}
+
+	_, err = bl2.GetBlock(block4.Id)
 	if err == nil {
 		t.Error(err)
 	}
@@ -312,7 +347,7 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 
 	blk := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data1"))
 	tx := types.NewAddressableTx(0, address.BytesToAddress([]byte{0x01}), address.BytesToAddress([]byte{0x02}), 10, 10, 10)
-	atx := atx("asdfdsf")
+	atx := atx()
 	bl2.AddBlockWithTxs(blk, []*types.AddressableSignedTransaction{tx}, []*types.ActivationTx{atx})
 
 	mblk := types.Block{MiniBlock: types.MiniBlock{BlockHeader: blk.BlockHeader, TxIds: []types.TransactionId{types.GetTransactionId(tx.SerializableSignedTransaction)}, AtxIds: []types.AtxId{atx.Id()}}}
