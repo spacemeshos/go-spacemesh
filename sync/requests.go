@@ -59,7 +59,7 @@ func BlockReqFactory() BlockRequestFactory {
 			var block types.Block
 			err := types.BytesToInterface(msg, &block)
 			if err != nil {
-				s.Error("could not unmarshal Miniblock data", err)
+				s.Error("could not unmarshal block data", err)
 				return
 			}
 			ch <- &block
@@ -100,30 +100,6 @@ func TxReqFactory(ids []types.TransactionId) RequestFactory {
 	}
 }
 
-func PoetReqFactory(poetProofRef []byte) RequestFactory {
-	return func(s *server.MessageServer, peer p2p.Peer) (chan interface{}, error) {
-		ch := make(chan interface{}, 1)
-		resHandler := func(msg []byte) {
-			s.Info("handle PoET proof response")
-			defer close(ch)
-			var proofMessage types.PoetProofMessage
-			err := types.BytesToInterface(msg, &proofMessage)
-			if err != nil {
-				s.Error("could not unmarshal PoET proof message: %v", err)
-				return
-			}
-
-			ch <- proofMessage
-		}
-
-		if err := s.SendRequest(POET, poetProofRef, peer, resHandler); err != nil {
-			return nil, err
-		}
-
-		return ch, nil
-	}
-}
-
 func ATxReqFactory(ids []types.AtxId) RequestFactory {
 	return func(s *server.MessageServer, peer p2p.Peer) (chan interface{}, error) {
 		ch := make(chan interface{}, 1)
@@ -145,6 +121,30 @@ func ATxReqFactory(ids []types.AtxId) RequestFactory {
 			return nil, err
 		}
 		if err := s.SendRequest(ATX, bts, peer, foo); err != nil {
+			return nil, err
+		}
+
+		return ch, nil
+	}
+}
+
+func PoetReqFactory(poetProofRef []byte) RequestFactory {
+	return func(s *server.MessageServer, peer p2p.Peer) (chan interface{}, error) {
+		ch := make(chan interface{}, 1)
+		resHandler := func(msg []byte) {
+			s.Info("handle PoET proof response")
+			defer close(ch)
+			var proofMessage types.PoetProofMessage
+			err := types.BytesToInterface(msg, &proofMessage)
+			if err != nil {
+				s.Error("could not unmarshal PoET proof message: %v", err)
+				return
+			}
+
+			ch <- proofMessage
+		}
+
+		if err := s.SendRequest(POET, poetProofRef, peer, resHandler); err != nil {
 			return nil, err
 		}
 

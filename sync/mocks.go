@@ -9,6 +9,27 @@ import (
 	"math/big"
 )
 
+type PoetDbMock struct{}
+
+func (PoetDbMock) GetProofMessage(proofRef []byte) ([]byte, error) { return proofRef, nil }
+
+func (PoetDbMock) HasProof(proofRef []byte) bool { return true }
+
+func (PoetDbMock) ValidateAndStore(proofMessage *types.PoetProofMessage) error { return nil }
+
+func (*PoetDbMock) SubscribeToProofRef(poetId [types.PoetIdLength]byte, roundId uint64) chan []byte {
+	ch := make(chan []byte)
+	go func() {
+		ch <- []byte("hello there")
+	}()
+	return ch
+}
+
+func (*PoetDbMock) GetMembershipMap(poetRoot []byte) (map[common.Hash]bool, error) {
+	hash := common.BytesToHash([]byte("anton"))
+	return map[common.Hash]bool{hash: true}, nil
+}
+
 type BlockEligibilityValidatorMock struct {
 }
 
