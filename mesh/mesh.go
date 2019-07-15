@@ -500,3 +500,46 @@ func (m *Mesh) GetATXs(atxIds []types.AtxId) (map[types.AtxId]*types.ActivationT
 	}
 	return atxs, mIds
 }
+
+// ActiveSetForLayerView - returns the active set size that matches the view of the contextually valid block in the provided layer
+func (m *Mesh) ActiveSetForLayerView(layer types.LayerID) (int, error) {
+	blocks, err := m.LayerBlockIds(layer)
+	if err != nil {
+		return 0, err
+	}
+
+	mp := make(map[types.BlockID]struct{}, len(blocks))
+	for _, bid := range blocks {
+		mp[bid] = struct{}{}
+	}
+
+	activeSetSize := 0
+	countedAtxs := make(map[types.AtxId]struct{})
+
+	traversalFunc := func(blkh *types.BlockHeader) error {
+		if m.IsContexuallyValid(blkh.Id) {
+			blk, err := m.GetBlock(blkh.Id)
+			if err != nil {
+				return err
+			}
+
+			for _, id := range blk.AtxIds {
+				// make sure we count only once
+				if _, exist := countedAtxs[id]; exist {
+					continue
+				}
+				countedAtxs[id] = struct{}{}
+				activeSetSize++
+			}
+		}
+
+		return nil
+	}
+
+	err = m.ForBlockInView(mp, layer, traversalFunc)
+	if err != nil {
+		return 0, err
+	}
+
+	return activeSetSize, nil
+}
