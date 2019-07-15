@@ -65,9 +65,9 @@ func TestBlockListener(t *testing.T) {
 	defer bl2.Close()
 	defer bl1.Close()
 	bl2.Start()
-	atx1 := atx("sdfhfsg")
-	atx2 := atx("asdfsdvxbnu")
-	atx3 := atx("rtutyh")
+	atx1 := atx()
+	atx2 := atx()
+	atx3 := atx()
 
 	bl1.ProcessAtx(atx1)
 	bl1.ProcessAtx(atx2)
@@ -123,7 +123,7 @@ func TestBlockListenerViewTraversal(t *testing.T) {
 	defer bl1.Close()
 	bl2.Start()
 
-	atx := atx("rt6uuk")
+	atx := atx()
 
 	byts, _ := types.InterfaceToBytes(atx)
 	var atx1 types.ActivationTx
@@ -257,7 +257,7 @@ func TestBlockListener_TraverseViewBadFlow(t *testing.T) {
 	defer bl1.Close()
 	bl2.Start()
 
-	atx := atx("rt6uuk")
+	atx := atx()
 
 	byts, _ := types.InterfaceToBytes(atx)
 	var atx1 types.ActivationTx
@@ -347,7 +347,7 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 
 	blk := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data1"))
 	tx := types.NewAddressableTx(0, address.BytesToAddress([]byte{0x01}), address.BytesToAddress([]byte{0x02}), 10, 10, 10)
-	atx := atx("asdfdsf")
+	atx := atx()
 	bl2.AddBlockWithTxs(blk, []*types.AddressableSignedTransaction{tx}, []*types.ActivationTx{atx})
 
 	mblk := types.Block{MiniBlock: types.MiniBlock{BlockHeader: blk.BlockHeader, TxIds: []types.TransactionId{types.GetTransactionId(tx.SerializableSignedTransaction)}, AtxIds: []types.AtxId{atx.Id()}}}

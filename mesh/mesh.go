@@ -199,6 +199,7 @@ func (m *Mesh) ValidateLayer(lyr *types.Layer) {
 	if newPbase > oldPbase {
 		m.PushTransactions(oldPbase, newPbase)
 	}
+	m.Info("done validating layer %v", lyr.Index())
 }
 
 func SortBlocks(blocks []*types.Block) []*types.Block {

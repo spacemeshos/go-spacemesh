@@ -169,7 +169,7 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool A
 	}
 
 	s.RegisterBytesMsgHandler(LAYER_HASH, newLayerHashRequestHandler(layers, logger))
-	s.RegisterBytesMsgHandler(MINI_BLOCK, newMiniBlockRequestHandler(layers, logger))
+	s.RegisterBytesMsgHandler(MINI_BLOCK, newBlockRequestHandler(layers, logger))
 	s.RegisterBytesMsgHandler(LAYER_IDS, newLayerBlockIdsRequestHandler(layers, logger))
 	s.RegisterBytesMsgHandler(TX, newTxsRequestHandler(s, logger))
 	s.RegisterBytesMsgHandler(ATX, newATxsRequestHandler(s, logger))
@@ -187,7 +187,7 @@ func (s *Syncer) maxSyncLayer() types.LayerID {
 func (s *Syncer) Synchronise() {
 	mu := sync.Mutex{}
 	for currentSyncLayer := s.ValidatedLayer() + 1; currentSyncLayer < s.maxSyncLayer(); currentSyncLayer++ {
-		s.Info("syncing layer %v to layer %v current consensus layer is %d", s.ValidatedLayer(), currentSyncLayer, s.currentLayer)
+		s.Info("syncing layer %v current consensus layer is %d", currentSyncLayer, s.currentLayer)
 		lyr, err := s.GetLayer(types.LayerID(currentSyncLayer))
 		if err != nil {
 			s.Info("layer %v is not in the database", currentSyncLayer)
@@ -232,8 +232,9 @@ func (s *Syncer) GetFullBlocks(blockIds []types.BlockID) []*types.Block {
 	blocksArr := make([]*types.Block, 0, len(blockIds))
 	for out := range output {
 		//ignore blocks that we could not fetch
-		if out != nil {
-			block := out.(*types.Block)
+
+		block, ok := out.(*types.Block)
+		if block != nil && ok {
 			txs, atxs, err := s.BlockSyntacticValidation(block)
 			if err != nil {
 				s.Error("failed to validate block %v %v", block.ID(), err)
@@ -256,7 +257,7 @@ func (s *Syncer) GetFullBlocks(blockIds []types.BlockID) []*types.Block {
 
 func (s *Syncer) BlockSyntacticValidation(block *types.Block) ([]*types.AddressableSignedTransaction, []*types.ActivationTx, error) {
 	if err := s.confirmBlockValidity(block); err != nil {
-		s.Error("failed derefrencing block data %v %v", block.ID(), err)
+		s.Error("block %v validity failed %v", block.ID(), err)
 		return nil, nil, errors.New(fmt.Sprintf("failed derefrencing block data %v %v", block.ID(), err))
 	}
 
@@ -345,9 +346,7 @@ func (s *Syncer) DataAvailabilty(blk *types.Block) ([]*types.AddressableSignedTr
 		return txs, atxs, atxerr
 	}
 
-	s.Info("fetched all txs for block %v", blk.ID())
-	s.Info("fetched all atxs for block %v", blk.ID())
-
+	s.Info("fetched all block data %v %v txs %v atxs", blk.ID())
 	return txs, atxs, nil
 }
 
@@ -361,20 +360,24 @@ func (s *Syncer) fetchLayerBlockIds(m map[string]p2p.Peer, lyr types.LayerID) ([
 	wrk, output := NewPeersWorker(s, v, &sync.Once{}, LayerIdsReqFactory(lyr))
 	go wrk.Work()
 
-	out := <-output
-	if out == nil {
-		return nil, errors.New("could not get layer ids from any peer")
-	}
-
 	idSet := make(map[types.BlockID]struct{}, s.LayerSize)
 	ids := make([]types.BlockID, 0, s.LayerSize)
 
-	//filter double ids
-	for _, bid := range out.([]types.BlockID) {
-		if _, exists := idSet[bid]; !exists {
-			idSet[bid] = struct{}{}
-			ids = append(ids, bid)
+	//unify results
+	for out := range output {
+		if out != nil {
+			//filter double ids
+			for _, bid := range out.([]types.BlockID) {
+				if _, exists := idSet[bid]; !exists {
+					idSet[bid] = struct{}{}
+					ids = append(ids, bid)
+				}
+			}
 		}
+	}
+
+	if len(ids) == 0 {
+		return nil, errors.New("could not get layer ids from any peer")
 	}
 
 	return ids, nil
@@ -391,11 +394,10 @@ func (s *Syncer) fetchLayerHashes(lyr types.LayerID) (map[string]p2p.Peer, error
 	go wrk.Work()
 	m := make(map[string]p2p.Peer)
 	for out := range output {
-		pair := out.(*peerHashPair)
-		if pair == nil { //do nothing on close channel
-			continue
+		pair, ok := out.(*peerHashPair)
+		if pair != nil && ok { //do nothing on close channel
+			m[string(pair.hash)] = pair.peer
 		}
-		m[string(pair.hash)] = pair.peer
 	}
 	if len(m) == 0 {
 		return nil, errors.New("could not get layer hashes from any peer")
@@ -420,7 +422,7 @@ func (s *Syncer) syncTxs(txids []types.TransactionId) ([]*types.AddressableSigne
 	missing := make([]types.TransactionId, 0)
 	for _, t := range txids {
 		if tx, err := s.txpool.Get(t); err == nil {
-			s.Info("found tx, %v in tx pool", hex.EncodeToString(t[:]))
+			s.Debug("found tx, %v in tx pool", hex.EncodeToString(t[:]))
 			unprocessedTxs[t] = &tx
 		} else {
 			missing = append(missing, t)
@@ -475,7 +477,7 @@ func (s *Syncer) syncAtxs(atxIds []types.AtxId) ([]*types.ActivationTx, error) {
 				missingInPool = append(missingInPool, id)
 				continue
 			}
-			s.Info("found atx, %v in atx pool", id.ShortId())
+			s.Debug("found atx, %v in atx pool", id.ShortId())
 			unprocessedAtxs[id] = &atx
 		} else {
 			s.Warning("atx %v not in atx pool", id.ShortId())
