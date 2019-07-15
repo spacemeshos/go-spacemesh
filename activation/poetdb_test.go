@@ -92,7 +92,7 @@ func TestPoetDbNonExistingKeys(t *testing.T) {
 	_, err := poetDb.getProofRef(key)
 	r.EqualError(err, fmt.Sprintf("could not fetch poet proof for key %x: leveldb: not found", key[:5]))
 
-	ref := []byte("abc")
+	ref := []byte("abcde")
 	_, err = poetDb.GetMembershipMap(ref)
 	r.EqualError(err, fmt.Sprintf("could not fetch poet proof for ref %x: leveldb: not found", ref[:5]))
 }

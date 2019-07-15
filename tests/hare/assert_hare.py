@@ -2,7 +2,7 @@ from pytest_testconfig import config as testconfig
 
 from tests.delayed_assert.delayed_assert import expect, assert_expectations
 from tests.queries import query_hare_output_set, query_round_1, query_round_2, query_round_3, query_pre_round, \
-    query_no_svp, query_empty_set, query_new_iteration
+    query_no_svp, query_empty_set, query_new_iteration, query_mem_usage
 
 
 class Set:
@@ -121,3 +121,17 @@ def validate_hare(indx, ns):
     expect(0 == len(lst), 'query no new iteration')
 
     assert_expectations()
+
+
+def get_max_mem_usage(i, n):
+    x = query_mem_usage(i, n)
+    max_mem = 0
+    for y in x:
+        try:
+            z = int(y.Alloc_max)
+            if z > max_mem:
+                max_mem = z
+        except:
+            continue
+
+    return max_mem
