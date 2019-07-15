@@ -38,7 +38,6 @@ COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/go-
 COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/go-hare /bin/go-hare
 COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/go-p2p /bin/go-p2p
 COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/go-sync /bin/go-sync
-COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/tests/sync/data /bin/data
 
 
 ENTRYPOINT ["/bin/go-spacemesh"]
