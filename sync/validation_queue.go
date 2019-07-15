@@ -74,13 +74,18 @@ func (vq *validationQueue) traverse(s *Syncer, blk *types.BlockHeader) error {
 		vq.callbacks[block.ID()] = vq.finishBlockCallback(s, block)
 
 		if vq.addDependencies(&block.BlockHeader, s.GetBlock) == false {
+			if err := vq.addToDatabase(block.ID()); err != nil {
+				return err
+			}
+
 			s.Info("dependencies done for %v", block.ID())
 			doneBlocks := vq.updateDependencies(block.ID())
 			for _, bid := range doneBlocks {
-				if !vq.addToDatabase(bid) {
-					return errors.New(fmt.Sprintf("could not finalize block %v validation  ", blk.ID()))
+				if err := vq.addToDatabase(bid); err != nil {
+					return errors.New(fmt.Sprintf("could not finalize block %v validation %v", blk.ID(), err))
 				}
 			}
+
 			vq.Info(" %v blocks in dependency map", len(vq.depMap))
 		}
 
@@ -161,14 +166,13 @@ func (vq *validationQueue) addDependencies(blk *types.BlockHeader, checkDatabase
 	return len(dependencys) > 0
 }
 
-func (vq *validationQueue) addToDatabase(id types.BlockID) bool {
+func (vq *validationQueue) addToDatabase(id types.BlockID) error {
 	if callback, ok := vq.callbacks[id]; ok {
 		if err := callback(); err != nil {
-			vq.Error("block %v failed validation %v", id, err)
-			return false
+			return err
 		}
 	}
-	return true
+	return nil
 }
 
 func (vq *validationQueue) getMissingBlocks() []types.BlockID {
