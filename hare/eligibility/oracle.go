@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
+	"github.com/hashicorp/golang-lru"
 	"github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -13,14 +14,15 @@ import (
 )
 
 const k = types.LayerID(25) // the confidence interval // TODO: read from config
+const cacheSize = 5         // we don't expect to handle more than three layers concurrently
 
 type valueProvider interface {
 	Value(layer types.LayerID) (uint32, error)
 }
 
-type activeSetProvider interface {
-	ActiveSetSize(epochId types.EpochId) (uint32, error)
-}
+// a func to retrieve the active set size for the provided layer
+// this func is assumed to be cpu intensive and hence we cache its results
+type activeSetFunc func(layer types.LayerID) (uint32, error)
 
 type Signer interface {
 	Sign(msg []byte) ([]byte, error)
@@ -30,11 +32,12 @@ type VerifierFunc = func(msg, sig, pub []byte) (bool, error)
 
 // Oracle is the hare eligibility oracle
 type Oracle struct {
-	beacon            valueProvider
-	activeSetProvider activeSetProvider
-	vrfSigner         Signer
-	vrfVerifier       VerifierFunc
-	layersPerEpoch    uint16
+	beacon         valueProvider
+	getActiveSet   activeSetFunc
+	vrfSigner      Signer
+	vrfVerifier    VerifierFunc
+	layersPerEpoch uint16
+	cache          *lru.Cache
 	log.Log
 }
 
@@ -49,14 +52,20 @@ func safeLayer(layer types.LayerID) types.LayerID {
 }
 
 // New returns a new eligibility oracle instance
-func New(beacon valueProvider, asProvider activeSetProvider, vrfVerifier VerifierFunc, vrfSigner Signer, layersPerEpoch uint16, log log.Log) *Oracle {
+func New(beacon valueProvider, activeSetFunc activeSetFunc, vrfVerifier VerifierFunc, vrfSigner Signer, layersPerEpoch uint16, log log.Log) *Oracle {
+	c, e := lru.New(cacheSize)
+	if e != nil {
+		log.Panic("Could not create lru cache err=%v", e)
+	}
+
 	return &Oracle{
-		beacon:            beacon,
-		activeSetProvider: asProvider,
-		vrfVerifier:       vrfVerifier,
-		vrfSigner:         vrfSigner,
-		layersPerEpoch:    layersPerEpoch,
-		Log:               log,
+		beacon:         beacon,
+		getActiveSet:   activeSetFunc,
+		vrfVerifier:    vrfVerifier,
+		vrfSigner:      vrfSigner,
+		layersPerEpoch: layersPerEpoch,
+		cache:          c,
+		Log:            log,
 	}
 }
 
@@ -87,12 +96,30 @@ func (o *Oracle) buildVRFMessage(id types.NodeId, layer types.LayerID, round int
 }
 
 func (o *Oracle) activeSetSize(layer types.LayerID) (uint32, error) {
-	ep := safeLayer(layer).GetEpoch(o.layersPerEpoch)
+	sl := safeLayer(layer) // calc safe layer
+
+	// check genesis
+	ep := sl.GetEpoch(o.layersPerEpoch)
 	if ep == 0 {
 		return 5, nil // TODO: agree on the inception problem
-		// return o.activeSetProvider.ActiveSetSize(0)
 	}
-	return o.activeSetProvider.ActiveSetSize(ep - 1)
+
+	// check cache
+	val, ok := o.cache.Get(layer)
+	if ok {
+		return val.(uint32), nil
+	}
+
+	setSize, err := o.getActiveSet(sl)
+	if err != nil {
+		o.Error("Could not retrieve active set size err=%v", err)
+		return 0, err
+	}
+
+	// update
+	o.cache.Add(sl, setSize)
+
+	return setSize, nil
 }
 
 // Eligible checks if Id is eligible on the given Layer where msg is the VRF message, sig is the role proof and assuming commSize as the expected committee size
