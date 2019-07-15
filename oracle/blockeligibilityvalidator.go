@@ -35,6 +35,28 @@ func NewBlockEligibilityValidator(committeeSize int32, layersPerEpoch uint16, ac
 }
 
 func (v BlockEligibilityValidator) BlockEligible(block *types.Block) (bool, error) {
+
+	//check block signature and is identity active
+	pubKey, err := ed25519.ExtractPublicKey(block.Bytes(), block.Sig())
+	if err != nil {
+		return false, err
+	}
+
+	pubString := signing.NewPublicKey(pubKey).String()
+
+	active, atxid, err := v.activationDb.IsIdentityActive(pubString, block.Layer())
+	if err != nil {
+		return false, errors.New(fmt.Sprintf("error while checking IsIdentityActive for %v %v ", block.ID(), err))
+	}
+
+	if !active {
+		return false, errors.New(fmt.Sprintf("block %v identity activation check failed ", block.ID()))
+	}
+
+	if atxid != block.ATXID {
+		return false, errors.New(fmt.Sprintf("wrong associated atx got %v expected %v ", block.ATXID.ShortId(), atxid))
+	}
+
 	epochNumber := block.LayerIndex.GetEpoch(v.layersPerEpoch)
 
 	// need to get active set size from previous epoch
@@ -59,12 +81,7 @@ func (v BlockEligibilityValidator) BlockEligible(block *types.Block) (bool, erro
 	message := serializeVRFMessage(epochBeacon, epochNumber, counter)
 	vrfSig := block.EligibilityProof.Sig
 
-	pubKey, err := ed25519.ExtractPublicKey(block.Bytes(), block.Sig())
-	if err != nil {
-		return false, errors.New(fmt.Sprintf("could not extract block %v public key %v ", block.ID(), err))
-	}
-
-	nodeId, err := v.activationDb.GetIdentity(signing.NewPublicKey(pubKey).String())
+	nodeId, err := v.activationDb.GetIdentity(pubString)
 	if err != nil { // means there is no such identity
 		return false, errors.New(fmt.Sprintf("could not extract identity from block %v %v ", block.ID(), err))
 	}
@@ -80,8 +97,7 @@ func (v BlockEligibilityValidator) BlockEligible(block *types.Block) (bool, erro
 		return false, nil
 	}
 
-	vrfHash := sha256.Sum256(vrfSig)
-	eligibleLayer := calcEligibleLayer(epochNumber, v.layersPerEpoch, vrfHash)
+	eligibleLayer := calcEligibleLayer(epochNumber, v.layersPerEpoch, sha256.Sum256(vrfSig))
 
 	return block.LayerIndex == eligibleLayer, nil
 }

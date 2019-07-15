@@ -4,7 +4,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -13,7 +12,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"sync"
@@ -261,8 +259,9 @@ func (s *Syncer) GetFullBlocks(blockIds []types.BlockID) []*types.Block {
 func (s *Syncer) BlockSyntacticValidation(block *types.Block) ([]*types.AddressableSignedTransaction, []*types.ActivationTx, error) {
 	//todo remove this hack once identity genesis setup is implemented
 	if block.Layer().GetEpoch(s.LayersPerEpoch).IsGenesis() == false {
-		if err := s.confirmBlockValidity(block); err != nil {
-			return nil, nil, errors.New(fmt.Sprintf("Block validety failed  %v %v", block.ID(), err))
+		//block eligibility
+		if eligable, err := s.BlockEligible(block); err != nil || !eligable {
+			return nil, nil, errors.New(fmt.Sprintf("block %v eligablety check failed %v", block.ID(), err))
 		}
 	}
 
@@ -278,36 +277,6 @@ func (s *Syncer) BlockSyntacticValidation(block *types.Block) ([]*types.Addressa
 	}
 
 	return txs, atxs, nil
-}
-
-func (s *Syncer) confirmBlockValidity(blk *types.Block) error {
-	s.Info("validate block %v ", blk.ID())
-
-	//check block signature and is identity active
-	pubKey, err := ed25519.ExtractPublicKey(blk.Bytes(), blk.Sig())
-	if err != nil {
-		return errors.New(fmt.Sprintf("could not extract block %v public key %v ", blk.ID(), err))
-	}
-
-	active, atxid, err := s.IsIdentityActive(signing.NewPublicKey(pubKey).String(), blk.Layer())
-	if err != nil {
-		return errors.New(fmt.Sprintf("error while checking IsIdentityActive for %v %v ", blk.ID(), err))
-	}
-
-	if !active {
-		return errors.New(fmt.Sprintf("block %v identity activation check failed ", blk.ID()))
-	}
-
-	if atxid != blk.ATXID {
-		return errors.New(fmt.Sprintf("wrong associated atx got %v expected %v ", blk.ATXID.ShortId(), atxid.ShortId()))
-	}
-
-	//block eligibility
-	if eligable, err := s.BlockEligible(blk); err != nil || !eligable {
-		return errors.New(fmt.Sprintf("block %v eligablety check failed %v", blk.ID(), err))
-	}
-
-	return nil
 }
 
 func (s *Syncer) ValidateView(blk *types.Block) bool {

@@ -66,8 +66,8 @@ func (vq *validationQueue) traverse(s *Syncer, blk *types.BlockHeader) error {
 
 		vq.visited[block.ID()] = struct{}{}
 		s.Info("Validating view Block %v", block.ID())
-		if err := s.confirmBlockValidity(block); err != nil {
-			return err
+		if eligable, err := s.BlockEligible(block); err != nil || !eligable {
+			return errors.New(fmt.Sprintf("Block %v eligiblety check failed %v", blk.ID(), err))
 		}
 
 		vq.callbacks[block.ID()] = vq.finishBlockCallback(s, block)
