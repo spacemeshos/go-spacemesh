@@ -26,7 +26,7 @@ bootstrap:
     hare-max-adversaries: '9'
     hare-round-duration-sec: '10'
     hare-wakeup-delta: '5'
-    layer-duration-sec: '360'
+    layer-duration-sec: '80'
 
 client:
   image: 'spacemeshos/go-spacemesh:develop'
@@ -45,7 +45,7 @@ client:
     hare-max-adversaries: '9'
     hare-round-duration-sec: '10'
     hare-wakeup-delta: '5'
-    layer-duration-sec: '360'
+    layer-duration-sec: '80'
 
 elastic:
   host: elastic.spacemesh.io
