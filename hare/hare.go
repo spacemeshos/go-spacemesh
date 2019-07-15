@@ -36,7 +36,7 @@ type orphanBlockProvider interface {
 }
 
 // checks if the collected output is valid
-type outputValidationFunc func(s *Set) bool
+type outputValidationFunc func(blocks []types.BlockID) bool
 
 // Hare is an orchestrator that shoots consensus processes and collects their termination output
 type Hare struct {
@@ -125,8 +125,16 @@ func (h *Hare) isTooLate(id InstanceId) bool {
 var ErrTooLate = errors.New("consensus process %v finished too late")
 
 func (h *Hare) collectOutput(output TerminationOutput) error {
+	set := output.Set()
+	blocks := make([]types.BlockID, len(set.values))
+	i := 0
+	for _, v := range set.values {
+		blocks[i] = v.BlockID
+		i++
+	}
+
 	// check validity of the collected output
-	if !h.validate(output.Set().) {
+	if !h.validate(blocks) {
 		h.Panic("Failed to validate the collected output set")
 	}
 
@@ -136,13 +144,6 @@ func (h *Hare) collectOutput(output TerminationOutput) error {
 		return ErrTooLate
 	}
 
-	set := output.Set()
-	blocks := make([]types.BlockID, len(set.values))
-	i := 0
-	for _, v := range set.values {
-		blocks[i] = v.BlockID
-		i++
-	}
 	h.mu.Lock()
 	if len(h.outputs) == h.bufferSize {
 		for k := range h.outputs {

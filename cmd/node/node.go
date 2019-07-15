@@ -366,6 +366,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 		hOracle = eligibility.New(beacon, atxdb, BLS381.Verify2, vrfSigner, uint16(app.Config.LayersPerEpoch), lg.WithName("hareOracle"))
 	}
 
+	// a function to validate we know the blocks
 	validationFunc := func(ids []types.BlockID) bool {
 		for _, b := range ids {
 			res, err := mdb.GetBlock(b)
