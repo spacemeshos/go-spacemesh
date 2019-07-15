@@ -213,22 +213,6 @@ var (
 )
 
 // GetResults returns the hare output for a given LayerID. returns error if we don't have results yet.
-func (h *Hare) BlockingGetResult(id types.LayerID) ([]types.BlockID, error) {
-	if h.isTooLate(InstanceId(id)) {
-		return nil, ErrTooOld
-	}
-
-	h.mu.RLock()
-	blks, ok := h.outputs[id]
-	if !ok {
-		h.mu.RUnlock()
-		return nil, ErrTooEarly
-	}
-	h.mu.RUnlock()
-	return blks, nil
-}
-
-// GetResults returns the hare output for a given LayerID. returns error if we don't have results yet.
 func (h *Hare) GetResult(id types.LayerID) ([]types.BlockID, error) {
 	if h.isTooLate(InstanceId(id)) {
 		return nil, ErrTooOld
