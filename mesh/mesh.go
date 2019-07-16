@@ -539,7 +539,7 @@ func (m *Mesh) ActiveSetForLayerView(layer types.LayerID, layersPerEpoch uint16)
 
 			// make sure the target epoch is our epoch
 			if atx.TargetEpoch(layersPerEpoch) != epoch {
-				m.Info("atx %v found, but targeting epoch %v instead of publication epoch %v",
+				m.Debug("atx %v found, but targeting epoch %v instead of publication epoch %v",
 					atx.ShortId(), atx.TargetEpoch(layersPerEpoch), epoch)
 				continue
 			}
