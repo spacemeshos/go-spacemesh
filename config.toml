@@ -13,6 +13,7 @@ oracle_server = "http://localhost:3030"
 oracle_server_worldid = 0
 genesis-time = "2019-02-13T17:02:00+00:00"
 layer-duration-sec = "5"
+hdist = "5"
 coinbase = "0x1234"
 
 # Node Config

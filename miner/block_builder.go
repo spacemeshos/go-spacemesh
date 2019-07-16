@@ -49,6 +49,7 @@ type BlockBuilder struct {
 	Signer
 	minerID          types.NodeId
 	rnd              *rand.Rand
+	hdist            types.LayerID
 	beginRoundEvent  chan types.LayerID
 	stopChan         chan struct{}
 	txGossipChannel  chan service.GossipMessage
@@ -68,7 +69,7 @@ type BlockBuilder struct {
 }
 
 func NewBlockBuilder(minerID types.NodeId, sgn Signer, net p2p.Service,
-	beginRoundEvent chan types.LayerID,
+	beginRoundEvent chan types.LayerID, hdist int,
 	txPool *TypesTransactionIdMemPool,
 	atxPool *TypesAtxIdMemPool,
 	weakCoin WeakCoinProvider,
@@ -85,6 +86,7 @@ func NewBlockBuilder(minerID types.NodeId, sgn Signer, net p2p.Service,
 	return BlockBuilder{
 		minerID:          minerID,
 		Signer:           sgn,
+		hdist:            types.LayerID(hdist),
 		Log:              lg,
 		rnd:              rand.New(rand.NewSource(int64(seed))),
 		beginRoundEvent:  beginRoundEvent,
@@ -150,7 +152,7 @@ func (t *BlockBuilder) Close() error {
 }
 
 type HareResultProvider interface {
-	GetResult(id types.LayerID) ([]types.BlockID, error)
+	GetResult(lower types.LayerID, upper types.LayerID) ([]types.BlockID, error)
 }
 
 type WeakCoinProvider interface {
@@ -180,7 +182,13 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 	} else if id == config.Genesis+1 {
 		votes = append(votes, config.GenesisId)
 	} else {
-		votes, err = t.hareResult.GetResult(id - 1)
+
+		bottom := types.LayerID(1)
+		if id > t.hdist {
+			bottom = id - t.hdist
+		}
+
+		votes, err = t.hareResult.GetResult(bottom, id-1)
 		if err != nil {
 			return nil, errors.New(fmt.Sprintf("didn't receive hare result for layer %v %v", id-1, err))
 		}
