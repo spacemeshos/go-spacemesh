@@ -353,3 +353,48 @@ func TestBuilder_PublishActivationTxSerialize(t *testing.T) {
 	bt2, err := types.AtxAsBytes(a)
 	assert.Equal(t, bt, bt2)
 }
+
+func Test_01(t *testing.T) {
+	id := types.NodeId{"aaaaaa", []byte("bbbbb")}
+	coinbase := address.HexToAddress("0xaaa")
+	net := &NetMock{}
+	layers := &MeshProviderMock{}
+	nipstBuilder := &NipstBuilderMock{}
+	layersPerEpoch := uint16(10)
+	lg := log.NewDefault(id.Key[:5])
+	activationDb := NewActivationDb(database.NewMemDatabase(), database.NewMemDatabase(), &MockIStore{}, mesh.NewMemMeshDB(lg.WithName("meshDB")), layersPerEpoch, &ValidatorMock{}, lg.WithName("atxDB1"))
+	b := NewBuilder(id, coinbase, activationDb, net, &ActiveSetProviderMock{}, layers, layersPerEpoch, nipstBuilder, nil, func() bool { return true }, lg.WithName("atxBuilder"))
+	prevAtx := types.AtxId{Hash: common.HexToHash("0x111")}
+	chlng := common.HexToHash("0x3333")
+	poetRef := []byte{0xbe, 0xef}
+	nipstBuilder.SetPoetRef(poetRef)
+	npst := nipst.NewNIPSTWithChallenge(&chlng, poetRef)
+
+	for i := 3; i < 6; i++ {
+		atx := types.NewActivationTx(types.NodeId{"aaaaaa", []byte("bbbbb")}, coinbase, 1, prevAtx, types.LayerID(i), 1, prevAtx, 5, []types.BlockID{1, 2, 3}, npst)
+		err := activationDb.StoreAtx(atx.PubLayerIdx.GetEpoch(layersPerEpoch), atx)
+		assert.NoError(t, err)
+	}
+
+	//ugly hack to set view size in db
+	view, err := layers.GetOrphanBlocksBefore(layers.LatestLayer())
+	assert.NoError(t, err)
+	v, err := types.ViewAsBytes(view)
+	assert.NoError(t, err)
+	activesetCache.put(common.BytesToHash(v), 10)
+
+	_, err = b.PublishActivationTx(1)
+	assert.NoError(t, err)
+
+	newAtx, err := types.BytesAsAtx(net.bt)
+	assert.NoError(t, err)
+	posAtx, err := activationDb.GetAtx(newAtx.PositioningAtx)
+	assert.NoError(t, err)
+	prevOfNewAtx, err := activationDb.GetAtx(newAtx.PrevATXId)
+
+	// check atx.PubLayerId - posAtx.PubLayerId = number of layers per epoch
+	assert.Equal(t, types.LayerID(layersPerEpoch), newAtx.PubLayerIdx-posAtx.PubLayerIdx)
+
+	// check pos & prev has the same PubLayerIdx
+	assert.Equal(t, posAtx.PubLayerIdx, prevOfNewAtx.PubLayerIdx)
+}
