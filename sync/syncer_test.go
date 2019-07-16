@@ -368,7 +368,7 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 		if err != nil {
 			t.Error("could not fetch all txs", err)
 		}
-		atxs, err := syncObj2.syncAtxs(block.AtxIds)
+		atxs, err := syncObj2.syncAtxs(block.Id, block.AtxIds)
 		if err != nil {
 			t.Error("could not fetch all atxs", err)
 		}

@@ -40,6 +40,7 @@ func (v BlockEligibilityValidator) BlockEligible(block *types.BlockHeader) (bool
 		return false, err
 	}
 
+	v.log.Info("Getting number of eligible blocks using params activeSetSize: %v, committeeSize: %v, layersPerEpoch: %v", activeSetSize, v.committeeSize, v.layersPerEpoch)
 	numberOfEligibleBlocks, err := getNumberOfEligibleBlocks(activeSetSize, v.committeeSize, v.layersPerEpoch, v.log)
 	if err != nil {
 		v.log.Error("failed to get number of eligible blocks: %v", err)

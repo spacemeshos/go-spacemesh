@@ -40,11 +40,14 @@ func NewActivationDb(dbstore database.DB, nipstStore database.DB, idstore IdStor
 //
 // ATXs received as input must be already syntactically valid. Only contextual validation is performed.
 func (db *ActivationDb) ProcessAtx(atx *types.ActivationTx) {
+	db.log.Info("waiting for mutex, atx %v", atx.ShortId())
 	db.processAtxMutex.Lock()
 	defer db.processAtxMutex.Unlock()
 
+	db.log.Info("aquired mutex, atx %v", atx.ShortId())
 	eatx, _ := db.GetAtx(atx.Id())
 	if eatx != nil {
+		db.log.Info("at ProcessAtx, atx %v already in DB", atx.ShortId())
 		atx.Nipst = nil
 		return
 	}

@@ -216,7 +216,7 @@ func (m *Mesh) ExtractUniqueOrderedTransactions(l *types.Layer) []*Transaction {
 
 	for _, b := range sortedBlocks {
 		if !m.tortoise.ContextualValidity(b.ID()) {
-			m.Info("block %v not Contextualy valid", b)
+			m.With().Info("block not Contextualy valid", log.Uint64("block_id", uint64(b.Id)), log.Uint64("layer_id", uint64(b.LayerIndex)))
 			continue
 		}
 
@@ -303,11 +303,19 @@ func (m *Mesh) AddBlock(blk *types.Block) error {
 }
 
 func (m *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.AddressableSignedTransaction, atxs []*types.ActivationTx) error {
-	m.Debug("add block %d", blk.ID())
+
+	atxstring := "["
+	for _, atx := range atxs {
+		atxstring += atx.ShortId() + ", "
+	}
+	atxstring += "]"
+
+	m.Info("add block %d, unprocessed atxs %v, unprocessed txs %v", blk.ID(), atxstring, txs)
 
 	atxids := make([]types.AtxId, 0, len(atxs))
 	for _, t := range atxs {
 		//todo this should return an error
+		m.Info("about to process atx %v", t.ShortId())
 		m.AtxDB.ProcessAtx(t)
 		atxids = append(atxids, t.Id())
 	}

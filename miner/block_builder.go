@@ -218,8 +218,13 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 		TxIds:  txids,
 	}
 
-	t.Log.Info("I've created a block in layer %v. id: %v, num of transactions: %v, votes: %d, viewEdges: %d atx %v, atxs:%v",
-		b.LayerIndex, b.Id, len(b.TxIds), len(b.BlockVotes), len(b.ViewEdges), b.ATXID.String()[:5], len(b.AtxIds))
+	atxstring := ""
+	for _, atx := range b.AtxIds {
+		atxstring += atx.ShortId() + ", "
+	}
+
+	t.Log.Info("I've created a block in layer %v. id: %v, num of transactions: %v, votes: %d, viewEdges: %d atx %v, atxs (%v): %v",
+		b.LayerIndex, b.Id, len(b.TxIds), len(b.BlockVotes), len(b.ViewEdges), b.ATXID.String()[:5], len(b.AtxIds), atxstring)
 
 	blockBytes, err := types.InterfaceToBytes(b)
 	if err != nil {
@@ -312,7 +317,7 @@ func (t *BlockBuilder) handleGossipAtx(data service.GossipMessage) {
 
 	t.AtxPool.Put(atx.Id(), atx)
 	data.ReportValidation(activation.AtxProtocol)
-	t.Info("stored and propagated new syntactically valid ATX: %v", atx.ShortId())
+	t.Info("added to mempool and propagated new syntactically valid ATX: %v", atx.ShortId())
 }
 
 func (t *BlockBuilder) acceptBlockData() {

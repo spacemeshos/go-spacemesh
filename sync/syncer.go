@@ -261,28 +261,37 @@ func (s *Syncer) BlockSyntacticValidation(block *types.Block) ([]*types.Addressa
 		return nil, nil, errors.New(fmt.Sprintf("failed derefrencing block data %v %v", block.ID(), err))
 	}
 
+	blocklog := s.Log.WithFields(log.Uint64("block_id", uint64(block.Id)))
+
+	blocklog.Info("Starting data availability check")
 	//data availability
 	txs, atxs, err := s.DataAvailabilty(block)
 	if err != nil {
 		return nil, nil, errors.New(fmt.Sprintf("data availabilty failed for block %v", block.ID()))
 	}
 
+	blocklog.Info("validating block view")
 	//validate blocks view
 	if valid := s.ValidateView(block); valid == false {
 		return nil, nil, errors.New(fmt.Sprintf("block %v not syntacticly valid", block.ID()))
 	}
 
+	blocklog.Info("block is syntactically valid")
+
 	return txs, atxs, nil
 }
 
 func (s *Syncer) confirmBlockValidity(blk *types.Block) error {
-	s.Info("validate block %v ", blk.ID())
+	blocklog := s.WithFields(log.Uint64("block_id", uint64(blk.Id)))
+	blocklog.Info("extracting pubkey from block")
 
 	//check block signature and is identity active
 	pubKey, err := ed25519.ExtractPublicKey(blk.Bytes(), blk.Sig())
 	if err != nil {
 		return errors.New(fmt.Sprintf("could not extract block %v public key %v ", blk.ID(), err))
 	}
+
+	blocklog.Info("checking that identity in block is active")
 
 	active, atxid, err := s.IsIdentityActive(signing.NewPublicKey(pubKey).String(), blk.Layer())
 	if err != nil {
@@ -296,6 +305,8 @@ func (s *Syncer) confirmBlockValidity(blk *types.Block) error {
 	if atxid != blk.ATXID {
 		return errors.New(fmt.Sprintf("wrong associated atx got %v expected %v ", blk.ATXID.ShortId(), atxid.ShortId()))
 	}
+
+	blocklog.Info("checking block eligibilty")
 
 	//block eligibility
 	if eligable, err := s.BlockEligible(&blk.BlockHeader); err != nil || !eligable {
@@ -315,6 +326,8 @@ func (s *Syncer) ValidateView(blk *types.Block) bool {
 }
 
 func (s *Syncer) DataAvailabilty(blk *types.Block) ([]*types.AddressableSignedTransaction, []*types.ActivationTx, error) {
+	blocklog := s.Log.WithFields(log.Uint64("block_id", uint64(blk.Id)))
+	blocklog.Info("starting to sync atxs and txs")
 	var txs []*types.AddressableSignedTransaction
 	var txerr error
 	wg := sync.WaitGroup{}
@@ -330,23 +343,39 @@ func (s *Syncer) DataAvailabilty(blk *types.Block) ([]*types.AddressableSignedTr
 
 	//sync ATxs
 	go func() {
-		atxs, atxerr = s.syncAtxs(blk.AtxIds)
+		atxs, atxerr = s.syncAtxs(blk.ID(), blk.AtxIds)
 		wg.Done()
 	}()
+
+	blocklog.Info("waiting sync atxs and txs")
 
 	wg.Wait()
 
 	if txerr != nil {
-		s.Warning("failed fetching block %v transactions %v", blk.ID(), txerr)
+		blocklog.Warning("failed fetching block transactions %v", txerr)
 		return txs, atxs, txerr
 	}
 
 	if atxerr != nil {
-		s.Warning("failed fetching block %v activation transactions %v", blk.ID(), atxerr)
+		blocklog.Warning("failed fetching block activation transactions %v", atxerr)
 		return txs, atxs, atxerr
 	}
 
-	s.Info("fetched all block data %v %v txs %v atxs", blk.ID())
+	totstring := ""
+	for _, mis := range blk.AtxIds {
+		totstring += mis.ShortId() + ", "
+	}
+	atxsstring := ""
+	cache := make(map[types.AtxId]struct{}, len(atxs))
+	for _, mis := range atxs {
+		if _, ok := cache[mis.Id()]; ok {
+			blocklog.Info("aaa found duplicated atx %v", mis.ShortId())
+		} else {
+			cache[mis.Id()] = struct{}{}
+		}
+		atxsstring += mis.ShortId() + ", "
+	}
+	blocklog.Info("fetched all atxs (total %v, unprocessed %v) for block ", totstring, atxsstring)
 	return txs, atxs, nil
 }
 
@@ -463,7 +492,7 @@ func (s *Syncer) syncTxs(txids []types.TransactionId) ([]*types.AddressableSigne
 }
 
 //returns atxs out of txids that are not in the local database
-func (s *Syncer) syncAtxs(atxIds []types.AtxId) ([]*types.ActivationTx, error) {
+func (s *Syncer) syncAtxs(blkId types.BlockID, atxIds []types.AtxId) ([]*types.ActivationTx, error) {
 
 	//look in pool
 	unprocessedAtxs := make(map[types.AtxId]*types.ActivationTx, len(atxIds))
@@ -473,14 +502,14 @@ func (s *Syncer) syncAtxs(atxIds []types.AtxId) ([]*types.ActivationTx, error) {
 		if x, err := s.atxpool.Get(id); err == nil {
 			atx := x
 			if atx.Nipst == nil {
-				s.Warning("atx %v nipst not found ", id.ShortId())
+				s.Warning("atx %v nipst not found (found in block %v)", id.ShortId(), blkId)
 				missingInPool = append(missingInPool, id)
 				continue
 			}
-			s.Debug("found atx, %v in atx pool", id.ShortId())
+			s.Info("found atx, %v in atx pool (found in block %v)", id.ShortId(), blkId)
 			unprocessedAtxs[id] = &atx
 		} else {
-			s.Warning("atx %v not in atx pool", id.ShortId())
+			s.Warning("atx %v not in atx pool (found in block %v)", id.ShortId(), blkId)
 			missingInPool = append(missingInPool, id)
 		}
 	}
@@ -490,15 +519,25 @@ func (s *Syncer) syncAtxs(atxIds []types.AtxId) ([]*types.ActivationTx, error) {
 
 	//map and sort atxs
 	if len(missingInDb) > 0 {
-
+		atxstring := ""
+		for _, mis := range missingInDb {
+			atxstring += mis.ShortId() + ", "
+		}
+		s.Info("about to sync atxs : %v for block %v", atxstring, blkId)
 		output := s.fetchWithFactory(NewNeighborhoodWorker(s, 1, ATxReqFactory(missingInDb)))
 		for out := range output {
 			atxs := out.([]types.ActivationTx)
+			gotatxstring := ""
+			for _, atx := range atxs {
+				gotatxstring += atx.ShortId() + ", "
+			}
+			s.Info("got atxs from sync : %v for block %v", gotatxstring, blkId)
 			for _, atx := range atxs {
 				if err := s.SyntacticallyValidateAtx(&atx); err != nil {
-					s.Warning("atx %v not valid %v", atx.ShortId(), err)
+					s.Warning("atx %v not valid %v (found in block %v)", atx.ShortId(), err, blkId)
 					continue
 				}
+				s.Info("atx %v is syntactically valid, adding to unprocessed map. blkId %v", atx.ShortId(), blkId)
 				tmp := atx
 				unprocessedAtxs[atx.Id()] = &tmp
 			}
@@ -508,13 +547,20 @@ func (s *Syncer) syncAtxs(atxIds []types.AtxId) ([]*types.ActivationTx, error) {
 	atxs := make([]*types.ActivationTx, 0, len(atxIds))
 	for _, id := range atxIds {
 		if tx, ok := unprocessedAtxs[id]; ok {
+			s.Info("adding atx %v to result. blkId %v", tx.ShortId(), blkId)
 			atxs = append(atxs, tx)
 		} else if _, ok := dbAtxs[id]; ok {
 			continue
 		} else {
-			return nil, errors.New(fmt.Sprintf("could not fetch atx %v", id.ShortId()))
+			return nil, errors.New(fmt.Sprintf("could not fetch atx %v (found in block %v)", id.ShortId(), blkId))
 		}
 	}
+
+	atxstring := ""
+	for _, mis := range atxs {
+		atxstring += mis.ShortId() + ", "
+	}
+	s.Info("done syncAtx, blkId %v, returning %s ", blkId, atxstring)
 	return atxs, nil
 }
 
