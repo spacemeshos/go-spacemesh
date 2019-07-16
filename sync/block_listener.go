@@ -110,11 +110,12 @@ func (bl *BlockListener) HandleNewBlock(blk *types.Block) bool {
 	}
 
 	blocklog.With().Info("finished syntactic validation adding block with txs")
-	if err := bl.AddBlockWithTxs(blk, txs, atxs); err != nil {
-		blocklog.With().Error("failed to add block to database", log.Err(err))
-		return false
-	}
-
+	go func() {
+		if err := bl.AddBlockWithTxs(blk, txs, atxs); err != nil {
+			blocklog.With().Error("failed to add block to database", log.Err(err))
+			return
+		}
+	}()
 	blocklog.Info("finished adding block block successfully")
 	return true
 }
