@@ -266,15 +266,15 @@ func makePoetProofMessage(t *testing.T) types.PoetProofMessage {
 	_, err = xdr.Unmarshal(file, &poetProof)
 	r.NoError(err)
 	r.EqualValues([][]byte{[]byte("1"), []byte("2"), []byte("3")}, poetProof.Members)
-	var poetId [types.PoetIdLength]byte
+	var poetId [types.PoetServiceIdLength]byte
 	copy(poetId[:], "poet id")
 	roundId := uint64(1337)
 
 	return types.PoetProofMessage{
-		PoetProof: poetProof,
-		PoetId:    poetId,
-		RoundId:   roundId,
-		Signature: nil,
+		PoetProof:     poetProof,
+		PoetServiceId: poetId,
+		RoundId:       roundId,
+		Signature:     nil,
 	}
 }
 

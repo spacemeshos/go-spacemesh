@@ -6,6 +6,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/spacemeshos/poet/rpc/api"
+	"github.com/spacemeshos/poet/service"
 	"google.golang.org/grpc"
 	"time"
 )
@@ -27,6 +28,18 @@ func (c *RPCPoetClient) submit(challenge common.Hash) (*types.PoetRound, error) 
 	}
 
 	return &types.PoetRound{Id: uint64(res.RoundId)}, nil
+}
+
+func (c *RPCPoetClient) getPoetServiceId() ([types.PoetServiceIdLength]byte, error) {
+	req := api.GetInfoRequest{}
+	res, err := c.client.GetInfo(context.Background(), &req)
+	if err != nil {
+		return [service.PoetServiceIdLength]byte{}, fmt.Errorf("rpc failure: %v", err)
+	}
+	var poetServiceId [service.PoetServiceIdLength]byte
+	copy(poetServiceId[:], res.PoetServiceId)
+
+	return poetServiceId, nil
 }
 
 // NewRPCPoetClient returns a new RPCPoetClient instance for the provided
