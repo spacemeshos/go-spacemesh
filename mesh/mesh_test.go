@@ -6,10 +6,13 @@ import (
 	"github.com/google/uuid"
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"math/big"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -251,4 +254,55 @@ func TestLayers_OrphanBlocks(t *testing.T) {
 	arr3, _ := layers.GetOrphanBlocksBefore(4)
 	assert.True(t, len(arr3) == 1, "wrong layer")
 
+}
+
+func createLayerWithAtx(t *testing.T, msh *Mesh, id types.LayerID, numOfBlocks int, atxs []*types.ActivationTx, votes []types.BlockID, views []types.BlockID) (created []types.BlockID) {
+	for i := 0; i < numOfBlocks; i++ {
+		block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), id, []byte("data1"))
+		block1.MinerID.Key = strconv.Itoa(i)
+		block1.BlockVotes = append(block1.BlockVotes, votes...)
+		for _, atx := range atxs {
+			block1.AtxIds = append(block1.AtxIds, atx.Id())
+		}
+		block1.ViewEdges = append(block1.ViewEdges, views...)
+		err := msh.AddBlockWithTxs(block1, []*types.AddressableSignedTransaction{}, atxs)
+		require.NoError(t, err)
+		created = append(created, block1.Id)
+	}
+	return
+}
+
+func TestMesh_ActiveSetForLayerView(t *testing.T) {
+	layers := getMesh(t.Name())
+	layers.AtxDB = &AtxDbMock{make(map[types.AtxId]*types.ActivationTx), make(map[types.AtxId]*types.NIPST)}
+
+	id1 := types.NodeId{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}
+	id2 := types.NodeId{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}
+	id3 := types.NodeId{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}
+	coinbase1 := address.HexToAddress("aaaa")
+	coinbase2 := address.HexToAddress("bbbb")
+	coinbase3 := address.HexToAddress("cccc")
+	atxs := []*types.ActivationTx{
+		types.NewActivationTx(id1, coinbase1, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 0, []types.BlockID{}, &types.NIPST{}),
+		types.NewActivationTx(id2, coinbase2, 0, *types.EmptyAtxId, 2, 0, *types.EmptyAtxId, 0, []types.BlockID{}, &types.NIPST{}),
+		types.NewActivationTx(id3, coinbase3, 0, *types.EmptyAtxId, 11, 0, *types.EmptyAtxId, 0, []types.BlockID{}, &types.NIPST{}),
+	}
+
+	poetRef := []byte{0xba, 0xb0}
+	for _, atx := range atxs {
+		hash, err := atx.NIPSTChallenge.Hash()
+		assert.NoError(t, err)
+		atx.Nipst = nipst.NewNIPSTWithChallenge(hash, poetRef)
+		layers.AtxDB.(*AtxDbMock).AddAtx(atx.Id(), atx)
+	}
+
+	blocks := createLayerWithAtx(t, layers, 1, 1, atxs, []types.BlockID{}, []types.BlockID{})
+	for i := 2; i <= 10; i++ {
+		blocks = createLayerWithAtx(t, layers, types.LayerID(i), 1, []*types.ActivationTx{}, blocks, blocks)
+
+	}
+
+	num, err := layers.ActiveSetForLayerView(10, 6)
+	assert.NoError(t, err)
+	assert.Equal(t, 2, int(num))
 }

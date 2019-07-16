@@ -28,7 +28,7 @@ type mockActiveSetProvider struct {
 	size uint32
 }
 
-func (m *mockActiveSetProvider) ActiveSetSize(id types.LayerID) (uint32, error) {
+func (m *mockActiveSetProvider) ActiveSetSize(id types.LayerID, layersPerEpoch uint16) (uint32, error) {
 	return m.size, nil
 }
 
@@ -129,7 +129,7 @@ type mockBufferedActiveSetProvider struct {
 	size map[types.LayerID]uint32
 }
 
-func (m *mockBufferedActiveSetProvider) ActiveSetSize(id types.LayerID) (uint32, error) {
+func (m *mockBufferedActiveSetProvider) ActiveSetSize(id types.LayerID, layersPerEpoch uint16) (uint32, error) {
 	v, ok := m.size[id]
 	if !ok {
 		return 0, errors.New("no instance")
@@ -152,7 +152,7 @@ func Test_ActiveSetSize(t *testing.T) {
 	assertActiveSetSize(t, o, 5, l+20)
 
 	// create error
-	o.getActiveSet = func(layer types.LayerID) (uint32, error) {
+	o.getActiveSet = func(layer types.LayerID, layersPerEpoch uint16) (uint32, error) {
 		return 5, errors.New("fake err")
 	}
 	activeSetSize, err := o.activeSetSize(l)

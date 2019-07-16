@@ -22,7 +22,7 @@ type valueProvider interface {
 
 // a func to retrieve the active set size for the provided layer
 // this func is assumed to be cpu intensive and hence we cache its results
-type activeSetFunc func(layer types.LayerID) (uint32, error)
+type activeSetFunc func(layer types.LayerID, layersPerEpoch uint16) (uint32, error)
 
 type Signer interface {
 	Sign(msg []byte) ([]byte, error)
@@ -109,7 +109,7 @@ func (o *Oracle) activeSetSize(layer types.LayerID) (uint32, error) {
 		return val.(uint32), nil
 	}
 
-	setSize, err := o.getActiveSet(sl)
+	setSize, err := o.getActiveSet(sl, o.layersPerEpoch)
 	if err != nil {
 		o.Error("Could not retrieve active set size err=%v", err)
 		return 0, err

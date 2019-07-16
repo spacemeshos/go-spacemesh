@@ -501,14 +501,15 @@ func (m *Mesh) GetATXs(atxIds []types.AtxId) (map[types.AtxId]*types.ActivationT
 	return atxs, mIds
 }
 
-// ActiveSetForLayerView - returns the active set size that matches the view of the contextually valid block in the provided layer
-func (m *Mesh) ActiveSetForLayerView(layer types.LayerID) (uint32, error) {
-	blocks, err := m.LayerBlockIds(layer)
-	if err != nil {
-		return 0, err
-	}
+// ActiveSetForLayerView - returns the active set size that matches the view of the contextually valid blocks in the provided layer
+func (m *Mesh) ActiveSetForLayerView(layer types.LayerID, layersPerEpoch uint16) (uint32, error) {
 
-	mp := make(map[types.BlockID]struct{}, len(blocks))
+	epoch := layer.GetEpoch(layersPerEpoch)
+	firstLayerOfPrevEpoch := types.LayerID(epoch-1) * types.LayerID(layersPerEpoch)
+
+	// build a map of all blocks between firstLayerOfPrevEpoch and our current layer
+	mp := make(map[types.BlockID]struct{})
+	blocks, err := m.LayerBlockIds(layer)
 	for _, bid := range blocks {
 		mp[bid] = struct{}{}
 	}
@@ -519,26 +520,40 @@ func (m *Mesh) ActiveSetForLayerView(layer types.LayerID) (uint32, error) {
 	traversalFunc := func(blkh *types.BlockHeader) error {
 
 		// only contextually valid blocks
-		if m.IsContexuallyValid(blkh.Id) {
-			blk, err := m.GetBlock(blkh.Id)
+		if !m.IsContexuallyValid(blkh.Id) {
+			return nil
+		}
+
+		blk, err := m.GetBlock(blkh.Id)
+		if err != nil {
+			return err
+		}
+
+		// count unique ATXs
+		for _, id := range blk.AtxIds {
+			atx, err := m.GetAtx(id)
 			if err != nil {
-				return err
+				log.Panic("error fetching atx %v from database -- inconsistent state", id.ShortId()) // TODO: handle inconsistent state
+				return fmt.Errorf("error fetching atx %v from database -- inconsistent state", id.ShortId())
 			}
 
-			for _, id := range blk.AtxIds {
-				// make sure we count only once
-				if _, exist := countedAtxs[id]; exist {
-					continue
-				}
-				countedAtxs[id] = struct{}{}
-				activeSetSize++
+			// make sure the target epoch is our epoch
+			if atx.TargetEpoch(layersPerEpoch) != epoch {
+				m.Info("atx %v found, but targeting epoch %v instead of publication epoch %v",
+					atx.ShortId(), atx.TargetEpoch(layersPerEpoch), epoch)
+				continue
 			}
+			if _, exist := countedAtxs[id]; exist {
+				continue
+			}
+			countedAtxs[id] = struct{}{}
+			activeSetSize++
 		}
 
 		return nil
 	}
 
-	err = m.ForBlockInView(mp, layer, traversalFunc)
+	err = m.ForBlockInView(mp, firstLayerOfPrevEpoch, traversalFunc)
 	if err != nil {
 		return 0, err
 	}
