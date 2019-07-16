@@ -65,6 +65,7 @@ type BlockBuilder struct {
 	atxValidator     AtxValidator
 	syncer           Syncer
 	started          bool
+	layersPerEpoch	 uint16
 }
 
 func NewBlockBuilder(minerID types.NodeId, sgn Signer, net p2p.Service,
@@ -78,6 +79,7 @@ func NewBlockBuilder(minerID types.NodeId, sgn Signer, net p2p.Service,
 	txValidator TxValidator,
 	atxValidator AtxValidator,
 	syncer Syncer,
+	layersPerEpoch uint16,
 	lg log.Log) BlockBuilder {
 
 	seed := binary.BigEndian.Uint64(md5.New().Sum([]byte(minerID.Key)))
@@ -103,6 +105,7 @@ func NewBlockBuilder(minerID types.NodeId, sgn Signer, net p2p.Service,
 		atxValidator:     atxValidator,
 		syncer:           syncer,
 		started:          false,
+		layersPerEpoch:	  layersPerEpoch,
 	}
 
 }
@@ -223,8 +226,8 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 		atxstring += atx.ShortId() + ", "
 	}
 
-	t.Log.Info("I've created a block in layer %v. id: %v, num of transactions: %v, votes: %d, viewEdges: %d atx %v, atxs (%v): %v",
-		b.LayerIndex, b.Id, len(b.TxIds), len(b.BlockVotes), len(b.ViewEdges), b.ATXID.String()[:5], len(b.AtxIds), atxstring)
+	t.Log.Info("I've created a block in layer %v (epoch %v). id: %v, num of transactions: %v, votes: %d, viewEdges: %d atx %v, atxs (%v): %v",
+		b.LayerIndex, b.LayerIndex.GetEpoch(t.layersPerEpoch), b.Id, len(b.TxIds), len(b.BlockVotes), len(b.ViewEdges), b.ATXID.String()[2:7], len(b.AtxIds), atxstring)
 
 	blockBytes, err := types.InterfaceToBytes(b)
 	if err != nil {

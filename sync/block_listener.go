@@ -25,6 +25,7 @@ type BlockListener struct {
 	startLock            uint32
 	timeout              time.Duration
 	exit                 chan struct{}
+	layersPerEpoch       uint16
 }
 
 type TickProvider interface {
@@ -44,13 +45,14 @@ func (bl *BlockListener) Start() {
 	}
 }
 
-func NewBlockListener(net service.Service, sync *Syncer, concurrency int, logger log.Log) *BlockListener {
+func NewBlockListener(net service.Service, sync *Syncer, concurrency int, layersPerEpoch uint16, logger log.Log) *BlockListener {
 	bl := BlockListener{
 		Syncer:               sync,
 		Log:                  logger,
 		semaphore:            make(chan struct{}, concurrency),
 		exit:                 make(chan struct{}),
 		receivedGossipBlocks: net.RegisterGossipProtocol(config.NewBlockProtocol),
+		layersPerEpoch:       layersPerEpoch,
 	}
 	return &bl
 }
@@ -93,7 +95,7 @@ func (bl *BlockListener) HandleNewBlock(blk *types.Block) bool {
 		atxstring += atx.ShortId() + ", "
 	}
 
-	blocklog.With().Info("got new block", log.Uint64("layer_id", uint64(blk.LayerIndex)), log.Int("txs", len(blk.TxIds)), log.Int("atxs", len(blk.AtxIds)), log.String("atx_list", atxstring))
+	blocklog.With().Info("got new block", log.Uint64("layer_id", uint64(blk.LayerIndex)), log.Int("txs", len(blk.TxIds)), log.Int("atxs", len(blk.AtxIds)), log.String("atx_list", atxstring), log.Int("epoch", int(bl.currentLayer.GetEpoch(bl.layersPerEpoch))))
 	//check if known
 
 	if _, err := bl.GetBlock(blk.Id); err == nil {

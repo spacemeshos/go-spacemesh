@@ -278,7 +278,7 @@ func (proc *ConsensusProcess) onEarlyMessage(m *Msg) {
 func (proc *ConsensusProcess) handleMessage(m *Msg) {
 	// Note: InstanceId is already verified by the broker
 
-	proc.Debug("Received message %v", m)
+	proc.Info("Received message %v (msg_id %v)", m, m.Sig[:5])
 
 	if !proc.validator.SyntacticallyValidateMessage(m) {
 		proc.Warning("Syntactically validation failed, pubkey %v", m.PubKey.ShortString())
@@ -305,7 +305,7 @@ func (proc *ConsensusProcess) handleMessage(m *Msg) {
 }
 
 func (proc *ConsensusProcess) processMsg(m *Msg) {
-	proc.Info("Processing message of type %v", m.InnerMsg.Type.String())
+	proc.Info("Processing message of type %v (msg_id %v)", m.InnerMsg.Type.String(), m.Sig[:5])
 	metrics.MessageTypeCounter.With("type_id", m.InnerMsg.Type.String()).Add(1)
 
 	switch m.InnerMsg.Type {
@@ -344,7 +344,7 @@ func (proc *ConsensusProcess) sendMessage(msg *Msg) {
 	}
 
 	proc.With().Info("message sent", log.String("msg_type", msg.InnerMsg.Type.String()),
-		log.Uint64("layer_id", uint64(proc.instanceId)))
+		log.Uint64("layer_id", uint64(proc.instanceId)), log.ByteString("msg_id", msg.Sig[:5]))
 }
 
 func (proc *ConsensusProcess) onRoundEnd() {
