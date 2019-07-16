@@ -6,6 +6,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/spacemeshos/poet/rpc/api"
+	"github.com/spacemeshos/poet/service"
 	"google.golang.org/grpc"
 	"time"
 )
@@ -19,16 +20,26 @@ type RPCPoetClient struct {
 // A compile time check to ensure that RPCPoetClient fully implements PoetProvingServiceClient.
 var _ PoetProvingServiceClient = (*RPCPoetClient)(nil)
 
-func (c *RPCPoetClient) submit(challenge common.Hash) (*types.PoetRound, [types.PoetIdLength]byte, error) {
+func (c *RPCPoetClient) submit(challenge common.Hash) (*types.PoetRound, error) {
 	req := api.SubmitRequest{Challenge: challenge[:]}
 	res, err := c.client.Submit(context.Background(), &req)
 	if err != nil {
-		return nil, [types.PoetIdLength]byte{}, fmt.Errorf("rpc failure: %v", err)
+		return nil, fmt.Errorf("rpc failure: %v", err)
 	}
-	var poetId [types.PoetIdLength]byte
-	copy(poetId[:], res.PoetId)
 
-	return &types.PoetRound{Id: uint64(res.RoundId)}, poetId, nil
+	return &types.PoetRound{Id: uint64(res.RoundId)}, nil
+}
+
+func (c *RPCPoetClient) getPoetServiceId() ([types.PoetIdLength]byte, error) {
+	req := api.GetInfoRequest{}
+	res, err := c.client.GetInfo(context.Background(), &req)
+	if err != nil {
+		return [service.PoetIdLength]byte{}, fmt.Errorf("rpc failure: %v", err)
+	}
+	var poetServiceId [service.PoetIdLength]byte
+	copy(poetServiceId[:], res.PoetServiceId)
+
+	return poetServiceId, nil
 }
 
 // NewRPCPoetClient returns a new RPCPoetClient instance for the provided

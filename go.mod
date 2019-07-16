@@ -20,7 +20,7 @@ require (
 	github.com/seehuhn/mt19937 v0.0.0-20180715112136-cc7708819361
 	github.com/spacemeshos/ed25519 v0.0.0-20190316215305-5878e62449c1
 	github.com/spacemeshos/merkle-tree v0.0.0-20190612125135-48574fd5f419
-	github.com/spacemeshos/poet v0.0.0-20190716094917-73c7af9b5630
+	github.com/spacemeshos/poet v0.0.0-20190716123943-fab87bc99829
 	github.com/spacemeshos/post v0.0.0-20190709100804-7327807ad763
 	github.com/spacemeshos/sha256-simd v0.0.0-20190111104731-8575aafc88c9
 	github.com/spf13/cobra v0.0.4

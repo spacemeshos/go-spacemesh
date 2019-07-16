@@ -38,7 +38,8 @@ type PostProverClient interface {
 type PoetProvingServiceClient interface {
 	// submit registers a challenge in the proving service
 	// open round suited for the specified duration.
-	submit(challenge common.Hash) (*types.PoetRound, [types.PoetIdLength]byte, error)
+	submit(challenge common.Hash) (*types.PoetRound, error)
+	getPoetServiceId() ([types.PoetIdLength]byte, error)
 }
 
 // initialNIPST returns an initial NIPST instance to be used in the NIPST construction.
@@ -140,22 +141,27 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *common.Hash) (*types.NIPST, error)
 
 	// Phase 0: Submit challenge to PoET service.
 	if nb.state.PoetRound == nil {
+		poetServiceId, err := nb.poetProver.getPoetServiceId()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get PoET service ID: %v", err)
+		}
+		nb.state.PoetId = poetServiceId
+
 		poetChallenge := challenge
 
 		nb.log.Debug("submitting challenge to PoET proving service (PoET id: %x, challenge: %x)",
 			nb.state.PoetId, poetChallenge)
 
-		round, poetId, err := nb.poetProver.submit(*poetChallenge)
+		round, err := nb.poetProver.submit(*poetChallenge)
 		if err != nil {
 			return nil, fmt.Errorf("failed to submit challenge to poet service: %v", err)
 		}
 
 		nb.log.Info("challenge submitted to PoET proving service (PoET id: %x, round id: %v)",
-			poetId, round.Id)
+			nb.state.PoetId, round.Id)
 
 		nipst.NipstChallenge = poetChallenge
 		nb.state.PoetRound = round
-		nb.state.PoetId = poetId // TODO: set the PoET id based on previous knowledge, not the submission response
 		nb.state.persist()
 	}
 

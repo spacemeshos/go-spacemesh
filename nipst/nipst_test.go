@@ -46,8 +46,12 @@ type poetProvingServiceClientMock struct{}
 // A compile time check to ensure that poetProvingServiceClientMock fully implements PoetProvingServiceClient.
 var _ PoetProvingServiceClient = (*poetProvingServiceClientMock)(nil)
 
-func (p *poetProvingServiceClientMock) submit(challenge common.Hash) (*types.PoetRound, [types.PoetIdLength]byte, error) {
-	return &types.PoetRound{}, [types.PoetIdLength]byte{}, nil
+func (p *poetProvingServiceClientMock) submit(challenge common.Hash) (*types.PoetRound, error) {
+	return &types.PoetRound{}, nil
+}
+
+func (p *poetProvingServiceClientMock) getPoetServiceId() ([types.PoetIdLength]byte, error) {
+	return [32]byte{}, nil
 }
 
 type poetDbMock struct{}
