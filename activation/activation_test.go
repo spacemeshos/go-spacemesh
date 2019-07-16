@@ -246,7 +246,9 @@ func TestBuilder_PublishActivationTx(t *testing.T) {
 	b = NewBuilder(id, coinbase, activationDb2, net, &ActiveSetProviderMock{}, layers, layersPerEpoch, nipstBuilder, nil, func() bool { return true }, lg.WithName("atxBuilder"))
 	b.nipstBuilder = &NipstErrBuilderMock{}
 	_, err = b.PublishActivationTx(0)
-	assert.Error(t, err)
+	assert.EqualError(t, err, "cannot create nipst: error")
+	b.db = nil
+	_, err = b.PublishActivationTx(0) // this would panic if we tried to re-create the challenge
 	assert.EqualError(t, err, "cannot create nipst: error")
 
 	activationDb3 := NewActivationDb(database.NewMemDatabase(), database.NewMemDatabase(), &MockIStore{}, mesh.NewMemMeshDB(log.NewDefault("")), layersPerEpoch, &ValidatorMock{}, lg.WithName("atxDB3"))

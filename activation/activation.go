@@ -165,58 +165,62 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) (bool, error) {
 	if b.nipst != nil {
 		b.log.Info("re-entering atx creation in epoch %v", epoch)
 	} else {
-		b.log.Info("starting build atx in epoch %v", epoch)
-		if b.prevATX == nil {
-			prevAtxId, err := b.GetPrevAtxId(b.nodeId)
-			if err != nil {
-				b.log.Info("no prev ATX found, starting fresh")
-			} else {
-				b.prevATX, err = b.db.GetAtx(*prevAtxId)
+		if b.challenge == nil {
+			b.log.Info("starting build atx in epoch %v", epoch)
+			if b.prevATX == nil {
+				prevAtxId, err := b.GetPrevAtxId(b.nodeId)
 				if err != nil {
-					// TODO: handle inconsistent state
-					b.log.Panic("prevAtx (id: %v) not found in DB -- inconsistent state", prevAtxId.ShortId())
+					b.log.Info("no prev ATX found, starting fresh")
+				} else {
+					b.prevATX, err = b.db.GetAtx(*prevAtxId)
+					if err != nil {
+						// TODO: handle inconsistent state
+						b.log.Panic("prevAtx (id: %v) not found in DB -- inconsistent state", prevAtxId.ShortId())
+					}
 				}
 			}
-		}
-		seq := uint64(0)
-		prevAtxId := *types.EmptyAtxId
-		if b.prevATX != nil {
-			seq = b.prevATX.Sequence + 1
+			seq := uint64(0)
+			prevAtxId := *types.EmptyAtxId
+			if b.prevATX != nil {
+				seq = b.prevATX.Sequence + 1
 
-			//check if this node hasn't published an activation already
-			if b.prevATX.PubLayerIdx.GetEpoch(b.layersPerEpoch) == epoch+1 {
-				b.log.Info("atx already created for epoch %v, aborting", epoch)
-				return false, nil
+				//check if this node hasn't published an activation already
+				if b.prevATX.PubLayerIdx.GetEpoch(b.layersPerEpoch) == epoch+1 {
+					b.log.Info("atx already created for epoch %v, aborting", epoch)
+					return false, nil
+				}
+				prevAtxId = b.prevATX.Id()
 			}
-			prevAtxId = b.prevATX.Id()
-		}
-		posAtxEndTick := uint64(0)
-		b.posLayerID = types.LayerID(0)
+			posAtxEndTick := uint64(0)
+			b.posLayerID = types.LayerID(0)
 
-		//positioning atx is from this epoch as well, since we will be publishing the atx in the next epoch
-		//todo: what if no other atx was received in this epoch yet?
-		posAtxId := *types.EmptyAtxId
-		posAtx, err := b.GetPositioningAtx(epoch)
-		atxPubLayerID := types.LayerID(0)
-		if err == nil {
-			posAtxEndTick = posAtx.EndTick
-			b.posLayerID = posAtx.PubLayerIdx
-			atxPubLayerID = b.posLayerID.Add(b.layersPerEpoch)
-			posAtxId = posAtx.Id()
+			//positioning atx is from this epoch as well, since we will be publishing the atx in the next epoch
+			//todo: what if no other atx was received in this epoch yet?
+			posAtxId := *types.EmptyAtxId
+			posAtx, err := b.GetPositioningAtx(epoch)
+			atxPubLayerID := types.LayerID(0)
+			if err == nil {
+				posAtxEndTick = posAtx.EndTick
+				b.posLayerID = posAtx.PubLayerIdx
+				atxPubLayerID = b.posLayerID.Add(b.layersPerEpoch)
+				posAtxId = posAtx.Id()
+			} else {
+				if !epoch.IsGenesis() {
+					return false, fmt.Errorf("cannot find pos atx: %v", err)
+				}
+			}
+
+			b.challenge = &types.NIPSTChallenge{
+				NodeId:         b.nodeId,
+				Sequence:       seq,
+				PrevATXId:      prevAtxId,
+				PubLayerIdx:    atxPubLayerID,
+				StartTick:      posAtxEndTick,
+				EndTick:        b.tickProvider.NumOfTicks(), //todo: add provider when
+				PositioningAtx: posAtxId,
+			}
 		} else {
-			if !epoch.IsGenesis() {
-				return false, fmt.Errorf("cannot find pos atx: %v", err)
-			}
-		}
-
-		b.challenge = &types.NIPSTChallenge{
-			NodeId:         b.nodeId,
-			Sequence:       seq,
-			PrevATXId:      prevAtxId,
-			PubLayerIdx:    atxPubLayerID,
-			StartTick:      posAtxEndTick,
-			EndTick:        b.tickProvider.NumOfTicks(), //todo: add provider when
-			PositioningAtx: posAtxId,
+			b.log.Info("re-entering atx creation with existing challenge in epoch %v", epoch)
 		}
 
 		hash, err := b.challenge.Hash()
