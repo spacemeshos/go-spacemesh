@@ -19,14 +19,16 @@ type RPCPoetClient struct {
 // A compile time check to ensure that RPCPoetClient fully implements PoetProvingServiceClient.
 var _ PoetProvingServiceClient = (*RPCPoetClient)(nil)
 
-func (c *RPCPoetClient) submit(challenge common.Hash) (*types.PoetRound, error) {
+func (c *RPCPoetClient) submit(challenge common.Hash) (*types.PoetRound, [types.PoetIdLength]byte, error) {
 	req := api.SubmitRequest{Challenge: challenge[:]}
 	res, err := c.client.Submit(context.Background(), &req)
 	if err != nil {
-		return nil, fmt.Errorf("rpc failure: %v", err)
+		return nil, [types.PoetIdLength]byte{}, fmt.Errorf("rpc failure: %v", err)
 	}
+	var poetId [types.PoetIdLength]byte
+	copy(poetId[:], res.PoetId)
 
-	return &types.PoetRound{Id: uint64(res.RoundId)}, nil
+	return &types.PoetRound{Id: uint64(res.RoundId)}, poetId, nil
 }
 
 // NewRPCPoetClient returns a new RPCPoetClient instance for the provided

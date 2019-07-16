@@ -3,6 +3,7 @@ package nipst
 import (
 	"crypto/rand"
 	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/spacemeshos/poet/integration"
 	"github.com/stretchr/testify/require"
 	"testing"
@@ -65,7 +66,8 @@ func testRPCPoetClient(c *RPCPoetClient, assert *require.Assertions) {
 	_, err := rand.Read(ch[:])
 	assert.NoError(err)
 
-	poetRound, err := c.submit(ch)
+	poetRound, poetId, err := c.submit(ch)
 	assert.NoError(err)
 	assert.NotNil(poetRound)
+	assert.NotEqual([types.PoetIdLength]byte{}, poetId)
 }
