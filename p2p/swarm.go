@@ -19,6 +19,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	timeSyncConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
+	"hash/fnv"
 
 	inet "net"
 	"strconv"
@@ -301,6 +302,16 @@ func (s *swarm) SendMessage(peerPubkey p2pcrypto.PublicKey, protocol string, pay
 	return s.sendMessageImpl(peerPubkey, protocol, service.DataBytes{Payload: payload})
 }
 
+type hash uint32
+
+// fnv.New32 must be used every time to be sure we get consistent results.
+func calcHash(msg []byte, prot string) hash {
+	msghash := fnv.New32() // todo: Add nonce to messages instead
+	msghash.Write(msg)
+	msghash.Write([]byte(prot))
+	return hash(msghash.Sum32())
+}
+
 // SendMessage Sends a message to a remote node
 // swarm will establish session if needed or use an existing session and open connection
 // Designed to be used by any high level protocol
@@ -345,6 +356,10 @@ func (s *swarm) sendMessageImpl(peerPubKey p2pcrypto.PublicKey, protocol string,
 	}
 
 	final := session.SealMessage(data)
+
+	h := calcHash(payload.Bytes(), protocol)
+	s.lNode.With().Info("new_gossip_message_send", log.String("from", s.lNode.String()), log.String("protocol", protocol), log.Uint32("hash", uint32(h)))
+
 
 	err = conn.Send(final)
 
