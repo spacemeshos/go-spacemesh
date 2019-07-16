@@ -6,12 +6,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/poet/service"
 	"github.com/spacemeshos/poet/shared"
 	"github.com/spacemeshos/post/proving"
 	"github.com/spacemeshos/sha256-simd"
 )
 
-const PoetIdLength = 32
+const PoetServiceIdLength = service.PoetServiceIdLength
 
 type EpochId uint64
 
@@ -155,16 +156,16 @@ type PoetProof struct {
 
 type PoetProofMessage struct {
 	PoetProof
-	PoetId    [PoetIdLength]byte
-	RoundId   uint64
-	Signature []byte
+	PoetServiceId [PoetServiceIdLength]byte
+	RoundId       uint64
+	Signature     []byte
 }
 
 func (proofMessage PoetProofMessage) Ref() ([]byte, error) {
 	poetProofBytes, err := InterfaceToBytes(&proofMessage.PoetProof)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal poet proof for poetId %x round %d: %v",
-			proofMessage.PoetId, proofMessage.RoundId, err)
+			proofMessage.PoetServiceId, proofMessage.RoundId, err)
 	}
 
 	ref := sha256.Sum256(poetProofBytes)

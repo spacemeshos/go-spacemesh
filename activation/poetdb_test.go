@@ -27,7 +27,7 @@ func TestPoetDbHappyFlow(t *testing.T) {
 	_, err = xdr.Unmarshal(file, &poetProof)
 	r.NoError(err)
 	r.EqualValues([][]byte{[]byte("1"), []byte("2"), []byte("3")}, poetProof.Members)
-	var poetId [types.PoetIdLength]byte
+	var poetId [types.PoetServiceIdLength]byte
 	copy(poetId[:], "poet id")
 	roundId := uint64(1337)
 
@@ -36,10 +36,10 @@ func TestPoetDbHappyFlow(t *testing.T) {
 	r.False(types.IsProcessingError(err))
 
 	err = poetDb.storeProof(&types.PoetProofMessage{
-		PoetProof: poetProof,
-		PoetId:    poetId,
-		RoundId:   roundId,
-		Signature: nil,
+		PoetProof:     poetProof,
+		PoetServiceId: poetId,
+		RoundId:       roundId,
+		Signature:     nil,
 	})
 	r.NoError(err)
 
@@ -69,7 +69,7 @@ func TestPoetDbInvalidPoetProof(t *testing.T) {
 	_, err = xdr.Unmarshal(file, &poetProof)
 	r.NoError(err)
 	r.EqualValues([][]byte{[]byte("1"), []byte("2"), []byte("3")}, poetProof.Members)
-	var poetId [types.PoetIdLength]byte
+	var poetId [types.PoetServiceIdLength]byte
 	copy(poetId[:], "poet id")
 	roundId := uint64(1337)
 	poetProof.Root = []byte("some other root")
@@ -85,7 +85,7 @@ func TestPoetDbNonExistingKeys(t *testing.T) {
 
 	poetDb := NewPoetDb(database.NewMemDatabase(), log.NewDefault("poetdb_test"))
 
-	var poetId [types.PoetIdLength]byte
+	var poetId [types.PoetServiceIdLength]byte
 	copy(poetId[:], "abc")
 
 	key := makeKey(poetId, 0)
@@ -102,7 +102,7 @@ func TestPoetDb_SubscribeToPoetProofRef(t *testing.T) {
 
 	poetDb := NewPoetDb(database.NewMemDatabase(), log.NewDefault("poetdb_test"))
 
-	var poetId [types.PoetIdLength]byte
+	var poetId [types.PoetServiceIdLength]byte
 	copy(poetId[:], "abc")
 
 	ch := poetDb.SubscribeToProofRef(poetId, 0)
@@ -125,10 +125,10 @@ func TestPoetDb_SubscribeToPoetProofRef(t *testing.T) {
 	r.False(types.IsProcessingError(err))
 
 	err = poetDb.storeProof(&types.PoetProofMessage{
-		PoetProof: poetProof,
-		PoetId:    poetId,
-		RoundId:   0,
-		Signature: nil,
+		PoetProof:     poetProof,
+		PoetServiceId: poetId,
+		RoundId:       0,
+		Signature:     nil,
 	})
 	r.NoError(err)
 
