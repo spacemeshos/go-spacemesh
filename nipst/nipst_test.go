@@ -50,7 +50,7 @@ func (p *poetProvingServiceClientMock) submit(challenge common.Hash) (*types.Poe
 	return &types.PoetRound{}, nil
 }
 
-func (p *poetProvingServiceClientMock) getPoetServiceId() ([types.PoetIdLength]byte, error) {
+func (p *poetProvingServiceClientMock) getPoetServiceId() ([types.PoetServiceIdLength]byte, error) {
 	return [32]byte{}, nil
 }
 
@@ -59,7 +59,7 @@ type poetDbMock struct{}
 // A compile time check to ensure that poetDbMock fully implements PoetDb.
 var _ PoetDb = (*poetDbMock)(nil)
 
-func (*poetDbMock) SubscribeToProofRef(poetId [types.PoetIdLength]byte, roundId uint64) chan []byte {
+func (*poetDbMock) SubscribeToProofRef(poetId [types.PoetServiceIdLength]byte, roundId uint64) chan []byte {
 	ch := make(chan []byte)
 	go func() {
 		ch <- []byte("hello there")

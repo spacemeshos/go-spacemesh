@@ -30,13 +30,13 @@ func (c *RPCPoetClient) submit(challenge common.Hash) (*types.PoetRound, error) 
 	return &types.PoetRound{Id: uint64(res.RoundId)}, nil
 }
 
-func (c *RPCPoetClient) getPoetServiceId() ([types.PoetIdLength]byte, error) {
+func (c *RPCPoetClient) getPoetServiceId() ([types.PoetServiceIdLength]byte, error) {
 	req := api.GetInfoRequest{}
 	res, err := c.client.GetInfo(context.Background(), &req)
 	if err != nil {
-		return [service.PoetIdLength]byte{}, fmt.Errorf("rpc failure: %v", err)
+		return [service.PoetServiceIdLength]byte{}, fmt.Errorf("rpc failure: %v", err)
 	}
-	var poetServiceId [service.PoetIdLength]byte
+	var poetServiceId [service.PoetServiceIdLength]byte
 	copy(poetServiceId[:], res.PoetServiceId)
 
 	return poetServiceId, nil
