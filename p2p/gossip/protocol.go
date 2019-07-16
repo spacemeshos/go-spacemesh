@@ -12,7 +12,7 @@ import (
 	"sync"
 )
 
-const messageQBufferSize = 100
+const messageQBufferSize = 1000
 const propagateHandleBufferSize = 1000 // number of MessageValidation that we allow buffering, above this number protocols will get stuck
 
 const ProtocolName = "/p2p/1.0/gossip"
@@ -32,6 +32,7 @@ func calcHash(msg []byte, prot string) hash {
 type baseNetwork interface {
 	SendMessage(peerPubkey p2pcrypto.PublicKey, protocol string, payload []byte) error
 	RegisterDirectProtocol(protocol string) chan service.DirectMessage
+	RegisterDirectProtocolWithChannel(protocol string, c chan service.DirectMessage) chan service.DirectMessage
 	SubscribePeerEvents() (conn chan p2pcrypto.PublicKey, disc chan p2pcrypto.PublicKey)
 	ProcessGossipProtocolMessage(sender p2pcrypto.PublicKey, protocol string, data service.Data, validationCompletedChan chan service.MessageValidation) error
 }
@@ -56,7 +57,6 @@ type Protocol struct {
 	oldMessageQ  map[hash]struct{}
 	oldMessageMu sync.RWMutex
 
-	relayQ     chan service.DirectMessage
 	messageQ   chan protocolMessage
 	propagateQ chan service.MessageValidation
 }
@@ -64,7 +64,6 @@ type Protocol struct {
 // NewProtocol creates a new gossip protocol instance. Call Start to start reading peers
 func NewProtocol(config config.SwarmConfig, base baseNetwork, localNodePubkey p2pcrypto.PublicKey, log2 log.Log) *Protocol {
 	// intentionally not subscribing to peers events so that the channels won't block in case executing Start delays
-	relayChan := base.RegisterDirectProtocol(ProtocolName)
 	return &Protocol{
 		Log:             log2,
 		config:          config,
@@ -73,7 +72,6 @@ func NewProtocol(config config.SwarmConfig, base baseNetwork, localNodePubkey p2
 		peers:           make(map[string]*peer),
 		shutdown:        make(chan struct{}),
 		oldMessageQ:     make(map[hash]struct{}), // todo : remember to drain this
-		relayQ:          relayChan,
 		messageQ:        make(chan protocolMessage, messageQBufferSize),
 		propagateQ:      make(chan service.MessageValidation, propagateHandleBufferSize),
 	}
@@ -175,7 +173,7 @@ func (prot *Protocol) processMessage(sender p2pcrypto.PublicKey, protocol string
 		return nil
 	}
 
-	prot.Log.With().Info("new_gossip_message", log.String("from", sender.String()), log.String("protocol", protocol), log.Uint32("hash", uint32(h)))
+	prot.Log.With().Debug("new_gossip_message", log.String("from", sender.String()), log.String("protocol", protocol), log.Uint32("hash", uint32(h)))
 	metrics.NewGossipMessages.With("protocol", protocol).Add(1)
 	return prot.net.ProcessGossipProtocolMessage(sender, protocol, msg, prot.propagateQ)
 }
@@ -186,7 +184,7 @@ loop:
 	for {
 		select {
 		case msgV := <-prot.propagateQ:
-			prot.propagateMessage(msgV.Message(), calcHash(msgV.Message(), msgV.Protocol()), msgV.Protocol(), msgV.Sender())
+			go prot.propagateMessage(msgV.Message(), calcHash(msgV.Message(), msgV.Protocol()), msgV.Protocol(), msgV.Sender())
 		case <-prot.shutdown:
 			err = errors.New("protocol shutdown")
 			break loop
