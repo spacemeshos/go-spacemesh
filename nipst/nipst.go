@@ -62,7 +62,7 @@ type builderState struct {
 }
 
 func (s *builderState) load() {
-	// TODO(noamnelke): implement
+
 }
 
 func (s *builderState) persist() {

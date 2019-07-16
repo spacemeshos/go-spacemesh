@@ -140,7 +140,7 @@ func (db *PoetDb) GetProofMessage(proofRef []byte) ([]byte, error) {
 func (db *PoetDb) GetMembershipMap(proofRef []byte) (map[common.Hash]bool, error) {
 	proofMessageBytes, err := db.GetProofMessage(proofRef)
 	if err != nil {
-		return nil, fmt.Errorf("could not fetch poet proof for ref %x: %v", proofRef[:5], err)
+		return nil, fmt.Errorf("could not fetch poet proof for ref %x: %v", proofRef[:3], err)
 	}
 	var proofMessage types.PoetProofMessage
 	if err := types.BytesToInterface(proofMessageBytes, &proofMessage); err != nil {
