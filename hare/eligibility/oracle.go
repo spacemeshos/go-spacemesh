@@ -105,8 +105,7 @@ func (o *Oracle) activeSetSize(layer types.LayerID) (uint32, error) {
 	}
 
 	// check cache
-	val, ok := o.cache.Get(layer)
-	if ok {
+	if val, exist := o.cache.Get(layer); exist {
 		return val.(uint32), nil
 	}
 

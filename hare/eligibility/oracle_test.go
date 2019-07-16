@@ -150,6 +150,14 @@ func Test_ActiveSetSize(t *testing.T) {
 	assertActiveSetSize(t, o, 2, l)
 	assertActiveSetSize(t, o, 3, l+10)
 	assertActiveSetSize(t, o, 5, l+20)
+
+	// create error
+	o.getActiveSet = func(layer types.LayerID) (uint32, error) {
+		return 5, errors.New("fake err")
+	}
+	activeSetSize, err := o.activeSetSize(l)
+	assert.Error(t, err)
+	assert.Equal(t, uint32(0), activeSetSize)
 }
 
 func assertActiveSetSize(t *testing.T, o *Oracle, expected uint32, l types.LayerID) {
