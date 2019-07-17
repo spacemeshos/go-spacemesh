@@ -189,7 +189,7 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 		}
 
 		votes, err = t.hareResult.GetResult(bottom, id-1)
-		if len(votes) == 0 {
+		if err != nil {
 			return nil, errors.New(fmt.Sprintf("didn't receive hare results for layers between  %v %v %v", bottom, id-1, err))
 		}
 	}
