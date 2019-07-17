@@ -355,6 +355,7 @@ func TestBuilder_PublishActivationTxSerialize(t *testing.T) {
 }
 
 func TestBuilder_PublishActivationTx_PosAtxOnSameLayerAsPrevAtx(t *testing.T) {
+	t.Skip("proves https://github.com/spacemeshos/go-spacemesh/issues/1166")
 	id := types.NodeId{"aaaaaa", []byte("bbbbb")}
 	coinbase := address.HexToAddress("0xaaa")
 	net := &NetMock{}
