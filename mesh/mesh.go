@@ -515,7 +515,7 @@ func (m *Mesh) ActiveSetForLayerView(layer types.LayerID, layersPerEpoch uint16)
 	}
 
 	activeSetSize := uint32(0)
-	countedAtxs := make(map[types.AtxId]struct{})
+	countedAtxs := make(map[string]types.AtxId)
 
 	traversalFunc := func(blkh *types.BlockHeader) error {
 
@@ -543,10 +543,13 @@ func (m *Mesh) ActiveSetForLayerView(layer types.LayerID, layersPerEpoch uint16)
 					atx.ShortId(), atx.TargetEpoch(layersPerEpoch), epoch)
 				continue
 			}
-			if _, exist := countedAtxs[id]; exist {
+			if prevId, exist := countedAtxs[atx.NodeId.Key]; exist { // same miner
+				if prevId != id { // different atx for same epoch
+					m.Error("Encountered second atx for the same miner on the same epoch atxId1=%v atxId2=%v", prevId, id)
+				}
 				continue
 			}
-			countedAtxs[id] = struct{}{}
+			countedAtxs[atx.NodeId.Key] = id
 			activeSetSize++
 		}
 
