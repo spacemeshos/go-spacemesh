@@ -2,7 +2,6 @@ package hare
 
 import (
 	"errors"
-	"fmt"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/hare/metrics"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -236,12 +235,10 @@ func (h *Hare) GetResult(lower types.LayerID, upper types.LayerID) ([]types.Bloc
 	for id := lower; id <= upper; id++ {
 		blks, ok := h.outputs[id]
 		if !ok {
-			h.mu.RUnlock()
-			return nil, errors.New(fmt.Sprintf("hare result for layer %v was not in map", id))
+			continue
 		}
 		results = append(results, blks...)
 	}
-
 	h.mu.RUnlock()
 	return results, nil
 }
