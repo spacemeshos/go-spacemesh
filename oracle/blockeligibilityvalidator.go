@@ -36,7 +36,8 @@ func NewBlockEligibilityValidator(committeeSize int32, layersPerEpoch uint16, ac
 
 func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (bool, error) {
 
-	if block.Layer().GetEpoch(v.layersPerEpoch) != 0 {
+	//todo remove this hack when genesis is handled
+	if block.Layer().GetEpoch(v.layersPerEpoch) == 0 {
 		return true, nil
 	}
 
