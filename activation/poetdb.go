@@ -34,7 +34,7 @@ func (db *PoetDb) HasProof(proofRef []byte) bool {
 }
 
 func (db *PoetDb) ValidateAndStore(proofMessage *types.PoetProofMessage) error {
-	if err := db.Validate(proofMessage.PoetProof, proofMessage.PoetId,
+	if err := db.Validate(proofMessage.PoetProof, proofMessage.PoetServiceId,
 		proofMessage.RoundId, proofMessage.Signature); err != nil {
 
 		return err
@@ -44,7 +44,7 @@ func (db *PoetDb) ValidateAndStore(proofMessage *types.PoetProofMessage) error {
 	return err
 }
 
-func (db *PoetDb) Validate(proof types.PoetProof, poetId [types.PoetIdLength]byte, roundId uint64,
+func (db *PoetDb) Validate(proof types.PoetProof, poetId [types.PoetServiceIdLength]byte, roundId uint64,
 	signature []byte) error {
 
 	root, err := calcRoot(proof.Members)
@@ -75,23 +75,23 @@ func (db *PoetDb) storeProof(proofMessage *types.PoetProofMessage) error {
 	batch := db.store.NewBatch()
 	if err := batch.Put(ref, messageBytes); err != nil {
 		return fmt.Errorf("failed to store poet proof for poetId %x round %d: %v",
-			proofMessage.PoetId[:5], proofMessage.RoundId, err)
+			proofMessage.PoetServiceId[:5], proofMessage.RoundId, err)
 	}
-	key := makeKey(proofMessage.PoetId, proofMessage.RoundId)
+	key := makeKey(proofMessage.PoetServiceId, proofMessage.RoundId)
 	if err := batch.Put(key[:], ref); err != nil {
 		return fmt.Errorf("failed to store poet proof index entry for poetId %x round %d: %v",
-			proofMessage.PoetId[:5], proofMessage.RoundId, err)
+			proofMessage.PoetServiceId[:5], proofMessage.RoundId, err)
 	}
 	if err := batch.Write(); err != nil {
 		return fmt.Errorf("failed to store poet proof and index for poetId %x round %d: %v",
-			proofMessage.PoetId[:5], proofMessage.RoundId, err)
+			proofMessage.PoetServiceId[:5], proofMessage.RoundId, err)
 	}
-	db.log.Debug("stored proof (id: %x) for round %d PoET id %x", ref[:5], proofMessage.RoundId, proofMessage.PoetId[:5])
+	db.log.Debug("stored proof (id: %x) for round %d PoET id %x", ref[:5], proofMessage.RoundId, proofMessage.PoetServiceId[:5])
 	db.publishProofRef(key, ref)
 	return nil
 }
 
-func (db *PoetDb) SubscribeToProofRef(poetId [types.PoetIdLength]byte, roundId uint64) chan []byte {
+func (db *PoetDb) SubscribeToProofRef(poetId [types.PoetServiceIdLength]byte, roundId uint64) chan []byte {
 	key := makeKey(poetId, roundId)
 	ch := make(chan []byte)
 
@@ -149,7 +149,7 @@ func (db *PoetDb) GetMembershipMap(proofRef []byte) (map[common.Hash]bool, error
 	return membershipSliceToMap(proofMessage.Members), nil
 }
 
-func makeKey(poetId [types.PoetIdLength]byte, roundId uint64) poetProofKey {
+func makeKey(poetId [types.PoetServiceIdLength]byte, roundId uint64) poetProofKey {
 	roundIdBytes := make([]byte, 8)
 	binary.LittleEndian.PutUint64(roundIdBytes, roundId)
 	sum := sha256.Sum256(append(poetId[:], roundIdBytes...))
