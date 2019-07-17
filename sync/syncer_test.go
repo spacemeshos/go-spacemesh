@@ -196,6 +196,7 @@ func TestSyncProtocol_BlockRequest(t *testing.T) {
 	block := types.NewExistingBlock(types.BlockID(uuid.New().ID()), lid, []byte("data data data"))
 
 	syncObj.AddBlockWithTxs(block, []*types.AddressableSignedTransaction{tx1}, []*types.ActivationTx{atx1})
+
 	syncObj2.Peers = getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
 
 	output := syncObj2.fetchWithFactory(NewBlockWorker(syncObj2, 1, BlockReqFactory(), blockSliceToChan([]types.BlockID{block.ID()})))

@@ -446,7 +446,7 @@ func (s *Syncer) syncTxs(txids []types.TransactionId) ([]*types.AddressableSigne
 	return txs, nil
 }
 
-func (s *Syncer) checkLocalTxs(txids []types.TransactionId) (map[types.TransactionId]*types.AddressableSignedTransaction, map[types.TransactionId]*types.AddressableSignedTransaction, []types.TransactionId) {
+func (s *Syncer) checkLocalTxs(txids []types.TransactionId) ([]types.SerializableSignedTransaction, map[types.TransactionId]*types.AddressableSignedTransaction, []types.TransactionId) {
 	//look in pool
 	unprocessedTxs := make(map[types.TransactionId]*types.AddressableSignedTransaction)
 	missing := make([]types.TransactionId, 0)
@@ -461,10 +461,15 @@ func (s *Syncer) checkLocalTxs(txids []types.TransactionId) (map[types.Transacti
 	//look in db
 	dbTxs, missinDB := s.GetTransactions(missing)
 	if len(dbTxs) > 0 {
-		println("fuuuuuuuuuck")
+		s.Info("found tx  in db")
 	}
-	s.Info("found tx  in db")
-	return unprocessedTxs, dbTxs, missinDB
+
+	unprocessedArr := []types.SerializableSignedTransaction{}
+	for _, tx := range unprocessedTxs {
+		unprocessedArr = append(unprocessedArr, *tx.SerializableSignedTransaction)
+	}
+
+	return unprocessedArr, dbTxs, missinDB
 }
 
 //returns atxs out of txids that are not in the local database
@@ -498,7 +503,7 @@ func (s *Syncer) syncAtxs(atxIds []types.AtxId) ([]*types.ActivationTx, error) {
 	return atxs, nil
 }
 
-func (s *Syncer) checkLocalAtxs(atxIds []types.AtxId) (map[types.AtxId]*types.ActivationTx, map[types.AtxId]*types.ActivationTx, []types.AtxId) {
+func (s *Syncer) checkLocalAtxs(atxIds []types.AtxId) ([]types.ActivationTx, map[types.AtxId]*types.ActivationTx, []types.AtxId) {
 	//look in pool
 	unprocessedAtxs := make(map[types.AtxId]*types.ActivationTx, len(atxIds))
 	missingInPool := make([]types.AtxId, 0, len(atxIds))
@@ -518,9 +523,14 @@ func (s *Syncer) checkLocalAtxs(atxIds []types.AtxId) (map[types.AtxId]*types.Ac
 			missingInPool = append(missingInPool, id)
 		}
 	}
+
+	unprocessedArr := []types.ActivationTx{}
+	for _, tx := range unprocessedAtxs {
+		unprocessedArr = append(unprocessedArr, *tx)
+	}
 	//look in db
 	dbAtxs, missingInDb := s.GetATXs(missingInPool)
-	return unprocessedAtxs, dbAtxs, missingInDb
+	return unprocessedArr, dbAtxs, missingInDb
 }
 
 func (s *Syncer) fetchWithFactory(wrk worker) chan interface{} {
