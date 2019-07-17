@@ -464,7 +464,7 @@ func (s *Syncer) checkLocalTxs(txids []types.TransactionId) ([]types.Serializabl
 		s.Info("found tx  in db")
 	}
 
-	unprocessedArr := []types.SerializableSignedTransaction{}
+	unprocessedArr := make([]types.SerializableSignedTransaction, 0, len(unprocessedTxs))
 	for _, tx := range unprocessedTxs {
 		unprocessedArr = append(unprocessedArr, *tx.SerializableSignedTransaction)
 	}
