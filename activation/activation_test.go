@@ -354,7 +354,7 @@ func TestBuilder_PublishActivationTxSerialize(t *testing.T) {
 	assert.Equal(t, bt, bt2)
 }
 
-func Test_01(t *testing.T) {
+func TestBuilder_PublishActivationTx_PosAtxOnSameLayerAsPrevAtx(t *testing.T) {
 	id := types.NodeId{"aaaaaa", []byte("bbbbb")}
 	coinbase := address.HexToAddress("0xaaa")
 	net := &NetMock{}
@@ -376,6 +376,9 @@ func Test_01(t *testing.T) {
 		assert.NoError(t, err)
 	}
 
+	prevATX := types.NewActivationTx(types.NodeId{"aaaaaa", []byte("bbbbb")}, coinbase, 1, prevAtx, types.LayerID(6), 1, prevAtx, 5, []types.BlockID{1, 2, 3}, npst)
+	b.prevATX = prevATX
+
 	//ugly hack to set view size in db
 	view, err := layers.GetOrphanBlocksBefore(layers.LatestLayer())
 	assert.NoError(t, err)
@@ -383,18 +386,18 @@ func Test_01(t *testing.T) {
 	assert.NoError(t, err)
 	activesetCache.put(common.BytesToHash(v), 10)
 
-	_, err = b.PublishActivationTx(1)
+	_, err = b.PublishActivationTx(0)
 	assert.NoError(t, err)
 
 	newAtx, err := types.BytesAsAtx(net.bt)
 	assert.NoError(t, err)
 	posAtx, err := activationDb.GetAtx(newAtx.PositioningAtx)
 	assert.NoError(t, err)
-	prevOfNewAtx, err := activationDb.GetAtx(newAtx.PrevATXId)
+	assert.Equal(t, prevATX.Id(), newAtx.PrevATXId)
 
 	// check atx.PubLayerId - posAtx.PubLayerId = number of layers per epoch
 	assert.Equal(t, types.LayerID(layersPerEpoch), newAtx.PubLayerIdx-posAtx.PubLayerIdx)
 
 	// check pos & prev has the same PubLayerIdx
-	assert.Equal(t, posAtx.PubLayerIdx, prevOfNewAtx.PubLayerIdx)
+	assert.Equal(t, prevATX.PubLayerIdx, posAtx.PubLayerIdx)
 }
