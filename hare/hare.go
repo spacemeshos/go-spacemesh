@@ -2,7 +2,6 @@ package hare
 
 import (
 	"errors"
-	"fmt"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/hare/metrics"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -113,24 +112,13 @@ func New(conf config.Config, p2p NetworkService, sign Signer, nid types.NodeId, 
 }
 
 func (h *Hare) isTooLate(id InstanceId) bool {
-	if id < InstanceId(h.oldestResultInBuffer()) { // bufferSize>=0
+	h.layerLock.RLock()
+	if int64(id) < int64(h.lastLayer)-int64(h.bufferSize) { // bufferSize>=0
+		h.layerLock.RUnlock()
 		return true
 	}
-	return false
-}
-
-func (h *Hare) oldestResultInBuffer() types.LayerID {
-
-	h.layerLock.RLock()
-
-	if h.lastLayer <= types.LayerID(h.bufferSize) {
-		h.layerLock.RUnlock()
-		return 0
-	}
-
-	lyr := h.lastLayer - types.LayerID(h.bufferSize)
 	h.layerLock.RUnlock()
-	return lyr
+	return false
 }
 
 // ErrTooLate means that the consensus was terminated too late
@@ -225,25 +213,19 @@ var (
 )
 
 // GetResults returns the hare output for a given LayerID. returns error if we don't have results yet.
-func (h *Hare) GetResult(lower types.LayerID, upper types.LayerID) ([]types.BlockID, error) {
-
-	if h.isTooLate(InstanceId(lower)) {
+func (h *Hare) GetResult(id types.LayerID) ([]types.BlockID, error) {
+	if h.isTooLate(InstanceId(id)) {
 		return nil, ErrTooOld
 	}
 
-	var results []types.BlockID
 	h.mu.RLock()
-	for id := lower; id <= upper; id++ {
-		blks, ok := h.outputs[id]
-		if !ok {
-			h.mu.RUnlock()
-			return nil, errors.New(fmt.Sprintf("hare result for layer %v was not in map", id))
-		}
-		results = append(results, blks...)
+	blks, ok := h.outputs[id]
+	if !ok {
+		h.mu.RUnlock()
+		return nil, ErrTooEarly
 	}
-
 	h.mu.RUnlock()
-	return results, nil
+	return blks, nil
 }
 
 func (h *Hare) outputCollectionLoop() {

@@ -36,9 +36,6 @@ func AddCommands(cmd *cobra.Command) {
 		config.LayerDurationSec, "Duration between layers in seconds")
 	cmd.PersistentFlags().IntVar(&config.LayerAvgSize, "layer-average-size",
 		config.LayerAvgSize, "Layer Avg size")
-	cmd.PersistentFlags().IntVar(&config.Hdist, "hdist",
-		config.Hdist, "hdist")
-
 	cmd.PersistentFlags().StringVar(&config.MemProfile, "mem-profile",
 		config.MemProfile, "output memory profiling stat to filename")
 	cmd.PersistentFlags().StringVar(&config.CpuProfile, "cpu-profile",
