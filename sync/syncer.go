@@ -420,15 +420,15 @@ func (s *Syncer) syncTxs(txids []types.TransactionId) ([]*types.AddressableSigne
 
 	for out := range s.fetchWithFactory(NewNeighborhoodWorker(s, 1, TxReqFactory(txids, s))) {
 		if ntxs, ok := out.([]types.SerializableSignedTransaction); ok {
-			for _, tx := range ntxs {
-				tmp := tx
-				ast, err := s.validateAndBuildTx(&tmp)
+			for _, tmp := range ntxs {
+				tx := tmp
+				ast, err := s.validateAndBuildTx(&tx)
 				if err != nil {
-					id := types.GetTransactionId(&tmp)
+					id := types.GetTransactionId(&tx)
 					s.Warning("tx %v not valid %v", hex.EncodeToString(id[:]), err)
 					continue
 				}
-				unprocessedTxs[types.GetTransactionId(&tmp)] = ast
+				unprocessedTxs[types.GetTransactionId(&tx)] = ast
 			}
 		}
 	}
@@ -479,12 +479,12 @@ func (s *Syncer) syncAtxs(atxIds []types.AtxId) ([]*types.ActivationTx, error) {
 	output := s.fetchWithFactory(NewNeighborhoodWorker(s, 1, ATxReqFactory(atxIds, s)))
 	for out := range output {
 		if atxs, ok := out.([]types.ActivationTx); ok {
-			for _, atx := range atxs {
+			for _, tmp := range atxs {
+				atx := tmp
 				if err := s.SyntacticallyValidateAtx(&atx); err != nil {
 					s.Warning("atx %v not valid %v", atx.ShortId(), err)
 					continue
 				}
-				tmp := atx
 				unprocessedAtxs[atx.Id()] = &tmp
 			}
 		}
