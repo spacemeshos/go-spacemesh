@@ -41,13 +41,13 @@ func RandStringRunes(n int) string {
 	return string(b)
 }
 
-func (a *mockActivationDB) IsIdentityActive(edId string, layer types.LayerID) (bool, types.AtxId, error) {
+func (a *mockActivationDB) IsIdentityActive(edId string, layer types.LayerID) (*types.NodeId, bool, types.AtxId, error) {
 	if idmap, ok := a.atxs[edId]; ok {
 		if atxid, ok := idmap[layer]; ok {
-			return true, atxid, nil
+			return nil, true, atxid, nil
 		}
 	}
-	return true, *types.EmptyAtxId, nil
+	return nil, true, *types.EmptyAtxId, nil
 }
 
 func (a mockActivationDB) ActiveSetSize(epochId types.EpochId) (uint32, error) {
@@ -102,7 +102,7 @@ func testBlockOracleAndValidator(r *require.Assertions, activeSetSize uint32, co
 
 		for _, proof := range proofs {
 			block := newBlockWithEligibility(layerID, nodeID, atxID, proof, activationDB)
-			eligible, err := validator.BlockEligible(block)
+			eligible, err := validator.BlockSignedAndEligible(block)
 			r.NoError(err, "at layer %d, with layersPerEpoch %d", layer, layersPerEpoch)
 			r.True(eligible, "should be eligible at layer %d, but isn't", layer)
 			counterValuesSeen[proof.J] += 1
@@ -171,7 +171,7 @@ func TestBlockOracleEmptyActiveSetValidation(t *testing.T) {
 	validator := NewBlockEligibilityValidator(committeeSize, layersPerEpoch, activationDB, beaconProvider,
 		validateVrf, lg.WithName("blkElgValidator"))
 	block := newBlockWithEligibility(types.LayerID(layersPerEpoch*2), nodeID, atxID, types.BlockEligibilityProof{}, activationDB)
-	eligible, err := validator.BlockEligible(block)
+	eligible, err := validator.BlockSignedAndEligible(block)
 	r.EqualError(err, "empty active set not allowed")
 	r.False(eligible)
 }
@@ -222,7 +222,7 @@ func TestBlockOracleValidatorInvalidProof(t *testing.T) {
 	validator := NewBlockEligibilityValidator(committeeSize, layersPerEpoch, activationDB, beaconProvider,
 		validateVrf, lg.WithName("blkElgValidator"))
 	block := newBlockWithEligibility(layerID, nodeID, atxID, proof, activationDB)
-	eligible, err := validator.BlockEligible(block)
+	eligible, err := validator.BlockSignedAndEligible(block)
 	r.False(eligible)
 	r.Nil(err)
 }
@@ -254,7 +254,7 @@ func TestBlockOracleValidatorInvalidProof2(t *testing.T) {
 	validator := NewBlockEligibilityValidator(int32(committeeSize), layersPerEpoch, validatorActivationDB, beaconProvider,
 		validateVrf, lg.WithName("blkElgValidator"))
 	block := newBlockWithEligibility(layerID, nodeID, atxID, proof, validatorActivationDB)
-	eligible, err := validator.BlockEligible(block)
+	eligible, err := validator.BlockSignedAndEligible(block)
 	r.False(eligible)
 	r.EqualError(err, fmt.Sprintf("proof counter (%d) must be less than number of eligible blocks (1)", proof.J))
 }
@@ -286,7 +286,7 @@ func TestBlockOracleValidatorInvalidProof3(t *testing.T) {
 	validator := NewBlockEligibilityValidator(int32(committeeSize), layersPerEpoch, validatorActivationDB, beaconProvider,
 		validateVrf, lg.WithName("blkElgValidator"))
 	block := newBlockWithEligibility(layerID, nodeID, atxID, proof, activationDB)
-	eligible, err := validator.BlockEligible(block)
+	eligible, err := validator.BlockSignedAndEligible(block)
 	r.False(eligible)
 	r.EqualError(err, "ATX target epoch (1) doesn't match block publication epoch (2)")
 }

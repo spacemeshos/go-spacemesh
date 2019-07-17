@@ -13,7 +13,7 @@ type ActivationDb interface {
 	GetNodeAtxIds(node types.NodeId) ([]types.AtxId, error)
 	GetAtx(id types.AtxId) (*types.ActivationTx, error)
 	GetIdentity(edId string) (types.NodeId, error)
-	IsIdentityActive(edId string, layer types.LayerID) (bool, types.AtxId, error)
+	IsIdentityActive(edId string, layer types.LayerID) (*types.NodeId, bool, types.AtxId, error)
 }
 
 type Signer interface {

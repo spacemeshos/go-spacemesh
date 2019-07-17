@@ -56,7 +56,7 @@ type State struct {
 }
 
 type StateQuerier interface {
-	IsIdentityActive(edId string, layer types.LayerID) (bool, types.AtxId, error)
+	IsIdentityActive(edId string, layer types.LayerID) (*types.NodeId, bool, types.AtxId, error)
 }
 
 type Msg struct {
@@ -87,7 +87,7 @@ func newMsg(hareMsg *Message, querier StateQuerier, layersPerEpoch uint16) (*Msg
 	}
 	// query if identity is active
 	pub := signing.NewPublicKey(pubKey)
-	res, _, err := querier.IsIdentityActive(pub.String(), types.LayerID(hareMsg.InnerMsg.InstanceId))
+	_, res, _, err := querier.IsIdentityActive(pub.String(), types.LayerID(hareMsg.InnerMsg.InstanceId))
 	if err != nil {
 		log.Error("error while checking if identity is active for %v err=%v", pub.String(), err)
 		return nil, errors.New("is identity active query failed")
@@ -611,7 +611,7 @@ func (proc *ConsensusProcess) endOfRound3() {
 
 func (proc *ConsensusProcess) shouldParticipate() bool {
 	// query if identity is active
-	res, _, err := proc.stateQuerier.IsIdentityActive(proc.signing.PublicKey().String(), types.LayerID(proc.instanceId))
+	_, res, _, err := proc.stateQuerier.IsIdentityActive(proc.signing.PublicKey().String(), types.LayerID(proc.instanceId))
 	if err != nil {
 		proc.With().Error("Error checking our identity for activeness", log.String("err", err.Error()),
 			log.Uint64("layer_id", uint64(proc.instanceId)))

@@ -116,7 +116,7 @@ func TestBlockBuilder_StartStop(t *testing.T) {
 	orphans := MockOrphans{st: []types.BlockID{1, 2, 3}}
 	builder := NewBlockBuilder(types.NodeId{}, &MockSigning{},
 		n,
-		beginRound,
+		beginRound, 1,
 		NewTypesTransactionIdMemPool(),
 		NewTypesAtxIdMemPool(),
 		MockCoin{},
@@ -157,9 +157,9 @@ func TestBlockBuilder_BlockIdGeneration(t *testing.T) {
 	hare := MockHare{res: map[types.LayerID][]types.BlockID{}}
 	hare.res[0] = hareRes
 
-	builder1 := NewBlockBuilder(types.NodeId{Key: "a"}, &MockSigning{}, n1, beginRound, NewTypesTransactionIdMemPool(),
+	builder1 := NewBlockBuilder(types.NodeId{Key: "a"}, &MockSigning{}, n1, beginRound, 1, NewTypesTransactionIdMemPool(),
 		NewTypesAtxIdMemPool(), MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare, mockBlockOracle{}, mockTxProcessor{}, &mockAtxValidator{}, &mockSyncer{}, log.New(n1.NodeInfo.ID.String(), "", ""))
-	builder2 := NewBlockBuilder(types.NodeId{Key: "b"}, &MockSigning{}, n2, beginRound, NewTypesTransactionIdMemPool(),
+	builder2 := NewBlockBuilder(types.NodeId{Key: "b"}, &MockSigning{}, n2, beginRound, 1, NewTypesTransactionIdMemPool(),
 		NewTypesAtxIdMemPool(), MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare, mockBlockOracle{}, mockTxProcessor{}, &mockAtxValidator{}, &mockSyncer{}, log.New(n2.NodeInfo.ID.String(), "", ""))
 
 	b1, _ := builder1.createBlock(1, types.AtxId{}, types.BlockEligibilityProof{}, nil, nil)
@@ -182,7 +182,7 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 	hare.res[0] = hareRes
 	hare.res[1] = hareRes1
 
-	builder := NewBlockBuilder(types.NodeId{"anton", []byte("anton")}, &MockSigning{}, n, beginRound, NewTypesTransactionIdMemPool(),
+	builder := NewBlockBuilder(types.NodeId{"anton", []byte("anton")}, &MockSigning{}, n, beginRound, 1, NewTypesTransactionIdMemPool(),
 		NewTypesAtxIdMemPool(), MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare, mockBlockOracle{}, mockTxProcessor{}, &mockAtxValidator{}, &mockSyncer{}, log.New(n.String(), "", ""))
 
 	err := builder.Start()
@@ -277,7 +277,7 @@ func TestBlockBuilder_Validation(t *testing.T) {
 	hare := MockHare{res: map[types.LayerID][]types.BlockID{}}
 	hare.res[0] = hareRes
 
-	builder1 := NewBlockBuilder(types.NodeId{Key: "a"}, &MockSigning{}, n1, beginRound, NewTypesTransactionIdMemPool(),
+	builder1 := NewBlockBuilder(types.NodeId{Key: "a"}, &MockSigning{}, n1, beginRound, 1, NewTypesTransactionIdMemPool(),
 		NewTypesAtxIdMemPool(), MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare, mockBlockOracle{}, mockTxProcessor{true}, &mockAtxValidator{}, &mockSyncer{}, log.New(n1.NodeInfo.ID.String(), "", ""))
 	builder1.Start()
 	ed := signing.NewEdSigner()

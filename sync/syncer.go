@@ -40,11 +40,11 @@ type PoetDb interface {
 }
 
 type BlockValidator interface {
-	BlockEligible(block *types.Block) (bool, error)
+	BlockSignedAndEligible(block *types.Block) (bool, error)
 }
 
 type EligibilityValidator interface {
-	BlockEligible(block *types.Block) (bool, error)
+	BlockSignedAndEligible(block *types.Block) (bool, error)
 }
 
 type TxSigValidator interface {
@@ -257,12 +257,10 @@ func (s *Syncer) GetFullBlocks(blockIds []types.BlockID) []*types.Block {
 }
 
 func (s *Syncer) BlockSyntacticValidation(block *types.Block) ([]*types.AddressableSignedTransaction, []*types.ActivationTx, error) {
-	//todo remove this hack once identity genesis setup is implemented
-	if block.Layer().GetEpoch(s.LayersPerEpoch).IsGenesis() == false {
-		//block eligibility
-		if eligable, err := s.BlockEligible(block); err != nil || !eligable {
-			return nil, nil, errors.New(fmt.Sprintf("block %v eligablety check failed %v", block.ID(), err))
-		}
+
+	//block eligibility
+	if eligable, err := s.BlockSignedAndEligible(block); err != nil || !eligable {
+		return nil, nil, errors.New(fmt.Sprintf("block %v eligablety check failed %v", block.ID(), err))
 	}
 
 	//data availability

@@ -34,7 +34,11 @@ func NewBlockEligibilityValidator(committeeSize int32, layersPerEpoch uint16, ac
 	}
 }
 
-func (v BlockEligibilityValidator) BlockEligible(block *types.Block) (bool, error) {
+func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (bool, error) {
+
+	if block.Layer().GetEpoch(v.layersPerEpoch) != 0 {
+		return true, nil
+	}
 
 	//check block signature and is identity active
 	pubKey, err := ed25519.ExtractPublicKey(block.Bytes(), block.Sig())
@@ -44,7 +48,7 @@ func (v BlockEligibilityValidator) BlockEligible(block *types.Block) (bool, erro
 
 	pubString := signing.NewPublicKey(pubKey).String()
 
-	active, atxid, err := v.activationDb.IsIdentityActive(pubString, block.Layer())
+	_, active, atxid, err := v.activationDb.IsIdentityActive(pubString, block.Layer())
 	if err != nil {
 		return false, errors.New(fmt.Sprintf("error while checking IsIdentityActive for %v %v ", block.ID(), err))
 	}
@@ -112,7 +116,7 @@ func (v BlockEligibilityValidator) getActiveSetSize(block *types.BlockHeader) (u
 		v.log.Error("getting ATX failed: %v %v ep(%v)", err, block.ATXID.ShortString(), blockEpoch)
 		return 0, fmt.Errorf("getting ATX failed: %v %v ep(%v)", err, block.ATXID.ShortString(), blockEpoch)
 	}
-	// TODO: remove the following check, as it should be validated before calling BlockEligible
+	// TODO: remove the following check, as it should be validated before calling BlockSignedAndEligible
 	if atxTargetEpoch := atx.PubLayerIdx.GetEpoch(v.layersPerEpoch) + 1; atxTargetEpoch != blockEpoch {
 		v.log.Error("ATX target epoch (%d) doesn't match block publication epoch (%d)",
 			atxTargetEpoch, blockEpoch)
