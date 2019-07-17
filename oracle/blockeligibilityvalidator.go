@@ -49,7 +49,7 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 
 	pubString := signing.NewPublicKey(pubKey).String()
 
-	_, active, atxid, err := v.activationDb.IsIdentityActive(pubString, block.Layer())
+	nodeId, active, atxid, err := v.activationDb.IsIdentityActive(pubString, block.Layer())
 	if err != nil {
 		return false, errors.New(fmt.Sprintf("error while checking IsIdentityActive for %v %v ", block.ID(), err))
 	}
@@ -85,11 +85,6 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 	epochBeacon := v.beaconProvider.GetBeacon(epochNumber)
 	message := serializeVRFMessage(epochBeacon, epochNumber, counter)
 	vrfSig := block.EligibilityProof.Sig
-
-	nodeId, err := v.activationDb.GetIdentity(pubString)
-	if err != nil { // means there is no such identity
-		return false, errors.New(fmt.Sprintf("could not extract identity from block %v %v ", block.ID(), err))
-	}
 
 	res, err := v.validateVRF(message, vrfSig, []byte(nodeId.VRFPublicKey))
 	if err != nil {
