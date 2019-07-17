@@ -51,7 +51,7 @@ func TestNewNeighborhoodWorker(t *testing.T) {
 	id2 := types.GetTransactionId(tx2.SerializableSignedTransaction)
 	id3 := types.GetTransactionId(tx3.SerializableSignedTransaction)
 
-	wrk := NewNeighborhoodWorker(syncObj2, 1, TxReqFactory([]types.TransactionId{id1, id2, id3}))
+	wrk := NewNeighborhoodWorker(syncObj2, 1, TxReqFactory([]types.TransactionId{id1, id2, id3}, syncObj2))
 	go wrk.Work()
 
 	select {
