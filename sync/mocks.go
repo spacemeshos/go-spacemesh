@@ -17,7 +17,7 @@ func (PoetDbMock) HasProof(proofRef []byte) bool { return true }
 
 func (PoetDbMock) ValidateAndStore(proofMessage *types.PoetProofMessage) error { return nil }
 
-func (*PoetDbMock) SubscribeToProofRef(poetId [types.PoetIdLength]byte, roundId uint64) chan []byte {
+func (*PoetDbMock) SubscribeToProofRef(poetId [types.PoetServiceIdLength]byte, roundId uint64) chan []byte {
 	ch := make(chan []byte)
 	go func() {
 		ch <- []byte("hello there")
