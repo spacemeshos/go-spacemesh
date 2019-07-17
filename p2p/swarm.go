@@ -357,9 +357,6 @@ func (s *swarm) sendMessageImpl(peerPubKey p2pcrypto.PublicKey, protocol string,
 
 	final := session.SealMessage(data)
 
-	h := calcHash(payload.Bytes(), protocol)
-	s.lNode.With().Info("new_gossip_message_send", log.String("from", s.lNode.String()), log.String("protocol", protocol), log.Uint32("hash", uint32(h)))
-
 
 	err = conn.Send(final)
 
@@ -584,6 +581,8 @@ func (s *swarm) ProcessGossipProtocolMessage(sender p2pcrypto.PublicKey, protoco
 
 // Broadcast creates a gossip message signs it and disseminate it to neighbors.
 func (s *swarm) Broadcast(protocol string, payload []byte) error {
+	h := calcHash(payload, protocol)
+	s.lNode.With().Info("new_gossip_message_broadcast", log.String("from", s.lNode.String()), log.String("protocol", protocol), log.Uint32("hash", uint32(h)))
 	return s.gossip.Broadcast(payload, protocol)
 }
 

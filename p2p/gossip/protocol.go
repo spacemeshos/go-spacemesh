@@ -2,6 +2,7 @@ package gossip
 
 import (
 	"errors"
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/metrics"
@@ -39,6 +40,27 @@ type baseNetwork interface {
 
 type protocolMessage struct {
 	msg *pb.ProtocolMessage
+}
+
+type MsgCache struct {
+	*lru.Cache
+}
+
+func NewMsgCache(size int) MsgCache {
+	cache, err := lru.New(size)
+	if err != nil {
+		log.Warning("could not initialize cache ", err)
+	}
+	return MsgCache{Cache: cache}
+}
+
+func (bc *MsgCache) Put(id hash) {
+	bc.Cache.Add(id, struct {}{})
+}
+
+func (bc MsgCache) Get(id hash)  bool {
+	_, found := bc.Cache.Get(id)
+	return found
 }
 
 // Protocol is the gossip protocol
@@ -173,7 +195,7 @@ func (prot *Protocol) processMessage(sender p2pcrypto.PublicKey, protocol string
 		return nil
 	}
 
-	prot.Log.With().Debug("new_gossip_message", log.String("from", sender.String()), log.String("protocol", protocol), log.Uint32("hash", uint32(h)))
+	prot.Log.With().Info("new_gossip_message", log.String("from", sender.String()), log.String("protocol", protocol), log.Uint32("hash", uint32(h)))
 	metrics.NewGossipMessages.With("protocol", protocol).Add(1)
 	return prot.net.ProcessGossipProtocolMessage(sender, protocol, msg, prot.propagateQ)
 }
@@ -184,6 +206,8 @@ loop:
 	for {
 		select {
 		case msgV := <-prot.propagateQ:
+			h := calcHash(msgV.Message(), msgV.Protocol())
+			prot.Log.With().Info("new_gossip_message_broadcast",  log.String("protocol", msgV.Protocol()), log.Uint32("hash", uint32(h)))
 			go prot.propagateMessage(msgV.Message(), calcHash(msgV.Message(), msgV.Protocol()), msgV.Protocol(), msgV.Sender())
 		case <-prot.shutdown:
 			err = errors.New("protocol shutdown")
