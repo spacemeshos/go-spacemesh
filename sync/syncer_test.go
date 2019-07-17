@@ -351,9 +351,9 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	block3 := types.NewExistingBlock(types.BlockID(222), 2, nil)
 	block3.ATXID = atx3.Id()
 
-	syncObj1.AddBlockWithTxs(block1, []*types.AddressableSignedTransaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8}, []*types.ActivationTx{atx1})
-	syncObj1.AddBlockWithTxs(block2, []*types.AddressableSignedTransaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8}, []*types.ActivationTx{atx2})
-	syncObj1.AddBlockWithTxs(block3, []*types.AddressableSignedTransaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8}, []*types.ActivationTx{atx3})
+	syncObj1.AddBlockWithTxs(block1, []*types.AddressableSignedTransaction{tx1}, []*types.ActivationTx{atx1})
+	syncObj1.AddBlockWithTxs(block2, []*types.AddressableSignedTransaction{tx1}, []*types.ActivationTx{atx2})
+	syncObj1.AddBlockWithTxs(block3, []*types.AddressableSignedTransaction{tx1}, []*types.ActivationTx{atx3})
 
 	ch := make(chan types.BlockID, 3)
 	ch <- block1.ID()

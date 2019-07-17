@@ -73,36 +73,16 @@ func BlockReqFactory() BlockRequestFactory {
 	}
 }
 
-//todo batch requests
-func TxReqFactory(ids []types.TransactionId) RequestFactory {
+func ATxReqFactory(ids []types.AtxId, syncer *Syncer) RequestFactory {
 	return func(s *server.MessageServer, peer p2p.Peer) (chan interface{}, error) {
 		ch := make(chan interface{}, 1)
-		foo := func(msg []byte) {
-			defer close(ch)
-			var tx []types.SerializableSignedTransaction
-			err := types.BytesToInterface(msg, &tx)
-			if err != nil {
-				s.Error("could not unmarshal tx data %v", err)
-				return
+		if unprocessed, _, missing := syncer.checkLocalAtxs(ids); len(missing) == 0 {
+			if len(unprocessed) > 0 {
+				ch <- unprocessed
 			}
-			ch <- tx
+			close(ch)
+			return ch, nil
 		}
-
-		bts, err := types.InterfaceToBytes(ids)
-		if err != nil {
-			return nil, err
-		}
-
-		if err := s.SendRequest(TX, bts, peer, foo); err != nil {
-			return nil, err
-		}
-		return ch, nil
-	}
-}
-
-func ATxReqFactory(ids []types.AtxId) RequestFactory {
-	return func(s *server.MessageServer, peer p2p.Peer) (chan interface{}, error) {
-		ch := make(chan interface{}, 1)
 		foo := func(msg []byte) {
 			s.Info("handle atx response ")
 			defer close(ch)
@@ -124,6 +104,41 @@ func ATxReqFactory(ids []types.AtxId) RequestFactory {
 			return nil, err
 		}
 
+		return ch, nil
+	}
+}
+
+//todo batch requests
+func TxReqFactory(ids []types.TransactionId, sync *Syncer) RequestFactory {
+	return func(s *server.MessageServer, peer p2p.Peer) (chan interface{}, error) {
+		ch := make(chan interface{}, 1)
+		if unprocessed, _, missing := sync.checkLocalTxs(ids); len(missing) == 0 {
+			if len(unprocessed) > 0 {
+				ch <- unprocessed
+			}
+			close(ch)
+			return ch, nil
+		}
+
+		foo := func(msg []byte) {
+			defer close(ch)
+			var tx []types.SerializableSignedTransaction
+			err := types.BytesToInterface(msg, &tx)
+			if err != nil {
+				s.Error("could not unmarshal tx data %v", err)
+				return
+			}
+			ch <- tx
+		}
+
+		bts, err := types.InterfaceToBytes(ids)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := s.SendRequest(TX, bts, peer, foo); err != nil {
+			return nil, err
+		}
 		return ch, nil
 	}
 }
