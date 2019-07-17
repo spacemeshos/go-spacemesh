@@ -7,6 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"math/rand"
 	"testing"
 	"time"
@@ -155,7 +156,7 @@ func Test_ActiveSetSize(t *testing.T) {
 	o.getActiveSet = func(layer types.LayerID, layersPerEpoch uint16) (uint32, error) {
 		return 5, errors.New("fake err")
 	}
-	activeSetSize, err := o.activeSetSize(l)
+	activeSetSize, err := o.activeSetSize(l + 19)
 	assert.Error(t, err)
 	assert.Equal(t, uint32(0), activeSetSize)
 }
@@ -209,4 +210,21 @@ func TestOracle_Eligible(t *testing.T) {
 	res, err = o.Eligible(1, 2, 3, types.NodeId{}, []byte{})
 	assert.False(t, res)
 	assert.Nil(t, err)
+}
+
+func TestOracle_activeSetSizeCache(t *testing.T) {
+	r := require.New(t)
+	o := New(&mockValueProvider{1, nil}, nil, nil, nil, 5, log.NewDefault(t.Name()))
+	o.getActiveSet = func(layer types.LayerID, layersPerEpoch uint16) (uint32, error) {
+		return 17, nil
+	}
+	v1, e := o.activeSetSize(k + 100)
+	r.NoError(e)
+
+	o.getActiveSet = func(layer types.LayerID, layersPerEpoch uint16) (uint32, error) {
+		return 19, nil
+	}
+	v2, e := o.activeSetSize(k + 100)
+	r.NoError(e)
+	r.Equal(v1, v2)
 }

@@ -507,7 +507,7 @@ func (m *Mesh) ActiveSetForLayerView(layer types.LayerID, layersPerEpoch uint16)
 	epoch := layer.GetEpoch(layersPerEpoch)
 	firstLayerOfPrevEpoch := types.LayerID(epoch-1) * types.LayerID(layersPerEpoch)
 
-	// build a map of all blocks between firstLayerOfPrevEpoch and our current layer
+	// build a map of all blocks on the current layer
 	mp := make(map[types.BlockID]struct{})
 	blocks, err := m.LayerBlockIds(layer)
 	for _, bid := range blocks {

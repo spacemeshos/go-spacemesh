@@ -15,6 +15,7 @@ import (
 
 const k = types.LayerID(25) // the confidence interval // TODO: read from config
 const cacheSize = 5         // we don't expect to handle more than three layers concurrently
+const genesisActiveSet = 5  // the active set size for genesis
 
 type valueProvider interface {
 	Value(layer types.LayerID) (uint32, error)
@@ -101,11 +102,11 @@ func (o *Oracle) activeSetSize(layer types.LayerID) (uint32, error) {
 	// check genesis
 	ep := sl.GetEpoch(o.layersPerEpoch)
 	if ep == 0 {
-		return 5, nil // TODO: agree on the inception problem
+		return genesisActiveSet, nil // TODO: agree on the inception problem
 	}
 
 	// check cache
-	if val, exist := o.cache.Get(layer); exist {
+	if val, exist := o.cache.Get(sl); exist {
 		return val.(uint32), nil
 	}
 
