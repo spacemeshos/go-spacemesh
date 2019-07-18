@@ -21,6 +21,10 @@ type localOracle struct {
 	nodeID        types.NodeId
 }
 
+func (bo *localOracle) IsIdentityActive(edId string, layer types.LayerID) (bool, error) {
+	return true, nil
+}
+
 func (bo *localOracle) Register(isHonest bool, pubkey string) {
 	bo.oc.Register(isHonest, pubkey)
 }

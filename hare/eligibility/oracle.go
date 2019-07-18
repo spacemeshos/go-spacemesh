@@ -187,7 +187,7 @@ func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
 	// check genesis
 	ep := sl.GetEpoch(o.layersPerEpoch)
 	if ep == 0 {
-		return nil, &genesisErr{}
+		return nil, genesisErr{}
 	}
 
 	// check cache
