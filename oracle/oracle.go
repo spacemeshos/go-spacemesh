@@ -52,6 +52,10 @@ func NewHareOracleFromClient(oc *OracleClient) *hareOracle {
 	}
 }
 
+func (bo *hareOracle) IsIdentityActive(edId string, layer types.LayerID) (bool, error) {
+	return bo.oc.IsIdentityActive(edId, layer)
+}
+
 // Eligible checks eligibility for an identity in a round
 func (bo *hareOracle) Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeId, sig []byte) (bool, error) {
 	//note: we don't use the proof in the oracle server. we keep it just for the future syntax

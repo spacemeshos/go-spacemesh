@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"math/rand"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -26,11 +27,11 @@ func (mvp *mockValueProvider) Value(layer types.LayerID) (uint32, error) {
 }
 
 type mockActiveSetProvider struct {
-	size uint32
+	size int
 }
 
-func (m *mockActiveSetProvider) ActiveSetSize(id types.LayerID, layersPerEpoch uint16) (uint32, error) {
-	return m.size, nil
+func (m *mockActiveSetProvider) ActiveSetSize(id types.LayerID, layersPerEpoch uint16) (map[string]types.AtxId, error) {
+	return createMapWithSize(m.size), nil
 }
 
 func buildVerifier(result bool, err error) VerifierFunc {
@@ -109,11 +110,11 @@ func genBytes() []byte {
 }
 
 func Test_ExpectedCommitteeSize(t *testing.T) {
-	setSize := uint32(1024)
+	setSize := 1024
 	commSize := 1000
 	o := New(&mockValueProvider{1, nil}, (&mockActiveSetProvider{setSize}).ActiveSetSize, buildVerifier(true, nil), &signer{}, 10, log.NewDefault(t.Name()))
 	count := 0
-	for i := uint32(0); i < setSize; i++ {
+	for i := 0; i < setSize; i++ {
 		res, err := o.Eligible(0, 0, commSize, types.NodeId{Key: ""}, genBytes())
 		assert.Nil(t, err)
 		if res {
@@ -127,34 +128,44 @@ func Test_ExpectedCommitteeSize(t *testing.T) {
 }
 
 type mockBufferedActiveSetProvider struct {
-	size map[types.LayerID]uint32
+	size map[types.LayerID]int
 }
 
-func (m *mockBufferedActiveSetProvider) ActiveSetSize(id types.LayerID, layersPerEpoch uint16) (uint32, error) {
+func (m *mockBufferedActiveSetProvider) ActiveSet(id types.LayerID, layersPerEpoch uint16) (map[string]types.AtxId, error) {
 	v, ok := m.size[id]
 	if !ok {
-		return 0, errors.New("no instance")
+		return createMapWithSize(0), errors.New("no instance")
 	}
 
-	return v, nil
+	return createMapWithSize(v), nil
+}
+
+func createMapWithSize(n int) map[string]types.AtxId {
+	m := make(map[string]types.AtxId)
+	for i := 0; i < n; i++ {
+		m[strconv.Itoa(i)] = *types.EmptyAtxId
+	}
+
+	return m
 }
 
 func Test_ActiveSetSize(t *testing.T) {
-	m := make(map[types.LayerID]uint32)
+	m := make(map[types.LayerID]int)
 	m[types.LayerID(19)] = 2
 	m[types.LayerID(29)] = 3
 	m[types.LayerID(39)] = 5
-	o := New(&mockValueProvider{1, nil}, (&mockBufferedActiveSetProvider{m}).ActiveSetSize, buildVerifier(true, nil), &signer{}, 10, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{1, nil}, (&mockBufferedActiveSetProvider{m}).ActiveSet, buildVerifier(true, nil), &signer{}, 10, log.NewDefault(t.Name()))
 	// TODO: remove this comment after inception problem is addressed
-	//assert.Equal(t, o.getActiveSet.ActiveSetSize(0), o.activeSetSize(1))
+	//assert.Equal(t, o.getActiveSet.ActiveSet(0), o.activeSetSize(1))
 	l := 19 + k
 	assertActiveSetSize(t, o, 2, l)
 	assertActiveSetSize(t, o, 3, l+10)
 	assertActiveSetSize(t, o, 5, l+20)
 
 	// create error
-	o.getActiveSet = func(layer types.LayerID, layersPerEpoch uint16) (uint32, error) {
-		return 5, errors.New("fake err")
+	o.getActiveSet = func(layer types.LayerID, layersPerEpoch uint16) (map[string]types.AtxId, error) {
+
+		return createMapWithSize(5), errors.New("fake err")
 	}
 	activeSetSize, err := o.activeSetSize(l + 19)
 	assert.Error(t, err)
@@ -215,14 +226,14 @@ func TestOracle_Eligible(t *testing.T) {
 func TestOracle_activeSetSizeCache(t *testing.T) {
 	r := require.New(t)
 	o := New(&mockValueProvider{1, nil}, nil, nil, nil, 5, log.NewDefault(t.Name()))
-	o.getActiveSet = func(layer types.LayerID, layersPerEpoch uint16) (uint32, error) {
-		return 17, nil
+	o.getActiveSet = func(layer types.LayerID, layersPerEpoch uint16) (map[string]types.AtxId, error) {
+		return createMapWithSize(17), nil
 	}
 	v1, e := o.activeSetSize(k + 100)
 	r.NoError(e)
 
-	o.getActiveSet = func(layer types.LayerID, layersPerEpoch uint16) (uint32, error) {
-		return 19, nil
+	o.getActiveSet = func(layer types.LayerID, layersPerEpoch uint16) (map[string]types.AtxId, error) {
+		return createMapWithSize(19), nil
 	}
 	v2, e := o.activeSetSize(k + 100)
 	r.NoError(e)

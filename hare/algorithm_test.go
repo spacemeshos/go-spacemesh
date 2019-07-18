@@ -40,6 +40,10 @@ type mockRolacle struct {
 	err        error
 }
 
+func (mr *mockRolacle) IsIdentityActive(edId string, layer types.LayerID) (bool, error) {
+	return true, nil
+}
+
 func (mr *mockRolacle) Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeId, sig []byte) (bool, error) {
 	return mr.isEligible, mr.err
 }
