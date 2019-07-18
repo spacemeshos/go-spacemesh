@@ -2,6 +2,7 @@ package hare
 
 import (
 	"bytes"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"github.com/nullstyle/go-xdr/xdr3"
@@ -278,7 +279,7 @@ func (proc *ConsensusProcess) onEarlyMessage(m *Msg) {
 func (proc *ConsensusProcess) handleMessage(m *Msg) {
 	// Note: InstanceId is already verified by the broker
 
-	proc.Info("Received message %v (msg_id %v)", m, m.Sig[:5])
+	proc.Info("Received message %v (msg_id %v)", m, hex.EncodeToString(m.Sig[:5]))
 
 	if !proc.validator.SyntacticallyValidateMessage(m) {
 		proc.Warning("Syntactically validation failed, pubkey %v", m.PubKey.ShortString())
@@ -305,7 +306,7 @@ func (proc *ConsensusProcess) handleMessage(m *Msg) {
 }
 
 func (proc *ConsensusProcess) processMsg(m *Msg) {
-	proc.Info("Processing message of type %v (msg_id %v)", m.InnerMsg.Type.String(), m.Sig[:5])
+	proc.Info("Processing message of type %v (msg_id %v)", m.InnerMsg.Type.String(), hex.EncodeToString(m.Sig[:5]))
 	metrics.MessageTypeCounter.With("type_id", m.InnerMsg.Type.String()).Add(1)
 
 	switch m.InnerMsg.Type {
@@ -344,7 +345,7 @@ func (proc *ConsensusProcess) sendMessage(msg *Msg) {
 	}
 
 	proc.With().Info("message sent", log.String("msg_type", msg.InnerMsg.Type.String()),
-		log.Uint64("layer_id", uint64(proc.instanceId)), log.ByteString("msg_id", msg.Sig[:5]))
+		log.Uint64("layer_id", uint64(proc.instanceId)), log.String("msg_id", hex.EncodeToString(msg.Sig[:5])))
 }
 
 func (proc *ConsensusProcess) onRoundEnd() {
