@@ -287,20 +287,26 @@ func (proc *ConsensusProcess) handleMessage(m *Msg) {
 
 	mType := MessageType(m.InnerMsg.Type).String()
 	// validate InnerMsg for this or next round
-	if !proc.validator.ContextuallyValidateMessage(m, proc.k) {
-		if !proc.validator.ContextuallyValidateMessage(m, proc.k+1) {
-			// TODO: should return error from InnerMsg validation to indicate what failed, should retry only for contextual failure
-			proc.Warning("message of type %v is not valid for either round, pubkey %v. Expected: %v, Actual: %v",
-				mType, m.PubKey.ShortString(), proc.k+1, m.InnerMsg.K)
-			return
-		} else { // a valid early InnerMsg, keep it for later
+	res, err := proc.validator.ContextuallyValidateMessage(m, proc.k)
+	if err != nil {
+		if err == errEarlyMsg { // early message, keep for later
 			proc.Debug("Early message of type %v detected. Keeping message, pubkey %v", mType, m.PubKey.ShortString())
 			proc.onEarlyMessage(m)
 			return
 		}
+
+		proc.Error("Error contextually validating message of type %v err=%v", mType, err)
+		return
 	}
 
-	// continue process msg by type
+	if !res { // not early, no error, simply contextually invalid
+		proc.With().Warning("message does not belong to this round and is not an early msg",
+			log.String("msg_type", mType), log.String("sender_id", m.PubKey.ShortString()),
+			log.Int32("current_k", proc.k), log.Int32("msg_k", m.InnerMsg.K))
+		return
+	}
+
+	// valid, continue process msg by type
 	proc.processMsg(m)
 }
 

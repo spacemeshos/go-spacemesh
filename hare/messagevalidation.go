@@ -8,7 +8,7 @@ import (
 
 type messageValidator interface {
 	SyntacticallyValidateMessage(m *Msg) bool
-	ContextuallyValidateMessage(m *Msg, expectedK int32) bool
+	ContextuallyValidateMessage(m *Msg, expectedK int32) (bool, error)
 }
 
 type IdentityProvider interface {
@@ -94,27 +94,42 @@ func newSyntaxContextValidator(signing Signer, threshold int, validator func(m *
 	return &syntaxContextValidator{signing, threshold, validator, stateQuerier, layersPerEpoch, logger}
 }
 
+var errEarlyMsg = errors.New("early message")
+
 // Validates the InnerMsg is contextually valid
-func (validator *syntaxContextValidator) ContextuallyValidateMessage(m *Msg, expectedK int32) bool {
+// Note: we can count on m.InnerMsg.K because we assume m is syntactically valid
+func (validator *syntaxContextValidator) ContextuallyValidateMessage(m *Msg, currentK int32) (bool, error) {
 	if m.InnerMsg == nil {
-		validator.Warning("Contextual validation failed: m.InnerMsg is nil")
-		return false
+		return false, errors.New("nil inner message")
 	}
 
 	// PreRound & Notify are always contextually valid
 	switch m.InnerMsg.Type {
 	case PreRound:
-		return true
+		return true, nil
+	case Proposal:
+		if currentK == Round1 {
+			return false, errEarlyMsg
+		}
+		if currentK == Round2 || currentK == Round3 {
+			return true, nil // process proposals for
+		}
+		return false, nil
 	case Notify:
-		return true
+		return true, nil
 	}
 
-	// Status, Proposal, Commit Messages should match the expected K
-	if expectedK == m.InnerMsg.K {
-		return true
+	// Status & Commit Messages should match the expected K
+	if currentK == m.InnerMsg.K { // arrived on time
+		return true, nil
 	}
 
-	return false
+	// matches the next round, early message
+	if currentK+1 == m.InnerMsg.K {
+		return false, errEarlyMsg
+	}
+
+	return false, nil
 }
 
 // Validates the syntax of the provided InnerMsg
