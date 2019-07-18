@@ -379,7 +379,9 @@ func TestSwarm_MultipleMessagesFromMultipleSendersToMultipleProtocols(t *testing
 	sa := &swarmArray{}
 	for i := 0; i < Senders; i++ {
 		wg.Add(1)
-		go func() {
+		payload := []byte(RandString(10000))
+
+		go func(b []byte) {
 			p := p2pTestNoStart(t, cfg)
 			require.NoError(t, p.Start())
 			sa.add(p)
@@ -393,12 +395,11 @@ func TestSwarm_MultipleMessagesFromMultipleSendersToMultipleProtocols(t *testing
 				randProto--
 			}
 
-			payload := []byte(RandString(10))
 			_, err := p.cPool.GetConnection(p1.network.LocalAddr().String(), p1.lNode.PublicKey())
 			require.NoError(t, err)
-			err = p.SendMessage(p1.lNode.PublicKey(), protos[randProto], payload)
+			err = p.SendMessage(p1.lNode.PublicKey(), protos[randProto], b)
 			require.NoError(t, err)
-		}()
+		}(payload)
 	}
 	wg.Wait()
 	p1.Shutdown()
@@ -810,7 +811,7 @@ func TestNeighborhood_Disconnect(t *testing.T) {
 
 	// manualy add an incoming peer
 	rnd2 := node.GenerateRandomNodeData()
-	n.outpeers[rnd2.PublicKey().String()] = rnd2.PublicKey() // no need to lock nothing's happening
+	n.outpeers[rnd2.PublicKey()] = struct{}{} // no need to lock nothing's happening
 	go n.Disconnect(rnd2.PublicKey())
 	ti = time.After(time.Millisecond)
 	select {
@@ -828,11 +829,10 @@ func TestSwarm_AddIncomingPeer(t *testing.T) {
 	p.addIncomingPeer(rnd.PublicKey())
 
 	p.inpeersMutex.RLock()
-	peer, ok := p.inpeers[rnd.PublicKey().String()]
+	_, ok := p.inpeers[rnd.PublicKey()]
 	p.inpeersMutex.RUnlock()
 
 	assert.True(t, ok)
-	assert.NotNil(t, peer)
 
 	nds := node.GenerateRandomNodesData(config.DefaultConfig().MaxInboundPeers)
 	for i := 0; i < len(nds); i++ {
@@ -841,10 +841,9 @@ func TestSwarm_AddIncomingPeer(t *testing.T) {
 
 	require.Equal(t, len(p.inpeers), config.DefaultConfig().MaxInboundPeers)
 	p.inpeersMutex.RLock()
-	peer, ok = p.inpeers[nds[len(nds)-1].PublicKey().String()]
+	_, ok = p.inpeers[nds[len(nds)-1].PublicKey()]
 	p.inpeersMutex.RUnlock()
 	assert.False(t, ok)
-	assert.Nil(t, peer)
 }
 
 func Test_NodeInfo(t *testing.T) {
