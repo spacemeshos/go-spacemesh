@@ -59,7 +59,9 @@ func safeLayer(layer types.LayerID, safetyParam types.LayerID) types.LayerID {
 	return layer - safetyParam
 }
 
-func roundedSafeLayer(layer types.LayerID, safetyParam types.LayerID, layersPerEpoch uint16) types.LayerID {
+func roundedSafeLayer(layer types.LayerID, safetyParam types.LayerID,
+	layersPerEpoch uint16, epochOffset types.LayerID) types.LayerID {
+
 	sl := safeLayer(layer, safetyParam)
 	if sl == config.Genesis {
 		return sl
@@ -67,7 +69,7 @@ func roundedSafeLayer(layer types.LayerID, safetyParam types.LayerID, layersPerE
 
 	ep := types.LayerID(sl.GetEpoch(layersPerEpoch))
 
-	threshold := ep*types.LayerID(layersPerEpoch) + constOffset
+	threshold := ep*types.LayerID(layersPerEpoch) + epochOffset
 	if sl >= threshold { // the safe layer is after the rounding threshold
 		return threshold // round to threshold
 	}
@@ -204,7 +206,7 @@ func (o *Oracle) Proof(id types.NodeId, layer types.LayerID, round int32) ([]byt
 
 // Returns a map of all active nodes in the specified layer id
 func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
-	sl := roundedSafeLayer(layer, k, o.layersPerEpoch)
+	sl := roundedSafeLayer(layer, k, o.layersPerEpoch, constOffset)
 
 	ep := sl.GetEpoch(o.layersPerEpoch)
 	// check genesis
