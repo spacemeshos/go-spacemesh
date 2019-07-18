@@ -90,6 +90,36 @@ func Duration(name string, val time.Duration) Field {
 	return Field(zap.Duration(name, val))
 }
 
+// LayerId return a Uint64 field (key - "layer_id")
+func LayerId(val uint64) Field {
+	return Uint64("layer_id", val)
+}
+
+// TxId return a String field (key - "tx_id")
+func TxId(val string) Field {
+	return String("tx_id", val)
+}
+
+// AtxId return a String field (key - "atx_id")
+func AtxId(val string) Field {
+	return String("atx_id", val)
+}
+
+// BlockId return a Uint64 field (key - "block_id")
+func BlockId(val uint64) Field {
+	return Uint64("block_id", val)
+}
+
+// EpochId return a Uint64 field (key - "epoch_id")
+func EpochId(val uint64) Field {
+	return Uint64("epoch_id", val)
+}
+
+// NodeId return a String field (key - "node_id")
+func NodeId(val string) Field {
+	return String("node_id", val)
+}
+
 // Err returns an error field
 func Err(v error) Field {
 	return Field(zap.Error(v))

@@ -259,7 +259,7 @@ func (t *BlockBuilder) listenForTx() {
 					continue
 				}
 
-				t.Log.Info("got new tx %v", hex.EncodeToString(id[:]))
+				t.Log.With().Info("got new tx", log.TxId(hex.EncodeToString(id[:5])))
 				data.ReportValidation(IncomingTxProtocol)
 				t.TransactionPool.Put(types.GetTransactionId(x), fullTx)
 			}
@@ -288,7 +288,7 @@ func (t *BlockBuilder) handleGossipAtx(data service.GossipMessage) {
 		t.Error("cannot parse incoming ATX")
 		return
 	}
-	t.Info("got new ATX %v", atx.ShortId())
+	t.With().Info("got new ATX", log.AtxId(atx.ShortId()))
 
 	//todo fetch from neighbour
 	if atx.Nipst == nil {
@@ -311,7 +311,7 @@ func (t *BlockBuilder) handleGossipAtx(data service.GossipMessage) {
 
 	t.AtxPool.Put(atx.Id(), atx)
 	data.ReportValidation(activation.AtxProtocol)
-	t.Info("stored and propagated new syntactically valid ATX: %v", atx.ShortId())
+	t.With().Info("stored and propagated new syntactically valid ATX", log.AtxId(atx.ShortId()))
 }
 
 func (t *BlockBuilder) acceptBlockData() {
@@ -324,11 +324,11 @@ func (t *BlockBuilder) acceptBlockData() {
 		case id := <-t.beginRoundEvent:
 			atxID, proofs, err := t.blockOracle.BlockEligible(id)
 			if err != nil {
-				t.Error("failed to check for block eligibility in layer %v: %v ", id, err)
+				t.With().Error("failed to check for block eligibility", log.LayerId(uint64(id)), log.Err(err))
 				continue
 			}
 			if len(proofs) == 0 {
-				t.Info("Notice: not eligible for blocks in layer %v", id)
+				t.With().Info("Notice: not eligible for blocks in layer", log.LayerId(uint64(id)))
 				continue
 			}
 			// TODO: include multiple proofs in each block and weigh blocks where applicable
