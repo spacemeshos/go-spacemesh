@@ -74,9 +74,17 @@ func BlockReqFactory() BlockRequestFactory {
 }
 
 //todo batch requests
-func TxReqFactory(ids []types.TransactionId) RequestFactory {
+func TxReqFactory(ids []types.TransactionId, sync *Syncer) RequestFactory {
 	return func(s *server.MessageServer, peer p2p.Peer) (chan interface{}, error) {
 		ch := make(chan interface{}, 1)
+		if unprocessed, _, missing := sync.checkLocalTxs(ids); len(missing) == 0 {
+			if len(unprocessed) > 0 {
+				ch <- unprocessed
+			}
+			close(ch)
+			return ch, nil
+		}
+
 		foo := func(msg []byte) {
 			defer close(ch)
 			var tx []types.SerializableSignedTransaction
@@ -100,9 +108,16 @@ func TxReqFactory(ids []types.TransactionId) RequestFactory {
 	}
 }
 
-func ATxReqFactory(ids []types.AtxId) RequestFactory {
+func ATxReqFactory(ids []types.AtxId, syncer *Syncer) RequestFactory {
 	return func(s *server.MessageServer, peer p2p.Peer) (chan interface{}, error) {
 		ch := make(chan interface{}, 1)
+		if unprocessed, _, missing := syncer.checkLocalAtxs(ids); len(missing) == 0 {
+			if len(unprocessed) > 0 {
+				ch <- unprocessed
+			}
+			close(ch)
+			return ch, nil
+		}
 		foo := func(msg []byte) {
 			s.Info("handle atx response ")
 			defer close(ch)
