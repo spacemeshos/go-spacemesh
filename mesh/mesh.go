@@ -514,8 +514,8 @@ func (m *Mesh) ActiveSetForLayerConsensusView(layer types.LayerID, layersPerEpoc
 		mp[bid] = struct{}{}
 	}
 
-	activeSetSize := uint32(0)
 	countedAtxs := make(map[string]types.AtxId)
+	penalties := make(map[string]struct{})
 
 	traversalFunc := func(blkh *types.BlockHeader) error {
 
@@ -540,20 +540,32 @@ func (m *Mesh) ActiveSetForLayerConsensusView(layer types.LayerID, layersPerEpoc
 			// make sure the target epoch is our epoch
 			if atx.TargetEpoch(layersPerEpoch) != epoch {
 				m.With().Debug("atx found, but targeting epoch doesn't match publication epoch",
-					log.String("atxid", atx.ShortId()),
+					log.String("atx_id", atx.ShortId()),
 					log.Uint64("atx_target_epoch", uint64(atx.TargetEpoch(layersPerEpoch))),
 					log.Uint64("actual_epoch", uint64(epoch)))
 				continue
 			}
+
+			// ignore atx from nodes in penalty
+			if _, exist := penalties[atx.NodeId.Key]; exist {
+				m.With().Debug("ignoring atx from node in penalty",
+					log.String("node_id", atx.NodeId.Key), log.String("atx_id", atx.ShortId()))
+				return nil
+			}
+
 			if prevId, exist := countedAtxs[atx.NodeId.Key]; exist { // same miner
+
 				if prevId != id { // different atx for same epoch
 					m.With().Error("Encountered second atx for the same miner on the same epoch",
 						log.String("first_atx", prevId.ShortId()), log.String("second_atx", id.ShortId()))
+
+					penalties[atx.NodeId.Key] = struct{}{} // mark node in penalty
+					delete(countedAtxs, atx.NodeId.Key)    // remove the penalized node from counted
 				}
 				continue
 			}
+
 			countedAtxs[atx.NodeId.Key] = id
-			activeSetSize++
 		}
 
 		return nil
@@ -564,5 +576,5 @@ func (m *Mesh) ActiveSetForLayerConsensusView(layer types.LayerID, layersPerEpoc
 		return 0, err
 	}
 
-	return activeSetSize, nil
+	return uint32(len(countedAtxs)), nil
 }
