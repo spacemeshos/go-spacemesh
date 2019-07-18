@@ -207,7 +207,7 @@ loop:
 		select {
 		case msgV := <-prot.propagateQ:
 			h := calcHash(msgV.Message(), msgV.Protocol())
-			prot.Log.With().Info("new_gossip_message_broadcast",  log.String("protocol", msgV.Protocol()), log.Uint32("hash", uint32(h)))
+			prot.Log.With().Info("new_gossip_message_relay",  log.String("protocol", msgV.Protocol()), log.Uint32("hash", uint32(h)))
 			go prot.propagateMessage(msgV.Message(), calcHash(msgV.Message(), msgV.Protocol()), msgV.Protocol(), msgV.Sender())
 		case <-prot.shutdown:
 			err = errors.New("protocol shutdown")
