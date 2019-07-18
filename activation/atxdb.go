@@ -52,21 +52,22 @@ func (db *ActivationDb) ProcessAtx(atx *types.ActivationTx) {
 		return
 	}
 	epoch := atx.PubLayerIdx.GetEpoch(db.LayersPerEpoch)
-	db.log.Info("processing atx id %v, pub-epoch %v node: %v layer %v", atx.ShortId(), epoch, atx.NodeId.Key[:5], atx.PubLayerIdx)
+	db.log.With().Info("processing atx", log.AtxId(atx.ShortId()), log.EpochId(uint64(epoch)),
+		log.NodeId(atx.NodeId.Key[:5]), log.LayerId(uint64(atx.PubLayerIdx)))
 	err := db.ContextuallyValidateAtx(atx)
 	if err != nil {
-		db.log.Error("ATX %v failed contextual validation: %v", atx.ShortId(), err)
+		db.log.With().Error("ATX failed contextual validation", log.AtxId(atx.ShortId()), log.Err(err))
 	} else {
-		db.log.Info("ATX %v is valid", atx.ShortId())
+		db.log.With().Info("ATX is valid", log.AtxId(atx.ShortId()))
 	}
 	err = db.StoreAtx(epoch, atx)
 	if err != nil {
-		db.log.Error("cannot store atx: %v", atx)
+		db.log.With().Error("cannot store atx", log.AtxId(atx.ShortId()), log.Err(err))
 	}
 
 	err = db.ids.StoreNodeIdentity(atx.NodeId)
 	if err != nil {
-		db.log.Error("cannot store node identity: %v err=%v", atx.NodeId, err)
+		db.log.With().Error("cannot store node identity", log.NodeId(atx.NodeId.ShortString()), log.AtxId(atx.ShortId()), log.Err(err))
 	}
 }
 
@@ -96,7 +97,7 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 	traversalFunc := func(blkh *types.BlockHeader) error {
 		blk, err := db.meshDb.GetBlock(blkh.Id)
 		if err != nil {
-			db.log.Error("cannot validate atx, block %v not found", blkh.Id)
+			db.log.With().Error("cannot validate atx, block wasn't found", log.AtxId(a.ShortId()), log.BlockId(uint64(blkh.Id)))
 			return err
 		}
 		//skip blocks not from atx epoch
@@ -203,7 +204,7 @@ func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error 
 	if err != nil {
 		return fmt.Errorf("cannot get NIPST Challenge hash: %v", err)
 	}
-	db.log.Info("NIPST challenge: %v, OK nipst %v", hash.ShortString(), atx.NIPSTChallenge.String())
+	db.log.With().Info("Validated NIPST", log.String("challenge_hash", hash.ShortString()))
 
 	if err = db.nipstValidator.Validate(atx.Nipst, *hash); err != nil {
 		return fmt.Errorf("NIPST not valid: %v", err)
@@ -522,28 +523,29 @@ func (db *ActivationDb) IsIdentityActive(edId string, layer types.LayerID) (bool
 		return false, *types.EmptyAtxId, fmt.Errorf("no active IDs for known node")
 	}
 
-	atx, err := db.GetAtx(ids[len(ids)-1])
+	atxId := ids[len(ids)-1]
+	atx, err := db.GetAtx(atxId)
 	if err != nil {
-		db.log.Error("IsIdentityActive erred while getting atx err=%v", err)
+		db.log.With().Error("IsIdentityActive erred while getting atx", log.AtxId(atxId.ShortId()), log.Err(err))
 		return false, *types.EmptyAtxId, nil
 	}
 
 	lastAtxTargetEpoch := atx.TargetEpoch(db.LayersPerEpoch)
 	if lastAtxTargetEpoch < epoch {
-		db.log.Info("IsIdentityActive latest atx is too old expected=%v actual=%v atxid=%v",
-			epoch, lastAtxTargetEpoch, atx.ShortId())
+		db.log.With().Info("IsIdentityActive latest atx is too old", log.Uint64("expected", uint64(epoch)),
+			log.Uint64("actual", uint64(lastAtxTargetEpoch)), log.AtxId(atx.ShortId()))
 		return false, *types.EmptyAtxId, nil
 	}
 
 	if lastAtxTargetEpoch > epoch {
 		// This could happen if we already published the ATX for the next epoch, so we check the previous one as well
 		if len(ids) < 2 {
-			db.log.Info("IsIdentityActive latest atx is too new but no previous atx len(ids)=%v", len(ids))
+			db.log.With().Info("IsIdentityActive latest atx is too new but no previous atx", log.AtxId(atxId.ShortId()), log.Int("num_atxs", len(ids)))
 			return false, *types.EmptyAtxId, nil
 		}
 		atx, err = db.GetAtx(ids[len(ids)-2])
 		if err != nil {
-			db.log.Error("IsIdentityActive erred while getting atx for second newest err=%v", err)
+			db.log.With().Error("IsIdentityActive erred while getting atx for second newest", log.AtxId(atx.Id().ShortId()), log.Err(err))
 			return false, *types.EmptyAtxId, nil
 		}
 	}

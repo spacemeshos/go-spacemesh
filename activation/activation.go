@@ -163,9 +163,9 @@ func (b *Builder) loop() {
 // publish atx may not produce an atx each time it is called, that is expected behaviour as well.
 func (b *Builder) PublishActivationTx(epoch types.EpochId) (bool, error) {
 	if b.nipst != nil {
-		b.log.Info("re-entering atx creation in epoch %v", epoch)
+		b.log.With().Info("re-entering atx creation", log.EpochId(uint64(epoch)))
 	} else {
-		b.log.Info("starting build atx in epoch %v", epoch)
+		b.log.With().Info("starting build atx", log.EpochId(uint64(epoch)))
 		if b.prevATX == nil {
 			prevAtxId, err := b.GetPrevAtxId(b.nodeId)
 			if err != nil {
@@ -185,7 +185,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) (bool, error) {
 
 			//check if this node hasn't published an activation already
 			if b.prevATX.PubLayerIdx.GetEpoch(b.layersPerEpoch) == epoch+1 {
-				b.log.Info("atx already created for epoch %v, aborting", epoch)
+				b.log.With().Info("atx already created, aborting", log.EpochId(uint64(epoch)))
 				return false, nil
 			}
 			prevAtxId = b.prevATX.Id()
@@ -249,8 +249,8 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) (bool, error) {
 	}
 	atx := types.NewActivationTxWithChallenge(*b.challenge, b.coinbaseAccount, activeIds, view, b.nipst)
 	activeSetSize, err := b.db.CalcActiveSetFromView(atx) // TODO: remove this assertion to improve performance
-	b.log.Info("active ids seen for epoch %v (pos atx epoch) is %v (cache) %v (from view)",
-		posEpoch, activeIds, activeSetSize)
+	b.log.With().Info("active ids seen for epoch", log.Uint64("pos_atx_epoch", uint64(posEpoch)),
+		log.Uint32("cache_cnt", activeIds), log.Uint32("view_cnt", activeSetSize))
 
 	if !atx.TargetEpoch(b.layersPerEpoch).IsGenesis() && activeSetSize == 0 {
 		b.log.Warning("empty active set size found! len(view): %d, view: %v", len(atx.View), atx.View)
