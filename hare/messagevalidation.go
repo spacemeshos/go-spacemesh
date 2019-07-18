@@ -119,7 +119,7 @@ func (validator *syntaxContextValidator) ContextuallyValidateMessage(m *Msg, cur
 		return true, nil
 	}
 
-	// Status, Proposal, Commit Messages should match the expected K
+	// Status & Commit Messages should match the expected K
 	if currentK == m.InnerMsg.K { // arrived on time
 		return true, nil
 	}
