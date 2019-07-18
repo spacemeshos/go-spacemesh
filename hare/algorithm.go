@@ -289,7 +289,7 @@ func (proc *ConsensusProcess) handleMessage(m *Msg) {
 	// validate InnerMsg for this or next round
 	res, err := proc.validator.ContextuallyValidateMessage(m, proc.k)
 	if err != nil {
-		if err.Error() == errEarlyMsg.Error() { // early message, keep for later
+		if err == errEarlyMsg { // early message, keep for later
 			proc.Debug("Early message of type %v detected. Keeping message, pubkey %v", mType, m.PubKey.ShortString())
 			proc.onEarlyMessage(m)
 			return
