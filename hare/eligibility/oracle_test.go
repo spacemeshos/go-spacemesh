@@ -14,6 +14,7 @@ import (
 	"time"
 )
 
+const defSafety = types.LayerID(25)
 const defLayersPerEpoch = 10
 const defNonGenesisLayer = defLayersPerEpoch*2 + 1
 
@@ -86,8 +87,9 @@ func TestOracle_IsEligible(t *testing.T) {
 }
 
 func Test_safeLayer(t *testing.T) {
-	assert.Equal(t, config.Genesis, safeLayer(1))
-	assert.Equal(t, 100-k, safeLayer(100))
+	const safety = 25
+	assert.Equal(t, config.Genesis, safeLayer(1, safety))
+	assert.Equal(t, types.LayerID(100-safety), safeLayer(100, safety))
 }
 
 func Test_ZeroParticipants(t *testing.T) {
@@ -160,7 +162,7 @@ func Test_ActiveSetSize(t *testing.T) {
 	o := New(&mockValueProvider{1, nil}, (&mockBufferedActiveSetProvider{m}).ActiveSet, buildVerifier(true, nil), &signer{}, 10, log.NewDefault(t.Name()))
 	// TODO: remove this comment after inception problem is addressed
 	//assert.Equal(t, o.getActiveSet.ActiveSet(0), o.activeSetSize(1))
-	l := 19 + k
+	l := 19 + defSafety
 	assertActiveSetSize(t, o, 2, l)
 	assertActiveSetSize(t, o, 3, l+10)
 	assertActiveSetSize(t, o, 5, l+20)
@@ -232,13 +234,13 @@ func TestOracle_activeSetSizeCache(t *testing.T) {
 	o.getActiveSet = func(layer types.LayerID, layersPerEpoch uint16) (map[string]types.AtxId, error) {
 		return createMapWithSize(17), nil
 	}
-	v1, e := o.activeSetSize(k + 100)
+	v1, e := o.activeSetSize(defSafety + 100)
 	r.NoError(e)
 
 	o.getActiveSet = func(layer types.LayerID, layersPerEpoch uint16) (map[string]types.AtxId, error) {
 		return createMapWithSize(19), nil
 	}
-	v2, e := o.activeSetSize(k + 100)
+	v2, e := o.activeSetSize(defSafety + 100)
 	r.NoError(e)
 	r.Equal(v1, v2)
 }

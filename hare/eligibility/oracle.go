@@ -16,6 +16,7 @@ import (
 const k = types.LayerID(25) // the confidence interval // TODO: read from config
 const cacheSize = 5         // we don't expect to handle more than three layers concurrently
 const genesisActiveSet = 5  // the active set size for genesis
+const constOffset = 30      // the constant offset from the beginning of the epoch
 
 type genesisErr struct{}
 
@@ -50,12 +51,33 @@ type Oracle struct {
 
 // Returns the relative Layer that w.h.p. we have agreement on its view
 // safe is defined to be k layers prior to the provided Layer
-func safeLayer(layer types.LayerID) types.LayerID {
-	if layer > k { // assuming genesis is zero
-		return layer - k
+func safeLayer(layer types.LayerID, safetyParam types.LayerID) types.LayerID {
+	if layer <= safetyParam { // assuming genesis is zero
+		return config.Genesis
 	}
 
-	return config.Genesis
+	return layer - safetyParam
+}
+
+func roundedSafeLayer(layer types.LayerID, safetyParam types.LayerID, layersPerEpoch uint16) types.LayerID {
+	sl := safeLayer(layer, safetyParam)
+	if sl == config.Genesis {
+		return sl
+	}
+
+	ep := types.LayerID(sl.GetEpoch(layersPerEpoch))
+
+	threshold := ep*types.LayerID(layersPerEpoch) + constOffset
+	if sl >= threshold { // the safe layer is after the rounding threshold
+		return threshold // round to threshold
+	}
+
+	if threshold <= types.LayerID(layersPerEpoch) { // we can't go before genesis
+		return config.Genesis // just return genesis
+	}
+
+	// round to the previous epoch threshold
+	return threshold - types.LayerID(layersPerEpoch)
 }
 
 // New returns a new eligibility oracle instance
@@ -85,7 +107,7 @@ type vrfMessage struct {
 
 // buildVRFMessage builds the VRF message used as input for the BLS (msg=Beacon##Id##Layer##Round)
 func (o *Oracle) buildVRFMessage(id types.NodeId, layer types.LayerID, round int32) ([]byte, error) {
-	v, err := o.beacon.Value(safeLayer(layer))
+	v, err := o.beacon.Value(safeLayer(layer, k))
 	if err != nil {
 		o.Error("Could not get Beacon value: %v", err)
 		return nil, err
@@ -182,10 +204,10 @@ func (o *Oracle) Proof(id types.NodeId, layer types.LayerID, round int32) ([]byt
 
 // Returns a map of all active nodes in the specified layer id
 func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
-	sl := safeLayer(layer)
+	sl := roundedSafeLayer(layer, k, o.layersPerEpoch)
 
-	// check genesis
 	ep := sl.GetEpoch(o.layersPerEpoch)
+	// check genesis
 	if ep == 0 {
 		return nil, genesisErr{}
 	}
