@@ -501,8 +501,8 @@ func (m *Mesh) GetATXs(atxIds []types.AtxId) (map[types.AtxId]*types.ActivationT
 	return atxs, mIds
 }
 
-// ActiveSetForLayerView - returns the active set size that matches the view of the contextually valid blocks in the provided layer
-func (m *Mesh) ActiveSetForLayerView(layer types.LayerID, layersPerEpoch uint16) (uint32, error) {
+// ActiveSetForLayerConsensusView - returns the active set size that matches the view of the contextually valid blocks in the provided layer
+func (m *Mesh) ActiveSetForLayerConsensusView(layer types.LayerID, layersPerEpoch uint16) (uint32, error) {
 
 	epoch := layer.GetEpoch(layersPerEpoch)
 	firstLayerOfPrevEpoch := types.LayerID(epoch-1) * types.LayerID(layersPerEpoch)
@@ -539,13 +539,16 @@ func (m *Mesh) ActiveSetForLayerView(layer types.LayerID, layersPerEpoch uint16)
 
 			// make sure the target epoch is our epoch
 			if atx.TargetEpoch(layersPerEpoch) != epoch {
-				m.Debug("atx %v found, but targeting epoch %v instead of publication epoch %v",
-					atx.ShortId(), atx.TargetEpoch(layersPerEpoch), epoch)
+				m.With().Debug("atx found, but targeting epoch doesn't match publication epoch",
+					log.String("atxid", atx.ShortId()),
+					log.Uint64("atx_target_epoch", uint64(atx.TargetEpoch(layersPerEpoch))),
+					log.Uint64("actual_epoch", uint64(epoch)))
 				continue
 			}
 			if prevId, exist := countedAtxs[atx.NodeId.Key]; exist { // same miner
 				if prevId != id { // different atx for same epoch
-					m.Error("Encountered second atx for the same miner on the same epoch atxId1=%v atxId2=%v", prevId, id)
+					m.With().Error("Encountered second atx for the same miner on the same epoch",
+						log.String("first_atx", prevId.ShortId()), log.String("second_atx", id.ShortId()))
 				}
 				continue
 			}

@@ -302,7 +302,7 @@ func TestMesh_ActiveSetForLayerView(t *testing.T) {
 
 	}
 
-	num, err := layers.ActiveSetForLayerView(10, 6)
+	num, err := layers.ActiveSetForLayerConsensusView(10, 6)
 	assert.NoError(t, err)
 	assert.Equal(t, 2, int(num))
 }

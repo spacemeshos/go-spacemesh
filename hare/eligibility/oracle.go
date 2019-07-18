@@ -112,7 +112,9 @@ func (o *Oracle) activeSetSize(layer types.LayerID) (uint32, error) {
 
 	setSize, err := o.getActiveSet(sl, o.layersPerEpoch)
 	if err != nil {
-		o.Error("Could not retrieve active set size err=%v", err)
+		o.With().Error("Could not retrieve active set size", log.String("err", err.Error()),
+			log.Uint64("layer", uint64(layer)), log.Uint64("epoch", uint64(layer.GetEpoch(o.layersPerEpoch))),
+			log.Uint64("safe_layer", uint64(sl)), log.Uint64("safe_epoch", uint64(ep)))
 		return 0, err
 	}
 
