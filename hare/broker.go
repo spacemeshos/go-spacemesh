@@ -116,7 +116,8 @@ func (b *Broker) eventLoop() {
 			msgInstId := InstanceId(hareMsg.InnerMsg.InstanceId)
 			state, exist := b.layerState[msgInstId]
 			if exist && state == invalid { // invalid instance, ignore
-				b.With().Info("Ignoring message because either the layer has already unregistered or the layer is out of sync", log.Uint64("layer_id", uint64(msgInstId)))
+				b.With().Info("Ignoring message because either the layer has already unregistered or the layer is out of sync",
+					log.Uint64("layer_id", uint64(msgInstId)))
 				continue
 			}
 
@@ -124,7 +125,8 @@ func (b *Broker) eventLoop() {
 			if !ok { // unknown instance, maybe just an early msg
 				if b.latestLayer+1 != msgInstId { // not an early msg
 					// ignore msg
-					b.Warning("Message validation failed: message for unknown layer is not an early message. Expected: %v Actual: %v", b.latestLayer+1, msgInstId)
+					b.With().Warning("Message validation failed: message for unregistered layer and is not an early message",
+						log.Uint64("current_layer", uint64(b.latestLayer)), log.Uint64("msg_layer", uint64(msgInstId)))
 					continue
 				}
 
