@@ -541,14 +541,14 @@ func (s *Syncer) checkLocalAtxs(atxIds []types.AtxId) ([]types.ActivationTx, map
 		if x, err := s.atxpool.Get(id); err == nil {
 			atx := x
 			if atx.Nipst == nil {
-				s.Warning("atx %v nipst not found (found in block %v)", id.ShortId(), blkId)
+				s.Warning("atx %v nipst not found (found in block %v)", id.ShortId())
 				missingInPool = append(missingInPool, id)
 				continue
 			}
-			s.Info("found atx, %v in atx pool (found in block %v)", id.ShortId(), blkId)
+			s.Info("found atx, %v in atx pool (found in block %v)", id.ShortId())
 			unprocessedAtxs[id] = &atx
 		} else {
-			s.Warning("atx %v not in atx pool (found in block %v)", id.ShortId(), blkId)
+			s.Warning("atx %v not in atx pool (found in block %v)", id.ShortId())
 			missingInPool = append(missingInPool, id)
 		}
 	}
