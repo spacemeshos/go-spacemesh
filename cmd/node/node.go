@@ -31,6 +31,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"runtime"
 	"runtime/pprof"
 	"time"
@@ -49,7 +50,7 @@ import (
 
 import _ "net/http/pprof"
 
-const identityFile = "identity.ed"
+const identityFileName = "key.bin"
 
 // VersionCmd returns the current version of spacemesh
 var Cmd = &cobra.Command{
@@ -468,38 +469,65 @@ func (app SpacemeshApp) stopServices() {
 
 }
 
-func getEdIdentity() (*signing.EdSigner, error) {
-	dataDir, err := filesystem.GetSpacemeshDataDirectoryPath()
+func (app *SpacemeshApp) getEdIdentity() (*signing.EdSigner, error) {
+	f, err := app.getIdentityFile()
 	if err != nil {
-		log.Error("Could not get data path err=%v", err)
-		return nil, err
-	}
+		log.Warning("Failed to find identity file: %v", err)
 
-	f := dataDir + "/" + identityFile
-	buff, err := ioutil.ReadFile(f)
-	if os.IsNotExist(err) {
 		edSgn := signing.NewEdSigner()
-		log.Warning("Identity file not found. Public key of new identity is %v", edSgn.PublicKey())
-		err := ioutil.WriteFile(f, edSgn.ToBuffer(), 0644)
+		f = filepath.Join(app.Config.POST.DataDir, edSgn.PublicKey().String(), identityFileName)
+		err := os.MkdirAll(filepath.Dir(f), filesystem.OwnerReadWriteExec)
 		if err != nil {
-			log.Error("Could not write the identity to file err=%v", err)
-			return nil, err
+			return nil, fmt.Errorf("failed to create directory for identity file: %v", err)
 		}
+		err = ioutil.WriteFile(f, edSgn.ToBuffer(), filesystem.OwnerReadWrite)
+		if err != nil {
+			return nil, fmt.Errorf("failed to write identity file: %v", err)
+		}
+		log.Warning("Created new identity with public key %v", edSgn.PublicKey())
 		return edSgn, nil
 	}
 
+	buff, err := ioutil.ReadFile(f)
 	if err != nil {
-		log.Error("Could not read identity from file err=%v", err)
-		return nil, err
+		return nil, fmt.Errorf("failed to read identity from file: %v", err)
 	}
-
 	edSgn, err := signing.NewEdSignerFromBuffer(buff)
 	if err != nil {
-		log.Error("Could not construct identity from data file err=%v", err)
-		return nil, err
+		return nil, fmt.Errorf("failed to construct identity from data file: %v", err)
 	}
-
+	if edSgn.PublicKey().String() != filepath.Base(filepath.Dir(f)) {
+		return nil, fmt.Errorf("identity file path ('%s') does not match public key (%s)", filepath.Dir(f), edSgn.PublicKey().String())
+	}
+	log.Info("Loaded identity from file ('%s')", f)
 	return edSgn, nil
+}
+
+type identityFileFound struct{}
+
+func (identityFileFound) Error() string {
+	return "identity file found"
+}
+
+func (app *SpacemeshApp) getIdentityFile() (string, error) {
+	var f string
+	err := filepath.Walk(app.Config.POST.DataDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		if !info.IsDir() && info.Name() == identityFileName {
+			f = path
+			return &identityFileFound{}
+		}
+		return nil
+	})
+	if _, ok := err.(*identityFileFound); ok {
+		return f, nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("failed to traverse PoST data dir: %v", err)
+	}
+	return "", fmt.Errorf("not found")
 }
 
 func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
@@ -550,7 +578,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 
 	// todo : register all protocols
 
-	app.edSgn, err = getEdIdentity()
+	app.edSgn, err = app.getEdIdentity()
 	if err != nil {
 		log.Panic("Could not retrieve identity err=%v", err)
 	}
