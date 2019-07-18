@@ -20,6 +20,7 @@ const protoName = "HARE_PROTOCOL"
 type Rolacle interface {
 	Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeId, sig []byte) (bool, error)
 	Proof(id types.NodeId, layer types.LayerID, round int32) ([]byte, error)
+	IsIdentityActive(edId string, layer types.LayerID) (bool, error)
 }
 
 type NetworkService interface {
@@ -56,7 +57,7 @@ type State struct {
 }
 
 type StateQuerier interface {
-	IsIdentityActive(edId string, layer types.LayerID) (bool, types.AtxId, error)
+	IsIdentityActive(edId string, layer types.LayerID) (bool, error)
 }
 
 type Msg struct {
@@ -87,7 +88,7 @@ func newMsg(hareMsg *Message, querier StateQuerier, layersPerEpoch uint16) (*Msg
 	}
 	// query if identity is active
 	pub := signing.NewPublicKey(pubKey)
-	res, _, err := querier.IsIdentityActive(pub.String(), types.LayerID(hareMsg.InnerMsg.InstanceId))
+	res, err := querier.IsIdentityActive(pub.String(), types.LayerID(hareMsg.InnerMsg.InstanceId))
 	if err != nil {
 		log.Error("error while checking if identity is active for %v err=%v", pub.String(), err)
 		return nil, errors.New("is identity active query failed")
@@ -611,7 +612,7 @@ func (proc *ConsensusProcess) endOfRound3() {
 
 func (proc *ConsensusProcess) shouldParticipate() bool {
 	// query if identity is active
-	res, _, err := proc.stateQuerier.IsIdentityActive(proc.signing.PublicKey().String(), types.LayerID(proc.instanceId))
+	res, err := proc.stateQuerier.IsIdentityActive(proc.signing.PublicKey().String(), types.LayerID(proc.instanceId))
 	if err != nil {
 		proc.With().Error("Error checking our identity for activeness", log.String("err", err.Error()),
 			log.Uint64("layer_id", uint64(proc.instanceId)))

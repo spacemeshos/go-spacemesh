@@ -502,7 +502,7 @@ func (m *Mesh) GetATXs(atxIds []types.AtxId) (map[types.AtxId]*types.ActivationT
 }
 
 // ActiveSetForLayerConsensusView - returns the active set size that matches the view of the contextually valid blocks in the provided layer
-func (m *Mesh) ActiveSetForLayerConsensusView(layer types.LayerID, layersPerEpoch uint16) (uint32, error) {
+func (m *Mesh) ActiveSetForLayerConsensusView(layer types.LayerID, layersPerEpoch uint16) (map[string]types.AtxId, error) {
 
 	epoch := layer.GetEpoch(layersPerEpoch)
 	firstLayerOfPrevEpoch := types.LayerID(epoch-1) * types.LayerID(layersPerEpoch)
@@ -573,8 +573,8 @@ func (m *Mesh) ActiveSetForLayerConsensusView(layer types.LayerID, layersPerEpoc
 
 	err = m.ForBlockInView(mp, firstLayerOfPrevEpoch, traversalFunc)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 
-	return uint32(len(countedAtxs)), nil
+	return countedAtxs, nil
 }

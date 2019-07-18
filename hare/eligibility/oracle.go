@@ -17,13 +17,19 @@ const k = types.LayerID(25) // the confidence interval // TODO: read from config
 const cacheSize = 5         // we don't expect to handle more than three layers concurrently
 const genesisActiveSet = 5  // the active set size for genesis
 
+type genesisErr struct{}
+
+func (e genesisErr) Error() string {
+	return "no data about active nodes for genesis"
+}
+
 type valueProvider interface {
 	Value(layer types.LayerID) (uint32, error)
 }
 
 // a func to retrieve the active set size for the provided layer
 // this func is assumed to be cpu intensive and hence we cache its results
-type activeSetFunc func(layer types.LayerID, layersPerEpoch uint16) (uint32, error)
+type activeSetFunc func(layer types.LayerID, layersPerEpoch uint16) (map[string]types.AtxId, error)
 
 type Signer interface {
 	Sign(msg []byte) ([]byte, error)
@@ -97,31 +103,16 @@ func (o *Oracle) buildVRFMessage(id types.NodeId, layer types.LayerID, round int
 }
 
 func (o *Oracle) activeSetSize(layer types.LayerID) (uint32, error) {
-	sl := safeLayer(layer) // calc safe layer
-
-	// check genesis
-	ep := sl.GetEpoch(o.layersPerEpoch)
-	if ep == 0 {
-		return genesisActiveSet, nil // TODO: agree on the inception problem
-	}
-
-	// check cache
-	if val, exist := o.cache.Get(sl); exist {
-		return val.(uint32), nil
-	}
-
-	setSize, err := o.getActiveSet(sl, o.layersPerEpoch)
+	actives, err := o.actives(layer)
 	if err != nil {
-		o.With().Error("Could not retrieve active set size", log.String("err", err.Error()),
-			log.Uint64("layer", uint64(layer)), log.Uint64("epoch", uint64(layer.GetEpoch(o.layersPerEpoch))),
-			log.Uint64("safe_layer", uint64(sl)), log.Uint64("safe_epoch", uint64(ep)))
+		if _, ok := err.(genesisErr); ok { // we are in genesis
+			return genesisActiveSet, nil
+		}
+
 		return 0, err
 	}
 
-	// update
-	o.cache.Add(sl, setSize)
-
-	return setSize, nil
+	return uint32(len(actives)), nil
 }
 
 // Eligible checks if Id is eligible on the given Layer where msg is the VRF message, sig is the role proof and assuming commSize as the expected committee size
@@ -187,4 +178,53 @@ func (o *Oracle) Proof(id types.NodeId, layer types.LayerID, round int32) ([]byt
 	}
 
 	return sig, nil
+}
+
+// Returns a map of all active nodes in the specified layer id
+func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
+	sl := safeLayer(layer)
+
+	// check genesis
+	ep := sl.GetEpoch(o.layersPerEpoch)
+	if ep == 0 {
+		return nil, &genesisErr{}
+	}
+
+	// check cache
+	if val, exist := o.cache.Get(sl); exist {
+		return val.(map[string]struct{}), nil
+	}
+
+	activeMap, err := o.getActiveSet(sl, o.layersPerEpoch)
+	if err != nil {
+		o.With().Error("Could not retrieve active set size", log.String("err", err.Error()),
+			log.Uint64("layer", uint64(layer)), log.Uint64("epoch", uint64(layer.GetEpoch(o.layersPerEpoch))),
+			log.Uint64("safe_layer", uint64(sl)), log.Uint64("safe_epoch", uint64(ep)))
+		return nil, err
+	}
+
+	// keep only ids (keys)
+	actives := make(map[string]struct{}, len(activeMap))
+	for k := range activeMap {
+		actives[k] = struct{}{}
+	}
+
+	// update
+	o.cache.Add(sl, actives)
+
+	return actives, nil
+}
+
+func (o *Oracle) IsIdentityActive(edId string, layer types.LayerID) (bool, error) {
+	actives, err := o.actives(layer)
+	if err != nil {
+		if _, ok := err.(genesisErr); ok { // we are in genesis
+			return true, nil // all ids are active in genesis
+		}
+
+		return false, err
+	}
+	_, exist := actives[edId]
+
+	return exist, nil
 }
