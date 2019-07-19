@@ -22,10 +22,10 @@ spec:
         resources:
           requests:
             memory: "512M"
-            cpu: "0.5"
+            cpu: "2"
           limits:
             memory: "2048M"
-            cpu: "1"
+            cpu: "2"
         ports:
         - containerPort: 9999
         volumeMounts:
