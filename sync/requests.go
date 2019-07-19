@@ -1,6 +1,8 @@
 package sync
 
 import (
+	"encoding/hex"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/types"
@@ -143,9 +145,16 @@ func ATxReqFactory(ids []types.AtxId, syncer *Syncer) RequestFactory {
 	}
 }
 
-func PoetReqFactory(poetProofRef []byte) RequestFactory {
+func PoetReqFactory(poetProofRef []byte, syncer *Syncer) RequestFactory {
 	return func(s *server.MessageServer, peer p2p.Peer) (chan interface{}, error) {
 		ch := make(chan interface{}, 1)
+		if pr, err := syncer.poetDb.GetProofMessage(poetProofRef); err == nil {
+			s.With().Info("found poet ref in local db, stop fetching from neighbors",
+				log.String("poet_ref", hex.EncodeToString(poetProofRef[:6])))
+			ch <- pr
+			close(ch)
+			return ch, nil
+		}
 		resHandler := func(msg []byte) {
 			s.Info("handle PoET proof response")
 			defer close(ch)
