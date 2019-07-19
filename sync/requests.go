@@ -82,6 +82,7 @@ func TxReqFactory(ids []types.TransactionId, sync *Syncer) RequestFactory {
 				ch <- unprocessed
 			}
 			close(ch)
+			s.Info("no Txs, continue (not sending anything to peers")
 			return ch, nil
 		}
 

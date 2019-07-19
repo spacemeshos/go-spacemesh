@@ -103,11 +103,11 @@ func (p *MessageServer) readLoop() {
 
 func (p *MessageServer) cleanStaleMessages() {
 	for {
-		p.Info("taking send req lock cleanStaleMessages - clean stale")
+		p.Debug("taking send req lock cleanStaleMessages - clean stale")
 		p.pendMutex.RLock()
 		elem := p.pendingQueue.Front()
 		p.pendMutex.RUnlock()
-		p.Info("taking send req lock done - clean stale")
+		p.Debug("taking send req lock done - clean stale")
 		if elem != nil {
 			item := elem.Value.(Item)
 			if time.Since(item.timestamp) > p.requestLifetime {
@@ -126,7 +126,7 @@ func (p *MessageServer) cleanStaleMessages() {
 
 func (p *MessageServer) removeFromPending(reqID uint64) {
 	var next *list.Element
-	p.Info("taking send req lock - remove from pending")
+	p.Debug("taking send req lock - remove from pending")
 	p.pendMutex.Lock()
 	for e := p.pendingQueue.Front(); e != nil; e = next {
 		next = e.Next()
@@ -138,7 +138,7 @@ func (p *MessageServer) removeFromPending(reqID uint64) {
 	}
 	delete(p.resHandlers, reqID)
 	p.pendMutex.Unlock()
-	p.Info("delete request result %v handler - taking send req lock", reqID)
+	p.Debug("delete request result %v handler - taking send req lock", reqID)
 }
 
 func (p *MessageServer) handleMessage(msg Message) {
@@ -199,12 +199,12 @@ func (p *MessageServer) RegisterBytesMsgHandler(msgType MessageType, reqHandler 
 
 func (p *MessageServer) SendRequest(msgType MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte)) error {
 	reqID := p.newRequestId()
-	p.Info("taking send req lock - sendRequest", reqID)
+	p.Debug("taking send req lock - sendRequest", reqID)
 	p.pendMutex.Lock()
 	p.resHandlers[reqID] = resHandler
 	p.pendingQueue.PushBack(Item{id: reqID, timestamp: time.Now()})
 	p.pendMutex.Unlock()
-	p.Info("taking send req lock - sendRequest", reqID)
+	p.Debug("taking send req lock - sendRequest", reqID)
 	msg := &service.DataMsgWrapper{Req: true, ReqID: reqID, MsgType: uint32(msgType), Payload: payload}
 	if sendErr := p.network.SendWrappedMessage(address, p.name, msg); sendErr != nil {
 		p.Error("sending message failed ", msg, " error: ", sendErr)

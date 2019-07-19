@@ -364,7 +364,7 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 
 	for out := range output {
 		block := out.(*types.Block)
-		txs, err := syncObj2.syncTxs(block.TxIds)
+		txs, err := syncObj2.syncTxs(1, block.TxIds)
 		if err != nil {
 			t.Error("could not fetch all txs", err)
 		}
@@ -826,10 +826,10 @@ func TestSyncer_Txs(t *testing.T) {
 
 	syncObj1.AddBlockWithTxs(block3, []*types.AddressableSignedTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
 	syncObj2.sigValidator = mockTxProcessor{true}
-	_, err := syncObj2.syncTxs(block3.TxIds)
+	_, err := syncObj2.syncTxs(1, block3.TxIds)
 	assert.NotNil(t, err)
 	syncObj2.sigValidator = mockTxProcessor{false}
-	_, err = syncObj2.syncTxs(block3.TxIds)
+	_, err = syncObj2.syncTxs(1, block3.TxIds)
 	assert.Nil(t, err)
 }
 

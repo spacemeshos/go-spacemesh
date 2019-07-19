@@ -111,6 +111,7 @@ func (vq *validationQueue) traverse(s *Syncer, blk *types.BlockHeader) error {
 func (vq *validationQueue) finishBlockCallback(s *Syncer, block *types.Block) func() error {
 	return func() error {
 		//data availability
+		vq.Log.With().Info("about to call DataAvailability from finishBlockCallback", log.BlockId(uint64(block.Id)), log.Int("num_txs", len(block.TxIds)))
 		txs, atxs, err := s.DataAvailabilty(block)
 		if err != nil {
 			return err

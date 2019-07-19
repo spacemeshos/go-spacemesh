@@ -334,7 +334,7 @@ func (s *Syncer) DataAvailabilty(blk *types.Block) ([]*types.AddressableSignedTr
 	wg.Add(2)
 	go func() {
 		//sync Transactions
-		txs, txerr = s.syncTxs(blk.TxIds)
+		txs, txerr = s.syncTxs(blk.Id, blk.TxIds)
 		for _, tx := range txs {
 			id := types.GetTransactionId(tx.SerializableSignedTransaction)
 			s.txpool.Put(id, tx)
@@ -451,7 +451,13 @@ func (s *Syncer) validateAndBuildTx(x *types.SerializableSignedTransaction) (*ty
 }
 
 //returns txs out of txids that are not in the local database
-func (s *Syncer) syncTxs(txids []types.TransactionId) ([]*types.AddressableSignedTransaction, error) {
+func (s *Syncer) syncTxs(blockId types.BlockID, txids []types.TransactionId) ([]*types.AddressableSignedTransaction, error) {
+	txs := make([]*types.AddressableSignedTransaction, 0, len(txids))
+
+	if len(txids) == 0 {
+		s.Log.With().Info("no Txs to sync", log.BlockId(uint64(blockId)))
+		return txs, nil
+	}
 	unprocessedTxs := make(map[types.TransactionId]*types.AddressableSignedTransaction)
 
 	for out := range s.fetchWithFactory(NewNeighborhoodWorker(s, 1, TxReqFactory(txids, s))) {
@@ -469,7 +475,6 @@ func (s *Syncer) syncTxs(txids []types.TransactionId) ([]*types.AddressableSigne
 		}
 	}
 
-	txs := make([]*types.AddressableSignedTransaction, 0, len(txids))
 	for _, id := range txids {
 		if tx, ok := unprocessedTxs[id]; ok {
 			txs = append(txs, tx)
@@ -497,7 +502,7 @@ func (s *Syncer) checkLocalTxs(txids []types.TransactionId) ([]types.Serializabl
 	//look in db
 	dbTxs, missinDB := s.GetTransactions(missing)
 	if len(dbTxs) > 0 {
-		s.Info("found tx  in db")
+		s.Info("found tx in db, count %v", len(dbTxs))
 	}
 
 	unprocessedArr := make([]types.SerializableSignedTransaction, 0, len(unprocessedTxs))
@@ -510,7 +515,11 @@ func (s *Syncer) checkLocalTxs(txids []types.TransactionId) ([]types.Serializabl
 
 //returns atxs out of txids that are not in the local database
 func (s *Syncer) syncAtxs(blkId types.BlockID, atxIds []types.AtxId) ([]*types.ActivationTx, error) {
-
+	atxs := make([]*types.ActivationTx, 0, len(atxIds))
+	if len(atxIds) == 0 {
+		s.Log.With().Info("no Atxs to sync", log.BlockId(uint64(blkId)))
+		return atxs, nil
+	}
 	unprocessedAtxs := make(map[types.AtxId]*types.ActivationTx, len(atxIds))
 	output := s.fetchWithFactory(NewNeighborhoodWorker(s, 1, ATxReqFactory(atxIds, s)))
 	for out := range output {
@@ -526,7 +535,6 @@ func (s *Syncer) syncAtxs(blkId types.BlockID, atxIds []types.AtxId) ([]*types.A
 		}
 	}
 
-	atxs := make([]*types.ActivationTx, 0, len(atxIds))
 	for _, id := range atxIds {
 		if tx, ok := unprocessedAtxs[id]; ok {
 			atxs = append(atxs, tx)
