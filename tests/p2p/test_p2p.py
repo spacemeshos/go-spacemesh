@@ -21,6 +21,7 @@ from tests.test_bs import add_single_client, add_multi_clients, get_conf
 dt = datetime.now()
 todaydate = dt.strftime("%Y.%m.%d")
 current_index = 'kubernetes_cluster-' + todaydate
+timeout_factor = 2
 
 
 def query_bootstrap_es(indx, namespace, bootstrap_po_name):
@@ -39,7 +40,7 @@ def query_bootstrap_es(indx, namespace, bootstrap_po_name):
 
 def test_bootstrap(init_session, setup_bootstrap):
     # wait for the bootstrap logs to be available in ElasticSearch
-    time.sleep(10)
+    time.sleep(10 * timeout_factor)
     assert setup_bootstrap.pods[0]['key'] == query_bootstrap_es(current_index,
                                                                 testconfig['namespace'],
                                                                 setup_bootstrap.pods[0]['name'])
@@ -47,7 +48,7 @@ def test_bootstrap(init_session, setup_bootstrap):
 
 def test_client(init_session, setup_clients, add_curl, save_log_on_exit):
     fields = {'M':'discovery_bootstrap'}
-    timetowait = len(setup_clients.pods)
+    timetowait = len(setup_clients.pods) * timeout_factor
     print("Sleeping " + str(timetowait) + " before checking out bootstrap results")
     time.sleep(timetowait)
     peers = query_message(current_index, testconfig['namespace'], setup_clients.deployment_name, fields, False)
@@ -57,7 +58,7 @@ def test_client(init_session, setup_clients, add_curl, save_log_on_exit):
 def test_add_client(add_client):
 
     # Sleep a while before checking the node is bootstarped
-    time.sleep(20)
+    time.sleep(20 * timeout_factor)
     fields = {'M': 'discovery_bootstrap'}
     hits = query_message(current_index, testconfig['namespace'], add_client, fields, True)
     assert len(hits) == 1, "Could not find new Client bootstrap message pod:{0}".format(add_client)
@@ -69,7 +70,7 @@ def test_add_many_clients(init_session, setup_bootstrap, setup_clients):
     cspec = get_conf(bs_info, testconfig['client'])
 
     pods = add_multi_clients(setup_bootstrap.deployment_id, cspec, size=4)
-    time.sleep(40)  # wait for the new clients to finish bootstrap and for logs to get to elasticsearch
+    time.sleep(40 * timeout_factor)  # wait for the new clients to finish bootstrap and for logs to get to elasticsearch
     fields = {'M': 'discovery_bootstrap'}
     for p in pods:
         hits = query_message(current_index, testconfig['namespace'], p, fields, True)
@@ -94,7 +95,7 @@ def test_gossip(init_session, setup_clients, add_curl):
 
     # Need to sleep for a while in order to enable the propagation of the gossip message - 0.5 sec for each node
     # TODO: check frequently before timeout so we might be able to finish earlier.
-    gossip_propagation_sleep = len(setup_clients.pods) / 2 # currently we expect short propagation times.
+    gossip_propagation_sleep = len(setup_clients.pods) * timeout_factor / 2 # currently we expect short propagation times.
     print('sleep for {0} sec to enable gossip propagation'.format(gossip_propagation_sleep))
     time.sleep(gossip_propagation_sleep)
 
@@ -123,7 +124,7 @@ def test_many_gossip_messages(setup_clients, add_curl):
 
         # Need to sleep for a while in order to enable the propagation of the gossip message - 0.5 sec for each node
         # TODO: check frequently before timeout so we might be able to finish earlier.
-        gossip_propagation_sleep = 10 # currently we expect short propagation times.
+        gossip_propagation_sleep = 10 * timeout_factor # currently we expect short propagation times.
         print('sleep for {0} sec to enable gossip propagation'.format(gossip_propagation_sleep))
         time.sleep(gossip_propagation_sleep)
 
@@ -152,7 +153,7 @@ def test_many_gossip_sim(setup_clients, add_curl):
         out = api_call(client_ip, data, api, testconfig['namespace'])
         assert "{'value': 'ok'}" in out
 
-    gossip_propagation_sleep = TEST_MESSAGES  + 20 # currently we expect short propagation times.
+    gossip_propagation_sleep = (TEST_MESSAGES + 20) * timeout_factor  # currently we expect short propagation times.
     print('sleep for {0} sec to enable gossip propagation'.format(gossip_propagation_sleep))
     time.sleep(gossip_propagation_sleep)
 
@@ -172,7 +173,7 @@ def test_late_bootstraps(init_session, setup_bootstrap, setup_clients):
         client = add_single_client(setup_bootstrap.deployment_id, get_conf(setup_bootstrap.pods[0], testconfig['client']))
         testnames.append((client, datetime.now()))
 
-    time.sleep(TEST_NUM)
+    time.sleep(TEST_NUM * timeout_factor)
 
     fields = {'M': 'discovery_bootstrap'}
     for i in testnames:
