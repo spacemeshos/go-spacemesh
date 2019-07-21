@@ -80,6 +80,6 @@ func DefaultConfig() Config {
 		OutboundPeersTarget:   10,
 		MaxInboundPeers:       100,
 		SwarmConfig:           SwarmConfigValues,
-		BufferSize:            100,
+		BufferSize:            1000,
 	}
 }

@@ -367,7 +367,7 @@ func (s *swarm) sendMessageImpl(peerPubKey p2pcrypto.PublicKey, protocol string,
 
 // RegisterDirectProtocol registers an handler for direct messaging based `protocol`
 func (s *swarm) RegisterDirectProtocol(protocol string) chan service.DirectMessage {
-	mchan := make(chan service.DirectMessage, config.ConfigValues.BufferSize)
+	mchan := make(chan service.DirectMessage, s.config.BufferSize)
 	s.protocolHandlerMutex.Lock()
 	s.directProtocolHandlers[protocol] = mchan
 	s.protocolHandlerMutex.Unlock()
