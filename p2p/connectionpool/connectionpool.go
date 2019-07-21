@@ -166,7 +166,7 @@ func (cp *ConnectionPool) handleNewConnection(rPub p2pcrypto.PublicKey, newConn 
 }
 
 func (cp *ConnectionPool) handleClosedConnection(conn net.Connection) {
-	cp.net.Logger().Info("connection_closed", log.String("id", conn.String()), log.String("remote", conn.RemotePublicKey().String()))
+	cp.net.Logger().With().Info("connection_closed", log.String("id", conn.String()), log.String("remote", conn.RemotePublicKey().String()))
 	cp.connMutex.Lock()
 	rPub := conn.RemotePublicKey().String()
 	cur, ok := cp.connections[rPub]
