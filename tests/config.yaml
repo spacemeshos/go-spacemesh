@@ -23,7 +23,7 @@ bootstrap:
     hare-wakeup-delta: '30'
     layers-per-epoch: '4'
     hare-exp-leaders: '15'
-    mem-prifile: 'mem.out'
+    mem-profile: 'mem.out'
     cpu-profile: 'cpu.out'
     coinbase: '0x4321'
 client:
@@ -41,7 +41,7 @@ client:
     layers-per-epoch: '4'
     hare-exp-leaders: '15'
     coinbase: '0x1234'
-    mem-prifile: 'mem.out'
+    mem-profile: 'mem.out'
     cpu-profile: 'cpu.out'
 elastic:
   host: elastic.spacemesh.io
