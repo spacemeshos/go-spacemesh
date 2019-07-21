@@ -18,11 +18,7 @@ const cacheSize = 5         // we don't expect to handle more than three layers 
 const genesisActiveSet = 5  // the active set size for genesis
 const constOffset = 30      // the constant offset from the beginning of the epoch
 
-type genesisErr struct{}
-
-func (e genesisErr) Error() string {
-	return "no data about active nodes for genesis"
-}
+var genesisErr = errors.New("no data about active nodes for genesis")
 
 type valueProvider interface {
 	Value(layer types.LayerID) (uint32, error)
@@ -31,6 +27,11 @@ type valueProvider interface {
 // a func to retrieve the active set size for the provided layer
 // this func is assumed to be cpu intensive and hence we cache its results
 type activeSetFunc func(layer types.LayerID, layersPerEpoch uint16) (map[string]types.AtxId, error)
+
+type casher interface {
+	Add(key, value interface{}) (evicted bool)
+	Get(key interface{}) (value interface{}, ok bool)
+}
 
 type Signer interface {
 	Sign(msg []byte) ([]byte, error)
@@ -45,7 +46,7 @@ type Oracle struct {
 	vrfSigner      Signer
 	vrfVerifier    VerifierFunc
 	layersPerEpoch uint16
-	cache          *lru.Cache
+	cache          casher
 	log.Log
 }
 
@@ -129,7 +130,7 @@ func (o *Oracle) buildVRFMessage(id types.NodeId, layer types.LayerID, round int
 func (o *Oracle) activeSetSize(layer types.LayerID) (uint32, error) {
 	actives, err := o.actives(layer)
 	if err != nil {
-		if _, ok := err.(genesisErr); ok { // we are in genesis
+		if err == genesisErr { // we are in genesis
 			return genesisActiveSet, nil
 		}
 
@@ -210,8 +211,8 @@ func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
 
 	ep := sl.GetEpoch(o.layersPerEpoch)
 	// check genesis
-	if ep == 0 {
-		return nil, genesisErr{}
+	if ep.IsGenesis() {
+		return nil, genesisErr
 	}
 
 	// check cache
@@ -242,7 +243,7 @@ func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
 func (o *Oracle) IsIdentityActive(edId string, layer types.LayerID) (bool, error) {
 	actives, err := o.actives(layer)
 	if err != nil {
-		if _, ok := err.(genesisErr); ok { // we are in genesis
+		if err == genesisErr { // we are in genesis
 			return true, nil // all ids are active in genesis
 		}
 

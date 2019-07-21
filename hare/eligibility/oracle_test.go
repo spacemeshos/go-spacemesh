@@ -53,6 +53,25 @@ func (s *signer) Sign(msg []byte) ([]byte, error) {
 	return s.sig, s.err
 }
 
+type mockCacher struct {
+	data map[interface{}]interface{}
+}
+
+func newMockCasher() *mockCacher {
+	return &mockCacher{make(map[interface{}]interface{})}
+}
+
+func (mc *mockCacher) Add(key, value interface{}) (evicted bool) {
+	_, evicted = mc.data[key]
+	mc.data[key] = value
+	return evicted
+}
+
+func (mc *mockCacher) Get(key interface{}) (value interface{}, ok bool) {
+	v, ok := mc.data[key]
+	return v, ok
+}
+
 func TestOracle_BuildVRFMessage(t *testing.T) {
 	o := Oracle{Log: log.NewDefault(t.Name())}
 	o.beacon = &mockValueProvider{1, someErr}
@@ -264,5 +283,71 @@ func TestOracle_roundedSafeLayer(t *testing.T) {
 func TestOracle_actives(t *testing.T) {
 	r := require.New(t)
 	o := New(&mockValueProvider{1, nil}, nil, nil, nil, 5, log.NewDefault(t.Name()))
-	actives()
+	_, err := o.actives(1)
+	r.Equal(genesisErr, err)
+
+	mp := createMapWithSize(9)
+	o.getActiveSet = func(layer types.LayerID, layersPerEpoch uint16) (map[string]types.AtxId, error) {
+		return mp, nil
+	}
+	o.cache = newMockCasher()
+	v, err := o.actives(100)
+	r.NoError(err)
+	v2, err := o.actives(100)
+	r.NoError(err)
+	r.Equal(v, v2)
+	for k := range mp {
+		_, exist := v[k]
+		r.True(exist)
+	}
+
+	o.getActiveSet = func(layer types.LayerID, layersPerEpoch uint16) (map[string]types.AtxId, error) {
+		return createMapWithSize(9), someErr
+	}
+	_, err = o.actives(200)
+	r.Equal(someErr, err)
+}
+
+func TestOracle_IsIdentityActive(t *testing.T) {
+	r := require.New(t)
+	o := New(&mockValueProvider{1, nil}, nil, nil, nil, 5, log.NewDefault(t.Name()))
+	mp := make(map[string]types.AtxId)
+	edid := "11111"
+	mp[edid] = types.AtxId{}
+	o.getActiveSet = func(layer types.LayerID, layersPerEpoch uint16) (map[string]types.AtxId, error) {
+		return mp, nil
+	}
+	v, err := o.IsIdentityActive("22222", 1)
+	r.NoError(err)
+	r.True(v)
+
+	o.getActiveSet = func(layer types.LayerID, layersPerEpoch uint16) (map[string]types.AtxId, error) {
+		return mp, someErr
+	}
+	_, err = o.IsIdentityActive("22222", 100)
+	r.Equal(someErr, err)
+
+	o.getActiveSet = func(layer types.LayerID, layersPerEpoch uint16) (map[string]types.AtxId, error) {
+		return mp, nil
+	}
+
+	v, err = o.IsIdentityActive("22222", 100)
+	r.NoError(err)
+	r.False(v)
+
+	v, err = o.IsIdentityActive(edid, 100)
+	r.NoError(err)
+	r.True(v)
+}
+
+func TestOracle_Eligible2(t *testing.T) {
+	o := New(&mockValueProvider{1, nil}, nil, nil, nil, 5, log.NewDefault(t.Name()))
+	o.getActiveSet = func(layer types.LayerID, layersPerEpoch uint16) (map[string]types.AtxId, error) {
+		return createMapWithSize(9), someErr
+	}
+	o.vrfVerifier = func(msg, sig, pub []byte) (bool, error) {
+		return true, nil
+	}
+	_, err := o.Eligible(100, 1, 1, types.NodeId{}, []byte{})
+	assert.Equal(t, someErr, err)
 }
