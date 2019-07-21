@@ -521,7 +521,7 @@ func (s *Syncer) syncAtxs(blkId types.BlockID, atxIds []types.AtxId) ([]*types.A
 		return atxs, nil
 	}
 	unprocessedAtxs := make(map[types.AtxId]*types.ActivationTx, len(atxIds))
-	output := s.fetchWithFactory(NewNeighborhoodWorker(s, 1, ATxReqFactory(atxIds, s)))
+	output := s.fetchWithFactory(NewNeighborhoodWorker(s, 1, ATxReqFactory(atxIds, s, blkId)))
 	for out := range output {
 		if atxs, ok := out.([]types.ActivationTx); ok {
 			for _, tmp := range atxs {
@@ -547,7 +547,7 @@ func (s *Syncer) syncAtxs(blkId types.BlockID, atxIds []types.AtxId) ([]*types.A
 	return atxs, nil
 }
 
-func (s *Syncer) checkLocalAtxs(atxIds []types.AtxId) ([]types.ActivationTx, map[types.AtxId]*types.ActivationTx, []types.AtxId) {
+func (s *Syncer) checkLocalAtxs(atxIds []types.AtxId, blkId types.BlockID) ([]types.ActivationTx, map[types.AtxId]*types.ActivationTx, []types.AtxId) {
 	//look in pool
 	unprocessedAtxs := make(map[types.AtxId]*types.ActivationTx, len(atxIds))
 	missingInPool := make([]types.AtxId, 0, len(atxIds))
@@ -556,14 +556,14 @@ func (s *Syncer) checkLocalAtxs(atxIds []types.AtxId) ([]types.ActivationTx, map
 		if x, err := s.atxpool.Get(id); err == nil {
 			atx := x
 			if atx.Nipst == nil {
-				s.Warning("atx %v nipst not found (found in block %v)", id.ShortId())
+				s.Warning("atx %v nipst not found (found in block %v)", id.ShortId(), blkId)
 				missingInPool = append(missingInPool, id)
 				continue
 			}
-			s.Info("found atx, %v in atx pool (found in block %v)", id.ShortId())
+			s.Info("found atx, %v in atx pool (found in block %v)", id.ShortId(), blkId)
 			unprocessedAtxs[id] = &atx
 		} else {
-			s.Warning("atx %v not in atx pool (found in block %v)", id.ShortId())
+			s.Warning("atx %v not in atx pool (found in block %v)", id.ShortId(), blkId)
 			missingInPool = append(missingInPool, id)
 		}
 	}

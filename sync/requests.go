@@ -111,22 +111,22 @@ func TxReqFactory(ids []types.TransactionId, sync *Syncer) RequestFactory {
 	}
 }
 
-func ATxReqFactory(ids []types.AtxId, syncer *Syncer) RequestFactory {
+func ATxReqFactory(ids []types.AtxId, syncer *Syncer, blkId types.BlockID) RequestFactory {
 	return func(s *server.MessageServer, peer p2p.Peer) (chan interface{}, error) {
 		ch := make(chan interface{}, 1)
-		if unprocessed, _, missing := syncer.checkLocalAtxs(ids); len(missing) == 0 {
+		if unprocessed, _, missing := syncer.checkLocalAtxs(ids, blkId); len(missing) == 0 {
 			if len(unprocessed) > 0 {
 				ch <- unprocessed
 			}
 			close(ch)
-			s.With().Info("no atx continue (not sending anything to peer)")
+			s.With().Info("no atx continue (not sending anything to peer)", log.BlockId(uint64(blkId)))
 			return ch, nil
 		}
 		atxstring := ""
 		for _, i := range ids {
 			atxstring += i.ShortId() + ", "
 		}
-		s.With().Info("about to sync atxs with peer", log.String("atx_list", atxstring))
+		s.With().Info("about to sync atxs with peer", log.String("atx_list", atxstring), log.BlockId(uint64(blkId)))
 		foo := func(msg []byte) {
 			defer close(ch)
 			var tx []types.ActivationTx
@@ -139,7 +139,7 @@ func ATxReqFactory(ids []types.AtxId, syncer *Syncer) RequestFactory {
 			for _, i := range tx {
 				atxstring += i.ShortId() + ", "
 			}
-			s.Info("handle atx response ", log.String("atx_list", atxstring))
+			s.Info("handle atx response ", log.String("atx_list", atxstring), log.BlockId(uint64(blkId)))
 
 			ch <- tx
 		}
