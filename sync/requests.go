@@ -119,10 +119,15 @@ func ATxReqFactory(ids []types.AtxId, syncer *Syncer) RequestFactory {
 				ch <- unprocessed
 			}
 			close(ch)
+			s.With().Info("no atx continue (not sending anything to peer)")
 			return ch, nil
 		}
+		atxstring := ""
+		for _, i := range ids {
+			atxstring += i.ShortId() + ", "
+		}
+		s.With().Info("about to sync atxs with peer", log.String("atx_list", atxstring))
 		foo := func(msg []byte) {
-			s.Info("handle atx response ")
 			defer close(ch)
 			var tx []types.ActivationTx
 			err := types.BytesToInterface(msg, &tx)
@@ -130,6 +135,11 @@ func ATxReqFactory(ids []types.AtxId, syncer *Syncer) RequestFactory {
 				s.Error("could not unmarshal tx data %v", err)
 				return
 			}
+			atxstring := ""
+			for _, i := range tx {
+				atxstring += i.ShortId() + ", "
+			}
+			s.Info("handle atx response ", log.String("atx_list", atxstring))
 
 			ch <- tx
 		}
@@ -163,6 +173,8 @@ func PoetReqFactory(poetProofRef []byte, syncer *Syncer) RequestFactory {
 				return ch, nil
 			}
 		}
+		s.With().Info("couldn't find poet ref in local db, fetching from neighbors",
+			log.String("poet_ref", hex.EncodeToString(poetProofRef[:6])))
 		resHandler := func(msg []byte) {
 			s.Info("handle PoET proof response")
 			defer close(ch)
