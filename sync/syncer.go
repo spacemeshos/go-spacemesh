@@ -452,14 +452,12 @@ func (s *Syncer) validateAndBuildTx(x *types.SerializableSignedTransaction) (*ty
 
 //returns txs out of txids that are not in the local database
 func (s *Syncer) syncTxs(blockId types.BlockID, txids []types.TransactionId) ([]*types.AddressableSignedTransaction, error) {
-	txs := make([]*types.AddressableSignedTransaction, 0, len(txids))
-
 	if len(txids) == 0 {
 		s.Log.With().Info("no Txs to sync", log.BlockId(uint64(blockId)))
-		return txs, nil
+		return []*types.AddressableSignedTransaction{}, nil
 	}
-	unprocessedTxs := make(map[types.TransactionId]*types.AddressableSignedTransaction)
-	txFetcherFunc := TxReqFactory(txids, s)
+	_, _, missing := s.checkLocalTxs(txids)
+	txFetcherFunc := TxReqFactory(missing, s)
 	for out := range s.fetchWithFactory(NewNeighborhoodWorker(s, 1, txFetcherFunc)) {
 		if ntxs, ok := out.([]types.SerializableSignedTransaction); ok {
 			for _, tmp := range ntxs {
@@ -470,24 +468,21 @@ func (s *Syncer) syncTxs(blockId types.BlockID, txids []types.TransactionId) ([]
 					s.Warning("tx %v not valid %v", hex.EncodeToString(id[:]), err)
 					continue
 				}
-				unprocessedTxs[types.GetTransactionId(&tx)] = ast
+				id := types.GetTransactionId(&tx)
+				s.txpool.Put(id, ast)
 			}
 		}
 	}
+	unprocessed, _, missing := s.checkLocalTxs(txids)
+	if len(missing) != 0 {
+		return nil, errors.New(fmt.Sprintf("could not fetch tx %v", missing))
 
-	for _, id := range txids {
-		if tx, ok := unprocessedTxs[id]; ok {
-			txs = append(txs, tx)
-		} else if _, err := s.GetTransaction(id); err == nil {
-			continue
-		} else {
-			return nil, errors.New(fmt.Sprintf("could not fetch tx %v", hex.EncodeToString(id[:])))
-		}
 	}
-	return txs, nil
+
+	return unprocessed, nil
 }
 
-func (s *Syncer) checkLocalTxs(txids []types.TransactionId) ([]types.SerializableSignedTransaction, map[types.TransactionId]*types.AddressableSignedTransaction, []types.TransactionId) {
+func (s *Syncer) checkLocalTxs(txids []types.TransactionId) ([]*types.AddressableSignedTransaction, map[types.TransactionId]*types.AddressableSignedTransaction, []types.TransactionId) {
 	//look in pool
 	unprocessedTxs := make(map[types.TransactionId]*types.AddressableSignedTransaction)
 	missing := make([]types.TransactionId, 0)
@@ -505,9 +500,9 @@ func (s *Syncer) checkLocalTxs(txids []types.TransactionId) ([]types.Serializabl
 		s.Info("found tx in db, count %v", len(dbTxs))
 	}
 
-	unprocessedArr := make([]types.SerializableSignedTransaction, 0, len(unprocessedTxs))
+	unprocessedArr := make([]*types.AddressableSignedTransaction, 0, len(unprocessedTxs))
 	for _, tx := range unprocessedTxs {
-		unprocessedArr = append(unprocessedArr, *tx.SerializableSignedTransaction)
+		unprocessedArr = append(unprocessedArr, tx)
 	}
 
 	return unprocessedArr, dbTxs, missinDB
@@ -515,14 +510,13 @@ func (s *Syncer) checkLocalTxs(txids []types.TransactionId) ([]types.Serializabl
 
 //returns atxs out of txids that are not in the local database
 func (s *Syncer) syncAtxs(blkId types.BlockID, atxIds []types.AtxId) ([]*types.ActivationTx, error) {
-	atxs := make([]*types.ActivationTx, 0, len(atxIds))
 	if len(atxIds) == 0 {
 		s.Log.With().Info("no Atxs to sync", log.BlockId(uint64(blkId)))
-		return atxs, nil
+		return []*types.ActivationTx{}, nil
 	}
-	unprocessedAtxs := make(map[types.AtxId]*types.ActivationTx, len(atxIds))
-	atxFetcherFunc :=  ATxReqFactory(atxIds, s, blkId)
-	output := s.fetchWithFactory(NewNeighborhoodWorker(s, 1,atxFetcherFunc))
+
+	_, _, missing := s.checkLocalAtxs(atxIds, blkId)
+	output := s.fetchWithFactory(NewNeighborhoodWorker(s, 1, ATxReqFactory(missing, s, blkId)))
 	for out := range output {
 		if atxs, ok := out.([]types.ActivationTx); ok {
 			for _, tmp := range atxs {
@@ -531,24 +525,20 @@ func (s *Syncer) syncAtxs(blkId types.BlockID, atxIds []types.AtxId) ([]*types.A
 					s.Warning("atx %v not valid %v", atx.ShortId(), err)
 					continue
 				}
-				unprocessedAtxs[atx.Id()] = &atx
+				s.atxpool.Put(atx.Id(), &atx)
 			}
 		}
 	}
 
-	for _, id := range atxIds {
-		if tx, ok := unprocessedAtxs[id]; ok {
-			atxs = append(atxs, tx)
-		} else if _, err := s.GetAtx(id); err == nil {
-			continue
-		} else {
-			return nil, errors.New(fmt.Sprintf("could not fetch atx %v", id.ShortId()))
-		}
+	unprocessedAtxs, _, missing := s.checkLocalAtxs(atxIds, blkId)
+	if len(missing) != 0 {
+		return nil, errors.New(fmt.Sprintf("could not fetch atxs %v", missing))
 	}
-	return atxs, nil
+
+	return unprocessedAtxs, nil
 }
 
-func (s *Syncer) checkLocalAtxs(atxIds []types.AtxId, blkId types.BlockID) ([]types.ActivationTx, map[types.AtxId]*types.ActivationTx, []types.AtxId) {
+func (s *Syncer) checkLocalAtxs(atxIds []types.AtxId, blkId types.BlockID) ([]*types.ActivationTx, map[types.AtxId]*types.ActivationTx, []types.AtxId) {
 	//look in pool
 	unprocessedAtxs := make(map[types.AtxId]*types.ActivationTx, len(atxIds))
 	missingInPool := make([]types.AtxId, 0, len(atxIds))
@@ -569,9 +559,9 @@ func (s *Syncer) checkLocalAtxs(atxIds []types.AtxId, blkId types.BlockID) ([]ty
 		}
 	}
 
-	unprocessedArr := []types.ActivationTx{}
+	unprocessedArr := []*types.ActivationTx{}
 	for _, tx := range unprocessedAtxs {
-		unprocessedArr = append(unprocessedArr, *tx)
+		unprocessedArr = append(unprocessedArr, tx)
 	}
 	//look in db
 	dbAtxs, missingInDb := s.GetATXs(missingInPool)

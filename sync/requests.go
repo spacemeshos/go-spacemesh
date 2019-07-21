@@ -79,15 +79,6 @@ func BlockReqFactory() BlockRequestFactory {
 func TxReqFactory(ids []types.TransactionId, sync *Syncer) RequestFactory {
 	return func(s *server.MessageServer, peer p2p.Peer) (chan interface{}, error) {
 		ch := make(chan interface{}, 1)
-		if unprocessed, _, missing := sync.checkLocalTxs(ids); len(missing) == 0 {
-			if len(unprocessed) > 0 {
-				ch <- unprocessed
-			}
-			close(ch)
-			s.Info("no Txs, continue (not sending anything to peers")
-			return ch, nil
-		}
-
 		foo := func(msg []byte) {
 			defer close(ch)
 			var tx []types.SerializableSignedTransaction
@@ -114,14 +105,6 @@ func TxReqFactory(ids []types.TransactionId, sync *Syncer) RequestFactory {
 func ATxReqFactory(ids []types.AtxId, syncer *Syncer, blkId types.BlockID) RequestFactory {
 	return func(s *server.MessageServer, peer p2p.Peer) (chan interface{}, error) {
 		ch := make(chan interface{}, 1)
-		if unprocessed, _, missing := syncer.checkLocalAtxs(ids, blkId); len(missing) == 0 {
-			if len(unprocessed) > 0 {
-				ch <- unprocessed
-			}
-			close(ch)
-			s.With().Info("no atx continue (not sending anything to peer)", log.BlockId(uint64(blkId)))
-			return ch, nil
-		}
 		atxstring := ""
 		for _, i := range ids {
 			atxstring += i.ShortId() + ", "
