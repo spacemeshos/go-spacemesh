@@ -111,18 +111,23 @@ func TxReqFactory(ids []types.TransactionId, sync *Syncer) RequestFactory {
 	}
 }
 
-func ATxReqFactory(ids []types.AtxId, syncer *Syncer) RequestFactory {
+func ATxReqFactory(ids []types.AtxId, syncer *Syncer, blkId types.BlockID) RequestFactory {
 	return func(s *server.MessageServer, peer p2p.Peer) (chan interface{}, error) {
 		ch := make(chan interface{}, 1)
-		if unprocessed, _, missing := syncer.checkLocalAtxs(ids); len(missing) == 0 {
+		if unprocessed, _, missing := syncer.checkLocalAtxs(ids, blkId); len(missing) == 0 {
 			if len(unprocessed) > 0 {
 				ch <- unprocessed
 			}
 			close(ch)
+			s.With().Info("no atx continue (not sending anything to peer)", log.BlockId(uint64(blkId)))
 			return ch, nil
 		}
+		atxstring := ""
+		for _, i := range ids {
+			atxstring += i.ShortId() + ", "
+		}
+		s.With().Info("about to sync atxs with peer", log.String("atx_list", atxstring), log.BlockId(uint64(blkId)))
 		foo := func(msg []byte) {
-			s.Info("handle atx response ")
 			defer close(ch)
 			var tx []types.ActivationTx
 			err := types.BytesToInterface(msg, &tx)
@@ -130,6 +135,11 @@ func ATxReqFactory(ids []types.AtxId, syncer *Syncer) RequestFactory {
 				s.Error("could not unmarshal tx data %v", err)
 				return
 			}
+			atxstring := ""
+			for _, i := range tx {
+				atxstring += i.ShortId() + ", "
+			}
+			s.Info("handle atx response ", log.String("atx_list", atxstring), log.BlockId(uint64(blkId)))
 
 			ch <- tx
 		}
@@ -152,10 +162,19 @@ func PoetReqFactory(poetProofRef []byte, syncer *Syncer) RequestFactory {
 		if pr, err := syncer.poetDb.GetProofMessage(poetProofRef); err == nil {
 			s.With().Info("found poet ref in local db, stop fetching from neighbors",
 				log.String("poet_ref", hex.EncodeToString(poetProofRef[:6])))
-			ch <- pr
-			close(ch)
-			return ch, nil
+			var proofMessage types.PoetProofMessage
+			err := types.BytesToInterface(pr, &proofMessage)
+			if err != nil {
+				s.With().Error("could not unmarshal PoET proof message, continue asking peers",
+					log.String("poet_ref", hex.EncodeToString(poetProofRef[:6])), log.Err(err))
+			} else {
+				ch <- proofMessage
+				close(ch)
+				return ch, nil
+			}
 		}
+		s.With().Info("couldn't find poet ref in local db, fetching from neighbors",
+			log.String("poet_ref", hex.EncodeToString(poetProofRef[:6])))
 		resHandler := func(msg []byte) {
 			s.Info("handle PoET proof response")
 			defer close(ch)
