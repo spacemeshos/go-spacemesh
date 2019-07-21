@@ -224,7 +224,7 @@ PreRound:
 	}
 	proc.preRoundTracker.FilterSet(proc.s)
 	if proc.s.Size() == 0 {
-		proc.With().EventError("Fatal: PreRound ended with empty set", log.Uint64("layer_id", uint64(proc.instanceId)))
+		proc.Event().Error("Fatal: PreRound ended with empty set", log.Uint64("layer_id", uint64(proc.instanceId)))
 	}
 	proc.advanceToNextRound() // K was initialized to -1, K should be 0
 
@@ -366,7 +366,7 @@ func (proc *ConsensusProcess) onRoundEnd() {
 		if s != nil {
 			sStr = s.String()
 		}
-		proc.With().EventInfo("Round 2 ended",
+		proc.Event().Info("Round 2 ended",
 			log.String("proposed_set", sStr),
 			log.Bool("is_conflicting", proc.proposalTracker.IsConflicting()),
 			log.Uint64("layer_id", uint64(proc.instanceId)))
@@ -378,7 +378,7 @@ func (proc *ConsensusProcess) onRoundEnd() {
 func (proc *ConsensusProcess) advanceToNextRound() {
 	proc.k++
 	if proc.k >= 4 && proc.k%4 == 0 {
-		proc.With().EventWarning("Starting new iteration", log.Int32("round_counter", proc.k),
+		proc.Event().Warning("Starting new iteration", log.Int32("round_counter", proc.k),
 			log.Uint64("layer_id", uint64(proc.instanceId)))
 	}
 }
@@ -529,7 +529,7 @@ func (proc *ConsensusProcess) processNotifyMsg(msg *Msg) {
 
 	// enough notifications, should terminate
 	proc.s = s // update to the agreed set
-	proc.With().EventInfo("Consensus process terminated", log.String("set_values", proc.s.String()),
+	proc.Event().Info("Consensus process terminated", log.String("set_values", proc.s.String()),
 		log.Uint64("layer_id", uint64(proc.instanceId)))
 	proc.terminationReport <- procOutput{proc.instanceId, proc.s}
 	proc.Close()
@@ -560,7 +560,7 @@ func (proc *ConsensusProcess) statusValidator() func(m *Msg) bool {
 
 func (proc *ConsensusProcess) endOfRound1() {
 	proc.statusesTracker.AnalyzeStatuses(proc.statusValidator())
-	proc.With().EventInfo("Round 1 ended", log.Bool("is_svp_ready", proc.statusesTracker.IsSVPReady()),
+	proc.Event().Info("Round 1 ended", log.Bool("is_svp_ready", proc.statusesTracker.IsSVPReady()),
 		log.Uint64("layer_id", uint64(proc.instanceId)))
 }
 
@@ -594,7 +594,7 @@ func (proc *ConsensusProcess) endOfRound3() {
 	}
 
 	// commit & send notification msg
-	proc.With().EventInfo("Round 3 ended: committing", log.String("committed_set", s.String()),
+	proc.Event().Info("Round 3 ended: committing", log.String("committed_set", s.String()),
 		log.Uint64("layer_id", uint64(proc.instanceId)))
 	proc.s = s
 	proc.certificate = cert

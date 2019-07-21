@@ -67,7 +67,7 @@ func (t *Ticker) Close() {
 func (t *Ticker) notifyOnTick() {
 	t.m.Lock()
 	defer t.m.Unlock()
-	log.With().EventInfo(fmt.Sprintf("release tick mesh.LayerID  %v", t.currentLayer))
+	log.Event().Info(fmt.Sprintf("release tick mesh.LayerID  %v", t.currentLayer))
 	for _, ch := range t.subscribes {
 		ch <- t.currentLayer
 		log.Debug("iv'e notified number : %v", t.ids[ch])

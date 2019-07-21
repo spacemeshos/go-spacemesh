@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/address"
+	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -217,7 +218,7 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 		TxIds:  txids,
 	}
 
-	t.Log.With().EventInfo(fmt.Sprintf("I've created a block in layer %v. id: %v, num of transactions: %v, votes: %d, viewEdges: %d atx %v, atxs:%v",
+	t.Log.Event().Info(fmt.Sprintf("I've created a block in layer %v. id: %v, num of transactions: %v, votes: %d, viewEdges: %d atx %v, atxs:%v",
 		b.LayerIndex, b.Id, len(b.TxIds), len(b.BlockVotes), len(b.ViewEdges), b.ATXID.String()[:5], len(b.AtxIds)))
 
 	blockBytes, err := types.InterfaceToBytes(b)
@@ -259,7 +260,7 @@ func (t *BlockBuilder) listenForTx() {
 					continue
 				}
 
-				t.Log.With().Info("got new tx", log.TxId(hex.EncodeToString(id[:5])))
+				t.Log.With().Info("got new tx", log.TxId(hex.EncodeToString(id[:common.Min(5, len(id))])))
 				data.ReportValidation(IncomingTxProtocol)
 				t.TransactionPool.Put(types.GetTransactionId(x), fullTx)
 			}

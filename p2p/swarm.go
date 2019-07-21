@@ -253,7 +253,7 @@ func (s *swarm) Start() error {
 			}
 			close(s.bootChan)
 			size := s.discover.Size()
-			s.lNode.With().EventInfo("discovery_bootstrap", log.Bool("success", size >= s.config.SwarmConfig.RandomConnections && s.bootErr == nil),
+			s.lNode.Event().Info("discovery_bootstrap", log.Bool("success", size >= s.config.SwarmConfig.RandomConnections && s.bootErr == nil),
 				log.Int("size", size), log.Duration("time_elapsed", time.Since(b)))
 		}()
 	}

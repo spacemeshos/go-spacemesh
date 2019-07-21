@@ -534,7 +534,7 @@ func (app *SpacemeshApp) getIdentityFile() (string, error) {
 }
 
 func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
-	log.With().EventInfo("Starting Spacemesh")
+	log.Event().Info("Starting Spacemesh")
 	if app.Config.MemProfile != "" {
 		log.Info("Starting mem profiling")
 		f, err := os.Create(app.Config.MemProfile)

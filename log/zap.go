@@ -159,6 +159,12 @@ func (l Log) WithFields(fields ...Field) Log {
 	}
 }
 
+const event_key = "event"
+
+func (l Log) Event() fieldLogger {
+	return fieldLogger{l: l.logger.With(unpack(Bool(event_key, true))...)}
+}
+
 func EnableLevelOption(enabler zapcore.LevelEnabler) zap.Option {
 	return zap.WrapCore(func(core zapcore.Core) zapcore.Core {
 		consoleSyncer := zapcore.AddSync(os.Stdout)
@@ -176,28 +182,6 @@ func (l Log) WithOptions(opts ...zap.Option) Log {
 		logger: lgr,
 		sugar:  lgr.Sugar(),
 	}
-}
-
-const event_key = "event"
-
-func (fl fieldLogger) EventInfo(msg string, fields ...Field) {
-	fields = append(fields, Bool(event_key, true))
-	fl.l.Info(msg, unpack(fields...)...)
-}
-
-func (fl fieldLogger) EventDebug(msg string, fields ...Field) {
-	fields = append(fields, Bool(event_key, true))
-	fl.l.Debug(msg, unpack(fields...)...)
-}
-
-func (fl fieldLogger) EventError(msg string, fields ...Field) {
-	fields = append(fields, Bool(event_key, true))
-	fl.l.Error(msg, unpack(fields...)...)
-}
-
-func (fl fieldLogger) EventWarning(msg string, fields ...Field) {
-	fields = append(fields, Bool(event_key, true))
-	fl.l.Warn(msg, unpack(fields...)...)
 }
 
 // Info prints message with fields
