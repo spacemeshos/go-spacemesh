@@ -23,8 +23,6 @@ bootstrap:
     hare-wakeup-delta: '30'
     layers-per-epoch: '4'
     hare-exp-leaders: '15'
-    mem-profile: 'mem.out'
-    cpu-profile: 'cpu.out'
     coinbase: '0x4321'
 client:
   image: 'spacemeshos/go-spacemesh-dev:tn'
@@ -41,8 +39,6 @@ client:
     layers-per-epoch: '4'
     hare-exp-leaders: '15'
     coinbase: '0x1234'
-    mem-profile: 'mem.out'
-    cpu-profile: 'cpu.out'
 elastic:
   host: elastic.spacemesh.io
   port: 9200
