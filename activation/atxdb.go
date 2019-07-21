@@ -204,11 +204,11 @@ func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error 
 	if err != nil {
 		return fmt.Errorf("cannot get NIPST Challenge hash: %v", err)
 	}
-	db.log.With().Info("Validated NIPST", log.String("challenge_hash", hash.ShortString()))
 
 	if err = db.nipstValidator.Validate(atx.Nipst, *hash); err != nil {
 		return fmt.Errorf("NIPST not valid: %v", err)
 	}
+	db.log.With().Info("Validated NIPST", log.String("challenge_hash", hash.ShortString()))
 
 	return nil
 }
