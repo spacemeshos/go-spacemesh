@@ -152,9 +152,16 @@ func PoetReqFactory(poetProofRef []byte, syncer *Syncer) RequestFactory {
 		if pr, err := syncer.poetDb.GetProofMessage(poetProofRef); err == nil {
 			s.With().Info("found poet ref in local db, stop fetching from neighbors",
 				log.String("poet_ref", hex.EncodeToString(poetProofRef[:6])))
-			ch <- pr
-			close(ch)
-			return ch, nil
+			var proofMessage types.PoetProofMessage
+			err := types.BytesToInterface(pr, &proofMessage)
+			if err != nil {
+				s.With().Error("could not unmarshal PoET proof message, continue asking peers",
+					log.String("poet_ref", hex.EncodeToString(poetProofRef[:6])), log.Err(err))
+			} else {
+				ch <- proofMessage
+				close(ch)
+				return ch, nil
+			}
 		}
 		resHandler := func(msg []byte) {
 			s.Info("handle PoET proof response")
