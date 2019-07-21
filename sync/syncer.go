@@ -335,10 +335,6 @@ func (s *Syncer) DataAvailabilty(blk *types.Block) ([]*types.AddressableSignedTr
 	go func() {
 		//sync Transactions
 		txs, txerr = s.syncTxs(blk.Id, blk.TxIds)
-		for _, tx := range txs {
-			id := types.GetTransactionId(tx.SerializableSignedTransaction)
-			s.txpool.Put(id, tx)
-		}
 		wg.Done()
 	}()
 
@@ -348,9 +344,6 @@ func (s *Syncer) DataAvailabilty(blk *types.Block) ([]*types.AddressableSignedTr
 	//sync ATxs
 	go func() {
 		atxs, atxerr = s.syncAtxs(blk.ID(), blk.AtxIds)
-		for _, atx := range atxs {
-			s.atxpool.Put(atx.Id(), atx)
-		}
 		wg.Done()
 	}()
 
@@ -456,27 +449,34 @@ func (s *Syncer) syncTxs(blockId types.BlockID, txids []types.TransactionId) ([]
 		s.Log.With().Info("no Txs to sync", log.BlockId(uint64(blockId)))
 		return []*types.AddressableSignedTransaction{}, nil
 	}
+
+	var unprocessed []*types.AddressableSignedTransaction
+
 	_, _, missing := s.checkLocalTxs(txids)
-	txFetcherFunc := TxReqFactory(missing, s)
-	for out := range s.fetchWithFactory(NewNeighborhoodWorker(s, 1, txFetcherFunc)) {
-		if ntxs, ok := out.([]types.SerializableSignedTransaction); ok {
-			for _, tmp := range ntxs {
-				tx := tmp
-				ast, err := s.validateAndBuildTx(&tx)
-				if err != nil {
+
+	if len(missing) > 0 {
+
+		txFetcherFunc := TxReqFactory(missing, s)
+		for out := range s.fetchWithFactory(NewNeighborhoodWorker(s, 1, txFetcherFunc)) {
+			if ntxs, ok := out.([]types.SerializableSignedTransaction); ok {
+				for _, tmp := range ntxs {
+					tx := tmp
+					ast, err := s.validateAndBuildTx(&tx)
+					if err != nil {
+						id := types.GetTransactionId(&tx)
+						s.Warning("tx %v not valid %v", hex.EncodeToString(id[:]), err)
+						continue
+					}
 					id := types.GetTransactionId(&tx)
-					s.Warning("tx %v not valid %v", hex.EncodeToString(id[:]), err)
-					continue
+					s.txpool.Put(id, ast)
 				}
-				id := types.GetTransactionId(&tx)
-				s.txpool.Put(id, ast)
 			}
 		}
-	}
-	unprocessed, _, missing := s.checkLocalTxs(txids)
-	if len(missing) != 0 {
-		return nil, errors.New(fmt.Sprintf("could not fetch tx %v", missing))
+		unprocessed, _, missing = s.checkLocalTxs(txids)
+		if len(missing) != 0 {
+			return nil, errors.New(fmt.Sprintf("could not fetch tx %v", missing))
 
+		}
 	}
 
 	return unprocessed, nil
@@ -514,25 +514,30 @@ func (s *Syncer) syncAtxs(blkId types.BlockID, atxIds []types.AtxId) ([]*types.A
 		s.Log.With().Info("no Atxs to sync", log.BlockId(uint64(blkId)))
 		return []*types.ActivationTx{}, nil
 	}
-
+	var unprocessedAtxs []*types.ActivationTx
 	_, _, missing := s.checkLocalAtxs(atxIds, blkId)
-	output := s.fetchWithFactory(NewNeighborhoodWorker(s, 1, ATxReqFactory(missing, s, blkId)))
-	for out := range output {
-		if atxs, ok := out.([]types.ActivationTx); ok {
-			for _, tmp := range atxs {
-				atx := tmp
-				if err := s.SyntacticallyValidateAtx(&atx); err != nil {
-					s.Warning("atx %v not valid %v", atx.ShortId(), err)
-					continue
+
+	if len(missing) > 0 {
+
+		output := s.fetchWithFactory(NewNeighborhoodWorker(s, 1, ATxReqFactory(missing, s, blkId)))
+		for out := range output {
+			if atxs, ok := out.([]types.ActivationTx); ok {
+				for _, tmp := range atxs {
+					atx := tmp
+					if err := s.SyntacticallyValidateAtx(&atx); err != nil {
+						s.Warning("atx %v not valid %v", atx.ShortId(), err)
+						continue
+					}
+					s.atxpool.Put(atx.Id(), &atx)
 				}
-				s.atxpool.Put(atx.Id(), &atx)
 			}
 		}
-	}
 
-	unprocessedAtxs, _, missing := s.checkLocalAtxs(atxIds, blkId)
-	if len(missing) != 0 {
-		return nil, errors.New(fmt.Sprintf("could not fetch atxs %v", missing))
+		unprocessedAtxs, _, missing = s.checkLocalAtxs(atxIds, blkId)
+		if len(missing) != 0 {
+			return nil, errors.New(fmt.Sprintf("could not fetch atxs %v", missing))
+		}
+
 	}
 
 	return unprocessedAtxs, nil
