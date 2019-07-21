@@ -93,8 +93,11 @@ func NewNeighborhoodWorker(s *Syncer, count int, reqFactory RequestFactory) work
 		peers := s.GetPeers()
 		for _, p := range peers {
 			peer := p
+			ch, err := reqFactory(s.MessageServer, peer)
+			if err != nil {
+				s.Error("request worker errored : %s", err)
+			}
 			s.Info("send request Peer: %v", peer)
-			ch, _ := reqFactory(s.MessageServer, peer)
 			timeout := time.After(s.RequestTimeout)
 			select {
 			case <-timeout:

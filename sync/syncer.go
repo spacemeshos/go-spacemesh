@@ -459,8 +459,8 @@ func (s *Syncer) syncTxs(blockId types.BlockID, txids []types.TransactionId) ([]
 		return txs, nil
 	}
 	unprocessedTxs := make(map[types.TransactionId]*types.AddressableSignedTransaction)
-
-	for out := range s.fetchWithFactory(NewNeighborhoodWorker(s, 1, TxReqFactory(txids, s))) {
+	txFetcherFunc := TxReqFactory(txids, s)
+	for out := range s.fetchWithFactory(NewNeighborhoodWorker(s, 1, txFetcherFunc)) {
 		if ntxs, ok := out.([]types.SerializableSignedTransaction); ok {
 			for _, tmp := range ntxs {
 				tx := tmp
@@ -521,7 +521,8 @@ func (s *Syncer) syncAtxs(blkId types.BlockID, atxIds []types.AtxId) ([]*types.A
 		return atxs, nil
 	}
 	unprocessedAtxs := make(map[types.AtxId]*types.ActivationTx, len(atxIds))
-	output := s.fetchWithFactory(NewNeighborhoodWorker(s, 1, ATxReqFactory(atxIds, s, blkId)))
+	atxFetcherFunc :=  ATxReqFactory(atxIds, s, blkId)
+	output := s.fetchWithFactory(NewNeighborhoodWorker(s, 1,atxFetcherFunc))
 	for out := range output {
 		if atxs, ok := out.([]types.ActivationTx); ok {
 			for _, tmp := range atxs {
@@ -563,7 +564,7 @@ func (s *Syncer) checkLocalAtxs(atxIds []types.AtxId, blkId types.BlockID) ([]ty
 			s.Info("found atx, %v in atx pool (found in block %v)", id.ShortId(), blkId)
 			unprocessedAtxs[id] = &atx
 		} else {
-			s.Warning("atx %v not in atx pool (found in block %v)", id.ShortId(), blkId)
+			//s.Warning("atx %v not in atx pool (found in block %v)", id.ShortId(), blkId)
 			missingInPool = append(missingInPool, id)
 		}
 	}
@@ -590,7 +591,8 @@ func (s *Syncer) fetchWithFactory(wrk worker) chan interface{} {
 
 func (s *Syncer) FetchPoetProof(poetProofRef []byte) error {
 	if !s.poetDb.HasProof(poetProofRef) {
-		out := <-s.fetchWithFactory(NewNeighborhoodWorker(s, 1, PoetReqFactory(poetProofRef, s)))
+		poetFetcher := PoetReqFactory(poetProofRef, s)
+		out := <-s.fetchWithFactory(NewNeighborhoodWorker(s, 1, poetFetcher))
 		if out == nil {
 			return fmt.Errorf("could not find PoET proof with any neighbor")
 		}
