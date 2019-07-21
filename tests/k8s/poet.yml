@@ -20,7 +20,7 @@ spec:
           - name: GRPC_GO_LOG_SEVERITY_LEVEL
             value: "debug"
         imagePullPolicy: Always
-        args: ['--rpclisten', '0.0.0.0:50002', '--restlisten', '0.0.0.0:80', "--n", "22"]
+        args: ['--rpclisten', '0.0.0.0:50002', '--restlisten', '0.0.0.0:80', "--n", "22", "--core.n", "22"]
         ports:
         - containerPort: 50002
       nodeSelector:
