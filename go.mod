@@ -18,10 +18,10 @@ require (
 	github.com/prometheus/client_golang v0.9.3
 	github.com/prometheus/common v0.4.0
 	github.com/seehuhn/mt19937 v0.0.0-20180715112136-cc7708819361
-	github.com/spacemeshos/ed25519 v0.0.0-20190316215305-5878e62449c1
+	github.com/spacemeshos/ed25519 v0.0.0-20190530014421-e235766d15a1
 	github.com/spacemeshos/merkle-tree v0.0.0-20190612125135-48574fd5f419
 	github.com/spacemeshos/poet v0.0.0-20190717095635-f016e4af26f2
-	github.com/spacemeshos/post v0.0.0-20190709100804-7327807ad763
+	github.com/spacemeshos/post v0.0.0-20190721130117-ecc4fecf758d
 	github.com/spacemeshos/sha256-simd v0.0.0-20190111104731-8575aafc88c9
 	github.com/spf13/cobra v0.0.4
 	github.com/spf13/pflag v1.0.3

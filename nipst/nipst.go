@@ -7,8 +7,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/spacemeshos/post/config"
+	"github.com/spacemeshos/post/persistence"
 	"github.com/spacemeshos/post/shared"
-	"io/ioutil"
 	"sync"
 	"time"
 )
@@ -216,14 +216,13 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *common.Hash) (*types.NIPST, error)
 }
 
 func (nb *NIPSTBuilder) IsPostInitialized() bool {
-	dir := shared.GetInitDir(nb.postCfg.DataDir, nb.id)
-	infos, err := ioutil.ReadDir(dir)
+	readers, err := persistence.GetReaders(nb.postCfg.DataDir, nb.id)
 	if err != nil {
-		nb.log.WithFields(log.Err(err), log.String("dir", dir)).Error("failed to look for init files")
+		nb.log.WithFields(log.Err(err)).Error("failed to look for init files")
 		return false
 	}
-	if len(infos) < 2 {
-		nb.log.WithFields(log.Int("num_files", len(infos))).Info("could not find init files")
+	if len(readers) == 0 {
+		nb.log.Info("could not find init files")
 		return false
 	}
 	return true
