@@ -195,7 +195,7 @@ func (prot *Protocol) processMessage(sender p2pcrypto.PublicKey, protocol string
 		return nil
 	}
 
-	//prot.Log.With().EventInfo("new_gossip_message", log.String("from", sender.String()), log.String("protocol", protocol), log.Uint32("hash", uint32(h)))
+	prot.Log.With().EventDebug("new_gossip_message", log.String("from", sender.String()), log.String("protocol", protocol), log.Uint32("hash", uint32(h)))
 	metrics.NewGossipMessages.With("protocol", protocol).Add(1)
 	return prot.net.ProcessGossipProtocolMessage(sender, protocol, msg, prot.propagateQ)
 }
@@ -207,7 +207,7 @@ loop:
 		select {
 		case msgV := <-prot.propagateQ:
 			h := calcHash(msgV.Message(), msgV.Protocol())
-			prot.Log.With().Info("new_gossip_message_relay",  log.String("protocol", msgV.Protocol()), log.Uint32("hash", uint32(h)))
+			prot.Log.With().EventDebug("new_gossip_message_relay",  log.String("protocol", msgV.Protocol()), log.Uint32("hash", uint32(h)))
 			go prot.propagateMessage(msgV.Message(), calcHash(msgV.Message(), msgV.Protocol()), msgV.Protocol(), msgV.Sender())
 		case <-prot.shutdown:
 			err = errors.New("protocol shutdown")

@@ -197,7 +197,7 @@ func (proc *ConsensusProcess) SetInbox(inbox chan *Msg) {
 }
 
 func (proc *ConsensusProcess) eventLoop() {
-	proc.With().Info("Consensus Process Started",
+	proc.With().EventInfo("Consensus Process Started",
 		log.Int("Hare-N", proc.cfg.N), log.Int("f", proc.cfg.F), log.String("duration", (time.Duration(proc.cfg.RoundDuration)*time.Second).String()),
 		log.LayerId(uint64(proc.instanceId)), log.Int("exp_leaders", proc.cfg.ExpectedLeaders), log.String("set_values", proc.s.String()))
 
@@ -279,7 +279,7 @@ func (proc *ConsensusProcess) onEarlyMessage(m *Msg) {
 func (proc *ConsensusProcess) handleMessage(m *Msg) {
 	// Note: InstanceId is already verified by the broker
 
-	proc.Info("Received message %v (msg_id %v)", m, hex.EncodeToString(m.Sig[:5]))
+	proc.Debug("Received message %v (msg_id %v)", m, hex.EncodeToString(m.Sig[:5]))
 
 	if !proc.validator.SyntacticallyValidateMessage(m) {
 		proc.Warning("Syntactically validation failed, pubkey %v", m.PubKey.ShortString())
@@ -312,7 +312,7 @@ func (proc *ConsensusProcess) handleMessage(m *Msg) {
 }
 
 func (proc *ConsensusProcess) processMsg(m *Msg) {
-	proc.Info("Processing message of type %v (msg_id %v)", m.InnerMsg.Type.String(), hex.EncodeToString(m.Sig[:5]))
+	proc.Debug("Processing message of type %v (msg_id %v)", m.InnerMsg.Type.String(), hex.EncodeToString(m.Sig[:5]))
 	metrics.MessageTypeCounter.With("type_id", m.InnerMsg.Type.String()).Add(1)
 
 	switch m.InnerMsg.Type {
@@ -340,7 +340,7 @@ func (proc *ConsensusProcess) sendMessage(msg *Msg) {
 
 	// check participation
 	if !proc.shouldParticipate() {
-		proc.With().Info("Should not participate", log.Int32("round", proc.k),
+		proc.With().Debug("Should not participate", log.Int32("round", proc.k),
 			log.Uint64("layer_id", uint64(proc.instanceId)))
 		return
 	}
@@ -350,7 +350,7 @@ func (proc *ConsensusProcess) sendMessage(msg *Msg) {
 		return
 	}
 
-	proc.With().Info("message sent", log.String("msg_type", msg.InnerMsg.Type.String()),
+	proc.With().Debug("message sent", log.String("msg_type", msg.InnerMsg.Type.String()),
 		log.Uint64("layer_id", uint64(proc.instanceId)), log.String("msg_id", hex.EncodeToString(msg.Sig[:5])))
 }
 
@@ -367,7 +367,7 @@ func (proc *ConsensusProcess) onRoundEnd() {
 		if s != nil {
 			sStr = s.String()
 		}
-		proc.With().EventInfo("Round 2 ended",
+		proc.With().EventDebug("Round 2 ended",
 			log.String("proposed_set", sStr),
 			log.Bool("is_conflicting", proc.proposalTracker.IsConflicting()),
 			log.Uint64("layer_id", uint64(proc.instanceId)))
@@ -561,14 +561,14 @@ func (proc *ConsensusProcess) statusValidator() func(m *Msg) bool {
 
 func (proc *ConsensusProcess) endOfRound1() {
 	proc.statusesTracker.AnalyzeStatuses(proc.statusValidator())
-	proc.With().EventInfo("Round 1 ended", log.Bool("is_svp_ready", proc.statusesTracker.IsSVPReady()),
+	proc.With().EventDebug("Round 1 ended", log.Bool("is_svp_ready", proc.statusesTracker.IsSVPReady()),
 		log.Uint64("layer_id", uint64(proc.instanceId)))
 }
 
 func (proc *ConsensusProcess) endOfRound3() {
 	// notify already sent after committing, only one should be sent
 	if proc.notifySent {
-		proc.Info("Round 3 ended: notification already sent")
+		proc.Debug("Round 3 ended: notification already sent")
 		return
 	}
 
@@ -595,7 +595,7 @@ func (proc *ConsensusProcess) endOfRound3() {
 	}
 
 	// commit & send notification msg
-	proc.With().EventInfo("Round 3 ended: committing", log.String("committed_set", s.String()),
+	proc.With().Debug("Round 3 ended: committing", log.String("committed_set", s.String()),
 		log.Uint64("layer_id", uint64(proc.instanceId)))
 	proc.s = s
 	proc.certificate = cert
@@ -620,7 +620,7 @@ func (proc *ConsensusProcess) shouldParticipate() bool {
 	}
 
 	if !res {
-		proc.With().Info("Should not participate in the protocol. Reason: identity not active",
+		proc.With().Debug("Should not participate in the protocol. Reason: identity not active",
 			log.Uint64("layer_id", uint64(proc.instanceId)))
 		return false
 	}
