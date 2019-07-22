@@ -241,16 +241,16 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) (bool, error) {
 	posEpoch := b.posLayerID.GetEpoch(b.layersPerEpoch)
 	activeIds, err := b.activeSet.ActiveSetSize(posEpoch)
 	if err != nil && !posEpoch.IsGenesis() {
-		return false, err
+		return false, fmt.Errorf("failed to get active set size: %v", err)
 	}
 	view, err := b.mesh.GetOrphanBlocksBefore(b.mesh.LatestLayer())
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("failed to get current view: %v", err)
 	}
 	atx := types.NewActivationTxWithChallenge(*b.challenge, b.coinbaseAccount, activeIds, view, b.nipst)
 	activeSetSize, err := b.db.CalcActiveSetFromView(atx) // TODO: remove this assertion to improve performance
 	if err != nil && !atx.TargetEpoch(b.layersPerEpoch).IsGenesis() {
-		return false, err
+		return false, fmt.Errorf("failed to calc active set from view: %v", err)
 	}
 	b.log.Info("active ids seen for epoch %v (pos atx epoch) is %v (cache) %v (from view)",
 		posEpoch, activeIds, activeSetSize)
@@ -271,7 +271,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) (bool, error) {
 
 	buf, err := types.AtxAsBytes(atx)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("failed to marshal ATX: %v", err)
 	}
 	b.prevATX = atx
 
@@ -282,7 +282,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) (bool, error) {
 
 	err = b.net.Broadcast(AtxProtocol, buf)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("failed to broadcast ATX: %v", err)
 	}
 
 	b.log.Info("atx published! id: %v, prevATXID: %v, posATXID: %v, layer: %v, published in epoch: %v, active set: %v miner: %v view %v",
