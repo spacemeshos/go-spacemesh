@@ -279,8 +279,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 					log.Error("cannot discard challenge")
 				}
 			}
-		}
-		if b.challenge == nil {
+		} else {
 			err := b.buildNipstChallenge(epoch)
 			if err != nil {
 				return err
