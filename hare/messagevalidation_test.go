@@ -127,27 +127,73 @@ func TestMessageValidator_Aggregated(t *testing.T) {
 	assert.False(t, validator.validateAggregatedMessage(agg, funcs))
 }
 
-func TestConsensusProcess_isContextuallyValid(t *testing.T) {
-	s := NewEmptySet(defaultSetSize)
-	cp := generateConsensusProcess(t)
-	cp.advanceToNextRound()
-
-	msgType := make([]MessageType, 4, 4)
-	msgType[0] = Status
-	msgType[1] = Proposal
-	msgType[2] = Commit
-	msgType[3] = Notify
-
-	for j := 0; j < len(msgType); j++ {
-		for i := 0; i < 4; i++ {
-			builder := NewMessageBuilder()
-			builder.SetType(msgType[j]).SetInstanceId(instanceId1).SetRoundCounter(cp.k).SetKi(ki).SetValues(s)
-			builder = builder.Sign(signing.NewEdSigner())
-			validator := defaultValidator()
-			assert.Equal(t, true, validator.ContextuallyValidateMessage(builder.Build(), cp.k))
-			cp.advanceToNextRound()
-		}
+func TestSyntaxContextValidator_PreRoundContext(t *testing.T) {
+	validator := defaultValidator()
+	ed := signing.NewEdSigner()
+	for i := 0; i < 10; i++ {
+		res, e := validator.ContextuallyValidateMessage(BuildPreRoundMsg(ed, NewSmallEmptySet()), int32(i))
+		assertNoErr(t, true, res, e)
 	}
+}
+
+func TestSyntaxContextValidator_NotifyContext(t *testing.T) {
+	validator := defaultValidator()
+	ed := signing.NewEdSigner()
+	for i := 0; i < 10; i++ {
+		res, e := validator.ContextuallyValidateMessage(BuildNotifyMsg(ed, NewSmallEmptySet()), int32(i))
+		assertNoErr(t, true, res, e)
+	}
+}
+
+func TestSyntaxContextValidator_StatusContext(t *testing.T) {
+	validator := defaultValidator()
+	ed := signing.NewEdSigner()
+	_, e := validator.ContextuallyValidateMessage(BuildStatusMsg(ed, NewSmallEmptySet()), -1)
+	assert.Error(t, e, errEarlyMsg.Error())
+
+	results := []bool{true, false, false, false}
+	for i := 0; i < 4; i++ {
+		res, e := validator.ContextuallyValidateMessage(BuildStatusMsg(ed, NewSmallEmptySet()), int32(i))
+		assertNoErr(t, results[i], res, e)
+	}
+}
+
+func TestSyntaxContextValidator_ProposalContext(t *testing.T) {
+	validator := defaultValidator()
+	ed := signing.NewEdSigner()
+	res, e := validator.ContextuallyValidateMessage(BuildProposalMsg(ed, NewSmallEmptySet()), -1)
+	assertNoErr(t, false, res, e)
+
+	res, e = validator.ContextuallyValidateMessage(BuildProposalMsg(ed, NewSmallEmptySet()), 0)
+	assert.Error(t, e, errEarlyMsg.Error())
+
+	res, e = validator.ContextuallyValidateMessage(BuildProposalMsg(ed, NewSmallEmptySet()), 1)
+	assertNoErr(t, true, res, e)
+
+	res, e = validator.ContextuallyValidateMessage(BuildProposalMsg(ed, NewSmallEmptySet()), 2)
+	assertNoErr(t, true, res, e)
+
+	res, e = validator.ContextuallyValidateMessage(BuildProposalMsg(ed, NewSmallEmptySet()), 3)
+	assertNoErr(t, false, res, e)
+}
+
+func TestSyntaxContextValidator_CommitContext(t *testing.T) {
+	validator := defaultValidator()
+	ed := signing.NewEdSigner()
+	res, e := validator.ContextuallyValidateMessage(BuildCommitMsg(ed, NewSmallEmptySet()), -1)
+	assertNoErr(t, false, res, e)
+
+	res, e = validator.ContextuallyValidateMessage(BuildCommitMsg(ed, NewSmallEmptySet()), 0)
+	assertNoErr(t, false, res, e)
+
+	res, e = validator.ContextuallyValidateMessage(BuildCommitMsg(ed, NewSmallEmptySet()), 1)
+	assert.Error(t, e, errEarlyMsg.Error())
+
+	res, e = validator.ContextuallyValidateMessage(BuildCommitMsg(ed, NewSmallEmptySet()), 2)
+	assertNoErr(t, true, res, e)
+
+	res, e = validator.ContextuallyValidateMessage(BuildCommitMsg(ed, NewSmallEmptySet()), 3)
+	assertNoErr(t, false, res, e)
 }
 
 func TestMessageValidator_ValidateMessage(t *testing.T) {
@@ -159,14 +205,23 @@ func TestMessageValidator_ValidateMessage(t *testing.T) {
 	preround := b.SetType(PreRound).Sign(proc.signing).Build()
 	preround.PubKey = proc.signing.PublicKey()
 	assert.True(t, v.SyntacticallyValidateMessage(preround))
-	assert.True(t, v.ContextuallyValidateMessage(preround, 0))
+	res, e := v.ContextuallyValidateMessage(preround, 0)
+	assert.NoError(t, e)
+	assert.True(t, res)
 	b, err = proc.initDefaultBuilder(proc.s)
 	assert.Nil(t, err)
 	status := b.SetType(Status).Sign(proc.signing).Build()
 	status.PubKey = proc.signing.PublicKey()
-	assert.True(t, v.ContextuallyValidateMessage(status, 0))
+	res, e = v.ContextuallyValidateMessage(status, 0)
+	assert.NoError(t, e)
+	assert.True(t, res)
 	assert.True(t, v.SyntacticallyValidateMessage(status))
 
+}
+
+func assertNoErr(t *testing.T, expect bool, actual bool, err error) {
+	assert.NoError(t, err)
+	assert.Equal(t, expect, actual)
 }
 
 func TestMessageValidator_SyntacticallyValidateMessage(t *testing.T) {
@@ -181,12 +236,16 @@ func TestMessageValidator_ContextuallyValidateMessage(t *testing.T) {
 	validator := newSyntaxContextValidator(signing.NewEdSigner(), 1, validate, &MockStateQuerier{true, nil}, 10, log.NewDefault("Validator"))
 	m := BuildPreRoundMsg(generateSigning(t), NewSmallEmptySet())
 	m.InnerMsg = nil
-	assert.False(t, validator.ContextuallyValidateMessage(m, 0))
+	res, e := validator.ContextuallyValidateMessage(m, 0)
+	assert.Error(t, e)
 	m = BuildPreRoundMsg(generateSigning(t), NewSetFromValues(value1))
-	assert.True(t, validator.ContextuallyValidateMessage(m, 0))
+	res, e = validator.ContextuallyValidateMessage(m, 0)
+	assertNoErr(t, true, res, e)
 	m = BuildStatusMsg(generateSigning(t), NewSetFromValues(value1))
-	assert.False(t, validator.ContextuallyValidateMessage(m, 1))
-	assert.True(t, validator.ContextuallyValidateMessage(m, 0))
+	res, e = validator.ContextuallyValidateMessage(m, 1)
+	assertNoErr(t, false, res, e)
+	res, e = validator.ContextuallyValidateMessage(m, 0)
+	assertNoErr(t, true, res, e)
 }
 
 func TestMessageValidator_validateSVPTypeA(t *testing.T) {

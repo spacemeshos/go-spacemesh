@@ -18,12 +18,11 @@ import (
 var cfg = config.Config{N: 10, F: 5, RoundDuration: 2, ExpectedLeaders: 5}
 
 type mockMessageValidator struct {
-	syntaxValid   bool
-	contextValid  bool
-	contextValid2 bool
-	countSyntax   int
-	countContext  int
-	firstK        int32
+	syntaxValid  bool
+	contextValid bool
+	err          error
+	countSyntax  int
+	countContext int
 }
 
 func (mmv *mockMessageValidator) SyntacticallyValidateMessage(m *Msg) bool {
@@ -31,13 +30,9 @@ func (mmv *mockMessageValidator) SyntacticallyValidateMessage(m *Msg) bool {
 	return mmv.syntaxValid
 }
 
-func (mmv *mockMessageValidator) ContextuallyValidateMessage(m *Msg, expectedK int32) bool {
+func (mmv *mockMessageValidator) ContextuallyValidateMessage(m *Msg, expectedK int32) (bool, error) {
 	mmv.countContext++
-	if mmv.firstK == expectedK {
-		return mmv.contextValid
-	}
-
-	return mmv.contextValid2
+	return mmv.contextValid, mmv.err
 }
 
 type mockRolacle struct {
@@ -206,7 +201,6 @@ func TestConsensusProcess_handleMessage(t *testing.T) {
 	oracle := &mockRolacle{}
 	proc.oracle = oracle
 	mValidator := &mockMessageValidator{}
-	mValidator.firstK = proc.k
 	proc.validator = mValidator
 	proc.inbox, _ = broker.Register(proc.Id())
 	msg := BuildPreRoundMsg(generateSigning(t), NewSetFromValues(value1))
@@ -224,7 +218,7 @@ func TestConsensusProcess_handleMessage(t *testing.T) {
 	proc.handleMessage(msg)
 	assert.Equal(t, 0, len(proc.pending))
 	mValidator.contextValid = false
-	mValidator.contextValid2 = true
+	mValidator.err = errEarlyMsg
 	proc.handleMessage(msg)
 	assert.Equal(t, 1, len(proc.pending))
 }
@@ -349,16 +343,22 @@ func TestConsensusProcess_procStatus(t *testing.T) {
 
 func TestConsensusProcess_procProposal(t *testing.T) {
 	proc := generateConsensusProcess(t)
+	proc.validator.(*syntaxContextValidator).threshold = 1
+	proc.validator.(*syntaxContextValidator).statusValidator = func(m *Msg) bool {
+		return true
+	}
+	proc.SetInbox(make(chan *Msg))
 	proc.advanceToNextRound()
 	proc.advanceToNextRound()
-	s := NewSmallEmptySet()
+	s := NewSetFromValues(value1)
 	m := BuildProposalMsg(generateSigning(t), s)
 	mpt := &mockProposalTracker{}
 	proc.proposalTracker = mpt
-	proc.processProposalMsg(m)
+	proc.handleMessage(m)
+	//proc.processProposalMsg(m)
 	assert.Equal(t, 1, mpt.countOnProposal)
 	proc.advanceToNextRound()
-	proc.processProposalMsg(m)
+	proc.handleMessage(m)
 	assert.Equal(t, 1, mpt.countOnLateProposal)
 }
 

@@ -249,6 +249,9 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) (bool, error) {
 	}
 	atx := types.NewActivationTxWithChallenge(*b.challenge, b.coinbaseAccount, activeIds, view, b.nipst)
 	activeSetSize, err := b.db.CalcActiveSetFromView(atx) // TODO: remove this assertion to improve performance
+	if err != nil && !atx.TargetEpoch(b.layersPerEpoch).IsGenesis() {
+		return false, err
+	}
 	b.log.Info("active ids seen for epoch %v (pos atx epoch) is %v (cache) %v (from view)",
 		posEpoch, activeIds, activeSetSize)
 
