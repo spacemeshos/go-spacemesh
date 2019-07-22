@@ -105,9 +105,12 @@ func TestTicker_TickFutureGenesis(t *testing.T) {
 
 func TestTicker_TickPastGenesis(t *testing.T) {
 	tmr := &RealClock{}
-	ticker := NewTicker(tmr, 2*time.Second, tmr.Now().Add(-4*time.Second))
+	ticker := NewTicker(tmr, 1*time.Second, tmr.Now().Add(-3900*time.Millisecond))
 	sub := ticker.Subscribe()
 	ticker.Start()
+	start := time.Now()
 	x := <-sub
-	assert.Equal(t, types.LayerID(3), x)
+	duration := time.Since(start)
+	assert.Equal(t, types.LayerID(4), x)
+	assert.True(t, duration > 99*time.Millisecond && duration < 105*time.Millisecond, duration)
 }
