@@ -163,7 +163,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	}
 	txbytes, _ := types.SignedTransactionAsBytes(tx)
 	path := "../tmp/test/state_" + time.Now().String()
-	genesisTime := time.Now().Add(10 * time.Second).Format(time.RFC3339)
+	genesisTime := time.Now().Add(20 * time.Second).Format(time.RFC3339)
 	suite.initMultipleInstances(5, path, genesisTime)
 	for _, a := range suite.apps {
 		a.startServices()
