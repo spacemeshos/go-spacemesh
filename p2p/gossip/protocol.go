@@ -2,6 +2,8 @@ package gossip
 
 import (
 	"errors"
+	"github.com/spacemeshos/go-spacemesh/activation"
+	config2 "github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/metrics"
@@ -174,8 +176,9 @@ func (prot *Protocol) processMessage(sender p2pcrypto.PublicKey, protocol string
 		prot.Log.With().Debug("old_gossip_message", log.String("from", sender.String()), log.String("protocol", protocol), log.Uint32("hash", uint32(h)))
 		return nil
 	}
-
-	prot.Log.With().Info("new_gossip_message", log.String("from", sender.String()), log.String("protocol", protocol), log.Uint32("hash", uint32(h)))
+	if protocol == config2.NewBlockProtocol || protocol == activation.AtxProtocol {
+		prot.Log.With().Info("new_gossip_message", log.String("from", sender.String()), log.String("protocol", protocol), log.Uint32("hash", uint32(h)))
+	}
 	metrics.NewGossipMessages.With("protocol", protocol).Add(1)
 	return prot.net.ProcessGossipProtocolMessage(sender, protocol, msg, prot.propagateQ)
 }
