@@ -92,7 +92,7 @@ func (t *Ticker) Subscribe() LayerTimer {
 }
 
 func (t *Ticker) updateLayerID() {
-	t.currentLayer = types.LayerID((t.time.Now().Sub(t.startEpoch) / t.tickInterval) + 1)
+	t.currentLayer = types.LayerID((t.time.Now().Sub(t.startEpoch) / t.tickInterval) + 2)
 }
 
 func (t *Ticker) StartClock(diff time.Duration) {

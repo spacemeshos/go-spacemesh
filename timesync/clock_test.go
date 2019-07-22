@@ -68,7 +68,7 @@ func TestTicker_StartClock_LayerID(t *testing.T) {
 
 	ts := NewTicker(MockTimer{}, tick, start)
 	ts.updateLayerID()
-	assert.Equal(t, types.LayerID(7), ts.currentLayer)
+	assert.Equal(t, types.LayerID(8), ts.currentLayer)
 	ts.Close()
 }
 
@@ -111,6 +111,6 @@ func TestTicker_TickPastGenesis(t *testing.T) {
 	start := time.Now()
 	x := <-sub
 	duration := time.Since(start)
-	assert.Equal(t, types.LayerID(4), x)
+	assert.Equal(t, types.LayerID(5), x)
 	assert.True(t, duration > 99*time.Millisecond && duration < 105*time.Millisecond, duration)
 }
