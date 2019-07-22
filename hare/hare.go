@@ -227,7 +227,7 @@ var (
 // GetResults returns the hare output for a given LayerID. returns error if we don't have results yet.
 func (h *Hare) GetResult(lower types.LayerID, upper types.LayerID) ([]types.BlockID, error) {
 
-	if h.isTooLate(InstanceId(lower)) {
+	if h.isTooLate(InstanceId(upper)) {
 		return nil, ErrTooOld
 	}
 

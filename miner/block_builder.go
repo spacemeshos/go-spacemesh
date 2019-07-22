@@ -185,7 +185,7 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 
 		bottom := types.LayerID(1)
 		if id > t.hdist {
-			bottom = id - t.hdist
+			bottom = id - t.hdist + 1
 		}
 
 		votes, err = t.hareResult.GetResult(bottom, id-1)
