@@ -100,14 +100,14 @@ func (m mockTxProcessor) ValidateTransactionSignature(tx *types.SerializableSign
 	return address.Address{}, errors.New("invalid sig for tx")
 }
 
-type mockSyncer struct{
+type mockSyncer struct {
 }
 
 func (mockSyncer) FetchPoetProof(poetProofRef []byte) error { return nil }
 
 func (mockSyncer) IsSynced() bool { return true }
 
-type mockSyncerP struct{
+type mockSyncerP struct {
 	synced bool
 }
 
@@ -339,15 +339,15 @@ func TestBlockBuilder_Gossip_NotSynced(t *testing.T) {
 
 	poetRef := []byte{0xba, 0x38}
 	atx := types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")},
-	coinbase,
-	1,
-	types.AtxId{common.Hash{1}},
-	5,
-	1,
-	types.AtxId{},
-	5,
-	[]types.BlockID{1, 2, 3},
-	nipst.NewNIPSTWithChallenge(&common.Hash{}, poetRef))
+		coinbase,
+		1,
+		types.AtxId{common.Hash{1}},
+		5,
+		1,
+		types.AtxId{},
+		5,
+		[]types.BlockID{1, 2, 3},
+		nipst.NewNIPSTWithChallenge(&common.Hash{}, poetRef))
 
 	atxBytes, err := types.InterfaceToBytes(&atx)
 	assert.NoError(t, err)
