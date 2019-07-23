@@ -312,7 +312,7 @@ func (proc *ConsensusProcess) handleMessage(m *Msg) {
 }
 
 func (proc *ConsensusProcess) processMsg(m *Msg) {
-	proc.Debug("Processing message of type %v (msg_id %v)", m.InnerMsg.Type.String(), hex.EncodeToString(m.Sig[:5]))
+	proc.Info("Processing message of type %v (msg_id %v)", m.InnerMsg.Type.String(), hex.EncodeToString(m.Sig[:5]))
 	metrics.MessageTypeCounter.With("type_id", m.InnerMsg.Type.String()).Add(1)
 
 	switch m.InnerMsg.Type {
@@ -340,7 +340,7 @@ func (proc *ConsensusProcess) sendMessage(msg *Msg) {
 
 	// check participation
 	if !proc.shouldParticipate() {
-		proc.With().Debug("Should not participate", log.Int32("round", proc.k),
+		proc.With().Info("Should not participate", log.Int32("round", proc.k),
 			log.Uint64("layer_id", uint64(proc.instanceId)))
 		return
 	}
@@ -355,7 +355,7 @@ func (proc *ConsensusProcess) sendMessage(msg *Msg) {
 }
 
 func (proc *ConsensusProcess) onRoundEnd() {
-	proc.With().Debug("End of round", log.Int32("K", proc.k), log.Uint64("layer_id", uint64(proc.instanceId)))
+	proc.With().Info("End of round", log.Int32("K", proc.k), log.Uint64("layer_id", uint64(proc.instanceId)))
 
 	// reset trackers
 	switch proc.currentRound() {
@@ -367,7 +367,7 @@ func (proc *ConsensusProcess) onRoundEnd() {
 		if s != nil {
 			sStr = s.String()
 		}
-		proc.With().EventDebug("Round 2 ended",
+		proc.With().EventInfo("Round 2 ended",
 			log.String("proposed_set", sStr),
 			log.Bool("is_conflicting", proc.proposalTracker.IsConflicting()),
 			log.Uint64("layer_id", uint64(proc.instanceId)))
@@ -523,7 +523,7 @@ func (proc *ConsensusProcess) processNotifyMsg(msg *Msg) {
 	}
 
 	if proc.notifyTracker.NotificationsCount(s) < proc.cfg.F+1 { // not enough
-		proc.Debug("Not enough notifications for termination. Expected: %v Actual: %v",
+		proc.Info("Not enough notifications for termination. Expected: %v Actual: %v",
 			proc.cfg.F+1, proc.notifyTracker.NotificationsCount(s))
 		return
 	}
@@ -561,14 +561,14 @@ func (proc *ConsensusProcess) statusValidator() func(m *Msg) bool {
 
 func (proc *ConsensusProcess) endOfRound1() {
 	proc.statusesTracker.AnalyzeStatuses(proc.statusValidator())
-	proc.With().EventDebug("Round 1 ended", log.Bool("is_svp_ready", proc.statusesTracker.IsSVPReady()),
+	proc.With().EventInfo("Round 1 ended", log.Bool("is_svp_ready", proc.statusesTracker.IsSVPReady()),
 		log.Uint64("layer_id", uint64(proc.instanceId)))
 }
 
 func (proc *ConsensusProcess) endOfRound3() {
 	// notify already sent after committing, only one should be sent
 	if proc.notifySent {
-		proc.Debug("Round 3 ended: notification already sent")
+		proc.Info("Round 3 ended: notification already sent")
 		return
 	}
 
@@ -595,7 +595,7 @@ func (proc *ConsensusProcess) endOfRound3() {
 	}
 
 	// commit & send notification msg
-	proc.With().Debug("Round 3 ended: committing", log.String("committed_set", s.String()),
+	proc.With().Info("Round 3 ended: committing", log.String("committed_set", s.String()),
 		log.Uint64("layer_id", uint64(proc.instanceId)))
 	proc.s = s
 	proc.certificate = cert
@@ -620,7 +620,7 @@ func (proc *ConsensusProcess) shouldParticipate() bool {
 	}
 
 	if !res {
-		proc.With().Debug("Should not participate in the protocol. Reason: identity not active",
+		proc.With().Info("Should not participate in the protocol. Reason: identity not active",
 			log.Uint64("layer_id", uint64(proc.instanceId)))
 		return false
 	}

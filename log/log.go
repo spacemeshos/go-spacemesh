@@ -6,8 +6,10 @@ import (
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/natefinch/lumberjack.v2"
 	"io"
+	"math/rand"
 	"os"
 	"path/filepath"
+	"time"
 
 	"go.uber.org/zap"
 )
@@ -28,16 +30,31 @@ var InfoLevel = zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
 	return lvl >= zapcore.InfoLevel
 })
 
+var WarnLevel = zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
+	return lvl >= zapcore.WarnLevel
+})
+
 var ErrorLevel = zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
 	return lvl >= zapcore.ErrorLevel
 })
 
+var randRes = 5
+
 func logLevel() zap.LevelEnablerFunc {
-	if debugMode {
-		return DebugLevel
-	} else {
-		return InfoLevel
+	if randRes == 5 {
+		rand.Seed(time.Now().UnixNano())
+		randRes = rand.Int() % 5
 	}
+	if randRes == 0 {
+		return InfoLevel
+	} else {
+		return WarnLevel
+	}
+	//if debugMode {
+	//	return DebugLevel
+	//} else {
+	//	return InfoLevel
+	//}
 }
 
 func encoder() zapcore.Encoder {
