@@ -53,10 +53,10 @@ func (v BlockEligibilityValidator) BlockEligible(block *types.BlockHeader) (bool
 			numberOfEligibleBlocks)
 	}
 
-	//epochBeacon := v.beaconProvider.GetBeacon(epochNumber)
-	//message := serializeVRFMessage(epochBeacon, epochNumber, counter)
+	epochBeacon := v.beaconProvider.GetBeacon(epochNumber)
+	message := serializeVRFMessage(epochBeacon, epochNumber, counter)
 	vrfSig := block.EligibilityProof.Sig
-	/*res, err := v.validateVRF(message, vrfSig, []byte(block.MinerID.VRFPublicKey))
+	res, err := v.validateVRF(message, vrfSig, []byte(block.MinerID.VRFPublicKey))
 	if err != nil {
 		v.log.Error("eligibility VRF validation erred: %v", err)
 		return false, fmt.Errorf("eligibility VRF validation failed: %v", err)
@@ -64,7 +64,7 @@ func (v BlockEligibilityValidator) BlockEligible(block *types.BlockHeader) (bool
 	if !res {
 		v.log.Error("eligibility VRF validation failed")
 		return false, nil
-	}*/
+	}
 	vrfHash := sha256.Sum256(vrfSig)
 	eligibleLayer := calcEligibleLayer(epochNumber, v.layersPerEpoch, vrfHash)
 

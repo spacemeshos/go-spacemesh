@@ -97,7 +97,7 @@ func (o *Oracle) activeSetSize(layer types.LayerID) (uint32, error) {
 
 // Eligible checks if Id is eligible on the given Layer where msg is the VRF message, sig is the role proof and assuming commSize as the expected committee size
 func (o *Oracle) Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeId, sig []byte) (bool, error) {
-	/*msg, err := o.buildVRFMessage(id, layer, round)
+	msg, err := o.buildVRFMessage(id, layer, round)
 	if err != nil {
 		o.Error("Could not build VRF message")
 		return false, err
@@ -113,7 +113,7 @@ func (o *Oracle) Eligible(layer types.LayerID, round int32, committeeSize int, i
 		o.With().Warning("A node did not pass VRF verification",
 			log.String("id", id.ShortString()), log.Uint64("layer_id", uint64(layer)))
 		return false, nil
-	}*/
+	}
 
 	// get active set size
 	activeSetSize, err := o.activeSetSize(layer)
