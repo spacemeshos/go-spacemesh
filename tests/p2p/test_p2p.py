@@ -23,7 +23,7 @@ from tests.test_bs import setup_bootstrap, create_configmap, setup_clients, save
 dt = datetime.now()
 todaydate = dt.strftime("%Y.%m.%d")
 current_index = 'kubernetes_cluster-' + todaydate
-timeout_factor = 2
+timeout_factor = 1
 
 
 def query_bootstrap_es(indx, namespace, bootstrap_po_name):
