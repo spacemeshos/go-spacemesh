@@ -44,10 +44,10 @@ func RandStringRunes(n int) string {
 func (a *mockActivationDB) IsIdentityActive(edId string, layer types.LayerID) (*types.NodeId, bool, types.AtxId, error) {
 	if idmap, ok := a.atxs[edId]; ok {
 		if atxid, ok := idmap[layer]; ok {
-			return nil, true, atxid, nil
+			return &types.NodeId{edId, publicKey}, true, atxid, nil
 		}
 	}
-	return nil, true, *types.EmptyAtxId, nil
+	return &types.NodeId{edId, publicKey}, true, *types.EmptyAtxId, nil
 }
 
 func (a mockActivationDB) ActiveSetSize(epochId types.EpochId) (uint32, error) {
