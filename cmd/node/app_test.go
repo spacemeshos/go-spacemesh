@@ -83,7 +83,7 @@ func (suite *AppTestSuite) TearDownTest() {
 	}
 }
 
-func (suite *AppTestSuite) initMultipleInstances(numOfInstances int, storeFormat string) {
+func (suite *AppTestSuite) initMultipleInstances(numOfInstances int, storeFormat string, genesisTime string) {
 	r := require.New(suite.T())
 
 	net := service.NewSimulator()
@@ -111,6 +111,7 @@ func (suite *AppTestSuite) initMultipleInstances(numOfInstances int, storeFormat
 		smApp.Config.LayerAvgSize = numOfInstances
 		smApp.Config.LayersPerEpoch = 3
 		smApp.Config.Hdist = 5
+		smApp.Config.GenesisTime = genesisTime
 
 		edSgn := signing.NewEdSigner()
 		pub := edSgn.PublicKey()
@@ -163,7 +164,8 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	}
 	txbytes, _ := types.SignedTransactionAsBytes(tx)
 	path := "../tmp/test/state_" + time.Now().String()
-	suite.initMultipleInstances(5, path)
+	genesisTime := time.Now().Add(20 * time.Second).Format(time.RFC3339)
+	suite.initMultipleInstances(5, path, genesisTime)
 	for _, a := range suite.apps {
 		a.startServices()
 	}
