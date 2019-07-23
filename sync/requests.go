@@ -98,7 +98,7 @@ func TxReqFactory(ids []types.TransactionId, sync *Syncer, blkId types.BlockID) 
 				tId := types.GetTransactionId(&i)
 				txstring += hex.EncodeToString(tId[:common.Min(5, len(tId))]) + ", "
 			}
-			s.With().Info("handle atx response ",  log.String("peer", peer.String()),  log.String("atx_list", txstring), log.BlockId(uint64(blkId)))
+			s.With().Info("handle tx response ",  log.String("peer", peer.String()),  log.String("tx_list", txstring), log.BlockId(uint64(blkId)))
 			ch <- tx
 		}
 
