@@ -19,7 +19,7 @@ bootstrap:
     hare-max-adversaries: '15'
     hare-round-duration-sec: '25'
     layer-duration-sec: '180'
-    layer-average-size: '100'
+    layer-average-size: '200'
     hare-wakeup-delta: '30'
     layers-per-epoch: '4'
     hare-exp-leaders: '15'
@@ -27,14 +27,14 @@ bootstrap:
 client:
   image: 'spacemeshos/go-spacemesh-dev:tn'
   command: '/bin/go-spacemesh'
-  replicas: 99
+  replicas: 249
   args:
     randcon: '8'
     hare-committee-size: '50'
     hare-max-adversaries: '15'
     hare-round-duration-sec: '25'
     layer-duration-sec: '180'
-    layer-average-size: '100'
+    layer-average-size: '200'
     hare-wakeup-delta: '30'
     layers-per-epoch: '4'
     hare-exp-leaders: '15'
