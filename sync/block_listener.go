@@ -72,21 +72,22 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 				bl.Error("got empty message while listening to gossip blocks")
 				return
 			}
-			go func() {
-				var blk types.Block
-				err := types.BytesToInterface(data.Bytes(), &blk)
-				if err != nil {
-					bl.Error("received invalid block %v", data.Bytes(), err)
-					return
-				}
+			var blk types.Block
+			err := types.BytesToInterface(data.Bytes(), &blk)
+			if err != nil {
+				bl.Error("received invalid block %v", data.Bytes(), err)
+				return
+			}
 
-				bl.HandleNewBlock(&blk, data)
-			}()
+			if bl.HandleNewBlock(&blk) {
+				data.ReportValidation(config.NewBlockProtocol)
+			}
+
 		}
 	}
 }
 
-func (bl *BlockListener) HandleNewBlock(blk *types.Block, data service.GossipMessage) bool {
+func (bl *BlockListener) HandleNewBlock(blk *types.Block) bool {
 
 	atxstring := ""
 	for _, atx := range blk.AtxIds {
@@ -108,17 +109,13 @@ func (bl *BlockListener) HandleNewBlock(blk *types.Block, data service.GossipMes
 		return false
 	}
 
-	bl.Log.With().Info("finished syntactic validation propagating and adding block with txs", log.BlockId(uint64(blk.ID())))
-	if data != nil {
-		data.ReportValidation(config.NewBlockProtocol)
-	}
-	// go func() { // moving to blocking call since HandleNewBlock now runs in a go routine
-	if err := bl.AddBlockWithTxs(blk, txs, atxs); err != nil {
-		bl.Log.With().Error("failed to add block to database", log.BlockId(uint64(blk.ID())), log.Err(err))
-		//return
-	} else {
-		bl.With().Info("added block to database", log.BlockId(uint64(blk.ID())))
-	}
-	//}()
+	bl.Log.With().Info("finished syntactic validation adding block with txs", log.BlockId(uint64(blk.ID())))
+	go func() {
+		if err := bl.AddBlockWithTxs(blk, txs, atxs); err != nil {
+			bl.Log.With().Error("failed to add block to database", log.BlockId(uint64(blk.ID())), log.Err(err))
+			return
+		}
+	}()
+	bl.With().Info("added block to database", log.BlockId(uint64(blk.ID())))
 	return true
 }

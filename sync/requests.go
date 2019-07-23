@@ -84,7 +84,7 @@ func TxReqFactory(ids []types.TransactionId, sync *Syncer, blkId types.BlockID) 
 		for _, i := range ids {
 			txstring += hex.EncodeToString(i[:common.Min(5, len(i))]) + ", "
 		}
-		s.With().Info("about to sync txs with peer", log.String("peer", peer.String()), log.String("tx_list", txstring), log.BlockId(uint64(blkId)))
+		s.With().Info("about to sync txs with peer", log.String("tx_list", txstring), log.BlockId(uint64(blkId)))
 		foo := func(msg []byte) {
 			defer close(ch)
 			var tx []types.SerializableSignedTransaction
@@ -93,7 +93,7 @@ func TxReqFactory(ids []types.TransactionId, sync *Syncer, blkId types.BlockID) 
 				s.Error("could not unmarshal tx data %v", err)
 				return
 			}
-			txstring := ""
+			txstring = ""
 			for _, i := range tx {
 				tId := types.GetTransactionId(&i)
 				txstring += hex.EncodeToString(tId[:common.Min(5, len(tId))]) + ", "
