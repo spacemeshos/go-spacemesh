@@ -8,15 +8,13 @@ import (
 	"github.com/hashicorp/golang-lru"
 	"github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/go-spacemesh/config"
+	eCfg "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"math"
 )
 
-const k = types.LayerID(25) // the confidence interval // TODO: read from config
-const cacheSize = 5         // we don't expect to handle more than three layers concurrently
-const genesisActiveSet = 5  // the active set size for genesis
-const constOffset = 30      // the constant offset from the beginning of the epoch
+const cacheSize = 5 // we don't expect to handle more than three layers concurrently
 
 var genesisErr = errors.New("no data about active nodes for genesis")
 
@@ -47,11 +45,12 @@ type Oracle struct {
 	vrfVerifier    VerifierFunc
 	layersPerEpoch uint16
 	cache          casher
+	cfg            eCfg.Config
 	log.Log
 }
 
 // Returns the relative Layer that w.h.p. we have agreement on its view
-// safe is defined to be k layers prior to the provided Layer
+// safe is defined to be confidenceInterval layers prior to the provided Layer
 func safeLayer(layer types.LayerID, safetyParam types.LayerID) types.LayerID {
 	if layer <= safetyParam { // assuming genesis is zero
 		return config.Genesis
@@ -84,7 +83,8 @@ func roundedSafeLayer(layer types.LayerID, safetyParam types.LayerID,
 }
 
 // New returns a new eligibility oracle instance
-func New(beacon valueProvider, activeSetFunc activeSetFunc, vrfVerifier VerifierFunc, vrfSigner Signer, layersPerEpoch uint16, log log.Log) *Oracle {
+func New(beacon valueProvider, activeSetFunc activeSetFunc, vrfVerifier VerifierFunc, vrfSigner Signer,
+	layersPerEpoch uint16, cfg eCfg.Config, log log.Log) *Oracle {
 	c, e := lru.New(cacheSize)
 	if e != nil {
 		log.Panic("Could not create lru cache err=%v", e)
@@ -97,6 +97,7 @@ func New(beacon valueProvider, activeSetFunc activeSetFunc, vrfVerifier Verifier
 		vrfSigner:      vrfSigner,
 		layersPerEpoch: layersPerEpoch,
 		cache:          c,
+		cfg:            cfg,
 		Log:            log,
 	}
 }
@@ -110,7 +111,7 @@ type vrfMessage struct {
 
 // buildVRFMessage builds the VRF message used as input for the BLS (msg=Beacon##Id##Layer##Round)
 func (o *Oracle) buildVRFMessage(id types.NodeId, layer types.LayerID, round int32) ([]byte, error) {
-	v, err := o.beacon.Value(safeLayer(layer, k))
+	v, err := o.beacon.Value(layer)
 	if err != nil {
 		o.Error("Could not get Beacon value: %v", err)
 		return nil, err
@@ -131,7 +132,7 @@ func (o *Oracle) activeSetSize(layer types.LayerID) (uint32, error) {
 	actives, err := o.actives(layer)
 	if err != nil {
 		if err == genesisErr { // we are in genesis
-			return genesisActiveSet, nil
+			return uint32(o.cfg.GenesisActiveSet), nil
 		}
 
 		return 0, err
@@ -207,7 +208,7 @@ func (o *Oracle) Proof(id types.NodeId, layer types.LayerID, round int32) ([]byt
 
 // Returns a map of all active nodes in the specified layer id
 func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
-	sl := roundedSafeLayer(layer, k, o.layersPerEpoch, constOffset)
+	sl := roundedSafeLayer(layer, types.LayerID(o.cfg.ConfidenceInterval), o.layersPerEpoch, types.LayerID(o.cfg.EpochOffset))
 
 	ep := sl.GetEpoch(o.layersPerEpoch)
 	// check genesis

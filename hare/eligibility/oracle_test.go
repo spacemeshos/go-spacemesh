@@ -4,6 +4,7 @@ import (
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/amcl/BLS381"
 	"github.com/spacemeshos/go-spacemesh/config"
+	eCfg "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
@@ -20,6 +21,7 @@ const defNonGenesisLayer = defLayersPerEpoch*2 + 1
 
 var someErr = errors.New("some error")
 var myErr = errors.New("my error")
+var cfg = eCfg.DefaultConfig()
 
 type mockValueProvider struct {
 	val uint32
@@ -80,7 +82,7 @@ func TestOracle_BuildVRFMessage(t *testing.T) {
 }
 
 func TestOracle_IsEligible(t *testing.T) {
-	o := New(&mockValueProvider{1, nil}, nil, nil, nil, 0, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{1, nil}, nil, nil, nil, 0, cfg, log.NewDefault(t.Name()))
 	o.layersPerEpoch = 10
 	o.vrfVerifier = buildVerifier(false, someErr)
 	res, err := o.Eligible(types.LayerID(1), 0, 1, types.NodeId{}, []byte{})
@@ -94,7 +96,7 @@ func TestOracle_IsEligible(t *testing.T) {
 	assert.False(t, res)
 
 	o.getActiveSet = (&mockActiveSetProvider{0}).ActiveSet
-	res, err = o.Eligible(types.LayerID(k+11), 1, 0, types.NodeId{}, []byte{})
+	res, err = o.Eligible(types.LayerID(cfg.ConfidenceInterval+11), 1, 0, types.NodeId{}, []byte{})
 	assert.NotNil(t, err)
 	assert.Equal(t, "active set size is zero", err.Error())
 	assert.False(t, res)
@@ -112,14 +114,14 @@ func Test_safeLayer(t *testing.T) {
 }
 
 func Test_ZeroParticipants(t *testing.T) {
-	o := New(&mockValueProvider{1, nil}, (&mockActiveSetProvider{5}).ActiveSet, buildVerifier(true, nil), &signer{}, defLayersPerEpoch, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{1, nil}, (&mockActiveSetProvider{5}).ActiveSet, buildVerifier(true, nil), &signer{}, defLayersPerEpoch, cfg, log.NewDefault(t.Name()))
 	res, err := o.Eligible(1, 0, 0, types.NodeId{Key: ""}, []byte{1})
 	assert.Nil(t, err)
 	assert.False(t, res)
 }
 
 func Test_AllParticipants(t *testing.T) {
-	o := New(&mockValueProvider{1, nil}, (&mockActiveSetProvider{5}).ActiveSet, buildVerifier(true, nil), &signer{}, 10, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{1, nil}, (&mockActiveSetProvider{5}).ActiveSet, buildVerifier(true, nil), &signer{}, 10, cfg, log.NewDefault(t.Name()))
 	res, err := o.Eligible(0, 0, 5, types.NodeId{Key: ""}, []byte{1})
 	assert.Nil(t, err)
 	assert.True(t, res)
@@ -136,7 +138,7 @@ func genBytes() []byte {
 func Test_ExpectedCommitteeSize(t *testing.T) {
 	setSize := 1024
 	commSize := 1000
-	o := New(&mockValueProvider{1, nil}, (&mockActiveSetProvider{setSize}).ActiveSet, buildVerifier(true, nil), &signer{}, 10, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{1, nil}, (&mockActiveSetProvider{setSize}).ActiveSet, buildVerifier(true, nil), &signer{}, 10, cfg, log.NewDefault(t.Name()))
 	count := 0
 	for i := 0; i < setSize; i++ {
 		res, err := o.Eligible(0, 0, commSize, types.NodeId{Key: ""}, genBytes())
@@ -179,7 +181,7 @@ func Test_ActiveSetSize(t *testing.T) {
 	m[types.LayerID(19)] = 2
 	m[types.LayerID(29)] = 3
 	m[types.LayerID(39)] = 5
-	o := New(&mockValueProvider{1, nil}, (&mockBufferedActiveSetProvider{m}).ActiveSet, buildVerifier(true, nil), &signer{}, 10, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{1, nil}, (&mockBufferedActiveSetProvider{m}).ActiveSet, buildVerifier(true, nil), &signer{}, 10, cfg, log.NewDefault(t.Name()))
 	// TODO: remove this comment after inception problem is addressed
 	//assert.Equal(t, o.getActiveSet.ActiveSet(0), o.activeSetSize(1))
 	l := 19 + defSafety
@@ -206,7 +208,7 @@ func assertActiveSetSize(t *testing.T, o *Oracle, expected uint32, l types.Layer
 func Test_BlsSignVerify(t *testing.T) {
 	pr, pu := BLS381.GenKeyPair(BLS381.DefaultSeed())
 	sr := BLS381.NewBlsSigner(pr)
-	o := New(&mockValueProvider{1, nil}, (&mockActiveSetProvider{10}).ActiveSet, BLS381.Verify2, sr, 10, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{1, nil}, (&mockActiveSetProvider{10}).ActiveSet, BLS381.Verify2, sr, 10, cfg, log.NewDefault(t.Name()))
 	id := types.NodeId{Key: "abc", VRFPublicKey: pu}
 	proof, err := o.Proof(id, 1, 1)
 	assert.Nil(t, err)
@@ -216,7 +218,7 @@ func Test_BlsSignVerify(t *testing.T) {
 }
 
 func TestOracle_Proof(t *testing.T) {
-	o := New(&mockValueProvider{0, myErr}, (&mockActiveSetProvider{10}).ActiveSet, buildVerifier(true, nil), &signer{}, 10, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{0, myErr}, (&mockActiveSetProvider{10}).ActiveSet, buildVerifier(true, nil), &signer{}, 10, cfg, log.NewDefault(t.Name()))
 	sig, err := o.Proof(types.NodeId{}, 2, 3)
 	assert.Nil(t, sig)
 	assert.NotNil(t, err)
@@ -235,7 +237,7 @@ func TestOracle_Proof(t *testing.T) {
 }
 
 func TestOracle_Eligible(t *testing.T) {
-	o := New(&mockValueProvider{0, myErr}, (&mockActiveSetProvider{10}).ActiveSet, buildVerifier(true, nil), &signer{}, 10, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{0, myErr}, (&mockActiveSetProvider{10}).ActiveSet, buildVerifier(true, nil), &signer{}, 10, cfg, log.NewDefault(t.Name()))
 	res, err := o.Eligible(1, 2, 3, types.NodeId{}, []byte{})
 	assert.False(t, res)
 	assert.NotNil(t, err)
@@ -250,7 +252,7 @@ func TestOracle_Eligible(t *testing.T) {
 
 func TestOracle_activeSetSizeCache(t *testing.T) {
 	r := require.New(t)
-	o := New(&mockValueProvider{1, nil}, nil, nil, nil, 5, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{1, nil}, nil, nil, nil, 5, cfg, log.NewDefault(t.Name()))
 	o.getActiveSet = func(layer types.LayerID, layersPerEpoch uint16) (map[string]struct{}, error) {
 		return createMapWithSize(17), nil
 	}
@@ -282,7 +284,7 @@ func TestOracle_roundedSafeLayer(t *testing.T) {
 
 func TestOracle_actives(t *testing.T) {
 	r := require.New(t)
-	o := New(&mockValueProvider{1, nil}, nil, nil, nil, 5, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{1, nil}, nil, nil, nil, 5, cfg, log.NewDefault(t.Name()))
 	_, err := o.actives(1)
 	r.Equal(genesisErr, err)
 
@@ -310,7 +312,7 @@ func TestOracle_actives(t *testing.T) {
 
 func TestOracle_IsIdentityActive(t *testing.T) {
 	r := require.New(t)
-	o := New(&mockValueProvider{1, nil}, nil, nil, nil, 5, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{1, nil}, nil, nil, nil, 5, cfg, log.NewDefault(t.Name()))
 	mp := make(map[string]struct{})
 	edid := "11111"
 	mp[edid] = struct{}{}
@@ -341,7 +343,7 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 }
 
 func TestOracle_Eligible2(t *testing.T) {
-	o := New(&mockValueProvider{1, nil}, nil, nil, nil, 5, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{1, nil}, nil, nil, nil, 5, cfg, log.NewDefault(t.Name()))
 	o.getActiveSet = func(layer types.LayerID, layersPerEpoch uint16) (map[string]struct{}, error) {
 		return createMapWithSize(9), someErr
 	}

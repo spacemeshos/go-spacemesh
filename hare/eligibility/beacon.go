@@ -15,18 +15,20 @@ type patternProvider interface {
 
 type beacon struct {
 	// provides a value that is unpredictable and agreed (w.h.p.) by all honest
-	patternProvider patternProvider
+	patternProvider    patternProvider
+	confidenceInterval uint64
 }
 
-func NewBeacon(patternProvider patternProvider) *beacon {
+func NewBeacon(patternProvider patternProvider, confidenceInterval uint64) *beacon {
 	return &beacon{
-		patternProvider: patternProvider,
+		patternProvider:    patternProvider,
+		confidenceInterval: confidenceInterval,
 	}
 }
 
 // Value returns the unpredictable and agreed value for the given Layer
 func (b *beacon) Value(layer types.LayerID) (uint32, error) {
-	v, err := b.patternProvider.GetGoodPattern(layer)
+	v, err := b.patternProvider.GetGoodPattern(safeLayer(layer, types.LayerID(b.confidenceInterval)))
 	if err != nil {
 		log.Error("Could not get pattern Id: %v", err)
 		return nilVal, err

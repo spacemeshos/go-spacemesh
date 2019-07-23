@@ -129,6 +129,18 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().IntVar(&config.HARE.ExpectedLeaders, "hare-exp-leaders",
 		config.HARE.ExpectedLeaders, "The expected number of leaders in the hare protocol")
 
+	/**======================== Hare Eligibility Oracle Flags ========================== **/
+
+	// N determines the size of the hare committee
+	cmd.PersistentFlags().Uint64Var(&config.ELIGIBILITY.ConfidenceInterval, "eligibility-confidence-interval",
+		config.ELIGIBILITY.ConfidenceInterval, "The confidence interval")
+	// F determines the max number of adversaries in the Hare committee
+	cmd.PersistentFlags().IntVar(&config.ELIGIBILITY.GenesisActiveSet, "eligibility-genesis-active-size",
+		config.ELIGIBILITY.GenesisActiveSet, "The active set size for genesis")
+	// RoundDuration determines the duration of a round in the Hare protocol
+	cmd.PersistentFlags().IntVar(&config.ELIGIBILITY.EpochOffset, "eligibility-epoch-offset",
+		config.ELIGIBILITY.EpochOffset, "The offset from the beginning of the epoch")
+
 	/**======================== PoST Flags ========================== **/
 
 	cmd.PersistentFlags().StringVar(&config.POST.DataDir, "post-datadir",

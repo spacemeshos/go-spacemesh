@@ -364,8 +364,8 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	if isFixedOracle { // fixed rolacle, take the provided rolacle
 		hOracle = rolacle
 	} else { // regular oracle, build and use it
-		beacon := eligibility.NewBeacon(trtl)
-		hOracle = eligibility.New(beacon, msh.ActiveSetForLayerConsensusView, BLS381.Verify2, vrfSigner, uint16(app.Config.LayersPerEpoch), lg.WithName("hareOracle"))
+		beacon := eligibility.NewBeacon(trtl, app.Config.ELIGIBILITY.ConfidenceInterval)
+		hOracle = eligibility.New(beacon, msh.ActiveSetForLayerConsensusView, BLS381.Verify2, vrfSigner, uint16(app.Config.LayersPerEpoch), app.Config.ELIGIBILITY, lg.WithName("hareOracle"))
 	}
 
 	// a function to validate we know the blocks
