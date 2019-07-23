@@ -205,7 +205,6 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 		BlockHeader: types.BlockHeader{
 			Id:               types.BlockID(t.rnd.Int63()),
 			LayerIndex:       id,
-			MinerID:          t.minerID,
 			ATXID:            atxID,
 			EligibilityProof: eligibilityProof,
 			Data:             nil,
