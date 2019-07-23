@@ -21,7 +21,7 @@ type localOracle struct {
 	nodeID        types.NodeId
 }
 
-func (bo *localOracle) IsIdentityActive(edId string, layer types.LayerID) (bool, error) {
+func (bo *localOracle) IsIdentityActiveOnConsensusView(edId string, layer types.LayerID) (bool, error) {
 	return true, nil
 }
 

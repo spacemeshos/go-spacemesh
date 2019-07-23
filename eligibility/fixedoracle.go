@@ -25,7 +25,7 @@ func New() *FixedRolacle {
 	return rolacle
 }
 
-func (fo *FixedRolacle) IsIdentityActive(edId string, layer types.LayerID) (bool, error) {
+func (fo *FixedRolacle) IsIdentityActiveOnConsensusView(edId string, layer types.LayerID) (bool, error) {
 	return true, nil
 }
 

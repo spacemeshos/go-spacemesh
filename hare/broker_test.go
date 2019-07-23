@@ -44,7 +44,7 @@ func NewMockStateQuerier() MockStateQuerier {
 	return MockStateQuerier{true, nil}
 }
 
-func (msq MockStateQuerier) IsIdentityActive(edId string, layer types.LayerID) (bool, error) {
+func (msq MockStateQuerier) IsIdentityActiveOnConsensusView(edId string, layer types.LayerID) (bool, error) {
 	return msq.res, msq.err
 }
 

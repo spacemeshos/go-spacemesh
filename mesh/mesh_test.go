@@ -284,6 +284,8 @@ func TestMesh_ActiveSetForLayerView(t *testing.T) {
 	coinbase3 := address.HexToAddress("cccc")
 	atxs := []*types.ActivationTx{
 		types.NewActivationTx(id1, coinbase1, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 0, []types.BlockID{}, &types.NIPST{}),
+		types.NewActivationTx(id1, coinbase1, 0, *types.EmptyAtxId, 2, 0, *types.EmptyAtxId, 0, []types.BlockID{}, &types.NIPST{}),
+		types.NewActivationTx(id1, coinbase1, 0, *types.EmptyAtxId, 3, 0, *types.EmptyAtxId, 0, []types.BlockID{}, &types.NIPST{}),
 		types.NewActivationTx(id2, coinbase2, 0, *types.EmptyAtxId, 2, 0, *types.EmptyAtxId, 0, []types.BlockID{}, &types.NIPST{}),
 		types.NewActivationTx(id3, coinbase3, 0, *types.EmptyAtxId, 11, 0, *types.EmptyAtxId, 0, []types.BlockID{}, &types.NIPST{}),
 	}
@@ -302,7 +304,9 @@ func TestMesh_ActiveSetForLayerView(t *testing.T) {
 
 	}
 
-	num, err := layers.ActiveSetForLayerConsensusView(10, 6)
+	actives, err := layers.ActiveSetForLayerConsensusView(10, 6)
 	assert.NoError(t, err)
-	assert.Equal(t, 2, int(len(num)))
+	assert.Equal(t, 1, int(len(actives)))
+	_, ok := actives[id2.Key]
+	assert.True(t, ok)
 }

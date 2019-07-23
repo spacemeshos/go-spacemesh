@@ -502,7 +502,7 @@ func (m *Mesh) GetATXs(atxIds []types.AtxId) (map[types.AtxId]*types.ActivationT
 }
 
 // ActiveSetForLayerConsensusView - returns the active set size that matches the view of the contextually valid blocks in the provided layer
-func (m *Mesh) ActiveSetForLayerConsensusView(layer types.LayerID, layersPerEpoch uint16) (map[string]types.AtxId, error) {
+func (m *Mesh) ActiveSetForLayerConsensusView(layer types.LayerID, layersPerEpoch uint16) (map[string]struct{}, error) {
 
 	epoch := layer.GetEpoch(layersPerEpoch)
 	firstLayerOfPrevEpoch := types.LayerID(epoch-1) * types.LayerID(layersPerEpoch)
@@ -511,18 +511,16 @@ func (m *Mesh) ActiveSetForLayerConsensusView(layer types.LayerID, layersPerEpoc
 	mp := make(map[types.BlockID]struct{})
 	blocks, err := m.LayerBlockIds(layer)
 	for _, bid := range blocks {
-		mp[bid] = struct{}{}
+		// only contextually valid blocks
+		if m.IsContexuallyValid(bid) {
+			mp[bid] = struct{}{}
+		}
 	}
 
 	countedAtxs := make(map[string]types.AtxId)
 	penalties := make(map[string]struct{})
 
 	traversalFunc := func(blkh *types.BlockHeader) error {
-
-		// only contextually valid blocks
-		if !m.IsContexuallyValid(blkh.Id) {
-			return nil
-		}
 
 		blk, err := m.GetBlock(blkh.Id)
 		if err != nil {
@@ -550,7 +548,7 @@ func (m *Mesh) ActiveSetForLayerConsensusView(layer types.LayerID, layersPerEpoc
 			if _, exist := penalties[atx.NodeId.Key]; exist {
 				m.With().Debug("ignoring atx from node in penalty",
 					log.String("node_id", atx.NodeId.Key), log.String("atx_id", atx.ShortId()))
-				return nil
+				continue
 			}
 
 			if prevId, exist := countedAtxs[atx.NodeId.Key]; exist { // same miner
@@ -576,5 +574,10 @@ func (m *Mesh) ActiveSetForLayerConsensusView(layer types.LayerID, layersPerEpoc
 		return nil, err
 	}
 
-	return countedAtxs, nil
+	result := make(map[string]struct{}, len(countedAtxs))
+	for k := range countedAtxs {
+		result[k] = struct{}{}
+	}
+
+	return result, nil
 }

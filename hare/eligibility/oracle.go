@@ -26,7 +26,7 @@ type valueProvider interface {
 
 // a func to retrieve the active set size for the provided layer
 // this func is assumed to be cpu intensive and hence we cache its results
-type activeSetFunc func(layer types.LayerID, layersPerEpoch uint16) (map[string]types.AtxId, error)
+type activeSetFunc func(layer types.LayerID, layersPerEpoch uint16) (map[string]struct{}, error)
 
 type casher interface {
 	Add(key, value interface{}) (evicted bool)
@@ -222,25 +222,19 @@ func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
 
 	activeMap, err := o.getActiveSet(sl, o.layersPerEpoch)
 	if err != nil {
-		o.With().Error("Could not retrieve active set size", log.String("err", err.Error()),
-			log.Uint64("layer", uint64(layer)), log.Uint64("epoch", uint64(layer.GetEpoch(o.layersPerEpoch))),
-			log.Uint64("safe_layer", uint64(sl)), log.Uint64("safe_epoch", uint64(ep)))
+		o.With().Error("Could not retrieve active set size", log.Err(err),
+			log.Uint64("layer_id", uint64(layer)), log.Uint64("epoch_id", uint64(layer.GetEpoch(o.layersPerEpoch))),
+			log.Uint64("safe_layer_id", uint64(sl)), log.Uint64("safe_epoch_id", uint64(ep)))
 		return nil, err
 	}
 
-	// keep only ids (keys)
-	actives := make(map[string]struct{}, len(activeMap))
-	for k := range activeMap {
-		actives[k] = struct{}{}
-	}
-
 	// update
-	o.cache.Add(sl, actives)
+	o.cache.Add(sl, activeMap)
 
-	return actives, nil
+	return activeMap, nil
 }
 
-func (o *Oracle) IsIdentityActive(edId string, layer types.LayerID) (bool, error) {
+func (o *Oracle) IsIdentityActiveOnConsensusView(edId string, layer types.LayerID) (bool, error) {
 	actives, err := o.actives(layer)
 	if err != nil {
 		if err == genesisErr { // we are in genesis

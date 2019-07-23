@@ -34,7 +34,7 @@ type mockActiveSetProvider struct {
 	size int
 }
 
-func (m *mockActiveSetProvider) ActiveSet(id types.LayerID, layersPerEpoch uint16) (map[string]types.AtxId, error) {
+func (m *mockActiveSetProvider) ActiveSet(id types.LayerID, layersPerEpoch uint16) (map[string]struct{}, error) {
 	return createMapWithSize(m.size), nil
 }
 
@@ -155,7 +155,7 @@ type mockBufferedActiveSetProvider struct {
 	size map[types.LayerID]int
 }
 
-func (m *mockBufferedActiveSetProvider) ActiveSet(id types.LayerID, layersPerEpoch uint16) (map[string]types.AtxId, error) {
+func (m *mockBufferedActiveSetProvider) ActiveSet(id types.LayerID, layersPerEpoch uint16) (map[string]struct{}, error) {
 	v, ok := m.size[id]
 	if !ok {
 		return createMapWithSize(0), errors.New("no instance")
@@ -164,10 +164,10 @@ func (m *mockBufferedActiveSetProvider) ActiveSet(id types.LayerID, layersPerEpo
 	return createMapWithSize(v), nil
 }
 
-func createMapWithSize(n int) map[string]types.AtxId {
-	m := make(map[string]types.AtxId)
+func createMapWithSize(n int) map[string]struct{} {
+	m := make(map[string]struct{})
 	for i := 0; i < n; i++ {
-		m[strconv.Itoa(i)] = *types.EmptyAtxId
+		m[strconv.Itoa(i)] = struct{}{}
 	}
 
 	return m
@@ -188,7 +188,7 @@ func Test_ActiveSetSize(t *testing.T) {
 	assertActiveSetSize(t, o, 5, l+20)
 
 	// create error
-	o.getActiveSet = func(layer types.LayerID, layersPerEpoch uint16) (map[string]types.AtxId, error) {
+	o.getActiveSet = func(layer types.LayerID, layersPerEpoch uint16) (map[string]struct{}, error) {
 
 		return createMapWithSize(5), errors.New("fake err")
 	}
@@ -251,13 +251,13 @@ func TestOracle_Eligible(t *testing.T) {
 func TestOracle_activeSetSizeCache(t *testing.T) {
 	r := require.New(t)
 	o := New(&mockValueProvider{1, nil}, nil, nil, nil, 5, log.NewDefault(t.Name()))
-	o.getActiveSet = func(layer types.LayerID, layersPerEpoch uint16) (map[string]types.AtxId, error) {
+	o.getActiveSet = func(layer types.LayerID, layersPerEpoch uint16) (map[string]struct{}, error) {
 		return createMapWithSize(17), nil
 	}
 	v1, e := o.activeSetSize(defSafety + 100)
 	r.NoError(e)
 
-	o.getActiveSet = func(layer types.LayerID, layersPerEpoch uint16) (map[string]types.AtxId, error) {
+	o.getActiveSet = func(layer types.LayerID, layersPerEpoch uint16) (map[string]struct{}, error) {
 		return createMapWithSize(19), nil
 	}
 	v2, e := o.activeSetSize(defSafety + 100)
@@ -287,7 +287,7 @@ func TestOracle_actives(t *testing.T) {
 	r.Equal(genesisErr, err)
 
 	mp := createMapWithSize(9)
-	o.getActiveSet = func(layer types.LayerID, layersPerEpoch uint16) (map[string]types.AtxId, error) {
+	o.getActiveSet = func(layer types.LayerID, layersPerEpoch uint16) (map[string]struct{}, error) {
 		return mp, nil
 	}
 	o.cache = newMockCasher()
@@ -301,7 +301,7 @@ func TestOracle_actives(t *testing.T) {
 		r.True(exist)
 	}
 
-	o.getActiveSet = func(layer types.LayerID, layersPerEpoch uint16) (map[string]types.AtxId, error) {
+	o.getActiveSet = func(layer types.LayerID, layersPerEpoch uint16) (map[string]struct{}, error) {
 		return createMapWithSize(9), someErr
 	}
 	_, err = o.actives(200)
@@ -311,38 +311,38 @@ func TestOracle_actives(t *testing.T) {
 func TestOracle_IsIdentityActive(t *testing.T) {
 	r := require.New(t)
 	o := New(&mockValueProvider{1, nil}, nil, nil, nil, 5, log.NewDefault(t.Name()))
-	mp := make(map[string]types.AtxId)
+	mp := make(map[string]struct{})
 	edid := "11111"
-	mp[edid] = types.AtxId{}
-	o.getActiveSet = func(layer types.LayerID, layersPerEpoch uint16) (map[string]types.AtxId, error) {
+	mp[edid] = struct{}{}
+	o.getActiveSet = func(layer types.LayerID, layersPerEpoch uint16) (map[string]struct{}, error) {
 		return mp, nil
 	}
-	v, err := o.IsIdentityActive("22222", 1)
+	v, err := o.IsIdentityActiveOnConsensusView("22222", 1)
 	r.NoError(err)
 	r.True(v)
 
-	o.getActiveSet = func(layer types.LayerID, layersPerEpoch uint16) (map[string]types.AtxId, error) {
+	o.getActiveSet = func(layer types.LayerID, layersPerEpoch uint16) (map[string]struct{}, error) {
 		return mp, someErr
 	}
-	_, err = o.IsIdentityActive("22222", 100)
+	_, err = o.IsIdentityActiveOnConsensusView("22222", 100)
 	r.Equal(someErr, err)
 
-	o.getActiveSet = func(layer types.LayerID, layersPerEpoch uint16) (map[string]types.AtxId, error) {
+	o.getActiveSet = func(layer types.LayerID, layersPerEpoch uint16) (map[string]struct{}, error) {
 		return mp, nil
 	}
 
-	v, err = o.IsIdentityActive("22222", 100)
+	v, err = o.IsIdentityActiveOnConsensusView("22222", 100)
 	r.NoError(err)
 	r.False(v)
 
-	v, err = o.IsIdentityActive(edid, 100)
+	v, err = o.IsIdentityActiveOnConsensusView(edid, 100)
 	r.NoError(err)
 	r.True(v)
 }
 
 func TestOracle_Eligible2(t *testing.T) {
 	o := New(&mockValueProvider{1, nil}, nil, nil, nil, 5, log.NewDefault(t.Name()))
-	o.getActiveSet = func(layer types.LayerID, layersPerEpoch uint16) (map[string]types.AtxId, error) {
+	o.getActiveSet = func(layer types.LayerID, layersPerEpoch uint16) (map[string]struct{}, error) {
 		return createMapWithSize(9), someErr
 	}
 	o.vrfVerifier = func(msg, sig, pub []byte) (bool, error) {
