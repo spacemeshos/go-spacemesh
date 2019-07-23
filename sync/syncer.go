@@ -335,6 +335,7 @@ func (s *Syncer) DataAvailabilty(blk *types.Block) ([]*types.AddressableSignedTr
 	go func() {
 		//sync Transactions
 		txs, txerr = s.syncTxs(blk.Id, blk.TxIds)
+		blocklog.Info("syncTx done")
 		wg.Done()
 	}()
 
@@ -344,12 +345,15 @@ func (s *Syncer) DataAvailabilty(blk *types.Block) ([]*types.AddressableSignedTr
 	//sync ATxs
 	go func() {
 		atxs, atxerr = s.syncAtxs(blk.ID(), blk.AtxIds)
+		blocklog.Info("syncAtx done")
 		wg.Done()
 	}()
 
 	blocklog.Info("waiting sync atxs and txs")
 
 	wg.Wait()
+
+	blocklog.Info("DONE waiting sync atxs and txs")
 
 	if txerr != nil {
 		blocklog.Warning("failed fetching block transactions %v", txerr)
@@ -455,7 +459,7 @@ func (s *Syncer) syncTxs(blockId types.BlockID, txids []types.TransactionId) ([]
 		return unprocessed, nil
 
 	}
-	txFetcherFunc := TxReqFactory(missing, s)
+	txFetcherFunc := TxReqFactory(missing, s, blockId)
 	for out := range s.fetchWithFactory(NewNeighborhoodWorker(s, 1, txFetcherFunc)) {
 		if ntxs, ok := out.([]types.SerializableSignedTransaction); ok {
 			for _, tmp := range ntxs {

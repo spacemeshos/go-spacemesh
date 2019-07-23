@@ -2,6 +2,7 @@ package sync
 
 import (
 	"encoding/hex"
+	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
@@ -76,9 +77,14 @@ func BlockReqFactory() BlockRequestFactory {
 }
 
 //todo batch requests
-func TxReqFactory(ids []types.TransactionId, sync *Syncer) RequestFactory {
+func TxReqFactory(ids []types.TransactionId, sync *Syncer, blkId types.BlockID) RequestFactory {
 	return func(s *server.MessageServer, peer p2p.Peer) (chan interface{}, error) {
 		ch := make(chan interface{}, 1)
+		txstring := ""
+		for _, i := range ids {
+			txstring += hex.EncodeToString(i[:common.Min(5, len(i))]) + ", "
+		}
+		s.With().Info("about to sync txs with peer", log.String("tx_list", txstring), log.BlockId(uint64(blkId)))
 		foo := func(msg []byte) {
 			defer close(ch)
 			var tx []types.SerializableSignedTransaction
@@ -87,6 +93,12 @@ func TxReqFactory(ids []types.TransactionId, sync *Syncer) RequestFactory {
 				s.Error("could not unmarshal tx data %v", err)
 				return
 			}
+			txstring = ""
+			for _, i := range tx {
+				tId := types.GetTransactionId(&i)
+				txstring += hex.EncodeToString(tId[:common.Min(5, len(tId))]) + ", "
+			}
+			s.Info("handle atx response ", log.String("atx_list", txstring), log.BlockId(uint64(blkId)))
 			ch <- tx
 		}
 
