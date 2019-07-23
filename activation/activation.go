@@ -163,9 +163,9 @@ func (b *Builder) loop() {
 // publish atx may not produce an atx each time it is called, that is expected behaviour as well.
 func (b *Builder) PublishActivationTx(epoch types.EpochId) (bool, error) {
 	if b.nipst != nil {
-		b.log.Info("re-entering atx creation in epoch %v", epoch)
+		b.log.With().Info("re-entering atx creation", log.EpochId(uint64(epoch)))
 	} else {
-		b.log.Info("starting build atx in epoch %v", epoch)
+		b.log.With().Info("starting build atx", log.EpochId(uint64(epoch)))
 		if b.prevATX == nil {
 			prevAtxId, err := b.GetPrevAtxId(b.nodeId)
 			if err != nil {
@@ -185,7 +185,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) (bool, error) {
 
 			//check if this node hasn't published an activation already
 			if b.prevATX.PubLayerIdx.GetEpoch(b.layersPerEpoch) == epoch+1 {
-				b.log.Info("atx already created for epoch %v, aborting", epoch)
+				b.log.With().Info("atx already created, aborting", log.EpochId(uint64(epoch)))
 				return false, nil
 			}
 			prevAtxId = b.prevATX.Id()
@@ -252,8 +252,8 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) (bool, error) {
 	if err != nil && !atx.TargetEpoch(b.layersPerEpoch).IsGenesis() {
 		return false, fmt.Errorf("failed to calc active set from view: %v", err)
 	}
-	b.log.Info("active ids seen for epoch %v (pos atx epoch) is %v (cache) %v (from view)",
-		posEpoch, activeIds, activeSetSize)
+	b.log.With().Info("active ids seen for epoch", log.Uint64("pos_atx_epoch", uint64(posEpoch)),
+		log.Uint32("cache_cnt", activeIds), log.Uint32("view_cnt", activeSetSize))
 
 	if !atx.TargetEpoch(b.layersPerEpoch).IsGenesis() && activeSetSize == 0 {
 		b.log.Warning("empty active set size found! len(view): %d, view: %v", len(atx.View), atx.View)
@@ -285,9 +285,9 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) (bool, error) {
 		return false, fmt.Errorf("failed to broadcast ATX: %v", err)
 	}
 
-	b.log.Info("atx published! id: %v, prevATXID: %v, posATXID: %v, layer: %v, published in epoch: %v, active set: %v miner: %v view %v",
+	b.log.Event().Info(fmt.Sprintf("atx published! id: %v, prevATXID: %v, posATXID: %v, layer: %v, published in epoch: %v, active set: %v miner: %v view %v",
 		atx.ShortId(), atx.PrevATXId.ShortString(), atx.PositioningAtx.ShortString(), atx.PubLayerIdx,
-		atx.PubLayerIdx.GetEpoch(b.layersPerEpoch), atx.ActiveSetSize, b.nodeId.Key[:5], len(atx.View))
+		atx.PubLayerIdx.GetEpoch(b.layersPerEpoch), atx.ActiveSetSize, b.nodeId.Key[:5], len(atx.View)))
 	return true, nil
 }
 

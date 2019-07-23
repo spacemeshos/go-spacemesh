@@ -159,6 +159,10 @@ func With() fieldLogger {
 	return fieldLogger{AppLog.logger}
 }
 
+func Event() fieldLogger {
+	return AppLog.Event()
+}
+
 func Panic(msg string, args ...interface{}) {
 	AppLog.Panic(msg, args...)
 }
