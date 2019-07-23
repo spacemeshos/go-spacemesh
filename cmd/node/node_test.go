@@ -25,7 +25,7 @@ func TestSpacemeshApp_getEdIdentity(t *testing.T) {
 	app.log = log.NewDefault("logger")
 
 	// get new identity
-	sgn, err := app.getEdIdentity()
+	sgn, err := app.LoadOrCreateEdSigner()
 	r.NoError(err)
 
 	// ensure we have a single subdirectory under tmp
@@ -34,7 +34,7 @@ func TestSpacemeshApp_getEdIdentity(t *testing.T) {
 	r.Len(infos, 1)
 
 	// run the method again
-	sgn2, err := app.getEdIdentity()
+	sgn2, err := app.LoadOrCreateEdSigner()
 	r.NoError(err)
 
 	// ensure that we didn't create another identity
@@ -50,6 +50,6 @@ func TestSpacemeshApp_getEdIdentity(t *testing.T) {
 	r.NoError(err)
 
 	// run the method again
-	_, err = app.getEdIdentity()
+	_, err = app.LoadOrCreateEdSigner()
 	r.EqualError(err, fmt.Sprintf("identity file path ('tmp/wrong name') does not match public key (%v)", sgn.PublicKey().String()))
 }

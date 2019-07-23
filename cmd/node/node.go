@@ -26,6 +26,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/spacemeshos/go-spacemesh/version"
+	"github.com/spacemeshos/post/shared"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
@@ -50,7 +51,7 @@ import (
 
 import _ "net/http/pprof"
 
-const identityFileName = "key.bin"
+const edKeyFileName = "key.bin"
 
 // VersionCmd returns the current version of spacemesh
 var Cmd = &cobra.Command{
@@ -469,13 +470,13 @@ func (app SpacemeshApp) stopServices() {
 
 }
 
-func (app *SpacemeshApp) getEdIdentity() (*signing.EdSigner, error) {
+func (app *SpacemeshApp) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 	f, err := app.getIdentityFile()
 	if err != nil {
 		log.Warning("Failed to find identity file: %v", err)
 
 		edSgn := signing.NewEdSigner()
-		f = filepath.Join(app.Config.POST.DataDir, edSgn.PublicKey().String(), identityFileName)
+		f = filepath.Join(shared.GetInitDir(app.Config.POST.DataDir, edSgn.PublicKey().Bytes()), edKeyFileName)
 		err := os.MkdirAll(filepath.Dir(f), filesystem.OwnerReadWriteExec)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create directory for identity file: %v", err)
@@ -515,7 +516,7 @@ func (app *SpacemeshApp) getIdentityFile() (string, error) {
 		if err != nil {
 			return nil
 		}
-		if !info.IsDir() && info.Name() == identityFileName {
+		if !info.IsDir() && info.Name() == edKeyFileName {
 			f = path
 			return &identityFileFound{}
 		}
@@ -578,7 +579,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 
 	// todo : register all protocols
 
-	app.edSgn, err = app.getEdIdentity()
+	app.edSgn, err = app.LoadOrCreateEdSigner()
 	if err != nil {
 		log.Panic("Could not retrieve identity err=%v", err)
 	}
