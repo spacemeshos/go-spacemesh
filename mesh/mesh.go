@@ -505,6 +505,10 @@ func (m *Mesh) GetATXs(atxIds []types.AtxId) (map[types.AtxId]*types.ActivationT
 func (m *Mesh) ActiveSetForLayerConsensusView(layer types.LayerID, layersPerEpoch uint16) (map[string]struct{}, error) {
 
 	epoch := layer.GetEpoch(layersPerEpoch)
+	if epoch == 0 {
+		return nil, errors.New("tried to retrieve active set for epoch 0")
+	}
+
 	firstLayerOfPrevEpoch := types.LayerID(epoch-1) * types.LayerID(layersPerEpoch)
 
 	// build a map of all blocks on the current layer

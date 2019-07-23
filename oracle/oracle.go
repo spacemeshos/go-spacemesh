@@ -56,7 +56,7 @@ func NewHareOracleFromClient(oc *OracleClient) *hareOracle {
 	}
 }
 
-func (bo *hareOracle) IsIdentityActive(edId string, layer types.LayerID) (bool, error) {
+func (bo *hareOracle) IsIdentityActiveOnConsensusView(edId string, layer types.LayerID) (bool, error) {
 	return bo.oc.IsIdentityActive(edId, layer)
 }
 

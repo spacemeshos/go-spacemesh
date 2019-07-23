@@ -310,3 +310,10 @@ func TestMesh_ActiveSetForLayerView(t *testing.T) {
 	_, ok := actives[id2.Key]
 	assert.True(t, ok)
 }
+
+func TestMesh_ActiveSetForLayerView2(t *testing.T) {
+	layers := getMesh(t.Name())
+	actives, err := layers.ActiveSetForLayerConsensusView(0, 10)
+	assert.Error(t, err)
+	assert.Nil(t, actives)
+}
