@@ -167,13 +167,11 @@ func (app *SpacemeshApp) Initialize(cmd *cobra.Command, args []string) (err erro
 		}
 	}()
 
-	app.introduction()
-
 	// parse the config file based on flags et al
 	err = app.ParseConfig()
 
 	if err != nil {
-		log.Error(fmt.Sprintf("couldn't parse the config %v", err))
+		log.Error(fmt.Sprintf("couldn't parse the config err=%v", err))
 	}
 
 	// ensure cli flags are higher priority than config file
@@ -183,6 +181,8 @@ func (app *SpacemeshApp) Initialize(cmd *cobra.Command, args []string) (err erro
 	timeCfg.TimeConfigValues = app.Config.TIME
 
 	app.setupLogging()
+
+	app.introduction()
 
 	// todo: add misc app setup here (metrics, debug, etc....)
 
