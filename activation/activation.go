@@ -249,6 +249,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) (bool, error) {
 		return false, err
 	}
 	atx := types.NewActivationTxWithChallenge(*b.challenge, b.coinbaseAccount, activeIds, view, b.nipst)
+	b.log.With().Info("start calculation active set")
 	activeSetSize, err := b.db.CalcActiveSetFromView(atx) // TODO: remove this assertion to improve performance
 	b.log.With().Info("active ids seen for epoch", log.Uint64("pos_atx_epoch", uint64(posEpoch)),
 		log.Uint32("cache_cnt", activeIds), log.Uint32("view_cnt", activeSetSize))

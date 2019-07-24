@@ -272,9 +272,9 @@ func (s *Syncer) BlockSyntacticValidation(block *types.Block) ([]*types.Addressa
 
 	blocklog.Info("validating block view")
 	//validate blocks view
-	/*if valid := s.ValidateView(block); valid == false {
+	if valid := s.ValidateView(block); valid == false {
 		return nil, nil, errors.New(fmt.Sprintf("block %v not syntacticly valid", block.ID()))
-	}*/
+	}
 
 	blocklog.Info("block is syntactically valid")
 
