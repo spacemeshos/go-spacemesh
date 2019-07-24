@@ -88,7 +88,7 @@ type NIPSTBuilder struct {
 
 type PoetDb interface {
 	SubscribeToProofRef(poetId [types.PoetServiceIdLength]byte, roundId uint64) chan []byte
-	GetMembershipMap(poetRoot []byte) (map[common.Hash]bool, error)
+	GetMembershipMap(proofRef []byte) (map[common.Hash]bool, error)
 }
 
 func NewNIPSTBuilder(id []byte, postCfg config.Config, postProver PostProverClient,

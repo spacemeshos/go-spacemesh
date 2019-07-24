@@ -74,6 +74,7 @@ type BaseConfig struct {
 	LayerDurationSec int    `mapstructure:"layer-duration-sec"`
 	LayerAvgSize     int    `mapstructure:"layer-average-size"`
 	LayersPerEpoch   int    `mapstructure:"layers-per-epoch"`
+	Hdist            int    `mapstructure:"hdist"`
 
 	PoETServer string `mapstructure:"poet-server"`
 

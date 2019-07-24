@@ -110,6 +110,7 @@ func (suite *AppTestSuite) initMultipleInstances(numOfInstances int, storeFormat
 		smApp.Config.CoinbaseAccount = strconv.Itoa(i + 1)
 		smApp.Config.LayerAvgSize = numOfInstances
 		smApp.Config.LayersPerEpoch = 3
+		smApp.Config.Hdist = 5
 		smApp.Config.GenesisTime = genesisTime
 
 		edSgn := signing.NewEdSigner()
