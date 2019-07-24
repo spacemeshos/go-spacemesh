@@ -125,7 +125,7 @@ def test_many_gossip_messages(setup_clients, add_curl):
 
         # Need to sleep for a while in order to enable the propagation of the gossip message - 0.5 sec for each node
         # TODO: check frequently before timeout so we might be able to finish earlier.
-        gossip_propagation_sleep = 10 * timeout_factor  # currently we expect short propagation times.
+        gossip_propagation_sleep = 15 * timeout_factor  # currently we expect short propagation times.
         print('sleep for {0} sec to enable gossip propagation'.format(gossip_propagation_sleep))
         time.sleep(gossip_propagation_sleep)
 
