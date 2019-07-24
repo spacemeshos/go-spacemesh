@@ -28,6 +28,7 @@ type MeshValidator interface {
 	HandleIncomingLayer(layer *types.Layer) (types.LayerID, types.LayerID)
 	HandleLateBlock(bl *types.Block)
 	ContextualValidity(id types.BlockID) bool
+	GetGoodPatternBlocks(layer types.LayerID) (map[types.BlockID]struct{}, error)
 }
 
 type TxProcessor interface {
@@ -143,11 +144,6 @@ func SerializableSignedTransaction2StateTransaction(tx *types.AddressableSignedT
 	amount := &big.Int{}
 	amount.SetUint64(tx.Amount)
 	return NewTransaction(tx.AccountNonce, tx.Address, tx.Recipient, amount, tx.GasLimit, price)
-}
-
-func (m *Mesh) IsContexuallyValid(b types.BlockID) bool {
-	//todo implement
-	return true
 }
 
 func (m *Mesh) ValidatedLayer() types.LayerID {
@@ -512,15 +508,10 @@ func (m *Mesh) ActiveSetForLayerConsensusView(layer types.LayerID, layersPerEpoc
 	firstLayerOfPrevEpoch := types.LayerID(epoch-1) * types.LayerID(layersPerEpoch)
 
 	// build a map of all blocks on the current layer
-	mp := make(map[types.BlockID]struct{})
-	blocks, err := m.LayerBlockIds(layer)
-	for _, bid := range blocks {
-		// only contextually valid blocks
-		if m.IsContexuallyValid(bid) {
-			mp[bid] = struct{}{}
-		}
+	mp, err := m.tortoise.GetGoodPatternBlocks(layer)
+	if err != nil {
+		return nil, err
 	}
-
 	countedAtxs := make(map[string]types.AtxId)
 	penalties := make(map[string]struct{})
 

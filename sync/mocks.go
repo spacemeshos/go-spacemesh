@@ -46,6 +46,10 @@ func (SyntacticValidatorMock) SyntacticallyValid(block *types.BlockHeader) (bool
 
 type MeshValidatorMock struct{}
 
+func (m *MeshValidatorMock) GetGoodPatternBlocks(layer types.LayerID) (map[types.BlockID]struct{}, error) {
+	panic("implement me")
+}
+
 func (m *MeshValidatorMock) HandleLateBlock(bl *types.Block)              {}
 func (m *MeshValidatorMock) RegisterLayerCallback(func(id types.LayerID)) {}
 func (mlg *MeshValidatorMock) ContextualValidity(id types.BlockID) bool   { return true }
