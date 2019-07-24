@@ -223,7 +223,7 @@ func (app *SpacemeshApp) setupLogging() {
 }
 
 func (app *SpacemeshApp) getAppInfo() string {
-	return fmt.Sprintf("12 App version: %s. Git: %s - %s . Go Version: %s. OS: %s-%s ",
+	return fmt.Sprintf("13 App version: %s. Git: %s - %s . Go Version: %s. OS: %s-%s ",
 		cmdp.Version, cmdp.Branch, cmdp.Commit, runtime.Version(), runtime.GOOS, runtime.GOARCH)
 }
 

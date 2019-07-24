@@ -235,7 +235,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) (bool, error) {
 			b.challenge.PubLayerIdx.GetEpoch(b.layersPerEpoch), b.mesh.LatestLayer().GetEpoch(b.layersPerEpoch), epoch)
 		return false, nil
 	}
-	time.Sleep(50 * time.Second)
+	time.Sleep(20 * time.Second)
 	// when we reach here an epoch has passed
 	// we've completed the sequential work, now before publishing the atx,
 	// we need to provide number of atx seen in the epoch of the positioning atx.
