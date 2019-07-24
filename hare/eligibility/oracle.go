@@ -49,8 +49,8 @@ type Oracle struct {
 	log.Log
 }
 
-// Returns the relative Layer that w.h.p. we have agreement on its view
-// safe is defined to be confidenceInterval layers prior to the provided Layer
+// Returns the relative layer id that w.h.p. we have agreement on its contextually valid blocks
+// safe layer is defined to be the confidence interval layers prior to the provided Layer
 func safeLayer(layer types.LayerID, safetyParam types.LayerID) types.LayerID {
 	if layer <= safetyParam { // assuming genesis is zero
 		return config.Genesis

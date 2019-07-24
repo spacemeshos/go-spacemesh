@@ -132,14 +132,14 @@ func AddCommands(cmd *cobra.Command) {
 	/**======================== Hare Eligibility Oracle Flags ========================== **/
 
 	// N determines the size of the hare committee
-	cmd.PersistentFlags().Uint64Var(&config.ELIGIBILITY.ConfidenceInterval, "eligibility-confidence-interval",
-		config.ELIGIBILITY.ConfidenceInterval, "The confidence interval")
+	cmd.PersistentFlags().Uint64Var(&config.HareEligibility.ConfidenceInterval, "eligibility-confidence-interval",
+		config.HareEligibility.ConfidenceInterval, "The relative layer (with respect to the current layer) we are confident to have consensus about")
 	// F determines the max number of adversaries in the Hare committee
-	cmd.PersistentFlags().IntVar(&config.ELIGIBILITY.GenesisActiveSet, "eligibility-genesis-active-size",
-		config.ELIGIBILITY.GenesisActiveSet, "The active set size for genesis")
+	cmd.PersistentFlags().IntVar(&config.HareEligibility.GenesisActiveSet, "eligibility-genesis-active-size",
+		config.HareEligibility.GenesisActiveSet, "The active set size for the genesis flow")
 	// RoundDuration determines the duration of a round in the Hare protocol
-	cmd.PersistentFlags().IntVar(&config.ELIGIBILITY.EpochOffset, "eligibility-epoch-offset",
-		config.ELIGIBILITY.EpochOffset, "The offset from the beginning of the epoch")
+	cmd.PersistentFlags().IntVar(&config.HareEligibility.EpochOffset, "eligibility-epoch-offset",
+		config.HareEligibility.EpochOffset, "The constant layer (within an epoch) for which we traverse its view for the purpose of counting consensus active set")
 
 	/**======================== PoST Flags ========================== **/
 
