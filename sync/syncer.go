@@ -535,8 +535,13 @@ func (s *Syncer) syncAtxs(blkId types.BlockID, atxIds []types.AtxId) ([]*types.A
 		if atxs, ok := out.([]types.ActivationTx); ok {
 			for _, tmp := range atxs {
 				atx := tmp
+				if err := s.FetchPoetProof(atx.GetPoetProofRef()); err != nil {
+					s.Error("received atx (%v) with syntactically invalid or missing PoET proof (%x): %v",
+						atx.ShortId(), atx.GetPoetProofRef()[:5], err)
+					continue
+				}
 				if err := s.SyntacticallyValidateAtx(&atx); err != nil {
-					s.Warning("atx %v not valid %v", atx.ShortId(), err)
+					s.Error("atx %v not valid %v", atx.ShortId(), err)
 					continue
 				}
 				s.atxpool.Put(atx.Id(), &atx)
