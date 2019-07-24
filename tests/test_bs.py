@@ -23,7 +23,6 @@ BOOT_DEPLOYMENT_FILE = './k8s/bootstrapoet-w-conf.yml'
 CLIENT_DEPLOYMENT_FILE = './k8s/client-w-conf.yml'
 CLIENT_POD_FILE = './k8s/single-client-w-conf.yml'
 CURL_POD_FILE = './k8s/curl.yml'
-ORACLE_DEPLOYMENT_FILE = './k8s/oracle.yml'
 
 BOOTSTRAP_PORT = 7513
 ORACLE_SERVER_PORT = 3030
@@ -84,10 +83,13 @@ def setup_bootstrap_in_namespace(namespace, bs_deployment_info, bootstrap_config
         time.sleep(1)
 
     bs_pod['pod_ip'] = resp.status.pod_ip
-    bootstrap_pod_logs = client.CoreV1Api().read_namespaced_pod_log(name=bs_pod['name'],
-                                                                    namespace=namespace,
-                                                                    container='bootstrap')
-    match = re.search(r"Local node identity >> (?P<bootstrap_key>\w+)", bootstrap_pod_logs)
+
+    match = pod.search_phrase_in_pod_log(bs_pod['name'], namespace, 'bootstrap',
+                                         r"Local node identity >> (?P<bootstrap_key>\w+)")
+
+    if not match:
+        raise Exception("Failed to read container logs in {0}".format('bootstrap'))
+
     bs_pod['key'] = match.group('bootstrap_key')
     bs_deployment_info.pods = [bs_pod]
     return bs_deployment_info
@@ -127,11 +129,6 @@ def setup_server(deployment_name, deployment_file, namespace):
 
     return ip
 
-
-@pytest.fixture(scope='module')
-def setup_oracle(request):
-    oracle_deployment_name = 'oracle'
-    return setup_server(oracle_deployment_name, ORACLE_DEPLOYMENT_FILE, testconfig['namespace'])
 
 
 @pytest.fixture(scope='module')
@@ -247,7 +244,7 @@ def add_multi_clients(deployment_id, container_specs, size=2):
 # The following fixture should not be used if you wish to add many clients during test.
 # Instead you should call add_single_client directly
 @pytest.fixture()
-def add_client(request, setup_oracle, setup_bootstrap, setup_clients):
+def add_client(request, setup_bootstrap, setup_clients):
     global client_name
 
     def _add_single_client():
@@ -256,7 +253,7 @@ def add_client(request, setup_oracle, setup_bootstrap, setup_clients):
             raise Exception("Could not find bootstrap node")
 
         bs_info = setup_bootstrap.pods[0]
-        cspec = get_conf(bs_info, testconfig['client'], setup_oracle)
+        cspec = get_conf(bs_info, testconfig['client'])
         client_name = add_single_client(setup_bootstrap.deployment_id, cspec)
         return client_name
 

@@ -56,7 +56,7 @@ type State struct {
 }
 
 type StateQuerier interface {
-	IsIdentityActive(edId string, layer types.LayerID) (bool, types.AtxId, error)
+	IsIdentityActive(edId string, layer types.LayerID) (*types.NodeId, bool, types.AtxId, error)
 }
 
 type Msg struct {
@@ -87,7 +87,7 @@ func newMsg(hareMsg *Message, querier StateQuerier, layersPerEpoch uint16) (*Msg
 	}
 	// query if identity is active
 	pub := signing.NewPublicKey(pubKey)
-	res, _, err := querier.IsIdentityActive(pub.String(), types.LayerID(hareMsg.InnerMsg.InstanceId))
+	_, res, _, err := querier.IsIdentityActive(pub.String(), types.LayerID(hareMsg.InnerMsg.InstanceId))
 	if err != nil {
 		log.Error("error while checking if identity is active for %v err=%v", pub.String(), err)
 		return nil, errors.New("is identity active query failed")
@@ -198,7 +198,7 @@ func (proc *ConsensusProcess) SetInbox(inbox chan *Msg) {
 func (proc *ConsensusProcess) eventLoop() {
 	proc.With().Info("Consensus Process Started",
 		log.Int("Hare-N", proc.cfg.N), log.Int("f", proc.cfg.F), log.String("duration", (time.Duration(proc.cfg.RoundDuration)*time.Second).String()),
-		log.Uint64("layer_id", uint64(proc.instanceId)), log.Int("exp_leaders", proc.cfg.ExpectedLeaders), log.String("set_values", proc.s.String()))
+		log.LayerId(uint64(proc.instanceId)), log.Int("exp_leaders", proc.cfg.ExpectedLeaders), log.String("set_values", proc.s.String()))
 
 	// set pre-round InnerMsg and send
 	builder, err := proc.initDefaultBuilder(proc.s)
@@ -224,7 +224,7 @@ PreRound:
 	}
 	proc.preRoundTracker.FilterSet(proc.s)
 	if proc.s.Size() == 0 {
-		proc.With().Error("Fatal: PreRound ended with empty set", log.Uint64("layer_id", uint64(proc.instanceId)))
+		proc.Event().Error("Fatal: PreRound ended with empty set", log.Uint64("layer_id", uint64(proc.instanceId)))
 	}
 	proc.advanceToNextRound() // K was initialized to -1, K should be 0
 
@@ -287,20 +287,26 @@ func (proc *ConsensusProcess) handleMessage(m *Msg) {
 
 	mType := MessageType(m.InnerMsg.Type).String()
 	// validate InnerMsg for this or next round
-	if !proc.validator.ContextuallyValidateMessage(m, proc.k) {
-		if !proc.validator.ContextuallyValidateMessage(m, proc.k+1) {
-			// TODO: should return error from InnerMsg validation to indicate what failed, should retry only for contextual failure
-			proc.Warning("message of type %v is not valid for either round, pubkey %v. Expected: %v, Actual: %v",
-				mType, m.PubKey.ShortString(), proc.k+1, m.InnerMsg.K)
-			return
-		} else { // a valid early InnerMsg, keep it for later
+	res, err := proc.validator.ContextuallyValidateMessage(m, proc.k)
+	if err != nil {
+		if err == errEarlyMsg { // early message, keep for later
 			proc.Debug("Early message of type %v detected. Keeping message, pubkey %v", mType, m.PubKey.ShortString())
 			proc.onEarlyMessage(m)
 			return
 		}
+
+		proc.Error("Error contextually validating message of type %v err=%v", mType, err)
+		return
 	}
 
-	// continue process msg by type
+	if !res { // not early, no error, simply contextually invalid
+		proc.With().Warning("message does not belong to this round and is not an early msg",
+			log.String("msg_type", mType), log.String("sender_id", m.PubKey.ShortString()),
+			log.Int32("current_k", proc.k), log.Int32("msg_k", m.InnerMsg.K))
+		return
+	}
+
+	// valid, continue process msg by type
 	proc.processMsg(m)
 }
 
@@ -360,7 +366,7 @@ func (proc *ConsensusProcess) onRoundEnd() {
 		if s != nil {
 			sStr = s.String()
 		}
-		proc.With().Info("Round 2 ended",
+		proc.Event().Info("Round 2 ended",
 			log.String("proposed_set", sStr),
 			log.Bool("is_conflicting", proc.proposalTracker.IsConflicting()),
 			log.Uint64("layer_id", uint64(proc.instanceId)))
@@ -372,7 +378,7 @@ func (proc *ConsensusProcess) onRoundEnd() {
 func (proc *ConsensusProcess) advanceToNextRound() {
 	proc.k++
 	if proc.k >= 4 && proc.k%4 == 0 {
-		proc.With().Warning("Starting new iteration", log.Int32("round_counter", proc.k),
+		proc.Event().Warning("Starting new iteration", log.Int32("round_counter", proc.k),
 			log.Uint64("layer_id", uint64(proc.instanceId)))
 	}
 }
@@ -523,7 +529,7 @@ func (proc *ConsensusProcess) processNotifyMsg(msg *Msg) {
 
 	// enough notifications, should terminate
 	proc.s = s // update to the agreed set
-	proc.With().Info("Consensus process terminated", log.String("set_values", proc.s.String()),
+	proc.Event().Info("Consensus process terminated", log.String("set_values", proc.s.String()),
 		log.Uint64("layer_id", uint64(proc.instanceId)))
 	proc.terminationReport <- procOutput{proc.instanceId, proc.s}
 	proc.Close()
@@ -554,7 +560,7 @@ func (proc *ConsensusProcess) statusValidator() func(m *Msg) bool {
 
 func (proc *ConsensusProcess) endOfRound1() {
 	proc.statusesTracker.AnalyzeStatuses(proc.statusValidator())
-	proc.With().Info("Round 1 ended", log.Bool("is_svp_ready", proc.statusesTracker.IsSVPReady()),
+	proc.Event().Info("Round 1 ended", log.Bool("is_svp_ready", proc.statusesTracker.IsSVPReady()),
 		log.Uint64("layer_id", uint64(proc.instanceId)))
 }
 
@@ -588,7 +594,7 @@ func (proc *ConsensusProcess) endOfRound3() {
 	}
 
 	// commit & send notification msg
-	proc.With().Info("Round 3 ended: committing", log.String("committed_set", s.String()),
+	proc.Event().Info("Round 3 ended: committing", log.String("committed_set", s.String()),
 		log.Uint64("layer_id", uint64(proc.instanceId)))
 	proc.s = s
 	proc.certificate = cert
@@ -605,7 +611,7 @@ func (proc *ConsensusProcess) endOfRound3() {
 
 func (proc *ConsensusProcess) shouldParticipate() bool {
 	// query if identity is active
-	res, _, err := proc.stateQuerier.IsIdentityActive(proc.signing.PublicKey().String(), types.LayerID(proc.instanceId))
+	_, res, _, err := proc.stateQuerier.IsIdentityActive(proc.signing.PublicKey().String(), types.LayerID(proc.instanceId))
 	if err != nil {
 		proc.With().Error("Error checking our identity for activeness", log.String("err", err.Error()),
 			log.Uint64("layer_id", uint64(proc.instanceId)))

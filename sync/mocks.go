@@ -9,10 +9,31 @@ import (
 	"math/big"
 )
 
+type PoetDbMock struct{}
+
+func (PoetDbMock) GetProofMessage(proofRef []byte) ([]byte, error) { return proofRef, nil }
+
+func (PoetDbMock) HasProof(proofRef []byte) bool { return true }
+
+func (PoetDbMock) ValidateAndStore(proofMessage *types.PoetProofMessage) error { return nil }
+
+func (*PoetDbMock) SubscribeToProofRef(poetId [types.PoetServiceIdLength]byte, roundId uint64) chan []byte {
+	ch := make(chan []byte)
+	go func() {
+		ch <- []byte("hello there")
+	}()
+	return ch
+}
+
+func (*PoetDbMock) GetMembershipMap(poetRoot []byte) (map[common.Hash]bool, error) {
+	hash := common.BytesToHash([]byte("anton"))
+	return map[common.Hash]bool{hash: true}, nil
+}
+
 type BlockEligibilityValidatorMock struct {
 }
 
-func (BlockEligibilityValidatorMock) BlockEligible(block *types.BlockHeader) (bool, error) {
+func (BlockEligibilityValidatorMock) BlockSignedAndEligible(block *types.Block) (bool, error) {
 	return true, nil
 }
 
@@ -100,8 +121,8 @@ func (t *AtxDbMock) ProcessAtx(atx *types.ActivationTx) {
 	t.nipsts[atx.Id()] = atx.Nipst
 }
 
-func (*AtxDbMock) IsIdentityActive(edId string, layer types.LayerID) (bool, types.AtxId, error) {
-	return true, *types.EmptyAtxId, nil
+func (*AtxDbMock) IsIdentityActive(edId string, layer types.LayerID) (*types.NodeId, bool, types.AtxId, error) {
+	return nil, true, *types.EmptyAtxId, nil
 }
 
 //todo: if this is used somewhere then impl some real mock

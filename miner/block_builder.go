@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/address"
+	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -205,7 +206,6 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 		BlockHeader: types.BlockHeader{
 			Id:               types.BlockID(t.rnd.Int63()),
 			LayerIndex:       id,
-			MinerID:          t.minerID,
 			ATXID:            atxID,
 			EligibilityProof: eligibilityProof,
 			Data:             nil,
@@ -218,8 +218,8 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 		TxIds:  txids,
 	}
 
-	t.Log.Info("I've created a block in layer %v. id: %v, num of transactions: %v, votes: %d, viewEdges: %d atx %v, atxs:%v",
-		b.LayerIndex, b.Id, len(b.TxIds), len(b.BlockVotes), len(b.ViewEdges), b.ATXID.String()[:5], len(b.AtxIds))
+	t.Log.Event().Info(fmt.Sprintf("I've created a block in layer %v. id: %v, num of transactions: %v, votes: %d, viewEdges: %d atx %v, atxs:%v",
+		b.LayerIndex, b.Id, len(b.TxIds), len(b.BlockVotes), len(b.ViewEdges), b.ATXID.String()[:5], len(b.AtxIds)))
 
 	blockBytes, err := types.InterfaceToBytes(b)
 	if err != nil {
@@ -260,7 +260,7 @@ func (t *BlockBuilder) listenForTx() {
 					continue
 				}
 
-				t.Log.Info("got new tx %v", hex.EncodeToString(id[:]))
+				t.Log.With().Info("got new tx", log.TxId(hex.EncodeToString(id[:common.Min(5, len(id))])))
 				data.ReportValidation(IncomingTxProtocol)
 				t.TransactionPool.Put(types.GetTransactionId(x), fullTx)
 			}
@@ -289,7 +289,7 @@ func (t *BlockBuilder) handleGossipAtx(data service.GossipMessage) {
 		t.Error("cannot parse incoming ATX")
 		return
 	}
-	t.Info("got new ATX %v", atx.ShortId())
+	t.With().Info("got new ATX", log.AtxId(atx.ShortId()))
 
 	//todo fetch from neighbour
 	if atx.Nipst == nil {
@@ -312,7 +312,7 @@ func (t *BlockBuilder) handleGossipAtx(data service.GossipMessage) {
 
 	t.AtxPool.Put(atx.Id(), atx)
 	data.ReportValidation(activation.AtxProtocol)
-	t.Info("stored and propagated new syntactically valid ATX: %v", atx.ShortId())
+	t.With().Info("stored and propagated new syntactically valid ATX", log.AtxId(atx.ShortId()))
 }
 
 func (t *BlockBuilder) acceptBlockData() {
@@ -325,11 +325,11 @@ func (t *BlockBuilder) acceptBlockData() {
 		case id := <-t.beginRoundEvent:
 			atxID, proofs, err := t.blockOracle.BlockEligible(id)
 			if err != nil {
-				t.Error("failed to check for block eligibility in layer %v: %v ", id, err)
+				t.With().Error("failed to check for block eligibility", log.LayerId(uint64(id)), log.Err(err))
 				continue
 			}
 			if len(proofs) == 0 {
-				t.Info("Notice: not eligible for blocks in layer %v", id)
+				t.With().Info("Notice: not eligible for blocks in layer", log.LayerId(uint64(id)))
 				continue
 			}
 			// TODO: include multiple proofs in each block and weigh blocks where applicable

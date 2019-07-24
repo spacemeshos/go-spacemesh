@@ -40,6 +40,7 @@ COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/go-
 COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/go-sync /bin/go-sync
 
 
+
 ENTRYPOINT ["/bin/go-spacemesh"]
 EXPOSE 7513
 

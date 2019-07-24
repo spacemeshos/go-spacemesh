@@ -1,6 +1,9 @@
 package main
 
 import (
+	"cloud.google.com/go/storage"
+	"context"
+	"crypto/tls"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/address"
@@ -9,13 +12,15 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/miner"
-	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/sync"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/types"
-	"github.com/spacemeshos/post/config"
 	"github.com/spf13/cobra"
+	"google.golang.org/api/iterator"
+	"google.golang.org/api/option"
+	"io/ioutil"
+	"net/http"
 	"os"
 	"time"
 )
@@ -33,28 +38,27 @@ var Cmd = &cobra.Command{
 	},
 }
 
-//conf
 //////////////////////////////
-//todo get from configuration
-var postCfg config.Config
 
-//todo get from configuration
-var conf = sync.Configuration{
-	Concurrency:    4,
-	LayerSize:      int(100),
-	RequestTimeout: 200 * time.Millisecond,
-}
-
-//////////////////////////////
+var expectedLayers int
+var bucket string
+var remote bool
+var timeout int
 
 func init() {
-	cmdp.AddCommands(Cmd)
+	//path to remote storage
+	Cmd.PersistentFlags().StringVarP(&bucket, "storage-path", "z", "spacemesh-sync-data", "Specify storage bucket name")
 
-	postCfg := config.DefaultConfig()
-	postCfg.Difficulty = 5
-	postCfg.NumProvenLabels = 10
-	postCfg.SpacePerUnit = 1 << 10 // 1KB.
-	postCfg.FileSize = 1 << 10     // 1KB.
+	//expected layers
+	Cmd.PersistentFlags().IntVar(&expectedLayers, "expected-layers", 101, "expected number of layers")
+
+	//fetch from remote
+	Cmd.PersistentFlags().BoolVar(&remote, "remote-data", false, "fetch from remote")
+
+	//request timeout
+	Cmd.PersistentFlags().IntVar(&timeout, "timeout", 500, "request timeout")
+
+	cmdp.AddCommands(Cmd)
 }
 
 type SyncApp struct {
@@ -82,34 +86,53 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	// start p2p services
 	lg := log.New("sync_test", "", "")
 	lg.Info("------------ Start sync test -----------")
+	lg.Info("data folder: ", app.Config.DataDir)
+	lg.Info("storage path: ", bucket)
+	lg.Info("download from remote storage: ", remote)
+	lg.Info("expected layers: ", expectedLayers)
+	lg.Info("request timeout: ", timeout)
+	app.Config.DataDir = "bin/data/"
+
+	conf := sync.Configuration{
+		Concurrency:    4,
+		LayerSize:      int(100),
+		RequestTimeout: time.Duration(timeout) * time.Millisecond,
+	}
+
+	if remote {
+		if err := GetData(app.Config.DataDir, lg); err != nil {
+			lg.Error("could not download data for test", err)
+			return
+		}
+	}
 	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P)
 
 	if err != nil {
 		panic("something got fudged while creating p2p service ")
 	}
 
-	iddbstore, err := database.NewLDBDatabase(app.Config.DataDir+"ids", 0, 0, lg.WithName("idDbStore"))
+	nipstStore, err := database.NewLDBDatabase(app.Config.DataDir+"nipst", 0, 0, lg.WithName("nipstDbStore").WithOptions(log.Nop))
 	if err != nil {
 		lg.Error("error: ", err)
 		return
 	}
 
-	poetDb := activation.NewPoetDb(database.NewMemDatabase(), lg.WithName("poetDb"))
-	validator := nipst.NewValidator(&postCfg, poetDb)
+	poetDb := activation.NewPoetDb(database.NewMemDatabase(), lg.WithName("poetDb").WithOptions(log.Nop))
 
-	mshdb := mesh.NewPersistentMeshDB(app.Config.DataDir, lg)
+	mshdb := mesh.NewPersistentMeshDB(app.Config.DataDir, lg.WithOptions(log.Nop))
 	atxdbStore, _ := database.NewLDBDatabase(app.Config.DataDir+"atx", 0, 0, lg)
-	atxdb := activation.NewActivationDb(atxdbStore, iddbstore, &sync.MockIStore{}, mshdb, 10, validator, lg.WithName("atxDB"))
+	atxdb := activation.NewActivationDb(atxdbStore, nipstStore, &sync.MockIStore{}, mshdb, uint16(1000), &sync.ValidatorMock{}, lg.WithName("atxDB").WithOptions(log.Nop))
 
 	txpool := miner.NewTypesTransactionIdMemPool()
 	atxpool := miner.NewTypesAtxIdMemPool()
 
-	msh := mesh.NewMesh(mshdb, atxdb, sync.ConfigTst(), &sync.MeshValidatorMock{}, txpool, atxpool, &sync.MockState{}, lg.WithOptions(log.Nop))
+	msh := mesh.NewMesh(mshdb, atxdb, sync.ConfigTst(), &sync.MeshValidatorMock{}, txpool, atxpool, &sync.MockState{}, lg)
 	defer msh.Close()
+	msh.AddBlock(&mesh.GenesisBlock)
 
 	ch := make(chan types.LayerID, 1)
 	app.sync = sync.NewSync(swarm, msh, txpool, atxpool, mockTxProcessor{}, sync.NewBlockValidator(sync.BlockEligibilityValidatorMock{}), poetDb, conf, ch, 0, lg.WithName("sync"))
-	ch <- 101
+	ch <- types.LayerID(expectedLayers)
 	if err = swarm.Start(); err != nil {
 		log.Panic("error starting p2p err=%v", err)
 	}
@@ -127,20 +150,79 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 
 	lg.Info("wait %v sec", 10)
 	time.Sleep(10 * time.Second)
-
 	app.sync.Start()
-	for app.sync.ValidatedLayer() < 100 {
+	for app.sync.ValidatedLayer() < types.LayerID(expectedLayers) {
 		lg.Info("sleep for %v sec", 30)
 		time.Sleep(30 * time.Second)
-		ch <- 101
+		ch <- types.LayerID(expectedLayers + 1)
 	}
 
 	lg.Info("%v verified layers %v", app.BaseApp.Config.P2P.NodeID, app.sync.ValidatedLayer())
-	lg.Info("sync done")
+	lg.Event().Info("sync done")
 	for {
 		lg.Info("keep busy sleep for %v sec", 60)
 		time.Sleep(60 * time.Second)
 	}
+}
+
+//download data from remote storage
+func GetData(path string, lg log.Log) error {
+	dirs := []string{"atx", "nipst", "blocks", "ids", "layers", "transactions", "validity"}
+	for _, dir := range dirs {
+		if err := os.MkdirAll(path+dir, 0777); err != nil {
+			return err
+		}
+	}
+
+	c := http.Client{
+		Transport: &http.Transport{
+			MaxIdleConnsPerHost: 10,
+			TLSClientConfig: &tls.Config{
+				MinVersion:         tls.VersionTLS11,
+				InsecureSkipVerify: true,
+			},
+		},
+		Timeout: 2 * time.Second,
+	}
+
+	ctx := context.TODO()
+	client, err := storage.NewClient(ctx, option.WithoutAuthentication(), option.WithHTTPClient(&c))
+	if err != nil {
+		panic(err)
+	}
+	it := client.Bucket(bucket).Objects(ctx, nil)
+	count := 0
+	for {
+		attrs, err := it.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return err
+		}
+
+		lg.Info("downloading:", attrs.Name)
+		rc, err := client.Bucket(bucket).Object(attrs.Name).NewReader(ctx)
+		if err != nil {
+			return err
+		}
+
+		defer rc.Close()
+
+		data, err := ioutil.ReadAll(rc)
+		if err != nil {
+			return err
+		}
+
+		err = ioutil.WriteFile("bin/"+attrs.Name, data, 0644)
+		if err != nil {
+			return err
+		}
+		count++
+	}
+
+	lg.Info("downloaded: %v files ", count)
+	return nil
 }
 
 func main() {
@@ -149,5 +231,4 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-
 }

@@ -7,8 +7,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/spacemeshos/post/config"
+	"github.com/spacemeshos/post/persistence"
 	"github.com/spacemeshos/post/shared"
-	"os"
 	"sync"
 	"time"
 )
@@ -39,6 +39,7 @@ type PoetProvingServiceClient interface {
 	// submit registers a challenge in the proving service
 	// open round suited for the specified duration.
 	submit(challenge common.Hash) (*types.PoetRound, error)
+	getPoetServiceId() ([types.PoetServiceIdLength]byte, error)
 }
 
 // initialNIPST returns an initial NIPST instance to be used in the NIPST construction.
@@ -53,8 +54,8 @@ type builderState struct {
 	// in which the PoET challenge was included in.
 	PoetRound *types.PoetRound
 
-	// PoetId is the public key of the PoET proving service.
-	PoetId [types.PoetIdLength]byte
+	// PoetServiceId is the public key of the PoET proving service.
+	PoetServiceId [types.PoetServiceIdLength]byte
 
 	// PoetProofRef is the root of the proof received from the PoET service.
 	PoetProofRef []byte
@@ -86,8 +87,8 @@ type NIPSTBuilder struct {
 }
 
 type PoetDb interface {
-	SubscribeToProofRef(poetId [types.PoetIdLength]byte, roundId uint64) chan []byte
-	GetMembershipMap(poetRoot []byte) (map[common.Hash]bool, error)
+	SubscribeToProofRef(poetId [types.PoetServiceIdLength]byte, roundId uint64) chan []byte
+	GetMembershipMap(proofRef []byte) (map[common.Hash]bool, error)
 }
 
 func NewNIPSTBuilder(id []byte, postCfg config.Config, postProver PostProverClient,
@@ -140,10 +141,16 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *common.Hash) (*types.NIPST, error)
 
 	// Phase 0: Submit challenge to PoET service.
 	if nb.state.PoetRound == nil {
+		poetServiceId, err := nb.poetProver.getPoetServiceId()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get PoET service ID: %v", err)
+		}
+		nb.state.PoetServiceId = poetServiceId
+
 		poetChallenge := challenge
 
 		nb.log.Debug("submitting challenge to PoET proving service (PoET id: %x, challenge: %x)",
-			nb.state.PoetId, poetChallenge)
+			nb.state.PoetServiceId, poetChallenge)
 
 		round, err := nb.poetProver.submit(*poetChallenge)
 		if err != nil {
@@ -151,7 +158,7 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *common.Hash) (*types.NIPST, error)
 		}
 
 		nb.log.Info("challenge submitted to PoET proving service (PoET id: %x, round id: %v)",
-			nb.state.PoetId, round.Id)
+			nb.state.PoetServiceId, round.Id)
 
 		nipst.NipstChallenge = poetChallenge
 		nb.state.PoetRound = round
@@ -160,7 +167,7 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *common.Hash) (*types.NIPST, error)
 
 	// Phase 1: receive proofs from PoET service
 	if nb.state.PoetProofRef == nil {
-		proofRefChan := nb.poetDb.SubscribeToProofRef(nb.state.PoetId, nb.state.PoetRound.Id)
+		proofRefChan := nb.poetDb.SubscribeToProofRef(nb.state.PoetServiceId, nb.state.PoetRound.Id)
 		poetProofRef := <-proofRefChan // TODO(noamnelke): handle timeout
 
 		membership, err := nb.poetDb.GetMembershipMap(poetProofRef)
@@ -170,7 +177,7 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *common.Hash) (*types.NIPST, error)
 		}
 		if !membership[*nipst.NipstChallenge] {
 			return nil, fmt.Errorf("not a member of this round (poetId: %x, roundId: %d)",
-				nb.state.PoetId, nb.state.PoetRound.Id) // TODO(noamnelke): handle this case!
+				nb.state.PoetServiceId, nb.state.PoetRound.Id) // TODO(noamnelke): handle this case!
 		}
 		nipst.PoetProofRef = poetProofRef
 		nb.state.PoetProofRef = poetProofRef
@@ -209,10 +216,13 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *common.Hash) (*types.NIPST, error)
 }
 
 func (nb *NIPSTBuilder) IsPostInitialized() bool {
-	dir := shared.GetInitDir(nb.postCfg.DataDir, nb.id)
-	_, err := os.Stat(dir)
-	if os.IsNotExist(err) {
-		nb.log.Info("could not find init files at %v", dir)
+	readers, err := persistence.GetReaders(nb.postCfg.DataDir, nb.id)
+	if err != nil {
+		nb.log.WithFields(log.Err(err)).Error("failed to look for init files")
+		return false
+	}
+	if len(readers) == 0 {
+		nb.log.Info("could not find init files")
 		return false
 	}
 	return true
