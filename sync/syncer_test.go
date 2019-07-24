@@ -236,10 +236,10 @@ func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 
 }
 
-func TestSyncer_EnsurePoetProofAvailableAndValid(t *testing.T) {
+func TestSyncer_FetchPoetProofAvailableAndValid(t *testing.T) {
 	r := require.New(t)
 
-	syncs, nodes := SyncMockFactory(2, conf, "TestSyncer_EnsurePoetProofAvailableAndValid_", memoryDB, newMemPoetDb)
+	syncs, nodes := SyncMockFactory(2, conf, "TestSyncer_FetchPoetProofAvailableAndValid_", memoryDB, newMemPoetDb)
 	s0 := syncs[0]
 	s1 := syncs[1]
 	s1.Peers = getPeersMock([]p2p.Peer{nodes[0].PublicKey()})

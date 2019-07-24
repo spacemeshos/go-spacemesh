@@ -477,6 +477,7 @@ func (s *Syncer) syncAtxs(atxIds []types.AtxId) ([]*types.ActivationTx, error) {
 				missingInPool = append(missingInPool, id)
 				continue
 			}
+
 			s.Debug("found atx, %v in atx pool", id.ShortId())
 			unprocessedAtxs[id] = &atx
 		} else {
@@ -490,15 +491,21 @@ func (s *Syncer) syncAtxs(atxIds []types.AtxId) ([]*types.ActivationTx, error) {
 
 	//map and sort atxs
 	if len(missingInDb) > 0 {
-
 		output := s.fetchWithFactory(NewNeighborhoodWorker(s, 1, ATxReqFactory(missingInDb)))
 		for out := range output {
 			atxs := out.([]types.ActivationTx)
 			for _, atx := range atxs {
-				if err := s.SyntacticallyValidateAtx(&atx); err != nil {
-					s.Warning("atx %v not valid %v", atx.ShortId(), err)
+				if err := s.FetchPoetProof(atx.GetPoetProofRef()); err != nil {
+					s.Error("received atx (%v) with syntactically invalid or missing PoET proof (%x): %v",
+						atx.ShortId(), atx.GetPoetProofRef()[:5], err)
 					continue
 				}
+
+				if err := s.SyntacticallyValidateAtx(&atx); err != nil {
+					s.Error("received an invalid atx (%v): %v", atx.ShortId(), err)
+					continue
+				}
+
 				tmp := atx
 				unprocessedAtxs[atx.Id()] = &tmp
 			}
