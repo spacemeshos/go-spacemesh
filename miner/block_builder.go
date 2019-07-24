@@ -314,22 +314,25 @@ func (t *BlockBuilder) handleGossipAtx(data service.GossipMessage) {
 		return
 	}
 
+	tn := time.Now()
 	if err := t.syncer.FetchPoetProof(atx.GetPoetProofRef()); err != nil {
 		t.Warning("received ATX (%v) with syntactically invalid or missing PoET proof (%x): %v",
 			atx.ShortId(), atx.GetPoetProofRef()[:5], err)
 		return
 	}
-
+	poetT := time.Since(tn)
+	t1 := time.Now()
 	err = t.atxValidator.SyntacticallyValidateAtx(atx)
 	if err != nil {
 		t.Warning("received syntactically invalid ATX %v: %v", atx.ShortId(), err)
 		// TODO: blacklist peer
 		return
 	}
-
+	validT := time.Since(t1)
 	t.AtxPool.Put(atx.Id(), atx)
 	data.ReportValidation(activation.AtxProtocol)
-	t.With().Info("added to mempool and propagated new syntactically valid ATX", log.AtxId(atx.ShortId()))
+	t.With().Info("added to mempool and propagated new syntactically valid ATX", log.AtxId(atx.ShortId()), log.Duration("poetT", poetT),
+		log.Duration("validateT", validT), log.Duration("totalT", time.Since(tn)))
 }
 
 func (t *BlockBuilder) acceptBlockData() {

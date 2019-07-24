@@ -10,12 +10,12 @@ deployment_ready_time_out: 120
 config_path: '../config.toml'
 
 bootstrap:
-  image: 'spacemeshos/go-spacemesh-dev:tn12'
+  image: 'spacemeshos/go-spacemesh-dev:tn'
   command: '/bin/go-spacemesh'
   replicas: 1
   args:
     randcon: '8'
-    hare-committee-size: '50'
+    hare-committee-size: '150'
     hare-max-adversaries: '15'
     hare-round-duration-sec: '25'
     layer-duration-sec: '180'
@@ -25,12 +25,12 @@ bootstrap:
     hare-exp-leaders: '15'
     coinbase: '0x4321'
 client:
-  image: 'spacemeshos/go-spacemesh-dev:tn12'
+  image: 'spacemeshos/go-spacemesh-dev:tn'
   command: '/bin/go-spacemesh'
   replicas: 299
   args:
     randcon: '8'
-    hare-committee-size: '50'
+    hare-committee-size: '150'
     hare-max-adversaries: '15'
     hare-round-duration-sec: '25'
     layer-duration-sec: '180'

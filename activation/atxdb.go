@@ -12,6 +12,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/types"
 	"sort"
 	"sync"
+	"time"
 )
 
 const CounterKey = 0xaaaa
@@ -82,8 +83,10 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 
 	count, found := activesetCache.Get(common.BytesToHash(viewBytes))
 	if found {
+		db.log.Info("cache hit on active set size : %v", a.ShortId())
 		return count, nil
 	}
+	db.log.Info("cache miss on active set size : %v", a.ShortId())
 
 	var counter uint32 = 0
 	set := make(map[types.AtxId]struct{})
@@ -153,6 +156,7 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 // - ATX LayerID is NipstLayerTime or less after the PositioningATX LayerID.
 // - The ATX view of the previous epoch contains ActiveSetSize activations.
 func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
+	t := time.Now() //todo: remove time calc
 	if atx.PrevATXId != *types.EmptyAtxId {
 		prevATX, err := db.GetAtx(atx.PrevATXId)
 		if err != nil {
@@ -170,7 +174,9 @@ func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error 
 			return fmt.Errorf("no prevATX reported, but sequence number not zero")
 		}
 	}
+	prevT := time.Since(t) //todo: remove time calc
 
+	t1 := time.Now() //todo: remove time calc
 	if atx.PositioningAtx != *types.EmptyAtxId {
 		posAtx, err := db.GetAtx(atx.PositioningAtx)
 		if err != nil {
@@ -190,11 +196,14 @@ func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error 
 			return fmt.Errorf("no positioning atx found")
 		}
 	}
+	posT := time.Since(t1) //todo: remove time calc
 
+	t1 = time.Now() //todo: remove time calc
 	activeSet, err := db.CalcActiveSetFromView(atx)
 	if err != nil && !atx.PubLayerIdx.GetEpoch(db.LayersPerEpoch).IsGenesis() {
 		return fmt.Errorf("could not calculate active set for ATX %v", atx.ShortId())
 	}
+	asT := time.Since(t1) //todo: remove time calc
 
 	if atx.ActiveSetSize != activeSet {
 		return fmt.Errorf("atx contains view with unequal active ids (%v) than seen (%v)", atx.ActiveSetSize, activeSet)
@@ -205,10 +214,17 @@ func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error 
 		return fmt.Errorf("cannot get NIPST Challenge hash: %v", err)
 	}
 
+	t1 = time.Now()
 	if err = db.nipstValidator.Validate(atx.Nipst, *hash); err != nil {
 		return fmt.Errorf("NIPST not valid: %v", err)
 	}
-	db.log.With().Info("Validated NIPST", log.String("challenge_hash", hash.ShortString()))
+	npstT := time.Since(t1)
+	db.log.With().Info("Validated NIPST", log.String("challenge_hash", hash.ShortString()),
+		log.Duration("activeSetCalc", asT),
+		log.Duration("prevT", prevT),
+		log.Duration("posT", posT),
+		log.Duration("npstValid", npstT),
+		log.Duration("total", time.Since(t)))
 
 	return nil
 }

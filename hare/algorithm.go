@@ -88,7 +88,7 @@ func newMsg(hareMsg *Message, querier StateQuerier, layersPerEpoch uint16) (*Msg
 	}
 	// query if identity is active
 	pub := signing.NewPublicKey(pubKey)
-	res, _, err := querier.IsIdentityActive(pub.String(), types.LayerID(hareMsg.InnerMsg.InstanceId))
+	/*res, _, err := querier.IsIdentityActive(pub.String(), types.LayerID(hareMsg.InnerMsg.InstanceId))
 	if err != nil {
 		log.Error("error while checking if identity is active for %v err=%v", pub.String(), err)
 		return nil, errors.New("is identity active query failed")
@@ -98,7 +98,7 @@ func newMsg(hareMsg *Message, querier StateQuerier, layersPerEpoch uint16) (*Msg
 	if !res {
 		log.Error("identity %v is not active", pub.ShortString())
 		return nil, errors.New("inactive identity")
-	}
+	}*/
 
 	return &Msg{hareMsg, pub}, nil
 }

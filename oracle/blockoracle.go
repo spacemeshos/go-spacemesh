@@ -76,11 +76,11 @@ func (bo *MinerBlockOracle) calcEligibilityProofs(epochNumber types.EpochId) err
 			return fmt.Errorf("failed to get latest ATX: %v", err)
 		}
 		bo.log.Warning("genesis epoch detected, using GenesisActiveSetSize (%d)", bo.committeeSize)
-		activeSetSize = bo.committeeSize
+		activeSetSize = 300//bo.committeeSize todo:(anton)
 	} else {
 		activeSetSize = atx.ActiveSetSize
 		if epochNumber.IsGenesis() && activeSetSize < bo.committeeSize {
-			activeSetSize = bo.committeeSize
+			activeSetSize = 300//bo.committeeSize
 		}
 		bo.atxID = atx.Id()
 	}

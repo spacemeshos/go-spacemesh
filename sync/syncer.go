@@ -272,9 +272,9 @@ func (s *Syncer) BlockSyntacticValidation(block *types.Block) ([]*types.Addressa
 
 	blocklog.Info("validating block view")
 	//validate blocks view
-	if valid := s.ValidateView(block); valid == false {
+	/*if valid := s.ValidateView(block); valid == false {
 		return nil, nil, errors.New(fmt.Sprintf("block %v not syntacticly valid", block.ID()))
-	}
+	}*/
 
 	blocklog.Info("block is syntactically valid")
 
@@ -285,14 +285,16 @@ func (s *Syncer) confirmBlockValidity(blk *types.Block) error {
 	blocklog := s.WithFields(log.Uint64("block_id", uint64(blk.Id)))
 	blocklog.Info("extracting pubkey from block")
 
+	t := time.Now()
 	//check block signature and is identity active
 	pubKey, err := ed25519.ExtractPublicKey(blk.Bytes(), blk.Sig())
 	if err != nil {
 		return errors.New(fmt.Sprintf("could not extract block %v public key %v ", blk.ID(), err))
 	}
 
-	blocklog.Info("checking that identity in block is active")
+	blocklog.Info("checking that identity in block is active, pubkey extraction t: %v", time.Since(t))
 
+	t = time.Now()
 	active, atxid, err := s.IsIdentityActive(signing.NewPublicKey(pubKey).String(), blk.Layer())
 	if err != nil {
 		return errors.New(fmt.Sprintf("error while checking IsIdentityActive for %v %v ", blk.ID(), err))
@@ -305,13 +307,14 @@ func (s *Syncer) confirmBlockValidity(blk *types.Block) error {
 	if atxid != blk.ATXID {
 		return errors.New(fmt.Sprintf("wrong associated atx got %v expected %v ", blk.ATXID.ShortId(), atxid.ShortId()))
 	}
-
-	blocklog.Info("checking block eligibilty")
-
+	activeT := time.Since(t)
+	t = time.Now()
 	//block eligibility
 	if eligable, err := s.BlockEligible(&blk.BlockHeader); err != nil || !eligable {
 		return errors.New(fmt.Sprintf("block %v eligablety check failed ", blk.ID()))
 	}
+
+	blocklog.Info("checking block eligibilty took %v, active check took %v", activeT,time.Since(t))
 
 	return nil
 }
@@ -332,6 +335,7 @@ func (s *Syncer) DataAvailabilty(blk *types.Block) ([]*types.AddressableSignedTr
 	var txerr error
 	wg := sync.WaitGroup{}
 	wg.Add(2)
+	t := time.Now()
 	go func() {
 		//sync Transactions
 		txs, txerr = s.syncTxs(blk.Id, blk.TxIds)
@@ -379,7 +383,7 @@ func (s *Syncer) DataAvailabilty(blk *types.Block) ([]*types.AddressableSignedTr
 		}
 		atxsstring += mis.ShortId() + ", "
 	}
-	blocklog.Info("fetched all atxs (total %v, unprocessed %v) for block ", totstring, atxsstring)
+	blocklog.Info("DataAvailability fetched all data (total %v, unprocessed %v) for block, total time: %v", totstring, atxsstring, time.Since(t))
 	return txs, atxs, nil
 }
 
@@ -487,6 +491,8 @@ func (s *Syncer) checkLocalTxs(txids []types.TransactionId) ([]*types.Addressabl
 	//look in pool
 	unprocessedTxs := make(map[types.TransactionId]*types.AddressableSignedTransaction)
 	missing := make([]types.TransactionId, 0)
+	t := time.Now()
+	t1 := time.Now()
 	for _, t := range txids {
 		if tx, err := s.txpool.Get(t); err == nil {
 			s.Debug("found tx, %v in tx pool", hex.EncodeToString(t[:]))
@@ -495,16 +501,21 @@ func (s *Syncer) checkLocalTxs(txids []types.TransactionId) ([]*types.Addressabl
 			missing = append(missing, t)
 		}
 	}
+	poolTime := time.Since(t)
+	t = time.Now()
 	//look in db
 	dbTxs, missinDB := s.GetTransactions(missing)
-	if len(dbTxs) > 0 {
-		s.Info("found tx in db, count %v", len(dbTxs))
-	}
+	dbTime := time.Since(t)
 
 	unprocessedArr := make([]*types.AddressableSignedTransaction, 0, len(unprocessedTxs))
 	for _, tx := range unprocessedTxs {
 		unprocessedArr = append(unprocessedArr, tx)
 	}
+
+	/*if len(dbTxs) > 0 {
+		s.Info("found tx in db, count %v", len(dbTxs))
+	}*/
+	s.Info("checkLocalTxs found tx in db, count %v poolt: %v dbt: %v total: %v", len(dbTxs), poolTime, dbTime, time.Since(t1))
 
 	return unprocessedArr, dbTxs, missinDB
 }
@@ -544,6 +555,8 @@ func (s *Syncer) checkLocalAtxs(atxIds []types.AtxId, blkId types.BlockID) ([]*t
 	//look in pool
 	unprocessedAtxs := make(map[types.AtxId]*types.ActivationTx, len(atxIds))
 	missingInPool := make([]types.AtxId, 0, len(atxIds))
+	t := time.Now()
+	t1 := time.Now()
 	for _, t := range atxIds {
 		id := t
 		if x, err := s.atxpool.Get(id); err == nil {
@@ -560,13 +573,17 @@ func (s *Syncer) checkLocalAtxs(atxIds []types.AtxId, blkId types.BlockID) ([]*t
 			missingInPool = append(missingInPool, id)
 		}
 	}
+	poolt := time.Since(t)
 
 	unprocessedArr := []*types.ActivationTx{}
 	for _, tx := range unprocessedAtxs {
 		unprocessedArr = append(unprocessedArr, tx)
 	}
 	//look in db
+	t = time.Now()
 	dbAtxs, missingInDb := s.GetATXs(missingInPool)
+	dbt := time.Since(t)
+	s.Info("checkLocalAtxs found atx in db count: %v poolt: %v dbt: %v total: %v", len(dbAtxs), poolt, dbt, time.Since(t1))
 	return unprocessedArr, dbAtxs, missingInDb
 }
 
