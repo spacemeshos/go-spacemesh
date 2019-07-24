@@ -500,6 +500,7 @@ func (s *Syncer) fetchWithFactory(wrk worker) chan interface{} {
 
 	return wrk.output
 }
+
 func (s *Syncer) FetchPoetProof(poetProofRef []byte) error {
 	if !s.poetDb.HasProof(poetProofRef) {
 		out := <-s.fetchWithFactory(NewNeighborhoodWorker(s, 1, PoetReqFactory(poetProofRef)))
