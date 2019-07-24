@@ -12,7 +12,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"math/big"
-	"strconv"
 	"testing"
 	"time"
 )
@@ -48,8 +47,8 @@ type AtxDbMock struct {
 	nipsts map[types.AtxId]*types.NIPST
 }
 
-func (*AtxDbMock) IsIdentityActive(edId string, layer types.LayerID) (bool, types.AtxId, error) {
-	return true, *types.EmptyAtxId, nil
+func (*AtxDbMock) IsIdentityActive(edId string, layer types.LayerID) (*types.NodeId, bool, types.AtxId, error) {
+	return nil, true, *types.EmptyAtxId, nil
 }
 func (t *AtxDbMock) GetEpochAtxIds(id types.EpochId) ([]types.AtxId, error) {
 	return []types.AtxId{}, nil /*todo: mock if needed */
@@ -259,7 +258,6 @@ func TestLayers_OrphanBlocks(t *testing.T) {
 func createLayerWithAtx(t *testing.T, msh *Mesh, id types.LayerID, numOfBlocks int, atxs []*types.ActivationTx, votes []types.BlockID, views []types.BlockID) (created []types.BlockID) {
 	for i := 0; i < numOfBlocks; i++ {
 		block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), id, []byte("data1"))
-		block1.MinerID.Key = strconv.Itoa(i)
 		block1.BlockVotes = append(block1.BlockVotes, votes...)
 		for _, atx := range atxs {
 			block1.AtxIds = append(block1.AtxIds, atx.Id())

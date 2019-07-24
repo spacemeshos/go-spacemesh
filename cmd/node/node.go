@@ -353,7 +353,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 
 	msh := mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, txpool, atxpool, processor, lg.WithName("mesh")) //todo: what to do with the logger?
 
-	conf := sync.Configuration{Concurrency: 4, LayerSize: int(layerSize), RequestTimeout: 100 * time.Millisecond}
+	conf := sync.Configuration{Concurrency: 4, LayerSize: int(layerSize), LayersPerEpoch: layersPerEpoch, RequestTimeout: 100 * time.Millisecond}
 
 	blockValidator := sync.NewBlockValidator(eValidator)
 	syncer := sync.NewSync(swarm, msh, txpool, atxpool, processor, blockValidator, poetDb, conf, clock.Subscribe(), clock.GetCurrentLayer(), lg.WithName("sync"))
@@ -373,9 +373,11 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 		for _, b := range ids {
 			res, err := mdb.GetBlock(b)
 			if err != nil {
+				app.log.With().Error("failed to validate block", log.BlockId(uint64(b)))
 				return false
 			}
 			if res == nil {
+				app.log.With().Error("failed to validate block (BUG BUG BUG - GetBlock return err nil and res nil)", log.BlockId(uint64(b)))
 				return false
 			}
 
@@ -532,7 +534,7 @@ func (app *SpacemeshApp) getIdentityFile() (string, error) {
 }
 
 func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
-	log.Info("Starting Spacemesh")
+	log.Event().Info("Starting Spacemesh")
 	if app.Config.MemProfile != "" {
 		log.Info("Starting mem profiling")
 		f, err := os.Create(app.Config.MemProfile)
