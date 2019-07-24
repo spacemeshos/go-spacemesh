@@ -77,7 +77,7 @@ def check_for_restarted_pods(namespace, specific_deployment_name=''):
         if specific_deployment_name:
             pods = CoreV1ApiClient().list_namespaced_pod(namespace,
                                                          label_selector=(
-                                                             "name={0}".format(specific_deployment_name.split('-')[0]))).items
+                                                             "name={0}".format(specific_deployment_name.split('-')[1]))).items
         else:
             pods = CoreV1ApiClient().list_namespaced_pod(namespace).items
     except (NewConnectionError, MaxRetryError, ConnectTimeoutError) as e:

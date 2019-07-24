@@ -31,7 +31,7 @@ def query_bootstrap_es(indx, namespace, bootstrap_po_name):
     s = Search(index=indx, using=es).query('bool', filter=[fltr])
     hits = list(s.scan())
     for h in hits:
-        match = re.search(r"Local node identity >> (?P<bootstrap_key>\w+)", h.log)
+        match = re.search(r"Local node identity >> (?P<bootstrap_key>\w+)", h.M)
         if match:
             return match.group('bootstrap_key')
     return None

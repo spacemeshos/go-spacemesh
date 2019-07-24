@@ -1,7 +1,7 @@
 apiVersion: extensions/v1beta1
 kind: Deployment
 metadata:
-  generateName: bootstrapoet-
+  generateName: sm-bootstrapoet-
 spec:
   replicas: 1
   template:

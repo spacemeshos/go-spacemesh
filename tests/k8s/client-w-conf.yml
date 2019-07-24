@@ -1,7 +1,7 @@
 apiVersion: extensions/v1beta1
 kind: Deployment
 metadata:
-  generateName: client-
+  generateName: sm-client-
 spec:
   selector:
     matchLabels:
