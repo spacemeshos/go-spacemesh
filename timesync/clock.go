@@ -1,6 +1,7 @@
 package timesync
 
 import (
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"sync"
@@ -42,11 +43,6 @@ func NewTicker(time Clock, tickInterval time.Duration, startEpoch time.Time) *Ti
 		stop:         make(chan struct{}),
 		ids:          make(map[LayerTimer]int),
 	}
-
-	if !time.Now().Before(startEpoch) {
-		t.updateLayerID()
-	}
-
 	return t
 }
 
@@ -58,7 +54,7 @@ func (t *Ticker) Start() {
 		diff = t.startEpoch.Sub(t.time.Now())
 	} else {
 		t.updateLayerID()
-		diff = ((t.time.Now().Sub(t.startEpoch)) / t.tickInterval) + t.tickInterval
+		diff = t.tickInterval - (t.time.Now().Sub(t.startEpoch) % t.tickInterval)
 	}
 
 	go t.StartClock(diff)
@@ -71,7 +67,7 @@ func (t *Ticker) Close() {
 func (t *Ticker) notifyOnTick() {
 	t.m.Lock()
 	defer t.m.Unlock()
-	log.Info("release tick mesh.LayerID  %v", t.currentLayer)
+	log.Event().Info(fmt.Sprintf("release tick mesh.LayerID  %v", t.currentLayer))
 	for _, ch := range t.subscribes {
 		ch <- t.currentLayer
 		log.Debug("iv'e notified number : %v", t.ids[ch])
@@ -97,10 +93,7 @@ func (t *Ticker) Subscribe() LayerTimer {
 }
 
 func (t *Ticker) updateLayerID() {
-	tksa := t.time.Now().Sub(t.startEpoch)
-	tks := (tksa / t.tickInterval).Nanoseconds()
-	//todo: need to unify all LayerIDs definitions and set them to uint64
-	t.currentLayer = types.LayerID(tks + 1)
+	t.currentLayer = types.LayerID((t.time.Now().Sub(t.startEpoch) / t.tickInterval) + 2)
 }
 
 func (t *Ticker) StartClock(diff time.Duration) {

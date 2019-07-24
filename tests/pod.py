@@ -1,3 +1,4 @@
+import re
 import yaml
 import time
 
@@ -91,3 +92,19 @@ def check_for_restarted_pods(namespace, specific_deployment_name=''):
             restarted_pods.append(p.metadata.name)
 
     return restarted_pods
+
+
+def search_phrase_in_pod_log(pod_name, name_space, container_name, phrase, time_out=10):
+
+    match = None
+    total_sleep = 0
+    while True:
+        pod_logs = client.CoreV1Api().read_namespaced_pod_log(name=pod_name,
+                                                              namespace=name_space,
+                                                              container=container_name)
+        match = re.search(phrase, pod_logs)
+        if not match and total_sleep < time_out:
+            time.sleep(1)
+            total_sleep = total_sleep + 1
+        else:
+            return match
