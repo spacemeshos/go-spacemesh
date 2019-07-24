@@ -123,7 +123,7 @@ def test_many_gossip_messages(setup_clients, add_curl):
 
         # Need to sleep for a while in order to enable the propagation of the gossip message - 0.5 sec for each node
         # TODO: check frequently before timeout so we might be able to finish earlier.
-        gossip_propagation_sleep = 10 # currently we expect short propagation times.
+        gossip_propagation_sleep = 15 # currently we expect short propagation times.
         print('sleep for {0} sec to enable gossip propagation'.format(gossip_propagation_sleep))
         time.sleep(gossip_propagation_sleep)
 
@@ -152,7 +152,7 @@ def test_many_gossip_sim(setup_clients, add_curl):
         out = api_call(client_ip, data, api, testconfig['namespace'])
         assert "{'value': 'ok'}" in out
 
-    gossip_propagation_sleep = TEST_MESSAGES  + 20 # currently we expect short propagation times.
+    gossip_propagation_sleep = TEST_MESSAGES + 15 # currently we expect short propagation times.
     print('sleep for {0} sec to enable gossip propagation'.format(gossip_propagation_sleep))
     time.sleep(gossip_propagation_sleep)
 
