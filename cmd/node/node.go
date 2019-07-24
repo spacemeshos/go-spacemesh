@@ -364,8 +364,8 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	if isFixedOracle { // fixed rolacle, take the provided rolacle
 		hOracle = rolacle
 	} else { // regular oracle, build and use it
-		beacon := eligibility.NewBeacon(trtl)
-		hOracle = eligibility.New(beacon, atxdb, BLS381.Verify2, vrfSigner, uint16(app.Config.LayersPerEpoch), lg.WithName("hareOracle"))
+		beacon := eligibility.NewBeacon(trtl, app.Config.HareEligibility.ConfidenceParam)
+		hOracle = eligibility.New(beacon, msh.ActiveSetForLayerConsensusView, BLS381.Verify2, vrfSigner, uint16(app.Config.LayersPerEpoch), app.Config.HareEligibility, lg.WithName("hareOracle"))
 	}
 
 	// a function to validate we know the blocks
@@ -385,7 +385,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 
 		return true
 	}
-	ha := hare.New(app.Config.HARE, swarm, sgn, nodeID, validationFunc, syncer.IsSynced, msh, hOracle, uint16(app.Config.LayersPerEpoch), idStore, atxdb, clock.Subscribe(), lg.WithName("hare"))
+	ha := hare.New(app.Config.HARE, swarm, sgn, nodeID, validationFunc, syncer.IsSynced, msh, hOracle, uint16(app.Config.LayersPerEpoch), idStore, hOracle, clock.Subscribe(), lg.WithName("hare"))
 
 	blockProducer := miner.NewBlockBuilder(nodeID, sgn, swarm, clock.Subscribe(), app.Config.Hdist, txpool, atxpool, coinToss, msh, ha, blockOracle, processor, atxdb, syncer, lg.WithName("blockBuilder"))
 	blockListener := sync.NewBlockListener(swarm, syncer, 4, lg.WithName("blockListener"))

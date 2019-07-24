@@ -20,6 +20,7 @@ const protoName = "HARE_PROTOCOL"
 type Rolacle interface {
 	Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeId, sig []byte) (bool, error)
 	Proof(id types.NodeId, layer types.LayerID, round int32) ([]byte, error)
+	IsIdentityActiveOnConsensusView(edId string, layer types.LayerID) (bool, error)
 }
 
 type NetworkService interface {
@@ -56,7 +57,7 @@ type State struct {
 }
 
 type StateQuerier interface {
-	IsIdentityActive(edId string, layer types.LayerID) (*types.NodeId, bool, types.AtxId, error)
+	IsIdentityActiveOnConsensusView(edId string, layer types.LayerID) (bool, error)
 }
 
 type Msg struct {
@@ -87,7 +88,7 @@ func newMsg(hareMsg *Message, querier StateQuerier, layersPerEpoch uint16) (*Msg
 	}
 	// query if identity is active
 	pub := signing.NewPublicKey(pubKey)
-	_, res, _, err := querier.IsIdentityActive(pub.String(), types.LayerID(hareMsg.InnerMsg.InstanceId))
+	res, err := querier.IsIdentityActiveOnConsensusView(pub.String(), types.LayerID(hareMsg.InnerMsg.InstanceId))
 	if err != nil {
 		log.Error("error while checking if identity is active for %v err=%v", pub.String(), err)
 		return nil, errors.New("is identity active query failed")
@@ -114,7 +115,6 @@ type ConsensusProcess struct {
 	isStarted         bool
 	inbox             chan *Msg
 	terminationReport chan TerminationOutput
-	stateQuerier      StateQuerier
 	validator         messageValidator
 	preRoundTracker   *PreRoundTracker
 	statusesTracker   *StatusTracker
@@ -137,7 +137,6 @@ func NewConsensusProcess(cfg config.Config, instanceId InstanceId, s *Set, oracl
 	proc.signing = signing
 	proc.nid = nid
 	proc.network = p2p
-	proc.stateQuerier = stateQuerier
 	proc.validator = newSyntaxContextValidator(signing, cfg.F+1, proc.statusValidator(), stateQuerier, layersPerEpoch, logger)
 	proc.preRoundTracker = NewPreRoundTracker(cfg.F+1, cfg.N)
 	proc.notifyTracker = NewNotifyTracker(cfg.N)
@@ -198,7 +197,7 @@ func (proc *ConsensusProcess) SetInbox(inbox chan *Msg) {
 func (proc *ConsensusProcess) eventLoop() {
 	proc.With().Info("Consensus Process Started",
 		log.Int("Hare-N", proc.cfg.N), log.Int("f", proc.cfg.F), log.String("duration", (time.Duration(proc.cfg.RoundDuration)*time.Second).String()),
-		log.LayerId(uint64(proc.instanceId)), log.Int("exp_leaders", proc.cfg.ExpectedLeaders), log.String("set_values", proc.s.String()))
+		log.Uint64("layer_id", uint64(proc.instanceId)), log.Int("exp_leaders", proc.cfg.ExpectedLeaders), log.String("set_values", proc.s.String()))
 
 	// set pre-round InnerMsg and send
 	builder, err := proc.initDefaultBuilder(proc.s)
@@ -611,7 +610,7 @@ func (proc *ConsensusProcess) endOfRound3() {
 
 func (proc *ConsensusProcess) shouldParticipate() bool {
 	// query if identity is active
-	_, res, _, err := proc.stateQuerier.IsIdentityActive(proc.signing.PublicKey().String(), types.LayerID(proc.instanceId))
+	res, err := proc.oracle.IsIdentityActiveOnConsensusView(proc.signing.PublicKey().String(), types.LayerID(proc.instanceId))
 	if err != nil {
 		proc.With().Error("Error checking our identity for activeness", log.String("err", err.Error()),
 			log.Uint64("layer_id", uint64(proc.instanceId)))

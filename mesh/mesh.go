@@ -28,6 +28,7 @@ type MeshValidator interface {
 	HandleIncomingLayer(layer *types.Layer) (types.LayerID, types.LayerID)
 	HandleLateBlock(bl *types.Block)
 	ContextualValidity(id types.BlockID) bool
+	GetGoodPatternBlocks(layer types.LayerID) (map[types.BlockID]struct{}, error)
 }
 
 type TxProcessor interface {
@@ -143,11 +144,6 @@ func SerializableSignedTransaction2StateTransaction(tx *types.AddressableSignedT
 	amount := &big.Int{}
 	amount.SetUint64(tx.Amount)
 	return NewTransaction(tx.AccountNonce, tx.Address, tx.Recipient, amount, tx.GasLimit, price)
-}
-
-func (m *Mesh) IsContexuallyValid(b types.BlockID) bool {
-	//todo implement
-	return true
 }
 
 func (m *Mesh) ValidatedLayer() types.LayerID {
@@ -499,4 +495,84 @@ func (m *Mesh) GetATXs(atxIds []types.AtxId) (map[types.AtxId]*types.ActivationT
 		}
 	}
 	return atxs, mIds
+}
+
+// ActiveSetForLayerConsensusView - returns the active set size that matches the view of the contextually valid blocks in the provided layer
+func (m *Mesh) ActiveSetForLayerConsensusView(layer types.LayerID, layersPerEpoch uint16) (map[string]struct{}, error) {
+
+	epoch := layer.GetEpoch(layersPerEpoch)
+	if epoch == 0 {
+		return nil, errors.New("tried to retrieve active set for epoch 0")
+	}
+
+	firstLayerOfPrevEpoch := types.LayerID(epoch-1) * types.LayerID(layersPerEpoch)
+
+	// build a map of all blocks on the current layer
+	mp, err := m.tortoise.GetGoodPatternBlocks(layer)
+	if err != nil {
+		return nil, err
+	}
+	countedAtxs := make(map[string]types.AtxId)
+	penalties := make(map[string]struct{})
+
+	traversalFunc := func(blkh *types.BlockHeader) error {
+
+		blk, err := m.GetBlock(blkh.Id)
+		if err != nil {
+			return err
+		}
+
+		// count unique ATXs
+		for _, id := range blk.AtxIds {
+			atx, err := m.GetAtx(id)
+			if err != nil {
+				log.Panic("error fetching atx %v from database -- inconsistent state", id.ShortId()) // TODO: handle inconsistent state
+				return fmt.Errorf("error fetching atx %v from database -- inconsistent state", id.ShortId())
+			}
+
+			// make sure the target epoch is our epoch
+			if atx.TargetEpoch(layersPerEpoch) != epoch {
+				m.With().Debug("atx found, but targeting epoch doesn't match publication epoch",
+					log.String("atx_id", atx.ShortId()),
+					log.Uint64("atx_target_epoch", uint64(atx.TargetEpoch(layersPerEpoch))),
+					log.Uint64("actual_epoch", uint64(epoch)))
+				continue
+			}
+
+			// ignore atx from nodes in penalty
+			if _, exist := penalties[atx.NodeId.Key]; exist {
+				m.With().Debug("ignoring atx from node in penalty",
+					log.String("node_id", atx.NodeId.Key), log.String("atx_id", atx.ShortId()))
+				continue
+			}
+
+			if prevId, exist := countedAtxs[atx.NodeId.Key]; exist { // same miner
+
+				if prevId != id { // different atx for same epoch
+					m.With().Error("Encountered second atx for the same miner on the same epoch",
+						log.String("first_atx", prevId.ShortId()), log.String("second_atx", id.ShortId()))
+
+					penalties[atx.NodeId.Key] = struct{}{} // mark node in penalty
+					delete(countedAtxs, atx.NodeId.Key)    // remove the penalized node from counted
+				}
+				continue
+			}
+
+			countedAtxs[atx.NodeId.Key] = id
+		}
+
+		return nil
+	}
+
+	err = m.ForBlockInView(mp, firstLayerOfPrevEpoch, traversalFunc)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(map[string]struct{}, len(countedAtxs))
+	for k := range countedAtxs {
+		result[k] = struct{}{}
+	}
+
+	return result, nil
 }

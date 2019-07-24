@@ -5,21 +5,30 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
+	"github.com/hashicorp/golang-lru"
 	"github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/go-spacemesh/config"
+	eCfg "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"math"
 )
 
-const k = types.LayerID(25) // the confidence interval // TODO: read from config
+const cacheSize = 5 // we don't expect to handle more than three layers concurrently
+
+var genesisErr = errors.New("no data about active nodes for genesis")
 
 type valueProvider interface {
 	Value(layer types.LayerID) (uint32, error)
 }
 
-type activeSetProvider interface {
-	ActiveSetSize(epochId types.EpochId) (uint32, error)
+// a func to retrieve the active set size for the provided layer
+// this func is assumed to be cpu intensive and hence we cache its results
+type activeSetFunc func(layer types.LayerID, layersPerEpoch uint16) (map[string]struct{}, error)
+
+type casher interface {
+	Add(key, value interface{}) (evicted bool)
+	Get(key interface{}) (value interface{}, ok bool)
 }
 
 type Signer interface {
@@ -30,33 +39,66 @@ type VerifierFunc = func(msg, sig, pub []byte) (bool, error)
 
 // Oracle is the hare eligibility oracle
 type Oracle struct {
-	beacon            valueProvider
-	activeSetProvider activeSetProvider
-	vrfSigner         Signer
-	vrfVerifier       VerifierFunc
-	layersPerEpoch    uint16
+	beacon         valueProvider
+	getActiveSet   activeSetFunc
+	vrfSigner      Signer
+	vrfVerifier    VerifierFunc
+	layersPerEpoch uint16
+	cache          casher
+	cfg            eCfg.Config
 	log.Log
 }
 
-// Returns the relative Layer that w.h.p. we have agreement on its view
-// safe is defined to be k layers prior to the provided Layer
-func safeLayer(layer types.LayerID) types.LayerID {
-	if layer > k { // assuming genesis is zero
-		return layer - k
+// Returns the relative layer id that w.h.p. we have agreement on its contextually valid blocks
+// safe layer is defined to be the confidence param layers prior to the provided Layer
+func safeLayer(layer types.LayerID, safetyParam types.LayerID) types.LayerID {
+	if layer <= safetyParam { // assuming genesis is zero
+		return config.Genesis
 	}
 
-	return config.Genesis
+	return layer - safetyParam
+}
+
+func roundedSafeLayer(layer types.LayerID, safetyParam types.LayerID,
+	layersPerEpoch uint16, epochOffset types.LayerID) types.LayerID {
+
+	sl := safeLayer(layer, safetyParam)
+	if sl == config.Genesis {
+		return sl
+	}
+
+	ep := types.LayerID(sl.GetEpoch(layersPerEpoch))
+
+	threshold := ep*types.LayerID(layersPerEpoch) + epochOffset
+	if sl >= threshold { // the safe layer is after the rounding threshold
+		return threshold // round to threshold
+	}
+
+	if threshold <= types.LayerID(layersPerEpoch) { // we can't go before genesis
+		return config.Genesis // just return genesis
+	}
+
+	// round to the previous epoch threshold
+	return threshold - types.LayerID(layersPerEpoch)
 }
 
 // New returns a new eligibility oracle instance
-func New(beacon valueProvider, asProvider activeSetProvider, vrfVerifier VerifierFunc, vrfSigner Signer, layersPerEpoch uint16, log log.Log) *Oracle {
+func New(beacon valueProvider, activeSetFunc activeSetFunc, vrfVerifier VerifierFunc, vrfSigner Signer,
+	layersPerEpoch uint16, cfg eCfg.Config, log log.Log) *Oracle {
+	c, e := lru.New(cacheSize)
+	if e != nil {
+		log.Panic("Could not create lru cache err=%v", e)
+	}
+
 	return &Oracle{
-		beacon:            beacon,
-		activeSetProvider: asProvider,
-		vrfVerifier:       vrfVerifier,
-		vrfSigner:         vrfSigner,
-		layersPerEpoch:    layersPerEpoch,
-		Log:               log,
+		beacon:         beacon,
+		getActiveSet:   activeSetFunc,
+		vrfVerifier:    vrfVerifier,
+		vrfSigner:      vrfSigner,
+		layersPerEpoch: layersPerEpoch,
+		cache:          c,
+		cfg:            cfg,
+		Log:            log,
 	}
 }
 
@@ -69,7 +111,7 @@ type vrfMessage struct {
 
 // buildVRFMessage builds the VRF message used as input for the BLS (msg=Beacon##Id##Layer##Round)
 func (o *Oracle) buildVRFMessage(id types.NodeId, layer types.LayerID, round int32) ([]byte, error) {
-	v, err := o.beacon.Value(safeLayer(layer))
+	v, err := o.beacon.Value(layer)
 	if err != nil {
 		o.Error("Could not get Beacon value: %v", err)
 		return nil, err
@@ -87,12 +129,16 @@ func (o *Oracle) buildVRFMessage(id types.NodeId, layer types.LayerID, round int
 }
 
 func (o *Oracle) activeSetSize(layer types.LayerID) (uint32, error) {
-	ep := safeLayer(layer).GetEpoch(o.layersPerEpoch)
-	if ep == 0 {
-		return 5, nil // TODO: agree on the inception problem
-		// return o.activeSetProvider.ActiveSetSize(0)
+	actives, err := o.actives(layer)
+	if err != nil {
+		if err == genesisErr { // we are in genesis
+			return uint32(o.cfg.GenesisActiveSet), nil
+		}
+
+		return 0, err
 	}
-	return o.activeSetProvider.ActiveSetSize(ep - 1)
+
+	return uint32(len(actives)), nil
 }
 
 // Eligible checks if Id is eligible on the given Layer where msg is the VRF message, sig is the role proof and assuming commSize as the expected committee size
@@ -158,4 +204,47 @@ func (o *Oracle) Proof(id types.NodeId, layer types.LayerID, round int32) ([]byt
 	}
 
 	return sig, nil
+}
+
+// Returns a map of all active nodes in the specified layer id
+func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
+	sl := roundedSafeLayer(layer, types.LayerID(o.cfg.ConfidenceParam), o.layersPerEpoch, types.LayerID(o.cfg.EpochOffset))
+
+	ep := sl.GetEpoch(o.layersPerEpoch)
+	// check genesis
+	if ep.IsGenesis() {
+		return nil, genesisErr
+	}
+
+	// check cache
+	if val, exist := o.cache.Get(sl); exist {
+		return val.(map[string]struct{}), nil
+	}
+
+	activeMap, err := o.getActiveSet(sl, o.layersPerEpoch)
+	if err != nil {
+		o.With().Error("Could not retrieve active set size", log.Err(err),
+			log.Uint64("layer_id", uint64(layer)), log.Uint64("epoch_id", uint64(layer.GetEpoch(o.layersPerEpoch))),
+			log.Uint64("safe_layer_id", uint64(sl)), log.Uint64("safe_epoch_id", uint64(ep)))
+		return nil, err
+	}
+
+	// update
+	o.cache.Add(sl, activeMap)
+
+	return activeMap, nil
+}
+
+func (o *Oracle) IsIdentityActiveOnConsensusView(edId string, layer types.LayerID) (bool, error) {
+	actives, err := o.actives(layer)
+	if err != nil {
+		if err == genesisErr { // we are in genesis
+			return true, nil // all ids are active in genesis
+		}
+
+		return false, err
+	}
+	_, exist := actives[edId]
+
+	return exist, nil
 }

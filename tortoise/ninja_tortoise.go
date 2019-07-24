@@ -88,6 +88,7 @@ type ninjaTortoise struct {
 	tVote              map[votingPattern]map[types.BlockID]vec           //global opinion
 	tTally             map[votingPattern]map[types.BlockID]vec           //for pattern p and block b count votes for b according to p
 	tPattern           map[votingPattern]map[types.BlockID]struct{}      //set of blocks that comprise pattern p
+	tPatternLock       sync.RWMutex                                      //lock for tPattern
 	tPatSupport        map[votingPattern]map[types.LayerID]votingPattern //pattern support count
 }
 
@@ -105,6 +106,7 @@ func NewNinjaTortoise(layerSize int, blocks BlockCache, log log.Log) *ninjaTorto
 		tExplicit:          map[types.BlockID]map[types.LayerID]votingPattern{},
 		tSupport:           map[votingPattern]int{},
 		tPattern:           map[votingPattern]map[types.BlockID]struct{}{},
+		tPatternLock:       sync.RWMutex{},
 		tVote:              map[votingPattern]map[types.BlockID]vec{},
 		tTally:             map[votingPattern]map[types.BlockID]vec{},
 		tComplete:          map[votingPattern]struct{}{},
@@ -130,7 +132,9 @@ func (ni *ninjaTortoise) evictOutOfPbase() {
 				delete(ni.tEffectiveToBlocks, p)
 				delete(ni.tVote, p)
 				delete(ni.tTally, p)
+				ni.tPatternLock.Lock()
 				delete(ni.tPattern, p)
+				ni.tPatternLock.Unlock()
 				delete(ni.tPatSupport, p)
 				delete(ni.tSupport, p)
 				ni.Debug("evict pattern %v from maps ", p)
@@ -180,7 +184,9 @@ func (ni *ninjaTortoise) processBlock(b *types.Block) {
 	ni.tExplicit[b.ID()] = make(map[types.LayerID]votingPattern, K)
 	for layerId, v := range patternMap {
 		vp := votingPattern{id: getIdsFromSet(v), LayerID: layerId}
+		ni.tPatternLock.Lock()
 		ni.tPattern[vp] = v
+		ni.tPatternLock.Unlock()
 		arr, _ := ni.patterns[vp.Layer()]
 		ni.patterns[vp.Layer()] = append(arr, vp)
 		ni.tExplicit[b.ID()][layerId] = vp
@@ -258,7 +264,10 @@ func (ni *ninjaTortoise) updateCorrectionVectors(p votingPattern, bottomOfWindow
 		return nil
 	}
 
-	ni.ForBlockInView(ni.tPattern[p], bottomOfWindow, foo)
+	ni.tPatternLock.RLock()
+	tp := ni.tPattern[p]
+	ni.tPatternLock.RUnlock()
+	ni.ForBlockInView(tp, bottomOfWindow, foo)
 }
 
 func (ni *ninjaTortoise) updatePatternTally(newMinGood votingPattern, botomOfWindow types.LayerID, correctionMap map[types.BlockID]vec, effCountMap map[types.LayerID]int) {
@@ -385,7 +394,10 @@ func (ni *ninjaTortoise) addPatternVote(p votingPattern, view map[types.BlockID]
 				ni.Panic("could not retrieve layer block ids")
 			}
 			for _, bl := range blocks {
-				if _, found := ni.tPattern[ex][bl]; found {
+				ni.tPatternLock.RLock()
+				_, found := ni.tPattern[ex][bl]
+				ni.tPatternLock.RUnlock()
+				if found {
 					ni.tTally[p][bl] = ni.tTally[p][bl].Add(Support)
 				} else if _, inSet := view[bl]; inSet { //in view but not in pattern
 					ni.tTally[p][bl] = ni.tTally[p][bl].Add(Against)
@@ -506,7 +518,10 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) { //i most rec
 				return nil
 			}
 
-			ni.ForBlockInView(ni.tPattern[p], ni.pBase.Layer()+1, foo)
+			ni.tPatternLock.RLock()
+			tp := ni.tPattern[p]
+			ni.tPatternLock.RUnlock()
+			ni.ForBlockInView(tp, ni.pBase.Layer()+1, foo)
 
 			//add corrected implicit votes
 			ni.updatePatternTally(p, windowStart, correctionMap, effCountMap)
@@ -584,4 +599,41 @@ func (ni *ninjaTortoise) GetGoodPattern(layer types.LayerID) (uint32, error) {
 	}
 
 	return uint32(val.id), nil
+}
+
+func (ni *ninjaTortoise) GetGoodPatternBlocks(layer types.LayerID) (map[types.BlockID]struct{}, error) {
+	if layer == 0 || layer == 1 {
+		blocksSlice, err := ni.LayerBlockIds(layer)
+		if err != nil {
+			ni.Error("Could not get layer block ids for layer %v err=%v", layer, err)
+			return nil, err
+		}
+		blocks := make(map[types.BlockID]struct{}, len(blocksSlice))
+		for _, b := range blocksSlice {
+			blocks[b] = struct{}{}
+		}
+		return blocks, nil
+	}
+
+	if layer >= ni.pBase.LayerID {
+		return nil, errors.New("pbase is lower than provided layer")
+	}
+
+	ni.tGoodLock.RLock()
+	val, ok := ni.tGood[layer]
+	ni.tGoodLock.RUnlock()
+
+	if !ok {
+		return nil, errors.New("no good layer")
+	}
+
+	ni.tPatternLock.RLock()
+	blocks, ok := ni.tPattern[val]
+	ni.tPatternLock.RUnlock()
+
+	if !ok {
+		return nil, errors.New("pattern does not exist")
+	}
+
+	return blocks, nil
 }
