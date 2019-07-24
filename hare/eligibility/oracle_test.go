@@ -96,7 +96,7 @@ func TestOracle_IsEligible(t *testing.T) {
 	assert.False(t, res)
 
 	o.getActiveSet = (&mockActiveSetProvider{0}).ActiveSet
-	res, err = o.Eligible(types.LayerID(cfg.ConfidenceInterval+11), 1, 0, types.NodeId{}, []byte{})
+	res, err = o.Eligible(types.LayerID(cfg.ConfidenceParam+11), 1, 0, types.NodeId{}, []byte{})
 	assert.NotNil(t, err)
 	assert.Equal(t, "active set size is zero", err.Error())
 	assert.False(t, res)

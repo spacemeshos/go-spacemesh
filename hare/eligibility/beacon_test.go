@@ -23,7 +23,7 @@ func (mpp *mockPatternProvider) GetGoodPattern(layer types.LayerID) (uint32, err
 func TestBeacon_Value(t *testing.T) {
 	b := beacon{}
 	b.patternProvider = &mockPatternProvider{1, 5, someErr}
-	b.confidenceInterval = cfg.ConfidenceInterval
+	b.confidenceParam = cfg.ConfidenceParam
 	_, err := b.Value(100)
 	assert.NotNil(t, err)
 	b.patternProvider = &mockPatternProvider{3, 5, nil}

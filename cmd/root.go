@@ -132,8 +132,8 @@ func AddCommands(cmd *cobra.Command) {
 	/**======================== Hare Eligibility Oracle Flags ========================== **/
 
 	// N determines the size of the hare committee
-	cmd.PersistentFlags().Uint64Var(&config.HareEligibility.ConfidenceInterval, "eligibility-confidence-interval",
-		config.HareEligibility.ConfidenceInterval, "The relative layer (with respect to the current layer) we are confident to have consensus about")
+	cmd.PersistentFlags().Uint64Var(&config.HareEligibility.ConfidenceParam, "eligibility-confidence-param",
+		config.HareEligibility.ConfidenceParam, "The relative layer (with respect to the current layer) we are confident to have consensus about")
 	// F determines the max number of adversaries in the Hare committee
 	cmd.PersistentFlags().IntVar(&config.HareEligibility.GenesisActiveSet, "eligibility-genesis-active-size",
 		config.HareEligibility.GenesisActiveSet, "The active set size for the genesis flow")

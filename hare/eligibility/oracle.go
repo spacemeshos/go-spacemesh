@@ -50,7 +50,7 @@ type Oracle struct {
 }
 
 // Returns the relative layer id that w.h.p. we have agreement on its contextually valid blocks
-// safe layer is defined to be the confidence interval layers prior to the provided Layer
+// safe layer is defined to be the confidence param layers prior to the provided Layer
 func safeLayer(layer types.LayerID, safetyParam types.LayerID) types.LayerID {
 	if layer <= safetyParam { // assuming genesis is zero
 		return config.Genesis
@@ -208,7 +208,7 @@ func (o *Oracle) Proof(id types.NodeId, layer types.LayerID, round int32) ([]byt
 
 // Returns a map of all active nodes in the specified layer id
 func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
-	sl := roundedSafeLayer(layer, types.LayerID(o.cfg.ConfidenceInterval), o.layersPerEpoch, types.LayerID(o.cfg.EpochOffset))
+	sl := roundedSafeLayer(layer, types.LayerID(o.cfg.ConfidenceParam), o.layersPerEpoch, types.LayerID(o.cfg.EpochOffset))
 
 	ep := sl.GetEpoch(o.layersPerEpoch)
 	// check genesis
