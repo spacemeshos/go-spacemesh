@@ -59,66 +59,36 @@ func (MockState) ValidateSignature(signed types.Signed) (address.Address, error)
 }
 
 type ATXDBMock struct {
-	// CalcActiveSetFromViewFunc mocks the CalcActiveSetFromView method.
-	CalcActiveSetFromViewFunc func(a *types.ActivationTx) (uint32, error)
-
-	// GetAtxFunc mocks the GetAtx method.
-	GetAtxFunc func(id types.AtxId) (*types.ActivationTx, error)
-
-	// GetEpochAtxIdsFunc mocks the GetEpochAtxIds method.
-	GetEpochAtxIdsFunc func(epochId types.EpochId) ([]types.AtxId, error)
-
-	// GetNodeAtxIdsFunc mocks the GetNodeAtxIds method.
-	GetNodeAtxIdsFunc func(nodeId types.NodeId) ([]types.AtxId, error)
-
-	// GetPrevAtxIdFunc mocks the GetPrevAtxId method.
-	GetPrevAtxIdFunc func(node types.NodeId) (*types.AtxId, error)
+	activeSet uint32
 }
 
 func (mock *ATXDBMock) CalcActiveSetFromView(a *types.ActivationTx) (uint32, error) {
-	return mock.CalcActiveSetFromViewFunc(a)
+	return mock.activeSet, nil
 }
 
 func (mock *ATXDBMock) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
-	return mock.GetAtxFunc(id)
+	panic("not implemented")
 }
 
 func (mock *ATXDBMock) GetEpochAtxIds(epochId types.EpochId) ([]types.AtxId, error) {
-	return mock.GetEpochAtxIdsFunc(epochId)
+	panic("not implemented")
 }
 
 func (mock *ATXDBMock) GetNodeAtxIds(nodeId types.NodeId) ([]types.AtxId, error) {
-	return mock.GetNodeAtxIds(nodeId)
+	panic("not implemented")
 }
 
 func (mock *ATXDBMock) GetPrevAtxId(node types.NodeId) (*types.AtxId, error) {
-	return mock.GetPrevAtxIdFunc(node)
-}
-
-type MemPoolMock struct {
-}
-
-func (mem *MemPoolMock) Get(id interface{}) interface{} {
-	return nil
-}
-
-func (mem *MemPoolMock) PopItems(size int) interface{} {
-	return nil
-}
-
-func (mem *MemPoolMock) Put(id interface{}, item interface{}) {
-}
-
-func (mem *MemPoolMock) Invalidate(id interface{}) {
+	panic("not implemented")
 }
 
 func ConfigTst() mesh.Config {
 	return mesh.Config{
-		big.NewInt(10),
-		big.NewInt(5000),
-		big.NewInt(15),
-		15,
-		5,
+		SimpleTxCost:   big.NewInt(10),
+		BaseReward:     big.NewInt(5000),
+		PenaltyPercent: big.NewInt(15),
+		TxQuota:        15,
+		RewardMaturity: 5,
 	}
 }
 

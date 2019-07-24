@@ -195,9 +195,9 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) (bool, error) {
 
 		//positioning atx is from this epoch as well, since we will be publishing the atx in the next epoch
 		//todo: what if no other atx was received in this epoch yet?
+		atxPubLayerID := types.LayerID(0)
 		posAtxId := *types.EmptyAtxId
 		posAtx, err := b.GetPositioningAtx(epoch)
-		atxPubLayerID := types.LayerID(0)
 		if err == nil {
 			posAtxEndTick = posAtx.EndTick
 			b.posLayerID = posAtx.PubLayerIdx
@@ -205,7 +205,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) (bool, error) {
 			posAtxId = posAtx.Id()
 		} else {
 			if !epoch.IsGenesis() {
-				return false, fmt.Errorf("cannot find pos atx: %v", err)
+				return false, fmt.Errorf("cannot find pos atx in epoch %v: %v", epoch, err)
 			}
 		}
 
@@ -344,7 +344,7 @@ func (b *Builder) GetLastSequence(node types.NodeId) uint64 {
 func (b *Builder) GetPositioningAtx(epochId types.EpochId) (*types.ActivationTx, error) {
 	posAtxId, err := b.GetPositioningAtxId(epochId)
 	if err != nil {
-		if b.prevATX != nil {
+		if b.prevATX != nil && b.prevATX.PubLayerIdx.GetEpoch(b.layersPerEpoch) == epochId {
 			//if the atx was created by this miner but have not propagated as an atx to the notwork yet, use the cached atx
 			return b.prevATX, nil
 		} else {
