@@ -200,7 +200,7 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 		bottom, top := calcHdistRange(id, t.hdist)
 		votes, err = t.hareResult.GetResult(bottom, top)
 		if err != nil {
-			return nil, errors.New(fmt.Sprintf("didn't receive hare results for layers between  %v %v %v", bottom, top, err))
+			return nil, errors.New(fmt.Sprintf("didn't receive hare results for layers bottom=%v top=%v hdist=%v err=%v", bottom, top, t.hdist, err))
 		}
 	}
 
