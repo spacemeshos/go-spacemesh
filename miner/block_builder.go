@@ -173,6 +173,20 @@ func (t *BlockBuilder) AddTransaction(tx *types.AddressableSignedTransaction) er
 	return nil
 }
 
+func calcHdistRange(id types.LayerID, hdist types.LayerID) (bottom types.LayerID, top types.LayerID) {
+	if hdist == 0 {
+		log.Panic("hdist cannot be zero")
+	}
+
+	bottom = types.LayerID(1)
+	top = id - 1
+	if id > hdist {
+		bottom = id - hdist
+	}
+
+	return bottom, top
+}
+
 func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibilityProof types.BlockEligibilityProof,
 	txs []types.AddressableSignedTransaction, atx []types.ActivationTx) (*types.Block, error) {
 
@@ -183,15 +197,10 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 	} else if id == config.Genesis+1 {
 		votes = append(votes, config.GenesisId)
 	} else {
-
-		bottom := types.LayerID(1)
-		if id > t.hdist {
-			bottom = id - t.hdist + 1
-		}
-
-		votes, err = t.hareResult.GetResult(bottom, id-1)
+		bottom, top := calcHdistRange(id, t.hdist)
+		votes, err = t.hareResult.GetResult(bottom, top)
 		if err != nil {
-			return nil, errors.New(fmt.Sprintf("didn't receive hare results for layers between  %v %v %v", bottom, id-1, err))
+			return nil, errors.New(fmt.Sprintf("didn't receive hare results for layers between  %v %v %v", bottom, top, err))
 		}
 	}
 
