@@ -9,6 +9,7 @@ import (
 type blockCache interface {
 	Get(id types.BlockID) *types.Block
 	put(b *types.Block)
+	remove(id types.BlockID)
 	Close()
 }
 
@@ -36,4 +37,8 @@ func (bc BlockCache) Get(id types.BlockID) *types.Block {
 	}
 	blk := item.(types.Block)
 	return &blk
+}
+
+func (bc BlockCache) remove(id types.BlockID) {
+	bc.Cache.Remove(id)
 }

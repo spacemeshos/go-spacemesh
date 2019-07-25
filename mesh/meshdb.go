@@ -228,13 +228,29 @@ func (m *MeshDB) writeBlock(bl *types.Block) error {
 		return fmt.Errorf("could not encode bl")
 	}
 
-	if err := m.blocks.Put(bl.ID().ToBytes(), bytes); err != nil {
-		return fmt.Errorf("could not add bl to %v databacse %v", bl.ID(), err)
-	}
+	m.blockCache.put(bl) // must be called before the go routine, to allow teardown
 
-	m.updateLayerWithBlock(&bl.MiniBlock)
+	go func() {
+		if err := m.blocks.Put(bl.ID().ToBytes(), bytes); err != nil {
+			m.Log.With().Error("could not add bl to database, removing from cache", log.BlockId(uint64(bl.ID())), log.Err(err))
 
-	m.blockCache.put(bl)
+			// teardown
+			m.blockCache.remove(bl.ID())
+			return
+		}
+
+		if err := m.updateLayerWithBlock(&bl.MiniBlock); err != nil {
+			m.Log.With().Error("could not update block in layer's db, removing block from block db", log.BlockId(uint64(bl.ID())), log.Err(err)) // teardown
+
+			// teardown
+			m.blockCache.remove(bl.ID())
+			if err := m.blocks.Delete(bl.ID().ToBytes()); err != nil {
+				m.Log.With().Error("failed to clean block db", log.BlockId(uint64(bl.ID())), log.Err(err))
+				return
+			}
+		}
+	}()
+
 
 	return nil
 }
