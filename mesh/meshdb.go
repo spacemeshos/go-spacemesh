@@ -1,7 +1,6 @@
 package mesh
 
 import (
-	"container/list"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -127,16 +126,34 @@ func (m *MeshDB) LayerBlockIds(index types.LayerID) ([]types.BlockID, error) {
 	return blockids, nil
 }
 
-func (mc *MeshDB) ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.BlockHeader) error) error {
-	stack := list.New()
-	for b := range view {
-		stack.PushFront(b)
-	}
-	set := make(map[types.BlockID]struct{})
-	for b := stack.Front(); b != nil; b = stack.Front() {
-		a := stack.Remove(stack.Front()).(types.BlockID)
+type blockQueue struct {
+	l []types.BlockID
+}
 
-		block, err := mc.GetBlock(a)
+func (s *blockQueue) Push(b types.BlockID) {
+	s.l = append(s.l, b)
+}
+
+func (s *blockQueue) Pop() types.BlockID {
+	b := s.l[0]
+	s.l = s.l[1:]
+	return b
+}
+
+func (s *blockQueue) IsEmpty() bool {
+	return len(s.l) == 0
+}
+
+func (m *MeshDB) ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.BlockHeader) error) error {
+	blocksToVisit := &blockQueue{}
+	for b := range view {
+		blocksToVisit.Push(b)
+	}
+	seenBlocks := make(map[types.BlockID]struct{})
+	for !blocksToVisit.IsEmpty() {
+		a := blocksToVisit.Pop()
+
+		block, err := m.GetBlock(a)
 		if err != nil {
 			return err
 		}
@@ -148,13 +165,16 @@ func (mc *MeshDB) ForBlockInView(view map[types.BlockID]struct{}, layer types.La
 
 		//push children to bfs queue
 		for _, id := range block.ViewEdges {
-			if bChild, err := mc.GetBlock(id); err != nil {
+			if _, found := seenBlocks[id]; found {
+				continue
+			}
+			if bChild, err := m.GetBlock(id); err != nil {
 				return err
 			} else {
 				if bChild.LayerIndex >= layer { //dont traverse too deep
-					if _, found := set[bChild.Id]; !found {
-						set[bChild.Id] = struct{}{}
-						stack.PushBack(bChild.Id)
+					if _, found := seenBlocks[id]; !found {
+						seenBlocks[id] = struct{}{}
+						blocksToVisit.Push(id)
 					}
 				}
 			}
