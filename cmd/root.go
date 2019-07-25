@@ -36,6 +36,9 @@ func AddCommands(cmd *cobra.Command) {
 		config.LayerDurationSec, "Duration between layers in seconds")
 	cmd.PersistentFlags().IntVar(&config.LayerAvgSize, "layer-average-size",
 		config.LayerAvgSize, "Layer Avg size")
+	cmd.PersistentFlags().IntVar(&config.Hdist, "hdist",
+		config.Hdist, "hdist")
+
 	cmd.PersistentFlags().StringVar(&config.MemProfile, "mem-profile",
 		config.MemProfile, "output memory profiling stat to filename")
 	cmd.PersistentFlags().StringVar(&config.CpuProfile, "cpu-profile",
@@ -128,6 +131,18 @@ func AddCommands(cmd *cobra.Command) {
 		config.HARE.WakeupDelta, "Wakeup delta after tick for hare protocol")
 	cmd.PersistentFlags().IntVar(&config.HARE.ExpectedLeaders, "hare-exp-leaders",
 		config.HARE.ExpectedLeaders, "The expected number of leaders in the hare protocol")
+
+	/**======================== Hare Eligibility Oracle Flags ========================== **/
+
+	// N determines the size of the hare committee
+	cmd.PersistentFlags().Uint64Var(&config.HareEligibility.ConfidenceParam, "eligibility-confidence-param",
+		config.HareEligibility.ConfidenceParam, "The relative layer (with respect to the current layer) we are confident to have consensus about")
+	// F determines the max number of adversaries in the Hare committee
+	cmd.PersistentFlags().IntVar(&config.HareEligibility.GenesisActiveSet, "eligibility-genesis-active-size",
+		config.HareEligibility.GenesisActiveSet, "The active set size for the genesis flow")
+	// RoundDuration determines the duration of a round in the Hare protocol
+	cmd.PersistentFlags().IntVar(&config.HareEligibility.EpochOffset, "eligibility-epoch-offset",
+		config.HareEligibility.EpochOffset, "The constant layer (within an epoch) for which we traverse its view for the purpose of counting consensus active set")
 
 	/**======================== PoST Flags ========================== **/
 

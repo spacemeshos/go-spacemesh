@@ -3,6 +3,7 @@ package miner
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
@@ -34,11 +35,19 @@ func (m MockCoin) GetResult() bool {
 }
 
 type MockHare struct {
-	res []types.BlockID
+	res map[types.LayerID][]types.BlockID
 }
 
-func (m MockHare) GetResult(id types.LayerID) ([]types.BlockID, error) {
-	return m.res, nil
+func (m MockHare) GetResult(lower types.LayerID, upper types.LayerID) ([]types.BlockID, error) {
+	var results []types.BlockID
+	for id := lower; id <= upper; id++ {
+		blks, ok := m.res[id]
+		if !ok {
+			return nil, errors.New(fmt.Sprintf("hare result for layer%v was not in map", id))
+		}
+		results = append(results, blks...)
+	}
+	return results, nil
 }
 
 type MockOrphans struct {
@@ -101,12 +110,13 @@ func TestBlockBuilder_StartStop(t *testing.T) {
 	//receiver := net.NewNode()
 
 	hareRes := []types.BlockID{types.BlockID(0), types.BlockID(1), types.BlockID(2), types.BlockID(3)}
-	hare := MockHare{res: hareRes}
+	hare := MockHare{res: map[types.LayerID][]types.BlockID{}}
+	hare.res[0] = hareRes
 
 	orphans := MockOrphans{st: []types.BlockID{1, 2, 3}}
 	builder := NewBlockBuilder(types.NodeId{}, &MockSigning{},
 		n,
-		beginRound,
+		beginRound, 5,
 		NewTypesTransactionIdMemPool(),
 		NewTypesAtxIdMemPool(),
 		MockCoin{},
@@ -144,11 +154,12 @@ func TestBlockBuilder_BlockIdGeneration(t *testing.T) {
 	n2 := net.NewNode()
 
 	hareRes := []types.BlockID{types.BlockID(0), types.BlockID(1), types.BlockID(2), types.BlockID(3)}
-	hare := MockHare{res: hareRes}
+	hare := MockHare{res: map[types.LayerID][]types.BlockID{}}
+	hare.res[0] = hareRes
 
-	builder1 := NewBlockBuilder(types.NodeId{Key: "a"}, &MockSigning{}, n1, beginRound, NewTypesTransactionIdMemPool(),
+	builder1 := NewBlockBuilder(types.NodeId{Key: "a"}, &MockSigning{}, n1, beginRound, 5, NewTypesTransactionIdMemPool(),
 		NewTypesAtxIdMemPool(), MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare, mockBlockOracle{}, mockTxProcessor{}, &mockAtxValidator{}, &mockSyncer{}, log.New(n1.NodeInfo.ID.String(), "", ""))
-	builder2 := NewBlockBuilder(types.NodeId{Key: "b"}, &MockSigning{}, n2, beginRound, NewTypesTransactionIdMemPool(),
+	builder2 := NewBlockBuilder(types.NodeId{Key: "b"}, &MockSigning{}, n2, beginRound, 5, NewTypesTransactionIdMemPool(),
 		NewTypesAtxIdMemPool(), MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare, mockBlockOracle{}, mockTxProcessor{}, &mockAtxValidator{}, &mockSyncer{}, log.New(n2.NodeInfo.ID.String(), "", ""))
 
 	b1, _ := builder1.createBlock(1, types.AtxId{}, types.BlockEligibilityProof{}, nil, nil)
@@ -166,9 +177,10 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 	coinbase := address.HexToAddress("aaaa")
 
 	hareRes := []types.BlockID{types.BlockID(0), types.BlockID(1), types.BlockID(2), types.BlockID(3)}
-	hare := MockHare{res: hareRes}
+	hare := MockHare{res: map[types.LayerID][]types.BlockID{}}
+	hare.res[1] = hareRes
 
-	builder := NewBlockBuilder(types.NodeId{"anton", []byte("anton")}, &MockSigning{}, n, beginRound, NewTypesTransactionIdMemPool(),
+	builder := NewBlockBuilder(types.NodeId{"anton", []byte("anton")}, &MockSigning{}, n, beginRound, 5, NewTypesTransactionIdMemPool(),
 		NewTypesAtxIdMemPool(), MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare, mockBlockOracle{}, mockTxProcessor{}, &mockAtxValidator{}, &mockSyncer{}, log.New(n.String(), "", ""))
 
 	err := builder.Start()
@@ -205,6 +217,7 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 	case output := <-receiver.RegisterGossipProtocol(config.NewBlockProtocol):
 		b := types.MiniBlock{}
 		xdr.Unmarshal(bytes.NewBuffer(output.Bytes()), &b)
+
 		assert.Equal(t, hareRes, b.BlockVotes)
 		assert.Equal(t, []types.BlockID{1, 2, 3}, b.ViewEdges)
 
@@ -258,9 +271,10 @@ func TestBlockBuilder_Validation(t *testing.T) {
 	n1 := net.NewNode()
 
 	hareRes := []types.BlockID{types.BlockID(0), types.BlockID(1), types.BlockID(2), types.BlockID(3)}
-	hare := MockHare{res: hareRes}
+	hare := MockHare{res: map[types.LayerID][]types.BlockID{}}
+	hare.res[0] = hareRes
 
-	builder1 := NewBlockBuilder(types.NodeId{Key: "a"}, &MockSigning{}, n1, beginRound, NewTypesTransactionIdMemPool(),
+	builder1 := NewBlockBuilder(types.NodeId{Key: "a"}, &MockSigning{}, n1, beginRound, 5, NewTypesTransactionIdMemPool(),
 		NewTypesAtxIdMemPool(), MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare, mockBlockOracle{}, mockTxProcessor{true}, &mockAtxValidator{}, &mockSyncer{}, log.New(n1.NodeInfo.ID.String(), "", ""))
 	builder1.Start()
 	ed := signing.NewEdSigner()

@@ -25,6 +25,10 @@ func New() *FixedRolacle {
 	return rolacle
 }
 
+func (fo *FixedRolacle) IsIdentityActiveOnConsensusView(edId string, layer types.LayerID) (bool, error) {
+	return true, nil
+}
+
 func (fo *FixedRolacle) Export(id uint32, committeeSize int) map[string]struct{} {
 	fo.mapRW.RLock()
 	total := len(fo.honest) + len(fo.faulty)

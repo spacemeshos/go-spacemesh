@@ -37,7 +37,7 @@ const Name = "/udp/v2/discovery"
 const MessageBufSize = 100
 
 // MessageTimeout is the timeout we tolerate when waiting for a message reply
-const MessageTimeout = time.Second * 1 // TODO: Parametrize
+const MessageTimeout = time.Second * 2 // TODO: Parametrize
 
 // PINGPONG is the ping protocol ID
 const PINGPONG = 0

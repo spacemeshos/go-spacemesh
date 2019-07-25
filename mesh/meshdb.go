@@ -48,14 +48,13 @@ func NewPersistentMeshDB(path string, log log.Log) *MeshDB {
 }
 
 func NewMemMeshDB(log log.Log) *MeshDB {
-	db := database.NewMemDatabase()
 	ll := &MeshDB{
 		Log:                log,
 		blockCache:         NewBlockCache(100 * layerSize),
-		blocks:             db,
-		layers:             db,
-		contextualValidity: db,
-		transactions:       db,
+		blocks:             database.NewMemDatabase(),
+		layers:             database.NewMemDatabase(),
+		contextualValidity: database.NewMemDatabase(),
+		transactions:       database.NewMemDatabase(),
 		orphanBlocks:       make(map[types.LayerID]map[types.BlockID]struct{}),
 		layerMutex:         make(map[types.LayerID]*layerMutex),
 	}
@@ -189,6 +188,9 @@ func (m *MeshDB) getMiniBlockBytes(id types.BlockID) ([]byte, error) {
 
 func (m *MeshDB) getContextualValidity(id types.BlockID) (bool, error) {
 	b, err := m.contextualValidity.Get(id.ToBytes())
+	if err != nil {
+		return false, nil
+	}
 	return b[0] == 1, err //bytes to bool
 }
 
@@ -198,6 +200,8 @@ func (m *MeshDB) setContextualValidity(id types.BlockID, valid bool) error {
 	var v []byte
 	if valid {
 		v = TRUE
+	} else {
+		v = FALSE
 	}
 	m.contextualValidity.Put(id.ToBytes(), v)
 	return nil
