@@ -112,13 +112,13 @@ func (bl *BlockListener) HandleNewBlock(blk *types.Block, data service.GossipMes
 	if data != nil {
 		data.ReportValidation(config.NewBlockProtocol)
 	}
-	go func() { // moving to blocking call since HandleNewBlock now runs in a go routine
-		if err := bl.AddBlockWithTxs(blk, txs, atxs); err != nil {
-			bl.Log.With().Error("failed to add block to database", log.BlockId(uint64(blk.ID())), log.Err(err))
-			//return
-		} else {
-			bl.With().Info("added block to database", log.BlockId(uint64(blk.ID())))
-		}
-	}()
+	//go func() { // moving to blocking call since HandleNewBlock now runs in a go routine
+	if err := bl.AddBlockWithTxs(blk, txs, atxs); err != nil {
+		bl.Log.With().Error("failed to add block to database", log.BlockId(uint64(blk.ID())), log.Err(err))
+		//return
+	} else {
+		bl.With().Info("added block to database", log.BlockId(uint64(blk.ID())))
+	}
+	//}()
 	return true
 }
