@@ -16,6 +16,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"math/big"
 	"testing"
 	"time"
@@ -289,4 +290,35 @@ func TestBlockBuilder_Validation(t *testing.T) {
 	n1.Broadcast(IncomingTxProtocol, b)
 	time.Sleep(300 * time.Millisecond)
 	assert.Equal(t, 1, len(builder1.TransactionPool.txMap))
+}
+
+func Test_calcHdistRange(t *testing.T) {
+	r := require.New(t)
+
+	// id > hdist
+	from, to := calcHdistRange(10, 3)
+	r.Equal(types.LayerID(7), from)
+	r.Equal(types.LayerID(9), to)
+
+	// id < hdist
+	from, to = calcHdistRange(3, 5)
+	r.Equal(types.LayerID(1), from)
+	r.Equal(types.LayerID(2), to)
+
+	// id = hdist
+	from, to = calcHdistRange(5, 5)
+	r.Equal(types.LayerID(1), from)
+	r.Equal(types.LayerID(4), to)
+
+	// hdist = 1
+	from, to = calcHdistRange(5, 1)
+	r.Equal(types.LayerID(4), from)
+	r.Equal(types.LayerID(4), to)
+
+	// hdist = 0
+	defer func() {
+		err := recover()
+		require.Equal(t, err, "hdist cannot be zero")
+	}()
+	from, to = calcHdistRange(5, 0)
 }

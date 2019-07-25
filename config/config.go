@@ -121,6 +121,7 @@ func defaultBaseConfig() BaseConfig {
 		LayerDurationSec:    30,
 		LayersPerEpoch:      3,
 		PoETServer:          "127.0.0.1",
+		Hdist:               5,
 	}
 }
 
