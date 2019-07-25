@@ -1,6 +1,7 @@
 package activation
 
 import (
+	"errors"
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/spacemeshos/go-spacemesh/address"
@@ -40,6 +41,9 @@ func (m *MeshValidatorMock) HandleIncomingLayer(layer *types.Layer) (types.Layer
 func (m *MeshValidatorMock) HandleLateBlock(bl *types.Block)              {}
 func (m *MeshValidatorMock) RegisterLayerCallback(func(id types.LayerID)) {}
 func (m *MeshValidatorMock) ContextualValidity(id types.BlockID) bool     { return true }
+func (m *MeshValidatorMock) GetGoodPatternBlocks(layer types.LayerID) (map[types.BlockID]struct{}, error) {
+	return nil, errors.New("not implemented")
+}
 
 type MockState struct{}
 
