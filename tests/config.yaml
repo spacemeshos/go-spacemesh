@@ -4,13 +4,13 @@ config_map_name: conf
 
 script_on_exit: '' # Uncomment this to save logs './k8s/log-client-pods.sh'
 
-genesis_delta: 50
+genesis_delta: 80
 single_pod_ready_time_out: 60
 deployment_ready_time_out: 120
 config_path: '../config.toml'
 
 bootstrap:
-  image: 'spacemeshos/go-spacemesh-dev:tn15'
+  image: 'spacemeshos/go-spacemesh-dev:tn16'
   command: '/bin/go-spacemesh'
   replicas: 1
   args:
@@ -25,9 +25,9 @@ bootstrap:
     hare-exp-leaders: '15'
     coinbase: '0x4321'
 client:
-  image: 'spacemeshos/go-spacemesh-dev:tn15'
+  image: 'spacemeshos/go-spacemesh-dev:tn16'
   command: '/bin/go-spacemesh'
-  replicas: 199
+  replicas: 179
   args:
     randcon: '8'
     hare-committee-size: '150'
