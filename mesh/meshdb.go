@@ -127,14 +127,14 @@ func (m *MeshDB) LayerBlockIds(index types.LayerID) ([]types.BlockID, error) {
 }
 
 type blockQueue struct {
-	l []types.BlockID
+	l []*types.Block
 }
 
-func (s *blockQueue) Push(b types.BlockID) {
+func (s *blockQueue) Push(b *types.Block) {
 	s.l = append(s.l, b)
 }
 
-func (s *blockQueue) Pop() types.BlockID {
+func (s *blockQueue) Pop() *types.Block {
 	b := s.l[0]
 	s.l = s.l[1:]
 	return b
@@ -144,22 +144,21 @@ func (s *blockQueue) IsEmpty() bool {
 	return len(s.l) == 0
 }
 
-func (m *MeshDB) ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.BlockHeader) error) error {
+func (m *MeshDB) ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) error) error {
 	blocksToVisit := &blockQueue{}
-	for b := range view {
-		blocksToVisit.Push(b)
-	}
-	seenBlocks := make(map[types.BlockID]struct{})
-	for !blocksToVisit.IsEmpty() {
-		a := blocksToVisit.Pop()
-
-		block, err := m.GetBlock(a)
+	for id := range view {
+		block, err := m.GetBlock(id)
 		if err != nil {
 			return err
 		}
+		blocksToVisit.Push(block)
+	}
+	seenBlocks := make(map[types.BlockID]struct{})
+	for !blocksToVisit.IsEmpty() {
+		block := blocksToVisit.Pop()
 
 		//execute handler
-		if err = blockHandler(&block.BlockHeader); err != nil {
+		if err := blockHandler(block); err != nil {
 			return err
 		}
 
@@ -174,7 +173,7 @@ func (m *MeshDB) ForBlockInView(view map[types.BlockID]struct{}, layer types.Lay
 				if bChild.LayerIndex >= layer { //dont traverse too deep
 					if _, found := seenBlocks[id]; !found {
 						seenBlocks[id] = struct{}{}
-						blocksToVisit.Push(id)
+						blocksToVisit.Push(bChild)
 					}
 				}
 			}
