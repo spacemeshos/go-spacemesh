@@ -16,7 +16,6 @@ import (
 	"math/big"
 	"strconv"
 	"testing"
-	"time"
 )
 
 func createLayerWithAtx(t *testing.T, msh *mesh.Mesh, id types.LayerID, numOfBlocks int, atxs []*types.ActivationTx, votes []types.BlockID, views []types.BlockID) (created []types.BlockID) {
@@ -552,67 +551,4 @@ func TestActivationDb_ProcessAtx(t *testing.T) {
 	res, err := atxdb.ids.GetIdentity(idx1.Key)
 	assert.Nil(t, err)
 	assert.Equal(t, idx1, res)
-}
-
-func TestActivationDb_SyntacticallyValidateAtx_Benchmark(t *testing.T) {
-	r := require.New(t)
-	nopLogger := log.NewDefault("").WithOptions(log.Nop)
-
-	atxdb, layers := getAtxDb("t8")
-	atxdb.log = nopLogger
-	layers.Log = nopLogger
-
-	const (
-		activesetSize  = 300
-		blocksPerLayer = 200
-		numberOfLayers = 100
-	)
-
-	coinbase := address.HexToAddress("c012ba5e")
-	var atxs []*types.ActivationTx
-	for i := 0; i < activesetSize; i++ {
-		id := types.NodeId{Key: uuid.New().String(), VRFPublicKey: []byte("vrf")}
-		atxs = append(atxs, types.NewActivationTx(id, coinbase, 0, *types.EmptyAtxId, 1,
-			0, *types.EmptyAtxId, 3, []types.BlockID{}, &types.NIPST{}))
-	}
-
-	poetRef := []byte{0x12, 0x21}
-	for _, atx := range atxs {
-		hash, err := atx.NIPSTChallenge.Hash()
-		assert.NoError(t, err)
-		atx.Nipst = nipst.NewNIPSTWithChallenge(hash, poetRef)
-	}
-
-	blocks := createLayerWithAtx(t, layers, 0, blocksPerLayer, atxs, []types.BlockID{}, []types.BlockID{})
-	for i := 1; i < numberOfLayers; i++ {
-		blocks = createLayerWithAtx(t, layers, types.LayerID(i), blocksPerLayer, []*types.ActivationTx{}, blocks, blocks)
-	}
-
-	idx1 := types.NodeId{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}
-	challenge := newChallenge(idx1, 0, *types.EmptyAtxId, *types.EmptyAtxId, numberOfLayers+1)
-	hash, err := challenge.Hash()
-	r.NoError(err)
-	prevAtx := newAtx(challenge, activesetSize, blocks, nipst.NewNIPSTWithChallenge(hash, poetRef))
-
-	atx := types.NewActivationTx(idx1, coinbase, 1, prevAtx.Id(), numberOfLayers+1+layersPerEpochBig, 0, prevAtx.Id(), activesetSize, blocks, &types.NIPST{})
-	hash, err = atx.NIPSTChallenge.Hash()
-	r.NoError(err)
-	atx.Nipst = nipst.NewNIPSTWithChallenge(hash, poetRef)
-	err = atxdb.StoreAtx(1, prevAtx)
-	r.NoError(err)
-
-	start := time.Now()
-	err = atxdb.SyntacticallyValidateAtx(atx)
-	fmt.Printf("\nSyntactic validation took %v\n", time.Since(start))
-	r.NoError(err)
-
-	start = time.Now()
-	err = atxdb.SyntacticallyValidateAtx(atx)
-	fmt.Printf("\nSecond syntactic validation took %v\n", time.Since(start))
-	r.NoError(err)
-
-	start = time.Now()
-	err = atxdb.ContextuallyValidateAtx(atx)
-	fmt.Printf("\nContextual validation took %v\n\n", time.Since(start))
-	r.NoError(err)
 }
