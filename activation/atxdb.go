@@ -33,7 +33,7 @@ type ActivationDb struct {
 }
 
 func NewActivationDb(dbstore database.DB, nipstStore database.DB, idstore IdStore, meshDb *mesh.MeshDB, layersPerEpoch uint16, nipstValidator NipstValidator, log log.Log) *ActivationDb {
-	return &ActivationDb{atxs: dbstore, nipsts: nipstStore, atxCache: NewAtxCache(20), meshDb: meshDb, nipstValidator: nipstValidator, LayersPerEpoch: layersPerEpoch, ids: idstore, log: log}
+	return &ActivationDb{atxs: dbstore, nipsts: nipstStore, atxCache: NewAtxCache(1000), meshDb: meshDb, nipstValidator: nipstValidator, LayersPerEpoch: layersPerEpoch, ids: idstore, log: log}
 }
 
 // ProcessAtx validates the active set size declared in the atx, and contextually validates the atx according to atx
@@ -81,12 +81,13 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 		return 0, err
 	}
 
-	count, found := activesetCache.Get(common.BytesToHash(viewBytes))
+	hash := common.BytesToHash(viewBytes)
+	count, found := activesetCache.Get(hash)
 	if found {
-		db.log.Info("cache hit on active set size : %v", a.ShortId())
+		db.log.Info("cache hit on active set size : %v hash %v", a.ShortId(), hash)
 		return count, nil
 	}
-	db.log.Info("cache miss on active set size : %v", a.ShortId())
+	db.log.Info("cache miss on active set size : %v hash %v", a.ShortId(), hash)
 
 	var counter uint32 = 0
 	set := make(map[types.AtxId]struct{})
@@ -134,10 +135,12 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 		mp[blk] = struct{}{}
 	}
 
+	t := time.Now()
 	err = db.meshDb.ForBlockInView(mp, firstLayerOfLastEpoch, traversalFunc)
 	if err != nil {
 		return 0, err
 	}
+
 	activesetCache.Add(common.BytesToHash(viewBytes), counter)
 
 	return counter, nil
@@ -219,7 +222,9 @@ func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error 
 		return fmt.Errorf("NIPST not valid: %v", err)
 	}
 	npstT := time.Since(t1)
-	db.log.With().Info("Validated NIPST", log.String("challenge_hash", hash.ShortString()),
+	db.log.With().Info("SyntacticallyValidateAtx",
+		log.String("atx", atx.ShortId()),
+		log.String("challenge_hash", hash.ShortString()),
 		log.Duration("activeSetCalc", asT),
 		log.Duration("prevT", prevT),
 		log.Duration("posT", posT),
