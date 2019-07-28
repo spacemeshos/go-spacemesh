@@ -17,6 +17,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/miner"
+	"github.com/spacemeshos/go-spacemesh/monitoring"
 	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/oracle"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -99,6 +100,8 @@ type SpacemeshApp struct {
 	poetListener     *activation.PoetListener
 	edSgn            *signing.EdSigner
 	log              log.Log
+	monitor          *monitoring.Monitor
+	updater          *monitoring.MemoryUpdater
 }
 
 type MiningEnabler interface {
@@ -517,6 +520,11 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 		if err := pprof.WriteHeapProfile(f); err != nil {
 			log.Error("could not write memory profile: ", err)
 		}
+
+		// monitor app
+		app.updater = monitoring.NewMemoryUpdater()
+		app.monitor = monitoring.NewMonitor(1*time.Second, 10*time.Second, app.updater, make(chan struct{}))
+		app.monitor.Start()
 	}
 
 	if app.Config.CpuProfile != "" {

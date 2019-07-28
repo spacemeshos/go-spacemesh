@@ -25,10 +25,13 @@ spec:
         resources:
           requests:
             memory: "512M"
-            cpu: "4"
+            cpu: "1"
           limits:
             memory: "2048M"
-            cpu: "4"
+            cpu: "3"
+        env:
+          - name: GODEBUG
+            value: gctrace=1
         ports:
         - containerPort: 9090
         volumeMounts:
