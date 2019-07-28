@@ -19,21 +19,6 @@ import (
 	"testing"
 )
 
-func createLayerWithAtx(t *testing.T, msh *mesh.Mesh, id types.LayerID, numOfBlocks int, atxs []*types.ActivationTx, votes []types.BlockID, views []types.BlockID) (created []types.BlockID) {
-	for i := 0; i < numOfBlocks; i++ {
-		block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), id, []byte("data1"))
-		block1.BlockVotes = append(block1.BlockVotes, votes...)
-		for _, atx := range atxs {
-			block1.AtxIds = append(block1.AtxIds, atx.Id())
-		}
-		block1.ViewEdges = append(block1.ViewEdges, views...)
-		err := msh.AddBlockWithTxs(block1, []*types.AddressableSignedTransaction{}, atxs)
-		require.NoError(t, err)
-		created = append(created, block1.Id)
-	}
-	return
-}
-
 type MeshValidatorMock struct{}
 
 func (m *MeshValidatorMock) HandleIncomingLayer(layer *types.Layer) (types.LayerID, types.LayerID) {
@@ -111,7 +96,7 @@ func rndStr() string {
 	return string(a)
 }
 
-func createLayerWithAtxContext(t *testing.T, msh *mesh.Mesh, id types.LayerID, numOfBlocks int, atxs []*types.ActivationTx, votes []types.BlockID, views []types.BlockID) (created []types.BlockID) {
+func createLayerWithAtx(t *testing.T, msh *mesh.Mesh, id types.LayerID, numOfBlocks int, atxs []*types.ActivationTx, votes []types.BlockID, views []types.BlockID) (created []types.BlockID) {
 	if numOfBlocks < len(atxs) {
 		panic("not supported")
 	}
@@ -167,14 +152,14 @@ func TestATX_ActiveSetForLayerView(t *testing.T) {
 	}
 
 	fmt.Println("ID4 ", atxs[4].Id().Hex())
-	blocks := createLayerWithAtxContext(t, layers, 1, 6, atxs, []types.BlockID{}, []types.BlockID{})
+	blocks := createLayerWithAtx(t, layers, 1, 6, atxs, []types.BlockID{}, []types.BlockID{})
 	before := blocks[:4]
 	four := blocks[4:5]
 	after := blocks[5:]
 	for i := 2; i <= 10; i++ {
-		before = createLayerWithAtxContext(t, layers, types.LayerID(i), 1, []*types.ActivationTx{}, before, before)
-		four = createLayerWithAtxContext(t, layers, types.LayerID(i), 1, []*types.ActivationTx{}, four, four)
-		after = createLayerWithAtxContext(t, layers, types.LayerID(i), 1, []*types.ActivationTx{}, after, after)
+		before = createLayerWithAtx(t, layers, types.LayerID(i), 1, []*types.ActivationTx{}, before, before)
+		four = createLayerWithAtx(t, layers, types.LayerID(i), 1, []*types.ActivationTx{}, four, four)
+		after = createLayerWithAtx(t, layers, types.LayerID(i), 1, []*types.ActivationTx{}, after, after)
 	}
 	for _, x := range before {
 		bProvider.mp[x] = struct{}{}

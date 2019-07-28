@@ -183,7 +183,7 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 
 	countedAtxs := make(map[string]types.AtxId)
 	penalties := make(map[string]struct{})
-	traversalFunc := db.createTraversalActiveSetCounterFunc(countedAtxs, penalties, db.LayersPerEpoch, countingEpoch)
+	traversalFunc := db.createTraversalActiveSetCounterFunc(countedAtxs, penalties, db.LayersPerEpoch, pubEpoch)
 
 	mp := map[types.BlockID]struct{}{}
 	for _, blk := range a.View {
