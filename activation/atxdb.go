@@ -194,7 +194,7 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 	if err != nil {
 		return 0, err
 	}
-	activesetCache.Add(common.BytesToHash(viewBytes), len(countedAtxs))
+	activesetCache.Add(common.BytesToHash(viewBytes), uint32(len(countedAtxs)))
 
 	return uint32(len(countedAtxs)), nil
 
