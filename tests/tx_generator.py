@@ -15,7 +15,8 @@ class TxGenerator:
         p = xdrlib.Packer()
         p.pack_hyper(nonce)
         dstBytes = bytes.fromhex(dst)
-        p.pack_fstring(ADDRESS_SIZE, dstBytes)
+        addr = dstBytes[len(dstBytes)-20:]
+        p.pack_fstring(ADDRESS_SIZE, addr)
         p.pack_hyper(gasLimit)
         p.pack_hyper(price)
         p.pack_hyper(amount)

@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-
+import random
 from tests import queries, analyse
 from tests import pod, deployment
 from tests.fixtures import load_config, DeploymentInfo, NetworkDeploymentInfo
@@ -18,6 +18,8 @@ from elasticsearch_dsl import Search, Q
 from tests.misc import ContainerSpec, CoreV1ApiClient
 from tests.queries import ES
 from tests.hare.assert_hare import validate_hare
+
+from tests.ed25519.eddsa import genkeypair
 
 BOOT_DEPLOYMENT_FILE = './k8s/bootstrapoet-w-conf.yml'
 CLIENT_DEPLOYMENT_FILE = './k8s/client-w-conf.yml'
@@ -386,6 +388,156 @@ def test_transaction(setup_network):
     print("balance ok")
 
     validate_hare(current_index, ns)  # validate hare
+
+
+def test_transactions(setup_network):
+    tap_init_amount  = 10000
+    tap = "7be017a967db77fd10ac7c891b3d6d946dea7e3e14756e2f0f9e09b9663f0d9c"
+
+    tapnonce = 0
+
+    tx_cost = 3 #.Mul(trans.GasPrice, tp.gasCost.BasicTxCost)
+
+    nonceapi = 'v1/nonce'
+    submitapi = 'v1/submittransaction'
+    balanceapi = 'v1/balance'
+
+    accounts = { tap: { "priv": "81c90dd832e18d1cf9758254327cb3135961af6688ac9c2a8c5d71f73acc5ce5", "nonce": 0, "send": [], "recv": [] } }
+
+    def random_node():
+        rnd = random.randint(0, len(setup_network.clients.pods)-1)
+        return setup_network.clients.pods[rnd]['pod_ip'], setup_network.clients.pods[rnd]['name']
+
+    def expected_balance(acc):
+        return sum([int(tx["amount"]) for tx in accounts[acc]["recv"]]) - sum(int(int(tx["amount"]) + (int(tx["gasprice"])*tx_cost)) for tx in accounts[acc]["send"])
+
+    def random_acconut():
+        pk, info = random.choice(list(accounts.keys()))
+        return pk, info
+
+    def new_account():
+        priv, pub = genkeypair()
+        strpub = bytes.hex(pub)
+        accounts[strpub] = { "priv": priv, "nonce": 0, "recv": [], "send": [] }
+        return strpub
+
+    def transfer(frm, to, amount=None, gasprice=None, gaslimit=None):
+        pod_ip, pod_name = random_node()
+        txGen = tx_generator.TxGenerator(pub=frm, pri=accounts[frm]['priv'])
+        if amount is None:
+            amount = random.randint(1, expected_balance(frm))
+        if gasprice is None:
+            gasprice = int(amount/10)
+        if gaslimit is None:
+            gaslimit = gasprice+1
+        txBytes = txGen.generate(to, accounts[frm]['nonce'], gaslimit, gasprice, amount)
+        accounts[frm]['nonce']+=1
+        data = '{"tx":'+ str(list(txBytes)) + '}'
+        out = api_call(pod_ip, data, submitapi, testconfig['namespace'])
+        print("submit transaction from {3} to {0} of {1} with gasprice {2}".format(to, amount, gasprice, frm))
+        print(data)
+        print(out)
+        if "{'value': 'ok'}" in out:
+            accounts[to]["recv"].append({ "from": txGen.publicK, "amount": amount, "gasprice": gasprice})
+            accounts[frm]["send"].append({"to": to, "amount": amount, "gasprice": gasprice})
+            return True
+        return False
+
+    def test_account(acc, init_amount=None):
+        pod_ip, pod_name = random_node()
+        #check nonce
+        data = '{"address":"'+ tap +'"}'
+        print("checking {0} nonce".format(acc))
+        out = api_call(pod_ip, data, nonceapi, testconfig['namespace'])
+        print(out)
+        if str(accounts[acc]['nonce']) in out:
+            # check balance
+            data = '{"address":"' + str(acc) + '"}'
+            print(data)
+            out = api_call(pod_ip, data, balanceapi, testconfig['namespace'])
+            print(out)
+            balance = 0
+            if init_amount is not None:
+                balance += init_amount
+            balance = balance + expected_balance(acc)
+            if "{'value': '" + str(balance) + "'}" in out:
+                print( "{0}, balance ok ({1})".format(str(acc), out))
+                return True
+            return False
+        return False
+
+
+    # send tx to client via rpc
+    TEST_TXS = 10
+    for i in range(TEST_TXS):
+        pod_ip, pod_name = random_node()
+        print(str("Sending tx from client: {0}/{1}").format(pod_name, pod_ip))
+        balance = tap_init_amount + expected_balance(tap)
+        if balance < 10:
+            break
+        amount = random.randint(1, tap_init_amount + balance)
+        strpub = new_account()
+        assert transfer(tap, strpub, amount=amount)
+
+    start = end = time.time()
+
+    ready = 0
+
+    for x in range(int(testconfig['client']['args']['layers-per-epoch'])*2): # wait for two epochs (genesis)
+        print("...")
+        time.sleep(float(testconfig['client']['args']['layer-duration-sec']))
+        print("checking tap nonce")
+        if test_account(tap, tap_init_amount):
+            print("nonce ok")
+            for pk in accounts:
+                if pk == tap:
+                    continue
+                print("checking account")
+                print(pk)
+                assert test_account(pk)
+                ready+=1
+
+    assert ready == len(accounts)-1
+
+    end = time.time()
+    print("test took {:.3f} seconds ".format(end - start))
+
+    ## IF LOGEVITY
+
+    TEST_TXS2 = 100
+
+    for i in range(TEST_TXS2):
+        pod_ip, pod_name = random_node()
+        print("Sending tx from client: {0}/{1}".format(pod_name, pod_ip))
+        if i % 2 == 0:
+
+            # create new acc
+            acc, acc_info = random_acconut()
+            pub = new_account()
+            assert transfer(acc, pub)
+        else:
+            accfrom, accfrom_info = random_acconut()
+            accto, accto_info = random_acconut()
+            while accfrom == accto:
+                accfrom, accfrom_info = random_acconut()
+                accto, accto_info = random_acconut()
+
+            assert transfer(accfrom, accto)
+
+    for x in range(int(testconfig['client']['args']['layers-per-epoch'])*2):
+        time.sleep(float(testconfig['client']['args']['layer-duration-sec']))
+        ready = 0
+        for pk in accounts:
+            if test_account(pk):
+                ready+=1
+
+        if ready == len(accounts)-1:
+            break
+
+    assert ready == len(accounts)-1
+
+    end = time.time()
+    print("test took {:.3f} seconds ".format(end - start))
 
 
 def test_mining(setup_network):
