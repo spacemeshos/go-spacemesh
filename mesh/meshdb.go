@@ -1,6 +1,7 @@
 package mesh
 
 import (
+	"container/list"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -126,32 +127,14 @@ func (m *MeshDB) LayerBlockIds(index types.LayerID) ([]types.BlockID, error) {
 	return blockids, nil
 }
 
-type blockIdQueue struct {
-	l []types.BlockID
-}
-
-func (s *blockIdQueue) Push(b types.BlockID) {
-	s.l = append(s.l, b)
-}
-
-func (s *blockIdQueue) Pop() types.BlockID {
-	b := s.l[0]
-	s.l = s.l[1:]
-	return b
-}
-
-func (s *blockIdQueue) IsEmpty() bool {
-	return len(s.l) == 0
-}
-
 func (m *MeshDB) ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) error) error {
-	blocksToVisit := &blockIdQueue{}
+	blocksToVisit := list.New()
 	for id := range view {
-		blocksToVisit.Push(id)
+		blocksToVisit.PushBack(id)
 	}
 	seenBlocks := make(map[types.BlockID]struct{})
-	for !blocksToVisit.IsEmpty() {
-		block, err := m.GetBlock(blocksToVisit.Pop())
+	for blocksToVisit.Len() > 0 {
+		block, err := m.GetBlock(blocksToVisit.Remove(blocksToVisit.Front()).(types.BlockID))
 		if err != nil {
 			return err
 		}
@@ -168,7 +151,7 @@ func (m *MeshDB) ForBlockInView(view map[types.BlockID]struct{}, layer types.Lay
 		for _, id := range block.ViewEdges {
 			if _, found := seenBlocks[id]; !found {
 				seenBlocks[id] = struct{}{}
-				blocksToVisit.Push(id)
+				blocksToVisit.PushBack(id)
 			}
 		}
 	}
