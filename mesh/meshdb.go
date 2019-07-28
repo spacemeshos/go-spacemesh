@@ -138,13 +138,20 @@ func (m *MeshDB) ForBlockInView(view map[types.BlockID]struct{}, layer types.Lay
 		if err != nil {
 			return err
 		}
+
+		//catch blocks that were referenced after more than one layer, and slipped through the stop condition
 		if block.LayerIndex < layer {
-			continue // dont traverse too deep
+			continue
 		}
 
 		//execute handler
 		if err := blockHandler(block); err != nil {
 			return err
+		}
+
+		//stop condition: referenced blocks must be in lower layers, so we don't traverse them
+		if block.LayerIndex == layer {
+			continue
 		}
 
 		//push children to bfs queue
