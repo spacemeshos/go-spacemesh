@@ -42,6 +42,11 @@ func (l Log) Panic(format string, args ...interface{}) {
 	l.sugar.Panicf(format, args...)
 }
 
+func (l Log) Time(start time.Time, context string) {
+	elapsed := time.Since(start)
+	l.Info("running %s took %v", context, elapsed)
+}
+
 // Wrap and export field logic
 
 // Field is a log field holding a name and value

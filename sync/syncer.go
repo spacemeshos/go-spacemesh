@@ -256,6 +256,7 @@ func (s *Syncer) GetFullBlocks(blockIds []types.BlockID) []*types.Block {
 }
 
 func (s *Syncer) BlockSyntacticValidation(block *types.Block) ([]*types.AddressableSignedTransaction, []*types.ActivationTx, error) {
+	defer s.Time(time.Now(), fmt.Sprintf("BlockSyntacticValidation (%v)", block.Id))
 	if err := s.confirmBlockValidity(block); err != nil {
 		s.Error("block %v validity failed %v", block.ID(), err)
 		return nil, nil, errors.New(fmt.Sprintf("failed derefrencing block data %v %v", block.ID(), err))
@@ -272,9 +273,9 @@ func (s *Syncer) BlockSyntacticValidation(block *types.Block) ([]*types.Addressa
 
 	blocklog.Info("validating block view")
 	//validate blocks view
-	/*if valid := s.ValidateView(block); valid == false {
+	if valid := s.ValidateView(block); valid == false {
 		return nil, nil, errors.New(fmt.Sprintf("block %v not syntacticly valid", block.ID()))
-	}*/
+	}
 
 	blocklog.Info("block is syntactically valid")
 
@@ -282,6 +283,7 @@ func (s *Syncer) BlockSyntacticValidation(block *types.Block) ([]*types.Addressa
 }
 
 func (s *Syncer) confirmBlockValidity(blk *types.Block) error {
+	defer s.Time(time.Now(), fmt.Sprintf("confirmBlockValidity (%v)", blk.Id))
 	blocklog := s.WithFields(log.Uint64("block_id", uint64(blk.Id)))
 	blocklog.Info("extracting pubkey from block")
 
@@ -320,6 +322,7 @@ func (s *Syncer) confirmBlockValidity(blk *types.Block) error {
 }
 
 func (s *Syncer) ValidateView(blk *types.Block) bool {
+	defer s.Time(time.Now(), fmt.Sprintf("ValidateView (%v)", blk.Id))
 	vq := NewValidationQueue(s.Log.WithName("validQ"))
 	if err := vq.traverse(s, &blk.BlockHeader); err != nil {
 		s.Warning("could not validate %v view %v", blk.ID(), err)
@@ -329,6 +332,7 @@ func (s *Syncer) ValidateView(blk *types.Block) bool {
 }
 
 func (s *Syncer) DataAvailabilty(blk *types.Block) ([]*types.AddressableSignedTransaction, []*types.ActivationTx, error) {
+	defer s.Time(time.Now(), fmt.Sprintf("DataAvailabilty (%v)", blk.Id))
 	blocklog := s.Log.WithFields(log.Uint64("block_id", uint64(blk.Id)))
 	blocklog.Info("starting to sync atxs and txs")
 	var txs []*types.AddressableSignedTransaction

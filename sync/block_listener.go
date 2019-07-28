@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
@@ -87,7 +88,7 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 }
 
 func (bl *BlockListener) HandleNewBlock(blk *types.Block, data service.GossipMessage) bool {
-
+	defer bl.Time(time.Now(), fmt.Sprintf("HandleNewBlock (%v)", blk.Id))
 	atxstring := ""
 	for _, atx := range blk.AtxIds {
 		atxstring += atx.ShortId() + ", "

@@ -306,6 +306,7 @@ func (t *BlockBuilder) handleGossipAtx(data service.GossipMessage) {
 		t.Error("cannot parse incoming ATX")
 		return
 	}
+	defer t.Time(time.Now(), fmt.Sprintf("handleGossipAtx (%v)", atx.ShortId()))
 	t.With().Info("got new ATX", log.AtxId(atx.ShortId()))
 
 	//todo fetch from neighbour

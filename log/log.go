@@ -38,12 +38,12 @@ var ErrorLevel = zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
 	return lvl >= zapcore.ErrorLevel
 })
 
-var randRes = 10
+var randRes = 25
 
 func logLevel() zap.LevelEnablerFunc {
-	if randRes == 10 {
+	if randRes == 25 {
 		rand.Seed(time.Now().UnixNano())
-		randRes = rand.Int() % 10
+		randRes = rand.Int() % 25
 	}
 	if randRes == 0 {
 		return InfoLevel

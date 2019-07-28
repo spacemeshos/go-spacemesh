@@ -13,6 +13,7 @@ import (
 	"sort"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 const (
@@ -303,7 +304,7 @@ func (m *Mesh) AddBlock(blk *types.Block) error {
 }
 
 func (m *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.AddressableSignedTransaction, atxs []*types.ActivationTx) error {
-
+	defer m.Time(time.Now(), fmt.Sprintf("AddBlockWithTxs (%v)", blk.Id))
 	atxstring := "["
 	for _, atx := range atxs {
 		atxstring += atx.ShortId() + ", "
@@ -345,6 +346,7 @@ func (m *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.AddressableSignedT
 }
 
 func (m *Mesh) invalidateFromPools(blk *types.MiniBlock) {
+	defer m.Time(time.Now(), fmt.Sprintf("invalidateFromPools (%v)", blk.Id))
 	for _, id := range blk.TxIds {
 		m.txInvalidator.Invalidate(id)
 	}
@@ -356,6 +358,7 @@ func (m *Mesh) invalidateFromPools(blk *types.MiniBlock) {
 
 //todo better thread safety
 func (m *Mesh) handleOrphanBlocks(blk *types.BlockHeader) {
+	defer m.Time(time.Now(), fmt.Sprintf("handleOrphanBlocks (%v)", blk.Id))
 	m.orphMutex.Lock()
 	defer m.orphMutex.Unlock()
 	if _, ok := m.orphanBlocks[blk.Layer()]; !ok {

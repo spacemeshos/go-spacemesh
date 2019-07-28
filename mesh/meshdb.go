@@ -8,6 +8,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"sync"
+	"time"
 )
 
 type layerMutex struct {
@@ -69,6 +70,7 @@ func (m *MeshDB) Close() {
 }
 
 func (m *MeshDB) AddBlock(bl *types.Block) error {
+	defer m.Time(time.Now(), fmt.Sprintf("AddBlock (%v)", bl.Id))
 	if _, err := m.getMiniBlockBytes(bl.ID()); err == nil {
 		return errors.New(fmt.Sprintf("block %v already exists in database", bl.ID()))
 	}
@@ -79,7 +81,7 @@ func (m *MeshDB) AddBlock(bl *types.Block) error {
 }
 
 func (m *MeshDB) GetBlock(id types.BlockID) (*types.Block, error) {
-
+	defer m.Log.Time(time.Now(), fmt.Sprintf("GetBlock (%v)", id))
 	if blkh := m.blockCache.Get(id); blkh != nil {
 		return blkh, nil
 	}
