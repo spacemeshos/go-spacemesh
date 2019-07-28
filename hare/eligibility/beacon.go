@@ -1,7 +1,6 @@
 package eligibility
 
 import (
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/types"
 )
 
@@ -26,11 +25,12 @@ func NewBeacon(patternProvider patternProvider) *beacon {
 
 // Value returns the unpredictable and agreed value for the given Layer
 func (b *beacon) Value(layer types.LayerID) (uint32, error) {
-	v, err := b.patternProvider.GetGoodPattern(layer)
-	if err != nil {
-		log.Error("Could not get pattern Id: %v", err)
-		return nilVal, err
-	}
-
-	return v, nil
+	//v, err := b.patternProvider.GetGoodPattern(layer)
+	//if err != nil {
+	//	log.Error("Could not get pattern Id: %v", err)
+	//	return nilVal, err
+	//}
+	//
+	//return v, nil
+	return uint32(layer), nil
 }

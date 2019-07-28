@@ -187,6 +187,10 @@ func (m *Mesh) GetLayer(index types.LayerID) (*types.Layer, error) {
 
 func (m *Mesh) ValidateLayer(lyr *types.Layer) {
 	m.Info("Validate layer %d", lyr.Index())
+	if lyr.Index() >= 5 {
+		m.Info("done (fake) validating layer %v", lyr.Index())
+		return
+	}
 
 	if lyr.Index() >= m.config.RewardMaturity {
 		m.AccumulateRewards(lyr.Index()-m.config.RewardMaturity, m.config)
