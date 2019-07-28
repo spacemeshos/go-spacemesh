@@ -350,36 +350,6 @@ func TestBuilder_PublishActivationTx_FailsWhenNipstBuilderFails(t *testing.T) {
 	r.False(published)
 }
 
-func TestBuilder_PublishActivationTx_ActiveSetSizeMismatchPanics(t *testing.T) {
-	r := require.New(t)
-
-	// setup
-	atxDb := &ATXDBMock{}
-	atxDb.activeSet = 30
-
-	b := newBuilder(atxDb)
-	b.activeSet.(*ActiveSetProviderMock).setActiveSetSize(0)
-
-	b.challenge = &types.NIPSTChallenge{PubLayerIdx: 1}
-	b.nipst = npst
-
-	published, err := publishAtx(b, postGenesisEpochLayer, postGenesisEpoch, layersPerEpoch)
-	r.NoError(err)
-	r.True(published)
-
-	// assert that the active set size of the published ATX is zero
-	atx := lastTransmittedAtx(t)
-	r.Zero(atx.ActiveSetSize)
-
-	b.challenge = &types.NIPSTChallenge{PubLayerIdx: postGenesisEpochLayer}
-	b.nipst = npst
-
-	// not genesis, should panic
-	r.PanicsWithValue("active set size mismatch! size based on view: 30, size reported: 0", func() {
-		_, _ = publishAtx(b, postGenesisEpochLayer, postGenesisEpoch, layersPerEpoch)
-	})
-}
-
 func TestBuilder_PublishActivationTx_Serialize(t *testing.T) {
 	r := require.New(t)
 
