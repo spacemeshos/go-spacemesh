@@ -163,9 +163,9 @@ func (b *Builder) loop() {
 // publish atx may not produce an atx each time it is called, that is expected behaviour as well.
 func (b *Builder) PublishActivationTx(epoch types.EpochId) (bool, error) {
 	if b.nipst != nil {
-		b.log.Info("re-entering atx creation in epoch %v", epoch)
+		b.log.With().Info("re-entering atx creation", log.EpochId(uint64(epoch)))
 	} else {
-		b.log.Info("starting build atx in epoch %v", epoch)
+		b.log.With().Info("starting build atx", log.EpochId(uint64(epoch)))
 		if b.prevATX == nil {
 			prevAtxId, err := b.GetPrevAtxId(b.nodeId)
 			if err != nil {
@@ -185,7 +185,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) (bool, error) {
 
 			//check if this node hasn't published an activation already
 			if b.prevATX.PubLayerIdx.GetEpoch(b.layersPerEpoch) == epoch+1 {
-				b.log.Info("atx already created for epoch %v, aborting", epoch)
+				b.log.With().Info("atx already created, aborting", log.EpochId(uint64(epoch)))
 				return false, nil
 			}
 			prevAtxId = b.prevATX.Id()
@@ -195,9 +195,9 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) (bool, error) {
 
 		//positioning atx is from this epoch as well, since we will be publishing the atx in the next epoch
 		//todo: what if no other atx was received in this epoch yet?
+		atxPubLayerID := types.LayerID(0)
 		posAtxId := *types.EmptyAtxId
 		posAtx, err := b.GetPositioningAtx(epoch)
-		atxPubLayerID := types.LayerID(0)
 		if err == nil {
 			posAtxEndTick = posAtx.EndTick
 			b.posLayerID = posAtx.PubLayerIdx
@@ -205,7 +205,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) (bool, error) {
 			posAtxId = posAtx.Id()
 		} else {
 			if !epoch.IsGenesis() {
-				return false, fmt.Errorf("cannot find pos atx: %v", err)
+				return false, fmt.Errorf("cannot find pos atx in epoch %v: %v", epoch, err)
 			}
 		}
 
@@ -241,16 +241,19 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) (bool, error) {
 	posEpoch := b.posLayerID.GetEpoch(b.layersPerEpoch)
 	activeIds, err := b.activeSet.ActiveSetSize(posEpoch)
 	if err != nil && !posEpoch.IsGenesis() {
-		return false, err
+		return false, fmt.Errorf("failed to get active set size: %v", err)
 	}
 	view, err := b.mesh.GetOrphanBlocksBefore(b.mesh.LatestLayer())
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("failed to get current view: %v", err)
 	}
 	atx := types.NewActivationTxWithChallenge(*b.challenge, b.coinbaseAccount, activeIds, view, b.nipst)
 	activeSetSize, err := b.db.CalcActiveSetFromView(atx) // TODO: remove this assertion to improve performance
-	b.log.Info("active ids seen for epoch %v (pos atx epoch) is %v (cache) %v (from view)",
-		posEpoch, activeIds, activeSetSize)
+	if err != nil && !atx.TargetEpoch(b.layersPerEpoch).IsGenesis() {
+		return false, fmt.Errorf("failed to calc active set from view: %v", err)
+	}
+	b.log.With().Info("active ids seen for epoch", log.Uint64("pos_atx_epoch", uint64(posEpoch)),
+		log.Uint32("cache_cnt", activeIds), log.Uint32("view_cnt", activeSetSize))
 
 	if !atx.TargetEpoch(b.layersPerEpoch).IsGenesis() && activeSetSize == 0 {
 		b.log.Warning("empty active set size found! len(view): %d, view: %v", len(atx.View), atx.View)
@@ -268,7 +271,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) (bool, error) {
 
 	buf, err := types.AtxAsBytes(atx)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("failed to marshal ATX: %v", err)
 	}
 	b.prevATX = atx
 
@@ -279,12 +282,12 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) (bool, error) {
 
 	err = b.net.Broadcast(AtxProtocol, buf)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("failed to broadcast ATX: %v", err)
 	}
 
-	b.log.Info("atx published! id: %v, prevATXID: %v, posATXID: %v, layer: %v, published in epoch: %v, active set: %v miner: %v view %v",
+	b.log.Event().Info(fmt.Sprintf("atx published! id: %v, prevATXID: %v, posATXID: %v, layer: %v, published in epoch: %v, active set: %v miner: %v view %v",
 		atx.ShortId(), atx.PrevATXId.ShortString(), atx.PositioningAtx.ShortString(), atx.PubLayerIdx,
-		atx.PubLayerIdx.GetEpoch(b.layersPerEpoch), atx.ActiveSetSize, b.nodeId.Key[:5], len(atx.View))
+		atx.PubLayerIdx.GetEpoch(b.layersPerEpoch), atx.ActiveSetSize, b.nodeId.Key[:5], len(atx.View)))
 	return true, nil
 }
 
@@ -341,7 +344,7 @@ func (b *Builder) GetLastSequence(node types.NodeId) uint64 {
 func (b *Builder) GetPositioningAtx(epochId types.EpochId) (*types.ActivationTx, error) {
 	posAtxId, err := b.GetPositioningAtxId(epochId)
 	if err != nil {
-		if b.prevATX != nil {
+		if b.prevATX != nil && b.prevATX.PubLayerIdx.GetEpoch(b.layersPerEpoch) == epochId {
 			//if the atx was created by this miner but have not propagated as an atx to the notwork yet, use the cached atx
 			return b.prevATX, nil
 		} else {

@@ -4,15 +4,14 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/p2p/config"
+	p2pconf "github.com/spacemeshos/go-spacemesh/p2p/config"
+
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"sync"
@@ -41,11 +40,11 @@ type PoetDb interface {
 }
 
 type BlockValidator interface {
-	BlockEligible(block *types.BlockHeader) (bool, error)
+	BlockSignedAndEligible(block *types.Block) (bool, error)
 }
 
 type EligibilityValidator interface {
-	BlockEligible(block *types.BlockHeader) (bool, error)
+	BlockSignedAndEligible(block *types.Block) (bool, error)
 }
 
 type TxSigValidator interface {
@@ -61,6 +60,7 @@ func NewBlockValidator(bev EligibilityValidator) BlockValidator {
 }
 
 type Configuration struct {
+	LayersPerEpoch uint16
 	Concurrency    int //number of workers for sync method
 	LayerSize      int
 	RequestTimeout time.Duration
@@ -73,6 +73,7 @@ type Syncer struct {
 	Configuration
 	log.Log
 	*server.MessageServer
+
 	sigValidator      TxSigValidator
 	poetDb            PoetDb
 	txpool            TxMemPool
@@ -155,7 +156,7 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool A
 		Log:            logger,
 		Mesh:           layers,
 		Peers:          p2p.NewPeers(srv, logger.WithName("peers")),
-		MessageServer:  server.NewMsgServer(srv.(server.Service), syncProtocol, conf.RequestTimeout, make(chan service.DirectMessage, config.ConfigValues.BufferSize), logger.WithName("srv")),
+		MessageServer:  server.NewMsgServer(srv.(server.Service), syncProtocol, conf.RequestTimeout, make(chan service.DirectMessage, p2pconf.ConfigValues.BufferSize), logger.WithName("srv")),
 		sigValidator:   sv,
 		SyncLock:       0,
 		txpool:         txpool,
@@ -256,9 +257,10 @@ func (s *Syncer) GetFullBlocks(blockIds []types.BlockID) []*types.Block {
 }
 
 func (s *Syncer) BlockSyntacticValidation(block *types.Block) ([]*types.AddressableSignedTransaction, []*types.ActivationTx, error) {
-	if err := s.confirmBlockValidity(block); err != nil {
-		s.Error("block %v validity failed %v", block.ID(), err)
-		return nil, nil, errors.New(fmt.Sprintf("failed derefrencing block data %v %v", block.ID(), err))
+
+	//block eligibility
+	if eligable, err := s.BlockSignedAndEligible(block); err != nil || !eligable {
+		return nil, nil, errors.New(fmt.Sprintf("block %v eligablety check failed %v", block.ID(), err))
 	}
 
 	//data availability
@@ -273,36 +275,6 @@ func (s *Syncer) BlockSyntacticValidation(block *types.Block) ([]*types.Addressa
 	}
 
 	return txs, atxs, nil
-}
-
-func (s *Syncer) confirmBlockValidity(blk *types.Block) error {
-	s.Info("validate block %v ", blk.ID())
-
-	//check block signature and is identity active
-	pubKey, err := ed25519.ExtractPublicKey(blk.Bytes(), blk.Sig())
-	if err != nil {
-		return errors.New(fmt.Sprintf("could not extract block %v public key %v ", blk.ID(), err))
-	}
-
-	active, atxid, err := s.IsIdentityActive(signing.NewPublicKey(pubKey).String(), blk.Layer())
-	if err != nil {
-		return errors.New(fmt.Sprintf("error while checking IsIdentityActive for %v %v ", blk.ID(), err))
-	}
-
-	if !active {
-		return errors.New(fmt.Sprintf("block %v identity activation check failed ", blk.ID()))
-	}
-
-	if atxid != blk.ATXID {
-		return errors.New(fmt.Sprintf("wrong associated atx got %v expected %v ", blk.ATXID.ShortId(), atxid.ShortId()))
-	}
-
-	//block eligibility
-	if eligable, err := s.BlockEligible(&blk.BlockHeader); err != nil || !eligable {
-		return errors.New(fmt.Sprintf("block %v eligablety check failed ", blk.ID()))
-	}
-
-	return nil
 }
 
 func (s *Syncer) ValidateView(blk *types.Block) bool {
@@ -535,6 +507,7 @@ func (s *Syncer) fetchWithFactory(wrk worker) chan interface{} {
 
 	return wrk.output
 }
+
 func (s *Syncer) FetchPoetProof(poetProofRef []byte) error {
 	if !s.poetDb.HasProof(poetProofRef) {
 		out := <-s.fetchWithFactory(NewNeighborhoodWorker(s, 1, PoetReqFactory(poetProofRef)))

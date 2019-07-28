@@ -33,7 +33,7 @@ func (*PoetDbMock) GetMembershipMap(poetRoot []byte) (map[common.Hash]bool, erro
 type BlockEligibilityValidatorMock struct {
 }
 
-func (BlockEligibilityValidatorMock) BlockEligible(block *types.BlockHeader) (bool, error) {
+func (BlockEligibilityValidatorMock) BlockSignedAndEligible(block *types.Block) (bool, error) {
 	return true, nil
 }
 
@@ -45,6 +45,10 @@ func (SyntacticValidatorMock) SyntacticallyValid(block *types.BlockHeader) (bool
 }
 
 type MeshValidatorMock struct{}
+
+func (m *MeshValidatorMock) GetGoodPatternBlocks(layer types.LayerID) (map[types.BlockID]struct{}, error) {
+	panic("implement me")
+}
 
 func (m *MeshValidatorMock) HandleLateBlock(bl *types.Block)              {}
 func (m *MeshValidatorMock) RegisterLayerCallback(func(id types.LayerID)) {}
@@ -121,8 +125,8 @@ func (t *AtxDbMock) ProcessAtx(atx *types.ActivationTx) {
 	t.nipsts[atx.Id()] = atx.Nipst
 }
 
-func (*AtxDbMock) IsIdentityActive(edId string, layer types.LayerID) (bool, types.AtxId, error) {
-	return true, *types.EmptyAtxId, nil
+func (*AtxDbMock) IsIdentityActive(edId string, layer types.LayerID) (*types.NodeId, bool, types.AtxId, error) {
+	return nil, true, *types.EmptyAtxId, nil
 }
 
 //todo: if this is used somewhere then impl some real mock

@@ -2,7 +2,6 @@ package activation
 
 import (
 	"fmt"
-	"github.com/google/uuid"
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/database"
@@ -14,6 +13,33 @@ import (
 	"github.com/stretchr/testify/require"
 	"testing"
 )
+
+// ========== Vars / Consts ==========
+
+const (
+	defaultActiveSetSize  = uint32(10)
+	layersPerEpoch        = 10
+	postGenesisEpoch      = 2
+	postGenesisEpochLayer = 22
+	defaultMeshLayer      = 12
+)
+
+var (
+	nodeId       = types.NodeId{Key: "11111", VRFPublicKey: []byte("22222")}
+	otherNodeId  = types.NodeId{Key: "00000", VRFPublicKey: []byte("00000")}
+	coinbase     = address.HexToAddress("33333")
+	prevAtxId    = types.AtxId{Hash: common.HexToHash("44444")}
+	chlng        = common.HexToHash("55555")
+	poetRef      = []byte("66666")
+	defaultView  = []types.BlockID{1, 2, 3}
+	net          = &NetMock{}
+	meshProvider = &MeshProviderMock{latestLayer: 12}
+	nipstBuilder = &NipstBuilderMock{}
+	npst         = nipst.NewNIPSTWithChallenge(&chlng, poetRef)
+	lg           = log.NewDefault(nodeId.Key[:5])
+)
+
+// ========== Mocks ==========
 
 type ActiveSetProviderMock struct {
 	i      uint32
@@ -29,44 +55,39 @@ func (aspm *ActiveSetProviderMock) ActiveSetSize(epochId types.EpochId) (uint32,
 	if aspm.wasset {
 		return aspm.i, nil
 	}
-	return 10, nil
+	return defaultActiveSetSize, nil
 }
 
 type MeshProviderMock struct {
 	GetOrphanBlocksBeforeFunc func(l types.LayerID) ([]types.BlockID, error)
-	LatestLayerFunc           func() types.LayerID
+	latestLayer               types.LayerID
 }
 
 func (mpm *MeshProviderMock) GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error) {
 	if mpm.GetOrphanBlocksBeforeFunc != nil {
 		return mpm.GetOrphanBlocksBeforeFunc(l)
 	}
-	return []types.BlockID{1, 2, 3}, nil
+	return defaultView, nil
 }
 
 func (mpm *MeshProviderMock) LatestLayer() types.LayerID {
-	if mpm.LatestLayerFunc != nil {
-		return mpm.LatestLayerFunc()
-	}
-	return 12
+	layer := mpm.latestLayer
+	mpm.latestLayer = defaultMeshLayer
+	return layer
 }
 
 type NetMock struct {
-	bt []byte
+	lastTransmission []byte
 }
 
 func (n *NetMock) Broadcast(id string, d []byte) error {
-	n.bt = d
+	n.lastTransmission = d
 	return nil
 }
 
 type NipstBuilderMock struct {
-	Challenge *common.Hash
-	poetRef   []byte
-}
-
-func (np *NipstBuilderMock) SetPoetRef(ref []byte) {
-	np.poetRef = ref
+	poetRef        []byte
+	buildNipstFunc func(challenge *common.Hash) (*types.NIPST, error)
 }
 
 func (np *NipstBuilderMock) IsPostInitialized() bool {
@@ -78,8 +99,10 @@ func (np *NipstBuilderMock) InitializePost() (*types.PostProof, error) {
 }
 
 func (np *NipstBuilderMock) BuildNIPST(challenge *common.Hash) (*types.NIPST, error) {
-	np.Challenge = challenge
-	return nipst.NewNIPSTWithChallenge(challenge, np.poetRef), nil
+	if np.buildNipstFunc != nil {
+		return np.buildNipstFunc(challenge)
+	}
+	return nipst.NewNIPSTWithChallenge(challenge, poetRef), nil
 }
 
 type NipstErrBuilderMock struct{}
@@ -94,17 +117,16 @@ func (np *NipstErrBuilderMock) InitializePost() (*types.PostProof, error) {
 }
 
 func (np *NipstErrBuilderMock) BuildNIPST(challenge *common.Hash) (*types.NIPST, error) {
-	return nil, fmt.Errorf("error")
+	return nil, fmt.Errorf("nipst builder error")
 }
 
-type MockIStore struct {
-}
+type MockIdStore struct{}
 
-func (*MockIStore) StoreNodeIdentity(id types.NodeId) error {
+func (*MockIdStore) StoreNodeIdentity(id types.NodeId) error {
 	return nil
 }
 
-func (*MockIStore) GetIdentity(id string) (types.NodeId, error) {
+func (*MockIdStore) GetIdentity(id string) (types.NodeId, error) {
 	return types.NodeId{}, nil
 }
 
@@ -114,233 +136,260 @@ func (*ValidatorMock) Validate(nipst *types.NIPST, expectedChallenge common.Hash
 	return nil
 }
 
-func TestBuilder_BuildActivationTx(t *testing.T) {
-	//todo: implement test
-	id := types.NodeId{"aaaaaa", []byte("bbbbb")}
-	coinbase := address.HexToAddress("0xaaa")
-	layersPerEpoch := uint16(10)
-	lg := log.NewDefault(id.Key[:5])
+// ========== Helper functions ==========
 
-	net := &NetMock{}
-	layers := &MeshProviderMock{}
-	activationDb := NewActivationDb(database.NewMemDatabase(), database.NewMemDatabase(), &MockIStore{}, mesh.NewMemMeshDB(log.NewDefault("")), layersPerEpoch, &ValidatorMock{}, lg.WithName("atxDB"))
-	asProvider := ActiveSetProviderMock{}
-	nipstBuilder := NipstBuilderMock{}
-
-	view, err := layers.GetOrphanBlocksBefore(layers.LatestLayer())
-	assert.NoError(t, err)
-	bt, err := types.ViewAsBytes(view)
-	assert.NoError(t, err)
-	activesetCache.put(common.BytesToHash(bt), 10)
-	b := NewBuilder(id, coinbase, activationDb, net, &asProvider, layers, 10, &nipstBuilder, nil, func() bool { return true }, lg.WithName("atxBuilder"))
-	prevAtx := types.AtxId{Hash: common.HexToHash("0x111")}
-	chlng := common.HexToHash("0x3333")
-	poetRef := []byte{0xde, 0xad}
-	nipstBuilder.SetPoetRef(poetRef)
-	npst := nipst.NewNIPSTWithChallenge(&chlng, poetRef)
-	atx := types.NewActivationTx(types.NodeId{"aaaaaa", []byte("bbbbb")}, coinbase, 1, prevAtx, 5, 1, prevAtx, 5, []types.BlockID{1, 2, 3}, npst)
-	err = activationDb.StoreAtx(atx.PubLayerIdx.GetEpoch(layersPerEpoch), atx)
-	assert.NoError(t, err)
-
-	// calc expected result
-	challenge := types.NIPSTChallenge{
-		NodeId:         b.nodeId,
-		Sequence:       b.GetLastSequence(b.nodeId) + 1,
-		PrevATXId:      atx.Id(),
-		PubLayerIdx:    atx.PubLayerIdx.Add(b.layersPerEpoch),
-		StartTick:      atx.EndTick,
-		EndTick:        b.tickProvider.NumOfTicks(), //todo: add provider when
-		PositioningAtx: atx.Id(),
-	}
-	bytes, err := challenge.Hash()
-	npst2 := nipst.NewNIPSTWithChallenge(bytes, poetRef)
-	view, err = b.mesh.GetOrphanBlocksBefore(layers.LatestLayer())
-	assert.NoError(t, err)
-	activeSetSize, err := b.activeSet.ActiveSetSize(1)
-	assert.NoError(t, err)
-	act := types.NewActivationTxWithChallenge(challenge, coinbase, activeSetSize, view, npst2)
-	assert.Equal(t, act.GetPoetProofRef(), npst2.PoetProofRef)
-
-	_, err = b.PublishActivationTx(layers.LatestLayer().GetEpoch(layersPerEpoch))
-	assert.NoError(t, err)
-	bts, err := types.AtxAsBytes(act)
-	assert.NoError(t, err)
-	assert.Equal(t, bts, net.bt)
-	activesetCache.Purge()
+func newActivationDb() *ActivationDb {
+	return NewActivationDb(database.NewMemDatabase(), database.NewMemDatabase(), &MockIdStore{}, mesh.NewMemMeshDB(lg.WithName("meshDB")), layersPerEpoch, &ValidatorMock{}, lg.WithName("atxDB"))
 }
 
-func TestBuilder_NoPrevATX(t *testing.T) {
-	//todo: implement test
-	id := types.NodeId{uuid.New().String(), []byte("bbbbb")}
-	coinbase := address.HexToAddress("0xaaa")
-	net := &NetMock{}
-	layers := &MeshProviderMock{}
-	layersPerEpoch := uint16(10)
-	lg := log.NewDefault(id.Key[:5])
-	activationDb := NewActivationDb(database.NewMemDatabase(), database.NewMemDatabase(), &MockIStore{}, mesh.NewMemMeshDB(log.NewDefault("")), layersPerEpoch, &ValidatorMock{}, lg.WithName("atxDB"))
-	b := NewBuilder(id, coinbase, activationDb, net, &ActiveSetProviderMock{}, layers, layersPerEpoch, &NipstBuilderMock{}, nil, func() bool { return true }, lg.WithName("atxBuilder"))
-	_, err := b.PublishActivationTx(2) // non genesis epoch
-	assert.EqualError(t, err, "cannot find pos atx: cannot find pos atx id: leveldb: not found")
+func isSynced(b bool) func() bool {
+	return func() bool {
+		return b
+	}
 }
 
-func TestBuilder_PublishActivationTx(t *testing.T) {
-	id := types.NodeId{"aaaaaa", []byte("bbbbb")}
-	coinbase := address.HexToAddress("0xaaa")
-	net := &NetMock{}
-	layers := &MeshProviderMock{}
-	nipstBuilder := &NipstBuilderMock{}
-	layersPerEpoch := uint16(10)
-	lg := log.NewDefault(id.Key[:5])
-	activationDb := NewActivationDb(database.NewMemDatabase(), database.NewMemDatabase(), &MockIStore{}, mesh.NewMemMeshDB(lg.WithName("meshDB")), layersPerEpoch, &ValidatorMock{}, lg.WithName("atxDB1"))
-	b := NewBuilder(id, coinbase, activationDb, net, &ActiveSetProviderMock{}, layers, layersPerEpoch, nipstBuilder, nil, func() bool { return true }, lg.WithName("atxBuilder"))
-	prevAtx := types.AtxId{Hash: common.HexToHash("0x111")}
-	chlng := common.HexToHash("0x3333")
-	poetRef := []byte{0xbe, 0xef}
-	nipstBuilder.SetPoetRef(poetRef)
-	npst := nipst.NewNIPSTWithChallenge(&chlng, poetRef)
-
-	atx := types.NewActivationTx(types.NodeId{"aaaaaa", []byte("bbbbb")}, coinbase, 1, prevAtx, 5, 1, prevAtx, 5, []types.BlockID{1, 2, 3}, npst)
-
-	err := activationDb.StoreAtx(atx.PubLayerIdx.GetEpoch(layersPerEpoch), atx)
-	assert.NoError(t, err)
-
+func newChallenge(nodeId types.NodeId, sequence uint64, prevAtxId, posAtxId types.AtxId, pubLayerId types.LayerID) types.NIPSTChallenge {
 	challenge := types.NIPSTChallenge{
-		NodeId:         b.nodeId,
-		Sequence:       b.GetLastSequence(b.nodeId) + 1,
-		PrevATXId:      atx.Id(),
-		PubLayerIdx:    atx.PubLayerIdx.Add(b.layersPerEpoch),
-		StartTick:      atx.EndTick,
-		EndTick:        b.tickProvider.NumOfTicks(), //todo: add provider when
-		PositioningAtx: atx.Id(),
+		NodeId:         nodeId,
+		Sequence:       sequence,
+		PrevATXId:      prevAtxId,
+		PubLayerIdx:    pubLayerId,
+		PositioningAtx: posAtxId,
 	}
+	return challenge
+}
 
-	bytes, err := challenge.Hash()
-	npst2 := nipst.NewNIPSTWithChallenge(bytes, poetRef)
-	assert.NoError(t, err)
+func newAtx(challenge types.NIPSTChallenge, ActiveSetSize uint32, View []types.BlockID, nipst *types.NIPST) *types.ActivationTx {
+	activationTx := &types.ActivationTx{
+		ActivationTxHeader: types.ActivationTxHeader{
+			NIPSTChallenge: challenge,
+			Coinbase:       coinbase,
+			ActiveSetSize:  ActiveSetSize,
+			View:           View,
+		},
+		Nipst: nipst,
+	}
+	return activationTx
+}
 
-	//ugly hack to set view size in db
-	view, err := layers.GetOrphanBlocksBefore(layers.LatestLayer())
+func newBuilder(activationDb ATXDBProvider) *Builder {
+	return NewBuilder(nodeId, coinbase, activationDb, net, &ActiveSetProviderMock{}, meshProvider, layersPerEpoch, nipstBuilder, nil, isSynced(true), lg.WithName("atxBuilder"))
+}
+
+func setActivesetSizeInCache(t *testing.T, activesetSize uint32) {
+	view, err := meshProvider.GetOrphanBlocksBefore(meshProvider.LatestLayer())
 	assert.NoError(t, err)
 	v, err := types.ViewAsBytes(view)
 	assert.NoError(t, err)
-	activesetCache.put(common.BytesToHash(v), 10)
-
-	view, err = b.mesh.GetOrphanBlocksBefore(layers.LatestLayer())
-	assert.NoError(t, err)
-	activeSetSize, err := b.activeSet.ActiveSetSize(1)
-	assert.NoError(t, err)
-	act := types.NewActivationTx(b.nodeId, coinbase, b.GetLastSequence(b.nodeId)+1, atx.Id(), atx.PubLayerIdx+10, 0, atx.Id(), activeSetSize, view, npst2)
-	_, err = b.PublishActivationTx(1)
-	assert.NoError(t, err)
-
-	bts, err := types.AtxAsBytes(act)
-	assert.NoError(t, err)
-	assert.Equal(t, bts, net.bt)
-	assert.Equal(t, bytes, nipstBuilder.Challenge)
-
-	//test publish 2 transaction in same epoch
-	published, err := b.PublishActivationTx(2)
-	assert.False(t, published)
-
-	activationDb2 := NewActivationDb(database.NewMemDatabase(), database.NewMemDatabase(), &MockIStore{}, mesh.NewMemMeshDB(log.NewDefault("")), layersPerEpoch, &ValidatorMock{}, lg.WithName("atxDB2"))
-	b = NewBuilder(id, coinbase, activationDb2, net, &ActiveSetProviderMock{}, layers, layersPerEpoch, nipstBuilder, nil, func() bool { return true }, lg.WithName("atxBuilder"))
-	b.nipstBuilder = &NipstErrBuilderMock{}
-	_, err = b.PublishActivationTx(0)
-	assert.Error(t, err)
-	assert.EqualError(t, err, "cannot create nipst: error")
-
-	activationDb3 := NewActivationDb(database.NewMemDatabase(), database.NewMemDatabase(), &MockIStore{}, mesh.NewMemMeshDB(log.NewDefault("")), layersPerEpoch, &ValidatorMock{}, lg.WithName("atxDB3"))
-	bt := NewBuilder(id, coinbase, activationDb3, net, &ActiveSetProviderMock{}, layers, layersPerEpoch, &NipstBuilderMock{}, nil, func() bool { return true }, lg.WithName("atxBuilder"))
-	_, err = bt.PublishActivationTx(2)
-	assert.EqualError(t, err, "cannot find pos atx: cannot find pos atx id: leveldb: not found")
-	activesetCache.Purge()
+	activesetCache.put(common.BytesToHash(v), activesetSize)
 }
 
-func TestBuilder_PublishActivationTxActiveSetSize(t *testing.T) {
-	id := types.NodeId{"aaaaaa", []byte("bbbbb")}
-	coinbase := address.HexToAddress("0xaaa")
-	net := &NetMock{}
-	layers := &MeshProviderMock{}
-	layers.LatestLayer()
-	nipstBuilder := &NipstBuilderMock{}
-	layersPerEpoch := uint16(3)
-	aspm := &ActiveSetProviderMock{}
-	lg := log.NewDefault(id.Key[:5])
-	dbmock := &ATXDBMock{}
-	b := NewBuilder(id, coinbase, dbmock, net, aspm, layers, layersPerEpoch, nipstBuilder, nil, func() bool { return true }, lg.WithName("atxBuilder"))
-	chlng := common.HexToHash("0x3333")
-	poetRef := []byte{0x66, 0x45}
-	nipstBuilder.SetPoetRef(poetRef)
-	npst := nipst.NewNIPSTWithChallenge(&chlng, poetRef)
-
-	b.challenge = &types.NIPSTChallenge{
-		PubLayerIdx: types.LayerID(1),
-	}
-
-	aspm.setActiveSetSize(0)
-
-	layers.LatestLayerFunc = func() types.LayerID {
-		return 0
-	}
-
-	b.nipst = npst
-
-	dbmock.CalcActiveSetFromViewFunc = func(a *types.ActivationTx) (u uint32, e error) {
-		return 30, nil
-	}
-
-	_, err := b.PublishActivationTx(types.EpochId(0))
-
+func lastTransmittedAtx(t *testing.T) (atx types.ActivationTx) {
+	err := types.BytesToInterface(net.lastTransmission, &atx)
 	require.NoError(t, err)
-
-	var atx types.ActivationTx
-	require.NoError(t, types.BytesToInterface(net.bt, &atx))
-
-	require.Equal(t, atx.ActiveSetSize, uint32(0))
-
-	// not genesis should panic
-
-	defer func() {
-		err := recover()
-		require.Equal(t, err, "active set size mismatch! size based on view: 30, size reported: 0")
-	}()
-
-	b.posLayerID = 6
-
-	layers.LatestLayerFunc = func() types.LayerID {
-		return 7 // after genesis
-	}
-
-	b.nipst = npst
-	b.challenge = &types.NIPSTChallenge{
-		PubLayerIdx: types.LayerID(8),
-	}
-	_, err = b.PublishActivationTx(types.EpochId(2))
+	return atx
 }
 
-func TestBuilder_PublishActivationTxSerialize(t *testing.T) {
-	id := types.NodeId{"aaaaaa", []byte("bbb")}
-	coinbase := address.HexToAddress("0xaaa")
-	net := &NetMock{}
-	layers := &MeshProviderMock{}
-	nipstBuilder := &NipstBuilderMock{}
-	layersPerEpoch := uint16(10)
-	lg := log.NewDefault(id.Key[:5])
-	activationDb := NewActivationDb(database.NewMemDatabase(), database.NewMemDatabase(), &MockIStore{}, mesh.NewMemMeshDB(log.NewDefault("")), layersPerEpoch, &ValidatorMock{}, lg.WithName("atxDB"))
-	b := NewBuilder(id, coinbase, activationDb, net, &ActiveSetProviderMock{}, layers, layersPerEpoch, nipstBuilder, nil, func() bool { return true }, lg.WithName("atxBuilder"))
-	prevAtx := types.AtxId{Hash: common.HexToHash("0x111")}
-	challenge1 := common.HexToHash("0x222222")
-	poetRef := []byte{0xba, 0xbe}
-	npst := nipst.NewNIPSTWithChallenge(&challenge1, poetRef)
+func assertLastAtx(r *require.Assertions, posAtx, prevAtx *types.ActivationTx, layersPerEpoch uint16) {
+	atx, err := types.BytesAsAtx(net.lastTransmission)
+	r.NoError(err)
 
-	atx := types.NewActivationTx(types.NodeId{"aaaaaa", []byte("bbb")}, coinbase, 1, prevAtx, 5, 1, prevAtx, 5, []types.BlockID{1, 2, 3}, npst)
+	r.Equal(nodeId, atx.NodeId)
+	if prevAtx != nil {
+		r.Equal(prevAtx.Sequence+1, atx.Sequence)
+		r.Equal(prevAtx.Id(), atx.PrevATXId)
+	} else {
+		r.Zero(atx.Sequence)
+		r.Equal(*types.EmptyAtxId, atx.PrevATXId)
+	}
+	r.Equal(posAtx.Id(), atx.PositioningAtx)
+	r.Equal(posAtx.PubLayerIdx.Add(layersPerEpoch), atx.PubLayerIdx)
+	r.Equal(defaultActiveSetSize, atx.ActiveSetSize)
+	r.Equal(defaultView, atx.View)
+	r.Equal(poetRef, atx.GetPoetProofRef())
+}
 
-	err := activationDb.StoreAtx(atx.PubLayerIdx.GetEpoch(layersPerEpoch), atx)
-	assert.NoError(t, err)
+func storeAtx(r *require.Assertions, activationDb *ActivationDb, atx *types.ActivationTx) {
+	epoch := atx.PubLayerIdx.GetEpoch(layersPerEpoch)
+	log.Info("stored ATX in epoch %v", epoch)
+	err := activationDb.StoreAtx(epoch, atx)
+	r.NoError(err)
+}
 
-	assert.NoError(t, err)
+func publishAtx(b *Builder, meshLayer types.LayerID, clockEpoch types.EpochId, buildNipstLayerDuration uint16) (published bool, err error) {
+	net.lastTransmission = nil
+	meshProvider.latestLayer = meshLayer
+	nipstBuilder.buildNipstFunc = func(challenge *common.Hash) (*types.NIPST, error) {
+		meshProvider.latestLayer = meshLayer.Add(buildNipstLayerDuration)
+		return nipst.NewNIPSTWithChallenge(challenge, poetRef), nil
+	}
+	_, err = b.PublishActivationTx(clockEpoch)
+	nipstBuilder.buildNipstFunc = nil
+	return net.lastTransmission != nil, err
+}
 
-	view, err := b.mesh.GetOrphanBlocksBefore(layers.LatestLayer())
+// ========== Tests ==========
+
+func TestBuilder_PublishActivationTx_HappyFlow(t *testing.T) {
+	r := require.New(t)
+
+	// setup
+	activationDb := newActivationDb()
+	b := newBuilder(activationDb)
+	setActivesetSizeInCache(t, defaultActiveSetSize)
+	defer activesetCache.Purge()
+
+	challenge := newChallenge(nodeId, 1, prevAtxId, prevAtxId, postGenesisEpochLayer)
+	prevAtx := newAtx(challenge, 5, defaultView, npst)
+	storeAtx(r, activationDb, prevAtx)
+
+	// create and publish ATX
+	published, err := publishAtx(b, postGenesisEpochLayer+1, postGenesisEpoch, layersPerEpoch)
+	r.NoError(err)
+	r.True(published)
+	assertLastAtx(r, prevAtx, prevAtx, layersPerEpoch)
+}
+
+func TestBuilder_PublishActivationTx_NoPrevATX(t *testing.T) {
+	r := require.New(t)
+
+	// setup
+	activationDb := newActivationDb()
+	b := newBuilder(activationDb)
+	setActivesetSizeInCache(t, defaultActiveSetSize)
+	defer activesetCache.Purge()
+
+	challenge := newChallenge(otherNodeId /*👀*/, 1, prevAtxId, prevAtxId, postGenesisEpochLayer)
+	posAtx := newAtx(challenge, 5, defaultView, npst)
+	storeAtx(r, activationDb, posAtx)
+
+	// create and publish ATX
+	published, err := publishAtx(b, postGenesisEpochLayer+1, postGenesisEpoch, layersPerEpoch)
+	r.NoError(err)
+	r.True(published)
+	assertLastAtx(r, posAtx, nil, layersPerEpoch)
+}
+
+func TestBuilder_PublishActivationTx_FailsWhenNoPosAtx(t *testing.T) {
+	r := require.New(t)
+
+	// setup
+	activationDb := newActivationDb()
+	b := newBuilder(activationDb)
+	setActivesetSizeInCache(t, defaultActiveSetSize)
+	defer activesetCache.Purge()
+
+	challenge := newChallenge(otherNodeId /*👀*/, 1, prevAtxId, prevAtxId, postGenesisEpochLayer-layersPerEpoch /*👀*/)
+	posAtx := newAtx(challenge, 5, defaultView, npst)
+	storeAtx(r, activationDb, posAtx)
+
+	// create and publish ATX
+	published, err := publishAtx(b, postGenesisEpochLayer+1, postGenesisEpoch, layersPerEpoch)
+	r.EqualError(err, "cannot find pos atx in epoch 2: cannot find pos atx id: leveldb: not found")
+	r.False(published)
+}
+
+func TestBuilder_PublishActivationTx_FailsWhenNoPosAtxButPrevAtxFromWrongEpochExists(t *testing.T) {
+	r := require.New(t)
+
+	// setup
+	activationDb := newActivationDb()
+	b := newBuilder(activationDb)
+	setActivesetSizeInCache(t, defaultActiveSetSize)
+	defer activesetCache.Purge()
+
+	challenge := newChallenge(nodeId, 1, prevAtxId, prevAtxId, postGenesisEpochLayer-layersPerEpoch /*👀*/)
+	prevAtx := newAtx(challenge, 5, defaultView, npst)
+	storeAtx(r, activationDb, prevAtx)
+
+	// create and publish ATX
+	published, err := publishAtx(b, postGenesisEpochLayer+1, postGenesisEpoch, layersPerEpoch)
+	r.EqualError(err, "cannot find pos atx in epoch 2: cannot find pos atx id: leveldb: not found")
+	r.False(published)
+}
+
+func TestBuilder_PublishActivationTx_DoesNotPublish2AtxsInSameEpoch(t *testing.T) {
+	r := require.New(t)
+
+	// setup
+	activationDb := newActivationDb()
+	b := newBuilder(activationDb)
+	setActivesetSizeInCache(t, defaultActiveSetSize)
+	defer activesetCache.Purge()
+
+	challenge := newChallenge(nodeId, 1, prevAtxId, prevAtxId, postGenesisEpochLayer)
+	prevAtx := newAtx(challenge, 5, defaultView, npst)
+	storeAtx(r, activationDb, prevAtx)
+
+	// create and publish ATX
+	published, err := publishAtx(b, postGenesisEpochLayer+1, postGenesisEpoch, layersPerEpoch)
+	r.NoError(err)
+	r.True(published)
+	assertLastAtx(r, prevAtx, prevAtx, layersPerEpoch)
+
+	// assert that another ATX cannot be published
+	published, err = publishAtx(b, postGenesisEpochLayer+1, postGenesisEpoch, layersPerEpoch) // 👀
+	r.NoError(err)
+	r.False(published)
+}
+
+func TestBuilder_PublishActivationTx_FailsWhenNipstBuilderFails(t *testing.T) {
+	r := require.New(t)
+
+	activationDb := newActivationDb()
+	nipstBuilder := &NipstErrBuilderMock{} // 👀 mock that returns error from BuildNipst()
+	b := NewBuilder(nodeId, coinbase, activationDb, net, &ActiveSetProviderMock{}, meshProvider, layersPerEpoch,
+		nipstBuilder, nil, isSynced(true), lg.WithName("atxBuilder"))
+
+	challenge := newChallenge(otherNodeId /*👀*/, 1, prevAtxId, prevAtxId, postGenesisEpochLayer)
+	posAtx := newAtx(challenge, 5, defaultView, npst)
+	storeAtx(r, activationDb, posAtx)
+
+	published, err := publishAtx(b, postGenesisEpochLayer+1, postGenesisEpoch, layersPerEpoch)
+	r.EqualError(err, "cannot create nipst: nipst builder error")
+	r.False(published)
+}
+
+func TestBuilder_PublishActivationTx_ActiveSetSizeMismatchPanics(t *testing.T) {
+	r := require.New(t)
+
+	// setup
+	atxDb := &ATXDBMock{}
+	atxDb.activeSet = 30
+
+	b := newBuilder(atxDb)
+	b.activeSet.(*ActiveSetProviderMock).setActiveSetSize(0)
+
+	b.challenge = &types.NIPSTChallenge{PubLayerIdx: 1}
+	b.nipst = npst
+
+	published, err := publishAtx(b, postGenesisEpochLayer, postGenesisEpoch, layersPerEpoch)
+	r.NoError(err)
+	r.True(published)
+
+	// assert that the active set size of the published ATX is zero
+	atx := lastTransmittedAtx(t)
+	r.Zero(atx.ActiveSetSize)
+
+	b.challenge = &types.NIPSTChallenge{PubLayerIdx: postGenesisEpochLayer}
+	b.nipst = npst
+
+	// not genesis, should panic
+	r.PanicsWithValue("active set size mismatch! size based on view: 30, size reported: 0", func() {
+		_, _ = publishAtx(b, postGenesisEpochLayer, postGenesisEpoch, layersPerEpoch)
+	})
+}
+
+func TestBuilder_PublishActivationTx_Serialize(t *testing.T) {
+	r := require.New(t)
+
+	activationDb := newActivationDb()
+	b := newBuilder(activationDb)
+
+	atx := types.NewActivationTx(nodeId, coinbase, 1, prevAtxId, 5, 1, prevAtxId, 5, []types.BlockID{1, 2, 3}, npst)
+	storeAtx(r, activationDb, atx)
+
+	view, err := b.mesh.GetOrphanBlocksBefore(meshProvider.LatestLayer())
 	assert.NoError(t, err)
 	activeSetSize, err := b.activeSet.ActiveSetSize(1)
 	assert.NoError(t, err)
@@ -355,50 +404,36 @@ func TestBuilder_PublishActivationTxSerialize(t *testing.T) {
 }
 
 func TestBuilder_PublishActivationTx_PosAtxOnSameLayerAsPrevAtx(t *testing.T) {
-	t.Skip("proves https://github.com/spacemeshos/go-spacemesh/issues/1166")
-	id := types.NodeId{"aaaaaa", []byte("bbbbb")}
-	coinbase := address.HexToAddress("0xaaa")
-	net := &NetMock{}
-	layers := &MeshProviderMock{}
-	nipstBuilder := &NipstBuilderMock{}
-	layersPerEpoch := uint16(10)
-	lg := log.NewDefault(id.Key[:5])
-	activationDb := NewActivationDb(database.NewMemDatabase(), database.NewMemDatabase(), &MockIStore{}, mesh.NewMemMeshDB(lg.WithName("meshDB")), layersPerEpoch, &ValidatorMock{}, lg.WithName("atxDB1"))
-	b := NewBuilder(id, coinbase, activationDb, net, &ActiveSetProviderMock{}, layers, layersPerEpoch, nipstBuilder, nil, func() bool { return true }, lg.WithName("atxBuilder"))
-	prevAtx := types.AtxId{Hash: common.HexToHash("0x111")}
-	chlng := common.HexToHash("0x3333")
-	poetRef := []byte{0xbe, 0xef}
-	nipstBuilder.SetPoetRef(poetRef)
-	npst := nipst.NewNIPSTWithChallenge(&chlng, poetRef)
+	r := require.New(t)
 
-	for i := 3; i < 6; i++ {
-		atx := types.NewActivationTx(types.NodeId{"aaaaaa", []byte("bbbbb")}, coinbase, 1, prevAtx, types.LayerID(i), 1, prevAtx, 5, []types.BlockID{1, 2, 3}, npst)
-		err := activationDb.StoreAtx(atx.PubLayerIdx.GetEpoch(layersPerEpoch), atx)
-		assert.NoError(t, err)
+	activationDb := newActivationDb()
+	b := newBuilder(activationDb)
+	setActivesetSizeInCache(t, 10)
+	defer activesetCache.Purge()
+
+	for i := postGenesisEpochLayer; i < postGenesisEpochLayer+3; i++ {
+		challenge := newChallenge(nodeId, 1, prevAtxId, prevAtxId, types.LayerID(i))
+		atx := newAtx(challenge, 5, defaultView, npst)
+		storeAtx(r, activationDb, atx)
 	}
 
-	prevATX := types.NewActivationTx(types.NodeId{"aaaaaa", []byte("bbbbb")}, coinbase, 1, prevAtx, types.LayerID(6), 1, prevAtx, 5, []types.BlockID{1, 2, 3}, npst)
+	challenge := newChallenge(nodeId, 1, prevAtxId, prevAtxId, postGenesisEpochLayer+3)
+	prevATX := newAtx(challenge, 5, defaultView, npst)
 	b.prevATX = prevATX
 
-	//ugly hack to set view size in db
-	view, err := layers.GetOrphanBlocksBefore(layers.LatestLayer())
-	assert.NoError(t, err)
-	v, err := types.ViewAsBytes(view)
-	assert.NoError(t, err)
-	activesetCache.put(common.BytesToHash(v), 10)
+	published, err := publishAtx(b, postGenesisEpochLayer+4, postGenesisEpoch, layersPerEpoch)
+	r.NoError(err)
+	r.True(published)
 
-	_, err = b.PublishActivationTx(0)
-	assert.NoError(t, err)
+	newAtx := lastTransmittedAtx(t)
+	r.Equal(prevATX.Id(), newAtx.PrevATXId)
 
-	newAtx, err := types.BytesAsAtx(net.bt)
-	assert.NoError(t, err)
 	posAtx, err := activationDb.GetAtx(newAtx.PositioningAtx)
-	assert.NoError(t, err)
-	assert.Equal(t, prevATX.Id(), newAtx.PrevATXId)
+	r.NoError(err)
 
-	// check atx.PubLayerId - posAtx.PubLayerId = number of layers per epoch
-	assert.Equal(t, types.LayerID(layersPerEpoch), newAtx.PubLayerIdx-posAtx.PubLayerIdx)
+	assertLastAtx(r, posAtx, prevATX, layersPerEpoch)
 
+	t.Skip("proves https://github.com/spacemeshos/go-spacemesh/issues/1166")
 	// check pos & prev has the same PubLayerIdx
-	assert.Equal(t, prevATX.PubLayerIdx, posAtx.PubLayerIdx)
+	r.Equal(prevATX.PubLayerIdx, posAtx.PubLayerIdx)
 }
