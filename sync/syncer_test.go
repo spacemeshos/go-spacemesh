@@ -257,6 +257,41 @@ func TestSyncer_FetchPoetProofAvailableAndValid(t *testing.T) {
 	r.NoError(err)
 }
 
+func TestSyncer_SyncAtxs_FetchPoetProof(t *testing.T) {
+	r := require.New(t)
+
+	syncs, nodes := SyncMockFactory(2, conf, "TestSyncer_SyncAtxs_FetchPoetProof_", memoryDB, newMemPoetDb)
+	s0 := syncs[0]
+	s1 := syncs[1]
+	s1.Peers = getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
+
+	// Store a poet proof and a respective atx in s0.
+
+	proofMessage := makePoetProofMessage(t)
+
+	err := s0.poetDb.ValidateAndStore(&proofMessage)
+	r.NoError(err)
+
+	poetProofBytes, err := types.InterfaceToBytes(&proofMessage.PoetProof)
+	r.NoError(err)
+	poetRef := sha256.Sum256(poetProofBytes)
+
+	atx1 := atx()
+	atx1.Nipst.PoetProofRef = poetRef[:]
+	s0.AtxDB.ProcessAtx(atx1)
+
+	// Make sure that s1 syncAtxs would fetch the missing poet proof.
+
+	r.False(s1.poetDb.HasProof(poetRef[:]))
+
+	atxs, err := s1.syncAtxs([]types.AtxId{atx1.Id()})
+	r.NoError(err)
+	r.Equal(1, len(atxs))
+	r.Equal(atx1.Id(), atxs[0].Id())
+
+	r.True(s1.poetDb.HasProof(poetRef[:]))
+}
+
 func makePoetProofMessage(t *testing.T) types.PoetProofMessage {
 	r := require.New(t)
 	file, err := os.Open(filepath.Join("..", "activation", "test_resources", "poet.proof"))
