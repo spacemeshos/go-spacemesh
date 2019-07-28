@@ -17,7 +17,7 @@ type PatternId uint32 //this hash dose not include the layer id
 
 const ( //Threshold
 	K               = 5 //number of explicit layers to vote for
-	Window          = 100
+	Window          = 10
 	LocalThreshold  = 0.8 //ThetaL
 	GlobalThreshold = 0.6 //ThetaG
 	Genesis         = 0
