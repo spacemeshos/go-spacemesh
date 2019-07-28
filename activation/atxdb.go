@@ -174,8 +174,6 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 		return count, nil
 	}
 
-	var counter uint32 = 0
-	set := make(map[types.AtxId]struct{})
 	pubEpoch := a.PubLayerIdx.GetEpoch(db.LayersPerEpoch)
 	if pubEpoch < 1 {
 		return 0, fmt.Errorf("publication epoch cannot be less than 1, found %v", pubEpoch)
@@ -183,37 +181,9 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 	countingEpoch := pubEpoch - 1
 	firstLayerOfLastEpoch := types.LayerID(countingEpoch) * types.LayerID(db.LayersPerEpoch)
 
-	traversalFunc := func(blkh *types.BlockHeader) error {
-		blk, err := db.meshDb.GetBlock(blkh.Id)
-		if err != nil {
-			db.log.With().Error("cannot validate atx, block wasn't found", log.AtxId(a.ShortId()), log.BlockId(uint64(blkh.Id)))
-			return err
-		}
-		//skip blocks not from atx epoch
-		if blk.LayerIndex.GetEpoch(db.LayersPerEpoch) != countingEpoch {
-			return nil
-		}
-		for _, id := range blk.AtxIds {
-			if _, found := set[id]; found {
-				continue
-			}
-			set[id] = struct{}{}
-			atx, err := db.GetAtx(id)
-			if err != nil {
-				log.Panic("error fetching atx %v from database -- inconsistent state", id.ShortId()) // TODO: handle inconsistent state
-				return fmt.Errorf("error fetching atx %v from database -- inconsistent state", id.ShortId())
-			}
-			if atx.TargetEpoch(db.LayersPerEpoch) != pubEpoch {
-				db.log.Debug("atx %v found, but targeting epoch %v instead of publication epoch %v",
-					atx.ShortId(), atx.TargetEpoch(db.LayersPerEpoch), pubEpoch)
-				continue
-			}
-			counter++
-			db.log.Debug("atx %v (epoch %d) found traversing in block %x (epoch %d)",
-				atx.ShortId(), atx.TargetEpoch(db.LayersPerEpoch), blk.Id, blk.LayerIndex.GetEpoch(db.LayersPerEpoch))
-		}
-		return nil
-	}
+	countedAtxs := make(map[string]types.AtxId)
+	penalties := make(map[string]struct{})
+	traversalFunc := db.createTraversalActiveSetCounterFunc(countedAtxs, penalties, db.LayersPerEpoch, countingEpoch)
 
 	mp := map[types.BlockID]struct{}{}
 	for _, blk := range a.View {
@@ -224,9 +194,9 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 	if err != nil {
 		return 0, err
 	}
-	activesetCache.Add(common.BytesToHash(viewBytes), counter)
+	activesetCache.Add(common.BytesToHash(viewBytes), len(countedAtxs))
 
-	return counter, nil
+	return uint32(len(countedAtxs)), nil
 
 }
 
