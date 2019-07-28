@@ -497,7 +497,7 @@ func (s *Syncer) syncAtxs(atxIds []types.AtxId) ([]*types.ActivationTx, error) {
 			for _, atx := range atxs {
 				if err := s.FetchPoetProof(atx.GetPoetProofRef()); err != nil {
 					s.Error("received atx (%v) with syntactically invalid or missing PoET proof (%x): %v",
-						atx.ShortId(), atx.GetPoetProofRef()[:5], err)
+						atx.ShortId(), atx.GetShortPoetProofRef(), err)
 					continue
 				}
 
