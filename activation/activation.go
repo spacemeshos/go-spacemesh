@@ -243,9 +243,14 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) (bool, error) {
 	if err != nil && !posEpoch.IsGenesis() {
 		return false, fmt.Errorf("failed to get active set size: %v", err)
 	}
-	view, err := b.mesh.GetOrphanBlocksBefore(b.mesh.LatestLayer())
-	if err != nil {
-		return false, fmt.Errorf("failed to get current view: %v", err)
+
+	viewLayer := b.challenge.PubLayerIdx.GetEpoch(b.layersPerEpoch).FirstLayer(b.layersPerEpoch)
+	var view []types.BlockID
+	if viewLayer > 0 {
+		view, err = b.mesh.GetOrphanBlocksBefore(viewLayer)
+		if err != nil {
+			return false, fmt.Errorf("failed to get current view: %v", err)
+		}
 	}
 	atx := types.NewActivationTxWithChallenge(*b.challenge, b.coinbaseAccount, activeIds, view, b.nipst)
 
