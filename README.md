@@ -86,7 +86,7 @@ _-- or --_
 
 Fork the project from https://github.com/spacemeshos/go-spacemesh
 
-Since the project uses Go 1.11's Modules it's best to place the code **outside** your `$GOPATH`. Read [this](https://github.com/golang/go/wiki/Modules#how-to-install-and-activate-module-support) for alternatives.
+Since the project uses Go 1.11's Modules it is best to place the code **outside** your `$GOPATH`. Read [this](https://github.com/golang/go/wiki/Modules#how-to-install-and-activate-module-support) for alternatives.
 
 ### Setting Up Local Environment
 
@@ -106,12 +106,14 @@ To build `go-spacemesh` for your current system architecture, from the project r
 ```
 make build
 ```
+
 This will (re-)generate protobuf files and build the `go-spacemesh` binary, saving it in the project root directory.
 
 To build a binary for a specific architecture directory use:
 ```
 make darwin | linux | windows
 ```
+
 Platform-specific binaries are saved to the `/build` directory.
 
 ### Running
@@ -145,6 +147,12 @@ On windows you will need the following prerequisites:
 - Make - after installation add `C:\Program Files (x86)\GnuWin32\bin` to System PATH
 
 You can then run the command `make install` followed by `make build` as on unix based systems.
+
+### Running a Local Testnet
+- You can run a local Spacemesh Testent with 6 full nodes, 6 user accounts, and 1 POET support service on your computer using docker. 
+- The local testnet full nodes are built from this repo.
+- This is a great way to get a feel for the protocol and the platform and to start hacking on Spacemesh.
+- Follow the steps in our [Local Testnet Guide](https://testnet.spacemesh.io/#/local)
 
 #### Next Steps...
 - Please visit our [wiki](https://github.com/spacemeshos/go-spacemesh/wiki)

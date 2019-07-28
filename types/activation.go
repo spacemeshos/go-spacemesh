@@ -136,11 +136,11 @@ func (t *ActivationTx) Id() AtxId {
 	return *t.id
 }
 
-func (t ActivationTx) ShortId() string {
+func (t *ActivationTx) ShortId() string {
 	return t.Id().ShortId()
 }
 
-func (t ActivationTx) TargetEpoch(layersPerEpoch uint16) EpochId {
+func (t *ActivationTx) TargetEpoch(layersPerEpoch uint16) EpochId {
 	return t.PubLayerIdx.GetEpoch(layersPerEpoch) + 1
 }
 

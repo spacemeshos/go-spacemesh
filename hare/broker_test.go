@@ -44,8 +44,8 @@ func NewMockStateQuerier() MockStateQuerier {
 	return MockStateQuerier{true, nil}
 }
 
-func (msq MockStateQuerier) IsIdentityActive(edId string, layer types.LayerID) (bool, types.AtxId, error) {
-	return msq.res, *types.EmptyAtxId, msq.err
+func (msq MockStateQuerier) IsIdentityActiveOnConsensusView(edId string, layer types.LayerID) (bool, error) {
+	return msq.res, msq.err
 }
 
 func createMessage(t *testing.T, instanceId InstanceId) []byte {
