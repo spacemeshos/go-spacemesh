@@ -3,13 +3,15 @@ package gossip
 import (
 	"errors"
 	lru "github.com/hashicorp/golang-lru"
+	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"hash/fnv"
+	"golang.org/x/crypto/sha3"
+	"io"
 	"sync"
 )
 
@@ -19,15 +21,58 @@ const propagateHandleBufferSize = 1000 // number of MessageValidation that we al
 const ProtocolName = "/p2p/1.0/gossip"
 const protocolVer = "0"
 
-type hash uint32
+
+type hash [12]byte
 
 // fnv.New32 must be used every time to be sure we get consistent results.
 func calcHash(msg []byte, prot string) hash {
-	msghash := fnv.New32() // todo: Add nonce to messages instead
+	msghash := sha3.NewShake128() // todo: Add nonce to messages instead
 	msghash.Write(msg)
 	msghash.Write([]byte(prot))
-	return hash(msghash.Sum32())
+	var h [12]byte
+	buf := make([]byte, 16)
+	_, _ = io.ReadFull(msghash, buf)
+	copy(h[:], buf[0:12])
+	return hash(h)
 }
+
+type doubleCache struct {
+	size uint
+	cacheA  map[hash]struct{}
+	cacheB  map[hash]struct{}
+}
+
+
+func newDoubleCache(size uint) *doubleCache {
+	return &doubleCache{size, make(map[hash]struct{}, size), make(map[hash]struct{}, size)}
+}
+
+func (a *doubleCache) lookupOrCreate(key hash) bool {
+	_, ok := a.cacheA[key]
+	if ok {
+		return true
+	}
+	_, ok = a.cacheB[key]
+	if ok {
+		return true
+	}
+	a.insert(key)
+	return false
+}
+
+func (a *doubleCache) insert(key hash) {
+	if uint(len(a.cacheA)) < a.size {
+		a.cacheA[key] = struct{}{}
+		return
+	}
+	if uint(len(a.cacheB)) < a.size {
+		a.cacheB[key] = struct{}{}
+		return
+	}
+	a.cacheB = a.cacheA
+	a.cacheA = make(map[hash]struct{}, a.size)
+}
+
 
 // Interface for the underlying p2p layer
 type baseNetwork interface {
@@ -76,7 +121,7 @@ type Protocol struct {
 
 	shutdown chan struct{}
 
-	oldMessageQ  map[hash]struct{}
+	oldMessageQ  *doubleCache
 	oldMessageMu sync.RWMutex
 
 	messageQ   chan protocolMessage
@@ -93,7 +138,7 @@ func NewProtocol(config config.SwarmConfig, base baseNetwork, localNodePubkey p2
 		localNodePubkey: localNodePubkey,
 		peers:           make(map[string]*peer),
 		shutdown:        make(chan struct{}),
-		oldMessageQ:     make(map[hash]struct{}), // todo : remember to drain this
+		oldMessageQ:     newDoubleCache(100000), // todo : remember to drain this
 		messageQ:        make(chan protocolMessage, messageQBufferSize),
 		propagateQ:      make(chan service.MessageValidation, propagateHandleBufferSize),
 	}
@@ -127,13 +172,13 @@ func (prot *Protocol) Close() {
 // Returns true if message was already processed before
 func (prot *Protocol) markMessageAsOld(h hash) bool {
 	prot.oldMessageMu.Lock()
-	var ok bool
-	if _, ok = prot.oldMessageQ[h]; !ok {
-		prot.oldMessageQ[h] = struct{}{}
-		prot.Log.Debug("marking message as old, hash %v", h)
-	} else {
-		prot.Log.Debug("message is already old, hash %v", h)
-	}
+	ok := prot.oldMessageQ.lookupOrCreate(h)
+	//if _, ok = prot.oldMessageQ[h]; !ok {
+	//	prot.oldMessageQ[h] = struct{}{}
+	//	prot.Log.Debug("marking message as old, hash %v", h)
+	//} else {
+	//	prot.Log.Debug("message is already old, hash %v", h)
+	//}
 	prot.oldMessageMu.Unlock()
 	return ok
 }
@@ -191,11 +236,11 @@ func (prot *Protocol) processMessage(sender p2pcrypto.PublicKey, protocol string
 		// todo : - have some more metrics for termination
 		// todo	: - maybe tell the peer we got this message already?
 		// todo : - maybe block this peer since he sends us old messages
-		prot.Log.With().Debug("old_gossip_message", log.String("from", sender.String()), log.String("protocol", protocol), log.Uint32("hash", uint32(h)))
+		prot.Log.With().Debug("old_gossip_message", log.String("from", sender.String()), log.String("protocol", protocol), log.String("hash", common.BytesToHash(h[:]).ShortString()))
 		return nil
 	}
 
-	prot.Log.With().EventInfo("new_gossip_message", log.String("from", sender.String()), log.String("protocol", protocol), log.Uint32("hash", uint32(h)))
+	prot.Log.With().EventInfo("new_gossip_message", log.String("from", sender.String()), log.String("protocol", protocol), log.String("hash", common.BytesToHash(h[:]).ShortString()))
 	metrics.NewGossipMessages.With("protocol", protocol).Add(1)
 	return prot.net.ProcessGossipProtocolMessage(sender, protocol, msg, prot.propagateQ)
 }
@@ -207,7 +252,7 @@ loop:
 		select {
 		case msgV := <-prot.propagateQ:
 			h := calcHash(msgV.Message(), msgV.Protocol())
-			prot.Log.With().EventDebug("new_gossip_message_relay",  log.String("protocol", msgV.Protocol()), log.Uint32("hash", uint32(h)))
+			prot.Log.With().EventDebug("new_gossip_message_relay",  log.String("protocol", msgV.Protocol()), log.String("hash", common.BytesToHash(h[:]).ShortString()))
 			go prot.propagateMessage(msgV.Message(), calcHash(msgV.Message(), msgV.Protocol()), msgV.Protocol(), msgV.Sender())
 		case <-prot.shutdown:
 			err = errors.New("protocol shutdown")
