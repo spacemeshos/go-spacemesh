@@ -21,6 +21,10 @@ type localOracle struct {
 	nodeID        types.NodeId
 }
 
+func (bo *localOracle) IsIdentityActiveOnConsensusView(edId string, layer types.LayerID) (bool, error) {
+	return true, nil
+}
+
 func (bo *localOracle) Register(isHonest bool, pubkey string) {
 	bo.oc.Register(isHonest, pubkey)
 }
@@ -50,6 +54,10 @@ func NewHareOracleFromClient(oc *OracleClient) *hareOracle {
 	return &hareOracle{
 		oc,
 	}
+}
+
+func (bo *hareOracle) IsIdentityActiveOnConsensusView(edId string, layer types.LayerID) (bool, error) {
+	return bo.oc.IsIdentityActive(edId, layer)
 }
 
 // Eligible checks eligibility for an identity in a round

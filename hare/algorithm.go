@@ -20,6 +20,7 @@ const protoName = "HARE_PROTOCOL"
 type Rolacle interface {
 	Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeId, sig []byte) (bool, error)
 	Proof(id types.NodeId, layer types.LayerID, round int32) ([]byte, error)
+	IsIdentityActiveOnConsensusView(edId string, layer types.LayerID) (bool, error)
 }
 
 type NetworkService interface {
@@ -56,7 +57,7 @@ type State struct {
 }
 
 type StateQuerier interface {
-	IsIdentityActive(edId string, layer types.LayerID) (bool, types.AtxId, error)
+	IsIdentityActiveOnConsensusView(edId string, layer types.LayerID) (bool, error)
 }
 
 type Msg struct {
@@ -87,7 +88,7 @@ func newMsg(hareMsg *Message, querier StateQuerier, layersPerEpoch uint16) (*Msg
 	}
 	// query if identity is active
 	pub := signing.NewPublicKey(pubKey)
-	res, _, err := querier.IsIdentityActive(pub.String(), types.LayerID(hareMsg.InnerMsg.InstanceId))
+	res, err := querier.IsIdentityActiveOnConsensusView(pub.String(), types.LayerID(hareMsg.InnerMsg.InstanceId))
 	if err != nil {
 		log.Error("error while checking if identity is active for %v err=%v", pub.String(), err)
 		return nil, errors.New("is identity active query failed")
@@ -114,7 +115,6 @@ type ConsensusProcess struct {
 	isStarted         bool
 	inbox             chan *Msg
 	terminationReport chan TerminationOutput
-	stateQuerier      StateQuerier
 	validator         messageValidator
 	preRoundTracker   *PreRoundTracker
 	statusesTracker   *StatusTracker
@@ -137,7 +137,6 @@ func NewConsensusProcess(cfg config.Config, instanceId InstanceId, s *Set, oracl
 	proc.signing = signing
 	proc.nid = nid
 	proc.network = p2p
-	proc.stateQuerier = stateQuerier
 	proc.validator = newSyntaxContextValidator(signing, cfg.F+1, proc.statusValidator(), stateQuerier, layersPerEpoch, logger)
 	proc.preRoundTracker = NewPreRoundTracker(cfg.F+1, cfg.N)
 	proc.notifyTracker = NewNotifyTracker(cfg.N)
@@ -224,7 +223,7 @@ PreRound:
 	}
 	proc.preRoundTracker.FilterSet(proc.s)
 	if proc.s.Size() == 0 {
-		proc.With().Error("Fatal: PreRound ended with empty set", log.Uint64("layer_id", uint64(proc.instanceId)))
+		proc.Event().Error("Fatal: PreRound ended with empty set", log.Uint64("layer_id", uint64(proc.instanceId)))
 	}
 	proc.advanceToNextRound() // K was initialized to -1, K should be 0
 
@@ -366,7 +365,7 @@ func (proc *ConsensusProcess) onRoundEnd() {
 		if s != nil {
 			sStr = s.String()
 		}
-		proc.With().Info("Round 2 ended",
+		proc.Event().Info("Round 2 ended",
 			log.String("proposed_set", sStr),
 			log.Bool("is_conflicting", proc.proposalTracker.IsConflicting()),
 			log.Uint64("layer_id", uint64(proc.instanceId)))
@@ -378,7 +377,7 @@ func (proc *ConsensusProcess) onRoundEnd() {
 func (proc *ConsensusProcess) advanceToNextRound() {
 	proc.k++
 	if proc.k >= 4 && proc.k%4 == 0 {
-		proc.With().Warning("Starting new iteration", log.Int32("round_counter", proc.k),
+		proc.Event().Warning("Starting new iteration", log.Int32("round_counter", proc.k),
 			log.Uint64("layer_id", uint64(proc.instanceId)))
 	}
 }
@@ -529,7 +528,7 @@ func (proc *ConsensusProcess) processNotifyMsg(msg *Msg) {
 
 	// enough notifications, should terminate
 	proc.s = s // update to the agreed set
-	proc.With().Info("Consensus process terminated", log.String("set_values", proc.s.String()),
+	proc.Event().Info("Consensus process terminated", log.String("set_values", proc.s.String()),
 		log.Uint64("layer_id", uint64(proc.instanceId)))
 	proc.terminationReport <- procOutput{proc.instanceId, proc.s}
 	proc.Close()
@@ -560,7 +559,7 @@ func (proc *ConsensusProcess) statusValidator() func(m *Msg) bool {
 
 func (proc *ConsensusProcess) endOfRound1() {
 	proc.statusesTracker.AnalyzeStatuses(proc.statusValidator())
-	proc.With().Info("Round 1 ended", log.Bool("is_svp_ready", proc.statusesTracker.IsSVPReady()),
+	proc.Event().Info("Round 1 ended", log.Bool("is_svp_ready", proc.statusesTracker.IsSVPReady()),
 		log.Uint64("layer_id", uint64(proc.instanceId)))
 }
 
@@ -594,7 +593,7 @@ func (proc *ConsensusProcess) endOfRound3() {
 	}
 
 	// commit & send notification msg
-	proc.With().Info("Round 3 ended: committing", log.String("committed_set", s.String()),
+	proc.Event().Info("Round 3 ended: committing", log.String("committed_set", s.String()),
 		log.Uint64("layer_id", uint64(proc.instanceId)))
 	proc.s = s
 	proc.certificate = cert
@@ -611,7 +610,7 @@ func (proc *ConsensusProcess) endOfRound3() {
 
 func (proc *ConsensusProcess) shouldParticipate() bool {
 	// query if identity is active
-	res, _, err := proc.stateQuerier.IsIdentityActive(proc.signing.PublicKey().String(), types.LayerID(proc.instanceId))
+	res, err := proc.oracle.IsIdentityActiveOnConsensusView(proc.signing.PublicKey().String(), types.LayerID(proc.instanceId))
 	if err != nil {
 		proc.With().Error("Error checking our identity for activeness", log.String("err", err.Error()),
 			log.Uint64("layer_id", uint64(proc.instanceId)))

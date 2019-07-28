@@ -7,8 +7,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/spacemeshos/post/config"
+	"github.com/spacemeshos/post/persistence"
 	"github.com/spacemeshos/post/shared"
-	"os"
 	"sync"
 	"time"
 )
@@ -88,7 +88,7 @@ type NIPSTBuilder struct {
 
 type PoetDb interface {
 	SubscribeToProofRef(poetId [types.PoetServiceIdLength]byte, roundId uint64) chan []byte
-	GetMembershipMap(poetRoot []byte) (map[common.Hash]bool, error)
+	GetMembershipMap(proofRef []byte) (map[common.Hash]bool, error)
 }
 
 func NewNIPSTBuilder(id []byte, postCfg config.Config, postProver PostProverClient,
@@ -216,10 +216,13 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *common.Hash) (*types.NIPST, error)
 }
 
 func (nb *NIPSTBuilder) IsPostInitialized() bool {
-	dir := shared.GetInitDir(nb.postCfg.DataDir, nb.id)
-	_, err := os.Stat(dir)
-	if os.IsNotExist(err) {
-		nb.log.Info("could not find init files at %v", dir)
+	readers, err := persistence.GetReaders(nb.postCfg.DataDir, nb.id)
+	if err != nil {
+		nb.log.WithFields(log.Err(err)).Error("failed to look for init files")
+		return false
+	}
+	if len(readers) == 0 {
+		nb.log.Info("could not find init files")
 		return false
 	}
 	return true

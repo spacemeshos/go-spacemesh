@@ -112,7 +112,7 @@ func TestHare_GetResult(t *testing.T) {
 
 	h := createHare(n1)
 
-	res, err := h.GetResult(types.LayerID(0))
+	res, err := h.GetResult(types.LayerID(0), types.LayerID(0))
 
 	require.Error(t, err)
 	require.Nil(t, res)
@@ -122,7 +122,7 @@ func TestHare_GetResult(t *testing.T) {
 
 	h.collectOutput(mockOutput{mockid, set})
 
-	res, err = h.GetResult(types.LayerID(0))
+	res, err = h.GetResult(types.LayerID(0), types.LayerID(0))
 
 	require.NoError(t, err)
 	require.True(t, uint32(res[0]) == uint32(set.values[value1.Id()].Bytes()[0]))
@@ -153,14 +153,14 @@ func TestHare_GetResult2(t *testing.T) {
 	}
 	time.Sleep(100 * time.Millisecond)
 
-	_, err := h.GetResult(types.LayerID(h.bufferSize))
+	_, err := h.GetResult(types.LayerID(h.bufferSize), types.LayerID(h.bufferSize))
 	require.NoError(t, err)
 
 	h.beginLayer <- types.LayerID(h.bufferSize + 1)
 
 	time.Sleep(100 * time.Millisecond)
 
-	_, err = h.GetResult(0)
+	_, err = h.GetResult(0, 0)
 	require.Equal(t, err, ErrTooOld)
 }
 
@@ -306,7 +306,7 @@ func TestHare_onTick(t *testing.T) {
 	//collect output one more time
 	wg.Wait()
 	time.Sleep(100 * time.Millisecond)
-	res2, err := h.GetResult(types.LayerID(0))
+	res2, err := h.GetResult(types.LayerID(0), types.LayerID(0))
 	require.NoError(t, err)
 
 	SortBlockIDs(res2)
@@ -324,7 +324,7 @@ func TestHare_onTick(t *testing.T) {
 
 	//collect output one more time
 	wg.Wait()
-	_, err = h.GetResult(types.LayerID(1))
+	_, err = h.GetResult(types.LayerID(1), types.LayerID(1))
 	require.Error(t, err)
 
 }

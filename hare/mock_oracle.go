@@ -53,6 +53,10 @@ type MockHashOracle struct {
 	hasher  *hasherU32
 }
 
+func (mock *MockHashOracle) IsIdentityActiveOnConsensusView(edId string, layer types.LayerID) (bool, error) {
+	return true, nil
+}
+
 // N is the expected comity size
 func NewMockHashOracle(expectedSize int) *MockHashOracle {
 	mock := new(MockHashOracle)

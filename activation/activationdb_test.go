@@ -1,6 +1,7 @@
 package activation
 
 import (
+	"errors"
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/spacemeshos/go-spacemesh/address"
@@ -14,14 +15,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"math/big"
-	"strconv"
 	"testing"
 )
 
 func createLayerWithAtx(t *testing.T, msh *mesh.Mesh, id types.LayerID, numOfBlocks int, atxs []*types.ActivationTx, votes []types.BlockID, views []types.BlockID) (created []types.BlockID) {
 	for i := 0; i < numOfBlocks; i++ {
 		block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), id, []byte("data1"))
-		block1.MinerID.Key = strconv.Itoa(i)
 		block1.BlockVotes = append(block1.BlockVotes, votes...)
 		for _, atx := range atxs {
 			block1.AtxIds = append(block1.AtxIds, atx.Id())
@@ -42,6 +41,9 @@ func (m *MeshValidatorMock) HandleIncomingLayer(layer *types.Layer) (types.Layer
 func (m *MeshValidatorMock) HandleLateBlock(bl *types.Block)              {}
 func (m *MeshValidatorMock) RegisterLayerCallback(func(id types.LayerID)) {}
 func (m *MeshValidatorMock) ContextualValidity(id types.BlockID) bool     { return true }
+func (m *MeshValidatorMock) GetGoodPatternBlocks(layer types.LayerID) (map[types.BlockID]struct{}, error) {
+	return nil, errors.New("not implemented")
+}
 
 type MockState struct{}
 
@@ -61,66 +63,36 @@ func (MockState) ValidateSignature(signed types.Signed) (address.Address, error)
 }
 
 type ATXDBMock struct {
-	// CalcActiveSetFromViewFunc mocks the CalcActiveSetFromView method.
-	CalcActiveSetFromViewFunc func(a *types.ActivationTx) (uint32, error)
-
-	// GetAtxFunc mocks the GetAtx method.
-	GetAtxFunc func(id types.AtxId) (*types.ActivationTx, error)
-
-	// GetEpochAtxIdsFunc mocks the GetEpochAtxIds method.
-	GetEpochAtxIdsFunc func(epochId types.EpochId) ([]types.AtxId, error)
-
-	// GetNodeAtxIdsFunc mocks the GetNodeAtxIds method.
-	GetNodeAtxIdsFunc func(nodeId types.NodeId) ([]types.AtxId, error)
-
-	// GetPrevAtxIdFunc mocks the GetPrevAtxId method.
-	GetPrevAtxIdFunc func(node types.NodeId) (*types.AtxId, error)
+	activeSet uint32
 }
 
 func (mock *ATXDBMock) CalcActiveSetFromView(a *types.ActivationTx) (uint32, error) {
-	return mock.CalcActiveSetFromViewFunc(a)
+	return mock.activeSet, nil
 }
 
 func (mock *ATXDBMock) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
-	return mock.GetAtxFunc(id)
+	panic("not implemented")
 }
 
 func (mock *ATXDBMock) GetEpochAtxIds(epochId types.EpochId) ([]types.AtxId, error) {
-	return mock.GetEpochAtxIdsFunc(epochId)
+	panic("not implemented")
 }
 
 func (mock *ATXDBMock) GetNodeAtxIds(nodeId types.NodeId) ([]types.AtxId, error) {
-	return mock.GetNodeAtxIds(nodeId)
+	panic("not implemented")
 }
 
 func (mock *ATXDBMock) GetPrevAtxId(node types.NodeId) (*types.AtxId, error) {
-	return mock.GetPrevAtxIdFunc(node)
-}
-
-type MemPoolMock struct {
-}
-
-func (mem *MemPoolMock) Get(id interface{}) interface{} {
-	return nil
-}
-
-func (mem *MemPoolMock) PopItems(size int) interface{} {
-	return nil
-}
-
-func (mem *MemPoolMock) Put(id interface{}, item interface{}) {
-}
-
-func (mem *MemPoolMock) Invalidate(id interface{}) {
+	panic("not implemented")
 }
 
 func ConfigTst() mesh.Config {
 	return mesh.Config{
-		big.NewInt(10),
-		big.NewInt(5000),
-		big.NewInt(15),
-		15,
-		5,
+		SimpleTxCost:   big.NewInt(10),
+		BaseReward:     big.NewInt(5000),
+		PenaltyPercent: big.NewInt(15),
+		TxQuota:        15,
+		RewardMaturity: 5,
 	}
 }
 
@@ -178,7 +150,7 @@ func Test_CalcActiveSetFromView(t *testing.T) {
 	}
 
 	block2 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 2200, []byte("data1"))
-	block2.MinerID.Key = strconv.Itoa(1)
+
 	block2.ViewEdges = blocks
 	layers.AddBlockWithTxs(block2, nil, atxs2)
 
@@ -294,8 +266,6 @@ func TestMesh_processBlockATXs(t *testing.T) {
 		atx.Nipst = nipst.NewNIPSTWithChallenge(hash, poetRef)
 	}
 
-	block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data1"))
-	block1.MinerID.Key = strconv.Itoa(1)
 	for _, t := range atxs {
 		atxdb.ProcessAtx(t)
 	}
@@ -321,9 +291,6 @@ func TestMesh_processBlockATXs(t *testing.T) {
 		assert.NoError(t, err)
 		atx.Nipst = nipst.NewNIPSTWithChallenge(hash, poetRef)
 	}
-
-	block2 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 2000, []byte("data1"))
-	block2.MinerID.Key = strconv.Itoa(1)
 	for _, t := range atxs2 {
 		atxdb.ProcessAtx(t)
 	}
@@ -546,7 +513,7 @@ func TestActivationDb_ProcessAtx(t *testing.T) {
 	coinbase := address.HexToAddress("aaaa")
 	atx := types.NewActivationTx(idx1, coinbase, 0, *types.EmptyAtxId, 100, 0, *types.EmptyAtxId, 3, []types.BlockID{}, &types.NIPST{})
 	atxdb.ProcessAtx(atx)
-	res, err := atxdb.ids.GetIdentity(idx1.Key)
+	res, err := atxdb.GetIdentity(idx1.Key)
 	assert.Nil(t, err)
 	assert.Equal(t, idx1, res)
 }

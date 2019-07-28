@@ -38,6 +38,7 @@ func (mmv *mockMessageValidator) ContextuallyValidateMessage(m *Msg, expectedK i
 type mockRolacle struct {
 	isEligible bool
 	err        error
+	MockStateQuerier
 }
 
 func (mr *mockRolacle) Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeId, sig []byte) (bool, error) {
@@ -181,7 +182,7 @@ func TestConsensusProcess_eventLoop(t *testing.T) {
 	broker.Start()
 	proc := generateConsensusProcess(t)
 	proc.network = net
-	oracle := &mockRolacle{}
+	oracle := &mockRolacle{MockStateQuerier: MockStateQuerier{true, nil}}
 	oracle.isEligible = true
 	proc.oracle = oracle
 	proc.inbox, _ = broker.Register(proc.Id())
@@ -289,23 +290,23 @@ func TestConsensusProcess_InitDefaultBuilder(t *testing.T) {
 
 func TestConsensusProcess_isEligible(t *testing.T) {
 	proc := generateConsensusProcess(t)
-	oracle := &mockRolacle{}
+	oracle := &mockRolacle{MockStateQuerier: MockStateQuerier{true, nil}}
 	proc.oracle = oracle
 	oracle.isEligible = false
 	assert.False(t, proc.shouldParticipate())
 	oracle.isEligible = true
 	assert.True(t, proc.shouldParticipate())
-	proc.stateQuerier = MockStateQuerier{false, errors.New("some err")}
+	oracle.MockStateQuerier = MockStateQuerier{false, errors.New("some err")}
 	assert.False(t, proc.shouldParticipate())
-	proc.stateQuerier = MockStateQuerier{false, nil}
+	oracle.MockStateQuerier = MockStateQuerier{false, nil}
 	assert.False(t, proc.shouldParticipate())
-	proc.stateQuerier = MockStateQuerier{true, nil}
+	oracle.MockStateQuerier = MockStateQuerier{true, nil}
 	assert.True(t, proc.shouldParticipate())
 }
 
 func TestConsensusProcess_sendMessage(t *testing.T) {
 	net := &mockP2p{}
-	oracle := &mockRolacle{}
+	oracle := &mockRolacle{MockStateQuerier: MockStateQuerier{true, nil}}
 
 	proc := generateConsensusProcess(t)
 	proc.oracle = oracle
@@ -458,7 +459,7 @@ func TestConsensusProcess_beginRound1(t *testing.T) {
 	proc.onRoundBegin()
 	network := &mockP2p{}
 	proc.network = network
-	oracle := &mockRolacle{}
+	oracle := &mockRolacle{MockStateQuerier: MockStateQuerier{true, nil}}
 	proc.oracle = oracle
 	s := NewSmallEmptySet()
 	m := BuildPreRoundMsg(generateSigning(t), s)
@@ -476,7 +477,7 @@ func TestConsensusProcess_beginRound2(t *testing.T) {
 	proc.advanceToNextRound()
 	network := &mockP2p{}
 	proc.network = network
-	oracle := &mockRolacle{}
+	oracle := &mockRolacle{MockStateQuerier: MockStateQuerier{true, nil}}
 	proc.oracle = oracle
 	oracle.isEligible = true
 
@@ -498,7 +499,7 @@ func TestConsensusProcess_beginRound3(t *testing.T) {
 	proc := generateConsensusProcess(t)
 	network := &mockP2p{}
 	proc.network = network
-	oracle := &mockRolacle{}
+	oracle := &mockRolacle{MockStateQuerier: MockStateQuerier{true, nil}}
 	proc.oracle = oracle
 	mpt := &mockProposalTracker{}
 	proc.proposalTracker = mpt
