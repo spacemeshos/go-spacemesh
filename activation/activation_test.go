@@ -1,6 +1,7 @@
 package activation
 
 import (
+	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
@@ -136,10 +137,22 @@ func (*ValidatorMock) Validate(nipst *types.NIPST, expectedChallenge common.Hash
 	return nil
 }
 
+type mockBlocksProvider struct {
+	mp map[types.BlockID]struct{}
+}
+
+func (mbp mockBlocksProvider) GetGoodPatternBlocks(layer types.LayerID) (map[types.BlockID]struct{}, error) {
+	if mbp.mp == nil {
+		return nil, errors.New("not implemented")
+	}
+
+	return mbp.mp, nil
+}
+
 // ========== Helper functions ==========
 
 func newActivationDb() *ActivationDb {
-	return NewActivationDb(database.NewMemDatabase(), database.NewMemDatabase(), &MockIdStore{}, mesh.NewMemMeshDB(lg.WithName("meshDB")), layersPerEpoch, &ValidatorMock{}, lg.WithName("atxDB"))
+	return NewActivationDb(database.NewMemDatabase(), database.NewMemDatabase(), &MockIdStore{}, mesh.NewMemMeshDB(lg.WithName("meshDB")), layersPerEpoch, mockBlocksProvider{}, &ValidatorMock{}, lg.WithName("atxDB"))
 }
 
 func isSynced(b bool) func() bool {

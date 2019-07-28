@@ -16,6 +16,10 @@ import (
 
 const CounterKey = 0xaaaa
 
+type goodBlocksProvider interface {
+	GetGoodPatternBlocks(layer types.LayerID) (map[types.BlockID]struct{}, error)
+}
+
 type ActivationDb struct {
 	sync.RWMutex
 	//todo: think about whether we need one db or several
@@ -26,13 +30,14 @@ type ActivationDb struct {
 	atxCache        AtxCache
 	meshDb          *mesh.MeshDB
 	LayersPerEpoch  uint16
+	blocksProvider  goodBlocksProvider
 	nipstValidator  NipstValidator
 	log             log.Log
 	processAtxMutex sync.Mutex
 }
 
-func NewActivationDb(dbstore database.DB, nipstStore database.DB, idstore IdStore, meshDb *mesh.MeshDB, layersPerEpoch uint16, nipstValidator NipstValidator, log log.Log) *ActivationDb {
-	return &ActivationDb{atxs: dbstore, nipsts: nipstStore, atxCache: NewAtxCache(20), meshDb: meshDb, nipstValidator: nipstValidator, LayersPerEpoch: layersPerEpoch, IdStore: idstore, log: log}
+func NewActivationDb(dbstore database.DB, nipstStore database.DB, idstore IdStore, meshDb *mesh.MeshDB, layersPerEpoch uint16, blocksProvider goodBlocksProvider, nipstValidator NipstValidator, log log.Log) *ActivationDb {
+	return &ActivationDb{atxs: dbstore, nipsts: nipstStore, atxCache: NewAtxCache(20), meshDb: meshDb, nipstValidator: nipstValidator, LayersPerEpoch: layersPerEpoch, blocksProvider: blocksProvider, IdStore: idstore, log: log}
 }
 
 // ProcessAtx validates the active set size declared in the atx, and contextually validates the atx according to atx
@@ -66,6 +71,93 @@ func (db *ActivationDb) ProcessAtx(atx *types.ActivationTx) {
 	if err != nil {
 		db.log.With().Error("cannot store node identity", log.NodeId(atx.NodeId.ShortString()), log.AtxId(atx.ShortId()), log.Err(err))
 	}
+}
+
+func (db *ActivationDb) createTraversalActiveSetCounterFunc(countedAtxs map[string]types.AtxId, penalties map[string]struct{}, layersPerEpoch uint16, epoch types.EpochId) func(blkh *types.BlockHeader) error {
+
+	traversalFunc := func(blkh *types.BlockHeader) error {
+
+		blk, err := db.meshDb.GetBlock(blkh.Id)
+		if err != nil {
+			return err
+		}
+
+		// count unique ATXs
+		for _, id := range blk.AtxIds {
+			atx, err := db.GetAtx(id)
+			if err != nil {
+				log.Panic("error fetching atx %v from database -- inconsistent state", id.ShortId()) // TODO: handle inconsistent state
+				return fmt.Errorf("error fetching atx %v from database -- inconsistent state", id.ShortId())
+			}
+
+			// make sure the target epoch is our epoch
+			if atx.TargetEpoch(layersPerEpoch) != epoch {
+				db.log.With().Debug("atx found, but targeting epoch doesn't match publication epoch",
+					log.String("atx_id", atx.ShortId()),
+					log.Uint64("atx_target_epoch", uint64(atx.TargetEpoch(layersPerEpoch))),
+					log.Uint64("actual_epoch", uint64(epoch)))
+				continue
+			}
+
+			// ignore atx from nodes in penalty
+			if _, exist := penalties[atx.NodeId.Key]; exist {
+				db.log.With().Debug("ignoring atx from node in penalty",
+					log.String("node_id", atx.NodeId.Key), log.String("atx_id", atx.ShortId()))
+				continue
+			}
+
+			if prevId, exist := countedAtxs[atx.NodeId.Key]; exist { // same miner
+
+				if prevId != id { // different atx for same epoch
+					db.log.With().Error("Encountered second atx for the same miner on the same epoch",
+						log.String("first_atx", prevId.ShortId()), log.String("second_atx", id.ShortId()))
+
+					penalties[atx.NodeId.Key] = struct{}{} // mark node in penalty
+					delete(countedAtxs, atx.NodeId.Key)    // remove the penalized node from counted
+				}
+				continue
+			}
+
+			countedAtxs[atx.NodeId.Key] = id
+		}
+
+		return nil
+	}
+
+	return traversalFunc
+}
+
+// ActiveSetForLayerConsensusView - returns the active set size that matches the view of the contextually valid blocks in the provided layer
+func (db *ActivationDb) ActiveSetForLayerConsensusView(layer types.LayerID, layersPerEpoch uint16) (map[string]struct{}, error) {
+
+	epoch := layer.GetEpoch(layersPerEpoch)
+	if epoch == 0 {
+		return nil, errors.New("tried to retrieve active set for epoch 0")
+	}
+
+	firstLayerOfPrevEpoch := types.LayerID(epoch-1) * types.LayerID(layersPerEpoch)
+
+	// build a map of all blocks on the current layer
+	mp, err := db.blocksProvider.GetGoodPatternBlocks(layer)
+	if err != nil {
+		return nil, err
+	}
+	countedAtxs := make(map[string]types.AtxId)
+	penalties := make(map[string]struct{})
+
+	traversalFunc := db.createTraversalActiveSetCounterFunc(countedAtxs, penalties, layersPerEpoch, epoch)
+
+	err = db.meshDb.ForBlockInView(mp, firstLayerOfPrevEpoch, traversalFunc)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(map[string]struct{}, len(countedAtxs))
+	for k := range countedAtxs {
+		result[k] = struct{}{}
+	}
+
+	return result, nil
 }
 
 // CalcActiveSetFromView traverses the view found in a - the activation tx and counts number of active ids published

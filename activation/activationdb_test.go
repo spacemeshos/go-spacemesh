@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"math/big"
+	"math/rand"
 	"testing"
 )
 
@@ -99,9 +100,103 @@ func ConfigTst() mesh.Config {
 func getAtxDb(id string) (*ActivationDb, *mesh.Mesh) {
 	lg := log.NewDefault(id)
 	memesh := mesh.NewMemMeshDB(lg.WithName("meshDB"))
-	atxdb := NewActivationDb(database.NewMemDatabase(), database.NewMemDatabase(), NewIdentityStore(database.NewMemDatabase()), memesh, 1000, &ValidatorMock{}, lg.WithName("atxDB"))
+	atxdb := NewActivationDb(database.NewMemDatabase(), database.NewMemDatabase(), NewIdentityStore(database.NewMemDatabase()), memesh, 1000, mockBlocksProvider{make(map[types.BlockID]struct{})}, &ValidatorMock{}, lg.WithName("atxDB"))
 	layers := mesh.NewMesh(memesh, atxdb, ConfigTst(), &MeshValidatorMock{}, &sync.MockTxMemPool{}, &sync.MockAtxMemPool{}, &MockState{}, lg.WithName("mesh"))
 	return atxdb, layers
+}
+
+func rndStr() string {
+	a := make([]byte, 8)
+	rand.Read(a)
+	return string(a)
+}
+
+func createLayerWithAtxContext(t *testing.T, msh *mesh.Mesh, id types.LayerID, numOfBlocks int, atxs []*types.ActivationTx, votes []types.BlockID, views []types.BlockID) (created []types.BlockID) {
+	if numOfBlocks < len(atxs) {
+		panic("not supported")
+	}
+	for i := 0; i < numOfBlocks; i++ {
+		rid := rand.Uint64()
+		bid := types.BlockID(rid)
+		block1 := types.NewExistingBlock(bid, id, []byte("data1"))
+		block1.BlockVotes = append(block1.BlockVotes, votes...)
+		if i < len(atxs) {
+			block1.AtxIds = append(block1.AtxIds, atxs[i].Id())
+			fmt.Printf("adding i=%v bid=%v atxid=%v", i, bid, atxs[i].Id().String())
+		}
+		block1.ViewEdges = append(block1.ViewEdges, views...)
+		var actualAtxs []*types.ActivationTx
+		if i < len(atxs) {
+			actualAtxs = atxs[i : i+1]
+		}
+		err := msh.AddBlockWithTxs(block1, []*types.AddressableSignedTransaction{}, actualAtxs)
+		require.NoError(t, err)
+		created = append(created, block1.Id)
+	}
+	return
+}
+
+func TestATX_ActiveSetForLayerView(t *testing.T) {
+	rand.Seed(1234573298579)
+	atxdb, layers := getAtxDb(t.Name())
+	bProvider := atxdb.blocksProvider.(mockBlocksProvider)
+	//layers.AtxDB = &AtxDbMock{make(map[types.AtxId]*types.ActivationTx), make(map[types.AtxId]*types.NIPST)}
+	id1 := types.NodeId{Key: rndStr(), VRFPublicKey: []byte("anton")}
+	id2 := types.NodeId{Key: rndStr(), VRFPublicKey: []byte("anton")}
+	id3 := types.NodeId{Key: rndStr(), VRFPublicKey: []byte("anton")}
+	id4 := types.NodeId{Key: rndStr(), VRFPublicKey: []byte("anton")}
+	coinbase1 := address.HexToAddress("aaaa")
+	coinbase2 := address.HexToAddress("bbbb")
+	coinbase3 := address.HexToAddress("cccc")
+	coinbase4 := address.HexToAddress("cccc")
+	atxs := []*types.ActivationTx{
+		types.NewActivationTx(id1, coinbase1, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 0, []types.BlockID{}, &types.NIPST{}),
+		types.NewActivationTx(id1, coinbase1, 0, *types.EmptyAtxId, 2, 0, *types.EmptyAtxId, 0, []types.BlockID{}, &types.NIPST{}),
+		types.NewActivationTx(id1, coinbase1, 0, *types.EmptyAtxId, 3, 0, *types.EmptyAtxId, 0, []types.BlockID{}, &types.NIPST{}),
+		types.NewActivationTx(id2, coinbase2, 0, *types.EmptyAtxId, 2, 0, *types.EmptyAtxId, 0, []types.BlockID{}, &types.NIPST{}),
+		types.NewActivationTx(id4, coinbase4, 0, *types.EmptyAtxId, 2, 0, *types.EmptyAtxId, 0, []types.BlockID{}, &types.NIPST{}),
+		types.NewActivationTx(id3, coinbase3, 0, *types.EmptyAtxId, 11, 0, *types.EmptyAtxId, 0, []types.BlockID{}, &types.NIPST{}),
+	}
+
+	poetRef := []byte{0xba, 0xb0}
+	for _, atx := range atxs {
+		hash, err := atx.NIPSTChallenge.Hash()
+		assert.NoError(t, err)
+		atx.Nipst = nipst.NewNIPSTWithChallenge(hash, poetRef)
+		//layers.AtxDB.(*AtxDbMock).AddAtx(atx.Id(), atx)
+	}
+
+	fmt.Println("ID4 ", atxs[4].Id().Hex())
+	blocks := createLayerWithAtxContext(t, layers, 1, 6, atxs, []types.BlockID{}, []types.BlockID{})
+	before := blocks[:4]
+	four := blocks[4:5]
+	after := blocks[5:]
+	for i := 2; i <= 10; i++ {
+		before = createLayerWithAtxContext(t, layers, types.LayerID(i), 1, []*types.ActivationTx{}, before, before)
+		four = createLayerWithAtxContext(t, layers, types.LayerID(i), 1, []*types.ActivationTx{}, four, four)
+		after = createLayerWithAtxContext(t, layers, types.LayerID(i), 1, []*types.ActivationTx{}, after, after)
+	}
+	for _, x := range before {
+		bProvider.mp[x] = struct{}{}
+	}
+
+	for _, x := range after {
+		bProvider.mp[x] = struct{}{}
+	}
+
+	actives, err := atxdb.ActiveSetForLayerConsensusView(10, 6)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, int(len(actives)))
+	_, ok := actives[id2.Key]
+	assert.True(t, ok)
+}
+
+func TestMesh_ActiveSetForLayerView2(t *testing.T) {
+	atxdb, _ := getAtxDb(t.Name())
+	actives, err := atxdb.ActiveSetForLayerConsensusView(0, 10)
+	assert.Error(t, err)
+	assert.Equal(t, "tried to retrieve active set for epoch 0", err.Error())
+	assert.Nil(t, actives)
 }
 
 func Test_CalcActiveSetFromView(t *testing.T) {

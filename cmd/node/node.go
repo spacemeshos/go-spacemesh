@@ -342,11 +342,10 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	//todo: this is initialized twice, need to refactor
 	validator := nipst.NewValidator(&app.Config.POST, poetDb)
 	mdb := mesh.NewPersistentMeshDB(dbStorepath, lg.WithName("meshDb"))
-	atxdb := activation.NewActivationDb(atxdbstore, nipstStore, idStore, mdb, layersPerEpoch, validator, lg.WithName("atxDb"))
+	trtl := tortoise.NewAlgorithm(int(1), mdb, lg.WithName("trtl"))
+	atxdb := activation.NewActivationDb(atxdbstore, nipstStore, idStore, mdb, layersPerEpoch, trtl, validator, lg.WithName("atxDb"))
 	beaconProvider := &oracle.EpochBeaconProvider{}
 	eValidator := oracle.NewBlockEligibilityValidator(int32(layerSize), layersPerEpoch, atxdb, beaconProvider, BLS381.Verify2, lg.WithName("blkElgValidator"))
-
-	trtl := tortoise.NewAlgorithm(int(1), mdb, lg.WithName("trtl"))
 
 	txpool := miner.NewTypesTransactionIdMemPool()
 	atxpool := miner.NewTypesAtxIdMemPool()
@@ -365,7 +364,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 		hOracle = rolacle
 	} else { // regular oracle, build and use it
 		beacon := eligibility.NewBeacon(trtl, app.Config.HareEligibility.ConfidenceParam)
-		hOracle = eligibility.New(beacon, msh.ActiveSetForLayerConsensusView, BLS381.Verify2, vrfSigner, uint16(app.Config.LayersPerEpoch), app.Config.HareEligibility, lg.WithName("hareOracle"))
+		hOracle = eligibility.New(beacon, atxdb.ActiveSetForLayerConsensusView, BLS381.Verify2, vrfSigner, uint16(app.Config.LayersPerEpoch), app.Config.HareEligibility, lg.WithName("hareOracle"))
 	}
 
 	// a function to validate we know the blocks

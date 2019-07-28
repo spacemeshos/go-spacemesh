@@ -4,6 +4,7 @@ import (
 	"cloud.google.com/go/storage"
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/address"
@@ -82,6 +83,13 @@ func (mockTxProcessor) ValidateTransactionSignature(tx *types.SerializableSigned
 	return address.HexToAddress("0xFFFF"), nil
 }
 
+type mockBlocksProvider struct {
+}
+
+func (mockBlocksProvider) GetGoodPatternBlocks(layer types.LayerID) (map[types.BlockID]struct{}, error) {
+	return nil, errors.New("not implemented")
+}
+
 func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	// start p2p services
 	lg := log.New("sync_test", "", "")
@@ -121,7 +129,7 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 
 	mshdb := mesh.NewPersistentMeshDB(app.Config.DataDir, lg.WithOptions(log.Nop))
 	atxdbStore, _ := database.NewLDBDatabase(app.Config.DataDir+"atx", 0, 0, lg)
-	atxdb := activation.NewActivationDb(atxdbStore, nipstStore, &sync.MockIStore{}, mshdb, uint16(1000), &sync.ValidatorMock{}, lg.WithName("atxDB").WithOptions(log.Nop))
+	atxdb := activation.NewActivationDb(atxdbStore, nipstStore, &sync.MockIStore{}, mshdb, uint16(1000), mockBlocksProvider{}, &sync.ValidatorMock{}, lg.WithName("atxDB").WithOptions(log.Nop))
 
 	txpool := miner.NewTypesTransactionIdMemPool()
 	atxpool := miner.NewTypesAtxIdMemPool()
