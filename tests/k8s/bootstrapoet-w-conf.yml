@@ -25,7 +25,7 @@ spec:
             cpu: "1"
           limits:
             memory: "2048M"
-            cpu: "3"
+            cpu: "2"
         env:
           - name: GODEBUG
             value: gctrace=1
