@@ -155,11 +155,12 @@ func newATxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 func newPoetRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 	return func(proofRef []byte) []byte {
 		proofMessage, err := s.poetDb.GetProofMessage(proofRef)
+		shortPoetRef := proofRef[:common.Min(5, len(proofRef))]
 		if err != nil {
-			logger.Warning("unfamiliar PoET proof was requested (id: %x): %v", proofRef[:5], err)
+			logger.Warning("unfamiliar PoET proof was requested (id: %x): %v", shortPoetRef, err)
 			return nil
 		}
-		logger.Info("returning PoET proof (id: %x) to neighbor", proofRef[:5])
+		logger.Info("returning PoET proof (id: %x) to neighbor", shortPoetRef)
 		return proofMessage
 	}
 }
