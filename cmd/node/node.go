@@ -344,7 +344,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	mdb := mesh.NewPersistentMeshDB(dbStorepath, lg.WithName("meshDb"))
 	atxdb := activation.NewActivationDb(atxdbstore, nipstStore, idStore, mdb, layersPerEpoch, validator, lg.WithName("atxDb"))
 	beaconProvider := &oracle.EpochBeaconProvider{}
-	eValidator := oracle.NewBlockEligibilityValidator(int32(layerSize), layersPerEpoch, atxdb, beaconProvider, BLS381.Verify2, lg.WithName("blkElgValidator"))
+	eValidator := oracle.NewBlockEligibilityValidator(int32(app.Config.HareEligibility.GenesisActiveSet), layersPerEpoch, atxdb, beaconProvider, BLS381.Verify2, lg.WithName("blkElgValidator"))
 
 	trtl := tortoise.NewAlgorithm(int(1), mdb, lg.WithName("trtl"))
 
@@ -357,7 +357,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 
 	blockValidator := sync.NewBlockValidator(eValidator)
 	syncer := sync.NewSync(swarm, msh, txpool, atxpool, processor, blockValidator, poetDb, conf, clock.Subscribe(), clock.GetCurrentLayer(), lg.WithName("sync"))
-	blockOracle := oracle.NewMinerBlockOracle(layerSize, uint16(layersPerEpoch), atxdb, beaconProvider, vrfSigner, nodeID, syncer.IsSynced, lg.WithName("blockOracle"))
+	blockOracle := oracle.NewMinerBlockOracle(uint32(app.Config.HareEligibility.GenesisActiveSet), uint16(layersPerEpoch), atxdb, beaconProvider, vrfSigner, nodeID, syncer.IsSynced, lg.WithName("blockOracle"))
 
 	// TODO: we should probably decouple the apptest and the node (and duplicate as necessary)
 	var hOracle hare.Rolacle
