@@ -84,9 +84,9 @@ func BytesAsAtx(b []byte) (*ActivationTx, error) {
 				},
 			},
 			ActiveSetSize: 0,
-			View:          nil,
 		},
 		Nipst: nil,
+		View:  nil,
 	}
 	_, err := xdr.Unmarshal(buf, &atx)
 	if err != nil {

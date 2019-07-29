@@ -11,7 +11,7 @@ import (
 
 type ActivationDb interface {
 	GetNodeAtxIds(node types.NodeId) ([]types.AtxId, error)
-	GetAtx(id types.AtxId) (*types.ActivationTx, error)
+	GetAtx(id types.AtxId) (*types.ActivationTxHeader, error)
 	GetIdentity(edId string) (types.NodeId, error)
 	IsIdentityActive(edId string, layer types.LayerID) (*types.NodeId, bool, types.AtxId, error)
 }
@@ -113,7 +113,7 @@ func (bo *MinerBlockOracle) calcEligibilityProofs(epochNumber types.EpochId) err
 	return nil
 }
 
-func (bo *MinerBlockOracle) getValidLatestATX(validForEpoch types.EpochId) (*types.ActivationTx, error) {
+func (bo *MinerBlockOracle) getValidLatestATX(validForEpoch types.EpochId) (*types.ActivationTxHeader, error) {
 	latestATXID, err := bo.getLatestATXID()
 	if err != nil {
 		return nil, fmt.Errorf("not in genesis (epoch %v) yet failed to get atx: %v", validForEpoch, err)

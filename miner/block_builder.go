@@ -188,7 +188,7 @@ func calcHdistRange(id types.LayerID, hdist types.LayerID) (bottom types.LayerID
 }
 
 func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibilityProof types.BlockEligibilityProof,
-	txs []types.AddressableSignedTransaction, atx []types.ActivationTx) (*types.Block, error) {
+	txs []types.AddressableSignedTransaction, atxids []types.AtxId) (*types.Block, error) {
 
 	var votes []types.BlockID = nil
 	var err error
@@ -212,11 +212,6 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 	var txids []types.TransactionId
 	for _, t := range txs {
 		txids = append(txids, types.GetTransactionId(t.SerializableSignedTransaction))
-	}
-
-	var atxids []types.AtxId
-	for _, t := range atx {
-		atxids = append(atxids, t.Id())
 	}
 
 	b := types.MiniBlock{
@@ -353,7 +348,10 @@ func (t *BlockBuilder) acceptBlockData() {
 
 			txList := t.TransactionPool.PopItems(MaxTransactionsPerBlock)
 
-			atxList := t.AtxPool.PopItems(MaxTransactionsPerBlock)
+			var atxList []types.AtxId
+			for _, atx := range t.AtxPool.PopItems(MaxTransactionsPerBlock) {
+				atxList = append(atxList, atx.Id())
+			}
 
 			for _, eligibilityProof := range proofs {
 				blk, err := t.createBlock(types.LayerID(id), atxID, eligibilityProof, txList, atxList)
