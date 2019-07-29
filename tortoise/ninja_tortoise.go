@@ -16,7 +16,6 @@ type vec [2]int
 type PatternId uint32 //this hash dose not include the layer id
 
 const ( //Threshold
-	K               = 5 //number of explicit layers to vote for
 	Window          = 10
 	LocalThreshold  = 0.8 //ThetaL
 	GlobalThreshold = 0.6 //ThetaG
@@ -25,7 +24,6 @@ const ( //Threshold
 
 var ( //correction vectors type
 	//Opinion
-	hdist   = types.LayerID(4)
 	Support = vec{1, 0}
 	Against = vec{0, 1}
 	Abstain = vec{0, 0}
@@ -73,9 +71,9 @@ type BlockCache interface {
 type ninjaTortoise struct {
 	log.Log
 	BlockCache   //block cache
-	hdist        int
+	hdist        types.LayerID
 	evict        types.LayerID
-	avgLayerSize uint64
+	avgLayerSize int
 	pBase        votingPattern
 	patterns     map[types.LayerID][]votingPattern                 //map patterns by layer for eviction purposes
 	tEffective   map[types.BlockID]votingPattern                   //Explicit voting pattern of latest layer for a block
@@ -99,8 +97,8 @@ func NewNinjaTortoise(layerSize int, blocks BlockCache, hdist int, log log.Log) 
 	return &ninjaTortoise{
 		Log:                log,
 		BlockCache:         blocks,
-		hdist:              hdist,
-		avgLayerSize:       uint64(layerSize),
+		hdist:              types.LayerID(hdist),
+		avgLayerSize:       layerSize,
 		pBase:              votingPattern{},
 		patterns:           map[types.LayerID][]votingPattern{},
 		tGood:              map[types.LayerID]votingPattern{},
@@ -121,11 +119,11 @@ func NewNinjaTortoise(layerSize int, blocks BlockCache, hdist int, log log.Log) 
 
 func (ni *ninjaTortoise) evictOutOfPbase() {
 	wg := sync.WaitGroup{}
-	if ni.pBase.Layer() <= hdist {
+	if ni.pBase.Layer() <= ni.hdist {
 		return
 	}
 
-	window := ni.pBase.Layer() - hdist
+	window := ni.pBase.Layer() - ni.hdist
 	for lyr := ni.evict; lyr < window; lyr++ {
 		wg.Add(1)
 		go func() {
@@ -185,7 +183,7 @@ func (ni *ninjaTortoise) processBlock(b *types.Block) {
 	}
 
 	var effective votingPattern
-	ni.tExplicit[b.ID()] = make(map[types.LayerID]votingPattern, K)
+	ni.tExplicit[b.ID()] = make(map[types.LayerID]votingPattern, ni.hdist)
 	for layerId, v := range patternMap {
 		vp := votingPattern{id: getIdsFromSet(v), LayerID: layerId}
 		ni.tPatternLock.Lock()
@@ -233,7 +231,7 @@ func getIdsFromSet(bids map[types.BlockID]struct{}) PatternId {
 	return getId(keys)
 }
 
-func globalOpinion(v vec, layerSize uint64, delta float64) vec {
+func globalOpinion(v vec, layerSize int, delta float64) vec {
 	threshold := float64(GlobalThreshold*delta) * float64(layerSize)
 	if float64(v[0]) > threshold {
 		return Support
@@ -436,7 +434,7 @@ func (ni *ninjaTortoise) handleGenesis(genesis *types.Layer) {
 	ni.tGoodLock.Lock()
 	ni.tGood[Genesis] = vp
 	ni.tGoodLock.Unlock()
-	ni.tExplicit[genesis.Blocks()[0].ID()] = make(map[types.LayerID]votingPattern, K*ni.avgLayerSize)
+	ni.tExplicit[genesis.Blocks()[0].ID()] = make(map[types.LayerID]votingPattern, int(ni.hdist)*ni.avgLayerSize)
 }
 
 //todo send map instead of ni
