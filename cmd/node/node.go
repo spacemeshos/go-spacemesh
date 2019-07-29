@@ -422,6 +422,9 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	app.P2P = swarm
 	app.poetListener = poetListener
 	app.atxBuilder = atxBuilder
+
+	log.Info("AS %v, CP %v EP %v LS %v", app.Config.HareEligibility.GenesisActiveSet, app.Config.HareEligibility.ConfidenceParam, app.Config.HareEligibility.EpochOffset, layerSize)
+
 	return nil
 }
 
