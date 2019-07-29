@@ -29,7 +29,7 @@ class ES:
         ES_PASSWD = os.getenv("ES_PASSWD")
         if not ES_PASSWD:
             raise Exception("Unknown Elasticsearch password. Please check 'ES_PASSWD' environment variable")
-        self.es = Elasticsearch("http://elastic-alpha.spacemesh.io",
+        self.es = Elasticsearch("http://elastic.spacemesh.io",
                                 http_auth=("spacemesh", ES_PASSWD), port=80, timeout=90)
 
     def get_search_api(self):

@@ -10,7 +10,7 @@ deployment_ready_time_out: 120
 config_path: '../config.toml'
 
 bootstrap:
-  image: 'spacemeshos/go-spacemesh-dev:tn'
+  image: 'spacemeshos/go-spacemesh-dev:tn20'
   command: '/bin/go-spacemesh'
   replicas: 1
   args:
@@ -26,7 +26,7 @@ bootstrap:
     coinbase: '0x4321'
     mem-profile: 'mem.out'
 client:
-  image: 'spacemeshos/go-spacemesh-dev:tn'
+  image: 'spacemeshos/go-spacemesh-dev:tn20'
   command: '/bin/go-spacemesh'
   replicas: 199
   args:
