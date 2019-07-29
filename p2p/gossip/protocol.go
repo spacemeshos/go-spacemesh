@@ -4,7 +4,6 @@ import (
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
-	"github.com/spacemeshos/go-spacemesh/p2p/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -167,7 +166,8 @@ func (prot *Protocol) processMessage(sender p2pcrypto.PublicKey, protocol string
 
 	isOld := prot.markMessageAsOld(h)
 	if isOld {
-		metrics.OldGossipMessages.With(metrics.ProtocolLabel, protocol).Add(1)
+		// todo: PROMETHEUS
+		//metrics.OldGossipMessages.With(metrics.ProtocolLabel, protocol).Add(1)
 		// todo : - have some more metrics for termination
 		// todo	: - maybe tell the peer we got this message already?
 		// todo : - maybe block this peer since he sends us old messages
@@ -176,7 +176,8 @@ func (prot *Protocol) processMessage(sender p2pcrypto.PublicKey, protocol string
 	}
 
 	prot.Log.Event().Debug("new_gossip_message", log.String("from", sender.String()), log.String("protocol", protocol), log.Uint32("hash", uint32(h)))
-	metrics.NewGossipMessages.With("protocol", protocol).Add(1)
+	// todo: PROMETHEUS
+	//metrics.NewGossipMessages.With("protocol", protocol).Add(1)
 	return prot.net.ProcessGossipProtocolMessage(sender, protocol, msg, prot.propagateQ)
 }
 

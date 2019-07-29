@@ -15,7 +15,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
 	"github.com/spacemeshos/go-spacemesh/mesh"
-	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/oracle"
@@ -619,7 +618,8 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	}
 
 	if app.Config.CollectMetrics {
-		metrics.StartCollectingMetrics(app.Config.MetricsPort)
+		// todo: PROMETHEUS
+		//metrics.StartCollectingMetrics(app.Config.MetricsPort)
 	}
 	app.startServices()
 

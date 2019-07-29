@@ -33,7 +33,8 @@ func (alg *Algorithm) HandleIncomingLayer(ll *types.Layer) (types.LayerID, types
 	oldPbase := alg.latestComplete()
 	alg.Tortoise.handleIncomingLayer(ll)
 	newPbase := alg.latestComplete()
-	updateMetrics(alg, ll)
+	// todo: PROMETHEUS
+	//updateMetrics(alg, ll)
 	return oldPbase, newPbase
 }
 

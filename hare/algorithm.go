@@ -7,7 +7,6 @@ import (
 	"github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
-	"github.com/spacemeshos/go-spacemesh/hare/metrics"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -311,7 +310,8 @@ func (proc *ConsensusProcess) handleMessage(m *Msg) {
 
 func (proc *ConsensusProcess) processMsg(m *Msg) {
 	proc.Debug("Processing message of type %v", m.InnerMsg.Type.String())
-	metrics.MessageTypeCounter.With("type_id", m.InnerMsg.Type.String()).Add(1)
+	// todo: PROMETHEUS
+	//metrics.MessageTypeCounter.With("type_id", m.InnerMsg.Type.String()).Add(1)
 
 	switch m.InnerMsg.Type {
 	case PreRound:

@@ -11,7 +11,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/connectionpool"
 	"github.com/spacemeshos/go-spacemesh/p2p/discovery"
 	"github.com/spacemeshos/go-spacemesh/p2p/gossip"
-	"github.com/spacemeshos/go-spacemesh/p2p/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
@@ -741,7 +740,8 @@ loop:
 			s.outpeersMutex.Unlock()
 
 			s.publishNewPeer(cne.n.PublicKey())
-			metrics.OutboundPeers.Add(1)
+			// todo: PROMETHEUS
+			//metrics.OutboundPeers.Add(1)
 			s.lNode.Debug("Neighborhood: Added peer to peer list %v", cne.n.String())
 		case <-tm.C:
 			break loop
@@ -764,7 +764,8 @@ func (s *swarm) Disconnect(peer p2pcrypto.PublicKey) {
 		delete(s.inpeers, peer.String())
 		s.inpeersMutex.Unlock()
 		s.publishDelPeer(peer)
-		metrics.InboundPeers.Add(-1)
+		// todo: PROMETHEUS
+		//metrics.InboundPeers.Add(-1)
 		return
 	}
 	s.inpeersMutex.Unlock()
@@ -778,7 +779,8 @@ func (s *swarm) Disconnect(peer p2pcrypto.PublicKey) {
 	}
 	s.outpeersMutex.Unlock()
 	s.publishDelPeer(peer)
-	metrics.OutboundPeers.Add(-1)
+	// todo: PROMETHEUS
+	//metrics.OutboundPeers.Add(-1)
 
 	// todo: don't remove if we know this is a valid peer for later
 	//s.discovery.Remove(peer) // address doesn't matter because we only check dhtid
@@ -803,7 +805,8 @@ func (s *swarm) addIncomingPeer(n p2pcrypto.PublicKey) error {
 	s.inpeersMutex.Unlock()
 	if !exist {
 		s.publishNewPeer(n)
-		metrics.InboundPeers.Add(1)
+		// todo: PROMETHEUS
+		//metrics.InboundPeers.Add(1)
 	}
 	return nil
 }
