@@ -88,7 +88,7 @@ func NewActivationTx(NodeId NodeId,
 	ActiveSetSize uint32,
 	View []BlockID,
 	nipst *NIPST) *ActivationTx {
-	return &ActivationTx{
+	atx := &ActivationTx{
 		ActivationTxHeader: ActivationTxHeader{
 			NIPSTChallenge: NIPSTChallenge{
 				NodeId:         NodeId,
@@ -104,13 +104,14 @@ func NewActivationTx(NodeId NodeId,
 		Nipst: nipst,
 		View:  View,
 	}
-
+	atx.CalcAndSetId()
+	return atx
 }
 
 func NewActivationTxWithChallenge(poetChallenge NIPSTChallenge, coinbase address.Address, ActiveSetSize uint32,
 	View []BlockID, nipst *NIPST) *ActivationTx {
 
-	return &ActivationTx{
+	atx := &ActivationTx{
 		ActivationTxHeader: ActivationTxHeader{
 			NIPSTChallenge: poetChallenge,
 			Coinbase:       coinbase,
@@ -119,20 +120,15 @@ func NewActivationTxWithChallenge(poetChallenge NIPSTChallenge, coinbase address
 		Nipst: nipst,
 		View:  View,
 	}
+	atx.CalcAndSetId()
+	return atx
 
 }
 
 func (atxh *ActivationTxHeader) Id() AtxId {
-	if atxh.id != nil {
-		return *atxh.id
+	if atxh.id == nil {
+		panic("id field must be set")
 	}
-	//todo: revise id function, add cache
-	tx, err := AtxHeaderAsBytes(atxh)
-	if err != nil {
-		panic("could not Serialize atx")
-	}
-
-	atxh.id = &AtxId{crypto.Keccak256Hash(tx)}
 	return *atxh.id
 }
 
@@ -144,12 +140,24 @@ func (atxh *ActivationTxHeader) TargetEpoch(layersPerEpoch uint16) EpochId {
 	return atxh.PubLayerIdx.GetEpoch(layersPerEpoch) + 1
 }
 
+func (atxh *ActivationTxHeader) SetId(id *AtxId) {
+	atxh.id = id
+}
+
+func (atx *ActivationTx) CalcAndSetId() {
+	tx, err := AtxHeaderAsBytes(&atx.ActivationTxHeader)
+	if err != nil {
+		panic("could not Serialize atx")
+	}
+	atx.SetId(&AtxId{crypto.Keccak256Hash(tx)})
+}
+
 func (atx *ActivationTx) GetPoetProofRef() []byte {
 	return atx.Nipst.PoetProofRef
 }
 
-func (t *ActivationTx) GetShortPoetProofRef() []byte {
-	return t.Nipst.PoetProofRef[:common.Min(5, len(t.Nipst.PoetProofRef))]
+func (atx *ActivationTx) GetShortPoetProofRef() []byte {
+	return atx.Nipst.PoetProofRef[:common.Min(5, len(atx.Nipst.PoetProofRef))]
 }
 
 type PoetProof struct {

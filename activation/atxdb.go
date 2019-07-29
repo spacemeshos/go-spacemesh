@@ -433,7 +433,7 @@ func (db *ActivationDb) getAtxUnlocked(id types.AtxId) (*types.ActivationTx, err
 	if err != nil {
 		return nil, err
 	}
-	atx, err := types.BytesAsAtx(b)
+	atx, err := types.BytesAsAtx(b, &id)
 	if err != nil {
 		return nil, err
 	}
@@ -465,7 +465,7 @@ func (db *ActivationDb) GetFullAtx(id types.AtxId) (*types.ActivationTx, error) 
 	if err != nil {
 		return nil, err
 	}
-	atx, err := types.BytesAsAtx(b)
+	atx, err := types.BytesAsAtx(b, &id)
 	if err != nil {
 		return nil, err
 	}

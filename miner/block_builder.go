@@ -296,7 +296,7 @@ func (t *BlockBuilder) handleGossipAtx(data service.GossipMessage) {
 	if data == nil {
 		return
 	}
-	atx, err := types.BytesAsAtx(data.Bytes())
+	atx, err := types.BytesAsAtx(data.Bytes(), nil)
 	if err != nil {
 		t.Error("cannot parse incoming ATX")
 		return

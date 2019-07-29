@@ -169,6 +169,7 @@ func newAtx(challenge types.NIPSTChallenge, ActiveSetSize uint32, View []types.B
 		Nipst: nipst,
 		View:  View,
 	}
+	activationTx.CalcAndSetId()
 	return activationTx
 }
 
@@ -191,7 +192,7 @@ func lastTransmittedAtx(t *testing.T) (atx types.ActivationTx) {
 }
 
 func assertLastAtx(r *require.Assertions, posAtx, prevAtx *types.ActivationTxHeader, layersPerEpoch uint16) {
-	atx, err := types.BytesAsAtx(net.lastTransmission)
+	atx, err := types.BytesAsAtx(net.lastTransmission, nil)
 	r.NoError(err)
 
 	r.Equal(nodeId, atx.NodeId)
@@ -397,7 +398,7 @@ func TestBuilder_PublishActivationTx_Serialize(t *testing.T) {
 
 	bt, err := types.AtxAsBytes(act)
 	assert.NoError(t, err)
-	a, err := types.BytesAsAtx(bt)
+	a, err := types.BytesAsAtx(bt, nil)
 	assert.NoError(t, err)
 	bt2, err := types.AtxAsBytes(a)
 	assert.Equal(t, bt, bt2)

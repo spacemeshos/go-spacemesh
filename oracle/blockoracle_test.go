@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/amcl/BLS381"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/require"
@@ -29,16 +28,6 @@ type mockActivationDB struct {
 	activeSetSize       uint32
 	atxPublicationLayer types.LayerID
 	atxs                map[string]map[types.LayerID]types.AtxId
-}
-
-var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
-
-func RandStringRunes(n int) string {
-	b := make([]rune, n)
-	for i := range b {
-		b[i] = letterRunes[rand.Intn(len(letterRunes))]
-	}
-	return string(b)
 }
 
 func (a *mockActivationDB) IsIdentityActive(edId string, layer types.LayerID) (*types.NodeId, bool, types.AtxId, error) {
@@ -67,9 +56,11 @@ func (a mockActivationDB) GetNodeAtxIds(node types.NodeId) ([]types.AtxId, error
 
 func (a mockActivationDB) GetAtx(id types.AtxId) (*types.ActivationTxHeader, error) {
 	if id == atxID {
-		return &types.ActivationTxHeader{
+		atxHeader := &types.ActivationTxHeader{
 			NIPSTChallenge: types.NIPSTChallenge{PubLayerIdx: a.atxPublicationLayer}, ActiveSetSize: a.activeSetSize,
-		}, nil
+		}
+		atxHeader.SetId(&id)
+		return atxHeader, nil
 	}
 	return nil, errors.New("wrong atx id")
 }
