@@ -169,6 +169,10 @@ func EnsureCLIFlags(cmd *cobra.Command, appcfg *bc.Config) {
 			elem = reflect.ValueOf(&appcfg.HARE).Elem()
 			assignFields(ff, elem, name)
 
+			ff = reflect.TypeOf(appcfg.HareEligibility)
+			elem = reflect.ValueOf(&appcfg.HareEligibility).Elem()
+			assignFields(ff, elem, name)
+
 			ff = reflect.TypeOf(appcfg.POST)
 			elem = reflect.ValueOf(&appcfg.POST).Elem()
 			assignFields(ff, elem, name)
