@@ -91,12 +91,7 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 	countingEpoch := pubEpoch - 1
 	firstLayerOfLastEpoch := types.LayerID(countingEpoch) * types.LayerID(db.LayersPerEpoch)
 
-	traversalFunc := func(blkh *types.BlockHeader) error {
-		blk, err := db.meshDb.GetBlock(blkh.Id)
-		if err != nil {
-			db.log.With().Error("cannot validate atx, block wasn't found", log.AtxId(a.ShortId()), log.BlockId(uint64(blkh.Id)))
-			return err
-		}
+	traversalFunc := func(blk *types.Block) error {
 		//skip blocks not from atx epoch
 		if blk.LayerIndex.GetEpoch(db.LayersPerEpoch) != countingEpoch {
 			return nil

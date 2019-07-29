@@ -127,36 +127,38 @@ func (m *MeshDB) LayerBlockIds(index types.LayerID) ([]types.BlockID, error) {
 	return blockids, nil
 }
 
-func (mc *MeshDB) ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.BlockHeader) error) error {
-	stack := list.New()
-	for b := range view {
-		stack.PushFront(b)
+func (m *MeshDB) ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) error) error {
+	blocksToVisit := list.New()
+	for id := range view {
+		blocksToVisit.PushBack(id)
 	}
-	set := make(map[types.BlockID]struct{})
-	for b := stack.Front(); b != nil; b = stack.Front() {
-		a := stack.Remove(stack.Front()).(types.BlockID)
-
-		block, err := mc.GetBlock(a)
+	seenBlocks := make(map[types.BlockID]struct{})
+	for blocksToVisit.Len() > 0 {
+		block, err := m.GetBlock(blocksToVisit.Remove(blocksToVisit.Front()).(types.BlockID))
 		if err != nil {
 			return err
 		}
 
+		//catch blocks that were referenced after more than one layer, and slipped through the stop condition
+		if block.LayerIndex < layer {
+			continue
+		}
+
 		//execute handler
-		if err = blockHandler(&block.BlockHeader); err != nil {
+		if err := blockHandler(block); err != nil {
 			return err
+		}
+
+		//stop condition: referenced blocks must be in lower layers, so we don't traverse them
+		if block.LayerIndex == layer {
+			continue
 		}
 
 		//push children to bfs queue
 		for _, id := range block.ViewEdges {
-			if bChild, err := mc.GetBlock(id); err != nil {
-				return err
-			} else {
-				if bChild.LayerIndex >= layer { //dont traverse too deep
-					if _, found := set[bChild.Id]; !found {
-						set[bChild.Id] = struct{}{}
-						stack.PushBack(bChild.Id)
-					}
-				}
+			if _, found := seenBlocks[id]; !found {
+				seenBlocks[id] = struct{}{}
+				blocksToVisit.PushBack(id)
 			}
 		}
 	}

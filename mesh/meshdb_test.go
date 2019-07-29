@@ -130,7 +130,7 @@ func testForeachInView(mdb *MeshDB, t *testing.T) {
 		l = lyr
 	}
 	mp := map[types.BlockID]struct{}{}
-	foo := func(nb *types.BlockHeader) error {
+	foo := func(nb *types.Block) error {
 		fmt.Println("process block", "layer", nb.Id, nb.LayerIndex)
 		mp[nb.Id] = struct{}{}
 		return nil
