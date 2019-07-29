@@ -137,13 +137,25 @@ func TestBlockListener_DataAvailability(t *testing.T) {
 
 	atx1 := atx()
 
+	// Push atx1 poet proof into bl1.
+
+	proofMessage := makePoetProofMessage(t)
+	err := bl1.poetDb.ValidateAndStore(&proofMessage)
+	require.NoError(t, err)
+
+	poetProofBytes, err := types.InterfaceToBytes(&proofMessage.PoetProof)
+	require.NoError(t, err)
+	poetRef := sha256.Sum256(poetProofBytes)
+
+	atx1.Nipst.PoetProofRef = poetRef[:]
+
 	// Push a block with tx1 and and atx1 into bl1.
 
 	block := types.NewExistingBlock(types.BlockID(2), 1, nil)
 	block.Signature = signer.Sign(block.Bytes())
 	block.TxIds = append(block.TxIds, types.GetTransactionId(tx1.SerializableSignedTransaction))
 	block.AtxIds = append(block.AtxIds, atx1.Id())
-	err := bl1.AddBlockWithTxs(block, []*types.AddressableSignedTransaction{tx1}, []*types.ActivationTx{atx1})
+	err = bl1.AddBlockWithTxs(block, []*types.AddressableSignedTransaction{tx1}, []*types.ActivationTx{atx1})
 	require.NoError(t, err)
 
 	_, err = bl1.GetBlock(block.Id)
