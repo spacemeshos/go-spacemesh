@@ -173,8 +173,7 @@ func (ni *ninjaTortoise) processBlock(b *types.Block) {
 		ni.Debug("block votes %d", bid)
 		bl, err := ni.GetBlock(bid)
 		if err != nil || bl == nil {
-			ni.Error(fmt.Sprintf("error block not found ID %d , %v!!!!!", bid, err))
-			return
+			ni.Panic(fmt.Sprintf("error block not found ID %d , %v!!!!!", bid, err))
 		}
 		if _, found := patternMap[bl.Layer()]; !found {
 			patternMap[bl.Layer()] = map[types.BlockID]struct{}{}
