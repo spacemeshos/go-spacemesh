@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/types"
+	"github.com/spacemeshos/sha256-simd"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"testing"
@@ -69,6 +70,20 @@ func TestBlockListener(t *testing.T) {
 	atx2 := atx()
 	atx3 := atx()
 
+	proofMessage := makePoetProofMessage(t)
+	if err := bl1.poetDb.ValidateAndStore(&proofMessage); err != nil {
+		t.Error(err)
+	}
+	poetProofBytes, err := types.InterfaceToBytes(&proofMessage.PoetProof)
+	if err != nil {
+		t.Error(err)
+	}
+	poetRef := sha256.Sum256(poetProofBytes)
+
+	atx1.Nipst.PoetProofRef = poetRef[:]
+	atx2.Nipst.PoetProofRef = poetRef[:]
+	atx3.Nipst.PoetProofRef = poetRef[:]
+
 	bl1.ProcessAtx(atx1)
 	bl1.ProcessAtx(atx2)
 	bl1.ProcessAtx(atx3)
@@ -92,7 +107,7 @@ func TestBlockListener(t *testing.T) {
 	bl1.AddBlock(block2)
 	bl1.AddBlock(block3)
 
-	_, err := bl1.GetBlock(block1.Id)
+	_, err = bl1.GetBlock(block1.Id)
 	if err != nil {
 		t.Error(err)
 	}
@@ -347,7 +362,19 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 
 	blk := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data1"))
 	tx := types.NewAddressableTx(0, address.BytesToAddress([]byte{0x01}), address.BytesToAddress([]byte{0x02}), 10, 10, 10)
+
 	atx := atx()
+	proofMessage := makePoetProofMessage(t)
+	if err := bl1.poetDb.ValidateAndStore(&proofMessage); err != nil {
+		t.Error(err)
+	}
+	poetProofBytes, err := types.InterfaceToBytes(&proofMessage.PoetProof)
+	if err != nil {
+		t.Error(err)
+	}
+	poetRef := sha256.Sum256(poetProofBytes)
+	atx.Nipst.PoetProofRef = poetRef[:]
+
 	bl2.AddBlockWithTxs(blk, []*types.AddressableSignedTransaction{tx}, []*types.ActivationTx{atx})
 
 	mblk := types.Block{MiniBlock: types.MiniBlock{BlockHeader: blk.BlockHeader, TxIds: []types.TransactionId{types.GetTransactionId(tx.SerializableSignedTransaction)}, AtxIds: []types.AtxId{atx.Id()}}}
