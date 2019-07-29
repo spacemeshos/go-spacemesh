@@ -127,8 +127,6 @@ func defaultBaseConfig() BaseConfig {
 
 // LoadConfig load the config file
 func LoadConfig(fileLocation string, vip *viper.Viper) (err error) {
-	log.Info("Parsing config file at location: %s", fileLocation)
-
 	if fileLocation == "" {
 		fileLocation = defaultConfigFileName
 	}
@@ -138,7 +136,7 @@ func LoadConfig(fileLocation string, vip *viper.Viper) (err error) {
 
 	if err != nil {
 		if fileLocation != defaultConfigFileName {
-			log.Warning("failed loading %v trying %v", fileLocation, defaultConfigFileName)
+			log.Warning("failed loading config from %v trying %v", fileLocation, defaultConfigFileName)
 			vip.SetConfigFile(defaultConfigFileName)
 			err = vip.ReadInConfig()
 		}
