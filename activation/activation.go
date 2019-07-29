@@ -253,6 +253,17 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) (bool, error) {
 		}
 	}
 	atx := types.NewActivationTxWithChallenge(*b.challenge, b.coinbaseAccount, activeIds, view, b.nipst)
+	//activeSetSize, err := b.db.CalcActiveSetFromView(atx) // TODO: remove this assertion to improve performance
+	//if err != nil && !atx.TargetEpoch(b.layersPerEpoch).IsGenesis() {
+	//	return false, fmt.Errorf("failed to calc active set from view: %v", err)
+	//}
+	//b.log.With().Info("active ids seen for epoch", log.Uint64("pos_atx_epoch", uint64(posEpoch)),
+	//	log.Uint32("cache_cnt", activeIds), log.Uint32("view_cnt", activeSetSize))
+	//
+	//if !atx.TargetEpoch(b.layersPerEpoch).IsGenesis() && activeSetSize == 0 {
+	//	b.log.Warning("empty active set size found! len(view): %d, view: %v", len(atx.View), atx.View)
+	//	return false, nil
+	//}
 
 	viewAsBytes, err := types.ViewAsBytes(view)
 	if err != nil {
@@ -265,6 +276,11 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) (bool, error) {
 
 	if atx.TargetEpoch(b.layersPerEpoch).IsGenesis() {
 		atx.ActiveSetSize = 0
+		//} else {
+		//	if activeSetSize != atx.ActiveSetSize {
+		//		b.log.Panic("active set size mismatch! size based on view: %d, size reported: %d",
+		//			activeSetSize, atx.ActiveSetSize)
+		//	}
 	}
 
 	buf, err := types.AtxAsBytes(atx)
