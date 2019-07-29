@@ -72,30 +72,34 @@ type BlockCache interface {
 //todo memory optimizations
 type ninjaTortoise struct {
 	log.Log
-	BlockCache         //block cache
-	evict              types.LayerID
-	avgLayerSize       uint64
-	pBase              votingPattern
-	patterns           map[types.LayerID][]votingPattern                 //map patterns by layer for eviction purposes
-	tEffective         map[types.BlockID]votingPattern                   //Explicit voting pattern of latest layer for a block
-	tCorrect           map[types.BlockID]map[types.BlockID]vec           //correction vectors
-	tExplicit          map[types.BlockID]map[types.LayerID]votingPattern //explict votes from block to layer pattern
-	tGood              map[types.LayerID]votingPattern                   //good pattern for layer i
-	tGoodLock          sync.RWMutex                                      // sync access to tGood map
-	tSupport           map[votingPattern]int                             //for pattern p the number of blocks that support p
-	tComplete          map[votingPattern]struct{}                        //complete voting patterns
-	tEffectiveToBlocks map[votingPattern][]types.BlockID                 //inverse blocks effective pattern
-	tVote              map[votingPattern]map[types.BlockID]vec           //global opinion
-	tTally             map[votingPattern]map[types.BlockID]vec           //for pattern p and block b count votes for b according to p
-	tPattern           map[votingPattern]map[types.BlockID]struct{}      //set of blocks that comprise pattern p
-	tPatternLock       sync.RWMutex                                      //lock for tPattern
-	tPatSupport        map[votingPattern]map[types.LayerID]votingPattern //pattern support count
+	BlockCache   //block cache
+	hdist        int
+	evict        types.LayerID
+	avgLayerSize uint64
+	pBase        votingPattern
+	patterns     map[types.LayerID][]votingPattern                 //map patterns by layer for eviction purposes
+	tEffective   map[types.BlockID]votingPattern                   //Explicit voting pattern of latest layer for a block
+	tCorrect     map[types.BlockID]map[types.BlockID]vec           //correction vectors
+	tExplicit    map[types.BlockID]map[types.LayerID]votingPattern //explict votes from block to layer pattern
+	tGood        map[types.LayerID]votingPattern                   //good pattern for layer i
+
+	tGoodLock          sync.RWMutex                                 // sync access to tGood map
+	tSupport           map[votingPattern]int                        //for pattern p the number of blocks that support p
+	tComplete          map[votingPattern]struct{}                   //complete voting patterns
+	tEffectiveToBlocks map[votingPattern][]types.BlockID            //inverse blocks effective pattern
+	tVote              map[votingPattern]map[types.BlockID]vec      //global opinion
+	tTally             map[votingPattern]map[types.BlockID]vec      //for pattern p and block b count votes for b according to p
+	tPattern           map[votingPattern]map[types.BlockID]struct{} //set of blocks that comprise pattern p
+
+	tPatternLock sync.RWMutex                                      //lock for tPattern
+	tPatSupport  map[votingPattern]map[types.LayerID]votingPattern //pattern support count
 }
 
-func NewNinjaTortoise(layerSize int, blocks BlockCache, log log.Log) *ninjaTortoise {
+func NewNinjaTortoise(layerSize int, blocks BlockCache, hdist int, log log.Log) *ninjaTortoise {
 	return &ninjaTortoise{
 		Log:                log,
 		BlockCache:         blocks,
+		hdist:              hdist,
 		avgLayerSize:       uint64(layerSize),
 		pBase:              votingPattern{},
 		patterns:           map[types.LayerID][]votingPattern{},
@@ -270,7 +274,7 @@ func (ni *ninjaTortoise) updateCorrectionVectors(p votingPattern, bottomOfWindow
 	ni.ForBlockInView(tp, bottomOfWindow, foo)
 }
 
-func (ni *ninjaTortoise) updatePatternTally(newMinGood votingPattern, botomOfWindow types.LayerID, correctionMap map[types.BlockID]vec, effCountMap map[types.LayerID]int) {
+func (ni *ninjaTortoise) updatePatternTally(newMinGood votingPattern, correctionMap map[types.BlockID]vec, effCountMap map[types.LayerID]int) {
 	ni.Debug("update tally pbase id:%d layer:%d p id:%d layer:%d", ni.pBase.id, ni.pBase.Layer(), newMinGood.id, newMinGood.Layer())
 	for idx, effc := range effCountMap {
 		ni.tGoodLock.RLock()
@@ -502,7 +506,7 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) { //i most rec
 			if Window > newlyr.Index() {
 				windowStart = 0
 			} else {
-				windowStart = newlyr.Index() - Window + 1
+				windowStart = Max(ni.pBase.Layer()+1, newlyr.Index()-Window+1)
 			}
 
 			view := make(map[types.BlockID]struct{})
@@ -521,10 +525,10 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) { //i most rec
 			ni.tPatternLock.RLock()
 			tp := ni.tPattern[p]
 			ni.tPatternLock.RUnlock()
-			ni.ForBlockInView(tp, ni.pBase.Layer()+1, foo)
+			ni.ForBlockInView(tp, windowStart, foo)
 
 			//add corrected implicit votes
-			ni.updatePatternTally(p, windowStart, correctionMap, effCountMap)
+			ni.updatePatternTally(p, correctionMap, effCountMap)
 
 			//add explicit votes
 			addPtrnVt := ni.addPatternVote(p, view)
@@ -533,7 +537,7 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) { //i most rec
 			}
 
 			complete := true
-			for idx := windowStart; idx < j; idx++ {
+			for idx := types.LayerID(0); idx < j; idx++ {
 				layer, _ := ni.LayerBlockIds(idx) //todo handle error
 				bids := make([]types.BlockID, 0, ni.avgLayerSize)
 				for _, bid := range layer {
@@ -558,7 +562,10 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) { //i most rec
 						complete = false //not complete
 					}
 				}
-				updatePatSupport(ni, p, bids, idx)
+
+				if idx > ni.pBase.Layer() {
+					updatePatSupport(ni, p, bids, idx)
+				}
 			}
 
 			//update correction vectors after vote count

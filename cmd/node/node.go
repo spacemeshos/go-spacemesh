@@ -346,7 +346,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	beaconProvider := &oracle.EpochBeaconProvider{}
 	eValidator := oracle.NewBlockEligibilityValidator(int32(layerSize), layersPerEpoch, atxdb, beaconProvider, BLS381.Verify2, lg.WithName("blkElgValidator"))
 
-	trtl := tortoise.NewAlgorithm(int(1), mdb, lg.WithName("trtl"))
+	trtl := tortoise.NewAlgorithm(int(layerSize), mdb, app.Config.Hdist, lg.WithName("trtl"))
 
 	txpool := miner.NewTypesTransactionIdMemPool()
 	atxpool := miner.NewTypesAtxIdMemPool()
