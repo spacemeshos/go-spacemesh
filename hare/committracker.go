@@ -1,10 +1,5 @@
 package hare
 
-import (
-	"fmt"
-	"github.com/spacemeshos/go-spacemesh/hare/metrics"
-)
-
 type commitTracker interface {
 	OnCommit(msg *Msg)
 	HasEnoughCommits() bool
@@ -52,7 +47,8 @@ func (ct *CommitTracker) OnCommit(msg *Msg) {
 	}
 
 	// add msg
-	metrics.CommitCounter.With("set_id", fmt.Sprint(s.Id())).Add(1)
+	// todo: PROMETHEUS
+	//metrics.CommitCounter.With("set_id", fmt.Sprint(s.Id())).Add(1)
 	ct.commits = append(ct.commits, msg.Message)
 }
 

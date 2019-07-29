@@ -3,13 +3,16 @@
 package log
 
 import (
+	"github.com/spacemeshos/go-spacemesh/rand"
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/natefinch/lumberjack.v2"
 	"io"
-	"math/rand"
+	"time"
+
+	//"math/rand"
 	"os"
 	"path/filepath"
-	"time"
+	//"time"
 
 	"go.uber.org/zap"
 )
@@ -50,11 +53,11 @@ func logLevel() zap.LevelEnablerFunc {
 	} else {
 		return WarnLevel
 	}
-	//if debugMode {
-	//	return DebugLevel
-	//} else {
-	//	return InfoLevel
-	//}
+	/*if debugMode {
+		return DebugLevel
+	} else {
+		return InfoLevel
+	}*/
 }
 
 func encoder() zapcore.Encoder {

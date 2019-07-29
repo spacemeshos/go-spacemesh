@@ -6,7 +6,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
-	"github.com/spacemeshos/go-spacemesh/p2p/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -20,7 +19,6 @@ const propagateHandleBufferSize = 1000 // number of MessageValidation that we al
 
 const ProtocolName = "/p2p/1.0/gossip"
 const protocolVer = "0"
-
 
 type hash [12]byte
 
@@ -37,11 +35,10 @@ func calcHash(msg []byte, prot string) hash {
 }
 
 type doubleCache struct {
-	size uint
-	cacheA  map[hash]struct{}
-	cacheB  map[hash]struct{}
+	size   uint
+	cacheA map[hash]struct{}
+	cacheB map[hash]struct{}
 }
-
 
 func newDoubleCache(size uint) *doubleCache {
 	return &doubleCache{size, make(map[hash]struct{}, size), make(map[hash]struct{}, size)}
@@ -73,7 +70,6 @@ func (a *doubleCache) insert(key hash) {
 	a.cacheA = make(map[hash]struct{}, a.size)
 }
 
-
 // Interface for the underlying p2p layer
 type baseNetwork interface {
 	SendMessage(peerPubkey p2pcrypto.PublicKey, protocol string, payload []byte) error
@@ -100,10 +96,10 @@ func NewMsgCache(size int) MsgCache {
 }
 
 func (bc *MsgCache) Put(id hash) {
-	bc.Cache.Add(id, struct {}{})
+	bc.Cache.Add(id, struct{}{})
 }
 
-func (bc MsgCache) Get(id hash)  bool {
+func (bc MsgCache) Get(id hash) bool {
 	_, found := bc.Cache.Get(id)
 	return found
 }
@@ -232,7 +228,8 @@ func (prot *Protocol) processMessage(sender p2pcrypto.PublicKey, protocol string
 
 	isOld := prot.markMessageAsOld(h)
 	if isOld {
-		metrics.OldGossipMessages.With(metrics.ProtocolLabel, protocol).Add(1)
+		// todo: PROMETHEUS
+		//metrics.OldGossipMessages.With(metrics.ProtocolLabel, protocol).Add(1)
 		// todo : - have some more metrics for termination
 		// todo	: - maybe tell the peer we got this message already?
 		// todo : - maybe block this peer since he sends us old messages
@@ -241,7 +238,8 @@ func (prot *Protocol) processMessage(sender p2pcrypto.PublicKey, protocol string
 	}
 
 	prot.Log.With().EventInfo("new_gossip_message", log.String("from", sender.String()), log.String("protocol", protocol), log.String("hash", common.BytesToHash(h[:]).ShortString()))
-	metrics.NewGossipMessages.With("protocol", protocol).Add(1)
+	// todo: PROMETHEUS
+	//metrics.NewGossipMessages.With("protocol", protocol).Add(1)
 	return prot.net.ProcessGossipProtocolMessage(sender, protocol, msg, prot.propagateQ)
 }
 
@@ -252,7 +250,7 @@ loop:
 		select {
 		case msgV := <-prot.propagateQ:
 			h := calcHash(msgV.Message(), msgV.Protocol())
-			prot.Log.With().EventDebug("new_gossip_message_relay",  log.String("protocol", msgV.Protocol()), log.String("hash", common.BytesToHash(h[:]).ShortString()))
+			prot.Log.With().EventDebug("new_gossip_message_relay", log.String("protocol", msgV.Protocol()), log.String("hash", common.BytesToHash(h[:]).ShortString()))
 			go prot.propagateMessage(msgV.Message(), calcHash(msgV.Message(), msgV.Protocol()), msgV.Protocol(), msgV.Sender())
 		case <-prot.shutdown:
 			err = errors.New("protocol shutdown")

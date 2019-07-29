@@ -3,7 +3,6 @@ package net
 import (
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"time"
 
@@ -153,7 +152,8 @@ func (c *FormattedConnection) Send(m []byte) error {
 	if err != nil {
 		return err
 	}
-	metrics.PeerRecv.With(metrics.PeerIdLabel, c.remotePub.String()).Add(float64(len(m)))
+	// todo: PROMETHEUS
+	//metrics.PeerRecv.With(metrics.PeerIdLabel, c.remotePub.String()).Add(float64(len(m)))
 	return nil
 }
 
@@ -227,8 +227,8 @@ Loop:
 				err = ErrTriedToSetupExistingConn
 				break Loop
 			}
-
-			metrics.PeerRecv.With(metrics.PeerIdLabel, c.remotePub.String()).Add(float64(len(msg)))
+			// todo: PROMETHEUS
+			//metrics.PeerRecv.With(metrics.PeerIdLabel, c.remotePub.String()).Add(float64(len(msg)))
 			c.publish(msg)
 
 		case <-c.closeChan:

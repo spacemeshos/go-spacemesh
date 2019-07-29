@@ -3,7 +3,6 @@ package hare
 import (
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
-	"github.com/spacemeshos/go-spacemesh/hare/metrics"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"sync"
@@ -202,7 +201,8 @@ func (h *Hare) onTick(id types.LayerID) {
 		h.broker.Unregister(cp.Id())
 		return
 	}
-	metrics.TotalConsensusProcesses.Add(1)
+	// todo: PROMETHEUS
+	//metrics.TotalConsensusProcesses.Add(1)
 }
 
 var (
@@ -237,7 +237,8 @@ func (h *Hare) outputCollectionLoop() {
 				h.Warning("Err collecting output from hare err: %v", err)
 			}
 			h.broker.Unregister(out.Id()) // unregister from broker after termination
-			metrics.TotalConsensusProcesses.Add(-1)
+			// todo: PROMETHEUS
+			//metrics.TotalConsensusProcesses.Add(-1)
 		case <-h.CloseChannel():
 			return
 		}

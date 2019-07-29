@@ -2,8 +2,6 @@ package hare
 
 import (
 	"encoding/binary"
-	"fmt"
-	"github.com/spacemeshos/go-spacemesh/hare/metrics"
 	"hash/fnv"
 )
 
@@ -38,7 +36,8 @@ func (nt *NotifyTracker) OnNotify(msg *Msg) bool {
 	s := NewSet(msg.InnerMsg.Values)
 	nt.onCertificate(msg.InnerMsg.Cert.AggMsgs.Messages[0].InnerMsg.K, s)
 	nt.tracker.Track(s.Id())
-	metrics.NotifyCounter.With("set_id", fmt.Sprint(s.Id())).Add(1)
+	// todo: PROMETHEUS
+	//metrics.NotifyCounter.With("set_id", fmt.Sprint(s.Id())).Add(1)
 
 	return false
 }

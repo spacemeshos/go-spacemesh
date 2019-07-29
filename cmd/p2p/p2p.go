@@ -5,7 +5,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/api"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spf13/cobra"
 	"os"
@@ -54,7 +53,8 @@ func (app *P2PApp) Start(cmd *cobra.Command, args []string) {
 
 	// Testing stuff
 	api.ApproveAPIGossipMessages(cmdp.Ctx, app.p2p)
-	metrics.StartCollectingMetrics(app.Config.MetricsPort)
+	// todo: PROMETHEUS
+	//metrics.StartCollectingMetrics(app.Config.MetricsPort)
 
 	// start the node
 

@@ -253,7 +253,6 @@ func (m *MeshDB) writeBlock(bl *types.Block) error {
 		}
 	}()
 
-
 	return nil
 }
 

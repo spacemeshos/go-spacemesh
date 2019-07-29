@@ -66,7 +66,7 @@ type BlockBuilder struct {
 	atxValidator     AtxValidator
 	syncer           Syncer
 	started          bool
-	layersPerEpoch	 uint16
+	layersPerEpoch   uint16
 }
 
 func NewBlockBuilder(minerID types.NodeId, sgn Signer, net p2p.Service,
@@ -106,7 +106,7 @@ func NewBlockBuilder(minerID types.NodeId, sgn Signer, net p2p.Service,
 		atxValidator:     atxValidator,
 		syncer:           syncer,
 		started:          false,
-		layersPerEpoch:	  layersPerEpoch,
+		layersPerEpoch:   layersPerEpoch,
 	}
 
 }

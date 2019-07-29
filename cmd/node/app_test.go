@@ -194,7 +194,7 @@ loop:
 							if r1 == r2 {
 								clientsDone++
 								if clientsDone == len(suite.apps)-1 {
-									log.Info("%d roots confirmed out of %d", clientsDone, len(suite.apps))
+									log.Info("%d roots confirmed out of %d, breaking loop", clientsDone, len(suite.apps))
 									break loop
 								}
 							}

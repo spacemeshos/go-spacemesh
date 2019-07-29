@@ -316,7 +316,7 @@ func (s *Syncer) confirmBlockValidity(blk *types.Block) error {
 		return errors.New(fmt.Sprintf("block %v eligablety check failed ", blk.ID()))
 	}
 
-	blocklog.Info("checking block eligibilty took %v, active check took %v", activeT,time.Since(t))
+	blocklog.Info("checking block eligibilty took %v, active check took %v", activeT, time.Since(t))
 
 	return nil
 }
