@@ -16,7 +16,6 @@ var Cmd = &cobra.Command{
 	Use:   "p2p",
 	Short: "start p2p",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("Starting p2p")
 		p2pApp := NewP2PApp()
 		defer p2pApp.Cleanup()
 
