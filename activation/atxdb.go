@@ -426,6 +426,9 @@ func (db *ActivationDb) GetEpochAtxIds(epochId types.EpochId) ([]types.AtxId, er
 // getAtxUnlocked gets the atx from db, this function is not thread safe and should be called under db lock
 // this function returns a pointer to an atx and an error if failed to retrieve it
 func (db *ActivationDb) getAtxUnlocked(id types.AtxId) (*types.ActivationTx, error) {
+	if atx, gotIt := db.atxCache.Get(id); gotIt {
+		return atx, nil
+	}
 	b, err := db.atxs.Get(id.Bytes())
 	if err != nil {
 		return nil, err
@@ -434,6 +437,7 @@ func (db *ActivationDb) getAtxUnlocked(id types.AtxId) (*types.ActivationTx, err
 	if err != nil {
 		return nil, err
 	}
+	db.atxCache.Add(id, atx)
 	return atx, nil
 }
 
