@@ -233,11 +233,11 @@ func (prot *Protocol) processMessage(sender p2pcrypto.PublicKey, protocol string
 		// todo : - have some more metrics for termination
 		// todo	: - maybe tell the peer we got this message already?
 		// todo : - maybe block this peer since he sends us old messages
-		prot.Log.With().Debug("old_gossip_message", log.String("from", sender.String()), log.String("protocol", protocol), log.String("hash", common.BytesToHash(h[:]).ShortString()))
+		prot.Log.With().Debug("old_gossip_message", log.String("from", sender.String()), log.String("protocol", protocol), log.String("hash", common.Bytes2Hex(h[:])))
 		return nil
 	}
 
-	prot.Log.With().EventInfo("new_gossip_message", log.String("from", sender.String()), log.String("protocol", protocol), log.String("hash", common.BytesToHash(h[:]).ShortString()))
+	prot.Log.With().EventInfo("new_gossip_message", log.String("from", sender.String()), log.String("protocol", protocol), log.String("hash", common.Bytes2Hex(h[:])))
 	// todo: PROMETHEUS
 	//metrics.NewGossipMessages.With("protocol", protocol).Add(1)
 	return prot.net.ProcessGossipProtocolMessage(sender, protocol, msg, prot.propagateQ)

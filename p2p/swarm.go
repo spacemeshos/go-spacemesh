@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/golang/protobuf/proto"
+	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/connectionpool"
@@ -18,7 +19,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	timeSyncConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
-	"hash/fnv"
+	"golang.org/x/crypto/sha3"
+	"io"
 
 	inet "net"
 	"strconv"
@@ -301,14 +303,18 @@ func (s *swarm) SendMessage(peerPubkey p2pcrypto.PublicKey, protocol string, pay
 	return s.sendMessageImpl(peerPubkey, protocol, service.DataBytes{Payload: payload})
 }
 
-type hash uint32
+type hash [12]byte
 
 // fnv.New32 must be used every time to be sure we get consistent results.
 func calcHash(msg []byte, prot string) hash {
-	msghash := fnv.New32() // todo: Add nonce to messages instead
+	msghash := sha3.NewShake128() // todo: Add nonce to messages instead
 	msghash.Write(msg)
 	msghash.Write([]byte(prot))
-	return hash(msghash.Sum32())
+	var h [12]byte
+	buf := make([]byte, 16)
+	_, _ = io.ReadFull(msghash, buf)
+	copy(h[:], buf[0:12])
+	return hash(h)
 }
 
 // SendMessage Sends a message to a remote node
@@ -580,7 +586,7 @@ func (s *swarm) ProcessGossipProtocolMessage(sender p2pcrypto.PublicKey, protoco
 // Broadcast creates a gossip message signs it and disseminate it to neighbors.
 func (s *swarm) Broadcast(protocol string, payload []byte) error {
 	h := calcHash(payload, protocol)
-	s.lNode.With().Info("new_gossip_message_broadcast", log.String("from", s.lNode.String()), log.String("protocol", protocol), log.Uint32("hash", uint32(h)))
+	s.lNode.With().Info("new_gossip_message_broadcast", log.String("from", s.lNode.String()), log.String("protocol", protocol), log.String("hash", common.Bytes2Hex(h[:])))
 	return s.gossip.Broadcast(payload, protocol)
 }
 
