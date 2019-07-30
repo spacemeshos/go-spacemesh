@@ -438,7 +438,7 @@ func (app *SpacemeshApp) startServices() {
 	}
 	app.poetListener.Start()
 	app.atxBuilder.Start()
-	app.clock.Start()
+	app.clock.StartNotifying()
 }
 
 func (app SpacemeshApp) stopServices() {
