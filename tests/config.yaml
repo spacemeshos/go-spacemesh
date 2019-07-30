@@ -24,8 +24,8 @@ bootstrap:
     layers-per-epoch: '3'
     coinbase: '0x4321'
     eligibility-confidence-param: '2'
-    eligibility-genesis-active-size: '50'
     eligibility-epoch-offset: '1'
+    genesis-active-size: '50'
 client:
   image: 'spacemeshos/go-spacemesh:develop'
   command: '/bin/go-spacemesh'
@@ -41,8 +41,8 @@ client:
     layers-per-epoch: '3'
     coinbase: '0x1234'
     eligibility-confidence-param: '2'
-    eligibility-genesis-active-size: '50'
     eligibility-epoch-offset: '1'
+    genesis-active-size: '50'
 elastic:
   host: elastic.spacemesh.io
   port: 9200
