@@ -172,7 +172,7 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 
 //download data from remote storage
 func GetData(path string, lg log.Log) error {
-	dirs := []string{"atx", "nipst", "blocks", "ids", "layers", "transactions", "validity"}
+	dirs := []string{"poet", "atx", "nipst", "blocks", "ids", "layers", "transactions", "validity"}
 	for _, dir := range dirs {
 		if err := os.MkdirAll(path+dir, 0777); err != nil {
 			return err
