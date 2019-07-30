@@ -1,6 +1,7 @@
 package activation
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"github.com/google/uuid"
@@ -19,9 +20,9 @@ import (
 	"time"
 )
 
-func createLayerWithAtx(t *testing.T, msh *mesh.Mesh, id types.LayerID, numOfBlocks int, atxs []*types.ActivationTx, votes []types.BlockID, views []types.BlockID) (created []types.BlockID) {
+func createLayerWithAtx(t require.TestingT, msh *mesh.Mesh, id types.LayerID, numOfBlocks int, atxs []*types.ActivationTx, votes []types.BlockID, views []types.BlockID) (created []types.BlockID) {
 	for i := 0; i < numOfBlocks; i++ {
-		block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), id, []byte("data1"))
+		block1 := types.NewExistingBlock(types.BlockID(binary.BigEndian.Uint64([]byte(uuid.New().String()[:8]))), id, []byte("data1"))
 		block1.BlockVotes = append(block1.BlockVotes, votes...)
 		for _, atx := range atxs {
 			block1.AtxIds = append(block1.AtxIds, atx.Id())
@@ -521,8 +522,8 @@ func TestActivationDb_ProcessAtx(t *testing.T) {
 	assert.Equal(t, idx1, res)
 }
 
-func TestActivationDb_SyntacticallyValidateAtx_Benchmark(t *testing.T) {
-	r := require.New(t)
+func BenchmarkActivationDb_SyntacticallyValidateAtx(b *testing.B) {
+	r := require.New(b)
 	nopLogger := log.NewDefault("").WithOptions(log.Nop)
 
 	atxdb, layers := getAtxDb("t8")
@@ -546,13 +547,13 @@ func TestActivationDb_SyntacticallyValidateAtx_Benchmark(t *testing.T) {
 	poetRef := []byte{0x12, 0x21}
 	for _, atx := range atxs {
 		hash, err := atx.NIPSTChallenge.Hash()
-		assert.NoError(t, err)
+		r.NoError(err)
 		atx.Nipst = nipst.NewNIPSTWithChallenge(hash, poetRef)
 	}
 
-	blocks := createLayerWithAtx(t, layers, 0, blocksPerLayer, atxs, []types.BlockID{}, []types.BlockID{})
+	blocks := createLayerWithAtx(b, layers, 0, blocksPerLayer, atxs, []types.BlockID{}, []types.BlockID{})
 	for i := 1; i < numberOfLayers; i++ {
-		blocks = createLayerWithAtx(t, layers, types.LayerID(i), blocksPerLayer, []*types.ActivationTx{}, blocks, blocks)
+		blocks = createLayerWithAtx(b, layers, types.LayerID(i), blocksPerLayer, []*types.ActivationTx{}, blocks, blocks)
 	}
 
 	idx1 := types.NodeId{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}
