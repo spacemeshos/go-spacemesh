@@ -498,7 +498,9 @@ func (db *ActivationDb) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
 		return nil, errors.New("trying to fetch empty atx id")
 	}
 
+	t := time.Now()
 	if atx, gotIt := db.atxCache.Get(id); gotIt {
+		db.log.Info("running GetAtx (%v) took %v read from cache: %v", id, time.Since(t), true)
 		return atx, nil
 	}
 	db.RLock()
@@ -512,6 +514,7 @@ func (db *ActivationDb) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
 		return nil, err
 	}
 	db.atxCache.Add(id, atx)
+	db.log.Info("running GetAtx (%v) took %v read from cache: %v", id, time.Since(t), false)
 	return atx, nil
 }
 
