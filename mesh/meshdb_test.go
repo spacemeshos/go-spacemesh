@@ -10,8 +10,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"math"
 	"os"
+	"path"
 	"testing"
 	"time"
 )
@@ -72,7 +74,7 @@ func chooseRandomPattern(blocksInLayer int, patternSize int) []int {
 	return indexes
 }
 
-func createLayerWithRandVoting(index types.LayerID, prev []*types.Layer, blocksInLayer int, patternSize int) *types.Layer {
+func createLayerWithRandVoting(index types.LayerID, prev []*types.Layer, blocksInLayer int, patternSize int, lg log.Log) *types.Layer {
 	l := types.NewLayer(index)
 	var patterns [][]int
 	for _, l := range prev {
@@ -82,7 +84,7 @@ func createLayerWithRandVoting(index types.LayerID, prev []*types.Layer, blocksI
 	}
 	layerBlocks := make([]types.BlockID, 0, blocksInLayer)
 	for i := 0; i < blocksInLayer; i++ {
-		bl := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 0, []byte("data data data"))
+		bl := types.NewExistingBlock(types.RandBlockId(), 0, []byte("data data data"))
 		layerBlocks = append(layerBlocks, bl.ID())
 		for idx, pat := range patterns {
 			for _, id := range pat {
@@ -95,7 +97,7 @@ func createLayerWithRandVoting(index types.LayerID, prev []*types.Layer, blocksI
 		}
 		l.AddBlock(bl)
 	}
-	log.Info("Created mesh.LayerID %d with blocks %d", l.Index(), layerBlocks)
+	lg.Info("Created mesh.LayerID %d with blocks %d", l.Index(), layerBlocks)
 	return l
 }
 
@@ -122,7 +124,7 @@ func testForeachInView(mdb *MeshDB, t *testing.T) {
 	}
 
 	for i := 0; i < 4; i++ {
-		lyr := createLayerWithRandVoting(l.Index()+1, []*types.Layer{l}, 2, 2)
+		lyr := createLayerWithRandVoting(l.Index()+1, []*types.Layer{l}, 2, 2, log.NewDefault("msh"))
 		for _, b := range lyr.Blocks() {
 			blocks[b.ID()] = b
 			mdb.AddBlock(b)
@@ -144,4 +146,45 @@ func testForeachInView(mdb *MeshDB, t *testing.T) {
 		_, found := mp[bl.ID()]
 		assert.True(t, found, "did not process block  ", bl)
 	}
+}
+
+func BenchmarkNewPersistentMeshDB(b *testing.B) {
+	const batchSize = 50
+
+	r := require.New(b)
+
+	mdb := NewPersistentMeshDB(path.Join(Path, "mesh_db"), log.NewDefault("meshDb"))
+	defer mdb.Close()
+	defer teardown()
+
+	l := GenesisLayer()
+	gen := l.Blocks()[0]
+
+	err := mdb.AddBlock(gen)
+	r.NoError(err)
+
+	start := time.Now()
+	lStart := time.Now()
+	for i := 0; i < 10*batchSize; i++ {
+		lyr := createLayerWithRandVoting(l.Index()+1, []*types.Layer{l}, 200, 20, log.NewDefault("msh").WithOptions(log.Nop))
+		for _, b := range lyr.Blocks() {
+			err := mdb.AddBlock(b)
+			r.NoError(err)
+		}
+		l = lyr
+		if i%batchSize == batchSize-1 {
+			fmt.Printf("layers %3d-%3d took %12v\t", i-(batchSize-1), i, time.Since(lStart))
+			lStart = time.Now()
+			for i := 0; i < 100; i++ {
+				for _, b := range lyr.Blocks() {
+					block, err := mdb.GetBlock(b.Id)
+					r.NoError(err)
+					r.NotNil(block)
+				}
+			}
+			fmt.Printf("reading last layer 100 times took %v\n", time.Since(lStart))
+			lStart = time.Now()
+		}
+	}
+	fmt.Printf("\n>>> Total time: %v\n\n", time.Since(start))
 }
