@@ -12,7 +12,6 @@ import (
 	"math/big"
 	"sort"
 	"sync"
-	"sync/atomic"
 	"time"
 )
 
@@ -366,13 +365,13 @@ func (m *Mesh) handleOrphanBlocks(blk *types.BlockHeader) {
 	}
 	m.orphanBlocks[blk.Layer()][blk.ID()] = struct{}{}
 	m.Info("Added block %d to orphans", blk.ID())
-	atomic.AddInt32(&m.orphanBlockCount, 1)
+	//atomic.AddInt32(&m.orphanBlockCount, 1)
 	for _, b := range blk.ViewEdges {
 		for _, layermap := range m.orphanBlocks {
 			if _, has := layermap[b]; has {
 				m.Log.Debug("delete block ", b, "from orphans")
 				delete(layermap, b)
-				atomic.AddInt32(&m.orphanBlockCount, -1)
+				//atomic.AddInt32(&m.orphanBlockCount, -1)
 				break
 			}
 		}
@@ -397,7 +396,6 @@ func (m *Mesh) GetUnverifiedLayerBlocks(l types.LayerID) ([]types.BlockID, error
 
 func (m *Mesh) GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error) {
 	m.orphMutex.RLock()
-	defer m.orphMutex.RUnlock()
 	ids := map[types.BlockID]struct{}{}
 	for key, val := range m.orphanBlocks {
 		if key < l {
@@ -406,6 +404,7 @@ func (m *Mesh) GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error) {
 			}
 		}
 	}
+	m.orphMutex.RUnlock()
 
 	blocks, err := m.GetUnverifiedLayerBlocks(l - 1)
 	if err != nil {
