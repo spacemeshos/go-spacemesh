@@ -223,7 +223,7 @@ PreRound:
 	}
 	proc.preRoundTracker.FilterSet(proc.s)
 	if proc.s.Size() == 0 {
-		proc.Event().Error("Fatal: PreRound ended with empty set", log.Uint64("layer_id", uint64(proc.instanceId)))
+		proc.Event().Error("Fatal: PreRound ended with empty set", log.LayerId(uint64(proc.instanceId)))
 	}
 	proc.advanceToNextRound() // K was initialized to -1, K should be 0
 
@@ -294,14 +294,18 @@ func (proc *ConsensusProcess) handleMessage(m *Msg) {
 			return
 		}
 
-		proc.Error("Error contextually validating message of type %v err=%v", mType, err)
+		proc.With().Error("Error contextually validating message",
+			log.String("msg_type", mType), log.String("sender_id", m.PubKey.ShortString()),
+			log.Int32("current_k", proc.k), log.Int32("msg_k", m.InnerMsg.K),
+			log.LayerId(uint64(proc.instanceId)), log.Err(err))
 		return
 	}
 
 	if !res { // not early, no error, simply contextually invalid
 		proc.With().Warning("message does not belong to this round and is not an early msg",
 			log.String("msg_type", mType), log.String("sender_id", m.PubKey.ShortString()),
-			log.Int32("current_k", proc.k), log.Int32("msg_k", m.InnerMsg.K))
+			log.Int32("current_k", proc.k), log.Int32("msg_k", m.InnerMsg.K),
+			log.LayerId(uint64(proc.instanceId)))
 		return
 	}
 

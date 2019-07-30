@@ -92,7 +92,7 @@ func SyncMockFactory(number int, conf Configuration, name string, dbType string,
 		txpool := miner.NewTypesTransactionIdMemPool()
 		atxpool := miner.NewTypesAtxIdMemPool()
 		sync := NewSync(net, getMesh(dbType, Path+name+"_"+time.Now().String()), txpool, atxpool, mockTxProcessor{}, blockValidator, poetDb(), conf, tk, 0, l)
-		ts.Start()
+		ts.StartNotifying()
 		nodes = append(nodes, sync)
 		p2ps = append(p2ps, net)
 	}
@@ -632,7 +632,7 @@ func Test_TwoNodes_SyncIntegrationSuite(t *testing.T) {
 		poetDb := activation.NewPoetDb(database.NewMemDatabase(), l.WithName("poetDb"))
 		sync := NewSync(s, msh, miner.NewTypesTransactionIdMemPool(), miner.NewTypesAtxIdMemPool(), mockTxProcessor{}, blockValidator, poetDb, conf, tk, 0, l)
 		sis.syncers = append(sis.syncers, sync)
-		ts.Start()
+		ts.StartNotifying()
 		atomic.AddUint32(&i, 1)
 	}
 	suite.Run(t, sis)
@@ -729,7 +729,7 @@ func Test_Multiple_SyncIntegrationSuite(t *testing.T) {
 		blockValidator := NewBlockValidator(BlockEligibilityValidatorMock{})
 		poetDb := activation.NewPoetDb(database.NewMemDatabase(), l.WithName("poetDb"))
 		sync := NewSync(s, msh, miner.NewTypesTransactionIdMemPool(), miner.NewTypesAtxIdMemPool(), mockTxProcessor{}, blockValidator, poetDb, conf, tk, 0, l)
-		ts.Start()
+		ts.StartNotifying()
 		sis.syncers = append(sis.syncers, sync)
 		atomic.AddUint32(&i, 1)
 	}

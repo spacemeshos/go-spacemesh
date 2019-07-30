@@ -111,8 +111,8 @@ const (
 )
 
 func (s *Syncer) IsSynced() bool {
-	s.Log.Info("latest: %v, maxSynced %v", s.LatestLayer(), s.maxSyncLayer())
-	return s.LatestLayer()+1 >= s.maxSyncLayer()
+	s.Log.Info("latest: %v, maxSynced %v", s.LatestLayer(), s.lastTickedLayer())
+	return s.LatestLayer()+1 >= s.lastTickedLayer()
 }
 
 func (s *Syncer) Start() {
@@ -179,7 +179,7 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool A
 	return s
 }
 
-func (s *Syncer) maxSyncLayer() types.LayerID {
+func (s *Syncer) lastTickedLayer() types.LayerID {
 	defer s.currentLayerMutex.RUnlock()
 	s.currentLayerMutex.RLock()
 	return s.currentLayer
@@ -187,7 +187,7 @@ func (s *Syncer) maxSyncLayer() types.LayerID {
 
 func (s *Syncer) Synchronise() {
 	mu := sync.Mutex{}
-	for currentSyncLayer := s.ValidatedLayer() + 1; currentSyncLayer < s.maxSyncLayer(); currentSyncLayer++ {
+	for currentSyncLayer := s.ValidatedLayer() + 1; currentSyncLayer < s.lastTickedLayer(); currentSyncLayer++ {
 		s.Info("syncing layer %v current consensus layer is %d", currentSyncLayer, s.currentLayer)
 		lyr, err := s.GetLayer(types.LayerID(currentSyncLayer))
 		if err != nil {
