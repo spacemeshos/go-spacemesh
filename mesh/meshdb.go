@@ -81,9 +81,9 @@ func (m *MeshDB) AddBlock(bl *types.Block) error {
 }
 
 func (m *MeshDB) GetBlock(id types.BlockID) (*types.Block, error) {
-	defer m.Log.Time(time.Now(), fmt.Sprintf("GetBlock (%v)", id))
+	t := time.Now()
 	if blkh := m.blockCache.Get(id); blkh != nil {
-		m.Log.Info("%v found in cache", id)
+		m.Log.Info("running GetBlock (%v) took %v read from cache: %v",id, time.Since(t), true)
 		return blkh, nil
 	}
 
@@ -93,6 +93,7 @@ func (m *MeshDB) GetBlock(id types.BlockID) (*types.Block, error) {
 	}
 	mbk := &types.Block{}
 	err = types.BytesToInterface(b, mbk)
+	m.Log.Info("running GetBlock (%v) took %v read from cache: %v",id, time.Since(t), false)
 	return mbk, err
 }
 
