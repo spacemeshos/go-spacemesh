@@ -83,6 +83,7 @@ func (m *MeshDB) AddBlock(bl *types.Block) error {
 func (m *MeshDB) GetBlock(id types.BlockID) (*types.Block, error) {
 	defer m.Log.Time(time.Now(), fmt.Sprintf("GetBlock (%v)", id))
 	if blkh := m.blockCache.Get(id); blkh != nil {
+		m.Log.Info("%v found in cache", id)
 		return blkh, nil
 	}
 
