@@ -26,7 +26,7 @@ def analyze_mining(deployment, last_layer, layers_per_epoch, layer_avg_size, tot
     for x in atxmap:
         lst = []
         for y in atxmap[x]:
-            if y[1] != 9:  # check layer
+            if y[1] != last_layer:  # check layer
                 lst.append(y[0])  # append data
         newmap[x] = lst  # remove layer 9
     atxmap = newmap
