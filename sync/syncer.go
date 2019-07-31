@@ -187,8 +187,13 @@ func (s *Syncer) lastTickedLayer() types.LayerID {
 
 func (s *Syncer) Synchronise() {
 	mu := sync.Mutex{}
-	for currentSyncLayer := s.ValidatedLayer() + 1; currentSyncLayer < s.lastTickedLayer(); currentSyncLayer++ {
+	for currentSyncLayer := s.ValidatedLayer() + 1; currentSyncLayer <= s.lastTickedLayer(); currentSyncLayer++ {
 		s.Info("syncing layer %v current consensus layer is %d", currentSyncLayer, s.currentLayer)
+
+		if s.IsSynced() && currentSyncLayer == s.lastTickedLayer() {
+			return
+		}
+
 		lyr, err := s.GetLayer(types.LayerID(currentSyncLayer))
 		if err != nil {
 			s.Info("layer %v is not in the database", currentSyncLayer)
