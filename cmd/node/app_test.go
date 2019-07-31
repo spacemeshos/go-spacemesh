@@ -83,15 +83,13 @@ func (suite *AppTestSuite) TearDownTest() {
 	}
 }
 
-func (suite *AppTestSuite) initMultipleInstances(numOfInstances int, storeFormat string, genesisTime string) {
+var runningName = 'a'
+var net = service.NewSimulator()
+
+func (suite *AppTestSuite) initMultipleInstances(numOfInstances int, numOfTotalInstances int, storeFormat string, genesisTime string, poetClient *nipst.RPCPoetClient) {
 	r := require.New(suite.T())
 
-	net := service.NewSimulator()
-	runningName := 'a'
 	rolacle := eligibility.New()
-	poetClient, err := NewRPCPoetHarnessClient()
-	r.NoError(err)
-	suite.poetCleanup = poetClient.CleanUp
 	rng := BLS381.DefaultSeed()
 	for i := 0; i < numOfInstances; i++ {
 		smApp := NewSpacemeshApp()
@@ -102,8 +100,8 @@ func (suite *AppTestSuite) initMultipleInstances(numOfInstances int, storeFormat
 		smApp.Config.POST.SpacePerUnit = 1 << 10 // 1KB.
 		smApp.Config.POST.FileSize = 1 << 10     // 1KB.
 
-		smApp.Config.HARE.N = numOfInstances
-		smApp.Config.HARE.F = numOfInstances / 2
+		smApp.Config.HARE.N = numOfTotalInstances
+		smApp.Config.HARE.F = numOfTotalInstances / 2
 		smApp.Config.HARE.RoundDuration = 3
 		smApp.Config.HARE.WakeupDelta = 10
 		smApp.Config.HARE.ExpectedLeaders = 5
@@ -116,7 +114,6 @@ func (suite *AppTestSuite) initMultipleInstances(numOfInstances int, storeFormat
 		edSgn := signing.NewEdSigner()
 		pub := edSgn.PublicKey()
 
-		r.NoError(err)
 		vrfPriv, vrfPub := BLS381.GenKeyPair(rng)
 		vrfSigner := BLS381.NewBlsSigner(vrfPriv)
 		nodeID := types.NodeId{Key: pub.String(), VRFPublicKey: vrfPub}
@@ -131,7 +128,7 @@ func (suite *AppTestSuite) initMultipleInstances(numOfInstances int, storeFormat
 
 		postClient := nipst.NewPostClient(&smApp.Config.POST)
 
-		err = smApp.initServices(nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(layerSize), postClient, poetClient, vrfSigner, uint16(smApp.Config.LayersPerEpoch))
+		err := smApp.initServices(nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(layerSize), postClient, poetClient, vrfSigner, uint16(smApp.Config.LayersPerEpoch))
 		r.NoError(err)
 		smApp.setupGenesis()
 
@@ -164,11 +161,25 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	}
 	txbytes, _ := types.SignedTransactionAsBytes(tx)
 	path := "../tmp/test/state_" + time.Now().String()
+
 	genesisTime := time.Now().Add(20 * time.Second).Format(time.RFC3339)
-	suite.initMultipleInstances(5, path, genesisTime)
+
+	poetClient, err := NewRPCPoetHarnessClient()
+	if err != nil {
+		log.Panic("failed creating poet client harness: %v", err)
+	}
+	suite.poetCleanup = poetClient.CleanUp
+
+	suite.initMultipleInstances(5, 6, path, genesisTime, poetClient)
 	for _, a := range suite.apps {
 		a.startServices()
 	}
+
+	go func() {
+		<-time.After(75 * time.Second)
+		suite.initMultipleInstances(1, 6, path, genesisTime, poetClient)
+		suite.apps[len(suite.apps)-1].startServices()
+	}()
 
 	defer suite.gracefulShutdown()
 
@@ -315,7 +326,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 		}
 	}
 
-	total_atxs := 0
+	total_atxs := 1 // assume we had an atx for the late node in order to pass assertion
 
 	for _, atxs := range patient.atxPerEpoch {
 		total_atxs += len(atxs)
@@ -331,7 +342,8 @@ func (suite *AppTestSuite) validateLastATXActiveSetSize(app *SpacemeshApp) {
 	suite.NoError(err)
 	atx, err := app.mesh.GetAtx(*prevAtxId)
 	suite.NoError(err)
-	suite.Equal(len(suite.apps), int(atx.ActiveSetSize), "atx: %v node: %v", atx.ShortId(), app.nodeId.Key[:5])
+	// active set size should be #nodes-1 for an atx that came before the second epoch
+	suite.Equal(len(suite.apps)-1, int(atx.ActiveSetSize), "atx: %v node: %v", atx.ShortId(), app.nodeId.Key[:5])
 }
 
 func (suite *AppTestSuite) gracefulShutdown() {
