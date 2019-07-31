@@ -935,6 +935,7 @@ func TestSyncer_Synchronise(t *testing.T) {
 	sync.AddBlock(types.NewExistingBlock(types.BlockID(2), 2, nil))
 	sync.AddBlock(types.NewExistingBlock(types.BlockID(3), 3, nil))
 	sync.Synchronise()
+	time.Sleep(100 * time.Millisecond) // handle go routine race
 	r.Equal(1, lv.countValidated)
 	r.Equal(1, lv.countValidate) // synced, expect only one call
 
@@ -942,5 +943,6 @@ func TestSyncer_Synchronise(t *testing.T) {
 	sync.lValidator = lv
 	sync.currentLayer = 4 // simulate not synced
 	sync.Synchronise()
-	r.Equal(2, lv.countValidate) // not synced, expect two calls
+	time.Sleep(100 * time.Millisecond) // handle go routine race
+	r.Equal(2, lv.countValidate)       // not synced, expect two calls
 }
