@@ -69,7 +69,7 @@ func (m *MeshDB) Close() {
 }
 
 func (m *MeshDB) AddBlock(bl *types.Block) error {
-	if _, err := m.getMiniBlockBytes(bl.ID()); err == nil {
+	if _, err := m.getBlockBytes(bl.ID()); err == nil {
 		return errors.New(fmt.Sprintf("block %v already exists in database", bl.ID()))
 	}
 	if err := m.writeBlock(bl); err != nil {
@@ -84,7 +84,7 @@ func (m *MeshDB) GetBlock(id types.BlockID) (*types.Block, error) {
 		return blkh, nil
 	}
 
-	b, err := m.getMiniBlockBytes(id)
+	b, err := m.getBlockBytes(id)
 	if err != nil {
 		return nil, err
 	}
@@ -184,7 +184,7 @@ func (m *MeshDB) layerBlockIds(index types.LayerID) ([]types.BlockID, error) {
 	return idSet, nil
 }
 
-func (m *MeshDB) getMiniBlockBytes(id types.BlockID) ([]byte, error) {
+func (m *MeshDB) getBlockBytes(id types.BlockID) ([]byte, error) {
 	return m.blocks.Get(id.ToBytes())
 }
 

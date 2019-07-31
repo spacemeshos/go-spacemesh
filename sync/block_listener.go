@@ -41,6 +41,7 @@ func (bl *BlockListener) Close() {
 
 func (bl *BlockListener) Start() {
 	if atomic.CompareAndSwapUint32(&bl.startLock, 0, 1) {
+		bl.Syncer.Start()
 		go bl.ListenToGossipBlocks()
 	}
 }

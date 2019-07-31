@@ -85,6 +85,7 @@ type Syncer struct {
 	clock             timesync.LayerTimer
 	exit              chan struct{}
 	currentLayerMutex sync.RWMutex
+	blockQueue        *validationQueue
 }
 
 func (s *Syncer) ForceSync() {
@@ -94,6 +95,7 @@ func (s *Syncer) ForceSync() {
 func (s *Syncer) Close() {
 	close(s.exit)
 	close(s.forceSync)
+	s.blockQueue.done()
 	s.MessageServer.Close()
 	s.Peers.Close()
 }
@@ -118,6 +120,7 @@ func (s *Syncer) IsSynced() bool {
 func (s *Syncer) Start() {
 	if atomic.CompareAndSwapUint32(&s.startLock, 0, 1) {
 		go s.run()
+		go s.blockQueue.traverse(s)
 		s.forceSync <- true
 		return
 	}
@@ -169,6 +172,8 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool A
 		exit:           make(chan struct{}),
 	}
 
+	//todo change get block to check local
+	s.blockQueue = NewValidationQueue(s.DataAvailabilty, s.AddBlockWithTxs, s.GetBlock, s.Log.WithName("validQ"))
 	s.RegisterBytesMsgHandler(LAYER_HASH, newLayerHashRequestHandler(layers, logger))
 	s.RegisterBytesMsgHandler(MINI_BLOCK, newBlockRequestHandler(layers, logger))
 	s.RegisterBytesMsgHandler(LAYER_IDS, newLayerBlockIdsRequestHandler(layers, logger))
@@ -233,22 +238,21 @@ func (s *Syncer) GetFullBlocks(blockIds []types.BlockID) []*types.Block {
 	blocksArr := make([]*types.Block, 0, len(blockIds))
 	for out := range output {
 		//ignore blocks that we could not fetch
-
-		block, ok := out.(*types.Block)
-		if block != nil && ok {
-			txs, atxs, err := s.BlockSyntacticValidation(block)
+		job, ok := out.(blockJob)
+		if ok && job.block != nil {
+			txs, atxs, err := s.BlockSyntacticValidation(job.block)
 			if err != nil {
-				s.Error("failed to validate block %v %v", block.ID(), err)
+				s.Error("failed to validate block %v %v", job.block.ID(), err)
 				continue
 			}
 
-			if err := s.AddBlockWithTxs(block, txs, atxs); err != nil {
-				s.Error("failed to add block %v to database %v", block.ID(), err)
+			if err := s.AddBlockWithTxs(job.block, txs, atxs); err != nil {
+				s.Error("failed to add block %v to database %v", job.block.ID(), err)
 				continue
 			}
 
-			s.Info("added block %v to layer %v", block.ID(), block.Layer())
-			blocksArr = append(blocksArr, block)
+			s.Info("added block %v to layer %v", job.block.ID(), job.block.Layer())
+			blocksArr = append(blocksArr, job.block)
 		}
 	}
 
@@ -278,12 +282,15 @@ func (s *Syncer) BlockSyntacticValidation(block *types.Block) ([]*types.Addressa
 }
 
 func (s *Syncer) ValidateView(blk *types.Block) bool {
-	vq := NewValidationQueue(s.Log.WithName("validQ"))
-	if err := vq.traverse(s, &blk.BlockHeader); err != nil {
-		s.Warning("could not validate %v view %v", blk.ID(), err)
-		return false
+
+	ch := make(chan bool, 1)
+	foo := func(res bool) error {
+		ch <- res
+		return nil
 	}
-	return true
+
+	s.blockQueue.addDependencies(blk, foo)
+	return <-ch
 }
 
 func (s *Syncer) DataAvailabilty(blk *types.Block) ([]*types.AddressableSignedTransaction, []*types.ActivationTx, error) {
@@ -318,7 +325,7 @@ func (s *Syncer) DataAvailabilty(blk *types.Block) ([]*types.AddressableSignedTr
 		return txs, atxs, atxerr
 	}
 
-	s.Info("fetched all block data %v %v txs %v atxs", blk.ID())
+	s.Info("fetched all block %v data  %v txs %v atxs", blk.ID(), len(blk.TxIds), len(blk.AtxIds))
 	return txs, atxs, nil
 }
 

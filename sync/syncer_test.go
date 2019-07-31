@@ -204,7 +204,7 @@ func TestSyncProtocol_BlockRequest(t *testing.T) {
 
 	select {
 	case a := <-output:
-		assert.Equal(t, a.(*types.Block).ID(), block.ID(), "wrong block")
+		assert.Equal(t, a.(blockJob).id, block.ID(), "wrong block")
 	case <-timeout.C:
 		assert.Fail(t, "no message received on channel")
 	}
@@ -398,7 +398,7 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	output := syncObj2.fetchWithFactory(NewBlockWorker(syncObj2, 1, BlockReqFactory(), blockSliceToChan([]types.BlockID{block1.ID(), block2.ID(), block3.ID()})))
 
 	for out := range output {
-		block := out.(*types.Block)
+		block := out.(blockJob).block
 		txs, err := syncObj2.syncTxs(block.TxIds)
 		if err != nil {
 			t.Error("could not fetch all txs", err)

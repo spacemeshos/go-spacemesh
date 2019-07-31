@@ -13,6 +13,11 @@ import (
 type RequestFactory func(s *server.MessageServer, peer p2p.Peer) (chan interface{}, error)
 type BlockRequestFactory func(s *server.MessageServer, peer p2p.Peer, id types.BlockID) (chan interface{}, error)
 
+type blockJob struct {
+	block *types.Block
+	id    types.BlockID
+}
+
 type worker struct {
 	*sync.Once
 	sync.WaitGroup
@@ -131,16 +136,16 @@ func NewBlockWorker(s *Syncer, count int, reqFactory BlockRequestFactory, ids ch
 				case <-timeout:
 					s.Error("block %v request to %v timed out", id, peer)
 				case v := <-ch:
-					if i, ok := v.(*types.Block); ok {
+					if blk, ok := v.(*types.Block); ok {
 						retrived = true
-						s.Info("Peer: %v responded to %v block request ", peer, i.ID())
-						output <- v
+						s.Info("Peer: %v responded to %v block request ", peer, blk.ID())
+						output <- blockJob{id: id, block: blk}
 						break next
 					}
 				}
 			}
 			if !retrived {
-				output <- nil
+				output <- blockJob{id: id, block: nil}
 			}
 		}
 	}

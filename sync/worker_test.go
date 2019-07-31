@@ -104,7 +104,7 @@ loop:
 				break loop
 			}
 
-			assert.True(t, item.(*types.Block).ID() == block.ID())
+			assert.True(t, item.(blockJob).id == block.ID())
 			count++
 		case <-timeout.C:
 

@@ -70,6 +70,8 @@ func TestBlockListener(t *testing.T) {
 	atx2 := atx()
 	atx3 := atx()
 
+	bl2.Start()
+
 	proofMessage := makePoetProofMessage(t)
 	if err := bl1.poetDb.ValidateAndStore(&proofMessage); err != nil {
 		t.Error(err)
@@ -320,28 +322,26 @@ func TestBlockListener_TraverseViewBadFlow(t *testing.T) {
 	bl2.GetFullBlocks([]types.BlockID{block5.Id})
 
 	b, err := bl2.GetBlock(block1.Id)
-	if err == nil {
-		t.Error(err)
-	}
+	assert.Error(t, err)
 
 	_, err = bl2.GetBlock(block2.Id)
 	if err == nil {
-		t.Error(err)
+		assert.Error(t, err)
 	}
 
 	_, err = bl2.GetBlock(block3.Id)
 	if err == nil {
-		t.Error(err)
+		assert.Error(t, err)
 	}
 
 	_, err = bl2.GetBlock(block4.Id)
 	if err == nil {
-		t.Error(err)
+		assert.Error(t, err)
 	}
 
 	b, err = bl2.GetBlock(block5.Id)
 	if err == nil {
-		t.Error(err)
+		assert.Error(t, err)
 	}
 
 	t.Log("  ", b)
