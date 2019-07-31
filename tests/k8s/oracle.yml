@@ -1,7 +1,7 @@
 apiVersion: extensions/v1beta1
 kind: Deployment
 metadata:
-  name: oracle
+  name: sm-oracle
 spec:
   replicas: 1
   template:

@@ -73,7 +73,7 @@ def setup_bootstrap_in_namespace(namespace, bs_deployment_info, bootstrap_config
         client.CoreV1Api().list_namespaced_pod(namespace=namespace,
                                                label_selector=(
                                                    "name={0}".format(
-                                                       bs_deployment_info.deployment_name.split('-')[0]))).items[0])
+                                                       bs_deployment_info.deployment_name.split('-')[1]))).items[0])
     bs_pod = {'name': bootstrap_pod_json.metadata.name}
 
     while True:
@@ -100,7 +100,7 @@ def setup_bootstrap_in_namespace(namespace, bs_deployment_info, bootstrap_config
 
 
 def setup_server(deployment_name, deployment_file, namespace):
-    deployment_name_prefix = deployment_name.split('-')[0]
+    deployment_name_prefix = deployment_name.split('-')[1]
     namespaced_pods = CoreV1ApiClient().list_namespaced_pod(namespace,
                                                             label_selector=(
                                                                 "name={0}".format(deployment_name_prefix))).items
@@ -185,7 +185,7 @@ def setup_clients_in_namespace(namespace, bs_deployment_info, client_deployment_
         CoreV1ApiClient().list_namespaced_pod(namespace,
                                               include_uninitialized=True,
                                               label_selector=("name={0}".format(
-                                                  client_deployment_info.deployment_name.split('-')[0]))).items)
+                                                  client_deployment_info.deployment_name.split('-')[1]))).items)
 
     client_deployment_info.pods = [{'name': c.metadata.name, 'pod_ip': c.status.pod_ip} for c in client_pods]
     return client_deployment_info
@@ -232,7 +232,7 @@ def add_multi_clients(deployment_id, container_specs, size=2):
     client_pods = CoreV1ApiClient().list_namespaced_pod(testconfig['namespace'],
                                                         include_uninitialized=True,
                                                         label_selector=("name={0}".format(
-                                                            resp.metadata._name.split('-')[0]))).items
+                                                            resp.metadata._name.split('-')[1]))).items
     pods = []
     for c in client_pods:
         pod_name = c.metadata.name
@@ -418,7 +418,7 @@ def test_mining(setup_network):
     layer_avg_size = testconfig['client']['args']['layer-average-size']
     layers_per_epoch = int(testconfig['client']['args']['layers-per-epoch'])
     # check only third epoch
-    epochs = 3
+    epochs = 5
     last_layer = epochs*layers_per_epoch
 
     queries.wait_for_latest_layer(testconfig["namespace"], last_layer)
