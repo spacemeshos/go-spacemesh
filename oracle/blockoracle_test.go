@@ -50,10 +50,6 @@ func (a *mockActivationDB) IsIdentityActive(edId string, layer types.LayerID) (*
 	return &types.NodeId{edId, publicKey}, true, *types.EmptyAtxId, nil
 }
 
-func (a mockActivationDB) ActiveSetSize(epochId types.EpochId) (uint32, error) {
-	return a.activeSetSize, nil
-}
-
 func (a mockActivationDB) GetIdentity(edId string) (types.NodeId, error) {
 	return types.NodeId{Key: edId, VRFPublicKey: publicKey}, nil
 }

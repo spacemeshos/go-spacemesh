@@ -14,10 +14,6 @@ const AtxProtocol = "AtxGossip"
 
 var activesetCache = NewActivesetCache(1000)
 
-type ActiveSetProvider interface {
-	ActiveSetSize(epochId types.EpochId) (uint32, error)
-}
-
 type MeshProvider interface {
 	GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error)
 	LatestLayer() types.LayerID
@@ -55,7 +51,7 @@ type NipstValidator interface {
 
 type ATXDBProvider interface {
 	GetAtx(id types.AtxId) (*types.ActivationTx, error)
-	CalcActiveSetFromView(a *types.ActivationTx) (uint32, error)
+	CalcActiveSetFromView(view []types.BlockID, pubEpoch types.EpochId) (uint32, error)
 	GetNodeAtxIds(nodeId types.NodeId) ([]types.AtxId, error)
 	GetEpochAtxIds(epochId types.EpochId) ([]types.AtxId, error)
 }
@@ -70,7 +66,6 @@ type Builder struct {
 	coinbaseAccount address.Address
 	db              ATXDBProvider
 	net             Broadcaster
-	activeSet       ActiveSetProvider
 	mesh            MeshProvider
 	layersPerEpoch  uint16
 	tickProvider    PoETNumberOfTickProvider
@@ -95,14 +90,13 @@ type Processor struct {
 }
 
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
-func NewBuilder(nodeId types.NodeId, coinbaseAccount address.Address, db ATXDBProvider, net Broadcaster, activeSet ActiveSetProvider, mesh MeshProvider, layersPerEpoch uint16, nipstBuilder NipstBuilder, layerClock chan types.LayerID, isSyncedFunc func() bool, store BytesStore, log log.Log) *Builder {
+func NewBuilder(nodeId types.NodeId, coinbaseAccount address.Address, db ATXDBProvider, net Broadcaster, mesh MeshProvider, layersPerEpoch uint16, nipstBuilder NipstBuilder, layerClock chan types.LayerID, isSyncedFunc func() bool, store BytesStore, log log.Log) *Builder {
 
 	return &Builder{
 		nodeId:          nodeId,
 		coinbaseAccount: coinbaseAccount,
 		db:              db,
 		net:             net,
-		activeSet:       activeSet,
 		mesh:            mesh,
 		layersPerEpoch:  layersPerEpoch,
 		nipstBuilder:    nipstBuilder,
@@ -312,33 +306,30 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 	// we've completed the sequential work, now before publishing the atx,
 	// we need to provide number of atx seen in the epoch of the positioning atx.
 	posEpoch := b.posLayerID.GetEpoch(b.layersPerEpoch)
-	activeIds, err := b.activeSet.ActiveSetSize(posEpoch)
-	if err != nil && !posEpoch.IsGenesis() {
-		return err
-	}
-	view, err := b.mesh.GetOrphanBlocksBefore(b.mesh.LatestLayer())
-	if err != nil {
-		return err
-	}
-	atx := types.NewActivationTxWithChallenge(*b.challenge, b.coinbaseAccount, activeIds, view, b.nipst)
-	activeSetSize, err := b.db.CalcActiveSetFromView(atx) // TODO: remove this assertion to improve performance
+	pubEpoch := b.challenge.PubLayerIdx.GetEpoch(b.layersPerEpoch) // can be 0 in first epoch
+	targetEpoch := pubEpoch + 1
 
-	if err != nil && !atx.TargetEpoch(b.layersPerEpoch).IsGenesis() {
-		b.log.Warning("empty active set size found! len(view): %d, view: %v", len(atx.View), atx.View)
+	viewLayer := pubEpoch.FirstLayer(b.layersPerEpoch)
+	var view []types.BlockID
+	if viewLayer > 0 {
+		var err error
+		view, err = b.mesh.GetOrphanBlocksBefore(viewLayer)
+		if err != nil {
+			return fmt.Errorf("failed to get current view: %v", err)
+		}
+	}
+
+	activeSetSize, err := b.db.CalcActiveSetFromView(view, pubEpoch)
+	if err != nil && !targetEpoch.IsGenesis() {
+		b.log.With().Warning("empty active set size found!", log.Int("len(view)", len(view)),
+			log.String("view", fmt.Sprintf("%v", view)), log.EpochId(uint64(pubEpoch)))
 		return nil
 	}
 
-	b.log.With().Info("active ids seen for epoch", log.Uint64("pos_atx_epoch", uint64(posEpoch)),
-		log.Uint32("cache_cnt", activeIds), log.Uint32("view_cnt", activeSetSize))
+	atx := types.NewActivationTxWithChallenge(*b.challenge, b.coinbaseAccount, activeSetSize, view, b.nipst)
 
-	if atx.TargetEpoch(b.layersPerEpoch).IsGenesis() {
-		atx.ActiveSetSize = 0
-	} else {
-		if activeSetSize != atx.ActiveSetSize {
-			b.log.Panic("active set size mismatch! size based on view: %d, size reported: %d",
-				activeSetSize, atx.ActiveSetSize)
-		}
-	}
+	b.log.With().Info("active ids seen for epoch", log.Uint64("pos_atx_epoch", uint64(posEpoch)),
+		log.Uint32("view_cnt", activeSetSize))
 
 	buf, err := types.AtxAsBytes(atx)
 	if err != nil {

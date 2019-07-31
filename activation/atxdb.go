@@ -71,8 +71,8 @@ func (db *ActivationDb) ProcessAtx(atx *types.ActivationTx) {
 // CalcActiveSetFromView traverses the view found in a - the activation tx and counts number of active ids published
 // in the epoch prior to the epoch that a was published at, this number is the number of active ids in the next epoch
 // the function returns error if the view is not found
-func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, error) {
-	viewBytes, err := types.ViewAsBytes(a.View)
+func (db *ActivationDb) CalcActiveSetFromView(view []types.BlockID, pubEpoch types.EpochId) (uint32, error) {
+	viewBytes, err := types.ViewAsBytes(view)
 	if err != nil {
 		return 0, err
 	}
@@ -84,7 +84,6 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 
 	var counter uint32 = 0
 	set := make(map[types.AtxId]struct{})
-	pubEpoch := a.PubLayerIdx.GetEpoch(db.LayersPerEpoch)
 	if pubEpoch < 1 {
 		return 0, fmt.Errorf("publication epoch cannot be less than 1, found %v", pubEpoch)
 	}
@@ -119,7 +118,7 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 	}
 
 	mp := map[types.BlockID]struct{}{}
-	for _, blk := range a.View {
+	for _, blk := range view {
 		mp[blk] = struct{}{}
 	}
 
@@ -183,7 +182,7 @@ func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error 
 		}
 	}
 
-	activeSet, err := db.CalcActiveSetFromView(atx)
+	activeSet, err := db.CalcActiveSetFromView(atx.View, atx.PubLayerIdx.GetEpoch(db.LayersPerEpoch))
 	if err != nil && !atx.PubLayerIdx.GetEpoch(db.LayersPerEpoch).IsGenesis() {
 		return fmt.Errorf("could not calculate active set for ATX %v", atx.ShortId())
 	}
@@ -265,10 +264,6 @@ func (db *ActivationDb) StoreAtx(ech types.EpochId, atx *types.ActivationTx) err
 		return err
 	}
 
-	err = db.incValidAtxCounter(ech)
-	if err != nil {
-		return err
-	}
 	err = db.addAtxToNodeIdSorted(atx.NodeId, atx)
 	if err != nil {
 		return err
@@ -317,34 +312,6 @@ func (db *ActivationDb) GetNipst(atxId types.AtxId) (*types.NIPST, error) {
 		return nil, err
 	}
 	return &npst, nil
-}
-
-func epochCounterKey(ech types.EpochId) []byte {
-	return append(ech.ToBytes(), common.Uint64ToBytes(uint64(CounterKey))...)
-}
-
-// incValidAtxCounter increases the number of active ids seen for epoch ech. Use only under db.lock.
-func (db *ActivationDb) incValidAtxCounter(ech types.EpochId) error {
-	key := epochCounterKey(ech)
-	val, err := db.atxs.Get(key)
-	if err != nil {
-		db.log.Debug("incrementing epoch %v ATX counter to 1", ech)
-		return db.atxs.Put(key, common.Uint32ToBytes(1))
-	}
-	db.log.Debug("incrementing epoch %v ATX counter to %v", ech, common.BytesToUint32(val)+1)
-	return db.atxs.Put(key, common.Uint32ToBytes(common.BytesToUint32(val)+1))
-}
-
-// ActiveSetSize returns the active set size stored in db for epoch ech
-func (db *ActivationDb) ActiveSetSize(epochId types.EpochId) (uint32, error) {
-	key := epochCounterKey(epochId)
-	db.RLock()
-	val, err := db.atxs.Get(key)
-	db.RUnlock()
-	if err != nil {
-		return 0, fmt.Errorf("could not fetch active set size from cache: %v", err)
-	}
-	return common.BytesToUint32(val), nil
 }
 
 // addAtxToEpoch adds atx to epoch epochId
