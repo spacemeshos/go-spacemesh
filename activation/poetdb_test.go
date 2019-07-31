@@ -94,7 +94,7 @@ func TestPoetDbNonExistingKeys(t *testing.T) {
 
 	ref := []byte("abcde")
 	_, err = poetDb.GetMembershipMap(ref)
-	r.EqualError(err, fmt.Sprintf("could not fetch poet proof for ref %x: leveldb: not found", ref[:5]))
+	r.EqualError(err, fmt.Sprintf("could not fetch poet proof for ref %x: leveldb: not found", ref[:3]))
 }
 
 func TestPoetDb_SubscribeToPoetProofRef(t *testing.T) {

@@ -92,7 +92,7 @@ func SyncMockFactory(number int, conf Configuration, name string, dbType string,
 		txpool := miner.NewTypesTransactionIdMemPool()
 		atxpool := miner.NewTypesAtxIdMemPool()
 		sync := NewSync(net, getMesh(dbType, Path+name+"_"+time.Now().String()), txpool, atxpool, mockTxProcessor{}, blockValidator, poetDb(), conf, tk, 0, l)
-		ts.Start()
+		ts.StartNotifying()
 		nodes = append(nodes, sync)
 		p2ps = append(p2ps, net)
 	}
@@ -236,10 +236,10 @@ func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 
 }
 
-func TestSyncer_EnsurePoetProofAvailableAndValid(t *testing.T) {
+func TestSyncer_FetchPoetProofAvailableAndValid(t *testing.T) {
 	r := require.New(t)
 
-	syncs, nodes := SyncMockFactory(2, conf, "TestSyncer_EnsurePoetProofAvailableAndValid_", memoryDB, newMemPoetDb)
+	syncs, nodes := SyncMockFactory(2, conf, "TestSyncer_FetchPoetProofAvailableAndValid_", memoryDB, newMemPoetDb)
 	s0 := syncs[0]
 	s1 := syncs[1]
 	s1.Peers = getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
@@ -255,6 +255,41 @@ func TestSyncer_EnsurePoetProofAvailableAndValid(t *testing.T) {
 
 	err = s1.FetchPoetProof(ref[:])
 	r.NoError(err)
+}
+
+func TestSyncer_SyncAtxs_FetchPoetProof(t *testing.T) {
+	r := require.New(t)
+
+	syncs, nodes := SyncMockFactory(2, conf, "TestSyncer_SyncAtxs_FetchPoetProof_", memoryDB, newMemPoetDb)
+	s0 := syncs[0]
+	s1 := syncs[1]
+	s1.Peers = getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
+
+	// Store a poet proof and a respective atx in s0.
+
+	proofMessage := makePoetProofMessage(t)
+
+	err := s0.poetDb.ValidateAndStore(&proofMessage)
+	r.NoError(err)
+
+	poetProofBytes, err := types.InterfaceToBytes(&proofMessage.PoetProof)
+	r.NoError(err)
+	poetRef := sha256.Sum256(poetProofBytes)
+
+	atx1 := atx()
+	atx1.Nipst.PoetProofRef = poetRef[:]
+	s0.AtxDB.ProcessAtx(atx1)
+
+	// Make sure that s1 syncAtxs would fetch the missing poet proof.
+
+	r.False(s1.poetDb.HasProof(poetRef[:]))
+
+	atxs, err := s1.syncAtxs([]types.AtxId{atx1.Id()})
+	r.NoError(err)
+	r.Equal(1, len(atxs))
+	r.Equal(atx1.Id(), atxs[0].Id())
+
+	r.True(s1.poetDb.HasProof(poetRef[:]))
 }
 
 func makePoetProofMessage(t *testing.T) types.PoetProofMessage {
@@ -597,7 +632,7 @@ func Test_TwoNodes_SyncIntegrationSuite(t *testing.T) {
 		poetDb := activation.NewPoetDb(database.NewMemDatabase(), l.WithName("poetDb"))
 		sync := NewSync(s, msh, miner.NewTypesTransactionIdMemPool(), miner.NewTypesAtxIdMemPool(), mockTxProcessor{}, blockValidator, poetDb, conf, tk, 0, l)
 		sis.syncers = append(sis.syncers, sync)
-		ts.Start()
+		ts.StartNotifying()
 		atomic.AddUint32(&i, 1)
 	}
 	suite.Run(t, sis)
@@ -694,7 +729,7 @@ func Test_Multiple_SyncIntegrationSuite(t *testing.T) {
 		blockValidator := NewBlockValidator(BlockEligibilityValidatorMock{})
 		poetDb := activation.NewPoetDb(database.NewMemDatabase(), l.WithName("poetDb"))
 		sync := NewSync(s, msh, miner.NewTypesTransactionIdMemPool(), miner.NewTypesAtxIdMemPool(), mockTxProcessor{}, blockValidator, poetDb, conf, tk, 0, l)
-		ts.Start()
+		ts.StartNotifying()
 		sis.syncers = append(sis.syncers, sync)
 		atomic.AddUint32(&i, 1)
 	}

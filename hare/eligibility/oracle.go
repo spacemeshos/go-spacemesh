@@ -39,13 +39,14 @@ type VerifierFunc = func(msg, sig, pub []byte) (bool, error)
 
 // Oracle is the hare eligibility oracle
 type Oracle struct {
-	beacon         valueProvider
-	getActiveSet   activeSetFunc
-	vrfSigner      Signer
-	vrfVerifier    VerifierFunc
-	layersPerEpoch uint16
-	cache          casher
-	cfg            eCfg.Config
+	beacon               valueProvider
+	getActiveSet         activeSetFunc
+	vrfSigner            Signer
+	vrfVerifier          VerifierFunc
+	layersPerEpoch       uint16
+	cache                casher
+	genesisActiveSetSize int
+	cfg                  eCfg.Config
 	log.Log
 }
 
@@ -84,21 +85,23 @@ func roundedSafeLayer(layer types.LayerID, safetyParam types.LayerID,
 
 // New returns a new eligibility oracle instance
 func New(beacon valueProvider, activeSetFunc activeSetFunc, vrfVerifier VerifierFunc, vrfSigner Signer,
-	layersPerEpoch uint16, cfg eCfg.Config, log log.Log) *Oracle {
+	layersPerEpoch uint16, genesisActiveSet int,
+	cfg eCfg.Config, log log.Log) *Oracle {
 	c, e := lru.New(cacheSize)
 	if e != nil {
 		log.Panic("Could not create lru cache err=%v", e)
 	}
 
 	return &Oracle{
-		beacon:         beacon,
-		getActiveSet:   activeSetFunc,
-		vrfVerifier:    vrfVerifier,
-		vrfSigner:      vrfSigner,
-		layersPerEpoch: layersPerEpoch,
-		cache:          c,
-		cfg:            cfg,
-		Log:            log,
+		beacon:               beacon,
+		getActiveSet:         activeSetFunc,
+		vrfVerifier:          vrfVerifier,
+		vrfSigner:            vrfSigner,
+		layersPerEpoch:       layersPerEpoch,
+		cache:                c,
+		genesisActiveSetSize: genesisActiveSet,
+		cfg:                  cfg,
+		Log:                  log,
 	}
 }
 
@@ -132,7 +135,7 @@ func (o *Oracle) activeSetSize(layer types.LayerID) (uint32, error) {
 	actives, err := o.actives(layer)
 	if err != nil {
 		if err == genesisErr { // we are in genesis
-			return uint32(o.cfg.GenesisActiveSet), nil
+			return uint32(o.genesisActiveSetSize), nil
 		}
 
 		return 0, err

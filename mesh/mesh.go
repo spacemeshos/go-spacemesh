@@ -152,6 +152,7 @@ func (m *Mesh) ValidatedLayer() types.LayerID {
 	return m.validatedLayer
 }
 
+// LatestLayer - returns the latest layer we saw from the network
 func (m *Mesh) LatestLayer() types.LayerID {
 	defer m.lkMutex.RUnlock()
 	m.lkMutex.RLock()
@@ -515,12 +516,7 @@ func (m *Mesh) ActiveSetForLayerConsensusView(layer types.LayerID, layersPerEpoc
 	countedAtxs := make(map[string]types.AtxId)
 	penalties := make(map[string]struct{})
 
-	traversalFunc := func(blkh *types.BlockHeader) error {
-
-		blk, err := m.GetBlock(blkh.Id)
-		if err != nil {
-			return err
-		}
+	traversalFunc := func(blk *types.Block) error {
 
 		// count unique ATXs
 		for _, id := range blk.AtxIds {

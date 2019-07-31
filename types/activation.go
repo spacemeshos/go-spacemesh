@@ -152,6 +152,10 @@ func (t *ActivationTx) GetPoetProofRef() []byte {
 	return t.Nipst.PoetProofRef
 }
 
+func (t *ActivationTx) GetShortPoetProofRef() []byte {
+	return t.Nipst.PoetProofRef[:common.Min(5, len(t.Nipst.PoetProofRef))]
+}
+
 type PoetProof struct {
 	shared.MerkleProof
 	Members   [][]byte

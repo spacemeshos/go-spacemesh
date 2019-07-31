@@ -111,8 +111,8 @@ const (
 )
 
 func (s *Syncer) IsSynced() bool {
-	s.Log.Info("latest: %v, maxSynced %v", s.LatestLayer(), s.maxSyncLayer())
-	return s.LatestLayer()+1 >= s.maxSyncLayer()
+	s.Log.Info("latest: %v, maxSynced %v", s.LatestLayer(), s.lastTickedLayer())
+	return s.LatestLayer()+1 >= s.lastTickedLayer()
 }
 
 func (s *Syncer) Start() {
@@ -179,7 +179,7 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool A
 	return s
 }
 
-func (s *Syncer) maxSyncLayer() types.LayerID {
+func (s *Syncer) lastTickedLayer() types.LayerID {
 	defer s.currentLayerMutex.RUnlock()
 	s.currentLayerMutex.RLock()
 	return s.currentLayer
@@ -187,7 +187,7 @@ func (s *Syncer) maxSyncLayer() types.LayerID {
 
 func (s *Syncer) Synchronise() {
 	mu := sync.Mutex{}
-	for currentSyncLayer := s.ValidatedLayer() + 1; currentSyncLayer < s.maxSyncLayer(); currentSyncLayer++ {
+	for currentSyncLayer := s.ValidatedLayer() + 1; currentSyncLayer < s.lastTickedLayer(); currentSyncLayer++ {
 		s.Info("syncing layer %v current consensus layer is %d", currentSyncLayer, s.currentLayer)
 		lyr, err := s.GetLayer(types.LayerID(currentSyncLayer))
 		if err != nil {
@@ -294,6 +294,10 @@ func (s *Syncer) DataAvailabilty(blk *types.Block) ([]*types.AddressableSignedTr
 	go func() {
 		//sync Transactions
 		txs, txerr = s.syncTxs(blk.TxIds)
+		for _, tx := range txs {
+			id := types.GetTransactionId(tx.SerializableSignedTransaction)
+			s.txpool.Put(id, tx)
+		}
 		wg.Done()
 	}()
 
@@ -303,6 +307,9 @@ func (s *Syncer) DataAvailabilty(blk *types.Block) ([]*types.AddressableSignedTr
 	//sync ATxs
 	go func() {
 		atxs, atxerr = s.syncAtxs(blk.AtxIds)
+		for _, atx := range atxs {
+			s.atxpool.Put(atx.Id(), atx)
+		}
 		wg.Done()
 	}()
 
@@ -449,6 +456,7 @@ func (s *Syncer) syncAtxs(atxIds []types.AtxId) ([]*types.ActivationTx, error) {
 				missingInPool = append(missingInPool, id)
 				continue
 			}
+
 			s.Debug("found atx, %v in atx pool", id.ShortId())
 			unprocessedAtxs[id] = &atx
 		} else {
@@ -462,15 +470,21 @@ func (s *Syncer) syncAtxs(atxIds []types.AtxId) ([]*types.ActivationTx, error) {
 
 	//map and sort atxs
 	if len(missingInDb) > 0 {
-
 		output := s.fetchWithFactory(NewNeighborhoodWorker(s, 1, ATxReqFactory(missingInDb)))
 		for out := range output {
 			atxs := out.([]types.ActivationTx)
 			for _, atx := range atxs {
-				if err := s.SyntacticallyValidateAtx(&atx); err != nil {
-					s.Warning("atx %v not valid %v", atx.ShortId(), err)
+				if err := s.FetchPoetProof(atx.GetPoetProofRef()); err != nil {
+					s.Error("received atx (%v) with syntactically invalid or missing PoET proof (%x): %v",
+						atx.ShortId(), atx.GetShortPoetProofRef(), err)
 					continue
 				}
+
+				if err := s.SyntacticallyValidateAtx(&atx); err != nil {
+					s.Error("received an invalid atx (%v): %v", atx.ShortId(), err)
+					continue
+				}
+
 				tmp := atx
 				unprocessedAtxs[atx.Id()] = &tmp
 			}
