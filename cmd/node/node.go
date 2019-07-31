@@ -337,6 +337,11 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	if err != nil {
 		return err
 	}
+
+	store, err := database.NewLDBDatabase(dbStorepath+"store", 0, 0, lg.WithName("store"))
+	if err != nil {
+		return err
+	}
 	idStore := activation.NewIdentityStore(iddbstore)
 	poetDb := activation.NewPoetDb(poetDbStore, lg.WithName("poetDb"))
 	//todo: this is initialized twice, need to refactor
@@ -410,7 +415,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	if coinBase.Big().Uint64() == 0 {
 		app.log.Panic("invalid Coinbase account")
 	}
-	atxBuilder := activation.NewBuilder(nodeID, coinBase, atxdb, swarm, atxdb, msh, layersPerEpoch, nipstBuilder, clock.Subscribe(), syncer.IsSynced, lg.WithName("atxBuilder"))
+	atxBuilder := activation.NewBuilder(nodeID, coinBase, atxdb, swarm, atxdb, msh, layersPerEpoch, nipstBuilder, clock.Subscribe(), syncer.IsSynced, store, lg.WithName("atxBuilder"))
 
 	app.blockProducer = &blockProducer
 	app.blockListener = blockListener
