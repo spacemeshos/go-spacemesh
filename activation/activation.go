@@ -170,6 +170,9 @@ func (b *Builder) loop() {
 	}
 }
 
+type alreadyPublishedErr struct{}
+
+func (alreadyPublishedErr) Error() string { return "already published" }
 
 func (b *Builder) buildNipstChallenge(epoch types.EpochId) error {
 	if b.prevATX == nil {
@@ -192,7 +195,7 @@ func (b *Builder) buildNipstChallenge(epoch types.EpochId) error {
 		//check if this node hasn't published an activation already
 		if b.prevATX.PubLayerIdx.GetEpoch(b.layersPerEpoch) == epoch+1 {
 			b.log.With().Info("atx already created, aborting", log.EpochId(uint64(epoch)))
-			return fmt.Errorf("atx already created for epoch %v, aborting", epoch)
+			return alreadyPublishedErr{}
 		}
 		prevAtxId = b.prevATX.Id()
 	}
@@ -282,6 +285,9 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 		} else {
 			err := b.buildNipstChallenge(epoch)
 			if err != nil {
+				if _, alreadyPublished := err.(alreadyPublishedErr); alreadyPublished {
+					return nil
+				}
 				return err
 			}
 		}
@@ -319,11 +325,11 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 
 	if err != nil && !atx.TargetEpoch(b.layersPerEpoch).IsGenesis() {
 		b.log.Warning("empty active set size found! len(view): %d, view: %v", len(atx.View), atx.View)
-		return nil	}
+		return nil
+	}
 
 	b.log.With().Info("active ids seen for epoch", log.Uint64("pos_atx_epoch", uint64(posEpoch)),
 		log.Uint32("cache_cnt", activeIds), log.Uint32("view_cnt", activeSetSize))
-
 
 	if atx.TargetEpoch(b.layersPerEpoch).IsGenesis() {
 		atx.ActiveSetSize = 0

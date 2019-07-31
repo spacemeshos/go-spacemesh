@@ -102,7 +102,7 @@ func (np *NipstBuilderMock) BuildNIPST(challenge *common.Hash) (*types.NIPST, er
 	if np.buildNipstFunc != nil {
 		return np.buildNipstFunc(challenge)
 	}
-	return nipst.NewNIPSTWithChallenge(challenge, poetRef), nil
+	return nipst.NewNIPSTWithChallenge(challenge, np.poetRef), nil
 }
 
 type NipstErrBuilderMock struct{}
@@ -480,15 +480,15 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	layersPerEpoch := uint16(10)
 	lg := log.NewDefault(id.Key[:5])
 	db := NewMockDB()
-	activationDb := NewActivationDb(database.NewMemDatabase(), database.NewMemDatabase(), &MockIStore{}, mesh.NewMemMeshDB(lg.WithName("meshDB")), layersPerEpoch, &ValidatorMock{}, lg.WithName("atxDB1"))
+	activationDb := NewActivationDb(database.NewMemDatabase(), database.NewMemDatabase(), &MockIdStore{}, mesh.NewMemMeshDB(lg.WithName("meshDB")), layersPerEpoch, &ValidatorMock{}, lg.WithName("atxDB1"))
 	b := NewBuilder(id, coinbase, activationDb, &FaultyNetMock{}, &ActiveSetProviderMock{}, layers, layersPerEpoch, nipstBuilder, nil, func() bool { return true }, db, lg.WithName("atxBuilder"))
 	prevAtx := types.AtxId{Hash: common.HexToHash("0x111")}
 	chlng := common.HexToHash("0x3333")
 	poetRef := []byte{0xbe, 0xef}
-	nipstBuilder.SetPoetRef(poetRef)
+	nipstBuilder.poetRef = poetRef
 	npst := nipst.NewNIPSTWithChallenge(&chlng, poetRef)
 
-	atx := types.NewActivationTx(types.NodeId{"aaaaaa", []byte("bbbbb")}, coinbase, 1, prevAtx, 5, 1, prevAtx, 5, []types.BlockID{1, 2, 3}, npst)
+	atx := types.NewActivationTx(types.NodeId{"aaaaaa", []byte("bbbbb")}, coinbase, 1, prevAtx, 15, 1, prevAtx, 5, []types.BlockID{1, 2, 3}, npst)
 
 	err := activationDb.StoreAtx(atx.PubLayerIdx.GetEpoch(layersPerEpoch), atx)
 	assert.NoError(t, err)
@@ -526,12 +526,12 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	b = NewBuilder(id, coinbase, activationDb, net, &ActiveSetProviderMock{}, layers, layersPerEpoch, nipstBuilder, nil, func() bool { return true }, db, lg.WithName("atxBuilder"))
 	err = b.loadChallenge()
 	assert.NoError(t, err)
+	layers.latestLayer = 22
 	err = b.PublishActivationTx(1)
 	assert.NoError(t, err)
 	bts, err := types.AtxAsBytes(act)
 	assert.NoError(t, err)
-	assert.Equal(t, bts, net.bt)
-	assert.Equal(t, bytes, nipstBuilder.Challenge)
+	assert.Equal(t, bts, net.lastTransmission)
 
 	b = NewBuilder(id, coinbase, activationDb, &FaultyNetMock{}, &ActiveSetProviderMock{}, layers, layersPerEpoch, nipstBuilder, nil, func() bool { return true }, db, lg.WithName("atxBuilder"))
 	err = b.PublishActivationTx(1)
@@ -542,7 +542,7 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	assert.Error(t, err)
 	err = b.loadChallenge()
 	assert.NoError(t, err)
-	err = b.PublishActivationTx(2)
+	err = b.PublishActivationTx(3)
 	assert.True(t, db.hadNone)
 
 }
