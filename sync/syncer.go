@@ -294,6 +294,10 @@ func (s *Syncer) DataAvailabilty(blk *types.Block) ([]*types.AddressableSignedTr
 	go func() {
 		//sync Transactions
 		txs, txerr = s.syncTxs(blk.TxIds)
+		for _, tx := range txs {
+			id := types.GetTransactionId(tx.SerializableSignedTransaction)
+			s.txpool.Put(id, tx)
+		}
 		wg.Done()
 	}()
 
@@ -303,6 +307,9 @@ func (s *Syncer) DataAvailabilty(blk *types.Block) ([]*types.AddressableSignedTr
 	//sync ATxs
 	go func() {
 		atxs, atxerr = s.syncAtxs(blk.AtxIds)
+		for _, atx := range atxs {
+			s.atxpool.Put(atx.Id(), atx)
+		}
 		wg.Done()
 	}()
 

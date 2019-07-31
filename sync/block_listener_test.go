@@ -123,6 +123,68 @@ func TestBlockListener(t *testing.T) {
 	t.Log("done!")
 }
 
+// TODO: perform this test on a standalone syncer instead of a blockListener.
+func TestBlockListener_DataAvailability(t *testing.T) {
+	sim := service.NewSimulator()
+	signer := signing.NewEdSigner()
+	n1 := sim.NewNode()
+	n2 := sim.NewNode()
+	bl1 := ListenerFactory(n1, PeersMock{func() []p2p.Peer { return []p2p.Peer{n2.PublicKey()} }}, "listener1", 3)
+	bl2 := ListenerFactory(n2, PeersMock{func() []p2p.Peer { return []p2p.Peer{n1.PublicKey()} }}, "listener2", 3)
+	defer bl2.Close()
+	defer bl1.Close()
+	bl2.Start()
+
+	atx1 := atx()
+
+	// Push atx1 poet proof into bl1.
+
+	proofMessage := makePoetProofMessage(t)
+	err := bl1.poetDb.ValidateAndStore(&proofMessage)
+	require.NoError(t, err)
+
+	poetProofBytes, err := types.InterfaceToBytes(&proofMessage.PoetProof)
+	require.NoError(t, err)
+	poetRef := sha256.Sum256(poetProofBytes)
+
+	atx1.Nipst.PoetProofRef = poetRef[:]
+
+	// Push a block with tx1 and and atx1 into bl1.
+
+	block := types.NewExistingBlock(types.BlockID(2), 1, nil)
+	block.Signature = signer.Sign(block.Bytes())
+	block.TxIds = append(block.TxIds, types.GetTransactionId(tx1.SerializableSignedTransaction))
+	block.AtxIds = append(block.AtxIds, atx1.Id())
+	err = bl1.AddBlockWithTxs(block, []*types.AddressableSignedTransaction{tx1}, []*types.ActivationTx{atx1})
+	require.NoError(t, err)
+
+	_, err = bl1.GetBlock(block.Id)
+	require.NoError(t, err)
+
+	// Verify that bl2 doesn't have them in mempool.
+
+	_, err = bl2.txpool.Get(types.GetTransactionId(tx1.SerializableSignedTransaction))
+	require.Error(t, err)
+	_, err = bl2.atxpool.Get(atx1.Id())
+	require.Error(t, err)
+
+	// Sync bl2.
+
+	txs, atxs, err := bl2.DataAvailabilty(block)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(txs))
+	require.Equal(t, types.GetTransactionId(tx1.SerializableSignedTransaction), types.GetTransactionId(txs[0].SerializableSignedTransaction))
+	require.Equal(t, 1, len(atxs))
+	require.Equal(t, atx1.Id(), atxs[0].Id())
+
+	// Verify that bl2 inserted them to the mempool.
+
+	_, err = bl2.txpool.Get(types.GetTransactionId(tx1.SerializableSignedTransaction))
+	require.NoError(t, err)
+	_, err = bl2.atxpool.Get(atx1.Id())
+	require.NoError(t, err)
+}
+
 func TestBlockListenerViewTraversal(t *testing.T) {
 
 	t.Log("TestBlockListener2 start")
