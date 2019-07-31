@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/nullstyle/go-xdr/xdr3"
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/config"
@@ -99,9 +100,20 @@ func (m mockTxProcessor) ValidateTransactionSignature(tx *types.SerializableSign
 	return address.Address{}, errors.New("invalid sig for tx")
 }
 
-type mockSyncer struct{}
+type mockSyncer struct {
+}
 
 func (mockSyncer) FetchPoetProof(poetProofRef []byte) error { return nil }
+
+func (mockSyncer) IsSynced() bool { return true }
+
+type mockSyncerP struct {
+	synced bool
+}
+
+func (mockSyncerP) FetchPoetProof(poetProofRef []byte) error { return nil }
+
+func (m mockSyncerP) IsSynced() bool { return m.synced }
 
 func TestBlockBuilder_StartStop(t *testing.T) {
 
@@ -290,6 +302,60 @@ func TestBlockBuilder_Validation(t *testing.T) {
 	n1.Broadcast(IncomingTxProtocol, b)
 	time.Sleep(300 * time.Millisecond)
 	assert.Equal(t, 1, len(builder1.TransactionPool.txMap))
+}
+
+func TestBlockBuilder_Gossip_NotSynced(t *testing.T) {
+	net := service.NewSimulator()
+	beginRound := make(chan types.LayerID)
+	n1 := net.NewNode()
+	coinbase := address.HexToAddress("aaaa")
+
+	hareRes := []types.BlockID{types.BlockID(0), types.BlockID(1), types.BlockID(2), types.BlockID(3)}
+	hare := MockHare{res: map[types.LayerID][]types.BlockID{}}
+	hare.res[0] = hareRes
+
+	builder1 := NewBlockBuilder(types.NodeId{Key: "a"}, &MockSigning{}, n1, beginRound, 5, NewTypesTransactionIdMemPool(),
+		NewTypesAtxIdMemPool(),
+		MockCoin{},
+		MockOrphans{st: []types.BlockID{1, 2, 3}},
+		hare,
+		mockBlockOracle{},
+		mockTxProcessor{false},
+		&mockAtxValidator{},
+		&mockSyncerP{false},
+		log.New(n1.NodeInfo.ID.String(),
+			"",
+			""))
+	builder1.Start()
+	ed := signing.NewEdSigner()
+	tx, e := types.NewSignedTx(0, address.HexToAddress("0xFF"), 2, 3, 4, ed)
+	assert.Nil(t, e)
+	b, e := types.SignedTransactionAsBytes(tx)
+	assert.Nil(t, e)
+	err := n1.Broadcast(IncomingTxProtocol, b)
+	assert.NoError(t, err)
+	time.Sleep(300 * time.Millisecond)
+	assert.Equal(t, 0, len(builder1.TransactionPool.txMap))
+
+	poetRef := []byte{0xba, 0x38}
+	atx := types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")},
+		coinbase,
+		1,
+		types.AtxId{common.Hash{1}},
+		5,
+		1,
+		types.AtxId{},
+		5,
+		[]types.BlockID{1, 2, 3},
+		nipst.NewNIPSTWithChallenge(&common.Hash{}, poetRef))
+
+	atxBytes, err := types.InterfaceToBytes(&atx)
+	assert.NoError(t, err)
+	err = n1.Broadcast(activation.AtxProtocol, atxBytes)
+	assert.NoError(t, err)
+	time.Sleep(300 * time.Millisecond)
+	assert.Equal(t, 0, len(builder1.TransactionPool.txMap))
+
 }
 
 func Test_calcHdistRange(t *testing.T) {
