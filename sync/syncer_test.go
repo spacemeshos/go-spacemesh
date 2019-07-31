@@ -907,3 +907,8 @@ func TestFetchLayerBlockIds(t *testing.T) {
 	}
 
 }
+
+func TestSyncer_Synchronise(t *testing.T) {
+	r := require.New(t)
+	MeshValidatorMock{}
+}
