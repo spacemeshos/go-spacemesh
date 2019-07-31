@@ -180,9 +180,10 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool A
 }
 
 func (s *Syncer) lastTickedLayer() types.LayerID {
-	defer s.currentLayerMutex.RUnlock()
 	s.currentLayerMutex.RLock()
-	return s.currentLayer
+	curr := s.currentLayer
+	s.currentLayerMutex.RUnlock()
+	return curr
 }
 
 func (s *Syncer) Synchronise() {
@@ -191,7 +192,7 @@ func (s *Syncer) Synchronise() {
 		s.Info("syncing layer %v current consensus layer is %d", currentSyncLayer, s.currentLayer)
 
 		if s.IsSynced() && currentSyncLayer == s.lastTickedLayer() {
-			return
+			continue
 		}
 
 		lyr, err := s.GetLayer(types.LayerID(currentSyncLayer))
