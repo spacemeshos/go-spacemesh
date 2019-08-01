@@ -250,17 +250,21 @@ func (s *Syncer) getLayerFromNeighbors(currenSyncLayer types.LayerID) (*types.La
 	return types.NewExistingLayer(types.LayerID(currenSyncLayer), blocksArr), nil
 }
 
-func (s *Syncer) SyncLayer(id types.LayerID, blockIds []types.BlockID) ([]*types.Block, error) {
+func (s *Syncer) SyncLayer(layerID types.LayerID, blockIds []types.BlockID) ([]*types.Block, error) {
 	ch := make(chan bool, 1)
 	foo := func(res bool) error {
-		s.Info("layer %v done", id)
+		s.Info("layer %v done", layerID)
 		ch <- res
 		return nil
 	}
-	s.blockQueue.addLayerDependencies(id, blockIds, foo)
-	<-ch
+	s.blockQueue.addDependencies(layerID, blockIds, foo)
+	s.Info("layer %v wait for blocks", layerID)
 
-	return s.LayerBlocks(id)
+	if result := <-ch; !result {
+		return nil, fmt.Errorf("could get blocks for layer  %v", layerID)
+	}
+
+	return s.LayerBlocks(layerID)
 }
 
 func (s *Syncer) BlockSyntacticValidation(block *types.Block) ([]*types.AddressableSignedTransaction, []*types.ActivationTx, error) {
