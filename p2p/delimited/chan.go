@@ -1,6 +1,7 @@
 package delimited
 
 import (
+	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"io"
@@ -12,6 +13,9 @@ import (
 type Chan struct {
 	connection io.ReadWriteCloser
 	closeOnce  sync.Once
+
+	clock sync.RWMutex
+	closed bool
 
 	outMsgChan chan outMessage
 	inMsgChan  chan []byte
@@ -27,13 +31,15 @@ func (s *Chan) In() chan []byte {
 
 // Out sends message on the wire, blocking.
 func (s *Chan) Out(message []byte) error {
-	outCb := make(chan error)
-	select {
-	case s.outMsgChan <- outMessage{message, outCb}:
+	s.clock.RLock()
+	if !s.closed {
+		outCb := make(chan error)
+		s.outMsgChan <- outMessage{message, outCb}
+		s.clock.RUnlock()
 		return <-outCb
-	case <-s.CloseChan:
-		return fmt.Errorf("formatter is closed")
 	}
+	s.clock.RUnlock()
+	return fmt.Errorf("formatter is closed")
 }
 
 type outMessage struct {
@@ -106,25 +112,37 @@ func (s *Chan) writeToWriter(w io.Writer) {
 	// single writer, no need for Mutex
 Loop:
 	for {
-		select {
-		case <-s.CloseChan:
-			break Loop // told we're done
-
-		case msg := <-s.outMsgChan:
+		s.clock.RLock()
+		cl := s.closed
+		s.clock.RUnlock()
+		if cl {
+			break Loop
+		}
+		msg := <-s.outMsgChan
 			if _, err := mw.WriteRecord(msg.Message()); err != nil {
 				// unexpected error. tell the client.
 				msg.Result() <- err
+				break Loop
 			} else {
 				// Report msg was sent
 				msg.Result() <- nil
 			}
-		}
+
+	}
+
+	cou := len(s.outMsgChan)
+	for i := 0; i < cou; i++ {
+		msg := <-s.outMsgChan
+		msg.Result() <- errors.New("formatter is closed")
 	}
 }
 
 // Close the Chan
 func (s *Chan) Close() {
 	s.closeOnce.Do(func() {
+		s.clock.Lock()
+		s.closed = true
+		s.clock.Unlock()
 		close(s.CloseChan)   // close both writer and reader
 		s.connection.Close() // close internal connection
 	})
