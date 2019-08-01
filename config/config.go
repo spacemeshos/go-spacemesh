@@ -87,6 +87,8 @@ type BaseConfig struct {
 	GenesisConfPath string `mapstructure:"genesis-conf"`
 
 	CoinbaseAccount string `mapstructure:"coinbase"`
+
+	GenesisActiveSet int `mapstructure:"genesis-active-size"` // the active set size for genesis
 }
 
 // DefaultConfig returns the default configuration for a spacemesh node
@@ -122,6 +124,7 @@ func defaultBaseConfig() BaseConfig {
 		LayersPerEpoch:      3,
 		PoETServer:          "127.0.0.1",
 		Hdist:               5,
+		GenesisActiveSet:    5,
 	}
 }
 

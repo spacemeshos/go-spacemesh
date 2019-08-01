@@ -50,6 +50,9 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringVar(&config.CoinbaseAccount, "coinbase",
 		config.CoinbaseAccount, "coinbase account to accumulate rewards")
 
+	cmd.PersistentFlags().IntVar(&config.GenesisActiveSet, "genesis-active-size",
+		config.GenesisActiveSet, "The active set size for the genesis flow")
+
 	/** ======================== P2P Flags ========================== **/
 
 	cmd.PersistentFlags().IntVar(&config.P2P.TCPPort, "tcp-port",
@@ -134,13 +137,8 @@ func AddCommands(cmd *cobra.Command) {
 
 	/**======================== Hare Eligibility Oracle Flags ========================== **/
 
-	// N determines the size of the hare committee
 	cmd.PersistentFlags().Uint64Var(&config.HareEligibility.ConfidenceParam, "eligibility-confidence-param",
 		config.HareEligibility.ConfidenceParam, "The relative layer (with respect to the current layer) we are confident to have consensus about")
-	// F determines the max number of adversaries in the Hare committee
-	cmd.PersistentFlags().IntVar(&config.HareEligibility.GenesisActiveSet, "eligibility-genesis-active-size",
-		config.HareEligibility.GenesisActiveSet, "The active set size for the genesis flow")
-	// RoundDuration determines the duration of a round in the Hare protocol
 	cmd.PersistentFlags().IntVar(&config.HareEligibility.EpochOffset, "eligibility-epoch-offset",
 		config.HareEligibility.EpochOffset, "The constant layer (within an epoch) for which we traverse its view for the purpose of counting consensus active set")
 
