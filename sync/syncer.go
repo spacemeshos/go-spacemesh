@@ -194,7 +194,6 @@ func (s *Syncer) lastTickedLayer() types.LayerID {
 }
 
 func (s *Syncer) Synchronise() {
-	mu := sync.Mutex{}
 	for currentSyncLayer := s.lValidator.ValidatedLayer() + 1; currentSyncLayer <= s.lastTickedLayer(); currentSyncLayer++ {
 		lastTickedLayer := s.lastTickedLayer()
 		s.Info("syncing layer %v current consensus layer is %d", currentSyncLayer, lastTickedLayer)
@@ -212,11 +211,7 @@ func (s *Syncer) Synchronise() {
 			}
 		}
 
-		mu.Lock()
-		go func(lyrToValidate types.Layer) {
-			s.lValidator.ValidateLayer(&lyrToValidate) //run one at a time
-			mu.Unlock()
-		}(*lyr)
+		s.lValidator.ValidateLayer(lyr) // wait for layer validation
 	}
 }
 
