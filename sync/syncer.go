@@ -66,6 +66,11 @@ type Configuration struct {
 	RequestTimeout time.Duration
 }
 
+type LayerValidator interface {
+	ValidatedLayer() types.LayerID
+	ValidateLayer(lyr *types.Layer)
+}
+
 type Syncer struct {
 	p2p.Peers
 	*mesh.Mesh
@@ -74,6 +79,7 @@ type Syncer struct {
 	log.Log
 	*server.MessageServer
 
+	lValidator        LayerValidator
 	sigValidator      TxSigValidator
 	poetDb            PoetDb
 	txpool            TxMemPool
@@ -111,8 +117,8 @@ const (
 )
 
 func (s *Syncer) IsSynced() bool {
-	s.Log.Info("latest: %v, maxSynced %v", s.LatestLayer(), s.maxSyncLayer())
-	return s.LatestLayer()+1 >= s.maxSyncLayer()
+	s.Log.Info("latest: %v, maxSynced %v", s.LatestLayer(), s.lastTickedLayer())
+	return s.LatestLayer()+1 >= s.lastTickedLayer()
 }
 
 func (s *Syncer) Start() {
@@ -157,6 +163,7 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool A
 		Mesh:           layers,
 		Peers:          p2p.NewPeers(srv, logger.WithName("peers")),
 		MessageServer:  server.NewMsgServer(srv.(server.Service), syncProtocol, conf.RequestTimeout, make(chan service.DirectMessage, p2pconf.ConfigValues.BufferSize), logger.WithName("srv")),
+		lValidator:     layers,
 		sigValidator:   sv,
 		SyncLock:       0,
 		txpool:         txpool,
@@ -179,16 +186,23 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool A
 	return s
 }
 
-func (s *Syncer) maxSyncLayer() types.LayerID {
-	defer s.currentLayerMutex.RUnlock()
+func (s *Syncer) lastTickedLayer() types.LayerID {
 	s.currentLayerMutex.RLock()
-	return s.currentLayer
+	curr := s.currentLayer
+	s.currentLayerMutex.RUnlock()
+	return curr
 }
 
 func (s *Syncer) Synchronise() {
 	mu := sync.Mutex{}
-	for currentSyncLayer := s.ValidatedLayer() + 1; currentSyncLayer < s.maxSyncLayer(); currentSyncLayer++ {
-		s.Info("syncing layer %v current consensus layer is %d", currentSyncLayer, s.currentLayer)
+	for currentSyncLayer := s.lValidator.ValidatedLayer() + 1; currentSyncLayer <= s.lastTickedLayer(); currentSyncLayer++ {
+		lastTickedLayer := s.lastTickedLayer()
+		s.Info("syncing layer %v current consensus layer is %d", currentSyncLayer, lastTickedLayer)
+
+		if s.IsSynced() && currentSyncLayer == lastTickedLayer {
+			continue
+		}
+
 		lyr, err := s.GetLayer(types.LayerID(currentSyncLayer))
 		if err != nil {
 			s.Info("layer %v is not in the database", currentSyncLayer)
@@ -200,7 +214,7 @@ func (s *Syncer) Synchronise() {
 
 		mu.Lock()
 		go func(lyrToValidate types.Layer) {
-			s.ValidateLayer(&lyrToValidate) //run one at a time
+			s.lValidator.ValidateLayer(&lyrToValidate) //run one at a time
 			mu.Unlock()
 		}(*lyr)
 	}
@@ -294,6 +308,10 @@ func (s *Syncer) DataAvailabilty(blk *types.Block) ([]*types.AddressableSignedTr
 	go func() {
 		//sync Transactions
 		txs, txerr = s.syncTxs(blk.TxIds)
+		for _, tx := range txs {
+			id := types.GetTransactionId(tx.SerializableSignedTransaction)
+			s.txpool.Put(id, tx)
+		}
 		wg.Done()
 	}()
 
@@ -303,6 +321,9 @@ func (s *Syncer) DataAvailabilty(blk *types.Block) ([]*types.AddressableSignedTr
 	//sync ATxs
 	go func() {
 		atxs, atxerr = s.syncAtxs(blk.AtxIds)
+		for _, atx := range atxs {
+			s.atxpool.Put(atx.Id(), atx)
+		}
 		wg.Done()
 	}()
 

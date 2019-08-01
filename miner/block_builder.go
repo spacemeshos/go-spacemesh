@@ -43,6 +43,7 @@ type AtxValidator interface {
 
 type Syncer interface {
 	FetchPoetProof(poetProofRef []byte) error
+	IsSynced() bool
 }
 
 type BlockBuilder struct {
@@ -257,6 +258,10 @@ func (t *BlockBuilder) listenForTx() {
 		case <-t.stopChan:
 			return
 		case data := <-t.txGossipChannel:
+			if !t.syncer.IsSynced() {
+				// not accepting txs when not synced
+				continue
+			}
 			if data != nil {
 
 				x, err := types.BytesAsSignedTransaction(data.Bytes())
@@ -287,6 +292,10 @@ func (t *BlockBuilder) listenForAtx() {
 		case <-t.stopChan:
 			return
 		case data := <-t.atxGossipChannel:
+			if !t.syncer.IsSynced() {
+				// not accepting atxs when not synced
+				continue
+			}
 			go t.handleGossipAtx(data)
 		}
 	}
@@ -365,7 +374,10 @@ func (t *BlockBuilder) acceptBlockData() {
 						t.Log.Error("cannot serialize block %v", err)
 						return
 					}
-					t.network.Broadcast(config.NewBlockProtocol, bytes)
+					err = t.network.Broadcast(config.NewBlockProtocol, bytes)
+					if err != nil {
+						t.Log.Error("cannot send block %v", err)
+					}
 				}()
 			}
 		}

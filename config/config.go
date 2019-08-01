@@ -87,6 +87,8 @@ type BaseConfig struct {
 	GenesisConfPath string `mapstructure:"genesis-conf"`
 
 	CoinbaseAccount string `mapstructure:"coinbase"`
+
+	GenesisActiveSet int `mapstructure:"genesis-active-size"` // the active set size for genesis
 }
 
 // DefaultConfig returns the default configuration for a spacemesh node
@@ -122,13 +124,12 @@ func defaultBaseConfig() BaseConfig {
 		LayersPerEpoch:      3,
 		PoETServer:          "127.0.0.1",
 		Hdist:               5,
+		GenesisActiveSet:    5,
 	}
 }
 
 // LoadConfig load the config file
 func LoadConfig(fileLocation string, vip *viper.Viper) (err error) {
-	log.Info("Parsing config file at location: %s", fileLocation)
-
 	if fileLocation == "" {
 		fileLocation = defaultConfigFileName
 	}
@@ -138,7 +139,7 @@ func LoadConfig(fileLocation string, vip *viper.Viper) (err error) {
 
 	if err != nil {
 		if fileLocation != defaultConfigFileName {
-			log.Warning("failed loading %v trying %v", fileLocation, defaultConfigFileName)
+			log.Warning("failed loading config from %v trying %v", fileLocation, defaultConfigFileName)
 			vip.SetConfigFile(defaultConfigFileName)
 			err = vip.ReadInConfig()
 		}

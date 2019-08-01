@@ -167,13 +167,11 @@ func (app *SpacemeshApp) Initialize(cmd *cobra.Command, args []string) (err erro
 		}
 	}()
 
-	app.introduction()
-
 	// parse the config file based on flags et al
 	err = app.ParseConfig()
 
 	if err != nil {
-		log.Error(fmt.Sprintf("couldn't parse the config %v", err))
+		log.Error(fmt.Sprintf("couldn't parse the config err=%v", err))
 	}
 
 	// ensure cli flags are higher priority than config file
@@ -183,6 +181,8 @@ func (app *SpacemeshApp) Initialize(cmd *cobra.Command, args []string) (err erro
 	timeCfg.TimeConfigValues = app.Config.TIME
 
 	app.setupLogging()
+
+	app.introduction()
 
 	// todo: add misc app setup here (metrics, debug, etc....)
 
@@ -332,6 +332,11 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	if err != nil {
 		return err
 	}
+
+	store, err := database.NewLDBDatabase(dbStorepath+"store", 0, 0, lg.WithName("store"))
+	if err != nil {
+		return err
+	}
 	idStore := activation.NewIdentityStore(iddbstore)
 	poetDb := activation.NewPoetDb(poetDbStore, lg.WithName("poetDb"))
 	//todo: this is initialized twice, need to refactor
@@ -339,7 +344,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	mdb := mesh.NewPersistentMeshDB(dbStorepath, lg.WithName("meshDb"))
 	atxdb := activation.NewActivationDb(atxdbstore, idStore, mdb, layersPerEpoch, validator, lg.WithName("atxDb"))
 	beaconProvider := &oracle.EpochBeaconProvider{}
-	eValidator := oracle.NewBlockEligibilityValidator(int32(layerSize), layersPerEpoch, atxdb, beaconProvider, BLS381.Verify2, lg.WithName("blkElgValidator"))
+	eValidator := oracle.NewBlockEligibilityValidator(int32(app.Config.GenesisActiveSet), layersPerEpoch, atxdb, beaconProvider, BLS381.Verify2, lg.WithName("blkElgValidator"))
 
 	trtl := tortoise.NewAlgorithm(int(1), mdb, lg.WithName("trtl"))
 
@@ -352,7 +357,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 
 	blockValidator := sync.NewBlockValidator(eValidator)
 	syncer := sync.NewSync(swarm, msh, txpool, atxpool, processor, blockValidator, poetDb, conf, clock.Subscribe(), clock.GetCurrentLayer(), lg.WithName("sync"))
-	blockOracle := oracle.NewMinerBlockOracle(layerSize, uint16(layersPerEpoch), atxdb, beaconProvider, vrfSigner, nodeID, syncer.IsSynced, lg.WithName("blockOracle"))
+	blockOracle := oracle.NewMinerBlockOracle(uint32(app.Config.GenesisActiveSet), uint16(layersPerEpoch), atxdb, beaconProvider, vrfSigner, nodeID, syncer.IsSynced, lg.WithName("blockOracle"))
 
 	// TODO: we should probably decouple the apptest and the node (and duplicate as necessary)
 	var hOracle hare.Rolacle
@@ -360,7 +365,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 		hOracle = rolacle
 	} else { // regular oracle, build and use it
 		beacon := eligibility.NewBeacon(trtl, app.Config.HareEligibility.ConfidenceParam)
-		hOracle = eligibility.New(beacon, msh.ActiveSetForLayerConsensusView, BLS381.Verify2, vrfSigner, uint16(app.Config.LayersPerEpoch), app.Config.HareEligibility, lg.WithName("hareOracle"))
+		hOracle = eligibility.New(beacon, msh.ActiveSetForLayerConsensusView, BLS381.Verify2, vrfSigner, uint16(app.Config.LayersPerEpoch), app.Config.GenesisActiveSet, app.Config.HareEligibility, lg.WithName("hareOracle"))
 	}
 
 	// a function to validate we know the blocks
@@ -405,7 +410,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	if coinBase.Big().Uint64() == 0 {
 		app.log.Panic("invalid Coinbase account")
 	}
-	atxBuilder := activation.NewBuilder(nodeID, coinBase, atxdb, swarm, atxdb, msh, layersPerEpoch, nipstBuilder, clock.Subscribe(), syncer.IsSynced, lg.WithName("atxBuilder"))
+	atxBuilder := activation.NewBuilder(nodeID, coinBase, atxdb, swarm, atxdb, msh, layersPerEpoch, nipstBuilder, clock.Subscribe(), syncer.IsSynced, store, lg.WithName("atxBuilder"))
 
 	app.blockProducer = &blockProducer
 	app.blockListener = blockListener
@@ -433,7 +438,7 @@ func (app *SpacemeshApp) startServices() {
 	}
 	app.poetListener.Start()
 	app.atxBuilder.Start()
-	app.clock.Start()
+	app.clock.StartNotifying()
 }
 
 func (app SpacemeshApp) stopServices() {
