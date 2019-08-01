@@ -91,7 +91,11 @@ type Syncer struct {
 	clock             timesync.LayerTimer
 	exit              chan struct{}
 	currentLayerMutex sync.RWMutex
-	blockQueue        *validationQueue
+
+	//todo fetch server
+	blockQueue *validationQueue
+	txQueue    *validationQueue
+	atxQueue   *validationQueue
 }
 
 func (s *Syncer) ForceSync() {
@@ -238,39 +242,25 @@ func (s *Syncer) getLayerFromNeighbors(currenSyncLayer types.LayerID) (*types.La
 		return nil, err
 	}
 
-	blocksArr := s.GetFullBlocks(blockIds)
-	if len(blocksArr) == 0 {
-		return nil, fmt.Errorf("could not any blocks  for layer  %v", currenSyncLayer)
+	blocksArr, err := s.SyncLayer(currenSyncLayer, blockIds)
+	if len(blocksArr) == 0 || err != nil {
+		return nil, fmt.Errorf("could get blocks for layer  %v", currenSyncLayer)
 	}
 
 	return types.NewExistingLayer(types.LayerID(currenSyncLayer), blocksArr), nil
 }
 
-func (s *Syncer) GetFullBlocks(blockIds []types.BlockID) []*types.Block {
-	output := s.fetchWithFactory(NewBlockWorker(s, s.Concurrency, BlockReqFactory(), blockSliceToChan(blockIds)))
-	blocksArr := make([]*types.Block, 0, len(blockIds))
-	for out := range output {
-		//ignore blocks that we could not fetch
-		job, ok := out.(blockJob)
-		if ok && job.block != nil {
-			txs, atxs, err := s.BlockSyntacticValidation(job.block)
-			if err != nil {
-				s.Error("failed to validate block %v %v", job.block.ID(), err)
-				continue
-			}
-
-			if err := s.AddBlockWithTxs(job.block, txs, atxs); err != nil {
-				s.Error("failed to add block %v to database %v", job.block.ID(), err)
-				continue
-			}
-
-			s.Info("added block %v to layer %v", job.block.ID(), job.block.Layer())
-			blocksArr = append(blocksArr, job.block)
-		}
+func (s *Syncer) SyncLayer(id types.LayerID, blockIds []types.BlockID) ([]*types.Block, error) {
+	ch := make(chan bool, 1)
+	foo := func(res bool) error {
+		s.Info("layer %v done", id)
+		ch <- res
+		return nil
 	}
+	s.blockQueue.addLayerDependencies(id, blockIds, foo)
+	<-ch
 
-	s.Info("done getting full blocks")
-	return blocksArr
+	return s.LayerBlocks(id)
 }
 
 func (s *Syncer) BlockSyntacticValidation(block *types.Block) ([]*types.AddressableSignedTransaction, []*types.ActivationTx, error) {
@@ -302,7 +292,7 @@ func (s *Syncer) ValidateView(blk *types.Block) bool {
 		return nil
 	}
 
-	s.blockQueue.addDependencies(blk, foo)
+	s.blockQueue.addBlockDependencies(blk, foo)
 	return <-ch
 }
 

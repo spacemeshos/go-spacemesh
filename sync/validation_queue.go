@@ -4,18 +4,32 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/types"
+	"reflect"
 )
 
 type dataAvailabilityFunc = func(blk *types.Block) ([]*types.AddressableSignedTransaction, []*types.ActivationTx, error)
 type addBlockFunc func(blk *types.Block, txs []*types.AddressableSignedTransaction, atxs []*types.ActivationTx) error
 type checkLocalFunc func(id types.BlockID) (*types.Block, error)
 
+const (
+	Layer JobType = 0
+	Block JobType = 1
+)
+
+type JobId uint64
+type JobType int
+
+type Job struct {
+	JobId
+	JobType
+}
+
 type validationQueue struct {
 	log.Log
 	queue            chan types.BlockID
-	callbacks        map[types.BlockID]func(res bool) error
-	depMap           map[types.BlockID]map[types.BlockID]struct{}
-	reverseDepMap    map[types.BlockID][]types.BlockID
+	callbacks        map[interface{}]func(res bool) error
+	depMap           map[interface{}]map[types.BlockID]struct{}
+	reverseDepMap    map[types.BlockID][]interface{}
 	visited          map[types.BlockID]struct{}
 	addBlock         addBlockFunc
 	checkLocal       checkLocalFunc
@@ -26,9 +40,9 @@ func NewValidationQueue(davail dataAvailabilityFunc, addBlock addBlockFunc, chec
 	vq := &validationQueue{
 		queue:            make(chan types.BlockID, 100),
 		visited:          make(map[types.BlockID]struct{}),
-		depMap:           make(map[types.BlockID]map[types.BlockID]struct{}),
-		reverseDepMap:    make(map[types.BlockID][]types.BlockID),
-		callbacks:        make(map[types.BlockID]func(res bool) error),
+		depMap:           make(map[interface{}]map[types.BlockID]struct{}),
+		reverseDepMap:    make(map[types.BlockID][]interface{}),
+		callbacks:        make(map[interface{}]func(res bool) error),
 		dataAvailability: davail,
 		addBlock:         addBlock,
 		checkLocal:       checkLocal,
@@ -60,36 +74,33 @@ func (vq *validationQueue) traverse(s *Syncer) error {
 
 	output := s.fetchWithFactory(NewBlockWorker(s, s.Concurrency, BlockReqFactory(), vq.queue))
 	for out := range output {
-		jb, ok := out.(blockJob)
-		if !ok || jb.block == nil {
-			if callback, callOk := vq.callbacks[jb.id]; callOk {
+		bjb, ok := out.(blockJob)
+		if !ok || bjb.block == nil {
+			if callback, callOk := vq.callbacks[bjb.id]; callOk {
 				callback(false)
 			}
 
-			vq.updateDependencies(jb.id, false)
+			vq.updateDependencies(bjb.id, false)
 			vq.Error(fmt.Sprintf("could not retrieve a block in view "))
 			continue
 		}
 
-		vq.Info("fetched  %v", jb.block.ID())
+		vq.Info("fetched  %v", bjb.block.ID())
 
-		vq.visited[jb.block.ID()] = struct{}{}
-		if eligable, err := s.BlockSignedAndEligible(jb.block); err != nil || !eligable {
-			vq.updateDependencies(jb.id, false)
-			vq.Error(fmt.Sprintf("Block %v eligiblety check failed %v", jb.block.ID(), err))
+		vq.visited[bjb.block.ID()] = struct{}{}
+		if eligable, err := s.BlockSignedAndEligible(bjb.block); err != nil || !eligable {
+			vq.updateDependencies(bjb.id, false)
+			vq.Error(fmt.Sprintf("Block %v eligiblety check failed %v", bjb.block.ID(), err))
 			continue
 		}
 
-		s.Info("Validating view Block %v", jb.block.ID())
+		s.Info("Validating view Block %v", bjb.block.ID())
 
-		if vq.addDependencies(jb.block, vq.finishBlockCallback(jb.block)) == false {
-			if err := vq.runCallback(jb.id, true); err != nil {
-				return err
-			}
-
-			s.Info("dependencies done for %v", jb.block.ID())
-			vq.updateDependencies(jb.id, true)
+		if vq.addBlockDependencies(bjb.block, vq.finishBlockCallback(bjb.block)) == false {
+			s.Info("dependencies done for %v", bjb.block.ID())
+			vq.updateDependencies(bjb.id, true)
 			vq.Info(" %v blocks in dependency map", len(vq.depMap))
+			vq.Info(" %v blocks in callback map", len(vq.callbacks))
 		}
 	}
 
@@ -118,10 +129,9 @@ func (vq *validationQueue) finishBlockCallback(block *types.Block) func(res bool
 }
 
 func (vq *validationQueue) updateDependencies(block types.BlockID, valid bool) {
-	delete(vq.depMap, block)
 	var doneBlocks []types.BlockID
 	doneQueue := make([]types.BlockID, 0, len(vq.depMap))
-	doneQueue = vq.removefromDepMaps(block, doneQueue)
+	doneQueue = vq.removefromDepMaps(block, valid, doneQueue)
 	for {
 		if len(doneQueue) == 0 {
 			break
@@ -129,30 +139,73 @@ func (vq *validationQueue) updateDependencies(block types.BlockID, valid bool) {
 		block = doneQueue[0]
 		doneQueue = doneQueue[1:]
 		doneBlocks = append(doneBlocks, block)
-		doneQueue = vq.removefromDepMaps(block, doneQueue)
-	}
-
-	for _, bid := range doneBlocks {
-		if err := vq.runCallback(bid, valid); err != nil {
-			vq.Error(fmt.Sprintf("could not finalize block validation %v", err))
-		}
+		doneQueue = vq.removefromDepMaps(block, valid, doneQueue)
 	}
 
 }
 
-func (vq *validationQueue) removefromDepMaps(block types.BlockID, queue []types.BlockID) []types.BlockID {
-	for _, b := range vq.reverseDepMap[block] {
-		delete(vq.depMap[b], block)
-		if len(vq.depMap[b]) == 0 {
-			delete(vq.depMap, b)
-			queue = append(queue, b)
+func (vq *validationQueue) removefromDepMaps(block types.BlockID, valid bool, doneBlocks []types.BlockID) []types.BlockID {
+
+	//clean after block
+	delete(vq.depMap, block)
+	delete(vq.callbacks, block)
+	delete(vq.visited, block)
+
+	for _, dep := range vq.reverseDepMap[block] {
+		delete(vq.depMap[dep], block)
+		if len(vq.depMap[dep]) == 0 {
+			delete(vq.depMap, dep)
+			switch id := dep.(type) {
+			case types.BlockID:
+				doneBlocks = append(doneBlocks, id)
+			}
+
+			vq.Info("run callback for %v, %v", dep, reflect.TypeOf(dep))
+			if callback, ok := vq.callbacks[dep]; ok {
+
+				if err := callback(valid); err != nil {
+					vq.Error(" %v callback Failed", dep)
+				}
+				delete(vq.callbacks, dep)
+			}
 		}
 	}
 	delete(vq.reverseDepMap, block)
-	return queue
+	return doneBlocks
 }
 
-func (vq *validationQueue) addDependencies(blk *types.Block, finishBlockCallback func(res bool) error) bool {
+func (vq *validationQueue) addLayerDependencies(lid types.LayerID, blks []types.BlockID, finishLayerCallback func(res bool) error) bool {
+	vq.callbacks[lid] = finishLayerCallback
+	dependencys := make(map[types.BlockID]struct{})
+	for _, id := range blks {
+		if vq.inQueue(id) {
+			vq.reverseDepMap[id] = append(vq.reverseDepMap[id], lid)
+			vq.Info("add block %v to %v dependencies map", id, lid)
+			dependencys[id] = struct{}{}
+		} else {
+			//	check database
+			if _, err := vq.checkLocal(id); err != nil {
+				//unknown block add to queue
+				vq.queue <- id
+				vq.reverseDepMap[id] = append(vq.reverseDepMap[id], lid)
+				vq.Info("add block %v to %v dependencies map", id, lid)
+				dependencys[id] = struct{}{}
+			}
+		}
+	}
+
+	//todo better this is a little hacky
+	if len(dependencys) == 0 {
+		finishLayerCallback(false)
+		return false
+	}
+
+	vq.depMap[lid] = dependencys
+
+	return true
+}
+
+func (vq *validationQueue) addBlockDependencies(blk *types.Block, finishBlockCallback func(res bool) error) bool {
 	vq.callbacks[blk.ID()] = finishBlockCallback
 	dependencys := make(map[types.BlockID]struct{})
 	for _, id := range blk.ViewEdges {
@@ -174,25 +227,13 @@ func (vq *validationQueue) addDependencies(blk *types.Block, finishBlockCallback
 
 	//todo better this is a little hacky
 	if len(dependencys) == 0 {
-		vq.runCallback(blk.ID(), true)
+		finishBlockCallback(true)
 		return false
 	}
 
 	vq.depMap[blk.ID()] = dependencys
 
 	return true
-}
-
-func (vq *validationQueue) runCallback(id types.BlockID, valid bool) error {
-	if callback, ok := vq.callbacks[id]; ok {
-
-		if err := callback(valid); err != nil {
-			return err
-		}
-
-		delete(vq.callbacks, id)
-	}
-	return nil
 }
 
 func (vq *validationQueue) getMissingBlocks() []types.BlockID {
