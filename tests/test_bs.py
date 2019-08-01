@@ -425,6 +425,7 @@ def test_mining(setup_network):
     print("test took {:.3f} seconds ".format(end - start))
 
     total_pods = len(setup_network.clients.pods) + len(setup_network.bootstrap.pods)
+    time.sleep(50)
     analyse.analyze_mining(testconfig['namespace'], last_layer, layers_per_epoch, layer_avg_size, total_pods)
 
     validate_hare(current_index, ns)  # validate hare
