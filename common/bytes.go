@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/hexutil"
+	"github.com/spacemeshos/sha256-simd"
 	"math/big"
 	"math/rand"
 	"reflect"
@@ -44,9 +45,7 @@ var (
 // BytesToHash sets b to hash.
 // If b is larger than len(h), b will be cropped from the left.
 func BytesToHash(b []byte) Hash {
-	var h Hash
-	h.SetBytes(b)
-	return h
+	return sha256.Sum256(b)
 }
 
 // BigToHash sets byte representation of b to hash.
@@ -102,16 +101,6 @@ func (h *Hash) UnmarshalJSON(input []byte) error {
 // MarshalText returns the hex representation of h.
 func (h Hash) MarshalText() ([]byte, error) {
 	return hexutil.Bytes(h[:]).MarshalText()
-}
-
-// SetBytes sets the hash to the value of b.
-// If b is larger than len(h), b will be cropped from the left.
-func (h *Hash) SetBytes(b []byte) {
-	if len(b) > len(h) {
-		b = b[len(b)-HashLength:]
-	}
-
-	copy(h[HashLength-len(b):], b)
 }
 
 // FromHex returns the bytes represented by the hexadecimal string s.
