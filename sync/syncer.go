@@ -129,14 +129,18 @@ func (s *Syncer) Start() {
 	}
 }
 
-//fires a sync every sm.syncInterval or on force space from outside
-func (s *Syncer) run() {
-	syncRoutine := func() {
+func (s *Syncer) getSyncRoutine() func() {
+	return func() {
 		if atomic.CompareAndSwapUint32(&s.SyncLock, IDLE, RUNNING) {
 			s.Synchronise()
 			atomic.StoreUint32(&s.SyncLock, IDLE)
 		}
 	}
+}
+
+//fires a sync every sm.syncInterval or on force space from outside
+func (s *Syncer) run() {
+	syncRoutine := s.getSyncRoutine()
 	for {
 		select {
 		case <-s.exit:
