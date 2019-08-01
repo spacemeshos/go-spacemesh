@@ -9,6 +9,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/types"
+	"github.com/spacemeshos/sha256-simd"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"testing"
@@ -214,7 +215,7 @@ func setActivesetSizeInCache(t *testing.T, activesetSize uint32) {
 	assert.NoError(t, err)
 	v, err := types.ViewAsBytes(view)
 	assert.NoError(t, err)
-	activesetCache.put(common.BytesToHash(v), activesetSize)
+	activesetCache.put(sha256.Sum256(v), activesetSize)
 }
 
 func lastTransmittedAtx(t *testing.T) (atx types.ActivationTx) {
@@ -512,7 +513,7 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	assert.NoError(t, err)
 	v, err := types.ViewAsBytes(view)
 	assert.NoError(t, err)
-	activesetCache.put(common.BytesToHash(v), 10)
+	activesetCache.put(sha256.Sum256(v), 10)
 
 	view, err = b.mesh.GetOrphanBlocksBefore(layers.LatestLayer())
 	assert.NoError(t, err)

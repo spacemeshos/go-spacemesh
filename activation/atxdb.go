@@ -10,6 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/types"
+	"github.com/spacemeshos/sha256-simd"
 	"sort"
 	"sync"
 )
@@ -77,7 +78,7 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 		return 0, err
 	}
 
-	count, found := activesetCache.Get(common.BytesToHash(viewBytes))
+	count, found := activesetCache.Get(sha256.Sum256(viewBytes))
 	if found {
 		return count, nil
 	}
@@ -127,7 +128,7 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 	if err != nil {
 		return 0, err
 	}
-	activesetCache.Add(common.BytesToHash(viewBytes), counter)
+	activesetCache.Add(sha256.Sum256(viewBytes), counter)
 
 	return counter, nil
 
