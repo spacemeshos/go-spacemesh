@@ -13,14 +13,15 @@ import (
 type LayerTimer chan types.LayerID
 
 type Ticker struct {
-	subscribes   []LayerTimer
-	currentLayer types.LayerID
-	m            sync.RWMutex
-	tickInterval time.Duration
-	startEpoch   time.Time
-	time         Clock
-	stop         chan struct{}
-	ids          map[LayerTimer]int
+	subscribes      []LayerTimer
+	nextLayerToTick types.LayerID
+	m               sync.RWMutex
+	tickInterval    time.Duration
+	startEpoch      time.Time
+	time            Clock
+	stop            chan struct{}
+	ids             map[LayerTimer]int
+	started         bool
 }
 
 type Clock interface {
@@ -35,29 +36,34 @@ func (RealClock) Now() time.Time {
 
 func NewTicker(time Clock, tickInterval time.Duration, startEpoch time.Time) *Ticker {
 	t := &Ticker{
-		subscribes:   make([]LayerTimer, 0, 0),
-		currentLayer: 1, //todo we dont need a tick for layer 0
-		tickInterval: tickInterval,
-		startEpoch:   startEpoch,
-		time:         time,
-		stop:         make(chan struct{}),
-		ids:          make(map[LayerTimer]int),
+		subscribes:      make([]LayerTimer, 0, 0),
+		nextLayerToTick: 1,
+		tickInterval:    tickInterval,
+		startEpoch:      startEpoch,
+		time:            time,
+		stop:            make(chan struct{}),
+		ids:             make(map[LayerTimer]int),
 	}
+	t.init()
 	return t
 }
 
-func (t *Ticker) Start() {
+func (t *Ticker) init() {
 	var diff time.Duration
 	log.Info("start clock interval is %v", t.tickInterval)
 	if t.time.Now().Before(t.startEpoch) {
-		t.currentLayer = 1
+		t.nextLayerToTick = 1
 		diff = t.startEpoch.Sub(t.time.Now())
 	} else {
 		t.updateLayerID()
 		diff = t.tickInterval - (t.time.Now().Sub(t.startEpoch) % t.tickInterval)
 	}
 
-	go t.StartClock(diff)
+	go t.startClock(diff)
+}
+
+func (t *Ticker) StartNotifying() {
+	t.started = true
 }
 
 func (t *Ticker) Close() {
@@ -65,21 +71,26 @@ func (t *Ticker) Close() {
 }
 
 func (t *Ticker) notifyOnTick() {
+	if !t.started {
+		return
+	}
+
 	t.m.Lock()
-	defer t.m.Unlock()
-	log.Event().Info(fmt.Sprintf("release tick mesh.LayerID  %v", t.currentLayer))
+	log.Event().Info(fmt.Sprintf("release tick mesh.LayerID  %v", t.nextLayerToTick))
 	for _, ch := range t.subscribes {
-		ch <- t.currentLayer
+		ch <- t.nextLayerToTick
 		log.Debug("iv'e notified number : %v", t.ids[ch])
 	}
 	log.Debug("Ive notified all")
-	t.currentLayer++
+	t.nextLayerToTick++
+	t.m.Unlock()
 }
 
 func (t *Ticker) GetCurrentLayer() types.LayerID {
 	t.m.RLock()
-	defer t.m.RUnlock()
-	return t.currentLayer
+	currentLayer := t.nextLayerToTick - 1 // nextLayerToTick is ensured to be >= 1
+	t.m.RUnlock()
+	return currentLayer
 }
 
 func (t *Ticker) Subscribe() LayerTimer {
@@ -93,10 +104,10 @@ func (t *Ticker) Subscribe() LayerTimer {
 }
 
 func (t *Ticker) updateLayerID() {
-	t.currentLayer = types.LayerID((t.time.Now().Sub(t.startEpoch) / t.tickInterval) + 2)
+	t.nextLayerToTick = types.LayerID((t.time.Now().Sub(t.startEpoch) / t.tickInterval) + 2)
 }
 
-func (t *Ticker) StartClock(diff time.Duration) {
+func (t *Ticker) startClock(diff time.Duration) {
 	log.Info("starting global clock now=%v genesis=%v", t.time.Now(), t.startEpoch)
 	log.Info("global clock going to sleep for %v", diff)
 
