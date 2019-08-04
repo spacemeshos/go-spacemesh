@@ -48,8 +48,8 @@ type AtxMemPoolInValidator interface {
 
 type AtxDB interface {
 	ProcessAtx(atx *types.ActivationTx)
-	GetAtx(id types.AtxId) (*types.ActivationTx, error)
-	GetNipst(id types.AtxId) (*types.NIPST, error)
+	GetAtx(id types.AtxId) (*types.ActivationTxHeader, error)
+	GetFullAtx(id types.AtxId) (*types.ActivationTx, error)
 	SyntacticallyValidateAtx(atx *types.ActivationTx) error
 }
 
@@ -481,15 +481,11 @@ func (m *Mesh) GetATXs(atxIds []types.AtxId) (map[types.AtxId]*types.ActivationT
 	var mIds []types.AtxId
 	atxs := make(map[types.AtxId]*types.ActivationTx, len(atxIds))
 	for _, id := range atxIds {
-		t, err := m.GetAtx(id)
+		t, err := m.GetFullAtx(id)
 		if err != nil {
 			m.Warning("could not get atx %v  from database, %v", id.ShortId(), err)
 			mIds = append(mIds, id)
 		} else {
-			if t.Nipst, err = m.GetNipst(t.Id()); err != nil {
-				m.Warning("could not get nipst %v from database, %v", id.ShortId(), err)
-				mIds = append(mIds, id)
-			}
 			atxs[t.Id()] = t
 		}
 	}

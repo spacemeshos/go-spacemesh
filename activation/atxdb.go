@@ -19,8 +19,6 @@ type ActivationDb struct {
 	//todo: think about whether we need one db or several
 	IdStore
 	atxs            database.DB
-	nipsts          database.DB
-	nipstLock       sync.RWMutex
 	atxCache        AtxCache
 	meshDb          *mesh.MeshDB
 	LayersPerEpoch  uint16
@@ -29,8 +27,8 @@ type ActivationDb struct {
 	processAtxMutex sync.Mutex
 }
 
-func NewActivationDb(dbstore database.DB, nipstStore database.DB, idstore IdStore, meshDb *mesh.MeshDB, layersPerEpoch uint16, nipstValidator NipstValidator, log log.Log) *ActivationDb {
-	return &ActivationDb{atxs: dbstore, nipsts: nipstStore, atxCache: NewAtxCache(20), meshDb: meshDb, nipstValidator: nipstValidator, LayersPerEpoch: layersPerEpoch, IdStore: idstore, log: log}
+func NewActivationDb(dbstore database.DB, idstore IdStore, meshDb *mesh.MeshDB, layersPerEpoch uint16, nipstValidator NipstValidator, log log.Log) *ActivationDb {
+	return &ActivationDb{atxs: dbstore, atxCache: NewAtxCache(20), meshDb: meshDb, nipstValidator: nipstValidator, LayersPerEpoch: layersPerEpoch, IdStore: idstore, log: log}
 }
 
 // ProcessAtx validates the active set size declared in the atx, and contextually validates the atx according to atx
@@ -43,13 +41,12 @@ func (db *ActivationDb) ProcessAtx(atx *types.ActivationTx) {
 
 	eatx, _ := db.GetAtx(atx.Id())
 	if eatx != nil {
-		atx.Nipst = nil
 		return
 	}
 	epoch := atx.PubLayerIdx.GetEpoch(db.LayersPerEpoch)
 	db.log.With().Info("processing atx", log.AtxId(atx.ShortId()), log.EpochId(uint64(epoch)),
 		log.NodeId(atx.NodeId.Key[:5]), log.LayerId(uint64(atx.PubLayerIdx)))
-	err := db.ContextuallyValidateAtx(atx)
+	err := db.ContextuallyValidateAtx(&atx.ActivationTxHeader)
 	if err != nil {
 		db.log.With().Error("ATX failed contextual validation", log.AtxId(atx.ShortId()), log.Err(err))
 	} else {
@@ -205,7 +202,7 @@ func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error 
 
 // ContextuallyValidateAtx ensures that the previous ATX referenced is the last known ATX for the referenced miner ID.
 // If a previous ATX is not referenced, it validates that indeed there's no previous known ATX for that miner ID.
-func (db *ActivationDb) ContextuallyValidateAtx(atx *types.ActivationTx) error {
+func (db *ActivationDb) ContextuallyValidateAtx(atx *types.ActivationTxHeader) error {
 	if atx.PrevATXId != *types.EmptyAtxId {
 		lastAtx, err := db.GetNodeLastAtxId(atx.NodeId)
 		if err != nil {
@@ -270,20 +267,7 @@ func (db *ActivationDb) StoreAtx(ech types.EpochId, atx *types.ActivationTx) err
 }
 
 func (db *ActivationDb) storeAtxUnlocked(atx *types.ActivationTx) error {
-	b, err := types.InterfaceToBytes(atx.Nipst)
-	if err != nil {
-		return err
-	}
-	db.nipstLock.Lock()
-	err = db.nipsts.Put(atx.Id().Bytes(), b)
-	db.nipstLock.Unlock()
-	if err != nil {
-		return err
-	}
-	//todo: think of how to break down the object better
-	atx.Nipst = nil
-
-	b, err = types.AtxAsBytes(atx)
+	b, err := types.AtxAsBytes(atx)
 	if err != nil {
 		return err
 	}
@@ -293,21 +277,6 @@ func (db *ActivationDb) storeAtxUnlocked(atx *types.ActivationTx) error {
 		return err
 	}
 	return nil
-}
-
-func (db *ActivationDb) GetNipst(atxId types.AtxId) (*types.NIPST, error) {
-	db.nipstLock.RLock()
-	bts, err := db.nipsts.Get(atxId.Bytes())
-	db.nipstLock.RUnlock()
-	if err != nil {
-		return nil, err
-	}
-	npst := types.NIPST{}
-	err = types.BytesToInterface(bts, &npst)
-	if err != nil {
-		return nil, err
-	}
-	return &npst, nil
 }
 
 func epochCounterKey(ech types.EpochId) []byte {
@@ -425,20 +394,32 @@ func (db *ActivationDb) GetPosAtxId(epochId types.EpochId) (types.AtxId, error) 
 // getAtxUnlocked gets the atx from db, this function is not thread safe and should be called under db lock
 // this function returns a pointer to an atx and an error if failed to retrieve it
 func (db *ActivationDb) getAtxUnlocked(id types.AtxId) (*types.ActivationTx, error) {
+	if atx, gotIt := db.atxCache.Get(id); gotIt {
+		return atx, nil
+	}
 	b, err := db.atxs.Get(id.Bytes())
 	if err != nil {
 		return nil, err
 	}
-	atx, err := types.BytesAsAtx(b)
+	atx, err := types.BytesAsAtx(b, &id)
 	if err != nil {
 		return nil, err
 	}
+	db.atxCache.Add(id, atx)
 	return atx, nil
 }
 
 // GetAtx returns the atx by the given id. this function is thread safe and will return error if the id is not found in the
 // atx db
-func (db *ActivationDb) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
+func (db *ActivationDb) GetAtx(id types.AtxId) (*types.ActivationTxHeader, error) {
+	atx, err := db.GetFullAtx(id)
+	if err != nil {
+		return nil, err
+	}
+	return &atx.ActivationTxHeader, nil
+}
+
+func (db *ActivationDb) GetFullAtx(id types.AtxId) (*types.ActivationTx, error) {
 	if id == *types.EmptyAtxId {
 		return nil, errors.New("trying to fetch empty atx id")
 	}
@@ -452,7 +433,7 @@ func (db *ActivationDb) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
 	if err != nil {
 		return nil, err
 	}
-	atx, err := types.BytesAsAtx(b)
+	atx, err := types.BytesAsAtx(b, &id)
 	if err != nil {
 		return nil, err
 	}
