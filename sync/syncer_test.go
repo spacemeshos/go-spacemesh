@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/google/uuid"
-	xdr "github.com/nullstyle/go-xdr/xdr3"
+	"github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
@@ -92,7 +92,7 @@ func SyncMockFactory(number int, conf Configuration, name string, dbType string,
 		txpool := miner.NewTypesTransactionIdMemPool()
 		atxpool := miner.NewTypesAtxIdMemPool()
 		sync := NewSync(net, getMesh(dbType, Path+name+"_"+time.Now().String()), txpool, atxpool, mockTxProcessor{}, blockValidator, poetDb(), conf, tk, 0, l)
-		ts.Start()
+		ts.StartNotifying()
 		nodes = append(nodes, sync)
 		p2ps = append(p2ps, net)
 	}
@@ -244,10 +244,10 @@ func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 
 }
 
-func TestSyncer_EnsurePoetProofAvailableAndValid(t *testing.T) {
+func TestSyncer_FetchPoetProofAvailableAndValid(t *testing.T) {
 	r := require.New(t)
 
-	syncs, nodes := SyncMockFactory(2, conf, "TestSyncer_EnsurePoetProofAvailableAndValid_", memoryDB, newMemPoetDb)
+	syncs, nodes := SyncMockFactory(2, conf, "TestSyncer_FetchPoetProofAvailableAndValid_", memoryDB, newMemPoetDb)
 	s0 := syncs[0]
 	s1 := syncs[1]
 	s1.Peers = getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
@@ -263,6 +263,41 @@ func TestSyncer_EnsurePoetProofAvailableAndValid(t *testing.T) {
 
 	err = s1.FetchPoetProof(ref[:])
 	r.NoError(err)
+}
+
+func TestSyncer_SyncAtxs_FetchPoetProof(t *testing.T) {
+	r := require.New(t)
+
+	syncs, nodes := SyncMockFactory(2, conf, "TestSyncer_SyncAtxs_FetchPoetProof_", memoryDB, newMemPoetDb)
+	s0 := syncs[0]
+	s1 := syncs[1]
+	s1.Peers = getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
+
+	// Store a poet proof and a respective atx in s0.
+
+	proofMessage := makePoetProofMessage(t)
+
+	err := s0.poetDb.ValidateAndStore(&proofMessage)
+	r.NoError(err)
+
+	poetProofBytes, err := types.InterfaceToBytes(&proofMessage.PoetProof)
+	r.NoError(err)
+	poetRef := sha256.Sum256(poetProofBytes)
+
+	atx1 := atx()
+	atx1.Nipst.PoetProofRef = poetRef[:]
+	s0.AtxDB.ProcessAtx(atx1)
+
+	// Make sure that s1 syncAtxs would fetch the missing poet proof.
+
+	r.False(s1.poetDb.HasProof(poetRef[:]))
+
+	atxs, err := s1.syncAtxs([]types.AtxId{atx1.Id()})
+	r.NoError(err)
+	r.Equal(1, len(atxs))
+	r.Equal(atx1.Id(), atxs[0].Id())
+
+	r.True(s1.poetDb.HasProof(poetRef[:]))
 }
 
 func makePoetProofMessage(t *testing.T) types.PoetProofMessage {
@@ -605,7 +640,7 @@ func Test_TwoNodes_SyncIntegrationSuite(t *testing.T) {
 		poetDb := activation.NewPoetDb(database.NewMemDatabase(), l.WithName("poetDb"))
 		sync := NewSync(s, msh, miner.NewTypesTransactionIdMemPool(), miner.NewTypesAtxIdMemPool(), mockTxProcessor{}, blockValidator, poetDb, conf, tk, 0, l)
 		sis.syncers = append(sis.syncers, sync)
-		ts.Start()
+		ts.StartNotifying()
 		atomic.AddUint32(&i, 1)
 	}
 	suite.Run(t, sis)
@@ -702,7 +737,7 @@ func Test_Multiple_SyncIntegrationSuite(t *testing.T) {
 		blockValidator := NewBlockValidator(BlockEligibilityValidatorMock{})
 		poetDb := activation.NewPoetDb(database.NewMemDatabase(), l.WithName("poetDb"))
 		sync := NewSync(s, msh, miner.NewTypesTransactionIdMemPool(), miner.NewTypesAtxIdMemPool(), mockTxProcessor{}, blockValidator, poetDb, conf, tk, 0, l)
-		ts.Start()
+		ts.StartNotifying()
 		sis.syncers = append(sis.syncers, sync)
 		atomic.AddUint32(&i, 1)
 	}
@@ -879,4 +914,75 @@ func TestFetchLayerBlockIds(t *testing.T) {
 		panic("did not get ids from all peers")
 	}
 
+}
+
+type mockLayerValidator struct {
+	vl             types.LayerID // the validated layer
+	countValidated int
+	countValidate  int
+}
+
+func (m *mockLayerValidator) ValidatedLayer() types.LayerID {
+	m.countValidated++
+	return m.vl
+}
+
+func (m *mockLayerValidator) ValidateLayer(lyr *types.Layer) {
+	m.countValidate++
+	m.vl = lyr.Index()
+}
+
+func TestSyncer_Synchronise(t *testing.T) {
+	r := require.New(t)
+	syncs, _ := SyncMockFactory(1, conf, t.Name(), memoryDB, newMockPoetDb)
+	sync := syncs[0]
+	sync.currentLayer = 3
+	lv := &mockLayerValidator{1, 0, 0}
+	sync.lValidator = lv
+	sync.AddBlock(types.NewExistingBlock(types.BlockID(1), 1, nil))
+	sync.AddBlock(types.NewExistingBlock(types.BlockID(2), 2, nil))
+	sync.AddBlock(types.NewExistingBlock(types.BlockID(3), 3, nil))
+	sync.Synchronise()
+	time.Sleep(100 * time.Millisecond) // handle go routine race
+	r.Equal(1, lv.countValidated)
+	r.Equal(1, lv.countValidate) // synced, expect only one call
+
+	lv = &mockLayerValidator{1, 0, 0}
+	sync.lValidator = lv
+	sync.currentLayer = 4 // simulate not synced
+	sync.Synchronise()
+	time.Sleep(100 * time.Millisecond) // handle go routine race
+	r.Equal(2, lv.countValidate)       // not synced, expect two calls
+}
+
+type mockTimedValidator struct {
+	delay time.Duration
+	calls int
+}
+
+func (m *mockTimedValidator) ValidatedLayer() types.LayerID {
+	return 1
+}
+
+func (m *mockTimedValidator) ValidateLayer(lyr *types.Layer) {
+	m.calls++
+	time.Sleep(m.delay)
+}
+
+func TestSyncer_ConcurrentSynchronise(t *testing.T) {
+	r := require.New(t)
+	syncs, _ := SyncMockFactory(1, conf, t.Name(), memoryDB, newMockPoetDb)
+	sync := syncs[0]
+	sync.currentLayer = 3
+	lv := &mockTimedValidator{1 * time.Second, 0}
+	sync.lValidator = lv
+	sync.AddBlock(types.NewExistingBlock(types.BlockID(1), 1, nil))
+	sync.AddBlock(types.NewExistingBlock(types.BlockID(2), 2, nil))
+	sync.AddBlock(types.NewExistingBlock(types.BlockID(3), 3, nil))
+	f := sync.getSyncRoutine()
+	go f()
+	time.Sleep(100 * time.Millisecond)
+	f()
+	time.Sleep(100 * time.Millisecond) // handle go routine race
+	r.Equal(1, lv.calls)
 }

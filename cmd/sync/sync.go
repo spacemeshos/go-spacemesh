@@ -99,7 +99,6 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	lg.Info("download from remote storage: ", remote)
 	lg.Info("expected layers: ", expectedLayers)
 	lg.Info("request timeout: ", timeout)
-	app.Config.DataDir = "bin/data/"
 
 	conf := sync.Configuration{
 		Concurrency:    4,
@@ -125,7 +124,13 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	poetDb := activation.NewPoetDb(database.NewMemDatabase(), lg.WithName("poetDb").WithOptions(log.Nop))
+	poetDbStore, err := database.NewLDBDatabase(app.Config.DataDir+"poet", 0, 0, lg.WithName("poetDbStore"))
+	if err != nil {
+		lg.Error("error: ", err)
+		return
+	}
+
+	poetDb := activation.NewPoetDb(poetDbStore, lg.WithName("poetDb").WithOptions(log.Nop))
 
 	mshdb := mesh.NewPersistentMeshDB(app.Config.DataDir, lg.WithOptions(log.Nop))
 	atxdbStore, _ := database.NewLDBDatabase(app.Config.DataDir+"atx", 0, 0, lg)
@@ -175,7 +180,7 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 
 //download data from remote storage
 func GetData(path string, lg log.Log) error {
-	dirs := []string{"atx", "nipst", "blocks", "ids", "layers", "transactions", "validity"}
+	dirs := []string{"poet", "atx", "nipst", "blocks", "ids", "layers", "transactions", "validity"}
 	for _, dir := range dirs {
 		if err := os.MkdirAll(path+dir, 0777); err != nil {
 			return err

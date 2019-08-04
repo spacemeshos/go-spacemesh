@@ -26,9 +26,9 @@ def analyze_mining(deployment, last_layer, layers_per_epoch, layer_avg_size, tot
     for x in atxmap:
         lst = []
         for y in atxmap[x]:
-            if y[1] != 9:  # check layer
+            if y[1] != last_layer:  # check layer
                 lst.append(y[0])  # append data
-        newmap[x] = lst  # remove layer 9
+        newmap[x] = lst  # remove last layer
     atxmap = newmap
     total_atxs = sum([len(atxmap[x]) for x in atxmap])
 
@@ -40,6 +40,7 @@ def analyze_mining(deployment, last_layer, layers_per_epoch, layer_avg_size, tot
     # not all nodes created blocks
     assert total_pods == len(blockmap)
     # remove blocks created in first epoch since first epoch starts with layer 1
+    print("total and first", total_blocks, first_epoch_blocks)
     assert int((total_blocks - first_epoch_blocks) / (last_layer - layers_per_epoch)) / layer_avg_size == 1
     # not all nodes produces atx in all epochs
     assert total_atxs == int((last_layer / layers_per_epoch)) * total_pods

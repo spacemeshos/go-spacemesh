@@ -1,6 +1,7 @@
 package activation
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"github.com/google/uuid"
@@ -17,7 +18,23 @@ import (
 	"math/big"
 	"math/rand"
 	"testing"
+	"time"
 )
+
+func createLayerWithAtx2(t require.TestingT, msh *mesh.Mesh, id types.LayerID, numOfBlocks int, atxs []*types.ActivationTx, votes []types.BlockID, views []types.BlockID) (created []types.BlockID) {
+	for i := 0; i < numOfBlocks; i++ {
+		block1 := types.NewExistingBlock(types.BlockID(binary.BigEndian.Uint64([]byte(uuid.New().String()[:8]))), id, []byte("data1"))
+		block1.BlockVotes = append(block1.BlockVotes, votes...)
+		for _, atx := range atxs {
+			block1.AtxIds = append(block1.AtxIds, atx.Id())
+		}
+		block1.ViewEdges = append(block1.ViewEdges, views...)
+		err := msh.AddBlockWithTxs(block1, []*types.AddressableSignedTransaction{}, atxs)
+		require.NoError(t, err)
+		created = append(created, block1.Id)
+	}
+	return
+}
 
 type MeshValidatorMock struct{}
 
@@ -82,10 +99,12 @@ func ConfigTst() mesh.Config {
 	}
 }
 
+const layersPerEpochBig = 1000
+
 func getAtxDb(id string) (*ActivationDb, *mesh.Mesh) {
 	lg := log.NewDefault(id)
 	memesh := mesh.NewMemMeshDB(lg.WithName("meshDB"))
-	atxdb := NewActivationDb(database.NewMemDatabase(), database.NewMemDatabase(), NewIdentityStore(database.NewMemDatabase()), memesh, 1000, mockBlocksProvider{make(map[types.BlockID]struct{})}, &ValidatorMock{}, lg.WithName("atxDB"))
+	atxdb := NewActivationDb(database.NewMemDatabase(), database.NewMemDatabase(), NewIdentityStore(database.NewMemDatabase()), memesh, layersPerEpochBig, mockBlocksProvider{make(map[types.BlockID]struct{})}, &ValidatorMock{}, lg.WithName("atxDB"))
 	layers := mesh.NewMesh(memesh, atxdb, ConfigTst(), &MeshValidatorMock{}, &sync.MockTxMemPool{}, &sync.MockAtxMemPool{}, &MockState{}, lg.WithName("mesh"))
 	return atxdb, layers
 }
@@ -596,4 +615,67 @@ func TestActivationDb_ProcessAtx(t *testing.T) {
 	res, err := atxdb.GetIdentity(idx1.Key)
 	assert.Nil(t, err)
 	assert.Equal(t, idx1, res)
+}
+
+func BenchmarkActivationDb_SyntacticallyValidateAtx(b *testing.B) {
+	r := require.New(b)
+	nopLogger := log.NewDefault("").WithOptions(log.Nop)
+
+	atxdb, layers := getAtxDb("t8")
+	atxdb.log = nopLogger
+	layers.Log = nopLogger
+
+	const (
+		activesetSize  = 300
+		blocksPerLayer = 200
+		numberOfLayers = 100
+	)
+
+	coinbase := address.HexToAddress("c012ba5e")
+	var atxs []*types.ActivationTx
+	for i := 0; i < activesetSize; i++ {
+		id := types.NodeId{Key: uuid.New().String(), VRFPublicKey: []byte("vrf")}
+		atxs = append(atxs, types.NewActivationTx(id, coinbase, 0, *types.EmptyAtxId, 1,
+			0, *types.EmptyAtxId, 3, []types.BlockID{}, &types.NIPST{}))
+	}
+
+	poetRef := []byte{0x12, 0x21}
+	for _, atx := range atxs {
+		hash, err := atx.NIPSTChallenge.Hash()
+		r.NoError(err)
+		atx.Nipst = nipst.NewNIPSTWithChallenge(hash, poetRef)
+	}
+
+	blocks := createLayerWithAtx2(b, layers, 0, blocksPerLayer, atxs, []types.BlockID{}, []types.BlockID{})
+	for i := 1; i < numberOfLayers; i++ {
+		blocks = createLayerWithAtx2(b, layers, types.LayerID(i), blocksPerLayer, []*types.ActivationTx{}, blocks, blocks)
+	}
+
+	idx1 := types.NodeId{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}
+	challenge := newChallenge(idx1, 0, *types.EmptyAtxId, *types.EmptyAtxId, numberOfLayers+1)
+	hash, err := challenge.Hash()
+	r.NoError(err)
+	prevAtx := newAtx(challenge, activesetSize, blocks, nipst.NewNIPSTWithChallenge(hash, poetRef))
+
+	atx := types.NewActivationTx(idx1, coinbase, 1, prevAtx.Id(), numberOfLayers+1+layersPerEpochBig, 0, prevAtx.Id(), activesetSize, blocks, &types.NIPST{})
+	hash, err = atx.NIPSTChallenge.Hash()
+	r.NoError(err)
+	atx.Nipst = nipst.NewNIPSTWithChallenge(hash, poetRef)
+	err = atxdb.StoreAtx(1, prevAtx)
+	r.NoError(err)
+
+	start := time.Now()
+	err = atxdb.SyntacticallyValidateAtx(atx)
+	fmt.Printf("\nSyntactic validation took %v\n", time.Since(start))
+	r.NoError(err)
+
+	start = time.Now()
+	err = atxdb.SyntacticallyValidateAtx(atx)
+	fmt.Printf("\nSecond syntactic validation took %v\n", time.Since(start))
+	r.NoError(err)
+
+	start = time.Now()
+	err = atxdb.ContextuallyValidateAtx(atx)
+	fmt.Printf("\nContextual validation took %v\n\n", time.Since(start))
+	r.NoError(err)
 }

@@ -16,7 +16,7 @@ ORACLE_DEPLOYMENT_FILE = './k8s/oracle.yml'
 # ==============================================================================
 @pytest.fixture(scope='module')
 def setup_oracle(request):
-    oracle_deployment_name = 'oracle'
+    oracle_deployment_name = 'sm-oracle'
     return setup_server(oracle_deployment_name, ORACLE_DEPLOYMENT_FILE, testconfig['namespace'])
 
 

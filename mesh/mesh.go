@@ -152,6 +152,7 @@ func (m *Mesh) ValidatedLayer() types.LayerID {
 	return m.validatedLayer
 }
 
+// LatestLayer - returns the latest layer we saw from the network
 func (m *Mesh) LatestLayer() types.LayerID {
 	defer m.lkMutex.RUnlock()
 	m.lkMutex.RLock()

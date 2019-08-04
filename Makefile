@@ -48,12 +48,10 @@ else
 endif
 .PHONY: genproto
 
-build:
+build: genproto
 ifeq ($(OS),Windows_NT)
-	make genproto
 	go build ${LDFLAGS} -o $(BIN_DIR_WIN)/$(BINARY).exe
 else
-	make genproto
 	go build ${LDFLAGS} -o $(BIN_DIR)/$(BINARY)
 endif
 .PHONY: build
@@ -86,12 +84,10 @@ tidy:
 	go mod tidy
 .PHONY: tidy
 
-$(PLATFORMS):
+$(PLATFORMS): genproto
 ifeq ($(OS),Windows_NT)
-	make genproto
 	set GOOS=$(os)&&set GOARCH=amd64&&go build ${LDFLAGS} -o $(CURR_DIR)/$(BINARY)
 else
-	make genproto
 	GOOS=$(os) GOARCH=amd64 go build ${LDFLAGS} -o $(CURR_DIR)/$(BINARY)
 endif
 .PHONY: $(PLATFORMS)

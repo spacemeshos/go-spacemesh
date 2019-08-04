@@ -66,7 +66,7 @@ func (vp votingPattern) Layer() types.LayerID {
 type BlockCache interface {
 	GetBlock(id types.BlockID) (*types.Block, error)
 	LayerBlockIds(id types.LayerID) ([]types.BlockID, error)
-	ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, foo func(block *types.BlockHeader) error) error
+	ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, foo func(block *types.Block) error) error
 }
 
 //todo memory optimizations
@@ -241,7 +241,7 @@ func globalOpinion(v vec, layerSize uint64, delta float64) vec {
 }
 
 func (ni *ninjaTortoise) updateCorrectionVectors(p votingPattern, bottomOfWindow types.LayerID) {
-	foo := func(x *types.BlockHeader) error {
+	foo := func(x *types.Block) error {
 		for _, bid := range ni.tEffectiveToBlocks[p] { //for all b who's effective vote is p
 			b, err := ni.GetBlock(bid)
 			if err != nil {
@@ -508,13 +508,13 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) { //i most rec
 			view := make(map[types.BlockID]struct{})
 			lCntr := make(map[types.LayerID]int)
 			correctionMap, effCountMap, getCrrEffCnt := ni.getCorrEffCounter()
-			foo := func(block *types.BlockHeader) error {
+			foo := func(block *types.Block) error {
 				view[block.ID()] = struct{}{} //all blocks in view
 				for _, id := range block.BlockVotes {
 					view[id] = struct{}{}
 				}
-				lCntr[block.Layer()]++ //amount of blocks for each layer in view
-				getCrrEffCnt(block)    //calc correction and eff count
+				lCntr[block.Layer()]++           //amount of blocks for each layer in view
+				getCrrEffCnt(&block.BlockHeader) //calc correction and eff count
 				return nil
 			}
 
@@ -586,7 +586,7 @@ func (ni *ninjaTortoise) GetGoodPattern(layer types.LayerID) (uint32, error) {
 		return uint32(getId(v)), nil
 	}
 
-	if layer >= ni.pBase.LayerID {
+	if layer > ni.pBase.LayerID {
 		return 0, errors.New("pbase is lower than provided layer")
 	}
 
@@ -615,7 +615,7 @@ func (ni *ninjaTortoise) GetGoodPatternBlocks(layer types.LayerID) (map[types.Bl
 		return blocks, nil
 	}
 
-	if layer >= ni.pBase.LayerID {
+	if layer > ni.pBase.LayerID {
 		return nil, errors.New("pbase is lower than provided layer")
 	}
 

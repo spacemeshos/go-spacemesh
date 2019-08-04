@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  generateName: client-
+  generateName: sm-client-
   labels:
     name: client
   annotations:

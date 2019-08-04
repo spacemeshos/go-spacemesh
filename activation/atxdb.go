@@ -73,17 +73,12 @@ func (db *ActivationDb) ProcessAtx(atx *types.ActivationTx) {
 	}
 }
 
-func (db *ActivationDb) createTraversalActiveSetCounterFunc(countedAtxs map[string]types.AtxId, penalties map[string]struct{}, layersPerEpoch uint16, epoch types.EpochId) func(blkh *types.BlockHeader) error {
+func (db *ActivationDb) createTraversalActiveSetCounterFunc(countedAtxs map[string]types.AtxId, penalties map[string]struct{}, layersPerEpoch uint16, epoch types.EpochId) func(b *types.Block) error {
 
-	traversalFunc := func(blkh *types.BlockHeader) error {
-
-		blk, err := db.meshDb.GetBlock(blkh.Id)
-		if err != nil {
-			return err
-		}
+	traversalFunc := func(b *types.Block) error {
 
 		// count unique ATXs
-		for _, id := range blk.AtxIds {
+		for _, id := range b.AtxIds {
 			atx, err := db.GetAtx(id)
 			if err != nil {
 				log.Panic("error fetching atx %v from database -- inconsistent state", id.ShortId()) // TODO: handle inconsistent state
