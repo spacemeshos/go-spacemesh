@@ -946,3 +946,35 @@ func TestSyncer_Synchronise(t *testing.T) {
 	time.Sleep(100 * time.Millisecond) // handle go routine race
 	r.Equal(2, lv.countValidate)       // not synced, expect two calls
 }
+
+type mockTimedValidator struct {
+	delay time.Duration
+	calls int
+}
+
+func (m *mockTimedValidator) ValidatedLayer() types.LayerID {
+	return 1
+}
+
+func (m *mockTimedValidator) ValidateLayer(lyr *types.Layer) {
+	m.calls++
+	time.Sleep(m.delay)
+}
+
+func TestSyncer_ConcurrentSynchronise(t *testing.T) {
+	r := require.New(t)
+	syncs, _ := SyncMockFactory(1, conf, t.Name(), memoryDB, newMockPoetDb)
+	sync := syncs[0]
+	sync.currentLayer = 3
+	lv := &mockTimedValidator{1 * time.Second, 0}
+	sync.lValidator = lv
+	sync.AddBlock(types.NewExistingBlock(types.BlockID(1), 1, nil))
+	sync.AddBlock(types.NewExistingBlock(types.BlockID(2), 2, nil))
+	sync.AddBlock(types.NewExistingBlock(types.BlockID(3), 3, nil))
+	f := sync.getSyncRoutine()
+	go f()
+	time.Sleep(100 * time.Millisecond)
+	f()
+	time.Sleep(100 * time.Millisecond) // handle go routine race
+	r.Equal(1, lv.calls)
+}
