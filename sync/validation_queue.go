@@ -3,6 +3,7 @@ package sync
 import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"reflect"
 	"sync"
@@ -126,7 +127,7 @@ func (vq *validationQueue) finishBlockCallback(block *types.Block) func(res bool
 			return err
 		}
 
-		if err := vq.addBlock(block, txs, atxs); err != nil {
+		if err := vq.addBlock(block, txs, atxs); err != nil && err != mesh.DoubleWrite {
 			return err
 		}
 

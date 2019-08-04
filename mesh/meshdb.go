@@ -16,6 +16,8 @@ type layerMutex struct {
 	layerWorkers uint32
 }
 
+var DoubleWrite = errors.New(fmt.Sprintf("item already exists in database"))
+
 type MeshDB struct {
 	log.Log
 	blockCache         blockCache
@@ -70,7 +72,7 @@ func (m *MeshDB) Close() {
 
 func (m *MeshDB) AddBlock(bl *types.Block) error {
 	if _, err := m.getBlockBytes(bl.ID()); err == nil {
-		return errors.New(fmt.Sprintf("block %v already exists in database", bl.ID()))
+		return DoubleWrite
 	}
 	if err := m.writeBlock(bl); err != nil {
 		return err
