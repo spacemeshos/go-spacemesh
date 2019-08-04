@@ -134,9 +134,13 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	msh := mesh.NewMesh(mshdb, atxdb, sync.ConfigTst(), &sync.MeshValidatorMock{}, txpool, atxpool, &sync.MockState{}, lg)
 	defer msh.Close()
 	msh.AddBlock(&mesh.GenesisBlock)
-
+	tick := 20 * time.Second
+	layout := "2006-01-02T15:04:05.000Z"
+	str := "2016-11-12T11:45:26.371Z"
+	start, _ := time.Parse(layout, str)
+	ts := timesync.NewTicker(sync.MockTimer{}, tick, start)
 	ch := make(chan types.LayerID, 1)
-	app.sync = sync.NewSync(swarm, msh, txpool, atxpool, mockTxProcessor{}, sync.NewBlockValidator(sync.BlockEligibilityValidatorMock{}), poetDb, conf, ch, 0, lg.WithName("sync"))
+	app.sync = sync.NewSync(swarm, msh, txpool, atxpool, mockTxProcessor{}, sync.NewBlockValidator(sync.BlockEligibilityValidatorMock{}), poetDb, conf, ts, lg.WithName("sync"))
 	ch <- types.LayerID(expectedLayers)
 	if err = swarm.Start(); err != nil {
 		log.Panic("error starting p2p err=%v", err)

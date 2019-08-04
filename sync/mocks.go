@@ -7,6 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"math/big"
+	"time"
 )
 
 type PoetDbMock struct{}
@@ -186,4 +187,14 @@ func (MockAtxMemPool) Put(id types.AtxId, item *types.ActivationTx) {
 
 func (MockAtxMemPool) Invalidate(id types.AtxId) {
 
+}
+
+type MockTimer struct {
+}
+
+func (MockTimer) Now() time.Time {
+	layout := "2006-01-02T15:04:05.000Z"
+	str := "2018-11-12T11:45:26.371Z"
+	start, _ := time.Parse(layout, str)
+	return start
 }

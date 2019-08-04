@@ -45,16 +45,6 @@ const (
 	Path     = "../tmp/sync/"
 )
 
-type MockTimer struct {
-}
-
-func (MockTimer) Now() time.Time {
-	layout := "2006-01-02T15:04:05.000Z"
-	str := "2018-11-12T11:45:26.371Z"
-	start, _ := time.Parse(layout, str)
-	return start
-}
-
 var (
 	tx1 = tx()
 	tx2 = tx()
@@ -618,7 +608,7 @@ func Test_TwoNodes_SyncIntegrationSuite(t *testing.T) {
 	sis.NeighborsCount = 1
 	sis.name = t.Name()
 	i := uint32(1)
-	tick := 200 * time.Millisecond
+	tick := 20 * time.Second
 	layout := "2006-01-02T15:04:05.000Z"
 	str := "2016-11-12T11:45:26.371Z"
 	start, _ := time.Parse(layout, str)
