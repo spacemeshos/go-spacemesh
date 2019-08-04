@@ -11,6 +11,10 @@ func LayerIdsReqFactory(lyr types.LayerID) RequestFactory {
 		ch := make(chan interface{}, 1)
 		foo := func(msg []byte) {
 			defer close(ch)
+			if len(msg) == 0 {
+				s.Warning("peer %v responded with nil to layer %v request", peer, lyr)
+				return
+			}
 			ids, err := types.BytesToBlockIds(msg)
 			if err != nil {
 				s.Error("could not unmarshal mesh.LayerIDs response")
@@ -30,6 +34,10 @@ func HashReqFactory(lyr types.LayerID) RequestFactory {
 		ch := make(chan interface{}, 1)
 		foo := func(msg []byte) {
 			defer close(ch)
+			if len(msg) == 0 {
+				s.Warning("peer %v responded with nil to hash request layer %v", peer, lyr)
+				return
+			}
 			ch <- &peerHashPair{peer: peer, hash: msg}
 		}
 		if err := s.SendRequest(LAYER_HASH, lyr.ToBytes(), peer, foo); err != nil {
@@ -56,6 +64,10 @@ func BlockReqFactory() BlockRequestFactory {
 		ch := make(chan interface{}, 1)
 		foo := func(msg []byte) {
 			defer close(ch)
+			if len(msg) == 0 {
+				s.Warning("peer %v responded with nil to block %v request", peer, id)
+				return
+			}
 			var block types.Block
 			err := types.BytesToInterface(msg, &block)
 			if err != nil {
@@ -79,6 +91,10 @@ func TxReqFactory(ids []types.TransactionId) RequestFactory {
 		ch := make(chan interface{}, 1)
 		foo := func(msg []byte) {
 			defer close(ch)
+			if len(msg) == 0 {
+				s.Warning("peer responded with nil to txs request ", peer)
+				return
+			}
 			var tx []types.SerializableSignedTransaction
 			err := types.BytesToInterface(msg, &tx)
 			if err != nil {
@@ -106,6 +122,10 @@ func ATxReqFactory(ids []types.AtxId) RequestFactory {
 		foo := func(msg []byte) {
 			s.Info("handle atx response ")
 			defer close(ch)
+			if len(msg) == 0 {
+				s.Warning("peer responded with nil to atxs request ", peer)
+				return
+			}
 			var tx []types.ActivationTx
 			err := types.BytesToInterface(msg, &tx)
 			if err != nil {
@@ -134,6 +154,11 @@ func PoetReqFactory(poetProofRef []byte) RequestFactory {
 		resHandler := func(msg []byte) {
 			s.Info("handle PoET proof response")
 			defer close(ch)
+			if len(msg) == 0 {
+				s.Warning("peer responded with nil to poet request %v", peer, poetProofRef)
+				return
+			}
+
 			var proofMessage types.PoetProofMessage
 			err := types.BytesToInterface(msg, &proofMessage)
 			if err != nil {
