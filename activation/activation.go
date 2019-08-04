@@ -5,7 +5,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"sync/atomic"
 )
@@ -57,7 +56,7 @@ type ATXDBProvider interface {
 	GetAtx(id types.AtxId) (*types.ActivationTx, error)
 	CalcActiveSetFromView(a *types.ActivationTx) (uint32, error)
 	GetNodeLastAtxId(nodeId types.NodeId) (types.AtxId, error)
-	GetEpochAtxIds(epochId types.EpochId) ([]types.AtxId, error)
+	GetPosAtxId(epochId types.EpochId) (types.AtxId, error)
 }
 
 type BytesStore interface {
@@ -87,11 +86,6 @@ type Builder struct {
 	store           BytesStore
 	isSynced        func() bool
 	log             log.Log
-}
-
-type Processor struct {
-	db            *ActivationDb
-	epochProvider EpochProvider
 }
 
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
@@ -389,12 +383,10 @@ func (b *Builder) GetPrevAtxId(node types.NodeId) (types.AtxId, error) {
 // it returns an error if epochs were not found in db
 func (b *Builder) GetPositioningAtxId(epochId types.EpochId) (*types.AtxId, error) {
 	//todo: make this on blocking until an atx is received
-	atxs, err := b.db.GetEpochAtxIds(epochId)
+	atxId, err := b.db.GetPosAtxId(epochId)
 	if err != nil {
 		return nil, err
 	}
-	atxId := atxs[rand.Int31n(int32(len(atxs)))]
-
 	return &atxId, nil
 }
 

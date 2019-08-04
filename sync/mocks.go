@@ -130,8 +130,8 @@ func (*AtxDbMock) IsIdentityActive(edId string, layer types.LayerID) (*types.Nod
 }
 
 //todo: if this is used somewhere then impl some real mock
-func (t *AtxDbMock) GetEpochAtxIds(id types.EpochId) ([]types.AtxId, error) {
-	return []types.AtxId{}, nil
+func (t *AtxDbMock) GetPosAtxId(id types.EpochId) (types.AtxId, error) {
+	return types.AtxId{}, nil
 }
 
 func (t *AtxDbMock) GetNipst(id types.AtxId) (*types.NIPST, error) {

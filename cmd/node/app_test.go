@@ -2,6 +2,7 @@ package node
 
 import (
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/amcl/BLS381"
 	"github.com/spacemeshos/go-spacemesh/api"
@@ -224,7 +225,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 
 	type nodeData struct {
 		layertoblocks map[types.LayerID][]types.BlockID
-		atxPerEpoch   map[types.EpochId][]types.AtxId
+		atxPerEpoch   map[types.EpochId]uint32
 	}
 
 	datamap := make(map[string]*nodeData)
@@ -252,7 +253,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 	for _, ap := range suite.apps {
 		if _, ok := datamap[ap.nodeId.Key]; !ok {
 			datamap[ap.nodeId.Key] = new(nodeData)
-			datamap[ap.nodeId.Key].atxPerEpoch = make(map[types.EpochId][]types.AtxId)
+			datamap[ap.nodeId.Key].atxPerEpoch = make(map[types.EpochId]uint32)
 			datamap[ap.nodeId.Key].layertoblocks = make(map[types.LayerID][]types.BlockID)
 		}
 
@@ -266,11 +267,17 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 			}
 			epoch := lyr.Index().GetEpoch(uint16(ap.Config.LayersPerEpoch))
 			if _, ok := datamap[ap.nodeId.Key].atxPerEpoch[epoch]; !ok {
-				atxs, err := ap.blockListener.AtxDB.GetEpochAtxIds(epoch)
+				//atxs, err := ap.blockListener.AtxDB.GetPosAtxId(epoch)
+				atxDb := ap.blockListener.AtxDB.(*activation.ActivationDb)
+				atxId, err := atxDb.GetNodeLastAtxId(ap.nodeId)
 				if err != nil {
-					log.Error("ERROR: couldn't get atxs for passed epoch: %v, err: %v", epoch, err)
+					log.Error("ERROR: couldn't get last atx for passed epoch: %v, err: %v", epoch, err)
 				}
-				datamap[ap.nodeId.Key].atxPerEpoch[epoch] = atxs
+				atx, err := atxDb.GetAtx(atxId)
+				if err != nil {
+					log.Error("ERROR: couldn't get last atx for passed epoch: %v, err: %v", epoch, err)
+				}
+				datamap[ap.nodeId.Key].atxPerEpoch[epoch] = atx.ActiveSetSize
 			}
 		}
 	}
@@ -289,8 +296,8 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 			}
 
 			for e, atx := range d.atxPerEpoch {
-				assert.Equal(suite.T(), len(atx), len(d2.atxPerEpoch[e]),
-					fmt.Sprintf("%v and %v had different atx maps for epoch: %v: %v: %v \r\n %v: %v", i, i2, e, i, atx, i2, d2.atxPerEpoch[e]))
+				assert.Equal(suite.T(), atx, d2.atxPerEpoch[e],
+					fmt.Sprintf("%v and %v had different atx counts for epoch: %v: %v: %v \r\n %v: %v", i, i2, e, i, atx, i2, d2.atxPerEpoch[e]))
 			}
 		}
 	}
@@ -318,7 +325,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 	total_atxs := 0
 
 	for _, atxs := range patient.atxPerEpoch {
-		total_atxs += len(atxs)
+		total_atxs += int(atxs)
 	}
 
 	assert.True(suite.T(), ((total_blocks-first_epoch_blocks)/(lastlayer-layers_per_epoch)) == layer_avg_size, fmt.Sprintf("not good num of blocks got: %v, want: %v. total_blocks: %v, first_epoch_blocks: %v, lastlayer: %v, layers_per_epoch: %v", (total_blocks-first_epoch_blocks)/(lastlayer-layers_per_epoch), layer_avg_size, total_blocks, first_epoch_blocks, lastlayer, layers_per_epoch))

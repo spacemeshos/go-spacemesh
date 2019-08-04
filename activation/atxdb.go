@@ -1,10 +1,8 @@
 package activation
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
-	"github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -14,6 +12,7 @@ import (
 )
 
 const CounterKey = 0xaaaa
+const posAtxKey = "posAtxKey"
 
 type ActivationDb struct {
 	sync.RWMutex
@@ -252,7 +251,7 @@ func (db *ActivationDb) StoreAtx(ech types.EpochId, atx *types.ActivationTx) err
 		return err
 	}
 
-	err = db.addAtxToEpoch(ech, atx.Id())
+	err = db.updatePosAtxIfNeeded(atx)
 	if err != nil {
 		return err
 	}
@@ -339,27 +338,49 @@ func (db *ActivationDb) ActiveSetSize(epochId types.EpochId) (uint32, error) {
 	return common.BytesToUint32(val), nil
 }
 
+type atxIdAndLayer struct {
+	AtxId   types.AtxId
+	LayerId types.LayerID
+}
+
 // addAtxToEpoch adds atx to epoch epochId
 // this function is not thread safe and needs to be called under a global lock
-func (db *ActivationDb) addAtxToEpoch(epochId types.EpochId, atx types.AtxId) error {
-	ids, err := db.atxs.Get(epochId.ToBytes())
-	var atxs []types.AtxId
-	if err != nil {
-		//epoch doesnt exist, need to insert new layer
-		ids = []byte{}
-		atxs = make([]types.AtxId, 0, 0)
-	} else {
-		atxs, err = decodeAtxIds(ids)
-		if err != nil {
-			return errors.New("could not get all atxs from database ")
-		}
+func (db *ActivationDb) updatePosAtxIfNeeded(atx *types.ActivationTx) error {
+	currentIdAndLayer, err := db.getCurrentAtxIdAndLayer()
+	if err != nil && err != database.ErrNotFound {
+		return fmt.Errorf("failed to get current ATX ID and layer: %v", err)
 	}
-	atxs = append(atxs, atx)
-	w, err := encodeAtxIds(atxs)
-	if err != nil {
-		return errors.New("could not encode layer atx ids")
+	if err == nil && currentIdAndLayer.LayerId >= atx.PubLayerIdx {
+		return nil
 	}
-	return db.atxs.Put(epochId.ToBytes(), w)
+
+	newIdAndLayer := atxIdAndLayer{
+		AtxId:   atx.Id(),
+		LayerId: atx.PubLayerIdx,
+	}
+	idAndLayerBytes, err := types.InterfaceToBytes(&newIdAndLayer)
+	if err != nil {
+		return fmt.Errorf("failed to marshal posAtx ID and layer: %v", err)
+	}
+
+	err = db.atxs.Put([]byte(posAtxKey), idAndLayerBytes)
+	if err != nil {
+		return fmt.Errorf("failed to store posAtx ID and layer: %v", err)
+	}
+	return nil
+}
+
+func (db ActivationDb) getCurrentAtxIdAndLayer() (atxIdAndLayer, error) {
+	posAtxBytes, err := db.atxs.Get([]byte(posAtxKey))
+	if err != nil {
+		return atxIdAndLayer{}, err
+	}
+	var currentIdAndLayer atxIdAndLayer
+	err = types.BytesToInterface(posAtxBytes, &currentIdAndLayer)
+	if err != nil {
+		return atxIdAndLayer{}, fmt.Errorf("failed to unmarshal posAtx ID and layer: %v", err)
+	}
+	return currentIdAndLayer, nil
 }
 
 func getNodeIdKey(id types.NodeId) []byte {
@@ -388,19 +409,17 @@ func (db *ActivationDb) GetNodeLastAtxId(nodeId types.NodeId) (types.AtxId, erro
 	return types.AtxId{Hash: common.BytesToHash(id)}, nil
 }
 
-// GetEpochAtxIds returns all atx id's created in this epoch as seen by this node
-func (db *ActivationDb) GetEpochAtxIds(epochId types.EpochId) ([]types.AtxId, error) {
-	db.RLock()
-	ids, err := db.atxs.Get(epochId.ToBytes())
-	db.RUnlock()
+// GetPosAtxId returns the best (highest layer id), currently known to this node, pos atx id
+func (db *ActivationDb) GetPosAtxId(epochId types.EpochId) (types.AtxId, error) {
+	idAndLayer, err := db.getCurrentAtxIdAndLayer()
 	if err != nil {
-		return nil, err
+		return *types.EmptyAtxId, err
 	}
-	atxs, err := decodeAtxIds(ids)
-	if err != nil {
-		return nil, err
+	if idAndLayer.LayerId.GetEpoch(db.LayersPerEpoch) != epochId {
+		return types.AtxId{}, fmt.Errorf("current posAtx (epoch %v) does not belong to the requested epoch (%v)",
+			idAndLayer.LayerId.GetEpoch(db.LayersPerEpoch), epochId)
 	}
-	return atxs, nil
+	return idAndLayer.AtxId, nil
 }
 
 // getAtxUnlocked gets the atx from db, this function is not thread safe and should be called under db lock
@@ -489,20 +508,4 @@ func (db *ActivationDb) IsIdentityActive(edId string, layer types.LayerID) (*typ
 
 	// lastAtxTargetEpoch = epoch
 	return &nodeId, atx.TargetEpoch(db.LayersPerEpoch) == epoch, atx.Id(), nil
-}
-
-func decodeAtxIds(idsBytes []byte) ([]types.AtxId, error) {
-	var ids []types.AtxId
-	if _, err := xdr.Unmarshal(bytes.NewReader(idsBytes), &ids); err != nil {
-		return nil, errors.New("error marshaling layer ")
-	}
-	return ids, nil
-}
-
-func encodeAtxIds(ids []types.AtxId) ([]byte, error) {
-	var w bytes.Buffer
-	if _, err := xdr.Marshal(&w, &ids); err != nil {
-		return nil, errors.New("error marshalling atx ids ")
-	}
-	return w.Bytes(), nil
 }

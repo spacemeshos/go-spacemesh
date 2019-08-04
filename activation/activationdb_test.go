@@ -76,7 +76,7 @@ func (mock *ATXDBMock) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
 	panic("not implemented")
 }
 
-func (mock *ATXDBMock) GetEpochAtxIds(epochId types.EpochId) ([]types.AtxId, error) {
+func (mock *ATXDBMock) GetPosAtxId(types.EpochId) (types.AtxId, error) {
 	panic("not implemented")
 }
 
