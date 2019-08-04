@@ -94,8 +94,14 @@ func (vq *validationQueue) traverse(s *Syncer) error {
 		}
 
 		s.Info("Validating view Block %v", bjb.block.ID())
+		res, err := vq.addBlockDependencies(bjb.block, vq.finishBlockCallback(bjb.block))
+		if err != nil {
+			vq.updateDependencies(bjb.id, false)
+			vq.Error(fmt.Sprintf("failed to add dependencies for Block %v %v", bjb.block.ID(), err))
+			continue
+		}
 
-		if vq.addBlockDependencies(bjb.block, vq.finishBlockCallback(bjb.block)) == false {
+		if res == false {
 			s.Info("dependencies done for %v", bjb.block.ID())
 			vq.updateDependencies(bjb.id, true)
 			vq.Info(" %v blocks in dependency map", len(vq.depMap))
@@ -155,17 +161,17 @@ func (vq *validationQueue) removefromDepMaps(block types.BlockID, valid bool, do
 		delete(vq.depMap[dep], block)
 		if len(vq.depMap[dep]) == 0 {
 			delete(vq.depMap, dep)
-			switch id := dep.(type) {
-			case types.BlockID:
-				doneBlocks = append(doneBlocks, id)
-			}
-
 			vq.Info("run callback for %v, %v", dep, reflect.TypeOf(dep))
 			if callback, ok := vq.callbacks[dep]; ok {
 				if err := callback(valid); err != nil {
 					vq.Error(" %v callback Failed", dep)
+					continue
 				}
 				delete(vq.callbacks, dep)
+				switch id := dep.(type) {
+				case types.BlockID:
+					doneBlocks = append(doneBlocks, id)
+				}
 			}
 		}
 	}
@@ -173,7 +179,7 @@ func (vq *validationQueue) removefromDepMaps(block types.BlockID, valid bool, do
 	return doneBlocks
 }
 
-func (vq *validationQueue) addDependencies(jobId interface{}, blks []types.BlockID, finishCallback func(res bool) error) bool {
+func (vq *validationQueue) addDependencies(jobId interface{}, blks []types.BlockID, finishCallback func(res bool) error) (bool, error) {
 	vq.mu.Lock()
 	defer vq.mu.Unlock()
 	vq.callbacks[jobId] = finishCallback
@@ -197,14 +203,13 @@ func (vq *validationQueue) addDependencies(jobId interface{}, blks []types.Block
 
 	//todo better this is a little hacky
 	if len(dependencys) == 0 {
-		finishCallback(true)
-		return false
+		return false, finishCallback(true)
 	}
 
 	vq.depMap[jobId] = dependencys
-	return true
+	return true, nil
 }
 
-func (vq *validationQueue) addBlockDependencies(blk *types.Block, finishBlockCallback func(res bool) error) bool {
+func (vq *validationQueue) addBlockDependencies(blk *types.Block, finishBlockCallback func(res bool) error) (bool, error) {
 	return vq.addDependencies(blk.ID(), blk.ViewEdges, finishBlockCallback)
 }

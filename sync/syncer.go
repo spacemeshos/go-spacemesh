@@ -166,7 +166,7 @@ func (s *Syncer) run() {
 }
 
 //fires a sync every sm.syncInterval or on force space from outside
-func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool AtxMemPool, sv TxSigValidator, bv BlockValidator, poetdb PoetDb, conf Configuration, clock timesync.LayerTimer, currentLayer types.LayerID, logger log.Log) *Syncer {
+func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool AtxMemPool, sv TxSigValidator, bv BlockValidator, poetdb PoetDb, conf Configuration, clock *timesync.Ticker, logger log.Log) *Syncer {
 	s := &Syncer{
 		BlockValidator: bv,
 		Configuration:  conf,
@@ -181,9 +181,9 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool A
 		atxpool:        atxpool,
 		poetDb:         poetdb,
 		startLock:      0,
-		currentLayer:   currentLayer,
+		currentLayer:   clock.GetCurrentLayer(),
 		forceSync:      make(chan bool),
-		clock:          clock,
+		clock:          clock.Subscribe(),
 		exit:           make(chan struct{}),
 	}
 
@@ -209,11 +209,11 @@ func (s *Syncer) lastTickedLayer() types.LayerID {
 func (s *Syncer) Synchronise() {
 	for currentSyncLayer := s.lValidator.ValidatedLayer() + 1; currentSyncLayer <= s.lastTickedLayer(); currentSyncLayer++ {
 		lastTickedLayer := s.lastTickedLayer()
-		s.Info("syncing layer %v current consensus layer is %d", currentSyncLayer, lastTickedLayer)
-
 		if s.IsSynced() && currentSyncLayer == lastTickedLayer {
 			continue
 		}
+
+		s.Info("syncing layer %v current consensus layer is %d", currentSyncLayer, lastTickedLayer)
 
 		lyr, err := s.GetLayer(types.LayerID(currentSyncLayer))
 		if err != nil {
@@ -289,14 +289,14 @@ func (s *Syncer) BlockSyntacticValidation(block *types.Block) ([]*types.Addressa
 }
 
 func (s *Syncer) ValidateView(blk *types.Block) bool {
-
 	ch := make(chan bool, 1)
+	defer close(ch)
 	foo := func(res bool) error {
 		ch <- res
 		return nil
 	}
 
-	s.blockQueue.addBlockDependencies(blk, foo)
+	s.blockQueue.addDependencies(blk.ID(), blk.ViewEdges, foo)
 	return <-ch
 }
 
