@@ -16,10 +16,6 @@ import (
 
 const CounterKey = 0xaaaa
 
-type goodBlocksProvider interface {
-	GetGoodPatternBlocks(layer types.LayerID) (map[types.BlockID]struct{}, error)
-}
-
 type ActivationDb struct {
 	sync.RWMutex
 	//todo: think about whether we need one db or several
@@ -30,14 +26,13 @@ type ActivationDb struct {
 	atxCache        AtxCache
 	meshDb          *mesh.MeshDB
 	LayersPerEpoch  uint16
-	blocksProvider  goodBlocksProvider
 	nipstValidator  NipstValidator
 	log             log.Log
 	processAtxMutex sync.Mutex
 }
 
-func NewActivationDb(dbstore database.DB, nipstStore database.DB, idstore IdStore, meshDb *mesh.MeshDB, layersPerEpoch uint16, blocksProvider goodBlocksProvider, nipstValidator NipstValidator, log log.Log) *ActivationDb {
-	return &ActivationDb{atxs: dbstore, nipsts: nipstStore, atxCache: NewAtxCache(20), meshDb: meshDb, nipstValidator: nipstValidator, LayersPerEpoch: layersPerEpoch, blocksProvider: blocksProvider, IdStore: idstore, log: log}
+func NewActivationDb(dbstore database.DB, nipstStore database.DB, idstore IdStore, meshDb *mesh.MeshDB, layersPerEpoch uint16, nipstValidator NipstValidator, log log.Log) *ActivationDb {
+	return &ActivationDb{atxs: dbstore, nipsts: nipstStore, atxCache: NewAtxCache(20), meshDb: meshDb, nipstValidator: nipstValidator, LayersPerEpoch: layersPerEpoch, IdStore: idstore, log: log}
 }
 
 // ProcessAtx validates the active set size declared in the atx, and contextually validates the atx according to atx
@@ -76,6 +71,11 @@ func (db *ActivationDb) ProcessAtx(atx *types.ActivationTx) {
 func (db *ActivationDb) createTraversalActiveSetCounterFunc(countedAtxs map[string]types.AtxId, penalties map[string]struct{}, layersPerEpoch uint16, epoch types.EpochId) func(b *types.Block) error {
 
 	traversalFunc := func(b *types.Block) error {
+
+		// don't count ATXs in blocks that are not destined to the prev epoch
+		if b.LayerIndex.GetEpoch(db.LayersPerEpoch) != epoch-1 {
+			return nil
+		}
 
 		// count unique ATXs
 		for _, id := range b.AtxIds {
@@ -122,27 +122,21 @@ func (db *ActivationDb) createTraversalActiveSetCounterFunc(countedAtxs map[stri
 	return traversalFunc
 }
 
-// ActiveSetForLayerConsensusView - returns the active set size that matches the view of the contextually valid blocks in the provided layer
-func (db *ActivationDb) ActiveSetForLayerConsensusView(layer types.LayerID, layersPerEpoch uint16) (map[string]struct{}, error) {
+// CalcActiveSetSize - returns the active set size that matches the view of the contextually valid blocks in the provided layer
+func (db *ActivationDb) CalcActiveSetSize(epoch types.EpochId, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
 
-	epoch := layer.GetEpoch(layersPerEpoch)
 	if epoch == 0 {
 		return nil, errors.New("tried to retrieve active set for epoch 0")
 	}
 
-	firstLayerOfPrevEpoch := types.LayerID(epoch-1) * types.LayerID(layersPerEpoch)
+	firstLayerOfPrevEpoch := types.LayerID(epoch-1) * types.LayerID(db.LayersPerEpoch)
 
-	// build a map of all blocks on the current layer
-	mp, err := db.blocksProvider.GetGoodPatternBlocks(layer)
-	if err != nil {
-		return nil, err
-	}
 	countedAtxs := make(map[string]types.AtxId)
 	penalties := make(map[string]struct{})
 
-	traversalFunc := db.createTraversalActiveSetCounterFunc(countedAtxs, penalties, layersPerEpoch, epoch)
+	traversalFunc := db.createTraversalActiveSetCounterFunc(countedAtxs, penalties, db.LayersPerEpoch, epoch)
 
-	err = db.meshDb.ForBlockInView(mp, firstLayerOfPrevEpoch, traversalFunc)
+	err := db.meshDb.ForBlockInView(blocks, firstLayerOfPrevEpoch, traversalFunc)
 	if err != nil {
 		return nil, err
 	}
@@ -173,19 +167,13 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 	if pubEpoch < 1 {
 		return 0, fmt.Errorf("publication epoch cannot be less than 1, found %v", pubEpoch)
 	}
-	countingEpoch := pubEpoch - 1
-	firstLayerOfLastEpoch := types.LayerID(countingEpoch) * types.LayerID(db.LayersPerEpoch)
-
-	countedAtxs := make(map[string]types.AtxId)
-	penalties := make(map[string]struct{})
-	traversalFunc := db.createTraversalActiveSetCounterFunc(countedAtxs, penalties, db.LayersPerEpoch, pubEpoch)
 
 	mp := map[types.BlockID]struct{}{}
 	for _, blk := range a.View {
 		mp[blk] = struct{}{}
 	}
 
-	err = db.meshDb.ForBlockInView(mp, firstLayerOfLastEpoch, traversalFunc)
+	countedAtxs, err := db.CalcActiveSetSize(pubEpoch, mp)
 	if err != nil {
 		return 0, err
 	}

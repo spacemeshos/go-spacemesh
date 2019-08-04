@@ -104,7 +104,7 @@ const layersPerEpochBig = 1000
 func getAtxDb(id string) (*ActivationDb, *mesh.Mesh) {
 	lg := log.NewDefault(id)
 	memesh := mesh.NewMemMeshDB(lg.WithName("meshDB"))
-	atxdb := NewActivationDb(database.NewMemDatabase(), database.NewMemDatabase(), NewIdentityStore(database.NewMemDatabase()), memesh, layersPerEpochBig, mockBlocksProvider{make(map[types.BlockID]struct{})}, &ValidatorMock{}, lg.WithName("atxDB"))
+	atxdb := NewActivationDb(database.NewMemDatabase(), database.NewMemDatabase(), NewIdentityStore(database.NewMemDatabase()), memesh, layersPerEpochBig, &ValidatorMock{}, lg.WithName("atxDB"))
 	layers := mesh.NewMesh(memesh, atxdb, ConfigTst(), &MeshValidatorMock{}, &sync.MockTxMemPool{}, &sync.MockAtxMemPool{}, &MockState{}, lg.WithName("mesh"))
 	return atxdb, layers
 }
@@ -143,7 +143,7 @@ func createLayerWithAtx(t *testing.T, msh *mesh.Mesh, id types.LayerID, numOfBlo
 func TestATX_ActiveSetForLayerView(t *testing.T) {
 	rand.Seed(1234573298579)
 	atxdb, layers := getAtxDb(t.Name())
-	bProvider := atxdb.blocksProvider.(mockBlocksProvider)
+	blocksMap := make(map[types.BlockID]struct{})
 	//layers.AtxDB = &AtxDbMock{make(map[types.AtxId]*types.ActivationTx), make(map[types.AtxId]*types.NIPST)}
 	id1 := types.NodeId{Key: rndStr(), VRFPublicKey: []byte("anton")}
 	id2 := types.NodeId{Key: rndStr(), VRFPublicKey: []byte("anton")}
@@ -181,14 +181,18 @@ func TestATX_ActiveSetForLayerView(t *testing.T) {
 		after = createLayerWithAtx(t, layers, types.LayerID(i), 1, []*types.ActivationTx{}, after, after)
 	}
 	for _, x := range before {
-		bProvider.mp[x] = struct{}{}
+		blocksMap[x] = struct{}{}
 	}
 
 	for _, x := range after {
-		bProvider.mp[x] = struct{}{}
+		blocksMap[x] = struct{}{}
 	}
 
-	actives, err := atxdb.ActiveSetForLayerConsensusView(10, 6)
+	layer := types.LayerID(10)
+	layersPerEpoch := uint16(6)
+	atxdb.LayersPerEpoch = layersPerEpoch
+	epoch := layer.GetEpoch(layersPerEpoch)
+	actives, err := atxdb.CalcActiveSetSize(epoch, blocksMap)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, int(len(actives)))
 	_, ok := actives[id2.Key]
@@ -197,7 +201,7 @@ func TestATX_ActiveSetForLayerView(t *testing.T) {
 
 func TestMesh_ActiveSetForLayerView2(t *testing.T) {
 	atxdb, _ := getAtxDb(t.Name())
-	actives, err := atxdb.ActiveSetForLayerConsensusView(0, 10)
+	actives, err := atxdb.CalcActiveSetSize(0, nil)
 	assert.Error(t, err)
 	assert.Equal(t, "tried to retrieve active set for epoch 0", err.Error())
 	assert.Nil(t, actives)
