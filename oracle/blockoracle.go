@@ -10,7 +10,7 @@ import (
 )
 
 type ActivationDb interface {
-	GetNodeAtxIds(node types.NodeId) ([]types.AtxId, error)
+	GetNodeLastAtxId(node types.NodeId) (types.AtxId, error)
 	GetAtx(id types.AtxId) (*types.ActivationTx, error)
 	GetIdentity(edId string) (types.NodeId, error)
 	IsIdentityActive(edId string, layer types.LayerID) (*types.NodeId, bool, types.AtxId, error)
@@ -152,18 +152,12 @@ func getNumberOfEligibleBlocks(activeSetSize uint32, committeeSize uint32, layer
 }
 
 func (bo *MinerBlockOracle) getLatestATXID() (types.AtxId, error) {
-	atxIDs, err := bo.activationDb.GetNodeAtxIds(bo.nodeID)
+	latestATXID, err := bo.activationDb.GetNodeLastAtxId(bo.nodeID)
 	if err != nil {
-		bo.log.Info("did not find ATX IDs for node: %v, error: %v", bo.nodeID.Key[:5], err)
+		bo.log.With().Info("did not find ATX IDs for node", log.NodeId(bo.nodeID.ShortString()), log.Err(err))
 		return types.AtxId{}, err
 	}
-	numOfActivations := len(atxIDs)
-	if numOfActivations < 1 {
-		bo.log.Error("no activations found for node id %v", bo.nodeID.Key)
-		return types.AtxId{}, errors.New("no activations found")
-	}
-	latestATXID := atxIDs[numOfActivations-1]
-	bo.log.Info("latest atx id is: %v", latestATXID.ShortString())
+	bo.log.With().Info("latest atx id found", log.AtxId(latestATXID.ShortString()))
 	return latestATXID, err
 }
 

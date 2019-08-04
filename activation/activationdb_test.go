@@ -80,7 +80,7 @@ func (mock *ATXDBMock) GetEpochAtxIds(epochId types.EpochId) ([]types.AtxId, err
 	panic("not implemented")
 }
 
-func (mock *ATXDBMock) GetNodeAtxIds(nodeId types.NodeId) ([]types.AtxId, error) {
+func (mock *ATXDBMock) GetNodeLastAtxId(nodeId types.NodeId) (types.AtxId, error) {
 	panic("not implemented")
 }
 
@@ -189,32 +189,29 @@ func Test_DBSanity(t *testing.T) {
 	err = atxdb.storeAtxUnlocked(atx3)
 	assert.NoError(t, err)
 
-	err = atxdb.addAtxToNodeIdSorted(id1, atx1)
+	err = atxdb.addAtxToNodeId(id1, atx1)
 	assert.NoError(t, err)
-	ids, err := atxdb.GetNodeAtxIds(id1)
+	id, err := atxdb.GetNodeLastAtxId(id1)
 	assert.NoError(t, err)
-	assert.Equal(t, 1, len(ids))
-	assert.Equal(t, atx1.Id(), ids[0])
+	assert.Equal(t, atx1.Id(), id)
 
-	err = atxdb.addAtxToNodeIdSorted(id2, atx2)
-	assert.NoError(t, err)
-
-	err = atxdb.addAtxToNodeIdSorted(id1, atx3)
+	err = atxdb.addAtxToNodeId(id2, atx2)
 	assert.NoError(t, err)
 
-	ids, err = atxdb.GetNodeAtxIds(id2)
+	err = atxdb.addAtxToNodeId(id1, atx3)
 	assert.NoError(t, err)
-	assert.Equal(t, 1, len(ids))
-	assert.Equal(t, atx2.Id(), ids[0])
 
-	ids, err = atxdb.GetNodeAtxIds(id1)
+	id, err = atxdb.GetNodeLastAtxId(id2)
 	assert.NoError(t, err)
-	assert.Equal(t, 2, len(ids))
-	assert.Equal(t, atx1.Id(), ids[0])
+	assert.Equal(t, atx2.Id(), id)
 
-	ids, err = atxdb.GetNodeAtxIds(id3)
+	id, err = atxdb.GetNodeLastAtxId(id1)
+	assert.NoError(t, err)
+	assert.Equal(t, atx3.Id(), id)
+
+	id, err = atxdb.GetNodeLastAtxId(id3)
 	assert.Error(t, err)
-	assert.Equal(t, 0, len(ids))
+	assert.Equal(t, *types.EmptyAtxId, id)
 }
 
 func Test_Wrong_CalcActiveSetFromView(t *testing.T) {
@@ -476,14 +473,14 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 	nodeAtxIds = append(nodeAtxIds, atx.Id())
 	nodeAtxIds = append(nodeAtxIds, id4)
 
-	ids, err := atxdb.GetNodeAtxIds(idx1)
-	assert.True(t, len(ids) == 5)
-	assert.Equal(t, ids, nodeAtxIds)
+	id, err := atxdb.GetNodeLastAtxId(idx1)
+	assert.NoError(t, err)
+	assert.Equal(t, atx.Id(), id)
 
-	_, err = atxdb.GetAtx(ids[len(ids)-1])
+	_, err = atxdb.GetAtx(id)
 	assert.NoError(t, err)
 
-	_, err = atxdb.GetAtx(ids[len(ids)-2])
+	_, err = atxdb.GetAtx(atx2id)
 	assert.NoError(t, err)
 
 	//test same sequence

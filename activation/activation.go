@@ -56,7 +56,7 @@ type NipstValidator interface {
 type ATXDBProvider interface {
 	GetAtx(id types.AtxId) (*types.ActivationTx, error)
 	CalcActiveSetFromView(a *types.ActivationTx) (uint32, error)
-	GetNodeAtxIds(nodeId types.NodeId) ([]types.AtxId, error)
+	GetNodeLastAtxId(nodeId types.NodeId) (types.AtxId, error)
 	GetEpochAtxIds(epochId types.EpochId) ([]types.AtxId, error)
 }
 
@@ -180,7 +180,7 @@ func (b *Builder) buildNipstChallenge(epoch types.EpochId) error {
 		if err != nil {
 			b.log.Info("no prev ATX found, starting fresh")
 		} else {
-			b.prevATX, err = b.db.GetAtx(*prevAtxId)
+			b.prevATX, err = b.db.GetAtx(prevAtxId)
 			if err != nil {
 				// TODO: handle inconsistent state
 				b.log.Panic("prevAtx (id: %v) not found in DB -- inconsistent state", prevAtxId.ShortId())
@@ -376,16 +376,13 @@ func (b *Builder) Load() *types.NIPSTChallenge {
 	return nil
 }
 
-func (b *Builder) GetPrevAtxId(node types.NodeId) (*types.AtxId, error) {
+func (b *Builder) GetPrevAtxId(node types.NodeId) (types.AtxId, error) {
 	//todo: make sure atx ids are ordered and valid
-	ids, err := b.db.GetNodeAtxIds(node)
+	id, err := b.db.GetNodeLastAtxId(node)
 	if err != nil {
-		return nil, err
+		return *types.EmptyAtxId, err
 	}
-	if len(ids) == 0 {
-		return nil, fmt.Errorf("no prev atxs for node %v", node.Key)
-	}
-	return &ids[len(ids)-1], nil
+	return id, nil
 }
 
 // GetPositioningAtxId returns a randomly selected atx from the provided epoch epochId
@@ -408,9 +405,9 @@ func (b *Builder) GetLastSequence(node types.NodeId) uint64 {
 	if err != nil {
 		return 0
 	}
-	atx, err := b.db.GetAtx(*atxId)
+	atx, err := b.db.GetAtx(atxId)
 	if err != nil {
-		b.log.Error("wtf no atx in db %v", *atxId)
+		b.log.Error("wtf no atx in db %v", atxId)
 		return 0
 	}
 	return atx.Sequence

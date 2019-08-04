@@ -10,7 +10,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/types"
-	"sort"
 	"sync"
 )
 
@@ -209,33 +208,26 @@ func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error 
 // If a previous ATX is not referenced, it validates that indeed there's no previous known ATX for that miner ID.
 func (db *ActivationDb) ContextuallyValidateAtx(atx *types.ActivationTx) error {
 	if atx.PrevATXId != *types.EmptyAtxId {
-		prevAtxIds, err := db.GetNodeAtxIds(atx.NodeId)
+		lastAtx, err := db.GetNodeLastAtxId(atx.NodeId)
 		if err != nil {
 			db.log.WithFields(
-				log.String("atx_id", atx.ShortId()), log.String("node_id", atx.NodeId.Key)).
-				Error("could not fetch node ATXs: %v", err)
-			return fmt.Errorf("could not fetch node ATXs: %v", err)
+				log.String("atx_id", atx.ShortId()), log.String("node_id", atx.NodeId.ShortString())).
+				Error("could not fetch node last ATX: %v", err)
+			return fmt.Errorf("could not fetch node last ATX: %v", err)
 		}
-		if len(prevAtxIds) == 0 {
-			return fmt.Errorf("ATX references a previous ATX, but no ATXs were found for this miner ID")
-		}
-		lastAtx := prevAtxIds[len(prevAtxIds)-1]
 		// last atx is not the one referenced
 		if lastAtx != atx.PrevATXId {
 			return fmt.Errorf("last atx is not the one referenced")
 		}
 	} else {
-		prevAtxIds, err := db.GetNodeAtxIds(atx.NodeId)
+		lastAtx, err := db.GetNodeLastAtxId(atx.NodeId)
 		if err != nil && err != database.ErrNotFound {
 			db.log.Error("fetching ATX ids failed: %v", err)
 			return err
 		}
-		if len(prevAtxIds) > 0 {
-			var ids []string
-			for _, x := range prevAtxIds {
-				ids = append(ids, x.ShortString())
-			}
-			return fmt.Errorf("no prevATX reported, but other ATXs with same nodeID (%v) found, atxs: %v", atx.NodeId.Key[:5], ids)
+		if err == nil { // we found an ATX for this node ID, although it reported no prevATX -- this is invalid
+			return fmt.Errorf("no prevATX reported, but other ATX with same nodeID (%v) found: %v",
+				atx.NodeId.ShortString(), lastAtx.ShortString())
 		}
 	}
 
@@ -269,7 +261,7 @@ func (db *ActivationDb) StoreAtx(ech types.EpochId, atx *types.ActivationTx) err
 	if err != nil {
 		return err
 	}
-	err = db.addAtxToNodeIdSorted(atx.NodeId, atx)
+	err = db.addAtxToNodeId(atx.NodeId, atx)
 	if err != nil {
 		return err
 	}
@@ -374,69 +366,26 @@ func getNodeIdKey(id types.NodeId) []byte {
 	return []byte(id.Key)
 }
 
-// addAtxToNodeIdSorted inserts activation atx id by node it is not thread safe and needs to be called under a global lock
-func (db *ActivationDb) addAtxToNodeIdSorted(nodeId types.NodeId, atx *types.ActivationTx) error {
+// addAtxToNodeId inserts activation atx id by node
+func (db *ActivationDb) addAtxToNodeId(nodeId types.NodeId, atx *types.ActivationTx) error {
 	key := getNodeIdKey(nodeId)
-	ids, err := db.atxs.Get(key)
-	var atxs []types.AtxId
+	err := db.atxs.Put(key, atx.Id().Bytes())
 	if err != nil {
-		//layer doesnt exist, need to insert new layer
-		ids = []byte{}
-		atxs = make([]types.AtxId, 0, 0)
-	} else {
-		atxs, err = decodeAtxIds(ids)
-		if err != nil {
-			return errors.New("could not get all atxs from database ")
-		}
+		return fmt.Errorf("failed to store ATX ID for node: %v", err)
 	}
-
-	// append needs to be sorted
-	atxs = append(atxs, atx.Id())
-	l := len(atxs)
-	if l > 1 {
-		lastAtx, err := db.getAtxUnlocked(atxs[l-2])
-		if err != nil {
-			return errors.New("could not get atx from database ")
-		}
-		if atx.Sequence < lastAtx.Sequence {
-			sort.Slice(atxs, func(i, j int) bool {
-				atx1, err := db.getAtxUnlocked(atxs[i])
-				if err != nil {
-					panic("inconsistent db")
-				}
-				atx2, err := db.getAtxUnlocked(atxs[j])
-				if err != nil {
-					panic("inconsistent db")
-				}
-
-				return atx1.Sequence < atx2.Sequence
-			})
-		}
-	}
-
-	w, err := encodeAtxIds(atxs)
-	if err != nil {
-		return errors.New("could not encode layer atx ids")
-	}
-	return db.atxs.Put(key, w)
+	return nil
 }
 
-// GetNodeAtxIds returns the atx ids that were received for node nodeId
-func (db *ActivationDb) GetNodeAtxIds(nodeId types.NodeId) ([]types.AtxId, error) {
+// GetNodeLastAtxId returns the last atx id that was received for node nodeId
+func (db *ActivationDb) GetNodeLastAtxId(nodeId types.NodeId) (types.AtxId, error) {
 	key := getNodeIdKey(nodeId)
-	db.log.Debug("fetching atxIDs for node %v", nodeId.Key[:5])
+	db.log.Debug("fetching atxIDs for node %v", nodeId.ShortString())
 
-	db.RLock()
-	ids, err := db.atxs.Get(key)
-	db.RUnlock()
+	id, err := db.atxs.Get(key)
 	if err != nil {
-		return nil, err
+		return *types.EmptyAtxId, err
 	}
-	atxs, err := decodeAtxIds(ids)
-	if err != nil {
-		return nil, err
-	}
-	return atxs, nil
+	return types.AtxId{Hash: common.BytesToHash(id)}, nil
 }
 
 // GetEpochAtxIds returns all atx id's created in this epoch as seen by this node
@@ -506,16 +455,11 @@ func (db *ActivationDb) IsIdentityActive(edId string, layer types.LayerID) (*typ
 		db.log.Error("IsIdentityActive erred while getting identity err=%v", err)
 		return nil, false, *types.EmptyAtxId, nil
 	}
-	ids, err := db.GetNodeAtxIds(nodeId)
+	atxId, err := db.GetNodeLastAtxId(nodeId)
 	if err != nil {
-		db.log.Error("IsIdentityActive erred while getting node atx ids err=%v", err)
+		db.log.Error("IsIdentityActive erred while getting last node atx id err=%v", err)
 		return nil, false, *types.EmptyAtxId, err
 	}
-	if len(ids) == 0 { // GetIdentity succeeded but no ATXs, this is a fatal error
-		return nil, false, *types.EmptyAtxId, fmt.Errorf("no active IDs for known node")
-	}
-
-	atxId := ids[len(ids)-1]
 	atx, err := db.GetAtx(atxId)
 	if err != nil {
 		db.log.With().Error("IsIdentityActive erred while getting atx", log.AtxId(atxId.ShortId()), log.Err(err))
@@ -531,13 +475,14 @@ func (db *ActivationDb) IsIdentityActive(edId string, layer types.LayerID) (*typ
 
 	if lastAtxTargetEpoch > epoch {
 		// This could happen if we already published the ATX for the next epoch, so we check the previous one as well
-		if len(ids) < 2 {
-			db.log.With().Info("IsIdentityActive latest atx is too new but no previous atx", log.AtxId(atxId.ShortId()), log.Int("num_atxs", len(ids)))
+		if atx.PrevATXId == *types.EmptyAtxId {
+			db.log.With().Info("IsIdentityActive latest atx is too new but no previous atx", log.AtxId(atxId.ShortId()))
 			return nil, false, *types.EmptyAtxId, nil
 		}
-		atx, err = db.GetAtx(ids[len(ids)-2])
+		prevAtxId := atx.PrevATXId
+		atx, err = db.GetAtx(prevAtxId)
 		if err != nil {
-			db.log.With().Error("IsIdentityActive erred while getting atx for second newest", log.AtxId(atx.Id().ShortId()), log.Err(err))
+			db.log.With().Error("IsIdentityActive erred while getting atx for second newest", log.AtxId(prevAtxId.ShortId()), log.Err(err))
 			return nil, false, *types.EmptyAtxId, nil
 		}
 	}
