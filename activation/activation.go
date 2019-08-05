@@ -319,11 +319,17 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 		}
 	}
 
-	activeSetSize, err := b.db.CalcActiveSetFromView(view, pubEpoch)
-	if err != nil && !targetEpoch.IsGenesis() {
-		b.log.With().Warning("empty active set size found!", log.Int("len(view)", len(view)),
-			log.String("view", fmt.Sprintf("%v", view)), log.EpochId(uint64(pubEpoch)))
-		return nil
+	var activeSetSize uint32
+	if pubEpoch > 0 {
+		var err error
+		activeSetSize, err = b.db.CalcActiveSetFromView(view, pubEpoch)
+		if err != nil {
+			return fmt.Errorf("failed to calculate activeset: %v", err)
+		}
+	}
+	if activeSetSize == 0 && !targetEpoch.IsGenesis() {
+		return fmt.Errorf("empty active set size found! epochId: %v, len(view): %d, view: %v",
+			pubEpoch, len(view), view)
 	}
 
 	atx := types.NewActivationTxWithChallenge(*b.challenge, b.coinbaseAccount, activeSetSize, view, b.nipst)
