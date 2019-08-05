@@ -12,11 +12,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/sync"
 	"github.com/spacemeshos/go-spacemesh/types"
+	"github.com/spacemeshos/sha256-simd"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"math/big"
 	"math/rand"
 	"os"
+	"sort"
 	"testing"
 	"time"
 )
@@ -257,11 +259,43 @@ func Test_CalcActiveSetFromView(t *testing.T) {
 	block2.ViewEdges = blocks
 	layers.AddBlockWithTxs(block2, nil, atxs2)
 
+	block3 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 2200, []byte("data1"))
+
+	block3.ViewEdges = blocks
+	layers.AddBlockWithTxs(block3, nil, atxs2)
+
 	for _, t := range atxs2 {
 		atxdb.ProcessAtx(t)
 	}
 
-	atx2 := types.NewActivationTx(id3, coinbase3, 0, *types.EmptyAtxId, 1435, 0, *types.EmptyAtxId, 6, []types.BlockID{block2.Id}, &types.NIPST{})
+	view := []types.BlockID{block2.Id, block3.Id}
+	sort.Slice(view, func(i, j int) bool {
+		return view[i] > view[j] // sort the view in the wrong order
+	})
+	atx2 := types.NewActivationTx(id3, coinbase3, 0, *types.EmptyAtxId, 1435, 0, *types.EmptyAtxId, 6, view, &types.NIPST{})
+	num, err = atxdb.CalcActiveSetFromView(atx2)
+	assert.NoError(t, err)
+	assert.Equal(t, 3, int(num))
+
+	// put a fake value in the cache and ensure that it's used
+	viewHash, err := calcSortedViewHash(atx2)
+	assert.NoError(t, err)
+	activesetCache.Purge()
+	activesetCache.put(viewHash, 8)
+
+	num, err = atxdb.CalcActiveSetFromView(atx2)
+	assert.NoError(t, err)
+	assert.Equal(t, 8, int(num))
+
+	// if the cache has the view in wrong order it should not be used
+	sorted := sort.SliceIsSorted(atx2.View, func(i, j int) bool { return view[i] > view[j] })
+	assert.True(t, sorted) // assert that the view is wrongly ordered
+	viewBytes, err := types.ViewAsBytes(atx2.View)
+	assert.NoError(t, err)
+	viewHash = sha256.Sum256(viewBytes)
+	activesetCache.Purge()
+	activesetCache.put(viewHash, 8)
+
 	num, err = atxdb.CalcActiveSetFromView(atx2)
 	assert.NoError(t, err)
 	assert.Equal(t, 3, int(num))
