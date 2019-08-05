@@ -230,13 +230,13 @@ func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
 		return val.(map[string]struct{}), nil
 	}
 
-	epoch := layer.GetEpoch(o.layersPerEpoch)
-
 	// build a map of all blocks on the current layer
-	mp, err := o.blocksProvider.GetGoodPatternBlocks(layer)
+	mp, err := o.blocksProvider.GetGoodPatternBlocks(sl)
 	if err != nil {
 		return nil, err
 	}
+
+	epoch := layer.GetEpoch(o.layersPerEpoch)
 	activeMap, err := o.getActiveSet(epoch, mp)
 	if err != nil {
 		o.With().Error("Could not retrieve active set size", log.Err(err),
