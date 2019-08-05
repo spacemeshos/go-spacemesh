@@ -104,7 +104,7 @@ func (suite *AppTestSuite) initMultipleInstances(numOfInstances int, storeFormat
 
 		smApp.Config.HARE.N = numOfInstances
 		smApp.Config.HARE.F = numOfInstances / 2
-		smApp.Config.HARE.RoundDuration = 2
+		smApp.Config.HARE.RoundDuration = 3
 		smApp.Config.HARE.WakeupDelta = 5
 		smApp.Config.HARE.ExpectedLeaders = 5
 		smApp.Config.CoinbaseAccount = strconv.Itoa(i + 1)
@@ -112,7 +112,7 @@ func (suite *AppTestSuite) initMultipleInstances(numOfInstances int, storeFormat
 		smApp.Config.LayersPerEpoch = 3
 		smApp.Config.Hdist = 5
 		smApp.Config.GenesisTime = genesisTime
-		smApp.Config.LayerDurationSec = 15
+		smApp.Config.LayerDurationSec = 20
 		smApp.Config.HareEligibility.ConfidenceParam = 2
 		smApp.Config.HareEligibility.EpochOffset = 0
 
