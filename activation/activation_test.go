@@ -9,8 +9,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/types"
+	"github.com/spacemeshos/sha256-simd"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"sort"
 	"testing"
 )
 
@@ -213,9 +215,12 @@ func newBuilder(activationDb ATXDBProvider) *Builder {
 func setActivesetSizeInCache(t *testing.T, activesetSize uint32) {
 	view, err := meshProvider.GetOrphanBlocksBefore(meshProvider.LatestLayer())
 	assert.NoError(t, err)
+	sort.Slice(view, func(i, j int) bool {
+		return view[i] < view[j]
+	})
 	v, err := types.ViewAsBytes(view)
 	assert.NoError(t, err)
-	activesetCache.put(common.BytesToHash(v), activesetSize)
+	activesetCache.put(sha256.Sum256(v), activesetSize)
 }
 
 func lastTransmittedAtx(t *testing.T) (atx types.ActivationTx) {
@@ -508,18 +513,9 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	npst2 := nipst.NewNIPSTWithChallenge(bytes, poetRef)
 	assert.NoError(t, err)
 
-	//ugly hack to set view size in db
-	view, err := layers.GetOrphanBlocksBefore(layers.LatestLayer())
-	assert.NoError(t, err)
-	v, err := types.ViewAsBytes(view)
-	assert.NoError(t, err)
-	activesetCache.put(common.BytesToHash(v), 10)
+	setActivesetSizeInCache(t, defaultActiveSetSize)
 
-	view, err = b.mesh.GetOrphanBlocksBefore(layers.LatestLayer())
-	assert.NoError(t, err)
-	activeSetSize, err := b.activeSet.ActiveSetSize(1)
-	assert.NoError(t, err)
-	act := types.NewActivationTx(b.nodeId, coinbase, b.GetLastSequence(b.nodeId)+1, atx.Id(), atx.PubLayerIdx+10, 0, atx.Id(), activeSetSize, view, npst2)
+	act := types.NewActivationTx(b.nodeId, coinbase, b.GetLastSequence(b.nodeId)+1, atx.Id(), atx.PubLayerIdx+10, 0, atx.Id(), defaultActiveSetSize, defaultView, npst2)
 	err = b.PublishActivationTx(1)
 	assert.Error(t, err)
 
