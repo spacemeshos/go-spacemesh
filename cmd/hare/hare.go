@@ -164,7 +164,7 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	if err != nil {
 		log.Panic("error starting p2p err=%v", err)
 	}
-	app.clock.Start()
+	app.clock.StartNotifying()
 }
 
 func main() {

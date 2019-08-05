@@ -418,13 +418,14 @@ def test_mining(setup_network):
     layer_avg_size = testconfig['client']['args']['layer-average-size']
     layers_per_epoch = int(testconfig['client']['args']['layers-per-epoch'])
     # check only third epoch
-    epochs = 3
+    epochs = 5
     last_layer = epochs*layers_per_epoch
 
     queries.wait_for_latest_layer(testconfig["namespace"], last_layer)
     print("test took {:.3f} seconds ".format(end - start))
 
     total_pods = len(setup_network.clients.pods) + len(setup_network.bootstrap.pods)
+    time.sleep(50)
     analyse.analyze_mining(testconfig['namespace'], last_layer, layers_per_epoch, layer_avg_size, total_pods)
 
     validate_hare(current_index, ns)  # validate hare

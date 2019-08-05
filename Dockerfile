@@ -19,6 +19,8 @@ COPY scripts/* scripts/
 
 RUN ./setup_env.sh
 
+RUN go get github.com/golang/snappy@v0.0.1
+
 # This image builds the go-spacemesh server
 FROM build_base AS server_builder
 # Here we copy the rest of the source code
@@ -38,8 +40,6 @@ COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/go-
 COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/go-hare /bin/go-hare
 COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/go-p2p /bin/go-p2p
 COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/go-sync /bin/go-sync
-
-
 
 ENTRYPOINT ["/bin/go-spacemesh"]
 EXPOSE 7513

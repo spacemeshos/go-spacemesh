@@ -586,8 +586,9 @@ func (ni *ninjaTortoise) GetGoodPattern(layer types.LayerID) (uint32, error) {
 		return uint32(getId(v)), nil
 	}
 
-	if layer >= ni.pBase.LayerID {
-		return 0, errors.New("pbase is lower than provided layer")
+	if layer > ni.pBase.LayerID {
+		ni.Error("GetGoodPattern erred layer=%v pbase=%v", layer, ni.pBase.LayerID)
+		return 0, errors.New("GetGoodPattern pbase is lower than provided layer")
 	}
 
 	ni.tGoodLock.RLock()
@@ -615,8 +616,9 @@ func (ni *ninjaTortoise) GetGoodPatternBlocks(layer types.LayerID) (map[types.Bl
 		return blocks, nil
 	}
 
-	if layer >= ni.pBase.LayerID {
-		return nil, errors.New("pbase is lower than provided layer")
+	if layer > ni.pBase.LayerID {
+		ni.Error("GetGoodPatternBlocks erred layer=%v pbase=%v", layer, ni.pBase.LayerID)
+		return nil, errors.New("GetGoodPatternBlocks pbase is lower than provided layer")
 	}
 
 	ni.tGoodLock.RLock()

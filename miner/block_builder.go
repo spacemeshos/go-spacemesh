@@ -43,6 +43,7 @@ type AtxValidator interface {
 
 type Syncer interface {
 	FetchPoetProof(poetProofRef []byte) error
+	IsSynced() bool
 }
 
 type BlockBuilder struct {
@@ -188,7 +189,7 @@ func calcHdistRange(id types.LayerID, hdist types.LayerID) (bottom types.LayerID
 }
 
 func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibilityProof types.BlockEligibilityProof,
-	txs []types.AddressableSignedTransaction, atx []types.ActivationTx) (*types.Block, error) {
+	txs []types.AddressableSignedTransaction, atxids []types.AtxId) (*types.Block, error) {
 
 	var votes []types.BlockID = nil
 	var err error
@@ -212,11 +213,6 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 	var txids []types.TransactionId
 	for _, t := range txs {
 		txids = append(txids, types.GetTransactionId(t.SerializableSignedTransaction))
-	}
-
-	var atxids []types.AtxId
-	for _, t := range atx {
-		atxids = append(atxids, t.Id())
 	}
 
 	b := types.MiniBlock{
@@ -262,6 +258,10 @@ func (t *BlockBuilder) listenForTx() {
 		case <-t.stopChan:
 			return
 		case data := <-t.txGossipChannel:
+			if !t.syncer.IsSynced() {
+				// not accepting txs when not synced
+				continue
+			}
 			if data != nil {
 
 				x, err := types.BytesAsSignedTransaction(data.Bytes())
@@ -292,6 +292,10 @@ func (t *BlockBuilder) listenForAtx() {
 		case <-t.stopChan:
 			return
 		case data := <-t.atxGossipChannel:
+			if !t.syncer.IsSynced() {
+				// not accepting atxs when not synced
+				continue
+			}
 			go t.handleGossipAtx(data)
 		}
 	}
@@ -301,7 +305,7 @@ func (t *BlockBuilder) handleGossipAtx(data service.GossipMessage) {
 	if data == nil {
 		return
 	}
-	atx, err := types.BytesAsAtx(data.Bytes())
+	atx, err := types.BytesAsAtx(data.Bytes(), nil)
 	if err != nil {
 		t.Error("cannot parse incoming ATX")
 		return
@@ -353,7 +357,10 @@ func (t *BlockBuilder) acceptBlockData() {
 
 			txList := t.TransactionPool.PopItems(MaxTransactionsPerBlock)
 
-			atxList := t.AtxPool.PopItems(MaxTransactionsPerBlock)
+			var atxList []types.AtxId
+			for _, atx := range t.AtxPool.PopItems(MaxTransactionsPerBlock) {
+				atxList = append(atxList, atx.Id())
+			}
 
 			for _, eligibilityProof := range proofs {
 				blk, err := t.createBlock(types.LayerID(id), atxID, eligibilityProof, txList, atxList)
@@ -367,7 +374,10 @@ func (t *BlockBuilder) acceptBlockData() {
 						t.Log.Error("cannot serialize block %v", err)
 						return
 					}
-					t.network.Broadcast(config.NewBlockProtocol, bytes)
+					err = t.network.Broadcast(config.NewBlockProtocol, bytes)
+					if err != nil {
+						t.Log.Error("cannot send block %v", err)
+					}
 				}()
 			}
 		}

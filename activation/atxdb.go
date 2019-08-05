@@ -21,8 +21,6 @@ type ActivationDb struct {
 	//todo: think about whether we need one db or several
 	IdStore
 	atxs            database.DB
-	nipsts          database.DB
-	nipstLock       sync.RWMutex
 	atxCache        AtxCache
 	meshDb          *mesh.MeshDB
 	LayersPerEpoch  uint16
@@ -31,8 +29,8 @@ type ActivationDb struct {
 	processAtxMutex sync.Mutex
 }
 
-func NewActivationDb(dbstore database.DB, nipstStore database.DB, idstore IdStore, meshDb *mesh.MeshDB, layersPerEpoch uint16, nipstValidator NipstValidator, log log.Log) *ActivationDb {
-	return &ActivationDb{atxs: dbstore, nipsts: nipstStore, atxCache: NewAtxCache(20), meshDb: meshDb, nipstValidator: nipstValidator, LayersPerEpoch: layersPerEpoch, IdStore: idstore, log: log}
+func NewActivationDb(dbstore database.DB, idstore IdStore, meshDb *mesh.MeshDB, layersPerEpoch uint16, nipstValidator NipstValidator, log log.Log) *ActivationDb {
+	return &ActivationDb{atxs: dbstore, atxCache: NewAtxCache(20), meshDb: meshDb, nipstValidator: nipstValidator, LayersPerEpoch: layersPerEpoch, IdStore: idstore, log: log}
 }
 
 // ProcessAtx validates the active set size declared in the atx, and contextually validates the atx according to atx
@@ -45,13 +43,12 @@ func (db *ActivationDb) ProcessAtx(atx *types.ActivationTx) {
 
 	eatx, _ := db.GetAtx(atx.Id())
 	if eatx != nil {
-		atx.Nipst = nil
 		return
 	}
 	epoch := atx.PubLayerIdx.GetEpoch(db.LayersPerEpoch)
 	db.log.With().Info("processing atx", log.AtxId(atx.ShortId()), log.EpochId(uint64(epoch)),
 		log.NodeId(atx.NodeId.Key[:5]), log.LayerId(uint64(atx.PubLayerIdx)))
-	err := db.ContextuallyValidateAtx(atx)
+	err := db.ContextuallyValidateAtx(&atx.ActivationTxHeader)
 	if err != nil {
 		db.log.With().Error("ATX failed contextual validation", log.AtxId(atx.ShortId()), log.Err(err))
 	} else {
@@ -68,6 +65,87 @@ func (db *ActivationDb) ProcessAtx(atx *types.ActivationTx) {
 	}
 }
 
+func (db *ActivationDb) createTraversalActiveSetCounterFunc(countedAtxs map[string]types.AtxId, penalties map[string]struct{}, layersPerEpoch uint16, epoch types.EpochId) func(b *types.Block) error {
+
+	traversalFunc := func(b *types.Block) error {
+
+		// don't count ATXs in blocks that are not destined to the prev epoch
+		if b.LayerIndex.GetEpoch(db.LayersPerEpoch) != epoch-1 {
+			return nil
+		}
+
+		// count unique ATXs
+		for _, id := range b.AtxIds {
+			atx, err := db.GetAtx(id)
+			if err != nil {
+				log.Panic("error fetching atx %v from database -- inconsistent state", id.ShortId()) // TODO: handle inconsistent state
+				return fmt.Errorf("error fetching atx %v from database -- inconsistent state", id.ShortId())
+			}
+
+			// make sure the target epoch is our epoch
+			if atx.TargetEpoch(layersPerEpoch) != epoch {
+				db.log.With().Debug("atx found, but targeting epoch doesn't match publication epoch",
+					log.String("atx_id", atx.ShortId()),
+					log.Uint64("atx_target_epoch", uint64(atx.TargetEpoch(layersPerEpoch))),
+					log.Uint64("actual_epoch", uint64(epoch)))
+				continue
+			}
+
+			// ignore atx from nodes in penalty
+			if _, exist := penalties[atx.NodeId.Key]; exist {
+				db.log.With().Debug("ignoring atx from node in penalty",
+					log.String("node_id", atx.NodeId.Key), log.String("atx_id", atx.ShortId()))
+				continue
+			}
+
+			if prevId, exist := countedAtxs[atx.NodeId.Key]; exist { // same miner
+
+				if prevId != id { // different atx for same epoch
+					db.log.With().Error("Encountered second atx for the same miner on the same epoch",
+						log.String("first_atx", prevId.ShortId()), log.String("second_atx", id.ShortId()))
+
+					penalties[atx.NodeId.Key] = struct{}{} // mark node in penalty
+					delete(countedAtxs, atx.NodeId.Key)    // remove the penalized node from counted
+				}
+				continue
+			}
+
+			countedAtxs[atx.NodeId.Key] = id
+		}
+
+		return nil
+	}
+
+	return traversalFunc
+}
+
+// CalcActiveSetSize - returns the active set size that matches the view of the contextually valid blocks in the provided layer
+func (db *ActivationDb) CalcActiveSetSize(epoch types.EpochId, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
+
+	if epoch == 0 {
+		return nil, errors.New("tried to retrieve active set for epoch 0")
+	}
+
+	firstLayerOfPrevEpoch := types.LayerID(epoch-1) * types.LayerID(db.LayersPerEpoch)
+
+	countedAtxs := make(map[string]types.AtxId)
+	penalties := make(map[string]struct{})
+
+	traversalFunc := db.createTraversalActiveSetCounterFunc(countedAtxs, penalties, db.LayersPerEpoch, epoch)
+
+	err := db.meshDb.ForBlockInView(blocks, firstLayerOfPrevEpoch, traversalFunc)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(map[string]struct{}, len(countedAtxs))
+	for k := range countedAtxs {
+		result[k] = struct{}{}
+	}
+
+	return result, nil
+}
+
 // CalcActiveSetFromView traverses the view found in a - the activation tx and counts number of active ids published
 // in the epoch prior to the epoch that a was published at, this number is the number of active ids in the next epoch
 // the function returns error if the view is not found
@@ -82,40 +160,9 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 		return count, nil
 	}
 
-	var counter uint32 = 0
-	set := make(map[types.AtxId]struct{})
 	pubEpoch := a.PubLayerIdx.GetEpoch(db.LayersPerEpoch)
 	if pubEpoch < 1 {
 		return 0, fmt.Errorf("publication epoch cannot be less than 1, found %v", pubEpoch)
-	}
-	countingEpoch := pubEpoch - 1
-	firstLayerOfLastEpoch := types.LayerID(countingEpoch) * types.LayerID(db.LayersPerEpoch)
-
-	traversalFunc := func(blk *types.Block) error {
-		//skip blocks not from atx epoch
-		if blk.LayerIndex.GetEpoch(db.LayersPerEpoch) != countingEpoch {
-			return nil
-		}
-		for _, id := range blk.AtxIds {
-			if _, found := set[id]; found {
-				continue
-			}
-			set[id] = struct{}{}
-			atx, err := db.GetAtx(id)
-			if err != nil {
-				log.Panic("error fetching atx %v from database -- inconsistent state", id.ShortId()) // TODO: handle inconsistent state
-				return fmt.Errorf("error fetching atx %v from database -- inconsistent state", id.ShortId())
-			}
-			if atx.TargetEpoch(db.LayersPerEpoch) != pubEpoch {
-				db.log.Debug("atx %v found, but targeting epoch %v instead of publication epoch %v",
-					atx.ShortId(), atx.TargetEpoch(db.LayersPerEpoch), pubEpoch)
-				continue
-			}
-			counter++
-			db.log.Debug("atx %v (epoch %d) found traversing in block %x (epoch %d)",
-				atx.ShortId(), atx.TargetEpoch(db.LayersPerEpoch), blk.Id, blk.LayerIndex.GetEpoch(db.LayersPerEpoch))
-		}
-		return nil
 	}
 
 	mp := map[types.BlockID]struct{}{}
@@ -123,13 +170,13 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 		mp[blk] = struct{}{}
 	}
 
-	err = db.meshDb.ForBlockInView(mp, firstLayerOfLastEpoch, traversalFunc)
+	countedAtxs, err := db.CalcActiveSetSize(pubEpoch, mp)
 	if err != nil {
 		return 0, err
 	}
-	activesetCache.Add(common.BytesToHash(viewBytes), counter)
+	activesetCache.Add(common.BytesToHash(viewBytes), uint32(len(countedAtxs)))
 
-	return counter, nil
+	return uint32(len(countedAtxs)), nil
 
 }
 
@@ -207,7 +254,7 @@ func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error 
 
 // ContextuallyValidateAtx ensures that the previous ATX referenced is the last known ATX for the referenced miner ID.
 // If a previous ATX is not referenced, it validates that indeed there's no previous known ATX for that miner ID.
-func (db *ActivationDb) ContextuallyValidateAtx(atx *types.ActivationTx) error {
+func (db *ActivationDb) ContextuallyValidateAtx(atx *types.ActivationTxHeader) error {
 	if atx.PrevATXId != *types.EmptyAtxId {
 		prevAtxIds, err := db.GetNodeAtxIds(atx.NodeId)
 		if err != nil {
@@ -279,20 +326,7 @@ func (db *ActivationDb) StoreAtx(ech types.EpochId, atx *types.ActivationTx) err
 }
 
 func (db *ActivationDb) storeAtxUnlocked(atx *types.ActivationTx) error {
-	b, err := types.InterfaceToBytes(atx.Nipst)
-	if err != nil {
-		return err
-	}
-	db.nipstLock.Lock()
-	err = db.nipsts.Put(atx.Id().Bytes(), b)
-	db.nipstLock.Unlock()
-	if err != nil {
-		return err
-	}
-	//todo: think of how to break down the object better
-	atx.Nipst = nil
-
-	b, err = types.AtxAsBytes(atx)
+	b, err := types.AtxAsBytes(atx)
 	if err != nil {
 		return err
 	}
@@ -302,21 +336,6 @@ func (db *ActivationDb) storeAtxUnlocked(atx *types.ActivationTx) error {
 		return err
 	}
 	return nil
-}
-
-func (db *ActivationDb) GetNipst(atxId types.AtxId) (*types.NIPST, error) {
-	db.nipstLock.RLock()
-	bts, err := db.nipsts.Get(atxId.Bytes())
-	db.nipstLock.RUnlock()
-	if err != nil {
-		return nil, err
-	}
-	npst := types.NIPST{}
-	err = types.BytesToInterface(bts, &npst)
-	if err != nil {
-		return nil, err
-	}
-	return &npst, nil
 }
 
 func epochCounterKey(ech types.EpochId) []byte {
@@ -457,20 +476,32 @@ func (db *ActivationDb) GetEpochAtxIds(epochId types.EpochId) ([]types.AtxId, er
 // getAtxUnlocked gets the atx from db, this function is not thread safe and should be called under db lock
 // this function returns a pointer to an atx and an error if failed to retrieve it
 func (db *ActivationDb) getAtxUnlocked(id types.AtxId) (*types.ActivationTx, error) {
+	if atx, gotIt := db.atxCache.Get(id); gotIt {
+		return atx, nil
+	}
 	b, err := db.atxs.Get(id.Bytes())
 	if err != nil {
 		return nil, err
 	}
-	atx, err := types.BytesAsAtx(b)
+	atx, err := types.BytesAsAtx(b, &id)
 	if err != nil {
 		return nil, err
 	}
+	db.atxCache.Add(id, atx)
 	return atx, nil
 }
 
 // GetAtx returns the atx by the given id. this function is thread safe and will return error if the id is not found in the
 // atx db
-func (db *ActivationDb) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
+func (db *ActivationDb) GetAtx(id types.AtxId) (*types.ActivationTxHeader, error) {
+	atx, err := db.GetFullAtx(id)
+	if err != nil {
+		return nil, err
+	}
+	return &atx.ActivationTxHeader, nil
+}
+
+func (db *ActivationDb) GetFullAtx(id types.AtxId) (*types.ActivationTx, error) {
 	if id == *types.EmptyAtxId {
 		return nil, errors.New("trying to fetch empty atx id")
 	}
@@ -484,7 +515,7 @@ func (db *ActivationDb) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
 	if err != nil {
 		return nil, err
 	}
-	atx, err := types.BytesAsAtx(b)
+	atx, err := types.BytesAsAtx(b, &id)
 	if err != nil {
 		return nil, err
 	}
