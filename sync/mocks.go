@@ -1,7 +1,6 @@
 package sync
 
 import (
-	"fmt"
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -94,49 +93,6 @@ func (MockState) ValidateTransactionSignature(tx *types.SerializableSignedTransa
 
 func (s *StateMock) ApplyRewards(layer types.LayerID, miners []string, underQuota map[string]int, bonusReward, diminishedReward *big.Int) {
 
-}
-
-type AtxDbMock struct {
-	db     map[types.AtxId]*types.ActivationTx
-	nipsts map[types.AtxId]*types.NIPST
-}
-
-var _ mesh.AtxDB = &AtxDbMock{}
-
-func (t *AtxDbMock) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
-	return nil
-}
-
-func NewAtxDbMock() *AtxDbMock {
-	return &AtxDbMock{
-		make(map[types.AtxId]*types.ActivationTx),
-		make(map[types.AtxId]*types.NIPST),
-	}
-}
-
-func (t *AtxDbMock) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
-	if atx, ok := t.db[id]; ok {
-		return atx, nil
-	}
-	return nil, fmt.Errorf("cannot find atx")
-}
-
-func (t *AtxDbMock) ProcessAtx(atx *types.ActivationTx) {
-	t.db[atx.Id()] = atx
-	t.nipsts[atx.Id()] = atx.Nipst
-}
-
-func (*AtxDbMock) IsIdentityActive(edId string, layer types.LayerID) (*types.NodeId, bool, types.AtxId, error) {
-	return nil, true, *types.EmptyAtxId, nil
-}
-
-//todo: if this is used somewhere then impl some real mock
-func (t *AtxDbMock) GetEpochAtxIds(id types.EpochId) ([]types.AtxId, error) {
-	return []types.AtxId{}, nil
-}
-
-func (t *AtxDbMock) GetNipst(id types.AtxId) (*types.NIPST, error) {
-	return t.nipsts[id], nil
 }
 
 type MockIStore struct {
