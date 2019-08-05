@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 
 from tests import queries, analyse
-from tests import pod, deployment
+from tests import pod, deployment, statefulset
 from tests.fixtures import load_config, DeploymentInfo, NetworkDeploymentInfo
 from tests.fixtures import init_session, set_namespace, set_docker_images, session_id
 from tests import tx_generator
@@ -20,6 +20,7 @@ from tests.queries import ES
 from tests.hare.assert_hare import validate_hare
 
 BOOT_DEPLOYMENT_FILE = './k8s/bootstrapoet-w-conf.yml'
+BOOT_STATEFULSET_FILE = './k8s/bootstrapoet-w-conf-ss.yml'
 CLIENT_DEPLOYMENT_FILE = './k8s/client-w-conf.yml'
 CLIENT_POD_FILE = './k8s/single-client-w-conf.yml'
 CURL_POD_FILE = './k8s/curl.yml'
@@ -61,11 +62,22 @@ def setup_bootstrap_in_namespace(namespace, bs_deployment_info, bootstrap_config
     cspec.append_args(genesis_time=GENESIS_TIME.isoformat('T', 'seconds'),
                       **bootstrap_args)
 
-    resp = deployment.create_deployment(BOOT_DEPLOYMENT_FILE, namespace,
-                                        deployment_id=bs_deployment_info.deployment_id,
-                                        replica_size=bootstrap_config['replicas'],
-                                        container_specs=cspec,
-                                        time_out=dep_time_out)
+    dep_type = 'deployment' if 'deployment_type' not in bootstrap_config else bootstrap_config['deployment_type']
+    if dep_type == 'deployment':
+        resp = deployment.create_deployment(BOOT_DEPLOYMENT_FILE, namespace,
+                                            deployment_id=bs_deployment_info.deployment_id,
+                                            replica_size=bootstrap_config['replicas'],
+                                            container_specs=cspec,
+                                            time_out=dep_time_out)
+    elif dep_type == 'statefulset':
+        resp = statefulset.create_statefulset(BOOT_STATEFULSET_FILE, namespace,
+                                              deployment_id=bs_deployment_info.deployment_id,
+                                              replica_size=bootstrap_config['replicas'],
+                                              container_specs=cspec,
+                                              time_out=dep_time_out)
+    else:
+        # deployment type is statefulset
+        raise Exception("Unknown deployment type in bootstrap configuration")
 
     bs_deployment_info.deployment_name = resp.metadata._name
     # The tests assume we deploy only 1 bootstrap
