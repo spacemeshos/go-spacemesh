@@ -73,12 +73,11 @@ func (db *ActivationDb) ProcessAtx(atx *types.ActivationTx) {
 // in the epoch prior to the epoch that a was published at, this number is the number of active ids in the next epoch
 // the function returns error if the view is not found
 func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, error) {
-	viewBytes, err := types.ViewAsBytes(a.View)
+	viewHash, err := calcSortedViewHash(a)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("failed to calc sorted view hash: %v", err)
 	}
-
-	count, found := activesetCache.Get(sha256.Sum256(viewBytes))
+	count, found := activesetCache.Get(viewHash)
 	if found {
 		return count, nil
 	}
@@ -128,10 +127,24 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 	if err != nil {
 		return 0, err
 	}
-	activesetCache.Add(sha256.Sum256(viewBytes), counter)
+	activesetCache.Add(viewHash, counter)
 
 	return counter, nil
 
+}
+
+func calcSortedViewHash(atx *types.ActivationTx) ([32]byte, error) {
+	var sortedView []types.BlockID
+	copy(sortedView, atx.View)
+	sort.Slice(sortedView, func(i, j int) bool {
+		return sortedView[i] < sortedView[j]
+	})
+	viewBytes, err := types.ViewAsBytes(sortedView)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	viewHash := sha256.Sum256(viewBytes)
+	return viewHash, err
 }
 
 // SyntacticallyValidateAtx ensures the following conditions apply, otherwise it returns an error.
