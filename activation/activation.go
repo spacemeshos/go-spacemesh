@@ -56,7 +56,7 @@ type ATXDBProvider interface {
 	GetAtx(id types.AtxId) (*types.ActivationTxHeader, error)
 	CalcActiveSetFromView(a *types.ActivationTx) (uint32, error)
 	GetNodeLastAtxId(nodeId types.NodeId) (types.AtxId, error)
-	GetPosAtxId(epochId types.EpochId) (types.AtxId, error)
+	GetPosAtxId(epochId types.EpochId) (*types.AtxId, error)
 }
 
 type BytesStore interface {
@@ -371,7 +371,6 @@ func (b *Builder) Load() *types.NIPSTChallenge {
 }
 
 func (b *Builder) GetPrevAtxId(node types.NodeId) (types.AtxId, error) {
-	//todo: make sure atx ids are ordered and valid
 	id, err := b.db.GetNodeLastAtxId(node)
 	if err != nil {
 		return *types.EmptyAtxId, err
@@ -387,7 +386,7 @@ func (b *Builder) GetPositioningAtxId(epochId types.EpochId) (*types.AtxId, erro
 	if err != nil {
 		return nil, err
 	}
-	return &atxId, nil
+	return atxId, nil
 }
 
 // GetLastSequence retruns the last sequence number of atx reported by node id node

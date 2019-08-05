@@ -256,9 +256,8 @@ func (db *ActivationDb) ContextuallyValidateAtx(atx *types.ActivationTxHeader) e
 	if atx.PrevATXId != *types.EmptyAtxId {
 		lastAtx, err := db.GetNodeLastAtxId(atx.NodeId)
 		if err != nil {
-			db.log.WithFields(
-				log.String("atx_id", atx.ShortId()), log.String("node_id", atx.NodeId.ShortString())).
-				Error("could not fetch node last ATX: %v", err)
+			db.log.With().Error("could not fetch node last ATX",
+				log.AtxId(atx.ShortId()), log.NodeId(atx.NodeId.ShortString()), log.Err(err))
 			return fmt.Errorf("could not fetch node last ATX: %v", err)
 		}
 		// last atx is not the one referenced
@@ -362,8 +361,8 @@ type atxIdAndLayer struct {
 	LayerId types.LayerID
 }
 
-// addAtxToEpoch adds atx to epoch epochId
-// this function is not thread safe and needs to be called under a global lock
+// updateTopAtxIfNeeded replaces the top ATX (positioning ATX candidate) if the latest ATX has a higher layer ID.
+// This function is not thread safe and needs to be called under a global lock.
 func (db *ActivationDb) updateTopAtxIfNeeded(atx *types.ActivationTx) error {
 	currentTopAtx, err := db.getTopAtx()
 	if err != nil && err != database.ErrNotFound {
@@ -429,16 +428,16 @@ func (db *ActivationDb) GetNodeLastAtxId(nodeId types.NodeId) (types.AtxId, erro
 }
 
 // GetPosAtxId returns the best (highest layer id), currently known to this node, pos atx id
-func (db *ActivationDb) GetPosAtxId(epochId types.EpochId) (types.AtxId, error) {
+func (db *ActivationDb) GetPosAtxId(epochId types.EpochId) (*types.AtxId, error) {
 	idAndLayer, err := db.getTopAtx()
 	if err != nil {
-		return *types.EmptyAtxId, err
+		return types.EmptyAtxId, err
 	}
 	if idAndLayer.LayerId.GetEpoch(db.LayersPerEpoch) != epochId {
-		return types.AtxId{}, fmt.Errorf("current posAtx (epoch %v) does not belong to the requested epoch (%v)",
+		return types.EmptyAtxId, fmt.Errorf("current posAtx (epoch %v) does not belong to the requested epoch (%v)",
 			idAndLayer.LayerId.GetEpoch(db.LayersPerEpoch), epochId)
 	}
-	return idAndLayer.AtxId, nil
+	return &idAndLayer.AtxId, nil
 }
 
 // getAtxUnlocked gets the atx from db, this function is not thread safe and should be called under db lock
