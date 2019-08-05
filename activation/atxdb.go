@@ -12,7 +12,7 @@ import (
 )
 
 const CounterKey = 0xaaaa
-const posAtxKey = "posAtxKey"
+const topAtxKey = "topAtxKey"
 
 type ActivationDb struct {
 	sync.RWMutex
@@ -248,7 +248,7 @@ func (db *ActivationDb) StoreAtx(ech types.EpochId, atx *types.ActivationTx) err
 		return err
 	}
 
-	err = db.updatePosAtxIfNeeded(atx)
+	err = db.updateTopAtxIfNeeded(atx)
 	if err != nil {
 		return err
 	}
@@ -314,42 +314,42 @@ type atxIdAndLayer struct {
 
 // addAtxToEpoch adds atx to epoch epochId
 // this function is not thread safe and needs to be called under a global lock
-func (db *ActivationDb) updatePosAtxIfNeeded(atx *types.ActivationTx) error {
-	currentIdAndLayer, err := db.getCurrentAtxIdAndLayer()
+func (db *ActivationDb) updateTopAtxIfNeeded(atx *types.ActivationTx) error {
+	currentTopAtx, err := db.getTopAtx()
 	if err != nil && err != database.ErrNotFound {
-		return fmt.Errorf("failed to get current ATX ID and layer: %v", err)
+		return fmt.Errorf("failed to get current ATX: %v", err)
 	}
-	if err == nil && currentIdAndLayer.LayerId >= atx.PubLayerIdx {
+	if err == nil && currentTopAtx.LayerId >= atx.PubLayerIdx {
 		return nil
 	}
 
-	newIdAndLayer := atxIdAndLayer{
+	newTopAtx := atxIdAndLayer{
 		AtxId:   atx.Id(),
 		LayerId: atx.PubLayerIdx,
 	}
-	idAndLayerBytes, err := types.InterfaceToBytes(&newIdAndLayer)
+	topAtxBytes, err := types.InterfaceToBytes(&newTopAtx)
 	if err != nil {
-		return fmt.Errorf("failed to marshal posAtx ID and layer: %v", err)
+		return fmt.Errorf("failed to marshal top ATX: %v", err)
 	}
 
-	err = db.atxs.Put([]byte(posAtxKey), idAndLayerBytes)
+	err = db.atxs.Put([]byte(topAtxKey), topAtxBytes)
 	if err != nil {
-		return fmt.Errorf("failed to store posAtx ID and layer: %v", err)
+		return fmt.Errorf("failed to store top ATX: %v", err)
 	}
 	return nil
 }
 
-func (db ActivationDb) getCurrentAtxIdAndLayer() (atxIdAndLayer, error) {
-	posAtxBytes, err := db.atxs.Get([]byte(posAtxKey))
+func (db ActivationDb) getTopAtx() (atxIdAndLayer, error) {
+	topAtxBytes, err := db.atxs.Get([]byte(topAtxKey))
 	if err != nil {
 		return atxIdAndLayer{}, err
 	}
-	var currentIdAndLayer atxIdAndLayer
-	err = types.BytesToInterface(posAtxBytes, &currentIdAndLayer)
+	var topAtx atxIdAndLayer
+	err = types.BytesToInterface(topAtxBytes, &topAtx)
 	if err != nil {
-		return atxIdAndLayer{}, fmt.Errorf("failed to unmarshal posAtx ID and layer: %v", err)
+		return atxIdAndLayer{}, fmt.Errorf("failed to unmarshal top ATX: %v", err)
 	}
-	return currentIdAndLayer, nil
+	return topAtx, nil
 }
 
 func getNodeIdKey(id types.NodeId) []byte {
@@ -380,7 +380,7 @@ func (db *ActivationDb) GetNodeLastAtxId(nodeId types.NodeId) (types.AtxId, erro
 
 // GetPosAtxId returns the best (highest layer id), currently known to this node, pos atx id
 func (db *ActivationDb) GetPosAtxId(epochId types.EpochId) (types.AtxId, error) {
-	idAndLayer, err := db.getCurrentAtxIdAndLayer()
+	idAndLayer, err := db.getTopAtx()
 	if err != nil {
 		return *types.EmptyAtxId, err
 	}
