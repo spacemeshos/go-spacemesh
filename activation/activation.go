@@ -54,7 +54,7 @@ type NipstValidator interface {
 }
 
 type ATXDBProvider interface {
-	GetAtx(id types.AtxId) (*types.ActivationTx, error)
+	GetAtx(id types.AtxId) (*types.ActivationTxHeader, error)
 	CalcActiveSetFromView(a *types.ActivationTx) (uint32, error)
 	GetNodeAtxIds(nodeId types.NodeId) ([]types.AtxId, error)
 	GetEpochAtxIds(epochId types.EpochId) ([]types.AtxId, error)
@@ -78,7 +78,7 @@ type Builder struct {
 	challenge       *types.NIPSTChallenge
 	nipst           *types.NIPST
 	posLayerID      types.LayerID
-	prevATX         *types.ActivationTx
+	prevATX         *types.ActivationTxHeader
 	timer           chan types.LayerID
 	stop            chan struct{}
 	finished        chan struct{}
@@ -344,7 +344,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 	if err != nil {
 		return err
 	}
-	b.prevATX = atx
+	b.prevATX = &atx.ActivationTxHeader
 
 	// cleanup state
 	b.nipst = nil
@@ -417,7 +417,7 @@ func (b *Builder) GetLastSequence(node types.NodeId) uint64 {
 }
 
 // GetPositioningAtx return the atx object for the positioning atx according to requested epochId
-func (b *Builder) GetPositioningAtx(epochId types.EpochId) (*types.ActivationTx, error) {
+func (b *Builder) GetPositioningAtx(epochId types.EpochId) (*types.ActivationTxHeader, error) {
 	posAtxId, err := b.GetPositioningAtxId(epochId)
 	if err != nil {
 		if b.prevATX != nil && b.prevATX.PubLayerIdx.GetEpoch(b.layersPerEpoch) == epochId {
