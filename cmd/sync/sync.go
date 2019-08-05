@@ -110,12 +110,6 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 		panic("something got fudged while creating p2p service ")
 	}
 
-	nipstStore, err := database.NewLDBDatabase(app.Config.DataDir+"nipst", 0, 0, lg.WithName("nipstDbStore").WithOptions(log.Nop))
-	if err != nil {
-		lg.Error("error: ", err)
-		return
-	}
-
 	poetDbStore, err := database.NewLDBDatabase(app.Config.DataDir+"poet", 0, 0, lg.WithName("poetDbStore"))
 	if err != nil {
 		lg.Error("error: ", err)
@@ -126,7 +120,7 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 
 	mshdb := mesh.NewPersistentMeshDB(app.Config.DataDir, lg.WithOptions(log.Nop))
 	atxdbStore, _ := database.NewLDBDatabase(app.Config.DataDir+"atx", 0, 0, lg)
-	atxdb := activation.NewActivationDb(atxdbStore, nipstStore, &sync.MockIStore{}, mshdb, uint16(1000), &sync.ValidatorMock{}, lg.WithName("atxDB").WithOptions(log.Nop))
+	atxdb := activation.NewActivationDb(atxdbStore, &sync.MockIStore{}, mshdb, uint16(1000), &sync.ValidatorMock{}, lg.WithName("atxDB").WithOptions(log.Nop))
 
 	txpool := miner.NewTypesTransactionIdMemPool()
 	atxpool := miner.NewTypesAtxIdMemPool()
