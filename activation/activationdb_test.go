@@ -1,7 +1,6 @@
 package activation
 
 import (
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"github.com/google/uuid"
@@ -17,13 +16,14 @@ import (
 	"github.com/stretchr/testify/require"
 	"math/big"
 	"math/rand"
+	"os"
 	"testing"
 	"time"
 )
 
 func createLayerWithAtx2(t require.TestingT, msh *mesh.Mesh, id types.LayerID, numOfBlocks int, atxs []*types.ActivationTx, votes []types.BlockID, views []types.BlockID) (created []types.BlockID) {
 	for i := 0; i < numOfBlocks; i++ {
-		block1 := types.NewExistingBlock(types.BlockID(binary.BigEndian.Uint64([]byte(uuid.New().String()[:8]))), id, []byte("data1"))
+		block1 := types.NewExistingBlock(types.RandBlockId(), id, []byte("data1"))
 		block1.BlockVotes = append(block1.BlockVotes, votes...)
 		for _, atx := range atxs {
 			block1.AtxIds = append(block1.AtxIds, atx.Id())
@@ -678,6 +678,66 @@ func BenchmarkActivationDb_SyntacticallyValidateAtx(b *testing.B) {
 	start = time.Now()
 	err = atxdb.ContextuallyValidateAtx(&atx.ActivationTxHeader)
 	fmt.Printf("\nContextual validation took %v\n\n", time.Since(start))
+	r.NoError(err)
+}
+
+func BenchmarkNewActivationDb(b *testing.B) {
+	r := require.New(b)
+
+	const tmpPath = "../tmp/atx"
+	lg := log.NewDefault("id").WithOptions(log.Nop)
+
+	msh := mesh.NewMemMeshDB(lg)
+	store := database.NewLevelDbStore(tmpPath, nil, nil)
+	atxdb := NewActivationDb(store, NewIdentityStore(store), msh, layersPerEpochBig, &ValidatorMock{}, lg.WithName("atxDB"))
+
+	const (
+		numOfMiners = 300
+		batchSize   = 15
+		numOfEpochs = 10 * batchSize
+	)
+	prevAtxs := make([]types.AtxId, numOfMiners)
+	pPrevAtxs := make([]types.AtxId, numOfMiners)
+	posAtx := prevAtxId
+	var atx *types.ActivationTx
+	layer := types.LayerID(postGenesisEpochLayer)
+
+	start := time.Now()
+	eStart := time.Now()
+	for epoch := postGenesisEpoch; epoch < postGenesisEpoch+numOfEpochs; epoch++ {
+		for miner := 0; miner < numOfMiners; miner++ {
+			challenge := newChallenge(nodeId, 1, prevAtxs[miner], posAtx, layer)
+			h, err := challenge.Hash()
+			r.NoError(err)
+			atx = newAtx(challenge, numOfMiners, defaultView, nipst.NewNIPSTWithChallenge(h, poetRef))
+			prevAtxs[miner] = atx.Id()
+			storeAtx(r, atxdb, atx, log.NewDefault("storeAtx").WithOptions(log.Nop))
+		}
+		//noinspection GoNilness
+		posAtx = atx.Id()
+		layer += layersPerEpoch
+		if epoch%batchSize == batchSize-1 {
+			fmt.Printf("epoch %3d-%3d took %v\t", epoch-(batchSize-1), epoch, time.Since(eStart))
+			eStart = time.Now()
+
+			for miner := 0; miner < numOfMiners; miner++ {
+				atx, err := atxdb.GetAtx(prevAtxs[miner])
+				r.NoError(err)
+				r.NotNil(atx)
+				atx, err = atxdb.GetAtx(pPrevAtxs[miner])
+				r.NoError(err)
+				r.NotNil(atx)
+			}
+			fmt.Printf("reading last and previous epoch 100 times took %v\n", time.Since(eStart))
+			eStart = time.Now()
+		}
+		copy(pPrevAtxs, prevAtxs)
+	}
+	fmt.Printf("\n>>> Total time: %v\n\n", time.Since(start))
+	time.Sleep(1 * time.Second)
+
+	// cleanup
+	err := os.RemoveAll(tmpPath)
 	r.NoError(err)
 }
 
