@@ -65,6 +65,87 @@ func (db *ActivationDb) ProcessAtx(atx *types.ActivationTx) {
 	}
 }
 
+func (db *ActivationDb) createTraversalActiveSetCounterFunc(countedAtxs map[string]types.AtxId, penalties map[string]struct{}, layersPerEpoch uint16, epoch types.EpochId) func(b *types.Block) error {
+
+	traversalFunc := func(b *types.Block) error {
+
+		// don't count ATXs in blocks that are not destined to the prev epoch
+		if b.LayerIndex.GetEpoch(db.LayersPerEpoch) != epoch-1 {
+			return nil
+		}
+
+		// count unique ATXs
+		for _, id := range b.AtxIds {
+			atx, err := db.GetAtx(id)
+			if err != nil {
+				log.Panic("error fetching atx %v from database -- inconsistent state", id.ShortId()) // TODO: handle inconsistent state
+				return fmt.Errorf("error fetching atx %v from database -- inconsistent state", id.ShortId())
+			}
+
+			// make sure the target epoch is our epoch
+			if atx.TargetEpoch(layersPerEpoch) != epoch {
+				db.log.With().Debug("atx found, but targeting epoch doesn't match publication epoch",
+					log.String("atx_id", atx.ShortId()),
+					log.Uint64("atx_target_epoch", uint64(atx.TargetEpoch(layersPerEpoch))),
+					log.Uint64("actual_epoch", uint64(epoch)))
+				continue
+			}
+
+			// ignore atx from nodes in penalty
+			if _, exist := penalties[atx.NodeId.Key]; exist {
+				db.log.With().Debug("ignoring atx from node in penalty",
+					log.String("node_id", atx.NodeId.Key), log.String("atx_id", atx.ShortId()))
+				continue
+			}
+
+			if prevId, exist := countedAtxs[atx.NodeId.Key]; exist { // same miner
+
+				if prevId != id { // different atx for same epoch
+					db.log.With().Error("Encountered second atx for the same miner on the same epoch",
+						log.String("first_atx", prevId.ShortId()), log.String("second_atx", id.ShortId()))
+
+					penalties[atx.NodeId.Key] = struct{}{} // mark node in penalty
+					delete(countedAtxs, atx.NodeId.Key)    // remove the penalized node from counted
+				}
+				continue
+			}
+
+			countedAtxs[atx.NodeId.Key] = id
+		}
+
+		return nil
+	}
+
+	return traversalFunc
+}
+
+// CalcActiveSetSize - returns the active set size that matches the view of the contextually valid blocks in the provided layer
+func (db *ActivationDb) CalcActiveSetSize(epoch types.EpochId, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
+
+	if epoch == 0 {
+		return nil, errors.New("tried to retrieve active set for epoch 0")
+	}
+
+	firstLayerOfPrevEpoch := types.LayerID(epoch-1) * types.LayerID(db.LayersPerEpoch)
+
+	countedAtxs := make(map[string]types.AtxId)
+	penalties := make(map[string]struct{})
+
+	traversalFunc := db.createTraversalActiveSetCounterFunc(countedAtxs, penalties, db.LayersPerEpoch, epoch)
+
+	err := db.meshDb.ForBlockInView(blocks, firstLayerOfPrevEpoch, traversalFunc)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(map[string]struct{}, len(countedAtxs))
+	for k := range countedAtxs {
+		result[k] = struct{}{}
+	}
+
+	return result, nil
+}
+
 // CalcActiveSetFromView traverses the view found in a - the activation tx and counts number of active ids published
 // in the epoch prior to the epoch that a was published at, this number is the number of active ids in the next epoch
 // the function returns error if the view is not found
@@ -79,40 +160,9 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 		return count, nil
 	}
 
-	var counter uint32 = 0
-	set := make(map[types.AtxId]struct{})
 	pubEpoch := a.PubLayerIdx.GetEpoch(db.LayersPerEpoch)
 	if pubEpoch < 1 {
 		return 0, fmt.Errorf("publication epoch cannot be less than 1, found %v", pubEpoch)
-	}
-	countingEpoch := pubEpoch - 1
-	firstLayerOfLastEpoch := types.LayerID(countingEpoch) * types.LayerID(db.LayersPerEpoch)
-
-	traversalFunc := func(blk *types.Block) error {
-		//skip blocks not from atx epoch
-		if blk.LayerIndex.GetEpoch(db.LayersPerEpoch) != countingEpoch {
-			return nil
-		}
-		for _, id := range blk.AtxIds {
-			if _, found := set[id]; found {
-				continue
-			}
-			set[id] = struct{}{}
-			atx, err := db.GetAtx(id)
-			if err != nil {
-				log.Panic("error fetching atx %v from database -- inconsistent state", id.ShortId()) // TODO: handle inconsistent state
-				return fmt.Errorf("error fetching atx %v from database -- inconsistent state", id.ShortId())
-			}
-			if atx.TargetEpoch(db.LayersPerEpoch) != pubEpoch {
-				db.log.Debug("atx %v found, but targeting epoch %v instead of publication epoch %v",
-					atx.ShortId(), atx.TargetEpoch(db.LayersPerEpoch), pubEpoch)
-				continue
-			}
-			counter++
-			db.log.Debug("atx %v (epoch %d) found traversing in block %x (epoch %d)",
-				atx.ShortId(), atx.TargetEpoch(db.LayersPerEpoch), blk.Id, blk.LayerIndex.GetEpoch(db.LayersPerEpoch))
-		}
-		return nil
 	}
 
 	mp := map[types.BlockID]struct{}{}
@@ -120,13 +170,13 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 		mp[blk] = struct{}{}
 	}
 
-	err = db.meshDb.ForBlockInView(mp, firstLayerOfLastEpoch, traversalFunc)
+	countedAtxs, err := db.CalcActiveSetSize(pubEpoch, mp)
 	if err != nil {
 		return 0, err
 	}
-	activesetCache.Add(common.BytesToHash(viewBytes), counter)
+	activesetCache.Add(common.BytesToHash(viewBytes), uint32(len(countedAtxs)))
 
-	return counter, nil
+	return uint32(len(countedAtxs)), nil
 
 }
 
