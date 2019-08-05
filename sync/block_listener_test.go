@@ -8,6 +8,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -118,7 +119,7 @@ func TestBlockListener(t *testing.T) {
 		t.Error(err)
 	}
 
-	bl2.SyncLayer(0, []types.BlockID{block1.Id})
+	bl2.syncLayer(0, []types.BlockID{block1.Id})
 
 	b, err := bl2.GetBlock(block1.Id)
 	if err != nil {
@@ -289,7 +290,7 @@ func TestBlockListenerViewTraversal(t *testing.T) {
 	bl1.AddBlock(block9)
 	bl1.AddBlock(block10)
 
-	bl2.SyncLayer(1, []types.BlockID{block10.Id})
+	bl2.syncLayer(1, []types.BlockID{block10.Id})
 
 	b, err := bl1.GetBlock(block1.Id)
 	if err != nil {
@@ -385,7 +386,7 @@ func TestBlockListener_TraverseViewBadFlow(t *testing.T) {
 	bl1.AddBlock(block4)
 	bl1.AddBlock(block5)
 
-	bl2.SyncLayer(5, []types.BlockID{block5.Id})
+	bl2.syncLayer(5, []types.BlockID{block5.Id})
 
 	b, err := bl2.GetBlock(block1.Id)
 	assert.Error(t, err)
@@ -424,9 +425,10 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 	bl2 := ListenerFactory(n2, PeersMock{func() []p2p.Peer { return []p2p.Peer{n1.PublicKey()} }}, "TestBlockListener_ListenToGossipBlocks2", 1)
 
 	bl1.Start()
-	bl2.Start() // TODO: @almog make sure data is available without starting
+	bl2.Start()
 
 	blk := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data1"))
+	blk.ViewEdges = append(blk.ViewEdges, mesh.GenesisBlock.ID())
 	tx := types.NewAddressableTx(0, address.BytesToAddress([]byte{0x01}), address.BytesToAddress([]byte{0x02}), 10, 10, 10)
 
 	atx := atx()

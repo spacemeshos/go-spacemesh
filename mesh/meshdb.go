@@ -81,6 +81,10 @@ func (m *MeshDB) AddBlock(bl *types.Block) error {
 }
 
 func (m *MeshDB) GetBlock(id types.BlockID) (*types.Block, error) {
+	if id == GenesisBlock.ID() {
+		//todo fit real genesis here
+		return &GenesisBlock, nil
+	}
 
 	if blkh := m.blockCache.Get(id); blkh != nil {
 		return blkh, nil

@@ -94,8 +94,8 @@ type Syncer struct {
 
 	//todo fetch server
 	blockQueue *validationQueue
-	txQueue    *validationQueue
-	atxQueue   *validationQueue
+	txQueue    *txQueue
+	atxQueue   *atxQueue
 }
 
 func (s *Syncer) ForceSync() {
@@ -242,7 +242,7 @@ func (s *Syncer) getLayerFromNeighbors(currenSyncLayer types.LayerID) (*types.La
 		return nil, err
 	}
 
-	blocksArr, err := s.SyncLayer(currenSyncLayer, blockIds)
+	blocksArr, err := s.syncLayer(currenSyncLayer, blockIds)
 	if len(blocksArr) == 0 || err != nil {
 		return nil, fmt.Errorf("could get blocks for layer  %v", currenSyncLayer)
 	}
@@ -250,7 +250,7 @@ func (s *Syncer) getLayerFromNeighbors(currenSyncLayer types.LayerID) (*types.La
 	return types.NewExistingLayer(types.LayerID(currenSyncLayer), blocksArr), nil
 }
 
-func (s *Syncer) SyncLayer(layerID types.LayerID, blockIds []types.BlockID) ([]*types.Block, error) {
+func (s *Syncer) syncLayer(layerID types.LayerID, blockIds []types.BlockID) ([]*types.Block, error) {
 	ch := make(chan bool, 1)
 	foo := func(res bool) error {
 		s.Info("layer %v done", layerID)
@@ -267,7 +267,7 @@ func (s *Syncer) SyncLayer(layerID types.LayerID, blockIds []types.BlockID) ([]*
 	return s.LayerBlocks(layerID)
 }
 
-func (s *Syncer) BlockSyntacticValidation(block *types.Block) ([]*types.AddressableSignedTransaction, []*types.ActivationTx, error) {
+func (s *Syncer) blockSyntacticValidation(block *types.Block) ([]*types.AddressableSignedTransaction, []*types.ActivationTx, error) {
 
 	//block eligibility
 	if eligable, err := s.BlockSignedAndEligible(block); err != nil || !eligable {
@@ -281,22 +281,27 @@ func (s *Syncer) BlockSyntacticValidation(block *types.Block) ([]*types.Addressa
 	}
 
 	//validate blocks view
-	if valid := s.ValidateView(block); valid == false {
+	if valid := s.validateBlockView(block); valid == false {
 		return nil, nil, errors.New(fmt.Sprintf("block %v not syntacticly valid", block.ID()))
 	}
 
 	return txs, atxs, nil
 }
 
-func (s *Syncer) ValidateView(blk *types.Block) bool {
+func (s *Syncer) validateBlockView(blk *types.Block) bool {
 	ch := make(chan bool, 1)
 	defer close(ch)
 	foo := func(res bool) error {
 		ch <- res
 		return nil
 	}
+	if res, err := s.blockQueue.addDependencies(blk.ID(), blk.ViewEdges, foo); res == false {
+		return true
+	} else if err != nil {
+		s.Error(fmt.Sprintf("block %v not syntactically valid ", blk.ID()))
+		return false
+	}
 
-	s.blockQueue.addDependencies(blk.ID(), blk.ViewEdges, foo)
 	return <-ch
 }
 

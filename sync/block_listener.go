@@ -101,7 +101,7 @@ func (bl *BlockListener) HandleNewBlock(blk *types.Block) bool {
 		return true
 	}
 
-	txs, atxs, err := bl.BlockSyntacticValidation(blk)
+	txs, atxs, err := bl.blockSyntacticValidation(blk)
 	if err != nil {
 		bl.With().Error("failed to validate block", log.BlockId(uint64(blk.ID())), log.Err(err))
 		return false
