@@ -1,6 +1,7 @@
 package activation
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"github.com/google/uuid"
@@ -19,9 +20,9 @@ import (
 	"time"
 )
 
-func createLayerWithAtx(t *testing.T, msh *mesh.Mesh, id types.LayerID, numOfBlocks int, atxs []*types.ActivationTx, votes []types.BlockID, views []types.BlockID) (created []types.BlockID) {
+func createLayerWithAtx(t require.TestingT, msh *mesh.Mesh, id types.LayerID, numOfBlocks int, atxs []*types.ActivationTx, votes []types.BlockID, views []types.BlockID) (created []types.BlockID) {
 	for i := 0; i < numOfBlocks; i++ {
-		block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), id, []byte("data1"))
+		block1 := types.NewExistingBlock(types.BlockID(binary.BigEndian.Uint64([]byte(uuid.New().String()[:8]))), id, []byte("data1"))
 		block1.BlockVotes = append(block1.BlockVotes, votes...)
 		for _, atx := range atxs {
 			block1.AtxIds = append(block1.AtxIds, atx.Id())
@@ -71,7 +72,7 @@ func (mock *ATXDBMock) CalcActiveSetFromView(a *types.ActivationTx) (uint32, err
 	return mock.activeSet, nil
 }
 
-func (mock *ATXDBMock) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
+func (mock *ATXDBMock) GetAtx(id types.AtxId) (*types.ActivationTxHeader, error) {
 	panic("not implemented")
 }
 
@@ -102,7 +103,7 @@ const layersPerEpochBig = 1000
 func getAtxDb(id string) (*ActivationDb, *mesh.Mesh) {
 	lg := log.NewDefault(id)
 	memesh := mesh.NewMemMeshDB(lg.WithName("meshDB"))
-	atxdb := NewActivationDb(database.NewMemDatabase(), database.NewMemDatabase(), NewIdentityStore(database.NewMemDatabase()), memesh, layersPerEpochBig, &ValidatorMock{}, lg.WithName("atxDB"))
+	atxdb := NewActivationDb(database.NewMemDatabase(), NewIdentityStore(database.NewMemDatabase()), memesh, layersPerEpochBig, &ValidatorMock{}, lg.WithName("atxDB"))
 	layers := mesh.NewMesh(memesh, atxdb, ConfigTst(), &MeshValidatorMock{}, &sync.MockTxMemPool{}, &sync.MockAtxMemPool{}, &MockState{}, lg.WithName("mesh"))
 	return atxdb, layers
 }
@@ -349,7 +350,7 @@ func TestActivationDB_ValidateAtx(t *testing.T) {
 	err = atxdb.SyntacticallyValidateAtx(atx)
 	assert.NoError(t, err)
 
-	err = atxdb.ContextuallyValidateAtx(atx)
+	err = atxdb.ContextuallyValidateAtx(&atx.ActivationTxHeader)
 	assert.NoError(t, err)
 }
 
@@ -411,7 +412,7 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	err = atxdb.StoreAtx(1, atx)
 	assert.NoError(t, err)
 	atx = types.NewActivationTx(idx1, coinbase, 1, prevAtx.Id(), 12, 0, prevAtx.Id(), 3, []types.BlockID{}, &types.NIPST{})
-	err = atxdb.ContextuallyValidateAtx(atx)
+	err = atxdb.ContextuallyValidateAtx(&atx.ActivationTxHeader)
 	assert.EqualError(t, err, "last atx is not the one referenced")
 }
 
@@ -467,7 +468,7 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 	id4 := atx.Id()
 
 	atx = types.NewActivationTx(idx1, coinbase, 3, atx2id, 1012, 0, prevAtx.Id(), 0, []types.BlockID{}, &types.NIPST{})
-	err = atxdb.ContextuallyValidateAtx(atx)
+	err = atxdb.ContextuallyValidateAtx(&atx.ActivationTxHeader)
 	assert.EqualError(t, err, "last atx is not the one referenced")
 
 	err = atxdb.StoreAtx(1, atx)
@@ -502,7 +503,7 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 	assert.NoError(t, err)
 
 	atx = types.NewActivationTx(idx2, coinbase, 2, atxId, 1013, 0, atx.Id(), 0, []types.BlockID{}, &types.NIPST{})
-	err = atxdb.ContextuallyValidateAtx(atx)
+	err = atxdb.ContextuallyValidateAtx(&atx.ActivationTxHeader)
 	assert.EqualError(t, err, "last atx is not the one referenced")
 
 	err = atxdb.StoreAtx(1, atx)
@@ -521,8 +522,8 @@ func TestActivationDb_ProcessAtx(t *testing.T) {
 	assert.Equal(t, idx1, res)
 }
 
-func TestActivationDb_SyntacticallyValidateAtx_Benchmark(t *testing.T) {
-	r := require.New(t)
+func BenchmarkActivationDb_SyntacticallyValidateAtx(b *testing.B) {
+	r := require.New(b)
 	nopLogger := log.NewDefault("").WithOptions(log.Nop)
 
 	atxdb, layers := getAtxDb("t8")
@@ -546,13 +547,13 @@ func TestActivationDb_SyntacticallyValidateAtx_Benchmark(t *testing.T) {
 	poetRef := []byte{0x12, 0x21}
 	for _, atx := range atxs {
 		hash, err := atx.NIPSTChallenge.Hash()
-		assert.NoError(t, err)
+		r.NoError(err)
 		atx.Nipst = nipst.NewNIPSTWithChallenge(hash, poetRef)
 	}
 
-	blocks := createLayerWithAtx(t, layers, 0, blocksPerLayer, atxs, []types.BlockID{}, []types.BlockID{})
+	blocks := createLayerWithAtx(b, layers, 0, blocksPerLayer, atxs, []types.BlockID{}, []types.BlockID{})
 	for i := 1; i < numberOfLayers; i++ {
-		blocks = createLayerWithAtx(t, layers, types.LayerID(i), blocksPerLayer, []*types.ActivationTx{}, blocks, blocks)
+		blocks = createLayerWithAtx(b, layers, types.LayerID(i), blocksPerLayer, []*types.ActivationTx{}, blocks, blocks)
 	}
 
 	idx1 := types.NodeId{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}
@@ -579,7 +580,7 @@ func TestActivationDb_SyntacticallyValidateAtx_Benchmark(t *testing.T) {
 	r.NoError(err)
 
 	start = time.Now()
-	err = atxdb.ContextuallyValidateAtx(atx)
+	err = atxdb.ContextuallyValidateAtx(&atx.ActivationTxHeader)
 	fmt.Printf("\nContextual validation took %v\n\n", time.Since(start))
 	r.NoError(err)
 }
