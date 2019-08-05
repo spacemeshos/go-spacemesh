@@ -315,7 +315,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 		var err error
 		view, err = b.mesh.GetOrphanBlocksBefore(viewLayer)
 		if err != nil {
-			return fmt.Errorf("failed to get current view: %v", err)
+			return fmt.Errorf("failed to get current view for layer %v: %v", viewLayer, err)
 		}
 	}
 
