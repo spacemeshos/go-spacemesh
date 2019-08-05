@@ -581,3 +581,44 @@ func BenchmarkActivationDb_SyntacticallyValidateAtx(b *testing.B) {
 	fmt.Printf("\nContextual validation took %v\n\n", time.Since(start))
 	r.NoError(err)
 }
+
+func TestActivationDb_TopAtx(t *testing.T) {
+	r := require.New(t)
+
+	atxdb, _ := getAtxDb("t8")
+
+	// ATX stored should become top ATX
+	atx, err := createAndStoreAtx(atxdb, 0)
+	r.NoError(err)
+
+	topAtx, err := atxdb.getTopAtx()
+	r.NoError(err)
+	r.Equal(atx.Id(), topAtx.AtxId)
+
+	// higher-layer ATX stored should become new top ATX
+	atx, err = createAndStoreAtx(atxdb, 3)
+	r.NoError(err)
+
+	topAtx, err = atxdb.getTopAtx()
+	r.NoError(err)
+	r.Equal(atx.Id(), topAtx.AtxId)
+
+	// lower-layer ATX stored should NOT become new top ATX
+	atx, err = createAndStoreAtx(atxdb, 1)
+	r.NoError(err)
+
+	topAtx, err = atxdb.getTopAtx()
+	r.NoError(err)
+	r.NotEqual(atx.Id(), topAtx.AtxId)
+}
+
+func createAndStoreAtx(atxdb *ActivationDb, layer types.LayerID) (*types.ActivationTx, error) {
+	id := types.NodeId{Key: uuid.New().String(), VRFPublicKey: []byte("vrf")}
+	atx := types.NewActivationTx(id, coinbase, 0, *types.EmptyAtxId, layer,
+		0, *types.EmptyAtxId, 3, []types.BlockID{}, &types.NIPST{})
+	err := atxdb.StoreAtx(atx.TargetEpoch(layersPerEpoch), atx)
+	if err != nil {
+		return nil, err
+	}
+	return atx, nil
+}
