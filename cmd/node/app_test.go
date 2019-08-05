@@ -50,7 +50,7 @@ func NewRPCPoetHarnessClient() (*nipst.RPCPoetClient, error) {
 		return nil, err
 	}
 	cfg.NodeAddress = "127.0.0.1:9091"
-	cfg.InitialRoundDuration = time.Duration(35 * time.Second).String()
+	cfg.InitialRoundDuration = time.Duration(5 * time.Second).String()
 
 	h, err := integration.NewHarness(cfg)
 	if err != nil {
@@ -106,13 +106,16 @@ func (suite *AppTestSuite) initMultipleInstances(numOfInstances int, storeFormat
 		smApp.Config.HARE.N = numOfInstances
 		smApp.Config.HARE.F = numOfInstances / 2
 		smApp.Config.HARE.RoundDuration = 3
-		smApp.Config.HARE.WakeupDelta = 10
+		smApp.Config.HARE.WakeupDelta = 5
 		smApp.Config.HARE.ExpectedLeaders = 5
 		smApp.Config.CoinbaseAccount = strconv.Itoa(i + 1)
 		smApp.Config.LayerAvgSize = numOfInstances
 		smApp.Config.LayersPerEpoch = 3
 		smApp.Config.Hdist = 5
 		smApp.Config.GenesisTime = genesisTime
+		smApp.Config.LayerDurationSec = 20
+		smApp.Config.HareEligibility.ConfidenceParam = 2
+		smApp.Config.HareEligibility.EpochOffset = 0
 
 		edSgn := signing.NewEdSigner()
 		pub := edSgn.PublicKey()
@@ -152,7 +155,7 @@ func activateGrpcServer(smApp *SpacemeshApp) {
 func (suite *AppTestSuite) TestMultipleNodes() {
 	//EntryPointCreated <- true
 
-	const numberOfEpochs = 2 // first 2 epochs are genesis
+	const numberOfEpochs = 5 // first 2 epochs are genesis
 	//addr := address.BytesToAddress([]byte{0x01})
 	dst := address.BytesToAddress([]byte{0x02})
 	acc1Signer, err := signing.NewEdSignerFromBuffer(common.FromHex(apiCfg.Account1Private))
@@ -174,7 +177,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	defer suite.gracefulShutdown()
 
 	_ = suite.apps[0].P2P.Broadcast(miner.IncomingTxProtocol, txbytes)
-	timeout := time.After(4.5 * 60 * time.Second)
+	timeout := time.After(6 * 60 * time.Second)
 
 	stickyClientsDone := 0
 loop:
@@ -186,9 +189,8 @@ loop:
 		default:
 			maxClientsDone := 0
 			for idx, app := range suite.apps {
-				if 10 == app.state.GetBalance(dst) &&
+				if 10 <= app.state.GetBalance(dst) &&
 					uint32(suite.apps[idx].mesh.LatestLayer()) == numberOfEpochs*uint32(suite.apps[idx].Config.LayersPerEpoch)+1 { // make sure all had 1 non-genesis layer
-
 					suite.validateLastATXActiveSetSize(app)
 					clientsDone := 0
 					for idx2, app2 := range suite.apps {
@@ -213,11 +215,11 @@ loop:
 				stickyClientsDone = maxClientsDone
 				log.Info("%d roots confirmed out of %d", maxClientsDone, len(suite.apps))
 			}
-			time.Sleep(30 * time.Second)
+			time.Sleep(10 * time.Second)
 		}
 	}
 
-	suite.validateBlocksAndATXs(8)
+	suite.validateBlocksAndATXs(types.LayerID(numberOfEpochs*suite.apps[0].Config.LayersPerEpoch) - 1)
 
 }
 
@@ -237,7 +239,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 		for _, ap := range suite.apps {
 			curNodeLastLayer := ap.blockListener.ValidatedLayer()
 			if curNodeLastLayer < untilLayer {
-				log.Info("layer for %v was %v, want %v", ap.nodeId.Key, curNodeLastLayer, 8)
+				log.Info("layer for %v was %v, want %v", ap.nodeId.Key, curNodeLastLayer, untilLayer)
 			} else {
 				count++
 			}
