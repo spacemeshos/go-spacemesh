@@ -131,7 +131,7 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 }
 
 func calcSortedViewHash(atx *types.ActivationTx) ([32]byte, error) {
-	var sortedView []types.BlockID
+	sortedView := make([]types.BlockID, len(atx.View))
 	copy(sortedView, atx.View)
 	sort.Slice(sortedView, func(i, j int) bool {
 		return sortedView[i] < sortedView[j]
