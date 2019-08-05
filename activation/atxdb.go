@@ -15,8 +15,6 @@ import (
 	"sync"
 )
 
-const CounterKey = 0xaaaa
-
 type ActivationDb struct {
 	sync.RWMutex
 	//todo: think about whether we need one db or several
@@ -345,34 +343,6 @@ func (db *ActivationDb) storeAtxUnlocked(atx *types.ActivationTx) error {
 		return err
 	}
 	return nil
-}
-
-func epochCounterKey(ech types.EpochId) []byte {
-	return append(ech.ToBytes(), common.Uint64ToBytes(uint64(CounterKey))...)
-}
-
-// incValidAtxCounter increases the number of active ids seen for epoch ech. Use only under db.lock.
-func (db *ActivationDb) incValidAtxCounter(ech types.EpochId) error {
-	key := epochCounterKey(ech)
-	val, err := db.atxs.Get(key)
-	if err != nil {
-		db.log.Debug("incrementing epoch %v ATX counter to 1", ech)
-		return db.atxs.Put(key, common.Uint32ToBytes(1))
-	}
-	db.log.Debug("incrementing epoch %v ATX counter to %v", ech, common.BytesToUint32(val)+1)
-	return db.atxs.Put(key, common.Uint32ToBytes(common.BytesToUint32(val)+1))
-}
-
-// ActiveSetSize returns the active set size stored in db for epoch ech
-func (db *ActivationDb) ActiveSetSize(epochId types.EpochId) (uint32, error) {
-	key := epochCounterKey(epochId)
-	db.RLock()
-	val, err := db.atxs.Get(key)
-	db.RUnlock()
-	if err != nil {
-		return 0, fmt.Errorf("could not fetch active set size from cache: %v", err)
-	}
-	return common.BytesToUint32(val), nil
 }
 
 // addAtxToEpoch adds atx to epoch epochId
