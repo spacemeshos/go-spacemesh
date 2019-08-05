@@ -10,6 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/types"
+	"github.com/spacemeshos/sha256-simd"
 	"sort"
 	"sync"
 )
@@ -126,7 +127,7 @@ func (db *ActivationDb) CalcActiveSetSize(epoch types.EpochId, blocks map[types.
 		return nil, errors.New("tried to retrieve active set for epoch 0")
 	}
 
-	firstLayerOfPrevEpoch := types.LayerID(epoch-1) * types.LayerID(db.LayersPerEpoch)
+	firstLayerOfPrevEpoch := (epoch - 1).FirstLayer(db.LayersPerEpoch)
 
 	countedAtxs := make(map[string]types.AtxId)
 	penalties := make(map[string]struct{})
@@ -150,12 +151,11 @@ func (db *ActivationDb) CalcActiveSetSize(epoch types.EpochId, blocks map[types.
 // in the epoch prior to the epoch that a was published at, this number is the number of active ids in the next epoch
 // the function returns error if the view is not found
 func (db *ActivationDb) CalcActiveSetFromView(view []types.BlockID, pubEpoch types.EpochId) (uint32, error) {
-	viewBytes, err := types.ViewAsBytes(view)
+	viewHash, err := calcSortedViewHash(view)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("failed to calc sorted view hash: %v", err)
 	}
-
-	count, found := activesetCache.Get(common.BytesToHash(viewBytes))
+	count, found := activesetCache.Get(viewHash)
 	if found {
 		return count, nil
 	}
@@ -173,10 +173,24 @@ func (db *ActivationDb) CalcActiveSetFromView(view []types.BlockID, pubEpoch typ
 	if err != nil {
 		return 0, err
 	}
-	activesetCache.Add(common.BytesToHash(viewBytes), uint32(len(countedAtxs)))
+	activesetCache.Add(viewHash, uint32(len(countedAtxs)))
 
 	return uint32(len(countedAtxs)), nil
 
+}
+
+func calcSortedViewHash(view []types.BlockID) (common.Hash, error) {
+	sortedView := make([]types.BlockID, len(view))
+	copy(sortedView, view)
+	sort.Slice(sortedView, func(i, j int) bool {
+		return sortedView[i] < sortedView[j]
+	})
+	viewBytes, err := types.ViewAsBytes(sortedView)
+	if err != nil {
+		return common.Hash{}, err
+	}
+	viewHash := sha256.Sum256(viewBytes)
+	return viewHash, err
 }
 
 // SyntacticallyValidateAtx ensures the following conditions apply, otherwise it returns an error.
