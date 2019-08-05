@@ -38,9 +38,9 @@ var EmptyAtxId = &AtxId{common.Hash{0}}
 
 type ActivationTxHeader struct {
 	NIPSTChallenge
+	id            *AtxId
 	Coinbase      address.Address
 	ActiveSetSize uint32
-	View          []BlockID
 }
 
 type NIPSTChallenge struct {
@@ -77,8 +77,8 @@ func (challenge *NIPSTChallenge) String() string {
 
 type ActivationTx struct {
 	ActivationTxHeader
-	id    *AtxId
 	Nipst *NIPST
+	View  []BlockID
 	//todo: add sig
 }
 
@@ -92,7 +92,7 @@ func NewActivationTx(NodeId NodeId,
 	ActiveSetSize uint32,
 	View []BlockID,
 	nipst *NIPST) *ActivationTx {
-	return &ActivationTx{
+	atx := &ActivationTx{
 		ActivationTxHeader: ActivationTxHeader{
 			NIPSTChallenge: NIPSTChallenge{
 				NodeId:         NodeId,
@@ -104,56 +104,64 @@ func NewActivationTx(NodeId NodeId,
 			},
 			Coinbase:      Coinbase,
 			ActiveSetSize: ActiveSetSize,
-			View:          View,
 		},
 		Nipst: nipst,
+		View:  View,
 	}
-
+	atx.CalcAndSetId()
+	return atx
 }
 
 func NewActivationTxWithChallenge(poetChallenge NIPSTChallenge, coinbase address.Address, ActiveSetSize uint32,
 	View []BlockID, nipst *NIPST) *ActivationTx {
 
-	return &ActivationTx{
+	atx := &ActivationTx{
 		ActivationTxHeader: ActivationTxHeader{
 			NIPSTChallenge: poetChallenge,
 			Coinbase:       coinbase,
 			ActiveSetSize:  ActiveSetSize,
-			View:           View,
 		},
 		Nipst: nipst,
+		View:  View,
 	}
+	atx.CalcAndSetId()
+	return atx
 
 }
 
-func (t *ActivationTx) Id() AtxId {
-	if t.id != nil {
-		return *t.id
+func (atxh *ActivationTxHeader) Id() AtxId {
+	if atxh.id == nil {
+		panic("id field must be set")
 	}
-	//todo: revise id function, add cache
-	tx, err := AtxHeaderAsBytes(&t.ActivationTxHeader)
+	return *atxh.id
+}
+
+func (atxh *ActivationTxHeader) ShortId() string {
+	return atxh.Id().ShortId()
+}
+
+func (atxh *ActivationTxHeader) TargetEpoch(layersPerEpoch uint16) EpochId {
+	return atxh.PubLayerIdx.GetEpoch(layersPerEpoch) + 1
+}
+
+func (atxh *ActivationTxHeader) SetId(id *AtxId) {
+	atxh.id = id
+}
+
+func (atx *ActivationTx) CalcAndSetId() {
+	tx, err := AtxHeaderAsBytes(&atx.ActivationTxHeader)
 	if err != nil {
 		panic("could not Serialize atx")
 	}
-
-	t.id = &AtxId{crypto.Keccak256Hash(tx)}
-	return *t.id
+	atx.SetId(&AtxId{crypto.Keccak256Hash(tx)})
 }
 
-func (t *ActivationTx) ShortId() string {
-	return t.Id().ShortId()
+func (atx *ActivationTx) GetPoetProofRef() []byte {
+	return atx.Nipst.PoetProofRef
 }
 
-func (t *ActivationTx) TargetEpoch(layersPerEpoch uint16) EpochId {
-	return t.PubLayerIdx.GetEpoch(layersPerEpoch) + 1
-}
-
-func (t *ActivationTx) GetPoetProofRef() []byte {
-	return t.Nipst.PoetProofRef
-}
-
-func (t *ActivationTx) GetShortPoetProofRef() []byte {
-	return t.Nipst.PoetProofRef[:common.Min(5, len(t.Nipst.PoetProofRef))]
+func (atx *ActivationTx) GetShortPoetProofRef() []byte {
+	return atx.Nipst.PoetProofRef[:common.Min(5, len(atx.Nipst.PoetProofRef))]
 }
 
 type PoetProof struct {

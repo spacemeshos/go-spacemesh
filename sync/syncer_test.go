@@ -117,6 +117,14 @@ func (s *stateMock) ValidateTransactionSignature(tx *types.SerializableSignedTra
 	return address.Address{}, nil
 }
 
+type mockBlocksProvider struct {
+	mp map[types.BlockID]struct{}
+}
+
+func (mbp mockBlocksProvider) GetGoodPatternBlocks(layer types.LayerID) (map[types.BlockID]struct{}, error) {
+	return nil, errors.New("not implemented")
+}
+
 var rewardConf = mesh.Config{
 	big.NewInt(10),
 	big.NewInt(5000),
@@ -128,9 +136,8 @@ var rewardConf = mesh.Config{
 func getMeshWithLevelDB(id string) *mesh.Mesh {
 	lg := log.New(id, "", "")
 	mshdb := mesh.NewPersistentMeshDB(id, lg)
-	nipstStore, _ := database.NewLDBDatabase(id+"nipst", 0, 0, lg.WithOptions(log.Nop))
 	atxdbStore, _ := database.NewLDBDatabase(id+"atx", 0, 0, lg.WithOptions(log.Nop))
-	atxdb := activation.NewActivationDb(atxdbStore, nipstStore, &MockIStore{}, mshdb, 10, &ValidatorMock{}, lg.WithOptions(log.Nop))
+	atxdb := activation.NewActivationDb(atxdbStore, &MockIStore{}, mshdb, 10, &ValidatorMock{}, lg.WithOptions(log.Nop))
 	return mesh.NewMesh(mshdb, atxdb, rewardConf, &MeshValidatorMock{}, &MockTxMemPool{}, &MockAtxMemPool{}, &stateMock{}, lg.WithOptions(log.Nop))
 }
 
@@ -141,7 +148,7 @@ func persistenceTeardown() {
 func getMeshWithMemoryDB(id string) *mesh.Mesh {
 	lg := log.New(id, "", "")
 	mshdb := mesh.NewMemMeshDB(lg)
-	atxdb := activation.NewActivationDb(database.NewMemDatabase(), database.NewMemDatabase(), &MockIStore{}, mshdb, 10, &ValidatorMock{}, lg.WithName("atxDB"))
+	atxdb := activation.NewActivationDb(database.NewMemDatabase(), &MockIStore{}, mshdb, 10, &ValidatorMock{}, lg.WithName("atxDB"))
 	return mesh.NewMesh(mshdb, atxdb, rewardConf, &MeshValidatorMock{}, &MockTxMemPool{}, &MockAtxMemPool{}, &stateMock{}, lg)
 }
 
@@ -945,4 +952,36 @@ func TestSyncer_Synchronise(t *testing.T) {
 	sync.Synchronise()
 	time.Sleep(100 * time.Millisecond) // handle go routine race
 	r.Equal(2, lv.countValidate)       // not synced, expect two calls
+}
+
+type mockTimedValidator struct {
+	delay time.Duration
+	calls int
+}
+
+func (m *mockTimedValidator) ValidatedLayer() types.LayerID {
+	return 1
+}
+
+func (m *mockTimedValidator) ValidateLayer(lyr *types.Layer) {
+	m.calls++
+	time.Sleep(m.delay)
+}
+
+func TestSyncer_ConcurrentSynchronise(t *testing.T) {
+	r := require.New(t)
+	syncs, _ := SyncMockFactory(1, conf, t.Name(), memoryDB, newMockPoetDb)
+	sync := syncs[0]
+	sync.currentLayer = 3
+	lv := &mockTimedValidator{1 * time.Second, 0}
+	sync.lValidator = lv
+	sync.AddBlock(types.NewExistingBlock(types.BlockID(1), 1, nil))
+	sync.AddBlock(types.NewExistingBlock(types.BlockID(2), 2, nil))
+	sync.AddBlock(types.NewExistingBlock(types.BlockID(3), 3, nil))
+	f := sync.getSyncRoutine()
+	go f()
+	time.Sleep(100 * time.Millisecond)
+	f()
+	time.Sleep(100 * time.Millisecond) // handle go routine race
+	r.Equal(1, lv.calls)
 }

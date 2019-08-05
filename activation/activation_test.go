@@ -155,7 +155,7 @@ func (n *FaultyNetMock) Broadcast(id string, d []byte) error {
 // ========== Helper functions ==========
 
 func newActivationDb() *ActivationDb {
-	return NewActivationDb(database.NewMemDatabase(), database.NewMemDatabase(), &MockIdStore{}, mesh.NewMemMeshDB(lg.WithName("meshDB")), layersPerEpoch, &ValidatorMock{}, lg.WithName("atxDB"))
+	return NewActivationDb(database.NewMemDatabase(), &MockIdStore{}, mesh.NewMemMeshDB(lg.WithName("meshDB")), layersPerEpoch, &ValidatorMock{}, lg.WithName("atxDB"))
 }
 
 func isSynced(b bool) func() bool {
@@ -181,10 +181,11 @@ func newAtx(challenge types.NIPSTChallenge, ActiveSetSize uint32, View []types.B
 			NIPSTChallenge: challenge,
 			Coinbase:       coinbase,
 			ActiveSetSize:  ActiveSetSize,
-			View:           View,
 		},
 		Nipst: nipst,
+		View:  View,
 	}
+	activationTx.CalcAndSetId()
 	return activationTx
 }
 
@@ -206,8 +207,8 @@ func lastTransmittedAtx(t *testing.T) (atx types.ActivationTx) {
 	return atx
 }
 
-func assertLastAtx(r *require.Assertions, posAtx, prevAtx *types.ActivationTx, layersPerEpoch uint16) {
-	atx, err := types.BytesAsAtx(net.lastTransmission)
+func assertLastAtx(r *require.Assertions, posAtx, prevAtx *types.ActivationTxHeader, layersPerEpoch uint16) {
+	atx, err := types.BytesAsAtx(net.lastTransmission, nil)
 	r.NoError(err)
 
 	r.Equal(nodeId, atx.NodeId)
@@ -263,7 +264,7 @@ func TestBuilder_PublishActivationTx_HappyFlow(t *testing.T) {
 	published, err := publishAtx(b, postGenesisEpochLayer+1, postGenesisEpoch, layersPerEpoch)
 	r.NoError(err)
 	r.True(published)
-	assertLastAtx(r, prevAtx, prevAtx, layersPerEpoch)
+	assertLastAtx(r, &prevAtx.ActivationTxHeader, &prevAtx.ActivationTxHeader, layersPerEpoch)
 }
 
 func TestBuilder_PublishActivationTx_NoPrevATX(t *testing.T) {
@@ -283,7 +284,7 @@ func TestBuilder_PublishActivationTx_NoPrevATX(t *testing.T) {
 	published, err := publishAtx(b, postGenesisEpochLayer+1, postGenesisEpoch, layersPerEpoch)
 	r.NoError(err)
 	r.True(published)
-	assertLastAtx(r, posAtx, nil, layersPerEpoch)
+	assertLastAtx(r, &posAtx.ActivationTxHeader, nil, layersPerEpoch)
 }
 
 func TestBuilder_PublishActivationTx_FailsWhenNoPosAtx(t *testing.T) {
@@ -341,7 +342,7 @@ func TestBuilder_PublishActivationTx_DoesNotPublish2AtxsInSameEpoch(t *testing.T
 	published, err := publishAtx(b, postGenesisEpochLayer+1, postGenesisEpoch, layersPerEpoch)
 	r.NoError(err)
 	r.True(published)
-	assertLastAtx(r, prevAtx, prevAtx, layersPerEpoch)
+	assertLastAtx(r, &prevAtx.ActivationTxHeader, &prevAtx.ActivationTxHeader, layersPerEpoch)
 
 	// assert that another ATX cannot be published
 	published, err = publishAtx(b, postGenesisEpochLayer+1, postGenesisEpoch, layersPerEpoch) // 👀
@@ -380,7 +381,7 @@ func TestBuilder_PublishActivationTx_Serialize(t *testing.T) {
 
 	bt, err := types.AtxAsBytes(act)
 	assert.NoError(t, err)
-	a, err := types.BytesAsAtx(bt)
+	a, err := types.BytesAsAtx(bt, nil)
 	assert.NoError(t, err)
 	bt2, err := types.AtxAsBytes(a)
 	assert.Equal(t, bt, bt2)
@@ -402,7 +403,7 @@ func TestBuilder_PublishActivationTx_PosAtxOnSameLayerAsPrevAtx(t *testing.T) {
 
 	challenge := newChallenge(nodeId, 1, prevAtxId, prevAtxId, postGenesisEpochLayer+3)
 	prevATX := newAtx(challenge, 5, defaultView, npst)
-	b.prevATX = prevATX
+	b.prevATX = &prevATX.ActivationTxHeader
 
 	published, err := publishAtx(b, postGenesisEpochLayer+4, postGenesisEpoch, layersPerEpoch)
 	r.NoError(err)
@@ -414,7 +415,7 @@ func TestBuilder_PublishActivationTx_PosAtxOnSameLayerAsPrevAtx(t *testing.T) {
 	posAtx, err := activationDb.GetAtx(newAtx.PositioningAtx)
 	r.NoError(err)
 
-	assertLastAtx(r, posAtx, prevATX, layersPerEpoch)
+	assertLastAtx(r, posAtx, &prevATX.ActivationTxHeader, layersPerEpoch)
 
 	t.Skip("proves https://github.com/spacemeshos/go-spacemesh/issues/1166")
 	// check pos & prev has the same PubLayerIdx
@@ -430,7 +431,7 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	layersPerEpoch := uint16(10)
 	lg := log.NewDefault(id.Key[:5])
 	db := NewMockDB()
-	activationDb := NewActivationDb(database.NewMemDatabase(), database.NewMemDatabase(), &MockIdStore{}, mesh.NewMemMeshDB(lg.WithName("meshDB")), layersPerEpoch, &ValidatorMock{}, lg.WithName("atxDB1"))
+	activationDb := NewActivationDb(database.NewMemDatabase(), &MockIdStore{}, mesh.NewMemMeshDB(lg.WithName("meshDB")), layersPerEpoch, &ValidatorMock{}, lg.WithName("atxDB1"))
 	b := NewBuilder(id, coinbase, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, nil, func() bool { return true }, db, lg.WithName("atxBuilder"))
 	prevAtx := types.AtxId{Hash: common.HexToHash("0x111")}
 	chlng := common.HexToHash("0x3333")

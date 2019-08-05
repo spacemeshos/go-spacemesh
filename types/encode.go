@@ -63,34 +63,17 @@ func AtxAsBytes(tx *ActivationTx) ([]byte, error) {
 	return w.Bytes(), nil
 }
 
-func BytesAsAtx(b []byte) (*ActivationTx, error) {
+func BytesAsAtx(b []byte, id *AtxId) (*ActivationTx, error) {
 	buf := bytes.NewReader(b)
-	atx := ActivationTx{
-		ActivationTxHeader: ActivationTxHeader{
-			NIPSTChallenge: NIPSTChallenge{
-				NodeId: NodeId{
-					Key:          "",
-					VRFPublicKey: nil,
-				},
-				Sequence: 0,
-				PrevATXId: AtxId{
-					Hash: common.Hash{},
-				},
-				PubLayerIdx: 0,
-				StartTick:   0,
-				EndTick:     0,
-				PositioningAtx: AtxId{
-					Hash: common.Hash{},
-				},
-			},
-			ActiveSetSize: 0,
-			View:          nil,
-		},
-		Nipst: nil,
-	}
+	var atx ActivationTx
 	_, err := xdr.Unmarshal(buf, &atx)
 	if err != nil {
 		return nil, err
+	}
+	if id == nil {
+		atx.CalcAndSetId()
+	} else {
+		atx.SetId(id)
 	}
 	return &atx, nil
 }
