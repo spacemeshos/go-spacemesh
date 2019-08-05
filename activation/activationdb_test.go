@@ -544,6 +544,15 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	atx = types.NewActivationTx(idx1, coinbase, 1, prevAtx.Id(), 12, 0, prevAtx.Id(), 3, []types.BlockID{}, &types.NIPST{})
 	err = atxdb.ContextuallyValidateAtx(&atx.ActivationTxHeader)
 	assert.EqualError(t, err, "last atx is not the one referenced")
+
+	//prev atx declared but not found
+	err = atxdb.StoreAtx(1, atx)
+	assert.NoError(t, err)
+	atx = types.NewActivationTx(idx1, coinbase, 1, prevAtx.Id(), 12, 0, prevAtx.Id(), 3, []types.BlockID{}, &types.NIPST{})
+	err = atxdb.atxs.Delete(getNodeIdKey(atx.NodeId))
+	assert.NoError(t, err)
+	err = atxdb.ContextuallyValidateAtx(&atx.ActivationTxHeader)
+	assert.EqualError(t, err, "could not fetch node last ATX: leveldb: not found")
 }
 
 func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
