@@ -18,6 +18,7 @@ from elasticsearch_dsl import Search, Q
 from tests.misc import ContainerSpec, CoreV1ApiClient
 from tests.queries import ES
 from tests.hare.assert_hare import validate_hare
+import pprint
 
 from tests.ed25519.eddsa import genkeypair
 
@@ -391,10 +392,11 @@ def test_transaction(setup_network):
 
 
 def test_transactions(setup_network):
+
+    DEBUG = False
+
     tap_init_amount  = 10000
     tap = "7be017a967db77fd10ac7c891b3d6d946dea7e3e14756e2f0f9e09b9663f0d9c"
-
-    tapnonce = 0
 
     tx_cost = 3 #.Mul(trans.GasPrice, tp.gasCost.BasicTxCost)
 
@@ -405,61 +407,71 @@ def test_transactions(setup_network):
     accounts = { tap: { "priv": "81c90dd832e18d1cf9758254327cb3135961af6688ac9c2a8c5d71f73acc5ce5", "nonce": 0, "send": [], "recv": [] } }
 
     def random_node():
-        rnd = random.randint(0, len(setup_network.clients.pods)-1)
-        return setup_network.clients.pods[rnd]['pod_ip'], setup_network.clients.pods[rnd]['name']
+        # rnd = random.randint(0, len(setup_network.clients.pods)-1)
+        return setup_network.clients.pods[0]['pod_ip'], setup_network.clients.pods[0]['name']
 
     def expected_balance(acc):
-        return sum([int(tx["amount"]) for tx in accounts[acc]["recv"]]) - sum(int(int(tx["amount"]) + (int(tx["gasprice"])*tx_cost)) for tx in accounts[acc]["send"])
+        balance = sum([int(tx["amount"]) for tx in accounts[acc]["recv"]]) - sum(int(int(tx["amount"]) + (int(tx["gasprice"])*tx_cost)) for tx in accounts[acc]["send"])
+        if DEBUG:
+            print("balance calculated for {0}, {1}, everything: {2}", acc, balance, pprint.pformat(accounts[acc]))
+        return balance
 
-    def random_acconut():
-        pk, info = random.choice(list(accounts.keys()))
-        return pk, info
+    def random_account():
+        pk = random.choice(list(accounts.keys()))
+        return pk
 
     def new_account():
         priv, pub = genkeypair()
         strpub = bytes.hex(pub)
-        accounts[strpub] = { "priv": priv, "nonce": 0, "recv": [], "send": [] }
+        accounts[strpub] = { "priv": bytes.hex(priv), "nonce": 0, "recv": [], "send": [] }
         return strpub
 
     def transfer(frm, to, amount=None, gasprice=None, gaslimit=None):
         pod_ip, pod_name = random_node()
         txGen = tx_generator.TxGenerator(pub=frm, pri=accounts[frm]['priv'])
         if amount is None:
-            amount = random.randint(1, expected_balance(frm))
+            amount = random.randint(1, expected_balance(frm) - (1*tx_cost) )
         if gasprice is None:
-            gasprice = int(amount/10)
+            gasprice = 1
         if gaslimit is None:
             gaslimit = gasprice+1
         txBytes = txGen.generate(to, accounts[frm]['nonce'], gaslimit, gasprice, amount)
-        accounts[frm]['nonce']+=1
+        accounts[frm]['nonce'] += 1
         data = '{"tx":'+ str(list(txBytes)) + '}'
-        out = api_call(pod_ip, data, submitapi, testconfig['namespace'])
         print("submit transaction from {3} to {0} of {1} with gasprice {2}".format(to, amount, gasprice, frm))
-        print(data)
-        print(out)
+        out = api_call(pod_ip, data, submitapi, testconfig['namespace'])
+        if DEBUG:
+            print(data)
+            print(out)
         if "{'value': 'ok'}" in out:
-            accounts[to]["recv"].append({ "from": txGen.publicK, "amount": amount, "gasprice": gasprice})
+            accounts[to]["recv"].append({ "from": bytes.hex(txGen.publicK), "amount": amount, "gasprice": gasprice})
             accounts[frm]["send"].append({"to": to, "amount": amount, "gasprice": gasprice})
             return True
+        if DEBUG:
+            print("THE ERROR")
+            print(out)
+            print('/THE ERROR')
         return False
 
-    def test_account(acc, init_amount=None):
+    def test_account(acc, init_amount=0):
         pod_ip, pod_name = random_node()
         #check nonce
-        data = '{"address":"'+ tap +'"}'
+        data = '{"address":"'+ acc +'"}'
         print("checking {0} nonce".format(acc))
         out = api_call(pod_ip, data, nonceapi, testconfig['namespace'])
-        print(out)
+        if DEBUG:
+            print(out)
         if str(accounts[acc]['nonce']) in out:
             # check balance
             data = '{"address":"' + str(acc) + '"}'
-            print(data)
+            if DEBUG:
+                print(data)
             out = api_call(pod_ip, data, balanceapi, testconfig['namespace'])
-            print(out)
-            balance = 0
-            if init_amount is not None:
-                balance += init_amount
+            if DEBUG:
+                print(out)
+            balance = init_amount
             balance = balance + expected_balance(acc)
+            print("expecting balance: {0}".format(balance))
             if "{'value': '" + str(balance) + "'}" in out:
                 print( "{0}, balance ok ({1})".format(str(acc), out))
                 return True
@@ -473,17 +485,17 @@ def test_transactions(setup_network):
         pod_ip, pod_name = random_node()
         print(str("Sending tx from client: {0}/{1}").format(pod_name, pod_ip))
         balance = tap_init_amount + expected_balance(tap)
-        if balance < 10:
+        if balance < 10: # Stop sending if the tap is out of money
             break
-        amount = random.randint(1, tap_init_amount + balance)
+        amount = random.randint(1, int(balance/2))
         strpub = new_account()
-        assert transfer(tap, strpub, amount=amount)
-
-    start = end = time.time()
+        print("TAP NONCE {0}".format(accounts[tap]['nonce']))
+        assert transfer(tap, strpub, amount=amount), "Transfer from tap failed"
+        print("TAP NONCE {0}".format(accounts[tap]['nonce']))
 
     ready = 0
-
     for x in range(int(testconfig['client']['args']['layers-per-epoch'])*2): # wait for two epochs (genesis)
+        ready = 0
         print("...")
         time.sleep(float(testconfig['client']['args']['layer-duration-sec']))
         print("checking tap nonce")
@@ -494,50 +506,59 @@ def test_transactions(setup_network):
                     continue
                 print("checking account")
                 print(pk)
-                assert test_account(pk)
+                assert test_account(pk), "account {0} didn't have the expected nonce and balance".format(pk)
                 ready+=1
+            break
+    assert ready == len(accounts)-1, "Not all accounts received sent txs" # one for 0 counting and one for tap.
 
-    assert ready == len(accounts)-1
 
-    end = time.time()
-    print("test took {:.3f} seconds ".format(end - start))
+    def is_there_a_valid_acc(min_balance, excpect=[]):
+        for acc in accounts:
+            if expected_balance(acc) - 1*tx_cost > min_balance and acc not in excpect:
+                return True
+        return False
 
-    ## IF LOGEVITY
+    ## IF LOGEVITY THE CODE BELOW SHOULD RUN FOREVER
 
-    TEST_TXS2 = 100
-
+    TEST_TXS2 = 10
+    newaccounts = []
     for i in range(TEST_TXS2):
+        if not is_there_a_valid_acc(100, newaccounts):
+            break
+
         pod_ip, pod_name = random_node()
         print("Sending tx from client: {0}/{1}".format(pod_name, pod_ip))
         if i % 2 == 0:
-
             # create new acc
-            acc, acc_info = random_acconut()
+            acc = random_account()
+            while acc in newaccounts or expected_balance(acc) < 100:
+                acc = random_account()
+
             pub = new_account()
-            assert transfer(acc, pub)
+            newaccounts.append(pub)
+            assert transfer(acc, pub), "Transfer from {0} to {1} (new account) failed".format(acc, pub)
         else:
-            accfrom, accfrom_info = random_acconut()
-            accto, accto_info = random_acconut()
-            while accfrom == accto:
-                accfrom, accfrom_info = random_acconut()
-                accto, accto_info = random_acconut()
+            accfrom = random_account()
+            accto = random_account()
+            while accfrom == accto or accfrom in newaccounts or expected_balance(accfrom) < 100:
+                accfrom = random_account()
+                accto = random_account()
+            assert transfer(accfrom, accto), "Transfer from {0} to {1} failed".format(accfrom, accto)
 
-            assert transfer(accfrom, accto)
+    ready = 0
 
-    for x in range(int(testconfig['client']['args']['layers-per-epoch'])*2):
+    for x in range(int(testconfig['client']['args']['layers-per-epoch'])*3):
         time.sleep(float(testconfig['client']['args']['layer-duration-sec']))
+        print("...")
         ready = 0
         for pk in accounts:
-            if test_account(pk):
+            if test_account(pk, init_amount=tap_init_amount if pk is tap else 0):
                 ready+=1
 
-        if ready == len(accounts)-1:
+        if ready == len(accounts):
             break
 
-    assert ready == len(accounts)-1
-
-    end = time.time()
-    print("test took {:.3f} seconds ".format(end - start))
+    assert ready == len(accounts), "Not all accounts got the sent txs got: {0}, want: {1}".format(ready, len(accounts)-1)
 
 
 def test_mining(setup_network):
