@@ -71,7 +71,7 @@ type ATXDBMock struct {
 	activeSet uint32
 }
 
-func (mock *ATXDBMock) CalcActiveSetFromView(a *types.ActivationTx) (uint32, error) {
+func (mock *ATXDBMock) CalcActiveSetFromView(view []types.BlockID, pubEpoch types.EpochId) (uint32, error) {
 	return mock.activeSet, nil
 }
 
@@ -237,7 +237,7 @@ func Test_CalcActiveSetFromView(t *testing.T) {
 	blocks = createLayerWithAtx(t, layers, 100, 10, []*types.ActivationTx{}, blocks, blocks)
 
 	atx := types.NewActivationTx(id1, coinbase1, 1, atxs[0].Id(), 1000, 0, atxs[0].Id(), 3, blocks, &types.NIPST{})
-	num, err := atxdb.CalcActiveSetFromView(atx)
+	num, err := atxdb.CalcActiveSetFromView(atx.View, atx.PubLayerIdx.GetEpoch(layersPerEpochBig))
 	assert.NoError(t, err)
 	assert.Equal(t, 3, int(num))
 
@@ -273,17 +273,17 @@ func Test_CalcActiveSetFromView(t *testing.T) {
 		return view[i] > view[j] // sort the view in the wrong order
 	})
 	atx2 := types.NewActivationTx(id3, coinbase3, 0, *types.EmptyAtxId, 1435, 0, *types.EmptyAtxId, 6, view, &types.NIPST{})
-	num, err = atxdb.CalcActiveSetFromView(atx2)
+	num, err = atxdb.CalcActiveSetFromView(atx2.View, atx2.PubLayerIdx.GetEpoch(layersPerEpochBig))
 	assert.NoError(t, err)
 	assert.Equal(t, 3, int(num))
 
 	// put a fake value in the cache and ensure that it's used
-	viewHash, err := calcSortedViewHash(atx2)
+	viewHash, err := calcSortedViewHash(atx2.View)
 	assert.NoError(t, err)
 	activesetCache.Purge()
 	activesetCache.put(viewHash, 8)
 
-	num, err = atxdb.CalcActiveSetFromView(atx2)
+	num, err = atxdb.CalcActiveSetFromView(atx2.View, atx2.PubLayerIdx.GetEpoch(layersPerEpochBig))
 	assert.NoError(t, err)
 	assert.Equal(t, 8, int(num))
 
@@ -296,7 +296,7 @@ func Test_CalcActiveSetFromView(t *testing.T) {
 	activesetCache.Purge()
 	activesetCache.put(viewHash, 8)
 
-	num, err = atxdb.CalcActiveSetFromView(atx2)
+	num, err = atxdb.CalcActiveSetFromView(atx2.View, atx2.PubLayerIdx.GetEpoch(layersPerEpochBig))
 	assert.NoError(t, err)
 	assert.Equal(t, 3, int(num))
 }
@@ -370,7 +370,7 @@ func Test_Wrong_CalcActiveSetFromView(t *testing.T) {
 	blocks = createLayerWithAtx(t, layers, 100, 10, []*types.ActivationTx{}, blocks, blocks)
 
 	atx := types.NewActivationTx(id1, coinbase1, 1, atxs[0].Id(), 1000, 0, atxs[0].Id(), 20, blocks, &types.NIPST{})
-	num, err := atxdb.CalcActiveSetFromView(atx)
+	num, err := atxdb.CalcActiveSetFromView(atx.View, atx.PubLayerIdx.GetEpoch(layersPerEpoch))
 	assert.NoError(t, err)
 	assert.NotEqual(t, 20, int(num))
 
@@ -406,16 +406,10 @@ func TestMesh_processBlockATXs(t *testing.T) {
 	for _, t := range atxs {
 		atxdb.ProcessAtx(t)
 	}
-	i, err := atxdb.ActiveSetSize(1)
-	assert.NoError(t, err)
-	assert.Equal(t, uint32(3), i)
 
 	atxdb.ProcessAtx(atxs[0])
 	atxdb.ProcessAtx(atxs[1])
 	atxdb.ProcessAtx(atxs[2])
-	activeSetSize, err := atxdb.ActiveSetSize(1)
-	assert.NoError(t, err)
-	assert.Equal(t, 3, int(activeSetSize))
 
 	// check that further atxs dont affect current epoch count
 	atxs2 := []*types.ActivationTx{
@@ -431,13 +425,6 @@ func TestMesh_processBlockATXs(t *testing.T) {
 	for _, t := range atxs2 {
 		atxdb.ProcessAtx(t)
 	}
-
-	activeSetSize, err = atxdb.ActiveSetSize(1)
-	assert.NoError(t, err)
-	assert.Equal(t, 3, int(activeSetSize))
-	activeSetSize, err = atxdb.ActiveSetSize(2)
-	assert.NoError(t, err)
-	assert.Equal(t, 3, int(activeSetSize))
 }
 
 func TestActivationDB_ValidateAtx(t *testing.T) {
