@@ -3,6 +3,7 @@ package node
 import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/address"
+	"github.com/spacemeshos/go-spacemesh/amcl"
 	"github.com/spacemeshos/go-spacemesh/amcl/BLS381"
 	"github.com/spacemeshos/go-spacemesh/api"
 	apiCfg "github.com/spacemeshos/go-spacemesh/api/config"
@@ -83,60 +84,59 @@ func (suite *AppTestSuite) TearDownTest() {
 	}
 }
 
-var runningName = 'a'
 var net = service.NewSimulator()
 
-func (suite *AppTestSuite) initMultipleInstances(numOfInstances int, numOfTotalInstances int, storeFormat string, genesisTime string, poetClient *nipst.RPCPoetClient) {
+func (suite *AppTestSuite) initSingleInstance(i int, genesisTime string, rng *amcl.RAND, storeFormat string, name string, rolacle *eligibility.FixedRolacle, poetClient *nipst.RPCPoetClient) {
 	r := require.New(suite.T())
 
-	rolacle := eligibility.New()
-	rng := BLS381.DefaultSeed()
+	smApp := NewSpacemeshApp()
+
+	smApp.Config.POST = nipst.DefaultConfig()
+	smApp.Config.POST.Difficulty = 5
+	smApp.Config.POST.NumProvenLabels = 10
+	smApp.Config.POST.SpacePerUnit = 1 << 10 // 1KB.
+	smApp.Config.POST.FileSize = 1 << 10     // 1KB.
+
+	smApp.Config.HARE.N = 6
+	smApp.Config.HARE.F = 2
+	smApp.Config.HARE.RoundDuration = 3
+	smApp.Config.HARE.WakeupDelta = 10
+	smApp.Config.HARE.ExpectedLeaders = 5
+	smApp.Config.CoinbaseAccount = strconv.Itoa(i + 1)
+	smApp.Config.LayerAvgSize = 6
+	smApp.Config.LayersPerEpoch = 3
+	smApp.Config.Hdist = 5
+	smApp.Config.GenesisTime = genesisTime
+
+	edSgn := signing.NewEdSigner()
+	pub := edSgn.PublicKey()
+
+	vrfPriv, vrfPub := BLS381.GenKeyPair(rng)
+	vrfSigner := BLS381.NewBlsSigner(vrfPriv)
+	nodeID := types.NodeId{Key: pub.String(), VRFPublicKey: vrfPub}
+
+	swarm := net.NewNode()
+	dbStorepath := storeFormat + name
+
+	hareOracle := oracle.NewLocalOracle(rolacle, 6, nodeID)
+	hareOracle.Register(true, pub.String())
+
+	postClient := nipst.NewPostClient(&smApp.Config.POST)
+
+	err := smApp.initServices(nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(smApp.Config.LayerAvgSize), postClient, poetClient, vrfSigner, uint16(smApp.Config.LayersPerEpoch))
+	r.NoError(err)
+	smApp.setupGenesis()
+
+	suite.apps = append(suite.apps, smApp)
+	suite.dbs = append(suite.dbs, dbStorepath)
+}
+
+func (suite *AppTestSuite) initMultipleInstances(rolacle *eligibility.FixedRolacle, rng *amcl.RAND, numOfInstances int, numOfTotalInstances int, storeFormat string, genesisTime string, poetClient *nipst.RPCPoetClient) {
+	name := 'a'
 	for i := 0; i < numOfInstances; i++ {
-		smApp := NewSpacemeshApp()
-
-		smApp.Config.POST = nipst.DefaultConfig()
-		smApp.Config.POST.Difficulty = 5
-		smApp.Config.POST.NumProvenLabels = 10
-		smApp.Config.POST.SpacePerUnit = 1 << 10 // 1KB.
-		smApp.Config.POST.FileSize = 1 << 10     // 1KB.
-
-		smApp.Config.HARE.N = numOfTotalInstances
-		smApp.Config.HARE.F = numOfTotalInstances / 2
-		smApp.Config.HARE.RoundDuration = 3
-		smApp.Config.HARE.WakeupDelta = 10
-		smApp.Config.HARE.ExpectedLeaders = 5
-		smApp.Config.CoinbaseAccount = strconv.Itoa(i + 1)
-		smApp.Config.LayerAvgSize = numOfInstances
-		smApp.Config.LayersPerEpoch = 3
-		smApp.Config.Hdist = 5
-		smApp.Config.GenesisTime = genesisTime
-
-		edSgn := signing.NewEdSigner()
-		pub := edSgn.PublicKey()
-
-		vrfPriv, vrfPub := BLS381.GenKeyPair(rng)
-		vrfSigner := BLS381.NewBlsSigner(vrfPriv)
-		nodeID := types.NodeId{Key: pub.String(), VRFPublicKey: vrfPub}
-
-		swarm := net.NewNode()
-		dbStorepath := storeFormat + string(runningName)
-
-		hareOracle := oracle.NewLocalOracle(rolacle, numOfInstances, nodeID)
-		hareOracle.Register(true, pub.String())
-
-		layerSize := numOfInstances
-
-		postClient := nipst.NewPostClient(&smApp.Config.POST)
-
-		err := smApp.initServices(nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(layerSize), postClient, poetClient, vrfSigner, uint16(smApp.Config.LayersPerEpoch))
-		r.NoError(err)
-		smApp.setupGenesis()
-
-		suite.apps = append(suite.apps, smApp)
-		suite.dbs = append(suite.dbs, dbStorepath)
-		runningName++
+		suite.initSingleInstance(i, genesisTime, rng, storeFormat, string(name), rolacle, poetClient)
+		name++
 	}
-	activateGrpcServer(suite.apps[0])
 }
 
 func activateGrpcServer(smApp *SpacemeshApp) {
@@ -170,14 +170,20 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	}
 	suite.poetCleanup = poetClient.CleanUp
 
-	suite.initMultipleInstances(5, 6, path, genesisTime, poetClient)
+	rolacle := eligibility.New()
+	rng := BLS381.DefaultSeed()
+
+	suite.initMultipleInstances(rolacle, rng, 5, 6, path, genesisTime, poetClient)
 	for _, a := range suite.apps {
 		a.startServices()
 	}
 
+	activateGrpcServer(suite.apps[0])
+
 	go func() {
-		<-time.After(75 * time.Second)
-		suite.initMultipleInstances(1, 6, path, genesisTime, poetClient)
+		threeAndAHalfLayer := float32(suite.apps[0].Config.LayerDurationSec) * float32(3.5)
+		<-time.After(time.Duration(threeAndAHalfLayer) * time.Second)
+		suite.initSingleInstance(7, genesisTime, rng, path, "g", rolacle, poetClient)
 		suite.apps[len(suite.apps)-1].startServices()
 	}()
 
