@@ -47,6 +47,13 @@ func (m mockTxProcessor) ValidateTransactionSignature(tx *types.SerializableSign
 }
 
 func ListenerFactory(serv service.Service, peers p2p.Peers, name string, layer types.LayerID) *BlockListener {
+	sync := SyncFactory(name, serv)
+	sync.Peers = peers
+	nbl := NewBlockListener(serv, sync, 2, log.New(name, "", ""))
+	return nbl
+}
+
+func SyncFactory(name string, serv service.Service) *Syncer {
 	tick := 20 * time.Second
 	layout := "2006-01-02T15:04:05.000Z"
 	str := "2018-11-12T11:45:26.371Z"
@@ -56,9 +63,7 @@ func ListenerFactory(serv service.Service, peers p2p.Peers, name string, layer t
 	poetDb := activation.NewPoetDb(database.NewMemDatabase(), l.WithName("poetDb"))
 	blockValidator := NewBlockValidator(BlockEligibilityValidatorMock{})
 	sync := NewSync(serv, getMesh(memoryDB, name), miner.NewTypesTransactionIdMemPool(), miner.NewTypesAtxIdMemPool(), mockTxProcessor{}, blockValidator, poetDb, conf, ts, l)
-	sync.Peers = peers
-	nbl := NewBlockListener(serv, sync, 2, log.New(name, "", ""))
-	return nbl
+	return sync
 }
 
 func TestBlockListener(t *testing.T) {
