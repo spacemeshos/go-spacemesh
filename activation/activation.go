@@ -378,8 +378,8 @@ func (b *Builder) GetPrevAtxId(node types.NodeId) (types.AtxId, error) {
 	return id, nil
 }
 
-// GetPositioningAtxId returns a randomly selected atx from the provided epoch epochId
-// it returns an error if epochs were not found in db
+// GetPositioningAtxId returns the top ATX (highest layer number) from the provided epoch epochId.
+// It returns an error if the top ATX is from a different epoch.
 func (b *Builder) GetPositioningAtxId(epochId types.EpochId) (*types.AtxId, error) {
 	//todo: make this on blocking until an atx is received
 	atxId, err := b.db.GetPosAtxId(epochId)
