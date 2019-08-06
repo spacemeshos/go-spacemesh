@@ -26,7 +26,6 @@ type MeshDB struct {
 	transactions       database.DB
 	contextualValidity database.DB //map blockId to contextualValidation state of block
 	orphanBlocks       map[types.LayerID]map[types.BlockID]struct{}
-	orphanBlockCount   int32
 	layerMutex         map[types.LayerID]*layerMutex
 	lhMutex            sync.Mutex
 }

@@ -106,6 +106,14 @@ func (s *stateMock) ValidateTransactionSignature(tx *types.SerializableSignedTra
 	return address.Address{}, nil
 }
 
+type mockBlocksProvider struct {
+	mp map[types.BlockID]struct{}
+}
+
+func (mbp mockBlocksProvider) GetGoodPatternBlocks(layer types.LayerID) (map[types.BlockID]struct{}, error) {
+	return nil, errors.New("not implemented")
+}
+
 var rewardConf = mesh.Config{
 	big.NewInt(10),
 	big.NewInt(5000),
