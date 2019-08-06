@@ -12,7 +12,6 @@ import (
 	"math/big"
 	"sort"
 	"sync"
-	"sync/atomic"
 )
 
 const (
@@ -347,13 +346,14 @@ func (m *Mesh) handleOrphanBlocks(blk *types.BlockHeader) {
 	}
 	m.orphanBlocks[blk.Layer()][blk.ID()] = struct{}{}
 	m.Info("Added block %d to orphans", blk.ID())
-	atomic.AddInt32(&m.orphanBlockCount, 1)
 	for _, b := range blk.ViewEdges {
-		for _, layermap := range m.orphanBlocks {
+		for layerId, layermap := range m.orphanBlocks {
 			if _, has := layermap[b]; has {
 				m.Log.Debug("delete block ", b, "from orphans")
 				delete(layermap, b)
-				atomic.AddInt32(&m.orphanBlockCount, -1)
+				if len(layermap) == 0 {
+					delete(m.orphanBlocks, layerId)
+				}
 				break
 			}
 		}
