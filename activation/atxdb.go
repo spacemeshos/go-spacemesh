@@ -13,7 +13,6 @@ import (
 	"sync"
 )
 
-const CounterKey = 0xaaaa
 const topAtxKey = "topAtxKey"
 
 type ActivationDb struct {
@@ -126,7 +125,7 @@ func (db *ActivationDb) CalcActiveSetSize(epoch types.EpochId, blocks map[types.
 		return nil, errors.New("tried to retrieve active set for epoch 0")
 	}
 
-	firstLayerOfPrevEpoch := types.LayerID(epoch-1) * types.LayerID(db.LayersPerEpoch)
+	firstLayerOfPrevEpoch := (epoch - 1).FirstLayer(db.LayersPerEpoch)
 
 	countedAtxs := make(map[string]types.AtxId)
 	penalties := make(map[string]struct{})
@@ -149,8 +148,8 @@ func (db *ActivationDb) CalcActiveSetSize(epoch types.EpochId, blocks map[types.
 // CalcActiveSetFromView traverses the view found in a - the activation tx and counts number of active ids published
 // in the epoch prior to the epoch that a was published at, this number is the number of active ids in the next epoch
 // the function returns error if the view is not found
-func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, error) {
-	viewHash, err := calcSortedViewHash(a)
+func (db *ActivationDb) CalcActiveSetFromView(view []types.BlockID, pubEpoch types.EpochId) (uint32, error) {
+	viewHash, err := calcSortedViewHash(view)
 	if err != nil {
 		return 0, fmt.Errorf("failed to calc sorted view hash: %v", err)
 	}
@@ -159,13 +158,12 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 		return count, nil
 	}
 
-	pubEpoch := a.PubLayerIdx.GetEpoch(db.LayersPerEpoch)
 	if pubEpoch < 1 {
 		return 0, fmt.Errorf("publication epoch cannot be less than 1, found %v", pubEpoch)
 	}
 
 	mp := map[types.BlockID]struct{}{}
-	for _, blk := range a.View {
+	for _, blk := range view {
 		mp[blk] = struct{}{}
 	}
 
@@ -179,9 +177,9 @@ func (db *ActivationDb) CalcActiveSetFromView(a *types.ActivationTx) (uint32, er
 
 }
 
-func calcSortedViewHash(atx *types.ActivationTx) ([32]byte, error) {
-	sortedView := make([]types.BlockID, len(atx.View))
-	copy(sortedView, atx.View)
+func calcSortedViewHash(view []types.BlockID) (common.Hash, error) {
+	sortedView := make([]types.BlockID, len(view))
+	copy(sortedView, view)
 	sort.Slice(sortedView, func(i, j int) bool {
 		return sortedView[i] < sortedView[j]
 	})
@@ -243,7 +241,7 @@ func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error 
 		}
 	}
 
-	activeSet, err := db.CalcActiveSetFromView(atx)
+	activeSet, err := db.CalcActiveSetFromView(atx.View, atx.PubLayerIdx.GetEpoch(db.LayersPerEpoch))
 	if err != nil && !atx.PubLayerIdx.GetEpoch(db.LayersPerEpoch).IsGenesis() {
 		return fmt.Errorf("could not calculate active set for ATX %v", atx.ShortId())
 	}
@@ -317,10 +315,6 @@ func (db *ActivationDb) StoreAtx(ech types.EpochId, atx *types.ActivationTx) err
 		return err
 	}
 
-	err = db.incValidAtxCounter(ech)
-	if err != nil {
-		return err
-	}
 	err = db.addAtxToNodeId(atx.NodeId, atx)
 	if err != nil {
 		return err
@@ -341,34 +335,6 @@ func (db *ActivationDb) storeAtxUnlocked(atx *types.ActivationTx) error {
 		return err
 	}
 	return nil
-}
-
-func epochCounterKey(ech types.EpochId) []byte {
-	return append(ech.ToBytes(), common.Uint64ToBytes(uint64(CounterKey))...)
-}
-
-// incValidAtxCounter increases the number of active ids seen for epoch ech. Use only under db.lock.
-func (db *ActivationDb) incValidAtxCounter(ech types.EpochId) error {
-	key := epochCounterKey(ech)
-	val, err := db.atxs.Get(key)
-	if err != nil {
-		db.log.Debug("incrementing epoch %v ATX counter to 1", ech)
-		return db.atxs.Put(key, common.Uint32ToBytes(1))
-	}
-	db.log.Debug("incrementing epoch %v ATX counter to %v", ech, common.BytesToUint32(val)+1)
-	return db.atxs.Put(key, common.Uint32ToBytes(common.BytesToUint32(val)+1))
-}
-
-// ActiveSetSize returns the active set size stored in db for epoch ech
-func (db *ActivationDb) ActiveSetSize(epochId types.EpochId) (uint32, error) {
-	key := epochCounterKey(epochId)
-	db.RLock()
-	val, err := db.atxs.Get(key)
-	db.RUnlock()
-	if err != nil {
-		return 0, fmt.Errorf("could not fetch active set size from cache: %v", err)
-	}
-	return common.BytesToUint32(val), nil
 }
 
 type atxIdAndLayer struct {

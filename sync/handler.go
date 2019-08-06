@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -121,7 +122,8 @@ func newATxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 			if tx, err := s.atxpool.Get(t); err == nil {
 				atxs[t] = &tx
 			} else {
-				logger.Error("Error handling atx request message, with ids: %v", atxids)
+				logger.With().Error("error handling atx request message",
+					log.AtxId(t.ShortId()), log.String("atx_ids", fmt.Sprintf("%x", atxids)))
 				return nil
 			}
 		}
