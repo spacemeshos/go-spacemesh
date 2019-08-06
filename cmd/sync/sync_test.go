@@ -7,7 +7,6 @@ import (
 
 func TestSpacemeshApp_TestSyncCmd(t *testing.T) {
 	syncApp := NewSyncApp()
-	defer syncApp.sync.Close()
 	defer syncApp.Cleanup()
 	syncApp.Initialize(Cmd)
 	syncApp.Config.DataDir = "bin/data/"
