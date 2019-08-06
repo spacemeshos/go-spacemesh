@@ -9,8 +9,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/types"
+	"github.com/spacemeshos/sha256-simd"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"sort"
 	"testing"
 )
 
@@ -213,9 +215,12 @@ func newBuilder(activationDb ATXDBProvider) *Builder {
 func setActivesetSizeInCache(t *testing.T, activesetSize uint32) {
 	view, err := meshProvider.GetOrphanBlocksBefore(meshProvider.LatestLayer())
 	assert.NoError(t, err)
+	sort.Slice(view, func(i, j int) bool {
+		return view[i] < view[j]
+	})
 	v, err := types.ViewAsBytes(view)
 	assert.NoError(t, err)
-	activesetCache.put(common.BytesToHash(v), activesetSize)
+	activesetCache.put(sha256.Sum256(v), activesetSize)
 }
 
 func lastTransmittedAtx(t *testing.T) (atx types.ActivationTx) {
@@ -243,9 +248,9 @@ func assertLastAtx(r *require.Assertions, posAtx, prevAtx *types.ActivationTxHea
 	r.Equal(poetRef, atx.GetPoetProofRef())
 }
 
-func storeAtx(r *require.Assertions, activationDb *ActivationDb, atx *types.ActivationTx) {
+func storeAtx(r *require.Assertions, activationDb *ActivationDb, atx *types.ActivationTx, lg log.Log) {
 	epoch := atx.PubLayerIdx.GetEpoch(layersPerEpoch)
-	log.Info("stored ATX in epoch %v", epoch)
+	lg.Info("stored ATX in epoch %v", epoch)
 	err := activationDb.StoreAtx(epoch, atx)
 	r.NoError(err)
 }
@@ -275,7 +280,7 @@ func TestBuilder_PublishActivationTx_HappyFlow(t *testing.T) {
 
 	challenge := newChallenge(nodeId, 1, prevAtxId, prevAtxId, postGenesisEpochLayer)
 	prevAtx := newAtx(challenge, 5, defaultView, npst)
-	storeAtx(r, activationDb, prevAtx)
+	storeAtx(r, activationDb, prevAtx, log.NewDefault("storeAtx"))
 
 	// create and publish ATX
 	published, err := publishAtx(b, postGenesisEpochLayer+1, postGenesisEpoch, layersPerEpoch)
@@ -295,7 +300,7 @@ func TestBuilder_PublishActivationTx_NoPrevATX(t *testing.T) {
 
 	challenge := newChallenge(otherNodeId /*👀*/, 1, prevAtxId, prevAtxId, postGenesisEpochLayer)
 	posAtx := newAtx(challenge, 5, defaultView, npst)
-	storeAtx(r, activationDb, posAtx)
+	storeAtx(r, activationDb, posAtx, log.NewDefault("storeAtx"))
 
 	// create and publish ATX
 	published, err := publishAtx(b, postGenesisEpochLayer+1, postGenesisEpoch, layersPerEpoch)
@@ -315,7 +320,7 @@ func TestBuilder_PublishActivationTx_FailsWhenNoPosAtx(t *testing.T) {
 
 	challenge := newChallenge(otherNodeId /*👀*/, 1, prevAtxId, prevAtxId, postGenesisEpochLayer-layersPerEpoch /*👀*/)
 	posAtx := newAtx(challenge, 5, defaultView, npst)
-	storeAtx(r, activationDb, posAtx)
+	storeAtx(r, activationDb, posAtx, log.NewDefault("storeAtx"))
 
 	// create and publish ATX
 	published, err := publishAtx(b, postGenesisEpochLayer+1, postGenesisEpoch, layersPerEpoch)
@@ -334,7 +339,7 @@ func TestBuilder_PublishActivationTx_FailsWhenNoPosAtxButPrevAtxFromWrongEpochEx
 
 	challenge := newChallenge(nodeId, 1, prevAtxId, prevAtxId, postGenesisEpochLayer-layersPerEpoch /*👀*/)
 	prevAtx := newAtx(challenge, 5, defaultView, npst)
-	storeAtx(r, activationDb, prevAtx)
+	storeAtx(r, activationDb, prevAtx, log.NewDefault("storeAtx"))
 
 	// create and publish ATX
 	published, err := publishAtx(b, postGenesisEpochLayer+1, postGenesisEpoch, layersPerEpoch)
@@ -353,7 +358,7 @@ func TestBuilder_PublishActivationTx_DoesNotPublish2AtxsInSameEpoch(t *testing.T
 
 	challenge := newChallenge(nodeId, 1, prevAtxId, prevAtxId, postGenesisEpochLayer)
 	prevAtx := newAtx(challenge, 5, defaultView, npst)
-	storeAtx(r, activationDb, prevAtx)
+	storeAtx(r, activationDb, prevAtx, log.NewDefault("storeAtx"))
 
 	// create and publish ATX
 	published, err := publishAtx(b, postGenesisEpochLayer+1, postGenesisEpoch, layersPerEpoch)
@@ -377,7 +382,7 @@ func TestBuilder_PublishActivationTx_FailsWhenNipstBuilderFails(t *testing.T) {
 
 	challenge := newChallenge(otherNodeId /*👀*/, 1, prevAtxId, prevAtxId, postGenesisEpochLayer)
 	posAtx := newAtx(challenge, 5, defaultView, npst)
-	storeAtx(r, activationDb, posAtx)
+	storeAtx(r, activationDb, posAtx, log.NewDefault("storeAtx"))
 
 	published, err := publishAtx(b, postGenesisEpochLayer+1, postGenesisEpoch, layersPerEpoch)
 	r.EqualError(err, "cannot create nipst: nipst builder error")
@@ -421,7 +426,7 @@ func TestBuilder_PublishActivationTx_Serialize(t *testing.T) {
 	b := newBuilder(activationDb)
 
 	atx := types.NewActivationTx(nodeId, coinbase, 1, prevAtxId, 5, 1, prevAtxId, 5, []types.BlockID{1, 2, 3}, npst)
-	storeAtx(r, activationDb, atx)
+	storeAtx(r, activationDb, atx, log.NewDefault("storeAtx"))
 
 	view, err := b.mesh.GetOrphanBlocksBefore(meshProvider.LatestLayer())
 	assert.NoError(t, err)
@@ -448,7 +453,7 @@ func TestBuilder_PublishActivationTx_PosAtxOnSameLayerAsPrevAtx(t *testing.T) {
 	for i := postGenesisEpochLayer; i < postGenesisEpochLayer+3; i++ {
 		challenge := newChallenge(nodeId, 1, prevAtxId, prevAtxId, types.LayerID(i))
 		atx := newAtx(challenge, 5, defaultView, npst)
-		storeAtx(r, activationDb, atx)
+		storeAtx(r, activationDb, atx, log.NewDefault("storeAtx"))
 	}
 
 	challenge := newChallenge(nodeId, 1, prevAtxId, prevAtxId, postGenesisEpochLayer+3)
@@ -508,18 +513,9 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	npst2 := nipst.NewNIPSTWithChallenge(bytes, poetRef)
 	assert.NoError(t, err)
 
-	//ugly hack to set view size in db
-	view, err := layers.GetOrphanBlocksBefore(layers.LatestLayer())
-	assert.NoError(t, err)
-	v, err := types.ViewAsBytes(view)
-	assert.NoError(t, err)
-	activesetCache.put(common.BytesToHash(v), 10)
+	setActivesetSizeInCache(t, defaultActiveSetSize)
 
-	view, err = b.mesh.GetOrphanBlocksBefore(layers.LatestLayer())
-	assert.NoError(t, err)
-	activeSetSize, err := b.activeSet.ActiveSetSize(1)
-	assert.NoError(t, err)
-	act := types.NewActivationTx(b.nodeId, coinbase, b.GetLastSequence(b.nodeId)+1, atx.Id(), atx.PubLayerIdx+10, 0, atx.Id(), activeSetSize, view, npst2)
+	act := types.NewActivationTx(b.nodeId, coinbase, b.GetLastSequence(b.nodeId)+1, atx.Id(), atx.PubLayerIdx+10, 0, atx.Id(), defaultActiveSetSize, defaultView, npst2)
 	err = b.PublishActivationTx(1)
 	assert.Error(t, err)
 

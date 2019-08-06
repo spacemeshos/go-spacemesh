@@ -2,6 +2,8 @@ package types
 
 import (
 	"bytes"
+	"encoding/binary"
+	"github.com/google/uuid"
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -246,6 +248,11 @@ func NewExistingBlock(id BlockID, layerIndex LayerID, data []byte) *Block {
 				Data:       data},
 		}}
 	return &b
+}
+
+func RandBlockId() BlockID {
+	id := uuid.New()
+	return BlockID(binary.BigEndian.Uint64(id[:8]))
 }
 
 func NewLayer(layerIndex LayerID) *Layer {
