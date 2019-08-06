@@ -300,5 +300,5 @@ func TestLayers_OrphanBlocksClearEmptyLayers(t *testing.T) {
 	arr2, _ := layers.GetOrphanBlocksBefore(2)
 	assert.Equal(t, len(arr2), 2)
 	layers.AddBlock(block5)
-	assert.Equal(t, 1,len(layers.orphanBlocks))
+	assert.Equal(t, 1, len(layers.orphanBlocks))
 }

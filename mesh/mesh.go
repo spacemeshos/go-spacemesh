@@ -356,7 +356,7 @@ func (m *Mesh) handleOrphanBlocks(blk *types.BlockHeader) {
 			if _, has := layermap[b]; has {
 				m.Log.Debug("delete block ", b, "from orphans")
 				delete(layermap, b)
-				if len(layermap) == 0{
+				if len(layermap) == 0 {
 					delete(m.orphanBlocks, layerId)
 				}
 				break
