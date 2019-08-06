@@ -70,9 +70,10 @@ func (*AtxDbMock) IsIdentityActive(edId string, layer types.LayerID) (*types.Nod
 	return nil, true, *types.EmptyAtxId, nil
 }
 
-func (t *AtxDbMock) GetEpochAtxIds(id types.EpochId) ([]types.AtxId, error) {
-	return []types.AtxId{}, nil /*todo: mock if needed */
+func (t *AtxDbMock) GetPosAtxId(id types.EpochId) (types.AtxId, error) {
+	return types.AtxId{}, nil /*todo: mock if needed */
 }
+
 func (t *AtxDbMock) GetAtx(id types.AtxId) (*types.ActivationTxHeader, error) {
 	if id == *types.EmptyAtxId {
 		return nil, fmt.Errorf("trying to fetch empty atx id")

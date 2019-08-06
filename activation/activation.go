@@ -5,7 +5,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"sync/atomic"
 )
@@ -52,8 +51,8 @@ type NipstValidator interface {
 type ATXDBProvider interface {
 	GetAtx(id types.AtxId) (*types.ActivationTxHeader, error)
 	CalcActiveSetFromView(view []types.BlockID, pubEpoch types.EpochId) (uint32, error)
-	GetNodeAtxIds(nodeId types.NodeId) ([]types.AtxId, error)
-	GetEpochAtxIds(epochId types.EpochId) ([]types.AtxId, error)
+	GetNodeLastAtxId(nodeId types.NodeId) (types.AtxId, error)
+	GetPosAtxId(epochId types.EpochId) (*types.AtxId, error)
 }
 
 type BytesStore interface {
@@ -82,11 +81,6 @@ type Builder struct {
 	store           BytesStore
 	isSynced        func() bool
 	log             log.Log
-}
-
-type Processor struct {
-	db            *ActivationDb
-	epochProvider EpochProvider
 }
 
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
@@ -174,7 +168,7 @@ func (b *Builder) buildNipstChallenge(epoch types.EpochId) error {
 		if err != nil {
 			b.log.Info("no prev ATX found, starting fresh")
 		} else {
-			b.prevATX, err = b.db.GetAtx(*prevAtxId)
+			b.prevATX, err = b.db.GetAtx(prevAtxId)
 			if err != nil {
 				// TODO: handle inconsistent state
 				b.log.Panic("prevAtx (id: %v) not found in DB -- inconsistent state", prevAtxId.ShortId())
@@ -373,29 +367,23 @@ func (b *Builder) Load() *types.NIPSTChallenge {
 	return nil
 }
 
-func (b *Builder) GetPrevAtxId(node types.NodeId) (*types.AtxId, error) {
-	//todo: make sure atx ids are ordered and valid
-	ids, err := b.db.GetNodeAtxIds(node)
+func (b *Builder) GetPrevAtxId(node types.NodeId) (types.AtxId, error) {
+	id, err := b.db.GetNodeLastAtxId(node)
 	if err != nil {
-		return nil, err
+		return *types.EmptyAtxId, err
 	}
-	if len(ids) == 0 {
-		return nil, fmt.Errorf("no prev atxs for node %v", node.Key)
-	}
-	return &ids[len(ids)-1], nil
+	return id, nil
 }
 
-// GetPositioningAtxId returns a randomly selected atx from the provided epoch epochId
-// it returns an error if epochs were not found in db
+// GetPositioningAtxId returns the top ATX (highest layer number) from the provided epoch epochId.
+// It returns an error if the top ATX is from a different epoch.
 func (b *Builder) GetPositioningAtxId(epochId types.EpochId) (*types.AtxId, error) {
 	//todo: make this on blocking until an atx is received
-	atxs, err := b.db.GetEpochAtxIds(epochId)
+	atxId, err := b.db.GetPosAtxId(epochId)
 	if err != nil {
 		return nil, err
 	}
-	atxId := atxs[rand.Int31n(int32(len(atxs)))]
-
-	return &atxId, nil
+	return atxId, nil
 }
 
 // GetLastSequence retruns the last sequence number of atx reported by node id node
@@ -405,9 +393,9 @@ func (b *Builder) GetLastSequence(node types.NodeId) uint64 {
 	if err != nil {
 		return 0
 	}
-	atx, err := b.db.GetAtx(*atxId)
+	atx, err := b.db.GetAtx(atxId)
 	if err != nil {
-		b.log.Error("wtf no atx in db %v", *atxId)
+		b.log.Error("wtf no atx in db %v", atxId)
 		return 0
 	}
 	return atx.Sequence
