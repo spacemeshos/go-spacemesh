@@ -322,11 +322,6 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 		return err
 	}
 
-	nipstStore, err := database.NewLDBDatabase(dbStorepath+"nipst", 0, 0, lg.WithName("nipstDbStore"))
-	if err != nil {
-		return err
-	}
-
 	poetDbStore, err := database.NewLDBDatabase(dbStorepath+"poet", 0, 0, lg.WithName("poetDbStore"))
 	if err != nil {
 		return err
@@ -347,11 +342,10 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	//todo: this is initialized twice, need to refactor
 	validator := nipst.NewValidator(&app.Config.POST, poetDb)
 	mdb := mesh.NewPersistentMeshDB(dbStorepath, lg.WithName("meshDb"))
-	atxdb := activation.NewActivationDb(atxdbstore, nipstStore, idStore, mdb, layersPerEpoch, validator, lg.WithName("atxDb"))
+	trtl := tortoise.NewAlgorithm(int(1), mdb, lg.WithName("trtl"))
+	atxdb := activation.NewActivationDb(atxdbstore, idStore, mdb, layersPerEpoch, validator, lg.WithName("atxDb"))
 	beaconProvider := &oracle.EpochBeaconProvider{}
 	eValidator := oracle.NewBlockEligibilityValidator(int32(app.Config.GenesisActiveSet), layersPerEpoch, atxdb, beaconProvider, BLS381.Verify2, lg.WithName("blkElgValidator"))
-
-	trtl := tortoise.NewAlgorithm(int(1), mdb, lg.WithName("trtl"))
 
 	txpool := miner.NewTypesTransactionIdMemPool()
 	atxpool := miner.NewTypesAtxIdMemPool()
@@ -370,7 +364,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 		hOracle = rolacle
 	} else { // regular oracle, build and use it
 		beacon := eligibility.NewBeacon(trtl, app.Config.HareEligibility.ConfidenceParam)
-		hOracle = eligibility.New(beacon, msh.ActiveSetForLayerConsensusView, BLS381.Verify2, vrfSigner, uint16(app.Config.LayersPerEpoch), app.Config.GenesisActiveSet, app.Config.HareEligibility, lg.WithName("hareOracle"))
+		hOracle = eligibility.New(beacon, atxdb.CalcActiveSetSize, BLS381.Verify2, vrfSigner, uint16(app.Config.LayersPerEpoch), app.Config.GenesisActiveSet, trtl, app.Config.HareEligibility, lg.WithName("hareOracle"))
 	}
 
 	// a function to validate we know the blocks
@@ -415,7 +409,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	if coinBase.Big().Uint64() == 0 {
 		app.log.Panic("invalid Coinbase account")
 	}
-	atxBuilder := activation.NewBuilder(nodeID, coinBase, atxdb, swarm, atxdb, msh, layersPerEpoch, nipstBuilder, clock.Subscribe(), syncer.IsSynced, store, lg.WithName("atxBuilder"))
+	atxBuilder := activation.NewBuilder(nodeID, coinBase, atxdb, swarm, msh, layersPerEpoch, nipstBuilder, clock.Subscribe(), syncer.IsSynced, store, lg.WithName("atxBuilder"))
 
 	app.blockProducer = &blockProducer
 	app.blockListener = blockListener

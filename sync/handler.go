@@ -1,7 +1,7 @@
 package sync
 
 import (
-	"encoding/hex"
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -122,21 +122,14 @@ func newATxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 			if tx, err := s.atxpool.Get(t); err == nil {
 				atxs[t] = &tx
 			} else {
-				logger.Error("Error handling atx request message, with ids: %v", atxids)
+				logger.With().Error("error handling atx request message",
+					log.AtxId(t.ShortId()), log.String("atx_ids", fmt.Sprintf("%x", atxids)))
 				return nil
 			}
 		}
 
 		var transactions []types.ActivationTx
 		for _, value := range atxs {
-			if value.Nipst == nil {
-				//todo nipst should be a reference change after implemented in atx
-				value.Nipst, err = s.GetNipst(value.Id())
-				if err != nil || value.Nipst == nil {
-					logger.Error("Error handling atx request message, cannot find nipst for atx %v", hex.EncodeToString(value.Id().Bytes()))
-					return nil
-				}
-			}
 			tx := *value
 			transactions = append(transactions, tx)
 		}
