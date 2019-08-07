@@ -1,7 +1,6 @@
 package sync
 
 import (
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/address"
@@ -188,7 +187,7 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool A
 	}
 
 	//todo change get block to check local
-	s.blockQueue = NewValidationQueue(s.DataAvailabiltyV2, s.AddBlockWithTxs, s.GetBlock, s.Log.WithName("validQ"))
+	s.blockQueue = NewValidationQueue(s.DataAvailabilty, s.AddBlockWithTxs, s.GetBlock, s.Log.WithName("validQ"))
 	s.txQueue = NewTxQueue(s)
 	s.atxQueue = NewAtxQueue(s)
 
@@ -278,7 +277,7 @@ func (s *Syncer) blockSyntacticValidation(block *types.Block) ([]*types.Addressa
 	}
 
 	//data availability
-	txs, atxs, err := s.DataAvailabiltyV2(block)
+	txs, atxs, err := s.DataAvailabilty(block)
 	if err != nil {
 		return nil, nil, errors.New(fmt.Sprintf("data availabilty failed for block %v", block.ID()))
 	}
@@ -309,49 +308,6 @@ func (s *Syncer) validateBlockView(blk *types.Block) bool {
 }
 
 func (s *Syncer) DataAvailabilty(blk *types.Block) ([]*types.AddressableSignedTransaction, []*types.ActivationTx, error) {
-	var txs []*types.AddressableSignedTransaction
-	var txerr error
-	wg := sync.WaitGroup{}
-	wg.Add(2)
-	go func() {
-		//sync Transactions
-		txs, txerr = s.syncTxs(blk.TxIds)
-		for _, tx := range txs {
-			id := types.GetTransactionId(tx.SerializableSignedTransaction)
-			s.txpool.Put(id, tx)
-		}
-		wg.Done()
-	}()
-
-	var atxs []*types.ActivationTx
-	var atxerr error
-
-	//sync ATxs
-	go func() {
-		atxs, atxerr = s.syncAtxs(blk.AtxIds)
-		for _, atx := range atxs {
-			s.atxpool.Put(atx.Id(), atx)
-		}
-		wg.Done()
-	}()
-
-	wg.Wait()
-
-	if txerr != nil {
-		s.Warning("failed fetching block %v transactions %v", blk.ID(), txerr)
-		return txs, atxs, txerr
-	}
-
-	if atxerr != nil {
-		s.Warning("failed fetching block %v activation transactions %v", blk.ID(), atxerr)
-		return txs, atxs, atxerr
-	}
-
-	s.Info("fetched all block %v data  %v txs %v atxs", blk.ID(), len(blk.TxIds), len(blk.AtxIds))
-	return txs, atxs, nil
-}
-
-func (s *Syncer) DataAvailabiltyV2(blk *types.Block) ([]*types.AddressableSignedTransaction, []*types.ActivationTx, error) {
 
 	txres, txerr := s.txQueue.Handle(blk.TxIds)
 	if txerr != nil {
@@ -431,117 +387,6 @@ func (s *Syncer) validateAndBuildTx(x *types.SerializableSignedTransaction) (*ty
 	}
 
 	return &types.AddressableSignedTransaction{SerializableSignedTransaction: x, Address: addr}, nil
-}
-
-//returns txs out of txids that are not in the local database
-func (s *Syncer) syncTxs(txids []types.TransactionId) ([]*types.AddressableSignedTransaction, error) {
-
-	//look in pool
-	unprocessedTxs := make(map[types.TransactionId]*types.AddressableSignedTransaction)
-	missing := make([]types.TransactionId, 0)
-	for _, t := range txids {
-		if tx, err := s.txpool.Get(t); err == nil {
-			s.Debug("found tx, %v in tx pool", hex.EncodeToString(t[:]))
-			unprocessedTxs[t] = &tx
-		} else {
-			missing = append(missing, t)
-		}
-	}
-
-	//look in db
-	dbTxs, missinDB := s.GetTransactions(missing)
-
-	//map and sort txs
-	if len(missinDB) > 0 {
-		for out := range s.fetchWithFactory(NewNeighborhoodWorker(s, 1, TxReqFactory(missinDB))) {
-			ntxs := out.([]types.SerializableSignedTransaction)
-			for _, tx := range ntxs {
-				tmp := tx
-				ast, err := s.validateAndBuildTx(&tmp)
-				if err != nil {
-					id := types.GetTransactionId(&tmp)
-					s.Warning("tx %v not valid %v", hex.EncodeToString(id[:]), err)
-					continue
-				}
-				unprocessedTxs[types.GetTransactionId(&tmp)] = ast
-			}
-		}
-	}
-
-	txs := make([]*types.AddressableSignedTransaction, 0, len(txids))
-	for _, id := range txids {
-		if tx, ok := unprocessedTxs[id]; ok {
-			txs = append(txs, tx)
-		} else if _, ok := dbTxs[id]; ok {
-			continue
-		} else {
-			return nil, errors.New(fmt.Sprintf("could not fetch tx %v", hex.EncodeToString(id[:])))
-		}
-	}
-	return txs, nil
-}
-
-//returns atxs out of txids that are not in the local database
-func (s *Syncer) syncAtxs(atxIds []types.AtxId) ([]*types.ActivationTx, error) {
-
-	//look in pool
-	unprocessedAtxs := make(map[types.AtxId]*types.ActivationTx, len(atxIds))
-	missingInPool := make([]types.AtxId, 0, len(atxIds))
-	for _, t := range atxIds {
-		id := t
-		if x, err := s.atxpool.Get(id); err == nil {
-			atx := x
-			if atx.Nipst == nil {
-				s.Warning("atx %v nipst not found ", id.ShortId())
-				missingInPool = append(missingInPool, id)
-				continue
-			}
-
-			s.Debug("found atx, %v in atx pool", id.ShortId())
-			unprocessedAtxs[id] = &atx
-		} else {
-			s.Warning("atx %v not in atx pool", id.ShortId())
-			missingInPool = append(missingInPool, id)
-		}
-	}
-
-	//look in db
-	dbAtxs, missingInDb := s.GetATXs(missingInPool)
-
-	//map and sort atxs
-	if len(missingInDb) > 0 {
-		output := s.fetchWithFactory(NewNeighborhoodWorker(s, 1, ATxReqFactory(missingInDb)))
-		for out := range output {
-			atxs := out.([]types.ActivationTx)
-			for _, atx := range atxs {
-				if err := s.FetchPoetProof(atx.GetPoetProofRef()); err != nil {
-					s.Error("received atx (%v) with syntactically invalid or missing PoET proof (%x): %v",
-						atx.ShortId(), atx.GetShortPoetProofRef(), err)
-					continue
-				}
-
-				if err := s.SyntacticallyValidateAtx(&atx); err != nil {
-					s.Error("received an invalid atx (%v): %v", atx.ShortId(), err)
-					continue
-				}
-
-				tmp := atx
-				unprocessedAtxs[atx.Id()] = &tmp
-			}
-		}
-	}
-
-	atxs := make([]*types.ActivationTx, 0, len(atxIds))
-	for _, id := range atxIds {
-		if tx, ok := unprocessedAtxs[id]; ok {
-			atxs = append(atxs, tx)
-		} else if _, ok := dbAtxs[id]; ok {
-			continue
-		} else {
-			return nil, errors.New(fmt.Sprintf("could not fetch atx %v", id.ShortId()))
-		}
-	}
-	return atxs, nil
 }
 
 func (s *Syncer) fetchWithFactory(wrk worker) chan interface{} {

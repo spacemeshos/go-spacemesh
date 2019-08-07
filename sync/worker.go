@@ -152,3 +152,43 @@ func NewBlockWorker(s *Syncer, count int, reqFactory BlockRequestFactory, ids ch
 
 	return worker{Log: s.Log, Once: mu, workCount: &acount, output: output, work: workFunc}
 }
+
+func NewFetchWorker(s *Syncer, count int, reqFactory RequestFactoryV2, idsChan chan *fetchJob) worker {
+	output := make(chan interface{}, count)
+	acount := int32(count)
+	mu := &sync.Once{}
+	workFunc := func() {
+		for jb := range idsChan {
+			if jb == nil {
+				s.Info("close fetch worker ")
+				return
+			}
+			retrived := false
+		next:
+			for _, p := range s.GetPeers() {
+				peer := p
+				s.Info("send fetch request to Peer: %v", peer.String())
+				ch, _ := reqFactory(s.MessageServer, peer, jb.ids)
+				timeout := time.After(s.RequestTimeout)
+				select {
+				case <-timeout:
+					s.Error("fetch request to %v timed out", peer.String())
+				case v := <-ch:
+					//chan not closed
+					if v != nil {
+						retrived = true
+						s.Info("Peer: %v responded to  fetch request ", peer.String())
+						output <- fetchJob{ids: jb.ids, items: v}
+						s.Info("done")
+						break next
+					}
+				}
+			}
+			if !retrived {
+				output <- fetchJob{ids: jb.ids, items: nil}
+			}
+		}
+	}
+
+	return worker{Log: s.Log, Once: mu, workCount: &acount, output: output, work: workFunc}
+}

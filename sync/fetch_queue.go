@@ -8,21 +8,20 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"sync"
-	"time"
 )
 
 type RequestFactoryV2 func(s *server.MessageServer, peer p2p.Peer, id interface{}) (chan interface{}, error)
 
 func NewTxQueue(s *Syncer) *txQueue {
 	//todo buffersize
-	q := &txQueue{Syncer: s, queue: make(chan interface{}, 100), pending: make(map[types.TransactionId][]chan bool), txlocks: map[types.TransactionId]*sync.Mutex{}}
+	q := &txQueue{Syncer: s, queue: make(chan *fetchJob, 100), pending: make(map[types.TransactionId][]chan bool), txlocks: map[types.TransactionId]*sync.Mutex{}}
 	go q.work()
 	return q
 }
 
 func NewAtxQueue(s *Syncer) *atxQueue {
 	//todo buffersize
-	q := &atxQueue{Syncer: s, queue: make(chan interface{}, 100), pending: make(map[types.AtxId][]chan bool), atxlocks: map[types.AtxId]*sync.Mutex{}}
+	q := &atxQueue{Syncer: s, queue: make(chan *fetchJob, 100), pending: make(map[types.AtxId][]chan bool), atxlocks: map[types.AtxId]*sync.Mutex{}}
 	go q.work()
 	return q
 }
@@ -37,7 +36,7 @@ type txQueue struct {
 	*Syncer
 	sync.Mutex
 	txlocks map[types.TransactionId]*sync.Mutex
-	queue   chan interface{} //types.TransactionId //todo make buffered
+	queue   chan *fetchJob //types.TransactionId //todo make buffered
 	pending map[types.TransactionId][]chan bool
 }
 
@@ -45,24 +44,22 @@ type atxQueue struct {
 	*Syncer
 	sync.Mutex
 	atxlocks map[types.AtxId]*sync.Mutex
-	queue    chan interface{} //types.AtxId
+	queue    chan *fetchJob //types.AtxId
 	pending  map[types.AtxId][]chan bool
 }
 
 //todo batches
 func (tq *txQueue) work() error {
-	output := tq.fetchWithFactory(NewFetchWorker(tq.Syncer, tq.Concurrency, TxReqFactoryV2(), tq.queue))
+	output := tq.fetchWithFactory(NewFetchWorker(tq.Syncer, tq.Concurrency, TxReqFactory(), tq.queue))
 	for out := range output {
+
 		if out == nil {
 			tq.Info("close queue")
 			return nil
 		}
+
 		txs := out.(fetchJob)
-		if txs.items == nil {
-			tq.Info("could not fetch any txs for ids %v", txs.ids)
-			continue
-		}
-		tq.Info("next id %v", txs)
+		tq.Info("next tx ids %v", txs)
 		tq.updateDependencies(txs) //todo hack add batches
 		tq.Info("next batch")
 	}
@@ -71,8 +68,13 @@ func (tq *txQueue) work() error {
 }
 
 func (tq *txQueue) updateDependencies(fj fetchJob) {
+	items, ok := fj.items.([]types.SerializableSignedTransaction)
+	if !ok {
+		tq.Warning("could not fetch any")
+		return
+	}
 	mp := map[types.TransactionId]types.SerializableSignedTransaction{}
-	for _, item := range fj.items.([]types.SerializableSignedTransaction) {
+	for _, item := range items {
 		mp[types.GetTransactionId(&item)] = item
 	}
 
@@ -103,19 +105,14 @@ func (tq *txQueue) invalidate(id types.TransactionId, tx *types.SerializableSign
 
 //todo batches
 func (aq *atxQueue) work() error {
-	output := aq.fetchWithFactory(NewFetchWorker(aq.Syncer, aq.Concurrency, ATxReqFactoryV2(), aq.queue))
+	output := aq.fetchWithFactory(NewFetchWorker(aq.Syncer, aq.Concurrency, ATxReqFactory(), aq.queue))
 	for out := range output {
 		if out == nil {
 			aq.Info("close queue")
 			return nil
 		}
 		txs := out.(fetchJob)
-		if txs.items == nil {
-			aq.Info("could not fetch any txs for ids %v", txs.ids)
-			continue
-		}
-
-		aq.Info("next id %v", txs)
+		aq.Info("next atx ids %v", txs)
 		aq.updateDependencies(txs) //todo hack add batches
 		aq.Info("next batch")
 	}
@@ -126,7 +123,7 @@ func (aq *atxQueue) work() error {
 func (tq *txQueue) addToQueue(ids []types.TransactionId) chan bool {
 
 	deps := tq.addToPending(ids)
-	tq.queue <- ids
+	tq.queue <- &fetchJob{ids: ids}
 
 	doneChan := make(chan bool)
 	//fan in
@@ -157,8 +154,14 @@ func (tq *txQueue) addToPending(ids []types.TransactionId) []chan bool {
 }
 
 func (aq *atxQueue) updateDependencies(fj fetchJob) {
+	items, ok := fj.items.([]types.ActivationTx)
+	if !ok {
+		aq.Warning("could not fetch any")
+		return
+	}
+
 	mp := map[types.AtxId]types.ActivationTx{}
-	for _, item := range fj.items.([]types.ActivationTx) {
+	for _, item := range items {
 		item.CalcAndSetId() //todo put it somewhere that will cause less confusion
 		mp[item.Id()] = item
 	}
@@ -189,7 +192,7 @@ func (aq *atxQueue) invalidate(id types.AtxId, atx *types.ActivationTx, valid bo
 
 func (aq *atxQueue) addToQueue(ids []types.AtxId) chan bool {
 	deps := aq.addToPending(ids)
-	aq.queue <- ids
+	aq.queue <- &fetchJob{ids: ids}
 
 	doneChan := make(chan bool)
 	//fan in
@@ -222,6 +225,10 @@ func (aq *atxQueue) addToPending(ids []types.AtxId) []chan bool {
 //todo minimize code duplication
 //returns txs out of txids that are not in the local database
 func (tq *txQueue) Handle(txids []types.TransactionId) ([]*types.AddressableSignedTransaction, error) {
+	if len(txids) == 0 {
+		tq.Warning("handle empty tx slice")
+		return nil, nil
+	}
 
 	tq.lockTxs(txids)
 	_, _, missing := tq.checkLocalTxs(txids)
@@ -307,7 +314,10 @@ func (tq *txQueue) checkLocalTxs(txids []types.TransactionId) (map[types.Transac
 //todo minimize code duplication
 //returns atxs out of atxids that are not in the local database
 func (aq *atxQueue) Handle(atxIds []types.AtxId) ([]*types.ActivationTx, error) {
-
+	if len(atxIds) == 0 {
+		aq.Warning("handle empty tx slice")
+		return nil, nil
+	}
 	aq.lockAtxs(atxIds)
 	_, _, missing := aq.checkLocalAtxs(atxIds)
 	output := aq.addToQueue(missing)
@@ -389,102 +399,4 @@ func (aq *atxQueue) checkLocalAtxs(atxIds []types.AtxId) (map[types.AtxId]*types
 	dbAtxs, missing := aq.GetATXs(missingInPool)
 
 	return unprocessedAtxs, dbAtxs, missing
-}
-
-func TxReqFactoryV2() RequestFactoryV2 {
-	return func(s *server.MessageServer, peer p2p.Peer, id interface{}) (chan interface{}, error) {
-		ch := make(chan interface{}, 1)
-		foo := func(msg []byte) {
-			defer close(ch)
-			if len(msg) == 0 {
-				s.Warning("peer responded with nil to txs request ", peer)
-				return
-			}
-			var tx []types.SerializableSignedTransaction
-			err := types.BytesToInterface(msg, &tx)
-			if err != nil {
-				s.Error("could not unmarshal tx data %v", err)
-				return
-			}
-			ch <- tx
-		}
-
-		bts, err := types.InterfaceToBytes(id) //todo send multiple ids
-		if err != nil {
-			return nil, err
-		}
-
-		if err := s.SendRequest(TX, bts, peer, foo); err != nil {
-			return nil, err
-		}
-		return ch, nil
-	}
-}
-
-func ATxReqFactoryV2() RequestFactoryV2 {
-	return func(s *server.MessageServer, peer p2p.Peer, ids interface{}) (chan interface{}, error) {
-		ch := make(chan interface{}, 1)
-		foo := func(msg []byte) {
-			s.Info("Handle atx response ")
-			defer close(ch)
-			if len(msg) == 0 {
-				s.Warning("peer responded with nil to atxs request ", peer)
-				return
-			}
-			var tx []types.ActivationTx
-			err := types.BytesToInterface(msg, &tx)
-			if err != nil {
-				s.Error("could not unmarshal tx data %v", err)
-				return
-			}
-
-			ch <- tx
-		}
-
-		bts, err := types.InterfaceToBytes(ids) //todo send multiple ids
-		if err != nil {
-			return nil, err
-		}
-		if err := s.SendRequest(ATX, bts, peer, foo); err != nil {
-			return nil, err
-		}
-
-		return ch, nil
-	}
-}
-
-func NewFetchWorker(s *Syncer, count int, reqFactory RequestFactoryV2, idsChan chan interface{}) worker {
-	output := make(chan interface{}, count)
-	acount := int32(count)
-	mu := &sync.Once{}
-	workFunc := func() {
-		for ids := range idsChan {
-			retrived := false
-		next:
-			for _, p := range s.GetPeers() {
-				peer := p
-				s.Info("send fetch request to Peer: %v", peer.String())
-				ch, _ := reqFactory(s.MessageServer, peer, ids)
-				timeout := time.After(s.RequestTimeout)
-				select {
-				case <-timeout:
-					s.Error("fetch request to %v timed out", peer.String())
-				case v := <-ch:
-					//chan not closed
-					if v != nil {
-						retrived = true
-						s.Info("Peer: %v responded to  fetch request ", peer.String())
-						output <- fetchJob{ids: ids, items: v}
-						s.Info("done")
-						break next
-					}
-				}
-			}
-			if !retrived {
-				output <- fetchJob{ids: ids, items: nil}
-			}
-		}
-	}
-
-	return worker{Log: s.Log, Once: mu, workCount: &acount, output: output, work: workFunc}
 }

@@ -85,9 +85,8 @@ func BlockReqFactory() BlockRequestFactory {
 	}
 }
 
-//todo batch requests
-func TxReqFactory(ids []types.TransactionId) RequestFactory {
-	return func(s *server.MessageServer, peer p2p.Peer) (chan interface{}, error) {
+func TxReqFactory() RequestFactoryV2 {
+	return func(s *server.MessageServer, peer p2p.Peer, id interface{}) (chan interface{}, error) {
 		ch := make(chan interface{}, 1)
 		foo := func(msg []byte) {
 			defer close(ch)
@@ -104,7 +103,7 @@ func TxReqFactory(ids []types.TransactionId) RequestFactory {
 			ch <- tx
 		}
 
-		bts, err := types.InterfaceToBytes(ids)
+		bts, err := types.InterfaceToBytes(id) //todo send multiple ids
 		if err != nil {
 			return nil, err
 		}
@@ -116,11 +115,11 @@ func TxReqFactory(ids []types.TransactionId) RequestFactory {
 	}
 }
 
-func ATxReqFactory(ids []types.AtxId) RequestFactory {
-	return func(s *server.MessageServer, peer p2p.Peer) (chan interface{}, error) {
+func ATxReqFactory() RequestFactoryV2 {
+	return func(s *server.MessageServer, peer p2p.Peer, ids interface{}) (chan interface{}, error) {
 		ch := make(chan interface{}, 1)
 		foo := func(msg []byte) {
-			s.Info("handle atx response ")
+			s.Info("Handle atx response ")
 			defer close(ch)
 			if len(msg) == 0 {
 				s.Warning("peer responded with nil to atxs request ", peer)
@@ -133,10 +132,10 @@ func ATxReqFactory(ids []types.AtxId) RequestFactory {
 				return
 			}
 
-			ch <- calcAndSetIds(tx)
+			ch <- tx
 		}
 
-		bts, err := types.InterfaceToBytes(ids)
+		bts, err := types.InterfaceToBytes(ids) //todo send multiple ids
 		if err != nil {
 			return nil, err
 		}

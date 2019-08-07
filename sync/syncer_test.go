@@ -280,7 +280,7 @@ func TestSyncer_SyncAtxs_FetchPoetProof(t *testing.T) {
 
 	r.False(s1.poetDb.HasProof(poetRef[:]))
 
-	atxs, err := s1.syncAtxs([]types.AtxId{atx1.Id()})
+	atxs, err := s1.atxQueue.Handle([]types.AtxId{atx1.Id()})
 	r.NoError(err)
 	r.Equal(1, len(atxs))
 	r.Equal(atx1.Id(), atxs[0].Id())
@@ -395,11 +395,11 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 
 	for out := range output {
 		block := out.(blockJob).block
-		txs, err := syncObj2.syncTxs(block.TxIds)
+		txs, err := syncObj2.txQueue.Handle(block.TxIds)
 		if err != nil {
 			t.Error("could not fetch all txs", err)
 		}
-		atxs, err := syncObj2.syncAtxs(block.AtxIds)
+		atxs, err := syncObj2.atxQueue.Handle(block.AtxIds)
 		if err != nil {
 			t.Error("could not fetch all atxs", err)
 		}
@@ -875,10 +875,10 @@ func TestSyncer_Txs(t *testing.T) {
 	block3.TxIds = []types.TransactionId{id1, id2, id3}
 	syncObj1.AddBlockWithTxs(block3, []*types.AddressableSignedTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
 	syncObj2.sigValidator = mockTxProcessor{true}
-	_, err := syncObj2.syncTxs(block3.TxIds)
+	_, err := syncObj2.txQueue.Handle(block3.TxIds)
 	assert.NotNil(t, err)
 	syncObj2.sigValidator = mockTxProcessor{false}
-	_, err = syncObj2.syncTxs(block3.TxIds)
+	_, err = syncObj2.txQueue.Handle(block3.TxIds)
 	assert.Nil(t, err)
 }
 

@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"crypto/sha256"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
@@ -51,7 +52,19 @@ func TestNewNeighborhoodWorker(t *testing.T) {
 	id2 := types.GetTransactionId(tx2.SerializableSignedTransaction)
 	id3 := types.GetTransactionId(tx3.SerializableSignedTransaction)
 
-	wrk := NewNeighborhoodWorker(syncObj2, 1, TxReqFactory([]types.TransactionId{id1, id2, id3}))
+	proofMessage := makePoetProofMessage(t)
+
+	if err := syncObj1.poetDb.ValidateAndStore(&proofMessage); err != nil {
+		t.Error()
+	}
+
+	poetProofBytes, err := types.InterfaceToBytes(&proofMessage.PoetProof)
+	if err != nil {
+		t.Error()
+	}
+
+	ref := sha256.Sum256(poetProofBytes)
+	wrk := NewNeighborhoodWorker(syncObj2, 1, PoetReqFactory(ref[:]))
 	go wrk.Work()
 
 	select {
