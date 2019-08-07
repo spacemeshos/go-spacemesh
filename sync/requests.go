@@ -94,7 +94,7 @@ func TxReqFactory() RequestFactoryV2 {
 				s.Warning("peer responded with nil to txs request ", peer)
 				return
 			}
-			var tx []types.SerializableSignedTransaction
+			var tx []*types.SerializableSignedTransaction
 			err := types.BytesToInterface(msg, &tx)
 			if err != nil {
 				s.Error("could not unmarshal tx data %v", err)
@@ -125,10 +125,10 @@ func ATxReqFactory() RequestFactoryV2 {
 				s.Warning("peer responded with nil to atxs request ", peer)
 				return
 			}
-			var tx []types.ActivationTx
+			var tx []*types.ActivationTx
 			err := types.BytesToInterface(msg, &tx)
 			if err != nil {
-				s.Error("could not unmarshal tx data %v", err)
+				s.Error("could not unmarshal atx data %v", err)
 				return
 			}
 
@@ -145,15 +145,6 @@ func ATxReqFactory() RequestFactoryV2 {
 
 		return ch, nil
 	}
-}
-
-func calcAndSetIds(atxs []types.ActivationTx) []types.ActivationTx {
-	atxsWithIds := make([]types.ActivationTx, 0, len(atxs))
-	for _, atx := range atxs {
-		atx.CalcAndSetId()
-		atxsWithIds = append(atxsWithIds, atx)
-	}
-	return atxsWithIds
 }
 
 func PoetReqFactory(poetProofRef []byte) RequestFactory {

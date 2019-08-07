@@ -68,19 +68,19 @@ func (tq *txQueue) work() error {
 }
 
 func (tq *txQueue) updateDependencies(fj fetchJob) {
-	items, ok := fj.items.([]types.SerializableSignedTransaction)
+	items, ok := fj.items.([]*types.SerializableSignedTransaction)
 	if !ok {
 		tq.Warning("could not fetch any")
 		return
 	}
-	mp := map[types.TransactionId]types.SerializableSignedTransaction{}
+	mp := map[types.TransactionId]*types.SerializableSignedTransaction{}
 	for _, item := range items {
-		mp[types.GetTransactionId(&item)] = item
+		mp[types.GetTransactionId(item)] = item
 	}
 
 	for _, id := range fj.ids.([]types.TransactionId) {
 		if item, ok := mp[id]; ok {
-			tq.invalidate(id, &item, true)
+			tq.invalidate(id, item, true)
 			continue
 		}
 		tq.invalidate(id, nil, false)
@@ -113,6 +113,7 @@ func (aq *atxQueue) work() error {
 		}
 		txs := out.(fetchJob)
 		aq.Info("next atx ids %v", txs)
+		aq.fetchPoetProofs(txs)    //removes atxs with proofs we could not fetch
 		aq.updateDependencies(txs) //todo hack add batches
 		aq.Info("next batch")
 	}
@@ -153,21 +154,42 @@ func (tq *txQueue) addToPending(ids []types.TransactionId) []chan bool {
 	return deps
 }
 
-func (aq *atxQueue) updateDependencies(fj fetchJob) {
-	items, ok := fj.items.([]types.ActivationTx)
+//todo get rid of this, send proofs with atxs
+func (aq *atxQueue) fetchPoetProofs(fj fetchJob) {
+	items, ok := fj.items.([]*types.ActivationTx)
 	if !ok {
 		aq.Warning("could not fetch any")
 		return
 	}
 
-	mp := map[types.AtxId]types.ActivationTx{}
+	itemsWithProofs := make([]*types.ActivationTx, len(items))
 	for _, item := range items {
 		item.CalcAndSetId() //todo put it somewhere that will cause less confusion
+		if err := aq.FetchPoetProof(item.GetPoetProofRef()); err != nil {
+			aq.Error("received atx (%v) with syntactically invalid or missing PoET proof (%x): %v",
+				item.ShortId(), item.GetShortPoetProofRef(), err)
+			continue
+		}
+		itemsWithProofs = append(itemsWithProofs, item)
+	}
+
+	fj.items = itemsWithProofs
+}
+
+func (aq *atxQueue) updateDependencies(fj fetchJob) {
+	items, ok := fj.items.([]*types.ActivationTx)
+	if !ok {
+		aq.Warning("could not fetch any")
+		return
+	}
+
+	mp := map[types.AtxId]*types.ActivationTx{}
+	for _, item := range items {
 		mp[item.Id()] = item
 	}
 	for _, id := range fj.ids.([]types.AtxId) {
 		if item, ok := mp[id]; ok {
-			aq.invalidate(id, &item, true)
+			aq.invalidate(id, item, true)
 			continue
 		}
 		aq.invalidate(id, nil, false)
