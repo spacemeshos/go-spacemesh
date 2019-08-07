@@ -259,13 +259,13 @@ func (a *addrBook) find(addr p2pcrypto.PublicKey) *KnownAddress {
 
 // Attempt increases the given address' attempt counter and updates
 // the last attempt time.
-func (a *addrBook) Attempt(addr *node.NodeInfo) {
+func (a *addrBook) Attempt(key p2pcrypto.PublicKey) {
 	a.mtx.Lock()
 	defer a.mtx.Unlock()
 
 	// find address.
 	// Surely address will be in tried by now?
-	ka := a.find(addr.PublicKey())
+	ka := a.find(key)
 	if ka == nil {
 		return
 	}
@@ -397,6 +397,19 @@ func (a *addrBook) NeedMoreAddresses() bool {
 	defer a.mtx.Unlock()
 
 	return a.numAddresses() < needAddressThreshold
+}
+
+// NeedMoreAddresses returns whether or not the address manager needs more
+// addresses.
+func (a *addrBook) NeedNewAddresses() bool {
+	a.mtx.Lock()
+	if a.nNew < a.nTried && a.nNew < needAddressThreshold/2 {
+		a.mtx.Unlock()
+		return true
+	}
+	a.mtx.Unlock()
+
+	return false
 }
 
 // AddressCache returns the current address cache.  It must be treated as

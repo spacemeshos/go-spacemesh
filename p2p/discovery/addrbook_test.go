@@ -35,7 +35,7 @@ func TestAttempt(t *testing.T) {
 	}
 
 	na := ka.na
-	n.Attempt(na)
+	n.Attempt(na.PublicKey())
 
 	if ka.LastAttempt().IsZero() {
 		t.Errorf("Address should have an attempt, but does not")
