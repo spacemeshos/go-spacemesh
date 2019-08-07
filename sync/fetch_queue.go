@@ -53,7 +53,15 @@ type atxQueue struct {
 func (tq *txQueue) work() error {
 	output := tq.fetchWithFactory(NewFetchWorker(tq.Syncer, tq.Concurrency, TxReqFactoryV2(), tq.queue))
 	for out := range output {
+		if out == nil {
+			tq.Info("close queue")
+			return nil
+		}
 		txs := out.(fetchJob)
+		if txs.items == nil {
+			tq.Info("could not fetch any txs for ids %v", txs.ids)
+			continue
+		}
 		tq.Info("next id %v", txs)
 		tq.updateDependencies(txs) //todo hack add batches
 		tq.Info("next batch")
@@ -97,7 +105,16 @@ func (tq *txQueue) invalidate(id types.TransactionId, tx *types.SerializableSign
 func (aq *atxQueue) work() error {
 	output := aq.fetchWithFactory(NewFetchWorker(aq.Syncer, aq.Concurrency, ATxReqFactoryV2(), aq.queue))
 	for out := range output {
+		if out == nil {
+			aq.Info("close queue")
+			return nil
+		}
 		txs := out.(fetchJob)
+		if txs.items == nil {
+			aq.Info("could not fetch any txs for ids %v", txs.ids)
+			continue
+		}
+
 		aq.Info("next id %v", txs)
 		aq.updateDependencies(txs) //todo hack add batches
 		aq.Info("next batch")

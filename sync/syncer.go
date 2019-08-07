@@ -188,7 +188,10 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool A
 	}
 
 	//todo change get block to check local
-	s.blockQueue = NewValidationQueue(s.DataAvailabilty, s.AddBlockWithTxs, s.GetBlock, s.Log.WithName("validQ"))
+	s.blockQueue = NewValidationQueue(s.DataAvailabiltyV2, s.AddBlockWithTxs, s.GetBlock, s.Log.WithName("validQ"))
+	s.txQueue = NewTxQueue(s)
+	s.atxQueue = NewAtxQueue(s)
+
 	s.RegisterBytesMsgHandler(LAYER_HASH, newLayerHashRequestHandler(layers, logger))
 	s.RegisterBytesMsgHandler(MINI_BLOCK, newBlockRequestHandler(layers, logger))
 	s.RegisterBytesMsgHandler(LAYER_IDS, newLayerBlockIdsRequestHandler(layers, logger))
@@ -275,7 +278,7 @@ func (s *Syncer) blockSyntacticValidation(block *types.Block) ([]*types.Addressa
 	}
 
 	//data availability
-	txs, atxs, err := s.DataAvailabilty(block)
+	txs, atxs, err := s.DataAvailabiltyV2(block)
 	if err != nil {
 		return nil, nil, errors.New(fmt.Sprintf("data availabilty failed for block %v", block.ID()))
 	}
@@ -346,6 +349,24 @@ func (s *Syncer) DataAvailabilty(blk *types.Block) ([]*types.AddressableSignedTr
 
 	s.Info("fetched all block %v data  %v txs %v atxs", blk.ID(), len(blk.TxIds), len(blk.AtxIds))
 	return txs, atxs, nil
+}
+
+func (s *Syncer) DataAvailabiltyV2(blk *types.Block) ([]*types.AddressableSignedTransaction, []*types.ActivationTx, error) {
+
+	txres, txerr := s.txQueue.Handle(blk.TxIds)
+	if txerr != nil {
+		s.Warning("failed fetching block %v transactions %v", blk.ID(), txerr)
+		return nil, nil, txerr
+	}
+
+	atxres, atxerr := s.atxQueue.Handle(blk.AtxIds)
+	if atxerr != nil {
+		s.Warning("failed fetching block %v activation transactions %v", blk.ID(), atxerr)
+		return nil, nil, atxerr
+	}
+
+	s.Info("fetched all block %v data  %v txs %v atxs", blk.ID(), len(blk.TxIds), len(blk.AtxIds))
+	return txres, atxres, nil
 }
 
 func (s *Syncer) fetchLayerBlockIds(m map[string]p2p.Peer, lyr types.LayerID) ([]types.BlockID, error) {
