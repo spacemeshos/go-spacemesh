@@ -17,14 +17,14 @@ type RequestFactoryV2 func(s *server.MessageServer, peer p2p.Peer, id interface{
 
 func NewTxQueue(s *Syncer) *txQueue {
 	//todo buffersize
-	q := &txQueue{Syncer: s, queue: make(chan interface{}, 100), dependencies: make(map[types.TransactionId][]chan bool)}
+	q := &txQueue{Syncer: s, queue: make(chan interface{}, 100), pending: make(map[types.TransactionId][]chan bool)}
 	go q.work()
 	return q
 }
 
 func NewAtxQueue(s *Syncer) *atxQueue {
 	//todo buffersize
-	q := &atxQueue{Syncer: s, queue: make(chan interface{}, 100), dependencies: make(map[types.AtxId][]chan bool)}
+	q := &atxQueue{Syncer: s, queue: make(chan interface{}, 100), pending: make(map[types.AtxId][]chan bool)}
 	go q.work()
 	return q
 }
@@ -39,121 +39,145 @@ type fetchJob struct {
 type txQueue struct {
 	*Syncer
 	sync.Mutex
-	queue        chan interface{} //types.TransactionId //todo make buffered
-	dependencies map[types.TransactionId][]chan bool
+	queue   chan interface{} //types.TransactionId //todo make buffered
+	pending map[types.TransactionId][]chan bool
 }
 
 type atxQueue struct {
 	*Syncer
 	sync.Mutex
-	queue        chan interface{} //types.AtxId
-	dependencies map[types.AtxId][]chan bool
+	queue   chan interface{} //types.AtxId
+	pending map[types.AtxId][]chan bool
 }
 
 //todo batches
 func (tq *txQueue) work() error {
 	output := tq.fetchWithFactory(NewFetchWorker(tq.Syncer, 1, TxReqFactoryV2(), tq.queue))
 	for out := range output {
-		txs, ok := out.(fetchJob)
+		txs := out.(fetchJob)
 		tq.Info("next id %v", txs)
-		if !ok || txs.items == nil {
-			tq.updateDependencie(txs.ids.(types.TransactionId), false) //todo hack add batches
-			continue
-		}
-		tq.updateDependencie(txs.ids.(types.TransactionId), true) //todo hack add batches
+		tq.updateDependencies(txs) //todo hack add batches
 		tq.Info("next batch")
 	}
 
 	return nil
 }
 
-func (tq *txQueue) updateDependencies(txs []types.TransactionId, valid bool) {
-	for _, id := range txs {
-		tq.updateDependencie(id, valid)
+func (tq *txQueue) updateDependencies(fj fetchJob) {
+	mp := map[types.TransactionId]struct{}{}
+	for _, item := range fj.items.([]types.SerializableSignedTransaction) {
+		mp[types.GetTransactionId(&item)] = struct{}{}
+	}
+
+	for _, id := range fj.ids.([]types.TransactionId) {
+		if _, ok := mp[id]; !ok {
+			tq.updateDependencie(id, false)
+			continue
+		}
+		tq.updateDependencie(id, true)
 	}
 }
 
 func (tq *txQueue) updateDependencie(id types.TransactionId, valid bool) {
 	tq.Info("done with %v !!!!!!!!!!!!!!!! %v", hex.EncodeToString(id[:]), valid)
-	for _, dep := range tq.dependencies[id] {
+	for _, dep := range tq.pending[id] {
 		dep <- valid
 	}
 
-	delete(tq.dependencies, id)
+	delete(tq.pending, id)
 }
 
 //todo batches
 func (aq *atxQueue) work() error {
 	output := aq.fetchWithFactory(NewFetchWorker(aq.Syncer, 1, ATxReqFactoryV2(), aq.queue))
 	for out := range output {
-		txs, ok := out.(fetchJob)
+		txs := out.(fetchJob)
 		aq.Info("next id %v", txs)
-		if !ok || txs.items == nil {
-			aq.updateDependencie(txs.ids.(types.AtxId), false)
-			continue
-		}
-
-		aq.updateDependencie(txs.ids.(types.AtxId), true)
+		aq.updateDependencies(txs) //todo hack add batches
 		aq.Info("next batch")
 	}
 
 	return nil
 }
 
-func (tq *txQueue) addToPending(ids []types.TransactionId) chan struct{} {
+func (tq *txQueue) addToPending(ids []types.TransactionId) chan bool {
 
 	deps := make([]chan bool, 0, len(ids))
 	for _, id := range ids {
-		tq.queue <- id
 		ch := make(chan bool, 1)
 		deps = append(deps, ch)
-		tq.dependencies[id] = append(tq.dependencies[id], ch)
+		tq.pending[id] = append(tq.pending[id], ch)
 	}
 
-	doneChan := make(chan struct{})
+	tq.queue <- ids
+
+	doneChan := make(chan bool)
 
 	//fan in
 	go func() {
+		alldone := true
 		for _, c := range deps {
-			<-c
+			done := <-c
+			if !done {
+				alldone = false
+				break
+			}
 		}
+		doneChan <- alldone
 		close(doneChan)
 	}()
 
 	return doneChan
 }
 
-func (aq *atxQueue) updateDependencies(txs []types.AtxId, valid bool) {
-	for _, id := range txs {
-		aq.updateDependencie(id, valid)
+func (aq *atxQueue) updateDependencies(fj fetchJob) {
+	mp := map[types.AtxId]struct{}{}
+	for _, item := range fj.items.([]types.ActivationTx) {
+		item.CalcAndSetId() //todo put it somewhere that will cause less confusion
+		mp[item.Id()] = struct{}{}
+	}
+
+	for _, id := range fj.ids.([]types.AtxId) {
+		if _, ok := mp[id]; !ok {
+			aq.updateDependencie(id, false)
+			continue
+		}
+		aq.updateDependencie(id, true)
 	}
 }
 
 func (aq *atxQueue) updateDependencie(id types.AtxId, valid bool) {
 	aq.Info("done with %v !!!!!!!!!!!!!!!! %v", id.ShortId(), valid)
-	for _, dep := range aq.dependencies[id] {
+	for _, dep := range aq.pending[id] {
 		dep <- valid
 	}
 
-	delete(aq.dependencies, id)
+	delete(aq.pending, id)
 }
 
-func (aq *atxQueue) addToPending(ids []types.AtxId) chan struct{} {
+func (aq *atxQueue) addToPending(ids []types.AtxId) chan bool {
 	deps := make([]chan bool, 0, len(ids))
 	for _, id := range ids {
-		aq.queue <- id
 		ch := make(chan bool, 1)
 		deps = append(deps, ch)
-		aq.dependencies[id] = append(aq.dependencies[id], ch)
+		aq.pending[id] = append(aq.pending[id], ch)
 	}
 
-	doneChan := make(chan struct{})
+	aq.queue <- ids
+
+	doneChan := make(chan bool)
 
 	//fan in
 	go func() {
+		alldone := true
 		for _, c := range deps {
-			<-c
+			done := <-c
+			if !done {
+				alldone = false
+				break
+			}
 		}
+		doneChan <- alldone
 		close(doneChan)
 	}()
 
@@ -294,7 +318,7 @@ func TxReqFactoryV2() RequestFactoryV2 {
 			ch <- tx
 		}
 
-		bts, err := types.InterfaceToBytes([]types.TransactionId{id.(types.TransactionId)}) //todo send multiple ids
+		bts, err := types.InterfaceToBytes(id) //todo send multiple ids
 		if err != nil {
 			return nil, err
 		}
@@ -326,7 +350,7 @@ func ATxReqFactoryV2() RequestFactoryV2 {
 			ch <- tx
 		}
 
-		bts, err := types.InterfaceToBytes([]types.AtxId{ids.(types.AtxId)}) //todo send multiple ids
+		bts, err := types.InterfaceToBytes(ids) //todo send multiple ids
 		if err != nil {
 			return nil, err
 		}

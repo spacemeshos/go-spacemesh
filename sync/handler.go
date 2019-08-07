@@ -86,8 +86,7 @@ func newTxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 			if tx, err := s.txpool.Get(t); err == nil {
 				txs[t] = &tx
 			} else {
-				logger.Error("Error handling tx request message, with ids: %d", msg)
-				return nil
+				logger.Error("Error handling tx request message, for id: %d", t)
 			}
 		}
 
@@ -122,9 +121,7 @@ func newATxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 			if tx, err := s.atxpool.Get(t); err == nil {
 				atxs[t] = &tx
 			} else {
-				logger.With().Error("error handling atx request message",
-					log.AtxId(t.ShortId()), log.String("atx_ids", fmt.Sprintf("%x", atxids)))
-				return nil
+				logger.With().Error("error handling atx request message", log.AtxId(t.ShortId()), log.String("atx_ids", fmt.Sprintf("%x", atxids)))
 			}
 		}
 

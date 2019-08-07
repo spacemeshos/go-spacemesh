@@ -98,12 +98,12 @@ func (vq *validationQueue) traverse(s *Syncer) error {
 		res, err := vq.addBlockDependencies(bjb.block, vq.finishBlockCallback(bjb.block))
 		if err != nil {
 			vq.updateDependencies(bjb.id, false)
-			vq.Error(fmt.Sprintf("failed to add dependencies for Block %v %v", bjb.block.ID(), err))
+			vq.Error(fmt.Sprintf("failed to add pending for Block %v %v", bjb.block.ID(), err))
 			continue
 		}
 
 		if res == false {
-			s.Info("dependencies done for %v", bjb.block.ID())
+			s.Info("pending done for %v", bjb.block.ID())
 			vq.updateDependencies(bjb.id, true)
 			vq.Info(" %v blocks in dependency map", len(vq.depMap))
 			vq.Info(" %v blocks in callback map", len(vq.callbacks))
@@ -188,7 +188,7 @@ func (vq *validationQueue) addDependencies(jobId interface{}, blks []types.Block
 	for _, id := range blks {
 		if vq.inQueue(id) {
 			vq.reverseDepMap[id] = append(vq.reverseDepMap[id], jobId)
-			vq.Info("add block %v to %v dependencies map", id, jobId)
+			vq.Info("add block %v to %v pending map", id, jobId)
 			dependencys[id] = struct{}{}
 		} else {
 			//	check database
@@ -196,7 +196,7 @@ func (vq *validationQueue) addDependencies(jobId interface{}, blks []types.Block
 				//unknown block add to queue
 				vq.queue <- id
 				vq.reverseDepMap[id] = append(vq.reverseDepMap[id], jobId)
-				vq.Info("add block %v to %v dependencies map", id, jobId)
+				vq.Info("add block %v to %v pending map", id, jobId)
 				dependencys[id] = struct{}{}
 			}
 		}
