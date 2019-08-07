@@ -70,14 +70,15 @@ func (tq *txQueue) updateDependencies(fj fetchJob) {
 
 	for _, id := range fj.ids.([]types.TransactionId) {
 		if item, ok := mp[id]; ok {
-			tq.updateDependencie(id, &item, true)
+			tq.invalidate(id, &item, true)
 			continue
 		}
-		tq.updateDependencie(id, nil, false)
+		tq.invalidate(id, nil, false)
 	}
 }
 
-func (tq *txQueue) updateDependencie(id types.TransactionId, tx *types.SerializableSignedTransaction, valid bool) {
+func (tq *txQueue) invalidate(id types.TransactionId, tx *types.SerializableSignedTransaction, valid bool) {
+	tq.Lock()
 	tq.Info("done with %v !!!!!!!!!!!!!!!! %v", hex.EncodeToString(id[:]), valid)
 	if valid && tx != nil {
 		tmp, err := tq.validateAndBuildTx(tx)
@@ -89,6 +90,7 @@ func (tq *txQueue) updateDependencie(id types.TransactionId, tx *types.Serializa
 		dep <- valid
 	}
 	delete(tq.pending, id)
+	tq.Unlock()
 }
 
 //todo batches
@@ -105,10 +107,9 @@ func (aq *atxQueue) work() error {
 }
 
 func (tq *txQueue) addToQueue(ids []types.TransactionId) chan bool {
-	tq.Lock()
+
 	deps := tq.addToPending(ids)
 	tq.queue <- ids
-	tq.Unlock()
 
 	doneChan := make(chan bool)
 	//fan in
@@ -127,12 +128,14 @@ func (tq *txQueue) addToQueue(ids []types.TransactionId) chan bool {
 }
 
 func (tq *txQueue) addToPending(ids []types.TransactionId) []chan bool {
+	tq.Lock()
 	deps := make([]chan bool, 0, len(ids))
 	for _, id := range ids {
 		ch := make(chan bool, 1)
 		deps = append(deps, ch)
 		tq.pending[id] = append(tq.pending[id], ch)
 	}
+	tq.Unlock()
 	return deps
 }
 
@@ -144,14 +147,15 @@ func (aq *atxQueue) updateDependencies(fj fetchJob) {
 	}
 	for _, id := range fj.ids.([]types.AtxId) {
 		if item, ok := mp[id]; ok {
-			aq.updateDependencie(id, &item, true)
+			aq.invalidate(id, &item, true)
 			continue
 		}
-		aq.updateDependencie(id, nil, false)
+		aq.invalidate(id, nil, false)
 	}
 }
 
-func (aq *atxQueue) updateDependencie(id types.AtxId, atx *types.ActivationTx, valid bool) {
+func (aq *atxQueue) invalidate(id types.AtxId, atx *types.ActivationTx, valid bool) {
+	aq.Lock()
 	aq.Info("done with %v !!!!!!!!!!!!!!!! %v", id.ShortId(), valid)
 
 	if valid && atx != nil {
@@ -163,13 +167,12 @@ func (aq *atxQueue) updateDependencie(id types.AtxId, atx *types.ActivationTx, v
 	}
 
 	delete(aq.pending, id)
+	aq.Unlock()
 }
 
 func (aq *atxQueue) addToQueue(ids []types.AtxId) chan bool {
-	aq.Lock()
 	deps := aq.addToPending(ids)
 	aq.queue <- ids
-	aq.Unlock()
 
 	doneChan := make(chan bool)
 	//fan in
@@ -188,12 +191,14 @@ func (aq *atxQueue) addToQueue(ids []types.AtxId) chan bool {
 }
 
 func (aq *atxQueue) addToPending(ids []types.AtxId) []chan bool {
+	aq.Lock()
 	deps := make([]chan bool, 0, len(ids))
 	for _, id := range ids {
 		ch := make(chan bool, 1)
 		deps = append(deps, ch)
 		aq.pending[id] = append(aq.pending[id], ch)
 	}
+	aq.Unlock()
 	return deps
 }
 
