@@ -98,12 +98,6 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 		RequestTimeout: time.Duration(timeout) * time.Millisecond,
 	}
 
-	if remote {
-		if err := GetData(app.Config.DataDir, lg); err != nil {
-			lg.Error("could not download data for test", err)
-			return
-		}
-	}
 	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P)
 
 	if err != nil {

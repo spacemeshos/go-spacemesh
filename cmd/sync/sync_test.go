@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/spacemeshos/go-spacemesh/log"
 	"testing"
 	"time"
 )
@@ -11,6 +12,13 @@ func TestSpacemeshApp_TestSyncCmd(t *testing.T) {
 	syncApp.Initialize(Cmd)
 	syncApp.Config.DataDir = "bin/data/"
 	remote = true
+
+	lg := log.New("", "", "")
+	if err := GetData(syncApp.Config.DataDir, lg); err != nil {
+		lg.Error("could not download data for test", err)
+		return
+	}
+
 	go syncApp.Start(Cmd, nil)
 
 	time.Sleep(20 * time.Second)
