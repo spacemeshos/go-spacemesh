@@ -3,8 +3,8 @@ package discovery
 import (
 	"context"
 	"errors"
+	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"time"
@@ -27,29 +27,28 @@ var ErrBootAbort = errors.New("bootstrap canceled by signal")
 
 // refresher is used to bootstrap and requestAddresses peers in the addrbook
 type refresher struct {
-	logger log.Log
-	config config.SwarmConfig
+	logger       log.Log
+	localAddress *node.NodeInfo
 
+	book      addressBook
 	bootNodes []*node.NodeInfo
 
-	book *addrBook
-
+	disc        Protocol
 	lastQueries map[p2pcrypto.PublicKey]time.Time
-
-	disc Protocol
 
 	quit chan struct{}
 }
 
-func newRefresher(book *addrBook, disc Protocol, bootnodes []*node.NodeInfo, logger log.Log) *refresher {
+func newRefresher(local *node.NodeInfo, book addressBook, disc Protocol, bootnodes []*node.NodeInfo, logger log.Log) *refresher {
 	//todo: trigger requestAddresses every X with random nodes
 	return &refresher{
-		logger:      logger,
-		book:        book,
-		disc:        disc,
-		bootNodes:   bootnodes,
-		lastQueries: make(map[p2pcrypto.PublicKey]time.Time),
-		quit:        make(chan struct{}), // todo: context ?
+		logger:       logger,
+		localAddress: local,
+		book:         book,
+		disc:         disc,
+		bootNodes:    bootnodes,
+		lastQueries:  make(map[p2pcrypto.PublicKey]time.Time),
+		quit:         make(chan struct{}), // todo: context ?
 	}
 }
 
@@ -62,28 +61,33 @@ func (r *refresher) Bootstrap(ctx context.Context, minPeers int) error {
 	// if there were any results but we didn't reach minPeers it will try the same procedure
 	// using the results as servers to query. every failed loop will wait a backoff
 	// to let other nodes populate before flooding with queries.
-
+	seed := false
+	size := r.book.NumAddresses()
+	if size == 0 {
+		r.book.AddAddresses(r.bootNodes, r.localAddress)
+		servers = r.bootNodes
+		seed = true
+	} else {
+		srv := r.book.AddressCache()
+		servers = srv[:common.Min(minPeers, len(srv))]
+	}
 loop:
 	for {
-		size := r.book.NumAddresses()
-		if size == 0 {
-			r.book.AddAddresses(r.bootNodes, r.book.localAddress)
-			servers = r.bootNodes
+		r.logger.Info("Bootstrap: starting with %v sized table", size)
+		res := r.requestAddresses(servers)
+		if len(res) > 0 {
+			servers = res
 		}
-
-		if size < minPeers+len(r.bootNodes) {
-			r.logger.Info("Bootstrap: starting with %v sized table", size)
-			res := r.requestAddresses(servers)
-			if len(res) > 0 {
-				servers = res
-			}
-			tries++
-			r.logger.Info("Bootstrap : %d try gave %v results", tries, len(res))
-		}
+		tries++
+		r.logger.Info("Bootstrap : %d try gave %v results", tries, len(res))
 
 		newsize := r.book.NumAddresses()
-		if newsize >= minPeers+len(r.bootNodes) {
-			r.logger.Info("Stopping bootstrap, achieved %v need %v", newsize-len(r.bootNodes), minPeers)
+		wanted := minPeers
+		if seed {
+			wanted += len(r.bootNodes)
+		}
+		if newsize-size >= wanted {
+			r.logger.Info("Stopping bootstrap, achieved %v need %v", newsize-size, wanted)
 			break
 		}
 
@@ -100,9 +104,11 @@ loop:
 
 	}
 
-	// currently we only have  the discovery address of bootnodes in the configuration so let them pick their own neighbors.
-	for _, b := range r.bootNodes {
-		r.book.RemoveAddress(b.PublicKey())
+	if seed {
+		// currently we only have  the discovery address of bootnodes in the configuration so let them pick their own neighbors.
+		for _, b := range r.bootNodes {
+			r.book.RemoveAddress(b.PublicKey())
+		}
 	}
 
 	return err
@@ -158,7 +164,7 @@ func (r *refresher) requestAddresses(servers []*node.NodeInfo) []*node.NodeInfo 
 	var out []*node.NodeInfo
 
 	seen := make(map[p2pcrypto.PublicKey]struct{})
-	seen[r.book.localAddress.PublicKey()] = struct{}{}
+	seen[r.localAddress.PublicKey()] = struct{}{}
 
 	now := time.Now()
 	pending := 0
