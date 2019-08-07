@@ -14,7 +14,7 @@ type Chan struct {
 	connection io.ReadWriteCloser
 	closeOnce  sync.Once
 
-	clock sync.RWMutex
+	cmtx   sync.RWMutex
 	closed bool
 
 	outMsgChan chan outMessage
@@ -31,14 +31,14 @@ func (s *Chan) In() chan []byte {
 
 // Out sends message on the wire, blocking.
 func (s *Chan) Out(message []byte) error {
-	s.clock.RLock()
+	s.cmtx.RLock()
 	if !s.closed {
 		outCb := make(chan error)
 		s.outMsgChan <- outMessage{message, outCb}
-		s.clock.RUnlock()
+		s.cmtx.RUnlock()
 		return <-outCb
 	}
-	s.clock.RUnlock()
+	s.cmtx.RUnlock()
 	return fmt.Errorf("formatter is closed")
 }
 
@@ -112,21 +112,21 @@ func (s *Chan) writeToWriter(w io.Writer) {
 	// single writer, no need for Mutex
 Loop:
 	for {
-		s.clock.RLock()
+		s.cmtx.RLock()
 		cl := s.closed
-		s.clock.RUnlock()
+		s.cmtx.RUnlock()
 		if cl {
 			break Loop
 		}
 		msg := <-s.outMsgChan
-			if _, err := mw.WriteRecord(msg.Message()); err != nil {
-				// unexpected error. tell the client.
-				msg.Result() <- err
-				break Loop
-			} else {
-				// Report msg was sent
-				msg.Result() <- nil
-			}
+		if _, err := mw.WriteRecord(msg.Message()); err != nil {
+			// unexpected error. tell the client.
+			msg.Result() <- err
+			break Loop
+		} else {
+			// Report msg was sent
+			msg.Result() <- nil
+		}
 
 	}
 
@@ -140,9 +140,9 @@ Loop:
 // Close the Chan
 func (s *Chan) Close() {
 	s.closeOnce.Do(func() {
-		s.clock.Lock()
+		s.cmtx.Lock()
 		s.closed = true
-		s.clock.Unlock()
+		s.cmtx.Unlock()
 		close(s.CloseChan)   // close both writer and reader
 		s.connection.Close() // close internal connection
 	})
