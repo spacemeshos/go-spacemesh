@@ -19,12 +19,32 @@ type PeerStore interface {
 	Bootstrap(ctx context.Context) error
 	Size() int
 	SetLocalAddresses(tcp, udp int)
+
+	Good(key p2pcrypto.PublicKey)
+	Attempt(key p2pcrypto.PublicKey)
 }
 
 type Protocol interface {
 	Ping(p p2pcrypto.PublicKey) error
 	GetAddresses(server p2pcrypto.PublicKey) ([]*node.NodeInfo, error)
 	SetLocalAddresses(tcp, udp int)
+}
+
+type addressBook interface {
+	Good(key p2pcrypto.PublicKey)
+	Attempt(key p2pcrypto.PublicKey)
+	RemoveAddress(key p2pcrypto.PublicKey)
+	NeedNewAddresses() bool
+	Lookup(key p2pcrypto.PublicKey) (*node.NodeInfo, error)
+	AddAddress(addr, srcAddr *node.NodeInfo)
+	AddAddresses(addrs []*node.NodeInfo, srcAddr *node.NodeInfo)
+	AddressCache() []*node.NodeInfo
+	NumAddresses() int
+	GetAddress() *KnownAddress
+}
+
+type bootstrapper interface {
+	Bootstrap(ctx context.Context, minPeers int) error
 }
 
 var (
@@ -41,8 +61,8 @@ type Discovery struct {
 	disc Protocol
 
 	local        *node.LocalNode
-	rt           *addrBook
-	bootstrapper *refresher
+	rt           addressBook
+	bootstrapper bootstrapper
 }
 
 // Size returns the size of addrBook.
@@ -50,8 +70,30 @@ func (d *Discovery) Size() int {
 	return d.rt.NumAddresses()
 }
 
+func (d *Discovery) Good(key p2pcrypto.PublicKey) {
+	d.rt.Good(key)
+}
+
+func (d *Discovery) Attempt(key p2pcrypto.PublicKey) {
+	d.rt.Attempt(key)
+}
+
+func (d *Discovery) refresh(ctx context.Context, peersToGet int) error {
+	err := d.bootstrapper.Bootstrap(ctx, peersToGet)
+	if err != nil {
+		d.local.Log.Error("Error trying to refresh addrbook ", err)
+		return err
+	}
+	return nil
+}
+
 // SelectPeers asks routing table to randomly select a slice of nodes in size `qty`
 func (d *Discovery) SelectPeers(qty int) []*node.NodeInfo {
+
+	if d.rt.NeedNewAddresses() {
+		d.refresh(context.Background(), qty) // TODO: use ctx with timeout, check errors
+	}
+
 	out := make([]*node.NodeInfo, 0, qty)
 	set := make(map[p2pcrypto.PublicKey]struct{})
 	for i := 0; i < qty; i++ {
@@ -84,10 +126,11 @@ func (d *Discovery) Update(addr, src *node.NodeInfo) {
 // TODO: Replace `node.LocalNode` with `NodeInfo` and `log.Log`.
 // New creates a new Discovery
 func New(ln *node.LocalNode, config config.SwarmConfig, service server.Service) *Discovery {
+	addrbook := NewAddrBook(ln.NodeInfo, config, ln.Log)
 	d := &Discovery{
 		config: config,
 		local:  ln,
-		rt:     NewAddrBook(ln.NodeInfo, config, ln.Log),
+		rt:     addrbook,
 	}
 
 	d.disc = NewDiscoveryProtocol(ln.NodeInfo, d.rt, service, ln.Log)
@@ -103,7 +146,7 @@ func New(ln *node.LocalNode, config config.SwarmConfig, service server.Service) 
 		bn = append(bn, nd)
 	}
 	//TODO: Return err if no bootstrap nodes were parsed.
-	d.bootstrapper = newRefresher(d.rt, d.disc, bn, ln.Log)
+	d.bootstrapper = newRefresher(ln.NodeInfo, d.rt, d.disc, bn, ln.Log)
 
 	return d
 }
@@ -120,5 +163,5 @@ func (d *Discovery) Remove(key p2pcrypto.PublicKey) {
 
 func (d *Discovery) Bootstrap(ctx context.Context) error {
 	d.local.Debug("Starting node bootstrap ", d.local.String())
-	return d.bootstrapper.Bootstrap(ctx, d.config.RandomConnections)
+	return d.refresh(ctx, d.config.RandomConnections)
 }
