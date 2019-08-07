@@ -811,7 +811,7 @@ func TestNeighborhood_Disconnect(t *testing.T) {
 
 	// manualy add an incoming peer
 	rnd2 := node.GenerateRandomNodeData()
-	n.outpeers[rnd2.PublicKey().String()] = rnd2.PublicKey() // no need to lock nothing's happening
+	n.outpeers[rnd2.PublicKey()] = struct{}{} // no need to lock nothing's happening
 	go n.Disconnect(rnd2.PublicKey())
 	ti = time.After(time.Millisecond)
 	select {
@@ -829,11 +829,10 @@ func TestSwarm_AddIncomingPeer(t *testing.T) {
 	p.addIncomingPeer(rnd.PublicKey())
 
 	p.inpeersMutex.RLock()
-	peer, ok := p.inpeers[rnd.PublicKey().String()]
+	_, ok := p.inpeers[rnd.PublicKey()]
 	p.inpeersMutex.RUnlock()
 
 	assert.True(t, ok)
-	assert.NotNil(t, peer)
 
 	nds := node.GenerateRandomNodesData(config.DefaultConfig().MaxInboundPeers)
 	for i := 0; i < len(nds); i++ {
@@ -842,10 +841,9 @@ func TestSwarm_AddIncomingPeer(t *testing.T) {
 
 	require.Equal(t, len(p.inpeers), config.DefaultConfig().MaxInboundPeers)
 	p.inpeersMutex.RLock()
-	peer, ok = p.inpeers[nds[len(nds)-1].PublicKey().String()]
+	_, ok = p.inpeers[nds[len(nds)-1].PublicKey()]
 	p.inpeersMutex.RUnlock()
 	assert.False(t, ok)
-	assert.Nil(t, peer)
 }
 
 func TestSwarm_AskPeersSerial(t *testing.T) {

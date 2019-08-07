@@ -278,7 +278,7 @@ func TestNeighborhood_Relay2(t *testing.T) {
 	for pk == nil {
 		rnd := p2pcrypto.NewRandomPubkey()
 		n.peersMutex.RLock()
-		if _, ok := n.peers[rnd.String()]; ok {
+		if _, ok := n.peers[rnd]; ok {
 			n.peersMutex.RUnlock()
 			continue
 		}
