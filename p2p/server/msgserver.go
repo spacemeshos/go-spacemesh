@@ -74,8 +74,8 @@ func (p *MessageServer) Close() {
 }
 
 func (p *MessageServer) readLoop() {
+	timer := time.NewTicker(p.requestLifetime + time.Millisecond*100)
 	for {
-		timer := time.NewTicker(p.requestLifetime + time.Millisecond*100)
 		select {
 		case <-p.exit:
 			p.Debug("shutting down protocol ", p.name)
