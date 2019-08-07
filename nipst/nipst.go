@@ -179,7 +179,6 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *common.Hash) (*types.NIPST, error)
 			return nil, fmt.Errorf("not a member of this round (poetId: %x, roundId: %d)",
 				nb.state.PoetServiceId, nb.state.PoetRound.Id) // TODO(noamnelke): handle this case!
 		}
-		nipst.PoetProofRef = poetProofRef
 		nb.state.PoetProofRef = poetProofRef
 		nb.state.persist()
 	}
@@ -251,11 +250,10 @@ func NewNIPSTWithChallenge(challenge *common.Hash, poetRef []byte) *types.NIPST 
 		NipstChallenge: challenge,
 		PostProof: &types.PostProof{
 			Identity:     []byte(nil),
-			Challenge:    []byte(nil),
+			Challenge:    poetRef,
 			MerkleRoot:   []byte(nil),
 			ProofNodes:   [][]byte(nil),
 			ProvenLeaves: [][]byte(nil),
 		},
-		PoetProofRef: poetRef,
 	}
 }
