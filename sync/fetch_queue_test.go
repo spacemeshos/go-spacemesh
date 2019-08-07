@@ -4,6 +4,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/types"
+	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
 )
@@ -60,6 +61,9 @@ func TestBlockListener_TestTxQueue(t *testing.T) {
 		}
 	}
 
+	assert.True(t, len(queue.txlocks) == 0)
+	assert.True(t, len(queue.pending) == 0)
+
 	bl2.Close()
 	bl1.Close()
 	time.Sleep(1 * time.Second)
@@ -113,6 +117,8 @@ func TestBlockListener_TestAtxQueue(t *testing.T) {
 			t.Error("done! without fetching")
 		}
 	}
+	assert.True(t, len(queue.atxlocks) == 0)
+	assert.True(t, len(queue.pending) == 0)
 
 	bl2.Close()
 	bl1.Close()
@@ -141,7 +147,7 @@ func TestBlockListener_TestTxQueueHandle(t *testing.T) {
 	block1.TxIds = []types.TransactionId{id1, id2, id3}
 	bl2.AddBlockWithTxs(block1, []*types.AddressableSignedTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
 
-	res, err := queue.handle([]types.TransactionId{id1, id2, id3})
+	res, err := queue.Handle([]types.TransactionId{id1, id2, id3})
 	if err != nil {
 		t.Error(err)
 	}
@@ -149,6 +155,9 @@ func TestBlockListener_TestTxQueueHandle(t *testing.T) {
 	if len(res) != 3 {
 		t.Error("wrong length")
 	}
+
+	assert.True(t, len(queue.txlocks) == 0)
+	assert.True(t, len(queue.pending) == 0)
 
 	bl2.Close()
 	bl1.Close()
@@ -177,7 +186,7 @@ func TestBlockListener_TestAtxQueueHandle(t *testing.T) {
 
 	bl2.AddBlockWithTxs(block1, []*types.AddressableSignedTransaction{}, []*types.ActivationTx{atx1, atx2, atx3})
 
-	res, err := queue.handle([]types.AtxId{atx1.Id(), atx2.Id(), atx3.Id()})
+	res, err := queue.Handle([]types.AtxId{atx1.Id(), atx2.Id(), atx3.Id()})
 	if err != nil {
 		t.Error(err)
 	}
@@ -185,6 +194,9 @@ func TestBlockListener_TestAtxQueueHandle(t *testing.T) {
 	if len(res) != 3 {
 		t.Error("wrong length")
 	}
+
+	assert.True(t, len(queue.atxlocks) == 0)
+	assert.True(t, len(queue.pending) == 0)
 
 	bl2.Close()
 	bl1.Close()

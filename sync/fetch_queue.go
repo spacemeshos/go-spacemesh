@@ -33,7 +33,6 @@ type fetchJob struct {
 }
 
 //todo make the queue generic
-//todo map garbage collection
 type txQueue struct {
 	*Syncer
 	sync.Mutex
@@ -109,15 +108,14 @@ func (tq *txQueue) addToQueue(ids []types.TransactionId) chan bool {
 	tq.Lock()
 	deps := tq.addToPending(ids)
 	tq.queue <- ids
+	tq.Unlock()
 
 	doneChan := make(chan bool)
-
 	//fan in
 	go func() {
 		alldone := true
 		for _, c := range deps {
-			done := <-c
-			if !done {
+			if done := <-c; !done {
 				alldone = false
 				break
 			}
@@ -125,7 +123,6 @@ func (tq *txQueue) addToQueue(ids []types.TransactionId) chan bool {
 		doneChan <- alldone
 		close(doneChan)
 	}()
-	tq.Unlock()
 	return doneChan
 }
 
@@ -172,14 +169,14 @@ func (aq *atxQueue) addToQueue(ids []types.AtxId) chan bool {
 	aq.Lock()
 	deps := aq.addToPending(ids)
 	aq.queue <- ids
-	doneChan := make(chan bool)
+	aq.Unlock()
 
+	doneChan := make(chan bool)
 	//fan in
 	go func() {
 		alldone := true
 		for _, c := range deps {
-			done := <-c
-			if !done {
+			if done := <-c; !done {
 				alldone = false
 				break
 			}
@@ -187,7 +184,6 @@ func (aq *atxQueue) addToQueue(ids []types.AtxId) chan bool {
 		doneChan <- alldone
 		close(doneChan)
 	}()
-	aq.Unlock()
 	return doneChan
 }
 
@@ -203,7 +199,7 @@ func (aq *atxQueue) addToPending(ids []types.AtxId) []chan bool {
 
 //todo minimize code duplication
 //returns txs out of txids that are not in the local database
-func (tq *txQueue) handle(txids []types.TransactionId) ([]*types.AddressableSignedTransaction, error) {
+func (tq *txQueue) Handle(txids []types.TransactionId) ([]*types.AddressableSignedTransaction, error) {
 
 	tq.lockTxs(txids)
 	_, _, missing := tq.checkLocalTxs(txids)
@@ -288,7 +284,7 @@ func (tq *txQueue) checkLocalTxs(txids []types.TransactionId) (map[types.Transac
 
 //todo minimize code duplication
 //returns atxs out of atxids that are not in the local database
-func (aq *atxQueue) handle(atxIds []types.AtxId) ([]*types.ActivationTx, error) {
+func (aq *atxQueue) Handle(atxIds []types.AtxId) ([]*types.ActivationTx, error) {
 
 	aq.lockAtxs(atxIds)
 	_, _, missing := aq.checkLocalAtxs(atxIds)
@@ -407,7 +403,7 @@ func ATxReqFactoryV2() RequestFactoryV2 {
 	return func(s *server.MessageServer, peer p2p.Peer, ids interface{}) (chan interface{}, error) {
 		ch := make(chan interface{}, 1)
 		foo := func(msg []byte) {
-			s.Info("handle atx response ")
+			s.Info("Handle atx response ")
 			defer close(ch)
 			if len(msg) == 0 {
 				s.Warning("peer responded with nil to atxs request ", peer)
