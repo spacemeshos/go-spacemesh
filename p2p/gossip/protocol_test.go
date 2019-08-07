@@ -1,6 +1,7 @@
 package gossip
 
 import (
+	"fmt"
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
@@ -482,4 +483,47 @@ func TestHash(t *testing.T) {
 
 	assert.NotEqual(t, calcHash(msg1, prot1), calcHash(msg1, prot2))
 	assert.NotEqual(t, calcHash(msg1, prot1), calcHash(msg2, prot1))
+}
+
+func Test_doubleCache(t *testing.T) {
+	size := uint(10)
+	c := newDoubleCache(size)
+	require.Len(t, c.cacheA, 0)
+	require.Len(t, c.cacheB, 0)
+
+	for i := uint(0); i < size; i++ {
+		require.False(t, c.lookupOrCreate(calcHash([]byte(fmt.Sprintf("LOL%v", i)), "prot")))
+	}
+
+	require.Len(t, c.cacheA, int(size))
+
+	c.lookupOrCreate(calcHash([]byte(fmt.Sprintf("LOL%v", size+1)), "prot"))
+	require.Len(t, c.cacheA, int(size))
+	require.Len(t, c.cacheB, 1)
+
+	for i := uint(0); i < size-1; i++ {
+		require.False(t, c.lookupOrCreate(calcHash([]byte(fmt.Sprintf("LOL%v", size+100+i)), "prot")))
+	}
+
+	require.Len(t, c.cacheA, int(size))
+	require.Len(t, c.cacheB, int(size))
+
+	cacheBitems := make(map[hash]struct{}, len(c.cacheB))
+	for item := range c.cacheB {
+		cacheBitems[item] = struct{}{}
+	}
+
+	require.False(t, c.lookupOrCreate(calcHash([]byte(fmt.Sprintf("LOL%v", size+1337)), "prot")))
+	// this should prune cache a which is the oldest and keep cache b items
+
+	require.Len(t, c.cacheB, 1)
+	require.Len(t, c.cacheA, int(size))
+
+	for item := range cacheBitems {
+		_, ok := c.cacheA[item]
+		require.True(t, ok)
+	}
+
+	require.True(t, c.lookupOrCreate(calcHash([]byte(fmt.Sprintf("LOL%v", size+1337)), "prot")))
+	require.False(t, c.lookupOrCreate(calcHash([]byte(fmt.Sprintf("LOL%v", 0)), "prot"))) // already pruned
 }
