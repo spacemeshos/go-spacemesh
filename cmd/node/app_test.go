@@ -108,9 +108,9 @@ func (suite *AppTestSuite) initSingleInstance(i int, genesisTime string, rng *am
 	smApp.Config.LayersPerEpoch = 3
 	smApp.Config.Hdist = 5
 	smApp.Config.GenesisTime = genesisTime
-		smApp.Config.LayerDurationSec = 20
-		smApp.Config.HareEligibility.ConfidenceParam = 2
-		smApp.Config.HareEligibility.EpochOffset = 0
+	smApp.Config.LayerDurationSec = 20
+	smApp.Config.HareEligibility.ConfidenceParam = 2
+	smApp.Config.HareEligibility.EpochOffset = 0
 
 	edSgn := signing.NewEdSigner()
 	pub := edSgn.PublicKey()
@@ -185,8 +185,8 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	activateGrpcServer(suite.apps[0])
 
 	go func() {
-		threeAndAHalfLayer := float32(suite.apps[0].Config.LayerDurationSec) * float32(3.5)
-		<-time.After(time.Duration(threeAndAHalfLayer) * time.Second)
+		delay := float32(suite.apps[0].Config.LayerDurationSec) * float32(7.5)
+		<-time.After(time.Duration(delay) * time.Second)
 		suite.initSingleInstance(7, genesisTime, rng, path, "g", rolacle, poetClient)
 		suite.apps[len(suite.apps)-1].startServices()
 	}()
@@ -362,6 +362,8 @@ func (suite *AppTestSuite) validateLastATXActiveSetSize(app *SpacemeshApp) {
 }
 
 func (suite *AppTestSuite) gracefulShutdown() {
+	log.Info("Graceful shutdown begin")
+
 	var wg sync.WaitGroup
 	for _, app := range suite.apps {
 		wg.Add(1)
@@ -371,6 +373,8 @@ func (suite *AppTestSuite) gracefulShutdown() {
 		}(app)
 	}
 	wg.Wait()
+
+	log.Info("Graceful shutdown end")
 }
 
 func TestAppTestSuite(t *testing.T) {
