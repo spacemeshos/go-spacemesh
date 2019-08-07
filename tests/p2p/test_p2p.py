@@ -14,7 +14,7 @@ from tests.queries import ES, query_message
 from tests.test_bs import add_single_client, add_multi_clients, get_conf
 from tests.test_bs import api_call
 # noinspection PyUnresolvedReferences
-from tests.test_bs import setup_bootstrap, create_configmap, setup_clients, save_log_on_exit, add_client, add_curl
+from tests.test_bs import setup_bootstrap, setup_clients, save_log_on_exit, add_client, add_curl
 
 # ==============================================================================
 #    TESTS

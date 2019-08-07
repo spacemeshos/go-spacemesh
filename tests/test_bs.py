@@ -130,9 +130,8 @@ def setup_server(deployment_name, deployment_file, namespace):
     return ip
 
 
-
 @pytest.fixture(scope='module')
-def setup_bootstrap(request, init_session, create_configmap):
+def setup_bootstrap(request, init_session):
     bootstrap_deployment_info = DeploymentInfo(dep_id=init_session)
 
     return setup_bootstrap_in_namespace(testconfig['namespace'],
@@ -280,7 +279,7 @@ def api_call(client_ip, data, api, namespace):
                  stderr=True, stdin=False, stdout=True, tty=False, _request_timeout=90)
     return res
 
-
+# The following fixture is currently not in used and mark for deprecattion
 @pytest.fixture(scope='module')
 def create_configmap(request):
     def _create_configmap_in_namespace(nspace):
