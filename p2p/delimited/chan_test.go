@@ -6,7 +6,6 @@ import (
 )
 
 type mockc struct {
-
 }
 
 func (mockc) Write(b []byte) (int, error) {
@@ -38,16 +37,14 @@ func Test_Chan(t *testing.T) {
 
 	c.Close()
 
-	for i := 0; i < 2000; i ++ {
-		tx := time.NewTimer(10*time.Second)
+	for i := 0; i < 2000; i++ {
+		tx := time.NewTimer(10 * time.Second)
 		select {
 		case <-done:
 			continue
-			case <-tx.C:
-				t.Fatal("timeout waiting for message")
+		case <-tx.C:
+			t.Fatal("timeout waiting for message")
 
 		}
 	}
-	//time.Sleep(1*time.Second)
-	//for x := i c.Out()
 }
