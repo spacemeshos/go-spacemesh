@@ -91,6 +91,7 @@ type Syncer struct {
 	clock             timesync.LayerTimer
 	exit              chan struct{}
 	currentLayerMutex sync.RWMutex
+	syncFuncWg        sync.WaitGroup
 }
 
 func (s *Syncer) ForceSync() {
@@ -98,8 +99,11 @@ func (s *Syncer) ForceSync() {
 }
 
 func (s *Syncer) Close() {
+	s.Info("Closing syncer")
 	close(s.exit)
 	close(s.forceSync)
+	time.Sleep(200 * time.Millisecond)
+	s.syncFuncWg.Wait() // must be called after we ensure no more sync routines can be created
 	s.MessageServer.Close()
 	s.Peers.Close()
 }
@@ -132,6 +136,7 @@ func (s *Syncer) Start() {
 func (s *Syncer) getSyncRoutine() func() {
 	return func() {
 		if atomic.CompareAndSwapUint32(&s.SyncLock, IDLE, RUNNING) {
+			s.syncFuncWg.Add(1)
 			s.Synchronise()
 			atomic.StoreUint32(&s.SyncLock, IDLE)
 		}
@@ -144,7 +149,7 @@ func (s *Syncer) run() {
 	for {
 		select {
 		case <-s.exit:
-			s.Debug("Work stoped")
+			s.Debug("Work stopped")
 			return
 		case <-s.forceSync:
 			go syncRoutine()
@@ -198,25 +203,30 @@ func (s *Syncer) lastTickedLayer() types.LayerID {
 }
 
 func (s *Syncer) Synchronise() {
-	for currentSyncLayer := s.lValidator.ValidatedLayer() + 1; currentSyncLayer <= s.lastTickedLayer(); currentSyncLayer++ {
-		lastTickedLayer := s.lastTickedLayer()
-		s.Info("syncing layer %v current consensus layer is %d", currentSyncLayer, lastTickedLayer)
-
-		if s.IsSynced() && currentSyncLayer == lastTickedLayer {
-			continue
-		}
-
+	currentSyncLayer := s.lValidator.ValidatedLayer() + 1
+	if s.IsSynced() {
 		lyr, err := s.GetLayer(types.LayerID(currentSyncLayer))
 		if err != nil {
-			s.Info("layer %v is not in the database", currentSyncLayer)
-			if lyr, err = s.getLayerFromNeighbors(currentSyncLayer); err != nil {
-				s.Info("could not get layer %v from neighbors %v", currentSyncLayer, err)
-				return
-			}
+			s.Error("err not nil err=%v", err)
+			return
 		}
-
 		s.lValidator.ValidateLayer(lyr) // wait for layer validation
+		return
 	}
+	for ; currentSyncLayer <= s.lastTickedLayer(); currentSyncLayer++ {
+		lastTickedLayer := s.lastTickedLayer()
+		s.Info("syncing layer %v current consensus layer is %d", currentSyncLayer, lastTickedLayer)
+		lyr, err := s.getLayerFromNeighbors(currentSyncLayer)
+		if err != nil {
+			s.Info("could not get layer %v from neighbors %v", currentSyncLayer, err)
+			return
+		}
+		if currentSyncLayer < lastTickedLayer {
+			s.lValidator.ValidateLayer(lyr) // wait for layer validation
+		}
+	}
+
+	s.syncFuncWg.Done()
 }
 
 func (s *Syncer) getLayerFromNeighbors(currenSyncLayer types.LayerID) (*types.Layer, error) {
