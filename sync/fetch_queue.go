@@ -360,14 +360,6 @@ func (aq *atxQueue) checkLocalAtxs(atxIds []types.AtxId) (map[types.AtxId]*types
 		id := t
 		if x, err := aq.atxpool.Get(id); err == nil {
 			atx := x
-
-			//todo need to get rid of this somehow
-			if atx.Nipst == nil {
-				aq.Warning("atx %v nipst not found ", id.ShortId())
-				missingInPool = append(missingInPool, id)
-				continue
-			}
-
 			aq.Debug("found atx, %v in atx pool", id.ShortId())
 			unprocessedAtxs[id] = &atx
 		} else {
