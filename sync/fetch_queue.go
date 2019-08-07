@@ -11,20 +11,18 @@ import (
 	"time"
 )
 
-const HandleTimeOut = 3 * time.Second
-
 type RequestFactoryV2 func(s *server.MessageServer, peer p2p.Peer, id interface{}) (chan interface{}, error)
 
 func NewTxQueue(s *Syncer) *txQueue {
 	//todo buffersize
-	q := &txQueue{Syncer: s, queue: make(chan interface{}, 100), pending: make(map[types.TransactionId][]chan bool)}
+	q := &txQueue{Syncer: s, queue: make(chan interface{}, 100), pending: make(map[types.TransactionId][]chan bool), txlocks: map[types.TransactionId]*sync.Mutex{}}
 	go q.work()
 	return q
 }
 
 func NewAtxQueue(s *Syncer) *atxQueue {
 	//todo buffersize
-	q := &atxQueue{Syncer: s, queue: make(chan interface{}, 100), pending: make(map[types.AtxId][]chan bool)}
+	q := &atxQueue{Syncer: s, queue: make(chan interface{}, 100), pending: make(map[types.AtxId][]chan bool), atxlocks: map[types.AtxId]*sync.Mutex{}}
 	go q.work()
 	return q
 }
@@ -32,13 +30,14 @@ func NewAtxQueue(s *Syncer) *atxQueue {
 type fetchJob struct {
 	items interface{}
 	ids   interface{}
-	jobID int
 }
 
 //todo make the queue generic
+//todo map garbage collection
 type txQueue struct {
 	*Syncer
 	sync.Mutex
+	txlocks map[types.TransactionId]*sync.Mutex
 	queue   chan interface{} //types.TransactionId //todo make buffered
 	pending map[types.TransactionId][]chan bool
 }
@@ -46,13 +45,14 @@ type txQueue struct {
 type atxQueue struct {
 	*Syncer
 	sync.Mutex
-	queue   chan interface{} //types.AtxId
-	pending map[types.AtxId][]chan bool
+	atxlocks map[types.AtxId]*sync.Mutex
+	queue    chan interface{} //types.AtxId
+	pending  map[types.AtxId][]chan bool
 }
 
 //todo batches
 func (tq *txQueue) work() error {
-	output := tq.fetchWithFactory(NewFetchWorker(tq.Syncer, 1, TxReqFactoryV2(), tq.queue))
+	output := tq.fetchWithFactory(NewFetchWorker(tq.Syncer, tq.Concurrency, TxReqFactoryV2(), tq.queue))
 	for out := range output {
 		txs := out.(fetchJob)
 		tq.Info("next id %v", txs)
@@ -64,32 +64,37 @@ func (tq *txQueue) work() error {
 }
 
 func (tq *txQueue) updateDependencies(fj fetchJob) {
-	mp := map[types.TransactionId]struct{}{}
+	mp := map[types.TransactionId]types.SerializableSignedTransaction{}
 	for _, item := range fj.items.([]types.SerializableSignedTransaction) {
-		mp[types.GetTransactionId(&item)] = struct{}{}
+		mp[types.GetTransactionId(&item)] = item
 	}
 
 	for _, id := range fj.ids.([]types.TransactionId) {
-		if _, ok := mp[id]; !ok {
-			tq.updateDependencie(id, false)
+		if item, ok := mp[id]; ok {
+			tq.updateDependencie(id, &item, true)
 			continue
 		}
-		tq.updateDependencie(id, true)
+		tq.updateDependencie(id, nil, false)
 	}
 }
 
-func (tq *txQueue) updateDependencie(id types.TransactionId, valid bool) {
+func (tq *txQueue) updateDependencie(id types.TransactionId, tx *types.SerializableSignedTransaction, valid bool) {
 	tq.Info("done with %v !!!!!!!!!!!!!!!! %v", hex.EncodeToString(id[:]), valid)
+	if valid && tx != nil {
+		tmp, err := tq.validateAndBuildTx(tx)
+		if err == nil {
+			tq.txpool.Put(id, tmp)
+		}
+	}
 	for _, dep := range tq.pending[id] {
 		dep <- valid
 	}
-
 	delete(tq.pending, id)
 }
 
 //todo batches
 func (aq *atxQueue) work() error {
-	output := aq.fetchWithFactory(NewFetchWorker(aq.Syncer, 1, ATxReqFactoryV2(), aq.queue))
+	output := aq.fetchWithFactory(NewFetchWorker(aq.Syncer, aq.Concurrency, ATxReqFactoryV2(), aq.queue))
 	for out := range output {
 		txs := out.(fetchJob)
 		aq.Info("next id %v", txs)
@@ -100,15 +105,9 @@ func (aq *atxQueue) work() error {
 	return nil
 }
 
-func (tq *txQueue) addToPending(ids []types.TransactionId) chan bool {
-
-	deps := make([]chan bool, 0, len(ids))
-	for _, id := range ids {
-		ch := make(chan bool, 1)
-		deps = append(deps, ch)
-		tq.pending[id] = append(tq.pending[id], ch)
-	}
-
+func (tq *txQueue) addToQueue(ids []types.TransactionId) chan bool {
+	tq.Lock()
+	deps := tq.addToPending(ids)
 	tq.queue <- ids
 
 	doneChan := make(chan bool)
@@ -126,28 +125,42 @@ func (tq *txQueue) addToPending(ids []types.TransactionId) chan bool {
 		doneChan <- alldone
 		close(doneChan)
 	}()
-
+	tq.Unlock()
 	return doneChan
 }
 
+func (tq *txQueue) addToPending(ids []types.TransactionId) []chan bool {
+	deps := make([]chan bool, 0, len(ids))
+	for _, id := range ids {
+		ch := make(chan bool, 1)
+		deps = append(deps, ch)
+		tq.pending[id] = append(tq.pending[id], ch)
+	}
+	return deps
+}
+
 func (aq *atxQueue) updateDependencies(fj fetchJob) {
-	mp := map[types.AtxId]struct{}{}
+	mp := map[types.AtxId]types.ActivationTx{}
 	for _, item := range fj.items.([]types.ActivationTx) {
 		item.CalcAndSetId() //todo put it somewhere that will cause less confusion
-		mp[item.Id()] = struct{}{}
+		mp[item.Id()] = item
 	}
-
 	for _, id := range fj.ids.([]types.AtxId) {
-		if _, ok := mp[id]; !ok {
-			aq.updateDependencie(id, false)
+		if item, ok := mp[id]; ok {
+			aq.updateDependencie(id, &item, true)
 			continue
 		}
-		aq.updateDependencie(id, true)
+		aq.updateDependencie(id, nil, false)
 	}
 }
 
-func (aq *atxQueue) updateDependencie(id types.AtxId, valid bool) {
+func (aq *atxQueue) updateDependencie(id types.AtxId, atx *types.ActivationTx, valid bool) {
 	aq.Info("done with %v !!!!!!!!!!!!!!!! %v", id.ShortId(), valid)
+
+	if valid && atx != nil {
+		aq.atxpool.Put(id, atx)
+	}
+
 	for _, dep := range aq.pending[id] {
 		dep <- valid
 	}
@@ -155,16 +168,10 @@ func (aq *atxQueue) updateDependencie(id types.AtxId, valid bool) {
 	delete(aq.pending, id)
 }
 
-func (aq *atxQueue) addToPending(ids []types.AtxId) chan bool {
-	deps := make([]chan bool, 0, len(ids))
-	for _, id := range ids {
-		ch := make(chan bool, 1)
-		deps = append(deps, ch)
-		aq.pending[id] = append(aq.pending[id], ch)
-	}
-
+func (aq *atxQueue) addToQueue(ids []types.AtxId) chan bool {
+	aq.Lock()
+	deps := aq.addToPending(ids)
 	aq.queue <- ids
-
 	doneChan := make(chan bool)
 
 	//fan in
@@ -180,42 +187,73 @@ func (aq *atxQueue) addToPending(ids []types.AtxId) chan bool {
 		doneChan <- alldone
 		close(doneChan)
 	}()
-
+	aq.Unlock()
 	return doneChan
+}
+
+func (aq *atxQueue) addToPending(ids []types.AtxId) []chan bool {
+	deps := make([]chan bool, 0, len(ids))
+	for _, id := range ids {
+		ch := make(chan bool, 1)
+		deps = append(deps, ch)
+		aq.pending[id] = append(aq.pending[id], ch)
+	}
+	return deps
 }
 
 //todo minimize code duplication
 //returns txs out of txids that are not in the local database
 func (tq *txQueue) handle(txids []types.TransactionId) ([]*types.AddressableSignedTransaction, error) {
 
-	//todo need to synchronize this somehow
-	_, _, missing := tq.CheckLocalTxs(txids)
-	output := tq.addToPending(missing)
-	timeout := time.NewTimer(HandleTimeOut)
+	tq.lockTxs(txids)
+	_, _, missing := tq.checkLocalTxs(txids)
+	output := tq.addToQueue(missing)
+	tq.unlockTxs(txids)
 
-	select {
-	case <-output:
-		unprocessedTxs, processedTxs, missing := tq.CheckLocalTxs(txids)
-		if len(missing) > 0 {
-			return nil, errors.New("something got fudged2")
-		}
-		txs := make([]*types.AddressableSignedTransaction, 0, len(txids))
-		for _, id := range txids {
-			if tx, ok := unprocessedTxs[id]; ok {
-				txs = append(txs, tx)
-			} else if _, ok := processedTxs[id]; ok {
-				continue
-			} else {
-				return nil, errors.New(fmt.Sprintf("could not fetch tx %v", hex.EncodeToString(id[:])))
-			}
-		}
-		return txs, nil
-	case <-timeout.C:
-		return nil, errors.New("something got fudged")
+	if success := <-output; !success {
+		return nil, errors.New(fmt.Sprintf("could not fetch all txs"))
 	}
+
+	unprocessedTxs, processedTxs, missing := tq.checkLocalTxs(txids)
+	if len(missing) > 0 {
+		return nil, errors.New("something got fudged2")
+	}
+
+	txs := make([]*types.AddressableSignedTransaction, 0, len(txids))
+	for _, id := range txids {
+		if tx, ok := unprocessedTxs[id]; ok {
+			txs = append(txs, tx)
+		} else if _, ok := processedTxs[id]; ok {
+			continue
+		} else {
+			return nil, errors.New(fmt.Sprintf("atx %v was not found after fetch was done", hex.EncodeToString(id[:])))
+		}
+	}
+	return txs, nil
 }
 
-func (tq *txQueue) CheckLocalTxs(txids []types.TransactionId) (map[types.TransactionId]*types.AddressableSignedTransaction, map[types.TransactionId]*types.AddressableSignedTransaction, []types.TransactionId) {
+func (tq *txQueue) unlockTxs(txids []types.TransactionId) {
+	tq.Lock()
+	for _, id := range txids {
+		delete(tq.txlocks, id)
+	}
+	tq.Unlock()
+}
+
+func (tq *txQueue) lockTxs(txids []types.TransactionId) {
+	tq.Lock()
+	for _, id := range txids {
+		lock, ok := tq.txlocks[id]
+		if !ok {
+			lock = &sync.Mutex{}
+			tq.txlocks[id] = lock
+		}
+		lock.Lock()
+	}
+	tq.Unlock()
+}
+
+func (tq *txQueue) checkLocalTxs(txids []types.TransactionId) (map[types.TransactionId]*types.AddressableSignedTransaction, map[types.TransactionId]*types.AddressableSignedTransaction, []types.TransactionId) {
 	//look in pool
 	unprocessedTxs := make(map[types.TransactionId]*types.AddressableSignedTransaction)
 	missingInPool := make([]types.TransactionId, 0)
@@ -232,42 +270,59 @@ func (tq *txQueue) CheckLocalTxs(txids []types.TransactionId) (map[types.Transac
 	return unprocessedTxs, dbTxs, missing
 }
 
-func (tq *txQueue) invalidateCallbacks(i int) {
-
-}
-
 //todo minimize code duplication
 //returns atxs out of atxids that are not in the local database
 func (aq *atxQueue) handle(atxIds []types.AtxId) ([]*types.ActivationTx, error) {
 
-	//todo need to synchronize this somehow
-	_, _, missing := aq.CheckLocalAtxs(atxIds)
-	output := aq.addToPending(missing)
-	timeout := time.NewTimer(HandleTimeOut)
+	aq.lockAtxs(atxIds)
+	_, _, missing := aq.checkLocalAtxs(atxIds)
+	output := aq.addToQueue(missing)
+	aq.unlockAtxs(atxIds)
 
-	select {
-	case <-output:
-		unprocessedAtxs, processedAtxs, missing := aq.CheckLocalAtxs(atxIds)
-		if len(missing) > 0 {
-			return nil, errors.New("something got fudged2")
-		}
-		atxs := make([]*types.ActivationTx, 0, len(atxIds))
-		for _, id := range atxIds {
-			if tx, ok := unprocessedAtxs[id]; ok {
-				atxs = append(atxs, tx)
-			} else if _, ok := processedAtxs[id]; ok {
-				continue
-			} else {
-				return nil, errors.New(fmt.Sprintf("could not fetch tx %v", id.ShortId()))
-			}
-		}
-		return atxs, nil
-	case <-timeout.C:
-		return nil, errors.New("something got fudged")
+	if success := <-output; !success {
+		return nil, errors.New(fmt.Sprintf("could not fetch all atxs"))
 	}
+
+	unprocessedAtxs, processedAtxs, missing := aq.checkLocalAtxs(atxIds)
+	if len(missing) > 0 {
+		return nil, errors.New("something got fudged2")
+	}
+
+	atxs := make([]*types.ActivationTx, 0, len(atxIds))
+	for _, id := range atxIds {
+		if tx, ok := unprocessedAtxs[id]; ok {
+			atxs = append(atxs, tx)
+		} else if _, ok := processedAtxs[id]; ok {
+			continue
+		} else {
+			return nil, errors.New(fmt.Sprintf("atx %v was not found after fetch was done", id.ShortId()))
+		}
+	}
+	return atxs, nil
 }
 
-func (aq *atxQueue) CheckLocalAtxs(atxIds []types.AtxId) (map[types.AtxId]*types.ActivationTx, map[types.AtxId]*types.ActivationTx, []types.AtxId) {
+func (aq *atxQueue) unlockAtxs(atxIds []types.AtxId) {
+	aq.Lock()
+	for _, id := range atxIds {
+		delete(aq.atxlocks, id)
+	}
+	aq.Unlock()
+}
+
+func (aq *atxQueue) lockAtxs(atxIds []types.AtxId) {
+	aq.Lock()
+	for _, id := range atxIds {
+		lock, ok := aq.atxlocks[id]
+		if !ok {
+			lock = &sync.Mutex{}
+			aq.atxlocks[id] = lock
+		}
+		lock.Lock()
+	}
+	aq.Unlock()
+}
+
+func (aq *atxQueue) checkLocalAtxs(atxIds []types.AtxId) (map[types.AtxId]*types.ActivationTx, map[types.AtxId]*types.ActivationTx, []types.AtxId) {
 	//look in pool
 	unprocessedAtxs := make(map[types.AtxId]*types.ActivationTx, len(atxIds))
 	missingInPool := make([]types.AtxId, 0, len(atxIds))
@@ -294,10 +349,6 @@ func (aq *atxQueue) CheckLocalAtxs(atxIds []types.AtxId) (map[types.AtxId]*types
 	dbAtxs, missing := aq.GetATXs(missingInPool)
 
 	return unprocessedAtxs, dbAtxs, missing
-}
-
-func (aq *atxQueue) invalidateCallbacks(i int) {
-
 }
 
 func TxReqFactoryV2() RequestFactoryV2 {
