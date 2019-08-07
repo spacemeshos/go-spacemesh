@@ -234,23 +234,39 @@ func (tq *txQueue) handle(txids []types.TransactionId) ([]*types.AddressableSign
 
 func (tq *txQueue) unlockTxs(txids []types.TransactionId) {
 	tq.Lock()
+
+	var locks []*sync.Mutex
 	for _, id := range txids {
+		locks = append(locks, tq.txlocks[id])
 		delete(tq.txlocks, id)
 	}
 	tq.Unlock()
+
+	for _, lock := range locks {
+		lock.Unlock()
+	}
 }
 
 func (tq *txQueue) lockTxs(txids []types.TransactionId) {
 	tq.Lock()
+	var locks []*sync.Mutex
 	for _, id := range txids {
 		lock, ok := tq.txlocks[id]
 		if !ok {
 			lock = &sync.Mutex{}
+			lock.Lock()
 			tq.txlocks[id] = lock
+		} else {
+			locks = append(locks, lock)
 		}
-		lock.Lock()
+
 	}
 	tq.Unlock()
+
+	for _, lk := range locks {
+		lk.Lock()
+	}
+
 }
 
 func (tq *txQueue) checkLocalTxs(txids []types.TransactionId) (map[types.TransactionId]*types.AddressableSignedTransaction, map[types.TransactionId]*types.AddressableSignedTransaction, []types.TransactionId) {
@@ -303,23 +319,37 @@ func (aq *atxQueue) handle(atxIds []types.AtxId) ([]*types.ActivationTx, error) 
 
 func (aq *atxQueue) unlockAtxs(atxIds []types.AtxId) {
 	aq.Lock()
+	var locks []*sync.Mutex
 	for _, id := range atxIds {
+		locks = append(locks, aq.atxlocks[id])
 		delete(aq.atxlocks, id)
 	}
 	aq.Unlock()
+
+	for _, lock := range locks {
+		lock.Unlock()
+	}
+
 }
 
 func (aq *atxQueue) lockAtxs(atxIds []types.AtxId) {
 	aq.Lock()
+	var locks []*sync.Mutex
 	for _, id := range atxIds {
 		lock, ok := aq.atxlocks[id]
 		if !ok {
 			lock = &sync.Mutex{}
+			lock.Lock()
 			aq.atxlocks[id] = lock
+		} else {
+			locks = append(locks, lock)
 		}
-		lock.Lock()
 	}
 	aq.Unlock()
+
+	for _, lock := range locks {
+		lock.Unlock()
+	}
 }
 
 func (aq *atxQueue) checkLocalAtxs(atxIds []types.AtxId) (map[types.AtxId]*types.ActivationTx, map[types.AtxId]*types.ActivationTx, []types.AtxId) {
