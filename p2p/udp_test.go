@@ -2,14 +2,13 @@ package p2p
 
 import (
 	"errors"
-	"github.com/golang/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/require"
 	net2 "net"
 	"testing"
@@ -154,14 +153,16 @@ func TestUDPMux_ProcessUDP(t *testing.T) {
 	m := NewUDPMux(nd, nil, udpMock, log.New(test_str, "", ""))
 	require.NotNil(t, m)
 	data := service.DataBytes{[]byte(test_str)}
-	msg := &pb.UDPProtocolMessage{}
+	msg := &ProtocolMessage{}
 
 	gotfrom := node.GenerateRandomNodeData()
 
-	msg.Metadata = pb.NewUDPProtocolMessageMetadata(gotfrom.PublicKey(), int8(nd.NetworkID()), test_str)
-	msg.Payload = &pb.Payload{Data: &pb.Payload_Payload{data.Bytes()}}
+	msg.Metadata = &ProtocolMessageMetadata{NextProtocol: test_str, ClientVersion: config.ClientVersion, Timestamp: time.Now().Unix(),
+		NetworkID: int32(nd.NetworkID())}
+	//pb.NewUDPProtocolMessageMetadata(gotfrom.PublicKey(), int8(nd.NetworkID()), test_str)
+	msg.Payload = &Payload{Payload: data.Bytes()}
 
-	msgbuf, err := proto.Marshal(msg)
+	msgbuf, err := types.InterfaceToBytes(msg)
 	require.NoError(t, err)
 
 	addr := &net2.UDPAddr{gotfrom.IP, int(gotfrom.DiscoveryPort), ""}
