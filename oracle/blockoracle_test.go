@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/amcl/BLS381"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/require"
@@ -31,16 +30,6 @@ type mockActivationDB struct {
 	atxs                map[string]map[types.LayerID]types.AtxId
 }
 
-var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
-
-func RandStringRunes(n int) string {
-	b := make([]rune, n)
-	for i := range b {
-		b[i] = letterRunes[rand.Intn(len(letterRunes))]
-	}
-	return string(b)
-}
-
 func (a *mockActivationDB) IsIdentityActive(edId string, layer types.LayerID) (*types.NodeId, bool, types.AtxId, error) {
 	if idmap, ok := a.atxs[edId]; ok {
 		if atxid, ok := idmap[layer]; ok {
@@ -50,26 +39,24 @@ func (a *mockActivationDB) IsIdentityActive(edId string, layer types.LayerID) (*
 	return &types.NodeId{edId, publicKey}, true, *types.EmptyAtxId, nil
 }
 
-func (a mockActivationDB) ActiveSetSize(epochId types.EpochId) (uint32, error) {
-	return a.activeSetSize, nil
-}
-
 func (a mockActivationDB) GetIdentity(edId string) (types.NodeId, error) {
 	return types.NodeId{Key: edId, VRFPublicKey: publicKey}, nil
 }
 
-func (a mockActivationDB) GetNodeAtxIds(node types.NodeId) ([]types.AtxId, error) {
+func (a mockActivationDB) GetNodeLastAtxId(node types.NodeId) (types.AtxId, error) {
 	if node.Key != nodeID.Key {
-		return []types.AtxId{}, nil
+		return *types.EmptyAtxId, errors.New("not found")
 	}
-	return []types.AtxId{atxID}, nil
+	return atxID, nil
 }
 
-func (a mockActivationDB) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
+func (a mockActivationDB) GetAtx(id types.AtxId) (*types.ActivationTxHeader, error) {
 	if id == atxID {
-		return &types.ActivationTx{ActivationTxHeader: types.ActivationTxHeader{
+		atxHeader := &types.ActivationTxHeader{
 			NIPSTChallenge: types.NIPSTChallenge{PubLayerIdx: a.atxPublicationLayer}, ActiveSetSize: a.activeSetSize,
-		}}, nil
+		}
+		atxHeader.SetId(&id)
+		return atxHeader, nil
 	}
 	return nil, errors.New("wrong atx id")
 }
@@ -194,7 +181,7 @@ func TestBlockOracleNoActivationsForNode(t *testing.T) {
 	blockOracle := NewMinerBlockOracle(uint32(committeeSize), layersPerEpoch, activationDB, beaconProvider, vrfSigner, nodeID, func() bool { return true }, lg.WithName("blockOracle"))
 
 	_, proofs, err := blockOracle.BlockEligible(types.LayerID(layersPerEpoch * 2))
-	r.EqualError(err, "failed to get latest ATX: not in genesis (epoch 2) yet failed to get atx: no activations found")
+	r.EqualError(err, "failed to get latest ATX: not in genesis (epoch 2) yet failed to get atx: not found")
 	r.Nil(proofs)
 }
 

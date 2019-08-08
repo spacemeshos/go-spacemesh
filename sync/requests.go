@@ -136,7 +136,7 @@ func ATxReqFactory(ids []types.AtxId) RequestFactory {
 				return
 			}
 
-			ch <- tx
+			ch <- calcAndSetIds(tx)
 		}
 
 		bts, err := types.InterfaceToBytes(ids)
@@ -149,6 +149,15 @@ func ATxReqFactory(ids []types.AtxId) RequestFactory {
 
 		return ch, nil
 	}
+}
+
+func calcAndSetIds(atxs []types.ActivationTx) []types.ActivationTx {
+	atxsWithIds := make([]types.ActivationTx, 0, len(atxs))
+	for _, atx := range atxs {
+		atx.CalcAndSetId()
+		atxsWithIds = append(atxsWithIds, atx)
+	}
+	return atxsWithIds
 }
 
 func PoetReqFactory(poetProofRef []byte) RequestFactory {

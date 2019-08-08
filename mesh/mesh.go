@@ -12,7 +12,6 @@ import (
 	"math/big"
 	"sort"
 	"sync"
-	"sync/atomic"
 )
 
 const (
@@ -47,11 +46,9 @@ type AtxMemPoolInValidator interface {
 }
 
 type AtxDB interface {
-	GetEpochAtxIds(id types.EpochId) ([]types.AtxId, error)
 	ProcessAtx(atx *types.ActivationTx)
-	GetAtx(id types.AtxId) (*types.ActivationTx, error)
-	GetNipst(id types.AtxId) (*types.NIPST, error)
-	IsIdentityActive(edId string, layer types.LayerID) (*types.NodeId, bool, types.AtxId, error)
+	GetAtx(id types.AtxId) (*types.ActivationTxHeader, error)
+	GetFullAtx(id types.AtxId) (*types.ActivationTx, error)
 	SyntacticallyValidateAtx(atx *types.ActivationTx) error
 }
 
@@ -309,13 +306,10 @@ func (m *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.AddressableSignedT
 		atxids = append(atxids, t.Id())
 	}
 
-	txids, err := m.writeTransactions(txs)
+	_, err := m.writeTransactions(txs)
 	if err != nil {
 		return fmt.Errorf("could not write transactions of block %v database %v", blk.ID(), err)
 	}
-
-	blk.AtxIds = atxids
-	blk.TxIds = txids
 
 	if err := m.MeshDB.AddBlock(blk); err != nil {
 		m.Error("failed to add block %v  %v", blk.ID(), err)
@@ -352,13 +346,14 @@ func (m *Mesh) handleOrphanBlocks(blk *types.BlockHeader) {
 	}
 	m.orphanBlocks[blk.Layer()][blk.ID()] = struct{}{}
 	m.Info("Added block %d to orphans", blk.ID())
-	atomic.AddInt32(&m.orphanBlockCount, 1)
 	for _, b := range blk.ViewEdges {
-		for _, layermap := range m.orphanBlocks {
+		for layerId, layermap := range m.orphanBlocks {
 			if _, has := layermap[b]; has {
 				m.Log.Debug("delete block ", b, "from orphans")
 				delete(layermap, b)
-				atomic.AddInt32(&m.orphanBlockCount, -1)
+				if len(layermap) == 0 {
+					delete(m.orphanBlocks, layerId)
+				}
 				break
 			}
 		}
@@ -483,92 +478,13 @@ func (m *Mesh) GetATXs(atxIds []types.AtxId) (map[types.AtxId]*types.ActivationT
 	var mIds []types.AtxId
 	atxs := make(map[types.AtxId]*types.ActivationTx, len(atxIds))
 	for _, id := range atxIds {
-		t, err := m.GetAtx(id)
+		t, err := m.GetFullAtx(id)
 		if err != nil {
 			m.Warning("could not get atx %v  from database, %v", id.ShortId(), err)
 			mIds = append(mIds, id)
 		} else {
-			if t.Nipst, err = m.GetNipst(t.Id()); err != nil {
-				m.Warning("could not get nipst %v from database, %v", id.ShortId(), err)
-				mIds = append(mIds, id)
-			}
 			atxs[t.Id()] = t
 		}
 	}
 	return atxs, mIds
-}
-
-// ActiveSetForLayerConsensusView - returns the active set size that matches the view of the contextually valid blocks in the provided layer
-func (m *Mesh) ActiveSetForLayerConsensusView(layer types.LayerID, layersPerEpoch uint16) (map[string]struct{}, error) {
-
-	epoch := layer.GetEpoch(layersPerEpoch)
-	if epoch == 0 {
-		return nil, errors.New("tried to retrieve active set for epoch 0")
-	}
-
-	firstLayerOfPrevEpoch := types.LayerID(epoch-1) * types.LayerID(layersPerEpoch)
-
-	// build a map of all blocks on the current layer
-	mp, err := m.tortoise.GetGoodPatternBlocks(layer)
-	if err != nil {
-		return nil, err
-	}
-	countedAtxs := make(map[string]types.AtxId)
-	penalties := make(map[string]struct{})
-
-	traversalFunc := func(blk *types.Block) error {
-
-		// count unique ATXs
-		for _, id := range blk.AtxIds {
-			atx, err := m.GetAtx(id)
-			if err != nil {
-				log.Panic("error fetching atx %v from database -- inconsistent state", id.ShortId()) // TODO: handle inconsistent state
-				return fmt.Errorf("error fetching atx %v from database -- inconsistent state", id.ShortId())
-			}
-
-			// make sure the target epoch is our epoch
-			if atx.TargetEpoch(layersPerEpoch) != epoch {
-				m.With().Debug("atx found, but targeting epoch doesn't match publication epoch",
-					log.String("atx_id", atx.ShortId()),
-					log.Uint64("atx_target_epoch", uint64(atx.TargetEpoch(layersPerEpoch))),
-					log.Uint64("actual_epoch", uint64(epoch)))
-				continue
-			}
-
-			// ignore atx from nodes in penalty
-			if _, exist := penalties[atx.NodeId.Key]; exist {
-				m.With().Debug("ignoring atx from node in penalty",
-					log.String("node_id", atx.NodeId.Key), log.String("atx_id", atx.ShortId()))
-				continue
-			}
-
-			if prevId, exist := countedAtxs[atx.NodeId.Key]; exist { // same miner
-
-				if prevId != id { // different atx for same epoch
-					m.With().Error("Encountered second atx for the same miner on the same epoch",
-						log.String("first_atx", prevId.ShortId()), log.String("second_atx", id.ShortId()))
-
-					penalties[atx.NodeId.Key] = struct{}{} // mark node in penalty
-					delete(countedAtxs, atx.NodeId.Key)    // remove the penalized node from counted
-				}
-				continue
-			}
-
-			countedAtxs[atx.NodeId.Key] = id
-		}
-
-		return nil
-	}
-
-	err = m.ForBlockInView(mp, firstLayerOfPrevEpoch, traversalFunc)
-	if err != nil {
-		return nil, err
-	}
-
-	result := make(map[string]struct{}, len(countedAtxs))
-	for k := range countedAtxs {
-		result[k] = struct{}{}
-	}
-
-	return result, nil
 }
