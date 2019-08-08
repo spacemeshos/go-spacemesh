@@ -70,9 +70,10 @@ func (*AtxDbMock) IsIdentityActive(edId string, layer types.LayerID) (*types.Nod
 	return nil, true, *types.EmptyAtxId, nil
 }
 
-func (t *AtxDbMock) GetEpochAtxIds(id types.EpochId) ([]types.AtxId, error) {
-	return []types.AtxId{}, nil /*todo: mock if needed */
+func (t *AtxDbMock) GetPosAtxId(id types.EpochId) (types.AtxId, error) {
+	return types.AtxId{}, nil /*todo: mock if needed */
 }
+
 func (t *AtxDbMock) GetAtx(id types.AtxId) (*types.ActivationTxHeader, error) {
 	if id == *types.EmptyAtxId {
 		return nil, fmt.Errorf("trying to fetch empty atx id")
@@ -277,4 +278,28 @@ func TestLayers_OrphanBlocks(t *testing.T) {
 	arr3, _ := layers.GetOrphanBlocksBefore(4)
 	assert.True(t, len(arr3) == 1, "wrong layer")
 
+}
+
+func TestLayers_OrphanBlocksClearEmptyLayers(t *testing.T) {
+	layers := getMesh("t6")
+	defer layers.Close()
+	block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	block2 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	block3 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 2, []byte("data data data"))
+	block4 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 2, []byte("data data data"))
+	block5 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 3, []byte("data data data"))
+	block5.AddView(block1.ID())
+	block5.AddView(block2.ID())
+	block5.AddView(block3.ID())
+	block5.AddView(block4.ID())
+	layers.AddBlock(block1)
+	layers.AddBlock(block2)
+	layers.AddBlock(block3)
+	layers.AddBlock(block4)
+	arr, _ := layers.GetOrphanBlocksBefore(3)
+	assert.True(t, len(arr) == 4, "wrong layer")
+	arr2, _ := layers.GetOrphanBlocksBefore(2)
+	assert.Equal(t, len(arr2), 2)
+	layers.AddBlock(block5)
+	assert.Equal(t, 1, len(layers.orphanBlocks))
 }

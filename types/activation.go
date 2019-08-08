@@ -22,6 +22,10 @@ func (l EpochId) IsGenesis() bool {
 	return l < 2
 }
 
+func (l EpochId) FirstLayer(layersPerEpoch uint16) LayerID {
+	return LayerID(uint64(l) * uint64(layersPerEpoch))
+}
+
 type AtxId struct {
 	common.Hash
 }

@@ -39,19 +39,15 @@ func (a *mockActivationDB) IsIdentityActive(edId string, layer types.LayerID) (*
 	return &types.NodeId{edId, publicKey}, true, *types.EmptyAtxId, nil
 }
 
-func (a mockActivationDB) ActiveSetSize(epochId types.EpochId) (uint32, error) {
-	return a.activeSetSize, nil
-}
-
 func (a mockActivationDB) GetIdentity(edId string) (types.NodeId, error) {
 	return types.NodeId{Key: edId, VRFPublicKey: publicKey}, nil
 }
 
-func (a mockActivationDB) GetNodeAtxIds(node types.NodeId) ([]types.AtxId, error) {
+func (a mockActivationDB) GetNodeLastAtxId(node types.NodeId) (types.AtxId, error) {
 	if node.Key != nodeID.Key {
-		return []types.AtxId{}, nil
+		return *types.EmptyAtxId, errors.New("not found")
 	}
-	return []types.AtxId{atxID}, nil
+	return atxID, nil
 }
 
 func (a mockActivationDB) GetAtx(id types.AtxId) (*types.ActivationTxHeader, error) {
@@ -185,7 +181,7 @@ func TestBlockOracleNoActivationsForNode(t *testing.T) {
 	blockOracle := NewMinerBlockOracle(uint32(committeeSize), layersPerEpoch, activationDB, beaconProvider, vrfSigner, nodeID, func() bool { return true }, lg.WithName("blockOracle"))
 
 	_, proofs, err := blockOracle.BlockEligible(types.LayerID(layersPerEpoch * 2))
-	r.EqualError(err, "failed to get latest ATX: not in genesis (epoch 2) yet failed to get atx: no activations found")
+	r.EqualError(err, "failed to get latest ATX: not in genesis (epoch 2) yet failed to get atx: not found")
 	r.Nil(proofs)
 }
 

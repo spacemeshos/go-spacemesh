@@ -12,7 +12,6 @@ import (
 	"math/big"
 	"sort"
 	"sync"
-	"sync/atomic"
 )
 
 const (
@@ -47,11 +46,9 @@ type AtxMemPoolInValidator interface {
 }
 
 type AtxDB interface {
-	GetEpochAtxIds(id types.EpochId) ([]types.AtxId, error)
 	ProcessAtx(atx *types.ActivationTx)
 	GetAtx(id types.AtxId) (*types.ActivationTxHeader, error)
 	GetFullAtx(id types.AtxId) (*types.ActivationTx, error)
-	IsIdentityActive(edId string, layer types.LayerID) (*types.NodeId, bool, types.AtxId, error)
 	SyntacticallyValidateAtx(atx *types.ActivationTx) error
 }
 
@@ -309,13 +306,10 @@ func (m *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.AddressableSignedT
 		atxids = append(atxids, t.Id())
 	}
 
-	txids, err := m.writeTransactions(txs)
+	_, err := m.writeTransactions(txs)
 	if err != nil {
 		return fmt.Errorf("could not write transactions of block %v database %v", blk.ID(), err)
 	}
-
-	blk.AtxIds = atxids
-	blk.TxIds = txids
 
 	if err := m.MeshDB.AddBlock(blk); err != nil {
 		m.Error("failed to add block %v  %v", blk.ID(), err)
@@ -352,13 +346,14 @@ func (m *Mesh) handleOrphanBlocks(blk *types.BlockHeader) {
 	}
 	m.orphanBlocks[blk.Layer()][blk.ID()] = struct{}{}
 	m.Info("Added block %d to orphans", blk.ID())
-	atomic.AddInt32(&m.orphanBlockCount, 1)
 	for _, b := range blk.ViewEdges {
-		for _, layermap := range m.orphanBlocks {
+		for layerId, layermap := range m.orphanBlocks {
 			if _, has := layermap[b]; has {
 				m.Log.Debug("delete block ", b, "from orphans")
 				delete(layermap, b)
-				atomic.AddInt32(&m.orphanBlockCount, -1)
+				if len(layermap) == 0 {
+					delete(m.orphanBlocks, layerId)
+				}
 				break
 			}
 		}

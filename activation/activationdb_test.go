@@ -71,7 +71,7 @@ type ATXDBMock struct {
 	activeSet uint32
 }
 
-func (mock *ATXDBMock) CalcActiveSetFromView(a *types.ActivationTx) (uint32, error) {
+func (mock *ATXDBMock) CalcActiveSetFromView(view []types.BlockID, pubEpoch types.EpochId) (uint32, error) {
 	return mock.activeSet, nil
 }
 
@@ -79,11 +79,11 @@ func (mock *ATXDBMock) GetAtx(id types.AtxId) (*types.ActivationTxHeader, error)
 	panic("not implemented")
 }
 
-func (mock *ATXDBMock) GetEpochAtxIds(epochId types.EpochId) ([]types.AtxId, error) {
+func (mock *ATXDBMock) GetPosAtxId(types.EpochId) (*types.AtxId, error) {
 	panic("not implemented")
 }
 
-func (mock *ATXDBMock) GetNodeAtxIds(nodeId types.NodeId) ([]types.AtxId, error) {
+func (mock *ATXDBMock) GetNodeLastAtxId(nodeId types.NodeId) (types.AtxId, error) {
 	panic("not implemented")
 }
 
@@ -237,7 +237,7 @@ func Test_CalcActiveSetFromView(t *testing.T) {
 	blocks = createLayerWithAtx(t, layers, 100, 10, []*types.ActivationTx{}, blocks, blocks)
 
 	atx := types.NewActivationTx(id1, coinbase1, 1, atxs[0].Id(), 1000, 0, atxs[0].Id(), 3, blocks, &types.NIPST{})
-	num, err := atxdb.CalcActiveSetFromView(atx)
+	num, err := atxdb.CalcActiveSetFromView(atx.View, atx.PubLayerIdx.GetEpoch(layersPerEpochBig))
 	assert.NoError(t, err)
 	assert.Equal(t, 3, int(num))
 
@@ -273,17 +273,17 @@ func Test_CalcActiveSetFromView(t *testing.T) {
 		return view[i] > view[j] // sort the view in the wrong order
 	})
 	atx2 := types.NewActivationTx(id3, coinbase3, 0, *types.EmptyAtxId, 1435, 0, *types.EmptyAtxId, 6, view, &types.NIPST{})
-	num, err = atxdb.CalcActiveSetFromView(atx2)
+	num, err = atxdb.CalcActiveSetFromView(atx2.View, atx2.PubLayerIdx.GetEpoch(layersPerEpochBig))
 	assert.NoError(t, err)
 	assert.Equal(t, 3, int(num))
 
 	// put a fake value in the cache and ensure that it's used
-	viewHash, err := calcSortedViewHash(atx2)
+	viewHash, err := calcSortedViewHash(atx2.View)
 	assert.NoError(t, err)
 	activesetCache.Purge()
 	activesetCache.put(viewHash, 8)
 
-	num, err = atxdb.CalcActiveSetFromView(atx2)
+	num, err = atxdb.CalcActiveSetFromView(atx2.View, atx2.PubLayerIdx.GetEpoch(layersPerEpochBig))
 	assert.NoError(t, err)
 	assert.Equal(t, 8, int(num))
 
@@ -296,7 +296,7 @@ func Test_CalcActiveSetFromView(t *testing.T) {
 	activesetCache.Purge()
 	activesetCache.put(viewHash, 8)
 
-	num, err = atxdb.CalcActiveSetFromView(atx2)
+	num, err = atxdb.CalcActiveSetFromView(atx2.View, atx2.PubLayerIdx.GetEpoch(layersPerEpochBig))
 	assert.NoError(t, err)
 	assert.Equal(t, 3, int(num))
 }
@@ -322,32 +322,29 @@ func Test_DBSanity(t *testing.T) {
 	err = atxdb.storeAtxUnlocked(atx3)
 	assert.NoError(t, err)
 
-	err = atxdb.addAtxToNodeIdSorted(id1, atx1)
+	err = atxdb.addAtxToNodeId(id1, atx1)
 	assert.NoError(t, err)
-	ids, err := atxdb.GetNodeAtxIds(id1)
+	id, err := atxdb.GetNodeLastAtxId(id1)
 	assert.NoError(t, err)
-	assert.Equal(t, 1, len(ids))
-	assert.Equal(t, atx1.Id(), ids[0])
+	assert.Equal(t, atx1.Id(), id)
 
-	err = atxdb.addAtxToNodeIdSorted(id2, atx2)
-	assert.NoError(t, err)
-
-	err = atxdb.addAtxToNodeIdSorted(id1, atx3)
+	err = atxdb.addAtxToNodeId(id2, atx2)
 	assert.NoError(t, err)
 
-	ids, err = atxdb.GetNodeAtxIds(id2)
+	err = atxdb.addAtxToNodeId(id1, atx3)
 	assert.NoError(t, err)
-	assert.Equal(t, 1, len(ids))
-	assert.Equal(t, atx2.Id(), ids[0])
 
-	ids, err = atxdb.GetNodeAtxIds(id1)
+	id, err = atxdb.GetNodeLastAtxId(id2)
 	assert.NoError(t, err)
-	assert.Equal(t, 2, len(ids))
-	assert.Equal(t, atx1.Id(), ids[0])
+	assert.Equal(t, atx2.Id(), id)
 
-	ids, err = atxdb.GetNodeAtxIds(id3)
+	id, err = atxdb.GetNodeLastAtxId(id1)
+	assert.NoError(t, err)
+	assert.Equal(t, atx3.Id(), id)
+
+	id, err = atxdb.GetNodeLastAtxId(id3)
 	assert.Error(t, err)
-	assert.Equal(t, 0, len(ids))
+	assert.Equal(t, *types.EmptyAtxId, id)
 }
 
 func Test_Wrong_CalcActiveSetFromView(t *testing.T) {
@@ -370,7 +367,7 @@ func Test_Wrong_CalcActiveSetFromView(t *testing.T) {
 	blocks = createLayerWithAtx(t, layers, 100, 10, []*types.ActivationTx{}, blocks, blocks)
 
 	atx := types.NewActivationTx(id1, coinbase1, 1, atxs[0].Id(), 1000, 0, atxs[0].Id(), 20, blocks, &types.NIPST{})
-	num, err := atxdb.CalcActiveSetFromView(atx)
+	num, err := atxdb.CalcActiveSetFromView(atx.View, atx.PubLayerIdx.GetEpoch(layersPerEpoch))
 	assert.NoError(t, err)
 	assert.NotEqual(t, 20, int(num))
 
@@ -406,16 +403,10 @@ func TestMesh_processBlockATXs(t *testing.T) {
 	for _, t := range atxs {
 		atxdb.ProcessAtx(t)
 	}
-	i, err := atxdb.ActiveSetSize(1)
-	assert.NoError(t, err)
-	assert.Equal(t, uint32(3), i)
 
 	atxdb.ProcessAtx(atxs[0])
 	atxdb.ProcessAtx(atxs[1])
 	atxdb.ProcessAtx(atxs[2])
-	activeSetSize, err := atxdb.ActiveSetSize(1)
-	assert.NoError(t, err)
-	assert.Equal(t, 3, int(activeSetSize))
 
 	// check that further atxs dont affect current epoch count
 	atxs2 := []*types.ActivationTx{
@@ -431,13 +422,6 @@ func TestMesh_processBlockATXs(t *testing.T) {
 	for _, t := range atxs2 {
 		atxdb.ProcessAtx(t)
 	}
-
-	activeSetSize, err = atxdb.ActiveSetSize(1)
-	assert.NoError(t, err)
-	assert.Equal(t, 3, int(activeSetSize))
-	activeSetSize, err = atxdb.ActiveSetSize(2)
-	assert.NoError(t, err)
-	assert.Equal(t, 3, int(activeSetSize))
 }
 
 func TestActivationDB_ValidateAtx(t *testing.T) {
@@ -547,6 +531,15 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	atx = types.NewActivationTx(idx1, coinbase, 1, prevAtx.Id(), 12, 0, prevAtx.Id(), 3, []types.BlockID{}, &types.NIPST{})
 	err = atxdb.ContextuallyValidateAtx(&atx.ActivationTxHeader)
 	assert.EqualError(t, err, "last atx is not the one referenced")
+
+	//prev atx declared but not found
+	err = atxdb.StoreAtx(1, atx)
+	assert.NoError(t, err)
+	atx = types.NewActivationTx(idx1, coinbase, 1, prevAtx.Id(), 12, 0, prevAtx.Id(), 3, []types.BlockID{}, &types.NIPST{})
+	err = atxdb.atxs.Delete(getNodeIdKey(atx.NodeId))
+	assert.NoError(t, err)
+	err = atxdb.ContextuallyValidateAtx(&atx.ActivationTxHeader)
+	assert.EqualError(t, err, "could not fetch node last ATX: leveldb: not found")
 }
 
 func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
@@ -609,14 +602,14 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 	nodeAtxIds = append(nodeAtxIds, atx.Id())
 	nodeAtxIds = append(nodeAtxIds, id4)
 
-	ids, err := atxdb.GetNodeAtxIds(idx1)
-	assert.True(t, len(ids) == 5)
-	assert.Equal(t, ids, nodeAtxIds)
+	id, err := atxdb.GetNodeLastAtxId(idx1)
+	assert.NoError(t, err)
+	assert.Equal(t, atx.Id(), id)
 
-	_, err = atxdb.GetAtx(ids[len(ids)-1])
+	_, err = atxdb.GetAtx(id)
 	assert.NoError(t, err)
 
-	_, err = atxdb.GetAtx(ids[len(ids)-2])
+	_, err = atxdb.GetAtx(atx2id)
 	assert.NoError(t, err)
 
 	//test same sequence
@@ -776,4 +769,45 @@ func BenchmarkNewActivationDb(b *testing.B) {
 	// cleanup
 	err := os.RemoveAll(tmpPath)
 	r.NoError(err)
+}
+
+func TestActivationDb_TopAtx(t *testing.T) {
+	r := require.New(t)
+
+	atxdb, _ := getAtxDb("t8")
+
+	// ATX stored should become top ATX
+	atx, err := createAndStoreAtx(atxdb, 0)
+	r.NoError(err)
+
+	topAtx, err := atxdb.getTopAtx()
+	r.NoError(err)
+	r.Equal(atx.Id(), topAtx.AtxId)
+
+	// higher-layer ATX stored should become new top ATX
+	atx, err = createAndStoreAtx(atxdb, 3)
+	r.NoError(err)
+
+	topAtx, err = atxdb.getTopAtx()
+	r.NoError(err)
+	r.Equal(atx.Id(), topAtx.AtxId)
+
+	// lower-layer ATX stored should NOT become new top ATX
+	atx, err = createAndStoreAtx(atxdb, 1)
+	r.NoError(err)
+
+	topAtx, err = atxdb.getTopAtx()
+	r.NoError(err)
+	r.NotEqual(atx.Id(), topAtx.AtxId)
+}
+
+func createAndStoreAtx(atxdb *ActivationDb, layer types.LayerID) (*types.ActivationTx, error) {
+	id := types.NodeId{Key: uuid.New().String(), VRFPublicKey: []byte("vrf")}
+	atx := types.NewActivationTx(id, coinbase, 0, *types.EmptyAtxId, layer,
+		0, *types.EmptyAtxId, 3, []types.BlockID{}, &types.NIPST{})
+	err := atxdb.StoreAtx(atx.TargetEpoch(layersPerEpoch), atx)
+	if err != nil {
+		return nil, err
+	}
+	return atx, nil
 }
