@@ -6,7 +6,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"hash/fnv"
 	"sync"
@@ -36,10 +35,6 @@ type baseNetwork interface {
 	ProcessGossipProtocolMessage(sender p2pcrypto.PublicKey, protocol string, data service.Data, validationCompletedChan chan service.MessageValidation) error
 }
 
-type protocolMessage struct {
-	msg *pb.ProtocolMessage
-}
-
 // Protocol is the gossip protocol
 type Protocol struct {
 	log.Log
@@ -56,15 +51,12 @@ type Protocol struct {
 	oldMessageQ  map[hash]struct{}
 	oldMessageMu sync.RWMutex
 
-	relayQ     chan service.DirectMessage
-	messageQ   chan protocolMessage
 	propagateQ chan service.MessageValidation
 }
 
 // NewProtocol creates a new gossip protocol instance. Call Start to start reading peers
 func NewProtocol(config config.SwarmConfig, base baseNetwork, localNodePubkey p2pcrypto.PublicKey, log2 log.Log) *Protocol {
 	// intentionally not subscribing to peers events so that the channels won't block in case executing Start delays
-	relayChan := base.RegisterDirectProtocol(ProtocolName)
 	return &Protocol{
 		Log:             log2,
 		config:          config,
@@ -73,8 +65,6 @@ func NewProtocol(config config.SwarmConfig, base baseNetwork, localNodePubkey p2
 		peers:           make(map[string]*peer),
 		shutdown:        make(chan struct{}),
 		oldMessageQ:     make(map[hash]struct{}), // todo : remember to drain this
-		relayQ:          relayChan,
-		messageQ:        make(chan protocolMessage, messageQBufferSize),
 		propagateQ:      make(chan service.MessageValidation, propagateHandleBufferSize),
 	}
 }

@@ -11,12 +11,10 @@ import (
 
 	"context"
 	"errors"
-	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/stretchr/testify/assert"
@@ -458,18 +456,19 @@ func TestSwarm_onRemoteClientMessage(t *testing.T) {
 	err = p.onRemoteClientMessage(imc)
 	assert.Equal(t, err, ErrBadFormat2)
 
-	goodmsg := &pb.ProtocolMessage{
-		Metadata: pb.NewProtocolMessageMetadata(id.PublicKey(), exampleProtocol), // not signed
-		Payload:  &pb.Payload{Data: &pb.Payload_Payload{[]byte(examplePayload)}},
+	goodmsg := &ProtocolMessage{
+		Metadata: &ProtocolMessageMetadata{AuthPubkey: id.PublicKey().Bytes(), NextProtocol: exampleProtocol,
+			Timestamp: time.Now().Unix(), ClientVersion: config.ClientVersion}, // not signed
+		Payload: &Payload{Payload: []byte(examplePayload)},
 	}
 
-	goodbin, _ := proto.Marshal(goodmsg)
+	goodbin, _ := types.InterfaceToBytes(goodmsg)
 
 	imc.Message = goodbin
 	session.SetDecrypt(goodbin, nil)
 
 	goodmsg.Metadata.Timestamp = time.Now().Add(-time.Hour).Unix()
-	nosynced, _ := proto.Marshal(goodmsg)
+	nosynced, _ := types.InterfaceToBytes(goodmsg)
 	session.SetDecrypt(nosynced, nil)
 	// Test out of sync
 	imc.Message = nosynced
@@ -480,7 +479,7 @@ func TestSwarm_onRemoteClientMessage(t *testing.T) {
 	// Test no protocol
 	goodmsg.Metadata.Timestamp = time.Now().Unix()
 
-	goodbin, _ = proto.Marshal(goodmsg)
+	goodbin, _ = types.InterfaceToBytes(goodmsg)
 	imc.Message = goodbin
 	session.SetDecrypt(goodbin, nil)
 

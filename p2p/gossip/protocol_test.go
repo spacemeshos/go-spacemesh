@@ -1,11 +1,9 @@
 package gossip
 
 import (
-	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -162,18 +160,8 @@ func newPubkey(t *testing.T) p2pcrypto.PublicKey {
 	return pubkey
 }
 
-func newTestMessageData(t testing.TB, authPubkey p2pcrypto.PublicKey, payload []byte, protocol string) ([]byte, *pb.ProtocolMessage) {
-	pm := &pb.ProtocolMessage{
-		Metadata: &pb.Metadata{
-			NextProtocol:  protocol,
-			Timestamp:     time.Now().Unix(),
-			ClientVersion: protocolVer,
-			AuthPubkey:    authPubkey.Bytes(),
-		},
-		Payload: &pb.Payload{Data: &pb.Payload_Payload{payload}},
-	}
-
-	return makePayload(t, pm).Bytes(), pm
+func newTestMessageData(payload []byte) service.Data {
+	return service.DataBytes{Payload: payload}
 }
 
 func addPeersAndTest(t testing.TB, num int, p *Protocol, net *mockBaseNetwork, work bool) {
@@ -217,11 +205,10 @@ func TestNeighborhood_AddIncomingPeer(t *testing.T) {
 	assert.Equal(t, 1, n.peersCount())
 }
 
-func makePayload(t testing.TB, message *pb.ProtocolMessage) service.Data {
-	payload, err := proto.Marshal(message)
-	assert.NoError(t, err)
-	return service.DataBytes{Payload: payload}
-}
+//func makePayload(t testing.TB, message *pb.ProtocolMessage) service.Data {
+//	assert.NoError(t, err)
+//	return service.DataBytes{Payload: payload}
+//}
 
 func TestNeighborhood_Relay(t *testing.T) {
 	net := newMockBaseNetwork()
@@ -231,17 +218,8 @@ func TestNeighborhood_Relay(t *testing.T) {
 
 	addPeersAndTest(t, 20, n, net, true)
 	pk := p2pcrypto.NewRandomPubkey()
-	pm := &pb.ProtocolMessage{
-		Metadata: &pb.Metadata{
-			NextProtocol:  "Someproto",
-			Timestamp:     time.Now().Unix(),
-			ClientVersion: protocolVer,
-			AuthPubkey:    pk.Bytes(),
-		},
-		Payload: &pb.Payload{Data: &pb.Payload_Payload{[]byte("LOL")}},
-	}
 
-	payload := makePayload(t, pm)
+	payload := newTestMessageData([]byte("LOL"))
 
 	//var msg service.DirectMessage = TestMessage{pk, payload}
 	net.pcountwg.Add(1)
@@ -354,8 +332,8 @@ func TestNeighborhood_Broadcast3(t *testing.T) {
 	assert.Equal(t, 1, net.processProtocolCount)
 	assert.Equal(t, 20, net.totalMessageSent())
 	pk2 := newPubkey(t)
-	payload, _ := newTestMessageData(t, pk2, msgB, "protocol")
-	var msg service.DirectMessage = TestMessage{pk2, service.DataBytes{payload}}
+	payload := newTestMessageData(msgB)
+	var msg service.DirectMessage = TestMessage{pk2, payload}
 	net.directInbox <- msg
 	passOrDeadlock(t, net.msgwg)
 	assert.Equal(t, 1, net.processProtocolCount)
