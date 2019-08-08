@@ -50,14 +50,6 @@ type TxValidator interface {
 	GetValidAddressableTx(tx *types.SerializableSignedTransaction) (*types.AddressableSignedTransaction, error)
 }
 
-type blockValidator struct {
-	EligibilityValidator
-}
-
-func NewBlockValidator(bev EligibilityValidator) BlockValidator {
-	return &blockValidator{bev}
-}
-
 type Configuration struct {
 	LayersPerEpoch uint16
 	Concurrency    int //number of workers for sync method
