@@ -490,5 +490,7 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	err = b.loadChallenge()
 	assert.NoError(t, err)
 	err = b.PublishActivationTx(3)
+	// This 👇 ensures that handing of the challenge succeeded and the code moved on to the next part
+	assert.EqualError(t, err, "cannot find pos atx in epoch 3: cannot find pos atx id: current posAtx (epoch 1) does not belong to the requested epoch (3)")
 	assert.True(t, db.hadNone)
 }
