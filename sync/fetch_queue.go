@@ -124,8 +124,6 @@ func (aq *atxQueue) work() error {
 func (tq *txQueue) addToQueue(ids []types.TransactionId) chan bool {
 
 	deps := tq.addToPending(ids)
-	tq.queue <- &fetchJob{ids: ids}
-
 	doneChan := make(chan bool)
 	//fan in
 	go func() {
@@ -145,11 +143,16 @@ func (tq *txQueue) addToQueue(ids []types.TransactionId) chan bool {
 func (tq *txQueue) addToPending(ids []types.TransactionId) []chan bool {
 	tq.Lock()
 	deps := make([]chan bool, 0, len(ids))
+	var idsToAdd []types.TransactionId
 	for _, id := range ids {
 		ch := make(chan bool, 1)
 		deps = append(deps, ch)
+		if _, ok := tq.pending[id]; !ok {
+			idsToAdd = append(idsToAdd, id)
+		}
 		tq.pending[id] = append(tq.pending[id], ch)
 	}
+	tq.queue <- &fetchJob{ids: idsToAdd}
 	tq.Unlock()
 	return deps
 }
@@ -214,8 +217,6 @@ func (aq *atxQueue) invalidate(id types.AtxId, atx *types.ActivationTx, valid bo
 
 func (aq *atxQueue) addToQueue(ids []types.AtxId) chan bool {
 	deps := aq.addToPending(ids)
-	aq.queue <- &fetchJob{ids: ids}
-
 	doneChan := make(chan bool)
 	//fan in
 	go func() {
@@ -235,10 +236,16 @@ func (aq *atxQueue) addToQueue(ids []types.AtxId) chan bool {
 func (aq *atxQueue) addToPending(ids []types.AtxId) []chan bool {
 	aq.Lock()
 	deps := make([]chan bool, 0, len(ids))
+	var idsToAdd []types.AtxId
 	for _, id := range ids {
 		ch := make(chan bool, 1)
 		deps = append(deps, ch)
+		if _, ok := aq.pending[id]; !ok {
+			idsToAdd = append(idsToAdd, id)
+		}
 		aq.pending[id] = append(aq.pending[id], ch)
+		aq.queue <- &fetchJob{ids: ids}
+
 	}
 	aq.Unlock()
 	return deps
@@ -252,10 +259,8 @@ func (tq *txQueue) Handle(txids []types.TransactionId) ([]*types.AddressableSign
 		return nil, nil
 	}
 
-	tq.lockTxs(txids)
 	_, _, missing := tq.checkLocalTxs(txids)
 	output := tq.addToQueue(missing)
-	tq.unlockTxs(txids)
 
 	if success := <-output; !success {
 		return nil, errors.New(fmt.Sprintf("could not fetch all txs"))
@@ -277,43 +282,6 @@ func (tq *txQueue) Handle(txids []types.TransactionId) ([]*types.AddressableSign
 		}
 	}
 	return txs, nil
-}
-
-func (tq *txQueue) unlockTxs(txids []types.TransactionId) {
-	tq.Lock()
-
-	var locks []*sync.Mutex
-	for _, id := range txids {
-		locks = append(locks, tq.txlocks[id])
-		delete(tq.txlocks, id)
-	}
-	tq.Unlock()
-
-	for _, lock := range locks {
-		lock.Unlock()
-	}
-}
-
-func (tq *txQueue) lockTxs(txids []types.TransactionId) {
-	tq.Lock()
-	var locks []*sync.Mutex
-	for _, id := range txids {
-		lock, ok := tq.txlocks[id]
-		if !ok {
-			lock = &sync.Mutex{}
-			lock.Lock()
-			tq.txlocks[id] = lock
-		} else {
-			locks = append(locks, lock)
-		}
-
-	}
-	tq.Unlock()
-
-	for _, lk := range locks {
-		lk.Lock()
-	}
-
 }
 
 func (tq *txQueue) checkLocalTxs(txids []types.TransactionId) (map[types.TransactionId]*types.AddressableSignedTransaction, map[types.TransactionId]*types.AddressableSignedTransaction, []types.TransactionId) {
@@ -340,10 +308,9 @@ func (aq *atxQueue) Handle(atxIds []types.AtxId) ([]*types.ActivationTx, error) 
 		aq.Warning("handle empty tx slice")
 		return nil, nil
 	}
-	aq.lockAtxs(atxIds)
+
 	_, _, missing := aq.checkLocalAtxs(atxIds)
 	output := aq.addToQueue(missing)
-	aq.unlockAtxs(atxIds)
 
 	if success := <-output; !success {
 		return nil, errors.New(fmt.Sprintf("could not fetch all atxs"))
@@ -365,41 +332,6 @@ func (aq *atxQueue) Handle(atxIds []types.AtxId) ([]*types.ActivationTx, error) 
 		}
 	}
 	return atxs, nil
-}
-
-func (aq *atxQueue) unlockAtxs(atxIds []types.AtxId) {
-	aq.Lock()
-	var locks []*sync.Mutex
-	for _, id := range atxIds {
-		locks = append(locks, aq.atxlocks[id])
-		delete(aq.atxlocks, id)
-	}
-	aq.Unlock()
-
-	for _, lock := range locks {
-		lock.Unlock()
-	}
-
-}
-
-func (aq *atxQueue) lockAtxs(atxIds []types.AtxId) {
-	aq.Lock()
-	var locks []*sync.Mutex
-	for _, id := range atxIds {
-		lock, ok := aq.atxlocks[id]
-		if !ok {
-			lock = &sync.Mutex{}
-			lock.Lock()
-			aq.atxlocks[id] = lock
-		} else {
-			locks = append(locks, lock)
-		}
-	}
-	aq.Unlock()
-
-	for _, lock := range locks {
-		lock.Unlock()
-	}
 }
 
 func (aq *atxQueue) checkLocalAtxs(atxIds []types.AtxId) (map[types.AtxId]*types.ActivationTx, map[types.AtxId]*types.ActivationTx, []types.AtxId) {
