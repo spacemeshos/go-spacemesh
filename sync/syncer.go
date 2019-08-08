@@ -117,7 +117,6 @@ func (s *Syncer) IsSynced() bool {
 func (s *Syncer) Start() {
 	if atomic.CompareAndSwapUint32(&s.startLock, 0, 1) {
 		go s.run()
-		go s.blockQueue.traverse()
 		s.forceSync <- true
 		return
 	}

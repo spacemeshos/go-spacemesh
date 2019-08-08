@@ -58,6 +58,8 @@ func NewValidationQueue(srvr *MessageServer, conf Configuration, bv BlockValidat
 		Log:              lg,
 	}
 
+	go vq.work()
+
 	return vq
 }
 
@@ -79,7 +81,7 @@ func (vq *validationQueue) done() {
 	close(vq.queue)
 }
 
-func (vq *validationQueue) traverse() error {
+func (vq *validationQueue) work() error {
 
 	output := fetchWithFactory(NewBlockWorker(vq.MessageServer, vq.Concurrency, BlockReqFactory(), vq.queue))
 	for out := range output {
