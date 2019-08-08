@@ -236,8 +236,7 @@ func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
 		return nil, err
 	}
 
-	epoch := layer.GetEpoch(o.layersPerEpoch)
-	activeMap, err := o.getActiveSet(epoch, mp)
+	activeMap, err := o.getActiveSet(ep, mp)
 	if err != nil {
 		o.With().Error("Could not retrieve active set size", log.Err(err),
 			log.Uint64("layer_id", uint64(layer)), log.Uint64("epoch_id", uint64(layer.GetEpoch(o.layersPerEpoch))),
