@@ -158,7 +158,7 @@ func (tq *txQueue) addToPending(ids []types.TransactionId) []chan bool {
 //returns txs out of txids that are not in the local database
 func (tq *txQueue) Handle(txids []types.TransactionId) ([]*types.AddressableSignedTransaction, error) {
 	if len(txids) == 0 {
-		tq.Warning("handle empty tx slice")
+		tq.Debug("handle empty tx slice")
 		return nil, nil
 	}
 
@@ -334,7 +334,7 @@ func (aq *atxQueue) addToPending(ids []types.AtxId) []chan bool {
 //returns atxs out of atxids that are not in the local database
 func (aq *atxQueue) Handle(atxIds []types.AtxId) ([]*types.ActivationTx, error) {
 	if len(atxIds) == 0 {
-		aq.Warning("handle empty tx slice")
+		aq.Debug("handle empty tx slice")
 		return nil, nil
 	}
 

@@ -61,7 +61,7 @@ func SyncFactory(name string, serv service.Service) *Syncer {
 	ts := timesync.NewTicker(MockTimer{}, tick, start)
 	l := log.New(name, "", "")
 	poetDb := activation.NewPoetDb(database.NewMemDatabase(), l.WithName("poetDb"))
-	blockValidator := NewBlockValidator(BlockEligibilityValidatorMock{})
+	blockValidator := BlockEligibilityValidatorMock{}
 	sync := NewSync(serv, getMesh(memoryDB, name), miner.NewTypesTransactionIdMemPool(), miner.NewTypesAtxIdMemPool(), mockTxProcessor{}, blockValidator, poetDb, conf, ts, l)
 	return sync
 }
