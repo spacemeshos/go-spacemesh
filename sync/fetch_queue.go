@@ -63,17 +63,6 @@ type txQueue struct {
 	pending map[types.TransactionId][]chan bool
 }
 
-type atxQueue struct {
-	log.Log
-	sync.Mutex
-	*mesh.Mesh
-	FetchPoetProof
-	*MessageServer
-	atxpool AtxMemPool
-	queue   chan *fetchJob //types.AtxId
-	pending map[types.AtxId][]chan bool
-}
-
 //todo batches
 func (tq *txQueue) work() error {
 	output := fetchWithFactory(NewFetchWorker(tq.MessageServer, tq.Log, 1, TxReqFactory(), tq.queue))
@@ -129,24 +118,6 @@ func (tq *txQueue) invalidate(id types.TransactionId, tx *types.SerializableSign
 	tq.Unlock()
 }
 
-//todo batches
-func (aq *atxQueue) work() error {
-	output := fetchWithFactory(NewFetchWorker(aq.MessageServer, aq.Log, 1, ATxReqFactory(), aq.queue))
-	for out := range output {
-		if out == nil {
-			aq.Info("close queue")
-			return nil
-		}
-		txs := out.(fetchJob)
-		//aq.Info("next atx ids %v", txs)
-		aq.fetchPoetProofs(txs)    //removes atxs with proofs we could not fetch
-		aq.updateDependencies(txs) //todo hack add batches
-		aq.Info("next batch")
-	}
-
-	return nil
-}
-
 func (tq *txQueue) addToQueue(ids []types.TransactionId) chan bool {
 
 	deps := tq.addToPending(ids)
@@ -181,6 +152,88 @@ func (tq *txQueue) addToPending(ids []types.TransactionId) []chan bool {
 	tq.queue <- &fetchJob{ids: idsToAdd}
 	tq.Unlock()
 	return deps
+}
+
+//todo minimize code duplication
+//returns txs out of txids that are not in the local database
+func (tq *txQueue) Handle(txids []types.TransactionId) ([]*types.AddressableSignedTransaction, error) {
+	if len(txids) == 0 {
+		tq.Warning("handle empty tx slice")
+		return nil, nil
+	}
+
+	unprocessedTxs, processedTxs, missing := tq.checkLocalTxs(txids)
+	if len(missing) > 0 {
+
+		output := tq.addToQueue(missing)
+
+		if success := <-output; !success {
+			return nil, errors.New(fmt.Sprintf("could not fetch all txs"))
+		}
+
+		unprocessedTxs, processedTxs, missing = tq.checkLocalTxs(txids)
+		if len(missing) > 0 {
+			return nil, errors.New("something got fudged2")
+		}
+	}
+
+	txs := make([]*types.AddressableSignedTransaction, 0, len(txids))
+	for _, id := range txids {
+		if tx, ok := unprocessedTxs[id]; ok {
+			txs = append(txs, tx)
+		} else if _, ok := processedTxs[id]; ok {
+			continue
+		} else {
+			return nil, errors.New(fmt.Sprintf("atx %v was not found after fetch was done", hex.EncodeToString(id[:])))
+		}
+	}
+	return txs, nil
+}
+
+func (tq *txQueue) checkLocalTxs(txids []types.TransactionId) (map[types.TransactionId]*types.AddressableSignedTransaction, map[types.TransactionId]*types.AddressableSignedTransaction, []types.TransactionId) {
+	//look in pool
+	unprocessedTxs := make(map[types.TransactionId]*types.AddressableSignedTransaction)
+	missingInPool := make([]types.TransactionId, 0)
+	for _, t := range txids {
+		if tx, err := tq.txpool.Get(t); err == nil {
+			tq.Debug("found tx, %v in tx pool", hex.EncodeToString(t[:]))
+			unprocessedTxs[t] = &tx
+		} else {
+			missingInPool = append(missingInPool, t)
+		}
+	}
+	//look in db
+	dbTxs, missing := tq.GetTransactions(missingInPool)
+	return unprocessedTxs, dbTxs, missing
+}
+
+type atxQueue struct {
+	log.Log
+	sync.Mutex
+	*mesh.Mesh
+	FetchPoetProof
+	*MessageServer
+	atxpool AtxMemPool
+	queue   chan *fetchJob //types.AtxId
+	pending map[types.AtxId][]chan bool
+}
+
+//todo batches
+func (aq *atxQueue) work() error {
+	output := fetchWithFactory(NewFetchWorker(aq.MessageServer, aq.Log, 1, ATxReqFactory(), aq.queue))
+	for out := range output {
+		if out == nil {
+			aq.Info("close queue")
+			return nil
+		}
+		txs := out.(fetchJob)
+		//aq.Info("next atx ids %v", txs)
+		aq.fetchPoetProofs(txs)    //removes atxs with proofs we could not fetch
+		aq.updateDependencies(txs) //todo hack add batches
+		aq.Info("next batch")
+	}
+
+	return nil
 }
 
 //todo get rid of this, send proofs with atxs
@@ -275,59 +328,6 @@ func (aq *atxQueue) addToPending(ids []types.AtxId) []chan bool {
 	}
 	aq.Unlock()
 	return deps
-}
-
-//todo minimize code duplication
-//returns txs out of txids that are not in the local database
-func (tq *txQueue) Handle(txids []types.TransactionId) ([]*types.AddressableSignedTransaction, error) {
-	if len(txids) == 0 {
-		tq.Warning("handle empty tx slice")
-		return nil, nil
-	}
-
-	unprocessedTxs, processedTxs, missing := tq.checkLocalTxs(txids)
-	if len(missing) > 0 {
-
-		output := tq.addToQueue(missing)
-
-		if success := <-output; !success {
-			return nil, errors.New(fmt.Sprintf("could not fetch all txs"))
-		}
-
-		unprocessedTxs, processedTxs, missing = tq.checkLocalTxs(txids)
-		if len(missing) > 0 {
-			return nil, errors.New("something got fudged2")
-		}
-	}
-
-	txs := make([]*types.AddressableSignedTransaction, 0, len(txids))
-	for _, id := range txids {
-		if tx, ok := unprocessedTxs[id]; ok {
-			txs = append(txs, tx)
-		} else if _, ok := processedTxs[id]; ok {
-			continue
-		} else {
-			return nil, errors.New(fmt.Sprintf("atx %v was not found after fetch was done", hex.EncodeToString(id[:])))
-		}
-	}
-	return txs, nil
-}
-
-func (tq *txQueue) checkLocalTxs(txids []types.TransactionId) (map[types.TransactionId]*types.AddressableSignedTransaction, map[types.TransactionId]*types.AddressableSignedTransaction, []types.TransactionId) {
-	//look in pool
-	unprocessedTxs := make(map[types.TransactionId]*types.AddressableSignedTransaction)
-	missingInPool := make([]types.TransactionId, 0)
-	for _, t := range txids {
-		if tx, err := tq.txpool.Get(t); err == nil {
-			tq.Debug("found tx, %v in tx pool", hex.EncodeToString(t[:]))
-			unprocessedTxs[t] = &tx
-		} else {
-			missingInPool = append(missingInPool, t)
-		}
-	}
-	//look in db
-	dbTxs, missing := tq.GetTransactions(missingInPool)
-	return unprocessedTxs, dbTxs, missing
 }
 
 //todo minimize code duplication
