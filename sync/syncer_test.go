@@ -194,7 +194,7 @@ func TestSyncProtocol_BlockRequest(t *testing.T) {
 	syncObj.AddBlockWithTxs(block, []*types.AddressableSignedTransaction{tx1}, []*types.ActivationTx{atx1})
 	syncObj2.Peers = getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
 
-	output := syncObj2.fetchWithFactory(NewBlockWorker(syncObj2, 1, BlockReqFactory(), blockSliceToChan([]types.BlockID{block.ID()})))
+	output := fetchWithFactory(NewBlockWorker(syncObj2.MessageServer, 1, BlockReqFactory(), blockSliceToChan([]types.BlockID{block.ID()})))
 
 	timeout := time.NewTimer(2 * time.Second)
 
@@ -220,7 +220,7 @@ func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 	//syncObj1.ValidateLayer(l) //this is to simulate the approval of the tortoise...
 	timeout := time.NewTimer(2 * time.Second)
 
-	wrk, output := NewPeersWorker(syncObj2, []p2p.Peer{nodes[0].PublicKey()}, &sync.Once{}, HashReqFactory(lid))
+	wrk, output := NewPeersWorker(syncObj2.MessageServer, []p2p.Peer{nodes[0].PublicKey()}, &sync.Once{}, HashReqFactory(lid))
 	go wrk.Work()
 
 	select {
@@ -336,7 +336,7 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 
 	timeout := time.NewTimer(2 * time.Second)
 
-	wrk, output := NewPeersWorker(syncObj, []p2p.Peer{nodes[1].PublicKey()}, &sync.Once{}, LayerIdsReqFactory(lid))
+	wrk, output := NewPeersWorker(syncObj.MessageServer, []p2p.Peer{nodes[1].PublicKey()}, &sync.Once{}, LayerIdsReqFactory(lid))
 	go wrk.Work()
 
 	select {
@@ -391,7 +391,7 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	ch <- block2.ID()
 	ch <- block3.ID()
 
-	output := syncObj2.fetchWithFactory(NewBlockWorker(syncObj2, 1, BlockReqFactory(), blockSliceToChan([]types.BlockID{block1.ID(), block2.ID(), block3.ID()})))
+	output := fetchWithFactory(NewBlockWorker(syncObj2.MessageServer, 1, BlockReqFactory(), blockSliceToChan([]types.BlockID{block1.ID(), block2.ID(), block3.ID()})))
 
 	for out := range output {
 		block := out.(blockJob).block
@@ -874,10 +874,10 @@ func TestSyncer_Txs(t *testing.T) {
 	id3 := types.GetTransactionId(tx3.SerializableSignedTransaction)
 	block3.TxIds = []types.TransactionId{id1, id2, id3}
 	syncObj1.AddBlockWithTxs(block3, []*types.AddressableSignedTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
-	syncObj2.sigValidator = mockTxProcessor{true}
+	syncObj2.txQueue.TxSigValidator = mockTxProcessor{true}
 	_, err := syncObj2.txQueue.Handle(block3.TxIds)
 	assert.NotNil(t, err)
-	syncObj2.sigValidator = mockTxProcessor{false}
+	syncObj2.txQueue.TxSigValidator = mockTxProcessor{false}
 	_, err = syncObj2.txQueue.Handle(block3.TxIds)
 	assert.Nil(t, err)
 }

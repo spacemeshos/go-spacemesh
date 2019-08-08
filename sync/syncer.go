@@ -50,14 +50,6 @@ type TxSigValidator interface {
 	ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (address.Address, error)
 }
 
-type blockValidator struct {
-	EligibilityValidator
-}
-
-func NewBlockValidator(bev EligibilityValidator) BlockValidator {
-	return &blockValidator{bev}
-}
-
 type Configuration struct {
 	LayersPerEpoch uint16
 	Concurrency    int //number of workers for sync method
@@ -71,18 +63,15 @@ type LayerValidator interface {
 }
 
 type Syncer struct {
-	p2p.Peers
-	*mesh.Mesh
-	BlockValidator
 	Configuration
 	log.Log
-	*server.MessageServer
-
-	lValidator        LayerValidator
-	sigValidator      TxSigValidator
+	*mesh.Mesh
+	EligibilityValidator
+	*MessageServer
 	poetDb            PoetDb
 	txpool            TxMemPool
 	atxpool           AtxMemPool
+	lValidator        LayerValidator
 	currentLayer      types.LayerID
 	SyncLock          uint32
 	startLock         uint32
@@ -106,7 +95,6 @@ func (s *Syncer) Close() {
 	close(s.forceSync)
 	s.blockQueue.done()
 	s.MessageServer.Close()
-	s.Peers.Close()
 }
 
 const (
@@ -129,7 +117,7 @@ func (s *Syncer) IsSynced() bool {
 func (s *Syncer) Start() {
 	if atomic.CompareAndSwapUint32(&s.startLock, 0, 1) {
 		go s.run()
-		go s.blockQueue.traverse(s)
+		go s.blockQueue.traverse()
 		s.forceSync <- true
 		return
 	}
@@ -166,37 +154,41 @@ func (s *Syncer) run() {
 
 //fires a sync every sm.syncInterval or on force space from outside
 func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool AtxMemPool, sv TxSigValidator, bv BlockValidator, poetdb PoetDb, conf Configuration, clock *timesync.Ticker, logger log.Log) *Syncer {
-	s := &Syncer{
-		BlockValidator: bv,
-		Configuration:  conf,
-		Log:            logger,
-		Mesh:           layers,
-		Peers:          p2p.NewPeers(srv, logger.WithName("peers")),
-		MessageServer:  server.NewMsgServer(srv.(server.Service), syncProtocol, conf.RequestTimeout, make(chan service.DirectMessage, p2pconf.ConfigValues.BufferSize), logger.WithName("srv")),
-		lValidator:     layers,
-		sigValidator:   sv,
-		SyncLock:       0,
-		txpool:         txpool,
-		atxpool:        atxpool,
-		poetDb:         poetdb,
-		startLock:      0,
-		currentLayer:   clock.GetCurrentLayer(),
-		forceSync:      make(chan bool),
-		clock:          clock.Subscribe(),
-		exit:           make(chan struct{}),
+
+	srvr := &MessageServer{
+		Configuration: conf,
+		MessageServer: server.NewMsgServer(srv.(server.Service), syncProtocol, conf.RequestTimeout, make(chan service.DirectMessage, p2pconf.ConfigValues.BufferSize), logger.WithName("srv")),
+		Peers:         p2p.NewPeers(srv, logger.WithName("peers")),
 	}
 
-	//todo change get block to check local
-	s.blockQueue = NewValidationQueue(s.DataAvailabilty, s.AddBlockWithTxs, s.GetBlock, s.Log.WithName("validQ"))
-	s.txQueue = NewTxQueue(s)
-	s.atxQueue = NewAtxQueue(s)
+	s := &Syncer{
+		EligibilityValidator: bv,
+		Configuration:        conf,
+		Log:                  logger,
+		Mesh:                 layers,
+		MessageServer:        srvr,
+		lValidator:           layers,
+		SyncLock:             0,
+		poetDb:               poetdb,
+		txpool:               txpool,
+		atxpool:              atxpool,
+		startLock:            0,
+		currentLayer:         clock.GetCurrentLayer(),
+		forceSync:            make(chan bool),
+		clock:                clock.Subscribe(),
+		exit:                 make(chan struct{}),
+	}
 
-	s.RegisterBytesMsgHandler(LAYER_HASH, newLayerHashRequestHandler(layers, logger))
-	s.RegisterBytesMsgHandler(MINI_BLOCK, newBlockRequestHandler(layers, logger))
-	s.RegisterBytesMsgHandler(LAYER_IDS, newLayerBlockIdsRequestHandler(layers, logger))
-	s.RegisterBytesMsgHandler(TX, newTxsRequestHandler(s, logger))
-	s.RegisterBytesMsgHandler(ATX, newATxsRequestHandler(s, logger))
-	s.RegisterBytesMsgHandler(POET, newPoetRequestHandler(s, logger))
+	s.blockQueue = NewValidationQueue(srvr, conf, bv, s.DataAvailabilty, layers.AddBlockWithTxs, s.GetBlock, logger.WithName("validQ"))
+	s.txQueue = NewTxQueue(layers, srvr, txpool, sv, logger.WithName("txFetchQueue"))
+	s.atxQueue = NewAtxQueue(layers, srvr, atxpool, s.FetchPoetProof, logger.WithName("atxFetchQueue"))
+
+	srvr.RegisterBytesMsgHandler(LAYER_HASH, newLayerHashRequestHandler(layers, logger))
+	srvr.RegisterBytesMsgHandler(MINI_BLOCK, newBlockRequestHandler(layers, logger))
+	srvr.RegisterBytesMsgHandler(LAYER_IDS, newLayerBlockIdsRequestHandler(layers, logger))
+	srvr.RegisterBytesMsgHandler(TX, newTxsRequestHandler(s, logger))
+	srvr.RegisterBytesMsgHandler(ATX, newATxsRequestHandler(s, logger))
+	srvr.RegisterBytesMsgHandler(POET, newPoetRequestHandler(s, logger))
 
 	return s
 }
@@ -332,7 +324,7 @@ func (s *Syncer) fetchLayerBlockIds(m map[string]p2p.Peer, lyr types.LayerID) ([
 		v = append(v, value)
 	}
 
-	wrk, output := NewPeersWorker(s, v, &sync.Once{}, LayerIdsReqFactory(lyr))
+	wrk, output := NewPeersWorker(s.MessageServer, v, &sync.Once{}, LayerIdsReqFactory(lyr))
 	go wrk.Work()
 
 	idSet := make(map[types.BlockID]struct{}, s.LayerSize)
@@ -365,7 +357,7 @@ type peerHashPair struct {
 
 func (s *Syncer) fetchLayerHashes(lyr types.LayerID) (map[string]p2p.Peer, error) {
 	// get layer hash from each peer
-	wrk, output := NewPeersWorker(s, s.GetPeers(), &sync.Once{}, HashReqFactory(lyr))
+	wrk, output := NewPeersWorker(s.MessageServer, s.GetPeers(), &sync.Once{}, HashReqFactory(lyr))
 	go wrk.Work()
 	m := make(map[string]p2p.Peer)
 	for out := range output {
@@ -380,16 +372,7 @@ func (s *Syncer) fetchLayerHashes(lyr types.LayerID) (map[string]p2p.Peer, error
 	return m, nil
 }
 
-func (s *Syncer) validateAndBuildTx(x *types.SerializableSignedTransaction) (*types.AddressableSignedTransaction, error) {
-	addr, err := s.sigValidator.ValidateTransactionSignature(x)
-	if err != nil {
-		return nil, err
-	}
-
-	return &types.AddressableSignedTransaction{SerializableSignedTransaction: x, Address: addr}, nil
-}
-
-func (s *Syncer) fetchWithFactory(wrk worker) chan interface{} {
+func fetchWithFactory(wrk worker) chan interface{} {
 	// each worker goroutine tries to fetch a block iteratively from each peer
 	go wrk.Work()
 	for i := 0; int32(i) < *wrk.workCount-1; i++ {
@@ -402,7 +385,7 @@ func (s *Syncer) fetchWithFactory(wrk worker) chan interface{} {
 
 func (s *Syncer) FetchPoetProof(poetProofRef []byte) error {
 	if !s.poetDb.HasProof(poetProofRef) {
-		out := <-s.fetchWithFactory(NewNeighborhoodWorker(s, 1, PoetReqFactory(poetProofRef)))
+		out := <-fetchWithFactory(NewNeighborhoodWorker(s.MessageServer, 1, PoetReqFactory(poetProofRef)))
 		if out == nil {
 			return fmt.Errorf("could not find PoET proof with any neighbor")
 		}

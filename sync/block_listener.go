@@ -4,6 +4,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/timesync"
@@ -13,7 +14,16 @@ import (
 	"time"
 )
 
-type MessageServer server.MessageServer
+type MessageServer struct {
+	Configuration
+	*server.MessageServer
+	p2p.Peers
+}
+
+func (ms *MessageServer) Close() {
+	ms.MessageServer.Close()
+	ms.Peers.Close()
+}
 
 type BlockListener struct {
 	*Syncer
@@ -71,6 +81,7 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 			}
 			bl.wg.Add(1)
 			go func() {
+				defer bl.wg.Done()
 				if data == nil {
 					bl.Error("got empty message while listening to gossip blocks")
 					return
@@ -85,7 +96,6 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 				if bl.HandleNewBlock(&blk) {
 					data.ReportValidation(config.NewBlockProtocol)
 				}
-				bl.wg.Done()
 			}()
 
 		}

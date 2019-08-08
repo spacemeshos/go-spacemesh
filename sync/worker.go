@@ -3,15 +3,14 @@ package sync
 import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"sync"
 	"sync/atomic"
 	"time"
 )
 
-type RequestFactory func(s *server.MessageServer, peer p2p.Peer) (chan interface{}, error)
-type BlockRequestFactory func(s *server.MessageServer, peer p2p.Peer, id types.BlockID) (chan interface{}, error)
+type RequestFactory func(s *MessageServer, peer p2p.Peer) (chan interface{}, error)
+type BlockRequestFactory func(s *MessageServer, peer p2p.Peer, id types.BlockID) (chan interface{}, error)
 
 type blockJob struct {
 	block *types.Block
@@ -42,7 +41,7 @@ func (w *worker) Clone() *worker {
 	return &worker{Log: w.Log, Once: w.Once, workCount: w.workCount, output: w.output, work: w.work}
 }
 
-func NewPeersWorker(s *Syncer, peers []p2p.Peer, mu *sync.Once, reqFactory RequestFactory) (worker, chan interface{}) {
+func NewPeersWorker(s *MessageServer, peers []p2p.Peer, mu *sync.Once, reqFactory RequestFactory) (worker, chan interface{}) {
 	count := int32(1)
 	numOfpeers := len(peers)
 	output := make(chan interface{}, numOfpeers)
@@ -55,7 +54,7 @@ func NewPeersWorker(s *Syncer, peers []p2p.Peer, mu *sync.Once, reqFactory Reque
 		peerFunc := func() {
 			defer wg.Done()
 			s.Info("send request Peer: %v", peer)
-			ch, err := reqFactory(s.MessageServer, peer)
+			ch, err := reqFactory(s, peer)
 			if err != nil {
 				s.Error("request failed, ", err)
 				return
@@ -90,7 +89,7 @@ func NewPeersWorker(s *Syncer, peers []p2p.Peer, mu *sync.Once, reqFactory Reque
 
 }
 
-func NewNeighborhoodWorker(s *Syncer, count int, reqFactory RequestFactory) worker {
+func NewNeighborhoodWorker(s *MessageServer, count int, reqFactory RequestFactory) worker {
 	output := make(chan interface{}, count)
 	acount := int32(count)
 	mu := &sync.Once{}
@@ -99,7 +98,7 @@ func NewNeighborhoodWorker(s *Syncer, count int, reqFactory RequestFactory) work
 		for _, p := range peers {
 			peer := p
 			s.Info("send request Peer: %v", peer)
-			ch, _ := reqFactory(s.MessageServer, peer)
+			ch, _ := reqFactory(s, peer)
 			timeout := time.After(s.RequestTimeout)
 			select {
 			case <-timeout:
@@ -119,7 +118,7 @@ func NewNeighborhoodWorker(s *Syncer, count int, reqFactory RequestFactory) work
 
 }
 
-func NewBlockWorker(s *Syncer, count int, reqFactory BlockRequestFactory, ids chan types.BlockID) worker {
+func NewBlockWorker(s *MessageServer, count int, reqFactory BlockRequestFactory, ids chan types.BlockID) worker {
 	output := make(chan interface{}, count)
 	acount := int32(count)
 	mu := &sync.Once{}
@@ -130,7 +129,7 @@ func NewBlockWorker(s *Syncer, count int, reqFactory BlockRequestFactory, ids ch
 			for _, p := range s.GetPeers() {
 				peer := p
 				s.Info("send %v block request to Peer: %v", id, peer)
-				ch, _ := reqFactory(s.MessageServer, peer, id)
+				ch, _ := reqFactory(s, peer, id)
 				timeout := time.After(s.RequestTimeout)
 				select {
 				case <-timeout:
@@ -153,33 +152,33 @@ func NewBlockWorker(s *Syncer, count int, reqFactory BlockRequestFactory, ids ch
 	return worker{Log: s.Log, Once: mu, workCount: &acount, output: output, work: workFunc}
 }
 
-func NewFetchWorker(s *Syncer, count int, reqFactory RequestFactoryV2, idsChan chan *fetchJob) worker {
+func NewFetchWorker(s *MessageServer, lg log.Log, count int, reqFactory RequestFactoryV2, idsChan chan *fetchJob) worker {
 	output := make(chan interface{}, count)
 	acount := int32(count)
 	mu := &sync.Once{}
 	workFunc := func() {
 		for jb := range idsChan {
 			if jb == nil {
-				s.Info("close fetch worker ")
+				lg.Info("close fetch worker ")
 				return
 			}
 			retrived := false
 		next:
 			for _, p := range s.GetPeers() {
 				peer := p
-				s.Info("send fetch request to Peer: %v", peer.String())
-				ch, _ := reqFactory(s.MessageServer, peer, jb.ids)
+				lg.Info("send fetch request to Peer: %v", peer.String())
+				ch, _ := reqFactory(s, peer, jb.ids)
 				timeout := time.After(s.RequestTimeout)
 				select {
 				case <-timeout:
-					s.Error("fetch request to %v timed out", peer.String())
+					lg.Error("fetch request to %v timed out", peer.String())
 				case v := <-ch:
 					//chan not closed
 					if v != nil {
 						retrived = true
-						s.Info("Peer: %v responded to  fetch request ", peer.String())
+						lg.Info("Peer: %v responded %v to fetch request ", peer.String(), v)
 						output <- fetchJob{ids: jb.ids, items: v}
-						s.Info("done")
+						lg.Info("done")
 						break next
 					}
 				}
@@ -190,5 +189,5 @@ func NewFetchWorker(s *Syncer, count int, reqFactory RequestFactoryV2, idsChan c
 		}
 	}
 
-	return worker{Log: s.Log, Once: mu, workCount: &acount, output: output, work: workFunc}
+	return worker{Log: lg, Once: mu, workCount: &acount, output: output, work: workFunc}
 }

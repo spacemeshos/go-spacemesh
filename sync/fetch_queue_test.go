@@ -22,7 +22,7 @@ func TestBlockListener_TestTxQueue(t *testing.T) {
 
 	bl1.Start()
 	bl2.Start()
-	queue := NewTxQueue(bl1)
+	queue := bl1.txQueue
 	id1 := types.GetTransactionId(tx1.SerializableSignedTransaction)
 	id2 := types.GetTransactionId(tx2.SerializableSignedTransaction)
 	id3 := types.GetTransactionId(tx3.SerializableSignedTransaction)
@@ -61,7 +61,6 @@ func TestBlockListener_TestTxQueue(t *testing.T) {
 		}
 	}
 
-	assert.True(t, len(queue.txlocks) == 0)
 	assert.True(t, len(queue.pending) == 0)
 
 	bl2.Close()
@@ -82,7 +81,7 @@ func TestBlockListener_TestAtxQueue(t *testing.T) {
 
 	bl1.Start()
 	bl2.Start()
-	queue := NewAtxQueue(bl1)
+	queue := bl1.atxQueue
 
 	block1 := types.NewExistingBlock(types.BlockID(111), 1, nil)
 	atx1 := atx()
@@ -117,7 +116,7 @@ func TestBlockListener_TestAtxQueue(t *testing.T) {
 			t.Error("done! without fetching")
 		}
 	}
-	assert.True(t, len(queue.atxlocks) == 0)
+
 	assert.True(t, len(queue.pending) == 0)
 
 	bl2.Close()
@@ -138,7 +137,7 @@ func TestBlockListener_TestTxQueueHandle(t *testing.T) {
 
 	bl1.Start()
 	bl2.Start()
-	queue := NewTxQueue(bl1)
+	queue := bl1.txQueue
 	id1 := types.GetTransactionId(tx1.SerializableSignedTransaction)
 	id2 := types.GetTransactionId(tx2.SerializableSignedTransaction)
 	id3 := types.GetTransactionId(tx3.SerializableSignedTransaction)
@@ -156,7 +155,6 @@ func TestBlockListener_TestTxQueueHandle(t *testing.T) {
 		t.Error("wrong length")
 	}
 
-	assert.True(t, len(queue.txlocks) == 0)
 	assert.True(t, len(queue.pending) == 0)
 
 	bl2.Close()
@@ -177,8 +175,8 @@ func TestBlockListener_TestAtxQueueHandle(t *testing.T) {
 
 	bl1.Start()
 	bl2.Start()
-	queue := NewAtxQueue(bl1)
 
+	queue := bl1.atxQueue
 	block1 := types.NewExistingBlock(types.BlockID(111), 1, nil)
 	atx1 := atx()
 	atx2 := atx()
@@ -195,7 +193,6 @@ func TestBlockListener_TestAtxQueueHandle(t *testing.T) {
 		t.Error("wrong length")
 	}
 
-	assert.True(t, len(queue.atxlocks) == 0)
 	assert.True(t, len(queue.pending) == 0)
 
 	bl2.Close()

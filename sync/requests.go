@@ -2,12 +2,11 @@ package sync
 
 import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/types"
 )
 
 func LayerIdsReqFactory(lyr types.LayerID) RequestFactory {
-	return func(s *server.MessageServer, peer p2p.Peer) (chan interface{}, error) {
+	return func(s *MessageServer, peer p2p.Peer) (chan interface{}, error) {
 		ch := make(chan interface{}, 1)
 		foo := func(msg []byte) {
 			defer close(ch)
@@ -30,7 +29,7 @@ func LayerIdsReqFactory(lyr types.LayerID) RequestFactory {
 }
 
 func HashReqFactory(lyr types.LayerID) RequestFactory {
-	return func(s *server.MessageServer, peer p2p.Peer) (chan interface{}, error) {
+	return func(s *MessageServer, peer p2p.Peer) (chan interface{}, error) {
 		ch := make(chan interface{}, 1)
 		foo := func(msg []byte) {
 			defer close(ch)
@@ -60,7 +59,7 @@ func blockSliceToChan(blockIds []types.BlockID) chan types.BlockID {
 
 func BlockReqFactory() BlockRequestFactory {
 	//convert to chan
-	return func(s *server.MessageServer, peer p2p.Peer, id types.BlockID) (chan interface{}, error) {
+	return func(s *MessageServer, peer p2p.Peer, id types.BlockID) (chan interface{}, error) {
 		ch := make(chan interface{}, 1)
 		foo := func(msg []byte) {
 			defer close(ch)
@@ -86,7 +85,7 @@ func BlockReqFactory() BlockRequestFactory {
 }
 
 func TxReqFactory() RequestFactoryV2 {
-	return func(s *server.MessageServer, peer p2p.Peer, id interface{}) (chan interface{}, error) {
+	return func(s *MessageServer, peer p2p.Peer, id interface{}) (chan interface{}, error) {
 		ch := make(chan interface{}, 1)
 		foo := func(msg []byte) {
 			defer close(ch)
@@ -116,7 +115,7 @@ func TxReqFactory() RequestFactoryV2 {
 }
 
 func ATxReqFactory() RequestFactoryV2 {
-	return func(s *server.MessageServer, peer p2p.Peer, ids interface{}) (chan interface{}, error) {
+	return func(s *MessageServer, peer p2p.Peer, ids interface{}) (chan interface{}, error) {
 		ch := make(chan interface{}, 1)
 		foo := func(msg []byte) {
 			s.Info("Handle atx response ")
@@ -148,7 +147,7 @@ func ATxReqFactory() RequestFactoryV2 {
 }
 
 func PoetReqFactory(poetProofRef []byte) RequestFactory {
-	return func(s *server.MessageServer, peer p2p.Peer) (chan interface{}, error) {
+	return func(s *MessageServer, peer p2p.Peer) (chan interface{}, error) {
 		ch := make(chan interface{}, 1)
 		resHandler := func(msg []byte) {
 			s.Info("handle PoET proof response")

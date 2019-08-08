@@ -21,7 +21,7 @@ func TestNewPeerWorker(t *testing.T) {
 	err := syncObj1.AddBlock(types.NewExistingBlock(types.BlockID(123), lid, nil))
 	assert.NoError(t, err)
 
-	wrk, output := NewPeersWorker(syncObj2, []p2p.Peer{nodes[3].PublicKey(), nodes[2].PublicKey(), nodes[0].PublicKey()}, &sync.Once{}, LayerIdsReqFactory(1))
+	wrk, output := NewPeersWorker(syncObj2.MessageServer, []p2p.Peer{nodes[3].PublicKey(), nodes[2].PublicKey(), nodes[0].PublicKey()}, &sync.Once{}, LayerIdsReqFactory(1))
 
 	go wrk.Work()
 	wrk.Wait()
@@ -52,7 +52,7 @@ func TestNewNeighborhoodWorker(t *testing.T) {
 	r.NoError(err)
 	ref := sha256.Sum256(poetProofBytes)
 
-	w := NewNeighborhoodWorker(s1, 1, PoetReqFactory(ref[:]))
+	w := NewNeighborhoodWorker(s1.MessageServer, 1, PoetReqFactory(ref[:]))
 	go w.work()
 	assert.NotNil(t, <-w.output)
 	r.NoError(err)
@@ -76,7 +76,7 @@ func TestNewBlockWorker(t *testing.T) {
 	pm1 := getPeersMock([]p2p.Peer{nodes[0].PublicKey(), nodes[1].PublicKey()})
 	syncObj3.Peers = pm1
 
-	wrk := NewBlockWorker(syncObj3, 1, BlockReqFactory(), blockSliceToChan([]types.BlockID{block.Id}))
+	wrk := NewBlockWorker(syncObj3.MessageServer, 1, BlockReqFactory(), blockSliceToChan([]types.BlockID{block.Id}))
 	go wrk.Work()
 	count := 0
 loop:

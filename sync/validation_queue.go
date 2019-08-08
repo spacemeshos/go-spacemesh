@@ -28,6 +28,9 @@ type Job struct {
 
 type validationQueue struct {
 	log.Log
+	*MessageServer
+	Configuration
+	BlockValidator
 	queue            chan types.BlockID
 	mu               sync.Mutex
 	callbacks        map[interface{}]func(res bool) error
@@ -39,8 +42,11 @@ type validationQueue struct {
 	dataAvailability dataAvailabilityFunc
 }
 
-func NewValidationQueue(davail dataAvailabilityFunc, addBlock addBlockFunc, checkLocal checkLocalFunc, lg log.Log) *validationQueue {
+func NewValidationQueue(srvr *MessageServer, conf Configuration, bv BlockValidator, davail dataAvailabilityFunc, addBlock addBlockFunc, checkLocal checkLocalFunc, lg log.Log) *validationQueue {
 	vq := &validationQueue{
+		Configuration:    conf,
+		MessageServer:    srvr,
+		BlockValidator:   bv,
 		queue:            make(chan types.BlockID, 100),
 		visited:          make(map[types.BlockID]struct{}),
 		depMap:           make(map[interface{}]map[types.BlockID]struct{}),
@@ -73,9 +79,9 @@ func (vq *validationQueue) done() {
 	close(vq.queue)
 }
 
-func (vq *validationQueue) traverse(s *Syncer) error {
+func (vq *validationQueue) traverse() error {
 
-	output := s.fetchWithFactory(NewBlockWorker(s, s.Concurrency, BlockReqFactory(), vq.queue))
+	output := fetchWithFactory(NewBlockWorker(vq.MessageServer, vq.Concurrency, BlockReqFactory(), vq.queue))
 	for out := range output {
 		bjb, ok := out.(blockJob)
 
@@ -88,13 +94,13 @@ func (vq *validationQueue) traverse(s *Syncer) error {
 		vq.Info("fetched  %v", bjb.block.ID())
 
 		vq.visited[bjb.block.ID()] = struct{}{}
-		if eligable, err := s.BlockSignedAndEligible(bjb.block); err != nil || !eligable {
+		if eligable, err := vq.BlockSignedAndEligible(bjb.block); err != nil || !eligable {
 			vq.updateDependencies(bjb.id, false)
 			vq.Error(fmt.Sprintf("Block %v eligiblety check failed %v", bjb.block.ID(), err))
 			continue
 		}
 
-		s.Info("Validating view Block %v", bjb.block.ID())
+		vq.Info("Validating view Block %v", bjb.block.ID())
 		res, err := vq.addBlockDependencies(bjb.block, vq.finishBlockCallback(bjb.block))
 		if err != nil {
 			vq.updateDependencies(bjb.id, false)
@@ -103,7 +109,7 @@ func (vq *validationQueue) traverse(s *Syncer) error {
 		}
 
 		if res == false {
-			s.Info("pending done for %v", bjb.block.ID())
+			vq.Info("pending done for %v", bjb.block.ID())
 			vq.updateDependencies(bjb.id, true)
 			vq.Info(" %v blocks in dependency map", len(vq.depMap))
 			vq.Info(" %v blocks in callback map", len(vq.callbacks))
