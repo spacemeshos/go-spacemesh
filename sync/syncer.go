@@ -51,14 +51,6 @@ type TxSigValidator interface {
 	ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (address.Address, error)
 }
 
-type blockValidator struct {
-	EligibilityValidator
-}
-
-func NewBlockValidator(bev EligibilityValidator) BlockValidator {
-	return &blockValidator{bev}
-}
-
 type Configuration struct {
 	LayersPerEpoch uint16
 	Concurrency    int //number of workers for sync method
