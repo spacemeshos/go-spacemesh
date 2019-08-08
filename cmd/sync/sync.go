@@ -92,6 +92,12 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	lg.Info("expected layers: ", expectedLayers)
 	lg.Info("request timeout: ", timeout)
 
+	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P)
+
+	if err != nil {
+		panic("something got fudged while creating p2p service ")
+	}
+
 	conf := sync.Configuration{
 		Concurrency:    4,
 		LayerSize:      int(100),
@@ -104,12 +110,6 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 			return
 		}
 	}
-	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P)
-
-	if err != nil {
-		panic("something got fudged while creating p2p service ")
-	}
-
 	poetDbStore, err := database.NewLDBDatabase(app.Config.DataDir+"poet", 0, 0, lg.WithName("poetDbStore"))
 	if err != nil {
 		lg.Error("error: ", err)
