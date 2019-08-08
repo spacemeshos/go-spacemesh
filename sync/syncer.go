@@ -102,8 +102,9 @@ func (s *Syncer) Close() {
 	s.Info("Closing syncer")
 	close(s.exit)
 	close(s.forceSync)
-	time.Sleep(200 * time.Millisecond)
-	s.syncFuncWg.Wait() // must be called after we ensure no more sync routines can be created
+	// TODO: broadly implement a better mechanism for shutdown
+	time.Sleep(5 * time.Millisecond) // "ensures" no more sync routines can be created, ok for now
+	s.syncFuncWg.Wait()              // must be called after we ensure no more sync routines can be created
 	s.MessageServer.Close()
 	s.Peers.Close()
 }
@@ -203,6 +204,7 @@ func (s *Syncer) lastTickedLayer() types.LayerID {
 }
 
 func (s *Syncer) Synchronise() {
+	defer s.syncFuncWg.Done()
 	currentSyncLayer := s.lValidator.ValidatedLayer() + 1
 	if s.IsSynced() {
 		lyr, err := s.GetLayer(types.LayerID(currentSyncLayer))
@@ -225,8 +227,6 @@ func (s *Syncer) Synchronise() {
 			s.lValidator.ValidateLayer(lyr) // wait for layer validation
 		}
 	}
-
-	s.syncFuncWg.Done()
 }
 
 func (s *Syncer) getLayerFromNeighbors(currenSyncLayer types.LayerID) (*types.Layer, error) {
