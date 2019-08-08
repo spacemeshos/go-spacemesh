@@ -138,7 +138,7 @@ func newSwarm(ctx context.Context, config config.Config, newNode bool, persist b
 		shutdown: make(chan struct{}), // non-buffered so requests to shutdown block until swarm is shut down
 
 		initial:           make(chan struct{}),
-		morePeersReq:      make(chan struct{}),
+		morePeersReq:      make(chan struct{}, config.MaxInboundPeers+config.OutboundPeersTarget),
 		inpeers:           make(map[string]p2pcrypto.PublicKey),
 		outpeers:          make(map[string]p2pcrypto.PublicKey),
 		newPeerSub:        make([]chan p2pcrypto.PublicKey, 0, 10),
@@ -627,12 +627,15 @@ func (s *swarm) startNeighborhood() error {
 }
 
 func (s *swarm) peersLoop() {
+	var moreLock uint32 = 0
 loop:
 	for {
 		select {
 		case <-s.morePeersReq:
 			s.lNode.Debug("loop: got morePeersReq")
-			go s.askForMorePeers()
+			if atomic.CompareAndSwapUint32(&moreLock, 0, 1) {
+				go s.askForMorePeers(&moreLock)
+			}
 		//todo: try getting the connections (heartbeat)
 		case <-s.shutdown:
 			break loop // maybe error ?
@@ -640,12 +643,13 @@ loop:
 	}
 }
 
-func (s *swarm) askForMorePeers() {
+func (s *swarm) askForMorePeers(doneFlag *uint32) {
 	s.outpeersMutex.RLock()
 	numpeers := len(s.outpeers)
 	s.outpeersMutex.RUnlock()
 	req := s.config.SwarmConfig.RandomConnections - numpeers
 	if req <= 0 {
+		atomic.StoreUint32(doneFlag, 0)
 		return
 	}
 
@@ -664,11 +668,13 @@ func (s *swarm) askForMorePeers() {
 			s.lNode.Debug("neighbors list: [%v]", strings.Join(strs, ","))
 			s.outpeersMutex.RUnlock()
 		})
+		atomic.StoreUint32(doneFlag, 0)
 		return
 	}
 	// if we could'nt get any maybe were initializing
 	// wait a little bit before trying again
 	time.Sleep(NoResultsInterval)
+	atomic.StoreUint32(doneFlag, 0)
 	s.morePeersReq <- struct{}{}
 }
 

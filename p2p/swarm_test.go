@@ -6,6 +6,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/discovery"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/require"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -845,6 +846,34 @@ func TestSwarm_AddIncomingPeer(t *testing.T) {
 	p.inpeersMutex.RUnlock()
 	assert.False(t, ok)
 	assert.Nil(t, peer)
+}
+
+func TestSwarm_AskPeersSerial(t *testing.T) {
+	p := p2pTestNoStart(t, config.DefaultConfig())
+	dsc := &discovery.MockPeerStore{}
+
+	timescalled := uint32(0)
+	block := make(chan struct{})
+
+	dsc.SelectPeersFunc = func(qty int) []*node.NodeInfo {
+		atomic.AddUint32(&timescalled, 1)
+		<-block
+		return node.GenerateRandomNodesData(qty) // will trigger sending on morepeersreq
+	}
+
+	p.discover = dsc
+
+	p.startNeighborhood()
+
+	p.morePeersReq <- struct{}{}
+	p.morePeersReq <- struct{}{}
+
+	block <- struct{}{}
+	require.Equal(t, atomic.LoadUint32(&timescalled), uint32(1))
+	block <- struct{}{}
+	require.Equal(t, atomic.LoadUint32(&timescalled), uint32(2))
+	block <- struct{}{}
+	require.Equal(t, atomic.LoadUint32(&timescalled), uint32(3))
 }
 
 func Test_NodeInfo(t *testing.T) {
