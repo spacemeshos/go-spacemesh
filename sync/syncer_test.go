@@ -124,7 +124,7 @@ var rewardConf = mesh.Config{
 
 func getMeshWithLevelDB(id string) *mesh.Mesh {
 	lg := log.New(id, "", "")
-	mshdb := mesh.NewPersistentMeshDB(id, lg)
+	mshdb, _ := mesh.NewPersistentMeshDB(id, lg)
 	atxdbStore, _ := database.NewLDBDatabase(id+"atx", 0, 0, lg.WithOptions(log.Nop))
 	atxdb := activation.NewActivationDb(atxdbStore, &MockIStore{}, mshdb, 10, &ValidatorMock{}, lg.WithOptions(log.Nop))
 	return mesh.NewMesh(mshdb, atxdb, rewardConf, &MeshValidatorMock{}, &MockTxMemPool{}, &MockAtxMemPool{}, &stateMock{}, lg.WithOptions(log.Nop))
@@ -229,7 +229,6 @@ func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 	case <-timeout.C:
 		assert.Fail(t, "no message received on channel")
 	}
-
 }
 
 func TestSyncer_FetchPoetProofAvailableAndValid(t *testing.T) {
@@ -273,7 +272,7 @@ func TestSyncer_SyncAtxs_FetchPoetProof(t *testing.T) {
 	poetRef := sha256.Sum256(poetProofBytes)
 
 	atx1 := atx()
-	atx1.Nipst.PoetProofRef = poetRef[:]
+	atx1.Nipst.PostProof.Challenge = poetRef[:]
 	s0.AtxDB.ProcessAtx(atx1)
 
 	// Make sure that s1 syncAtxs would fetch the missing poet proof.
@@ -357,7 +356,6 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 	case <-timeout.C:
 		assert.Fail(t, "no message received on channel")
 	}
-
 }
 
 func TestSyncProtocol_FetchBlocks(t *testing.T) {
@@ -991,4 +989,88 @@ func TestSyncer_ConcurrentSynchronise(t *testing.T) {
 	f()
 	time.Sleep(100 * time.Millisecond) // handle go routine race
 	r.Equal(1, lv.calls)
+}
+
+func TestSyncProtocol_NilResponse(t *testing.T) {
+	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_NilResponse", memoryDB, newMemPoetDb)
+	defer syncs[0].Close()
+	defer syncs[1].Close()
+
+	var nonExistingLayerId = types.LayerID(0)
+	var nonExistingBlockId = types.BlockID(0)
+	var nonExistingTxId types.TransactionId
+	var nonExistingAtxId types.AtxId
+	var nonExistingPoetRef []byte
+
+	timeout := 1 * time.Second
+	timeoutErrMsg := "no message received on channel"
+
+	// Layer Hash
+
+	wrk, output := NewPeersWorker(syncs[0], []p2p.Peer{nodes[1].PublicKey()}, &sync.Once{}, HashReqFactory(nonExistingLayerId))
+	go wrk.Work()
+
+	select {
+	case out := <-output:
+		assert.Nil(t, out)
+	case <-time.After(timeout):
+		assert.Fail(t, timeoutErrMsg)
+	}
+
+	// Layer Block Ids
+
+	wrk, output = NewPeersWorker(syncs[0], []p2p.Peer{nodes[1].PublicKey()}, &sync.Once{}, LayerIdsReqFactory(nonExistingLayerId))
+	go wrk.Work()
+
+	select {
+	case out := <-output:
+		assert.Nil(t, out)
+	case <-time.After(timeout):
+		assert.Fail(t, timeoutErrMsg)
+	}
+
+	// Block
+
+	output = syncs[0].fetchWithFactory(NewBlockWorker(syncs[0], 1, BlockReqFactory(), blockSliceToChan([]types.BlockID{nonExistingBlockId})))
+
+	select {
+	case out := <-output:
+		assert.Nil(t, out)
+	case <-time.After(timeout):
+		assert.Fail(t, timeoutErrMsg)
+	}
+
+	// Tx
+
+	wrk = NewNeighborhoodWorker(syncs[0], 1, TxReqFactory([]types.TransactionId{nonExistingTxId}))
+	go wrk.Work()
+
+	select {
+	case out := <-wrk.output:
+		assert.Nil(t, out)
+	case <-time.After(timeout):
+		assert.Fail(t, timeoutErrMsg)
+	}
+
+	// Atx
+
+	output = syncs[0].fetchWithFactory(NewNeighborhoodWorker(syncs[0], 1, ATxReqFactory([]types.AtxId{nonExistingAtxId})))
+
+	select {
+	case out := <-output:
+		assert.Nil(t, out)
+	case <-time.After(timeout):
+		assert.Fail(t, timeoutErrMsg)
+	}
+
+	// PoET
+
+	output = syncs[0].fetchWithFactory(NewNeighborhoodWorker(syncs[0], 1, PoetReqFactory(nonExistingPoetRef)))
+
+	select {
+	case out := <-output:
+		assert.Nil(t, out)
+	case <-time.After(timeout):
+		assert.Fail(t, timeoutErrMsg)
+	}
 }

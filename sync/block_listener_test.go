@@ -100,9 +100,9 @@ func TestBlockListener(t *testing.T) {
 	}
 	poetRef := sha256.Sum256(poetProofBytes)
 
-	atx1.Nipst.PoetProofRef = poetRef[:]
-	atx2.Nipst.PoetProofRef = poetRef[:]
-	atx3.Nipst.PoetProofRef = poetRef[:]
+	atx1.Nipst.PostProof.Challenge = poetRef[:]
+	atx2.Nipst.PostProof.Challenge = poetRef[:]
+	atx3.Nipst.PostProof.Challenge = poetRef[:]
 
 	bl1.ProcessAtx(atx1)
 	bl1.ProcessAtx(atx2)
@@ -167,7 +167,7 @@ func TestBlockListener_DataAvailability(t *testing.T) {
 	require.NoError(t, err)
 	poetRef := sha256.Sum256(poetProofBytes)
 
-	atx1.Nipst.PoetProofRef = poetRef[:]
+	atx1.Nipst.PostProof.Challenge = poetRef[:]
 
 	// Push a block with tx1 and and atx1 into bl1.
 
@@ -456,7 +456,7 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 		t.Error(err)
 	}
 	poetRef := sha256.Sum256(poetProofBytes)
-	atx.Nipst.PoetProofRef = poetRef[:]
+	atx.Nipst.PostProof.Challenge = poetRef[:]
 
 	bl2.AddBlockWithTxs(blk, []*types.AddressableSignedTransaction{tx}, []*types.ActivationTx{atx})
 
