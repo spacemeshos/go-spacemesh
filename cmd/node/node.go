@@ -344,7 +344,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	mdb := mesh.NewPersistentMeshDB(dbStorepath, lg.WithName("meshDb"))
 	atxdb := activation.NewActivationDb(atxdbstore, idStore, mdb, layersPerEpoch, validator, lg.WithName("atxDb"))
 	beaconProvider := &oracle.EpochBeaconProvider{}
-	eValidator := oracle.NewBlockEligibilityValidator(int32(app.Config.GenesisActiveSet), layersPerEpoch, atxdb, beaconProvider, BLS381.Verify2, lg.WithName("blkElgValidator"))
+	eValidator := oracle.NewBlockEligibilityValidator(layerSize, uint32(app.Config.GenesisActiveSet), layersPerEpoch, atxdb, beaconProvider, BLS381.Verify2, lg.WithName("blkElgValidator"))
 
 	trtl := tortoise.NewAlgorithm(int(layerSize), mdb, app.Config.Hdist, lg.WithName("trtl"))
 
@@ -357,7 +357,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 
 	blockValidator := sync.NewBlockValidator(eValidator)
 	syncer := sync.NewSync(swarm, msh, txpool, atxpool, processor, blockValidator, poetDb, conf, clock.Subscribe(), clock.GetCurrentLayer(), lg.WithName("sync"))
-	blockOracle := oracle.NewMinerBlockOracle(uint32(app.Config.GenesisActiveSet), uint16(layersPerEpoch), atxdb, beaconProvider, vrfSigner, nodeID, syncer.IsSynced, lg.WithName("blockOracle"))
+	blockOracle := oracle.NewMinerBlockOracle(layerSize, uint32(app.Config.GenesisActiveSet), uint16(layersPerEpoch), atxdb, beaconProvider, vrfSigner, nodeID, syncer.IsSynced, lg.WithName("blockOracle"))
 
 	// TODO: we should probably decouple the apptest and the node (and duplicate as necessary)
 	var hOracle hare.Rolacle
@@ -441,13 +441,16 @@ func (app *SpacemeshApp) startServices() {
 	app.clock.StartNotifying()
 }
 
-func (app SpacemeshApp) stopServices() {
+func (app *SpacemeshApp) stopServices() {
 
 	log.Info("%v closing services ", app.nodeId.Key)
 
 	if err := app.blockProducer.Close(); err != nil {
 		log.Error("cannot stop block producer %v", err)
 	}
+
+	log.Info("%v closing clock", app.nodeId.Key)
+	app.clock.Close()
 
 	app.log.Info("closing PoET listener")
 	app.poetListener.Close()
@@ -460,9 +463,6 @@ func (app SpacemeshApp) stopServices() {
 
 	log.Info("%v closing Hare", app.nodeId.Key)
 	app.hare.Close() //todo: need to add this
-
-	log.Info("%v closing clock", app.nodeId.Key)
-	app.clock.Close()
 
 	log.Info("%v closing p2p", app.nodeId.Key)
 	app.P2P.Shutdown()
