@@ -148,7 +148,7 @@ func (b *Builder) loop() {
 				epoch := layer.GetEpoch(b.layersPerEpoch)
 				err := b.PublishActivationTx(epoch)
 				if err != nil {
-					b.log.Error("cannot create atx in epoch %v: %v", epoch, err)
+					b.log.Warning("cannot create atx in epoch %v: %v", epoch, err)
 				}
 				b.finished <- struct{}{}
 			}()

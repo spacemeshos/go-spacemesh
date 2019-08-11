@@ -47,7 +47,7 @@ func (ev *eligibilityValidator) validateRole(m *Msg) (bool, error) {
 
 	nId, err := ev.identityProvider.GetIdentity(pub.String())
 	if err != nil {
-		ev.Error("Eligibility validator: could not validate role err=%v", err)
+		ev.With().Error("Eligibility validator: GetIdentity failed", log.Err(err), log.String("sender_id", pub.ShortString()))
 		return false, err
 	}
 
