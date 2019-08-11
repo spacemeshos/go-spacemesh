@@ -47,7 +47,7 @@ func NewValidationQueue(srvr *MessageServer, conf Configuration, bv BlockValidat
 		Configuration:    conf,
 		MessageServer:    srvr,
 		BlockValidator:   bv,
-		queue:            make(chan types.BlockID, 100),
+		queue:            make(chan types.BlockID, 2*conf.LayerSize),
 		visited:          make(map[types.BlockID]struct{}),
 		depMap:           make(map[interface{}]map[types.BlockID]struct{}),
 		reverseDepMap:    make(map[types.BlockID][]interface{}),
@@ -102,24 +102,26 @@ func (vq *validationQueue) work() error {
 			continue
 		}
 
-		vq.Info("Validating view Block %v", bjb.block.ID())
-		res, err := vq.addBlockDependencies(bjb.block, vq.finishBlockCallback(bjb.block))
-		if err != nil {
-			vq.updateDependencies(bjb.id, false)
-			vq.Error(fmt.Sprintf("failed to add pending for Block %v %v", bjb.block.ID(), err))
-			continue
-		}
+		vq.handleBlockDependencies(bjb) //todo better deadlock solution
 
-		if res == false {
-			vq.Info("pending done for %v", bjb.block.ID())
-			vq.updateDependencies(bjb.id, true)
-			vq.Info(" %v blocks in dependency map", len(vq.depMap))
-			vq.Info(" %v blocks in callback map", len(vq.callbacks))
-		}
 		vq.Info("next block")
 	}
 
 	return nil
+}
+
+func (vq *validationQueue) handleBlockDependencies(bjb blockJob) {
+	vq.Info("Validating view Block %v", bjb.block.ID())
+	res, err := vq.addDependencies(bjb.block.ID(), bjb.block.ViewEdges, vq.finishBlockCallback(bjb.block))
+	if err != nil {
+		vq.updateDependencies(bjb.id, false)
+		vq.Error(fmt.Sprintf("failed to add pending for Block %v %v", bjb.block.ID(), err))
+		//continue
+	}
+	if res == false {
+		vq.Info("pending done for %v", bjb.block.ID())
+		vq.updateDependencies(bjb.id, true)
+	}
 }
 
 func (vq *validationQueue) finishBlockCallback(block *types.Block) func(res bool) error {
@@ -190,9 +192,9 @@ func (vq *validationQueue) removefromDepMaps(block types.BlockID, valid bool, do
 
 func (vq *validationQueue) addDependencies(jobId interface{}, blks []types.BlockID, finishCallback func(res bool) error) (bool, error) {
 	vq.mu.Lock()
-	defer vq.mu.Unlock()
 	vq.callbacks[jobId] = finishCallback
 	dependencys := make(map[types.BlockID]struct{})
+	idsToPush := make([]types.BlockID, 0, len(blks))
 	for _, id := range blks {
 		if vq.inQueue(id) {
 			vq.reverseDepMap[id] = append(vq.reverseDepMap[id], jobId)
@@ -202,12 +204,17 @@ func (vq *validationQueue) addDependencies(jobId interface{}, blks []types.Block
 			//	check database
 			if _, err := vq.checkLocal(id); err != nil {
 				//unknown block add to queue
-				vq.queue <- id
 				vq.reverseDepMap[id] = append(vq.reverseDepMap[id], jobId)
 				vq.Info("add block %v to %v pending map", id, jobId)
 				dependencys[id] = struct{}{}
+				idsToPush = append(idsToPush, id)
 			}
 		}
+	}
+	vq.mu.Unlock()
+
+	for _, id := range idsToPush {
+		vq.queue <- id
 	}
 
 	//todo better this is a little hacky
@@ -217,8 +224,4 @@ func (vq *validationQueue) addDependencies(jobId interface{}, blks []types.Block
 
 	vq.depMap[jobId] = dependencys
 	return true, nil
-}
-
-func (vq *validationQueue) addBlockDependencies(blk *types.Block, finishBlockCallback func(res bool) error) (bool, error) {
-	return vq.addDependencies(blk.ID(), blk.ViewEdges, finishBlockCallback)
 }

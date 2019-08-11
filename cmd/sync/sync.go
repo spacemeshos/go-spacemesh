@@ -56,7 +56,7 @@ func init() {
 	Cmd.PersistentFlags().BoolVar(&remote, "remote-data", false, "fetch from remote")
 
 	//request timeout
-	Cmd.PersistentFlags().IntVar(&timeout, "timeout", 500, "request timeout")
+	Cmd.PersistentFlags().IntVar(&timeout, "timeout", 200, "request timeout")
 
 	cmdp.AddCommands(Cmd)
 }
@@ -109,7 +109,7 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 
 	conf := sync.Configuration{
 		Concurrency:    4,
-		LayerSize:      int(100),
+		LayerSize:      int(200),
 		RequestTimeout: time.Duration(timeout) * time.Millisecond,
 	}
 

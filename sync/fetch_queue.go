@@ -14,14 +14,14 @@ import (
 type RequestFactoryV2 func(s *MessageServer, peer p2p.Peer, id interface{}) (chan interface{}, error)
 type FetchPoetProof func(poetProofRef []byte) error
 
-func NewTxQueue(msh *mesh.Mesh, srv *MessageServer, txpool TxMemPool, txSigValidator TxValidator, lg log.Log) *txQueue {
+func NewTxQueue(msh *mesh.Mesh, srv *MessageServer, txpool TxMemPool, txValidator TxValidator, lg log.Log) *txQueue {
 	//todo buffersize
 
 	q := &txQueue{
 		Log:           lg,
 		Mesh:          msh,
 		MessageServer: srv,
-		TxValidator:   txSigValidator,
+		TxValidator:   txValidator,
 		txpool:        txpool,
 		queue:         make(chan *fetchJob, 100),
 		pending:       make(map[types.TransactionId][]chan bool),
@@ -89,33 +89,36 @@ func (tq *txQueue) updateDependencies(fj fetchJob) {
 		return
 	}
 	mp := map[types.TransactionId]*types.SerializableSignedTransaction{}
+
 	for _, item := range items {
 		mp[types.GetTransactionId(item)] = item
 	}
 
 	for _, id := range fj.ids.([]types.TransactionId) {
 		if item, ok := mp[id]; ok {
-			tq.invalidate(id, item, true)
-			continue
+			tx, err := tq.GetValidAddressableTx(item)
+			if err == nil {
+				tq.invalidate(id, tx, true)
+				continue
+			}
 		}
 		tq.invalidate(id, nil, false)
 	}
 }
 
-func (tq *txQueue) invalidate(id types.TransactionId, tx *types.SerializableSignedTransaction, valid bool) {
+func (tq *txQueue) invalidate(id types.TransactionId, tx *types.AddressableSignedTransaction, valid bool) {
+
+	if valid {
+		tq.txpool.Put(id, tx)
+	}
+
 	tq.Lock()
-	tq.Info("done with %v !!!!!!!!!!!!!!!! %v", hex.EncodeToString(id[:]), valid)
-	if valid && tx != nil {
-		tmp, err := tq.validateAndBuildTx(tx)
-		if err == nil {
-			tq.txpool.Put(id, tmp)
-		}
-	}
-	for _, dep := range tq.pending[id] {
-		dep <- valid
-	}
+	deps := tq.pending[id]
 	delete(tq.pending, id)
 	tq.Unlock()
+	for _, dep := range deps {
+		dep <- valid
+	}
 }
 
 func (tq *txQueue) addToQueue(ids []types.TransactionId) chan bool {
@@ -149,8 +152,8 @@ func (tq *txQueue) addToPending(ids []types.TransactionId) []chan bool {
 		}
 		tq.pending[id] = append(tq.pending[id], ch)
 	}
-	tq.queue <- &fetchJob{ids: idsToAdd}
 	tq.Unlock()
+	tq.queue <- &fetchJob{ids: idsToAdd}
 	return deps
 }
 
@@ -279,19 +282,20 @@ func (aq *atxQueue) updateDependencies(fj fetchJob) {
 }
 
 func (aq *atxQueue) invalidate(id types.AtxId, atx *types.ActivationTx, valid bool) {
-	aq.Lock()
 	aq.Info("done with %v !!!!!!!!!!!!!!!! %v", id.ShortId(), valid)
 
 	if valid && atx != nil {
 		aq.atxpool.Put(id, atx)
 	}
 
-	for _, dep := range aq.pending[id] {
-		dep <- valid
-	}
-
+	aq.Lock()
+	deps := aq.pending[id]
 	delete(aq.pending, id)
 	aq.Unlock()
+
+	for _, dep := range deps {
+		dep <- valid
+	}
 }
 
 func (aq *atxQueue) addToQueue(ids []types.AtxId) chan bool {
@@ -323,10 +327,9 @@ func (aq *atxQueue) addToPending(ids []types.AtxId) []chan bool {
 			idsToAdd = append(idsToAdd, id)
 		}
 		aq.pending[id] = append(aq.pending[id], ch)
-		aq.queue <- &fetchJob{ids: ids}
-
 	}
 	aq.Unlock()
+	aq.queue <- &fetchJob{ids: idsToAdd}
 	return deps
 }
 

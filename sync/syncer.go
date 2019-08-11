@@ -249,9 +249,14 @@ func (s *Syncer) syncLayer(layerID types.LayerID, blockIds []types.BlockID) ([]*
 		ch <- res
 		return nil
 	}
-	s.blockQueue.addDependencies(layerID, blockIds, foo)
-	s.Info("layer %v wait for blocks", layerID)
 
+	if res, err := s.blockQueue.addDependencies(layerID, blockIds, foo); res == false {
+		return s.LayerBlocks(layerID)
+	} else if err != nil {
+		return nil, errors.New(fmt.Sprintf("failed adding layer %v blocks to queue", layerID))
+	}
+
+	s.Info("layer %v wait for blocks", layerID)
 	if result := <-ch; !result {
 		return nil, fmt.Errorf("could get blocks for layer  %v", layerID)
 	}
