@@ -104,15 +104,22 @@ func (tq *txQueue) updateDependencies(fj fetchJob) {
 		tq.Warning("could not fetch any")
 		return
 	}
+	mp := map[types.TransactionId]*types.SerializableSignedTransaction{}
 
 	for _, item := range items {
-		if tx, err := tq.GetValidAddressableTx(item); err == nil {
-			tq.invalidate(types.GetTransactionId(item), tx, true)
-			continue
-		}
-		tq.invalidate(types.GetTransactionId(item), nil, false)
+		mp[types.GetTransactionId(item)] = item
 	}
 
+	for _, id := range fj.ids.([]types.TransactionId) {
+		if item, ok := mp[id]; ok {
+			tx, err := tq.GetValidAddressableTx(item)
+			if err == nil {
+				tq.invalidate(id, tx, true)
+				continue
+			}
+		}
+		tq.invalidate(id, nil, false)
+	}
 }
 
 func (tq *txQueue) invalidate(id types.TransactionId, tx *types.AddressableSignedTransaction, valid bool) {
