@@ -242,7 +242,7 @@ func sanity(mdb *mesh.MeshDB, layers int, layerSize int, patternSize int, badBlk
 		start := time.Now()
 		alg.handleIncomingLayer(lyr)
 		alg.Debug("Time to process layer: %v ", time.Since(start))
-		fmt.Println(fmt.Sprintf("lyr %d tally was %d", lyr, alg.tTally[alg.pBase][config.GenesisId]))
+		fmt.Println(fmt.Sprintf("lyr %v tally was %d", lyr, alg.tTally[alg.pBase][config.GenesisId]))
 		l = lyr
 	}
 
