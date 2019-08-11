@@ -128,13 +128,13 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	poetDb := activation.NewPoetDb(poetDbStore, lg.WithName("poetDb").WithOptions(log.Nop))
 
 	mshdb := mesh.NewPersistentMeshDB(app.Config.DataDir, lg.WithOptions(log.Nop))
-	atxdbStore, _ := database.NewLDBDatabase(app.Config.DataDir+"atx", 0, 0, lg)
+	atxdbStore, _ := database.NewLDBDatabase(app.Config.DataDir+"atx", 0, 0, lg.WithOptions(log.Nop))
 	atxdb := activation.NewActivationDb(atxdbStore, &sync.MockIStore{}, mshdb, uint16(1000), &sync.ValidatorMock{}, lg.WithName("atxDB").WithOptions(log.Nop))
 
 	txpool := miner.NewTypesTransactionIdMemPool()
 	atxpool := miner.NewTypesAtxIdMemPool()
 
-	msh := mesh.NewMesh(mshdb, atxdb, sync.ConfigTst(), &sync.MeshValidatorMock{}, txpool, atxpool, &sync.MockState{}, lg)
+	msh := mesh.NewMesh(mshdb, atxdb, sync.ConfigTst(), &sync.MeshValidatorMock{}, txpool, atxpool, &sync.MockState{}, lg.WithOptions(log.Nop))
 	defer msh.Close()
 	msh.AddBlock(&mesh.GenesisBlock)
 	tick := 20 * time.Second
@@ -142,9 +142,9 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	str := "2016-11-12T11:45:26.371Z"
 	start, _ := time.Parse(layout, str)
 	ts := timesync.NewTicker(sync.MockTimer{}, tick, start)
-	ch := make(chan types.LayerID, 1)
+
 	app.sync = sync.NewSync(swarm, msh, txpool, atxpool, mockTxProcessor{}, sync.BlockEligibilityValidatorMock{}, poetDb, conf, ts, lg.WithName("sync"))
-	ch <- types.LayerID(expectedLayers)
+
 	if err = swarm.Start(); err != nil {
 		log.Panic("error starting p2p err=%v", err)
 	}
@@ -160,13 +160,13 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 		}
 	}
 
-	lg.Info("wait %v sec", 10)
+	sleep := time.Duration(10)
+	lg.Info("wait %v sec", sleep)
 	time.Sleep(10 * time.Second)
 	app.sync.Start()
 	for app.sync.ValidatedLayer() < types.LayerID(expectedLayers) {
-		lg.Info("sleep for %v sec", 30)
-		time.Sleep(30 * time.Second)
-		ch <- types.LayerID(expectedLayers + 1)
+		lg.Info("not done yet, sleep for %v sec", sleep)
+		time.Sleep(sleep * time.Second)
 	}
 
 	lg.Info("%v verified layers %v", app.BaseApp.Config.P2P.NodeID, app.sync.ValidatedLayer())

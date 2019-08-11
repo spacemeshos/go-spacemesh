@@ -74,9 +74,8 @@ func (tq *txQueue) work() error {
 		}
 
 		txs := out.(fetchJob)
-		tq.Info("next tx ids %v", txs)
 		tq.updateDependencies(txs) //todo hack add batches
-		tq.Info("next batch")
+		tq.Debug("next batch")
 	}
 
 	return nil
@@ -107,7 +106,7 @@ func (tq *txQueue) updateDependencies(fj fetchJob) {
 }
 
 func (tq *txQueue) invalidate(id types.TransactionId, tx *types.AddressableSignedTransaction, valid bool) {
-
+	tq.Debug("done with %v !!!!!!!!!!!!!!!! %v", id, valid)
 	if valid {
 		tq.txpool.Put(id, tx)
 	}
@@ -202,6 +201,7 @@ func (tq *txQueue) checkLocalTxs(txids []types.TransactionId) (map[types.Transac
 			tq.Debug("found tx, %v in tx pool", hex.EncodeToString(t[:]))
 			unprocessedTxs[t] = &tx
 		} else {
+			tq.Debug("atx %v not in atx pool", hex.EncodeToString(t[:]))
 			missingInPool = append(missingInPool, t)
 		}
 	}
@@ -230,10 +230,9 @@ func (aq *atxQueue) work() error {
 			return nil
 		}
 		txs := out.(fetchJob)
-		//aq.Info("next atx ids %v", txs)
 		aq.fetchPoetProofs(txs)    //removes atxs with proofs we could not fetch
 		aq.updateDependencies(txs) //todo hack add batches
-		aq.Info("next batch")
+		aq.Debug("next batch")
 	}
 
 	return nil
@@ -272,17 +271,22 @@ func (aq *atxQueue) updateDependencies(fj fetchJob) {
 	for _, item := range items {
 		mp[item.Id()] = item
 	}
+
 	for _, id := range fj.ids.([]types.AtxId) {
-		if item, ok := mp[id]; ok {
-			aq.invalidate(id, item, true)
-			continue
+		if atx, ok := mp[id]; ok {
+			err := aq.SyntacticallyValidateAtx(atx)
+			if err == nil {
+				aq.invalidate(id, atx, true)
+				continue
+			}
 		}
 		aq.invalidate(id, nil, false)
 	}
+
 }
 
 func (aq *atxQueue) invalidate(id types.AtxId, atx *types.ActivationTx, valid bool) {
-	aq.Info("done with %v !!!!!!!!!!!!!!!! %v", id.ShortId(), valid)
+	aq.Debug("done with %v !!!!!!!!!!!!!!!! %v", id.ShortId(), valid)
 
 	if valid && atx != nil {
 		aq.atxpool.Put(id, atx)
@@ -379,7 +383,7 @@ func (aq *atxQueue) checkLocalAtxs(atxIds []types.AtxId) (map[types.AtxId]*types
 			aq.Debug("found atx, %v in atx pool", id.ShortId())
 			unprocessedAtxs[id] = &atx
 		} else {
-			aq.Warning("atx %v not in atx pool", id.ShortId())
+			aq.Debug("atx %v not in atx pool", id.ShortId())
 			missingInPool = append(missingInPool, id)
 		}
 	}

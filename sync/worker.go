@@ -166,7 +166,7 @@ func NewFetchWorker(s *MessageServer, lg log.Log, count int, reqFactory RequestF
 		next:
 			for _, p := range s.GetPeers() {
 				peer := p
-				lg.Info("send fetch request to Peer: %v", peer.String())
+				lg.Debug("send fetch request to Peer: %v", peer.String())
 				ch, _ := reqFactory(s, peer, jb.ids)
 				timeout := time.After(s.RequestTimeout)
 				select {
@@ -176,9 +176,8 @@ func NewFetchWorker(s *MessageServer, lg log.Log, count int, reqFactory RequestF
 					//chan not closed
 					if v != nil {
 						retrived = true
-						lg.Info("Peer: %v responded %v to fetch request ", peer.String(), v)
+						lg.Debug("Peer: %v responded %v to fetch request ", peer.String(), v)
 						output <- fetchJob{ids: jb.ids, items: v}
-						lg.Info("done")
 						break next
 					}
 				}
