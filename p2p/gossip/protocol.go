@@ -12,7 +12,6 @@ import (
 	"sync"
 )
 
-const messageQBufferSize = 100
 const oldMessageCacheSize = 10000
 const propagateHandleBufferSize = 1000 // number of MessageValidation that we allow buffering, above this number protocols will get stuck
 
@@ -90,7 +89,6 @@ type Protocol struct {
 	oldMessageQ  *doubleCache
 	oldMessageMu sync.RWMutex
 
-	relayQ     chan service.DirectMessage
 	propagateQ chan service.MessageValidation
 }
 
