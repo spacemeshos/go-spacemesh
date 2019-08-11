@@ -98,18 +98,18 @@ func (suite *AppTestSuite) initSingleInstance(i int, genesisTime string, rng *am
 	smApp.Config.POST.SpacePerUnit = 1 << 10 // 1KB.
 	smApp.Config.POST.FileSize = 1 << 10     // 1KB.
 
-	smApp.Config.HARE.N = 6
+	smApp.Config.HARE.N = 5
 	smApp.Config.HARE.F = 2
 	smApp.Config.HARE.RoundDuration = 3
 	smApp.Config.HARE.WakeupDelta = 5
 	smApp.Config.HARE.ExpectedLeaders = 5
 	smApp.Config.CoinbaseAccount = strconv.Itoa(i + 1)
-	smApp.Config.LayerAvgSize = 6
-	smApp.Config.LayersPerEpoch = 3
+	smApp.Config.LayerAvgSize = 12
+	smApp.Config.LayersPerEpoch = 4
 	smApp.Config.Hdist = 5
 	smApp.Config.GenesisTime = genesisTime
 	smApp.Config.LayerDurationSec = 20
-	smApp.Config.HareEligibility.ConfidenceParam = 2
+	smApp.Config.HareEligibility.ConfidenceParam = 3
 	smApp.Config.HareEligibility.EpochOffset = 0
 
 	edSgn := signing.NewEdSigner()
@@ -151,7 +151,6 @@ func activateGrpcServer(smApp *SpacemeshApp) {
 
 func (suite *AppTestSuite) TestMultipleNodes() {
 	//EntryPointCreated <- true
-
 	const numberOfEpochs = 5 // first 2 epochs are genesis
 	//addr := address.BytesToAddress([]byte{0x01})
 	dst := address.BytesToAddress([]byte{0x02})
@@ -184,8 +183,9 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 
 	activateGrpcServer(suite.apps[0])
 
+	startInLayer := 9 // delayed pod will start in this layer
 	go func() {
-		delay := float32(suite.apps[0].Config.LayerDurationSec) * float32(7.5)
+		delay := float32(suite.apps[0].Config.LayerDurationSec) * (float32(startInLayer) + 0.5)
 		<-time.After(time.Duration(delay) * time.Second)
 		suite.initSingleInstance(7, genesisTime, rng, path, "g", rolacle, poetClient)
 		suite.apps[len(suite.apps)-1].startServices()
@@ -194,7 +194,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	defer suite.gracefulShutdown()
 
 	_ = suite.apps[0].P2P.Broadcast(miner.IncomingTxProtocol, txbytes)
-	timeout := time.After(6 * 60 * time.Second)
+	timeout := time.After(10 * 60 * time.Second)
 
 	stickyClientsDone := 0
 loop:
@@ -207,7 +207,7 @@ loop:
 			maxClientsDone := 0
 			for idx, app := range suite.apps {
 				if 10 <= app.state.GetBalance(dst) &&
-					uint32(suite.apps[idx].mesh.LatestLayer()) == numberOfEpochs*uint32(suite.apps[idx].Config.LayersPerEpoch)+1 { // make sure all had 1 non-genesis layer
+					uint32(suite.apps[idx].mesh.LatestLayer()) == numberOfEpochs*uint32(suite.apps[idx].Config.LayersPerEpoch) { // make sure all had 1 non-genesis layer
 					suite.validateLastATXActiveSetSize(app)
 					clientsDone := 0
 					for idx2, app2 := range suite.apps {
@@ -236,37 +236,25 @@ loop:
 		}
 	}
 
-	suite.validateBlocksAndATXs(types.LayerID(numberOfEpochs*suite.apps[0].Config.LayersPerEpoch) - 1)
+	suite.validateBlocksAndATXs(types.LayerID(numberOfEpochs*suite.apps[0].Config.LayersPerEpoch)-1, types.LayerID(startInLayer))
 
 }
 
-func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
+func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID, startInLayer types.LayerID) {
+	log.Info("untilLayer=%v", untilLayer)
 
 	type nodeData struct {
 		layertoblocks map[types.LayerID][]types.BlockID
 		atxPerEpoch   map[types.EpochId]uint32
 	}
 
+	layersPerEpoch := int(suite.apps[0].Config.LayersPerEpoch)
 	datamap := make(map[string]*nodeData)
 
-	// wait until all nodes are in `untilLayer`
-	for {
-
-		count := 0
-		for _, ap := range suite.apps {
-			curNodeLastLayer := ap.blockListener.ValidatedLayer()
-			if curNodeLastLayer < untilLayer {
-				log.Info("layer for %v was %v, want %v", ap.nodeId.Key, curNodeLastLayer, untilLayer)
-			} else {
-				count++
-			}
-		}
-
-		if count == len(suite.apps) {
-			break
-		}
-
-		time.Sleep(time.Duration(suite.apps[0].Config.LayerDurationSec/2) * time.Second)
+	// assert all nodes validated untilLayer-1
+	for _, ap := range suite.apps {
+		curNodeLastLayer := ap.blockListener.ValidatedLayer()
+		assert.True(suite.T(), int(untilLayer)-1 <= int(curNodeLastLayer))
 	}
 
 	for _, ap := range suite.apps {
@@ -284,29 +272,23 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 			for _, b := range lyr.Blocks() {
 				datamap[ap.nodeId.Key].layertoblocks[lyr.Index()] = append(datamap[ap.nodeId.Key].layertoblocks[lyr.Index()], b.ID())
 			}
-			epoch := lyr.Index().GetEpoch(uint16(ap.Config.LayersPerEpoch))
-			if _, ok := datamap[ap.nodeId.Key].atxPerEpoch[epoch]; !ok {
-				//atxs, err := ap.blockListener.AtxDB.GetPosAtxId(epoch)
-				atxDb := ap.blockListener.AtxDB.(*activation.ActivationDb)
-				atxId, err := atxDb.GetNodeLastAtxId(ap.nodeId)
-				if err != nil {
-					log.Error("ERROR: couldn't get last atx for passed epoch: %v, err: %v", epoch, err)
-				}
-				atx, err := atxDb.GetAtx(atxId)
-				if err != nil {
-					log.Error("ERROR: couldn't get last atx for passed epoch: %v, err: %v", epoch, err)
-				}
-				datamap[ap.nodeId.Key].atxPerEpoch[epoch] = atx.ActiveSetSize
-			}
 		}
 	}
 
+	lateNodeKey := suite.apps[len(suite.apps)-1].nodeId.Key
 	for i, d := range datamap {
 		log.Info("Node %v in len(layerstoblocks) %v", i, len(d.layertoblocks))
+		if i == lateNodeKey { // skip late node
+			continue
+		}
 		for i2, d2 := range datamap {
 			if i == i2 {
 				continue
 			}
+			if i2 == lateNodeKey { // skip late node
+				continue
+			}
+
 			assert.Equal(suite.T(), len(d.layertoblocks), len(d2.layertoblocks), "%v has not matching layer to %v. %v not %v", i, i2, len(d.layertoblocks), len(d2.layertoblocks))
 
 			for l, bl := range d.layertoblocks {
@@ -322,34 +304,51 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 	}
 
 	// assuming all nodes have the same results
-	layers_per_epoch := int(suite.apps[0].Config.LayersPerEpoch)
-	layer_avg_size := suite.apps[0].Config.LayerAvgSize
+	layerAvgSize := suite.apps[0].Config.LayerAvgSize
 	patient := datamap[suite.apps[0].nodeId.Key]
 
-	lastlayer := len(patient.layertoblocks)
+	lastLayer := len(patient.layertoblocks)
 
-	total_blocks := 0
+	totalBlocks := 0
 	for _, l := range patient.layertoblocks {
-		total_blocks += len(l)
+		totalBlocks += len(l)
 	}
 
-	first_epoch_blocks := 0
-
-	for i := 0; i < layers_per_epoch; i++ {
+	firstEpochBlocks := 0
+	for i := 0; i < layersPerEpoch; i++ {
 		if l, ok := patient.layertoblocks[types.LayerID(i)]; ok {
-			first_epoch_blocks += len(l)
+			firstEpochBlocks += len(l)
 		}
 	}
 
-	total_atxs := 1 // assume we had an atx for the late node in order to pass assertion
+	// assert number of blocks
+	totalEpochs := int(untilLayer.GetEpoch(uint16(layersPerEpoch))) + 1
+	lateNodeActiveEpochs := totalEpochs - int(startInLayer.GetEpoch(uint16(layersPerEpoch))) - 2
+	allMiners := len(suite.apps)
+	//exp := (layerAvgSize/(allMiners-1)*(allMiners-1)*(totalEpochs-lateNodeActiveEpochs) + layerAvgSize/(allMiners-1)*allMiners + (layerAvgSize/allMiners)*allMiners*(lateNodeActiveEpochs-2)) * layersPerEpoch
+	exp := (layerAvgSize*layersPerEpoch)/(allMiners-1)*(allMiners-1)*(totalEpochs-lateNodeActiveEpochs-1) + (layerAvgSize*layersPerEpoch)/(allMiners-1)*allMiners
+	act := totalBlocks - firstEpochBlocks
+	assert.Equal(suite.T(), exp, act,
+		fmt.Sprintf("not good num of blocks got: %v, want: %v. totalBlocks: %v, firstEpochBlocks: %v, lastLayer: %v, layersPerEpoch: %v layerAvgSize: %v totalEpochs: %v lateNodeActiveEpochs: %v",
+			act, exp, totalBlocks, firstEpochBlocks, lastLayer, layersPerEpoch, layerAvgSize, totalEpochs, lateNodeActiveEpochs))
 
-	for _, atxs := range patient.atxPerEpoch {
-		total_atxs += int(atxs)
+	firstAp := suite.apps[0]
+	atxDb := firstAp.blockListener.AtxDB.(*activation.ActivationDb)
+	atxId, err := atxDb.GetNodeLastAtxId(firstAp.nodeId)
+	assert.NoError(suite.T(), err)
+	atx, err := atxDb.GetAtx(atxId)
+	assert.NoError(suite.T(), err)
+
+	totalAtxs := uint32(0)
+	for atx != nil {
+		totalAtxs += atx.ActiveSetSize
+		atx, err = atxDb.GetAtx(atx.PrevATXId)
 	}
 
-	assert.True(suite.T(), ((total_blocks-first_epoch_blocks)/(lastlayer-layers_per_epoch)) == layer_avg_size, fmt.Sprintf("not good num of blocks got: %v, want: %v. total_blocks: %v, first_epoch_blocks: %v, lastlayer: %v, layers_per_epoch: %v", (total_blocks-first_epoch_blocks)/(lastlayer-layers_per_epoch), layer_avg_size, total_blocks, first_epoch_blocks, lastlayer, layers_per_epoch))
-	assert.True(suite.T(), total_atxs == (lastlayer/layers_per_epoch)*len(suite.apps), fmt.Sprintf("not good num of atxs got: %v, want: %v", total_atxs, (lastlayer/layers_per_epoch)*len(suite.apps)))
-
+	// assert number of ATXs
+	exp = totalEpochs*(allMiners-1) + (lateNodeActiveEpochs + 1) - len(suite.apps) // minus last epoch #atxs
+	act = int(totalAtxs)
+	assert.Equal(suite.T(), exp, act, fmt.Sprintf("not good num of atxs got: %v, want: %v", act, exp))
 }
 
 func (suite *AppTestSuite) validateLastATXActiveSetSize(app *SpacemeshApp) {
@@ -357,8 +356,7 @@ func (suite *AppTestSuite) validateLastATXActiveSetSize(app *SpacemeshApp) {
 	suite.NoError(err)
 	atx, err := app.mesh.GetAtx(prevAtxId)
 	suite.NoError(err)
-	// active set size should be #nodes-1 for an atx that came before the second epoch
-	suite.Equal(len(suite.apps)-1, int(atx.ActiveSetSize), "atx: %v node: %v", atx.ShortId(), app.nodeId.Key[:5])
+	suite.True(int(atx.ActiveSetSize) >= (len(suite.apps)-1), "atx: %v node: %v", atx.ShortId(), app.nodeId.Key[:5])
 }
 
 func (suite *AppTestSuite) gracefulShutdown() {
