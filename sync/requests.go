@@ -12,12 +12,13 @@ func LayerIdsReqFactory(lyr types.LayerID) RequestFactory {
 		resHandler := func(msg []byte) {
 			defer close(ch)
 			if msg == nil {
+				s.Info("received empty layer ids response")
 				return
 			}
 
 			ids, err := types.BytesToBlockIds(msg)
 			if err != nil {
-				s.Error("could not unmarshal mesh.LayerIDs response")
+				s.Error("could not unmarshal layer ids response: %v", err)
 				return
 			}
 
@@ -36,6 +37,7 @@ func HashReqFactory(lyr types.LayerID) RequestFactory {
 		resHandler := func(msg []byte) {
 			defer close(ch)
 			if msg == nil {
+				s.Info("received empty layer hash response")
 				return
 			}
 
@@ -66,13 +68,14 @@ func BlockReqFactory() BlockRequestFactory {
 		resHandler := func(msg []byte) {
 			defer close(ch)
 			if msg == nil {
+				s.Info("received empty block data response")
 				return
 			}
 
 			var block types.Block
 			err := types.BytesToInterface(msg, &block)
 			if err != nil {
-				s.Error("could not unmarshal block data", err)
+				s.Error("could not unmarshal block data response: %v", err)
 				return
 			}
 
@@ -94,13 +97,14 @@ func TxReqFactory(ids []types.TransactionId) RequestFactory {
 		resHandler := func(msg []byte) {
 			defer close(ch)
 			if msg == nil {
+				s.Info("received empty tx data response")
 				return
 			}
 
 			var tx []types.SerializableSignedTransaction
 			err := types.BytesToInterface(msg, &tx)
 			if err != nil {
-				s.Error("could not unmarshal tx data %v", err)
+				s.Error("could not unmarshal tx data response: %v", err)
 				return
 			}
 
@@ -123,16 +127,16 @@ func ATxReqFactory(ids []types.AtxId) RequestFactory {
 	return func(s *server.MessageServer, peer p2p.Peer) (chan interface{}, error) {
 		ch := make(chan interface{}, 1)
 		resHandler := func(msg []byte) {
-			s.Info("handle atx response ")
 			defer close(ch)
 			if msg == nil {
+				s.Info("received empty atx data response")
 				return
 			}
 
 			var tx []types.ActivationTx
 			err := types.BytesToInterface(msg, &tx)
 			if err != nil {
-				s.Error("could not unmarshal tx data %v", err)
+				s.Error("could not unmarshal atx data response: %v", err)
 				return
 			}
 
@@ -164,16 +168,16 @@ func PoetReqFactory(poetProofRef []byte) RequestFactory {
 	return func(s *server.MessageServer, peer p2p.Peer) (chan interface{}, error) {
 		ch := make(chan interface{}, 1)
 		resHandler := func(msg []byte) {
-			s.Info("handle PoET proof response")
 			defer close(ch)
 			if msg == nil {
+				s.Info("received empty PoET proof response")
 				return
 			}
 
 			var proofMessage types.PoetProofMessage
 			err := types.BytesToInterface(msg, &proofMessage)
 			if err != nil {
-				s.Error("could not unmarshal PoET proof message: %v", err)
+				s.Error("could not unmarshal PoET proof response: %v", err)
 				return
 			}
 
