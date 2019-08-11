@@ -218,10 +218,10 @@ func (o *Oracle) Proof(id types.NodeId, layer types.LayerID, round int32) ([]byt
 // Returns a map of all active nodes in the specified layer id
 func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
 	sl := roundedSafeLayer(layer, types.LayerID(o.cfg.ConfidenceParam), o.layersPerEpoch, types.LayerID(o.cfg.EpochOffset))
+	safeEp := sl.GetEpoch(o.layersPerEpoch)
 
-	ep := sl.GetEpoch(o.layersPerEpoch)
 	// check genesis
-	if ep.IsGenesis() {
+	if safeEp.IsGenesis() {
 		return nil, genesisErr
 	}
 
@@ -236,11 +236,11 @@ func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
 		return nil, err
 	}
 
-	activeMap, err := o.getActiveSet(ep, mp)
+	activeMap, err := o.getActiveSet(safeEp, mp)
 	if err != nil {
 		o.With().Error("Could not retrieve active set size", log.Err(err),
 			log.Uint64("layer_id", uint64(layer)), log.Uint64("epoch_id", uint64(layer.GetEpoch(o.layersPerEpoch))),
-			log.Uint64("safe_layer_id", uint64(sl)), log.Uint64("safe_epoch_id", uint64(ep)))
+			log.Uint64("safe_layer_id", uint64(sl)), log.Uint64("safe_epoch_id", uint64(safeEp)))
 		return nil, err
 	}
 
@@ -257,6 +257,7 @@ func (o *Oracle) IsIdentityActiveOnConsensusView(edId string, layer types.LayerI
 			return true, nil // all ids are active in genesis
 		}
 
+		o.With().Error("IsIdentityActiveOnConsensusView erred while calling actives func", log.Err(err))
 		return false, err
 	}
 	_, exist := actives[edId]
