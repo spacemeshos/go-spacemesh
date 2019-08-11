@@ -36,9 +36,17 @@ type mockTxProcessor struct {
 	notValid bool
 }
 
+func (m mockTxProcessor) GetValidAddressableTx(tx *types.SerializableSignedTransaction) (*types.AddressableSignedTransaction, error) {
+	addr, err := m.ValidateTransactionSignature(tx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &types.AddressableSignedTransaction{SerializableSignedTransaction: tx, Address: addr}, nil
+}
+
 func (m mockTxProcessor) ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (address.Address, error) {
 	if !m.notValid {
-
 		return address.HexToAddress("0xFFFF"), nil
 	}
 	return address.Address{}, errors.New("invalid sig for tx")
@@ -49,7 +57,7 @@ func ListenerFactory(serv service.Service, peers p2p.Peers, name string, layer t
 	ch <- layer
 	l := log.New(name, "", "")
 	poetDb := activation.NewPoetDb(database.NewMemDatabase(), l.WithName("poetDb"))
-	blockValidator := NewBlockValidator(BlockEligibilityValidatorMock{})
+	blockValidator := BlockEligibilityValidatorMock{}
 	sync := NewSync(serv, getMesh(memoryDB, name), miner.NewTypesTransactionIdMemPool(), miner.NewTypesAtxIdMemPool(), mockTxProcessor{}, blockValidator, poetDb, conf, ch, layer, l)
 	sync.Peers = peers
 	nbl := NewBlockListener(serv, sync, 2, log.New(name, "", ""))
@@ -80,9 +88,9 @@ func TestBlockListener(t *testing.T) {
 	}
 	poetRef := sha256.Sum256(poetProofBytes)
 
-	atx1.Nipst.PoetProofRef = poetRef[:]
-	atx2.Nipst.PoetProofRef = poetRef[:]
-	atx3.Nipst.PoetProofRef = poetRef[:]
+	atx1.Nipst.PostProof.Challenge = poetRef[:]
+	atx2.Nipst.PostProof.Challenge = poetRef[:]
+	atx3.Nipst.PostProof.Challenge = poetRef[:]
 
 	bl1.ProcessAtx(atx1)
 	bl1.ProcessAtx(atx2)
@@ -147,7 +155,7 @@ func TestBlockListener_DataAvailability(t *testing.T) {
 	require.NoError(t, err)
 	poetRef := sha256.Sum256(poetProofBytes)
 
-	atx1.Nipst.PoetProofRef = poetRef[:]
+	atx1.Nipst.PostProof.Challenge = poetRef[:]
 
 	// Push a block with tx1 and and atx1 into bl1.
 
@@ -437,7 +445,7 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 		t.Error(err)
 	}
 	poetRef := sha256.Sum256(poetProofBytes)
-	atx.Nipst.PoetProofRef = poetRef[:]
+	atx.Nipst.PostProof.Challenge = poetRef[:]
 
 	bl2.AddBlockWithTxs(blk, []*types.AddressableSignedTransaction{tx}, []*types.ActivationTx{atx})
 

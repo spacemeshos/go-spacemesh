@@ -28,7 +28,8 @@ func init() {
 }
 
 func getPersistentMash() *mesh.MeshDB {
-	return mesh.NewPersistentMeshDB(fmt.Sprintf(Path+"ninje_tortoise/"), log.New("ninje_tortoise", "", ""))
+	db, _ := mesh.NewPersistentMeshDB(fmt.Sprintf(Path+"ninje_tortoise/"), log.New("ninje_tortoise", "", ""))
+	return db
 }
 
 func persistenceTeardown() {
