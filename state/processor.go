@@ -115,6 +115,15 @@ func (tp *TransactionProcessor) ValidateTransactionSignature(tx *types.Serializa
 	return addr, nil
 }
 
+func (tp *TransactionProcessor) GetValidAddressableTx(tx *types.SerializableSignedTransaction) (*types.AddressableSignedTransaction, error) {
+	addr, err := tp.ValidateTransactionSignature(tx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &types.AddressableSignedTransaction{SerializableSignedTransaction: tx, Address: addr}, nil
+}
+
 //should receive sort predicate
 // ApplyTransaction receives a batch of transaction to apply on state. Returns the number of transaction that failed to apply.
 func (tp *TransactionProcessor) ApplyTransactions(layer types.LayerID, txs mesh.Transactions) (uint32, error) {

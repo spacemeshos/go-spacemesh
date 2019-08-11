@@ -78,6 +78,15 @@ func (app *SyncApp) Cleanup() {
 type mockTxProcessor struct {
 }
 
+func (processor mockTxProcessor) GetValidAddressableTx(tx *types.SerializableSignedTransaction) (*types.AddressableSignedTransaction, error) {
+	addr, err := processor.ValidateTransactionSignature(tx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &types.AddressableSignedTransaction{SerializableSignedTransaction: tx, Address: addr}, nil
+}
+
 func (mockTxProcessor) ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (address.Address, error) {
 	return address.HexToAddress("0xFFFF"), nil
 }

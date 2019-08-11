@@ -70,6 +70,24 @@ def get_deployment_logs(namespace, depname):
     get_podlist_logs(namespace, lst)
 
 
+def poll_query_message(indx, namespace, client_po_name, fields, findFails=False, startTime=None, expected=None, query_time_out=120):
+
+    hits = query_message(indx, namespace, client_po_name, fields, findFails, startTime)
+    if expected is None:
+        return hits
+
+    time_passed = 0
+    while len(hits) < expected:
+        if time_passed > query_time_out:
+            print("Timeout expired when polling on query expected={0}, hits={1}".format(expected, len(hits)))
+            break
+
+        time.sleep(10)
+        time_passed+=10
+        hits = query_message(indx, namespace, client_po_name, fields, findFails, startTime)
+    return hits
+
+
 def query_message(indx, namespace, client_po_name, fields, findFails=False, startTime=None):
     # TODO : break this to smaller functions ?
     es = ES().get_search_api()
