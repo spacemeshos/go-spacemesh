@@ -104,8 +104,6 @@ func (n *UDPNet) Send(to *node.NodeInfo, data []byte) error {
 
 	_, err := n.conn.WriteToUDP(final, addr)
 
-	n.logger.Debug("UDP MESSAGE to %v SENT ? %v", to.PublicKey().String(), err)
-
 	return err
 }
 
