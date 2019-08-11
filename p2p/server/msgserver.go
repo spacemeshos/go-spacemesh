@@ -166,7 +166,7 @@ func (p *MessageServer) handleRequestMessage(msg Message, data *service.DataMsgW
 
 func (p *MessageServer) handleResponseMessage(headers *service.DataMsgWrapper) {
 	//get and remove from pendingMap
-	p.Debug("handleResponseMessage req %v", headers.ReqID)
+	p.Log.With().Debug("handleResponseMessage", log.Uint64("req_id", headers.ReqID))
 	p.pendMutex.RLock()
 	foo, okFoo := p.resHandlers[headers.ReqID]
 	p.pendMutex.RUnlock()
@@ -206,7 +206,7 @@ func (p *MessageServer) SendRequest(msgType MessageType, payload []byte, address
 		p.removeFromPending(reqID)
 		return sendErr
 	}
-	p.Debug("sent request id: %v", reqID)
+	p.Log.With().Debug("sent request", log.Uint64("req_id", reqID))
 	return nil
 }
 
