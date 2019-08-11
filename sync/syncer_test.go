@@ -1007,7 +1007,7 @@ func TestSyncProtocol_NilResponse(t *testing.T) {
 
 	// Layer Hash
 
-	wrk, output := NewPeersWorker(syncs[0], []p2p.Peer{nodes[1].PublicKey()}, &sync.Once{}, HashReqFactory(nonExistingLayerId))
+	wrk, output := NewPeersWorker(syncs[0].MessageServer, []p2p.Peer{nodes[1].PublicKey()}, &sync.Once{}, HashReqFactory(nonExistingLayerId))
 	go wrk.Work()
 
 	select {
@@ -1019,7 +1019,7 @@ func TestSyncProtocol_NilResponse(t *testing.T) {
 
 	// Layer Block Ids
 
-	wrk, output = NewPeersWorker(syncs[0], []p2p.Peer{nodes[1].PublicKey()}, &sync.Once{}, LayerIdsReqFactory(nonExistingLayerId))
+	wrk, output = NewPeersWorker(syncs[0].MessageServer, []p2p.Peer{nodes[1].PublicKey()}, &sync.Once{}, LayerIdsReqFactory(nonExistingLayerId))
 	go wrk.Work()
 
 	select {
@@ -1031,41 +1031,36 @@ func TestSyncProtocol_NilResponse(t *testing.T) {
 
 	// Block
 
-	output = syncs[0].fetchWithFactory(NewBlockWorker(syncs[0], 1, BlockReqFactory(), blockSliceToChan([]types.BlockID{nonExistingBlockId})))
+	output = fetchWithFactory(NewBlockWorker(syncs[0].MessageServer, 1, BlockReqFactory(), blockSliceToChan([]types.BlockID{nonExistingBlockId})))
 
 	select {
 	case out := <-output:
-		assert.Nil(t, out)
+		assert.True(t, out.(blockJob).block == nil)
 	case <-time.After(timeout):
 		assert.Fail(t, timeoutErrMsg)
 	}
 
 	// Tx
 
-	wrk = NewNeighborhoodWorker(syncs[0], 1, TxReqFactory([]types.TransactionId{nonExistingTxId}))
-	go wrk.Work()
-
+	ch := syncs[0].txQueue.addToQueue([]types.TransactionId{nonExistingTxId})
 	select {
-	case out := <-wrk.output:
-		assert.Nil(t, out)
+	case <-ch:
+		t.Error(t, "should not return ")
 	case <-time.After(timeout):
-		assert.Fail(t, timeoutErrMsg)
+
 	}
 
 	// Atx
-
-	output = syncs[0].fetchWithFactory(NewNeighborhoodWorker(syncs[0], 1, ATxReqFactory([]types.AtxId{nonExistingAtxId})))
-
+	ch = syncs[0].atxQueue.addToQueue([]types.AtxId{nonExistingAtxId})
+	// PoET
 	select {
-	case out := <-output:
-		assert.Nil(t, out)
+	case out := <-ch:
+		assert.True(t, out == false)
 	case <-time.After(timeout):
-		assert.Fail(t, timeoutErrMsg)
+
 	}
 
-	// PoET
-
-	output = syncs[0].fetchWithFactory(NewNeighborhoodWorker(syncs[0], 1, PoetReqFactory(nonExistingPoetRef)))
+	output = fetchWithFactory(NewNeighborhoodWorker(syncs[0].MessageServer, 1, PoetReqFactory(nonExistingPoetRef)))
 
 	select {
 	case out := <-output:

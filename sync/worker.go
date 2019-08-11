@@ -135,11 +135,13 @@ func NewBlockWorker(s *MessageServer, count int, reqFactory BlockRequestFactory,
 				case <-timeout:
 					s.Error("block %v request to %v timed out", id, peer)
 				case v := <-ch:
-					if blk, ok := v.(*types.Block); ok {
-						retrived = true
-						s.Info("Peer: %v responded to %v block request ", peer, blk.ID())
-						output <- blockJob{id: id, block: blk}
-						break next
+					if v != nil {
+						if blk, ok := v.(*types.Block); ok {
+							retrived = true
+							s.Info("Peer: %v responded to %v block request ", peer, blk.ID())
+							output <- blockJob{id: id, block: blk}
+							break next
+						}
 					}
 				}
 			}
@@ -173,13 +175,13 @@ func NewFetchWorker(s *MessageServer, lg log.Log, count int, reqFactory RequestF
 				case <-timeout:
 					lg.Error("fetch request to %v timed out", peer.String())
 				case v := <-ch:
-					//chan not closed
 					if v != nil {
 						retrived = true
-						lg.Debug("Peer: %v responded %v to fetch request ", peer.String(), v)
+						lg.Info("Peer: %v responded %v to fetch request ", peer.String(), v)
 						output <- fetchJob{ids: jb.ids, items: v}
 						break next
 					}
+					lg.Info("next peer")
 				}
 			}
 			if !retrived {
