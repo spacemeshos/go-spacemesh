@@ -22,7 +22,7 @@ bootstrap:
     layer-duration-sec: '10'
     layer-average-size: '20'
     data-folder: '/bin/data/'
-    expected-layers: '50'
+    expected-layers: '200'
     storage-path: 'spacemesh-sync-data'
     remote-data: 'true'
 client:
@@ -37,7 +37,7 @@ client:
     layer-duration-sec: '10'
     layer-average-size: '20'
     data-folder: '/bin/data/'
-    expected-layers: '50'
+    expected-layers: '200'
     storage-path: 'spacemesh-sync-data'
     remote-data: 'true'
 elastic:
