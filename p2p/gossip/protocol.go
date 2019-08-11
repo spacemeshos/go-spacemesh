@@ -13,6 +13,7 @@ import (
 )
 
 const messageQBufferSize = 100
+const oldMessageCacheSize = 10000
 const propagateHandleBufferSize = 1000 // number of MessageValidation that we allow buffering, above this number protocols will get stuck
 
 const ProtocolName = "/p2p/1.0/gossip"
@@ -38,7 +39,7 @@ func newDoubleCache(size uint) *doubleCache {
 	return &doubleCache{size, make(map[hash]struct{}, size), make(map[hash]struct{}, size)}
 }
 
-func (a *doubleCache) lookupOrCreate(key hash) bool {
+func (a *doubleCache) getOrInsert(key hash) bool {
 	_, ok := a.cacheA[key]
 	if ok {
 		return true
@@ -103,7 +104,7 @@ func NewProtocol(config config.SwarmConfig, base baseNetwork, localNodePubkey p2
 		localNodePubkey: localNodePubkey,
 		peers:           make(map[p2pcrypto.PublicKey]*peer),
 		shutdown:        make(chan struct{}),
-		oldMessageQ:     newDoubleCache(10000), // todo : remember to drain this
+		oldMessageQ:     newDoubleCache(oldMessageCacheSize), // todo : remember to drain this
 		propagateQ:      make(chan service.MessageValidation, propagateHandleBufferSize),
 	}
 }
@@ -136,7 +137,7 @@ func (prot *Protocol) Close() {
 // Returns true if message was already processed before
 func (prot *Protocol) markMessageAsOld(h hash) bool {
 	prot.oldMessageMu.Lock()
-	ok := prot.oldMessageQ.lookupOrCreate(h)
+	ok := prot.oldMessageQ.getOrInsert(h)
 	prot.oldMessageMu.Unlock()
 	return ok
 }
