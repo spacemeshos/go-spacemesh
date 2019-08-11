@@ -36,9 +36,17 @@ type mockTxProcessor struct {
 	notValid bool
 }
 
+func (m mockTxProcessor) GetValidAddressableTx(tx *types.SerializableSignedTransaction) (*types.AddressableSignedTransaction, error) {
+	addr, err := m.ValidateTransactionSignature(tx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &types.AddressableSignedTransaction{SerializableSignedTransaction: tx, Address: addr}, nil
+}
+
 func (m mockTxProcessor) ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (address.Address, error) {
 	if !m.notValid {
-
 		return address.HexToAddress("0xFFFF"), nil
 	}
 	return address.Address{}, errors.New("invalid sig for tx")
