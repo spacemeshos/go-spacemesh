@@ -283,28 +283,26 @@ func (m *MeshDB) getLayerMutex(index types.LayerID) *layerMutex {
 	return ll
 }
 
-func (m *MeshDB) writeTransactions(txs []*types.AddressableSignedTransaction) ([]types.TransactionId, error) {
-	txids := make([]types.TransactionId, 0, len(txs))
+func (m *MeshDB) writeTransactions(txs []*types.AddressableSignedTransaction) error {
 	batch := m.transactions.NewBatch()
 	for _, t := range txs {
 		bytes, err := types.AddressableTransactionAsBytes(t)
 		if err != nil {
 			m.Error("could not marshall tx %v to bytes ", err)
-			return nil, err
+			return err
 		}
 		id := types.GetTransactionId(t.SerializableSignedTransaction)
 		if err := batch.Put(id[:], bytes); err != nil {
 			m.Error("could not write tx %v to database ", hex.EncodeToString(id[:]), err)
-			return nil, err
+			return err
 		}
-		txids = append(txids, id)
 		m.Debug("write tx %v to db", hex.EncodeToString(id[:]))
 	}
 	err := batch.Write()
 	if err != nil {
-		return nil, fmt.Errorf("failed to write transactions: %v", err)
+		return fmt.Errorf("failed to write transactions: %v", err)
 	}
-	return txids, nil
+	return nil
 }
 
 func (m *MeshDB) GetTransactions(transactions []types.TransactionId) (
