@@ -99,9 +99,9 @@ def search_phrase_in_pod_log(pod_name, name_space, container_name, phrase, time_
     match = None
     total_sleep = 0
     while True:
-        pod_logs = client.CoreV1Api().read_namespaced_pod_log(name=pod_name,
-                                                              namespace=name_space,
-                                                              container=container_name)
+        pod_logs = CoreV1ApiClient().read_namespaced_pod_log(name=pod_name,
+                                                             namespace=name_space,
+                                                             container=container_name)
         match = re.search(phrase, pod_logs)
         if not match and total_sleep < time_out:
             time.sleep(1)
