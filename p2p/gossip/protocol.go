@@ -110,7 +110,6 @@ func (prot *Protocol) markMessageAsOld(h hash) bool {
 	var ok bool
 	if _, ok = prot.oldMessageQ[h]; !ok {
 		prot.oldMessageQ[h] = struct{}{}
-		prot.Log.Debug("marking message as old, hash %v", h)
 	} else {
 		prot.Log.Debug("message is already old, hash %v", h)
 	}
