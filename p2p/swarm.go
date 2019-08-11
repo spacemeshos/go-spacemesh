@@ -627,15 +627,12 @@ func (s *swarm) startNeighborhood() error {
 }
 
 func (s *swarm) peersLoop() {
-	var moreLock uint32 = 0
 loop:
 	for {
 		select {
 		case <-s.morePeersReq:
 			s.lNode.Debug("loop: got morePeersReq")
-			if atomic.CompareAndSwapUint32(&moreLock, 0, 1) {
-				go s.askForMorePeers(&moreLock)
-			}
+			s.askForMorePeers()
 		//todo: try getting the connections (heartbeat)
 		case <-s.shutdown:
 			break loop // maybe error ?
@@ -643,13 +640,12 @@ loop:
 	}
 }
 
-func (s *swarm) askForMorePeers(doneFlag *uint32) {
+func (s *swarm) askForMorePeers() {
 	s.outpeersMutex.RLock()
 	numpeers := len(s.outpeers)
 	s.outpeersMutex.RUnlock()
 	req := s.config.SwarmConfig.RandomConnections - numpeers
 	if req <= 0 {
-		atomic.StoreUint32(doneFlag, 0)
 		return
 	}
 
@@ -668,13 +664,11 @@ func (s *swarm) askForMorePeers(doneFlag *uint32) {
 			s.lNode.Debug("neighbors list: [%v]", strings.Join(strs, ","))
 			s.outpeersMutex.RUnlock()
 		})
-		atomic.StoreUint32(doneFlag, 0)
 		return
 	}
 	// if we could'nt get any maybe were initializing
 	// wait a little bit before trying again
 	time.Sleep(NoResultsInterval)
-	atomic.StoreUint32(doneFlag, 0)
 	s.morePeersReq <- struct{}{}
 }
 
