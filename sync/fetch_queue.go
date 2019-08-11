@@ -14,17 +14,17 @@ import (
 type RequestFactoryV2 func(s *MessageServer, peer p2p.Peer, id interface{}) (chan interface{}, error)
 type FetchPoetProof func(poetProofRef []byte) error
 
-func NewTxQueue(msh *mesh.Mesh, srv *MessageServer, txpool TxMemPool, txSigValidator TxSigValidator, lg log.Log) *txQueue {
+func NewTxQueue(msh *mesh.Mesh, srv *MessageServer, txpool TxMemPool, txSigValidator TxValidator, lg log.Log) *txQueue {
 	//todo buffersize
 
 	q := &txQueue{
-		Log:            lg,
-		Mesh:           msh,
-		MessageServer:  srv,
-		TxSigValidator: txSigValidator,
-		txpool:         txpool,
-		queue:          make(chan *fetchJob, 100),
-		pending:        make(map[types.TransactionId][]chan bool),
+		Log:           lg,
+		Mesh:          msh,
+		MessageServer: srv,
+		TxValidator:   txSigValidator,
+		txpool:        txpool,
+		queue:         make(chan *fetchJob, 100),
+		pending:       make(map[types.TransactionId][]chan bool),
 	}
 	go q.work()
 	return q
@@ -57,7 +57,7 @@ type txQueue struct {
 	sync.Mutex
 	*mesh.Mesh
 	*MessageServer
-	TxSigValidator
+	TxValidator
 	txpool  TxMemPool
 	queue   chan *fetchJob //types.TransactionId //todo make buffered
 	pending map[types.TransactionId][]chan bool

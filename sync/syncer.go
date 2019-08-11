@@ -3,7 +3,6 @@ package sync
 import (
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -46,8 +45,8 @@ type EligibilityValidator interface {
 	BlockSignedAndEligible(block *types.Block) (bool, error)
 }
 
-type TxSigValidator interface {
-	ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (address.Address, error)
+type TxValidator interface {
+	GetValidAddressableTx(tx *types.SerializableSignedTransaction) (*types.AddressableSignedTransaction, error)
 }
 
 type Configuration struct {
@@ -152,7 +151,7 @@ func (s *Syncer) run() {
 }
 
 //fires a sync every sm.syncInterval or on force space from outside
-func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool AtxMemPool, sv TxSigValidator, bv BlockValidator, poetdb PoetDb, conf Configuration, clock *timesync.Ticker, logger log.Log) *Syncer {
+func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool AtxMemPool, sv TxValidator, bv BlockValidator, poetdb PoetDb, conf Configuration, clock *timesync.Ticker, logger log.Log) *Syncer {
 
 	srvr := &MessageServer{
 		Configuration: conf,

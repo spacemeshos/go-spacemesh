@@ -874,10 +874,10 @@ func TestSyncer_Txs(t *testing.T) {
 	id3 := types.GetTransactionId(tx3.SerializableSignedTransaction)
 	block3.TxIds = []types.TransactionId{id1, id2, id3}
 	syncObj1.AddBlockWithTxs(block3, []*types.AddressableSignedTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
-	syncObj2.txQueue.TxSigValidator = mockTxProcessor{true}
+	syncObj2.txQueue.TxValidator = mockTxProcessor{true}
 	_, err := syncObj2.txQueue.Handle(block3.TxIds)
 	assert.NotNil(t, err)
-	syncObj2.txQueue.TxSigValidator = mockTxProcessor{false}
+	syncObj2.txQueue.TxValidator = mockTxProcessor{false}
 	_, err = syncObj2.txQueue.Handle(block3.TxIds)
 	assert.Nil(t, err)
 }
