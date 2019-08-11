@@ -88,7 +88,7 @@ func SyncMockFactory(number int, conf Configuration, name string, dbType string,
 		net := sim.NewNode()
 		name := fmt.Sprintf(name+"_%d", i)
 		l := log.New(name, "", "")
-		blockValidator := NewBlockValidator(BlockEligibilityValidatorMock{})
+		blockValidator := BlockEligibilityValidatorMock{}
 		txpool := miner.NewTypesTransactionIdMemPool()
 		atxpool := miner.NewTypesAtxIdMemPool()
 		sync := NewSync(net, getMesh(dbType, Path+name+"_"+time.Now().String()), txpool, atxpool, mockTxProcessor{}, blockValidator, poetDb(), conf, tk, 0, l)
@@ -635,7 +635,7 @@ func Test_TwoNodes_SyncIntegrationSuite(t *testing.T) {
 	sis.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
 		l := log.New(fmt.Sprintf("%s_%d", sis.name, atomic.LoadUint32(&i)), "", "")
 		msh := getMesh(memoryDB, fmt.Sprintf("%s_%s", sis.name, time.Now()))
-		blockValidator := NewBlockValidator(BlockEligibilityValidatorMock{})
+		blockValidator := BlockEligibilityValidatorMock{}
 		poetDb := activation.NewPoetDb(database.NewMemDatabase(), l.WithName("poetDb"))
 		sync := NewSync(s, msh, miner.NewTypesTransactionIdMemPool(), miner.NewTypesAtxIdMemPool(), mockTxProcessor{}, blockValidator, poetDb, conf, tk, 0, l)
 		sis.syncers = append(sis.syncers, sync)
@@ -751,7 +751,7 @@ func Test_Multiple_SyncIntegrationSuite(t *testing.T) {
 	sis.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
 		l := log.New(fmt.Sprintf("%s_%d", sis.name, atomic.LoadUint32(&i)), "", "")
 		msh := getMesh(memoryDB, fmt.Sprintf("%s_%d", sis.name, atomic.LoadUint32(&i)))
-		blockValidator := NewBlockValidator(BlockEligibilityValidatorMock{})
+		blockValidator := BlockEligibilityValidatorMock{}
 		poetDb := activation.NewPoetDb(database.NewMemDatabase(), l.WithName("poetDb"))
 		sync := NewSync(s, msh, miner.NewTypesTransactionIdMemPool(), miner.NewTypesAtxIdMemPool(), mockTxProcessor{}, blockValidator, poetDb, conf, tk, 0, l)
 		ts.StartNotifying()
@@ -888,10 +888,10 @@ func TestSyncer_Txs(t *testing.T) {
 	id3 := types.GetTransactionId(tx3.SerializableSignedTransaction)
 	block3.TxIds = []types.TransactionId{id1, id2, id3}
 	syncObj1.AddBlockWithTxs(block3, []*types.AddressableSignedTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
-	syncObj2.sigValidator = mockTxProcessor{true}
+	syncObj2.txValidator = mockTxProcessor{true}
 	_, err := syncObj2.syncTxs(block3.TxIds)
 	assert.NotNil(t, err)
-	syncObj2.sigValidator = mockTxProcessor{false}
+	syncObj2.txValidator = mockTxProcessor{false}
 	_, err = syncObj2.syncTxs(block3.TxIds)
 	assert.Nil(t, err)
 }

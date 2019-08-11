@@ -78,6 +78,15 @@ func (app *SyncApp) Cleanup() {
 type mockTxProcessor struct {
 }
 
+func (processor mockTxProcessor) GetValidAddressableTx(tx *types.SerializableSignedTransaction) (*types.AddressableSignedTransaction, error) {
+	addr, err := processor.ValidateTransactionSignature(tx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &types.AddressableSignedTransaction{SerializableSignedTransaction: tx, Address: addr}, nil
+}
+
 func (mockTxProcessor) ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (address.Address, error) {
 	return address.HexToAddress("0xFFFF"), nil
 }
@@ -130,7 +139,7 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	msh.AddBlock(&mesh.GenesisBlock)
 
 	ch := make(chan types.LayerID, 1)
-	app.sync = sync.NewSync(swarm, msh, txpool, atxpool, mockTxProcessor{}, sync.NewBlockValidator(sync.BlockEligibilityValidatorMock{}), poetDb, conf, ch, 0, lg.WithName("sync"))
+	app.sync = sync.NewSync(swarm, msh, txpool, atxpool, mockTxProcessor{}, sync.BlockEligibilityValidatorMock{}, poetDb, conf, ch, 0, lg.WithName("sync"))
 	ch <- types.LayerID(expectedLayers)
 	if err = swarm.Start(); err != nil {
 		log.Panic("error starting p2p err=%v", err)

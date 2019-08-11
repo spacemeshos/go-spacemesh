@@ -4,7 +4,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -47,16 +46,8 @@ type EligibilityValidator interface {
 	BlockSignedAndEligible(block *types.Block) (bool, error)
 }
 
-type TxSigValidator interface {
-	ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (address.Address, error)
-}
-
-type blockValidator struct {
-	EligibilityValidator
-}
-
-func NewBlockValidator(bev EligibilityValidator) BlockValidator {
-	return &blockValidator{bev}
+type TxValidator interface {
+	GetValidAddressableTx(tx *types.SerializableSignedTransaction) (*types.AddressableSignedTransaction, error)
 }
 
 type Configuration struct {
@@ -80,7 +71,7 @@ type Syncer struct {
 	*server.MessageServer
 
 	lValidator        LayerValidator
-	sigValidator      TxSigValidator
+	txValidator       TxValidator
 	poetDb            PoetDb
 	txpool            TxMemPool
 	atxpool           AtxMemPool
@@ -159,7 +150,7 @@ func (s *Syncer) run() {
 }
 
 //fires a sync every sm.syncInterval or on force space from outside
-func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool AtxMemPool, sv TxSigValidator, bv BlockValidator, poetdb PoetDb, conf Configuration, clock timesync.LayerTimer, currentLayer types.LayerID, logger log.Log) *Syncer {
+func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool AtxMemPool, tv TxValidator, bv BlockValidator, poetdb PoetDb, conf Configuration, clock timesync.LayerTimer, currentLayer types.LayerID, logger log.Log) *Syncer {
 	s := &Syncer{
 		BlockValidator: bv,
 		Configuration:  conf,
@@ -168,7 +159,7 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool A
 		Peers:          p2p.NewPeers(srv, logger.WithName("peers")),
 		MessageServer:  server.NewMsgServer(srv.(server.Service), syncProtocol, conf.RequestTimeout, make(chan service.DirectMessage, p2pconf.ConfigValues.BufferSize), logger.WithName("srv")),
 		lValidator:     layers,
-		sigValidator:   sv,
+		txValidator:    tv,
 		SyncLock:       0,
 		txpool:         txpool,
 		atxpool:        atxpool,
@@ -397,15 +388,6 @@ func (s *Syncer) fetchLayerHashes(lyr types.LayerID) (map[string]p2p.Peer, error
 	return m, nil
 }
 
-func (s *Syncer) validateAndBuildTx(x *types.SerializableSignedTransaction) (*types.AddressableSignedTransaction, error) {
-	addr, err := s.sigValidator.ValidateTransactionSignature(x)
-	if err != nil {
-		return nil, err
-	}
-
-	return &types.AddressableSignedTransaction{SerializableSignedTransaction: x, Address: addr}, nil
-}
-
 //returns txs out of txids that are not in the local database
 func (s *Syncer) syncTxs(txids []types.TransactionId) ([]*types.AddressableSignedTransaction, error) {
 
@@ -430,7 +412,7 @@ func (s *Syncer) syncTxs(txids []types.TransactionId) ([]*types.AddressableSigne
 			ntxs := out.([]types.SerializableSignedTransaction)
 			for _, tx := range ntxs {
 				tmp := tx
-				ast, err := s.validateAndBuildTx(&tmp)
+				ast, err := s.txValidator.GetValidAddressableTx(&tmp)
 				if err != nil {
 					id := types.GetTransactionId(&tmp)
 					s.Warning("tx %v not valid %v", hex.EncodeToString(id[:]), err)

@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -34,7 +33,7 @@ type Signer interface {
 }
 
 type TxValidator interface {
-	ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (address.Address, error)
+	GetValidAddressableTx(tx *types.SerializableSignedTransaction) (*types.AddressableSignedTransaction, error)
 }
 
 type AtxValidator interface {
@@ -242,15 +241,6 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 	return &types.Block{MiniBlock: b, Signature: t.Signer.Sign(blockBytes)}, nil
 }
 
-func (t *BlockBuilder) validateAndBuildTx(x *types.SerializableSignedTransaction) (*types.AddressableSignedTransaction, error) {
-	addr, err := t.txValidator.ValidateTransactionSignature(x)
-	if err != nil {
-		return nil, err
-	}
-
-	return &types.AddressableSignedTransaction{SerializableSignedTransaction: x, Address: addr}, nil
-}
-
 func (t *BlockBuilder) listenForTx() {
 	t.Log.Info("start listening for txs")
 	for {
@@ -271,7 +261,7 @@ func (t *BlockBuilder) listenForTx() {
 				}
 
 				id := types.GetTransactionId(x)
-				fullTx, err := t.validateAndBuildTx(x)
+				fullTx, err := t.txValidator.GetValidAddressableTx(x)
 				if err != nil {
 					t.Log.Error("Transaction validation failed for id=%v, err=%v", id, err)
 					continue
