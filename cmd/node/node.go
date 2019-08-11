@@ -341,7 +341,10 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	poetDb := activation.NewPoetDb(poetDbStore, lg.WithName("poetDb"))
 	//todo: this is initialized twice, need to refactor
 	validator := nipst.NewValidator(&app.Config.POST, poetDb)
-	mdb := mesh.NewPersistentMeshDB(dbStorepath, lg.WithName("meshDb"))
+	mdb, err := mesh.NewPersistentMeshDB(dbStorepath, lg.WithName("meshDb"))
+	if err != nil {
+		return err
+	}
 	atxdb := activation.NewActivationDb(atxdbstore, idStore, mdb, layersPerEpoch, validator, lg.WithName("atxDb"))
 	beaconProvider := &oracle.EpochBeaconProvider{}
 	eValidator := oracle.NewBlockEligibilityValidator(int32(app.Config.GenesisActiveSet), layersPerEpoch, atxdb, beaconProvider, BLS381.Verify2, lg.WithName("blkElgValidator"))

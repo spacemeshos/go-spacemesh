@@ -21,18 +21,21 @@ type MeshDB struct {
 	blockCache         blockCache
 	layers             database.DB
 	blocks             database.DB
-	transactions       database.DB
+	transactions       database.Database
 	contextualValidity database.DB //map blockId to contextualValidation state of block
 	orphanBlocks       map[types.LayerID]map[types.BlockID]struct{}
 	layerMutex         map[types.LayerID]*layerMutex
 	lhMutex            sync.Mutex
 }
 
-func NewPersistentMeshDB(path string, log log.Log) *MeshDB {
+func NewPersistentMeshDB(path string, log log.Log) (*MeshDB, error) {
 	bdb := database.NewLevelDbStore(path+"blocks", nil, nil)
 	ldb := database.NewLevelDbStore(path+"layers", nil, nil)
 	vdb := database.NewLevelDbStore(path+"validity", nil, nil)
-	tdb := database.NewLevelDbStore(path+"transactions", nil, nil)
+	tdb, err := database.NewLDBDatabase(path+"transactions", 0, 0, log)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize transactions db: %v", err)
+	}
 	ll := &MeshDB{
 		Log:                log,
 		blockCache:         NewBlockCache(100 * layerSize),
@@ -43,7 +46,7 @@ func NewPersistentMeshDB(path string, log log.Log) *MeshDB {
 		orphanBlocks:       make(map[types.LayerID]map[types.BlockID]struct{}),
 		layerMutex:         make(map[types.LayerID]*layerMutex),
 	}
-	return ll
+	return ll, nil
 }
 
 func NewMemMeshDB(log log.Log) *MeshDB {
@@ -282,22 +285,25 @@ func (m *MeshDB) getLayerMutex(index types.LayerID) *layerMutex {
 
 func (m *MeshDB) writeTransactions(txs []*types.AddressableSignedTransaction) ([]types.TransactionId, error) {
 	txids := make([]types.TransactionId, 0, len(txs))
+	batch := m.transactions.NewBatch()
 	for _, t := range txs {
 		bytes, err := types.AddressableTransactionAsBytes(t)
 		if err != nil {
 			m.Error("could not marshall tx %v to bytes ", err)
 			return nil, err
 		}
-
 		id := types.GetTransactionId(t.SerializableSignedTransaction)
-		if err := m.transactions.Put(id[:], bytes); err != nil {
+		if err := batch.Put(id[:], bytes); err != nil {
 			m.Error("could not write tx %v to database ", hex.EncodeToString(id[:]), err)
 			return nil, err
 		}
 		txids = append(txids, id)
 		m.Debug("write tx %v to db", hex.EncodeToString(id[:]))
 	}
-
+	err := batch.Write()
+	if err != nil {
+		return nil, fmt.Errorf("failed to write transactions: %v", err)
+	}
 	return txids, nil
 }
 
