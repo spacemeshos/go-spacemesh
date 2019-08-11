@@ -28,6 +28,10 @@ type PostProverClient interface {
 	// the amortized computational complexity can be made arbitrarily small.
 	execute(id []byte, challenge []byte, timeout time.Duration) (proof *types.PostProof, err error)
 
+	// set the needed params for setting up post commitment in the specified logical drive and with
+	// requested commitment size
+	SetPostParams(logicalDrive string, commitmentSize uint64)
+
 	SetLogger(logger shared.Logger)
 }
 
@@ -228,8 +232,12 @@ func (nb *NIPSTBuilder) IsPostInitialized() bool {
 	return true
 }
 
-func (nb *NIPSTBuilder) InitializePost() (*types.PostProof, error) {
+func (nb *NIPSTBuilder) InitializePost(logicalDrive string, commitmentSize uint64) (*types.PostProof, error) {
 	defTimeout := 5 * time.Second // TODO: replace temporary solution
+
+	nb.postCfg.DataDir = logicalDrive
+	nb.postCfg.SpacePerUnit = commitmentSize
+	nb.postProver.SetPostParams(logicalDrive, commitmentSize)
 
 	if nb.IsPostInitialized() {
 		return nil, errors.New("PoST already initialized")

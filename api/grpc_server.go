@@ -2,6 +2,7 @@
 package api
 
 import (
+	"encoding/hex"
 	"fmt"
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/spacemeshos/go-spacemesh/activation"
@@ -26,6 +27,7 @@ type SpacemeshGrpcService struct {
 	StateApi StateAPI
 	Network  NetworkAPI
 	Tx       TxAPI
+	Mining   MiningAPI
 }
 
 // Echo returns the response for an echo api request
@@ -65,7 +67,7 @@ func (s SpacemeshGrpcService) GetNonce(ctx context.Context, in *pb.AccountId) (*
 	return &msg, nil
 }
 
-func (s SpacemeshGrpcService) SubmitTransaction(ctx context.Context, in *pb.SignedTransaction) (*pb.SimpleMessage, error) {
+func (s SpacemeshGrpcService) SubmitTransaction(ctx context.Context, in *pb.SignedTransaction) (*pb.TxConfirmation, error) {
 	log.Info("GRPC SubmitTransaction msg")
 
 	signedTx := &types.SerializableSignedTransaction{}
@@ -80,10 +82,12 @@ func (s SpacemeshGrpcService) SubmitTransaction(ctx context.Context, in *pb.Sign
 		log.Error("tx failed to validate signature, error %v", err)
 		return nil, err
 	}
-	log.Info("GRPC SubmitTransaction BROADCAST tx. address %x (len %v), gaslimit %v, price %v", signedTx.Recipient, len(signedTx.Recipient), signedTx.GasLimit, signedTx.GasPrice)
+	id := types.GetTransactionId(signedTx)
+	hexIdStr := hex.EncodeToString(id[:])
+	log.Info("GRPC SubmitTransaction BROADCAST tx. address %x (len %v), gaslimit %v, price %v id %v", signedTx.Recipient, len(signedTx.Recipient), signedTx.GasLimit, signedTx.GasPrice, hexIdStr[:5])
 	go s.Network.Broadcast(miner.IncomingTxProtocol, in.Tx)
 	log.Info("GRPC SubmitTransaction returned msg ok")
-	return &pb.SimpleMessage{Value: "ok"}, nil
+	return &pb.TxConfirmation{Value: "ok", Id: hexIdStr}, nil
 }
 
 // P2P API
@@ -123,10 +127,10 @@ type TxAPI interface {
 }
 
 // NewGrpcService create a new grpc service using config data.
-func NewGrpcService(net NetworkAPI, state StateAPI, tx TxAPI) *SpacemeshGrpcService {
+func NewGrpcService(net NetworkAPI, state StateAPI, tx TxAPI, mining MiningAPI) *SpacemeshGrpcService {
 	port := config.ConfigValues.GrpcServerPort
 	server := grpc.NewServer()
-	return &SpacemeshGrpcService{Server: server, Port: uint(port), StateApi: state, Network: net, Tx: tx}
+	return &SpacemeshGrpcService{Server: server, Port: uint(port), StateApi: state, Network: net, Tx: tx, Mining: mining}
 }
 
 // StartService starts the grpc service.
@@ -167,6 +171,15 @@ func (s SpacemeshGrpcService) startServiceInternal(status chan bool) {
 
 }
 
+func (s SpacemeshGrpcService) StartMining(ctx context.Context, message *pb.InitPost) (*pb.SimpleMessage, error) {
+	addr, err := address.StringToAddress(message.Coinbase)
+	err = s.Mining.StartPost(addr, message.LogicalDrive, message.CommitmentSize)
+	if err != nil {
+		return &pb.SimpleMessage{}, err
+	}
+	return &pb.SimpleMessage{Value: "ok"}, nil
+}
+
 func (s SpacemeshGrpcService) SetCommitmentSize(ctx context.Context, message *pb.CommitmentSizeMessage) (*pb.SimpleMessage, error) {
 	log.Info("GRPC SetCommitmentSize msg")
 
@@ -180,6 +193,11 @@ func (s SpacemeshGrpcService) SetLogicalDrive(ctx context.Context, message *pb.L
 
 func (s SpacemeshGrpcService) SetAwardsAddress(ctx context.Context, id *pb.AccountId) (*pb.SimpleMessage, error) {
 	log.Info("GRPC SetAwardsAddress msg")
+	addr, err := address.StringToAddress(id.Address)
+	if err != nil {
+		return &pb.SimpleMessage{}, err
+	}
+	s.Mining.SetCoinbaseAccount(addr)
 	return &pb.SimpleMessage{Value: "ok"}, nil
 }
 

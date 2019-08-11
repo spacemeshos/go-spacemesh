@@ -137,6 +137,9 @@ func (suite *AppTestSuite) initMultipleInstances(numOfInstances int, storeFormat
 
 		err = smApp.initServices(nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(layerSize), postClient, poetClient, vrfSigner, uint16(smApp.Config.LayersPerEpoch))
 		r.NoError(err)
+		coinBase := address.HexToAddress(smApp.Config.CoinbaseAccount)
+		err = smApp.atxBuilder.StartPost(coinBase, smApp.Config.POST.DataDir, smApp.Config.POST.SpacePerUnit)
+		r.NoError(err)
 		smApp.setupGenesis()
 
 		suite.apps = append(suite.apps, smApp)
@@ -148,7 +151,7 @@ func (suite *AppTestSuite) initMultipleInstances(numOfInstances int, storeFormat
 
 func activateGrpcServer(smApp *SpacemeshApp) {
 	smApp.Config.API.StartGrpcServer = true
-	smApp.grpcAPIService = api.NewGrpcService(smApp.P2P, smApp.state, smApp.txProcessor)
+	smApp.grpcAPIService = api.NewGrpcService(smApp.P2P, smApp.state, smApp.txProcessor, smApp.atxBuilder)
 	smApp.grpcAPIService.StartService(nil)
 }
 

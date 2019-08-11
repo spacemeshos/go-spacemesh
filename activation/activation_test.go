@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"sort"
 	"testing"
+	"time"
 )
 
 // ========== Vars / Consts ==========
@@ -71,15 +72,20 @@ func (n *NetMock) Broadcast(id string, d []byte) error {
 }
 
 type NipstBuilderMock struct {
-	poetRef        []byte
-	buildNipstFunc func(challenge *common.Hash) (*types.NIPST, error)
+	poetRef         []byte
+	buildNipstFunc  func(challenge *common.Hash) (*types.NIPST, error)
+	SleepTime       int
+	PostInitialized bool
 }
 
 func (np *NipstBuilderMock) IsPostInitialized() bool {
-	return true
+	return np.PostInitialized
 }
 
-func (np *NipstBuilderMock) InitializePost() (*types.PostProof, error) {
+func (np *NipstBuilderMock) InitializePost(logicalDrive string, commitmentSize uint64) (*types.PostProof, error) {
+	if np.SleepTime != 0 {
+		time.Sleep(time.Duration(np.SleepTime) * time.Millisecond)
+	}
 	return nil, nil
 }
 
@@ -97,7 +103,7 @@ func (np *NipstErrBuilderMock) IsPostInitialized() bool {
 	return true
 }
 
-func (np *NipstErrBuilderMock) InitializePost() (*types.PostProof, error) {
+func (np *NipstErrBuilderMock) InitializePost(logicalDrive string, commitmentSize uint64) (*types.PostProof, error) {
 	return nil, nil
 }
 
@@ -432,7 +438,7 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	coinbase := address.HexToAddress("0xaaa")
 	net := &NetMock{}
 	layers := &MeshProviderMock{}
-	nipstBuilder := &NipstBuilderMock{}
+	nipstBuilder := &NipstBuilderMock{PostInitialized: true}
 	layersPerEpoch := uint16(10)
 	lg := log.NewDefault(id.Key[:5])
 	db := NewMockDB()
@@ -491,4 +497,29 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	assert.NoError(t, err)
 	err = b.PublishActivationTx(3)
 	assert.True(t, db.hadNone)
+}
+
+func TestStartPost(t *testing.T) {
+	id := types.NodeId{"aaaaaa", []byte("bbbbb")}
+	coinbase := address.HexToAddress("0xaaa")
+	//net := &NetMock{}
+	layers := &MeshProviderMock{}
+	nipstBuilder := &NipstBuilderMock{PostInitialized: false}
+	layersPerEpoch := uint16(10)
+	lg := log.NewDefault(id.Key[:5])
+
+	drive := "/tmp/anton"
+	coinbase2 := address.HexToAddress("0xabb")
+	db := NewMockDB()
+	activationDb := NewActivationDb(database.NewMemDatabase(), &MockIdStore{}, mesh.NewMemMeshDB(lg.WithName("meshDB")), layersPerEpoch, &ValidatorMock{}, lg.WithName("atxDB1"))
+	b := NewBuilder(id, coinbase, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, nil, func() bool { return true }, db, lg.WithName("atxBuilder"))
+
+	nipstBuilder.SleepTime = 10000
+	err := b.StartPost(coinbase2, drive, 1000)
+	assert.NoError(t, err)
+
+	// negative test to run
+	err = b.StartPost(coinbase2, drive, 1000)
+	assert.Error(t, err)
+
 }

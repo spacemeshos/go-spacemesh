@@ -8,6 +8,11 @@ message SimpleMessage {
     string value = 1;
 }
 
+message TxConfirmation {
+    string value = 1;
+    string id = 2;
+}
+
 message AccountId {
     string address =1;
 }
@@ -17,6 +22,12 @@ message TransferFunds {
     AccountId receiver =2;
     uint64 nonce =3;
     uint64 amount =4;
+}
+
+message InitPost {
+    string logicalDrive =1;
+    uint64 commitmentSize =2;
+    string coinbase =3;
 }
 
 message SignedTransaction {
@@ -58,7 +69,13 @@ service SpacemeshService {
           body: "*"
         };
     }
-    rpc SubmitTransaction(SignedTransaction) returns (SimpleMessage) {
+    rpc StartMining(InitPost) returns (SimpleMessage) {
+        option (google.api.http) = {
+          post: "/v1/startmining"
+          body: "*"
+        };
+    }
+    rpc SubmitTransaction(SignedTransaction) returns (TxConfirmation) {
         option (google.api.http) = {
           post: "/v1/submittransaction"
           body: "*"

@@ -69,3 +69,10 @@ func (c *PostClient) execute(id []byte, challenge []byte, timeout time.Duration)
 func (c *PostClient) SetLogger(logger shared.Logger) {
 	c.logger = logger
 }
+
+func (c *PostClient) SetPostParams(logicalDrive string, commitmentSize uint64) {
+	cfg := *c.cfg
+	c.cfg = &cfg
+	c.cfg.DataDir = logicalDrive
+	c.cfg.SpacePerUnit = commitmentSize
+}
