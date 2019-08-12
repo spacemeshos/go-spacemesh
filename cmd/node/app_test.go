@@ -194,7 +194,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	defer suite.gracefulShutdown()
 
 	_ = suite.apps[0].P2P.Broadcast(miner.IncomingTxProtocol, txbytes)
-	timeout := time.After(10 * 60 * time.Second)
+	timeout := time.After(8 * 60 * time.Second)
 
 	stickyClientsDone := 0
 loop:
@@ -356,7 +356,7 @@ func (suite *AppTestSuite) validateLastATXActiveSetSize(app *SpacemeshApp) {
 	suite.NoError(err)
 	atx, err := app.mesh.GetAtx(prevAtxId)
 	suite.NoError(err)
-	suite.True(int(atx.ActiveSetSize) >= (len(suite.apps)-1), "atx: %v node: %v", atx.ShortId(), app.nodeId.Key[:5])
+	suite.True(int(atx.ActiveSetSize) >= (len(suite.apps) - 1), "atx: %v node: %v", atx.ShortId(), app.nodeId.Key[:5])
 }
 
 func (suite *AppTestSuite) gracefulShutdown() {
