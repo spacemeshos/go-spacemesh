@@ -32,6 +32,9 @@ type PostProverClient interface {
 	// requested commitment size
 	SetPostParams(logicalDrive string, commitmentSize uint64)
 
+	//Reset deletes
+	Reset() error
+
 	SetLogger(logger shared.Logger)
 }
 

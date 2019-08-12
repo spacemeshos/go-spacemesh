@@ -43,6 +43,10 @@ func (p *postProverClientMock) SetLogger(shared.Logger) {}
 
 func (p *postProverClientMock) SetPostParams(logicalDrive string, commitmentSize uint64) {}
 
+func (p *postProverClientMock) Reset() error {
+	return nil
+}
+
 type poetProvingServiceClientMock struct{}
 
 // A compile time check to ensure that poetProvingServiceClientMock fully implements PoetProvingServiceClient.
@@ -105,6 +109,7 @@ func TestInitializePost(t *testing.T) {
 	drive := "/tmp/anton"
 	unitSize := 2048
 	_, err := nb.InitializePost(drive, uint64(unitSize))
+	defer nb.postProver.Reset()
 	assert.NoError(err)
 	assert.Equal(nb.postCfg.DataDir, drive)
 	assert.Equal(nb.postCfg.SpacePerUnit, uint64(unitSize))
@@ -176,6 +181,7 @@ func TestNewNIPSTBuilderNotInitialized(t *testing.T) {
 
 	idsToCleanup = append(idsToCleanup, minerIDNotInitialized)
 	initialProof, err := nb.InitializePost(postCfg.DataDir, postCfg.SpacePerUnit)
+	defer nb.postProver.Reset()
 	r.NoError(err)
 	r.NotNil(initialProof)
 
