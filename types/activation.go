@@ -157,11 +157,11 @@ func (atx *ActivationTx) CalcAndSetId() {
 }
 
 func (atx *ActivationTx) GetPoetProofRef() []byte {
-	return atx.Nipst.PoetProofRef
+	return atx.Nipst.PostProof.Challenge
 }
 
 func (atx *ActivationTx) GetShortPoetProofRef() []byte {
-	return atx.Nipst.PoetProofRef[:common.Min(5, len(atx.Nipst.PoetProofRef))]
+	return atx.Nipst.PostProof.Challenge[:common.Min(5, len(atx.Nipst.PostProof.Challenge))]
 }
 
 type PoetProof struct {
@@ -209,9 +209,6 @@ type NIPST struct {
 	// postProof is the proof that the prover data
 	// is still stored (or was recomputed).
 	PostProof *PostProof
-
-	// reference to the PoET proof, should be available to all since the PoET proof is propagated over gossip
-	PoetProofRef []byte
 }
 
 type PostProof proving.Proof

@@ -283,7 +283,7 @@ func TestSyncer_SyncAtxs_FetchPoetProof(t *testing.T) {
 	poetRef := sha256.Sum256(poetProofBytes)
 
 	atx1 := atx()
-	atx1.Nipst.PoetProofRef = poetRef[:]
+	atx1.Nipst.PostProof.Challenge = poetRef[:]
 	s0.AtxDB.ProcessAtx(atx1)
 
 	// Make sure that s1 syncAtxs would fetch the missing poet proof.
