@@ -194,13 +194,13 @@ func TestSyncProtocol_BlockRequest(t *testing.T) {
 	syncObj.AddBlockWithTxs(block, []*types.AddressableSignedTransaction{tx1}, []*types.ActivationTx{atx1})
 	syncObj2.Peers = getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
 
-	output := fetchWithFactory(NewBlockWorker(syncObj2.MessageServer, 1, BlockReqFactory(), blockSliceToChan([]types.BlockID{block.ID()})))
+	output := fetchWithFactory(NewFetchWorker(syncObj2.MessageServer, syncObj2.Log, 1, BlockReqFactory(), blockSliceToChan([]types.BlockID{block.ID()})))
 
 	timeout := time.NewTimer(2 * time.Second)
 
 	select {
 	case a := <-output:
-		assert.Equal(t, a.(blockJob).id, block.ID(), "wrong block")
+		assert.Equal(t, a.(fetchJob).ids, block.ID(), "wrong block")
 	case <-timeout.C:
 		assert.Fail(t, "no message received on channel")
 	}
@@ -389,10 +389,10 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	ch <- block2.ID()
 	ch <- block3.ID()
 
-	output := fetchWithFactory(NewBlockWorker(syncObj2.MessageServer, 1, BlockReqFactory(), blockSliceToChan([]types.BlockID{block1.ID(), block2.ID(), block3.ID()})))
+	output := fetchWithFactory(NewFetchWorker(syncObj2.MessageServer, syncObj2.Log, 1, BlockReqFactory(), blockSliceToChan([]types.BlockID{block1.ID(), block2.ID(), block3.ID()})))
 
 	for out := range output {
-		block := out.(blockJob).block
+		block := out.(fetchJob).items.(*types.Block)
 		txs, err := syncObj2.txQueue.Handle(block.TxIds)
 		if err != nil {
 			t.Error("could not fetch all txs", err)
@@ -1031,11 +1031,11 @@ func TestSyncProtocol_NilResponse(t *testing.T) {
 
 	// Block
 
-	output = fetchWithFactory(NewBlockWorker(syncs[0].MessageServer, 1, BlockReqFactory(), blockSliceToChan([]types.BlockID{nonExistingBlockId})))
+	output = fetchWithFactory(NewFetchWorker(syncs[0].MessageServer, syncs[0].Log, 1, BlockReqFactory(), blockSliceToChan([]types.BlockID{nonExistingBlockId})))
 
 	select {
 	case out := <-output:
-		assert.True(t, out.(blockJob).block == nil)
+		assert.True(t, out.(fetchJob).items == nil)
 	case <-time.After(timeout):
 		assert.Fail(t, timeoutErrMsg)
 	}

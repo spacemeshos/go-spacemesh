@@ -48,8 +48,8 @@ func HashReqFactory(lyr types.LayerID) RequestFactory {
 
 }
 
-func blockSliceToChan(blockIds []types.BlockID) chan types.BlockID {
-	blockIdsCh := make(chan types.BlockID, len(blockIds))
+func blockSliceToChan(blockIds []types.BlockID) chan interface{} {
+	blockIdsCh := make(chan interface{}, len(blockIds))
 	for _, id := range blockIds {
 		blockIdsCh <- id
 	}
@@ -57,9 +57,9 @@ func blockSliceToChan(blockIds []types.BlockID) chan types.BlockID {
 	return blockIdsCh
 }
 
-func BlockReqFactory() BlockRequestFactory {
+func BlockReqFactory() RequestFactoryV2 {
 	//convert to chan
-	return func(s *MessageServer, peer p2p.Peer, id types.BlockID) (chan interface{}, error) {
+	return func(s *MessageServer, peer p2p.Peer, id interface{}) (chan interface{}, error) {
 		ch := make(chan interface{}, 1)
 		foo := func(msg []byte) {
 			defer close(ch)
@@ -76,7 +76,12 @@ func BlockReqFactory() BlockRequestFactory {
 			ch <- &block
 		}
 
-		if err := s.SendRequest(MINI_BLOCK, id.ToBytes(), peer, foo); err != nil {
+		bts, err := types.InterfaceToBytes(id) //todo send multiple ids
+		if err != nil {
+			return nil, err
+		}
+
+		if err := s.SendRequest(MINI_BLOCK, bts, peer, foo); err != nil {
 			return nil, err
 		}
 

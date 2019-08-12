@@ -31,7 +31,7 @@ type validationQueue struct {
 	*MessageServer
 	Configuration
 	BlockValidator
-	queue            chan types.BlockID
+	queue            chan interface{}
 	mu               sync.Mutex
 	callbacks        map[interface{}]func(res bool) error
 	depMap           map[interface{}]map[types.BlockID]struct{}
@@ -47,7 +47,7 @@ func NewValidationQueue(srvr *MessageServer, conf Configuration, bv BlockValidat
 		Configuration:    conf,
 		MessageServer:    srvr,
 		BlockValidator:   bv,
-		queue:            make(chan types.BlockID, 2*conf.LayerSize),
+		queue:            make(chan interface{}, 2*conf.LayerSize),
 		visited:          make(map[types.BlockID]struct{}),
 		depMap:           make(map[interface{}]map[types.BlockID]struct{}),
 		reverseDepMap:    make(map[types.BlockID][]interface{}),
@@ -83,26 +83,32 @@ func (vq *validationQueue) done() {
 
 func (vq *validationQueue) work() error {
 
-	output := fetchWithFactory(NewBlockWorker(vq.MessageServer, vq.Concurrency, BlockReqFactory(), vq.queue))
+	output := fetchWithFactory(NewFetchWorker(vq.MessageServer, vq.Log, vq.Concurrency, BlockReqFactory(), vq.queue))
 	for out := range output {
-		bjb, ok := out.(blockJob)
+		bjb, ok := out.(fetchJob)
+		if !ok {
+			vq.Error(fmt.Sprintf("Type conversion err %v", out))
+			continue
+		}
 
-		if !ok || bjb.block == nil {
-			vq.updateDependencies(bjb.id, false)
+		bid := bjb.ids.(types.BlockID)
+
+		if bjb.items == nil {
+			vq.updateDependencies(bid, false)
 			vq.Error(fmt.Sprintf("could not retrieve a block in view "))
 			continue
 		}
 
-		vq.Info("fetched  %v", bjb.block.ID())
-
-		vq.visited[bjb.block.ID()] = struct{}{}
-		if eligable, err := vq.BlockSignedAndEligible(bjb.block); err != nil || !eligable {
-			vq.updateDependencies(bjb.id, false)
-			vq.Error(fmt.Sprintf("Block %v eligiblety check failed %v", bjb.block.ID(), err))
+		vq.Info("fetched  %v", bid)
+		blk := bjb.items.(*types.Block)
+		vq.visited[bid] = struct{}{}
+		if eligable, err := vq.BlockSignedAndEligible(blk); err != nil || !eligable {
+			vq.updateDependencies(bid, false)
+			vq.Error(fmt.Sprintf("Block %v eligiblety check failed %v", bid, err))
 			continue
 		}
 
-		vq.handleBlockDependencies(bjb) //todo better deadlock solution
+		vq.handleBlockDependencies(blk) //todo better deadlock solution
 
 		vq.Info("next block")
 	}
@@ -110,17 +116,17 @@ func (vq *validationQueue) work() error {
 	return nil
 }
 
-func (vq *validationQueue) handleBlockDependencies(bjb blockJob) {
-	vq.Info("Validating view Block %v", bjb.block.ID())
-	res, err := vq.addDependencies(bjb.block.ID(), bjb.block.ViewEdges, vq.finishBlockCallback(bjb.block))
+func (vq *validationQueue) handleBlockDependencies(blk *types.Block) {
+	vq.Info("Validating view Block %v", blk.ID())
+	res, err := vq.addDependencies(blk.ID(), blk.ViewEdges, vq.finishBlockCallback(blk))
 	if err != nil {
-		vq.updateDependencies(bjb.id, false)
-		vq.Error(fmt.Sprintf("failed to add pending for Block %v %v", bjb.block.ID(), err))
+		vq.updateDependencies(blk.ID(), false)
+		vq.Error(fmt.Sprintf("failed to add pending for Block %v %v", blk.ID(), err))
 		//continue
 	}
 	if res == false {
-		vq.Info("pending done for %v", bjb.block.ID())
-		vq.updateDependencies(bjb.id, true)
+		vq.Info("pending done for %v", blk.ID())
+		vq.updateDependencies(blk.ID(), true)
 	}
 }
 

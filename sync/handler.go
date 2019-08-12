@@ -52,7 +52,8 @@ func newLayerBlockIdsRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg 
 
 func newBlockRequestHandler(msh *mesh.Mesh, logger log.Log) func(msg []byte) []byte {
 	return func(msg []byte) []byte {
-		blockid := types.BlockID(common.BytesToUint64(msg))
+		var blockid types.BlockID
+		types.BytesToInterface(msg, &blockid)
 		logger.Debug("handle block %v request", blockid)
 		blk, err := msh.GetBlock(blockid)
 		if err != nil {

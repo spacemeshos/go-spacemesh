@@ -14,13 +14,37 @@ import (
 type RequestFactoryV2 func(s *MessageServer, peer p2p.Peer, id interface{}) (chan interface{}, error)
 type FetchPoetProof func(poetProofRef []byte) error
 
+type fetchJob struct {
+	items interface{}
+	ids   interface{}
+}
+
 //todo make the queue generic
 type fetchQueue struct {
 	log.Log
+	RequestFactoryV2
 	sync.Mutex
 	*mesh.Mesh
 	*MessageServer
-	queue chan *fetchJob //types.TransactionId //todo make buffered
+	updateDependencies func(fj fetchJob)
+	queue              chan interface{} //types.TransactionId //todo make buffered
+}
+
+//todo batches
+func (fq *fetchQueue) work() error {
+	output := fetchWithFactory(NewFetchWorker(fq.MessageServer, fq.Log, 1, fq.RequestFactoryV2, fq.queue))
+	for out := range output {
+
+		if out == nil {
+			fq.Info("close queue")
+			return nil
+		}
+
+		txs := out.(fetchJob)
+		fq.updateDependencies(txs) //todo hack add batches
+		fq.Debug("next batch")
+	}
+	return nil
 }
 
 //todo make the queue generic
@@ -31,94 +55,51 @@ type txQueue struct {
 	pending map[types.TransactionId][]chan bool
 }
 
-type atxQueue struct {
-	fetchQueue
-	FetchPoetProof
-	atxpool AtxMemPool
-	pending map[types.AtxId][]chan bool
-}
-
 func NewTxQueue(msh *mesh.Mesh, srv *MessageServer, txpool TxMemPool, txValidator TxValidator, lg log.Log) *txQueue {
 	//todo buffersize
-
 	q := &txQueue{
-
-		fetchQueue: fetchQueue{
-			Log:           lg,
-			Mesh:          msh,
-			MessageServer: srv,
-			queue:         make(chan *fetchJob, 100)},
-
 		txpool:      txpool,
 		TxValidator: txValidator,
 		pending:     make(map[types.TransactionId][]chan bool),
 	}
-	go q.work()
-	return q
-}
 
-func NewAtxQueue(msh *mesh.Mesh, srv *MessageServer, atxpool AtxMemPool, fetchPoetProof FetchPoetProof, lg log.Log) *atxQueue {
-	//todo buffersize
-
-	q := &atxQueue{
-		fetchQueue: fetchQueue{
-			Log:           lg,
-			Mesh:          msh,
-			MessageServer: srv,
-			queue:         make(chan *fetchJob, 100)},
-
-		atxpool:        atxpool,
-		FetchPoetProof: fetchPoetProof,
-		pending:        make(map[types.AtxId][]chan bool),
+	q.fetchQueue = fetchQueue{
+		Log:                lg,
+		Mesh:               msh,
+		MessageServer:      srv,
+		updateDependencies: q.updateDependencies(),
+		RequestFactoryV2:   TxReqFactory(),
+		queue:              make(chan interface{}, 1000),
 	}
+
 	go q.work()
 	return q
 }
 
-type fetchJob struct {
-	items interface{}
-	ids   interface{}
-}
-
-//todo batches
-func (tq *txQueue) work() error {
-	output := fetchWithFactory(NewFetchWorker(tq.MessageServer, tq.Log, 1, TxReqFactory(), tq.queue))
-	for out := range output {
-
-		if out == nil {
-			tq.Info("close queue")
-			return nil
+func (tq *txQueue) updateDependencies() func(fj fetchJob) {
+	return func(fj fetchJob) {
+		items, ok := fj.items.([]*types.SerializableSignedTransaction)
+		if !ok {
+			tq.Warning("could not fetch any")
+			return
 		}
 
-		txs := out.(fetchJob)
-		tq.updateDependencies(txs) //todo hack add batches
-		tq.Debug("next batch")
-	}
+		mp := map[types.TransactionId]*types.SerializableSignedTransaction{}
 
-	return nil
-}
+		for _, item := range items {
+			mp[types.GetTransactionId(item)] = item
+		}
 
-func (tq *txQueue) updateDependencies(fj fetchJob) {
-	items, ok := fj.items.([]*types.SerializableSignedTransaction)
-	if !ok {
-		tq.Warning("could not fetch any")
-		return
-	}
-	mp := map[types.TransactionId]*types.SerializableSignedTransaction{}
-
-	for _, item := range items {
-		mp[types.GetTransactionId(item)] = item
-	}
-
-	for _, id := range fj.ids.([]types.TransactionId) {
-		if item, ok := mp[id]; ok {
-			tx, err := tq.GetValidAddressableTx(item)
-			if err == nil {
-				tq.invalidate(id, tx, true)
-				continue
+		for _, id := range fj.ids.([]types.TransactionId) {
+			if item, ok := mp[id]; ok {
+				tx, err := tq.GetValidAddressableTx(item)
+				if err == nil {
+					tq.invalidate(id, tx, true)
+					continue
+				}
 			}
+			tq.invalidate(id, nil, false)
 		}
-		tq.invalidate(id, nil, false)
 	}
 }
 
@@ -138,22 +119,8 @@ func (tq *txQueue) invalidate(id types.TransactionId, tx *types.AddressableSigne
 }
 
 func (tq *txQueue) addToQueue(ids []types.TransactionId) chan bool {
-
 	deps := tq.addToPending(ids)
-	doneChan := make(chan bool)
-	//fan in
-	go func() {
-		alldone := true
-		for _, c := range deps {
-			if done := <-c; !done {
-				alldone = false
-				break
-			}
-		}
-		doneChan <- alldone
-		close(doneChan)
-	}()
-	return doneChan
+	return getDoneChan(deps)
 }
 
 func (tq *txQueue) addToPending(ids []types.TransactionId) []chan bool {
@@ -169,8 +136,54 @@ func (tq *txQueue) addToPending(ids []types.TransactionId) []chan bool {
 		tq.pending[id] = append(tq.pending[id], ch)
 	}
 	tq.Unlock()
-	tq.queue <- &fetchJob{ids: idsToAdd}
+	tq.queue <- idsToAdd
 	return deps
+}
+
+type atxQueue struct {
+	fetchQueue
+	FetchPoetProof
+	atxpool AtxMemPool
+	pending map[types.AtxId][]chan bool
+}
+
+func NewAtxQueue(msh *mesh.Mesh, srv *MessageServer, atxpool AtxMemPool, fetchPoetProof FetchPoetProof, lg log.Log) *atxQueue {
+	//todo buffersize
+
+	q := &atxQueue{
+		atxpool:        atxpool,
+		FetchPoetProof: fetchPoetProof,
+		pending:        make(map[types.AtxId][]chan bool),
+	}
+
+	q.fetchQueue = fetchQueue{
+		Log:                lg,
+		Mesh:               msh,
+		MessageServer:      srv,
+		updateDependencies: q.updateDependencies(),
+		RequestFactoryV2:   ATxReqFactory(),
+		queue:              make(chan interface{}, 1000),
+	}
+
+	go q.work()
+	return q
+}
+
+func (aq *atxQueue) invalidate(id types.AtxId, atx *types.ActivationTx, valid bool) {
+	aq.Debug("done with %v !!!!!!!!!!!!!!!! %v", id.ShortId(), valid)
+
+	if valid && atx != nil {
+		aq.atxpool.Put(id, atx)
+	}
+
+	aq.Lock()
+	deps := aq.pending[id]
+	delete(aq.pending, id)
+	aq.Unlock()
+
+	for _, dep := range deps {
+		dep <- valid
+	}
 }
 
 //todo minimize code duplication
@@ -227,25 +240,6 @@ func (tq *txQueue) checkLocalTxs(txids []types.TransactionId) (map[types.Transac
 	return unprocessedTxs, dbTxs, missing
 }
 
-//todo batches
-func (aq *atxQueue) work() error {
-	output := fetchWithFactory(NewFetchWorker(aq.MessageServer, aq.Log, 1, ATxReqFactory(), aq.queue))
-	for out := range output {
-		if out == nil {
-			aq.Info("close queue")
-			return nil
-		}
-		txs := out.(fetchJob)
-
-		aq.fetchPoetProofs(txs) //removes atxs with proofs we could not fetch
-
-		aq.updateDependencies(txs) //todo hack add batches
-		aq.Debug("next batch")
-	}
-
-	return nil
-}
-
 //todo get rid of this, send proofs with atxs
 func (aq *atxQueue) fetchPoetProofs(fj fetchJob) {
 	items, ok := fj.items.([]*types.ActivationTx)
@@ -268,64 +262,36 @@ func (aq *atxQueue) fetchPoetProofs(fj fetchJob) {
 	fj.items = itemsWithProofs
 }
 
-func (aq *atxQueue) updateDependencies(fj fetchJob) {
-	items, ok := fj.items.([]*types.ActivationTx)
-	if !ok {
-		aq.Warning("could not fetch any")
-		return
-	}
-
-	mp := map[types.AtxId]*types.ActivationTx{}
-	for _, item := range items {
-		mp[item.Id()] = item
-	}
-
-	for _, id := range fj.ids.([]types.AtxId) {
-		if atx, ok := mp[id]; ok {
-			err := aq.SyntacticallyValidateAtx(atx)
-			if err == nil {
-				aq.invalidate(id, atx, true)
-				continue
-			}
+func (aq *atxQueue) updateDependencies() func(fj fetchJob) {
+	return func(fj fetchJob) {
+		aq.fetchPoetProofs(fj)
+		items, ok := fj.items.([]*types.ActivationTx)
+		if !ok {
+			aq.Warning("could not fetch any")
+			return
 		}
-		aq.invalidate(id, nil, false)
+
+		mp := map[types.AtxId]*types.ActivationTx{}
+		for _, item := range items {
+			mp[item.Id()] = item
+		}
+
+		for _, id := range fj.ids.([]types.AtxId) {
+			if atx, ok := mp[id]; ok {
+				err := aq.SyntacticallyValidateAtx(atx)
+				if err == nil {
+					aq.invalidate(id, atx, true)
+					continue
+				}
+			}
+			aq.invalidate(id, nil, false)
+		}
 	}
 
-}
-
-func (aq *atxQueue) invalidate(id types.AtxId, atx *types.ActivationTx, valid bool) {
-	aq.Debug("done with %v !!!!!!!!!!!!!!!! %v", id.ShortId(), valid)
-
-	if valid && atx != nil {
-		aq.atxpool.Put(id, atx)
-	}
-
-	aq.Lock()
-	deps := aq.pending[id]
-	delete(aq.pending, id)
-	aq.Unlock()
-
-	for _, dep := range deps {
-		dep <- valid
-	}
 }
 
 func (aq *atxQueue) addToQueue(ids []types.AtxId) chan bool {
-	deps := aq.addToPending(ids)
-	doneChan := make(chan bool)
-	//fan in
-	go func() {
-		alldone := true
-		for _, c := range deps {
-			if done := <-c; !done {
-				alldone = false
-				break
-			}
-		}
-		doneChan <- alldone
-		close(doneChan)
-	}()
-	return doneChan
+	return getDoneChan(aq.addToPending(ids))
 }
 
 func (aq *atxQueue) addToPending(ids []types.AtxId) []chan bool {
@@ -341,7 +307,7 @@ func (aq *atxQueue) addToPending(ids []types.AtxId) []chan bool {
 		aq.pending[id] = append(aq.pending[id], ch)
 	}
 	aq.Unlock()
-	aq.queue <- &fetchJob{ids: idsToAdd}
+	aq.queue <- idsToAdd
 	return deps
 }
 
@@ -401,11 +367,19 @@ func (aq *atxQueue) checkLocalAtxs(atxIds []types.AtxId) (map[types.AtxId]*types
 	return unprocessedAtxs, dbAtxs, missing
 }
 
-func (tq *txQueue) validateAndBuildTx(x *types.SerializableSignedTransaction) (*types.AddressableSignedTransaction, error) {
-	addr, err := tq.ValidateTransactionSignature(x)
-	if err != nil {
-		return nil, err
-	}
-
-	return &types.AddressableSignedTransaction{SerializableSignedTransaction: x, Address: addr}, nil
+func getDoneChan(deps []chan bool) chan bool {
+	doneChan := make(chan bool)
+	//fan in
+	go func() {
+		alldone := true
+		for _, c := range deps {
+			if done := <-c; !done {
+				alldone = false
+				break
+			}
+		}
+		doneChan <- alldone
+		close(doneChan)
+	}()
+	return doneChan
 }
