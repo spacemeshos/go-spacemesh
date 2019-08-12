@@ -22,7 +22,7 @@ type BlockEligibilityValidator struct {
 	log                  log.Log
 }
 
-func NewBlockEligibilityValidator(committeeSize uint32, genesisActiveSetSize uint32, layersPerEpoch uint16, activationDb ActivationDb,
+func NewBlockEligibilityValidator(committeeSize, genesisActiveSetSize uint32, layersPerEpoch uint16, activationDb ActivationDb,
 	beaconProvider *EpochBeaconProvider, validateVRF VRFValidationFunction, log log.Log) *BlockEligibilityValidator {
 
 	return &BlockEligibilityValidator{

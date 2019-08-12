@@ -82,7 +82,7 @@ type Syncer struct {
 	clock             timesync.LayerTimer
 	exit              chan struct{}
 	currentLayerMutex sync.RWMutex
-	syncFuncWg        sync.WaitGroup
+	syncRoutineWg     sync.WaitGroup
 }
 
 func (s *Syncer) ForceSync() {
@@ -95,7 +95,7 @@ func (s *Syncer) Close() {
 	close(s.forceSync)
 	// TODO: broadly implement a better mechanism for shutdown
 	time.Sleep(5 * time.Millisecond) // "ensures" no more sync routines can be created, ok for now
-	s.syncFuncWg.Wait()              // must be called after we ensure no more sync routines can be created
+	s.syncRoutineWg.Wait()           // must be called after we ensure no more sync routines can be created
 	s.MessageServer.Close()
 	s.Peers.Close()
 }
@@ -128,7 +128,7 @@ func (s *Syncer) Start() {
 func (s *Syncer) getSyncRoutine() func() {
 	return func() {
 		if atomic.CompareAndSwapUint32(&s.SyncLock, IDLE, RUNNING) {
-			s.syncFuncWg.Add(1)
+			s.syncRoutineWg.Add(1)
 			s.Synchronise()
 			atomic.StoreUint32(&s.SyncLock, IDLE)
 		}
@@ -195,12 +195,12 @@ func (s *Syncer) lastTickedLayer() types.LayerID {
 }
 
 func (s *Syncer) Synchronise() {
-	defer s.syncFuncWg.Done()
+	defer s.syncRoutineWg.Done()
 	currentSyncLayer := s.lValidator.ValidatedLayer() + 1
 	if s.IsSynced() {
 		lyr, err := s.GetLayer(types.LayerID(currentSyncLayer))
 		if err != nil {
-			s.Error("err not nil err=%v", err)
+			s.With().Error("failed getting layer even though IsSynced is true", log.Err(err))
 			return
 		}
 		s.lValidator.ValidateLayer(lyr) // wait for layer validation
