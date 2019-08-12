@@ -305,7 +305,6 @@ func TestJsonWalletApi(t *testing.T) {
 	resp, err := http.Post(url, contentType, strings.NewReader(payload))
 	assert.NoError(t, err, "failed to http post to api endpoint")
 
-
 	buf, err := ioutil.ReadAll(resp.Body)
 	assert.NoError(t, err, "failed to read response body")
 	resp.Body.Close()
@@ -326,7 +325,6 @@ func TestJsonWalletApi(t *testing.T) {
 	url = fmt.Sprintf("http://127.0.0.1:%d/v1/balance", config.ConfigValues.JSONServerPort)
 	resp, err = http.Post(url, contentType, strings.NewReader(payload))
 	assert.NoError(t, err, "failed to http post to api endpoint")
-
 
 	buf, err = ioutil.ReadAll(resp.Body)
 	assert.NoError(t, err, "failed to read response body")
@@ -365,7 +363,6 @@ func TestJsonWalletApi(t *testing.T) {
 	url = fmt.Sprintf("http://127.0.0.1:%d/v1/submittransaction", config.ConfigValues.JSONServerPort)
 	resp, err = http.Post(url, contentType, strings.NewReader(buf2.String())) //string(payload2))) //todo: we currently accept all kinds of payloads
 	assert.NoError(t, err, "failed to http post to api endpoint")
-
 
 	buf, err = ioutil.ReadAll(resp.Body)
 	assert.NoError(t, err, "failed to read response body")
@@ -419,7 +416,6 @@ func TestJsonWalletApi(t *testing.T) {
 
 	got, want = resp.StatusCode, http.StatusOK
 	assert.Equal(t, want, got)
-
 
 	// stop the services
 	jsonService.StopService()

@@ -33,7 +33,7 @@ type MinerBlockOracle struct {
 	eligibilityProofs map[types.LayerID][]types.BlockEligibilityProof
 	atxID             types.AtxId
 	isSynced          func() bool
-	eligibilityMutex sync.RWMutex
+	eligibilityMutex  sync.RWMutex
 	log               log.Log
 }
 

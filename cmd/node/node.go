@@ -93,7 +93,7 @@ type SpacemeshApp struct {
 	blockListener    *sync.BlockListener
 	state            *state.StateDB
 	blockProducer    *miner.BlockBuilder
-	oracle 			 *oracle.MinerBlockOracle
+	oracle           *oracle.MinerBlockOracle
 	txProcessor      *state.TransactionProcessor
 	mesh             *mesh.Mesh
 	clock            *timesync.Ticker
@@ -653,8 +653,6 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 		app.jsonAPIService = api.NewJSONHTTPServer()
 		app.jsonAPIService.StartService(nil)
 	}
-
-
 
 	log.Info("App started.")
 

@@ -46,7 +46,7 @@ type PostClient struct {
 var _ PostProverClient = (*PostClient)(nil)
 
 func NewPostClient(cfg *config.Config) *PostClient {
-	return &PostClient{cfg,nil, shared.DisabledLogger{}}
+	return &PostClient{cfg, nil, shared.DisabledLogger{}}
 }
 
 func (c *PostClient) initialize(id []byte, timeout time.Duration) (commitment *types.PostProof, err error) {
@@ -67,7 +67,7 @@ func (c *PostClient) execute(id []byte, challenge []byte, timeout time.Duration)
 	return (*types.PostProof)(proof), err
 }
 
-func (c *PostClient) Reset() error{
+func (c *PostClient) Reset() error {
 	if c.initializer != nil {
 		err := c.initializer.Reset()
 		if err != nil {
