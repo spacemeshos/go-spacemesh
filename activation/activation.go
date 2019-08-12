@@ -1,6 +1,7 @@
 package activation
 
 import (
+	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
@@ -12,6 +13,7 @@ import (
 const AtxProtocol = "AtxGossip"
 
 var activesetCache = NewActivesetCache(1000)
+var tooSoonErr = errors.New("received PoET proof too soon")
 
 type MeshProvider interface {
 	GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error)
@@ -148,7 +150,11 @@ func (b *Builder) loop() {
 				epoch := layer.GetEpoch(b.layersPerEpoch)
 				err := b.PublishActivationTx(epoch)
 				if err != nil {
-					b.log.Warning("cannot create atx in epoch %v: %v", epoch, err)
+					if err == tooSoonErr {
+						b.log.Warning("cannot create atx in epoch %v: %v", epoch, err)
+					} else {
+						b.log.Error("cannot create atx in epoch %v: %v", epoch, err)
+					}
 				}
 				b.finished <- struct{}{}
 			}()
@@ -293,8 +299,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 		// cannot determine active set size before mesh reaches publication epoch, will try again in next layer
 		b.log.Warning("received PoET proof too soon. ATX publication epoch: %v; mesh epoch: %v; started in clock-epoch: %v",
 			b.challenge.PubLayerIdx.GetEpoch(b.layersPerEpoch), b.mesh.LatestLayer().GetEpoch(b.layersPerEpoch), epoch)
-		return fmt.Errorf("received PoET proof too soon. ATX publication epoch: %v; mesh epoch: %v; started in clock-epoch: %v",
-			b.challenge.PubLayerIdx.GetEpoch(b.layersPerEpoch), b.mesh.LatestLayer().GetEpoch(b.layersPerEpoch), epoch)
+		return tooSoonErr
 	}
 
 	// when we reach here an epoch has passed

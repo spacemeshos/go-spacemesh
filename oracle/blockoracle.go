@@ -86,7 +86,7 @@ func (bo *MinerBlockOracle) calcEligibilityProofs(epochNumber types.EpochId) err
 
 	if epochNumber.IsGenesis() {
 		activeSetSize = bo.genesisActiveSetSize
-		bo.log.Warning("genesis epoch detected, using GenesisActiveSetSize (%d)", activeSetSize)
+		bo.log.Info("genesis epoch detected, using GenesisActiveSetSize (%v)", activeSetSize)
 	}
 
 	numberOfEligibleBlocks, err := getNumberOfEligibleBlocks(activeSetSize, bo.committeeSize, bo.layersPerEpoch, bo.log)

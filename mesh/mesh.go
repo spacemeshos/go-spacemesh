@@ -6,7 +6,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/crypto/sha3"
-	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/rlp"
 	"github.com/spacemeshos/go-spacemesh/types"
@@ -425,11 +424,7 @@ func (m *Mesh) AccumulateRewards(rewardLayer types.LayerID, params Config) {
 	for _, bl := range l.Blocks() {
 		atx, err := m.AtxDB.GetAtx(bl.ATXID)
 		if err != nil {
-			if err == database.ErrNotFound {
-				m.With().Warning("Atx from block not found in db", log.Err(err), log.BlockId(uint64(bl.Id)), log.AtxId(bl.ATXID.ShortString()))
-			} else { // unexpected error
-				m.With().Error("Encountered an unexpected error while getting the block's atx from db", log.Err(err), log.BlockId(uint64(bl.Id)), log.AtxId(bl.ATXID.ShortString()))
-			}
+			m.With().Warning("Atx from block not found in db", log.Err(err), log.BlockId(uint64(bl.Id)), log.AtxId(bl.ATXID.ShortString()))
 			continue
 		}
 		ids = append(ids, atx.Coinbase)
