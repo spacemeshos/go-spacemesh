@@ -116,6 +116,7 @@ func (suite *AppTestSuite) initMultipleInstances(numOfInstances int, storeFormat
 		smApp.Config.LayerDurationSec = 20
 		smApp.Config.HareEligibility.ConfidenceParam = 2
 		smApp.Config.HareEligibility.EpochOffset = 0
+		smApp.Config.StartMining = true
 
 		edSgn := signing.NewEdSigner()
 		pub := edSgn.PublicKey()
@@ -137,9 +138,9 @@ func (suite *AppTestSuite) initMultipleInstances(numOfInstances int, storeFormat
 
 		err = smApp.initServices(nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(layerSize), postClient, poetClient, vrfSigner, uint16(smApp.Config.LayersPerEpoch))
 		r.NoError(err)
-		coinBase := address.HexToAddress(smApp.Config.CoinbaseAccount)
+		/*coinBase := address.HexToAddress(smApp.Config.CoinbaseAccount)
 		err = smApp.atxBuilder.StartPost(coinBase, smApp.Config.POST.DataDir, smApp.Config.POST.SpacePerUnit)
-		r.NoError(err)
+		r.NoError(err)*/
 		smApp.setupGenesis()
 
 		suite.apps = append(suite.apps, smApp)

@@ -434,6 +434,15 @@ func (app *SpacemeshApp) startServices() {
 		log.Panic("cannot start block producer")
 	}
 	app.poetListener.Start()
+
+	if app.Config.StartMining {
+		coinBase := address.HexToAddress(app.Config.CoinbaseAccount)
+		err := app.atxBuilder.StartPost(coinBase, app.Config.POST.DataDir, app.Config.POST.SpacePerUnit)
+		if err != nil {
+			log.Error("Error initializing post, err: %v", err)
+			log.Panic("Error initializing post")
+		}
+	}
 	app.atxBuilder.Start()
 	app.clock.StartNotifying()
 }
@@ -644,6 +653,8 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 		app.jsonAPIService = api.NewJSONHTTPServer()
 		app.jsonAPIService.StartService(nil)
 	}
+
+
 
 	log.Info("App started.")
 
