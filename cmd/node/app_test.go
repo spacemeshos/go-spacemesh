@@ -100,15 +100,15 @@ func (suite *AppTestSuite) initSingleInstance(i int, genesisTime string, rng *am
 
 	smApp.Config.HARE.N = 5
 	smApp.Config.HARE.F = 2
-	smApp.Config.HARE.RoundDuration = 3
-	smApp.Config.HARE.WakeupDelta = 8
+	smApp.Config.HARE.RoundDuration = 4
+	smApp.Config.HARE.WakeupDelta = 5
 	smApp.Config.HARE.ExpectedLeaders = 5
 	smApp.Config.CoinbaseAccount = strconv.Itoa(i + 1)
 	smApp.Config.LayerAvgSize = 12
 	smApp.Config.LayersPerEpoch = 4
 	smApp.Config.Hdist = 5
 	smApp.Config.GenesisTime = genesisTime
-	smApp.Config.LayerDurationSec = 25
+	smApp.Config.LayerDurationSec = 30
 	smApp.Config.HareEligibility.ConfidenceParam = 3
 	smApp.Config.HareEligibility.EpochOffset = 0
 
@@ -122,7 +122,7 @@ func (suite *AppTestSuite) initSingleInstance(i int, genesisTime string, rng *am
 	swarm := net.NewNode()
 	dbStorepath := storeFormat + name
 
-	hareOracle := oracle.NewLocalOracle(rolacle, 6, nodeID)
+	hareOracle := oracle.NewLocalOracle(rolacle, 5, nodeID)
 	hareOracle.Register(true, pub.String())
 
 	postClient := nipst.NewPostClient(&smApp.Config.POST)
@@ -183,7 +183,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 
 	activateGrpcServer(suite.apps[0])
 
-	startInLayer := 9 // delayed pod will start in this layer
+	startInLayer := 5 // delayed pod will start in this layer
 	go func() {
 		delay := float32(suite.apps[0].Config.LayerDurationSec) * (float32(startInLayer) + 0.5)
 		<-time.After(time.Duration(delay) * time.Second)
@@ -194,7 +194,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	defer suite.gracefulShutdown()
 
 	_ = suite.apps[0].P2P.Broadcast(miner.IncomingTxProtocol, txbytes)
-	timeout := time.After(9 * 60 * time.Second)
+	timeout := time.After(11 * 60 * time.Second)
 
 	stickyClientsDone := 0
 loop:

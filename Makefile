@@ -93,7 +93,7 @@ endif
 .PHONY: $(PLATFORMS)
 
 test:
-	ulimit -n 500; go test -short -p 1 ./...
+	ulimit -n 500; go test -short -timeout 0 -p 1 ./...
 .PHONY: test
 
 test-tidy:
