@@ -113,7 +113,6 @@ func TestInitializePost(t *testing.T) {
 	npst, err := nb.BuildNIPST(&hash)
 	assert.NoError(err)
 	assert.NotNil(npst)
-
 }
 
 func TestNIPSTBuilderWithClients(t *testing.T) {

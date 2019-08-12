@@ -93,6 +93,7 @@ type SpacemeshApp struct {
 	blockListener    *sync.BlockListener
 	state            *state.StateDB
 	blockProducer    *miner.BlockBuilder
+	oracle 			 *oracle.MinerBlockOracle
 	txProcessor      *state.TransactionProcessor
 	mesh             *mesh.Mesh
 	clock            *timesync.Ticker
@@ -101,10 +102,6 @@ type SpacemeshApp struct {
 	poetListener     *activation.PoetListener
 	edSgn            *signing.EdSigner
 	log              log.Log
-}
-
-type MiningEnabler interface {
-	MiningEligible() bool
 }
 
 // ParseConfig unmarshal config file into struct
@@ -421,6 +418,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	app.P2P = swarm
 	app.poetListener = poetListener
 	app.atxBuilder = atxBuilder
+	app.oracle = blockOracle
 	return nil
 }
 
@@ -638,7 +636,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	// start api servers
 	if apiConf.StartGrpcServer || apiConf.StartJSONServer {
 		// start grpc if specified or if json rpc specified
-		app.grpcAPIService = api.NewGrpcService(app.P2P, app.state, app.mesh.TxProcessor, app.atxBuilder)
+		app.grpcAPIService = api.NewGrpcService(app.P2P, app.state, app.mesh.TxProcessor, app.atxBuilder, app.oracle)
 		app.grpcAPIService.StartService(nil)
 	}
 

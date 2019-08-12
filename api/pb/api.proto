@@ -34,6 +34,10 @@ message SignedTransaction {
     bytes tx = 1; // serialized with XDR
 }
 
+message EligibleLayers {
+    repeated uint64 layers = 1;
+}
+
 message BroadcastMessage {
     string data = 1;
 }
@@ -123,7 +127,7 @@ service SpacemeshService {
           body: "*"
         };
     }
-    rpc GetUpcomingAwards(google.protobuf.Empty) returns (SimpleMessage) {
+    rpc GetUpcomingAwards(google.protobuf.Empty) returns (EligibleLayers) {
         option (google.api.http) = {
           post: "/v1/getupcomingawards"
           body: "*"

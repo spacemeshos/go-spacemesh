@@ -288,3 +288,28 @@ func newBlockWithEligibility(layerID types.LayerID, nodeID types.NodeId, atxID t
 	db.atxs[ed.PublicKey().String()][layerID] = atxID
 	return block
 }
+
+func TestMinerBlockOracle_GetEligibleLayers(t *testing.T) {
+	r := require.New(t)
+	activeSetSize := uint32(5)
+	committeeSize := int32(10)
+	layersPerEpoch := uint16(20)
+
+	activationDB := &mockActivationDB{activeSetSize: activeSetSize, atxPublicationLayer: types.LayerID(0), atxs: map[string]map[types.LayerID]types.AtxId{}}
+	beaconProvider := &EpochBeaconProvider{}
+	lg := log.NewDefault(nodeID.Key[:5])
+	blockOracle := NewMinerBlockOracle(uint32(committeeSize), layersPerEpoch, activationDB, beaconProvider, vrfSigner, nodeID, func() bool { return true }, lg.WithName("blockOracle"))
+	numberOfEpochsToTest := 1 // this test supports only 1 epoch
+	eligibleLayers := 0
+	for layer := layersPerEpoch * 2; layer < layersPerEpoch*uint16(numberOfEpochsToTest+2); layer++ {
+		activationDB.atxPublicationLayer = types.LayerID((layer/layersPerEpoch)*layersPerEpoch - 1)
+		layerID := types.LayerID(layer)
+		_, proofs, err := blockOracle.BlockEligible(layerID)
+		r.NoError(err)
+		if len(proofs) > 0 {
+			eligibleLayers++
+		}
+	}
+	r.Equal(eligibleLayers, len(blockOracle.GetEligibleLayers()))
+
+}

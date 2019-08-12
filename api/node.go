@@ -3,6 +3,7 @@ package api
 import (
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/types"
 )
 
 type Service interface {
@@ -24,4 +25,8 @@ type NetworkAPI interface {
 type MiningAPI interface {
 	StartPost(address address.Address, logicalDrive string, commitmentSize uint64) error
 	SetCoinbaseAccount(rewardAddress address.Address)
+}
+
+type OracleAPI interface {
+	GetEligibleLayers() []types.LayerID
 }

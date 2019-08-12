@@ -28,6 +28,7 @@ type SpacemeshGrpcService struct {
 	Network  NetworkAPI
 	Tx       TxAPI
 	Mining   MiningAPI
+	Oracle   OracleAPI
 }
 
 // Echo returns the response for an echo api request
@@ -127,10 +128,17 @@ type TxAPI interface {
 }
 
 // NewGrpcService create a new grpc service using config data.
-func NewGrpcService(net NetworkAPI, state StateAPI, tx TxAPI, mining MiningAPI) *SpacemeshGrpcService {
+func NewGrpcService(net NetworkAPI, state StateAPI, tx TxAPI, mining MiningAPI, oracle OracleAPI) *SpacemeshGrpcService {
 	port := config.ConfigValues.GrpcServerPort
 	server := grpc.NewServer()
-	return &SpacemeshGrpcService{Server: server, Port: uint(port), StateApi: state, Network: net, Tx: tx, Mining: mining}
+	return &SpacemeshGrpcService{Server: server,
+		Port:     uint(port),
+		StateApi: state,
+		Network:  net,
+		Tx:       tx,
+		Mining:   mining,
+		Oracle:   oracle,
+	}
 }
 
 // StartService starts the grpc service.
@@ -211,7 +219,12 @@ func (s SpacemeshGrpcService) GetTotalAwards(ctx context.Context, empty *empty.E
 	return &pb.SimpleMessage{Value: "1234"}, nil
 }
 
-func (s SpacemeshGrpcService) GetUpcomingAwards(ctx context.Context, empty *empty.Empty) (*pb.SimpleMessage, error) {
+func (s SpacemeshGrpcService) GetUpcomingAwards(ctx context.Context, empty *empty.Empty) (*pb.EligibleLayers, error) {
 	log.Info("GRPC GetUpcomingAwards msg")
-	return &pb.SimpleMessage{Value: "43221"}, nil
+	layers := s.Oracle.GetEligibleLayers()
+	ly := make([]uint64, 0, len(layers))
+	for _, l := range layers {
+		ly = append(ly, uint64(l))
+	}
+	return &pb.EligibleLayers{Layers: ly}, nil
 }
