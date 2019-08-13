@@ -11,6 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	"math/big"
 	"math/rand"
@@ -22,12 +23,16 @@ type ProcessorStateSuite struct {
 	db        *database.MemDatabase
 	state     *StateDB
 	processor *TransactionProcessor
+	projector *ProjectorMock
 }
 
-type ProjectorMock struct{}
+type ProjectorMock struct {
+	nonceDiff   uint64
+	balanceDiff uint64
+}
 
 func (p *ProjectorMock) GetStateProjection(stateObj mesh.StateObj) (uint64, uint64, error) {
-	panic("implement me")
+	return stateObj.Nonce() + p.nonceDiff, stateObj.Balance().Uint64() - p.balanceDiff, nil
 }
 
 func (s *ProcessorStateSuite) SetupTest() {
@@ -35,8 +40,9 @@ func (s *ProcessorStateSuite) SetupTest() {
 	lg := log.New("proc_logger", "", "")
 	s.db = database.NewMemDatabase()
 	s.state, _ = New(common.Hash{}, NewDatabase(s.db))
+	s.projector = &ProjectorMock{}
 
-	s.processor = NewTransactionProcessor(rng, s.state, &ProjectorMock{}, GasConfig{big.NewInt(5)}, lg)
+	s.processor = NewTransactionProcessor(rng, s.state, s.projector, GasConfig{big.NewInt(5)}, lg)
 }
 
 func createAccount(state *StateDB, addr address.Address, balance int64, nonce uint64) *StateObj {
@@ -391,6 +397,46 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 	writtenMore := s.db.Len()
 
 	assert.True(s.T(), writtenMore > written)
+}
+
+func newTx(origin address.Address, nonce, amount uint64) *types.AddressableSignedTransaction {
+	return types.NewAddressableTx(nonce, origin, address.Address{}, amount, 3, 1)
+}
+
+func (s *ProcessorStateSuite) TestTransactionProcessor_ValidateNonceAndBalance() {
+	r := require.New(s.T())
+	origin := address.BytesToAddress([]byte("abc"))
+	s.processor.globalState.SetBalance(origin, big.NewInt(100))
+	s.processor.globalState.SetNonce(origin, 5)
+	s.projector.balanceDiff = 10
+	s.projector.nonceDiff = 2
+
+	err := s.processor.ValidateNonceAndBalance(newTx(origin, 7, 10))
+	r.NoError(err)
+}
+
+func (s *ProcessorStateSuite) TestTransactionProcessor_ValidateNonceAndBalance_WrongNonce() {
+	r := require.New(s.T())
+	origin := address.BytesToAddress([]byte("abc"))
+	s.processor.globalState.SetBalance(origin, big.NewInt(100))
+	s.processor.globalState.SetNonce(origin, 5)
+	s.projector.balanceDiff = 10
+	s.projector.nonceDiff = 2
+
+	err := s.processor.ValidateNonceAndBalance(newTx(origin, 8, 10))
+	r.EqualError(err, "incorrect account nonce! Expected: 7, Actual: 8")
+}
+
+func (s *ProcessorStateSuite) TestTransactionProcessor_ValidateNonceAndBalance_InsufficientBalance() {
+	r := require.New(s.T())
+	origin := address.BytesToAddress([]byte("abc"))
+	s.processor.globalState.SetBalance(origin, big.NewInt(100))
+	s.processor.globalState.SetNonce(origin, 5)
+	s.projector.balanceDiff = 10
+	s.projector.nonceDiff = 2
+
+	err := s.processor.ValidateNonceAndBalance(newTx(origin, 7, 95))
+	r.EqualError(err, "insufficient balance! Available: 90, Attempting to spend: 95")
 }
 
 func TestTransactionProcessor_ApplyTransactionTestSuite(t *testing.T) {

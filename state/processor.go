@@ -122,14 +122,13 @@ func (tp *TransactionProcessor) ValidateTransactionSignature(tx *types.Serializa
 }
 
 func (tp *TransactionProcessor) ValidateNonceAndBalance(tx *types.AddressableSignedTransaction) error {
-	// TODO: add tests
 	stateObj := tp.globalState.GetOrNewStateObj(tx.Address)
 	nonce, balance, err := tp.projector.GetStateProjection(stateObj)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to project state for account %v: %v", tx.Address.Short(), err)
 	}
-	if tx.AccountNonce != nonce+1 {
-		return fmt.Errorf("incorrect account nonce! Expected: %d, Actual: %d", nonce+1, tx.AccountNonce)
+	if tx.AccountNonce != nonce {
+		return fmt.Errorf("incorrect account nonce! Expected: %d, Actual: %d", nonce, tx.AccountNonce)
 	}
 	if tx.Amount > balance { // TODO: compare available balance to only fee
 		return fmt.Errorf("insufficient balance! Available: %d, Attempting to spend: %d", balance, tx.Amount)
