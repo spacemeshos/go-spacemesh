@@ -138,7 +138,7 @@ func newSwarm(ctx context.Context, config config.Config, newNode bool, persist b
 		shutdown: make(chan struct{}), // non-buffered so requests to shutdown block until swarm is shut down
 
 		initial:           make(chan struct{}),
-		morePeersReq:      make(chan struct{}),
+		morePeersReq:      make(chan struct{}, config.MaxInboundPeers+config.OutboundPeersTarget),
 		inpeers:           make(map[string]p2pcrypto.PublicKey),
 		outpeers:          make(map[string]p2pcrypto.PublicKey),
 		newPeerSub:        make([]chan p2pcrypto.PublicKey, 0, 10),
@@ -632,7 +632,7 @@ loop:
 		select {
 		case <-s.morePeersReq:
 			s.lNode.Debug("loop: got morePeersReq")
-			go s.askForMorePeers()
+			s.askForMorePeers()
 		//todo: try getting the connections (heartbeat)
 		case <-s.shutdown:
 			break loop // maybe error ?
