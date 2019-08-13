@@ -48,7 +48,7 @@ type Protocol struct {
 	net             baseNetwork
 	localNodePubkey p2pcrypto.PublicKey
 
-	peers      map[string]*peer
+	peers      map[p2pcrypto.PublicKey]*peer
 	peersMutex sync.RWMutex
 
 	shutdown chan struct{}
@@ -70,7 +70,7 @@ func NewProtocol(config config.SwarmConfig, base baseNetwork, localNodePubkey p2
 		config:          config,
 		net:             base,
 		localNodePubkey: localNodePubkey,
-		peers:           make(map[string]*peer),
+		peers:           make(map[p2pcrypto.PublicKey]*peer),
 		shutdown:        make(chan struct{}),
 		oldMessageQ:     make(map[hash]struct{}), // todo : remember to drain this
 		relayQ:          relayChan,
@@ -121,7 +121,7 @@ func (prot *Protocol) propagateMessage(payload []byte, h hash, nextProt string, 
 	prot.peersMutex.RLock()
 peerLoop:
 	for p := range prot.peers {
-		if exclude.String() == p {
+		if exclude == p {
 			continue peerLoop
 		}
 		go func(pubkey p2pcrypto.PublicKey) {
@@ -151,13 +151,13 @@ func (prot *Protocol) Start() {
 
 func (prot *Protocol) addPeer(peer p2pcrypto.PublicKey) {
 	prot.peersMutex.Lock()
-	prot.peers[peer.String()] = newPeer(prot.net, peer, prot.Log)
+	prot.peers[peer] = newPeer(prot.net, peer, prot.Log)
 	prot.peersMutex.Unlock()
 }
 
 func (prot *Protocol) removePeer(peer p2pcrypto.PublicKey) {
 	prot.peersMutex.Lock()
-	delete(prot.peers, peer.String())
+	delete(prot.peers, peer)
 	prot.peersMutex.Unlock()
 }
 
@@ -227,7 +227,7 @@ func (prot *Protocol) peersCount() int {
 // hasPeer returns whether or not a peer is known to the protocol, used for testing only
 func (prot *Protocol) hasPeer(key p2pcrypto.PublicKey) bool {
 	prot.peersMutex.RLock()
-	_, ok := prot.peers[key.String()]
+	_, ok := prot.peers[key]
 	prot.peersMutex.RUnlock()
 	return ok
 }
