@@ -24,13 +24,19 @@ type ProcessorStateSuite struct {
 	processor *TransactionProcessor
 }
 
+type ProjectorMock struct{}
+
+func (p *ProjectorMock) GetStateProjection(stateObj mesh.StateObj) (uint64, uint64, error) {
+	panic("implement me")
+}
+
 func (s *ProcessorStateSuite) SetupTest() {
 	rng := rand.New(mt19937.New())
 	lg := log.New("proc_logger", "", "")
 	s.db = database.NewMemDatabase()
 	s.state, _ = New(common.Hash{}, NewDatabase(s.db))
 
-	s.processor = NewTransactionProcessor(rng, s.state, GasConfig{big.NewInt(5)}, lg)
+	s.processor = NewTransactionProcessor(rng, s.state, &ProjectorMock{}, GasConfig{big.NewInt(5)}, lg)
 }
 
 func createAccount(state *StateDB, addr address.Address, balance int64, nonce uint64) *StateObj {
@@ -397,7 +403,7 @@ func TestTransactionProcessor_randomSort(t *testing.T) {
 	db := database.NewMemDatabase()
 	state, _ := New(common.Hash{}, NewDatabase(db))
 	lg := log.New("proc_logger", "", "")
-	processor := NewTransactionProcessor(rng, state, GasConfig{big.NewInt(5)}, lg)
+	processor := NewTransactionProcessor(rng, state, &ProjectorMock{}, GasConfig{big.NewInt(5)}, lg)
 
 	obj1 := createAccount(state, toAddr([]byte{0x01}), 2, 0)
 	obj2 := createAccount(state, toAddr([]byte{0x01, 02}), 1, 10)
@@ -442,7 +448,7 @@ func TestValidateTxSignature(t *testing.T) {
 	db := database.NewMemDatabase()
 	state, _ := New(common.Hash{}, NewDatabase(db))
 	lg := log.New("proc_logger", "", "")
-	proc := NewTransactionProcessor(rng, state, GasConfig{big.NewInt(5)}, lg)
+	proc := NewTransactionProcessor(rng, state, &ProjectorMock{}, GasConfig{big.NewInt(5)}, lg)
 
 	// positive flow
 	pub, pri, _ := ed25519.GenerateKey(crand.Reader)

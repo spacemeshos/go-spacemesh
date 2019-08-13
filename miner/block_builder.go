@@ -10,7 +10,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/oracle"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -108,23 +107,6 @@ func NewBlockBuilder(minerID types.NodeId, sgn Signer, net p2p.Service,
 		started:          false,
 	}
 
-}
-
-func Transaction2SerializableTransaction(tx *mesh.Transaction) *types.AddressableSignedTransaction {
-	inner := types.InnerSerializableSignedTransaction{
-		AccountNonce: tx.AccountNonce,
-		Recipient:    *tx.Recipient,
-		Amount:       tx.Amount.Uint64(),
-		GasLimit:     tx.GasLimit,
-		GasPrice:     tx.GasPrice.Uint64(),
-	}
-	sst := &types.SerializableSignedTransaction{
-		InnerSerializableSignedTransaction: inner,
-	}
-	return &types.AddressableSignedTransaction{
-		SerializableSignedTransaction: sst,
-		Address:                       tx.Origin,
-	}
 }
 
 func (t *BlockBuilder) Start() error {
@@ -345,6 +327,7 @@ func (t *BlockBuilder) acceptBlockData() {
 			}
 			// TODO: include multiple proofs in each block and weigh blocks where applicable
 
+			// TODO: change this 👇 method to limit the number of txs and select them to maximize fees
 			txList := t.TransactionPool.PopItems(MaxTransactionsPerBlock)
 
 			var atxList []types.AtxId

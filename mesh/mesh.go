@@ -252,6 +252,12 @@ func (m *Mesh) PushTransactions(oldBase types.LayerID, newBase types.LayerID) {
 		if err != nil {
 			m.Log.Error("cannot apply transactions %v", err)
 		}
+		// TODO: add tests
+		if err := m.removeFromMeshTxs(merged); err != nil {
+			m.With().Error("failed to remove from meshTxs", log.Err(err))
+		}
+		// TODO: also remove transactions from contextually invalid blocks, unless they still appear in newer layers
+		// TODO: consider returning these txs to mempool (otherwise cont. inv. blocks can be used to censor txs)
 		m.Log.Info("applied %v transactions in new pbase is %d apply result was %d", len(merged), newBase, x)
 	}
 }
@@ -309,6 +315,10 @@ func (m *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.AddressableSignedT
 	err := m.writeTransactions(txs)
 	if err != nil {
 		return fmt.Errorf("could not write transactions of block %v database %v", blk.ID(), err)
+	}
+	// TODO: add tests
+	if err := m.addToMeshTxs(txs); err != nil {
+		return fmt.Errorf("failed to add to meshTxs: %v", err)
 	}
 
 	if err := m.MeshDB.AddBlock(blk); err != nil {

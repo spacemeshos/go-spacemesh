@@ -5,9 +5,13 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/address"
+	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/types"
+	"math/big"
+	"sort"
 	"sync"
 )
 
@@ -23,6 +27,7 @@ type MeshDB struct {
 	blocks             database.DB
 	transactions       database.Database
 	contextualValidity database.DB //map blockId to contextualValidation state of block
+	meshTxs            database.Database
 	orphanBlocks       map[types.LayerID]map[types.BlockID]struct{}
 	layerMutex         map[types.LayerID]*layerMutex
 	lhMutex            sync.Mutex
@@ -36,6 +41,11 @@ func NewPersistentMeshDB(path string, log log.Log) (*MeshDB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize transactions db: %v", err)
 	}
+	mtx, err := database.NewLDBDatabase(path+"meshTxs", 0, 0, log)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize mesh transactions db: %v", err)
+	}
+
 	ll := &MeshDB{
 		Log:                log,
 		blockCache:         NewBlockCache(100 * layerSize),
@@ -43,6 +53,7 @@ func NewPersistentMeshDB(path string, log log.Log) (*MeshDB, error) {
 		layers:             ldb,
 		transactions:       tdb,
 		contextualValidity: vdb,
+		meshTxs:            mtx,
 		orphanBlocks:       make(map[types.LayerID]map[types.BlockID]struct{}),
 		layerMutex:         make(map[types.LayerID]*layerMutex),
 	}
@@ -57,6 +68,7 @@ func NewMemMeshDB(log log.Log) *MeshDB {
 		layers:             database.NewMemDatabase(),
 		contextualValidity: database.NewMemDatabase(),
 		transactions:       database.NewMemDatabase(),
+		meshTxs:            database.NewMemDatabase(),
 		orphanBlocks:       make(map[types.LayerID]map[types.BlockID]struct{}),
 		layerMutex:         make(map[types.LayerID]*layerMutex),
 	}
@@ -303,6 +315,162 @@ func (m *MeshDB) writeTransactions(txs []*types.AddressableSignedTransaction) er
 		return fmt.Errorf("failed to write transactions: %v", err)
 	}
 	return nil
+}
+
+func Transaction2SerializableTransaction(tx *Transaction) *types.AddressableSignedTransaction {
+	inner := types.InnerSerializableSignedTransaction{
+		AccountNonce: tx.AccountNonce,
+		Recipient:    *tx.Recipient,
+		Amount:       tx.Amount.Uint64(),
+		GasLimit:     tx.GasLimit,
+		GasPrice:     tx.GasPrice.Uint64(),
+	}
+	sst := &types.SerializableSignedTransaction{
+		InnerSerializableSignedTransaction: inner,
+	}
+	return &types.AddressableSignedTransaction{
+		SerializableSignedTransaction: sst,
+		Address:                       tx.Origin,
+	}
+}
+
+type tinyTx struct {
+	Id     types.TransactionId
+	Origin address.Address
+	Nonce  uint64
+	Amount uint64
+	//Fee    uint64
+}
+
+func addressableTxToTiny(tx *types.AddressableSignedTransaction) tinyTx {
+	// TODO: calculate and store fee amount
+	return tinyTx{
+		Id:     types.TransactionId{}, // TODO: ??
+		Origin: tx.Address,
+		Nonce:  tx.AccountNonce,
+		Amount: tx.Amount,
+	}
+}
+
+func txToTiny(tx *Transaction) tinyTx {
+	// TODO: calculate and store fee amount
+	id := types.GetTransactionId(Transaction2SerializableTransaction(tx).SerializableSignedTransaction)
+	return tinyTx{
+		Id:     id,
+		Origin: tx.Origin,
+		Nonce:  tx.AccountNonce,
+		Amount: tx.Amount.Uint64(),
+	}
+}
+
+func (m *MeshDB) addToMeshTxs(txs []*types.AddressableSignedTransaction) error {
+	// TODO: add tests
+	// TODO: lock
+	tinyTxs := make([]tinyTx, 0, len(txs))
+	for _, tx := range txs {
+		tinyTxs = append(tinyTxs, addressableTxToTiny(tx))
+	}
+	groupedTxs := groupAndSort(tinyTxs)
+
+	for account, accountTxs := range groupedTxs {
+		// TODO: instead of storing a list, use LevelDB's prefixed keys and then iterate all relevant keys
+		accountTxsBytes, err := m.meshTxs.Get(account.Bytes())
+		if err != nil && err != database.ErrNotFound {
+			return fmt.Errorf("failed to get mesh txs for account %s", account.Short())
+		}
+		var currentTxs []tinyTx
+		if err == nil {
+			if err := types.BytesToInterface(accountTxsBytes, &currentTxs); err != nil {
+				return fmt.Errorf("failed to unmarshal account tx list: %v", err)
+			}
+		}
+		// TODO: instead of just adding txs, ensure they are valid first (e.g. correct nonce)
+		currentTxs = append(currentTxs, accountTxs...)
+		if accountTxsBytes, err = types.InterfaceToBytes(&currentTxs); err != nil {
+			return fmt.Errorf("failed to marshal account tx list: %v", err)
+		}
+		if err := m.meshTxs.Put(account.Bytes(), accountTxsBytes); err != nil {
+			return fmt.Errorf("failed to store mesh txs for address %s", account.Short())
+		}
+	}
+	return nil
+}
+
+func (m *MeshDB) removeFromMeshTxs(txs []*Transaction) error {
+	// TODO: add tests
+	// TODO: lock
+	tinyTxs := make([]tinyTx, 0, len(txs))
+	for _, tx := range txs {
+		tinyTxs = append(tinyTxs, txToTiny(tx))
+	}
+	groupedTxs := groupAndSort(tinyTxs)
+
+	for account, accountTxs := range groupedTxs {
+		// TODO: instead of storing a list, use LevelDB's prefixed keys and then iterate all relevant keys
+		accountTxsBytes, err := m.meshTxs.Get(account.Bytes())
+		if err != nil && err != database.ErrNotFound {
+			return fmt.Errorf("failed to get mesh txs for account %s", account.Short())
+		}
+		var currentTxs []tinyTx
+		if err == nil {
+			if err := types.BytesToInterface(accountTxsBytes, &currentTxs); err != nil {
+				return fmt.Errorf("failed to unmarshal account tx list: %v", err)
+			}
+		}
+		// TODO: we currently assume the transactions are inserted in the same order - validate this
+		currentTxs = currentTxs[common.Min(len(accountTxs), len(currentTxs)):]
+		if accountTxsBytes, err = types.InterfaceToBytes(&currentTxs); err != nil {
+			return fmt.Errorf("failed to marshal account tx list: %v", err)
+		}
+		if err := m.meshTxs.Put(account.Bytes(), accountTxsBytes); err != nil {
+			return fmt.Errorf("failed to store mesh txs for address %s", account.Short())
+		}
+	}
+	return nil
+}
+
+func groupAndSort(txs []tinyTx) map[address.Address][]tinyTx {
+	var sortedByNonce []tinyTx
+	copy(sortedByNonce, txs)
+	sort.Slice(sortedByNonce, func(i, j int) bool {
+		return sortedByNonce[i].Nonce < sortedByNonce[j].Nonce
+	})
+
+	grouped := make(map[address.Address][]tinyTx)
+	for _, tx := range txs {
+		grouped[tx.Origin] = append(grouped[tx.Origin], tx)
+	}
+	return grouped
+}
+
+type StateObj interface {
+	Address() address.Address
+	Nonce() uint64
+	Balance() *big.Int
+}
+
+func (m *MeshDB) GetStateProjection(stateObj StateObj) (nonce uint64, balance uint64, err error) {
+	// TODO: add tests
+	var additionalTxs []tinyTx
+	if meshTxsBytes, err := m.meshTxs.Get(stateObj.Address().Bytes()); err != nil {
+		if err == database.ErrNotFound {
+			return stateObj.Nonce(), stateObj.Balance().Uint64(), nil
+		}
+		return 0, 0, err
+	} else if err := types.BytesToInterface(meshTxsBytes, &additionalTxs); err != nil {
+		return 0, 0, err
+	}
+	nonce = stateObj.Nonce()
+	balance = stateObj.Balance().Uint64()
+	for _, tx := range additionalTxs {
+		if tx.Nonce != nonce+1 {
+			return 0, 0, fmt.Errorf("inconsistent state! Prev. nonce: %d, New nonce: %d (tx: %v)",
+				nonce, tx.Nonce, tx.Id)
+		}
+		nonce = tx.Nonce
+		balance -= tx.Amount // TODO: only subtract fees
+	}
+	return nonce, balance, nil
 }
 
 func (m *MeshDB) GetTransactions(transactions []types.TransactionId) (

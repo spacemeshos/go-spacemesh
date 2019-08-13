@@ -37,6 +37,10 @@ func DefaultConfig() GasConfig {
 	}
 }
 
+type Projector interface {
+	GetStateProjection(stateObj mesh.StateObj) (nonce uint64, balance uint64, err error)
+}
+
 type TransactionProcessor struct {
 	log.Log
 	rand         PseudoRandomizer
@@ -45,6 +49,7 @@ type TransactionProcessor struct {
 	currentLayer types.LayerID
 	rootHash     common.Hash
 	stateQueue   list.List
+	projector    Projector
 	gasCost      GasConfig
 	db           *trie.Database
 	mu           sync.Mutex
@@ -52,7 +57,7 @@ type TransactionProcessor struct {
 
 const maxPastStates = 20
 
-func NewTransactionProcessor(rnd PseudoRandomizer, db *StateDB, gasParams GasConfig, logger log.Log) *TransactionProcessor {
+func NewTransactionProcessor(rnd PseudoRandomizer, db *StateDB, projector Projector, gasParams GasConfig, logger log.Log) *TransactionProcessor {
 	return &TransactionProcessor{
 		Log:          logger,
 		rand:         rnd,
@@ -61,6 +66,7 @@ func NewTransactionProcessor(rnd PseudoRandomizer, db *StateDB, gasParams GasCon
 		currentLayer: 0,
 		rootHash:     common.Hash{},
 		stateQueue:   list.List{},
+		projector:    projector,
 		gasCost:      gasParams,
 		db:           db.TrieDB(),
 		mu:           sync.Mutex{}, //sync between reset and apply mesh.Transactions
@@ -115,13 +121,34 @@ func (tp *TransactionProcessor) ValidateTransactionSignature(tx *types.Serializa
 	return addr, nil
 }
 
+func (tp *TransactionProcessor) ValidateNonceAndBalance(tx *types.AddressableSignedTransaction) error {
+	// TODO: add tests
+	stateObj := tp.globalState.GetOrNewStateObj(tx.Address)
+	nonce, balance, err := tp.projector.GetStateProjection(stateObj)
+	if err != nil {
+		return err
+	}
+	if tx.AccountNonce != nonce+1 {
+		return fmt.Errorf("incorrect account nonce! Expected: %d, Actual: %d", nonce+1, tx.AccountNonce)
+	}
+	if tx.Amount > balance { // TODO: compare available balance to only fee
+		return fmt.Errorf("insufficient balance! Available: %d, Attempting to spend: %d", balance, tx.Amount)
+	}
+	return nil
+}
+
 func (tp *TransactionProcessor) GetValidAddressableTx(tx *types.SerializableSignedTransaction) (*types.AddressableSignedTransaction, error) {
 	addr, err := tp.ValidateTransactionSignature(tx)
 	if err != nil {
 		return nil, err
 	}
+	//TODO: decide if we want to validate nonce and balance here, or in a separate function (hint: sync)
+	transaction := &types.AddressableSignedTransaction{SerializableSignedTransaction: tx, Address: addr}
+	if err := tp.ValidateNonceAndBalance(transaction); err != nil {
+		return nil, err
+	}
 
-	return &types.AddressableSignedTransaction{SerializableSignedTransaction: tx, Address: addr}, nil
+	return transaction, nil
 }
 
 //should receive sort predicate

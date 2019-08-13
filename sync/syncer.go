@@ -412,6 +412,7 @@ func (s *Syncer) syncTxs(txids []types.TransactionId) ([]*types.AddressableSigne
 			ntxs := out.([]types.SerializableSignedTransaction)
 			for _, tx := range ntxs {
 				tmp := tx
+				// TODO: decide if we want to validate nonce and balance here 👇
 				ast, err := s.txValidator.GetValidAddressableTx(&tmp)
 				if err != nil {
 					id := types.GetTransactionId(&tmp)
