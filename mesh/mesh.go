@@ -252,7 +252,6 @@ func (m *Mesh) PushTransactions(oldBase types.LayerID, newBase types.LayerID) {
 		if err != nil {
 			m.Log.Error("cannot apply transactions %v", err)
 		}
-		// TODO: add tests
 		if err := m.removeFromMeshTxs(merged); err != nil {
 			m.With().Error("failed to remove from meshTxs", log.Err(err))
 		}
@@ -316,7 +315,6 @@ func (m *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.AddressableSignedT
 	if err != nil {
 		return fmt.Errorf("could not write transactions of block %v database %v", blk.ID(), err)
 	}
-	// TODO: add tests
 	if err := m.addToMeshTxs(txs); err != nil {
 		return fmt.Errorf("failed to add to meshTxs: %v", err)
 	}

@@ -9,6 +9,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"math/big"
 	"testing"
 	"time"
@@ -302,4 +303,29 @@ func TestLayers_OrphanBlocksClearEmptyLayers(t *testing.T) {
 	assert.Equal(t, len(arr2), 2)
 	layers.AddBlock(block5)
 	assert.Equal(t, 1, len(layers.orphanBlocks))
+}
+
+func TestMesh_AddBlockWithTxs_PushTransactions_UpdateMeshTxs(t *testing.T) {
+	r := require.New(t)
+
+	msh := getMesh("mesh")
+
+	origin := address.BytesToAddress([]byte("abc"))
+	tx := newTx(origin, 2468, 111)
+
+	blk := types.NewExistingBlock(1, 1, nil)
+	blk.TxIds = []types.TransactionId{types.GetTransactionId(tx.SerializableSignedTransaction)}
+
+	err := msh.AddBlockWithTxs(blk, []*types.AddressableSignedTransaction{tx}, nil)
+	r.NoError(err)
+
+	txns := getTxns(r, msh.MeshDB, origin)
+	r.Len(txns, 1)
+	r.Equal(2468, int(txns[0].Nonce))
+	r.Equal(111, int(txns[0].Amount))
+
+	msh.PushTransactions(1, 2)
+
+	txns = getTxns(r, msh.MeshDB, origin)
+	r.Empty(txns)
 }
