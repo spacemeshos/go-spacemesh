@@ -94,7 +94,7 @@ def check_for_restarted_pods(namespace, specific_deployment_name=''):
     return restarted_pods
 
 
-def search_phrase_in_pod_log(pod_name, name_space, container_name, phrase, time_out=10):
+def search_phrase_in_pod_log(pod_name, name_space, container_name, phrase, time_out=60):
 
     match = None
     total_sleep = 0

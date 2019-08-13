@@ -37,7 +37,11 @@ def load_config():
     if os.path.isfile(kube_config_path):
         config.load_kube_config(kube_config_path)
     else:
-        raise Exception("KUBECONFIG file not found: {0}".format(kube_config_path))
+        # Assuming in cluster config
+        try:
+            config.load_incluster_config()
+        except:
+            raise Exception("KUBECONFIG file not found: {0}".format(kube_config_path))
 
 
 @pytest.fixture(scope='session')
