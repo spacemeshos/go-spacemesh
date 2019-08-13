@@ -85,10 +85,10 @@ type addrBook struct {
 	rand *rand.Rand
 	key  [32]byte
 	// todo: consider different lock to index (rw?)
-	addrIndex map[string]*KnownAddress // address key to ka for all addrs.
+	addrIndex map[node.ID]*KnownAddress // address key to ka for all addrs.
 	// todo: use arrays instead of maps
-	addrNew   [newBucketCount]map[string]*KnownAddress
-	addrTried [triedBucketCount]map[string]*KnownAddress
+	addrNew   [newBucketCount]map[node.ID]*KnownAddress
+	addrTried [triedBucketCount]map[node.ID]*KnownAddress
 
 	//todo: lock local for updates
 	localAddress *node.NodeInfo
@@ -145,7 +145,7 @@ func (a *addrBook) updateAddress(netAddr, srcAddr *node.NodeInfo) {
 		// updated elsewhere in the addrmanager code and would otherwise
 		// change the actual netaddress on the peer.
 		ka = &KnownAddress{na: netAddr, srcAddr: srcAddr, lastSeen: time.Now()}
-		a.addrIndex[netAddr.ID.String()] = ka
+		a.addrIndex[netAddr.ID] = ka
 		a.nNew++
 		// XXX time penalty?
 	}
@@ -153,7 +153,7 @@ func (a *addrBook) updateAddress(netAddr, srcAddr *node.NodeInfo) {
 	bucket := a.getNewBucket(netAddr.IP, srcAddr.IP)
 
 	// Already exists?
-	if _, ok := a.addrNew[bucket][netAddr.PublicKey().String()]; ok {
+	if _, ok := a.addrNew[bucket][netAddr.ID]; ok {
 		return
 	}
 
@@ -165,7 +165,7 @@ func (a *addrBook) updateAddress(netAddr, srcAddr *node.NodeInfo) {
 
 	// Add to new bucket.
 	ka.refs++
-	a.addrNew[bucket][netAddr.PublicKey().String()] = ka
+	a.addrNew[bucket][netAddr.ID] = ka
 
 	a.logger.Debug("Added new address %s for a total of %d addresses", netAddr.String(), a.nTried+a.nNew)
 }
@@ -244,7 +244,7 @@ func (a *addrBook) GetAddress() *KnownAddress {
 
 func (a *addrBook) Lookup(addr p2pcrypto.PublicKey) (*node.NodeInfo, error) {
 	a.mtx.Lock()
-	d, ok := a.addrIndex[addr.String()]
+	d, ok := a.addrIndex[addr.Array()]
 	a.mtx.Unlock()
 	if !ok {
 		// Todo: just return empty without error ?
@@ -254,7 +254,7 @@ func (a *addrBook) Lookup(addr p2pcrypto.PublicKey) (*node.NodeInfo, error) {
 }
 
 func (a *addrBook) find(addr p2pcrypto.PublicKey) *KnownAddress {
-	return a.addrIndex[addr.String()]
+	return a.addrIndex[addr.Array()]
 }
 
 // Attempt increases the given address' attempt counter and updates
@@ -301,7 +301,7 @@ func (a *addrBook) Good(addr p2pcrypto.PublicKey) {
 
 	// remove from all new buckets.
 	// record one of the buckets in question and call it the `first'
-	addrKey := addr.String()
+	addrKey := addr.Array()
 	oldBucket := -1
 	for i := range a.addrNew {
 		// we check for existence so we can record the first one
@@ -326,7 +326,7 @@ func (a *addrBook) Good(addr p2pcrypto.PublicKey) {
 	// Room in this tried bucket?
 	if len(a.addrTried[bucket]) < triedBucketSize {
 		ka.tried = true
-		a.addrTried[bucket][addr.String()] = ka
+		a.addrTried[bucket][addr.Array()] = ka
 		a.nTried++
 		return
 	}
@@ -347,7 +347,7 @@ func (a *addrBook) Good(addr p2pcrypto.PublicKey) {
 	// replace with ka in list.
 	ka.tried = true
 
-	a.addrTried[bucket][ka.na.String()] = ka
+	a.addrTried[bucket][ka.na.ID] = ka
 
 	rmka.tried = false
 	rmka.refs++
@@ -357,7 +357,7 @@ func (a *addrBook) Good(addr p2pcrypto.PublicKey) {
 	// something back.
 	a.nNew++
 
-	rmkey := rmka.na.String()
+	rmkey := rmka.na.ID
 	a.logger.Debug("Replacing %s with %s in tried", rmkey, addrKey)
 	// We made sure there is space here just above.
 	a.addrNew[newBucket][rmkey] = rmka
@@ -498,7 +498,7 @@ func (a *addrBook) expireNew(bucket int) {
 	}
 
 	if oldest != nil {
-		key := oldest.na.String()
+		key := oldest.na.ID
 		delete(a.addrNew[bucket], key)
 		oldest.refs--
 		if oldest.refs == 0 {
@@ -590,33 +590,35 @@ func (a *addrBook) RemoveAddress(key p2pcrypto.PublicKey) {
 	a.mtx.Lock()
 	defer a.mtx.Unlock()
 
-	ka := a.addrIndex[key.String()]
+	id := key.Array()
+
+	ka := a.addrIndex[id]
 	if ka == nil {
 		return
 	}
 
 	for _, b := range a.addrNew {
-		if _, ok := b[key.String()]; ok {
-			delete(b, key.String())
+		if _, ok := b[id]; ok {
+			delete(b, id)
 			a.nNew--
 		}
 	}
 
 	for _, b := range a.addrTried {
-		if _, ok := b[key.String()]; ok {
-			delete(b, key.String())
+		if _, ok := b[id]; ok {
+			delete(b, id)
 			a.nTried--
 		}
 	}
 
-	delete(a.addrIndex, key.String())
+	delete(a.addrIndex, id)
 }
 
 // reset resets the address manager by reinitialising the random source
 // and allocating fresh empty bucket storage.
 func (a *addrBook) reset() {
 
-	a.addrIndex = make(map[string]*KnownAddress)
+	a.addrIndex = make(map[node.ID]*KnownAddress)
 
 	// fill key with bytes from a good random source.
 	err := crypto.GetRandomBytesToBuffer(32, a.key[:])
@@ -625,10 +627,10 @@ func (a *addrBook) reset() {
 	}
 
 	for i := range a.addrNew {
-		a.addrNew[i] = make(map[string]*KnownAddress)
+		a.addrNew[i] = make(map[node.ID]*KnownAddress)
 	}
 	for i := range a.addrTried {
-		a.addrTried[i] = make(map[string]*KnownAddress)
+		a.addrTried[i] = make(map[node.ID]*KnownAddress)
 	}
 }
 
