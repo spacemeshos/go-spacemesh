@@ -365,7 +365,6 @@ func txToTiny(tx *Transaction) tinyTx {
 }
 
 func (m *MeshDB) addToMeshTxs(txs []*types.AddressableSignedTransaction) error {
-	// TODO: add tests
 	// TODO: lock
 	tinyTxs := make([]tinyTx, 0, len(txs))
 	for _, tx := range txs {
@@ -398,7 +397,6 @@ func (m *MeshDB) addToMeshTxs(txs []*types.AddressableSignedTransaction) error {
 }
 
 func (m *MeshDB) removeFromMeshTxs(txs []*Transaction) error {
-	// TODO: add tests
 	// TODO: lock
 	tinyTxs := make([]tinyTx, 0, len(txs))
 	for _, tx := range txs {
@@ -431,14 +429,14 @@ func (m *MeshDB) removeFromMeshTxs(txs []*Transaction) error {
 }
 
 func groupAndSort(txs []tinyTx) map[address.Address][]tinyTx {
-	var sortedByNonce []tinyTx
+	sortedByNonce := make([]tinyTx, len(txs))
 	copy(sortedByNonce, txs)
 	sort.Slice(sortedByNonce, func(i, j int) bool {
 		return sortedByNonce[i].Nonce < sortedByNonce[j].Nonce
 	})
 
 	grouped := make(map[address.Address][]tinyTx)
-	for _, tx := range txs {
+	for _, tx := range sortedByNonce {
 		grouped[tx.Origin] = append(grouped[tx.Origin], tx)
 	}
 	return grouped

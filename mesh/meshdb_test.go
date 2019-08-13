@@ -241,7 +241,10 @@ func addToMeshTxs(mdb *MeshDB, txs []*types.AddressableSignedTransaction) error 
 	for _, tx := range txs {
 		tinyTxs = append(tinyTxs, addressableTxToTiny(tx))
 	}
-	groupedTxs := groupAndSort(tinyTxs)
+	groupedTxs := make(map[address.Address][]tinyTx)
+	for _, tx := range tinyTxs {
+		groupedTxs[tx.Origin] = append(groupedTxs[tx.Origin], tx)
+	}
 
 	for account, accountTxs := range groupedTxs {
 		accountTxsBytes, err := types.InterfaceToBytes(&accountTxs)
@@ -297,4 +300,58 @@ func TestMeshDB_GetStateProjection_NothingToApply(t *testing.T) {
 	r.NoError(err)
 	r.Equal(uint64(initialNonce), nonce)
 	r.Equal(uint64(initialBalance), balance)
+}
+
+func TestMeshDB_MeshTxs(t *testing.T) {
+	r := require.New(t)
+
+	mdb := NewMemMeshDB(log.New("TestForEachInView", "", ""))
+
+	origin1 := address.BytesToAddress([]byte("thc"))
+	origin2 := address.BytesToAddress([]byte("cbd"))
+	err := mdb.addToMeshTxs([]*types.AddressableSignedTransaction{
+		newTx(origin1, 421, 241),
+		newTx(origin1, 420, 240),
+		newTx(origin2, 1, 101),
+		newTx(origin2, 0, 100),
+	})
+	r.NoError(err)
+
+	txns1 := getTxns(r, mdb, origin1)
+	r.Len(txns1, 2)
+	r.Equal(420, int(txns1[0].Nonce))
+	r.Equal(421, int(txns1[1].Nonce))
+	r.Equal(240, int(txns1[0].Amount))
+	r.Equal(241, int(txns1[1].Amount))
+
+	txns2 := getTxns(r, mdb, origin2)
+	r.Len(txns2, 2)
+	r.Equal(0, int(txns2[0].Nonce))
+	r.Equal(1, int(txns2[1].Nonce))
+	r.Equal(100, int(txns2[0].Amount))
+	r.Equal(101, int(txns2[1].Amount))
+
+	err = mdb.removeFromMeshTxs([]*Transaction{SerializableSignedTransaction2StateTransaction(newTx(origin2, 1, 101))})
+	r.NoError(err)
+
+	txns1 = getTxns(r, mdb, origin1)
+	r.Len(txns1, 2)
+	r.Equal(420, int(txns1[0].Nonce))
+	r.Equal(421, int(txns1[1].Nonce))
+	r.Equal(240, int(txns1[0].Amount))
+	r.Equal(241, int(txns1[1].Amount))
+
+	txns2 = getTxns(r, mdb, origin2)
+	r.Len(txns2, 1)
+	r.Equal(1, int(txns2[0].Nonce))
+	r.Equal(101, int(txns2[0].Amount))
+}
+
+func getTxns(r *require.Assertions, mdb *MeshDB, origin address.Address) []tinyTx {
+	txnsB, err := mdb.meshTxs.Get(origin.Bytes())
+	r.NoError(err)
+	var txns []tinyTx
+	err = types.BytesToInterface(txnsB, &txns)
+	r.NoError(err)
+	return txns
 }
