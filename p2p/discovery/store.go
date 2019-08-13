@@ -59,16 +59,16 @@ func (a *addrBook) savePeers(path string) {
 	for i := range a.addrNew {
 		sam.NewBuckets[i] = make([]string, len(a.addrNew[i]))
 		j := 0
-		for k := range a.addrNew[i] {
-			sam.NewBuckets[i][j] = k
+		for _, v := range a.addrNew[i] {
+			sam.NewBuckets[i][j] = v.na.String()
 			j++
 		}
 	}
 	for i := range a.addrTried {
 		sam.TriedBuckets[i] = make([]string, len(a.addrTried[i]))
 		j := 0
-		for k := range a.addrTried[i] {
-			sam.TriedBuckets[i][j] = k
+		for _, v := range a.addrTried[i] {
+			sam.TriedBuckets[i][j] = v.na.String()
 			j++
 		}
 	}
@@ -148,12 +148,17 @@ func (a *addrBook) deserializePeers(filePath string) error {
 		ka.attempts = v.Attempts
 		ka.lastattempt = time.Unix(v.LastAttempt, 0)
 		ka.lastsuccess = time.Unix(v.LastSuccess, 0)
-		a.addrIndex[ka.na.ID.String()] = ka
+		a.addrIndex[ka.na.ID] = ka
 	}
 
 	for i := range sam.NewBuckets {
 		for _, val := range sam.NewBuckets[i] {
-			ka, ok := a.addrIndex[val]
+			parsed, err := node.ParseNode(val)
+			if err != nil {
+				a.logger.Warning("a problem occured trying to load peer %v, err=%v", val, err)
+				continue
+			}
+			ka, ok := a.addrIndex[parsed.ID]
 			if !ok {
 				return fmt.Errorf("newbucket contains %s but "+
 					"none in address list", val)
@@ -163,13 +168,18 @@ func (a *addrBook) deserializePeers(filePath string) error {
 				a.nNew++
 			}
 			ka.refs++
-			a.addrNew[i][val] = ka
+			a.addrNew[i][parsed.ID] = ka
 		}
 	}
 
 	for i := range sam.TriedBuckets {
 		for _, val := range sam.TriedBuckets[i] {
-			ka, ok := a.addrIndex[val]
+			parsed, err := node.ParseNode(val)
+			if err != nil {
+				a.logger.Warning("a problem occured trying to load peer %v, err=%v", val, err)
+				continue
+			}
+			ka, ok := a.addrIndex[parsed.ID]
 			if !ok {
 				return fmt.Errorf("tried bucket contains %s but "+
 					"none in address list", val)
@@ -179,7 +189,7 @@ func (a *addrBook) deserializePeers(filePath string) error {
 				a.nTried++
 			}
 			ka.refs++
-			a.addrTried[i][val] = ka
+			a.addrTried[i][parsed.ID] = ka
 		}
 	}
 

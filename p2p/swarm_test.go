@@ -6,6 +6,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/discovery"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/require"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -810,7 +811,7 @@ func TestNeighborhood_Disconnect(t *testing.T) {
 
 	// manualy add an incoming peer
 	rnd2 := node.GenerateRandomNodeData()
-	n.outpeers[rnd2.PublicKey().String()] = rnd2.PublicKey() // no need to lock nothing's happening
+	n.outpeers[rnd2.PublicKey()] = struct{}{} // no need to lock nothing's happening
 	go n.Disconnect(rnd2.PublicKey())
 	ti = time.After(time.Millisecond)
 	select {
@@ -828,11 +829,10 @@ func TestSwarm_AddIncomingPeer(t *testing.T) {
 	p.addIncomingPeer(rnd.PublicKey())
 
 	p.inpeersMutex.RLock()
-	peer, ok := p.inpeers[rnd.PublicKey().String()]
+	_, ok := p.inpeers[rnd.PublicKey()]
 	p.inpeersMutex.RUnlock()
 
 	assert.True(t, ok)
-	assert.NotNil(t, peer)
 
 	nds := node.GenerateRandomNodesData(config.DefaultConfig().MaxInboundPeers)
 	for i := 0; i < len(nds); i++ {
@@ -841,10 +841,37 @@ func TestSwarm_AddIncomingPeer(t *testing.T) {
 
 	require.Equal(t, len(p.inpeers), config.DefaultConfig().MaxInboundPeers)
 	p.inpeersMutex.RLock()
-	peer, ok = p.inpeers[nds[len(nds)-1].PublicKey().String()]
+	_, ok = p.inpeers[nds[len(nds)-1].PublicKey()]
 	p.inpeersMutex.RUnlock()
 	assert.False(t, ok)
-	assert.Nil(t, peer)
+}
+
+func TestSwarm_AskPeersSerial(t *testing.T) {
+	p := p2pTestNoStart(t, config.DefaultConfig())
+	dsc := &discovery.MockPeerStore{}
+
+	timescalled := uint32(0)
+	block := make(chan struct{})
+
+	dsc.SelectPeersFunc = func(qty int) []*node.NodeInfo {
+		atomic.AddUint32(&timescalled, 1)
+		<-block
+		return node.GenerateRandomNodesData(qty) // will trigger sending on morepeersreq
+	}
+
+	p.discover = dsc
+
+	p.startNeighborhood()
+
+	p.morePeersReq <- struct{}{}
+	p.morePeersReq <- struct{}{}
+
+	block <- struct{}{}
+	require.Equal(t, atomic.LoadUint32(&timescalled), uint32(1))
+	block <- struct{}{}
+	require.Equal(t, atomic.LoadUint32(&timescalled), uint32(2))
+	block <- struct{}{}
+	require.Equal(t, atomic.LoadUint32(&timescalled), uint32(3))
 }
 
 func Test_NodeInfo(t *testing.T) {
