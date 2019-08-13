@@ -100,15 +100,15 @@ func (suite *AppTestSuite) initSingleInstance(i int, genesisTime string, rng *am
 
 	smApp.Config.HARE.N = 5
 	smApp.Config.HARE.F = 2
-	smApp.Config.HARE.RoundDuration = 4
+	smApp.Config.HARE.RoundDuration = 3
 	smApp.Config.HARE.WakeupDelta = 5
 	smApp.Config.HARE.ExpectedLeaders = 5
 	smApp.Config.CoinbaseAccount = strconv.Itoa(i + 1)
-	smApp.Config.LayerAvgSize = 12
-	smApp.Config.LayersPerEpoch = 4
+	smApp.Config.LayerAvgSize = 5
+	smApp.Config.LayersPerEpoch = 3
 	smApp.Config.Hdist = 5
 	smApp.Config.GenesisTime = genesisTime
-	smApp.Config.LayerDurationSec = 30
+	smApp.Config.LayerDurationSec = 20
 	smApp.Config.HareEligibility.ConfidenceParam = 3
 	smApp.Config.HareEligibility.EpochOffset = 0
 
@@ -135,7 +135,7 @@ func (suite *AppTestSuite) initSingleInstance(i int, genesisTime string, rng *am
 	suite.dbs = append(suite.dbs, dbStorepath)
 }
 
-func (suite *AppTestSuite) initMultipleInstances(rolacle *eligibility.FixedRolacle, rng *amcl.RAND, numOfInstances int, numOfTotalInstances int, storeFormat string, genesisTime string, poetClient *nipst.RPCPoetClient) {
+func (suite *AppTestSuite) initMultipleInstances(rolacle *eligibility.FixedRolacle, rng *amcl.RAND, numOfInstances int, storeFormat string, genesisTime string, poetClient *nipst.RPCPoetClient) {
 	name := 'a'
 	for i := 0; i < numOfInstances; i++ {
 		suite.initSingleInstance(i, genesisTime, rng, storeFormat, string(name), rolacle, poetClient)
@@ -176,7 +176,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	rolacle := eligibility.New()
 	rng := BLS381.DefaultSeed()
 
-	suite.initMultipleInstances(rolacle, rng, 5, 6, path, genesisTime, poetClient)
+	suite.initMultipleInstances(rolacle, rng, 5, path, genesisTime, poetClient)
 	for _, a := range suite.apps {
 		a.startServices()
 	}
@@ -184,17 +184,17 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	activateGrpcServer(suite.apps[0])
 
 	startInLayer := 5 // delayed pod will start in this layer
-	go func() {
+	/*go func() {
 		delay := float32(suite.apps[0].Config.LayerDurationSec) * (float32(startInLayer) + 0.5)
 		<-time.After(time.Duration(delay) * time.Second)
 		suite.initSingleInstance(7, genesisTime, rng, path, "g", rolacle, poetClient)
 		suite.apps[len(suite.apps)-1].startServices()
 	}()
-
+	*/
 	defer suite.gracefulShutdown()
 
 	_ = suite.apps[0].P2P.Broadcast(miner.IncomingTxProtocol, txbytes)
-	timeout := time.After(11 * 60 * time.Second)
+	timeout := time.After(6 * 60 * time.Second)
 
 	stickyClientsDone := 0
 loop:
@@ -323,13 +323,12 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID, start
 
 	// assert number of blocks
 	totalEpochs := int(untilLayer.GetEpoch(uint16(layersPerEpoch))) + 1
-	lateNodeActiveEpochs := totalEpochs - int(startInLayer.GetEpoch(uint16(layersPerEpoch))) - 2
 	allMiners := len(suite.apps)
-	exp := (layerAvgSize*layersPerEpoch)/(allMiners-1)*(allMiners-1)*(totalEpochs-lateNodeActiveEpochs-1) + (layerAvgSize*layersPerEpoch)/(allMiners-1)*allMiners + (layerAvgSize*layersPerEpoch/allMiners)*allMiners*(lateNodeActiveEpochs-1)
+	exp := (layerAvgSize * layersPerEpoch) / allMiners * allMiners * (totalEpochs - 1)
 	act := totalBlocks - firstEpochBlocks
 	assert.Equal(suite.T(), exp, act,
-		fmt.Sprintf("not good num of blocks got: %v, want: %v. totalBlocks: %v, firstEpochBlocks: %v, lastLayer: %v, layersPerEpoch: %v layerAvgSize: %v totalEpochs: %v lateNodeActiveEpochs: %v",
-			act, exp, totalBlocks, firstEpochBlocks, lastLayer, layersPerEpoch, layerAvgSize, totalEpochs, lateNodeActiveEpochs))
+		fmt.Sprintf("not good num of blocks got: %v, want: %v. totalBlocks: %v, firstEpochBlocks: %v, lastLayer: %v, layersPerEpoch: %v layerAvgSize: %v totalEpochs: %v",
+			act, exp, totalBlocks, firstEpochBlocks, lastLayer, layersPerEpoch, layerAvgSize, totalEpochs))
 
 	firstAp := suite.apps[0]
 	atxDb := firstAp.blockListener.AtxDB.(*activation.ActivationDb)
@@ -345,7 +344,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID, start
 	}
 
 	// assert number of ATXs
-	exp = totalEpochs*(allMiners-1) + (lateNodeActiveEpochs + 1) - len(suite.apps) // minus last epoch #atxs
+	exp = totalEpochs*allMiners - len(suite.apps) // minus last epoch #atxs
 	act = int(totalAtxs)
 	assert.Equal(suite.T(), exp, act, fmt.Sprintf("not good num of atxs got: %v, want: %v", act, exp))
 }
@@ -355,7 +354,7 @@ func (suite *AppTestSuite) validateLastATXActiveSetSize(app *SpacemeshApp) {
 	suite.NoError(err)
 	atx, err := app.mesh.GetAtx(prevAtxId)
 	suite.NoError(err)
-	suite.True(int(atx.ActiveSetSize) >= (len(suite.apps)-1), "atx: %v node: %v", atx.ShortId(), app.nodeId.Key[:5])
+	suite.True(int(atx.ActiveSetSize) == len(suite.apps), "atx: %v node: %v", atx.ShortId(), app.nodeId.Key[:5])
 }
 
 func (suite *AppTestSuite) gracefulShutdown() {
