@@ -31,12 +31,5 @@ spec:
             cpu: "1"
         ports:
         - containerPort: 9090
-        volumeMounts:
-        - name: config-volume
-          mountPath: /etc/config
-      volumes:
-      - name: config-volume
-        configMap:
-          name: conf
       nodeSelector:
         role: tests
