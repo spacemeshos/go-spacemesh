@@ -344,8 +344,9 @@ type tinyTx struct {
 
 func addressableTxToTiny(tx *types.AddressableSignedTransaction) tinyTx {
 	// TODO: calculate and store fee amount
+	id := types.GetTransactionId(tx.SerializableSignedTransaction)
 	return tinyTx{
-		Id:     types.TransactionId{}, // TODO: ??
+		Id:     id,
 		Origin: tx.Address,
 		Nonce:  tx.AccountNonce,
 		Amount: tx.Amount,
@@ -450,24 +451,27 @@ type StateObj interface {
 }
 
 func (m *MeshDB) GetStateProjection(stateObj StateObj) (nonce uint64, balance uint64, err error) {
-	// TODO: add tests
 	var additionalTxs []tinyTx
 	if meshTxsBytes, err := m.meshTxs.Get(stateObj.Address().Bytes()); err != nil {
 		if err == database.ErrNotFound {
 			return stateObj.Nonce(), stateObj.Balance().Uint64(), nil
 		}
-		return 0, 0, err
+		return 0, 0, fmt.Errorf("failed to get meshTxs for account %v: %v", stateObj.Address().Short(), err)
 	} else if err := types.BytesToInterface(meshTxsBytes, &additionalTxs); err != nil {
-		return 0, 0, err
+		return 0, 0, fmt.Errorf("failed to unmarshal meshTxs for account %v: %v", stateObj.Address().Short(), err)
 	}
 	nonce = stateObj.Nonce()
 	balance = stateObj.Balance().Uint64()
 	for _, tx := range additionalTxs {
-		if tx.Nonce != nonce+1 {
-			return 0, 0, fmt.Errorf("inconsistent state! Prev. nonce: %d, New nonce: %d (tx: %v)",
-				nonce, tx.Nonce, tx.Id)
+		if tx.Nonce != nonce {
+			return 0, 0, fmt.Errorf("inconsistent state! "+
+				"When adding tx %x, expected nonce: %d, actual: %d", tx.Id, nonce, tx.Nonce)
 		}
-		nonce = tx.Nonce
+		nonce = tx.Nonce + 1
+		if tx.Amount > balance {
+			return 0, 0, fmt.Errorf("inconsistent state! "+
+				"When adding tx %x balance becomes negative. Balance before: %d, Amount: %d", tx.Id, balance, tx.Amount)
+		}
 		balance -= tx.Amount // TODO: only subtract fees
 	}
 	return nonce, balance, nil

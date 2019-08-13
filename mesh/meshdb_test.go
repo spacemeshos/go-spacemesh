@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"math"
+	"math/big"
 	"os"
 	"path"
 	"testing"
@@ -189,4 +190,111 @@ func BenchmarkNewPersistentMeshDB(b *testing.B) {
 		}
 	}
 	fmt.Printf("\n>>> Total time: %v\n\n", time.Since(start))
+}
+
+const (
+	initialNonce   = 0
+	initialBalance = 100
+)
+
+type MockStateObj struct {
+}
+
+func (m *MockStateObj) Address() address.Address {
+	var addr [20]byte
+	copy(addr[:], "12345678901234567890")
+	return addr
+}
+
+func (m *MockStateObj) Nonce() uint64 {
+	return initialNonce
+}
+
+func (m *MockStateObj) Balance() *big.Int {
+	return big.NewInt(initialBalance)
+}
+
+func newTx(origin address.Address, nonce, amount uint64) *types.AddressableSignedTransaction {
+	return types.NewAddressableTx(nonce, origin, address.Address{}, amount, 3, 1)
+}
+
+func TestMeshDB_GetStateProjection(t *testing.T) {
+	r := require.New(t)
+
+	mdb := NewMemMeshDB(log.New("TestForEachInView", "", ""))
+	stateObj := &MockStateObj{}
+	origin := stateObj.Address()
+	err := mdb.addToMeshTxs([]*types.AddressableSignedTransaction{
+		newTx(origin, 0, 10),
+		newTx(origin, 1, 20),
+	})
+	r.NoError(err)
+
+	nonce, balance, err := mdb.GetStateProjection(stateObj)
+	r.NoError(err)
+	r.Equal(uint64(initialNonce+2), nonce)
+	r.Equal(uint64(initialBalance-30), balance)
+}
+
+func addToMeshTxs(mdb *MeshDB, txs []*types.AddressableSignedTransaction) error {
+	tinyTxs := make([]tinyTx, 0, len(txs))
+	for _, tx := range txs {
+		tinyTxs = append(tinyTxs, addressableTxToTiny(tx))
+	}
+	groupedTxs := groupAndSort(tinyTxs)
+
+	for account, accountTxs := range groupedTxs {
+		accountTxsBytes, err := types.InterfaceToBytes(&accountTxs)
+		if err != nil {
+			return fmt.Errorf("failed to marshal account tx list: %v", err)
+		}
+		if err := mdb.meshTxs.Put(account.Bytes(), accountTxsBytes); err != nil {
+			return fmt.Errorf("failed to store mesh txs for address %s", account.Short())
+		}
+	}
+	return nil
+}
+
+func TestMeshDB_GetStateProjection_WrongNonce(t *testing.T) {
+	r := require.New(t)
+
+	mdb := NewMemMeshDB(log.New("TestForEachInView", "", ""))
+	stateObj := &MockStateObj{}
+	origin := stateObj.Address()
+	err := addToMeshTxs(mdb, []*types.AddressableSignedTransaction{
+		newTx(origin, 1, 10),
+		newTx(origin, 0, 20),
+	})
+	r.NoError(err)
+
+	_, _, err = mdb.GetStateProjection(stateObj)
+	r.EqualError(err, "inconsistent state! When adding tx a44e208d8241599c30add840988c233ba73d2d9300549fb11e9572ee5c37be9a, expected nonce: 0, actual: 1")
+}
+
+func TestMeshDB_GetStateProjection_DetectNegativeBalance(t *testing.T) {
+	r := require.New(t)
+
+	mdb := NewMemMeshDB(log.New("TestForEachInView", "", ""))
+	stateObj := &MockStateObj{}
+	origin := stateObj.Address()
+	err := addToMeshTxs(mdb, []*types.AddressableSignedTransaction{
+		newTx(origin, 0, 10),
+		newTx(origin, 1, 95),
+	})
+	r.NoError(err)
+
+	_, _, err = mdb.GetStateProjection(stateObj)
+	r.EqualError(err, "inconsistent state! When adding tx ad650cd8f1c3ab90ec015f77bcbb96def02ca0268ccee08cf77041e7c9d5cc07 balance becomes negative. Balance before: 90, Amount: 95")
+}
+
+func TestMeshDB_GetStateProjection_NothingToApply(t *testing.T) {
+	r := require.New(t)
+
+	mdb := NewMemMeshDB(log.New("TestForEachInView", "", ""))
+	stateObj := &MockStateObj{}
+
+	nonce, balance, err := mdb.GetStateProjection(stateObj)
+	r.NoError(err)
+	r.Equal(uint64(initialNonce), nonce)
+	r.Equal(uint64(initialBalance), balance)
 }
