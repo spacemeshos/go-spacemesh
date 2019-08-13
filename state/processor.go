@@ -122,7 +122,10 @@ func (tp *TransactionProcessor) ValidateTransactionSignature(tx *types.Serializa
 }
 
 func (tp *TransactionProcessor) ValidateNonceAndBalance(tx *types.AddressableSignedTransaction) error {
-	stateObj := tp.globalState.GetOrNewStateObj(tx.Address)
+	stateObj := &StateObj{}
+	if tp.globalState.Exist(tx.Address) {
+		stateObj = tp.globalState.GetOrNewStateObj(tx.Address)
+	}
 	nonce, balance, err := tp.projector.GetStateProjection(stateObj)
 	if err != nil {
 		return fmt.Errorf("failed to project state for account %v: %v", tx.Address.Short(), err)
