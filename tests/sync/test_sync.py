@@ -54,6 +54,13 @@ def search_pod_logs(namespace, pod_name, term):
     return False
 
 
+def check_pod(podName):
+    res = query_message(current_index, testconfig['namespace'], podName, {"M": "sync done"}, False)
+    if res:
+        return True
+    return False
+
+
 def test_sync_gradually_add_nodes(init_session, setup_bootstrap, save_log_on_exit):
     bs_info = setup_bootstrap.pods[0]
 
@@ -64,46 +71,40 @@ def test_sync_gradually_add_nodes(init_session, setup_bootstrap, save_log_on_exi
     del cspec.args['remote-data']
     cspec.args['data-folder'] = ""
 
-    inf1 = new_client_in_namespace(testconfig['namespace'], setup_bootstrap, cspec, 1)
+    clients = [None] * 4
+    clients[0] = new_client_in_namespace(testconfig['namespace'], setup_bootstrap, cspec, 1)
     time.sleep(10)
-    inf2 = new_client_in_namespace(testconfig['namespace'], setup_bootstrap, cspec, 1)
+    clients[1] = new_client_in_namespace(testconfig['namespace'], setup_bootstrap, cspec, 1)
     time.sleep(20)
-    inf3 = new_client_in_namespace(testconfig['namespace'], setup_bootstrap, cspec, 1)
+    clients[2] = new_client_in_namespace(testconfig['namespace'], setup_bootstrap, cspec, 1)
     time.sleep(20)
-    inf4 = new_client_in_namespace(testconfig['namespace'], setup_bootstrap, cspec, 1)
-
-    fields = {"M": "sync done"}
+    clients[3] = new_client_in_namespace(testconfig['namespace'], setup_bootstrap, cspec, 1)
 
     start = time.time()
 
-    for i in range(20):
-        res = query_message(current_index, testconfig['namespace'], inf4.pods[0]['name'], fields, False)
-        if res:
-            print("last pod finished")
-            print("asserting all pods ...")
+    for i in range(30):
+
+        done = 0
+        for i in range(0, 4):
+            podName = clients[i].pods[0]['name']
+            if not check_pod(podName): # not all done
+                print("pod " + podName + " still not done. Going to sleep")
+                break # stop check and sleep
+            else:
+                print("pod " + podName + " done")
+                done = done + 1
+
+        if done == 4:
+            print("all pods done")
             break
+
         sleep = 1
         print("not done yet sleep for " + str(sleep) + " minute")
         time.sleep(sleep * 60)
 
     end = time.time()
 
-    assert res
-    print("pod " + inf4.pods[0]['name'] + " done")
-
-    res1 = query_message(current_index, testconfig['namespace'], inf1.pods[0]['name'], fields, False)
-    assert res1
-    print("pod " + inf1.pods[0]['name'] + " done")
-
-    res2 = query_message(current_index, testconfig['namespace'], inf2.pods[0]['name'], fields, False)
-    assert res2
-    print("pod " + inf2.pods[0]['name'] + " done")
-
-    res3 = query_message(current_index, testconfig['namespace'], inf3.pods[0]['name'], fields, False)
-    assert res3
-    print("pod " + inf3.pods[0]['name'] + " done")
-
     delete_deployment(inf.deployment_name, testconfig['namespace'])
 
-    print("it took " + str(end - start) + "to sync all nodes with " + cspec.args['expected-layers'] + "layers")
+    print("it took " + str(end - start) + " to sync all nodes with " + cspec.args['expected-layers'] + "layers")
     print("done!!")
