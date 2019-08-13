@@ -52,28 +52,35 @@ func newRefresher(local *node.NodeInfo, book addressBook, disc Protocol, bootnod
 	}
 }
 
-func (r *refresher) Bootstrap(ctx context.Context, minPeers int) error {
+func (r *refresher) Bootstrap(ctx context.Context, numpeers int) error {
 	var err error
 	tries := 0
 	servers := make([]*node.NodeInfo, 0, len(r.bootNodes))
 
 	// The following loop will add the pre-set bootstrap nodes and query them for results
-	// if there were any results but we didn't reach minPeers it will try the same procedure
+	// if there were any results but we didn't reach numpeers it will try the same procedure
 	// using the results as servers to query. every failed loop will wait a backoff
 	// to let other nodes populate before flooding with queries.
-	seed := false
 	size := r.book.NumAddresses()
 	if size == 0 {
 		r.book.AddAddresses(r.bootNodes, r.localAddress)
 		servers = r.bootNodes
-		seed = true
+		size = len(r.bootNodes)
+		defer func() {
+			// currently we only have  the discovery address of bootnodes in the configuration so let them pick their own neighbors.
+			for _, b := range r.bootNodes {
+				r.book.RemoveAddress(b.PublicKey())
+			}
+		}()
 	} else {
 		srv := r.book.AddressCache()
-		servers = srv[:common.Min(minPeers, len(srv))]
+		servers = srv[:common.Min(numpeers, len(srv))]
 	}
+
+	r.logger.Info("Bootstrap: starting with %v sized table", size)
+
 loop:
 	for {
-		r.logger.Info("Bootstrap: starting with %v sized table", size)
 		res := r.requestAddresses(servers)
 		if len(res) > 0 {
 			servers = res
@@ -82,10 +89,8 @@ loop:
 		r.logger.Info("Bootstrap : %d try gave %v results", tries, len(res))
 
 		newsize := r.book.NumAddresses()
-		wanted := minPeers
-		if seed {
-			wanted += len(r.bootNodes)
-		}
+		wanted := numpeers
+
 		if newsize-size >= wanted {
 			r.logger.Info("Stopping bootstrap, achieved %v need %v", newsize-size, wanted)
 			break
@@ -102,13 +107,6 @@ loop:
 			continue
 		}
 
-	}
-
-	if seed {
-		// currently we only have  the discovery address of bootnodes in the configuration so let them pick their own neighbors.
-		for _, b := range r.bootNodes {
-			r.book.RemoveAddress(b.PublicKey())
-		}
 	}
 
 	return err

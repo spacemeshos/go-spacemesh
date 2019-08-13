@@ -4,6 +4,7 @@ package discovery
 import (
 	"context"
 	"errors"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
@@ -81,7 +82,7 @@ func (d *Discovery) Attempt(key p2pcrypto.PublicKey) {
 func (d *Discovery) refresh(ctx context.Context, peersToGet int) error {
 	err := d.bootstrapper.Bootstrap(ctx, peersToGet)
 	if err != nil {
-		d.local.Log.Error("Error trying to refresh addrbook ", err)
+		d.local.Log.With().Error("addrbook refresh error", log.Err(err))
 		return err
 	}
 	return nil

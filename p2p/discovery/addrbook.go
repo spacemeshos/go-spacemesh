@@ -390,17 +390,9 @@ func (a *addrBook) NumAddresses() int {
 	return a.numAddresses()
 }
 
-// NeedMoreAddresses returns whether or not the address manager needs more
-// addresses.
-func (a *addrBook) NeedMoreAddresses() bool {
-	a.mtx.Lock()
-	defer a.mtx.Unlock()
-
-	return a.numAddresses() < needAddressThreshold
-}
-
-// NeedMoreAddresses returns whether or not the address manager needs more
-// addresses.
+// NeedNewAddresses returns whether or not the address manager needs more new
+// addresses. this means we have less new addresses than tried addresses and we don't
+// have more than half of the threshold
 func (a *addrBook) NeedNewAddresses() bool {
 	a.mtx.Lock()
 	if a.nNew < a.nTried && a.nNew < needAddressThreshold/2 {

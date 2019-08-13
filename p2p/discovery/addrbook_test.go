@@ -1,7 +1,6 @@
 package discovery
 
 import (
-	"fmt"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/stretchr/testify/require"
 
@@ -39,31 +38,6 @@ func TestAttempt(t *testing.T) {
 
 	if ka.LastAttempt().IsZero() {
 		t.Errorf("Address should have an attempt, but does not")
-	}
-}
-
-func TestNeedMoreAddresses(t *testing.T) {
-	n := testAddrBook("needmoreaddr")
-	addrsToAdd := 1500
-	b := n.NeedMoreAddresses()
-	if !b {
-		t.Errorf("Expected that we need more addresses")
-	}
-
-	//randnode := generateDiscNode()
-	//rds := NodeInfoFromNode(randnode.Node173, 144, 173, 111), 8333
-
-	n.AddAddresses(generateDiscNodesFakeIPs(1500), n.localAddress)
-	numAddrs := n.NumAddresses()
-	if numAddrs > addrsToAdd {
-		t.Errorf("Number of addresses is too many %d vs %d", numAddrs, addrsToAdd)
-	}
-
-	fmt.Println(numAddrs)
-
-	b = n.NeedMoreAddresses()
-	if b {
-		t.Errorf("Expected that we don't need more addresses")
 	}
 }
 
