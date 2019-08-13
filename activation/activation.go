@@ -354,8 +354,8 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 	}
 
 	b.log.Event().Info("atx published!", log.AtxId(atx.ShortId()), log.String("prev_atx_id", atx.PrevATXId.ShortString()),
-	    log.String("post_atx_id", atx.PositioningAtx.ShortString()), log.LayerId(uint64(atx.PubLayerIdx)), log.EpochId(uint64(atx.PubLayerIdx.GetEpoch(b.layersPerEpoch))),
-	    log.Uint32("active_set", atx.ActiveSetSize), log.String("miner", b.nodeId.Key[:5]), log.Int("view", len(atx.View)))
+		log.String("post_atx_id", atx.PositioningAtx.ShortString()), log.LayerId(uint64(atx.PubLayerIdx)), log.EpochId(uint64(atx.PubLayerIdx.GetEpoch(b.layersPerEpoch))),
+		log.Uint32("active_set", atx.ActiveSetSize), log.String("miner", b.nodeId.Key[:5]), log.Int("view", len(atx.View)))
 
 	return nil
 }
