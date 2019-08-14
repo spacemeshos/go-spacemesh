@@ -57,57 +57,26 @@ def search_pod_logs(namespace, pod_name, term):
 def test_add_delayed_nodes(init_session, setup_bootstrap, save_log_on_exit):
     bs_info = setup_bootstrap.pods[0]
     cspec = get_conf(bs_info, testconfig['client'])
+    ns = testconfig['namespace']
 
     layerDuration = int(testconfig['client']['args']['layer-duration-sec'])
     layersPerEpoch = int(testconfig['client']['args']['layers-per-epoch'])
+    epochDuration = layerDuration*layersPerEpoch
 
-    # start with 50 miners
-    inf = new_client_in_namespace(testconfig['namespace'], setup_bootstrap, cspec, 50)
+    # start with 100 miners
+    inf = new_client_in_namespace(ns, setup_bootstrap, cspec, 100)
+    time.sleep(epochDuration) # wait epoch duration
 
     # add 50 each epoch
-    inf1 = new_client_in_namespace(testconfig['namespace'], setup_bootstrap, cspec, 1)
-    time.sleep(10)
+    numToAdd = 50
+    count = 4
+    clients = [None] * count
+    for i in range(0, count):
+        clients[0] = new_client_in_namespace(ns, setup_bootstrap, cspec, numToAdd)
+        time.sleep(epochDuration)
 
+    time.sleep(2*epochDuration) # wait two more epochs
 
+    # validate
 
-    inf2 = new_client_in_namespace(testconfig['namespace'], setup_bootstrap, cspec, 1)
-    time.sleep(20)
-    inf3 = new_client_in_namespace(testconfig['namespace'], setup_bootstrap, cspec, 1)
-    time.sleep(20)
-    inf4 = new_client_in_namespace(testconfig['namespace'], setup_bootstrap, cspec, 1)
-
-    fields = {"M": "sync done"}
-
-    start = time.time()
-
-    for i in range(20):
-        res = query_message(current_index, testconfig['namespace'], inf4.pods[0]['name'], fields, False)
-        if res:
-            print("last pod finished")
-            print("asserting all pods ...")
-            break
-        sleep = 1
-        print("not done yet sleep for " + str(sleep) + " minute")
-        time.sleep(sleep * 60)
-
-    end = time.time()
-
-    assert res
-    print("pod " + inf4.pods[0]['name'] + " done")
-
-    res1 = query_message(current_index, testconfig['namespace'], inf1.pods[0]['name'], fields, False)
-    assert res1
-    print("pod " + inf1.pods[0]['name'] + " done")
-
-    res2 = query_message(current_index, testconfig['namespace'], inf2.pods[0]['name'], fields, False)
-    assert res2
-    print("pod " + inf2.pods[0]['name'] + " done")
-
-    res3 = query_message(current_index, testconfig['namespace'], inf3.pods[0]['name'], fields, False)
-    assert res3
-    print("pod " + inf3.pods[0]['name'] + " done")
-
-    delete_deployment(inf.deployment_name, testconfig['namespace'])
-
-    print("it took " + str(end - start) + "to sync all nodes with " + cspec.args['expected-layers'] + "layers")
-    print("done!!")
+    validate_hare(current_index, ns)  # validate hare
