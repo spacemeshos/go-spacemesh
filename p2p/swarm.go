@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/golang/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/connectionpool"
@@ -14,10 +13,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	timeSyncConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
+	"github.com/spacemeshos/go-spacemesh/types"
 	"strings"
 
 	inet "net"
@@ -328,18 +327,20 @@ func (s *swarm) sendMessageImpl(peerPubKey p2pcrypto.PublicKey, protocol string,
 		return err
 	}
 
-	protomessage := &pb.ProtocolMessage{
-		Metadata: pb.NewProtocolMessageMetadata(s.lNode.PublicKey(), protocol),
+	protomessage := &ProtocolMessage{
+		Metadata: &ProtocolMessageMetadata{NextProtocol: protocol, ClientVersion: config.ClientVersion,
+			Timestamp: time.Now().Unix(), AuthPubkey: s.LocalNode().PublicKey().Bytes()},
+		Payload: nil,
 	}
 
-	realpayload, err := pb.CreatePayload(payload)
+	realpayload, err := CreatePayload(payload)
 	if err != nil {
 		return err
 	}
 
 	protomessage.Payload = realpayload
 
-	data, err := proto.Marshal(protomessage)
+	data, err := types.InterfaceToBytes(protomessage)
 	if err != nil {
 		return fmt.Errorf("failed to encode signed message err: %v", err)
 	}
@@ -494,8 +495,8 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 		return ErrFailDecrypt
 	}
 
-	pm := &pb.ProtocolMessage{}
-	err = proto.Unmarshal(decPayload, pm)
+	pm := &ProtocolMessage{}
+	err = types.BytesToInterface(decPayload, pm)
 	if err != nil {
 		s.lNode.Error("proto marshaling err=", err)
 		return ErrBadFormat2
@@ -508,7 +509,7 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 		return ErrOutOfSync
 	}
 
-	data, err := pb.ExtractData(pm.Payload)
+	data, err := ExtractData(pm.Payload)
 
 	if err != nil {
 		return err
