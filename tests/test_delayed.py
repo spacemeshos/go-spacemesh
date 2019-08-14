@@ -56,16 +56,20 @@ def search_pod_logs(namespace, pod_name, term):
 
 def test_add_delayed_nodes(init_session, setup_bootstrap, save_log_on_exit):
     bs_info = setup_bootstrap.pods[0]
-
     cspec = get_conf(bs_info, testconfig['client'])
 
-    inf = new_client_in_namespace(testconfig['namespace'], setup_bootstrap, cspec, 10)
+    layerDuration = int(testconfig['client']['args']['layer-duration-sec'])
+    layersPerEpoch = int(testconfig['client']['args']['layers-per-epoch'])
 
-    del cspec.args['remote-data']
-    cspec.args['data-folder'] = ""
+    # start with 50 miners
+    inf = new_client_in_namespace(testconfig['namespace'], setup_bootstrap, cspec, 50)
 
+    # add 50 each epoch
     inf1 = new_client_in_namespace(testconfig['namespace'], setup_bootstrap, cspec, 1)
     time.sleep(10)
+
+
+
     inf2 = new_client_in_namespace(testconfig['namespace'], setup_bootstrap, cspec, 1)
     time.sleep(20)
     inf3 = new_client_in_namespace(testconfig['namespace'], setup_bootstrap, cspec, 1)
