@@ -233,8 +233,8 @@ func (b *Builder) buildNipstChallenge(epoch types.EpochId) error {
 }
 
 func (b *Builder) StartPost(rewardAddress address.Address, logicalDrive string, commitmentSize uint64) error {
+	b.log.Info("Starting post, reward address: %x", rewardAddress)
 	b.SetCoinbaseAccount(rewardAddress)
-
 	if !b.nipstBuilder.IsPostInitialized() {
 		b.postInitLock.Lock()
 		if b.initStatus != Idle {

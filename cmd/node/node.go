@@ -442,6 +442,8 @@ func (app *SpacemeshApp) startServices() {
 			log.Error("Error initializing post, err: %v", err)
 			log.Panic("Error initializing post")
 		}
+	} else {
+		log.Info("Manual post init")
 	}
 	app.atxBuilder.Start()
 	app.clock.StartNotifying()

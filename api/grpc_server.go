@@ -180,6 +180,7 @@ func (s SpacemeshGrpcService) startServiceInternal(status chan bool) {
 }
 
 func (s SpacemeshGrpcService) StartMining(ctx context.Context, message *pb.InitPost) (*pb.SimpleMessage, error) {
+	log.Info("GRPC StartMining msg")
 	addr, err := address.StringToAddress(message.Coinbase)
 	err = s.Mining.StartPost(addr, message.LogicalDrive, message.CommitmentSize)
 	if err != nil {
