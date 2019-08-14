@@ -60,6 +60,7 @@ func NewMemMeshDB(log log.Log) *MeshDB {
 		layers:             database.NewMemDatabase(),
 		contextualValidity: database.NewMemDatabase(),
 		transactions:       database.NewMemDatabase(),
+		patterns:           database.NewMemDatabase(),
 		orphanBlocks:       make(map[types.LayerID]map[types.BlockID]struct{}),
 		layerMutex:         make(map[types.LayerID]*layerMutex),
 	}
