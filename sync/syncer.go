@@ -196,7 +196,12 @@ func (s *Syncer) lastTickedLayer() types.LayerID {
 
 func (s *Syncer) Synchronise() {
 	defer s.syncRoutineWg.Done()
+
 	currentSyncLayer := s.lValidator.ValidatedLayer() + 1
+	if currentSyncLayer == 1 && s.lastTickedLayer() == 1 { // skip validation for first layer
+		s.Info("Skipping validation of layer 1")
+		return
+	}
 	if s.IsSynced() {
 		lyr, err := s.GetLayer(types.LayerID(currentSyncLayer))
 		if err != nil {
