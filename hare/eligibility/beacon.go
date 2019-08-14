@@ -37,10 +37,11 @@ func (b *beacon) Value(layer types.LayerID) (uint32, error) {
 		return nilVal, err
 	}
 
-	return getBeaconFromSet(v), nil
+	return calcValue(v), nil
 }
 
-func getBeaconFromSet(bids map[types.BlockID]struct{}) uint32 {
+// calculates the beacon value from the set of ids
+func calcValue(bids map[types.BlockID]struct{}) uint32 {
 	keys := make([]types.BlockID, 0, len(bids))
 	for k := range bids {
 		keys = append(keys, k)
