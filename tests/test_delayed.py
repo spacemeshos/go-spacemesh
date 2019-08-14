@@ -72,7 +72,8 @@ def test_add_delayed_nodes(init_session, setup_bootstrap, save_log_on_exit):
     count = 4
     clients = [None] * count
     for i in range(0, count):
-        clients[0] = new_client_in_namespace(ns, setup_bootstrap, cspec, numToAdd)
+        clients[i] = new_client_in_namespace(ns, setup_bootstrap, cspec, numToAdd)
+        print("Added client batch ", i, clients[i].pods[i]['name'])
         time.sleep(epochDuration)
 
     time.sleep(2*epochDuration) # wait two more epochs
