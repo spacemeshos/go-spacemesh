@@ -366,13 +366,7 @@ func (m *MeshDB) GetGoodPattern(layer types.LayerID) (map[types.BlockID]struct{}
 }
 
 func (m *MeshDB) SaveGoodPattern(layer types.LayerID, blks map[types.BlockID]struct{}) error {
-
-	values := make([]types.BlockID, 0, len(blks))
-	for value := range blks {
-		values = append(values, value)
-	}
-
-	bts, err := types.InterfaceToBytes(values)
+	bts, err := types.InterfaceToBytes(blks)
 	if err != nil {
 		return fmt.Errorf("could not save good pattern for layer %v", layer)
 	}
