@@ -105,7 +105,7 @@ func (validator *syntaxContextValidator) ContextuallyValidateMessage(m *Msg, cur
 
 	// first validate pre-round and notify
 	switch m.InnerMsg.Type {
-	case PreRound:
+	case Pre:
 		return true, nil
 	case Notify:
 		return true, nil
@@ -118,30 +118,30 @@ func (validator *syntaxContextValidator) ContextuallyValidateMessage(m *Msg, cur
 		return false, nil
 	}
 
-	// PreRound & Notify are always contextually valid
+	// Pre & Notify are always contextually valid
 	currentRound := currentK % 4
 	switch m.InnerMsg.Type {
 	case Proposal:
-		if currentRound == Round1 {
+		if currentRound == StatusRound {
 			return false, errEarlyMsg
 		}
-		if currentRound == Round2 || currentRound == Round3 { // may be a late proposal
+		if currentRound == ProposalRound || currentRound == CommitRound { // may be a late proposal
 			return true, nil
 		}
 		return false, nil
 	case Status:
-		if currentRound == Round0 {
+		if currentRound == PreRound {
 			return false, errEarlyMsg
 		}
-		if currentRound == Round1 {
+		if currentRound == StatusRound {
 			return true, nil
 		}
 		return false, nil
 	case Commit:
-		if currentRound == Round2 {
+		if currentRound == ProposalRound {
 			return false, errEarlyMsg
 		}
-		if currentRound == Round3 {
+		if currentRound == CommitRound {
 			return true, nil
 		}
 		return false, nil
@@ -179,14 +179,14 @@ func (validator *syntaxContextValidator) SyntacticallyValidateMessage(m *Msg) bo
 
 	claimedRound := m.InnerMsg.K % 4
 	switch m.InnerMsg.Type {
-	case PreRound:
+	case Pre:
 		return true
 	case Status:
-		return claimedRound == Round1
+		return claimedRound == StatusRound
 	case Proposal:
-		return claimedRound == Round2 && validator.validateSVP(m)
+		return claimedRound == ProposalRound && validator.validateSVP(m)
 	case Commit:
-		return claimedRound == Round3
+		return claimedRound == CommitRound
 	case Notify:
 		return validator.validateCertificate(m.InnerMsg.Cert)
 	default:

@@ -386,7 +386,7 @@ func TestConsensusProcess_procNotify(t *testing.T) {
 	proc.ki = 0
 	m.InnerMsg.K = proc.ki
 	proc.s.Add(value5)
-	proc.k = Round4
+	proc.k = NotifyRound
 	proc.processNotifyMsg(m)
 	assert.True(t, s.Equals(proc.s))
 }
@@ -415,13 +415,13 @@ func TestConsensusProcess_Termination(t *testing.T) {
 func TestConsensusProcess_currentRound(t *testing.T) {
 	proc := generateConsensusProcess(t)
 	proc.advanceToNextRound()
-	assert.Equal(t, Round1, proc.currentRound())
+	assert.Equal(t, StatusRound, proc.currentRound())
 	proc.advanceToNextRound()
-	assert.Equal(t, Round2, proc.currentRound())
+	assert.Equal(t, ProposalRound, proc.currentRound())
 	proc.advanceToNextRound()
-	assert.Equal(t, Round3, proc.currentRound())
+	assert.Equal(t, CommitRound, proc.currentRound())
 	proc.advanceToNextRound()
-	assert.Equal(t, Round4, proc.currentRound())
+	assert.Equal(t, NotifyRound, proc.currentRound())
 }
 
 func TestConsensusProcess_onEarlyMessage(t *testing.T) {

@@ -273,7 +273,7 @@ func TestMessageValidator_ValidateMessage(t *testing.T) {
 	v := proc.validator
 	b, err := proc.initDefaultBuilder(proc.s)
 	assert.Nil(t, err)
-	preround := b.SetType(PreRound).Sign(proc.signing).Build()
+	preround := b.SetType(Pre).Sign(proc.signing).Build()
 	preround.PubKey = proc.signing.PublicKey()
 	assert.True(t, v.SyntacticallyValidateMessage(preround))
 	res, e := v.ContextuallyValidateMessage(preround, 0)
