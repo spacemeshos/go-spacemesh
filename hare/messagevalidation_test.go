@@ -2,9 +2,11 @@ package hare
 
 import (
 	"errors"
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"testing"
 )
 
@@ -128,24 +130,27 @@ func TestMessageValidator_Aggregated(t *testing.T) {
 }
 
 func TestSyntaxContextValidator_PreRoundContext(t *testing.T) {
+	r := require.New(t)
 	validator := defaultValidator()
 	ed := signing.NewEdSigner()
 	for i := 0; i < 10; i++ {
 		res, e := validator.ContextuallyValidateMessage(BuildPreRoundMsg(ed, NewSmallEmptySet()), int32(i))
-		assertNoErr(t, true, res, e)
+		assertNoErr(r, true, res, e)
 	}
 }
 
 func TestSyntaxContextValidator_NotifyContext(t *testing.T) {
+	r := require.New(t)
 	validator := defaultValidator()
 	ed := signing.NewEdSigner()
 	for i := 0; i < 10; i++ {
 		res, e := validator.ContextuallyValidateMessage(BuildNotifyMsg(ed, NewSmallEmptySet()), int32(i))
-		assertNoErr(t, true, res, e)
+		assertNoErr(r, true, res, e)
 	}
 }
 
 func TestSyntaxContextValidator_StatusContext(t *testing.T) {
+	r := require.New(t)
 	validator := defaultValidator()
 	ed := signing.NewEdSigner()
 	_, e := validator.ContextuallyValidateMessage(BuildStatusMsg(ed, NewSmallEmptySet()), -1)
@@ -154,46 +159,56 @@ func TestSyntaxContextValidator_StatusContext(t *testing.T) {
 	results := []bool{true, false, false, false}
 	for i := 0; i < 4; i++ {
 		res, e := validator.ContextuallyValidateMessage(BuildStatusMsg(ed, NewSmallEmptySet()), int32(i))
-		assertNoErr(t, results[i], res, e)
+		assertNoErr(r, results[i], res, e)
 	}
 }
 
 func TestSyntaxContextValidator_ProposalContext(t *testing.T) {
+	r := require.New(t)
 	validator := defaultValidator()
 	ed := signing.NewEdSigner()
+
 	res, e := validator.ContextuallyValidateMessage(BuildProposalMsg(ed, NewSmallEmptySet()), -1)
-	assertNoErr(t, false, res, e)
+	assertNoErr(r, false, res, e)
 
-	res, e = validator.ContextuallyValidateMessage(BuildProposalMsg(ed, NewSmallEmptySet()), 0)
-	assert.Error(t, e, errEarlyMsg.Error())
+	for i := int32(0); i < 10; i++ {
+		k := i * 4
+		res, e = validator.ContextuallyValidateMessage(BuildProposalMsg(ed, NewSmallEmptySet()), k)
+		r.Error(e, errEarlyMsg.Error())
 
-	res, e = validator.ContextuallyValidateMessage(BuildProposalMsg(ed, NewSmallEmptySet()), 1)
-	assertNoErr(t, true, res, e)
+		res, e = validator.ContextuallyValidateMessage(BuildProposalMsg(ed, NewSmallEmptySet()), k+1)
+		assertNoErr(r, true, res, e)
 
-	res, e = validator.ContextuallyValidateMessage(BuildProposalMsg(ed, NewSmallEmptySet()), 2)
-	assertNoErr(t, true, res, e)
+		res, e = validator.ContextuallyValidateMessage(BuildProposalMsg(ed, NewSmallEmptySet()), k+2)
+		assertNoErr(r, true, res, e)
 
-	res, e = validator.ContextuallyValidateMessage(BuildProposalMsg(ed, NewSmallEmptySet()), 3)
-	assertNoErr(t, false, res, e)
+		res, e = validator.ContextuallyValidateMessage(BuildProposalMsg(ed, NewSmallEmptySet()), k+3)
+		assertNoErr(r, false, res, e)
+	}
 }
 
 func TestSyntaxContextValidator_CommitContext(t *testing.T) {
+	r := require.New(t)
 	validator := defaultValidator()
 	ed := signing.NewEdSigner()
 	res, e := validator.ContextuallyValidateMessage(BuildCommitMsg(ed, NewSmallEmptySet()), -1)
-	assertNoErr(t, false, res, e)
+	assertNoErr(r, false, res, e)
 
-	res, e = validator.ContextuallyValidateMessage(BuildCommitMsg(ed, NewSmallEmptySet()), 0)
-	assertNoErr(t, false, res, e)
+	for i := int32(0); i < 10; i++ {
+		fmt.Println(i)
+		k := i * 4
+		res, e = validator.ContextuallyValidateMessage(BuildCommitMsg(ed, NewSmallEmptySet()), k)
+		assertNoErr(r, false, res, e)
 
-	res, e = validator.ContextuallyValidateMessage(BuildCommitMsg(ed, NewSmallEmptySet()), 1)
-	assert.Error(t, e, errEarlyMsg.Error())
+		res, e = validator.ContextuallyValidateMessage(BuildCommitMsg(ed, NewSmallEmptySet()), k+1)
+		r.Error(e, errEarlyMsg.Error())
 
-	res, e = validator.ContextuallyValidateMessage(BuildCommitMsg(ed, NewSmallEmptySet()), 2)
-	assertNoErr(t, true, res, e)
+		res, e = validator.ContextuallyValidateMessage(BuildCommitMsg(ed, NewSmallEmptySet()), k+2)
+		assertNoErr(r, true, res, e)
 
-	res, e = validator.ContextuallyValidateMessage(BuildCommitMsg(ed, NewSmallEmptySet()), 3)
-	assertNoErr(t, false, res, e)
+		res, e = validator.ContextuallyValidateMessage(BuildCommitMsg(ed, NewSmallEmptySet()), k+3)
+		assertNoErr(r, false, res, e)
+	}
 }
 
 func TestMessageValidator_ValidateMessage(t *testing.T) {
@@ -219,9 +234,9 @@ func TestMessageValidator_ValidateMessage(t *testing.T) {
 
 }
 
-func assertNoErr(t *testing.T, expect bool, actual bool, err error) {
-	assert.NoError(t, err)
-	assert.Equal(t, expect, actual)
+func assertNoErr(r *require.Assertions, expect bool, actual bool, err error) {
+	r.NoError(err)
+	r.Equal(expect, actual)
 }
 
 func TestMessageValidator_SyntacticallyValidateMessage(t *testing.T) {
@@ -233,19 +248,20 @@ func TestMessageValidator_SyntacticallyValidateMessage(t *testing.T) {
 }
 
 func TestMessageValidator_ContextuallyValidateMessage(t *testing.T) {
+	r := require.New(t)
 	validator := newSyntaxContextValidator(signing.NewEdSigner(), 1, validate, &MockStateQuerier{true, nil}, 10, log.NewDefault("Validator"))
 	m := BuildPreRoundMsg(generateSigning(t), NewSmallEmptySet())
 	m.InnerMsg = nil
 	res, e := validator.ContextuallyValidateMessage(m, 0)
-	assert.Error(t, e)
+	r.Error(e)
 	m = BuildPreRoundMsg(generateSigning(t), NewSetFromValues(value1))
 	res, e = validator.ContextuallyValidateMessage(m, 0)
-	assertNoErr(t, true, res, e)
+	assertNoErr(r, true, res, e)
 	m = BuildStatusMsg(generateSigning(t), NewSetFromValues(value1))
 	res, e = validator.ContextuallyValidateMessage(m, 1)
-	assertNoErr(t, false, res, e)
+	assertNoErr(r, false, res, e)
 	res, e = validator.ContextuallyValidateMessage(m, 0)
-	assertNoErr(t, true, res, e)
+	assertNoErr(r, true, res, e)
 }
 
 func TestMessageValidator_validateSVPTypeA(t *testing.T) {

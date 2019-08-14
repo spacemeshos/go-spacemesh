@@ -104,14 +104,15 @@ func (validator *syntaxContextValidator) ContextuallyValidateMessage(m *Msg, cur
 	}
 
 	// PreRound & Notify are always contextually valid
+	currentRound := currentK % 4
 	switch m.InnerMsg.Type {
 	case PreRound:
 		return true, nil
 	case Proposal:
-		if currentK == Round1 {
+		if currentRound == Round1 {
 			return false, errEarlyMsg
 		}
-		if currentK == Round2 || currentK == Round3 {
+		if currentRound == Round2 || currentRound == Round3 {
 			return true, nil // process proposals for
 		}
 		return false, nil
