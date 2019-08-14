@@ -100,7 +100,7 @@ func Test_Net_LimitedConnections(t *testing.T) {
 	for i := 0; i < cfg.MaxPendingConnections-1; i++ {
 		listener.releaseConn()
 	}
-	n.config.SessionTimeout = 300 * time.Millisecond
+	n.config.SessionTimeout = 1 * time.Second
 	listener.releaseConn()
 
 	require.Equal(t, atomic.LoadInt32(&listener.calledCount), int32(cfg.MaxPendingConnections))
