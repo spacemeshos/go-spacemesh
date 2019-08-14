@@ -45,15 +45,12 @@ func getBeaconFromSet(bids map[types.BlockID]struct{}) uint32 {
 	for k := range bids {
 		keys = append(keys, k)
 	}
-	return getBeacon(keys)
-}
 
-func getBeacon(bids []types.BlockID) uint32 {
-	sort.Slice(bids, func(i, j int) bool { return bids[i] < bids[j] })
+	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
 	// calc
 	h := fnv.New32()
-	for i := 0; i < len(bids); i++ {
-		h.Write(common.Uint32ToBytes(uint32(bids[i])))
+	for i := 0; i < len(keys); i++ {
+		h.Write(common.Uint32ToBytes(uint32(keys[i])))
 	}
 	// update
 	sum := h.Sum32()
