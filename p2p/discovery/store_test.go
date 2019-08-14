@@ -4,6 +4,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -31,7 +32,7 @@ func assertAddr(t *testing.T, got, expected *node.NodeInfo) {
 // assertAddrs ensures that the manager's address cache matches the given
 // expected addresses.
 func assertAddrs(t *testing.T, addrMgr *addrBook,
-	expectedAddrs map[string]*node.NodeInfo) {
+	expectedAddrs map[p2pcrypto.PublicKey]*node.NodeInfo) {
 
 	t.Helper()
 
@@ -43,8 +44,8 @@ func assertAddrs(t *testing.T, addrMgr *addrBook,
 	}
 
 	for _, addr := range addrs {
-		addrStr := addr.ID.String()
-		expectedAddr, ok := expectedAddrs[addrStr]
+		addrStr := addr.ID
+		expectedAddr, ok := expectedAddrs[addr.PublicKey()]
 		if !ok {
 			t.Fatalf("expected to find address %v", addrStr)
 		}
@@ -76,10 +77,10 @@ func TestAddrManagerSerialization(t *testing.T) {
 	// We'll be adding 5 random addresses to the manager.
 	const numAddrs = 5
 
-	expectedAddrs := make(map[string]*node.NodeInfo, numAddrs)
+	expectedAddrs := make(map[p2pcrypto.PublicKey]*node.NodeInfo, numAddrs)
 	for i := 0; i < numAddrs; i++ {
 		addr := node.GenerateRandomNodeData()
-		expectedAddrs[addr.PublicKey().String()] = addr
+		expectedAddrs[addr.PublicKey()] = addr
 		addrMgr.AddAddress(addr, node.GenerateRandomNodeData())
 	}
 

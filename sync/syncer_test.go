@@ -960,7 +960,8 @@ func TestSyncer_Synchronise(t *testing.T) {
 	sync.AddBlock(types.NewExistingBlock(types.BlockID(1), 1, nil))
 	sync.AddBlock(types.NewExistingBlock(types.BlockID(2), 2, nil))
 	sync.AddBlock(types.NewExistingBlock(types.BlockID(3), 3, nil))
-	sync.Synchronise()
+	sr := sync.getSyncRoutine()
+	sr()
 	time.Sleep(100 * time.Millisecond) // handle go routine race
 	r.Equal(1, lv.countValidated)
 	r.Equal(1, lv.countValidate) // synced, expect only one call
@@ -968,9 +969,9 @@ func TestSyncer_Synchronise(t *testing.T) {
 	lv = &mockLayerValidator{1, 0, 0}
 	sync.lValidator = lv
 	sync.currentLayer = 4 // simulate not synced
-	sync.Synchronise()
+	sr()
 	time.Sleep(100 * time.Millisecond) // handle go routine race
-	r.Equal(2, lv.countValidate)       // not synced, expect two calls
+	r.Equal(1, lv.countValidate)       // not synced, expect one call
 }
 
 type mockTimedValidator struct {
