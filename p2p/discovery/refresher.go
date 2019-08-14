@@ -64,7 +64,6 @@ func (r *refresher) Bootstrap(ctx context.Context, numpeers int) error {
 	size := r.book.NumAddresses()
 	if size == 0 {
 		r.book.AddAddresses(r.bootNodes, r.localAddress)
-		servers = r.bootNodes
 		size = len(r.bootNodes)
 		defer func() {
 			// currently we only have  the discovery address of bootnodes in the configuration so let them pick their own neighbors.
@@ -72,19 +71,15 @@ func (r *refresher) Bootstrap(ctx context.Context, numpeers int) error {
 				r.book.RemoveAddress(b.PublicKey())
 			}
 		}()
-	} else {
-		srv := r.book.AddressCache()
-		servers = srv[:common.Min(numpeers, len(srv))]
 	}
 
 	r.logger.Info("Bootstrap: starting with %v sized table", size)
 
 loop:
 	for {
+		srv := r.book.AddressCache() // get fresh members to query
+		servers = srv[:common.Min(numpeers, len(srv))]
 		res := r.requestAddresses(servers)
-		if len(res) > 0 {
-			servers = res
-		}
 		tries++
 		r.logger.Info("Bootstrap : %d try gave %v results", tries, len(res))
 
@@ -106,7 +101,6 @@ loop:
 		case <-timer.C:
 			continue
 		}
-
 	}
 
 	return err
@@ -159,6 +153,9 @@ func (r *refresher) requestAddresses(servers []*node.NodeInfo) []*node.NodeInfo 
 
 	// todo: here we stop only after we've tried querying or queried all addrs
 	// 	maybe we should stop after we've reached a certain amount ? (needMoreAddresses..)
+	// todo: revisit this area to think about if lastQueries is even needed, since we're going
+	// 		to probably sleep for more than minTimeBetweenQueries between running requestAddresses
+	//		calls. maybe we can use only the seen cache instead.
 	var out []*node.NodeInfo
 
 	seen := make(map[p2pcrypto.PublicKey]struct{})
@@ -203,11 +200,16 @@ func (r *refresher) requestAddresses(servers []*node.NodeInfo) []*node.NodeInfo 
 			}
 			if cr.res != nil && len(cr.res) > 0 {
 				for _, a := range cr.res {
-					if _, ok := seen[a.PublicKey()]; !ok {
-						out = append(out, a)
-						r.book.AddAddress(a, cr.src)
-						seen[a.PublicKey()] = struct{}{}
+					if _, ok := seen[a.PublicKey()]; ok {
+						continue
 					}
+
+					if _, ok := r.lastQueries[a.PublicKey()]; ok {
+						continue
+					}
+					out = append(out, a)
+					r.book.AddAddress(a, cr.src)
+					seen[a.PublicKey()] = struct{}{}
 				}
 			}
 		case <-r.quit:
