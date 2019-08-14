@@ -887,3 +887,49 @@ func Test_NodeInfo(t *testing.T) {
 		panic(err)
 	}
 }
+
+func TestNeighborhood_ReportConnectionResult(t *testing.T) {
+	const PeerNum = 10
+	n := p2pTestNoStart(t, config.DefaultConfig())
+	goodcount := 0
+	attemptcount := 0
+
+	ps := &discovery.MockPeerStore{}
+
+	ps.GoodFunc = func(key p2pcrypto.PublicKey) {
+		goodcount++
+	}
+
+	ps.AttemptFunc = func(key p2pcrypto.PublicKey) {
+		attemptcount++
+	}
+
+	rnds := node.GenerateRandomNodesData(PeerNum)
+
+	ps.SelectPeersFunc = func(qty int) []*node.NodeInfo {
+		return rnds
+	}
+
+	n.discover = ps
+
+	//_, disc := n.SubscribePeerEvents()
+
+	n.getMorePeers(PeerNum)
+	require.Equal(t, attemptcount, PeerNum)
+
+	realnode := p2pTestNoStart(t, config.DefaultConfig())
+	realnode2 := p2pTestNoStart(t, config.DefaultConfig())
+	realnode.Start()
+	realnode2.Start()
+
+	newrnds := node.GenerateRandomNodesData(PeerNum - 2)
+
+	ps.SelectPeersFunc = func(qty int) []*node.NodeInfo {
+		return append([]*node.NodeInfo{realnode.lNode.NodeInfo, realnode2.lNode.NodeInfo}, newrnds...)
+	}
+
+	n.getMorePeers(PeerNum)
+
+	require.Equal(t, goodcount, 2)
+	require.True(t, attemptcount == PeerNum*2-2)
+}
