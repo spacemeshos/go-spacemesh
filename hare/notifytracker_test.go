@@ -7,7 +7,7 @@ import (
 
 func BuildNotifyMsg(signing Signer, s *Set) *Msg {
 	builder := NewMessageBuilder()
-	builder.SetType(PreRound).SetInstanceId(instanceId1).SetRoundCounter(Round4).SetKi(ki).SetValues(s)
+	builder.SetType(Notify).SetInstanceId(instanceId1).SetRoundCounter(Round4).SetKi(ki).SetValues(s)
 	builder = builder.SetPubKey(signing.PublicKey()).Sign(signing)
 	cert := &Certificate{}
 	cert.Values = NewSetFromValues(value1).ToSlice()

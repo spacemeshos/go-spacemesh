@@ -2,7 +2,6 @@ package hare
 
 import (
 	"errors"
-	"fmt"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
@@ -133,8 +132,11 @@ func TestSyntaxContextValidator_PreRoundContext(t *testing.T) {
 	r := require.New(t)
 	validator := defaultValidator()
 	ed := signing.NewEdSigner()
-	for i := 0; i < 10; i++ {
-		res, e := validator.ContextuallyValidateMessage(BuildPreRoundMsg(ed, NewSmallEmptySet()), int32(i))
+	pre := BuildPreRoundMsg(ed, NewSmallEmptySet())
+	for i := int32(0); i < 10; i++ {
+		k := i * 4
+		pre.InnerMsg.K = k
+		res, e := validator.ContextuallyValidateMessage(pre, k)
 		assertNoErr(r, true, res, e)
 	}
 }
@@ -143,8 +145,11 @@ func TestSyntaxContextValidator_NotifyContext(t *testing.T) {
 	r := require.New(t)
 	validator := defaultValidator()
 	ed := signing.NewEdSigner()
-	for i := 0; i < 10; i++ {
-		res, e := validator.ContextuallyValidateMessage(BuildNotifyMsg(ed, NewSmallEmptySet()), int32(i))
+	notify := BuildNotifyMsg(ed, NewSmallEmptySet())
+	for i := int32(0); i < 10; i++ {
+		k := i * 4
+		notify.InnerMsg.K = k
+		res, e := validator.ContextuallyValidateMessage(notify, k)
 		assertNoErr(r, true, res, e)
 	}
 }
@@ -153,13 +158,28 @@ func TestSyntaxContextValidator_StatusContext(t *testing.T) {
 	r := require.New(t)
 	validator := defaultValidator()
 	ed := signing.NewEdSigner()
-	_, e := validator.ContextuallyValidateMessage(BuildStatusMsg(ed, NewSmallEmptySet()), -1)
-	assert.Error(t, e, errEarlyMsg.Error())
+	status := BuildStatusMsg(ed, NewSmallEmptySet())
+	status.InnerMsg.K = -1
+	_, e := validator.ContextuallyValidateMessage(status, -1)
+	r.Error(e, errEarlyMsg.Error())
 
-	results := []bool{true, false, false, false}
-	for i := 0; i < 4; i++ {
-		res, e := validator.ContextuallyValidateMessage(BuildStatusMsg(ed, NewSmallEmptySet()), int32(i))
-		assertNoErr(r, results[i], res, e)
+	for i := int32(0); i < 10; i++ {
+		k := i * 4
+		status.InnerMsg.K = k
+		res, e := validator.ContextuallyValidateMessage(status, k)
+		assertNoErr(r, true, res, e)
+
+		status.InnerMsg.K = k + 1
+		res, e = validator.ContextuallyValidateMessage(status, k+1)
+		assertNoErr(r, false, res, e)
+
+		status.InnerMsg.K = k + 2
+		res, e = validator.ContextuallyValidateMessage(status, k+2)
+		assertNoErr(r, false, res, e)
+
+		status.InnerMsg.K = k + 3
+		res, e = validator.ContextuallyValidateMessage(status, k+3)
+		assertNoErr(r, false, res, e)
 	}
 }
 
@@ -167,22 +187,27 @@ func TestSyntaxContextValidator_ProposalContext(t *testing.T) {
 	r := require.New(t)
 	validator := defaultValidator()
 	ed := signing.NewEdSigner()
-
-	res, e := validator.ContextuallyValidateMessage(BuildProposalMsg(ed, NewSmallEmptySet()), -1)
+	proposal := BuildProposalMsg(ed, NewSmallEmptySet())
+	proposal.InnerMsg.K = -1
+	res, e := validator.ContextuallyValidateMessage(proposal, -1)
 	assertNoErr(r, false, res, e)
 
 	for i := int32(0); i < 10; i++ {
 		k := i * 4
-		res, e = validator.ContextuallyValidateMessage(BuildProposalMsg(ed, NewSmallEmptySet()), k)
+		proposal.InnerMsg.K = k
+		res, e = validator.ContextuallyValidateMessage(proposal, k)
 		r.Error(e, errEarlyMsg.Error())
 
-		res, e = validator.ContextuallyValidateMessage(BuildProposalMsg(ed, NewSmallEmptySet()), k+1)
+		proposal.InnerMsg.K = k + 1
+		res, e = validator.ContextuallyValidateMessage(proposal, k+1)
 		assertNoErr(r, true, res, e)
 
-		res, e = validator.ContextuallyValidateMessage(BuildProposalMsg(ed, NewSmallEmptySet()), k+2)
+		proposal.InnerMsg.K = k + 2
+		res, e = validator.ContextuallyValidateMessage(proposal, k+2)
 		assertNoErr(r, true, res, e)
 
-		res, e = validator.ContextuallyValidateMessage(BuildProposalMsg(ed, NewSmallEmptySet()), k+3)
+		proposal.InnerMsg.K = k + 3
+		res, e = validator.ContextuallyValidateMessage(proposal, k+3)
 		assertNoErr(r, false, res, e)
 	}
 }
@@ -191,24 +216,55 @@ func TestSyntaxContextValidator_CommitContext(t *testing.T) {
 	r := require.New(t)
 	validator := defaultValidator()
 	ed := signing.NewEdSigner()
-	res, e := validator.ContextuallyValidateMessage(BuildCommitMsg(ed, NewSmallEmptySet()), -1)
+	commit := BuildCommitMsg(ed, NewSmallEmptySet())
+	commit.InnerMsg.K = -1
+	res, e := validator.ContextuallyValidateMessage(commit, -1)
 	assertNoErr(r, false, res, e)
 
 	for i := int32(0); i < 10; i++ {
-		fmt.Println(i)
 		k := i * 4
-		res, e = validator.ContextuallyValidateMessage(BuildCommitMsg(ed, NewSmallEmptySet()), k)
+		commit.InnerMsg.K = k
+		res, e = validator.ContextuallyValidateMessage(commit, k)
 		assertNoErr(r, false, res, e)
 
-		res, e = validator.ContextuallyValidateMessage(BuildCommitMsg(ed, NewSmallEmptySet()), k+1)
+		commit.InnerMsg.K = k + 1
+		res, e = validator.ContextuallyValidateMessage(commit, k+1)
 		r.Error(e, errEarlyMsg.Error())
 
-		res, e = validator.ContextuallyValidateMessage(BuildCommitMsg(ed, NewSmallEmptySet()), k+2)
+		commit.InnerMsg.K = k + 2
+		res, e = validator.ContextuallyValidateMessage(commit, k+2)
 		assertNoErr(r, true, res, e)
 
-		res, e = validator.ContextuallyValidateMessage(BuildCommitMsg(ed, NewSmallEmptySet()), k+3)
+		commit.InnerMsg.K = k + 3
+		res, e = validator.ContextuallyValidateMessage(commit, k+3)
 		assertNoErr(r, false, res, e)
 	}
+}
+
+func TestSyntaxContextValidator_ContextuallyValidateMessageForIteration(t *testing.T) {
+	r := require.New(t)
+	v := defaultValidator()
+	ed := signing.NewEdSigner()
+	set := NewSmallEmptySet()
+	pre := BuildPreRoundMsg(ed, set)
+	pre.InnerMsg.K = -1
+	r.True(v.ContextuallyValidateMessage(pre, 1))
+
+	status := BuildStatusMsg(ed, set)
+	status.InnerMsg.K = 100
+	r.False(v.ContextuallyValidateMessage(status, 1))
+
+	proposal := BuildCommitMsg(ed, set)
+	proposal.InnerMsg.K = 100
+	r.False(v.ContextuallyValidateMessage(proposal, 1))
+
+	commit := BuildCommitMsg(ed, set)
+	commit.InnerMsg.K = 100
+	r.False(v.ContextuallyValidateMessage(commit, 1))
+
+	notify := BuildNotifyMsg(ed, set)
+	notify.InnerMsg.K = 100
+	r.True(v.ContextuallyValidateMessage(notify, 1))
 }
 
 func TestMessageValidator_ValidateMessage(t *testing.T) {

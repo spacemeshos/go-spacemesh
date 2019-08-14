@@ -29,6 +29,7 @@ const (
 )
 
 const (
+	Round0 = -1
 	Round1 = 0
 	Round2 = 1
 	Round3 = 2

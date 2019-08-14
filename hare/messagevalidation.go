@@ -103,31 +103,48 @@ func (validator *syntaxContextValidator) ContextuallyValidateMessage(m *Msg, cur
 		return false, errors.New("nil inner message")
 	}
 
-	// PreRound & Notify are always contextually valid
-	currentRound := currentK % 4
+	// first validate pre-round and notify
 	switch m.InnerMsg.Type {
 	case PreRound:
 		return true, nil
-	case Proposal:
-		if currentRound == Round1 {
-			return false, errEarlyMsg
-		}
-		if currentRound == Round2 || currentRound == Round3 {
-			return true, nil // process proposals for
-		}
-		return false, nil
 	case Notify:
 		return true, nil
 	}
 
-	// Status & Commit Messages should match the expected K
-	if currentK == m.InnerMsg.K { // arrived on time
-		return true, nil
+	// the message must match the current iteration unless it is a notify message
+	currentIteration := currentK / 4
+	msgIteration := m.InnerMsg.K / 4
+	if currentIteration != msgIteration {
+		return false, nil
 	}
 
-	// matches the next round, early message
-	if currentK+1 == m.InnerMsg.K {
-		return false, errEarlyMsg
+	// PreRound & Notify are always contextually valid
+	currentRound := currentK % 4
+	switch m.InnerMsg.Type {
+	case Proposal:
+		if currentRound == Round1 {
+			return false, errEarlyMsg
+		}
+		if currentRound == Round2 || currentRound == Round3 { // may be a late proposal
+			return true, nil
+		}
+		return false, nil
+	case Status:
+		if currentRound == Round0 {
+			return false, errEarlyMsg
+		}
+		if currentRound == Round1 {
+			return true, nil
+		}
+		return false, nil
+	case Commit:
+		if currentRound == Round2 {
+			return false, errEarlyMsg
+		}
+		if currentRound == Round3 {
+			return true, nil
+		}
+		return false, nil
 	}
 
 	return false, nil
