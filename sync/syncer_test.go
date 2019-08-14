@@ -956,8 +956,7 @@ func TestSyncer_Synchronise(t *testing.T) {
 	sync := syncs[0]
 	lv := &mockLayerValidator{0, 0, 0}
 	sync.lValidator = lv
-
-	sync.currentLayer = 1
+	
 	sr := sync.getSyncRoutine()
 	sr()
 	time.Sleep(100 * time.Millisecond) // handle go routine race
