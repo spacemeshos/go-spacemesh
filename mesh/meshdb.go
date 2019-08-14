@@ -23,6 +23,7 @@ type MeshDB struct {
 	blocks             database.DB
 	transactions       database.Database
 	contextualValidity database.DB //map blockId to contextualValidation state of block
+	patterns           database.DB //map blockId to contextualValidation state of block
 	orphanBlocks       map[types.LayerID]map[types.BlockID]struct{}
 	layerMutex         map[types.LayerID]*layerMutex
 	lhMutex            sync.Mutex
@@ -32,6 +33,7 @@ func NewPersistentMeshDB(path string, log log.Log) (*MeshDB, error) {
 	bdb := database.NewLevelDbStore(path+"blocks", nil, nil)
 	ldb := database.NewLevelDbStore(path+"layers", nil, nil)
 	vdb := database.NewLevelDbStore(path+"validity", nil, nil)
+	pdb := database.NewLevelDbStore(path+"patterns", nil, nil)
 	tdb, err := database.NewLDBDatabase(path+"transactions", 0, 0, log)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize transactions db: %v", err)
@@ -42,6 +44,7 @@ func NewPersistentMeshDB(path string, log log.Log) (*MeshDB, error) {
 		blocks:             bdb,
 		layers:             ldb,
 		transactions:       tdb,
+		patterns:           pdb,
 		contextualValidity: vdb,
 		orphanBlocks:       make(map[types.LayerID]map[types.BlockID]struct{}),
 		layerMutex:         make(map[types.LayerID]*layerMutex),
@@ -329,4 +332,51 @@ func (m *MeshDB) GetTransaction(id types.TransactionId) (*types.AddressableSigne
 		return nil, fmt.Errorf("could not find transaction in database %v err=%v", hex.EncodeToString(id[:]), err)
 	}
 	return types.BytesAsAddressableTransaction(tBytes)
+}
+
+func (m *MeshDB) GetGoodPattern(layer types.LayerID) (map[types.BlockID]struct{}, error) {
+
+	if layer == 0 || layer == 1 {
+		v, err := m.LayerBlockIds(layer)
+		if err != nil {
+			m.Error("Could not get layer block ids for layer %v err=%v", layer, err)
+			return nil, err
+		}
+
+		mp := make(map[types.BlockID]struct{}, len(v))
+		for _, blk := range v {
+			mp[blk] = struct{}{}
+		}
+
+		return mp, nil
+	}
+
+	tBytes, err := m.patterns.Get(layer.ToBytes())
+	if err != nil {
+		return nil, fmt.Errorf("could not find good pattern for layer %v", layer)
+	}
+
+	var blkSlice map[types.BlockID]struct{}
+	err = types.BytesToInterface(tBytes, blkSlice)
+	if err != nil {
+		return nil, fmt.Errorf("could not desirialize good pattern for layer %v", layer)
+	}
+
+	return blkSlice, nil
+}
+
+func (m *MeshDB) SaveGoodPattern(layer types.LayerID, blks map[types.BlockID]struct{}) error {
+
+	values := make([]types.BlockID, 0, len(blks))
+	for value := range blks {
+		values = append(values, value)
+	}
+
+	bts, err := types.InterfaceToBytes(values)
+	if err != nil {
+		return fmt.Errorf("could not save good pattern for layer %v", layer)
+	}
+
+	m.patterns.Put(layer.ToBytes(), bts)
+	return nil
 }
