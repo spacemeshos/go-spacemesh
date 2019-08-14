@@ -14,6 +14,26 @@ from elasticsearch_dsl import Search, Q
 #    TESTS
 # ==============================================================================
 
+def setup_clients_in_namespace(namespace, bs_deployment_info, client_deployment_info, client_config,
+                               oracle=None, poet=None, dep_time_out=120):
+
+    cspec = get_conf(bs_deployment_info, client_config, oracle, poet)
+
+    resp = deployment.create_deployment(CLIENT_DEPLOYMENT_FILE, namespace,
+                                        deployment_id=client_deployment_info.deployment_id,
+                                        replica_size=client_config['replicas'],
+                                        container_specs=cspec,
+                                        time_out=dep_time_out)
+
+    client_deployment_info.deployment_name = resp.metadata._name
+    client_pods = (
+        CoreV1ApiClient().list_namespaced_pod(namespace,
+                                              include_uninitialized=True,
+                                              label_selector=("name={0}".format(
+                                                  client_deployment_info.deployment_name.split('-')[1]))).items)
+
+    client_deployment_info.pods = [{'name': c.metadata.name, 'pod_ip': c.status.pod_ip} for c in client_pods]
+    return client_deployment_info
 
 def new_client_in_namespace(name_space, setup_bootstrap, cspec, num):
     resp = create_deployment(CLIENT_DEPLOYMENT_FILE, name_space,
@@ -56,7 +76,7 @@ def search_pod_logs(namespace, pod_name, term):
 
 def test_add_delayed_nodes(init_session, setup_bootstrap, save_log_on_exit):
     bs_info = setup_bootstrap.pods[0]
-    cspec = get_conf(bs_info, testconfig['client'])
+    cspec = get_conf(bs_info, testconfig['client'], None, setup_bootstrap.pods[0]['pod_ip'])
     ns = testconfig['namespace']
 
     layerDuration = int(testconfig['client']['args']['layer-duration-sec'])
