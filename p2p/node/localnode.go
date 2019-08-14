@@ -96,7 +96,7 @@ func newLocalNodeWithKeys(pubKey p2pcrypto.PublicKey, privKey p2pcrypto.PrivateK
 	}
 
 	if !persist {
-		n.Log = log.New(n.ID.String(), "", "")
+		n.Log = log.NewDefault(n.ID.String())
 		return n, nil
 	}
 
@@ -105,13 +105,13 @@ func newLocalNodeWithKeys(pubKey p2pcrypto.PublicKey, privKey p2pcrypto.PrivateK
 		return nil, err
 	}
 
-	nodeDir, err := filesystem.EnsureNodeDataDirectory(dataDir, n.ID.String())
+	_, err = filesystem.EnsureNodeDataDirectory(dataDir, n.ID.String())
 	if err != nil {
 		return nil, err
 	}
 
 	// persistent logging
-	n.Log = log.New(n.ID.String(), nodeDir, "node.log")
+	n.Log = log.NewDefault(n.ID.String())
 
 	n.Info("Local node identity >> %v", n.PublicKey().String())
 

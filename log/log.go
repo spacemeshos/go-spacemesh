@@ -53,7 +53,7 @@ var AppLog Log
 func init() {
 	// create a basic temp os.Stdout logger
 	// This logger is used until the app calls InitSpacemeshLoggingSystem().
-	AppLog = New(mainLoggerName, "", "")
+	AppLog = NewDefault(mainLoggerName)
 }
 
 // DebugMode sets log debug level
@@ -130,7 +130,7 @@ func getFileWriter(dataFolderPath, logFileName string) io.Writer {
 
 // InitSpacemeshLoggingSystem initializes app logging system.
 func InitSpacemeshLoggingSystem(dataFolderPath string, logFileName string) {
-	AppLog = New(mainLoggerName, dataFolderPath, logFileName)
+	AppLog = NewDefault(mainLoggerName)
 }
 
 // public wrappers abstracting away logging lib impl
