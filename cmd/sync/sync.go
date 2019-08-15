@@ -72,10 +72,22 @@ func NewSyncApp() *SyncApp {
 }
 
 func (app *SyncApp) Cleanup() {
-
+	err := os.RemoveAll(app.Config.DataDir)
+	if err != nil {
+		app.sync.Error("failed to cleanup sync: %v", err)
+	}
 }
 
 type mockTxProcessor struct {
+}
+
+func (processor mockTxProcessor) GetValidAddressableTx(tx *types.SerializableSignedTransaction) (*types.AddressableSignedTransaction, error) {
+	addr, err := processor.ValidateTransactionSignature(tx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &types.AddressableSignedTransaction{SerializableSignedTransaction: tx, Address: addr}, nil
 }
 
 func (mockTxProcessor) ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (address.Address, error) {
@@ -92,6 +104,12 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	lg.Info("expected layers: ", expectedLayers)
 	lg.Info("request timeout: ", timeout)
 
+	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P)
+
+	if err != nil {
+		panic("something got fudged while creating p2p service ")
+	}
+
 	conf := sync.Configuration{
 		Concurrency:    4,
 		LayerSize:      int(100),
@@ -104,12 +122,6 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 			return
 		}
 	}
-	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P)
-
-	if err != nil {
-		panic("something got fudged while creating p2p service ")
-	}
-
 	poetDbStore, err := database.NewLDBDatabase(app.Config.DataDir+"poet", 0, 0, lg.WithName("poetDbStore"))
 	if err != nil {
 		lg.Error("error: ", err)
@@ -118,7 +130,7 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 
 	poetDb := activation.NewPoetDb(poetDbStore, lg.WithName("poetDb").WithOptions(log.Nop))
 
-	mshdb := mesh.NewPersistentMeshDB(app.Config.DataDir, lg.WithOptions(log.Nop))
+	mshdb, _ := mesh.NewPersistentMeshDB(app.Config.DataDir, lg.WithOptions(log.Nop))
 	atxdbStore, _ := database.NewLDBDatabase(app.Config.DataDir+"atx", 0, 0, lg)
 	atxdb := activation.NewActivationDb(atxdbStore, &sync.MockIStore{}, mshdb, uint16(1000), &sync.ValidatorMock{}, lg.WithName("atxDB").WithOptions(log.Nop))
 
@@ -130,7 +142,7 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	msh.AddBlock(&mesh.GenesisBlock)
 
 	ch := make(chan types.LayerID, 1)
-	app.sync = sync.NewSync(swarm, msh, txpool, atxpool, mockTxProcessor{}, sync.NewBlockValidator(sync.BlockEligibilityValidatorMock{}), poetDb, conf, ch, 0, lg.WithName("sync"))
+	app.sync = sync.NewSync(swarm, msh, txpool, atxpool, mockTxProcessor{}, sync.BlockEligibilityValidatorMock{}, poetDb, conf, ch, 0, lg.WithName("sync"))
 	ch <- types.LayerID(expectedLayers)
 	if err = swarm.Start(); err != nil {
 		log.Panic("error starting p2p err=%v", err)

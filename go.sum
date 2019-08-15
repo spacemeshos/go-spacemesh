@@ -152,9 +152,11 @@ github.com/olekukonko/tablewriter v0.0.1/go.mod h1:vsDQFd/mU46D+Z4whnwzcISnGGzXW
 github.com/onsi/ginkgo v1.6.0/go.mod h1:lLunBs/Ym6LB5Z9jYTR76FiuTmxDTDusOGeTQH+WWjE=
 github.com/onsi/ginkgo v1.7.0 h1:WSHQ+IS43OoUrWtD1/bbclrwK8TTH5hzp+umCiuxHgs=
 github.com/onsi/ginkgo v1.7.0/go.mod h1:lLunBs/Ym6LB5Z9jYTR76FiuTmxDTDusOGeTQH+WWjE=
+github.com/onsi/ginkgo v1.8.0 h1:VkHVNpR4iVnU8XQR6DBm8BqYjN7CRzw+xKUbVVbbW9w=
 github.com/onsi/ginkgo v1.8.0/go.mod h1:lLunBs/Ym6LB5Z9jYTR76FiuTmxDTDusOGeTQH+WWjE=
 github.com/onsi/gomega v1.4.3 h1:RE1xgDvH7imwFD45h+u2SgIfERHlS2yNG4DObb5BSKU=
 github.com/onsi/gomega v1.4.3/go.mod h1:ex+gbHU/CVuBBDIJjb2X0qEXbFg53c61hWP/1CpauHY=
+github.com/onsi/gomega v1.5.0 h1:izbySO9zDPmjJ8rDjLvkA2zJHIo+HkYXHnf7eN7SSyo=
 github.com/onsi/gomega v1.5.0/go.mod h1:ex+gbHU/CVuBBDIJjb2X0qEXbFg53c61hWP/1CpauHY=
 github.com/pelletier/go-toml v1.2.0 h1:T5zMGML61Wp+FlcbWjRDT7yAxhJNAiPPLOFECq181zc=
 github.com/pelletier/go-toml v1.2.0/go.mod h1:5z9KED0ma1S8pY6P1sdut58dfprrGBbd/94hg7ilaic=
@@ -209,8 +211,8 @@ github.com/spacemeshos/poet v0.0.0-20190717095635-f016e4af26f2 h1:zMmLj4cADgTFQV
 github.com/spacemeshos/poet v0.0.0-20190717095635-f016e4af26f2/go.mod h1:x9Mh8Qf4L7E28y9DCcxHTZ/3BhjsfHv6T7vI0ahj4So=
 github.com/spacemeshos/post v0.0.0-20190508113329-07bdc2589d98 h1:dB9yxkhtbDYGlW7tdp3PSGRXeuOq7kE/3sJqT8Nja+M=
 github.com/spacemeshos/post v0.0.0-20190508113329-07bdc2589d98/go.mod h1:n8EGjskKs9gKrxfCWqgrEH5zBiYFLZ70LezPb0CRXPg=
-github.com/spacemeshos/post v0.0.0-20190721130117-ecc4fecf758d h1:HszUQKsV1rroFglDUbQDRm0gsUyjKUmDxbhRJ/lXcFU=
-github.com/spacemeshos/post v0.0.0-20190721130117-ecc4fecf758d/go.mod h1:SxYZvgIyGKC/1JxnA42y0GaOE/ohnCo2qFk+c6EiUPQ=
+github.com/spacemeshos/post v0.0.0-20190811074956-2869fc4b20e5 h1:mCmtO2Yxqe1SaOa+s9XAukPbqgTDj8PnUtUiYI1kiVk=
+github.com/spacemeshos/post v0.0.0-20190811074956-2869fc4b20e5/go.mod h1:43GwKHD+nI5wUzzUMwRbpJdC2r9dURZ6V3Jkc9eUMSE=
 github.com/spacemeshos/post v0.0.0-20190811074956-2869fc4b20e5 h1:mCmtO2Yxqe1SaOa+s9XAukPbqgTDj8PnUtUiYI1kiVk=
 github.com/spacemeshos/post v0.0.0-20190811074956-2869fc4b20e5/go.mod h1:43GwKHD+nI5wUzzUMwRbpJdC2r9dURZ6V3Jkc9eUMSE=
 github.com/spacemeshos/sha256-simd v0.0.0-20190111104731-8575aafc88c9 h1:Cc+np6ORem5wrvO+YHQ1sdu71ItiQVRiYB4ugazpgxM=

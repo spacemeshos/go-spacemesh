@@ -115,7 +115,7 @@ func TestTicker_TickPastGenesis(t *testing.T) {
 	x := <-sub
 	duration := time.Since(start)
 	assert.Equal(t, types.LayerID(5), x)
-	assert.True(t, duration > 99*time.Millisecond && duration < 105*time.Millisecond, duration)
+	assert.True(t, duration > 99*time.Millisecond && duration < 107*time.Millisecond, duration)
 }
 
 func TestTicker_NewTicker(t *testing.T) {

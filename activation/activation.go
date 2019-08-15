@@ -1,6 +1,7 @@
 package activation
 
 import (
+	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
@@ -14,6 +15,7 @@ import (
 const AtxProtocol = "AtxGossip"
 
 var activesetCache = NewActivesetCache(1000)
+var tooSoonErr = errors.New("received PoET proof too soon")
 
 type MeshProvider interface {
 	GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error)
@@ -161,7 +163,11 @@ func (b *Builder) loop() {
 				epoch := layer.GetEpoch(b.layersPerEpoch)
 				err := b.PublishActivationTx(epoch)
 				if err != nil {
-					b.log.Error("cannot create atx in epoch %v: %v", epoch, err)
+					if err == tooSoonErr {
+						b.log.Warning("cannot create atx in epoch %v: %v", epoch, err)
+					} else {
+						b.log.Error("cannot create atx in epoch %v: %v", epoch, err)
+					}
 				}
 				b.finished <- struct{}{}
 			}()
@@ -330,7 +336,8 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 					log.Error("cannot discard challenge")
 				}
 			}
-		} else {
+		}
+		if b.challenge == nil {
 			err := b.buildNipstChallenge(epoch)
 			if err != nil {
 				if _, alreadyPublished := err.(alreadyPublishedErr); alreadyPublished {
@@ -352,8 +359,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 		// cannot determine active set size before mesh reaches publication epoch, will try again in next layer
 		b.log.Warning("received PoET proof too soon. ATX publication epoch: %v; mesh epoch: %v; started in clock-epoch: %v",
 			b.challenge.PubLayerIdx.GetEpoch(b.layersPerEpoch), b.mesh.LatestLayer().GetEpoch(b.layersPerEpoch), epoch)
-		return fmt.Errorf("received PoET proof too soon. ATX publication epoch: %v; mesh epoch: %v; started in clock-epoch: %v",
-			b.challenge.PubLayerIdx.GetEpoch(b.layersPerEpoch), b.mesh.LatestLayer().GetEpoch(b.layersPerEpoch), epoch)
+		return tooSoonErr
 	}
 
 	// when we reach here an epoch has passed
@@ -412,9 +418,10 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 		log.Error("cannot discard nipst challenge %s", err)
 	}
 
-	b.log.Event().Info(fmt.Sprintf("atx published! id: %v, prevATXID: %v, posATXID: %v, layer: %v, published in epoch: %v, active set: %v miner: %v view %v",
-		atx.ShortId(), atx.PrevATXId.ShortString(), atx.PositioningAtx.ShortString(), atx.PubLayerIdx,
-		atx.PubLayerIdx.GetEpoch(b.layersPerEpoch), atx.ActiveSetSize, b.nodeId.Key[:5], len(atx.View)))
+	b.log.Event().Info("atx published!", log.AtxId(atx.ShortId()), log.String("prev_atx_id", atx.PrevATXId.ShortString()),
+		log.String("post_atx_id", atx.PositioningAtx.ShortString()), log.LayerId(uint64(atx.PubLayerIdx)), log.EpochId(uint64(atx.PubLayerIdx.GetEpoch(b.layersPerEpoch))),
+		log.Uint32("active_set", atx.ActiveSetSize), log.String("miner", b.nodeId.Key[:5]), log.Int("view", len(atx.View)))
+
 	return nil
 }
 

@@ -30,9 +30,9 @@ type networker interface {
 type ConnectionPool struct {
 	localPub    p2pcrypto.PublicKey
 	net         networker
-	connections map[string]net.Connection
+	connections map[p2pcrypto.PublicKey]net.Connection
 	connMutex   sync.RWMutex
-	pending     map[string][]chan dialResult
+	pending     map[p2pcrypto.PublicKey][]chan dialResult
 	pendMutex   sync.Mutex
 	dialWait    sync.WaitGroup
 	shutdown    bool
@@ -43,9 +43,9 @@ func NewConnectionPool(network networker, lPub p2pcrypto.PublicKey) *ConnectionP
 	cPool := &ConnectionPool{
 		localPub:    lPub,
 		net:         network,
-		connections: make(map[string]net.Connection),
+		connections: make(map[p2pcrypto.PublicKey]net.Connection),
 		connMutex:   sync.RWMutex{},
-		pending:     make(map[string][]chan dialResult),
+		pending:     make(map[p2pcrypto.PublicKey][]chan dialResult),
 		pendMutex:   sync.Mutex{},
 		dialWait:    sync.WaitGroup{},
 		shutdown:    false,
@@ -107,10 +107,10 @@ func (cp *ConnectionPool) closeConnections() {
 
 func (cp *ConnectionPool) handleDialResult(rPub p2pcrypto.PublicKey, result dialResult) {
 	cp.pendMutex.Lock()
-	for _, p := range cp.pending[rPub.String()] {
+	for _, p := range cp.pending[rPub] {
 		p <- result
 	}
-	delete(cp.pending, rPub.String())
+	delete(cp.pending, rPub)
 	cp.pendMutex.Unlock()
 }
 
@@ -130,7 +130,7 @@ func (cp *ConnectionPool) handleNewConnection(rPub p2pcrypto.PublicKey, newConn 
 	}
 	cp.net.Logger().With().Info("new_connection", log.String("src", srcPub), log.String("dst", dstPub))
 	// check if there isn't already same connection (possible if the second connection is a Remote connection)
-	curConn, ok := cp.connections[rPub.String()]
+	curConn, ok := cp.connections[rPub]
 	if ok {
 		// it is possible to get a new connection with the same peers as another existing connection, in case the two peers tried to connect to each other at the same time.
 		// We need both peers to agree on which connection to keep and which one to close otherwise they might end up closing both connections (bug #195)
@@ -144,7 +144,7 @@ func (cp *ConnectionPool) handleNewConnection(rPub p2pcrypto.PublicKey, newConn 
 				cp.net.Logger().Warning("connection created while connection already exists between peers, closing existing connection. existing session ID=%v, new session ID=%v, remote=%s", curConn.Session().ID(), newConn.Session().ID(), rPub)
 			}
 			closeConn = curConn
-			cp.connections[rPub.String()] = newConn
+			cp.connections[rPub] = newConn
 		} else { // newConn < curConn
 			cp.net.Logger().Warning("connection created while connection already exists between peers, closing new connection. existing session ID=%v, new session ID=%v, remote=%s", curConn.Session().ID(), newConn.Session().ID(), rPub)
 			closeConn = newConn
@@ -157,7 +157,7 @@ func (cp *ConnectionPool) handleNewConnection(rPub p2pcrypto.PublicKey, newConn 
 		// we don't need to update on the new connection since there were already a connection in the table and there shouldn't be any registered channel waiting for updates
 		return
 	}
-	cp.connections[rPub.String()] = newConn
+	cp.connections[rPub] = newConn
 	cp.connMutex.Unlock()
 
 	// update all registered channels
@@ -166,9 +166,9 @@ func (cp *ConnectionPool) handleNewConnection(rPub p2pcrypto.PublicKey, newConn 
 }
 
 func (cp *ConnectionPool) handleClosedConnection(conn net.Connection) {
-	cp.net.Logger().Info("connection_closed", log.String("id", conn.String()), log.String("remote", conn.RemotePublicKey().String()))
+	cp.net.Logger().With().Info("connection_closed", log.String("id", conn.String()), log.String("remote", conn.RemotePublicKey().String()))
 	cp.connMutex.Lock()
-	rPub := conn.RemotePublicKey().String()
+	rPub := conn.RemotePublicKey()
 	cur, ok := cp.connections[rPub]
 	// only delete if the closed connection is the same as the cached one (it is possible that the closed connection is a duplication and therefore was closed)
 	if ok && cur.ID() == conn.ID() {
@@ -185,7 +185,7 @@ func (cp *ConnectionPool) GetConnection(address string, remotePub p2pcrypto.Publ
 		return nil, errors.New("ConnectionPool was shut down")
 	}
 	// look for the connection in the pool
-	conn, found := cp.connections[remotePub.String()]
+	conn, found := cp.connections[remotePub]
 	if found {
 		cp.connMutex.RUnlock()
 		return conn, nil
@@ -194,9 +194,9 @@ func (cp *ConnectionPool) GetConnection(address string, remotePub p2pcrypto.Publ
 	// where it is possible that the connection will be established and all registered channels will be notified before
 	// the current registration
 	cp.pendMutex.Lock()
-	_, found = cp.pending[remotePub.String()]
+	_, found = cp.pending[remotePub]
 	pendChan := make(chan dialResult)
-	cp.pending[remotePub.String()] = append(cp.pending[remotePub.String()], pendChan)
+	cp.pending[remotePub] = append(cp.pending[remotePub], pendChan)
 	if !found {
 		// No one is waiting for a connection with the remote peer, need to call Dial
 		go func() {
@@ -225,7 +225,7 @@ func (cp *ConnectionPool) GetConnectionIfExists(remotePub p2pcrypto.PublicKey) (
 		return nil, errors.New("ConnectionPool was shut down")
 	}
 	// look for the connection in the pool
-	if conn, found := cp.connections[remotePub.String()]; found {
+	if conn, found := cp.connections[remotePub]; found {
 		cp.connMutex.RUnlock()
 		return conn, nil
 	}
@@ -233,7 +233,7 @@ func (cp *ConnectionPool) GetConnectionIfExists(remotePub p2pcrypto.PublicKey) (
 	// where it is possible that the connection will be established and all registered channels will be notified before
 	// the current registration
 	cp.pendMutex.Lock()
-	if _, found := cp.pending[remotePub.String()]; !found {
+	if _, found := cp.pending[remotePub]; !found {
 		// No one is waiting for a connection with the remote peer
 		cp.connMutex.RUnlock()
 		cp.pendMutex.Unlock()
@@ -241,7 +241,7 @@ func (cp *ConnectionPool) GetConnectionIfExists(remotePub p2pcrypto.PublicKey) (
 	}
 
 	pendChan := make(chan dialResult)
-	cp.pending[remotePub.String()] = append(cp.pending[remotePub.String()], pendChan)
+	cp.pending[remotePub] = append(cp.pending[remotePub], pendChan)
 	cp.pendMutex.Unlock()
 	cp.connMutex.RUnlock()
 	// wait for the connection to be established, if the channel is closed (in case of dialing error) will return nil

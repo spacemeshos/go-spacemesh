@@ -22,12 +22,13 @@ type Signer interface {
 }
 
 type MinerBlockOracle struct {
-	committeeSize  uint32
-	layersPerEpoch uint16
-	activationDb   ActivationDb
-	beaconProvider *EpochBeaconProvider
-	vrfSigner      Signer
-	nodeID         types.NodeId
+	committeeSize        uint32
+	genesisActiveSetSize uint32
+	layersPerEpoch       uint16
+	activationDb         ActivationDb
+	beaconProvider       *EpochBeaconProvider
+	vrfSigner            Signer
+	nodeID               types.NodeId
 
 	proofsEpoch       types.EpochId
 	eligibilityProofs map[types.LayerID][]types.BlockEligibilityProof
@@ -37,18 +38,19 @@ type MinerBlockOracle struct {
 	log               log.Log
 }
 
-func NewMinerBlockOracle(committeeSize uint32, layersPerEpoch uint16, activationDb ActivationDb, beaconProvider *EpochBeaconProvider, vrfSigner Signer, nodeId types.NodeId, isSynced func() bool, log log.Log) *MinerBlockOracle {
+func NewMinerBlockOracle(committeeSize uint32, genesisActiveSetSize uint32, layersPerEpoch uint16, activationDb ActivationDb, beaconProvider *EpochBeaconProvider, vrfSigner Signer, nodeId types.NodeId, isSynced func() bool, log log.Log) *MinerBlockOracle {
 
 	return &MinerBlockOracle{
-		committeeSize:  committeeSize,
-		layersPerEpoch: layersPerEpoch,
-		activationDb:   activationDb,
-		beaconProvider: beaconProvider,
-		vrfSigner:      vrfSigner,
-		nodeID:         nodeId,
-		proofsEpoch:    ^types.EpochId(0),
-		isSynced:       isSynced,
-		log:            log,
+		committeeSize:        committeeSize,
+		genesisActiveSetSize: genesisActiveSetSize,
+		layersPerEpoch:       layersPerEpoch,
+		activationDb:         activationDb,
+		beaconProvider:       beaconProvider,
+		vrfSigner:            vrfSigner,
+		nodeID:               nodeId,
+		proofsEpoch:          ^types.EpochId(0),
+		isSynced:             isSynced,
+		log:                  log,
 	}
 }
 
@@ -82,15 +84,16 @@ func (bo *MinerBlockOracle) calcEligibilityProofs(epochNumber types.EpochId) err
 		if !epochNumber.IsGenesis() {
 			return fmt.Errorf("failed to get latest ATX: %v", err)
 		}
-		bo.log.Warning("genesis epoch detected, using GenesisActiveSetSize (%d)", bo.committeeSize)
-		activeSetSize = bo.committeeSize
 	} else {
 		activeSetSize = atx.ActiveSetSize
-		if epochNumber.IsGenesis() && activeSetSize < bo.committeeSize {
-			activeSetSize = bo.committeeSize
-		}
 		bo.atxID = atx.Id()
 	}
+
+	if epochNumber.IsGenesis() {
+		activeSetSize = bo.genesisActiveSetSize
+		bo.log.Info("genesis epoch detected, using GenesisActiveSetSize (%v)", activeSetSize)
+	}
+
 	numberOfEligibleBlocks, err := getNumberOfEligibleBlocks(activeSetSize, bo.committeeSize, bo.layersPerEpoch, bo.log)
 	if err != nil {
 		bo.log.Error("failed to get number of eligible blocks: %v", err)

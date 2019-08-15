@@ -10,11 +10,11 @@ from pytest_testconfig import config as testconfig
 
 # noinspection PyUnresolvedReferences
 from tests.fixtures import init_session, load_config, set_namespace, session_id, set_docker_images
-from tests.queries import ES, query_message
+from tests.queries import ES, query_message, poll_query_message
 from tests.test_bs import add_single_client, add_multi_clients, get_conf
 from tests.test_bs import api_call
 # noinspection PyUnresolvedReferences
-from tests.test_bs import setup_bootstrap, create_configmap, setup_clients, save_log_on_exit, add_client, add_curl
+from tests.test_bs import setup_bootstrap, setup_clients, save_log_on_exit, add_client, add_curl
 
 # ==============================================================================
 #    TESTS
@@ -27,12 +27,7 @@ timeout_factor = 1
 
 
 def query_bootstrap_es(indx, namespace, bootstrap_po_name):
-    es = ES().get_search_api()
-    fltr = Q("match_phrase", kubernetes__namespace_name=namespace) & \
-           Q("match_phrase", kubernetes__pod_name=bootstrap_po_name) & \
-           Q("match_phrase", M="Local node identity")
-    s = Search(index=indx, using=es).query('bool', filter=[fltr])
-    hits = list(s.scan())
+    hits = poll_query_message(current_index, namespace, bootstrap_po_name, { "M": "Local node identity" }, expected=1)
     for h in hits:
         match = re.search(r"Local node identity >> (?P<bootstrap_key>\w+)", h.M)
         if match:
@@ -53,7 +48,14 @@ def test_client(init_session, setup_clients, add_curl, save_log_on_exit):
     timetowait = len(setup_clients.pods) * timeout_factor
     print("Sleeping " + str(timetowait) + " before checking out bootstrap results")
     time.sleep(timetowait)
-    peers = query_message(current_index, testconfig['namespace'], setup_clients.deployment_name, fields, False)
+
+    peers = poll_query_message(indx=current_index,
+                               namespace=testconfig['namespace'],
+                               client_po_name=setup_clients.deployment_name,
+                               fields=fields,
+                               findFails=False,
+                               expected=len(setup_clients.pods))
+
     assert len(peers) == len(setup_clients.pods)
 
 
@@ -61,7 +63,13 @@ def test_add_client(add_client):
     # Sleep a while before checking the node is bootstarped
     time.sleep(20 * timeout_factor)
     fields = {'M': 'discovery_bootstrap'}
-    hits = query_message(current_index, testconfig['namespace'], add_client, fields, True)
+
+    hits = poll_query_message(indx=current_index,
+                              namespace=testconfig['namespace'],
+                              client_po_name=add_client,
+                              fields=fields,
+                              findFails=True,
+                              expected=1)
     assert len(hits) == 1, "Could not find new Client bootstrap message pod:{0}".format(add_client)
 
 
@@ -73,7 +81,12 @@ def test_add_many_clients(init_session, setup_bootstrap, setup_clients):
     time.sleep(40 * timeout_factor)  # wait for the new clients to finish bootstrap and for logs to get to elasticsearch
     fields = {'M': 'discovery_bootstrap'}
     for p in pods:
-        hits = query_message(current_index, testconfig['namespace'], p, fields, True)
+        hits = poll_query_message(indx=current_index,
+                                  namespace=testconfig['namespace'],
+                                  client_po_name=p,
+                                  fields=fields,
+                                  findFails=True,
+                                  expected=1)
         assert len(hits) == 1, "Could not find new Client bootstrap message pod:{0}".format(p)
 
 
@@ -100,8 +113,15 @@ def test_gossip(init_session, setup_clients, add_curl):
     print('sleep for {0} sec to enable gossip propagation'.format(gossip_propagation_sleep))
     time.sleep(gossip_propagation_sleep)
 
-    after = query_message(current_index, testconfig['namespace'], setup_clients.deployment_name, fields, False)
-    assert initial + len(setup_clients.pods) == len(after)
+    total_expected_gossip = initial + len(setup_clients.pods)
+    after = poll_query_message(indx=current_index,
+                               namespace=testconfig['namespace'],
+                               client_po_name=setup_clients.deployment_name,
+                               fields=fields,
+                               findFails=False,
+                               expected=total_expected_gossip)
+
+    assert total_expected_gossip == len(after), "test_gossip: Total gossip messages in ES is not as expected"
 
 
 def test_many_gossip_messages(setup_clients, add_curl):
@@ -129,8 +149,15 @@ def test_many_gossip_messages(setup_clients, add_curl):
         print('sleep for {0} sec to enable gossip propagation'.format(gossip_propagation_sleep))
         time.sleep(gossip_propagation_sleep)
 
-        after = query_message(current_index, testconfig['namespace'], setup_clients.deployment_name, fields, False)
-        assert initial + len(setup_clients.pods) * (i + 1) == len(after)
+        total_expected_gossip = initial + len(setup_clients.pods) * (i + 1)
+        after = poll_query_message(indx=current_index,
+                                   namespace=testconfig['namespace'],
+                                   client_po_name=setup_clients.deployment_name,
+                                   fields=fields,
+                                   findFails=False,
+                                   expected=total_expected_gossip)
+
+        assert total_expected_gossip == len(after), "test_many_gossip_messages: Total gossip messages in ES is not as expected"
 
 
 def test_many_gossip_sim(setup_clients, add_curl):
@@ -158,8 +185,15 @@ def test_many_gossip_sim(setup_clients, add_curl):
     print('sleep for {0} sec to enable gossip propagation'.format(gossip_propagation_sleep))
     time.sleep(gossip_propagation_sleep)
 
-    after = query_message(current_index, testconfig['namespace'], setup_clients.deployment_name, fields, False)
-    assert initial + len(setup_clients.pods) * TEST_MESSAGES == len(after)
+    total_expected_gossip = initial + len(setup_clients.pods) * TEST_MESSAGES
+    after = poll_query_message(indx=current_index,
+                               namespace=testconfig['namespace'],
+                               client_po_name=setup_clients.deployment_name,
+                               fields=fields,
+                               findFails=False,
+                               expected=total_expected_gossip)
+
+    assert total_expected_gossip == len(after), "test_many_gossip_sim: Total gossip messages in ES is not as expected"
 
 
 # NOTE : this test is ran in the end because it affects the network structure,
@@ -179,5 +213,11 @@ def test_late_bootstraps(init_session, setup_bootstrap, setup_clients):
 
     fields = {'M': 'discovery_bootstrap'}
     for i in testnames:
-        hits = query_message(current_index, testconfig['namespace'], i[0], fields, False)
+        hits = poll_query_message(indx=current_index,
+                                  namespace=testconfig['namespace'],
+                                  client_po_name= i[0],
+                                  fields=fields,
+                                  findFails=False,
+                                  expected=1)
+
         assert len(hits) == 1, "Could not find new Client bootstrap message"

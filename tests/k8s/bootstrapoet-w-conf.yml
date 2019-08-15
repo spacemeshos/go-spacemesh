@@ -29,9 +29,6 @@ spec:
         ports:
         - containerPort: 9091
         - containerPort: 9999
-        volumeMounts:
-        - name: config-volume
-          mountPath: /etc/config
       - name: poet
         image: spacemeshos/poet:develop
         imagePullPolicy: Always
@@ -45,9 +42,5 @@ spec:
             cpu: "2"
         ports:
           - containerPort: 50002
-      volumes:
-        - name: config-volume
-          configMap:
-            name: conf
       nodeSelector:
         role: tests

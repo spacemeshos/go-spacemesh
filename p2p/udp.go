@@ -5,14 +5,14 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/version"
+	"github.com/spacemeshos/go-spacemesh/types"
 	"net"
+	"time"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	inet "github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 )
 
@@ -129,18 +129,23 @@ func (mux *UDPMux) sendMessageImpl(peerPubkey p2pcrypto.PublicKey, protocol stri
 
 	//todo: Session (maybe use cpool ?)
 
-	protomessage := &pb.UDPProtocolMessage{
-		Metadata: pb.NewUDPProtocolMessageMetadata(mux.local.PublicKey(), mux.local.NetworkID(), protocol), // todo : config
+	mt := ProtocolMessageMetadata{protocol,
+		config.ClientVersion,
+		time.Now().UnixNano(),
+		mux.local.PublicKey().Bytes(),
+		int32(mux.local.NetworkID()),
 	}
 
-	realpayload, err := pb.CreatePayload(payload)
+	message := ProtocolMessage{
+		Metadata: &mt,
+	}
+
+	message.Payload, err = CreatePayload(payload)
 	if err != nil {
-		return fmt.Errorf("can't create payload from message %v", err)
+		return fmt.Errorf("can't create payload, err:%v", err)
 	}
 
-	protomessage.Payload = realpayload
-
-	data, err := proto.Marshal(protomessage)
+	data, err := types.InterfaceToBytes(&message)
 	if err != nil {
 		return fmt.Errorf("failed to encode signed message err: %v", err)
 	}
@@ -178,8 +183,8 @@ func (upm *udpProtocolMessage) Data() service.Data {
 // processUDPMessage processes a udp message received and passes it to the protocol, it adds related p2p metadata.
 func (mux *UDPMux) processUDPMessage(sender p2pcrypto.PublicKey, fromaddr net.Addr, buf []byte) error {
 	mux.logger.Debug("Processing message from %v, %v, len:%v", sender.String(), fromaddr.String(), len(buf))
-	msg := &pb.UDPProtocolMessage{}
-	err := proto.Unmarshal(buf, msg)
+	msg := &ProtocolMessage{}
+	err := types.BytesToInterface(buf, msg)
 	if err != nil {
 		return errors.New("could'nt deserialize message")
 	}
@@ -195,10 +200,10 @@ func (mux *UDPMux) processUDPMessage(sender p2pcrypto.PublicKey, fromaddr net.Ad
 
 	var data service.Data
 
-	data, err = pb.ExtractData(msg.Payload)
+	data, err = ExtractData(msg.Payload)
 
 	if err != nil {
-		return err
+		return fmt.Errorf("failed extracting data from message err:%v", err)
 	}
 
 	p2pmeta := service.P2PMetadata{fromaddr}

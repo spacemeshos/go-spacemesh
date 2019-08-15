@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/address"
+	"github.com/spacemeshos/go-spacemesh/amcl"
 	"github.com/spacemeshos/go-spacemesh/amcl/BLS381"
 	"github.com/spacemeshos/go-spacemesh/api"
 	apiCfg "github.com/spacemeshos/go-spacemesh/api/config"
@@ -84,70 +85,63 @@ func (suite *AppTestSuite) TearDownTest() {
 	}
 }
 
-func (suite *AppTestSuite) initMultipleInstances(numOfInstances int, storeFormat string, genesisTime string) {
+var net = service.NewSimulator()
+
+func (suite *AppTestSuite) initSingleInstance(i int, genesisTime string, rng *amcl.RAND, storeFormat string, name string, rolacle *eligibility.FixedRolacle, poetClient *nipst.RPCPoetClient) {
 	r := require.New(suite.T())
 
-	net := service.NewSimulator()
-	runningName := 'a'
-	rolacle := eligibility.New()
-	poetClient, err := NewRPCPoetHarnessClient()
+	smApp := NewSpacemeshApp()
+
+	smApp.Config.POST = nipst.DefaultConfig()
+	smApp.Config.POST.Difficulty = 5
+	smApp.Config.POST.NumProvenLabels = 10
+	smApp.Config.POST.SpacePerUnit = 1 << 10 // 1KB.
+	smApp.Config.POST.FileSize = 1 << 10     // 1KB.
+
+	smApp.Config.HARE.N = 5
+	smApp.Config.HARE.F = 2
+	smApp.Config.HARE.RoundDuration = 3
+	smApp.Config.HARE.WakeupDelta = 5
+	smApp.Config.HARE.ExpectedLeaders = 5
+	smApp.Config.CoinbaseAccount = strconv.Itoa(i + 1)
+	smApp.Config.LayerAvgSize = 5
+	smApp.Config.LayersPerEpoch = 3
+	smApp.Config.Hdist = 5
+	smApp.Config.GenesisTime = genesisTime
+	smApp.Config.LayerDurationSec = 20
+	smApp.Config.HareEligibility.ConfidenceParam = 3
+	smApp.Config.HareEligibility.EpochOffset = 0
+	smApp.Config.StartMining = true
+
+	edSgn := signing.NewEdSigner()
+	pub := edSgn.PublicKey()
+
+	vrfPriv, vrfPub := BLS381.GenKeyPair(rng)
+	vrfSigner := BLS381.NewBlsSigner(vrfPriv)
+	nodeID := types.NodeId{Key: pub.String(), VRFPublicKey: vrfPub}
+
+	swarm := net.NewNode()
+	dbStorepath := storeFormat + name
+
+	hareOracle := oracle.NewLocalOracle(rolacle, 5, nodeID)
+	hareOracle.Register(true, pub.String())
+
+	postClient := nipst.NewPostClient(&smApp.Config.POST)
+
+	err := smApp.initServices(nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(smApp.Config.LayerAvgSize), postClient, poetClient, vrfSigner, uint16(smApp.Config.LayersPerEpoch))
 	r.NoError(err)
-	suite.poetCleanup = poetClient.CleanUp
-	rng := BLS381.DefaultSeed()
+	smApp.setupGenesis()
+
+	suite.apps = append(suite.apps, smApp)
+	suite.dbs = append(suite.dbs, dbStorepath)
+}
+
+func (suite *AppTestSuite) initMultipleInstances(rolacle *eligibility.FixedRolacle, rng *amcl.RAND, numOfInstances int, storeFormat string, genesisTime string, poetClient *nipst.RPCPoetClient) {
+	name := 'a'
 	for i := 0; i < numOfInstances; i++ {
-		smApp := NewSpacemeshApp()
-
-		smApp.Config.POST = nipst.DefaultConfig()
-		smApp.Config.POST.Difficulty = 5
-		smApp.Config.POST.NumProvenLabels = 10
-		smApp.Config.POST.SpacePerUnit = 1 << 10 // 1KB.
-		smApp.Config.POST.FileSize = 1 << 10     // 1KB.
-
-		smApp.Config.HARE.N = numOfInstances
-		smApp.Config.HARE.F = numOfInstances / 2
-		smApp.Config.HARE.RoundDuration = 3
-		smApp.Config.HARE.WakeupDelta = 5
-		smApp.Config.HARE.ExpectedLeaders = 5
-		smApp.Config.CoinbaseAccount = strconv.Itoa(i + 1)
-		smApp.Config.LayerAvgSize = numOfInstances
-		smApp.Config.LayersPerEpoch = 3
-		smApp.Config.Hdist = 5
-		smApp.Config.GenesisTime = genesisTime
-		smApp.Config.LayerDurationSec = 20
-		smApp.Config.HareEligibility.ConfidenceParam = 2
-		smApp.Config.HareEligibility.EpochOffset = 0
-		smApp.Config.StartMining = true
-
-		edSgn := signing.NewEdSigner()
-		pub := edSgn.PublicKey()
-
-		r.NoError(err)
-		vrfPriv, vrfPub := BLS381.GenKeyPair(rng)
-		vrfSigner := BLS381.NewBlsSigner(vrfPriv)
-		nodeID := types.NodeId{Key: pub.String(), VRFPublicKey: vrfPub}
-
-		swarm := net.NewNode()
-		dbStorepath := storeFormat + string(runningName)
-
-		hareOracle := oracle.NewLocalOracle(rolacle, numOfInstances, nodeID)
-		hareOracle.Register(true, pub.String())
-
-		layerSize := numOfInstances
-
-		postClient := nipst.NewPostClient(&smApp.Config.POST)
-
-		err = smApp.initServices(nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(layerSize), postClient, poetClient, vrfSigner, uint16(smApp.Config.LayersPerEpoch))
-		r.NoError(err)
-		/*coinBase := address.HexToAddress(smApp.Config.CoinbaseAccount)
-		err = smApp.atxBuilder.StartPost(coinBase, smApp.Config.POST.DataDir, smApp.Config.POST.SpacePerUnit)
-		r.NoError(err)*/
-		smApp.setupGenesis()
-
-		suite.apps = append(suite.apps, smApp)
-		suite.dbs = append(suite.dbs, dbStorepath)
-		runningName++
+		suite.initSingleInstance(i, genesisTime, rng, storeFormat, string(name), rolacle, poetClient)
+		name++
 	}
-	activateGrpcServer(suite.apps[0])
 }
 
 func activateGrpcServer(smApp *SpacemeshApp) {
@@ -158,7 +152,6 @@ func activateGrpcServer(smApp *SpacemeshApp) {
 
 func (suite *AppTestSuite) TestMultipleNodes() {
 	//EntryPointCreated <- true
-
 	const numberOfEpochs = 5 // first 2 epochs are genesis
 	//addr := address.BytesToAddress([]byte{0x01})
 	dst := address.BytesToAddress([]byte{0x02})
@@ -172,12 +165,33 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	}
 	txbytes, _ := types.SignedTransactionAsBytes(tx)
 	path := "../tmp/test/state_" + time.Now().String()
+
 	genesisTime := time.Now().Add(20 * time.Second).Format(time.RFC3339)
-	suite.initMultipleInstances(5, path, genesisTime)
+
+	poetClient, err := NewRPCPoetHarnessClient()
+	if err != nil {
+		log.Panic("failed creating poet client harness: %v", err)
+	}
+	suite.poetCleanup = poetClient.CleanUp
+
+	rolacle := eligibility.New()
+	rng := BLS381.DefaultSeed()
+
+	suite.initMultipleInstances(rolacle, rng, 5, path, genesisTime, poetClient)
 	for _, a := range suite.apps {
 		a.startServices()
 	}
 
+	activateGrpcServer(suite.apps[0])
+
+	startInLayer := 5 // delayed pod will start in this layer
+	/*go func() {
+		delay := float32(suite.apps[0].Config.LayerDurationSec) * (float32(startInLayer) + 0.5)
+		<-time.After(time.Duration(delay) * time.Second)
+		suite.initSingleInstance(7, genesisTime, rng, path, "g", rolacle, poetClient)
+		suite.apps[len(suite.apps)-1].startServices()
+	}()
+	*/
 	defer suite.gracefulShutdown()
 
 	_ = suite.apps[0].P2P.Broadcast(miner.IncomingTxProtocol, txbytes)
@@ -194,7 +208,7 @@ loop:
 			maxClientsDone := 0
 			for idx, app := range suite.apps {
 				if 10 <= app.state.GetBalance(dst) &&
-					uint32(suite.apps[idx].mesh.LatestLayer()) == numberOfEpochs*uint32(suite.apps[idx].Config.LayersPerEpoch)+1 { // make sure all had 1 non-genesis layer
+					uint32(suite.apps[idx].mesh.LatestLayer()) == numberOfEpochs*uint32(suite.apps[idx].Config.LayersPerEpoch) { // make sure all had 1 non-genesis layer
 					suite.validateLastATXActiveSetSize(app)
 					clientsDone := 0
 					for idx2, app2 := range suite.apps {
@@ -223,37 +237,25 @@ loop:
 		}
 	}
 
-	suite.validateBlocksAndATXs(types.LayerID(numberOfEpochs*suite.apps[0].Config.LayersPerEpoch) - 1)
+	suite.validateBlocksAndATXs(types.LayerID(numberOfEpochs*suite.apps[0].Config.LayersPerEpoch)-1, types.LayerID(startInLayer))
 
 }
 
-func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
+func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID, startInLayer types.LayerID) {
+	log.Info("untilLayer=%v", untilLayer)
 
 	type nodeData struct {
 		layertoblocks map[types.LayerID][]types.BlockID
 		atxPerEpoch   map[types.EpochId]uint32
 	}
 
+	layersPerEpoch := int(suite.apps[0].Config.LayersPerEpoch)
 	datamap := make(map[string]*nodeData)
 
-	// wait until all nodes are in `untilLayer`
-	for {
-
-		count := 0
-		for _, ap := range suite.apps {
-			curNodeLastLayer := ap.blockListener.ValidatedLayer()
-			if curNodeLastLayer < untilLayer {
-				log.Info("layer for %v was %v, want %v", ap.nodeId.Key, curNodeLastLayer, untilLayer)
-			} else {
-				count++
-			}
-		}
-
-		if count == len(suite.apps) {
-			break
-		}
-
-		time.Sleep(time.Duration(suite.apps[0].Config.LayerDurationSec/2) * time.Second)
+	// assert all nodes validated untilLayer-1
+	for _, ap := range suite.apps {
+		curNodeLastLayer := ap.blockListener.ValidatedLayer()
+		assert.True(suite.T(), int(untilLayer)-1 <= int(curNodeLastLayer))
 	}
 
 	for _, ap := range suite.apps {
@@ -271,29 +273,23 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 			for _, b := range lyr.Blocks() {
 				datamap[ap.nodeId.Key].layertoblocks[lyr.Index()] = append(datamap[ap.nodeId.Key].layertoblocks[lyr.Index()], b.ID())
 			}
-			epoch := lyr.Index().GetEpoch(uint16(ap.Config.LayersPerEpoch))
-			if _, ok := datamap[ap.nodeId.Key].atxPerEpoch[epoch]; !ok {
-				//atxs, err := ap.blockListener.AtxDB.GetPosAtxId(epoch)
-				atxDb := ap.blockListener.AtxDB.(*activation.ActivationDb)
-				atxId, err := atxDb.GetNodeLastAtxId(ap.nodeId)
-				if err != nil {
-					log.Error("ERROR: couldn't get last atx for passed epoch: %v, err: %v", epoch, err)
-				}
-				atx, err := atxDb.GetAtx(atxId)
-				if err != nil {
-					log.Error("ERROR: couldn't get last atx for passed epoch: %v, err: %v", epoch, err)
-				}
-				datamap[ap.nodeId.Key].atxPerEpoch[epoch] = atx.ActiveSetSize
-			}
 		}
 	}
 
+	lateNodeKey := suite.apps[len(suite.apps)-1].nodeId.Key
 	for i, d := range datamap {
 		log.Info("Node %v in len(layerstoblocks) %v", i, len(d.layertoblocks))
+		if i == lateNodeKey { // skip late node
+			continue
+		}
 		for i2, d2 := range datamap {
 			if i == i2 {
 				continue
 			}
+			if i2 == lateNodeKey { // skip late node
+				continue
+			}
+
 			assert.Equal(suite.T(), len(d.layertoblocks), len(d2.layertoblocks), "%v has not matching layer to %v. %v not %v", i, i2, len(d.layertoblocks), len(d2.layertoblocks))
 
 			for l, bl := range d.layertoblocks {
@@ -309,34 +305,49 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 	}
 
 	// assuming all nodes have the same results
-	layers_per_epoch := int(suite.apps[0].Config.LayersPerEpoch)
-	layer_avg_size := suite.apps[0].Config.LayerAvgSize
+	layerAvgSize := suite.apps[0].Config.LayerAvgSize
 	patient := datamap[suite.apps[0].nodeId.Key]
 
-	lastlayer := len(patient.layertoblocks)
+	lastLayer := len(patient.layertoblocks)
 
-	total_blocks := 0
+	totalBlocks := 0
 	for _, l := range patient.layertoblocks {
-		total_blocks += len(l)
+		totalBlocks += len(l)
 	}
 
-	first_epoch_blocks := 0
-
-	for i := 0; i < layers_per_epoch; i++ {
+	firstEpochBlocks := 0
+	for i := 0; i < layersPerEpoch; i++ {
 		if l, ok := patient.layertoblocks[types.LayerID(i)]; ok {
-			first_epoch_blocks += len(l)
+			firstEpochBlocks += len(l)
 		}
 	}
 
-	total_atxs := 0
+	// assert number of blocks
+	totalEpochs := int(untilLayer.GetEpoch(uint16(layersPerEpoch))) + 1
+	allMiners := len(suite.apps)
+	exp := (layerAvgSize * layersPerEpoch) / allMiners * allMiners * (totalEpochs - 1)
+	act := totalBlocks - firstEpochBlocks
+	assert.Equal(suite.T(), exp, act,
+		fmt.Sprintf("not good num of blocks got: %v, want: %v. totalBlocks: %v, firstEpochBlocks: %v, lastLayer: %v, layersPerEpoch: %v layerAvgSize: %v totalEpochs: %v",
+			act, exp, totalBlocks, firstEpochBlocks, lastLayer, layersPerEpoch, layerAvgSize, totalEpochs))
 
-	for _, atxs := range patient.atxPerEpoch {
-		total_atxs += int(atxs)
+	firstAp := suite.apps[0]
+	atxDb := firstAp.blockListener.AtxDB.(*activation.ActivationDb)
+	atxId, err := atxDb.GetNodeLastAtxId(firstAp.nodeId)
+	assert.NoError(suite.T(), err)
+	atx, err := atxDb.GetAtx(atxId)
+	assert.NoError(suite.T(), err)
+
+	totalAtxs := uint32(0)
+	for atx != nil {
+		totalAtxs += atx.ActiveSetSize
+		atx, err = atxDb.GetAtx(atx.PrevATXId)
 	}
 
-	assert.True(suite.T(), ((total_blocks-first_epoch_blocks)/(lastlayer-layers_per_epoch)) == layer_avg_size, fmt.Sprintf("not good num of blocks got: %v, want: %v. total_blocks: %v, first_epoch_blocks: %v, lastlayer: %v, layers_per_epoch: %v", (total_blocks-first_epoch_blocks)/(lastlayer-layers_per_epoch), layer_avg_size, total_blocks, first_epoch_blocks, lastlayer, layers_per_epoch))
-	assert.True(suite.T(), total_atxs == (lastlayer/layers_per_epoch)*len(suite.apps), fmt.Sprintf("not good num of atxs got: %v, want: %v", total_atxs, (lastlayer/layers_per_epoch)*len(suite.apps)))
-
+	// assert number of ATXs
+	exp = totalEpochs*allMiners - len(suite.apps) // minus last epoch #atxs
+	act = int(totalAtxs)
+	assert.Equal(suite.T(), exp, act, fmt.Sprintf("not good num of atxs got: %v, want: %v", act, exp))
 }
 
 func (suite *AppTestSuite) validateLastATXActiveSetSize(app *SpacemeshApp) {
@@ -344,10 +355,12 @@ func (suite *AppTestSuite) validateLastATXActiveSetSize(app *SpacemeshApp) {
 	suite.NoError(err)
 	atx, err := app.mesh.GetAtx(prevAtxId)
 	suite.NoError(err)
-	suite.Equal(len(suite.apps), int(atx.ActiveSetSize), "atx: %v node: %v", atx.ShortId(), app.nodeId.Key[:5])
+	suite.True(int(atx.ActiveSetSize) == len(suite.apps), "atx: %v node: %v", atx.ShortId(), app.nodeId.Key[:5])
 }
 
 func (suite *AppTestSuite) gracefulShutdown() {
+	log.Info("Graceful shutdown begin")
+
 	var wg sync.WaitGroup
 	for _, app := range suite.apps {
 		wg.Add(1)
@@ -357,6 +370,8 @@ func (suite *AppTestSuite) gracefulShutdown() {
 		}(app)
 	}
 	wg.Wait()
+
+	log.Info("Graceful shutdown end")
 }
 
 func TestAppTestSuite(t *testing.T) {
