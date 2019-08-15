@@ -132,34 +132,45 @@ func (validator *syntaxContextValidator) ContextuallyValidateMessage(m *Msg, cur
 	// the message must match the current iteration unless it is a notify or pre-round message
 	currentIteration := currentK / 4
 	msgIteration := m.InnerMsg.K / 4
-	if currentIteration != msgIteration {
-		return errInvalidIter
-	}
+	sameIter := currentIteration == msgIteration
 
 	// check status, proposal & commit types
 	switch m.InnerMsg.Type {
 	case Status:
-		if currentRound == PreRound {
+		if currentRound == PreRound && sameIter {
 			return errEarlyMsg
 		}
-		if currentRound == StatusRound {
+		if currentRound == NotifyRound && currentIteration+1 == msgIteration {
+			return errEarlyMsg
+		}
+		if currentRound == StatusRound && sameIter {
 			return nil
+		}
+		if !sameIter {
+			return errInvalidIter
 		}
 		return errInvalidRound
 	case Proposal:
-		if currentRound == StatusRound {
+		if currentRound == StatusRound && sameIter {
 			return errEarlyMsg
 		}
-		if currentRound == ProposalRound || currentRound == CommitRound { // may be a late proposal
+		// a late proposal is also contextually valid
+		if (currentRound == ProposalRound || currentRound == CommitRound) && sameIter {
 			return nil
+		}
+		if !sameIter {
+			return errInvalidIter
 		}
 		return errInvalidRound
 	case Commit:
-		if currentRound == ProposalRound {
+		if currentRound == ProposalRound && sameIter {
 			return errEarlyMsg
 		}
-		if currentRound == CommitRound {
+		if currentRound == CommitRound && sameIter {
 			return nil
+		}
+		if !sameIter {
+			return errInvalidIter
 		}
 		return errInvalidRound
 	}
