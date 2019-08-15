@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/golang/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/connectionpool"
@@ -14,10 +13,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	timeSyncConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
+	"github.com/spacemeshos/go-spacemesh/types"
 	"strings"
 
 	inet "net"
@@ -76,8 +75,8 @@ type swarm struct {
 
 	outpeersMutex sync.RWMutex
 	inpeersMutex  sync.RWMutex
-	outpeers      map[string]p2pcrypto.PublicKey
-	inpeers       map[string]p2pcrypto.PublicKey
+	outpeers      map[p2pcrypto.PublicKey]struct{}
+	inpeers       map[p2pcrypto.PublicKey]struct{}
 
 	morePeersReq      chan struct{}
 	connectingTimeout time.Duration
@@ -139,8 +138,8 @@ func newSwarm(ctx context.Context, config config.Config, newNode bool, persist b
 
 		initial:           make(chan struct{}),
 		morePeersReq:      make(chan struct{}, config.MaxInboundPeers+config.OutboundPeersTarget),
-		inpeers:           make(map[string]p2pcrypto.PublicKey),
-		outpeers:          make(map[string]p2pcrypto.PublicKey),
+		inpeers:           make(map[p2pcrypto.PublicKey]struct{}),
+		outpeers:          make(map[p2pcrypto.PublicKey]struct{}),
 		newPeerSub:        make([]chan p2pcrypto.PublicKey, 0, 10),
 		delPeerSub:        make([]chan p2pcrypto.PublicKey, 0, 10),
 		connectingTimeout: ConnectingTimeout,
@@ -312,7 +311,7 @@ func (s *swarm) sendMessageImpl(peerPubKey p2pcrypto.PublicKey, protocol string,
 	var err error
 	var conn net.Connection
 
-	if peerPubKey.String() == s.lNode.PublicKey().String() {
+	if peerPubKey == s.lNode.PublicKey() {
 		return errors.New("can't send message to self")
 	}
 
@@ -328,18 +327,20 @@ func (s *swarm) sendMessageImpl(peerPubKey p2pcrypto.PublicKey, protocol string,
 		return err
 	}
 
-	protomessage := &pb.ProtocolMessage{
-		Metadata: pb.NewProtocolMessageMetadata(s.lNode.PublicKey(), protocol),
+	protomessage := &ProtocolMessage{
+		Metadata: &ProtocolMessageMetadata{NextProtocol: protocol, ClientVersion: config.ClientVersion,
+			Timestamp: time.Now().Unix(), AuthPubkey: s.LocalNode().PublicKey().Bytes()},
+		Payload: nil,
 	}
 
-	realpayload, err := pb.CreatePayload(payload)
+	realpayload, err := CreatePayload(payload)
 	if err != nil {
 		return err
 	}
 
 	protomessage.Payload = realpayload
 
-	data, err := proto.Marshal(protomessage)
+	data, err := types.InterfaceToBytes(protomessage)
 	if err != nil {
 		return fmt.Errorf("failed to encode signed message err: %v", err)
 	}
@@ -355,7 +356,7 @@ func (s *swarm) sendMessageImpl(peerPubKey p2pcrypto.PublicKey, protocol string,
 
 // RegisterDirectProtocol registers an handler for direct messaging based `protocol`
 func (s *swarm) RegisterDirectProtocol(protocol string) chan service.DirectMessage {
-	mchan := make(chan service.DirectMessage, config.ConfigValues.BufferSize)
+	mchan := make(chan service.DirectMessage, s.config.BufferSize)
 	s.protocolHandlerMutex.Lock()
 	s.directProtocolHandlers[protocol] = mchan
 	s.protocolHandlerMutex.Unlock()
@@ -494,8 +495,8 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 		return ErrFailDecrypt
 	}
 
-	pm := &pb.ProtocolMessage{}
-	err = proto.Unmarshal(decPayload, pm)
+	pm := &ProtocolMessage{}
+	err = types.BytesToInterface(decPayload, pm)
 	if err != nil {
 		s.lNode.Error("proto marshaling err=", err)
 		return ErrBadFormat2
@@ -508,7 +509,7 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 		return ErrOutOfSync
 	}
 
-	data, err := pb.ExtractData(pm.Payload)
+	data, err := ExtractData(pm.Payload)
 
 	if err != nil {
 		return err
@@ -651,14 +652,17 @@ func (s *swarm) askForMorePeers() {
 
 	s.getMorePeers(req)
 
+	s.outpeersMutex.RLock()
+	numpeers = len(s.outpeers)
+	s.outpeersMutex.RUnlock()
 	// todo: better way then going in this every time ?
-	if len(s.outpeers) >= s.config.SwarmConfig.RandomConnections {
+	if numpeers >= s.config.SwarmConfig.RandomConnections {
 		s.initOnce.Do(func() {
 			s.lNode.Info("gossip; connected to initial required neighbors - %v", len(s.outpeers))
 			close(s.initial)
 			s.outpeersMutex.RLock()
 			var strs []string
-			for _, pk := range s.outpeers {
+			for pk := range s.outpeers {
 				strs = append(strs, pk.String())
 			}
 			s.lNode.Debug("neighbors list: [%v]", strings.Join(strs, ","))
@@ -699,7 +703,7 @@ func (s *swarm) getMorePeers(numpeers int) int {
 	// TODO: try splitting the load and don't connect to more than X at a time
 	for i := 0; i < ndsLen; i++ {
 		go func(nd *node.NodeInfo, reportChan chan cnErr) {
-			if nd.String() == s.lNode.String() {
+			if nd.PublicKey() == s.lNode.PublicKey() {
 				reportChan <- cnErr{nd, errors.New("connection to self")}
 				return
 			}
@@ -718,35 +722,37 @@ loop:
 			total++ // We count i every time to know when to close the channel
 
 			if cne.err != nil {
-				s.lNode.Debug("can't establish connection with sampled peer %v, %v", cne.n.String(), cne.err)
+				s.lNode.Debug("can't establish connection with sampled peer %v, %v", cne.n.PublicKey(), cne.err)
 				bad++
-				break // this peer didn't work, todo: tell discovery
+				s.discover.Attempt(cne.n.PublicKey())
+				break
 			}
 
-			pkstr := cne.n.PublicKey().String()
+			pk := cne.n.PublicKey()
 
 			s.inpeersMutex.Lock()
-			_, ok := s.inpeers[pkstr]
+			_, ok := s.inpeers[pk]
 			s.inpeersMutex.Unlock()
 			if ok {
-				s.lNode.Debug("not allowing peers from inbound to upgrade to outbound to prevent poisoning, peer %v", cne.n.String())
+				s.lNode.Debug("not allowing peers from inbound to upgrade to outbound to prevent poisoning, peer %v", cne.n.PublicKey())
 				bad++
 				break
 			}
 
 			s.outpeersMutex.Lock()
-			if _, ok := s.outpeers[pkstr]; ok {
+			if _, ok := s.outpeers[pk]; ok {
 				s.outpeersMutex.Unlock()
-				s.lNode.Debug("selected an already outbound peer. not counting that peer.", cne.n.String())
+				s.lNode.Debug("selected an already outbound peer. not counting that peer.", cne.n.PublicKey())
 				bad++
 				break
 			}
-			s.outpeers[pkstr] = cne.n.PublicKey()
+			s.outpeers[pk] = struct{}{}
 			s.outpeersMutex.Unlock()
 
+			s.discover.Good(cne.n.PublicKey())
 			s.publishNewPeer(cne.n.PublicKey())
 			metrics.OutboundPeers.Add(1)
-			s.lNode.Debug("Neighborhood: Added peer to peer list %v", cne.n.String())
+			s.lNode.Debug("Neighborhood: Added peer to peer list %v", cne.n.PublicKey())
 		case <-tm.C:
 			break loop
 		case <-s.shutdown:
@@ -764,8 +770,8 @@ loop:
 // Disconnect removes a peer from the neighborhood. It requests more peers if our outbound peer count is less than configured
 func (s *swarm) Disconnect(peer p2pcrypto.PublicKey) {
 	s.inpeersMutex.Lock()
-	if _, ok := s.inpeers[peer.String()]; ok {
-		delete(s.inpeers, peer.String())
+	if _, ok := s.inpeers[peer]; ok {
+		delete(s.inpeers, peer)
 		s.inpeersMutex.Unlock()
 		s.publishDelPeer(peer)
 		metrics.InboundPeers.Add(-1)
@@ -774,8 +780,8 @@ func (s *swarm) Disconnect(peer p2pcrypto.PublicKey) {
 	s.inpeersMutex.Unlock()
 
 	s.outpeersMutex.Lock()
-	if _, ok := s.outpeers[peer.String()]; ok {
-		delete(s.outpeers, peer.String())
+	if _, ok := s.outpeers[peer]; ok {
+		delete(s.outpeers, peer)
 	} else {
 		s.outpeersMutex.Unlock()
 		return
@@ -794,7 +800,7 @@ func (s *swarm) Disconnect(peer p2pcrypto.PublicKey) {
 func (s *swarm) addIncomingPeer(n p2pcrypto.PublicKey) error {
 	s.inpeersMutex.RLock()
 	amnt := len(s.inpeers)
-	_, exist := s.inpeers[n.String()]
+	_, exist := s.inpeers[n]
 	s.inpeersMutex.RUnlock()
 
 	if amnt >= s.config.MaxInboundPeers {
@@ -803,7 +809,7 @@ func (s *swarm) addIncomingPeer(n p2pcrypto.PublicKey) error {
 	}
 
 	s.inpeersMutex.Lock()
-	s.inpeers[n.String()] = n
+	s.inpeers[n] = struct{}{}
 	s.inpeersMutex.Unlock()
 	if !exist {
 		s.publishNewPeer(n)
@@ -814,14 +820,14 @@ func (s *swarm) addIncomingPeer(n p2pcrypto.PublicKey) error {
 
 func (s *swarm) hasIncomingPeer(peer p2pcrypto.PublicKey) bool {
 	s.inpeersMutex.RLock()
-	_, ok := s.inpeers[peer.String()]
+	_, ok := s.inpeers[peer]
 	s.inpeersMutex.RUnlock()
 	return ok
 }
 
 func (s *swarm) hasOutgoingPeer(peer p2pcrypto.PublicKey) bool {
 	s.outpeersMutex.RLock()
-	_, ok := s.outpeers[peer.String()]
+	_, ok := s.outpeers[peer]
 	s.outpeersMutex.RUnlock()
 	return ok
 }

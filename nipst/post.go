@@ -55,14 +55,14 @@ func (c *PostClient) initialize(id []byte, timeout time.Duration) (commitment *t
 		return nil, fmt.Errorf("space (%d) is not a multiple of merkle.NodeSize (%d)", c.cfg.SpacePerUnit, merkle.NodeSize)
 	}
 
-	proof, err := initialization.NewInitializer(c.cfg, c.logger).Initialize(id)
+	proof, err := initialization.NewInitializer(c.cfg, id).Initialize()
 	return (*types.PostProof)(proof), err
 }
 
 func (c *PostClient) execute(id []byte, challenge []byte, timeout time.Duration) (*types.PostProof, error) {
 	// TODO(moshababo): implement timeout
-	prover := proving.NewProver(c.cfg, c.logger)
-	proof, err := prover.GenerateProof(id, challenge)
+	prover := proving.NewProver(c.cfg, id)
+	proof, err := prover.GenerateProof(challenge)
 	return (*types.PostProof)(proof), err
 }
 
