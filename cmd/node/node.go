@@ -403,7 +403,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 
 	coinBase := address.HexToAddress(app.Config.CoinbaseAccount)
 
-	if coinBase.Big().Uint64() == 0 {
+	if coinBase.Big().Uint64() == 0 && app.Config.StartMining {
 		app.log.Panic("invalid Coinbase account")
 	}
 	atxBuilder := activation.NewBuilder(nodeID, coinBase, atxdb, swarm, msh, layersPerEpoch, nipstBuilder, clock.Subscribe(), syncer.IsSynced, store, lg.WithName("atxBuilder"))

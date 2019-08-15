@@ -31,6 +31,14 @@ func BigToAddress(b *big.Int) Address { return BytesToAddress(b.Bytes()) }
 func HexToAddress(s string) Address { return BytesToAddress(common.FromHex(s)) }
 
 func StringToAddress(s string) (Address, error) {
+	if len(s) > 1 {
+		if s[0:2] == "0x" || s[0:2] == "0X" {
+			s = s[2:]
+		}
+	}
+	if len(s)%2 == 1 {
+		s = "0" + s
+	}
 	bt, err := hex.DecodeString(s)
 	if err != nil {
 		return Address{}, err

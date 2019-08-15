@@ -7,6 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/shared"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"os"
 	"path/filepath"
@@ -41,10 +42,14 @@ func (p *postProverClientMock) execute(id []byte, challenge []byte, timeout time
 
 func (p *postProverClientMock) SetLogger(shared.Logger) {}
 
-func (p *postProverClientMock) SetPostParams(logicalDrive string, commitmentSize uint64) {}
+func (p *postProverClientMock) SetParams(logicalDrive string, commitmentSize uint64) {}
 
 func (p *postProverClientMock) Reset() error {
 	return nil
+}
+
+func (p *postProverClientMock) Initialized() bool {
+	return true
 }
 
 type poetProvingServiceClientMock struct{}
@@ -109,7 +114,8 @@ func TestInitializePost(t *testing.T) {
 	drive := "/tmp/anton"
 	unitSize := 2048
 	_, err := nb.InitializePost(drive, uint64(unitSize))
-	defer nb.postProver.Reset()
+	assert.NoError(err)
+	defer func() { assert.NoError(nb.postProver.Reset()) }()
 	assert.NoError(err)
 	assert.Equal(nb.postCfg.DataDir, drive)
 	assert.Equal(nb.postCfg.SpacePerUnit, uint64(unitSize))
@@ -181,7 +187,7 @@ func TestNewNIPSTBuilderNotInitialized(t *testing.T) {
 
 	idsToCleanup = append(idsToCleanup, minerIDNotInitialized)
 	initialProof, err := nb.InitializePost(postCfg.DataDir, postCfg.SpacePerUnit)
-	defer nb.postProver.Reset()
+	defer assert.NoError(t, nb.postProver.Reset())
 	r.NoError(err)
 	r.NotNil(initialProof)
 

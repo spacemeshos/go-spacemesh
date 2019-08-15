@@ -81,9 +81,18 @@ func (c *PostClient) SetLogger(logger shared.Logger) {
 	c.logger = logger
 }
 
-func (c *PostClient) SetPostParams(logicalDrive string, commitmentSize uint64) {
+func (c *PostClient) SetParams(logicalDrive string, commitmentSize uint64) {
 	cfg := *c.cfg
 	c.cfg = &cfg
 	c.cfg.DataDir = logicalDrive
 	c.cfg.SpacePerUnit = commitmentSize
+}
+
+func (c *PostClient) Initialized() bool {
+	if c.initializer == nil {
+		return false
+	}
+
+	state, _, _ := c.initializer.State()
+	return state == initialization.StateCompleted
 }

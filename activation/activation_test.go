@@ -74,6 +74,7 @@ func (n *NetMock) Broadcast(id string, d []byte) error {
 type NipstBuilderMock struct {
 	poetRef         []byte
 	buildNipstFunc  func(challenge *common.Hash) (*types.NIPST, error)
+	initPostFunc    func(logicalDrive string, commitmentSize uint64) (*types.PostProof, error)
 	SleepTime       int
 	PostInitialized bool
 }
@@ -83,6 +84,9 @@ func (np *NipstBuilderMock) IsPostInitialized() bool {
 }
 
 func (np *NipstBuilderMock) InitializePost(logicalDrive string, commitmentSize uint64) (*types.PostProof, error) {
+	if np.initPostFunc != nil {
+		return np.initPostFunc(logicalDrive, commitmentSize)
+	}
 	if np.SleepTime != 0 {
 		time.Sleep(time.Duration(np.SleepTime) * time.Millisecond)
 	}
@@ -520,6 +524,17 @@ func TestStartPost(t *testing.T) {
 
 	// negative test to run
 	err = b.StartPost(coinbase2, drive, 1000)
-	assert.Error(t, err)
+	assert.EqualError(t, err, "attempted to start post when post already inited")
+
+	nipstBuilder.initPostFunc = func(logicalDrive string, commitmentSize uint64) (*types.PostProof, error){
+		return nil, fmt.Errorf("error")
+	}
+
+	// negative test for error in buildNipst - this might not work in travis so I've commented it out
+	b = NewBuilder(id, coinbase, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, nil, func() bool { return true }, db, lg.WithName("atxBuilder"))
+	b.errorTimeoutMs = 1000
+	nipstBuilder.PostInitialized = false
+	err = b.StartPost(coinbase2, drive, 1000)
+	assert.EqualError(t, err, "error")
 
 }

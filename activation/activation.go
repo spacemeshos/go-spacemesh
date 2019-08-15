@@ -8,6 +8,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/types"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 const AtxProtocol = "AtxGossip"
@@ -62,9 +63,9 @@ type BytesStore interface {
 }
 
 const (
-	Idle       = 1
-	InProgress = 2
-	Done       = 3
+	Idle = 1 + iota
+	InProgress
+	Done
 )
 
 type Builder struct {
@@ -90,6 +91,7 @@ type Builder struct {
 	accountLock     sync.RWMutex
 	postInitLock    sync.RWMutex
 	initStatus      int
+	errorTimeoutMs  time.Duration
 	log             log.Log
 }
 
@@ -110,6 +112,7 @@ func NewBuilder(nodeId types.NodeId, coinbaseAccount address.Address, db ATXDBPr
 		isSynced:        isSyncedFunc,
 		store:           store,
 		initStatus:      Idle,
+		errorTimeoutMs:  100,
 		log:             log,
 	}
 }
@@ -147,7 +150,7 @@ func (b *Builder) loop() {
 			initStat := b.initStatus
 			b.postInitLock.RUnlock()
 			if initStat != Done || !b.nipstBuilder.IsPostInitialized() {
-				b.log.Info("nipst is not initialized yet, not building nipst")
+				b.log.Info("post is not initialized yet, not building nipst")
 				break
 			}
 			if b.working {
@@ -232,29 +235,38 @@ func (b *Builder) buildNipstChallenge(epoch types.EpochId) error {
 	return nil
 }
 
-func (b *Builder) StartPost(rewardAddress address.Address, logicalDrive string, commitmentSize uint64) error {
+func (b *Builder) StartPost(rewardAddress address.Address, dataDir string, space uint64) error {
 	b.log.Info("Starting post, reward address: %x", rewardAddress)
 	b.SetCoinbaseAccount(rewardAddress)
-	if !b.nipstBuilder.IsPostInitialized() {
-		b.postInitLock.Lock()
-		if b.initStatus != Idle {
-			b.postInitLock.Unlock()
-			return fmt.Errorf("attempted to start post when post already inited")
-		}
-		b.initStatus = InProgress
-		go func() {
-			_, err := b.nipstBuilder.InitializePost(logicalDrive, commitmentSize) // TODO: add proof to first ATX
-			b.postInitLock.Lock()
-			b.initStatus = Done
-			b.postInitLock.Unlock()
-			if err != nil {
-				b.log.Error("PoST initialization failed: %v", err)
-				return
-			}
-		}()
+	b.postInitLock.Lock()
+	if b.initStatus != Idle {
 		b.postInitLock.Unlock()
+		return fmt.Errorf("attempted to start post when post already inited")
 	}
-	return nil
+	b.initStatus = InProgress
+	errChan := make(chan error, 1)
+	go func() {
+		_, err := b.nipstBuilder.InitializePost(dataDir, space) // TODO: add proof to first ATX
+		b.postInitLock.Lock()
+		if err != nil {
+			b.initStatus = Idle
+			b.postInitLock.Unlock()
+			b.log.Error("PoST initialization failed: %v", err)
+			errChan <- err
+			return
+		}
+		b.initStatus = Done
+		b.postInitLock.Unlock()
+	}()
+	b.postInitLock.Unlock()
+	// todo: refactor initializePost to be concurrent, returning error in a blocking manner
+	t := time.NewTimer(b.errorTimeoutMs * time.Millisecond)
+	select {
+	case <-t.C:
+		return nil
+	case err := <-errChan:
+		return err
+	}
 }
 
 func (b *Builder) SetCoinbaseAccount(rewardAddress address.Address) {
