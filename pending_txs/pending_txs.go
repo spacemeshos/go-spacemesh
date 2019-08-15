@@ -54,6 +54,10 @@ func (apt *AccountPendingTxs) Remove(accepted []types.TinyTx, rejected []types.T
 	}
 }
 
+func (apt *AccountPendingTxs) RemoveNonce(nonce uint64) {
+	delete(apt.PendingTxs, nonce)
+}
+
 func (apt *AccountPendingTxs) GetProjection(prevNonce, prevBalance uint64) (nonce, balance uint64) {
 	nonce = prevNonce
 	balance = prevBalance
