@@ -62,20 +62,18 @@ func (ml *mockListener) listenerFunc() (net.Listener, error) {
 }
 
 func (ml *mockListener) Accept() (net.Conn, error) {
+	<-ml.connReleaser
 	atomic.AddInt32(&ml.calledCount, 1)
 	<-ml.connReleaser
 	var c net.Conn = nil
-	var c2 net.Conn = nil
 	if ml.accpetResErr == nil {
-		c, c2 = net.Pipe() // just for the interface lolz
-		go func(con net.Conn) {
-
-		}(c2)
+		c, _ = net.Pipe() // just for the interface lolz
 	}
 	return c, ml.accpetResErr
 }
 
 func (ml *mockListener) releaseConn() {
+	ml.connReleaser <- struct{}{}
 	ml.connReleaser <- struct{}{}
 }
 
@@ -88,7 +86,7 @@ func (ml *mockListener) Addr() net.Addr {
 
 func Test_Net_LimitedConnections(t *testing.T) {
 	cfg := config.DefaultConfig()
-	cfg.SessionTimeout = 1000 * time.Millisecond
+	cfg.SessionTimeout = 100 * time.Millisecond
 
 	ln, err := node.NewNodeIdentity(cfg, "0.0.0.0:0000", false)
 	require.NoError(t, err)
@@ -97,19 +95,19 @@ func Test_Net_LimitedConnections(t *testing.T) {
 	listener := newMockListener()
 	err = n.listen(listener.listenerFunc)
 	require.NoError(t, err)
-	for i := 0; i < cfg.MaxPendingConnections-1; i++ {
+	for i := 0; i < cfg.MaxPendingConnections; i++ {
 		listener.releaseConn()
 	}
-	n.config.SessionTimeout = 1 * time.Second
-	listener.releaseConn()
 
 	require.Equal(t, atomic.LoadInt32(&listener.calledCount), int32(cfg.MaxPendingConnections))
 	done := make(chan struct{})
 	go func() {
+		done <- struct{}{}
 		listener.releaseConn()
 		done <- struct{}{}
 	}()
 	require.Equal(t, atomic.LoadInt32(&listener.calledCount), int32(cfg.MaxPendingConnections))
+	<-done
 	<-done
 	require.Equal(t, atomic.LoadInt32(&listener.calledCount), int32(cfg.MaxPendingConnections)+1)
 }

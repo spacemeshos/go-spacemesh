@@ -291,7 +291,7 @@ func (n *Net) accept(listen net.Listener) {
 			defer func() { pending <- struct{}{} }()
 			err := c.setupIncoming(n.config.SessionTimeout)
 			if err != nil {
-				n.logger.Warning("Error handling incoming connection with ", c.remoteAddr.String())
+				n.logger.Event().Warning("conn_incoming_failed", log.String("remote", c.remoteAddr.String()), log.Err(err))
 				return
 			}
 			go c.beginEventProcessing()
