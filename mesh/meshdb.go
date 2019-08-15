@@ -354,13 +354,13 @@ func (m *MeshDB) GetGoodPattern(layer types.LayerID) (map[types.BlockID]struct{}
 
 	tBytes, err := m.patterns.Get(layer.ToBytes())
 	if err != nil {
-		return nil, fmt.Errorf("could not find good pattern for layer %v", layer)
+		return nil, fmt.Errorf("could not find good pattern for layer %v %v", layer, err)
 	}
 
 	var blkSlice map[types.BlockID]struct{}
 	err = types.BytesToInterface(tBytes, &blkSlice)
 	if err != nil {
-		return nil, fmt.Errorf("could not desirialize good pattern for layer %v", layer)
+		return nil, fmt.Errorf("could not desirialize good pattern for layer %v %v", layer, err)
 	}
 
 	return blkSlice, nil
@@ -370,7 +370,7 @@ func (m *MeshDB) SaveGoodPattern(layer types.LayerID, blks map[types.BlockID]str
 	m.Info("write good pattern for layer %v to database", layer)
 	bts, err := types.InterfaceToBytes(blks)
 	if err != nil {
-		return fmt.Errorf("could not save good pattern for layer %v", layer)
+		return fmt.Errorf("could not save good pattern for layer %v %v", layer, err)
 	}
 
 	m.patterns.Put(layer.ToBytes(), bts)
