@@ -57,7 +57,7 @@ type BlockBuilder struct {
 	atxGossipChannel chan service.GossipMessage
 	hareResult       HareResultProvider
 	AtxPool          *TypesAtxIdMemPool
-	TransactionPool  *TypesTransactionIdMemPool
+	TransactionPool  TxPool
 	mu               sync.Mutex
 	network          p2p.Service
 	weakCoinToss     WeakCoinProvider
@@ -71,7 +71,7 @@ type BlockBuilder struct {
 
 func NewBlockBuilder(minerID types.NodeId, sgn Signer, net p2p.Service,
 	beginRoundEvent chan types.LayerID, hdist int,
-	txPool *TypesTransactionIdMemPool,
+	txPool TxPool,
 	atxPool *TypesAtxIdMemPool,
 	weakCoin WeakCoinProvider,
 	orph OrphanBlockProvider,

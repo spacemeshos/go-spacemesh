@@ -309,11 +309,11 @@ func TestBlockBuilder_Validation(t *testing.T) {
 	assert.Nil(t, e)
 	n1.Broadcast(IncomingTxProtocol, b)
 	time.Sleep(300 * time.Millisecond)
-	assert.Equal(t, 0, len(builder1.TransactionPool.txMap))
+	assert.Empty(t, builder1.TransactionPool.PopItems(10))
 	builder1.txValidator = mockTxProcessor{false}
 	n1.Broadcast(IncomingTxProtocol, b)
 	time.Sleep(300 * time.Millisecond)
-	assert.Equal(t, 1, len(builder1.TransactionPool.txMap))
+	assert.Len(t, builder1.TransactionPool.PopItems(10), 1)
 }
 
 func TestBlockBuilder_Gossip_NotSynced(t *testing.T) {
@@ -347,7 +347,7 @@ func TestBlockBuilder_Gossip_NotSynced(t *testing.T) {
 	err := n1.Broadcast(IncomingTxProtocol, b)
 	assert.NoError(t, err)
 	time.Sleep(300 * time.Millisecond)
-	assert.Equal(t, 0, len(builder1.TransactionPool.txMap))
+	assert.Empty(t, builder1.TransactionPool.PopItems(10))
 
 	poetRef := []byte{0xba, 0x38}
 	atx := types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")},
@@ -366,7 +366,7 @@ func TestBlockBuilder_Gossip_NotSynced(t *testing.T) {
 	err = n1.Broadcast(activation.AtxProtocol, atxBytes)
 	assert.NoError(t, err)
 	time.Sleep(300 * time.Millisecond)
-	assert.Equal(t, 0, len(builder1.TransactionPool.txMap))
+	assert.Empty(t, builder1.TransactionPool.PopItems(10))
 
 }
 

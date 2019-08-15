@@ -256,7 +256,7 @@ func (m *Mesh) PushTransactions(oldBase types.LayerID, newBase types.LayerID) {
 		if err := m.removeFromMeshTxs(merged, nil, i); err != nil {
 			m.With().Error("failed to remove from meshTxs", log.Err(err))
 		}
-		// TODO: return rejected txs to mempool (otherwise cont. inv. blocks can be used to censor txs)
+		// TODO: return rejected txs to mempool after validation (otherwise cont. inv. blocks can be used to censor txs)
 		m.Log.Info("applied %v transactions in new pbase is %d apply result was %d", len(merged), newBase, x)
 	}
 }

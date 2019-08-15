@@ -345,7 +345,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	}
 
 	rng := rand.New(mt19937.New())
-	processor := state.NewTransactionProcessor(rng, st, mdb, app.Config.GAS, lg.WithName("state")) // TODO: add meshDb
+	processor := state.NewTransactionProcessor(rng, st, mdb, app.Config.GAS, lg.WithName("state"))
 
 	atxdb := activation.NewActivationDb(atxdbstore, idStore, mdb, layersPerEpoch, validator, lg.WithName("atxDb"))
 	beaconProvider := &oracle.EpochBeaconProvider{}
@@ -353,7 +353,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 
 	trtl := tortoise.NewAlgorithm(int(layerSize), mdb, app.Config.Hdist, lg.WithName("trtl"))
 
-	txpool := miner.NewTypesTransactionIdMemPool()
+	txpool := miner.NewTxPoolWithAccounts()
 	atxpool := miner.NewTypesAtxIdMemPool()
 
 	msh := mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, txpool, atxpool, processor, lg.WithName("mesh")) //todo: what to do with the logger?
