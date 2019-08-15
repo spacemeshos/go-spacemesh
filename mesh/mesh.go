@@ -252,11 +252,11 @@ func (m *Mesh) PushTransactions(oldBase types.LayerID, newBase types.LayerID) {
 		if err != nil {
 			m.Log.Error("cannot apply transactions %v", err)
 		}
-		if err := m.removeFromMeshTxs(merged, i); err != nil {
+		// TODO: also pass rejected transactions from contextually invalid blocks
+		if err := m.removeFromMeshTxs(merged, nil, i); err != nil {
 			m.With().Error("failed to remove from meshTxs", log.Err(err))
 		}
-		// TODO: also remove transactions from contextually invalid blocks, unless they still appear in newer layers
-		// TODO: consider returning these txs to mempool (otherwise cont. inv. blocks can be used to censor txs)
+		// TODO: return rejected txs to mempool (otherwise cont. inv. blocks can be used to censor txs)
 		m.Log.Info("applied %v transactions in new pbase is %d apply result was %d", len(merged), newBase, x)
 	}
 }

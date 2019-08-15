@@ -33,6 +33,7 @@ type Signer interface {
 
 type TxValidator interface {
 	GetValidAddressableTx(tx *types.SerializableSignedTransaction) (*types.AddressableSignedTransaction, error)
+	ValidateNonceAndBalance(transaction *types.AddressableSignedTransaction) error
 }
 
 type AtxValidator interface {
@@ -245,7 +246,14 @@ func (t *BlockBuilder) listenForTx() {
 				id := types.GetTransactionId(x)
 				fullTx, err := t.txValidator.GetValidAddressableTx(x)
 				if err != nil {
-					t.Log.Error("Transaction validation failed for id=%v, err=%v", id, err)
+					t.With().Error("Transaction sig validation failed",
+						log.TxId(hex.EncodeToString(id[:common.Min(5, len(id))])), log.Err(err))
+					continue
+				}
+				// TODO: This only considers mesh transactions (not mempool)
+				if err := t.txValidator.ValidateNonceAndBalance(fullTx); err != nil {
+					t.With().Error("Transaction nonce and balance validation failed",
+						log.TxId(hex.EncodeToString(id[:common.Min(5, len(id))])), log.Err(err))
 					continue
 				}
 

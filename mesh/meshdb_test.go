@@ -315,7 +315,9 @@ func TestMeshDB_MeshTxs(t *testing.T) {
 	r.Equal(100, int(txns2[0].Amount))
 	r.Equal(101, int(txns2[1].Amount))
 
-	err = mdb.removeFromMeshTxs([]*Transaction{SerializableSignedTransaction2StateTransaction(newTx(origin2, 0, 100))}, 1)
+	err = mdb.removeFromMeshTxs([]*Transaction{
+		SerializableSignedTransaction2StateTransaction(newTx(origin2, 0, 100)),
+	}, nil, 1)
 	r.NoError(err)
 
 	txns1 = getTxns(r, mdb, origin1)

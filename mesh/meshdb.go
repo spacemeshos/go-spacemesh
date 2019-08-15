@@ -384,27 +384,38 @@ func (m *MeshDB) addToMeshTxs(txs []*types.AddressableSignedTransaction, layer t
 	return nil
 }
 
-func (m *MeshDB) removeFromMeshTxs(txs []*Transaction, layer types.LayerID) error {
+func (m *MeshDB) removeFromMeshTxs(accepted, rejected []*Transaction, layer types.LayerID) error {
 	// TODO: lock
-	tinyTxs := make([]tinyTx, 0, len(txs))
-	for _, tx := range txs {
-		tinyTxs = append(tinyTxs, txToTiny(tx))
+	gAccepted := txsToTinyGrouped(accepted)
+	gRejected := txsToTinyGrouped(rejected)
+	accounts := make(map[address.Address]struct{})
+	for account := range gAccepted {
+		accounts[account] = struct{}{}
 	}
-	groupedTxs := groupByOrigin(tinyTxs)
+	for account := range gRejected {
+		accounts[account] = struct{}{}
+	}
 
-	for account, accountTxs := range groupedTxs {
+	for account := range accounts {
 		// TODO: instead of storing a list, use LevelDB's prefixed keys and then iterate all relevant keys
 		pending, err := m.getAccountPendingTxs(account)
 		if err != nil {
 			return err
 		}
-		// TODO: get rejected txs
-		pending.Remove(accountTxs, nil, 0)
+		pending.Remove(gAccepted[account], gRejected[account], layer)
 		if err := m.storeAccountPendingTxs(account, pending); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func txsToTinyGrouped(txs []*Transaction) map[address.Address][]tinyTx {
+	tinyTxs := make([]tinyTx, 0, len(txs))
+	for _, tx := range txs {
+		tinyTxs = append(tinyTxs, txToTiny(tx))
+	}
+	return groupByOrigin(tinyTxs)
 }
 
 func (m *MeshDB) storeAccountPendingTxs(account address.Address, pending *accountPendingTxs) error {

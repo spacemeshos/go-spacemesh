@@ -144,13 +144,7 @@ func (tp *TransactionProcessor) GetValidAddressableTx(tx *types.SerializableSign
 	if err != nil {
 		return nil, err
 	}
-	//TODO: decide if we want to validate nonce and balance here, or in a separate function (hint: sync)
-	transaction := &types.AddressableSignedTransaction{SerializableSignedTransaction: tx, Address: addr}
-	if err := tp.ValidateNonceAndBalance(transaction); err != nil {
-		return nil, err
-	}
-
-	return transaction, nil
+	return &types.AddressableSignedTransaction{SerializableSignedTransaction: tx, Address: addr}, nil
 }
 
 //should receive sort predicate
