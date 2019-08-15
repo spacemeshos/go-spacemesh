@@ -18,18 +18,18 @@ type PostProverClient interface {
 	// to store some data, by having its storage being filled with
 	// pseudo-random data with respect to a specific id.
 	// This data is the result of a computationally-expensive operation.
-	initialize(id []byte, timeout time.Duration) (commitment *types.PostProof, err error)
+	initialize(timeout time.Duration) (commitment *types.PostProof, err error)
 
 	// execute is the phase in which the prover received a challenge,
 	// and proves that his data is still stored (or was recomputed).
 	// This phase can be repeated arbitrarily many times without repeating initialization;
 	// thus despite the initialization essentially serving as a proof-of-work,
 	// the amortized computational complexity can be made arbitrarily small.
-	execute(id []byte, challenge []byte, timeout time.Duration) (proof *types.PostProof, err error)
+	execute(challenge []byte, timeout time.Duration) (proof *types.PostProof, err error)
 
 	// SetParams set the needed params for setting up post commitment in the specified logical drive and with
 	// requested commitment size.
-	SetParams(dataDir string, space uint64)
+	SetParams(id []byte, dataDir string, space uint64)
 
 	// Reset deletes.
 	Reset() error
@@ -197,7 +197,7 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *common.Hash) (*types.NIPST, error)
 	if nipst.PostProof == nil {
 		nb.log.Info("starting PoST execution (challenge: %x)", nb.state.PoetProofRef)
 
-		proof, err := nb.postProver.execute(nb.id, nb.state.PoetProofRef, defTimeout)
+		proof, err := nb.postProver.execute(nb.state.PoetProofRef, defTimeout)
 		if err != nil {
 			return nil, fmt.Errorf("failed to execute PoST: %v", err)
 		}
@@ -233,9 +233,9 @@ func (nb *NIPSTBuilder) InitializePost(dataDir string, space uint64) (*types.Pos
 
 	nb.postCfg.DataDir = dataDir
 	nb.postCfg.SpacePerUnit = space
-	nb.postProver.SetParams(dataDir, space)
+	nb.postProver.SetParams(nb.id, dataDir, space)
 
-	commitment, err := nb.postProver.initialize(nb.id, defTimeout)
+	commitment, err := nb.postProver.initialize(defTimeout)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize PoST: %v", err)
 	}

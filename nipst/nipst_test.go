@@ -32,17 +32,17 @@ type postProverClientMock struct{}
 // A compile time check to ensure that postProverClientMock fully implements PostProverClient.
 var _ PostProverClient = (*postProverClientMock)(nil)
 
-func (p *postProverClientMock) initialize(id []byte, timeout time.Duration) (*types.PostProof, error) {
+func (p *postProverClientMock) initialize(timeout time.Duration) (commitment *types.PostProof, err error) {
 	return &types.PostProof{}, nil
 }
 
-func (p *postProverClientMock) execute(id []byte, challenge []byte, timeout time.Duration) (*types.PostProof, error) {
+func (p *postProverClientMock) execute(challenge []byte, timeout time.Duration) (proof *types.PostProof, err error) {
 	return &types.PostProof{}, nil
 }
 
 func (p *postProverClientMock) SetLogger(shared.Logger) {}
 
-func (p *postProverClientMock) SetParams(logicalDrive string, commitmentSize uint64) {}
+func (p *postProverClientMock) SetParams(id []byte, dataDir string, space uint64) {}
 
 func (p *postProverClientMock) Reset() error {
 	return nil

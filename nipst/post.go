@@ -37,6 +37,7 @@ func verifyPost(proof *types.PostProof, space uint64, numProvenLabels uint, diff
 }
 
 type PostClient struct {
+	id          []byte
 	cfg         *config.Config
 	initializer *initialization.Initializer
 	logger      shared.Logger
@@ -46,23 +47,29 @@ type PostClient struct {
 var _ PostProverClient = (*PostClient)(nil)
 
 func NewPostClient(cfg *config.Config) *PostClient {
-	return &PostClient{cfg, nil, shared.DisabledLogger{}}
+	return &PostClient{nil, cfg, initialization.NewInitializer(cfg, nil), shared.DisabledLogger{}}
 }
 
-func (c *PostClient) initialize(id []byte, timeout time.Duration) (commitment *types.PostProof, err error) {
+func (c *PostClient) initialize(timeout time.Duration) (commitment *types.PostProof, err error) {
+	if c.id == nil {
+		return nil, fmt.Errorf("no id provided, cannot initialize post")
+	}
 	// TODO(moshababo): implement timeout
 	//TODO: implement persistence
 	if c.cfg.SpacePerUnit%merkle.NodeSize != 0 {
 		return nil, fmt.Errorf("space (%d) is not a multiple of merkle.NodeSize (%d)", c.cfg.SpacePerUnit, merkle.NodeSize)
 	}
-	c.initializer = initialization.NewInitializer(c.cfg, id)
+	c.initializer = initialization.NewInitializer(c.cfg, c.id)
 	proof, err := c.initializer.Initialize()
 	return (*types.PostProof)(proof), err
 }
 
-func (c *PostClient) execute(id []byte, challenge []byte, timeout time.Duration) (*types.PostProof, error) {
+func (c *PostClient) execute(challenge []byte, timeout time.Duration) (*types.PostProof, error) {
 	// TODO(moshababo): implement timeout
-	prover := proving.NewProver(c.cfg, id)
+	if c.id == nil {
+		return nil, fmt.Errorf("no id provided, cannot execute post")
+	}
+	prover := proving.NewProver(c.cfg, c.id)
 	proof, err := prover.GenerateProof(challenge)
 	return (*types.PostProof)(proof), err
 }
@@ -81,18 +88,18 @@ func (c *PostClient) SetLogger(logger shared.Logger) {
 	c.logger = logger
 }
 
-func (c *PostClient) SetParams(dataDir string, space uint64) {
+func (c *PostClient) SetParams(id []byte, dataDir string, space uint64) {
 	cfg := *c.cfg
 	c.cfg = &cfg
 	c.cfg.DataDir = dataDir
 	c.cfg.SpacePerUnit = space
+	c.id = id
 }
 
 func (c *PostClient) Initialized() bool {
 	if c.initializer == nil {
-		return false
+		c.initializer = initialization.NewInitializer(c.cfg, c.id)
 	}
-
 	state, _, _ := c.initializer.State()
 	return state == initialization.StateCompleted
 }
