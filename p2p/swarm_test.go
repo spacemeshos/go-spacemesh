@@ -12,12 +12,10 @@ import (
 
 	"context"
 	"errors"
-	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/stretchr/testify/assert"
@@ -459,18 +457,19 @@ func TestSwarm_onRemoteClientMessage(t *testing.T) {
 	err = p.onRemoteClientMessage(imc)
 	assert.Equal(t, err, ErrBadFormat2)
 
-	goodmsg := &pb.ProtocolMessage{
-		Metadata: pb.NewProtocolMessageMetadata(id.PublicKey(), exampleProtocol), // not signed
-		Payload:  &pb.Payload{Data: &pb.Payload_Payload{[]byte(examplePayload)}},
+	goodmsg := &ProtocolMessage{
+		Metadata: &ProtocolMessageMetadata{AuthPubkey: id.PublicKey().Bytes(), NextProtocol: exampleProtocol,
+			Timestamp: time.Now().Unix(), ClientVersion: config.ClientVersion}, // not signed
+		Payload: &Payload{Payload: []byte(examplePayload)},
 	}
 
-	goodbin, _ := proto.Marshal(goodmsg)
+	goodbin, _ := types.InterfaceToBytes(goodmsg)
 
 	imc.Message = goodbin
 	session.SetDecrypt(goodbin, nil)
 
 	goodmsg.Metadata.Timestamp = time.Now().Add(-time.Hour).Unix()
-	nosynced, _ := proto.Marshal(goodmsg)
+	nosynced, _ := types.InterfaceToBytes(goodmsg)
 	session.SetDecrypt(nosynced, nil)
 	// Test out of sync
 	imc.Message = nosynced
@@ -481,7 +480,7 @@ func TestSwarm_onRemoteClientMessage(t *testing.T) {
 	// Test no protocol
 	goodmsg.Metadata.Timestamp = time.Now().Unix()
 
-	goodbin, _ = proto.Marshal(goodmsg)
+	goodbin, _ = types.InterfaceToBytes(goodmsg)
 	imc.Message = goodbin
 	session.SetDecrypt(goodbin, nil)
 
@@ -886,4 +885,50 @@ func Test_NodeInfo(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
+}
+
+func TestNeighborhood_ReportConnectionResult(t *testing.T) {
+	const PeerNum = 10
+	n := p2pTestNoStart(t, config.DefaultConfig())
+	goodcount := 0
+	attemptcount := 0
+
+	ps := &discovery.MockPeerStore{}
+
+	ps.GoodFunc = func(key p2pcrypto.PublicKey) {
+		goodcount++
+	}
+
+	ps.AttemptFunc = func(key p2pcrypto.PublicKey) {
+		attemptcount++
+	}
+
+	rnds := node.GenerateRandomNodesData(PeerNum)
+
+	ps.SelectPeersFunc = func(qty int) []*node.NodeInfo {
+		return rnds
+	}
+
+	n.discover = ps
+
+	//_, disc := n.SubscribePeerEvents()
+
+	n.getMorePeers(PeerNum)
+	require.Equal(t, attemptcount, PeerNum)
+
+	realnode := p2pTestNoStart(t, config.DefaultConfig())
+	realnode2 := p2pTestNoStart(t, config.DefaultConfig())
+	realnode.Start()
+	realnode2.Start()
+
+	newrnds := node.GenerateRandomNodesData(PeerNum - 2)
+
+	ps.SelectPeersFunc = func(qty int) []*node.NodeInfo {
+		return append([]*node.NodeInfo{realnode.lNode.NodeInfo, realnode2.lNode.NodeInfo}, newrnds...)
+	}
+
+	n.getMorePeers(PeerNum)
+
+	require.Equal(t, goodcount, 2)
+	require.True(t, attemptcount == PeerNum*2-2)
 }

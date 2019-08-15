@@ -1,7 +1,6 @@
 package timesync
 
 import (
-	"fmt"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"sync"
@@ -76,7 +75,7 @@ func (t *Ticker) notifyOnTick() {
 	}
 
 	t.m.Lock()
-	log.Event().Info(fmt.Sprintf("release tick mesh.LayerID  %v", t.nextLayerToTick))
+	log.Event().Info("release tick", log.LayerId(uint64(t.nextLayerToTick)))
 	for _, ch := range t.subscribes {
 		ch <- t.nextLayerToTick
 		log.Debug("iv'e notified number : %v", t.ids[ch])
