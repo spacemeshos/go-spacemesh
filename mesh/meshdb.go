@@ -8,6 +8,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/pending_txs"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"math/big"
 	"sync"
@@ -332,29 +333,10 @@ func Transaction2SerializableTransaction(tx *Transaction) *types.AddressableSign
 	}
 }
 
-type tinyTx struct {
-	Id     types.TransactionId
-	Origin address.Address
-	Nonce  uint64
-	Amount uint64
-	//Fee    uint64
-}
-
-func addressableTxToTiny(tx *types.AddressableSignedTransaction) tinyTx {
-	// TODO: calculate and store fee amount
-	id := types.GetTransactionId(tx.SerializableSignedTransaction)
-	return tinyTx{
-		Id:     id,
-		Origin: tx.Address,
-		Nonce:  tx.AccountNonce,
-		Amount: tx.Amount,
-	}
-}
-
-func txToTiny(tx *Transaction) tinyTx {
+func txToTiny(tx *Transaction) types.TinyTx {
 	// TODO: calculate and store fee amount
 	id := types.GetTransactionId(Transaction2SerializableTransaction(tx).SerializableSignedTransaction)
-	return tinyTx{
+	return types.TinyTx{
 		Id:     id,
 		Origin: tx.Origin,
 		Nonce:  tx.AccountNonce,
@@ -364,9 +346,9 @@ func txToTiny(tx *Transaction) tinyTx {
 
 func (m *MeshDB) addToMeshTxs(txs []*types.AddressableSignedTransaction, layer types.LayerID) error {
 	// TODO: lock
-	tinyTxs := make([]tinyTx, 0, len(txs))
+	tinyTxs := make([]types.TinyTx, 0, len(txs))
 	for _, tx := range txs {
-		tinyTxs = append(tinyTxs, addressableTxToTiny(tx))
+		tinyTxs = append(tinyTxs, types.AddressableTxToTiny(tx))
 	}
 	groupedTxs := groupByOrigin(tinyTxs)
 
@@ -410,15 +392,15 @@ func (m *MeshDB) removeFromMeshTxs(accepted, rejected []*Transaction, layer type
 	return nil
 }
 
-func txsToTinyGrouped(txs []*Transaction) map[address.Address][]tinyTx {
-	tinyTxs := make([]tinyTx, 0, len(txs))
+func txsToTinyGrouped(txs []*Transaction) map[address.Address][]types.TinyTx {
+	tinyTxs := make([]types.TinyTx, 0, len(txs))
 	for _, tx := range txs {
 		tinyTxs = append(tinyTxs, txToTiny(tx))
 	}
 	return groupByOrigin(tinyTxs)
 }
 
-func (m *MeshDB) storeAccountPendingTxs(account address.Address, pending *accountPendingTxs) error {
+func (m *MeshDB) storeAccountPendingTxs(account address.Address, pending *pending_txs.AccountPendingTxs) error {
 	if pending.IsEmpty() {
 		if err := m.meshTxs.Delete(account.Bytes()); err != nil {
 			return fmt.Errorf("failed to delete empty pending txs for account %v: %v", account.Short(), err)
@@ -433,23 +415,23 @@ func (m *MeshDB) storeAccountPendingTxs(account address.Address, pending *accoun
 	return nil
 }
 
-func (m *MeshDB) getAccountPendingTxs(account address.Address) (*accountPendingTxs, error) {
+func (m *MeshDB) getAccountPendingTxs(account address.Address) (*pending_txs.AccountPendingTxs, error) {
 	accountTxsBytes, err := m.meshTxs.Get(account.Bytes())
 	if err != nil && err != database.ErrNotFound {
 		return nil, fmt.Errorf("failed to get mesh txs for account %s", account.Short())
 	}
 	if err == database.ErrNotFound {
-		return newAccountPendingTxs(), nil
+		return pending_txs.NewAccountPendingTxs(), nil
 	}
-	var pending accountPendingTxs
+	var pending pending_txs.AccountPendingTxs
 	if err := types.BytesToInterface(accountTxsBytes, &pending); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal account pending txs: %v", err)
 	}
 	return &pending, nil
 }
 
-func groupByOrigin(txs []tinyTx) map[address.Address][]tinyTx {
-	grouped := make(map[address.Address][]tinyTx)
+func groupByOrigin(txs []types.TinyTx) map[address.Address][]types.TinyTx {
+	grouped := make(map[address.Address][]types.TinyTx)
 	for _, tx := range txs {
 		grouped[tx.Origin] = append(grouped[tx.Origin], tx)
 	}

@@ -1,4 +1,4 @@
-package mesh
+package pending_txs
 
 import (
 	"github.com/spacemeshos/go-spacemesh/types"
@@ -9,17 +9,17 @@ type nanoTx struct {
 	HighestLayerIncludedIn types.LayerID
 }
 
-type accountPendingTxs struct {
+type AccountPendingTxs struct {
 	PendingTxs map[uint64]map[types.TransactionId]nanoTx
 }
 
-func newAccountPendingTxs() *accountPendingTxs {
-	return &accountPendingTxs{
+func NewAccountPendingTxs() *AccountPendingTxs {
+	return &AccountPendingTxs{
 		PendingTxs: make(map[uint64]map[types.TransactionId]nanoTx),
 	}
 }
 
-func (apt *accountPendingTxs) Add(txs []tinyTx, layer types.LayerID) {
+func (apt *AccountPendingTxs) Add(txs []types.TinyTx, layer types.LayerID) {
 	for _, tx := range txs {
 		existing, found := apt.PendingTxs[tx.Nonce]
 		if !found {
@@ -36,7 +36,7 @@ func (apt *accountPendingTxs) Add(txs []tinyTx, layer types.LayerID) {
 	}
 }
 
-func (apt *accountPendingTxs) Remove(accepted []tinyTx, rejected []tinyTx, layer types.LayerID) {
+func (apt *AccountPendingTxs) Remove(accepted []types.TinyTx, rejected []types.TinyTx, layer types.LayerID) {
 	for _, tx := range accepted {
 		delete(apt.PendingTxs, tx.Nonce)
 	}
@@ -54,7 +54,7 @@ func (apt *accountPendingTxs) Remove(accepted []tinyTx, rejected []tinyTx, layer
 	}
 }
 
-func (apt *accountPendingTxs) GetProjection(prevNonce, prevBalance uint64) (nonce, balance uint64) {
+func (apt *AccountPendingTxs) GetProjection(prevNonce, prevBalance uint64) (nonce, balance uint64) {
 	nonce = prevNonce
 	balance = prevBalance
 	for {
@@ -77,6 +77,6 @@ func (apt *accountPendingTxs) GetProjection(prevNonce, prevBalance uint64) (nonc
 	return nonce, balance
 }
 
-func (apt *accountPendingTxs) IsEmpty() bool {
+func (apt *AccountPendingTxs) IsEmpty() bool {
 	return len(apt.PendingTxs) == 0
 }

@@ -8,6 +8,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/nipst"
+	"github.com/spacemeshos/go-spacemesh/pending_txs"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
@@ -333,19 +334,19 @@ func TestMeshDB_MeshTxs(t *testing.T) {
 	r.Equal(101, int(txns2[0].Amount))
 }
 
-func getTxns(r *require.Assertions, mdb *MeshDB, origin address.Address) []tinyTx {
+func getTxns(r *require.Assertions, mdb *MeshDB, origin address.Address) []types.TinyTx {
 	txnsB, err := mdb.meshTxs.Get(origin.Bytes())
 	if err == database.ErrNotFound {
-		return []tinyTx{}
+		return []types.TinyTx{}
 	}
 	r.NoError(err)
-	var txns accountPendingTxs
+	var txns pending_txs.AccountPendingTxs
 	err = types.BytesToInterface(txnsB, &txns)
 	r.NoError(err)
-	var ret []tinyTx
+	var ret []types.TinyTx
 	for nonce, nonceTxs := range txns.PendingTxs {
 		for id, tx := range nonceTxs {
-			ret = append(ret, tinyTx{Id: id, Nonce: nonce, Amount: tx.Amount})
+			ret = append(ret, types.TinyTx{Id: id, Nonce: nonce, Amount: tx.Amount})
 		}
 	}
 	sort.Slice(ret, func(i, j int) bool {
