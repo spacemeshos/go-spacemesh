@@ -18,13 +18,13 @@ var EntryPointCreated = make(chan bool, 1)
 
 var (
 	// Version is the app's semantic version. Designed to be overwritten by make.
-	Version = "0.0.1"
+	Version string
 
 	// Branch is the git branch used to build the App. Designed to be overwritten by make.
-	Branch = ""
+	Branch string
 
 	// Commit is the git commit used to build the app. Designed to be overwritten by make.
-	Commit = ""
+	Commit string
 	// ctx    cancel used to signal the app to gracefully exit.
 	Ctx, Cancel = context.WithCancel(context.Background())
 )
