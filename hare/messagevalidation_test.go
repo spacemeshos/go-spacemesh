@@ -151,7 +151,23 @@ func TestSyntaxContextValidator_NotifyContext(t *testing.T) {
 		notify.InnerMsg.K = k
 		e := validator.ContextuallyValidateMessage(notify, k)
 		r.Nil(e)
+
+		notify.InnerMsg.K = k + 1
+		e = validator.ContextuallyValidateMessage(notify, k)
+		r.Equal(errInvalidIter, e)
+
+		notify.InnerMsg.K = k + 2
+		e = validator.ContextuallyValidateMessage(notify, k)
+		r.Equal(errInvalidIter, e)
+
+		notify.InnerMsg.K = k + 3
+		e = validator.ContextuallyValidateMessage(notify, k)
+		r.Equal(errInvalidIter, e)
 	}
+
+	notify.InnerMsg.K = 3
+	e := validator.ContextuallyValidateMessage(notify, 2)
+	r.Equal(errEarlyMsg, e)
 }
 
 func TestSyntaxContextValidator_StatusContext(t *testing.T) {

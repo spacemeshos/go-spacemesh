@@ -120,9 +120,9 @@ func (validator *syntaxContextValidator) ContextuallyValidateMessage(m *Msg, cur
 			return nil
 		}
 
-		// early notify is accepted
+		// early notify detected
 		if m.InnerMsg.K == currentK+1 && currentRound == CommitRound {
-			return nil
+			return errEarlyMsg
 		}
 
 		// future notify is rejected
