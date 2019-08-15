@@ -25,14 +25,15 @@ const (
 	Proposal MessageType = 1
 	Commit   MessageType = 2
 	Notify   MessageType = 3
-	PreRound MessageType = 10
+	Pre      MessageType = 10
 )
 
 const (
-	Round1 = 0
-	Round2 = 1
-	Round3 = 2
-	Round4 = 3
+	PreRound      = -1
+	StatusRound   = 0
+	ProposalRound = 1
+	CommitRound   = 2
+	NotifyRound   = 3
 )
 
 const defaultSetSize = 200
@@ -47,7 +48,7 @@ func (mType MessageType) String() string {
 		return "Commit"
 	case Notify:
 		return "Notify"
-	case PreRound:
+	case Pre:
 		return "PreRound"
 	default:
 		return "Unknown message type"
