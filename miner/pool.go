@@ -6,8 +6,8 @@ import (
 	"sync"
 )
 
-//go:generate genny -in=$GOFILE -out=gen_tx_$GOFILE gen "KeyType=types.AtxId ValueType=types.ActivationTx"
-//go:generate genny -in=$GOFILE -out=gen_atx_$GOFILE gen "KeyType=types.TransactionId ValueType=types.AddressableSignedTransaction"
+//go:generate genny -in=$GOFILE -out=gen_atx_$GOFILE gen "KeyType=types.AtxId ValueType=types.ActivationTx"
+//go:generate genny -in=$GOFILE -out=gen_tx_$GOFILE gen "KeyType=types.TransactionId ValueType=types.AddressableSignedTransaction"
 
 type KeyType generic.Type
 type ValueType generic.Type

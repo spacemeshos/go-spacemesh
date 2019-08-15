@@ -11,42 +11,42 @@ import (
 	"github.com/spacemeshos/go-spacemesh/types"
 )
 
-type TypesTransactionIdMemPool struct {
+type TypesAtxIdMemPool struct {
 	mu    sync.RWMutex
-	txMap map[types.TransactionId]*types.AddressableSignedTransaction
+	txMap map[types.AtxId]*types.ActivationTx
 }
 
-func NewTypesTransactionIdMemPool() *TypesTransactionIdMemPool {
-	return &TypesTransactionIdMemPool{sync.RWMutex{}, make(map[types.TransactionId]*types.AddressableSignedTransaction)}
+func NewTypesAtxIdMemPool() *TypesAtxIdMemPool {
+	return &TypesAtxIdMemPool{sync.RWMutex{}, make(map[types.AtxId]*types.ActivationTx)}
 }
 
-func (mem *TypesTransactionIdMemPool) Get(id types.TransactionId) (types.AddressableSignedTransaction, error) {
+func (mem *TypesAtxIdMemPool) Get(id types.AtxId) (types.ActivationTx, error) {
 	mem.mu.RLock()
 	defer mem.mu.RUnlock()
 	val, ok := mem.txMap[id]
 	if !ok {
-		return *new(types.AddressableSignedTransaction), fmt.Errorf("Cannot find in mempool")
+		return *new(types.ActivationTx), fmt.Errorf("Cannot find in mempool")
 	}
 	return *val, nil
 }
 
-func (mem *TypesTransactionIdMemPool) PopItems(size int) []types.AddressableSignedTransaction {
+func (mem *TypesAtxIdMemPool) PopItems(size int) []types.ActivationTx {
 	mem.mu.RLock()
 	defer mem.mu.RUnlock()
-	txList := make([]types.AddressableSignedTransaction, 0, MaxTransactionsPerBlock)
+	txList := make([]types.ActivationTx, 0, MaxTransactionsPerBlock)
 	for _, k := range mem.txMap {
 		txList = append(txList, *k)
 	}
 	return txList
 }
 
-func (mem *TypesTransactionIdMemPool) Put(id types.TransactionId, item *types.AddressableSignedTransaction) {
+func (mem *TypesAtxIdMemPool) Put(id types.AtxId, item *types.ActivationTx) {
 	mem.mu.Lock()
 	mem.txMap[id] = item
 	mem.mu.Unlock()
 }
 
-func (mem *TypesTransactionIdMemPool) Invalidate(id types.TransactionId) {
+func (mem *TypesAtxIdMemPool) Invalidate(id types.AtxId) {
 	mem.mu.Lock()
 	defer mem.mu.Unlock()
 	delete(mem.txMap, id)
