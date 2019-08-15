@@ -2,6 +2,7 @@ package nipst
 
 import (
 	"crypto/rand"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/stretchr/testify/require"
 	"testing"
 )
@@ -31,6 +32,7 @@ func TestPostClient(t *testing.T) {
 	assert.NotNil(proof)
 	assert.Equal([]byte(proof.Challenge), challenge[:])
 
+	log.Info("space %v", postCfg.SpacePerUnit)
 	res, err = verifyPost(proof, postCfg.SpacePerUnit, postCfg.NumProvenLabels, postCfg.Difficulty)
 	assert.NoError(err)
 	assert.True(res)

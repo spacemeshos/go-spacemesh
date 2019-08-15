@@ -7,7 +7,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/types"
+	"sync"
 	"sync/atomic"
+	"time"
 )
 
 const AtxProtocol = "AtxGossip"
@@ -38,7 +40,7 @@ func (provider *PoETNumberOfTickProvider) NumOfTicks() uint64 {
 type NipstBuilder interface {
 	BuildNIPST(challenge *common.Hash) (*types.NIPST, error)
 	IsPostInitialized() bool
-	InitializePost() (*types.PostProof, error)
+	InitializePost(logicalDrive string, commitmentSize uint64) (*types.PostProof, error)
 }
 
 type IdStore interface {
@@ -62,6 +64,12 @@ type BytesStore interface {
 	Get(key []byte) ([]byte, error)
 }
 
+const (
+	Idle = 1 + iota
+	InProgress
+	Done
+)
+
 type Builder struct {
 	nodeId          types.NodeId
 	coinbaseAccount address.Address
@@ -82,6 +90,10 @@ type Builder struct {
 	started         uint32
 	store           BytesStore
 	isSynced        func() bool
+	accountLock     sync.RWMutex
+	postInitLock    sync.RWMutex
+	initStatus      int
+	errorTimeoutMs  time.Duration
 	log             log.Log
 }
 
@@ -101,6 +113,8 @@ func NewBuilder(nodeId types.NodeId, coinbaseAccount address.Address, db ATXDBPr
 		finished:        make(chan struct{}),
 		isSynced:        isSyncedFunc,
 		store:           store,
+		initStatus:      Idle,
+		errorTimeoutMs:  100,
 		log:             log,
 	}
 }
@@ -121,14 +135,6 @@ func (b *Builder) Stop() {
 
 // loop is the main loop that tries to create an atx per tick received from the global clock
 func (b *Builder) loop() {
-	// post is initialized here, consider moving it to another location.
-	if !b.nipstBuilder.IsPostInitialized() {
-		_, err := b.nipstBuilder.InitializePost() // TODO: add proof to first ATX
-		if err != nil {
-			b.log.Error("PoST initialization failed: %v", err)
-			return
-		}
-	}
 	err := b.loadChallenge()
 	if err != nil {
 		log.Info("challenge not loaded: %s", err)
@@ -140,6 +146,13 @@ func (b *Builder) loop() {
 		case layer := <-b.timer:
 			if !b.isSynced() {
 				b.log.Info("cannot create atx : not synced")
+				break
+			}
+			b.postInitLock.RLock()
+			initStat := b.initStatus
+			b.postInitLock.RUnlock()
+			if initStat != Done || !b.nipstBuilder.IsPostInitialized() {
+				b.log.Info("post is not initialized yet, not building nipst")
 				break
 			}
 			if b.working {
@@ -226,6 +239,56 @@ func (b *Builder) buildNipstChallenge(epoch types.EpochId) error {
 		log.Error("challenge cannot be stored: %s", err)
 	}
 	return nil
+}
+
+func (b *Builder) StartPost(rewardAddress address.Address, dataDir string, space uint64) error {
+	b.log.Info("Starting post, reward address: %x", rewardAddress)
+	b.SetCoinbaseAccount(rewardAddress)
+	b.postInitLock.Lock()
+	if b.initStatus == Done {
+		return nil
+	}
+	if b.initStatus == InProgress {
+		b.postInitLock.Unlock()
+		return fmt.Errorf("attempted to start post when post already initiated")
+	}
+	b.initStatus = InProgress
+	errChan := make(chan error, 1)
+	go func() {
+		_, err := b.nipstBuilder.InitializePost(dataDir, space) // TODO: add proof to first ATX
+		b.postInitLock.Lock()
+		if err != nil {
+			b.initStatus = Idle
+			b.postInitLock.Unlock()
+			b.log.Error(err.Error())
+			errChan <- err
+			return
+		}
+		b.initStatus = Done
+		b.postInitLock.Unlock()
+	}()
+	b.postInitLock.Unlock()
+	// todo: refactor initializePost to be concurrent, returning error in a blocking manner
+	t := time.NewTimer(b.errorTimeoutMs * time.Millisecond)
+	select {
+	case <-t.C:
+		return nil
+	case err := <-errChan:
+		return err
+	}
+}
+
+func (b *Builder) SetCoinbaseAccount(rewardAddress address.Address) {
+	b.accountLock.Lock()
+	b.coinbaseAccount = rewardAddress
+	b.accountLock.Unlock()
+}
+
+func (b *Builder) getCoinbaseAccount() address.Address {
+	b.accountLock.RLock()
+	acc := b.coinbaseAccount
+	b.accountLock.RUnlock()
+	return acc
 }
 
 func (b Builder) getNipstKey() []byte {
@@ -332,7 +395,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 			pubEpoch, len(view), view)
 	}
 
-	atx := types.NewActivationTxWithChallenge(*b.challenge, b.coinbaseAccount, activeSetSize, view, b.nipst)
+	atx := types.NewActivationTxWithChallenge(*b.challenge, b.getCoinbaseAccount(), activeSetSize, view, b.nipst)
 
 	b.log.With().Info("active ids seen for epoch", log.Uint64("pos_atx_epoch", uint64(posEpoch)),
 		log.Uint32("view_cnt", activeSetSize))

@@ -93,6 +93,7 @@ type SpacemeshApp struct {
 	blockListener    *sync.BlockListener
 	state            *state.StateDB
 	blockProducer    *miner.BlockBuilder
+	oracle           *oracle.MinerBlockOracle
 	txProcessor      *state.TransactionProcessor
 	mesh             *mesh.Mesh
 	clock            *timesync.Ticker
@@ -101,10 +102,6 @@ type SpacemeshApp struct {
 	poetListener     *activation.PoetListener
 	edSgn            *signing.EdSigner
 	log              log.Log
-}
-
-type MiningEnabler interface {
-	MiningEligible() bool
 }
 
 // ParseConfig unmarshal config file into struct
@@ -403,13 +400,9 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 		lg.WithName("nipstBuilder"),
 	)
 
-	if app.Config.CoinbaseAccount == "" {
-		app.log.Panic("cannot start mining without Coinbase account")
-	}
-
 	coinBase := address.HexToAddress(app.Config.CoinbaseAccount)
 
-	if coinBase.Big().Uint64() == 0 {
+	if coinBase.Big().Uint64() == 0 && app.Config.StartMining {
 		app.log.Panic("invalid Coinbase account")
 	}
 	atxBuilder := activation.NewBuilder(nodeID, coinBase, atxdb, swarm, msh, layersPerEpoch, nipstBuilder, clock.Subscribe(), syncer.IsSynced, store, lg.WithName("atxBuilder"))
@@ -424,6 +417,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	app.P2P = swarm
 	app.poetListener = poetListener
 	app.atxBuilder = atxBuilder
+	app.oracle = blockOracle
 	return nil
 }
 
@@ -439,6 +433,17 @@ func (app *SpacemeshApp) startServices() {
 		log.Panic("cannot start block producer")
 	}
 	app.poetListener.Start()
+
+	if app.Config.StartMining {
+		coinBase := address.HexToAddress(app.Config.CoinbaseAccount)
+		err := app.atxBuilder.StartPost(coinBase, app.Config.POST.DataDir, app.Config.POST.SpacePerUnit)
+		if err != nil {
+			log.Error("Error initializing post, err: %v", err)
+			log.Panic("Error initializing post")
+		}
+	} else {
+		log.Info("Manual post init")
+	}
 	app.atxBuilder.Start()
 	app.clock.StartNotifying()
 }
@@ -641,7 +646,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	// start api servers
 	if apiConf.StartGrpcServer || apiConf.StartJSONServer {
 		// start grpc if specified or if json rpc specified
-		app.grpcAPIService = api.NewGrpcService(app.P2P, app.state, app.mesh.TxProcessor)
+		app.grpcAPIService = api.NewGrpcService(app.P2P, app.state, app.mesh.TxProcessor, app.atxBuilder, app.oracle)
 		app.grpcAPIService.StartService(nil)
 	}
 
