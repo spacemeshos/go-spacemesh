@@ -199,6 +199,38 @@ func TestNewNIPSTBuilderNotInitialized(t *testing.T) {
 	r.NoError(err)
 }
 
+func TestNewNIPSTBuilderAlreadyInitialized(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	r := require.New(t)
+
+	minerIDNotInitialized := []byte("not initialized")
+	//nipstChallenge := common.BytesToHash([]byte("anton"))
+
+	postProver := NewPostClient(&postCfg)
+	poetProver, err := newRPCPoetHarnessClient()
+	r.NotNil(poetProver)
+	defer func() {
+		err = poetProver.CleanUp()
+		r.NoError(err)
+	}()
+	r.NoError(err)
+	poetDb := &poetDbMock{}
+	nb := newNIPSTBuilder(minerIDNotInitialized, postCfg, postProver, poetProver,
+		poetDb, verifyPost, log.NewDefault(string(minerID)))
+	_, err = nb.InitializePost(postCfg.DataDir, postCfg.SpacePerUnit)
+	defer func() { assert.NoError(t, nb.postProver.Reset()) }()
+	r.NoError(err)
+
+	nb2 := newNIPSTBuilder(minerIDNotInitialized, postCfg, postProver, poetProver,
+		poetDb, verifyPost, log.NewDefault(string(minerID)))
+
+	r.True(nb2.postProver.Initialized())
+
+}
+
 func TestValidator_Validate(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
@@ -249,7 +281,9 @@ func TestMain(m *testing.M) {
 func initPost(id []byte) {
 	defTimeout := 5 * time.Second
 	idsToCleanup = append(idsToCleanup, id)
-	_, err := NewPostClient(&postCfg).initialize(id, defTimeout)
+	c := NewPostClient(&postCfg)
+	c.SetParams([]byte("anton"), "/tmp/",2048)
+	_, err := c.initialize(defTimeout)
 	logIfError(err)
 }
 

@@ -123,7 +123,7 @@ func newNIPSTBuilder(
 	verifyPost verifyPostFunc,
 	log log.Log,
 ) *NIPSTBuilder {
-	return &NIPSTBuilder{
+	b := &NIPSTBuilder{
 		id:         id,
 		postCfg:    postCfg,
 		postProver: postProver,
@@ -137,6 +137,8 @@ func newNIPSTBuilder(
 			nipst: initialNIPST(postCfg.SpacePerUnit),
 		},
 	}
+	postProver.SetParams(id, postCfg.DataDir, postCfg.SpacePerUnit)
+	return b
 }
 
 func (nb *NIPSTBuilder) BuildNIPST(challenge *common.Hash) (*types.NIPST, error) {

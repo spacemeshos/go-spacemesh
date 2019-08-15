@@ -15,10 +15,12 @@ func TestPostClient(t *testing.T) {
 	assert.NoError(err)
 
 	c := NewPostClient(&postCfg)
+	c.SetParams([]byte("anton"), "/tmp/aaa",1024)
 	assert.NotNil(c)
 
 	idsToCleanup = append(idsToCleanup, id)
-	commitment, err := c.initialize(id)
+	commitment, err := c.initialize(0)
+	defer func() { assert.NoError(c.Reset())}()
 	assert.NoError(err)
 	assert.NotNil(commitment)
 
@@ -27,7 +29,7 @@ func TestPostClient(t *testing.T) {
 	assert.True(res)
 
 	challenge := []byte("this is a challenge")
-	proof, err := c.execute(id, 0)
+	proof, err := c.execute(challenge, 0)
 	assert.NoError(err)
 	assert.NotNil(proof)
 	assert.Equal([]byte(proof.Challenge), challenge[:])

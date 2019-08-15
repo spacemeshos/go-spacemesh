@@ -47,7 +47,7 @@ type PostClient struct {
 var _ PostProverClient = (*PostClient)(nil)
 
 func NewPostClient(cfg *config.Config) *PostClient {
-	return &PostClient{nil, cfg, initialization.NewInitializer(cfg, nil), shared.DisabledLogger{}}
+	return &PostClient{nil, cfg, nil, shared.DisabledLogger{}}
 }
 
 func (c *PostClient) initialize(timeout time.Duration) (commitment *types.PostProof, err error) {
@@ -94,11 +94,13 @@ func (c *PostClient) SetParams(id []byte, dataDir string, space uint64) {
 	c.cfg.DataDir = dataDir
 	c.cfg.SpacePerUnit = space
 	c.id = id
+	c.initializer = initialization.NewInitializer(c.cfg, c.id)
 }
 
 func (c *PostClient) Initialized() bool {
 	if c.initializer == nil {
-		c.initializer = initialization.NewInitializer(c.cfg, c.id)
+		c.logger.Error("tried to initialize with no id and initializer")
+		return false
 	}
 	state, _, _ := c.initializer.State()
 	return state == initialization.StateCompleted
