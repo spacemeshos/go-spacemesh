@@ -37,7 +37,7 @@ func Test_newRefresher(t *testing.T) {
 	//}
 	local := generateDiscNode()
 	addrbk := NewAddrBook(local, cfg.SwarmConfig, GetTestLogger("test.newRefresher.addrbook"))
-	ref := newRefresher(addrbk, &mockDisc{}, bootnodes, GetTestLogger("test.newRefresher"))
+	ref := newRefresher(local, addrbk, &mockDisc{}, bootnodes, GetTestLogger("test.newRefresher"))
 
 	require.Equal(t, ref.bootNodes, bootnodes)
 }
@@ -98,7 +98,7 @@ func TestRefresher_refresh(t *testing.T) {
 	local := generateDiscNode()
 	disc := &mockDisc{}
 	addrbk := NewAddrBook(local, cfg.SwarmConfig, GetTestLogger("test.newRefresher.addrbook"))
-	ref := newRefresher(addrbk, disc, []*node.NodeInfo{}, GetTestLogger("test.newRefresher"))
+	ref := newRefresher(local, addrbk, disc, []*node.NodeInfo{}, GetTestLogger("test.newRefresher"))
 
 	boot := generateDiscNode()
 
@@ -125,7 +125,7 @@ func TestRefresher_refresh2(t *testing.T) {
 	local := generateDiscNode()
 	disc := &mockDisc{}
 	addrbk := NewAddrBook(local, cfg.SwarmConfig, GetTestLogger("test.newRefresher.addrbook"))
-	ref := newRefresher(addrbk, disc, []*node.NodeInfo{}, GetTestLogger("test.newRefresher"))
+	ref := newRefresher(local, addrbk, disc, []*node.NodeInfo{}, GetTestLogger("test.newRefresher"))
 
 	boot := generateDiscNodes(3)
 
@@ -153,7 +153,7 @@ func TestRefresher_refresh3(t *testing.T) {
 	local := generateDiscNode()
 	disc := &mockDisc{}
 	addrbk := NewAddrBook(local, cfg.SwarmConfig, GetTestLogger("test.newRefresher.addrbook"))
-	ref := newRefresher(addrbk, disc, []*node.NodeInfo{}, GetTestLogger("test.newRefresher"))
+	ref := newRefresher(local, addrbk, disc, []*node.NodeInfo{}, GetTestLogger("test.newRefresher"))
 
 	boot := generateDiscNodes(3)
 
@@ -187,7 +187,7 @@ func TestRefresher_Bootstrap(t *testing.T) {
 	//}
 
 	addrbk := NewAddrBook(local, cfg.SwarmConfig, GetTestLogger("test.newRefresher.addrbook"))
-	ref := newRefresher(addrbk, disc, boot, GetTestLogger("test.newRefresher"))
+	ref := newRefresher(local, addrbk, disc, boot, GetTestLogger("test.newRefresher"))
 
 	disc.pingres = nil
 	disc.findnoderr = nil
@@ -210,7 +210,7 @@ func TestRefresher_BootstrapAbort(t *testing.T) {
 	//}
 
 	addrbk := NewAddrBook(local, cfg.SwarmConfig, GetTestLogger("test.newRefresher.addrbook"))
-	ref := newRefresher(addrbk, disc, boot, GetTestLogger("test.newRefresher"))
+	ref := newRefresher(local, addrbk, disc, boot, GetTestLogger("test.newRefresher"))
 
 	disc.pingres = nil
 	disc.findnoderr = nil

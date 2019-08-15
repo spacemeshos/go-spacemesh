@@ -207,7 +207,7 @@ dockertest-sync: dockerbuild-test dockerrun-sync
 .PHONY: dockertest-sync
 
 # The following is used to run tests one after the other locally
-dockerrun-test: dockerbuild-test dockerrun-p2p dockerrun-mining dockerrun-hare
+dockerrun-test: dockerbuild-test dockerrun-p2p dockerrun-mining dockerrun-hare dockerrun-sync
 .PHONY: dockerrun-test
 
 dockerrun-all: dockerpush dockerrun-test

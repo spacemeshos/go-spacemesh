@@ -27,12 +27,7 @@ timeout_factor = 1
 
 
 def query_bootstrap_es(indx, namespace, bootstrap_po_name):
-    es = ES().get_search_api()
-    fltr = Q("match_phrase", kubernetes__namespace_name=namespace) & \
-           Q("match_phrase", kubernetes__pod_name=bootstrap_po_name) & \
-           Q("match_phrase", M="Local node identity")
-    s = Search(index=indx, using=es).query('bool', filter=[fltr])
-    hits = list(s.scan())
+    hits = poll_query_message(current_index, namespace, bootstrap_po_name, { "M": "Local node identity" }, expected=1)
     for h in hits:
         match = re.search(r"Local node identity >> (?P<bootstrap_key>\w+)", h.M)
         if match:
