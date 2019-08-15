@@ -286,7 +286,7 @@ func (proc *ConsensusProcess) handleMessage(m *Msg) {
 
 	mType := MessageType(m.InnerMsg.Type).String()
 	// validate InnerMsg for this or next round
-	res, err := proc.validator.ContextuallyValidateMessage(m, proc.k)
+	err := proc.validator.ContextuallyValidateMessage(m, proc.k)
 	if err != nil {
 		if err == errEarlyMsg { // early message, keep for later
 			proc.Debug("Early message of type %v detected. Keeping message, pubkey %v", mType, m.PubKey.ShortString())
@@ -294,18 +294,11 @@ func (proc *ConsensusProcess) handleMessage(m *Msg) {
 			return
 		}
 
+		// not an early message but also contextually invalid
 		proc.With().Error("Error contextually validating message",
 			log.String("msg_type", mType), log.String("sender_id", m.PubKey.ShortString()),
 			log.Int32("current_k", proc.k), log.Int32("msg_k", m.InnerMsg.K),
 			log.LayerId(uint64(proc.instanceId)), log.Err(err))
-		return
-	}
-
-	if !res { // not early, no error, simply contextually invalid
-		proc.With().Warning("message does not belong to this round and is not an early msg",
-			log.String("msg_type", mType), log.String("sender_id", m.PubKey.ShortString()),
-			log.Int32("current_k", proc.k), log.Int32("msg_k", m.InnerMsg.K),
-			log.LayerId(uint64(proc.instanceId)))
 		return
 	}
 

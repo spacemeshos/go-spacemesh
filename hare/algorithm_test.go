@@ -30,9 +30,9 @@ func (mmv *mockMessageValidator) SyntacticallyValidateMessage(m *Msg) bool {
 	return mmv.syntaxValid
 }
 
-func (mmv *mockMessageValidator) ContextuallyValidateMessage(m *Msg, expectedK int32) (bool, error) {
+func (mmv *mockMessageValidator) ContextuallyValidateMessage(m *Msg, expectedK int32) error {
 	mmv.countContext++
-	return mmv.contextValid, mmv.err
+	return mmv.err
 }
 
 type mockRolacle struct {

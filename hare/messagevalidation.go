@@ -8,7 +8,7 @@ import (
 
 type messageValidator interface {
 	SyntacticallyValidateMessage(m *Msg) bool
-	ContextuallyValidateMessage(m *Msg, expectedK int32) (bool, error)
+	ContextuallyValidateMessage(m *Msg, expectedK int32) error
 }
 
 type IdentityProvider interface {
@@ -94,60 +94,77 @@ func newSyntaxContextValidator(signing Signer, threshold int, validator func(m *
 	return &syntaxContextValidator{signing, threshold, validator, stateQuerier, layersPerEpoch, logger}
 }
 
-var errEarlyMsg = errors.New("early message")
+var ( // contextual validation errors
+	errNilInner       = errors.New("nil inner message")
+	errEarlyMsg       = errors.New("early message")
+	errInvalidIter    = errors.New("incorrect iteration number")
+	errInvalidRound   = errors.New("incorrect round")
+	errUnexpectedType = errors.New("unexpected message type")
+)
 
 // Validates the InnerMsg is contextually valid
 // Note: we can count on m.InnerMsg.K because we assume m is syntactically valid
-func (validator *syntaxContextValidator) ContextuallyValidateMessage(m *Msg, currentK int32) (bool, error) {
+func (validator *syntaxContextValidator) ContextuallyValidateMessage(m *Msg, currentK int32) error {
 	if m.InnerMsg == nil {
-		return false, errors.New("nil inner message")
+		return errNilInner
 	}
 
+	currentRound := currentK % 4
 	// first validate pre-round and notify
 	switch m.InnerMsg.Type {
 	case Pre:
-		return true, nil
+		return nil
 	case Notify:
-		return true, nil
+		// old notify is accepted
+		if m.InnerMsg.K <= currentK {
+			return nil
+		}
+
+		// early notify is accepted
+		if m.InnerMsg.K == currentK+1 && currentRound == CommitRound {
+			return nil
+		}
+
+		// future notify is rejected
+		return errInvalidIter
 	}
 
-	// the message must match the current iteration unless it is a notify message
+	// the message must match the current iteration unless it is a notify or pre-round message
 	currentIteration := currentK / 4
 	msgIteration := m.InnerMsg.K / 4
 	if currentIteration != msgIteration {
-		return false, nil
+		return errInvalidIter
 	}
 
-	// Pre & Notify are always contextually valid
-	currentRound := currentK % 4
+	// check status, proposal & commit types
 	switch m.InnerMsg.Type {
-	case Proposal:
-		if currentRound == StatusRound {
-			return false, errEarlyMsg
-		}
-		if currentRound == ProposalRound || currentRound == CommitRound { // may be a late proposal
-			return true, nil
-		}
-		return false, nil
 	case Status:
 		if currentRound == PreRound {
-			return false, errEarlyMsg
+			return errEarlyMsg
 		}
 		if currentRound == StatusRound {
-			return true, nil
+			return nil
 		}
-		return false, nil
+		return errInvalidRound
+	case Proposal:
+		if currentRound == StatusRound {
+			return errEarlyMsg
+		}
+		if currentRound == ProposalRound || currentRound == CommitRound { // may be a late proposal
+			return nil
+		}
+		return errInvalidRound
 	case Commit:
 		if currentRound == ProposalRound {
-			return false, errEarlyMsg
+			return errEarlyMsg
 		}
 		if currentRound == CommitRound {
-			return true, nil
+			return nil
 		}
-		return false, nil
+		return errInvalidRound
 	}
 
-	return false, nil
+	return errUnexpectedType
 }
 
 // Validates the syntax of the provided InnerMsg
