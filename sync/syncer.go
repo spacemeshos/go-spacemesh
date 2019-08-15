@@ -78,6 +78,7 @@ type Syncer struct {
 	clock             timesync.LayerTimer
 	exit              chan struct{}
 	currentLayerMutex sync.RWMutex
+	syncRoutineWg     sync.WaitGroup
 
 	//todo fetch server
 	blockQueue *validationQueue
@@ -90,8 +91,12 @@ func (s *Syncer) ForceSync() {
 }
 
 func (s *Syncer) Close() {
+	s.Info("Closing syncer")
 	close(s.exit)
 	close(s.forceSync)
+	// TODO: broadly implement a better mechanism for shutdown
+	time.Sleep(5 * time.Millisecond) // "ensures" no more sync routines can be created, ok for now
+	s.syncRoutineWg.Wait()           // must be called after we ensure no more sync routines can be created
 	s.blockQueue.done()
 	s.MessageServer.Close()
 }
@@ -124,6 +129,7 @@ func (s *Syncer) Start() {
 func (s *Syncer) getSyncRoutine() func() {
 	return func() {
 		if atomic.CompareAndSwapUint32(&s.SyncLock, IDLE, RUNNING) {
+			s.syncRoutineWg.Add(1)
 			s.Synchronise()
 			atomic.StoreUint32(&s.SyncLock, IDLE)
 		}
@@ -136,7 +142,7 @@ func (s *Syncer) run() {
 	for {
 		select {
 		case <-s.exit:
-			s.Debug("Work stoped")
+			s.Debug("Work stopped")
 			return
 		case <-s.forceSync:
 			go syncRoutine()
@@ -199,7 +205,23 @@ func (s *Syncer) lastTickedLayer() types.LayerID {
 }
 
 func (s *Syncer) Synchronise() {
-	for currentSyncLayer := s.lValidator.ValidatedLayer() + 1; currentSyncLayer <= s.lastTickedLayer(); currentSyncLayer++ {
+	defer s.syncRoutineWg.Done()
+
+	currentSyncLayer := s.lValidator.ValidatedLayer() + 1
+	if s.lastTickedLayer() == 1 { // skip validation for first layer
+		s.Info("Not syncing in layer 1")
+		return
+	}
+	if s.IsSynced() {
+		lyr, err := s.GetLayer(types.LayerID(currentSyncLayer))
+		if err != nil {
+			s.With().Error("failed getting layer even though IsSynced is true", log.Err(err))
+			return
+		}
+		s.lValidator.ValidateLayer(lyr) // wait for layer validation
+		return
+	}
+	for ; currentSyncLayer <= s.lastTickedLayer(); currentSyncLayer++ {
 		lastTickedLayer := s.lastTickedLayer()
 		if s.IsSynced() && currentSyncLayer == lastTickedLayer {
 			continue
@@ -207,16 +229,14 @@ func (s *Syncer) Synchronise() {
 
 		s.Info("syncing layer %v current consensus layer is %d", currentSyncLayer, lastTickedLayer)
 
-		lyr, err := s.GetLayer(types.LayerID(currentSyncLayer))
+		lyr, err := s.getLayerFromNeighbors(currentSyncLayer)
 		if err != nil {
-			s.Info("layer %v is not in the database", currentSyncLayer)
-			if lyr, err = s.getLayerFromNeighbors(currentSyncLayer); err != nil {
-				s.Info("could not get layer %v from neighbors %v", currentSyncLayer, err)
-				return
-			}
+			s.Info("could not get layer %v from neighbors %v", currentSyncLayer, err)
+			return
 		}
-
-		s.lValidator.ValidateLayer(lyr) // wait for layer validation
+		if currentSyncLayer < lastTickedLayer {
+			s.lValidator.ValidateLayer(lyr) // wait for layer validation
+		}
 	}
 }
 

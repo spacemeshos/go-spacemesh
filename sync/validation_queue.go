@@ -93,6 +93,7 @@ func (vq *validationQueue) work() error {
 
 		bid := bjb.ids.(types.BlockID)
 
+		s.Info("Validating view for block %v", block.ID())
 		if bjb.items == nil {
 			vq.updateDependencies(bid, false)
 			vq.Error(fmt.Sprintf("could not retrieve a block in view "))

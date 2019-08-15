@@ -72,7 +72,10 @@ func NewSyncApp() *SyncApp {
 }
 
 func (app *SyncApp) Cleanup() {
-
+	err := os.RemoveAll(app.Config.DataDir)
+	if err != nil {
+		app.sync.Error("failed to cleanup sync: %v", err)
+	}
 }
 
 type mockTxProcessor struct {

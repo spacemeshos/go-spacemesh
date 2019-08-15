@@ -940,13 +940,22 @@ func TestSyncer_Synchronise(t *testing.T) {
 	r := require.New(t)
 	syncs, _ := SyncMockFactory(1, conf, t.Name(), memoryDB, newMockPoetDb)
 	sync := syncs[0]
-	sync.currentLayer = 3
-	lv := &mockLayerValidator{1, 0, 0}
+	lv := &mockLayerValidator{0, 0, 0}
 	sync.lValidator = lv
+
+	sr := sync.getSyncRoutine()
+	sr()
+	time.Sleep(100 * time.Millisecond) // handle go routine race
+	r.Equal(1, lv.countValidated)
+	r.Equal(0, lv.countValidate)
+
 	sync.AddBlock(types.NewExistingBlock(types.BlockID(1), 1, nil))
 	sync.AddBlock(types.NewExistingBlock(types.BlockID(2), 2, nil))
 	sync.AddBlock(types.NewExistingBlock(types.BlockID(3), 3, nil))
-	sync.Synchronise()
+	lv = &mockLayerValidator{1, 0, 0}
+	sync.lValidator = lv
+	sync.currentLayer = 3
+	sr()
 	time.Sleep(100 * time.Millisecond) // handle go routine race
 	r.Equal(1, lv.countValidated)
 	r.Equal(1, lv.countValidate) // synced, expect only one call
@@ -954,9 +963,9 @@ func TestSyncer_Synchronise(t *testing.T) {
 	lv = &mockLayerValidator{1, 0, 0}
 	sync.lValidator = lv
 	sync.currentLayer = 4 // simulate not synced
-	sync.Synchronise()
+	sr()
 	time.Sleep(100 * time.Millisecond) // handle go routine race
-	r.Equal(2, lv.countValidate)       // not synced, expect two calls
+	r.Equal(1, lv.countValidate)       // not synced, expect one call
 }
 
 type mockTimedValidator struct {

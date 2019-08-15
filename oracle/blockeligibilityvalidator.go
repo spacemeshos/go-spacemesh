@@ -13,24 +13,26 @@ import (
 type VRFValidationFunction func(message, signature, publicKey []byte) (bool, error)
 
 type BlockEligibilityValidator struct {
-	committeeSize  uint32
-	layersPerEpoch uint16
-	activationDb   ActivationDb
-	beaconProvider *EpochBeaconProvider
-	validateVRF    VRFValidationFunction
-	log            log.Log
+	committeeSize        uint32
+	genesisActiveSetSize uint32
+	layersPerEpoch       uint16
+	activationDb         ActivationDb
+	beaconProvider       *EpochBeaconProvider
+	validateVRF          VRFValidationFunction
+	log                  log.Log
 }
 
-func NewBlockEligibilityValidator(committeeSize int32, layersPerEpoch uint16, activationDb ActivationDb,
+func NewBlockEligibilityValidator(committeeSize, genesisActiveSetSize uint32, layersPerEpoch uint16, activationDb ActivationDb,
 	beaconProvider *EpochBeaconProvider, validateVRF VRFValidationFunction, log log.Log) *BlockEligibilityValidator {
 
 	return &BlockEligibilityValidator{
-		committeeSize:  uint32(committeeSize),
-		layersPerEpoch: layersPerEpoch,
-		activationDb:   activationDb,
-		beaconProvider: beaconProvider,
-		validateVRF:    validateVRF,
-		log:            log,
+		committeeSize:        committeeSize,
+		genesisActiveSetSize: genesisActiveSetSize,
+		layersPerEpoch:       layersPerEpoch,
+		activationDb:         activationDb,
+		beaconProvider:       beaconProvider,
+		validateVRF:          validateVRF,
+		log:                  log,
 	}
 }
 
@@ -105,7 +107,7 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 func (v BlockEligibilityValidator) getActiveSetSize(block *types.BlockHeader) (uint32, error) {
 	blockEpoch := block.LayerIndex.GetEpoch(v.layersPerEpoch)
 	if blockEpoch.IsGenesis() {
-		return v.committeeSize, nil
+		return v.genesisActiveSetSize, nil
 	}
 	atx, err := v.activationDb.GetAtx(block.ATXID)
 	if err != nil {

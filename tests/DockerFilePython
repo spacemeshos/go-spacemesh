@@ -3,8 +3,6 @@ FROM alpine:3.10
 ENV KUBE_CLIENT_VERSION="4.0.0" \
 	KUBE_WS_PATCH_VERSION="2.0.98"
 
-COPY tests tests
-
 RUN apk add build-base libffi-dev openssl-dev
 RUN apk add --update --no-cache \
 		dumb-init \

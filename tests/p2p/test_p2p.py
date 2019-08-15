@@ -14,7 +14,7 @@ from tests.queries import ES, query_message, poll_query_message
 from tests.test_bs import add_single_client, add_multi_clients, get_conf
 from tests.test_bs import api_call
 # noinspection PyUnresolvedReferences
-from tests.test_bs import setup_bootstrap, create_configmap, setup_clients, save_log_on_exit, add_client, add_curl
+from tests.test_bs import setup_bootstrap, setup_clients, save_log_on_exit, add_client, add_curl
 
 # ==============================================================================
 #    TESTS
@@ -27,12 +27,7 @@ timeout_factor = 1
 
 
 def query_bootstrap_es(indx, namespace, bootstrap_po_name):
-    es = ES().get_search_api()
-    fltr = Q("match_phrase", kubernetes__namespace_name=namespace) & \
-           Q("match_phrase", kubernetes__pod_name=bootstrap_po_name) & \
-           Q("match_phrase", M="Local node identity")
-    s = Search(index=indx, using=es).query('bool', filter=[fltr])
-    hits = list(s.scan())
+    hits = poll_query_message(current_index, namespace, bootstrap_po_name, { "M": "Local node identity" }, expected=1)
     for h in hits:
         match = re.search(r"Local node identity >> (?P<bootstrap_key>\w+)", h.M)
         if match:
@@ -225,4 +220,4 @@ def test_late_bootstraps(init_session, setup_bootstrap, setup_clients):
                                   findFails=False,
                                   expected=1)
 
-        assert len(hits) == 1, "Could not find new Client bootstrap message"
+        assert len(hits) == 1, "Could not find new Client bootstrap message. client: {0}".format(i[0])

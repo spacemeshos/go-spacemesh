@@ -93,6 +93,7 @@ type SpacemeshApp struct {
 	blockListener    *sync.BlockListener
 	state            *state.StateDB
 	blockProducer    *miner.BlockBuilder
+	oracle           *oracle.MinerBlockOracle
 	txProcessor      *state.TransactionProcessor
 	mesh             *mesh.Mesh
 	clock            *timesync.Ticker
@@ -101,10 +102,6 @@ type SpacemeshApp struct {
 	poetListener     *activation.PoetListener
 	edSgn            *signing.EdSigner
 	log              log.Log
-}
-
-type MiningEnabler interface {
-	MiningEligible() bool
 }
 
 // ParseConfig unmarshal config file into struct
@@ -350,7 +347,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 
 	atxdb := activation.NewActivationDb(atxdbstore, idStore, mdb, layersPerEpoch, validator, lg.WithName("atxDb"))
 	beaconProvider := &oracle.EpochBeaconProvider{}
-	eValidator := oracle.NewBlockEligibilityValidator(int32(app.Config.GenesisActiveSet), layersPerEpoch, atxdb, beaconProvider, BLS381.Verify2, lg.WithName("blkElgValidator"))
+	eValidator := oracle.NewBlockEligibilityValidator(layerSize, uint32(app.Config.GenesisActiveSet), layersPerEpoch, atxdb, beaconProvider, BLS381.Verify2, lg.WithName("blkElgValidator"))
 
 	txpool := miner.NewTypesTransactionIdMemPool()
 	atxpool := miner.NewTypesAtxIdMemPool()
@@ -360,7 +357,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	conf := sync.Configuration{Concurrency: 4, LayerSize: int(layerSize), LayersPerEpoch: layersPerEpoch, RequestTimeout: 100 * time.Millisecond}
 
 	syncer := sync.NewSync(swarm, msh, txpool, atxpool, processor, eValidator, poetDb, conf, clock, lg.WithName("sync"))
-	blockOracle := oracle.NewMinerBlockOracle(uint32(app.Config.GenesisActiveSet), uint16(layersPerEpoch), atxdb, beaconProvider, vrfSigner, nodeID, syncer.IsSynced, lg.WithName("blockOracle"))
+	blockOracle := oracle.NewMinerBlockOracle(layerSize, uint32(app.Config.GenesisActiveSet), uint16(layersPerEpoch), atxdb, beaconProvider, vrfSigner, nodeID, syncer.IsSynced, lg.WithName("blockOracle"))
 
 	// TODO: we should probably decouple the apptest and the node (and duplicate as necessary)
 	var hOracle hare.Rolacle
@@ -404,13 +401,9 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 		lg.WithName("nipstBuilder"),
 	)
 
-	if app.Config.CoinbaseAccount == "" {
-		app.log.Panic("cannot start mining without Coinbase account")
-	}
-
 	coinBase := address.HexToAddress(app.Config.CoinbaseAccount)
 
-	if coinBase.Big().Uint64() == 0 {
+	if coinBase.Big().Uint64() == 0 && app.Config.StartMining {
 		app.log.Panic("invalid Coinbase account")
 	}
 	atxBuilder := activation.NewBuilder(nodeID, coinBase, atxdb, swarm, msh, layersPerEpoch, nipstBuilder, clock.Subscribe(), syncer.IsSynced, store, lg.WithName("atxBuilder"))
@@ -425,6 +418,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	app.P2P = swarm
 	app.poetListener = poetListener
 	app.atxBuilder = atxBuilder
+	app.oracle = blockOracle
 	return nil
 }
 
@@ -440,17 +434,31 @@ func (app *SpacemeshApp) startServices() {
 		log.Panic("cannot start block producer")
 	}
 	app.poetListener.Start()
+
+	if app.Config.StartMining {
+		coinBase := address.HexToAddress(app.Config.CoinbaseAccount)
+		err := app.atxBuilder.StartPost(coinBase, app.Config.POST.DataDir, app.Config.POST.SpacePerUnit)
+		if err != nil {
+			log.Error("Error initializing post, err: %v", err)
+			log.Panic("Error initializing post")
+		}
+	} else {
+		log.Info("Manual post init")
+	}
 	app.atxBuilder.Start()
 	app.clock.StartNotifying()
 }
 
-func (app SpacemeshApp) stopServices() {
+func (app *SpacemeshApp) stopServices() {
 
 	log.Info("%v closing services ", app.nodeId.Key)
 
 	if err := app.blockProducer.Close(); err != nil {
 		log.Error("cannot stop block producer %v", err)
 	}
+
+	log.Info("%v closing clock", app.nodeId.Key)
+	app.clock.Close()
 
 	app.log.Info("closing PoET listener")
 	app.poetListener.Close()
@@ -463,9 +471,6 @@ func (app SpacemeshApp) stopServices() {
 
 	log.Info("%v closing Hare", app.nodeId.Key)
 	app.hare.Close() //todo: need to add this
-
-	log.Info("%v closing clock", app.nodeId.Key)
-	app.clock.Close()
 
 	log.Info("%v closing p2p", app.nodeId.Key)
 	app.P2P.Shutdown()
@@ -642,7 +647,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	// start api servers
 	if apiConf.StartGrpcServer || apiConf.StartJSONServer {
 		// start grpc if specified or if json rpc specified
-		app.grpcAPIService = api.NewGrpcService(app.P2P, app.state, app.mesh.TxProcessor)
+		app.grpcAPIService = api.NewGrpcService(app.P2P, app.state, app.mesh.TxProcessor, app.atxBuilder, app.oracle)
 		app.grpcAPIService.StartService(nil)
 	}
 

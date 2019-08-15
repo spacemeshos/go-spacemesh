@@ -219,12 +219,12 @@ func Test_findNodeFailure(t *testing.T) {
 
 	cfg := config.DefaultConfig().SwarmConfig
 	cfg.RandomConnections = 1
-	cfg.RoutingTableBucketSize = 2
+	cfg.RoutingTableBucketSize = 1
 	cfg.BootstrapNodes = []string{bsinfo.String()}
 	_, dht2 := simNodeWithDHT(t, cfg, sim)
 
 	go func() {
-		<-time.After(time.Second / 2)
+		<-time.After(time.Second)
 		realnode := sim.NewNodeFrom(bsinfo)
 		d := New(bsnode, config.DefaultConfig().SwarmConfig, realnode)
 		<-time.After(time.Second)
@@ -236,4 +236,42 @@ func Test_findNodeFailure(t *testing.T) {
 	require.NoError(t, err)
 	sz := dht2.Size()
 	require.Equal(t, sz, 1)
+}
+
+func Test_Refresh(t *testing.T) {
+	sim := service.NewSimulator()
+	bsnode, bsinfo := node.GenerateTestNode(t)
+	serv := sim.NewNodeFrom(bsinfo)
+
+	disc := New(bsnode, config.DefaultConfig().SwarmConfig, serv)
+	rt := &mockAddrBook{}
+	rt.NeedNewAddressesFunc = func() bool {
+		return true
+	}
+
+	requsted := 0
+
+	refresher := &refresherMock{}
+
+	refresher.BootstrapFunc = func(ctx context.Context, minPeers int) error {
+		requsted = minPeers
+		return nil
+	}
+
+	disc.rt = rt
+	disc.bootstrapper = refresher
+
+	prz := disc.SelectPeers(10)
+	require.Len(t, prz, 0)
+	require.Equal(t, requsted, 10)
+
+	requsted = 0
+
+	rt.NeedNewAddressesFunc = func() bool {
+		return false
+	}
+
+	prz = disc.SelectPeers(10)
+	require.Len(t, prz, 0)
+	require.Equal(t, requsted, 0)
 }
