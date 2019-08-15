@@ -81,11 +81,11 @@ func (c *PostClient) SetLogger(logger shared.Logger) {
 	c.logger = logger
 }
 
-func (c *PostClient) SetParams(logicalDrive string, commitmentSize uint64) {
+func (c *PostClient) SetParams(dataDir string, space uint64) {
 	cfg := *c.cfg
 	c.cfg = &cfg
-	c.cfg.DataDir = logicalDrive
-	c.cfg.SpacePerUnit = commitmentSize
+	c.cfg.DataDir = dataDir
+	c.cfg.SpacePerUnit = space
 }
 
 func (c *PostClient) Initialized() bool {

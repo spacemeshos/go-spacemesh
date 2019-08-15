@@ -248,7 +248,7 @@ func (b *Builder) StartPost(rewardAddress address.Address, dataDir string, space
 	if b.initStatus == Done {
 		return nil
 	}
-	if b.initStatus != Idle {
+	if b.initStatus == InProgress {
 		b.postInitLock.Unlock()
 		return fmt.Errorf("attempted to start post when post already initiated")
 	}
