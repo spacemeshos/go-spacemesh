@@ -83,9 +83,9 @@ func (np *NipstBuilderMock) IsPostInitialized() bool {
 	return np.PostInitialized
 }
 
-func (np *NipstBuilderMock) InitializePost(logicalDrive string, commitmentSize uint64) (*types.PostProof, error) {
+func (np *NipstBuilderMock) InitializePost(datadir string, space uint64) (*types.PostProof, error) {
 	if np.initPostFunc != nil {
-		return np.initPostFunc(logicalDrive, commitmentSize)
+		return np.initPostFunc(datadir, space)
 	}
 	if np.SleepTime != 0 {
 		time.Sleep(time.Duration(np.SleepTime) * time.Millisecond)
@@ -107,7 +107,7 @@ func (np *NipstErrBuilderMock) IsPostInitialized() bool {
 	return true
 }
 
-func (np *NipstErrBuilderMock) InitializePost(logicalDrive string, commitmentSize uint64) (*types.PostProof, error) {
+func (np *NipstErrBuilderMock) InitializePost(dataDir string, space uint64) (*types.PostProof, error) {
 	return nil, nil
 }
 
