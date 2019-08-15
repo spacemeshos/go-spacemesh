@@ -29,7 +29,7 @@ type PostProverClient interface {
 
 	// SetParams set the needed params for setting up post commitment in the specified logical drive and with
 	// requested commitment size.
-	SetParams(logicalDrive string, commitmentSize uint64)
+	SetParams(dataDir string, space uint64)
 
 	// Reset deletes.
 	Reset() error
@@ -228,12 +228,12 @@ func (nb *NIPSTBuilder) IsPostInitialized() bool {
 	return nb.postProver.Initialized()
 }
 
-func (nb *NIPSTBuilder) InitializePost(logicalDrive string, commitmentSize uint64) (*types.PostProof, error) {
+func (nb *NIPSTBuilder) InitializePost(dataDir string, space uint64) (*types.PostProof, error) {
 	defTimeout := 5 * time.Second // TODO: replace temporary solution
 
-	nb.postCfg.DataDir = logicalDrive
-	nb.postCfg.SpacePerUnit = commitmentSize
-	nb.postProver.SetParams(logicalDrive, commitmentSize)
+	nb.postCfg.DataDir = dataDir
+	nb.postCfg.SpacePerUnit = space
+	nb.postProver.SetParams(dataDir, space)
 
 	commitment, err := nb.postProver.initialize(nb.id, defTimeout)
 	if err != nil {
