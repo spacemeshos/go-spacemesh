@@ -372,3 +372,58 @@ func buildSVP(ki int32, S ...*Set) *AggregatedMessages {
 	svp.Messages = msgs
 	return svp
 }
+
+func validateMatrix(t *testing.T, mType MessageType, msgK int32, exp []error) {
+	r := require.New(t)
+	rounds := []int32{-1, 0, 1, 2, 3, 4, 5, 6, 7}
+	v := defaultValidator()
+	sgn := generateSigning(t)
+	set := NewEmptySet(1)
+	var m *Msg = nil
+	switch mType {
+	case Status:
+		m = BuildStatusMsg(sgn, set)
+	case Proposal:
+		m = BuildProposalMsg(sgn, set)
+	case Commit:
+		m = BuildCommitMsg(sgn, set)
+	case Notify:
+		m = BuildNotifyMsg(sgn, set)
+	default:
+		panic("unexpected msg type")
+	}
+
+	for i, round := range rounds {
+		m.InnerMsg.K = msgK
+		e := v.ContextuallyValidateMessage(m, round)
+		r.Equal(exp[i], e, "msgK=%v\tround=%v\texp=%v\tactual=%v", msgK, round, exp[i], e)
+	}
+}
+
+func TestSyntaxContextValidator_StatusContextMatrix(t *testing.T) {
+	msg0 := []error{errEarlyMsg, nil, errInvalidRound, errInvalidRound, errInvalidRound, errInvalidIter, errInvalidIter, errInvalidIter, errInvalidIter}
+	msg4 := []error{errInvalidIter, errInvalidIter, errInvalidIter, errInvalidIter, errEarlyMsg, nil, errInvalidRound, errInvalidRound, errInvalidRound}
+	validateMatrix(t, Status, 0, msg0)
+	validateMatrix(t, Status, 4, msg4)
+}
+
+func TestSyntaxContextValidator_ProposalContextMatrix(t *testing.T) {
+	msg1 := []error{errInvalidRound, errEarlyMsg, nil, nil, errInvalidRound, errInvalidIter, errInvalidIter, errInvalidIter, errInvalidIter}
+	msg5 := []error{errInvalidIter, errInvalidIter, errInvalidIter, errInvalidIter, errInvalidIter, errEarlyMsg, nil, nil, errInvalidRound}
+	validateMatrix(t, Proposal, 1, msg1)
+	validateMatrix(t, Proposal, 5, msg5)
+}
+
+func TestSyntaxContextValidator_CommitContextMatrix(t *testing.T) {
+	msg2 := []error{errInvalidRound, errInvalidRound, errEarlyMsg, nil, errInvalidRound, errInvalidIter, errInvalidIter, errInvalidIter, errInvalidIter}
+	msg6 := []error{errInvalidIter, errInvalidIter, errInvalidIter, errInvalidIter, errInvalidIter, errInvalidRound, errEarlyMsg, nil, errInvalidRound}
+	validateMatrix(t, Commit, 2, msg2)
+	validateMatrix(t, Commit, 6, msg6)
+}
+
+func TestSyntaxContextValidator_NotifyContextMatrix(t *testing.T) {
+	msg3 := []error{errInvalidRound, errInvalidRound, errInvalidRound, errEarlyMsg, nil, nil, nil, nil, nil}
+	msg7 := []error{errInvalidIter, errInvalidIter, errInvalidIter, errInvalidIter, errInvalidIter, errInvalidRound, errInvalidRound, errEarlyMsg, nil}
+	validateMatrix(t, Notify, 3, msg3)
+	validateMatrix(t, Notify, 7, msg7)
+}

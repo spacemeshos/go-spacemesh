@@ -102,19 +102,30 @@ var ( // contextual validation errors
 	errUnexpectedType = errors.New("unexpected message type")
 )
 
+const firstNotifyRound = 3
+
 // Validates the InnerMsg is contextually valid
 // Note: we can count on m.InnerMsg.K because we assume m is syntactically valid
 func (validator *syntaxContextValidator) ContextuallyValidateMessage(m *Msg, currentK int32) error {
 	if m.InnerMsg == nil {
 		return errNilInner
 	}
-
 	currentRound := currentK % 4
+	// the message must match the current iteration unless it is a notify or pre-round message
+	currentIteration := currentK / 4
+	msgIteration := m.InnerMsg.K / 4
+	sameIter := currentIteration == msgIteration
+
 	// first validate pre-round and notify
 	switch m.InnerMsg.Type {
 	case Pre:
 		return nil
 	case Notify:
+		// notify before notify could be created for this iteration
+		if currentRound < CommitRound && sameIter {
+			return errInvalidRound
+		}
+
 		// old notify is accepted
 		if m.InnerMsg.K <= currentK {
 			return nil
@@ -128,11 +139,6 @@ func (validator *syntaxContextValidator) ContextuallyValidateMessage(m *Msg, cur
 		// future notify is rejected
 		return errInvalidIter
 	}
-
-	// the message must match the current iteration unless it is a notify or pre-round message
-	currentIteration := currentK / 4
-	msgIteration := m.InnerMsg.K / 4
-	sameIter := currentIteration == msgIteration
 
 	// check status, proposal & commit types
 	switch m.InnerMsg.Type {
