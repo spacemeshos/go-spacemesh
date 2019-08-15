@@ -153,7 +153,7 @@ func buildNIPST(r *require.Assertions, postCfg config.Config, nipstChallenge com
 		poetDb, verifyPost, log.NewDefault(string(minerID)))
 
 	_, err = nb.InitializePost(postCfg.DataDir, postCfg.SpacePerUnit)
-	defer func() {r.NoError(nb.postProver.Reset())}()
+	defer func() { r.NoError(nb.postProver.Reset()) }()
 
 	r.NoError(err)
 
@@ -190,7 +190,7 @@ func TestNewNIPSTBuilderNotInitialized(t *testing.T) {
 
 	idsToCleanup = append(idsToCleanup, minerIDNotInitialized)
 	initialProof, err := nb.InitializePost(postCfg.DataDir, postCfg.SpacePerUnit)
-	defer func (){ assert.NoError(t, nb.postProver.Reset())} ()
+	defer func() { assert.NoError(t, nb.postProver.Reset()) }()
 	r.NoError(err)
 	r.NotNil(initialProof)
 
