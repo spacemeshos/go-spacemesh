@@ -526,7 +526,7 @@ func TestStartPost(t *testing.T) {
 	err = b.StartPost(coinbase2, drive, 1000)
 	assert.EqualError(t, err, "attempted to start post when post already inited")
 
-	nipstBuilder.initPostFunc = func(logicalDrive string, commitmentSize uint64) (*types.PostProof, error){
+	nipstBuilder.initPostFunc = func(logicalDrive string, commitmentSize uint64) (*types.PostProof, error) {
 		return nil, fmt.Errorf("error")
 	}
 
