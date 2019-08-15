@@ -36,7 +36,7 @@ type Signer interface {
 }
 
 type goodBlocksProvider interface {
-	GetGoodPatternBlocks(layer types.LayerID) (map[types.BlockID]struct{}, error)
+	GetGoodPattern(layer types.LayerID) (map[types.BlockID]struct{}, error)
 }
 
 type VerifierFunc = func(msg, sig, pub []byte) (bool, error)
@@ -231,7 +231,7 @@ func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
 	}
 
 	// build a map of all blocks on the current layer
-	mp, err := o.blocksProvider.GetGoodPatternBlocks(sl)
+	mp, err := o.blocksProvider.GetGoodPattern(sl)
 	if err != nil {
 		return nil, err
 	}

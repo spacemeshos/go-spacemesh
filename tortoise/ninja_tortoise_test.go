@@ -215,8 +215,7 @@ func TestNinjaTortoise_Sanity1(t *testing.T) {
 	layers := 20
 	mdb := getInMemMesh()
 	alg := sanity(mdb, layers, layerSize, patternSize, 0.2)
-	res := vec{patternSize * (layers - 1), 0}
-	assert.True(t, alg.tTally[alg.pBase][config.GenesisId] == res, "lyr %d tally was %d insted of %d", layers, alg.tTally[alg.pBase][config.GenesisId], res)
+	assert.True(t, alg.pBase.Layer() == types.LayerID(layers-1))
 }
 
 func sanity(mdb *mesh.MeshDB, layers int, layerSize int, patternSize int, badBlks float64) *ninjaTortoise {

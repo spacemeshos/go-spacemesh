@@ -5,6 +5,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"testing"
 )
 
@@ -128,72 +129,42 @@ func TestMessageValidator_Aggregated(t *testing.T) {
 }
 
 func TestSyntaxContextValidator_PreRoundContext(t *testing.T) {
+	r := require.New(t)
 	validator := defaultValidator()
 	ed := signing.NewEdSigner()
-	for i := 0; i < 10; i++ {
-		res, e := validator.ContextuallyValidateMessage(BuildPreRoundMsg(ed, NewSmallEmptySet()), int32(i))
-		assertNoErr(t, true, res, e)
+	pre := BuildPreRoundMsg(ed, NewSmallEmptySet())
+	for i := int32(0); i < 10; i++ {
+		k := i * 4
+		pre.InnerMsg.K = k
+		e := validator.ContextuallyValidateMessage(pre, k)
+		r.Nil(e)
 	}
 }
 
-func TestSyntaxContextValidator_NotifyContext(t *testing.T) {
-	validator := defaultValidator()
+func TestSyntaxContextValidator_ContextuallyValidateMessageForIteration(t *testing.T) {
+	r := require.New(t)
+	v := defaultValidator()
 	ed := signing.NewEdSigner()
-	for i := 0; i < 10; i++ {
-		res, e := validator.ContextuallyValidateMessage(BuildNotifyMsg(ed, NewSmallEmptySet()), int32(i))
-		assertNoErr(t, true, res, e)
-	}
-}
+	set := NewSmallEmptySet()
+	pre := BuildPreRoundMsg(ed, set)
+	pre.InnerMsg.K = -1
+	r.Nil(v.ContextuallyValidateMessage(pre, 1))
 
-func TestSyntaxContextValidator_StatusContext(t *testing.T) {
-	validator := defaultValidator()
-	ed := signing.NewEdSigner()
-	_, e := validator.ContextuallyValidateMessage(BuildStatusMsg(ed, NewSmallEmptySet()), -1)
-	assert.Error(t, e, errEarlyMsg.Error())
+	status := BuildStatusMsg(ed, set)
+	status.InnerMsg.K = 100
+	r.Equal(errInvalidIter, v.ContextuallyValidateMessage(status, 1))
 
-	results := []bool{true, false, false, false}
-	for i := 0; i < 4; i++ {
-		res, e := validator.ContextuallyValidateMessage(BuildStatusMsg(ed, NewSmallEmptySet()), int32(i))
-		assertNoErr(t, results[i], res, e)
-	}
-}
+	proposal := BuildCommitMsg(ed, set)
+	proposal.InnerMsg.K = 100
+	r.Equal(errInvalidIter, v.ContextuallyValidateMessage(proposal, 1))
 
-func TestSyntaxContextValidator_ProposalContext(t *testing.T) {
-	validator := defaultValidator()
-	ed := signing.NewEdSigner()
-	res, e := validator.ContextuallyValidateMessage(BuildProposalMsg(ed, NewSmallEmptySet()), -1)
-	assertNoErr(t, false, res, e)
+	commit := BuildCommitMsg(ed, set)
+	commit.InnerMsg.K = 100
+	r.Equal(errInvalidIter, v.ContextuallyValidateMessage(commit, 1))
 
-	res, e = validator.ContextuallyValidateMessage(BuildProposalMsg(ed, NewSmallEmptySet()), 0)
-	assert.Error(t, e, errEarlyMsg.Error())
-
-	res, e = validator.ContextuallyValidateMessage(BuildProposalMsg(ed, NewSmallEmptySet()), 1)
-	assertNoErr(t, true, res, e)
-
-	res, e = validator.ContextuallyValidateMessage(BuildProposalMsg(ed, NewSmallEmptySet()), 2)
-	assertNoErr(t, true, res, e)
-
-	res, e = validator.ContextuallyValidateMessage(BuildProposalMsg(ed, NewSmallEmptySet()), 3)
-	assertNoErr(t, false, res, e)
-}
-
-func TestSyntaxContextValidator_CommitContext(t *testing.T) {
-	validator := defaultValidator()
-	ed := signing.NewEdSigner()
-	res, e := validator.ContextuallyValidateMessage(BuildCommitMsg(ed, NewSmallEmptySet()), -1)
-	assertNoErr(t, false, res, e)
-
-	res, e = validator.ContextuallyValidateMessage(BuildCommitMsg(ed, NewSmallEmptySet()), 0)
-	assertNoErr(t, false, res, e)
-
-	res, e = validator.ContextuallyValidateMessage(BuildCommitMsg(ed, NewSmallEmptySet()), 1)
-	assert.Error(t, e, errEarlyMsg.Error())
-
-	res, e = validator.ContextuallyValidateMessage(BuildCommitMsg(ed, NewSmallEmptySet()), 2)
-	assertNoErr(t, true, res, e)
-
-	res, e = validator.ContextuallyValidateMessage(BuildCommitMsg(ed, NewSmallEmptySet()), 3)
-	assertNoErr(t, false, res, e)
+	notify := BuildNotifyMsg(ed, set)
+	notify.InnerMsg.K = 100
+	r.Equal(errInvalidIter, v.ContextuallyValidateMessage(notify, 1))
 }
 
 func TestMessageValidator_ValidateMessage(t *testing.T) {
@@ -202,26 +173,23 @@ func TestMessageValidator_ValidateMessage(t *testing.T) {
 	v := proc.validator
 	b, err := proc.initDefaultBuilder(proc.s)
 	assert.Nil(t, err)
-	preround := b.SetType(PreRound).Sign(proc.signing).Build()
+	preround := b.SetType(Pre).Sign(proc.signing).Build()
 	preround.PubKey = proc.signing.PublicKey()
 	assert.True(t, v.SyntacticallyValidateMessage(preround))
-	res, e := v.ContextuallyValidateMessage(preround, 0)
-	assert.NoError(t, e)
-	assert.True(t, res)
+	e := v.ContextuallyValidateMessage(preround, 0)
+	assert.Nil(t, e)
 	b, err = proc.initDefaultBuilder(proc.s)
 	assert.Nil(t, err)
 	status := b.SetType(Status).Sign(proc.signing).Build()
 	status.PubKey = proc.signing.PublicKey()
-	res, e = v.ContextuallyValidateMessage(status, 0)
-	assert.NoError(t, e)
-	assert.True(t, res)
+	e = v.ContextuallyValidateMessage(status, 0)
+	assert.Nil(t, e)
 	assert.True(t, v.SyntacticallyValidateMessage(status))
-
 }
 
-func assertNoErr(t *testing.T, expect bool, actual bool, err error) {
-	assert.NoError(t, err)
-	assert.Equal(t, expect, actual)
+func assertNoErr(r *require.Assertions, expect bool, actual bool, err error) {
+	r.NoError(err)
+	r.Equal(expect, actual)
 }
 
 func TestMessageValidator_SyntacticallyValidateMessage(t *testing.T) {
@@ -230,22 +198,6 @@ func TestMessageValidator_SyntacticallyValidateMessage(t *testing.T) {
 	assert.False(t, validator.SyntacticallyValidateMessage(m))
 	m = BuildPreRoundMsg(generateSigning(t), NewSetFromValues(value1))
 	assert.True(t, validator.SyntacticallyValidateMessage(m))
-}
-
-func TestMessageValidator_ContextuallyValidateMessage(t *testing.T) {
-	validator := newSyntaxContextValidator(signing.NewEdSigner(), 1, validate, &MockStateQuerier{true, nil}, 10, log.NewDefault("Validator"))
-	m := BuildPreRoundMsg(generateSigning(t), NewSmallEmptySet())
-	m.InnerMsg = nil
-	res, e := validator.ContextuallyValidateMessage(m, 0)
-	assert.Error(t, e)
-	m = BuildPreRoundMsg(generateSigning(t), NewSetFromValues(value1))
-	res, e = validator.ContextuallyValidateMessage(m, 0)
-	assertNoErr(t, true, res, e)
-	m = BuildStatusMsg(generateSigning(t), NewSetFromValues(value1))
-	res, e = validator.ContextuallyValidateMessage(m, 1)
-	assertNoErr(t, false, res, e)
-	res, e = validator.ContextuallyValidateMessage(m, 0)
-	assertNoErr(t, true, res, e)
 }
 
 func TestMessageValidator_validateSVPTypeA(t *testing.T) {
@@ -303,4 +255,59 @@ func buildSVP(ki int32, S ...*Set) *AggregatedMessages {
 	svp := &AggregatedMessages{}
 	svp.Messages = msgs
 	return svp
+}
+
+func validateMatrix(t *testing.T, mType MessageType, msgK int32, exp []error) {
+	r := require.New(t)
+	rounds := []int32{-1, 0, 1, 2, 3, 4, 5, 6, 7}
+	v := defaultValidator()
+	sgn := generateSigning(t)
+	set := NewEmptySet(1)
+	var m *Msg = nil
+	switch mType {
+	case Status:
+		m = BuildStatusMsg(sgn, set)
+	case Proposal:
+		m = BuildProposalMsg(sgn, set)
+	case Commit:
+		m = BuildCommitMsg(sgn, set)
+	case Notify:
+		m = BuildNotifyMsg(sgn, set)
+	default:
+		panic("unexpected msg type")
+	}
+
+	for i, round := range rounds {
+		m.InnerMsg.K = msgK
+		e := v.ContextuallyValidateMessage(m, round)
+		r.Equal(exp[i], e, "msgK=%v\tround=%v\texp=%v\tactual=%v", msgK, round, exp[i], e)
+	}
+}
+
+func TestSyntaxContextValidator_StatusContextMatrix(t *testing.T) {
+	msg0 := []error{errEarlyMsg, nil, errInvalidRound, errInvalidRound, errInvalidRound, errInvalidIter, errInvalidIter, errInvalidIter, errInvalidIter}
+	msg4 := []error{errInvalidIter, errInvalidIter, errInvalidIter, errInvalidIter, errEarlyMsg, nil, errInvalidRound, errInvalidRound, errInvalidRound}
+	validateMatrix(t, Status, 0, msg0)
+	validateMatrix(t, Status, 4, msg4)
+}
+
+func TestSyntaxContextValidator_ProposalContextMatrix(t *testing.T) {
+	msg1 := []error{errInvalidRound, errEarlyMsg, nil, nil, errInvalidRound, errInvalidIter, errInvalidIter, errInvalidIter, errInvalidIter}
+	msg5 := []error{errInvalidIter, errInvalidIter, errInvalidIter, errInvalidIter, errInvalidIter, errEarlyMsg, nil, nil, errInvalidRound}
+	validateMatrix(t, Proposal, 1, msg1)
+	validateMatrix(t, Proposal, 5, msg5)
+}
+
+func TestSyntaxContextValidator_CommitContextMatrix(t *testing.T) {
+	msg2 := []error{errInvalidRound, errInvalidRound, errEarlyMsg, nil, errInvalidRound, errInvalidIter, errInvalidIter, errInvalidIter, errInvalidIter}
+	msg6 := []error{errInvalidIter, errInvalidIter, errInvalidIter, errInvalidIter, errInvalidIter, errInvalidRound, errEarlyMsg, nil, errInvalidRound}
+	validateMatrix(t, Commit, 2, msg2)
+	validateMatrix(t, Commit, 6, msg6)
+}
+
+func TestSyntaxContextValidator_NotifyContextMatrix(t *testing.T) {
+	msg3 := []error{errInvalidRound, errInvalidRound, errInvalidRound, errEarlyMsg, nil, nil, nil, nil, nil}
+	msg7 := []error{errInvalidIter, errInvalidIter, errInvalidIter, errInvalidIter, errInvalidIter, errInvalidRound, errInvalidRound, errEarlyMsg, nil}
+	validateMatrix(t, Notify, 3, msg3)
+	validateMatrix(t, Notify, 7, msg7)
 }
