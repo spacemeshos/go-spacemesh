@@ -245,9 +245,12 @@ func (b *Builder) StartPost(rewardAddress address.Address, dataDir string, space
 	b.log.Info("Starting post, reward address: %x", rewardAddress)
 	b.SetCoinbaseAccount(rewardAddress)
 	b.postInitLock.Lock()
+	if b.initStatus == Done {
+		return nil
+	}
 	if b.initStatus != Idle {
 		b.postInitLock.Unlock()
-		return fmt.Errorf("attempted to start post when post already inited")
+		return fmt.Errorf("attempted to start post when post already initiated")
 	}
 	b.initStatus = InProgress
 	errChan := make(chan error, 1)
@@ -257,7 +260,7 @@ func (b *Builder) StartPost(rewardAddress address.Address, dataDir string, space
 		if err != nil {
 			b.initStatus = Idle
 			b.postInitLock.Unlock()
-			b.log.Error("PoST initialization failed: %v", err)
+			b.log.Error(err.Error())
 			errChan <- err
 			return
 		}

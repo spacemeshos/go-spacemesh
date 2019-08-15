@@ -400,10 +400,6 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 		lg.WithName("nipstBuilder"),
 	)
 
-	if app.Config.CoinbaseAccount == "" {
-		app.log.Panic("cannot start mining without Coinbase account")
-	}
-
 	coinBase := address.HexToAddress(app.Config.CoinbaseAccount)
 
 	if coinBase.Big().Uint64() == 0 && app.Config.StartMining {
