@@ -7,6 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/shared"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"os"
 	"path/filepath"
@@ -40,6 +41,16 @@ func (p *postProverClientMock) execute(id []byte, challenge []byte, timeout time
 }
 
 func (p *postProverClientMock) SetLogger(shared.Logger) {}
+
+func (p *postProverClientMock) SetParams(logicalDrive string, commitmentSize uint64) {}
+
+func (p *postProverClientMock) Reset() error {
+	return nil
+}
+
+func (p *postProverClientMock) Initialized() bool {
+	return true
+}
 
 type poetProvingServiceClientMock struct{}
 
@@ -83,6 +94,32 @@ func TestNIPSTBuilderWithMocks(t *testing.T) {
 
 	nb := newNIPSTBuilder(minerID, postCfg, postProver, poetProver,
 		poetDb, verifyPost, log.NewDefault(string(minerID)))
+	hash := common.BytesToHash([]byte("anton"))
+	npst, err := nb.BuildNIPST(&hash)
+	assert.NoError(err)
+	assert.NotNil(npst)
+}
+
+func TestInitializePost(t *testing.T) {
+	assert := require.New(t)
+
+	postProver := NewPostClient(&postCfg)
+	poetProver := &poetProvingServiceClientMock{}
+	verifyPost := func(*types.PostProof, uint64, uint, uint) (bool, error) { return true, nil }
+
+	poetDb := &poetDbMock{}
+
+	nb := newNIPSTBuilder(minerID, postCfg, postProver, poetProver,
+		poetDb, verifyPost, log.NewDefault(string(minerID)))
+	drive := "/tmp/anton"
+	unitSize := 2048
+	_, err := nb.InitializePost(drive, uint64(unitSize))
+	assert.NoError(err)
+	defer func() { assert.NoError(nb.postProver.Reset()) }()
+	assert.NoError(err)
+	assert.Equal(nb.postCfg.DataDir, drive)
+	assert.Equal(nb.postCfg.SpacePerUnit, uint64(unitSize))
+
 	hash := common.BytesToHash([]byte("anton"))
 	npst, err := nb.BuildNIPST(&hash)
 	assert.NoError(err)
@@ -149,7 +186,8 @@ func TestNewNIPSTBuilderNotInitialized(t *testing.T) {
 	r.Nil(npst)
 
 	idsToCleanup = append(idsToCleanup, minerIDNotInitialized)
-	initialProof, err := nb.InitializePost()
+	initialProof, err := nb.InitializePost(postCfg.DataDir, postCfg.SpacePerUnit)
+	defer assert.NoError(t, nb.postProver.Reset())
 	r.NoError(err)
 	r.NotNil(initialProof)
 

@@ -111,6 +111,7 @@ func (suite *AppTestSuite) initSingleInstance(i int, genesisTime string, rng *am
 	smApp.Config.LayerDurationSec = 20
 	smApp.Config.HareEligibility.ConfidenceParam = 3
 	smApp.Config.HareEligibility.EpochOffset = 0
+	smApp.Config.StartMining = true
 
 	edSgn := signing.NewEdSigner()
 	pub := edSgn.PublicKey()
@@ -145,7 +146,7 @@ func (suite *AppTestSuite) initMultipleInstances(rolacle *eligibility.FixedRolac
 
 func activateGrpcServer(smApp *SpacemeshApp) {
 	smApp.Config.API.StartGrpcServer = true
-	smApp.grpcAPIService = api.NewGrpcService(smApp.P2P, smApp.state, smApp.txProcessor)
+	smApp.grpcAPIService = api.NewGrpcService(smApp.P2P, smApp.state, smApp.txProcessor, smApp.atxBuilder, smApp.oracle)
 	smApp.grpcAPIService.StartService(nil)
 }
 
