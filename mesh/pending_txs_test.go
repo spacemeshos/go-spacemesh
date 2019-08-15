@@ -121,4 +121,13 @@ func TestNewAccountPendingTxs(t *testing.T) {
 	nonce, balance = pendingTxs.GetProjection(prevNonce, prevBalance)
 	r.Equal(prevNonce+4, nonce)
 	r.Equal(prevBalance-100-50-100-50, balance)
+
+	// Rejecting a transaction only removes that version, if several exist
+	// This can also cause a transaction that would previously over-draft the account to become valid
+	pendingTxs.Remove(nil, []tinyTx{
+		addressableTxToTiny(newTx(address.BytesToAddress(nil), 5, 100)),
+	}, 2)
+	nonce, balance = pendingTxs.GetProjection(prevNonce, prevBalance)
+	r.Equal(prevNonce+2, nonce)
+	r.Equal(prevBalance-50-950, balance)
 }
