@@ -193,12 +193,14 @@ func (s SpacemeshGrpcService) StartMining(ctx context.Context, message *pb.InitP
 }
 
 func (s SpacemeshGrpcService) SetCommitmentSize(ctx context.Context, message *pb.CommitmentSizeMessage) (*pb.SimpleMessage, error) {
+	//todo: we should review if this RPC is necessary
 	log.Info("GRPC SetCommitmentSize msg")
 
 	return &pb.SimpleMessage{Value: "ok"}, nil
 }
 
 func (s SpacemeshGrpcService) SetLogicalDrive(ctx context.Context, message *pb.LogicalDriveMessage) (*pb.SimpleMessage, error) {
+	//todo: we should review if this RPC is necessary
 	log.Info("GRPC SetLogicalDrive msg")
 	return &pb.SimpleMessage{Value: "ok"}, nil
 }
@@ -214,11 +216,13 @@ func (s SpacemeshGrpcService) SetAwardsAddress(ctx context.Context, id *pb.Accou
 }
 
 func (s SpacemeshGrpcService) GetInitProgress(ctx context.Context, empty *empty.Empty) (*pb.SimpleMessage, error) {
+	//todo: we should review if this RPC is necessary
 	log.Info("GRPC GetInitProgress msg")
 	return &pb.SimpleMessage{Value: "80"}, nil
 }
 
 func (s SpacemeshGrpcService) GetTotalAwards(ctx context.Context, empty *empty.Empty) (*pb.SimpleMessage, error) {
+	//todo: we should review if this RPC is necessary
 	log.Info("GRPC GetTotalAwards msg")
 	return &pb.SimpleMessage{Value: "1234"}, nil
 }
