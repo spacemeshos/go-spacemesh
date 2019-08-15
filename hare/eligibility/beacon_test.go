@@ -38,8 +38,8 @@ func TestBeacon_Value(t *testing.T) {
 	b.patternProvider = &mockPatternProvider{valGoodPtrn, genesisGoodPtrn, nil}
 	val, err := b.Value(100)
 	assert.Nil(t, err)
-	assert.Equal(t, getBeaconFromSet(valGoodPtrn), val)
+	assert.Equal(t, calcValue(valGoodPtrn), val)
 	val, err = b.Value(1)
 	assert.Nil(t, err)
-	assert.Equal(t, getBeaconFromSet(genesisGoodPtrn), val)
+	assert.Equal(t, calcValue(genesisGoodPtrn), val)
 }
