@@ -7,7 +7,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/spacemeshos/post/config"
-	"github.com/spacemeshos/post/persistence"
 	"github.com/spacemeshos/post/shared"
 	"sync"
 	"time"
@@ -28,6 +27,17 @@ type PostProverClient interface {
 	// the amortized computational complexity can be made arbitrarily small.
 	execute(id []byte, challenge []byte, timeout time.Duration) (proof *types.PostProof, err error)
 
+	// SetParams set the needed params for setting up post commitment in the specified logical drive and with
+	// requested commitment size.
+	SetParams(dataDir string, space uint64)
+
+	// Reset deletes.
+	Reset() error
+
+	// Initialized returns true if post has been initialized ,false otherwise.
+	Initialized() bool
+
+	// SetLogger sets logger for post prover.
 	SetLogger(logger shared.Logger)
 }
 
@@ -215,24 +225,15 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *common.Hash) (*types.NIPST, error)
 }
 
 func (nb *NIPSTBuilder) IsPostInitialized() bool {
-	readers, err := persistence.GetReaders(nb.postCfg.DataDir, nb.id)
-	if err != nil {
-		nb.log.WithFields(log.Err(err)).Error("failed to look for init files")
-		return false
-	}
-	if len(readers) == 0 {
-		nb.log.Info("could not find init files")
-		return false
-	}
-	return true
+	return nb.postProver.Initialized()
 }
 
-func (nb *NIPSTBuilder) InitializePost() (*types.PostProof, error) {
+func (nb *NIPSTBuilder) InitializePost(dataDir string, space uint64) (*types.PostProof, error) {
 	defTimeout := 5 * time.Second // TODO: replace temporary solution
 
-	if nb.IsPostInitialized() {
-		return nil, errors.New("PoST already initialized")
-	}
+	nb.postCfg.DataDir = dataDir
+	nb.postCfg.SpacePerUnit = space
+	nb.postProver.SetParams(dataDir, space)
 
 	commitment, err := nb.postProver.initialize(nb.id, defTimeout)
 	if err != nil {

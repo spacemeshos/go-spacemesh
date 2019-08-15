@@ -7,6 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/spacemeshos/sha256-simd"
+	"sync"
 )
 
 type ActivationDb interface {
@@ -33,6 +34,7 @@ type MinerBlockOracle struct {
 	eligibilityProofs map[types.LayerID][]types.BlockEligibilityProof
 	atxID             types.AtxId
 	isSynced          func() bool
+	eligibilityMutex  sync.RWMutex
 	log               log.Log
 }
 
@@ -65,8 +67,11 @@ func (bo *MinerBlockOracle) BlockEligible(layerID types.LayerID) (types.AtxId, [
 			return *types.EmptyAtxId, nil, err
 		}
 	}
-	bo.log.Info("miner %v found eligible for %d blocks in layer %d", bo.nodeID.Key[:5], len(bo.eligibilityProofs[layerID]), layerID)
-	return bo.atxID, bo.eligibilityProofs[layerID], nil
+	bo.eligibilityMutex.RLock()
+	proofs := bo.eligibilityProofs[layerID]
+	bo.eligibilityMutex.RUnlock()
+	bo.log.Info("miner %v found eligible for %d blocks in layer %d", bo.nodeID.Key[:5], len(proofs), layerID)
+	return bo.atxID, proofs, nil
 }
 
 func (bo *MinerBlockOracle) calcEligibilityProofs(epochNumber types.EpochId) error {
@@ -95,7 +100,9 @@ func (bo *MinerBlockOracle) calcEligibilityProofs(epochNumber types.EpochId) err
 		return err
 	}
 
+	bo.eligibilityMutex.Lock()
 	bo.eligibilityProofs = map[types.LayerID][]types.BlockEligibilityProof{}
+	bo.eligibilityMutex.Unlock()
 	for counter := uint32(0); counter < numberOfEligibleBlocks; counter++ {
 		message := serializeVRFMessage(epochBeacon, epochNumber, counter)
 		vrfSig, err := bo.vrfSigner.Sign(message)
@@ -105,14 +112,18 @@ func (bo *MinerBlockOracle) calcEligibilityProofs(epochNumber types.EpochId) err
 		}
 		vrfHash := sha256.Sum256(vrfSig)
 		eligibleLayer := calcEligibleLayer(epochNumber, bo.layersPerEpoch, vrfHash)
+		bo.eligibilityMutex.Lock()
 		bo.eligibilityProofs[eligibleLayer] = append(bo.eligibilityProofs[eligibleLayer], types.BlockEligibilityProof{
 			J:   counter,
 			Sig: vrfSig,
 		})
+		bo.eligibilityMutex.Unlock()
 	}
 	bo.proofsEpoch = epochNumber
+	bo.eligibilityMutex.RLock()
 	bo.log.Info("miner %v is eligible for %d blocks on %d layers in epoch %d",
 		bo.nodeID.Key[:5], numberOfEligibleBlocks, len(bo.eligibilityProofs), epochNumber)
+	bo.eligibilityMutex.RUnlock()
 	return nil
 }
 
@@ -170,4 +181,14 @@ func serializeVRFMessage(epochBeacon []byte, epochNumber types.EpochId, counter 
 	binary.LittleEndian.PutUint64(message[len(epochBeacon):], uint64(epochNumber))
 	binary.LittleEndian.PutUint32(message[len(epochBeacon)+binary.Size(epochNumber):], counter)
 	return message
+}
+
+func (bo *MinerBlockOracle) GetEligibleLayers() []types.LayerID {
+	bo.eligibilityMutex.RLock()
+	layers := make([]types.LayerID, 0, len(bo.eligibilityProofs))
+	for layer := range bo.eligibilityProofs {
+		layers = append(layers, layer)
+	}
+	bo.eligibilityMutex.RUnlock()
+	return layers
 }
