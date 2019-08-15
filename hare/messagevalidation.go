@@ -8,7 +8,7 @@ import (
 
 type messageValidator interface {
 	SyntacticallyValidateMessage(m *Msg) bool
-	ContextuallyValidateMessage(m *Msg, expectedK int32) (bool, error)
+	ContextuallyValidateMessage(m *Msg, expectedK int32) error
 }
 
 type IdentityProvider interface {
@@ -94,42 +94,94 @@ func newSyntaxContextValidator(signing Signer, threshold int, validator func(m *
 	return &syntaxContextValidator{signing, threshold, validator, stateQuerier, layersPerEpoch, logger}
 }
 
-var errEarlyMsg = errors.New("early message")
+var ( // contextual validation errors
+	errNilInner       = errors.New("nil inner message")
+	errEarlyMsg       = errors.New("early message")
+	errInvalidIter    = errors.New("incorrect iteration number")
+	errInvalidRound   = errors.New("incorrect round")
+	errUnexpectedType = errors.New("unexpected message type")
+)
+
+const firstNotifyRound = 3
 
 // Validates the InnerMsg is contextually valid
 // Note: we can count on m.InnerMsg.K because we assume m is syntactically valid
-func (validator *syntaxContextValidator) ContextuallyValidateMessage(m *Msg, currentK int32) (bool, error) {
+func (validator *syntaxContextValidator) ContextuallyValidateMessage(m *Msg, currentK int32) error {
 	if m.InnerMsg == nil {
-		return false, errors.New("nil inner message")
+		return errNilInner
 	}
+	currentRound := currentK % 4
+	// the message must match the current iteration unless it is a notify or pre-round message
+	currentIteration := currentK / 4
+	msgIteration := m.InnerMsg.K / 4
+	sameIter := currentIteration == msgIteration
 
-	// PreRound & Notify are always contextually valid
+	// first validate pre-round and notify
 	switch m.InnerMsg.Type {
-	case PreRound:
-		return true, nil
-	case Proposal:
-		if currentK == Round1 {
-			return false, errEarlyMsg
-		}
-		if currentK == Round2 || currentK == Round3 {
-			return true, nil // process proposals for
-		}
-		return false, nil
+	case Pre:
+		return nil
 	case Notify:
-		return true, nil
+		// notify before notify could be created for this iteration
+		if currentRound < CommitRound && sameIter {
+			return errInvalidRound
+		}
+
+		// old notify is accepted
+		if m.InnerMsg.K <= currentK {
+			return nil
+		}
+
+		// early notify detected
+		if m.InnerMsg.K == currentK+1 && currentRound == CommitRound {
+			return errEarlyMsg
+		}
+
+		// future notify is rejected
+		return errInvalidIter
 	}
 
-	// Status & Commit Messages should match the expected K
-	if currentK == m.InnerMsg.K { // arrived on time
-		return true, nil
+	// check status, proposal & commit types
+	switch m.InnerMsg.Type {
+	case Status:
+		if currentRound == PreRound && sameIter {
+			return errEarlyMsg
+		}
+		if currentRound == NotifyRound && currentIteration+1 == msgIteration {
+			return errEarlyMsg
+		}
+		if currentRound == StatusRound && sameIter {
+			return nil
+		}
+		if !sameIter {
+			return errInvalidIter
+		}
+		return errInvalidRound
+	case Proposal:
+		if currentRound == StatusRound && sameIter {
+			return errEarlyMsg
+		}
+		// a late proposal is also contextually valid
+		if (currentRound == ProposalRound || currentRound == CommitRound) && sameIter {
+			return nil
+		}
+		if !sameIter {
+			return errInvalidIter
+		}
+		return errInvalidRound
+	case Commit:
+		if currentRound == ProposalRound && sameIter {
+			return errEarlyMsg
+		}
+		if currentRound == CommitRound && sameIter {
+			return nil
+		}
+		if !sameIter {
+			return errInvalidIter
+		}
+		return errInvalidRound
 	}
 
-	// matches the next round, early message
-	if currentK+1 == m.InnerMsg.K {
-		return false, errEarlyMsg
-	}
-
-	return false, nil
+	return errUnexpectedType
 }
 
 // Validates the syntax of the provided InnerMsg
@@ -161,14 +213,14 @@ func (validator *syntaxContextValidator) SyntacticallyValidateMessage(m *Msg) bo
 
 	claimedRound := m.InnerMsg.K % 4
 	switch m.InnerMsg.Type {
-	case PreRound:
+	case Pre:
 		return true
 	case Status:
-		return claimedRound == Round1
+		return claimedRound == StatusRound
 	case Proposal:
-		return claimedRound == Round2 && validator.validateSVP(m)
+		return claimedRound == ProposalRound && validator.validateSVP(m)
 	case Commit:
-		return claimedRound == Round3
+		return claimedRound == CommitRound
 	case Notify:
 		return validator.validateCertificate(m.InnerMsg.Cert)
 	default:

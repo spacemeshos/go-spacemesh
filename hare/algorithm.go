@@ -205,7 +205,7 @@ func (proc *ConsensusProcess) eventLoop() {
 		proc.Error("init default builder failed: %v", err)
 		return
 	}
-	m := builder.SetType(PreRound).Sign(proc.signing).Build()
+	m := builder.SetType(Pre).Sign(proc.signing).Build()
 	proc.sendMessage(m)
 
 	// listen to pre-round Messages
@@ -286,7 +286,7 @@ func (proc *ConsensusProcess) handleMessage(m *Msg) {
 
 	mType := MessageType(m.InnerMsg.Type).String()
 	// validate InnerMsg for this or next round
-	res, err := proc.validator.ContextuallyValidateMessage(m, proc.k)
+	err := proc.validator.ContextuallyValidateMessage(m, proc.k)
 	if err != nil {
 		if err == errEarlyMsg { // early message, keep for later
 			proc.Debug("Early message of type %v detected. Keeping message, pubkey %v", mType, m.PubKey.ShortString())
@@ -294,18 +294,11 @@ func (proc *ConsensusProcess) handleMessage(m *Msg) {
 			return
 		}
 
+		// not an early message but also contextually invalid
 		proc.With().Error("Error contextually validating message",
 			log.String("msg_type", mType), log.String("sender_id", m.PubKey.ShortString()),
 			log.Int32("current_k", proc.k), log.Int32("msg_k", m.InnerMsg.K),
 			log.LayerId(uint64(proc.instanceId)), log.Err(err))
-		return
-	}
-
-	if !res { // not early, no error, simply contextually invalid
-		proc.With().Warning("message does not belong to this round and is not an early msg",
-			log.String("msg_type", mType), log.String("sender_id", m.PubKey.ShortString()),
-			log.Int32("current_k", proc.k), log.Int32("msg_k", m.InnerMsg.K),
-			log.LayerId(uint64(proc.instanceId)))
 		return
 	}
 
@@ -318,7 +311,7 @@ func (proc *ConsensusProcess) processMsg(m *Msg) {
 	metrics.MessageTypeCounter.With("type_id", m.InnerMsg.Type.String()).Add(1)
 
 	switch m.InnerMsg.Type {
-	case PreRound:
+	case Pre:
 		proc.processPreRoundMsg(m)
 	case Status: // end of round 1
 		proc.processStatusMsg(m)
@@ -361,9 +354,9 @@ func (proc *ConsensusProcess) onRoundEnd() {
 
 	// reset trackers
 	switch proc.currentRound() {
-	case Round1:
+	case StatusRound:
 		proc.endOfRound1()
-	case Round2:
+	case ProposalRound:
 		s := proc.proposalTracker.ProposedSet()
 		sStr := "nil"
 		if s != nil {
@@ -373,7 +366,7 @@ func (proc *ConsensusProcess) onRoundEnd() {
 			log.String("proposed_set", sStr),
 			log.Bool("is_conflicting", proc.proposalTracker.IsConflicting()),
 			log.Uint64("layer_id", uint64(proc.instanceId)))
-	case Round3:
+	case CommitRound:
 		proc.endOfRound3()
 	}
 }
@@ -452,13 +445,13 @@ func (proc *ConsensusProcess) handlePending(pending map[string]*Msg) {
 func (proc *ConsensusProcess) onRoundBegin() {
 	// reset trackers
 	switch proc.currentRound() {
-	case Round1:
+	case StatusRound:
 		proc.beginRound1()
-	case Round2:
+	case ProposalRound:
 		proc.beginRound2()
-	case Round3:
+	case CommitRound:
 		proc.beginRound3()
-	case Round4:
+	case NotifyRound:
 		proc.beginRound4()
 	default:
 		proc.Panic("Current round out of bounds. Expected: 0-3, Found: ", proc.currentRound())
@@ -494,9 +487,9 @@ func (proc *ConsensusProcess) processStatusMsg(msg *Msg) {
 func (proc *ConsensusProcess) processProposalMsg(msg *Msg) {
 	currRnd := proc.currentRound()
 
-	if currRnd == Round2 { // regular proposal
+	if currRnd == ProposalRound { // regular proposal
 		proc.proposalTracker.OnProposal(msg)
-	} else if currRnd == Round3 { // late proposal
+	} else if currRnd == CommitRound { // late proposal
 		proc.proposalTracker.OnLateProposal(msg)
 	} else {
 		proc.Error("Received proposal message for processing in an invalid context: K=%v", msg.InnerMsg.K)
@@ -515,7 +508,7 @@ func (proc *ConsensusProcess) processNotifyMsg(msg *Msg) {
 		return
 	}
 
-	if proc.currentRound() == Round4 { // not necessary to update otherwise
+	if proc.currentRound() == NotifyRound { // not necessary to update otherwise
 		// we assume that this expression was checked before
 		if int32(msg.InnerMsg.Cert.AggMsgs.Messages[0].InnerMsg.K) >= proc.ki { // update state iff K >= Ki
 			proc.s = s
@@ -645,7 +638,7 @@ func (proc *ConsensusProcess) currentRole() Role {
 	}
 
 	if res { // eligible
-		if proc.currentRound() == Round2 {
+		if proc.currentRound() == ProposalRound {
 			return Leader
 		}
 		return Active
@@ -656,7 +649,7 @@ func (proc *ConsensusProcess) currentRole() Role {
 
 // Returns the expected committee size for the given round assuming maxExpActives is the default size
 func expectedCommitteeSize(k int32, maxExpActive, expLeaders int) int {
-	if k%4 == Round2 {
+	if k%4 == ProposalRound {
 		return expLeaders // expected number of leaders
 	}
 
