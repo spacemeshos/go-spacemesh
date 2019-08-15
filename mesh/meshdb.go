@@ -6,12 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/address"
-	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"math/big"
-	"sort"
 	"sync"
 )
 
@@ -364,79 +362,84 @@ func txToTiny(tx *Transaction) tinyTx {
 	}
 }
 
-func (m *MeshDB) addToMeshTxs(txs []*types.AddressableSignedTransaction) error {
+func (m *MeshDB) addToMeshTxs(txs []*types.AddressableSignedTransaction, layer types.LayerID) error {
 	// TODO: lock
 	tinyTxs := make([]tinyTx, 0, len(txs))
 	for _, tx := range txs {
 		tinyTxs = append(tinyTxs, addressableTxToTiny(tx))
 	}
-	groupedTxs := groupAndSort(tinyTxs)
+	groupedTxs := groupByOrigin(tinyTxs)
 
 	for account, accountTxs := range groupedTxs {
 		// TODO: instead of storing a list, use LevelDB's prefixed keys and then iterate all relevant keys
-		accountTxsBytes, err := m.meshTxs.Get(account.Bytes())
-		if err != nil && err != database.ErrNotFound {
-			return fmt.Errorf("failed to get mesh txs for account %s", account.Short())
+		pending, err := m.getAccountPendingTxs(account)
+		if err != nil {
+			return err
 		}
-		var currentTxs []tinyTx
-		if err == nil {
-			if err := types.BytesToInterface(accountTxsBytes, &currentTxs); err != nil {
-				return fmt.Errorf("failed to unmarshal account tx list: %v", err)
-			}
-		}
-		// TODO: instead of just adding txs, ensure they are valid first (e.g. correct nonce)
-		currentTxs = append(currentTxs, accountTxs...)
-		if accountTxsBytes, err = types.InterfaceToBytes(&currentTxs); err != nil {
-			return fmt.Errorf("failed to marshal account tx list: %v", err)
-		}
-		if err := m.meshTxs.Put(account.Bytes(), accountTxsBytes); err != nil {
-			return fmt.Errorf("failed to store mesh txs for address %s", account.Short())
+		pending.Add(accountTxs, layer)
+		if err := m.storeAccountPendingTxs(account, pending); err != nil {
+			return err
 		}
 	}
 	return nil
 }
 
-func (m *MeshDB) removeFromMeshTxs(txs []*Transaction) error {
+func (m *MeshDB) removeFromMeshTxs(txs []*Transaction, layer types.LayerID) error {
 	// TODO: lock
 	tinyTxs := make([]tinyTx, 0, len(txs))
 	for _, tx := range txs {
 		tinyTxs = append(tinyTxs, txToTiny(tx))
 	}
-	groupedTxs := groupAndSort(tinyTxs)
+	groupedTxs := groupByOrigin(tinyTxs)
 
 	for account, accountTxs := range groupedTxs {
 		// TODO: instead of storing a list, use LevelDB's prefixed keys and then iterate all relevant keys
-		accountTxsBytes, err := m.meshTxs.Get(account.Bytes())
-		if err != nil && err != database.ErrNotFound {
-			return fmt.Errorf("failed to get mesh txs for account %s", account.Short())
+		pending, err := m.getAccountPendingTxs(account)
+		if err != nil {
+			return err
 		}
-		var currentTxs []tinyTx
-		if err == nil {
-			if err := types.BytesToInterface(accountTxsBytes, &currentTxs); err != nil {
-				return fmt.Errorf("failed to unmarshal account tx list: %v", err)
-			}
-		}
-		// TODO: we currently assume the transactions are inserted in the same order - validate this
-		currentTxs = currentTxs[common.Min(len(accountTxs), len(currentTxs)):]
-		if accountTxsBytes, err = types.InterfaceToBytes(&currentTxs); err != nil {
-			return fmt.Errorf("failed to marshal account tx list: %v", err)
-		}
-		if err := m.meshTxs.Put(account.Bytes(), accountTxsBytes); err != nil {
-			return fmt.Errorf("failed to store mesh txs for address %s", account.Short())
+		// TODO: get rejected txs
+		pending.Remove(accountTxs, nil, 0)
+		if err := m.storeAccountPendingTxs(account, pending); err != nil {
+			return err
 		}
 	}
 	return nil
 }
 
-func groupAndSort(txs []tinyTx) map[address.Address][]tinyTx {
-	sortedByNonce := make([]tinyTx, len(txs))
-	copy(sortedByNonce, txs)
-	sort.Slice(sortedByNonce, func(i, j int) bool {
-		return sortedByNonce[i].Nonce < sortedByNonce[j].Nonce
-	})
+func (m *MeshDB) storeAccountPendingTxs(account address.Address, pending *accountPendingTxs) error {
+	if pending.IsEmpty() {
+		if err := m.meshTxs.Delete(account.Bytes()); err != nil {
+			return fmt.Errorf("failed to delete empty pending txs for account %v: %v", account.Short(), err)
+		}
+		return nil
+	}
+	if accountTxsBytes, err := types.InterfaceToBytes(&pending); err != nil {
+		return fmt.Errorf("failed to marshal account pending txs: %v", err)
+	} else if err := m.meshTxs.Put(account.Bytes(), accountTxsBytes); err != nil {
+		return fmt.Errorf("failed to store mesh txs for address %s", account.Short())
+	}
+	return nil
+}
 
+func (m *MeshDB) getAccountPendingTxs(account address.Address) (*accountPendingTxs, error) {
+	accountTxsBytes, err := m.meshTxs.Get(account.Bytes())
+	if err != nil && err != database.ErrNotFound {
+		return nil, fmt.Errorf("failed to get mesh txs for account %s", account.Short())
+	}
+	if err == database.ErrNotFound {
+		return newAccountPendingTxs(), nil
+	}
+	var pending accountPendingTxs
+	if err := types.BytesToInterface(accountTxsBytes, &pending); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal account pending txs: %v", err)
+	}
+	return &pending, nil
+}
+
+func groupByOrigin(txs []tinyTx) map[address.Address][]tinyTx {
 	grouped := make(map[address.Address][]tinyTx)
-	for _, tx := range sortedByNonce {
+	for _, tx := range txs {
 		grouped[tx.Origin] = append(grouped[tx.Origin], tx)
 	}
 	return grouped
@@ -449,29 +452,11 @@ type StateObj interface {
 }
 
 func (m *MeshDB) GetStateProjection(stateObj StateObj) (nonce uint64, balance uint64, err error) {
-	var additionalTxs []tinyTx
-	if meshTxsBytes, err := m.meshTxs.Get(stateObj.Address().Bytes()); err != nil {
-		if err == database.ErrNotFound {
-			return stateObj.Nonce(), stateObj.Balance().Uint64(), nil
-		}
-		return 0, 0, fmt.Errorf("failed to get meshTxs for account %v: %v", stateObj.Address().Short(), err)
-	} else if err := types.BytesToInterface(meshTxsBytes, &additionalTxs); err != nil {
-		return 0, 0, fmt.Errorf("failed to unmarshal meshTxs for account %v: %v", stateObj.Address().Short(), err)
+	pending, err := m.getAccountPendingTxs(stateObj.Address())
+	if err != nil {
+		return 0, 0, err
 	}
-	nonce = stateObj.Nonce()
-	balance = stateObj.Balance().Uint64()
-	for _, tx := range additionalTxs {
-		if tx.Nonce != nonce {
-			return 0, 0, fmt.Errorf("inconsistent state! "+
-				"When adding tx %x, expected nonce: %d, actual: %d", tx.Id, nonce, tx.Nonce)
-		}
-		nonce = tx.Nonce + 1
-		if tx.Amount > balance {
-			return 0, 0, fmt.Errorf("inconsistent state! "+
-				"When adding tx %x balance becomes negative. Balance before: %d, Amount: %d", tx.Id, balance, tx.Amount)
-		}
-		balance -= tx.Amount // TODO: only subtract fees
-	}
+	nonce, balance = pending.GetProjection(stateObj.Nonce(), stateObj.Balance().Uint64())
 	return nonce, balance, nil
 }
 

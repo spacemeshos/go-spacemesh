@@ -5,6 +5,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/rand"
@@ -15,6 +16,7 @@ import (
 	"math/big"
 	"os"
 	"path"
+	"sort"
 	"testing"
 	"time"
 )
@@ -221,41 +223,19 @@ func newTx(origin address.Address, nonce, amount uint64) *types.AddressableSigne
 func TestMeshDB_GetStateProjection(t *testing.T) {
 	r := require.New(t)
 
-	mdb := NewMemMeshDB(log.New("TestForEachInView", "", ""))
+	mdb := NewMemMeshDB(log.NewDefault("MeshDB.GetStateProjection"))
 	stateObj := &MockStateObj{}
 	origin := stateObj.Address()
 	err := mdb.addToMeshTxs([]*types.AddressableSignedTransaction{
 		newTx(origin, 0, 10),
 		newTx(origin, 1, 20),
-	})
+	}, 1)
 	r.NoError(err)
 
 	nonce, balance, err := mdb.GetStateProjection(stateObj)
 	r.NoError(err)
-	r.Equal(uint64(initialNonce+2), nonce)
-	r.Equal(uint64(initialBalance-30), balance)
-}
-
-func addToMeshTxs(mdb *MeshDB, txs []*types.AddressableSignedTransaction) error {
-	tinyTxs := make([]tinyTx, 0, len(txs))
-	for _, tx := range txs {
-		tinyTxs = append(tinyTxs, addressableTxToTiny(tx))
-	}
-	groupedTxs := make(map[address.Address][]tinyTx)
-	for _, tx := range tinyTxs {
-		groupedTxs[tx.Origin] = append(groupedTxs[tx.Origin], tx)
-	}
-
-	for account, accountTxs := range groupedTxs {
-		accountTxsBytes, err := types.InterfaceToBytes(&accountTxs)
-		if err != nil {
-			return fmt.Errorf("failed to marshal account tx list: %v", err)
-		}
-		if err := mdb.meshTxs.Put(account.Bytes(), accountTxsBytes); err != nil {
-			return fmt.Errorf("failed to store mesh txs for address %s", account.Short())
-		}
-	}
-	return nil
+	r.Equal(initialNonce+2, int(nonce))
+	r.Equal(initialBalance-30, int(balance))
 }
 
 func TestMeshDB_GetStateProjection_WrongNonce(t *testing.T) {
@@ -264,14 +244,16 @@ func TestMeshDB_GetStateProjection_WrongNonce(t *testing.T) {
 	mdb := NewMemMeshDB(log.New("TestForEachInView", "", ""))
 	stateObj := &MockStateObj{}
 	origin := stateObj.Address()
-	err := addToMeshTxs(mdb, []*types.AddressableSignedTransaction{
+	err := mdb.addToMeshTxs([]*types.AddressableSignedTransaction{
 		newTx(origin, 1, 10),
-		newTx(origin, 0, 20),
-	})
+		newTx(origin, 2, 20),
+	}, 1)
 	r.NoError(err)
 
-	_, _, err = mdb.GetStateProjection(stateObj)
-	r.EqualError(err, "inconsistent state! When adding tx a44e208d8241599c30add840988c233ba73d2d9300549fb11e9572ee5c37be9a, expected nonce: 0, actual: 1")
+	nonce, balance, err := mdb.GetStateProjection(stateObj)
+	r.NoError(err)
+	r.Equal(initialNonce, int(nonce))
+	r.Equal(initialBalance, int(balance))
 }
 
 func TestMeshDB_GetStateProjection_DetectNegativeBalance(t *testing.T) {
@@ -280,14 +262,16 @@ func TestMeshDB_GetStateProjection_DetectNegativeBalance(t *testing.T) {
 	mdb := NewMemMeshDB(log.New("TestForEachInView", "", ""))
 	stateObj := &MockStateObj{}
 	origin := stateObj.Address()
-	err := addToMeshTxs(mdb, []*types.AddressableSignedTransaction{
+	err := mdb.addToMeshTxs([]*types.AddressableSignedTransaction{
 		newTx(origin, 0, 10),
 		newTx(origin, 1, 95),
-	})
+	}, 1)
 	r.NoError(err)
 
-	_, _, err = mdb.GetStateProjection(stateObj)
-	r.EqualError(err, "inconsistent state! When adding tx ad650cd8f1c3ab90ec015f77bcbb96def02ca0268ccee08cf77041e7c9d5cc07 balance becomes negative. Balance before: 90, Amount: 95")
+	nonce, balance, err := mdb.GetStateProjection(stateObj)
+	r.NoError(err)
+	r.Equal(1, int(nonce))
+	r.Equal(initialBalance-10, int(balance))
 }
 
 func TestMeshDB_GetStateProjection_NothingToApply(t *testing.T) {
@@ -310,11 +294,11 @@ func TestMeshDB_MeshTxs(t *testing.T) {
 	origin1 := address.BytesToAddress([]byte("thc"))
 	origin2 := address.BytesToAddress([]byte("cbd"))
 	err := mdb.addToMeshTxs([]*types.AddressableSignedTransaction{
-		newTx(origin1, 421, 241),
 		newTx(origin1, 420, 240),
-		newTx(origin2, 1, 101),
+		newTx(origin1, 421, 241),
 		newTx(origin2, 0, 100),
-	})
+		newTx(origin2, 1, 101),
+	}, 1)
 	r.NoError(err)
 
 	txns1 := getTxns(r, mdb, origin1)
@@ -331,7 +315,7 @@ func TestMeshDB_MeshTxs(t *testing.T) {
 	r.Equal(100, int(txns2[0].Amount))
 	r.Equal(101, int(txns2[1].Amount))
 
-	err = mdb.removeFromMeshTxs([]*Transaction{SerializableSignedTransaction2StateTransaction(newTx(origin2, 1, 101))})
+	err = mdb.removeFromMeshTxs([]*Transaction{SerializableSignedTransaction2StateTransaction(newTx(origin2, 0, 100))}, 1)
 	r.NoError(err)
 
 	txns1 = getTxns(r, mdb, origin1)
@@ -349,9 +333,21 @@ func TestMeshDB_MeshTxs(t *testing.T) {
 
 func getTxns(r *require.Assertions, mdb *MeshDB, origin address.Address) []tinyTx {
 	txnsB, err := mdb.meshTxs.Get(origin.Bytes())
+	if err == database.ErrNotFound {
+		return []tinyTx{}
+	}
 	r.NoError(err)
-	var txns []tinyTx
+	var txns accountPendingTxs
 	err = types.BytesToInterface(txnsB, &txns)
 	r.NoError(err)
-	return txns
+	var ret []tinyTx
+	for nonce, nonceTxs := range txns.PendingTxs {
+		for id, tx := range nonceTxs {
+			ret = append(ret, tinyTx{Id: id, Nonce: nonce, Amount: tx.Amount})
+		}
+	}
+	sort.Slice(ret, func(i, j int) bool {
+		return ret[i].Nonce < ret[j].Nonce
+	})
+	return ret
 }
