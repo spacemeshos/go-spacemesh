@@ -89,32 +89,32 @@ func (fq *fetchQueue) invalidate(id common.Hash, valid bool) {
 }
 
 //returns txs out of txids that are not in the local database
-func (tq *fetchQueue) Handle(txids []common.Hash) ([]Item, error) {
-	if len(txids) == 0 {
-		tq.Debug("handle empty slice")
+func (tq *fetchQueue) Handle(itemIds []common.Hash) ([]Item, error) {
+	if len(itemIds) == 0 {
+		tq.Debug("handle empty item ids slice")
 		return nil, nil
 	}
 
-	unprocessedTxs, processedTxs, missing := tq.checkLocal(txids)
+	unprocessedItems, processedItems, missing := tq.checkLocal(itemIds)
 	if len(missing) > 0 {
 
 		output := tq.addToQueue(missing)
 
 		if success := <-output; !success {
-			return nil, errors.New(fmt.Sprintf("could not fetch all txs"))
+			return nil, errors.New(fmt.Sprintf("could not fetch all items"))
 		}
 
-		unprocessedTxs, processedTxs, missing = tq.checkLocal(txids)
+		unprocessedItems, processedItems, missing = tq.checkLocal(itemIds)
 		if len(missing) > 0 {
-			return nil, errors.New("something got fudged2")
+			return nil, errors.New("could not find all items even though fetch was successful")
 		}
 	}
 
-	txs := make([]Item, 0, len(txids))
-	for _, id := range txids {
-		if tx, ok := unprocessedTxs[id]; ok {
+	txs := make([]Item, 0, len(itemIds))
+	for _, id := range itemIds {
+		if tx, ok := unprocessedItems[id]; ok {
 			txs = append(txs, tx)
-		} else if _, ok := processedTxs[id]; ok {
+		} else if _, ok := processedItems[id]; ok {
 			continue
 		} else {
 			return nil, errors.New(fmt.Sprintf("item %v was not found after fetch was done", hex.EncodeToString(id[:])))
@@ -147,6 +147,7 @@ func NewTxQueue(msh *mesh.Mesh, srv *MessageServer, txpool TxMemPool, txValidato
 	return q
 }
 
+//we could get rid of this if we had a unified id type
 func (tx txQueue) HandleTxs(txids []types.TransactionId) ([]*types.AddressableSignedTransaction, error) {
 	txItems := make([]common.Hash, 0, len(txids))
 	for _, i := range txids {
@@ -216,6 +217,7 @@ func NewAtxQueue(msh *mesh.Mesh, srv *MessageServer, atxpool AtxMemPool, fetchPo
 	return q
 }
 
+//we could get rid of this if we had a unified id type
 func (atx atxQueue) HandleAtxs(atxids []types.AtxId) ([]*types.ActivationTx, error) {
 	atxItems := make([]common.Hash, 0, len(atxids))
 	for _, i := range atxids {
@@ -266,14 +268,14 @@ func updateAtxDependencies(invalidate func(id common.Hash, valid bool), sValidat
 func atxCheckLocalFactory(msh *mesh.Mesh, lg log.Log, atxpool AtxMemPool) func(atxIds []common.Hash) (map[common.Hash]Item, map[common.Hash]Item, []common.Hash) {
 	//look in pool
 	return func(atxIds []common.Hash) (map[common.Hash]Item, map[common.Hash]Item, []common.Hash) {
-		unprocessedAtxs := make(map[types.AtxId]*types.ActivationTx, len(atxIds))
+		unprocessedItems := make(map[common.Hash]Item, len(atxIds))
 		missingInPool := make([]types.AtxId, 0, len(atxIds))
 		for _, t := range atxIds {
 			id := types.AtxId{Hash: t}
 			if x, err := atxpool.Get(id); err == nil {
 				atx := x
 				lg.Debug("found atx, %v in atx pool", id.ShortString())
-				unprocessedAtxs[id] = &atx
+				unprocessedItems[id.ItemId()] = &atx
 			} else {
 				lg.Debug("atx %v not in atx pool", id.ShortString())
 				missingInPool = append(missingInPool, id)
@@ -281,11 +283,6 @@ func atxCheckLocalFactory(msh *mesh.Mesh, lg log.Log, atxpool AtxMemPool) func(a
 		}
 		//look in db
 		dbAtxs, missing := msh.GetATXs(missingInPool)
-
-		unprocessedItems := make(map[common.Hash]Item, len(unprocessedAtxs))
-		for i := range unprocessedAtxs {
-			unprocessedItems[i.Hash] = unprocessedAtxs[i]
-		}
 
 		dbItems := make(map[common.Hash]Item, len(dbAtxs))
 		for i := range dbAtxs {
@@ -304,13 +301,13 @@ func atxCheckLocalFactory(msh *mesh.Mesh, lg log.Log, atxpool AtxMemPool) func(a
 func txCheckLocalFactory(msh *mesh.Mesh, lg log.Log, txpool TxMemPool) func(txids []common.Hash) (map[common.Hash]Item, map[common.Hash]Item, []common.Hash) {
 	//look in pool
 	return func(txIds []common.Hash) (map[common.Hash]Item, map[common.Hash]Item, []common.Hash) {
-		unprocessedTxs := make(map[types.TransactionId]*types.AddressableSignedTransaction)
+		unprocessedItems := make(map[common.Hash]Item)
 		missingInPool := make([]types.TransactionId, 0)
 		for _, t := range txIds {
 			id := types.TransactionId(t)
 			if tx, err := txpool.Get(id); err == nil {
 				lg.Debug("found tx, %v in tx pool", hex.EncodeToString(t[:]))
-				unprocessedTxs[id] = &tx
+				unprocessedItems[id.ItemId()] = &tx
 			} else {
 				lg.Debug("tx %v not in atx pool", hex.EncodeToString(t[:]))
 				missingInPool = append(missingInPool, id)
@@ -318,11 +315,6 @@ func txCheckLocalFactory(msh *mesh.Mesh, lg log.Log, txpool TxMemPool) func(txid
 		}
 		//look in db
 		dbTxs, missing := msh.GetTransactions(missingInPool)
-
-		unprocessedItems := make(map[common.Hash]Item, len(unprocessedTxs))
-		for i := range unprocessedTxs {
-			unprocessedItems[i.ItemId()] = unprocessedTxs[i]
-		}
 
 		dbItems := make(map[common.Hash]Item, len(dbTxs))
 		for i := range dbTxs {
