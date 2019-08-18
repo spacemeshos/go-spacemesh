@@ -27,7 +27,6 @@ type MeshValidator interface {
 	HandleIncomingLayer(layer *types.Layer) (types.LayerID, types.LayerID)
 	HandleLateBlock(bl *types.Block)
 	ContextualValidity(id types.BlockID) bool
-	GetGoodPatternBlocks(layer types.LayerID) (map[types.BlockID]struct{}, error)
 }
 
 type TxProcessor interface {
@@ -210,7 +209,7 @@ func (m *Mesh) ExtractUniqueOrderedTransactions(l *types.Layer) []*Transaction {
 
 	for _, b := range sortedBlocks {
 		if !m.tortoise.ContextualValidity(b.ID()) {
-			m.Info("block %v not Contextualy valid", b)
+			m.Info("block %v not Contextualy valid", b.ID())
 			continue
 		}
 

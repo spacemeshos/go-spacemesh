@@ -188,7 +188,7 @@ func (n *Net) createConnection(address string, remotePub p2pcrypto.PublicKey, se
 	}
 
 	n.logger.Debug("Connected to %s...", address)
-	formatter := delimited.NewChan(10)
+	formatter := delimited.NewChan(1000)
 	return newConnection(netConn, n, formatter, remotePub, session, n.logger), nil
 }
 
@@ -285,13 +285,13 @@ func (n *Net) accept(listen net.Listener) {
 		}
 
 		n.logger.Debug("Got new connection... Remote Address: %s", netConn.RemoteAddr())
-		formatter := delimited.NewChan(10)
+		formatter := delimited.NewChan(1000)
 		c := newConnection(netConn, n, formatter, nil, nil, n.logger)
 		go func(con Connection) {
 			defer func() { pending <- struct{}{} }()
 			err := c.setupIncoming(n.config.SessionTimeout)
 			if err != nil {
-				n.logger.Warning("Error handling incoming connection with ", c.remoteAddr.String())
+				n.logger.Event().Warning("conn_incoming_failed", log.String("remote", c.remoteAddr.String()), log.Err(err))
 				return
 			}
 			go c.beginEventProcessing()
