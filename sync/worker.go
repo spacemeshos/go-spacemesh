@@ -81,7 +81,7 @@ func NewPeersWorker(s *MessageServer, peers []p2p.Peer, mu *sync.Once, reqFactor
 		wg.Wait()
 	}
 
-	worker := worker{Log: s.Log.WithName("peersWrkr"), Once: mu, workCount: &count, output: output, work: wrkFunc}
+	worker := worker{Log: s.Log.WithName("peersWrkr"), Once: mu, WaitGroup: &sync.WaitGroup{}, workCount: &count, output: output, work: wrkFunc}
 
 	return worker, output
 
@@ -112,7 +112,7 @@ func NewNeighborhoodWorker(s *MessageServer, count int, reqFactory RequestFactor
 		}
 	}
 
-	return worker{Log: s.Log, Once: mu, workCount: &acount, output: output, work: workFunc}
+	return worker{Log: s.Log, Once: mu, WaitGroup: &sync.WaitGroup{}, workCount: &acount, output: output, work: workFunc}
 
 }
 
@@ -130,7 +130,7 @@ func NewFetchWorker(s *MessageServer, lg log.Log, count int, reqFactory FetchReq
 		next:
 			for _, p := range s.GetPeers() {
 				peer := p
-				lg.Info("send fetch request to Peer: %v val %v", peer.String(), reflect.TypeOf(ids), ids)
+				lg.Info("send fetch request %v of %v to Peer: %v ", reflect.TypeOf(ids), peer.String())
 				ch, _ := reqFactory(s, peer, ids)
 				timeout := time.After(s.RequestTimeout)
 				select {
@@ -152,7 +152,7 @@ func NewFetchWorker(s *MessageServer, lg log.Log, count int, reqFactory FetchReq
 		}
 	}
 
-	return worker{Log: lg, Once: mu, workCount: &acount, output: output, work: workFunc}
+	return worker{Log: lg, Once: mu, WaitGroup: &sync.WaitGroup{}, workCount: &acount, output: output, work: workFunc}
 }
 
 func NewBlockhWorker(s *MessageServer, lg log.Log, count int, reqFactory BlockRequestFactory, idsChan chan types.BlockID) worker {
@@ -166,7 +166,7 @@ func NewBlockhWorker(s *MessageServer, lg log.Log, count int, reqFactory BlockRe
 		next:
 			for _, p := range s.GetPeers() {
 				peer := p
-				lg.Info("send fetch request to Peer: %v val %v", peer.String(), reflect.TypeOf(id), id)
+				lg.Info("send fetch block request to Peer: %v id: %v", peer.String(), id)
 				ch, _ := reqFactory(s, peer, id)
 				timeout := time.After(s.RequestTimeout)
 				select {
@@ -188,5 +188,5 @@ func NewBlockhWorker(s *MessageServer, lg log.Log, count int, reqFactory BlockRe
 		}
 	}
 
-	return worker{Log: lg, Once: mu, workCount: &acount, output: output, work: workFunc}
+	return worker{Log: lg, Once: mu, WaitGroup: &sync.WaitGroup{}, workCount: &acount, output: output, work: workFunc}
 }

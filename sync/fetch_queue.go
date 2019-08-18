@@ -137,7 +137,7 @@ func NewTxQueue(msh *mesh.Mesh, srv *MessageServer, txpool TxMemPool, txValidato
 			MessageServer:       srv,
 			Mutex:               &sync.Mutex{},
 			FetchRequestFactory: TxReqFactory(),
-			checkLocal:          txcheckLocalFactory(msh, lg, txpool),
+			checkLocal:          txCheckLocalFactory(msh, lg, txpool),
 			pending:             make(map[common.Hash][]chan bool),
 			queue:               make(chan []common.Hash, 1000)},
 	}
@@ -205,7 +205,7 @@ func NewAtxQueue(msh *mesh.Mesh, srv *MessageServer, atxpool AtxMemPool, fetchPo
 			MessageServer:       srv,
 			FetchRequestFactory: ATxReqFactory(),
 			Mutex:               &sync.Mutex{},
-			checkLocal:          atxcheckLocalFactory(msh, lg, atxpool),
+			checkLocal:          atxCheckLocalFactory(msh, lg, atxpool),
 			pending:             make(map[common.Hash][]chan bool),
 			queue:               make(chan []common.Hash, 1000),
 		},
@@ -263,7 +263,7 @@ func updateAtxDependencies(invalidate func(id common.Hash, valid bool), sValidat
 
 }
 
-func atxcheckLocalFactory(msh *mesh.Mesh, lg log.Log, atxpool AtxMemPool) func(atxIds []common.Hash) (map[common.Hash]Item, map[common.Hash]Item, []common.Hash) {
+func atxCheckLocalFactory(msh *mesh.Mesh, lg log.Log, atxpool AtxMemPool) func(atxIds []common.Hash) (map[common.Hash]Item, map[common.Hash]Item, []common.Hash) {
 	//look in pool
 	return func(atxIds []common.Hash) (map[common.Hash]Item, map[common.Hash]Item, []common.Hash) {
 		unprocessedAtxs := make(map[types.AtxId]*types.ActivationTx, len(atxIds))
@@ -301,7 +301,7 @@ func atxcheckLocalFactory(msh *mesh.Mesh, lg log.Log, atxpool AtxMemPool) func(a
 	}
 }
 
-func txcheckLocalFactory(msh *mesh.Mesh, lg log.Log, txpool TxMemPool) func(txids []common.Hash) (map[common.Hash]Item, map[common.Hash]Item, []common.Hash) {
+func txCheckLocalFactory(msh *mesh.Mesh, lg log.Log, txpool TxMemPool) func(txids []common.Hash) (map[common.Hash]Item, map[common.Hash]Item, []common.Hash) {
 	//look in pool
 	return func(txIds []common.Hash) (map[common.Hash]Item, map[common.Hash]Item, []common.Hash) {
 		unprocessedTxs := make(map[types.TransactionId]*types.AddressableSignedTransaction)
