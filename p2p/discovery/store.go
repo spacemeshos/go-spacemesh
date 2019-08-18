@@ -231,7 +231,6 @@ out:
 		case <-dumpAddressTicker.C:
 			a.savePeers(finalPath)
 			a.logger.Debug("Saved peers to file %v", finalPath)
-
 		case <-a.quit:
 			break out
 		}

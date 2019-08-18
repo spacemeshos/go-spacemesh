@@ -70,13 +70,13 @@ func (app *P2PApp) Start(cmd *cobra.Command, args []string) {
 		// start grpc if specified or if json rpc specified
 		log.Info("Started the GRPC Service")
 		grpc := api.NewGrpcService(app.p2p, nil, nil, nil, nil, nil)
-		grpc.StartService(nil)
+		grpc.StartService()
 	}
 
 	if app.Config.API.StartJSONServer {
 		log.Info("Started the JSON Service")
 		json := api.NewJSONHTTPServer()
-		json.StartService(nil)
+		json.StartService()
 	}
 
 	<-cmdp.Ctx.Done()

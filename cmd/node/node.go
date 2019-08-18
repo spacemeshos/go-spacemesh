@@ -1,6 +1,7 @@
 package node
 
 import (
+	"context"
 	"fmt"
 	"github.com/seehuhn/mt19937"
 	"github.com/spacemeshos/go-spacemesh/activation"
@@ -437,6 +438,7 @@ func (app *SpacemeshApp) startServices() {
 	if err != nil {
 		log.Panic("cannot start block producer")
 	}
+
 	app.poetListener.Start()
 
 	if app.Config.StartMining {
@@ -455,32 +457,47 @@ func (app *SpacemeshApp) startServices() {
 
 func (app *SpacemeshApp) stopServices() {
 
-	log.Info("%v closing services ", app.nodeId.Key)
-
-	if err := app.blockProducer.Close(); err != nil {
-		log.Error("cannot stop block producer %v", err)
+	if app.blockProducer != nil {
+		app.log.Info("%v closing block producer", app.nodeId.Key)
+		if err := app.blockProducer.Close(); err != nil {
+			log.Error("cannot stop block producer %v", err)
+		}
 	}
 
-	log.Info("%v closing clock", app.nodeId.Key)
-	app.clock.Close()
+	if app.clock != nil {
+		app.log.Info("%v closing clock", app.nodeId.Key)
+		app.clock.Close()
+	}
 
-	app.log.Info("closing PoET listener")
-	app.poetListener.Close()
+	if app.poetListener != nil {
+		app.log.Info("closing PoET listener")
+		app.poetListener.Close()
+	}
 
-	app.log.Info("closing atx builder")
-	app.atxBuilder.Stop()
+	if app.atxBuilder != nil {
+		app.log.Info("closing atx builder")
+		app.atxBuilder.Stop()
+	}
 
-	log.Info("%v closing blockListener", app.nodeId.Key)
-	app.blockListener.Close()
+	if app.blockListener != nil {
+		app.log.Info("%v closing blockListener", app.nodeId.Key)
+		app.blockListener.Close()
+	}
 
-	log.Info("%v closing Hare", app.nodeId.Key)
-	app.hare.Close() //todo: need to add this
+	if app.hare != nil {
+		app.log.Info("%v closing Hare", app.nodeId.Key)
+		app.hare.Close() //todo: need to add this
+	}
 
-	log.Info("%v closing p2p", app.nodeId.Key)
-	app.P2P.Shutdown()
+	if app.P2P != nil {
+		app.log.Info("%v closing p2p", app.nodeId.Key)
+		app.P2P.Shutdown()
+	}
 
-	log.Info("%v closing mesh", app.nodeId.Key)
-	app.mesh.Close()
+	if app.mesh != nil {
+		app.log.Info("%v closing mesh", app.nodeId.Key)
+		app.mesh.Close()
+	}
 
 }
 
@@ -575,12 +592,15 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 
 	if app.Config.PprofHttpServer {
 		log.Info("Starting pprof server")
+		srv := &http.Server{Addr: ":6060"}
+		defer srv.Shutdown(context.TODO())
 		go func() {
-			err := http.ListenAndServe(":6060", nil)
+			err := srv.ListenAndServe()
 			if err != nil {
 				log.Error("cannot start http server", err)
 			}
 		}()
+
 	}
 
 	// start p2p services
@@ -599,7 +619,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	}
 
 	log.Info("connecting to POET on IP %v", app.Config.PoETServer)
-	poetClient, err := nipst.NewRemoteRPCPoetClient(app.Config.PoETServer, 30*time.Second)
+	poetClient, err := nipst.NewRemoteRPCPoetClient(app.Config.PoETServer, cmdp.Ctx)
 	if err != nil {
 		log.Error("poet server not found on addr %v, err: %v", app.Config.PoETServer, err)
 		return
@@ -652,19 +672,19 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	if apiConf.StartGrpcServer || apiConf.StartJSONServer {
 		// start grpc if specified or if json rpc specified
 		app.grpcAPIService = api.NewGrpcService(app.P2P, app.state, app.mesh.TxProcessor, app.atxBuilder, app.oracle, app.clock)
-		app.grpcAPIService.StartService(nil)
+		app.grpcAPIService.StartService()
 	}
 
 	if apiConf.StartJSONServer {
 		app.jsonAPIService = api.NewJSONHTTPServer()
-		app.jsonAPIService.StartService(nil)
+		app.jsonAPIService.StartService()
 	}
 
 	log.Info("App started.")
 
 	// app blocks until it receives a signal to exit
 	// this signal may come from the node or from sig-abort (ctrl-c)
-	app.NodeInitCallback <- true
+	//app.NodeInitCallback <- true
 
 	<-cmdp.Ctx.Done()
 	//return nil

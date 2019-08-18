@@ -378,6 +378,7 @@ func (s *swarm) Shutdown() {
 	s.network.Shutdown()
 	s.cPool.Shutdown()
 	s.udpServer.Shutdown()
+	s.discover.Shutdown()
 
 	s.protocolHandlerMutex.Lock()
 	for i, _ := range s.directProtocolHandlers {

@@ -95,6 +95,10 @@ func (m *MockPeerStore) Size() int {
 	return m.updateCount
 }
 
+func (m *MockPeerStore) Shutdown() {
+
+}
+
 func (m *MockPeerStore) Good(key p2pcrypto.PublicKey) {
 	if m.GoodFunc != nil {
 		m.GoodFunc(key)
