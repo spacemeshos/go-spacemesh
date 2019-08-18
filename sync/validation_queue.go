@@ -11,19 +11,11 @@ import (
 
 type dataAvailabilityFunc = func(blk *types.Block) ([]*types.AddressableSignedTransaction, []*types.ActivationTx, error)
 type addBlockFunc func(blk *types.Block, txs []*types.AddressableSignedTransaction, atxs []*types.ActivationTx) error
-type checkLocalFunc func(id types.BlockID) (*types.Block, error)
+type BlockCheckLocalFunc func(id types.BlockID) (*types.Block, error)
 
-const (
-	Layer JobType = 0
-	Block JobType = 1
-)
-
-type JobId uint64
-type JobType int
-
-type Job struct {
-	JobId
-	JobType
+type blockJob struct {
+	item *types.Block
+	id   types.BlockID
 }
 
 type validationQueue struct {
@@ -31,23 +23,23 @@ type validationQueue struct {
 	*MessageServer
 	Configuration
 	BlockValidator
-	queue            chan interface{}
+	queue            chan types.BlockID
 	mu               sync.Mutex
 	callbacks        map[interface{}]func(res bool) error
 	depMap           map[interface{}]map[types.BlockID]struct{}
 	reverseDepMap    map[types.BlockID][]interface{}
 	visited          map[types.BlockID]struct{}
 	addBlock         addBlockFunc
-	checkLocal       checkLocalFunc
+	checkLocal       BlockCheckLocalFunc
 	dataAvailability dataAvailabilityFunc
 }
 
-func NewValidationQueue(srvr *MessageServer, conf Configuration, bv BlockValidator, davail dataAvailabilityFunc, addBlock addBlockFunc, checkLocal checkLocalFunc, lg log.Log) *validationQueue {
+func NewValidationQueue(srvr *MessageServer, conf Configuration, bv BlockValidator, davail dataAvailabilityFunc, addBlock addBlockFunc, checkLocal BlockCheckLocalFunc, lg log.Log) *validationQueue {
 	vq := &validationQueue{
 		Configuration:    conf,
 		MessageServer:    srvr,
 		BlockValidator:   bv,
-		queue:            make(chan interface{}, 2*conf.LayerSize),
+		queue:            make(chan types.BlockID, 2*conf.LayerSize),
 		visited:          make(map[types.BlockID]struct{}),
 		depMap:           make(map[interface{}]map[types.BlockID]struct{}),
 		reverseDepMap:    make(map[types.BlockID][]interface{}),
@@ -83,33 +75,29 @@ func (vq *validationQueue) done() {
 
 func (vq *validationQueue) work() error {
 
-	output := fetchWithFactory(NewFetchWorker(vq.MessageServer, vq.Log, vq.Concurrency, BlockReqFactory(), vq.queue))
+	output := fetchWithFactory(NewBlockhWorker(vq.MessageServer, vq.Log, vq.Concurrency, BlockReqFactory(), vq.queue))
 	for out := range output {
-		bjb, ok := out.(fetchJob)
+		bjb, ok := out.(blockJob)
 		if !ok {
 			vq.Error(fmt.Sprintf("Type conversion err %v", out))
 			continue
 		}
 
-		bid := bjb.ids.(types.BlockID)
-
-		s.Info("Validating view for block %v", block.ID())
-		if bjb.items == nil {
-			vq.updateDependencies(bid, false)
+		if bjb.item == nil {
+			vq.updateDependencies(bjb.id, false)
 			vq.Error(fmt.Sprintf("could not retrieve a block in view "))
 			continue
 		}
 
-		vq.Info("fetched  %v", bid)
-		blk := bjb.items.(*types.Block)
-		vq.visited[bid] = struct{}{}
-		if eligable, err := vq.BlockSignedAndEligible(blk); err != nil || !eligable {
-			vq.updateDependencies(bid, false)
-			vq.Error(fmt.Sprintf("Block %v eligiblety check failed %v", bid, err))
+		vq.Info("fetched  %v", bjb.id)
+		vq.visited[bjb.id] = struct{}{}
+		if eligable, err := vq.BlockSignedAndEligible(bjb.item); err != nil || !eligable {
+			vq.updateDependencies(bjb.id, false)
+			vq.Error(fmt.Sprintf("Block %v eligiblety check failed %v", bjb.id, err))
 			continue
 		}
 
-		vq.handleBlockDependencies(blk) //todo better deadlock solution
+		vq.handleBlockDependencies(bjb.item) //todo better deadlock solution
 
 		vq.Info("next block")
 	}

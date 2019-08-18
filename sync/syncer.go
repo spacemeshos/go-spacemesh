@@ -324,13 +324,13 @@ func (s *Syncer) validateBlockView(blk *types.Block) bool {
 
 func (s *Syncer) DataAvailabilty(blk *types.Block) ([]*types.AddressableSignedTransaction, []*types.ActivationTx, error) {
 
-	txres, txerr := s.txQueue.Handle(blk.TxIds)
+	txres, txerr := s.txQueue.HandleTxs(blk.TxIds)
 	if txerr != nil {
 		s.Warning("failed fetching block %v transactions %v", blk.ID(), txerr)
 		return nil, nil, txerr
 	}
 
-	atxres, atxerr := s.atxQueue.Handle(blk.AtxIds)
+	atxres, atxerr := s.atxQueue.HandleAtxs(blk.AtxIds)
 	if atxerr != nil {
 		s.Warning("failed fetching block %v activation transactions %v", blk.ID(), atxerr)
 		return nil, nil, atxerr

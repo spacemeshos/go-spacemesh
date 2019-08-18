@@ -34,11 +34,15 @@ func (t AtxId) ShortId() string {
 	return t.ShortString()
 }
 
+func (t AtxId) ItemId() common.Hash {
+	return t.Hash
+}
+
 var EmptyAtxId = &AtxId{common.Hash{0}}
 
 type ActivationTxHeader struct {
 	NIPSTChallenge
-	id            *AtxId
+	*AtxId
 	Coinbase      address.Address
 	ActiveSetSize uint32
 }
@@ -130,10 +134,10 @@ func NewActivationTxWithChallenge(poetChallenge NIPSTChallenge, coinbase address
 }
 
 func (atxh *ActivationTxHeader) Id() AtxId {
-	if atxh.id == nil {
+	if atxh.AtxId == nil {
 		panic("id field must be set")
 	}
-	return *atxh.id
+	return *atxh.AtxId
 }
 
 func (atxh *ActivationTxHeader) ShortId() string {
@@ -145,10 +149,15 @@ func (atxh *ActivationTxHeader) TargetEpoch(layersPerEpoch uint16) EpochId {
 }
 
 func (atxh *ActivationTxHeader) SetId(id *AtxId) {
-	atxh.id = id
+	atxh.AtxId = id
 }
 
 func (atx *ActivationTx) CalcAndSetId() {
+	//hack to avoid issue #1335
+	if atx.AtxId != nil {
+		return
+	}
+
 	tx, err := AtxHeaderAsBytes(&atx.ActivationTxHeader)
 	if err != nil {
 		panic("could not Serialize atx")

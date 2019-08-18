@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/types"
@@ -11,11 +12,8 @@ import (
 )
 
 type RequestFactory func(s *MessageServer, peer p2p.Peer) (chan interface{}, error)
-
-type blockJob struct {
-	block *types.Block
-	id    types.BlockID
-}
+type FetchRequestFactory func(s *MessageServer, peer p2p.Peer, id interface{}) (chan []Item, error)
+type BlockRequestFactory func(s *MessageServer, peer p2p.Peer, id interface{}) (chan interface{}, error)
 
 type worker struct {
 	*sync.Once
@@ -118,7 +116,7 @@ func NewNeighborhoodWorker(s *MessageServer, count int, reqFactory RequestFactor
 
 }
 
-func NewFetchWorker(s *MessageServer, lg log.Log, count int, reqFactory RequestFactoryV2, idsChan chan interface{}) worker {
+func NewFetchWorker(s *MessageServer, lg log.Log, count int, reqFactory FetchRequestFactory, idsChan chan []common.Hash) worker {
 	output := make(chan interface{}, count)
 	acount := int32(count)
 	mu := &sync.Once{}
@@ -132,7 +130,7 @@ func NewFetchWorker(s *MessageServer, lg log.Log, count int, reqFactory RequestF
 		next:
 			for _, p := range s.GetPeers() {
 				peer := p
-				lg.Info("send fetch request to Peer: %v", peer.String(), reflect.TypeOf(ids))
+				lg.Info("send fetch request to Peer: %v val %v", peer.String(), reflect.TypeOf(ids), ids)
 				ch, _ := reqFactory(s, peer, ids)
 				timeout := time.After(s.RequestTimeout)
 				select {
@@ -150,6 +148,42 @@ func NewFetchWorker(s *MessageServer, lg log.Log, count int, reqFactory RequestF
 			}
 			if !retrived {
 				output <- fetchJob{ids: ids, items: nil}
+			}
+		}
+	}
+
+	return worker{Log: lg, Once: mu, workCount: &acount, output: output, work: workFunc}
+}
+
+func NewBlockhWorker(s *MessageServer, lg log.Log, count int, reqFactory BlockRequestFactory, idsChan chan types.BlockID) worker {
+	output := make(chan interface{}, count)
+	acount := int32(count)
+	mu := &sync.Once{}
+	workFunc := func() {
+		for id := range idsChan {
+			lg.Info("id %v out of chan ", id)
+			retrived := false
+		next:
+			for _, p := range s.GetPeers() {
+				peer := p
+				lg.Info("send fetch request to Peer: %v val %v", peer.String(), reflect.TypeOf(id), id)
+				ch, _ := reqFactory(s, peer, id)
+				timeout := time.After(s.RequestTimeout)
+				select {
+				case <-timeout:
+					lg.Error("fetch request to %v on %v timed out", peer.String(), id)
+				case v := <-ch:
+					if v != nil {
+						retrived = true
+						lg.Info("Peer: %v responded %v to fetch request ", peer.String(), v)
+						output <- blockJob{id: id, item: v.(*types.Block)}
+						break next
+					}
+					lg.Info("next peer")
+				}
+			}
+			if !retrived {
+				output <- blockJob{id: id, item: nil}
 			}
 		}
 	}

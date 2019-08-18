@@ -48,8 +48,8 @@ func HashReqFactory(lyr types.LayerID) RequestFactory {
 
 }
 
-func blockSliceToChan(blockIds []types.BlockID) chan interface{} {
-	blockIdsCh := make(chan interface{}, len(blockIds))
+func blockSliceToChan(blockIds []types.BlockID) chan types.BlockID {
+	blockIdsCh := make(chan types.BlockID, len(blockIds))
 	for _, id := range blockIds {
 		blockIdsCh <- id
 	}
@@ -57,7 +57,7 @@ func blockSliceToChan(blockIds []types.BlockID) chan interface{} {
 	return blockIdsCh
 }
 
-func BlockReqFactory() RequestFactoryV2 {
+func BlockReqFactory() BlockRequestFactory {
 	//convert to chan
 	return func(s *MessageServer, peer p2p.Peer, id interface{}) (chan interface{}, error) {
 		ch := make(chan interface{}, 1)
@@ -89,9 +89,9 @@ func BlockReqFactory() RequestFactoryV2 {
 	}
 }
 
-func TxReqFactory() RequestFactoryV2 {
-	return func(s *MessageServer, peer p2p.Peer, ids interface{}) (chan interface{}, error) {
-		ch := make(chan interface{}, 1)
+func TxReqFactory() FetchRequestFactory {
+	return func(s *MessageServer, peer p2p.Peer, ids interface{}) (chan []Item, error) {
+		ch := make(chan []Item, 1)
 		foo := func(msg []byte) {
 			defer close(ch)
 			if len(msg) == 0 || msg == nil {
@@ -104,7 +104,12 @@ func TxReqFactory() RequestFactoryV2 {
 				s.Error("could not unmarshal tx data %v", err)
 				return
 			}
-			ch <- tx
+
+			items := make([]Item, len(tx))
+			for i, arg := range tx {
+				items[i] = arg
+			}
+			ch <- items
 		}
 
 		bts, err := types.InterfaceToBytes(ids) //todo send multiple ids
@@ -119,9 +124,9 @@ func TxReqFactory() RequestFactoryV2 {
 	}
 }
 
-func ATxReqFactory() RequestFactoryV2 {
-	return func(s *MessageServer, peer p2p.Peer, ids interface{}) (chan interface{}, error) {
-		ch := make(chan interface{}, 1)
+func ATxReqFactory() FetchRequestFactory {
+	return func(s *MessageServer, peer p2p.Peer, ids interface{}) (chan []Item, error) {
+		ch := make(chan []Item, 1)
 		foo := func(msg []byte) {
 			s.Info("Handle atx response ")
 			defer close(ch)
@@ -136,7 +141,12 @@ func ATxReqFactory() RequestFactoryV2 {
 				return
 			}
 
-			ch <- tx
+			items := make([]Item, len(tx))
+			for i, arg := range tx {
+				items[i] = arg
+			}
+
+			ch <- items
 		}
 
 		bts, err := types.InterfaceToBytes(ids) //todo send multiple ids

@@ -1,9 +1,11 @@
 package sync
 
 import (
+	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/types"
+	"github.com/spacemeshos/sha256-simd"
 	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
@@ -34,7 +36,7 @@ func TestBlockListener_TestTxQueue(t *testing.T) {
 	block1.TxIds = []types.TransactionId{id1, id2, id3}
 	bl2.AddBlockWithTxs(block1, []*types.AddressableSignedTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
 
-	ch := queue.addToQueue([]types.TransactionId{id1, id2, id3})
+	ch := queue.addToQueue([]common.Hash{id1.ItemId(), id2.ItemId(), id3.ItemId()})
 	timeout := time.After(1 * time.Second)
 
 	select {
@@ -47,7 +49,7 @@ func TestBlockListener_TestTxQueue(t *testing.T) {
 		break
 	}
 
-	ch = queue.addToQueue([]types.TransactionId{id1, id2, id3, id4})
+	ch = queue.addToQueue([]common.Hash{id1.ItemId(), id2.ItemId(), id3.ItemId(), id4.ItemId()})
 	timeout = time.After(1 * time.Second)
 
 	select {
@@ -89,9 +91,26 @@ func TestBlockListener_TestAtxQueue(t *testing.T) {
 	atx3 := atx()
 	atx4 := atx()
 
+	proofMessage := makePoetProofMessage(t)
+	if err := bl1.poetDb.ValidateAndStore(&proofMessage); err != nil {
+		t.Error(err)
+	}
+	poetProofBytes, err := types.InterfaceToBytes(&proofMessage.PoetProof)
+	if err != nil {
+		t.Error(err)
+	}
+	poetRef := sha256.Sum256(poetProofBytes)
+
+	atx1.Nipst.PostProof.Challenge = poetRef[:]
+	atx2.Nipst.PostProof.Challenge = poetRef[:]
+	atx3.Nipst.PostProof.Challenge = poetRef[:]
+	atx4.Nipst.PostProof.Challenge = poetRef[:]
+
+	bl1.ProcessAtx(atx1)
+
 	bl2.AddBlockWithTxs(block1, []*types.AddressableSignedTransaction{}, []*types.ActivationTx{atx1, atx2, atx3})
 
-	ch := queue.addToQueue([]types.AtxId{atx1.Id(), atx2.Id(), atx3.Id()})
+	ch := queue.addToQueue([]common.Hash{atx1.ItemId(), atx2.ItemId(), atx3.ItemId()})
 	timeout := time.After(1 * time.Second)
 	select {
 	// Got a timeout! fail with a timeout error
@@ -103,7 +122,7 @@ func TestBlockListener_TestAtxQueue(t *testing.T) {
 		break
 	}
 
-	ch = queue.addToQueue([]types.AtxId{atx1.Id(), atx2.Id(), atx3.Id(), atx4.Id()})
+	ch = queue.addToQueue([]common.Hash{atx1.ItemId(), atx2.ItemId(), atx3.ItemId(), atx4.ItemId()})
 	timeout = time.After(1 * time.Second)
 
 	select {
@@ -146,7 +165,7 @@ func TestBlockListener_TestTxQueueHandle(t *testing.T) {
 	block1.TxIds = []types.TransactionId{id1, id2, id3}
 	bl2.AddBlockWithTxs(block1, []*types.AddressableSignedTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
 
-	res, err := queue.Handle([]types.TransactionId{id1, id2, id3})
+	res, err := queue.Handle([]common.Hash{id1.ItemId(), id2.ItemId(), id3.ItemId()})
 	if err != nil {
 		t.Error(err)
 	}
@@ -184,7 +203,7 @@ func TestBlockListener_TestAtxQueueHandle(t *testing.T) {
 
 	bl2.AddBlockWithTxs(block1, []*types.AddressableSignedTransaction{}, []*types.ActivationTx{atx1, atx2, atx3})
 
-	res, err := queue.Handle([]types.AtxId{atx1.Id(), atx2.Id(), atx3.Id()})
+	res, err := queue.Handle([]common.Hash{atx1.ItemId(), atx2.ItemId(), atx3.ItemId()})
 	if err != nil {
 		t.Error(err)
 	}

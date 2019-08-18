@@ -11,7 +11,12 @@ import (
 )
 
 type BlockID uint64
-type TransactionId [32]byte
+type TransactionId common.Hash
+
+func (l TransactionId) ItemId() common.Hash {
+	return common.Hash(l)
+}
+
 type LayerID uint64
 
 func (l LayerID) GetEpoch(layersPerEpoch uint16) EpochId {
@@ -75,6 +80,10 @@ type MiniBlock struct {
 	AtxIds []AtxId
 }
 
+func (t *Block) ItemId() common.Hash {
+	return common.BytesToHash(t.Id.ToBytes())
+}
+
 func (t *Block) Sig() []byte {
 	return t.Signature
 }
@@ -109,6 +118,10 @@ type InnerSerializableSignedTransaction struct {
 type SerializableSignedTransaction struct {
 	InnerSerializableSignedTransaction
 	Signature [64]byte
+}
+
+func (t *SerializableSignedTransaction) ItemId() common.Hash {
+	return GetTransactionId(t).ItemId()
 }
 
 func NewSignedTx(nonce uint64, rec address.Address, amount, gas, price uint64, signer *signing.EdSigner) (*SerializableSignedTransaction, error) {

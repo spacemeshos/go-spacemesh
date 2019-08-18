@@ -11,8 +11,8 @@ import (
 
 func newLayerHashRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg []byte) []byte {
 	return func(msg []byte) []byte {
-		logger.Debug("handle layer hash request")
 		lyrid := common.BytesToUint64(msg)
+		logger.Info("handle layer %v hash request", lyrid)
 		layer, err := layers.GetLayer(types.LayerID(lyrid))
 		if err != nil {
 			logger.Error("Error handling layer %d request message with error: %v", lyrid, err)

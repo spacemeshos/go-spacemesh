@@ -470,8 +470,8 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 	err = n2.Broadcast(config.NewBlockProtocol, data)
 	assert.NoError(t, err)
 
-	time.Sleep(3 * time.Second)
-	timeout := time.After(5 * time.Second)
+	time.Sleep(1 * time.Second)
+	timeout := time.After(2 * time.Second)
 	for {
 		select {
 		// Got a timeout! fail with a timeout error

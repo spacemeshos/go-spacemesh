@@ -76,7 +76,7 @@ func TestNewBlockWorker(t *testing.T) {
 	pm1 := getPeersMock([]p2p.Peer{nodes[0].PublicKey(), nodes[1].PublicKey()})
 	syncObj3.Peers = pm1
 
-	wrk := NewFetchWorker(syncObj3.MessageServer, syncObj3.Log, 1, BlockReqFactory(), blockSliceToChan([]types.BlockID{block.Id}))
+	wrk := NewBlockhWorker(syncObj3.MessageServer, syncObj3.Log, 1, BlockReqFactory(), blockSliceToChan([]types.BlockID{block.Id}))
 	go wrk.Work()
 	count := 0
 loop:
@@ -87,7 +87,7 @@ loop:
 				break loop
 			}
 
-			assert.True(t, item.(fetchJob).ids == block.ID())
+			assert.True(t, item.(blockJob).id == block.ID())
 			count++
 		case <-timeout.C:
 
