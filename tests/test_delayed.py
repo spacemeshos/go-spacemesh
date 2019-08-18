@@ -84,11 +84,11 @@ def test_add_delayed_nodes(init_session, setup_bootstrap, save_log_on_exit):
     epochDuration = layerDuration*layersPerEpoch
 
     # start with 100 miners
-    inf = new_client_in_namespace(ns, setup_bootstrap, cspec, 100)
+    inf = new_client_in_namespace(ns, setup_bootstrap, cspec, 20)
     time.sleep(epochDuration) # wait epoch duration
 
     # add 50 each epoch
-    numToAdd = 50
+    numToAdd = 10
     count = 4
     clients = [None] * count
     for i in range(0, count):
