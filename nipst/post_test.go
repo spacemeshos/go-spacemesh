@@ -15,12 +15,12 @@ func TestPostClient(t *testing.T) {
 	assert.NoError(err)
 
 	c := NewPostClient(&postCfg)
-	c.SetParams([]byte("anton"), "/tmp/aaa",1024)
+	c.SetParams([]byte("anton"), "/tmp/aaa", 1024)
 	assert.NotNil(c)
 
 	idsToCleanup = append(idsToCleanup, id)
 	commitment, err := c.initialize(0)
-	defer func() { assert.NoError(c.Reset())}()
+	defer func() { assert.NoError(c.Reset()) }()
 	assert.NoError(err)
 	assert.NotNil(commitment)
 

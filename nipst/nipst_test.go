@@ -282,7 +282,7 @@ func initPost(id []byte) {
 	defTimeout := 5 * time.Second
 	idsToCleanup = append(idsToCleanup, id)
 	c := NewPostClient(&postCfg)
-	c.SetParams([]byte("anton"), "/tmp/",2048)
+	c.SetParams([]byte("anton"), "/tmp/", 2048)
 	_, err := c.initialize(defTimeout)
 	logIfError(err)
 }
