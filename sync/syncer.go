@@ -112,9 +112,15 @@ const (
 	syncProtocol                    = "/sync/1.0/"
 )
 
+func (s *Syncer) WeaklySynced() bool {
+	// equivalent to s.LatestLayer() >= s.lastTickedLayer()-1
+	// means we have data from the previous layer
+	return s.LatestLayer()+1 >= s.lastTickedLayer()
+}
+
 func (s *Syncer) IsSynced() bool {
 	s.Log.Info("latest: %v, maxSynced %v", s.LatestLayer(), s.lastTickedLayer())
-	return s.LatestLayer()+1 >= s.lastTickedLayer()
+	return s.WeaklySynced() && gossip-synced
 }
 
 func (s *Syncer) Start() {
@@ -200,9 +206,10 @@ func (s *Syncer) Synchronise() {
 	currentSyncLayer := s.lValidator.ValidatedLayer() + 1
 	if s.lastTickedLayer() == 1 { // skip validation for first layer
 		s.Info("Not syncing in layer 1")
+		// TODO: set p2p-synced true (default is false)
 		return
 	}
-	if s.IsSynced() {
+	if s.WeaklySynced() {
 		lyr, err := s.GetLayer(types.LayerID(currentSyncLayer))
 		if err != nil {
 			s.With().Error("failed getting layer even though IsSynced is true", log.Err(err))
@@ -211,18 +218,29 @@ func (s *Syncer) Synchronise() {
 		s.lValidator.ValidateLayer(lyr) // wait for layer validation
 		return
 	}
-	for ; currentSyncLayer <= s.lastTickedLayer(); currentSyncLayer++ {
-		lastTickedLayer := s.lastTickedLayer()
-		s.Info("syncing layer %v current consensus layer is %d", currentSyncLayer, lastTickedLayer)
+
+	// TODO: mark p2p-synced false ?
+
+	for ; currentSyncLayer < s.lastTickedLayer(); currentSyncLayer++ {
+		s.Info("syncing layer %v current consensus layer is %d", currentSyncLayer, s.lastTickedLayer())
 		lyr, err := s.getLayerFromNeighbors(currentSyncLayer)
 		if err != nil {
 			s.Info("could not get layer %v from neighbors %v", currentSyncLayer, err)
 			return
 		}
-		if currentSyncLayer < lastTickedLayer {
-			s.lValidator.ValidateLayer(lyr) // wait for layer validation
-		}
+
+		s.lValidator.ValidateLayer(lyr) // wait for layer validation
 	}
+
+	_, err := s.getLayerFromNeighbors(currentSyncLayer)
+	if err != nil {
+		s.Info("could not get last ticked layer %v from neighbors %v", currentSyncLayer, err)
+		return
+	}
+
+	// TODO: wait 2 ticks
+
+	// TODO: mark p2p-synced
 }
 
 func (s *Syncer) getLayerFromNeighbors(currenSyncLayer types.LayerID) (*types.Layer, error) {
