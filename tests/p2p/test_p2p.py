@@ -220,4 +220,4 @@ def test_late_bootstraps(init_session, setup_bootstrap, setup_clients):
                                   findFails=False,
                                   expected=1)
 
-        assert len(hits) == 1, "Could not find new Client bootstrap message"
+        assert len(hits) == 1, "Could not find new Client bootstrap message. client: {0}".format(i[0])
