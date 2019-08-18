@@ -3,6 +3,7 @@ package net
 import (
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/delimited"
 	"github.com/spacemeshos/go-spacemesh/p2p/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"time"
@@ -13,7 +14,6 @@ import (
 	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/crypto"
-	"github.com/spacemeshos/go-spacemesh/p2p/net/wire"
 )
 
 var (
@@ -60,11 +60,15 @@ type FormattedConnection struct {
 	remotePub  p2pcrypto.PublicKey
 	remoteAddr net.Addr
 	closeChan  chan struct{}
-	formatter  wire.Formatter // format messages in some way
-	networker  networker      // network context
+	networker  networker // network context
 	session    NetworkSession
-	closeOnce  sync.Once
-	closed     bool
+
+	r    *delimited.Reader
+	wmtx sync.Mutex
+	w    *delimited.Writer
+
+	closeMtx sync.RWMutex
+	closed   bool
 }
 
 type networker interface {
@@ -81,7 +85,7 @@ type readWriteCloseAddresser interface {
 }
 
 // Create a new connection wrapping a net.Conn with a provided connection manager
-func newConnection(conn readWriteCloseAddresser, netw networker, formatter wire.Formatter,
+func newConnection(conn readWriteCloseAddresser, netw networker, reader *delimited.Reader, writer *delimited.Writer,
 	remotePub p2pcrypto.PublicKey, session NetworkSession, log log.Log) *FormattedConnection {
 
 	// todo parametrize channel size - hard-coded for now
@@ -91,13 +95,14 @@ func newConnection(conn readWriteCloseAddresser, netw networker, formatter wire.
 		created:    time.Now(),
 		remotePub:  remotePub,
 		remoteAddr: conn.RemoteAddr(),
-		formatter:  formatter,
+		r:          reader,
+		w:          writer,
 		networker:  netw,
 		session:    session,
 		closeChan:  make(chan struct{}),
 	}
 
-	connection.formatter.Pipe(conn)
+	//connection.formatter.Pipe(conn)
 	return connection
 }
 
@@ -140,28 +145,46 @@ func (c *FormattedConnection) publish(message []byte) {
 	c.networker.EnqueueMessage(IncomingMessageEvent{c, message})
 }
 
-// incomingChannel returns the incoming messages channel
-func (c *FormattedConnection) incomingChannel() chan []byte {
-	return c.formatter.In()
-}
-
+//// Send binary data to a connection
+//// data is copied over so caller can get rid of the data
+//// Concurrency: can be called from any go routine
+//func (c *FormattedConnection) Send(m []byte) error {
+//	err := c.formatter.Out(m)
+//	if err != nil {
+//		return err
+//	}
+//	metrics.PeerRecv.With(metrics.PeerIdLabel, c.remotePub.String()).Add(float64(len(m)))
+//	return nil
+//}
 // Send binary data to a connection
 // data is copied over so caller can get rid of the data
 // Concurrency: can be called from any go routine
 func (c *FormattedConnection) Send(m []byte) error {
-	err := c.formatter.Out(m)
+	c.closeMtx.RLock()
+	if c.closed {
+		return errors.New("connection was closed")
+		c.closeMtx.RUnlock()
+	}
+	c.closeMtx.RUnlock()
+
+	c.wmtx.Lock()
+	_, err := c.w.WriteRecord(m)
 	if err != nil {
+		c.wmtx.Unlock()
 		return err
 	}
+	c.wmtx.Unlock()
 	metrics.PeerRecv.With(metrics.PeerIdLabel, c.remotePub.String()).Add(float64(len(m)))
 	return nil
 }
 
 // Close closes the connection (implements io.Closer). It is go safe.
 func (c *FormattedConnection) Close() {
-	c.closeOnce.Do(func() {
-		close(c.closeChan)
-	})
+	c.wmtx.Lock()
+	c.closeMtx.Lock()
+	c.closed = true
+	c.closeMtx.Unlock()
+	c.wmtx.Unlock()
 }
 
 // Closed Reports whether the connection was closed. It is go safe.
@@ -170,71 +193,121 @@ func (c *FormattedConnection) Closed() bool {
 }
 
 func (c *FormattedConnection) shutdown(err error) {
+	c.wmtx.Lock()
+	c.wmtx.Unlock()
 	c.closed = true
 	c.logger.Debug("Shutting down conn with %v err=%v", c.RemotePublicKey().String(), err)
 	if err != ErrConnectionClosed {
 		c.networker.publishClosingConnection(c)
 	}
-	c.formatter.Close()
+	c.closeMtx.Lock()
+	c.closeMtx.Unlock()
 }
 
 var ErrTriedToSetupExistingConn = errors.New("tried to setup existing connection")
 var ErrIncomingSessionTimeout = errors.New("timeout waiting for handshake message")
 
+//func (c *FormattedConnection) setupIncoming(timeout time.Duration) error {
+//	var err error
+//	tm := time.NewTimer(timeout)
+//	select {
+//	case msg, ok := <-c.formatter.In():
+//		if !ok { // chan closed
+//			err = ErrClosedIncomingChannel
+//			break
+//		}
+//
+//		if c.session == nil {
+//			err = c.networker.HandlePreSessionIncomingMessage(c, msg)
+//			if err != nil {
+//				break
+//			}
+//			return nil
+//		}
+//		err = ErrTriedToSetupExistingConn
+//		break
+//	case <-tm.C:
+//		err = ErrIncomingSessionTimeout
+//	}
+//
+//	c.Close()
+//	return err
+//}
 func (c *FormattedConnection) setupIncoming(timeout time.Duration) error {
+	msg, err := c.r.Next()
+	if err != nil {
+		return err
+	}
+	if c.session == nil {
+		err = c.networker.HandlePreSessionIncomingMessage(c, msg)
+		if err != nil {
+			return err
+		}
+	} else {
+		panic("set incoming connection twice")
+	}
+
+	return nil
+}
+
+//// Push outgoing message to the connections
+//// Read from the incoming new messages and send down the connection
+//func (c *FormattedConnection) beginEventProcessing() {
+//
+//	var err error
+//
+//Loop:
+//	for {
+//		select {
+//		case msg, ok := <-c.formatter.In():
+//			if !ok { // chan closed
+//				err = ErrClosedIncomingChannel
+//				break Loop
+//			}
+//
+//			if c.session == nil {
+//				err = ErrTriedToSetupExistingConn
+//				break Loop
+//			}
+//
+//			metrics.PeerRecv.With(metrics.PeerIdLabel, c.remotePub.String()).Add(float64(len(msg)))
+//			c.publish(msg)
+//
+//		case <-c.closeChan:
+//			err = ErrConnectionClosed
+//			break Loop
+//		}
+//	}
+//	c.shutdown(err)
+//}
+// Push outgoing message to the connections
+// Read from the incoming new messages and send down the connection
+func (c *FormattedConnection) beginEventProcessing() {
 	var err error
-	tm := time.NewTimer(timeout)
-	select {
-	case msg, ok := <-c.formatter.In():
-		if !ok { // chan closed
-			err = ErrClosedIncomingChannel
+	var buf []byte
+	for {
+		c.closeMtx.RLock()
+		if c.closed {
+			err = errors.New("connection was closed")
+			c.closeMtx.RUnlock()
+			break
+		}
+		c.closeMtx.RUnlock()
+
+		buf, err = c.r.Next()
+		if err != nil {
 			break
 		}
 
 		if c.session == nil {
-			err = c.networker.HandlePreSessionIncomingMessage(c, msg)
-			if err != nil {
-				break
-			}
-			return nil
+			err = ErrTriedToSetupExistingConn
+			break
 		}
-		err = ErrTriedToSetupExistingConn
-		break
-	case <-tm.C:
-		err = ErrIncomingSessionTimeout
+
+		newbuf := make([]byte, len(buf))
+		copy(newbuf, buf)
+		c.publish(newbuf)
 	}
 
-	c.Close()
-	return err
-}
-
-// Push outgoing message to the connections
-// Read from the incoming new messages and send down the connection
-func (c *FormattedConnection) beginEventProcessing() {
-
-	var err error
-
-Loop:
-	for {
-		select {
-		case msg, ok := <-c.formatter.In():
-			if !ok { // chan closed
-				err = ErrClosedIncomingChannel
-				break Loop
-			}
-
-			if c.session == nil {
-				err = ErrTriedToSetupExistingConn
-				break Loop
-			}
-
-			metrics.PeerRecv.With(metrics.PeerIdLabel, c.remotePub.String()).Add(float64(len(msg)))
-			c.publish(msg)
-
-		case <-c.closeChan:
-			err = ErrConnectionClosed
-			break Loop
-		}
-	}
 	c.shutdown(err)
 }
