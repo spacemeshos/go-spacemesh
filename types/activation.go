@@ -149,6 +149,11 @@ func (atxh *ActivationTxHeader) SetId(id *AtxId) {
 }
 
 func (atx *ActivationTx) CalcAndSetId() {
+	if atx.ActivationTxHeader.id != nil { // already calculated the id
+		return
+	}
+
+	// calculate
 	tx, err := AtxHeaderAsBytes(&atx.ActivationTxHeader)
 	if err != nil {
 		panic("could not Serialize atx")
