@@ -486,10 +486,6 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 			}
 		}
 	}
-
-	bl2.Close()
-	bl1.Close()
-	time.Sleep(1 * time.Second)
 }
 
 //todo integration testing

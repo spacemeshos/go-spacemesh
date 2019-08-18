@@ -29,7 +29,7 @@ type fetchJob struct {
 type fetchQueue struct {
 	log.Log
 	FetchRequestFactory
-	sync.Mutex
+	*sync.Mutex
 	*mesh.Mesh
 	*MessageServer
 	pending            map[common.Hash][]chan bool
@@ -135,6 +135,7 @@ func NewTxQueue(msh *mesh.Mesh, srv *MessageServer, txpool TxMemPool, txValidato
 			Log:                 lg,
 			Mesh:                msh,
 			MessageServer:       srv,
+			Mutex:               &sync.Mutex{},
 			FetchRequestFactory: TxReqFactory(),
 			checkLocal:          txcheckLocalFactory(msh, lg, txpool),
 			pending:             make(map[common.Hash][]chan bool),
@@ -203,6 +204,7 @@ func NewAtxQueue(msh *mesh.Mesh, srv *MessageServer, atxpool AtxMemPool, fetchPo
 			Mesh:                msh,
 			MessageServer:       srv,
 			FetchRequestFactory: ATxReqFactory(),
+			Mutex:               &sync.Mutex{},
 			checkLocal:          atxcheckLocalFactory(msh, lg, atxpool),
 			pending:             make(map[common.Hash][]chan bool),
 			queue:               make(chan []common.Hash, 1000),
@@ -267,7 +269,7 @@ func atxcheckLocalFactory(msh *mesh.Mesh, lg log.Log, atxpool AtxMemPool) func(a
 		unprocessedAtxs := make(map[types.AtxId]*types.ActivationTx, len(atxIds))
 		missingInPool := make([]types.AtxId, 0, len(atxIds))
 		for _, t := range atxIds {
-			id := types.AtxId{t}
+			id := types.AtxId{Hash: t}
 			if x, err := atxpool.Get(id); err == nil {
 				atx := x
 				lg.Debug("found atx, %v in atx pool", id.ShortString())

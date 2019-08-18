@@ -17,7 +17,7 @@ type BlockRequestFactory func(s *MessageServer, peer p2p.Peer, id interface{}) (
 
 type worker struct {
 	*sync.Once
-	sync.WaitGroup
+	*sync.WaitGroup
 	work      func()
 	workCount *int32
 	output    chan interface{}
