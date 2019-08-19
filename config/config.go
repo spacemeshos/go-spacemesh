@@ -89,6 +89,8 @@ type BaseConfig struct {
 	CoinbaseAccount string `mapstructure:"coinbase"`
 
 	GenesisActiveSet int `mapstructure:"genesis-active-size"` // the active set size for genesis
+
+	PublishEventsUrl string `mapstructure:"publish-events"`
 }
 
 // DefaultConfig returns the default configuration for a spacemesh node

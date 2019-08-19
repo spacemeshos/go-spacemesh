@@ -20,6 +20,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/oracle"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/spacemeshos/go-spacemesh/sync"
@@ -222,6 +223,10 @@ func (app *SpacemeshApp) setupLogging() {
 	log.InitSpacemeshLoggingSystem(dataDir, "spacemesh.log")
 
 	log.Info("%s", app.getAppInfo())
+
+	if app.Config.PublishEventsUrl != "" {
+		events.InitializeEventPubsub(app.Config.PublishEventsUrl)
+	}
 }
 
 func (app *SpacemeshApp) getAppInfo() string {

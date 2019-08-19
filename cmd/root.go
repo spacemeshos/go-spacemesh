@@ -52,6 +52,8 @@ func AddCommands(cmd *cobra.Command) {
 
 	cmd.PersistentFlags().IntVar(&config.GenesisActiveSet, "genesis-active-size",
 		config.GenesisActiveSet, "The active set size for the genesis flow")
+	cmd.PersistentFlags().StringVar(&config.PublishEventsUrl, "events-url",
+		config.PublishEventsUrl, "publish events on this url, if no url specified event will no be published")
 
 	/** ======================== P2P Flags ========================== **/
 
