@@ -8,13 +8,10 @@ import (
 const (
 	NewBlock channelId = 1 + iota
 	BlockValid
-	BlockInvalid
 	NewAtx
 	AtxValid
-	AtxInvalid
 	NewTx
 	TxValid
-	TxInvalid
 	RewardReceived
 )
 
