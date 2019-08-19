@@ -90,8 +90,8 @@ type NIPSTBuilder struct {
 	stop    bool
 	stopM   sync.Mutex
 	errChan chan error
-	cfgM sync.RWMutex
-	state *builderState
+	cfgM    sync.RWMutex
+	state   *builderState
 
 	log log.Log
 }

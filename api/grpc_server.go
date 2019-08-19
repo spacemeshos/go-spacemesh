@@ -206,7 +206,7 @@ func (s SpacemeshGrpcService) GetMiningStats(ctx context.Context, empty *empty.E
 	//todo: we should review if this RPC is necessary
 	log.Info("GRPC GetInitProgress msg")
 	stat, coinbase, dataDir := s.Mining.MiningStats()
-	return &pb.MiningStats{Status:int32(stat), Coinbase:coinbase, DataDir:dataDir}, nil
+	return &pb.MiningStats{Status: int32(stat), Coinbase: coinbase, DataDir: dataDir}, nil
 }
 
 func (s SpacemeshGrpcService) GetTotalAwards(ctx context.Context, empty *empty.Empty) (*pb.SimpleMessage, error) {

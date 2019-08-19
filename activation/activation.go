@@ -281,7 +281,7 @@ func (b *Builder) StartPost(rewardAddress address.Address, dataDir string, space
 }
 
 // MiningStats returns state of post init, coinbase reward account and data directory path for post commitment
-func (b *Builder) MiningStats() (int, string, string){
+func (b *Builder) MiningStats() (int, string, string) {
 	acc := b.getCoinbaseAccount()
 	b.postInitLock.RLock()
 	stats := b.initStatus
