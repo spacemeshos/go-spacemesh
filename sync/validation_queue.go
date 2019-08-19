@@ -106,6 +106,11 @@ func (vq *validationQueue) finishBlockCallback(s *Syncer, block *types.Block) fu
 			return err
 		}
 
+		//validate block's votes
+		if valid := s.validateVotes(block); valid == false {
+			return errors.New(fmt.Sprintf("validate votes failed for block %v", block.ID()))
+		}
+
 		if err := s.AddBlockWithTxs(block, txs, atxs); err != nil {
 			return err
 		}
