@@ -553,9 +553,10 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) { //i most rec
 
 			// update completeness of p
 			if _, found := ni.tComplete[p]; complete && !found {
+				ni.pBase = p
 				ni.tComplete[p] = struct{}{}
 				ni.SaveGoodPattern(p.Layer(), ni.tPattern[p])
-				ni.pBase = p
+				ni.SaveOpinion()
 				ni.Debug("found new complete and good pattern for layer %d pattern %d with %d support ", l, p.id, ni.tSupport[p])
 			}
 		}
