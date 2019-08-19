@@ -37,31 +37,11 @@ type MeshValidatorMock struct {
 	mdb *MeshDB
 }
 
-func (m *MeshValidatorMock) GetGoodPatternBlocks(layer types.LayerID) (map[types.BlockID]struct{}, error) {
-	blocks, err := m.mdb.LayerBlockIds(layer)
-	if err != nil {
-		return nil, err
-	}
-	mp := make(map[types.BlockID]struct{})
-	for _, b := range blocks {
-		res, err := m.ContextualValidity(b)
-		if err != nil {
-			continue
-		}
-		if res {
-			mp[b] = struct{}{}
-		}
-	}
-
-	return mp, nil
-}
-
 func (m *MeshValidatorMock) HandleIncomingLayer(layer *types.Layer) (types.LayerID, types.LayerID) {
 	return layer.Index() - 1, layer.Index()
 }
-func (m *MeshValidatorMock) HandleLateBlock(bl *types.Block)                     {}
-func (m *MeshValidatorMock) RegisterLayerCallback(func(id types.LayerID))        {}
-func (mlg *MeshValidatorMock) ContextualValidity(id types.BlockID) (bool, error) { return true, nil }
+func (m *MeshValidatorMock) HandleLateBlock(bl *types.Block)              {}
+func (m *MeshValidatorMock) RegisterLayerCallback(func(id types.LayerID)) {}
 
 type MockState struct{}
 
