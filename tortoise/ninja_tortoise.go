@@ -65,6 +65,7 @@ type Mesh interface {
 	LayerBlockIds(id types.LayerID) ([]types.BlockID, error)
 	ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, foo func(block *types.Block) error) error
 	SaveGoodPattern(layer types.LayerID, blks map[types.BlockID]struct{}) error
+	SaveContextualValidity(id types.BlockID, valid bool) error
 }
 
 //todo memory optimizations
@@ -561,4 +562,14 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) { //i most rec
 	}
 	ni.Info("finished layer %d pbase is %d", newlyr.Index(), ni.pBase.Layer())
 	return
+}
+
+func (ni *ninjaTortoise) SaveOpinion() {
+	for blk, vec := range ni.tVote[ni.pBase] {
+		if vec == Support {
+			ni.SaveContextualValidity(blk, true)
+		} else {
+			ni.SaveContextualValidity(blk, false)
+		}
+	}
 }

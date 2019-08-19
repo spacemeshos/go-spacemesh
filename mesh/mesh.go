@@ -208,8 +208,11 @@ func (m *Mesh) ExtractUniqueOrderedTransactions(l *types.Layer) []*Transaction {
 	txids := make(map[types.TransactionId]struct{})
 
 	for _, b := range sortedBlocks {
-		if !m.tortoise.ContextualValidity(b.ID()) {
-			m.Info("block %v not Contextualy valid", b.ID())
+		if valid, err := m.ContextualValidity(b.ID()); !valid {
+			if err != nil {
+				m.Error("could not get contextual validity for block %v", b.ID(), err)
+			}
+			m.Info("block %v not contextually valid %v ", b.ID())
 			continue
 		}
 
@@ -453,10 +456,6 @@ func (m *Mesh) AccumulateRewards(rewardLayer types.LayerID, params Config) {
 	m.ApplyRewards(types.LayerID(rewardLayer), ids, uq, bonusReward, diminishedReward)
 	//todo: should miner id be sorted in a deterministic order prior to applying rewards?
 
-}
-
-func (m *Mesh) GetContextualValidity(id types.BlockID) (bool, error) {
-	return m.getContextualValidity(id)
 }
 
 var GenesisBlock = types.Block{
