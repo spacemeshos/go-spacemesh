@@ -124,6 +124,10 @@ func (InvalidAtxEvent) getChannel() channelId {
 
 type NewTxEvent struct {
 	TxId string
+	Origin string
+	Destination string
+	Amount uint64
+	Gas uint64
 }
 
 func (NewTxEvent) getChannel() channelId {

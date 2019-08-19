@@ -258,7 +258,11 @@ func (tp *TransactionProcessor) Process(transactions mesh.Transactions, trnsBySe
 			//todo: should we abort all transaction processing if we failed this one?
 			err := tp.ApplyTransaction(trns)
 			//todo: think maybe moving these to another validation process before palying transactions.
-			events.Publish(events.NewTxEvent{TxId: trns.Hash().String()})
+			events.Publish(events.NewTxEvent{TxId: trns.Hash().String(),
+				Origin:      trns.Origin.String(),
+				Destination: trns.Recipient.String(),
+				Amount:      trns.Amount.Uint64(),
+				Gas:         trns.GasPrice.Uint64()})
 			if err != nil {
 				errors++
 				events.Publish(events.InvalidTxEvent{TxId: trns.Hash().String()})
