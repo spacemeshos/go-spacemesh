@@ -54,6 +54,12 @@ message LogicalDriveMessage {
     string logicalDrive = 1;
 }
 
+message MiningStats {
+    string dataDir = 1;
+    int32 status = 2;
+    string coinbase = 3;
+}
+
 service SpacemeshService {
     rpc Echo(SimpleMessage) returns (SimpleMessage) {
         option (google.api.http) = {
@@ -97,39 +103,15 @@ service SpacemeshService {
           body: "*"
         };
     }
-    rpc SetCommitmentSize(CommitmentSizeMessage) returns (SimpleMessage) {
-        option (google.api.http) = {
-          post: "/v1/setcommitmentsize"
-          body: "*"
-        };
-    }
-    rpc SetLogicalDrive(LogicalDriveMessage) returns (SimpleMessage) {
-        option (google.api.http) = {
-          post: "/v1/setlogicaldrive"
-          body: "*"
-        };
-    }
     rpc SetAwardsAddress(AccountId) returns (SimpleMessage) {
         option (google.api.http) = {
           post: "/v1/setawardsaddr"
           body: "*"
         };
     }
-    rpc GetInitProgress(google.protobuf.Empty) returns (SimpleMessage) {
+    rpc GetMiningStats(google.protobuf.Empty) returns (MiningStats) {
         option (google.api.http) = {
-          post: "/v1/getprogress"
-          body: "*"
-        };
-    }
-    rpc GetTotalAwards(google.protobuf.Empty) returns (SimpleMessage) {
-        option (google.api.http) = {
-          post: "/v1/gettotalawards"
-          body: "*"
-        };
-    }
-    rpc GetUpcomingAwards(google.protobuf.Empty) returns (EligibleLayers) {
-        option (google.api.http) = {
-          post: "/v1/getupcomingawards"
+          post: "/v1/stats"
           body: "*"
         };
     }

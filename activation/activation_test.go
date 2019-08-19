@@ -79,6 +79,10 @@ type NipstBuilderMock struct {
 	PostInitialized bool
 }
 
+func (np *NipstBuilderMock) GetDataDirPath() string {
+	return ""
+}
+
 func (np *NipstBuilderMock) IsPostInitialized() bool {
 	return np.PostInitialized
 }
@@ -101,6 +105,10 @@ func (np *NipstBuilderMock) BuildNIPST(challenge *common.Hash) (*types.NIPST, er
 }
 
 type NipstErrBuilderMock struct{}
+
+func (np *NipstErrBuilderMock) GetDataDirPath() string {
+	return ""
+}
 
 func (np *NipstErrBuilderMock) IsPostInitialized() bool {
 
