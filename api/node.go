@@ -23,7 +23,7 @@ type NetworkAPI interface {
 }
 
 type MiningAPI interface {
-	StartPost(address address.Address, logicalDrive string, commitmentSize uint64) error
+	StartPost(address address.Address, datadir string, space uint64) error
 	SetCoinbaseAccount(rewardAddress address.Address)
 }
 

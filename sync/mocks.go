@@ -111,6 +111,10 @@ func (*ValidatorMock) Validate(nipst *types.NIPST, expectedChallenge common.Hash
 	return nil
 }
 
+func (*ValidatorMock) VerifyPost(proof *types.PostProof, space uint64) error {
+	return nil
+}
+
 type MockTxMemPool struct{}
 
 func (MockTxMemPool) Get(id types.TransactionId) (types.AddressableSignedTransaction, error) {

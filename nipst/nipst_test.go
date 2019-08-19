@@ -12,7 +12,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 )
 
 var minerID = []byte("id")
@@ -32,25 +31,21 @@ type postProverClientMock struct{}
 // A compile time check to ensure that postProverClientMock fully implements PostProverClient.
 var _ PostProverClient = (*postProverClientMock)(nil)
 
-func (p *postProverClientMock) initialize(id []byte, timeout time.Duration) (*types.PostProof, error) {
+func (*postProverClientMock) Initialize() (*types.PostProof, error) { return &types.PostProof{}, nil }
+
+func (*postProverClientMock) Execute(challenge []byte) (*types.PostProof, error) {
 	return &types.PostProof{}, nil
 }
 
-func (p *postProverClientMock) execute(id []byte, challenge []byte, timeout time.Duration) (*types.PostProof, error) {
-	return &types.PostProof{}, nil
-}
+func (*postProverClientMock) Reset() error { return nil }
 
-func (p *postProverClientMock) SetLogger(shared.Logger) {}
+func (*postProverClientMock) IsInitialized() bool { return true }
 
-func (p *postProverClientMock) SetParams(logicalDrive string, commitmentSize uint64) {}
+func (*postProverClientMock) SetLogger(shared.Logger) {}
 
-func (p *postProverClientMock) Reset() error {
-	return nil
-}
+func (*postProverClientMock) SetParams(datadir string, space uint64) {}
 
-func (p *postProverClientMock) Initialized() bool {
-	return true
-}
+func (*postProverClientMock) Cfg() *config.Config { return &config.Config{} }
 
 type poetProvingServiceClientMock struct{}
 
@@ -88,11 +83,11 @@ func TestNIPSTBuilderWithMocks(t *testing.T) {
 
 	postProver := &postProverClientMock{}
 	poetProver := &poetProvingServiceClientMock{}
-	verifyPost := func(*types.PostProof, uint64, uint, uint) (bool, error) { return true, nil }
+	verifyPost := func(*types.PostProof, uint64, uint, uint) error { return nil }
 
 	poetDb := &poetDbMock{}
 
-	nb := newNIPSTBuilder(minerID, postCfg, postProver, poetProver,
+	nb := newNIPSTBuilder(minerID, postProver, poetProver,
 		poetDb, verifyPost, log.NewDefault(string(minerID)))
 	hash := common.BytesToHash([]byte("anton"))
 	npst, err := nb.BuildNIPST(&hash)
@@ -103,22 +98,23 @@ func TestNIPSTBuilderWithMocks(t *testing.T) {
 func TestInitializePost(t *testing.T) {
 	assert := require.New(t)
 
-	postProver := NewPostClient(&postCfg)
+	postProver := NewPostClient(&postCfg, minerID)
 	poetProver := &poetProvingServiceClientMock{}
-	verifyPost := func(*types.PostProof, uint64, uint, uint) (bool, error) { return true, nil }
+	verifyPost := func(*types.PostProof, uint64, uint, uint) error { return nil }
 
 	poetDb := &poetDbMock{}
 
-	nb := newNIPSTBuilder(minerID, postCfg, postProver, poetProver,
+	nb := newNIPSTBuilder(minerID, postProver, poetProver,
 		poetDb, verifyPost, log.NewDefault(string(minerID)))
-	drive := "/tmp/anton"
-	unitSize := 2048
-	_, err := nb.InitializePost(drive, uint64(unitSize))
+	datadir := "/tmp/anton"
+	space := uint64(2048)
+
+	postProver.SetParams(datadir, space)
+	_, err := postProver.Initialize()
 	assert.NoError(err)
-	defer func() { assert.NoError(nb.postProver.Reset()) }()
-	assert.NoError(err)
-	assert.Equal(nb.postCfg.DataDir, drive)
-	assert.Equal(nb.postCfg.SpacePerUnit, uint64(unitSize))
+	defer func() {
+		assert.NoError(postProver.Reset())
+	}()
 
 	hash := common.BytesToHash([]byte("anton"))
 	npst, err := nb.BuildNIPST(&hash)
@@ -144,7 +140,7 @@ func TestNIPSTBuilderWithClients(t *testing.T) {
 }
 
 func buildNIPST(r *require.Assertions, postCfg config.Config, nipstChallenge common.Hash, poetDb PoetDb) *types.NIPST {
-	postProver := NewPostClient(&postCfg)
+	postProver := NewPostClient(&postCfg, minerID)
 	poetProver, err := newRPCPoetHarnessClient()
 	r.NotNil(poetProver)
 	defer func() {
@@ -152,7 +148,7 @@ func buildNIPST(r *require.Assertions, postCfg config.Config, nipstChallenge com
 		r.NoError(err)
 	}()
 	r.NoError(err)
-	nb := newNIPSTBuilder(minerID, postCfg, postProver, poetProver,
+	nb := newNIPSTBuilder(minerID, postProver, poetProver,
 		poetDb, verifyPost, log.NewDefault(string(minerID)))
 	npst, err := nb.BuildNIPST(&nipstChallenge)
 	r.NoError(err)
@@ -169,7 +165,7 @@ func TestNewNIPSTBuilderNotInitialized(t *testing.T) {
 	minerIDNotInitialized := []byte("not initialized")
 	nipstChallenge := common.BytesToHash([]byte("anton"))
 
-	postProver := NewPostClient(&postCfg)
+	postProver := NewPostClient(&postCfg, minerIDNotInitialized)
 	poetProver, err := newRPCPoetHarnessClient()
 	r.NotNil(poetProver)
 	defer func() {
@@ -178,7 +174,7 @@ func TestNewNIPSTBuilderNotInitialized(t *testing.T) {
 	}()
 	r.NoError(err)
 	poetDb := &poetDbMock{}
-	nb := newNIPSTBuilder(minerIDNotInitialized, postCfg, postProver, poetProver,
+	nb := newNIPSTBuilder(minerIDNotInitialized, postProver, poetProver,
 		poetDb, verifyPost, log.NewDefault(string(minerID)))
 
 	npst, err := nb.BuildNIPST(&nipstChallenge)
@@ -186,8 +182,10 @@ func TestNewNIPSTBuilderNotInitialized(t *testing.T) {
 	r.Nil(npst)
 
 	idsToCleanup = append(idsToCleanup, minerIDNotInitialized)
-	initialProof, err := nb.InitializePost(postCfg.DataDir, postCfg.SpacePerUnit)
-	defer assert.NoError(t, nb.postProver.Reset())
+	initialProof, err := postProver.Initialize()
+	defer func() {
+		assert.NoError(t, nb.postProver.Reset())
+	}()
 	r.NoError(err)
 	r.NotNil(initialProof)
 
@@ -234,7 +232,7 @@ func TestValidator_Validate(t *testing.T) {
 }
 
 func validateNIPST(npst *types.NIPST, postCfg config.Config, nipstChallenge common.Hash, poetDb PoetDb) error {
-	v := &Validator{&postCfg, poetDb, verifyPost}
+	v := &Validator{&postCfg, poetDb}
 	return v.Validate(npst, nipstChallenge)
 }
 
@@ -247,9 +245,8 @@ func TestMain(m *testing.M) {
 }
 
 func initPost(id []byte) {
-	defTimeout := 5 * time.Second
 	idsToCleanup = append(idsToCleanup, id)
-	_, err := NewPostClient(&postCfg).initialize(id, defTimeout)
+	_, err := NewPostClient(&postCfg, id).Initialize()
 	logIfError(err)
 }
 

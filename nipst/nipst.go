@@ -9,7 +9,6 @@ import (
 	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/shared"
 	"sync"
-	"time"
 )
 
 // PostProverClient provides proving functionality for PoST.
@@ -18,27 +17,29 @@ type PostProverClient interface {
 	// to store some data, by having its storage being filled with
 	// pseudo-random data with respect to a specific id.
 	// This data is the result of a computationally-expensive operation.
-	initialize(id []byte, timeout time.Duration) (commitment *types.PostProof, err error)
+	Initialize() (commitment *types.PostProof, err error)
 
-	// execute is the phase in which the prover received a challenge,
+	// Execute is the phase in which the prover received a challenge,
 	// and proves that his data is still stored (or was recomputed).
 	// This phase can be repeated arbitrarily many times without repeating initialization;
 	// thus despite the initialization essentially serving as a proof-of-work,
 	// the amortized computational complexity can be made arbitrarily small.
-	execute(id []byte, challenge []byte, timeout time.Duration) (proof *types.PostProof, err error)
+	Execute(challenge []byte) (proof *types.PostProof, err error)
+
+	// Reset removes the initialization-phase files.
+	Reset() error
+
+	// IsInitialized indicates whether the initialization-phase has been completed.
+	IsInitialized() bool
 
 	// SetParams set the needed params for setting up post commitment in the specified logical drive and with
 	// requested commitment size.
-	SetParams(dataDir string, space uint64)
-
-	// Reset deletes.
-	Reset() error
-
-	// Initialized returns true if post has been initialized ,false otherwise.
-	Initialized() bool
+	SetParams(datadir string, space uint64)
 
 	// SetLogger sets logger for post prover.
 	SetLogger(logger shared.Logger)
+
+	Cfg() *config.Config
 }
 
 // PoetProvingServiceClient provides a gateway to a trust-less public proving
@@ -49,12 +50,8 @@ type PoetProvingServiceClient interface {
 	// submit registers a challenge in the proving service
 	// open round suited for the specified duration.
 	submit(challenge common.Hash) (*types.PoetRound, error)
-	getPoetServiceId() ([types.PoetServiceIdLength]byte, error)
-}
 
-// initialNIPST returns an initial NIPST instance to be used in the NIPST construction.
-func initialNIPST(space uint64) *types.NIPST {
-	return &types.NIPST{Space: space}
+	getPoetServiceId() ([types.PoetServiceIdLength]byte, error)
 }
 
 type builderState struct {
@@ -81,7 +78,6 @@ func (s *builderState) persist() {
 
 type NIPSTBuilder struct {
 	id         []byte
-	postCfg    config.Config
 	postProver PostProverClient
 	poetProver PoetProvingServiceClient
 	poetDb     PoetDb
@@ -101,11 +97,10 @@ type PoetDb interface {
 	GetMembershipMap(proofRef []byte) (map[common.Hash]bool, error)
 }
 
-func NewNIPSTBuilder(id []byte, postCfg config.Config, postProver PostProverClient,
+func NewNIPSTBuilder(id []byte, postProver PostProverClient,
 	poetProver PoetProvingServiceClient, poetDb PoetDb, log log.Log) *NIPSTBuilder {
 	return newNIPSTBuilder(
 		id,
-		postCfg,
 		postProver,
 		poetProver,
 		poetDb,
@@ -116,7 +111,6 @@ func NewNIPSTBuilder(id []byte, postCfg config.Config, postProver PostProverClie
 
 func newNIPSTBuilder(
 	id []byte,
-	postCfg config.Config,
 	postProver PostProverClient,
 	poetProver PoetProvingServiceClient,
 	poetDb PoetDb,
@@ -125,7 +119,6 @@ func newNIPSTBuilder(
 ) *NIPSTBuilder {
 	return &NIPSTBuilder{
 		id:         id,
-		postCfg:    postCfg,
 		postProver: postProver,
 		poetProver: poetProver,
 		poetDb:     poetDb,
@@ -134,20 +127,22 @@ func newNIPSTBuilder(
 		errChan:    make(chan error),
 		log:        log,
 		state: &builderState{
-			nipst: initialNIPST(postCfg.SpacePerUnit),
+			nipst: &types.NIPST{},
 		},
 	}
 }
 
 func (nb *NIPSTBuilder) BuildNIPST(challenge *common.Hash) (*types.NIPST, error) {
-	defTimeout := 10 * time.Second // TODO: replace temporary solution
 	nb.state.load()
 
-	if !nb.IsPostInitialized() {
+	if !nb.postProver.IsInitialized() {
 		return nil, errors.New("PoST not initialized")
 	}
 
+	cfg := nb.postProver.Cfg()
 	nipst := nb.state.nipst
+
+	nipst.Space = cfg.SpacePerUnit
 
 	// Phase 0: Submit challenge to PoET service.
 	if nb.state.PoetRound == nil {
@@ -197,17 +192,13 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *common.Hash) (*types.NIPST, error)
 	if nipst.PostProof == nil {
 		nb.log.Info("starting PoST execution (challenge: %x)", nb.state.PoetProofRef)
 
-		proof, err := nb.postProver.execute(nb.id, nb.state.PoetProofRef, defTimeout)
+		proof, err := nb.postProver.Execute(nb.state.PoetProofRef)
 		if err != nil {
 			return nil, fmt.Errorf("failed to execute PoST: %v", err)
 		}
 
-		res, err := nb.verifyPost(proof, nb.postCfg.SpacePerUnit, nb.postCfg.NumProvenLabels, nb.postCfg.Difficulty)
-		if err != nil {
+		if err := nb.verifyPost(proof, cfg.SpacePerUnit, cfg.NumProvenLabels, cfg.Difficulty); err != nil {
 			return nil, fmt.Errorf("created an invalid PoST proof: %v", err)
-		}
-		if !res {
-			return nil, fmt.Errorf("created an invalid PoST proof")
 		}
 
 		nb.log.Info("finished PoST execution (proof: %v)", proof)
@@ -219,30 +210,9 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *common.Hash) (*types.NIPST, error)
 	nb.log.Info("finished NIPST construction")
 
 	nb.state = &builderState{
-		nipst: initialNIPST(nb.postCfg.SpacePerUnit),
+		nipst: &types.NIPST{},
 	}
 	return nipst, nil
-}
-
-func (nb *NIPSTBuilder) IsPostInitialized() bool {
-	return nb.postProver.Initialized()
-}
-
-func (nb *NIPSTBuilder) InitializePost(dataDir string, space uint64) (*types.PostProof, error) {
-	defTimeout := 5 * time.Second // TODO: replace temporary solution
-
-	nb.postCfg.DataDir = dataDir
-	nb.postCfg.SpacePerUnit = space
-	nb.postProver.SetParams(dataDir, space)
-
-	commitment, err := nb.postProver.initialize(nb.id, defTimeout)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize PoST: %v", err)
-	}
-
-	nb.log.Info("finished PoST initialization (commitment: %v), space: %v", commitment, nb.postCfg.FileSize)
-
-	return commitment, nil
 }
 
 func NewNIPSTWithChallenge(challenge *common.Hash, poetRef []byte) *types.NIPST {
