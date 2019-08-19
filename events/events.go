@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	NewBlock channelId = 1 +iota
+	NewBlock channelId = 1 + iota
 	BlockValid
 	BlockInvalid
 	NewAtx
@@ -55,25 +55,25 @@ type Event interface {
 func newEventPublisher(eventUrl string) (*EventPublisher, error) {
 	p, err := newPublisher(eventUrl)
 	if err != nil {
-		return nil,err
+		return nil, err
 	}
 	return &EventPublisher{*p}, nil
 }
 
 // PublishEvent publishes the provided event on pubsub infra. It encodes messages using XDR protocol.
-func (p *EventPublisher) PublishEvent(event Event) error{
+func (p *EventPublisher) PublishEvent(event Event) error {
 	bytes, err := types.InterfaceToBytes(event)
 	if err != nil {
 		return err
 	}
-	return p.publish(event.getChannel(),bytes)
+	return p.publish(event.getChannel(), bytes)
 }
 
-func (p *EventPublisher) Close() error{
+func (p *EventPublisher) Close() error {
 	return p.sock.Close()
 }
 
-type BasicEvent struct{
+type BasicEvent struct {
 	Id byte
 }
 
@@ -98,7 +98,7 @@ func (BlockValidEvent) getChannel() channelId {
 
 type BlockInvalidEvent BlockValidEvent
 
-func (BlockInvalidEvent) getChannel() channelId{
+func (BlockInvalidEvent) getChannel() channelId {
 	return BlockInvalid
 }
 
@@ -106,19 +106,19 @@ type NewAtxEvent struct {
 	AtxId string
 }
 
-func (NewAtxEvent) getChannel() channelId{
+func (NewAtxEvent) getChannel() channelId {
 	return NewAtx
 }
 
 type ValidAtxEvent NewAtxEvent
 
-func (ValidAtxEvent) getChannel() channelId{
+func (ValidAtxEvent) getChannel() channelId {
 	return AtxValid
 }
 
 type InvalidAtxEvent NewAtxEvent
 
-func (InvalidAtxEvent) getChannel() channelId{
+func (InvalidAtxEvent) getChannel() channelId {
 	return AtxInvalid
 }
 
@@ -126,27 +126,27 @@ type NewTxEvent struct {
 	TxId string
 }
 
-func (NewTxEvent) getChannel() channelId{
+func (NewTxEvent) getChannel() channelId {
 	return NewTx
 }
 
 type ValidTxEvent NewTxEvent
 
-func (ValidTxEvent) getChannel() channelId{
+func (ValidTxEvent) getChannel() channelId {
 	return TxValid
 }
 
 type InvalidTxEvent NewTxEvent
 
-func (InvalidTxEvent) getChannel() channelId{
+func (InvalidTxEvent) getChannel() channelId {
 	return TxInvalid
 }
 
 type RewardReceivedEvent struct {
 	Coinbase string
-	Amount uint64
+	Amount   uint64
 }
 
-func (RewardReceivedEvent) getChannel() channelId{
+func (RewardReceivedEvent) getChannel() channelId {
 	return RewardReceived
 }

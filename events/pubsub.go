@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 )
+
 // channelBuffer defines the listening channel buffer size.
 const channelBuffer = 100
 
@@ -19,11 +20,11 @@ type channelId byte
 
 // Subscriber defines the struct of the receiving end of the pubsub messages.
 type Subscriber struct {
-	sock   mangos.Socket
-	output map[channelId]chan []byte
+	sock      mangos.Socket
+	output    map[channelId]chan []byte
 	allOutput chan []byte
-	getAll bool
-	chanLock sync.RWMutex
+	getAll    bool
+	chanLock  sync.RWMutex
 }
 
 // newSubscriber received url string as input on which it will register to receive messages passed by server.
@@ -58,7 +59,7 @@ func (sub *Subscriber) startListening() {
 			if err != nil {
 				if err.Error() == "connection closed" {
 					log.Warning("connection closed on pubsub reader")
-				}else {
+				} else {
 					log.Error("error on recv: %v", err)
 				}
 				return
@@ -85,7 +86,7 @@ func (sub *Subscriber) close() error {
 }
 
 // subscribe subscribes to the given topic, returns a channel on which data from the topic is received.
-func (sub *Subscriber) subscribe(topic channelId) (chan []byte ,error) {
+func (sub *Subscriber) subscribe(topic channelId) (chan []byte, error) {
 	if _, ok := sub.output[topic]; !ok {
 		sub.chanLock.Lock()
 		sub.output[topic] = make(chan []byte, channelBuffer)
@@ -102,7 +103,7 @@ func (sub *Subscriber) subscribe(topic channelId) (chan []byte ,error) {
 }
 
 // subscribe subscribes to the given topic, returns a channel on which data from the topic is received.
-func (sub *Subscriber) subscribeToAll() (chan []byte ,error) {
+func (sub *Subscriber) subscribeToAll() (chan []byte, error) {
 
 	err := sub.sock.SetOption(mangos.OptionSubscribe, []byte(""))
 	if err != nil {
@@ -130,10 +131,9 @@ func newPublisher(url string) (*Publisher, error) {
 		return nil, fmt.Errorf("can't listen on pub socket: %s", err.Error())
 	}
 	time.Sleep(time.Second)
-	p := &Publisher{sock:sock}
+	p := &Publisher{sock: sock}
 	return p, nil
 }
-
 
 func (p *Publisher) publish(topic channelId, payload []byte) error {
 	msg := append([]byte{byte(topic)}, payload...)

@@ -99,7 +99,7 @@ func (bl *BlockListener) HandleNewBlock(blk *types.Block) bool {
 		bl.With().Info("we already know this block", log.BlockId(uint64(blk.ID())))
 		return true
 	}
-	events.Publish(events.NewBlockEvent{Block: uint64(blk.Id), Atx:blk.ATXID.String(), Layer:uint64(blk.LayerIndex)})
+	events.Publish(events.NewBlockEvent{Block: uint64(blk.Id), Atx: blk.ATXID.String(), Layer: uint64(blk.LayerIndex)})
 
 	txs, atxs, err := bl.BlockSyntacticValidation(blk)
 	if err != nil {

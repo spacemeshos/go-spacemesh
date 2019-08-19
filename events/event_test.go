@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func TestNewBlockEvent(t *testing.T){
+func TestNewBlockEvent(t *testing.T) {
 	url := "tcp://localhost:56565"
 
 	eventPublisher, err := newEventPublisher(url)
@@ -26,7 +26,7 @@ func TestNewBlockEvent(t *testing.T){
 	s.startListening()
 	time.Sleep(5 * time.Second)
 
-	orig := NewBlockEvent{Layer:1, Block:234}
+	orig := NewBlockEvent{Layer: 1, Block: 234}
 	err = eventPublisher.PublishEvent(orig)
 	assert.NoError(t, err)
 
@@ -41,8 +41,7 @@ func TestNewBlockEvent(t *testing.T){
 		err := types.BytesToInterface(rec[1:], &e)
 		assert.NoError(t, err)
 
-		assert.Equal(t, orig,e)
+		assert.Equal(t, orig, e)
 	}
-
 
 }

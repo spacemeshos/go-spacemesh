@@ -73,7 +73,7 @@ func client(url string, name string) {
 	}
 }
 
-func TestWhatever(t *testing.T){
+func TestWhatever(t *testing.T) {
 	t.Skip()
 	url := "tcp://localhost:48844"
 
@@ -108,19 +108,18 @@ func TestPubSub(t *testing.T) {
 		assert.NoError(t, s.sock.Close())
 	}()
 
-	wg :=sync.WaitGroup{}
+	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
 		for i := 0; i < numOfMessages; i++ {
 			err = p.publish(topics[0], payload)
 			assert.NoError(t, err)
-			if err !=  nil {
+			if err != nil {
 				log.Error("wtf : %v", err)
 			}
 		}
 		wg.Done()
 	}()
-
 
 	msg := append([]byte{byte(topics[0])}, payload...)
 	tm := time.NewTimer(3 * time.Second)
@@ -141,8 +140,8 @@ loop:
 				log.Info(string(msg))
 				break loop
 			}
-			case <-irrelevantTopic:
-				irrelvantCounter++
+		case <-irrelevantTopic:
+			irrelvantCounter++
 		}
 	}
 	assert.Equal(t, 0, irrelvantCounter)
@@ -166,7 +165,7 @@ func TestPubSub_subscribeAll(t *testing.T) {
 	assert.NoError(t, err)
 	_, err = s.subscribe(topics[0])
 	assert.NoError(t, err)
-	out ,err := s.subscribeToAll()
+	out, err := s.subscribeToAll()
 	assert.NoError(t, err)
 	s.startListening()
 	numOfMessages := 5
@@ -179,7 +178,6 @@ func TestPubSub_subscribeAll(t *testing.T) {
 		err = p.publish(topics[1], payload)
 		assert.NoError(t, err)
 	}
-
 
 	//msg := append([]byte{byte(topics[0])}, payload...)
 	tm := time.NewTimer(3 * time.Second)
@@ -203,4 +201,3 @@ loop:
 	assert.True(t, allCounter == numOfMessages)
 	assert.True(t, counter == 0)
 }
-
