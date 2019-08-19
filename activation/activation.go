@@ -269,16 +269,21 @@ func (b *Builder) StartPost(rewardAddress address.Address, dataDir string, space
 			b.commitment, err = b.postProver.Execute(shared.ZeroChallenge)
 			if err != nil {
 				errChan <- err
+				atomic.StoreInt32(&b.initStatus, InitIdle)
+				b.log.Error("PoST execution failure: %v", err)
 				return
 			}
 		} else {
 			b.commitment, err = b.postProver.Initialize()
 			if err != nil {
 				errChan <- err
+				atomic.StoreInt32(&b.initStatus, InitIdle)
+				b.log.Error("PoST initialization failure: %v", err)
 				return
 			}
 		}
 
+		b.log.Info("PoST initialization completed")
 		atomic.StoreInt32(&b.initStatus, InitDone)
 	}()
 
@@ -287,8 +292,6 @@ func (b *Builder) StartPost(rewardAddress address.Address, dataDir string, space
 	case <-time.After(100 * time.Millisecond):
 		return nil
 	case err := <-errChan:
-		b.log.Error(err.Error())
-		atomic.StoreInt32(&b.initStatus, InitIdle)
 		return err
 	}
 }
