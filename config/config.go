@@ -90,6 +90,8 @@ type BaseConfig struct {
 
 	GenesisActiveSet int `mapstructure:"genesis-active-size"` // the active set size for genesis
 
+	SyncRequestTimeout int `mapstructure:"sync-request-timeout"` // the timeout for direct request in the sync
+
 	StartMining bool `mapstructure:"start-mining"`
 }
 

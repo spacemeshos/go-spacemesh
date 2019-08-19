@@ -55,6 +55,9 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().IntVar(&config.GenesisActiveSet, "genesis-active-size",
 		config.GenesisActiveSet, "The active set size for the genesis flow")
 
+	cmd.PersistentFlags().IntVar(&config.SyncRequestTimeout, "sync-request-timeout",
+		2000, "the timeout in ms for direct requests in the sync")
+
 	/** ======================== P2P Flags ========================== **/
 
 	cmd.PersistentFlags().IntVar(&config.P2P.TCPPort, "tcp-port",
