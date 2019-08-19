@@ -65,13 +65,13 @@ func (db *ActivationDb) ProcessAtx(atx *types.ActivationTx) {
 	}
 }
 
-func (db *ActivationDb) createTraversalActiveSetCounterFunc(countedAtxs map[string]types.AtxId, penalties map[string]struct{}, layersPerEpoch uint16, epoch types.EpochId) func(b *types.Block) error {
+func (db *ActivationDb) createTraversalActiveSetCounterFunc(countedAtxs map[string]types.AtxId, penalties map[string]struct{}, layersPerEpoch uint16, epoch types.EpochId) func(b *types.Block) (bool, error) {
 
-	traversalFunc := func(b *types.Block) error {
+	traversalFunc := func(b *types.Block) (stop bool, err error) {
 
 		// don't count ATXs in blocks that are not destined to the prev epoch
 		if b.LayerIndex.GetEpoch(db.LayersPerEpoch) != epoch-1 {
-			return nil
+			return false, nil
 		}
 
 		// count unique ATXs
@@ -79,7 +79,7 @@ func (db *ActivationDb) createTraversalActiveSetCounterFunc(countedAtxs map[stri
 			atx, err := db.GetAtx(id)
 			if err != nil {
 				log.Panic("error fetching atx %v from database -- inconsistent state", id.ShortId()) // TODO: handle inconsistent state
-				return fmt.Errorf("error fetching atx %v from database -- inconsistent state", id.ShortId())
+				return false, fmt.Errorf("error fetching atx %v from database -- inconsistent state", id.ShortId())
 			}
 
 			// make sure the target epoch is our epoch
@@ -113,7 +113,7 @@ func (db *ActivationDb) createTraversalActiveSetCounterFunc(countedAtxs map[stri
 			countedAtxs[atx.NodeId.Key] = id
 		}
 
-		return nil
+		return false, nil
 	}
 
 	return traversalFunc
