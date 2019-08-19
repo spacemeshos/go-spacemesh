@@ -115,11 +115,11 @@ func (ValidAtxEvent) getChannel() channelId {
 }
 
 type NewTxEvent struct {
-	TxId string
-	Origin string
+	TxId        string
+	Origin      string
 	Destination string
-	Amount uint64
-	Gas uint64
+	Amount      uint64
+	Gas         uint64
 }
 
 func (NewTxEvent) getChannel() channelId {
@@ -127,14 +127,13 @@ func (NewTxEvent) getChannel() channelId {
 }
 
 type ValidTxEvent struct {
-	TxId string
+	TxId  string
 	Valid bool
 }
 
 func (ValidTxEvent) getChannel() channelId {
 	return TxValid
 }
-
 
 type RewardReceivedEvent struct {
 	Coinbase string
