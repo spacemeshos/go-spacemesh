@@ -23,7 +23,6 @@ type Subscriber struct {
 	sock      mangos.Socket
 	output    map[channelId]chan []byte
 	allOutput chan []byte
-	getAll    bool
 	chanLock  sync.RWMutex
 }
 
@@ -44,7 +43,6 @@ func newSubscriber(url string) (*Subscriber, error) {
 		socket,
 		make(map[channelId]chan []byte),
 		nil,
-		false,
 		sync.RWMutex{},
 	}, nil
 }
