@@ -6,6 +6,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/crypto/sha3"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/rlp"
 	"github.com/spacemeshos/go-spacemesh/types"
@@ -209,7 +210,9 @@ func (m *Mesh) ExtractUniqueOrderedTransactions(l *types.Layer) []*Transaction {
 	txids := make(map[types.TransactionId]struct{})
 
 	for _, b := range sortedBlocks {
-		if !m.tortoise.ContextualValidity(b.ID()) {
+		isBlockValid := m.tortoise.ContextualValidity(b.ID())
+		events.Publish(events.BlockValidEvent{Block: uint64(b.ID()), Valid: isBlockValid})
+		if !isBlockValid {
 			m.Info("block %v not Contextualy valid", b)
 			continue
 		}
@@ -299,6 +302,7 @@ func (m *Mesh) AddBlock(blk *types.Block) error {
 func (m *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.AddressableSignedTransaction, atxs []*types.ActivationTx) error {
 	m.Debug("add block %d", blk.ID())
 
+	events.Publish(events.NewBlockEvent{Block: uint64(blk.Id), Atx: blk.ATXID.String(), Layer: uint64(blk.LayerIndex)})
 	atxids := make([]types.AtxId, 0, len(atxs))
 	for _, t := range atxs {
 		//todo this should return an error

@@ -16,14 +16,14 @@ func TestNewBlockEvent(t *testing.T) {
 		assert.NoError(t, eventPublisher.Close())
 	}()
 
-	s, err := newSubscriber(url)
+	s, err := NewSubscriber(url)
 	assert.NoError(t, err)
 	defer func() {
-		assert.NoError(t, s.close())
+		assert.NoError(t, s.Close())
 	}()
-	c, err := s.subscribe(NewBlock)
+	c, err := s.Subscribe(NewBlock)
 	assert.NoError(t, err)
-	s.startListening()
+	s.StartListening()
 	time.Sleep(5 * time.Second)
 
 	orig := NewBlockEvent{Layer: 1, Block: 234}

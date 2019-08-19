@@ -26,8 +26,8 @@ type Subscriber struct {
 	chanLock  sync.RWMutex
 }
 
-// newSubscriber received url string as input on which it will register to receive messages passed by server.
-func newSubscriber(url string) (*Subscriber, error) {
+// NewSubscriber received url string as input on which it will register to receive messages passed by server.
+func NewSubscriber(url string) (*Subscriber, error) {
 	socket, err := sub.NewSocket()
 	if err != nil {
 		return nil, err
@@ -47,9 +47,9 @@ func newSubscriber(url string) (*Subscriber, error) {
 	}, nil
 }
 
-// startListening runs in a go routine and listens to all channels this subscriber is registered to. it then passes the
+// StartListening runs in a go routine and listens to all channels this subscriber is registered to. it then passes the
 // messages received to the appropriate reader channel.
-func (sub *Subscriber) startListening() {
+func (sub *Subscriber) StartListening() {
 	go func() {
 		for {
 			data, err := sub.sock.Recv()
@@ -78,13 +78,13 @@ func (sub *Subscriber) startListening() {
 	}()
 }
 
-// close closes the socket which in turn will close the listener func
-func (sub *Subscriber) close() error {
+// Close closes the socket which in turn will Close the listener func
+func (sub *Subscriber) Close() error {
 	return sub.sock.Close()
 }
 
-// subscribe subscribes to the given topic, returns a channel on which data from the topic is received.
-func (sub *Subscriber) subscribe(topic channelId) (chan []byte, error) {
+// Subscribe subscribes to the given topic, returns a channel on which data from the topic is received.
+func (sub *Subscriber) Subscribe(topic channelId) (chan []byte, error) {
 	if _, ok := sub.output[topic]; !ok {
 		sub.chanLock.Lock()
 		sub.output[topic] = make(chan []byte, channelBuffer)
@@ -100,8 +100,8 @@ func (sub *Subscriber) subscribe(topic channelId) (chan []byte, error) {
 	return sub.output[topic], err
 }
 
-// subscribe subscribes to the given topic, returns a channel on which data from the topic is received.
-func (sub *Subscriber) subscribeToAll() (chan []byte, error) {
+// Subscribe subscribes to the given topic, returns a channel on which data from the topic is received.
+func (sub *Subscriber) SubscribeToAll() (chan []byte, error) {
 
 	err := sub.sock.SetOption(mangos.OptionSubscribe, []byte(""))
 	if err != nil {

@@ -265,11 +265,9 @@ func (tp *TransactionProcessor) Process(transactions mesh.Transactions, trnsBySe
 				Gas:         trns.GasPrice.Uint64()})
 			if err != nil {
 				errors++
-				events.Publish(events.InvalidTxEvent{TxId: trns.Hash().String()})
 				tp.Log.Error("transaction aborted: %v", err)
-			} else {
-				events.Publish(events.ValidTxEvent{TxId: trns.Hash().String()})
 			}
+			events.Publish(events.ValidTxEvent{TxId: trns.Hash().String(), Valid: err == nil})
 		}
 	}
 	return errors

@@ -90,16 +90,11 @@ func (NewBlockEvent) getChannel() channelId {
 
 type BlockValidEvent struct {
 	Block uint64
+	Valid bool
 }
 
 func (BlockValidEvent) getChannel() channelId {
 	return BlockValid
-}
-
-type BlockInvalidEvent BlockValidEvent
-
-func (BlockInvalidEvent) getChannel() channelId {
-	return BlockInvalid
 }
 
 type NewAtxEvent struct {
@@ -110,16 +105,13 @@ func (NewAtxEvent) getChannel() channelId {
 	return NewAtx
 }
 
-type ValidAtxEvent NewAtxEvent
+type ValidAtxEvent struct {
+	AtxId string
+	Valid bool
+}
 
 func (ValidAtxEvent) getChannel() channelId {
 	return AtxValid
-}
-
-type InvalidAtxEvent NewAtxEvent
-
-func (InvalidAtxEvent) getChannel() channelId {
-	return AtxInvalid
 }
 
 type NewTxEvent struct {
@@ -134,17 +126,15 @@ func (NewTxEvent) getChannel() channelId {
 	return NewTx
 }
 
-type ValidTxEvent NewTxEvent
+type ValidTxEvent struct {
+	TxId string
+	Valid bool
+}
 
 func (ValidTxEvent) getChannel() channelId {
 	return TxValid
 }
 
-type InvalidTxEvent NewTxEvent
-
-func (InvalidTxEvent) getChannel() channelId {
-	return TxInvalid
-}
 
 type RewardReceivedEvent struct {
 	Coinbase string

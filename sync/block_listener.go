@@ -2,7 +2,6 @@ package sync
 
 import (
 	"github.com/spacemeshos/go-spacemesh/config"
-	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -99,15 +98,12 @@ func (bl *BlockListener) HandleNewBlock(blk *types.Block) bool {
 		bl.With().Info("we already know this block", log.BlockId(uint64(blk.ID())))
 		return true
 	}
-	events.Publish(events.NewBlockEvent{Block: uint64(blk.Id), Atx: blk.ATXID.String(), Layer: uint64(blk.LayerIndex)})
 
 	txs, atxs, err := bl.BlockSyntacticValidation(blk)
 	if err != nil {
 		bl.With().Error("failed to validate block", log.BlockId(uint64(blk.ID())), log.Err(err))
-		events.Publish(events.BlockInvalidEvent{Block: uint64(blk.Id)})
 		return false
 	}
-	events.Publish(events.BlockValidEvent{Block: uint64(blk.Id)})
 
 	if err := bl.AddBlockWithTxs(blk, txs, atxs); err != nil {
 		bl.With().Error("failed to add block to database", log.BlockId(uint64(blk.ID())), log.Err(err))

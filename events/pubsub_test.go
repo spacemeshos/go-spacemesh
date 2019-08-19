@@ -63,7 +63,7 @@ func client(url string, name string) {
 	// Empty byte array effectively subscribes to everything
 	err = sock.SetOption(mangos.OptionSubscribe, []byte(""))
 	if err != nil {
-		die("cannot subscribe: %s", err.Error())
+		die("cannot Subscribe: %s", err.Error())
 	}
 	for {
 		if msg, err = sock.Recv(); err != nil {
@@ -95,13 +95,13 @@ func TestPubSub(t *testing.T) {
 	}()
 
 	payload := []byte("anton2")
-	s, err := newSubscriber(url)
+	s, err := NewSubscriber(url)
 	assert.NoError(t, err)
-	_, err = s.subscribe(topics[0])
+	_, err = s.Subscribe(topics[0])
 	assert.NoError(t, err)
-	irrelevantTopic, err := s.subscribe(topics[1])
+	irrelevantTopic, err := s.Subscribe(topics[1])
 	assert.NoError(t, err)
-	s.startListening()
+	s.StartListening()
 	numOfMessages := 5
 	time.Sleep(2 * time.Second)
 	defer func() {
@@ -161,13 +161,13 @@ func TestPubSub_subscribeAll(t *testing.T) {
 	}()
 
 	payload := []byte("anton2")
-	s, err := newSubscriber(url)
+	s, err := NewSubscriber(url)
 	assert.NoError(t, err)
-	_, err = s.subscribe(topics[0])
+	_, err = s.Subscribe(topics[0])
 	assert.NoError(t, err)
-	out, err := s.subscribeToAll()
+	out, err := s.SubscribeToAll()
 	assert.NoError(t, err)
-	s.startListening()
+	s.StartListening()
 	numOfMessages := 5
 	time.Sleep(2 * time.Second)
 	defer func() {
