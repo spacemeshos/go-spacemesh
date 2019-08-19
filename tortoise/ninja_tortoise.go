@@ -65,6 +65,7 @@ type Mesh interface {
 	LayerBlockIds(id types.LayerID) ([]types.BlockID, error)
 	ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, foo func(block *types.Block) (bool, error)) error
 	SaveGoodPattern(layer types.LayerID, blks map[types.BlockID]struct{}) error
+	SaveContextualValidity(id types.BlockID, valid bool) error
 }
 
 //todo memory optimizations
@@ -552,13 +553,24 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) { //i most rec
 
 			// update completeness of p
 			if _, found := ni.tComplete[p]; complete && !found {
+				ni.pBase = p
 				ni.tComplete[p] = struct{}{}
 				ni.SaveGoodPattern(p.Layer(), ni.tPattern[p])
-				ni.pBase = p
+				ni.SaveOpinion()
 				ni.Debug("found new complete and good pattern for layer %d pattern %d with %d support ", l, p.id, ni.tSupport[p])
 			}
 		}
 	}
 	ni.Info("finished layer %d pbase is %d", newlyr.Index(), ni.pBase.Layer())
 	return
+}
+
+func (ni *ninjaTortoise) SaveOpinion() {
+	for blk, vec := range ni.tVote[ni.pBase] {
+		if vec == Support {
+			ni.SaveContextualValidity(blk, true)
+		} else {
+			ni.SaveContextualValidity(blk, false)
+		}
+	}
 }
