@@ -197,9 +197,9 @@ func (m *MeshDB) getMiniBlockBytes(id types.BlockID) ([]byte, error) {
 func (m *MeshDB) ContextualValidity(id types.BlockID) (bool, error) {
 	b, err := m.contextualValidity.Get(id.ToBytes())
 	if err != nil {
-		return false, nil
+		return false, err
 	}
-	return b[0] == 1, err //bytes to bool
+	return b[0] == 1, nil //bytes to bool
 }
 
 func (m *MeshDB) SaveContextualValidity(id types.BlockID, valid bool) error {

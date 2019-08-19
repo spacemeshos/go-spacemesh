@@ -26,7 +26,6 @@ var FALSE = []byte{0}
 type MeshValidator interface {
 	HandleIncomingLayer(layer *types.Layer) (types.LayerID, types.LayerID)
 	HandleLateBlock(bl *types.Block)
-	ContextualValidity(id types.BlockID) bool
 }
 
 type TxProcessor interface {

@@ -14,6 +14,25 @@ import (
 	"time"
 )
 
+type ContextualValidityMock struct {
+}
+
+func (m *ContextualValidityMock) Put(key, value []byte) error {
+	return nil
+}
+
+func (m *ContextualValidityMock) Get(key []byte) (value []byte, err error) {
+	return TRUE, nil
+}
+
+func (m *ContextualValidityMock) Delete(key []byte) error {
+	return nil
+}
+
+func (m *ContextualValidityMock) Close() {
+
+}
+
 type MeshValidatorMock struct {
 	mdb *MeshDB
 }
@@ -25,7 +44,7 @@ func (m *MeshValidatorMock) GetGoodPatternBlocks(layer types.LayerID) (map[types
 	}
 	mp := make(map[types.BlockID]struct{})
 	for _, b := range blocks {
-		res, err := m.mdb.getContextualValidity(b)
+		res, err := m.ContextualValidity(b)
 		if err != nil {
 			continue
 		}
@@ -40,9 +59,9 @@ func (m *MeshValidatorMock) GetGoodPatternBlocks(layer types.LayerID) (map[types
 func (m *MeshValidatorMock) HandleIncomingLayer(layer *types.Layer) (types.LayerID, types.LayerID) {
 	return layer.Index() - 1, layer.Index()
 }
-func (m *MeshValidatorMock) HandleLateBlock(bl *types.Block)              {}
-func (m *MeshValidatorMock) RegisterLayerCallback(func(id types.LayerID)) {}
-func (mlg *MeshValidatorMock) ContextualValidity(id types.BlockID) bool   { return true }
+func (m *MeshValidatorMock) HandleLateBlock(bl *types.Block)                     {}
+func (m *MeshValidatorMock) RegisterLayerCallback(func(id types.LayerID))        {}
+func (mlg *MeshValidatorMock) ContextualValidity(id types.BlockID) (bool, error) { return true, nil }
 
 type MockState struct{}
 
