@@ -133,7 +133,9 @@ func (m *MeshDB) LayerBlockIds(index types.LayerID) ([]types.BlockID, error) {
 	return blockids, nil
 }
 
-func (m *MeshDB) ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) error) error {
+// The block handler func should return two values - a bool indicating whether or not we should stop traversing after the current block (happy flow)
+// and an error indicating that an error occurred while handling the block, the traversing will stop in that case as well (error flow)
+func (m *MeshDB) ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) (bool, error)) error {
 	blocksToVisit := list.New()
 	for id := range view {
 		blocksToVisit.PushBack(id)
@@ -151,8 +153,14 @@ func (m *MeshDB) ForBlockInView(view map[types.BlockID]struct{}, layer types.Lay
 		}
 
 		//execute handler
-		if err := blockHandler(block); err != nil {
+		stop, err := blockHandler(block)
+		if err != nil {
 			return err
+		}
+
+		if stop {
+			m.Log.With().Debug("ForBlockInView stopped", log.BlockId(uint64(block.ID())))
+			break
 		}
 
 		//stop condition: referenced blocks must be in lower layers, so we don't traverse them

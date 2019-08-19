@@ -33,7 +33,7 @@ import (
 	"time"
 )
 
-var conf = Configuration{1000, 1, 300, 500 * time.Millisecond}
+var conf = Configuration{1000, 1, 300, 500 * time.Millisecond, 5}
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
