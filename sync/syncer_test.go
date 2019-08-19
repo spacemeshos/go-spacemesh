@@ -83,7 +83,6 @@ func SyncMockFactory(number int, conf Configuration, name string, dbType string,
 	str := "2018-11-12T11:45:26.371Z"
 	start, _ := time.Parse(layout, str)
 	ts := timesync.NewTicker(MockTimer{}, tick, start)
-	tk := ts.Subscribe()
 	for i := 0; i < number; i++ {
 		net := sim.NewNode()
 		name := fmt.Sprintf(name+"_%d", i)
@@ -91,7 +90,7 @@ func SyncMockFactory(number int, conf Configuration, name string, dbType string,
 		blockValidator := BlockEligibilityValidatorMock{}
 		txpool := miner.NewTypesTransactionIdMemPool()
 		atxpool := miner.NewTypesAtxIdMemPool()
-		sync := NewSync(net, getMesh(dbType, Path+name+"_"+time.Now().String()), txpool, atxpool, mockTxProcessor{}, blockValidator, poetDb(), conf, tk, 0, l)
+		sync := NewSync(net, getMesh(dbType, Path+name+"_"+time.Now().String()), txpool, atxpool, mockTxProcessor{}, blockValidator, poetDb(), conf, ts, 0, l)
 		ts.StartNotifying()
 		nodes = append(nodes, sync)
 		p2ps = append(p2ps, net)
@@ -471,6 +470,9 @@ func TestSyncProtocol_SyncNodes(t *testing.T) {
 	syncObj2.AddBlockWithTxs(block9, []*types.AddressableSignedTransaction{tx7, tx8}, []*types.ActivationTx{})
 	syncObj2.AddBlockWithTxs(block10, []*types.AddressableSignedTransaction{tx7, tx8}, []*types.ActivationTx{})
 
+	syncObj1.Start()
+	syncObj2.Start()
+
 	timeout := time.After(3 * 60 * time.Second)
 	syncObj3.SetLatestLayer(6)
 	syncObj3.Start()
@@ -487,6 +489,8 @@ loop:
 
 				t.Log("done!")
 				break loop
+			} else {
+				fmt.Println("safdsaf  ", syncObj3.ValidatedLayer())
 			}
 			time.Sleep(100 * time.Millisecond)
 		}
@@ -564,6 +568,8 @@ func syncTest(dpType string, t *testing.T) {
 	syncObj1.AddBlockWithTxs(block9, []*types.AddressableSignedTransaction{tx7, tx8}, []*types.ActivationTx{})
 	syncObj1.AddBlockWithTxs(block10, []*types.AddressableSignedTransaction{tx7, tx8}, []*types.ActivationTx{})
 
+	syncObj1.Start()
+
 	syncObj2.Start()
 	syncObj2.SetLatestLayer(5)
 	syncObj3.Start()
@@ -629,13 +635,12 @@ func Test_TwoNodes_SyncIntegrationSuite(t *testing.T) {
 	str := "2018-11-12T11:45:26.371Z"
 	start, _ := time.Parse(layout, str)
 	ts := timesync.NewTicker(MockTimer{}, tick, start)
-	tk := ts.Subscribe()
 	sis.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
 		l := log.New(fmt.Sprintf("%s_%d", sis.name, atomic.LoadUint32(&i)), "", "")
 		msh := getMesh(memoryDB, fmt.Sprintf("%s_%s", sis.name, time.Now()))
 		blockValidator := BlockEligibilityValidatorMock{}
 		poetDb := activation.NewPoetDb(database.NewMemDatabase(), l.WithName("poetDb"))
-		sync := NewSync(s, msh, miner.NewTypesTransactionIdMemPool(), miner.NewTypesAtxIdMemPool(), mockTxProcessor{}, blockValidator, poetDb, conf, tk, 0, l)
+		sync := NewSync(s, msh, miner.NewTypesTransactionIdMemPool(), miner.NewTypesAtxIdMemPool(), mockTxProcessor{}, blockValidator, poetDb, conf, ts, 0, l)
 		sis.syncers = append(sis.syncers, sync)
 		ts.StartNotifying()
 		atomic.AddUint32(&i, 1)
@@ -745,13 +750,12 @@ func Test_Multiple_SyncIntegrationSuite(t *testing.T) {
 	str := "2018-11-12T11:45:26.371Z"
 	start, _ := time.Parse(layout, str)
 	ts := timesync.NewTicker(MockTimer{}, tick, start)
-	tk := ts.Subscribe()
 	sis.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
 		l := log.New(fmt.Sprintf("%s_%d", sis.name, atomic.LoadUint32(&i)), "", "")
 		msh := getMesh(memoryDB, fmt.Sprintf("%s_%d", sis.name, atomic.LoadUint32(&i)))
 		blockValidator := BlockEligibilityValidatorMock{}
 		poetDb := activation.NewPoetDb(database.NewMemDatabase(), l.WithName("poetDb"))
-		sync := NewSync(s, msh, miner.NewTypesTransactionIdMemPool(), miner.NewTypesAtxIdMemPool(), mockTxProcessor{}, blockValidator, poetDb, conf, tk, 0, l)
+		sync := NewSync(s, msh, miner.NewTypesTransactionIdMemPool(), miner.NewTypesAtxIdMemPool(), mockTxProcessor{}, blockValidator, poetDb, conf, ts, 0, l)
 		ts.StartNotifying()
 		sis.syncers = append(sis.syncers, sync)
 		atomic.AddUint32(&i, 1)

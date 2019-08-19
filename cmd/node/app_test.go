@@ -112,6 +112,7 @@ func (suite *AppTestSuite) initSingleInstance(i int, genesisTime string, rng *am
 	smApp.Config.HareEligibility.ConfidenceParam = 3
 	smApp.Config.HareEligibility.EpochOffset = 0
 	smApp.Config.StartMining = true
+	smApp.Config.SyncRequestTimeout = 2000
 
 	edSgn := signing.NewEdSigner()
 	pub := edSgn.PublicKey()

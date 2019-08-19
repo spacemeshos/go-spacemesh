@@ -94,6 +94,28 @@ func (mockTxProcessor) ValidateTransactionSignature(tx *types.SerializableSigned
 	return address.HexToAddress("0xFFFF"), nil
 }
 
+type mockClock struct {
+	ch    map[timesync.LayerTimer]int
+	first timesync.LayerTimer
+}
+
+func (c *mockClock) Subscribe() timesync.LayerTimer {
+	if c.ch == nil {
+		c.ch = make(map[timesync.LayerTimer]int)
+	}
+	newCh := make(chan types.LayerID, 1)
+	c.ch[newCh] = len(c.ch)
+	if c.first == nil {
+		c.first = newCh
+	}
+
+	return newCh
+}
+
+func (c *mockClock) Unsubscribe(timer timesync.LayerTimer) {
+	delete(c.ch, timer)
+}
+
 func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	// start p2p services
 	lg := log.New("sync_test", "", "")
@@ -141,9 +163,9 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	defer msh.Close()
 	msh.AddBlock(&mesh.GenesisBlock)
 
-	ch := make(chan types.LayerID, 1)
-	app.sync = sync.NewSync(swarm, msh, txpool, atxpool, mockTxProcessor{}, sync.BlockEligibilityValidatorMock{}, poetDb, conf, ch, 0, lg.WithName("sync"))
-	ch <- types.LayerID(expectedLayers)
+	clock := &mockClock{}
+	app.sync = sync.NewSync(swarm, msh, txpool, atxpool, mockTxProcessor{}, sync.BlockEligibilityValidatorMock{}, poetDb, conf, &mockClock{}, 0, lg.WithName("sync"))
+	clock.first <- types.LayerID(expectedLayers)
 	if err = swarm.Start(); err != nil {
 		log.Panic("error starting p2p err=%v", err)
 	}
@@ -165,7 +187,7 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	for app.sync.ValidatedLayer() < types.LayerID(expectedLayers) {
 		lg.Info("sleep for %v sec", 30)
 		time.Sleep(30 * time.Second)
-		ch <- types.LayerID(expectedLayers + 1)
+		clock.first <- types.LayerID(expectedLayers + 1)
 	}
 
 	lg.Info("%v verified layers %v", app.BaseApp.Config.P2P.NodeID, app.sync.ValidatedLayer())
