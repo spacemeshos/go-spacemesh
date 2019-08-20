@@ -234,7 +234,7 @@ func (s *Syncer) Synchronise() {
 		return
 	}
 	if s.WeaklySynced() {
-		s.Info("Going to validate layer %v", currentSyncLayer)
+		s.Info("Node is synced. Going to validate layer %v", currentSyncLayer)
 
 		lyr, err := s.GetLayer(types.LayerID(currentSyncLayer))
 		if err != nil {
@@ -274,7 +274,6 @@ func (s *Syncer) Synchronise() {
 	// assumed to be weakly synced here
 	// just get the layers and validate
 
-	currentSyncLayer++
 	lyr, err := s.GetLayer(types.LayerID(currentSyncLayer))
 	if err != nil {
 		s.With().Error("failed getting layer even though IsSynced is true", log.Err(err))
