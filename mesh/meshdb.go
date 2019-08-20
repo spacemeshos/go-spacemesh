@@ -358,18 +358,28 @@ func (m *MeshDB) GetGoodPattern(layer types.LayerID) (map[types.BlockID]struct{}
 		return mp, nil
 	}
 
-	tBytes, err := m.patterns.Get(layer.ToBytes())
+	blks, err := m.LayerBlocks(layer)
 	if err != nil {
-		return nil, fmt.Errorf("could not find good pattern for layer %v %v", layer, err)
+		return nil, err
 	}
 
-	var blkSlice map[types.BlockID]struct{}
-	err = types.BytesToInterface(tBytes, &blkSlice)
-	if err != nil {
-		return nil, fmt.Errorf("could not desirialize good pattern for layer %v %v", layer, err)
+	var validBlks map[types.BlockID]struct{}
+
+	for _, b := range blks {
+		valid, err := m.ContextualValidity(b.ID())
+
+		if err != nil {
+			m.Error("could not get contextual validity for block %v", b.ID(), err)
+		}
+
+		if !valid {
+			continue
+		}
+
+		validBlks[b.ID()] = struct{}{}
 	}
 
-	return blkSlice, nil
+	return validBlks, nil
 }
 
 func (m *MeshDB) SaveGoodPattern(layer types.LayerID, blks map[types.BlockID]struct{}) error {
