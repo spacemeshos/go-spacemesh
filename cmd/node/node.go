@@ -359,7 +359,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 
 	msh := mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, txpool, atxpool, processor, lg.WithName("mesh")) //todo: what to do with the logger?
 
-	conf := sync.Configuration{Concurrency: 4, LayerSize: int(layerSize), LayersPerEpoch: layersPerEpoch, RequestTimeout: time.Duration(app.Config.SyncRequestTimeout) * time.Millisecond}
+	conf := sync.Configuration{Concurrency: 4, LayerSize: int(layerSize), LayersPerEpoch: layersPerEpoch, RequestTimeout: time.Duration(app.Config.SyncRequestTimeout) * time.Millisecond, Hdist: app.Config.Hdist}
 
 	syncer := sync.NewSync(swarm, msh, txpool, atxpool, processor, eValidator, poetDb, conf, clock, clock.GetCurrentLayer(), lg.WithName("sync"))
 	blockOracle := oracle.NewMinerBlockOracle(layerSize, uint32(app.Config.GenesisActiveSet), uint16(layersPerEpoch), atxdb, beaconProvider, vrfSigner, nodeID, syncer.WeaklySynced, lg.WithName("blockOracle"))
