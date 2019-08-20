@@ -292,7 +292,7 @@ func newBlockWithEligibility(layerID types.LayerID, nodeID types.NodeId, atxID t
 
 func TestBlockEligibility_calc(t *testing.T) {
 	r := require.New(t)
-	atxH := types.NewActivationTxWithChallenge(types.NIPSTChallenge{PubLayerIdx: 0}, address.Address{}, 1, nil, nil)
+	atxH := types.NewActivationTxWithChallenge(types.NIPSTChallenge{PubLayerIdx: 0}, address.Address{}, 1, nil, nil, nil)
 	atxH.ActiveSetSize = 10
 	atxDb := &mockAtxDB{atxH: &atxH.ActivationTxHeader}
 	genSetSize := uint32(0)
