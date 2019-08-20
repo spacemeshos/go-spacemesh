@@ -363,7 +363,7 @@ func (m *MeshDB) GetGoodPattern(layer types.LayerID) (map[types.BlockID]struct{}
 		return nil, err
 	}
 
-	var validBlks map[types.BlockID]struct{}
+	validBlks := make(map[types.BlockID]struct{})
 
 	for _, b := range blks {
 		valid, err := m.ContextualValidity(b.ID())
