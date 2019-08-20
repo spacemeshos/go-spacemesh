@@ -348,3 +348,35 @@ def query_new_iteration(indx, ns):
 
 def query_mem_usage(indx, ns):
     return query_message(indx, ns, ns, {'M': 'json_mem_data'}, False)
+
+
+
+def message_propagation(deployment, fields):
+    logs = query_message(current_index, deployment, deployment, fields, False)
+    srt = sorted(logs,key=lambda x: datetime.strptime(x.T, "%Y-%m-%dT%H:%M:%S.%fZ"))
+    if len(srt) > 0:
+        t1 = datetime.strptime(srt[0].T, "%Y-%m-%dT%H:%M:%S.%fZ")
+        t2 = datetime.strptime(srt[len(srt) - 1].T, "%Y-%m-%dT%H:%M:%S.%fZ")
+        diff = t2 - t1
+        print(diff)
+        return diff
+
+
+def max_propagation_time(deployment, fields, special_field):
+    logs = query_message(current_index, deployment, deployment, fields, False)
+    checked = set()
+    max_propagation = None
+    max_msg = None
+    for x in logs:
+        if x[special_field] in checked:
+            continue
+        checked.add(x[special_field])
+        newfields = fields.copy()
+        newfields[special_field] = x[special_field]
+        prop = message_propagation(deployment, newfields)
+        print("--")
+        if prop is not None and (max_propagation is None or prop > max_propagation):
+            max_propagation = prop
+            max_msg = newfields[special_field]
+    print(max_propagation)
+    print(max_msg)
