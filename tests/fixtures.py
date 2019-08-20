@@ -78,14 +78,16 @@ def set_namespace(request, session_id, load_config):
         v1.create_namespace(body)
 
     def fin():
-
         # On teardown we wish to report on pods that were restarted by k8s during the test
         restarted_pods = pod.check_for_restarted_pods(testconfig['namespace'])
         if restarted_pods:
             print('\n\nAttention!!! The following pods were restarted during test: {0}\n\n'.format(restarted_pods))
 
-        print("\nDeleting test namespace: {0}".format(testconfig['namespace']))
-        v1.delete_namespace(name=testconfig['namespace'], body=client.V1DeleteOptions())
+        if hasattr(request, 'param') and request.param == 'doNotDeleteNameSpace':
+            print("\nDo not delete namespace: {0}".format(testconfig['namespace']))
+        else:
+            print("\nDeleting test namespace: {0}".format(testconfig['namespace']))
+            v1.delete_namespace(name=testconfig['namespace'], body=client.V1DeleteOptions())
 
     request.addfinalizer(fin)
     return _setup_namespace()
