@@ -68,9 +68,13 @@ func (c *PostClient) Reset() error {
 	return c.initializer.Reset()
 }
 
-func (c *PostClient) IsInitialized() bool {
-	state, _, _ := c.initializer.State()
-	return state == initialization.StateCompleted
+func (c *PostClient) IsInitialized() (bool, error) {
+	state, _, err := c.initializer.State()
+	if err != nil {
+		return false, err
+	}
+
+	return state == initialization.StateCompleted, nil
 }
 
 func (c *PostClient) SetParams(dataDir string, space uint64) {

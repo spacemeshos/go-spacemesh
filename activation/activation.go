@@ -149,7 +149,7 @@ func (b *Builder) loop() {
 				break
 			}
 			initStatus := atomic.LoadInt32(&b.initStatus)
-			if initStatus != InitDone || !b.postProver.IsInitialized() {
+			if initStatus != InitDone {
 				b.log.Info("post is not initialized yet, not building nipst")
 				break
 			}
@@ -265,20 +265,29 @@ func (b *Builder) StartPost(rewardAddress address.Address, dataDir string, space
 	go func() {
 		var err error
 		b.postProver.SetParams(dataDir, space)
-		if b.postProver.IsInitialized() {
+		initialized, err := b.postProver.IsInitialized()
+		if err != nil {
+			errChan <- err
+			atomic.StoreInt32(&b.initStatus, InitIdle)
+			return
+		}
+
+		if initialized {
 			b.commitment, err = b.postProver.Execute(shared.ZeroChallenge)
 			if err != nil {
+				err := fmt.Errorf("PoST execution failed: %v", err)
+				b.log.Error(err.Error())
 				errChan <- err
 				atomic.StoreInt32(&b.initStatus, InitIdle)
-				b.log.Error("PoST execution failed: %v", err)
 				return
 			}
 		} else {
 			b.commitment, err = b.postProver.Initialize()
 			if err != nil {
+				err := fmt.Errorf("PoST initialization failed: %v", err)
+				b.log.Error(err.Error())
 				errChan <- err
 				atomic.StoreInt32(&b.initStatus, InitIdle)
-				b.log.Error("PoST initialization failed: %v", err)
 				return
 			}
 		}

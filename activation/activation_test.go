@@ -93,7 +93,7 @@ func (*postProverClientMock) Execute(challenge []byte) (*types.PostProof, error)
 
 func (*postProverClientMock) Reset() error { return nil }
 
-func (*postProverClientMock) IsInitialized() bool { return true }
+func (*postProverClientMock) IsInitialized() (bool, error) { return true, nil }
 
 func (*postProverClientMock) SetLogger(shared.Logger) {}
 
@@ -587,14 +587,16 @@ func TestStartPost(t *testing.T) {
 	// This test verifies that the params are being set in the post client.
 	assert.Nil(t, builder.commitment)
 	err := builder.StartPost(coinbase2, drive, 1000)
-	assert.EqualError(t, err, "space (1000) must be a multiple of 32")
+	assert.EqualError(t, err, "PoST initialization failed: space (1000) must be a multiple of 32")
 	assert.Nil(t, builder.commitment)
+	assert.Equal(t, postProver.Cfg().SpacePerUnit, uint64(1000))
 
 	// Initialize.
 	assert.Nil(t, builder.commitment)
 	err = builder.StartPost(coinbase2, drive, 1024)
 	assert.NoError(t, err)
 	assert.NotNil(t, builder.commitment)
+	assert.Equal(t, postProver.Cfg().SpacePerUnit, uint64(1024))
 
 	// Attempt to initialize again.
 	err = builder.StartPost(coinbase2, drive, 1024)
@@ -603,12 +605,12 @@ func TestStartPost(t *testing.T) {
 
 	// Instantiate a new builder and call StartPost on the same datadir, which is already initialized,
 	// and so will result in running the execution phase instead of the initialization phase.
-	// This test verifies that running the execution phase with different space will return an error.
+	// This test verifies that a call to StartPost with a different space param will return an error.
 	execBuilder := NewBuilder(id, coinbase, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, postProver, nil, func() bool { return true }, db, lg.WithName("atxBuilder"))
 	err = execBuilder.StartPost(coinbase2, drive, 2048)
 	assert.EqualError(t, err, "config mismatch")
 
-	// Call StartPost with the correct space.
+	// Call StartPost with the correct space param.
 	err = execBuilder.StartPost(coinbase2, drive, 1024)
 	assert.NoError(t, err)
 

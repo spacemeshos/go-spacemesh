@@ -30,7 +30,7 @@ type PostProverClient interface {
 	Reset() error
 
 	// IsInitialized indicates whether the initialization phase has been completed.
-	IsInitialized() bool
+	IsInitialized() (bool, error)
 
 	// SetParams updates the datadir and space params in the client config, to be used in the initialization
 	// and the execution phases. It overrides the config which the client was instantiated with.
@@ -136,7 +136,7 @@ func newNIPSTBuilder(
 func (nb *NIPSTBuilder) BuildNIPST(challenge *common.Hash) (*types.NIPST, error) {
 	nb.state.load()
 
-	if !nb.postProver.IsInitialized() {
+	if initialized, err := nb.postProver.IsInitialized(); !initialized || err != nil {
 		return nil, errors.New("PoST not initialized")
 	}
 
