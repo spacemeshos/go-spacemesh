@@ -8,7 +8,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spf13/cobra"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
+	"runtime"
+	"runtime/pprof"
 )
 
 // Cmd is the p2p cmd
@@ -45,7 +49,46 @@ func (app *P2PApp) Start(cmd *cobra.Command, args []string) {
 	// init p2p services
 	log.JSONLog(true)
 	log.DebugMode(true)
+
+	log.Event().Info("Starting Spacemesh")
+	if app.Config.MemProfile != "" {
+		log.Info("Starting mem profiling")
+		f, err := os.Create(app.Config.MemProfile)
+		if err != nil {
+			log.Error("could not create memory profile: ", err)
+		}
+		defer f.Close()
+		runtime.GC() // get up-to-date statistics
+		if err := pprof.WriteHeapProfile(f); err != nil {
+			log.Error("could not write memory profile: ", err)
+		}
+	}
+
+	if app.Config.CpuProfile != "" {
+		log.Info("Starting cpu profile")
+		f, err := os.Create(app.Config.CpuProfile)
+		if err != nil {
+			log.Error("could not create CPU profile: ", err)
+		}
+		defer f.Close()
+		if err := pprof.StartCPUProfile(f); err != nil {
+			log.Error("could not start CPU profile: ", err)
+		}
+		defer pprof.StopCPUProfile()
+	}
+
+	if app.Config.PprofHttpServer {
+		log.Info("Starting pprof server")
+		go func() {
+			err := http.ListenAndServe(":6060", nil)
+			if err != nil {
+				log.Error("cannot start http server", err)
+			}
+		}()
+	}
+
 	log.Info("Initializing P2P services")
+
 	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P)
 	if err != nil {
 		log.Panic("Error init p2p services, err: %v", err)

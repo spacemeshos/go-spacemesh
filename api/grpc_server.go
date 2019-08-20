@@ -92,19 +92,6 @@ func (s SpacemeshGrpcService) SubmitTransaction(ctx context.Context, in *pb.Sign
 	return &pb.TxConfirmation{Value: "ok", Id: hexIdStr}, nil
 }
 
-// P2P API
-
-func (s SpacemeshGrpcService) Broadcast(ctx context.Context, in *pb.BroadcastMessage) (*pb.SimpleMessage, error) {
-	log.Info("GRPC Broadcast msg")
-	err := s.Network.Broadcast(APIGossipProtocol, []byte(in.Data))
-	if err != nil {
-		log.Warning("RPC Broadcast failed please check that `test-mode` is on in order to use RPC Broadcast.")
-		return &pb.SimpleMessage{Value: err.Error()}, err
-	}
-	log.Info("GRPC Broadcast msg ok")
-	return &pb.SimpleMessage{Value: "ok"}, nil
-}
-
 func (s SpacemeshGrpcService) BroadcastPoet(ctx context.Context, in *pb.BinaryMessage) (*pb.SimpleMessage, error) {
 	log.Debug("GRPC Broadcast PoET msg")
 	err := s.Network.Broadcast(activation.PoetProofProtocol, in.Data)

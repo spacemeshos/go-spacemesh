@@ -161,7 +161,6 @@ def test_many_gossip_messages(setup_clients, add_curl):
 
 
 def test_many_gossip_sim(setup_clients, add_curl):
-    msg_size = 10000  # 1kb TODO: increase up to 2mb
     fields = {'M': 'new_gossip_message', 'protocol': 'api_test_gossip'}
     TEST_MESSAGES = 100
 
@@ -174,10 +173,8 @@ def test_many_gossip_sim(setup_clients, add_curl):
         print("Sending gossip from client ip: {0}/{1}".format(podname, client_ip))
 
         # todo: take out broadcast and rpcs to helper methods.
-        start = datetime.utcnow()
         api = 'v1/broadcast'
-        msg = "".join(choice(ascii_lowercase) for i in range(msg_size))
-        data = '{"data":"' + msg + '"}'
+        data = '{"data":"nil", "size": 1000000 }'
         out = api_call(client_ip, data, api, testconfig['namespace'])
         assert "{'value': 'ok'}" in out
 

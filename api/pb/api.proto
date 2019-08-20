@@ -40,6 +40,7 @@ message EligibleLayers {
 
 message BroadcastMessage {
     string data = 1;
+    uint64 size = 2;
 }
 
 message BinaryMessage {
