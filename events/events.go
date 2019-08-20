@@ -85,12 +85,12 @@ func (NewBlockEvent) getChannel() channelId {
 	return NewBlock
 }
 
-type BlockValidEvent struct {
+type ValidBlockEvent struct {
 	Block uint64
 	Valid bool
 }
 
-func (BlockValidEvent) getChannel() channelId {
+func (ValidBlockEvent) getChannel() channelId {
 	return BlockValid
 }
 

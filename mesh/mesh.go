@@ -211,7 +211,7 @@ func (m *Mesh) ExtractUniqueOrderedTransactions(l *types.Layer) []*Transaction {
 
 	for _, b := range sortedBlocks {
 		isBlockValid := m.tortoise.ContextualValidity(b.ID())
-		events.Publish(events.BlockValidEvent{Block: uint64(b.ID()), Valid: isBlockValid})
+		events.Publish(events.ValidBlockEvent{Block: uint64(b.ID()), Valid: isBlockValid})
 		if !isBlockValid {
 			m.Info("block %v not Contextualy valid", b)
 			continue
