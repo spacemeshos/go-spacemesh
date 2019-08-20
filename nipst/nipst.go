@@ -26,19 +26,20 @@ type PostProverClient interface {
 	// the amortized computational complexity can be made arbitrarily small.
 	Execute(challenge []byte) (proof *types.PostProof, err error)
 
-	// Reset removes the initialization-phase files.
+	// Reset removes the initialization phase files.
 	Reset() error
 
-	// IsInitialized indicates whether the initialization-phase has been completed.
+	// IsInitialized indicates whether the initialization phase has been completed.
 	IsInitialized() bool
 
-	// SetParams set the needed params for setting up post commitment in the specified logical drive and with
-	// requested commitment size.
+	// SetParams updates the datadir and space params in the client config, to be used in the initialization
+	// and the execution phases. It overrides the config which the client was instantiated with.
 	SetParams(datadir string, space uint64)
 
-	// SetLogger sets logger for post prover.
+	// SetLogger sets a logger for the client.
 	SetLogger(logger shared.Logger)
 
+	// Cfg returns the the client latest config.
 	Cfg() *config.Config
 }
 

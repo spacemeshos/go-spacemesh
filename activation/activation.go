@@ -194,10 +194,10 @@ func (b *Builder) buildNipstChallenge(epoch types.EpochId) error {
 	}
 	seq := uint64(0)
 	prevAtxId := *types.EmptyAtxId
-	commitmentMerkleTree := []byte(nil)
+	commitmentMerkleRoot := []byte(nil)
 
 	if b.prevATX == nil {
-		commitmentMerkleTree = b.commitment.MerkleRoot
+		commitmentMerkleRoot = b.commitment.MerkleRoot
 	} else {
 		seq = b.prevATX.Sequence + 1
 		//todo: handle this case for loading mem and recovering
@@ -236,7 +236,7 @@ func (b *Builder) buildNipstChallenge(epoch types.EpochId) error {
 		StartTick:            posAtxEndTick,
 		EndTick:              b.tickProvider.NumOfTicks(), //todo: add provider when
 		PositioningAtx:       posAtxId,
-		CommitmentMerkleRoot: commitmentMerkleTree,
+		CommitmentMerkleRoot: commitmentMerkleRoot,
 	}
 
 	err = b.storeChallenge(b.challenge)
@@ -252,10 +252,10 @@ func (b *Builder) StartPost(rewardAddress address.Address, dataDir string, space
 
 	initStatus := atomic.LoadInt32(&b.initStatus)
 
-	if initStatus == InitDone {
+	switch initStatus {
+	case InitDone:
 		return fmt.Errorf("already initialized")
-	}
-	if initStatus == InitInProgress {
+	case InitInProgress:
 		return fmt.Errorf("already started")
 	}
 
@@ -270,7 +270,7 @@ func (b *Builder) StartPost(rewardAddress address.Address, dataDir string, space
 			if err != nil {
 				errChan <- err
 				atomic.StoreInt32(&b.initStatus, InitIdle)
-				b.log.Error("PoST execution failure: %v", err)
+				b.log.Error("PoST execution failed: %v", err)
 				return
 			}
 		} else {
@@ -278,12 +278,12 @@ func (b *Builder) StartPost(rewardAddress address.Address, dataDir string, space
 			if err != nil {
 				errChan <- err
 				atomic.StoreInt32(&b.initStatus, InitIdle)
-				b.log.Error("PoST initialization failure: %v", err)
+				b.log.Error("PoST initialization failed: %v", err)
 				return
 			}
 		}
 
-		b.log.Info("PoST initialization completed")
+		b.log.Info("PoST initialization completed, datadir: %v, space: %v, commitment merkle root: %x", dataDir, space, b.commitment.MerkleRoot)
 		atomic.StoreInt32(&b.initStatus, InitDone)
 	}()
 

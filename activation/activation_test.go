@@ -581,27 +581,38 @@ func TestStartPost(t *testing.T) {
 	}()
 
 	activationDb := NewActivationDb(database.NewMemDatabase(), &MockIdStore{}, mesh.NewMemMeshDB(lg.WithName("meshDB")), layersPerEpoch, &ValidatorMock{}, lg.WithName("atxDB1"))
-	b := NewBuilder(id, coinbase, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, postProver, nil, func() bool { return true }, db, lg.WithName("atxBuilder"))
+	builder := NewBuilder(id, coinbase, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, postProver, nil, func() bool { return true }, db, lg.WithName("atxBuilder"))
 
 	// Attempt to initialize with invalid space.
-	// This checks that the params are being set in the post client.
-	err := b.StartPost(coinbase2, drive, 1000)
+	// This test verifies that the params are being set in the post client.
+	assert.Nil(t, builder.commitment)
+	err := builder.StartPost(coinbase2, drive, 1000)
 	assert.EqualError(t, err, "space (1000) must be a multiple of 32")
+	assert.Nil(t, builder.commitment)
 
 	// Initialize.
-	err = b.StartPost(coinbase2, drive, 1024)
+	assert.Nil(t, builder.commitment)
+	err = builder.StartPost(coinbase2, drive, 1024)
 	assert.NoError(t, err)
+	assert.NotNil(t, builder.commitment)
 
 	// Attempt to initialize again.
-	err = b.StartPost(coinbase2, drive, 1024)
+	err = builder.StartPost(coinbase2, drive, 1024)
 	assert.EqualError(t, err, "already initialized")
+	assert.NotNil(t, builder.commitment)
 
-	// Create a new builder instance and test execution with different params.
-	b = NewBuilder(id, coinbase, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, postProver, nil, func() bool { return true }, db, lg.WithName("atxBuilder"))
-	err = b.StartPost(coinbase2, drive, 2048)
+	// Instantiate a new builder and call StartPost on the same datadir, which is already initialized,
+	// and so will result in running the execution phase instead of the initialization phase.
+	// This test verifies that running the execution phase with different space will return an error.
+	execBuilder := NewBuilder(id, coinbase, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, postProver, nil, func() bool { return true }, db, lg.WithName("atxBuilder"))
+	err = execBuilder.StartPost(coinbase2, drive, 2048)
 	assert.EqualError(t, err, "config mismatch")
 
-	// Execute with correct params.
-	err = b.StartPost(coinbase2, drive, 1024)
+	// Call StartPost with the correct space.
+	err = execBuilder.StartPost(coinbase2, drive, 1024)
 	assert.NoError(t, err)
+
+	// Verify both builders produced the same commitment proof - one from the initialization phase,
+	// the other from a zero-challenge execution phase.
+	assert.Equal(t, builder.commitment, execBuilder.commitment)
 }
