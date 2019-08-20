@@ -129,6 +129,7 @@ func defaultBaseConfig() BaseConfig {
 		PoETServer:          "127.0.0.1",
 		Hdist:               5,
 		GenesisActiveSet:    5,
+		SyncRequestTimeout:  2000,
 	}
 }
 
