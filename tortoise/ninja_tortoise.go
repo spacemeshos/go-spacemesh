@@ -465,7 +465,7 @@ func (ni *ninjaTortoise) getVote(id types.BlockID) vec {
 }
 
 func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) { //i most recent layer
-	ni.Info("update tables layer %d with %d blocks", newlyr.Index(), len(newlyr.Blocks()))
+	ni.With().Info("Tortoise update tables", log.LayerId(uint64(newlyr.Index())), log.Int("n_blocks", len(newlyr.Blocks())))
 	defer ni.evictOutOfPbase()
 	ni.processBlocks(newlyr)
 
@@ -561,7 +561,7 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) { //i most rec
 			}
 		}
 	}
-	ni.Info("finished layer %d pbase is %d", newlyr.Index(), ni.pBase.Layer())
+	ni.With().Info("Tortoise finished layer", log.LayerId(uint64(newlyr.Index())), log.Uint64("pbase", uint64(ni.pBase.Layer())))
 	return
 }
 
