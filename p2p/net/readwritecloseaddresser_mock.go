@@ -27,7 +27,7 @@ type ReadWriteCloseAddresserMock struct {
 // NewReadWriteCloseAddresserMock is this
 func NewReadWriteCloseAddresserMock() *ReadWriteCloseAddresserMock {
 	return &ReadWriteCloseAddresserMock{
-		readChan: make(chan struct{}),
+		readChan: make(chan struct{}, 1),
 	}
 }
 

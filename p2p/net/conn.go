@@ -59,23 +59,23 @@ type FormattedConnection struct {
 	created    time.Time
 	remotePub  p2pcrypto.PublicKey
 	remoteAddr net.Addr
-	closeChan  chan struct{}
 	networker  networker // network context
 	session    NetworkSession
 
-	r    *delimited.Reader
+	r    formattedReader
 	wmtx sync.Mutex
-	w    *delimited.Writer
+	w    formattedWriter
 
 	closeMtx sync.RWMutex
 	closed   bool
+	close    io.Closer
 }
 
 type networker interface {
 	HandlePreSessionIncomingMessage(c Connection, msg []byte) error
 	EnqueueMessage(ime IncomingMessageEvent)
-	SubscribeClosingConnections(func(Connection))
-	publishClosingConnection(c Connection)
+	SubscribeClosingConnections(func(c ConnectionWithErr))
+	publishClosingConnection(c ConnectionWithErr)
 	NetworkID() int8
 }
 
@@ -84,8 +84,16 @@ type readWriteCloseAddresser interface {
 	RemoteAddr() net.Addr
 }
 
+type formattedReader interface {
+	Next() ([]byte, error)
+}
+
+type formattedWriter interface {
+	WriteRecord([]byte) (int, error)
+}
+
 // Create a new connection wrapping a net.Conn with a provided connection manager
-func newConnection(conn readWriteCloseAddresser, netw networker, reader *delimited.Reader, writer *delimited.Writer,
+func newConnection(conn readWriteCloseAddresser, netw networker,
 	remotePub p2pcrypto.PublicKey, session NetworkSession, log log.Log) *FormattedConnection {
 
 	// todo parametrize channel size - hard-coded for now
@@ -95,11 +103,11 @@ func newConnection(conn readWriteCloseAddresser, netw networker, reader *delimit
 		created:    time.Now(),
 		remotePub:  remotePub,
 		remoteAddr: conn.RemoteAddr(),
-		r:          reader,
-		w:          writer,
+		r:          delimited.NewReader(conn),
+		w:          delimited.NewWriter(conn),
+		close:      conn,
 		networker:  netw,
 		session:    session,
-		closeChan:  make(chan struct{}),
 	}
 
 	//connection.formatter.Pipe(conn)
@@ -182,7 +190,16 @@ func (c *FormattedConnection) Send(m []byte) error {
 func (c *FormattedConnection) Close() {
 	c.wmtx.Lock()
 	c.closeMtx.Lock()
+	if c.closed {
+		c.wmtx.Unlock()
+		c.closeMtx.Unlock()
+		return
+	}
 	c.closed = true
+	err := c.close.Close()
+	if err != nil {
+		c.logger.Warning("error while closing with connection %v, err: %v", c.RemotePublicKey().String(), err)
+	}
 	c.closeMtx.Unlock()
 	c.wmtx.Unlock()
 }
@@ -190,18 +207,6 @@ func (c *FormattedConnection) Close() {
 // Closed Reports whether the connection was closed. It is go safe.
 func (c *FormattedConnection) Closed() bool {
 	return c.closed
-}
-
-func (c *FormattedConnection) shutdown(err error) {
-	c.wmtx.Lock()
-	c.wmtx.Unlock()
-	c.closed = true
-	c.logger.Debug("Shutting down conn with %v err=%v", c.RemotePublicKey().String(), err)
-	if err != ErrConnectionClosed {
-		c.networker.publishClosingConnection(c)
-	}
-	c.closeMtx.Lock()
-	c.closeMtx.Unlock()
 }
 
 var ErrTriedToSetupExistingConn = errors.New("tried to setup existing connection")
@@ -234,6 +239,13 @@ var ErrIncomingSessionTimeout = errors.New("timeout waiting for handshake messag
 //	return err
 //}
 func (c *FormattedConnection) setupIncoming(timeout time.Duration) error {
+	c.closeMtx.RLock()
+	closed := c.closed
+	c.closeMtx.RUnlock()
+	if closed {
+		return errors.New("can't setup closed connection")
+	}
+
 	msg, err := c.r.Next()
 	if err != nil {
 		return err
@@ -288,7 +300,7 @@ func (c *FormattedConnection) beginEventProcessing() {
 	for {
 		c.closeMtx.RLock()
 		if c.closed {
-			err = errors.New("connection was closed")
+			err = ErrConnectionClosed
 			c.closeMtx.RUnlock()
 			break
 		}
@@ -309,5 +321,9 @@ func (c *FormattedConnection) beginEventProcessing() {
 		c.publish(newbuf)
 	}
 
-	c.shutdown(err)
+	if err != ErrConnectionClosed {
+		c.Close()
+	}
+
+	c.networker.publishClosingConnection(ConnectionWithErr{c, err})
 }

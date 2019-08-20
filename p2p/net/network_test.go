@@ -84,6 +84,16 @@ func (ml *mockListener) Addr() net.Addr {
 	return &net.IPAddr{IP: net.ParseIP("0.0.0.0"), Zone: "ipv4"}
 }
 
+type tempErr string
+
+func (t tempErr) Error() string {
+	return string(t)
+}
+
+func (t tempErr) Temporary() bool {
+	return true
+}
+
 func Test_Net_LimitedConnections(t *testing.T) {
 	cfg := config.DefaultConfig()
 	cfg.SessionTimeout = 100 * time.Millisecond
@@ -95,11 +105,13 @@ func Test_Net_LimitedConnections(t *testing.T) {
 	listener := newMockListener()
 	err = n.listen(listener.listenerFunc)
 	require.NoError(t, err)
+	listener.accpetResErr = tempErr("demo connection will close and allow more")
 	for i := 0; i < cfg.MaxPendingConnections; i++ {
 		listener.releaseConn()
 	}
 
 	require.Equal(t, atomic.LoadInt32(&listener.calledCount), int32(cfg.MaxPendingConnections))
+
 	done := make(chan struct{})
 	go func() {
 		done <- struct{}{}

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
-	"github.com/spacemeshos/go-spacemesh/p2p/delimited"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/version"
@@ -56,7 +55,7 @@ type Net struct {
 	regNewRemoteConn []func(NewConnectionEvent)
 
 	clsMutex           sync.RWMutex
-	closingConnections []func(Connection)
+	closingConnections []func(ConnectionWithErr)
 
 	queuesCount           uint
 	incomingMessagesQueue []chan IncomingMessageEvent
@@ -85,7 +84,7 @@ func NewNet(conf config.Config, localEntity *node.LocalNode) (*Net, error) {
 		logger:                localEntity.Log,
 		listenAddress:         tcpAddress,
 		regNewRemoteConn:      make([]func(NewConnectionEvent), 0, 3),
-		closingConnections:    make([]func(Connection), 0, 3),
+		closingConnections:    make([]func(cwe ConnectionWithErr), 0, 3),
 		queuesCount:           qcount,
 		incomingMessagesQueue: make([]chan IncomingMessageEvent, qcount, qcount),
 		config:                conf,
@@ -149,13 +148,13 @@ func (n *Net) IncomingMessages() []chan IncomingMessageEvent {
 }
 
 // SubscribeClosingConnections registers a callback for a new connection event. all registered callbacks are called before moving.
-func (n *Net) SubscribeClosingConnections(f func(connection Connection)) {
+func (n *Net) SubscribeClosingConnections(f func(connection ConnectionWithErr)) {
 	n.clsMutex.Lock()
 	n.closingConnections = append(n.closingConnections, f)
 	n.clsMutex.Unlock()
 }
 
-func (n *Net) publishClosingConnection(connection Connection) {
+func (n *Net) publishClosingConnection(connection ConnectionWithErr) {
 	n.clsMutex.RLock()
 	for _, f := range n.closingConnections {
 		f(connection)
@@ -187,7 +186,7 @@ func (n *Net) createConnection(address string, remotePub p2pcrypto.PublicKey, se
 	}
 
 	n.logger.Debug("Connected to %s...", address)
-	return newConnection(netConn, n, delimited.NewReader(netConn), delimited.NewWriter(netConn), remotePub, session, n.logger), nil
+	return newConnection(netConn, n, remotePub, session, n.logger), nil
 }
 
 func (n *Net) createSecuredConnection(address string, remotePubkey p2pcrypto.PublicKey, timeOut time.Duration,
@@ -275,15 +274,22 @@ func (n *Net) accept(listen net.Listener) {
 		netConn, err := listen.Accept()
 		if err != nil {
 
-			if !n.isShuttingDown {
-				n.logger.Error("Failed to accept connection request %v", err)
+			if n.isShuttingDown {
+				return
 				//TODO only print to log and return? The node will continue running without the listener, doesn't sound healthy
 			}
-			return
+			if !Temporary(err) {
+				n.logger.Error("Listener errored while accepting connections: err: %v", err)
+				return
+			}
+
+			n.logger.Warning("Failed to accept connection request err:%v", err)
+			pending <- struct{}{}
+			continue
 		}
 
 		n.logger.Debug("Got new connection... Remote Address: %s", netConn.RemoteAddr())
-		c := newConnection(netConn, n, delimited.NewReader(netConn), delimited.NewWriter(netConn), nil, nil, n.logger)
+		c := newConnection(netConn, n, nil, nil, n.logger)
 		go func(con Connection) {
 			defer func() { pending <- struct{}{} }()
 			err := c.setupIncoming(n.config.SessionTimeout)

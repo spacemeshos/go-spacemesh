@@ -190,14 +190,15 @@ func (s *swarm) onNewConnection(nce net.NewConnectionEvent) {
 	err := s.addIncomingPeer(nce.Node.PublicKey())
 	if err != nil {
 		// todo: send rejection reason
+		// todo: remove from connection pool
 		nce.Conn.Close()
 	}
 }
 
-func (s *swarm) onClosedConnection(c net.Connection) {
+func (s *swarm) onClosedConnection(cwe net.ConnectionWithErr) {
 	// we don't want to block, we know this node's connection was closed.
 	// todo: consider recconnecting
-	s.Disconnect(c.RemotePublicKey())
+	s.Disconnect(cwe.Conn.RemotePublicKey())
 }
 
 // Start starts the p2p service. if configured, bootstrap is started in the background.

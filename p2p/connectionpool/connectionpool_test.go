@@ -243,7 +243,7 @@ func TestClosedConnection(t *testing.T) {
 	conn, _ := cPool.GetConnection(addr, remotePub)
 
 	// report that the connection was closed
-	nMock.PublishClosingConnection(conn)
+	nMock.PublishClosingConnection(net.ConnectionWithErr{conn, errors.New("error")})
 
 	// query same connection and assert that it's a new instance
 	conn2, _ := cPool.GetConnection(addr, remotePub)
@@ -284,7 +284,7 @@ func TestRandom(t *testing.T) {
 				peer := peers[rand.Int31n(int32(peerCnt))]
 				conn, err := cPool.GetConnection(peer.addr, peer.key)
 				assert.Nil(t, err)
-				nMock.PublishClosingConnection(conn)
+				nMock.PublishClosingConnection(net.ConnectionWithErr{conn, errors.New("closing")})
 			}()
 		} else {
 			go func() {

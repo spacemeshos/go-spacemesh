@@ -19,7 +19,7 @@ type networker interface {
 	Dial(address string, remotePublicKey p2pcrypto.PublicKey) (net.Connection, error) // Connect to a remote node. Can send when no error.
 	SubscribeOnNewRemoteConnections(func(event net.NewConnectionEvent))
 	NetworkID() int8
-	SubscribeClosingConnections(func(net.Connection))
+	SubscribeClosingConnections(func(net.ConnectionWithErr))
 	Logger() log.Log
 }
 
@@ -61,11 +61,13 @@ func (cp *ConnectionPool) OnNewConnection(nce net.NewConnectionEvent) {
 	cp.handleNewConnection(nce.Conn.RemotePublicKey(), nce.Conn, net.Remote)
 }
 
-func (cp *ConnectionPool) OnClosedConnection(c net.Connection) {
+func (cp *ConnectionPool) OnClosedConnection(cwe net.ConnectionWithErr) {
 	if cp.isShuttingDown() {
 		return
 	}
-	cp.handleClosedConnection(c)
+	conn := cwe.Conn
+	cp.net.Logger().With().Info("connection_closed", log.String("id", conn.String()), log.String("remote", conn.RemotePublicKey().String()), log.Err(cwe.Err))
+	cp.handleClosedConnection(conn)
 }
 
 func (cp *ConnectionPool) isShuttingDown() bool {
@@ -166,7 +168,6 @@ func (cp *ConnectionPool) handleNewConnection(rPub p2pcrypto.PublicKey, newConn 
 }
 
 func (cp *ConnectionPool) handleClosedConnection(conn net.Connection) {
-	cp.net.Logger().With().Info("connection_closed", log.String("id", conn.String()), log.String("remote", conn.RemotePublicKey().String()))
 	cp.connMutex.Lock()
 	rPub := conn.RemotePublicKey()
 	cur, ok := cp.connections[rPub]
