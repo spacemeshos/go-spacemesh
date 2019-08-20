@@ -27,6 +27,7 @@ bootstrap:
     eligibility-confidence-param: '6'
     eligibility-epoch-offset: '0'
     genesis-active-size: '20'
+    sync-request-timeout: '5000'
     hdist: '5'
 client:
   image: 'spacemeshos/go-spacemesh-dev:test_delayed_nodes'
@@ -46,6 +47,7 @@ client:
     eligibility-confidence-param: '6'
     eligibility-epoch-offset: '0'
     genesis-active-size: '20'
+    sync-request-timeout: '5000'
     hdist: '5'
 elastic:
   host: elastic.spacemesh.io
