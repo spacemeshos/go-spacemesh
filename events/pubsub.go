@@ -121,7 +121,7 @@ func newPublisher(url string) (*Publisher, error) {
 	var sock mangos.Socket
 	var err error
 	if sock, err = pub.NewSocket(); err != nil {
-		return nil, fmt.Errorf("can't get newEventPublisher pub socket: %s", err)
+		return nil, fmt.Errorf("can't get NewEventPublisher pub socket: %s", err)
 	}
 	sock.AddTransport(ipc.NewTransport())
 	sock.AddTransport(tcp.NewTransport())

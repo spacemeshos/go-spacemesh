@@ -10,7 +10,7 @@ import (
 func TestNewBlockEvent(t *testing.T) {
 	url := "tcp://localhost:56565"
 
-	eventPublisher, err := newEventPublisher(url)
+	eventPublisher, err := NewEventPublisher(url)
 	assert.NoError(t, err)
 	defer func() {
 		assert.NoError(t, eventPublisher.Close())

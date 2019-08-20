@@ -29,7 +29,7 @@ func server(url string) {
 	var sock mangos.Socket
 	var err error
 	if sock, err = pub.NewSocket(); err != nil {
-		die("can't get newEventPublisher pub socket: %s", err)
+		die("can't get NewEventPublisher pub socket: %s", err)
 	}
 	sock.AddTransport(ipc.NewTransport())
 	sock.AddTransport(tcp.NewTransport())
@@ -53,7 +53,7 @@ func client(url string, name string) {
 	var msg []byte
 
 	if sock, err = sub.NewSocket(); err != nil {
-		die("can't get newEventPublisher sub socket: %s", err.Error())
+		die("can't get NewEventPublisher sub socket: %s", err.Error())
 	}
 	sock.AddTransport(ipc.NewTransport())
 	sock.AddTransport(tcp.NewTransport())

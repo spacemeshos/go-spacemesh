@@ -29,7 +29,7 @@ func Publish(event Event) {
 // InitializeEventPubsub initializes the global pubsub broadcaster server
 func InitializeEventPubsub(ur string) {
 	var err error
-	publisher, err = newEventPublisher(ur)
+	publisher, err = NewEventPublisher(ur)
 	if err != nil {
 		log.Panic("cannot init pubsub: %v", err)
 	}
@@ -47,9 +47,9 @@ type Event interface {
 	getChannel() channelId
 }
 
-// newEventPublisher is a constructor for the event publisher, it received a url string in format of tcp://localhost:56565 to start
+// NewEventPublisher is a constructor for the event publisher, it received a url string in format of tcp://localhost:56565 to start
 // listening for connections.
-func newEventPublisher(eventUrl string) (*EventPublisher, error) {
+func NewEventPublisher(eventUrl string) (*EventPublisher, error) {
 	p, err := newPublisher(eventUrl)
 	if err != nil {
 		return nil, err
