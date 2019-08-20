@@ -73,6 +73,7 @@ func NewPeersWorker(s *Syncer, peers []p2p.Peer, mu *sync.Once, reqFactory Reque
 	}
 
 	wrkFunc := func() {
+		s.With().Info("Calling peer functions", log.Int("peer_funcs_count", len(peerfuncs)))
 		for _, p := range peerfuncs {
 			go p()
 		}
