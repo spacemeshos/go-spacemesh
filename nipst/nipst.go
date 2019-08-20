@@ -32,6 +32,9 @@ type PostProverClient interface {
 	// IsInitialized indicates whether the initialization phase has been completed.
 	IsInitialized() (bool, error)
 
+	// VerifyInitAllowed returns potential errors as when calling the initialization phase.
+	VerifyInitAllowed() error
+
 	// SetParams updates the datadir and space params in the client config, to be used in the initialization
 	// and the execution phases. It overrides the config which the client was instantiated with.
 	SetParams(datadir string, space uint64)

@@ -11,7 +11,6 @@ import (
 	"github.com/spacemeshos/post/shared"
 	"sync"
 	"sync/atomic"
-	"time"
 )
 
 const AtxProtocol = "AtxGossip"
@@ -94,7 +93,8 @@ type Builder struct {
 	store           BytesStore
 	isSynced        func() bool
 	accountLock     sync.RWMutex
-	initStatus      int32
+	InitLock        sync.RWMutex
+	initStatus      int
 	log             log.Log
 }
 
@@ -148,7 +148,10 @@ func (b *Builder) loop() {
 				b.log.Info("cannot create atx : not synced")
 				break
 			}
-			initStatus := atomic.LoadInt32(&b.initStatus)
+
+			b.InitLock.RLock()
+			initStatus := b.initStatus
+			b.InitLock.RUnlock()
 			if initStatus != InitDone {
 				b.log.Info("post is not initialized yet, not building nipst")
 				break
@@ -247,62 +250,71 @@ func (b *Builder) buildNipstChallenge(epoch types.EpochId) error {
 }
 
 func (b *Builder) StartPost(rewardAddress address.Address, dataDir string, space uint64) error {
-	b.log.Info("Starting post, reward address: %x", rewardAddress)
-	b.SetCoinbaseAccount(rewardAddress)
-
-	initStatus := atomic.LoadInt32(&b.initStatus)
-
-	switch initStatus {
+	b.InitLock.Lock()
+	switch b.initStatus {
 	case InitDone:
+		b.InitLock.Unlock()
 		return fmt.Errorf("already initialized")
 	case InitInProgress:
+		b.InitLock.Unlock()
 		return fmt.Errorf("already started")
 	}
 
-	atomic.StoreInt32(&b.initStatus, InitInProgress)
+	b.initStatus = InitInProgress
+	b.InitLock.Unlock()
 
-	errChan := make(chan error, 1)
-	go func() {
-		var err error
-		b.postProver.SetParams(dataDir, space)
-		initialized, err := b.postProver.IsInitialized()
-		if err != nil {
-			errChan <- err
-			atomic.StoreInt32(&b.initStatus, InitIdle)
-			return
+	b.log.Info("Starting post, reward address: %x", rewardAddress)
+	b.SetCoinbaseAccount(rewardAddress)
+	b.postProver.SetParams(dataDir, space)
+
+	initialized, err := b.postProver.IsInitialized()
+	if err != nil {
+		b.InitLock.Lock()
+		b.initStatus = InitIdle
+		b.InitLock.Unlock()
+		return err
+	}
+
+	if !initialized {
+		if err := b.postProver.VerifyInitAllowed(); err != nil {
+			b.InitLock.Lock()
+			b.initStatus = InitIdle
+			b.InitLock.Unlock()
+			return err
 		}
+	}
 
+	go func() {
 		if initialized {
 			b.commitment, err = b.postProver.Execute(shared.ZeroChallenge)
 			if err != nil {
-				err := fmt.Errorf("PoST execution failed: %v", err)
-				b.log.Error(err.Error())
-				errChan <- err
-				atomic.StoreInt32(&b.initStatus, InitIdle)
+				b.log.Error("PoST execution failed: %v", err)
+
+				b.InitLock.Lock()
+				b.initStatus = InitIdle
+				b.InitLock.Unlock()
 				return
 			}
 		} else {
 			b.commitment, err = b.postProver.Initialize()
 			if err != nil {
-				err := fmt.Errorf("PoST initialization failed: %v", err)
-				b.log.Error(err.Error())
-				errChan <- err
-				atomic.StoreInt32(&b.initStatus, InitIdle)
+				b.log.Error("PoST initialization failed: %v", err)
+
+				b.InitLock.Lock()
+				b.initStatus = InitIdle
+				b.InitLock.Unlock()
 				return
 			}
 		}
 
 		b.log.Info("PoST initialization completed, datadir: %v, space: %v, commitment merkle root: %x", dataDir, space, b.commitment.MerkleRoot)
-		atomic.StoreInt32(&b.initStatus, InitDone)
+
+		b.InitLock.Lock()
+		b.initStatus = InitDone
+		b.InitLock.Unlock()
 	}()
 
-	// todo: refactor initializePost to be concurrent, returning error in a blocking manner
-	select {
-	case <-time.After(100 * time.Millisecond):
-		return nil
-	case err := <-errChan:
-		return err
-	}
+	return nil
 }
 
 func (b *Builder) SetCoinbaseAccount(rewardAddress address.Address) {

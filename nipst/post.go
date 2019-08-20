@@ -77,6 +77,10 @@ func (c *PostClient) IsInitialized() (bool, error) {
 	return state == initialization.StateCompleted, nil
 }
 
+func (c *PostClient) VerifyInitAllowed() error {
+	return c.initializer.VerifyInitAllowed()
+}
+
 func (c *PostClient) SetParams(dataDir string, space uint64) {
 	cfg := *c.cfg
 	cfg.DataDir = dataDir

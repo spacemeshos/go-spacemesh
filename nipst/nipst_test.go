@@ -41,6 +41,8 @@ func (*postProverClientMock) Reset() error { return nil }
 
 func (*postProverClientMock) IsInitialized() (bool, error) { return true, nil }
 
+func (*postProverClientMock) VerifyInitAllowed() error { return nil }
+
 func (*postProverClientMock) SetLogger(shared.Logger) {}
 
 func (*postProverClientMock) SetParams(datadir string, space uint64) {}

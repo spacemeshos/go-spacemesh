@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"sort"
 	"testing"
+	"time"
 )
 
 // ========== Vars / Consts ==========
@@ -94,6 +95,8 @@ func (*postProverClientMock) Execute(challenge []byte) (*types.PostProof, error)
 func (*postProverClientMock) Reset() error { return nil }
 
 func (*postProverClientMock) IsInitialized() (bool, error) { return true, nil }
+
+func (*postProverClientMock) VerifyInitAllowed() error { return nil }
 
 func (*postProverClientMock) SetLogger(shared.Logger) {}
 
@@ -587,7 +590,7 @@ func TestStartPost(t *testing.T) {
 	// This test verifies that the params are being set in the post client.
 	assert.Nil(t, builder.commitment)
 	err := builder.StartPost(coinbase2, drive, 1000)
-	assert.EqualError(t, err, "PoST initialization failed: space (1000) must be a multiple of 32")
+	assert.EqualError(t, err, "space (1000) must be a multiple of 32")
 	assert.Nil(t, builder.commitment)
 	assert.Equal(t, postProver.Cfg().SpacePerUnit, uint64(1000))
 
@@ -595,6 +598,7 @@ func TestStartPost(t *testing.T) {
 	assert.Nil(t, builder.commitment)
 	err = builder.StartPost(coinbase2, drive, 1024)
 	assert.NoError(t, err)
+	time.Sleep(100 * time.Millisecond) // Introducing a small delay since the procedure is async.
 	assert.NotNil(t, builder.commitment)
 	assert.Equal(t, postProver.Cfg().SpacePerUnit, uint64(1024))
 
@@ -611,8 +615,11 @@ func TestStartPost(t *testing.T) {
 	assert.EqualError(t, err, "config mismatch")
 
 	// Call StartPost with the correct space param.
+	assert.Nil(t, execBuilder.commitment)
 	err = execBuilder.StartPost(coinbase2, drive, 1024)
+	time.Sleep(100 * time.Millisecond)
 	assert.NoError(t, err)
+	assert.NotNil(t, execBuilder.commitment)
 
 	// Verify both builders produced the same commitment proof - one from the initialization phase,
 	// the other from a zero-challenge execution phase.
