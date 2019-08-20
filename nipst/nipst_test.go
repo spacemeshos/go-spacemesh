@@ -39,7 +39,7 @@ func (*postProverClientMock) Execute(challenge []byte) (*types.PostProof, error)
 
 func (*postProverClientMock) Reset() error { return nil }
 
-func (*postProverClientMock) IsInitialized() bool { return true }
+func (*postProverClientMock) IsInitialized() (bool, error) { return true, nil }
 
 func (*postProverClientMock) SetLogger(shared.Logger) {}
 
