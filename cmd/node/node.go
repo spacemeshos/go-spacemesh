@@ -10,7 +10,6 @@ import (
 	apiCfg "github.com/spacemeshos/go-spacemesh/api/config"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common"
-	"github.com/spacemeshos/go-spacemesh/consensus"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
@@ -283,6 +282,13 @@ func (app *SpacemeshApp) setupTestFeatures() {
 	api.ApproveAPIGossipMessages(cmdp.Ctx, app.P2P)
 }
 
+type weakCoinStub struct {
+}
+
+func (weakCoinStub) GetResult() bool {
+	return true
+}
+
 func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service, dbStorepath string, sgn hare.Signer, isFixedOracle bool, rolacle hare.Rolacle, layerSize uint32, postClient nipst.PostProverClient, poetClient nipst.PoetProvingServiceClient, vrfSigner *BLS381.BlsSigner, layersPerEpoch uint16) error {
 
 	app.nodeId = nodeID
@@ -306,7 +312,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	rng := rand.New(mt19937.New())
 	processor := state.NewTransactionProcessor(rng, st, app.Config.GAS, lg.WithName("state"))
 
-	coinToss := consensus.WeakCoin{}
+	coinToss := weakCoinStub{}
 	gTime, err := time.Parse(time.RFC3339, app.Config.GenesisTime)
 	if err != nil {
 		return err
