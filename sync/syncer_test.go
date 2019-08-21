@@ -234,9 +234,11 @@ func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 	wrk, output := NewPeersWorker(syncObj2, []p2p.Peer{nodes[0].PublicKey()}, &sync.Once{}, HashReqFactory(lid))
 	go wrk.Work()
 
+	orig, _ := syncObj1.GetLayer(types.LayerID(1))
+
 	select {
 	case hash := <-output:
-		assert.Equal(t, "some hash representing the layer", string(hash.(*peerHashPair).hash), "wrong block")
+		assert.Equal(t, string(orig.Hash()), string(hash.(*peerHashPair).hash), "wrong block")
 	case <-timeout.C:
 		assert.Fail(t, "no message received on channel")
 	}
@@ -917,9 +919,9 @@ func TestFetchLayerBlockIds(t *testing.T) {
 	syncObj1.AddBlock(block1)
 	syncObj2.AddBlock(block2)
 
-	mp := map[string]p2p.Peer{}
-	mp["1"] = nodes[0].PublicKey()
-	mp["2"] = nodes[1].PublicKey()
+	mp := map[string][]p2p.Peer{}
+	mp["1"] = append(mp["1"], nodes[0].PublicKey())
+	mp["2"] = append(mp["2"], nodes[1].PublicKey())
 	ids, _ := syncObj3.fetchLayerBlockIds(mp, 1)
 
 	assert.True(t, len(ids) == 2)

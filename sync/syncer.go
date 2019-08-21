@@ -386,27 +386,38 @@ func (s *Syncer) DataAvailabilty(blk *types.Block) ([]*types.AddressableSignedTr
 	return txs, atxs, nil
 }
 
-func (s *Syncer) fetchLayerBlockIds(m map[string]p2p.Peer, lyr types.LayerID) ([]types.BlockID, error) {
+func (s *Syncer) fetchLayerBlockIds(m map[string][]p2p.Peer, lyr types.LayerID) ([]types.BlockID, error) {
 	//send request to different users according to returned hashes
-	v := make([]p2p.Peer, 0, len(m))
-	for _, value := range m {
-		v = append(v, value)
-	}
-
-	wrk, output := NewPeersWorker(s, v, &sync.Once{}, LayerIdsReqFactory(lyr))
-	go wrk.Work()
-
 	idSet := make(map[types.BlockID]struct{}, s.LayerSize)
 	ids := make([]types.BlockID, 0, s.LayerSize)
+	for h, peers := range m {
+	NextHash:
+		for _, peer := range peers {
+			s.Info("send request Peer: %v", peer)
+			ch, err := LayerIdsReqFactory(lyr)(s.MessageServer, peer)
+			if err != nil {
+				return nil, err
+			}
 
-	//unify results
-	for out := range output {
-		if out != nil {
-			//filter double ids
-			for _, bid := range out.([]types.BlockID) {
-				if _, exists := idSet[bid]; !exists {
-					idSet[bid] = struct{}{}
-					ids = append(ids, bid)
+			timeout := time.After(s.RequestTimeout)
+			select {
+			case <-timeout:
+				s.Error("layer ids request to %v timed out", peer)
+				continue
+			case v := <-ch:
+				if v != nil {
+					s.Info("Peer: %v responded to layer ids request", peer)
+					for _, bid := range v.([]types.BlockID) {
+						if _, exists := idSet[bid]; !exists {
+							idSet[bid] = struct{}{}
+							ids = append(ids, bid)
+							hash := types.HashBlockIds(ids)
+							if string(hash) == h {
+								delete(m, string(hash))
+								break NextHash
+							}
+						}
+					}
 				}
 			}
 		}
@@ -424,15 +435,15 @@ type peerHashPair struct {
 	hash []byte
 }
 
-func (s *Syncer) fetchLayerHashes(lyr types.LayerID) (map[string]p2p.Peer, error) {
+func (s *Syncer) fetchLayerHashes(lyr types.LayerID) (map[string][]p2p.Peer, error) {
 	// get layer hash from each peer
 	wrk, output := NewPeersWorker(s, s.GetPeers(), &sync.Once{}, HashReqFactory(lyr))
 	go wrk.Work()
-	m := make(map[string]p2p.Peer)
+	m := make(map[string][]p2p.Peer)
 	for out := range output {
 		pair, ok := out.(*peerHashPair)
 		if pair != nil && ok { //do nothing on close channel
-			m[string(pair.hash)] = pair.peer
+			m[string(pair.hash)] = append(m[string(pair.hash)], pair.peer)
 		}
 	}
 	if len(m) == 0 {

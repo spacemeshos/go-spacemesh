@@ -8,6 +8,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"hash/fnv"
+	"sort"
 )
 
 type BlockID uint64
@@ -217,7 +219,27 @@ func (l *Layer) Blocks() []*Block {
 }
 
 func (l *Layer) Hash() []byte {
-	return []byte("some hash representing the layer")
+	keys := make([]BlockID, 0, len(l.Blocks()))
+	for _, block := range l.Blocks() {
+		keys = append(keys, block.ID())
+	}
+	return HashBlockIds(keys)
+}
+
+func HashBlockIds(bids []BlockID) []byte {
+
+	sort.Slice(bids, func(i, j int) bool { return bids[i] < bids[j] })
+	// calc
+	h := fnv.New32()
+	for i := 0; i < len(bids); i++ {
+		_, e := h.Write(common.Uint32ToBytes(uint32(bids[i])))
+		if e != nil {
+			log.Panic("Could not write to hash obj while calculating layer hash")
+		}
+	}
+	// update
+	sum := h.Sum32()
+	return common.Uint32ToBytes(sum)
 }
 
 func (l *Layer) AddBlock(block *Block) {
