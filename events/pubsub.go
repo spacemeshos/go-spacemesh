@@ -85,24 +85,20 @@ func (sub *Subscriber) Close() error {
 
 // Subscribe subscribes to the given topic, returns a channel on which data from the topic is received.
 func (sub *Subscriber) Subscribe(topic channelId) (chan []byte, error) {
+	sub.chanLock.Lock()
 	if _, ok := sub.output[topic]; !ok {
-		sub.chanLock.Lock()
 		sub.output[topic] = make(chan []byte, channelBuffer)
-		sub.chanLock.Unlock()
 	}
+	sub.chanLock.Unlock()
 	err := sub.sock.SetOption(mangos.OptionSubscribe, []byte{byte(topic)})
 	if err != nil {
 		return nil, err
 	}
-	/*if err == nil {
-		err = sub.SetOption(mangos.OptionRecvDeadline, 10*time.Second)
-	}*/
 	return sub.output[topic], err
 }
 
-// Subscribe subscribes to the given topic, returns a channel on which data from the topic is received.
+// SubscribeAll subscribes to all available topics.
 func (sub *Subscriber) SubscribeToAll() (chan []byte, error) {
-
 	err := sub.sock.SetOption(mangos.OptionSubscribe, []byte(""))
 	if err != nil {
 		return nil, err
@@ -140,20 +136,3 @@ func (p *Publisher) publish(topic channelId, payload []byte) error {
 	return err
 }
 
-func subscribe(socket mangos.Socket, topic string) error {
-	err := socket.SetOption(mangos.OptionSubscribe, []byte(topic))
-	if err == nil {
-		err = socket.SetOption(mangos.OptionRecvDeadline, 10*time.Second)
-	}
-	return err
-}
-
-func publish(socket mangos.Socket, topic, message string) error {
-	err := socket.Send([]byte(fmt.Sprintf("%s|%s", topic, message)))
-	return err
-}
-
-func receive(socket mangos.Socket) (string, error) {
-	message, err := socket.Recv()
-	return string(message), err
-}

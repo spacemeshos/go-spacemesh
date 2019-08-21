@@ -40,7 +40,7 @@ func InitializeEventPubsub(ur string) {
 
 // EventPublisher is the struct that publishes events to subscribers by topics.
 type EventPublisher struct {
-	Publisher
+	*Publisher
 }
 
 // Event defines the interface that each message sent by the EventPublisher needs to implemet for it to correctly
@@ -57,7 +57,7 @@ func NewEventPublisher(eventUrl string) (*EventPublisher, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &EventPublisher{*p}, nil
+	return &EventPublisher{p}, nil
 }
 
 // PublishEvent publishes the provided event on pubsub infra. It encodes messages using XDR protocol.
