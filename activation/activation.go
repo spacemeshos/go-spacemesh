@@ -132,6 +132,7 @@ func (b *Builder) Start() {
 // Stop stops the atx builder.
 func (b *Builder) Stop() {
 	b.finished <- struct{}{}
+	close(b.stop)
 }
 
 // loop is the main loop that tries to create an atx per tick received from the global clock
