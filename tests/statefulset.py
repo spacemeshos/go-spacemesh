@@ -63,9 +63,9 @@ def delete_statefulset(statefulset_name, name_space):
     try:
         k8s_beta = client.AppsV1Api()
         resp = k8s_beta.delete_namespaced_stateful_set(name=statefulset_name,
-                                                     namespace=name_space,
-                                                     body=client.V1DeleteOptions(propagation_policy='Foreground',
-                                                                                 grace_period_seconds=5))
+                                                       namespace=name_space,
+                                                       body=client.V1DeleteOptions(propagation_policy='Foreground',
+                                                                                   grace_period_seconds=5))
     except ApiException as e:
         if e.status == 404:
             return resp
