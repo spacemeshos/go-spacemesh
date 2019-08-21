@@ -1,6 +1,7 @@
 package eligibility
 
 import (
+	"errors"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -49,7 +50,7 @@ func (b *beacon) Value(layer types.LayerID) (uint32, error) {
 	if err != nil {
 		log.With().Error("Could not get pattern Id",
 			log.Err(err), log.LayerId(uint64(layer)), log.Uint64("sl_id", uint64(sl)))
-		return nilVal, err
+		return nilVal, errors.New("could not calc beacon value")
 	}
 
 	// calculate

@@ -217,7 +217,10 @@ func (m *MeshDB) SaveContextualValidity(id types.BlockID, valid bool) error {
 	} else {
 		v = FALSE
 	}
-	m.contextualValidity.Put(id.ToBytes(), v)
+	err := m.contextualValidity.Put(id.ToBytes(), v)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -369,7 +372,7 @@ func (m *MeshDB) GetGoodPattern(layer types.LayerID) (map[types.BlockID]struct{}
 		valid, err := m.ContextualValidity(b.ID())
 
 		if err != nil {
-			m.Error("could not get contextual validity for block %v", b.ID(), err)
+			m.Error("could not get contextual validity for block %v in layer %v err=%v", b.ID(), layer, err)
 		}
 
 		if !valid {
