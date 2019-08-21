@@ -553,10 +553,9 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) { //i most rec
 
 			// update completeness of p
 			if _, found := ni.tComplete[p]; complete && !found {
-				ni.pBase = p
 				ni.tComplete[p] = struct{}{}
-				ni.SaveGoodPattern(p.Layer(), ni.tPattern[p])
-				ni.SaveOpinion()
+				ni.SaveOpinion(p)
+				ni.pBase = p
 				ni.Debug("found new complete and good pattern for layer %d pattern %d with %d support ", l, p.id, ni.tSupport[p])
 			}
 		}
@@ -565,12 +564,16 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) { //i most rec
 	return
 }
 
-func (ni *ninjaTortoise) SaveOpinion() {
-	for blk, vec := range ni.tVote[ni.pBase] {
+func (ni *ninjaTortoise) SaveOpinion(p votingPattern) {
+	for blk, vec := range ni.tVote[p] {
+		valid := false
 		if vec == Support {
-			ni.SaveContextualValidity(blk, true)
-		} else {
-			ni.SaveContextualValidity(blk, false)
+			valid = true
 		}
+
+		if err := ni.SaveContextualValidity(blk, valid); err != nil {
+			ni.Error("could not write contextual validity for block %v ", blk)
+		}
+
 	}
 }
