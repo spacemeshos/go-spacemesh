@@ -80,14 +80,23 @@ func (c *PostClient) SetParams(dataDir string, space uint64) {
 	cfg := *c.cfg
 	cfg.DataDir = dataDir
 	cfg.SpacePerUnit = space
-
-	c.initializer = initialization.NewInitializer(&cfg, c.id)
-	c.prover = proving.NewProver(&cfg, c.id)
 	c.cfg = &cfg
+
+	c.initializer = initialization.NewInitializer(c.cfg, c.id)
+	c.initializer.SetLogger(c.logger)
+
+	c.prover = proving.NewProver(c.cfg, c.id)
+	c.prover.SetLogger(c.logger)
 }
 
 func (c *PostClient) SetLogger(logger shared.Logger) {
 	c.logger = logger
+
+	c.initializer = initialization.NewInitializer(c.cfg, c.id)
+	c.initializer.SetLogger(c.logger)
+
+	c.prover = proving.NewProver(c.cfg, c.id)
+	c.prover.SetLogger(c.logger)
 }
 
 func (c *PostClient) Cfg() *config.Config {
