@@ -6,15 +6,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/shared"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"os"
-	"path/filepath"
 	"testing"
 )
 
 var minerID = []byte("id")
-var idsToCleanup [][]byte
 var postCfg config.Config
 
 func init() {
@@ -141,7 +137,6 @@ func TestNIPSTBuilderWithClients(t *testing.T) {
 }
 
 func buildNIPST(r *require.Assertions, postCfg config.Config, nipstChallenge common.Hash, poetDb PoetDb) *types.NIPST {
-	postProver := NewPostClient(&postCfg, minerID)
 	poetProver, err := newRPCPoetHarnessClient()
 	r.NotNil(poetProver)
 	defer func() {
@@ -149,8 +144,20 @@ func buildNIPST(r *require.Assertions, postCfg config.Config, nipstChallenge com
 		r.NoError(err)
 	}()
 	r.NoError(err)
+
+	postProver := NewPostClient(&postCfg, minerID)
+	defer func() {
+		err := postProver.Reset()
+		r.NoError(err)
+	}()
+
+	commitment, err := postProver.Initialize()
+	r.NoError(err)
+	r.NotNil(commitment)
+
 	nb := newNIPSTBuilder(minerID, postProver, poetProver,
 		poetDb, verifyPost, log.NewDefault(string(minerID)))
+
 	npst, err := nb.BuildNIPST(&nipstChallenge)
 	r.NoError(err)
 	return npst
@@ -182,13 +189,13 @@ func TestNewNIPSTBuilderNotInitialized(t *testing.T) {
 	r.EqualError(err, "PoST not initialized")
 	r.Nil(npst)
 
-	idsToCleanup = append(idsToCleanup, minerIDNotInitialized)
-	initialProof, err := postProver.Initialize()
+	commitment, err := postProver.Initialize()
 	defer func() {
-		assert.NoError(t, nb.postProver.Reset())
+		err := postProver.Reset()
+		r.NoError(err)
 	}()
 	r.NoError(err)
-	r.NotNil(initialProof)
+	r.NotNil(commitment)
 
 	npst, err = nb.BuildNIPST(&nipstChallenge)
 	r.NoError(err)
@@ -235,39 +242,4 @@ func TestValidator_Validate(t *testing.T) {
 func validateNIPST(npst *types.NIPST, postCfg config.Config, nipstChallenge common.Hash, poetDb PoetDb) error {
 	v := &Validator{&postCfg, poetDb}
 	return v.Validate(npst, nipstChallenge)
-}
-
-func TestMain(m *testing.M) {
-	flag.Parse()
-	initPost(minerID)
-	res := m.Run()
-	cleanup()
-	os.Exit(res)
-}
-
-func initPost(id []byte) {
-	idsToCleanup = append(idsToCleanup, id)
-	_, err := NewPostClient(&postCfg, id).Initialize()
-	logIfError(err)
-}
-
-func cleanup() {
-	matches, err := filepath.Glob("*.bin")
-	logIfError(err)
-	for _, f := range matches {
-		err = os.Remove(f)
-		logIfError(err)
-	}
-
-	for _, id := range idsToCleanup {
-		dir := shared.GetInitDir(postCfg.DataDir, id)
-		err = os.RemoveAll(dir)
-		logIfError(err)
-	}
-}
-
-func logIfError(err error) {
-	if err != nil {
-		_, _ = os.Stderr.WriteString(err.Error())
-	}
 }

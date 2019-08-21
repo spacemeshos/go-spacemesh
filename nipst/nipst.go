@@ -91,7 +91,6 @@ type NIPSTBuilder struct {
 	stop    bool
 	stopM   sync.Mutex
 	errChan chan error
-	cfgM    sync.RWMutex
 	state   *builderState
 
 	log log.Log
@@ -219,15 +218,6 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *common.Hash) (*types.NIPST, error)
 	}
 	return nipst, nil
 }
-
-func (nb *NIPSTBuilder) GetDataDirPath() string {
-	var d string
-	nb.cfgM.RLock()
-	d = nb.postCfg.DataDir
-	nb.cfgM.RUnlock()
-	return d
-}
-
 
 func NewNIPSTWithChallenge(challenge *common.Hash, poetRef []byte) *types.NIPST {
 	return &types.NIPST{

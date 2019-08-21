@@ -17,10 +17,13 @@ func TestPostClient(t *testing.T) {
 	c := NewPostClient(&postCfg, id)
 	assert.NotNil(c)
 
-	idsToCleanup = append(idsToCleanup, id)
 	commitment, err := c.Initialize()
 	assert.NoError(err)
 	assert.NotNil(commitment)
+	defer func() {
+		err := c.Reset()
+		assert.NoError(err)
+	}()
 
 	err = verifyPost(commitment, postCfg.SpacePerUnit, postCfg.NumProvenLabels, postCfg.Difficulty)
 	assert.NoError(err)

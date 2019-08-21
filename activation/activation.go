@@ -40,7 +40,6 @@ func (provider *PoETNumberOfTickProvider) NumOfTicks() uint64 {
 
 type NipstBuilder interface {
 	BuildNIPST(challenge *common.Hash) (*types.NIPST, error)
-	GetDataDirPath() string
 }
 
 type IdStore interface {
@@ -261,12 +260,13 @@ func (b *Builder) StartPost(rewardAddress address.Address, dataDir string, space
 		return fmt.Errorf("already started")
 	}
 
+	b.log.Info("Starting post, reward address: %x", rewardAddress)
+
 	b.initStatus = InitInProgress
+	b.postProver.SetParams(dataDir, space)
 	b.InitLock.Unlock()
 
-	b.log.Info("Starting post, reward address: %x", rewardAddress)
 	b.SetCoinbaseAccount(rewardAddress)
-	b.postProver.SetParams(dataDir, space)
 
 	initialized, err := b.postProver.IsInitialized()
 	if err != nil {
@@ -323,8 +323,9 @@ func (b *Builder) MiningStats() (int, string, string) {
 	acc := b.getCoinbaseAccount()
 	b.InitLock.RLock()
 	stats := b.initStatus
+	datadir := b.postProver.Cfg().DataDir
 	b.InitLock.RUnlock()
-	return stats, acc.String(), b.nipstBuilder.GetDataDirPath()
+	return stats, acc.String(), datadir
 }
 
 func (b *Builder) SetCoinbaseAccount(rewardAddress address.Address) {
