@@ -40,6 +40,7 @@ func (provider *PoETNumberOfTickProvider) NumOfTicks() uint64 {
 
 type NipstBuilder interface {
 	BuildNIPST(challenge *common.Hash) (*types.NIPST, error)
+	GetDataDirPath() string
 }
 
 type IdStore interface {
@@ -317,6 +318,15 @@ func (b *Builder) StartPost(rewardAddress address.Address, dataDir string, space
 	return nil
 }
 
+// MiningStats returns state of post init, coinbase reward account and data directory path for post commitment
+func (b *Builder) MiningStats() (int, string, string) {
+	acc := b.getCoinbaseAccount()
+	b.InitLock.RLock()
+	stats := b.initStatus
+	b.InitLock.RUnlock()
+	return stats, acc.String(), b.nipstBuilder.GetDataDirPath()
+}
+
 func (b *Builder) SetCoinbaseAccount(rewardAddress address.Address) {
 	b.accountLock.Lock()
 	b.coinbaseAccount = rewardAddress
@@ -468,6 +478,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 	b.log.Event().Info("atx published!", log.AtxId(atx.ShortId()), log.String("prev_atx_id", atx.PrevATXId.ShortString()),
 		log.String("post_atx_id", atx.PositioningAtx.ShortString()), log.LayerId(uint64(atx.PubLayerIdx)), log.EpochId(uint64(atx.PubLayerIdx.GetEpoch(b.layersPerEpoch))),
 		log.Uint32("active_set", atx.ActiveSetSize), log.String("miner", b.nodeId.Key[:5]), log.Int("view", len(atx.View)))
+
 	return nil
 }
 

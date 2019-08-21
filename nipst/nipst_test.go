@@ -1,7 +1,6 @@
 package nipst
 
 import (
-	"flag"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/types"
