@@ -192,19 +192,6 @@ func (s SpacemeshGrpcService) StartMining(ctx context.Context, message *pb.InitP
 	return &pb.SimpleMessage{Value: "ok"}, nil
 }
 
-func (s SpacemeshGrpcService) SetCommitmentSize(ctx context.Context, message *pb.CommitmentSizeMessage) (*pb.SimpleMessage, error) {
-	//todo: we should review if this RPC is necessary
-	log.Info("GRPC SetCommitmentSize msg")
-
-	return &pb.SimpleMessage{Value: "ok"}, nil
-}
-
-func (s SpacemeshGrpcService) SetLogicalDrive(ctx context.Context, message *pb.LogicalDriveMessage) (*pb.SimpleMessage, error) {
-	//todo: we should review if this RPC is necessary
-	log.Info("GRPC SetLogicalDrive msg")
-	return &pb.SimpleMessage{Value: "ok"}, nil
-}
-
 func (s SpacemeshGrpcService) SetAwardsAddress(ctx context.Context, id *pb.AccountId) (*pb.SimpleMessage, error) {
 	log.Info("GRPC SetAwardsAddress msg")
 	addr, err := address.StringToAddress(id.Address)
@@ -215,10 +202,11 @@ func (s SpacemeshGrpcService) SetAwardsAddress(ctx context.Context, id *pb.Accou
 	return &pb.SimpleMessage{Value: "ok"}, nil
 }
 
-func (s SpacemeshGrpcService) GetInitProgress(ctx context.Context, empty *empty.Empty) (*pb.SimpleMessage, error) {
+func (s SpacemeshGrpcService) GetMiningStats(ctx context.Context, empty *empty.Empty) (*pb.MiningStats, error) {
 	//todo: we should review if this RPC is necessary
 	log.Info("GRPC GetInitProgress msg")
-	return &pb.SimpleMessage{Value: "80"}, nil
+	stat, coinbase, dataDir := s.Mining.MiningStats()
+	return &pb.MiningStats{Status: int32(stat), Coinbase: coinbase, DataDir: dataDir}, nil
 }
 
 func (s SpacemeshGrpcService) GetTotalAwards(ctx context.Context, empty *empty.Empty) (*pb.SimpleMessage, error) {

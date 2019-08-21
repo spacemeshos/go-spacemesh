@@ -323,7 +323,7 @@ func Test_Patterns(t *testing.T) {
 	mp[block4.ID()] = struct{}{}
 	mp[block5.ID()] = struct{}{}
 	layers.SaveGoodPattern(1, map[types.BlockID]struct{}{})
-	layers.GetGoodPattern(1)
+	layers.ContextuallyValidBlock(1)
 
 	_, ok := mp[block1.ID()]
 	assert.True(t, ok)
