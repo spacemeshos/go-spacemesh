@@ -182,7 +182,7 @@ func (tp *TransactionProcessor) ApplyRewards(layer types.LayerID, minersAccounts
 			layer)
 
 		tp.globalState.AddBalance(account, reward)
-		events.Publish(events.RewardReceivedEvent{Coinbase: account.String(), Amount: reward.Uint64()})
+		events.Publish(events.RewardReceived{Coinbase: account.String(), Amount: reward.Uint64()})
 	}
 	newHash, err := tp.globalState.Commit(false)
 
@@ -258,7 +258,7 @@ func (tp *TransactionProcessor) Process(transactions mesh.Transactions, trnsBySe
 			//todo: should we abort all transaction processing if we failed this one?
 			err := tp.ApplyTransaction(trns)
 			//todo: think maybe moving these to another validation process before palying transactions.
-			events.Publish(events.NewTxEvent{TxId: trns.Hash().String(),
+			events.Publish(events.NewTx{Id: trns.Hash().String(),
 				Origin:      trns.Origin.String(),
 				Destination: trns.Recipient.String(),
 				Amount:      trns.Amount.Uint64(),
@@ -267,7 +267,7 @@ func (tp *TransactionProcessor) Process(transactions mesh.Transactions, trnsBySe
 				errors++
 				tp.Log.Error("transaction aborted: %v", err)
 			}
-			events.Publish(events.ValidTxEvent{TxId: trns.Hash().String(), Valid: err == nil})
+			events.Publish(events.ValidTx{Id: trns.Hash().String(), Valid: err == nil})
 		}
 	}
 	return errors

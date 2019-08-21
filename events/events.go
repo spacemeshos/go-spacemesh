@@ -6,13 +6,13 @@ import (
 )
 
 const (
-	NewBlock channelId = 1 + iota
-	BlockValid
-	NewAtx
-	AtxValid
-	NewTx
-	TxValid
-	RewardReceived
+	EventNewBlock channelId = 1 + iota
+	EventBlockValid
+	EventNewAtx
+	EventAtxValid
+	EventNewTx
+	EventTxValid
+	EventRewardReceived
 )
 
 // publisher is the event publisher singleton.
@@ -22,7 +22,10 @@ var publisher *EventPublisher
 func Publish(event Event) {
 	if publisher != nil {
 		err := publisher.PublishEvent(event)
-		log.Error("pubsub error: %v", err)
+		if err != nil {
+			log.Error("pubsub error: %v", err)
+		}
+
 	}
 }
 
@@ -70,73 +73,68 @@ func (p *EventPublisher) Close() error {
 	return p.sock.Close()
 }
 
-type BasicEvent struct {
-	Id byte
-}
-
-type NewBlockEvent struct {
-	BasicEvent
+type NewBlock struct {
+	Id    uint64
 	Layer uint64
-	Block uint64
 	Atx   string
 }
 
-func (NewBlockEvent) getChannel() channelId {
-	return NewBlock
+func (NewBlock) getChannel() channelId {
+	return EventNewBlock
 }
 
-type ValidBlockEvent struct {
-	Block uint64
+type ValidBlock struct {
+	Id    uint64
 	Valid bool
 }
 
-func (ValidBlockEvent) getChannel() channelId {
-	return BlockValid
+func (ValidBlock) getChannel() channelId {
+	return EventBlockValid
 }
 
-type NewAtxEvent struct {
-	AtxId string
+type NewAtx struct {
+	Id string
 }
 
-func (NewAtxEvent) getChannel() channelId {
-	return NewAtx
+func (NewAtx) getChannel() channelId {
+	return EventNewAtx
 }
 
-type ValidAtxEvent struct {
-	AtxId string
+type ValidAtx struct {
+	Id    string
 	Valid bool
 }
 
-func (ValidAtxEvent) getChannel() channelId {
-	return AtxValid
+func (ValidAtx) getChannel() channelId {
+	return EventAtxValid
 }
 
-type NewTxEvent struct {
-	TxId        string
+type NewTx struct {
+	Id          string
 	Origin      string
 	Destination string
 	Amount      uint64
 	Gas         uint64
 }
 
-func (NewTxEvent) getChannel() channelId {
-	return NewTx
+func (NewTx) getChannel() channelId {
+	return EventNewTx
 }
 
-type ValidTxEvent struct {
-	TxId  string
+type ValidTx struct {
+	Id    string
 	Valid bool
 }
 
-func (ValidTxEvent) getChannel() channelId {
-	return TxValid
+func (ValidTx) getChannel() channelId {
+	return EventTxValid
 }
 
-type RewardReceivedEvent struct {
+type RewardReceived struct {
 	Coinbase string
 	Amount   uint64
 }
 
-func (RewardReceivedEvent) getChannel() channelId {
-	return RewardReceived
+func (RewardReceived) getChannel() channelId {
+	return EventRewardReceived
 }

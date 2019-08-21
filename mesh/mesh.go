@@ -209,7 +209,7 @@ func (m *Mesh) ExtractUniqueOrderedTransactions(l *types.Layer) []*Transaction {
 
 	for _, b := range sortedBlocks {
 		valid, err := m.ContextualValidity(b.ID())
-		events.Publish(events.ValidBlockEvent{Block: uint64(b.ID()), Valid: valid})
+		events.Publish(events.ValidBlock{Id: uint64(b.ID()), Valid: valid})
 		if !valid {
 			if err != nil {
 				m.Error("could not get contextual validity for block %v", b.ID(), err)
@@ -303,7 +303,7 @@ func (m *Mesh) AddBlock(blk *types.Block) error {
 func (m *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.AddressableSignedTransaction, atxs []*types.ActivationTx) error {
 	m.Debug("add block %d", blk.ID())
 
-	events.Publish(events.NewBlockEvent{Block: uint64(blk.Id), Atx: blk.ATXID.String(), Layer: uint64(blk.LayerIndex)})
+	events.Publish(events.NewBlock{Id: uint64(blk.Id), Atx: blk.ATXID.String(), Layer: uint64(blk.LayerIndex)})
 	atxids := make([]types.AtxId, 0, len(atxs))
 	for _, t := range atxs {
 		//todo this should return an error

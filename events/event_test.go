@@ -21,12 +21,12 @@ func TestNewBlockEvent(t *testing.T) {
 	defer func() {
 		assert.NoError(t, s.Close())
 	}()
-	c, err := s.Subscribe(NewBlock)
+	c, err := s.Subscribe(EventNewBlock)
 	assert.NoError(t, err)
 	s.StartListening()
 	time.Sleep(5 * time.Second)
 
-	orig := NewBlockEvent{Layer: 1, Block: 234}
+	orig := NewBlock{Layer: 1, Id: 234}
 	err = eventPublisher.PublishEvent(orig)
 	assert.NoError(t, err)
 
@@ -36,7 +36,7 @@ func TestNewBlockEvent(t *testing.T) {
 	case <-tm.C:
 		assert.Fail(t, "didnt receive message")
 	case rec := <-c:
-		e := NewBlockEvent{}
+		e := NewBlock{}
 
 		err := types.BytesToInterface(rec[1:], &e)
 		assert.NoError(t, err)
