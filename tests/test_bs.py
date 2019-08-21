@@ -22,6 +22,7 @@ from tests.hare.assert_hare import validate_hare
 BOOT_DEPLOYMENT_FILE = './k8s/bootstrapoet-w-conf.yml'
 BOOT_STATEFULSET_FILE = './k8s/bootstrapoet-w-conf-ss.yml'
 CLIENT_DEPLOYMENT_FILE = './k8s/client-w-conf.yml'
+CLIENT_STATEFULSET_FILE = './k8s/client-w-conf-ss.yml'
 CLIENT_POD_FILE = './k8s/single-client-w-conf.yml'
 CURL_POD_FILE = './k8s/curl.yml'
 
@@ -186,11 +187,21 @@ def setup_clients_in_namespace(namespace, bs_deployment_info, client_deployment_
 
     cspec = get_conf(bs_deployment_info, client_config, oracle, poet)
 
-    resp = deployment.create_deployment(CLIENT_DEPLOYMENT_FILE, namespace,
-                                        deployment_id=client_deployment_info.deployment_id,
-                                        replica_size=client_config['replicas'],
-                                        container_specs=cspec,
-                                        time_out=dep_time_out)
+    dep_type = 'deployment' if 'deployment_type' not in client_config else client_config['deployment_type']
+    if dep_type == 'deployment':
+        resp = deployment.create_deployment(CLIENT_DEPLOYMENT_FILE, namespace,
+                                            deployment_id=client_deployment_info.deployment_id,
+                                            replica_size=client_config['replicas'],
+                                            container_specs=cspec,
+                                            time_out=dep_time_out)
+    elif dep_type == 'statefulset':
+        resp = statefulset.create_statefulset(CLIENT_STATEFULSET_FILE, namespace,
+                                              deployment_id=client_deployment_info.deployment_id,
+                                              replica_size=client_config['replicas'],
+                                              container_specs=cspec,
+                                              time_out=dep_time_out)
+    else:
+        raise Exception("Unknown deployment type in client configuration")
 
     client_deployment_info.deployment_name = resp.metadata._name
     client_pods = (
