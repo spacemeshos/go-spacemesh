@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -34,7 +33,7 @@ type Signer interface {
 }
 
 type TxValidator interface {
-	ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (address.Address, error)
+	GetValidAddressableTx(tx *types.SerializableSignedTransaction) (*types.AddressableSignedTransaction, error)
 }
 
 type AtxValidator interface {
@@ -189,7 +188,7 @@ func calcHdistRange(id types.LayerID, hdist types.LayerID) (bottom types.LayerID
 }
 
 func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibilityProof types.BlockEligibilityProof,
-	txs []types.AddressableSignedTransaction, atx []types.ActivationTx) (*types.Block, error) {
+	txs []types.AddressableSignedTransaction, atxids []types.AtxId) (*types.Block, error) {
 
 	var votes []types.BlockID = nil
 	var err error
@@ -213,11 +212,6 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 	var txids []types.TransactionId
 	for _, t := range txs {
 		txids = append(txids, types.GetTransactionId(t.SerializableSignedTransaction))
-	}
-
-	var atxids []types.AtxId
-	for _, t := range atx {
-		atxids = append(atxids, t.Id())
 	}
 
 	b := types.MiniBlock{
@@ -247,15 +241,6 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 	return &types.Block{MiniBlock: b, Signature: t.Signer.Sign(blockBytes)}, nil
 }
 
-func (t *BlockBuilder) validateAndBuildTx(x *types.SerializableSignedTransaction) (*types.AddressableSignedTransaction, error) {
-	addr, err := t.txValidator.ValidateTransactionSignature(x)
-	if err != nil {
-		return nil, err
-	}
-
-	return &types.AddressableSignedTransaction{SerializableSignedTransaction: x, Address: addr}, nil
-}
-
 func (t *BlockBuilder) listenForTx() {
 	t.Log.Info("start listening for txs")
 	for {
@@ -276,7 +261,7 @@ func (t *BlockBuilder) listenForTx() {
 				}
 
 				id := types.GetTransactionId(x)
-				fullTx, err := t.validateAndBuildTx(x)
+				fullTx, err := t.txValidator.GetValidAddressableTx(x)
 				if err != nil {
 					t.Log.Error("Transaction validation failed for id=%v, err=%v", id, err)
 					continue
@@ -310,7 +295,7 @@ func (t *BlockBuilder) handleGossipAtx(data service.GossipMessage) {
 	if data == nil {
 		return
 	}
-	atx, err := types.BytesAsAtx(data.Bytes())
+	atx, err := types.BytesAsAtx(data.Bytes(), nil)
 	if err != nil {
 		t.Error("cannot parse incoming ATX")
 		return
@@ -362,7 +347,10 @@ func (t *BlockBuilder) acceptBlockData() {
 
 			txList := t.TransactionPool.PopItems(MaxTransactionsPerBlock)
 
-			atxList := t.AtxPool.PopItems(MaxTransactionsPerBlock)
+			var atxList []types.AtxId
+			for _, atx := range t.AtxPool.PopItems(MaxTransactionsPerBlock) {
+				atxList = append(atxList, atx.Id())
+			}
 
 			for _, eligibilityProof := range proofs {
 				blk, err := t.createBlock(types.LayerID(id), atxID, eligibilityProof, txList, atxList)

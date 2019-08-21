@@ -28,7 +28,8 @@ func init() {
 }
 
 func getPersistentMash() *mesh.MeshDB {
-	return mesh.NewPersistentMeshDB(fmt.Sprintf(Path+"ninje_tortoise/"), log.New("ninje_tortoise", "", ""))
+	db, _ := mesh.NewPersistentMeshDB(fmt.Sprintf(Path+"ninje_tortoise/"), log.New("ninje_tortoise", "", ""))
+	return db
 }
 
 func persistenceTeardown() {
@@ -214,8 +215,7 @@ func TestNinjaTortoise_Sanity1(t *testing.T) {
 	layers := 20
 	mdb := getInMemMesh()
 	alg := sanity(mdb, layers, layerSize, patternSize, 0.2)
-	res := vec{patternSize * (layers - 1), 0}
-	assert.True(t, alg.tTally[alg.pBase][config.GenesisId] == res, "lyr %d tally was %d insted of %d", layers, alg.tTally[alg.pBase][config.GenesisId], res)
+	assert.True(t, alg.pBase.Layer() == types.LayerID(layers-1))
 }
 
 func sanity(mdb *mesh.MeshDB, layers int, layerSize int, patternSize int, badBlks float64) *ninjaTortoise {
@@ -236,12 +236,13 @@ func sanity(mdb *mesh.MeshDB, layers int, layerSize int, patternSize int, badBlk
 		l = lyr
 	}
 
-	alg := NewNinjaTortoise(layerSize, mdb, lg)
+	alg := NewNinjaTortoise(layerSize, mdb, 5, lg)
 
 	for _, lyr := range lyrs {
 		start := time.Now()
 		alg.handleIncomingLayer(lyr)
 		alg.Debug("Time to process layer: %v ", time.Since(start))
+		fmt.Println(fmt.Sprintf("lyr %v tally was %d", lyr, alg.tTally[alg.pBase][config.GenesisId]))
 		l = lyr
 	}
 
@@ -255,7 +256,7 @@ func sanity(mdb *mesh.MeshDB, layers int, layerSize int, patternSize int, badBlk
 func TestNinjaTortoise_Sanity2(t *testing.T) {
 	defer persistenceTeardown()
 	mdb := getInMemMesh()
-	alg := NewNinjaTortoise(3, mdb, log.New("TestNinjaTortoise_Sanity2", "", ""))
+	alg := NewNinjaTortoise(3, mdb, 5, log.New("TestNinjaTortoise_Sanity2", "", ""))
 	l := createMulExplicitLayer(0, map[types.LayerID]*types.Layer{}, nil, 1)
 	l1 := createMulExplicitLayer(1, map[types.LayerID]*types.Layer{l.Index(): l}, map[types.LayerID][]int{0: {0}}, 3)
 	l2 := createMulExplicitLayer(2, map[types.LayerID]*types.Layer{l1.Index(): l1}, map[types.LayerID][]int{1: {0, 1, 2}}, 3)

@@ -65,13 +65,14 @@ func (vq *validationQueue) traverse(s *Syncer, blk *types.BlockHeader) error {
 		}
 
 		vq.visited[block.ID()] = struct{}{}
-		s.Info("Validating view Block %v", block.ID())
+		s.Info("Checking eligibility for block %v", block.ID())
 		if eligable, err := s.BlockSignedAndEligible(block); err != nil || !eligable {
 			return errors.New(fmt.Sprintf("Block %v eligiblety check failed %v", blk.ID(), err))
 		}
 
 		vq.callbacks[block.ID()] = vq.finishBlockCallback(s, block)
 
+		s.Info("Validating view for block %v", block.ID())
 		if vq.addDependencies(&block.BlockHeader, s.GetBlock) == false {
 			if err := vq.addToDatabase(block.ID()); err != nil {
 				return err
@@ -103,6 +104,11 @@ func (vq *validationQueue) finishBlockCallback(s *Syncer, block *types.Block) fu
 		txs, atxs, err := s.DataAvailabilty(block)
 		if err != nil {
 			return err
+		}
+
+		//validate block's votes
+		if valid := s.validateVotes(block); valid == false {
+			return errors.New(fmt.Sprintf("validate votes failed for block %v", block.ID()))
 		}
 
 		if err := s.AddBlockWithTxs(block, txs, atxs); err != nil {

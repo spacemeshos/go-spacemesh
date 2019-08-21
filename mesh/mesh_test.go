@@ -6,37 +6,35 @@ import (
 	"github.com/google/uuid"
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"math/big"
 	"testing"
 	"time"
 )
 
-type MeshValidatorMock struct {
-	mdb *MeshDB
+type ContextualValidityMock struct {
 }
 
-func (m *MeshValidatorMock) GetGoodPatternBlocks(layer types.LayerID) (map[types.BlockID]struct{}, error) {
-	blocks, err := m.mdb.LayerBlockIds(layer)
-	if err != nil {
-		return nil, err
-	}
-	mp := make(map[types.BlockID]struct{})
-	for _, b := range blocks {
-		res, err := m.mdb.getContextualValidity(b)
-		if err != nil {
-			continue
-		}
-		if res {
-			mp[b] = struct{}{}
-		}
-	}
+func (m *ContextualValidityMock) Put(key, value []byte) error {
+	return nil
+}
 
-	return mp, nil
+func (m *ContextualValidityMock) Get(key []byte) (value []byte, err error) {
+	return TRUE, nil
+}
+
+func (m *ContextualValidityMock) Delete(key []byte) error {
+	return nil
+}
+
+func (m *ContextualValidityMock) Close() {
+
+}
+
+type MeshValidatorMock struct {
+	mdb *MeshDB
 }
 
 func (m *MeshValidatorMock) HandleIncomingLayer(layer *types.Layer) (types.LayerID, types.LayerID) {
@@ -44,7 +42,6 @@ func (m *MeshValidatorMock) HandleIncomingLayer(layer *types.Layer) (types.Layer
 }
 func (m *MeshValidatorMock) HandleLateBlock(bl *types.Block)              {}
 func (m *MeshValidatorMock) RegisterLayerCallback(func(id types.LayerID)) {}
-func (mlg *MeshValidatorMock) ContextualValidity(id types.BlockID) bool   { return true }
 
 type MockState struct{}
 
@@ -71,19 +68,24 @@ type AtxDbMock struct {
 func (*AtxDbMock) IsIdentityActive(edId string, layer types.LayerID) (*types.NodeId, bool, types.AtxId, error) {
 	return nil, true, *types.EmptyAtxId, nil
 }
-func (t *AtxDbMock) GetEpochAtxIds(id types.EpochId) ([]types.AtxId, error) {
-	return []types.AtxId{}, nil /*todo: mock if needed */
+
+func (t *AtxDbMock) GetPosAtxId(id types.EpochId) (types.AtxId, error) {
+	return types.AtxId{}, nil /*todo: mock if needed */
 }
 
-func (t *AtxDbMock) GetAtx(id types.AtxId) (*types.ActivationTx, error) {
+func (t *AtxDbMock) GetAtx(id types.AtxId) (*types.ActivationTxHeader, error) {
 	if id == *types.EmptyAtxId {
 		return nil, fmt.Errorf("trying to fetch empty atx id")
 	}
 
 	if atx, ok := t.db[id]; ok {
-		return atx, nil
+		return &atx.ActivationTxHeader, nil
 	}
 	return nil, fmt.Errorf("cannot find atx")
+}
+
+func (t *AtxDbMock) GetFullAtx(id types.AtxId) (*types.ActivationTx, error) {
+	panic("implement me")
 }
 
 func (t *AtxDbMock) AddAtx(id types.AtxId, atx *types.ActivationTx) {
@@ -277,90 +279,61 @@ func TestLayers_OrphanBlocks(t *testing.T) {
 
 }
 
-func createLayerWithAtx(t *testing.T, msh *Mesh, id types.LayerID, numOfBlocks int, atxs []*types.ActivationTx, votes []types.BlockID, views []types.BlockID, context bool) (created []types.BlockID) {
-	if numOfBlocks < len(atxs) {
-		panic("not supported")
-	}
-	for i := 0; i < numOfBlocks; i++ {
-		rid := rand.Uint64()
-		bid := types.BlockID(rid)
-		block1 := types.NewExistingBlock(bid, id, []byte("data1"))
-		block1.BlockVotes = append(block1.BlockVotes, votes...)
-		if i < len(atxs) {
-			block1.AtxIds = append(block1.AtxIds, atxs[i].Id())
-			fmt.Printf("adding i=%v bid=%v atxid=%v", i, bid, atxs[i].Id().String())
-		}
-		block1.ViewEdges = append(block1.ViewEdges, views...)
-		msh.setContextualValidity(bid, context)
-		var actualAtxs []*types.ActivationTx
-		if i < len(atxs) {
-			actualAtxs = atxs[i : i+1]
-		}
-		err := msh.AddBlockWithTxs(block1, []*types.AddressableSignedTransaction{}, actualAtxs)
-		require.NoError(t, err)
-		created = append(created, block1.Id)
-	}
-	return
+func TestLayers_OrphanBlocksClearEmptyLayers(t *testing.T) {
+	layers := getMesh("t6")
+	defer layers.Close()
+	block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	block2 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	block3 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 2, []byte("data data data"))
+	block4 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 2, []byte("data data data"))
+	block5 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 3, []byte("data data data"))
+	block5.AddView(block1.ID())
+	block5.AddView(block2.ID())
+	block5.AddView(block3.ID())
+	block5.AddView(block4.ID())
+	layers.AddBlock(block1)
+	layers.AddBlock(block2)
+	layers.AddBlock(block3)
+	layers.AddBlock(block4)
+	arr, _ := layers.GetOrphanBlocksBefore(3)
+	assert.True(t, len(arr) == 4, "wrong layer")
+	arr2, _ := layers.GetOrphanBlocksBefore(2)
+	assert.Equal(t, len(arr2), 2)
+	layers.AddBlock(block5)
+	assert.Equal(t, 1, len(layers.orphanBlocks))
 }
 
-func rndStr() string {
-	a := make([]byte, 4)
-	rand.Read(a)
-	return string(a)
-}
+func Test_Patterns(t *testing.T) {
+	layers := getMesh("t7")
+	defer layers.Close()
+	block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	block2 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	block3 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	block4 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	block5 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	layers.AddBlock(block1)
+	layers.AddBlock(block2)
+	layers.AddBlock(block3)
+	layers.AddBlock(block4)
+	layers.AddBlock(block5)
+	mp := map[types.BlockID]struct{}{}
+	mp[block1.ID()] = struct{}{}
+	mp[block2.ID()] = struct{}{}
+	mp[block3.ID()] = struct{}{}
+	mp[block4.ID()] = struct{}{}
+	mp[block5.ID()] = struct{}{}
+	layers.SaveGoodPattern(1, map[types.BlockID]struct{}{})
+	layers.GetGoodPattern(1)
 
-func TestMesh_ActiveSetForLayerView(t *testing.T) {
-	rand.Seed(1234573298579)
-	layers := getMesh(t.Name())
-	layers.AtxDB = &AtxDbMock{make(map[types.AtxId]*types.ActivationTx), make(map[types.AtxId]*types.NIPST)}
-	id1 := types.NodeId{Key: rndStr(), VRFPublicKey: []byte("anton")}
-	id2 := types.NodeId{Key: rndStr(), VRFPublicKey: []byte("anton")}
-	id3 := types.NodeId{Key: rndStr(), VRFPublicKey: []byte("anton")}
-	id4 := types.NodeId{Key: rndStr(), VRFPublicKey: []byte("anton")}
-	coinbase1 := address.HexToAddress("aaaa")
-	coinbase2 := address.HexToAddress("bbbb")
-	coinbase3 := address.HexToAddress("cccc")
-	coinbase4 := address.HexToAddress("cccc")
-	atxs := []*types.ActivationTx{
-		types.NewActivationTx(id1, coinbase1, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 0, []types.BlockID{}, &types.NIPST{}),
-		types.NewActivationTx(id1, coinbase1, 0, *types.EmptyAtxId, 2, 0, *types.EmptyAtxId, 0, []types.BlockID{}, &types.NIPST{}),
-		types.NewActivationTx(id1, coinbase1, 0, *types.EmptyAtxId, 3, 0, *types.EmptyAtxId, 0, []types.BlockID{}, &types.NIPST{}),
-		types.NewActivationTx(id2, coinbase2, 0, *types.EmptyAtxId, 2, 0, *types.EmptyAtxId, 0, []types.BlockID{}, &types.NIPST{}),
-		types.NewActivationTx(id4, coinbase4, 0, *types.EmptyAtxId, 2, 0, *types.EmptyAtxId, 0, []types.BlockID{}, &types.NIPST{}),
-		types.NewActivationTx(id3, coinbase3, 0, *types.EmptyAtxId, 11, 0, *types.EmptyAtxId, 0, []types.BlockID{}, &types.NIPST{}),
-	}
-
-	poetRef := []byte{0xba, 0xb0}
-	for _, atx := range atxs {
-		hash, err := atx.NIPSTChallenge.Hash()
-		assert.NoError(t, err)
-		atx.Nipst = nipst.NewNIPSTWithChallenge(hash, poetRef)
-		layers.AtxDB.(*AtxDbMock).AddAtx(atx.Id(), atx)
-	}
-
-	fmt.Println("ID4 ", atxs[4].Id().Hex())
-	blocks := createLayerWithAtx(t, layers, 1, 6, atxs, []types.BlockID{}, []types.BlockID{}, true)
-	before := blocks[:4]
-	four := blocks[4:5]
-	after := blocks[5:]
-	for i := 2; i <= 10; i++ {
-		before = createLayerWithAtx(t, layers, types.LayerID(i), 1, []*types.ActivationTx{}, before, before, true)
-		four = createLayerWithAtx(t, layers, types.LayerID(i), 1, []*types.ActivationTx{}, four, four, true)
-		after = createLayerWithAtx(t, layers, types.LayerID(i), 1, []*types.ActivationTx{}, after, after, true)
-	}
-	layers.setContextualValidity(four[0], false)
-
-	actives, err := layers.ActiveSetForLayerConsensusView(10, 6)
-	assert.NoError(t, err)
-	assert.Equal(t, 1, int(len(actives)))
-	_, ok := actives[id2.Key]
+	_, ok := mp[block1.ID()]
 	assert.True(t, ok)
-}
+	_, ok = mp[block2.ID()]
+	assert.True(t, ok)
+	_, ok = mp[block3.ID()]
+	assert.True(t, ok)
+	_, ok = mp[block4.ID()]
+	assert.True(t, ok)
+	_, ok = mp[block5.ID()]
+	assert.True(t, ok)
 
-func TestMesh_ActiveSetForLayerView2(t *testing.T) {
-	layers := getMesh(t.Name())
-	actives, err := layers.ActiveSetForLayerConsensusView(0, 10)
-	assert.Error(t, err)
-	assert.Equal(t, "tried to retrieve active set for epoch 0", err.Error())
-	assert.Nil(t, actives)
 }

@@ -4,7 +4,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -47,16 +46,8 @@ type EligibilityValidator interface {
 	BlockSignedAndEligible(block *types.Block) (bool, error)
 }
 
-type TxSigValidator interface {
-	ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (address.Address, error)
-}
-
-type blockValidator struct {
-	EligibilityValidator
-}
-
-func NewBlockValidator(bev EligibilityValidator) BlockValidator {
-	return &blockValidator{bev}
+type TxValidator interface {
+	GetValidAddressableTx(tx *types.SerializableSignedTransaction) (*types.AddressableSignedTransaction, error)
 }
 
 type Configuration struct {
@@ -64,6 +55,7 @@ type Configuration struct {
 	Concurrency    int //number of workers for sync method
 	LayerSize      int
 	RequestTimeout time.Duration
+	Hdist          int
 }
 
 type LayerValidator interface {
@@ -80,7 +72,7 @@ type Syncer struct {
 	*server.MessageServer
 
 	lValidator        LayerValidator
-	sigValidator      TxSigValidator
+	txValidator       TxValidator
 	poetDb            PoetDb
 	txpool            TxMemPool
 	atxpool           AtxMemPool
@@ -91,6 +83,7 @@ type Syncer struct {
 	clock             timesync.LayerTimer
 	exit              chan struct{}
 	currentLayerMutex sync.RWMutex
+	syncRoutineWg     sync.WaitGroup
 }
 
 func (s *Syncer) ForceSync() {
@@ -98,8 +91,12 @@ func (s *Syncer) ForceSync() {
 }
 
 func (s *Syncer) Close() {
+	s.Info("Closing syncer")
 	close(s.exit)
 	close(s.forceSync)
+	// TODO: broadly implement a better mechanism for shutdown
+	time.Sleep(5 * time.Millisecond) // "ensures" no more sync routines can be created, ok for now
+	s.syncRoutineWg.Wait()           // must be called after we ensure no more sync routines can be created
 	s.MessageServer.Close()
 	s.Peers.Close()
 }
@@ -132,6 +129,7 @@ func (s *Syncer) Start() {
 func (s *Syncer) getSyncRoutine() func() {
 	return func() {
 		if atomic.CompareAndSwapUint32(&s.SyncLock, IDLE, RUNNING) {
+			s.syncRoutineWg.Add(1)
 			s.Synchronise()
 			atomic.StoreUint32(&s.SyncLock, IDLE)
 		}
@@ -144,7 +142,7 @@ func (s *Syncer) run() {
 	for {
 		select {
 		case <-s.exit:
-			s.Debug("Work stoped")
+			s.Debug("Work stopped")
 			return
 		case <-s.forceSync:
 			go syncRoutine()
@@ -159,7 +157,7 @@ func (s *Syncer) run() {
 }
 
 //fires a sync every sm.syncInterval or on force space from outside
-func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool AtxMemPool, sv TxSigValidator, bv BlockValidator, poetdb PoetDb, conf Configuration, clock timesync.LayerTimer, currentLayer types.LayerID, logger log.Log) *Syncer {
+func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool AtxMemPool, tv TxValidator, bv BlockValidator, poetdb PoetDb, conf Configuration, clock timesync.LayerTimer, currentLayer types.LayerID, logger log.Log) *Syncer {
 	s := &Syncer{
 		BlockValidator: bv,
 		Configuration:  conf,
@@ -168,7 +166,7 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool A
 		Peers:          p2p.NewPeers(srv, logger.WithName("peers")),
 		MessageServer:  server.NewMsgServer(srv.(server.Service), syncProtocol, conf.RequestTimeout, make(chan service.DirectMessage, p2pconf.ConfigValues.BufferSize), logger.WithName("srv")),
 		lValidator:     layers,
-		sigValidator:   sv,
+		txValidator:    tv,
 		SyncLock:       0,
 		txpool:         txpool,
 		atxpool:        atxpool,
@@ -198,24 +196,33 @@ func (s *Syncer) lastTickedLayer() types.LayerID {
 }
 
 func (s *Syncer) Synchronise() {
-	for currentSyncLayer := s.lValidator.ValidatedLayer() + 1; currentSyncLayer <= s.lastTickedLayer(); currentSyncLayer++ {
-		lastTickedLayer := s.lastTickedLayer()
-		s.Info("syncing layer %v current consensus layer is %d", currentSyncLayer, lastTickedLayer)
+	defer s.syncRoutineWg.Done()
 
-		if s.IsSynced() && currentSyncLayer == lastTickedLayer {
-			continue
-		}
-
+	currentSyncLayer := s.lValidator.ValidatedLayer() + 1
+	if s.lastTickedLayer() == 1 { // skip validation for first layer
+		s.Info("Not syncing in layer 1")
+		return
+	}
+	if s.IsSynced() {
 		lyr, err := s.GetLayer(types.LayerID(currentSyncLayer))
 		if err != nil {
-			s.Info("layer %v is not in the database", currentSyncLayer)
-			if lyr, err = s.getLayerFromNeighbors(currentSyncLayer); err != nil {
-				s.Info("could not get layer %v from neighbors %v", currentSyncLayer, err)
-				return
-			}
+			s.With().Error("failed getting layer even though IsSynced is true", log.Err(err))
+			return
 		}
-
 		s.lValidator.ValidateLayer(lyr) // wait for layer validation
+		return
+	}
+	for ; currentSyncLayer <= s.lastTickedLayer(); currentSyncLayer++ {
+		lastTickedLayer := s.lastTickedLayer()
+		s.Info("syncing layer %v current consensus layer is %d", currentSyncLayer, lastTickedLayer)
+		lyr, err := s.getLayerFromNeighbors(currentSyncLayer)
+		if err != nil {
+			s.Info("could not get layer %v from neighbors %v", currentSyncLayer, err)
+			return
+		}
+		if currentSyncLayer < lastTickedLayer {
+			s.lValidator.ValidateLayer(lyr) // wait for layer validation
+		}
 	}
 }
 
@@ -282,9 +289,14 @@ func (s *Syncer) BlockSyntacticValidation(block *types.Block) ([]*types.Addressa
 		return nil, nil, errors.New(fmt.Sprintf("data availabilty failed for block %v", block.ID()))
 	}
 
-	//validate blocks view
+	//validate block's view
 	if valid := s.ValidateView(block); valid == false {
 		return nil, nil, errors.New(fmt.Sprintf("block %v not syntacticly valid", block.ID()))
+	}
+
+	//validate block's votes
+	if valid := s.validateVotes(block); valid == false {
+		return nil, nil, errors.New(fmt.Sprintf("validate votes failed for block %v", block.ID()))
 	}
 
 	return txs, atxs, nil
@@ -297,6 +309,38 @@ func (s *Syncer) ValidateView(blk *types.Block) bool {
 		return false
 	}
 	return true
+}
+
+func (s *Syncer) validateVotes(blk *types.Block) bool {
+	view := map[types.BlockID]struct{}{}
+	for _, blk := range blk.ViewEdges {
+		view[blk] = struct{}{}
+	}
+
+	vote := map[types.BlockID]struct{}{}
+	for _, blk := range blk.BlockVotes {
+		vote[blk] = struct{}{}
+	}
+
+	traverse := func(b *types.Block) (stop bool, err error) {
+		if _, ok := vote[b.ID()]; ok {
+			delete(vote, b.ID())
+		}
+		return len(vote) == 0, nil
+	}
+
+	// traverse only through the last Hdist layers
+	lowestLayer := blk.LayerIndex - types.LayerID(s.Hdist)
+	if blk.LayerIndex < types.LayerID(s.Hdist) {
+		lowestLayer = 0
+	}
+	err := s.ForBlockInView(view, lowestLayer, traverse)
+	if err == nil && len(vote) > 0 {
+		err = fmt.Errorf("voting on blocks out of view (or out of Hdist), %v", vote)
+	}
+	s.Log.With().Info("validateVotes done", log.Err(err))
+
+	return err == nil
 }
 
 func (s *Syncer) DataAvailabilty(blk *types.Block) ([]*types.AddressableSignedTransaction, []*types.ActivationTx, error) {
@@ -397,15 +441,6 @@ func (s *Syncer) fetchLayerHashes(lyr types.LayerID) (map[string]p2p.Peer, error
 	return m, nil
 }
 
-func (s *Syncer) validateAndBuildTx(x *types.SerializableSignedTransaction) (*types.AddressableSignedTransaction, error) {
-	addr, err := s.sigValidator.ValidateTransactionSignature(x)
-	if err != nil {
-		return nil, err
-	}
-
-	return &types.AddressableSignedTransaction{SerializableSignedTransaction: x, Address: addr}, nil
-}
-
 //returns txs out of txids that are not in the local database
 func (s *Syncer) syncTxs(txids []types.TransactionId) ([]*types.AddressableSignedTransaction, error) {
 
@@ -430,7 +465,7 @@ func (s *Syncer) syncTxs(txids []types.TransactionId) ([]*types.AddressableSigne
 			ntxs := out.([]types.SerializableSignedTransaction)
 			for _, tx := range ntxs {
 				tmp := tx
-				ast, err := s.validateAndBuildTx(&tmp)
+				ast, err := s.txValidator.GetValidAddressableTx(&tmp)
 				if err != nil {
 					id := types.GetTransactionId(&tmp)
 					s.Warning("tx %v not valid %v", hex.EncodeToString(id[:]), err)

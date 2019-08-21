@@ -24,7 +24,7 @@ type valueProvider interface {
 
 // a func to retrieve the active set size for the provided layer
 // this func is assumed to be cpu intensive and hence we cache its results
-type activeSetFunc func(layer types.LayerID, layersPerEpoch uint16) (map[string]struct{}, error)
+type activeSetFunc func(epoch types.EpochId, blocks map[types.BlockID]struct{}) (map[string]struct{}, error)
 
 type casher interface {
 	Add(key, value interface{}) (evicted bool)
@@ -33,6 +33,10 @@ type casher interface {
 
 type Signer interface {
 	Sign(msg []byte) ([]byte, error)
+}
+
+type goodBlocksProvider interface {
+	GetGoodPattern(layer types.LayerID) (map[types.BlockID]struct{}, error)
 }
 
 type VerifierFunc = func(msg, sig, pub []byte) (bool, error)
@@ -46,6 +50,7 @@ type Oracle struct {
 	layersPerEpoch       uint16
 	cache                casher
 	genesisActiveSetSize int
+	blocksProvider       goodBlocksProvider
 	cfg                  eCfg.Config
 	log.Log
 }
@@ -85,7 +90,7 @@ func roundedSafeLayer(layer types.LayerID, safetyParam types.LayerID,
 
 // New returns a new eligibility oracle instance
 func New(beacon valueProvider, activeSetFunc activeSetFunc, vrfVerifier VerifierFunc, vrfSigner Signer,
-	layersPerEpoch uint16, genesisActiveSet int,
+	layersPerEpoch uint16, genesisActiveSet int, goodBlocksProvider goodBlocksProvider,
 	cfg eCfg.Config, log log.Log) *Oracle {
 	c, e := lru.New(cacheSize)
 	if e != nil {
@@ -100,6 +105,7 @@ func New(beacon valueProvider, activeSetFunc activeSetFunc, vrfVerifier Verifier
 		layersPerEpoch:       layersPerEpoch,
 		cache:                c,
 		genesisActiveSetSize: genesisActiveSet,
+		blocksProvider:       goodBlocksProvider,
 		cfg:                  cfg,
 		Log:                  log,
 	}
@@ -212,10 +218,10 @@ func (o *Oracle) Proof(id types.NodeId, layer types.LayerID, round int32) ([]byt
 // Returns a map of all active nodes in the specified layer id
 func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
 	sl := roundedSafeLayer(layer, types.LayerID(o.cfg.ConfidenceParam), o.layersPerEpoch, types.LayerID(o.cfg.EpochOffset))
+	safeEp := sl.GetEpoch(o.layersPerEpoch)
 
-	ep := sl.GetEpoch(o.layersPerEpoch)
 	// check genesis
-	if ep.IsGenesis() {
+	if safeEp.IsGenesis() {
 		return nil, genesisErr
 	}
 
@@ -224,11 +230,17 @@ func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
 		return val.(map[string]struct{}), nil
 	}
 
-	activeMap, err := o.getActiveSet(sl, o.layersPerEpoch)
+	// build a map of all blocks on the current layer
+	mp, err := o.blocksProvider.GetGoodPattern(sl)
+	if err != nil {
+		return nil, err
+	}
+
+	activeMap, err := o.getActiveSet(safeEp, mp)
 	if err != nil {
 		o.With().Error("Could not retrieve active set size", log.Err(err),
 			log.Uint64("layer_id", uint64(layer)), log.Uint64("epoch_id", uint64(layer.GetEpoch(o.layersPerEpoch))),
-			log.Uint64("safe_layer_id", uint64(sl)), log.Uint64("safe_epoch_id", uint64(ep)))
+			log.Uint64("safe_layer_id", uint64(sl)), log.Uint64("safe_epoch_id", uint64(safeEp)))
 		return nil, err
 	}
 
@@ -245,6 +257,7 @@ func (o *Oracle) IsIdentityActiveOnConsensusView(edId string, layer types.LayerI
 			return true, nil // all ids are active in genesis
 		}
 
+		o.With().Error("IsIdentityActiveOnConsensusView erred while calling actives func", log.Err(err))
 		return false, err
 	}
 	_, exist := actives[edId]

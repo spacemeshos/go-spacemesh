@@ -36,9 +36,17 @@ type mockTxProcessor struct {
 	notValid bool
 }
 
+func (m mockTxProcessor) GetValidAddressableTx(tx *types.SerializableSignedTransaction) (*types.AddressableSignedTransaction, error) {
+	addr, err := m.ValidateTransactionSignature(tx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &types.AddressableSignedTransaction{SerializableSignedTransaction: tx, Address: addr}, nil
+}
+
 func (m mockTxProcessor) ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (address.Address, error) {
 	if !m.notValid {
-
 		return address.HexToAddress("0xFFFF"), nil
 	}
 	return address.Address{}, errors.New("invalid sig for tx")
@@ -49,7 +57,7 @@ func ListenerFactory(serv service.Service, peers p2p.Peers, name string, layer t
 	ch <- layer
 	l := log.New(name, "", "")
 	poetDb := activation.NewPoetDb(database.NewMemDatabase(), l.WithName("poetDb"))
-	blockValidator := NewBlockValidator(BlockEligibilityValidatorMock{})
+	blockValidator := BlockEligibilityValidatorMock{}
 	sync := NewSync(serv, getMesh(memoryDB, name), miner.NewTypesTransactionIdMemPool(), miner.NewTypesAtxIdMemPool(), mockTxProcessor{}, blockValidator, poetDb, conf, ch, layer, l)
 	sync.Peers = peers
 	nbl := NewBlockListener(serv, sync, 2, log.New(name, "", ""))
@@ -80,9 +88,9 @@ func TestBlockListener(t *testing.T) {
 	}
 	poetRef := sha256.Sum256(poetProofBytes)
 
-	atx1.Nipst.PoetProofRef = poetRef[:]
-	atx2.Nipst.PoetProofRef = poetRef[:]
-	atx3.Nipst.PoetProofRef = poetRef[:]
+	atx1.Nipst.PostProof.Challenge = poetRef[:]
+	atx2.Nipst.PostProof.Challenge = poetRef[:]
+	atx3.Nipst.PostProof.Challenge = poetRef[:]
 
 	bl1.ProcessAtx(atx1)
 	bl1.ProcessAtx(atx2)
@@ -147,7 +155,7 @@ func TestBlockListener_DataAvailability(t *testing.T) {
 	require.NoError(t, err)
 	poetRef := sha256.Sum256(poetProofBytes)
 
-	atx1.Nipst.PoetProofRef = poetRef[:]
+	atx1.Nipst.PostProof.Challenge = poetRef[:]
 
 	// Push a block with tx1 and and atx1 into bl1.
 
@@ -185,6 +193,116 @@ func TestBlockListener_DataAvailability(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestBlockListener_ValidateVotesGoodFlow(t *testing.T) {
+	block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	block1.Id = 1
+
+	block2 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	block2.Id = 2
+
+	block3 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	block3.Id = 3
+
+	block4 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	block4.Id = 4
+
+	block5 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	block5.Id = 5
+
+	block6 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	block6.Id = 6
+
+	block7 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	block7.Id = 7
+
+	block1.AddView(2)
+	block1.AddView(3)
+	block1.AddView(4)
+	block2.AddView(5)
+	block2.AddView(6)
+	block3.AddView(6)
+	block4.AddView(7)
+	block6.AddView(7)
+
+	block1.AddVote(2)
+	block1.AddVote(3)
+	block2.AddVote(5)
+	block3.AddVote(6)
+	block4.AddVote(7)
+	block6.AddVote(7)
+
+	sim := service.NewSimulator()
+	n1 := sim.NewNode()
+	n2 := sim.NewNode()
+	bl1 := ListenerFactory(n1, PeersMock{func() []p2p.Peer { return []p2p.Peer{n2.PublicKey()} }}, "TestBlockListener_ValidateVotesGoodFlow", 2)
+	defer bl1.Close()
+
+	bl1.MeshDB.AddBlock(block1)
+	bl1.MeshDB.AddBlock(block2)
+	bl1.MeshDB.AddBlock(block3)
+	bl1.MeshDB.AddBlock(block4)
+	bl1.MeshDB.AddBlock(block5)
+	bl1.MeshDB.AddBlock(block6)
+	bl1.MeshDB.AddBlock(block7)
+
+	assert.True(t, bl1.validateVotes(block1))
+}
+
+func TestBlockListener_ValidateVotesBadFlow(t *testing.T) {
+	block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 7, []byte("data data data"))
+	block1.Id = 1
+
+	block2 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 8, []byte("data data data"))
+	block2.Id = 2
+
+	block3 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 8, []byte("data data data"))
+	block3.Id = 3
+
+	block4 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 9, []byte("data data data"))
+	block4.Id = 4
+
+	block5 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 9, []byte("data data data"))
+	block5.Id = 5
+
+	block6 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 9, []byte("data data data"))
+	block6.Id = 6
+
+	block7 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 10, []byte("data data data"))
+	block7.Id = 7
+
+	block1.AddView(2)
+	block1.AddView(3)
+	//block1.AddView(4)
+	block2.AddView(5)
+	block2.AddView(6)
+	block3.AddView(6)
+	block4.AddView(7)
+	block6.AddView(7)
+
+	block1.AddVote(2)
+	block1.AddVote(3)
+	block1.AddVote(4)
+	block2.AddVote(5)
+	block3.AddVote(6)
+	block4.AddVote(7)
+	block6.AddVote(7)
+
+	sim := service.NewSimulator()
+	n1 := sim.NewNode()
+	n2 := sim.NewNode()
+	bl1 := ListenerFactory(n1, PeersMock{func() []p2p.Peer { return []p2p.Peer{n2.PublicKey()} }}, "TestBlockListener_ValidateVotesBadFlow", 2)
+	defer bl1.Close()
+	bl1.MeshDB.AddBlock(block1)
+	bl1.MeshDB.AddBlock(block2)
+	bl1.MeshDB.AddBlock(block3)
+	bl1.MeshDB.AddBlock(block4)
+	bl1.MeshDB.AddBlock(block5)
+	bl1.MeshDB.AddBlock(block6)
+	bl1.MeshDB.AddBlock(block7)
+
+	assert.False(t, bl1.validateVotes(block1))
+}
+
 func TestBlockListenerViewTraversal(t *testing.T) {
 
 	t.Log("TestBlockListener2 start")
@@ -205,6 +323,7 @@ func TestBlockListenerViewTraversal(t *testing.T) {
 	byts, _ := types.InterfaceToBytes(atx)
 	var atx1 types.ActivationTx
 	types.BytesToInterface(byts, &atx1)
+	atx1.CalcAndSetId()
 
 	bl1.ProcessAtx(atx)
 	bl2.ProcessAtx(&atx1)
@@ -339,6 +458,7 @@ func TestBlockListener_TraverseViewBadFlow(t *testing.T) {
 	byts, _ := types.InterfaceToBytes(atx)
 	var atx1 types.ActivationTx
 	types.BytesToInterface(byts, &atx1)
+	atx1.CalcAndSetId()
 
 	bl1.ProcessAtx(atx)
 	bl2.ProcessAtx(&atx1)
@@ -435,7 +555,7 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 		t.Error(err)
 	}
 	poetRef := sha256.Sum256(poetProofBytes)
-	atx.Nipst.PoetProofRef = poetRef[:]
+	atx.Nipst.PostProof.Challenge = poetRef[:]
 
 	bl2.AddBlockWithTxs(blk, []*types.AddressableSignedTransaction{tx}, []*types.ActivationTx{atx})
 
