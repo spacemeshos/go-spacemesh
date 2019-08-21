@@ -11,12 +11,7 @@ import (
 )
 
 func DefaultConfig() config.Config {
-	cfg := config.DefaultConfig()
-	cfg.Difficulty = 5
-	cfg.NumProvenLabels = 10
-	cfg.SpacePerUnit = 1 << 10 // 1KB.
-	cfg.FileSize = 1 << 10     // 1KB.
-	return *cfg
+	return *config.DefaultConfig()
 }
 
 func verifyPost(proof *types.PostProof, space uint64, numProvenLabels uint, difficulty uint) error {
