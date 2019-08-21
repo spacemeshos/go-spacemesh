@@ -41,6 +41,7 @@ type NipstBuilder interface {
 	BuildNIPST(challenge *common.Hash) (*types.NIPST, error)
 	IsPostInitialized() bool
 	InitializePost(logicalDrive string, commitmentSize uint64) (*types.PostProof, error)
+	GetDataDirPath() string
 }
 
 type IdStore interface {
@@ -246,6 +247,7 @@ func (b *Builder) StartPost(rewardAddress address.Address, dataDir string, space
 	b.SetCoinbaseAccount(rewardAddress)
 	b.postInitLock.Lock()
 	if b.initStatus == Done {
+		b.postInitLock.Unlock()
 		return nil
 	}
 	if b.initStatus == InProgress {
@@ -276,6 +278,15 @@ func (b *Builder) StartPost(rewardAddress address.Address, dataDir string, space
 	case err := <-errChan:
 		return err
 	}
+}
+
+// MiningStats returns state of post init, coinbase reward account and data directory path for post commitment
+func (b *Builder) MiningStats() (int, string, string) {
+	acc := b.getCoinbaseAccount()
+	b.postInitLock.RLock()
+	stats := b.initStatus
+	b.postInitLock.RUnlock()
+	return stats, acc.String(), b.nipstBuilder.GetDataDirPath()
 }
 
 func (b *Builder) SetCoinbaseAccount(rewardAddress address.Address) {

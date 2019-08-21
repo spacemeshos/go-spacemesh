@@ -87,6 +87,10 @@ func (t *TxAPIMock) ValidateTransactionSignature(tx *types.SerializableSignedTra
 type MinigApiMock struct {
 }
 
+func (*MinigApiMock) MiningStats() (int, string, string) {
+	return 1, "123456", "/tmp"
+}
+
 func (*MinigApiMock) StartPost(address address.Address, logicalDrive string, commitmentSize uint64) error {
 	return nil
 }
@@ -405,8 +409,8 @@ func TestJsonWalletApi(t *testing.T) {
 	got, want = resp.StatusCode, http.StatusOK
 	assert.Equal(t, want, got)
 
-	// test get eligible layers / miner rewards
-	url = fmt.Sprintf("http://127.0.0.1:%d/v1/startmining", config.ConfigValues.JSONServerPort)
+	// test get statistics about init progress
+	url = fmt.Sprintf("http://127.0.0.1:%d/v1/stats", config.ConfigValues.JSONServerPort)
 	resp, err = http.Post(url, contentType, nil)
 	assert.NoError(t, err, "failed to http post to api endpoint")
 
@@ -416,6 +420,14 @@ func TestJsonWalletApi(t *testing.T) {
 
 	got, want = resp.StatusCode, http.StatusOK
 	assert.Equal(t, want, got)
+
+	var stats pb.MiningStats
+	err = jsonpb.UnmarshalString(string(buf), &stats)
+	assert.NoError(t, err)
+
+	assert.Equal(t, int32(1), stats.Status)
+	assert.Equal(t, "/tmp", stats.DataDir)
+	assert.Equal(t, "123456", stats.Coinbase)
 
 	// stop the services
 	jsonService.StopService()
