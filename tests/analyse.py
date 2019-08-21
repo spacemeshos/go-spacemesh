@@ -26,8 +26,8 @@ def analyze_mining(deployment, last_layer, layers_per_epoch, layer_avg_size, tot
     for x in atxmap:
         lst = []
         for y in atxmap[x]:
-            if y[1] != last_layer:  # check layer
-                lst.append(y[0])  # append data
+            if y.layer_id != last_layer:  # check layer
+                lst.append(y)  # append data
         newmap[x] = lst  # remove last layer
     atxmap = newmap
     total_atxs = sum([len(atxmap[x]) for x in atxmap])
@@ -49,7 +49,7 @@ def analyze_mining(deployment, last_layer, layers_per_epoch, layer_avg_size, tot
     for node in atxmap:
         mp = set()
         for blk in atxmap[node]:
-            mp.add(blk[4])
+            mp.add(blk.published_in_epoch)
         assert len(atxmap[node]) / int((last_layer / layers_per_epoch) + 0.5) == 1
         if len(mp) != int((last_layer / layers_per_epoch)):
             print("mp " + ','.join(mp) + " node " + node + " atxmap " + str(atxmap[node]))

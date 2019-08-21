@@ -38,6 +38,8 @@ func AddCommands(cmd *cobra.Command) {
 		config.LayerAvgSize, "Layer Avg size")
 	cmd.PersistentFlags().IntVar(&config.Hdist, "hdist",
 		config.Hdist, "hdist")
+	cmd.PersistentFlags().BoolVar(&config.StartMining, "start-mining",
+		config.StartMining, "start mining")
 
 	cmd.PersistentFlags().StringVar(&config.MemProfile, "mem-profile",
 		config.MemProfile, "output memory profiling stat to filename")

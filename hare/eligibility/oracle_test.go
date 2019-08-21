@@ -28,7 +28,7 @@ type mockBlocksProvider struct {
 	mp map[types.BlockID]struct{}
 }
 
-func (mbp mockBlocksProvider) GetGoodPatternBlocks(layer types.LayerID) (map[types.BlockID]struct{}, error) {
+func (mbp mockBlocksProvider) GetGoodPattern(layer types.LayerID) (map[types.BlockID]struct{}, error) {
 	return mbp.mp, nil
 }
 
@@ -323,7 +323,7 @@ type bProvider struct {
 	mp map[types.LayerID]map[types.BlockID]struct{}
 }
 
-func (p *bProvider) GetGoodPatternBlocks(layer types.LayerID) (map[types.BlockID]struct{}, error) {
+func (p *bProvider) GetGoodPattern(layer types.LayerID) (map[types.BlockID]struct{}, error) {
 	if mp, exist := p.mp[layer]; exist {
 		return mp, nil
 	}
@@ -335,14 +335,17 @@ func TestOracle_activesSafeLayer(t *testing.T) {
 	r := require.New(t)
 	o := New(&mockValueProvider{1, nil}, nil, nil, nil, 2, genActive, mockBlocksProvider{}, eCfg.Config{ConfidenceParam: 2, EpochOffset: 0}, log.NewDefault(t.Name()))
 	mp := createMapWithSize(9)
+	o.cache = newMockCasher()
+	lyr := types.LayerID(10)
+	rsl := roundedSafeLayer(lyr, types.LayerID(o.cfg.ConfidenceParam), o.layersPerEpoch, types.LayerID(o.cfg.EpochOffset))
 	o.getActiveSet = func(epoch types.EpochId, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
+		ep := rsl.GetEpoch(o.layersPerEpoch)
+		r.Equal(ep, epoch)
 		return mp, nil
 	}
-	o.cache = newMockCasher()
 
-	lyr := types.LayerID(10)
 	bmp := make(map[types.LayerID]map[types.BlockID]struct{})
-	bmp[roundedSafeLayer(lyr, types.LayerID(o.cfg.ConfidenceParam), o.layersPerEpoch, types.LayerID(o.cfg.EpochOffset))] = make(map[types.BlockID]struct{})
+	bmp[rsl] = make(map[types.BlockID]struct{})
 	o.blocksProvider = &bProvider{bmp}
 	mpRes, err := o.actives(lyr)
 	r.NotNil(mpRes)

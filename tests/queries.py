@@ -1,6 +1,7 @@
 import os
 import re
 import time
+import collections
 from datetime import datetime
 
 from elasticsearch import Elasticsearch
@@ -137,17 +138,18 @@ def query_message(indx, namespace, client_po_name, fields, findFails=False, star
     return s
 
 
+atx = collections.namedtuple('atx', ['atx_id', 'layer_id', 'published_in_epoch'])
+
+
 def parseAtx(log_messages):
     node2blocks = {}
     for x in log_messages:
-        ls = re.findall(r'layer: \d+', x.M) # layer string
-        layer = int(re.findall(r'\d+', ls[0])[0])
         nid = re.split(r'\.', x.N)[0]
-        m = re.findall(r'(?<=\b:\s)(\w+)|(?<=view\s)(\w+)', x.M)
+        matx = atx(x.atx_id, x.layer_id, x.epoch_id)
         if nid in node2blocks:
-            node2blocks[nid].append((m, layer))
+            node2blocks[nid].append(matx)
         else:
-            node2blocks[nid] = [(m, layer)]
+            node2blocks[nid] = [matx]
     return node2blocks
 
 
@@ -207,7 +209,7 @@ def get_blocks_per_node_and_layer(deployment):
 def get_layers(deployment):
     block_fields = {"M": "release tick"}
     layers = query_message(current_index, deployment, deployment, block_fields, True)
-    ids = [int(re.findall(r'\d+', x.M)[0]) for x in layers]
+    ids = [int(x.layer_id) for x in layers]
     return ids
 
 

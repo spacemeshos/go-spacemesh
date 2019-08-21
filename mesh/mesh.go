@@ -27,8 +27,6 @@ var FALSE = []byte{0}
 type MeshValidator interface {
 	HandleIncomingLayer(layer *types.Layer) (types.LayerID, types.LayerID)
 	HandleLateBlock(bl *types.Block)
-	ContextualValidity(id types.BlockID) bool
-	GetGoodPatternBlocks(layer types.LayerID) (map[types.BlockID]struct{}, error)
 }
 
 type TxProcessor interface {
@@ -210,10 +208,13 @@ func (m *Mesh) ExtractUniqueOrderedTransactions(l *types.Layer) []*Transaction {
 	txids := make(map[types.TransactionId]struct{})
 
 	for _, b := range sortedBlocks {
-		isBlockValid := m.tortoise.ContextualValidity(b.ID())
-		events.Publish(events.ValidBlockEvent{Block: uint64(b.ID()), Valid: isBlockValid})
-		if !isBlockValid {
-			m.Info("block %v not Contextualy valid", b)
+		valid, err := m.ContextualValidity(b.ID())
+		events.Publish(events.ValidBlockEvent{Block: uint64(b.ID()), Valid: valid})
+		if !valid {
+			if err != nil {
+				m.Error("could not get contextual validity for block %v", b.ID(), err)
+			}
+			m.Info("block %v not contextually valid %v ", b.ID())
 			continue
 		}
 
@@ -428,7 +429,7 @@ func (m *Mesh) AccumulateRewards(rewardLayer types.LayerID, params Config) {
 	for _, bl := range l.Blocks() {
 		atx, err := m.AtxDB.GetAtx(bl.ATXID)
 		if err != nil {
-			m.Error("Atx not found %v block %v", err, bl.Id)
+			m.With().Warning("Atx from block not found in db", log.Err(err), log.BlockId(uint64(bl.Id)), log.AtxId(bl.ATXID.ShortString()))
 			continue
 		}
 		ids = append(ids, atx.Coinbase)
@@ -458,10 +459,6 @@ func (m *Mesh) AccumulateRewards(rewardLayer types.LayerID, params Config) {
 	m.ApplyRewards(types.LayerID(rewardLayer), ids, uq, bonusReward, diminishedReward)
 	//todo: should miner id be sorted in a deterministic order prior to applying rewards?
 
-}
-
-func (m *Mesh) GetContextualValidity(id types.BlockID) (bool, error) {
-	return m.getContextualValidity(id)
 }
 
 var GenesisBlock = types.Block{

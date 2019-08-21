@@ -8,12 +8,12 @@ import (
 )
 
 type mockPatternProvider struct {
-	val        uint32
-	valGenesis uint32
+	val        map[types.BlockID]struct{}
+	valGenesis map[types.BlockID]struct{}
 	err        error
 }
 
-func (mpp *mockPatternProvider) GetGoodPattern(layer types.LayerID) (uint32, error) {
+func (mpp *mockPatternProvider) GetGoodPattern(layer types.LayerID) (map[types.BlockID]struct{}, error) {
 	if layer == config.Genesis {
 		return mpp.valGenesis, mpp.err
 	}
@@ -22,15 +22,24 @@ func (mpp *mockPatternProvider) GetGoodPattern(layer types.LayerID) (uint32, err
 
 func TestBeacon_Value(t *testing.T) {
 	b := beacon{}
-	b.patternProvider = &mockPatternProvider{1, 5, someErr}
+
+	genesisGoodPtrn := map[types.BlockID]struct{}{}
+	genesisGoodPtrn[420] = struct{}{}
+
+	valGoodPtrn := map[types.BlockID]struct{}{}
+	valGoodPtrn[1] = struct{}{}
+	valGoodPtrn[4] = struct{}{}
+	valGoodPtrn[6] = struct{}{}
+
+	b.patternProvider = &mockPatternProvider{valGoodPtrn, genesisGoodPtrn, someErr}
 	b.confidenceParam = cfg.ConfidenceParam
 	_, err := b.Value(100)
 	assert.NotNil(t, err)
-	b.patternProvider = &mockPatternProvider{3, 5, nil}
+	b.patternProvider = &mockPatternProvider{valGoodPtrn, genesisGoodPtrn, nil}
 	val, err := b.Value(100)
 	assert.Nil(t, err)
-	assert.Equal(t, uint32(3), val)
+	assert.Equal(t, calcValue(valGoodPtrn), val)
 	val, err = b.Value(1)
 	assert.Nil(t, err)
-	assert.Equal(t, uint32(5), val)
+	assert.Equal(t, calcValue(genesisGoodPtrn), val)
 }

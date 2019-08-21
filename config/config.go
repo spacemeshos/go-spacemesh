@@ -91,6 +91,8 @@ type BaseConfig struct {
 	GenesisActiveSet int `mapstructure:"genesis-active-size"` // the active set size for genesis
 
 	PublishEventsUrl string `mapstructure:"publish-events"`
+
+	StartMining bool `mapstructure:"start-mining"`
 }
 
 // DefaultConfig returns the default configuration for a spacemesh node

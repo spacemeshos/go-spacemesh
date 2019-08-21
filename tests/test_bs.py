@@ -70,14 +70,14 @@ def setup_bootstrap_in_namespace(namespace, bs_deployment_info, bootstrap_config
     bs_deployment_info.deployment_name = resp.metadata._name
     # The tests assume we deploy only 1 bootstrap
     bootstrap_pod_json = (
-        client.CoreV1Api().list_namespaced_pod(namespace=namespace,
-                                               label_selector=(
-                                                   "name={0}".format(
-                                                       bs_deployment_info.deployment_name.split('-')[1]))).items[0])
+        CoreV1ApiClient().list_namespaced_pod(namespace=namespace,
+                                              label_selector=(
+                                                  "name={0}".format(
+                                                      bs_deployment_info.deployment_name.split('-')[1]))).items[0])
     bs_pod = {'name': bootstrap_pod_json.metadata.name}
 
     while True:
-        resp = client.CoreV1Api().read_namespaced_pod(name=bs_pod['name'], namespace=namespace)
+        resp = CoreV1ApiClient().read_namespaced_pod(name=bs_pod['name'], namespace=namespace)
         if resp.status.phase != 'Pending':
             break
         time.sleep(1)
@@ -130,9 +130,8 @@ def setup_server(deployment_name, deployment_file, namespace):
     return ip
 
 
-
 @pytest.fixture(scope='module')
-def setup_bootstrap(request, init_session, create_configmap):
+def setup_bootstrap(request, init_session):
     bootstrap_deployment_info = DeploymentInfo(dep_id=init_session)
 
     return setup_bootstrap_in_namespace(testconfig['namespace'],
@@ -280,7 +279,7 @@ def api_call(client_ip, data, api, namespace):
                  stderr=True, stdin=False, stdout=True, tty=False, _request_timeout=90)
     return res
 
-
+# The following fixture is currently not in used and mark for deprecattion
 @pytest.fixture(scope='module')
 def create_configmap(request):
     def _create_configmap_in_namespace(nspace):

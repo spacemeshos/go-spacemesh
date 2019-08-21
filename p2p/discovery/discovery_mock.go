@@ -16,10 +16,16 @@ type MockPeerStore struct {
 	LookupFunc      func(p2pcrypto.PublicKey) (*node.NodeInfo, error)
 	lookupRes       *node.NodeInfo
 	lookupErr       error
+
+	RemoveFunc  func(key p2pcrypto.PublicKey)
+	GoodFunc    func(key p2pcrypto.PublicKey)
+	AttemptFunc func(key p2pcrypto.PublicKey)
 }
 
 func (m *MockPeerStore) Remove(key p2pcrypto.PublicKey) {
-
+	if m.RemoveFunc != nil {
+		m.RemoveFunc(key)
+	}
 }
 
 // SetUpdate sets the function to run on an issued update
@@ -89,6 +95,17 @@ func (m *MockPeerStore) Size() int {
 	return m.updateCount
 }
 
+func (m *MockPeerStore) Good(key p2pcrypto.PublicKey) {
+	if m.GoodFunc != nil {
+		m.GoodFunc(key)
+	}
+}
+func (m *MockPeerStore) Attempt(key p2pcrypto.PublicKey) {
+	if m.AttemptFunc != nil {
+		m.AttemptFunc(key)
+	}
+}
+
 // mockAddrBook
 type mockAddrBook struct {
 	addAddressFunc func(n, src *node.NodeInfo)
@@ -101,11 +118,34 @@ type mockAddrBook struct {
 	GetAddressFunc func() *KnownAddress
 	GetAddressRes  *KnownAddress
 
+	NeedNewAddressesFunc func() bool
+
 	AddressCacheResult []*node.NodeInfo
+
+	GoodFunc    func(key p2pcrypto.PublicKey)
+	AttemptFunc func(key p2pcrypto.PublicKey)
 }
 
 func (m *mockAddrBook) RemoveAddress(key p2pcrypto.PublicKey) {
 
+}
+
+func (m *mockAddrBook) Good(key p2pcrypto.PublicKey) {
+	if m.GoodFunc != nil {
+		m.GoodFunc(key)
+	}
+}
+func (m *mockAddrBook) Attempt(key p2pcrypto.PublicKey) {
+	if m.AttemptFunc != nil {
+		m.AttemptFunc(key)
+	}
+}
+
+func (m *mockAddrBook) NeedNewAddresses() bool {
+	if m.NeedNewAddressesFunc != nil {
+		return m.NeedNewAddressesFunc()
+	}
+	return false
 }
 
 // SetUpdate sets the function to run on an issued update
@@ -167,4 +207,15 @@ func (m *mockAddrBook) GetAddress() *KnownAddress {
 func (m *mockAddrBook) NumAddresses() int {
 	//todo: mockAddrBook size
 	return m.addressCount
+}
+
+type refresherMock struct {
+	BootstrapFunc func(ctx context.Context, minPeers int) error
+}
+
+func (r *refresherMock) Bootstrap(ctx context.Context, minPeers int) error {
+	if r.BootstrapFunc != nil {
+		return r.BootstrapFunc(ctx, minPeers)
+	}
+	return nil
 }

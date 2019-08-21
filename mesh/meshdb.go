@@ -23,6 +23,7 @@ type MeshDB struct {
 	blocks             database.DB
 	transactions       database.Database
 	contextualValidity database.DB //map blockId to contextualValidation state of block
+	patterns           database.DB //map blockId to contextualValidation state of block
 	orphanBlocks       map[types.LayerID]map[types.BlockID]struct{}
 	layerMutex         map[types.LayerID]*layerMutex
 	lhMutex            sync.Mutex
@@ -32,6 +33,7 @@ func NewPersistentMeshDB(path string, log log.Log) (*MeshDB, error) {
 	bdb := database.NewLevelDbStore(path+"blocks", nil, nil)
 	ldb := database.NewLevelDbStore(path+"layers", nil, nil)
 	vdb := database.NewLevelDbStore(path+"validity", nil, nil)
+	pdb := database.NewLevelDbStore(path+"patterns", nil, nil)
 	tdb, err := database.NewLDBDatabase(path+"transactions", 0, 0, log)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize transactions db: %v", err)
@@ -42,6 +44,7 @@ func NewPersistentMeshDB(path string, log log.Log) (*MeshDB, error) {
 		blocks:             bdb,
 		layers:             ldb,
 		transactions:       tdb,
+		patterns:           pdb,
 		contextualValidity: vdb,
 		orphanBlocks:       make(map[types.LayerID]map[types.BlockID]struct{}),
 		layerMutex:         make(map[types.LayerID]*layerMutex),
@@ -57,6 +60,7 @@ func NewMemMeshDB(log log.Log) *MeshDB {
 		layers:             database.NewMemDatabase(),
 		contextualValidity: database.NewMemDatabase(),
 		transactions:       database.NewMemDatabase(),
+		patterns:           database.NewMemDatabase(),
 		orphanBlocks:       make(map[types.LayerID]map[types.BlockID]struct{}),
 		layerMutex:         make(map[types.LayerID]*layerMutex),
 	}
@@ -129,7 +133,9 @@ func (m *MeshDB) LayerBlockIds(index types.LayerID) ([]types.BlockID, error) {
 	return blockids, nil
 }
 
-func (m *MeshDB) ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) error) error {
+// The block handler func should return two values - a bool indicating whether or not we should stop traversing after the current block (happy flow)
+// and an error indicating that an error occurred while handling the block, the traversing will stop in that case as well (error flow)
+func (m *MeshDB) ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) (bool, error)) error {
 	blocksToVisit := list.New()
 	for id := range view {
 		blocksToVisit.PushBack(id)
@@ -147,8 +153,14 @@ func (m *MeshDB) ForBlockInView(view map[types.BlockID]struct{}, layer types.Lay
 		}
 
 		//execute handler
-		if err := blockHandler(block); err != nil {
+		stop, err := blockHandler(block)
+		if err != nil {
 			return err
+		}
+
+		if stop {
+			m.Log.With().Debug("ForBlockInView stopped", log.BlockId(uint64(block.ID())))
+			break
 		}
 
 		//stop condition: referenced blocks must be in lower layers, so we don't traverse them
@@ -190,17 +202,15 @@ func (m *MeshDB) getMiniBlockBytes(id types.BlockID) ([]byte, error) {
 	return m.blocks.Get(id.ToBytes())
 }
 
-func (m *MeshDB) getContextualValidity(id types.BlockID) (bool, error) {
+func (m *MeshDB) ContextualValidity(id types.BlockID) (bool, error) {
 	b, err := m.contextualValidity.Get(id.ToBytes())
 	if err != nil {
-		return false, nil
+		return false, err
 	}
-	return b[0] == 1, err //bytes to bool
+	return b[0] == 1, nil //bytes to bool
 }
 
-func (m *MeshDB) setContextualValidity(id types.BlockID, valid bool) error {
-	//todo implement
-	//todo concurrency
+func (m *MeshDB) SaveContextualValidity(id types.BlockID, valid bool) error {
 	var v []byte
 	if valid {
 		v = TRUE
@@ -329,4 +339,46 @@ func (m *MeshDB) GetTransaction(id types.TransactionId) (*types.AddressableSigne
 		return nil, fmt.Errorf("could not find transaction in database %v err=%v", hex.EncodeToString(id[:]), err)
 	}
 	return types.BytesAsAddressableTransaction(tBytes)
+}
+
+func (m *MeshDB) GetGoodPattern(layer types.LayerID) (map[types.BlockID]struct{}, error) {
+
+	if layer == 0 || layer == 1 {
+		v, err := m.LayerBlockIds(layer)
+		if err != nil {
+			m.Error("Could not get layer block ids for layer %v err=%v", layer, err)
+			return nil, err
+		}
+
+		mp := make(map[types.BlockID]struct{}, len(v))
+		for _, blk := range v {
+			mp[blk] = struct{}{}
+		}
+
+		return mp, nil
+	}
+
+	tBytes, err := m.patterns.Get(layer.ToBytes())
+	if err != nil {
+		return nil, fmt.Errorf("could not find good pattern for layer %v %v", layer, err)
+	}
+
+	var blkSlice map[types.BlockID]struct{}
+	err = types.BytesToInterface(tBytes, &blkSlice)
+	if err != nil {
+		return nil, fmt.Errorf("could not desirialize good pattern for layer %v %v", layer, err)
+	}
+
+	return blkSlice, nil
+}
+
+func (m *MeshDB) SaveGoodPattern(layer types.LayerID, blks map[types.BlockID]struct{}) error {
+	m.Info("write good pattern for layer %v to database", layer)
+	bts, err := types.InterfaceToBytes(blks)
+	if err != nil {
+		return fmt.Errorf("could not save good pattern for layer %v %v", layer, err)
+	}
+
+	m.patterns.Put(layer.ToBytes(), bts)
+	return nil
 }

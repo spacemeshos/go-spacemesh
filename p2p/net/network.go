@@ -3,14 +3,13 @@ package net
 import (
 	"errors"
 	"fmt"
-	"github.com/gogo/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/delimited"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"github.com/spacemeshos/go-spacemesh/p2p/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/version"
+	"github.com/spacemeshos/go-spacemesh/types"
 	"net"
 	"strconv"
 	"sync"
@@ -189,7 +188,7 @@ func (n *Net) createConnection(address string, remotePub p2pcrypto.PublicKey, se
 	}
 
 	n.logger.Debug("Connected to %s...", address)
-	formatter := delimited.NewChan(10)
+	formatter := delimited.NewChan(1000)
 	return newConnection(netConn, n, formatter, remotePub, session, n.logger), nil
 }
 
@@ -286,13 +285,13 @@ func (n *Net) accept(listen net.Listener) {
 		}
 
 		n.logger.Debug("Got new connection... Remote Address: %s", netConn.RemoteAddr())
-		formatter := delimited.NewChan(10)
+		formatter := delimited.NewChan(1000)
 		c := newConnection(netConn, n, formatter, nil, nil, n.logger)
 		go func(con Connection) {
 			defer func() { pending <- struct{}{} }()
 			err := c.setupIncoming(n.config.SessionTimeout)
 			if err != nil {
-				n.logger.Warning("Error handling incoming connection with ", c.remoteAddr.String())
+				n.logger.Event().Warning("conn_incoming_failed", log.String("remote", c.remoteAddr.String()), log.Err(err))
 				return
 			}
 			go c.beginEventProcessing()
@@ -333,8 +332,8 @@ func (n *Net) HandlePreSessionIncomingMessage(c Connection, message []byte) erro
 		return err
 	}
 
-	handshakeData := &pb.HandshakeData{}
-	err = proto.Unmarshal(protoMessage, handshakeData)
+	handshakeData := &HandshakeData{}
+	err = types.BytesToInterface(protoMessage, handshakeData)
 	if err != nil {
 		return err
 	}
@@ -344,7 +343,7 @@ func (n *Net) HandlePreSessionIncomingMessage(c Connection, message []byte) erro
 		return err
 	}
 	// TODO: pass TO - IP:port and FROM - IP:port in handshake message.
-	remoteListeningPort := uint16(handshakeData.Port)
+	remoteListeningPort := handshakeData.Port
 	remoteListeningAddress, err := replacePort(c.RemoteAddr().String(), remoteListeningPort)
 	if err != nil {
 		return err
@@ -355,7 +354,7 @@ func (n *Net) HandlePreSessionIncomingMessage(c Connection, message []byte) erro
 	return nil
 }
 
-func verifyNetworkIDAndClientVersion(networkID int8, handshakeData *pb.HandshakeData) error {
+func verifyNetworkIDAndClientVersion(networkID int8, handshakeData *HandshakeData) error {
 	// compare that version to the min client version in config
 	ok, err := version.CheckNodeVersion(handshakeData.ClientVersion, config.MinClientVersion)
 	if err == nil && !ok {
@@ -374,12 +373,12 @@ func verifyNetworkIDAndClientVersion(networkID int8, handshakeData *pb.Handshake
 }
 
 func generateHandshakeMessage(session NetworkSession, networkID int8, localIncomingPort int, localPubkey p2pcrypto.PublicKey) ([]byte, error) {
-	handshakeData := &pb.HandshakeData{
+	handshakeData := &HandshakeData{
 		ClientVersion: config.ClientVersion,
 		NetworkID:     int32(networkID),
-		Port:          uint32(localIncomingPort),
+		Port:          uint16(localIncomingPort),
 	}
-	handshakeMessage, err := proto.Marshal(handshakeData)
+	handshakeMessage, err := types.InterfaceToBytes(handshakeData)
 	if err != nil {
 		return nil, err
 	}
