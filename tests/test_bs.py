@@ -103,15 +103,14 @@ def add_multi_clients(deployment_id, container_specs, size=2):
     return pods
 
 
-def choose_k8s_object_create(config):
+def choose_k8s_object_create(config, deployment_file, statefulset_file):
     dep_type = 'deployment' if 'deployment_type' not in config else config['deployment_type']
     if dep_type == 'deployment':
-        k8s_object_create_func = deployment.create_deployment
+        return deployment_file, deployment.create_deployment
     elif dep_type == 'statefulset':
-        k8s_object_create_func = statefulset.create_statefulset
+        return statefulset_file, statefulset.create_statefulset
     else:
         raise Exception("Unknown deployment type in configuration. Please check your config.yaml")
-    return k8s_object_create_func
 
 
 def setup_bootstrap_in_namespace(namespace, bs_deployment_info, bootstrap_config, oracle=None, poet=None, dep_time_out=120):
@@ -128,22 +127,14 @@ def setup_bootstrap_in_namespace(namespace, bs_deployment_info, bootstrap_config
     cspec.append_args(genesis_time=GENESIS_TIME.isoformat('T', 'seconds'),
                       **bootstrap_args)
 
-    dep_type = 'deployment' if 'deployment_type' not in bootstrap_config else bootstrap_config['deployment_type']
-    if dep_type == 'deployment':
-        resp = deployment.create_deployment(BOOT_DEPLOYMENT_FILE, namespace,
-                                            deployment_id=bs_deployment_info.deployment_id,
-                                            replica_size=bootstrap_config['replicas'],
-                                            container_specs=cspec,
-                                            time_out=dep_time_out)
-    elif dep_type == 'statefulset':
-        resp = statefulset.create_statefulset(BOOT_STATEFULSET_FILE, namespace,
-                                              deployment_id=bs_deployment_info.deployment_id,
-                                              replica_size=bootstrap_config['replicas'],
-                                              container_specs=cspec,
-                                              time_out=dep_time_out)
-    else:
-        # deployment type is statefulset
-        raise Exception("Unknown deployment type in bootstrap configuration")
+    k8s_file, k8s_create_func = choose_k8s_object_create(bootstrap_config,
+                                                         BOOT_DEPLOYMENT_FILE,
+                                                         BOOT_STATEFULSET_FILE)
+    resp = k8s_create_func(k8s_file, namespace,
+                           deployment_id=bs_deployment_info.deployment_id,
+                           replica_size=bootstrap_config['replicas'],
+                           container_specs=cspec,
+                           time_out=dep_time_out)
 
     bs_deployment_info.deployment_name = resp.metadata._name
     # The tests assume we deploy only 1 bootstrap
@@ -178,21 +169,14 @@ def setup_clients_in_namespace(namespace, bs_deployment_info, client_deployment_
 
     cspec = get_conf(bs_deployment_info, client_config, oracle, poet)
 
-    dep_type = 'deployment' if 'deployment_type' not in client_config else client_config['deployment_type']
-    if dep_type == 'deployment':
-        resp = deployment.create_deployment(CLIENT_DEPLOYMENT_FILE, namespace,
-                                            deployment_id=client_deployment_info.deployment_id,
-                                            replica_size=client_config['replicas'],
-                                            container_specs=cspec,
-                                            time_out=dep_time_out)
-    elif dep_type == 'statefulset':
-        resp = statefulset.create_statefulset(CLIENT_STATEFULSET_FILE, namespace,
-                                              deployment_id=client_deployment_info.deployment_id,
-                                              replica_size=client_config['replicas'],
-                                              container_specs=cspec,
-                                              time_out=dep_time_out)
-    else:
-        raise Exception("Unknown deployment type in client configuration")
+    k8s_file, k8s_create_func = choose_k8s_object_create(client_config,
+                                                         CLIENT_DEPLOYMENT_FILE,
+                                                         CLIENT_STATEFULSET_FILE)
+    resp = k8s_create_func(k8s_file, namespace,
+                           deployment_id=client_deployment_info.deployment_id,
+                           replica_size=client_config['replicas'],
+                           container_specs=cspec,
+                           time_out=dep_time_out)
 
     client_deployment_info.deployment_name = resp.metadata._name
     client_pods = (
