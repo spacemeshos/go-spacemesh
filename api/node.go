@@ -4,6 +4,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/types"
+	"time"
 )
 
 type Service interface {
@@ -31,4 +32,8 @@ type MiningAPI interface {
 
 type OracleAPI interface {
 	GetEligibleLayers() []types.LayerID
+}
+
+type GenesisTimeAPI interface {
+	GetGenesisTime() time.Time
 }

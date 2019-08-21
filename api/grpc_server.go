@@ -22,13 +22,14 @@ import (
 
 // SpacemeshGrpcService is a grpc server providing the Spacemesh api
 type SpacemeshGrpcService struct {
-	Server   *grpc.Server
-	Port     uint
-	StateApi StateAPI
-	Network  NetworkAPI
-	Tx       TxAPI
-	Mining   MiningAPI
-	Oracle   OracleAPI
+	Server    *grpc.Server
+	Port      uint
+	StateApi  StateAPI
+	Network   NetworkAPI
+	Tx        TxAPI
+	Mining    MiningAPI
+	Oracle    OracleAPI
+	GenTime   GenesisTimeAPI
 }
 
 // Echo returns the response for an echo api request
@@ -128,7 +129,7 @@ type TxAPI interface {
 }
 
 // NewGrpcService create a new grpc service using config data.
-func NewGrpcService(net NetworkAPI, state StateAPI, tx TxAPI, mining MiningAPI, oracle OracleAPI) *SpacemeshGrpcService {
+func NewGrpcService(net NetworkAPI, state StateAPI, tx TxAPI, mining MiningAPI, oracle OracleAPI, genTime GenesisTimeAPI) *SpacemeshGrpcService {
 	port := config.ConfigValues.GrpcServerPort
 	server := grpc.NewServer()
 	return &SpacemeshGrpcService{Server: server,
@@ -138,6 +139,7 @@ func NewGrpcService(net NetworkAPI, state StateAPI, tx TxAPI, mining MiningAPI, 
 		Tx:       tx,
 		Mining:   mining,
 		Oracle:   oracle,
+		GenTime: genTime,
 	}
 }
 
@@ -223,4 +225,9 @@ func (s SpacemeshGrpcService) GetUpcomingAwards(ctx context.Context, empty *empt
 		ly = append(ly, uint64(l))
 	}
 	return &pb.EligibleLayers{Layers: ly}, nil
+}
+
+func (s SpacemeshGrpcService) GetGenesisTime(ctx context.Context, empty *empty.Empty) (*pb.SimpleMessage, error) {
+	log.Info("GRPC GetGenesisTime msg")
+	return &pb.SimpleMessage{Value:s.GenTime.GetGenesisTime().String()}, nil
 }
