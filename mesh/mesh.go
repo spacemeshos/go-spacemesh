@@ -212,9 +212,9 @@ func (m *Mesh) ExtractUniqueOrderedTransactions(l *types.Layer) []*Transaction {
 		events.Publish(events.ValidBlock{Id: uint64(b.ID()), Valid: valid})
 		if !valid {
 			if err != nil {
-				m.Error("could not get contextual validity for block %v", b.ID(), err)
+				m.With().Error("could not get contextual validity for block", log.BlockId(uint64(b.ID())), log.Err(err))
 			}
-			m.Info("block %v not contextually valid %v ", b.ID())
+			m.With().Info("block not contextually valid", log.BlockId(uint64(b.ID()))) // TODO: do we want this log? is it info?
 			continue
 		}
 
