@@ -1,6 +1,8 @@
 package eligibility
 
 import (
+	"errors"
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/types"
@@ -13,31 +15,56 @@ const nilVal = 0
 type patternProvider interface {
 	// GetPatternId returns the pattern Id of the given Layer
 	// the pattern Id is defined to be the hash of blocks in a Layer
-	GetGoodPattern(layer types.LayerID) (map[types.BlockID]struct{}, error)
+	ContextuallyValidBlock(layer types.LayerID) (map[types.BlockID]struct{}, error)
+}
+
+type addGet interface {
+	Add(key, value interface{}) (evicted bool)
+	Get(key interface{}) (value interface{}, ok bool)
 }
 
 type beacon struct {
 	// provides a value that is unpredictable and agreed (w.h.p.) by all honest
 	patternProvider patternProvider
 	confidenceParam uint64
+	cache           addGet
 }
 
 func NewBeacon(patternProvider patternProvider, confidenceParam uint64) *beacon {
+	c, e := lru.New(cacheSize)
+	if e != nil {
+		log.Panic("Could not create lru cache err=%v", e)
+	}
 	return &beacon{
 		patternProvider: patternProvider,
 		confidenceParam: confidenceParam,
+		cache:           c,
 	}
 }
 
 // Value returns the unpredictable and agreed value for the given Layer
 func (b *beacon) Value(layer types.LayerID) (uint32, error) {
-	v, err := b.patternProvider.GetGoodPattern(safeLayer(layer, types.LayerID(b.confidenceParam)))
-	if err != nil {
-		log.Error("Could not get pattern Id: %v", err)
-		return nilVal, err
+	sl := safeLayer(layer, types.LayerID(b.confidenceParam))
+
+	// check cache
+	if val, exist := b.cache.Get(sl); exist {
+		return val.(uint32), nil
 	}
 
-	return calcValue(v), nil
+	v, err := b.patternProvider.ContextuallyValidBlock(sl)
+	if err != nil {
+		log.With().Error("Could not get pattern Id",
+			log.Err(err), log.LayerId(uint64(layer)), log.Uint64("sl_id", uint64(sl)))
+		return nilVal, errors.New("could not calc beacon value")
+	}
+
+	// calculate
+	value := calcValue(v)
+
+	// update
+	b.cache.Add(sl, value)
+
+	return value, nil
 }
 
 // calculates the beacon value from the set of ids
@@ -51,7 +78,10 @@ func calcValue(bids map[types.BlockID]struct{}) uint32 {
 	// calc
 	h := fnv.New32()
 	for i := 0; i < len(keys); i++ {
-		h.Write(common.Uint32ToBytes(uint32(keys[i])))
+		_, err := h.Write(common.Uint32ToBytes(uint32(keys[i])))
+		if err != nil {
+			log.Panic("Could not calculate beacon value. Hash write error=%v", err)
+		}
 	}
 	// update
 	sum := h.Sum32()
