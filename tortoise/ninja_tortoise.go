@@ -23,9 +23,10 @@ const ( //Threshold
 
 var ( //correction vectors type
 	//Opinion
-	Support = vec{1, 0}
-	Against = vec{0, 1}
-	Abstain = vec{0, 0}
+	Support     = vec{1, 0}
+	Against     = vec{0, 1}
+	Abstain     = vec{0, 0}
+	ZeroPattern = votingPattern{}
 )
 
 func Max(i types.LayerID, j types.LayerID) types.LayerID {
@@ -170,20 +171,28 @@ func (ni *ninjaTortoise) processBlock(b *types.Block) {
 
 	patternMap := make(map[types.LayerID]map[types.BlockID]struct{})
 	for _, bid := range b.BlockVotes {
+
 		ni.Debug("block votes %d", bid)
 		bl, err := ni.GetBlock(bid)
+
 		if err != nil || bl == nil {
 			ni.Panic(fmt.Sprintf("error block not found ID %d , %v!!!!!", bid, err))
 		}
+
 		if _, found := patternMap[bl.Layer()]; !found {
 			patternMap[bl.Layer()] = map[types.BlockID]struct{}{}
 		}
+
 		patternMap[bl.Layer()][bl.ID()] = struct{}{}
 	}
 
 	var effective votingPattern
 	ni.tExplicit[b.ID()] = make(map[types.LayerID]votingPattern, ni.hdist)
-	for layerId, v := range patternMap {
+	for layerId := b.Layer() - ni.hdist; layerId < b.Layer(); layerId++ {
+		v, ok := patternMap[layerId]
+		if !ok {
+			ni.tExplicit[b.ID()][layerId] = ZeroPattern
+		}
 		vp := votingPattern{id: getIdsFromSet(v), LayerID: layerId}
 		ni.tPattern[vp] = v
 		arr, _ := ni.patterns[vp.Layer()]
@@ -385,6 +394,14 @@ func (ni *ninjaTortoise) addPatternVote(p votingPattern, view map[types.BlockID]
 			if err != nil {
 				ni.Panic("could not retrieve layer block ids")
 			}
+
+			//explicitly abstain
+			if ex == ZeroPattern {
+				for _, bl := range blocks {
+					ni.tTally[p][bl] = ni.tTally[p][bl].Add(Abstain)
+				}
+			}
+
 			for _, bl := range blocks {
 				_, found := ni.tPattern[ex][bl]
 				if found {
