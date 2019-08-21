@@ -85,25 +85,25 @@ func init() {
 // SpacemeshApp is the cli app singleton
 type SpacemeshApp struct {
 	*cobra.Command
-	nodeId           types.NodeId
-	P2P              p2p.Service
-	Config           *cfg.Config
-	NodeInitCallback chan bool
-	grpcAPIService   *api.SpacemeshGrpcService
-	jsonAPIService   *api.JSONHTTPServer
-	syncer           *sync.Syncer
-	blockListener    *sync.BlockListener
-	state            *state.StateDB
-	blockProducer    *miner.BlockBuilder
-	oracle           *oracle.MinerBlockOracle
-	txProcessor      *state.TransactionProcessor
-	mesh             *mesh.Mesh
-	clock            *timesync.Ticker
-	hare             *hare.Hare
-	atxBuilder       *activation.Builder
-	poetListener     *activation.PoetListener
-	edSgn            *signing.EdSigner
-	log              log.Log
+	nodeId         types.NodeId
+	P2P            p2p.Service
+	Config         *cfg.Config
+	grpcAPIService *api.SpacemeshGrpcService
+	jsonAPIService *api.JSONHTTPServer
+	syncer         *sync.Syncer
+	blockListener  *sync.BlockListener
+	state          *state.StateDB
+	blockProducer  *miner.BlockBuilder
+	oracle         *oracle.MinerBlockOracle
+	txProcessor    *state.TransactionProcessor
+	mesh           *mesh.Mesh
+	clock          *timesync.Ticker
+	hare           *hare.Hare
+	atxBuilder     *activation.Builder
+	poetListener   *activation.PoetListener
+	edSgn          *signing.EdSigner
+	closers        []interface{ Close() }
+	log            log.Log
 }
 
 // ParseConfig unmarshal config file into struct
@@ -136,8 +136,7 @@ func NewSpacemeshApp() *SpacemeshApp {
 
 	defaultConfig := cfg.DefaultConfig()
 	node := &SpacemeshApp{
-		Config:           &defaultConfig,
-		NodeInitCallback: make(chan bool, 1),
+		Config: &defaultConfig,
 	}
 
 	return node
@@ -235,19 +234,7 @@ func (app *SpacemeshApp) getAppInfo() string {
 // Post Execute tasks
 func (app *SpacemeshApp) Cleanup(cmd *cobra.Command, args []string) (err error) {
 	log.Info("App Cleanup starting...")
-
-	if app.jsonAPIService != nil {
-		log.Info("Stopping JSON service api...")
-		app.jsonAPIService.StopService()
-	}
-
-	if app.grpcAPIService != nil {
-		log.Info("Stopping GRPC service ...")
-		app.grpcAPIService.StopService()
-	}
-
 	app.stopServices()
-
 	// add any other Cleanup tasks here....
 	log.Info("App Cleanup completed\n\n")
 
@@ -305,6 +292,8 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	if err != nil {
 		return err
 	}
+	app.closers = append(app.closers, db)
+
 	st, err := state.New(common.Hash{}, state.NewDatabase(db)) //todo: we probably should load DB with latest hash
 	if err != nil {
 		return err
@@ -324,22 +313,27 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	if err != nil {
 		return err
 	}
+	app.closers = append(app.closers, atxdbstore)
 
 	poetDbStore, err := database.NewLDBDatabase(dbStorepath+"poet", 0, 0, lg.WithName("poetDbStore"))
 	if err != nil {
 		return err
 	}
+	app.closers = append(app.closers, poetDbStore)
 
 	//todo: put in config
 	iddbstore, err := database.NewLDBDatabase(dbStorepath+"ids", 0, 0, lg.WithName("stateDbStore"))
 	if err != nil {
 		return err
 	}
+	app.closers = append(app.closers, iddbstore)
 
 	store, err := database.NewLDBDatabase(dbStorepath+"store", 0, 0, lg.WithName("store"))
 	if err != nil {
 		return err
 	}
+	app.closers = append(app.closers, store)
+
 	idStore := activation.NewIdentityStore(iddbstore)
 	poetDb := activation.NewPoetDb(poetDbStore, lg.WithName("poetDb"))
 	//todo: this is initialized twice, need to refactor
@@ -457,6 +451,16 @@ func (app *SpacemeshApp) startServices() {
 
 func (app *SpacemeshApp) stopServices() {
 
+	if app.jsonAPIService != nil {
+		log.Info("Stopping JSON service api...")
+		app.jsonAPIService.StopService()
+	}
+
+	if app.grpcAPIService != nil {
+		log.Info("Stopping GRPC service ...")
+		app.grpcAPIService.StopService()
+	}
+
 	if app.blockProducer != nil {
 		app.log.Info("%v closing block producer", app.nodeId.Key)
 		if err := app.blockProducer.Close(); err != nil {
@@ -497,6 +501,13 @@ func (app *SpacemeshApp) stopServices() {
 	if app.mesh != nil {
 		app.log.Info("%v closing mesh", app.nodeId.Key)
 		app.mesh.Close()
+	}
+
+	// Close all databases. todo: consider moving all services to close this way
+	for _, closer := range app.closers {
+		if closer != nil {
+			closer.Close()
+		}
 	}
 
 }
@@ -684,8 +695,5 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 
 	// app blocks until it receives a signal to exit
 	// this signal may come from the node or from sig-abort (ctrl-c)
-	//app.NodeInitCallback <- true
-
 	<-cmdp.Ctx.Done()
-	//return nil
 }
