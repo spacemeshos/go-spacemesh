@@ -9,6 +9,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/config"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/oracle"
@@ -313,8 +314,10 @@ func (t *BlockBuilder) handleGossipAtx(data service.GossipMessage) {
 			atx.ShortId(), atx.GetShortPoetProofRef(), err)
 		return
 	}
+	events.Publish(events.NewAtx{Id: atx.Id().String()})
 
 	err = t.atxValidator.SyntacticallyValidateAtx(atx)
+	events.Publish(events.ValidAtx{Id: atx.Id().String(), Valid: err == nil})
 	if err != nil {
 		t.Warning("received syntactically invalid ATX %v: %v", atx.ShortId(), err)
 		// TODO: blacklist peer
