@@ -1047,7 +1047,7 @@ func TestSyncer_p2pSyncForTwoLayers(t *testing.T) {
 	_, ok = lv.validatedLayers[current+1]
 	r.False(ok)
 
-	sync.p2pSyncForTwoLayers(current)
+	sync.p2pSyncForOneFullLayer(current)
 	time.Sleep(50 * time.Millisecond)
 	after := sync.currentLayer
 	r.Equal(current+2, after)

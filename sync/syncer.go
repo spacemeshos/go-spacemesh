@@ -236,12 +236,14 @@ func (s *Syncer) Synchronise() {
 	defer s.syncRoutineWg.Done()
 
 	currentSyncLayer := s.lValidator.ValidatedLayer() + 1
+
 	if s.lastTickedLayer() == 1 { // skip validation for first layer
 		s.Info("Not syncing in layer 1")
-		s.setP2pSynced(true)
+		s.setP2pSynced(true) // fully-synced, make sure we listen to p2p
 		return
 	}
-	if s.WeaklySynced() {
+
+	if s.WeaklySynced() { // we have all the data of the prev layers so we can simply validate
 		s.Info("Node is synced. Going to validate layer %v", currentSyncLayer)
 
 		lyr, err := s.lProvider.GetLayer(currentSyncLayer)
@@ -253,9 +255,12 @@ func (s *Syncer) Synchronise() {
 		return
 	}
 
+	// node is not synced
 	s.Info("Node is out of sync setting p2p-synced to false and starting sync")
-	s.setP2pSynced(false)
+	s.setP2pSynced(false) // don't listen to p2p while not synced
 
+	// first, bring all the data of the prev layers
+	// Note: lastTicked() is not constant but updates as ticks are received
 	for ; currentSyncLayer < s.lastTickedLayer(); currentSyncLayer++ {
 		s.Info("syncing layer %v current consensus layer is %d", currentSyncLayer, s.lastTickedLayer())
 		lyr, err := s.getLayerFromNeighbors(currentSyncLayer)
@@ -267,16 +272,26 @@ func (s *Syncer) Synchronise() {
 		s.lValidator.ValidateLayer(lyr) // wait for layer validation
 	}
 
+	// Now we are somewhere in the layer (begin, middle, end)
+	// fetch what you can from the neighbors
 	_, err := s.getLayerFromNeighbors(currentSyncLayer)
 	if err != nil {
 		s.Info("could not get last ticked layer %v from neighbors %v", currentSyncLayer, err)
 		return
 	}
 
-	s.p2pSyncForTwoLayers(currentSyncLayer)
+	// wait for two ticks to ensure we are fully synced before we open p2p or validate the current layer
+	err = s.p2pSyncForOneFullLayer(currentSyncLayer)
+	if err != nil {
+		// TODO: should we panic?
+		s.With().Error("failed getting layer even though we listened to p2p", log.LayerId(uint64(currentSyncLayer)), log.Err(err))
+	}
 }
 
-func (s *Syncer) p2pSyncForTwoLayers(currentSyncLayer types.LayerID) {
+// Waits two ticks (while weakly-synced) in order to ensure that we listened to p2p for one full layer
+// after that we are assumed to have all the data required for validation so we can validate and open p2p
+// opening p2p in weakly-synced transition us to fully-synced
+func (s *Syncer) p2pSyncForOneFullLayer(currentSyncLayer types.LayerID) error {
 	// subscribe and wait for two ticks
 	ch := s.clockSub.Subscribe()
 	<-ch
@@ -286,23 +301,26 @@ func (s *Syncer) p2pSyncForTwoLayers(currentSyncLayer types.LayerID) {
 	// assumed to be weakly synced here
 	// just get the layers and validate
 
+	// get & validate first tick
 	lyr, err := s.lProvider.GetLayer(currentSyncLayer)
 	if err != nil {
-		s.With().Error("failed getting layer even though we listened to p2p", log.LayerId(uint64(currentSyncLayer)), log.Err(err))
-		return
+		return err
 	}
 	s.lValidator.ValidateLayer(lyr)
 
+	// get & validate second tick
 	currentSyncLayer++
 	lyr, err = s.lProvider.GetLayer(currentSyncLayer)
 	if err != nil {
-		s.With().Error("failed getting layer even though we listened to p2p", log.LayerId(uint64(currentSyncLayer)), log.Err(err))
-		return
+		return err
 	}
 	s.lValidator.ValidateLayer(lyr)
 	s.Info("Done waiting for ticks and validation. setting p2p true")
 
-	s.setP2pSynced(true) // set p2p-synced to true
+	// fully-synced - set p2p-synced to true
+	s.setP2pSynced(true)
+
+	return nil
 }
 
 func (s *Syncer) getLayerFromNeighbors(currenSyncLayer types.LayerID) (*types.Layer, error) {
