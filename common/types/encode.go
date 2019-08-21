@@ -5,14 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"github.com/nullstyle/go-xdr/xdr3"
-	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/crypto/sha3"
 	"sort"
 )
 
-func (b BlockID) ToBytes() []byte { return common.Uint64ToBytes(uint64(b)) }
+func (b BlockID) ToBytes() []byte { return util.Uint64ToBytes(uint64(b)) }
 
-func (l LayerID) ToBytes() []byte { return common.Uint64ToBytes(uint64(l)) }
+func (l LayerID) ToBytes() []byte { return util.Uint64ToBytes(uint64(l)) }
 
 func BlockIdsAsBytes(ids []BlockID) ([]byte, error) {
 	var w bytes.Buffer
@@ -63,6 +63,14 @@ func AtxAsBytes(tx *ActivationTx) ([]byte, error) {
 	return w.Bytes(), nil
 }
 
+func AtxIdsAsBytes(ids []AtxId) ([]byte, error) {
+	var w bytes.Buffer
+	if _, err := xdr.Marshal(&w, &ids); err != nil {
+		return nil, fmt.Errorf("error marshalling atx ids: %v", err)
+	}
+	return w.Bytes(), nil
+}
+
 func BytesAsAtx(b []byte, id *AtxId) (*ActivationTx, error) {
 	buf := bytes.NewReader(b)
 	var atx ActivationTx
@@ -76,6 +84,14 @@ func BytesAsAtx(b []byte, id *AtxId) (*ActivationTx, error) {
 		atx.SetId(id)
 	}
 	return &atx, nil
+}
+
+func TxIdsAsBytes(ids []TransactionId) ([]byte, error) {
+	var w bytes.Buffer
+	if _, err := xdr.Marshal(&w, &ids); err != nil {
+		return nil, fmt.Errorf("error marshalling tx ids: %v", err)
+	}
+	return w.Bytes(), nil
 }
 
 func NIPSTChallengeAsBytes(challenge *NIPSTChallenge) ([]byte, error) {

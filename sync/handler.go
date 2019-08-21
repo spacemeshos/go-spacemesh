@@ -2,16 +2,16 @@ package sync
 
 import (
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
-	"github.com/spacemeshos/go-spacemesh/types"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 func newLayerHashRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg []byte) []byte {
 	return func(msg []byte) []byte {
 		logger.Debug("handle layer hash request")
-		lyrid := common.BytesToUint64(msg)
+		lyrid := util.BytesToUint64(msg)
 		layer, err := layers.GetLayer(types.LayerID(lyrid))
 		if err != nil {
 			logger.With().Error("Error handling layer request message", log.LayerId(lyrid), log.Err(err))
@@ -24,7 +24,7 @@ func newLayerHashRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg []by
 func newLayerBlockIdsRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg []byte) []byte {
 	return func(msg []byte) []byte {
 		logger.Debug("handle blockIds request")
-		lyrid := common.BytesToUint64(msg)
+		lyrid := util.BytesToUint64(msg)
 		layer, err := layers.GetLayer(types.LayerID(lyrid))
 		if err != nil {
 			logger.Error("Error handling ids request message with LayerID: %d and error: %s", lyrid, err.Error())
@@ -51,7 +51,7 @@ func newLayerBlockIdsRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg 
 
 func newBlockRequestHandler(msh *mesh.Mesh, logger log.Log) func(msg []byte) []byte {
 	return func(msg []byte) []byte {
-		blockid := types.BlockID(common.BytesToUint64(msg))
+		blockid := types.BlockID(util.BytesToUint64(msg))
 		logger.Debug("handle block %v request", blockid)
 		blk, err := msh.GetBlock(blockid)
 		if err != nil {
@@ -148,7 +148,7 @@ func newATxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 func newPoetRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 	return func(proofRef []byte) []byte {
 		proofMessage, err := s.poetDb.GetProofMessage(proofRef)
-		shortPoetRef := proofRef[:common.Min(5, len(proofRef))]
+		shortPoetRef := proofRef[:util.Min(5, len(proofRef))]
 		if err != nil {
 			logger.Warning("unfamiliar PoET proof was requested (id: %x): %v", shortPoetRef, err)
 			return nil

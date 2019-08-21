@@ -15,7 +15,7 @@
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 /*
-Package hexutil implements hex encoding with 0x prefix.
+Package util implements hex encoding with 0x prefix.
 This encoding is used by the Ethereum RPC API to transport binary data in JSON payloads.
 
 Encoding Rules
@@ -28,7 +28,7 @@ encodes as "0x".
 Integers are encoded using the least amount of digits (no leading zero digits). Their
 encoding may be of uneven length. The number zero encodes as "0x0".
 */
-package hexutil
+package util
 
 import (
 	"encoding/hex"
@@ -237,4 +237,29 @@ func mapError(err error) error {
 		return ErrOddLength
 	}
 	return err
+}
+
+// Hex2Bytes returns the bytes represented by the hexadecimal string str.
+func Hex2Bytes(str string) []byte {
+	h, _ := hex.DecodeString(str)
+	return h
+}
+
+// Bytes2Hex returns the hexadecimal encoding of d.
+func Bytes2Hex(d []byte) string {
+	return hex.EncodeToString(d)
+}
+
+// FromHex returns the bytes represented by the hexadecimal string s.
+// s may be prefixed with "0x".
+func FromHex(s string) []byte {
+	if len(s) > 1 {
+		if s[0:2] == "0x" || s[0:2] == "0X" {
+			s = s[2:]
+		}
+	}
+	if len(s)%2 == 1 {
+		s = "0" + s
+	}
+	return Hex2Bytes(s)
 }

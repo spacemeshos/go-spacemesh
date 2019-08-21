@@ -2,7 +2,7 @@ package timesync
 
 import (
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/types"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"sync"
 	"time"
 )

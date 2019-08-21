@@ -2,9 +2,9 @@ package tortoise
 
 import (
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/types"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"hash/fnv"
 	"math"
 	"sort"
@@ -212,7 +212,7 @@ func getId(bids []types.BlockID) PatternId {
 	// calc
 	h := fnv.New32()
 	for i := 0; i < len(bids); i++ {
-		h.Write(common.Uint32ToBytes(uint32(bids[i])))
+		h.Write(util.Uint32ToBytes(uint32(bids[i])))
 	}
 	// update
 	sum := h.Sum32()

@@ -2,12 +2,10 @@ package mesh
 
 import (
 	"bytes"
-	"fmt"
 	"github.com/google/uuid"
-	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/rand"
-	"github.com/spacemeshos/go-spacemesh/types"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/stretchr/testify/assert"
 	"math/big"
 	"testing"
@@ -45,64 +43,19 @@ func (m *MeshValidatorMock) RegisterLayerCallback(func(id types.LayerID)) {}
 
 type MockState struct{}
 
-func (MockState) ValidateSignature(signed types.Signed) (address.Address, error) {
-	return address.Address{}, nil
+func (MockState) ValidateSignature(signed types.Signed) (types.Address, error) {
+	return types.Address{}, nil
 }
 
 func (MockState) ApplyTransactions(layer types.LayerID, txs Transactions) (uint32, error) {
 	return 0, nil
 }
 
-func (MockState) ApplyRewards(layer types.LayerID, miners []address.Address, underQuota map[address.Address]int, bonusReward, diminishedReward *big.Int) {
+func (MockState) ApplyRewards(layer types.LayerID, miners []types.Address, underQuota map[types.Address]int, bonusReward, diminishedReward *big.Int) {
 }
 
-func (MockState) ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (address.Address, error) {
-	return address.Address{}, nil
-}
-
-type AtxDbMock struct {
-	db     map[types.AtxId]*types.ActivationTx
-	nipsts map[types.AtxId]*types.NIPST
-}
-
-func (*AtxDbMock) IsIdentityActive(edId string, layer types.LayerID) (*types.NodeId, bool, types.AtxId, error) {
-	return nil, true, *types.EmptyAtxId, nil
-}
-
-func (t *AtxDbMock) GetPosAtxId(id types.EpochId) (types.AtxId, error) {
-	return types.AtxId{}, nil /*todo: mock if needed */
-}
-
-func (t *AtxDbMock) GetAtx(id types.AtxId) (*types.ActivationTxHeader, error) {
-	if id == *types.EmptyAtxId {
-		return nil, fmt.Errorf("trying to fetch empty atx id")
-	}
-
-	if atx, ok := t.db[id]; ok {
-		return &atx.ActivationTxHeader, nil
-	}
-	return nil, fmt.Errorf("cannot find atx")
-}
-
-func (t *AtxDbMock) GetFullAtx(id types.AtxId) (*types.ActivationTx, error) {
-	panic("implement me")
-}
-
-func (t *AtxDbMock) AddAtx(id types.AtxId, atx *types.ActivationTx) {
-	t.db[id] = atx
-	t.nipsts[id] = atx.Nipst
-}
-
-func (t *AtxDbMock) GetNipst(id types.AtxId) (*types.NIPST, error) {
-	return t.nipsts[id], nil
-}
-
-func (AtxDbMock) ProcessAtx(atx *types.ActivationTx) {
-
-}
-
-func (AtxDbMock) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
-	return nil
+func (MockState) ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (types.Address, error) {
+	return types.Address{}, nil
 }
 
 type MockTxMemPool struct{}

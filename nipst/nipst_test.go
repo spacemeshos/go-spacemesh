@@ -1,9 +1,8 @@
 package nipst
 
 import (
-	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/types"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/shared"
 	"github.com/stretchr/testify/assert"
@@ -54,7 +53,7 @@ type poetProvingServiceClientMock struct{}
 // A compile time check to ensure that poetProvingServiceClientMock fully implements PoetProvingServiceClient.
 var _ PoetProvingServiceClient = (*poetProvingServiceClientMock)(nil)
 
-func (p *poetProvingServiceClientMock) submit(challenge common.Hash) (*types.PoetRound, error) {
+func (p *poetProvingServiceClientMock) submit(challenge types.Hash32) (*types.PoetRound, error) {
 	return &types.PoetRound{}, nil
 }
 
@@ -75,9 +74,9 @@ func (*poetDbMock) SubscribeToProofRef(poetId [types.PoetServiceIdLength]byte, r
 	return ch
 }
 
-func (*poetDbMock) GetMembershipMap(poetRoot []byte) (map[common.Hash]bool, error) {
-	hash := common.BytesToHash([]byte("anton"))
-	return map[common.Hash]bool{hash: true}, nil
+func (*poetDbMock) GetMembershipMap(poetRoot []byte) (map[types.Hash32]bool, error) {
+	hash := types.BytesToHash([]byte("anton"))
+	return map[types.Hash32]bool{hash: true}, nil
 }
 
 func TestNIPSTBuilderWithMocks(t *testing.T) {
@@ -91,7 +90,7 @@ func TestNIPSTBuilderWithMocks(t *testing.T) {
 
 	nb := newNIPSTBuilder(minerID, postCfg, postProver, poetProver,
 		poetDb, verifyPost, log.NewDefault(string(minerID)))
-	hash := common.BytesToHash([]byte("anton"))
+	hash := types.BytesToHash([]byte("anton"))
 	npst, err := nb.BuildNIPST(&hash)
 	assert.NoError(err)
 	assert.NotNil(npst)
@@ -117,7 +116,7 @@ func TestInitializePost(t *testing.T) {
 	assert.Equal(nb.postCfg.DataDir, drive)
 	assert.Equal(nb.postCfg.SpacePerUnit, uint64(unitSize))
 
-	hash := common.BytesToHash([]byte("anton"))
+	hash := types.BytesToHash([]byte("anton"))
 	npst, err := nb.BuildNIPST(&hash)
 	assert.NoError(err)
 	assert.NotNil(npst)
@@ -132,7 +131,7 @@ func TestNIPSTBuilderWithClients(t *testing.T) {
 
 	poetDb := &poetDbMock{}
 
-	nipstChallenge := common.BytesToHash([]byte("anton"))
+	nipstChallenge := types.BytesToHash([]byte("anton"))
 
 	npst := buildNIPST(r, postCfg, nipstChallenge, poetDb)
 
@@ -140,7 +139,7 @@ func TestNIPSTBuilderWithClients(t *testing.T) {
 	r.NoError(err)
 }
 
-func buildNIPST(r *require.Assertions, postCfg config.Config, nipstChallenge common.Hash, poetDb PoetDb) *types.NIPST {
+func buildNIPST(r *require.Assertions, postCfg config.Config, nipstChallenge types.Hash32, poetDb PoetDb) *types.NIPST {
 	postProver := NewPostClient(&postCfg)
 	poetProver, err := newRPCPoetHarnessClient()
 	r.NotNil(poetProver)
@@ -170,7 +169,7 @@ func TestNewNIPSTBuilderNotInitialized(t *testing.T) {
 	r := require.New(t)
 
 	minerIDNotInitialized := []byte("not initialized")
-	nipstChallenge := common.BytesToHash([]byte("anton"))
+	nipstChallenge := types.BytesToHash([]byte("anton"))
 
 	postProver := NewPostClient(&postCfg)
 	poetProver, err := newRPCPoetHarnessClient()
@@ -210,7 +209,7 @@ func TestValidator_Validate(t *testing.T) {
 	r := require.New(t)
 
 	poetDb := &poetDbMock{}
-	nipstChallenge := common.BytesToHash([]byte("anton"))
+	nipstChallenge := types.BytesToHash([]byte("anton"))
 
 	npst := buildNIPST(r, postCfg, nipstChallenge, poetDb)
 
@@ -232,11 +231,11 @@ func TestValidator_Validate(t *testing.T) {
 	err = validateNIPST(npst, newPostCfg, nipstChallenge, poetDb)
 	r.EqualError(err, "PoST proof invalid: validation failed: number of derived leaf indices (12) doesn't match number of included proven leaves (9)")
 
-	err = validateNIPST(npst, postCfg, common.BytesToHash([]byte("lerner")), poetDb)
+	err = validateNIPST(npst, postCfg, types.BytesToHash([]byte("lerner")), poetDb)
 	r.EqualError(err, "NIPST challenge is not equal to expected challenge")
 }
 
-func validateNIPST(npst *types.NIPST, postCfg config.Config, nipstChallenge common.Hash, poetDb PoetDb) error {
+func validateNIPST(npst *types.NIPST, postCfg config.Config, nipstChallenge types.Hash32, poetDb PoetDb) error {
 	v := &Validator{&postCfg, poetDb, verifyPost}
 	return v.Validate(npst, nipstChallenge)
 }

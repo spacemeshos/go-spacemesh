@@ -6,8 +6,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/address"
-	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -18,7 +16,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
-	"github.com/spacemeshos/go-spacemesh/types"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/sha256-simd"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -99,11 +97,11 @@ func SyncMockFactory(number int, conf Configuration, name string, dbType string,
 
 type stateMock struct{}
 
-func (stateMock) ValidateSignature(signed types.Signed) (address.Address, error) {
-	return address.Address{}, nil
+func (stateMock) ValidateSignature(signed types.Signed) (types.Address, error) {
+	return types.Address{}, nil
 }
 
-func (s *stateMock) ApplyRewards(layer types.LayerID, miners []address.Address, underQuota map[address.Address]int, bonusReward, diminishedReward *big.Int) {
+func (s *stateMock) ApplyRewards(layer types.LayerID, miners []types.Address, underQuota map[types.Address]int, bonusReward, diminishedReward *big.Int) {
 
 }
 
@@ -111,8 +109,8 @@ func (s *stateMock) ApplyTransactions(id types.LayerID, tx mesh.Transactions) (u
 	return 0, nil
 }
 
-func (s *stateMock) ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (address.Address, error) {
-	return address.Address{}, nil
+func (s *stateMock) ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (types.Address, error) {
+	return types.Address{}, nil
 }
 
 type mockBlocksProvider struct {
@@ -842,8 +840,8 @@ end:
 func tx() *types.AddressableSignedTransaction {
 	gasPrice := rand.Uint64()
 	addr := rand.Int63n(1000000)
-	tx := types.NewAddressableTx(1, address.HexToAddress(RandStringRunes(8)),
-		address.HexToAddress(strconv.FormatUint(uint64(addr), 10)),
+	tx := types.NewAddressableTx(1, types.HexToAddress(RandStringRunes(8)),
+		types.HexToAddress(strconv.FormatUint(uint64(addr), 10)),
 		10, 100, gasPrice)
 
 	return tx
@@ -860,8 +858,8 @@ func RandStringRunes(n int) string {
 }
 
 func atx() *types.ActivationTx {
-	coinbase := address.HexToAddress("aaaa")
-	chlng := common.HexToHash("0x3333")
+	coinbase := types.HexToAddress("aaaa")
+	chlng := types.HexToHash32("0x3333")
 	poetRef := []byte{0xde, 0xad}
 	npst := nipst.NewNIPSTWithChallenge(&chlng, poetRef)
 

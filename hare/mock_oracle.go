@@ -3,7 +3,7 @@ package hare
 import (
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/types"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"hash/fnv"
 	"math"
 	"sync"
