@@ -85,12 +85,24 @@ def add_single_client(deployment_id, container_specs):
 
 
 def add_multi_clients(deployment_id, container_specs, size=2):
-    resp = deployment.create_deployment(file_name=CLIENT_DEPLOYMENT_FILE,
-                                        name_space=testconfig['namespace'],
-                                        deployment_id=deployment_id,
-                                        replica_size=size,
-                                        container_specs=container_specs,
-                                        time_out=testconfig['deployment_ready_time_out'])
+    dep_type = 'deployment' if 'deployment_type' not in testconfig['client'] else testconfig['client']['deployment_type']
+    if dep_type == 'deployment':
+        resp = deployment.create_deployment(file_name=CLIENT_DEPLOYMENT_FILE,
+                                            name_space=testconfig['namespace'],
+                                            deployment_id=deployment_id,
+                                            replica_size=size,
+                                            container_specs=container_specs,
+                                            time_out=testconfig['deployment_ready_time_out'])
+    elif dep_type == 'statefulset':
+        resp = deployment.create_deployment(file_name=CLIENT_STATEFULSET_FILE,
+                                            name_space=testconfig['namespace'],
+                                            deployment_id=deployment_id,
+                                            replica_size=size,
+                                            container_specs=container_specs,
+                                            time_out=testconfig['deployment_ready_time_out'])
+    else:
+        raise Exception("Unknown deployment type in client configuration")
+    
     client_pods = CoreV1ApiClient().list_namespaced_pod(testconfig['namespace'],
                                                         include_uninitialized=True,
                                                         label_selector=("name={0}".format(
