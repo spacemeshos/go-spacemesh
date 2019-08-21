@@ -135,4 +135,3 @@ func (p *Publisher) publish(topic channelId, payload []byte) error {
 	err := p.sock.Send(msg)
 	return err
 }
-
