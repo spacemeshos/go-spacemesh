@@ -90,6 +90,8 @@ type BaseConfig struct {
 
 	GenesisActiveSet int `mapstructure:"genesis-active-size"` // the active set size for genesis
 
+	PublishEventsUrl string `mapstructure:"publish-events"`
+
 	StartMining bool `mapstructure:"start-mining"`
 }
 
