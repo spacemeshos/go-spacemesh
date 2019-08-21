@@ -1,7 +1,6 @@
 package nipst
 
 import (
-	"flag"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/types"
@@ -9,8 +8,6 @@ import (
 	"github.com/spacemeshos/post/shared"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"os"
-	"path/filepath"
 	"testing"
 	"time"
 )
@@ -154,6 +151,12 @@ func buildNIPST(r *require.Assertions, postCfg config.Config, nipstChallenge com
 	r.NoError(err)
 	nb := newNIPSTBuilder(minerID, postCfg, postProver, poetProver,
 		poetDb, verifyPost, log.NewDefault(string(minerID)))
+
+	_, err = nb.InitializePost(postCfg.DataDir, postCfg.SpacePerUnit)
+	defer func() { r.NoError(nb.postProver.Reset()) }()
+
+	r.NoError(err)
+
 	npst, err := nb.BuildNIPST(&nipstChallenge)
 	r.NoError(err)
 	return npst
@@ -187,7 +190,7 @@ func TestNewNIPSTBuilderNotInitialized(t *testing.T) {
 
 	idsToCleanup = append(idsToCleanup, minerIDNotInitialized)
 	initialProof, err := nb.InitializePost(postCfg.DataDir, postCfg.SpacePerUnit)
-	defer assert.NoError(t, nb.postProver.Reset())
+	defer func() { assert.NoError(t, nb.postProver.Reset()) }()
 	r.NoError(err)
 	r.NotNil(initialProof)
 
@@ -236,40 +239,4 @@ func TestValidator_Validate(t *testing.T) {
 func validateNIPST(npst *types.NIPST, postCfg config.Config, nipstChallenge common.Hash, poetDb PoetDb) error {
 	v := &Validator{&postCfg, poetDb, verifyPost}
 	return v.Validate(npst, nipstChallenge)
-}
-
-func TestMain(m *testing.M) {
-	flag.Parse()
-	initPost(minerID)
-	res := m.Run()
-	cleanup()
-	os.Exit(res)
-}
-
-func initPost(id []byte) {
-	defTimeout := 5 * time.Second
-	idsToCleanup = append(idsToCleanup, id)
-	_, err := NewPostClient(&postCfg).initialize(id, defTimeout)
-	logIfError(err)
-}
-
-func cleanup() {
-	matches, err := filepath.Glob("*.bin")
-	logIfError(err)
-	for _, f := range matches {
-		err = os.Remove(f)
-		logIfError(err)
-	}
-
-	for _, id := range idsToCleanup {
-		dir := shared.GetInitDir(postCfg.DataDir, id)
-		err = os.RemoveAll(dir)
-		logIfError(err)
-	}
-}
-
-func logIfError(err error) {
-	if err != nil {
-		_, _ = os.Stderr.WriteString(err.Error())
-	}
 }
