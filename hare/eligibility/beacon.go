@@ -15,7 +15,7 @@ const nilVal = 0
 type patternProvider interface {
 	// GetPatternId returns the pattern Id of the given Layer
 	// the pattern Id is defined to be the hash of blocks in a Layer
-	GetGoodPattern(layer types.LayerID) (map[types.BlockID]struct{}, error)
+	ContextuallyValidBlock(layer types.LayerID) (map[types.BlockID]struct{}, error)
 }
 
 type addGet interface {
@@ -51,7 +51,7 @@ func (b *beacon) Value(layer types.LayerID) (uint32, error) {
 		return val.(uint32), nil
 	}
 
-	v, err := b.patternProvider.GetGoodPattern(sl)
+	v, err := b.patternProvider.ContextuallyValidBlock(sl)
 	if err != nil {
 		log.With().Error("Could not get pattern Id",
 			log.Err(err), log.LayerId(uint64(layer)), log.Uint64("sl_id", uint64(sl)))

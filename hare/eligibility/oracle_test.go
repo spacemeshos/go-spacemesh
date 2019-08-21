@@ -28,7 +28,7 @@ type mockBlocksProvider struct {
 	mp map[types.BlockID]struct{}
 }
 
-func (mbp mockBlocksProvider) GetGoodPattern(layer types.LayerID) (map[types.BlockID]struct{}, error) {
+func (mbp mockBlocksProvider) ContextuallyValidBlock(layer types.LayerID) (map[types.BlockID]struct{}, error) {
 	return mbp.mp, nil
 }
 
@@ -327,7 +327,7 @@ type bProvider struct {
 	mp map[types.LayerID]map[types.BlockID]struct{}
 }
 
-func (p *bProvider) GetGoodPattern(layer types.LayerID) (map[types.BlockID]struct{}, error) {
+func (p *bProvider) ContextuallyValidBlock(layer types.LayerID) (map[types.BlockID]struct{}, error) {
 	if mp, exist := p.mp[layer]; exist {
 		return mp, nil
 	}

@@ -344,7 +344,8 @@ func (m *MeshDB) GetTransaction(id types.TransactionId) (*types.AddressableSigne
 	return types.BytesAsAddressableTransaction(tBytes)
 }
 
-func (m *MeshDB) GetGoodPattern(layer types.LayerID) (map[types.BlockID]struct{}, error) {
+// ContextuallyValidBlock - returns the contextually valid blocks for the provided layer
+func (m *MeshDB) ContextuallyValidBlock(layer types.LayerID) (map[types.BlockID]struct{}, error) {
 
 	if layer == 0 || layer == 1 {
 		v, err := m.LayerBlockIds(layer)
