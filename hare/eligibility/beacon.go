@@ -18,11 +18,16 @@ type patternProvider interface {
 	GetGoodPattern(layer types.LayerID) (map[types.BlockID]struct{}, error)
 }
 
+type addGet interface {
+	Add(key, value interface{}) (evicted bool)
+	Get(key interface{}) (value interface{}, ok bool)
+}
+
 type beacon struct {
 	// provides a value that is unpredictable and agreed (w.h.p.) by all honest
 	patternProvider patternProvider
 	confidenceParam uint64
-	cache           *lru.Cache
+	cache           addGet
 }
 
 func NewBeacon(patternProvider patternProvider, confidenceParam uint64) *beacon {
@@ -73,7 +78,10 @@ func calcValue(bids map[types.BlockID]struct{}) uint32 {
 	// calc
 	h := fnv.New32()
 	for i := 0; i < len(keys); i++ {
-		h.Write(common.Uint32ToBytes(uint32(keys[i])))
+		_, err := h.Write(common.Uint32ToBytes(uint32(keys[i])))
+		if err != nil {
+			log.Panic("Could not calculate beacon value. Hash write error=%v", err)
+		}
 	}
 	// update
 	sum := h.Sum32()

@@ -4,6 +4,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"testing"
 )
 
@@ -21,7 +22,11 @@ func (mpp *mockPatternProvider) GetGoodPattern(layer types.LayerID) (map[types.B
 }
 
 func TestBeacon_Value(t *testing.T) {
+	r := require.New(t)
+
 	b := beacon{}
+	c := newMockCasher()
+	b.cache = c
 
 	genesisGoodPtrn := map[types.BlockID]struct{}{}
 	genesisGoodPtrn[420] = struct{}{}
@@ -34,12 +39,31 @@ func TestBeacon_Value(t *testing.T) {
 	b.patternProvider = &mockPatternProvider{valGoodPtrn, genesisGoodPtrn, someErr}
 	b.confidenceParam = cfg.ConfidenceParam
 	_, err := b.Value(100)
-	assert.NotNil(t, err)
+	r.NotNil(err)
 	b.patternProvider = &mockPatternProvider{valGoodPtrn, genesisGoodPtrn, nil}
 	val, err := b.Value(100)
+	r.Nil(err)
+	r.Equal(calcValue(valGoodPtrn), val)
+	r.Equal(2, c.numGet)
+	r.Equal(1, c.numAdd)
+
+	// ensure cache
+	val, err = b.Value(100)
 	assert.Nil(t, err)
 	assert.Equal(t, calcValue(valGoodPtrn), val)
+	r.Equal(3, c.numGet)
+	r.Equal(1, c.numAdd)
+
 	val, err = b.Value(1)
 	assert.Nil(t, err)
 	assert.Equal(t, calcValue(genesisGoodPtrn), val)
+}
+
+func TestNewBeacon(t *testing.T) {
+	r := require.New(t)
+	p := &mockPatternProvider{}
+	b := NewBeacon(p, 10)
+	r.Equal(p, b.patternProvider)
+	r.Equal(uint64(10), b.confidenceParam)
+	r.NotNil(p, b.cache)
 }

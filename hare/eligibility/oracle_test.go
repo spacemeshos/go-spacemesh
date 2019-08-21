@@ -65,21 +65,25 @@ func (s *signer) Sign(msg []byte) ([]byte, error) {
 }
 
 type mockCacher struct {
-	data map[interface{}]interface{}
+	data   map[interface{}]interface{}
+	numAdd int
+	numGet int
 }
 
 func newMockCasher() *mockCacher {
-	return &mockCacher{make(map[interface{}]interface{})}
+	return &mockCacher{make(map[interface{}]interface{}), 0, 0}
 }
 
 func (mc *mockCacher) Add(key, value interface{}) (evicted bool) {
 	_, evicted = mc.data[key]
 	mc.data[key] = value
+	mc.numAdd++
 	return evicted
 }
 
 func (mc *mockCacher) Get(key interface{}) (value interface{}, ok bool) {
 	v, ok := mc.data[key]
+	mc.numGet++
 	return v, ok
 }
 
