@@ -2,6 +2,7 @@ module github.com/spacemeshos/go-spacemesh
 
 require (
 	cloud.google.com/go v0.38.0
+	github.com/Microsoft/go-winio v0.4.14 // indirect
 	github.com/VividCortex/gohistogram v1.0.0 // indirect
 	github.com/btcsuite/btcd v0.0.0-20190213025234-306aecffea32
 	github.com/btcsuite/btcutil v0.0.0-20190207003914-4c204d697803
@@ -17,6 +18,7 @@ require (
 	github.com/prometheus/client_golang v0.9.3
 	github.com/prometheus/common v0.4.0
 	github.com/seehuhn/mt19937 v0.0.0-20180715112136-cc7708819361
+	github.com/smartystreets/goconvey v0.0.0-20190731233626-505e41936337 // indirect
 	github.com/spacemeshos/ed25519 v0.0.0-20190530014421-e235766d15a1
 	github.com/spacemeshos/merkle-tree v0.0.0-20190612125135-48574fd5f419
 	github.com/spacemeshos/poet v0.0.0-20190717095635-f016e4af26f2
@@ -36,4 +38,5 @@ require (
 	google.golang.org/genproto v0.0.0-20190502173448-54afdca5d873
 	google.golang.org/grpc v1.21.0
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
+	nanomsg.org/go-mangos v1.4.0
 )
