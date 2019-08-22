@@ -12,6 +12,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/consensus"
 	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -219,6 +220,10 @@ func (app *SpacemeshApp) setupLogging() {
 	log.InitSpacemeshLoggingSystem(dataDir, "spacemesh.log")
 
 	log.Info("%s", app.getAppInfo())
+
+	if app.Config.PublishEventsUrl != "" {
+		events.InitializeEventPubsub(app.Config.PublishEventsUrl)
+	}
 }
 
 func (app *SpacemeshApp) getAppInfo() string {
@@ -290,7 +295,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 
 	name := nodeID.ShortString()
 
-	lg := log.NewDefault(name).WithFields(log.String("nodeID", name))
+	lg := log.NewDefault(name).WithFields(log.NodeId(name))
 	app.log = lg.WithName("app")
 
 	postClient.SetLogger(lg.WithName("post"))
@@ -646,7 +651,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	// start api servers
 	if apiConf.StartGrpcServer || apiConf.StartJSONServer {
 		// start grpc if specified or if json rpc specified
-		app.grpcAPIService = api.NewGrpcService(app.P2P, app.state, app.mesh.TxProcessor, app.atxBuilder, app.oracle)
+		app.grpcAPIService = api.NewGrpcService(app.P2P, app.state, app.mesh.TxProcessor, app.atxBuilder, app.oracle, app.clock)
 		app.grpcAPIService.StartService(nil)
 	}
 
