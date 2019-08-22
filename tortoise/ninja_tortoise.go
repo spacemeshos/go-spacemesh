@@ -465,7 +465,7 @@ func (ni *ninjaTortoise) getVote(id types.BlockID) vec {
 }
 
 func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) { //i most recent layer
-	ni.Info("update tables layer %d with %d blocks", newlyr.Index(), len(newlyr.Blocks()))
+	ni.With().Info("Tortoise update tables", log.LayerId(uint64(newlyr.Index())), log.Int("n_blocks", len(newlyr.Blocks())))
 	defer ni.evictOutOfPbase()
 	ni.processBlocks(newlyr)
 
@@ -553,24 +553,27 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) { //i most rec
 
 			// update completeness of p
 			if _, found := ni.tComplete[p]; complete && !found {
-				ni.pBase = p
 				ni.tComplete[p] = struct{}{}
-				ni.SaveGoodPattern(p.Layer(), ni.tPattern[p])
-				ni.SaveOpinion()
+				ni.SaveOpinion(p)
+				ni.pBase = p
 				ni.Debug("found new complete and good pattern for layer %d pattern %d with %d support ", l, p.id, ni.tSupport[p])
 			}
 		}
 	}
-	ni.Info("finished layer %d pbase is %d", newlyr.Index(), ni.pBase.Layer())
+	ni.With().Info("Tortoise finished layer", log.LayerId(uint64(newlyr.Index())), log.Uint64("pbase", uint64(ni.pBase.Layer())))
 	return
 }
 
-func (ni *ninjaTortoise) SaveOpinion() {
-	for blk, vec := range ni.tVote[ni.pBase] {
+func (ni *ninjaTortoise) SaveOpinion(p votingPattern) {
+	for blk, vec := range ni.tVote[p] {
+		valid := false
 		if vec == Support {
-			ni.SaveContextualValidity(blk, true)
-		} else {
-			ni.SaveContextualValidity(blk, false)
+			valid = true
 		}
+
+		if err := ni.SaveContextualValidity(blk, valid); err != nil {
+			ni.Error("could not write contextual validity for block %v ", blk)
+		}
+
 	}
 }

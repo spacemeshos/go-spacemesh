@@ -90,8 +90,8 @@ type NIPSTBuilder struct {
 	stop    bool
 	stopM   sync.Mutex
 	errChan chan error
-
-	state *builderState
+	cfgM    sync.RWMutex
+	state   *builderState
 
 	log log.Log
 }
@@ -228,12 +228,22 @@ func (nb *NIPSTBuilder) IsPostInitialized() bool {
 	return nb.postProver.Initialized()
 }
 
+func (nb *NIPSTBuilder) GetDataDirPath() string {
+	var d string
+	nb.cfgM.RLock()
+	d = nb.postCfg.DataDir
+	nb.cfgM.RUnlock()
+	return d
+}
+
 func (nb *NIPSTBuilder) InitializePost(dataDir string, space uint64) (*types.PostProof, error) {
 	defTimeout := 5 * time.Second // TODO: replace temporary solution
 
+	nb.cfgM.Lock()
 	nb.postCfg.DataDir = dataDir
 	nb.postCfg.SpacePerUnit = space
 	nb.postProver.SetParams(dataDir, space)
+	nb.cfgM.Unlock()
 
 	commitment, err := nb.postProver.initialize(nb.id, defTimeout)
 	if err != nil {
