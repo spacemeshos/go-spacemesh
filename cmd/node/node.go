@@ -295,7 +295,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 
 	name := nodeID.ShortString()
 
-	lg := log.NewDefault(name).WithFields(log.String("nodeID", name))
+	lg := log.NewDefault(name).WithFields(log.NodeId(name))
 	app.log = lg.WithName("app")
 
 	postClient.SetLogger(lg.WithName("post"))
@@ -648,7 +648,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	// start api servers
 	if apiConf.StartGrpcServer || apiConf.StartJSONServer {
 		// start grpc if specified or if json rpc specified
-		app.grpcAPIService = api.NewGrpcService(app.P2P, app.state, app.mesh.TxProcessor, app.atxBuilder, app.oracle)
+		app.grpcAPIService = api.NewGrpcService(app.P2P, app.state, app.mesh.TxProcessor, app.atxBuilder, app.oracle, app.clock)
 		app.grpcAPIService.StartService(nil)
 	}
 

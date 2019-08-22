@@ -115,5 +115,11 @@ service SpacemeshService {
           body: "*"
         };
     }
+    rpc GetGenesisTime(google.protobuf.Empty) returns (SimpleMessage) {
+        option (google.api.http) = {
+          post: "/v1/genesis"
+          body: "*"
+        };
+    }
 }
 
