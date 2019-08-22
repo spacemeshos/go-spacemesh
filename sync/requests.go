@@ -3,7 +3,9 @@ package sync
 import (
 	"bytes"
 	"crypto/sha256"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"encoding/hex"
+	"errors"
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/types"
@@ -116,17 +118,9 @@ func TxReqFactory(ids []types.TransactionId) RequestFactory {
 				return
 			}
 
-			mp := make(map[types.TransactionId]struct{})
-			for _, id := range ids {
-				mp[id] = struct{}{}
-			}
-
-			for _, tx := range txs {
-				txid := types.GetTransactionId(&tx)
-				if _, ok := mp[txid]; !ok {
-					s.Info("received a tx that was not requested  %v", txid)
-					return
-				}
+			if valid, err := validateTxIds(ids, txs); !valid {
+				s.Error("fetch failed bad response : %v", err)
+				return
 			}
 
 			ch <- txs
@@ -142,6 +136,20 @@ func TxReqFactory(ids []types.TransactionId) RequestFactory {
 		}
 		return ch, nil
 	}
+}
+
+func validateTxIds(ids []types.TransactionId, txs []types.SerializableSignedTransaction) (bool, error) {
+	mp := make(map[types.TransactionId]struct{})
+	for _, id := range ids {
+		mp[id] = struct{}{}
+	}
+	for _, tx := range txs {
+		txid := types.GetTransactionId(&tx)
+		if _, ok := mp[txid]; !ok {
+			return false, errors.New(fmt.Sprintf("received a tx that was not requested  %v", hex.EncodeToString(txid[:])))
+		}
+	}
+	return true, nil
 }
 
 func ATxReqFactory(ids []types.AtxId) RequestFactory {
@@ -161,19 +169,10 @@ func ATxReqFactory(ids []types.AtxId) RequestFactory {
 				return
 			}
 
-			mp := make(map[types.AtxId]struct{})
-			for _, id := range ids {
-				mp[id] = struct{}{}
-			}
-
 			atxs = calcAndSetIds(atxs)
-
-			for _, tx := range atxs {
-				txid := tx.Id()
-				if _, ok := mp[txid]; !ok {
-					s.Info("received an atx that was not requested  %v", txid)
-					return
-				}
+			if valid, err := validateAtxIds(ids, atxs); !valid {
+				s.Error("fetch failed bad response : %v", err)
+				return
 			}
 
 			ch <- atxs
@@ -189,6 +188,20 @@ func ATxReqFactory(ids []types.AtxId) RequestFactory {
 
 		return ch, nil
 	}
+}
+
+func validateAtxIds(ids []types.AtxId, atxs []types.ActivationTx) (bool, error) {
+	mp := make(map[types.AtxId]struct{})
+	for _, id := range ids {
+		mp[id] = struct{}{}
+	}
+	for _, tx := range atxs {
+		txid := tx.Id()
+		if _, ok := mp[txid]; !ok {
+			return false, errors.New(fmt.Sprintf("received a tx that was not requested  %v", tx.ShortId()))
+		}
+	}
+	return true, nil
 }
 
 func calcAndSetIds(atxs []types.ActivationTx) []types.ActivationTx {
@@ -217,14 +230,8 @@ func PoetReqFactory(poetProofRef []byte) RequestFactory {
 				return
 			}
 
-			valid, err := validatePoetRef(proofMessage, poetProofRef)
-			if err != nil {
-				s.Error("could not unmarshal PoET proof response: %v", err)
-				return
-			}
-
-			if valid {
-				s.Info("received an atx that was not requested  %v", poetProofRef)
+			if valid, err := validatePoetRef(proofMessage, poetProofRef); !valid {
+				s.Error("failed validating poet response", err)
 				return
 			}
 
@@ -242,12 +249,11 @@ func PoetReqFactory(poetProofRef []byte) RequestFactory {
 func validatePoetRef(proofMessage types.PoetProofMessage, poetProofRef []byte) (bool, error) {
 	poetProofBytes, err := types.InterfaceToBytes(&proofMessage.PoetProof)
 	if err != nil {
-		log.Error("could marshal PoET response for validation ", err)
-		return false, err
+		return false, errors.New(fmt.Sprintf("could marshal PoET response for validation %v", err))
 	}
 	b := sha256.Sum256(poetProofBytes)
 	if bytes.Compare(b[:], poetProofRef) != 0 {
-		return false, err
+		return false, errors.New(fmt.Sprintf("poet recived was diffrent then requested"))
 	}
 
 	return true, nil
