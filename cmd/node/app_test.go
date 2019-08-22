@@ -109,7 +109,7 @@ func (suite *AppTestSuite) initSingleInstance(i int, genesisTime string, rng *am
 	smApp.Config.Hdist = 5
 	smApp.Config.GenesisTime = genesisTime
 	smApp.Config.LayerDurationSec = 20
-	smApp.Config.HareEligibility.ConfidenceParam = 3
+	smApp.Config.HareEligibility.ConfidenceParam = 4
 	smApp.Config.HareEligibility.EpochOffset = 0
 	smApp.Config.StartMining = true
 	smApp.Config.SyncRequestTimeout = 2000
