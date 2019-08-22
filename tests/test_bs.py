@@ -85,12 +85,16 @@ def add_single_client(deployment_id, container_specs):
 
 
 def add_multi_clients(deployment_id, container_specs, size=2):
-    resp = deployment.create_deployment(file_name=CLIENT_DEPLOYMENT_FILE,
-                                        name_space=testconfig['namespace'],
-                                        deployment_id=deployment_id,
-                                        replica_size=size,
-                                        container_specs=container_specs,
-                                        time_out=testconfig['deployment_ready_time_out'])
+
+    k8s_file, k8s_create_func = choose_k8s_object_create(testconfig['client'],
+                                                         CLIENT_DEPLOYMENT_FILE,
+                                                         CLIENT_STATEFULSET_FILE)
+    resp = k8s_create_func(k8s_file, testconfig['namespace'],
+                           deployment_id=deployment_id,
+                           replica_size=size,
+                           container_specs=cspec,
+                           time_out=testconfig['deployment_ready_time_out'])
+
     client_pods = CoreV1ApiClient().list_namespaced_pod(testconfig['namespace'],
                                                         include_uninitialized=True,
                                                         label_selector=("name={0}".format(
