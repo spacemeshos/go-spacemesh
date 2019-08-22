@@ -54,6 +54,7 @@ type Configuration struct {
 	Concurrency    int //number of workers for sync method
 	LayerSize      int
 	RequestTimeout time.Duration
+	Hdist          int
 }
 
 type LayerValidator interface {
@@ -297,9 +298,14 @@ func (s *Syncer) blockSyntacticValidation(block *types.Block) ([]*types.Addressa
 		return nil, nil, errors.New(fmt.Sprintf("data availabilty failed for block %v", block.ID()))
 	}
 
-	//validate blocks view
+	//validate block's view
 	if valid := s.validateBlockView(block); valid == false {
 		return nil, nil, errors.New(fmt.Sprintf("block %v not syntacticly valid", block.ID()))
+	}
+
+	//validate block's votes
+	if valid := s.validateVotes(block); valid == false {
+		return nil, nil, errors.New(fmt.Sprintf("validate votes failed for block %v", block.ID()))
 	}
 
 	return txs, atxs, nil
@@ -320,6 +326,38 @@ func (s *Syncer) validateBlockView(blk *types.Block) bool {
 	}
 
 	return <-ch
+}
+
+func (s *Syncer) validateVotes(blk *types.Block) bool {
+	view := map[types.BlockID]struct{}{}
+	for _, blk := range blk.ViewEdges {
+		view[blk] = struct{}{}
+	}
+
+	vote := map[types.BlockID]struct{}{}
+	for _, blk := range blk.BlockVotes {
+		vote[blk] = struct{}{}
+	}
+
+	traverse := func(b *types.Block) (stop bool, err error) {
+		if _, ok := vote[b.ID()]; ok {
+			delete(vote, b.ID())
+		}
+		return len(vote) == 0, nil
+	}
+
+	// traverse only through the last Hdist layers
+	lowestLayer := blk.LayerIndex - types.LayerID(s.Hdist)
+	if blk.LayerIndex < types.LayerID(s.Hdist) {
+		lowestLayer = 0
+	}
+	err := s.ForBlockInView(view, lowestLayer, traverse)
+	if err == nil && len(vote) > 0 {
+		err = fmt.Errorf("voting on blocks out of view (or out of Hdist), %v", vote)
+	}
+	s.Log.With().Info("validateVotes done", log.Err(err))
+
+	return err == nil
 }
 
 func (s *Syncer) DataAvailabilty(blk *types.Block) ([]*types.AddressableSignedTransaction, []*types.ActivationTx, error) {

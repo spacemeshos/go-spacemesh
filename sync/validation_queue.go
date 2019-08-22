@@ -132,6 +132,11 @@ func (vq *validationQueue) finishBlockCallback(block *types.Block) func(res bool
 			return err
 		}
 
+		//validate block's votes
+		if valid := s.validateVotes(block); valid == false {
+			return errors.New(fmt.Sprintf("validate votes failed for block %v", block.ID()))
+		}
+
 		if err := vq.addBlock(block, txs, atxs); err != nil && err != mesh.DoubleWrite {
 			return err
 		}

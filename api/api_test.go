@@ -87,6 +87,10 @@ func (t *TxAPIMock) ValidateTransactionSignature(tx *types.SerializableSignedTra
 type MinigApiMock struct {
 }
 
+func (*MinigApiMock) MiningStats() (int, string, string) {
+	return 1, "123456", "/tmp"
+}
+
 func (*MinigApiMock) StartPost(address address.Address, logicalDrive string, commitmentSize uint64) error {
 	return nil
 }
@@ -102,12 +106,21 @@ func (*OracleMock) GetEligibleLayers() []types.LayerID {
 	return []types.LayerID{1, 2, 3, 4}
 }
 
+type GenesisTimeMock struct {
+	t time.Time
+}
+
+func (t GenesisTimeMock) GetGenesisTime() time.Time {
+	return t.t
+}
+
 var (
 	ap          = NodeAPIMock{}
 	networkMock = NetworkMock{}
 	tx          = TxAPIMock{}
 	mining      = MinigApiMock{}
 	oracle      = OracleMock{}
+	genTime     = GenesisTimeMock{time.Now()}
 )
 
 func TestServersConfig(t *testing.T) {
@@ -118,7 +131,7 @@ func TestServersConfig(t *testing.T) {
 
 	config.ConfigValues.JSONServerPort = port1
 	config.ConfigValues.GrpcServerPort = port2
-	grpcService := NewGrpcService(&networkMock, ap, &tx, &mining, &oracle)
+	grpcService := NewGrpcService(&networkMock, ap, &tx, &mining, &oracle, nil)
 	jsonService := NewJSONHTTPServer()
 
 	assert.Equal(t, grpcService.Port, uint(config.ConfigValues.GrpcServerPort), "Expected same port")
@@ -136,7 +149,7 @@ func TestGrpcApi(t *testing.T) {
 
 	const message = "Hello World"
 
-	grpcService := NewGrpcService(&networkMock, ap, &tx, &mining, &oracle)
+	grpcService := NewGrpcService(&networkMock, ap, &tx, &mining, &oracle, nil)
 	grpcStatus := make(chan bool, 2)
 
 	// start a server
@@ -178,7 +191,7 @@ func TestJsonApi(t *testing.T) {
 	ap := NodeAPIMock{}
 	net := NetworkMock{}
 	tx := TxAPIMock{}
-	grpcService := NewGrpcService(&net, ap, &tx, &mining, &oracle)
+	grpcService := NewGrpcService(&net, ap, &tx, &mining, &oracle, nil)
 	jsonService := NewJSONHTTPServer()
 
 	jsonStatus := make(chan bool, 2)
@@ -275,7 +288,7 @@ func TestJsonWalletApi(t *testing.T) {
 	ap.nonces[addr] = 10
 	ap.balances[addr] = big.NewInt(100)
 	txApi := TxAPIMock{}
-	grpcService := NewGrpcService(&net, ap, &txApi, &mining, &oracle)
+	grpcService := NewGrpcService(&net, ap, &txApi, &mining, &oracle, &genTime)
 	jsonService := NewJSONHTTPServer()
 
 	jsonStatus := make(chan bool, 2)
@@ -405,8 +418,8 @@ func TestJsonWalletApi(t *testing.T) {
 	got, want = resp.StatusCode, http.StatusOK
 	assert.Equal(t, want, got)
 
-	// test get eligible layers / miner rewards
-	url = fmt.Sprintf("http://127.0.0.1:%d/v1/startmining", config.ConfigValues.JSONServerPort)
+	// test get statistics about init progress
+	url = fmt.Sprintf("http://127.0.0.1:%d/v1/stats", config.ConfigValues.JSONServerPort)
 	resp, err = http.Post(url, contentType, nil)
 	assert.NoError(t, err, "failed to http post to api endpoint")
 
@@ -416,6 +429,31 @@ func TestJsonWalletApi(t *testing.T) {
 
 	got, want = resp.StatusCode, http.StatusOK
 	assert.Equal(t, want, got)
+
+	var stats pb.MiningStats
+	err = jsonpb.UnmarshalString(string(buf), &stats)
+	assert.NoError(t, err)
+
+	assert.Equal(t, int32(1), stats.Status)
+	assert.Equal(t, "/tmp", stats.DataDir)
+	assert.Equal(t, "123456", stats.Coinbase)
+
+	// test get genesisTime
+	url = fmt.Sprintf("http://127.0.0.1:%d/v1/genesis", config.ConfigValues.JSONServerPort)
+	resp, err = http.Post(url, contentType, nil)
+	assert.NoError(t, err, "failed to http post to api endpoint")
+
+	buf, err = ioutil.ReadAll(resp.Body)
+	resp.Body.Close()
+	assert.NoError(t, err, "failed to read response body")
+
+	got, want = resp.StatusCode, http.StatusOK
+	assert.Equal(t, want, got)
+
+	err = jsonpb.UnmarshalString(string(buf), &msg)
+	assert.NoError(t, err)
+
+	assert.Equal(t, genTime.t.String(), msg.Value)
 
 	// stop the services
 	jsonService.StopService()
@@ -435,7 +473,7 @@ func TestJsonWalletApi_Errors(t *testing.T) {
 	ap := NewNodeAPIMock()
 	net := NetworkMock{}
 	tx := TxAPIMock{}
-	grpcService := NewGrpcService(&net, ap, &tx, &mining, &oracle)
+	grpcService := NewGrpcService(&net, ap, &tx, &mining, &oracle, nil)
 	jsonService := NewJSONHTTPServer()
 
 	jsonStatus := make(chan bool, 2)
@@ -507,7 +545,7 @@ func TestSpaceMeshGrpcService_Broadcast(t *testing.T) {
 	ap := NewNodeAPIMock()
 	net := NetworkMock{broadcasted: []byte{0x00}}
 	tx := TxAPIMock{}
-	grpcService := NewGrpcService(&net, ap, &tx, &mining, &oracle)
+	grpcService := NewGrpcService(&net, ap, &tx, &mining, &oracle, nil)
 	jsonService := NewJSONHTTPServer()
 
 	jsonStatus := make(chan bool, 2)
@@ -576,7 +614,7 @@ func TestSpaceMeshGrpcService_BroadcastErrors(t *testing.T) {
 	net := NetworkMock{broadcasted: []byte{0x00}}
 	net.broadCastErr = true
 	tx := TxAPIMock{}
-	grpcService := NewGrpcService(&net, ap, &tx, &mining, &oracle)
+	grpcService := NewGrpcService(&net, ap, &tx, &mining, &oracle, nil)
 	jsonService := NewJSONHTTPServer()
 
 	jsonStatus := make(chan bool, 2)

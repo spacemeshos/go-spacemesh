@@ -63,8 +63,9 @@ func (vp votingPattern) Layer() types.LayerID {
 type Mesh interface {
 	GetBlock(id types.BlockID) (*types.Block, error)
 	LayerBlockIds(id types.LayerID) ([]types.BlockID, error)
-	ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, foo func(block *types.Block) error) error
+	ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, foo func(block *types.Block) (bool, error)) error
 	SaveGoodPattern(layer types.LayerID, blks map[types.BlockID]struct{}) error
+	SaveContextualValidity(id types.BlockID, valid bool) error
 }
 
 //todo memory optimizations
@@ -239,7 +240,7 @@ func globalOpinion(v vec, layerSize int, delta float64) vec {
 }
 
 func (ni *ninjaTortoise) updateCorrectionVectors(p votingPattern, bottomOfWindow types.LayerID) {
-	foo := func(x *types.Block) error {
+	foo := func(x *types.Block) (bool, error) {
 		for _, bid := range ni.tEffectiveToBlocks[p] { //for all b who's effective vote is p
 			b, err := ni.GetBlock(bid)
 			if err != nil {
@@ -259,7 +260,7 @@ func (ni *ninjaTortoise) updateCorrectionVectors(p votingPattern, bottomOfWindow
 				ni.Debug("block %d from layer %d dose'nt explicitly vote for layer %d", b.ID(), b.Layer(), x.Layer())
 			}
 		}
-		return nil
+		return false, nil
 	}
 
 	tp := ni.tPattern[p]
@@ -464,7 +465,7 @@ func (ni *ninjaTortoise) getVote(id types.BlockID) vec {
 }
 
 func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) { //i most recent layer
-	ni.Info("update tables layer %d with %d blocks", newlyr.Index(), len(newlyr.Blocks()))
+	ni.With().Info("Tortoise update tables", log.LayerId(uint64(newlyr.Index())), log.Int("n_blocks", len(newlyr.Blocks())))
 	defer ni.evictOutOfPbase()
 	ni.processBlocks(newlyr)
 
@@ -493,14 +494,14 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) { //i most rec
 			view := make(map[types.BlockID]struct{})
 			lCntr := make(map[types.LayerID]int)
 			correctionMap, effCountMap, getCrrEffCnt := ni.getCorrEffCounter()
-			foo := func(block *types.Block) error {
+			foo := func(block *types.Block) (bool, error) {
 				view[block.ID()] = struct{}{} //all blocks in view
 				for _, id := range block.BlockVotes {
 					view[id] = struct{}{}
 				}
 				lCntr[block.Layer()]++           //amount of blocks for each layer in view
 				getCrrEffCnt(&block.BlockHeader) //calc correction and eff count
-				return nil
+				return false, nil
 			}
 
 			tp := ni.tPattern[p]
@@ -553,12 +554,26 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) { //i most rec
 			// update completeness of p
 			if _, found := ni.tComplete[p]; complete && !found {
 				ni.tComplete[p] = struct{}{}
-				ni.SaveGoodPattern(p.Layer(), ni.tPattern[p])
+				ni.SaveOpinion(p)
 				ni.pBase = p
 				ni.Debug("found new complete and good pattern for layer %d pattern %d with %d support ", l, p.id, ni.tSupport[p])
 			}
 		}
 	}
-	ni.Info("finished layer %d pbase is %d", newlyr.Index(), ni.pBase.Layer())
+	ni.With().Info("Tortoise finished layer", log.LayerId(uint64(newlyr.Index())), log.Uint64("pbase", uint64(ni.pBase.Layer())))
 	return
+}
+
+func (ni *ninjaTortoise) SaveOpinion(p votingPattern) {
+	for blk, vec := range ni.tVote[p] {
+		valid := false
+		if vec == Support {
+			valid = true
+		}
+
+		if err := ni.SaveContextualValidity(blk, valid); err != nil {
+			ni.Error("could not write contextual validity for block %v ", blk)
+		}
+
+	}
 }

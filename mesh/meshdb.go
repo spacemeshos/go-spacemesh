@@ -139,7 +139,9 @@ func (m *MeshDB) LayerBlockIds(index types.LayerID) ([]types.BlockID, error) {
 	return blockids, nil
 }
 
-func (m *MeshDB) ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) error) error {
+// The block handler func should return two values - a bool indicating whether or not we should stop traversing after the current block (happy flow)
+// and an error indicating that an error occurred while handling the block, the traversing will stop in that case as well (error flow)
+func (m *MeshDB) ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) (bool, error)) error {
 	blocksToVisit := list.New()
 	for id := range view {
 		blocksToVisit.PushBack(id)
@@ -157,8 +159,14 @@ func (m *MeshDB) ForBlockInView(view map[types.BlockID]struct{}, layer types.Lay
 		}
 
 		//execute handler
-		if err := blockHandler(block); err != nil {
+		stop, err := blockHandler(block)
+		if err != nil {
 			return err
+		}
+
+		if stop {
+			m.Log.With().Debug("ForBlockInView stopped", log.BlockId(uint64(block.ID())))
+			break
 		}
 
 		//stop condition: referenced blocks must be in lower layers, so we don't traverse them
@@ -200,24 +208,25 @@ func (m *MeshDB) getBlockBytes(id types.BlockID) ([]byte, error) {
 	return m.blocks.Get(id.ToBytes())
 }
 
-func (m *MeshDB) getContextualValidity(id types.BlockID) (bool, error) {
+func (m *MeshDB) ContextualValidity(id types.BlockID) (bool, error) {
 	b, err := m.contextualValidity.Get(id.ToBytes())
 	if err != nil {
-		return false, nil
+		return false, err
 	}
-	return b[0] == 1, err //bytes to bool
+	return b[0] == 1, nil //bytes to bool
 }
 
-func (m *MeshDB) setContextualValidity(id types.BlockID, valid bool) error {
-	//todo implement
-	//todo concurrency
+func (m *MeshDB) SaveContextualValidity(id types.BlockID, valid bool) error {
 	var v []byte
 	if valid {
 		v = TRUE
 	} else {
 		v = FALSE
 	}
-	m.contextualValidity.Put(id.ToBytes(), v)
+	err := m.contextualValidity.Put(id.ToBytes(), v)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -341,7 +350,8 @@ func (m *MeshDB) GetTransaction(id types.TransactionId) (*types.AddressableSigne
 	return types.BytesAsAddressableTransaction(tBytes)
 }
 
-func (m *MeshDB) GetGoodPattern(layer types.LayerID) (map[types.BlockID]struct{}, error) {
+// ContextuallyValidBlock - returns the contextually valid blocks for the provided layer
+func (m *MeshDB) ContextuallyValidBlock(layer types.LayerID) (map[types.BlockID]struct{}, error) {
 
 	if layer == 0 || layer == 1 {
 		v, err := m.LayerBlockIds(layer)
@@ -358,18 +368,28 @@ func (m *MeshDB) GetGoodPattern(layer types.LayerID) (map[types.BlockID]struct{}
 		return mp, nil
 	}
 
-	tBytes, err := m.patterns.Get(layer.ToBytes())
+	blks, err := m.LayerBlocks(layer)
 	if err != nil {
-		return nil, fmt.Errorf("could not find good pattern for layer %v %v", layer, err)
+		return nil, err
 	}
 
-	var blkSlice map[types.BlockID]struct{}
-	err = types.BytesToInterface(tBytes, &blkSlice)
-	if err != nil {
-		return nil, fmt.Errorf("could not desirialize good pattern for layer %v %v", layer, err)
+	validBlks := make(map[types.BlockID]struct{})
+
+	for _, b := range blks {
+		valid, err := m.ContextualValidity(b.ID())
+
+		if err != nil {
+			m.Error("could not get contextual validity for block %v in layer %v err=%v", b.ID(), layer, err)
+		}
+
+		if !valid {
+			continue
+		}
+
+		validBlks[b.ID()] = struct{}{}
 	}
 
-	return blkSlice, nil
+	return validBlks, nil
 }
 
 func (m *MeshDB) SaveGoodPattern(layer types.LayerID, blks map[types.BlockID]struct{}) error {
