@@ -333,7 +333,7 @@ func (m *MeshDB) GetTransactions(transactions []types.TransactionId) (
 	for _, id := range transactions {
 		t, err := m.GetTransaction(id)
 		if err != nil {
-			m.Warning("", err)
+			m.Warning("could not fetch tx, %v %v", hex.EncodeToString(id[:]), err)
 			mIds = append(mIds, id)
 		} else {
 			ts[id] = t
