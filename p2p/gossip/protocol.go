@@ -142,9 +142,14 @@ func (prot *Protocol) markMessageAsOld(h hash) bool {
 
 func (prot *Protocol) propagateMessage(payload []byte, h hash, nextProt string, exclude p2pcrypto.PublicKey) {
 	prot.peersMutex.RLock()
+	peers := make([]p2pcrypto.PublicKey, 0, len(prot.peers))
+	for p := range prot.peers {
+		peers = append(peers, p)
+	}
+	prot.peersMutex.RUnlock()
 	var wg sync.WaitGroup
 peerLoop:
-	for p := range prot.peers {
+	for _, p := range peers {
 		if exclude == p {
 			continue peerLoop
 		}
@@ -158,7 +163,6 @@ peerLoop:
 			wg.Done()
 		}(prot.peers[p].pubkey)
 	}
-	prot.peersMutex.RUnlock()
 	wg.Wait()
 }
 
