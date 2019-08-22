@@ -130,6 +130,10 @@ type mockAddrBook struct {
 	AttemptFunc func(key p2pcrypto.PublicKey)
 }
 
+func (m *mockAddrBook) Stop() {
+
+}
+
 func (m *mockAddrBook) RemoveAddress(key p2pcrypto.PublicKey) {
 
 }
