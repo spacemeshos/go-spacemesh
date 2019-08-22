@@ -1009,7 +1009,15 @@ func TestSyncer_Synchronise2(t *testing.T) {
 	sync.currentLayer = 1
 	r.False(sync.p2pSynced)
 
+	// current layer = 0
+	sync.currentLayer = 0
+	sync.syncRoutineWg.Add(1)
+	sync.Synchronise()
+	r.Equal(0, lv.countValidate)
+	r.True(sync.p2pSynced)
+
 	// current layer = 1
+	sync.currentLayer = 1
 	sync.syncRoutineWg.Add(1)
 	sync.Synchronise()
 	r.Equal(0, lv.countValidate)

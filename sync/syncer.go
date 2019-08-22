@@ -236,8 +236,8 @@ func (s *Syncer) Synchronise() {
 
 	currentSyncLayer := s.lValidator.ValidatedLayer() + 1
 
-	if s.lastTickedLayer() == 1 { // skip validation for first layer
-		s.Info("Not syncing in layer 1")
+	if s.lastTickedLayer() <= 1 { // skip validation for first layer
+		s.With().Info("Not syncing in layer <= 1", log.LayerId(uint64(s.lastTickedLayer())))
 		s.setP2pSynced(true) // fully-synced, make sure we listen to p2p
 		return
 	}
