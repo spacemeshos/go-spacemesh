@@ -1,6 +1,9 @@
 package sync
 
 import (
+	"bytes"
+	"crypto/sha256"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/types"
@@ -214,6 +217,17 @@ func PoetReqFactory(poetProofRef []byte) RequestFactory {
 				return
 			}
 
+			valid, err := validatePoetRef(proofMessage, poetProofRef)
+			if err != nil {
+				s.Error("could not unmarshal PoET proof response: %v", err)
+				return
+			}
+
+			if valid {
+				s.Info("received an atx that was not requested  %v", poetProofRef)
+				return
+			}
+
 			ch <- proofMessage
 		}
 
@@ -223,4 +237,18 @@ func PoetReqFactory(poetProofRef []byte) RequestFactory {
 
 		return ch, nil
 	}
+}
+
+func validatePoetRef(proofMessage types.PoetProofMessage, poetProofRef []byte) (bool, error) {
+	poetProofBytes, err := types.InterfaceToBytes(&proofMessage.PoetProof)
+	if err != nil {
+		log.Error("could marshal PoET response for validation ", err)
+		return false, err
+	}
+	b := sha256.Sum256(poetProofBytes)
+	if bytes.Compare(b[:], poetProofRef) != 0 {
+		return false, err
+	}
+
+	return true, nil
 }

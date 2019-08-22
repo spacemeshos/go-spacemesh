@@ -1108,6 +1108,7 @@ func TestSyncProtocol_BadResponse(t *testing.T) {
 	timeout := 1 * time.Second
 	timeoutErrMsg := "no message received on channel"
 
+	//setup mocks
 	blockHandlerMock := func([]byte) []byte {
 		t.Log("return fake block")
 		blk := types.NewExistingBlock(types.BlockID(8), 1, nil)
@@ -1127,6 +1128,7 @@ func TestSyncProtocol_BadResponse(t *testing.T) {
 		return byts
 	}
 
+	//register mocks
 	syncs[1].RegisterBytesMsgHandler(BLOCK, blockHandlerMock)
 	syncs[1].RegisterBytesMsgHandler(TX, txHandlerMock)
 	syncs[1].RegisterBytesMsgHandler(ATX, atxHandlerMock)
@@ -1154,6 +1156,17 @@ func TestSyncProtocol_BadResponse(t *testing.T) {
 
 	// Atx
 	output = syncs[0].fetchWithFactory(NewNeighborhoodWorker(syncs[0], 1, ATxReqFactory([]types.AtxId{{Hash: [32]byte{1}}})))
+
+	select {
+	case out := <-output:
+		assert.Nil(t, out)
+	case <-time.After(timeout):
+		assert.Fail(t, timeoutErrMsg)
+	}
+
+	// PoET
+
+	output = syncs[0].fetchWithFactory(NewNeighborhoodWorker(syncs[0], 1, PoetReqFactory([]byte{1})))
 
 	select {
 	case out := <-output:
