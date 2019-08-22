@@ -11,7 +11,7 @@ from pytest_testconfig import config as testconfig
 # noinspection PyUnresolvedReferences
 from tests.fixtures import init_session, load_config, set_namespace, session_id, set_docker_images
 from tests.queries import ES, query_message, poll_query_message
-from tests.test_bs import add_single_client, add_multi_clients, get_conf
+from tests.test_bs import add_multi_clients, get_conf
 from tests.test_bs import api_call
 # noinspection PyUnresolvedReferences
 from tests.test_bs import setup_bootstrap, setup_clients, save_log_on_exit, add_client, add_curl
@@ -205,9 +205,10 @@ def test_late_bootstraps(init_session, setup_bootstrap, setup_clients):
     testnames = []
 
     for i in range(TEST_NUM):
-        client = add_single_client(setup_bootstrap.deployment_id,
-                                   get_conf(setup_bootstrap.pods[0], testconfig['client']))
-        testnames.append((client, datetime.now()))
+        client = add_multi_clients(setup_bootstrap.deployment_id,
+                                   get_conf(setup_bootstrap.pods[0], testconfig['client']),
+                                   1)
+        testnames.append((client[0], datetime.now()))
 
     time.sleep(TEST_NUM * timeout_factor)
 
