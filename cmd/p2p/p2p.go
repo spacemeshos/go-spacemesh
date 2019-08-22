@@ -48,7 +48,7 @@ func (app *P2PApp) Cleanup() {
 func (app *P2PApp) Start(cmd *cobra.Command, args []string) {
 	// init p2p services
 	log.JSONLog(true)
-	log.DebugMode(true)
+	//log.DebugMode(true)
 
 	log.Event().Info("Starting Spacemesh")
 	if app.Config.MemProfile != "" {

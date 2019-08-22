@@ -174,7 +174,7 @@ def test_many_gossip_sim(setup_clients, add_curl):
 
         # todo: take out broadcast and rpcs to helper methods.
         api = 'v1/broadcast'
-        data = '{"data":"nil", "size": 1000000 }'
+        data = '{"data":"nil", "size": 100000 }'
         out = api_call(client_ip, data, api, testconfig['namespace'])
         assert "{'value': 'ok'}" in out
 

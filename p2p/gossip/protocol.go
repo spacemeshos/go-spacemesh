@@ -205,7 +205,7 @@ func (prot *Protocol) processMessage(sender p2pcrypto.PublicKey, protocol string
 		return nil
 	}
 
-	prot.Log.Event().Debug("new_gossip_message", log.String("from", sender.String()), log.String("protocol", protocol), log.String("hash", common.Bytes2Hex(h[:])))
+	prot.Log.Event().Info("new_gossip_message", log.String("from", sender.String()), log.String("protocol", protocol), log.String("hash", common.Bytes2Hex(h[:])))
 	metrics.NewGossipMessages.With("protocol", protocol).Add(1)
 	return prot.net.ProcessGossipProtocolMessage(sender, protocol, msg, prot.propagateQ)
 }
