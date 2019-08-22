@@ -154,7 +154,7 @@ func TestConsensusFixedOracle(t *testing.T) {
 
 	test := newConsensusTest()
 
-	cfg := config.Config{N: 16, F: 8, RoundDuration: 1, ExpectedLeaders: 5}
+	cfg := config.Config{N: 16, F: 8, RoundDuration: 2, ExpectedLeaders: 5}
 	sim := service.NewSimulator()
 	totalNodes := 20
 	test.initialSets = make([]*Set, totalNodes)
@@ -181,7 +181,7 @@ func TestSingleValueForHonestSet(t *testing.T) {
 
 	test := newConsensusTest()
 
-	cfg := config.Config{N: 50, F: 25, RoundDuration: 2, ExpectedLeaders: 5}
+	cfg := config.Config{N: 50, F: 25, RoundDuration: 3, ExpectedLeaders: 5}
 	totalNodes := 50
 	sim := service.NewSimulator()
 	test.initialSets = make([]*Set, totalNodes)
@@ -208,7 +208,7 @@ func TestAllDifferentSet(t *testing.T) {
 
 	test := newConsensusTest()
 
-	cfg := config.Config{N: 10, F: 5, RoundDuration: 1, ExpectedLeaders: 5}
+	cfg := config.Config{N: 10, F: 5, RoundDuration: 2, ExpectedLeaders: 5}
 	sim := service.NewSimulator()
 	totalNodes := 10
 	test.initialSets = make([]*Set, totalNodes)
@@ -245,7 +245,7 @@ func TestSndDelayedDishonest(t *testing.T) {
 
 	test := newConsensusTest()
 
-	cfg := config.Config{N: 50, F: 25, RoundDuration: 2, ExpectedLeaders: 5}
+	cfg := config.Config{N: 50, F: 25, RoundDuration: 3, ExpectedLeaders: 5}
 	totalNodes := 50
 	sim := service.NewSimulator()
 	test.initialSets = make([]*Set, totalNodes)
@@ -288,7 +288,7 @@ func TestRecvDelayedDishonest(t *testing.T) {
 
 	test := newConsensusTest()
 
-	cfg := config.Config{N: 50, F: 25, RoundDuration: 2, ExpectedLeaders: 5}
+	cfg := config.Config{N: 50, F: 25, RoundDuration: 3, ExpectedLeaders: 5}
 	totalNodes := 50
 	sim := service.NewSimulator()
 	test.initialSets = make([]*Set, totalNodes)
