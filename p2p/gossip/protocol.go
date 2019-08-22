@@ -161,7 +161,7 @@ peerLoop:
 				prot.Warning("Failed sending msg %v to %v, reason=%v", h, pubkey, err)
 			}
 			wg.Done()
-		}(prot.peers[p].pubkey)
+		}(p)
 	}
 	wg.Wait()
 }

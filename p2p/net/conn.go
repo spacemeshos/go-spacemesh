@@ -158,11 +158,10 @@ func (c *FormattedConnection) publish(message []byte) {
 func (c *FormattedConnection) Send(m []byte) error {
 	c.wmtx.Lock()
 	_, err := c.w.WriteRecord(m)
+	c.wmtx.Unlock()
 	if err != nil {
-		c.wmtx.Unlock()
 		return err
 	}
-	c.wmtx.Unlock()
 	metrics.PeerRecv.With(metrics.PeerIdLabel, c.remotePub.String()).Add(float64(len(m)))
 	return nil
 }
@@ -185,7 +184,7 @@ func (c *FormattedConnection) Close() {
 // Closed returns whether the connection is closed
 func (c *FormattedConnection) Closed() bool {
 	c.wmtx.Lock()
-	c.wmtx.Unlock()
+	defer c.wmtx.Unlock()
 	return c.closed
 }
 
