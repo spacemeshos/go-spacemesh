@@ -141,8 +141,7 @@ func NewBlockWorker(s *Syncer, count int, reqFactory BlockRequestFactory, ids ch
 				}
 			}
 			if !retrived {
-				// for now panic if the timeout is not enough for all peers
-				//s.Panic("Failed to retrieve block %v from all peers", id) // TODO: test will fail. do we want this?
+				s.With().Error("Failed to retrieve block from all peers", log.BlockId(uint64(id)))
 				output <- nil
 			}
 		}

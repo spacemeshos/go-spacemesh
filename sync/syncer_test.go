@@ -79,10 +79,8 @@ func SyncMockFactory(number int, conf Configuration, name string, dbType string,
 	p2ps = make([]*service.Node, 0, number)
 	sim := service.NewSimulator()
 	tick := 200 * time.Millisecond
-	layout := "2006-01-02T15:04:05.000Z"
-	str := "2018-11-12T11:45:26.371Z"
-	start, _ := time.Parse(layout, str)
-	ts := timesync.NewTicker(MockTimer{}, tick, start)
+	timer := timesync.RealClock{}
+	ts := timesync.NewTicker(timer, tick, timer.Now().Add(tick*-4))
 	for i := 0; i < number; i++ {
 		net := sim.NewNode()
 		name := fmt.Sprintf(name+"_%d", i)
@@ -90,11 +88,12 @@ func SyncMockFactory(number int, conf Configuration, name string, dbType string,
 		blockValidator := BlockEligibilityValidatorMock{}
 		txpool := miner.NewTypesTransactionIdMemPool()
 		atxpool := miner.NewTypesAtxIdMemPool()
-		sync := NewSync(net, getMesh(dbType, Path+name+"_"+time.Now().String()), txpool, atxpool, mockTxProcessor{}, blockValidator, poetDb(), conf, ts, 0, l)
-		ts.StartNotifying()
+		sync := NewSync(net, getMesh(dbType, Path+name+"_"+time.Now().String()), txpool, atxpool, mockTxProcessor{}, blockValidator, poetDb(), conf, ts, ts.GetCurrentLayer(), l)
+		sync.RequestTimeout = 100 * time.Millisecond
 		nodes = append(nodes, sync)
 		p2ps = append(p2ps, net)
 	}
+	ts.StartNotifying()
 	return nodes, p2ps
 }
 
@@ -160,11 +159,10 @@ func getMesh(dbType, id string) *mesh.Mesh {
 }
 
 func TestSyncer_Start(t *testing.T) {
-	syncs, _ := SyncMockFactory(2, conf, "TestSyncer_Start_", memoryDB, newMockPoetDb)
-	sync := syncs[0]
-	defer sync.Close()
-	sync.SetLatestLayer(5)
-	sync.Start()
+	syncs, _ := SyncMockFactory(1, conf, t.Name(), memoryDB, newMockPoetDb)
+	syn := syncs[0]
+	defer syn.Close()
+	syn.Start()
 	timeout := time.After(10 * time.Second)
 	for {
 		select {
@@ -173,7 +171,7 @@ func TestSyncer_Start(t *testing.T) {
 			t.Error("timed out ")
 			return
 		default:
-			if atomic.LoadUint32(&sync.startLock) == 1 {
+			if atomic.LoadUint32(&syn.startLock) == 1 {
 				return
 			}
 		}
@@ -181,7 +179,7 @@ func TestSyncer_Start(t *testing.T) {
 }
 
 func TestSyncer_Close(t *testing.T) {
-	syncs, _ := SyncMockFactory(2, conf, "TestSyncer_Close_", memoryDB, newMockPoetDb)
+	syncs, _ := SyncMockFactory(2, conf, t.Name(), memoryDB, newMockPoetDb)
 	sync := syncs[0]
 	sync.Start()
 	sync.Close()
@@ -194,7 +192,7 @@ func TestSyncer_Close(t *testing.T) {
 
 func TestSyncProtocol_BlockRequest(t *testing.T) {
 	atx1 := atx()
-	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_BlockRequest_", memoryDB, newMockPoetDb)
+	syncs, nodes := SyncMockFactory(2, conf, t.Name(), memoryDB, newMockPoetDb)
 	syncObj := syncs[0]
 	syncObj2 := syncs[1]
 	defer syncObj.Close()
@@ -218,7 +216,7 @@ func TestSyncProtocol_BlockRequest(t *testing.T) {
 }
 
 func TestSyncProtocol_LayerHashRequest(t *testing.T) {
-	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_LayerHashRequest_", memoryDB, newMockPoetDb)
+	syncs, nodes := SyncMockFactory(2, conf, t.Name(), memoryDB, newMockPoetDb)
 	atx1 := atx()
 	syncObj1 := syncs[0]
 	defer syncObj1.Close()
@@ -245,7 +243,7 @@ func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 func TestSyncer_FetchPoetProofAvailableAndValid(t *testing.T) {
 	r := require.New(t)
 
-	syncs, nodes := SyncMockFactory(2, conf, "TestSyncer_FetchPoetProofAvailableAndValid_", memoryDB, newMemPoetDb)
+	syncs, nodes := SyncMockFactory(2, conf, t.Name(), memoryDB, newMemPoetDb)
 	s0 := syncs[0]
 	s1 := syncs[1]
 	s1.Peers = getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
@@ -266,7 +264,7 @@ func TestSyncer_FetchPoetProofAvailableAndValid(t *testing.T) {
 func TestSyncer_SyncAtxs_FetchPoetProof(t *testing.T) {
 	r := require.New(t)
 
-	syncs, nodes := SyncMockFactory(2, conf, "TestSyncer_SyncAtxs_FetchPoetProof_", memoryDB, newMemPoetDb)
+	syncs, nodes := SyncMockFactory(2, conf, t.Name(), memoryDB, newMemPoetDb)
 	s0 := syncs[0]
 	s1 := syncs[1]
 	s1.Peers = getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
@@ -320,7 +318,7 @@ func makePoetProofMessage(t *testing.T) types.PoetProofMessage {
 }
 
 func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
-	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_LayerIdsRequest_", memoryDB, newMockPoetDb)
+	syncs, nodes := SyncMockFactory(2, conf, t.Name(), memoryDB, newMockPoetDb)
 	atx1 := atx()
 	atx2 := atx()
 	atx3 := atx()
@@ -370,7 +368,7 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 }
 
 func TestSyncProtocol_FetchBlocks(t *testing.T) {
-	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_FetchBlocks_", memoryDB, newMockPoetDb)
+	syncs, nodes := SyncMockFactory(2, conf, t.Name(), memoryDB, newMockPoetDb)
 	atx1 := atx()
 
 	atx2 := atx()
@@ -418,20 +416,20 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 }
 
 func TestSyncProtocol_SyncNodes(t *testing.T) {
-	syncs, nodes := SyncMockFactory(3, conf, "TestSyncer_Start_", memoryDB, newMockPoetDb)
-	pm1 := getPeersMock([]p2p.Peer{nodes[1].PublicKey()})
-	pm3 := getPeersMock([]p2p.Peer{nodes[1].PublicKey()})
-	pm2 := getPeersMock([]p2p.Peer{nodes[0].PublicKey(), nodes[2].PublicKey()})
+	syncs, nodes := SyncMockFactory(3, conf, t.Name(), memoryDB, newMockPoetDb)
+	pm1 := getPeersMock([]p2p.Peer{nodes[2].PublicKey()})
+	pm2 := getPeersMock([]p2p.Peer{nodes[2].PublicKey()})
+	pm3 := getPeersMock([]p2p.Peer{nodes[0].PublicKey(), nodes[1].PublicKey()})
 	syncObj1 := syncs[0]
 	syncObj1.Peers = pm1 //override peers with mock
 	defer syncObj1.Close()
 
-	syncObj2 := syncs[2]
-	syncObj2.Peers = pm3 //override peers with mock
+	syncObj2 := syncs[1]
+	syncObj2.Peers = pm2 //override peers with mock
 	defer syncObj2.Close()
 
-	syncObj3 := syncs[1]
-	syncObj3.Peers = pm2 //override peers with mock
+	syncObj3 := syncs[2]
+	syncObj3.Peers = pm3 //override peers with mock
 	defer syncObj3.Close()
 
 	signer := signing.NewEdSigner()
@@ -471,11 +469,13 @@ func TestSyncProtocol_SyncNodes(t *testing.T) {
 	syncObj2.AddBlockWithTxs(block9, []*types.AddressableSignedTransaction{tx7, tx8}, []*types.ActivationTx{})
 	syncObj2.AddBlockWithTxs(block10, []*types.AddressableSignedTransaction{tx7, tx8}, []*types.ActivationTx{})
 
-	syncObj1.Start()
-	syncObj2.Start()
+	syncObj1.clockSub.Unsubscribe(syncObj1.clock)
+	syncObj2.clockSub.Unsubscribe(syncObj2.clock)
+	//syncObj1.Start()
+	//syncObj2.Start()
 
 	timeout := time.After(3 * 60 * time.Second)
-	syncObj3.SetLatestLayer(6)
+	//syncObj3.currentLayer = 6
 	syncObj3.Start()
 	// Keep trying until we're timed out or got a result or got an error
 loop:
@@ -490,8 +490,6 @@ loop:
 
 				t.Log("done!")
 				break loop
-			} else {
-				fmt.Println("safdsaf  ", syncObj3.ValidatedLayer())
 			}
 			time.Sleep(100 * time.Millisecond)
 		}
@@ -507,7 +505,7 @@ func getPeersMock(peers []p2p.Peer) p2p.PeersImpl {
 
 func syncTest(dpType string, t *testing.T) {
 
-	syncs, nodes := SyncMockFactory(4, conf, "SyncMultipleNodes_", dpType, newMockPoetDb)
+	syncs, nodes := SyncMockFactory(4, conf, t.Name(), dpType, newMockPoetDb)
 	syncObj1 := syncs[0]
 	defer syncObj1.Close()
 	syncObj2 := syncs[1]
@@ -572,11 +570,8 @@ func syncTest(dpType string, t *testing.T) {
 	syncObj1.Start()
 
 	syncObj2.Start()
-	syncObj2.SetLatestLayer(5)
 	syncObj3.Start()
-	syncObj3.SetLatestLayer(5)
 	syncObj4.Start()
-	syncObj4.SetLatestLayer(5)
 
 	// Keep trying until we're timed out or got a result or got an error
 	timeout := time.After(30 * time.Second)
@@ -588,7 +583,7 @@ loop:
 		case <-timeout:
 			t.Error("timed out ")
 		default:
-			if syncObj2.ValidatedLayer() == 4 && syncObj3.ValidatedLayer() == 4 {
+			if syncObj2.ValidatedLayer() >= 4 && syncObj3.ValidatedLayer() >= 4 {
 				t.Log("done!")
 				t.Log(syncObj2.ValidatedLayer(), " ", syncObj3.ValidatedLayer())
 				break loop
@@ -875,7 +870,7 @@ func atx() *types.ActivationTx {
 
 func TestSyncer_Txs(t *testing.T) {
 	// check tx validation
-	syncs, nodes := SyncMockFactory(2, conf, "TestSyncer_Start_", memoryDB, newMockPoetDb)
+	syncs, nodes := SyncMockFactory(2, conf, t.Name(), memoryDB, newMockPoetDb)
 	pm1 := getPeersMock([]p2p.Peer{nodes[1].PublicKey()})
 	pm2 := getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
 	syncObj1 := syncs[0]
@@ -901,7 +896,7 @@ func TestSyncer_Txs(t *testing.T) {
 
 func TestFetchLayerBlockIds(t *testing.T) {
 	// check tx validation
-	syncs, nodes := SyncMockFactory(3, conf, "TestSyncer_Start_", memoryDB, newMockPoetDb)
+	syncs, nodes := SyncMockFactory(3, conf, t.Name(), memoryDB, newMockPoetDb)
 	pm1 := getPeersMock([]p2p.Peer{nodes[2].PublicKey()})
 	pm2 := getPeersMock([]p2p.Peer{nodes[2].PublicKey()})
 	pm3 := getPeersMock([]p2p.Peer{nodes[0].PublicKey(), nodes[1].PublicKey()})
@@ -1101,7 +1096,7 @@ func TestSyncer_ConcurrentSynchronise(t *testing.T) {
 }
 
 func TestSyncProtocol_NilResponse(t *testing.T) {
-	syncs, nodes := SyncMockFactory(2, conf, "TestSyncProtocol_NilResponse", memoryDB, newMemPoetDb)
+	syncs, nodes := SyncMockFactory(2, conf, t.Name(), memoryDB, newMemPoetDb)
 	defer syncs[0].Close()
 	defer syncs[1].Close()
 

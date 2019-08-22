@@ -234,11 +234,15 @@ func (s *Syncer) lastTickedLayer() types.LayerID {
 func (s *Syncer) Synchronise() {
 	defer s.syncRoutineWg.Done()
 
-	currentSyncLayer := s.lValidator.ValidatedLayer() + 1
-
 	if s.lastTickedLayer() <= 1 { // skip validation for first layer
 		s.With().Info("Not syncing in layer <= 1", log.LayerId(uint64(s.lastTickedLayer())))
 		s.setP2pSynced(true) // fully-synced, make sure we listen to p2p
+		return
+	}
+
+	currentSyncLayer := s.lValidator.ValidatedLayer() + 1
+	if currentSyncLayer == s.lastTickedLayer() { // only validate if current < lastTicked
+		s.With().Info("Already synced for layer", log.Uint64("current_sync_layer", uint64(currentSyncLayer)))
 		return
 	}
 
@@ -247,7 +251,7 @@ func (s *Syncer) Synchronise() {
 
 		lyr, err := s.lProvider.GetLayer(currentSyncLayer)
 		if err != nil {
-			s.Panic("failed getting layer even though we are weakly-synced err=%v", err)
+			s.Panic("failed getting layer even though we are weakly-synced currentLayer=%v lastTicked=%v err=%v ", currentSyncLayer, s.lastTickedLayer(), err)
 			return
 		}
 		s.lValidator.ValidateLayer(lyr) // wait for layer validation
