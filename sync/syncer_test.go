@@ -878,7 +878,7 @@ func TestSyncer_Txs(t *testing.T) {
 	assert.Nil(t, err)
 
 	// new queue and try again
-	tq := NewTxQueue(getMesh(memoryDB, " "), syncObj2, miner.NewTypesTransactionIdMemPool(), mockTxProcessor{true}, syncObj2.WithName(""))
+	tq := NewTxQueue(syncObj2, mockTxProcessor{true})
 
 	txs, err2 := tq.Handle([]common.Hash{id1.ItemId(), id2.ItemId(), id3.ItemId()})
 	assert.Nil(t, txs)

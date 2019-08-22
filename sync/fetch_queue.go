@@ -128,21 +128,21 @@ type txQueue struct {
 	fetchQueue
 }
 
-func NewTxQueue(msh *mesh.Mesh, srv WorkerInfra, txpool TxMemPool, txValidator TxValidator, lg log.Log) *txQueue {
+func NewTxQueue(s *Syncer, txValidator TxValidator) *txQueue {
 	//todo buffersize
 	q := &txQueue{
 		fetchQueue: fetchQueue{
-			Log:                 lg,
-			Mesh:                msh,
-			workerInfra:         srv,
+			Log:                 s.Log.WithName("txFetchQueue"),
+			Mesh:                s.Mesh,
+			workerInfra:         s.workerInfra,
 			Mutex:               &sync.Mutex{},
 			FetchRequestFactory: TxReqFactory(),
-			checkLocal:          txCheckLocalFactory(msh, lg, txpool),
+			checkLocal:          s.txCheckLocalFactory,
 			pending:             make(map[common.Hash][]chan bool),
 			queue:               make(chan []common.Hash, 1000)},
 	}
 
-	q.updateDependencies = updateTxDependencies(q.invalidate, txpool, txValidator.GetValidAddressableTx)
+	q.updateDependencies = updateTxDependencies(q.invalidate, s.txpool, txValidator.GetValidAddressableTx)
 	go q.work()
 	return q
 }
@@ -197,22 +197,22 @@ type atxQueue struct {
 	fetchQueue
 }
 
-func NewAtxQueue(msh *mesh.Mesh, srv WorkerInfra, atxpool AtxMemPool, fetchPoetProof FetchPoetProofFunc, lg log.Log) *atxQueue {
+func NewAtxQueue(s *Syncer, fetchPoetProof FetchPoetProofFunc) *atxQueue {
 	//todo buffersize
 	q := &atxQueue{
 		fetchQueue: fetchQueue{
-			Log:                 lg,
-			Mesh:                msh,
-			workerInfra:         srv,
+			Log:                 s.Log.WithName("atxFetchQueue"),
+			Mesh:                s.Mesh,
+			workerInfra:         s.workerInfra,
 			FetchRequestFactory: ATxReqFactory(),
 			Mutex:               &sync.Mutex{},
-			checkLocal:          atxCheckLocalFactory(msh, lg, atxpool),
+			checkLocal:          s.atxCheckLocalFactory,
 			pending:             make(map[common.Hash][]chan bool),
 			queue:               make(chan []common.Hash, 1000),
 		},
 	}
 
-	q.updateDependencies = updateAtxDependencies(q.invalidate, msh.SyntacticallyValidateAtx, atxpool, fetchPoetProof)
+	q.updateDependencies = updateAtxDependencies(q.invalidate, s.SyntacticallyValidateAtx, s.atxpool, fetchPoetProof)
 	go q.work()
 	return q
 }
@@ -263,71 +263,6 @@ func updateAtxDependencies(invalidate func(id common.Hash, valid bool), sValidat
 		}
 	}
 
-}
-
-func atxCheckLocalFactory(msh *mesh.Mesh, lg log.Log, atxpool AtxMemPool) func(atxIds []common.Hash) (map[common.Hash]Item, map[common.Hash]Item, []common.Hash) {
-	//look in pool
-	return func(atxIds []common.Hash) (map[common.Hash]Item, map[common.Hash]Item, []common.Hash) {
-		unprocessedItems := make(map[common.Hash]Item, len(atxIds))
-		missingInPool := make([]types.AtxId, 0, len(atxIds))
-		for _, t := range atxIds {
-			id := types.AtxId{Hash: t}
-			if x, err := atxpool.Get(id); err == nil {
-				atx := x
-				lg.Debug("found atx, %v in atx pool", id.ShortString())
-				unprocessedItems[id.ItemId()] = &atx
-			} else {
-				lg.Debug("atx %v not in atx pool", id.ShortString())
-				missingInPool = append(missingInPool, id)
-			}
-		}
-		//look in db
-		dbAtxs, missing := msh.GetATXs(missingInPool)
-
-		dbItems := make(map[common.Hash]Item, len(dbAtxs))
-		for i := range dbAtxs {
-			dbItems[i.Hash] = i
-		}
-
-		missingItems := make([]common.Hash, 0, len(missing))
-		for _, i := range missing {
-			missingItems = append(missingItems, i.Hash)
-		}
-
-		return unprocessedItems, dbItems, missingItems
-	}
-}
-
-func txCheckLocalFactory(msh *mesh.Mesh, lg log.Log, txpool TxMemPool) func(txids []common.Hash) (map[common.Hash]Item, map[common.Hash]Item, []common.Hash) {
-	//look in pool
-	return func(txIds []common.Hash) (map[common.Hash]Item, map[common.Hash]Item, []common.Hash) {
-		unprocessedItems := make(map[common.Hash]Item)
-		missingInPool := make([]types.TransactionId, 0)
-		for _, t := range txIds {
-			id := types.TransactionId(t)
-			if tx, err := txpool.Get(id); err == nil {
-				lg.Debug("found tx, %v in tx pool", hex.EncodeToString(t[:]))
-				unprocessedItems[id.ItemId()] = &tx
-			} else {
-				lg.Debug("tx %v not in atx pool", hex.EncodeToString(t[:]))
-				missingInPool = append(missingInPool, id)
-			}
-		}
-		//look in db
-		dbTxs, missing := msh.GetTransactions(missingInPool)
-
-		dbItems := make(map[common.Hash]Item, len(dbTxs))
-		for i := range dbTxs {
-			dbItems[i.ItemId()] = i
-		}
-
-		missingItems := make([]common.Hash, 0, len(missing))
-		for _, i := range missing {
-			missingItems = append(missingItems, i.ItemId())
-		}
-
-		return unprocessedItems, dbItems, missingItems
-	}
 }
 
 func getDoneChan(deps []chan bool) chan bool {

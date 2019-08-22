@@ -1,8 +1,10 @@
 package sync
 
 import (
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -187,8 +189,8 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool A
 	}
 
 	s.blockQueue = NewValidationQueue(srvr, s.Configuration, s, logger.WithName("validQ"))
-	s.txQueue = NewTxQueue(layers, srvr, txpool, sv, logger.WithName("txFetchQueue"))
-	s.atxQueue = NewAtxQueue(layers, srvr, atxpool, s.FetchPoetProof, logger.WithName("atxFetchQueue"))
+	s.txQueue = NewTxQueue(s, sv)
+	s.atxQueue = NewAtxQueue(s, s.FetchPoetProof)
 
 	srvr.RegisterBytesMsgHandler(LAYER_HASH, newLayerHashRequestHandler(layers, logger))
 	srvr.RegisterBytesMsgHandler(MINI_BLOCK, newBlockRequestHandler(layers, logger))
@@ -457,4 +459,65 @@ func (s *Syncer) FetchPoetProof(poetProofRef []byte) error {
 		}
 	}
 	return nil
+}
+
+func (s *Syncer) atxCheckLocalFactory(atxIds []common.Hash) (map[common.Hash]Item, map[common.Hash]Item, []common.Hash) {
+	//look in pool
+	unprocessedItems := make(map[common.Hash]Item, len(atxIds))
+	missingInPool := make([]types.AtxId, 0, len(atxIds))
+	for _, t := range atxIds {
+		id := types.AtxId{Hash: t}
+		if x, err := s.atxpool.Get(id); err == nil {
+			atx := x
+			s.Debug("found atx, %v in atx pool", id.ShortString())
+			unprocessedItems[id.ItemId()] = &atx
+		} else {
+			s.Debug("atx %v not in atx pool", id.ShortString())
+			missingInPool = append(missingInPool, id)
+		}
+	}
+	//look in db
+	dbAtxs, missing := s.GetATXs(missingInPool)
+
+	dbItems := make(map[common.Hash]Item, len(dbAtxs))
+	for i := range dbAtxs {
+		dbItems[i.Hash] = i
+	}
+
+	missingItems := make([]common.Hash, 0, len(missing))
+	for _, i := range missing {
+		missingItems = append(missingItems, i.Hash)
+	}
+
+	return unprocessedItems, dbItems, missingItems
+}
+
+func (s *Syncer) txCheckLocalFactory(txIds []common.Hash) (map[common.Hash]Item, map[common.Hash]Item, []common.Hash) {
+	//look in pool
+	unprocessedItems := make(map[common.Hash]Item)
+	missingInPool := make([]types.TransactionId, 0)
+	for _, t := range txIds {
+		id := types.TransactionId(t)
+		if tx, err := s.txpool.Get(id); err == nil {
+			s.Debug("found tx, %v in tx pool", hex.EncodeToString(t[:]))
+			unprocessedItems[id.ItemId()] = &tx
+		} else {
+			s.Debug("tx %v not in atx pool", hex.EncodeToString(t[:]))
+			missingInPool = append(missingInPool, id)
+		}
+	}
+	//look in db
+	dbTxs, missing := s.GetTransactions(missingInPool)
+
+	dbItems := make(map[common.Hash]Item, len(dbTxs))
+	for i := range dbTxs {
+		dbItems[i.ItemId()] = i
+	}
+
+	missingItems := make([]common.Hash, 0, len(missing))
+	for _, i := range missing {
+		missingItems = append(missingItems, i.ItemId())
+	}
+
+	return unprocessedItems, dbItems, missingItems
 }
