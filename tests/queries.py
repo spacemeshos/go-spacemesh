@@ -378,5 +378,5 @@ def max_propagation_time(deployment, fields, special_field):
         if prop is not None and (max_propagation is None or prop > max_propagation):
             max_propagation = prop
             max_msg = newfields[special_field]
-    print(max_propagation)
-    print(max_msg)
+    print("Max propagation message: {0}".format(max_msg))
+    print("Max propagation time: {0}".format(max_propagation))

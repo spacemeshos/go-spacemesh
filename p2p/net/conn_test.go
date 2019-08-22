@@ -69,9 +69,9 @@ func TestPreSessionMessage(t *testing.T) {
 	rPub := p2pcrypto.NewRandomPubkey()
 	conn := newConnection(rwcam, netw, rPub, nil, netw.logger)
 	rwcam.SetReadResult([]byte{3, 1, 1, 1}, nil)
-	err := conn.setupIncoming(time.Second)
+	err := conn.setupIncoming(time.Millisecond)
 	require.NoError(t, err)
-	require.Equal(t, conn.Closed(), false)
+	assert.Equal(t, rwcam.CloseCount(), 0)
 	require.Equal(t, int32(1), netw.PreSessionCount())
 }
 
@@ -83,7 +83,7 @@ func TestPreSessionMessageAfterSession(t *testing.T) {
 	rwcam.SetReadResult([]byte{3, 1, 1, 1}, nil)
 	go conn.beginEventProcessing()
 	time.Sleep(50 * time.Millisecond)
-	assert.Equal(t, conn.Closed(), true)
+	assert.Equal(t, rwcam.CloseCount(), 1)
 }
 
 func TestPreSessionError(t *testing.T) {
