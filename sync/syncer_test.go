@@ -920,8 +920,8 @@ func TestFetchLayerBlockIds(t *testing.T) {
 	syncObj2.AddBlock(block2)
 
 	mp := map[uint32][]p2p.Peer{}
-	mp[1] = append(mp[1], nodes[0].PublicKey())
-	mp[2] = append(mp[2], nodes[1].PublicKey())
+	mp[types.HashBlockIds([]types.BlockID{block1.ID()})] = append(mp[1], nodes[0].PublicKey())
+	mp[types.HashBlockIds([]types.BlockID{block2.ID()})] = append(mp[2], nodes[1].PublicKey())
 	ids, _ := syncObj3.fetchLayerBlockIds(mp, 1)
 
 	assert.True(t, len(ids) == 2)
