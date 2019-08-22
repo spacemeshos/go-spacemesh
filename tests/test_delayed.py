@@ -9,6 +9,8 @@ from tests.test_bs import current_index, wait_genesis, GENESIS_TIME, BOOT_DEPLOY
 from tests.misc import CoreV1ApiClient
 from tests.queries import ES, query_message
 from elasticsearch_dsl import Search, Q
+from tests.hare.assert_hare import validate_hare
+
 
 # ==============================================================================
 #    TESTS
@@ -58,20 +60,8 @@ def new_client_in_namespace(name_space, setup_bootstrap, cspec, num):
     return client_info
 
 
-def search_pod_logs(namespace, pod_name, term):
-    api = ES().get_search_api()
-    fltr = Q("match_phrase", kubernetes__pod_name=pod_name) & Q("match_phrase", kubernetes__namespace_name=namespace)
-    s = Search(index=current_index, using=api).query('bool').filter(fltr).sort("time")
-    res = s.execute()
-    full = Search(index=current_index, using=api).query('bool').filter(fltr).sort("time").extra(size=res.hits.total)
-    res = full.execute()
-    hits = list(res.hits)
-    print("Writing ${0} log lines for pod {1} ".format(len(hits), pod_name))
-    with open('./logs/' + pod_name + '.txt', 'w') as f:
-        for i in hits:
-            if term in i.log:
-                return True
-    return False
+
+def get_atx_count(layer):
 
 
 def test_add_delayed_nodes(init_session, setup_bootstrap, save_log_on_exit):
@@ -83,11 +73,12 @@ def test_add_delayed_nodes(init_session, setup_bootstrap, save_log_on_exit):
     layersPerEpoch = int(testconfig['client']['args']['layers-per-epoch'])
     epochDuration = layerDuration*layersPerEpoch
 
-    # start with 100 miners
-    inf = new_client_in_namespace(ns, setup_bootstrap, cspec, 20)
+    # start with 20 miners
+    startCount = 20
+    inf = new_client_in_namespace(ns, setup_bootstrap, cspec, startCount)
     time.sleep(epochDuration) # wait epoch duration
 
-    # add 50 each epoch
+    # add 10 each epoch
     numToAdd = 10
     count = 4
     clients = [None] * count
@@ -98,6 +89,14 @@ def test_add_delayed_nodes(init_session, setup_bootstrap, save_log_on_exit):
 
     time.sleep(2*epochDuration) # wait two more epochs
 
-    # validate
+    total = startCount + count * numToAdd # total nodes
+    totalEpochs = 1 + count + 2
+    totalLayers = layersPerEpoch * totalEpochs
+    firstLayerOfLastEpoch = totalLayers-layersPerEpoch
+    f = int(testconfig['client']['args']['hare-max-adversaries'])
 
-    validate_hare(current_index, ns)  # validate hare
+    # validate
+    expect_hare(current_index, ns, firstLayerOfLastEpoch, totalLayers-1, total, f):
+
+    atxLastEpoch = query_atx_published(current_index, ns, firstLayerOfLastEpoch)
+    assert len(atxLastEpoch) == total
