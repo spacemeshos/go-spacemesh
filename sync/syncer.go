@@ -407,19 +407,19 @@ func (s *Syncer) fetchLayerBlockIds(m map[uint32][]p2p.Peer, lyr types.LayerID) 
 			case v := <-ch:
 				if v != nil {
 					s.Info("Peer: %v responded to layer ids request", peer)
-					hash := types.HashBlockIds(v.([]types.BlockID))
-					if h != hash {
-						s.Info("Peer: %v layer ids hash dose not match request", peer)
+					//peer returned set with bad hash ask next peer
+					if h != types.HashBlockIds(v.([]types.BlockID)) {
+						s.Error("Peer: %v layer ids hash does not match request", peer)
 						break
 					}
 
-					delete(m, hash)
 					for _, bid := range v.([]types.BlockID) {
 						if _, exists := idSet[bid]; !exists {
 							idSet[bid] = struct{}{}
 							ids = append(ids, bid)
 						}
 					}
+					//fetch for next hash
 					break NextHash
 				}
 			}
