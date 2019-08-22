@@ -40,7 +40,7 @@ func (pi PeersImpl) Close() {
 
 func (pi PeersImpl) GetPeers() []Peer {
 	peers := pi.snapshot.Load().([]Peer)
-	pi.Info("now connected to %v peers", len(peers))
+	pi.With().Info("now connected", log.Int("n_peers", len(peers)))
 	return peers
 }
 
@@ -52,10 +52,10 @@ func (pi *PeersImpl) listenToPeers(newPeerC chan p2pcrypto.PublicKey, expiredPee
 			pi.Debug("run stopped")
 			return
 		case peer := <-newPeerC:
-			pi.Debug("new peer %v", peer.String())
+			pi.With().Debug("new peer", log.String("peer", peer.String()))
 			peerSet[peer] = true
 		case peer := <-expiredPeerC:
-			pi.Debug("expired peer %v", peer.String())
+			pi.With().Debug("expired peer", log.String("peer", peer.String()))
 			delete(peerSet, peer)
 		}
 		keys := make([]Peer, 0, len(peerSet))

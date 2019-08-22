@@ -92,6 +92,8 @@ type BaseConfig struct {
 
 	SyncRequestTimeout int `mapstructure:"sync-request-timeout"` // the timeout for direct request in the sync
 
+	PublishEventsUrl string `mapstructure:"publish-events"`
+
 	StartMining bool `mapstructure:"start-mining"`
 }
 

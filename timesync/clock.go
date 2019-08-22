@@ -132,3 +132,7 @@ func (t *Ticker) startClock(diff time.Duration) {
 		}
 	}
 }
+
+func (t Ticker) GetGenesisTime() time.Time {
+	return t.startEpoch
+}
