@@ -4,7 +4,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/btcsuite/btcutil/base58"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -244,11 +243,11 @@ func (s *Syncer) Synchronise() {
 	}
 
 	if s.WeaklySynced() { // we have all the data of the prev layers so we can simply validate
-		s.Info("Node is synced. Going to validate layer %v", currentSyncLayer)
+		s.With().Info("Node is synced. Going to validate layer", log.LayerId(uint64(currentSyncLayer)))
 
 		lyr, err := s.lProvider.GetLayer(currentSyncLayer)
 		if err != nil {
-			s.With().Error("failed getting layer even though we are weakly-synced", log.Err(err))
+			s.Panic("failed getting layer even though we are weakly-synced err=%v", err)
 			return
 		}
 		s.lValidator.ValidateLayer(lyr) // wait for layer validation
@@ -262,7 +261,7 @@ func (s *Syncer) Synchronise() {
 	// first, bring all the data of the prev layers
 	// Note: lastTicked() is not constant but updates as ticks are received
 	for ; currentSyncLayer < s.lastTickedLayer(); currentSyncLayer++ {
-		s.Info("syncing layer %v current consensus layer is %d", currentSyncLayer, s.lastTickedLayer())
+		s.With().Info("syncing layer", log.Uint64("current_sync_layer", uint64(currentSyncLayer)), log.Uint64("last_ticked_layer", uint64(s.lastTickedLayer())))
 		lyr, err := s.getLayerFromNeighbors(currentSyncLayer)
 		if err != nil {
 			s.Info("could not get layer %v from neighbors %v", currentSyncLayer, err)
@@ -276,15 +275,14 @@ func (s *Syncer) Synchronise() {
 	// fetch what you can from the neighbors
 	_, err := s.getLayerFromNeighbors(currentSyncLayer)
 	if err != nil {
-		s.Info("could not get last ticked layer %v from neighbors %v", currentSyncLayer, err)
+		s.With().Info("could not get last ticked layer from neighbors", log.LayerId(uint64(currentSyncLayer)), log.Err(err))
 		return
 	}
 
 	// wait for two ticks to ensure we are fully synced before we open p2p or validate the current layer
 	err = s.p2pSyncForOneFullLayer(currentSyncLayer)
 	if err != nil {
-		// TODO: should we panic?
-		s.With().Error("failed getting layer even though we listened to p2p", log.LayerId(uint64(currentSyncLayer)), log.Err(err))
+		s.With().Error("Fatal: failed getting layer even though we listened to p2p", log.LayerId(uint64(currentSyncLayer)), log.Err(err))
 	}
 }
 
@@ -529,7 +527,6 @@ func (s *Syncer) fetchLayerHashes(lyr types.LayerID) (map[string]p2p.Peer, error
 	for out := range output {
 		pair, ok := out.(*peerHashPair)
 		if pair != nil && ok { //do nothing on close channel
-			s.Info("Fetching layer %v hashes: hash=%v from peer=%v", lyr, base58.Encode(pair.hash), pair.peer.String())
 			m[string(pair.hash)] = pair.peer
 		}
 	}
