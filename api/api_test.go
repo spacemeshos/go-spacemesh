@@ -150,11 +150,9 @@ func TestGrpcApi(t *testing.T) {
 	const message = "Hello World"
 
 	grpcService := NewGrpcService(&networkMock, ap, &tx, &mining, &oracle, nil)
-	grpcStatus := make(chan bool, 2)
 
 	// start a server
-	grpcService.StartService(grpcStatus)
-	<-grpcStatus
+	grpcService.StartService()
 
 	// start a client
 	addr := "localhost:" + strconv.Itoa(int(config.ConfigValues.GrpcServerPort))
@@ -177,7 +175,6 @@ func TestGrpcApi(t *testing.T) {
 
 	// stop the server
 	grpcService.StopService()
-	<-grpcStatus
 }
 
 func TestJsonApi(t *testing.T) {
@@ -194,15 +191,10 @@ func TestJsonApi(t *testing.T) {
 	grpcService := NewGrpcService(&net, ap, &tx, &mining, &oracle, nil)
 	jsonService := NewJSONHTTPServer()
 
-	jsonStatus := make(chan bool, 2)
-	grpcStatus := make(chan bool, 2)
-
 	// start grp and json server
-	grpcService.StartService(grpcStatus)
-	<-grpcStatus
+	grpcService.StartService()
 
-	jsonService.StartService(jsonStatus)
-	<-jsonStatus
+	jsonService.StartService()
 
 	const message = "hello world!"
 	const contentType = "application/json"
@@ -245,9 +237,7 @@ func TestJsonApi(t *testing.T) {
 
 	// stop the services
 	jsonService.StopService()
-	<-jsonStatus
 	grpcService.StopService()
-	<-grpcStatus
 }
 
 func createXdrSignedTransaction(params types.SerializableSignedTransaction, key ed25519.PrivateKey) ([]byte, []byte) {
@@ -291,15 +281,9 @@ func TestJsonWalletApi(t *testing.T) {
 	grpcService := NewGrpcService(&net, ap, &txApi, &mining, &oracle, &genTime)
 	jsonService := NewJSONHTTPServer()
 
-	jsonStatus := make(chan bool, 2)
-	grpcStatus := make(chan bool, 2)
-
 	// start grp and json server
-	grpcService.StartService(grpcStatus)
-	<-grpcStatus
-
-	jsonService.StartService(jsonStatus)
-	<-jsonStatus
+	grpcService.StartService()
+	jsonService.StartService()
 
 	const message = "10"
 	const contentType = "application/json"
@@ -457,9 +441,7 @@ func TestJsonWalletApi(t *testing.T) {
 
 	// stop the services
 	jsonService.StopService()
-	<-jsonStatus
 	grpcService.StopService()
-	<-grpcStatus
 }
 
 func TestJsonWalletApi_Errors(t *testing.T) {
@@ -476,15 +458,10 @@ func TestJsonWalletApi_Errors(t *testing.T) {
 	grpcService := NewGrpcService(&net, ap, &tx, &mining, &oracle, nil)
 	jsonService := NewJSONHTTPServer()
 
-	jsonStatus := make(chan bool, 2)
-	grpcStatus := make(chan bool, 2)
-
 	// start grp and json server
-	grpcService.StartService(grpcStatus)
-	<-grpcStatus
+	grpcService.StartService()
 
-	jsonService.StartService(jsonStatus)
-	<-jsonStatus
+	jsonService.StartService()
 
 	const contentType = "application/json"
 
@@ -527,9 +504,7 @@ func TestJsonWalletApi_Errors(t *testing.T) {
 
 	// stop the services
 	jsonService.StopService()
-	<-jsonStatus
 	grpcService.StopService()
-	<-grpcStatus
 }
 
 func TestSpaceMeshGrpcService_Broadcast(t *testing.T) {
@@ -548,15 +523,10 @@ func TestSpaceMeshGrpcService_Broadcast(t *testing.T) {
 	grpcService := NewGrpcService(&net, ap, &tx, &mining, &oracle, nil)
 	jsonService := NewJSONHTTPServer()
 
-	jsonStatus := make(chan bool, 2)
-	grpcStatus := make(chan bool, 2)
-
 	// start grp and json server
-	grpcService.StartService(grpcStatus)
-	<-grpcStatus
+	grpcService.StartService()
 
-	jsonService.StartService(jsonStatus)
-	<-jsonStatus
+	jsonService.StartService()
 
 	const message = "ok"
 	const contentType = "application/json"
@@ -596,9 +566,7 @@ func TestSpaceMeshGrpcService_Broadcast(t *testing.T) {
 
 	// stop the services
 	jsonService.StopService()
-	<-jsonStatus
 	grpcService.StopService()
-	<-grpcStatus
 }
 
 func TestSpaceMeshGrpcService_BroadcastErrors(t *testing.T) {
@@ -617,15 +585,9 @@ func TestSpaceMeshGrpcService_BroadcastErrors(t *testing.T) {
 	grpcService := NewGrpcService(&net, ap, &tx, &mining, &oracle, nil)
 	jsonService := NewJSONHTTPServer()
 
-	jsonStatus := make(chan bool, 2)
-	grpcStatus := make(chan bool, 2)
-
 	// start grp and json server
-	grpcService.StartService(grpcStatus)
-	<-grpcStatus
-
-	jsonService.StartService(jsonStatus)
-	<-jsonStatus
+	grpcService.StartService()
+	jsonService.StartService()
 
 	const contentType = "application/json"
 
@@ -655,9 +617,7 @@ func TestSpaceMeshGrpcService_BroadcastErrors(t *testing.T) {
 
 	// stop the services
 	jsonService.StopService()
-	<-jsonStatus
 	grpcService.StopService()
-	<-grpcStatus
 }
 
 type mockSrv struct {

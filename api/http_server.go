@@ -26,7 +26,7 @@ func NewJSONHTTPServer() *JSONHTTPServer {
 }
 
 // StopService stops the server.
-func (s JSONHTTPServer) StopService() {
+func (s *JSONHTTPServer) StopService() {
 	log.Debug("Stopping json-http service...")
 	if err := s.server.Shutdown(context.TODO()); err != nil {
 		log.Error("Error during shutdown json API server : %v", err)
@@ -34,11 +34,11 @@ func (s JSONHTTPServer) StopService() {
 }
 
 // StartService starts the json api server and listens for status (started, stopped).
-func (s JSONHTTPServer) StartService() {
+func (s *JSONHTTPServer) StartService() {
 	go s.startInternal()
 }
 
-func (s JSONHTTPServer) startInternal() {
+func (s *JSONHTTPServer) startInternal() {
 
 	mux := runtime.NewServeMux()
 	opts := []grpc.DialOption{grpc.WithInsecure()}
