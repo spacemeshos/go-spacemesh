@@ -1018,6 +1018,16 @@ func TestSyncer_Synchronise2(t *testing.T) {
 	r.Equal(0, lv.countValidate)
 	r.True(sync.p2pSynced)
 
+	// validated layer = 5 && current layer = 6 -> don't call validate
+	lv = &mockLayerValidator{5, 0, 0, nil}
+	sync.lValidator = lv
+	sync.currentLayer = 6
+	sync.syncRoutineWg.Add(1)
+	sync.SetLatestLayer(5)
+	sync.Synchronise()
+	r.Equal(0, lv.countValidate)
+	r.True(sync.p2pSynced)
+
 	// current layer != 1 && weakly-synced
 	lv = &mockLayerValidator{0, 0, 0, nil}
 	sync.lValidator = lv
