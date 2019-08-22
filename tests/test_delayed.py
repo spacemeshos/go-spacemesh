@@ -61,9 +61,6 @@ def new_client_in_namespace(name_space, setup_bootstrap, cspec, num):
 
 
 
-def get_atx_count(layer):
-
-
 def test_add_delayed_nodes(init_session, setup_bootstrap, save_log_on_exit):
     bs_info = setup_bootstrap.pods[0]
     cspec = get_conf(bs_info, testconfig['client'], None, setup_bootstrap.pods[0]['pod_ip'])
@@ -96,7 +93,7 @@ def test_add_delayed_nodes(init_session, setup_bootstrap, save_log_on_exit):
     f = int(testconfig['client']['args']['hare-max-adversaries'])
 
     # validate
-    expect_hare(current_index, ns, firstLayerOfLastEpoch, totalLayers-1, total, f):
+    expect_hare(current_index, ns, firstLayerOfLastEpoch, totalLayers-1, total, f)
 
     atxLastEpoch = query_atx_published(current_index, ns, firstLayerOfLastEpoch)
     assert len(atxLastEpoch) == total
