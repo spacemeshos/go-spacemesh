@@ -1099,3 +1099,67 @@ func TestSyncProtocol_NilResponse(t *testing.T) {
 		assert.Fail(t, timeoutErrMsg)
 	}
 }
+
+func TestSyncProtocol_BadResponse(t *testing.T) {
+	syncs, _ := SyncMockFactory(2, conf, "TestSyncProtocol_NilResponse", memoryDB, newMemPoetDb)
+	defer syncs[0].Close()
+	defer syncs[1].Close()
+
+	timeout := 1 * time.Second
+	timeoutErrMsg := "no message received on channel"
+
+	blockHandlerMock := func([]byte) []byte {
+		t.Log("return fake block")
+		blk := types.NewExistingBlock(types.BlockID(8), 1, nil)
+		byts, _ := types.InterfaceToBytes(blk)
+		return byts
+	}
+
+	txHandlerMock := func([]byte) []byte {
+		t.Log("return fake tx")
+		byts, _ := types.InterfaceToBytes(tx())
+		return byts
+	}
+
+	atxHandlerMock := func([]byte) []byte {
+		t.Log("return fake atx")
+		byts, _ := types.InterfaceToBytes([]types.ActivationTx{*atx()})
+		return byts
+	}
+
+	syncs[1].RegisterBytesMsgHandler(BLOCK, blockHandlerMock)
+	syncs[1].RegisterBytesMsgHandler(TX, txHandlerMock)
+	syncs[1].RegisterBytesMsgHandler(ATX, atxHandlerMock)
+
+	// Block
+	output := syncs[0].fetchWithFactory(NewBlockWorker(syncs[0], 1, BlockReqFactory(), blockSliceToChan([]types.BlockID{1})))
+
+	select {
+	case out := <-output:
+		assert.Nil(t, out)
+	case <-time.After(timeout):
+		assert.Fail(t, timeoutErrMsg)
+	}
+
+	// Tx
+	wrk := NewNeighborhoodWorker(syncs[0], 1, TxReqFactory([]types.TransactionId{[32]byte{1}}))
+	go wrk.Work()
+
+	select {
+	case out := <-wrk.output:
+		assert.Nil(t, out)
+	case <-time.After(timeout):
+		assert.Fail(t, timeoutErrMsg)
+	}
+
+	// Atx
+	output = syncs[0].fetchWithFactory(NewNeighborhoodWorker(syncs[0], 1, ATxReqFactory([]types.AtxId{{Hash: [32]byte{1}}})))
+
+	select {
+	case out := <-output:
+		assert.Nil(t, out)
+	case <-time.After(timeout):
+		assert.Fail(t, timeoutErrMsg)
+	}
+
+}

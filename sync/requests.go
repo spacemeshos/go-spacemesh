@@ -79,10 +79,15 @@ func BlockReqFactory() BlockRequestFactory {
 				return
 			}
 
+			if block.ID() != id {
+				s.Info("received block with different id than requested")
+				return
+			}
+
 			ch <- &block
 		}
 
-		if err := s.SendRequest(MINI_BLOCK, id.ToBytes(), peer, resHandler); err != nil {
+		if err := s.SendRequest(BLOCK, id.ToBytes(), peer, resHandler); err != nil {
 			return nil, err
 		}
 
@@ -101,14 +106,27 @@ func TxReqFactory(ids []types.TransactionId) RequestFactory {
 				return
 			}
 
-			var tx []types.SerializableSignedTransaction
-			err := types.BytesToInterface(msg, &tx)
+			var txs []types.SerializableSignedTransaction
+			err := types.BytesToInterface(msg, &txs)
 			if err != nil {
 				s.Error("could not unmarshal tx data response: %v", err)
 				return
 			}
 
-			ch <- tx
+			mp := make(map[types.TransactionId]struct{})
+			for _, id := range ids {
+				mp[id] = struct{}{}
+			}
+
+			for _, tx := range txs {
+				txid := types.GetTransactionId(&tx)
+				if _, ok := mp[txid]; !ok {
+					s.Info("received a tx that was not requested  %v", txid)
+					return
+				}
+			}
+
+			ch <- txs
 		}
 
 		bts, err := types.InterfaceToBytes(ids)
@@ -133,14 +151,29 @@ func ATxReqFactory(ids []types.AtxId) RequestFactory {
 				return
 			}
 
-			var tx []types.ActivationTx
-			err := types.BytesToInterface(msg, &tx)
+			var atxs []types.ActivationTx
+			err := types.BytesToInterface(msg, &atxs)
 			if err != nil {
 				s.Error("could not unmarshal atx data response: %v", err)
 				return
 			}
 
-			ch <- calcAndSetIds(tx)
+			mp := make(map[types.AtxId]struct{})
+			for _, id := range ids {
+				mp[id] = struct{}{}
+			}
+
+			atxs = calcAndSetIds(atxs)
+
+			for _, tx := range atxs {
+				txid := tx.Id()
+				if _, ok := mp[txid]; !ok {
+					s.Info("received an atx that was not requested  %v", txid)
+					return
+				}
+			}
+
+			ch <- atxs
 		}
 
 		bts, err := types.InterfaceToBytes(ids)
