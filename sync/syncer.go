@@ -17,6 +17,8 @@ import (
 	"time"
 )
 
+type ForBlockInView func(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) (bool, error)) error
+
 type TxMemPool interface {
 	Get(id types.TransactionId) (types.AddressableSignedTransaction, error)
 	PopItems(size int) []types.AddressableSignedTransaction
@@ -67,7 +69,7 @@ type Syncer struct {
 	log.Log
 	*mesh.Mesh
 	EligibilityValidator
-	*MessageServer
+	*workerInfra
 	poetDb            PoetDb
 	txpool            TxMemPool
 	atxpool           AtxMemPool
@@ -160,10 +162,10 @@ func (s *Syncer) run() {
 //fires a sync every sm.syncInterval or on force space from outside
 func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool AtxMemPool, sv TxValidator, bv BlockValidator, poetdb PoetDb, conf Configuration, clock *timesync.Ticker, logger log.Log) *Syncer {
 
-	srvr := &MessageServer{
-		Configuration: conf,
-		MessageServer: server.NewMsgServer(srv.(server.Service), syncProtocol, conf.RequestTimeout, make(chan service.DirectMessage, p2pconf.ConfigValues.BufferSize), logger.WithName("srv")),
-		Peers:         p2p.NewPeers(srv, logger.WithName("peers")),
+	srvr := &workerInfra{
+		RequestTimeout: conf.RequestTimeout,
+		MessageServer:  server.NewMsgServer(srv.(server.Service), syncProtocol, conf.RequestTimeout, make(chan service.DirectMessage, p2pconf.ConfigValues.BufferSize), logger.WithName("srv")),
+		Peers:          p2p.NewPeers(srv, logger.WithName("peers")),
 	}
 
 	s := &Syncer{
@@ -171,7 +173,7 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool A
 		Configuration:        conf,
 		Log:                  logger,
 		Mesh:                 layers,
-		MessageServer:        srvr,
+		workerInfra:          srvr,
 		lValidator:           layers,
 		SyncLock:             0,
 		poetDb:               poetdb,
@@ -184,7 +186,7 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool A
 		exit:                 make(chan struct{}),
 	}
 
-	s.blockQueue = NewValidationQueue(srvr, conf, bv, s.DataAvailabilty, layers.AddBlockWithTxs, s.GetBlock, logger.WithName("validQ"))
+	s.blockQueue = NewValidationQueue(srvr, s.Configuration, s, logger.WithName("validQ"))
 	s.txQueue = NewTxQueue(layers, srvr, txpool, sv, logger.WithName("txFetchQueue"))
 	s.atxQueue = NewAtxQueue(layers, srvr, atxpool, s.FetchPoetProof, logger.WithName("atxFetchQueue"))
 
@@ -304,7 +306,7 @@ func (s *Syncer) blockSyntacticValidation(block *types.Block) ([]*types.Addressa
 	}
 
 	//validate block's votes
-	if valid := s.validateVotes(block); valid == false {
+	if valid := validateVotes(block, s.ForBlockInView, s.Hdist); valid == false {
 		return nil, nil, errors.New(fmt.Sprintf("validate votes failed for block %v", block.ID()))
 	}
 
@@ -328,7 +330,7 @@ func (s *Syncer) validateBlockView(blk *types.Block) bool {
 	return <-ch
 }
 
-func (s *Syncer) validateVotes(blk *types.Block) bool {
+func validateVotes(blk *types.Block, forBlockfunc ForBlockInView, depth int) bool {
 	view := map[types.BlockID]struct{}{}
 	for _, blk := range blk.ViewEdges {
 		view[blk] = struct{}{}
@@ -347,16 +349,14 @@ func (s *Syncer) validateVotes(blk *types.Block) bool {
 	}
 
 	// traverse only through the last Hdist layers
-	lowestLayer := blk.LayerIndex - types.LayerID(s.Hdist)
-	if blk.LayerIndex < types.LayerID(s.Hdist) {
+	lowestLayer := blk.LayerIndex - types.LayerID(depth)
+	if blk.LayerIndex < types.LayerID(depth) {
 		lowestLayer = 0
 	}
-	err := s.ForBlockInView(view, lowestLayer, traverse)
+	err := forBlockfunc(view, lowestLayer, traverse)
 	if err == nil && len(vote) > 0 {
 		err = fmt.Errorf("voting on blocks out of view (or out of Hdist), %v", vote)
 	}
-	s.Log.With().Info("validateVotes done", log.Err(err))
-
 	return err == nil
 }
 
@@ -385,7 +385,7 @@ func (s *Syncer) fetchLayerBlockIds(m map[string]p2p.Peer, lyr types.LayerID) ([
 		v = append(v, value)
 	}
 
-	wrk, output := NewPeersWorker(s.MessageServer, v, &sync.Once{}, LayerIdsReqFactory(lyr))
+	wrk, output := NewPeersWorker(s, v, &sync.Once{}, LayerIdsReqFactory(lyr))
 	go wrk.Work()
 
 	idSet := make(map[types.BlockID]struct{}, s.LayerSize)
@@ -418,7 +418,7 @@ type peerHashPair struct {
 
 func (s *Syncer) fetchLayerHashes(lyr types.LayerID) (map[string]p2p.Peer, error) {
 	// get layer hash from each peer
-	wrk, output := NewPeersWorker(s.MessageServer, s.GetPeers(), &sync.Once{}, HashReqFactory(lyr))
+	wrk, output := NewPeersWorker(s, s.GetPeers(), &sync.Once{}, HashReqFactory(lyr))
 	go wrk.Work()
 	m := make(map[string]p2p.Peer)
 	for out := range output {
@@ -446,7 +446,7 @@ func fetchWithFactory(wrk worker) chan interface{} {
 
 func (s *Syncer) FetchPoetProof(poetProofRef []byte) error {
 	if !s.poetDb.HasProof(poetProofRef) {
-		out := <-fetchWithFactory(NewNeighborhoodWorker(s.MessageServer, 1, PoetReqFactory(poetProofRef)))
+		out := <-fetchWithFactory(NewNeighborhoodWorker(s, 1, PoetReqFactory(poetProofRef)))
 		if out == nil {
 			return fmt.Errorf("could not find PoET proof with any neighbor")
 		}

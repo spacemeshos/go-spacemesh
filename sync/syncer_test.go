@@ -194,7 +194,7 @@ func TestSyncProtocol_BlockRequest(t *testing.T) {
 	syncObj.AddBlockWithTxs(block, []*types.AddressableSignedTransaction{tx1}, []*types.ActivationTx{atx1})
 	syncObj2.Peers = getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
 
-	output := fetchWithFactory(NewBlockhWorker(syncObj2.MessageServer, syncObj2.Log, 1, BlockReqFactory(), blockSliceToChan([]types.BlockID{block.ID()})))
+	output := fetchWithFactory(NewBlockhWorker(syncObj2, 1, BlockReqFactory(), blockSliceToChan([]types.BlockID{block.ID()})))
 
 	timeout := time.NewTimer(2 * time.Second)
 
@@ -220,7 +220,7 @@ func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 	//syncObj1.ValidateLayer(l) //this is to simulate the approval of the tortoise...
 	timeout := time.NewTimer(2 * time.Second)
 
-	wrk, output := NewPeersWorker(syncObj2.MessageServer, []p2p.Peer{nodes[0].PublicKey()}, &sync.Once{}, HashReqFactory(lid))
+	wrk, output := NewPeersWorker(syncObj2, []p2p.Peer{nodes[0].PublicKey()}, &sync.Once{}, HashReqFactory(lid))
 	go wrk.Work()
 
 	select {
@@ -335,7 +335,7 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 
 	timeout := time.NewTimer(2 * time.Second)
 
-	wrk, output := NewPeersWorker(syncObj.MessageServer, []p2p.Peer{nodes[1].PublicKey()}, &sync.Once{}, LayerIdsReqFactory(lid))
+	wrk, output := NewPeersWorker(syncObj, []p2p.Peer{nodes[1].PublicKey()}, &sync.Once{}, LayerIdsReqFactory(lid))
 	go wrk.Work()
 
 	select {
@@ -389,7 +389,7 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	ch <- block2.ID()
 	ch <- block3.ID()
 
-	output := fetchWithFactory(NewBlockhWorker(syncObj2.MessageServer, syncObj2.Log, 1, BlockReqFactory(), blockSliceToChan([]types.BlockID{block1.ID(), block2.ID(), block3.ID()})))
+	output := fetchWithFactory(NewBlockhWorker(syncObj2, 1, BlockReqFactory(), blockSliceToChan([]types.BlockID{block1.ID(), block2.ID(), block3.ID()})))
 
 	for out := range output {
 		block := out.(blockJob).item
@@ -878,7 +878,7 @@ func TestSyncer_Txs(t *testing.T) {
 	assert.Nil(t, err)
 
 	// new queue and try again
-	tq := NewTxQueue(getMesh(memoryDB, " "), syncObj2.MessageServer, miner.NewTypesTransactionIdMemPool(), mockTxProcessor{true}, syncObj2.WithName(""))
+	tq := NewTxQueue(getMesh(memoryDB, " "), syncObj2, miner.NewTypesTransactionIdMemPool(), mockTxProcessor{true}, syncObj2.WithName(""))
 
 	txs, err2 := tq.Handle([]common.Hash{id1.ItemId(), id2.ItemId(), id3.ItemId()})
 	assert.Nil(t, txs)
@@ -1021,7 +1021,7 @@ func TestSyncProtocol_NilResponse(t *testing.T) {
 
 	// Layer Hash
 
-	wrk, output := NewPeersWorker(syncs[0].MessageServer, []p2p.Peer{nodes[1].PublicKey()}, &sync.Once{}, HashReqFactory(nonExistingLayerId))
+	wrk, output := NewPeersWorker(syncs[0], []p2p.Peer{nodes[1].PublicKey()}, &sync.Once{}, HashReqFactory(nonExistingLayerId))
 	go wrk.Work()
 
 	select {
@@ -1033,7 +1033,7 @@ func TestSyncProtocol_NilResponse(t *testing.T) {
 
 	// Layer Block Ids
 
-	wrk, output = NewPeersWorker(syncs[0].MessageServer, []p2p.Peer{nodes[1].PublicKey()}, &sync.Once{}, LayerIdsReqFactory(nonExistingLayerId))
+	wrk, output = NewPeersWorker(syncs[0], []p2p.Peer{nodes[1].PublicKey()}, &sync.Once{}, LayerIdsReqFactory(nonExistingLayerId))
 	go wrk.Work()
 
 	select {
@@ -1045,7 +1045,7 @@ func TestSyncProtocol_NilResponse(t *testing.T) {
 
 	// Block
 
-	output = fetchWithFactory(NewBlockhWorker(syncs[0].MessageServer, syncs[0].Log, 1, BlockReqFactory(), blockSliceToChan([]types.BlockID{nonExistingBlockId})))
+	output = fetchWithFactory(NewBlockhWorker(syncs[0], 1, BlockReqFactory(), blockSliceToChan([]types.BlockID{nonExistingBlockId})))
 
 	select {
 	case out := <-output:
@@ -1074,7 +1074,7 @@ func TestSyncProtocol_NilResponse(t *testing.T) {
 
 	}
 
-	output = fetchWithFactory(NewNeighborhoodWorker(syncs[0].MessageServer, 1, PoetReqFactory(nonExistingPoetRef)))
+	output = fetchWithFactory(NewNeighborhoodWorker(syncs[0], 1, PoetReqFactory(nonExistingPoetRef)))
 
 	select {
 	case out := <-output:

@@ -31,7 +31,7 @@ type fetchQueue struct {
 	FetchRequestFactory
 	*sync.Mutex
 	*mesh.Mesh
-	*MessageServer
+	workerInfra        WorkerInfra
 	pending            map[common.Hash][]chan bool
 	updateDependencies func(fj fetchJob)
 	checkLocal         CheckLocalFunc
@@ -40,7 +40,7 @@ type fetchQueue struct {
 
 //todo batches
 func (fq *fetchQueue) work() error {
-	output := fetchWithFactory(NewFetchWorker(fq.MessageServer, fq.Log, 1, fq.FetchRequestFactory, fq.queue))
+	output := fetchWithFactory(NewFetchWorker(fq.workerInfra, 1, fq.FetchRequestFactory, fq.queue))
 	for out := range output {
 
 		if out == nil {
@@ -128,13 +128,13 @@ type txQueue struct {
 	fetchQueue
 }
 
-func NewTxQueue(msh *mesh.Mesh, srv *MessageServer, txpool TxMemPool, txValidator TxValidator, lg log.Log) *txQueue {
+func NewTxQueue(msh *mesh.Mesh, srv WorkerInfra, txpool TxMemPool, txValidator TxValidator, lg log.Log) *txQueue {
 	//todo buffersize
 	q := &txQueue{
 		fetchQueue: fetchQueue{
 			Log:                 lg,
 			Mesh:                msh,
-			MessageServer:       srv,
+			workerInfra:         srv,
 			Mutex:               &sync.Mutex{},
 			FetchRequestFactory: TxReqFactory(),
 			checkLocal:          txCheckLocalFactory(msh, lg, txpool),
@@ -197,13 +197,13 @@ type atxQueue struct {
 	fetchQueue
 }
 
-func NewAtxQueue(msh *mesh.Mesh, srv *MessageServer, atxpool AtxMemPool, fetchPoetProof FetchPoetProofFunc, lg log.Log) *atxQueue {
+func NewAtxQueue(msh *mesh.Mesh, srv WorkerInfra, atxpool AtxMemPool, fetchPoetProof FetchPoetProofFunc, lg log.Log) *atxQueue {
 	//todo buffersize
 	q := &atxQueue{
 		fetchQueue: fetchQueue{
 			Log:                 lg,
 			Mesh:                msh,
-			MessageServer:       srv,
+			workerInfra:         srv,
 			FetchRequestFactory: ATxReqFactory(),
 			Mutex:               &sync.Mutex{},
 			checkLocal:          atxCheckLocalFactory(msh, lg, atxpool),

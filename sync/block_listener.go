@@ -4,8 +4,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
-	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/types"
@@ -13,17 +11,6 @@ import (
 	"sync/atomic"
 	"time"
 )
-
-type MessageServer struct {
-	Configuration
-	*server.MessageServer
-	p2p.Peers
-}
-
-func (ms *MessageServer) Close() {
-	ms.MessageServer.Close()
-	ms.Peers.Close()
-}
 
 type BlockListener struct {
 	*Syncer

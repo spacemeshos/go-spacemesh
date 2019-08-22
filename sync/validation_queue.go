@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -9,45 +10,42 @@ import (
 	"sync"
 )
 
-type dataAvailabilityFunc = func(blk *types.Block) ([]*types.AddressableSignedTransaction, []*types.ActivationTx, error)
-type addBlockFunc func(blk *types.Block, txs []*types.AddressableSignedTransaction, atxs []*types.ActivationTx) error
-type BlockCheckLocalFunc func(id types.BlockID) (*types.Block, error)
-
 type blockJob struct {
 	item *types.Block
 	id   types.BlockID
 }
 
-type validationQueue struct {
-	log.Log
-	*MessageServer
-	Configuration
+type ValidationInfra interface {
+	DataAvailabilty(blk *types.Block) ([]*types.AddressableSignedTransaction, []*types.ActivationTx, error)
+	AddBlockWithTxs(blk *types.Block, txs []*types.AddressableSignedTransaction, atxs []*types.ActivationTx) error
+	GetBlock(id types.BlockID) (*types.Block, error)
+	ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) (bool, error)) error
 	BlockValidator
-	queue            chan types.BlockID
-	mu               sync.Mutex
-	callbacks        map[interface{}]func(res bool) error
-	depMap           map[interface{}]map[types.BlockID]struct{}
-	reverseDepMap    map[types.BlockID][]interface{}
-	visited          map[types.BlockID]struct{}
-	addBlock         addBlockFunc
-	checkLocal       BlockCheckLocalFunc
-	dataAvailability dataAvailabilityFunc
+	log.Logger
 }
 
-func NewValidationQueue(srvr *MessageServer, conf Configuration, bv BlockValidator, davail dataAvailabilityFunc, addBlock addBlockFunc, checkLocal BlockCheckLocalFunc, lg log.Log) *validationQueue {
+type validationQueue struct {
+	Configuration
+	ValidationInfra
+	workerInfra   WorkerInfra
+	queue         chan types.BlockID
+	mu            sync.Mutex
+	callbacks     map[interface{}]func(res bool) error
+	depMap        map[interface{}]map[types.BlockID]struct{}
+	reverseDepMap map[types.BlockID][]interface{}
+	visited       map[types.BlockID]struct{}
+}
+
+func NewValidationQueue(srvr WorkerInfra, conf Configuration, msh ValidationInfra, lg log.Log) *validationQueue {
 	vq := &validationQueue{
-		Configuration:    conf,
-		MessageServer:    srvr,
-		BlockValidator:   bv,
-		queue:            make(chan types.BlockID, 2*conf.LayerSize),
-		visited:          make(map[types.BlockID]struct{}),
-		depMap:           make(map[interface{}]map[types.BlockID]struct{}),
-		reverseDepMap:    make(map[types.BlockID][]interface{}),
-		callbacks:        make(map[interface{}]func(res bool) error),
-		dataAvailability: davail,
-		addBlock:         addBlock,
-		checkLocal:       checkLocal,
-		Log:              lg,
+		Configuration:   conf,
+		workerInfra:     srvr,
+		queue:           make(chan types.BlockID, 2*conf.LayerSize),
+		visited:         make(map[types.BlockID]struct{}),
+		depMap:          make(map[interface{}]map[types.BlockID]struct{}),
+		reverseDepMap:   make(map[types.BlockID][]interface{}),
+		callbacks:       make(map[interface{}]func(res bool) error),
+		ValidationInfra: msh,
 	}
 
 	go vq.work()
@@ -75,7 +73,7 @@ func (vq *validationQueue) done() {
 
 func (vq *validationQueue) work() error {
 
-	output := fetchWithFactory(NewBlockhWorker(vq.MessageServer, vq.Log, vq.Concurrency, BlockReqFactory(), vq.queue))
+	output := fetchWithFactory(NewBlockhWorker(vq.workerInfra, vq.Concurrency, BlockReqFactory(), vq.queue))
 	for out := range output {
 		bjb, ok := out.(blockJob)
 		if !ok {
@@ -127,17 +125,17 @@ func (vq *validationQueue) finishBlockCallback(block *types.Block) func(res bool
 		}
 
 		//data availability
-		txs, atxs, err := vq.dataAvailability(block)
+		txs, atxs, err := vq.DataAvailabilty(block)
 		if err != nil {
 			return err
 		}
 
 		//validate block's votes
-		if valid := s.validateVotes(block); valid == false {
+		if valid := validateVotes(block, vq.ForBlockInView, vq.Hdist); valid == false {
 			return errors.New(fmt.Sprintf("validate votes failed for block %v", block.ID()))
 		}
 
-		if err := vq.addBlock(block, txs, atxs); err != nil && err != mesh.DoubleWrite {
+		if err := vq.AddBlockWithTxs(block, txs, atxs); err != nil && err != mesh.DoubleWrite {
 			return err
 		}
 
@@ -202,7 +200,7 @@ func (vq *validationQueue) addDependencies(jobId interface{}, blks []types.Block
 			dependencys[id] = struct{}{}
 		} else {
 			//	check database
-			if _, err := vq.checkLocal(id); err != nil {
+			if _, err := vq.GetBlock(id); err != nil {
 				//unknown block add to queue
 				vq.reverseDepMap[id] = append(vq.reverseDepMap[id], jobId)
 				vq.Info("add block %v to %v pending map", id, jobId)
