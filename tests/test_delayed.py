@@ -7,9 +7,9 @@ from tests.fixtures import set_namespace, load_config, init_session, set_docker_
 from tests.test_bs import setup_clients, save_log_on_exit, setup_bootstrap, create_configmap
 from tests.test_bs import current_index, wait_genesis, GENESIS_TIME, BOOT_DEPLOYMENT_FILE, CLIENT_DEPLOYMENT_FILE, get_conf
 from tests.misc import CoreV1ApiClient
-from tests.queries import ES, query_message
+from tests.queries import ES, query_message, query_atx_published
 from elasticsearch_dsl import Search, Q
-from tests.hare.assert_hare import validate_hare
+from tests.hare.assert_hare import expect_hare
 
 
 # ==============================================================================
