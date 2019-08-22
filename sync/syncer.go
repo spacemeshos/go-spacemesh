@@ -386,7 +386,7 @@ func (s *Syncer) DataAvailabilty(blk *types.Block) ([]*types.AddressableSignedTr
 	return txs, atxs, nil
 }
 
-func (s *Syncer) fetchLayerBlockIds(m map[string][]p2p.Peer, lyr types.LayerID) ([]types.BlockID, error) {
+func (s *Syncer) fetchLayerBlockIds(m map[uint32][]p2p.Peer, lyr types.LayerID) ([]types.BlockID, error) {
 	//send request to different users according to returned hashes
 	idSet := make(map[types.BlockID]struct{}, s.LayerSize)
 	ids := make([]types.BlockID, 0, s.LayerSize)
@@ -407,17 +407,20 @@ func (s *Syncer) fetchLayerBlockIds(m map[string][]p2p.Peer, lyr types.LayerID) 
 			case v := <-ch:
 				if v != nil {
 					s.Info("Peer: %v responded to layer ids request", peer)
+					hash := types.HashBlockIds(v.([]types.BlockID))
+					if h != hash {
+						s.Info("Peer: %v layer ids hash dose not match request", peer)
+						break
+					}
+
+					delete(m, hash)
 					for _, bid := range v.([]types.BlockID) {
 						if _, exists := idSet[bid]; !exists {
 							idSet[bid] = struct{}{}
 							ids = append(ids, bid)
-							hash := types.HashBlockIds(ids)
-							if string(hash) == h {
-								delete(m, string(hash))
-								break NextHash
-							}
 						}
 					}
+					break NextHash
 				}
 			}
 		}
@@ -432,18 +435,18 @@ func (s *Syncer) fetchLayerBlockIds(m map[string][]p2p.Peer, lyr types.LayerID) 
 
 type peerHashPair struct {
 	peer p2p.Peer
-	hash []byte
+	hash uint32
 }
 
-func (s *Syncer) fetchLayerHashes(lyr types.LayerID) (map[string][]p2p.Peer, error) {
+func (s *Syncer) fetchLayerHashes(lyr types.LayerID) (map[uint32][]p2p.Peer, error) {
 	// get layer hash from each peer
 	wrk, output := NewPeersWorker(s, s.GetPeers(), &sync.Once{}, HashReqFactory(lyr))
 	go wrk.Work()
-	m := make(map[string][]p2p.Peer)
+	m := make(map[uint32][]p2p.Peer)
 	for out := range output {
 		pair, ok := out.(*peerHashPair)
 		if pair != nil && ok { //do nothing on close channel
-			m[string(pair.hash)] = append(m[string(pair.hash)], pair.peer)
+			m[pair.hash] = append(m[pair.hash], pair.peer)
 		}
 	}
 	if len(m) == 0 {

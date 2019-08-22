@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/types"
@@ -46,7 +47,7 @@ func HashReqFactory(lyr types.LayerID) RequestFactory {
 				return
 			}
 
-			ch <- &peerHashPair{peer: peer, hash: msg}
+			ch <- &peerHashPair{peer: peer, hash: common.BytesToUint32(msg)}
 		}
 		if err := s.SendRequest(LAYER_HASH, lyr.ToBytes(), peer, resHandler); err != nil {
 			return nil, err

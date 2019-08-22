@@ -218,7 +218,7 @@ func (l *Layer) Blocks() []*Block {
 	return l.blocks
 }
 
-func (l *Layer) Hash() []byte {
+func (l *Layer) Hash() uint32 {
 	keys := make([]BlockID, 0, len(l.Blocks()))
 	for _, block := range l.Blocks() {
 		keys = append(keys, block.ID())
@@ -226,7 +226,7 @@ func (l *Layer) Hash() []byte {
 	return HashBlockIds(keys)
 }
 
-func HashBlockIds(bids []BlockID) []byte {
+func HashBlockIds(bids []BlockID) uint32 {
 
 	sort.Slice(bids, func(i, j int) bool { return bids[i] < bids[j] })
 	// calc
@@ -238,8 +238,7 @@ func HashBlockIds(bids []BlockID) []byte {
 		}
 	}
 	// update
-	sum := h.Sum32()
-	return common.Uint32ToBytes(sum)
+	return h.Sum32()
 }
 
 func (l *Layer) AddBlock(block *Block) {
