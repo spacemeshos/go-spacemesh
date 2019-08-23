@@ -93,6 +93,7 @@ def test_add_delayed_nodes(init_session, setup_bootstrap, save_log_on_exit):
     f = int(testconfig['client']['args']['hare-max-adversaries'])
 
     # validate
+    time.sleep(layerDuration) # wait one layer for logs to propagate
     expect_hare(current_index, ns, firstLayerOfLastEpoch, totalLayers-1, total, f)
 
     atxLastEpoch = query_atx_published(current_index, ns, firstLayerOfLastEpoch)
