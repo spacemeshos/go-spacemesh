@@ -73,6 +73,7 @@ func NewPeersWorker(s *Syncer, peers []p2p.Peer, mu *sync.Once, reqFactory Reque
 	}
 
 	wrkFunc := func() {
+		s.With().Info("Calling peer functions", log.Int("peer_funcs_count", len(peerfuncs)))
 		for _, p := range peerfuncs {
 			go p()
 		}
@@ -140,6 +141,7 @@ func NewBlockWorker(s *Syncer, count int, reqFactory BlockRequestFactory, ids ch
 				}
 			}
 			if !retrived {
+				s.With().Error("Failed to retrieve block from all peers", log.BlockId(uint64(id)))
 				output <- nil
 			}
 		}

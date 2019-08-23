@@ -74,9 +74,12 @@ func (m *MeshDB) Close() {
 	m.contextualValidity.Close()
 }
 
+var ErrAlreadyExist = errors.New("block already exist in database")
+
 func (m *MeshDB) AddBlock(bl *types.Block) error {
 	if _, err := m.getMiniBlockBytes(bl.ID()); err == nil {
-		return errors.New(fmt.Sprintf("block %v already exists in database", bl.ID()))
+		m.With().Warning("Block already exist in database", log.BlockId(uint64(bl.Id)))
+		return ErrAlreadyExist
 	}
 	if err := m.writeBlock(bl); err != nil {
 		return err
