@@ -80,7 +80,8 @@ def test_hare_scale(init_session, setup_bootstrap_for_hare, setup_clients_for_ha
     time.sleep(delay)
 
     ns = testconfig['namespace']
-    expect_hare(current_index, ns, 1, layers_count, total)
+    f = int(testconfig['client']['args']['hare-max-adversaries'])
+    expect_hare(current_index, ns, 1, layers_count, total, f)
     max_mem = get_max_mem_usage(current_index, ns)
     print('Mem usage is {0} expected max is {1}'.format(max_mem, EXPECTED_MAX_MEM))
     assert max_mem < EXPECTED_MAX_MEM
