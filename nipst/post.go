@@ -8,6 +8,7 @@ import (
 	"github.com/spacemeshos/post/proving"
 	"github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/post/validation"
+	"sync"
 )
 
 func DefaultConfig() config.Config {
@@ -34,6 +35,8 @@ type PostClient struct {
 	initializer *initialization.Initializer
 	prover      *proving.Prover
 	logger      shared.Logger
+
+	sync.RWMutex
 }
 
 // A compile time check to ensure that PostClient fully implements PostProverClient.
@@ -50,20 +53,32 @@ func NewPostClient(cfg *config.Config, id []byte) *PostClient {
 }
 
 func (c *PostClient) Initialize() (commitment *types.PostProof, err error) {
+	c.Lock()
+	defer c.Unlock()
+
 	proof, err := c.initializer.Initialize()
 	return (*types.PostProof)(proof), err
 }
 
 func (c *PostClient) Execute(challenge []byte) (*types.PostProof, error) {
+	c.RLock()
+	defer c.RUnlock()
+
 	proof, err := c.prover.GenerateProof(challenge)
 	return (*types.PostProof)(proof), err
 }
 
 func (c *PostClient) Reset() error {
+	c.Lock()
+	defer c.Unlock()
+
 	return c.initializer.Reset()
 }
 
 func (c *PostClient) IsInitialized() (bool, error) {
+	c.RLock()
+	defer c.RUnlock()
+
 	state, _, err := c.initializer.State()
 	if err != nil {
 		return false, err
@@ -73,10 +88,16 @@ func (c *PostClient) IsInitialized() (bool, error) {
 }
 
 func (c *PostClient) VerifyInitAllowed() error {
+	c.RLock()
+	defer c.RUnlock()
+
 	return c.initializer.VerifyInitAllowed()
 }
 
 func (c *PostClient) SetParams(dataDir string, space uint64) {
+	c.Lock()
+	defer c.Unlock()
+
 	cfg := *c.cfg
 	cfg.DataDir = dataDir
 	cfg.SpacePerUnit = space
@@ -90,6 +111,9 @@ func (c *PostClient) SetParams(dataDir string, space uint64) {
 }
 
 func (c *PostClient) SetLogger(logger shared.Logger) {
+	c.Lock()
+	defer c.Unlock()
+
 	c.logger = logger
 
 	c.initializer = initialization.NewInitializer(c.cfg, c.id)
@@ -100,6 +124,9 @@ func (c *PostClient) SetLogger(logger shared.Logger) {
 }
 
 func (c *PostClient) Cfg() *config.Config {
+	c.RLock()
+	defer c.RUnlock()
+
 	cfg := *c.cfg
 	return &cfg
 }
