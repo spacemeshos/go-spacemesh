@@ -93,8 +93,7 @@ type Builder struct {
 	store           BytesStore
 	isSynced        func() bool
 	accountLock     sync.RWMutex
-	InitLock        sync.RWMutex
-	initStatus      int
+	initStatus      int32
 	log             log.Log
 }
 
@@ -149,10 +148,7 @@ func (b *Builder) loop() {
 				break
 			}
 
-			b.InitLock.RLock()
-			initStatus := b.initStatus
-			b.InitLock.RUnlock()
-			if initStatus != InitDone {
+			if atomic.LoadInt32(&b.initStatus) != InitDone {
 				b.log.Info("post is not initialized yet, not building nipst")
 				break
 			}
@@ -250,37 +246,29 @@ func (b *Builder) buildNipstChallenge(epoch types.EpochId) error {
 }
 
 func (b *Builder) StartPost(rewardAddress address.Address, dataDir string, space uint64) error {
-	b.InitLock.Lock()
-	switch b.initStatus {
-	case InitDone:
-		b.InitLock.Unlock()
-		return fmt.Errorf("already initialized")
-	case InitInProgress:
-		b.InitLock.Unlock()
-		return fmt.Errorf("already started")
+	if !atomic.CompareAndSwapInt32(&b.initStatus, InitIdle, InitInProgress) {
+		switch atomic.LoadInt32(&b.initStatus) {
+		case InitDone:
+			return fmt.Errorf("already initialized")
+		case InitInProgress:
+		default:
+			return fmt.Errorf("already started")
+		}
 	}
 
 	b.log.Info("Starting post, reward address: %x", rewardAddress)
-
-	b.initStatus = InitInProgress
 	b.postProver.SetParams(dataDir, space)
-	b.InitLock.Unlock()
-
 	b.SetCoinbaseAccount(rewardAddress)
 
 	initialized, err := b.postProver.IsInitialized()
 	if err != nil {
-		b.InitLock.Lock()
-		b.initStatus = InitIdle
-		b.InitLock.Unlock()
+		atomic.StoreInt32(&b.initStatus, InitIdle)
 		return err
 	}
 
 	if !initialized {
 		if err := b.postProver.VerifyInitAllowed(); err != nil {
-			b.InitLock.Lock()
-			b.initStatus = InitIdle
-			b.InitLock.Unlock()
+			atomic.StoreInt32(&b.initStatus, InitIdle)
 			return err
 		}
 	}
@@ -290,29 +278,20 @@ func (b *Builder) StartPost(rewardAddress address.Address, dataDir string, space
 			b.commitment, err = b.postProver.Execute(shared.ZeroChallenge)
 			if err != nil {
 				b.log.Error("PoST execution failed: %v", err)
-
-				b.InitLock.Lock()
-				b.initStatus = InitIdle
-				b.InitLock.Unlock()
+				atomic.StoreInt32(&b.initStatus, InitIdle)
 				return
 			}
 		} else {
 			b.commitment, err = b.postProver.Initialize()
 			if err != nil {
 				b.log.Error("PoST initialization failed: %v", err)
-
-				b.InitLock.Lock()
-				b.initStatus = InitIdle
-				b.InitLock.Unlock()
+				atomic.StoreInt32(&b.initStatus, InitIdle)
 				return
 			}
 		}
 
 		b.log.Info("PoST initialization completed, datadir: %v, space: %v, commitment merkle root: %x", dataDir, space, b.commitment.MerkleRoot)
-
-		b.InitLock.Lock()
-		b.initStatus = InitDone
-		b.InitLock.Unlock()
+		atomic.StoreInt32(&b.initStatus, InitDone)
 	}()
 
 	return nil
@@ -321,11 +300,9 @@ func (b *Builder) StartPost(rewardAddress address.Address, dataDir string, space
 // MiningStats returns state of post init, coinbase reward account and data directory path for post commitment
 func (b *Builder) MiningStats() (int, string, string) {
 	acc := b.getCoinbaseAccount()
-	b.InitLock.RLock()
-	stats := b.initStatus
+	initStatus := atomic.LoadInt32(&b.initStatus)
 	datadir := b.postProver.Cfg().DataDir
-	b.InitLock.RUnlock()
-	return stats, acc.String(), datadir
+	return int(initStatus), acc.String(), datadir
 }
 
 func (b *Builder) SetCoinbaseAccount(rewardAddress address.Address) {
