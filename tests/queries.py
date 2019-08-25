@@ -348,3 +348,6 @@ def query_new_iteration(indx, ns):
 
 def query_mem_usage(indx, ns):
     return query_message(indx, ns, ns, {'M': 'json_mem_data'}, False)
+
+def query_atx_published(indx, ns, layer):
+    return query_message(indx, ns, ns, {'M': 'atx published', 'layer_id': str(layer)}, False)

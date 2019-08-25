@@ -10,7 +10,6 @@ import (
 	apiCfg "github.com/spacemeshos/go-spacemesh/api/config"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common"
-	"github.com/spacemeshos/go-spacemesh/consensus"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/hare"
@@ -288,6 +287,13 @@ func (app *SpacemeshApp) setupTestFeatures() {
 	api.ApproveAPIGossipMessages(cmdp.Ctx, app.P2P)
 }
 
+type weakCoinStub struct {
+}
+
+func (weakCoinStub) GetResult() bool {
+	return true
+}
+
 func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service, dbStorepath string, sgn hare.Signer, isFixedOracle bool, rolacle hare.Rolacle, layerSize uint32, postClient nipst.PostProverClient, poetClient nipst.PoetProvingServiceClient, vrfSigner *BLS381.BlsSigner, layersPerEpoch uint16) error {
 
 	app.nodeId = nodeID
@@ -311,7 +317,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	rng := rand.New(mt19937.New())
 	processor := state.NewTransactionProcessor(rng, st, app.Config.GAS, lg.WithName("state"))
 
-	coinToss := consensus.WeakCoin{}
+	coinToss := weakCoinStub{}
 	gTime, err := time.Parse(time.RFC3339, app.Config.GenesisTime)
 	if err != nil {
 		return err
@@ -359,10 +365,10 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 
 	msh := mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, txpool, atxpool, processor, lg.WithName("mesh")) //todo: what to do with the logger?
 
-	conf := sync.Configuration{Concurrency: 4, LayerSize: int(layerSize), LayersPerEpoch: layersPerEpoch, RequestTimeout: 100 * time.Millisecond, Hdist: app.Config.Hdist}
+	conf := sync.Configuration{Concurrency: 4, LayerSize: int(layerSize), LayersPerEpoch: layersPerEpoch, RequestTimeout: time.Duration(app.Config.SyncRequestTimeout) * time.Millisecond, Hdist: app.Config.Hdist}
 
-	syncer := sync.NewSync(swarm, msh, txpool, atxpool, processor, eValidator, poetDb, conf, clock, lg.WithName("sync"))
-	blockOracle := oracle.NewMinerBlockOracle(layerSize, uint32(app.Config.GenesisActiveSet), uint16(layersPerEpoch), atxdb, beaconProvider, vrfSigner, nodeID, syncer.IsSynced, lg.WithName("blockOracle"))
+	syncer := sync.NewSync(swarm, msh, txpool, atxpool, processor, eValidator, poetDb, conf, clock, clock.GetCurrentLayer(), lg.WithName("sync"))
+	blockOracle := oracle.NewMinerBlockOracle(layerSize, uint32(app.Config.GenesisActiveSet), uint16(layersPerEpoch), atxdb, beaconProvider, vrfSigner, nodeID, syncer.WeaklySynced, lg.WithName("blockOracle"))
 
 	// TODO: we should probably decouple the apptest and the node (and duplicate as necessary)
 	var hOracle hare.Rolacle
@@ -411,7 +417,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	if coinBase.Big().Uint64() == 0 && app.Config.StartMining {
 		app.log.Panic("invalid Coinbase account")
 	}
-	atxBuilder := activation.NewBuilder(nodeID, coinBase, atxdb, swarm, msh, layersPerEpoch, nipstBuilder, clock.Subscribe(), syncer.IsSynced, store, lg.WithName("atxBuilder"))
+	atxBuilder := activation.NewBuilder(nodeID, coinBase, atxdb, swarm, msh, layersPerEpoch, nipstBuilder, clock.Subscribe(), syncer.WeaklySynced, store, lg.WithName("atxBuilder"))
 
 	app.blockProducer = &blockProducer
 	app.blockListener = blockListener

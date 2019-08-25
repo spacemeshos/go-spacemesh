@@ -54,6 +54,24 @@ func (m mockTxProcessor) ValidateTransactionSignature(tx *types.SerializableSign
 	return address.Address{}, errors.New("invalid sig for tx")
 }
 
+type mockClock struct {
+	ch map[timesync.LayerTimer]int
+}
+
+func (c *mockClock) Subscribe() timesync.LayerTimer {
+	if c.ch == nil {
+		c.ch = make(map[timesync.LayerTimer]int)
+	}
+	newCh := make(chan types.LayerID, 1)
+	c.ch[newCh] = len(c.ch)
+
+	return newCh
+}
+
+func (c *mockClock) Unsubscribe(timer timesync.LayerTimer) {
+	delete(c.ch, timer)
+}
+
 func ListenerFactory(serv service.Service, peers p2p.Peers, name string, layer types.LayerID) *BlockListener {
 	sync := SyncFactory(name, serv)
 	sync.Peers = peers
