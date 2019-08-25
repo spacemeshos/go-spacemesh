@@ -1244,7 +1244,7 @@ func TestSyncProtocol_BadResponse(t *testing.T) {
 	assert.Error(t, err1)
 
 	// Block
-	output := syncs[0].fetchWithFactory(NewBlockWorker(syncs[0], 1, BlockReqFactory(), blockSliceToChan([]types.BlockID{1})))
+	output := fetchWithFactory(NewBlockhWorker(syncs[0], 1, BlockReqFactory(), blockSliceToChan([]types.BlockID{1})))
 
 	select {
 	case out := <-output:
@@ -1254,18 +1254,21 @@ func TestSyncProtocol_BadResponse(t *testing.T) {
 	}
 
 	// Tx
-	wrk := NewNeighborhoodWorker(syncs[0], 1, TxReqFactory([]types.TransactionId{[32]byte{1}}))
-	go wrk.Work()
+	ch := make(chan []common.Hash, 1)
+	ch <- []common.Hash{[32]byte{1}}
+	output = fetchWithFactory(NewFetchWorker(syncs[0], 1, TxReqFactory(), ch))
 
 	select {
-	case out := <-wrk.output:
+	case out := <-output:
 		assert.Nil(t, out)
 	case <-time.After(timeout):
 		assert.Fail(t, timeoutErrMsg)
 	}
 
 	// Atx
-	output = syncs[0].fetchWithFactory(NewNeighborhoodWorker(syncs[0], 1, ATxReqFactory([]types.AtxId{{Hash: [32]byte{1}}})))
+	ch = make(chan []common.Hash, 1)
+	ch <- []common.Hash{[32]byte{1}}
+	output = fetchWithFactory(NewFetchWorker(syncs[0], 1, ATxReqFactory(), ch))
 
 	select {
 	case out := <-output:
@@ -1276,7 +1279,7 @@ func TestSyncProtocol_BadResponse(t *testing.T) {
 
 	// PoET
 
-	output = syncs[0].fetchWithFactory(NewNeighborhoodWorker(syncs[0], 1, PoetReqFactory([]byte{1})))
+	output = fetchWithFactory(NewNeighborhoodWorker(syncs[0], 1, PoetReqFactory([]byte{1})))
 
 	select {
 	case out := <-output:

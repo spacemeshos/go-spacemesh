@@ -480,12 +480,12 @@ func (s *Syncer) fetchLayerBlockIds(m map[uint32][]p2p.Peer, lyr types.LayerID) 
 	NextHash:
 		for _, peer := range peers {
 			s.Info("send request Peer: %v", peer)
-			ch, err := LayerIdsReqFactory(lyr)(s.MessageServer, peer)
+			ch, err := LayerIdsReqFactory(lyr)(s, peer)
 			if err != nil {
 				return nil, err
 			}
 
-			timeout := time.After(s.RequestTimeout)
+			timeout := time.After(s.Configuration.RequestTimeout)
 			select {
 			case <-timeout:
 				s.Error("layer ids request to %v timed out", peer)

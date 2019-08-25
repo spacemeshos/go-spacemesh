@@ -247,7 +247,8 @@ func updateAtxDependencies(invalidate func(id common.Hash, valid bool), sValidat
 
 		mp := map[common.Hash]*types.ActivationTx{}
 		for _, item := range fj.items {
-			mp[item.ItemId()] = item.(*types.ActivationTx)
+			tmp := item.(types.ActivationTx)
+			mp[item.ItemId()] = &tmp
 		}
 
 		for _, id := range fj.ids {
@@ -284,16 +285,16 @@ func getDoneChan(deps []chan bool) chan bool {
 
 //todo get rid of this, send proofs with atxs
 func fetchProofCalcId(fetchPoetProof FetchPoetProofFunc, fj fetchJob) {
-	itemsWithProofs := make([]Item, len(fj.items))
+	itemsWithProofs := make([]Item, 0, len(fj.items))
 	for _, item := range fj.items {
-		atx := item.(*types.ActivationTx)
+		atx := item.(types.ActivationTx)
 		atx.CalcAndSetId() //todo put it somewhere that will cause less confusion
 		if err := fetchPoetProof(atx.GetPoetProofRef()); err != nil {
 			log.Error("received atx (%v) with syntactically invalid or missing PoET proof (%x): %v",
 				atx.ShortId(), atx.GetShortPoetProofRef(), err)
 			continue
 		}
-		itemsWithProofs = append(itemsWithProofs, atx)
+		itemsWithProofs = append(itemsWithProofs, &atx)
 	}
 
 	fj.items = itemsWithProofs

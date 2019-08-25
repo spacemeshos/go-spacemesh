@@ -166,7 +166,7 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	layout := "2006-01-02T15:04:05.000Z"
 	str := "2016-11-12T11:45:26.371Z"
 	start, _ := time.Parse(layout, str)
-	ts := timesync.NewTicker(sync.MockTimer{}, tick, start)
+	ts := timesync.NewTicker(timesync.RealClock{}, tick, start)
 
 	clock := &mockClock{}
 	app.sync = sync.NewSync(swarm, msh, txpool, atxpool, mockTxProcessor{}, sync.BlockEligibilityValidatorMock{}, poetDb, conf, ts, lg.WithName("sync"))

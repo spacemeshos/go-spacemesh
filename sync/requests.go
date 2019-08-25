@@ -110,21 +110,21 @@ func TxReqFactory() FetchRequestFactory {
 				s.Warning("peer responded with nil to txs request ", peer)
 				return
 			}
-			var txs []*types.SerializableSignedTransaction
+			var txs []types.SerializableSignedTransaction
 			err := types.BytesToInterface(msg, &txs)
-			if err != nil || tx == nil {
+			if err != nil || txs == nil {
 				s.Error("could not unmarshal tx data %v", err)
 				return
 			}
 
-			if valid, err := validateTxIds(ids, txs); !valid {
+			if valid, err := validateTxIds(ids.([]common.Hash), txs); !valid {
 				s.Error("fetch failed bad response : %v", err)
 				return
 			}
 
-			items := make([]Item, len(tx))
-			for i, arg := range tx {
-				items[i] = arg
+			items := make([]Item, len(txs))
+			for i, arg := range txs {
+				items[i] = &arg
 			}
 			ch <- items
 		}
@@ -141,14 +141,14 @@ func TxReqFactory() FetchRequestFactory {
 	}
 }
 
-func validateTxIds(ids []types.TransactionId, txs []types.SerializableSignedTransaction) (bool, error) {
-	mp := make(map[types.TransactionId]struct{})
+func validateTxIds(ids []common.Hash, txs []types.SerializableSignedTransaction) (bool, error) {
+	mp := make(map[common.Hash]struct{})
 	for _, id := range ids {
 		mp[id] = struct{}{}
 	}
 	for _, tx := range txs {
 		txid := types.GetTransactionId(&tx)
-		if _, ok := mp[txid]; !ok {
+		if _, ok := mp[txid.ItemId()]; !ok {
 			return false, errors.New(fmt.Sprintf("received a tx that was not requested  %v", hex.EncodeToString(txid[:])))
 		}
 	}
@@ -165,22 +165,21 @@ func ATxReqFactory() FetchRequestFactory {
 				s.Warning("peer responded with nil to atxs request ", peer)
 				return
 			}
-			var atxs []*types.ActivationTx
+			var atxs []types.ActivationTx
 			err := types.BytesToInterface(msg, &atxs)
-			if err != nil || tx == nil {
+			if err != nil || atxs == nil {
 				s.Error("could not unmarshal atx data %v", err)
 				return
 			}
 
 			atxs = calcAndSetIds(atxs)
-			if valid, err := validateAtxIds(ids, atxs); !valid {
+			if valid, err := validateAtxIds(ids.([]common.Hash), atxs); !valid {
 				s.Error("fetch failed bad response : %v", err)
 				return
 			}
 
-
-			items := make([]Item, len(tx))
-			for i, arg := range tx {
+			items := make([]Item, len(atxs))
+			for i, arg := range atxs {
 				items[i] = arg
 			}
 
@@ -199,13 +198,13 @@ func ATxReqFactory() FetchRequestFactory {
 	}
 }
 
-func validateAtxIds(ids []types.AtxId, atxs []types.ActivationTx) (bool, error) {
-	mp := make(map[types.AtxId]struct{})
+func validateAtxIds(ids []common.Hash, atxs []types.ActivationTx) (bool, error) {
+	mp := make(map[common.Hash]struct{})
 	for _, id := range ids {
 		mp[id] = struct{}{}
 	}
 	for _, tx := range atxs {
-		txid := tx.Id()
+		txid := tx.ItemId()
 		if _, ok := mp[txid]; !ok {
 			return false, errors.New(fmt.Sprintf("received a tx that was not requested  %v", tx.ShortId()))
 		}
