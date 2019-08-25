@@ -64,7 +64,6 @@ type Mesh interface {
 	GetBlock(id types.BlockID) (*types.Block, error)
 	LayerBlockIds(id types.LayerID) ([]types.BlockID, error)
 	ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, foo func(block *types.Block) (bool, error)) error
-	SaveGoodPattern(layer types.LayerID, blks map[types.BlockID]struct{}) error
 	SaveContextualValidity(id types.BlockID, valid bool) error
 }
 

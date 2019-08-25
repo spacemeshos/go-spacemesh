@@ -302,38 +302,3 @@ func TestLayers_OrphanBlocksClearEmptyLayers(t *testing.T) {
 	layers.AddBlock(block5)
 	assert.Equal(t, 1, len(layers.orphanBlocks))
 }
-
-func Test_Patterns(t *testing.T) {
-	layers := getMesh("t7")
-	defer layers.Close()
-	block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
-	block2 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
-	block3 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
-	block4 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
-	block5 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
-	layers.AddBlock(block1)
-	layers.AddBlock(block2)
-	layers.AddBlock(block3)
-	layers.AddBlock(block4)
-	layers.AddBlock(block5)
-	mp := map[types.BlockID]struct{}{}
-	mp[block1.ID()] = struct{}{}
-	mp[block2.ID()] = struct{}{}
-	mp[block3.ID()] = struct{}{}
-	mp[block4.ID()] = struct{}{}
-	mp[block5.ID()] = struct{}{}
-	layers.SaveGoodPattern(1, map[types.BlockID]struct{}{})
-	layers.ContextuallyValidBlock(1)
-
-	_, ok := mp[block1.ID()]
-	assert.True(t, ok)
-	_, ok = mp[block2.ID()]
-	assert.True(t, ok)
-	_, ok = mp[block3.ID()]
-	assert.True(t, ok)
-	_, ok = mp[block4.ID()]
-	assert.True(t, ok)
-	_, ok = mp[block5.ID()]
-	assert.True(t, ok)
-
-}
