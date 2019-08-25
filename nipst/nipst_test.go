@@ -80,12 +80,11 @@ func TestNIPSTBuilderWithMocks(t *testing.T) {
 
 	postProver := &postProverClientMock{}
 	poetProver := &poetProvingServiceClientMock{}
-	verifyPost := func(*types.PostProof, uint64, uint, uint) error { return nil }
 
 	poetDb := &poetDbMock{}
 
 	nb := newNIPSTBuilder(minerID, postProver, poetProver,
-		poetDb, verifyPost, log.NewDefault(string(minerID)))
+		poetDb, log.NewDefault(string(minerID)))
 	hash := common.BytesToHash([]byte("anton"))
 	npst, err := nb.BuildNIPST(&hash)
 	assert.NoError(err)
@@ -97,12 +96,11 @@ func TestInitializePost(t *testing.T) {
 
 	postProver := NewPostClient(&postCfg, minerID)
 	poetProver := &poetProvingServiceClientMock{}
-	verifyPost := func(*types.PostProof, uint64, uint, uint) error { return nil }
 
 	poetDb := &poetDbMock{}
 
 	nb := newNIPSTBuilder(minerID, postProver, poetProver,
-		poetDb, verifyPost, log.NewDefault(string(minerID)))
+		poetDb, log.NewDefault(string(minerID)))
 	datadir := "/tmp/anton"
 	space := uint64(2048)
 
@@ -156,7 +154,7 @@ func buildNIPST(r *require.Assertions, postCfg config.Config, nipstChallenge com
 	r.NotNil(commitment)
 
 	nb := newNIPSTBuilder(minerID, postProver, poetProver,
-		poetDb, verifyPost, log.NewDefault(string(minerID)))
+		poetDb, log.NewDefault(string(minerID)))
 
 	npst, err := nb.BuildNIPST(&nipstChallenge)
 	r.NoError(err)
@@ -183,7 +181,7 @@ func TestNewNIPSTBuilderNotInitialized(t *testing.T) {
 	r.NoError(err)
 	poetDb := &poetDbMock{}
 	nb := newNIPSTBuilder(minerIDNotInitialized, postProver, poetProver,
-		poetDb, verifyPost, log.NewDefault(string(minerID)))
+		poetDb, log.NewDefault(string(minerID)))
 
 	npst, err := nb.BuildNIPST(&nipstChallenge)
 	r.EqualError(err, "PoST not initialized")

@@ -86,7 +86,6 @@ type NIPSTBuilder struct {
 	postProver PostProverClient
 	poetProver PoetProvingServiceClient
 	poetDb     PoetDb
-	verifyPost verifyPostFunc
 
 	stop    bool
 	stopM   sync.Mutex
@@ -108,7 +107,6 @@ func NewNIPSTBuilder(id []byte, postProver PostProverClient,
 		postProver,
 		poetProver,
 		poetDb,
-		verifyPost,
 		log,
 	)
 }
@@ -118,7 +116,6 @@ func newNIPSTBuilder(
 	postProver PostProverClient,
 	poetProver PoetProvingServiceClient,
 	poetDb PoetDb,
-	verifyPost verifyPostFunc,
 	log log.Log,
 ) *NIPSTBuilder {
 	return &NIPSTBuilder{
@@ -126,7 +123,6 @@ func newNIPSTBuilder(
 		postProver: postProver,
 		poetProver: poetProver,
 		poetDb:     poetDb,
-		verifyPost: verifyPost,
 		stop:       false,
 		errChan:    make(chan error),
 		log:        log,
@@ -199,10 +195,6 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *common.Hash) (*types.NIPST, error)
 		proof, err := nb.postProver.Execute(nb.state.PoetProofRef)
 		if err != nil {
 			return nil, fmt.Errorf("failed to execute PoST: %v", err)
-		}
-
-		if err := nb.verifyPost(proof, cfg.SpacePerUnit, cfg.NumProvenLabels, cfg.Difficulty); err != nil {
-			return nil, fmt.Errorf("created an invalid PoST proof: %v", err)
 		}
 
 		nb.log.Info("finished PoST execution (proof: %v)", proof)
