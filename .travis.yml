@@ -33,7 +33,7 @@ jobs:
       - make test-fmt
   - stage: docker-push
     name: "Push to dockerHub"
-    script: 
+    script:
       - make dockerpush
     if: branch = develop AND type != pull_request
 
@@ -53,6 +53,10 @@ jobs:
   - name: "Run sync system tests"
     script:
       - make dockertest-sync
+    if: branch = develop AND type != pull_request
+  - name: "Run late nodes system test"
+    script:
+      - make dockertest-late-nodes
     if: branch = develop AND type != pull_request
 
 cache:
