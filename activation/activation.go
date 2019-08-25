@@ -196,6 +196,9 @@ func (b *Builder) buildNipstChallenge(epoch types.EpochId) error {
 	commitmentMerkleRoot := []byte(nil)
 
 	if b.prevATX == nil {
+		// if and only if it's the first ATX, the merkle root of the initial PoST proof,
+		// the commitment, is included in the nipst challenge. This is done in order to prove
+		// that it existed before the PoET start time.
 		commitmentMerkleRoot = b.commitment.MerkleRoot
 	} else {
 		seq = b.prevATX.Sequence + 1
