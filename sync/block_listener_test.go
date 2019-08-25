@@ -197,7 +197,7 @@ func TestBlockListener_DataAvailability(t *testing.T) {
 
 	// Sync bl2.
 
-	txs, txErr, atxs, atxErr := bl2.DataAvailability(block, false)
+	txs, txErr, atxs, atxErr := bl2.DataAvailability(block)
 	require.NoError(t, txErr)
 	require.NoError(t, atxErr)
 	require.Equal(t, 1, len(txs))
@@ -648,7 +648,7 @@ func TestBlockListener_AtxCache(t *testing.T) {
 
 	err = bl1.AddBlockWithTxs(blk2, []*types.AddressableSignedTransaction{tx1}, []*types.ActivationTx{atx1, atx2})
 	require.NoError(t, err)
-	require.Equal(t, 2, atxDb.ProcCnt)
+	require.Equal(t, 4, atxDb.ProcCnt)
 	_, err = bl1.GetBlock(blk2.Id)
 	require.NoError(t, err)
 
@@ -660,7 +660,7 @@ func TestBlockListener_AtxCache(t *testing.T) {
 
 	err = bl1.AddBlockWithTxs(blk3, []*types.AddressableSignedTransaction{tx1}, []*types.ActivationTx{atx1})
 	require.NoError(t, err)
-	require.Equal(t, 3, atxDb.ProcCnt)
+	require.Equal(t, 5, atxDb.ProcCnt)
 	_, err = bl1.GetBlock(blk3.Id)
 	require.NoError(t, err)
 }

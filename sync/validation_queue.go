@@ -101,24 +101,8 @@ func (vq *validationQueue) traverse(s *Syncer, blk *types.BlockHeader) error {
 func (vq *validationQueue) finishBlockCallback(s *Syncer, block *types.Block) func() error {
 	return func() error {
 		//data availability
-		atxsHash12, atxsRes, atxsSeen, err := s.checkAtxCache(block)
-		if err != nil {
-			return fmt.Errorf("failed to check ATXs cache - err %v", err)
-		}
-		if atxsSeen == true && atxsRes == false {
-			return fmt.Errorf("invalid atxs according to cache (key %v)", atxsHash12)
-		}
-		txs, txErr, atxs, atxErr := s.DataAvailability(block, atxsSeen)
+		txs, txErr, atxs, atxErr := s.DataAvailability(block)
 		if txErr != nil || atxErr != nil {
-			if atxErr != nil {
-				// update cache only on failures, positive caching is done after all ATXs are processed
-				s.updateAtxCache(atxsHash12, false)
-				if atxsSeen {
-					// shouldn't happen
-					// todo - remove this check once code is tested
-					s.Log.Panic("bad cache behavior")
-				}
-			}
 			return fmt.Errorf("txerr %v, atxerr %v", txErr, atxErr)
 		}
 
@@ -130,8 +114,6 @@ func (vq *validationQueue) finishBlockCallback(s *Syncer, block *types.Block) fu
 		if err := s.AddBlockWithTxs(block, txs, atxs); err != nil {
 			return err
 		}
-		// should be called after the atxs are processed, since in cases of cache hit we don't process any atx)
-		s.updateAtxCache(atxsHash12, true)
 
 		return nil
 	}

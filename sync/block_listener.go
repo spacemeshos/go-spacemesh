@@ -99,7 +99,7 @@ func (bl *BlockListener) HandleNewBlock(blk *types.Block) bool {
 		return true
 	}
 
-	txs, atxs, atxCacheKey, err := bl.BlockSyntacticValidation(blk)
+	txs, atxs, err := bl.BlockSyntacticValidation(blk)
 	if err != nil {
 		bl.With().Error("failed to validate block", log.BlockId(uint64(blk.ID())), log.Err(err))
 		return false
@@ -109,9 +109,6 @@ func (bl *BlockListener) HandleNewBlock(blk *types.Block) bool {
 		bl.With().Error("failed to add block to database", log.BlockId(uint64(blk.ID())), log.Err(err))
 		return false
 	}
-	// should be called after the atxs are processed, since in cases of cache hit we don't process any atx)
-	bl.updateAtxCache(atxCacheKey, true)
-
 
 	bl.With().Info("added block to database", log.BlockId(uint64(blk.ID())))
 	return true

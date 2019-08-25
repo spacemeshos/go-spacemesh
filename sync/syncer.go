@@ -99,8 +99,6 @@ type Syncer struct {
 	exit              chan struct{}
 	currentLayerMutex sync.RWMutex
 	syncRoutineWg     sync.WaitGroup
-	atxCache          *types.DoubleResultCache
-	viewCache         *types.DoubleResultCache
 	p2pSynced         bool // true if we are p2p-synced, false otherwise
 	p2pLock           sync.RWMutex
 }
@@ -217,8 +215,6 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool A
 		clockSub:       clockSub,
 		clock:          clockSub.Subscribe(),
 		exit:           make(chan struct{}),
-		atxCache:       types.NewDoubleResultCache(ValidationCacheSize),
-		viewCache:      types.NewDoubleResultCache(ValidationCacheSize),
 		p2pSynced:      false,
 	}
 
@@ -363,7 +359,7 @@ func (s *Syncer) GetFullBlocks(blockIds []types.BlockID) []*types.Block {
 
 		block, ok := out.(*types.Block)
 		if block != nil && ok {
-			txs, atxs, atxCacheKey, err := s.BlockSyntacticValidation(block)
+			txs, atxs, err := s.BlockSyntacticValidation(block)
 			if err != nil {
 				s.Error("failed to validate block %v %v", block.ID(), err)
 				continue
@@ -373,8 +369,6 @@ func (s *Syncer) GetFullBlocks(blockIds []types.BlockID) []*types.Block {
 				s.Error("failed to add block %v to database %v", block.ID(), err)
 				continue
 			}
-			// should be called after the atxs are processed, since in cases of cache hit we don't process any atx)
-			s.updateAtxCache(atxCacheKey, true)
 
 			s.Info("added block %v to layer %v", block.ID(), block.Layer())
 			blocksArr = append(blocksArr, block)
@@ -385,89 +379,30 @@ func (s *Syncer) GetFullBlocks(blockIds []types.BlockID) []*types.Block {
 	return blocksArr
 }
 
-func (s *Syncer) checkAtxCache(blk *types.Block) (atxsHash12 types.Hash12, atxsRes bool, atxsSeen bool, err error) {
-	atxsHash12, err = types.CalcAtxsHash12(blk.AtxIds)
-	if err != nil {
-		return types.Hash12{}, false, false, err
-	}
-	atxsRes, atxsSeen = s.atxCache.Get(atxsHash12)
-	return
-}
-
-func (s *Syncer) checkViewCache(blk *types.Block) (viewHash12 types.Hash12, viewRes bool, viewSeen bool, err error) {
-	viewHash12, err = types.CalcBlocksHash12(blk.ViewEdges)
-	if err != nil {
-		return types.Hash12{}, false, false, err
-	}
-	viewRes, viewSeen = s.viewCache.Get(viewHash12)
-	return
-}
-
-func (s *Syncer) updateAtxCache(key types.Hash12, result bool) {
-	_, _, err := s.atxCache.GetOrInsert(key, result)
-	if err != nil {
-		s.Log.Panic("error updating atx cache - err %v", err)
-	}
-}
-
-func (s *Syncer) updateViewCache(key types.Hash12, result bool) {
-	_, _, err := s.viewCache.GetOrInsert(key, result)
-	if err != nil {
-		s.Log.Panic("error updating view cache - err %v", err)
-	}
-}
-
-func (s *Syncer) BlockSyntacticValidation(block *types.Block) ([]*types.AddressableSignedTransaction, []*types.ActivationTx, types.Hash12, error) {
+func (s *Syncer) BlockSyntacticValidation(block *types.Block) ([]*types.AddressableSignedTransaction, []*types.ActivationTx, error) {
 	//block eligibility
 	if eligible, err := s.BlockSignedAndEligible(block); err != nil || !eligible {
-		return nil, nil, types.Hash12{}, fmt.Errorf("block eligibiliy check failed - err %v", err)
+		return nil, nil, fmt.Errorf("block eligibiliy check failed - err %v", err)
 	}
 
 	//data availability
-	atxsHash12, atxsRes, atxsSeen, err := s.checkAtxCache(block)
-	if err != nil {
-		return nil, nil, types.Hash12{}, fmt.Errorf("failed to check ATXs cache - err %v", err)
-	}
-	if atxsSeen == true && atxsRes == false {
-		return nil, nil, types.Hash12{}, fmt.Errorf("invalid atxs according to cache (key %v)", atxsHash12)
-	}
-
-	txs, txErr, atxs, atxErr := s.DataAvailability(block, atxsSeen)
+	txs, txErr, atxs, atxErr := s.DataAvailability(block)
 	if txErr != nil || atxErr != nil {
-		// update cache only on failures, positive caching is done after all ATXs are processed
-		if atxErr != nil {
-			s.updateAtxCache(atxsHash12, false)
-			if atxsSeen {
-				// shouldn't happen
-				// todo - remove this check once code is tested
-				s.Log.Panic("bad cache behavior")
-			}
-		}
-		return nil, nil, types.Hash12{}, fmt.Errorf("txerr %v, atxerr %v", txErr, atxErr)
+		return nil, nil, fmt.Errorf("txerr %v, atxerr %v", txErr, atxErr)
 	}
 
 	//validate block's view
-	viewHash12, viewRes, viewSeen, err := s.checkViewCache(block)
-	if err != nil {
-		return nil, nil, types.Hash12{}, fmt.Errorf("failed to check view cache - err %v", err)
-	}
-	if viewSeen == true && viewRes == false {
-		return nil, nil, types.Hash12{}, fmt.Errorf("invalid view according to cache (key %v)", viewHash12)
-	}
-	if viewSeen == false {
-		valid := s.ValidateView(block)
-		s.updateViewCache(viewHash12, valid)
-		if valid == false {
-			return nil, nil, types.Hash12{}, errors.New(fmt.Sprintf("block %v not syntacticly valid", block.ID()))
-		}
+	valid := s.ValidateView(block)
+	if valid == false {
+		return nil, nil, errors.New(fmt.Sprintf("block %v not syntacticly valid", block.ID()))
 	}
 
 	//validate block's votes
 	if valid := s.validateVotes(block); valid == false {
-		return nil, nil, types.Hash12{}, errors.New(fmt.Sprintf("validate votes failed for block %v", block.ID()))
+		return nil, nil, errors.New(fmt.Sprintf("validate votes failed for block %v", block.ID()))
 	}
 
-	return txs, atxs, atxsHash12, nil
+	return txs, atxs, nil
 }
 
 func (s *Syncer) ValidateView(blk *types.Block) bool {
@@ -512,7 +447,7 @@ func (s *Syncer) validateVotes(blk *types.Block) bool {
 }
 
 // Return two errors - first, indication for the tx handling; second, indication of atx handling
-func (s *Syncer) DataAvailability(blk *types.Block, atxsSeen bool) ([]*types.AddressableSignedTransaction, error, []*types.ActivationTx, error) {
+func (s *Syncer) DataAvailability(blk *types.Block) ([]*types.AddressableSignedTransaction, error, []*types.ActivationTx, error) {
 	var txs []*types.AddressableSignedTransaction
 	var txerr error
 	wg := sync.WaitGroup{}
@@ -531,18 +466,14 @@ func (s *Syncer) DataAvailability(blk *types.Block, atxsSeen bool) ([]*types.Add
 	var atxs []*types.ActivationTx
 	var atxerr error
 
-	if !atxsSeen {
-		//sync ATxs
-		go func() {
-			atxs, atxerr = s.syncAtxs(blk.AtxIds)
-			for _, atx := range atxs {
-				s.atxpool.Put(atx.Id(), atx)
-			}
-			wg.Done()
-		}()
-	} else {
+	//sync ATxs
+	go func() {
+		atxs, atxerr = s.syncAtxs(blk.AtxIds)
+		for _, atx := range atxs {
+			s.atxpool.Put(atx.Id(), atx)
+		}
 		wg.Done()
-	}
+	}()
 
 	wg.Wait()
 
