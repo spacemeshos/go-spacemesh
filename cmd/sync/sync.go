@@ -15,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/sync"
 	"github.com/spacemeshos/go-spacemesh/timesync"
+	"github.com/spacemeshos/go-spacemesh/tortoise"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/spf13/cobra"
 	"google.golang.org/api/iterator"
@@ -125,7 +126,6 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	lg.Info("download from remote storage: ", remote)
 	lg.Info("expected layers: ", expectedLayers)
 	lg.Info("request timeout: ", timeout)
-
 	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P)
 
 	if err != nil {
@@ -158,8 +158,8 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 
 	txpool := miner.NewTypesTransactionIdMemPool()
 	atxpool := miner.NewTypesAtxIdMemPool()
-
-	msh := mesh.NewMesh(mshdb, atxdb, sync.ConfigTst(), &sync.MeshValidatorMock{}, txpool, atxpool, &sync.MockState{}, lg.WithOptions(log.Nop))
+	trtl := tortoise.NewAlgorithm(int(100), mshdb, app.Config.Hdist, lg.WithName("trtl"))
+	msh := mesh.NewMesh(mshdb, atxdb, sync.ConfigTst(), trtl, txpool, atxpool, &sync.MockState{}, lg.WithOptions(log.Nop))
 	defer msh.Close()
 	msh.AddBlock(&mesh.GenesisBlock)
 	tick := 20 * time.Second

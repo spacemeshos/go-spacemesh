@@ -394,14 +394,3 @@ func (m *MeshDB) ContextuallyValidBlock(layer types.LayerID) (map[types.BlockID]
 
 	return validBlks, nil
 }
-
-func (m *MeshDB) SaveGoodPattern(layer types.LayerID, blks map[types.BlockID]struct{}) error {
-	m.Info("write good pattern for layer %v to database", layer)
-	bts, err := types.InterfaceToBytes(blks)
-	if err != nil {
-		return fmt.Errorf("could not save good pattern for layer %v %v", layer, err)
-	}
-
-	m.patterns.Put(layer.ToBytes(), bts)
-	return nil
-}
