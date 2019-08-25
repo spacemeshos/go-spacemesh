@@ -409,7 +409,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 	b.log.With().Info("active ids seen for epoch", log.Uint64("pos_atx_epoch", uint64(posEpoch)),
 		log.Uint32("view_cnt", activeSetSize))
 
-	buf, err := types.AtxAsBytes(atx)
+	buf, err := types.InterfaceToBytes(atx)
 	if err != nil {
 		return err
 	}

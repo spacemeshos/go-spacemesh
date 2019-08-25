@@ -287,7 +287,7 @@ func Test_CalcActiveSetFromView(t *testing.T) {
 	// if the cache has the view in wrong order it should not be used
 	sorted := sort.SliceIsSorted(atx2.View, func(i, j int) bool { return atx2.View[i] > atx2.View[j] })
 	assert.True(t, sorted) // assert that the view is wrongly ordered
-	viewBytes, err := types.ViewAsBytes(atx2.View)
+	viewBytes, err := types.InterfaceToBytes(atx2.View)
 	assert.NoError(t, err)
 	viewHash = types.CalcHash12(viewBytes)
 	activesetCache.Purge()

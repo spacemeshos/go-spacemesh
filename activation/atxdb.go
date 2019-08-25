@@ -308,7 +308,7 @@ func (db *ActivationDb) StoreAtx(ech types.EpochId, atx *types.ActivationTx) err
 }
 
 func (db *ActivationDb) storeAtxUnlocked(atx *types.ActivationTx) error {
-	b, err := types.AtxAsBytes(atx)
+	b, err := types.InterfaceToBytes(atx)
 	if err != nil {
 		return err
 	}

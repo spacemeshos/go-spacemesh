@@ -31,46 +31,6 @@ func BytesToBlockIds(blockIds []byte) ([]BlockID, error) {
 	return ids, nil
 }
 
-func ViewAsBytes(ids []BlockID) ([]byte, error) {
-	var w bytes.Buffer
-	if _, err := xdr.Marshal(&w, &ids); err != nil {
-		return nil, fmt.Errorf("error marshalling view: %v", err)
-	}
-	return w.Bytes(), nil
-}
-
-func BytesToView(blockIds []byte) ([]BlockID, error) {
-	var ids []BlockID
-	if _, err := xdr.Unmarshal(bytes.NewReader(blockIds), &ids); err != nil {
-		return nil, errors.New("error marshaling layer ")
-	}
-	return ids, nil
-}
-
-func AtxHeaderAsBytes(tx *ActivationTxHeader) ([]byte, error) {
-	var w bytes.Buffer
-	if _, err := xdr.Marshal(&w, &tx); err != nil {
-		return nil, fmt.Errorf("error marshalling atx header: %v", err)
-	}
-	return w.Bytes(), nil
-}
-
-func AtxAsBytes(tx *ActivationTx) ([]byte, error) {
-	var w bytes.Buffer
-	if _, err := xdr.Marshal(&w, &tx); err != nil {
-		return nil, fmt.Errorf("error marshalling atx: %v", err)
-	}
-	return w.Bytes(), nil
-}
-
-func AtxIdsAsBytes(ids []AtxId) ([]byte, error) {
-	var w bytes.Buffer
-	if _, err := xdr.Marshal(&w, &ids); err != nil {
-		return nil, fmt.Errorf("error marshalling atx ids: %v", err)
-	}
-	return w.Bytes(), nil
-}
-
 func BytesAsAtx(b []byte, id *AtxId) (*ActivationTx, error) {
 	buf := bytes.NewReader(b)
 	var atx ActivationTx

@@ -6,10 +6,9 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
-	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 func LayerIdsReqFactory(lyr types.LayerID) RequestFactory {
@@ -46,8 +45,13 @@ func HashReqFactory(lyr types.LayerID) RequestFactory {
 				s.Info("received empty layer hash response")
 				return
 			}
-
-			ch <- &peerHashPair{peer: peer, hash: common.BytesToUint32(msg)}
+			if len(msg) != types.Hash32Length {
+				s.Error("received layer hash in wrong length, len %v", len(msg))
+				return
+			}
+			var h types.Hash32
+			h.SetBytes(msg)
+			ch <- &peerHashPair{peer: peer, hash: h}
 		}
 		if err := s.SendRequest(LAYER_HASH, lyr.ToBytes(), peer, resHandler); err != nil {
 			return nil, err

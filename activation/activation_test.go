@@ -400,11 +400,11 @@ func TestBuilder_PublishActivationTx_Serialize(t *testing.T) {
 	assert.NoError(t, err)
 	act := types.NewActivationTx(b.nodeId, coinbase, b.GetLastSequence(b.nodeId)+1, atx.Id(), atx.PubLayerIdx+10, 0, atx.Id(), defaultActiveSetSize, view, npst)
 
-	bt, err := types.AtxAsBytes(act)
+	bt, err := types.InterfaceToBytes(act)
 	assert.NoError(t, err)
 	a, err := types.BytesAsAtx(bt, nil)
 	assert.NoError(t, err)
-	bt2, err := types.AtxAsBytes(a)
+	bt2, err := types.InterfaceToBytes(a)
 	assert.Equal(t, bt, bt2)
 }
 
@@ -492,7 +492,7 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	layers.latestLayer = 22
 	err = b.PublishActivationTx(1)
 	assert.NoError(t, err)
-	bts, err := types.AtxAsBytes(act)
+	bts, err := types.InterfaceToBytes(act)
 	assert.NoError(t, err)
 	assert.Equal(t, bts, net.lastTransmission)
 

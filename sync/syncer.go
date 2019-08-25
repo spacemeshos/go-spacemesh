@@ -486,7 +486,7 @@ func (s *Syncer) DataAvailability(blk *types.Block) ([]*types.AddressableSignedT
 	return txs, nil, atxs, nil
 }
 
-func (s *Syncer) fetchLayerBlockIds(m map[uint32][]p2p.Peer, lyr types.LayerID) ([]types.BlockID, error) {
+func (s *Syncer) fetchLayerBlockIds(m map[types.Hash32][]p2p.Peer, lyr types.LayerID) ([]types.BlockID, error) {
 	//send request to different users according to returned hashes
 	idSet := make(map[types.BlockID]struct{}, s.LayerSize)
 	ids := make([]types.BlockID, 0, s.LayerSize)
@@ -508,7 +508,12 @@ func (s *Syncer) fetchLayerBlockIds(m map[uint32][]p2p.Peer, lyr types.LayerID) 
 				if v != nil {
 					s.Info("Peer: %v responded to layer ids request", peer)
 					//peer returned set with bad hash ask next peer
-					if h != types.HashBlockIds(v.([]types.BlockID)) {
+					res, err := types.CalcBlocksHash32(v.([]types.BlockID))
+					if err != nil {
+						s.With().Error("Peer: got invalid layer ids", log.String("peer", peer.String()), log.Err(err))
+						break
+					}
+					if h != res {
 						s.Error("Peer: %v layer ids hash does not match request", peer)
 						break
 					}
@@ -535,14 +540,14 @@ func (s *Syncer) fetchLayerBlockIds(m map[uint32][]p2p.Peer, lyr types.LayerID) 
 
 type peerHashPair struct {
 	peer p2p.Peer
-	hash uint32
+	hash types.Hash32
 }
 
-func (s *Syncer) fetchLayerHashes(lyr types.LayerID) (map[uint32][]p2p.Peer, error) {
+func (s *Syncer) fetchLayerHashes(lyr types.LayerID) (map[types.Hash32][]p2p.Peer, error) {
 	// get layer hash from each peer
 	wrk, output := NewPeersWorker(s, s.GetPeers(), &sync.Once{}, HashReqFactory(lyr))
 	go wrk.Work()
-	m := make(map[uint32][]p2p.Peer)
+	m := make(map[types.Hash32][]p2p.Peer)
 	for out := range output {
 		pair, ok := out.(*peerHashPair)
 		if pair != nil && ok { //do nothing on close channel
