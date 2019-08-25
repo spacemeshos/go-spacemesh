@@ -84,17 +84,21 @@ def test_add_delayed_nodes(init_session, setup_bootstrap, save_log_on_exit):
         print("Added client batch ", i, clients[i].pods[i]['name'])
         time.sleep(epochDuration)
 
+    print("Done adding clients. Going to wait for two epochs")
     time.sleep(2*epochDuration) # wait two more epochs
 
-    total = startCount + count * numToAdd # total nodes
+    # total = bootstrap + first clients + added clients
+    total = 1 + startCount + count * numToAdd
     totalEpochs = 1 + count + 2
     totalLayers = layersPerEpoch * totalEpochs
     firstLayerOfLastEpoch = totalLayers-layersPerEpoch
     f = int(testconfig['client']['args']['hare-max-adversaries'])
 
     # validate
+    print("Waiting one layer for logs")
     time.sleep(layerDuration) # wait one layer for logs to propagate
-    expect_hare(current_index, ns, firstLayerOfLastEpoch, totalLayers-1, total, f)
 
+    print("Running validation")
+    expect_hare(current_index, ns, firstLayerOfLastEpoch, totalLayers-1, total, f) # validate hare
     atxLastEpoch = query_atx_published(current_index, ns, firstLayerOfLastEpoch)
-    assert len(atxLastEpoch) == total
+    assert len(atxLastEpoch) == total # validate #atxs in last epoch
