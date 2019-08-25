@@ -231,8 +231,6 @@ func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 	wrk, output := NewPeersWorker(syncObj2, []p2p.Peer{nodes[0].PublicKey()}, &sync.Once{}, HashReqFactory(lid))
 	go wrk.Work()
 
-	orig, _ := syncObj1.GetLayer(types.LayerID(1))
-
 	select {
 	case <-output:
 		return
