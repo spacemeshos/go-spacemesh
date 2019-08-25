@@ -259,7 +259,7 @@ func (b *Builder) StartPost(rewardAddress address.Address, dataDir string, space
 		}
 	}
 
-	b.log.Info("Starting post, reward address: %x", rewardAddress)
+	b.log.Info("Starting post, datadir: %v, space: %v, reward address: %x", dataDir, space, rewardAddress)
 	b.postProver.SetParams(dataDir, space)
 	b.SetCoinbaseAccount(rewardAddress)
 
