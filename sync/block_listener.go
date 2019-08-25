@@ -5,7 +5,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"sync"
 	"sync/atomic"
@@ -23,10 +22,6 @@ type BlockListener struct {
 	startLock            uint32
 	timeout              time.Duration
 	exit                 chan struct{}
-}
-
-type TickProvider interface {
-	Subscribe() timesync.LayerTimer
 }
 
 func (bl *BlockListener) Close() {
