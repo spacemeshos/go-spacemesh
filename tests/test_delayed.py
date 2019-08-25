@@ -86,7 +86,8 @@ def test_add_delayed_nodes(init_session, setup_bootstrap, save_log_on_exit):
 
     time.sleep(2*epochDuration) # wait two more epochs
 
-    total = startCount + count * numToAdd # total nodes
+    # total = bootstrap + first clients + added clients
+    total = 1 + startCount + count * numToAdd
     totalEpochs = 1 + count + 2
     totalLayers = layersPerEpoch * totalEpochs
     firstLayerOfLastEpoch = totalLayers-layersPerEpoch
