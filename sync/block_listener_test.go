@@ -12,6 +12,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/spacemeshos/sha256-simd"
 	"github.com/stretchr/testify/assert"
@@ -52,13 +53,31 @@ func (m mockTxProcessor) ValidateTransactionSignature(tx *types.SerializableSign
 	return address.Address{}, errors.New("invalid sig for tx")
 }
 
+type mockClock struct {
+	ch map[timesync.LayerTimer]int
+}
+
+func (c *mockClock) Subscribe() timesync.LayerTimer {
+	if c.ch == nil {
+		c.ch = make(map[timesync.LayerTimer]int)
+	}
+	newCh := make(chan types.LayerID, 1)
+	c.ch[newCh] = len(c.ch)
+
+	return newCh
+}
+
+func (c *mockClock) Unsubscribe(timer timesync.LayerTimer) {
+	delete(c.ch, timer)
+}
+
 func ListenerFactory(serv service.Service, peers p2p.Peers, name string, layer types.LayerID) *BlockListener {
-	ch := make(chan types.LayerID, 1)
-	ch <- layer
+	cl := &mockClock{}
 	l := log.New(name, "", "")
 	poetDb := activation.NewPoetDb(database.NewMemDatabase(), l.WithName("poetDb"))
 	blockValidator := BlockEligibilityValidatorMock{}
-	sync := NewSync(serv, getMesh(memoryDB, name), miner.NewTypesTransactionIdMemPool(), miner.NewTypesAtxIdMemPool(), mockTxProcessor{}, blockValidator, poetDb, conf, ch, layer, l)
+	sync := NewSync(serv, getMesh(memoryDB, name), miner.NewTypesTransactionIdMemPool(), miner.NewTypesAtxIdMemPool(), mockTxProcessor{}, blockValidator, poetDb, conf, cl, layer, l)
+	sync.clock <- layer
 	sync.Peers = peers
 	nbl := NewBlockListener(serv, sync, 2, log.New(name, "", ""))
 	return nbl

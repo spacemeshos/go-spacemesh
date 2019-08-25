@@ -57,6 +57,9 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringVar(&config.PublishEventsUrl, "events-url",
 		config.PublishEventsUrl, "publish events on this url, if no url specified event will no be published")
 
+	cmd.PersistentFlags().IntVar(&config.SyncRequestTimeout, "sync-request-timeout",
+		2000, "the timeout in ms for direct requests in the sync")
+
 	/** ======================== P2P Flags ========================== **/
 
 	cmd.PersistentFlags().IntVar(&config.P2P.TCPPort, "tcp-port",

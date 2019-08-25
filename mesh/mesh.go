@@ -316,8 +316,8 @@ func (m *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.AddressableSignedT
 		return fmt.Errorf("could not write transactions of block %v database %v", blk.ID(), err)
 	}
 
-	if err := m.MeshDB.AddBlock(blk); err != nil {
-		m.Error("failed to add block %v  %v", blk.ID(), err)
+	if err := m.MeshDB.AddBlock(blk); err != nil && err != ErrAlreadyExist {
+		m.With().Error("failed to add block", log.BlockId(uint64(blk.ID())), log.Err(err))
 		return err
 	}
 
