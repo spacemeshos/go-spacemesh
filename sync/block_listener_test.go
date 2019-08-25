@@ -81,10 +81,7 @@ func ListenerFactory(serv service.Service, peers p2p.Peers, name string, layer t
 
 func SyncFactory(name string, serv service.Service) *Syncer {
 	tick := 20 * time.Second
-	layout := "2006-01-02T15:04:05.000Z"
-	str := "2018-11-12T11:45:26.371Z"
-	start, _ := time.Parse(layout, str)
-	ts := timesync.NewTicker(MockTimer{}, tick, start)
+	ts := timesync.NewTicker(timesync.RealClock{}, tick, time.Now())
 	l := log.New(name, "", "")
 	poetDb := activation.NewPoetDb(database.NewMemDatabase(), l.WithName("poetDb"))
 	blockValidator := BlockEligibilityValidatorMock{}

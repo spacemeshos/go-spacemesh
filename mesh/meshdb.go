@@ -79,7 +79,7 @@ func (m *MeshDB) Close() {
 var ErrAlreadyExist = errors.New("block already exist in database")
 
 func (m *MeshDB) AddBlock(bl *types.Block) error {
-	if _, err := m.getMiniBlockBytes(bl.ID()); err == nil {
+	if _, err := m.getBlockBytes(bl.ID()); err == nil {
 		m.With().Warning("Block already exist in database", log.BlockId(uint64(bl.Id)))
 		return ErrAlreadyExist
 	}
@@ -240,7 +240,7 @@ func (m *MeshDB) writeBlock(bl *types.Block) error {
 	}
 
 	if err := m.blocks.Put(bl.ID().ToBytes(), bytes); err != nil {
-		return fmt.Errorf("could not add bl to %v databacse %v", bl.ID(), err)
+		return fmt.Errorf("could not add bl %v to database %v", bl.ID(), err)
 	}
 
 	m.updateLayerWithBlock(&bl.MiniBlock)

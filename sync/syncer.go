@@ -53,9 +53,10 @@ type TxValidator interface {
 	GetValidAddressableTx(tx *types.SerializableSignedTransaction) (*types.AddressableSignedTransaction, error)
 }
 
-type clockSubscriber interface {
+type TickProvider interface {
 	Subscribe() timesync.LayerTimer
 	Unsubscribe(timer timesync.LayerTimer)
+	GetCurrentLayer() types.LayerID
 }
 
 type Configuration struct {
@@ -81,6 +82,7 @@ type Syncer struct {
 	*mesh.Mesh
 	EligibilityValidator
 	*workerInfra
+	TickProvider
 	poetDb            PoetDb
 	txpool            TxMemPool
 	atxpool           AtxMemPool
@@ -89,11 +91,12 @@ type Syncer struct {
 	SyncLock          uint32
 	startLock         uint32
 	forceSync         chan bool
-	clockSub          clockSubscriber
-	clock             timesync.LayerTimer
+	LayerCh           timesync.LayerTimer
 	exit              chan struct{}
 	currentLayerMutex sync.RWMutex
 	syncRoutineWg     sync.WaitGroup
+	p2pLock           sync.RWMutex
+	p2pSynced         bool
 
 	//todo fetch server
 	blockQueue *validationQueue
@@ -142,7 +145,7 @@ func (s *Syncer) getP2pSynced() bool {
 	return b
 }
 
-func (s *Syncer) setP2pSynced(b bool) {
+func (s *Syncer) setGossipSynced(b bool) {
 	s.p2pLock.Lock()
 	s.p2pSynced = b
 	s.p2pLock.Unlock()
@@ -181,7 +184,7 @@ func (s *Syncer) run() {
 			return
 		case <-s.forceSync:
 			go syncRoutine()
-		case layer := <-s.clock:
+		case layer := <-s.LayerCh:
 			s.currentLayerMutex.Lock()
 			s.currentLayer = layer
 			s.currentLayerMutex.Unlock()
@@ -192,31 +195,31 @@ func (s *Syncer) run() {
 }
 
 //fires a sync every sm.syncInterval or on force space from outside
-func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool AtxMemPool, sv TxValidator, bv BlockValidator, poetdb PoetDb, conf Configuration, clock *timesync.Ticker, logger log.Log) *Syncer {
+func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool AtxMemPool, sv TxValidator, bv BlockValidator, poetdb PoetDb, conf Configuration, clock TickProvider, logger log.Log) *Syncer {
 
 	srvr := &workerInfra{
 		RequestTimeout: conf.RequestTimeout,
 		MessageServer:  server.NewMsgServer(srv.(server.Service), syncProtocol, conf.RequestTimeout, make(chan service.DirectMessage, p2pconf.ConfigValues.BufferSize), logger.WithName("srv")),
 		Peers:          p2p.NewPeers(srv, logger.WithName("peers")),
 	}
-
 	s := &Syncer{
 		EligibilityValidator: bv,
 		Configuration:        conf,
 		Log:                  logger,
 		Mesh:                 layers,
 		workerInfra:          srvr,
+		TickProvider:         clock,
 		lValidator:           layers,
 		SyncLock:             0,
 		poetDb:               poetdb,
 		txpool:               txpool,
 		atxpool:              atxpool,
 		startLock:            0,
-		currentLayer:         clock.GetCurrentLayer(),
 		forceSync:            make(chan bool),
-		clock:                clock.Subscribe(),
+		currentLayer:         clock.GetCurrentLayer(),
+		LayerCh:              clock.Subscribe(),
 		exit:                 make(chan struct{}),
-		p2pSynced:      false,
+		p2pSynced:            false,
 	}
 
 	s.blockQueue = NewValidationQueue(srvr, s.Configuration, s, logger.WithName("validQ"))
@@ -245,7 +248,7 @@ func (s *Syncer) Synchronise() {
 
 	if s.lastTickedLayer() <= 1 { // skip validation for first layer
 		s.With().Info("Not syncing in layer <= 1", log.LayerId(uint64(s.lastTickedLayer())))
-		s.setP2pSynced(true) // fully-synced, make sure we listen to p2p
+		s.setGossipSynced(true) // fully-synced, make sure we listen to p2p
 		return
 	}
 
@@ -258,7 +261,7 @@ func (s *Syncer) Synchronise() {
 	if s.WeaklySynced() { // we have all the data of the prev layers so we can simply validate
 		s.With().Info("Node is synced. Going to validate layer", log.LayerId(uint64(currentSyncLayer)))
 
-		lyr, err := s.lProvider.GetLayer(currentSyncLayer)
+		lyr, err := s.GetLayer(currentSyncLayer)
 		if err != nil {
 			s.Panic("failed getting layer even though we are weakly-synced currentLayer=%v lastTicked=%v err=%v ", currentSyncLayer, s.lastTickedLayer(), err)
 			return
@@ -268,16 +271,12 @@ func (s *Syncer) Synchronise() {
 	}
 
 	// node is not synced
-	s.Info("Node is out of sync setting p2p-synced to false and starting sync")
-	s.setP2pSynced(false) // don't listen to p2p while not synced
+	s.Info("Node is out of sync setting gossip-synced to false and starting sync")
+	s.setGossipSynced(false) // don't listen to gossip while not synced
 
 	// first, bring all the data of the prev layers
 	// Note: lastTicked() is not constant but updates as ticks are received
 	for ; currentSyncLayer < s.lastTickedLayer(); currentSyncLayer++ {
-		if s.IsSynced() && currentSyncLayer == lastTickedLayer {
-			continue
-		}
-
 		s.With().Info("syncing layer", log.Uint64("current_sync_layer", uint64(currentSyncLayer)), log.Uint64("last_ticked_layer", uint64(s.lastTickedLayer())))
 		lyr, err := s.getLayerFromNeighbors(currentSyncLayer)
 		if err != nil {
@@ -296,28 +295,28 @@ func (s *Syncer) Synchronise() {
 		return
 	}
 
-	// wait for two ticks to ensure we are fully synced before we open p2p or validate the current layer
-	err = s.p2pSyncForOneFullLayer(currentSyncLayer)
+	// wait for two ticks to ensure we are fully synced before we open gossip or validate the current layer
+	err = s.gossipSyncForOneFullLayer(currentSyncLayer)
 	if err != nil {
-		s.With().Error("Fatal: failed getting layer even though we listened to p2p", log.LayerId(uint64(currentSyncLayer)), log.Err(err))
+		s.With().Error("Fatal: failed getting layer even though we listened to gossip", log.LayerId(uint64(currentSyncLayer)), log.Err(err))
 	}
 }
 
-// Waits two ticks (while weakly-synced) in order to ensure that we listened to p2p for one full layer
-// after that we are assumed to have all the data required for validation so we can validate and open p2p
-// opening p2p in weakly-synced transition us to fully-synced
-func (s *Syncer) p2pSyncForOneFullLayer(currentSyncLayer types.LayerID) error {
+// Waits two ticks (while weakly-synced) in order to ensure that we listened to gossip for one full layer
+// after that we are assumed to have all the data required for validation so we can validate and open gossip
+// opening gossip in weakly-synced transition us to fully-synced
+func (s *Syncer) gossipSyncForOneFullLayer(currentSyncLayer types.LayerID) error {
 	// subscribe and wait for two ticks
-	ch := s.clockSub.Subscribe()
+	ch := s.TickProvider.Subscribe()
 	<-ch
 	<-ch
-	s.clockSub.Unsubscribe(ch) // unsub, we won't be listening on this ch anymore
+	s.TickProvider.Unsubscribe(ch) // unsub, we won't be listening on this ch anymore
 
 	// assumed to be weakly synced here
 	// just get the layers and validate
 
 	// get & validate first tick
-	lyr, err := s.lProvider.GetLayer(currentSyncLayer)
+	lyr, err := s.GetLayer(currentSyncLayer)
 	if err != nil {
 		return err
 	}
@@ -325,15 +324,15 @@ func (s *Syncer) p2pSyncForOneFullLayer(currentSyncLayer types.LayerID) error {
 
 	// get & validate second tick
 	currentSyncLayer++
-	lyr, err = s.lProvider.GetLayer(currentSyncLayer)
+	lyr, err = s.GetLayer(currentSyncLayer)
 	if err != nil {
 		return err
 	}
 	s.lValidator.ValidateLayer(lyr)
-	s.Info("Done waiting for ticks and validation. setting p2p true")
+	s.Info("Done waiting for ticks and validation. setting gossip true")
 
-	// fully-synced - set p2p-synced to true
-	s.setP2pSynced(true)
+	// fully-synced - set gossip -synced to true
+	s.setGossipSynced(true)
 
 	return nil
 }
