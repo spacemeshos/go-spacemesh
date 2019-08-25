@@ -9,8 +9,9 @@ from elasticsearch_dsl import Search, Q
 from pytest_testconfig import config as testconfig
 
 # noinspection PyUnresolvedReferences
+from tests.context import ES
 from tests.fixtures import init_session, load_config, set_namespace, session_id, set_docker_images
-from tests.queries import ES, query_message, poll_query_message
+from tests.queries import query_message, poll_query_message
 from tests.test_bs import add_single_client, add_multi_clients, get_conf
 from tests.test_bs import api_call
 # noinspection PyUnresolvedReferences
