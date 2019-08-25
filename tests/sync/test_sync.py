@@ -103,7 +103,7 @@ def test_sync_gradually_add_nodes(init_session, setup_bootstrap, save_log_on_exi
         print("not done yet sleep for " + str(sleep) + " seconds")
         time.sleep(sleep)
 
-    assert done == 4
+    assert done == num_clients
 
     end = time.time()
 
