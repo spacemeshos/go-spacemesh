@@ -218,26 +218,27 @@ func (l *Layer) Blocks() []*Block {
 	return l.blocks
 }
 
-func (l *Layer) Hash() []byte {
-	bids := l.blocks
-	keys := make([]BlockID, 0, len(bids))
-	for _, tortoiseBlock := range bids {
-		keys = append(keys, tortoiseBlock.ID())
+func (l *Layer) Hash() uint32 {
+	keys := make([]BlockID, 0, len(l.Blocks()))
+	for _, block := range l.Blocks() {
+		keys = append(keys, block.ID())
 	}
+	return HashBlockIds(keys)
+}
 
-	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
+func HashBlockIds(bids []BlockID) uint32 {
+
+	sort.Slice(bids, func(i, j int) bool { return bids[i] < bids[j] })
 	// calc
 	h := fnv.New32()
-	for i := 0; i < len(keys); i++ {
-		_, e := h.Write(common.Uint32ToBytes(uint32(keys[i])))
+	for i := 0; i < len(bids); i++ {
+		_, e := h.Write(common.Uint32ToBytes(uint32(bids[i])))
 		if e != nil {
 			log.Panic("Could not write to hash obj while calculating layer hash")
 		}
 	}
 	// update
-	sum := h.Sum32()
-
-	return common.Uint32ToBytes(sum)
+	return h.Sum32()
 }
 
 func (l *Layer) AddBlock(block *Block) {

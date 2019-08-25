@@ -1,6 +1,12 @@
 package sync
 
 import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
+	"fmt"
+	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/types"
@@ -41,7 +47,7 @@ func HashReqFactory(lyr types.LayerID) RequestFactory {
 				return
 			}
 
-			ch <- &peerHashPair{peer: peer, hash: msg}
+			ch <- &peerHashPair{peer: peer, hash: common.BytesToUint32(msg)}
 		}
 		if err := s.SendRequest(LAYER_HASH, lyr.ToBytes(), peer, resHandler); err != nil {
 			return nil, err
@@ -79,10 +85,15 @@ func BlockReqFactory() BlockRequestFactory {
 				return
 			}
 
+			if block.ID() != id {
+				s.Info("received block with different id than requested")
+				return
+			}
+
 			ch <- &block
 		}
 
-		if err := s.SendRequest(MINI_BLOCK, id.ToBytes(), peer, resHandler); err != nil {
+		if err := s.SendRequest(BLOCK, id.ToBytes(), peer, resHandler); err != nil {
 			return nil, err
 		}
 
@@ -101,14 +112,19 @@ func TxReqFactory(ids []types.TransactionId) RequestFactory {
 				return
 			}
 
-			var tx []types.SerializableSignedTransaction
-			err := types.BytesToInterface(msg, &tx)
+			var txs []types.SerializableSignedTransaction
+			err := types.BytesToInterface(msg, &txs)
 			if err != nil {
 				s.Error("could not unmarshal tx data response: %v", err)
 				return
 			}
 
-			ch <- tx
+			if valid, err := validateTxIds(ids, txs); !valid {
+				s.Error("fetch failed bad response : %v", err)
+				return
+			}
+
+			ch <- txs
 		}
 
 		bts, err := types.InterfaceToBytes(ids)
@@ -123,6 +139,20 @@ func TxReqFactory(ids []types.TransactionId) RequestFactory {
 	}
 }
 
+func validateTxIds(ids []types.TransactionId, txs []types.SerializableSignedTransaction) (bool, error) {
+	mp := make(map[types.TransactionId]struct{})
+	for _, id := range ids {
+		mp[id] = struct{}{}
+	}
+	for _, tx := range txs {
+		txid := types.GetTransactionId(&tx)
+		if _, ok := mp[txid]; !ok {
+			return false, errors.New(fmt.Sprintf("received a tx that was not requested  %v", hex.EncodeToString(txid[:])))
+		}
+	}
+	return true, nil
+}
+
 func ATxReqFactory(ids []types.AtxId) RequestFactory {
 	return func(s *server.MessageServer, peer p2p.Peer) (chan interface{}, error) {
 		ch := make(chan interface{}, 1)
@@ -133,14 +163,20 @@ func ATxReqFactory(ids []types.AtxId) RequestFactory {
 				return
 			}
 
-			var tx []types.ActivationTx
-			err := types.BytesToInterface(msg, &tx)
+			var atxs []types.ActivationTx
+			err := types.BytesToInterface(msg, &atxs)
 			if err != nil {
 				s.Error("could not unmarshal atx data response: %v", err)
 				return
 			}
 
-			ch <- calcAndSetIds(tx)
+			atxs = calcAndSetIds(atxs)
+			if valid, err := validateAtxIds(ids, atxs); !valid {
+				s.Error("fetch failed bad response : %v", err)
+				return
+			}
+
+			ch <- atxs
 		}
 
 		bts, err := types.InterfaceToBytes(ids)
@@ -153,6 +189,20 @@ func ATxReqFactory(ids []types.AtxId) RequestFactory {
 
 		return ch, nil
 	}
+}
+
+func validateAtxIds(ids []types.AtxId, atxs []types.ActivationTx) (bool, error) {
+	mp := make(map[types.AtxId]struct{})
+	for _, id := range ids {
+		mp[id] = struct{}{}
+	}
+	for _, tx := range atxs {
+		txid := tx.Id()
+		if _, ok := mp[txid]; !ok {
+			return false, errors.New(fmt.Sprintf("received a tx that was not requested  %v", tx.ShortId()))
+		}
+	}
+	return true, nil
 }
 
 func calcAndSetIds(atxs []types.ActivationTx) []types.ActivationTx {
@@ -181,6 +231,11 @@ func PoetReqFactory(poetProofRef []byte) RequestFactory {
 				return
 			}
 
+			if valid, err := validatePoetRef(proofMessage, poetProofRef); !valid {
+				s.Error("failed validating poet response", err)
+				return
+			}
+
 			ch <- proofMessage
 		}
 
@@ -190,4 +245,17 @@ func PoetReqFactory(poetProofRef []byte) RequestFactory {
 
 		return ch, nil
 	}
+}
+
+func validatePoetRef(proofMessage types.PoetProofMessage, poetProofRef []byte) (bool, error) {
+	poetProofBytes, err := types.InterfaceToBytes(&proofMessage.PoetProof)
+	if err != nil {
+		return false, errors.New(fmt.Sprintf("could marshal PoET response for validation %v", err))
+	}
+	b := sha256.Sum256(poetProofBytes)
+	if bytes.Compare(b[:], poetProofRef) != 0 {
+		return false, errors.New(fmt.Sprintf("poet recived was diffrent then requested"))
+	}
+
+	return true, nil
 }

@@ -234,7 +234,7 @@ func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 	select {
 	case <-output:
 		return
-		//assert.Equal(t, "some hash representing the layer", string(hash.(*peerHashPair).hash), "wrong block")
+		//assert.Equal(t, string(orig.Hash()), string(hash.(*peerHashPair).hash), "wrong block")
 	case <-timeout.C:
 		assert.Fail(t, "no message received on channel")
 	}
@@ -917,9 +917,9 @@ func TestFetchLayerBlockIds(t *testing.T) {
 	syncObj1.AddBlock(block1)
 	syncObj2.AddBlock(block2)
 
-	mp := map[string]p2p.Peer{}
-	mp["1"] = nodes[0].PublicKey()
-	mp["2"] = nodes[1].PublicKey()
+	mp := map[uint32][]p2p.Peer{}
+	mp[types.HashBlockIds([]types.BlockID{block1.ID()})] = append(mp[1], nodes[0].PublicKey())
+	mp[types.HashBlockIds([]types.BlockID{block2.ID()})] = append(mp[2], nodes[1].PublicKey())
 	ids, _ := syncObj3.fetchLayerBlockIds(mp, 1)
 
 	assert.True(t, len(ids) == 2)
@@ -1187,4 +1187,96 @@ func TestSyncProtocol_NilResponse(t *testing.T) {
 	case <-time.After(timeout):
 		assert.Fail(t, timeoutErrMsg)
 	}
+}
+
+func TestSyncProtocol_BadResponse(t *testing.T) {
+	syncs, _ := SyncMockFactory(2, conf, "TestSyncProtocol_NilResponse", memoryDB, newMemPoetDb)
+	defer syncs[0].Close()
+	defer syncs[1].Close()
+
+	timeout := 1 * time.Second
+	timeoutErrMsg := "no message received on channel"
+
+	syncs[1].AddBlock(types.NewExistingBlock(types.BlockID(1), 1, nil))
+	syncs[1].AddBlock(types.NewExistingBlock(types.BlockID(2), 1, nil))
+	syncs[1].AddBlock(types.NewExistingBlock(types.BlockID(3), 1, nil))
+	//setup mocks
+
+	layerHashesMock := func([]byte) []byte {
+		t.Log("return fake atx")
+		return common.Uint32ToBytes(11)
+	}
+
+	blockHandlerMock := func([]byte) []byte {
+		t.Log("return fake block")
+		blk := types.NewExistingBlock(types.BlockID(8), 1, nil)
+		byts, _ := types.InterfaceToBytes(blk)
+		return byts
+	}
+
+	txHandlerMock := func([]byte) []byte {
+		t.Log("return fake tx")
+		byts, _ := types.InterfaceToBytes(tx())
+		return byts
+	}
+
+	atxHandlerMock := func([]byte) []byte {
+		t.Log("return fake atx")
+		byts, _ := types.InterfaceToBytes([]types.ActivationTx{*atx()})
+		return byts
+	}
+
+	//register mocks
+	syncs[1].RegisterBytesMsgHandler(LAYER_HASH, layerHashesMock)
+	syncs[1].RegisterBytesMsgHandler(BLOCK, blockHandlerMock)
+	syncs[1].RegisterBytesMsgHandler(TX, txHandlerMock)
+	syncs[1].RegisterBytesMsgHandler(ATX, atxHandlerMock)
+
+	// layer hash
+	_, err1 := syncs[0].getLayerFromNeighbors(types.LayerID(1))
+
+	assert.Error(t, err1)
+
+	// Block
+	output := syncs[0].fetchWithFactory(NewBlockWorker(syncs[0], 1, BlockReqFactory(), blockSliceToChan([]types.BlockID{1})))
+
+	select {
+	case out := <-output:
+		assert.Nil(t, out)
+	case <-time.After(timeout):
+		assert.Fail(t, timeoutErrMsg)
+	}
+
+	// Tx
+	wrk := NewNeighborhoodWorker(syncs[0], 1, TxReqFactory([]types.TransactionId{[32]byte{1}}))
+	go wrk.Work()
+
+	select {
+	case out := <-wrk.output:
+		assert.Nil(t, out)
+	case <-time.After(timeout):
+		assert.Fail(t, timeoutErrMsg)
+	}
+
+	// Atx
+	output = syncs[0].fetchWithFactory(NewNeighborhoodWorker(syncs[0], 1, ATxReqFactory([]types.AtxId{{Hash: [32]byte{1}}})))
+
+	select {
+	case out := <-output:
+		assert.Nil(t, out)
+	case <-time.After(timeout):
+		assert.Fail(t, timeoutErrMsg)
+	}
+
+	// PoET
+
+	output = syncs[0].fetchWithFactory(NewNeighborhoodWorker(syncs[0], 1, PoetReqFactory([]byte{1})))
+
+	select {
+	case out := <-output:
+		assert.Nil(t, out)
+	case <-time.After(timeout):
+		assert.Fail(t, timeoutErrMsg)
+	}
+
 }
