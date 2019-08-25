@@ -216,7 +216,7 @@ endif
 	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
 		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
 		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
-		-it go-spacemesh-python:$(BRANCH) pytest -s -v test_delayed.py --tc-file=delayed_config.yaml --tc-format=yaml
+		-it go-spacemesh-python:$(BRANCH) pytest -s -v late_nodes/test_delayed.py --tc-file=late_nodes/delayed_config.yaml --tc-format=yaml
 
 .PHONY: dockerrun-late-nodes
 
