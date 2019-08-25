@@ -1,40 +1,14 @@
-import os
 import re
 import time
 import collections
 from datetime import datetime
-
-from elasticsearch import Elasticsearch
 from elasticsearch_dsl import Search, Q
+
+from tests.context import ES
 
 dt = datetime.now()
 todaydate = dt.strftime("%Y.%m.%d")
 current_index = 'kubernetes_cluster-' + todaydate
-
-
-def singleton(cls):
-    instance = [None]
-
-    def wrapper(*args, **kwargs):
-        if instance[0] is None:
-            instance[0] = cls(*args, **kwargs)
-        return instance[0]
-
-    return wrapper
-
-
-@singleton
-class ES:
-
-    def __init__(self):
-        ES_PASSWD = os.getenv("ES_PASSWD")
-        if not ES_PASSWD:
-            raise Exception("Unknown Elasticsearch password. Please check 'ES_PASSWD' environment variable")
-        self.es = Elasticsearch("http://elastic.spacemesh.io",
-                                http_auth=("spacemesh", ES_PASSWD), port=80, timeout=90)
-
-    def get_search_api(self):
-        return self.es
 
 
 def get_podlist(namespace, depname):
@@ -348,3 +322,6 @@ def query_new_iteration(indx, ns):
 
 def query_mem_usage(indx, ns):
     return query_message(indx, ns, ns, {'M': 'json_mem_data'}, False)
+
+def query_atx_published(indx, ns, layer):
+    return query_message(indx, ns, ns, {'M': 'atx published', 'layer_id': str(layer)}, False)

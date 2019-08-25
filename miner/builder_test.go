@@ -112,12 +112,20 @@ func (m mockTxProcessor) ValidateTransactionSignature(tx *types.SerializableSign
 type mockSyncer struct {
 }
 
+func (mockSyncer) WeaklySynced() bool {
+	return true
+}
+
 func (mockSyncer) FetchPoetProof(poetProofRef []byte) error { return nil }
 
 func (mockSyncer) IsSynced() bool { return true }
 
 type mockSyncerP struct {
 	synced bool
+}
+
+func (m mockSyncerP) WeaklySynced() bool {
+	return m.synced
 }
 
 func (mockSyncerP) FetchPoetProof(poetProofRef []byte) error { return nil }

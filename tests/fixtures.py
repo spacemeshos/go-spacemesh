@@ -7,6 +7,7 @@ from kubernetes import config
 from kubernetes import client
 from pytest_testconfig import config as testconfig
 from tests.misc import CoreV1ApiClient
+from tests.context import Context
 
 
 def random_id(length):
@@ -35,7 +36,8 @@ def load_config():
     kube_config_var = os.getenv('KUBECONFIG', '~/.kube/config')
     kube_config_path = os.path.expanduser(kube_config_var)
     if os.path.isfile(kube_config_path):
-        config.load_kube_config(kube_config_path)
+        kube_config_context = Context().get()
+        config.load_kube_config(config_file=kube_config_path, context=kube_config_context)
     else:
         # Assuming in cluster config
         try:

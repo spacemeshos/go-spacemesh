@@ -125,3 +125,23 @@ func TestTicker_NewTicker(t *testing.T) {
 	r.False(ticker.started) // not started until call to StartNotifying
 	r.Equal(types.LayerID(3), ticker.nextLayerToTick)
 }
+
+func TestTicker_SubscribeUnsubscribe(t *testing.T) {
+	r := require.New(t)
+	tmr := &RealClock{}
+	ticker := NewTicker(tmr, 1*time.Millisecond, tmr.Now())
+	r.Equal(0, len(ticker.subscribers))
+	c1 := ticker.Subscribe()
+	r.Equal(1, len(ticker.subscribers))
+
+	c2 := ticker.Subscribe()
+	r.Equal(2, len(ticker.subscribers))
+
+	ticker.Unsubscribe(c1)
+	r.Equal(1, len(ticker.subscribers))
+	_, ok := ticker.subscribers[c1]
+	r.False(ok)
+
+	ticker.Unsubscribe(c2)
+	r.Equal(0, len(ticker.subscribers))
+}
