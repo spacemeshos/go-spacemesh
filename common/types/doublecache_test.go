@@ -48,4 +48,3 @@ func Test_doubleCache(t *testing.T) {
 	require.True(t, c.GetOrInsert(CalcMessageHash12([]byte(fmt.Sprintf("LOL%v", size+1337)), "prot")))
 	require.False(t, c.GetOrInsert(CalcMessageHash12([]byte(fmt.Sprintf("LOL%v", 0)), "prot"))) // already pruned
 }
-

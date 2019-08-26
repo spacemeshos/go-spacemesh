@@ -2,13 +2,13 @@ package gossip
 
 import (
 	"errors"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"sync"
 )
 
@@ -39,7 +39,7 @@ type Protocol struct {
 
 	shutdown chan struct{}
 
-	oldMessageQ  *types.DoubleCache
+	oldMessageQ *types.DoubleCache
 
 	propagateQ chan service.MessageValidation
 }

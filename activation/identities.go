@@ -1,9 +1,9 @@
 package activation
 
 import (
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/sha256-simd"
 )
 

@@ -11,7 +11,6 @@ import (
 	"sort"
 )
 
-
 const (
 	// HashLength is the expected length of the hash
 	Hash32Length = 32
@@ -20,10 +19,9 @@ const (
 
 // Hash represents the first 12 bytes of sha256, mostly used for internal caches
 type Hash12 [Hash12Length]byte
+
 // Hash represents the 32 byte Keccak256 hash of arbitrary data.
 type Hash32 [Hash32Length]byte
-
-
 
 func CalcHash12(data []byte) Hash12 {
 	msghash := sha256.Sum256(data)

@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -17,7 +18,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/sha256-simd"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -635,11 +635,11 @@ func Test_TwoNodes_SyncIntegrationSuite(t *testing.T) {
 		msh := getMesh(memoryDB, fmt.Sprintf("%s_%s", sis.name, time.Now()))
 		blockValidator := BlockEligibilityValidatorMock{}
 		poetDb := activation.NewPoetDb(database.NewMemDatabase(), l.WithName("poetDb"))
-		sync := NewSync(s, msh, miner.NewTypesTransactionIdMemPool(), miner.NewTypesAtxIdMemPool(), mockTxProcessor{}, blockValidator, poetDb, conf, ts, 0, l)
+		sync := NewSync(s, msh, miner.NewTypesTransactionIdMemPool(), miner.NewTypesAtxIdMemPool(), mockTxProcessor{}, blockValidator, poetDb, conf, ts, ts.GetCurrentLayer(), l)
 		sis.syncers = append(sis.syncers, sync)
-		ts.StartNotifying()
 		atomic.AddUint32(&i, 1)
 	}
+	ts.StartNotifying()
 	suite.Run(t, sis)
 }
 
@@ -708,6 +708,9 @@ func (sis *syncIntegrationTwoNodes) TestSyncProtocol_TwoNodes() {
 	timeout := time.After(60 * time.Second)
 	syncObj1.SetLatestLayer(6)
 	syncObj1.Start()
+
+	syncObj0.Start()
+	syncObj2.Start()
 
 	// Keep trying until we're timed out or got a result or got an error
 	for {

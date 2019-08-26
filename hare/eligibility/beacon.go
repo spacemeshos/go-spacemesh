@@ -3,9 +3,9 @@ package eligibility
 import (
 	"errors"
 	lru "github.com/hashicorp/golang-lru"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"hash/fnv"
 	"sort"
 )

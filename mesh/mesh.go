@@ -3,20 +3,20 @@ package mesh
 import (
 	"errors"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/crypto/sha3"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/rlp"
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"math/big"
 	"sort"
 	"sync"
 )
 
 const (
-	layerSize = 200
-	Genesis   = types.LayerID(0)
-	GenesisId = 420
+	layerSize   = 200
+	Genesis     = types.LayerID(0)
+	GenesisId   = 420
 	TxCacheSize = 1000
 )
 

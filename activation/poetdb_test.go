@@ -3,9 +3,9 @@ package activation
 import (
 	"fmt"
 	"github.com/nullstyle/go-xdr/xdr3"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/sha256-simd"
 	"github.com/stretchr/testify/require"
 	"os"

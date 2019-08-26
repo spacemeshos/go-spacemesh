@@ -3,9 +3,9 @@ package activation
 import (
 	"encoding/binary"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/merkle-tree"
 	"github.com/spacemeshos/poet/hash"
 	"github.com/spacemeshos/poet/shared"

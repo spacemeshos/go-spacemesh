@@ -27,7 +27,7 @@ import (
 // information necessary for retrieving the missing node.
 type MissingNodeError struct {
 	NodeHash types.Hash32 // hash of the missing node
-	Path     []byte      // hex-encoded path to the missing node
+	Path     []byte       // hex-encoded path to the missing node
 }
 
 func (err *MissingNodeError) Error() string {

@@ -61,7 +61,6 @@ func (a *DoubleCache) insert(key Hash12) {
 	a.cacheB[key] = struct{}{}
 }
 
-
 // Thread safe
 type DoubleResultCache struct {
 	size   uint

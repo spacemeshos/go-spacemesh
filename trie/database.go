@@ -54,14 +54,14 @@ type Database struct {
 	newest types.Hash32                 // Newest tracked node, flush-list tail
 
 	preimages map[types.Hash32][]byte // Preimages of nodes from the secure trie
-	seckeybuf [secureKeyLength]byte  // Ephemeral buffer for calculating preimage keys
+	seckeybuf [secureKeyLength]byte   // Ephemeral buffer for calculating preimage keys
 
-	gctime  time.Duration      // Time spent on garbage collection since last commit
-	gcnodes uint64             // Nodes garbage collected since last commit
+	gctime  time.Duration     // Time spent on garbage collection since last commit
+	gcnodes uint64            // Nodes garbage collected since last commit
 	gcsize  types.StorageSize // Data storage garbage collected since last commit
 
-	flushtime  time.Duration      // Time spent on data flushing since last commit
-	flushnodes uint64             // Nodes flushed since last commit
+	flushtime  time.Duration     // Time spent on data flushing since last commit
+	flushnodes uint64            // Nodes flushed since last commit
 	flushsize  types.StorageSize // Data storage flushed since last commit
 
 	nodesSize     types.StorageSize // Storage size of the nodes cache (exc. flushlist)
@@ -119,7 +119,7 @@ type cachedNode struct {
 	node node   // Cached collapsed trie node, or raw rlp data
 	size uint16 // Byte size of the useful cached data
 
-	parents  uint16                 // Number of live nodes referencing this one
+	parents  uint16                  // Number of live nodes referencing this one
 	children map[types.Hash32]uint16 // External children referenced by this node
 
 	flushPrev types.Hash32 // Previous node in the flush-list

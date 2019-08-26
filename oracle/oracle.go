@@ -1,8 +1,8 @@
 package oracle
 
 import (
-	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/eligibility"
 )
 
 // todo: configure oracle test constants like committee size and honesty.

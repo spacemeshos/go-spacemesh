@@ -1,8 +1,8 @@
 package api
 
 import (
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"time"
 )
 
