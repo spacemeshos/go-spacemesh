@@ -3,10 +3,9 @@ package activation
 import (
 	"encoding/binary"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/spacemeshos/merkle-tree"
 	"github.com/spacemeshos/poet/hash"
 	"github.com/spacemeshos/poet/shared"
@@ -137,7 +136,7 @@ func (db *PoetDb) GetProofMessage(proofRef []byte) ([]byte, error) {
 	return db.store.Get(proofRef)
 }
 
-func (db *PoetDb) GetMembershipMap(proofRef []byte) (map[common.Hash]bool, error) {
+func (db *PoetDb) GetMembershipMap(proofRef []byte) (map[types.Hash32]bool, error) {
 	proofMessageBytes, err := db.GetProofMessage(proofRef)
 	if err != nil {
 		return nil, fmt.Errorf("could not fetch poet proof for ref %x: %v", proofRef[:3], err)
@@ -156,10 +155,10 @@ func makeKey(poetId [types.PoetServiceIdLength]byte, roundId uint64) poetProofKe
 	return sum
 }
 
-func membershipSliceToMap(membership [][]byte) map[common.Hash]bool {
-	res := make(map[common.Hash]bool)
+func membershipSliceToMap(membership [][]byte) map[types.Hash32]bool {
+	res := make(map[types.Hash32]bool)
 	for _, member := range membership {
-		res[common.BytesToHash(member)] = true
+		res[types.BytesToHash(member)] = true
 	}
 	return res
 }

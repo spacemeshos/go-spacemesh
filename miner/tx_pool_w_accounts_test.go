@@ -1,8 +1,7 @@
 package miner
 
 import (
-	"github.com/spacemeshos/go-spacemesh/address"
-	"github.com/spacemeshos/go-spacemesh/types"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/stretchr/testify/require"
 	"testing"
 )
@@ -14,7 +13,7 @@ func TestNewTxPoolWithAccounts(t *testing.T) {
 	prevNonce := uint64(5)
 	prevBalance := uint64(1000)
 
-	origin := address.BytesToAddress([]byte("abc"))
+	origin := types.BytesToAddress([]byte("abc"))
 	nonce, balance := pool.GetProjection(origin, prevNonce, prevBalance)
 	r.Equal(prevNonce, nonce)
 	r.Equal(prevBalance, balance)
@@ -44,6 +43,6 @@ func TestNewTxPoolWithAccounts(t *testing.T) {
 	r.Equal(prevBalance-50-150, balance)
 }
 
-func newTx(origin address.Address, nonce, amount uint64) *types.AddressableSignedTransaction {
-	return types.NewAddressableTx(nonce, origin, address.Address{}, amount, 3, 1)
+func newTx(origin types.Address, nonce, amount uint64) *types.AddressableSignedTransaction {
+	return types.NewAddressableTx(nonce, origin, types.Address{}, amount, 3, 1)
 }

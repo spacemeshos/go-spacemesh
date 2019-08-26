@@ -3,14 +3,12 @@ package mesh
 import (
 	"fmt"
 	"github.com/google/uuid"
-	"github.com/spacemeshos/go-spacemesh/address"
-	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/pending_txs"
 	"github.com/spacemeshos/go-spacemesh/rand"
-	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"math"
@@ -47,14 +45,14 @@ func TestMeshDB_AddBlock(t *testing.T) {
 
 	mdb := NewMemMeshDB(log.New("TestForEachInView", "", ""))
 	defer mdb.Close()
-	coinbase := address.HexToAddress("aaaa")
+	coinbase := types.HexToAddress("aaaa")
 
 	block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data1"))
 
 	addTransactionsWithGas(mdb, block1, 4, rand.Int63n(100))
 
 	poetRef := []byte{0xba, 0x05}
-	atx := types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")}, coinbase, 1, types.AtxId{}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&common.Hash{}, poetRef))
+	atx := types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")}, coinbase, 1, types.AtxId{}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&types.Hash32{}, poetRef))
 
 	block1.AtxIds = append(block1.AtxIds, atx.Id())
 	err := mdb.AddBlock(block1)
@@ -276,7 +274,7 @@ const (
 type MockStateObj struct {
 }
 
-func (m *MockStateObj) Address() address.Address {
+func (m *MockStateObj) Address() types.Address {
 	var addr [20]byte
 	copy(addr[:], "12345678901234567890")
 	return addr
@@ -290,8 +288,8 @@ func (m *MockStateObj) Balance() *big.Int {
 	return big.NewInt(initialBalance)
 }
 
-func newTx(origin address.Address, nonce, amount uint64) *types.AddressableSignedTransaction {
-	return types.NewAddressableTx(nonce, origin, address.Address{}, amount, 3, 1)
+func newTx(origin types.Address, nonce, amount uint64) *types.AddressableSignedTransaction {
+	return types.NewAddressableTx(nonce, origin, types.Address{}, amount, 3, 1)
 }
 
 func TestMeshDB_GetStateProjection(t *testing.T) {
@@ -365,8 +363,8 @@ func TestMeshDB_MeshTxs(t *testing.T) {
 
 	mdb := NewMemMeshDB(log.New("TestForEachInView", "", ""))
 
-	origin1 := address.BytesToAddress([]byte("thc"))
-	origin2 := address.BytesToAddress([]byte("cbd"))
+	origin1 := types.BytesToAddress([]byte("thc"))
+	origin2 := types.BytesToAddress([]byte("cbd"))
 	err := mdb.addToMeshTxs([]*types.AddressableSignedTransaction{
 		newTx(origin1, 420, 240),
 		newTx(origin1, 421, 241),
@@ -407,7 +405,7 @@ func TestMeshDB_MeshTxs(t *testing.T) {
 	r.Equal(101, int(txns2[0].Amount))
 }
 
-func getTxns(r *require.Assertions, mdb *MeshDB, origin address.Address) []types.TinyTx {
+func getTxns(r *require.Assertions, mdb *MeshDB, origin types.Address) []types.TinyTx {
 	txnsB, err := mdb.meshTxs.Get(origin.Bytes())
 	if err == database.ErrNotFound {
 		return []types.TinyTx{}

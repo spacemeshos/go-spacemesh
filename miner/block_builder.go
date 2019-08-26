@@ -7,14 +7,14 @@ import (
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/oracle"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"github.com/spacemeshos/go-spacemesh/types"
 	"math/rand"
 	"sync"
 	"time"
@@ -248,17 +248,17 @@ func (t *BlockBuilder) listenForTx() {
 				fullTx, err := t.txValidator.GetValidAddressableTx(x)
 				if err != nil {
 					t.With().Error("Transaction sig validation failed",
-						log.TxId(hex.EncodeToString(id[:common.Min(5, len(id))])), log.Err(err))
+						log.TxId(hex.EncodeToString(id[:util.Min(5, len(id))])), log.Err(err))
 					continue
 				}
 				// TODO: This only considers mesh transactions (not mempool)
 				if err := t.txValidator.ValidateNonceAndBalance(fullTx); err != nil {
 					t.With().Error("Transaction nonce and balance validation failed",
-						log.TxId(hex.EncodeToString(id[:common.Min(5, len(id))])), log.Err(err))
+						log.TxId(hex.EncodeToString(id[:util.Min(5, len(id))])), log.Err(err))
 					continue
 				}
 
-				t.Log.With().Info("got new tx", log.TxId(hex.EncodeToString(id[:common.Min(5, len(id))])))
+				t.Log.With().Info("got new tx", log.TxId(hex.EncodeToString(id[:util.Min(5, len(id))])))
 				data.ReportValidation(IncomingTxProtocol)
 				t.TransactionPool.Put(types.GetTransactionId(x), fullTx)
 			}

@@ -1,9 +1,8 @@
 package miner
 
 import (
-	"github.com/spacemeshos/go-spacemesh/address"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/pending_txs"
-	"github.com/spacemeshos/go-spacemesh/types"
 )
 
 type TxPool interface {
@@ -15,13 +14,13 @@ type TxPool interface {
 
 type TxPoolWithAccounts struct {
 	TxPool
-	accounts map[address.Address]*pending_txs.AccountPendingTxs
+	accounts map[types.Address]*pending_txs.AccountPendingTxs
 }
 
 func NewTxPoolWithAccounts() *TxPoolWithAccounts {
 	return &TxPoolWithAccounts{
 		TxPool:   NewTypesTransactionIdMemPool(),
-		accounts: make(map[address.Address]*pending_txs.AccountPendingTxs),
+		accounts: make(map[types.Address]*pending_txs.AccountPendingTxs),
 	}
 }
 
@@ -45,7 +44,7 @@ func (t *TxPoolWithAccounts) Invalidate(id types.TransactionId) {
 	t.TxPool.Invalidate(id)
 }
 
-func (t *TxPoolWithAccounts) GetProjection(addr address.Address, prevNonce, prevBalance uint64) (nonce, balance uint64) {
+func (t *TxPoolWithAccounts) GetProjection(addr types.Address, prevNonce, prevBalance uint64) (nonce, balance uint64) {
 	account, found := t.accounts[addr]
 	if !found {
 		return prevNonce, prevBalance
@@ -53,7 +52,7 @@ func (t *TxPoolWithAccounts) GetProjection(addr address.Address, prevNonce, prev
 	return account.GetProjection(prevNonce, prevBalance)
 }
 
-func (t *TxPoolWithAccounts) getOrCreate(addr address.Address) *pending_txs.AccountPendingTxs {
+func (t *TxPoolWithAccounts) getOrCreate(addr types.Address) *pending_txs.AccountPendingTxs {
 	account, found := t.accounts[addr]
 	if !found {
 		account = pending_txs.NewAccountPendingTxs()

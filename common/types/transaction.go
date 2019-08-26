@@ -1,12 +1,8 @@
 package types
 
-import (
-	"github.com/spacemeshos/go-spacemesh/address"
-)
-
 type TinyTx struct {
 	Id     TransactionId
-	Origin address.Address
+	Origin Address
 	Nonce  uint64
 	Amount uint64
 	//Fee    uint64

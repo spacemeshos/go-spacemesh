@@ -3,9 +3,7 @@ package types
 import (
 	"encoding/hex"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/address"
-	"github.com/spacemeshos/go-spacemesh/common"
-	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/poet/service"
 	"github.com/spacemeshos/poet/shared"
 	"github.com/spacemeshos/post/proving"
@@ -16,7 +14,7 @@ const PoetServiceIdLength = service.PoetServiceIdLength
 
 type EpochId uint64
 
-func (l EpochId) ToBytes() []byte { return common.Uint64ToBytes(uint64(l)) }
+func (l EpochId) ToBytes() []byte { return util.Uint64ToBytes(uint64(l)) }
 
 func (l EpochId) IsGenesis() bool {
 	return l < 2
@@ -27,19 +25,19 @@ func (l EpochId) FirstLayer(layersPerEpoch uint16) LayerID {
 }
 
 type AtxId struct {
-	common.Hash
+	Hash32
 }
 
 func (t AtxId) ShortId() string {
 	return t.ShortString()
 }
 
-var EmptyAtxId = &AtxId{common.Hash{0}}
+var EmptyAtxId = &AtxId{Hash32{0}}
 
 type ActivationTxHeader struct {
 	NIPSTChallenge
 	id            *AtxId
-	Coinbase      address.Address
+	Coinbase      Address
 	ActiveSetSize uint32
 }
 
@@ -53,19 +51,19 @@ type NIPSTChallenge struct {
 	PositioningAtx AtxId
 }
 
-func (challenge *NIPSTChallenge) Hash() (*common.Hash, error) {
+func (challenge *NIPSTChallenge) Hash() (*Hash32, error) {
 	ncBytes, err := NIPSTChallengeAsBytes(challenge)
 	if err != nil {
 		return nil, err
 	}
-	hash := common.Hash(sha256.Sum256(ncBytes))
+	hash := CalcHash32(ncBytes)
 	return &hash, nil
 }
 
 func (challenge *NIPSTChallenge) String() string {
 	return fmt.Sprintf("<id: [vrf: %v ed: %v], seq: %v, prevAtx: %v, PubLayer: %v, s tick: %v, e tick: %v, "+
 		"posAtx: %v>",
-		common.Bytes2Hex(challenge.NodeId.VRFPublicKey)[:5],
+		util.Bytes2Hex(challenge.NodeId.VRFPublicKey)[:5],
 		challenge.NodeId.Key[:5],
 		challenge.Sequence,
 		challenge.PrevATXId.ShortId(),
@@ -83,7 +81,7 @@ type ActivationTx struct {
 }
 
 func NewActivationTx(NodeId NodeId,
-	Coinbase address.Address,
+	Coinbase Address,
 	Sequence uint64,
 	PrevATX AtxId,
 	LayerIndex LayerID,
@@ -112,7 +110,7 @@ func NewActivationTx(NodeId NodeId,
 	return atx
 }
 
-func NewActivationTxWithChallenge(poetChallenge NIPSTChallenge, coinbase address.Address, ActiveSetSize uint32,
+func NewActivationTxWithChallenge(poetChallenge NIPSTChallenge, coinbase Address, ActiveSetSize uint32,
 	View []BlockID, nipst *NIPST) *ActivationTx {
 
 	atx := &ActivationTx{
@@ -149,11 +147,7 @@ func (atxh *ActivationTxHeader) SetId(id *AtxId) {
 }
 
 func (atx *ActivationTx) CalcAndSetId() {
-	tx, err := AtxHeaderAsBytes(&atx.ActivationTxHeader)
-	if err != nil {
-		panic("could not Serialize atx")
-	}
-	atx.SetId(&AtxId{crypto.Keccak256Hash(tx)})
+	atx.SetId(&AtxId{CalcAtxHash32(atx)})
 }
 
 func (atx *ActivationTx) GetPoetProofRef() []byte {
@@ -161,7 +155,7 @@ func (atx *ActivationTx) GetPoetProofRef() []byte {
 }
 
 func (atx *ActivationTx) GetShortPoetProofRef() []byte {
-	return atx.Nipst.PostProof.Challenge[:common.Min(5, len(atx.Nipst.PostProof.Challenge))]
+	return atx.Nipst.PostProof.Challenge[:util.Min(5, len(atx.Nipst.PostProof.Challenge))]
 }
 
 type PoetProof struct {
@@ -204,7 +198,7 @@ type NIPST struct {
 
 	// nipstChallenge is the challenge for PoET which is
 	// constructed from fields in the activation transaction.
-	NipstChallenge *common.Hash
+	NipstChallenge *Hash32
 
 	// postProof is the proof that the prover data
 	// is still stored (or was recomputed).
@@ -223,7 +217,7 @@ func bytesToShortString(b []byte) string {
 	if l == 0 {
 		return "empty"
 	}
-	return fmt.Sprintf("\"%s…\"", hex.EncodeToString(b)[:common.Min(l, 5)])
+	return fmt.Sprintf("\"%s…\"", hex.EncodeToString(b)[:util.Min(l, 5)])
 }
 
 type ProcessingError string

@@ -4,12 +4,10 @@ import (
 	crand "crypto/rand"
 	"github.com/seehuhn/mt19937"
 	"github.com/spacemeshos/ed25519"
-	"github.com/spacemeshos/go-spacemesh/address"
-	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
-	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -39,13 +37,13 @@ func (s *ProcessorStateSuite) SetupTest() {
 	rng := rand.New(mt19937.New())
 	lg := log.New("proc_logger", "", "")
 	s.db = database.NewMemDatabase()
-	s.state, _ = New(common.Hash{}, NewDatabase(s.db))
+	s.state, _ = New(types.Hash32{}, NewDatabase(s.db))
 	s.projector = &ProjectorMock{}
 
 	s.processor = NewTransactionProcessor(rng, s.state, s.projector, GasConfig{big.NewInt(5)}, lg)
 }
 
-func createAccount(state *StateDB, addr address.Address, balance int64, nonce uint64) *StateObj {
+func createAccount(state *StateDB, addr types.Address, balance int64, nonce uint64) *StateObj {
 	obj1 := state.GetOrNewStateObj(addr)
 	obj1.AddBalance(big.NewInt(balance))
 	obj1.SetNonce(nonce)
@@ -54,7 +52,7 @@ func createAccount(state *StateDB, addr address.Address, balance int64, nonce ui
 }
 
 func createTransaction(nonce uint64,
-	origin address.Address, destination address.Address, amount int64) *mesh.Transaction {
+	origin types.Address, destination types.Address, amount int64) *mesh.Transaction {
 	return &mesh.Transaction{
 		AccountNonce: nonce,
 		Origin:       origin,
@@ -191,19 +189,19 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_Errors()
 }
 
 func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyRewards() {
-	s.processor.ApplyRewards(1, []address.Address{address.HexToAddress("aaa"),
-		address.HexToAddress("bbb"),
-		address.HexToAddress("ccc"),
-		address.HexToAddress("ddd"),
-		address.HexToAddress("bbb"),
-		address.HexToAddress("aaa")},
-		map[address.Address]int{address.HexToAddress("aaa"): 1, address.HexToAddress("bbb"): 2},
+	s.processor.ApplyRewards(1, []types.Address{types.HexToAddress("aaa"),
+		types.HexToAddress("bbb"),
+		types.HexToAddress("ccc"),
+		types.HexToAddress("ddd"),
+		types.HexToAddress("bbb"),
+		types.HexToAddress("aaa")},
+		map[types.Address]int{types.HexToAddress("aaa"): 1, types.HexToAddress("bbb"): 2},
 		big.NewInt(1000), big.NewInt(300))
 
-	assert.Equal(s.T(), s.state.GetBalance(address.HexToAddress("aaa")), uint64(1300))
-	assert.Equal(s.T(), s.state.GetBalance(address.HexToAddress("bbb")), uint64(600))
-	assert.Equal(s.T(), s.state.GetBalance(address.HexToAddress("ccc")), uint64(1000))
-	assert.Equal(s.T(), s.state.GetBalance(address.HexToAddress("ddd")), uint64(1000))
+	assert.Equal(s.T(), s.state.GetBalance(types.HexToAddress("aaa")), uint64(1300))
+	assert.Equal(s.T(), s.state.GetBalance(types.HexToAddress("bbb")), uint64(600))
+	assert.Equal(s.T(), s.state.GetBalance(types.HexToAddress("ccc")), uint64(1000))
+	assert.Equal(s.T(), s.state.GetBalance(types.HexToAddress("ddd")), uint64(1000))
 }
 
 func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_OrderByNonce() {
@@ -399,13 +397,13 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 	assert.True(s.T(), writtenMore > written)
 }
 
-func newTx(origin address.Address, nonce, amount uint64) *types.AddressableSignedTransaction {
-	return types.NewAddressableTx(nonce, origin, address.Address{}, amount, 3, 1)
+func newTx(origin types.Address, nonce, amount uint64) *types.AddressableSignedTransaction {
+	return types.NewAddressableTx(nonce, origin, types.Address{}, amount, 3, 1)
 }
 
 func (s *ProcessorStateSuite) TestTransactionProcessor_ValidateNonceAndBalance() {
 	r := require.New(s.T())
-	origin := address.BytesToAddress([]byte("abc"))
+	origin := types.BytesToAddress([]byte("abc"))
 	s.processor.globalState.SetBalance(origin, big.NewInt(100))
 	s.processor.globalState.SetNonce(origin, 5)
 	s.projector.balanceDiff = 10
@@ -417,7 +415,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ValidateNonceAndBalance()
 
 func (s *ProcessorStateSuite) TestTransactionProcessor_ValidateNonceAndBalance_WrongNonce() {
 	r := require.New(s.T())
-	origin := address.BytesToAddress([]byte("abc"))
+	origin := types.BytesToAddress([]byte("abc"))
 	s.processor.globalState.SetBalance(origin, big.NewInt(100))
 	s.processor.globalState.SetNonce(origin, 5)
 	s.projector.balanceDiff = 10
@@ -429,7 +427,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ValidateNonceAndBalance_W
 
 func (s *ProcessorStateSuite) TestTransactionProcessor_ValidateNonceAndBalance_InsufficientBalance() {
 	r := require.New(s.T())
-	origin := address.BytesToAddress([]byte("abc"))
+	origin := types.BytesToAddress([]byte("abc"))
 	s.processor.globalState.SetBalance(origin, big.NewInt(100))
 	s.processor.globalState.SetNonce(origin, 5)
 	s.projector.balanceDiff = 10
@@ -447,7 +445,7 @@ func TestTransactionProcessor_randomSort(t *testing.T) {
 	rng := rand.New(mt19937.New())
 	rng.Seed(1)
 	db := database.NewMemDatabase()
-	state, _ := New(common.Hash{}, NewDatabase(db))
+	state, _ := New(types.Hash32{}, NewDatabase(db))
 	lg := log.New("proc_logger", "", "")
 	processor := NewTransactionProcessor(rng, state, &ProjectorMock{}, GasConfig{big.NewInt(5)}, lg)
 
@@ -492,7 +490,7 @@ func TestValidateTxSignature(t *testing.T) {
 	rng := rand.New(mt19937.New())
 	rng.Seed(1)
 	db := database.NewMemDatabase()
-	state, _ := New(common.Hash{}, NewDatabase(db))
+	state, _ := New(types.Hash32{}, NewDatabase(db))
 	lg := log.New("proc_logger", "", "")
 	proc := NewTransactionProcessor(rng, state, &ProjectorMock{}, GasConfig{big.NewInt(5)}, lg)
 
@@ -510,6 +508,6 @@ func TestValidateTxSignature(t *testing.T) {
 	tx = createXdrSignedTransaction(pri)
 
 	addr, e = proc.ValidateTransactionSignature(tx)
-	assert.Equal(t, address.Address{}, addr)
+	assert.Equal(t, types.Address{}, addr)
 	assert.Error(t, e)
 }

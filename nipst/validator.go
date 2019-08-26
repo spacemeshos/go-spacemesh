@@ -4,8 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common"
-	"github.com/spacemeshos/go-spacemesh/types"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/post/config"
 )
 
@@ -25,7 +24,7 @@ func NewValidator(postCfg *config.Config, poetDb PoetDb) *Validator {
 	}
 }
 
-func (v *Validator) Validate(nipst *types.NIPST, expectedChallenge common.Hash) error {
+func (v *Validator) Validate(nipst *types.NIPST, expectedChallenge types.Hash32) error {
 	if !bytes.Equal(nipst.NipstChallenge[:], expectedChallenge[:]) {
 		return errors.New("NIPST challenge is not equal to expected challenge")
 	}

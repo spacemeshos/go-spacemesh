@@ -6,8 +6,7 @@ import (
 	"fmt"
 	"github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/address"
-	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -15,7 +14,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"math/big"
@@ -105,11 +103,11 @@ func (m mockTxProcessor) GetValidAddressableTx(tx *types.SerializableSignedTrans
 	return &types.AddressableSignedTransaction{SerializableSignedTransaction: tx, Address: addr}, nil
 }
 
-func (m mockTxProcessor) ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (address.Address, error) {
+func (m mockTxProcessor) ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (types.Address, error) {
 	if !m.notValid {
-		return address.HexToAddress("0xFFFF"), nil
+		return types.HexToAddress("0xFFFF"), nil
 	}
-	return address.Address{}, errors.New("invalid sig for tx")
+	return types.Address{}, errors.New("invalid sig for tx")
 }
 
 type mockSyncer struct {
@@ -173,8 +171,8 @@ func TestBlockBuilder_StartStop(t *testing.T) {
 	err = builder.Close()
 	assert.Error(t, err)
 
-	addr1 := address.BytesToAddress([]byte{0x02})
-	addr2 := address.BytesToAddress([]byte{0x01})
+	addr1 := types.BytesToAddress([]byte{0x02})
+	addr2 := types.BytesToAddress([]byte{0x01})
 	err = builder.AddTransaction(types.NewAddressableTx(1, addr1, addr2, 1, DefaultGasLimit, DefaultGas))
 	assert.Error(t, err)
 }
@@ -207,7 +205,7 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 	beginRound := make(chan types.LayerID)
 	n := net.NewNode()
 	receiver := net.NewNode()
-	coinbase := address.HexToAddress("aaaa")
+	coinbase := types.HexToAddress("aaaa")
 
 	hareRes := []types.BlockID{types.BlockID(0), types.BlockID(1), types.BlockID(2), types.BlockID(3)}
 	hare := MockHare{res: map[types.LayerID][]types.BlockID{}}
@@ -219,8 +217,8 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 	err := builder.Start()
 	assert.NoError(t, err)
 
-	addr1 := address.BytesToAddress([]byte{0x02})
-	addr2 := address.BytesToAddress([]byte{0x01})
+	addr1 := types.BytesToAddress([]byte{0x02})
+	addr2 := types.BytesToAddress([]byte{0x01})
 
 	trans := []*types.AddressableSignedTransaction{
 		mesh.Transaction2SerializableTransaction(mesh.NewTransaction(1, addr1, addr2, big.NewInt(1), DefaultGasLimit, big.NewInt(DefaultGas))),
@@ -236,9 +234,9 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 
 	poetRef := []byte{0xba, 0x38}
 	atxs := []*types.ActivationTx{
-		types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")}, coinbase, 1, types.AtxId{common.Hash{1}}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&common.Hash{}, poetRef)),
-		types.NewActivationTx(types.NodeId{"bbbb", []byte("bbb")}, coinbase, 1, types.AtxId{common.Hash{2}}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&common.Hash{}, poetRef)),
-		types.NewActivationTx(types.NodeId{"cccc", []byte("bbb")}, coinbase, 1, types.AtxId{common.Hash{3}}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&common.Hash{}, poetRef)),
+		types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")}, coinbase, 1, types.AtxId{types.Hash32{1}}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&types.Hash32{}, poetRef)),
+		types.NewActivationTx(types.NodeId{"bbbb", []byte("bbb")}, coinbase, 1, types.AtxId{types.Hash32{2}}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&types.Hash32{}, poetRef)),
+		types.NewActivationTx(types.NodeId{"cccc", []byte("bbb")}, coinbase, 1, types.AtxId{types.Hash32{3}}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&types.Hash32{}, poetRef)),
 	}
 
 	builder.AtxPool.Put(atxs[0].Id(), atxs[0])
@@ -270,7 +268,7 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 }
 
 func TestBlockBuilder_SerializeTrans(t *testing.T) {
-	tx := types.NewAddressableTx(0, address.BytesToAddress([]byte{0x01}), address.BytesToAddress([]byte{0x02}), 10, 10, 10)
+	tx := types.NewAddressableTx(0, types.BytesToAddress([]byte{0x01}), types.BytesToAddress([]byte{0x02}), 10, 10, 10)
 	buf, err := types.AddressableTransactionAsBytes(tx)
 	assert.NoError(t, err)
 
@@ -311,7 +309,7 @@ func TestBlockBuilder_Validation(t *testing.T) {
 		NewTypesAtxIdMemPool(), MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare, mockBlockOracle{}, mockTxProcessor{true}, &mockAtxValidator{}, &mockSyncer{}, log.New(n1.NodeInfo.ID.String(), "", ""))
 	builder1.Start()
 	ed := signing.NewEdSigner()
-	tx, e := types.NewSignedTx(0, address.HexToAddress("0xFF"), 2, 3, 4, ed)
+	tx, e := types.NewSignedTx(0, types.HexToAddress("0xFF"), 2, 3, 4, ed)
 	assert.Nil(t, e)
 	b, e := types.SignedTransactionAsBytes(tx)
 	assert.Nil(t, e)
@@ -328,7 +326,7 @@ func TestBlockBuilder_Gossip_NotSynced(t *testing.T) {
 	net := service.NewSimulator()
 	beginRound := make(chan types.LayerID)
 	n1 := net.NewNode()
-	coinbase := address.HexToAddress("aaaa")
+	coinbase := types.HexToAddress("aaaa")
 
 	hareRes := []types.BlockID{types.BlockID(0), types.BlockID(1), types.BlockID(2), types.BlockID(3)}
 	hare := MockHare{res: map[types.LayerID][]types.BlockID{}}
@@ -348,7 +346,7 @@ func TestBlockBuilder_Gossip_NotSynced(t *testing.T) {
 			""))
 	builder1.Start()
 	ed := signing.NewEdSigner()
-	tx, e := types.NewSignedTx(0, address.HexToAddress("0xFF"), 2, 3, 4, ed)
+	tx, e := types.NewSignedTx(0, types.HexToAddress("0xFF"), 2, 3, 4, ed)
 	assert.Nil(t, e)
 	b, e := types.SignedTransactionAsBytes(tx)
 	assert.Nil(t, e)
@@ -361,13 +359,13 @@ func TestBlockBuilder_Gossip_NotSynced(t *testing.T) {
 	atx := types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")},
 		coinbase,
 		1,
-		types.AtxId{common.Hash{1}},
+		types.AtxId{types.Hash32{1}},
 		5,
 		1,
 		types.AtxId{},
 		5,
 		[]types.BlockID{1, 2, 3},
-		nipst.NewNIPSTWithChallenge(&common.Hash{}, poetRef))
+		nipst.NewNIPSTWithChallenge(&types.Hash32{}, poetRef))
 
 	atxBytes, err := types.InterfaceToBytes(&atx)
 	assert.NoError(t, err)

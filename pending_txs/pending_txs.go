@@ -1,7 +1,7 @@
 package pending_txs
 
 import (
-	"github.com/spacemeshos/go-spacemesh/types"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 type nanoTx struct {

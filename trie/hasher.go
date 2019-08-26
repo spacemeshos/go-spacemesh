@@ -17,7 +17,8 @@
 package trie
 
 import (
-	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/crypto/sha3"
 	"github.com/spacemeshos/go-spacemesh/rlp"
 	"hash"
@@ -128,7 +129,7 @@ func (h *hasher) hashChildren(original node, db *Database) (node, node, error) {
 		// Hash the short node's child, caching the newly hashed subtree
 		collapsed, cached := n.copy(), n.copy()
 		collapsed.Key = hexToCompact(n.Key)
-		cached.Key = common.CopyBytes(n.Key)
+		cached.Key = util.CopyBytes(n.Key)
 
 		if _, ok := n.Val.(valueNode); !ok {
 			collapsed.Val, cached.Val, err = h.hash(n.Val, db, false)
@@ -183,7 +184,7 @@ func (h *hasher) store(n node, db *Database, force bool) (node, error) {
 
 	if db != nil {
 		// We are pooling the trie nodes into an intermediate memory cache
-		hash := common.BytesToHash(hash)
+		hash := types.BytesToHash(hash)
 
 		db.lock.Lock()
 		db.insert(hash, h.tmp, n)

@@ -3,12 +3,12 @@ package node
 import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/amcl"
 	"github.com/spacemeshos/go-spacemesh/amcl/BLS381"
 	"github.com/spacemeshos/go-spacemesh/api"
 	apiCfg "github.com/spacemeshos/go-spacemesh/api/config"
-	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/miner"
@@ -16,7 +16,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/oracle"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/spacemeshos/poet/integration"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -155,8 +154,8 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	//EntryPointCreated <- true
 	const numberOfEpochs = 5 // first 2 epochs are genesis
 	//addr := address.BytesToAddress([]byte{0x01})
-	dst := address.BytesToAddress([]byte{0x02})
-	acc1Signer, err := signing.NewEdSignerFromBuffer(common.FromHex(apiCfg.Account1Private))
+	dst := types.BytesToAddress([]byte{0x02})
+	acc1Signer, err := signing.NewEdSignerFromBuffer(util.FromHex(apiCfg.Account1Private))
 	if err != nil {
 		log.Panic("Could not build ed signer err=%v", err)
 	}
