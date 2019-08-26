@@ -53,8 +53,8 @@ func NewPostClient(cfg *config.Config, id []byte) *PostClient {
 }
 
 func (c *PostClient) Initialize() (commitment *types.PostProof, err error) {
-	c.Lock()
-	defer c.Unlock()
+	c.RLock()
+	defer c.RUnlock()
 
 	proof, err := c.initializer.Initialize()
 	return (*types.PostProof)(proof), err
@@ -116,10 +116,10 @@ func (c *PostClient) SetLogger(logger shared.Logger) {
 
 	c.logger = logger
 
-	c.initializer = initialization.NewInitializer(c.cfg, c.id)
+	//c.initializer = initialization.NewInitializer(c.cfg, c.id)
 	c.initializer.SetLogger(c.logger)
 
-	c.prover = proving.NewProver(c.cfg, c.id)
+	//c.prover = proving.NewProver(c.cfg, c.id)
 	c.prover.SetLogger(c.logger)
 }
 

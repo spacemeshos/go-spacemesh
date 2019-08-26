@@ -259,7 +259,6 @@ func (b *Builder) StartPost(rewardAddress address.Address, dataDir string, space
 		}
 	}
 
-	b.log.Info("Starting post, datadir: %v, space: %v, reward address: %x", dataDir, space, rewardAddress)
 	b.postProver.SetParams(dataDir, space)
 	b.SetCoinbaseAccount(rewardAddress)
 
@@ -275,6 +274,12 @@ func (b *Builder) StartPost(rewardAddress address.Address, dataDir string, space
 			return err
 		}
 	}
+
+	b.log.With().Info("PoST initialization starting",
+		log.String("datadir", dataDir),
+		log.String("space", fmt.Sprintf("%d", space)),
+		log.String("rewardAddress", fmt.Sprintf("%x", rewardAddress)),
+	)
 
 	go func() {
 		if initialized {
@@ -293,7 +298,12 @@ func (b *Builder) StartPost(rewardAddress address.Address, dataDir string, space
 			}
 		}
 
-		b.log.Info("PoST initialization completed, datadir: %v, space: %v, commitment merkle root: %x", dataDir, space, b.commitment.MerkleRoot)
+		b.log.With().Info("PoST initialization completed",
+			log.String("datadir", dataDir),
+			log.String("space", fmt.Sprintf("%d", space)),
+			log.String("commitment merkle root", fmt.Sprintf("%x", b.commitment.MerkleRoot)),
+		)
+
 		atomic.StoreInt32(&b.initStatus, InitDone)
 	}()
 
