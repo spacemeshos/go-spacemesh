@@ -3,7 +3,6 @@ package nipst
 import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/shared"
 	"github.com/stretchr/testify/require"
@@ -134,7 +133,7 @@ func TestNIPSTBuilderWithClients(t *testing.T) {
 	r.NoError(err)
 }
 
-func buildNIPST(r *require.Assertions, postCfg config.Config, nipstChallenge types.Hash, poetDb PoetDb) *types.NIPST {
+func buildNIPST(r *require.Assertions, postCfg config.Config, nipstChallenge types.Hash32, poetDb PoetDb) *types.NIPST {
 	poetProver, err := newRPCPoetHarnessClient()
 	r.NotNil(poetProver)
 	defer func() {

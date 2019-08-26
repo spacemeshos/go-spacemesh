@@ -6,7 +6,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/nipst"
-	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/spacemeshos/post/shared"
 	"sync"
 	"sync/atomic"
@@ -38,7 +37,7 @@ func (provider *PoETNumberOfTickProvider) NumOfTicks() uint64 {
 }
 
 type NipstBuilder interface {
-	BuildNIPST(challenge *common.Hash) (*types.NIPST, error)
+	BuildNIPST(challenge *types.Hash32) (*types.NIPST, error)
 }
 
 type IdStore interface {
@@ -247,7 +246,7 @@ func (b *Builder) buildNipstChallenge(epoch types.EpochId) error {
 	return nil
 }
 
-func (b *Builder) StartPost(rewardAddress address.Address, dataDir string, space uint64) error {
+func (b *Builder) StartPost(rewardAddress types.Address, dataDir string, space uint64) error {
 	if !atomic.CompareAndSwapInt32(&b.initStatus, InitIdle, InitInProgress) {
 		switch atomic.LoadInt32(&b.initStatus) {
 		case InitDone:

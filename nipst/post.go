@@ -2,9 +2,7 @@ package nipst
 
 import (
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/merkle-tree"
 	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/initialization"
 	"github.com/spacemeshos/post/proving"

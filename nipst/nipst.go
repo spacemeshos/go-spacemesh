@@ -54,7 +54,7 @@ type PoetProvingServiceClient interface {
 	// submit registers a challenge in the proving service
 	// open round suited for the specified duration.
 	submit(challenge types.Hash32) (*types.PoetRound, error)
-	
+
 	getPoetServiceId() ([types.PoetServiceIdLength]byte, error)
 }
 
@@ -211,7 +211,7 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *types.Hash32) (*types.NIPST, error
 	return nipst, nil
 }
 
-func NewNIPSTWithChallenge(challenge *common.Hash, poetRef []byte) *types.NIPST {
+func NewNIPSTWithChallenge(challenge *types.Hash32, poetRef []byte) *types.NIPST {
 	return &types.NIPST{
 		Space:          0,
 		NipstChallenge: challenge,

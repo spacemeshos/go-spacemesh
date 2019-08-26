@@ -8,10 +8,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/nipst"
-	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/shared"
-	"github.com/spacemeshos/sha256-simd"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"sort"
@@ -105,30 +103,8 @@ func (*postProverClientMock) SetParams(datadir string, space uint64) {}
 func (*postProverClientMock) Cfg() *config.Config { return nil }
 
 type NipstBuilderMock struct {
-	poetRef         []byte
-	buildNipstFunc  func(challenge *types.Hash32) (*types.NIPST, error)
-	initPostFunc    func(logicalDrive string, commitmentSize uint64) (*types.PostProof, error)
-	SleepTime       int
-}
-
-func (np *NipstBuilderMock) GetDataDirPath() string {
-	return ""
-}
-
-func (np *NipstBuilderMock) IsPostInitialized() bool {
-	return np.PostInitialized
-}
-
-func (np *NipstBuilderMock) InitializePost(datadir string, space uint64) (*types.PostProof, error) {
-	if np.initPostFunc != nil {
-		return np.initPostFunc(datadir, space)
-	}
-	if np.SleepTime != 0 {
-		time.Sleep(time.Duration(np.SleepTime) * time.Millisecond)
-	}
-	return nil, nil
 	poetRef        []byte
-	buildNipstFunc func(challenge *common.Hash) (*types.NIPST, error)
+	buildNipstFunc func(challenge *types.Hash32) (*types.NIPST, error)
 	initPostFunc   func(logicalDrive string, commitmentSize uint64) (*types.PostProof, error)
 	SleepTime      int
 }
@@ -142,7 +118,7 @@ func (np *NipstBuilderMock) BuildNIPST(challenge *types.Hash32) (*types.NIPST, e
 
 type NipstErrBuilderMock struct{}
 
-func (np *NipstErrBuilderMock) BuildNIPST(challenge *common.Hash) (*types.NIPST, error) {
+func (np *NipstErrBuilderMock) BuildNIPST(challenge *types.Hash32) (*types.NIPST, error) {
 	return nil, fmt.Errorf("nipst builder error")
 }
 
@@ -516,7 +492,7 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	db := NewMockDB()
 	activationDb := NewActivationDb(database.NewMemDatabase(), &MockIdStore{}, mesh.NewMemMeshDB(lg.WithName("meshDB")), layersPerEpoch, &ValidatorMock{}, lg.WithName("atxDB1"))
 	b := NewBuilder(id, coinbase, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, postProver, nil, func() bool { return true }, db, lg.WithName("atxBuilder"))
-	prevAtx := types.AtxId{Hash32: common.HexToHash32("0x111")}
+	prevAtx := types.AtxId{Hash32: types.HexToHash32("0x111")}
 	chlng := types.HexToHash32("0x3333")
 	poetRef := []byte{0xbe, 0xef}
 	nipstBuilder.poetRef = poetRef
@@ -576,7 +552,6 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 func TestStartPost(t *testing.T) {
 	id := types.NodeId{"aaaaaa", []byte("bbbbb")}
 	coinbase := types.HexToAddress("0xaaa")
-	coinbase := address.HexToAddress("0xaaa")
 	layers := &MeshProviderMock{}
 	nipstBuilder := &NipstBuilderMock{}
 	layersPerEpoch := uint16(10)
@@ -592,7 +567,7 @@ func TestStartPost(t *testing.T) {
 	postCfg.SpacePerUnit = 1 << 10 // 1KB.
 	postCfg.FileSize = 1 << 10     // 1KB.
 
-	postProver := nipst.NewPostClient(&postCfg, common.Hex2Bytes(id.Key))
+	postProver := nipst.NewPostClient(&postCfg, util.Hex2Bytes(id.Key))
 	defer func() {
 		assert.NoError(t, postProver.Reset())
 	}()
