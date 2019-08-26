@@ -111,15 +111,12 @@ func (c *PostClient) SetParams(dataDir string, space uint64) {
 }
 
 func (c *PostClient) SetLogger(logger shared.Logger) {
-	c.Lock()
-	defer c.Unlock()
+	c.RLock()
+	defer c.RLock()
 
 	c.logger = logger
 
-	//c.initializer = initialization.NewInitializer(c.cfg, c.id)
 	c.initializer.SetLogger(c.logger)
-
-	//c.prover = proving.NewProver(c.cfg, c.id)
 	c.prover.SetLogger(c.logger)
 }
 
