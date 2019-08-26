@@ -1,8 +1,7 @@
 package state
 
 import (
-	"github.com/spacemeshos/go-spacemesh/address"
-	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/rlp"
 	"io"
@@ -16,12 +15,12 @@ type AccountState interface {
 	AddBalance(amount *big.Int)
 	SubBalance(amount *big.Int)
 	SetBalance(amount *big.Int)
-	GetAddress() address.Address
+	GetAddress() types.Address
 }
 
 type StateObj struct {
-	address  address.Address
-	addrHash common.Hash
+	address  types.Address
+	addrHash types.Hash32
 	account  Account
 	db       *StateDB
 }
@@ -32,7 +31,7 @@ type Account struct {
 }
 
 // newObject creates a state object.
-func newObject(db *StateDB, address address.Address, data Account) *StateObj {
+func newObject(db *StateDB, address types.Address, data Account) *StateObj {
 	if data.Balance == nil {
 		data.Balance = new(big.Int)
 	}
@@ -105,7 +104,7 @@ func (self *StateObj) deepCopy(db *StateDB) *StateObj {
 //
 
 // Returns the address of the contract/account
-func (c *StateObj) Address() address.Address {
+func (c *StateObj) Address() types.Address {
 	return c.address
 }
 

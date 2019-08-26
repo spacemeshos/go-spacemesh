@@ -1,7 +1,7 @@
 package hare
 
 import (
-	"github.com/spacemeshos/go-spacemesh/types"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 type orphanMock struct {
