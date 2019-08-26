@@ -62,11 +62,26 @@ def new_client_in_namespace(name_space, setup_bootstrap, cspec, num):
 
 # this is a path for travis's 10m timeout limit
 # we reached the timeout because epochDuration happened to be greater than 10m
+# duration is in seconds
 def sleep_and_print(duration):
-    time.sleep(duration/2) # wait half
-    print("Half of duration passed") # print something for travis
-    time.sleep(duration/2) # wait second half
+    print("Going to sleep total of %s" % duration)
 
+    interval = 30 # each 30 seconds
+    if duration <= interval:
+        time.sleep(duration)
+        return
+
+    iters = int(duration / interval)
+    print("Number of iterations is %s" % iters)
+    for i in range(0, iters):
+        print("Going to sleep for %s seconds" % interval) # print something for travis
+        time.sleep(interval) # sleep interval
+
+    # sleep the rest
+    rem = duration % interval
+    print("Going to sleep %s seconds" % rem)
+    time.sleep(rem)
+    print("Done")
 
 def test_add_delayed_nodes(init_session, setup_bootstrap, save_log_on_exit):
     bs_info = setup_bootstrap.pods[0]
@@ -93,8 +108,7 @@ def test_add_delayed_nodes(init_session, setup_bootstrap, save_log_on_exit):
 
     print("Done adding clients. Going to wait for two epochs")
     # wait two more epochs
-    sleep_and_print(epochDuration)
-    sleep_and_print(epochDuration)
+    sleep_and_print(2*epochDuration)
 
     # total = bootstrap + first clients + added clients
     total = 1 + startCount + count * numToAdd
