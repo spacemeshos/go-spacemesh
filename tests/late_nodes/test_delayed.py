@@ -60,6 +60,28 @@ def new_client_in_namespace(name_space, setup_bootstrap, cspec, num):
     return client_info
 
 
+# this is a path for travis's 10m timeout limit
+# we reached the timeout because epochDuration happened to be greater than 10m
+# duration is in seconds
+def sleep_and_print(duration):
+    print("Going to sleep total of %s" % duration)
+
+    interval = 30 # each 30 seconds
+    if duration <= interval:
+        time.sleep(duration)
+        return
+
+    iters = int(duration / interval)
+    print("Number of iterations is %s" % iters)
+    for i in range(0, iters):
+        print("Going to sleep for %s seconds" % interval) # print something for travis
+        time.sleep(interval) # sleep interval
+
+    # sleep the rest
+    rem = duration % interval
+    print("Going to sleep %s seconds" % rem)
+    time.sleep(rem)
+    print("Done")
 
 def test_add_delayed_nodes(init_session, setup_bootstrap, save_log_on_exit):
     bs_info = setup_bootstrap.pods[0]
@@ -73,7 +95,7 @@ def test_add_delayed_nodes(init_session, setup_bootstrap, save_log_on_exit):
     # start with 20 miners
     startCount = 20
     inf = new_client_in_namespace(ns, setup_bootstrap, cspec, startCount)
-    time.sleep(epochDuration) # wait epoch duration
+    sleep_and_print(epochDuration) # wait epoch duration
 
     # add 10 each epoch
     numToAdd = 10
@@ -82,10 +104,11 @@ def test_add_delayed_nodes(init_session, setup_bootstrap, save_log_on_exit):
     for i in range(0, count):
         clients[i] = new_client_in_namespace(ns, setup_bootstrap, cspec, numToAdd)
         print("Added client batch ", i, clients[i].pods[i]['name'])
-        time.sleep(epochDuration)
+        sleep_and_print(epochDuration)
 
     print("Done adding clients. Going to wait for two epochs")
-    time.sleep(2*epochDuration) # wait two more epochs
+    # wait two more epochs
+    sleep_and_print(2*epochDuration)
 
     # total = bootstrap + first clients + added clients
     total = 1 + startCount + count * numToAdd
