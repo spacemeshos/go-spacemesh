@@ -615,7 +615,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	vrfPriv, vrfPub := BLS381.GenKeyPair(rng)
 	vrfSigner := BLS381.NewBlsSigner(vrfPriv)
 	nodeID := types.NodeId{Key: app.edSgn.PublicKey().String(), VRFPublicKey: vrfPub}
-	postClient := nipst.NewPostClient(&app.Config.POST, common.Hex2Bytes(nodeID.Key))
+	postClient := nipst.NewPostClient(&app.Config.POST, util.Hex2Bytes(nodeID.Key))
 
 	apiConf := &app.Config.API
 	dbStorepath := app.Config.DataDir
