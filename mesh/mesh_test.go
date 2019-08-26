@@ -265,7 +265,8 @@ func TestMesh_AddBlockWithTxs_PushTransactions_UpdateMeshTxs(t *testing.T) {
 	origin := types.BytesToAddress([]byte("abc"))
 	tx := newTx(origin, 2468, 111)
 
-	blk := types.NewExistingBlock(1, 1, nil)
+	blockId := types.BlockID(1)
+	blk := types.NewExistingBlock(blockId, 1, nil)
 	blk.TxIds = []types.TransactionId{types.GetTransactionId(tx.SerializableSignedTransaction)}
 
 	err := msh.AddBlockWithTxs(blk, []*types.AddressableSignedTransaction{tx}, nil)
@@ -275,6 +276,9 @@ func TestMesh_AddBlockWithTxs_PushTransactions_UpdateMeshTxs(t *testing.T) {
 	r.Len(txns, 1)
 	r.Equal(2468, int(txns[0].Nonce))
 	r.Equal(111, int(txns[0].Amount))
+
+	err = msh.contextualValidity.Put(blockId.ToBytes(), []byte{1})
+	r.NoError(err)
 
 	msh.PushTransactions(1, 2)
 
