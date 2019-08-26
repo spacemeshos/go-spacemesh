@@ -35,12 +35,15 @@ class NetworkDeploymentInfo():
 def load_config():
     kube_config_var = os.getenv('KUBECONFIG', '~/.kube/config')
     kube_config_path = os.path.expanduser(kube_config_var)
+    print("kubeconfig file is: {0}".format(kube_config_path))
     if os.path.isfile(kube_config_path):
         kube_config_context = Context().get()
+        print("Loading config: {0} context: {1}".format(kube_config_path, kube_config_context))
         config.load_kube_config(config_file=kube_config_path, context=kube_config_context)
     else:
         # Assuming in cluster config
         try:
+            print("Loading incluster config")
             config.load_incluster_config()
         except:
             raise Exception("KUBECONFIG file not found: {0}".format(kube_config_path))
