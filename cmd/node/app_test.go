@@ -126,7 +126,7 @@ func (suite *AppTestSuite) initSingleInstance(i int, genesisTime string, rng *am
 	hareOracle := oracle.NewLocalOracle(rolacle, 5, nodeID)
 	hareOracle.Register(true, pub.String())
 
-	postClient := nipst.NewPostClient(&smApp.Config.POST, common.Hex2Bytes(nodeID.Key))
+	postClient := nipst.NewPostClient(&smApp.Config.POST, util.Hex2Bytes(nodeID.Key))
 
 	err := smApp.initServices(nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(smApp.Config.LayerAvgSize), postClient, poetClient, vrfSigner, uint16(smApp.Config.LayersPerEpoch))
 	r.NoError(err)
