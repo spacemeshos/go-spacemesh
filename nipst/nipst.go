@@ -197,7 +197,8 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *common.Hash) (*types.NIPST, error)
 			return nil, fmt.Errorf("failed to execute PoST: %v", err)
 		}
 
-		nb.log.Info("finished PoST execution (proof: %v)", proof)
+		nb.log.With().Info("finished PoST execution",
+			log.String("proof merkle root", fmt.Sprintf("%x", proof.MerkleRoot)))
 
 		nipst.PostProof = proof
 		nb.state.persist()
