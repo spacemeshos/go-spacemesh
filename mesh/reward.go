@@ -1,9 +1,8 @@
 package mesh
 
 import (
-	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/types"
 	"math/big"
 )
 
@@ -32,7 +31,7 @@ func CalculateLayerReward(id types.LayerID, params Config) *big.Int {
 }
 
 func MergeDoubles(transactions []*Transaction) []*Transaction {
-	transactionSet := make(map[common.Hash]struct{})
+	transactionSet := make(map[types.Hash32]struct{})
 	merged := make([]*Transaction, 0, len(transactions))
 	for _, trns := range transactions {
 		if _, ok := transactionSet[trns.Hash()]; !ok {

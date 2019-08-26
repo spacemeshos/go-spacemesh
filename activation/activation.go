@@ -3,8 +3,7 @@ package activation
 import (
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/address"
-	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/types"
@@ -48,7 +47,7 @@ type IdStore interface {
 }
 
 type NipstValidator interface {
-	Validate(nipst *types.NIPST, expectedChallenge common.Hash) error
+	Validate(nipst *types.NIPST, expectedChallenge types.Hash32) error
 	VerifyPost(proof *types.PostProof, space uint64) error
 }
 
@@ -72,7 +71,7 @@ const (
 
 type Builder struct {
 	nodeId          types.NodeId
-	coinbaseAccount address.Address
+	coinbaseAccount types.Address
 	db              ATXDBProvider
 	net             Broadcaster
 	mesh            MeshProvider
@@ -98,7 +97,7 @@ type Builder struct {
 }
 
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
-func NewBuilder(nodeId types.NodeId, coinbaseAccount address.Address, db ATXDBProvider, net Broadcaster, mesh MeshProvider, layersPerEpoch uint16, nipstBuilder NipstBuilder, postProver nipst.PostProverClient, layerClock chan types.LayerID, isSyncedFunc func() bool, store BytesStore, log log.Log) *Builder {
+func NewBuilder(nodeId types.NodeId, coinbaseAccount types.Address, db ATXDBProvider, net Broadcaster, mesh MeshProvider, layersPerEpoch uint16, nipstBuilder NipstBuilder, postProver nipst.PostProverClient, layerClock chan types.LayerID, isSyncedFunc func() bool, store BytesStore, log log.Log) *Builder {
 	return &Builder{
 		nodeId:          nodeId,
 		coinbaseAccount: coinbaseAccount,
@@ -322,13 +321,13 @@ func (b *Builder) MiningStats() (int, string, string) {
 	return int(initStatus), acc.String(), datadir
 }
 
-func (b *Builder) SetCoinbaseAccount(rewardAddress address.Address) {
+func (b *Builder) SetCoinbaseAccount(rewardAddress types.Address) {
 	b.accountLock.Lock()
 	b.coinbaseAccount = rewardAddress
 	b.accountLock.Unlock()
 }
 
-func (b *Builder) getCoinbaseAccount() address.Address {
+func (b *Builder) getCoinbaseAccount() types.Address {
 	b.accountLock.RLock()
 	acc := b.coinbaseAccount
 	b.accountLock.RUnlock()
@@ -449,7 +448,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 	b.log.With().Info("active ids seen for epoch", log.Uint64("pos_atx_epoch", uint64(posEpoch)),
 		log.Uint32("view_cnt", activeSetSize))
 
-	buf, err := types.AtxAsBytes(atx)
+	buf, err := types.InterfaceToBytes(atx)
 	if err != nil {
 		return err
 	}

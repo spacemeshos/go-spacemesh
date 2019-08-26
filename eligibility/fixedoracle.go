@@ -2,8 +2,8 @@ package eligibility
 
 import (
 	"encoding/binary"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/types"
 	"hash/fnv"
 	"sync"
 )

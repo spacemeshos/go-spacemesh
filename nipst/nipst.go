@@ -3,9 +3,8 @@ package nipst
 import (
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/shared"
 	"sync"
@@ -54,8 +53,8 @@ type PostProverClient interface {
 type PoetProvingServiceClient interface {
 	// submit registers a challenge in the proving service
 	// open round suited for the specified duration.
-	submit(challenge common.Hash) (*types.PoetRound, error)
-
+	submit(challenge types.Hash32) (*types.PoetRound, error)
+	
 	getPoetServiceId() ([types.PoetServiceIdLength]byte, error)
 }
 
@@ -97,7 +96,7 @@ type NIPSTBuilder struct {
 
 type PoetDb interface {
 	SubscribeToProofRef(poetId [types.PoetServiceIdLength]byte, roundId uint64) chan []byte
-	GetMembershipMap(proofRef []byte) (map[common.Hash]bool, error)
+	GetMembershipMap(proofRef []byte) (map[types.Hash32]bool, error)
 }
 
 func NewNIPSTBuilder(id []byte, postProver PostProverClient,
@@ -132,7 +131,7 @@ func newNIPSTBuilder(
 	}
 }
 
-func (nb *NIPSTBuilder) BuildNIPST(challenge *common.Hash) (*types.NIPST, error) {
+func (nb *NIPSTBuilder) BuildNIPST(challenge *types.Hash32) (*types.NIPST, error) {
 	nb.state.load()
 
 	if initialized, err := nb.postProver.IsInitialized(); !initialized || err != nil {

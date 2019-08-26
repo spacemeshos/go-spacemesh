@@ -2,9 +2,9 @@ package tortoise
 
 import (
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/types"
 	"hash/fnv"
 	"math"
 	"sort"
@@ -64,7 +64,6 @@ type Mesh interface {
 	GetBlock(id types.BlockID) (*types.Block, error)
 	LayerBlockIds(id types.LayerID) ([]types.BlockID, error)
 	ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, foo func(block *types.Block) (bool, error)) error
-	SaveGoodPattern(layer types.LayerID, blks map[types.BlockID]struct{}) error
 	SaveContextualValidity(id types.BlockID, valid bool) error
 }
 
@@ -213,7 +212,7 @@ func getId(bids []types.BlockID) PatternId {
 	// calc
 	h := fnv.New32()
 	for i := 0; i < len(bids); i++ {
-		h.Write(common.Uint32ToBytes(uint32(bids[i])))
+		h.Write(util.Uint32ToBytes(uint32(bids[i])))
 	}
 	// update
 	sum := h.Sum32()

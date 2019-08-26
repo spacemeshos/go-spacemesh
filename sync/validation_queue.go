@@ -3,8 +3,8 @@ package sync
 import (
 	"errors"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/types"
 )
 
 type validationQueue struct {
@@ -101,9 +101,9 @@ func (vq *validationQueue) traverse(s *Syncer, blk *types.BlockHeader) error {
 func (vq *validationQueue) finishBlockCallback(s *Syncer, block *types.Block) func() error {
 	return func() error {
 		//data availability
-		txs, atxs, err := s.DataAvailabilty(block)
-		if err != nil {
-			return err
+		txs, txErr, atxs, atxErr := s.DataAvailability(block)
+		if txErr != nil || atxErr != nil {
+			return fmt.Errorf("txerr %v, atxerr %v", txErr, atxErr)
 		}
 
 		//validate block's votes
