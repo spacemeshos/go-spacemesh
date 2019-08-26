@@ -126,6 +126,7 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	lg.Info("download from remote storage: ", remote)
 	lg.Info("expected layers: ", expectedLayers)
 	lg.Info("request timeout: ", timeout)
+	lg.Info("hdist: ", app.Config.Hdist)
 	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P)
 
 	if err != nil {
@@ -134,8 +135,9 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 
 	conf := sync.Configuration{
 		Concurrency:    4,
-		LayerSize:      int(100),
+		LayerSize:      int(app.Config.LayerAvgSize),
 		RequestTimeout: time.Duration(timeout) * time.Millisecond,
+		Hdist:          app.Config.Hdist,
 	}
 
 	if remote {
