@@ -112,7 +112,6 @@ func NewActivationTx(NodeId NodeId,
 	return atx
 }
 
-
 func NewActivationTxWithChallenge(poetChallenge NIPSTChallenge, coinbase Address, ActiveSetSize uint32,
 	View []BlockID, nipst *NIPST, commitment *PostProof) *ActivationTx {
 
@@ -128,7 +127,6 @@ func NewActivationTxWithChallenge(poetChallenge NIPSTChallenge, coinbase Address
 	}
 	atx.CalcAndSetId()
 	return atx
-
 }
 
 func (atxh *ActivationTxHeader) Id() AtxId {
