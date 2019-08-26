@@ -9,6 +9,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/config"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/oracle"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -42,7 +43,7 @@ type AtxValidator interface {
 
 type Syncer interface {
 	FetchPoetProof(poetProofRef []byte) error
-	IsSynced() bool
+	WeaklySynced() bool
 }
 
 type BlockBuilder struct {
@@ -231,7 +232,7 @@ func (t *BlockBuilder) listenForTx() {
 		case <-t.stopChan:
 			return
 		case data := <-t.txGossipChannel:
-			if !t.syncer.IsSynced() {
+			if !t.syncer.WeaklySynced() {
 				// not accepting txs when not synced
 				continue
 			}
@@ -272,7 +273,7 @@ func (t *BlockBuilder) listenForAtx() {
 		case <-t.stopChan:
 			return
 		case data := <-t.atxGossipChannel:
-			if !t.syncer.IsSynced() {
+			if !t.syncer.WeaklySynced() {
 				// not accepting atxs when not synced
 				continue
 			}
@@ -303,8 +304,10 @@ func (t *BlockBuilder) handleGossipAtx(data service.GossipMessage) {
 			atx.ShortId(), atx.GetShortPoetProofRef(), err)
 		return
 	}
+	events.Publish(events.NewAtx{Id: atx.Id().String()})
 
 	err = t.atxValidator.SyntacticallyValidateAtx(atx)
+	events.Publish(events.ValidAtx{Id: atx.Id().String(), Valid: err == nil})
 	if err != nil {
 		t.Warning("received syntactically invalid ATX %v: %v", atx.ShortId(), err)
 		// TODO: blacklist peer

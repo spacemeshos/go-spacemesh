@@ -137,10 +137,10 @@ func testForeachInView(mdb *MeshDB, t *testing.T) {
 		l = lyr
 	}
 	mp := map[types.BlockID]struct{}{}
-	foo := func(nb *types.Block) error {
+	foo := func(nb *types.Block) (bool, error) {
 		fmt.Println("process block", "layer", nb.Id, nb.LayerIndex)
 		mp[nb.Id] = struct{}{}
-		return nil
+		return false, nil
 	}
 	ids := map[types.BlockID]struct{}{}
 	for _, b := range l.Blocks() {
@@ -151,6 +151,79 @@ func testForeachInView(mdb *MeshDB, t *testing.T) {
 		_, found := mp[bl.ID()]
 		assert.True(t, found, "did not process block  ", bl)
 	}
+}
+
+func TestForEachInView_InMem_WithStop(t *testing.T) {
+	mdb := NewMemMeshDB(log.New("TestForEachInView", "", ""))
+	blocks := make(map[types.BlockID]*types.Block)
+	l := GenesisLayer()
+	gen := l.Blocks()[0]
+	blocks[gen.ID()] = gen
+
+	if err := mdb.AddBlock(gen); err != nil {
+		t.Fail()
+	}
+
+	for i := 0; i < 4; i++ {
+		lyr := createLayerWithRandVoting(l.Index()+1, []*types.Layer{l}, 2, 2, log.NewDefault("msh"))
+		for _, b := range lyr.Blocks() {
+			blocks[b.ID()] = b
+			mdb.AddBlock(b)
+		}
+		l = lyr
+	}
+	mp := map[types.BlockID]struct{}{}
+	i := 0
+	foo := func(nb *types.Block) (bool, error) {
+		fmt.Println("process block", "layer", nb.Id, nb.LayerIndex)
+		mp[nb.Id] = struct{}{}
+		i++
+		return i == 5, nil
+	}
+	ids := map[types.BlockID]struct{}{}
+	for _, b := range l.Blocks() {
+		ids[b.Id] = struct{}{}
+	}
+	err := mdb.ForBlockInView(ids, 0, foo)
+	assert.NoError(t, err)
+	assert.Equal(t, 5, i)
+}
+
+func TestForEachInView_InMem_WithLimitedLayer(t *testing.T) {
+	mdb := NewMemMeshDB(log.New("TestForEachInView", "", ""))
+	blocks := make(map[types.BlockID]*types.Block)
+	l := GenesisLayer()
+	gen := l.Blocks()[0]
+	blocks[gen.ID()] = gen
+
+	if err := mdb.AddBlock(gen); err != nil {
+		t.Fail()
+	}
+
+	for i := 0; i < 4; i++ {
+		lyr := createLayerWithRandVoting(l.Index()+1, []*types.Layer{l}, 2, 2, log.NewDefault("msh"))
+		for _, b := range lyr.Blocks() {
+			blocks[b.ID()] = b
+			mdb.AddBlock(b)
+		}
+		l = lyr
+	}
+	mp := map[types.BlockID]struct{}{}
+	i := 0
+	foo := func(nb *types.Block) (bool, error) {
+		fmt.Println("process block", "layer", nb.Id, nb.LayerIndex)
+		mp[nb.Id] = struct{}{}
+		i++
+		return false, nil
+	}
+	ids := map[types.BlockID]struct{}{}
+	for _, b := range l.Blocks() {
+		ids[b.Id] = struct{}{}
+	}
+	// traverse until (and including) layer 2
+	err := mdb.ForBlockInView(ids, 2, foo)
+	assert.NoError(t, err)
+	assert.Equal(t, 6, i)
 }
 
 func BenchmarkNewPersistentMeshDB(b *testing.B) {

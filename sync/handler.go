@@ -14,10 +14,10 @@ func newLayerHashRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg []by
 		lyrid := common.BytesToUint64(msg)
 		layer, err := layers.GetLayer(types.LayerID(lyrid))
 		if err != nil {
-			logger.Error("Error handling layer %d request message with error: %v", lyrid, err)
+			logger.With().Error("Error handling layer request message", log.LayerId(lyrid), log.Err(err))
 			return nil
 		}
-		return layer.Hash()
+		return common.Uint32ToBytes(layer.Hash())
 	}
 }
 

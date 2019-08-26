@@ -6,6 +6,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/crypto/sha3"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/rlp"
 	"github.com/spacemeshos/go-spacemesh/types"
@@ -26,7 +27,6 @@ var FALSE = []byte{0}
 type MeshValidator interface {
 	HandleIncomingLayer(layer *types.Layer) (types.LayerID, types.LayerID)
 	HandleLateBlock(bl *types.Block)
-	ContextualValidity(id types.BlockID) bool
 }
 
 type TxProcessor interface {
@@ -208,8 +208,13 @@ func (m *Mesh) ExtractUniqueOrderedTransactions(l *types.Layer) []*Transaction {
 	txids := make(map[types.TransactionId]struct{})
 
 	for _, b := range sortedBlocks {
-		if !m.tortoise.ContextualValidity(b.ID()) {
-			m.Info("block %v not Contextualy valid", b.ID())
+		valid, err := m.ContextualValidity(b.ID())
+		events.Publish(events.ValidBlock{Id: uint64(b.ID()), Valid: valid})
+		if !valid {
+			if err != nil {
+				m.With().Error("could not get contextual validity for block", log.BlockId(uint64(b.ID())), log.Err(err))
+			}
+			m.With().Info("block not contextually valid", log.BlockId(uint64(b.ID()))) // TODO: do we want this log? is it info?
 			continue
 		}
 
@@ -303,6 +308,7 @@ func (m *Mesh) AddBlock(blk *types.Block) error {
 func (m *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.AddressableSignedTransaction, atxs []*types.ActivationTx) error {
 	m.Debug("add block %d", blk.ID())
 
+	events.Publish(events.NewBlock{Id: uint64(blk.Id), Atx: blk.ATXID.String(), Layer: uint64(blk.LayerIndex)})
 	atxids := make([]types.AtxId, 0, len(atxs))
 	for _, t := range atxs {
 		//todo this should return an error
@@ -318,8 +324,8 @@ func (m *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.AddressableSignedT
 		return fmt.Errorf("failed to add to meshTxs: %v", err)
 	}
 
-	if err := m.MeshDB.AddBlock(blk); err != nil {
-		m.Error("failed to add block %v  %v", blk.ID(), err)
+	if err := m.MeshDB.AddBlock(blk); err != nil && err != ErrAlreadyExist {
+		m.With().Error("failed to add block", log.BlockId(uint64(blk.ID())), log.Err(err))
 		return err
 	}
 
@@ -461,10 +467,6 @@ func (m *Mesh) AccumulateRewards(rewardLayer types.LayerID, params Config) {
 	m.ApplyRewards(types.LayerID(rewardLayer), ids, uq, bonusReward, diminishedReward)
 	//todo: should miner id be sorted in a deterministic order prior to applying rewards?
 
-}
-
-func (m *Mesh) GetContextualValidity(id types.BlockID) (bool, error) {
-	return m.getContextualValidity(id)
 }
 
 var GenesisBlock = types.Block{

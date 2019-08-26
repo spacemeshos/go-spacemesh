@@ -50,16 +50,26 @@ type TxValidator interface {
 	GetValidAddressableTx(tx *types.SerializableSignedTransaction) (*types.AddressableSignedTransaction, error)
 }
 
+type clockSubscriber interface {
+	Subscribe() timesync.LayerTimer
+	Unsubscribe(timer timesync.LayerTimer)
+}
+
 type Configuration struct {
 	LayersPerEpoch uint16
 	Concurrency    int //number of workers for sync method
 	LayerSize      int
 	RequestTimeout time.Duration
+	Hdist          int
 }
 
 type LayerValidator interface {
 	ValidatedLayer() types.LayerID
 	ValidateLayer(lyr *types.Layer)
+}
+
+type LayerProvider interface {
+	GetLayer(index types.LayerID) (*types.Layer, error)
 }
 
 type Syncer struct {
@@ -71,6 +81,7 @@ type Syncer struct {
 	*server.MessageServer
 
 	lValidator        LayerValidator
+	lProvider         LayerProvider
 	txValidator       TxValidator
 	poetDb            PoetDb
 	txpool            TxMemPool
@@ -79,10 +90,13 @@ type Syncer struct {
 	SyncLock          uint32
 	startLock         uint32
 	forceSync         chan bool
+	clockSub          clockSubscriber
 	clock             timesync.LayerTimer
 	exit              chan struct{}
 	currentLayerMutex sync.RWMutex
 	syncRoutineWg     sync.WaitGroup
+	p2pSynced         bool // true if we are p2p-synced, false otherwise
+	p2pLock           sync.RWMutex
 }
 
 func (s *Syncer) ForceSync() {
@@ -103,7 +117,7 @@ func (s *Syncer) Close() {
 const (
 	IDLE         uint32             = 0
 	RUNNING      uint32             = 1
-	MINI_BLOCK   server.MessageType = 1
+	BLOCK        server.MessageType = 1
 	LAYER_HASH   server.MessageType = 2
 	LAYER_IDS    server.MessageType = 3
 	TX           server.MessageType = 4
@@ -112,9 +126,29 @@ const (
 	syncProtocol                    = "/sync/1.0/"
 )
 
+func (s *Syncer) WeaklySynced() bool {
+	// equivalent to s.LatestLayer() >= s.lastTickedLayer()-1
+	// means we have data from the previous layer
+	return s.LatestLayer()+1 >= s.lastTickedLayer()
+}
+
+func (s *Syncer) getP2pSynced() bool {
+	s.p2pLock.RLock()
+	b := s.p2pSynced
+	s.p2pLock.RUnlock()
+
+	return b
+}
+
+func (s *Syncer) setP2pSynced(b bool) {
+	s.p2pLock.Lock()
+	s.p2pSynced = b
+	s.p2pLock.Unlock()
+}
+
 func (s *Syncer) IsSynced() bool {
 	s.Log.Info("latest: %v, maxSynced %v", s.LatestLayer(), s.lastTickedLayer())
-	return s.LatestLayer()+1 >= s.lastTickedLayer()
+	return s.WeaklySynced() && s.getP2pSynced()
 }
 
 func (s *Syncer) Start() {
@@ -156,7 +190,7 @@ func (s *Syncer) run() {
 }
 
 //fires a sync every sm.syncInterval or on force space from outside
-func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool AtxMemPool, tv TxValidator, bv BlockValidator, poetdb PoetDb, conf Configuration, clock timesync.LayerTimer, currentLayer types.LayerID, logger log.Log) *Syncer {
+func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool AtxMemPool, tv TxValidator, bv BlockValidator, poetdb PoetDb, conf Configuration, clockSub clockSubscriber, currentLayer types.LayerID, logger log.Log) *Syncer {
 	s := &Syncer{
 		BlockValidator: bv,
 		Configuration:  conf,
@@ -165,6 +199,7 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool A
 		Peers:          p2p.NewPeers(srv, logger.WithName("peers")),
 		MessageServer:  server.NewMsgServer(srv.(server.Service), syncProtocol, conf.RequestTimeout, make(chan service.DirectMessage, p2pconf.ConfigValues.BufferSize), logger.WithName("srv")),
 		lValidator:     layers,
+		lProvider:      layers,
 		txValidator:    tv,
 		SyncLock:       0,
 		txpool:         txpool,
@@ -173,12 +208,14 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool A
 		startLock:      0,
 		currentLayer:   currentLayer,
 		forceSync:      make(chan bool),
-		clock:          clock,
+		clockSub:       clockSub,
+		clock:          clockSub.Subscribe(),
 		exit:           make(chan struct{}),
+		p2pSynced:      false,
 	}
 
 	s.RegisterBytesMsgHandler(LAYER_HASH, newLayerHashRequestHandler(layers, logger))
-	s.RegisterBytesMsgHandler(MINI_BLOCK, newBlockRequestHandler(layers, logger))
+	s.RegisterBytesMsgHandler(BLOCK, newBlockRequestHandler(layers, logger))
 	s.RegisterBytesMsgHandler(LAYER_IDS, newLayerBlockIdsRequestHandler(layers, logger))
 	s.RegisterBytesMsgHandler(TX, newTxsRequestHandler(s, logger))
 	s.RegisterBytesMsgHandler(ATX, newATxsRequestHandler(s, logger))
@@ -197,32 +234,95 @@ func (s *Syncer) lastTickedLayer() types.LayerID {
 func (s *Syncer) Synchronise() {
 	defer s.syncRoutineWg.Done()
 
-	currentSyncLayer := s.lValidator.ValidatedLayer() + 1
-	if s.lastTickedLayer() == 1 { // skip validation for first layer
-		s.Info("Not syncing in layer 1")
+	if s.lastTickedLayer() <= 1 { // skip validation for first layer
+		s.With().Info("Not syncing in layer <= 1", log.LayerId(uint64(s.lastTickedLayer())))
+		s.setP2pSynced(true) // fully-synced, make sure we listen to p2p
 		return
 	}
-	if s.IsSynced() {
-		lyr, err := s.GetLayer(types.LayerID(currentSyncLayer))
+
+	currentSyncLayer := s.lValidator.ValidatedLayer() + 1
+	if currentSyncLayer == s.lastTickedLayer() { // only validate if current < lastTicked
+		s.With().Info("Already synced for layer", log.Uint64("current_sync_layer", uint64(currentSyncLayer)))
+		return
+	}
+
+	if s.WeaklySynced() { // we have all the data of the prev layers so we can simply validate
+		s.With().Info("Node is synced. Going to validate layer", log.LayerId(uint64(currentSyncLayer)))
+
+		lyr, err := s.lProvider.GetLayer(currentSyncLayer)
 		if err != nil {
-			s.With().Error("failed getting layer even though IsSynced is true", log.Err(err))
+			s.Panic("failed getting layer even though we are weakly-synced currentLayer=%v lastTicked=%v err=%v ", currentSyncLayer, s.lastTickedLayer(), err)
 			return
 		}
 		s.lValidator.ValidateLayer(lyr) // wait for layer validation
 		return
 	}
-	for ; currentSyncLayer <= s.lastTickedLayer(); currentSyncLayer++ {
-		lastTickedLayer := s.lastTickedLayer()
-		s.Info("syncing layer %v current consensus layer is %d", currentSyncLayer, lastTickedLayer)
+
+	// node is not synced
+	s.Info("Node is out of sync setting p2p-synced to false and starting sync")
+	s.setP2pSynced(false) // don't listen to p2p while not synced
+
+	// first, bring all the data of the prev layers
+	// Note: lastTicked() is not constant but updates as ticks are received
+	for ; currentSyncLayer < s.lastTickedLayer(); currentSyncLayer++ {
+		s.With().Info("syncing layer", log.Uint64("current_sync_layer", uint64(currentSyncLayer)), log.Uint64("last_ticked_layer", uint64(s.lastTickedLayer())))
 		lyr, err := s.getLayerFromNeighbors(currentSyncLayer)
 		if err != nil {
 			s.Info("could not get layer %v from neighbors %v", currentSyncLayer, err)
 			return
 		}
-		if currentSyncLayer < lastTickedLayer {
-			s.lValidator.ValidateLayer(lyr) // wait for layer validation
-		}
+
+		s.lValidator.ValidateLayer(lyr) // wait for layer validation
 	}
+
+	// Now we are somewhere in the layer (begin, middle, end)
+	// fetch what you can from the neighbors
+	_, err := s.getLayerFromNeighbors(currentSyncLayer)
+	if err != nil {
+		s.With().Info("could not get last ticked layer from neighbors", log.LayerId(uint64(currentSyncLayer)), log.Err(err))
+		return
+	}
+
+	// wait for two ticks to ensure we are fully synced before we open p2p or validate the current layer
+	err = s.p2pSyncForOneFullLayer(currentSyncLayer)
+	if err != nil {
+		s.With().Error("Fatal: failed getting layer even though we listened to p2p", log.LayerId(uint64(currentSyncLayer)), log.Err(err))
+	}
+}
+
+// Waits two ticks (while weakly-synced) in order to ensure that we listened to p2p for one full layer
+// after that we are assumed to have all the data required for validation so we can validate and open p2p
+// opening p2p in weakly-synced transition us to fully-synced
+func (s *Syncer) p2pSyncForOneFullLayer(currentSyncLayer types.LayerID) error {
+	// subscribe and wait for two ticks
+	ch := s.clockSub.Subscribe()
+	<-ch
+	<-ch
+	s.clockSub.Unsubscribe(ch) // unsub, we won't be listening on this ch anymore
+
+	// assumed to be weakly synced here
+	// just get the layers and validate
+
+	// get & validate first tick
+	lyr, err := s.lProvider.GetLayer(currentSyncLayer)
+	if err != nil {
+		return err
+	}
+	s.lValidator.ValidateLayer(lyr)
+
+	// get & validate second tick
+	currentSyncLayer++
+	lyr, err = s.lProvider.GetLayer(currentSyncLayer)
+	if err != nil {
+		return err
+	}
+	s.lValidator.ValidateLayer(lyr)
+	s.Info("Done waiting for ticks and validation. setting p2p true")
+
+	// fully-synced - set p2p-synced to true
+	s.setP2pSynced(true)
+
+	return nil
 }
 
 func (s *Syncer) getLayerFromNeighbors(currenSyncLayer types.LayerID) (*types.Layer, error) {
@@ -288,9 +388,14 @@ func (s *Syncer) BlockSyntacticValidation(block *types.Block) ([]*types.Addressa
 		return nil, nil, errors.New(fmt.Sprintf("data availabilty failed for block %v", block.ID()))
 	}
 
-	//validate blocks view
+	//validate block's view
 	if valid := s.ValidateView(block); valid == false {
 		return nil, nil, errors.New(fmt.Sprintf("block %v not syntacticly valid", block.ID()))
+	}
+
+	//validate block's votes
+	if valid := s.validateVotes(block); valid == false {
+		return nil, nil, errors.New(fmt.Sprintf("validate votes failed for block %v", block.ID()))
 	}
 
 	return txs, atxs, nil
@@ -303,6 +408,38 @@ func (s *Syncer) ValidateView(blk *types.Block) bool {
 		return false
 	}
 	return true
+}
+
+func (s *Syncer) validateVotes(blk *types.Block) bool {
+	view := map[types.BlockID]struct{}{}
+	for _, blk := range blk.ViewEdges {
+		view[blk] = struct{}{}
+	}
+
+	vote := map[types.BlockID]struct{}{}
+	for _, blk := range blk.BlockVotes {
+		vote[blk] = struct{}{}
+	}
+
+	traverse := func(b *types.Block) (stop bool, err error) {
+		if _, ok := vote[b.ID()]; ok {
+			delete(vote, b.ID())
+		}
+		return len(vote) == 0, nil
+	}
+
+	// traverse only through the last Hdist layers
+	lowestLayer := blk.LayerIndex - types.LayerID(s.Hdist)
+	if blk.LayerIndex < types.LayerID(s.Hdist) {
+		lowestLayer = 0
+	}
+	err := s.ForBlockInView(view, lowestLayer, traverse)
+	if err == nil && len(vote) > 0 {
+		err = fmt.Errorf("voting on blocks out of view (or out of Hdist), %v", vote)
+	}
+	s.Log.With().Info("validateVotes done", log.Err(err))
+
+	return err == nil
 }
 
 func (s *Syncer) DataAvailabilty(blk *types.Block) ([]*types.AddressableSignedTransaction, []*types.ActivationTx, error) {
@@ -348,27 +485,41 @@ func (s *Syncer) DataAvailabilty(blk *types.Block) ([]*types.AddressableSignedTr
 	return txs, atxs, nil
 }
 
-func (s *Syncer) fetchLayerBlockIds(m map[string]p2p.Peer, lyr types.LayerID) ([]types.BlockID, error) {
+func (s *Syncer) fetchLayerBlockIds(m map[uint32][]p2p.Peer, lyr types.LayerID) ([]types.BlockID, error) {
 	//send request to different users according to returned hashes
-	v := make([]p2p.Peer, 0, len(m))
-	for _, value := range m {
-		v = append(v, value)
-	}
-
-	wrk, output := NewPeersWorker(s, v, &sync.Once{}, LayerIdsReqFactory(lyr))
-	go wrk.Work()
-
 	idSet := make(map[types.BlockID]struct{}, s.LayerSize)
 	ids := make([]types.BlockID, 0, s.LayerSize)
+	for h, peers := range m {
+	NextHash:
+		for _, peer := range peers {
+			s.Info("send request Peer: %v", peer)
+			ch, err := LayerIdsReqFactory(lyr)(s.MessageServer, peer)
+			if err != nil {
+				return nil, err
+			}
 
-	//unify results
-	for out := range output {
-		if out != nil {
-			//filter double ids
-			for _, bid := range out.([]types.BlockID) {
-				if _, exists := idSet[bid]; !exists {
-					idSet[bid] = struct{}{}
-					ids = append(ids, bid)
+			timeout := time.After(s.RequestTimeout)
+			select {
+			case <-timeout:
+				s.Error("layer ids request to %v timed out", peer)
+				continue
+			case v := <-ch:
+				if v != nil {
+					s.Info("Peer: %v responded to layer ids request", peer)
+					//peer returned set with bad hash ask next peer
+					if h != types.HashBlockIds(v.([]types.BlockID)) {
+						s.Error("Peer: %v layer ids hash does not match request", peer)
+						break
+					}
+
+					for _, bid := range v.([]types.BlockID) {
+						if _, exists := idSet[bid]; !exists {
+							idSet[bid] = struct{}{}
+							ids = append(ids, bid)
+						}
+					}
+					//fetch for next hash
+					break NextHash
 				}
 			}
 		}
@@ -383,18 +534,18 @@ func (s *Syncer) fetchLayerBlockIds(m map[string]p2p.Peer, lyr types.LayerID) ([
 
 type peerHashPair struct {
 	peer p2p.Peer
-	hash []byte
+	hash uint32
 }
 
-func (s *Syncer) fetchLayerHashes(lyr types.LayerID) (map[string]p2p.Peer, error) {
+func (s *Syncer) fetchLayerHashes(lyr types.LayerID) (map[uint32][]p2p.Peer, error) {
 	// get layer hash from each peer
 	wrk, output := NewPeersWorker(s, s.GetPeers(), &sync.Once{}, HashReqFactory(lyr))
 	go wrk.Work()
-	m := make(map[string]p2p.Peer)
+	m := make(map[uint32][]p2p.Peer)
 	for out := range output {
 		pair, ok := out.(*peerHashPair)
 		if pair != nil && ok { //do nothing on close channel
-			m[string(pair.hash)] = pair.peer
+			m[pair.hash] = append(m[pair.hash], pair.peer)
 		}
 	}
 	if len(m) == 0 {
@@ -470,7 +621,7 @@ func (s *Syncer) syncAtxs(atxIds []types.AtxId) ([]*types.ActivationTx, error) {
 			s.Debug("found atx, %v in atx pool", id.ShortId())
 			unprocessedAtxs[id] = &atx
 		} else {
-			s.Warning("atx %v not in atx pool", id.ShortId())
+			s.Debug("atx %v not in atx pool", id.ShortId())
 			missingInPool = append(missingInPool, id)
 		}
 	}

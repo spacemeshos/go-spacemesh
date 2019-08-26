@@ -15,27 +15,27 @@ import (
 	"time"
 )
 
-type MeshValidatorMock struct {
-	mdb *MeshDB
+type ContextualValidityMock struct {
 }
 
-func (m *MeshValidatorMock) GetGoodPatternBlocks(layer types.LayerID) (map[types.BlockID]struct{}, error) {
-	blocks, err := m.mdb.LayerBlockIds(layer)
-	if err != nil {
-		return nil, err
-	}
-	mp := make(map[types.BlockID]struct{})
-	for _, b := range blocks {
-		res, err := m.mdb.getContextualValidity(b)
-		if err != nil {
-			continue
-		}
-		if res {
-			mp[b] = struct{}{}
-		}
-	}
+func (m *ContextualValidityMock) Put(key, value []byte) error {
+	return nil
+}
 
-	return mp, nil
+func (m *ContextualValidityMock) Get(key []byte) (value []byte, err error) {
+	return TRUE, nil
+}
+
+func (m *ContextualValidityMock) Delete(key []byte) error {
+	return nil
+}
+
+func (m *ContextualValidityMock) Close() {
+
+}
+
+type MeshValidatorMock struct {
+	mdb *MeshDB
 }
 
 func (m *MeshValidatorMock) HandleIncomingLayer(layer *types.Layer) (types.LayerID, types.LayerID) {
@@ -43,7 +43,6 @@ func (m *MeshValidatorMock) HandleIncomingLayer(layer *types.Layer) (types.Layer
 }
 func (m *MeshValidatorMock) HandleLateBlock(bl *types.Block)              {}
 func (m *MeshValidatorMock) RegisterLayerCallback(func(id types.LayerID)) {}
-func (mlg *MeshValidatorMock) ContextualValidity(id types.BlockID) bool   { return true }
 
 type MockState struct{}
 
@@ -303,41 +302,6 @@ func TestLayers_OrphanBlocksClearEmptyLayers(t *testing.T) {
 	assert.Equal(t, len(arr2), 2)
 	layers.AddBlock(block5)
 	assert.Equal(t, 1, len(layers.orphanBlocks))
-}
-
-func Test_Patterns(t *testing.T) {
-	layers := getMesh("t7")
-	defer layers.Close()
-	block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
-	block2 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
-	block3 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
-	block4 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
-	block5 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
-	layers.AddBlock(block1)
-	layers.AddBlock(block2)
-	layers.AddBlock(block3)
-	layers.AddBlock(block4)
-	layers.AddBlock(block5)
-	mp := map[types.BlockID]struct{}{}
-	mp[block1.ID()] = struct{}{}
-	mp[block2.ID()] = struct{}{}
-	mp[block3.ID()] = struct{}{}
-	mp[block4.ID()] = struct{}{}
-	mp[block5.ID()] = struct{}{}
-	layers.SaveGoodPattern(1, map[types.BlockID]struct{}{})
-	layers.GetGoodPattern(1)
-
-	_, ok := mp[block1.ID()]
-	assert.True(t, ok)
-	_, ok = mp[block2.ID()]
-	assert.True(t, ok)
-	_, ok = mp[block3.ID()]
-	assert.True(t, ok)
-	_, ok = mp[block4.ID()]
-	assert.True(t, ok)
-	_, ok = mp[block5.ID()]
-	assert.True(t, ok)
-
 }
 
 func TestMesh_AddBlockWithTxs_PushTransactions_UpdateMeshTxs(t *testing.T) {

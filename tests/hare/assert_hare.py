@@ -76,35 +76,34 @@ def assert_all(curr_idx, ns):
     assert validate(lst)
 
 
-def expect_consensus_process(curr_idx, ns, layer, total):
-    msg = 'layer=%s' % layer
+def expect_consensus_process(curr_idx, ns, layer, total, f):
+    msg = 'layer=%s expected=%s actual=%s'
     # assert no node ended up with an empty set at the end of the pre-round
     lst = query_pre_round(curr_idx, ns, layer)
-    expect(0 == len(lst), msg)
+    expect(0 == len(lst), msg % (layer, 0, len(lst)))
 
     # assert all nodes had SVP ready at the end of round 1
     lst = query_round_1(curr_idx, ns, layer)
-    expect(total == len(lst), msg)
+    expect(total == len(lst), msg % (layer, total, len(lst)))
 
     # assert all nodes had a (non-nil) proposal at the end of round 2
     lst = query_round_2(curr_idx, ns, layer)
-    expect(total == len(lst), msg)
+    expect(total == len(lst), msg % (layer, total, len(lst)))
 
     # assert at least f+1 has committed at the end of round 3
     lst = query_round_3(curr_idx, ns, layer)
-    f = int(testconfig['client']['args']['hare-max-adversaries'])
-    expect(len(lst) >= f + 1, msg)
+    expect(len(lst) >= f + 1, 'layer=%s len=%d f=%d' % (layer, len(lst), f))
 
     # assert termination output set
     lst = query_hare_output_set(curr_idx, ns, layer)
-    expect(total == len(lst), msg)
-    expect(validate(lst), msg)
+    expect(total == len(lst), msg % (layer, total, len(lst)))
+    expect(validate(lst), msg % (layer, 'true', 'false'))
 
 
-def expect_hare(curr_idx, ns, min_l, max_l, total):
+def expect_hare(curr_idx, ns, min_l, max_l, total, f):
     layer = min_l
     while layer <= max_l:
-        expect_consensus_process(curr_idx, ns, layer, total)
+        expect_consensus_process(curr_idx, ns, layer, total, f)
         layer = layer + 1
 
     assert_expectations()

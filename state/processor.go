@@ -8,6 +8,7 @@ import (
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/trie"
@@ -204,6 +205,7 @@ func (tp *TransactionProcessor) ApplyRewards(layer types.LayerID, minersAccounts
 			layer)
 
 		tp.globalState.AddBalance(account, reward)
+		events.Publish(events.RewardReceived{Coinbase: account.String(), Amount: reward.Uint64()})
 	}
 	newHash, err := tp.globalState.Commit(false)
 
@@ -278,11 +280,17 @@ func (tp *TransactionProcessor) Process(transactions mesh.Transactions, trnsBySe
 		for _, trns := range trnsBySender[origin] {
 			//todo: should we abort all transaction processing if we failed this one?
 			err := tp.ApplyTransaction(trns)
+			//todo: think maybe moving these to another validation process before palying transactions.
+			events.Publish(events.NewTx{Id: trns.Hash().String(),
+				Origin:      trns.Origin.String(),
+				Destination: trns.Recipient.String(),
+				Amount:      trns.Amount.Uint64(),
+				Gas:         trns.GasPrice.Uint64()})
 			if err != nil {
 				errors++
 				tp.Log.Error("transaction aborted: %v", err)
 			}
-
+			events.Publish(events.ValidTx{Id: trns.Hash().String(), Valid: err == nil})
 		}
 	}
 	return errors
