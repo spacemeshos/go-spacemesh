@@ -14,17 +14,35 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package common
+package types
 
-import "math/big"
-
-// Common big integers often used
-var (
-	Big1   = big.NewInt(1)
-	Big2   = big.NewInt(2)
-	Big3   = big.NewInt(3)
-	Big0   = big.NewInt(0)
-	Big32  = big.NewInt(32)
-	Big256 = big.NewInt(256)
-	Big257 = big.NewInt(257)
+import (
+	"fmt"
 )
+
+// StorageSize is a wrapper around a float value that supports user friendly
+// formatting.
+type StorageSize float64
+
+// String implements the stringer interface.
+func (s StorageSize) String() string {
+	if s > 1000000 {
+		return fmt.Sprintf("%.2f mB", s/1000000)
+	} else if s > 1000 {
+		return fmt.Sprintf("%.2f kB", s/1000)
+	} else {
+		return fmt.Sprintf("%.2f B", s)
+	}
+}
+
+// TerminalString implements log.TerminalStringer, formatting a string for console
+// output during logging.
+func (s StorageSize) TerminalString() string {
+	if s > 1000000 {
+		return fmt.Sprintf("%.2fmB", s/1000000)
+	} else if s > 1000 {
+		return fmt.Sprintf("%.2fkB", s/1000)
+	} else {
+		return fmt.Sprintf("%.2fB", s)
+	}
+}

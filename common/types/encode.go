@@ -5,14 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"github.com/nullstyle/go-xdr/xdr3"
-	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/crypto/sha3"
 	"sort"
 )
 
-func (b BlockID) ToBytes() []byte { return common.Uint64ToBytes(uint64(b)) }
+func (b BlockID) ToBytes() []byte { return util.Uint64ToBytes(uint64(b)) }
 
-func (l LayerID) ToBytes() []byte { return common.Uint64ToBytes(uint64(l)) }
+func (l LayerID) ToBytes() []byte { return util.Uint64ToBytes(uint64(l)) }
 
 func BlockIdsAsBytes(ids []BlockID) ([]byte, error) {
 	var w bytes.Buffer
@@ -31,38 +31,6 @@ func BytesToBlockIds(blockIds []byte) ([]BlockID, error) {
 	return ids, nil
 }
 
-func ViewAsBytes(ids []BlockID) ([]byte, error) {
-	var w bytes.Buffer
-	if _, err := xdr.Marshal(&w, &ids); err != nil {
-		return nil, fmt.Errorf("error marshalling view: %v", err)
-	}
-	return w.Bytes(), nil
-}
-
-func BytesToView(blockIds []byte) ([]BlockID, error) {
-	var ids []BlockID
-	if _, err := xdr.Unmarshal(bytes.NewReader(blockIds), &ids); err != nil {
-		return nil, errors.New("error marshaling layer ")
-	}
-	return ids, nil
-}
-
-func AtxHeaderAsBytes(tx *ActivationTxHeader) ([]byte, error) {
-	var w bytes.Buffer
-	if _, err := xdr.Marshal(&w, &tx); err != nil {
-		return nil, fmt.Errorf("error marshalling atx header: %v", err)
-	}
-	return w.Bytes(), nil
-}
-
-func AtxAsBytes(tx *ActivationTx) ([]byte, error) {
-	var w bytes.Buffer
-	if _, err := xdr.Marshal(&w, &tx); err != nil {
-		return nil, fmt.Errorf("error marshalling atx: %v", err)
-	}
-	return w.Bytes(), nil
-}
-
 func BytesAsAtx(b []byte, id *AtxId) (*ActivationTx, error) {
 	buf := bytes.NewReader(b)
 	var atx ActivationTx
@@ -76,6 +44,14 @@ func BytesAsAtx(b []byte, id *AtxId) (*ActivationTx, error) {
 		atx.SetId(id)
 	}
 	return &atx, nil
+}
+
+func TxIdsAsBytes(ids []TransactionId) ([]byte, error) {
+	var w bytes.Buffer
+	if _, err := xdr.Marshal(&w, &ids); err != nil {
+		return nil, fmt.Errorf("error marshalling tx ids: %v", err)
+	}
+	return w.Bytes(), nil
 }
 
 func NIPSTChallengeAsBytes(challenge *NIPSTChallenge) ([]byte, error) {

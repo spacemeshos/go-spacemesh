@@ -3,9 +3,8 @@ package nipst
 import (
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/shared"
 	"sync"
@@ -48,7 +47,7 @@ type PostProverClient interface {
 type PoetProvingServiceClient interface {
 	// submit registers a challenge in the proving service
 	// open round suited for the specified duration.
-	submit(challenge common.Hash) (*types.PoetRound, error)
+	submit(challenge types.Hash32) (*types.PoetRound, error)
 	getPoetServiceId() ([types.PoetServiceIdLength]byte, error)
 }
 
@@ -98,7 +97,7 @@ type NIPSTBuilder struct {
 
 type PoetDb interface {
 	SubscribeToProofRef(poetId [types.PoetServiceIdLength]byte, roundId uint64) chan []byte
-	GetMembershipMap(proofRef []byte) (map[common.Hash]bool, error)
+	GetMembershipMap(proofRef []byte) (map[types.Hash32]bool, error)
 }
 
 func NewNIPSTBuilder(id []byte, postCfg config.Config, postProver PostProverClient,
@@ -139,7 +138,7 @@ func newNIPSTBuilder(
 	}
 }
 
-func (nb *NIPSTBuilder) BuildNIPST(challenge *common.Hash) (*types.NIPST, error) {
+func (nb *NIPSTBuilder) BuildNIPST(challenge *types.Hash32) (*types.NIPST, error) {
 	defTimeout := 10 * time.Second // TODO: replace temporary solution
 	nb.state.load()
 
@@ -255,7 +254,7 @@ func (nb *NIPSTBuilder) InitializePost(dataDir string, space uint64) (*types.Pos
 	return commitment, nil
 }
 
-func NewNIPSTWithChallenge(challenge *common.Hash, poetRef []byte) *types.NIPST {
+func NewNIPSTWithChallenge(challenge *types.Hash32, poetRef []byte) *types.NIPST {
 	return &types.NIPST{
 		Space:          0,
 		NipstChallenge: challenge,

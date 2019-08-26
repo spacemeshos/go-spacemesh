@@ -2,14 +2,12 @@ package activation
 
 import (
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/address"
-	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/nipst"
-	"github.com/spacemeshos/go-spacemesh/types"
-	"github.com/spacemeshos/sha256-simd"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"sort"
@@ -30,9 +28,9 @@ const (
 var (
 	nodeId       = types.NodeId{Key: "11111", VRFPublicKey: []byte("22222")}
 	otherNodeId  = types.NodeId{Key: "00000", VRFPublicKey: []byte("00000")}
-	coinbase     = address.HexToAddress("33333")
-	prevAtxId    = types.AtxId{Hash: common.HexToHash("44444")}
-	chlng        = common.HexToHash("55555")
+	coinbase     = types.HexToAddress("33333")
+	prevAtxId    = types.AtxId{Hash32: types.HexToHash32("44444")}
+	chlng        = types.HexToHash32("55555")
 	poetRef      = []byte("66666")
 	defaultView  = []types.BlockID{1, 2, 3}
 	net          = &NetMock{}
@@ -73,7 +71,7 @@ func (n *NetMock) Broadcast(id string, d []byte) error {
 
 type NipstBuilderMock struct {
 	poetRef         []byte
-	buildNipstFunc  func(challenge *common.Hash) (*types.NIPST, error)
+	buildNipstFunc  func(challenge *types.Hash32) (*types.NIPST, error)
 	initPostFunc    func(logicalDrive string, commitmentSize uint64) (*types.PostProof, error)
 	SleepTime       int
 	PostInitialized bool
@@ -97,7 +95,7 @@ func (np *NipstBuilderMock) InitializePost(datadir string, space uint64) (*types
 	return nil, nil
 }
 
-func (np *NipstBuilderMock) BuildNIPST(challenge *common.Hash) (*types.NIPST, error) {
+func (np *NipstBuilderMock) BuildNIPST(challenge *types.Hash32) (*types.NIPST, error) {
 	if np.buildNipstFunc != nil {
 		return np.buildNipstFunc(challenge)
 	}
@@ -119,7 +117,7 @@ func (np *NipstErrBuilderMock) InitializePost(dataDir string, space uint64) (*ty
 	return nil, nil
 }
 
-func (np *NipstErrBuilderMock) BuildNIPST(challenge *common.Hash) (*types.NIPST, error) {
+func (np *NipstErrBuilderMock) BuildNIPST(challenge *types.Hash32) (*types.NIPST, error) {
 	return nil, fmt.Errorf("nipst builder error")
 }
 
@@ -135,7 +133,7 @@ func (*MockIdStore) GetIdentity(id string) (types.NodeId, error) {
 
 type ValidatorMock struct{}
 
-func (*ValidatorMock) Validate(nipst *types.NIPST, expectedChallenge common.Hash) error {
+func (*ValidatorMock) Validate(nipst *types.NIPST, expectedChallenge types.Hash32) error {
 	return nil
 }
 
@@ -155,12 +153,12 @@ func (m *MockDB) Put(key, val []byte) error {
 	if len(val) == 0 {
 		m.hadNone = true
 	}
-	m.mp[common.Bytes2Hex(key)] = val
+	m.mp[util.Bytes2Hex(key)] = val
 	return nil
 }
 
 func (m *MockDB) Get(key []byte) ([]byte, error) {
-	return m.mp[common.Bytes2Hex(key)], nil
+	return m.mp[util.Bytes2Hex(key)], nil
 }
 
 type FaultyNetMock struct {
@@ -219,9 +217,9 @@ func setActivesetSizeInCache(t *testing.T, activesetSize uint32) {
 	sort.Slice(view, func(i, j int) bool {
 		return view[i] < view[j]
 	})
-	v, err := types.ViewAsBytes(view)
+	h, err := types.CalcBlocksHash12(view)
 	assert.NoError(t, err)
-	activesetCache.put(sha256.Sum256(v), activesetSize)
+	activesetCache.put(h, activesetSize)
 }
 
 func lastTransmittedAtx(t *testing.T) (atx types.ActivationTx) {
@@ -259,7 +257,7 @@ func storeAtx(r *require.Assertions, activationDb *ActivationDb, atx *types.Acti
 func publishAtx(b *Builder, meshLayer types.LayerID, clockEpoch types.EpochId, buildNipstLayerDuration uint16) (published bool, err error) {
 	net.lastTransmission = nil
 	meshProvider.latestLayer = meshLayer
-	nipstBuilder.buildNipstFunc = func(challenge *common.Hash) (*types.NIPST, error) {
+	nipstBuilder.buildNipstFunc = func(challenge *types.Hash32) (*types.NIPST, error) {
 		meshProvider.latestLayer = meshLayer.Add(buildNipstLayerDuration)
 		return nipst.NewNIPSTWithChallenge(challenge, poetRef), nil
 	}
@@ -402,11 +400,11 @@ func TestBuilder_PublishActivationTx_Serialize(t *testing.T) {
 	assert.NoError(t, err)
 	act := types.NewActivationTx(b.nodeId, coinbase, b.GetLastSequence(b.nodeId)+1, atx.Id(), atx.PubLayerIdx+10, 0, atx.Id(), defaultActiveSetSize, view, npst)
 
-	bt, err := types.AtxAsBytes(act)
+	bt, err := types.InterfaceToBytes(act)
 	assert.NoError(t, err)
 	a, err := types.BytesAsAtx(bt, nil)
 	assert.NoError(t, err)
-	bt2, err := types.AtxAsBytes(a)
+	bt2, err := types.InterfaceToBytes(a)
 	assert.Equal(t, bt, bt2)
 }
 
@@ -447,7 +445,7 @@ func TestBuilder_PublishActivationTx_PosAtxOnSameLayerAsPrevAtx(t *testing.T) {
 
 func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	id := types.NodeId{"aaaaaa", []byte("bbbbb")}
-	coinbase := address.HexToAddress("0xaaa")
+	coinbase := types.HexToAddress("0xaaa")
 	net := &NetMock{}
 	layers := &MeshProviderMock{}
 	nipstBuilder := &NipstBuilderMock{PostInitialized: true}
@@ -456,8 +454,8 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	db := NewMockDB()
 	activationDb := NewActivationDb(database.NewMemDatabase(), &MockIdStore{}, mesh.NewMemMeshDB(lg.WithName("meshDB")), layersPerEpoch, &ValidatorMock{}, lg.WithName("atxDB1"))
 	b := NewBuilder(id, coinbase, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, nil, func() bool { return true }, db, lg.WithName("atxBuilder"))
-	prevAtx := types.AtxId{Hash: common.HexToHash("0x111")}
-	chlng := common.HexToHash("0x3333")
+	prevAtx := types.AtxId{Hash32: types.HexToHash32("0x111")}
+	chlng := types.HexToHash32("0x3333")
 	poetRef := []byte{0xbe, 0xef}
 	nipstBuilder.poetRef = poetRef
 	npst := nipst.NewNIPSTWithChallenge(&chlng, poetRef)
@@ -494,7 +492,7 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	layers.latestLayer = 22
 	err = b.PublishActivationTx(1)
 	assert.NoError(t, err)
-	bts, err := types.AtxAsBytes(act)
+	bts, err := types.InterfaceToBytes(act)
 	assert.NoError(t, err)
 	assert.Equal(t, bts, net.lastTransmission)
 
@@ -515,7 +513,7 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 
 func TestStartPost(t *testing.T) {
 	id := types.NodeId{"aaaaaa", []byte("bbbbb")}
-	coinbase := address.HexToAddress("0xaaa")
+	coinbase := types.HexToAddress("0xaaa")
 	//net := &NetMock{}
 	layers := &MeshProviderMock{}
 	nipstBuilder := &NipstBuilderMock{PostInitialized: false}
@@ -523,7 +521,7 @@ func TestStartPost(t *testing.T) {
 	lg := log.NewDefault(id.Key[:5])
 
 	drive := "/tmp/anton"
-	coinbase2 := address.HexToAddress("0xabb")
+	coinbase2 := types.HexToAddress("0xabb")
 	db := NewMockDB()
 	activationDb := NewActivationDb(database.NewMemDatabase(), &MockIdStore{}, mesh.NewMemMeshDB(lg.WithName("meshDB")), layersPerEpoch, &ValidatorMock{}, lg.WithName("atxDB1"))
 	b := NewBuilder(id, coinbase, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, nil, func() bool { return true }, db, lg.WithName("atxBuilder"))
