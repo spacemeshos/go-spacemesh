@@ -523,12 +523,12 @@ func syncTest(dpType string, t *testing.T) {
 	defer syncObj4.Close()
 	n1 := nodes[0]
 	n2 := nodes[1]
-	n4 := nodes[3]
+	//n4 := nodes[3]
 
 	syncObj1.Peers = getPeersMock([]p2p.Peer{n2.PublicKey()})
 	syncObj2.Peers = getPeersMock([]p2p.Peer{n1.PublicKey()})
-	syncObj3.Peers = getPeersMock([]p2p.Peer{n1.PublicKey(), n2.PublicKey(), n4.PublicKey()})
-	syncObj4.Peers = getPeersMock([]p2p.Peer{n1.PublicKey(), n2.PublicKey()})
+	syncObj3.Peers = getPeersMock([]p2p.Peer{n1.PublicKey()})
+	syncObj4.Peers = getPeersMock([]p2p.Peer{n1.PublicKey()})
 
 	signer := signing.NewEdSigner()
 
@@ -559,6 +559,12 @@ func syncTest(dpType string, t *testing.T) {
 	block10 := types.NewExistingBlock(types.BlockID(101), 4, nil)
 	block10.Signature = signer.Sign(block10.Bytes())
 
+	block11 := types.NewExistingBlock(types.BlockID(101), 5, nil)
+	block10.Signature = signer.Sign(block10.Bytes())
+
+	block12 := types.NewExistingBlock(types.BlockID(101), 6, nil)
+	block10.Signature = signer.Sign(block10.Bytes())
+
 	syncObj1.ValidateLayer(mesh.GenesisLayer())
 	syncObj2.ValidateLayer(mesh.GenesisLayer())
 	syncObj3.ValidateLayer(mesh.GenesisLayer())
@@ -573,6 +579,8 @@ func syncTest(dpType string, t *testing.T) {
 	syncObj1.AddBlockWithTxs(block8, []*types.AddressableSignedTransaction{tx4, tx5, tx6}, []*types.ActivationTx{})
 	syncObj1.AddBlockWithTxs(block9, []*types.AddressableSignedTransaction{tx7, tx8}, []*types.ActivationTx{})
 	syncObj1.AddBlockWithTxs(block10, []*types.AddressableSignedTransaction{tx7, tx8}, []*types.ActivationTx{})
+	syncObj1.AddBlockWithTxs(block11, []*types.AddressableSignedTransaction{tx7, tx8}, []*types.ActivationTx{})
+	syncObj1.AddBlockWithTxs(block12, []*types.AddressableSignedTransaction{tx7, tx8}, []*types.ActivationTx{})
 
 	syncObj1.Start()
 
@@ -583,7 +591,6 @@ func syncTest(dpType string, t *testing.T) {
 	// Keep trying until we're timed out or got a result or got an error
 	timeout := time.After(30 * time.Second)
 
-loop:
 	for {
 		select {
 		// Got a timeout! fail with a timeout error
@@ -591,11 +598,15 @@ loop:
 			t.Error("timed out ")
 		default:
 			if syncObj2.ValidatedLayer() >= 4 && syncObj3.ValidatedLayer() >= 4 {
-				t.Log("done!")
-				t.Log(syncObj2.ValidatedLayer(), " ", syncObj3.ValidatedLayer())
-				break loop
+				log.Info("done!", syncObj2.ValidatedLayer(), syncObj3.ValidatedLayer())
+				// path for this UT calling sync.Close before we read from channel causes writing to closed channel
+				x := syncObj1.clockSub.Subscribe()
+				<-x
+				<-x
+				return
 			}
 		}
+		time.Sleep(500 * time.Millisecond)
 	}
 }
 
