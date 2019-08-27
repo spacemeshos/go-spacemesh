@@ -65,6 +65,14 @@ var (
 	tx8 = tx()
 )
 
+var commitment = &types.PostProof{
+	Identity:     []byte(nil),
+	Challenge:    []byte(nil),
+	MerkleRoot:   []byte("1"),
+	ProofNodes:   [][]byte(nil),
+	ProvenLeaves: [][]byte(nil),
+}
+
 func newMemPoetDb() PoetDb {
 	return activation.NewPoetDb(database.NewMemDatabase(), log.NewDefault("poetDb"))
 }
@@ -868,7 +876,11 @@ func atx() *types.ActivationTx {
 	poetRef := []byte{0xde, 0xad}
 	npst := nipst.NewNIPSTWithChallenge(&chlng, poetRef)
 
-	return types.NewActivationTx(types.NodeId{Key: RandStringRunes(8), VRFPublicKey: []byte(RandStringRunes(8))}, coinbase, 0, *types.EmptyAtxId, 5, 1, *types.EmptyAtxId, 0, []types.BlockID{1, 2, 3}, npst)
+	atx := types.NewActivationTx(types.NodeId{Key: RandStringRunes(8), VRFPublicKey: []byte(RandStringRunes(8))}, coinbase, 0, *types.EmptyAtxId, 5, 1, *types.EmptyAtxId, 0, []types.BlockID{1, 2, 3}, npst)
+	atx.Commitment = commitment
+	atx.CommitmentMerkleRoot = commitment.MerkleRoot
+	atx.CalcAndSetId()
+	return atx
 }
 
 func TestSyncer_Txs(t *testing.T) {

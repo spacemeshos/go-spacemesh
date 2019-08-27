@@ -23,7 +23,7 @@ type NetworkAPI interface {
 }
 
 type MiningAPI interface {
-	StartPost(address types.Address, logicalDrive string, commitmentSize uint64) error
+	StartPost(address types.Address, datadir string, space uint64) error
 	SetCoinbaseAccount(rewardAddress types.Address)
 	// MiningStats returns state of post init, coinbase reward account and data directory path for post commitment
 	MiningStats() (int, string, string)
