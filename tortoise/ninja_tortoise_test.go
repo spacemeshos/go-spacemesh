@@ -147,6 +147,81 @@ func PrintMemUsage() {
 
 var badblocks = 0.1
 
+func TestNinjaTortoise_VariableLayerSize(t *testing.T) {
+
+	lg := log.New("tortoise_test", "", "")
+
+	mdb := getMeshForBench()
+	alg := NewNinjaTortoise(8, mdb, 5, lg)
+	l := mesh.GenesisLayer()
+	AddLayer(mdb, l)
+	alg.handleIncomingLayer(l)
+
+	l1 := createLayer(1, []*types.Layer{l}, 8)
+	AddLayer(mdb, l1)
+	alg.handleIncomingLayer(l1)
+
+	l2 := createLayer(2, []*types.Layer{l1, l}, 8)
+	AddLayer(mdb, l2)
+	alg.handleIncomingLayer(l2)
+
+	l3 := createLayer(3, []*types.Layer{l2, l1, l}, 8)
+	AddLayer(mdb, l3)
+	alg.handleIncomingLayer(l3)
+
+	l4 := createLayer(4, []*types.Layer{l3, l2, l1, l}, 8)
+	AddLayer(mdb, l4)
+	alg.handleIncomingLayer(l4)
+
+	l5 := createLayer(5, []*types.Layer{l4, l3, l2, l1, l}, 4)
+	AddLayer(mdb, l5)
+	alg.handleIncomingLayer(l5)
+
+	l6 := createLayer(6, []*types.Layer{l5, l4, l3, l2, l1}, 9)
+	AddLayer(mdb, l6)
+	alg.handleIncomingLayer(l6)
+	//
+	l7 := createLayer(7, []*types.Layer{l6, l5, l4, l3, l2}, 9)
+	AddLayer(mdb, l7)
+	alg.handleIncomingLayer(l7)
+
+	l8 := createLayer(8, []*types.Layer{l7, l6, l5, l4, l3}, 9)
+	AddLayer(mdb, l8)
+	alg.handleIncomingLayer(l8)
+
+	l9 := createLayer(9, []*types.Layer{l8, l7, l6, l5, l4}, 9)
+	AddLayer(mdb, l9)
+	alg.handleIncomingLayer(l9)
+
+}
+
+func createLayer(index types.LayerID, prev []*types.Layer, blocksInLayer int) *types.Layer {
+	l := types.NewLayer(index)
+	var patterns [][]int
+	for _, l := range prev {
+		blocks := l.Blocks()
+		blocksInPrevLayer := len(blocks)
+		patterns = append(patterns, chooseRandomPattern(blocksInPrevLayer, int(math.Min(float64(blocksInPrevLayer), float64(blocksInPrevLayer)))))
+	}
+	layerBlocks := make([]types.BlockID, 0, blocksInLayer)
+	for i := 0; i < blocksInLayer; i++ {
+		bl := types.NewExistingBlock(types.BlockID(uuid.New().ID()), index, []byte("data data data"))
+		layerBlocks = append(layerBlocks, bl.ID())
+		for idx, pat := range patterns {
+			for _, id := range pat {
+				b := prev[idx].Blocks()[id]
+				bl.AddVote(types.BlockID(b.ID()))
+			}
+		}
+		for _, prevBloc := range prev[0].Blocks() {
+			bl.AddView(types.BlockID(prevBloc.ID()))
+		}
+		l.AddBlock(bl)
+	}
+	log.Debug("Created mesh.LayerID %d with blocks %d", l.Index(), layerBlocks)
+	return l
+}
+
 func TestNinjaTortoise_S10P9(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
@@ -210,9 +285,9 @@ func TestNinjaTortoise_S200P140(t *testing.T) {
 //vote explicitly only for previous layer
 //correction vectors have no affect here
 func TestNinjaTortoise_Sanity1(t *testing.T) {
-	layerSize := 200
-	patternSize := 200
-	layers := 20
+	layerSize := 3
+	patternSize := 3
+	layers := 5
 	mdb := getInMemMesh()
 	alg := sanity(mdb, layers, layerSize, patternSize, 0.2)
 	assert.True(t, alg.pBase.Layer() == types.LayerID(layers-1))
@@ -242,7 +317,7 @@ func sanity(mdb *mesh.MeshDB, layers int, layerSize int, patternSize int, badBlk
 		start := time.Now()
 		alg.handleIncomingLayer(lyr)
 		alg.Debug("Time to process layer: %v ", time.Since(start))
-		fmt.Println(fmt.Sprintf("lyr %v tally was %d", lyr, alg.tTally[alg.pBase][config.GenesisId]))
+		fmt.Println(fmt.Sprintf("lyr %v tally was %d", lyr.Index()-1, alg.tTally[*alg.pBase][config.GenesisId]))
 		l = lyr
 	}
 
@@ -274,10 +349,10 @@ func TestNinjaTortoise_Sanity2(t *testing.T) {
 	alg.handleIncomingLayer(l2)
 	alg.handleIncomingLayer(l3)
 	alg.handleIncomingLayer(l4)
-	for b, vec := range alg.tTally[alg.pBase] {
+	for b, vec := range alg.tTally[*alg.pBase] {
 		alg.Debug("------> tally for block %d according to complete pattern %d are %d", b, alg.pBase, vec)
 	}
-	assert.True(t, alg.tTally[alg.pBase][l.Blocks()[0].ID()] == vec{5, 0}, "lyr %d tally was %d insted of %d", 0, alg.tTally[alg.pBase][l.Blocks()[0].ID()], vec{5, 0})
+	assert.True(t, alg.tTally[*alg.pBase][l.Blocks()[0].ID()] == vec{5, 0}, "lyr %d tally was %d insted of %d", 0, alg.tTally[*alg.pBase][l.Blocks()[0].ID()], vec{5, 0})
 }
 
 func createMulExplicitLayer(index types.LayerID, prev map[types.LayerID]*types.Layer, patterns map[types.LayerID][]int, blocksInLayer int) *types.Layer {
