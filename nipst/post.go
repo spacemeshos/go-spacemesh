@@ -112,7 +112,7 @@ func (c *PostClient) SetParams(dataDir string, space uint64) {
 
 func (c *PostClient) SetLogger(logger shared.Logger) {
 	c.RLock()
-	defer c.RLock()
+	defer c.RUnlock()
 
 	c.logger = logger
 
