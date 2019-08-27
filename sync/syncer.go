@@ -263,6 +263,10 @@ func (s *Syncer) Synchronise() {
 	}
 
 	// node is not synced
+	s.handleNotSyncedFlow(currentSyncLayer)
+}
+
+func (s *Syncer) handleNotSyncedFlow(currentSyncLayer types.LayerID) {
 	s.Info("Node is out of sync setting p2p-synced to false and starting sync")
 	s.setP2pSynced(false) // don't listen to p2p while not synced
 
@@ -284,13 +288,12 @@ func (s *Syncer) Synchronise() {
 	_, err := s.getLayerFromNeighbors(currentSyncLayer)
 	if err != nil {
 		s.With().Info("could not get last ticked layer from neighbors", log.LayerId(uint64(currentSyncLayer)), log.Err(err))
-		return
 	}
 
 	// wait for two ticks to ensure we are fully synced before we open p2p or validate the current layer
 	err = s.p2pSyncForOneFullLayer(currentSyncLayer)
 	if err != nil {
-		s.With().Error("Fatal: failed getting layer even though we listened to p2p", log.LayerId(uint64(currentSyncLayer)), log.Err(err))
+		s.With().Error("Fatal: failed getting layer from db even though we listened to p2p", log.LayerId(uint64(currentSyncLayer)), log.Err(err))
 	}
 }
 
@@ -299,10 +302,12 @@ func (s *Syncer) Synchronise() {
 // opening p2p in weakly-synced transition us to fully-synced
 func (s *Syncer) p2pSyncForOneFullLayer(currentSyncLayer types.LayerID) error {
 	// subscribe and wait for two ticks
+	s.Info("waiting for two ticks while p2p is open")
 	ch := s.clockSub.Subscribe()
 	<-ch
 	<-ch
 	s.clockSub.Unsubscribe(ch) // unsub, we won't be listening on this ch anymore
+	s.Info("done waiting for two ticks while listening to p2p")
 
 	// assumed to be weakly synced here
 	// just get the layers and validate

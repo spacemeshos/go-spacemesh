@@ -1057,6 +1057,24 @@ func TestSyncer_Synchronise2(t *testing.T) {
 	r.True(sync.p2pSynced)
 }
 
+func TestSyncer_handleNotSyncedFlow(t *testing.T) {
+	r := require.New(t)
+	txpool := miner.NewTypesTransactionIdMemPool()
+	atxpool := miner.NewTypesAtxIdMemPool()
+	ts := &mockClock{}
+	sync := NewSync(service.NewSimulator().NewNode(), getMesh(memoryDB, Path+t.Name()+"_"+time.Now().String()), txpool, atxpool, mockTxProcessor{}, BlockEligibilityValidatorMock{}, newMockPoetDb(), conf, ts, 10, log.NewDefault(t.Name()))
+
+	lv := &mockLayerValidator{0, 0, 0, nil}
+	sync.lValidator = lv
+	sync.currentLayer = 10
+	sync.SetLatestLayer(20)
+	sync.lProvider = &mockLayerProvider{}
+
+	go sync.handleNotSyncedFlow(10)
+	time.Sleep(100 * time.Millisecond)
+	r.Equal(2, ts.countSub)
+}
+
 func TestSyncer_p2pSyncForTwoLayers(t *testing.T) {
 	r := require.New(t)
 	syncs, _ := SyncMockFactory(1, conf, t.Name(), memoryDB, newMockPoetDb)
