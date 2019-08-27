@@ -1,3 +1,4 @@
+import json
 from datetime import datetime, timedelta
 
 from tests import queries, analyse
@@ -399,10 +400,11 @@ def test_mining(setup_network):
     out = api_call(client_ip, data, api, testconfig['namespace'])
     # assert "{'value': '0'}" in out
     # print("nonce ok")
+    nonce = int(json.loads(out.replace("\'", "\""))['value'])
 
     api = 'v1/submittransaction'
     txGen = tx_generator.TxGenerator()
-    txBytes = txGen.generate("0000000000000000000000000000000000002222", 0, 246, 642, 100)
+    txBytes = txGen.generate("0000000000000000000000000000000000002222", nonce, 246, 642, 100)
     data = '{"tx":'+ str(list(txBytes)) + '}'
     print("submitting transaction")
     out = api_call(client_ip, data, api, testconfig['namespace'])
