@@ -193,6 +193,8 @@ func TestNinjaTortoise_VariableLayerSize(t *testing.T) {
 	AddLayer(mdb, l9)
 	alg.handleIncomingLayer(l9)
 
+	assert.True(t, alg.pBase.Layer() == 8)
+
 }
 
 func createLayer(index types.LayerID, prev []*types.Layer, blocksInLayer int) *types.Layer {
