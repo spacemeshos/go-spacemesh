@@ -263,10 +263,10 @@ func (s *Syncer) Synchronise() {
 	}
 
 	// node is not synced
-	s.handleNotSyncedFlow(currentSyncLayer)
+	s.handleNotSynced(currentSyncLayer)
 }
 
-func (s *Syncer) handleNotSyncedFlow(currentSyncLayer types.LayerID) {
+func (s *Syncer) handleNotSynced(currentSyncLayer types.LayerID) {
 	s.Info("Node is out of sync setting p2p-synced to false and starting sync")
 	s.setP2pSynced(false) // don't listen to p2p while not synced
 

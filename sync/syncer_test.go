@@ -1070,7 +1070,7 @@ func TestSyncer_handleNotSyncedFlow(t *testing.T) {
 	sync.SetLatestLayer(20)
 	sync.lProvider = &mockLayerProvider{}
 
-	go sync.handleNotSyncedFlow(10)
+	go sync.handleNotSynced(10)
 	time.Sleep(100 * time.Millisecond)
 	r.Equal(2, ts.countSub)
 }
