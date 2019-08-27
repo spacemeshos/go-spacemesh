@@ -273,7 +273,7 @@ func (b *Builder) StartPost(rewardAddress types.Address, dataDir string, space u
 		}
 	}
 
-	b.log.With().Info("PoST initialization starting",
+	b.log.With().Info("Starting PoST initialization",
 		log.String("datadir", dataDir),
 		log.String("space", fmt.Sprintf("%d", space)),
 		log.String("rewardAddress", fmt.Sprintf("%x", rewardAddress)),
