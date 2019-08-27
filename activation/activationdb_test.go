@@ -496,40 +496,39 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	err := atxdb.StoreAtx(1, prevAtx)
 	assert.NoError(t, err)
 
-	//todo: can test against exact error strings
-	//wrong sequnce
+	// Wrong sequence.
 	atx := types.NewActivationTx(idx1, coinbase, 0, prevAtx.Id(), 1012, 0, prevAtx.Id(), 3, []types.BlockID{}, &types.NIPST{})
 	err = atxdb.SyntacticallyValidateAtx(atx)
 	assert.EqualError(t, err, "sequence number is not one more than prev sequence number")
 
-	//wrong active set
+	// Wrong active set.
 	atx = types.NewActivationTx(idx1, coinbase, 1, prevAtx.Id(), 1012, 0, prevAtx.Id(), 10, []types.BlockID{}, &types.NIPST{})
 	err = atxdb.SyntacticallyValidateAtx(atx)
 	assert.EqualError(t, err, "atx contains view with unequal active ids (10) than seen (0)")
 
-	//wrong positioning atx
+	// Wrong positioning atx.
 	atx = types.NewActivationTx(idx1, coinbase, 1, prevAtx.Id(), 1012, 0, atxs[0].Id(), 3, []types.BlockID{}, &types.NIPST{})
 	err = atxdb.SyntacticallyValidateAtx(atx)
 	assert.EqualError(t, err, "expected distance of one epoch (1000 layers) from pos ATX but found 1011")
 
-	//wrong prevATx
+	// Wrong prevATx.
 	atx = types.NewActivationTx(idx1, coinbase, 1, atxs[0].Id(), 1012, 0, prevAtx.Id(), 3, []types.BlockID{}, &types.NIPST{})
 	err = atxdb.SyntacticallyValidateAtx(atx)
 	assert.EqualError(t, err, fmt.Sprintf("previous ATX belongs to different miner. atx.Id: %v, atx.NodeId: %v, prevAtx.NodeId: %v", atx.ShortId(), atx.NodeId.Key, atxs[0].NodeId.Key))
 
-	//wrong layerId
+	// Wrong layerId.
 	atx = types.NewActivationTx(idx1, coinbase, 1, prevAtx.Id(), 12, 0, prevAtx.Id(), 3, []types.BlockID{}, npst)
 	err = atxdb.SyntacticallyValidateAtx(atx)
 	assert.EqualError(t, err, "atx layer (12) must be after positioning atx layer (100)")
 
-	//atx already exists
+	// Atx already exists.
 	err = atxdb.StoreAtx(1, atx)
 	assert.NoError(t, err)
 	atx = types.NewActivationTx(idx1, coinbase, 1, prevAtx.Id(), 12, 0, prevAtx.Id(), 3, []types.BlockID{}, &types.NIPST{})
 	err = atxdb.ContextuallyValidateAtx(&atx.ActivationTxHeader)
 	assert.EqualError(t, err, "last atx is not the one referenced")
 
-	//prev atx declared but not found
+	// Prev atx declared but not found.
 	err = atxdb.StoreAtx(1, atx)
 	assert.NoError(t, err)
 	atx = types.NewActivationTx(idx1, coinbase, 1, prevAtx.Id(), 12, 0, prevAtx.Id(), 3, []types.BlockID{}, &types.NIPST{})
@@ -537,6 +536,37 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	assert.NoError(t, err)
 	err = atxdb.ContextuallyValidateAtx(&atx.ActivationTxHeader)
 	assert.EqualError(t, err, "could not fetch node last ATX: leveldb: not found")
+
+	// Prev atx not declared but commitment not included.
+	atx = types.NewActivationTx(idx1, coinbase, 0, *types.EmptyAtxId, 1012, 0, prevAtx.Id(), 3, []types.BlockID{}, &types.NIPST{})
+	err = atxdb.SyntacticallyValidateAtx(atx)
+	assert.EqualError(t, err, "no prevATX declared, but commitment proof is not included")
+
+	// Prev atx not declared but commitment merkle root not included.
+	atx = types.NewActivationTx(idx1, coinbase, 0, *types.EmptyAtxId, 1012, 0, prevAtx.Id(), 3, []types.BlockID{}, &types.NIPST{})
+	atx.Commitment = commitment
+	err = atxdb.SyntacticallyValidateAtx(atx)
+	assert.EqualError(t, err, "no prevATX declared, but commitment merkle root is not included in challenge")
+
+	// Challenge and commitment merkle root mismatch.
+	atx = types.NewActivationTx(idx1, coinbase, 0, *types.EmptyAtxId, 1012, 0, prevAtx.Id(), 3, []types.BlockID{}, &types.NIPST{})
+	atx.Commitment = commitment
+	atx.CommitmentMerkleRoot = append([]byte{}, commitment.MerkleRoot...)
+	atx.CommitmentMerkleRoot[0] += 1
+	err = atxdb.SyntacticallyValidateAtx(atx)
+	assert.EqualError(t, err, "commitment merkle root included in challenge is not equal to the merkle root included in the proof")
+
+	// Prev atx declared but commitment is included.
+	atx = types.NewActivationTx(idx1, coinbase, 1, prevAtx.Id(), 1012, 0, prevAtx.Id(), 3, []types.BlockID{}, &types.NIPST{})
+	atx.Commitment = commitment
+	err = atxdb.SyntacticallyValidateAtx(atx)
+	assert.EqualError(t, err, "prevATX declared, but commitment proof is included")
+
+	// Prev atx declared but commitment merkle root is included.
+	atx = types.NewActivationTx(idx1, coinbase, 1, prevAtx.Id(), 1012, 0, prevAtx.Id(), 3, []types.BlockID{}, &types.NIPST{})
+	atx.CommitmentMerkleRoot = commitment.MerkleRoot
+	err = atxdb.SyntacticallyValidateAtx(atx)
+	assert.EqualError(t, err, "prevATX declared, but commitment merkle root is included in challenge")
 }
 
 func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {

@@ -3,96 +3,127 @@ package nipst
 import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/merkle-tree"
 	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/initialization"
 	"github.com/spacemeshos/post/proving"
 	"github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/post/validation"
-	"time"
+	"sync"
 )
 
 func DefaultConfig() config.Config {
-	cfg := config.DefaultConfig()
-	cfg.Difficulty = 5
-	cfg.NumProvenLabels = 10
-	cfg.SpacePerUnit = 1 << 10 // 1KB.
-	cfg.FileSize = 1 << 10     // 1KB.
-	return *cfg
+	return *config.DefaultConfig()
 }
 
-func verifyPost(proof *types.PostProof, space uint64, numProvenLabels uint, difficulty uint) (bool, error) {
+func verifyPost(proof *types.PostProof, space uint64, numProvenLabels uint, difficulty uint) error {
 	if space%config.LabelGroupSize != 0 {
-		return false, fmt.Errorf("space (%d) is not a multiple of LabelGroupSize (%d)", space, config.LabelGroupSize)
+		return fmt.Errorf("space (%d) is not a multiple of LabelGroupSize (%d)", space, config.LabelGroupSize)
 	}
 
 	cfg := config.Config{SpacePerUnit: space, NumProvenLabels: uint(numProvenLabels), Difficulty: uint(difficulty)}
 	validator := validation.NewValidator(&cfg)
-	err := validator.Validate((*proving.Proof)(proof))
-	if err != nil {
-		return false, err
+	if err := validator.Validate((*proving.Proof)(proof)); err != nil {
+		return err
 	}
 
-	return true, nil
+	return nil
 }
 
 type PostClient struct {
+	id          []byte
 	cfg         *config.Config
 	initializer *initialization.Initializer
+	prover      *proving.Prover
 	logger      shared.Logger
+
+	sync.RWMutex
 }
 
 // A compile time check to ensure that PostClient fully implements PostProverClient.
 var _ PostProverClient = (*PostClient)(nil)
 
-func NewPostClient(cfg *config.Config) *PostClient {
-	return &PostClient{cfg, nil, shared.DisabledLogger{}}
+func NewPostClient(cfg *config.Config, id []byte) *PostClient {
+	return &PostClient{
+		id:          id,
+		cfg:         cfg,
+		initializer: initialization.NewInitializer(cfg, id),
+		prover:      proving.NewProver(cfg, id),
+		logger:      shared.DisabledLogger{},
+	}
 }
 
-func (c *PostClient) initialize(id []byte, timeout time.Duration) (commitment *types.PostProof, err error) {
-	// TODO(moshababo): implement timeout
-	//TODO: implement persistence
-	if c.cfg.SpacePerUnit%merkle.NodeSize != 0 {
-		return nil, fmt.Errorf("space (%d) is not a multiple of merkle.NodeSize (%d)", c.cfg.SpacePerUnit, merkle.NodeSize)
-	}
-	c.initializer = initialization.NewInitializer(c.cfg, id)
+func (c *PostClient) Initialize() (commitment *types.PostProof, err error) {
+	c.RLock()
+	defer c.RUnlock()
+
 	proof, err := c.initializer.Initialize()
 	return (*types.PostProof)(proof), err
 }
 
-func (c *PostClient) execute(id []byte, challenge []byte, timeout time.Duration) (*types.PostProof, error) {
-	// TODO(moshababo): implement timeout
-	prover := proving.NewProver(c.cfg, id)
-	proof, err := prover.GenerateProof(challenge)
+func (c *PostClient) Execute(challenge []byte) (*types.PostProof, error) {
+	c.RLock()
+	defer c.RUnlock()
+
+	proof, err := c.prover.GenerateProof(challenge)
 	return (*types.PostProof)(proof), err
 }
 
 func (c *PostClient) Reset() error {
-	if c.initializer != nil {
-		err := c.initializer.Reset()
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+	c.Lock()
+	defer c.Unlock()
+
+	return c.initializer.Reset()
 }
 
-func (c *PostClient) SetLogger(logger shared.Logger) {
-	c.logger = logger
+func (c *PostClient) IsInitialized() (bool, error) {
+	c.RLock()
+	defer c.RUnlock()
+
+	state, _, err := c.initializer.State()
+	if err != nil {
+		return false, err
+	}
+
+	return state == initialization.StateCompleted, nil
+}
+
+func (c *PostClient) VerifyInitAllowed() error {
+	c.RLock()
+	defer c.RUnlock()
+
+	return c.initializer.VerifyInitAllowed()
 }
 
 func (c *PostClient) SetParams(dataDir string, space uint64) {
+	c.Lock()
+	defer c.Unlock()
+
 	cfg := *c.cfg
+	cfg.DataDir = dataDir
+	cfg.SpacePerUnit = space
 	c.cfg = &cfg
-	c.cfg.DataDir = dataDir
-	c.cfg.SpacePerUnit = space
+
+	c.initializer = initialization.NewInitializer(c.cfg, c.id)
+	c.initializer.SetLogger(c.logger)
+
+	c.prover = proving.NewProver(c.cfg, c.id)
+	c.prover.SetLogger(c.logger)
 }
 
-func (c *PostClient) Initialized() bool {
-	if c.initializer == nil {
-		return false
-	}
+func (c *PostClient) SetLogger(logger shared.Logger) {
+	c.RLock()
+	defer c.RUnlock()
 
-	state, _, _ := c.initializer.State()
-	return state == initialization.StateCompleted
+	c.logger = logger
+
+	c.initializer.SetLogger(c.logger)
+	c.prover.SetLogger(c.logger)
+}
+
+func (c *PostClient) Cfg() *config.Config {
+	c.RLock()
+	defer c.RUnlock()
+
+	cfg := *c.cfg
+	return &cfg
 }
