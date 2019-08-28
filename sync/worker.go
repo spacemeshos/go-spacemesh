@@ -13,8 +13,7 @@ import (
 )
 
 type RequestFactory func(s WorkerInfra, peer p2p.Peer) (chan interface{}, error)
-type FetchRequestFactory func(s WorkerInfra, peer p2p.Peer, id []types.Hash32) (chan []Item, error)
-type BlockRequestFactory func(s WorkerInfra, peer p2p.Peer, id []types.Hash32) (chan interface{}, error)
+type BatchRequestFactory func(s WorkerInfra, peer p2p.Peer, id []types.Hash32) (chan []Item, error)
 
 type WorkerInfra interface {
 	GetPeers() []p2p.Peer
@@ -140,7 +139,7 @@ func NewNeighborhoodWorker(s WorkerInfra, count int, reqFactory RequestFactory) 
 
 }
 
-func NewFetchWorker(s WorkerInfra, count int, reqFactory FetchRequestFactory, idsChan chan []types.Hash32) worker {
+func NewFetchWorker(s WorkerInfra, count int, reqFactory BatchRequestFactory, idsChan chan []types.Hash32) worker {
 	output := make(chan interface{}, count)
 	acount := int32(count)
 	mu := &sync.Once{}

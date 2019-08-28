@@ -28,7 +28,7 @@ type fetchJob struct {
 //todo make the queue generic
 type fetchQueue struct {
 	log.Log
-	FetchRequestFactory
+	BatchRequestFactory
 	*sync.Mutex
 	*mesh.Mesh
 	workerInfra        WorkerInfra
@@ -40,7 +40,7 @@ type fetchQueue struct {
 
 //todo batches
 func (fq *fetchQueue) work() error {
-	output := fetchWithFactory(NewFetchWorker(fq.workerInfra, 1, fq.FetchRequestFactory, fq.queue))
+	output := fetchWithFactory(NewFetchWorker(fq.workerInfra, 1, fq.BatchRequestFactory, fq.queue))
 	for out := range output {
 		if out == nil {
 			fq.Info("close queue")
@@ -134,7 +134,7 @@ func NewTxQueue(s *Syncer, txValidator TxValidator) *txQueue {
 			Mesh:                s.Mesh,
 			workerInfra:         s.workerInfra,
 			Mutex:               &sync.Mutex{},
-			FetchRequestFactory: TxReqFactory(),
+			BatchRequestFactory: TxFetchReqFactory,
 			checkLocal:          s.txCheckLocalFactory,
 			pending:             make(map[types.Hash32][]chan bool),
 			queue:               make(chan []types.Hash32, 1000)},
@@ -202,7 +202,7 @@ func NewAtxQueue(s *Syncer, fetchPoetProof FetchPoetProofFunc) *atxQueue {
 			Log:                 s.Log.WithName("atxFetchQueue"),
 			Mesh:                s.Mesh,
 			workerInfra:         s.workerInfra,
-			FetchRequestFactory: ATxReqFactory(),
+			BatchRequestFactory: AtxFetchReqFactory,
 			Mutex:               &sync.Mutex{},
 			checkLocal:          s.atxCheckLocalFactory,
 			pending:             make(map[types.Hash32][]chan bool),

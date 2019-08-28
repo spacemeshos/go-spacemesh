@@ -7,7 +7,14 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"reflect"
+)
+
+var (
+	BlockFetchReqFactory = newFetchReqFactory(BLOCK, blocksAsItems)
+	TxFetchReqFactory    = newFetchReqFactory(TX, txsAsItems)
+	AtxFetchReqFactory   = newFetchReqFactory(ATX, atxsAsItems)
 )
 
 func LayerIdsReqFactory(lyr types.LayerID) RequestFactory {
@@ -59,7 +66,7 @@ func HashReqFactory(lyr types.LayerID) RequestFactory {
 
 }
 
-func BlockReqFactory() FetchRequestFactory {
+func newFetchReqFactory(msgtype server.MessageType, asItems func(msg []byte) ([]Item, error)) BatchRequestFactory {
 	//convert to chan
 	return func(s WorkerInfra, peer p2p.Peer, ids []types.Hash32) (chan []Item, error) {
 		ch := make(chan []Item, 1)
@@ -69,16 +76,11 @@ func BlockReqFactory() FetchRequestFactory {
 				s.Warning("peer %v responded with nil to block request", peer)
 				return
 			}
-			var blocks []types.Block
-			err := types.BytesToInterface(msg, &blocks)
+
+			items, err := asItems(msg)
 			if err != nil {
-				s.Error("could not unmarshal block data", err)
+				s.Error("fetch failed bad response : %v", err)
 				return
-			}
-
-			items := make([]Item, len(blocks))
-			for i, arg := range blocks {
-				items[i] = arg
 			}
 
 			if valid, err := validateItemIds(ids, items); !valid {
@@ -89,12 +91,7 @@ func BlockReqFactory() FetchRequestFactory {
 			ch <- items
 		}
 
-		bts, err := types.InterfaceToBytes(ids) //todo send multiple ids
-		if err != nil {
-			return nil, err
-		}
-
-		if err := s.SendRequest(BLOCK, bts, peer, foo); err != nil {
+		if err := encodeAndSendRequest(msgtype, ids, s, peer, foo); err != nil {
 			return nil, err
 		}
 
@@ -102,117 +99,44 @@ func BlockReqFactory() FetchRequestFactory {
 	}
 }
 
-func TxReqFactory() FetchRequestFactory {
-	return func(s WorkerInfra, peer p2p.Peer, ids []types.Hash32) (chan []Item, error) {
-		ch := make(chan []Item, 1)
-		foo := func(msg []byte) {
-			defer close(ch)
-			if len(msg) == 0 || msg == nil {
-				s.Warning("peer responded with nil to txs request ", peer)
-				return
-			}
-			var txs []types.SerializableSignedTransaction
-			err := types.BytesToInterface(msg, &txs)
-			if err != nil || txs == nil {
-				s.Error("could not unmarshal tx data %v", err)
-				return
-			}
-
-			items := make([]Item, len(txs))
-			for i, arg := range txs {
-				items[i] = arg
-			}
-
-			if valid, err := validateItemIds(ids, items); !valid {
-				s.Error("fetch failed bad response : %v", err)
-				return
-			}
-
-			ch <- items
-		}
-
-		bts, err := types.InterfaceToBytes(ids) //todo send multiple ids
-		if err != nil {
-			return nil, err
-		}
-
-		if err := s.SendRequest(TX, bts, peer, foo); err != nil {
-			return nil, err
-		}
-		return ch, nil
+func atxsAsItems(msg []byte) ([]Item, error) {
+	var atxs []types.ActivationTx
+	err := types.BytesToInterface(msg, &atxs)
+	if err != nil || atxs == nil {
+		return nil, err
 	}
+	atxs = calcAndSetIds(atxs)
+	items := make([]Item, len(atxs))
+	for i, arg := range atxs {
+		items[i] = arg
+	}
+	return items, nil
 }
 
-func validateItemIds(ids []types.Hash32, items []Item) (bool, error) {
-	mp := make(map[types.Hash32]struct{})
-	for _, id := range ids {
-		mp[id] = struct{}{}
+func txsAsItems(msg []byte) ([]Item, error) {
+	var txs []types.SerializableSignedTransaction
+	err := types.BytesToInterface(msg, &txs)
+	if err != nil || txs == nil {
+		return nil, err
 	}
-	for _, tx := range items {
-		txid := tx.Hash32()
-		if _, ok := mp[txid]; !ok {
-			return false, errors.New(fmt.Sprintf("received item that was not requested %v type %v", tx.ShortString(), reflect.TypeOf(tx)))
-		}
+	items := make([]Item, len(txs))
+	for i, arg := range txs {
+		items[i] = arg
 	}
-	return true, nil
+	return items, nil
 }
 
-func ATxReqFactory() FetchRequestFactory {
-	return func(s WorkerInfra, peer p2p.Peer, ids []types.Hash32) (chan []Item, error) {
-		ch := make(chan []Item, 1)
-		foo := func(msg []byte) {
-			s.Info("Handle atx response ")
-			defer close(ch)
-			if len(msg) == 0 || msg == nil {
-				s.Warning("peer responded with nil to atxs request ", peer)
-				return
-			}
-			var atxs []types.ActivationTx
-			err := types.BytesToInterface(msg, &atxs)
-			if err != nil || atxs == nil {
-				s.Error("could not unmarshal atx data %v", err)
-				return
-			}
-
-			atxs = calcAndSetIds(atxs)
-
-			items := make([]Item, len(atxs))
-			for i, arg := range atxs {
-				items[i] = arg
-			}
-
-			if valid, err := validateItemIds(ids, items); !valid {
-				s.Error("fetch failed bad response : %v", err)
-				return
-			}
-
-			ch <- items
-		}
-
-		bts, err := types.InterfaceToBytes(ids) //todo send multiple ids
-		if err != nil {
-			return nil, err
-		}
-		if err := s.SendRequest(ATX, bts, peer, foo); err != nil {
-			return nil, err
-		}
-
-		return ch, nil
+func blocksAsItems(msg []byte) ([]Item, error) {
+	var blocks []types.Block
+	err := types.BytesToInterface(msg, &blocks)
+	if err != nil {
+		return nil, err
 	}
-}
-
-func validateAtxIds(ids []types.Hash32, atxs []types.ActivationTx) (bool, error) {
-	mp := make(map[types.Hash32]struct{})
-	for _, id := range ids {
-		mp[id] = struct{}{}
+	items := make([]Item, len(blocks))
+	for i, arg := range blocks {
+		items[i] = arg
 	}
-	for _, tx := range atxs {
-		txid := tx.Hash32()
-		if _, ok := mp[txid]; !ok {
-			return false, errors.New(fmt.Sprintf("received a tx that was not requested  %v", tx.ShortString()))
-		}
-	}
-	return true, nil
+	return items, nil
 }
 
 func calcAndSetIds(atxs []types.ActivationTx) []types.ActivationTx {
@@ -269,4 +193,29 @@ func validatePoetRef(proofMessage types.PoetProofMessage, poetProofRef []byte) (
 	}
 
 	return true, nil
+}
+
+func validateItemIds(ids []types.Hash32, items []Item) (bool, error) {
+	mp := make(map[types.Hash32]struct{})
+	for _, id := range ids {
+		mp[id] = struct{}{}
+	}
+	for _, tx := range items {
+		txid := tx.Hash32()
+		if _, ok := mp[txid]; !ok {
+			return false, errors.New(fmt.Sprintf("received item that was not requested %v type %v", tx.ShortString(), reflect.TypeOf(tx)))
+		}
+	}
+	return true, nil
+}
+
+func encodeAndSendRequest(req server.MessageType, ids []types.Hash32, s WorkerInfra, peer p2p.Peer, foo func(msg []byte)) error {
+	bts, err := types.InterfaceToBytes(ids)
+	if err != nil {
+		return err
+	}
+	if err := s.SendRequest(req, bts, peer, foo); err != nil {
+		return err
+	}
+	return nil
 }

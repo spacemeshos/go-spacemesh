@@ -201,7 +201,7 @@ func TestSyncProtocol_BlockRequest(t *testing.T) {
 	ch := make(chan []types.Hash32, 1)
 	ch <- []types.Hash32{block.Hash32()}
 
-	output := fetchWithFactory(NewFetchWorker(syncObj2, 1, BlockReqFactory(), ch))
+	output := fetchWithFactory(NewFetchWorker(syncObj2, 1, newFetchReqFactory(BLOCK, blocksAsItems), ch))
 
 	timeout := time.NewTimer(2 * time.Second)
 
@@ -397,7 +397,7 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	ch <- []types.Hash32{block2.Hash32()}
 	ch <- []types.Hash32{block3.Hash32()}
 	close(ch)
-	output := fetchWithFactory(NewFetchWorker(syncObj2, 1, BlockReqFactory(), ch))
+	output := fetchWithFactory(NewFetchWorker(syncObj2, 1, newFetchReqFactory(BLOCK, blocksAsItems), ch))
 
 	for out := range output {
 		block := out.(fetchJob).items[0].(types.Block)
@@ -1205,7 +1205,7 @@ func TestSyncProtocol_NilResponse(t *testing.T) {
 	bch := make(chan []types.Hash32, 1)
 	bch <- []types.Hash32{nonExistingBlockId.AsHash32()}
 
-	output = fetchWithFactory(NewFetchWorker(syncs[0], 1, BlockReqFactory(), bch))
+	output = fetchWithFactory(NewFetchWorker(syncs[0], 1, newFetchReqFactory(BLOCK, blocksAsItems), bch))
 
 	select {
 	case out := <-output:
@@ -1296,7 +1296,7 @@ func TestSyncProtocol_BadResponse(t *testing.T) {
 	ch := make(chan []types.Hash32, 1)
 	bid := types.BlockID(1)
 	ch <- []types.Hash32{bid.AsHash32()}
-	output := fetchWithFactory(NewFetchWorker(syncs[0], 1, BlockReqFactory(), ch))
+	output := fetchWithFactory(NewFetchWorker(syncs[0], 1, newFetchReqFactory(BLOCK, blocksAsItems), ch))
 
 	select {
 	case out := <-output:
@@ -1308,7 +1308,7 @@ func TestSyncProtocol_BadResponse(t *testing.T) {
 	// Tx
 	ch = make(chan []types.Hash32, 1)
 	ch <- []types.Hash32{[32]byte{1}}
-	output = fetchWithFactory(NewFetchWorker(syncs[0], 1, TxReqFactory(), ch))
+	output = fetchWithFactory(NewFetchWorker(syncs[0], 1, newFetchReqFactory(TX, txsAsItems), ch))
 
 	select {
 	case out := <-output:
@@ -1320,7 +1320,7 @@ func TestSyncProtocol_BadResponse(t *testing.T) {
 	// Atx
 	ch = make(chan []types.Hash32, 1)
 	ch <- []types.Hash32{[32]byte{1}}
-	output = fetchWithFactory(NewFetchWorker(syncs[0], 1, ATxReqFactory(), ch))
+	output = fetchWithFactory(NewFetchWorker(syncs[0], 1, newFetchReqFactory(ATX, atxsAsItems), ch))
 
 	select {
 	case out := <-output:

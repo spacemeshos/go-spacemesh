@@ -69,7 +69,7 @@ func (vq *validationQueue) done() {
 
 func (vq *validationQueue) work() {
 
-	output := fetchWithFactory(NewFetchWorker(vq.workerInfra, vq.Concurrency, BlockReqFactory(), vq.queue))
+	output := fetchWithFactory(NewFetchWorker(vq.workerInfra, vq.Concurrency, BlockFetchReqFactory, vq.queue))
 	for out := range output {
 		bjb, ok := out.(fetchJob)
 		if !ok {
