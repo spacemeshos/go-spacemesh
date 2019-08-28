@@ -16,7 +16,8 @@ type SValidateAtxFunc func(atx *types.ActivationTx) error
 type CheckLocalFunc func(atxIds []types.Hash32) (map[types.Hash32]Item, map[types.Hash32]Item, []types.Hash32)
 
 type Item interface {
-	ItemId() types.Hash32
+	Hash32() types.Hash32
+	ShortString() string
 }
 
 type fetchJob struct {
@@ -41,14 +42,12 @@ type fetchQueue struct {
 func (fq *fetchQueue) work() error {
 	output := fetchWithFactory(NewFetchWorker(fq.workerInfra, 1, fq.FetchRequestFactory, fq.queue))
 	for out := range output {
-
 		if out == nil {
 			fq.Info("close queue")
 			return nil
 		}
 
-		txs := out.(fetchJob)
-		fq.updateDependencies(txs) //todo hack add batches
+		fq.updateDependencies(out.(fetchJob))
 		fq.Debug("next batch")
 	}
 	return nil
@@ -150,7 +149,7 @@ func NewTxQueue(s *Syncer, txValidator TxValidator) *txQueue {
 func (tx txQueue) HandleTxs(txids []types.TransactionId) ([]*types.AddressableSignedTransaction, error) {
 	txItems := make([]types.Hash32, 0, len(txids))
 	for _, i := range txids {
-		txItems = append(txItems, i.ItemId())
+		txItems = append(txItems, i.Hash32())
 	}
 
 	txres, err := tx.Handle(txItems)
@@ -172,15 +171,15 @@ func updateTxDependencies(invalidate func(id types.Hash32, valid bool), txpool T
 			return
 		}
 
-		mp := map[types.Hash32]*types.SerializableSignedTransaction{}
+		mp := map[types.Hash32]types.SerializableSignedTransaction{}
 
 		for _, item := range fj.items {
-			mp[item.ItemId()] = item.(*types.SerializableSignedTransaction)
+			mp[item.Hash32()] = item.(types.SerializableSignedTransaction)
 		}
 
 		for _, id := range fj.ids {
 			if item, ok := mp[id]; ok {
-				tx, err := getValidAddrTx(item)
+				tx, err := getValidAddrTx(&item)
 				if err == nil {
 					txpool.Put(types.TransactionId(id), tx)
 					invalidate(id, true)
@@ -220,7 +219,7 @@ func NewAtxQueue(s *Syncer, fetchPoetProof FetchPoetProofFunc) *atxQueue {
 func (atx atxQueue) HandleAtxs(atxids []types.AtxId) ([]*types.ActivationTx, error) {
 	atxItems := make([]types.Hash32, 0, len(atxids))
 	for _, i := range atxids {
-		atxItems = append(atxItems, i.ItemId())
+		atxItems = append(atxItems, i.Hash32())
 	}
 
 	atxres, err := atx.Handle(atxItems)
@@ -244,17 +243,17 @@ func updateAtxDependencies(invalidate func(id types.Hash32, valid bool), sValida
 
 		fetchProofCalcId(fetchProof, fj)
 
-		mp := map[types.Hash32]*types.ActivationTx{}
+		mp := map[types.Hash32]types.ActivationTx{}
 		for _, item := range fj.items {
 			tmp := item.(types.ActivationTx)
-			mp[item.ItemId()] = &tmp
+			mp[item.Hash32()] = tmp
 		}
 
 		for _, id := range fj.ids {
 			if atx, ok := mp[id]; ok {
-				err := sValidateAtx(atx)
+				err := sValidateAtx(&atx)
 				if err == nil {
-					atxpool.Put(atx.Id(), atx)
+					atxpool.Put(atx.Id(), &atx)
 					invalidate(id, true)
 					continue
 				}
@@ -290,10 +289,10 @@ func fetchProofCalcId(fetchPoetProof FetchPoetProofFunc, fj fetchJob) {
 		atx.CalcAndSetId() //todo put it somewhere that will cause less confusion
 		if err := fetchPoetProof(atx.GetPoetProofRef()); err != nil {
 			log.Error("received atx (%v) with syntactically invalid or missing PoET proof (%x): %v",
-				atx.ShortId(), atx.GetShortPoetProofRef(), err)
+				atx.ShortString(), atx.GetShortPoetProofRef(), err)
 			continue
 		}
-		itemsWithProofs = append(itemsWithProofs, &atx)
+		itemsWithProofs = append(itemsWithProofs, atx)
 	}
 
 	fj.items = itemsWithProofs

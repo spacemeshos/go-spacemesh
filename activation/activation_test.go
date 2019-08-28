@@ -31,7 +31,7 @@ var (
 	nodeId       = types.NodeId{Key: "11111", VRFPublicKey: []byte("22222")}
 	otherNodeId  = types.NodeId{Key: "00000", VRFPublicKey: []byte("00000")}
 	coinbase     = types.HexToAddress("33333")
-	prevAtxId    = types.AtxId{Hash32: types.HexToHash32("44444")}
+	prevAtxId    = types.AtxId(types.HexToHash32("44444"))
 	chlng        = types.HexToHash32("55555")
 	poetRef      = []byte("66666")
 	defaultView  = []types.BlockID{1, 2, 3}
@@ -492,7 +492,7 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	db := NewMockDB()
 	activationDb := NewActivationDb(database.NewMemDatabase(), &MockIdStore{}, mesh.NewMemMeshDB(lg.WithName("meshDB")), layersPerEpoch, &ValidatorMock{}, lg.WithName("atxDB1"))
 	b := NewBuilder(id, coinbase, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, postProver, nil, func() bool { return true }, db, lg.WithName("atxBuilder"))
-	prevAtx := types.AtxId{Hash32: types.HexToHash32("0x111")}
+	prevAtx := types.AtxId(types.HexToHash32("0x111"))
 	chlng := types.HexToHash32("0x3333")
 	poetRef := []byte{0xbe, 0xef}
 	nipstBuilder.poetRef = poetRef
@@ -513,7 +513,7 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 		PositioningAtx: atx.Id(),
 	}
 
-	bytes, err := challenge.Hash()
+	bytes, err := challenge.NipstHash()
 	npst2 := nipst.NewNIPSTWithChallenge(bytes, poetRef)
 	assert.NoError(t, err)
 

@@ -4,16 +4,12 @@ import (
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"reflect"
 	"sync"
 )
-
-type blockJob struct {
-	item *types.Block
-	id   types.BlockID
-}
 
 type ValidationInfra interface {
 	DataAvailabilty(blk *types.Block) ([]*types.AddressableSignedTransaction, []*types.ActivationTx, error)
@@ -28,7 +24,7 @@ type validationQueue struct {
 	Configuration
 	ValidationInfra
 	workerInfra   WorkerInfra
-	queue         chan types.BlockID
+	queue         chan []types.Hash32
 	mu            sync.Mutex
 	callbacks     map[interface{}]func(res bool) error
 	depMap        map[interface{}]map[types.BlockID]struct{}
@@ -40,7 +36,7 @@ func NewValidationQueue(srvr WorkerInfra, conf Configuration, msh ValidationInfr
 	vq := &validationQueue{
 		Configuration:   conf,
 		workerInfra:     srvr,
-		queue:           make(chan types.BlockID, 2*conf.LayerSize),
+		queue:           make(chan []types.Hash32, 2*conf.LayerSize),
 		visited:         make(map[types.BlockID]struct{}),
 		depMap:          make(map[interface{}]map[types.BlockID]struct{}),
 		reverseDepMap:   make(map[types.BlockID][]interface{}),
@@ -71,36 +67,45 @@ func (vq *validationQueue) done() {
 	close(vq.queue)
 }
 
-func (vq *validationQueue) work() error {
+func (vq *validationQueue) work() {
 
-	output := fetchWithFactory(NewBlockhWorker(vq.workerInfra, vq.Concurrency, BlockReqFactory(), vq.queue))
+	output := fetchWithFactory(NewFetchWorker(vq.workerInfra, vq.Concurrency, BlockReqFactory(), vq.queue))
 	for out := range output {
-		bjb, ok := out.(blockJob)
+		bjb, ok := out.(fetchJob)
 		if !ok {
 			vq.Error(fmt.Sprintf("Type conversion err %v", out))
 			continue
 		}
 
-		if bjb.item == nil {
-			vq.updateDependencies(bjb.id, false)
+		if len(bjb.ids) == 0 {
+			vq.Info("channel closed")
+			return
+		}
+
+		//todo movem to batch block request
+		bid := types.BlockID(util.BytesToUint64(bjb.ids[0].Bytes()))
+		if bjb.items == nil {
+			vq.updateDependencies(bid, false)
 			vq.Error(fmt.Sprintf("could not retrieve a block in view "))
 			continue
 		}
 
-		vq.Info("fetched  %v", bjb.id)
-		vq.visited[bjb.id] = struct{}{}
-		if eligable, err := vq.BlockSignedAndEligible(bjb.item); err != nil || !eligable {
-			vq.updateDependencies(bjb.id, false)
-			vq.Error(fmt.Sprintf("Block %v eligiblety check failed %v", bjb.id, err))
+		block := bjb.items[0].(types.Block) //todo hack remove after batch block request is implemented in request and handler
+
+		vq.Info("fetched  %v", bid)
+		vq.visited[bid] = struct{}{}
+		if eligable, err := vq.BlockSignedAndEligible(&block); err != nil || !eligable {
+			vq.updateDependencies(bid, false)
+			vq.Error(fmt.Sprintf("Block %v eligiblety check failed %v", bjb.ids, err))
 			continue
 		}
 
-		vq.handleBlockDependencies(bjb.item) //todo better deadlock solution
+		vq.handleBlockDependencies(&block) //todo better deadlock solution
 
 		vq.Info("next block")
 	}
 
-	return nil
+	return
 }
 
 func (vq *validationQueue) handleBlockDependencies(blk *types.Block) {
@@ -192,7 +197,7 @@ func (vq *validationQueue) addDependencies(jobId interface{}, blks []types.Block
 	vq.mu.Lock()
 	vq.callbacks[jobId] = finishCallback
 	dependencys := make(map[types.BlockID]struct{})
-	idsToPush := make([]types.BlockID, 0, len(blks))
+	idsToPush := make([]types.Hash32, 0, len(blks))
 	for _, id := range blks {
 		if vq.inQueue(id) {
 			vq.reverseDepMap[id] = append(vq.reverseDepMap[id], jobId)
@@ -205,14 +210,14 @@ func (vq *validationQueue) addDependencies(jobId interface{}, blks []types.Block
 				vq.reverseDepMap[id] = append(vq.reverseDepMap[id], jobId)
 				vq.Info("add block %v to %v pending map", id, jobId)
 				dependencys[id] = struct{}{}
-				idsToPush = append(idsToPush, id)
+				idsToPush = append(idsToPush, id.AsHash32())
 			}
 		}
 	}
 	vq.mu.Unlock()
 
 	for _, id := range idsToPush {
-		vq.queue <- id
+		vq.queue <- []types.Hash32{id}
 	}
 
 	//todo better this is a little hacky

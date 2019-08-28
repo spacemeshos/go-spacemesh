@@ -583,11 +583,11 @@ func (s *Syncer) atxCheckLocalFactory(atxIds []types.Hash32) (map[types.Hash32]I
 	unprocessedItems := make(map[types.Hash32]Item, len(atxIds))
 	missingInPool := make([]types.AtxId, 0, len(atxIds))
 	for _, t := range atxIds {
-		id := types.AtxId{Hash32: t}
+		id := types.AtxId(t)
 		if x, err := s.atxpool.Get(id); err == nil {
 			atx := x
 			s.Debug("found atx, %v in atx pool", id.ShortString())
-			unprocessedItems[id.ItemId()] = &atx
+			unprocessedItems[id.Hash32()] = &atx
 		} else {
 			s.Debug("atx %v not in atx pool", id.ShortString())
 			missingInPool = append(missingInPool, id)
@@ -597,13 +597,13 @@ func (s *Syncer) atxCheckLocalFactory(atxIds []types.Hash32) (map[types.Hash32]I
 	dbAtxs, missing := s.GetATXs(missingInPool)
 
 	dbItems := make(map[types.Hash32]Item, len(dbAtxs))
-	for i := range dbAtxs {
-		dbItems[i.Hash32] = i
+	for i, k := range dbAtxs {
+		dbItems[i.Hash32()] = k
 	}
 
 	missingItems := make([]types.Hash32, 0, len(missing))
 	for _, i := range missing {
-		missingItems = append(missingItems, i.Hash32)
+		missingItems = append(missingItems, i.Hash32())
 	}
 
 	return unprocessedItems, dbItems, missingItems
@@ -617,7 +617,7 @@ func (s *Syncer) txCheckLocalFactory(txIds []types.Hash32) (map[types.Hash32]Ite
 		id := types.TransactionId(t)
 		if tx, err := s.txpool.Get(id); err == nil {
 			s.Debug("found tx, %v in tx pool", hex.EncodeToString(t[:]))
-			unprocessedItems[id.ItemId()] = &tx
+			unprocessedItems[id.Hash32()] = &tx
 		} else {
 			s.Debug("tx %v not in atx pool", hex.EncodeToString(t[:]))
 			missingInPool = append(missingInPool, id)
@@ -627,13 +627,13 @@ func (s *Syncer) txCheckLocalFactory(txIds []types.Hash32) (map[types.Hash32]Ite
 	dbTxs, missing := s.GetTransactions(missingInPool)
 
 	dbItems := make(map[types.Hash32]Item, len(dbTxs))
-	for i := range dbTxs {
-		dbItems[i.ItemId()] = i
+	for i, k := range dbTxs {
+		dbItems[i.Hash32()] = k
 	}
 
 	missingItems := make([]types.Hash32, 0, len(missing))
 	for _, i := range missing {
-		missingItems = append(missingItems, i.ItemId())
+		missingItems = append(missingItems, i.Hash32())
 	}
 
 	return unprocessedItems, dbItems, missingItems

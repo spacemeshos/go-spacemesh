@@ -3,11 +3,11 @@ package sync
 import (
 	"bytes"
 	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"reflect"
 )
 
 func LayerIdsReqFactory(lyr types.LayerID) RequestFactory {
@@ -59,41 +59,37 @@ func HashReqFactory(lyr types.LayerID) RequestFactory {
 
 }
 
-func blockSliceToChan(blockIds []types.BlockID) chan types.BlockID {
-	blockIdsCh := make(chan types.BlockID, len(blockIds))
-	for _, id := range blockIds {
-		blockIdsCh <- id
-	}
-	close(blockIdsCh)
-	return blockIdsCh
-}
-
-func BlockReqFactory() BlockRequestFactory {
+func BlockReqFactory() FetchRequestFactory {
 	//convert to chan
-	return func(s WorkerInfra, peer p2p.Peer, id interface{}) (chan interface{}, error) {
-		ch := make(chan interface{}, 1)
+	return func(s WorkerInfra, peer p2p.Peer, ids []types.Hash32) (chan []Item, error) {
+		ch := make(chan []Item, 1)
 		foo := func(msg []byte) {
 			defer close(ch)
 			if len(msg) == 0 || msg == nil {
-				s.Warning("peer %v responded with nil to block %v request", peer, id)
+				s.Warning("peer %v responded with nil to block request", peer)
 				return
 			}
-			var block types.Block
-			err := types.BytesToInterface(msg, &block)
+			var blocks []types.Block
+			err := types.BytesToInterface(msg, &blocks)
 			if err != nil {
 				s.Error("could not unmarshal block data", err)
 				return
 			}
 
-			if block.ID() != id {
-				s.Info("received block with different id than requested")
+			items := make([]Item, len(blocks))
+			for i, arg := range blocks {
+				items[i] = arg
+			}
+
+			if valid, err := validateItemIds(ids, items); !valid {
+				s.Error("fetch failed bad response : %v", err)
 				return
 			}
 
-			ch <- &block
+			ch <- items
 		}
 
-		bts, err := types.InterfaceToBytes(id) //todo send multiple ids
+		bts, err := types.InterfaceToBytes(ids) //todo send multiple ids
 		if err != nil {
 			return nil, err
 		}
@@ -107,7 +103,7 @@ func BlockReqFactory() BlockRequestFactory {
 }
 
 func TxReqFactory() FetchRequestFactory {
-	return func(s WorkerInfra, peer p2p.Peer, ids interface{}) (chan []Item, error) {
+	return func(s WorkerInfra, peer p2p.Peer, ids []types.Hash32) (chan []Item, error) {
 		ch := make(chan []Item, 1)
 		foo := func(msg []byte) {
 			defer close(ch)
@@ -122,15 +118,16 @@ func TxReqFactory() FetchRequestFactory {
 				return
 			}
 
-			if valid, err := validateTxIds(ids.([]types.Hash32), txs); !valid {
+			items := make([]Item, len(txs))
+			for i, arg := range txs {
+				items[i] = arg
+			}
+
+			if valid, err := validateItemIds(ids, items); !valid {
 				s.Error("fetch failed bad response : %v", err)
 				return
 			}
 
-			items := make([]Item, len(txs))
-			for i, arg := range txs {
-				items[i] = &arg
-			}
 			ch <- items
 		}
 
@@ -146,22 +143,22 @@ func TxReqFactory() FetchRequestFactory {
 	}
 }
 
-func validateTxIds(ids []types.Hash32, txs []types.SerializableSignedTransaction) (bool, error) {
+func validateItemIds(ids []types.Hash32, items []Item) (bool, error) {
 	mp := make(map[types.Hash32]struct{})
 	for _, id := range ids {
 		mp[id] = struct{}{}
 	}
-	for _, tx := range txs {
-		txid := types.GetTransactionId(&tx)
-		if _, ok := mp[txid.ItemId()]; !ok {
-			return false, errors.New(fmt.Sprintf("received a tx that was not requested  %v", hex.EncodeToString(txid[:])))
+	for _, tx := range items {
+		txid := tx.Hash32()
+		if _, ok := mp[txid]; !ok {
+			return false, errors.New(fmt.Sprintf("received item that was not requested %v type %v", tx.ShortString(), reflect.TypeOf(tx)))
 		}
 	}
 	return true, nil
 }
 
 func ATxReqFactory() FetchRequestFactory {
-	return func(s WorkerInfra, peer p2p.Peer, ids interface{}) (chan []Item, error) {
+	return func(s WorkerInfra, peer p2p.Peer, ids []types.Hash32) (chan []Item, error) {
 		ch := make(chan []Item, 1)
 		foo := func(msg []byte) {
 			s.Info("Handle atx response ")
@@ -178,14 +175,15 @@ func ATxReqFactory() FetchRequestFactory {
 			}
 
 			atxs = calcAndSetIds(atxs)
-			if valid, err := validateAtxIds(ids.([]types.Hash32), atxs); !valid {
-				s.Error("fetch failed bad response : %v", err)
-				return
-			}
 
 			items := make([]Item, len(atxs))
 			for i, arg := range atxs {
 				items[i] = arg
+			}
+
+			if valid, err := validateItemIds(ids, items); !valid {
+				s.Error("fetch failed bad response : %v", err)
+				return
 			}
 
 			ch <- items
@@ -209,9 +207,9 @@ func validateAtxIds(ids []types.Hash32, atxs []types.ActivationTx) (bool, error)
 		mp[id] = struct{}{}
 	}
 	for _, tx := range atxs {
-		txid := tx.ItemId()
+		txid := tx.Hash32()
 		if _, ok := mp[txid]; !ok {
-			return false, errors.New(fmt.Sprintf("received a tx that was not requested  %v", tx.ShortId()))
+			return false, errors.New(fmt.Sprintf("received a tx that was not requested  %v", tx.ShortString()))
 		}
 	}
 	return true, nil

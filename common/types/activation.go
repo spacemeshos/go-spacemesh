@@ -24,23 +24,25 @@ func (l EpochId) FirstLayer(layersPerEpoch uint16) LayerID {
 	return LayerID(uint64(l) * uint64(layersPerEpoch))
 }
 
-type AtxId struct {
-	Hash32
+type AtxId Hash32
+
+func (t AtxId) ShortString() string {
+	return t.Hash32().ShortString()
 }
 
-func (t AtxId) ShortId() string {
-	return t.ShortString()
+func (t AtxId) Hash32() Hash32 {
+	return Hash32(t)
 }
 
-func (t AtxId) ItemId() common.Hash {
-	return t.Hash
+func (t AtxId) Bytes() []byte {
+	return Hash32(t).Bytes()
 }
 
-var EmptyAtxId = &AtxId{Hash32{0}}
+var EmptyAtxId = &AtxId{0}
 
 type ActivationTxHeader struct {
 	NIPSTChallenge
-	*AtxId
+	id            AtxId
 	Coinbase      Address
 	ActiveSetSize uint32
 }
@@ -56,7 +58,7 @@ type NIPSTChallenge struct {
 	CommitmentMerkleRoot []byte
 }
 
-func (challenge *NIPSTChallenge) Hash() (*Hash32, error) {
+func (challenge *NIPSTChallenge) NipstHash() (*Hash32, error) {
 	ncBytes, err := NIPSTChallengeAsBytes(challenge)
 	if err != nil {
 		return nil, err
@@ -66,16 +68,16 @@ func (challenge *NIPSTChallenge) Hash() (*Hash32, error) {
 }
 
 func (challenge *NIPSTChallenge) String() string {
-	return fmt.Sprintf("<id: [vrf: %v ed: %v], seq: %v, prevAtx: %v, PubLayer: %v, s tick: %v, e tick: %v, "+
+	return fmt.Sprintf("<Id: [vrf: %v ed: %v], seq: %v, prevAtx: %v, PubLayer: %v, s tick: %v, e tick: %v, "+
 		"posAtx: %v>",
 		util.Bytes2Hex(challenge.NodeId.VRFPublicKey)[:5],
 		challenge.NodeId.Key[:5],
 		challenge.Sequence,
-		challenge.PrevATXId.ShortId(),
+		challenge.PrevATXId.ShortString(),
 		challenge.PubLayerIdx,
 		challenge.StartTick,
 		challenge.EndTick,
-		challenge.PositioningAtx.ShortId())
+		challenge.PositioningAtx.ShortString())
 }
 
 type ActivationTx struct {
@@ -134,26 +136,30 @@ func NewActivationTxWithChallenge(poetChallenge NIPSTChallenge, coinbase Address
 }
 
 func (atxh *ActivationTxHeader) Id() AtxId {
-	if atxh.AtxId == nil {
-		panic("id field must be set")
+	if atxh.id == *EmptyAtxId {
+		panic("Id field must be set")
 	}
-	return *atxh.AtxId
+	return atxh.id
 }
 
-func (atxh *ActivationTxHeader) ShortId() string {
-	return atxh.Id().ShortId()
+func (atx ActivationTxHeader) Hash32() Hash32 {
+	return atx.Id().Hash32()
+}
+
+func (atx ActivationTxHeader) ShortString() string {
+	return atx.Id().ShortString()
 }
 
 func (atxh *ActivationTxHeader) TargetEpoch(layersPerEpoch uint16) EpochId {
 	return atxh.PubLayerIdx.GetEpoch(layersPerEpoch) + 1
 }
 
-func (atxh *ActivationTxHeader) SetId(id *AtxId) {
-	atxh.AtxId = id
+func (atxh *ActivationTxHeader) SetId(id AtxId) {
+	atxh.id = id
 }
 
 func (atx *ActivationTx) CalcAndSetId() {
-	atx.SetId(&AtxId{CalcAtxHash32(atx)})
+	atx.SetId(AtxId(CalcAtxHash32(atx)))
 }
 
 func (atx *ActivationTx) GetPoetProofRef() []byte {
@@ -193,7 +199,7 @@ type PoetRound struct {
 }
 
 // NIPST is Non-Interactive Proof of Space-Time.
-// Given an id, a space parameter S, a duration D and a challenge C,
+// Given an Id, a space parameter S, a duration D and a challenge C,
 // it can convince a verifier that (1) the prover expended S * D space-time
 // after learning the challenge C. (2) the prover did not know the NIPST until D time
 // after the prover learned C.
@@ -214,7 +220,7 @@ type NIPST struct {
 type PostProof proving.Proof
 
 func (p *PostProof) String() string {
-	return fmt.Sprintf("id: %v, challenge: %v, root: %v",
+	return fmt.Sprintf("Id: %v, challenge: %v, root: %v",
 		bytesToShortString(p.Identity), bytesToShortString(p.Challenge), bytesToShortString(p.MerkleRoot))
 }
 

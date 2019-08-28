@@ -41,7 +41,7 @@ func BytesAsAtx(b []byte, id *AtxId) (*ActivationTx, error) {
 	if id == nil {
 		atx.CalcAndSetId()
 	} else {
-		atx.SetId(id)
+		atx.SetId(*id)
 	}
 	return &atx, nil
 }
@@ -114,7 +114,7 @@ func InterfaceToBytes(i interface{}) ([]byte, error) {
 	return w.Bytes(), nil
 }
 
-//todo standardized transaction id across project
+//todo standardized transaction Id across project
 //todo replace panic
 func GetTransactionId(t *SerializableSignedTransaction) TransactionId {
 	tx, err := InterfaceToBytes(t)

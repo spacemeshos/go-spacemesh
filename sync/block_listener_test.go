@@ -150,14 +150,14 @@ func TestBlockListener(t *testing.T) {
 	bl1.AddBlock(block2)
 	bl1.AddBlock(block3)
 
-	_, err = bl1.GetBlock(block1.Id)
+	_, err = bl1.GetBlock(block1.ID())
 	if err != nil {
 		t.Error(err)
 	}
 
-	bl2.syncLayer(0, []types.BlockID{block1.Id})
+	bl2.syncLayer(0, []types.BlockID{block1.ID()})
 
-	b, err := bl2.GetBlock(block1.Id)
+	b, err := bl2.GetBlock(block1.ID())
 	if err != nil {
 		t.Error(err)
 	}
@@ -201,7 +201,7 @@ func TestBlockListener_DataAvailability(t *testing.T) {
 	err = bl1.AddBlockWithTxs(block, []*types.AddressableSignedTransaction{tx1}, []*types.ActivationTx{atx1})
 	require.NoError(t, err)
 
-	_, err = bl1.GetBlock(block.Id)
+	_, err = bl1.GetBlock(block.ID())
 	require.NoError(t, err)
 
 	// Verify that bl2 doesn't have them in mempool.
@@ -213,9 +213,8 @@ func TestBlockListener_DataAvailability(t *testing.T) {
 
 	// Sync bl2.
 
-	txs, txErr, atxs, atxErr := bl2.DataAvailability(block)
-	require.NoError(t, txErr)
-	require.NoError(t, atxErr)
+	txs, atxs, err := bl2.DataAvailabilty(block)
+	require.NoError(t, err)
 	require.Equal(t, 1, len(txs))
 	require.Equal(t, types.GetTransactionId(tx1.SerializableSignedTransaction), types.GetTransactionId(txs[0].SerializableSignedTransaction))
 	require.Equal(t, 1, len(atxs))
@@ -541,24 +540,16 @@ func TestBlockListener_TraverseViewBadFlow(t *testing.T) {
 	assert.Error(t, err)
 
 	_, err = bl2.GetBlock(block2.Id)
-	if err == nil {
-		assert.Error(t, err)
-	}
+	assert.Error(t, err)
 
 	_, err = bl2.GetBlock(block3.Id)
-	if err == nil {
-		assert.Error(t, err)
-	}
+	assert.Error(t, err)
 
 	_, err = bl2.GetBlock(block4.Id)
-	if err == nil {
-		assert.Error(t, err)
-	}
+	assert.Error(t, err)
 
 	b, err = bl2.GetBlock(block5.Id)
-	if err == nil {
-		assert.Error(t, err)
-	}
+	assert.Error(t, err)
 
 	t.Log("  ", b)
 	t.Log("done!")

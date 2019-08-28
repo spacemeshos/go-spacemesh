@@ -125,7 +125,7 @@ func createLayerWithAtx(t *testing.T, msh *mesh.Mesh, id types.LayerID, numOfBlo
 		block1.BlockVotes = append(block1.BlockVotes, votes...)
 		if i < len(atxs) {
 			block1.AtxIds = append(block1.AtxIds, atxs[i].Id())
-			fmt.Printf("adding i=%v bid=%v atxid=%v", i, bid, atxs[i].Id().String())
+			fmt.Printf("adding i=%v bid=%v atxid=%v", i, bid, atxs[i].Id().ShortString())
 		}
 		block1.ViewEdges = append(block1.ViewEdges, views...)
 		var actualAtxs []*types.ActivationTx
@@ -163,13 +163,13 @@ func TestATX_ActiveSetForLayerView(t *testing.T) {
 
 	poetRef := []byte{0xba, 0xb0}
 	for _, atx := range atxs {
-		hash, err := atx.NIPSTChallenge.Hash()
+		hash, err := atx.NIPSTChallenge.NipstHash()
 		assert.NoError(t, err)
 		atx.Nipst = nipst.NewNIPSTWithChallenge(hash, poetRef)
 		//layers.AtxDB.(*AtxDbMock).AddAtx(atx.Id(), atx)
 	}
 
-	fmt.Println("ID4 ", atxs[4].Id().Hex())
+	fmt.Println("ID4 ", atxs[4].Id().ShortString())
 	blocks := createLayerWithAtx(t, layers, 1, 6, atxs, []types.BlockID{}, []types.BlockID{})
 	before := blocks[:4]
 	four := blocks[4:5]
@@ -224,7 +224,7 @@ func Test_CalcActiveSetFromView(t *testing.T) {
 
 	poetRef := []byte{0xba, 0xb0}
 	for _, atx := range atxs {
-		hash, err := atx.NIPSTChallenge.Hash()
+		hash, err := atx.NIPSTChallenge.NipstHash()
 		assert.NoError(t, err)
 		atx.Nipst = nipst.NewNIPSTWithChallenge(hash, poetRef)
 	}
@@ -246,7 +246,7 @@ func Test_CalcActiveSetFromView(t *testing.T) {
 	}
 
 	for _, atx := range atxs2 {
-		hash, err := atx.NIPSTChallenge.Hash()
+		hash, err := atx.NIPSTChallenge.NipstHash()
 		assert.NoError(t, err)
 		atx.Nipst = nipst.NewNIPSTWithChallenge(hash, poetRef)
 	}
@@ -392,7 +392,7 @@ func TestMesh_processBlockATXs(t *testing.T) {
 		types.NewActivationTx(id3, coinbase3, 0, *types.EmptyAtxId, 1435, 0, posATX.Id(), 0, []types.BlockID{}, &types.NIPST{}),
 	}
 	for _, atx := range atxs {
-		hash, err := atx.NIPSTChallenge.Hash()
+		hash, err := atx.NIPSTChallenge.NipstHash()
 		assert.NoError(t, err)
 		atx.Nipst = nipst.NewNIPSTWithChallenge(hash, poetRef)
 	}
@@ -412,7 +412,7 @@ func TestMesh_processBlockATXs(t *testing.T) {
 		types.NewActivationTx(id3, coinbase3, 1, atxs[2].Id(), 2435, 0, atxs[2].Id(), 0, []types.BlockID{}, &types.NIPST{}),
 	}
 	for _, atx := range atxs2 {
-		hash, err := atx.NIPSTChallenge.Hash()
+		hash, err := atx.NIPSTChallenge.NipstHash()
 		assert.NoError(t, err)
 		atx.Nipst = nipst.NewNIPSTWithChallenge(hash, poetRef)
 	}
@@ -439,7 +439,7 @@ func TestActivationDB_ValidateAtx(t *testing.T) {
 	}
 	poetRef := []byte{0x12, 0x21}
 	for _, atx := range atxs {
-		hash, err := atx.NIPSTChallenge.Hash()
+		hash, err := atx.NIPSTChallenge.NipstHash()
 		assert.NoError(t, err)
 		atx.Nipst = nipst.NewNIPSTWithChallenge(hash, poetRef)
 	}
@@ -450,12 +450,12 @@ func TestActivationDB_ValidateAtx(t *testing.T) {
 
 	//atx := types.NewActivationTx(id1, 1, atxs[0].Id(), 1000, 0, atxs[0].Id(), 3, blocks, &nipst.NIPST{})
 	prevAtx := types.NewActivationTx(idx1, coinbase1, 0, *types.EmptyAtxId, 100, 0, *types.EmptyAtxId, 3, blocks, &types.NIPST{})
-	hash, err := prevAtx.NIPSTChallenge.Hash()
+	hash, err := prevAtx.NIPSTChallenge.NipstHash()
 	assert.NoError(t, err)
 	prevAtx.Nipst = nipst.NewNIPSTWithChallenge(hash, poetRef)
 
 	atx := types.NewActivationTx(idx1, coinbase1, 1, prevAtx.Id(), 1012, 0, prevAtx.Id(), 3, blocks, &types.NIPST{})
-	hash, err = atx.NIPSTChallenge.Hash()
+	hash, err = atx.NIPSTChallenge.NipstHash()
 	assert.NoError(t, err)
 	atx.Nipst = nipst.NewNIPSTWithChallenge(hash, poetRef)
 	err = atxdb.StoreAtx(1, prevAtx)
@@ -514,7 +514,7 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	// Wrong prevATx.
 	atx = types.NewActivationTx(idx1, coinbase, 1, atxs[0].Id(), 1012, 0, prevAtx.Id(), 3, []types.BlockID{}, &types.NIPST{})
 	err = atxdb.SyntacticallyValidateAtx(atx)
-	assert.EqualError(t, err, fmt.Sprintf("previous ATX belongs to different miner. atx.Id: %v, atx.NodeId: %v, prevAtx.NodeId: %v", atx.ShortId(), atx.NodeId.Key, atxs[0].NodeId.Key))
+	assert.EqualError(t, err, fmt.Sprintf("previous ATX belongs to different miner. atx.Id: %v, atx.NodeId: %v, prevAtx.NodeId: %v", atx.ShortString(), atx.NodeId.Key, atxs[0].NodeId.Key))
 
 	// Wrong layerId.
 	atx = types.NewActivationTx(idx1, coinbase, 1, prevAtx.Id(), 12, 0, prevAtx.Id(), 3, []types.BlockID{}, npst)
@@ -699,7 +699,7 @@ func BenchmarkActivationDb_SyntacticallyValidateAtx(b *testing.B) {
 
 	poetRef := []byte{0x12, 0x21}
 	for _, atx := range atxs {
-		hash, err := atx.NIPSTChallenge.Hash()
+		hash, err := atx.NIPSTChallenge.NipstHash()
 		r.NoError(err)
 		atx.Nipst = nipst.NewNIPSTWithChallenge(hash, poetRef)
 	}
@@ -711,12 +711,12 @@ func BenchmarkActivationDb_SyntacticallyValidateAtx(b *testing.B) {
 
 	idx1 := types.NodeId{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}
 	challenge := newChallenge(idx1, 0, *types.EmptyAtxId, *types.EmptyAtxId, numberOfLayers+1)
-	hash, err := challenge.Hash()
+	hash, err := challenge.NipstHash()
 	r.NoError(err)
 	prevAtx := newAtx(challenge, activesetSize, blocks, nipst.NewNIPSTWithChallenge(hash, poetRef))
 
 	atx := types.NewActivationTx(idx1, coinbase, 1, prevAtx.Id(), numberOfLayers+1+layersPerEpochBig, 0, prevAtx.Id(), activesetSize, blocks, &types.NIPST{})
-	hash, err = atx.NIPSTChallenge.Hash()
+	hash, err = atx.NIPSTChallenge.NipstHash()
 	r.NoError(err)
 	atx.Nipst = nipst.NewNIPSTWithChallenge(hash, poetRef)
 	err = atxdb.StoreAtx(1, prevAtx)
@@ -764,7 +764,7 @@ func BenchmarkNewActivationDb(b *testing.B) {
 	for epoch := postGenesisEpoch; epoch < postGenesisEpoch+numOfEpochs; epoch++ {
 		for miner := 0; miner < numOfMiners; miner++ {
 			challenge := newChallenge(nodeId, 1, prevAtxs[miner], posAtx, layer)
-			h, err := challenge.Hash()
+			h, err := challenge.NipstHash()
 			r.NoError(err)
 			atx = newAtx(challenge, numOfMiners, defaultView, nipst.NewNIPSTWithChallenge(h, poetRef))
 			prevAtxs[miner] = atx.Id()

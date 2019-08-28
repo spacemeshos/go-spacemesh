@@ -1,4 +1,4 @@
-namespace: ''
+namespace: 'almog'
 
 config_map_name: conf
 

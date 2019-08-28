@@ -80,7 +80,6 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 				if bl.HandleNewBlock(&blk) {
 					data.ReportValidation(config.NewBlockProtocol)
 				}
-				bl.wg.Done()
 			}()
 
 		}
@@ -89,9 +88,9 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 
 func (bl *BlockListener) HandleNewBlock(blk *types.Block) bool {
 
-	bl.Log.With().Info("got new block", log.BlockId(uint64(blk.Id)), log.Int("txs", len(blk.TxIds)), log.Int("atxs", len(blk.AtxIds)))
+	bl.Log.With().Info("got new block", log.BlockId(uint64(blk.ID())), log.Int("txs", len(blk.TxIds)), log.Int("atxs", len(blk.AtxIds)))
 	//check if known
-	if _, err := bl.GetBlock(blk.Id); err == nil {
+	if _, err := bl.GetBlock(blk.ID()); err == nil {
 		bl.With().Info("we already know this block", log.BlockId(uint64(blk.ID())))
 		return true
 	}
@@ -102,7 +101,7 @@ func (bl *BlockListener) HandleNewBlock(blk *types.Block) bool {
 		return false
 	}
 
-	if err := bl.AddBlockWithTxs(blk, txs, atxs); err != nil && err != mesh.DoubleWrite {
+	if err := bl.AddBlockWithTxs(blk, txs, atxs); err != nil && err != mesh.ErrAlreadyExist {
 		bl.With().Error("failed to add block to database", log.BlockId(uint64(blk.ID())), log.Err(err))
 		return false
 	}

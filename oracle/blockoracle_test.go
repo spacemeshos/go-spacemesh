@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-var atxID = types.AtxId{Hash32: [32]byte{1, 3, 3, 7}}
+var atxID = types.AtxId([32]byte{1, 3, 3, 7})
 var nodeID, vrfSigner = generateNodeIDAndSigner()
 var validateVrf = BLS381.Verify2
 var privateKey, publicKey = BLS381.GenKeyPair(BLS381.DefaultSeed())
@@ -55,7 +55,7 @@ func (a mockActivationDB) GetAtx(id types.AtxId) (*types.ActivationTxHeader, err
 		atxHeader := &types.ActivationTxHeader{
 			NIPSTChallenge: types.NIPSTChallenge{PubLayerIdx: a.atxPublicationLayer}, ActiveSetSize: a.activeSetSize,
 		}
-		atxHeader.SetId(&id)
+		atxHeader.SetId(id)
 		return atxHeader, nil
 	}
 	return nil, errors.New("wrong atx id")

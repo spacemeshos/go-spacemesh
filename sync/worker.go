@@ -13,8 +13,8 @@ import (
 )
 
 type RequestFactory func(s WorkerInfra, peer p2p.Peer) (chan interface{}, error)
-type FetchRequestFactory func(s WorkerInfra, peer p2p.Peer, id interface{}) (chan []Item, error)
-type BlockRequestFactory func(s WorkerInfra, peer p2p.Peer, id interface{}) (chan interface{}, error)
+type FetchRequestFactory func(s WorkerInfra, peer p2p.Peer, id []types.Hash32) (chan []Item, error)
+type BlockRequestFactory func(s WorkerInfra, peer p2p.Peer, id []types.Hash32) (chan interface{}, error)
 
 type WorkerInfra interface {
 	GetPeers() []p2p.Peer
@@ -164,7 +164,7 @@ func NewFetchWorker(s WorkerInfra, count int, reqFactory FetchRequestFactory, id
 				case v := <-ch:
 					if v != nil {
 						retrived = true
-						lg.Info("Peer: %v responded %v to fetch request ", peer.String(), v)
+						lg.Info("Peer: %v responded %v to fetch request ", peer.String())
 						output <- fetchJob{ids: ids, items: v}
 						break next
 					}
@@ -173,43 +173,6 @@ func NewFetchWorker(s WorkerInfra, count int, reqFactory FetchRequestFactory, id
 			}
 			if !retrived {
 				output <- fetchJob{ids: ids, items: nil}
-			}
-		}
-	}
-
-	return worker{Logger: lg, Once: mu, WaitGroup: &sync.WaitGroup{}, workCount: &acount, output: output, work: workFunc}
-}
-
-func NewBlockhWorker(s WorkerInfra, count int, reqFactory BlockRequestFactory, idsChan chan types.Hash32) worker {
-	output := make(chan interface{}, count)
-	acount := int32(count)
-	mu := &sync.Once{}
-	lg := s.WithName("BlockWrker")
-	workFunc := func() {
-		for id := range idsChan {
-			lg.Info("id %v out of chan ", id)
-			retrived := false
-		next:
-			for _, p := range s.GetPeers() {
-				peer := p
-				lg.Info("send fetch block request to Peer: %v id: %v", peer.String(), id)
-				ch, _ := reqFactory(s, peer, id)
-				timeout := time.After(s.GetTimeout())
-				select {
-				case <-timeout:
-					lg.Error("fetch request to %v on %v timed out", peer.String(), id)
-				case v := <-ch:
-					if v != nil {
-						retrived = true
-						lg.Info("Peer: %v responded %v to fetch request ", peer.String(), v)
-						output <- blockJob{id: id, item: v.(*types.Block)}
-						break next
-					}
-					lg.Info("next peer")
-				}
-			}
-			if !retrived {
-				output <- blockJob{id: id, item: nil}
 			}
 		}
 	}
