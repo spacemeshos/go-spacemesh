@@ -19,7 +19,7 @@ package state
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/rlp"
 	"github.com/spacemeshos/go-spacemesh/trie"
 )
@@ -54,7 +54,7 @@ func (self *StateDB) RawDump() Dump {
 			Nonce:   data.Nonce,
 		}
 
-		dump.Accounts[common.Bytes2Hex(addr)] = account
+		dump.Accounts[util.Bytes2Hex(addr)] = account
 	}
 	return dump
 }

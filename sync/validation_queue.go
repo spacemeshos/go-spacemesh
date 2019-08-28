@@ -3,11 +3,9 @@ package sync
 import (
 	"errors"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/types"
-	"reflect"
-	"sync"
 )
 
 type blockJob struct {
@@ -125,9 +123,9 @@ func (vq *validationQueue) finishBlockCallback(block *types.Block) func(res bool
 		}
 
 		//data availability
-		txs, atxs, err := vq.DataAvailabilty(block)
-		if err != nil {
-			return err
+		txs, txErr, atxs, atxErr := vq.DataAvailability(block)
+		if txErr != nil || atxErr != nil {
+			return fmt.Errorf("txerr %v, atxerr %v", txErr, atxErr)
 		}
 
 		//validate block's votes

@@ -6,8 +6,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/address"
-	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -18,7 +18,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
-	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/spacemeshos/sha256-simd"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -56,6 +55,14 @@ var (
 	tx8 = tx()
 )
 
+var commitment = &types.PostProof{
+	Identity:     []byte(nil),
+	Challenge:    []byte(nil),
+	MerkleRoot:   []byte("1"),
+	ProofNodes:   [][]byte(nil),
+	ProvenLeaves: [][]byte(nil),
+}
+
 func newMemPoetDb() PoetDb {
 	return activation.NewPoetDb(database.NewMemDatabase(), log.NewDefault("poetDb"))
 }
@@ -88,11 +95,11 @@ func SyncMockFactory(number int, conf Configuration, name string, dbType string,
 
 type stateMock struct{}
 
-func (stateMock) ValidateSignature(signed types.Signed) (address.Address, error) {
-	return address.Address{}, nil
+func (stateMock) ValidateSignature(signed types.Signed) (types.Address, error) {
+	return types.Address{}, nil
 }
 
-func (s *stateMock) ApplyRewards(layer types.LayerID, miners []address.Address, underQuota map[address.Address]int, bonusReward, diminishedReward *big.Int) {
+func (s *stateMock) ApplyRewards(layer types.LayerID, miners []types.Address, underQuota map[types.Address]int, bonusReward, diminishedReward *big.Int) {
 
 }
 
@@ -100,8 +107,8 @@ func (s *stateMock) ApplyTransactions(id types.LayerID, tx mesh.Transactions) (u
 	return 0, nil
 }
 
-func (s *stateMock) ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (address.Address, error) {
-	return address.Address{}, nil
+func (s *stateMock) ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (types.Address, error) {
+	return types.Address{}, nil
 }
 
 type mockBlocksProvider struct {
@@ -506,12 +513,12 @@ func syncTest(dpType string, t *testing.T) {
 	defer syncObj4.Close()
 	n1 := nodes[0]
 	n2 := nodes[1]
-	n4 := nodes[3]
+	//n4 := nodes[3]
 
 	syncObj1.Peers = getPeersMock([]p2p.Peer{n2.PublicKey()})
 	syncObj2.Peers = getPeersMock([]p2p.Peer{n1.PublicKey()})
-	syncObj3.Peers = getPeersMock([]p2p.Peer{n1.PublicKey(), n2.PublicKey(), n4.PublicKey()})
-	syncObj4.Peers = getPeersMock([]p2p.Peer{n1.PublicKey(), n2.PublicKey()})
+	syncObj3.Peers = getPeersMock([]p2p.Peer{n1.PublicKey()})
+	syncObj4.Peers = getPeersMock([]p2p.Peer{n1.PublicKey()})
 
 	signer := signing.NewEdSigner()
 
@@ -542,6 +549,12 @@ func syncTest(dpType string, t *testing.T) {
 	block10 := types.NewExistingBlock(types.BlockID(101), 4, nil)
 	block10.Signature = signer.Sign(block10.Bytes())
 
+	block11 := types.NewExistingBlock(types.BlockID(101), 5, nil)
+	block10.Signature = signer.Sign(block10.Bytes())
+
+	block12 := types.NewExistingBlock(types.BlockID(101), 6, nil)
+	block10.Signature = signer.Sign(block10.Bytes())
+
 	syncObj1.ValidateLayer(mesh.GenesisLayer())
 	syncObj2.ValidateLayer(mesh.GenesisLayer())
 	syncObj3.ValidateLayer(mesh.GenesisLayer())
@@ -556,6 +569,8 @@ func syncTest(dpType string, t *testing.T) {
 	syncObj1.AddBlockWithTxs(block8, []*types.AddressableSignedTransaction{tx4, tx5, tx6}, []*types.ActivationTx{})
 	syncObj1.AddBlockWithTxs(block9, []*types.AddressableSignedTransaction{tx7, tx8}, []*types.ActivationTx{})
 	syncObj1.AddBlockWithTxs(block10, []*types.AddressableSignedTransaction{tx7, tx8}, []*types.ActivationTx{})
+	syncObj1.AddBlockWithTxs(block11, []*types.AddressableSignedTransaction{tx7, tx8}, []*types.ActivationTx{})
+	syncObj1.AddBlockWithTxs(block12, []*types.AddressableSignedTransaction{tx7, tx8}, []*types.ActivationTx{})
 
 	syncObj1.Start()
 
@@ -566,7 +581,6 @@ func syncTest(dpType string, t *testing.T) {
 	// Keep trying until we're timed out or got a result or got an error
 	timeout := time.After(30 * time.Second)
 
-loop:
 	for {
 		select {
 		// Got a timeout! fail with a timeout error
@@ -574,11 +588,15 @@ loop:
 			t.Error("timed out ")
 		default:
 			if syncObj2.ValidatedLayer() >= 4 && syncObj3.ValidatedLayer() >= 4 {
-				t.Log("done!")
-				t.Log(syncObj2.ValidatedLayer(), " ", syncObj3.ValidatedLayer())
-				break loop
+				log.Info("done!", syncObj2.ValidatedLayer(), syncObj3.ValidatedLayer())
+				// path for this UT calling sync.Close before we read from channel causes writing to closed channel
+				x := syncObj1.clockSub.Subscribe()
+				<-x
+				<-x
+				return
 			}
 		}
+		time.Sleep(500 * time.Millisecond)
 	}
 }
 
@@ -626,11 +644,11 @@ func Test_TwoNodes_SyncIntegrationSuite(t *testing.T) {
 		msh := getMesh(memoryDB, fmt.Sprintf("%s_%s", sis.name, time.Now()))
 		blockValidator := BlockEligibilityValidatorMock{}
 		poetDb := activation.NewPoetDb(database.NewMemDatabase(), l.WithName("poetDb"))
-		sync := NewSync(s, msh, miner.NewTypesTransactionIdMemPool(), miner.NewTypesAtxIdMemPool(), mockTxProcessor{}, blockValidator, poetDb, conf, ts, l)
+		sync := NewSync(s, msh, miner.NewTypesTransactionIdMemPool(), miner.NewTypesAtxIdMemPool(), mockTxProcessor{}, blockValidator, poetDb, conf, ts, ts.GetCurrentLayer(), l)
 		sis.syncers = append(sis.syncers, sync)
-		ts.StartNotifying()
 		atomic.AddUint32(&i, 1)
 	}
+	ts.StartNotifying()
 	suite.Run(t, sis)
 }
 
@@ -696,6 +714,9 @@ func (sis *syncIntegrationTwoNodes) TestSyncProtocol_TwoNodes() {
 	timeout := time.After(60 * time.Second)
 	syncObj1.SetLatestLayer(6)
 	syncObj1.Start()
+
+	syncObj0.Start()
+	syncObj2.Start()
 
 	// Keep trying until we're timed out or got a result or got an error
 	for {
@@ -782,13 +803,14 @@ func (sis *syncIntegrationMultipleNodes) TestSyncProtocol_MultipleNodes() {
 	syncObj5 := sis.syncers[4]
 	defer syncObj5.Close()
 
-	syncObj1.AddBlock(block2)
-	syncObj1.AddBlockWithTxs(block3, []*types.AddressableSignedTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
-	syncObj1.AddBlockWithTxs(block4, []*types.AddressableSignedTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
-	syncObj1.AddBlockWithTxs(block5, []*types.AddressableSignedTransaction{tx4, tx5, tx6}, []*types.ActivationTx{})
-	syncObj1.AddBlockWithTxs(block6, []*types.AddressableSignedTransaction{tx4, tx5, tx6}, []*types.ActivationTx{})
-	syncObj1.AddBlockWithTxs(block7, []*types.AddressableSignedTransaction{tx7, tx8}, []*types.ActivationTx{})
-	syncObj1.AddBlockWithTxs(block8, []*types.AddressableSignedTransaction{tx7, tx8}, []*types.ActivationTx{})
+	err := syncObj1.AddBlock(block2)
+	require.NoError(t, err)
+	err = syncObj1.AddBlockWithTxs(block3, []*types.AddressableSignedTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
+	err = syncObj1.AddBlockWithTxs(block4, []*types.AddressableSignedTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
+	err = syncObj1.AddBlockWithTxs(block5, []*types.AddressableSignedTransaction{tx4, tx5, tx6}, []*types.ActivationTx{})
+	err = syncObj1.AddBlockWithTxs(block6, []*types.AddressableSignedTransaction{tx4, tx5, tx6}, []*types.ActivationTx{})
+	err = syncObj1.AddBlockWithTxs(block7, []*types.AddressableSignedTransaction{tx7, tx8}, []*types.ActivationTx{})
+	err = syncObj1.AddBlockWithTxs(block8, []*types.AddressableSignedTransaction{tx7, tx8}, []*types.ActivationTx{})
 
 	timeout := time.After(30 * time.Second)
 	syncObj1.Start()
@@ -829,8 +851,8 @@ end:
 func tx() *types.AddressableSignedTransaction {
 	gasPrice := rand.Uint64()
 	addr := rand.Int63n(1000000)
-	tx := types.NewAddressableTx(1, address.HexToAddress(RandStringRunes(8)),
-		address.HexToAddress(strconv.FormatUint(uint64(addr), 10)),
+	tx := types.NewAddressableTx(1, types.HexToAddress(RandStringRunes(8)),
+		types.HexToAddress(strconv.FormatUint(uint64(addr), 10)),
 		10, 100, gasPrice)
 
 	return tx
@@ -847,14 +869,16 @@ func RandStringRunes(n int) string {
 }
 
 func atx() *types.ActivationTx {
-	coinbase := address.HexToAddress("aaaa")
-	chlng := common.HexToHash("0x3333")
+	coinbase := types.HexToAddress("aaaa")
+	chlng := types.HexToHash32("0x3333")
 	poetRef := []byte{0xde, 0xad}
 	npst := nipst.NewNIPSTWithChallenge(&chlng, poetRef)
-	tmp := types.NewActivationTx(types.NodeId{Key: RandStringRunes(8), VRFPublicKey: []byte(RandStringRunes(8))}, coinbase, 0, *types.EmptyAtxId, 5, 1, *types.EmptyAtxId, 0, []types.BlockID{1, 2, 3}, npst)
-	tmp.CalcAndSetId()
-	log.Info("ultimate fuck  %v", tmp.ItemId())
-	return tmp
+
+	atx := types.NewActivationTx(types.NodeId{Key: RandStringRunes(8), VRFPublicKey: []byte(RandStringRunes(8))}, coinbase, 0, *types.EmptyAtxId, 5, 1, *types.EmptyAtxId, 0, []types.BlockID{1, 2, 3}, npst)
+	atx.Commitment = commitment
+	atx.CommitmentMerkleRoot = commitment.MerkleRoot
+	atx.CalcAndSetId()
+	return atx
 }
 
 func TestSyncer_Txs(t *testing.T) {
@@ -914,9 +938,11 @@ func TestFetchLayerBlockIds(t *testing.T) {
 	syncObj1.AddBlock(block1)
 	syncObj2.AddBlock(block2)
 
-	mp := map[uint32][]p2p.Peer{}
-	mp[types.HashBlockIds([]types.BlockID{block1.ID()})] = append(mp[1], nodes[0].PublicKey())
-	mp[types.HashBlockIds([]types.BlockID{block2.ID()})] = append(mp[2], nodes[1].PublicKey())
+	mp := map[types.Hash32][]p2p.Peer{}
+	hash1, _ := types.CalcBlocksHash32([]types.BlockID{block1.ID()})
+	mp[hash1] = append(mp[hash1], nodes[0].PublicKey())
+	hash2, _ := types.CalcBlocksHash32([]types.BlockID{block2.ID()})
+	mp[hash2] = append(mp[hash2], nodes[1].PublicKey())
 	ids, _ := syncObj3.fetchLayerBlockIds(mp, 1)
 
 	assert.True(t, len(ids) == 2)
@@ -1028,6 +1054,24 @@ func TestSyncer_Synchronise2(t *testing.T) {
 	sync.Synchronise()
 	r.Equal(1, lv.countValidate)
 	r.True(sync.p2pSynced)
+}
+
+func TestSyncer_handleNotSyncedFlow(t *testing.T) {
+	r := require.New(t)
+	txpool := miner.NewTypesTransactionIdMemPool()
+	atxpool := miner.NewTypesAtxIdMemPool()
+	ts := &mockClock{}
+	sync := NewSync(service.NewSimulator().NewNode(), getMesh(memoryDB, Path+t.Name()+"_"+time.Now().String()), txpool, atxpool, mockTxProcessor{}, BlockEligibilityValidatorMock{}, newMockPoetDb(), conf, ts, 10, log.NewDefault(t.Name()))
+
+	lv := &mockLayerValidator{0, 0, 0, nil}
+	sync.lValidator = lv
+	sync.currentLayer = 10
+	sync.SetLatestLayer(20)
+	sync.lProvider = &mockLayerProvider{}
+
+	go sync.handleNotSynced(10)
+	time.Sleep(100 * time.Millisecond)
+	r.Equal(2, ts.countSub)
 }
 
 func TestSyncer_p2pSyncForTwoLayers(t *testing.T) {
@@ -1210,7 +1254,7 @@ func TestSyncProtocol_BadResponse(t *testing.T) {
 
 	layerHashesMock := func([]byte) []byte {
 		t.Log("return fake atx")
-		return common.Uint32ToBytes(11)
+		return util.Uint32ToBytes(11)
 	}
 
 	blockHandlerMock := func([]byte) []byte {

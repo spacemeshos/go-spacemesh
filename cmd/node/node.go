@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"github.com/seehuhn/mt19937"
 	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/amcl"
 	"github.com/spacemeshos/go-spacemesh/amcl/BLS381"
 	apiCfg "github.com/spacemeshos/go-spacemesh/api/config"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
-	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/hare"
@@ -24,7 +24,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/spacemeshos/go-spacemesh/sync"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
-	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/spacemeshos/go-spacemesh/version"
 	"github.com/spacemeshos/post/shared"
 	"io/ioutil"
@@ -264,14 +263,14 @@ func (app *SpacemeshApp) setupGenesis() {
 		conf = apiCfg.DefaultGenesisConfig()
 	}
 	for id, acc := range conf.InitialAccounts {
-		bytes := common.FromHex(id)
+		bytes := util.FromHex(id)
 		if len(bytes) == 0 {
 			//todo: should we panic here?
 			log.Error("cannot read config entry for :%s", id)
 			continue
 		}
 
-		addr := address.BytesToAddress(bytes)
+		addr := types.BytesToAddress(bytes)
 		app.state.CreateAccount(addr)
 		app.state.AddBalance(addr, acc.Balance)
 		app.state.SetNonce(addr, acc.Nonce)
@@ -310,7 +309,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	if err != nil {
 		return err
 	}
-	st, err := state.New(common.Hash{}, state.NewDatabase(db)) //todo: we probably should load DB with latest hash
+	st, err := state.New(types.Hash32{}, state.NewDatabase(db)) //todo: we probably should load DB with latest hash
 	if err != nil {
 		return err
 	}
@@ -404,20 +403,19 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	poetListener := activation.NewPoetListener(swarm, poetDb, lg.WithName("poetListener"))
 
 	nipstBuilder := nipst.NewNIPSTBuilder(
-		common.Hex2Bytes(nodeID.Key), // TODO: use both keys in the nodeID
-		app.Config.POST,
+		util.Hex2Bytes(nodeID.Key), // TODO: use both keys in the nodeID
 		postClient,
 		poetClient,
 		poetDb,
 		lg.WithName("nipstBuilder"),
 	)
 
-	coinBase := address.HexToAddress(app.Config.CoinbaseAccount)
+	coinBase := types.HexToAddress(app.Config.CoinbaseAccount)
 
 	if coinBase.Big().Uint64() == 0 && app.Config.StartMining {
 		app.log.Panic("invalid Coinbase account")
 	}
-	atxBuilder := activation.NewBuilder(nodeID, coinBase, atxdb, swarm, msh, layersPerEpoch, nipstBuilder, clock.Subscribe(), syncer.WeaklySynced, store, lg.WithName("atxBuilder"))
+	atxBuilder := activation.NewBuilder(nodeID, coinBase, atxdb, swarm, msh, layersPerEpoch, nipstBuilder, postClient, clock.Subscribe(), syncer.WeaklySynced, store, lg.WithName("atxBuilder"))
 
 	app.blockProducer = &blockProducer
 	app.blockListener = blockListener
@@ -447,7 +445,7 @@ func (app *SpacemeshApp) startServices() {
 	app.poetListener.Start()
 
 	if app.Config.StartMining {
-		coinBase := address.HexToAddress(app.Config.CoinbaseAccount)
+		coinBase := types.HexToAddress(app.Config.CoinbaseAccount)
 		err := app.atxBuilder.StartPost(coinBase, app.Config.POST.DataDir, app.Config.POST.SpacePerUnit)
 		if err != nil {
 			log.Error("Error initializing post, err: %v", err)
@@ -612,17 +610,15 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	postClient := nipst.NewPostClient(&app.Config.POST)
-
 	rng := amcl.NewRAND()
 	pub := app.edSgn.PublicKey().Bytes()
 	rng.Seed(len(pub), app.edSgn.Sign(pub)) // assuming ed.private is random, the sig can be used as seed
 	vrfPriv, vrfPub := BLS381.GenKeyPair(rng)
 	vrfSigner := BLS381.NewBlsSigner(vrfPriv)
 	nodeID := types.NodeId{Key: app.edSgn.PublicKey().String(), VRFPublicKey: vrfPub}
+	postClient := nipst.NewPostClient(&app.Config.POST, util.Hex2Bytes(nodeID.Key))
 
 	apiConf := &app.Config.API
-
 	dbStorepath := app.Config.DataDir
 
 	err = app.initServices(nodeID, swarm, dbStorepath, app.edSgn, false, nil, uint32(app.Config.LayerAvgSize), postClient, poetClient, vrfSigner, uint16(app.Config.LayersPerEpoch))

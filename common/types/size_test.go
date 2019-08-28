@@ -14,35 +14,25 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package common
+package types
 
 import (
-	"fmt"
+	"testing"
 )
 
-// StorageSize is a wrapper around a float value that supports user friendly
-// formatting.
-type StorageSize float64
-
-// String implements the stringer interface.
-func (s StorageSize) String() string {
-	if s > 1000000 {
-		return fmt.Sprintf("%.2f mB", s/1000000)
-	} else if s > 1000 {
-		return fmt.Sprintf("%.2f kB", s/1000)
-	} else {
-		return fmt.Sprintf("%.2f B", s)
+func TestStorageSizeString(t *testing.T) {
+	tests := []struct {
+		size StorageSize
+		str  string
+	}{
+		{2381273, "2.38 mB"},
+		{2192, "2.19 kB"},
+		{12, "12.00 B"},
 	}
-}
 
-// TerminalString implements log.TerminalStringer, formatting a string for console
-// output during logging.
-func (s StorageSize) TerminalString() string {
-	if s > 1000000 {
-		return fmt.Sprintf("%.2fmB", s/1000000)
-	} else if s > 1000 {
-		return fmt.Sprintf("%.2fkB", s/1000)
-	} else {
-		return fmt.Sprintf("%.2fB", s)
+	for _, test := range tests {
+		if test.size.String() != test.str {
+			t.Errorf("%f: got %q, want %q", float64(test.size), test.size.String(), test.str)
+		}
 	}
 }

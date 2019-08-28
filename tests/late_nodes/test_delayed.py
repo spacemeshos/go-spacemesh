@@ -60,6 +60,28 @@ def new_client_in_namespace(name_space, setup_bootstrap, cspec, num):
     return client_info
 
 
+# this is a path for travis's 10m timeout limit
+# we reached the timeout because epochDuration happened to be greater than 10m
+# duration is in seconds
+def sleep_and_print(duration):
+    print("Going to sleep total of %s" % duration)
+
+    interval = 30 # each 30 seconds
+    if duration <= interval:
+        time.sleep(duration)
+        return
+
+    iters = int(duration / interval)
+    print("Number of iterations is %s" % iters)
+    for i in range(0, iters):
+        print("Going to sleep for %s seconds" % interval) # print something for travis
+        time.sleep(interval) # sleep interval
+
+    # sleep the rest
+    rem = duration % interval
+    print("Going to sleep %s seconds" % rem)
+    time.sleep(rem)
+    print("Done")
 
 def test_add_delayed_nodes(init_session, setup_bootstrap, save_log_on_exit):
     bs_info = setup_bootstrap.pods[0]
@@ -73,7 +95,7 @@ def test_add_delayed_nodes(init_session, setup_bootstrap, save_log_on_exit):
     # start with 20 miners
     startCount = 20
     inf = new_client_in_namespace(ns, setup_bootstrap, cspec, startCount)
-    time.sleep(epochDuration) # wait epoch duration
+    sleep_and_print(epochDuration) # wait epoch duration
 
     # add 10 each epoch
     numToAdd = 10
@@ -82,19 +104,24 @@ def test_add_delayed_nodes(init_session, setup_bootstrap, save_log_on_exit):
     for i in range(0, count):
         clients[i] = new_client_in_namespace(ns, setup_bootstrap, cspec, numToAdd)
         print("Added client batch ", i, clients[i].pods[i]['name'])
-        time.sleep(epochDuration)
+        sleep_and_print(epochDuration)
 
-    time.sleep(2*epochDuration) # wait two more epochs
+    print("Done adding clients. Going to wait for two epochs")
+    # wait two more epochs
+    sleep_and_print(2*epochDuration)
 
-    total = startCount + count * numToAdd # total nodes
+    # total = bootstrap + first clients + added clients
+    total = 1 + startCount + count * numToAdd
     totalEpochs = 1 + count + 2
     totalLayers = layersPerEpoch * totalEpochs
     firstLayerOfLastEpoch = totalLayers-layersPerEpoch
     f = int(testconfig['client']['args']['hare-max-adversaries'])
 
     # validate
+    print("Waiting one layer for logs")
     time.sleep(layerDuration) # wait one layer for logs to propagate
-    expect_hare(current_index, ns, firstLayerOfLastEpoch, totalLayers-1, total, f)
 
+    print("Running validation")
+    expect_hare(current_index, ns, firstLayerOfLastEpoch, totalLayers-1, total, f) # validate hare
     atxLastEpoch = query_atx_published(current_index, ns, firstLayerOfLastEpoch)
-    assert len(atxLastEpoch) == total
+    assert len(atxLastEpoch) == total # validate #atxs in last epoch

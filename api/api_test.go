@@ -6,13 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/ed25519"
-	"github.com/spacemeshos/go-spacemesh/address"
-	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/state"
-	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/require"
 	"io/ioutil"
 	"math/big"
@@ -35,8 +34,8 @@ import (
 // Better a small code duplication than a small dependency
 
 type NodeAPIMock struct {
-	balances map[address.Address]*big.Int
-	nonces   map[address.Address]uint64
+	balances map[types.Address]*big.Int
+	nonces   map[types.Address]uint64
 }
 
 type NetworkMock struct {
@@ -54,33 +53,33 @@ func (s *NetworkMock) Broadcast(chanel string, payload []byte) error {
 
 func NewNodeAPIMock() NodeAPIMock {
 	return NodeAPIMock{
-		balances: make(map[address.Address]*big.Int),
-		nonces:   make(map[address.Address]uint64),
+		balances: make(map[types.Address]*big.Int),
+		nonces:   make(map[types.Address]uint64),
 	}
 }
 
-func (n NodeAPIMock) GetBalance(address address.Address) uint64 {
+func (n NodeAPIMock) GetBalance(address types.Address) uint64 {
 	return n.balances[address].Uint64()
 }
 
-func (n NodeAPIMock) GetNonce(address address.Address) uint64 {
+func (n NodeAPIMock) GetNonce(address types.Address) uint64 {
 	return n.nonces[address]
 }
 
-func (n NodeAPIMock) Exist(address address.Address) bool {
+func (n NodeAPIMock) Exist(address types.Address) bool {
 	_, ok := n.nonces[address]
 	return ok
 }
 
 type TxAPIMock struct {
-	mockOrigin address.Address
+	mockOrigin types.Address
 }
 
-func (t *TxAPIMock) setMockOrigin(orig address.Address) {
+func (t *TxAPIMock) setMockOrigin(orig types.Address) {
 	t.mockOrigin = orig
 }
 
-func (t *TxAPIMock) ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (address.Address, error) {
+func (t *TxAPIMock) ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (types.Address, error) {
 	return t.mockOrigin, nil
 }
 
@@ -91,11 +90,11 @@ func (*MinigApiMock) MiningStats() (int, string, string) {
 	return 1, "123456", "/tmp"
 }
 
-func (*MinigApiMock) StartPost(address address.Address, logicalDrive string, commitmentSize uint64) error {
+func (*MinigApiMock) StartPost(address types.Address, logicalDrive string, commitmentSize uint64) error {
 	return nil
 }
 
-func (*MinigApiMock) SetCoinbaseAccount(rewardAddress address.Address) {
+func (*MinigApiMock) SetCoinbaseAccount(rewardAddress types.Address) {
 
 }
 
@@ -278,7 +277,7 @@ func TestJsonWalletApi(t *testing.T) {
 	port2, err := node.GetUnboundedPort()
 	assert.NoError(t, err, "Should be able to establish a connection on a port")
 	addrBytes := []byte{0x01}
-	addr := address.BytesToAddress(addrBytes)
+	addr := types.BytesToAddress(addrBytes)
 	if config.ConfigValues.JSONServerPort == 0 {
 		config.ConfigValues.JSONServerPort = port1
 		config.ConfigValues.GrpcServerPort = port2
@@ -305,7 +304,7 @@ func TestJsonWalletApi(t *testing.T) {
 	const contentType = "application/json"
 
 	// generate request payload (api input params)
-	reqParams := pb.AccountId{Address: common.Bytes2Hex(addrBytes)}
+	reqParams := pb.AccountId{Address: util.Bytes2Hex(addrBytes)}
 	var m jsonpb.Marshaler
 	payload, err := m.MarshalToString(&reqParams)
 	assert.NoError(t, err, "failed to marshal to string")
@@ -359,7 +358,7 @@ func TestJsonWalletApi(t *testing.T) {
 	sPub, key, _ := ed25519.GenerateKey(crand.Reader)
 	sAddr := state.PublicKeyToAccountAddress(sPub)
 	txApi.setMockOrigin(sAddr)
-	rec := address.BytesToAddress([]byte{0xde, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa})
+	rec := types.BytesToAddress([]byte{0xde, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa})
 	txParams.Recipient = rec
 	txParams.AccountNonce = 1111
 	txParams.Amount = 1234
@@ -489,7 +488,7 @@ func TestJsonWalletApi_Errors(t *testing.T) {
 	const contentType = "application/json"
 
 	// generate request payload (api input params)
-	reqParams := pb.AccountId{Address: common.Bytes2Hex(addrBytes)}
+	reqParams := pb.AccountId{Address: util.Bytes2Hex(addrBytes)}
 	var m jsonpb.Marshaler
 	payload, err := m.MarshalToString(&reqParams)
 	assert.NoError(t, err, "failed to marshal to string")

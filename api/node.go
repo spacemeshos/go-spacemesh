@@ -1,9 +1,8 @@
 package api
 
 import (
-	"github.com/spacemeshos/go-spacemesh/address"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"github.com/spacemeshos/go-spacemesh/types"
 	"time"
 )
 
@@ -12,11 +11,11 @@ type Service interface {
 }
 
 type StateAPI interface {
-	GetBalance(address address.Address) uint64
+	GetBalance(address types.Address) uint64
 
-	GetNonce(address address.Address) uint64
+	GetNonce(address types.Address) uint64
 
-	Exist(address address.Address) bool
+	Exist(address types.Address) bool
 }
 
 type NetworkAPI interface {
@@ -24,8 +23,8 @@ type NetworkAPI interface {
 }
 
 type MiningAPI interface {
-	StartPost(address address.Address, logicalDrive string, commitmentSize uint64) error
-	SetCoinbaseAccount(rewardAddress address.Address)
+	StartPost(address types.Address, datadir string, space uint64) error
+	SetCoinbaseAccount(rewardAddress types.Address)
 	// MiningStats returns state of post init, coinbase reward account and data directory path for post commitment
 	MiningStats() (int, string, string)
 }
