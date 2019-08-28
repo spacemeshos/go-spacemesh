@@ -1,11 +1,12 @@
 package sync
 
 import (
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
-	"github.com/spacemeshos/go-spacemesh/types"
+	"reflect"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -139,7 +140,7 @@ func NewNeighborhoodWorker(s WorkerInfra, count int, reqFactory RequestFactory) 
 
 }
 
-func NewFetchWorker(s WorkerInfra, count int, reqFactory FetchRequestFactory, idsChan chan []common.Hash) worker {
+func NewFetchWorker(s WorkerInfra, count int, reqFactory FetchRequestFactory, idsChan chan []types.Hash32) worker {
 	output := make(chan interface{}, count)
 	acount := int32(count)
 	mu := &sync.Once{}
@@ -179,7 +180,7 @@ func NewFetchWorker(s WorkerInfra, count int, reqFactory FetchRequestFactory, id
 	return worker{Logger: lg, Once: mu, WaitGroup: &sync.WaitGroup{}, workCount: &acount, output: output, work: workFunc}
 }
 
-func NewBlockhWorker(s WorkerInfra, count int, reqFactory BlockRequestFactory, idsChan chan types.BlockID) worker {
+func NewBlockhWorker(s WorkerInfra, count int, reqFactory BlockRequestFactory, idsChan chan types.Hash32) worker {
 	output := make(chan interface{}, count)
 	acount := int32(count)
 	mu := &sync.Once{}

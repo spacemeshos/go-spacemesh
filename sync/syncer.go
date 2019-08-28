@@ -4,7 +4,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -397,9 +396,9 @@ func (s *Syncer) blockSyntacticValidation(block *types.Block) ([]*types.Addressa
 	}
 
 	//data availability
-	txs, txErr, atxs, atxErr := s.DataAvailability(block)
-	if txErr != nil || atxErr != nil {
-		return nil, nil, fmt.Errorf("txerr %v, atxerr %v", txErr, atxErr)
+	txs, atxs, err := s.DataAvailabilty(block)
+	if err != nil {
+		return nil, nil, fmt.Errorf("DataAvailabilty failed for block %v err: %v", block, err)
 	}
 
 	//validate block's view
@@ -463,19 +462,16 @@ func validateVotes(blk *types.Block, forBlockfunc ForBlockInView, depth int) boo
 	return err == nil
 }
 
-// Return two errors - first, indication for the tx handling; second, indication of atx handling
-func (s *Syncer) DataAvailability(blk *types.Block) ([]*types.AddressableSignedTransaction, error,[]*types.ActivationTx, error) {
+func (s *Syncer) DataAvailabilty(blk *types.Block) ([]*types.AddressableSignedTransaction, []*types.ActivationTx, error) {
 
 	txres, txerr := s.txQueue.HandleTxs(blk.TxIds)
 	if txerr != nil {
-		s.Warning("failed fetching block %v transactions %v", blk.ID(), txerr)
-		return nil, nil, txerr
+		return nil, nil, fmt.Errorf("failed fetching block %v transactions %v", blk.ID(), txerr)
 	}
 
 	atxres, atxerr := s.atxQueue.HandleAtxs(blk.AtxIds)
 	if atxerr != nil {
-		s.Warning("failed fetching block %v activation transactions %v", blk.ID(), atxerr)
-		return nil, nil, atxerr
+		return nil, nil, fmt.Errorf("failed fetching block %v activation transactions %v", blk.ID(), atxerr)
 	}
 
 	s.Info("fetched all block data %v", blk.ID())
@@ -582,12 +578,12 @@ func (s *Syncer) FetchPoetProof(poetProofRef []byte) error {
 	return nil
 }
 
-func (s *Syncer) atxCheckLocalFactory(atxIds []common.Hash) (map[common.Hash]Item, map[common.Hash]Item, []common.Hash) {
+func (s *Syncer) atxCheckLocalFactory(atxIds []types.Hash32) (map[types.Hash32]Item, map[types.Hash32]Item, []types.Hash32) {
 	//look in pool
-	unprocessedItems := make(map[common.Hash]Item, len(atxIds))
+	unprocessedItems := make(map[types.Hash32]Item, len(atxIds))
 	missingInPool := make([]types.AtxId, 0, len(atxIds))
 	for _, t := range atxIds {
-		id := types.AtxId{Hash: t}
+		id := types.AtxId{Hash32: t}
 		if x, err := s.atxpool.Get(id); err == nil {
 			atx := x
 			s.Debug("found atx, %v in atx pool", id.ShortString())
@@ -600,22 +596,22 @@ func (s *Syncer) atxCheckLocalFactory(atxIds []common.Hash) (map[common.Hash]Ite
 	//look in db
 	dbAtxs, missing := s.GetATXs(missingInPool)
 
-	dbItems := make(map[common.Hash]Item, len(dbAtxs))
+	dbItems := make(map[types.Hash32]Item, len(dbAtxs))
 	for i := range dbAtxs {
-		dbItems[i.Hash] = i
+		dbItems[i.Hash32] = i
 	}
 
-	missingItems := make([]common.Hash, 0, len(missing))
+	missingItems := make([]types.Hash32, 0, len(missing))
 	for _, i := range missing {
-		missingItems = append(missingItems, i.Hash)
+		missingItems = append(missingItems, i.Hash32)
 	}
 
 	return unprocessedItems, dbItems, missingItems
 }
 
-func (s *Syncer) txCheckLocalFactory(txIds []common.Hash) (map[common.Hash]Item, map[common.Hash]Item, []common.Hash) {
+func (s *Syncer) txCheckLocalFactory(txIds []types.Hash32) (map[types.Hash32]Item, map[types.Hash32]Item, []types.Hash32) {
 	//look in pool
-	unprocessedItems := make(map[common.Hash]Item)
+	unprocessedItems := make(map[types.Hash32]Item)
 	missingInPool := make([]types.TransactionId, 0)
 	for _, t := range txIds {
 		id := types.TransactionId(t)
@@ -630,12 +626,12 @@ func (s *Syncer) txCheckLocalFactory(txIds []common.Hash) (map[common.Hash]Item,
 	//look in db
 	dbTxs, missing := s.GetTransactions(missingInPool)
 
-	dbItems := make(map[common.Hash]Item, len(dbTxs))
+	dbItems := make(map[types.Hash32]Item, len(dbTxs))
 	for i := range dbTxs {
 		dbItems[i.ItemId()] = i
 	}
 
-	missingItems := make([]common.Hash, 0, len(missing))
+	missingItems := make([]types.Hash32, 0, len(missing))
 	for _, i := range missing {
 		missingItems = append(missingItems, i.ItemId())
 	}

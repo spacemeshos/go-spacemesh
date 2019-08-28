@@ -4,25 +4,24 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
-	"github.com/spacemeshos/go-spacemesh/types"
 	"sync"
 )
 
 type FetchPoetProofFunc func(poetProofRef []byte) error
 type GetValidAddressableTxFunc func(tx *types.SerializableSignedTransaction) (*types.AddressableSignedTransaction, error)
 type SValidateAtxFunc func(atx *types.ActivationTx) error
-type CheckLocalFunc func(atxIds []common.Hash) (map[common.Hash]Item, map[common.Hash]Item, []common.Hash)
+type CheckLocalFunc func(atxIds []types.Hash32) (map[types.Hash32]Item, map[types.Hash32]Item, []types.Hash32)
 
 type Item interface {
-	ItemId() common.Hash
+	ItemId() types.Hash32
 }
 
 type fetchJob struct {
 	items []Item
-	ids   []common.Hash
+	ids   []types.Hash32
 }
 
 //todo make the queue generic
@@ -32,10 +31,10 @@ type fetchQueue struct {
 	*sync.Mutex
 	*mesh.Mesh
 	workerInfra        WorkerInfra
-	pending            map[common.Hash][]chan bool
+	pending            map[types.Hash32][]chan bool
 	updateDependencies func(fj fetchJob)
 	checkLocal         CheckLocalFunc
-	queue              chan []common.Hash //types.TransactionId //todo make buffered
+	queue              chan []types.Hash32 //types.TransactionId //todo make buffered
 }
 
 //todo batches
@@ -55,14 +54,14 @@ func (fq *fetchQueue) work() error {
 	return nil
 }
 
-func (fq *fetchQueue) addToQueue(ids []common.Hash) chan bool {
+func (fq *fetchQueue) addToQueue(ids []types.Hash32) chan bool {
 	return getDoneChan(fq.addToPending(ids))
 }
 
-func (fq *fetchQueue) addToPending(ids []common.Hash) []chan bool {
+func (fq *fetchQueue) addToPending(ids []types.Hash32) []chan bool {
 	fq.Lock()
 	deps := make([]chan bool, 0, len(ids))
-	var idsToAdd []common.Hash
+	var idsToAdd []types.Hash32
 	for _, id := range ids {
 		ch := make(chan bool, 1)
 		deps = append(deps, ch)
@@ -76,7 +75,7 @@ func (fq *fetchQueue) addToPending(ids []common.Hash) []chan bool {
 	return deps
 }
 
-func (fq *fetchQueue) invalidate(id common.Hash, valid bool) {
+func (fq *fetchQueue) invalidate(id types.Hash32, valid bool) {
 	fq.Debug("done with %v !!!!!!!!!!!!!!!! %v", id.ShortString(), valid)
 	fq.Lock()
 	deps := fq.pending[id]
@@ -89,7 +88,7 @@ func (fq *fetchQueue) invalidate(id common.Hash, valid bool) {
 }
 
 //returns txs out of txids that are not in the local database
-func (tq *fetchQueue) Handle(itemIds []common.Hash) ([]Item, error) {
+func (tq *fetchQueue) Handle(itemIds []types.Hash32) ([]Item, error) {
 	if len(itemIds) == 0 {
 		tq.Debug("handle empty item ids slice")
 		return nil, nil
@@ -138,8 +137,8 @@ func NewTxQueue(s *Syncer, txValidator TxValidator) *txQueue {
 			Mutex:               &sync.Mutex{},
 			FetchRequestFactory: TxReqFactory(),
 			checkLocal:          s.txCheckLocalFactory,
-			pending:             make(map[common.Hash][]chan bool),
-			queue:               make(chan []common.Hash, 1000)},
+			pending:             make(map[types.Hash32][]chan bool),
+			queue:               make(chan []types.Hash32, 1000)},
 	}
 
 	q.updateDependencies = updateTxDependencies(q.invalidate, s.txpool, txValidator.GetValidAddressableTx)
@@ -149,7 +148,7 @@ func NewTxQueue(s *Syncer, txValidator TxValidator) *txQueue {
 
 //we could get rid of this if we had a unified id type
 func (tx txQueue) HandleTxs(txids []types.TransactionId) ([]*types.AddressableSignedTransaction, error) {
-	txItems := make([]common.Hash, 0, len(txids))
+	txItems := make([]types.Hash32, 0, len(txids))
 	for _, i := range txids {
 		txItems = append(txItems, i.ItemId())
 	}
@@ -167,13 +166,13 @@ func (tx txQueue) HandleTxs(txids []types.TransactionId) ([]*types.AddressableSi
 	return txs, nil
 }
 
-func updateTxDependencies(invalidate func(id common.Hash, valid bool), txpool TxMemPool, getValidAddrTx GetValidAddressableTxFunc) func(fj fetchJob) {
+func updateTxDependencies(invalidate func(id types.Hash32, valid bool), txpool TxMemPool, getValidAddrTx GetValidAddressableTxFunc) func(fj fetchJob) {
 	return func(fj fetchJob) {
 		if len(fj.items) == 0 {
 			return
 		}
 
-		mp := map[common.Hash]*types.SerializableSignedTransaction{}
+		mp := map[types.Hash32]*types.SerializableSignedTransaction{}
 
 		for _, item := range fj.items {
 			mp[item.ItemId()] = item.(*types.SerializableSignedTransaction)
@@ -207,8 +206,8 @@ func NewAtxQueue(s *Syncer, fetchPoetProof FetchPoetProofFunc) *atxQueue {
 			FetchRequestFactory: ATxReqFactory(),
 			Mutex:               &sync.Mutex{},
 			checkLocal:          s.atxCheckLocalFactory,
-			pending:             make(map[common.Hash][]chan bool),
-			queue:               make(chan []common.Hash, 1000),
+			pending:             make(map[types.Hash32][]chan bool),
+			queue:               make(chan []types.Hash32, 1000),
 		},
 	}
 
@@ -219,7 +218,7 @@ func NewAtxQueue(s *Syncer, fetchPoetProof FetchPoetProofFunc) *atxQueue {
 
 //we could get rid of this if we had a unified id type
 func (atx atxQueue) HandleAtxs(atxids []types.AtxId) ([]*types.ActivationTx, error) {
-	atxItems := make([]common.Hash, 0, len(atxids))
+	atxItems := make([]types.Hash32, 0, len(atxids))
 	for _, i := range atxids {
 		atxItems = append(atxItems, i.ItemId())
 	}
@@ -237,7 +236,7 @@ func (atx atxQueue) HandleAtxs(atxids []types.AtxId) ([]*types.ActivationTx, err
 	return atxs, nil
 }
 
-func updateAtxDependencies(invalidate func(id common.Hash, valid bool), sValidateAtx SValidateAtxFunc, atxpool AtxMemPool, fetchProof FetchPoetProofFunc) func(fj fetchJob) {
+func updateAtxDependencies(invalidate func(id types.Hash32, valid bool), sValidateAtx SValidateAtxFunc, atxpool AtxMemPool, fetchProof FetchPoetProofFunc) func(fj fetchJob) {
 	return func(fj fetchJob) {
 		if len(fj.items) == 0 {
 			return
@@ -245,7 +244,7 @@ func updateAtxDependencies(invalidate func(id common.Hash, valid bool), sValidat
 
 		fetchProofCalcId(fetchProof, fj)
 
-		mp := map[common.Hash]*types.ActivationTx{}
+		mp := map[types.Hash32]*types.ActivationTx{}
 		for _, item := range fj.items {
 			tmp := item.(types.ActivationTx)
 			mp[item.ItemId()] = &tmp

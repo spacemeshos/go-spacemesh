@@ -6,8 +6,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"github.com/spacemeshos/go-spacemesh/timesync"
-	"github.com/spacemeshos/go-spacemesh/types"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -67,7 +65,7 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 			// TODO: A WIP is on it's way hence we only comment-out the go routine until impl
 			bl.wg.Add(1)
 			go func() {
-			defer bl.wg.Done()
+				defer bl.wg.Done()
 				if data == nil {
 					bl.Error("got empty message while listening to gossip blocks")
 					return
@@ -79,10 +77,10 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 					return
 				}
 
-			if bl.HandleNewBlock(&blk) {
-				data.ReportValidation(config.NewBlockProtocol)
-			}
-			bl.wg.Done()
+				if bl.HandleNewBlock(&blk) {
+					data.ReportValidation(config.NewBlockProtocol)
+				}
+				bl.wg.Done()
 			}()
 
 		}

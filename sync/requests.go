@@ -8,8 +8,6 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/p2p/server"
-	"github.com/spacemeshos/go-spacemesh/types"
 )
 
 func LayerIdsReqFactory(lyr types.LayerID) RequestFactory {
@@ -44,7 +42,7 @@ func HashReqFactory(lyr types.LayerID) RequestFactory {
 				s.Warning("peer %v responded with nil to hash request layer %v", peer, lyr)
 				return
 			}
-if len(msg) != types.Hash32Length {
+			if len(msg) != types.Hash32Length {
 				s.Error("received layer hash in wrong length, len %v", len(msg))
 				return
 			}
@@ -124,7 +122,7 @@ func TxReqFactory() FetchRequestFactory {
 				return
 			}
 
-			if valid, err := validateTxIds(ids.([]common.Hash), txs); !valid {
+			if valid, err := validateTxIds(ids.([]types.Hash32), txs); !valid {
 				s.Error("fetch failed bad response : %v", err)
 				return
 			}
@@ -148,8 +146,8 @@ func TxReqFactory() FetchRequestFactory {
 	}
 }
 
-func validateTxIds(ids []common.Hash, txs []types.SerializableSignedTransaction) (bool, error) {
-	mp := make(map[common.Hash]struct{})
+func validateTxIds(ids []types.Hash32, txs []types.SerializableSignedTransaction) (bool, error) {
+	mp := make(map[types.Hash32]struct{})
 	for _, id := range ids {
 		mp[id] = struct{}{}
 	}
@@ -180,7 +178,7 @@ func ATxReqFactory() FetchRequestFactory {
 			}
 
 			atxs = calcAndSetIds(atxs)
-			if valid, err := validateAtxIds(ids.([]common.Hash), atxs); !valid {
+			if valid, err := validateAtxIds(ids.([]types.Hash32), atxs); !valid {
 				s.Error("fetch failed bad response : %v", err)
 				return
 			}
@@ -205,8 +203,8 @@ func ATxReqFactory() FetchRequestFactory {
 	}
 }
 
-func validateAtxIds(ids []common.Hash, atxs []types.ActivationTx) (bool, error) {
-	mp := make(map[common.Hash]struct{})
+func validateAtxIds(ids []types.Hash32, atxs []types.ActivationTx) (bool, error) {
+	mp := make(map[types.Hash32]struct{})
 	for _, id := range ids {
 		mp[id] = struct{}{}
 	}

@@ -10,10 +10,10 @@ import (
 )
 
 type BlockID uint64
-type TransactionId common.Hash
+type TransactionId Hash32
 
-func (l TransactionId) ItemId() common.Hash {
-	return common.Hash(l)
+func (l TransactionId) ItemId() Hash32 {
+	return Hash32(l)
 }
 
 type LayerID uint64
@@ -79,8 +79,8 @@ type MiniBlock struct {
 	AtxIds []AtxId
 }
 
-func (t *Block) ItemId() common.Hash {
-	return common.BytesToHash(t.Id.ToBytes())
+func (t *Block) ItemId() Hash32 {
+	return BytesToHash(t.Id.ToBytes())
 }
 
 func (t *Block) Sig() []byte {
@@ -119,7 +119,7 @@ type SerializableSignedTransaction struct {
 	Signature [64]byte
 }
 
-func (t *SerializableSignedTransaction) ItemId() common.Hash {
+func (t *SerializableSignedTransaction) ItemId() Hash32 {
 	return GetTransactionId(t).ItemId()
 }
 

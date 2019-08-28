@@ -16,8 +16,6 @@ type layerMutex struct {
 	layerWorkers uint32
 }
 
-var DoubleWrite = errors.New(fmt.Sprintf("item already exists in database"))
-
 type MeshDB struct {
 	log.Log
 	blockCache         blockCache

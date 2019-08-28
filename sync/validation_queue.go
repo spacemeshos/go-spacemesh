@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/types"
+	"github.com/spacemeshos/go-spacemesh/mesh"
+	"reflect"
+	"sync"
 )
 
 type blockJob struct {
@@ -123,9 +125,9 @@ func (vq *validationQueue) finishBlockCallback(block *types.Block) func(res bool
 		}
 
 		//data availability
-		txs, txErr, atxs, atxErr := vq.DataAvailability(block)
-		if txErr != nil || atxErr != nil {
-			return fmt.Errorf("txerr %v, atxerr %v", txErr, atxErr)
+		txs, atxs, err := vq.DataAvailabilty(block)
+		if err != nil {
+			return fmt.Errorf("DataAvailabilty failed for block %v err: %v", block, err)
 		}
 
 		//validate block's votes
@@ -133,7 +135,7 @@ func (vq *validationQueue) finishBlockCallback(block *types.Block) func(res bool
 			return errors.New(fmt.Sprintf("validate votes failed for block %v", block.ID()))
 		}
 
-		if err := vq.AddBlockWithTxs(block, txs, atxs); err != nil && err != mesh.DoubleWrite {
+		if err := vq.AddBlockWithTxs(block, txs, atxs); err != nil && err != mesh.ErrAlreadyExist {
 			return err
 		}
 
