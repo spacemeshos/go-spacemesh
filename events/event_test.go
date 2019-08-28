@@ -1,7 +1,7 @@
 package events
 
 import (
-	"github.com/spacemeshos/go-spacemesh/types"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
