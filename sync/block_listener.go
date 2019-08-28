@@ -94,7 +94,7 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 
 func (bl *BlockListener) HandleNewBlock(blk *types.Block) bool {
 
-	bl.Log.With().Info("got new block", log.BlockId(uint64(blk.Id)), log.Int("txs", len(blk.TxIds)), log.Int("atxs", len(blk.AtxIds)))
+	bl.Log.With().Info("got new block", log.BlockId(uint64(blk.Id)), log.Int("txs", len(blk.TxIds)), log.Int("atxs", len(blk.AtxIds)), log.LayerId(uint64(blk.Layer())))
 	//check if known
 	if _, err := bl.GetBlock(blk.Id); err == nil {
 		bl.With().Info("we already know this block", log.BlockId(uint64(blk.ID())))
