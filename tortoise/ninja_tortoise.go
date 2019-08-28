@@ -468,7 +468,7 @@ func (ni *ninjaTortoise) getVote(id types.BlockID) vec {
 	return ni.tVote[*ni.pBase][id]
 }
 
-func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) { //i most recent layer
+func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) {
 	ni.With().Info("Tortoise update tables", log.LayerId(uint64(newlyr.Index())), log.Int("n_blocks", len(newlyr.Blocks())))
 	defer ni.evictOutOfPbase()
 	ni.processBlocks(newlyr)

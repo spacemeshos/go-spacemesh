@@ -197,6 +197,64 @@ func TestNinjaTortoise_VariableLayerSize(t *testing.T) {
 
 }
 
+func TestNinjaTortoise_BlockByBlock(t *testing.T) {
+
+	lg := log.New("tortoise_test", "", "")
+
+	mdb := getMeshForBench()
+	alg := NewNinjaTortoise(8, mdb, 5, lg)
+	l := mesh.GenesisLayer()
+	AddLayer(mdb, l)
+	handleLayerBlockByBlock(l, alg)
+
+	l1 := createLayer(1, []*types.Layer{l}, 8)
+	AddLayer(mdb, l1)
+	handleLayerBlockByBlock(l1, alg)
+
+	l2 := createLayer(2, []*types.Layer{l1, l}, 8)
+	AddLayer(mdb, l2)
+	handleLayerBlockByBlock(l2, alg)
+
+	l3 := createLayer(3, []*types.Layer{l2, l1, l}, 8)
+	AddLayer(mdb, l3)
+	handleLayerBlockByBlock(l3, alg)
+
+	l4 := createLayer(4, []*types.Layer{l3, l2, l1, l}, 8)
+	AddLayer(mdb, l4)
+	handleLayerBlockByBlock(l4, alg)
+
+	l5 := createLayer(5, []*types.Layer{l4, l3, l2, l1, l}, 4)
+	AddLayer(mdb, l5)
+	handleLayerBlockByBlock(l5, alg)
+
+	l6 := createLayer(6, []*types.Layer{l5, l4, l3, l2, l1}, 9)
+	AddLayer(mdb, l6)
+	handleLayerBlockByBlock(l6, alg)
+	//
+	l7 := createLayer(7, []*types.Layer{l6, l5, l4, l3, l2}, 9)
+	AddLayer(mdb, l7)
+	handleLayerBlockByBlock(l7, alg)
+
+	l8 := createLayer(8, []*types.Layer{l7, l6, l5, l4, l3}, 9)
+	AddLayer(mdb, l8)
+	handleLayerBlockByBlock(l8, alg)
+
+	l9 := createLayer(9, []*types.Layer{l8, l7, l6, l5, l4}, 9)
+	AddLayer(mdb, l9)
+	handleLayerBlockByBlock(l9, alg)
+
+	assert.True(t, alg.pBase.Layer() == 8)
+
+}
+
+func handleLayerBlockByBlock(lyr *types.Layer, algorithm *ninjaTortoise) {
+	idx := lyr.Index()
+	for _, blk := range lyr.Blocks() {
+		lr := types.NewExistingLayer(idx, []*types.Block{blk})
+		algorithm.handleIncomingLayer(lr)
+	}
+}
+
 func createLayer(index types.LayerID, prev []*types.Layer, blocksInLayer int) *types.Layer {
 	l := types.NewLayer(index)
 	var patterns [][]int
