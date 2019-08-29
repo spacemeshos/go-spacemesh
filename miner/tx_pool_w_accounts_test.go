@@ -81,6 +81,16 @@ func TestGetRandIdxs(t *testing.T) {
 		idsList = append(idsList, id)
 	}
 	require.ElementsMatch(t, []uint64{1, 5, 6, 8, 9}, idsList)
+
+	otherSeed := []byte("other seed")
+
+	idxs = getRandIdxs(5, 10, otherSeed)
+
+	idsList = []uint64{}
+	for id := range idxs {
+		idsList = append(idsList, id)
+	}
+	require.ElementsMatch(t, []uint64{2, 4, 6, 7, 8}, idsList) // different seed -> different indices
 }
 
 func newTx(origin types.Address, nonce, amount uint64) (types.TransactionId, *types.AddressableSignedTransaction) {
