@@ -1070,8 +1070,8 @@ func TestSyncer_Synchronise2(t *testing.T) {
 
 func TestSyncer_handleNotSyncedFlow(t *testing.T) {
 	r := require.New(t)
-	txpool := miner.NewTypesTransactionIdMemPool()
-	atxpool := miner.NewTypesAtxIdMemPool()
+	txpool := miner.NewTxPoolWithAccounts()
+	atxpool := miner.NewAtxMemPool()
 	ts := &mockClock{}
 	sync := NewSync(service.NewSimulator().NewNode(), getMesh(memoryDB, Path+t.Name()+"_"+time.Now().String()), txpool, atxpool, mockTxProcessor{}, BlockEligibilityValidatorMock{}, newMockPoetDb(), conf, ts, 10, log.NewDefault(t.Name()))
 
