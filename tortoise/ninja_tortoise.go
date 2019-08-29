@@ -75,7 +75,7 @@ type ninjaTortoise struct {
 	hdist        types.LayerID
 	evict        types.LayerID
 	avgLayerSize int
-	pBase        *votingPattern
+	pBase        votingPattern
 	patterns     map[types.LayerID][]votingPattern                 //map patterns by layer for eviction purposes
 	tEffective   map[types.BlockID]votingPattern                   //Explicit voting pattern of latest layer for a block
 	tCorrect     map[types.BlockID]map[types.BlockID]vec           //correction vectors
@@ -101,7 +101,7 @@ func NewNinjaTortoise(layerSize int, blocks Mesh, hdist int, log log.Log) *ninja
 		Mesh:         blocks,
 		hdist:        types.LayerID(hdist),
 		avgLayerSize: layerSize,
-		pBase:        nil,
+		pBase:        ZeroPattern,
 
 		patterns:   map[types.LayerID][]votingPattern{},
 		tGood:      map[types.LayerID]votingPattern{},
@@ -121,7 +121,7 @@ func NewNinjaTortoise(layerSize int, blocks Mesh, hdist int, log log.Log) *ninja
 
 func (ni *ninjaTortoise) evictOutOfPbase() {
 	wg := sync.WaitGroup{}
-	if ni.pBase.Layer() <= ni.hdist {
+	if ni.pBase == ZeroPattern || ni.pBase.Layer() <= ni.hdist {
 		return
 	}
 
@@ -314,7 +314,9 @@ func (ni *ninjaTortoise) findMinimalNewlyGoodLayer(lyr *types.Layer) types.Layer
 	minGood := types.LayerID(math.MaxUint64)
 
 	var j types.LayerID
-	if Window > lyr.Index() {
+	if ni.pBase == ZeroPattern {
+		minGood = 0
+	} else if Window > lyr.Index() {
 		j = ni.pBase.Layer() + 1
 	} else {
 		j = Max(ni.pBase.Layer()+1, lyr.Index()-Window+1)
@@ -341,7 +343,7 @@ func (ni *ninjaTortoise) findMinimalNewlyGoodLayer(lyr *types.Layer) types.Layer
 		}
 	}
 
-	ni.Debug("found minimal good layer %d", minGood)
+	ni.Info("found minimal good layer %d", minGood)
 	return minGood
 }
 
@@ -377,7 +379,7 @@ func (ni *ninjaTortoise) addPatternVote(p votingPattern, view map[types.BlockID]
 			ni.Panic(fmt.Sprintf("error block not found ID %d %v", b, err))
 		}
 
-		if ni.pBase != nil && bl.Layer() <= ni.pBase.Layer() { //ignore under pbase
+		if ni.pBase != ZeroPattern && bl.Layer() <= ni.pBase.Layer() { //ignore under pbase
 			return
 		}
 
@@ -430,9 +432,9 @@ func (ni *ninjaTortoise) handleGenesis(genesis *types.Layer) {
 	for _, blk := range genesis.Blocks() {
 		blkIds = append(blkIds, blk.ID())
 	}
-	vp := votingPattern{id: getId(blkIds), LayerID: Genesis}
-	ni.pBase = &vp
-	ni.tGood[Genesis] = vp
+	//vp := votingPattern{id: getId(blkIds), LayerID: Genesis}
+	//ni.pBase = &vp
+	//ni.tGood[Genesis] = vp
 	ni.tExplicit[genesis.Blocks()[0].ID()] = make(map[types.LayerID]votingPattern, int(ni.hdist)*ni.avgLayerSize)
 }
 
@@ -456,15 +458,11 @@ func initTallyToBase(tally map[votingPattern]map[types.BlockID]vec, base votingP
 }
 
 func (ni *ninjaTortoise) latestComplete() types.LayerID {
-	if ni.pBase == nil {
-		return 0
-	}
-
 	return ni.pBase.Layer()
 }
 
 func (ni *ninjaTortoise) getVotes() map[types.BlockID]vec {
-	return ni.tVote[*ni.pBase]
+	return ni.tVote[ni.pBase]
 }
 
 func (ni *ninjaTortoise) getVote(id types.BlockID) vec {
@@ -478,7 +476,7 @@ func (ni *ninjaTortoise) getVote(id types.BlockID) vec {
 		return Against
 	}
 
-	return ni.tVote[*ni.pBase][id]
+	return ni.tVote[ni.pBase][id]
 }
 
 func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) {
@@ -498,7 +496,7 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) {
 		p, gfound := ni.tGood[j]
 		if gfound {
 			//init p's tally to pBase tally
-			initTallyToBase(ni.tTally, *ni.pBase, p)
+			initTallyToBase(ni.tTally, ni.pBase, p)
 
 			//find bottom of window
 			var windowStart types.LayerID
@@ -569,7 +567,7 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) {
 			if _, found := ni.tComplete[p]; complete && !found {
 				ni.tComplete[p] = struct{}{}
 				ni.SaveOpinion(p)
-				ni.pBase = &p
+				ni.pBase = p
 				ni.Debug("found new complete and good pattern for layer %d pattern %d with %d support ", l, p.id, ni.tSupport[p])
 			}
 		}

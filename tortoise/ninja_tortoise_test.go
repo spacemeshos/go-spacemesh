@@ -422,7 +422,7 @@ func sanity(t *testing.T, mdb *mesh.MeshDB, layers int, layerSize int, patternSi
 		start := time.Now()
 		alg.handleIncomingLayer(lyr)
 		alg.Debug("Time to process layer: %v ", time.Since(start))
-		fmt.Println(fmt.Sprintf("lyr %v tally was %d", lyr.Index()-1, alg.tTally[*alg.pBase][config.GenesisId]))
+		fmt.Println(fmt.Sprintf("lyr %v tally was %d", lyr.Index()-1, alg.tTally[alg.pBase][config.GenesisId]))
 		l = lyr
 	}
 
@@ -440,6 +440,7 @@ func TestNinjaTortoise_Sanity2(t *testing.T) {
 	l := createMulExplicitLayer(0, map[types.LayerID]*types.Layer{}, nil, 1)
 	l1 := createMulExplicitLayer(1, map[types.LayerID]*types.Layer{l.Index(): l}, map[types.LayerID][]int{0: {0}}, 3)
 	l2 := createMulExplicitLayer(2, map[types.LayerID]*types.Layer{l1.Index(): l1}, map[types.LayerID][]int{1: {0, 1, 2}}, 3)
+
 	l3 := createMulExplicitLayer(3, map[types.LayerID]*types.Layer{l2.Index(): l2}, map[types.LayerID][]int{l2.Index(): {0}}, 3)
 	l4 := createMulExplicitLayer(4, map[types.LayerID]*types.Layer{l2.Index(): l2, l3.Index(): l3}, map[types.LayerID][]int{l2.Index(): {1, 2}, l3.Index(): {1, 2}}, 4)
 
@@ -454,10 +455,10 @@ func TestNinjaTortoise_Sanity2(t *testing.T) {
 	alg.handleIncomingLayer(l2)
 	alg.handleIncomingLayer(l3)
 	alg.handleIncomingLayer(l4)
-	for b, vec := range alg.tTally[*alg.pBase] {
+	for b, vec := range alg.tTally[alg.pBase] {
 		alg.Debug("------> tally for block %d according to complete pattern %d are %d", b, alg.pBase, vec)
 	}
-	assert.True(t, alg.tTally[*alg.pBase][l.Blocks()[0].ID()] == vec{5, 0}, "lyr %d tally was %d insted of %d", 0, alg.tTally[*alg.pBase][l.Blocks()[0].ID()], vec{5, 0})
+	assert.True(t, alg.tTally[alg.pBase][l.Blocks()[0].ID()] == vec{5, 0}, "lyr %d tally was %d insted of %d", 0, alg.tTally[alg.pBase][l.Blocks()[0].ID()], vec{5, 0})
 }
 
 func createMulExplicitLayer(index types.LayerID, prev map[types.LayerID]*types.Layer, patterns map[types.LayerID][]int, blocksInLayer int) *types.Layer {
