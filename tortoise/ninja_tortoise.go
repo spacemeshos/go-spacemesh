@@ -183,9 +183,17 @@ func (ni *ninjaTortoise) processBlock(b *types.Block) {
 
 	var effective votingPattern
 	ni.tExplicit[b.ID()] = make(map[types.LayerID]votingPattern, ni.hdist)
-	for layerId := b.Layer() - ni.hdist; layerId < b.Layer(); layerId++ {
-		v, ok := patternMap[layerId]
-		if !ok {
+
+	var layerId types.LayerID
+	if ni.hdist > b.Layer() {
+		layerId = 0
+	} else {
+		layerId = b.Layer() - ni.hdist
+	}
+
+	for ; layerId < b.Layer(); layerId++ {
+		v, found := patternMap[layerId]
+		if !found {
 			ni.tExplicit[b.ID()][layerId] = ZeroPattern
 		}
 		vp := votingPattern{id: getIdsFromSet(v), LayerID: layerId}
@@ -314,9 +322,7 @@ func (ni *ninjaTortoise) findMinimalNewlyGoodLayer(lyr *types.Layer) types.Layer
 	minGood := types.LayerID(math.MaxUint64)
 
 	var j types.LayerID
-	if ni.pBase == ZeroPattern {
-		minGood = 0
-	} else if Window > lyr.Index() {
+	if Window > lyr.Index() {
 		j = ni.pBase.Layer() + 1
 	} else {
 		j = Max(ni.pBase.Layer()+1, lyr.Index()-Window+1)

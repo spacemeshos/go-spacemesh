@@ -436,54 +436,32 @@ func sanity(t *testing.T, mdb *mesh.MeshDB, layers int, layerSize int, patternSi
 func TestNinjaTortoise_Sanity2(t *testing.T) {
 	defer persistenceTeardown()
 	mdb := getInMemMesh()
-	alg := NewNinjaTortoise(3, mdb, 5, log.New("TestNinjaTortoise_Sanity2", "", ""))
-	l := createMulExplicitLayer(0, map[types.LayerID]*types.Layer{}, nil, 1)
-	l1 := createMulExplicitLayer(1, map[types.LayerID]*types.Layer{l.Index(): l}, map[types.LayerID][]int{0: {0}}, 3)
-	l2 := createMulExplicitLayer(2, map[types.LayerID]*types.Layer{l1.Index(): l1}, map[types.LayerID][]int{1: {0, 1, 2}}, 3)
+	alg := NewNinjaTortoise(3, mdb, 5, log.New(t.Name(), "", ""))
+	l := mesh.GenesisLayer()
 
-	l3 := createMulExplicitLayer(3, map[types.LayerID]*types.Layer{l2.Index(): l2}, map[types.LayerID][]int{l2.Index(): {0}}, 3)
-	l4 := createMulExplicitLayer(4, map[types.LayerID]*types.Layer{l2.Index(): l2, l3.Index(): l3}, map[types.LayerID][]int{l2.Index(): {1, 2}, l3.Index(): {1, 2}}, 4)
+	l1 := createLayer(1, []*types.Layer{l}, 3)
+	l2 := createLayer(2, []*types.Layer{l1, l}, 3)
+	l3 := createLayer(3, []*types.Layer{l2, l1, l}, 3)
+	l4 := createLayer(4, []*types.Layer{l3, l1, l}, 3)
+	l5 := createLayer(5, []*types.Layer{l4, l3, l2, l1, l}, 3)
 
 	AddLayer(mdb, l)
 	AddLayer(mdb, l1)
 	AddLayer(mdb, l2)
 	AddLayer(mdb, l3)
 	AddLayer(mdb, l4)
+	AddLayer(mdb, l5)
 
 	alg.handleIncomingLayer(l)
 	alg.handleIncomingLayer(l1)
 	alg.handleIncomingLayer(l2)
 	alg.handleIncomingLayer(l3)
 	alg.handleIncomingLayer(l4)
+	alg.handleIncomingLayer(l5)
 	for b, vec := range alg.tTally[alg.pBase] {
 		alg.Debug("------> tally for block %d according to complete pattern %d are %d", b, alg.pBase, vec)
 	}
-	assert.True(t, alg.tTally[alg.pBase][l.Blocks()[0].ID()] == vec{5, 0}, "lyr %d tally was %d insted of %d", 0, alg.tTally[alg.pBase][l.Blocks()[0].ID()], vec{5, 0})
-}
-
-func createMulExplicitLayer(index types.LayerID, prev map[types.LayerID]*types.Layer, patterns map[types.LayerID][]int, blocksInLayer int) *types.Layer {
-	l := types.NewLayer(index)
-	layerBlocks := make([]types.BlockID, 0, blocksInLayer)
-	for i := 0; i < blocksInLayer; i++ {
-		bl := types.NewExistingBlock(types.BlockID(uuid.New().ID()), index, []byte("data data data"))
-		layerBlocks = append(layerBlocks, bl.ID())
-
-		for lyrId, pat := range patterns {
-			for _, id := range pat {
-				b := prev[lyrId].Blocks()[id]
-				bl.AddVote(types.BlockID(b.ID()))
-			}
-		}
-		if index > 0 {
-			for _, prevBloc := range prev[index-1].Blocks() {
-				bl.AddView(types.BlockID(prevBloc.ID()))
-			}
-		}
-		l.AddBlock(bl)
-	}
-	log.Debug("Created mesh.LayerID %d with blocks %d", l.Index(), layerBlocks)
-
-	return l
+	assert.True(t, alg.tTally[alg.pBase][l.Blocks()[0].ID()] == vec{12, 0}, "lyr %d tally was %d insted of %d", 0, alg.tTally[alg.pBase][l.Blocks()[0].ID()], vec{12, 0})
 }
 
 func createLayerWithCorruptedPattern(index types.LayerID, prev *types.Layer, blocksInLayer int, patternSize int, badBlocks float64) *types.Layer {
