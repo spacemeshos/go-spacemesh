@@ -648,7 +648,7 @@ func Test_TwoNodes_SyncIntegrationSuite(t *testing.T) {
 	layout := "2006-01-02T15:04:05.000Z"
 	str := "2018-11-12T11:45:26.371Z"
 	start, _ := time.Parse(layout, str)
-	ts := timesync.NewTicker(MockTimer{}, tick, start)
+	ts := timesync.NewTicker(timesync.RealClock{}, tick, start)
 	sis.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
 		l := log.New(fmt.Sprintf("%s_%d", sis.name, atomic.LoadUint32(&i)), "", "")
 		msh := getMesh(memoryDB, fmt.Sprintf("%s_%s", sis.name, time.Now()))
@@ -766,7 +766,7 @@ func Test_Multiple_SyncIntegrationSuite(t *testing.T) {
 	layout := "2006-01-02T15:04:05.000Z"
 	str := "2018-11-12T11:45:26.371Z"
 	start, _ := time.Parse(layout, str)
-	ts := timesync.NewTicker(MockTimer{}, tick, start)
+	ts := timesync.NewTicker(timesync.RealClock{}, tick, start)
 	sis.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
 		l := log.New(fmt.Sprintf("%s_%d", sis.name, atomic.LoadUint32(&i)), "", "")
 		msh := getMesh(memoryDB, fmt.Sprintf("%s_%d", sis.name, atomic.LoadUint32(&i)))
