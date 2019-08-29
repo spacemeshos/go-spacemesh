@@ -20,6 +20,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/oracle"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/pending_txs"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/spacemeshos/go-spacemesh/sync"
@@ -351,17 +352,18 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 		return err
 	}
 
+	txpool := miner.NewTxPoolWithAccounts()
+	atxpool := miner.NewAtxMemPool()
+	projector := pending_txs.NewProjector(mdb, txpool)
+
 	rng := rand.New(mt19937.New())
-	processor := state.NewTransactionProcessor(rng, st, mdb, app.Config.GAS, lg.WithName("state"))
+	processor := state.NewTransactionProcessor(rng, st, projector, app.Config.GAS, lg.WithName("state"))
 
 	atxdb := activation.NewActivationDb(atxdbstore, idStore, mdb, layersPerEpoch, validator, lg.WithName("atxDb"))
 	beaconProvider := &oracle.EpochBeaconProvider{}
 	eValidator := oracle.NewBlockEligibilityValidator(layerSize, uint32(app.Config.GenesisActiveSet), layersPerEpoch, atxdb, beaconProvider, BLS381.Verify2, lg.WithName("blkElgValidator"))
 
 	trtl := tortoise.NewAlgorithm(int(layerSize), mdb, app.Config.Hdist, lg.WithName("trtl"))
-
-	txpool := miner.NewTxPoolWithAccounts()
-	atxpool := miner.NewAtxMemPool()
 
 	msh := mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, txpool, atxpool, processor, lg.WithName("mesh")) //todo: what to do with the logger?
 

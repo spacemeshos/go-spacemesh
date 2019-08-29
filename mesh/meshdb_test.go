@@ -12,7 +12,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"math"
-	"math/big"
 	"os"
 	"path"
 	"sort"
@@ -271,21 +270,10 @@ const (
 	initialBalance = 100
 )
 
-type MockStateObj struct {
-}
-
-func (m *MockStateObj) Address() types.Address {
+func address() types.Address {
 	var addr [20]byte
 	copy(addr[:], "12345678901234567890")
 	return addr
-}
-
-func (m *MockStateObj) Nonce() uint64 {
-	return initialNonce
-}
-
-func (m *MockStateObj) Balance() *big.Int {
-	return big.NewInt(initialBalance)
 }
 
 func newTx(origin types.Address, nonce, amount uint64) *types.AddressableSignedTransaction {
@@ -296,15 +284,14 @@ func TestMeshDB_GetStateProjection(t *testing.T) {
 	r := require.New(t)
 
 	mdb := NewMemMeshDB(log.NewDefault("MeshDB.GetStateProjection"))
-	stateObj := &MockStateObj{}
-	origin := stateObj.Address()
+	origin := address()
 	err := mdb.addToMeshTxs([]*types.AddressableSignedTransaction{
 		newTx(origin, 0, 10),
 		newTx(origin, 1, 20),
 	}, 1)
 	r.NoError(err)
 
-	nonce, balance, err := mdb.GetStateProjection(stateObj)
+	nonce, balance, err := mdb.GetProjection(origin, initialNonce, initialBalance)
 	r.NoError(err)
 	r.Equal(initialNonce+2, int(nonce))
 	r.Equal(initialBalance-30, int(balance))
@@ -314,15 +301,14 @@ func TestMeshDB_GetStateProjection_WrongNonce(t *testing.T) {
 	r := require.New(t)
 
 	mdb := NewMemMeshDB(log.New("TestForEachInView", "", ""))
-	stateObj := &MockStateObj{}
-	origin := stateObj.Address()
+	origin := address()
 	err := mdb.addToMeshTxs([]*types.AddressableSignedTransaction{
 		newTx(origin, 1, 10),
 		newTx(origin, 2, 20),
 	}, 1)
 	r.NoError(err)
 
-	nonce, balance, err := mdb.GetStateProjection(stateObj)
+	nonce, balance, err := mdb.GetProjection(origin, initialNonce, initialBalance)
 	r.NoError(err)
 	r.Equal(initialNonce, int(nonce))
 	r.Equal(initialBalance, int(balance))
@@ -332,15 +318,14 @@ func TestMeshDB_GetStateProjection_DetectNegativeBalance(t *testing.T) {
 	r := require.New(t)
 
 	mdb := NewMemMeshDB(log.New("TestForEachInView", "", ""))
-	stateObj := &MockStateObj{}
-	origin := stateObj.Address()
+	origin := address()
 	err := mdb.addToMeshTxs([]*types.AddressableSignedTransaction{
 		newTx(origin, 0, 10),
 		newTx(origin, 1, 95),
 	}, 1)
 	r.NoError(err)
 
-	nonce, balance, err := mdb.GetStateProjection(stateObj)
+	nonce, balance, err := mdb.GetProjection(origin, initialNonce, initialBalance)
 	r.NoError(err)
 	r.Equal(1, int(nonce))
 	r.Equal(initialBalance-10, int(balance))
@@ -350,9 +335,8 @@ func TestMeshDB_GetStateProjection_NothingToApply(t *testing.T) {
 	r := require.New(t)
 
 	mdb := NewMemMeshDB(log.New("TestForEachInView", "", ""))
-	stateObj := &MockStateObj{}
 
-	nonce, balance, err := mdb.GetStateProjection(stateObj)
+	nonce, balance, err := mdb.GetProjection(address(), initialNonce, initialBalance)
 	r.NoError(err)
 	r.Equal(uint64(initialNonce), nonce)
 	r.Equal(uint64(initialBalance), balance)

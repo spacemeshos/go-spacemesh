@@ -29,8 +29,8 @@ type ProjectorMock struct {
 	balanceDiff uint64
 }
 
-func (p *ProjectorMock) GetStateProjection(stateObj mesh.StateObj) (uint64, uint64, error) {
-	return stateObj.Nonce() + p.nonceDiff, stateObj.Balance().Uint64() - p.balanceDiff, nil
+func (p *ProjectorMock) GetProjection(addr types.Address, prevNonce, prevBalance uint64) (nonce, balance uint64, err error) {
+	return prevNonce + p.nonceDiff, prevBalance - p.balanceDiff, nil
 }
 
 func (s *ProcessorStateSuite) SetupTest() {

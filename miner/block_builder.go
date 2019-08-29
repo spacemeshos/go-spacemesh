@@ -258,7 +258,6 @@ func (t *BlockBuilder) listenForTx() {
 						log.TxId(hex.EncodeToString(id[:util.Min(5, len(id))])), log.Err(err))
 					continue
 				}
-				// TODO: This only considers mesh transactions (not mempool)
 				if err := t.txValidator.ValidateNonceAndBalance(fullTx); err != nil {
 					t.With().Error("Transaction nonce and balance validation failed",
 						log.TxId(hex.EncodeToString(id[:util.Min(5, len(id))])), log.Err(err))

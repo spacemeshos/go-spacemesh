@@ -459,12 +459,12 @@ type StateObj interface {
 	Balance() *big.Int
 }
 
-func (m *MeshDB) GetStateProjection(stateObj StateObj) (nonce uint64, balance uint64, err error) {
-	pending, err := m.getAccountPendingTxs(stateObj.Address())
+func (m *MeshDB) GetProjection(addr types.Address, prevNonce, prevBalance uint64) (nonce, balance uint64, err error) {
+	pending, err := m.getAccountPendingTxs(addr)
 	if err != nil {
 		return 0, 0, err
 	}
-	nonce, balance = pending.GetProjection(stateObj.Nonce(), stateObj.Balance().Uint64())
+	nonce, balance = pending.GetProjection(prevNonce, prevBalance)
 	return nonce, balance, nil
 }
 

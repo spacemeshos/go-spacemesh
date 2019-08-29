@@ -37,7 +37,7 @@ func DefaultConfig() GasConfig {
 }
 
 type Projector interface {
-	GetStateProjection(stateObj mesh.StateObj) (nonce uint64, balance uint64, err error)
+	GetProjection(addr types.Address, prevNonce, prevBalance uint64) (nonce, balance uint64, err error)
 }
 
 type TransactionProcessor struct {
@@ -125,7 +125,7 @@ func (tp *TransactionProcessor) ValidateNonceAndBalance(tx *types.AddressableSig
 	if tp.globalState.Exist(tx.Address) {
 		stateObj = tp.globalState.GetOrNewStateObj(tx.Address)
 	}
-	nonce, balance, err := tp.projector.GetStateProjection(stateObj)
+	nonce, balance, err := tp.projector.GetProjection(stateObj.Address(), stateObj.Nonce(), stateObj.Balance().Uint64())
 	if err != nil {
 		return fmt.Errorf("failed to project state for account %v: %v", tx.Address.Short(), err)
 	}
