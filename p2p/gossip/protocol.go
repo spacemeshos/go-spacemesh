@@ -125,12 +125,14 @@ func (prot *Protocol) Start() {
 func (prot *Protocol) addPeer(peer p2pcrypto.PublicKey) {
 	prot.peersMutex.Lock()
 	prot.peers[peer] = newPeer(prot.net, peer, prot.Log)
+	prot.Log.With().Info("adding peer", log.String("peer", peer.String()))
 	prot.peersMutex.Unlock()
 }
 
 func (prot *Protocol) removePeer(peer p2pcrypto.PublicKey) {
 	prot.peersMutex.Lock()
 	delete(prot.peers, peer)
+	prot.Log.With().Info("deleting peer", log.String("peer", peer.String()))
 	prot.peersMutex.Unlock()
 }
 
