@@ -148,7 +148,7 @@ func TestBlockBuilder_StartStop(t *testing.T) {
 	builder := NewBlockBuilder(types.NodeId{}, &MockSigning{},
 		n,
 		beginRound, 5,
-		NewTypesTransactionIdMemPool(),
+		NewTxPoolWithAccounts(),
 		NewTypesAtxIdMemPool(),
 		MockCoin{},
 		orphans,
@@ -188,9 +188,9 @@ func TestBlockBuilder_BlockIdGeneration(t *testing.T) {
 	hare := MockHare{res: map[types.LayerID][]types.BlockID{}}
 	hare.res[0] = hareRes
 
-	builder1 := NewBlockBuilder(types.NodeId{Key: "a"}, &MockSigning{}, n1, beginRound, 5, NewTypesTransactionIdMemPool(),
+	builder1 := NewBlockBuilder(types.NodeId{Key: "a"}, &MockSigning{}, n1, beginRound, 5, NewTxPoolWithAccounts(),
 		NewTypesAtxIdMemPool(), MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare, mockBlockOracle{}, mockTxProcessor{}, &mockAtxValidator{}, &mockSyncer{}, log.New(n1.NodeInfo.ID.String(), "", ""))
-	builder2 := NewBlockBuilder(types.NodeId{Key: "b"}, &MockSigning{}, n2, beginRound, 5, NewTypesTransactionIdMemPool(),
+	builder2 := NewBlockBuilder(types.NodeId{Key: "b"}, &MockSigning{}, n2, beginRound, 5, NewTxPoolWithAccounts(),
 		NewTypesAtxIdMemPool(), MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare, mockBlockOracle{}, mockTxProcessor{}, &mockAtxValidator{}, &mockSyncer{}, log.New(n2.NodeInfo.ID.String(), "", ""))
 
 	b1, _ := builder1.createBlock(1, types.AtxId{}, types.BlockEligibilityProof{}, nil, nil)
@@ -211,7 +211,7 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 	hare := MockHare{res: map[types.LayerID][]types.BlockID{}}
 	hare.res[1] = hareRes
 
-	builder := NewBlockBuilder(types.NodeId{"anton", []byte("anton")}, &MockSigning{}, n, beginRound, 5, NewTypesTransactionIdMemPool(),
+	builder := NewBlockBuilder(types.NodeId{"anton", []byte("anton")}, &MockSigning{}, n, beginRound, 5, NewTxPoolWithAccounts(),
 		NewTypesAtxIdMemPool(), MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare, mockBlockOracle{}, mockTxProcessor{}, &mockAtxValidator{}, &mockSyncer{}, log.New(n.String(), "", ""))
 
 	err := builder.Start()
@@ -305,7 +305,7 @@ func TestBlockBuilder_Validation(t *testing.T) {
 	hare := MockHare{res: map[types.LayerID][]types.BlockID{}}
 	hare.res[0] = hareRes
 
-	builder1 := NewBlockBuilder(types.NodeId{Key: "a"}, &MockSigning{}, n1, beginRound, 5, NewTypesTransactionIdMemPool(),
+	builder1 := NewBlockBuilder(types.NodeId{Key: "a"}, &MockSigning{}, n1, beginRound, 5, NewTxPoolWithAccounts(),
 		NewTypesAtxIdMemPool(), MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare, mockBlockOracle{}, mockTxProcessor{true}, &mockAtxValidator{}, &mockSyncer{}, log.New(n1.NodeInfo.ID.String(), "", ""))
 	builder1.Start()
 	ed := signing.NewEdSigner()
@@ -315,11 +315,12 @@ func TestBlockBuilder_Validation(t *testing.T) {
 	assert.Nil(t, e)
 	n1.Broadcast(IncomingTxProtocol, b)
 	time.Sleep(300 * time.Millisecond)
-	assert.Empty(t, builder1.TransactionPool.PopItems(10))
+	seed := []byte("seed")
+	assert.Empty(t, builder1.TransactionPool.GetRandomTxs(10, seed))
 	builder1.txValidator = mockTxProcessor{false}
 	n1.Broadcast(IncomingTxProtocol, b)
 	time.Sleep(300 * time.Millisecond)
-	assert.Len(t, builder1.TransactionPool.PopItems(10), 1)
+	assert.Len(t, builder1.TransactionPool.GetRandomTxs(10, seed), 1)
 }
 
 func TestBlockBuilder_Gossip_NotSynced(t *testing.T) {
@@ -332,7 +333,7 @@ func TestBlockBuilder_Gossip_NotSynced(t *testing.T) {
 	hare := MockHare{res: map[types.LayerID][]types.BlockID{}}
 	hare.res[0] = hareRes
 
-	builder1 := NewBlockBuilder(types.NodeId{Key: "a"}, &MockSigning{}, n1, beginRound, 5, NewTypesTransactionIdMemPool(),
+	builder1 := NewBlockBuilder(types.NodeId{Key: "a"}, &MockSigning{}, n1, beginRound, 5, NewTxPoolWithAccounts(),
 		NewTypesAtxIdMemPool(),
 		MockCoin{},
 		MockOrphans{st: []types.BlockID{1, 2, 3}},
@@ -353,7 +354,8 @@ func TestBlockBuilder_Gossip_NotSynced(t *testing.T) {
 	err := n1.Broadcast(IncomingTxProtocol, b)
 	assert.NoError(t, err)
 	time.Sleep(300 * time.Millisecond)
-	assert.Empty(t, builder1.TransactionPool.PopItems(10))
+	seed := []byte("seed")
+	assert.Empty(t, builder1.TransactionPool.GetRandomTxs(10, seed))
 
 	poetRef := []byte{0xba, 0x38}
 	atx := types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")},
@@ -372,8 +374,7 @@ func TestBlockBuilder_Gossip_NotSynced(t *testing.T) {
 	err = n1.Broadcast(activation.AtxProtocol, atxBytes)
 	assert.NoError(t, err)
 	time.Sleep(300 * time.Millisecond)
-	assert.Empty(t, builder1.TransactionPool.PopItems(10))
-
+	assert.Empty(t, builder1.TransactionPool.GetRandomTxs(10, seed))
 }
 
 func Test_calcHdistRange(t *testing.T) {

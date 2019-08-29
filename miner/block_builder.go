@@ -46,6 +46,13 @@ type Syncer interface {
 	WeaklySynced() bool
 }
 
+type TxPool interface {
+	Get(id types.TransactionId) (types.AddressableSignedTransaction, error)
+	GetRandomTxs(size int, seed []byte) []types.AddressableSignedTransaction
+	Put(id types.TransactionId, item *types.AddressableSignedTransaction)
+	Invalidate(id types.TransactionId)
+}
+
 type BlockBuilder struct {
 	log.Log
 	Signer
@@ -338,15 +345,13 @@ func (t *BlockBuilder) acceptBlockData() {
 			}
 			// TODO: include multiple proofs in each block and weigh blocks where applicable
 
-			// TODO: change this 👇 method to limit the number of txs and select them to maximize fees
-			txList := t.TransactionPool.PopItems(MaxTransactionsPerBlock)
-
 			var atxList []types.AtxId
 			for _, atx := range t.AtxPool.PopItems(MaxTransactionsPerBlock) {
 				atxList = append(atxList, atx.Id())
 			}
 
 			for _, eligibilityProof := range proofs {
+				txList := t.TransactionPool.GetRandomTxs(MaxTransactionsPerBlock, eligibilityProof.Sig)
 				blk, err := t.createBlock(types.LayerID(id), atxID, eligibilityProof, txList, atxList)
 				if err != nil {
 					t.Error("cannot create new block, %v ", err)
