@@ -3,21 +3,21 @@ package mesh
 import (
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/address"
-	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/crypto/sha3"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/rlp"
-	"github.com/spacemeshos/go-spacemesh/types"
 	"math/big"
 	"sort"
 	"sync"
 )
 
 const (
-	layerSize = 200
-	Genesis   = types.LayerID(0)
-	GenesisId = 420
+	layerSize   = 200
+	Genesis     = types.LayerID(0)
+	GenesisId   = 420
+	TxCacheSize = 1000
 )
 
 var TRUE = []byte{1}
@@ -30,9 +30,9 @@ type MeshValidator interface {
 
 type TxProcessor interface {
 	ApplyTransactions(layer types.LayerID, transactions Transactions) (uint32, error)
-	ApplyRewards(layer types.LayerID, miners []address.Address, underQuota map[address.Address]int, bonusReward, diminishedReward *big.Int)
-	ValidateSignature(s types.Signed) (address.Address, error)
-	ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (address.Address, error) //todo use validate signature across the bord and remove this
+	ApplyRewards(layer types.LayerID, miners []types.Address, underQuota map[types.Address]int, bonusReward, diminishedReward *big.Int)
+	ValidateSignature(s types.Signed) (types.Address, error)
+	ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (types.Address, error) //todo use validate signature across the bord and remove this
 }
 
 type TxMemPoolInValidator interface {
@@ -91,17 +91,17 @@ type Transaction struct {
 	AccountNonce uint64
 	GasPrice     *big.Int
 	GasLimit     uint64
-	Recipient    *address.Address
-	Origin       address.Address //todo: remove this, should be calculated from sig.
+	Recipient    *types.Address
+	Origin       types.Address //todo: remove this, should be calculated from sig.
 	Amount       *big.Int
 	Payload      []byte
 
 	//todo: add signatures
 
-	hash *common.Hash
+	hash *types.Hash32
 }
 
-func (tx *Transaction) Hash() common.Hash {
+func (tx *Transaction) Hash() types.Hash32 {
 	if tx.hash == nil {
 		hash := rlpHash(tx)
 		tx.hash = &hash
@@ -111,7 +111,7 @@ func (tx *Transaction) Hash() common.Hash {
 
 type Transactions []*Transaction
 
-func NewTransaction(nonce uint64, origin address.Address, destination address.Address,
+func NewTransaction(nonce uint64, origin types.Address, destination types.Address,
 	amount *big.Int, gasLimit uint64, gasPrice *big.Int) *Transaction {
 	return &Transaction{
 		AccountNonce: nonce,
@@ -125,7 +125,7 @@ func NewTransaction(nonce uint64, origin address.Address, destination address.Ad
 	}
 }
 
-func rlpHash(x interface{}) (h common.Hash) {
+func rlpHash(x interface{}) (h types.Hash32) {
 	hw := sha3.NewKeccak256()
 	rlp.Encode(hw, x)
 	hw.Sum(h[:0])
@@ -207,7 +207,9 @@ func (m *Mesh) ExtractUniqueOrderedTransactions(l *types.Layer) []*Transaction {
 	txids := make(map[types.TransactionId]struct{})
 
 	for _, b := range sortedBlocks {
-		if valid, err := m.ContextualValidity(b.ID()); !valid {
+		valid, err := m.ContextualValidity(b.ID())
+		events.Publish(events.ValidBlock{Id: uint64(b.ID()), Valid: valid})
+		if !valid {
 			if err != nil {
 				m.With().Error("could not get contextual validity for block", log.BlockId(uint64(b.ID())), log.Err(err))
 			}
@@ -300,6 +302,7 @@ func (m *Mesh) AddBlock(blk *types.Block) error {
 func (m *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.AddressableSignedTransaction, atxs []*types.ActivationTx) error {
 	m.Debug("add block %d", blk.ID())
 
+	events.Publish(events.NewBlock{Id: uint64(blk.Id), Atx: blk.ATXID.String(), Layer: uint64(blk.LayerIndex)})
 	atxids := make([]types.AtxId, 0, len(atxs))
 	for _, t := range atxs {
 		//todo this should return an error
@@ -312,8 +315,8 @@ func (m *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.AddressableSignedT
 		return fmt.Errorf("could not write transactions of block %v database %v", blk.ID(), err)
 	}
 
-	if err := m.MeshDB.AddBlock(blk); err != nil {
-		m.Error("failed to add block %v  %v", blk.ID(), err)
+	if err := m.MeshDB.AddBlock(blk); err != nil && err != ErrAlreadyExist {
+		m.With().Error("failed to add block", log.BlockId(uint64(blk.ID())), log.Err(err))
 		return err
 	}
 
@@ -417,8 +420,8 @@ func (m *Mesh) AccumulateRewards(rewardLayer types.LayerID, params Config) {
 		return
 	}
 
-	ids := make([]address.Address, 0, len(l.Blocks()))
-	uq := make(map[address.Address]int)
+	ids := make([]types.Address, 0, len(l.Blocks()))
+	uq := make(map[types.Address]int)
 
 	// TODO: instead of the following code we need to validate the eligibility of each block individually using the
 	//  proof included in each block

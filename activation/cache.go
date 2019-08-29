@@ -3,8 +3,7 @@ package activation
 import (
 	"github.com/hashicorp/golang-lru"
 	"github.com/prometheus/common/log"
-	"github.com/spacemeshos/go-spacemesh/common"
-	"github.com/spacemeshos/go-spacemesh/types"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 type ActivesetCache struct {
@@ -19,11 +18,11 @@ func NewActivesetCache(size int) ActivesetCache {
 	return ActivesetCache{Cache: cache}
 }
 
-func (bc *ActivesetCache) put(view common.Hash, setSize uint32) {
+func (bc *ActivesetCache) put(view types.Hash12, setSize uint32) {
 	bc.Cache.Add(view, setSize)
 }
 
-func (bc ActivesetCache) Get(view common.Hash) (uint32, bool) {
+func (bc ActivesetCache) Get(view types.Hash12) (uint32, bool) {
 	item, found := bc.Cache.Get(view)
 	if !found {
 		return 0, false

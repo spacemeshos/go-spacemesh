@@ -6,13 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/ed25519"
-	"github.com/spacemeshos/go-spacemesh/address"
-	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/state"
-	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/require"
 	"io/ioutil"
 	"math/big"
@@ -35,8 +34,8 @@ import (
 // Better a small code duplication than a small dependency
 
 type NodeAPIMock struct {
-	balances map[address.Address]*big.Int
-	nonces   map[address.Address]uint64
+	balances map[types.Address]*big.Int
+	nonces   map[types.Address]uint64
 }
 
 type NetworkMock struct {
@@ -54,33 +53,33 @@ func (s *NetworkMock) Broadcast(chanel string, payload []byte) error {
 
 func NewNodeAPIMock() NodeAPIMock {
 	return NodeAPIMock{
-		balances: make(map[address.Address]*big.Int),
-		nonces:   make(map[address.Address]uint64),
+		balances: make(map[types.Address]*big.Int),
+		nonces:   make(map[types.Address]uint64),
 	}
 }
 
-func (n NodeAPIMock) GetBalance(address address.Address) uint64 {
+func (n NodeAPIMock) GetBalance(address types.Address) uint64 {
 	return n.balances[address].Uint64()
 }
 
-func (n NodeAPIMock) GetNonce(address address.Address) uint64 {
+func (n NodeAPIMock) GetNonce(address types.Address) uint64 {
 	return n.nonces[address]
 }
 
-func (n NodeAPIMock) Exist(address address.Address) bool {
+func (n NodeAPIMock) Exist(address types.Address) bool {
 	_, ok := n.nonces[address]
 	return ok
 }
 
 type TxAPIMock struct {
-	mockOrigin address.Address
+	mockOrigin types.Address
 }
 
-func (t *TxAPIMock) setMockOrigin(orig address.Address) {
+func (t *TxAPIMock) setMockOrigin(orig types.Address) {
 	t.mockOrigin = orig
 }
 
-func (t *TxAPIMock) ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (address.Address, error) {
+func (t *TxAPIMock) ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (types.Address, error) {
 	return t.mockOrigin, nil
 }
 
@@ -91,11 +90,11 @@ func (*MinigApiMock) MiningStats() (int, string, string) {
 	return 1, "123456", "/tmp"
 }
 
-func (*MinigApiMock) StartPost(address address.Address, logicalDrive string, commitmentSize uint64) error {
+func (*MinigApiMock) StartPost(address types.Address, logicalDrive string, commitmentSize uint64) error {
 	return nil
 }
 
-func (*MinigApiMock) SetCoinbaseAccount(rewardAddress address.Address) {
+func (*MinigApiMock) SetCoinbaseAccount(rewardAddress types.Address) {
 
 }
 
@@ -106,12 +105,21 @@ func (*OracleMock) GetEligibleLayers() []types.LayerID {
 	return []types.LayerID{1, 2, 3, 4}
 }
 
+type GenesisTimeMock struct {
+	t time.Time
+}
+
+func (t GenesisTimeMock) GetGenesisTime() time.Time {
+	return t.t
+}
+
 var (
 	ap          = NodeAPIMock{}
 	networkMock = NetworkMock{}
 	tx          = TxAPIMock{}
 	mining      = MinigApiMock{}
 	oracle      = OracleMock{}
+	genTime     = GenesisTimeMock{time.Now()}
 )
 
 func TestServersConfig(t *testing.T) {
@@ -122,7 +130,7 @@ func TestServersConfig(t *testing.T) {
 
 	config.ConfigValues.JSONServerPort = port1
 	config.ConfigValues.GrpcServerPort = port2
-	grpcService := NewGrpcService(&networkMock, ap, &tx, &mining, &oracle)
+	grpcService := NewGrpcService(&networkMock, ap, &tx, &mining, &oracle, nil)
 	jsonService := NewJSONHTTPServer()
 
 	assert.Equal(t, grpcService.Port, uint(config.ConfigValues.GrpcServerPort), "Expected same port")
@@ -140,7 +148,7 @@ func TestGrpcApi(t *testing.T) {
 
 	const message = "Hello World"
 
-	grpcService := NewGrpcService(&networkMock, ap, &tx, &mining, &oracle)
+	grpcService := NewGrpcService(&networkMock, ap, &tx, &mining, &oracle, nil)
 	grpcStatus := make(chan bool, 2)
 
 	// start a server
@@ -182,7 +190,7 @@ func TestJsonApi(t *testing.T) {
 	ap := NodeAPIMock{}
 	net := NetworkMock{}
 	tx := TxAPIMock{}
-	grpcService := NewGrpcService(&net, ap, &tx, &mining, &oracle)
+	grpcService := NewGrpcService(&net, ap, &tx, &mining, &oracle, nil)
 	jsonService := NewJSONHTTPServer()
 
 	jsonStatus := make(chan bool, 2)
@@ -269,7 +277,7 @@ func TestJsonWalletApi(t *testing.T) {
 	port2, err := node.GetUnboundedPort()
 	assert.NoError(t, err, "Should be able to establish a connection on a port")
 	addrBytes := []byte{0x01}
-	addr := address.BytesToAddress(addrBytes)
+	addr := types.BytesToAddress(addrBytes)
 	if config.ConfigValues.JSONServerPort == 0 {
 		config.ConfigValues.JSONServerPort = port1
 		config.ConfigValues.GrpcServerPort = port2
@@ -279,7 +287,7 @@ func TestJsonWalletApi(t *testing.T) {
 	ap.nonces[addr] = 10
 	ap.balances[addr] = big.NewInt(100)
 	txApi := TxAPIMock{}
-	grpcService := NewGrpcService(&net, ap, &txApi, &mining, &oracle)
+	grpcService := NewGrpcService(&net, ap, &txApi, &mining, &oracle, &genTime)
 	jsonService := NewJSONHTTPServer()
 
 	jsonStatus := make(chan bool, 2)
@@ -296,7 +304,7 @@ func TestJsonWalletApi(t *testing.T) {
 	const contentType = "application/json"
 
 	// generate request payload (api input params)
-	reqParams := pb.AccountId{Address: common.Bytes2Hex(addrBytes)}
+	reqParams := pb.AccountId{Address: util.Bytes2Hex(addrBytes)}
 	var m jsonpb.Marshaler
 	payload, err := m.MarshalToString(&reqParams)
 	assert.NoError(t, err, "failed to marshal to string")
@@ -350,7 +358,7 @@ func TestJsonWalletApi(t *testing.T) {
 	sPub, key, _ := ed25519.GenerateKey(crand.Reader)
 	sAddr := state.PublicKeyToAccountAddress(sPub)
 	txApi.setMockOrigin(sAddr)
-	rec := address.BytesToAddress([]byte{0xde, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa})
+	rec := types.BytesToAddress([]byte{0xde, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa})
 	txParams.Recipient = rec
 	txParams.AccountNonce = 1111
 	txParams.Amount = 1234
@@ -429,6 +437,23 @@ func TestJsonWalletApi(t *testing.T) {
 	assert.Equal(t, "/tmp", stats.DataDir)
 	assert.Equal(t, "123456", stats.Coinbase)
 
+	// test get genesisTime
+	url = fmt.Sprintf("http://127.0.0.1:%d/v1/genesis", config.ConfigValues.JSONServerPort)
+	resp, err = http.Post(url, contentType, nil)
+	assert.NoError(t, err, "failed to http post to api endpoint")
+
+	buf, err = ioutil.ReadAll(resp.Body)
+	resp.Body.Close()
+	assert.NoError(t, err, "failed to read response body")
+
+	got, want = resp.StatusCode, http.StatusOK
+	assert.Equal(t, want, got)
+
+	err = jsonpb.UnmarshalString(string(buf), &msg)
+	assert.NoError(t, err)
+
+	assert.Equal(t, genTime.t.String(), msg.Value)
+
 	// stop the services
 	jsonService.StopService()
 	<-jsonStatus
@@ -447,7 +472,7 @@ func TestJsonWalletApi_Errors(t *testing.T) {
 	ap := NewNodeAPIMock()
 	net := NetworkMock{}
 	tx := TxAPIMock{}
-	grpcService := NewGrpcService(&net, ap, &tx, &mining, &oracle)
+	grpcService := NewGrpcService(&net, ap, &tx, &mining, &oracle, nil)
 	jsonService := NewJSONHTTPServer()
 
 	jsonStatus := make(chan bool, 2)
@@ -463,7 +488,7 @@ func TestJsonWalletApi_Errors(t *testing.T) {
 	const contentType = "application/json"
 
 	// generate request payload (api input params)
-	reqParams := pb.AccountId{Address: common.Bytes2Hex(addrBytes)}
+	reqParams := pb.AccountId{Address: util.Bytes2Hex(addrBytes)}
 	var m jsonpb.Marshaler
 	payload, err := m.MarshalToString(&reqParams)
 	assert.NoError(t, err, "failed to marshal to string")
@@ -519,7 +544,7 @@ func TestSpaceMeshGrpcService_Broadcast(t *testing.T) {
 	ap := NewNodeAPIMock()
 	net := NetworkMock{broadcasted: []byte{0x00}}
 	tx := TxAPIMock{}
-	grpcService := NewGrpcService(&net, ap, &tx, &mining, &oracle)
+	grpcService := NewGrpcService(&net, ap, &tx, &mining, &oracle, nil)
 	jsonService := NewJSONHTTPServer()
 
 	jsonStatus := make(chan bool, 2)
@@ -588,7 +613,7 @@ func TestSpaceMeshGrpcService_BroadcastErrors(t *testing.T) {
 	net := NetworkMock{broadcasted: []byte{0x00}}
 	net.broadCastErr = true
 	tx := TxAPIMock{}
-	grpcService := NewGrpcService(&net, ap, &tx, &mining, &oracle)
+	grpcService := NewGrpcService(&net, ap, &tx, &mining, &oracle, nil)
 	jsonService := NewJSONHTTPServer()
 
 	jsonStatus := make(chan bool, 2)

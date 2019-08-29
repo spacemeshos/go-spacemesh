@@ -2,9 +2,9 @@ package tortoise
 
 import (
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/types"
 	"hash/fnv"
 	"math"
 	"sort"
@@ -65,7 +65,6 @@ type Mesh interface {
 	GetBlock(id types.BlockID) (*types.Block, error)
 	LayerBlockIds(id types.LayerID) ([]types.BlockID, error)
 	ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, foo func(block *types.Block) (bool, error)) error
-	SaveGoodPattern(layer types.LayerID, blks map[types.BlockID]struct{}) error
 	SaveContextualValidity(id types.BlockID, valid bool) error
 }
 
@@ -218,7 +217,7 @@ func getId(bids []types.BlockID) PatternId {
 	// calc
 	h := fnv.New32()
 	for i := 0; i < len(bids); i++ {
-		h.Write(common.Uint32ToBytes(uint32(bids[i])))
+		h.Write(util.Uint32ToBytes(uint32(bids[i])))
 	}
 	// update
 	sum := h.Sum32()
@@ -478,7 +477,7 @@ func (ni *ninjaTortoise) getVote(id types.BlockID) vec {
 }
 
 func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) { //i most recent layer
-	ni.Info("update tables layer %d with %d blocks", newlyr.Index(), len(newlyr.Blocks()))
+	ni.With().Info("Tortoise update tables", log.LayerId(uint64(newlyr.Index())), log.Int("n_blocks", len(newlyr.Blocks())))
 	defer ni.evictOutOfPbase()
 	ni.processBlocks(newlyr)
 
@@ -573,7 +572,7 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) { //i most rec
 			}
 		}
 	}
-	ni.Info("finished layer %d pbase is %d", newlyr.Index(), ni.pBase.Layer())
+	ni.With().Info("Tortoise finished layer", log.LayerId(uint64(newlyr.Index())), log.Uint64("pbase", uint64(ni.pBase.Layer())))
 	return
 }
 
