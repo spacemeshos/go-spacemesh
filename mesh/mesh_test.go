@@ -64,7 +64,7 @@ type MockTxMemPool struct{}
 func (MockTxMemPool) Get(id types.TransactionId) (types.AddressableSignedTransaction, error) {
 	return types.AddressableSignedTransaction{}, nil
 }
-func (MockTxMemPool) PopItems(size int) []types.AddressableSignedTransaction {
+func (MockTxMemPool) GetAllItems() []types.AddressableSignedTransaction {
 	return nil
 }
 func (MockTxMemPool) Put(id types.TransactionId, item *types.AddressableSignedTransaction) {
@@ -80,7 +80,7 @@ func (MockAtxMemPool) Get(id types.AtxId) (types.ActivationTx, error) {
 	return types.ActivationTx{}, nil
 }
 
-func (MockAtxMemPool) PopItems(size int) []types.ActivationTx {
+func (MockAtxMemPool) GetAllItems() []types.ActivationTx {
 	return nil
 }
 

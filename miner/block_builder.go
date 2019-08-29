@@ -64,7 +64,7 @@ type BlockBuilder struct {
 	txGossipChannel  chan service.GossipMessage
 	atxGossipChannel chan service.GossipMessage
 	hareResult       HareResultProvider
-	AtxPool          *TypesAtxIdMemPool
+	AtxPool          *AtxMemPool
 	TransactionPool  TxPool
 	mu               sync.Mutex
 	network          p2p.Service
@@ -80,7 +80,7 @@ type BlockBuilder struct {
 func NewBlockBuilder(minerID types.NodeId, sgn Signer, net p2p.Service,
 	beginRoundEvent chan types.LayerID, hdist int,
 	txPool TxPool,
-	atxPool *TypesAtxIdMemPool,
+	atxPool *AtxMemPool,
 	weakCoin WeakCoinProvider,
 	orph OrphanBlockProvider,
 	hare HareResultProvider,
@@ -346,7 +346,7 @@ func (t *BlockBuilder) acceptBlockData() {
 			// TODO: include multiple proofs in each block and weigh blocks where applicable
 
 			var atxList []types.AtxId
-			for _, atx := range t.AtxPool.PopItems(MaxTransactionsPerBlock) {
+			for _, atx := range t.AtxPool.GetAllItems() {
 				atxList = append(atxList, atx.Id())
 			}
 

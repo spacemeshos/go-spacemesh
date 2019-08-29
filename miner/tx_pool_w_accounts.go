@@ -11,7 +11,7 @@ import (
 
 type innerPool interface {
 	Get(id types.TransactionId) (types.AddressableSignedTransaction, error)
-	PopItems(size int) []types.AddressableSignedTransaction
+	GetAllItems() []types.AddressableSignedTransaction
 	Put(id types.TransactionId, item *types.AddressableSignedTransaction)
 	Invalidate(id types.TransactionId)
 }
@@ -23,13 +23,13 @@ type TxPoolWithAccounts struct {
 
 func NewTxPoolWithAccounts() *TxPoolWithAccounts {
 	return &TxPoolWithAccounts{
-		innerPool: NewTypesTransactionIdMemPool(),
+		innerPool: NewTxMemPool(),
 		accounts:  make(map[types.Address]*pending_txs.AccountPendingTxs),
 	}
 }
 
 func (t *TxPoolWithAccounts) GetRandomTxs(numOfTxs int, seed []byte) []types.AddressableSignedTransaction {
-	txs := t.innerPool.PopItems(0)
+	txs := t.innerPool.GetAllItems()
 	if len(txs) <= numOfTxs {
 		return txs
 	}

@@ -158,7 +158,7 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	atxdb := activation.NewActivationDb(atxdbStore, &sync.MockIStore{}, mshdb, uint16(1000), &sync.ValidatorMock{}, lg.WithName("atxDB").WithOptions(log.Nop))
 
 	txpool := miner.NewTxPoolWithAccounts()
-	atxpool := miner.NewTypesAtxIdMemPool()
+	atxpool := miner.NewAtxMemPool()
 	trtl := tortoise.NewAlgorithm(int(100), mshdb, app.Config.Hdist, lg.WithName("trtl"))
 	msh := mesh.NewMesh(mshdb, atxdb, sync.ConfigTst(), trtl, txpool, atxpool, &sync.MockState{}, lg.WithOptions(log.Nop))
 	defer msh.Close()

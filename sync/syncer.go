@@ -20,14 +20,14 @@ import (
 
 type TxMemPool interface {
 	Get(id types.TransactionId) (types.AddressableSignedTransaction, error)
-	PopItems(size int) []types.AddressableSignedTransaction
+	GetAllItems() []types.AddressableSignedTransaction
 	Put(id types.TransactionId, item *types.AddressableSignedTransaction)
 	Invalidate(id types.TransactionId)
 }
 
 type AtxMemPool interface {
 	Get(id types.AtxId) (types.ActivationTx, error)
-	PopItems(size int) []types.ActivationTx
+	GetAllItems() []types.ActivationTx
 	Put(id types.AtxId, item *types.ActivationTx)
 	Invalidate(id types.AtxId)
 }

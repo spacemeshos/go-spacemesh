@@ -6,22 +6,22 @@ import (
 	"sync"
 )
 
-//go:generate genny -in=$GOFILE -out=gen_atx_$GOFILE gen "KeyType=types.AtxId ValueType=types.ActivationTx"
-//go:generate genny -in=$GOFILE -out=gen_tx_$GOFILE gen "KeyType=types.TransactionId ValueType=types.AddressableSignedTransaction"
+//go:generate genny -in=$GOFILE -out=gen_atx_$GOFILE gen "Name=Atx KeyType=types.AtxId ValueType=types.ActivationTx"
+//go:generate genny -in=$GOFILE -out=gen_tx_$GOFILE gen "Name=Tx KeyType=types.TransactionId ValueType=types.AddressableSignedTransaction"
 
 type KeyType generic.Type
 type ValueType generic.Type
 
-type KeyTypeMemPool struct {
+type NameMemPool struct {
 	mu    sync.RWMutex
 	txMap map[KeyType]*ValueType
 }
 
-func NewKeyTypeMemPool() *KeyTypeMemPool {
-	return &KeyTypeMemPool{sync.RWMutex{}, make(map[KeyType]*ValueType)}
+func NewNameMemPool() *NameMemPool {
+	return &NameMemPool{sync.RWMutex{}, make(map[KeyType]*ValueType)}
 }
 
-func (mem *KeyTypeMemPool) Get(id KeyType) (ValueType, error) {
+func (mem *NameMemPool) Get(id KeyType) (ValueType, error) {
 	mem.mu.RLock()
 	defer mem.mu.RUnlock()
 	val, ok := mem.txMap[id]
@@ -31,23 +31,23 @@ func (mem *KeyTypeMemPool) Get(id KeyType) (ValueType, error) {
 	return *val, nil
 }
 
-func (mem *KeyTypeMemPool) PopItems(size int) []ValueType {
+func (mem *NameMemPool) GetAllItems() []ValueType {
 	mem.mu.RLock()
 	defer mem.mu.RUnlock()
-	txList := make([]ValueType, 0, MaxTransactionsPerBlock)
+	var txList []ValueType
 	for _, k := range mem.txMap {
 		txList = append(txList, *k)
 	}
 	return txList
 }
 
-func (mem *KeyTypeMemPool) Put(id KeyType, item *ValueType) {
+func (mem *NameMemPool) Put(id KeyType, item *ValueType) {
 	mem.mu.Lock()
 	mem.txMap[id] = item
 	mem.mu.Unlock()
 }
 
-func (mem *KeyTypeMemPool) Invalidate(id KeyType) {
+func (mem *NameMemPool) Invalidate(id KeyType) {
 	mem.mu.Lock()
 	defer mem.mu.Unlock()
 	delete(mem.txMap, id)
