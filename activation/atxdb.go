@@ -1,6 +1,7 @@
 package activation
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -198,9 +199,30 @@ func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error 
 		if prevATX.Sequence+1 != atx.Sequence {
 			return fmt.Errorf("sequence number is not one more than prev sequence number")
 		}
+
+		if atx.Commitment != nil {
+			return fmt.Errorf("prevATX declared, but commitment proof is included")
+		}
+
+		if atx.CommitmentMerkleRoot != nil {
+			return fmt.Errorf("prevATX declared, but commitment merkle root is included in challenge")
+		}
 	} else {
 		if atx.Sequence != 0 {
-			return fmt.Errorf("no prevATX reported, but sequence number not zero")
+			return fmt.Errorf("no prevATX declared, but sequence number not zero")
+		}
+		if atx.Commitment == nil {
+			return fmt.Errorf("no prevATX declared, but commitment proof is not included")
+		}
+		if atx.CommitmentMerkleRoot == nil {
+			return fmt.Errorf("no prevATX declared, but commitment merkle root is not included in challenge")
+		}
+		if !bytes.Equal(atx.Commitment.MerkleRoot, atx.CommitmentMerkleRoot) {
+			return errors.New("commitment merkle root included in challenge is not equal to the merkle root included in the proof")
+		}
+
+		if err := db.nipstValidator.VerifyPost(atx.Commitment, atx.Nipst.Space); err != nil {
+			return fmt.Errorf("invalid commitment proof: %v", err)
 		}
 	}
 
@@ -237,7 +259,7 @@ func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error 
 	if err != nil {
 		return fmt.Errorf("cannot get NIPST Challenge hash: %v", err)
 	}
-	db.log.With().Info("Validated NIPST", log.String("challenge_hash", hash.ShortString()))
+	db.log.With().Info("Validated NIPST", log.String("challenge_hash", hash.ShortString()), log.AtxId(atx.ShortId()))
 
 	if err = db.nipstValidator.Validate(atx.Nipst, *hash); err != nil {
 		return fmt.Errorf("NIPST not valid: %v", err)

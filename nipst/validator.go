@@ -8,19 +8,17 @@ import (
 	"github.com/spacemeshos/post/config"
 )
 
-type verifyPostFunc func(proof *types.PostProof, space uint64, numberOfProvenLabels uint, difficulty uint) (bool, error)
+type verifyPostFunc func(proof *types.PostProof, space uint64, numberOfProvenLabels uint, difficulty uint) error
 
 type Validator struct {
-	postCfg    *config.Config
-	poetDb     PoetDb
-	verifyPost verifyPostFunc
+	postCfg *config.Config
+	poetDb  PoetDb
 }
 
 func NewValidator(postCfg *config.Config, poetDb PoetDb) *Validator {
 	return &Validator{
-		postCfg:    postCfg,
-		verifyPost: verifyPost,
-		poetDb:     poetDb,
+		postCfg: postCfg,
+		poetDb:  poetDb,
 	}
 }
 
@@ -37,9 +35,13 @@ func (v *Validator) Validate(nipst *types.NIPST, expectedChallenge types.Hash32)
 		return fmt.Errorf("PoST space (%d) is less than a single space unit (%d)", nipst.Space, v.postCfg.SpacePerUnit)
 	}
 
-	if valid, err := v.verifyPost(nipst.PostProof, nipst.Space, v.postCfg.NumProvenLabels, v.postCfg.Difficulty); err != nil || !valid {
+	if err := v.VerifyPost(nipst.PostProof, nipst.Space); err != nil {
 		return fmt.Errorf("PoST proof invalid: %v", err)
 	}
 
 	return nil
+}
+
+func (v *Validator) VerifyPost(proof *types.PostProof, space uint64) error {
+	return verifyPost(proof, space, v.postCfg.NumProvenLabels, v.postCfg.Difficulty)
 }

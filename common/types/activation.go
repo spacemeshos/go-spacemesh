@@ -42,13 +42,14 @@ type ActivationTxHeader struct {
 }
 
 type NIPSTChallenge struct {
-	NodeId         NodeId
-	Sequence       uint64
-	PrevATXId      AtxId
-	PubLayerIdx    LayerID
-	StartTick      uint64
-	EndTick        uint64
-	PositioningAtx AtxId
+	NodeId               NodeId
+	Sequence             uint64
+	PrevATXId            AtxId
+	PubLayerIdx          LayerID
+	StartTick            uint64
+	EndTick              uint64
+	PositioningAtx       AtxId
+	CommitmentMerkleRoot []byte
 }
 
 func (challenge *NIPSTChallenge) Hash() (*Hash32, error) {
@@ -75,8 +76,9 @@ func (challenge *NIPSTChallenge) String() string {
 
 type ActivationTx struct {
 	ActivationTxHeader
-	Nipst *NIPST
-	View  []BlockID
+	Nipst      *NIPST
+	View       []BlockID
+	Commitment *PostProof
 	//todo: add sig
 }
 
@@ -111,7 +113,7 @@ func NewActivationTx(NodeId NodeId,
 }
 
 func NewActivationTxWithChallenge(poetChallenge NIPSTChallenge, coinbase Address, ActiveSetSize uint32,
-	View []BlockID, nipst *NIPST) *ActivationTx {
+	View []BlockID, nipst *NIPST, commitment *PostProof) *ActivationTx {
 
 	atx := &ActivationTx{
 		ActivationTxHeader: ActivationTxHeader{
@@ -119,12 +121,12 @@ func NewActivationTxWithChallenge(poetChallenge NIPSTChallenge, coinbase Address
 			Coinbase:       coinbase,
 			ActiveSetSize:  ActiveSetSize,
 		},
-		Nipst: nipst,
-		View:  View,
+		Nipst:      nipst,
+		View:       View,
+		Commitment: commitment,
 	}
 	atx.CalcAndSetId()
 	return atx
-
 }
 
 func (atxh *ActivationTxHeader) Id() AtxId {

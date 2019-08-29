@@ -67,24 +67,26 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 				bl.With().Info("ignoring gossip blocks - not synced yet")
 				break
 			}
+			// TODO: we currently don't support async block handling due to missing blk request duplication
+			// TODO: A WIP is on it's way hence we only comment-out the go routine until impl
 			bl.wg.Add(1)
-			go func() {
-				if data == nil {
-					bl.Error("got empty message while listening to gossip blocks")
-					return
-				}
-				var blk types.Block
-				err := types.BytesToInterface(data.Bytes(), &blk)
-				if err != nil {
-					bl.Error("received invalid block %v", data.Bytes(), err)
-					return
-				}
+			//go func() {
+			if data == nil {
+				bl.Error("got empty message while listening to gossip blocks")
+				return
+			}
+			var blk types.Block
+			err := types.BytesToInterface(data.Bytes(), &blk)
+			if err != nil {
+				bl.Error("received invalid block %v", data.Bytes(), err)
+				return
+			}
 
-				if bl.HandleNewBlock(&blk) {
-					data.ReportValidation(config.NewBlockProtocol)
-				}
-				bl.wg.Done()
-			}()
+			if bl.HandleNewBlock(&blk) {
+				data.ReportValidation(config.NewBlockProtocol)
+			}
+			bl.wg.Done()
+			//}()
 
 		}
 	}
@@ -92,7 +94,7 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 
 func (bl *BlockListener) HandleNewBlock(blk *types.Block) bool {
 
-	bl.Log.With().Info("got new block", log.BlockId(uint64(blk.Id)), log.Int("txs", len(blk.TxIds)), log.Int("atxs", len(blk.AtxIds)))
+	bl.Log.With().Info("got new block", log.BlockId(uint64(blk.Id)), log.LayerId(uint64(blk.Layer())), log.Int("txs", len(blk.TxIds)), log.Int("atxs", len(blk.AtxIds)))
 	//check if known
 	if _, err := bl.GetBlock(blk.Id); err == nil {
 		bl.With().Info("we already know this block", log.BlockId(uint64(blk.ID())))

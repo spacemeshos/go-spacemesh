@@ -284,7 +284,7 @@ func (t *BlockBuilder) listenForAtx() {
 				// not accepting atxs when not synced
 				continue
 			}
-			go t.handleGossipAtx(data)
+			t.handleGossipAtx(data)
 		}
 	}
 }
@@ -298,7 +298,7 @@ func (t *BlockBuilder) handleGossipAtx(data service.GossipMessage) {
 		t.Error("cannot parse incoming ATX")
 		return
 	}
-	t.With().Info("got new ATX", log.AtxId(atx.ShortId()))
+	t.With().Info("got new ATX", log.AtxId(atx.ShortId()), log.LayerId(uint64(atx.PubLayerIdx)))
 
 	//todo fetch from neighbour
 	if atx.Nipst == nil {
