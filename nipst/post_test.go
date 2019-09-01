@@ -14,7 +14,8 @@ func TestPostClient(t *testing.T) {
 	_, err := rand.Read(id)
 	assert.NoError(err)
 
-	c := NewPostClient(&postCfg, id)
+	c, err := NewPostClient(&postCfg, id)
+	assert.NoError(err)
 	assert.NotNil(c)
 
 	commitment, err := c.Initialize()

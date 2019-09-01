@@ -17,7 +17,7 @@ func init() {
 	postCfg.Difficulty = 5
 	postCfg.NumProvenLabels = 10
 	postCfg.SpacePerUnit = 1 << 10 // 1KB.
-	postCfg.FileSize = 1 << 10     // 1KB.
+	postCfg.NumFiles = 1
 }
 
 type postProverClientMock struct{}
@@ -39,7 +39,7 @@ func (*postProverClientMock) VerifyInitAllowed() error { return nil }
 
 func (*postProverClientMock) SetLogger(shared.Logger) {}
 
-func (*postProverClientMock) SetParams(datadir string, space uint64) {}
+func (*postProverClientMock) SetParams(datadir string, space uint64) error { return nil }
 
 func (*postProverClientMock) Cfg() *config.Config { return &config.Config{} }
 
@@ -93,9 +93,11 @@ func TestNIPSTBuilderWithMocks(t *testing.T) {
 func TestInitializePost(t *testing.T) {
 	assert := require.New(t)
 
-	postProver := NewPostClient(&postCfg, minerID)
-	poetProver := &poetProvingServiceClientMock{}
+	postProver, err := NewPostClient(&postCfg, minerID)
+	assert.NoError(err)
+	assert.NotNil(postProver)
 
+	poetProver := &poetProvingServiceClientMock{}
 	poetDb := &poetDbMock{}
 
 	nb := newNIPSTBuilder(minerID, postProver, poetProver,
@@ -103,8 +105,9 @@ func TestInitializePost(t *testing.T) {
 	datadir := "/tmp/anton"
 	space := uint64(2048)
 
-	postProver.SetParams(datadir, space)
-	_, err := postProver.Initialize()
+	err = postProver.SetParams(datadir, space)
+	assert.NoError(err)
+	_, err = postProver.Initialize()
 	assert.NoError(err)
 	defer func() {
 		assert.NoError(postProver.Reset())
@@ -142,7 +145,9 @@ func buildNIPST(r *require.Assertions, postCfg config.Config, nipstChallenge typ
 	}()
 	r.NoError(err)
 
-	postProver := NewPostClient(&postCfg, minerID)
+	postProver, err := NewPostClient(&postCfg, minerID)
+	r.NoError(err)
+	r.NotNil(postProver)
 	defer func() {
 		err := postProver.Reset()
 		r.NoError(err)
@@ -170,7 +175,10 @@ func TestNewNIPSTBuilderNotInitialized(t *testing.T) {
 	minerIDNotInitialized := []byte("not initialized")
 	nipstChallenge := types.BytesToHash([]byte("anton"))
 
-	postProver := NewPostClient(&postCfg, minerIDNotInitialized)
+	postProver, err := NewPostClient(&postCfg, minerIDNotInitialized)
+	r.NoError(err)
+	r.NotNil(postProver)
+
 	poetProver, err := newRPCPoetHarnessClient()
 	r.NotNil(poetProver)
 	defer func() {
