@@ -407,3 +407,60 @@ func Test_calcHdistRange(t *testing.T) {
 	}()
 	from, to = calcHdistRange(5, 0)
 }
+
+var (
+	one   = types.CalcHash32([]byte("1"))
+	two   = types.CalcHash32([]byte("2"))
+	three = types.CalcHash32([]byte("3"))
+	four  = types.CalcHash32([]byte("3"))
+	five  = types.CalcHash32([]byte("3"))
+)
+
+var (
+	atx1 = types.AtxId{Hash32: one}
+	atx2 = types.AtxId{Hash32: two}
+	atx3 = types.AtxId{Hash32: three}
+	atx4 = types.AtxId{Hash32: three}
+	atx5 = types.AtxId{Hash32: three}
+)
+
+func Test_selectAtxs(t *testing.T) {
+	r := require.New(t)
+
+	atxs := []types.AtxId{atx1, atx2, atx3, atx4, atx5}
+	selected := selectAtxs(atxs, 2)
+	r.Equal(2, len(selected))
+
+	selected = selectAtxs(atxs, 5)
+	r.Equal(5, len(selected))
+
+	selected = selectAtxs(atxs, 10)
+	r.Equal(5, len(selected))
+
+	rand.Seed(1000)
+	origin := []types.AtxId{atx1, atx2, atx3, atx4, atx5}
+	mp := make(map[types.AtxId]struct{}, 0)
+	for i := 0; i < 1000; i++ {
+		atxs = []types.AtxId{atx1, atx2, atx3, atx4, atx5}
+		selected = selectAtxs(atxs, 2)
+
+		for _, i := range selected {
+			mp[i] = struct{}{}
+		}
+	}
+	fmt.Println(len(mp))
+	for _, x := range origin {
+		f := false
+		for y := range mp {
+			if x == y {
+				f = true
+			}
+		}
+
+		if !f {
+			r.FailNow("Couldn't find %v", x)
+		}
+	}
+
+	r.Equal(5, len(mp))
+}

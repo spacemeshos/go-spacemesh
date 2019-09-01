@@ -60,8 +60,8 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().IntVar(&config.SyncRequestTimeout, "sync-request-timeout",
 		2000, "the timeout in ms for direct requests in the sync")
 
-	cmd.PersistentFlags().IntVar(&config.AtxsSelectCount, "atxs-select-count",
-		100, "the number of atxs to select for new blocks")
+	cmd.PersistentFlags().IntVar(&config.AtxsPerBlock, "atxs-per-block",
+		100, "the number of atxs to select per block on block creation")
 
 	/** ======================== P2P Flags ========================== **/
 
