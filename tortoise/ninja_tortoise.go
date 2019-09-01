@@ -193,14 +193,18 @@ func (ni *ninjaTortoise) processBlock(b *types.Block) {
 
 	for ; layerId < b.Layer(); layerId++ {
 		v, found := patternMap[layerId]
+
 		if !found {
 			ni.tExplicit[b.ID()][layerId] = ZeroPattern
+			continue
 		}
+
 		vp := votingPattern{id: getIdsFromSet(v), LayerID: layerId}
 		ni.tPattern[vp] = v
 		arr, _ := ni.patterns[vp.Layer()]
 		ni.patterns[vp.Layer()] = append(arr, vp)
 		ni.tExplicit[b.ID()][layerId] = vp
+
 		if layerId >= effective.Layer() {
 			effective = vp
 		}
