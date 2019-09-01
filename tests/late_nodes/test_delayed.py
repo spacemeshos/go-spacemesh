@@ -48,7 +48,8 @@ def test_add_delayed_nodes(init_session, setup_bootstrap, save_log_on_exit):
 
     # start with 20 miners
     startCount = 20
-    inf = new_client_in_namespace(ns, setup_bootstrap, cspec, startCount)
+    time_out = testconfig['deployment_ready_time_out']
+    inf = new_client_in_namespace(ns, setup_bootstrap, cspec, startCount, time_out)
     sleep_and_print(epochDuration) # wait epoch duration
 
     # add 10 each epoch
@@ -56,7 +57,7 @@ def test_add_delayed_nodes(init_session, setup_bootstrap, save_log_on_exit):
     count = 4
     clients = [None] * count
     for i in range(0, count):
-        clients[i] = new_client_in_namespace(ns, setup_bootstrap, cspec, numToAdd)
+        clients[i] = new_client_in_namespace(ns, setup_bootstrap, cspec, numToAdd, time_out)
         print("Added client batch ", i, clients[i].pods[i]['name'])
         sleep_and_print(epochDuration)
 
