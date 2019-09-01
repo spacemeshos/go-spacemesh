@@ -21,7 +21,7 @@ def setup_oracle(request):
 
 
 @pytest.fixture(scope='module')
-def setup_bootstrap_for_hare(request, init_session, setup_oracle, create_configmap):
+def setup_bootstrap_for_hare(request, init_session, setup_oracle):
     bootstrap_deployment_info = DeploymentInfo(dep_id=init_session)
     return setup_bootstrap_in_namespace(testconfig['namespace'],
                                         bootstrap_deployment_info,
