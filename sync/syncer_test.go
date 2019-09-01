@@ -1375,4 +1375,10 @@ func TestSyncer_BlockSyntacticValidation(t *testing.T) {
 	b.AtxIds = []types.AtxId{atx1, atx2, atx3}
 	_, _, err := s.BlockSyntacticValidation(b)
 	r.EqualError(err, errDupTx.Error())
+
+	for i := 0; i <= miner.AtxsPerBlockLimit; i++ {
+		b.AtxIds = append(b.AtxIds, atx1)
+	}
+	_, _, err = s.BlockSyntacticValidation(b)
+	r.EqualError(err, errTooManyAtxs.Error())
 }

@@ -29,7 +29,7 @@ const DefaultGas = 1
 
 const IncomingTxProtocol = "TxGossip"
 
-const atxsPerBlockLimit = 100
+const AtxsPerBlockLimit = 100
 
 type Signer interface {
 	Sign(m []byte) []byte
@@ -248,8 +248,8 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 }
 
 func selectAtxs(atxs []types.AtxId, atxsPerBlock int) []types.AtxId {
-	if atxsPerBlock > atxsPerBlockLimit { // validate limit
-		log.Panic("Number of atxs per block required is bigger than the limit atxsPerBlock=%v limit=%v", atxsPerBlock, atxsPerBlockLimit)
+	if atxsPerBlock > AtxsPerBlockLimit { // validate limit
+		log.Panic("Number of atxs per block required is bigger than the limit atxsPerBlock=%v limit=%v", atxsPerBlock, AtxsPerBlockLimit)
 	}
 
 	if len(atxs) == 0 { // no atxs to pick from

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	p2pconf "github.com/spacemeshos/go-spacemesh/p2p/config"
 
@@ -384,8 +385,11 @@ func (s *Syncer) GetFullBlocks(blockIds []types.BlockID) []*types.Block {
 	return blocksArr
 }
 
-var errDupTx = errors.New("duplicate TransactionId in block")
-var errDupAtx = errors.New("duplicate AtxId in block")
+var (
+	errDupTx       = errors.New("duplicate TransactionId in block")
+	errDupAtx      = errors.New("duplicate AtxId in block")
+	errTooManyAtxs = errors.New("too many atxs in blocks")
+)
 
 func validateUniqueTxAtx(b *types.Block) error {
 	// check for duplicate tx id
@@ -410,6 +414,11 @@ func validateUniqueTxAtx(b *types.Block) error {
 }
 
 func (s *Syncer) BlockSyntacticValidation(block *types.Block) ([]*types.AddressableSignedTransaction, []*types.ActivationTx, error) {
+	if len(block.AtxIds) > miner.AtxsPerBlockLimit { // TODO: should put it also in validation queue
+		s.Error("Too many atxs in block expected<=%v actual=%v", miner.AtxsPerBlockLimit, len(block.AtxIds))
+		return nil, nil, errTooManyAtxs
+	}
+
 	// validate unique tx atx
 	if err := validateUniqueTxAtx(block); err != nil {
 		return nil, nil, err
