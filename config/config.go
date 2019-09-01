@@ -95,6 +95,8 @@ type BaseConfig struct {
 	PublishEventsUrl string `mapstructure:"publish-events"`
 
 	StartMining bool `mapstructure:"start-mining"`
+
+	AtxsSelectCount int `mapstructure:"atxs-select-count"`
 }
 
 // DefaultConfig returns the default configuration for a spacemesh node
@@ -132,6 +134,7 @@ func defaultBaseConfig() BaseConfig {
 		Hdist:               5,
 		GenesisActiveSet:    5,
 		SyncRequestTimeout:  2000,
+		AtxsSelectCount:     100,
 	}
 }
 
