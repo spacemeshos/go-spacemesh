@@ -17,10 +17,10 @@ from pytest_testconfig import config as testconfig
 from elasticsearch_dsl import Search, Q
 from tests.misc import ContainerSpec, CoreV1ApiClient
 from tests.context import ES
+from tests.client import CLIENT_DEPLOYMENT_FILE
 from tests.hare.assert_hare import validate_hare
 
 BOOT_DEPLOYMENT_FILE = './k8s/bootstrapoet-w-conf.yml'
-CLIENT_DEPLOYMENT_FILE = './k8s/client-w-conf.yml'
 CLIENT_POD_FILE = './k8s/single-client-w-conf.yml'
 CURL_POD_FILE = './k8s/curl.yml'
 
@@ -97,39 +97,6 @@ def setup_bootstrap_in_namespace(namespace, bs_deployment_info, bootstrap_config
 # ==============================================================================
 #    Fixtures
 # ==============================================================================
-
-
-def setup_server(deployment_name, deployment_file, namespace):
-    deployment_name_prefix = deployment_name.split('-')[1]
-    namespaced_pods = CoreV1ApiClient().list_namespaced_pod(namespace,
-                                                            label_selector=(
-                                                                "name={0}".format(deployment_name_prefix))).items
-    if namespaced_pods:
-        # if server already exist -> delete it
-        deployment.delete_deployment(deployment_name, namespace)
-
-    resp = deployment.create_deployment(deployment_file, namespace, time_out=testconfig['deployment_ready_time_out'])
-    namespaced_pods = CoreV1ApiClient().list_namespaced_pod(namespace,
-                                                            label_selector=(
-                                                                "name={0}".format(deployment_name_prefix))).items
-    if not namespaced_pods:
-        raise Exception('Could not setup Server: {0}'.format(deployment_name))
-
-    ip = namespaced_pods[0].status.pod_ip
-    if ip is None:
-        print("{0} IP was None, trying again..".format(deployment_name_prefix))
-        time.sleep(3)
-        # retry
-        namespaced_pods = CoreV1ApiClient().list_namespaced_pod(namespace,
-                                                                label_selector=(
-                                                                    "name={0}".format(deployment_name_prefix))).items
-        ip = namespaced_pods[0].status.pod_ip
-        if ip is None:
-            raise Exception("Failed to retrieve {0} ip address".format(deployment_name_prefix))
-
-    return ip
-
-
 @pytest.fixture(scope='module')
 def setup_bootstrap(request, init_session):
     bootstrap_deployment_info = DeploymentInfo(dep_id=init_session)

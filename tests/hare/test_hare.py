@@ -3,12 +3,45 @@ import time
 import pytest
 from pytest_testconfig import config as testconfig
 
+from tests import deployment
 from tests.fixtures import DeploymentInfo
 from tests.fixtures import init_session, load_config, set_namespace, session_id, set_docker_images
+from tests.misc import CoreV1ApiClient
 from tests.hare.assert_hare import expect_hare, assert_all, get_max_mem_usage
-from tests.test_bs import current_index, setup_bootstrap_in_namespace, setup_clients_in_namespace, setup_server, create_configmap, wait_genesis
+from tests.test_bs import current_index, setup_bootstrap_in_namespace, setup_clients_in_namespace, create_configmap, wait_genesis
 
 ORACLE_DEPLOYMENT_FILE = './k8s/oracle.yml'
+
+
+def setup_server(deployment_name, deployment_file, namespace):
+    deployment_name_prefix = deployment_name.split('-')[1]
+    namespaced_pods = CoreV1ApiClient().list_namespaced_pod(namespace,
+                                                            label_selector=(
+                                                                "name={0}".format(deployment_name_prefix))).items
+    if namespaced_pods:
+        # if server already exist -> delete it
+        deployment.delete_deployment(deployment_name, namespace)
+
+    resp = deployment.create_deployment(deployment_file, namespace, time_out=testconfig['deployment_ready_time_out'])
+    namespaced_pods = CoreV1ApiClient().list_namespaced_pod(namespace,
+                                                            label_selector=(
+                                                                "name={0}".format(deployment_name_prefix))).items
+    if not namespaced_pods:
+        raise Exception('Could not setup Server: {0}'.format(deployment_name))
+
+    ip = namespaced_pods[0].status.pod_ip
+    if ip is None:
+        print("{0} IP was None, trying again..".format(deployment_name_prefix))
+        time.sleep(3)
+        # retry
+        namespaced_pods = CoreV1ApiClient().list_namespaced_pod(namespace,
+                                                                label_selector=(
+                                                                    "name={0}".format(deployment_name_prefix))).items
+        ip = namespaced_pods[0].status.pod_ip
+        if ip is None:
+            raise Exception("Failed to retrieve {0} ip address".format(deployment_name_prefix))
+
+    return ip
 
 
 # ==============================================================================
