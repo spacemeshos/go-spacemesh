@@ -384,10 +384,40 @@ func (s *Syncer) GetFullBlocks(blockIds []types.BlockID) []*types.Block {
 	return blocksArr
 }
 
+var errDupTx = errors.New("duplicate TransactionId in block")
+var errDupAtx = errors.New("duplicate AtxId in block")
+
+func validateUniqueTxAtx(b *types.Block) error {
+	// check for duplicate tx id
+	mt := make(map[types.TransactionId]struct{})
+	for _, tx := range b.TxIds {
+		if _, exist := mt[tx]; exist {
+			return errDupTx
+		}
+		mt[tx] = struct{}{}
+	}
+
+	// check for duplicate atx id
+	ma := make(map[types.AtxId]struct{})
+	for _, atx := range b.AtxIds {
+		if _, exist := ma[atx]; exist {
+			return errDupAtx
+		}
+		ma[atx] = struct{}{}
+	}
+
+	return nil
+}
+
 func (s *Syncer) BlockSyntacticValidation(block *types.Block) ([]*types.AddressableSignedTransaction, []*types.ActivationTx, error) {
 	//block eligibility
 	if eligible, err := s.BlockSignedAndEligible(block); err != nil || !eligible {
 		return nil, nil, fmt.Errorf("block eligibiliy check failed - err %v", err)
+	}
+
+	// validate unique tx atx
+	if err := validateUniqueTxAtx(block); err != nil {
+		return nil, nil, err
 	}
 
 	//data availability

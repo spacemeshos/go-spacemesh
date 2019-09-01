@@ -100,6 +100,11 @@ func (vq *validationQueue) traverse(s *Syncer, blk *types.BlockHeader) error {
 
 func (vq *validationQueue) finishBlockCallback(s *Syncer, block *types.Block) func() error {
 	return func() error {
+		// validate unique tx atx
+		if err := validateUniqueTxAtx(block); err != nil {
+			return err
+		}
+
 		//data availability
 		txs, txErr, atxs, atxErr := s.DataAvailability(block)
 		if txErr != nil || atxErr != nil {
