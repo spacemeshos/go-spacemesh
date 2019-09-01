@@ -412,16 +412,16 @@ var (
 	one   = types.CalcHash32([]byte("1"))
 	two   = types.CalcHash32([]byte("2"))
 	three = types.CalcHash32([]byte("3"))
-	four  = types.CalcHash32([]byte("3"))
-	five  = types.CalcHash32([]byte("3"))
+	four  = types.CalcHash32([]byte("4"))
+	five  = types.CalcHash32([]byte("5"))
 )
 
 var (
 	atx1 = types.AtxId{Hash32: one}
 	atx2 = types.AtxId{Hash32: two}
 	atx3 = types.AtxId{Hash32: three}
-	atx4 = types.AtxId{Hash32: three}
-	atx5 = types.AtxId{Hash32: three}
+	atx4 = types.AtxId{Hash32: four}
+	atx5 = types.AtxId{Hash32: five}
 )
 
 func Test_selectAtxs(t *testing.T) {
@@ -437,10 +437,11 @@ func Test_selectAtxs(t *testing.T) {
 	selected = selectAtxs(atxs, 10)
 	r.Equal(5, len(selected))
 
+	// check uniformity
 	rand.Seed(1000)
 	origin := []types.AtxId{atx1, atx2, atx3, atx4, atx5}
 	mp := make(map[types.AtxId]struct{}, 0)
-	for i := 0; i < 1000; i++ {
+	for i := 0; i < 100; i++ {
 		atxs = []types.AtxId{atx1, atx2, atx3, atx4, atx5}
 		selected = selectAtxs(atxs, 2)
 
@@ -448,11 +449,11 @@ func Test_selectAtxs(t *testing.T) {
 			mp[i] = struct{}{}
 		}
 	}
-	fmt.Println(len(mp))
+
 	for _, x := range origin {
 		f := false
 		for y := range mp {
-			if x == y {
+			if bytes.Equal(x.Bytes(), y.Bytes()) {
 				f = true
 			}
 		}
