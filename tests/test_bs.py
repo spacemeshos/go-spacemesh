@@ -17,11 +17,10 @@ from pytest_testconfig import config as testconfig
 from elasticsearch_dsl import Search, Q
 from tests.misc import ContainerSpec, CoreV1ApiClient
 from tests.context import ES
-from tests.client import CLIENT_DEPLOYMENT_FILE
+from tests.client import CLIENT_DEPLOYMENT_FILE, add_single_client
 from tests.hare.assert_hare import validate_hare
 
 BOOT_DEPLOYMENT_FILE = './k8s/bootstrapoet-w-conf.yml'
-CLIENT_POD_FILE = './k8s/single-client-w-conf.yml'
 CURL_POD_FILE = './k8s/curl.yml'
 
 BOOTSTRAP_PORT = 7513
@@ -177,17 +176,6 @@ def setup_network(request, init_session, setup_bootstrap, setup_clients, add_cur
     return network_deployment
 
 
-def add_single_client(deployment_id, container_specs):
-    resp = pod.create_pod(CLIENT_POD_FILE,
-                          testconfig['namespace'],
-                          deployment_id=deployment_id,
-                          container_specs=container_specs)
-
-    client_name = resp.metadata.name
-    print("Add new client: {0}".format(client_name))
-    return client_name
-
-
 def add_multi_clients(deployment_id, container_specs, size=2):
     resp = deployment.create_deployment(file_name=CLIENT_DEPLOYMENT_FILE,
                                         name_space=testconfig['namespace'],
@@ -220,7 +208,7 @@ def add_client(request, setup_bootstrap, setup_clients):
 
         bs_info = setup_bootstrap.pods[0]
         cspec = get_conf(bs_info, testconfig['client'])
-        client_name = add_single_client(setup_bootstrap.deployment_id, cspec)
+        client_name = add_single_client(setup_bootstrap.deployment_id, testconfig['namespace'], cspec)
         return client_name
 
     return _add_single_client()
