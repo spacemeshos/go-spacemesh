@@ -401,9 +401,7 @@ func (ni *ninjaTortoise) addPatternVote(p votingPattern, view map[types.BlockID]
 
 			//explicitly abstain
 			if ex == ZeroPattern {
-				for _, bl := range blocks {
-					ni.tTally[p][bl] = ni.tTally[p][bl].Add(Abstain)
-				}
+				continue
 			}
 
 			for _, bl := range blocks {
