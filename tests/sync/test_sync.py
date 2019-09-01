@@ -42,15 +42,14 @@ def test_sync_gradually_add_nodes(init_session, setup_bootstrap, save_log_on_exi
     bs_info = setup_bootstrap.pods[0]
 
     cspec = get_conf(bs_info, testconfig['client'])
-
-    inf = new_client_in_namespace(testconfig['namespace'], setup_bootstrap, cspec, 10)
+    time_out = testconfig['deployment_ready_time_out']
+    inf = new_client_in_namespace(testconfig['namespace'], setup_bootstrap, cspec, 10, time_out)
 
     del cspec.args['remote-data']
     cspec.args['data-folder'] = ""
 
     num_clients = 4
     clients = [None] * num_clients
-    time_out = testconfig['deployment_ready_time_out']
     clients[0] = new_client_in_namespace(testconfig['namespace'], setup_bootstrap, cspec, 1, time_out)
     time.sleep(10)
     clients[1] = new_client_in_namespace(testconfig['namespace'], setup_bootstrap, cspec, 1, time_out)
