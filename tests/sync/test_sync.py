@@ -50,13 +50,14 @@ def test_sync_gradually_add_nodes(init_session, setup_bootstrap, save_log_on_exi
 
     num_clients = 4
     clients = [None] * num_clients
-    clients[0] = new_client_in_namespace(testconfig['namespace'], setup_bootstrap, cspec, 1)
+    time_out = testconfig['deployment_ready_time_out']
+    clients[0] = new_client_in_namespace(testconfig['namespace'], setup_bootstrap, cspec, 1, time_out)
     time.sleep(10)
-    clients[1] = new_client_in_namespace(testconfig['namespace'], setup_bootstrap, cspec, 1)
+    clients[1] = new_client_in_namespace(testconfig['namespace'], setup_bootstrap, cspec, 1, time_out)
     time.sleep(20)
-    clients[2] = new_client_in_namespace(testconfig['namespace'], setup_bootstrap, cspec, 1)
+    clients[2] = new_client_in_namespace(testconfig['namespace'], setup_bootstrap, cspec, 1, time_out)
     time.sleep(20)
-    clients[3] = new_client_in_namespace(testconfig['namespace'], setup_bootstrap, cspec, 1)
+    clients[3] = new_client_in_namespace(testconfig['namespace'], setup_bootstrap, cspec, 1, time_out)
 
     start = time.time()
     sleep = 30 # seconds
