@@ -26,6 +26,7 @@ class ES:
         ctxt = Context()
         cluster_name = ctxt.get_cluster_name()
         es_url = generate_elastic_url(cluster_name)
+        print("ES_PASSWD is {0}".format(ES_PASSWD))
         self.es = Elasticsearch(es_url, http_auth=("spacemesh", ES_PASSWD), port=80, timeout=90)
 
     def get_search_api(self):
