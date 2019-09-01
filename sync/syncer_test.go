@@ -1370,7 +1370,6 @@ func TestSyncer_BlockSyntacticValidation(t *testing.T) {
 	r := require.New(t)
 	a, _ := SyncMockFactory(1, conf, t.Name(), memoryDB, newMemPoetDb)
 	s := a[0]
-	s.BlockValidator = BlockEligibilityValidatorMock{}
 	b := &types.Block{}
 	b.TxIds = []types.TransactionId{txid1, txid2, txid1}
 	b.AtxIds = []types.AtxId{atx1, atx2, atx3}

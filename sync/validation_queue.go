@@ -65,7 +65,14 @@ func (vq *validationQueue) traverse(s *Syncer, blk *types.BlockHeader) error {
 		}
 
 		vq.visited[block.ID()] = struct{}{}
+
+		// validate unique tx atx
+		if err := validateUniqueTxAtx(block); err != nil {
+			return err
+		}
+
 		s.Info("Checking eligibility for block %v", block.ID())
+		// validate eligibility
 		if eligable, err := s.BlockSignedAndEligible(block); err != nil || !eligable {
 			return errors.New(fmt.Sprintf("Block %v eligiblety check failed %v", blk.ID(), err))
 		}
@@ -100,11 +107,6 @@ func (vq *validationQueue) traverse(s *Syncer, blk *types.BlockHeader) error {
 
 func (vq *validationQueue) finishBlockCallback(s *Syncer, block *types.Block) func() error {
 	return func() error {
-		// validate unique tx atx
-		if err := validateUniqueTxAtx(block); err != nil {
-			return err
-		}
-
 		//data availability
 		txs, txErr, atxs, atxErr := s.DataAvailability(block)
 		if txErr != nil || atxErr != nil {
