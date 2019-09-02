@@ -257,7 +257,7 @@ func globalOpinion(v vec, layerSize int, delta float64) vec {
 
 func (ni *ninjaTortoise) updateCorrectionVectors(p votingPattern, bottomOfWindow types.LayerID) {
 	foo := func(x *types.Block) (bool, error) {
-		for _, bid := range ni.tEffectiveToBlocks[p] { //for all b who's effective vote is p
+		for _, bid := range ni.tEffectiveToBlocks[p] { //for all b whose effective vote is p
 			b, err := ni.GetBlock(bid)
 			if err != nil {
 				ni.Panic(fmt.Sprintf("error block not found ID %d", bid))
