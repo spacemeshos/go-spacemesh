@@ -115,6 +115,8 @@ func (vq *validationQueue) finishBlockCallback(s *Syncer, block *types.Block) fu
 			return err
 		}
 
+		s.HandleLateBlock(block)
+
 		return nil
 	}
 }

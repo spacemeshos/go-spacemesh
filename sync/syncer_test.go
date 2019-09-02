@@ -962,58 +962,40 @@ func TestFetchLayerBlockIds(t *testing.T) {
 
 }
 
-type mockLayerValidator struct {
-	vl              types.LayerID // the validated layer
-	countValidated  int
-	countValidate   int
-	validatedLayers map[types.LayerID]struct{}
-}
-
-func (m *mockLayerValidator) ValidatedLayer() types.LayerID {
-	m.countValidated++
-	return m.vl
-}
-
-func (m *mockLayerValidator) ValidateLayer(lyr *types.Layer) {
-	m.countValidate++
-	m.vl = lyr.Index()
-	if m.validatedLayers == nil {
-		m.validatedLayers = make(map[types.LayerID]struct{})
-	}
-
-	m.validatedLayers[lyr.Index()] = struct{}{}
-}
-
 func TestSyncer_Synchronise(t *testing.T) {
 	r := require.New(t)
 	syncs, _ := SyncMockFactory(1, conf, t.Name(), memoryDB, newMockPoetDb)
 	sync := syncs[0]
-	lv := &mockLayerValidator{0, 0, 0, nil}
-	sync.lValidator = lv
+	lv := &MeshValidatorMock{0, 0, sync.Mesh, 0, 0, 0, nil}
+	sync.Mesh.MeshValidator = lv
 
 	sr := sync.getSyncRoutine()
 	sr()
 	time.Sleep(100 * time.Millisecond) // handle go routine race
-	r.Equal(1, lv.countValidated)
+	r.Equal(sync.WeaklySynced(), false)
+	r.Equal(sync.getP2pSynced(), false)
 	r.Equal(0, lv.countValidate)
 
 	sync.AddBlock(types.NewExistingBlock(types.BlockID(1), 1, nil))
 	sync.AddBlock(types.NewExistingBlock(types.BlockID(2), 2, nil))
 	sync.AddBlock(types.NewExistingBlock(types.BlockID(3), 3, nil))
-	lv = &mockLayerValidator{1, 0, 0, nil}
-	sync.lValidator = lv
+	lv = &MeshValidatorMock{0, 0, sync.Mesh, 1, 0, 0, nil}
+	sync.Mesh.MeshValidator = lv
 	sync.currentLayer = 3
 	sr()
 	time.Sleep(100 * time.Millisecond) // handle go routine race
-	r.Equal(1, lv.countValidated)
+	r.Equal(sync.getP2pSynced(), false)
+	r.Equal(sync.WeaklySynced(), true)
 	r.Equal(1, lv.countValidate) // synced, expect only one call
 
-	lv = &mockLayerValidator{1, 0, 0, nil}
-	sync.lValidator = lv
+	lv = &MeshValidatorMock{0, 0, sync.Mesh, 1, 0, 0, nil}
+	sync.Mesh.MeshValidator = lv
 	sync.currentLayer = 4 // simulate not synced
 	sr()
 	time.Sleep(100 * time.Millisecond) // handle go routine race
 	r.Equal(1, lv.countValidate)       // not synced, expect one call
+	r.Equal(sync.getP2pSynced(), false)
+	r.Equal(sync.WeaklySynced(), true)
 }
 
 type mockLayerProvider struct {
@@ -1027,10 +1009,13 @@ func TestSyncer_Synchronise2(t *testing.T) {
 	r := require.New(t)
 	syncs, _ := SyncMockFactory(1, conf, t.Name(), memoryDB, newMockPoetDb)
 	sync := syncs[0]
-	lv := &mockLayerValidator{0, 0, 0, nil}
-	sync.lValidator = lv
+
+	lv := &MeshValidatorMock{0, 0, sync.Mesh, 0, 0, 0, nil}
+	sync.Mesh.MeshValidator = lv
 	sync.currentLayer = 1
 	r.False(sync.p2pSynced)
+
+	sync.AddBlock(types.NewExistingBlock(types.BlockID(10), 0, nil))
 
 	// current layer = 0
 	sync.currentLayer = 0
@@ -1039,6 +1024,7 @@ func TestSyncer_Synchronise2(t *testing.T) {
 	r.Equal(0, lv.countValidate)
 	r.True(sync.p2pSynced)
 
+	sync.AddBlock(types.NewExistingBlock(types.BlockID(11), 1, nil))
 	// current layer = 1
 	sync.currentLayer = 1
 	sync.syncRoutineWg.Add(1)
@@ -1046,19 +1032,36 @@ func TestSyncer_Synchronise2(t *testing.T) {
 	r.Equal(0, lv.countValidate)
 	r.True(sync.p2pSynced)
 
-	// validated layer = 5 && current layer = 6 -> don't call validate
-	lv = &mockLayerValidator{5, 0, 0, nil}
-	sync.lValidator = lv
 	sync.currentLayer = 6
+	sync.AddBlock(types.NewExistingBlock(types.BlockID(12), 2, nil))
+	sync.AddBlock(types.NewExistingBlock(types.BlockID(13), 3, nil))
+	sync.AddBlock(types.NewExistingBlock(types.BlockID(14), 4, nil))
+	sync.AddBlock(types.NewExistingBlock(types.BlockID(15), 5, nil))
+	l, _ := sync.GetLayer(1)
+	sync.ValidateLayer(l)
+	l, _ = sync.GetLayer(2)
+	sync.ValidateLayer(l)
+	l, _ = sync.GetLayer(3)
+	sync.GetLayer(4)
+	l, _ = sync.GetLayer(4)
+	sync.ValidateLayer(l)
+	l, _ = sync.GetLayer(5)
+	sync.ValidateLayer(l)
+
+	// validated layer = 5 && current layer = 6 -> don't call validate
+	lv.countValidate = 0
+	sync.currentLayer = 5
 	sync.syncRoutineWg.Add(1)
-	sync.SetLatestLayer(5)
 	sync.Synchronise()
 	r.Equal(0, lv.countValidate)
 	r.True(sync.p2pSynced)
 
+	sync.AddBlock(types.NewExistingBlock(types.BlockID(11), 6, nil))
+
 	// current layer != 1 && weakly-synced
-	lv = &mockLayerValidator{0, 0, 0, nil}
-	sync.lValidator = lv
+	lv = &MeshValidatorMock{0, 0, sync.Mesh, 0, 0, 0, nil}
+	sync.Mesh = getMeshWithMemoryDB("tst")
+	sync.Mesh.MeshValidator = lv
 	sync.currentLayer = 2
 	sync.SetLatestLayer(2)
 	sync.lProvider = &mockLayerProvider{}
@@ -1075,8 +1078,8 @@ func TestSyncer_handleNotSyncedFlow(t *testing.T) {
 	ts := &mockClock{}
 	sync := NewSync(service.NewSimulator().NewNode(), getMesh(memoryDB, Path+t.Name()+"_"+time.Now().String()), txpool, atxpool, mockTxProcessor{}, BlockEligibilityValidatorMock{}, newMockPoetDb(), conf, ts, 10, log.NewDefault(t.Name()))
 
-	lv := &mockLayerValidator{0, 0, 0, nil}
-	sync.lValidator = lv
+	lv := &MeshValidatorMock{0, 0, sync.Mesh, 0, 0, 0, nil}
+	sync.Mesh.MeshValidator = lv
 	sync.currentLayer = 10
 	sync.SetLatestLayer(20)
 	sync.lProvider = &mockLayerProvider{}
@@ -1090,7 +1093,7 @@ func TestSyncer_p2pSyncForTwoLayers(t *testing.T) {
 	r := require.New(t)
 	syncs, _ := SyncMockFactory(1, conf, t.Name(), memoryDB, newMockPoetDb)
 	sync := syncs[0]
-	lv := &mockLayerValidator{0, 0, 0, nil}
+
 	sync.lProvider = &mockLayerProvider{}
 	sync.SyncLock = RUNNING
 
@@ -1098,7 +1101,8 @@ func TestSyncer_p2pSyncForTwoLayers(t *testing.T) {
 	sync.Start()
 	time.Sleep(250 * time.Millisecond)
 	current := sync.currentLayer
-	sync.lValidator = lv
+	lv := &MeshValidatorMock{0, 0, sync.Mesh, 0, 0, 0, nil}
+	sync.Mesh.MeshValidator = lv
 
 	// make sure not validated before the call
 	_, ok := lv.validatedLayers[current]
@@ -1119,27 +1123,13 @@ func TestSyncer_p2pSyncForTwoLayers(t *testing.T) {
 	r.True(ok)
 }
 
-type mockTimedValidator struct {
-	delay time.Duration
-	calls int
-}
-
-func (m *mockTimedValidator) ValidatedLayer() types.LayerID {
-	return 1
-}
-
-func (m *mockTimedValidator) ValidateLayer(lyr *types.Layer) {
-	m.calls++
-	time.Sleep(m.delay)
-}
-
 func TestSyncer_ConcurrentSynchronise(t *testing.T) {
 	r := require.New(t)
 	syncs, _ := SyncMockFactory(1, conf, t.Name(), memoryDB, newMockPoetDb)
 	sync := syncs[0]
 	sync.currentLayer = 3
-	lv := &mockTimedValidator{1 * time.Second, 0}
-	sync.lValidator = lv
+	lv := &MeshValidatorMock{1 * time.Second, 0, sync.Mesh, 0, 0, 0, nil}
+	sync.Mesh.MeshValidator = lv
 	sync.AddBlock(types.NewExistingBlock(types.BlockID(1), 1, nil))
 	sync.AddBlock(types.NewExistingBlock(types.BlockID(2), 2, nil))
 	sync.AddBlock(types.NewExistingBlock(types.BlockID(3), 3, nil))
