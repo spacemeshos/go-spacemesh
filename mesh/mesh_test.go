@@ -257,30 +257,43 @@ func TestLayers_OrphanBlocksClearEmptyLayers(t *testing.T) {
 	assert.Equal(t, 1, len(layers.orphanBlocks))
 }
 
+type MockMempoolWrapper struct {
+	txs []*types.AddressableSignedTransaction
+}
+
+func (m *MockMempoolWrapper) ValidateAndAddTxToPool(tx *types.AddressableSignedTransaction, postValidationFuncs ...func()) error {
+	m.txs = append(m.txs, tx)
+	return nil
+}
+
 func TestMesh_AddBlockWithTxs_PushTransactions_UpdateMeshTxs(t *testing.T) {
 	r := require.New(t)
 
 	msh := getMesh("mesh")
+	mempoolWrapper := &MockMempoolWrapper{}
+	msh.SetTxMempool(mempoolWrapper)
 
-	origin := types.BytesToAddress([]byte("abc"))
-	tx := newTx(origin, 2468, 111)
-
-	blockId := types.BlockID(1)
-	blk := types.NewExistingBlock(blockId, 1, nil)
-	blk.TxIds = []types.TransactionId{types.GetTransactionId(tx.SerializableSignedTransaction)}
-
-	err := msh.AddBlockWithTxs(blk, []*types.AddressableSignedTransaction{tx}, nil)
-	r.NoError(err)
+	layerID := types.LayerID(1)
+	origin := types.BytesToAddress([]byte("origin"))
+	tx1 := addTxToMesh(r, msh, origin, 2468)
+	tx2 := addTxToMesh(r, msh, origin, 2469)
+	tx3 := addTxToMesh(r, msh, origin, 2470)
+	tx4 := addTxToMesh(r, msh, origin, 2471)
+	tx5 := addTxToMesh(r, msh, origin, 2472)
+	addBlockWithTxs(r, msh, layerID, true, tx1, tx2)
+	addBlockWithTxs(r, msh, layerID, true, tx2, tx3, tx4)
+	addBlockWithTxs(r, msh, layerID, false, tx4, tx5)
+	addBlockWithTxs(r, msh, layerID, false, tx5)
 
 	txns := getTxns(r, msh.MeshDB, origin)
-	r.Len(txns, 1)
-	r.Equal(2468, int(txns[0].Nonce))
-	r.Equal(111, int(txns[0].Amount))
-
-	err = msh.contextualValidity.Put(blockId.ToBytes(), []byte{1})
-	r.NoError(err)
+	r.Len(txns, 5)
+	for i := 0; i < 5; i++ {
+		r.Equal(2468+i, int(txns[i].Nonce))
+		r.Equal(111, int(txns[i].Amount))
+	}
 
 	msh.PushTransactions(1, 2)
+	r.ElementsMatch([]*types.AddressableSignedTransaction{tx4, tx5}, mempoolWrapper.txs)
 
 	txns = getTxns(r, msh.MeshDB, origin)
 	r.Empty(txns)
@@ -325,7 +338,7 @@ func addBlockWithTxs(r *require.Assertions, msh *Mesh, id types.LayerID, valid b
 	}
 	err := msh.SaveContextualValidity(blk.Id, valid)
 	r.NoError(err)
-	err = msh.AddBlock(blk)
+	err = msh.AddBlockWithTxs(blk, txs, nil)
 	r.NoError(err)
 	return blk
 }

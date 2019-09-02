@@ -50,11 +50,16 @@ type AtxDB interface {
 	SyntacticallyValidateAtx(atx *types.ActivationTx) error
 }
 
+type TxMempool interface {
+	ValidateAndAddTxToPool(tx *types.AddressableSignedTransaction, postValidationFuncs ...func()) error
+}
+
 type Mesh struct {
 	log.Log
 	*MeshDB
 	AtxDB
 	TxProcessor
+	txMempool      TxMempool
 	txInvalidator  TxMemPoolInValidator
 	atxInvalidator AtxMemPoolInValidator
 	config         Config
@@ -86,7 +91,11 @@ func NewMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh MeshValidator, t
 	return ll
 }
 
-//todo: this object should be splitted into two parts: one is the actual value serialized into trie, and an containig obj with caches
+func (m *Mesh) SetTxMempool(txMempool TxMempool) {
+	m.txMempool = txMempool
+}
+
+//todo: this object should be split into two parts: one is the actual value serialized into trie, and an containing obj with caches
 type Transaction struct {
 	AccountNonce uint64
 	GasPrice     *big.Int
@@ -264,7 +273,12 @@ func (m *Mesh) PushTransactions(oldBase, newBase types.LayerID) {
 		if err := m.removeFromMeshTxs(validBlockTxs, invalidBlockTxs, i); err != nil {
 			m.With().Error("failed to remove from meshTxs", log.Err(err))
 		}
-		// TODO: return rejected txs to mempool after validation (otherwise cont. inv. blocks can be used to censor txs)
+		if m.txMempool != nil {
+			for _, tx := range invalidBlockTxs {
+				_ = m.txMempool.ValidateAndAddTxToPool(Transaction2SerializableTransaction(tx))
+				// We ignore errors here, since they mean that the tx is no longer valid and we shouldn't re-add it
+			}
+		}
 		m.With().Info("applied transactions",
 			log.Int("valid_block_txs", len(validBlockTxs)),
 			log.Int("invalid_block_txs", len(invalidBlockTxs)),

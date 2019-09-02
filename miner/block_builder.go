@@ -88,11 +88,11 @@ func NewBlockBuilder(minerID types.NodeId, sgn Signer, net p2p.Service,
 	txValidator TxValidator,
 	atxValidator AtxValidator,
 	syncer Syncer,
-	lg log.Log) BlockBuilder {
+	lg log.Log) *BlockBuilder {
 
 	seed := binary.BigEndian.Uint64(md5.New().Sum([]byte(minerID.Key)))
 
-	return BlockBuilder{
+	return &BlockBuilder{
 		minerID:          minerID,
 		Signer:           sgn,
 		hdist:            types.LayerID(hdist),
@@ -243,33 +243,45 @@ func (t *BlockBuilder) listenForTx() {
 				// not accepting txs when not synced
 				continue
 			}
-			if data != nil {
+			if data == nil {
+				continue
+			}
 
-				x, err := types.BytesAsSignedTransaction(data.Bytes())
-				if err != nil {
-					t.Log.Error("cannot parse incoming TX")
-					continue
-				}
+			x, err := types.BytesAsSignedTransaction(data.Bytes())
+			if err != nil {
+				t.Log.Error("cannot parse incoming TX")
+				continue
+			}
 
-				id := types.GetTransactionId(x)
-				fullTx, err := t.txValidator.GetValidAddressableTx(x)
-				if err != nil {
-					t.With().Error("Transaction sig validation failed",
-						log.TxId(hex.EncodeToString(id[:util.Min(5, len(id))])), log.Err(err))
-					continue
-				}
-				if err := t.txValidator.ValidateNonceAndBalance(fullTx); err != nil {
-					t.With().Error("Transaction nonce and balance validation failed",
-						log.TxId(hex.EncodeToString(id[:util.Min(5, len(id))])), log.Err(err))
-					continue
-				}
-
+			id := types.GetTransactionId(x)
+			fullTx, err := t.txValidator.GetValidAddressableTx(x)
+			if err != nil {
+				t.With().Error("Transaction sig validation failed",
+					log.TxId(hex.EncodeToString(id[:util.Min(5, len(id))])), log.Err(err))
+				continue
+			}
+			if err := t.ValidateAndAddTxToPool(fullTx, func() {
 				t.Log.With().Info("got new tx", log.TxId(hex.EncodeToString(id[:util.Min(5, len(id))])))
 				data.ReportValidation(IncomingTxProtocol)
-				t.TransactionPool.Put(types.GetTransactionId(x), fullTx)
+			}); err != nil {
+				t.With().Error("Transaction nonce and balance validation failed",
+					log.TxId(hex.EncodeToString(id[:util.Min(5, len(id))])), log.Err(err))
+				continue
 			}
 		}
 	}
+}
+
+func (t *BlockBuilder) ValidateAndAddTxToPool(tx *types.AddressableSignedTransaction, postValidationFuncs ...func()) error {
+	err := t.txValidator.ValidateNonceAndBalance(tx)
+	if err != nil {
+		return err
+	}
+	for _, f := range postValidationFuncs {
+		f()
+	}
+	t.TransactionPool.Put(types.GetTransactionId(tx.SerializableSignedTransaction), tx)
+	return nil
 }
 
 func (t *BlockBuilder) listenForAtx() {
