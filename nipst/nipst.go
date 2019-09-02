@@ -37,7 +37,7 @@ type PostProverClient interface {
 
 	// SetParams updates the datadir and space params in the client config, to be used in the initialization
 	// and the execution phases. It overrides the config which the client was instantiated with.
-	SetParams(datadir string, space uint64)
+	SetParams(datadir string, space uint64) error
 
 	// SetLogger sets a logger for the client.
 	SetLogger(logger shared.Logger)
