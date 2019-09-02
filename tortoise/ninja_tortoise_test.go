@@ -197,6 +197,35 @@ func TestNinjaTortoise_VariableLayerSize(t *testing.T) {
 
 }
 
+func TestNinjaTortoise_Abstain(t *testing.T) {
+
+	lg := log.New(t.Name(), "", "")
+
+	mdb := getMeshForBench()
+	alg := NewNinjaTortoise(3, mdb, 5, lg)
+	l := mesh.GenesisLayer()
+	AddLayer(mdb, l)
+	alg.handleIncomingLayer(l)
+
+	l1 := createLayer(1, []*types.Layer{l}, 3)
+	AddLayer(mdb, l1)
+	alg.handleIncomingLayer(l1)
+
+	l2 := createLayer(2, []*types.Layer{l1, l}, 3)
+	AddLayer(mdb, l2)
+	alg.handleIncomingLayer(l2)
+
+	l3 := createLayer(3, []*types.Layer{l2, l}, 3)
+	AddLayer(mdb, l3)
+	alg.handleIncomingLayer(l3)
+
+	l4 := createLayer(4, []*types.Layer{l3, l}, 3)
+	AddLayer(mdb, l4)
+	alg.handleIncomingLayer(l4)
+	assert.True(t, alg.pBase.Layer() == 3)
+	assert.True(t, alg.tTally[alg.tGood[3]][mesh.GenesisBlock.ID()][0] == 9)
+}
+
 func TestNinjaTortoise_BlockByBlock(t *testing.T) {
 
 	lg := log.New(t.Name(), "", "")
