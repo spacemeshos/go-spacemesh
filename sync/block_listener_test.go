@@ -569,7 +569,7 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 	bl2 := ListenerFactory(n2, PeersMock{func() []p2p.Peer { return []p2p.Peer{n1.PublicKey()} }}, "TestBlockListener_ListenToGossipBlocks2", 1)
 
 	bl1.Start()
-	bl2.Start() // TODO: @almog make sure data is available without starting
+	bl2.Start()
 
 	blk := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data1"))
 	tx := types.NewAddressableTx(0, types.BytesToAddress([]byte{0x01}), types.BytesToAddress([]byte{0x02}), 10, 10, 10)

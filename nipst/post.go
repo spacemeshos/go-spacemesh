@@ -20,9 +20,18 @@ func verifyPost(proof *types.PostProof, space uint64, numProvenLabels uint, diff
 		return fmt.Errorf("space (%d) is not a multiple of LabelGroupSize (%d)", space, config.LabelGroupSize)
 	}
 
-	cfg := config.Config{SpacePerUnit: space, NumProvenLabels: uint(numProvenLabels), Difficulty: uint(difficulty)}
-	validator := validation.NewValidator(&cfg)
-	if err := validator.Validate((*proving.Proof)(proof)); err != nil {
+	cfg := config.Config{
+		SpacePerUnit:    space,
+		NumProvenLabels: uint(numProvenLabels),
+		Difficulty:      uint(difficulty),
+		NumFiles:        1,
+	}
+
+	v, err := validation.NewValidator(&cfg)
+	if err != nil {
+		return err
+	}
+	if err := v.Validate((*proving.Proof)(proof)); err != nil {
 		return err
 	}
 
@@ -42,14 +51,24 @@ type PostClient struct {
 // A compile time check to ensure that PostClient fully implements PostProverClient.
 var _ PostProverClient = (*PostClient)(nil)
 
-func NewPostClient(cfg *config.Config, id []byte) *PostClient {
+func NewPostClient(cfg *config.Config, id []byte) (*PostClient, error) {
+	init, err := initialization.NewInitializer(cfg, id)
+	if err != nil {
+		return nil, err
+	}
+
+	p, err := proving.NewProver(cfg, id)
+	if err != nil {
+		return nil, err
+	}
+
 	return &PostClient{
 		id:          id,
 		cfg:         cfg,
-		initializer: initialization.NewInitializer(cfg, id),
-		prover:      proving.NewProver(cfg, id),
+		initializer: init,
+		prover:      p,
 		logger:      shared.DisabledLogger{},
-	}
+	}, nil
 }
 
 func (c *PostClient) Initialize() (commitment *types.PostProof, err error) {
@@ -94,7 +113,7 @@ func (c *PostClient) VerifyInitAllowed() error {
 	return c.initializer.VerifyInitAllowed()
 }
 
-func (c *PostClient) SetParams(dataDir string, space uint64) {
+func (c *PostClient) SetParams(dataDir string, space uint64) error {
 	c.Lock()
 	defer c.Unlock()
 
@@ -103,11 +122,23 @@ func (c *PostClient) SetParams(dataDir string, space uint64) {
 	cfg.SpacePerUnit = space
 	c.cfg = &cfg
 
-	c.initializer = initialization.NewInitializer(c.cfg, c.id)
-	c.initializer.SetLogger(c.logger)
+	init, err := initialization.NewInitializer(c.cfg, c.id)
+	if err != nil {
+		return err
+	}
 
-	c.prover = proving.NewProver(c.cfg, c.id)
-	c.prover.SetLogger(c.logger)
+	p, err := proving.NewProver(c.cfg, c.id)
+	if err != nil {
+		return err
+	}
+
+	init.SetLogger(c.logger)
+	c.initializer = init
+
+	p.SetLogger(c.logger)
+	c.prover = p
+
+	return nil
 }
 
 func (c *PostClient) SetLogger(logger shared.Logger) {
