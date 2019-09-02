@@ -276,8 +276,9 @@ func address() types.Address {
 	return addr
 }
 
-func newTx(origin types.Address, nonce, amount uint64) *types.AddressableSignedTransaction {
-	return types.NewAddressableTx(nonce, origin, types.Address{}, amount, 3, 1)
+func newTx(origin types.Address, nonce, totalAmount uint64) *types.AddressableSignedTransaction {
+	feeAmount := uint64(1)
+	return types.NewAddressableTx(nonce, origin, types.Address{}, totalAmount-feeAmount, 3, feeAmount)
 }
 
 func TestMeshDB_GetStateProjection(t *testing.T) {
@@ -361,15 +362,15 @@ func TestMeshDB_MeshTxs(t *testing.T) {
 	r.Len(txns1, 2)
 	r.Equal(420, int(txns1[0].Nonce))
 	r.Equal(421, int(txns1[1].Nonce))
-	r.Equal(240, int(txns1[0].Amount))
-	r.Equal(241, int(txns1[1].Amount))
+	r.Equal(240, int(txns1[0].TotalAmount))
+	r.Equal(241, int(txns1[1].TotalAmount))
 
 	txns2 := getTxns(r, mdb, origin2)
 	r.Len(txns2, 2)
 	r.Equal(0, int(txns2[0].Nonce))
 	r.Equal(1, int(txns2[1].Nonce))
-	r.Equal(100, int(txns2[0].Amount))
-	r.Equal(101, int(txns2[1].Amount))
+	r.Equal(100, int(txns2[0].TotalAmount))
+	r.Equal(101, int(txns2[1].TotalAmount))
 
 	err = mdb.removeFromMeshTxs([]*Transaction{
 		SerializableSignedTransaction2StateTransaction(newTx(origin2, 0, 100)),
@@ -380,13 +381,13 @@ func TestMeshDB_MeshTxs(t *testing.T) {
 	r.Len(txns1, 2)
 	r.Equal(420, int(txns1[0].Nonce))
 	r.Equal(421, int(txns1[1].Nonce))
-	r.Equal(240, int(txns1[0].Amount))
-	r.Equal(241, int(txns1[1].Amount))
+	r.Equal(240, int(txns1[0].TotalAmount))
+	r.Equal(241, int(txns1[1].TotalAmount))
 
 	txns2 = getTxns(r, mdb, origin2)
 	r.Len(txns2, 1)
 	r.Equal(1, int(txns2[0].Nonce))
-	r.Equal(101, int(txns2[0].Amount))
+	r.Equal(101, int(txns2[0].TotalAmount))
 }
 
 func getTxns(r *require.Assertions, mdb *MeshDB, origin types.Address) []types.TinyTx {
@@ -401,7 +402,7 @@ func getTxns(r *require.Assertions, mdb *MeshDB, origin types.Address) []types.T
 	var ret []types.TinyTx
 	for nonce, nonceTxs := range txns.PendingTxs {
 		for id, tx := range nonceTxs {
-			ret = append(ret, types.TinyTx{Id: id, Nonce: nonce, Amount: tx.Amount})
+			ret = append(ret, types.TinyTx{Id: id, Nonce: nonce, TotalAmount: tx.TotalAmount})
 		}
 	}
 	sort.Slice(ret, func(i, j int) bool {

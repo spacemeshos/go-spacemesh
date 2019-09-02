@@ -68,7 +68,7 @@ func TestTxPoolWithAccounts_GetRandomTxs(t *testing.T) {
 	for _, tx := range txs {
 		nonces = append(nonces, tx.AccountNonce)
 	}
-	r.ElementsMatch([]uint64{5, 7, 11, 12, 14}, nonces)
+	r.ElementsMatch([]uint64{5, 10, 11, 13, 14}, nonces)
 }
 
 func TestGetRandIdxs(t *testing.T) {
@@ -93,7 +93,8 @@ func TestGetRandIdxs(t *testing.T) {
 	require.ElementsMatch(t, []uint64{2, 4, 6, 7, 8}, idsList) // different seed -> different indices
 }
 
-func newTx(origin types.Address, nonce, amount uint64) (types.TransactionId, *types.AddressableSignedTransaction) {
-	tx := types.NewAddressableTx(nonce, origin, types.Address{}, amount, 3, 1)
+func newTx(origin types.Address, nonce, totalAmount uint64) (types.TransactionId, *types.AddressableSignedTransaction) {
+	feeAmount := uint64(1)
+	tx := types.NewAddressableTx(nonce, origin, types.Address{}, totalAmount-feeAmount, 3, feeAmount)
 	return types.GetTransactionId(tx.SerializableSignedTransaction), tx
 }

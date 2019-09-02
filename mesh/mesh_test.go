@@ -289,7 +289,7 @@ func TestMesh_AddBlockWithTxs_PushTransactions_UpdateMeshTxs(t *testing.T) {
 	r.Len(txns, 5)
 	for i := 0; i < 5; i++ {
 		r.Equal(2468+i, int(txns[i].Nonce))
-		r.Equal(111, int(txns[i].Amount))
+		r.Equal(111, int(txns[i].TotalAmount))
 	}
 
 	msh.PushTransactions(1, 2)

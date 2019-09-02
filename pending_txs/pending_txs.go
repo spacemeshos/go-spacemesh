@@ -5,7 +5,7 @@ import (
 )
 
 type nanoTx struct {
-	Amount                 uint64
+	TotalAmount            uint64
 	HighestLayerIncludedIn types.LayerID
 }
 
@@ -30,7 +30,7 @@ func (apt *AccountPendingTxs) Add(txs []types.TinyTx, layer types.LayerID) {
 			layer = existing[tx.Id].HighestLayerIncludedIn
 		}
 		existing[tx.Id] = nanoTx{
-			Amount:                 tx.Amount,
+			TotalAmount:            tx.TotalAmount,
 			HighestLayerIncludedIn: layer,
 		}
 	}
@@ -68,8 +68,8 @@ func (apt *AccountPendingTxs) GetProjection(prevNonce, prevBalance uint64) (nonc
 		}
 		var maxValidAmount uint64
 		for _, tx := range txs {
-			if tx.Amount > maxValidAmount && balance >= tx.Amount {
-				maxValidAmount = tx.Amount
+			if tx.TotalAmount > maxValidAmount && balance >= tx.TotalAmount {
+				maxValidAmount = tx.TotalAmount
 			}
 		}
 		if maxValidAmount == 0 { // No transaction can be added without depleting the account

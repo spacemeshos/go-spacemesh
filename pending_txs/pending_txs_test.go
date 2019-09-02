@@ -6,8 +6,9 @@ import (
 	"testing"
 )
 
-func newTx(origin types.Address, nonce, amount uint64) *types.AddressableSignedTransaction {
-	return types.NewAddressableTx(nonce, origin, types.Address{}, amount, 3, 1)
+func newTx(origin types.Address, nonce, totalAmount uint64) *types.AddressableSignedTransaction {
+	feeAmount := uint64(1)
+	return types.NewAddressableTx(nonce, origin, types.Address{}, totalAmount-feeAmount, 3, feeAmount)
 }
 
 func TestNewAccountPendingTxs(t *testing.T) {

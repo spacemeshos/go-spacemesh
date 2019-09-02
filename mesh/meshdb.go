@@ -352,10 +352,10 @@ func txToTiny(tx *Transaction) types.TinyTx {
 	// TODO: calculate and store fee amount
 	id := types.GetTransactionId(Transaction2SerializableTransaction(tx).SerializableSignedTransaction)
 	return types.TinyTx{
-		Id:     id,
-		Origin: tx.Origin,
-		Nonce:  tx.AccountNonce,
-		Amount: tx.Amount.Uint64(),
+		Id:          id,
+		Origin:      tx.Origin,
+		Nonce:       tx.AccountNonce,
+		TotalAmount: tx.Amount.Uint64() + tx.GasPrice.Uint64(), // TODO: GasPrice represents the absolute fee here, as a temporarily hack
 	}
 }
 
