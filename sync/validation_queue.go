@@ -9,21 +9,23 @@ import (
 
 type validationQueue struct {
 	log.Log
-	queue         chan types.BlockID
-	callbacks     map[types.BlockID]func() error
-	depMap        map[types.BlockID]map[types.BlockID]struct{}
-	reverseDepMap map[types.BlockID][]types.BlockID
-	visited       map[types.BlockID]struct{}
+	blockFastValidator blockFastValidator
+	queue              chan types.BlockID
+	callbacks          map[types.BlockID]func() error
+	depMap             map[types.BlockID]map[types.BlockID]struct{}
+	reverseDepMap      map[types.BlockID][]types.BlockID
+	visited            map[types.BlockID]struct{}
 }
 
-func NewValidationQueue(lg log.Log) *validationQueue {
+func NewValidationQueue(validator blockFastValidator, lg log.Log) *validationQueue {
 	vq := &validationQueue{
-		queue:         make(chan types.BlockID, 100),
-		visited:       make(map[types.BlockID]struct{}),
-		depMap:        make(map[types.BlockID]map[types.BlockID]struct{}),
-		reverseDepMap: make(map[types.BlockID][]types.BlockID),
-		callbacks:     make(map[types.BlockID]func() error),
-		Log:           lg,
+		blockFastValidator: validator,
+		queue:              make(chan types.BlockID, 100),
+		visited:            make(map[types.BlockID]struct{}),
+		depMap:             make(map[types.BlockID]map[types.BlockID]struct{}),
+		reverseDepMap:      make(map[types.BlockID][]types.BlockID),
+		callbacks:          make(map[types.BlockID]func() error),
+		Log:                lg,
 	}
 
 	return vq
@@ -66,15 +68,9 @@ func (vq *validationQueue) traverse(s *Syncer, blk *types.BlockHeader) error {
 
 		vq.visited[block.ID()] = struct{}{}
 
-		// validate unique tx atx
-		if err := validateUniqueTxAtx(block); err != nil {
+		if err := vq.blockFastValidator(block); err != nil {
+			vq.With().Error("ValidationQueue: block validation failed", log.BlockId(uint64(block.ID())), log.Err(err))
 			return err
-		}
-
-		s.Info("Checking eligibility for block %v", block.ID())
-		// validate eligibility
-		if eligable, err := s.BlockSignedAndEligible(block); err != nil || !eligable {
-			return errors.New(fmt.Sprintf("Block %v eligiblety check failed %v", blk.ID(), err))
 		}
 
 		vq.callbacks[block.ID()] = vq.finishBlockCallback(s, block)

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
-	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	p2pconf "github.com/spacemeshos/go-spacemesh/p2p/config"
 
@@ -77,10 +76,12 @@ type LayerProvider interface {
 	GetLayer(index types.LayerID) (*types.Layer, error)
 }
 
+type blockFastValidator func(block *types.Block) error
+
 type Syncer struct {
 	p2p.Peers
 	*mesh.Mesh
-	BlockValidator
+	blockFastValidator
 	Configuration
 	log.Log
 	*server.MessageServer
@@ -195,28 +196,48 @@ func (s *Syncer) run() {
 }
 
 //fires a sync every sm.syncInterval or on force space from outside
-func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool AtxMemPool, tv TxValidator, bv BlockValidator, poetdb PoetDb, conf Configuration, clockSub clockSubscriber, currentLayer types.LayerID, logger log.Log) *Syncer {
+func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool AtxMemPool, tv TxValidator, bv BlockValidator, poetdb PoetDb, conf Configuration, clockSub clockSubscriber, currentLayer types.LayerID, atxsLimit int, logger log.Log) *Syncer {
+	fastValidator := func(block *types.Block) error {
+
+		if len(block.AtxIds) > atxsLimit {
+			logger.Error("Too many atxs in block expected<=%v actual=%v", atxsLimit, len(block.AtxIds))
+			return errTooManyAtxs
+		}
+
+		// validate unique tx atx
+		if err := validateUniqueTxAtx(block); err != nil {
+			return err
+		}
+
+		//block eligibility
+		if eligible, err := bv.BlockSignedAndEligible(block); err != nil || !eligible {
+			return fmt.Errorf("block eligibiliy check failed - err %v", err)
+		}
+
+		return nil
+	}
+
 	s := &Syncer{
-		BlockValidator: bv,
-		Configuration:  conf,
-		Log:            logger,
-		Mesh:           layers,
-		Peers:          p2p.NewPeers(srv, logger.WithName("peers")),
-		MessageServer:  server.NewMsgServer(srv.(server.Service), syncProtocol, conf.RequestTimeout, make(chan service.DirectMessage, p2pconf.ConfigValues.BufferSize), logger.WithName("srv")),
-		lValidator:     layers,
-		lProvider:      layers,
-		txValidator:    tv,
-		SyncLock:       0,
-		txpool:         txpool,
-		atxpool:        atxpool,
-		poetDb:         poetdb,
-		startLock:      0,
-		currentLayer:   currentLayer,
-		forceSync:      make(chan bool),
-		clockSub:       clockSub,
-		clock:          clockSub.Subscribe(),
-		exit:           make(chan struct{}),
-		p2pSynced:      false,
+		blockFastValidator: fastValidator,
+		Configuration:      conf,
+		Log:                logger,
+		Mesh:               layers,
+		Peers:              p2p.NewPeers(srv, logger.WithName("peers")),
+		MessageServer:      server.NewMsgServer(srv.(server.Service), syncProtocol, conf.RequestTimeout, make(chan service.DirectMessage, p2pconf.ConfigValues.BufferSize), logger.WithName("srv")),
+		lValidator:         layers,
+		lProvider:          layers,
+		txValidator:        tv,
+		SyncLock:           0,
+		txpool:             txpool,
+		atxpool:            atxpool,
+		poetDb:             poetdb,
+		startLock:          0,
+		currentLayer:       currentLayer,
+		forceSync:          make(chan bool),
+		clockSub:           clockSub,
+		clock:              clockSub.Subscribe(),
+		exit:               make(chan struct{}),
+		p2pSynced:          false,
 	}
 
 	s.RegisterBytesMsgHandler(LAYER_HASH, newLayerHashRequestHandler(layers, logger))
@@ -414,19 +435,10 @@ func validateUniqueTxAtx(b *types.Block) error {
 }
 
 func (s *Syncer) BlockSyntacticValidation(block *types.Block) ([]*types.AddressableSignedTransaction, []*types.ActivationTx, error) {
-	if len(block.AtxIds) > miner.AtxsPerBlockLimit { // TODO: should put it also in validation queue
-		s.Error("Too many atxs in block expected<=%v actual=%v", miner.AtxsPerBlockLimit, len(block.AtxIds))
-		return nil, nil, errTooManyAtxs
-	}
-
-	// validate unique tx atx
-	if err := validateUniqueTxAtx(block); err != nil {
+	// run block fast validation
+	if err := s.blockFastValidator(block); err != nil {
+		s.With().Error("BlockSyntacticValidation: block validation failed", log.BlockId(uint64(block.ID())), log.Err(err))
 		return nil, nil, err
-	}
-
-	//block eligibility
-	if eligible, err := s.BlockSignedAndEligible(block); err != nil || !eligible {
-		return nil, nil, fmt.Errorf("block eligibiliy check failed - err %v", err)
 	}
 
 	//data availability
@@ -450,7 +462,7 @@ func (s *Syncer) BlockSyntacticValidation(block *types.Block) ([]*types.Addressa
 }
 
 func (s *Syncer) ValidateView(blk *types.Block) bool {
-	vq := NewValidationQueue(s.Log.WithName("validQ"))
+	vq := NewValidationQueue(s.blockFastValidator, s.Log.WithName("validQ"))
 	if err := vq.traverse(s, &blk.BlockHeader); err != nil {
 		s.Error("could not validate %v view %v", blk.ID(), err)
 		return false

@@ -93,6 +93,7 @@ endif
 .PHONY: $(PLATFORMS)
 
 test:
+	make build
 	ulimit -n 500; go test -short -timeout 0 -p 1 ./...
 .PHONY: test
 

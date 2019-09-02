@@ -248,10 +248,6 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 }
 
 func selectAtxs(atxs []types.AtxId, atxsPerBlock int) []types.AtxId {
-	if atxsPerBlock > AtxsPerBlockLimit { // validate limit
-		log.Panic("Number of atxs per block required is bigger than the limit atxsPerBlock=%v limit=%v", atxsPerBlock, AtxsPerBlockLimit)
-	}
-
 	if len(atxs) == 0 { // no atxs to pick from
 		return atxs
 	}
