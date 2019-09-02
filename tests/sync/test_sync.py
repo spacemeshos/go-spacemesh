@@ -3,28 +3,10 @@ from pytest_testconfig import config as testconfig
 
 from tests.client import new_client_in_namespace
 from tests.deployment import delete_deployment
-from tests.fixtures import set_namespace, load_config, init_session, set_docker_images, session_id, DeploymentInfo, init_session
+from tests.fixtures import set_namespace, load_config, init_session, set_docker_images, session_id, DeploymentInfo
 from tests.test_bs import setup_clients, save_log_on_exit, setup_bootstrap, create_configmap
-from tests.test_bs import current_index, wait_genesis, GENESIS_TIME, get_conf
-from tests.context import ES
+from tests.test_bs import current_index, get_conf
 from tests.queries import query_message
-from elasticsearch_dsl import Search, Q
-
-
-def search_pod_logs(namespace, pod_name, term):
-    api = ES().get_search_api()
-    fltr = Q("match_phrase", kubernetes__pod_name=pod_name) & Q("match_phrase", kubernetes__namespace_name=namespace)
-    s = Search(index=current_index, using=api).query('bool').filter(fltr).sort("time")
-    res = s.execute()
-    full = Search(index=current_index, using=api).query('bool').filter(fltr).sort("time").extra(size=res.hits.total)
-    res = full.execute()
-    hits = list(res.hits)
-    print("Writing ${0} log lines for pod {1} ".format(len(hits), pod_name))
-    with open('./logs/' + pod_name + '.txt', 'w') as f:
-        for i in hits:
-            if term in i.log:
-                return True
-    return False
 
 
 def check_pod(podName):
