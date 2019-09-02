@@ -1316,3 +1316,53 @@ func TestSyncProtocol_BadResponse(t *testing.T) {
 	}
 
 }
+
+func genByte32() [32]byte {
+	var x [32]byte
+	rand.Read(x[:])
+
+	return x
+}
+
+var txid1 = types.TransactionId(genByte32())
+var txid2 = types.TransactionId(genByte32())
+var txid3 = types.TransactionId(genByte32())
+
+var one = types.CalcHash32([]byte("1"))
+var two = types.CalcHash32([]byte("2"))
+var three = types.CalcHash32([]byte("3"))
+
+var atx1 = types.AtxId{Hash32: one}
+var atx2 = types.AtxId{Hash32: two}
+var atx3 = types.AtxId{Hash32: three}
+
+func Test_validateUniqueTxAtx(t *testing.T) {
+	r := require.New(t)
+	b := &types.Block{}
+
+	// unique
+	b.TxIds = []types.TransactionId{txid1, txid2, txid3}
+	b.AtxIds = []types.AtxId{atx1, atx2, atx3}
+	r.Nil(validateUniqueTxAtx(b))
+
+	// dup txs
+	b.TxIds = []types.TransactionId{txid1, txid2, txid1}
+	b.AtxIds = []types.AtxId{atx1, atx2, atx3}
+	r.EqualError(validateUniqueTxAtx(b), errDupTx.Error())
+
+	// dup atxs
+	b.TxIds = []types.TransactionId{txid1, txid2, txid3}
+	b.AtxIds = []types.AtxId{atx1, atx2, atx1}
+	r.EqualError(validateUniqueTxAtx(b), errDupAtx.Error())
+}
+
+func TestSyncer_BlockSyntacticValidation(t *testing.T) {
+	r := require.New(t)
+	a, _ := SyncMockFactory(1, conf, t.Name(), memoryDB, newMemPoetDb)
+	s := a[0]
+	b := &types.Block{}
+	b.TxIds = []types.TransactionId{txid1, txid2, txid1}
+	b.AtxIds = []types.AtxId{atx1, atx2, atx3}
+	_, _, err := s.BlockSyntacticValidation(b)
+	r.EqualError(err, errDupTx.Error())
+}
