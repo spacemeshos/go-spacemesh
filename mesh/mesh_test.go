@@ -129,25 +129,25 @@ func TestLayers_AddBlock(t *testing.T) {
 }
 
 func TestLayers_AddLayer(t *testing.T) {
-	layers := getMesh("t2")
-	defer layers.Close()
-	id := types.LayerID(1)
-	block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), id, []byte("data"))
-	block2 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), id, []byte("data"))
-	block3 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), id, []byte("data"))
-	l, err := layers.GetLayer(id)
-	assert.True(t, err != nil, "error: ", err)
+	r := require.New(t)
 
-	err = layers.AddBlock(block1)
-	assert.NoError(t, err)
-	err = layers.AddBlock(block2)
-	assert.NoError(t, err)
-	err = layers.AddBlock(block3)
-	assert.NoError(t, err)
-	l, err = layers.GetLayer(id)
-	assert.NoError(t, err)
-	//assert.True(t, layers.VerifiedLayer() == 0, "wrong layer count")
-	assert.True(t, string(l.Blocks()[1].MiniBlock.Data) == "data", "wrong block data ")
+	msh := getMesh("t2")
+	defer msh.Close()
+
+	id := types.LayerID(1)
+
+	_, err := msh.GetLayer(id)
+	r.EqualError(err, "error getting layer 1 from database leveldb: not found")
+
+	err = msh.AddBlock(types.NewExistingBlock(types.BlockID(uuid.New().ID()), id, []byte("data")))
+	r.NoError(err)
+	err = msh.AddBlock(types.NewExistingBlock(types.BlockID(uuid.New().ID()), id, []byte("data")))
+	r.NoError(err)
+	err = msh.AddBlock(types.NewExistingBlock(types.BlockID(uuid.New().ID()), id, []byte("data")))
+	r.NoError(err)
+	l, err := msh.GetLayer(id)
+	r.NoError(err)
+	r.True(string(l.Blocks()[1].MiniBlock.Data) == "data", "wrong block data ")
 }
 
 func TestLayers_AddWrongLayer(t *testing.T) {
@@ -284,4 +284,56 @@ func TestMesh_AddBlockWithTxs_PushTransactions_UpdateMeshTxs(t *testing.T) {
 
 	txns = getTxns(r, msh.MeshDB, origin)
 	r.Empty(txns)
+}
+
+func TestMesh_ExtractUniqueOrderedTransactions(t *testing.T) {
+	r := require.New(t)
+
+	msh := getMesh("t2")
+	defer msh.Close()
+	layerID := types.LayerID(1)
+	origin := types.BytesToAddress([]byte("origin"))
+	tx1 := addTxToMesh(r, msh, origin, 2468)
+	tx2 := addTxToMesh(r, msh, origin, 2469)
+	tx3 := addTxToMesh(r, msh, origin, 2470)
+	tx4 := addTxToMesh(r, msh, origin, 2471)
+	tx5 := addTxToMesh(r, msh, origin, 2472)
+	addBlockWithTxs(r, msh, layerID, true, tx1, tx2)
+	addBlockWithTxs(r, msh, layerID, true, tx2, tx3, tx4)
+	addBlockWithTxs(r, msh, layerID, false, tx4, tx5)
+	addBlockWithTxs(r, msh, layerID, false, tx5)
+	l, err := msh.GetLayer(layerID)
+	r.NoError(err)
+
+	validBlocks, invalidBlocks := msh.ExtractUniqueOrderedTransactions(l)
+
+	r.ElementsMatch(toStateTxs(tx1, tx2, tx3, tx4), validBlocks)
+	r.ElementsMatch(toStateTxs(tx4, tx5), invalidBlocks)
+}
+
+func addTxToMesh(r *require.Assertions, msh *Mesh, origin types.Address, nonce uint64) *types.AddressableSignedTransaction {
+	tx1 := newTx(origin, nonce, 111)
+	err := msh.writeTransactions([]*types.AddressableSignedTransaction{tx1})
+	r.NoError(err)
+	return tx1
+}
+
+func addBlockWithTxs(r *require.Assertions, msh *Mesh, id types.LayerID, valid bool, txs ...*types.AddressableSignedTransaction) *types.Block {
+	blk := types.NewExistingBlock(types.BlockID(uuid.New().ID()), id, []byte("data"))
+	for _, tx := range txs {
+		blk.TxIds = append(blk.TxIds, types.GetTransactionId(tx.SerializableSignedTransaction))
+	}
+	err := msh.SaveContextualValidity(blk.Id, valid)
+	r.NoError(err)
+	err = msh.AddBlock(blk)
+	r.NoError(err)
+	return blk
+}
+
+func toStateTxs(txs ...*types.AddressableSignedTransaction) []*Transaction {
+	var res []*Transaction
+	for _, tx := range txs {
+		res = append(res, SerializableSignedTransaction2StateTransaction(tx))
+	}
+	return res
 }
