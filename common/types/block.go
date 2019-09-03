@@ -12,7 +12,7 @@ import (
 type BlockID uint64
 type TransactionId Hash32
 
-func (t TransactionId) ShortId() string {
+func (t TransactionId) ShortString() string {
 	return t.Hash32().ShortString()
 }
 
@@ -129,7 +129,7 @@ func (t SerializableSignedTransaction) Hash32() Hash32 {
 	return GetTransactionId(&t).Hash32()
 }
 
-func (t SerializableSignedTransaction) ShortId() string {
+func (t SerializableSignedTransaction) ShortString() string {
 	return GetTransactionId(&t).Hash32().ShortString()
 }
 
@@ -201,7 +201,7 @@ func (b BlockHeader) Hash32() Hash32 {
 	return b.Id.AsHash32()
 }
 
-func (b BlockHeader) ShortId() string {
+func (b BlockHeader) ShortString() string {
 	return b.Id.AsHash32().ShortString()
 }
 

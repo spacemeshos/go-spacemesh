@@ -203,7 +203,7 @@ func validateItemIds(ids []types.Hash32, items []Item) (bool, error) {
 	for _, tx := range items {
 		txid := tx.Hash32()
 		if _, ok := mp[txid]; !ok {
-			return false, errors.New(fmt.Sprintf("received item that was not requested %v type %v", tx.ShortId(), reflect.TypeOf(tx)))
+			return false, errors.New(fmt.Sprintf("received item that was not requested %v type %v", tx.ShortString(), reflect.TypeOf(tx)))
 		}
 	}
 	return true, nil

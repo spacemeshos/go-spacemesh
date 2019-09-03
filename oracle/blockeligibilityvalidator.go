@@ -61,7 +61,7 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 	}
 
 	if atxid != block.ATXID {
-		return false, errors.New(fmt.Sprintf("wrong associated atx got %v expected %v ", block.ATXID.ShortId(), atxid))
+		return false, errors.New(fmt.Sprintf("wrong associated atx got %v expected %v ", block.ATXID.ShortString(), atxid))
 	}
 
 	epochNumber := block.LayerIndex.GetEpoch(v.layersPerEpoch)
@@ -111,8 +111,8 @@ func (v BlockEligibilityValidator) getActiveSetSize(block *types.BlockHeader) (u
 	}
 	atx, err := v.activationDb.GetAtx(block.ATXID)
 	if err != nil {
-		v.log.Error("getting ATX failed: %v %v ep(%v)", err, block.ATXID.ShortId(), blockEpoch)
-		return 0, fmt.Errorf("getting ATX failed: %v %v ep(%v)", err, block.ATXID.ShortId(), blockEpoch)
+		v.log.Error("getting ATX failed: %v %v ep(%v)", err, block.ATXID.ShortString(), blockEpoch)
+		return 0, fmt.Errorf("getting ATX failed: %v %v ep(%v)", err, block.ATXID.ShortString(), blockEpoch)
 	}
 	// TODO: remove the following check, as it should be validated before calling BlockSignedAndEligible
 	if atxTargetEpoch := atx.PubLayerIdx.GetEpoch(v.layersPerEpoch) + 1; atxTargetEpoch != blockEpoch {

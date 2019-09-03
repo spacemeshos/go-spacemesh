@@ -171,7 +171,7 @@ func (bo *MinerBlockOracle) getLatestATXID() (types.AtxId, error) {
 		bo.log.With().Info("did not find ATX IDs for node", log.NodeId(bo.nodeID.ShortString()), log.Err(err))
 		return types.AtxId{}, err
 	}
-	bo.log.With().Info("latest atx id found", log.AtxId(latestATXID.ShortId()))
+	bo.log.With().Info("latest atx id found", log.AtxId(latestATXID.ShortString()))
 	return latestATXID, err
 }
 

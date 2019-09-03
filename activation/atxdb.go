@@ -43,22 +43,22 @@ func (db *ActivationDb) ProcessAtx(atx *types.ActivationTx) {
 		return
 	}
 	epoch := atx.PubLayerIdx.GetEpoch(db.LayersPerEpoch)
-	db.log.With().Info("processing atx", log.AtxId(atx.ShortId()), log.EpochId(uint64(epoch)),
+	db.log.With().Info("processing atx", log.AtxId(atx.ShortString()), log.EpochId(uint64(epoch)),
 		log.NodeId(atx.NodeId.Key[:5]), log.LayerId(uint64(atx.PubLayerIdx)))
 	err := db.ContextuallyValidateAtx(&atx.ActivationTxHeader)
 	if err != nil {
-		db.log.With().Error("ATX failed contextual validation", log.AtxId(atx.ShortId()), log.Err(err))
+		db.log.With().Error("ATX failed contextual validation", log.AtxId(atx.ShortString()), log.Err(err))
 	} else {
-		db.log.With().Info("ATX is valid", log.AtxId(atx.ShortId()))
+		db.log.With().Info("ATX is valid", log.AtxId(atx.ShortString()))
 	}
 	err = db.StoreAtx(epoch, atx)
 	if err != nil {
-		db.log.With().Error("cannot store atx", log.AtxId(atx.ShortId()), log.Err(err))
+		db.log.With().Error("cannot store atx", log.AtxId(atx.ShortString()), log.Err(err))
 	}
 
 	err = db.StoreNodeIdentity(atx.NodeId)
 	if err != nil {
-		db.log.With().Error("cannot store node identity", log.NodeId(atx.NodeId.ShortString()), log.AtxId(atx.ShortId()), log.Err(err))
+		db.log.With().Error("cannot store node identity", log.NodeId(atx.NodeId.ShortString()), log.AtxId(atx.ShortString()), log.Err(err))
 	}
 }
 
@@ -75,14 +75,14 @@ func (db *ActivationDb) createTraversalActiveSetCounterFunc(countedAtxs map[stri
 		for _, id := range b.AtxIds {
 			atx, err := db.GetAtx(id)
 			if err != nil {
-				log.Panic("error fetching atx %v from database -- inconsistent state", id.ShortId()) // TODO: handle inconsistent state
-				return false, fmt.Errorf("error fetching atx %v from database -- inconsistent state", id.ShortId())
+				log.Panic("error fetching atx %v from database -- inconsistent state", id.ShortString()) // TODO: handle inconsistent state
+				return false, fmt.Errorf("error fetching atx %v from database -- inconsistent state", id.ShortString())
 			}
 
 			// make sure the target epoch is our epoch
 			if atx.TargetEpoch(layersPerEpoch) != epoch {
 				db.log.With().Debug("atx found, but targeting epoch doesn't match publication epoch",
-					log.String("atx_id", atx.ShortId()),
+					log.String("atx_id", atx.ShortString()),
 					log.Uint64("atx_target_epoch", uint64(atx.TargetEpoch(layersPerEpoch))),
 					log.Uint64("actual_epoch", uint64(epoch)))
 				continue
@@ -91,7 +91,7 @@ func (db *ActivationDb) createTraversalActiveSetCounterFunc(countedAtxs map[stri
 			// ignore atx from nodes in penalty
 			if _, exist := penalties[atx.NodeId.Key]; exist {
 				db.log.With().Debug("ignoring atx from node in penalty",
-					log.String("node_id", atx.NodeId.Key), log.String("atx_id", atx.ShortId()))
+					log.String("node_id", atx.NodeId.Key), log.String("atx_id", atx.ShortString()))
 				continue
 			}
 
@@ -99,7 +99,7 @@ func (db *ActivationDb) createTraversalActiveSetCounterFunc(countedAtxs map[stri
 
 				if prevId != id { // different atx for same epoch
 					db.log.With().Error("Encountered second atx for the same miner on the same epoch",
-						log.String("first_atx", prevId.ShortId()), log.String("second_atx", id.ShortId()))
+						log.String("first_atx", prevId.ShortString()), log.String("second_atx", id.ShortString()))
 
 					penalties[atx.NodeId.Key] = struct{}{} // mark node in penalty
 					delete(countedAtxs, atx.NodeId.Key)    // remove the penalized node from counted
@@ -194,7 +194,7 @@ func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error 
 		}
 		if prevATX.NodeId.Key != atx.NodeId.Key {
 			return fmt.Errorf("previous ATX belongs to different miner. atx.Id: %v, atx.NodeId: %v, prevAtx.NodeId: %v",
-				atx.ShortId(), atx.NodeId.Key, prevATX.NodeId.Key)
+				atx.ShortString(), atx.NodeId.Key, prevATX.NodeId.Key)
 		}
 		if prevATX.Sequence+1 != atx.Sequence {
 			return fmt.Errorf("sequence number is not one more than prev sequence number")
@@ -248,7 +248,7 @@ func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error 
 
 	activeSet, err := db.CalcActiveSetFromView(atx.View, atx.PubLayerIdx.GetEpoch(db.LayersPerEpoch))
 	if err != nil && !atx.PubLayerIdx.GetEpoch(db.LayersPerEpoch).IsGenesis() {
-		return fmt.Errorf("could not calculate active set for ATX %v", atx.ShortId())
+		return fmt.Errorf("could not calculate active set for ATX %v", atx.ShortString())
 	}
 
 	if atx.ActiveSetSize != activeSet {
@@ -259,7 +259,7 @@ func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error 
 	if err != nil {
 		return fmt.Errorf("cannot get NIPST Challenge hash: %v", err)
 	}
-	db.log.With().Info("Validated NIPST", log.String("challenge_hash", hash.ShortString()), log.AtxId(atx.ShortId()))
+	db.log.With().Info("Validated NIPST", log.String("challenge_hash", hash.ShortString()), log.AtxId(atx.ShortString()))
 
 	if err = db.nipstValidator.Validate(atx.Nipst, *hash); err != nil {
 		return fmt.Errorf("NIPST not valid: %v", err)
@@ -275,7 +275,7 @@ func (db *ActivationDb) ContextuallyValidateAtx(atx *types.ActivationTxHeader) e
 		lastAtx, err := db.GetNodeLastAtxId(atx.NodeId)
 		if err != nil {
 			db.log.With().Error("could not fetch node last ATX",
-				log.AtxId(atx.ShortId()), log.NodeId(atx.NodeId.ShortString()), log.Err(err))
+				log.AtxId(atx.ShortString()), log.NodeId(atx.NodeId.ShortString()), log.Err(err))
 			return fmt.Errorf("could not fetch node last ATX: %v", err)
 		}
 		// last atx is not the one referenced
@@ -290,7 +290,7 @@ func (db *ActivationDb) ContextuallyValidateAtx(atx *types.ActivationTxHeader) e
 		}
 		if err == nil { // we found an ATX for this node ID, although it reported no prevATX -- this is invalid
 			return fmt.Errorf("no prevATX reported, but other ATX with same nodeID (%v) found: %v",
-				atx.NodeId.ShortString(), lastAtx.ShortId())
+				atx.NodeId.ShortString(), lastAtx.ShortString())
 		}
 	}
 
@@ -324,7 +324,7 @@ func (db *ActivationDb) StoreAtx(ech types.EpochId, atx *types.ActivationTx) err
 	if err != nil {
 		return err
 	}
-	db.log.Debug("finished storing atx %v, in epoch %v", atx.ShortId(), ech)
+	db.log.Debug("finished storing atx %v, in epoch %v", atx.ShortString(), ech)
 
 	return nil
 }
@@ -497,27 +497,27 @@ func (db *ActivationDb) IsIdentityActive(edId string, layer types.LayerID) (*typ
 	}
 	atx, err := db.GetAtx(atxId)
 	if err != nil {
-		db.log.With().Error("IsIdentityActive erred while getting atx", log.AtxId(atxId.ShortId()), log.Err(err))
+		db.log.With().Error("IsIdentityActive erred while getting atx", log.AtxId(atxId.ShortString()), log.Err(err))
 		return nil, false, *types.EmptyAtxId, nil
 	}
 
 	lastAtxTargetEpoch := atx.TargetEpoch(db.LayersPerEpoch)
 	if lastAtxTargetEpoch < epoch {
 		db.log.With().Info("IsIdentityActive latest atx is too old", log.Uint64("expected", uint64(epoch)),
-			log.Uint64("actual", uint64(lastAtxTargetEpoch)), log.AtxId(atx.ShortId()))
+			log.Uint64("actual", uint64(lastAtxTargetEpoch)), log.AtxId(atx.ShortString()))
 		return nil, false, *types.EmptyAtxId, nil
 	}
 
 	if lastAtxTargetEpoch > epoch {
 		// This could happen if we already published the ATX for the next epoch, so we check the previous one as well
 		if atx.PrevATXId == *types.EmptyAtxId {
-			db.log.With().Info("IsIdentityActive latest atx is too new but no previous atx", log.AtxId(atxId.ShortId()))
+			db.log.With().Info("IsIdentityActive latest atx is too new but no previous atx", log.AtxId(atxId.ShortString()))
 			return nil, false, *types.EmptyAtxId, nil
 		}
 		prevAtxId := atx.PrevATXId
 		atx, err = db.GetAtx(prevAtxId)
 		if err != nil {
-			db.log.With().Error("IsIdentityActive erred while getting atx for second newest", log.AtxId(prevAtxId.ShortId()), log.Err(err))
+			db.log.With().Error("IsIdentityActive erred while getting atx for second newest", log.AtxId(prevAtxId.ShortString()), log.Err(err))
 			return nil, false, *types.EmptyAtxId, nil
 		}
 	}

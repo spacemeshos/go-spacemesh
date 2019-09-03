@@ -643,10 +643,10 @@ func (s *Syncer) atxCheckLocal(atxIds []types.Hash32) (map[types.Hash32]Item, ma
 		id := types.AtxId(t)
 		if x, err := s.atxpool.Get(id); err == nil {
 			atx := x
-			s.Debug("found atx, %v in atx pool", id.ShortId())
+			s.Debug("found atx, %v in atx pool", id.ShortString())
 			unprocessedItems[id.Hash32()] = &atx
 		} else {
-			s.Debug("atx %v not in atx pool", id.ShortId())
+			s.Debug("atx %v not in atx pool", id.ShortString())
 			missingInPool = append(missingInPool, id)
 		}
 	}

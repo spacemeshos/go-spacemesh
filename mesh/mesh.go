@@ -302,7 +302,7 @@ func (m *Mesh) AddBlock(blk *types.Block) error {
 func (m *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.AddressableSignedTransaction, atxs []*types.ActivationTx) error {
 	m.Debug("add block %d", blk.ID())
 
-	events.Publish(events.NewBlock{Id: uint64(blk.ID()), Atx: blk.ATXID.ShortId(), Layer: uint64(blk.LayerIndex)})
+	events.Publish(events.NewBlock{Id: uint64(blk.ID()), Atx: blk.ATXID.ShortString(), Layer: uint64(blk.LayerIndex)})
 	for _, t := range atxs {
 		//todo this should return an error
 		m.AtxDB.ProcessAtx(t)
@@ -426,7 +426,7 @@ func (m *Mesh) AccumulateRewards(rewardLayer types.LayerID, params Config) {
 	for _, bl := range l.Blocks() {
 		atx, err := m.AtxDB.GetAtx(bl.ATXID)
 		if err != nil {
-			m.With().Warning("Atx from block not found in db", log.Err(err), log.BlockId(uint64(bl.ID())), log.AtxId(bl.ATXID.ShortId()))
+			m.With().Warning("Atx from block not found in db", log.Err(err), log.BlockId(uint64(bl.ID())), log.AtxId(bl.ATXID.ShortString()))
 			continue
 		}
 		ids = append(ids, atx.Coinbase)
@@ -478,7 +478,7 @@ func (m *Mesh) GetATXs(atxIds []types.AtxId) (map[types.AtxId]*types.ActivationT
 	for _, id := range atxIds {
 		t, err := m.GetFullAtx(id)
 		if err != nil {
-			m.Warning("could not get atx %v  from database, %v", id.ShortId(), err)
+			m.Warning("could not get atx %v  from database, %v", id.ShortString(), err)
 			mIds = append(mIds, id)
 		} else {
 			atxs[t.Id()] = t
