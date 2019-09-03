@@ -7,6 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/pending_txs"
 	"github.com/spacemeshos/sha256-simd"
 	"sort"
+	"sync"
 )
 
 type innerPool interface {
@@ -18,7 +19,8 @@ type innerPool interface {
 
 type TxPoolWithAccounts struct {
 	innerPool
-	accounts map[types.Address]*pending_txs.AccountPendingTxs
+	accounts      map[types.Address]*pending_txs.AccountPendingTxs
+	accountsMutex sync.RWMutex
 }
 
 func NewTxPoolWithAccounts() *TxPoolWithAccounts {
@@ -63,19 +65,28 @@ func getRandIdxs(numOfTxs, spaceSize int, seed []byte) map[uint64]struct{} {
 }
 
 func (t *TxPoolWithAccounts) Put(id types.TransactionId, item *types.AddressableSignedTransaction) {
+	t.accountsMutex.Lock()
 	t.getOrCreate(item.Address).Add([]types.TinyTx{types.AddressableTxToTiny(item)}, 0)
+	t.accountsMutex.Unlock()
 	t.innerPool.Put(id, item)
 }
 
 func (t *TxPoolWithAccounts) Invalidate(id types.TransactionId) {
+	t.accountsMutex.Lock()
 	if tx, err := t.innerPool.Get(id); err == nil {
 		t.accounts[tx.Address].RemoveNonce(tx.AccountNonce)
+		if t.accounts[tx.Address].IsEmpty() {
+			delete(t.accounts, tx.Address)
+		}
 	}
+	t.accountsMutex.Unlock()
 	t.innerPool.Invalidate(id)
 }
 
 func (t *TxPoolWithAccounts) GetProjection(addr types.Address, prevNonce, prevBalance uint64) (nonce, balance uint64) {
+	t.accountsMutex.RLock()
 	account, found := t.accounts[addr]
+	t.accountsMutex.RUnlock()
 	if !found {
 		return prevNonce, prevBalance
 	}

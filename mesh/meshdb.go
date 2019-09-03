@@ -27,6 +27,7 @@ type MeshDB struct {
 	contextualValidity database.DB //map blockId to contextualValidation state of block
 	patterns           database.DB //map blockId to contextualValidation state of block
 	meshTxs            database.Database
+	meshTxsMutex       sync.Mutex
 	orphanBlocks       map[types.LayerID]map[types.BlockID]struct{}
 	layerMutex         map[types.LayerID]*layerMutex
 	lhMutex            sync.Mutex
@@ -360,29 +361,37 @@ func txToTiny(tx *Transaction) types.TinyTx {
 }
 
 func (m *MeshDB) addToMeshTxs(txs []*types.AddressableSignedTransaction, layer types.LayerID) error {
-	// TODO: lock
 	tinyTxs := make([]types.TinyTx, 0, len(txs))
 	for _, tx := range txs {
 		tinyTxs = append(tinyTxs, types.AddressableTxToTiny(tx))
 	}
 	groupedTxs := groupByOrigin(tinyTxs)
 
-	for account, accountTxs := range groupedTxs {
-		// TODO: instead of storing a list, use LevelDB's prefixed keys and then iterate all relevant keys
-		pending, err := m.getAccountPendingTxs(account)
-		if err != nil {
-			return err
-		}
-		pending.Add(accountTxs, layer)
-		if err := m.storeAccountPendingTxs(account, pending); err != nil {
+	for addr, accountTxs := range groupedTxs {
+		if err := m.addToAccountTxs(addr, accountTxs, layer); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
+func (m *MeshDB) addToAccountTxs(addr types.Address, accountTxs []types.TinyTx, layer types.LayerID) error {
+	m.meshTxsMutex.Lock()
+	defer m.meshTxsMutex.Unlock()
+
+	// TODO: instead of storing a list, use LevelDB's prefixed keys and then iterate all relevant keys
+	pending, err := m.getAccountPendingTxs(addr)
+	if err != nil {
+		return err
+	}
+	pending.Add(accountTxs, layer)
+	if err := m.storeAccountPendingTxs(addr, pending); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (m *MeshDB) removeFromMeshTxs(accepted, rejected []*Transaction, layer types.LayerID) error {
-	// TODO: lock
 	gAccepted := txsToTinyGrouped(accepted)
 	gRejected := txsToTinyGrouped(rejected)
 	accounts := make(map[types.Address]struct{})
@@ -394,15 +403,25 @@ func (m *MeshDB) removeFromMeshTxs(accepted, rejected []*Transaction, layer type
 	}
 
 	for account := range accounts {
-		// TODO: instead of storing a list, use LevelDB's prefixed keys and then iterate all relevant keys
-		pending, err := m.getAccountPendingTxs(account)
-		if err != nil {
+		if err := m.removeFromAccountTxs(account, gAccepted, gRejected, layer); err != nil {
 			return err
 		}
-		pending.Remove(gAccepted[account], gRejected[account], layer)
-		if err := m.storeAccountPendingTxs(account, pending); err != nil {
-			return err
-		}
+	}
+	return nil
+}
+
+func (m *MeshDB) removeFromAccountTxs(account types.Address, gAccepted map[types.Address][]types.TinyTx, gRejected map[types.Address][]types.TinyTx, layer types.LayerID) error {
+	m.meshTxsMutex.Lock()
+	defer m.meshTxsMutex.Unlock()
+
+	// TODO: instead of storing a list, use LevelDB's prefixed keys and then iterate all relevant keys
+	pending, err := m.getAccountPendingTxs(account)
+	if err != nil {
+		return err
+	}
+	pending.Remove(gAccepted[account], gRejected[account], layer)
+	if err := m.storeAccountPendingTxs(account, pending); err != nil {
+		return err
 	}
 	return nil
 }
@@ -430,10 +449,10 @@ func (m *MeshDB) storeAccountPendingTxs(account types.Address, pending *pending_
 	return nil
 }
 
-func (m *MeshDB) getAccountPendingTxs(account types.Address) (*pending_txs.AccountPendingTxs, error) {
-	accountTxsBytes, err := m.meshTxs.Get(account.Bytes())
+func (m *MeshDB) getAccountPendingTxs(addr types.Address) (*pending_txs.AccountPendingTxs, error) {
+	accountTxsBytes, err := m.meshTxs.Get(addr.Bytes())
 	if err != nil && err != database.ErrNotFound {
-		return nil, fmt.Errorf("failed to get mesh txs for account %s", account.Short())
+		return nil, fmt.Errorf("failed to get mesh txs for account %s", addr.Short())
 	}
 	if err == database.ErrNotFound {
 		return pending_txs.NewAccountPendingTxs(), nil
