@@ -186,7 +186,7 @@ func (n *Net) createConnection(address string, remotePub p2pcrypto.PublicKey, se
 	}
 
 	n.logger.Debug("Connected to %s...", address)
-	return newConnection(netConn, n, remotePub, session, n.logger), nil
+	return newConnection(netConn, n, remotePub, session, n.config.ResponseTimeout, n.logger), nil
 }
 
 func (n *Net) createSecuredConnection(address string, remotePubkey p2pcrypto.PublicKey, timeOut time.Duration,
@@ -289,7 +289,7 @@ func (n *Net) accept(listen net.Listener) {
 		}
 
 		n.logger.Debug("Got new connection... Remote Address: %s", netConn.RemoteAddr())
-		c := newConnection(netConn, n, nil, nil, n.logger)
+		c := newConnection(netConn, n, nil, nil, n.config.ResponseTimeout, n.logger)
 		go func(con Connection) {
 			defer func() { pending <- struct{}{} }()
 			err := c.setupIncoming(n.config.SessionTimeout)

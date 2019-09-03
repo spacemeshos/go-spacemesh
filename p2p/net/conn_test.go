@@ -17,7 +17,7 @@ func TestSendReceiveMessage(t *testing.T) {
 	netw := NewNetworkMock()
 	rwcam := NewReadWriteCloseAddresserMock()
 	rPub := p2pcrypto.NewRandomPubkey()
-	conn := newConnection(rwcam, netw, rPub, &networkSessionImpl{}, netw.logger)
+	conn := newConnection(rwcam, netw, rPub, &networkSessionImpl{}, time.Second, netw.logger)
 	go conn.beginEventProcessing()
 	msg := "hello"
 	err := conn.Send([]byte(msg))
@@ -33,7 +33,7 @@ func TestReceiveError(t *testing.T) {
 	netw := NewNetworkMock()
 	rwcam := NewReadWriteCloseAddresserMock()
 	rPub := p2pcrypto.NewRandomPubkey()
-	conn := newConnection(rwcam, netw, rPub, &networkSessionImpl{}, netw.logger)
+	conn := newConnection(rwcam, netw, rPub, &networkSessionImpl{}, time.Second, netw.logger)
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -53,7 +53,7 @@ func TestSendError(t *testing.T) {
 	netw := NewNetworkMock()
 	rwcam := NewReadWriteCloseAddresserMock()
 	rPub := p2pcrypto.NewRandomPubkey()
-	conn := newConnection(rwcam, netw, rPub, &networkSessionImpl{}, netw.logger)
+	conn := newConnection(rwcam, netw, rPub, &networkSessionImpl{}, time.Second, netw.logger)
 	go conn.beginEventProcessing()
 
 	rwcam.SetWriteResult(fmt.Errorf("fail"))
@@ -67,7 +67,7 @@ func TestPreSessionMessage(t *testing.T) {
 	netw := NewNetworkMock()
 	rwcam := NewReadWriteCloseAddresserMock()
 	rPub := p2pcrypto.NewRandomPubkey()
-	conn := newConnection(rwcam, netw, rPub, nil, netw.logger)
+	conn := newConnection(rwcam, netw, rPub, nil, time.Second, netw.logger)
 	rwcam.SetReadResult([]byte{3, 1, 1, 1}, nil)
 	err := conn.setupIncoming(time.Millisecond)
 	require.NoError(t, err)
@@ -79,7 +79,7 @@ func TestPreSessionMessageAfterSession(t *testing.T) {
 	netw := NewNetworkMock()
 	rwcam := NewReadWriteCloseAddresserMock()
 	rPub := p2pcrypto.NewRandomPubkey()
-	conn := newConnection(rwcam, netw, rPub, nil, netw.logger)
+	conn := newConnection(rwcam, netw, rPub, nil, time.Second, netw.logger)
 	rwcam.SetReadResult([]byte{3, 1, 1, 1}, nil)
 	go conn.beginEventProcessing()
 	time.Sleep(50 * time.Millisecond)
@@ -90,7 +90,7 @@ func TestPreSessionError(t *testing.T) {
 	netw := NewNetworkMock()
 	rwcam := NewReadWriteCloseAddresserMock()
 	rPub := p2pcrypto.NewRandomPubkey()
-	conn := newConnection(rwcam, netw, rPub, nil, netw.logger)
+	conn := newConnection(rwcam, netw, rPub, nil, time.Second, netw.logger)
 	netw.SetPreSessionResult(fmt.Errorf("fail"))
 	rwcam.SetReadResult(append([]byte{1}, []byte("0")...), nil)
 	err := conn.setupIncoming(time.Second)
@@ -101,7 +101,7 @@ func TestErrClose(t *testing.T) {
 	netw := NewNetworkMock()
 	rwcam := NewReadWriteCloseAddresserMock()
 	rPub := p2pcrypto.NewRandomPubkey()
-	conn := newConnection(rwcam, netw, rPub, &networkSessionImpl{}, netw.logger)
+	conn := newConnection(rwcam, netw, rPub, &networkSessionImpl{}, time.Second, netw.logger)
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -119,7 +119,7 @@ func TestClose(t *testing.T) {
 	netw := NewNetworkMock()
 	rwcam := NewReadWriteCloseAddresserMock()
 	rPub := p2pcrypto.NewRandomPubkey()
-	conn := newConnection(rwcam, netw, rPub, &networkSessionImpl{}, netw.logger)
+	conn := newConnection(rwcam, netw, rPub, &networkSessionImpl{}, time.Second, netw.logger)
 
 	go conn.beginEventProcessing()
 	conn.Close()
@@ -131,7 +131,7 @@ func TestDoubleClose(t *testing.T) {
 	netw := NewNetworkMock()
 	rwcam := NewReadWriteCloseAddresserMock()
 	rPub := p2pcrypto.NewRandomPubkey()
-	conn := newConnection(rwcam, netw, rPub, &networkSessionImpl{}, netw.logger)
+	conn := newConnection(rwcam, netw, rPub, &networkSessionImpl{}, time.Second, netw.logger)
 
 	go conn.beginEventProcessing()
 	conn.Close()
@@ -148,7 +148,7 @@ func TestGettersToBoostCoverage(t *testing.T) {
 	addr := net.TCPAddr{net.ParseIP("1.1.1.1"), 555, "ipv4"}
 	rwcam.setRemoteAddrResult(&addr)
 	rPub := p2pcrypto.NewRandomPubkey()
-	conn := newConnection(rwcam, netw, rPub, &networkSessionImpl{}, netw.logger)
+	conn := newConnection(rwcam, netw, rPub, &networkSessionImpl{}, time.Second, netw.logger)
 	assert.Equal(t, 36, len(conn.ID()))
 	assert.Equal(t, conn.ID(), conn.String())
 	rPub = p2pcrypto.NewRandomPubkey()

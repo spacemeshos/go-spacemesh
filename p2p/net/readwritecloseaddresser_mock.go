@@ -3,6 +3,7 @@ package net
 import (
 	"net"
 	"sync"
+	"time"
 )
 
 // ReadWriteCloseAddresserMock is a ninja robot
@@ -42,6 +43,14 @@ func (rwcam *ReadWriteCloseAddresserMock) SetReadResult(p []byte, err error) {
 // ReadCount is this
 func (rwcam *ReadWriteCloseAddresserMock) ReadCount() int {
 	return rwcam.readCnt
+}
+
+func (rwcam *ReadWriteCloseAddresserMock) SetReadDeadline(t time.Time) error {
+	return nil
+}
+
+func (rwcam *ReadWriteCloseAddresserMock) SetWriteDeadline(t time.Time) error {
+	return nil
 }
 
 // Read is this

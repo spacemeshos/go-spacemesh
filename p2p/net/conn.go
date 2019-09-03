@@ -4,7 +4,6 @@ import (
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/delimited"
-	"github.com/spacemeshos/go-spacemesh/p2p/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"time"
 
@@ -61,14 +60,14 @@ type FormattedConnection struct {
 	remoteAddr net.Addr
 	networker  networker // network context
 	session    NetworkSession
-
-	r formattedReader
-
-	wmtx sync.Mutex
-	w    formattedWriter
-
-	closed bool
-	close  io.Closer
+	deadline   time.Duration
+	timeout    time.Duration
+	r          formattedReader
+	wmtx       sync.Mutex
+	w          formattedWriter
+	closed     bool
+	deadliner  deadliner
+	close      io.Closer
 }
 
 type networker interface {
@@ -81,7 +80,13 @@ type networker interface {
 
 type readWriteCloseAddresser interface {
 	io.ReadWriteCloser
+	deadliner
 	RemoteAddr() net.Addr
+}
+
+type deadliner interface {
+	SetReadDeadline(t time.Time) error
+	SetWriteDeadline(t time.Time) error
 }
 
 type formattedReader interface {
@@ -94,7 +99,7 @@ type formattedWriter interface {
 
 // Create a new connection wrapping a net.Conn with a provided connection manager
 func newConnection(conn readWriteCloseAddresser, netw networker,
-	remotePub p2pcrypto.PublicKey, session NetworkSession, log log.Log) *FormattedConnection {
+	remotePub p2pcrypto.PublicKey, session NetworkSession, deadline time.Duration, log log.Log) *FormattedConnection {
 
 	// todo parametrize channel size - hard-coded for now
 	connection := &FormattedConnection{
@@ -106,6 +111,8 @@ func newConnection(conn readWriteCloseAddresser, netw networker,
 		r:          delimited.NewReader(conn),
 		w:          delimited.NewWriter(conn),
 		close:      conn,
+		deadline:   deadline,
+		deadliner:  conn,
 		networker:  netw,
 		session:    session,
 	}
@@ -157,12 +164,16 @@ func (c *FormattedConnection) publish(message []byte) {
 // Concurrency: can be called from any go routine
 func (c *FormattedConnection) Send(m []byte) error {
 	c.wmtx.Lock()
+	c.deadliner.SetReadDeadline(time.Now().Add(c.deadline))
+	if c.closed {
+		c.wmtx.Unlock()
+		return fmt.Errorf("connection was closed")
+	}
 	_, err := c.w.WriteRecord(m)
 	c.wmtx.Unlock()
 	if err != nil {
 		return err
 	}
-	metrics.PeerRecv.With(metrics.PeerIdLabel, c.remotePub.String()).Add(float64(len(m)))
 	return nil
 }
 
@@ -241,6 +252,7 @@ func (c *FormattedConnection) beginEventProcessing() {
 	var err error
 	var buf []byte
 	for {
+		c.deadliner.SetReadDeadline(time.Now().Add(c.deadline))
 		buf, err = c.r.Next()
 		if err != nil {
 			break
