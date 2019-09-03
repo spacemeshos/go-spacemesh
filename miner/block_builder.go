@@ -84,7 +84,7 @@ func NewBlockBuilder(minerID types.NodeId, sgn Signer, net p2p.Service,
 	txValidator TxValidator,
 	atxValidator AtxValidator,
 	syncer Syncer,
-	selectCount int,
+	atxsPerBlock int,
 	lg log.Log) BlockBuilder {
 
 	seed := binary.BigEndian.Uint64(md5.New().Sum([]byte(minerID.Key)))
@@ -111,7 +111,7 @@ func NewBlockBuilder(minerID types.NodeId, sgn Signer, net p2p.Service,
 		atxValidator:     atxValidator,
 		syncer:           syncer,
 		started:          false,
-		atxsPerBlock:     selectCount,
+		atxsPerBlock:     atxsPerBlock,
 	}
 
 }

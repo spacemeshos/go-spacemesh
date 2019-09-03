@@ -204,16 +204,15 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool A
 			return errTooManyAtxs
 		}
 
-		// validate unique tx atx
-		if err := validateUniqueTxAtx(block); err != nil {
-			return err
-		}
-
 		// block eligibility
 		if eligible, err := bv.BlockSignedAndEligible(block); err != nil || !eligible {
 			return fmt.Errorf("block eligibiliy check failed - err %v", err)
 		}
 
+		// validate unique tx atx
+		if err := validateUniqueTxAtx(block); err != nil {
+			return err
+		}
 		return nil
 	}
 
