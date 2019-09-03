@@ -21,6 +21,8 @@ import (
 	"time"
 )
 
+const atxLimit = 100
+
 type PeersMock struct {
 	getPeers func() []p2p.Peer
 }

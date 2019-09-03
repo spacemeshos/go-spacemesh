@@ -24,24 +24,23 @@ type validationQueue struct {
 	Configuration
 	ValidationInfra
 	workerInfra   WorkerInfra
-	queue         chan []types.Hash32
+	blockFastValidator blockFastValidator
+	queue              chan []types.Hash32
 	mu            sync.Mutex
-	callbacks     map[interface{}]func(res bool) error
-	depMap        map[interface{}]map[types.BlockID]struct{}
-	reverseDepMap map[types.BlockID][]interface{}
-	visited       map[types.BlockID]struct{}
+	callbacks          map[interface{}]func(res bool) error
+	depMap             map[interface{}]map[types.BlockID]struct{}
+	reverseDepMap      map[types.BlockID][]interface{}
+	visited            map[types.BlockID]struct{}
 }
 
-func NewValidationQueue(srvr WorkerInfra, conf Configuration, msh ValidationInfra, lg log.Log) *validationQueue {
+func NewValidationQueue(lg log.Log) *validationQueue {
 	vq := &validationQueue{
-		Configuration:   conf,
-		workerInfra:     srvr,
-		queue:           make(chan []types.Hash32, 2*conf.LayerSize),
-		visited:         make(map[types.BlockID]struct{}),
-		depMap:          make(map[interface{}]map[types.BlockID]struct{}),
-		reverseDepMap:   make(map[types.BlockID][]interface{}),
-		callbacks:       make(map[interface{}]func(res bool) error),
-		ValidationInfra: msh,
+		queue:         make(chan types.BlockID, 100),
+		visited:       make(map[types.BlockID]struct{}),
+		depMap:        make(map[types.BlockID]map[types.BlockID]struct{}),
+		reverseDepMap: make(map[types.BlockID][]types.BlockID),
+		callbacks:     make(map[types.BlockID]func() error),
+		Log:           lg,
 	}
 
 	go vq.work()
@@ -97,20 +96,13 @@ func (vq *validationQueue) work() {
 		vq.Info("fetched  %v", bid)
 		vq.visited[bid] = struct{}{}
 
-		// validate unique tx atx
-		if err := validateUniqueTxAtx(&block); err != nil {
+		if err := vq.blockFastValidator(&block); err != nil {
+			vq.With().Error("ValidationQueue: block validation failed", log.BlockId(uint64(block.ID())), log.Err(err))
 			vq.updateDependencies(bid, false)
 			continue
 		}
 
-		// validate block eligibility
-		if eligable, err := vq.BlockSignedAndEligible(&block); err != nil || !eligable {
-			vq.updateDependencies(bid, false)
-			vq.Error(fmt.Sprintf("Block %v eligiblety check failed %v", bjb.ids, err))
-			continue
-		}
-
-		vq.handleBlockDependencies(&block) //todo better deadlock solution
+		vq.callbacks[block.ID()] = vq.finishBlockCallback(s, block)
 
 		vq.Info("next block")
 	}
