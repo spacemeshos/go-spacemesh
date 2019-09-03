@@ -144,6 +144,7 @@ func (o *Oracle) activeSetSize(layer types.LayerID) (uint32, error) {
 			return uint32(o.genesisActiveSetSize), nil
 		}
 
+		o.With().Error("activeSetSize erred while calling actives func", log.Err(err))
 		return 0, err
 	}
 
@@ -234,6 +235,12 @@ func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
 	mp, err := o.blocksProvider.ContextuallyValidBlock(sl)
 	if err != nil {
 		return nil, err
+	}
+
+	// no contextually valid blocks
+	if len(mp) == 0 {
+		o.Error("Could not calculate hare active set size: no contextually valid blocks")
+		return nil, errors.New("no contextually valid blocks")
 	}
 
 	activeMap, err := o.getActiveSet(safeEp, mp)
