@@ -417,11 +417,11 @@ var (
 )
 
 var (
-	atx1 = types.AtxId{Hash32: one}
-	atx2 = types.AtxId{Hash32: two}
-	atx3 = types.AtxId{Hash32: three}
-	atx4 = types.AtxId{Hash32: four}
-	atx5 = types.AtxId{Hash32: five}
+	atx1 = types.AtxId(one)
+	atx2 = types.AtxId(two)
+	atx3 = types.AtxId(three)
+	atx4 = types.AtxId(four)
+	atx5 = types.AtxId(five)
 )
 
 func Test_selectAtxs(t *testing.T) {
