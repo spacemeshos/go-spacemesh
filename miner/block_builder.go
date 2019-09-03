@@ -237,7 +237,7 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 	}
 
 	t.Log.Event().Info(fmt.Sprintf("I've created a block in layer %v. id: %v, num of transactions: %v, votes: %d, viewEdges: %d atx %v, atxs:%v",
-		b.LayerIndex, b.ID(), len(b.TxIds), len(b.BlockVotes), len(b.ViewEdges), b.ATXID.ShortString(), len(b.AtxIds)))
+		b.LayerIndex, b.ID(), len(b.TxIds), len(b.BlockVotes), len(b.ViewEdges), b.ATXID.ShortId(), len(b.AtxIds)))
 
 	blockBytes, err := types.InterfaceToBytes(b)
 	if err != nil {
@@ -326,7 +326,7 @@ func (t *BlockBuilder) handleGossipAtx(data service.GossipMessage) {
 		t.Error("cannot parse incoming ATX")
 		return
 	}
-	t.With().Info("got new ATX", log.AtxId(atx.ShortString()))
+	t.With().Info("got new ATX", log.AtxId(atx.ShortId()))
 
 	//todo fetch from neighbour
 	if atx.Nipst == nil {
@@ -336,22 +336,22 @@ func (t *BlockBuilder) handleGossipAtx(data service.GossipMessage) {
 
 	if err := t.syncer.FetchPoetProof(atx.GetPoetProofRef()); err != nil {
 		t.Warning("received ATX (%v) with syntactically invalid or missing PoET proof (%x): %v",
-			atx.ShortString(), atx.GetShortPoetProofRef(), err)
+			atx.ShortId(), atx.GetShortPoetProofRef(), err)
 		return
 	}
 	events.Publish(events.NewAtx{Id: atx.Id().Hash32().String()})
 
 	err = t.atxValidator.SyntacticallyValidateAtx(atx)
-	events.Publish(events.ValidAtx{Id: atx.Id().ShortString(), Valid: err == nil})
+	events.Publish(events.ValidAtx{Id: atx.Id().ShortId(), Valid: err == nil})
 	if err != nil {
-		t.Warning("received syntactically invalid ATX %v: %v", atx.ShortString(), err)
+		t.Warning("received syntactically invalid ATX %v: %v", atx.ShortId(), err)
 		// TODO: blacklist peer
 		return
 	}
 
 	t.AtxPool.Put(atx.Id(), atx)
 	data.ReportValidation(activation.AtxProtocol)
-	t.With().Info("stored and propagated new syntactically valid ATX", log.AtxId(atx.ShortString()))
+	t.With().Info("stored and propagated new syntactically valid ATX", log.AtxId(atx.ShortId()))
 }
 
 func (t *BlockBuilder) acceptBlockData() {

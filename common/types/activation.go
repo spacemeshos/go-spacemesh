@@ -26,7 +26,7 @@ func (l EpochId) FirstLayer(layersPerEpoch uint16) LayerID {
 
 type AtxId Hash32
 
-func (t AtxId) ShortString() string {
+func (t AtxId) ShortId() string {
 	return t.Hash32().ShortString()
 }
 
@@ -73,11 +73,11 @@ func (challenge *NIPSTChallenge) String() string {
 		util.Bytes2Hex(challenge.NodeId.VRFPublicKey)[:5],
 		challenge.NodeId.Key[:5],
 		challenge.Sequence,
-		challenge.PrevATXId.ShortString(),
+		challenge.PrevATXId.ShortId(),
 		challenge.PubLayerIdx,
 		challenge.StartTick,
 		challenge.EndTick,
-		challenge.PositioningAtx.ShortString())
+		challenge.PositioningAtx.ShortId())
 }
 
 type ActivationTx struct {
@@ -146,8 +146,8 @@ func (atx ActivationTxHeader) Hash32() Hash32 {
 	return atx.Id().Hash32()
 }
 
-func (atx ActivationTxHeader) ShortString() string {
-	return atx.Id().ShortString()
+func (atx ActivationTxHeader) ShortId() string {
+	return atx.Id().ShortId()
 }
 
 func (atxh *ActivationTxHeader) TargetEpoch(layersPerEpoch uint16) EpochId {

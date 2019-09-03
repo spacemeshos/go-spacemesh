@@ -16,7 +16,7 @@ type CheckLocalFunc func(ids []types.Hash32) (map[types.Hash32]Item, map[types.H
 
 type Item interface {
 	Hash32() types.Hash32
-	ShortString() string
+	ShortId() string
 }
 
 type fetchJob struct {
@@ -305,7 +305,7 @@ func fetchProofCalcId(fetchPoetProof FetchPoetProofFunc, fj fetchJob) {
 		atx.CalcAndSetId() //todo put it somewhere that will cause less confusion
 		if err := fetchPoetProof(atx.GetPoetProofRef()); err != nil {
 			log.Error("received atx (%v) with syntactically invalid or missing PoET proof (%x): %v",
-				atx.ShortString(), atx.GetShortPoetProofRef(), err)
+				atx.ShortId(), atx.GetShortPoetProofRef(), err)
 			continue
 		}
 		itemsWithProofs = append(itemsWithProofs, atx)
