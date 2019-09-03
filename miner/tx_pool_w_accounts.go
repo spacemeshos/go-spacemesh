@@ -79,8 +79,8 @@ func (t *TxPoolWithAccounts) Invalidate(id types.TransactionId) {
 			delete(t.accounts, tx.Address)
 		}
 	}
-	t.accountsMutex.Unlock()
 	t.innerPool.Invalidate(id)
+	t.accountsMutex.Unlock()
 }
 
 func (t *TxPoolWithAccounts) GetProjection(addr types.Address, prevNonce, prevBalance uint64) (nonce, balance uint64) {
