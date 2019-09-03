@@ -132,8 +132,9 @@ func (tp *TransactionProcessor) ValidateNonceAndBalance(tx *types.AddressableSig
 	if tx.AccountNonce != nonce {
 		return fmt.Errorf("incorrect account nonce! Expected: %d, Actual: %d", nonce, tx.AccountNonce)
 	}
-	if tx.Amount > balance { // TODO: compare available balance to only fee
-		return fmt.Errorf("insufficient balance! Available: %d, Attempting to spend: %d", balance, tx.Amount)
+	if (tx.Amount + tx.GasPrice) > balance { // TODO: GasPrice represents the absolute fee here, as a temporarily hack
+		return fmt.Errorf("insufficient balance! Available: %d, Attempting to spend: %d+%d=%d",
+			balance, tx.Amount, tx.GasPrice, tx.Amount+tx.GasPrice)
 	}
 	return nil
 }

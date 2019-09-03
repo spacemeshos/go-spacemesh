@@ -397,8 +397,9 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 	assert.True(s.T(), writtenMore > written)
 }
 
-func newTx(origin types.Address, nonce, amount uint64) *types.AddressableSignedTransaction {
-	return types.NewAddressableTx(nonce, origin, types.Address{}, amount, 3, 1)
+func newTx(origin types.Address, nonce, totalAmount uint64) *types.AddressableSignedTransaction {
+	feeAmount := uint64(1)
+	return types.NewAddressableTx(nonce, origin, types.Address{}, totalAmount-feeAmount, 3, feeAmount)
 }
 
 func (s *ProcessorStateSuite) TestTransactionProcessor_ValidateNonceAndBalance() {
@@ -434,7 +435,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ValidateNonceAndBalance_I
 	s.projector.nonceDiff = 2
 
 	err := s.processor.ValidateNonceAndBalance(newTx(origin, 7, 95))
-	r.EqualError(err, "insufficient balance! Available: 90, Attempting to spend: 95")
+	r.EqualError(err, "insufficient balance! Available: 90, Attempting to spend: 94+1=95")
 }
 
 func TestTransactionProcessor_ApplyTransactionTestSuite(t *testing.T) {
