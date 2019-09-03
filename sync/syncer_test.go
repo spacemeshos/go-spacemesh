@@ -95,7 +95,7 @@ func SyncMockFactory(number int, conf Configuration, name string, dbType string,
 		blockValidator := BlockEligibilityValidatorMock{}
 		txpool := miner.NewTxMemPool()
 		atxpool := miner.NewAtxMemPool()
-		sync := NewSync(net, getMesh(dbType, Path+name+"_"+time.Now().String()), txpool, atxpool, mockTxProcessor{}, blockValidator, poetDb(), conf, ts, ts.GetCurrentLayer(), l)
+		sync := NewSync(net, getMesh(dbType, Path+name+"_"+time.Now().String()), txpool, atxpool, mockTxProcessor{}, blockValidator, poetDb(), conf, ts, ts.GetCurrentLayer(), atxLimit, l)
 		sync.RequestTimeout = 100 * time.Millisecond
 		nodes = append(nodes, sync)
 		p2ps = append(p2ps, net)
@@ -654,7 +654,7 @@ func Test_TwoNodes_SyncIntegrationSuite(t *testing.T) {
 		msh := getMesh(memoryDB, fmt.Sprintf("%s_%s", sis.name, time.Now()))
 		blockValidator := BlockEligibilityValidatorMock{}
 		poetDb := activation.NewPoetDb(database.NewMemDatabase(), l.WithName("poetDb"))
-		sync := NewSync(s, msh, miner.NewTxMemPool(), miner.NewAtxMemPool(), mockTxProcessor{}, blockValidator, poetDb, conf, ts, ts.GetCurrentLayer(), l)
+		sync := NewSync(s, msh, miner.NewTxMemPool(), miner.NewAtxMemPool(), mockTxProcessor{}, blockValidator, poetDb, conf, ts, ts.GetCurrentLayer(), atxLimit, l)
 		sis.syncers = append(sis.syncers, sync)
 		atomic.AddUint32(&i, 1)
 	}
@@ -772,7 +772,7 @@ func Test_Multiple_SyncIntegrationSuite(t *testing.T) {
 		msh := getMesh(memoryDB, fmt.Sprintf("%s_%d", sis.name, atomic.LoadUint32(&i)))
 		blockValidator := BlockEligibilityValidatorMock{}
 		poetDb := activation.NewPoetDb(database.NewMemDatabase(), l.WithName("poetDb"))
-		sync := NewSync(s, msh, miner.NewTxMemPool(), miner.NewAtxMemPool(), mockTxProcessor{}, blockValidator, poetDb, conf, ts, 0, l)
+		sync := NewSync(s, msh, miner.NewTxMemPool(), miner.NewAtxMemPool(), mockTxProcessor{}, blockValidator, poetDb, conf, ts, 0, atxLimit, l)
 		ts.StartNotifying()
 		sis.syncers = append(sis.syncers, sync)
 		atomic.AddUint32(&i, 1)
@@ -1073,7 +1073,7 @@ func TestSyncer_handleNotSyncedFlow(t *testing.T) {
 	txpool := miner.NewTxPoolWithAccounts()
 	atxpool := miner.NewAtxMemPool()
 	ts := &mockClock{}
-	sync := NewSync(service.NewSimulator().NewNode(), getMesh(memoryDB, Path+t.Name()+"_"+time.Now().String()), txpool, atxpool, mockTxProcessor{}, BlockEligibilityValidatorMock{}, newMockPoetDb(), conf, ts, 10, log.NewDefault(t.Name()))
+	sync := NewSync(service.NewSimulator().NewNode(), getMesh(memoryDB, Path+t.Name()+"_"+time.Now().String()), txpool, atxpool, mockTxProcessor{}, BlockEligibilityValidatorMock{}, newMockPoetDb(), conf, ts, 10, atxLimit, log.NewDefault(t.Name()))
 
 	lv := &mockLayerValidator{0, 0, 0, nil}
 	sync.lValidator = lv
@@ -1375,4 +1375,10 @@ func TestSyncer_BlockSyntacticValidation(t *testing.T) {
 	b.AtxIds = []types.AtxId{atx1, atx2, atx3}
 	_, _, err := s.BlockSyntacticValidation(b)
 	r.EqualError(err, errDupTx.Error())
+
+	for i := 0; i <= miner.AtxsPerBlockLimit; i++ {
+		b.AtxIds = append(b.AtxIds, atx1)
+	}
+	_, _, err = s.BlockSyntacticValidation(b)
+	r.EqualError(err, errTooManyAtxs.Error())
 }

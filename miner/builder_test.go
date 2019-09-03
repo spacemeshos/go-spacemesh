@@ -21,6 +21,8 @@ import (
 	"time"
 )
 
+const selectCount = 100
+
 type MockSigning struct {
 }
 
@@ -157,6 +159,7 @@ func TestBlockBuilder_StartStop(t *testing.T) {
 		mockTxProcessor{},
 		&mockAtxValidator{},
 		&mockSyncer{},
+		selectCount,
 		log.New(n.String(), "", ""))
 
 	err := builder.Start()
@@ -189,9 +192,9 @@ func TestBlockBuilder_BlockIdGeneration(t *testing.T) {
 	hare.res[0] = hareRes
 
 	builder1 := NewBlockBuilder(types.NodeId{Key: "a"}, &MockSigning{}, n1, beginRound, 5, NewTxPoolWithAccounts(),
-		NewAtxMemPool(), MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare, mockBlockOracle{}, mockTxProcessor{}, &mockAtxValidator{}, &mockSyncer{}, log.New(n1.NodeInfo.ID.String(), "", ""))
+		NewAtxMemPool(), MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare, mockBlockOracle{}, mockTxProcessor{}, &mockAtxValidator{}, &mockSyncer{}, selectCount, log.New(n1.NodeInfo.ID.String(), "", ""))
 	builder2 := NewBlockBuilder(types.NodeId{Key: "b"}, &MockSigning{}, n2, beginRound, 5, NewTxPoolWithAccounts(),
-		NewAtxMemPool(), MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare, mockBlockOracle{}, mockTxProcessor{}, &mockAtxValidator{}, &mockSyncer{}, log.New(n2.NodeInfo.ID.String(), "", ""))
+		NewAtxMemPool(), MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare, mockBlockOracle{}, mockTxProcessor{}, &mockAtxValidator{}, &mockSyncer{}, selectCount, log.New(n2.NodeInfo.ID.String(), "", ""))
 
 	b1, _ := builder1.createBlock(1, types.AtxId{}, types.BlockEligibilityProof{}, nil, nil)
 
@@ -212,7 +215,7 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 	hare.res[1] = hareRes
 
 	builder := NewBlockBuilder(types.NodeId{"anton", []byte("anton")}, &MockSigning{}, n, beginRound, 5, NewTxPoolWithAccounts(),
-		NewAtxMemPool(), MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare, mockBlockOracle{}, mockTxProcessor{}, &mockAtxValidator{}, &mockSyncer{}, log.New(n.String(), "", ""))
+		NewAtxMemPool(), MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare, mockBlockOracle{}, mockTxProcessor{}, &mockAtxValidator{}, &mockSyncer{}, selectCount, log.New(n.String(), "", ""))
 
 	err := builder.Start()
 	assert.NoError(t, err)
@@ -306,7 +309,7 @@ func TestBlockBuilder_Validation(t *testing.T) {
 	hare.res[0] = hareRes
 
 	builder1 := NewBlockBuilder(types.NodeId{Key: "a"}, &MockSigning{}, n1, beginRound, 5, NewTxPoolWithAccounts(),
-		NewAtxMemPool(), MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare, mockBlockOracle{}, mockTxProcessor{true}, &mockAtxValidator{}, &mockSyncer{}, log.New(n1.NodeInfo.ID.String(), "", ""))
+		NewAtxMemPool(), MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare, mockBlockOracle{}, mockTxProcessor{true}, &mockAtxValidator{}, &mockSyncer{}, selectCount, log.New(n1.NodeInfo.ID.String(), "", ""))
 	builder1.Start()
 	ed := signing.NewEdSigner()
 	tx, e := types.NewSignedTx(0, types.HexToAddress("0xFF"), 2, 3, 4, ed)
@@ -342,6 +345,7 @@ func TestBlockBuilder_Gossip_NotSynced(t *testing.T) {
 		mockTxProcessor{false},
 		&mockAtxValidator{},
 		&mockSyncerP{false},
+		selectCount,
 		log.New(n1.NodeInfo.ID.String(),
 			"",
 			""))
@@ -406,4 +410,62 @@ func Test_calcHdistRange(t *testing.T) {
 		require.Equal(t, err, "hdist cannot be zero")
 	}()
 	from, to = calcHdistRange(5, 0)
+}
+
+var (
+	one   = types.CalcHash32([]byte("1"))
+	two   = types.CalcHash32([]byte("2"))
+	three = types.CalcHash32([]byte("3"))
+	four  = types.CalcHash32([]byte("4"))
+	five  = types.CalcHash32([]byte("5"))
+)
+
+var (
+	atx1 = types.AtxId{Hash32: one}
+	atx2 = types.AtxId{Hash32: two}
+	atx3 = types.AtxId{Hash32: three}
+	atx4 = types.AtxId{Hash32: four}
+	atx5 = types.AtxId{Hash32: five}
+)
+
+func Test_selectAtxs(t *testing.T) {
+	r := require.New(t)
+
+	atxs := []types.AtxId{atx1, atx2, atx3, atx4, atx5}
+	selected := selectAtxs(atxs, 2)
+	r.Equal(2, len(selected))
+
+	selected = selectAtxs(atxs, 5)
+	r.Equal(5, len(selected))
+
+	selected = selectAtxs(atxs, 10)
+	r.Equal(5, len(selected))
+
+	// check uniformity
+	rand.Seed(1000)
+	origin := []types.AtxId{atx1, atx2, atx3, atx4, atx5}
+	mp := make(map[types.AtxId]struct{}, 0)
+	for i := 0; i < 100; i++ {
+		atxs = []types.AtxId{atx1, atx2, atx3, atx4, atx5}
+		selected = selectAtxs(atxs, 2)
+
+		for _, i := range selected {
+			mp[i] = struct{}{}
+		}
+	}
+
+	for _, x := range origin {
+		f := false
+		for y := range mp {
+			if bytes.Equal(x.Bytes(), y.Bytes()) {
+				f = true
+			}
+		}
+
+		if !f {
+			r.FailNow("Couldn't find %v", x)
+		}
+	}
+
+	r.Equal(5, len(mp))
 }

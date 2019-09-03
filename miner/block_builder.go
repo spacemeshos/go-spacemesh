@@ -28,6 +28,8 @@ const DefaultGas = 1
 
 const IncomingTxProtocol = "TxGossip"
 
+const AtxsPerBlockLimit = 100
+
 type Signer interface {
 	Sign(m []byte) []byte
 }
@@ -75,6 +77,7 @@ type BlockBuilder struct {
 	atxValidator     AtxValidator
 	syncer           Syncer
 	started          bool
+	atxsPerBlock     int // number of atxs to select per block
 }
 
 func NewBlockBuilder(minerID types.NodeId, sgn Signer, net p2p.Service,
@@ -88,6 +91,7 @@ func NewBlockBuilder(minerID types.NodeId, sgn Signer, net p2p.Service,
 	txValidator TxValidator,
 	atxValidator AtxValidator,
 	syncer Syncer,
+	atxsPerBlock int,
 	lg log.Log) *BlockBuilder {
 
 	seed := binary.BigEndian.Uint64(md5.New().Sum([]byte(minerID.Key)))
@@ -114,6 +118,7 @@ func NewBlockBuilder(minerID types.NodeId, sgn Signer, net p2p.Service,
 		atxValidator:     atxValidator,
 		syncer:           syncer,
 		started:          false,
+		atxsPerBlock:     atxsPerBlock,
 	}
 
 }
@@ -217,7 +222,7 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 			BlockVotes:       votes,
 			ViewEdges:        viewEdges,
 		},
-		AtxIds: atxids,
+		AtxIds: selectAtxs(atxids, t.atxsPerBlock),
 		TxIds:  txids,
 	}
 
@@ -230,6 +235,26 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 	}
 
 	return &types.Block{MiniBlock: b, Signature: t.Signer.Sign(blockBytes)}, nil
+}
+
+func selectAtxs(atxs []types.AtxId, atxsPerBlock int) []types.AtxId {
+	if len(atxs) == 0 { // no atxs to pick from
+		return atxs
+	}
+
+	if len(atxs) <= atxsPerBlock { // no need to choose
+		return atxs // take all
+	}
+
+	// we have more than atxsPerBlock, choose randomly
+	selected := make([]types.AtxId, 0)
+	for i := 0; i < atxsPerBlock; i++ {
+		idx := i + rand.Intn(len(atxs)-i)       // random index in [i, len(atxs))
+		selected = append(selected, atxs[idx])  // select atx at idx
+		atxs[i], atxs[idx] = atxs[idx], atxs[i] // swap selected with i so we don't choose it again
+	}
+
+	return selected
 }
 
 func (t *BlockBuilder) listenForTx() {
