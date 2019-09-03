@@ -220,7 +220,7 @@ func (m *MeshDB) SaveContextualValidity(id types.BlockID, valid bool) error {
 	} else {
 		v = FALSE
 	}
-	m.Debug("save contextual validity %V %V", id, valid)
+	m.Debug("save contextual validity %v %v", id, valid)
 	err := m.contextualValidity.Put(id.ToBytes(), v)
 	if err != nil {
 		return err
