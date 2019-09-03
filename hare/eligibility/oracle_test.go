@@ -303,8 +303,13 @@ func TestOracle_actives(t *testing.T) {
 	r := require.New(t)
 	o := New(&mockValueProvider{1, nil}, nil, nil, nil, 5, genActive, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
 	_, err := o.actives(1)
-	r.Equal(genesisErr, err)
+	r.EqualError(err, errGenesis.Error())
 
+	o.blocksProvider = mockBlocksProvider{mp: make(map[types.BlockID]struct{})}
+	_, err = o.actives(100)
+	r.EqualError(err, errNoContextualBlocks.Error())
+
+	o.blocksProvider = mockBlocksProvider{}
 	mp := createMapWithSize(9)
 	o.getActiveSet = func(epoch types.EpochId, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
 		return mp, nil

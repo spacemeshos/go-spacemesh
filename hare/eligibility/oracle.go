@@ -16,7 +16,10 @@ import (
 
 const cacheSize = 5 // we don't expect to handle more than three layers concurrently
 
-var genesisErr = errors.New("no data about active nodes for genesis")
+var (
+	errGenesis            = errors.New("no data about active nodes for genesis")
+	errNoContextualBlocks = errors.New("no contextually valid blocks")
+)
 
 type valueProvider interface {
 	Value(layer types.LayerID) (uint32, error)
@@ -140,7 +143,7 @@ func (o *Oracle) buildVRFMessage(id types.NodeId, layer types.LayerID, round int
 func (o *Oracle) activeSetSize(layer types.LayerID) (uint32, error) {
 	actives, err := o.actives(layer)
 	if err != nil {
-		if err == genesisErr { // we are in genesis
+		if err == errGenesis { // we are in genesis
 			return uint32(o.genesisActiveSetSize), nil
 		}
 
@@ -223,7 +226,7 @@ func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
 
 	// check genesis
 	if safeEp.IsGenesis() {
-		return nil, genesisErr
+		return nil, errGenesis
 	}
 
 	// check cache
@@ -242,7 +245,7 @@ func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
 		o.Error("Could not calculate hare active set size: no contextually valid blocks",
 			log.Uint64("layer_id", uint64(layer)), log.Uint64("epoch_id", uint64(layer.GetEpoch(o.layersPerEpoch))),
 			log.Uint64("safe_layer_id", uint64(sl)), log.Uint64("safe_epoch_id", uint64(safeEp)))
-		return nil, errors.New("no contextually valid blocks")
+		return nil, errNoContextualBlocks
 	}
 
 	activeMap, err := o.getActiveSet(safeEp, mp)
@@ -262,7 +265,7 @@ func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
 func (o *Oracle) IsIdentityActiveOnConsensusView(edId string, layer types.LayerID) (bool, error) {
 	actives, err := o.actives(layer)
 	if err != nil {
-		if err == genesisErr { // we are in genesis
+		if err == errGenesis { // we are in genesis
 			return true, nil // all ids are active in genesis
 		}
 
