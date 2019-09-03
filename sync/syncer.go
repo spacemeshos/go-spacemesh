@@ -209,7 +209,7 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool A
 			return err
 		}
 
-		//block eligibility
+		// block eligibility
 		if eligible, err := bv.BlockSignedAndEligible(block); err != nil || !eligible {
 			return fmt.Errorf("block eligibiliy check failed - err %v", err)
 		}
