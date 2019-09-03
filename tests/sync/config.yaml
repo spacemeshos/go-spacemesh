@@ -1,4 +1,4 @@
-namespace: 'almog'
+namespace: ''
 
 config_map_name: conf
 
@@ -22,7 +22,7 @@ bootstrap:
     layer-duration-sec: '10'
     layer-average-size: '20'
     data-folder: '/bin/data/'
-    expected-layers: '200'
+    expected-layers: '50'
     storage-path: 'spacemesh-sync-data'
     remote-data: 'true'
     hdist: '1'
@@ -38,7 +38,7 @@ client:
     layer-duration-sec: '10'
     layer-average-size: '20'
     data-folder: '/bin/data/'
-    expected-layers: '200'
+    expected-layers: '50'
     storage-path: 'spacemesh-sync-data'
     remote-data: 'true'
     hdist: '1'
