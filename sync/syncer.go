@@ -126,7 +126,9 @@ func (s *Syncer) Close() {
 	// TODO: broadly implement a better mechanism for shutdown
 	time.Sleep(5 * time.Millisecond) // "ensures" no more sync routines can be created, ok for now
 	s.syncRoutineWg.Wait()           // must be called after we ensure no more sync routines can be created
-	s.blockQueue.done()
+	s.blockQueue.Close()
+	s.atxQueue.Close()
+	s.txQueue.Close()
 	s.MessageServer.Close()
 }
 
@@ -234,7 +236,7 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool A
 		p2pSynced:            false,
 	}
 
-	s.blockQueue = NewValidationQueue(srvr, s.Configuration, s, s.blockCheckLocalFactory, logger.WithName("validQ"))
+	s.blockQueue = NewValidationQueue(srvr, s.Configuration, s, s.blockCheckLocal, logger.WithName("validQ"))
 	s.txQueue = NewTxQueue(s, sv)
 	s.atxQueue = NewAtxQueue(s, s.FetchPoetProof)
 
@@ -633,7 +635,7 @@ func (s *Syncer) FetchPoetProof(poetProofRef []byte) error {
 	return nil
 }
 
-func (s *Syncer) atxCheckLocalFactory(atxIds []types.Hash32) (map[types.Hash32]Item, map[types.Hash32]Item, []types.Hash32) {
+func (s *Syncer) atxCheckLocal(atxIds []types.Hash32) (map[types.Hash32]Item, map[types.Hash32]Item, []types.Hash32) {
 	//look in pool
 	unprocessedItems := make(map[types.Hash32]Item, len(atxIds))
 	missingInPool := make([]types.AtxId, 0, len(atxIds))
@@ -664,7 +666,7 @@ func (s *Syncer) atxCheckLocalFactory(atxIds []types.Hash32) (map[types.Hash32]I
 	return unprocessedItems, dbItems, missingItems
 }
 
-func (s *Syncer) txCheckLocalFactory(txIds []types.Hash32) (map[types.Hash32]Item, map[types.Hash32]Item, []types.Hash32) {
+func (s *Syncer) txCheckLocal(txIds []types.Hash32) (map[types.Hash32]Item, map[types.Hash32]Item, []types.Hash32) {
 	//look in pool
 	unprocessedItems := make(map[types.Hash32]Item)
 	missingInPool := make([]types.TransactionId, 0)
@@ -694,7 +696,7 @@ func (s *Syncer) txCheckLocalFactory(txIds []types.Hash32) (map[types.Hash32]Ite
 	return unprocessedItems, dbItems, missingItems
 }
 
-func (s *Syncer) blockCheckLocalFactory(blockIds []types.Hash32) (map[types.Hash32]Item, map[types.Hash32]Item, []types.Hash32) {
+func (s *Syncer) blockCheckLocal(blockIds []types.Hash32) (map[types.Hash32]Item, map[types.Hash32]Item, []types.Hash32) {
 	//look in pool
 	var dbItems map[types.Hash32]Item
 	for _, itemId := range blockIds {

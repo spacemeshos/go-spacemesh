@@ -1216,7 +1216,7 @@ func TestSyncProtocol_NilResponse(t *testing.T) {
 
 	// Tx
 
-	ch := syncs[0].txQueue.addToQueue([]types.Hash32{nonExistingTxId.Hash32()})
+	ch := syncs[0].txQueue.addToPendingGetCh([]types.Hash32{nonExistingTxId.Hash32()})
 	select {
 	case <-ch:
 		t.Error(t, "should not return ")
@@ -1225,7 +1225,7 @@ func TestSyncProtocol_NilResponse(t *testing.T) {
 	}
 
 	// Atx
-	ch = syncs[0].atxQueue.addToQueue([]types.Hash32{nonExistingAtxId.Hash32()})
+	ch = syncs[0].atxQueue.addToPendingGetCh([]types.Hash32{nonExistingAtxId.Hash32()})
 	// PoET
 	select {
 	case out := <-ch:

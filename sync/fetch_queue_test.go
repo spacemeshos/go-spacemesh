@@ -35,7 +35,7 @@ func TestBlockListener_TestTxQueue(t *testing.T) {
 	block1.TxIds = []types.TransactionId{id1, id2, id3}
 	bl2.AddBlockWithTxs(block1, []*types.AddressableSignedTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
 
-	ch := queue.addToQueue([]types.Hash32{id1.Hash32(), id2.Hash32(), id3.Hash32()})
+	ch := queue.addToPendingGetCh([]types.Hash32{id1.Hash32(), id2.Hash32(), id3.Hash32()})
 	timeout := time.After(1 * time.Second)
 
 	select {
@@ -48,7 +48,7 @@ func TestBlockListener_TestTxQueue(t *testing.T) {
 		break
 	}
 
-	ch = queue.addToQueue([]types.Hash32{id1.Hash32(), id2.Hash32(), id3.Hash32(), id4.Hash32()})
+	ch = queue.addToPendingGetCh([]types.Hash32{id1.Hash32(), id2.Hash32(), id3.Hash32(), id4.Hash32()})
 	timeout = time.After(1 * time.Second)
 
 	select {
@@ -109,7 +109,7 @@ func TestBlockListener_TestAtxQueue(t *testing.T) {
 
 	bl2.AddBlockWithTxs(block1, []*types.AddressableSignedTransaction{}, []*types.ActivationTx{atx1, atx2, atx3})
 
-	ch := queue.addToQueue([]types.Hash32{atx1.Hash32(), atx2.Hash32(), atx3.Hash32()})
+	ch := queue.addToPendingGetCh([]types.Hash32{atx1.Hash32(), atx2.Hash32(), atx3.Hash32()})
 	timeout := time.After(1 * time.Second)
 	select {
 	// Got a timeout! fail with a timeout error
@@ -121,7 +121,7 @@ func TestBlockListener_TestAtxQueue(t *testing.T) {
 		break
 	}
 
-	ch = queue.addToQueue([]types.Hash32{atx1.Hash32(), atx2.Hash32(), atx3.Hash32(), atx4.Hash32()})
+	ch = queue.addToPendingGetCh([]types.Hash32{atx1.Hash32(), atx2.Hash32(), atx3.Hash32(), atx4.Hash32()})
 	timeout = time.After(1 * time.Second)
 
 	select {

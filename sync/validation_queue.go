@@ -24,8 +24,6 @@ type validationQueue struct {
 	Configuration
 	ValidationInfra
 	fetchQueue
-	workerInfra   WorkerInfra
-	mu            sync.Mutex
 	callbacks     map[interface{}]func(res bool) error
 	depMap        map[interface{}]map[types.BlockID]struct{}
 	reverseDepMap map[types.BlockID][]interface{}
@@ -44,7 +42,6 @@ func NewValidationQueue(srvr WorkerInfra, conf Configuration, msh ValidationInfr
 			queue:               make(chan []types.Hash32, 1000),
 		},
 		Configuration:   conf,
-		workerInfra:     srvr,
 		visited:         make(map[types.BlockID]struct{}),
 		depMap:          make(map[interface{}]map[types.BlockID]struct{}),
 		reverseDepMap:   make(map[types.BlockID][]interface{}),
@@ -68,11 +65,6 @@ func (vq *validationQueue) inQueue(id types.BlockID) bool {
 		return true
 	}
 	return false
-}
-
-func (vq *validationQueue) done() {
-	vq.Info("done")
-	close(vq.queue)
 }
 
 func (vq *validationQueue) handleBlock(bjb fetchJob) {
@@ -138,8 +130,8 @@ func (vq *validationQueue) finishBlockCallback(block *types.Block) func(res bool
 }
 
 func (vq *validationQueue) updateDependencies(block types.BlockID, valid bool) {
-	vq.mu.Lock()
-	defer vq.mu.Unlock()
+	vq.Lock()
+	defer vq.Unlock()
 	var doneBlocks []types.BlockID
 	doneQueue := make([]types.BlockID, 0, len(vq.depMap))
 	doneQueue = vq.removefromDepMaps(block, valid, doneQueue)
@@ -183,7 +175,7 @@ func (vq *validationQueue) removefromDepMaps(block types.BlockID, valid bool, do
 }
 
 func (vq *validationQueue) addDependencies(jobId interface{}, blks []types.BlockID, finishCallback func(res bool) error) (bool, error) {
-	vq.mu.Lock()
+	vq.Lock()
 	vq.callbacks[jobId] = finishCallback
 	dependencys := make(map[types.BlockID]struct{})
 	idsToPush := make([]types.Hash32, 0, len(blks))
@@ -203,10 +195,10 @@ func (vq *validationQueue) addDependencies(jobId interface{}, blks []types.Block
 			}
 		}
 	}
-	vq.mu.Unlock()
+	vq.Unlock()
 
 	for _, id := range idsToPush {
-		vq.queue <- []types.Hash32{id}
+		vq.addToPending([]types.Hash32{id})
 	}
 
 	//todo better this is a little hacky

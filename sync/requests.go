@@ -68,30 +68,30 @@ func HashReqFactory(lyr types.LayerID) RequestFactory {
 
 func newFetchReqFactory(msgtype server.MessageType, asItems func(msg []byte) ([]Item, error)) BatchRequestFactory {
 	//convert to chan
-	return func(s WorkerInfra, peer p2p.Peer, ids []types.Hash32) (chan []Item, error) {
+	return func(infra WorkerInfra, peer p2p.Peer, ids []types.Hash32) (chan []Item, error) {
 		ch := make(chan []Item, 1)
 		foo := func(msg []byte) {
 			defer close(ch)
 			if len(msg) == 0 || msg == nil {
-				s.Warning("peer %v responded with nil to block request", peer)
+				infra.Warning("peer %v responded with nil to block request", peer)
 				return
 			}
 
 			items, err := asItems(msg)
 			if err != nil {
-				s.Error("fetch failed bad response : %v", err)
+				infra.Error("fetch failed bad response : %v", err)
 				return
 			}
 
 			if valid, err := validateItemIds(ids, items); !valid {
-				s.Error("fetch failed bad response : %v", err)
+				infra.Error("fetch failed bad response : %v", err)
 				return
 			}
 
 			ch <- items
 		}
 
-		if err := encodeAndSendRequest(msgtype, ids, s, peer, foo); err != nil {
+		if err := encodeAndSendRequest(msgtype, ids, infra, peer, foo); err != nil {
 			return nil, err
 		}
 

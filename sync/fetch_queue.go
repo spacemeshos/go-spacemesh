@@ -36,6 +36,11 @@ type fetchQueue struct {
 	queue       chan []types.Hash32 //types.TransactionId //todo make buffered
 }
 
+func (vq *fetchQueue) Close() {
+	vq.Info("done")
+	close(vq.queue)
+}
+
 //todo batches
 func (fq *fetchQueue) work() error {
 	output := fetchWithFactory(NewFetchWorker(fq.workerInfra, 1, fq.BatchRequestFactory, fq.queue))
@@ -66,7 +71,7 @@ func (fq *fetchQueue) work() error {
 	return nil
 }
 
-func (fq *fetchQueue) addToQueue(ids []types.Hash32) chan bool {
+func (fq *fetchQueue) addToPendingGetCh(ids []types.Hash32) chan bool {
 	return getDoneChan(fq.addToPending(ids))
 }
 
@@ -109,7 +114,7 @@ func (tq *fetchQueue) Handle(itemIds []types.Hash32) ([]Item, error) {
 	unprocessedItems, processedItems, missing := tq.checkLocal(itemIds)
 	if len(missing) > 0 {
 
-		output := tq.addToQueue(missing)
+		output := tq.addToPendingGetCh(missing)
 
 		if success := <-output; !success {
 			return nil, errors.New(fmt.Sprintf("could not fetch all items"))
@@ -147,7 +152,7 @@ func NewTxQueue(s *Syncer, txValidator TxValidator) *txQueue {
 			workerInfra:         s.workerInfra,
 			Mutex:               &sync.Mutex{},
 			BatchRequestFactory: TxFetchReqFactory,
-			checkLocal:          s.txCheckLocalFactory,
+			checkLocal:          s.txCheckLocal,
 			pending:             make(map[types.Hash32][]chan bool),
 			queue:               make(chan []types.Hash32, 1000)},
 	}
@@ -215,7 +220,7 @@ func NewAtxQueue(s *Syncer, fetchPoetProof FetchPoetProofFunc) *atxQueue {
 			workerInfra:         s.workerInfra,
 			BatchRequestFactory: AtxFetchReqFactory,
 			Mutex:               &sync.Mutex{},
-			checkLocal:          s.atxCheckLocalFactory,
+			checkLocal:          s.atxCheckLocal,
 			pending:             make(map[types.Hash32][]chan bool),
 			queue:               make(chan []types.Hash32, 1000),
 		},
