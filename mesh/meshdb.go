@@ -350,7 +350,6 @@ func Transaction2SerializableTransaction(tx *Transaction) *types.AddressableSign
 }
 
 func txToTiny(tx *Transaction) types.TinyTx {
-	// TODO: calculate and store fee amount
 	id := types.GetTransactionId(Transaction2SerializableTransaction(tx).SerializableSignedTransaction)
 	return types.TinyTx{
 		Id:          id,
