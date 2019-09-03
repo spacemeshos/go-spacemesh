@@ -64,7 +64,7 @@ type Configuration struct {
 	Concurrency    int //number of workers for sync method
 	LayerSize      int
 	RequestTimeout time.Duration
-	atxsLimit      int
+	AtxsLimit      int
 	Hdist          int
 }
 
@@ -290,8 +290,8 @@ func (s *Syncer) Synchronise() {
 
 func (s *Syncer) FastValidation(block *types.Block) error {
 
-	if len(block.AtxIds) > s.atxsLimit {
-		s.Error("Too many atxs in block expected<=%v actual=%v", s.atxsLimit, len(block.AtxIds))
+	if len(block.AtxIds) > s.AtxsLimit {
+		s.Error("Too many atxs in block expected<=%v actual=%v", s.AtxsLimit, len(block.AtxIds))
 		return errTooManyAtxs
 	}
 
