@@ -42,7 +42,7 @@ var EmptyAtxId = &AtxId{0}
 
 type ActivationTxHeader struct {
 	NIPSTChallenge
-	id            AtxId
+	AtxId
 	Coinbase      Address
 	ActiveSetSize uint32
 }
@@ -136,18 +136,10 @@ func NewActivationTxWithChallenge(poetChallenge NIPSTChallenge, coinbase Address
 }
 
 func (atxh *ActivationTxHeader) Id() AtxId {
-	if atxh.id == *EmptyAtxId {
+	if atxh.AtxId == *EmptyAtxId {
 		panic("Id field must be set")
 	}
-	return atxh.id
-}
-
-func (atx ActivationTxHeader) Hash32() Hash32 {
-	return atx.Id().Hash32()
-}
-
-func (atx ActivationTxHeader) ShortId() string {
-	return atx.Id().ShortId()
+	return atxh.AtxId
 }
 
 func (atxh *ActivationTxHeader) TargetEpoch(layersPerEpoch uint16) EpochId {
@@ -155,7 +147,11 @@ func (atxh *ActivationTxHeader) TargetEpoch(layersPerEpoch uint16) EpochId {
 }
 
 func (atxh *ActivationTxHeader) SetId(id AtxId) {
-	atxh.id = id
+	if atxh.AtxId != *EmptyAtxId {
+		return
+	}
+
+	atxh.AtxId = id
 }
 
 func (atx *ActivationTx) CalcAndSetId() {
