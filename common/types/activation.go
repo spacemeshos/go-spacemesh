@@ -147,7 +147,7 @@ func (atx ActivationTxHeader) Hash32() Hash32 {
 }
 
 func (atx ActivationTxHeader) ShortId() string {
-	return atx.ShortId()
+	return atx.Id().ShortId()
 }
 
 func (atxh *ActivationTxHeader) TargetEpoch(layersPerEpoch uint16) EpochId {
