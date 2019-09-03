@@ -135,13 +135,13 @@ func TestBlockListener(t *testing.T) {
 
 	bl2.ProcessAtx(atx1)
 
-	block1 := types.NewExistingBlock(types.BlockID(123), 0, nil)
+	block1 := types.NewExistingBlock(types.BlockID(123), 1, nil)
 	block1.Signature = signer.Sign(block1.Bytes())
 	block1.ATXID = *types.EmptyAtxId
-	block2 := types.NewExistingBlock(types.BlockID(321), 1, nil)
+	block2 := types.NewExistingBlock(types.BlockID(321), 0, nil)
 	block2.Signature = signer.Sign(block2.Bytes())
 	block2.AtxIds = append(block2.AtxIds, atx2.Id())
-	block3 := types.NewExistingBlock(types.BlockID(222), 2, nil)
+	block3 := types.NewExistingBlock(types.BlockID(222), 0, nil)
 	block3.Signature = signer.Sign(block3.Bytes())
 	block3.AtxIds = append(block3.AtxIds, atx3.Id())
 
@@ -536,7 +536,8 @@ func TestBlockListener_TraverseViewBadFlow(t *testing.T) {
 	bl1.AddBlock(block4)
 	bl1.AddBlock(block5)
 
-	bl2.syncLayer(5, []types.BlockID{block5.Id})
+	go bl2.syncLayer(5, []types.BlockID{block5.Id})
+	time.Sleep(1 * time.Second) //wait for fetch
 
 	b, err := bl2.GetBlock(block1.Id)
 	assert.Error(t, err)

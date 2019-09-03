@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -63,6 +64,7 @@ type Configuration struct {
 	Concurrency    int //number of workers for sync method
 	LayerSize      int
 	RequestTimeout time.Duration
+	atxsLimit      int
 	Hdist          int
 }
 
@@ -73,6 +75,12 @@ type LayerValidator interface {
 
 const (
 	ValidationCacheSize = 1000
+)
+
+var (
+	errDupTx       = errors.New("duplicate TransactionId in block")
+	errDupAtx      = errors.New("duplicate AtxId in block")
+	errTooManyAtxs = errors.New("too many atxs in blocks")
 )
 
 type LayerProvider interface {
@@ -205,6 +213,7 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool A
 		MessageServer:  server.NewMsgServer(srv.(server.Service), syncProtocol, conf.RequestTimeout, make(chan service.DirectMessage, p2pconf.ConfigValues.BufferSize), logger.WithName("srv")),
 		Peers:          p2p.NewPeers(srv, logger.WithName("peers")),
 	}
+
 	s := &Syncer{
 		EligibilityValidator: bv,
 		Configuration:        conf,
@@ -225,7 +234,7 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool A
 		p2pSynced:            false,
 	}
 
-	s.blockQueue = NewValidationQueue(srvr, s.Configuration, s, logger.WithName("validQ"))
+	s.blockQueue = NewValidationQueue(srvr, s.Configuration, s, s.blockCheckLocalFactory, logger.WithName("validQ"))
 	s.txQueue = NewTxQueue(s, sv)
 	s.atxQueue = NewAtxQueue(s, s.FetchPoetProof)
 
@@ -275,6 +284,26 @@ func (s *Syncer) Synchronise() {
 
 	// node is not synced
 	s.handleNotSynced(currentSyncLayer)
+}
+
+func (s *Syncer) FastValidation(block *types.Block) error {
+
+	if len(block.AtxIds) > s.atxsLimit {
+		s.Error("Too many atxs in block expected<=%v actual=%v", s.atxsLimit, len(block.AtxIds))
+		return errTooManyAtxs
+	}
+
+	// block eligibility
+	if eligible, err := s.BlockSignedAndEligible(block); err != nil || !eligible {
+		return fmt.Errorf("block eligibiliy check failed - err %v", err)
+	}
+
+	// validate unique tx atx
+	if err := validateUniqueTxAtx(block); err != nil {
+		return err
+	}
+	return nil
+
 }
 
 func (s *Syncer) handleNotSynced(currentSyncLayer types.LayerID) {
@@ -388,9 +417,6 @@ func (s *Syncer) syncLayer(layerID types.LayerID, blockIds []types.BlockID) ([]*
 
 	return s.LayerBlocks(layerID)
 }
-
-var errDupTx = errors.New("duplicate TransactionId in block")
-var errDupAtx = errors.New("duplicate AtxId in block")
 
 func validateUniqueTxAtx(b *types.Block) error {
 	// check for duplicate tx id
@@ -666,4 +692,21 @@ func (s *Syncer) txCheckLocalFactory(txIds []types.Hash32) (map[types.Hash32]Ite
 	}
 
 	return unprocessedItems, dbItems, missingItems
+}
+
+func (s *Syncer) blockCheckLocalFactory(blockIds []types.Hash32) (map[types.Hash32]Item, map[types.Hash32]Item, []types.Hash32) {
+	//look in pool
+	var dbItems map[types.Hash32]Item
+	for _, itemId := range blockIds {
+		var id = util.BytesToUint64(itemId.Bytes())
+		res, err := s.GetBlock(types.BlockID(id))
+		if err != nil {
+			s.Debug("get block failed %v", id)
+			continue
+		}
+
+		dbItems[itemId] = res
+	}
+
+	return nil, dbItems, nil
 }

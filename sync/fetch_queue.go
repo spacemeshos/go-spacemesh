@@ -6,14 +6,13 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
 	"sync"
 )
 
 type FetchPoetProofFunc func(poetProofRef []byte) error
 type GetValidAddressableTxFunc func(tx *types.SerializableSignedTransaction) (*types.AddressableSignedTransaction, error)
 type SValidateAtxFunc func(atx *types.ActivationTx) error
-type CheckLocalFunc func(atxIds []types.Hash32) (map[types.Hash32]Item, map[types.Hash32]Item, []types.Hash32)
+type CheckLocalFunc func(ids []types.Hash32) (map[types.Hash32]Item, map[types.Hash32]Item, []types.Hash32)
 
 type Item interface {
 	Hash32() types.Hash32
@@ -30,12 +29,11 @@ type fetchQueue struct {
 	log.Log
 	BatchRequestFactory
 	*sync.Mutex
-	*mesh.Mesh
-	workerInfra        WorkerInfra
-	pending            map[types.Hash32][]chan bool
-	updateDependencies func(fj fetchJob)
-	checkLocal         CheckLocalFunc
-	queue              chan []types.Hash32 //types.TransactionId //todo make buffered
+	workerInfra WorkerInfra
+	pending     map[types.Hash32][]chan bool
+	handle      func(fj fetchJob)
+	checkLocal  CheckLocalFunc
+	queue       chan []types.Hash32 //types.TransactionId //todo make buffered
 }
 
 //todo batches
@@ -47,7 +45,22 @@ func (fq *fetchQueue) work() error {
 			return nil
 		}
 
-		fq.updateDependencies(out.(fetchJob))
+		bjb, ok := out.(fetchJob)
+		if !ok {
+			fq.Error(fmt.Sprintf("Type conversion err %v", out))
+			continue
+		}
+
+		if len(bjb.ids) == 0 {
+			return fmt.Errorf("channel closed")
+		}
+
+		if len(bjb.items) == 0 {
+			fq.Warning("could not fetch any items ") //todo print ids
+			continue
+		}
+
+		fq.handle(out.(fetchJob))
 		fq.Debug("next batch")
 	}
 	return nil
@@ -131,7 +144,6 @@ func NewTxQueue(s *Syncer, txValidator TxValidator) *txQueue {
 	q := &txQueue{
 		fetchQueue: fetchQueue{
 			Log:                 s.Log.WithName("txFetchQueue"),
-			Mesh:                s.Mesh,
 			workerInfra:         s.workerInfra,
 			Mutex:               &sync.Mutex{},
 			BatchRequestFactory: TxFetchReqFactory,
@@ -140,7 +152,7 @@ func NewTxQueue(s *Syncer, txValidator TxValidator) *txQueue {
 			queue:               make(chan []types.Hash32, 1000)},
 	}
 
-	q.updateDependencies = updateTxDependencies(q.invalidate, s.txpool, txValidator.GetValidAddressableTx)
+	q.handle = updateTxDependencies(q.invalidate, s.txpool, txValidator.GetValidAddressableTx)
 	go q.work()
 	return q
 }
@@ -200,7 +212,6 @@ func NewAtxQueue(s *Syncer, fetchPoetProof FetchPoetProofFunc) *atxQueue {
 	q := &atxQueue{
 		fetchQueue: fetchQueue{
 			Log:                 s.Log.WithName("atxFetchQueue"),
-			Mesh:                s.Mesh,
 			workerInfra:         s.workerInfra,
 			BatchRequestFactory: AtxFetchReqFactory,
 			Mutex:               &sync.Mutex{},
@@ -210,7 +221,7 @@ func NewAtxQueue(s *Syncer, fetchPoetProof FetchPoetProofFunc) *atxQueue {
 		},
 	}
 
-	q.updateDependencies = updateAtxDependencies(q.invalidate, s.SyntacticallyValidateAtx, s.atxpool, fetchPoetProof)
+	q.handle = updateAtxDependencies(q.invalidate, s.SyntacticallyValidateAtx, s.atxpool, fetchPoetProof)
 	go q.work()
 	return q
 }

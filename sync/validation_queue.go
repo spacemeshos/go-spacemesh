@@ -16,33 +16,42 @@ type ValidationInfra interface {
 	AddBlockWithTxs(blk *types.Block, txs []*types.AddressableSignedTransaction, atxs []*types.ActivationTx) error
 	GetBlock(id types.BlockID) (*types.Block, error)
 	ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) (bool, error)) error
-	BlockValidator
+	FastValidation(block *types.Block) error
 	log.Logger
 }
 
 type validationQueue struct {
 	Configuration
 	ValidationInfra
+	fetchQueue
 	workerInfra   WorkerInfra
-	blockFastValidator blockFastValidator
-	queue              chan []types.Hash32
 	mu            sync.Mutex
-	callbacks          map[interface{}]func(res bool) error
-	depMap             map[interface{}]map[types.BlockID]struct{}
-	reverseDepMap      map[types.BlockID][]interface{}
-	visited            map[types.BlockID]struct{}
+	callbacks     map[interface{}]func(res bool) error
+	depMap        map[interface{}]map[types.BlockID]struct{}
+	reverseDepMap map[types.BlockID][]interface{}
+	visited       map[types.BlockID]struct{}
 }
 
-func NewValidationQueue(lg log.Log) *validationQueue {
+func NewValidationQueue(srvr WorkerInfra, conf Configuration, msh ValidationInfra, checkLocal CheckLocalFunc, lg log.Log) *validationQueue {
 	vq := &validationQueue{
-		queue:         make(chan types.BlockID, 100),
-		visited:       make(map[types.BlockID]struct{}),
-		depMap:        make(map[types.BlockID]map[types.BlockID]struct{}),
-		reverseDepMap: make(map[types.BlockID][]types.BlockID),
-		callbacks:     make(map[types.BlockID]func() error),
-		Log:           lg,
+		fetchQueue: fetchQueue{
+			Log:                 srvr.WithName("atxFetchQueue"),
+			workerInfra:         srvr,
+			checkLocal:          checkLocal,
+			BatchRequestFactory: BlockFetchReqFactory,
+			Mutex:               &sync.Mutex{},
+			pending:             make(map[types.Hash32][]chan bool),
+			queue:               make(chan []types.Hash32, 1000),
+		},
+		Configuration:   conf,
+		workerInfra:     srvr,
+		visited:         make(map[types.BlockID]struct{}),
+		depMap:          make(map[interface{}]map[types.BlockID]struct{}),
+		reverseDepMap:   make(map[types.BlockID][]interface{}),
+		callbacks:       make(map[interface{}]func(res bool) error),
+		ValidationInfra: msh,
 	}
-
+	vq.handle = vq.handleBlock
 	go vq.work()
 
 	return vq
@@ -66,48 +75,26 @@ func (vq *validationQueue) done() {
 	close(vq.queue)
 }
 
-func (vq *validationQueue) work() {
-
-	output := fetchWithFactory(NewFetchWorker(vq.workerInfra, vq.Concurrency, BlockFetchReqFactory, vq.queue))
-	for out := range output {
-		bjb, ok := out.(fetchJob)
-		if !ok {
-			vq.Error(fmt.Sprintf("Type conversion err %v", out))
-			continue
-		}
-
-		if len(bjb.ids) == 0 {
-			vq.Info("channel closed")
-			return
-		}
-
-		//todo movem to batch block request
-		bid := types.BlockID(util.BytesToUint64(bjb.ids[0].Bytes()))
-
-		if bjb.items == nil {
-			//no items fetched
-			vq.updateDependencies(bid, false)
-			vq.Error(fmt.Sprintf("could not retrieve a block in view "))
-			continue
-		}
-
-		block := bjb.items[0].(types.Block) //todo hack remove after batch block request is implemented in request and handler
-
-		vq.Info("fetched  %v", bid)
-		vq.visited[bid] = struct{}{}
-
-		if err := vq.blockFastValidator(&block); err != nil {
-			vq.With().Error("ValidationQueue: block validation failed", log.BlockId(uint64(block.ID())), log.Err(err))
-			vq.updateDependencies(bid, false)
-			continue
-		}
-
-		vq.callbacks[block.ID()] = vq.finishBlockCallback(s, block)
-
-		vq.Info("next block")
+func (vq *validationQueue) handleBlock(bjb fetchJob) {
+	//todo movem to batch block request
+	bid := types.BlockID(util.BytesToUint64(bjb.ids[0].Bytes()))
+	if bjb.items == nil {
+		//no items fetched
+		vq.updateDependencies(bid, false)
+		vq.Error(fmt.Sprintf("could not retrieve a block in view "))
+		//return
 	}
-
-	return
+	block := bjb.items[0].(types.Block)
+	//todo hack remove after batch block request is implemented in request and handler
+	vq.Info("fetched  %v", bid)
+	vq.visited[bid] = struct{}{}
+	if err := vq.FastValidation(&block); err != nil {
+		vq.Error("ValidationQueue: block validation failed", log.BlockId(uint64(block.ID())), log.Err(err))
+		vq.updateDependencies(bid, false)
+		//return
+	}
+	vq.handleBlockDependencies(&block)
+	//todo better deadlock solution
 }
 
 func (vq *validationQueue) handleBlockDependencies(blk *types.Block) {
