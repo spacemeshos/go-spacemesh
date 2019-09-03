@@ -342,7 +342,7 @@ func (t *BlockBuilder) handleGossipAtx(data service.GossipMessage) {
 	events.Publish(events.NewAtx{Id: atx.Id().Hash32().String()})
 
 	err = t.atxValidator.SyntacticallyValidateAtx(atx)
-	events.Publish(events.ValidAtx{Id: atx.Id().ShortId(), Valid: err == nil})
+	events.Publish(events.ValidAtx{Id: atx.ShortId(), Valid: err == nil})
 	if err != nil {
 		t.Warning("received syntactically invalid ATX %v: %v", atx.ShortId(), err)
 		// TODO: blacklist peer

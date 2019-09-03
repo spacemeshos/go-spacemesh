@@ -125,7 +125,7 @@ func createLayerWithAtx(t *testing.T, msh *mesh.Mesh, id types.LayerID, numOfBlo
 		block1.BlockVotes = append(block1.BlockVotes, votes...)
 		if i < len(atxs) {
 			block1.AtxIds = append(block1.AtxIds, atxs[i].Id())
-			fmt.Printf("adding i=%v bid=%v atxid=%v", i, bid, atxs[i].Id().ShortId())
+			fmt.Printf("adding i=%v bid=%v atxid=%v", i, bid, atxs[i].ShortId())
 		}
 		block1.ViewEdges = append(block1.ViewEdges, views...)
 		var actualAtxs []*types.ActivationTx
