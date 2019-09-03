@@ -239,7 +239,9 @@ func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
 
 	// no contextually valid blocks
 	if len(mp) == 0 {
-		o.Error("Could not calculate hare active set size: no contextually valid blocks")
+		o.Error("Could not calculate hare active set size: no contextually valid blocks",
+			log.Uint64("layer_id", uint64(layer)), log.Uint64("epoch_id", uint64(layer.GetEpoch(o.layersPerEpoch))),
+			log.Uint64("safe_layer_id", uint64(sl)), log.Uint64("safe_epoch_id", uint64(safeEp)))
 		return nil, errors.New("no contextually valid blocks")
 	}
 
@@ -264,7 +266,8 @@ func (o *Oracle) IsIdentityActiveOnConsensusView(edId string, layer types.LayerI
 			return true, nil // all ids are active in genesis
 		}
 
-		o.With().Error("IsIdentityActiveOnConsensusView erred while calling actives func", log.Err(err))
+		o.With().Error("IsIdentityActiveOnConsensusView erred while calling actives func",
+			log.LayerId(uint64(layer)), log.Err(err))
 		return false, err
 	}
 	_, exist := actives[edId]
