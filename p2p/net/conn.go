@@ -62,16 +62,17 @@ type FormattedConnection struct {
 	remoteAddr net.Addr
 	networker  networker // network context
 	session    NetworkSession
-
-	r formattedReader
-
-	wmtx sync.Mutex
-	w    formattedWriter
-
-	closed bool
-	close  io.Closer
+	deadline   time.Duration
+	timeout    time.Duration
+	r          formattedReader
+	wmtx       sync.Mutex
+	w          formattedWriter
+	closed     bool
+	deadliner  deadliner
+	close      io.Closer
 
 	msgSizeLimit int
+
 }
 
 type networker interface {
@@ -84,7 +85,13 @@ type networker interface {
 
 type readWriteCloseAddresser interface {
 	io.ReadWriteCloser
+	deadliner
 	RemoteAddr() net.Addr
+}
+
+type deadliner interface {
+	SetReadDeadline(t time.Time) error
+	SetWriteDeadline(t time.Time) error
 }
 
 type formattedReader interface {
@@ -97,7 +104,7 @@ type formattedWriter interface {
 
 // Create a new connection wrapping a net.Conn with a provided connection manager
 func newConnection(conn readWriteCloseAddresser, netw networker,
-	remotePub p2pcrypto.PublicKey, session NetworkSession, msgSizeLimit int, log log.Log) *FormattedConnection {
+	remotePub p2pcrypto.PublicKey, session NetworkSession, msgSizeLimit int,  deadline time.Duration, log log.Log) *FormattedConnection {
 
 	// todo parametrize channel size - hard-coded for now
 	connection := &FormattedConnection{
@@ -109,6 +116,8 @@ func newConnection(conn readWriteCloseAddresser, netw networker,
 		r:            delimited.NewReader(conn),
 		w:            delimited.NewWriter(conn),
 		close:        conn,
+		deadline:   deadline,
+		deadliner:  conn,
 		networker:    netw,
 		session:      session,
 		msgSizeLimit: msgSizeLimit,
@@ -161,6 +170,11 @@ func (c *FormattedConnection) publish(message []byte) {
 // Concurrency: can be called from any go routine
 func (c *FormattedConnection) Send(m []byte) error {
 	c.wmtx.Lock()
+	c.deadliner.SetReadDeadline(time.Now().Add(c.deadline))
+	if c.closed {
+		c.wmtx.Unlock()
+		return fmt.Errorf("connection was closed")
+	}
 	_, err := c.w.WriteRecord(m)
 	c.wmtx.Unlock()
 	if err != nil {
@@ -239,7 +253,6 @@ func (c *FormattedConnection) setupIncoming(timeout time.Duration) error {
 			c.Close()
 			return err
 		}
-
 	case <-t.C:
 		c.Close()
 		return errors.New("timeout while waiting for session message")
@@ -254,6 +267,7 @@ func (c *FormattedConnection) beginEventProcessing() {
 	var err error
 	var buf []byte
 	for {
+		c.deadliner.SetReadDeadline(time.Now().Add(c.deadline))
 		buf, err = c.r.Next()
 		if err != nil {
 			break
