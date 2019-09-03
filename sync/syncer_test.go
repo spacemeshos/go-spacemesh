@@ -1357,9 +1357,9 @@ var one = types.CalcHash32([]byte("1"))
 var two = types.CalcHash32([]byte("2"))
 var three = types.CalcHash32([]byte("3"))
 
-var atx1 = types.AtxId{Hash32: one}
-var atx2 = types.AtxId{Hash32: two}
-var atx3 = types.AtxId{Hash32: three}
+var atx1 = types.AtxId(one)
+var atx2 = types.AtxId(two)
+var atx3 = types.AtxId(three)
 
 func Test_validateUniqueTxAtx(t *testing.T) {
 	r := require.New(t)
@@ -1379,15 +1379,4 @@ func Test_validateUniqueTxAtx(t *testing.T) {
 	b.TxIds = []types.TransactionId{txid1, txid2, txid3}
 	b.AtxIds = []types.AtxId{atx1, atx2, atx1}
 	r.EqualError(validateUniqueTxAtx(b), errDupAtx.Error())
-}
-
-func TestSyncer_BlockSyntacticValidation(t *testing.T) {
-	r := require.New(t)
-	a, _ := SyncMockFactory(1, conf, t.Name(), memoryDB, newMemPoetDb)
-	s := a[0]
-	b := &types.Block{}
-	b.TxIds = []types.TransactionId{txid1, txid2, txid1}
-	b.AtxIds = []types.AtxId{atx1, atx2, atx3}
-	_, _, err := s.BlockSyntacticValidation(b)
-	r.EqualError(err, errDupTx.Error())
 }

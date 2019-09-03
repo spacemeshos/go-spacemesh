@@ -84,7 +84,9 @@ func (vq *validationQueue) work() {
 
 		//todo movem to batch block request
 		bid := types.BlockID(util.BytesToUint64(bjb.ids[0].Bytes()))
+
 		if bjb.items == nil {
+			//no items fetched
 			vq.updateDependencies(bid, false)
 			vq.Error(fmt.Sprintf("could not retrieve a block in view "))
 			continue
@@ -96,11 +98,12 @@ func (vq *validationQueue) work() {
 		vq.visited[bid] = struct{}{}
 
 		// validate unique tx atx
-		if err := validateUniqueTxAtx(block); err != nil {
+		if err := validateUniqueTxAtx(&block); err != nil {
 			vq.updateDependencies(bid, false)
-			return err
+			continue
 		}
 
+		// validate block eligibility
 		if eligable, err := vq.BlockSignedAndEligible(&block); err != nil || !eligable {
 			vq.updateDependencies(bid, false)
 			vq.Error(fmt.Sprintf("Block %v eligiblety check failed %v", bjb.ids, err))

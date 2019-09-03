@@ -311,22 +311,22 @@ func (t *BlockBuilder) handleGossipAtx(data service.GossipMessage) {
 
 	if err := t.syncer.FetchPoetProof(atx.GetPoetProofRef()); err != nil {
 		t.Warning("received ATX (%v) with syntactically invalid or missing PoET proof (%x): %v",
-			atx.ShortId(), atx.GetShortPoetProofRef(), err)
+			atx.ShortString(), atx.GetShortPoetProofRef(), err)
 		return
 	}
-	events.Publish(events.NewAtx{Id: atx.Id().String()})
+	events.Publish(events.NewAtx{Id: atx.Id().Hash32().String()})
 
 	err = t.atxValidator.SyntacticallyValidateAtx(atx)
-	events.Publish(events.ValidAtx{Id: atx.Id().String(), Valid: err == nil})
+	events.Publish(events.ValidAtx{Id: atx.Id().ShortString(), Valid: err == nil})
 	if err != nil {
-		t.Warning("received syntactically invalid ATX %v: %v", atx.ShortId(), err)
+		t.Warning("received syntactically invalid ATX %v: %v", atx.ShortString(), err)
 		// TODO: blacklist peer
 		return
 	}
 
 	t.AtxPool.Put(atx.Id(), atx)
 	data.ReportValidation(activation.AtxProtocol)
-	t.With().Info("stored and propagated new syntactically valid ATX", log.AtxId(atx.ShortId()))
+	t.With().Info("stored and propagated new syntactically valid ATX", log.AtxId(atx.ShortString()))
 }
 
 func (t *BlockBuilder) acceptBlockData() {
