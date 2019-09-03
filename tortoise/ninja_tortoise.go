@@ -511,7 +511,7 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) {
 			if Window > newlyr.Index() {
 				windowStart = 0
 			} else {
-				windowStart = Max(ni.pBase.Layer()+1, newlyr.Index()-Window+1)
+				windowStart = Max(ni.pBase.Layer(), newlyr.Index()-Window+1)
 			}
 
 			view := make(map[types.BlockID]struct{})
