@@ -29,6 +29,10 @@ type mockBlocksProvider struct {
 }
 
 func (mbp mockBlocksProvider) ContextuallyValidBlock(layer types.LayerID) (map[types.BlockID]struct{}, error) {
+	if mbp.mp == nil {
+		mbp.mp = make(map[types.BlockID]struct{})
+		mbp.mp[types.BlockID(10)] = struct{}{}
+	}
 	return mbp.mp, nil
 }
 
@@ -349,7 +353,9 @@ func TestOracle_activesSafeLayer(t *testing.T) {
 	}
 
 	bmp := make(map[types.LayerID]map[types.BlockID]struct{})
-	bmp[rsl] = make(map[types.BlockID]struct{})
+	mp2 := make(map[types.BlockID]struct{})
+	mp2[10] = struct{}{}
+	bmp[rsl] = mp2
 	o.blocksProvider = &bProvider{bmp}
 	mpRes, err := o.actives(lyr)
 	r.NotNil(mpRes)
