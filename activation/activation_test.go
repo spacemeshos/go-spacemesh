@@ -98,7 +98,7 @@ func (*postProverClientMock) VerifyInitAllowed() error { return nil }
 
 func (*postProverClientMock) SetLogger(shared.Logger) {}
 
-func (*postProverClientMock) SetParams(datadir string, space uint64) {}
+func (*postProverClientMock) SetParams(datadir string, space uint64) error { return nil }
 
 func (*postProverClientMock) Cfg() *config.Config { return nil }
 
@@ -565,9 +565,11 @@ func TestStartPost(t *testing.T) {
 	postCfg.Difficulty = 5
 	postCfg.NumProvenLabels = 10
 	postCfg.SpacePerUnit = 1 << 10 // 1KB.
-	postCfg.FileSize = 1 << 10     // 1KB.
+	postCfg.NumFiles = 1
 
-	postProver := nipst.NewPostClient(&postCfg, util.Hex2Bytes(id.Key))
+	postProver, err := nipst.NewPostClient(&postCfg, util.Hex2Bytes(id.Key))
+	assert.NoError(t, err)
+	assert.NotNil(t, postProver)
 	defer func() {
 		assert.NoError(t, postProver.Reset())
 	}()
@@ -578,8 +580,8 @@ func TestStartPost(t *testing.T) {
 	// Attempt to initialize with invalid space.
 	// This test verifies that the params are being set in the post client.
 	assert.Nil(t, builder.commitment)
-	err := builder.StartPost(coinbase2, drive, 1000)
-	assert.EqualError(t, err, "space (1000) must be a multiple of 32")
+	err = builder.StartPost(coinbase2, drive, 1000)
+	assert.EqualError(t, err, "space (1000) must be a power of 2")
 	assert.Nil(t, builder.commitment)
 	assert.Equal(t, postProver.Cfg().SpacePerUnit, uint64(1000))
 

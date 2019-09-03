@@ -94,6 +94,13 @@ func (vq *validationQueue) work() {
 
 		vq.Info("fetched  %v", bid)
 		vq.visited[bid] = struct{}{}
+
+		// validate unique tx atx
+		if err := validateUniqueTxAtx(block); err != nil {
+			vq.updateDependencies(bid, false)
+			return err
+		}
+
 		if eligable, err := vq.BlockSignedAndEligible(&block); err != nil || !eligable {
 			vq.updateDependencies(bid, false)
 			vq.Error(fmt.Sprintf("Block %v eligiblety check failed %v", bjb.ids, err))

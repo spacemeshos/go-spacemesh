@@ -257,7 +257,9 @@ func (b *Builder) StartPost(rewardAddress types.Address, dataDir string, space u
 		}
 	}
 
-	b.postProver.SetParams(dataDir, space)
+	if err := b.postProver.SetParams(dataDir, space); err != nil {
+		return err
+	}
 	b.SetCoinbaseAccount(rewardAddress)
 
 	initialized, err := b.postProver.IsInitialized()

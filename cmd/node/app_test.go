@@ -95,7 +95,7 @@ func (suite *AppTestSuite) initSingleInstance(i int, genesisTime string, rng *am
 	smApp.Config.POST.Difficulty = 5
 	smApp.Config.POST.NumProvenLabels = 10
 	smApp.Config.POST.SpacePerUnit = 1 << 10 // 1KB.
-	smApp.Config.POST.FileSize = 1 << 10     // 1KB.
+	smApp.Config.POST.NumFiles = 1
 
 	smApp.Config.HARE.N = 5
 	smApp.Config.HARE.F = 2
@@ -126,9 +126,11 @@ func (suite *AppTestSuite) initSingleInstance(i int, genesisTime string, rng *am
 	hareOracle := oracle.NewLocalOracle(rolacle, 5, nodeID)
 	hareOracle.Register(true, pub.String())
 
-	postClient := nipst.NewPostClient(&smApp.Config.POST, util.Hex2Bytes(nodeID.Key))
+	postClient, err := nipst.NewPostClient(&smApp.Config.POST, util.Hex2Bytes(nodeID.Key))
+	r.NoError(err)
+	r.NotNil(postClient)
 
-	err := smApp.initServices(nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(smApp.Config.LayerAvgSize), postClient, poetClient, vrfSigner, uint16(smApp.Config.LayersPerEpoch))
+	err = smApp.initServices(nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(smApp.Config.LayerAvgSize), postClient, poetClient, vrfSigner, uint16(smApp.Config.LayersPerEpoch))
 	r.NoError(err)
 	smApp.setupGenesis()
 
