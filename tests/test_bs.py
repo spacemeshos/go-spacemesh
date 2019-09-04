@@ -23,7 +23,6 @@ BOOT_DEPLOYMENT_FILE = './k8s/bootstrapoet-w-conf.yml'
 BOOT_STATEFULSET_FILE = './k8s/bootstrapoet-w-conf-ss.yml'
 CLIENT_DEPLOYMENT_FILE = './k8s/client-w-conf.yml'
 CLIENT_STATEFULSET_FILE = './k8s/client-w-conf-ss.yml'
-CLIENT_POD_FILE = './k8s/single-client-w-conf.yml'
 CURL_POD_FILE = './k8s/curl.yml'
 
 BOOTSTRAP_PORT = 7513
@@ -71,18 +70,6 @@ def get_conf(bs_info, client_config, setup_oracle=None, setup_poet=None, args=No
     if len(client_args) > 0:
         cspec.append_args(**client_args)
     return cspec
-
-
-# Do not use this if you need to add a client with persistent storage
-def add_single_client(deployment_id, container_specs):
-    resp = pod.create_pod(CLIENT_POD_FILE,
-                          testconfig['namespace'],
-                          deployment_id=deployment_id,
-                          container_specs=container_specs)
-
-    client_name = resp.metadata.name
-    print("Add new client: {0}".format(client_name))
-    return client_name
 
 
 def add_multi_clients(deployment_id, container_specs, size=2):
@@ -239,25 +226,6 @@ def setup_network(request, init_session, setup_bootstrap, setup_clients, add_cur
                                                bs_deployment_info=setup_bootstrap,
                                                cl_deployment_info=setup_clients)
     return network_deployment
-
-
-# The following fixture should not be used if you wish to add many clients during test.
-# Instead you should call add_single_client directly
-@pytest.fixture()
-def add_client(request, setup_bootstrap, setup_clients):
-    global client_name
-
-    def _add_single_client():
-        global client_name
-        if not setup_bootstrap.pods:
-            raise Exception("Could not find bootstrap node")
-
-        bs_info = setup_bootstrap.pods[0]
-        cspec = get_conf(bs_info, testconfig['client'])
-        client_name = add_single_client(setup_bootstrap.deployment_id, cspec)
-        return client_name
-
-    return _add_single_client()
 
 
 @pytest.fixture(scope='module')
