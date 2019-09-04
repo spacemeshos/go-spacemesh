@@ -111,6 +111,8 @@ func AddCommands(cmd *cobra.Command) {
 		config.TIME.DefaultTimeoutLatency, "Default timeout to ntp query")
 	cmd.PersistentFlags().DurationVar(&config.TIME.RefreshNtpInterval, "refresh-ntp-interval",
 		config.TIME.RefreshNtpInterval, "Refresh intervals to ntp")
+	cmd.PersistentFlags().IntVar(&config.P2P.MsgSizeLimit, "msg-size-limit",
+		config.P2P.MsgSizeLimit, "The message size limit in bytes for incoming messages")
 
 	/** ======================== API Flags ========================== **/
 
