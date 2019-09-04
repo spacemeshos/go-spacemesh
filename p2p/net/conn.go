@@ -3,6 +3,7 @@ package net
 import (
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"time"
@@ -196,8 +197,8 @@ func (c *FormattedConnection) setupIncoming(timeout time.Duration) error {
 			break
 		}
 
-		if len(msg) > c.msgSizeLimit {
-			c.logger.With().Error("processMessage: message is too big",
+		if c.msgSizeLimit != config.UnlimitedMsgSize && len(msg) > c.msgSizeLimit {
+			c.logger.With().Error("setupIncoming: message is too big",
 				log.Int("limit", c.msgSizeLimit), log.Int("actual", len(msg)))
 			err = ErrMsgExceededLimit
 			break

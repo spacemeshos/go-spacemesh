@@ -24,6 +24,8 @@ func duration(duration string) (dur time.Duration) {
 	return dur
 }
 
+const UnlimitedMsgSize = 0
+
 // Config defines the configuration options for the Spacemesh peer-to-peer networking layer
 type Config struct {
 	TCPPort               int           `mapstructure:"tcp-port"`
@@ -82,6 +84,6 @@ func DefaultConfig() Config {
 		MaxInboundPeers:       100,
 		SwarmConfig:           SwarmConfigValues,
 		BufferSize:            100,
-		MsgSizeLimit:          1 * 1024 * 1024,
+		MsgSizeLimit:          UnlimitedMsgSize,
 	}
 }

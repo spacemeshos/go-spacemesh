@@ -116,7 +116,7 @@ func (n *UDPNet) IncomingMessages() chan UDPMessageEvent {
 
 // main listening loop
 func (n *UDPNet) listenToUDPNetworkMessages(listener net.PacketConn) {
-	buf := make([]byte, n.config.MsgSizeLimit) // todo: buffer pool ?
+	buf := make([]byte, maxMessageSize) // todo: buffer pool ?
 	for {
 		size, addr, err := listener.ReadFrom(buf)
 		if err != nil {
@@ -132,7 +132,12 @@ func (n *UDPNet) listenToUDPNetworkMessages(listener net.PacketConn) {
 
 		}
 
-		// todo : check size?
+		if n.config.MsgSizeLimit != config.UnlimitedMsgSize && size > n.config.MsgSizeLimit {
+			n.logger.With().Error("listenToUDPNetworkMessages: message is too big",
+				log.Int("limit", n.config.MsgSizeLimit), log.Int("actual", size))
+			continue
+		}
+
 		copybuf := make([]byte, size)
 		copy(copybuf, buf)
 
