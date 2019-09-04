@@ -364,7 +364,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 
 	msh := mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, txpool, atxpool, processor, lg.WithName("mesh")) //todo: what to do with the logger?
 
-	conf := sync.Configuration{Concurrency: 4, LayerSize: int(layerSize), LayersPerEpoch: layersPerEpoch, RequestTimeout: time.Duration(app.Config.SyncRequestTimeout) * time.Millisecond, Hdist: app.Config.Hdist}
+	conf := sync.Configuration{Concurrency: 4, LayerSize: int(layerSize), LayersPerEpoch: layersPerEpoch, RequestTimeout: time.Duration(app.Config.SyncRequestTimeout) * time.Millisecond, Hdist: app.Config.Hdist, AtxsLimit: app.Config.AtxsPerBlock}
 	if app.Config.AtxsPerBlock > miner.AtxsPerBlockLimit { // validate limit
 		app.log.Panic("Number of atxs per block required is bigger than the limit atxsPerBlock=%v limit=%v", app.Config.AtxsPerBlock, miner.AtxsPerBlockLimit)
 	}
