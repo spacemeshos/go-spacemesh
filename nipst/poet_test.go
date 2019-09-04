@@ -2,7 +2,7 @@ package nipst
 
 import (
 	"crypto/rand"
-	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/poet/integration"
 	"github.com/stretchr/testify/require"
 	"testing"
@@ -61,7 +61,7 @@ func TestRPCPoet(t *testing.T) {
 }
 
 func testRPCPoetClient(c *RPCPoetClient, assert *require.Assertions) {
-	var ch common.Hash
+	var ch types.Hash32
 	_, err := rand.Read(ch[:])
 	assert.NoError(err)
 

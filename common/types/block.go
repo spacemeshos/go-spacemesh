@@ -4,8 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"github.com/google/uuid"
-	"github.com/spacemeshos/go-spacemesh/address"
-	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
@@ -35,7 +34,7 @@ func (id NodeId) String() string {
 }
 
 func (id NodeId) ToBytes() []byte {
-	return common.Hex2Bytes(id.String())
+	return util.Hex2Bytes(id.String())
 }
 
 func (id NodeId) ShortString() string {
@@ -99,7 +98,7 @@ type BlockEligibilityProof struct {
 // TODO rename to SerializableTransaction once we remove the old SerializableTransaction
 type InnerSerializableSignedTransaction struct {
 	AccountNonce uint64
-	Recipient    address.Address
+	Recipient    Address
 	GasLimit     uint64
 	GasPrice     uint64
 	Amount       uint64
@@ -111,7 +110,7 @@ type SerializableSignedTransaction struct {
 	Signature [64]byte
 }
 
-func NewSignedTx(nonce uint64, rec address.Address, amount, gas, price uint64, signer *signing.EdSigner) (*SerializableSignedTransaction, error) {
+func NewSignedTx(nonce uint64, rec Address, amount, gas, price uint64, signer *signing.EdSigner) (*SerializableSignedTransaction, error) {
 	inner := InnerSerializableSignedTransaction{
 		AccountNonce: nonce,
 		Recipient:    rec,
@@ -138,10 +137,10 @@ func NewSignedTx(nonce uint64, rec address.Address, amount, gas, price uint64, s
 // Used to hold a signed transaction along with its address
 type AddressableSignedTransaction struct {
 	*SerializableSignedTransaction
-	address.Address
+	Address
 }
 
-func NewAddressableTx(nonce uint64, orig, rec address.Address, amount, gasLimit, gasPrice uint64) *AddressableSignedTransaction {
+func NewAddressableTx(nonce uint64, orig, rec Address, amount, gasLimit, gasPrice uint64) *AddressableSignedTransaction {
 	inner := InnerSerializableSignedTransaction{
 		AccountNonce: nonce,
 		Recipient:    rec,
@@ -216,8 +215,17 @@ func (l *Layer) Blocks() []*Block {
 	return l.blocks
 }
 
-func (l *Layer) Hash() []byte {
-	return []byte("some hash representing the layer")
+func (l *Layer) Hash() Hash32 {
+	bids := l.blocks
+	keys := make([]BlockID, 0, len(bids))
+	for _, tortoiseBlock := range bids {
+		keys = append(keys, tortoiseBlock.ID())
+	}
+	hash, err := CalcBlocksHash32(keys)
+	if err != nil {
+		log.Panic("failed to calculate layer's hash - layer id %v", l.index)
+	}
+	return hash
 }
 
 func (l *Layer) AddBlock(block *Block) {

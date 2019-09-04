@@ -2,8 +2,7 @@ package state
 
 import (
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/address"
-	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/rlp"
 	"github.com/spacemeshos/go-spacemesh/trie"
@@ -12,18 +11,18 @@ import (
 )
 
 type GlobalStateDB interface {
-	Exist(addr address.Address) bool
-	Empty(addr address.Address) bool
-	GetBalance(addr address.Address) uint64
-	GetNonce(addr address.Address) uint64
-	AddBalance(addr address.Address, amount *big.Int)
-	SubBalance(addr address.Address, amount *big.Int)
-	SetNonce(addr address.Address, nonce uint64)
-	GetOrNewStateObj(addr address.Address) *StateObj
-	CreateAccount(addr address.Address)
-	Commit(deleteEmptyObjects bool) (root common.Hash, err error)
+	Exist(addr types.Address) bool
+	Empty(addr types.Address) bool
+	GetBalance(addr types.Address) uint64
+	GetNonce(addr types.Address) uint64
+	AddBalance(addr types.Address, amount *big.Int)
+	SubBalance(addr types.Address, amount *big.Int)
+	SetNonce(addr types.Address, nonce uint64)
+	GetOrNewStateObj(addr types.Address) *StateObj
+	CreateAccount(addr types.Address)
+	Commit(deleteEmptyObjects bool) (root types.Hash32, err error)
 	//Copy() *GlobalStateDB
-	IntermediateRoot(deleteEmptyObjects bool) common.Hash
+	IntermediateRoot(deleteEmptyObjects bool) types.Hash32
 	TrieDB() *trie.Database
 }
 
@@ -34,8 +33,8 @@ type StateDB struct {
 	lock sync.Mutex
 
 	// This map holds 'live' objects, which will get modified while processing a state transition.
-	stateObjects      map[address.Address]*StateObj
-	stateObjectsDirty map[address.Address]struct{}
+	stateObjects      map[types.Address]*StateObj
+	stateObjectsDirty map[types.Address]struct{}
 
 	// DB error.
 	// State objects are used by the consensus core and VM which are
@@ -46,7 +45,7 @@ type StateDB struct {
 }
 
 // Create a new state from a given trie.
-func New(root common.Hash, db Database) (*StateDB, error) {
+func New(root types.Hash32, db Database) (*StateDB, error) {
 	tr, err := db.OpenTrie(root)
 	if err != nil {
 		return nil, err
@@ -54,8 +53,8 @@ func New(root common.Hash, db Database) (*StateDB, error) {
 	return &StateDB{
 		db:                db,
 		globalTrie:        tr,
-		stateObjects:      make(map[address.Address]*StateObj),
-		stateObjectsDirty: make(map[address.Address]struct{}),
+		stateObjects:      make(map[types.Address]*StateObj),
+		stateObjectsDirty: make(map[types.Address]struct{}),
 	}, nil
 }
 
@@ -72,13 +71,13 @@ func (self *StateDB) Error() error {
 
 // Exist reports whether the given account address exists in the state.
 // Notably this also returns true for suicided accounts.
-func (self *StateDB) Exist(addr address.Address) bool {
+func (self *StateDB) Exist(addr types.Address) bool {
 	return self.getStateObj(addr) != nil
 }
 
 // Empty returns whether the state object is either non-existent
 // or empty according to the EIP161 specification (balance = nonce = code = 0)
-func (self *StateDB) Empty(addr address.Address) bool {
+func (self *StateDB) Empty(addr types.Address) bool {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 	so := self.getStateObj(addr)
@@ -86,7 +85,7 @@ func (self *StateDB) Empty(addr address.Address) bool {
 }
 
 // Retrieve the balance from the given address or 0 if object not found
-func (self *StateDB) GetBalance(addr address.Address) uint64 {
+func (self *StateDB) GetBalance(addr types.Address) uint64 {
 	StateObj := self.getStateObj(addr)
 	if StateObj != nil {
 		return StateObj.Balance().Uint64()
@@ -94,7 +93,7 @@ func (self *StateDB) GetBalance(addr address.Address) uint64 {
 	return 0
 }
 
-func (self *StateDB) GetNonce(addr address.Address) uint64 {
+func (self *StateDB) GetNonce(addr types.Address) uint64 {
 	StateObj := self.getStateObj(addr)
 	if StateObj != nil {
 		return StateObj.Nonce()
@@ -108,7 +107,7 @@ func (self *StateDB) GetNonce(addr address.Address) uint64 {
  */
 
 // AddBalance adds amount to the account associated with addr.
-func (self *StateDB) AddBalance(addr address.Address, amount *big.Int) {
+func (self *StateDB) AddBalance(addr types.Address, amount *big.Int) {
 	stateObj := self.GetOrNewStateObj(addr)
 	if stateObj != nil {
 		stateObj.AddBalance(amount)
@@ -116,21 +115,21 @@ func (self *StateDB) AddBalance(addr address.Address, amount *big.Int) {
 }
 
 // SubBalance subtracts amount from the account associated with addr.
-func (self *StateDB) SubBalance(addr address.Address, amount *big.Int) {
+func (self *StateDB) SubBalance(addr types.Address, amount *big.Int) {
 	StateObj := self.GetOrNewStateObj(addr)
 	if StateObj != nil {
 		StateObj.SubBalance(amount)
 	}
 }
 
-func (self *StateDB) SetBalance(addr address.Address, amount *big.Int) {
+func (self *StateDB) SetBalance(addr types.Address, amount *big.Int) {
 	stateObj := self.GetOrNewStateObj(addr)
 	if stateObj != nil {
 		stateObj.SetBalance(amount)
 	}
 }
 
-func (self *StateDB) SetNonce(addr address.Address, nonce uint64) {
+func (self *StateDB) SetNonce(addr types.Address, nonce uint64) {
 	stateObj := self.GetOrNewStateObj(addr)
 	if stateObj != nil {
 		stateObj.SetNonce(nonce)
@@ -151,8 +150,8 @@ func (self *StateDB) updateStateObj(StateObj *StateObj) {
 	self.setError(self.globalTrie.TryUpdate(addr[:], data))
 }
 
-// Retrieve a state object given by the address. Returns nil if not found.
-func (self *StateDB) getStateObj(addr address.Address) (StateObj *StateObj) {
+// Retrieve a state object given by the types. Returns nil if not found.
+func (self *StateDB) getStateObj(addr types.Address) (StateObj *StateObj) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 	// Prefer 'live' objects.
@@ -189,7 +188,7 @@ func (self *StateDB) setStateObj(object *StateObj) {
 }
 
 // Retrieve a state object or create a new state object if nil.
-func (self *StateDB) GetOrNewStateObj(addr address.Address) *StateObj {
+func (self *StateDB) GetOrNewStateObj(addr types.Address) *StateObj {
 	stateObj := self.getStateObj(addr)
 	if stateObj == nil { //|| StateObj.deleted {
 		stateObj, _ = self.createObject(addr)
@@ -199,7 +198,7 @@ func (self *StateDB) GetOrNewStateObj(addr address.Address) *StateObj {
 
 // createObject creates a new state object. If there is an existing account with
 // the given address, it is overwritten and returned as the second return value.
-func (self *StateDB) createObject(addr address.Address) (newobj, prev *StateObj) {
+func (self *StateDB) createObject(addr types.Address) (newobj, prev *StateObj) {
 	prev = self.getStateObj(addr)
 	newobj = newObject(self, addr, Account{})
 	newobj.setNonce(0) // sets the object to dirty
@@ -225,7 +224,7 @@ func (self *StateDB) createObject(addr address.Address) (newobj, prev *StateObj)
 //   2. tx_create(sha(account ++ nonce)) (note that this gets the address of 1)
 //
 // Carrying over the balance ensures that Ether doesn't disappear.
-func (self *StateDB) CreateAccount(addr address.Address) {
+func (self *StateDB) CreateAccount(addr types.Address) {
 	new, prev := self.createObject(addr)
 	if prev != nil {
 		new.setBalance(prev.account.Balance)
@@ -242,8 +241,8 @@ func (self *StateDB) Copy() *StateDB {
 	state := &StateDB{
 		db:                self.db,
 		globalTrie:        self.db.CopyTrie(self.globalTrie),
-		stateObjects:      make(map[address.Address]*StateObj),
-		stateObjectsDirty: make(map[address.Address]struct{}),
+		stateObjects:      make(map[types.Address]*StateObj),
+		stateObjectsDirty: make(map[types.Address]struct{}),
 	}
 
 	for addr := range self.stateObjectsDirty {
@@ -257,7 +256,7 @@ func (self *StateDB) Copy() *StateDB {
 }
 
 // Commit writes the state to the underlying in-memory trie database.
-func (s *StateDB) Commit(deleteEmptyObjects bool) (root common.Hash, err error) {
+func (s *StateDB) Commit(deleteEmptyObjects bool) (root types.Hash32, err error) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	// Commit objects to the trie.
@@ -282,7 +281,7 @@ func (s *StateDB) Finalise(deleteEmptyObjects bool) {
 // IntermediateRoot computes the current root hash of the state trie.
 // It is called in between transactions to get the root hash that
 // goes into transaction receipts.
-func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) common.Hash {
+func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) types.Hash32 {
 	return s.globalTrie.Hash()
 }
 

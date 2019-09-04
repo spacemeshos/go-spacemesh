@@ -16,7 +16,7 @@ from kubernetes.stream import stream
 from pytest_testconfig import config as testconfig
 from elasticsearch_dsl import Search, Q
 from tests.misc import ContainerSpec, CoreV1ApiClient
-from tests.queries import ES
+from tests.context import ES
 from tests.hare.assert_hare import validate_hare
 
 BOOT_DEPLOYMENT_FILE = './k8s/bootstrapoet-w-conf.yml'

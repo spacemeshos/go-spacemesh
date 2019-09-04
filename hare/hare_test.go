@@ -1,14 +1,14 @@
 package hare
 
 import (
-	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	signing2 "github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"sort"
@@ -177,7 +177,7 @@ func TestHare_collectOutputCheckValidation(t *testing.T) {
 	h.collectOutput(mockOutput{mockid, set})
 	output, ok := h.outputs[types.LayerID(mockid)]
 	require.True(t, ok)
-	require.Equal(t, output[0], types.BlockID(common.BytesToUint32(set.values[0].Bytes())))
+	require.Equal(t, output[0], types.BlockID(util.BytesToUint32(set.values[0].Bytes())))
 
 	// make sure we panic for false
 	defer func() {
@@ -204,7 +204,7 @@ func TestHare_collectOutput(t *testing.T) {
 	h.collectOutput(mockOutput{mockid, set})
 	output, ok := h.outputs[types.LayerID(mockid)]
 	require.True(t, ok)
-	require.Equal(t, output[0], types.BlockID(common.BytesToUint32(set.values[0].Bytes())))
+	require.Equal(t, output[0], types.BlockID(util.BytesToUint32(set.values[0].Bytes())))
 
 	mockid = instanceId2
 
@@ -227,7 +227,7 @@ func TestHare_collectOutput2(t *testing.T) {
 	h.collectOutput(mockOutput{mockid, set})
 	output, ok := h.outputs[types.LayerID(mockid)]
 	require.True(t, ok)
-	require.Equal(t, output[0], types.BlockID(common.BytesToUint32(set.values[0].Bytes())))
+	require.Equal(t, output[0], types.BlockID(util.BytesToUint32(set.values[0].Bytes())))
 
 	h.lastLayer = 3
 	newmockid := instanceId1

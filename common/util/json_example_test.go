@@ -14,22 +14,21 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package hexutil_test
+package util
 
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common/hexutil"
 )
 
 type MyType [5]byte
 
 func (v *MyType) UnmarshalText(input []byte) error {
-	return hexutil.UnmarshalFixedText("MyType", input, v[:])
+	return UnmarshalFixedText("MyType", input, v[:])
 }
 
 func (v MyType) String() string {
-	return hexutil.Bytes(v[:]).String()
+	return Bytes(v[:]).String()
 }
 
 func ExampleUnmarshalFixedText() {
