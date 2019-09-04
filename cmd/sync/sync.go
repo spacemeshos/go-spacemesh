@@ -15,7 +15,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/sync"
 	"github.com/spacemeshos/go-spacemesh/timesync"
-	"github.com/spacemeshos/go-spacemesh/tortoise"
 	"github.com/spf13/cobra"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
@@ -56,7 +55,7 @@ func init() {
 	Cmd.PersistentFlags().BoolVar(&remote, "remote-data", false, "fetch from remote")
 
 	//request timeout
-	Cmd.PersistentFlags().IntVar(&timeout, "timeout", 500, "request timeout")
+	Cmd.PersistentFlags().IntVar(&timeout, "timeout", 200, "request timeout")
 
 	cmdp.AddCommands(Cmd)
 }
@@ -134,6 +133,7 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 
 	conf := sync.Configuration{
 		Concurrency:    4,
+		AtxsLimit:      200,
 		LayerSize:      int(app.Config.LayerAvgSize),
 		RequestTimeout: time.Duration(timeout) * time.Millisecond,
 		Hdist:          app.Config.Hdist,
@@ -159,14 +159,17 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 
 	txpool := miner.NewTypesTransactionIdMemPool()
 	atxpool := miner.NewTypesAtxIdMemPool()
-	trtl := tortoise.NewAlgorithm(int(100), mshdb, app.Config.Hdist, lg.WithName("trtl"))
-	msh := mesh.NewMesh(mshdb, atxdb, sync.ConfigTst(), trtl, txpool, atxpool, &sync.MockState{}, lg.WithOptions(log.Nop))
+	msh := mesh.NewMesh(mshdb, atxdb, sync.ConfigTst(), &sync.MeshValidatorMock{}, txpool, atxpool, &sync.MockState{}, lg.WithOptions(log.Nop))
 	defer msh.Close()
 	msh.AddBlock(&mesh.GenesisBlock)
-
-	clock := &mockClock{}
-	app.sync = sync.NewSync(swarm, msh, txpool, atxpool, mockTxProcessor{}, sync.BlockEligibilityValidatorMock{}, poetDb, conf, clock, 0, 100, lg.WithName("sync"))
-	clock.first <- types.LayerID(expectedLayers)
+	tick := 5 * time.Second
+	layout := "2006-01-02T15:04:05.000Z"
+	str := "2016-11-12T11:45:26.371Z"
+	start, _ := time.Parse(layout, str)
+	ts := timesync.NewTicker(timesync.RealClock{}, tick, start)
+	curr := ts.GetCurrentLayer()
+	lg.Info("current layer %v", curr)
+	app.sync = sync.NewSync(swarm, msh, txpool, atxpool, mockTxProcessor{}, sync.BlockEligibilityValidatorMock{}, poetDb, conf, ts, lg.WithName("sync"))
 	if err = swarm.Start(); err != nil {
 		log.Panic("error starting p2p err=%v", err)
 	}
@@ -182,13 +185,13 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 		}
 	}
 
-	lg.Info("wait %v sec", 10)
+	sleep := time.Duration(10)
+	lg.Info("wait %v sec", sleep)
 	time.Sleep(10 * time.Second)
 	app.sync.Start()
 	for app.sync.ValidatedLayer() < types.LayerID(expectedLayers) {
 		lg.Info("sleep for %v sec", 30)
 		time.Sleep(30 * time.Second)
-		clock.first <- types.LayerID(expectedLayers + 1)
 	}
 
 	lg.Info("%v verified layers %v", app.BaseApp.Config.P2P.NodeID, app.sync.ValidatedLayer())

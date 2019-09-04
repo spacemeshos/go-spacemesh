@@ -60,7 +60,9 @@ func CalcAtxsHash12(ids []AtxId) (Hash12, error) {
 	sorted := make([]AtxId, len(ids))
 	copy(sorted, ids)
 	sort.Slice(sorted, func(i, j int) bool {
-		return bytes.Compare(sorted[i].Hash32[:], sorted[j].Hash32[:]) < 0 //sorted[i] < sorted[j]
+		a := sorted[i].Hash32()
+		b := sorted[j].Hash32()
+		return bytes.Compare(a[:], b[:]) < 0 //sorted[i] < sorted[j]
 	})
 	bytes, err := InterfaceToBytes(sorted)
 	if err != nil {

@@ -541,6 +541,7 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) {
 				layer, _ := ni.LayerBlockIds(idx) //todo handle error
 				bids := make([]types.BlockID, 0, ni.avgLayerSize)
 				for _, bid := range layer {
+
 					//if bid is not in p's view.
 					//add negative vote multiplied by the amount of blocks in the view
 					//explicit votes against (not in view )
