@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/poet/service"
 	"github.com/spacemeshos/poet/shared"
 	"github.com/spacemeshos/post/proving"
@@ -148,6 +149,8 @@ func (atxh *ActivationTxHeader) TargetEpoch(layersPerEpoch uint16) EpochId {
 
 func (atxh *ActivationTxHeader) SetId(id AtxId) {
 	if atxh.AtxId != *EmptyAtxId {
+		//can happen when a pear sends an object with initialized id
+		log.Warning("id field was already set")
 		return
 	}
 

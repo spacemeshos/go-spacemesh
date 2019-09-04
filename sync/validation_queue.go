@@ -16,7 +16,7 @@ type ValidationInfra interface {
 	AddBlockWithTxs(blk *types.Block, txs []*types.AddressableSignedTransaction, atxs []*types.ActivationTx) error
 	GetBlock(id types.BlockID) (*types.Block, error)
 	ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) (bool, error)) error
-	FastValidation(block *types.Block) error
+	fastValidation(block *types.Block) error
 	log.Logger
 }
 
@@ -80,11 +80,12 @@ func (vq *blockQueue) handleBlock(bjb fetchJob) {
 	//todo hack remove after batch block request is implemented in request and handler
 	vq.Info("fetched  %v", bid)
 	vq.visited[bid] = struct{}{}
-	if err := vq.FastValidation(&block); err != nil {
+	if err := vq.fastValidation(&block); err != nil {
 		vq.Error("ValidationQueue: block validation failed", log.BlockId(uint64(block.ID())), log.Err(err))
 		vq.updateDependencies(bid, false)
 		//return
 	}
+
 	vq.handleBlockDependencies(&block)
 	//todo better deadlock solution
 }

@@ -65,7 +65,7 @@ func (fq *fetchQueue) work() error {
 			continue
 		}
 
-		fq.handle(out.(fetchJob))
+		fq.handle(bjb)
 		fq.Debug("next batch")
 	}
 	return nil
@@ -104,7 +104,7 @@ func (fq *fetchQueue) invalidate(id types.Hash32, valid bool) {
 	}
 }
 
-//returns txs out of txids that are not in the local database
+//returns items out of itemIds that are not in the local database
 func (tq *fetchQueue) Handle(itemIds []types.Hash32) ([]Item, error) {
 	if len(itemIds) == 0 {
 		tq.Debug("handle empty item ids slice")

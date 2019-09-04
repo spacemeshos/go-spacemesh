@@ -288,7 +288,7 @@ func (s *Syncer) Synchronise() {
 	s.handleNotSynced(currentSyncLayer)
 }
 
-func (s *Syncer) FastValidation(block *types.Block) error {
+func (s *Syncer) fastValidation(block *types.Block) error {
 
 	if len(block.AtxIds) > s.AtxsLimit {
 		s.Error("Too many atxs in block expected<=%v actual=%v", s.AtxsLimit, len(block.AtxIds))
@@ -444,12 +444,8 @@ func validateUniqueTxAtx(b *types.Block) error {
 
 func (s *Syncer) blockSyntacticValidation(block *types.Block) ([]*types.AddressableSignedTransaction, []*types.ActivationTx, error) {
 	// validate unique tx atx
-	if err := validateUniqueTxAtx(block); err != nil {
+	if err := s.fastValidation(block); err != nil {
 		return nil, nil, err
-	}
-	//block eligibility
-	if eligible, err := s.BlockSignedAndEligible(block); err != nil || !eligible {
-		return nil, nil, fmt.Errorf("block eligibiliy check failed - err %v", err)
 	}
 
 	//data availability
