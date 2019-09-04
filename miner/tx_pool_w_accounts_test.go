@@ -3,7 +3,10 @@ package miner
 import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/stretchr/testify/require"
+	"strconv"
+	"sync"
 	"testing"
+	"time"
 )
 
 func TestNewTxPoolWithAccounts(t *testing.T) {
@@ -97,4 +100,55 @@ func newTx(origin types.Address, nonce, totalAmount uint64) (types.TransactionId
 	feeAmount := uint64(1)
 	tx := types.NewAddressableTx(nonce, origin, types.Address{}, totalAmount-feeAmount, 3, feeAmount)
 	return types.GetTransactionId(tx.SerializableSignedTransaction), tx
+}
+
+func BenchmarkTxPoolWithAccounts(b *testing.B) {
+	pool := NewTxPoolWithAccounts()
+
+	const numBatches = 10
+	txBatches := make([][]*types.AddressableSignedTransaction, numBatches)
+	txIdBatches := make([][]types.TransactionId, numBatches)
+	for i := 0; i < numBatches; i++ {
+		txBatches[i], txIdBatches[i] = createBatch(types.BytesToAddress([]byte("origin" + strconv.Itoa(i))))
+	}
+
+	wg := &sync.WaitGroup{}
+
+	start := time.Now()
+	wg.Add(numBatches)
+	for i, batch := range txBatches {
+		go addBatch(pool, batch, txIdBatches[i], wg)
+	}
+	wg.Wait()
+	wg.Add(numBatches)
+	for _, batch := range txIdBatches {
+		go invalidateBatch(pool, batch, wg)
+	}
+	wg.Wait()
+	b.Log(time.Since(start))
+}
+
+func addBatch(pool *TxPoolWithAccounts, txBatch []*types.AddressableSignedTransaction, txIdBatch []types.TransactionId, wg *sync.WaitGroup) {
+	for i, tx := range txBatch {
+		pool.Put(txIdBatch[i], tx)
+	}
+	wg.Done()
+}
+
+func invalidateBatch(pool *TxPoolWithAccounts, txIdBatch []types.TransactionId, wg *sync.WaitGroup) {
+	for _, txId := range txIdBatch {
+		pool.Invalidate(txId)
+	}
+	wg.Done()
+}
+
+func createBatch(origin types.Address) ([]*types.AddressableSignedTransaction, []types.TransactionId) {
+	var txBatch []*types.AddressableSignedTransaction
+	var txIdBatch []types.TransactionId
+	for i := uint64(0); i < 10000; i++ {
+		txId, tx := newTx(origin, 5+i, 50)
+		txBatch = append(txBatch, tx)
+		txIdBatch = append(txIdBatch, txId)
+	}
+	return txBatch, txIdBatch
 }
