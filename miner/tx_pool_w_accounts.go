@@ -64,23 +64,31 @@ func getRandIdxs(numOfTxs, spaceSize int, seed []byte) map[uint64]struct{} {
 	return idxs
 }
 
-func (t *TxPoolWithAccounts) Put(id types.TransactionId, item *types.AddressableSignedTransaction) {
+func (t *TxPoolWithAccounts) Put(id types.TransactionId, tx *types.AddressableSignedTransaction) {
 	t.accountsMutex.Lock()
-	t.getOrCreate(item.Address).Add([]types.TinyTx{types.AddressableTxToTiny(item)}, 0)
+	t.getOrCreate(tx.Address).Add([]types.TinyTx{types.AddressableTxToTiny(tx)}, 0)
 	t.accountsMutex.Unlock()
-	t.innerPool.Put(id, item)
+	t.innerPool.Put(id, tx)
 }
 
 func (t *TxPoolWithAccounts) Invalidate(id types.TransactionId) {
 	t.accountsMutex.Lock()
 	if tx, err := t.innerPool.Get(id); err == nil {
-		t.accounts[tx.Address].RemoveNonce(tx.AccountNonce)
-		if t.accounts[tx.Address].IsEmpty() {
-			delete(t.accounts, tx.Address)
-		}
+		t.removeNonce(tx)
 	}
 	t.innerPool.Invalidate(id)
 	t.accountsMutex.Unlock()
+}
+
+func (t *TxPoolWithAccounts) removeNonce(tx types.AddressableSignedTransaction) {
+	pendingTxs, found := t.accounts[tx.Address]
+	if !found {
+		return
+	}
+	pendingTxs.RemoveNonce(tx.AccountNonce)
+	if pendingTxs.IsEmpty() {
+		delete(t.accounts, tx.Address)
+	}
 }
 
 func (t *TxPoolWithAccounts) GetProjection(addr types.Address, prevNonce, prevBalance uint64) (nonce, balance uint64) {
