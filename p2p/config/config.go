@@ -39,6 +39,7 @@ type Config struct {
 	MaxInboundPeers       int           `mapstructure:"max-inbound"`
 	SwarmConfig           SwarmConfig   `mapstructure:"swarm"`
 	BufferSize            int           `mapstructure:"buffer-size"`
+	MsgSizeLimit          int           `mapstructure:"msg-size-limit"` // in bytes
 }
 
 // SwarmConfig specifies swarm config params.
@@ -81,5 +82,6 @@ func DefaultConfig() Config {
 		MaxInboundPeers:       100,
 		SwarmConfig:           SwarmConfigValues,
 		BufferSize:            100,
+		MsgSizeLimit:          1 * 1024 * 1024,
 	}
 }

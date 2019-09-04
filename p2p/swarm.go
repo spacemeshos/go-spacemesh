@@ -393,6 +393,11 @@ func (s *swarm) Shutdown() {
 
 // process an incoming message
 func (s *swarm) processMessage(ime net.IncomingMessageEvent) {
+	if len(ime.Message) > s.config.MsgSizeLimit {
+		s.lNode.With().Error("processMessage: message is too big",
+			log.Int("limit", s.config.MsgSizeLimit), log.Int("actual", len(ime.Message)))
+		return
+	}
 
 	err := s.onRemoteClientMessage(ime)
 	if err != nil {

@@ -9,6 +9,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 )
 
+// TODO: we should remove this const. Should  not depend on the number of addresses.
+// TODO: the number of addresses should be derived from the limit provided in the config
 const maxMessageSize = 300 * 60 // @see 0getAddrMax
 
 // UDPMessageEvent is an event about a udp message. passed through a channel
@@ -114,7 +116,7 @@ func (n *UDPNet) IncomingMessages() chan UDPMessageEvent {
 
 // main listening loop
 func (n *UDPNet) listenToUDPNetworkMessages(listener net.PacketConn) {
-	buf := make([]byte, maxMessageSize) // todo: buffer pool ?
+	buf := make([]byte, n.config.MsgSizeLimit) // todo: buffer pool ?
 	for {
 		size, addr, err := listener.ReadFrom(buf)
 		if err != nil {

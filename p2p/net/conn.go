@@ -54,17 +54,18 @@ type Connection interface {
 // A network connection supporting full-duplex messaging
 type FormattedConnection struct {
 	// metadata for logging / debugging
-	logger     log.Log
-	id         string // uuid for logging
-	created    time.Time
-	remotePub  p2pcrypto.PublicKey
-	remoteAddr net.Addr
-	closeChan  chan struct{}
-	formatter  wire.Formatter // format messages in some way
-	networker  networker      // network context
-	session    NetworkSession
-	closeOnce  sync.Once
-	closed     bool
+	logger       log.Log
+	id           string // uuid for logging
+	created      time.Time
+	remotePub    p2pcrypto.PublicKey
+	remoteAddr   net.Addr
+	closeChan    chan struct{}
+	formatter    wire.Formatter // format messages in some way
+	networker    networker      // network context
+	session      NetworkSession
+	closeOnce    sync.Once
+	closed       bool
+	msgSizeLimit int
 }
 
 type networker interface {
@@ -82,19 +83,20 @@ type readWriteCloseAddresser interface {
 
 // Create a new connection wrapping a net.Conn with a provided connection manager
 func newConnection(conn readWriteCloseAddresser, netw networker, formatter wire.Formatter,
-	remotePub p2pcrypto.PublicKey, session NetworkSession, log log.Log) *FormattedConnection {
+	remotePub p2pcrypto.PublicKey, session NetworkSession, msgSizeLimit int, log log.Log) *FormattedConnection {
 
 	// todo parametrize channel size - hard-coded for now
 	connection := &FormattedConnection{
-		logger:     log,
-		id:         crypto.UUIDString(),
-		created:    time.Now(),
-		remotePub:  remotePub,
-		remoteAddr: conn.RemoteAddr(),
-		formatter:  formatter,
-		networker:  netw,
-		session:    session,
-		closeChan:  make(chan struct{}),
+		logger:       log,
+		id:           crypto.UUIDString(),
+		created:      time.Now(),
+		remotePub:    remotePub,
+		remoteAddr:   conn.RemoteAddr(),
+		formatter:    formatter,
+		networker:    netw,
+		session:      session,
+		closeChan:    make(chan struct{}),
+		msgSizeLimit: msgSizeLimit,
 	}
 
 	connection.formatter.Pipe(conn)
@@ -188,6 +190,12 @@ func (c *FormattedConnection) setupIncoming(timeout time.Duration) error {
 	case msg, ok := <-c.formatter.In():
 		if !ok { // chan closed
 			err = ErrClosedIncomingChannel
+			break
+		}
+
+		if len(msg) > c.msgSizeLimit {
+			c.logger.With().Error("processMessage: message is too big",
+				log.Int("limit", c.msgSizeLimit), log.Int("actual", len(msg)))
 			break
 		}
 
