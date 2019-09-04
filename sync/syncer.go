@@ -77,10 +77,12 @@ type LayerProvider interface {
 	GetLayer(index types.LayerID) (*types.Layer, error)
 }
 
+type blockFastValidator func(block *types.Block) error
+
 type Syncer struct {
 	p2p.Peers
 	*mesh.Mesh
-	BlockValidator
+	blockFastValidator
 	Configuration
 	log.Log
 	*server.MessageServer
@@ -193,27 +195,47 @@ func (s *Syncer) run() {
 }
 
 //fires a sync every sm.syncInterval or on force space from outside
-func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool AtxMemPool, tv TxValidator, bv BlockValidator, poetdb PoetDb, conf Configuration, clockSub clockSubscriber, currentLayer types.LayerID, logger log.Log) *Syncer {
+func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool AtxMemPool, tv TxValidator, bv BlockValidator, poetdb PoetDb, conf Configuration, clockSub clockSubscriber, currentLayer types.LayerID, atxsLimit int, logger log.Log) *Syncer {
+	fastValidator := func(block *types.Block) error {
+
+		if len(block.AtxIds) > atxsLimit {
+			logger.Error("Too many atxs in block expected<=%v actual=%v", atxsLimit, len(block.AtxIds))
+			return errTooManyAtxs
+		}
+
+		// block eligibility
+		if eligible, err := bv.BlockSignedAndEligible(block); err != nil || !eligible {
+			return fmt.Errorf("block eligibiliy check failed - err %v", err)
+		}
+
+		// validate unique tx atx
+		if err := validateUniqueTxAtx(block); err != nil {
+			return err
+		}
+		return nil
+	}
+
 	s := &Syncer{
-		BlockValidator: bv,
-		Configuration:  conf,
-		Log:            logger,
-		Mesh:           layers,
-		Peers:          p2p.NewPeers(srv, logger.WithName("peers")),
-		MessageServer:  server.NewMsgServer(srv.(server.Service), syncProtocol, conf.RequestTimeout, make(chan service.DirectMessage, p2pconf.ConfigValues.BufferSize), logger.WithName("srv")),
-		lProvider:      layers,
-		txValidator:    tv,
-		SyncLock:       0,
-		txpool:         txpool,
-		atxpool:        atxpool,
-		poetDb:         poetdb,
-		startLock:      0,
-		currentLayer:   currentLayer,
-		forceSync:      make(chan bool),
-		clockSub:       clockSub,
-		clock:          clockSub.Subscribe(),
-		exit:           make(chan struct{}),
-		p2pSynced:      false,
+		blockFastValidator: fastValidator,
+		Configuration:      conf,
+		Log:                logger,
+		Mesh:               layers,
+		Peers:              p2p.NewPeers(srv, logger.WithName("peers")),
+		MessageServer:      server.NewMsgServer(srv.(server.Service), syncProtocol, conf.RequestTimeout, make(chan service.DirectMessage, p2pconf.ConfigValues.BufferSize), logger.WithName("srv")),
+		lValidator:         layers,
+		lProvider:          layers,
+		txValidator:        tv,
+		SyncLock:           0,
+		txpool:             txpool,
+		atxpool:            atxpool,
+		poetDb:             poetdb,
+		startLock:          0,
+		currentLayer:       currentLayer,
+		forceSync:          make(chan bool),
+		clockSub:           clockSub,
+		clock:              clockSub.Subscribe(),
+		exit:               make(chan struct{}),
+		p2pSynced:          false,
 	}
 
 	s.RegisterBytesMsgHandler(LAYER_HASH, newLayerHashRequestHandler(layers, logger))
@@ -242,8 +264,8 @@ func (s *Syncer) Synchronise() {
 		return
 	}
 
-	currentSyncLayer := s.ValidatedLayer() + 1
-	if currentSyncLayer >= s.lastTickedLayer() { // only validate if current < lastTicked
+	currentSyncLayer := s.lValidator.ValidatedLayer() + 1
+	if currentSyncLayer == s.lastTickedLayer() { // only validate if current < lastTicked
 		s.With().Info("Already synced for layer", log.Uint64("current_sync_layer", uint64(currentSyncLayer)))
 		return
 	}
@@ -256,7 +278,7 @@ func (s *Syncer) Synchronise() {
 			s.Panic("failed getting layer even though we are weakly-synced currentLayer=%v lastTicked=%v err=%v ", currentSyncLayer, s.lastTickedLayer(), err)
 			return
 		}
-		s.ValidateLayer(lyr) // wait for layer validation
+		s.lValidator.ValidateLayer(lyr) // wait for layer validation
 		return
 	}
 
@@ -278,7 +300,7 @@ func (s *Syncer) handleNotSynced(currentSyncLayer types.LayerID) {
 			return
 		}
 
-		s.ValidateLayer(lyr) // wait for layer validation
+		s.lValidator.ValidateLayer(lyr) // wait for layer validation
 	}
 
 	// Now we are somewhere in the layer (begin, middle, end)
@@ -315,7 +337,7 @@ func (s *Syncer) p2pSyncForOneFullLayer(currentSyncLayer types.LayerID) error {
 	if err != nil {
 		return err
 	}
-	s.ValidateLayer(lyr)
+	s.lValidator.ValidateLayer(lyr)
 
 	// get & validate second tick
 	currentSyncLayer++
@@ -323,7 +345,7 @@ func (s *Syncer) p2pSyncForOneFullLayer(currentSyncLayer types.LayerID) error {
 	if err != nil {
 		return err
 	}
-	s.ValidateLayer(lyr)
+	s.lValidator.ValidateLayer(lyr)
 	s.Info("Done waiting for ticks and validation. setting p2p true")
 
 	// fully-synced - set p2p-synced to true
@@ -382,10 +404,39 @@ func (s *Syncer) GetFullBlocks(blockIds []types.BlockID) []*types.Block {
 	return blocksArr
 }
 
+var (
+	errDupTx       = errors.New("duplicate TransactionId in block")
+	errDupAtx      = errors.New("duplicate AtxId in block")
+	errTooManyAtxs = errors.New("too many atxs in blocks")
+)
+
+func validateUniqueTxAtx(b *types.Block) error {
+	// check for duplicate tx id
+	mt := make(map[types.TransactionId]struct{}, len(b.TxIds))
+	for _, tx := range b.TxIds {
+		if _, exist := mt[tx]; exist {
+			return errDupTx
+		}
+		mt[tx] = struct{}{}
+	}
+
+	// check for duplicate atx id
+	ma := make(map[types.AtxId]struct{}, len(b.AtxIds))
+	for _, atx := range b.AtxIds {
+		if _, exist := ma[atx]; exist {
+			return errDupAtx
+		}
+		ma[atx] = struct{}{}
+	}
+
+	return nil
+}
+
 func (s *Syncer) BlockSyntacticValidation(block *types.Block) ([]*types.AddressableSignedTransaction, []*types.ActivationTx, error) {
-	//block eligibility
-	if eligible, err := s.BlockSignedAndEligible(block); err != nil || !eligible {
-		return nil, nil, fmt.Errorf("block eligibiliy check failed - err %v", err)
+	// run block fast validation
+	if err := s.blockFastValidator(block); err != nil {
+		s.With().Error("BlockSyntacticValidation: block validation failed", log.BlockId(uint64(block.ID())), log.Err(err))
+		return nil, nil, err
 	}
 
 	//data availability

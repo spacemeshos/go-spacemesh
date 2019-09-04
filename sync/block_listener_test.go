@@ -21,6 +21,8 @@ import (
 	"time"
 )
 
+const atxLimit = 100
+
 type PeersMock struct {
 	getPeers func() []p2p.Peer
 }
@@ -85,7 +87,7 @@ func ListenerFactory(serv service.Service, peers p2p.Peers, name string, layer t
 	l := log.New(name, "", "")
 	poetDb := activation.NewPoetDb(database.NewMemDatabase(), l.WithName("poetDb"))
 	blockValidator := BlockEligibilityValidatorMock{}
-	sync := NewSync(serv, getMesh(memoryDB, name), miner.NewTypesTransactionIdMemPool(), miner.NewTypesAtxIdMemPool(), mockTxProcessor{}, blockValidator, poetDb, conf, cl, layer, l)
+	sync := NewSync(serv, getMesh(memoryDB, name), miner.NewTypesTransactionIdMemPool(), miner.NewTypesAtxIdMemPool(), mockTxProcessor{}, blockValidator, poetDb, conf, cl, layer, atxLimit, l)
 	sync.clock <- layer
 	sync.Peers = peers
 	nbl := NewBlockListener(serv, sync, 2, log.New(name, "", ""))
@@ -569,7 +571,7 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 	bl2 := ListenerFactory(n2, PeersMock{func() []p2p.Peer { return []p2p.Peer{n1.PublicKey()} }}, "TestBlockListener_ListenToGossipBlocks2", 1)
 
 	bl1.Start()
-	bl2.Start() // TODO: @almog make sure data is available without starting
+	bl2.Start()
 
 	blk := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data1"))
 	tx := types.NewAddressableTx(0, types.BytesToAddress([]byte{0x01}), types.BytesToAddress([]byte{0x02}), 10, 10, 10)

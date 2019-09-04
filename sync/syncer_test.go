@@ -95,7 +95,7 @@ func SyncMockFactory(number int, conf Configuration, name string, dbType string,
 		blockValidator := BlockEligibilityValidatorMock{}
 		txpool := miner.NewTypesTransactionIdMemPool()
 		atxpool := miner.NewTypesAtxIdMemPool()
-		sync := NewSync(net, getMesh(dbType, Path+name+"_"+time.Now().String()), txpool, atxpool, mockTxProcessor{}, blockValidator, poetDb(), conf, ts, ts.GetCurrentLayer(), l)
+		sync := NewSync(net, getMesh(dbType, Path+name+"_"+time.Now().String()), txpool, atxpool, mockTxProcessor{}, blockValidator, poetDb(), conf, ts, ts.GetCurrentLayer(), atxLimit, l)
 		sync.RequestTimeout = 100 * time.Millisecond
 		nodes = append(nodes, sync)
 		p2ps = append(p2ps, net)
@@ -654,7 +654,7 @@ func Test_TwoNodes_SyncIntegrationSuite(t *testing.T) {
 		msh := getMesh(memoryDB, fmt.Sprintf("%s_%s", sis.name, time.Now()))
 		blockValidator := BlockEligibilityValidatorMock{}
 		poetDb := activation.NewPoetDb(database.NewMemDatabase(), l.WithName("poetDb"))
-		sync := NewSync(s, msh, miner.NewTypesTransactionIdMemPool(), miner.NewTypesAtxIdMemPool(), mockTxProcessor{}, blockValidator, poetDb, conf, ts, ts.GetCurrentLayer(), l)
+		sync := NewSync(s, msh, miner.NewTypesTransactionIdMemPool(), miner.NewTypesAtxIdMemPool(), mockTxProcessor{}, blockValidator, poetDb, conf, ts, ts.GetCurrentLayer(), atxLimit, l)
 		sis.syncers = append(sis.syncers, sync)
 		atomic.AddUint32(&i, 1)
 	}
@@ -772,7 +772,7 @@ func Test_Multiple_SyncIntegrationSuite(t *testing.T) {
 		msh := getMesh(memoryDB, fmt.Sprintf("%s_%d", sis.name, atomic.LoadUint32(&i)))
 		blockValidator := BlockEligibilityValidatorMock{}
 		poetDb := activation.NewPoetDb(database.NewMemDatabase(), l.WithName("poetDb"))
-		sync := NewSync(s, msh, miner.NewTypesTransactionIdMemPool(), miner.NewTypesAtxIdMemPool(), mockTxProcessor{}, blockValidator, poetDb, conf, ts, 0, l)
+		sync := NewSync(s, msh, miner.NewTypesTransactionIdMemPool(), miner.NewTypesAtxIdMemPool(), mockTxProcessor{}, blockValidator, poetDb, conf, ts, 0, atxLimit, l)
 		ts.StartNotifying()
 		sis.syncers = append(sis.syncers, sync)
 		atomic.AddUint32(&i, 1)
@@ -1076,7 +1076,7 @@ func TestSyncer_handleNotSyncedFlow(t *testing.T) {
 	txpool := miner.NewTypesTransactionIdMemPool()
 	atxpool := miner.NewTypesAtxIdMemPool()
 	ts := &mockClock{}
-	sync := NewSync(service.NewSimulator().NewNode(), getMesh(memoryDB, Path+t.Name()+"_"+time.Now().String()), txpool, atxpool, mockTxProcessor{}, BlockEligibilityValidatorMock{}, newMockPoetDb(), conf, ts, 10, log.NewDefault(t.Name()))
+	sync := NewSync(service.NewSimulator().NewNode(), getMesh(memoryDB, Path+t.Name()+"_"+time.Now().String()), txpool, atxpool, mockTxProcessor{}, BlockEligibilityValidatorMock{}, newMockPoetDb(), conf, ts, 10, atxLimit, log.NewDefault(t.Name()))
 
 	lv := &MeshValidatorMock{0, 0, sync.Mesh, 0, 0, 0, nil}
 	sync.Mesh.MeshValidator = lv
@@ -1315,4 +1315,60 @@ func TestSyncProtocol_BadResponse(t *testing.T) {
 		assert.Fail(t, timeoutErrMsg)
 	}
 
+}
+
+func genByte32() [32]byte {
+	var x [32]byte
+	rand.Read(x[:])
+
+	return x
+}
+
+var txid1 = types.TransactionId(genByte32())
+var txid2 = types.TransactionId(genByte32())
+var txid3 = types.TransactionId(genByte32())
+
+var one = types.CalcHash32([]byte("1"))
+var two = types.CalcHash32([]byte("2"))
+var three = types.CalcHash32([]byte("3"))
+
+var atx1 = types.AtxId{Hash32: one}
+var atx2 = types.AtxId{Hash32: two}
+var atx3 = types.AtxId{Hash32: three}
+
+func Test_validateUniqueTxAtx(t *testing.T) {
+	r := require.New(t)
+	b := &types.Block{}
+
+	// unique
+	b.TxIds = []types.TransactionId{txid1, txid2, txid3}
+	b.AtxIds = []types.AtxId{atx1, atx2, atx3}
+	r.Nil(validateUniqueTxAtx(b))
+
+	// dup txs
+	b.TxIds = []types.TransactionId{txid1, txid2, txid1}
+	b.AtxIds = []types.AtxId{atx1, atx2, atx3}
+	r.EqualError(validateUniqueTxAtx(b), errDupTx.Error())
+
+	// dup atxs
+	b.TxIds = []types.TransactionId{txid1, txid2, txid3}
+	b.AtxIds = []types.AtxId{atx1, atx2, atx1}
+	r.EqualError(validateUniqueTxAtx(b), errDupAtx.Error())
+}
+
+func TestSyncer_BlockSyntacticValidation(t *testing.T) {
+	r := require.New(t)
+	a, _ := SyncMockFactory(1, conf, t.Name(), memoryDB, newMemPoetDb)
+	s := a[0]
+	b := &types.Block{}
+	b.TxIds = []types.TransactionId{txid1, txid2, txid1}
+	b.AtxIds = []types.AtxId{atx1, atx2, atx3}
+	_, _, err := s.BlockSyntacticValidation(b)
+	r.EqualError(err, errDupTx.Error())
+
+	for i := 0; i <= miner.AtxsPerBlockLimit; i++ {
+		b.AtxIds = append(b.AtxIds, atx1)
+	}
+	_, _, err = s.BlockSyntacticValidation(b)
+	r.EqualError(err, errTooManyAtxs.Error())
 }

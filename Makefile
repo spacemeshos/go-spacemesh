@@ -92,7 +92,7 @@ else
 endif
 .PHONY: $(PLATFORMS)
 
-test:
+test: genproto
 	ulimit -n 500; go test -short -timeout 0 -p 1 ./...
 .PHONY: test
 
