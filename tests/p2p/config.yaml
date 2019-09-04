@@ -6,7 +6,7 @@ script_on_exit: '' # Uncomment this to save logs './k8s/log-client-pods.sh'
 
 genesis_delta: 150
 single_pod_ready_time_out: 60
-deployment_ready_time_out: 120
+deployment_ready_time_out: 120 #default 120
 config_path: '../config.toml'
 
 bootstrap:
@@ -28,10 +28,11 @@ bootstrap:
     layer-duration-sec: '60'
     layer-average-size: '20'
     hare-wakeup-delta: '10'
+  deployment_type: deployment # default:deployment  
 client:
   image: 'spacemeshos/go-spacemesh:develop'
   command: '/bin/go-p2p'
-  replicas: 40
+  replicas: 40 #default 40
   resources:
     requests:
       memory: '256M'
@@ -47,6 +48,7 @@ client:
     layer-duration-sec: '60'
     layer-average-size: '20'
     hare-wakeup-delta: '10'
+  deployment_type: deployment # default:deployment 
 elastic:
   host: elastic.spacemesh.io
   port: 9200
