@@ -180,8 +180,11 @@ func (c *FormattedConnection) shutdown(err error) {
 	c.formatter.Close()
 }
 
-var ErrTriedToSetupExistingConn = errors.New("tried to setup existing connection")
-var ErrIncomingSessionTimeout = errors.New("timeout waiting for handshake message")
+var (
+	ErrTriedToSetupExistingConn = errors.New("tried to setup existing connection")
+	ErrIncomingSessionTimeout   = errors.New("timeout waiting for handshake message")
+	ErrMsgExceededLimit         = errors.New("message size exceeded limit")
+)
 
 func (c *FormattedConnection) setupIncoming(timeout time.Duration) error {
 	var err error
@@ -196,6 +199,7 @@ func (c *FormattedConnection) setupIncoming(timeout time.Duration) error {
 		if len(msg) > c.msgSizeLimit {
 			c.logger.With().Error("processMessage: message is too big",
 				log.Int("limit", c.msgSizeLimit), log.Int("actual", len(msg)))
+			err = ErrMsgExceededLimit
 			break
 		}
 

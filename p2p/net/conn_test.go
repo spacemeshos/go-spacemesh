@@ -95,6 +95,20 @@ func TestPreSessionMessageAfterSession(t *testing.T) {
 	assert.Equal(t, conn.Closed(), true)
 }
 
+func TestConn_Limit(t *testing.T) {
+	netw := NewNetworkMock()
+	rwcam := NewReadWriteCloseAddresserMock()
+	rPub := p2pcrypto.NewRandomPubkey()
+	formatter := delimited.NewChan(10)
+	conn := newConnection(rwcam, netw, formatter, rPub, nil, 1, netw.logger)
+	go func() {
+		conn.incomingChannel() <- []byte{1, 2, 3}
+	}()
+
+	err := conn.setupIncoming(time.Second)
+	assert.EqualError(t, err, ErrMsgExceededLimit.Error())
+}
+
 func TestPreSessionError(t *testing.T) {
 	netw := NewNetworkMock()
 	rwcam := NewReadWriteCloseAddresserMock()
