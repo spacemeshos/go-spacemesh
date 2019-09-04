@@ -4,7 +4,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"sync"
 	"sync/atomic"
@@ -100,7 +99,7 @@ func (bl *BlockListener) HandleNewBlock(blk *types.Block) bool {
 		return false
 	}
 
-	if err := bl.AddBlockWithTxs(blk, txs, atxs); err != nil && err != mesh.ErrAlreadyExist {
+	if err := bl.AddBlockWithTxs(blk, txs, atxs); err != nil {
 		bl.With().Error("failed to add block to database", log.BlockId(uint64(blk.ID())), log.Err(err))
 		return false
 	}
