@@ -117,6 +117,7 @@ func TestSwarm_RegisterProtocolNoStart(t *testing.T) {
 
 func TestSwarm_processMessage(t *testing.T) {
 	s := swarm{}
+	s.config = config.DefaultConfig()
 	s.lNode, _ = node.GenerateTestNode(t)
 	r := node.GenerateRandomNodeData()
 	c := &net.ConnectionMock{}
