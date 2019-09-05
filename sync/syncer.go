@@ -222,7 +222,6 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool A
 		Mesh:               layers,
 		Peers:              p2p.NewPeers(srv, logger.WithName("peers")),
 		MessageServer:      server.NewMsgServer(srv.(server.Service), syncProtocol, conf.RequestTimeout, make(chan service.DirectMessage, p2pconf.ConfigValues.BufferSize), logger.WithName("srv")),
-		lValidator:         layers,
 		lProvider:          layers,
 		txValidator:        tv,
 		SyncLock:           0,
@@ -264,7 +263,7 @@ func (s *Syncer) Synchronise() {
 		return
 	}
 
-	currentSyncLayer := s.lValidator.ValidatedLayer() + 1
+	currentSyncLayer := s.ValidatedLayer() + 1
 	if currentSyncLayer == s.lastTickedLayer() { // only validate if current < lastTicked
 		s.With().Info("Already synced for layer", log.Uint64("current_sync_layer", uint64(currentSyncLayer)))
 		return
@@ -278,7 +277,7 @@ func (s *Syncer) Synchronise() {
 			s.Panic("failed getting layer even though we are weakly-synced currentLayer=%v lastTicked=%v err=%v ", currentSyncLayer, s.lastTickedLayer(), err)
 			return
 		}
-		s.lValidator.ValidateLayer(lyr) // wait for layer validation
+		s.ValidateLayer(lyr) // wait for layer validation
 		return
 	}
 
@@ -300,7 +299,7 @@ func (s *Syncer) handleNotSynced(currentSyncLayer types.LayerID) {
 			return
 		}
 
-		s.lValidator.ValidateLayer(lyr) // wait for layer validation
+		s.ValidateLayer(lyr) // wait for layer validation
 	}
 
 	// Now we are somewhere in the layer (begin, middle, end)
@@ -337,7 +336,7 @@ func (s *Syncer) p2pSyncForOneFullLayer(currentSyncLayer types.LayerID) error {
 	if err != nil {
 		return err
 	}
-	s.lValidator.ValidateLayer(lyr)
+	s.ValidateLayer(lyr)
 
 	// get & validate second tick
 	currentSyncLayer++
@@ -345,7 +344,7 @@ func (s *Syncer) p2pSyncForOneFullLayer(currentSyncLayer types.LayerID) error {
 	if err != nil {
 		return err
 	}
-	s.lValidator.ValidateLayer(lyr)
+	s.ValidateLayer(lyr)
 	s.Info("Done waiting for ticks and validation. setting p2p true")
 
 	// fully-synced - set p2p-synced to true
@@ -460,7 +459,7 @@ func (s *Syncer) BlockSyntacticValidation(block *types.Block) ([]*types.Addressa
 }
 
 func (s *Syncer) ValidateView(blk *types.Block) bool {
-	vq := NewValidationQueue(s.Log.WithName("validQ"))
+	vq := NewValidationQueue(s.blockFastValidator, s.Log.WithName("validQ"))
 	if err := vq.traverse(s, &blk.BlockHeader); err != nil {
 		s.Error("could not validate %v view %v", blk.ID(), err)
 		return false
