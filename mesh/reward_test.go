@@ -36,8 +36,8 @@ func (s *MockMapState) ApplyRewards(layer types.LayerID, miners []types.Address,
 
 }
 
-func (s *MockMapState) ValidateTransactionSignature(tx *types.Transaction) (types.Address, error) {
-	return types.Address{}, nil
+func (s *MockMapState) AddressExists(addr types.Address) bool {
+	return true
 }
 
 func ConfigTst() Config {

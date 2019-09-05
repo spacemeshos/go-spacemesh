@@ -81,8 +81,8 @@ func (app *SyncApp) Cleanup() {
 type mockTxProcessor struct {
 }
 
-func (mockTxProcessor) ValidateTransactionSignature(tx *types.Transaction) (types.Address, error) {
-	return types.HexToAddress("0xFFFF"), nil
+func (mockTxProcessor) AddressExists(addr types.Address) bool {
+	return true
 }
 
 type mockClock struct {

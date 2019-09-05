@@ -47,7 +47,7 @@ type EligibilityValidator interface {
 }
 
 type TxValidator interface {
-	ValidateTransactionSignature(tx *types.Transaction) (types.Address, error)
+	AddressExists(addr types.Address) bool
 }
 
 type clockSubscriber interface {
@@ -639,10 +639,9 @@ func (s *Syncer) syncTxs(txids []types.TransactionId) ([]*types.Transaction, err
 			ntxs := out.([]types.Transaction)
 			for _, tx := range ntxs {
 				tmp := tx
-				_, err := s.txValidator.ValidateTransactionSignature(&tmp)
-				if err != nil {
-					id := tmp.Id()
-					s.Warning("tx %v not valid %v", hex.EncodeToString(id[:]), err)
+				if !s.txValidator.AddressExists(tmp.Origin()) {
+					s.With().Warning("tx origin does not exist", log.TxId(tmp.Id().Short()),
+						log.String("origin", tmp.Origin().String()))
 					continue
 				}
 				unprocessedTxs[tmp.Id()] = &tmp
@@ -657,7 +656,7 @@ func (s *Syncer) syncTxs(txids []types.TransactionId) ([]*types.Transaction, err
 		} else if _, ok := dbTxs[id]; ok {
 			continue
 		} else {
-			return nil, errors.New(fmt.Sprintf("could not fetch tx %v", hex.EncodeToString(id[:])))
+			return nil, fmt.Errorf("could not fetch tx with id: %v", id.Short())
 		}
 	}
 	return txs, nil

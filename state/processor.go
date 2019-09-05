@@ -79,7 +79,7 @@ func PublicKeyToAccountAddress(pub ed25519.PublicKey) types.Address {
 
 // Validate the signature by extracting the source account and validating its existence.
 // Return the src acount address and error in case of failure
-func (tp *TransactionProcessor) ValidateSignature(s types.Signed) (types.Address, error) {
+func (tp *TransactionProcessor) ValidateSignature(s types.Signed) (types.Address, error) { // TODO: never used
 	var w bytes.Buffer
 	_, err := xdr.Marshal(&w, s.Data())
 	if err != nil {

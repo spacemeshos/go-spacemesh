@@ -30,7 +30,7 @@ type TxProcessor interface {
 	ApplyTransactions(layer types.LayerID, transactions []*types.Transaction) (uint32, error)
 	ApplyRewards(layer types.LayerID, miners []types.Address, underQuota map[types.Address]int, bonusReward, diminishedReward *big.Int)
 	ValidateSignature(s types.Signed) (types.Address, error)
-	ValidateTransactionSignature(tx *types.Transaction) (types.Address, error) //todo use validate signature across the bord and remove this
+	AddressExists(addr types.Address) bool
 }
 
 type TxMemPoolInValidator interface {

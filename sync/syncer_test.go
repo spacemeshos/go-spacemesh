@@ -118,8 +118,8 @@ func (s *stateMock) ApplyTransactions(id types.LayerID, tx []*types.Transaction)
 	return 0, nil
 }
 
-func (s *stateMock) ValidateTransactionSignature(tx *types.Transaction) (types.Address, error) {
-	return types.Address{}, nil
+func (s *stateMock) AddressExists(addr types.Address) bool {
+	return true
 }
 
 type mockBlocksProvider struct {

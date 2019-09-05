@@ -79,8 +79,8 @@ func (t *TxAPIMock) setMockOrigin(orig types.Address) {
 	t.mockOrigin = orig
 }
 
-func (t *TxAPIMock) ValidateTransactionSignature(tx *types.Transaction) (types.Address, error) {
-	return t.mockOrigin, nil
+func (t *TxAPIMock) AddressExists(addr types.Address) bool {
+	return true
 }
 
 type MinigApiMock struct {

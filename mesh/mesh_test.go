@@ -56,8 +56,8 @@ func (MockState) ApplyTransactions(layer types.LayerID, txs []*types.Transaction
 func (MockState) ApplyRewards(layer types.LayerID, miners []types.Address, underQuota map[types.Address]int, bonusReward, diminishedReward *big.Int) {
 }
 
-func (MockState) ValidateTransactionSignature(tx *types.Transaction) (types.Address, error) {
-	return types.Address{}, nil
+func (MockState) AddressExists(addr types.Address) bool {
+	return true
 }
 
 type MockTxMemPool struct{}

@@ -78,9 +78,8 @@ func (s SpacemeshGrpcService) SubmitTransaction(ctx context.Context, in *pb.Sign
 		return nil, err
 	}
 	log.Info("GRPC SubmitTransaction to address: %s (len: %v), amount: %v gaslimit: %v, price: %v", signedTx.Recipient.Short(), len(signedTx.Recipient), signedTx.Amount, signedTx.GasLimit, signedTx.GasPrice)
-	_, err = s.Tx.ValidateTransactionSignature(signedTx)
-	if err != nil {
-		log.Error("tx failed to validate signature, error %v", err)
+	if !s.Tx.AddressExists(signedTx.Origin()) {
+		log.Error("tx failed to validate signature")
 		return nil, err
 	}
 	id := signedTx.Id()
@@ -124,7 +123,7 @@ func (s SpacemeshGrpcService) StopService() {
 }
 
 type TxAPI interface {
-	ValidateTransactionSignature(tx *types.Transaction) (types.Address, error)
+	AddressExists(addr types.Address) bool
 }
 
 // NewGrpcService create a new grpc service using config data.

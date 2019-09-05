@@ -84,8 +84,8 @@ func (MockState) ValidateSignature(signed types.Signed) (types.Address, error) {
 func (MockState) ApplyRewards(layer types.LayerID, miners []types.Address, underQuota map[types.Address]int, bonusReward, diminishedReward *big.Int) {
 }
 
-func (MockState) ValidateTransactionSignature(tx *types.Transaction) (types.Address, error) {
-	return types.Address{}, nil
+func (MockState) AddressExists(addr types.Address) bool {
+	return true
 }
 
 func (s *StateMock) ApplyRewards(layer types.LayerID, miners []string, underQuota map[string]int, bonusReward, diminishedReward *big.Int) {
