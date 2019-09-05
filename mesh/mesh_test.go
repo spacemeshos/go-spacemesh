@@ -2,7 +2,6 @@ package mesh
 
 import (
 	"bytes"
-	"fmt"
 	"github.com/google/uuid"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -282,11 +281,6 @@ func TestMesh_AddBlockWithTxs_PushTransactions_UpdateMeshTxs(t *testing.T) {
 	tx3 := addTxToMesh(r, msh, signer, 2470)
 	tx4 := addTxToMesh(r, msh, signer, 2471)
 	tx5 := addTxToMesh(r, msh, signer, 2472)
-	fmt.Printf("%x\n", tx1.Id())
-	fmt.Printf("%x\n", tx2.Id())
-	fmt.Printf("%x\n", tx3.Id())
-	fmt.Printf("%x\n", tx4.Id())
-	fmt.Printf("%x\n", tx5.Id())
 	addBlockWithTxs(r, msh, layerID, true, tx1, tx2)
 	addBlockWithTxs(r, msh, layerID, true, tx2, tx3, tx4)
 	addBlockWithTxs(r, msh, layerID, false, tx4, tx5)
@@ -303,9 +297,6 @@ func TestMesh_AddBlockWithTxs_PushTransactions_UpdateMeshTxs(t *testing.T) {
 	r.ElementsMatch(GetTransactionIds(tx4, tx5), GetTransactionIds(mempoolWrapper.txs...))
 
 	txns = getTxns(r, msh.MeshDB, origin)
-	for _, tx := range txns {
-		fmt.Printf("%x\n", tx.Id)
-	} // TODO: for some reason a couple of txs don't get invalidated 🤔 (and their IDs change)
 	r.Empty(txns)
 }
 

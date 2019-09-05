@@ -19,36 +19,36 @@ func NewAccountPendingTxs() *AccountPendingTxs {
 	}
 }
 
-func (apt *AccountPendingTxs) Add(txs []types.TinyTx, layer types.LayerID) {
+func (apt *AccountPendingTxs) Add(layer types.LayerID, txs ...*types.Transaction) {
 	for _, tx := range txs {
-		existing, found := apt.PendingTxs[tx.Nonce]
+		existing, found := apt.PendingTxs[tx.AccountNonce]
 		if !found {
 			existing = make(map[types.TransactionId]nanoTx)
-			apt.PendingTxs[tx.Nonce] = existing
+			apt.PendingTxs[tx.AccountNonce] = existing
 		}
-		if existing[tx.Id].HighestLayerIncludedIn > layer {
-			layer = existing[tx.Id].HighestLayerIncludedIn
+		if existing[tx.Id()].HighestLayerIncludedIn > layer {
+			layer = existing[tx.Id()].HighestLayerIncludedIn
 		}
-		existing[tx.Id] = nanoTx{
-			TotalAmount:            tx.TotalAmount,
+		existing[tx.Id()] = nanoTx{
+			TotalAmount:            tx.Amount + tx.GasPrice,
 			HighestLayerIncludedIn: layer,
 		}
 	}
 }
 
-func (apt *AccountPendingTxs) Remove(accepted []types.TinyTx, rejected []types.TinyTx, layer types.LayerID) {
+func (apt *AccountPendingTxs) Remove(accepted, rejected []*types.Transaction, layer types.LayerID) {
 	for _, tx := range accepted {
-		delete(apt.PendingTxs, tx.Nonce)
+		delete(apt.PendingTxs, tx.AccountNonce)
 	}
 	for _, tx := range rejected {
-		existing, found := apt.PendingTxs[tx.Nonce]
+		existing, found := apt.PendingTxs[tx.AccountNonce]
 		if found {
-			if existing[tx.Id].HighestLayerIncludedIn > layer {
+			if existing[tx.Id()].HighestLayerIncludedIn > layer {
 				continue
 			}
-			delete(existing, tx.Id)
+			delete(existing, tx.Id())
 			if len(existing) == 0 {
-				delete(apt.PendingTxs, tx.Nonce)
+				delete(apt.PendingTxs, tx.AccountNonce)
 			}
 		}
 	}

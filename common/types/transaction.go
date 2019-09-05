@@ -8,22 +8,6 @@ import (
 	"github.com/spacemeshos/sha256-simd"
 )
 
-type TinyTx struct {
-	Id          TransactionId
-	Origin      Address
-	Nonce       uint64
-	TotalAmount uint64
-}
-
-func TxToTiny(tx *Transaction) TinyTx {
-	return TinyTx{
-		Id:          tx.Id(),
-		Origin:      tx.Origin(),
-		Nonce:       tx.AccountNonce,
-		TotalAmount: tx.Amount + tx.GasPrice, // TODO: GasPrice represents the absolute fee here, as a temporarily hack
-	}
-}
-
 type TransactionId [32]byte
 
 func (id TransactionId) Bytes() []byte {

@@ -407,19 +407,25 @@ func TestMeshDB_MeshTxs(t *testing.T) {
 	r.Equal(101, int(txns2[0].TotalAmount))
 }
 
-func getTxns(r *require.Assertions, mdb *MeshDB, origin types.Address) []types.TinyTx {
+type TinyTx struct {
+	Id          types.TransactionId
+	Nonce       uint64
+	TotalAmount uint64
+}
+
+func getTxns(r *require.Assertions, mdb *MeshDB, origin types.Address) []TinyTx {
 	txnsB, err := mdb.meshTxs.Get(origin.Bytes())
 	if err == database.ErrNotFound {
-		return []types.TinyTx{}
+		return []TinyTx{}
 	}
 	r.NoError(err)
 	var txns pending_txs.AccountPendingTxs
 	err = types.BytesToInterface(txnsB, &txns)
 	r.NoError(err)
-	var ret []types.TinyTx
+	var ret []TinyTx
 	for nonce, nonceTxs := range txns.PendingTxs {
 		for id, tx := range nonceTxs {
-			ret = append(ret, types.TinyTx{Id: id, Nonce: nonce, TotalAmount: tx.TotalAmount})
+			ret = append(ret, TinyTx{Id: id, Nonce: nonce, TotalAmount: tx.TotalAmount})
 		}
 	}
 	sort.Slice(ret, func(i, j int) bool {

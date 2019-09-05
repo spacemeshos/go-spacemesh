@@ -66,7 +66,7 @@ func getRandIdxs(numOfTxs, spaceSize int, seed []byte) map[uint64]struct{} {
 
 func (t *TxPoolWithAccounts) Put(id types.TransactionId, tx *types.Transaction) {
 	t.accountsMutex.Lock()
-	t.getOrCreate(tx.Origin()).Add([]types.TinyTx{types.TxToTiny(tx)}, 0)
+	t.getOrCreate(tx.Origin()).Add(0, tx)
 	t.accountsMutex.Unlock()
 	t.innerPool.Put(id, tx)
 }

@@ -334,11 +334,7 @@ func (m *MeshDB) writeTransactions(txs []*types.Transaction) error {
 }
 
 func (m *MeshDB) addToMeshTxs(txs []*types.Transaction, layer types.LayerID) error {
-	tinyTxs := make([]types.TinyTx, 0, len(txs))
-	for _, tx := range txs {
-		tinyTxs = append(tinyTxs, types.TxToTiny(tx))
-	}
-	groupedTxs := groupByOrigin(tinyTxs)
+	groupedTxs := groupByOrigin(txs)
 
 	for addr, accountTxs := range groupedTxs {
 		if err := m.addToAccountTxs(addr, accountTxs, layer); err != nil {
@@ -348,7 +344,7 @@ func (m *MeshDB) addToMeshTxs(txs []*types.Transaction, layer types.LayerID) err
 	return nil
 }
 
-func (m *MeshDB) addToAccountTxs(addr types.Address, accountTxs []types.TinyTx, layer types.LayerID) error {
+func (m *MeshDB) addToAccountTxs(addr types.Address, accountTxs []*types.Transaction, layer types.LayerID) error {
 	m.meshTxsMutex.Lock()
 	defer m.meshTxsMutex.Unlock()
 
@@ -357,7 +353,7 @@ func (m *MeshDB) addToAccountTxs(addr types.Address, accountTxs []types.TinyTx, 
 	if err != nil {
 		return err
 	}
-	pending.Add(accountTxs, layer)
+	pending.Add(layer, accountTxs...)
 	if err := m.storeAccountPendingTxs(addr, pending); err != nil {
 		return err
 	}
@@ -365,8 +361,8 @@ func (m *MeshDB) addToAccountTxs(addr types.Address, accountTxs []types.TinyTx, 
 }
 
 func (m *MeshDB) removeFromMeshTxs(accepted, rejected []*types.Transaction, layer types.LayerID) error {
-	gAccepted := txsToTinyGrouped(accepted)
-	gRejected := txsToTinyGrouped(rejected)
+	gAccepted := groupByOrigin(accepted)
+	gRejected := groupByOrigin(rejected)
 	accounts := make(map[types.Address]struct{})
 	for account := range gAccepted {
 		accounts[account] = struct{}{}
@@ -383,7 +379,7 @@ func (m *MeshDB) removeFromMeshTxs(accepted, rejected []*types.Transaction, laye
 	return nil
 }
 
-func (m *MeshDB) removeFromAccountTxs(account types.Address, gAccepted map[types.Address][]types.TinyTx, gRejected map[types.Address][]types.TinyTx, layer types.LayerID) error {
+func (m *MeshDB) removeFromAccountTxs(account types.Address, gAccepted, gRejected map[types.Address][]*types.Transaction, layer types.LayerID) error {
 	m.meshTxsMutex.Lock()
 	defer m.meshTxsMutex.Unlock()
 
@@ -397,14 +393,6 @@ func (m *MeshDB) removeFromAccountTxs(account types.Address, gAccepted map[types
 		return err
 	}
 	return nil
-}
-
-func txsToTinyGrouped(txs []*types.Transaction) map[types.Address][]types.TinyTx {
-	tinyTxs := make([]types.TinyTx, 0, len(txs))
-	for _, tx := range txs {
-		tinyTxs = append(tinyTxs, types.TxToTiny(tx))
-	}
-	return groupByOrigin(tinyTxs)
 }
 
 func (m *MeshDB) storeAccountPendingTxs(account types.Address, pending *pending_txs.AccountPendingTxs) error {
@@ -437,10 +425,10 @@ func (m *MeshDB) getAccountPendingTxs(addr types.Address) (*pending_txs.AccountP
 	return &pending, nil
 }
 
-func groupByOrigin(txs []types.TinyTx) map[types.Address][]types.TinyTx {
-	grouped := make(map[types.Address][]types.TinyTx)
+func groupByOrigin(txs []*types.Transaction) map[types.Address][]*types.Transaction {
+	grouped := make(map[types.Address][]*types.Transaction)
 	for _, tx := range txs {
-		grouped[tx.Origin] = append(grouped[tx.Origin], tx)
+		grouped[tx.Origin()] = append(grouped[tx.Origin()], tx)
 	}
 	return grouped
 }
