@@ -288,7 +288,7 @@ func (t *BlockBuilder) listenForTx() {
 	}
 }
 
-func (t *BlockBuilder) ValidateAndAddTxToPool(tx *types.Transaction, postValidationFuncs ...func()) error {
+func (t *BlockBuilder) ValidateAndAddTxToPool(tx *types.Transaction, postValidationFunc func()) error {
 	if !t.txValidator.AddressExists(tx.Origin()) {
 		return fmt.Errorf("transaction origin does not exist")
 	}
@@ -296,8 +296,8 @@ func (t *BlockBuilder) ValidateAndAddTxToPool(tx *types.Transaction, postValidat
 	if err != nil {
 		return err
 	}
-	for _, f := range postValidationFuncs {
-		f()
+	if postValidationFunc != nil {
+		postValidationFunc()
 	}
 	t.TransactionPool.Put(tx.Id(), tx)
 	return nil

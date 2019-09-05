@@ -262,7 +262,7 @@ type MockMempoolWrapper struct {
 	txs []*types.Transaction
 }
 
-func (m *MockMempoolWrapper) ValidateAndAddTxToPool(tx *types.Transaction, postValidationFuncs ...func()) error {
+func (m *MockMempoolWrapper) ValidateAndAddTxToPool(tx *types.Transaction, postValidationFunc func()) error {
 	m.txs = append(m.txs, tx)
 	return nil
 }
