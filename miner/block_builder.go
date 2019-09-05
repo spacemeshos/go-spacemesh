@@ -35,8 +35,8 @@ type Signer interface {
 }
 
 type TxValidator interface {
-	GetValidAddressableTx(tx *types.SerializableSignedTransaction) (*types.AddressableSignedTransaction, error)
-	ValidateNonceAndBalance(transaction *types.AddressableSignedTransaction) error
+	ValidateTransactionSignature(tx *types.Transaction) (types.Address, error)
+	ValidateNonceAndBalance(transaction *types.Transaction) error
 }
 
 type AtxValidator interface {
@@ -49,9 +49,9 @@ type Syncer interface {
 }
 
 type TxPool interface {
-	Get(id types.TransactionId) (types.AddressableSignedTransaction, error)
-	GetRandomTxs(size int, seed []byte) []types.AddressableSignedTransaction
-	Put(id types.TransactionId, item *types.AddressableSignedTransaction)
+	Get(id types.TransactionId) (types.Transaction, error)
+	GetRandomTxs(size int, seed []byte) []types.Transaction
+	Put(id types.TransactionId, item *types.Transaction)
 	Invalidate(id types.TransactionId)
 }
 
@@ -161,11 +161,11 @@ type OrphanBlockProvider interface {
 }
 
 //used from external API call?
-func (t *BlockBuilder) AddTransaction(tx *types.AddressableSignedTransaction) error {
+func (t *BlockBuilder) AddTransaction(tx *types.Transaction) error {
 	if !t.started {
 		return fmt.Errorf("BlockBuilderStopped")
 	}
-	t.TransactionPool.Put(types.GetTransactionId(tx.SerializableSignedTransaction), tx)
+	t.TransactionPool.Put(tx.Id(), tx)
 	return nil
 }
 
@@ -184,7 +184,7 @@ func calcHdistRange(id types.LayerID, hdist types.LayerID) (bottom types.LayerID
 }
 
 func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibilityProof types.BlockEligibilityProof,
-	txs []types.AddressableSignedTransaction, atxids []types.AtxId) (*types.Block, error) {
+	txs []types.Transaction, atxids []types.AtxId) (*types.Block, error) {
 
 	var votes []types.BlockID = nil
 	var err error
@@ -207,7 +207,7 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 
 	var txids []types.TransactionId
 	for _, t := range txs {
-		txids = append(txids, types.GetTransactionId(t.SerializableSignedTransaction))
+		txids = append(txids, t.Id())
 	}
 
 	b := types.MiniBlock{
@@ -278,14 +278,14 @@ func (t *BlockBuilder) listenForTx() {
 				continue
 			}
 
-			id := types.GetTransactionId(x)
-			fullTx, err := t.txValidator.GetValidAddressableTx(x)
+			id := x.Id()
+			_, err = t.txValidator.ValidateTransactionSignature(x)
 			if err != nil {
 				t.With().Error("Transaction sig validation failed",
 					log.TxId(hex.EncodeToString(id[:util.Min(5, len(id))])), log.Err(err))
 				continue
 			}
-			if err := t.ValidateAndAddTxToPool(fullTx, func() {
+			if err := t.ValidateAndAddTxToPool(x, func() {
 				t.Log.With().Info("got new tx", log.TxId(hex.EncodeToString(id[:util.Min(5, len(id))])))
 				data.ReportValidation(IncomingTxProtocol)
 			}); err != nil {
@@ -297,7 +297,7 @@ func (t *BlockBuilder) listenForTx() {
 	}
 }
 
-func (t *BlockBuilder) ValidateAndAddTxToPool(tx *types.AddressableSignedTransaction, postValidationFuncs ...func()) error {
+func (t *BlockBuilder) ValidateAndAddTxToPool(tx *types.Transaction, postValidationFuncs ...func()) error {
 	err := t.txValidator.ValidateNonceAndBalance(tx)
 	if err != nil {
 		return err
@@ -305,7 +305,7 @@ func (t *BlockBuilder) ValidateAndAddTxToPool(tx *types.AddressableSignedTransac
 	for _, f := range postValidationFuncs {
 		f()
 	}
-	t.TransactionPool.Put(types.GetTransactionId(tx.SerializableSignedTransaction), tx)
+	t.TransactionPool.Put(tx.Id(), tx)
 	return nil
 }
 
@@ -388,7 +388,7 @@ func (t *BlockBuilder) acceptBlockData() {
 
 			for _, eligibilityProof := range proofs {
 				txList := t.TransactionPool.GetRandomTxs(MaxTransactionsPerBlock, eligibilityProof.Sig)
-				blk, err := t.createBlock(types.LayerID(id), atxID, eligibilityProof, txList, atxList)
+				blk, err := t.createBlock(id, atxID, eligibilityProof, txList, atxList)
 				if err != nil {
 					t.Error("cannot create new block, %v ", err)
 					continue

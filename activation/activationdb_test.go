@@ -28,7 +28,7 @@ func createLayerWithAtx2(t require.TestingT, msh *mesh.Mesh, id types.LayerID, n
 			block1.AtxIds = append(block1.AtxIds, atx.Id())
 		}
 		block1.ViewEdges = append(block1.ViewEdges, views...)
-		err := msh.AddBlockWithTxs(block1, []*types.AddressableSignedTransaction{}, atxs)
+		err := msh.AddBlockWithTxs(block1, []*types.Transaction{}, atxs)
 		require.NoError(t, err)
 		created = append(created, block1.Id)
 	}
@@ -49,14 +49,14 @@ func (m *MeshValidatorMock) GetGoodPatternBlocks(layer types.LayerID) (map[types
 
 type MockState struct{}
 
-func (MockState) ApplyTransactions(layer types.LayerID, txs mesh.Transactions) (uint32, error) {
+func (MockState) ApplyTransactions(layer types.LayerID, txs []*types.Transaction) (uint32, error) {
 	return 0, nil
 }
 
 func (MockState) ApplyRewards(layer types.LayerID, miners []types.Address, underQuota map[types.Address]int, bonusReward, diminishedReward *big.Int) {
 }
 
-func (MockState) ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (types.Address, error) {
+func (MockState) ValidateTransactionSignature(tx *types.Transaction) (types.Address, error) {
 	return types.Address{}, nil
 }
 
@@ -132,7 +132,7 @@ func createLayerWithAtx(t *testing.T, msh *mesh.Mesh, id types.LayerID, numOfBlo
 		if i < len(atxs) {
 			actualAtxs = atxs[i : i+1]
 		}
-		err := msh.AddBlockWithTxs(block1, []*types.AddressableSignedTransaction{}, actualAtxs)
+		err := msh.AddBlockWithTxs(block1, []*types.Transaction{}, actualAtxs)
 		require.NoError(t, err)
 		created = append(created, block1.Id)
 	}

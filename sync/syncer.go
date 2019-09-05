@@ -19,9 +19,9 @@ import (
 )
 
 type TxMemPool interface {
-	Get(id types.TransactionId) (types.AddressableSignedTransaction, error)
-	GetAllItems() []types.AddressableSignedTransaction
-	Put(id types.TransactionId, item *types.AddressableSignedTransaction)
+	Get(id types.TransactionId) (types.Transaction, error)
+	GetAllItems() []types.Transaction
+	Put(id types.TransactionId, item *types.Transaction)
 	Invalidate(id types.TransactionId)
 }
 
@@ -47,7 +47,7 @@ type EligibilityValidator interface {
 }
 
 type TxValidator interface {
-	GetValidAddressableTx(tx *types.SerializableSignedTransaction) (*types.AddressableSignedTransaction, error)
+	ValidateTransactionSignature(tx *types.Transaction) (types.Address, error)
 }
 
 type clockSubscriber interface {
@@ -433,7 +433,7 @@ func validateUniqueTxAtx(b *types.Block) error {
 	return nil
 }
 
-func (s *Syncer) BlockSyntacticValidation(block *types.Block) ([]*types.AddressableSignedTransaction, []*types.ActivationTx, error) {
+func (s *Syncer) BlockSyntacticValidation(block *types.Block) ([]*types.Transaction, []*types.ActivationTx, error) {
 	// run block fast validation
 	if err := s.blockFastValidator(block); err != nil {
 		s.With().Error("BlockSyntacticValidation: block validation failed", log.BlockId(uint64(block.ID())), log.Err(err))
@@ -502,8 +502,8 @@ func (s *Syncer) validateVotes(blk *types.Block) bool {
 }
 
 // Return two errors - first, indication for the tx handling; second, indication of atx handling
-func (s *Syncer) DataAvailability(blk *types.Block) ([]*types.AddressableSignedTransaction, error, []*types.ActivationTx, error) {
-	var txs []*types.AddressableSignedTransaction
+func (s *Syncer) DataAvailability(blk *types.Block) ([]*types.Transaction, error, []*types.ActivationTx, error) {
+	var txs []*types.Transaction
 	var txerr error
 	wg := sync.WaitGroup{}
 	wg.Add(2)
@@ -512,7 +512,7 @@ func (s *Syncer) DataAvailability(blk *types.Block) ([]*types.AddressableSignedT
 		//sync Transactions
 		txs, txerr = s.syncTxs(blk.TxIds)
 		for _, tx := range txs {
-			id := types.GetTransactionId(tx.SerializableSignedTransaction)
+			id := tx.Id()
 			s.txpool.Put(id, tx)
 		}
 		wg.Done()
@@ -616,10 +616,10 @@ func (s *Syncer) fetchLayerHashes(lyr types.LayerID) (map[types.Hash32][]p2p.Pee
 }
 
 //returns txs out of txids that are not in the local database
-func (s *Syncer) syncTxs(txids []types.TransactionId) ([]*types.AddressableSignedTransaction, error) {
+func (s *Syncer) syncTxs(txids []types.TransactionId) ([]*types.Transaction, error) {
 
 	//look in pool
-	unprocessedTxs := make(map[types.TransactionId]*types.AddressableSignedTransaction)
+	unprocessedTxs := make(map[types.TransactionId]*types.Transaction)
 	missing := make([]types.TransactionId, 0)
 	for _, t := range txids {
 		if tx, err := s.txpool.Get(t); err == nil {
@@ -636,21 +636,21 @@ func (s *Syncer) syncTxs(txids []types.TransactionId) ([]*types.AddressableSigne
 	//map and sort txs
 	if len(missinDB) > 0 {
 		for out := range s.fetchWithFactory(NewNeighborhoodWorker(s, 1, TxReqFactory(missinDB))) {
-			ntxs := out.([]types.SerializableSignedTransaction)
+			ntxs := out.([]types.Transaction)
 			for _, tx := range ntxs {
 				tmp := tx
-				ast, err := s.txValidator.GetValidAddressableTx(&tmp)
+				_, err := s.txValidator.ValidateTransactionSignature(&tmp)
 				if err != nil {
-					id := types.GetTransactionId(&tmp)
+					id := tmp.Id()
 					s.Warning("tx %v not valid %v", hex.EncodeToString(id[:]), err)
 					continue
 				}
-				unprocessedTxs[types.GetTransactionId(&tmp)] = ast
+				unprocessedTxs[tmp.Id()] = &tmp
 			}
 		}
 	}
 
-	txs := make([]*types.AddressableSignedTransaction, 0, len(txids))
+	txs := make([]*types.Transaction, 0, len(txids))
 	for _, id := range txids {
 		if tx, ok := unprocessedTxs[id]; ok {
 			txs = append(txs, tx)

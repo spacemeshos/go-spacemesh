@@ -92,10 +92,9 @@ func newTxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 			}
 		}
 
-		var transactions []types.SerializableSignedTransaction
-		for _, value := range txs {
-			tx := *value.SerializableSignedTransaction
-			transactions = append(transactions, tx)
+		var transactions []types.Transaction
+		for _, tx := range txs {
+			transactions = append(transactions, *tx)
 		}
 
 		bbytes, err := types.InterfaceToBytes(transactions)

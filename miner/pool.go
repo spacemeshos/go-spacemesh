@@ -7,7 +7,7 @@ import (
 )
 
 //go:generate genny -in=$GOFILE -out=gen_atx_$GOFILE gen "Name=Atx KeyType=types.AtxId ValueType=types.ActivationTx"
-//go:generate genny -in=$GOFILE -out=gen_tx_$GOFILE gen "Name=Tx KeyType=types.TransactionId ValueType=types.AddressableSignedTransaction"
+//go:generate genny -in=$GOFILE -out=gen_tx_$GOFILE gen "Name=Tx KeyType=types.TransactionId ValueType=types.SignedTransaction"
 
 type KeyType generic.Type
 type ValueType generic.Type

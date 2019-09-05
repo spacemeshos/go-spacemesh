@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/go-spacemesh/common/util"
-	"github.com/spacemeshos/go-spacemesh/crypto/sha3"
 	"sort"
 )
 
@@ -62,24 +61,7 @@ func NIPSTChallengeAsBytes(challenge *NIPSTChallenge) ([]byte, error) {
 	return w.Bytes(), nil
 }
 
-func AddressableTransactionAsBytes(tx *AddressableSignedTransaction) ([]byte, error) {
-	var w bytes.Buffer
-	if _, err := xdr.Marshal(&w, tx); err != nil {
-		return nil, fmt.Errorf("error marshalling transaction: %v", err)
-	}
-	return w.Bytes(), nil
-}
-
-func BytesAsAddressableTransaction(buf []byte) (*AddressableSignedTransaction, error) {
-	b := AddressableSignedTransaction{}
-	_, err := xdr.Unmarshal(bytes.NewReader(buf), &b)
-	if err != nil {
-		return nil, err
-	}
-	return &b, nil
-}
-
-func SignedTransactionAsBytes(tx *SerializableSignedTransaction) ([]byte, error) {
+func SignedTransactionAsBytes(tx *Transaction) ([]byte, error) {
 	var w bytes.Buffer
 	if _, err := xdr.Marshal(&w, &tx); err != nil {
 		return nil, fmt.Errorf("error marshalling transaction: %v", err)
@@ -87,8 +69,8 @@ func SignedTransactionAsBytes(tx *SerializableSignedTransaction) ([]byte, error)
 	return w.Bytes(), nil
 }
 
-func BytesAsSignedTransaction(buf []byte) (*SerializableSignedTransaction, error) {
-	b := SerializableSignedTransaction{}
+func BytesAsSignedTransaction(buf []byte) (*Transaction, error) {
+	b := Transaction{}
 	_, err := xdr.Unmarshal(bytes.NewReader(buf), &b)
 	if err != nil {
 		return nil, err
@@ -96,7 +78,7 @@ func BytesAsSignedTransaction(buf []byte) (*SerializableSignedTransaction, error
 	return &b, nil
 }
 
-//!!! Pass the interface by reference
+// ⚠️ Pass the interface by reference
 func BytesToInterface(buf []byte, i interface{}) error {
 	_, err := xdr.Unmarshal(bytes.NewReader(buf), i)
 	if err != nil {
@@ -105,22 +87,11 @@ func BytesToInterface(buf []byte, i interface{}) error {
 	return nil
 }
 
-//!!! Pass the interface by reference
+// ⚠️ Pass the interface by reference
 func InterfaceToBytes(i interface{}) ([]byte, error) {
 	var w bytes.Buffer
 	if _, err := xdr.Marshal(&w, &i); err != nil {
 		return nil, err
 	}
 	return w.Bytes(), nil
-}
-
-//todo standardized transaction id across project
-//todo replace panic
-func GetTransactionId(t *SerializableSignedTransaction) TransactionId {
-	tx, err := InterfaceToBytes(t)
-	if err != nil {
-		panic("could not Serialize transaction")
-	}
-	res := sha3.Sum256(tx)
-	return res
 }

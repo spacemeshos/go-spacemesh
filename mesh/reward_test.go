@@ -20,7 +20,7 @@ func (MockMapState) ValidateSignature(signed types.Signed) (types.Address, error
 	return types.Address{}, nil
 }
 
-func (MockMapState) ApplyTransactions(layer types.LayerID, txs Transactions) (uint32, error) {
+func (MockMapState) ApplyTransactions(layer types.LayerID, txs []*types.Transaction) (uint32, error) {
 	return 0, nil
 }
 
@@ -36,7 +36,7 @@ func (s *MockMapState) ApplyRewards(layer types.LayerID, miners []types.Address,
 
 }
 
-func (s *MockMapState) ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (types.Address, error) {
+func (s *MockMapState) ValidateTransactionSignature(tx *types.Transaction) (types.Address, error) {
 	return types.Address{}, nil
 }
 
@@ -64,16 +64,16 @@ func getMeshWithMapState(id string, s TxProcessor) (*Mesh, *AtxDbMock) {
 
 func addTransactionsWithGas(mesh *MeshDB, bl *types.Block, numOfTxs int, gasPrice int64) int64 {
 	var totalRewards int64
-	var txs []*types.AddressableSignedTransaction
+	var txs []*types.Transaction
 	for i := 0; i < numOfTxs; i++ {
 		addr := rand.Int63n(10000)
 		//log.Info("adding tx with gas price %v nonce %v", gasPrice, i)
-		tx := types.NewAddressableTx(uint64(i), types.HexToAddress("1"),
+		tx := types.NewTxWithOrigin(uint64(i), types.HexToAddress("1"),
 			types.HexToAddress(strconv.FormatUint(uint64(addr), 10)),
 			10,
 			100,
 			uint64(gasPrice))
-		bl.TxIds = append(bl.TxIds, types.GetTransactionId(tx.SerializableSignedTransaction))
+		bl.TxIds = append(bl.TxIds, tx.Id())
 		totalRewards += gasPrice
 		txs = append(txs, tx)
 	}
@@ -266,34 +266,10 @@ func TestMesh_MergeDoubles(t *testing.T) {
 	layers, _ := getMeshWithMapState("t1", s)
 	defer layers.Close()
 	dst := types.HexToAddress("2")
-	transactions := []*Transaction{
-		{
-			AccountNonce: 1,
-			Origin:       types.HexToAddress("1"),
-			Recipient:    &dst,
-			Amount:       big.NewInt(10),
-			GasLimit:     100,
-			GasPrice:     big.NewInt(1),
-			Payload:      nil,
-		},
-		{
-			AccountNonce: 1,
-			Origin:       types.HexToAddress("1"),
-			Recipient:    &dst,
-			Amount:       big.NewInt(10),
-			GasLimit:     100,
-			GasPrice:     big.NewInt(1),
-			Payload:      nil,
-		},
-		{
-			AccountNonce: 1,
-			Origin:       types.HexToAddress("1"),
-			Recipient:    &dst,
-			Amount:       big.NewInt(10),
-			GasLimit:     100,
-			GasPrice:     big.NewInt(1),
-			Payload:      nil,
-		},
+	transactions := []*types.Transaction{
+		types.NewTxWithOrigin(1, types.HexToAddress("1"), dst, 10, 100, 1),
+		types.NewTxWithOrigin(1, types.HexToAddress("1"), dst, 10, 100, 1),
+		types.NewTxWithOrigin(1, types.HexToAddress("1"), dst, 10, 100, 1),
 	}
 
 	txs := MergeDoubles(transactions)

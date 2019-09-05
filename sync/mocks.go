@@ -57,7 +57,7 @@ func (m *MeshValidatorMock) HandleIncomingLayer(layer *types.Layer) (types.Layer
 
 type StateMock struct{}
 
-func (s *StateMock) ApplyTransactions(id types.LayerID, tx mesh.Transactions) (uint32, error) {
+func (s *StateMock) ApplyTransactions(id types.LayerID, tx []*types.Transaction) (uint32, error) {
 	return 0, nil
 }
 
@@ -73,7 +73,7 @@ func ConfigTst() mesh.Config {
 
 type MockState struct{}
 
-func (MockState) ApplyTransactions(layer types.LayerID, txs mesh.Transactions) (uint32, error) {
+func (MockState) ApplyTransactions(layer types.LayerID, txs []*types.Transaction) (uint32, error) {
 	return 0, nil
 }
 
@@ -84,7 +84,7 @@ func (MockState) ValidateSignature(signed types.Signed) (types.Address, error) {
 func (MockState) ApplyRewards(layer types.LayerID, miners []types.Address, underQuota map[types.Address]int, bonusReward, diminishedReward *big.Int) {
 }
 
-func (MockState) ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (types.Address, error) {
+func (MockState) ValidateTransactionSignature(tx *types.Transaction) (types.Address, error) {
 	return types.Address{}, nil
 }
 
@@ -115,13 +115,13 @@ func (*ValidatorMock) VerifyPost(proof *types.PostProof, space uint64) error {
 
 type MockTxMemPool struct{}
 
-func (MockTxMemPool) Get(id types.TransactionId) (types.AddressableSignedTransaction, error) {
-	return types.AddressableSignedTransaction{}, nil
+func (MockTxMemPool) Get(id types.TransactionId) (types.Transaction, error) {
+	return types.Transaction{}, nil
 }
-func (MockTxMemPool) GetAllItems() []types.AddressableSignedTransaction {
+func (MockTxMemPool) GetAllItems() []*types.Transaction {
 	return nil
 }
-func (MockTxMemPool) Put(id types.TransactionId, item *types.AddressableSignedTransaction) {
+func (MockTxMemPool) Put(id types.TransactionId, item *types.Transaction) {
 
 }
 func (MockTxMemPool) Invalidate(id types.TransactionId) {

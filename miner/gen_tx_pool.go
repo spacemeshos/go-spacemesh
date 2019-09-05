@@ -13,34 +13,34 @@ import (
 
 type TxMemPool struct {
 	mu    sync.RWMutex
-	txMap map[types.TransactionId]*types.AddressableSignedTransaction
+	txMap map[types.TransactionId]*types.Transaction
 }
 
 func NewTxMemPool() *TxMemPool {
-	return &TxMemPool{sync.RWMutex{}, make(map[types.TransactionId]*types.AddressableSignedTransaction)}
+	return &TxMemPool{sync.RWMutex{}, make(map[types.TransactionId]*types.Transaction)}
 }
 
-func (mem *TxMemPool) Get(id types.TransactionId) (types.AddressableSignedTransaction, error) {
+func (mem *TxMemPool) Get(id types.TransactionId) (types.Transaction, error) {
 	mem.mu.RLock()
 	defer mem.mu.RUnlock()
 	val, ok := mem.txMap[id]
 	if !ok {
-		return *new(types.AddressableSignedTransaction), fmt.Errorf("Cannot find in mempool")
+		return *new(types.Transaction), fmt.Errorf("Cannot find in mempool")
 	}
 	return *val, nil
 }
 
-func (mem *TxMemPool) GetAllItems() []types.AddressableSignedTransaction {
+func (mem *TxMemPool) GetAllItems() []types.Transaction {
 	mem.mu.RLock()
 	defer mem.mu.RUnlock()
-	var txList []types.AddressableSignedTransaction
+	var txList []types.Transaction
 	for _, k := range mem.txMap {
 		txList = append(txList, *k)
 	}
 	return txList
 }
 
-func (mem *TxMemPool) Put(id types.TransactionId, item *types.AddressableSignedTransaction) {
+func (mem *TxMemPool) Put(id types.TransactionId, item *types.Transaction) {
 	mem.mu.Lock()
 	mem.txMap[id] = item
 	mem.mu.Unlock()

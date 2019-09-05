@@ -71,7 +71,7 @@ func TestTxPoolWithAccounts_GetRandomTxs(t *testing.T) {
 	for _, tx := range txs {
 		nonces = append(nonces, tx.AccountNonce)
 	}
-	r.ElementsMatch([]uint64{5, 10, 11, 13, 14}, nonces)
+	r.ElementsMatch([]uint64{5, 8, 10, 12, 14}, nonces)
 }
 
 func TestGetRandIdxs(t *testing.T) {
@@ -96,17 +96,17 @@ func TestGetRandIdxs(t *testing.T) {
 	require.ElementsMatch(t, []uint64{2, 4, 6, 7, 8}, idsList) // different seed -> different indices
 }
 
-func newTx(origin types.Address, nonce, totalAmount uint64) (types.TransactionId, *types.AddressableSignedTransaction) {
+func newTx(origin types.Address, nonce, totalAmount uint64) (types.TransactionId, *types.Transaction) {
 	feeAmount := uint64(1)
-	tx := types.NewAddressableTx(nonce, origin, types.Address{}, totalAmount-feeAmount, 3, feeAmount)
-	return types.GetTransactionId(tx.SerializableSignedTransaction), tx
+	tx := types.NewTxWithOrigin(nonce, origin, types.Address{}, totalAmount-feeAmount, 3, feeAmount)
+	return tx.Id(), tx
 }
 
 func BenchmarkTxPoolWithAccounts(b *testing.B) {
 	pool := NewTxPoolWithAccounts()
 
 	const numBatches = 10
-	txBatches := make([][]*types.AddressableSignedTransaction, numBatches)
+	txBatches := make([][]*types.Transaction, numBatches)
 	txIdBatches := make([][]types.TransactionId, numBatches)
 	for i := 0; i < numBatches; i++ {
 		txBatches[i], txIdBatches[i] = createBatch(types.BytesToAddress([]byte("origin" + strconv.Itoa(i))))
@@ -128,7 +128,7 @@ func BenchmarkTxPoolWithAccounts(b *testing.B) {
 	b.Log(time.Since(start))
 }
 
-func addBatch(pool *TxPoolWithAccounts, txBatch []*types.AddressableSignedTransaction, txIdBatch []types.TransactionId, wg *sync.WaitGroup) {
+func addBatch(pool *TxPoolWithAccounts, txBatch []*types.Transaction, txIdBatch []types.TransactionId, wg *sync.WaitGroup) {
 	for i, tx := range txBatch {
 		pool.Put(txIdBatch[i], tx)
 	}
@@ -142,8 +142,8 @@ func invalidateBatch(pool *TxPoolWithAccounts, txIdBatch []types.TransactionId, 
 	wg.Done()
 }
 
-func createBatch(origin types.Address) ([]*types.AddressableSignedTransaction, []types.TransactionId) {
-	var txBatch []*types.AddressableSignedTransaction
+func createBatch(origin types.Address) ([]*types.Transaction, []types.TransactionId) {
+	var txBatch []*types.Transaction
 	var txIdBatch []types.TransactionId
 	for i := uint64(0); i < 10000; i++ {
 		txId, tx := newTx(origin, 5+i, 50)

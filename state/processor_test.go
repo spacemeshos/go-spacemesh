@@ -2,12 +2,13 @@ package state
 
 import (
 	crand "crypto/rand"
+	"fmt"
 	"github.com/seehuhn/mt19937"
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -51,17 +52,8 @@ func createAccount(state *StateDB, addr types.Address, balance int64, nonce uint
 	return obj1
 }
 
-func createTransaction(nonce uint64,
-	origin types.Address, destination types.Address, amount int64) *mesh.Transaction {
-	return &mesh.Transaction{
-		AccountNonce: nonce,
-		Origin:       origin,
-		Recipient:    &destination,
-		Amount:       big.NewInt(amount),
-		GasLimit:     100,
-		GasPrice:     big.NewInt(1),
-		Payload:      nil,
-	}
+func createTransaction(nonce uint64, origin types.Address, destination types.Address, amount uint64) *types.Transaction {
+	return types.NewTxWithOrigin(nonce, origin, destination, amount, 100, 1)
 }
 
 func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction() {
@@ -75,7 +67,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction() {
 	createAccount(s.state, toAddr([]byte{0x02}), 44, 0)
 	s.state.Commit(false)
 
-	transactions := mesh.Transactions{
+	transactions := []*types.Transaction{
 		createTransaction(obj1.Nonce(), obj1.address, obj2.address, 1),
 	}
 
@@ -164,7 +156,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_Errors()
 	createAccount(s.state, toAddr([]byte{0x02}), 44, 0)
 	s.state.Commit(false)
 
-	transactions := mesh.Transactions{
+	transactions := []*types.Transaction{
 		createTransaction(obj1.Nonce(), obj1.address, obj2.address, 1),
 	}
 
@@ -210,7 +202,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_OrderByN
 	obj3 := createAccount(s.state, toAddr([]byte{0x02}), 44, 0)
 	s.state.Commit(false)
 
-	transactions := mesh.Transactions{
+	transactions := []*types.Transaction{
 		createTransaction(obj1.Nonce()+3, obj1.address, obj3.address, 1),
 		createTransaction(obj1.Nonce()+2, obj1.address, obj3.address, 1),
 		createTransaction(obj1.Nonce()+1, obj1.address, obj3.address, 1),
@@ -253,7 +245,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Reset() {
 	createAccount(s.state, toAddr([]byte{0x02}), 44, 0)
 	s.state.Commit(false)
 
-	transactions := mesh.Transactions{
+	transactions := []*types.Transaction{
 		createTransaction(obj1.Nonce(), obj1.address, obj2.address, 1),
 		//createTransaction(obj2.Nonce(),obj2.address, obj1.address, 1),
 	}
@@ -262,7 +254,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Reset() {
 	assert.NoError(s.T(), err)
 	assert.True(s.T(), failed == 0)
 
-	transactions = mesh.Transactions{
+	transactions = []*types.Transaction{
 		createTransaction(obj1.Nonce(), obj1.address, obj2.address, 1),
 		createTransaction(obj2.Nonce(), obj2.address, obj1.address, 10),
 	}
@@ -350,7 +342,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 	var want string
 	for i := 0; i < testCycles; i++ {
 		numOfTransactions := rand.Intn(maxTransactions-minTransactions) + minTransactions
-		trns := mesh.Transactions{}
+		trns := []*types.Transaction{}
 		nonceTrack := make(map[*StateObj]int)
 		for j := 0; j < numOfTransactions; j++ {
 
@@ -367,10 +359,10 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 				dstAccount = accounts[int(rand.Uint32()%(uint32(len(accounts)-1)))]
 			}
 			t := createTransaction(s.processor.globalState.GetNonce(srcAccount.address)+uint64(nonceTrack[srcAccount]),
-				srcAccount.address, dstAccount.address, int64(rand.Uint64()%srcAccount.Balance().Uint64())/100)
+				srcAccount.address, dstAccount.address, (rand.Uint64()%srcAccount.Balance().Uint64())/100)
 			trns = append(trns, t)
 
-			log.Info("transaction %v nonce %v amount %v", t.Origin.Hex(), t.AccountNonce, t.Amount)
+			log.Info("transaction %v nonce %v amount %v", t.Origin().Hex(), t.AccountNonce, t.Amount)
 		}
 		failed, err := s.processor.ApplyTransactions(types.LayerID(i), trns)
 		assert.NoError(s.T(), err)
@@ -397,9 +389,9 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 	assert.True(s.T(), writtenMore > written)
 }
 
-func newTx(origin types.Address, nonce, totalAmount uint64) *types.AddressableSignedTransaction {
+func newTx(origin types.Address, nonce, totalAmount uint64) *types.Transaction {
 	feeAmount := uint64(1)
-	return types.NewAddressableTx(nonce, origin, types.Address{}, totalAmount-feeAmount, 3, feeAmount)
+	return types.NewTxWithOrigin(nonce, origin, types.Address{}, totalAmount-feeAmount, 3, feeAmount)
 }
 
 func (s *ProcessorStateSuite) TestTransactionProcessor_ValidateNonceAndBalance() {
@@ -453,7 +445,7 @@ func TestTransactionProcessor_randomSort(t *testing.T) {
 	obj1 := createAccount(state, toAddr([]byte{0x01}), 2, 0)
 	obj2 := createAccount(state, toAddr([]byte{0x01, 02}), 1, 10)
 
-	transactions := mesh.Transactions{
+	transactions := []*types.Transaction{
 		createTransaction(obj1.Nonce(), obj1.address, obj2.address, 1),
 		createTransaction(obj1.Nonce(), obj1.address, obj2.address, 2),
 		createTransaction(obj1.Nonce(), obj2.address, obj1.address, 3),
@@ -461,7 +453,7 @@ func TestTransactionProcessor_randomSort(t *testing.T) {
 		createTransaction(obj1.Nonce(), obj2.address, obj1.address, 5),
 	}
 
-	expected := mesh.Transactions{
+	expected := []*types.Transaction{
 		transactions[4],
 		transactions[3],
 		transactions[1],
@@ -474,16 +466,12 @@ func TestTransactionProcessor_randomSort(t *testing.T) {
 	assert.Equal(t, expected, trans)
 }
 
-func createXdrSignedTransaction(key ed25519.PrivateKey) *types.SerializableSignedTransaction {
-	tx := &types.SerializableSignedTransaction{}
-	tx.AccountNonce = 1111
-	tx.Amount = 123
-	tx.Recipient = toAddr([]byte{0xde})
-	tx.GasLimit = 11
-	tx.GasPrice = 456
-
-	buf, _ := types.InterfaceToBytes(&tx.InnerSerializableSignedTransaction)
-	copy(tx.Signature[:], ed25519.Sign2(key, buf))
+func createXdrSignedTransaction(t *testing.T, key ed25519.PrivateKey) *types.Transaction {
+	r := require.New(t)
+	signer, err := signing.NewEdSignerFromBuffer(key)
+	r.NoError(err)
+	tx, err := types.NewSignedTx(1111, toAddr([]byte{0xde}), 123, 11, 456, signer)
+	r.NoError(err)
 	return tx
 }
 
@@ -498,7 +486,7 @@ func TestValidateTxSignature(t *testing.T) {
 	// positive flow
 	pub, pri, _ := ed25519.GenerateKey(crand.Reader)
 	createAccount(state, PublicKeyToAccountAddress(pub), 123, 321)
-	tx := createXdrSignedTransaction(pri)
+	tx := createXdrSignedTransaction(t, pri)
 
 	addr, e := proc.ValidateTransactionSignature(tx)
 	assert.Equal(t, PublicKeyToAccountAddress(pub), addr)
@@ -506,9 +494,12 @@ func TestValidateTxSignature(t *testing.T) {
 
 	// negative flow
 	pub, pri, _ = ed25519.GenerateKey(crand.Reader)
-	tx = createXdrSignedTransaction(pri)
+	tx = createXdrSignedTransaction(t, pri)
 
+	tx.Origin()
 	addr, e = proc.ValidateTransactionSignature(tx)
 	assert.Equal(t, types.Address{}, addr)
-	assert.Error(t, e)
+	expectedAddr := types.Address{}
+	expectedAddr.SetBytes(pub)
+	assert.EqualError(t, e, fmt.Sprintf("failed to validate tx signature, unknown src account %x", expectedAddr))
 }

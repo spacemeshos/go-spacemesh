@@ -1,14 +1,17 @@
 package mesh
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/google/uuid"
+	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/pending_txs"
 	"github.com/spacemeshos/go-spacemesh/rand"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"math"
@@ -276,19 +279,33 @@ func address() types.Address {
 	return addr
 }
 
-func newTx(origin types.Address, nonce, totalAmount uint64) *types.AddressableSignedTransaction {
+func newTx(r *require.Assertions, signer *signing.EdSigner, nonce, totalAmount uint64) *types.Transaction {
 	feeAmount := uint64(1)
-	return types.NewAddressableTx(nonce, origin, types.Address{}, totalAmount-feeAmount, 3, feeAmount)
+	tx, err := types.NewSignedTx(nonce, types.Address{}, totalAmount-feeAmount, 3, feeAmount, signer)
+	r.NoError(err)
+	return tx
+}
+
+func newSignerAndAddress(r *require.Assertions, seedStr string) (*signing.EdSigner, types.Address) {
+	seed := make([]byte, 32)
+	copy(seed, seedStr)
+	_, privKey, err := ed25519.GenerateKey(bytes.NewReader(seed))
+	r.NoError(err)
+	signer, err := signing.NewEdSignerFromBuffer(privKey)
+	r.NoError(err)
+	var addr types.Address
+	addr.SetBytes(signer.PublicKey().Bytes())
+	return signer, addr
 }
 
 func TestMeshDB_GetStateProjection(t *testing.T) {
 	r := require.New(t)
 
 	mdb := NewMemMeshDB(log.NewDefault("MeshDB.GetStateProjection"))
-	origin := address()
-	err := mdb.addToMeshTxs([]*types.AddressableSignedTransaction{
-		newTx(origin, 0, 10),
-		newTx(origin, 1, 20),
+	signer, origin := newSignerAndAddress(r, "123")
+	err := mdb.addToMeshTxs([]*types.Transaction{
+		newTx(r, signer, 0, 10),
+		newTx(r, signer, 1, 20),
 	}, 1)
 	r.NoError(err)
 
@@ -302,10 +319,10 @@ func TestMeshDB_GetStateProjection_WrongNonce(t *testing.T) {
 	r := require.New(t)
 
 	mdb := NewMemMeshDB(log.New("TestForEachInView", "", ""))
-	origin := address()
-	err := mdb.addToMeshTxs([]*types.AddressableSignedTransaction{
-		newTx(origin, 1, 10),
-		newTx(origin, 2, 20),
+	signer, origin := newSignerAndAddress(r, "123")
+	err := mdb.addToMeshTxs([]*types.Transaction{
+		newTx(r, signer, 1, 10),
+		newTx(r, signer, 2, 20),
 	}, 1)
 	r.NoError(err)
 
@@ -319,10 +336,10 @@ func TestMeshDB_GetStateProjection_DetectNegativeBalance(t *testing.T) {
 	r := require.New(t)
 
 	mdb := NewMemMeshDB(log.New("TestForEachInView", "", ""))
-	origin := address()
-	err := mdb.addToMeshTxs([]*types.AddressableSignedTransaction{
-		newTx(origin, 0, 10),
-		newTx(origin, 1, 95),
+	signer, origin := newSignerAndAddress(r, "123")
+	err := mdb.addToMeshTxs([]*types.Transaction{
+		newTx(r, signer, 0, 10),
+		newTx(r, signer, 1, 95),
 	}, 1)
 	r.NoError(err)
 
@@ -348,13 +365,13 @@ func TestMeshDB_MeshTxs(t *testing.T) {
 
 	mdb := NewMemMeshDB(log.New("TestForEachInView", "", ""))
 
-	origin1 := types.BytesToAddress([]byte("thc"))
-	origin2 := types.BytesToAddress([]byte("cbd"))
-	err := mdb.addToMeshTxs([]*types.AddressableSignedTransaction{
-		newTx(origin1, 420, 240),
-		newTx(origin1, 421, 241),
-		newTx(origin2, 0, 100),
-		newTx(origin2, 1, 101),
+	signer1, origin1 := newSignerAndAddress(r, "thc")
+	signer2, origin2 := newSignerAndAddress(r, "cbd")
+	err := mdb.addToMeshTxs([]*types.Transaction{
+		newTx(r, signer1, 420, 240),
+		newTx(r, signer1, 421, 241),
+		newTx(r, signer2, 0, 100),
+		newTx(r, signer2, 1, 101),
 	}, 1)
 	r.NoError(err)
 
@@ -372,8 +389,8 @@ func TestMeshDB_MeshTxs(t *testing.T) {
 	r.Equal(100, int(txns2[0].TotalAmount))
 	r.Equal(101, int(txns2[1].TotalAmount))
 
-	err = mdb.removeFromMeshTxs([]*Transaction{
-		SerializableSignedTransaction2StateTransaction(newTx(origin2, 0, 100)),
+	err = mdb.removeFromMeshTxs([]*types.Transaction{
+		newTx(r, signer2, 0, 100),
 	}, nil, 1)
 	r.NoError(err)
 

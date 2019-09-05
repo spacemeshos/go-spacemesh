@@ -311,15 +311,15 @@ func (m *MeshDB) getLayerMutex(index types.LayerID) *layerMutex {
 	return ll
 }
 
-func (m *MeshDB) writeTransactions(txs []*types.AddressableSignedTransaction) error {
+func (m *MeshDB) writeTransactions(txs []*types.Transaction) error {
 	batch := m.transactions.NewBatch()
 	for _, t := range txs {
-		bytes, err := types.AddressableTransactionAsBytes(t)
+		bytes, err := types.SignedTransactionAsBytes(t)
 		if err != nil {
 			m.Error("could not marshall tx %v to bytes ", err)
 			return err
 		}
-		id := types.GetTransactionId(t.SerializableSignedTransaction)
+		id := t.Id()
 		if err := batch.Put(id[:], bytes); err != nil {
 			m.Error("could not write tx %v to database ", hex.EncodeToString(id[:]), err)
 			return err
@@ -333,37 +333,10 @@ func (m *MeshDB) writeTransactions(txs []*types.AddressableSignedTransaction) er
 	return nil
 }
 
-func Transaction2SerializableTransaction(tx *Transaction) *types.AddressableSignedTransaction {
-	inner := types.InnerSerializableSignedTransaction{
-		AccountNonce: tx.AccountNonce,
-		Recipient:    *tx.Recipient,
-		Amount:       tx.Amount.Uint64(),
-		GasLimit:     tx.GasLimit,
-		GasPrice:     tx.GasPrice.Uint64(),
-	}
-	sst := &types.SerializableSignedTransaction{
-		InnerSerializableSignedTransaction: inner,
-	}
-	return &types.AddressableSignedTransaction{
-		SerializableSignedTransaction: sst,
-		Address:                       tx.Origin,
-	}
-}
-
-func txToTiny(tx *Transaction) types.TinyTx {
-	id := types.GetTransactionId(Transaction2SerializableTransaction(tx).SerializableSignedTransaction)
-	return types.TinyTx{
-		Id:          id,
-		Origin:      tx.Origin,
-		Nonce:       tx.AccountNonce,
-		TotalAmount: tx.Amount.Uint64() + tx.GasPrice.Uint64(), // TODO: GasPrice represents the absolute fee here, as a temporarily hack
-	}
-}
-
-func (m *MeshDB) addToMeshTxs(txs []*types.AddressableSignedTransaction, layer types.LayerID) error {
+func (m *MeshDB) addToMeshTxs(txs []*types.Transaction, layer types.LayerID) error {
 	tinyTxs := make([]types.TinyTx, 0, len(txs))
 	for _, tx := range txs {
-		tinyTxs = append(tinyTxs, types.AddressableTxToTiny(tx))
+		tinyTxs = append(tinyTxs, types.TxToTiny(tx))
 	}
 	groupedTxs := groupByOrigin(tinyTxs)
 
@@ -391,7 +364,7 @@ func (m *MeshDB) addToAccountTxs(addr types.Address, accountTxs []types.TinyTx, 
 	return nil
 }
 
-func (m *MeshDB) removeFromMeshTxs(accepted, rejected []*Transaction, layer types.LayerID) error {
+func (m *MeshDB) removeFromMeshTxs(accepted, rejected []*types.Transaction, layer types.LayerID) error {
 	gAccepted := txsToTinyGrouped(accepted)
 	gRejected := txsToTinyGrouped(rejected)
 	accounts := make(map[types.Address]struct{})
@@ -426,10 +399,10 @@ func (m *MeshDB) removeFromAccountTxs(account types.Address, gAccepted map[types
 	return nil
 }
 
-func txsToTinyGrouped(txs []*Transaction) map[types.Address][]types.TinyTx {
+func txsToTinyGrouped(txs []*types.Transaction) map[types.Address][]types.TinyTx {
 	tinyTxs := make([]types.TinyTx, 0, len(txs))
 	for _, tx := range txs {
-		tinyTxs = append(tinyTxs, txToTiny(tx))
+		tinyTxs = append(tinyTxs, types.TxToTiny(tx))
 	}
 	return groupByOrigin(tinyTxs)
 }
@@ -488,11 +461,11 @@ func (m *MeshDB) GetProjection(addr types.Address, prevNonce, prevBalance uint64
 }
 
 func (m *MeshDB) GetTransactions(transactions []types.TransactionId) (
-	map[types.TransactionId]*types.AddressableSignedTransaction,
+	map[types.TransactionId]*types.Transaction,
 	[]types.TransactionId) {
 
 	var mIds []types.TransactionId
-	ts := make(map[types.TransactionId]*types.AddressableSignedTransaction, len(transactions))
+	ts := make(map[types.TransactionId]*types.Transaction, len(transactions))
 	for _, id := range transactions {
 		t, err := m.GetTransaction(id)
 		if err != nil {
@@ -505,12 +478,12 @@ func (m *MeshDB) GetTransactions(transactions []types.TransactionId) (
 	return ts, mIds
 }
 
-func (m *MeshDB) GetTransaction(id types.TransactionId) (*types.AddressableSignedTransaction, error) {
+func (m *MeshDB) GetTransaction(id types.TransactionId) (*types.Transaction, error) {
 	tBytes, err := m.transactions.Get(id[:])
 	if err != nil {
 		return nil, fmt.Errorf("could not find transaction in database %v err=%v", hex.EncodeToString(id[:]), err)
 	}
-	return types.BytesAsAddressableTransaction(tBytes)
+	return types.BytesAsSignedTransaction(tBytes)
 }
 
 // ContextuallyValidBlock - returns the contextually valid blocks for the provided layer

@@ -2,10 +2,12 @@ package mesh
 
 import (
 	"bytes"
+	"fmt"
 	"github.com/google/uuid"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/rand"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"math/big"
@@ -48,26 +50,26 @@ func (MockState) ValidateSignature(signed types.Signed) (types.Address, error) {
 	return types.Address{}, nil
 }
 
-func (MockState) ApplyTransactions(layer types.LayerID, txs Transactions) (uint32, error) {
+func (MockState) ApplyTransactions(layer types.LayerID, txs []*types.Transaction) (uint32, error) {
 	return 0, nil
 }
 
 func (MockState) ApplyRewards(layer types.LayerID, miners []types.Address, underQuota map[types.Address]int, bonusReward, diminishedReward *big.Int) {
 }
 
-func (MockState) ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (types.Address, error) {
+func (MockState) ValidateTransactionSignature(tx *types.Transaction) (types.Address, error) {
 	return types.Address{}, nil
 }
 
 type MockTxMemPool struct{}
 
-func (MockTxMemPool) Get(id types.TransactionId) (types.AddressableSignedTransaction, error) {
-	return types.AddressableSignedTransaction{}, nil
+func (MockTxMemPool) Get(id types.TransactionId) (types.Transaction, error) {
+	return types.Transaction{}, nil
 }
-func (MockTxMemPool) GetAllItems() []types.AddressableSignedTransaction {
+func (MockTxMemPool) GetAllItems() []*types.Transaction {
 	return nil
 }
-func (MockTxMemPool) Put(id types.TransactionId, item *types.AddressableSignedTransaction) {
+func (MockTxMemPool) Put(id types.TransactionId, item *types.Transaction) {
 
 }
 func (MockTxMemPool) Invalidate(id types.TransactionId) {
@@ -258,10 +260,10 @@ func TestLayers_OrphanBlocksClearEmptyLayers(t *testing.T) {
 }
 
 type MockMempoolWrapper struct {
-	txs []*types.AddressableSignedTransaction
+	txs []*types.Transaction
 }
 
-func (m *MockMempoolWrapper) ValidateAndAddTxToPool(tx *types.AddressableSignedTransaction, postValidationFuncs ...func()) error {
+func (m *MockMempoolWrapper) ValidateAndAddTxToPool(tx *types.Transaction, postValidationFuncs ...func()) error {
 	m.txs = append(m.txs, tx)
 	return nil
 }
@@ -274,12 +276,17 @@ func TestMesh_AddBlockWithTxs_PushTransactions_UpdateMeshTxs(t *testing.T) {
 	msh.SetTxMempool(mempoolWrapper)
 
 	layerID := types.LayerID(1)
-	origin := types.BytesToAddress([]byte("origin"))
-	tx1 := addTxToMesh(r, msh, origin, 2468)
-	tx2 := addTxToMesh(r, msh, origin, 2469)
-	tx3 := addTxToMesh(r, msh, origin, 2470)
-	tx4 := addTxToMesh(r, msh, origin, 2471)
-	tx5 := addTxToMesh(r, msh, origin, 2472)
+	signer, origin := newSignerAndAddress(r, "origin")
+	tx1 := addTxToMesh(r, msh, signer, 2468)
+	tx2 := addTxToMesh(r, msh, signer, 2469)
+	tx3 := addTxToMesh(r, msh, signer, 2470)
+	tx4 := addTxToMesh(r, msh, signer, 2471)
+	tx5 := addTxToMesh(r, msh, signer, 2472)
+	fmt.Printf("%x\n", tx1.Id())
+	fmt.Printf("%x\n", tx2.Id())
+	fmt.Printf("%x\n", tx3.Id())
+	fmt.Printf("%x\n", tx4.Id())
+	fmt.Printf("%x\n", tx5.Id())
 	addBlockWithTxs(r, msh, layerID, true, tx1, tx2)
 	addBlockWithTxs(r, msh, layerID, true, tx2, tx3, tx4)
 	addBlockWithTxs(r, msh, layerID, false, tx4, tx5)
@@ -293,9 +300,12 @@ func TestMesh_AddBlockWithTxs_PushTransactions_UpdateMeshTxs(t *testing.T) {
 	}
 
 	msh.PushTransactions(1, 2)
-	r.ElementsMatch([]*types.AddressableSignedTransaction{tx4, tx5}, mempoolWrapper.txs)
+	r.ElementsMatch(GetTransactionIds(tx4, tx5), GetTransactionIds(mempoolWrapper.txs...))
 
 	txns = getTxns(r, msh.MeshDB, origin)
+	for _, tx := range txns {
+		fmt.Printf("%x\n", tx.Id)
+	} // TODO: for some reason a couple of txs don't get invalidated 🤔 (and their IDs change)
 	r.Empty(txns)
 }
 
@@ -305,12 +315,12 @@ func TestMesh_ExtractUniqueOrderedTransactions(t *testing.T) {
 	msh := getMesh("t2")
 	defer msh.Close()
 	layerID := types.LayerID(1)
-	origin := types.BytesToAddress([]byte("origin"))
-	tx1 := addTxToMesh(r, msh, origin, 2468)
-	tx2 := addTxToMesh(r, msh, origin, 2469)
-	tx3 := addTxToMesh(r, msh, origin, 2470)
-	tx4 := addTxToMesh(r, msh, origin, 2471)
-	tx5 := addTxToMesh(r, msh, origin, 2472)
+	signer, _ := newSignerAndAddress(r, "origin")
+	tx1 := addTxToMesh(r, msh, signer, 2468)
+	tx2 := addTxToMesh(r, msh, signer, 2469)
+	tx3 := addTxToMesh(r, msh, signer, 2470)
+	tx4 := addTxToMesh(r, msh, signer, 2471)
+	tx5 := addTxToMesh(r, msh, signer, 2472)
 	addBlockWithTxs(r, msh, layerID, true, tx1, tx2)
 	addBlockWithTxs(r, msh, layerID, true, tx2, tx3, tx4)
 	addBlockWithTxs(r, msh, layerID, false, tx4, tx5)
@@ -320,33 +330,33 @@ func TestMesh_ExtractUniqueOrderedTransactions(t *testing.T) {
 
 	validBlocks, invalidBlocks := msh.ExtractUniqueOrderedTransactions(l)
 
-	r.ElementsMatch(toStateTxs(tx1, tx2, tx3, tx4), validBlocks)
-	r.ElementsMatch(toStateTxs(tx4, tx5), invalidBlocks)
+	r.ElementsMatch(GetTransactionIds(tx1, tx2, tx3, tx4), GetTransactionIds(validBlocks...))
+	r.ElementsMatch(GetTransactionIds(tx4, tx5), GetTransactionIds(invalidBlocks...))
 }
 
-func addTxToMesh(r *require.Assertions, msh *Mesh, origin types.Address, nonce uint64) *types.AddressableSignedTransaction {
-	tx1 := newTx(origin, nonce, 111)
-	err := msh.writeTransactions([]*types.AddressableSignedTransaction{tx1})
+func GetTransactionIds(txs ...*types.Transaction) []types.TransactionId {
+	var res []types.TransactionId
+	for _, tx := range txs {
+		res = append(res, tx.Id())
+	}
+	return res
+}
+
+func addTxToMesh(r *require.Assertions, msh *Mesh, signer *signing.EdSigner, nonce uint64) *types.Transaction {
+	tx1 := newTx(r, signer, nonce, 111)
+	err := msh.writeTransactions([]*types.Transaction{tx1})
 	r.NoError(err)
 	return tx1
 }
 
-func addBlockWithTxs(r *require.Assertions, msh *Mesh, id types.LayerID, valid bool, txs ...*types.AddressableSignedTransaction) *types.Block {
+func addBlockWithTxs(r *require.Assertions, msh *Mesh, id types.LayerID, valid bool, txs ...*types.Transaction) *types.Block {
 	blk := types.NewExistingBlock(types.BlockID(uuid.New().ID()), id, []byte("data"))
 	for _, tx := range txs {
-		blk.TxIds = append(blk.TxIds, types.GetTransactionId(tx.SerializableSignedTransaction))
+		blk.TxIds = append(blk.TxIds, tx.Id())
 	}
 	err := msh.SaveContextualValidity(blk.Id, valid)
 	r.NoError(err)
 	err = msh.AddBlockWithTxs(blk, txs, nil)
 	r.NoError(err)
 	return blk
-}
-
-func toStateTxs(txs ...*types.AddressableSignedTransaction) []*Transaction {
-	var res []*Transaction
-	for _, tx := range txs {
-		res = append(res, SerializableSignedTransaction2StateTransaction(tx))
-	}
-	return res
 }

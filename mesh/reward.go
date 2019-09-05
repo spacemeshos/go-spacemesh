@@ -30,12 +30,12 @@ func CalculateLayerReward(id types.LayerID, params Config) *big.Int {
 	return params.BaseReward
 }
 
-func MergeDoubles(transactions []*Transaction) []*Transaction {
-	transactionSet := make(map[types.Hash32]struct{})
-	merged := make([]*Transaction, 0, len(transactions))
+func MergeDoubles(transactions []*types.Transaction) []*types.Transaction {
+	transactionSet := make(map[types.TransactionId]struct{})
+	merged := make([]*types.Transaction, 0, len(transactions))
 	for _, trns := range transactions {
-		if _, ok := transactionSet[trns.Hash()]; !ok {
-			transactionSet[trns.Hash()] = struct{}{}
+		if _, ok := transactionSet[trns.Id()]; !ok {
+			transactionSet[trns.Id()] = struct{}{}
 			merged = append(merged, trns)
 		} else {
 			log.Debug("double trans merged %v", trns)

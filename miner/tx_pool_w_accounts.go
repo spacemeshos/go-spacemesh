@@ -11,9 +11,9 @@ import (
 )
 
 type innerPool interface {
-	Get(id types.TransactionId) (types.AddressableSignedTransaction, error)
-	GetAllItems() []types.AddressableSignedTransaction
-	Put(id types.TransactionId, item *types.AddressableSignedTransaction)
+	Get(id types.TransactionId) (types.Transaction, error)
+	GetAllItems() []types.Transaction
+	Put(id types.TransactionId, item *types.Transaction)
 	Invalidate(id types.TransactionId)
 }
 
@@ -30,18 +30,18 @@ func NewTxPoolWithAccounts() *TxPoolWithAccounts {
 	}
 }
 
-func (t *TxPoolWithAccounts) GetRandomTxs(numOfTxs int, seed []byte) []types.AddressableSignedTransaction {
+func (t *TxPoolWithAccounts) GetRandomTxs(numOfTxs int, seed []byte) []types.Transaction {
 	txs := t.innerPool.GetAllItems()
 	if len(txs) <= numOfTxs {
 		return txs
 	}
 
 	sort.Slice(txs, func(i, j int) bool {
-		id1 := types.GetTransactionId(txs[i].SerializableSignedTransaction)
-		id2 := types.GetTransactionId(txs[j].SerializableSignedTransaction)
+		id1 := txs[i].Id()
+		id2 := txs[j].Id()
 		return bytes.Compare(id1[:], id2[:]) < 0
 	})
-	var ret []types.AddressableSignedTransaction
+	var ret []types.Transaction
 	for idx := range getRandIdxs(numOfTxs, len(txs), seed) {
 		ret = append(ret, txs[idx])
 	}
@@ -64,9 +64,9 @@ func getRandIdxs(numOfTxs, spaceSize int, seed []byte) map[uint64]struct{} {
 	return idxs
 }
 
-func (t *TxPoolWithAccounts) Put(id types.TransactionId, tx *types.AddressableSignedTransaction) {
+func (t *TxPoolWithAccounts) Put(id types.TransactionId, tx *types.Transaction) {
 	t.accountsMutex.Lock()
-	t.getOrCreate(tx.Address).Add([]types.TinyTx{types.AddressableTxToTiny(tx)}, 0)
+	t.getOrCreate(tx.Origin()).Add([]types.TinyTx{types.TxToTiny(tx)}, 0)
 	t.accountsMutex.Unlock()
 	t.innerPool.Put(id, tx)
 }
@@ -80,14 +80,14 @@ func (t *TxPoolWithAccounts) Invalidate(id types.TransactionId) {
 	t.accountsMutex.Unlock()
 }
 
-func (t *TxPoolWithAccounts) removeNonce(tx types.AddressableSignedTransaction) {
-	pendingTxs, found := t.accounts[tx.Address]
+func (t *TxPoolWithAccounts) removeNonce(tx types.Transaction) {
+	pendingTxs, found := t.accounts[tx.Origin()]
 	if !found {
 		return
 	}
 	pendingTxs.RemoveNonce(tx.AccountNonce)
 	if pendingTxs.IsEmpty() {
-		delete(t.accounts, tx.Address)
+		delete(t.accounts, tx.Origin())
 	}
 }
 

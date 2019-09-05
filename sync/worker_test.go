@@ -42,26 +42,26 @@ func TestNewNeighborhoodWorker(t *testing.T) {
 	defer syncObj2.Close()
 
 	block := types.NewExistingBlock(types.BlockID(333), 1, nil)
-	syncObj1.AddBlockWithTxs(block, []*types.AddressableSignedTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
+	syncObj1.AddBlockWithTxs(block, []*types.Transaction{tx1, tx2, tx3}, []*types.ActivationTx{})
 	timeout := time.NewTimer(2 * time.Second)
 	pm1 := getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
 	syncObj2.Peers = pm1
 
-	id1 := types.GetTransactionId(tx1.SerializableSignedTransaction)
-	id2 := types.GetTransactionId(tx2.SerializableSignedTransaction)
-	id3 := types.GetTransactionId(tx3.SerializableSignedTransaction)
+	id1 := tx1.Id()
+	id2 := tx2.Id()
+	id3 := tx3.Id()
 
 	wrk := NewNeighborhoodWorker(syncObj2, 1, TxReqFactory([]types.TransactionId{id1, id2, id3}))
 	go wrk.Work()
 
 	select {
 	case item := <-wrk.output:
-		txs := item.([]types.SerializableSignedTransaction)
+		txs := item.([]types.Transaction)
 		assert.Equal(t, 3, len(txs))
 		mp := make(map[types.TransactionId]struct{})
-		mp[types.GetTransactionId(&txs[0])] = struct{}{}
-		mp[types.GetTransactionId(&txs[1])] = struct{}{}
-		mp[types.GetTransactionId(&txs[2])] = struct{}{}
+		mp[txs[0].Id()] = struct{}{}
+		mp[txs[1].Id()] = struct{}{}
+		mp[txs[2].Id()] = struct{}{}
 
 		_, ok := mp[id1]
 		assert.True(t, ok)
@@ -86,8 +86,8 @@ func TestNewBlockWorker(t *testing.T) {
 	defer syncObj3.Close()
 
 	block := types.NewExistingBlock(types.BlockID(333), 1, nil)
-	syncObj1.AddBlockWithTxs(block, []*types.AddressableSignedTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
-	syncObj2.AddBlockWithTxs(block, []*types.AddressableSignedTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
+	syncObj1.AddBlockWithTxs(block, []*types.Transaction{tx1, tx2, tx3}, []*types.ActivationTx{})
+	syncObj2.AddBlockWithTxs(block, []*types.Transaction{tx1, tx2, tx3}, []*types.ActivationTx{})
 
 	timeout := time.NewTimer(10 * time.Second)
 	pm1 := getPeersMock([]p2p.Peer{nodes[0].PublicKey(), nodes[1].PublicKey()})

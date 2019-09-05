@@ -116,7 +116,7 @@ func TxReqFactory(ids []types.TransactionId) RequestFactory {
 				return
 			}
 
-			var txs []types.SerializableSignedTransaction
+			var txs []types.Transaction
 			err := types.BytesToInterface(msg, &txs)
 			if err != nil {
 				s.Error("could not unmarshal tx data response: %v", err)
@@ -143,13 +143,13 @@ func TxReqFactory(ids []types.TransactionId) RequestFactory {
 	}
 }
 
-func validateTxIds(ids []types.TransactionId, txs []types.SerializableSignedTransaction) (bool, error) {
+func validateTxIds(ids []types.TransactionId, txs []types.Transaction) (bool, error) {
 	mp := make(map[types.TransactionId]struct{})
 	for _, id := range ids {
 		mp[id] = struct{}{}
 	}
 	for _, tx := range txs {
-		txid := types.GetTransactionId(&tx)
+		txid := tx.Id()
 		if _, ok := mp[txid]; !ok {
 			return false, errors.New(fmt.Sprintf("received a tx that was not requested  %v", hex.EncodeToString(txid[:])))
 		}

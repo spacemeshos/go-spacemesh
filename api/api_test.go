@@ -8,9 +8,9 @@ import (
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/stretchr/testify/require"
 	"io/ioutil"
@@ -79,7 +79,7 @@ func (t *TxAPIMock) setMockOrigin(orig types.Address) {
 	t.mockOrigin = orig
 }
 
-func (t *TxAPIMock) ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (types.Address, error) {
+func (t *TxAPIMock) ValidateTransactionSignature(tx *types.Transaction) (types.Address, error) {
 	return t.mockOrigin, nil
 }
 
@@ -249,28 +249,6 @@ func TestJsonApi(t *testing.T) {
 	<-grpcStatus
 }
 
-func createXdrSignedTransaction(params types.SerializableSignedTransaction, key ed25519.PrivateKey) ([]byte, []byte) {
-	tx := types.SerializableSignedTransaction{}
-	tx.AccountNonce = params.AccountNonce
-	tx.Amount = params.Amount
-	tx.Recipient = params.Recipient
-	tx.GasLimit = params.GasLimit
-	tx.GasPrice = params.GasPrice
-
-	buf, err := types.InterfaceToBytes(&tx.InnerSerializableSignedTransaction)
-	if err != nil {
-		log.Error("failed to marshal tx")
-	}
-
-	copy(tx.Signature[:], ed25519.Sign2(key, buf))
-
-	buf, err = types.InterfaceToBytes(&tx)
-	if err != nil {
-		log.Error("failed to marshal signed tx")
-	}
-	return buf, tx.Signature[:]
-}
-
 func TestJsonWalletApi(t *testing.T) {
 
 	port1, err := node.GetUnboundedPort()
@@ -354,19 +332,17 @@ func TestJsonWalletApi(t *testing.T) {
 	value = resp.Header.Get("Content-Type")
 	assert.Equal(t, value, contentType)
 
-	txParams := types.SerializableSignedTransaction{}
 	sPub, key, _ := ed25519.GenerateKey(crand.Reader)
 	sAddr := state.PublicKeyToAccountAddress(sPub)
 	txApi.setMockOrigin(sAddr)
 	rec := types.BytesToAddress([]byte{0xde, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa})
-	txParams.Recipient = rec
-	txParams.AccountNonce = 1111
-	txParams.Amount = 1234
-	txParams.GasLimit = 11
-	txParams.GasPrice = 321
-	xdrTx, sig := createXdrSignedTransaction(txParams, key)
-	copy(txParams.Signature[:], sig)
-	txToSend := pb.SignedTransaction{Tx: xdrTx}
+	signer, err := signing.NewEdSignerFromBuffer(key)
+	assert.NoError(t, err)
+	tx, err := types.NewSignedTx(1111, rec, 1234, 11, 321, signer)
+	assert.NoError(t, err)
+	txBytes, err := types.InterfaceToBytes(tx)
+	assert.NoError(t, err)
+	txToSend := pb.SignedTransaction{Tx: txBytes}
 
 	var buf2 bytes.Buffer
 	err = m.Marshal(&buf2, &txToSend)
@@ -391,11 +367,11 @@ func TestJsonWalletApi(t *testing.T) {
 	gotV, wantV = ret.Value, "ok"
 	assert.Equal(t, wantV, gotV)
 
-	id := types.GetTransactionId(&txParams)
+	id := tx.Id()
 	hexIdStr := hex.EncodeToString(id[:])
 
 	assert.Equal(t, hexIdStr, ret.Id)
-	val, err := types.SignedTransactionAsBytes(&txParams)
+	val, err := types.SignedTransactionAsBytes(tx)
 	assert.NoError(t, err)
 	assert.Equal(t, val, net.broadcasted)
 

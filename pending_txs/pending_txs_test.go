@@ -6,9 +6,9 @@ import (
 	"testing"
 )
 
-func newTx(origin types.Address, nonce, totalAmount uint64) *types.AddressableSignedTransaction {
+func newTx(origin types.Address, nonce, totalAmount uint64) *types.Transaction {
 	feeAmount := uint64(1)
-	return types.NewAddressableTx(nonce, origin, types.Address{}, totalAmount-feeAmount, 3, feeAmount)
+	return types.NewTxWithOrigin(nonce, origin, types.Address{}, totalAmount-feeAmount, 3, feeAmount)
 }
 
 func TestNewAccountPendingTxs(t *testing.T) {
@@ -27,7 +27,7 @@ func TestNewAccountPendingTxs(t *testing.T) {
 
 	// Adding works
 	pendingTxs.Add([]types.TinyTx{
-		types.AddressableTxToTiny(newTx(types.BytesToAddress(nil), 5, 100)),
+		types.TxToTiny(newTx(types.BytesToAddress(nil), 5, 100)),
 	}, 1)
 	empty = pendingTxs.IsEmpty()
 	r.False(empty)
@@ -37,7 +37,7 @@ func TestNewAccountPendingTxs(t *testing.T) {
 
 	// Accepting a transaction removes all same-nonce transactions
 	pendingTxs.Remove([]types.TinyTx{
-		types.AddressableTxToTiny(newTx(types.BytesToAddress(nil), 5, 50)),
+		types.TxToTiny(newTx(types.BytesToAddress(nil), 5, 50)),
 	}, nil, 1)
 	empty = pendingTxs.IsEmpty()
 	r.True(empty)
@@ -47,7 +47,7 @@ func TestNewAccountPendingTxs(t *testing.T) {
 
 	// Add a transaction again
 	pendingTxs.Add([]types.TinyTx{
-		types.AddressableTxToTiny(newTx(types.BytesToAddress(nil), 5, 100)),
+		types.TxToTiny(newTx(types.BytesToAddress(nil), 5, 100)),
 	}, 1)
 	nonce, balance = pendingTxs.GetProjection(prevNonce, prevBalance)
 	r.Equal(prevNonce+1, nonce)
@@ -55,7 +55,7 @@ func TestNewAccountPendingTxs(t *testing.T) {
 
 	// Now add it again in a higher layer -- this layer is now required when rejecting
 	pendingTxs.Add([]types.TinyTx{
-		types.AddressableTxToTiny(newTx(types.BytesToAddress(nil), 5, 100)),
+		types.TxToTiny(newTx(types.BytesToAddress(nil), 5, 100)),
 	}, 2)
 	nonce, balance = pendingTxs.GetProjection(prevNonce, prevBalance)
 	r.Equal(prevNonce+1, nonce)
@@ -63,7 +63,7 @@ func TestNewAccountPendingTxs(t *testing.T) {
 
 	// When it's added again in a lower layer -- nothing changes
 	pendingTxs.Add([]types.TinyTx{
-		types.AddressableTxToTiny(newTx(types.BytesToAddress(nil), 5, 100)),
+		types.TxToTiny(newTx(types.BytesToAddress(nil), 5, 100)),
 	}, 0)
 	nonce, balance = pendingTxs.GetProjection(prevNonce, prevBalance)
 	r.Equal(prevNonce+1, nonce)
@@ -71,7 +71,7 @@ func TestNewAccountPendingTxs(t *testing.T) {
 
 	// Rejecting a transaction with same-nonce does NOT remove a different transactions
 	pendingTxs.Remove(nil, []types.TinyTx{
-		types.AddressableTxToTiny(newTx(types.BytesToAddress(nil), 5, 50)),
+		types.TxToTiny(newTx(types.BytesToAddress(nil), 5, 50)),
 	}, 2)
 	nonce, balance = pendingTxs.GetProjection(prevNonce, prevBalance)
 	r.Equal(prevNonce+1, nonce)
@@ -79,7 +79,7 @@ func TestNewAccountPendingTxs(t *testing.T) {
 
 	// Rejecting a transaction in a lower layer than the highest seen for it, does not remove it, either
 	pendingTxs.Remove(nil, []types.TinyTx{
-		types.AddressableTxToTiny(newTx(types.BytesToAddress(nil), 5, 100)),
+		types.TxToTiny(newTx(types.BytesToAddress(nil), 5, 100)),
 	}, 1)
 	nonce, balance = pendingTxs.GetProjection(prevNonce, prevBalance)
 	r.Equal(prevNonce+1, nonce)
@@ -87,7 +87,7 @@ func TestNewAccountPendingTxs(t *testing.T) {
 
 	// However, rejecting a transaction in the highest layer it was seen in DOES remove it
 	pendingTxs.Remove(nil, []types.TinyTx{
-		types.AddressableTxToTiny(newTx(types.BytesToAddress(nil), 5, 100)),
+		types.TxToTiny(newTx(types.BytesToAddress(nil), 5, 100)),
 	}, 2)
 	nonce, balance = pendingTxs.GetProjection(prevNonce, prevBalance)
 	r.Equal(prevNonce, nonce)
@@ -95,8 +95,8 @@ func TestNewAccountPendingTxs(t *testing.T) {
 
 	// When several transactions exist with same nonce, projection is pessimistic (reduces balance by higher amount)
 	pendingTxs.Add([]types.TinyTx{
-		types.AddressableTxToTiny(newTx(types.BytesToAddress(nil), 5, 100)),
-		types.AddressableTxToTiny(newTx(types.BytesToAddress(nil), 5, 50)),
+		types.TxToTiny(newTx(types.BytesToAddress(nil), 5, 100)),
+		types.TxToTiny(newTx(types.BytesToAddress(nil), 5, 50)),
 	}, 1)
 	nonce, balance = pendingTxs.GetProjection(prevNonce, prevBalance)
 	r.Equal(prevNonce+1, nonce)
@@ -104,8 +104,8 @@ func TestNewAccountPendingTxs(t *testing.T) {
 
 	// Adding higher nonce transactions with a missing nonce in between does not affect projection
 	pendingTxs.Add([]types.TinyTx{
-		types.AddressableTxToTiny(newTx(types.BytesToAddress(nil), 7, 100)),
-		types.AddressableTxToTiny(newTx(types.BytesToAddress(nil), 8, 50)),
+		types.TxToTiny(newTx(types.BytesToAddress(nil), 7, 100)),
+		types.TxToTiny(newTx(types.BytesToAddress(nil), 8, 50)),
 	}, 1)
 	nonce, balance = pendingTxs.GetProjection(prevNonce, prevBalance)
 	r.Equal(prevNonce+1, nonce)
@@ -113,7 +113,7 @@ func TestNewAccountPendingTxs(t *testing.T) {
 
 	// Trying to fill the gap with a transaction that would over-draft the account has no effect
 	pendingTxs.Add([]types.TinyTx{
-		types.AddressableTxToTiny(newTx(types.BytesToAddress(nil), 6, 950)),
+		types.TxToTiny(newTx(types.BytesToAddress(nil), 6, 950)),
 	}, 1)
 	nonce, balance = pendingTxs.GetProjection(prevNonce, prevBalance)
 	r.Equal(prevNonce+1, nonce)
@@ -121,7 +121,7 @@ func TestNewAccountPendingTxs(t *testing.T) {
 
 	// But filling the gap with a valid transaction causes the higher nonce transactions to start being considered
 	pendingTxs.Add([]types.TinyTx{
-		types.AddressableTxToTiny(newTx(types.BytesToAddress(nil), 6, 50)),
+		types.TxToTiny(newTx(types.BytesToAddress(nil), 6, 50)),
 	}, 1)
 	nonce, balance = pendingTxs.GetProjection(prevNonce, prevBalance)
 	r.Equal(prevNonce+4, nonce)
@@ -130,7 +130,7 @@ func TestNewAccountPendingTxs(t *testing.T) {
 	// Rejecting a transaction only removes that version, if several exist
 	// This can also cause a transaction that would previously over-draft the account to become valid
 	pendingTxs.Remove(nil, []types.TinyTx{
-		types.AddressableTxToTiny(newTx(types.BytesToAddress(nil), 5, 100)),
+		types.TxToTiny(newTx(types.BytesToAddress(nil), 5, 100)),
 	}, 2)
 	nonce, balance = pendingTxs.GetProjection(prevNonce, prevBalance)
 	r.Equal(prevNonce+2, nonce)

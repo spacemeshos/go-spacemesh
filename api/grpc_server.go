@@ -71,7 +71,7 @@ func (s SpacemeshGrpcService) GetNonce(ctx context.Context, in *pb.AccountId) (*
 func (s SpacemeshGrpcService) SubmitTransaction(ctx context.Context, in *pb.SignedTransaction) (*pb.TxConfirmation, error) {
 	log.Info("GRPC SubmitTransaction msg")
 
-	signedTx := &types.SerializableSignedTransaction{}
+	signedTx := &types.Transaction{}
 	err := types.BytesToInterface(in.Tx, signedTx)
 	if err != nil {
 		log.Error("failed to deserialize tx, error %v", err)
@@ -83,7 +83,7 @@ func (s SpacemeshGrpcService) SubmitTransaction(ctx context.Context, in *pb.Sign
 		log.Error("tx failed to validate signature, error %v", err)
 		return nil, err
 	}
-	id := types.GetTransactionId(signedTx)
+	id := signedTx.Id()
 	hexIdStr := hex.EncodeToString(id[:])
 	log.Info("GRPC SubmitTransaction BROADCAST tx. address %x (len %v), gaslimit %v, price %v id %v", signedTx.Recipient, len(signedTx.Recipient), signedTx.GasLimit, signedTx.GasPrice, hexIdStr[:5])
 	go s.Network.Broadcast(miner.IncomingTxProtocol, in.Tx)
@@ -124,7 +124,7 @@ func (s SpacemeshGrpcService) StopService() {
 }
 
 type TxAPI interface {
-	ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (types.Address, error)
+	ValidateTransactionSignature(tx *types.Transaction) (types.Address, error)
 }
 
 // NewGrpcService create a new grpc service using config data.

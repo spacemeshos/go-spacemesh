@@ -7,6 +7,7 @@ import (
 )
 
 func TestSpacemeshApp_TestSyncCmd(t *testing.T) {
+	t.Skip("skipped until sync test cloud resources are updated")
 	syncApp := NewSyncApp()
 	defer syncApp.Cleanup()
 	syncApp.Initialize(Cmd)

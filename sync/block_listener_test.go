@@ -39,16 +39,7 @@ type mockTxProcessor struct {
 	notValid bool
 }
 
-func (m mockTxProcessor) GetValidAddressableTx(tx *types.SerializableSignedTransaction) (*types.AddressableSignedTransaction, error) {
-	addr, err := m.ValidateTransactionSignature(tx)
-	if err != nil {
-		return nil, err
-	}
-
-	return &types.AddressableSignedTransaction{SerializableSignedTransaction: tx, Address: addr}, nil
-}
-
-func (m mockTxProcessor) ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (types.Address, error) {
+func (m mockTxProcessor) ValidateTransactionSignature(tx *types.Transaction) (types.Address, error) {
 	if !m.notValid {
 		return types.HexToAddress("0xFFFF"), nil
 	}
@@ -191,9 +182,9 @@ func TestBlockListener_DataAvailability(t *testing.T) {
 
 	block := types.NewExistingBlock(types.BlockID(2), 1, nil)
 	block.Signature = signer.Sign(block.Bytes())
-	block.TxIds = append(block.TxIds, types.GetTransactionId(tx1.SerializableSignedTransaction))
+	block.TxIds = append(block.TxIds, tx1.Id())
 	block.AtxIds = append(block.AtxIds, atx1.Id())
-	err = bl1.AddBlockWithTxs(block, []*types.AddressableSignedTransaction{tx1}, []*types.ActivationTx{atx1})
+	err = bl1.AddBlockWithTxs(block, []*types.Transaction{tx1}, []*types.ActivationTx{atx1})
 	require.NoError(t, err)
 
 	_, err = bl1.GetBlock(block.Id)
@@ -201,7 +192,7 @@ func TestBlockListener_DataAvailability(t *testing.T) {
 
 	// Verify that bl2 doesn't have them in mempool.
 
-	_, err = bl2.txpool.Get(types.GetTransactionId(tx1.SerializableSignedTransaction))
+	_, err = bl2.txpool.Get(tx1.Id())
 	require.Error(t, err)
 	_, err = bl2.atxpool.Get(atx1.Id())
 	require.Error(t, err)
@@ -212,13 +203,13 @@ func TestBlockListener_DataAvailability(t *testing.T) {
 	require.NoError(t, txErr)
 	require.NoError(t, atxErr)
 	require.Equal(t, 1, len(txs))
-	require.Equal(t, types.GetTransactionId(tx1.SerializableSignedTransaction), types.GetTransactionId(txs[0].SerializableSignedTransaction))
+	require.Equal(t, tx1.Id(), txs[0].Id())
 	require.Equal(t, 1, len(atxs))
 	require.Equal(t, atx1.Id(), atxs[0].Id())
 
 	// Verify that bl2 inserted them to the mempool.
 
-	_, err = bl2.txpool.Get(types.GetTransactionId(tx1.SerializableSignedTransaction))
+	_, err = bl2.txpool.Get(tx1.Id())
 	require.NoError(t, err)
 	_, err = bl2.atxpool.Get(atx1.Id())
 	require.NoError(t, err)
@@ -574,7 +565,7 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 	bl2.Start()
 
 	blk := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data1"))
-	tx := types.NewAddressableTx(0, types.BytesToAddress([]byte{0x01}), types.BytesToAddress([]byte{0x02}), 10, 10, 10)
+	tx := types.NewTxWithOrigin(0, types.BytesToAddress([]byte{0x01}), types.BytesToAddress([]byte{0x02}), 10, 10, 10)
 
 	atx := atx()
 	proofMessage := makePoetProofMessage(t)
@@ -588,9 +579,9 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 	poetRef := sha256.Sum256(poetProofBytes)
 	atx.Nipst.PostProof.Challenge = poetRef[:]
 
-	bl2.AddBlockWithTxs(blk, []*types.AddressableSignedTransaction{tx}, []*types.ActivationTx{atx})
+	bl2.AddBlockWithTxs(blk, []*types.Transaction{tx}, []*types.ActivationTx{atx})
 
-	mblk := types.Block{MiniBlock: types.MiniBlock{BlockHeader: blk.BlockHeader, TxIds: []types.TransactionId{types.GetTransactionId(tx.SerializableSignedTransaction)}, AtxIds: []types.AtxId{atx.Id()}}}
+	mblk := types.Block{MiniBlock: types.MiniBlock{BlockHeader: blk.BlockHeader, TxIds: []types.TransactionId{tx.Id()}, AtxIds: []types.AtxId{atx.Id()}}}
 	signer := signing.NewEdSigner()
 	mblk.Signature = signer.Sign(mblk.Bytes())
 
@@ -640,11 +631,11 @@ func TestBlockListener_AtxCache(t *testing.T) {
 	// Push block with tx1 and and atx1 into bl1.
 	blk1 := types.NewExistingBlock(types.BlockID(1), 1, nil)
 	blk1.Signature = signer.Sign(blk1.Bytes())
-	blk1.TxIds = append(blk1.TxIds, types.GetTransactionId(tx1.SerializableSignedTransaction))
+	blk1.TxIds = append(blk1.TxIds, tx1.Id())
 	blk1.AtxIds = append(blk1.AtxIds, atx1.Id())
 	blk1.AtxIds = append(blk1.AtxIds, atx2.Id())
 
-	err := bl1.AddBlockWithTxs(blk1, []*types.AddressableSignedTransaction{tx1}, []*types.ActivationTx{atx1, atx2})
+	err := bl1.AddBlockWithTxs(blk1, []*types.Transaction{tx1}, []*types.ActivationTx{atx1, atx2})
 	require.NoError(t, err)
 	require.Equal(t, 2, atxDb.ProcCnt)
 	_, err = bl1.GetBlock(blk1.Id)
@@ -653,11 +644,11 @@ func TestBlockListener_AtxCache(t *testing.T) {
 	// Push different block with same transactions - not expected to process atxs
 	blk2 := types.NewExistingBlock(types.BlockID(2), 1, nil)
 	blk2.Signature = signer.Sign(blk2.Bytes())
-	blk2.TxIds = append(blk2.TxIds, types.GetTransactionId(tx1.SerializableSignedTransaction))
+	blk2.TxIds = append(blk2.TxIds, tx1.Id())
 	blk2.AtxIds = append(blk2.AtxIds, atx1.Id())
 	blk2.AtxIds = append(blk2.AtxIds, atx2.Id())
 
-	err = bl1.AddBlockWithTxs(blk2, []*types.AddressableSignedTransaction{tx1}, []*types.ActivationTx{atx1, atx2})
+	err = bl1.AddBlockWithTxs(blk2, []*types.Transaction{tx1}, []*types.ActivationTx{atx1, atx2})
 	require.NoError(t, err)
 	require.Equal(t, 4, atxDb.ProcCnt)
 	_, err = bl1.GetBlock(blk2.Id)
@@ -666,10 +657,10 @@ func TestBlockListener_AtxCache(t *testing.T) {
 	// Push different block with subset of transactions - expected to process atxs
 	blk3 := types.NewExistingBlock(types.BlockID(3), 1, nil)
 	blk3.Signature = signer.Sign(blk3.Bytes())
-	blk3.TxIds = append(blk3.TxIds, types.GetTransactionId(tx1.SerializableSignedTransaction))
+	blk3.TxIds = append(blk3.TxIds, tx1.Id())
 	blk3.AtxIds = append(blk3.AtxIds, atx1.Id())
 
-	err = bl1.AddBlockWithTxs(blk3, []*types.AddressableSignedTransaction{tx1}, []*types.ActivationTx{atx1})
+	err = bl1.AddBlockWithTxs(blk3, []*types.Transaction{tx1}, []*types.ActivationTx{atx1})
 	require.NoError(t, err)
 	require.Equal(t, 5, atxDb.ProcCnt)
 	_, err = bl1.GetBlock(blk3.Id)

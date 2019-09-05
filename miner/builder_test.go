@@ -9,14 +9,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"math/big"
 	"testing"
 	"time"
 )
@@ -92,20 +90,11 @@ type mockTxProcessor struct {
 	notValid bool
 }
 
-func (m mockTxProcessor) ValidateNonceAndBalance(transaction *types.AddressableSignedTransaction) error {
+func (m mockTxProcessor) ValidateNonceAndBalance(transaction *types.Transaction) error {
 	return nil
 }
 
-func (m mockTxProcessor) GetValidAddressableTx(tx *types.SerializableSignedTransaction) (*types.AddressableSignedTransaction, error) {
-	addr, err := m.ValidateTransactionSignature(tx)
-	if err != nil {
-		return nil, err
-	}
-
-	return &types.AddressableSignedTransaction{SerializableSignedTransaction: tx, Address: addr}, nil
-}
-
-func (m mockTxProcessor) ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (types.Address, error) {
+func (m mockTxProcessor) ValidateTransactionSignature(tx *types.Transaction) (types.Address, error) {
 	if !m.notValid {
 		return types.HexToAddress("0xFFFF"), nil
 	}
@@ -176,7 +165,7 @@ func TestBlockBuilder_StartStop(t *testing.T) {
 
 	addr1 := types.BytesToAddress([]byte{0x02})
 	addr2 := types.BytesToAddress([]byte{0x01})
-	err = builder.AddTransaction(types.NewAddressableTx(1, addr1, addr2, 1, DefaultGasLimit, DefaultGas))
+	err = builder.AddTransaction(types.NewTxWithOrigin(1, addr1, addr2, 1, DefaultGasLimit, DefaultGas))
 	assert.Error(t, err)
 }
 
@@ -223,13 +212,13 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 	addr1 := types.BytesToAddress([]byte{0x02})
 	addr2 := types.BytesToAddress([]byte{0x01})
 
-	trans := []*types.AddressableSignedTransaction{
-		mesh.Transaction2SerializableTransaction(mesh.NewTransaction(1, addr1, addr2, big.NewInt(1), DefaultGasLimit, big.NewInt(DefaultGas))),
-		mesh.Transaction2SerializableTransaction(mesh.NewTransaction(2, addr1, addr2, big.NewInt(1), DefaultGasLimit, big.NewInt(DefaultGas))),
-		mesh.Transaction2SerializableTransaction(mesh.NewTransaction(3, addr1, addr2, big.NewInt(1), DefaultGasLimit, big.NewInt(DefaultGas))),
+	trans := []*types.Transaction{
+		types.NewTxWithOrigin(1, addr1, addr2, 1, DefaultGasLimit, DefaultGas),
+		types.NewTxWithOrigin(2, addr1, addr2, 1, DefaultGasLimit, DefaultGas),
+		types.NewTxWithOrigin(3, addr1, addr2, 1, DefaultGasLimit, DefaultGas),
 	}
 
-	transids := []types.TransactionId{types.GetTransactionId(trans[0].SerializableSignedTransaction), types.GetTransactionId(trans[1].SerializableSignedTransaction), types.GetTransactionId(trans[2].SerializableSignedTransaction)}
+	transids := []types.TransactionId{trans[0].Id(), trans[1].Id(), trans[2].Id()}
 
 	builder.AddTransaction(trans[0])
 	builder.AddTransaction(trans[1])
@@ -271,12 +260,14 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 }
 
 func TestBlockBuilder_SerializeTrans(t *testing.T) {
-	tx := types.NewAddressableTx(0, types.BytesToAddress([]byte{0x01}), types.BytesToAddress([]byte{0x02}), 10, 10, 10)
-	buf, err := types.AddressableTransactionAsBytes(tx)
+	tx, err := types.NewSignedTx(0, types.BytesToAddress([]byte{0x02}), 10, 10, 10, signing.NewEdSigner())
+	assert.NoError(t, err)
+	buf, err := types.SignedTransactionAsBytes(tx)
 	assert.NoError(t, err)
 
-	ntx, err := types.BytesAsAddressableTransaction(buf)
+	ntx, err := types.BytesAsSignedTransaction(buf)
 	assert.NoError(t, err)
+	ntx.Origin()
 
 	assert.Equal(t, *tx, *ntx)
 }

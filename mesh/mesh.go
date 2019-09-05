@@ -4,10 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/crypto/sha3"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/rlp"
 	"math/big"
 	"sort"
 	"sync"
@@ -29,10 +27,10 @@ type MeshValidator interface {
 }
 
 type TxProcessor interface {
-	ApplyTransactions(layer types.LayerID, transactions Transactions) (uint32, error)
+	ApplyTransactions(layer types.LayerID, transactions []*types.Transaction) (uint32, error)
 	ApplyRewards(layer types.LayerID, miners []types.Address, underQuota map[types.Address]int, bonusReward, diminishedReward *big.Int)
 	ValidateSignature(s types.Signed) (types.Address, error)
-	ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (types.Address, error) //todo use validate signature across the bord and remove this
+	ValidateTransactionSignature(tx *types.Transaction) (types.Address, error) //todo use validate signature across the bord and remove this
 }
 
 type TxMemPoolInValidator interface {
@@ -51,7 +49,7 @@ type AtxDB interface {
 }
 
 type TxMempool interface {
-	ValidateAndAddTxToPool(tx *types.AddressableSignedTransaction, postValidationFuncs ...func()) error
+	ValidateAndAddTxToPool(tx *types.Transaction, postValidationFuncs ...func()) error
 }
 
 type Mesh struct {
@@ -93,63 +91,6 @@ func NewMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh MeshValidator, t
 
 func (m *Mesh) SetTxMempool(txMempool TxMempool) {
 	m.txMempool = txMempool
-}
-
-//todo: this object should be split into two parts: one is the actual value serialized into trie, and an containing obj with caches
-type Transaction struct {
-	AccountNonce uint64
-	GasPrice     *big.Int
-	GasLimit     uint64
-	Recipient    *types.Address
-	Origin       types.Address //todo: remove this, should be calculated from sig.
-	Amount       *big.Int
-	Payload      []byte
-
-	//todo: add signatures
-
-	hash *types.Hash32
-}
-
-func (tx *Transaction) Hash() types.Hash32 {
-	if tx.hash == nil {
-		hash := rlpHash(tx)
-		tx.hash = &hash
-	}
-	return *tx.hash
-}
-
-type Transactions []*Transaction
-
-func NewTransaction(nonce uint64, origin types.Address, destination types.Address,
-	amount *big.Int, gasLimit uint64, gasPrice *big.Int) *Transaction {
-	return &Transaction{
-		AccountNonce: nonce,
-		Origin:       origin,
-		Recipient:    &destination,
-		Amount:       amount,
-		GasLimit:     gasLimit,
-		GasPrice:     gasPrice,
-		hash:         nil,
-		Payload:      nil,
-	}
-}
-
-func rlpHash(x interface{}) (h types.Hash32) {
-	hw := sha3.NewKeccak256()
-	rlp.Encode(hw, x)
-	hw.Sum(h[:0])
-	return h
-}
-
-func SerializableSignedTransaction2StateTransaction(tx *types.AddressableSignedTransaction) *Transaction {
-	price := &big.Int{}
-	price.SetUint64(tx.GasPrice)
-
-	amount := &big.Int{}
-	amount.SetUint64(tx.Amount)
-	stateTx := NewTransaction(tx.AccountNonce, tx.Address, tx.Recipient, amount, tx.GasLimit, price)
-	stateTx.Hash()
-	return stateTx
 }
 
 func (m *Mesh) ValidatedLayer() types.LayerID {
@@ -211,7 +152,7 @@ func SortBlocks(blocks []*types.Block) []*types.Block {
 	return blocks
 }
 
-func (m *Mesh) ExtractUniqueOrderedTransactions(l *types.Layer) (validBlocks, invalidBlocks []*Transaction) {
+func (m *Mesh) ExtractUniqueOrderedTransactions(l *types.Layer) (validBlocks, invalidBlocks []*types.Transaction) {
 	sortedBlocks := SortBlocks(l.Blocks())
 
 	txids := map[bool]map[types.TransactionId]struct{}{
@@ -237,8 +178,8 @@ func (m *Mesh) ExtractUniqueOrderedTransactions(l *types.Layer) (validBlocks, in
 	return m.getUniqueTxs(txids[true], l), m.getUniqueTxs(txids[false], l)
 }
 
-func (m *Mesh) getUniqueTxs(txids map[types.TransactionId]struct{}, l *types.Layer) []*Transaction {
-	txs := make([]*Transaction, 0, layerSize)
+func (m *Mesh) getUniqueTxs(txids map[types.TransactionId]struct{}, l *types.Layer) []*types.Transaction {
+	txs := make([]*types.Transaction, 0, layerSize)
 	idSlice := make([]types.TransactionId, 0, len(txids))
 	for id := range txids {
 		idSlice = append(idSlice, id)
@@ -251,7 +192,7 @@ func (m *Mesh) getUniqueTxs(txids map[types.TransactionId]struct{}, l *types.Lay
 
 	for _, tx := range stxs {
 		//todo: think about these conversions.. are they needed?
-		txs = append(txs, SerializableSignedTransaction2StateTransaction(tx))
+		txs = append(txs, tx)
 	}
 
 	return MergeDoubles(txs)
@@ -275,7 +216,7 @@ func (m *Mesh) PushTransactions(oldBase, newBase types.LayerID) {
 		}
 		if m.txMempool != nil {
 			for _, tx := range invalidBlockTxs {
-				_ = m.txMempool.ValidateAndAddTxToPool(Transaction2SerializableTransaction(tx))
+				_ = m.txMempool.ValidateAndAddTxToPool(tx)
 				// We ignore errors here, since they mean that the tx is no longer valid and we shouldn't re-add it
 			}
 		}
@@ -328,7 +269,7 @@ func (m *Mesh) AddBlock(blk *types.Block) error {
 	return nil
 }
 
-func (m *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.AddressableSignedTransaction, atxs []*types.ActivationTx) error {
+func (m *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.Transaction, atxs []*types.ActivationTx) error {
 	m.Debug("add block %d", blk.ID())
 
 	events.Publish(events.NewBlock{Id: uint64(blk.Id), Atx: blk.ATXID.String(), Layer: uint64(blk.LayerIndex)})
@@ -475,7 +416,7 @@ func (m *Mesh) AccumulateRewards(rewardLayer types.LayerID, params Config) {
 	rewards := &big.Int{}
 	processed := 0
 	for _, tx := range merged {
-		res := new(big.Int).Mul(tx.GasPrice, params.SimpleTxCost)
+		res := new(big.Int).SetUint64(tx.GasPrice * params.SimpleTxCost.Uint64())
 		processed++
 		rewards.Add(rewards, res)
 	}
