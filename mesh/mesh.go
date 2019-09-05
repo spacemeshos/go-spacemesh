@@ -216,8 +216,12 @@ func (m *Mesh) PushTransactions(oldBase, newBase types.LayerID) {
 		}
 		if m.txMempool != nil {
 			for _, tx := range invalidBlockTxs {
-				_ = m.txMempool.ValidateAndAddTxToPool(tx)
+				err = m.txMempool.ValidateAndAddTxToPool(tx)
 				// We ignore errors here, since they mean that the tx is no longer valid and we shouldn't re-add it
+				if err == nil {
+					m.With().Info("transaction from contextually invalid block re-added to mempool",
+						log.TxId(tx.Id().Short()))
+				}
 			}
 		}
 		m.With().Info("applied transactions",

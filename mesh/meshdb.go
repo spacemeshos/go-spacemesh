@@ -457,7 +457,7 @@ func (m *MeshDB) GetTransactions(transactions []types.TransactionId) (
 	for _, id := range transactions {
 		t, err := m.GetTransaction(id)
 		if err != nil {
-			m.Warning("could not fetch tx, %v %v", hex.EncodeToString(id[:]), err)
+			m.With().Warning("could not fetch tx", log.TxId(id.Short()), log.Err(err))
 			mIds = append(mIds, id)
 		} else {
 			ts[id] = t
@@ -471,7 +471,7 @@ func (m *MeshDB) GetTransaction(id types.TransactionId) (*types.Transaction, err
 	if err != nil {
 		return nil, fmt.Errorf("could not find transaction in database %v err=%v", hex.EncodeToString(id[:]), err)
 	}
-	return types.BytesAsSignedTransaction(tBytes)
+	return types.BytesAsTransaction(tBytes)
 }
 
 // ContextuallyValidBlock - returns the contextually valid blocks for the provided layer

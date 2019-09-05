@@ -270,23 +270,18 @@ func (t *BlockBuilder) listenForTx() {
 				continue
 			}
 
-			tx, err := types.BytesAsSignedTransaction(data.Bytes())
+			tx, err := types.BytesAsTransaction(data.Bytes())
 			if err != nil {
 				t.Log.Error("cannot parse incoming TX")
 				continue
 			}
 
-			if !t.txValidator.AddressExists(tx.Origin()) {
-				t.With().Error("Transaction origin unknown",
-					log.TxId(tx.Id().Short()), log.String("origin", tx.Origin().String()), log.Err(err))
-				continue
-			}
 			if err := t.ValidateAndAddTxToPool(tx, func() {
 				t.Log.With().Info("got new tx", log.TxId(tx.Id().Short()))
 				data.ReportValidation(IncomingTxProtocol)
 			}); err != nil {
-				t.With().Error("Transaction nonce and balance validation failed",
-					log.TxId(tx.Id().Short()), log.Err(err))
+				t.With().Error("Transaction validation failed",
+					log.TxId(tx.Id().Short()), log.String("origin", tx.Origin().String()), log.Err(err))
 				continue
 			}
 		}
@@ -294,6 +289,9 @@ func (t *BlockBuilder) listenForTx() {
 }
 
 func (t *BlockBuilder) ValidateAndAddTxToPool(tx *types.Transaction, postValidationFuncs ...func()) error {
+	if !t.txValidator.AddressExists(tx.Origin()) {
+		return fmt.Errorf("transaction origin does not exist")
+	}
 	err := t.txValidator.ValidateNonceAndBalance(tx)
 	if err != nil {
 		return err

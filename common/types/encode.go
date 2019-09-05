@@ -69,7 +69,7 @@ func SignedTransactionAsBytes(tx *Transaction) ([]byte, error) {
 	return w.Bytes(), nil
 }
 
-func BytesAsSignedTransaction(buf []byte) (*Transaction, error) {
+func BytesAsTransaction(buf []byte) (*Transaction, error) {
 	b := Transaction{}
 	_, err := xdr.Unmarshal(bytes.NewReader(buf), &b)
 	if err != nil {
