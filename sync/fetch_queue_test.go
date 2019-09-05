@@ -164,7 +164,7 @@ func TestBlockListener_TestTxQueueHandle(t *testing.T) {
 	block1.TxIds = []types.TransactionId{id1, id2, id3}
 	bl2.AddBlockWithTxs(block1, []*types.AddressableSignedTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
 
-	res, err := queue.Handle([]types.Hash32{id1.Hash32(), id2.Hash32(), id3.Hash32()})
+	res, err := queue.handle([]types.Hash32{id1.Hash32(), id2.Hash32(), id3.Hash32()})
 	if err != nil {
 		t.Error(err)
 	}
@@ -210,7 +210,7 @@ func TestBlockListener_TestAtxQueueHandle(t *testing.T) {
 
 	bl2.AddBlockWithTxs(block1, []*types.AddressableSignedTransaction{}, []*types.ActivationTx{atx1, atx2, atx3})
 
-	res, err := bl1.atxQueue.Handle([]types.Hash32{atx1.Hash32(), atx2.Hash32(), atx3.Hash32()})
+	res, err := bl1.atxQueue.handle([]types.Hash32{atx1.Hash32(), atx2.Hash32(), atx3.Hash32()})
 	if err != nil {
 		t.Error(err)
 	}

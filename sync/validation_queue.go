@@ -48,7 +48,7 @@ func NewValidationQueue(srvr WorkerInfra, conf Configuration, msh ValidationInfr
 		callbacks:       make(map[interface{}]func(res bool) error),
 		ValidationInfra: msh,
 	}
-	vq.handle = vq.handleBlock
+	vq.handleFetch = vq.handleBlock
 	go vq.work()
 
 	return vq
@@ -76,17 +76,17 @@ func (vq *blockQueue) handleBlock(bjb fetchJob) {
 		vq.Error(fmt.Sprintf("could not retrieve a block in view "))
 		//return
 	}
-	block := bjb.items[0].(types.Block)
+	block := bjb.items[0].(*types.Block)
 	//todo hack remove after batch block request is implemented in request and handler
 	vq.Info("fetched  %v", bid)
 	vq.visited[bid] = struct{}{}
-	if err := vq.fastValidation(&block); err != nil {
+	if err := vq.fastValidation(block); err != nil {
 		vq.Error("ValidationQueue: block validation failed", log.BlockId(uint64(block.ID())), log.Err(err))
 		vq.updateDependencies(bid, false)
 		//return
 	}
 
-	vq.handleBlockDependencies(&block)
+	vq.handleBlockDependencies(block)
 	//todo better deadlock solution
 }
 

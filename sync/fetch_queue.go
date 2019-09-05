@@ -1,7 +1,6 @@
 package sync
 
 import (
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -31,7 +30,7 @@ type fetchQueue struct {
 	*sync.Mutex
 	workerInfra WorkerInfra
 	pending     map[types.Hash32][]chan bool
-	handle      func(fj fetchJob)
+	handleFetch func(fj fetchJob)
 	checkLocal  CheckLocalFunc
 	queue       chan []types.Hash32 //types.TransactionId //todo make buffered
 }
@@ -39,6 +38,14 @@ type fetchQueue struct {
 func (vq *fetchQueue) Close() {
 	vq.Info("done")
 	close(vq.queue)
+}
+
+func concatShortIds(items []types.Hash32) string {
+	str := ""
+	for _, i := range items {
+		str += str + i.ShortString()
+	}
+	return str
 }
 
 //todo batches
@@ -61,11 +68,11 @@ func (fq *fetchQueue) work() error {
 		}
 
 		if len(bjb.items) == 0 {
-			fq.Warning("could not fetch any items ") //todo print ids
+			fq.Warning("could not fetch any items %s", concatShortIds(bjb.ids))
 			continue
 		}
 
-		fq.handle(bjb)
+		fq.handleFetch(bjb)
 		fq.Debug("next batch")
 	}
 	return nil
@@ -105,13 +112,13 @@ func (fq *fetchQueue) invalidate(id types.Hash32, valid bool) {
 }
 
 //returns items out of itemIds that are not in the local database
-func (tq *fetchQueue) Handle(itemIds []types.Hash32) ([]Item, error) {
+func (tq *fetchQueue) handle(itemIds []types.Hash32) (map[types.Hash32]Item, error) {
 	if len(itemIds) == 0 {
 		tq.Debug("handle empty item ids slice")
 		return nil, nil
 	}
 
-	unprocessedItems, processedItems, missing := tq.checkLocal(itemIds)
+	unprocessedItems, _, missing := tq.checkLocal(itemIds)
 	if len(missing) > 0 {
 
 		output := tq.addToPendingGetCh(missing)
@@ -120,23 +127,13 @@ func (tq *fetchQueue) Handle(itemIds []types.Hash32) ([]Item, error) {
 			return nil, errors.New(fmt.Sprintf("could not fetch all items"))
 		}
 
-		unprocessedItems, processedItems, missing = tq.checkLocal(itemIds)
+		unprocessedItems, _, missing = tq.checkLocal(itemIds)
 		if len(missing) > 0 {
 			return nil, errors.New("could not find all items even though fetch was successful")
 		}
 	}
 
-	txs := make([]Item, 0, len(itemIds))
-	for _, id := range itemIds {
-		if tx, ok := unprocessedItems[id]; ok {
-			txs = append(txs, tx)
-		} else if _, ok := processedItems[id]; ok {
-			continue
-		} else {
-			return nil, errors.New(fmt.Sprintf("item %v was not found after fetch was done", hex.EncodeToString(id[:])))
-		}
-	}
-	return txs, nil
+	return unprocessedItems, nil
 }
 
 //todo make the queue generic
@@ -157,7 +154,7 @@ func NewTxQueue(s *Syncer, txValidator TxValidator) *txQueue {
 			queue:               make(chan []types.Hash32, 1000)},
 	}
 
-	q.handle = updateTxDependencies(q.invalidate, s.txpool, txValidator.GetValidAddressableTx)
+	q.handleFetch = updateTxDependencies(q.invalidate, s.txpool, txValidator.GetValidAddressableTx)
 	go q.work()
 	return q
 }
@@ -169,7 +166,7 @@ func (tx txQueue) HandleTxs(txids []types.TransactionId) ([]*types.AddressableSi
 		txItems = append(txItems, i.Hash32())
 	}
 
-	txres, err := tx.Handle(txItems)
+	txres, err := tx.handle(txItems)
 	if err != nil {
 		return nil, err
 	}
@@ -188,15 +185,15 @@ func updateTxDependencies(invalidate func(id types.Hash32, valid bool), txpool T
 			return
 		}
 
-		mp := map[types.Hash32]types.SerializableSignedTransaction{}
+		mp := map[types.Hash32]*types.SerializableSignedTransaction{}
 
 		for _, item := range fj.items {
-			mp[item.Hash32()] = item.(types.SerializableSignedTransaction)
+			mp[item.Hash32()] = item.(*types.SerializableSignedTransaction)
 		}
 
 		for _, id := range fj.ids {
 			if item, ok := mp[id]; ok {
-				tx, err := getValidAddrTx(&item)
+				tx, err := getValidAddrTx(item)
 				if err == nil {
 					txpool.Put(types.TransactionId(id), tx)
 					invalidate(id, true)
@@ -226,7 +223,7 @@ func NewAtxQueue(s *Syncer, fetchPoetProof FetchPoetProofFunc) *atxQueue {
 		},
 	}
 
-	q.handle = updateAtxDependencies(q.invalidate, s.SyntacticallyValidateAtx, s.atxpool, fetchPoetProof)
+	q.handleFetch = updateAtxDependencies(q.invalidate, s.SyntacticallyValidateAtx, s.atxpool, fetchPoetProof)
 	go q.work()
 	return q
 }
@@ -238,7 +235,7 @@ func (atx atxQueue) HandleAtxs(atxids []types.AtxId) ([]*types.ActivationTx, err
 		atxItems = append(atxItems, i.Hash32())
 	}
 
-	atxres, err := atx.Handle(atxItems)
+	atxres, err := atx.handle(atxItems)
 	if err != nil {
 		return nil, err
 	}
@@ -259,17 +256,17 @@ func updateAtxDependencies(invalidate func(id types.Hash32, valid bool), sValida
 
 		fetchProofCalcId(fetchProof, fj)
 
-		mp := map[types.Hash32]types.ActivationTx{}
+		mp := map[types.Hash32]*types.ActivationTx{}
 		for _, item := range fj.items {
-			tmp := item.(types.ActivationTx)
+			tmp := item.(*types.ActivationTx)
 			mp[item.Hash32()] = tmp
 		}
 
 		for _, id := range fj.ids {
 			if atx, ok := mp[id]; ok {
-				err := sValidateAtx(&atx)
+				err := sValidateAtx(atx)
 				if err == nil {
-					atxpool.Put(atx.Id(), &atx)
+					atxpool.Put(atx.Id(), atx)
 					invalidate(id, true)
 					continue
 				}
@@ -301,7 +298,7 @@ func getDoneChan(deps []chan bool) chan bool {
 func fetchProofCalcId(fetchPoetProof FetchPoetProofFunc, fj fetchJob) {
 	itemsWithProofs := make([]Item, 0, len(fj.items))
 	for _, item := range fj.items {
-		atx := item.(types.ActivationTx)
+		atx := item.(*types.ActivationTx)
 		atx.CalcAndSetId() //todo put it somewhere that will cause less confusion
 		if err := fetchPoetProof(atx.GetPoetProofRef()); err != nil {
 			log.Error("received atx (%v) with syntactically invalid or missing PoET proof (%x): %v",

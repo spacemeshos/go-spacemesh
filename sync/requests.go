@@ -107,8 +107,8 @@ func atxsAsItems(msg []byte) ([]Item, error) {
 	}
 	atxs = calcAndSetIds(atxs)
 	items := make([]Item, len(atxs))
-	for i, arg := range atxs {
-		items[i] = arg
+	for i := range atxs {
+		items[i] = &atxs[i]
 	}
 	return items, nil
 }
@@ -120,8 +120,8 @@ func txsAsItems(msg []byte) ([]Item, error) {
 		return nil, err
 	}
 	items := make([]Item, len(txs))
-	for i, arg := range txs {
-		items[i] = arg
+	for i := range txs {
+		items[i] = &txs[i]
 	}
 	return items, nil
 }
@@ -133,8 +133,8 @@ func blocksAsItems(msg []byte) ([]Item, error) {
 		return nil, err
 	}
 	items := make([]Item, len(blocks))
-	for i, arg := range blocks {
-		items[i] = arg
+	for i := range blocks {
+		items[i] = &blocks[i]
 	}
 	return items, nil
 }

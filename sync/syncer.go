@@ -517,14 +517,20 @@ func validateVotes(blk *types.Block, forBlockfunc ForBlockInView, depth int) boo
 
 func (s *Syncer) DataAvailabilty(blk *types.Block) ([]*types.AddressableSignedTransaction, []*types.ActivationTx, error) {
 
-	txres, txerr := s.txQueue.HandleTxs(blk.TxIds)
-	if txerr != nil {
-		return nil, nil, fmt.Errorf("failed fetching block %v transactions %v", blk.ID(), txerr)
+	var txres []*types.AddressableSignedTransaction
+	var txerr error
+	if len(blk.TxIds) > 0 {
+		if txres, txerr = s.txQueue.HandleTxs(blk.TxIds); txerr != nil {
+			return nil, nil, fmt.Errorf("failed fetching block %v transactions %v", blk.ID(), txerr)
+		}
 	}
 
-	atxres, atxerr := s.atxQueue.HandleAtxs(blk.AtxIds)
-	if atxerr != nil {
-		return nil, nil, fmt.Errorf("failed fetching block %v activation transactions %v", blk.ID(), atxerr)
+	var atxres []*types.ActivationTx
+	var atxerr error
+	if len(blk.AtxIds) > 0 {
+		if atxres, atxerr = s.atxQueue.HandleAtxs(blk.AtxIds); atxerr != nil {
+			return nil, nil, fmt.Errorf("failed fetching block %v activation transactions %v", blk.ID(), atxerr)
+		}
 	}
 
 	s.Info("fetched all block data %v", blk.ID())

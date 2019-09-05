@@ -59,8 +59,7 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 				bl.With().Info("ignoring gossip blocks - not synced yet")
 				break
 			}
-			// TODO: we currently don't support async block handling due to missing blk request duplication
-			// TODO: A WIP is on it's way hence we only comment-out the go routine until impl
+
 			bl.wg.Add(1)
 			go func() {
 				defer bl.wg.Done()

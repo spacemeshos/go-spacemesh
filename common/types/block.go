@@ -12,12 +12,12 @@ import (
 type BlockID uint64
 type TransactionId Hash32
 
-func (t TransactionId) ShortString() string {
+func (t *TransactionId) ShortString() string {
 	return t.Hash32().ShortString()
 }
 
-func (t TransactionId) Hash32() Hash32 {
-	return Hash32(t)
+func (t *TransactionId) Hash32() Hash32 {
+	return Hash32(*t)
 }
 
 type LayerID uint64
@@ -125,12 +125,14 @@ type SerializableSignedTransaction struct {
 	Signature [64]byte
 }
 
-func (t SerializableSignedTransaction) Hash32() Hash32 {
-	return GetTransactionId(&t).Hash32()
+func (t *SerializableSignedTransaction) Hash32() Hash32 {
+	id := GetTransactionId(t)
+	return id.Hash32()
 }
 
-func (t SerializableSignedTransaction) ShortString() string {
-	return GetTransactionId(&t).Hash32().ShortString()
+func (t *SerializableSignedTransaction) ShortString() string {
+	id := GetTransactionId(t)
+	return id.ShortString()
 }
 
 func NewSignedTx(nonce uint64, rec Address, amount, gas, price uint64, signer *signing.EdSigner) (*SerializableSignedTransaction, error) {
