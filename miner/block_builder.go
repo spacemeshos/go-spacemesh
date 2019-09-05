@@ -3,12 +3,10 @@ package miner
 import (
 	"crypto/md5"
 	"encoding/binary"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -35,7 +33,7 @@ type Signer interface {
 }
 
 type TxValidator interface {
-	ValidateTransactionSignature(tx *types.Transaction) (types.Address, error)
+	AddressExists(addr types.Address) bool
 	ValidateNonceAndBalance(transaction *types.Transaction) error
 }
 
@@ -272,25 +270,23 @@ func (t *BlockBuilder) listenForTx() {
 				continue
 			}
 
-			x, err := types.BytesAsSignedTransaction(data.Bytes())
+			tx, err := types.BytesAsSignedTransaction(data.Bytes())
 			if err != nil {
 				t.Log.Error("cannot parse incoming TX")
 				continue
 			}
 
-			id := x.Id()
-			_, err = t.txValidator.ValidateTransactionSignature(x)
-			if err != nil {
-				t.With().Error("Transaction sig validation failed",
-					log.TxId(hex.EncodeToString(id[:util.Min(5, len(id))])), log.Err(err))
+			if !t.txValidator.AddressExists(tx.Origin()) {
+				t.With().Error("Transaction origin unknown",
+					log.TxId(tx.Id().Short()), log.String("origin", tx.Origin().String()), log.Err(err))
 				continue
 			}
-			if err := t.ValidateAndAddTxToPool(x, func() {
-				t.Log.With().Info("got new tx", log.TxId(hex.EncodeToString(id[:util.Min(5, len(id))])))
+			if err := t.ValidateAndAddTxToPool(tx, func() {
+				t.Log.With().Info("got new tx", log.TxId(tx.Id().Short()))
 				data.ReportValidation(IncomingTxProtocol)
 			}); err != nil {
 				t.With().Error("Transaction nonce and balance validation failed",
-					log.TxId(hex.EncodeToString(id[:util.Min(5, len(id))])), log.Err(err))
+					log.TxId(tx.Id().Short()), log.Err(err))
 				continue
 			}
 		}

@@ -2,7 +2,6 @@ package state
 
 import (
 	crand "crypto/rand"
-	"fmt"
 	"github.com/seehuhn/mt19937"
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -488,18 +487,13 @@ func TestValidateTxSignature(t *testing.T) {
 	createAccount(state, PublicKeyToAccountAddress(pub), 123, 321)
 	tx := createXdrSignedTransaction(t, pri)
 
-	addr, e := proc.ValidateTransactionSignature(tx)
-	assert.Equal(t, PublicKeyToAccountAddress(pub), addr)
-	assert.NoError(t, e)
+	assert.Equal(t, PublicKeyToAccountAddress(pub), tx.Origin())
+	assert.True(t, proc.AddressExists(tx.Origin()))
 
 	// negative flow
 	pub, pri, _ = ed25519.GenerateKey(crand.Reader)
 	tx = createXdrSignedTransaction(t, pri)
 
-	tx.Origin()
-	addr, e = proc.ValidateTransactionSignature(tx)
-	assert.Equal(t, types.Address{}, addr)
-	expectedAddr := types.Address{}
-	expectedAddr.SetBytes(pub)
-	assert.EqualError(t, e, fmt.Sprintf("failed to validate tx signature, unknown src account %x", expectedAddr))
+	assert.False(t, proc.AddressExists(tx.Origin()))
+	assert.Equal(t, PublicKeyToAccountAddress(pub), tx.Origin())
 }

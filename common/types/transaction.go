@@ -18,6 +18,10 @@ func (id TransactionId) String() string {
 	return fmt.Sprintf("%x", id.Bytes())
 }
 
+func (id TransactionId) Short() string {
+	return fmt.Sprintf("%.3x", id.Bytes())
+}
+
 type Transaction struct {
 	InnerTransaction
 	Signature [64]byte

@@ -101,13 +101,8 @@ func (tp *TransactionProcessor) ValidateSignature(s types.Signed) (types.Address
 
 // Validate the tx's signature by extracting the source account and validating its existence.
 // Return the src acount address and error in case of failure
-func (tp *TransactionProcessor) ValidateTransactionSignature(tx *types.Transaction) (types.Address, error) {
-	addr := tx.Origin()
-	if !tp.globalState.Exist(addr) {
-		return types.Address{}, fmt.Errorf("failed to validate tx signature, unknown src account %x", addr)
-	}
-
-	return addr, nil
+func (tp *TransactionProcessor) AddressExists(addr types.Address) bool {
+	return tp.globalState.Exist(addr)
 }
 
 func (tp *TransactionProcessor) ValidateNonceAndBalance(tx *types.Transaction) error {

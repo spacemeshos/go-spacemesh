@@ -94,11 +94,8 @@ func (m mockTxProcessor) ValidateNonceAndBalance(transaction *types.Transaction)
 	return nil
 }
 
-func (m mockTxProcessor) ValidateTransactionSignature(tx *types.Transaction) (types.Address, error) {
-	if !m.notValid {
-		return types.HexToAddress("0xFFFF"), nil
-	}
-	return types.Address{}, errors.New("invalid sig for tx")
+func (m mockTxProcessor) AddressExists(addr types.Address) bool {
+	return !m.notValid
 }
 
 type mockSyncer struct {
