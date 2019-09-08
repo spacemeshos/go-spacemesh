@@ -47,8 +47,7 @@ type Syncer interface {
 }
 
 type TxPool interface {
-	Get(id types.TransactionId) (types.Transaction, error)
-	GetRandomTxs(size int, seed []byte) []types.Transaction
+	GetRandomTxs(numOfTxs int, seed []byte) []types.TransactionId
 	Put(id types.TransactionId, item *types.Transaction)
 	Invalidate(id types.TransactionId)
 }
@@ -182,7 +181,7 @@ func calcHdistRange(id types.LayerID, hdist types.LayerID) (bottom types.LayerID
 }
 
 func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibilityProof types.BlockEligibilityProof,
-	txs []types.Transaction, atxids []types.AtxId) (*types.Block, error) {
+	txids []types.TransactionId, atxids []types.AtxId) (*types.Block, error) {
 
 	var votes []types.BlockID = nil
 	var err error
@@ -201,11 +200,6 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 	viewEdges, err := t.orphans.GetOrphanBlocksBefore(id)
 	if err != nil {
 		return nil, err
-	}
-
-	var txids []types.TransactionId
-	for _, t := range txs {
-		txids = append(txids, t.Id())
 	}
 
 	b := types.MiniBlock{

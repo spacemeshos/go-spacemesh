@@ -20,16 +20,12 @@ import (
 
 type TxMemPool interface {
 	Get(id types.TransactionId) (types.Transaction, error)
-	GetAllItems() []types.Transaction
 	Put(id types.TransactionId, item *types.Transaction)
-	Invalidate(id types.TransactionId)
 }
 
 type AtxMemPool interface {
 	Get(id types.AtxId) (types.ActivationTx, error)
-	GetAllItems() []types.ActivationTx
 	Put(id types.AtxId, item *types.ActivationTx)
-	Invalidate(id types.AtxId)
 }
 
 type PoetDb interface {

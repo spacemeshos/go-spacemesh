@@ -1,6 +1,7 @@
 package miner
 
 import (
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/stretchr/testify/require"
 	"strconv"
@@ -12,7 +13,7 @@ import (
 func TestNewTxPoolWithAccounts(t *testing.T) {
 	r := require.New(t)
 
-	pool := NewTxPoolWithAccounts()
+	pool := NewTxMemPool()
 	prevNonce := uint64(5)
 	prevBalance := uint64(1000)
 
@@ -41,7 +42,7 @@ func TestNewTxPoolWithAccounts(t *testing.T) {
 	seed := []byte("seed")
 	items := pool.GetRandomTxs(1, seed)
 	r.Len(items, 1)
-	r.Equal(tx2, &items[0])
+	r.Equal(tx2.Id(), items[0])
 	nonce, balance = pool.GetProjection(origin, prevNonce+2, prevBalance-50-150)
 	r.Equal(prevNonce+2, nonce)
 	r.Equal(prevBalance-50-150, balance)
@@ -50,14 +51,18 @@ func TestNewTxPoolWithAccounts(t *testing.T) {
 func TestTxPoolWithAccounts_GetRandomTxs(t *testing.T) {
 	r := require.New(t)
 
-	pool := NewTxPoolWithAccounts()
+	pool := NewTxMemPool()
 	prevNonce := uint64(5)
 	prevBalance := uint64(1000)
 	origin := types.BytesToAddress([]byte("abc"))
 	const numTxs = 10
 
-	for i := prevNonce; i < prevNonce+numTxs; i++ {
-		pool.Put(newTx(origin, i, 50))
+	ids := make([]types.TransactionId, numTxs)
+	for i := uint64(0); i < numTxs; i++ {
+		id, tx := newTx(origin, prevNonce+i, 50)
+		ids[i] = id
+		fmt.Printf("%d: %v\n", i, id.String())
+		pool.Put(id, tx)
 	}
 
 	nonce, balance := pool.GetProjection(origin, prevNonce, prevBalance)
@@ -67,11 +72,18 @@ func TestTxPoolWithAccounts_GetRandomTxs(t *testing.T) {
 	seed := []byte("seed")
 	txs := pool.GetRandomTxs(5, seed)
 	r.Len(txs, 5)
-	var nonces []uint64
+	var txIds []types.TransactionId
 	for _, tx := range txs {
-		nonces = append(nonces, tx.AccountNonce)
+		txIds = append(txIds, tx)
 	}
-	r.ElementsMatch([]uint64{5, 8, 10, 12, 14}, nonces)
+	r.ElementsMatch([]types.TransactionId{ids[5], ids[0], ids[9], ids[3], ids[7]}, txIds)
+	/*
+		e960de27caffa83e6e8bbcf126268115d7b0284b15b67e3d1394db63ddf551cc
+		b791d54444fa6fec3be511c3e02906ccab7dec03611d61b8b5fc6a5a8015320f
+		064d86ea163b6b9e2bdf476e2f4da78bf05f1cf90d87d561605498451a0ff56c
+		6e1409da76706c440385655be5730b34c0e02545f2d1b54ec9e407d3c6fef8e4
+		b21487d43b2bcd27fe1caadff4ddf846e10e0722a78174780a67200bf1dab27e
+	*/
 }
 
 func TestGetRandIdxs(t *testing.T) {
@@ -103,7 +115,7 @@ func newTx(origin types.Address, nonce, totalAmount uint64) (types.TransactionId
 }
 
 func BenchmarkTxPoolWithAccounts(b *testing.B) {
-	pool := NewTxPoolWithAccounts()
+	pool := NewTxMemPool()
 
 	const numBatches = 10
 	txBatches := make([][]*types.Transaction, numBatches)
@@ -128,14 +140,14 @@ func BenchmarkTxPoolWithAccounts(b *testing.B) {
 	b.Log(time.Since(start))
 }
 
-func addBatch(pool *TxPoolWithAccounts, txBatch []*types.Transaction, txIdBatch []types.TransactionId, wg *sync.WaitGroup) {
+func addBatch(pool *TxMempool, txBatch []*types.Transaction, txIdBatch []types.TransactionId, wg *sync.WaitGroup) {
 	for i, tx := range txBatch {
 		pool.Put(txIdBatch[i], tx)
 	}
 	wg.Done()
 }
 
-func invalidateBatch(pool *TxPoolWithAccounts, txIdBatch []types.TransactionId, wg *sync.WaitGroup) {
+func invalidateBatch(pool *TxMempool, txIdBatch []types.TransactionId, wg *sync.WaitGroup) {
 	for _, txId := range txIdBatch {
 		pool.Invalidate(txId)
 	}

@@ -54,7 +54,10 @@ func (apt *AccountPendingTxs) Remove(accepted, rejected []*types.Transaction, la
 	}
 }
 
-func (apt *AccountPendingTxs) RemoveNonce(nonce uint64) {
+func (apt *AccountPendingTxs) RemoveNonce(nonce uint64, deleteTx func(id types.TransactionId)) {
+	for id := range apt.PendingTxs[nonce] {
+		deleteTx(id)
+	}
 	delete(apt.PendingTxs, nonce)
 }
 

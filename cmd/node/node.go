@@ -352,7 +352,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 		return err
 	}
 
-	txpool := miner.NewTxPoolWithAccounts()
+	txpool := miner.NewTxMemPool()
 	atxpool := miner.NewAtxMemPool()
 	projector := pending_txs.NewProjector(mdb, txpool)
 
