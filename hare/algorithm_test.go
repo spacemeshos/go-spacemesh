@@ -11,6 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
 )
@@ -517,16 +518,38 @@ func TestConsensusProcess_beginRound3(t *testing.T) {
 	assert.Equal(t, 1, network.count)
 }
 
+type mockNet struct {
+	callBroadcast int
+	callRegister  int
+	err           error
+}
+
+func (m *mockNet) Broadcast(protocol string, payload []byte) error {
+	m.callBroadcast++
+	return m.err
+}
+
+func (m *mockNet) RegisterGossipProtocol(protocol string) chan service.GossipMessage {
+	m.callRegister++
+	return nil
+}
+
 func TestConsensusProcess_beginRound4(t *testing.T) {
+	r := require.New(t)
+
 	proc := generateConsensusProcess(t)
 	proc.beginRound1()
 	proc.beginRound2()
 	proc.beginRound3()
-	assert.NotNil(t, proc.commitTracker)
-	assert.NotNil(t, proc.proposalTracker)
+	r.NotNil(proc.commitTracker)
+	r.NotNil(proc.proposalTracker)
+
+	net := &mockNet{}
+	proc.network = net
 	proc.beginRound4()
-	assert.Nil(t, proc.commitTracker)
-	assert.Nil(t, proc.proposalTracker)
+	r.Equal(1, net.callBroadcast)
+	r.Nil(proc.commitTracker)
+	r.Nil(proc.proposalTracker)
 }
 
 func TestConsensusProcess_handlePending(t *testing.T) {
@@ -551,14 +574,12 @@ func TestConsensusProcess_endOfRound3(t *testing.T) {
 	proc.proposalTracker = mpt
 	mct := &mockCommitTracker{}
 	proc.commitTracker = mct
-	proc.notifySent = true
-	proc.endOfRound3()
-	proc.notifySent = false
-	assert.Equal(t, 0, mpt.countIsConflicting)
-	mpt.isConflicting = true
 	proc.endOfRound3()
 	assert.Equal(t, 1, mpt.countIsConflicting)
-	assert.Equal(t, 0, mct.countHasEnoughCommits)
+	mpt.isConflicting = true
+	proc.endOfRound3()
+	assert.Equal(t, 2, mpt.countIsConflicting)
+	assert.Equal(t, 1, mct.countHasEnoughCommits)
 	mpt.isConflicting = false
 	mct.hasEnoughCommits = false
 	proc.endOfRound3()
@@ -578,5 +599,4 @@ func TestConsensusProcess_endOfRound3(t *testing.T) {
 	proc.endOfRound3()
 	assert.True(t, proc.s.Equals(mpt.proposedSet))
 	assert.Equal(t, mct.certificate, proc.certificate)
-	assert.True(t, proc.notifySent)
 }
