@@ -62,6 +62,10 @@ type BytesStore interface {
 	Get(key []byte) ([]byte, error)
 }
 
+type Signer interface {
+	Sign(m []byte) []byte
+}
+
 const (
 	InitIdle = 1 + iota
 	InitInProgress
@@ -69,6 +73,7 @@ const (
 )
 
 type Builder struct {
+	Signer
 	nodeId          types.NodeId
 	coinbaseAccount types.Address
 	db              ATXDBProvider
@@ -96,8 +101,9 @@ type Builder struct {
 }
 
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
-func NewBuilder(nodeId types.NodeId, coinbaseAccount types.Address, db ATXDBProvider, net Broadcaster, mesh MeshProvider, layersPerEpoch uint16, nipstBuilder NipstBuilder, postProver nipst.PostProverClient, layerClock chan types.LayerID, isSyncedFunc func() bool, store BytesStore, log log.Log) *Builder {
+func NewBuilder(nodeId types.NodeId, coinbaseAccount types.Address, signer Signer, db ATXDBProvider, net Broadcaster, mesh MeshProvider, layersPerEpoch uint16, nipstBuilder NipstBuilder, postProver nipst.PostProverClient, layerClock chan types.LayerID, isSyncedFunc func() bool, store BytesStore, log log.Log) *Builder {
 	return &Builder{
+		Signer:          signer,
 		nodeId:          nodeId,
 		coinbaseAccount: coinbaseAccount,
 		db:              db,
@@ -128,6 +134,17 @@ func (b *Builder) Start() {
 // Stop stops the atx builder.
 func (b *Builder) Stop() {
 	b.finished <- struct{}{}
+}
+
+func (b Builder) signAtx(atx *types.ActivationTx) (*types.SignedAtx, error) {
+	bts, err := types.InterfaceToBytes(atx)
+	if err != nil {
+		return nil, err
+	}
+	sig := b.Sign(bts)
+	return &types.SignedAtx{
+		atx, sig,
+	}, nil
 }
 
 // loop is the main loop that tries to create an atx per tick received from the global clock
@@ -449,7 +466,12 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 	b.log.With().Info("active ids seen for epoch", log.Uint64("pos_atx_epoch", uint64(posEpoch)),
 		log.Uint32("view_cnt", activeSetSize))
 
-	buf, err := types.InterfaceToBytes(atx)
+	signedAtx, err := b.signAtx(atx)
+	if err != nil {
+		return err
+	}
+
+	buf, err := types.InterfaceToBytes(signedAtx)
 	if err != nil {
 		return err
 	}

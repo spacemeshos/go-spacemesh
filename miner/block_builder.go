@@ -321,11 +321,19 @@ func (t *BlockBuilder) handleGossipAtx(data service.GossipMessage) {
 	if data == nil {
 		return
 	}
-	atx, err := types.BytesAsAtx(data.Bytes(), nil)
+	signedAtx, err := types.BytesAsSignedAtx(data.Bytes())
 	if err != nil {
 		t.Error("cannot parse incoming ATX")
 		return
 	}
+
+	err = types.ValidateSignedAtx(signedAtx)
+	if err != nil {
+		log.Error("cannot validate atx sig atx id %v err %v", signedAtx.Id(), err)
+		return
+	}
+
+	atx := signedAtx.ActivationTx
 	t.With().Info("got new ATX", log.AtxId(atx.ShortId()), log.LayerId(uint64(atx.PubLayerIdx)))
 
 	//todo fetch from neighbour

@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/poet/service"
 	"github.com/spacemeshos/poet/shared"
 	"github.com/spacemeshos/post/proving"
@@ -82,6 +83,11 @@ type ActivationTx struct {
 	//todo: add sig
 }
 
+type SignedAtx struct {
+	*ActivationTx
+	Sig []byte
+}
+
 func NewActivationTx(NodeId NodeId,
 	Coinbase Address,
 	Sequence uint64,
@@ -158,6 +164,18 @@ func (atx *ActivationTx) GetPoetProofRef() []byte {
 
 func (atx *ActivationTx) GetShortPoetProofRef() []byte {
 	return atx.Nipst.PostProof.Challenge[:util.Min(5, len(atx.Nipst.PostProof.Challenge))]
+}
+
+func ValidateSignedAtx(signedAtx *SignedAtx) error {
+	atxBytes, err := InterfaceToBytes(signedAtx.ActivationTx)
+	if err != nil {
+		return err
+	}
+	verified := signing.Verify(signing.NewPublicKey(util.Hex2Bytes(signedAtx.NodeId.Key)), atxBytes, signedAtx.Sig)
+	if !verified {
+		return fmt.Errorf("invalid signature")
+	}
+	return nil
 }
 
 type PoetProof struct {
