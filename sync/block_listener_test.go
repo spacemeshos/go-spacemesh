@@ -420,6 +420,11 @@ func TestBlockListenerViewTraversal(t *testing.T) {
 	block10.Signature = signer.Sign(block10.Bytes())
 	block10.Id = 10
 
+	block11 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	block11.ATXID = *types.EmptyAtxId
+	block11.Signature = signer.Sign(block11.Bytes())
+	block11.Id = 11
+
 	block2.AddView(block1.ID())
 	block3.AddView(block2.ID())
 	block4.AddView(block2.ID())
@@ -443,8 +448,9 @@ func TestBlockListenerViewTraversal(t *testing.T) {
 	bl1.AddBlock(block8)
 	bl1.AddBlock(block9)
 	bl1.AddBlock(block10)
+	bl1.AddBlock(block11)
 
-	bl2.syncLayer(1, []types.BlockID{block10.Id})
+	bl2.syncLayer(1, []types.BlockID{block10.Id, block11.Id})
 
 	b, err := bl1.GetBlock(block1.Id)
 	if err != nil {

@@ -168,8 +168,8 @@ func TestATX_ActiveSetForLayerView(t *testing.T) {
 		atx.Nipst = nipst.NewNIPSTWithChallenge(hash, poetRef)
 		//layers.AtxDB.(*AtxDbMock).AddAtx(atx.Id(), atx)
 	}
-
-	fmt.Println("ID4 ", atxs[4].Id().ShortString())
+	id := atxs[4].Id()
+	fmt.Println("ID4 ", id.ShortString())
 	blocks := createLayerWithAtx(t, layers, 1, 6, atxs, []types.BlockID{}, []types.BlockID{})
 	before := blocks[:4]
 	four := blocks[4:5]

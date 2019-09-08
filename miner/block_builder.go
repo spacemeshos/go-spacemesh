@@ -339,7 +339,9 @@ func (t *BlockBuilder) handleGossipAtx(data service.GossipMessage) {
 			atx.ShortString(), atx.GetShortPoetProofRef(), err)
 		return
 	}
-	events.Publish(events.NewAtx{Id: atx.Id().Hash32().String()})
+
+	id := atx.Id()
+	events.Publish(events.NewAtx{Id: id.Hash32().String()})
 
 	err = t.atxValidator.SyntacticallyValidateAtx(atx)
 	events.Publish(events.ValidAtx{Id: atx.ShortString(), Valid: err == nil})

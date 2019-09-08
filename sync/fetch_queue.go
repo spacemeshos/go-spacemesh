@@ -72,6 +72,7 @@ func (fq *fetchQueue) work() error {
 			continue
 		}
 
+		fq.Debug("fetched items %s", concatShortIds(bjb.ids))
 		fq.handleFetch(bjb)
 		fq.Debug("next batch")
 	}
@@ -83,6 +84,7 @@ func (fq *fetchQueue) addToPendingGetCh(ids []types.Hash32) chan bool {
 }
 
 func (fq *fetchQueue) addToPending(ids []types.Hash32) []chan bool {
+
 	fq.Lock()
 	deps := make([]chan bool, 0, len(ids))
 	var idsToAdd []types.Hash32

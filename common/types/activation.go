@@ -27,12 +27,12 @@ func (l EpochId) FirstLayer(layersPerEpoch uint16) LayerID {
 
 type AtxId Hash32
 
-func (t AtxId) ShortString() string {
+func (t *AtxId) ShortString() string {
 	return t.Hash32().ShortString()
 }
 
-func (t AtxId) Hash32() Hash32 {
-	return Hash32(t)
+func (t *AtxId) Hash32() Hash32 {
+	return Hash32(*t)
 }
 
 func (t AtxId) Bytes() []byte {

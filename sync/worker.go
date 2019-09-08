@@ -6,7 +6,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
-	"reflect"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -150,20 +149,21 @@ func NewFetchWorker(s WorkerInfra, count int, reqFactory BatchRequestFactory, id
 				lg.Info("close fetch worker ")
 				return
 			}
+			idsStr := concatShortIds(ids)
 			retrived := false
 		next:
 			for _, p := range s.GetPeers() {
 				peer := p
-				lg.Info("send fetch request %v of %v to Peer: %v ", reflect.TypeOf(ids), peer.String())
+				lg.Info("send fetch request to Peer: %v ids: %v", peer.String(), idsStr)
 				ch, _ := reqFactory(s, peer, ids)
 				timeout := time.After(s.GetTimeout())
 				select {
 				case <-timeout:
-					lg.Error("fetch request to %v on %v timed out", peer.String(), ids)
+					lg.Error("fetch request to %v on %v timed out %s", peer.String(), idsStr)
 				case v := <-ch:
 					if v != nil {
 						retrived = true
-						lg.Info("Peer: %v responded %v to fetch request ", peer.String())
+						lg.Info("Peer: %v responded to fetch request %s", peer.String(), idsStr)
 						output <- fetchJob{ids: ids, items: v}
 						break next
 					}
