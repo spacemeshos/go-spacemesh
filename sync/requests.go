@@ -28,7 +28,7 @@ func LayerIdsReqFactory(lyr types.LayerID) RequestFactory {
 			}
 			ids, err := types.BytesToBlockIds(msg)
 			if err != nil {
-				s.Error("could not unmarshal mesh.LayerIDs response")
+				s.Error("could not unmarshal mesh.LayerIDs response ", err)
 				return
 			}
 			ch <- ids

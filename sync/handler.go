@@ -12,7 +12,7 @@ import (
 func newLayerHashRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg []byte) []byte {
 	return func(msg []byte) []byte {
 		lyrid := util.BytesToUint64(msg)
-		logger.Info("handle layer %v hash request", lyrid)
+		logger.With().Info("handle layer %v hash request", log.LayerId(lyrid))
 		layer, err := layers.GetLayer(types.LayerID(lyrid))
 		if err != nil {
 			logger.With().Error("Error handling layer request message", log.LayerId(lyrid), log.Err(err))
