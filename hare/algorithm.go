@@ -195,7 +195,7 @@ func (proc *ConsensusProcess) SetInbox(inbox chan *Msg) {
 func (proc *ConsensusProcess) eventLoop() {
 	proc.With().Info("Consensus Process Started",
 		log.Int("Hare-N", proc.cfg.N), log.Int("f", proc.cfg.F), log.String("duration", (time.Duration(proc.cfg.RoundDuration)*time.Second).String()),
-		log.LayerId(uint64(proc.instanceId)), log.Int("exp_leaders", proc.cfg.ExpectedLeaders), log.String("set_values", proc.s.String()))
+		log.LayerId(uint64(proc.instanceId)), log.Int("exp_leaders", proc.cfg.ExpectedLeaders), log.String("current_set", proc.s.String()))
 
 	// set pre-round InnerMsg and send
 	builder, err := proc.initDefaultBuilder(proc.s)
@@ -440,6 +440,7 @@ func (proc *ConsensusProcess) beginRound4() {
 		proc.Error("init default builder failed: %v", err)
 		return
 	}
+	proc.Event().Info("Begin Round 4", log.String("current_set", proc.s.String()), log.LayerId(uint64(proc.instanceId)))
 	builder = builder.SetType(Notify).SetCertificate(proc.certificate).Sign(proc.signing)
 	notifyMsg := builder.Build()
 	proc.sendMessage(notifyMsg)
@@ -538,7 +539,7 @@ func (proc *ConsensusProcess) processNotifyMsg(msg *Msg) {
 
 	// enough notifications, should terminate
 	proc.s = s // update to the agreed set
-	proc.Event().Info("Consensus process terminated", log.String("set_values", proc.s.String()), log.LayerId(uint64(proc.instanceId)))
+	proc.Event().Info("Consensus process terminated", log.String("current_set", proc.s.String()), log.LayerId(uint64(proc.instanceId)))
 	proc.terminationReport <- procOutput{proc.instanceId, proc.s}
 	proc.Close()
 	proc.terminating = true // ensures immediate termination
@@ -596,8 +597,6 @@ func (proc *ConsensusProcess) endOfRound3() {
 	}
 
 	// commit & send notification msg
-	proc.Event().Info("Round 3 ended: committing", log.String("committed_set", s.String()),
-		log.Uint64("layer_id", uint64(proc.instanceId)))
 	proc.s = s
 	proc.certificate = cert
 }
