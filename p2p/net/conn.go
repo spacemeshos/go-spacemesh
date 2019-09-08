@@ -4,6 +4,7 @@ import (
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/delimited"
+	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"time"
@@ -69,6 +70,8 @@ type FormattedConnection struct {
 
 	closed bool
 	close  io.Closer
+
+	msgSizeLimit int
 }
 
 type networker interface {
@@ -94,7 +97,7 @@ type formattedWriter interface {
 
 // Create a new connection wrapping a net.Conn with a provided connection manager
 func newConnection(conn readWriteCloseAddresser, netw networker,
-	remotePub p2pcrypto.PublicKey, session NetworkSession, log log.Log) *FormattedConnection {
+	remotePub p2pcrypto.PublicKey, session NetworkSession, msgSizeLimit int, log log.Log) *FormattedConnection {
 
 	// todo parametrize channel size - hard-coded for now
 	connection := &FormattedConnection{
@@ -108,6 +111,7 @@ func newConnection(conn readWriteCloseAddresser, netw networker,
 		close:      conn,
 		networker:  netw,
 		session:    session,
+		msgSizeLimit: msgSizeLimit,
 	}
 
 	return connection
@@ -190,6 +194,7 @@ func (c *FormattedConnection) Closed() bool {
 
 var ErrTriedToSetupExistingConn = errors.New("tried to setup existing connection")
 var ErrIncomingSessionTimeout = errors.New("timeout waiting for handshake message")
+var ErrMsgExceededLimit         = errors.New("message size exceeded limit")
 
 func (c *FormattedConnection) setupIncoming(timeout time.Duration) error {
 	be := make(chan struct {
@@ -217,6 +222,14 @@ func (c *FormattedConnection) setupIncoming(timeout time.Duration) error {
 			c.Close()
 			return err
 		}
+
+		if c.msgSizeLimit != config.UnlimitedMsgSize && len(msg) > c.msgSizeLimit {
+			c.logger.With().Error("setupIncoming: message is too big",
+				log.Int("limit", c.msgSizeLimit), log.Int("actual", len(msg)))
+			err = ErrMsgExceededLimit
+			break
+		}
+
 		if c.session == nil {
 			err = c.networker.HandlePreSessionIncomingMessage(c, msg)
 			if err != nil {

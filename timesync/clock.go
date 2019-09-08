@@ -1,8 +1,8 @@
 package timesync
 
 import (
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/types"
 	"sync"
 	"time"
 )
@@ -12,14 +12,13 @@ import (
 type LayerTimer chan types.LayerID
 
 type Ticker struct {
-	subscribes      []LayerTimer
 	nextLayerToTick types.LayerID
 	m               sync.RWMutex
 	tickInterval    time.Duration
 	startEpoch      time.Time
 	time            Clock
 	stop            chan struct{}
-	ids             map[LayerTimer]int
+	subscribers     map[LayerTimer]struct{} // map subscribers by channel
 	started         bool
 }
 
@@ -35,13 +34,12 @@ func (RealClock) Now() time.Time {
 
 func NewTicker(time Clock, tickInterval time.Duration, startEpoch time.Time) *Ticker {
 	t := &Ticker{
-		subscribes:      make([]LayerTimer, 0, 0),
 		nextLayerToTick: 1,
 		tickInterval:    tickInterval,
 		startEpoch:      startEpoch,
 		time:            time,
 		stop:            make(chan struct{}),
-		ids:             make(map[LayerTimer]int),
+		subscribers:     make(map[LayerTimer]struct{}),
 	}
 	t.init()
 	return t
@@ -76,9 +74,11 @@ func (t *Ticker) notifyOnTick() {
 
 	t.m.Lock()
 	log.Event().Info("release tick", log.LayerId(uint64(t.nextLayerToTick)))
-	for _, ch := range t.subscribes {
+	count := 1
+	for ch := range t.subscribers {
 		ch <- t.nextLayerToTick
-		log.Debug("iv'e notified number : %v", t.ids[ch])
+		log.Debug("iv'e notified number : %v", count)
+		count++
 	}
 	log.Debug("Ive notified all")
 	t.nextLayerToTick++
@@ -95,11 +95,16 @@ func (t *Ticker) GetCurrentLayer() types.LayerID {
 func (t *Ticker) Subscribe() LayerTimer {
 	ch := make(LayerTimer)
 	t.m.Lock()
-	t.ids[ch] = len(t.ids)
-	t.subscribes = append(t.subscribes, ch)
+	t.subscribers[ch] = struct{}{}
 	t.m.Unlock()
 
 	return ch
+}
+
+func (t *Ticker) Unsubscribe(ch LayerTimer) {
+	t.m.Lock()
+	delete(t.subscribers, ch)
+	t.m.Unlock()
 }
 
 func (t *Ticker) updateLayerID() {

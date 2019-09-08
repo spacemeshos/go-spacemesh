@@ -1,15 +1,13 @@
 package activation
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
-	"github.com/spacemeshos/go-spacemesh/types"
-	"github.com/spacemeshos/sha256-simd"
-	"sort"
 	"sync"
 )
 
@@ -149,7 +147,7 @@ func (db *ActivationDb) CalcActiveSetSize(epoch types.EpochId, blocks map[types.
 // in the epoch prior to the epoch that a was published at, this number is the number of active ids in the next epoch
 // the function returns error if the view is not found
 func (db *ActivationDb) CalcActiveSetFromView(view []types.BlockID, pubEpoch types.EpochId) (uint32, error) {
-	viewHash, err := calcSortedViewHash(view)
+	viewHash, err := types.CalcBlocksHash12(view)
 	if err != nil {
 		return 0, fmt.Errorf("failed to calc sorted view hash: %v", err)
 	}
@@ -177,20 +175,6 @@ func (db *ActivationDb) CalcActiveSetFromView(view []types.BlockID, pubEpoch typ
 
 }
 
-func calcSortedViewHash(view []types.BlockID) (common.Hash, error) {
-	sortedView := make([]types.BlockID, len(view))
-	copy(sortedView, view)
-	sort.Slice(sortedView, func(i, j int) bool {
-		return sortedView[i] < sortedView[j]
-	})
-	viewBytes, err := types.ViewAsBytes(sortedView)
-	if err != nil {
-		return common.Hash{}, err
-	}
-	viewHash := sha256.Sum256(viewBytes)
-	return viewHash, err
-}
-
 // SyntacticallyValidateAtx ensures the following conditions apply, otherwise it returns an error.
 //
 // - If the sequence number is non-zero: PrevATX points to a syntactically valid ATX whose sequence number is one less
@@ -215,9 +199,30 @@ func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error 
 		if prevATX.Sequence+1 != atx.Sequence {
 			return fmt.Errorf("sequence number is not one more than prev sequence number")
 		}
+
+		if atx.Commitment != nil {
+			return fmt.Errorf("prevATX declared, but commitment proof is included")
+		}
+
+		if atx.CommitmentMerkleRoot != nil {
+			return fmt.Errorf("prevATX declared, but commitment merkle root is included in challenge")
+		}
 	} else {
 		if atx.Sequence != 0 {
-			return fmt.Errorf("no prevATX reported, but sequence number not zero")
+			return fmt.Errorf("no prevATX declared, but sequence number not zero")
+		}
+		if atx.Commitment == nil {
+			return fmt.Errorf("no prevATX declared, but commitment proof is not included")
+		}
+		if atx.CommitmentMerkleRoot == nil {
+			return fmt.Errorf("no prevATX declared, but commitment merkle root is not included in challenge")
+		}
+		if !bytes.Equal(atx.Commitment.MerkleRoot, atx.CommitmentMerkleRoot) {
+			return errors.New("commitment merkle root included in challenge is not equal to the merkle root included in the proof")
+		}
+
+		if err := db.nipstValidator.VerifyPost(atx.Commitment, atx.Nipst.Space); err != nil {
+			return fmt.Errorf("invalid commitment proof: %v", err)
 		}
 	}
 
@@ -254,7 +259,7 @@ func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error 
 	if err != nil {
 		return fmt.Errorf("cannot get NIPST Challenge hash: %v", err)
 	}
-	db.log.With().Info("Validated NIPST", log.String("challenge_hash", hash.ShortString()))
+	db.log.With().Info("Validated NIPST", log.String("challenge_hash", hash.ShortString()), log.AtxId(atx.ShortId()))
 
 	if err = db.nipstValidator.Validate(atx.Nipst, *hash); err != nil {
 		return fmt.Errorf("NIPST not valid: %v", err)
@@ -325,7 +330,7 @@ func (db *ActivationDb) StoreAtx(ech types.EpochId, atx *types.ActivationTx) err
 }
 
 func (db *ActivationDb) storeAtxUnlocked(atx *types.ActivationTx) error {
-	b, err := types.AtxAsBytes(atx)
+	b, err := types.InterfaceToBytes(atx)
 	if err != nil {
 		return err
 	}
@@ -405,7 +410,7 @@ func (db *ActivationDb) GetNodeLastAtxId(nodeId types.NodeId) (types.AtxId, erro
 	if err != nil {
 		return *types.EmptyAtxId, err
 	}
-	return types.AtxId{Hash: common.BytesToHash(id)}, nil
+	return types.AtxId{Hash32: types.BytesToHash(id)}, nil
 }
 
 // GetPosAtxId returns the best (highest layer id), currently known to this node, pos atx id

@@ -3,9 +3,9 @@ package eligibility
 import (
 	"errors"
 	lru "github.com/hashicorp/golang-lru"
-	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/types"
 	"hash/fnv"
 	"sort"
 )
@@ -78,7 +78,7 @@ func calcValue(bids map[types.BlockID]struct{}) uint32 {
 	// calc
 	h := fnv.New32()
 	for i := 0; i < len(keys); i++ {
-		_, err := h.Write(common.Uint32ToBytes(uint32(keys[i])))
+		_, err := h.Write(util.Uint32ToBytes(uint32(keys[i])))
 		if err != nil {
 			log.Panic("Could not calculate beacon value. Hash write error=%v", err)
 		}

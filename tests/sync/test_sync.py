@@ -7,7 +7,8 @@ from tests.fixtures import set_namespace, load_config, init_session, set_docker_
 from tests.test_bs import setup_clients, save_log_on_exit, setup_bootstrap, create_configmap
 from tests.test_bs import current_index, wait_genesis, GENESIS_TIME, BOOT_DEPLOYMENT_FILE, CLIENT_DEPLOYMENT_FILE, get_conf
 from tests.misc import CoreV1ApiClient
-from tests.queries import ES, query_message
+from tests.context import ES
+from tests.queries import query_message
 from elasticsearch_dsl import Search, Q
 
 # ==============================================================================
@@ -71,7 +72,8 @@ def test_sync_gradually_add_nodes(init_session, setup_bootstrap, save_log_on_exi
     del cspec.args['remote-data']
     cspec.args['data-folder'] = ""
 
-    clients = [None] * 4
+    num_clients = 4
+    clients = [None] * num_clients
     clients[0] = new_client_in_namespace(testconfig['namespace'], setup_bootstrap, cspec, 1)
     time.sleep(10)
     clients[1] = new_client_in_namespace(testconfig['namespace'], setup_bootstrap, cspec, 1)
@@ -81,12 +83,12 @@ def test_sync_gradually_add_nodes(init_session, setup_bootstrap, save_log_on_exi
     clients[3] = new_client_in_namespace(testconfig['namespace'], setup_bootstrap, cspec, 1)
 
     start = time.time()
-
-    for i in range(30):
-
+    sleep = 30 # seconds
+    num_iter = 10 # total of 5 minutes
+    for i in range(num_iter):
         done = 0
-        for i in range(0, 4):
-            podName = clients[i].pods[0]['name']
+        for j in range(0, num_clients):
+            podName = clients[j].pods[0]['name']
             if not check_pod(podName): # not all done
                 print("pod " + podName + " still not done. Going to sleep")
                 break # stop check and sleep
@@ -94,13 +96,14 @@ def test_sync_gradually_add_nodes(init_session, setup_bootstrap, save_log_on_exi
                 print("pod " + podName + " done")
                 done = done + 1
 
-        if done == 4:
+        if done == num_clients:
             print("all pods done")
             break
 
-        sleep = 1
-        print("not done yet sleep for " + str(sleep) + " minute")
-        time.sleep(sleep * 60)
+        print("not done yet sleep for " + str(sleep) + " seconds")
+        time.sleep(sleep)
+
+    assert done == num_clients
 
     end = time.time()
 

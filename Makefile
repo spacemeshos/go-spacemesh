@@ -92,7 +92,7 @@ else
 endif
 .PHONY: $(PLATFORMS)
 
-test:
+test: genproto
 	ulimit -n 500; go test -short -timeout 0 -p 1 ./...
 .PHONY: test
 
@@ -205,6 +205,23 @@ endif
 
 dockertest-sync: dockerbuild-test dockerrun-sync
 .PHONY: dockertest-sync
+
+# command for late nodes
+
+dockerrun-late-nodes:
+ifndef ES_PASSWD
+	$(error ES_PASSWD is not set)
+endif
+
+	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
+		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
+		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
+		-it go-spacemesh-python:$(BRANCH) pytest -s -v late_nodes/test_delayed.py --tc-file=late_nodes/delayed_config.yaml --tc-format=yaml
+
+.PHONY: dockerrun-late-nodes
+
+dockertest-late-nodes: dockerbuild-test dockerrun-late-nodes
+.PHONY: dockertest-late-nodes
 
 # The following is used to run tests one after the other locally
 dockerrun-test: dockerbuild-test dockerrun-p2p dockerrun-mining dockerrun-hare dockerrun-sync

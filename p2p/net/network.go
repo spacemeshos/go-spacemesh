@@ -3,12 +3,13 @@ package net
 import (
 	"errors"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
+	"github.com/spacemeshos/go-spacemesh/p2p/delimited"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/version"
-	"github.com/spacemeshos/go-spacemesh/types"
 	"net"
 	"strconv"
 	"sync"
@@ -186,7 +187,7 @@ func (n *Net) createConnection(address string, remotePub p2pcrypto.PublicKey, se
 	}
 
 	n.logger.Debug("Connected to %s...", address)
-	return newConnection(netConn, n, remotePub, session, n.logger), nil
+	return newConnection(netConn, n, remotePub, session, n.config.MsgSizeLimit, n.logger), nil
 }
 
 func (n *Net) createSecuredConnection(address string, remotePubkey p2pcrypto.PublicKey, timeOut time.Duration,
@@ -289,7 +290,7 @@ func (n *Net) accept(listen net.Listener) {
 		}
 
 		n.logger.Debug("Got new connection... Remote Address: %s", netConn.RemoteAddr())
-		c := newConnection(netConn, n, nil, nil, n.logger)
+		c := newConnection(netConn, n, nil, nil,n.config.MsgSizeLimit, n.logger)
 		go func(con Connection) {
 			defer func() { pending <- struct{}{} }()
 			err := c.setupIncoming(n.config.SessionTimeout)

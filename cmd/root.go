@@ -57,6 +57,12 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringVar(&config.PublishEventsUrl, "events-url",
 		config.PublishEventsUrl, "publish events on this url, if no url specified event will no be published")
 
+	cmd.PersistentFlags().IntVar(&config.SyncRequestTimeout, "sync-request-timeout",
+		2000, "the timeout in ms for direct requests in the sync")
+
+	cmd.PersistentFlags().IntVar(&config.AtxsPerBlock, "atxs-per-block",
+		100, "the number of atxs to select per block on block creation")
+
 	/** ======================== P2P Flags ========================== **/
 
 	cmd.PersistentFlags().IntVar(&config.P2P.TCPPort, "tcp-port",
@@ -105,6 +111,8 @@ func AddCommands(cmd *cobra.Command) {
 		config.TIME.DefaultTimeoutLatency, "Default timeout to ntp query")
 	cmd.PersistentFlags().DurationVar(&config.TIME.RefreshNtpInterval, "refresh-ntp-interval",
 		config.TIME.RefreshNtpInterval, "Refresh intervals to ntp")
+	cmd.PersistentFlags().IntVar(&config.P2P.MsgSizeLimit, "msg-size-limit",
+		config.P2P.MsgSizeLimit, "The message size limit in bytes for incoming messages")
 
 	/** ======================== API Flags ========================== **/
 
@@ -152,8 +160,8 @@ func AddCommands(cmd *cobra.Command) {
 		config.POST.DataDir, "The directory that contains post data files")
 	cmd.PersistentFlags().Uint64Var(&config.POST.SpacePerUnit, "post-space",
 		config.POST.SpacePerUnit, "Space per unit, in bytes")
-	cmd.PersistentFlags().Uint64Var(&config.POST.FileSize, "post-filesize",
-		config.POST.FileSize, "Space per file, in bytes")
+	cmd.PersistentFlags().IntVar(&config.POST.NumFiles, "post-numfiles",
+		config.POST.NumFiles, "Number of files")
 	cmd.PersistentFlags().UintVar(&config.POST.Difficulty, "post-difficulty",
 		config.POST.Difficulty, "Computational cost of the initialization")
 	cmd.PersistentFlags().UintVar(&config.POST.NumProvenLabels, "post-labels",

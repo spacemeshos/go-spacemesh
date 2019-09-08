@@ -3,6 +3,8 @@ package net
 import (
 	"errors"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/config"
+	"github.com/spacemeshos/go-spacemesh/p2p/delimited"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -12,6 +14,8 @@ import (
 	"testing"
 	"time"
 )
+
+var msgSizeLimit = config.DefaultConfig().P2P.MsgSizeLimit
 
 func TestSendReceiveMessage(t *testing.T) {
 	netw := NewNetworkMock()
@@ -84,6 +88,20 @@ func TestPreSessionMessageAfterSession(t *testing.T) {
 	go conn.beginEventProcessing()
 	time.Sleep(50 * time.Millisecond)
 	assert.Equal(t, rwcam.CloseCount(), 1)
+}
+
+func TestConn_Limit(t *testing.T) {
+	netw := NewNetworkMock()
+	rwcam := NewReadWriteCloseAddresserMock()
+	rPub := p2pcrypto.NewRandomPubkey()
+	formatter := delimited.NewChan(10)
+	conn := newConnection(rwcam, netw, formatter, rPub, nil, 1, netw.logger)
+	go func() {
+		conn.incomingChannel() <- []byte{1, 2, 3}
+	}()
+
+	err := conn.setupIncoming(time.Second)
+	assert.EqualError(t, err, ErrMsgExceededLimit.Error())
 }
 
 func TestPreSessionError(t *testing.T) {

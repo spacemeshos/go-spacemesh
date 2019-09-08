@@ -19,15 +19,15 @@ package trie
 import (
 	"fmt"
 
-	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 // MissingNodeError is returned by the trie functions (TryGet, TryUpdate, TryDelete)
 // in the case where a trie node is not present in the local database. It contains
 // information necessary for retrieving the missing node.
 type MissingNodeError struct {
-	NodeHash common.Hash // hash of the missing node
-	Path     []byte      // hex-encoded path to the missing node
+	NodeHash types.Hash32 // hash of the missing node
+	Path     []byte       // hex-encoded path to the missing node
 }
 
 func (err *MissingNodeError) Error() string {
