@@ -67,42 +67,38 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 					bl.Error("got empty message while listening to gossip blocks")
 					return
 				}
-				var blk types.Block
-				err := types.BytesToInterface(data.Bytes(), &blk)
-				if err != nil {
-					bl.Error("received invalid block %v", data.Bytes(), err)
-					return
-				}
 
-				if bl.HandleNewBlock(&blk) {
-					data.ReportValidation(config.NewBlockProtocol)
-				}
+				bl.handleBlock(data)
+
 			}()
 
 		}
 	}
 }
 
-func (bl *BlockListener) HandleNewBlock(blk *types.Block) bool {
-
+func (bl *BlockListener) handleBlock(data service.GossipMessage) {
+	var blk types.Block
+	err := types.BytesToInterface(data.Bytes(), &blk)
+	if err != nil {
+		bl.Error("received invalid block %v", data.Bytes(), err)
+		return
+	}
 	bl.Log.With().Info("got new block", log.BlockId(uint64(blk.ID())), log.LayerId(uint64(blk.Layer())), log.Int("txs", len(blk.TxIds)), log.Int("atxs", len(blk.AtxIds)))
 	//check if known
 	if _, err := bl.GetBlock(blk.ID()); err == nil {
 		bl.With().Info("we already know this block", log.BlockId(uint64(blk.ID())))
-		return true
+		return
 	}
-
-	txs, atxs, err := bl.blockSyntacticValidation(blk)
+	txs, atxs, err := bl.blockSyntacticValidation(&blk)
 	if err != nil {
 		bl.With().Error("failed to validate block", log.BlockId(uint64(blk.ID())), log.Err(err))
-		return false
+		return
 	}
-
-	if err := bl.AddBlockWithTxs(blk, txs, atxs); err != nil {
+	data.ReportValidation(config.NewBlockProtocol)
+	if err := bl.AddBlockWithTxs(&blk, txs, atxs); err != nil {
 		bl.With().Error("failed to add block to database", log.BlockId(uint64(blk.ID())), log.Err(err))
-		return false
+		return
 	}
-
 	bl.With().Info("added block to database", log.BlockId(uint64(blk.ID())))
-	return true
+	return
 }
