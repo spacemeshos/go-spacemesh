@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/config"
-	"github.com/spacemeshos/go-spacemesh/p2p/delimited"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -21,7 +20,7 @@ func TestSendReceiveMessage(t *testing.T) {
 	netw := NewNetworkMock()
 	rwcam := NewReadWriteCloseAddresserMock()
 	rPub := p2pcrypto.NewRandomPubkey()
-	conn := newConnection(rwcam, netw, rPub, &networkSessionImpl{}, netw.logger)
+	conn := newConnection(rwcam, netw, rPub, &networkSessionImpl{}, msgSizeLimit, netw.logger)
 	go conn.beginEventProcessing()
 	msg := "hello"
 	err := conn.Send([]byte(msg))
@@ -37,7 +36,7 @@ func TestReceiveError(t *testing.T) {
 	netw := NewNetworkMock()
 	rwcam := NewReadWriteCloseAddresserMock()
 	rPub := p2pcrypto.NewRandomPubkey()
-	conn := newConnection(rwcam, netw, rPub, &networkSessionImpl{}, netw.logger)
+	conn := newConnection(rwcam, netw, rPub, &networkSessionImpl{}, msgSizeLimit, netw.logger)
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -57,7 +56,7 @@ func TestSendError(t *testing.T) {
 	netw := NewNetworkMock()
 	rwcam := NewReadWriteCloseAddresserMock()
 	rPub := p2pcrypto.NewRandomPubkey()
-	conn := newConnection(rwcam, netw, rPub, &networkSessionImpl{}, netw.logger)
+	conn := newConnection(rwcam, netw, rPub, &networkSessionImpl{}, msgSizeLimit, netw.logger)
 	go conn.beginEventProcessing()
 
 	rwcam.SetWriteResult(fmt.Errorf("fail"))
@@ -71,7 +70,7 @@ func TestPreSessionMessage(t *testing.T) {
 	netw := NewNetworkMock()
 	rwcam := NewReadWriteCloseAddresserMock()
 	rPub := p2pcrypto.NewRandomPubkey()
-	conn := newConnection(rwcam, netw, rPub, nil, netw.logger)
+	conn := newConnection(rwcam, netw, rPub, nil, msgSizeLimit, netw.logger)
 	rwcam.SetReadResult([]byte{3, 1, 1, 1}, nil)
 	err := conn.setupIncoming(time.Millisecond)
 	require.NoError(t, err)
@@ -83,7 +82,7 @@ func TestPreSessionMessageAfterSession(t *testing.T) {
 	netw := NewNetworkMock()
 	rwcam := NewReadWriteCloseAddresserMock()
 	rPub := p2pcrypto.NewRandomPubkey()
-	conn := newConnection(rwcam, netw, rPub, nil, netw.logger)
+	conn := newConnection(rwcam, netw, rPub, nil, msgSizeLimit, netw.logger)
 	rwcam.SetReadResult([]byte{3, 1, 1, 1}, nil)
 	go conn.beginEventProcessing()
 	time.Sleep(50 * time.Millisecond)
@@ -94,12 +93,8 @@ func TestConn_Limit(t *testing.T) {
 	netw := NewNetworkMock()
 	rwcam := NewReadWriteCloseAddresserMock()
 	rPub := p2pcrypto.NewRandomPubkey()
-	formatter := delimited.NewChan(10)
-	conn := newConnection(rwcam, netw, formatter, rPub, nil, 1, netw.logger)
-	go func() {
-		conn.incomingChannel() <- []byte{1, 2, 3}
-	}()
-
+	conn := newConnection(rwcam, netw, rPub, nil, 1, netw.logger)
+	rwcam.SetReadResult([]byte{5, 1, 2, 3, 4, 5, 6}, nil)
 	err := conn.setupIncoming(time.Second)
 	assert.EqualError(t, err, ErrMsgExceededLimit.Error())
 }
@@ -108,7 +103,7 @@ func TestPreSessionError(t *testing.T) {
 	netw := NewNetworkMock()
 	rwcam := NewReadWriteCloseAddresserMock()
 	rPub := p2pcrypto.NewRandomPubkey()
-	conn := newConnection(rwcam, netw, rPub, nil, netw.logger)
+	conn := newConnection(rwcam, netw, rPub, nil, msgSizeLimit, netw.logger)
 	netw.SetPreSessionResult(fmt.Errorf("fail"))
 	rwcam.SetReadResult(append([]byte{1}, []byte("0")...), nil)
 	err := conn.setupIncoming(time.Second)
@@ -119,7 +114,7 @@ func TestErrClose(t *testing.T) {
 	netw := NewNetworkMock()
 	rwcam := NewReadWriteCloseAddresserMock()
 	rPub := p2pcrypto.NewRandomPubkey()
-	conn := newConnection(rwcam, netw, rPub, &networkSessionImpl{}, netw.logger)
+	conn := newConnection(rwcam, netw, rPub, &networkSessionImpl{}, msgSizeLimit, netw.logger)
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -137,7 +132,7 @@ func TestClose(t *testing.T) {
 	netw := NewNetworkMock()
 	rwcam := NewReadWriteCloseAddresserMock()
 	rPub := p2pcrypto.NewRandomPubkey()
-	conn := newConnection(rwcam, netw, rPub, &networkSessionImpl{}, netw.logger)
+	conn := newConnection(rwcam, netw, rPub, &networkSessionImpl{}, msgSizeLimit, netw.logger)
 
 	go conn.beginEventProcessing()
 	conn.Close()
@@ -149,7 +144,7 @@ func TestDoubleClose(t *testing.T) {
 	netw := NewNetworkMock()
 	rwcam := NewReadWriteCloseAddresserMock()
 	rPub := p2pcrypto.NewRandomPubkey()
-	conn := newConnection(rwcam, netw, rPub, &networkSessionImpl{}, netw.logger)
+	conn := newConnection(rwcam, netw, rPub, &networkSessionImpl{}, msgSizeLimit, netw.logger)
 
 	go conn.beginEventProcessing()
 	conn.Close()
@@ -166,7 +161,7 @@ func TestGettersToBoostCoverage(t *testing.T) {
 	addr := net.TCPAddr{net.ParseIP("1.1.1.1"), 555, "ipv4"}
 	rwcam.setRemoteAddrResult(&addr)
 	rPub := p2pcrypto.NewRandomPubkey()
-	conn := newConnection(rwcam, netw, rPub, &networkSessionImpl{}, netw.logger)
+	conn := newConnection(rwcam, netw, rPub, &networkSessionImpl{}, msgSizeLimit, netw.logger)
 	assert.Equal(t, 36, len(conn.ID()))
 	assert.Equal(t, conn.ID(), conn.String())
 	rPub = p2pcrypto.NewRandomPubkey()

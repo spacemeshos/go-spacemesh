@@ -3,8 +3,8 @@ package net
 import (
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/delimited"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
+	"github.com/spacemeshos/go-spacemesh/p2p/delimited"
 	"github.com/spacemeshos/go-spacemesh/p2p/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"time"
@@ -101,16 +101,16 @@ func newConnection(conn readWriteCloseAddresser, netw networker,
 
 	// todo parametrize channel size - hard-coded for now
 	connection := &FormattedConnection{
-		logger:     log,
-		id:         crypto.UUIDString(),
-		created:    time.Now(),
-		remotePub:  remotePub,
-		remoteAddr: conn.RemoteAddr(),
-		r:          delimited.NewReader(conn),
-		w:          delimited.NewWriter(conn),
-		close:      conn,
-		networker:  netw,
-		session:    session,
+		logger:       log,
+		id:           crypto.UUIDString(),
+		created:      time.Now(),
+		remotePub:    remotePub,
+		remoteAddr:   conn.RemoteAddr(),
+		r:            delimited.NewReader(conn),
+		w:            delimited.NewWriter(conn),
+		close:        conn,
+		networker:    netw,
+		session:      session,
 		msgSizeLimit: msgSizeLimit,
 	}
 
@@ -194,7 +194,7 @@ func (c *FormattedConnection) Closed() bool {
 
 var ErrTriedToSetupExistingConn = errors.New("tried to setup existing connection")
 var ErrIncomingSessionTimeout = errors.New("timeout waiting for handshake message")
-var ErrMsgExceededLimit         = errors.New("message size exceeded limit")
+var ErrMsgExceededLimit = errors.New("message size exceeded limit")
 
 func (c *FormattedConnection) setupIncoming(timeout time.Duration) error {
 	be := make(chan struct {
@@ -226,20 +226,20 @@ func (c *FormattedConnection) setupIncoming(timeout time.Duration) error {
 		if c.msgSizeLimit != config.UnlimitedMsgSize && len(msg) > c.msgSizeLimit {
 			c.logger.With().Error("setupIncoming: message is too big",
 				log.Int("limit", c.msgSizeLimit), log.Int("actual", len(msg)))
-			err = ErrMsgExceededLimit
-			break
+			return ErrMsgExceededLimit
 		}
 
-		if c.session == nil {
-			err = c.networker.HandlePreSessionIncomingMessage(c, msg)
-			if err != nil {
-				c.Close()
-				return err
-			}
-		} else {
+		if c.session != nil {
 			c.Close()
 			return errors.New("setup connection twice")
 		}
+
+		err = c.networker.HandlePreSessionIncomingMessage(c, msg)
+		if err != nil {
+			c.Close()
+			return err
+		}
+
 	case <-t.C:
 		c.Close()
 		return errors.New("timeout while waiting for session message")

@@ -6,7 +6,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
-	"github.com/spacemeshos/go-spacemesh/p2p/delimited"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/version"
@@ -290,7 +289,7 @@ func (n *Net) accept(listen net.Listener) {
 		}
 
 		n.logger.Debug("Got new connection... Remote Address: %s", netConn.RemoteAddr())
-		c := newConnection(netConn, n, nil, nil,n.config.MsgSizeLimit, n.logger)
+		c := newConnection(netConn, n, nil, nil, n.config.MsgSizeLimit, n.logger)
 		go func(con Connection) {
 			defer func() { pending <- struct{}{} }()
 			err := c.setupIncoming(n.config.SessionTimeout)
