@@ -116,13 +116,12 @@ func New(beacon valueProvider, activeSetFunc activeSetFunc, vrfVerifier Verifier
 
 type vrfMessage struct {
 	Beacon uint32
-	Id     types.NodeId
 	Layer  types.LayerID
 	Round  int32
 }
 
 // buildVRFMessage builds the VRF message used as input for the BLS (msg=Beacon##Id##Layer##Round)
-func (o *Oracle) buildVRFMessage(id types.NodeId, layer types.LayerID, round int32) ([]byte, error) {
+func (o *Oracle) buildVRFMessage(layer types.LayerID, round int32) ([]byte, error) {
 	v, err := o.beacon.Value(layer)
 	if err != nil {
 		o.Error("Could not get Beacon value: %v", err)
@@ -130,7 +129,7 @@ func (o *Oracle) buildVRFMessage(id types.NodeId, layer types.LayerID, round int
 	}
 
 	var w bytes.Buffer
-	msg := vrfMessage{v, id, layer, round}
+	msg := vrfMessage{v, layer, round}
 	_, err = xdr.Marshal(&w, &msg)
 	if err != nil {
 		o.Error("Fatal: could not marshal xdr")
@@ -156,7 +155,7 @@ func (o *Oracle) activeSetSize(layer types.LayerID) (uint32, error) {
 
 // Eligible checks if Id is eligible on the given Layer where msg is the VRF message, sig is the role proof and assuming commSize as the expected committee size
 func (o *Oracle) Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeId, sig []byte) (bool, error) {
-	msg, err := o.buildVRFMessage(id, layer, round)
+	msg, err := o.buildVRFMessage(layer, round)
 	if err != nil {
 		o.Error("Could not build VRF message")
 		return false, err
@@ -203,8 +202,8 @@ func (o *Oracle) Eligible(layer types.LayerID, round int32, committeeSize int, i
 }
 
 // Proof returns the role proof for the current Layer & Round
-func (o *Oracle) Proof(id types.NodeId, layer types.LayerID, round int32) ([]byte, error) {
-	msg, err := o.buildVRFMessage(id, layer, round)
+func (o *Oracle) Proof(layer types.LayerID, round int32) ([]byte, error) {
+	msg, err := o.buildVRFMessage(layer, round)
 	if err != nil {
 		o.Error("Proof: could not build VRF message err=%v", err)
 		return nil, err
