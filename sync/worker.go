@@ -161,7 +161,7 @@ func NewFetchWorker(s WorkerInfra, count int, reqFactory BatchRequestFactory, id
 				case <-timeout:
 					lg.Error("fetch request to %v on %v timed out %s", peer.String(), idsStr)
 				case v := <-ch:
-					if v != nil {
+					if v != nil && len(v) > 0 {
 						retrived = true
 						lg.Info("Peer: %v responded to fetch request %s", peer.String(), idsStr)
 						output <- fetchJob{ids: ids, items: v}

@@ -810,6 +810,14 @@ func (sis *syncIntegrationMultipleNodes) TestSyncProtocol_MultipleNodes() {
 
 	err := syncObj1.AddBlock(block2)
 	require.NoError(t, err)
+	err = syncObj2.AddBlock(block2)
+	require.NoError(t, err)
+	err = syncObj3.AddBlock(block2)
+	require.NoError(t, err)
+	err = syncObj4.AddBlock(block2)
+	require.NoError(t, err)
+	err = syncObj5.AddBlock(block2)
+	require.NoError(t, err)
 	err = syncObj1.AddBlockWithTxs(block3, []*types.AddressableSignedTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
 	err = syncObj1.AddBlockWithTxs(block4, []*types.AddressableSignedTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
 	err = syncObj1.AddBlockWithTxs(block5, []*types.AddressableSignedTransaction{tx4, tx5, tx6}, []*types.ActivationTx{})
@@ -818,7 +826,7 @@ func (sis *syncIntegrationMultipleNodes) TestSyncProtocol_MultipleNodes() {
 	err = syncObj1.AddBlockWithTxs(block8, []*types.AddressableSignedTransaction{tx7, tx8}, []*types.ActivationTx{})
 
 	timeout := time.After(30 * time.Second)
-	syncObj1.Start()
+	//syncObj1.Start()
 	syncObj1.SetLatestLayer(5)
 	syncObj2.Start()
 	syncObj2.SetLatestLayer(5)
@@ -837,6 +845,7 @@ func (sis *syncIntegrationMultipleNodes) TestSyncProtocol_MultipleNodes() {
 			t.Error("timed out ")
 			goto end
 		default:
+
 			if syncObj1.ValidatedLayer() >= 3 || syncObj2.ValidatedLayer() >= 3 || syncObj3.ValidatedLayer() >= 3 || syncObj5.ValidatedLayer() >= 3 {
 				t.Log("done!")
 				goto end

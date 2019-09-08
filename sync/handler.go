@@ -12,7 +12,7 @@ import (
 func newLayerHashRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg []byte) []byte {
 	return func(msg []byte) []byte {
 		lyrid := util.BytesToUint64(msg)
-		logger.With().Info("handle layer %v hash request", log.LayerId(lyrid))
+		logger.With().Info("handle layer hash request", log.LayerId(lyrid))
 		layer, err := layers.GetLayer(types.LayerID(lyrid))
 		if err != nil {
 			logger.With().Error("Error handling layer request message", log.LayerId(lyrid), log.Err(err))
@@ -66,7 +66,7 @@ func newBlockRequestHandler(msh *mesh.Mesh, logger log.Log) func(msg []byte) []b
 			logger.Debug("handle block %v request", id)
 			blk, err := msh.GetBlock(types.BlockID(id))
 			if err != nil {
-				logger.Error("Error handling block request message, with BlockID: %d and err: %v", bid, err)
+				logger.Error("Error handling block request message, with BlockID: %d and err: %v", id, err)
 				continue
 			}
 			blocks = append(blocks, *blk)
