@@ -61,14 +61,6 @@ func NIPSTChallengeAsBytes(challenge *NIPSTChallenge) ([]byte, error) {
 	return w.Bytes(), nil
 }
 
-func SignedTransactionAsBytes(tx *Transaction) ([]byte, error) {
-	var w bytes.Buffer
-	if _, err := xdr.Marshal(&w, &tx); err != nil {
-		return nil, fmt.Errorf("error marshalling transaction: %v", err)
-	}
-	return w.Bytes(), nil
-}
-
 func BytesAsTransaction(buf []byte) (*Transaction, error) {
 	b := Transaction{}
 	_, err := xdr.Unmarshal(bytes.NewReader(buf), &b)

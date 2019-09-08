@@ -286,7 +286,7 @@ func (m *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.Transaction, atxs 
 
 	err := m.writeTransactions(txs)
 	if err != nil {
-		return fmt.Errorf("could not write transactions of block %v database %v", blk.ID(), err)
+		return fmt.Errorf("could not write transactions of block %v database: %v", blk.ID(), err)
 	}
 	if err := m.addToMeshTxs(txs, blk.LayerIndex); err != nil {
 		return fmt.Errorf("failed to add to meshTxs: %v", err)

@@ -259,7 +259,7 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 func TestBlockBuilder_SerializeTrans(t *testing.T) {
 	tx, err := types.NewSignedTx(0, types.BytesToAddress([]byte{0x02}), 10, 10, 10, signing.NewEdSigner())
 	assert.NoError(t, err)
-	buf, err := types.SignedTransactionAsBytes(tx)
+	buf, err := types.InterfaceToBytes(tx)
 	assert.NoError(t, err)
 
 	ntx, err := types.BytesAsTransaction(buf)
@@ -302,7 +302,7 @@ func TestBlockBuilder_Validation(t *testing.T) {
 	ed := signing.NewEdSigner()
 	tx, e := types.NewSignedTx(0, types.HexToAddress("0xFF"), 2, 3, 4, ed)
 	assert.Nil(t, e)
-	b, e := types.SignedTransactionAsBytes(tx)
+	b, e := types.InterfaceToBytes(tx)
 	assert.Nil(t, e)
 	n1.Broadcast(IncomingTxProtocol, b)
 	time.Sleep(300 * time.Millisecond)
@@ -341,7 +341,7 @@ func TestBlockBuilder_Gossip_NotSynced(t *testing.T) {
 	ed := signing.NewEdSigner()
 	tx, e := types.NewSignedTx(0, types.HexToAddress("0xFF"), 2, 3, 4, ed)
 	assert.Nil(t, e)
-	b, e := types.SignedTransactionAsBytes(tx)
+	b, e := types.InterfaceToBytes(tx)
 	assert.Nil(t, e)
 	err := n1.Broadcast(IncomingTxProtocol, b)
 	assert.NoError(t, err)

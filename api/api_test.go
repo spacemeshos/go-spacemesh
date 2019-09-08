@@ -371,7 +371,7 @@ func TestJsonWalletApi(t *testing.T) {
 	hexIdStr := hex.EncodeToString(id[:])
 
 	assert.Equal(t, hexIdStr, ret.Id)
-	val, err := types.SignedTransactionAsBytes(tx)
+	val, err := types.InterfaceToBytes(tx)
 	assert.NoError(t, err)
 	assert.Equal(t, val, net.broadcasted)
 

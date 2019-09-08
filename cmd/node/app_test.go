@@ -165,7 +165,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	if err != nil {
 		log.Panic("panicked creating signed tx err=%v", err)
 	}
-	txbytes, _ := types.SignedTransactionAsBytes(tx)
+	txbytes, _ := types.InterfaceToBytes(tx)
 	path := "../tmp/test/state_" + time.Now().String()
 
 	genesisTime := time.Now().Add(20 * time.Second).Format(time.RFC3339)

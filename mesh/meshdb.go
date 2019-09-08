@@ -314,17 +314,14 @@ func (m *MeshDB) getLayerMutex(index types.LayerID) *layerMutex {
 func (m *MeshDB) writeTransactions(txs []*types.Transaction) error {
 	batch := m.transactions.NewBatch()
 	for _, t := range txs {
-		bytes, err := types.SignedTransactionAsBytes(t)
+		bytes, err := types.InterfaceToBytes(t)
 		if err != nil {
-			m.Error("could not marshall tx %v to bytes ", err)
-			return err
+			return fmt.Errorf("could not marshall tx %v to bytes: %v", t.Id().Short(), err)
 		}
-		id := t.Id()
-		if err := batch.Put(id[:], bytes); err != nil {
-			m.Error("could not write tx %v to database ", hex.EncodeToString(id[:]), err)
-			return err
+		if err := batch.Put(t.Id().Bytes(), bytes); err != nil {
+			return fmt.Errorf("could not write tx %v to database: %v", t.Id().Short(), err)
 		}
-		m.Debug("write tx %v to db", hex.EncodeToString(id[:]))
+		m.Debug("wrote tx %v to db", t.Id().Short())
 	}
 	err := batch.Write()
 	if err != nil {
