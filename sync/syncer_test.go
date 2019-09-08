@@ -1371,4 +1371,9 @@ func TestSyncer_BlockSyntacticValidation(t *testing.T) {
 	}
 	_, _, err = s.BlockSyntacticValidation(b)
 	r.EqualError(err, errTooManyAtxs.Error())
+
+	b.TxIds = []types.TransactionId{}
+	b.AtxIds = []types.AtxId{}
+	_, _, err = s.BlockSyntacticValidation(b)
+	r.Nil(err)
 }
