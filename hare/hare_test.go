@@ -323,8 +323,9 @@ func TestHare_onTick(t *testing.T) {
 
 	//collect output one more time
 	wg.Wait()
-	_, err = h.GetResult(types.LayerID(1), types.LayerID(1))
-	require.Error(t, err)
+	res, err := h.GetResult(types.LayerID(1), types.LayerID(1))
+	require.Nil(t, err)
+	require.Equal(t, []types.BlockID(nil), res)
 
 }
 
