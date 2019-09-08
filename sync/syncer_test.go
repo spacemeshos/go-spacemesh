@@ -1391,22 +1391,22 @@ func Test_validateUniqueTxAtx(t *testing.T) {
 
 func TestSyncer_BlockSyntacticValidation(t *testing.T) {
 	r := require.New(t)
-	a, _ := SyncMockFactory(1, conf, t.Name(), memoryDB, newMemPoetDb)
-	s := a[0]
+	syncs, _, _ := SyncMockFactory(2, conf, "TestSyncProtocol_NilResponse", memoryDB, newMemPoetDb)
+	s := syncs[0]
 	b := &types.Block{}
 	b.TxIds = []types.TransactionId{txid1, txid2, txid1}
 	b.AtxIds = []types.AtxId{atx1, atx2, atx3}
-	_, _, err := s.BlockSyntacticValidation(b)
+	_, _, err := s.blockSyntacticValidation(b)
 	r.EqualError(err, errDupTx.Error())
 
 	for i := 0; i <= miner.AtxsPerBlockLimit; i++ {
 		b.AtxIds = append(b.AtxIds, atx1)
 	}
-	_, _, err = s.BlockSyntacticValidation(b)
+	_, _, err = s.blockSyntacticValidation(b)
 	r.EqualError(err, errTooManyAtxs.Error())
 
 	b.TxIds = []types.TransactionId{}
 	b.AtxIds = []types.AtxId{}
-	_, _, err = s.BlockSyntacticValidation(b)
+	_, _, err = s.blockSyntacticValidation(b)
 	r.Nil(err)
 }
