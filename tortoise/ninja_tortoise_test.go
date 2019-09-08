@@ -326,47 +326,50 @@ func TestNinjaTortoise_LateBlocks(t *testing.T) {
 	lg := log.New(t.Name(), "", "")
 
 	mdb := getMeshForBench()
-	alg := NewNinjaTortoise(10, mdb, 5, lg)
-	l := mesh.GenesisLayer()
-	AddLayer(mdb, l)
-	alg.handleIncomingLayer(l)
+	alg := NewNinjaTortoise(10, mdb, 1, lg)
 
-	l1 := createLayer(1, []*types.Layer{l}, 8)
-	AddLayer(mdb, l1)
-	alg.handleIncomingLayer(l1)
+	l01 := types.NewLayer(0)
+	l01.AddBlock(types.NewExistingBlock(123, 0, nil))
 
-	l11 := types.NewLayer(1)
-	l11.AddBlock(l1.Blocks()[0])
-	l11.AddBlock(l1.Blocks()[1])
-	l11.AddBlock(l1.Blocks()[2])
-	l11.AddBlock(l1.Blocks()[3])
-	l11.AddBlock(l1.Blocks()[4])
-	l11.AddBlock(l1.Blocks()[5])
+	l02 := types.NewLayer(0)
+	l02.AddBlock(types.NewExistingBlock(321, 0, nil))
 
-	l12 := types.NewLayer(1)
-	l12.AddBlock(l1.Blocks()[2])
-	l12.AddBlock(l1.Blocks()[3])
-	l12.AddBlock(l1.Blocks()[4])
-	l12.AddBlock(l1.Blocks()[5])
-	l12.AddBlock(l1.Blocks()[6])
-	l12.AddBlock(l1.Blocks()[7])
+	AddLayer(mdb, l01)
+	AddLayer(mdb, l02)
+	alg.handleIncomingLayer(l01)
+	alg.handleIncomingLayer(l02)
+
+	l11 := createLayer(1, []*types.Layer{l01}, 6)
+	AddLayer(mdb, l11)
+	alg.handleIncomingLayer(l11)
+
+	l12 := createLayer(1, []*types.Layer{l02}, 6)
+	AddLayer(mdb, l12)
+	alg.handleIncomingLayer(l12)
 
 	//l2 votes for first pattern
-	l2 := createLayer(2, []*types.Layer{l11, l}, 6)
-	AddLayer(mdb, l2)
-	alg.handleIncomingLayer(l2)
+	l21 := createLayer(2, []*types.Layer{l11}, 6)
+	AddLayer(mdb, l21)
+	alg.handleIncomingLayer(l21)
 
 	//l3 votes for sec pattern
-	l3 := createLayer(3, []*types.Layer{l2, l12, l}, 15)
+	l3 := createLayer(3, []*types.Layer{l21}, 6)
 	AddLayer(mdb, l3)
 	alg.handleIncomingLayer(l3)
 
+	l22 := createLayer(2, []*types.Layer{l12}, 6)
+	AddLayer(mdb, l22)
+	alg.handleIncomingLayer(l22)
+
 	//l4 votes for first pattern
-	l4 := createLayer(4, []*types.Layer{l3, l2, l11, l}, 25)
+	l4 := createLayer(4, []*types.Layer{l3}, 6)
 	AddLayer(mdb, l4)
 	alg.handleIncomingLayer(l4)
 
-	assert.True(t, alg.pBase.Layer() == 3)
+	//l5 votes for first pattern
+	l5 := createLayer(5, []*types.Layer{l4}, 25)
+	AddLayer(mdb, l5)
+	alg.handleIncomingLayer(l5)
 
 }
 
