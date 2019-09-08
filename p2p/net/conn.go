@@ -72,7 +72,6 @@ type FormattedConnection struct {
 	close      io.Closer
 
 	msgSizeLimit int
-
 }
 
 type networker interface {
@@ -104,7 +103,7 @@ type formattedWriter interface {
 
 // Create a new connection wrapping a net.Conn with a provided connection manager
 func newConnection(conn readWriteCloseAddresser, netw networker,
-	remotePub p2pcrypto.PublicKey, session NetworkSession, msgSizeLimit int,  deadline time.Duration, log log.Log) *FormattedConnection {
+	remotePub p2pcrypto.PublicKey, session NetworkSession, msgSizeLimit int, deadline time.Duration, log log.Log) *FormattedConnection {
 
 	// todo parametrize channel size - hard-coded for now
 	connection := &FormattedConnection{
@@ -116,8 +115,8 @@ func newConnection(conn readWriteCloseAddresser, netw networker,
 		r:            delimited.NewReader(conn),
 		w:            delimited.NewWriter(conn),
 		close:        conn,
-		deadline:   deadline,
-		deadliner:  conn,
+		deadline:     deadline,
+		deadliner:    conn,
 		networker:    netw,
 		session:      session,
 		msgSizeLimit: msgSizeLimit,
@@ -170,7 +169,7 @@ func (c *FormattedConnection) publish(message []byte) {
 // Concurrency: can be called from any go routine
 func (c *FormattedConnection) Send(m []byte) error {
 	c.wmtx.Lock()
-	c.deadliner.SetReadDeadline(time.Now().Add(c.deadline))
+	c.deadliner.SetWriteDeadline(time.Now().Add(c.deadline))
 	if c.closed {
 		c.wmtx.Unlock()
 		return fmt.Errorf("connection was closed")
@@ -218,6 +217,7 @@ func (c *FormattedConnection) setupIncoming(timeout time.Duration) error {
 
 	go func() {
 		// TODO: some other way to make sure this groutine closes
+		c.deadliner.SetReadDeadline(time.Now().Add(c.deadline))
 		msg, err := c.r.Next()
 		be <- struct {
 			b []byte
@@ -267,7 +267,6 @@ func (c *FormattedConnection) beginEventProcessing() {
 	var err error
 	var buf []byte
 	for {
-		c.deadliner.SetReadDeadline(time.Now().Add(c.deadline))
 		buf, err = c.r.Next()
 		if err != nil {
 			break
