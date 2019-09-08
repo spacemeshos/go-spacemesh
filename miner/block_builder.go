@@ -206,11 +206,12 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 		bottom, top := calcHdistRange(id, t.hdist)
 		votes, err = t.hareResult.GetResult(bottom, top)
 		if err != nil {
-			t.With().Error("GetResult returned an error",
+			t.With().Warning("Could not get hare result during block creation",
 				log.Uint64("bottom", uint64(bottom)), log.Uint64("top", uint64(top)),
 				log.Uint64("hdist", uint64(t.hdist)), log.Err(err))
 		}
 		if votes == nil { // if no votes set to empty
+			t.Info("Votes is nil. Setting votes to an empty array")
 			votes = []types.BlockID{}
 		}
 	}
