@@ -1389,19 +1389,24 @@ func Test_validateUniqueTxAtx(t *testing.T) {
 	r.EqualError(validateUniqueTxAtx(b), errDupAtx.Error())
 }
 
-//func TestSyncer_BlockSyntacticValidation(t *testing.T) {
-//	r := require.New(t)
-//	a, _ := SyncMockFactory(1, conf, t.Name(), memoryDB, newMemPoetDb)
-//	s := a[0]
-//	b := &types.Block{}
-//	b.TxIds = []types.TransactionId{txid1, txid2, txid1}
-//	b.AtxIds = []types.AtxId{atx1, atx2, atx3}
-//	_, _, err := s.BlockSyntacticValidation(b)
-//	r.EqualError(err, errDupTx.Error())
-//
-//	for i := 0; i <= miner.AtxsPerBlockLimit; i++ {
-//		b.AtxIds = append(b.AtxIds, atx1)
-//	}
-//	_, _, err = s.BlockSyntacticValidation(b)
-//	r.EqualError(err, errTooManyAtxs.Error())
-//}
+func TestSyncer_BlockSyntacticValidation(t *testing.T) {
+	r := require.New(t)
+	a, _ := SyncMockFactory(1, conf, t.Name(), memoryDB, newMemPoetDb)
+	s := a[0]
+	b := &types.Block{}
+	b.TxIds = []types.TransactionId{txid1, txid2, txid1}
+	b.AtxIds = []types.AtxId{atx1, atx2, atx3}
+	_, _, err := s.BlockSyntacticValidation(b)
+	r.EqualError(err, errDupTx.Error())
+
+	for i := 0; i <= miner.AtxsPerBlockLimit; i++ {
+		b.AtxIds = append(b.AtxIds, atx1)
+	}
+	_, _, err = s.BlockSyntacticValidation(b)
+	r.EqualError(err, errTooManyAtxs.Error())
+
+	b.TxIds = []types.TransactionId{}
+	b.AtxIds = []types.AtxId{}
+	_, _, err = s.BlockSyntacticValidation(b)
+	r.Nil(err)
+}
