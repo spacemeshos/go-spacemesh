@@ -826,7 +826,7 @@ func (sis *syncIntegrationMultipleNodes) TestSyncProtocol_MultipleNodes() {
 	err = syncObj1.AddBlockWithTxs(block8, []*types.AddressableSignedTransaction{tx7, tx8}, []*types.ActivationTx{})
 
 	timeout := time.After(30 * time.Second)
-	//syncObj1.Start()
+	syncObj1.Start()
 	syncObj1.SetLatestLayer(5)
 	syncObj2.Start()
 	syncObj2.SetLatestLayer(5)
@@ -850,7 +850,7 @@ func (sis *syncIntegrationMultipleNodes) TestSyncProtocol_MultipleNodes() {
 				t.Log("done!")
 				goto end
 			}
-			time.Sleep(1 * time.Millisecond)
+			time.Sleep(100 * time.Millisecond)
 		}
 	}
 end:
