@@ -58,6 +58,7 @@ func (mr *mockRolacle) Unregister(id string) {
 
 type mockP2p struct {
 	count int
+	err   error
 }
 
 func (m *mockP2p) RegisterGossipProtocol(protocol string) chan service.GossipMessage {
@@ -66,7 +67,7 @@ func (m *mockP2p) RegisterGossipProtocol(protocol string) chan service.GossipMes
 
 func (m *mockP2p) Broadcast(protocol string, payload []byte) error {
 	m.count++
-	return nil
+	return m.err
 }
 
 type mockProposalTracker struct {
@@ -306,6 +307,7 @@ func TestConsensusProcess_isEligible(t *testing.T) {
 }
 
 func TestConsensusProcess_sendMessage(t *testing.T) {
+	r := require.New(t)
 	net := &mockP2p{}
 	oracle := &mockRolacle{MockStateQuerier: MockStateQuerier{true, nil}}
 
@@ -313,17 +315,25 @@ func TestConsensusProcess_sendMessage(t *testing.T) {
 	proc.oracle = oracle
 	proc.network = net
 
-	proc.sendMessage(nil)
-	assert.Equal(t, 0, net.count)
+	b := proc.sendMessage(nil)
+	r.Equal(0, net.count)
+	r.False(b)
 	msg := buildStatusMsg(generateSigning(t), proc.s, 0)
 
 	oracle.isEligible = false
-	proc.sendMessage(msg)
-	assert.Equal(t, 0, net.count)
+	b = proc.sendMessage(msg)
+	r.False(b)
+	r.Equal(0, net.count)
 
 	oracle.isEligible = true
-	proc.sendMessage(msg)
-	assert.Equal(t, 1, net.count)
+	net.err = errors.New("mock network failed error")
+	b = proc.sendMessage(msg)
+	r.False(b)
+	r.Equal(1, net.count)
+
+	net.err = nil
+	b = proc.sendMessage(msg)
+	r.True(b)
 }
 
 func TestConsensusProcess_procPre(t *testing.T) {
