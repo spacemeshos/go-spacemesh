@@ -551,15 +551,12 @@ func TestConsensusProcess_beginRound4(t *testing.T) {
 	proc.beginRound1()
 	proc.beginRound2()
 	proc.beginRound3()
-	r.NotNil(proc.commitTracker)
-	r.NotNil(proc.proposalTracker)
 
 	net := &mockNet{}
 	proc.network = net
 	proc.beginRound4()
 	r.Equal(1, net.callBroadcast)
-	r.Nil(proc.commitTracker)
-	r.Nil(proc.proposalTracker)
+	r.True(proc.notifySent)
 }
 
 func TestConsensusProcess_handlePending(t *testing.T) {
@@ -577,6 +574,8 @@ func TestConsensusProcess_handlePending(t *testing.T) {
 }
 
 func TestConsensusProcess_endOfRound3(t *testing.T) {
+	r := require.New(t)
+
 	proc := generateConsensusProcess(t)
 	net := &mockP2p{}
 	proc.network = net
@@ -585,28 +584,45 @@ func TestConsensusProcess_endOfRound3(t *testing.T) {
 	mct := &mockCommitTracker{}
 	proc.commitTracker = mct
 	proc.endOfRound3()
-	assert.Equal(t, 1, mpt.countIsConflicting)
+	r.Equal(1, mpt.countIsConflicting)
+	r.NotNil(proc.proposalTracker)
+	r.NotNil(proc.commitTracker)
+
 	mpt.isConflicting = true
 	proc.endOfRound3()
-	assert.Equal(t, 2, mpt.countIsConflicting)
-	assert.Equal(t, 1, mct.countHasEnoughCommits)
+	r.Equal(2, mpt.countIsConflicting)
+	r.Equal(1, mct.countHasEnoughCommits)
+	r.NotNil(proc.proposalTracker)
+	r.NotNil(proc.commitTracker)
+
 	mpt.isConflicting = false
 	mct.hasEnoughCommits = false
 	proc.endOfRound3()
-	assert.Equal(t, 0, mct.countBuildCertificate)
+	r.Equal(0, mct.countBuildCertificate)
+	r.NotNil(proc.proposalTracker)
+	r.NotNil(proc.commitTracker)
+
 	mct.hasEnoughCommits = true
 	mct.certificate = nil
 	proc.endOfRound3()
-	assert.Equal(t, 1, mct.countBuildCertificate)
-	assert.Equal(t, 0, mpt.countProposedSet)
+	r.Equal(1, mct.countBuildCertificate)
+	r.Equal(0, mpt.countProposedSet)
+	r.NotNil(proc.proposalTracker)
+	r.NotNil(proc.commitTracker)
+
 	mct.certificate = &Certificate{}
 	proc.endOfRound3()
 	mpt.proposedSet = nil
 	proc.s = NewSmallEmptySet()
 	proc.endOfRound3()
-	assert.NotNil(t, proc.s)
+	r.NotNil(proc.s)
+	r.NotNil(proc.proposalTracker)
+	r.NotNil(proc.commitTracker)
+
 	mpt.proposedSet = NewSetFromValues(value1)
 	proc.endOfRound3()
-	assert.True(t, proc.s.Equals(mpt.proposedSet))
-	assert.Equal(t, mct.certificate, proc.certificate)
+	r.True(proc.s.Equals(mpt.proposedSet))
+	r.Equal(mct.certificate, proc.certificate)
+	r.Nil(proc.proposalTracker)
+	r.Nil(proc.commitTracker)
 }

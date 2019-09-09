@@ -436,12 +436,6 @@ func (proc *ConsensusProcess) beginRound3() {
 }
 
 func (proc *ConsensusProcess) beginRound4() {
-	// release proposal & commit trackers
-	defer func() {
-		proc.commitTracker = nil
-		proc.proposalTracker = nil
-	}()
-
 	// send notify message only once
 	if proc.notifySent {
 		proc.Info("Notify already sent")
@@ -611,6 +605,10 @@ func (proc *ConsensusProcess) endOfRound3() {
 	// commit & send notification msg
 	proc.s = s
 	proc.certificate = cert
+
+	// release proposal & commit trackers
+	proc.commitTracker = nil
+	proc.proposalTracker = nil
 }
 
 func (proc *ConsensusProcess) shouldParticipate() bool {
