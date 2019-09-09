@@ -580,6 +580,12 @@ func (proc *ConsensusProcess) endOfRound1() {
 }
 
 func (proc *ConsensusProcess) endOfRound3() {
+	// release proposal & commit trackers
+	defer func() {
+		proc.commitTracker = nil
+		proc.proposalTracker = nil
+	}()
+
 	if proc.proposalTracker.IsConflicting() {
 		proc.Warning("Round 3 ended: proposal is conflicting")
 		return
@@ -605,10 +611,6 @@ func (proc *ConsensusProcess) endOfRound3() {
 	// update set & matching certificate
 	proc.s = s
 	proc.certificate = cert
-
-	// release proposal & commit trackers
-	proc.commitTracker = nil
-	proc.proposalTracker = nil
 }
 
 func (proc *ConsensusProcess) shouldParticipate() bool {
