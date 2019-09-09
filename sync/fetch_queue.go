@@ -42,9 +42,9 @@ func (vq *fetchQueue) Close() {
 
 func concatShortIds(items []types.Hash32) string {
 	str := ""
-	for _, i := range items {
-		str += str + i.ShortString()
-	}
+	//for _, i := range items {
+	//	str += str + i.ShortString()
+	//}
 	return str
 }
 
@@ -52,6 +52,7 @@ func concatShortIds(items []types.Hash32) string {
 func (fq *fetchQueue) work() error {
 	output := fetchWithFactory(NewFetchWorker(fq.workerInfra, 1, fq.BatchRequestFactory, fq.queue))
 	for out := range output {
+		fq.Debug("new batch out of queue")
 		if out == nil {
 			fq.Info("close queue")
 			return nil
@@ -59,7 +60,7 @@ func (fq *fetchQueue) work() error {
 
 		bjb, ok := out.(fetchJob)
 		if !ok {
-			fq.Error(fmt.Sprintf("Type conversion err %v", out))
+			fq.Error(fmt.Sprintf("Type assertion err %v", out))
 			continue
 		}
 
@@ -153,7 +154,7 @@ func NewTxQueue(s *Syncer, txValidator TxValidator) *txQueue {
 			BatchRequestFactory: TxFetchReqFactory,
 			checkLocal:          s.txCheckLocal,
 			pending:             make(map[types.Hash32][]chan bool),
-			queue:               make(chan []types.Hash32, 1000)},
+			queue:               make(chan []types.Hash32, 10000)},
 	}
 
 	q.handleFetch = updateTxDependencies(q.invalidate, s.txpool, txValidator.GetValidAddressableTx)
@@ -221,7 +222,7 @@ func NewAtxQueue(s *Syncer, fetchPoetProof FetchPoetProofFunc) *atxQueue {
 			Mutex:               &sync.Mutex{},
 			checkLocal:          s.atxCheckLocal,
 			pending:             make(map[types.Hash32][]chan bool),
-			queue:               make(chan []types.Hash32, 1000),
+			queue:               make(chan []types.Hash32, 10000),
 		},
 	}
 

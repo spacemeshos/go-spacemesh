@@ -4,7 +4,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/util"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/poet/service"
 	"github.com/spacemeshos/poet/shared"
 	"github.com/spacemeshos/post/proving"
@@ -39,13 +38,25 @@ func (t AtxId) Bytes() []byte {
 	return Hash32(t).Bytes()
 }
 
-var EmptyAtxId = &AtxId{0}
+var EmptyAtxId = &AtxId{}
 
 type ActivationTxHeader struct {
 	NIPSTChallenge
-	AtxId
+	id            *AtxId
 	Coinbase      Address
 	ActiveSetSize uint32
+}
+
+func (t *ActivationTxHeader) ShortString() string {
+	return t.id.ShortString()
+}
+
+func (t *ActivationTxHeader) Hash32() Hash32 {
+	return Hash32(*t.id)
+}
+
+func (t *ActivationTxHeader) Bytes() []byte {
+	return t.id.Bytes()
 }
 
 type NIPSTChallenge struct {
@@ -137,28 +148,23 @@ func NewActivationTxWithChallenge(poetChallenge NIPSTChallenge, coinbase Address
 }
 
 func (atxh *ActivationTxHeader) Id() AtxId {
-	if atxh.AtxId == *EmptyAtxId {
-		panic("Id field must be set")
+	if atxh.id == nil {
+		panic("id field must be set")
 	}
-	return atxh.AtxId
+	return *atxh.id
 }
 
 func (atxh *ActivationTxHeader) TargetEpoch(layersPerEpoch uint16) EpochId {
 	return atxh.PubLayerIdx.GetEpoch(layersPerEpoch) + 1
 }
 
-func (atxh *ActivationTxHeader) SetId(id AtxId) {
-	if atxh.AtxId != *EmptyAtxId {
-		//can happen when a pear sends an object with initialized id
-		log.Warning("id field was already set")
-		return
-	}
-
-	atxh.AtxId = id
+func (atxh *ActivationTxHeader) SetId(id *AtxId) {
+	atxh.id = id
 }
 
 func (atx *ActivationTx) CalcAndSetId() {
-	atx.SetId(AtxId(CalcAtxHash32(atx)))
+	id := AtxId(CalcAtxHash32(atx))
+	atx.SetId(&id)
 }
 
 func (atx *ActivationTx) GetPoetProofRef() []byte {

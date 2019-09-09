@@ -1074,7 +1074,7 @@ func TestSyncer_handleNotSyncedFlow(t *testing.T) {
 	r := require.New(t)
 	txpool := miner.NewTypesTransactionIdMemPool()
 	atxpool := miner.NewTypesAtxIdMemPool()
-	ts := &mockClock{}
+	ts := &MockClock{}
 	sync := NewSync(service.NewSimulator().NewNode(), getMesh(memoryDB, Path+t.Name()+"_"+time.Now().String()), txpool, atxpool, mockTxProcessor{}, BlockEligibilityValidatorMock{}, newMockPoetDb(), conf, ts, log.NewDefault(t.Name()))
 	lv := &mockLayerValidator{0, 0, 0, nil}
 	sync.lValidator = lv
@@ -1409,4 +1409,27 @@ func TestSyncer_BlockSyntacticValidation(t *testing.T) {
 	b.AtxIds = []types.AtxId{}
 	_, _, err = s.blockSyntacticValidation(b)
 	r.Nil(err)
+}
+
+func TestSyncer_AtxSetID(t *testing.T) {
+	a := atx()
+	bbytes, _ := types.InterfaceToBytes(*a)
+	var b types.ActivationTx
+	types.BytesToInterface(bbytes, &b)
+	t.Log(fmt.Sprintf("%+v\n", *a))
+	t.Log("---------------------")
+	t.Log(fmt.Sprintf("%+v\n", b))
+	t.Log("---------------------")
+	assert.Equal(t, b.Nipst, a.Nipst)
+	assert.Equal(t, b.View, a.View)
+	assert.Equal(t, b.Commitment, a.Commitment)
+
+	assert.Equal(t, b.ActivationTxHeader.NodeId, a.ActivationTxHeader.NodeId)
+	assert.Equal(t, b.ActivationTxHeader.PrevATXId, a.ActivationTxHeader.PrevATXId)
+	assert.Equal(t, b.ActivationTxHeader.ActiveSetSize, a.ActivationTxHeader.ActiveSetSize)
+	assert.Equal(t, b.ActivationTxHeader.Coinbase, a.ActivationTxHeader.Coinbase)
+	assert.Equal(t, b.ActivationTxHeader.CommitmentMerkleRoot, a.ActivationTxHeader.CommitmentMerkleRoot)
+	assert.Equal(t, b.ActivationTxHeader.NIPSTChallenge, a.ActivationTxHeader.NIPSTChallenge)
+	b.CalcAndSetId()
+	assert.Equal(t, a.ShortString(), b.ShortString())
 }

@@ -41,7 +41,7 @@ func BytesAsAtx(b []byte, id AtxId) (*ActivationTx, error) {
 	if id == *EmptyAtxId {
 		atx.CalcAndSetId()
 	} else {
-		atx.SetId(id)
+		atx.SetId(&id)
 	}
 	return &atx, nil
 }

@@ -93,28 +93,6 @@ func (mockTxProcessor) ValidateTransactionSignature(tx *types.SerializableSigned
 	return types.HexToAddress("0xFFFF"), nil
 }
 
-type mockClock struct {
-	ch    map[timesync.LayerTimer]int
-	first timesync.LayerTimer
-}
-
-func (c *mockClock) Subscribe() timesync.LayerTimer {
-	if c.ch == nil {
-		c.ch = make(map[timesync.LayerTimer]int)
-	}
-	newCh := make(chan types.LayerID, 1)
-	c.ch[newCh] = len(c.ch)
-	if c.first == nil {
-		c.first = newCh
-	}
-
-	return newCh
-}
-
-func (c *mockClock) Unsubscribe(timer timesync.LayerTimer) {
-	delete(c.ch, timer)
-}
-
 func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	// start p2p services
 	lg := log.New("sync_test", "", "")
@@ -162,14 +140,10 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	msh := mesh.NewMesh(mshdb, atxdb, sync.ConfigTst(), &sync.MeshValidatorMock{}, txpool, atxpool, &sync.MockState{}, lg.WithOptions(log.Nop))
 	defer msh.Close()
 	msh.AddBlock(&mesh.GenesisBlock)
-	tick := 5 * time.Second
-	layout := "2006-01-02T15:04:05.000Z"
-	str := "2016-11-12T11:45:26.371Z"
-	start, _ := time.Parse(layout, str)
-	ts := timesync.NewTicker(timesync.RealClock{}, tick, start)
-	curr := ts.GetCurrentLayer()
-	lg.Info("current layer %v", curr)
-	app.sync = sync.NewSync(swarm, msh, txpool, atxpool, mockTxProcessor{}, sync.BlockEligibilityValidatorMock{}, poetDb, conf, ts, lg.WithName("sync"))
+	clock := sync.MockClock{}
+	clock.Layer = types.LayerID(expectedLayers + 1)
+	lg.Info("current layer %v", clock.GetCurrentLayer())
+	app.sync = sync.NewSync(swarm, msh, txpool, atxpool, mockTxProcessor{}, sync.BlockEligibilityValidatorMock{}, poetDb, conf, &clock, lg.WithName("sync"))
 	if err = swarm.Start(); err != nil {
 		log.Panic("error starting p2p err=%v", err)
 	}
@@ -185,13 +159,14 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 		}
 	}
 
-	sleep := time.Duration(10)
+	sleep := time.Duration(10) * time.Second
 	lg.Info("wait %v sec", sleep)
-	time.Sleep(10 * time.Second)
 	app.sync.Start()
 	for app.sync.ValidatedLayer() < types.LayerID(expectedLayers) {
+		clock.Tick()
 		lg.Info("sleep for %v sec", 30)
 		time.Sleep(30 * time.Second)
+
 	}
 
 	lg.Info("%v verified layers %v", app.BaseApp.Config.P2P.NodeID, app.sync.ValidatedLayer())

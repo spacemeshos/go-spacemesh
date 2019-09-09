@@ -55,7 +55,7 @@ func (a mockActivationDB) GetAtx(id types.AtxId) (*types.ActivationTxHeader, err
 		atxHeader := &types.ActivationTxHeader{
 			NIPSTChallenge: types.NIPSTChallenge{PubLayerIdx: a.atxPublicationLayer}, ActiveSetSize: a.activeSetSize,
 		}
-		atxHeader.SetId(id)
+		atxHeader.SetId(&id)
 		return atxHeader, nil
 	}
 	return nil, errors.New("wrong atx id")

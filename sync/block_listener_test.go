@@ -55,38 +55,6 @@ func (m mockTxProcessor) ValidateTransactionSignature(tx *types.SerializableSign
 	return types.Address{}, errors.New("invalid sig for tx")
 }
 
-type mockClock struct {
-	ch         map[timesync.LayerTimer]int
-	ids        map[int]timesync.LayerTimer
-	countSub   int
-	countUnsub int
-	layer      types.LayerID
-}
-
-func (c *mockClock) GetCurrentLayer() types.LayerID {
-	return c.layer
-}
-
-func (c *mockClock) Subscribe() timesync.LayerTimer {
-	c.countSub++
-
-	if c.ch == nil {
-		c.ch = make(map[timesync.LayerTimer]int)
-		c.ids = make(map[int]timesync.LayerTimer)
-	}
-	newCh := make(chan types.LayerID, 1)
-	c.ch[newCh] = len(c.ch)
-	c.ids[len(c.ch)] = newCh
-
-	return newCh
-}
-
-func (c *mockClock) Unsubscribe(timer timesync.LayerTimer) {
-	c.countUnsub++
-	delete(c.ids, c.ch[timer])
-	delete(c.ch, timer)
-}
-
 func ListenerFactory(serv service.Service, peers p2p.Peers, name string, layer types.LayerID) *BlockListener {
 	sync := SyncFactory(name, serv)
 	sync.Peers = peers
@@ -536,6 +504,11 @@ func TestBlockListener_TraverseViewBadFlow(t *testing.T) {
 	block5.Signature = signer.Sign(block5.Bytes())
 	block5.Id = 5
 
+	block6 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	block6.ATXID = *types.EmptyAtxId
+	block6.Signature = signer.Sign(block5.Bytes())
+	block6.Id = 6
+
 	block2.AddView(block1.ID())
 	block3.AddView(block2.ID())
 	block4.AddView(block2.ID())
@@ -547,7 +520,7 @@ func TestBlockListener_TraverseViewBadFlow(t *testing.T) {
 	bl1.AddBlock(block4)
 	bl1.AddBlock(block5)
 
-	go bl2.syncLayer(5, []types.BlockID{block5.Id})
+	go bl2.syncLayer(5, []types.BlockID{block5.Id, block6.Id})
 	time.Sleep(1 * time.Second) //wait for fetch
 
 	b, err := bl2.GetBlock(block1.Id)

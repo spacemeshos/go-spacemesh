@@ -414,7 +414,7 @@ func (s *Syncer) syncLayer(layerID types.LayerID, blockIds []types.BlockID) ([]*
 
 	s.Info("layer %v wait for blocks", layerID)
 	if result := <-ch; !result {
-		return nil, fmt.Errorf("could get blocks for layer  %v", layerID)
+		return nil, fmt.Errorf("could not get all blocks for layer  %v", layerID)
 	}
 
 	return s.LayerBlocks(layerID)

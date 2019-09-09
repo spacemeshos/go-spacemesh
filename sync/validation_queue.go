@@ -16,7 +16,6 @@ type ValidationInfra interface {
 	GetBlock(id types.BlockID) (*types.Block, error)
 	ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) (bool, error)) error
 	fastValidation(block *types.Block) error
-	log.Logger
 }
 
 type blockQueue struct {
@@ -66,6 +65,8 @@ func (vq *blockQueue) inQueue(id types.Hash32) bool {
 	return false
 }
 
+// handles all fetched blocks
+// this handler is passed to fetchQueue which is responsible for triggering the call
 func (vq *blockQueue) handleBlock(bjb fetchJob) {
 	mp := map[types.Hash32]*types.Block{}
 	for _, item := range bjb.items {
@@ -96,8 +97,10 @@ func (vq *blockQueue) handleBlock(bjb fetchJob) {
 
 }
 
+// handles new block dependencies
+// if there are unknown blocks in the view they are added to the fetch queue
 func (vq *blockQueue) handleBlockDependencies(blk *types.Block) {
-	vq.Info("Validating view Block %v", blk.ID())
+	vq.Info("handle dependencies view Block %v", blk.ID())
 	res, err := vq.addDependencies(blk.ID(), blk.ViewEdges, vq.finishBlockCallback(blk))
 
 	if err != nil {
@@ -137,6 +140,7 @@ func (vq *blockQueue) finishBlockCallback(block *types.Block) func(res bool) err
 	}
 }
 
+// removes all dependencies for are block
 func (vq *blockQueue) updateDependencies(block types.Hash32, valid bool) {
 	vq.Lock()
 	defer vq.Unlock()
@@ -157,6 +161,9 @@ func (vq *blockQueue) updateDependencies(block types.Hash32, valid bool) {
 	}
 }
 
+// removes block from dependencies maps and calls the blocks callback\
+// dependencies can be of type block/layer
+// for block jobs we need to return  a list of finished blocks
 func (vq *blockQueue) removefromDepMaps(block types.Hash32, valid bool, doneBlocks []types.Hash32) []types.Hash32 {
 	for _, dep := range vq.reverseDepMap[block] {
 		delete(vq.depMap[dep], block)
@@ -164,11 +171,11 @@ func (vq *blockQueue) removefromDepMaps(block types.Hash32, valid bool, doneBloc
 			delete(vq.depMap, dep)
 			vq.Info("run callback for %v, %v", dep, reflect.TypeOf(dep))
 			if callback, ok := vq.callbacks[dep]; ok {
+				delete(vq.callbacks, dep)
 				if err := callback(valid); err != nil {
 					vq.Error(" %v callback Failed", dep)
 					continue
 				}
-				delete(vq.callbacks, dep)
 				switch id := dep.(type) {
 				case types.BlockID:
 					doneBlocks = append(doneBlocks, id.AsHash32())
@@ -205,6 +212,7 @@ func (vq *blockQueue) addDependencies(jobId interface{}, blks []types.BlockID, f
 	vq.Unlock()
 
 	if len(idsToPush) > 0 {
+		vq.Debug("add %v to queue %v", len(idsToPush), jobId)
 		vq.addToPending(idsToPush)
 	}
 
