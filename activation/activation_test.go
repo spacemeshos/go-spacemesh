@@ -499,7 +499,7 @@ func TestBuilder_SignAtx(t *testing.T) {
 	activationDb := NewActivationDb(database.NewMemDatabase(), &MockIdStore{}, mesh.NewMemMeshDB(lg.WithName("meshDB")), layersPerEpoch, &ValidatorMock{}, lg.WithName("atxDB1"))
 	b := NewBuilder(nodeId, coinbase, ed, activationDb, net, meshProvider, layersPerEpoch, nipstBuilder, postProver, nil, isSynced(true), NewMockDB(), lg.WithName("atxBuilder"))
 
-	prevAtx := types.AtxId{Hash32: types.HexToHash32("0x111")}
+	prevAtx := types.AtxId(types.HexToHash32("0x111"))
 	atx := types.NewActivationTx(nodeId, coinbase, 1, prevAtx, 15, 1, prevAtx, 5, []types.BlockID{1, 2, 3}, npst)
 	atxBytes, err := types.InterfaceToBytes(atx)
 	assert.NoError(t, err)
