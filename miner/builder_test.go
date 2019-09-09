@@ -474,8 +474,8 @@ func TestBlockBuilder_createBlock(t *testing.T) {
 	beginRound := make(chan types.LayerID)
 	n1 := service.NewSimulator().NewNode()
 	hare := mockHare{}
-	builder1 := NewBlockBuilder(types.NodeId{Key: "a"}, &MockSigning{}, n1, beginRound, 5, NewTypesTransactionIdMemPool(),
-		NewTypesAtxIdMemPool(), MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare, mockBlockOracle{}, mockTxProcessor{true}, &mockAtxValidator{}, &mockSyncer{}, selectCount, log.NewDefault(t.Name()))
+	builder1 := NewBlockBuilder(types.NodeId{Key: "a"}, &MockSigning{}, n1, beginRound, 5, NewTxMemPool(),
+		NewAtxMemPool(), MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare, mockBlockOracle{}, mockTxProcessor{true}, &mockAtxValidator{}, &mockSyncer{}, selectCount, log.NewDefault(t.Name()))
 
 	builder1.hareResult = mockHare{err: err, ids: nil}
 	b, err := builder1.createBlock(5, types.AtxId{}, types.BlockEligibilityProof{}, nil, nil)
