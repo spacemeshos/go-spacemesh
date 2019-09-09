@@ -180,11 +180,10 @@ func (fo *FixedRolacle) Eligible(layer types.LayerID, round int32, committeeSize
 	return exist, nil
 }
 
-func (fo *FixedRolacle) Proof(id types.NodeId, layer types.LayerID, round int32) ([]byte, error) {
+func (fo *FixedRolacle) Proof(layer types.LayerID, round int32) ([]byte, error) {
 	kInBytes := make([]byte, 4)
 	binary.LittleEndian.PutUint32(kInBytes, uint32(round))
 	hash := fnv.New32()
-	hash.Write([]byte(id.Key))
 	hash.Write(kInBytes)
 
 	hashBytes := make([]byte, 4)

@@ -45,7 +45,7 @@ func (mr *mockRolacle) Eligible(layer types.LayerID, round int32, committeeSize 
 	return mr.isEligible, mr.err
 }
 
-func (mr *mockRolacle) Proof(id types.NodeId, layer types.LayerID, round int32) ([]byte, error) {
+func (mr *mockRolacle) Proof(layer types.LayerID, round int32) ([]byte, error) {
 	return []byte{}, nil
 }
 
