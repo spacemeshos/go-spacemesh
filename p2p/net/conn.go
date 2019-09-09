@@ -219,6 +219,7 @@ func (c *FormattedConnection) setupIncoming(timeout time.Duration) error {
 		// TODO: some other way to make sure this groutine closes
 		c.deadliner.SetReadDeadline(time.Now().Add(c.deadline))
 		msg, err := c.r.Next()
+		c.deadliner.SetReadDeadline(time.Time{}) // disable read deadline
 		be <- struct {
 			b []byte
 			e error
