@@ -107,15 +107,15 @@ func TestHare_Start(t *testing.T) {
 }
 
 func TestHare_GetResult(t *testing.T) {
+	r := require.New(t)
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 
 	h := createHare(n1)
 
 	res, err := h.GetResult(types.LayerID(0), types.LayerID(0))
-
-	require.Error(t, err)
-	require.Nil(t, res)
+	r.Nil(err)
+	r.Nil(res)
 
 	mockid := InstanceId(0)
 	set := NewSetFromValues(value1)
@@ -123,9 +123,8 @@ func TestHare_GetResult(t *testing.T) {
 	h.collectOutput(mockOutput{mockid, set})
 
 	res, err = h.GetResult(types.LayerID(0), types.LayerID(0))
-
-	require.NoError(t, err)
-	require.True(t, uint32(res[0]) == uint32(set.values[value1.Id()].Bytes()[0]))
+	r.NoError(err)
+	r.True(uint32(res[0]) == uint32(set.values[value1.Id()].Bytes()[0]))
 }
 
 func TestHare_GetResult2(t *testing.T) {
@@ -324,8 +323,9 @@ func TestHare_onTick(t *testing.T) {
 
 	//collect output one more time
 	wg.Wait()
-	_, err = h.GetResult(types.LayerID(1), types.LayerID(1))
-	require.Error(t, err)
+	res, err := h.GetResult(types.LayerID(1), types.LayerID(1))
+	require.Nil(t, err)
+	require.Equal(t, []types.BlockID(nil), res)
 
 }
 

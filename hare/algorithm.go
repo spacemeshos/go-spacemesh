@@ -302,6 +302,10 @@ func (proc *ConsensusProcess) handleMessage(m *Msg) {
 		return
 	}
 
+	if m.InnerMsg.Type == Pre && proc.k != -1 {
+		proc.Warning("Encountered late PreRound message")
+	}
+
 	// valid, continue process msg by type
 	proc.processMsg(m)
 }

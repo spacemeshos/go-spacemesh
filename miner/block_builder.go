@@ -202,11 +202,17 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 		return nil, errors.New("cannot create blockBytes in genesis layer")
 	} else if id == config.Genesis+1 {
 		votes = append(votes, config.GenesisId)
-	} else {
+	} else { // get from hare
 		bottom, top := calcHdistRange(id, t.hdist)
 		votes, err = t.hareResult.GetResult(bottom, top)
 		if err != nil {
-			return nil, errors.New(fmt.Sprintf("didn't receive hare results for layers bottom=%v top=%v hdist=%v err=%v", bottom, top, t.hdist, err))
+			t.With().Warning("Could not get hare result during block creation",
+				log.Uint64("bottom", uint64(bottom)), log.Uint64("top", uint64(top)),
+				log.Uint64("hdist", uint64(t.hdist)), log.Err(err))
+		}
+		if votes == nil { // if no votes set to empty
+			t.Info("Votes is nil. Setting votes to an empty array")
+			votes = []types.BlockID{}
 		}
 	}
 
