@@ -30,7 +30,7 @@ const (
 )
 
 var (
-	pub, _, _          = ed25519.GenerateKey(nil)
+	pub, _, _    = ed25519.GenerateKey(nil)
 	nodeId       = types.NodeId{Key: util.Bytes2Hex(pub), VRFPublicKey: []byte("22222")}
 	otherNodeId  = types.NodeId{Key: "00000", VRFPublicKey: []byte("00000")}
 	coinbase     = types.HexToAddress("33333")
@@ -510,6 +510,10 @@ func TestBuilder_SignAtx(t *testing.T) {
 
 	ok2 := types.ValidateSignedAtx(signed)
 	assert.NoError(t, ok2)
+
+	signed.Sig[0] = signed.Sig[0] -1
+	err = types.ValidateSignedAtx(signed)
+	assert.Error(t, err)
 }
 
 func TestBuilder_NipstPublishRecovery(t *testing.T) {

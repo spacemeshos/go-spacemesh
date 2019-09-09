@@ -72,7 +72,7 @@ func (es *EdSigner) Sign(m []byte) []byte {
 	return ed25519.Sign2(es.privKey, m)
 }
 
-func Verify(pubkey *PublicKey, message []byte, sign []byte) bool{
+func Verify(pubkey *PublicKey, message []byte, sign []byte) bool {
 	return ed25519.Verify2(ed25519.PublicKey(pubkey.Bytes()), message, sign)
 }
 
