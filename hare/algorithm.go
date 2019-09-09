@@ -388,8 +388,6 @@ func (proc *ConsensusProcess) beginRound1() {
 
 	// check participation
 	if !proc.shouldParticipate() {
-		proc.With().Info("Should not participate", log.Int32("round", proc.k),
-			log.Uint64("layer_id", uint64(proc.instanceId)))
 		return
 	}
 
@@ -639,31 +637,38 @@ func (proc *ConsensusProcess) shouldParticipate() bool {
 	// query if identity is active
 	res, err := proc.oracle.IsIdentityActiveOnConsensusView(proc.signing.PublicKey().String(), types.LayerID(proc.instanceId))
 	if err != nil {
-		proc.With().Error("Error checking our identity for activeness", log.String("err", err.Error()),
-			log.Uint64("layer_id", uint64(proc.instanceId)))
+		proc.With().Error("Should not participate: error checking our identity for activeness",
+			log.Err(err), log.Uint64("layer_id", uint64(proc.instanceId)))
 		return false
 	}
 
 	if !res {
-		proc.With().Info("Should not participate in the protocol. Reason: identity not active",
+		proc.With().Info("Should not participate: identity is not active",
 			log.Uint64("layer_id", uint64(proc.instanceId)))
 		return false
 	}
 
-	return proc.currentRole() != Passive
+	if role := proc.currentRole(); role == Passive {
+		proc.With().Info("Should not participate: passive",
+			log.Int32("round", proc.k), log.Uint64("layer_id", uint64(proc.instanceId)))
+		return false
+	}
+
+	// should participate
+	return true
 }
 
 // Returns the role matching the current round if eligible for this round, false otherwise
 func (proc *ConsensusProcess) currentRole() Role {
 	proof, err := proc.oracle.Proof(types.LayerID(proc.instanceId), proc.k)
 	if err != nil {
-		proc.Error("Could not retrieve proof from oracle err=%v", err)
+		proc.With().Error("Could not retrieve proof from oracle", log.Err(err))
 		return Passive
 	}
 
 	res, err := proc.oracle.Eligible(types.LayerID(proc.instanceId), proc.k, expectedCommitteeSize(proc.k, proc.cfg.N, proc.cfg.ExpectedLeaders), proc.nid, proof)
 	if err != nil {
-		proc.Error("Error checking our eligibility: %v", err)
+		proc.With().Error("Could not check our eligibility", log.Err(err))
 		return Passive
 	}
 
