@@ -511,7 +511,7 @@ func TestBuilder_SignAtx(t *testing.T) {
 	ok2 := types.ValidateSignedAtx(signed)
 	assert.NoError(t, ok2)
 
-	signed.Sig[0] = signed.Sig[0] -1
+	signed.Sig[0] = signed.Sig[0] - 1
 	err = types.ValidateSignedAtx(signed)
 	assert.Error(t, err)
 }
