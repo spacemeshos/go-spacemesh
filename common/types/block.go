@@ -10,7 +10,16 @@ import (
 )
 
 type BlockID uint64
-type TransactionId [32]byte
+type TransactionId Hash32
+
+func (t *TransactionId) ShortString() string {
+	return t.Hash32().ShortString()
+}
+
+func (t *TransactionId) Hash32() Hash32 {
+	return Hash32(*t)
+}
+
 type LayerID uint64
 
 func (l LayerID) GetEpoch(layersPerEpoch uint16) EpochId {
@@ -74,6 +83,12 @@ type MiniBlock struct {
 	AtxIds []AtxId
 }
 
+func (t BlockID) AsHash32() Hash32 {
+	b := make([]byte, 32)
+	binary.LittleEndian.PutUint64(b, uint64(t))
+	return BytesToHash(b)
+}
+
 func (t *Block) Sig() []byte {
 	return t.Signature
 }
@@ -108,6 +123,16 @@ type InnerSerializableSignedTransaction struct {
 type SerializableSignedTransaction struct {
 	InnerSerializableSignedTransaction
 	Signature [64]byte
+}
+
+func (t *SerializableSignedTransaction) Hash32() Hash32 {
+	id := GetTransactionId(t)
+	return id.Hash32()
+}
+
+func (t *SerializableSignedTransaction) ShortString() string {
+	id := GetTransactionId(t)
+	return id.ShortString()
 }
 
 func NewSignedTx(nonce uint64, rec Address, amount, gas, price uint64, signer *signing.EdSigner) (*SerializableSignedTransaction, error) {
@@ -174,6 +199,14 @@ func (b BlockHeader) ID() BlockID {
 	return b.Id
 }
 
+func (b BlockHeader) Hash32() Hash32 {
+	return b.Id.AsHash32()
+}
+
+func (b BlockHeader) ShortString() string {
+	return b.Id.AsHash32().ShortString()
+}
+
 func (b BlockHeader) Layer() LayerID {
 	return b.LayerIndex
 }
@@ -223,7 +256,7 @@ func (l *Layer) Hash() Hash32 {
 	}
 	hash, err := CalcBlocksHash32(keys)
 	if err != nil {
-		log.Panic("failed to calculate layer's hash - layer id %v", l.index)
+		log.Panic("failed to calculate layer's hash - layer Id %v", l.index)
 	}
 	return hash
 }

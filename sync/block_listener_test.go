@@ -55,43 +55,21 @@ func (m mockTxProcessor) ValidateTransactionSignature(tx *types.SerializableSign
 	return types.Address{}, errors.New("invalid sig for tx")
 }
 
-type mockClock struct {
-	ch         map[timesync.LayerTimer]int
-	ids        map[int]timesync.LayerTimer
-	countSub   int
-	countUnsub int
-}
-
-func (c *mockClock) Subscribe() timesync.LayerTimer {
-	c.countSub++
-
-	if c.ch == nil {
-		c.ch = make(map[timesync.LayerTimer]int)
-		c.ids = make(map[int]timesync.LayerTimer)
-	}
-	newCh := make(chan types.LayerID, 1)
-	c.ch[newCh] = len(c.ch)
-	c.ids[len(c.ch)] = newCh
-
-	return newCh
-}
-
-func (c *mockClock) Unsubscribe(timer timesync.LayerTimer) {
-	c.countUnsub++
-	delete(c.ids, c.ch[timer])
-	delete(c.ch, timer)
-}
-
 func ListenerFactory(serv service.Service, peers p2p.Peers, name string, layer types.LayerID) *BlockListener {
-	cl := &mockClock{}
-	l := log.New(name, "", "")
-	poetDb := activation.NewPoetDb(database.NewMemDatabase(), l.WithName("poetDb"))
-	blockValidator := BlockEligibilityValidatorMock{}
-	sync := NewSync(serv, getMesh(memoryDB, name), miner.NewTypesTransactionIdMemPool(), miner.NewTypesAtxIdMemPool(), mockTxProcessor{}, blockValidator, poetDb, conf, cl, layer, atxLimit, l)
-	sync.clock <- layer
+	sync := SyncFactory(name, serv)
 	sync.Peers = peers
 	nbl := NewBlockListener(serv, sync, 2, log.New(name, "", ""))
 	return nbl
+}
+
+func SyncFactory(name string, serv service.Service) *Syncer {
+	tick := 20 * time.Second
+	ts := timesync.NewTicker(timesync.RealClock{}, tick, time.Now())
+	l := log.New(name, "", "")
+	poetDb := activation.NewPoetDb(database.NewMemDatabase(), l.WithName("poetDb"))
+	blockValidator := BlockEligibilityValidatorMock{}
+	sync := NewSync(serv, getMesh(memoryDB, name), miner.NewTypesTransactionIdMemPool(), miner.NewTypesAtxIdMemPool(), mockTxProcessor{}, blockValidator, poetDb, conf, ts, l)
+	return sync
 }
 
 func TestBlockListener(t *testing.T) {
@@ -107,6 +85,8 @@ func TestBlockListener(t *testing.T) {
 	atx1 := atx()
 	atx2 := atx()
 	atx3 := atx()
+
+	bl2.Start()
 
 	proofMessage := makePoetProofMessage(t)
 	if err := bl1.poetDb.ValidateAndStore(&proofMessage); err != nil {
@@ -128,13 +108,13 @@ func TestBlockListener(t *testing.T) {
 
 	bl2.ProcessAtx(atx1)
 
-	block1 := types.NewExistingBlock(types.BlockID(123), 0, nil)
+	block1 := types.NewExistingBlock(types.BlockID(123), 1, nil)
 	block1.Signature = signer.Sign(block1.Bytes())
 	block1.ATXID = *types.EmptyAtxId
-	block2 := types.NewExistingBlock(types.BlockID(321), 1, nil)
+	block2 := types.NewExistingBlock(types.BlockID(321), 0, nil)
 	block2.Signature = signer.Sign(block2.Bytes())
 	block2.AtxIds = append(block2.AtxIds, atx2.Id())
-	block3 := types.NewExistingBlock(types.BlockID(222), 2, nil)
+	block3 := types.NewExistingBlock(types.BlockID(222), 0, nil)
 	block3.Signature = signer.Sign(block3.Bytes())
 	block3.AtxIds = append(block3.AtxIds, atx3.Id())
 
@@ -145,14 +125,14 @@ func TestBlockListener(t *testing.T) {
 	bl1.AddBlock(block2)
 	bl1.AddBlock(block3)
 
-	_, err = bl1.GetBlock(block1.Id)
+	_, err = bl1.GetBlock(block1.ID())
 	if err != nil {
 		t.Error(err)
 	}
 
-	bl2.GetFullBlocks([]types.BlockID{block1.Id})
+	bl2.syncLayer(0, []types.BlockID{block1.ID()})
 
-	b, err := bl2.GetBlock(block1.Id)
+	b, err := bl2.GetBlock(block1.ID())
 	if err != nil {
 		t.Error(err)
 	}
@@ -196,7 +176,7 @@ func TestBlockListener_DataAvailability(t *testing.T) {
 	err = bl1.AddBlockWithTxs(block, []*types.AddressableSignedTransaction{tx1}, []*types.ActivationTx{atx1})
 	require.NoError(t, err)
 
-	_, err = bl1.GetBlock(block.Id)
+	_, err = bl1.GetBlock(block.ID())
 	require.NoError(t, err)
 
 	// Verify that bl2 doesn't have them in mempool.
@@ -208,9 +188,8 @@ func TestBlockListener_DataAvailability(t *testing.T) {
 
 	// Sync bl2.
 
-	txs, txErr, atxs, atxErr := bl2.DataAvailability(block)
-	require.NoError(t, txErr)
-	require.NoError(t, atxErr)
+	txs, atxs, err := bl2.DataAvailabilty(block)
+	require.NoError(t, err)
 	require.Equal(t, 1, len(txs))
 	require.Equal(t, types.GetTransactionId(tx1.SerializableSignedTransaction), types.GetTransactionId(txs[0].SerializableSignedTransaction))
 	require.Equal(t, 1, len(atxs))
@@ -276,7 +255,7 @@ func TestBlockListener_ValidateVotesGoodFlow(t *testing.T) {
 	bl1.MeshDB.AddBlock(block6)
 	bl1.MeshDB.AddBlock(block7)
 
-	assert.True(t, bl1.validateVotes(block1))
+	assert.True(t, validateVotes(block1, bl1.ForBlockInView, bl1.Hdist))
 }
 
 func TestBlockListener_ValidateVotesBadFlow(t *testing.T) {
@@ -331,7 +310,7 @@ func TestBlockListener_ValidateVotesBadFlow(t *testing.T) {
 	bl1.MeshDB.AddBlock(block6)
 	bl1.MeshDB.AddBlock(block7)
 
-	assert.False(t, bl1.validateVotes(block1))
+	assert.False(t, validateVotes(block1, bl1.ForBlockInView, bl1.Hdist))
 }
 
 func TestBlockListenerViewTraversal(t *testing.T) {
@@ -409,6 +388,11 @@ func TestBlockListenerViewTraversal(t *testing.T) {
 	block10.Signature = signer.Sign(block10.Bytes())
 	block10.Id = 10
 
+	block11 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	block11.ATXID = *types.EmptyAtxId
+	block11.Signature = signer.Sign(block11.Bytes())
+	block11.Id = 11
+
 	block2.AddView(block1.ID())
 	block3.AddView(block2.ID())
 	block4.AddView(block2.ID())
@@ -432,8 +416,9 @@ func TestBlockListenerViewTraversal(t *testing.T) {
 	bl1.AddBlock(block8)
 	bl1.AddBlock(block9)
 	bl1.AddBlock(block10)
+	bl1.AddBlock(block11)
 
-	bl2.GetFullBlocks([]types.BlockID{block10.Id})
+	bl2.syncLayer(1, []types.BlockID{block10.Id, block11.Id})
 
 	b, err := bl1.GetBlock(block1.Id)
 	if err != nil {
@@ -519,6 +504,11 @@ func TestBlockListener_TraverseViewBadFlow(t *testing.T) {
 	block5.Signature = signer.Sign(block5.Bytes())
 	block5.Id = 5
 
+	block6 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	block6.ATXID = *types.EmptyAtxId
+	block6.Signature = signer.Sign(block5.Bytes())
+	block6.Id = 6
+
 	block2.AddView(block1.ID())
 	block3.AddView(block2.ID())
 	block4.AddView(block2.ID())
@@ -530,32 +520,23 @@ func TestBlockListener_TraverseViewBadFlow(t *testing.T) {
 	bl1.AddBlock(block4)
 	bl1.AddBlock(block5)
 
-	bl2.GetFullBlocks([]types.BlockID{block5.Id})
+	go bl2.syncLayer(5, []types.BlockID{block5.Id, block6.Id})
+	time.Sleep(1 * time.Second) //wait for fetch
 
 	b, err := bl2.GetBlock(block1.Id)
-	if err == nil {
-		t.Error(err)
-	}
+	assert.Error(t, err)
 
 	_, err = bl2.GetBlock(block2.Id)
-	if err == nil {
-		t.Error(err)
-	}
+	assert.Error(t, err)
 
 	_, err = bl2.GetBlock(block3.Id)
-	if err == nil {
-		t.Error(err)
-	}
+	assert.Error(t, err)
 
 	_, err = bl2.GetBlock(block4.Id)
-	if err == nil {
-		t.Error(err)
-	}
+	assert.Error(t, err)
 
 	b, err = bl2.GetBlock(block5.Id)
-	if err == nil {
-		t.Error(err)
-	}
+	assert.Error(t, err)
 
 	t.Log("  ", b)
 	t.Log("done!")
@@ -574,6 +555,7 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 	bl2.Start()
 
 	blk := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data1"))
+	blk.ViewEdges = append(blk.ViewEdges, mesh.GenesisBlock.ID())
 	tx := types.NewAddressableTx(0, types.BytesToAddress([]byte{0x01}), types.BytesToAddress([]byte{0x02}), 10, 10, 10)
 
 	atx := atx()
@@ -600,8 +582,8 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 	err = n2.Broadcast(config.NewBlockProtocol, data)
 	assert.NoError(t, err)
 
-	time.Sleep(3 * time.Second)
-	timeout := time.After(5 * time.Second)
+	time.Sleep(1 * time.Second)
+	timeout := time.After(2 * time.Second)
 	for {
 		select {
 		// Got a timeout! fail with a timeout error
@@ -616,10 +598,6 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 			}
 		}
 	}
-
-	bl2.Close()
-	bl1.Close()
-	time.Sleep(1 * time.Second)
 }
 
 func TestBlockListener_AtxCache(t *testing.T) {

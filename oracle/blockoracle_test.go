@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-var atxID = types.AtxId{Hash32: [32]byte{1, 3, 3, 7}}
+var atxID = types.AtxId([32]byte{1, 3, 3, 7})
 var nodeID, vrfSigner = generateNodeIDAndSigner()
 var validateVrf = BLS381.Verify2
 var privateKey, publicKey = BLS381.GenKeyPair(BLS381.DefaultSeed())
