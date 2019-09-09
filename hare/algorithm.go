@@ -124,6 +124,7 @@ type ConsensusProcess struct {
 	terminating       bool
 	cfg               config.Config
 	pending           map[string]*Msg
+	notifySent        bool
 }
 
 // Creates a new consensus process instance
@@ -328,27 +329,28 @@ func (proc *ConsensusProcess) processMsg(m *Msg) {
 	}
 }
 
-func (proc *ConsensusProcess) sendMessage(msg *Msg) {
+func (proc *ConsensusProcess) sendMessage(msg *Msg) bool {
 	// invalid msg
 	if msg == nil {
 		proc.Error("sendMessage was called with nil")
-		return
+		return false
 	}
 
 	// check participation
 	if !proc.shouldParticipate() {
 		proc.With().Info("Should not participate", log.Int32("round", proc.k),
 			log.Uint64("layer_id", uint64(proc.instanceId)))
-		return
+		return false
 	}
 
 	if err := proc.network.Broadcast(protoName, msg.Bytes()); err != nil {
 		proc.Error("Could not broadcast round message ", err.Error())
-		return
+		return false
 	}
 
 	proc.With().Info("message sent", log.String("msg_type", msg.InnerMsg.Type.String()),
 		log.Uint64("layer_id", uint64(proc.instanceId)))
+	return true
 }
 
 func (proc *ConsensusProcess) onRoundEnd() {
@@ -434,6 +436,18 @@ func (proc *ConsensusProcess) beginRound3() {
 }
 
 func (proc *ConsensusProcess) beginRound4() {
+	// release proposal & commit trackers
+	defer func() {
+		proc.commitTracker = nil
+		proc.proposalTracker = nil
+	}()
+
+	// send notify message only once
+	if proc.notifySent {
+		proc.Info("Notify already sent")
+		return
+	}
+
 	// build & send notify message
 	builder, err := proc.initDefaultBuilder(proc.s)
 	if err != nil {
@@ -443,11 +457,9 @@ func (proc *ConsensusProcess) beginRound4() {
 	proc.Event().Info("Begin Round 4", log.String("current_set", proc.s.String()), log.LayerId(uint64(proc.instanceId)))
 	builder = builder.SetType(Notify).SetCertificate(proc.certificate).Sign(proc.signing)
 	notifyMsg := builder.Build()
-	proc.sendMessage(notifyMsg)
-
-	//
-	proc.commitTracker = nil
-	proc.proposalTracker = nil
+	if proc.sendMessage(notifyMsg) { // on success, mark sent
+		proc.notifySent = true
+	}
 }
 
 func (proc *ConsensusProcess) handlePending(pending map[string]*Msg) {
