@@ -1,16 +1,18 @@
 package sync
 
 import (
+	"crypto/sha256"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"sync"
 	"testing"
 	"time"
 )
 
 func TestNewPeerWorker(t *testing.T) {
-	syncs, nodes := SyncMockFactory(4, conf, "TestNewPeerWorker", memoryDB, newMockPoetDb)
+	syncs, nodes, _ := SyncMockFactory(4, conf, "TestNewPeerWorker", memoryDB, newMockPoetDb)
 	syncObj1 := syncs[0]
 	defer syncObj1.Close()
 	syncObj2 := syncs[1]
@@ -35,82 +37,24 @@ func TestNewPeerWorker(t *testing.T) {
 }
 
 func TestNewNeighborhoodWorker(t *testing.T) {
-	syncs, nodes := SyncMockFactory(2, conf, "TestNewNeighborhoodWorker", memoryDB, newMockPoetDb)
-	syncObj1 := syncs[0]
-	defer syncObj1.Close()
-	syncObj2 := syncs[1]
-	defer syncObj2.Close()
+	r := require.New(t)
+	syncs, nodes, _ := SyncMockFactory(2, conf, "TestSyncer_FetchPoetProofAvailableAndValid_", memoryDB, newMemPoetDb)
+	s0 := syncs[0]
+	s1 := syncs[1]
+	s1.Peers = getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
 
-	block := types.NewExistingBlock(types.BlockID(333), 1, nil)
-	syncObj1.AddBlockWithTxs(block, []*types.AddressableSignedTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
-	timeout := time.NewTimer(2 * time.Second)
-	pm1 := getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
-	syncObj2.Peers = pm1
+	proofMessage := makePoetProofMessage(t)
 
-	id1 := types.GetTransactionId(tx1.SerializableSignedTransaction)
-	id2 := types.GetTransactionId(tx2.SerializableSignedTransaction)
-	id3 := types.GetTransactionId(tx3.SerializableSignedTransaction)
+	err := s0.poetDb.ValidateAndStore(&proofMessage)
+	r.NoError(err)
 
-	wrk := NewNeighborhoodWorker(syncObj2, 1, TxReqFactory([]types.TransactionId{id1, id2, id3}))
-	go wrk.Work()
+	poetProofBytes, err := types.InterfaceToBytes(&proofMessage.PoetProof)
+	r.NoError(err)
+	ref := sha256.Sum256(poetProofBytes)
 
-	select {
-	case item := <-wrk.output:
-		txs := item.([]types.SerializableSignedTransaction)
-		assert.Equal(t, 3, len(txs))
-		mp := make(map[types.TransactionId]struct{})
-		mp[types.GetTransactionId(&txs[0])] = struct{}{}
-		mp[types.GetTransactionId(&txs[1])] = struct{}{}
-		mp[types.GetTransactionId(&txs[2])] = struct{}{}
-
-		_, ok := mp[id1]
-		assert.True(t, ok)
-		_, ok = mp[id2]
-		assert.True(t, ok)
-		_, ok = mp[id3]
-		assert.True(t, ok)
-
-	case <-timeout.C:
-		assert.Fail(t, "no message received on channel")
-	}
-	wrk.Wait()
-}
-
-func TestNewBlockWorker(t *testing.T) {
-	syncs, nodes := SyncMockFactory(3, conf, "TestNewNeighborhoodWorker", memoryDB, newMockPoetDb)
-	syncObj1 := syncs[0]
-	defer syncObj1.Close()
-	syncObj2 := syncs[1]
-	defer syncObj2.Close()
-	syncObj3 := syncs[2]
-	defer syncObj3.Close()
-
-	block := types.NewExistingBlock(types.BlockID(333), 1, nil)
-	syncObj1.AddBlockWithTxs(block, []*types.AddressableSignedTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
-	syncObj2.AddBlockWithTxs(block, []*types.AddressableSignedTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
-
-	timeout := time.NewTimer(10 * time.Second)
-	pm1 := getPeersMock([]p2p.Peer{nodes[0].PublicKey(), nodes[1].PublicKey()})
-	syncObj3.Peers = pm1
-
-	wrk := NewBlockWorker(syncObj3, 1, BlockReqFactory(), blockSliceToChan([]types.BlockID{block.Id}))
-	go wrk.Work()
-	count := 0
-loop:
-	for {
-		select {
-		case item, ok := <-wrk.output:
-			if !ok {
-				break loop
-			}
-
-			assert.True(t, item.(*types.Block).ID() == block.ID())
-			count++
-		case <-timeout.C:
-
-		}
-	}
-
-	wrk.Wait()
-	assert.True(t, count == 1)
+	w := NewNeighborhoodWorker(s1, 1, PoetReqFactory(ref[:]))
+	go w.work()
+	assert.NotNil(t, <-w.output)
+	r.NoError(err)
+	w.Wait()
 }

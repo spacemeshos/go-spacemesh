@@ -31,7 +31,7 @@ var (
 	nodeId       = types.NodeId{Key: "11111", VRFPublicKey: []byte("22222")}
 	otherNodeId  = types.NodeId{Key: "00000", VRFPublicKey: []byte("00000")}
 	coinbase     = types.HexToAddress("33333")
-	prevAtxId    = types.AtxId{Hash32: types.HexToHash32("44444")}
+	prevAtxId    = types.AtxId(types.HexToHash32("44444"))
 	chlng        = types.HexToHash32("55555")
 	poetRef      = []byte("66666")
 	defaultView  = []types.BlockID{1, 2, 3}
@@ -236,7 +236,7 @@ func lastTransmittedAtx(t *testing.T) (atx types.ActivationTx) {
 }
 
 func assertLastAtx(r *require.Assertions, posAtx, prevAtx *types.ActivationTxHeader, layersPerEpoch uint16) {
-	atx, err := types.BytesAsAtx(net.lastTransmission, nil)
+	atx, err := types.BytesAsAtx(net.lastTransmission, *types.EmptyAtxId)
 	r.NoError(err)
 
 	r.Equal(nodeId, atx.NodeId)
@@ -440,7 +440,7 @@ func TestBuilder_PublishActivationTx_Serialize(t *testing.T) {
 
 	bt, err := types.InterfaceToBytes(act)
 	assert.NoError(t, err)
-	a, err := types.BytesAsAtx(bt, nil)
+	a, err := types.BytesAsAtx(bt, *types.EmptyAtxId)
 	assert.NoError(t, err)
 	bt2, err := types.InterfaceToBytes(a)
 	assert.Equal(t, bt, bt2)
@@ -492,7 +492,7 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	db := NewMockDB()
 	activationDb := NewActivationDb(database.NewMemDatabase(), &MockIdStore{}, mesh.NewMemMeshDB(lg.WithName("meshDB")), layersPerEpoch, &ValidatorMock{}, lg.WithName("atxDB1"))
 	b := NewBuilder(id, coinbase, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, postProver, nil, func() bool { return true }, db, lg.WithName("atxBuilder"))
-	prevAtx := types.AtxId{Hash32: types.HexToHash32("0x111")}
+	prevAtx := types.AtxId(types.HexToHash32("0x111"))
 	chlng := types.HexToHash32("0x3333")
 	poetRef := []byte{0xbe, 0xef}
 	nipstBuilder.poetRef = poetRef

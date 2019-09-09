@@ -125,7 +125,7 @@ func createLayerWithAtx(t *testing.T, msh *mesh.Mesh, id types.LayerID, numOfBlo
 		block1.BlockVotes = append(block1.BlockVotes, votes...)
 		if i < len(atxs) {
 			block1.AtxIds = append(block1.AtxIds, atxs[i].Id())
-			fmt.Printf("adding i=%v bid=%v atxid=%v", i, bid, atxs[i].Id().String())
+			fmt.Printf("adding i=%v bid=%v atxid=%v", i, bid, atxs[i].ShortString())
 		}
 		block1.ViewEdges = append(block1.ViewEdges, views...)
 		var actualAtxs []*types.ActivationTx
@@ -168,8 +168,8 @@ func TestATX_ActiveSetForLayerView(t *testing.T) {
 		atx.Nipst = nipst.NewNIPSTWithChallenge(hash, poetRef)
 		//layers.AtxDB.(*AtxDbMock).AddAtx(atx.Id(), atx)
 	}
-
-	fmt.Println("ID4 ", atxs[4].Id().Hex())
+	id := atxs[4].Id()
+	fmt.Println("ID4 ", id.ShortString())
 	blocks := createLayerWithAtx(t, layers, 1, 6, atxs, []types.BlockID{}, []types.BlockID{})
 	before := blocks[:4]
 	four := blocks[4:5]
@@ -518,7 +518,7 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	// Wrong prevATx.
 	atx = types.NewActivationTx(idx1, coinbase, 1, atxs[0].Id(), 1012, 0, posAtx.Id(), 3, []types.BlockID{}, &types.NIPST{})
 	err = atxdb.SyntacticallyValidateAtx(atx)
-	assert.EqualError(t, err, fmt.Sprintf("previous ATX belongs to different miner. atx.Id: %v, atx.NodeId: %v, prevAtx.NodeId: %v", atx.ShortId(), atx.NodeId.Key, atxs[0].NodeId.Key))
+	assert.EqualError(t, err, fmt.Sprintf("previous ATX belongs to different miner. atx.Id: %v, atx.NodeId: %v, prevAtx.NodeId: %v", atx.ShortString(), atx.NodeId.Key, atxs[0].NodeId.Key))
 
 	// Wrong layerId.
 	posAtx2 := types.NewActivationTx(idx2, coinbase, 0, *types.EmptyAtxId, 1020, 0, *types.EmptyAtxId, 3, blocks, npst)

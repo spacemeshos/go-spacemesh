@@ -24,21 +24,39 @@ func (l EpochId) FirstLayer(layersPerEpoch uint16) LayerID {
 	return LayerID(uint64(l) * uint64(layersPerEpoch))
 }
 
-type AtxId struct {
-	Hash32
+type AtxId Hash32
+
+func (t *AtxId) ShortString() string {
+	return t.Hash32().ShortString()
 }
 
-func (t AtxId) ShortId() string {
-	return t.ShortString()
+func (t *AtxId) Hash32() Hash32 {
+	return Hash32(*t)
 }
 
-var EmptyAtxId = &AtxId{Hash32{0}}
+func (t AtxId) Bytes() []byte {
+	return Hash32(t).Bytes()
+}
+
+var EmptyAtxId = &AtxId{}
 
 type ActivationTxHeader struct {
 	NIPSTChallenge
 	id            *AtxId
 	Coinbase      Address
 	ActiveSetSize uint32
+}
+
+func (t *ActivationTxHeader) ShortString() string {
+	return t.id.ShortString()
+}
+
+func (t *ActivationTxHeader) Hash32() Hash32 {
+	return Hash32(*t.id)
+}
+
+func (t *ActivationTxHeader) Bytes() []byte {
+	return t.id.Bytes()
 }
 
 type NIPSTChallenge struct {
@@ -67,11 +85,11 @@ func (challenge *NIPSTChallenge) String() string {
 		util.Bytes2Hex(challenge.NodeId.VRFPublicKey)[:5],
 		challenge.NodeId.Key[:5],
 		challenge.Sequence,
-		challenge.PrevATXId.ShortId(),
+		challenge.PrevATXId.ShortString(),
 		challenge.PubLayerIdx,
 		challenge.StartTick,
 		challenge.EndTick,
-		challenge.PositioningAtx.ShortId())
+		challenge.PositioningAtx.ShortString())
 }
 
 type ActivationTx struct {
@@ -136,10 +154,6 @@ func (atxh *ActivationTxHeader) Id() AtxId {
 	return *atxh.id
 }
 
-func (atxh *ActivationTxHeader) ShortId() string {
-	return atxh.Id().ShortId()
-}
-
 func (atxh *ActivationTxHeader) TargetEpoch(layersPerEpoch uint16) EpochId {
 	return atxh.PubLayerIdx.GetEpoch(layersPerEpoch) + 1
 }
@@ -149,7 +163,8 @@ func (atxh *ActivationTxHeader) SetId(id *AtxId) {
 }
 
 func (atx *ActivationTx) CalcAndSetId() {
-	atx.SetId(&AtxId{CalcAtxHash32(atx)})
+	id := AtxId(CalcAtxHash32(atx))
+	atx.SetId(&id)
 }
 
 func (atx *ActivationTx) GetPoetProofRef() []byte {
