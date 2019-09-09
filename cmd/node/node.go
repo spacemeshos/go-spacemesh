@@ -220,6 +220,7 @@ func (app *SpacemeshApp) setupLogging() {
 	log.Info("%s", app.getAppInfo())
 
 	if app.Config.PublishEventsUrl != "" {
+		log.Info("pubsubing on %v", app.Config.PublishEventsUrl)
 		events.InitializeEventPubsub(app.Config.PublishEventsUrl)
 	}
 }
