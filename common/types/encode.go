@@ -31,17 +31,17 @@ func BytesToBlockIds(blockIds []byte) ([]BlockID, error) {
 	return ids, nil
 }
 
-func BytesAsAtx(b []byte, id *AtxId) (*ActivationTx, error) {
+func BytesAsAtx(b []byte, id AtxId) (*ActivationTx, error) {
 	buf := bytes.NewReader(b)
 	var atx ActivationTx
 	_, err := xdr.Unmarshal(buf, &atx)
 	if err != nil {
 		return nil, err
 	}
-	if id == nil {
+	if id == *EmptyAtxId {
 		atx.CalcAndSetId()
 	} else {
-		atx.SetId(id)
+		atx.SetId(&id)
 	}
 	return &atx, nil
 }
@@ -125,7 +125,7 @@ func InterfaceToBytes(i interface{}) ([]byte, error) {
 	return w.Bytes(), nil
 }
 
-//todo standardized transaction id across project
+//todo standardized transaction Id across project
 //todo replace panic
 func GetTransactionId(t *SerializableSignedTransaction) TransactionId {
 	tx, err := InterfaceToBytes(t)

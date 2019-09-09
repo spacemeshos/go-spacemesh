@@ -33,8 +33,8 @@ func (bo *localOracle) Eligible(layer types.LayerID, round int32, committeeSize 
 	return bo.oc.Eligible(layer, round, committeeSize, id, sig)
 }
 
-func (bo *localOracle) Proof(id types.NodeId, layer types.LayerID, round int32) ([]byte, error) {
-	return bo.oc.Proof(id, layer, round)
+func (bo *localOracle) Proof(layer types.LayerID, round int32) ([]byte, error) {
+	return bo.oc.Proof(layer, round)
 }
 
 func NewLocalOracle(rolacle *eligibility.FixedRolacle, committeeSize int, nodeID types.NodeId) *localOracle {
@@ -67,6 +67,6 @@ func (bo *hareOracle) Eligible(layer types.LayerID, round int32, committeeSize i
 	return bo.oc.Eligible(layer, round, committeeSize, id, sig)
 }
 
-func (bo *hareOracle) Proof(id types.NodeId, layer types.LayerID, round int32) ([]byte, error) {
-	return bo.oc.Proof(id, layer, round)
+func (bo *hareOracle) Proof(layer types.LayerID, round int32) ([]byte, error) {
+	return bo.oc.Proof(layer, round)
 }

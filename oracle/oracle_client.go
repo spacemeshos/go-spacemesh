@@ -188,7 +188,7 @@ func (oc *OracleClient) Eligible(layer types.LayerID, round int32, committeeSize
 	return valid, nil
 }
 
-func (o *OracleClient) Proof(id types.NodeId, layer types.LayerID, round int32) ([]byte, error) {
+func (o *OracleClient) Proof(layer types.LayerID, round int32) ([]byte, error) {
 	return []byte{}, nil
 }
 func (oc *OracleClient) IsIdentityActive(s string, id types.LayerID) (bool, error) {
