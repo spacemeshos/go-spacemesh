@@ -192,10 +192,18 @@ func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error 
 		if err != nil {
 			return fmt.Errorf("validation failed: prevATX not found: %v", err)
 		}
+
 		if prevATX.NodeId.Key != atx.NodeId.Key {
 			return fmt.Errorf("previous ATX belongs to different miner. atx.Id: %v, atx.NodeId: %v, prevAtx.NodeId: %v",
 				atx.ShortId(), atx.NodeId.Key, prevATX.NodeId.Key)
 		}
+
+		prevEp := prevATX.PubLayerIdx.GetEpoch(db.LayersPerEpoch)
+		curEp := atx.PubLayerIdx.GetEpoch(db.LayersPerEpoch)
+		if prevEp >= curEp {
+			return fmt.Errorf("prevAtx epoch (%v) isn't older than current atx epoch (%v)", prevEp, curEp)
+		}
+
 		if prevATX.Sequence+1 != atx.Sequence {
 			return fmt.Errorf("sequence number is not one more than prev sequence number")
 		}
