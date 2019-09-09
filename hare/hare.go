@@ -2,11 +2,10 @@ package hare
 
 import (
 	"errors"
-	"fmt"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/hare/metrics"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/types"
 	"sync"
 	"time"
 )
@@ -241,10 +240,6 @@ func (h *Hare) GetResult(lower types.LayerID, upper types.LayerID) ([]types.Bloc
 		results = append(results, blks...)
 	}
 	h.mu.RUnlock()
-
-	if len(results) == 0 {
-		return nil, errors.New(fmt.Sprintf("could not get any hare results between %v %v ", lower, upper))
-	}
 
 	return results, nil
 }

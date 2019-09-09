@@ -2,7 +2,7 @@ package oracle
 
 import (
 	"encoding/binary"
-	"github.com/spacemeshos/go-spacemesh/types"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 type EpochBeaconProvider struct {

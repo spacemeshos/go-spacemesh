@@ -14,26 +14,28 @@ func TestPostClient(t *testing.T) {
 	_, err := rand.Read(id)
 	assert.NoError(err)
 
-	c := NewPostClient(&postCfg)
+	c, err := NewPostClient(&postCfg, id)
+	assert.NoError(err)
 	assert.NotNil(c)
 
-	idsToCleanup = append(idsToCleanup, id)
-	commitment, err := c.initialize(id, 0)
+	commitment, err := c.Initialize()
 	assert.NoError(err)
 	assert.NotNil(commitment)
+	defer func() {
+		err := c.Reset()
+		assert.NoError(err)
+	}()
 
-	res, err := verifyPost(commitment, postCfg.SpacePerUnit, postCfg.NumProvenLabels, postCfg.Difficulty)
+	err = verifyPost(commitment, postCfg.SpacePerUnit, postCfg.NumProvenLabels, postCfg.Difficulty)
 	assert.NoError(err)
-	assert.True(res)
 
 	challenge := []byte("this is a challenge")
-	proof, err := c.execute(id, challenge, 0)
+	proof, err := c.Execute(challenge)
 	assert.NoError(err)
 	assert.NotNil(proof)
 	assert.Equal([]byte(proof.Challenge), challenge[:])
 
 	log.Info("space %v", postCfg.SpacePerUnit)
-	res, err = verifyPost(proof, postCfg.SpacePerUnit, postCfg.NumProvenLabels, postCfg.Difficulty)
+	err = verifyPost(proof, postCfg.SpacePerUnit, postCfg.NumProvenLabels, postCfg.Difficulty)
 	assert.NoError(err)
-	assert.True(res)
 }

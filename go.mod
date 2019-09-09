@@ -9,7 +9,6 @@ require (
 	github.com/cheekybits/genny v1.0.0
 	github.com/go-kit/kit v0.8.0
 	github.com/gogo/protobuf v1.2.1
-	github.com/golang-collections/go-datastructures v0.0.0-20150211160725-59788d5eb259
 	github.com/golang/protobuf v1.3.1
 	github.com/google/uuid v1.1.0
 	github.com/grpc-ecosystem/grpc-gateway v1.9.0
@@ -22,7 +21,7 @@ require (
 	github.com/spacemeshos/ed25519 v0.0.0-20190530014421-e235766d15a1
 	github.com/spacemeshos/merkle-tree v0.0.0-20190612125135-48574fd5f419
 	github.com/spacemeshos/poet v0.0.0-20190717095635-f016e4af26f2
-	github.com/spacemeshos/post v0.0.0-20190815123609-2a8c38b6a857
+	github.com/spacemeshos/post v0.0.0-20190901120255-d42405e2036e
 	github.com/spacemeshos/sha256-simd v0.0.0-20190111104731-8575aafc88c9
 	github.com/spf13/cobra v0.0.4
 	github.com/spf13/pflag v1.0.3

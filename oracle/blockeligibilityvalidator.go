@@ -4,9 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/ed25519"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/spacemeshos/sha256-simd"
 )
 
@@ -61,7 +61,7 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 	}
 
 	if atxid != block.ATXID {
-		return false, errors.New(fmt.Sprintf("wrong associated atx got %v expected %v ", block.ATXID.ShortId(), atxid))
+		return false, errors.New(fmt.Sprintf("wrong associated atx got %v expected %v ", block.ATXID.ShortString(), atxid))
 	}
 
 	epochNumber := block.LayerIndex.GetEpoch(v.layersPerEpoch)

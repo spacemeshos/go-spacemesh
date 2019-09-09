@@ -2,9 +2,9 @@ package p2p
 
 import (
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p/connectionpool"
 	"github.com/spacemeshos/go-spacemesh/p2p/discovery"
-	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/require"
 	"sync/atomic"
 	"testing"
@@ -117,6 +117,7 @@ func TestSwarm_RegisterProtocolNoStart(t *testing.T) {
 
 func TestSwarm_processMessage(t *testing.T) {
 	s := swarm{}
+	s.config = config.DefaultConfig()
 	s.lNode, _ = node.GenerateTestNode(t)
 	r := node.GenerateRandomNodeData()
 	c := &net.ConnectionMock{}

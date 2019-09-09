@@ -25,6 +25,7 @@ bootstrap:
     expected-layers: '50'
     storage-path: 'spacemesh-sync-data'
     remote-data: 'true'
+    hdist: '1'
 client:
   image: 'spacemeshos/go-spacemesh:develop'
   command: '/bin/go-sync'
@@ -40,6 +41,7 @@ client:
     expected-layers: '50'
     storage-path: 'spacemesh-sync-data'
     remote-data: 'true'
+    hdist: '1'
 elastic:
   host: elastic.spacemesh.io
   port: 9200

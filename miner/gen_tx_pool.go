@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/spacemeshos/go-spacemesh/types"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 type TypesAtxIdMemPool struct {

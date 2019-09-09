@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/connectionpool"
@@ -16,7 +17,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	timeSyncConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
-	"github.com/spacemeshos/go-spacemesh/types"
 	"strings"
 
 	inet "net"
@@ -393,6 +393,11 @@ func (s *swarm) Shutdown() {
 
 // process an incoming message
 func (s *swarm) processMessage(ime net.IncomingMessageEvent) {
+	if s.config.MsgSizeLimit != config.UnlimitedMsgSize && len(ime.Message) > s.config.MsgSizeLimit {
+		s.lNode.With().Error("processMessage: message is too big",
+			log.Int("limit", s.config.MsgSizeLimit), log.Int("actual", len(ime.Message)))
+		return
+	}
 
 	err := s.onRemoteClientMessage(ime)
 	if err != nil {

@@ -90,9 +90,13 @@ type BaseConfig struct {
 
 	GenesisActiveSet int `mapstructure:"genesis-active-size"` // the active set size for genesis
 
+	SyncRequestTimeout int `mapstructure:"sync-request-timeout"` // the timeout for direct request in the sync
+
 	PublishEventsUrl string `mapstructure:"events-url"`
 
 	StartMining bool `mapstructure:"start-mining"`
+
+	AtxsPerBlock int `mapstructure:"atxs-per-block"`
 }
 
 // DefaultConfig returns the default configuration for a spacemesh node
@@ -129,6 +133,8 @@ func defaultBaseConfig() BaseConfig {
 		PoETServer:          "127.0.0.1",
 		Hdist:               5,
 		GenesisActiveSet:    5,
+		SyncRequestTimeout:  2000,
+		AtxsPerBlock:        100,
 	}
 }
 

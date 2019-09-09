@@ -1,24 +1,23 @@
 import random
 import re
 import time
+import pytest
 from datetime import datetime
 from random import choice
 from string import ascii_lowercase
 
-from elasticsearch_dsl import Search, Q
 from pytest_testconfig import config as testconfig
 
 # noinspection PyUnresolvedReferences
+from tests.context import ES
 from tests.fixtures import init_session, load_config, set_namespace, session_id, set_docker_images
-from tests.queries import ES, query_message, poll_query_message
-from tests.test_bs import add_single_client, add_multi_clients, get_conf
+
+from tests.queries import query_message, poll_query_message
+from tests.test_bs import add_multi_clients, get_conf
 from tests.test_bs import api_call
 # noinspection PyUnresolvedReferences
-from tests.test_bs import setup_bootstrap, setup_clients, save_log_on_exit, add_client, add_curl
+from tests.test_bs import setup_bootstrap, setup_clients, save_log_on_exit, add_curl
 
-# ==============================================================================
-#    TESTS
-# ==============================================================================
 
 dt = datetime.now()
 todaydate = dt.strftime("%Y.%m.%d")
@@ -34,6 +33,32 @@ def query_bootstrap_es(indx, namespace, bootstrap_po_name):
             return match.group('bootstrap_key')
     return None
 
+# ==============================================================================
+#    Fixtures
+# ==============================================================================
+
+
+# The following fixture should not be used if you wish to add many clients during test.
+@pytest.fixture()
+def add_client(request, setup_bootstrap, setup_clients):
+    global client_name
+
+    def _add_single_client():
+        global client_name
+        if not setup_bootstrap.pods:
+            raise Exception("Could not find bootstrap node")
+
+        bs_info = setup_bootstrap.pods[0]
+        cspec = get_conf(bs_info, testconfig['client'])
+        client_name = add_multi_clients(setup_bootstrap.deployment_id, cspec, 1)[0]
+        return client_name
+
+    return _add_single_client()
+
+
+# ==============================================================================
+#    TESTS
+# ==============================================================================
 
 def test_bootstrap(init_session, setup_bootstrap):
     # wait for the bootstrap logs to be available in ElasticSearch
@@ -205,9 +230,10 @@ def test_late_bootstraps(init_session, setup_bootstrap, setup_clients):
     testnames = []
 
     for i in range(TEST_NUM):
-        client = add_single_client(setup_bootstrap.deployment_id,
-                                   get_conf(setup_bootstrap.pods[0], testconfig['client']))
-        testnames.append((client, datetime.now()))
+        client = add_multi_clients(setup_bootstrap.deployment_id,
+                                   get_conf(setup_bootstrap.pods[0], testconfig['client']),
+                                   1)
+        testnames.append((client[0], datetime.now()))
 
     time.sleep(TEST_NUM * timeout_factor)
 

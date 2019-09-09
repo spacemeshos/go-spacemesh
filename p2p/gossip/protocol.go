@@ -2,13 +2,13 @@ package gossip
 
 import (
 	"errors"
-	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"github.com/spacemeshos/sha256-simd"
 	"sync"
 )
 
@@ -17,53 +17,6 @@ const propagateHandleBufferSize = 1000 // number of MessageValidation that we al
 
 const ProtocolName = "/p2p/1.0/gossip"
 const protocolVer = "0"
-
-type hash [12]byte
-
-// fnv.New32 must be used every time to be sure we get consistent results.
-func calcHash(msg []byte, prot string) hash {
-	msghash := sha256.Sum256(append(msg, []byte(prot)...))
-	var h [12]byte
-	copy(h[:], msghash[0:12])
-	return hash(h)
-}
-
-type doubleCache struct {
-	size   uint
-	cacheA map[hash]struct{}
-	cacheB map[hash]struct{}
-}
-
-func newDoubleCache(size uint) *doubleCache {
-	return &doubleCache{size, make(map[hash]struct{}, size), make(map[hash]struct{}, size)}
-}
-
-func (a *doubleCache) getOrInsert(key hash) bool {
-	_, ok := a.cacheA[key]
-	if ok {
-		return true
-	}
-	_, ok = a.cacheB[key]
-	if ok {
-		return true
-	}
-	a.insert(key)
-	return false
-}
-
-func (a *doubleCache) insert(key hash) {
-	if uint(len(a.cacheA)) < a.size {
-		a.cacheA[key] = struct{}{}
-		return
-	}
-	if uint(len(a.cacheB)) < a.size {
-		a.cacheB[key] = struct{}{}
-		return
-	}
-	a.cacheA = a.cacheB
-	a.cacheB = make(map[hash]struct{}, a.size)
-	a.cacheB[key] = struct{}{}
-}
 
 // Interface for the underlying p2p layer
 type baseNetwork interface {
@@ -86,8 +39,7 @@ type Protocol struct {
 
 	shutdown chan struct{}
 
-	oldMessageQ  *doubleCache
-	oldMessageMu sync.RWMutex
+	oldMessageQ *types.DoubleCache
 
 	propagateQ chan service.MessageValidation
 }
@@ -102,7 +54,7 @@ func NewProtocol(config config.SwarmConfig, base baseNetwork, localNodePubkey p2
 		localNodePubkey: localNodePubkey,
 		peers:           make(map[p2pcrypto.PublicKey]*peer),
 		shutdown:        make(chan struct{}),
-		oldMessageQ:     newDoubleCache(oldMessageCacheSize), // todo : remember to drain this
+		oldMessageQ:     types.NewDoubleCache(oldMessageCacheSize), // todo : remember to drain this
 		propagateQ:      make(chan service.MessageValidation, propagateHandleBufferSize),
 	}
 }
@@ -133,14 +85,12 @@ func (prot *Protocol) Close() {
 
 // markMessageAsOld adds the message's hash to the old messages queue so that the message won't be processed in case received again.
 // Returns true if message was already processed before
-func (prot *Protocol) markMessageAsOld(h hash) bool {
-	prot.oldMessageMu.Lock()
-	ok := prot.oldMessageQ.getOrInsert(h)
-	prot.oldMessageMu.Unlock()
+func (prot *Protocol) markMessageAsOld(h types.Hash12) bool {
+	ok := prot.oldMessageQ.GetOrInsert(h)
 	return ok
 }
 
-func (prot *Protocol) propagateMessage(payload []byte, h hash, nextProt string, exclude p2pcrypto.PublicKey) {
+func (prot *Protocol) propagateMessage(payload []byte, h types.Hash12, nextProt string, exclude p2pcrypto.PublicKey) {
 	prot.peersMutex.RLock()
 peerLoop:
 	for p := range prot.peers {
@@ -175,17 +125,19 @@ func (prot *Protocol) Start() {
 func (prot *Protocol) addPeer(peer p2pcrypto.PublicKey) {
 	prot.peersMutex.Lock()
 	prot.peers[peer] = newPeer(prot.net, peer, prot.Log)
+	prot.Log.With().Info("adding peer", log.String("peer", peer.String()))
 	prot.peersMutex.Unlock()
 }
 
 func (prot *Protocol) removePeer(peer p2pcrypto.PublicKey) {
 	prot.peersMutex.Lock()
 	delete(prot.peers, peer)
+	prot.Log.With().Info("deleting peer", log.String("peer", peer.String()))
 	prot.peersMutex.Unlock()
 }
 
 func (prot *Protocol) processMessage(sender p2pcrypto.PublicKey, protocol string, msg service.Data) error {
-	h := calcHash(msg.Bytes(), protocol)
+	h := types.CalcMessageHash12(msg.Bytes(), protocol)
 
 	isOld := prot.markMessageAsOld(h)
 	if isOld {
@@ -193,11 +145,11 @@ func (prot *Protocol) processMessage(sender p2pcrypto.PublicKey, protocol string
 		// todo : - have some more metrics for termination
 		// todo	: - maybe tell the peer we got this message already?
 		// todo : - maybe block this peer since he sends us old messages
-		prot.Log.With().Debug("old_gossip_message", log.String("from", sender.String()), log.String("protocol", protocol), log.String("hash", common.Bytes2Hex(h[:])))
+		prot.Log.With().Debug("old_gossip_message", log.String("from", sender.String()), log.String("protocol", protocol), log.String("hash", util.Bytes2Hex(h[:])))
 		return nil
 	}
 
-	prot.Log.Event().Debug("new_gossip_message", log.String("from", sender.String()), log.String("protocol", protocol), log.String("hash", common.Bytes2Hex(h[:])))
+	prot.Log.Event().Debug("new_gossip_message", log.String("from", sender.String()), log.String("protocol", protocol), log.String("hash", util.Bytes2Hex(h[:])))
 	metrics.NewGossipMessages.With("protocol", protocol).Add(1)
 	return prot.net.ProcessGossipProtocolMessage(sender, protocol, msg, prot.propagateQ)
 }
@@ -208,8 +160,8 @@ loop:
 	for {
 		select {
 		case msgV := <-prot.propagateQ:
-			h := calcHash(msgV.Message(), msgV.Protocol())
-			prot.Log.With().Debug("new_gossip_message_relay", log.String("protocol", msgV.Protocol()), log.String("hash", common.Bytes2Hex(h[:])))
+			h := types.CalcMessageHash12(msgV.Message(), msgV.Protocol())
+			prot.Log.With().Debug("new_gossip_message_relay", log.String("protocol", msgV.Protocol()), log.String("hash", util.Bytes2Hex(h[:])))
 			prot.propagateMessage(msgV.Message(), h, msgV.Protocol(), msgV.Sender())
 		case <-prot.shutdown:
 			err = errors.New("protocol shutdown")

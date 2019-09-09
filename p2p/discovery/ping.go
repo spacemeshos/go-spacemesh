@@ -3,7 +3,7 @@ package discovery
 import (
 	"bytes"
 	"errors"
-	"github.com/spacemeshos/go-spacemesh/types"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"net"
 	"time"
 

@@ -3,13 +3,13 @@ package hare
 import (
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/amcl/BLS381"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
@@ -45,7 +45,7 @@ func (mr *mockRolacle) Eligible(layer types.LayerID, round int32, committeeSize 
 	return mr.isEligible, mr.err
 }
 
-func (mr *mockRolacle) Proof(id types.NodeId, layer types.LayerID, round int32) ([]byte, error) {
+func (mr *mockRolacle) Proof(layer types.LayerID, round int32) ([]byte, error) {
 	return []byte{}, nil
 }
 

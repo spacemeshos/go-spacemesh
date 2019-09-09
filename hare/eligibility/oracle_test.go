@@ -3,10 +3,10 @@ package eligibility
 import (
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/amcl/BLS381"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
 	eCfg "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"math/rand"
@@ -29,6 +29,10 @@ type mockBlocksProvider struct {
 }
 
 func (mbp mockBlocksProvider) ContextuallyValidBlock(layer types.LayerID) (map[types.BlockID]struct{}, error) {
+	if mbp.mp == nil {
+		mbp.mp = make(map[types.BlockID]struct{})
+		mbp.mp[types.BlockID(10)] = struct{}{}
+	}
 	return mbp.mp, nil
 }
 
@@ -90,7 +94,7 @@ func (mc *mockCacher) Get(key interface{}) (value interface{}, ok bool) {
 func TestOracle_BuildVRFMessage(t *testing.T) {
 	o := Oracle{Log: log.NewDefault(t.Name())}
 	o.beacon = &mockValueProvider{1, someErr}
-	_, err := o.buildVRFMessage(types.NodeId{}, types.LayerID(1), 1)
+	_, err := o.buildVRFMessage(types.LayerID(1), 1)
 	assert.NotNil(t, err)
 }
 
@@ -223,7 +227,7 @@ func Test_BlsSignVerify(t *testing.T) {
 	sr := BLS381.NewBlsSigner(pr)
 	o := New(&mockValueProvider{1, nil}, (&mockActiveSetProvider{10}).ActiveSet, BLS381.Verify2, sr, 10, genActive, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
 	id := types.NodeId{Key: "abc", VRFPublicKey: pu}
-	proof, err := o.Proof(id, 1, 1)
+	proof, err := o.Proof(1, 1)
 	assert.Nil(t, err)
 	res, err := o.Eligible(1, 1, 10, id, proof)
 	assert.Nil(t, err)
@@ -232,19 +236,19 @@ func Test_BlsSignVerify(t *testing.T) {
 
 func TestOracle_Proof(t *testing.T) {
 	o := New(&mockValueProvider{0, myErr}, (&mockActiveSetProvider{10}).ActiveSet, buildVerifier(true, nil), &signer{}, 10, genActive, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
-	sig, err := o.Proof(types.NodeId{}, 2, 3)
+	sig, err := o.Proof(2, 3)
 	assert.Nil(t, sig)
 	assert.NotNil(t, err)
 	assert.Equal(t, myErr, err)
 	o.beacon = &mockValueProvider{0, nil}
 	o.vrfSigner = &signer{nil, myErr}
-	sig, err = o.Proof(types.NodeId{}, 2, 3)
+	sig, err = o.Proof(2, 3)
 	assert.Nil(t, sig)
 	assert.NotNil(t, err)
 	assert.Equal(t, myErr, err)
 	mySig := []byte{1, 2}
 	o.vrfSigner = &signer{mySig, nil}
-	sig, err = o.Proof(types.NodeId{}, 2, 3)
+	sig, err = o.Proof(2, 3)
 	assert.Nil(t, err)
 	assert.Equal(t, mySig, sig)
 }
@@ -299,8 +303,13 @@ func TestOracle_actives(t *testing.T) {
 	r := require.New(t)
 	o := New(&mockValueProvider{1, nil}, nil, nil, nil, 5, genActive, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
 	_, err := o.actives(1)
-	r.Equal(genesisErr, err)
+	r.EqualError(err, errGenesis.Error())
 
+	o.blocksProvider = mockBlocksProvider{mp: make(map[types.BlockID]struct{})}
+	_, err = o.actives(100)
+	r.EqualError(err, errNoContextualBlocks.Error())
+
+	o.blocksProvider = mockBlocksProvider{}
 	mp := createMapWithSize(9)
 	o.getActiveSet = func(epoch types.EpochId, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
 		return mp, nil
@@ -349,7 +358,9 @@ func TestOracle_activesSafeLayer(t *testing.T) {
 	}
 
 	bmp := make(map[types.LayerID]map[types.BlockID]struct{})
-	bmp[rsl] = make(map[types.BlockID]struct{})
+	mp2 := make(map[types.BlockID]struct{})
+	mp2[10] = struct{}{}
+	bmp[rsl] = mp2
 	o.blocksProvider = &bProvider{bmp}
 	mpRes, err := o.actives(lyr)
 	r.NotNil(mpRes)

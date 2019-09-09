@@ -17,8 +17,7 @@
 package state
 
 import (
-	"github.com/spacemeshos/go-spacemesh/address"
-	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/stretchr/testify/assert"
 	"math/big"
@@ -31,12 +30,12 @@ type StateSuite struct {
 	state *StateDB
 }
 
-var toAddr = address.BytesToAddress
+var toAddr = types.BytesToAddress
 
 func TestDump(t *testing.T) {
 	s := &StateSuite{}
 	s.db = database.NewMemDatabase()
-	s.state, _ = New(common.Hash{}, NewDatabase(s.db))
+	s.state, _ = New(types.Hash32{}, NewDatabase(s.db))
 	// generate a few entries
 	obj1 := s.state.GetOrNewStateObj(toAddr([]byte{0x01}))
 	obj1.AddBalance(big.NewInt(22))
@@ -78,7 +77,7 @@ func TestLookupPastState(t *testing.T) {
 	s := &StateSuite{}
 	s.db = database.NewMemDatabase()
 	sdb := NewDatabase(s.db)
-	s.state, _ = New(common.Hash{}, sdb)
+	s.state, _ = New(types.Hash32{}, sdb)
 	// generate a few entries
 	obj1 := s.state.GetOrNewStateObj(toAddr([]byte{0x01}))
 	obj1.AddBalance(big.NewInt(22))
@@ -99,7 +98,7 @@ func TestLookupPastState(t *testing.T) {
 
 func (s *StateSuite) SetUpTest(t *testing.T) {
 	s.db = database.NewMemDatabase()
-	s.state, _ = New(common.Hash{}, NewDatabase(s.db))
+	s.state, _ = New(types.Hash32{}, NewDatabase(s.db))
 }
 
 func compareStateObjects(so0, so1 *StateObj, t *testing.T) {

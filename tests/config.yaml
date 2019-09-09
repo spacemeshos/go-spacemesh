@@ -13,6 +13,13 @@ bootstrap:
   image: 'spacemeshos/go-spacemesh:develop'
   command: '/bin/go-spacemesh'
   replicas: 1
+  resources:
+    requests:
+      memory: '1024M'
+      cpu: '1'
+    limits:
+      memory: '2048M'
+      cpu: '2'
   args:
     randcon: '8'
     hare-committee-size: '50'
@@ -31,6 +38,13 @@ client:
   image: 'spacemeshos/go-spacemesh:develop'
   command: '/bin/go-spacemesh'
   replicas: 49
+  resources:
+    requests:
+      memory: '1024M'
+      cpu: '1'
+    limits:
+      memory: '2048M'
+      cpu: '2'
   args:
     randcon: '8'
     hare-committee-size: '50'

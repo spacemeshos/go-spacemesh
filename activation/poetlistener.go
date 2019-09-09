@@ -1,9 +1,9 @@
 package activation
 
 import (
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"github.com/spacemeshos/go-spacemesh/types"
 )
 
 const PoetProofProtocol = "PoetProof"

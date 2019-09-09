@@ -17,7 +17,7 @@
 package database
 
 import (
-	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"sort"
 	"sync"
 )
@@ -46,7 +46,7 @@ func (db *MemDatabase) Put(key []byte, value []byte) error {
 	db.lock.Lock()
 	defer db.lock.Unlock()
 
-	db.db[string(key)] = common.CopyBytes(value)
+	db.db[string(key)] = util.CopyBytes(value)
 	return nil
 }
 
@@ -63,7 +63,7 @@ func (db *MemDatabase) Get(key []byte) ([]byte, error) {
 	defer db.lock.RUnlock()
 
 	if entry, ok := db.db[string(key)]; ok {
-		return common.CopyBytes(entry), nil
+		return util.CopyBytes(entry), nil
 	}
 	return nil, ErrNotFound
 }
@@ -126,13 +126,13 @@ type memBatch struct {
 }
 
 func (b *memBatch) Put(key, value []byte) error {
-	b.writes = append(b.writes, kv{common.CopyBytes(key), common.CopyBytes(value), false})
+	b.writes = append(b.writes, kv{util.CopyBytes(key), util.CopyBytes(value), false})
 	b.size += len(value)
 	return nil
 }
 
 func (b *memBatch) Delete(key []byte) error {
-	b.writes = append(b.writes, kv{common.CopyBytes(key), nil, true})
+	b.writes = append(b.writes, kv{util.CopyBytes(key), nil, true})
 	b.size += 1
 	return nil
 }

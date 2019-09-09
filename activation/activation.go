@@ -3,13 +3,12 @@ package activation
 import (
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/address"
-	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/types"
+	"github.com/spacemeshos/go-spacemesh/nipst"
+	"github.com/spacemeshos/post/shared"
 	"sync"
 	"sync/atomic"
-	"time"
 )
 
 const AtxProtocol = "AtxGossip"
@@ -38,10 +37,7 @@ func (provider *PoETNumberOfTickProvider) NumOfTicks() uint64 {
 }
 
 type NipstBuilder interface {
-	BuildNIPST(challenge *common.Hash) (*types.NIPST, error)
-	IsPostInitialized() bool
-	InitializePost(logicalDrive string, commitmentSize uint64) (*types.PostProof, error)
-	GetDataDirPath() string
+	BuildNIPST(challenge *types.Hash32) (*types.NIPST, error)
 }
 
 type IdStore interface {
@@ -50,7 +46,8 @@ type IdStore interface {
 }
 
 type NipstValidator interface {
-	Validate(nipst *types.NIPST, expectedChallenge common.Hash) error
+	Validate(nipst *types.NIPST, expectedChallenge types.Hash32) error
+	VerifyPost(proof *types.PostProof, space uint64) error
 }
 
 type ATXDBProvider interface {
@@ -66,22 +63,24 @@ type BytesStore interface {
 }
 
 const (
-	Idle = 1 + iota
-	InProgress
-	Done
+	InitIdle = 1 + iota
+	InitInProgress
+	InitDone
 )
 
 type Builder struct {
 	nodeId          types.NodeId
-	coinbaseAccount address.Address
+	coinbaseAccount types.Address
 	db              ATXDBProvider
 	net             Broadcaster
 	mesh            MeshProvider
 	layersPerEpoch  uint16
 	tickProvider    PoETNumberOfTickProvider
 	nipstBuilder    NipstBuilder
+	postProver      nipst.PostProverClient
 	challenge       *types.NIPSTChallenge
 	nipst           *types.NIPST
+	commitment      *types.PostProof
 	posLayerID      types.LayerID
 	prevATX         *types.ActivationTxHeader
 	timer           chan types.LayerID
@@ -92,15 +91,12 @@ type Builder struct {
 	store           BytesStore
 	isSynced        func() bool
 	accountLock     sync.RWMutex
-	postInitLock    sync.RWMutex
-	initStatus      int
-	errorTimeoutMs  time.Duration
+	initStatus      int32
 	log             log.Log
 }
 
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
-func NewBuilder(nodeId types.NodeId, coinbaseAccount address.Address, db ATXDBProvider, net Broadcaster, mesh MeshProvider, layersPerEpoch uint16, nipstBuilder NipstBuilder, layerClock chan types.LayerID, isSyncedFunc func() bool, store BytesStore, log log.Log) *Builder {
-
+func NewBuilder(nodeId types.NodeId, coinbaseAccount types.Address, db ATXDBProvider, net Broadcaster, mesh MeshProvider, layersPerEpoch uint16, nipstBuilder NipstBuilder, postProver nipst.PostProverClient, layerClock chan types.LayerID, isSyncedFunc func() bool, store BytesStore, log log.Log) *Builder {
 	return &Builder{
 		nodeId:          nodeId,
 		coinbaseAccount: coinbaseAccount,
@@ -109,13 +105,13 @@ func NewBuilder(nodeId types.NodeId, coinbaseAccount address.Address, db ATXDBPr
 		mesh:            mesh,
 		layersPerEpoch:  layersPerEpoch,
 		nipstBuilder:    nipstBuilder,
+		postProver:      postProver,
 		timer:           layerClock,
 		stop:            make(chan struct{}),
 		finished:        make(chan struct{}),
 		isSynced:        isSyncedFunc,
 		store:           store,
-		initStatus:      Idle,
-		errorTimeoutMs:  100,
+		initStatus:      InitIdle,
 		log:             log,
 	}
 }
@@ -149,10 +145,8 @@ func (b *Builder) loop() {
 				b.log.Info("cannot create atx : not synced")
 				break
 			}
-			b.postInitLock.RLock()
-			initStat := b.initStatus
-			b.postInitLock.RUnlock()
-			if initStat != Done || !b.nipstBuilder.IsPostInitialized() {
+
+			if atomic.LoadInt32(&b.initStatus) != InitDone {
 				b.log.Info("post is not initialized yet, not building nipst")
 				break
 			}
@@ -191,13 +185,20 @@ func (b *Builder) buildNipstChallenge(epoch types.EpochId) error {
 			b.prevATX, err = b.db.GetAtx(prevAtxId)
 			if err != nil {
 				// TODO: handle inconsistent state
-				b.log.Panic("prevAtx (id: %v) not found in DB -- inconsistent state", prevAtxId.ShortId())
+				b.log.Panic("prevAtx (id: %v) not found in DB -- inconsistent state", prevAtxId.ShortString())
 			}
 		}
 	}
 	seq := uint64(0)
 	prevAtxId := *types.EmptyAtxId
-	if b.prevATX != nil {
+	commitmentMerkleRoot := []byte(nil)
+
+	if b.prevATX == nil {
+		// if and only if it's the first ATX, the merkle root of the initial PoST proof,
+		// the commitment, is included in the nipst challenge. This is done in order to prove
+		// that it existed before the PoET start time.
+		commitmentMerkleRoot = b.commitment.MerkleRoot
+	} else {
 		seq = b.prevATX.Sequence + 1
 		//todo: handle this case for loading mem and recovering
 		//check if this node hasn't published an activation already
@@ -207,6 +208,7 @@ func (b *Builder) buildNipstChallenge(epoch types.EpochId) error {
 		}
 		prevAtxId = b.prevATX.Id()
 	}
+
 	posAtxEndTick := uint64(0)
 	b.posLayerID = types.LayerID(0)
 
@@ -227,14 +229,16 @@ func (b *Builder) buildNipstChallenge(epoch types.EpochId) error {
 	}
 
 	b.challenge = &types.NIPSTChallenge{
-		NodeId:         b.nodeId,
-		Sequence:       seq,
-		PrevATXId:      prevAtxId,
-		PubLayerIdx:    atxPubLayerID,
-		StartTick:      posAtxEndTick,
-		EndTick:        b.tickProvider.NumOfTicks(), //todo: add provider when
-		PositioningAtx: posAtxId,
+		NodeId:               b.nodeId,
+		Sequence:             seq,
+		PrevATXId:            prevAtxId,
+		PubLayerIdx:          atxPubLayerID,
+		StartTick:            posAtxEndTick,
+		EndTick:              b.tickProvider.NumOfTicks(), //todo: add provider when
+		PositioningAtx:       posAtxId,
+		CommitmentMerkleRoot: commitmentMerkleRoot,
 	}
+
 	err = b.storeChallenge(b.challenge)
 	if err != nil {
 		log.Error("challenge cannot be stored: %s", err)
@@ -242,60 +246,89 @@ func (b *Builder) buildNipstChallenge(epoch types.EpochId) error {
 	return nil
 }
 
-func (b *Builder) StartPost(rewardAddress address.Address, dataDir string, space uint64) error {
-	b.log.Info("Starting post, reward address: %x", rewardAddress)
-	b.SetCoinbaseAccount(rewardAddress)
-	b.postInitLock.Lock()
-	if b.initStatus == Done {
-		b.postInitLock.Unlock()
-		return nil
-	}
-	if b.initStatus == InProgress {
-		b.postInitLock.Unlock()
-		return fmt.Errorf("attempted to start post when post already initiated")
-	}
-	b.initStatus = InProgress
-	errChan := make(chan error, 1)
-	go func() {
-		_, err := b.nipstBuilder.InitializePost(dataDir, space) // TODO: add proof to first ATX
-		b.postInitLock.Lock()
-		if err != nil {
-			b.initStatus = Idle
-			b.postInitLock.Unlock()
-			b.log.Error(err.Error())
-			errChan <- err
-			return
+func (b *Builder) StartPost(rewardAddress types.Address, dataDir string, space uint64) error {
+	if !atomic.CompareAndSwapInt32(&b.initStatus, InitIdle, InitInProgress) {
+		switch atomic.LoadInt32(&b.initStatus) {
+		case InitDone:
+			return fmt.Errorf("already initialized")
+		case InitInProgress:
+		default:
+			return fmt.Errorf("already started")
 		}
-		b.initStatus = Done
-		b.postInitLock.Unlock()
-	}()
-	b.postInitLock.Unlock()
-	// todo: refactor initializePost to be concurrent, returning error in a blocking manner
-	t := time.NewTimer(b.errorTimeoutMs * time.Millisecond)
-	select {
-	case <-t.C:
-		return nil
-	case err := <-errChan:
+	}
+
+	if err := b.postProver.SetParams(dataDir, space); err != nil {
 		return err
 	}
+	b.SetCoinbaseAccount(rewardAddress)
+
+	initialized, err := b.postProver.IsInitialized()
+	if err != nil {
+		atomic.StoreInt32(&b.initStatus, InitIdle)
+		return err
+	}
+
+	if !initialized {
+		if err := b.postProver.VerifyInitAllowed(); err != nil {
+			atomic.StoreInt32(&b.initStatus, InitIdle)
+			return err
+		}
+	}
+
+	b.log.With().Info("Starting PoST initialization",
+		log.String("datadir", dataDir),
+		log.String("space", fmt.Sprintf("%d", space)),
+		log.String("rewardAddress", fmt.Sprintf("%x", rewardAddress)),
+	)
+
+	go func() {
+		if initialized {
+			// If initialized, run the execution phase with zero-challenge,
+			// to create the initial proof (the commitment).
+			b.commitment, err = b.postProver.Execute(shared.ZeroChallenge)
+			if err != nil {
+				b.log.Error("PoST execution failed: %v", err)
+				atomic.StoreInt32(&b.initStatus, InitIdle)
+				return
+			}
+		} else {
+			// If not initialized, run the initialization phase.
+			// This would create the initial proof (the commitment) as well.
+			b.commitment, err = b.postProver.Initialize()
+			if err != nil {
+				b.log.Error("PoST initialization failed: %v", err)
+				atomic.StoreInt32(&b.initStatus, InitIdle)
+				return
+			}
+		}
+
+		b.log.With().Info("PoST initialization completed",
+			log.String("datadir", dataDir),
+			log.String("space", fmt.Sprintf("%d", space)),
+			log.String("commitment merkle root", fmt.Sprintf("%x", b.commitment.MerkleRoot)),
+		)
+
+		atomic.StoreInt32(&b.initStatus, InitDone)
+	}()
+
+	return nil
 }
 
 // MiningStats returns state of post init, coinbase reward account and data directory path for post commitment
 func (b *Builder) MiningStats() (int, string, string) {
 	acc := b.getCoinbaseAccount()
-	b.postInitLock.RLock()
-	stats := b.initStatus
-	b.postInitLock.RUnlock()
-	return stats, acc.String(), b.nipstBuilder.GetDataDirPath()
+	initStatus := atomic.LoadInt32(&b.initStatus)
+	datadir := b.postProver.Cfg().DataDir
+	return int(initStatus), acc.String(), datadir
 }
 
-func (b *Builder) SetCoinbaseAccount(rewardAddress address.Address) {
+func (b *Builder) SetCoinbaseAccount(rewardAddress types.Address) {
 	b.accountLock.Lock()
 	b.coinbaseAccount = rewardAddress
 	b.accountLock.Unlock()
 }
 
-func (b *Builder) getCoinbaseAccount() address.Address {
+func (b *Builder) getCoinbaseAccount() types.Address {
 	b.accountLock.RLock()
 	acc := b.coinbaseAccount
 	b.accountLock.RUnlock()
@@ -406,12 +439,17 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 			pubEpoch, len(view), view)
 	}
 
-	atx := types.NewActivationTxWithChallenge(*b.challenge, b.getCoinbaseAccount(), activeSetSize, view, b.nipst)
+	var commitment *types.PostProof
+	if b.prevATX == nil {
+		commitment = b.commitment
+	}
+
+	atx := types.NewActivationTxWithChallenge(*b.challenge, b.getCoinbaseAccount(), activeSetSize, view, b.nipst, commitment)
 
 	b.log.With().Info("active ids seen for epoch", log.Uint64("pos_atx_epoch", uint64(posEpoch)),
 		log.Uint32("view_cnt", activeSetSize))
 
-	buf, err := types.AtxAsBytes(atx)
+	buf, err := types.InterfaceToBytes(atx)
 	if err != nil {
 		return err
 	}
@@ -432,7 +470,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 		log.Error("cannot discard nipst challenge %s", err)
 	}
 
-	b.log.Event().Info("atx published!", log.AtxId(atx.ShortId()), log.String("prev_atx_id", atx.PrevATXId.ShortString()),
+	b.log.Event().Info("atx published!", log.AtxId(atx.ShortString()), log.String("prev_atx_id", atx.PrevATXId.ShortString()),
 		log.String("post_atx_id", atx.PositioningAtx.ShortString()), log.LayerId(uint64(atx.PubLayerIdx)), log.EpochId(uint64(atx.PubLayerIdx.GetEpoch(b.layersPerEpoch))),
 		log.Uint32("active_set", atx.ActiveSetSize), log.String("miner", b.nodeId.Key[:5]), log.Int("view", len(atx.View)))
 

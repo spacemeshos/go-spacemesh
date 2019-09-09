@@ -1,14 +1,14 @@
 package hare
 
 import (
-	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	signing2 "github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"sort"
@@ -107,15 +107,15 @@ func TestHare_Start(t *testing.T) {
 }
 
 func TestHare_GetResult(t *testing.T) {
+	r := require.New(t)
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 
 	h := createHare(n1)
 
 	res, err := h.GetResult(types.LayerID(0), types.LayerID(0))
-
-	require.Error(t, err)
-	require.Nil(t, res)
+	r.Nil(err)
+	r.Nil(res)
 
 	mockid := InstanceId(0)
 	set := NewSetFromValues(value1)
@@ -123,9 +123,8 @@ func TestHare_GetResult(t *testing.T) {
 	h.collectOutput(mockOutput{mockid, set})
 
 	res, err = h.GetResult(types.LayerID(0), types.LayerID(0))
-
-	require.NoError(t, err)
-	require.True(t, uint32(res[0]) == uint32(set.values[value1.Id()].Bytes()[0]))
+	r.NoError(err)
+	r.True(uint32(res[0]) == uint32(set.values[value1.Id()].Bytes()[0]))
 }
 
 func TestHare_GetResult2(t *testing.T) {
@@ -177,7 +176,7 @@ func TestHare_collectOutputCheckValidation(t *testing.T) {
 	h.collectOutput(mockOutput{mockid, set})
 	output, ok := h.outputs[types.LayerID(mockid)]
 	require.True(t, ok)
-	require.Equal(t, output[0], types.BlockID(common.BytesToUint32(set.values[0].Bytes())))
+	require.Equal(t, output[0], types.BlockID(util.BytesToUint32(set.values[0].Bytes())))
 
 	// make sure we panic for false
 	defer func() {
@@ -204,7 +203,7 @@ func TestHare_collectOutput(t *testing.T) {
 	h.collectOutput(mockOutput{mockid, set})
 	output, ok := h.outputs[types.LayerID(mockid)]
 	require.True(t, ok)
-	require.Equal(t, output[0], types.BlockID(common.BytesToUint32(set.values[0].Bytes())))
+	require.Equal(t, output[0], types.BlockID(util.BytesToUint32(set.values[0].Bytes())))
 
 	mockid = instanceId2
 
@@ -227,7 +226,7 @@ func TestHare_collectOutput2(t *testing.T) {
 	h.collectOutput(mockOutput{mockid, set})
 	output, ok := h.outputs[types.LayerID(mockid)]
 	require.True(t, ok)
-	require.Equal(t, output[0], types.BlockID(common.BytesToUint32(set.values[0].Bytes())))
+	require.Equal(t, output[0], types.BlockID(util.BytesToUint32(set.values[0].Bytes())))
 
 	h.lastLayer = 3
 	newmockid := instanceId1
@@ -324,8 +323,9 @@ func TestHare_onTick(t *testing.T) {
 
 	//collect output one more time
 	wg.Wait()
-	_, err = h.GetResult(types.LayerID(1), types.LayerID(1))
-	require.Error(t, err)
+	res, err := h.GetResult(types.LayerID(1), types.LayerID(1))
+	require.Nil(t, err)
+	require.Equal(t, []types.BlockID(nil), res)
 
 }
 

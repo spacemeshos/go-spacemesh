@@ -2,8 +2,8 @@ package hare
 
 import (
 	"errors"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/types"
 	"hash/fnv"
 	"math"
 	"sync"
@@ -120,6 +120,6 @@ func (mock *MockHashOracle) Eligible(layer types.LayerID, round int32, committee
 	return false, nil
 }
 
-func (m *MockHashOracle) Proof(id types.NodeId, layer types.LayerID, round int32) ([]byte, error) {
+func (m *MockHashOracle) Proof(layer types.LayerID, round int32) ([]byte, error) {
 	return []byte{}, nil
 }
