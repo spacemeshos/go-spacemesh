@@ -602,7 +602,7 @@ func (proc *ConsensusProcess) endOfRound3() {
 		return
 	}
 
-	// commit & send notification msg
+	// update set & matching certificate
 	proc.s = s
 	proc.certificate = cert
 
