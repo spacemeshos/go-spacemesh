@@ -19,7 +19,7 @@ const protoName = "HARE_PROTOCOL"
 
 type Rolacle interface {
 	Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeId, sig []byte) (bool, error)
-	Proof(id types.NodeId, layer types.LayerID, round int32) ([]byte, error)
+	Proof(layer types.LayerID, round int32) ([]byte, error)
 	IsIdentityActiveOnConsensusView(edId string, layer types.LayerID) (bool, error)
 }
 
@@ -479,7 +479,7 @@ func (proc *ConsensusProcess) onRoundBegin() {
 func (proc *ConsensusProcess) initDefaultBuilder(s *Set) (*MessageBuilder, error) {
 	builder := NewMessageBuilder().SetInstanceId(proc.instanceId)
 	builder = builder.SetRoundCounter(proc.k).SetKi(proc.ki).SetValues(s)
-	proof, err := proc.oracle.Proof(proc.nid, types.LayerID(proc.instanceId), proc.k)
+	proof, err := proc.oracle.Proof(types.LayerID(proc.instanceId), proc.k)
 	if err != nil {
 		proc.Error("Could not initialize default builder err=%v", err)
 		return nil, err
@@ -621,7 +621,7 @@ func (proc *ConsensusProcess) shouldParticipate() bool {
 
 // Returns the role matching the current round if eligible for this round, false otherwise
 func (proc *ConsensusProcess) currentRole() Role {
-	proof, err := proc.oracle.Proof(proc.nid, types.LayerID(proc.instanceId), proc.k)
+	proof, err := proc.oracle.Proof(types.LayerID(proc.instanceId), proc.k)
 	if err != nil {
 		proc.Error("Could not retrieve proof from oracle err=%v", err)
 		return Passive
