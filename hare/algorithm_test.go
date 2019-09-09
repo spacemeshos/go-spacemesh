@@ -309,10 +309,8 @@ func TestConsensusProcess_isEligible(t *testing.T) {
 func TestConsensusProcess_sendMessage(t *testing.T) {
 	r := require.New(t)
 	net := &mockP2p{}
-	oracle := &mockRolacle{MockStateQuerier: MockStateQuerier{true, nil}}
 
 	proc := generateConsensusProcess(t)
-	proc.oracle = oracle
 	proc.network = net
 
 	b := proc.sendMessage(nil)
@@ -320,12 +318,6 @@ func TestConsensusProcess_sendMessage(t *testing.T) {
 	r.False(b)
 	msg := buildStatusMsg(generateSigning(t), proc.s, 0)
 
-	oracle.isEligible = false
-	b = proc.sendMessage(msg)
-	r.False(b)
-	r.Equal(0, net.count)
-
-	oracle.isEligible = true
 	net.err = errors.New("mock network failed error")
 	b = proc.sendMessage(msg)
 	r.False(b)
