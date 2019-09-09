@@ -580,45 +580,54 @@ func TestConsensusProcess_endOfRound3(t *testing.T) {
 	net := &mockP2p{}
 	proc.network = net
 	mpt := &mockProposalTracker{}
-	proc.proposalTracker = mpt
 	mct := &mockCommitTracker{}
+	proc.proposalTracker = mpt
 	proc.commitTracker = mct
 	proc.endOfRound3()
 	r.Equal(1, mpt.countIsConflicting)
-	r.NotNil(proc.proposalTracker)
-	r.NotNil(proc.commitTracker)
+	r.Nil(proc.proposalTracker)
+	r.Nil(proc.commitTracker)
 
+	proc.proposalTracker = mpt
+	proc.commitTracker = mct
 	mpt.isConflicting = true
 	proc.endOfRound3()
 	r.Equal(2, mpt.countIsConflicting)
 	r.Equal(1, mct.countHasEnoughCommits)
-	r.NotNil(proc.proposalTracker)
-	r.NotNil(proc.commitTracker)
+	r.Nil(proc.proposalTracker)
+	r.Nil(proc.commitTracker)
 
+	proc.proposalTracker = mpt
+	proc.commitTracker = mct
 	mpt.isConflicting = false
 	mct.hasEnoughCommits = false
 	proc.endOfRound3()
 	r.Equal(0, mct.countBuildCertificate)
-	r.NotNil(proc.proposalTracker)
-	r.NotNil(proc.commitTracker)
+	r.Nil(proc.proposalTracker)
+	r.Nil(proc.commitTracker)
 
+	proc.proposalTracker = mpt
+	proc.commitTracker = mct
 	mct.hasEnoughCommits = true
 	mct.certificate = nil
 	proc.endOfRound3()
 	r.Equal(1, mct.countBuildCertificate)
 	r.Equal(0, mpt.countProposedSet)
-	r.NotNil(proc.proposalTracker)
-	r.NotNil(proc.commitTracker)
+	r.Nil(proc.proposalTracker)
+	r.Nil(proc.commitTracker)
 
+	proc.proposalTracker = mpt
+	proc.commitTracker = mct
 	mct.certificate = &Certificate{}
-	proc.endOfRound3()
 	mpt.proposedSet = nil
 	proc.s = NewSmallEmptySet()
 	proc.endOfRound3()
 	r.NotNil(proc.s)
-	r.NotNil(proc.proposalTracker)
-	r.NotNil(proc.commitTracker)
+	r.Nil(proc.proposalTracker)
+	r.Nil(proc.commitTracker)
 
+	proc.proposalTracker = mpt
+	proc.commitTracker = mct
 	mpt.proposedSet = NewSetFromValues(value1)
 	proc.endOfRound3()
 	r.True(proc.s.Equals(mpt.proposedSet))
