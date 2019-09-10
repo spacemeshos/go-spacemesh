@@ -74,25 +74,26 @@ func (vq *blockQueue) handleBlock(bjb fetchJob) {
 		mp[item.Hash32()] = tmp
 	}
 
-	id := bjb.ids[0]
+	for _, id := range bjb.ids {
 
-	block, found := mp[id]
-	if !found {
-		vq.updateDependencies(id, false)
-		vq.Error(fmt.Sprintf("could not retrieve a block in view "))
-		return
+		block, found := mp[id]
+		if !found {
+			vq.updateDependencies(id, false)
+			vq.Error(fmt.Sprintf("could not retrieve a block in view "))
+			continue
+		}
+
+		vq.Info("fetched  %v", id.String())
+		vq.visited[id] = struct{}{}
+		if err := vq.fastValidation(block); err != nil {
+			vq.Error("ValidationQueue: block validation failed", log.BlockId(uint64(block.ID())), log.Err(err))
+			vq.updateDependencies(id, false)
+			return
+		}
+
+		vq.handleBlockDependencies(block)
+		//todo better deadlock solution
 	}
-
-	vq.Info("fetched  %v", id.String())
-	vq.visited[id] = struct{}{}
-	if err := vq.fastValidation(block); err != nil {
-		vq.Error("ValidationQueue: block validation failed", log.BlockId(uint64(block.ID())), log.Err(err))
-		vq.updateDependencies(id, false)
-		return
-	}
-
-	vq.handleBlockDependencies(block)
-	//todo better deadlock solution
 
 }
 
@@ -210,9 +211,9 @@ func (vq *blockQueue) addDependencies(jobId interface{}, blks []types.BlockID, f
 	}
 	vq.Unlock()
 
-	vq.Debug("add %v to queue %v", len(idsToPush), jobId)
-	for _, i := range idsToPush {
-		vq.addToPending([]types.Hash32{i})
+	if len(idsToPush) > 0 {
+		vq.Debug("add %v to queue %v", len(idsToPush), jobId)
+		vq.addToPending(idsToPush)
 	}
 
 	//todo better this is a little hacky
