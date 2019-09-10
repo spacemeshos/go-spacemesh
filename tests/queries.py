@@ -284,7 +284,7 @@ def find_missing(indx, namespace, client_po_name, fields, min=1):
 
 def query_hare_output_set(indx, ns, layer):
     hits = query_message(indx, ns, ns, {'M': 'Consensus process terminated', 'layer_id': str(layer)}, True)
-    lst = [h.set_values for h in hits]
+    lst = [h.current_set for h in hits]
 
     return lst
 

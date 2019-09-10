@@ -198,14 +198,20 @@ func (proc *ConsensusProcess) eventLoop() {
 		log.Int("Hare-N", proc.cfg.N), log.Int("f", proc.cfg.F), log.String("duration", (time.Duration(proc.cfg.RoundDuration)*time.Second).String()),
 		log.LayerId(uint64(proc.instanceId)), log.Int("exp_leaders", proc.cfg.ExpectedLeaders), log.String("current_set", proc.s.String()))
 
-	// set pre-round InnerMsg and send
-	builder, err := proc.initDefaultBuilder(proc.s)
-	if err != nil {
-		proc.Error("init default builder failed: %v", err)
-		return
+	// check participation
+	if !proc.shouldParticipate() {
+		proc.With().Info("Should not participate", log.Int32("round", proc.k),
+			log.Uint64("layer_id", uint64(proc.instanceId)))
+	} else {
+		// set pre-round InnerMsg and send
+		builder, err := proc.initDefaultBuilder(proc.s)
+		if err != nil {
+			proc.Error("init default builder failed: %v", err)
+			return
+		}
+		m := builder.SetType(Pre).Sign(proc.signing).Build()
+		proc.sendMessage(m)
 	}
-	m := builder.SetType(Pre).Sign(proc.signing).Build()
-	proc.sendMessage(m)
 
 	// listen to pre-round Messages
 	timer := time.NewTimer(time.Duration(proc.cfg.RoundDuration) * time.Second)
@@ -336,13 +342,6 @@ func (proc *ConsensusProcess) sendMessage(msg *Msg) bool {
 		return false
 	}
 
-	// check participation
-	if !proc.shouldParticipate() {
-		proc.With().Info("Should not participate", log.Int32("round", proc.k),
-			log.Uint64("layer_id", uint64(proc.instanceId)))
-		return false
-	}
-
 	if err := proc.network.Broadcast(protoName, msg.Bytes()); err != nil {
 		proc.Error("Could not broadcast round message ", err.Error())
 		return false
@@ -386,6 +385,12 @@ func (proc *ConsensusProcess) advanceToNextRound() {
 func (proc *ConsensusProcess) beginRound1() {
 	proc.statusesTracker = NewStatusTracker(proc.cfg.F+1, proc.cfg.N)
 	proc.statusesTracker.Log = proc.Log
+
+	// check participation
+	if !proc.shouldParticipate() {
+		return
+	}
+
 	b, err := proc.initDefaultBuilder(proc.s)
 	if err != nil {
 		proc.Error("init default builder failed: %v", err)
@@ -401,7 +406,7 @@ func (proc *ConsensusProcess) beginRound2() {
 	// done with building proposal, reset statuses tracking
 	defer func() { proc.statusesTracker = nil }()
 
-	if proc.shouldParticipate() && proc.statusesTracker.IsSVPReady() {
+	if proc.statusesTracker.IsSVPReady() && proc.shouldParticipate() {
 		builder, err := proc.initDefaultBuilder(proc.statusesTracker.ProposalSet(defaultSetSize))
 		if err != nil {
 			proc.Error("init default builder failed: %v", err)
@@ -424,6 +429,14 @@ func (proc *ConsensusProcess) beginRound3() {
 	proc.commitTracker = NewCommitTracker(proc.cfg.F+1, proc.cfg.N, proposedSet) // track commits for proposed set
 
 	if proposedSet != nil { // has proposal to commit on
+
+		// check participation
+		if !proc.shouldParticipate() {
+			proc.With().Info("Should not participate", log.Int32("round", proc.k),
+				log.Uint64("layer_id", uint64(proc.instanceId)))
+			return
+		}
+
 		builder, err := proc.initDefaultBuilder(proposedSet)
 		if err != nil {
 			proc.Error("init default builder failed: %v", err)
@@ -439,6 +452,13 @@ func (proc *ConsensusProcess) beginRound4() {
 	// send notify message only once
 	if proc.notifySent {
 		proc.Info("Notify already sent")
+		return
+	}
+
+	// check participation
+	if !proc.shouldParticipate() {
+		proc.With().Info("Should not participate", log.Int32("round", proc.k),
+			log.Uint64("layer_id", uint64(proc.instanceId)))
 		return
 	}
 
@@ -617,31 +637,38 @@ func (proc *ConsensusProcess) shouldParticipate() bool {
 	// query if identity is active
 	res, err := proc.oracle.IsIdentityActiveOnConsensusView(proc.signing.PublicKey().String(), types.LayerID(proc.instanceId))
 	if err != nil {
-		proc.With().Error("Error checking our identity for activeness", log.String("err", err.Error()),
-			log.Uint64("layer_id", uint64(proc.instanceId)))
+		proc.With().Error("Should not participate: error checking our identity for activeness",
+			log.Err(err), log.Uint64("layer_id", uint64(proc.instanceId)))
 		return false
 	}
 
 	if !res {
-		proc.With().Info("Should not participate in the protocol. Reason: identity not active",
+		proc.With().Info("Should not participate: identity is not active",
 			log.Uint64("layer_id", uint64(proc.instanceId)))
 		return false
 	}
 
-	return proc.currentRole() != Passive
+	if role := proc.currentRole(); role == Passive {
+		proc.With().Info("Should not participate: passive",
+			log.Int32("round", proc.k), log.Uint64("layer_id", uint64(proc.instanceId)))
+		return false
+	}
+
+	// should participate
+	return true
 }
 
 // Returns the role matching the current round if eligible for this round, false otherwise
 func (proc *ConsensusProcess) currentRole() Role {
 	proof, err := proc.oracle.Proof(types.LayerID(proc.instanceId), proc.k)
 	if err != nil {
-		proc.Error("Could not retrieve proof from oracle err=%v", err)
+		proc.With().Error("Could not retrieve proof from oracle", log.Err(err))
 		return Passive
 	}
 
 	res, err := proc.oracle.Eligible(types.LayerID(proc.instanceId), proc.k, expectedCommitteeSize(proc.k, proc.cfg.N, proc.cfg.ExpectedLeaders), proc.nid, proof)
 	if err != nil {
-		proc.Error("Error checking our eligibility: %v", err)
+		proc.With().Error("Could not check our eligibility", log.Err(err))
 		return Passive
 	}
 

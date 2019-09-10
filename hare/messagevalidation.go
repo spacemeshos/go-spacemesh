@@ -35,7 +35,7 @@ func (ev *eligibilityValidator) validateRole(m *Msg) (bool, error) {
 	}
 
 	if m.InnerMsg == nil {
-		ev.Warning("Eligibility validator: InnerMsg is nil")
+		ev.Error("Eligibility validator: InnerMsg is nil")
 		return false, errors.New("fatal: nil inner message")
 	}
 
@@ -54,11 +54,11 @@ func (ev *eligibilityValidator) validateRole(m *Msg) (bool, error) {
 	// validate role
 	res, err := ev.oracle.Eligible(layer, m.InnerMsg.K, expectedCommitteeSize(m.InnerMsg.K, ev.maxExpActives, ev.expLeaders), nId, m.InnerMsg.RoleProof)
 	if err != nil {
-		ev.Error("Could not retrieve eligibility result err=%v", err)
+		ev.With().Error("Eligibility validator: could not retrieve eligibility result", log.Err(err))
 		return false, err
 	}
 	if !res {
-		ev.Warning("Role validation failed for %v", pub.ShortString())
+		ev.With().Error("Eligibility validator: sender is not eligible to participate", log.String("sender_pub", pub.ShortString()))
 		return false, nil
 	}
 
