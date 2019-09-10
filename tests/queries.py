@@ -284,7 +284,7 @@ def find_missing(indx, namespace, client_po_name, fields, min=1):
 
 def query_hare_output_set(indx, ns, layer):
     hits = query_message(indx, ns, ns, {'M': 'Consensus process terminated', 'layer_id': str(layer)}, True)
-    lst = [h.set_values for h in hits]
+    lst = [h.current_set for h in hits]
 
     return lst
 
@@ -301,7 +301,7 @@ def query_round_2(indx, ns, layer):
 
 
 def query_round_3(indx, ns, layer):
-    return query_message(indx, ns, ns, {'M': 'Round 3 ended: committing', 'layer_id': str(layer)}, False)
+    return query_message(indx, ns, ns, {'M': 'message sent', 'msg_type': 'Commit', 'layer_id': str(layer)}, False)
 
 
 def query_pre_round(indx, ns, layer):
@@ -322,6 +322,7 @@ def query_new_iteration(indx, ns):
 
 def query_mem_usage(indx, ns):
     return query_message(indx, ns, ns, {'M': 'json_mem_data'}, False)
+
 
 def query_atx_published(indx, ns, layer):
     return query_message(indx, ns, ns, {'M': 'atx published', 'layer_id': str(layer)}, False)
