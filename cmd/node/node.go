@@ -408,7 +408,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	blockProducer := miner.NewBlockBuilder(nodeID, sgn, swarm, clock.Subscribe(), app.Config.Hdist, txpool, atxpool, coinToss, msh, ha, blockOracle, processor, atxdb, syncer, app.Config.AtxsPerBlock, stateAndMeshProjector, lg.WithName("blockBuilder"))
 	blockListener := sync.NewBlockListener(swarm, syncer, 4, lg.WithName("blockListener"))
 
-	msh.SetTxMempool(blockProducer)
+	msh.SetBlockBuilder(blockProducer)
 
 	poetListener := activation.NewPoetListener(swarm, poetDb, lg.WithName("poetListener"))
 

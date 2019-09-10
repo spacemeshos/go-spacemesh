@@ -258,11 +258,11 @@ func TestLayers_OrphanBlocksClearEmptyLayers(t *testing.T) {
 	assert.Equal(t, 1, len(layers.orphanBlocks))
 }
 
-type MockMempoolWrapper struct {
+type MockBlockBuilder struct {
 	txs []*types.Transaction
 }
 
-func (m *MockMempoolWrapper) ValidateAndAddTxToPool(tx *types.Transaction, postValidationFunc func()) error {
+func (m *MockBlockBuilder) ValidateAndAddTxToPool(tx *types.Transaction, postValidationFunc func()) error {
 	m.txs = append(m.txs, tx)
 	return nil
 }
@@ -271,8 +271,8 @@ func TestMesh_AddBlockWithTxs_PushTransactions_UpdateMeshTxs(t *testing.T) {
 	r := require.New(t)
 
 	msh := getMesh("mesh")
-	mempoolWrapper := &MockMempoolWrapper{}
-	msh.SetTxMempool(mempoolWrapper)
+	blockBuilder := &MockBlockBuilder{}
+	msh.SetBlockBuilder(blockBuilder)
 
 	layerID := types.LayerID(1)
 	signer, origin := newSignerAndAddress(r, "origin")
@@ -294,7 +294,7 @@ func TestMesh_AddBlockWithTxs_PushTransactions_UpdateMeshTxs(t *testing.T) {
 	}
 
 	msh.PushTransactions(1, 2)
-	r.ElementsMatch(GetTransactionIds(tx4, tx5), GetTransactionIds(mempoolWrapper.txs...))
+	r.ElementsMatch(GetTransactionIds(tx4, tx5), GetTransactionIds(blockBuilder.txs...))
 
 	txns = getTxns(r, msh.MeshDB, origin)
 	r.Empty(txns)

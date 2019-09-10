@@ -48,7 +48,7 @@ type AtxDB interface {
 	SyntacticallyValidateAtx(atx *types.ActivationTx) error
 }
 
-type TxMempool interface {
+type BlockBuilder interface {
 	ValidateAndAddTxToPool(tx *types.Transaction, postValidationFunc func()) error
 }
 
@@ -57,7 +57,7 @@ type Mesh struct {
 	*MeshDB
 	AtxDB
 	TxProcessor
-	txMempool      TxMempool
+	blockBuilder   BlockBuilder
 	txInvalidator  TxMemPoolInValidator
 	atxInvalidator AtxMemPoolInValidator
 	config         Config
@@ -89,8 +89,8 @@ func NewMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh MeshValidator, t
 	return ll
 }
 
-func (m *Mesh) SetTxMempool(txMempool TxMempool) {
-	m.txMempool = txMempool
+func (m *Mesh) SetBlockBuilder(blockBuilder BlockBuilder) {
+	m.blockBuilder = blockBuilder
 }
 
 func (m *Mesh) ValidatedLayer() types.LayerID {
@@ -214,9 +214,9 @@ func (m *Mesh) PushTransactions(oldBase, newBase types.LayerID) {
 		if err := m.removeFromMeshTxs(validBlockTxs, invalidBlockTxs, i); err != nil {
 			m.With().Error("failed to remove from meshTxs", log.Err(err))
 		}
-		if m.txMempool != nil {
+		if m.blockBuilder != nil {
 			for _, tx := range invalidBlockTxs {
-				err = m.txMempool.ValidateAndAddTxToPool(tx, nil)
+				err = m.blockBuilder.ValidateAndAddTxToPool(tx, nil)
 				// We ignore errors here, since they mean that the tx is no longer valid and we shouldn't re-add it
 				if err == nil {
 					m.With().Info("transaction from contextually invalid block re-added to mempool",
