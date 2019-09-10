@@ -5,7 +5,8 @@ import (
 )
 
 type nanoTx struct {
-	TotalAmount            uint64
+	Amount                 uint64
+	Fee                    uint64
 	HighestLayerIncludedIn types.LayerID
 }
 
@@ -30,7 +31,8 @@ func (apt *AccountPendingTxs) Add(layer types.LayerID, txs ...*types.Transaction
 			layer = existing[tx.Id()].HighestLayerIncludedIn
 		}
 		existing[tx.Id()] = nanoTx{
-			TotalAmount:            tx.Amount + tx.GasPrice,
+			Amount:                 tx.Amount,
+			Fee:                    tx.GasPrice, // TODO: Filthy hack!
 			HighestLayerIncludedIn: layer,
 		}
 	}
@@ -62,28 +64,40 @@ func (apt *AccountPendingTxs) RemoveNonce(nonce uint64, deleteTx func(id types.T
 }
 
 func (apt *AccountPendingTxs) GetProjection(prevNonce, prevBalance uint64) (nonce, balance uint64) {
-	nonce = prevNonce
-	balance = prevBalance
+	_, nonce, balance = apt.ValidTxs(prevNonce, prevBalance)
+	return nonce, balance
+}
+
+func (apt *AccountPendingTxs) ValidTxs(prevNonce, prevBalance uint64) (txIds []types.TransactionId, nonce, balance uint64) {
+	nonce, balance = prevNonce, prevBalance
 	for {
 		txs, found := apt.PendingTxs[nonce]
 		if !found {
-			break
+			break // no transactions found with required nonce
 		}
-		var maxValidAmount uint64
-		for _, tx := range txs {
-			if tx.TotalAmount > maxValidAmount && balance >= tx.TotalAmount {
-				maxValidAmount = tx.TotalAmount
-			}
+		id := validTxWithHighestFee(txs, balance)
+		if id == types.EmptyTransactionId {
+			break // all transactions would overdraft the account
 		}
-		if maxValidAmount == 0 { // No transaction can be added without depleting the account
-			break
-		}
-		balance -= maxValidAmount
+		txIds = append(txIds, id)
+		balance -= txs[id].Amount + txs[id].Fee
 		nonce++
 	}
-	return nonce, balance
+	return txIds, nonce, balance
 }
 
 func (apt *AccountPendingTxs) IsEmpty() bool {
 	return len(apt.PendingTxs) == 0
+}
+
+func validTxWithHighestFee(txs map[types.TransactionId]nanoTx, balance uint64) types.TransactionId {
+	bestId := types.EmptyTransactionId
+	var maxFee uint64
+	for id, tx := range txs {
+		if tx.Fee > maxFee && balance >= (tx.Amount+tx.Fee) {
+			maxFee = tx.Fee
+			bestId = id
+		}
+	}
+	return bestId
 }

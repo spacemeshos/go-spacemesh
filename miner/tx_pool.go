@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/pending_txs"
 	"github.com/spacemeshos/sha256-simd"
@@ -34,16 +35,21 @@ func (t *TxMempool) Get(id types.TransactionId) (types.Transaction, error) {
 	return types.Transaction{}, errors.New("transaction not found in mempool")
 }
 
-func (t *TxMempool) GetRandomTxs(numOfTxs int, seed []byte) []types.TransactionId {
+func (t *TxMempool) GetTxsForBlock(numOfTxs int, seed []byte, getState func(addr types.Address) (nonce, balance uint64, err error)) ([]types.TransactionId, error) {
 	var txIds []types.TransactionId
 	t.mu.RLock()
-	for id := range t.txs {
-		txIds = append(txIds, id)
+	for addr, account := range t.accounts {
+		nonce, balance, err := getState(addr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get state for addr %s: %v", addr.Short(), err)
+		}
+		accountTxIds, _, _ := account.ValidTxs(nonce, balance)
+		txIds = append(txIds, accountTxIds...)
 	}
 	t.mu.RUnlock()
 
 	if len(txIds) <= numOfTxs {
-		return txIds
+		return txIds, nil
 	}
 
 	sort.Slice(txIds, func(i, j int) bool {
@@ -53,7 +59,7 @@ func (t *TxMempool) GetRandomTxs(numOfTxs int, seed []byte) []types.TransactionI
 	for idx := range getRandIdxs(numOfTxs, len(txIds), seed) {
 		ret = append(ret, txIds[idx])
 	}
-	return ret
+	return ret, nil
 }
 
 func getRandIdxs(numOfTxs, spaceSize int, seed []byte) map[uint64]struct{} {

@@ -14,7 +14,7 @@ func TestNewTxPoolWithAccounts(t *testing.T) {
 	r := require.New(t)
 
 	pool := NewTxMemPool()
-	prevNonce := uint64(5)
+	prevNonce := uint64(4)
 	prevBalance := uint64(1000)
 
 	origin := types.BytesToAddress([]byte("abc"))
@@ -22,13 +22,13 @@ func TestNewTxPoolWithAccounts(t *testing.T) {
 	r.Equal(prevNonce, nonce)
 	r.Equal(prevBalance, balance)
 
-	tx1Id, tx1 := newTx(origin, 5, 50)
+	tx1Id, tx1 := newTx(origin, 4, 50)
 	pool.Put(tx1Id, tx1)
 	nonce, balance = pool.GetProjection(origin, prevNonce, prevBalance)
 	r.Equal(prevNonce+1, nonce)
 	r.Equal(prevBalance-50, balance)
 
-	tx2Id, tx2 := newTx(origin, 6, 150)
+	tx2Id, tx2 := newTx(origin, 5, 150)
 	pool.Put(tx2Id, tx2)
 	nonce, balance = pool.GetProjection(origin, prevNonce, prevBalance)
 	r.Equal(prevNonce+2, nonce)
@@ -40,7 +40,8 @@ func TestNewTxPoolWithAccounts(t *testing.T) {
 	r.Equal(prevBalance-50-150, balance)
 
 	seed := []byte("seed")
-	items := pool.GetRandomTxs(1, seed)
+	items, err := pool.GetTxsForBlock(1, seed, getState)
+	r.NoError(err)
 	r.Len(items, 1)
 	r.Equal(tx2.Id(), items[0])
 	nonce, balance = pool.GetProjection(origin, prevNonce+2, prevBalance-50-150)
@@ -70,7 +71,8 @@ func TestTxPoolWithAccounts_GetRandomTxs(t *testing.T) {
 	r.Equal(prevBalance-(50*numTxs), balance)
 
 	seed := []byte("seed")
-	txs := pool.GetRandomTxs(5, seed)
+	txs, err := pool.GetTxsForBlock(5, seed, getState)
+	r.NoError(err)
 	r.Len(txs, 5)
 	var txIds []types.TransactionId
 	for _, tx := range txs {

@@ -47,9 +47,13 @@ type Syncer interface {
 }
 
 type TxPool interface {
-	GetRandomTxs(numOfTxs int, seed []byte) []types.TransactionId
+	GetTxsForBlock(numOfTxs int, seed []byte, getState func(addr types.Address) (nonce, balance uint64, err error)) ([]types.TransactionId, error)
 	Put(id types.TransactionId, item *types.Transaction)
 	Invalidate(id types.TransactionId)
+}
+
+type Projector interface {
+	GetProjection(addr types.Address) (nonce, balance uint64, err error)
 }
 
 type BlockBuilder struct {
@@ -75,21 +79,13 @@ type BlockBuilder struct {
 	syncer           Syncer
 	started          bool
 	atxsPerBlock     int // number of atxs to select per block
+	projector        Projector
 }
 
-func NewBlockBuilder(minerID types.NodeId, sgn Signer, net p2p.Service,
-	beginRoundEvent chan types.LayerID, hdist int,
-	txPool TxPool,
-	atxPool *AtxMemPool,
-	weakCoin WeakCoinProvider,
-	orph OrphanBlockProvider,
-	hare HareResultProvider,
-	blockOracle oracle.BlockOracle,
-	txValidator TxValidator,
-	atxValidator AtxValidator,
-	syncer Syncer,
-	atxsPerBlock int,
-	lg log.Log) *BlockBuilder {
+func NewBlockBuilder(minerID types.NodeId, sgn Signer, net p2p.Service, beginRoundEvent chan types.LayerID, hdist int,
+	txPool TxPool, atxPool *AtxMemPool, weakCoin WeakCoinProvider, orph OrphanBlockProvider, hare HareResultProvider,
+	blockOracle oracle.BlockOracle, txValidator TxValidator, atxValidator AtxValidator, syncer Syncer, atxsPerBlock int,
+	projector Projector, lg log.Log) *BlockBuilder {
 
 	seed := binary.BigEndian.Uint64(md5.New().Sum([]byte(minerID.Key)))
 
@@ -116,6 +112,7 @@ func NewBlockBuilder(minerID types.NodeId, sgn Signer, net p2p.Service,
 		syncer:           syncer,
 		started:          false,
 		atxsPerBlock:     atxsPerBlock,
+		projector:        projector,
 	}
 
 }
@@ -363,14 +360,14 @@ func (t *BlockBuilder) acceptBlockData() {
 		case <-t.stopChan:
 			return
 
-		case id := <-t.beginRoundEvent:
-			atxID, proofs, err := t.blockOracle.BlockEligible(id)
+		case layerID := <-t.beginRoundEvent:
+			atxID, proofs, err := t.blockOracle.BlockEligible(layerID)
 			if err != nil {
-				t.With().Error("failed to check for block eligibility", log.LayerId(uint64(id)), log.Err(err))
+				t.With().Error("failed to check for block eligibility", log.LayerId(uint64(layerID)), log.Err(err))
 				continue
 			}
 			if len(proofs) == 0 {
-				t.With().Info("Notice: not eligible for blocks in layer", log.LayerId(uint64(id)))
+				t.With().Info("Notice: not eligible for blocks in layer", log.LayerId(uint64(layerID)))
 				continue
 			}
 			// TODO: include multiple proofs in each block and weigh blocks where applicable
@@ -381,8 +378,12 @@ func (t *BlockBuilder) acceptBlockData() {
 			}
 
 			for _, eligibilityProof := range proofs {
-				txList := t.TransactionPool.GetRandomTxs(MaxTransactionsPerBlock, eligibilityProof.Sig)
-				blk, err := t.createBlock(id, atxID, eligibilityProof, txList, atxList)
+				txList, err := t.TransactionPool.GetTxsForBlock(MaxTransactionsPerBlock, eligibilityProof.Sig, t.projector.GetProjection)
+				if err != nil {
+					t.With().Error("failed to get txs for block", log.LayerId(uint64(layerID)), log.Err(err))
+					continue
+				}
+				blk, err := t.createBlock(layerID, atxID, eligibilityProof, txList, atxList)
 				if err != nil {
 					t.Error("cannot create new block, %v ", err)
 					continue

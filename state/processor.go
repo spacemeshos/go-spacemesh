@@ -106,13 +106,10 @@ func (tp *TransactionProcessor) AddressExists(addr types.Address) bool {
 }
 
 func (tp *TransactionProcessor) ValidateNonceAndBalance(tx *types.Transaction) error {
-	stateObj := &StateObj{}
-	if tp.globalState.Exist(tx.Origin()) {
-		stateObj = tp.globalState.GetOrNewStateObj(tx.Origin())
-	}
-	nonce, balance, err := tp.projector.GetProjection(stateObj.Address(), stateObj.Nonce(), stateObj.Balance().Uint64())
+	origin := tx.Origin()
+	nonce, balance, err := tp.projector.GetProjection(origin, tp.globalState.GetNonce(origin), tp.globalState.GetBalance(origin))
 	if err != nil {
-		return fmt.Errorf("failed to project state for account %v: %v", tx.Origin().Short(), err)
+		return fmt.Errorf("failed to project state for account %v: %v", origin.Short(), err)
 	}
 	if tx.AccountNonce != nonce {
 		return fmt.Errorf("incorrect account nonce! Expected: %d, Actual: %d", nonce, tx.AccountNonce)

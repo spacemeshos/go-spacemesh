@@ -65,7 +65,7 @@ func TestMeshDB_AddBlock(t *testing.T) {
 
 	assert.True(t, len(rBlock1.TxIds) == len(block1.TxIds), "block content was wrong")
 	assert.True(t, len(rBlock1.AtxIds) == len(block1.AtxIds), "block content was wrong")
-	//assert.True(t, bytes.Compare(rBlock2.Data, []byte("data2")) == 0, "block content was wrong")
+	// assert.True(t, bytes.Compare(rBlock2.Data, []byte("data2")) == 0, "block content was wrong")
 }
 
 func chooseRandomPattern(blocksInLayer int, patternSize int) []int {
@@ -425,7 +425,7 @@ func getTxns(r *require.Assertions, mdb *MeshDB, origin types.Address) []TinyTx 
 	var ret []TinyTx
 	for nonce, nonceTxs := range txns.PendingTxs {
 		for id, tx := range nonceTxs {
-			ret = append(ret, TinyTx{Id: id, Nonce: nonce, TotalAmount: tx.TotalAmount})
+			ret = append(ret, TinyTx{Id: id, Nonce: nonce, TotalAmount: tx.Amount + tx.Fee})
 		}
 	}
 	sort.Slice(ret, func(i, j int) bool {

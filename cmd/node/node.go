@@ -354,10 +354,10 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 
 	txpool := miner.NewTxMemPool()
 	atxpool := miner.NewAtxMemPool()
-	projector := pending_txs.NewProjector(mdb, txpool)
+	meshAndPoolProjector := pending_txs.NewMeshAndPoolProjector(mdb, txpool)
 
 	rng := rand.New(mt19937.New())
-	processor := state.NewTransactionProcessor(rng, st, projector, app.Config.GAS, lg.WithName("state"))
+	processor := state.NewTransactionProcessor(rng, st, meshAndPoolProjector, app.Config.GAS, lg.WithName("state"))
 
 	atxdb := activation.NewActivationDb(atxdbstore, idStore, mdb, layersPerEpoch, validator, lg.WithName("atxDb"))
 	beaconProvider := &oracle.EpochBeaconProvider{}
@@ -404,7 +404,8 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	}
 	ha := hare.New(app.Config.HARE, swarm, sgn, nodeID, validationFunc, syncer.IsSynced, msh, hOracle, uint16(app.Config.LayersPerEpoch), idStore, hOracle, clock.Subscribe(), lg.WithName("hare"))
 
-	blockProducer := miner.NewBlockBuilder(nodeID, sgn, swarm, clock.Subscribe(), app.Config.Hdist, txpool, atxpool, coinToss, msh, ha, blockOracle, processor, atxdb, syncer, app.Config.AtxsPerBlock, lg.WithName("blockBuilder"))
+	stateAndMeshProjector := pending_txs.NewStateAndMeshProjector(st, msh)
+	blockProducer := miner.NewBlockBuilder(nodeID, sgn, swarm, clock.Subscribe(), app.Config.Hdist, txpool, atxpool, coinToss, msh, ha, blockOracle, processor, atxdb, syncer, app.Config.AtxsPerBlock, stateAndMeshProjector, lg.WithName("blockBuilder"))
 	blockListener := sync.NewBlockListener(swarm, syncer, 4, lg.WithName("blockListener"))
 
 	msh.SetTxMempool(blockProducer)
