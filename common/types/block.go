@@ -72,6 +72,12 @@ type MiniBlock struct {
 	AtxIds []AtxId
 }
 
+func (t BlockID) AsHash32() Hash32 {
+	b := make([]byte, 32)
+	binary.LittleEndian.PutUint64(b, uint64(t))
+	return BytesToHash(b)
+}
+
 func (t *Block) Sig() []byte {
 	return t.Signature
 }
@@ -108,6 +114,14 @@ func newBlockHeader(id BlockID, layerID LayerID, coin bool, data []byte, ts int6
 
 func (b BlockHeader) ID() BlockID {
 	return b.Id
+}
+
+func (b BlockHeader) Hash32() Hash32 {
+	return b.Id.AsHash32()
+}
+
+func (b BlockHeader) ShortString() string {
+	return b.Id.AsHash32().ShortString()
 }
 
 func (b BlockHeader) Layer() LayerID {
@@ -159,7 +173,7 @@ func (l *Layer) Hash() Hash32 {
 	}
 	hash, err := CalcBlocksHash32(keys)
 	if err != nil {
-		log.Panic("failed to calculate layer's hash - layer id %v", l.index)
+		log.Panic("failed to calculate layer's hash - layer Id %v", l.index)
 	}
 	return hash
 }

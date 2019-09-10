@@ -67,6 +67,14 @@ func (t *Transaction) Id() TransactionId {
 	return id
 }
 
+func (t *Transaction) Hash32() Hash32 {
+	return t.Id().Hash32()
+}
+
+func (t *Transaction) ShortString() string {
+	return t.Id().ShortString()
+}
+
 type InnerTransaction struct {
 	AccountNonce uint64
 	Recipient    Address

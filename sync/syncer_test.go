@@ -32,7 +32,7 @@ import (
 	"time"
 )
 
-var conf = Configuration{1000, 1, 300, 500 * time.Millisecond, 5}
+var conf = Configuration{1000, 1, 300, 500 * time.Millisecond, 100, 5}
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
@@ -43,16 +43,6 @@ const (
 	memoryDB = "MemoryDB"
 	Path     = "../tmp/sync/"
 )
-
-type MockTimer struct {
-}
-
-func (MockTimer) Now() time.Time {
-	layout := "2006-01-02T15:04:05.000Z"
-	str := "2018-11-12T11:45:26.371Z"
-	start, _ := time.Parse(layout, str)
-	return start
-}
 
 var (
 	tx1 = tx()
@@ -81,7 +71,7 @@ func newMockPoetDb() PoetDb {
 	return &PoetDbMock{}
 }
 
-func SyncMockFactory(number int, conf Configuration, name string, dbType string, poetDb func() PoetDb) (syncs []*Syncer, p2ps []*service.Node) {
+func SyncMockFactory(number int, conf Configuration, name string, dbType string, poetDb func() PoetDb) (syncs []*Syncer, p2ps []*service.Node, ticker *timesync.Ticker) {
 	nodes := make([]*Syncer, 0, number)
 	p2ps = make([]*service.Node, 0, number)
 	sim := service.NewSimulator()
@@ -95,13 +85,12 @@ func SyncMockFactory(number int, conf Configuration, name string, dbType string,
 		blockValidator := BlockEligibilityValidatorMock{}
 		txpool := miner.NewTxMemPool()
 		atxpool := miner.NewAtxMemPool()
-		sync := NewSync(net, getMesh(dbType, Path+name+"_"+time.Now().String()), txpool, atxpool, mockTxProcessor{}, blockValidator, poetDb(), conf, ts, ts.GetCurrentLayer(), atxLimit, l)
-		sync.RequestTimeout = 100 * time.Millisecond
+		sync := NewSync(net, getMesh(dbType, Path+name+"_"+time.Now().String()), txpool, atxpool, mockTxProcessor{}, blockValidator, poetDb(), conf, ts, l)
 		nodes = append(nodes, sync)
 		p2ps = append(p2ps, net)
 	}
 	ts.StartNotifying()
-	return nodes, p2ps
+	return nodes, p2ps, ts
 }
 
 type stateMock struct{}
@@ -166,7 +155,7 @@ func getMesh(dbType, id string) *mesh.Mesh {
 }
 
 func TestSyncer_Start(t *testing.T) {
-	syncs, _ := SyncMockFactory(1, conf, t.Name(), memoryDB, newMockPoetDb)
+	syncs, _, _ := SyncMockFactory(1, conf, t.Name(), memoryDB, newMockPoetDb)
 	syn := syncs[0]
 	defer syn.Close()
 	syn.Start()
@@ -186,7 +175,7 @@ func TestSyncer_Start(t *testing.T) {
 }
 
 func TestSyncer_Close(t *testing.T) {
-	syncs, _ := SyncMockFactory(2, conf, t.Name(), memoryDB, newMockPoetDb)
+	syncs, _, _ := SyncMockFactory(2, conf, t.Name(), memoryDB, newMockPoetDb)
 	sync := syncs[0]
 	sync.Start()
 	sync.Close()
@@ -199,7 +188,7 @@ func TestSyncer_Close(t *testing.T) {
 
 func TestSyncProtocol_BlockRequest(t *testing.T) {
 	atx1 := atx()
-	syncs, nodes := SyncMockFactory(2, conf, t.Name(), memoryDB, newMockPoetDb)
+	syncs, nodes, _ := SyncMockFactory(2, conf, t.Name(), memoryDB, newMockPoetDb)
 	syncObj := syncs[0]
 	syncObj2 := syncs[1]
 	defer syncObj.Close()
@@ -209,13 +198,16 @@ func TestSyncProtocol_BlockRequest(t *testing.T) {
 	syncObj.AddBlockWithTxs(block, []*types.Transaction{tx1}, []*types.ActivationTx{atx1})
 	syncObj2.Peers = getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
 
-	output := syncObj2.fetchWithFactory(NewBlockWorker(syncObj2, 1, BlockReqFactory(), blockSliceToChan([]types.BlockID{block.ID()})))
+	ch := make(chan []types.Hash32, 1)
+	ch <- []types.Hash32{block.Hash32()}
+
+	output := fetchWithFactory(NewFetchWorker(syncObj2, 1, newFetchReqFactory(BLOCK, blocksAsItems), ch))
 
 	timeout := time.NewTimer(2 * time.Second)
 
 	select {
 	case a := <-output:
-		assert.Equal(t, a.(*types.Block).ID(), block.ID(), "wrong block")
+		assert.Equal(t, a.(fetchJob).ids[0], block.Hash32(), "wrong block")
 	case <-timeout.C:
 		assert.Fail(t, "no message received on channel")
 	}
@@ -223,7 +215,7 @@ func TestSyncProtocol_BlockRequest(t *testing.T) {
 }
 
 func TestSyncProtocol_LayerHashRequest(t *testing.T) {
-	syncs, nodes := SyncMockFactory(2, conf, t.Name(), memoryDB, newMockPoetDb)
+	syncs, nodes, _ := SyncMockFactory(2, conf, t.Name(), memoryDB, newMockPoetDb)
 	atx1 := atx()
 	syncObj1 := syncs[0]
 	defer syncObj1.Close()
@@ -250,7 +242,7 @@ func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 func TestSyncer_FetchPoetProofAvailableAndValid(t *testing.T) {
 	r := require.New(t)
 
-	syncs, nodes := SyncMockFactory(2, conf, t.Name(), memoryDB, newMemPoetDb)
+	syncs, nodes, _ := SyncMockFactory(2, conf, t.Name(), memoryDB, newMemPoetDb)
 	s0 := syncs[0]
 	s1 := syncs[1]
 	s1.Peers = getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
@@ -271,7 +263,7 @@ func TestSyncer_FetchPoetProofAvailableAndValid(t *testing.T) {
 func TestSyncer_SyncAtxs_FetchPoetProof(t *testing.T) {
 	r := require.New(t)
 
-	syncs, nodes := SyncMockFactory(2, conf, t.Name(), memoryDB, newMemPoetDb)
+	syncs, nodes, _ := SyncMockFactory(2, conf, t.Name(), memoryDB, newMemPoetDb)
 	s0 := syncs[0]
 	s1 := syncs[1]
 	s1.Peers = getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
@@ -295,10 +287,12 @@ func TestSyncer_SyncAtxs_FetchPoetProof(t *testing.T) {
 
 	r.False(s1.poetDb.HasProof(poetRef[:]))
 
-	atxs, err := s1.syncAtxs([]types.AtxId{atx1.Id()})
+	atxs, err := s1.atxQueue.handle([]types.Hash32{atx1.Hash32()})
 	r.NoError(err)
 	r.Equal(1, len(atxs))
-	r.Equal(atx1.Id(), atxs[0].Id())
+
+	_, found := atxs[atx1.Hash32()]
+	r.True(found)
 
 	r.True(s1.poetDb.HasProof(poetRef[:]))
 }
@@ -325,7 +319,7 @@ func makePoetProofMessage(t *testing.T) types.PoetProofMessage {
 }
 
 func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
-	syncs, nodes := SyncMockFactory(2, conf, t.Name(), memoryDB, newMockPoetDb)
+	syncs, nodes, _ := SyncMockFactory(2, conf, t.Name(), memoryDB, newMockPoetDb)
 	atx1 := atx()
 	atx2 := atx()
 	atx3 := atx()
@@ -375,7 +369,7 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 }
 
 func TestSyncProtocol_FetchBlocks(t *testing.T) {
-	syncs, nodes := SyncMockFactory(2, conf, t.Name(), memoryDB, newMockPoetDb)
+	syncs, nodes, _ := SyncMockFactory(2, conf, t.Name(), memoryDB, newMockPoetDb)
 	atx1 := atx()
 
 	atx2 := atx()
@@ -400,30 +394,31 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	syncObj1.AddBlockWithTxs(block2, []*types.Transaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8}, []*types.ActivationTx{atx2})
 	syncObj1.AddBlockWithTxs(block3, []*types.Transaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8}, []*types.ActivationTx{atx3})
 
-	ch := make(chan types.BlockID, 3)
-	ch <- block1.ID()
-	ch <- block2.ID()
-	ch <- block3.ID()
-
-	output := syncObj2.fetchWithFactory(NewBlockWorker(syncObj2, 1, BlockReqFactory(), blockSliceToChan([]types.BlockID{block1.ID(), block2.ID(), block3.ID()})))
+	ch := make(chan []types.Hash32, 3)
+	ch <- []types.Hash32{block1.Hash32()}
+	ch <- []types.Hash32{block2.Hash32()}
+	ch <- []types.Hash32{block3.Hash32()}
+	close(ch)
+	output := fetchWithFactory(NewFetchWorker(syncObj2, 1, newFetchReqFactory(BLOCK, blocksAsItems), ch))
 
 	for out := range output {
-		block := out.(*types.Block)
-		txs, err := syncObj2.syncTxs(block.TxIds)
+		block := out.(fetchJob).items[0].(*types.Block)
+		txs, err := syncObj2.txQueue.HandleTxs(block.TxIds)
 		if err != nil {
 			t.Error("could not fetch all txs", err)
 		}
-		atxs, err := syncObj2.syncAtxs(block.AtxIds)
+		atxs, err := syncObj2.atxQueue.HandleAtxs(block.AtxIds)
 		if err != nil {
 			t.Error("could not fetch all atxs", err)
 		}
 		syncObj2.Debug("add block to layer %v", block)
+
 		syncObj2.AddBlockWithTxs(block, txs, atxs)
 	}
 }
 
 func TestSyncProtocol_SyncNodes(t *testing.T) {
-	syncs, nodes := SyncMockFactory(3, conf, t.Name(), memoryDB, newMockPoetDb)
+	syncs, nodes, _ := SyncMockFactory(3, conf, t.Name(), memoryDB, newMockPoetDb)
 	pm1 := getPeersMock([]p2p.Peer{nodes[2].PublicKey()})
 	pm2 := getPeersMock([]p2p.Peer{nodes[2].PublicKey()})
 	pm3 := getPeersMock([]p2p.Peer{nodes[0].PublicKey(), nodes[1].PublicKey()})
@@ -476,8 +471,8 @@ func TestSyncProtocol_SyncNodes(t *testing.T) {
 	syncObj2.AddBlockWithTxs(block9, []*types.Transaction{tx7, tx8}, []*types.ActivationTx{})
 	syncObj2.AddBlockWithTxs(block10, []*types.Transaction{tx7, tx8}, []*types.ActivationTx{})
 
-	syncObj1.clockSub.Unsubscribe(syncObj1.clock)
-	syncObj2.clockSub.Unsubscribe(syncObj2.clock)
+	syncObj1.Unsubscribe(syncObj1.LayerCh)
+	syncObj2.Unsubscribe(syncObj2.LayerCh)
 	//syncObj1.Start()
 	//syncObj2.Start()
 
@@ -512,7 +507,7 @@ func getPeersMock(peers []p2p.Peer) p2p.PeersImpl {
 
 func syncTest(dpType string, t *testing.T) {
 
-	syncs, nodes := SyncMockFactory(4, conf, t.Name(), dpType, newMockPoetDb)
+	syncs, nodes, clock := SyncMockFactory(4, conf, t.Name(), dpType, newMockPoetDb)
 	syncObj1 := syncs[0]
 	defer syncObj1.Close()
 	syncObj2 := syncs[1]
@@ -600,7 +595,7 @@ func syncTest(dpType string, t *testing.T) {
 			if syncObj2.ValidatedLayer() >= 4 && syncObj3.ValidatedLayer() >= 4 {
 				log.Info("done!", syncObj2.ValidatedLayer(), syncObj3.ValidatedLayer())
 				// path for this UT calling sync.Close before we read from channel causes writing to closed channel
-				x := syncObj1.clockSub.Subscribe()
+				x := clock.Subscribe()
 				<-x
 				<-x
 				return
@@ -644,9 +639,9 @@ func Test_TwoNodes_SyncIntegrationSuite(t *testing.T) {
 	sis.NeighborsCount = 1
 	sis.name = t.Name()
 	i := uint32(1)
-	tick := 200 * time.Millisecond
+	tick := 20 * time.Second
 	layout := "2006-01-02T15:04:05.000Z"
-	str := "2018-11-12T11:45:26.371Z"
+	str := "2016-11-12T11:45:26.371Z"
 	start, _ := time.Parse(layout, str)
 	ts := timesync.NewTicker(timesync.RealClock{}, tick, start)
 	sis.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
@@ -654,7 +649,7 @@ func Test_TwoNodes_SyncIntegrationSuite(t *testing.T) {
 		msh := getMesh(memoryDB, fmt.Sprintf("%s_%s", sis.name, time.Now()))
 		blockValidator := BlockEligibilityValidatorMock{}
 		poetDb := activation.NewPoetDb(database.NewMemDatabase(), l.WithName("poetDb"))
-		sync := NewSync(s, msh, miner.NewTxMemPool(), miner.NewAtxMemPool(), mockTxProcessor{}, blockValidator, poetDb, conf, ts, ts.GetCurrentLayer(), atxLimit, l)
+		sync := NewSync(s, msh, miner.NewTxMemPool(), miner.NewAtxMemPool(), mockTxProcessor{}, blockValidator, poetDb, conf, ts, l)
 		sis.syncers = append(sis.syncers, sync)
 		atomic.AddUint32(&i, 1)
 	}
@@ -694,9 +689,6 @@ func (sis *syncIntegrationTwoNodes) TestSyncProtocol_TwoNodes() {
 	syncObj2 := sis.syncers[2]
 	defer syncObj2.Close()
 
-	syncObj2.AddBlock(block1)
-	syncObj2.AddBlock(block2)
-
 	id1 := tx1.Id()
 	id2 := tx2.Id()
 	id3 := tx3.Id()
@@ -713,16 +705,16 @@ func (sis *syncIntegrationTwoNodes) TestSyncProtocol_TwoNodes() {
 	block7.TxIds = []types.TransactionId{id7, id8}
 	block8.TxIds = []types.TransactionId{id7, id8}
 
-	syncObj1.AddBlock(block1)
-	syncObj1.AddBlock(block2)
-	syncObj1.AddBlockWithTxs(block3, []*types.Transaction{tx1, tx2, tx3}, []*types.ActivationTx{})
-	syncObj1.AddBlockWithTxs(block4, []*types.Transaction{tx1, tx2, tx3}, []*types.ActivationTx{})
-	syncObj1.AddBlockWithTxs(block5, []*types.Transaction{tx4, tx5, tx6}, []*types.ActivationTx{})
-	syncObj1.AddBlockWithTxs(block6, []*types.Transaction{tx4, tx5, tx6}, []*types.ActivationTx{})
-	syncObj1.AddBlockWithTxs(block7, []*types.Transaction{tx7, tx8}, []*types.ActivationTx{})
-	syncObj1.AddBlockWithTxs(block8, []*types.Transaction{tx7, tx8}, []*types.ActivationTx{})
-	syncObj1.AddBlock(block9)
-	syncObj1.AddBlock(block10)
+	syncObj2.AddBlock(block1)
+	syncObj2.AddBlock(block2)
+	syncObj2.AddBlockWithTxs(block3, []*types.Transaction{tx1, tx2, tx3}, []*types.ActivationTx{})
+	syncObj2.AddBlockWithTxs(block4, []*types.Transaction{tx1, tx2, tx3}, []*types.ActivationTx{})
+	syncObj2.AddBlockWithTxs(block5, []*types.Transaction{tx4, tx5, tx6}, []*types.ActivationTx{})
+	syncObj2.AddBlockWithTxs(block6, []*types.Transaction{tx4, tx5, tx6}, []*types.ActivationTx{})
+	syncObj2.AddBlockWithTxs(block7, []*types.Transaction{tx7, tx8}, []*types.ActivationTx{})
+	syncObj2.AddBlockWithTxs(block8, []*types.Transaction{tx7, tx8}, []*types.ActivationTx{})
+	syncObj2.AddBlock(block9)
+	syncObj2.AddBlock(block10)
 
 	timeout := time.After(60 * time.Second)
 	syncObj1.SetLatestLayer(6)
@@ -772,7 +764,7 @@ func Test_Multiple_SyncIntegrationSuite(t *testing.T) {
 		msh := getMesh(memoryDB, fmt.Sprintf("%s_%d", sis.name, atomic.LoadUint32(&i)))
 		blockValidator := BlockEligibilityValidatorMock{}
 		poetDb := activation.NewPoetDb(database.NewMemDatabase(), l.WithName("poetDb"))
-		sync := NewSync(s, msh, miner.NewTxMemPool(), miner.NewAtxMemPool(), mockTxProcessor{}, blockValidator, poetDb, conf, ts, 0, atxLimit, l)
+		sync := NewSync(s, msh, miner.NewTxMemPool(), miner.NewAtxMemPool(), mockTxProcessor{}, blockValidator, poetDb, conf, ts, l)
 		ts.StartNotifying()
 		sis.syncers = append(sis.syncers, sync)
 		atomic.AddUint32(&i, 1)
@@ -818,6 +810,14 @@ func (sis *syncIntegrationMultipleNodes) TestSyncProtocol_MultipleNodes() {
 
 	err := syncObj1.AddBlock(block2)
 	require.NoError(t, err)
+	err = syncObj2.AddBlock(block2)
+	require.NoError(t, err)
+	err = syncObj3.AddBlock(block2)
+	require.NoError(t, err)
+	err = syncObj4.AddBlock(block2)
+	require.NoError(t, err)
+	err = syncObj5.AddBlock(block2)
+	require.NoError(t, err)
 	err = syncObj1.AddBlockWithTxs(block3, []*types.Transaction{tx1, tx2, tx3}, []*types.ActivationTx{})
 	err = syncObj1.AddBlockWithTxs(block4, []*types.Transaction{tx1, tx2, tx3}, []*types.ActivationTx{})
 	err = syncObj1.AddBlockWithTxs(block5, []*types.Transaction{tx4, tx5, tx6}, []*types.ActivationTx{})
@@ -845,11 +845,12 @@ func (sis *syncIntegrationMultipleNodes) TestSyncProtocol_MultipleNodes() {
 			t.Error("timed out ")
 			goto end
 		default:
+
 			if syncObj1.ValidatedLayer() >= 3 || syncObj2.ValidatedLayer() >= 3 || syncObj3.ValidatedLayer() >= 3 || syncObj5.ValidatedLayer() >= 3 {
 				t.Log("done!")
 				goto end
 			}
-			time.Sleep(1 * time.Millisecond)
+			time.Sleep(100 * time.Millisecond)
 		}
 	}
 end:
@@ -896,15 +897,19 @@ func atx() *types.ActivationTx {
 
 func TestSyncer_Txs(t *testing.T) {
 	// check tx validation
-	syncs, nodes := SyncMockFactory(2, conf, t.Name(), memoryDB, newMockPoetDb)
+	syncs, nodes, _ := SyncMockFactory(3, conf, t.Name(), memoryDB, newMockPoetDb)
 	pm1 := getPeersMock([]p2p.Peer{nodes[1].PublicKey()})
 	pm2 := getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
+	pm3 := getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
 	syncObj1 := syncs[0]
 	syncObj1.Peers = pm1 //override peers with mock
 	defer syncObj1.Close()
 	syncObj2 := syncs[1]
 	syncObj2.Peers = pm2 //override peers with mock
 	defer syncObj2.Close()
+	syncObj3 := syncs[2]
+	syncObj3.Peers = pm3 //override peers with mock
+	defer syncObj3.Close()
 
 	block3 := types.NewExistingBlock(types.BlockID(333), 1, nil)
 	id1 := tx1.Id()
@@ -912,17 +917,21 @@ func TestSyncer_Txs(t *testing.T) {
 	id3 := tx3.Id()
 	block3.TxIds = []types.TransactionId{id1, id2, id3}
 	syncObj1.AddBlockWithTxs(block3, []*types.Transaction{tx1, tx2, tx3}, []*types.ActivationTx{})
-	syncObj2.txValidator = mockTxProcessor{true}
-	_, err := syncObj2.syncTxs(block3.TxIds)
-	assert.NotNil(t, err)
-	syncObj2.txValidator = mockTxProcessor{false}
-	_, err = syncObj2.syncTxs(block3.TxIds)
+
+	_, err := syncObj2.txQueue.handle([]types.Hash32{id1.Hash32(), id2.Hash32(), id3.Hash32()})
 	assert.Nil(t, err)
+
+	// new queue and try again
+	tq := NewTxQueue(syncObj3, mockTxProcessor{true})
+
+	txs, err2 := tq.handle([]types.Hash32{id1.Hash32(), id2.Hash32(), id3.Hash32()})
+	assert.Nil(t, txs)
+	assert.NotNil(t, err2)
 }
 
 func TestFetchLayerBlockIds(t *testing.T) {
 	// check tx validation
-	syncs, nodes := SyncMockFactory(3, conf, t.Name(), memoryDB, newMockPoetDb)
+	syncs, nodes, _ := SyncMockFactory(3, conf, t.Name(), memoryDB, newMockPoetDb)
 	pm1 := getPeersMock([]p2p.Peer{nodes[2].PublicKey()})
 	pm2 := getPeersMock([]p2p.Peer{nodes[2].PublicKey()})
 	pm3 := getPeersMock([]p2p.Peer{nodes[0].PublicKey(), nodes[1].PublicKey()})
@@ -986,7 +995,7 @@ func (m *mockLayerValidator) ValidateLayer(lyr *types.Layer) {
 
 func TestSyncer_Synchronise(t *testing.T) {
 	r := require.New(t)
-	syncs, _ := SyncMockFactory(1, conf, t.Name(), memoryDB, newMockPoetDb)
+	syncs, _, _ := SyncMockFactory(1, conf, t.Name(), memoryDB, newMockPoetDb)
 	sync := syncs[0]
 	lv := &mockLayerValidator{0, 0, 0, nil}
 	sync.lValidator = lv
@@ -1016,17 +1025,11 @@ func TestSyncer_Synchronise(t *testing.T) {
 	r.Equal(1, lv.countValidate)       // not synced, expect one call
 }
 
-type mockLayerProvider struct {
-}
-
-func (mlp *mockLayerProvider) GetLayer(index types.LayerID) (*types.Layer, error) {
-	return types.NewLayer(index), nil
-}
-
 func TestSyncer_Synchronise2(t *testing.T) {
 	r := require.New(t)
-	syncs, _ := SyncMockFactory(1, conf, t.Name(), memoryDB, newMockPoetDb)
+	syncs, _, _ := SyncMockFactory(1, conf, t.Name(), memoryDB, newMockPoetDb)
 	sync := syncs[0]
+	sync.AddBlockWithTxs(types.NewExistingBlock(1, 1, nil), nil, nil)
 	lv := &mockLayerValidator{0, 0, 0, nil}
 	sync.lValidator = lv
 	sync.currentLayer = 1
@@ -1061,7 +1064,6 @@ func TestSyncer_Synchronise2(t *testing.T) {
 	sync.lValidator = lv
 	sync.currentLayer = 2
 	sync.SetLatestLayer(2)
-	sync.lProvider = &mockLayerProvider{}
 	sync.syncRoutineWg.Add(1)
 	sync.Synchronise()
 	r.Equal(1, lv.countValidate)
@@ -1072,15 +1074,12 @@ func TestSyncer_handleNotSyncedFlow(t *testing.T) {
 	r := require.New(t)
 	txpool := miner.NewTxMemPool()
 	atxpool := miner.NewAtxMemPool()
-	ts := &mockClock{}
-	sync := NewSync(service.NewSimulator().NewNode(), getMesh(memoryDB, Path+t.Name()+"_"+time.Now().String()), txpool, atxpool, mockTxProcessor{}, BlockEligibilityValidatorMock{}, newMockPoetDb(), conf, ts, 10, atxLimit, log.NewDefault(t.Name()))
-
+	ts := &MockClock{}
+	sync := NewSync(service.NewSimulator().NewNode(), getMesh(memoryDB, Path+t.Name()+"_"+time.Now().String()), txpool, atxpool, mockTxProcessor{}, BlockEligibilityValidatorMock{}, newMockPoetDb(), conf, ts, log.NewDefault(t.Name()))
 	lv := &mockLayerValidator{0, 0, 0, nil}
 	sync.lValidator = lv
 	sync.currentLayer = 10
 	sync.SetLatestLayer(20)
-	sync.lProvider = &mockLayerProvider{}
-
 	go sync.handleNotSynced(10)
 	time.Sleep(100 * time.Millisecond)
 	r.Equal(2, ts.countSub)
@@ -1088,12 +1087,31 @@ func TestSyncer_handleNotSyncedFlow(t *testing.T) {
 
 func TestSyncer_p2pSyncForTwoLayers(t *testing.T) {
 	r := require.New(t)
-	syncs, _ := SyncMockFactory(1, conf, t.Name(), memoryDB, newMockPoetDb)
-	sync := syncs[0]
-	lv := &mockLayerValidator{0, 0, 0, nil}
-	sync.lProvider = &mockLayerProvider{}
-	sync.SyncLock = RUNNING
+	tick := 1 * time.Second
+	timer := timesync.RealClock{}
+	ts := timesync.NewTicker(timer, tick, timer.Now().Add(tick*-4))
+	sim := service.NewSimulator()
+	net := sim.NewNode()
+	l := log.New(t.Name(), "", "")
+	blockValidator := BlockEligibilityValidatorMock{}
+	txpool := miner.NewTxMemPool()
+	atxpool := miner.NewAtxMemPool()
+	//ch := ts.Subscribe()
+	msh := getMesh(memoryDB, Path+t.Name()+"_"+time.Now().String())
 
+	msh.AddBlock(types.NewExistingBlock(types.BlockID(1), 1, nil))
+	msh.AddBlock(types.NewExistingBlock(types.BlockID(2), 2, nil))
+	msh.AddBlock(types.NewExistingBlock(types.BlockID(3), 3, nil))
+	msh.AddBlock(types.NewExistingBlock(types.BlockID(4), 4, nil))
+	msh.AddBlock(types.NewExistingBlock(types.BlockID(5), 5, nil))
+	msh.AddBlock(types.NewExistingBlock(types.BlockID(6), 6, nil))
+	msh.AddBlock(types.NewExistingBlock(types.BlockID(7), 7, nil))
+
+	sync := NewSync(net, msh, txpool, atxpool, mockTxProcessor{}, blockValidator, newMockPoetDb(), conf, ts, l)
+	ts.StartNotifying()
+	lv := &mockLayerValidator{0, 0, 0, nil}
+	sync.SyncLock = RUNNING
+	sync.lValidator = lv
 	sync.SetLatestLayer(10)
 	sync.Start()
 	time.Sleep(250 * time.Millisecond)
@@ -1106,10 +1124,12 @@ func TestSyncer_p2pSyncForTwoLayers(t *testing.T) {
 	_, ok = lv.validatedLayers[current+1]
 	r.False(ok)
 
-	sync.p2pSyncForOneFullLayer(current)
-	time.Sleep(50 * time.Millisecond)
+	before := sync.currentLayer
+	if err := sync.gossipSyncForOneFullLayer(current); err != nil {
+		t.Error(err)
+	}
 	after := sync.currentLayer
-	r.Equal(current+2, after)
+	r.Equal(before+2, after)
 	r.Equal(2, lv.countValidate)
 
 	// make sure the layers were validated after the call
@@ -1135,7 +1155,7 @@ func (m *mockTimedValidator) ValidateLayer(lyr *types.Layer) {
 
 func TestSyncer_ConcurrentSynchronise(t *testing.T) {
 	r := require.New(t)
-	syncs, _ := SyncMockFactory(1, conf, t.Name(), memoryDB, newMockPoetDb)
+	syncs, _, _ := SyncMockFactory(1, conf, t.Name(), memoryDB, newMockPoetDb)
 	sync := syncs[0]
 	sync.currentLayer = 3
 	lv := &mockTimedValidator{1 * time.Second, 0}
@@ -1152,7 +1172,7 @@ func TestSyncer_ConcurrentSynchronise(t *testing.T) {
 }
 
 func TestSyncProtocol_NilResponse(t *testing.T) {
-	syncs, nodes := SyncMockFactory(2, conf, t.Name(), memoryDB, newMemPoetDb)
+	syncs, nodes, _ := SyncMockFactory(2, conf, t.Name(), memoryDB, newMemPoetDb)
 	defer syncs[0].Close()
 	defer syncs[1].Close()
 
@@ -1190,42 +1210,39 @@ func TestSyncProtocol_NilResponse(t *testing.T) {
 	}
 
 	// Block
+	bch := make(chan []types.Hash32, 1)
+	bch <- []types.Hash32{nonExistingBlockId.AsHash32()}
 
-	output = syncs[0].fetchWithFactory(NewBlockWorker(syncs[0], 1, BlockReqFactory(), blockSliceToChan([]types.BlockID{nonExistingBlockId})))
+	output = fetchWithFactory(NewFetchWorker(syncs[0], 1, newFetchReqFactory(BLOCK, blocksAsItems), bch))
 
 	select {
 	case out := <-output:
-		assert.Nil(t, out)
+		assert.True(t, out.(fetchJob).items == nil)
 	case <-time.After(timeout):
 		assert.Fail(t, timeoutErrMsg)
 	}
 
 	// Tx
 
-	wrk = NewNeighborhoodWorker(syncs[0], 1, TxReqFactory([]types.TransactionId{nonExistingTxId}))
-	go wrk.Work()
-
+	ch := syncs[0].txQueue.addToPendingGetCh([]types.Hash32{nonExistingTxId.Hash32()})
 	select {
-	case out := <-wrk.output:
-		assert.Nil(t, out)
+	case <-ch:
+		t.Error(t, "should not return ")
 	case <-time.After(timeout):
-		assert.Fail(t, timeoutErrMsg)
+
 	}
 
 	// Atx
-
-	output = syncs[0].fetchWithFactory(NewNeighborhoodWorker(syncs[0], 1, ATxReqFactory([]types.AtxId{nonExistingAtxId})))
-
+	ch = syncs[0].atxQueue.addToPendingGetCh([]types.Hash32{nonExistingAtxId.Hash32()})
+	// PoET
 	select {
-	case out := <-output:
-		assert.Nil(t, out)
+	case out := <-ch:
+		assert.True(t, out == false)
 	case <-time.After(timeout):
-		assert.Fail(t, timeoutErrMsg)
+
 	}
 
-	// PoET
-
-	output = syncs[0].fetchWithFactory(NewNeighborhoodWorker(syncs[0], 1, PoetReqFactory(nonExistingPoetRef)))
+	output = fetchWithFactory(NewNeighborhoodWorker(syncs[0], 1, PoetReqFactory(nonExistingPoetRef)))
 
 	select {
 	case out := <-output:
@@ -1236,7 +1253,7 @@ func TestSyncProtocol_NilResponse(t *testing.T) {
 }
 
 func TestSyncProtocol_BadResponse(t *testing.T) {
-	syncs, _ := SyncMockFactory(2, conf, "TestSyncProtocol_NilResponse", memoryDB, newMemPoetDb)
+	syncs, _, _ := SyncMockFactory(2, conf, "TestSyncProtocol_NilResponse", memoryDB, newMemPoetDb)
 	defer syncs[0].Close()
 	defer syncs[1].Close()
 
@@ -1256,7 +1273,7 @@ func TestSyncProtocol_BadResponse(t *testing.T) {
 	blockHandlerMock := func([]byte) []byte {
 		t.Log("return fake block")
 		blk := types.NewExistingBlock(types.BlockID(8), 1, nil)
-		byts, _ := types.InterfaceToBytes(blk)
+		byts, _ := types.InterfaceToBytes([]types.Block{*blk})
 		return byts
 	}
 
@@ -1284,39 +1301,45 @@ func TestSyncProtocol_BadResponse(t *testing.T) {
 	assert.Error(t, err1)
 
 	// Block
-	output := syncs[0].fetchWithFactory(NewBlockWorker(syncs[0], 1, BlockReqFactory(), blockSliceToChan([]types.BlockID{1})))
+	ch := make(chan []types.Hash32, 1)
+	bid := types.BlockID(1)
+	ch <- []types.Hash32{bid.AsHash32()}
+	output := fetchWithFactory(NewFetchWorker(syncs[0], 1, newFetchReqFactory(BLOCK, blocksAsItems), ch))
 
 	select {
 	case out := <-output:
-		assert.Nil(t, out)
+		assert.Nil(t, out.(fetchJob).items)
 	case <-time.After(timeout):
 		assert.Fail(t, timeoutErrMsg)
 	}
 
 	// Tx
-	wrk := NewNeighborhoodWorker(syncs[0], 1, TxReqFactory([]types.TransactionId{[32]byte{1}}))
-	go wrk.Work()
+	ch = make(chan []types.Hash32, 1)
+	ch <- []types.Hash32{[32]byte{1}}
+	output = fetchWithFactory(NewFetchWorker(syncs[0], 1, newFetchReqFactory(TX, txsAsItems), ch))
 
 	select {
-	case out := <-wrk.output:
-		assert.Nil(t, out)
+	case out := <-output:
+		assert.Nil(t, out.(fetchJob).items)
 	case <-time.After(timeout):
 		assert.Fail(t, timeoutErrMsg)
 	}
 
 	// Atx
-	output = syncs[0].fetchWithFactory(NewNeighborhoodWorker(syncs[0], 1, ATxReqFactory([]types.AtxId{{Hash32: [32]byte{1}}})))
+	ch = make(chan []types.Hash32, 1)
+	ch <- []types.Hash32{[32]byte{1}}
+	output = fetchWithFactory(NewFetchWorker(syncs[0], 1, newFetchReqFactory(ATX, atxsAsItems), ch))
 
 	select {
 	case out := <-output:
-		assert.Nil(t, out)
+		assert.Nil(t, out.(fetchJob).items)
 	case <-time.After(timeout):
 		assert.Fail(t, timeoutErrMsg)
 	}
 
 	// PoET
 
-	output = syncs[0].fetchWithFactory(NewNeighborhoodWorker(syncs[0], 1, PoetReqFactory([]byte{1})))
+	output = fetchWithFactory(NewNeighborhoodWorker(syncs[0], 1, PoetReqFactory([]byte{1})))
 
 	select {
 	case out := <-output:
@@ -1342,9 +1365,9 @@ var one = types.CalcHash32([]byte("1"))
 var two = types.CalcHash32([]byte("2"))
 var three = types.CalcHash32([]byte("3"))
 
-var atx1 = types.AtxId{Hash32: one}
-var atx2 = types.AtxId{Hash32: two}
-var atx3 = types.AtxId{Hash32: three}
+var atx1 = types.AtxId(one)
+var atx2 = types.AtxId(two)
+var atx3 = types.AtxId(three)
 
 func Test_validateUniqueTxAtx(t *testing.T) {
 	r := require.New(t)
@@ -1368,22 +1391,45 @@ func Test_validateUniqueTxAtx(t *testing.T) {
 
 func TestSyncer_BlockSyntacticValidation(t *testing.T) {
 	r := require.New(t)
-	a, _ := SyncMockFactory(1, conf, t.Name(), memoryDB, newMemPoetDb)
-	s := a[0]
+	syncs, _, _ := SyncMockFactory(2, conf, "TestSyncProtocol_NilResponse", memoryDB, newMemPoetDb)
+	s := syncs[0]
 	b := &types.Block{}
 	b.TxIds = []types.TransactionId{txid1, txid2, txid1}
 	b.AtxIds = []types.AtxId{atx1, atx2, atx3}
-	_, _, err := s.BlockSyntacticValidation(b)
+	_, _, err := s.blockSyntacticValidation(b)
 	r.EqualError(err, errDupTx.Error())
 
 	for i := 0; i <= miner.AtxsPerBlockLimit; i++ {
 		b.AtxIds = append(b.AtxIds, atx1)
 	}
-	_, _, err = s.BlockSyntacticValidation(b)
+	_, _, err = s.blockSyntacticValidation(b)
 	r.EqualError(err, errTooManyAtxs.Error())
 
 	b.TxIds = []types.TransactionId{}
 	b.AtxIds = []types.AtxId{}
-	_, _, err = s.BlockSyntacticValidation(b)
+	_, _, err = s.blockSyntacticValidation(b)
 	r.Nil(err)
+}
+
+func TestSyncer_AtxSetID(t *testing.T) {
+	a := atx()
+	bbytes, _ := types.InterfaceToBytes(*a)
+	var b types.ActivationTx
+	types.BytesToInterface(bbytes, &b)
+	t.Log(fmt.Sprintf("%+v\n", *a))
+	t.Log("---------------------")
+	t.Log(fmt.Sprintf("%+v\n", b))
+	t.Log("---------------------")
+	assert.Equal(t, b.Nipst, a.Nipst)
+	assert.Equal(t, b.View, a.View)
+	assert.Equal(t, b.Commitment, a.Commitment)
+
+	assert.Equal(t, b.ActivationTxHeader.NodeId, a.ActivationTxHeader.NodeId)
+	assert.Equal(t, b.ActivationTxHeader.PrevATXId, a.ActivationTxHeader.PrevATXId)
+	assert.Equal(t, b.ActivationTxHeader.ActiveSetSize, a.ActivationTxHeader.ActiveSetSize)
+	assert.Equal(t, b.ActivationTxHeader.Coinbase, a.ActivationTxHeader.Coinbase)
+	assert.Equal(t, b.ActivationTxHeader.CommitmentMerkleRoot, a.ActivationTxHeader.CommitmentMerkleRoot)
+	assert.Equal(t, b.ActivationTxHeader.NIPSTChallenge, a.ActivationTxHeader.NIPSTChallenge)
+	b.CalcAndSetId()
+	assert.Equal(t, a.ShortString(), b.ShortString())
 }

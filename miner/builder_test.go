@@ -216,9 +216,9 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 
 	poetRef := []byte{0xba, 0x38}
 	atxs := []*types.ActivationTx{
-		types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")}, coinbase, 1, types.AtxId{types.Hash32{1}}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&types.Hash32{}, poetRef)),
-		types.NewActivationTx(types.NodeId{"bbbb", []byte("bbb")}, coinbase, 1, types.AtxId{types.Hash32{2}}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&types.Hash32{}, poetRef)),
-		types.NewActivationTx(types.NodeId{"cccc", []byte("bbb")}, coinbase, 1, types.AtxId{types.Hash32{3}}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&types.Hash32{}, poetRef)),
+		types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")}, coinbase, 1, types.AtxId(types.Hash32{1}), 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&types.Hash32{}, poetRef)),
+		types.NewActivationTx(types.NodeId{"bbbb", []byte("bbb")}, coinbase, 1, types.AtxId(types.Hash32{2}), 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&types.Hash32{}, poetRef)),
+		types.NewActivationTx(types.NodeId{"cccc", []byte("bbb")}, coinbase, 1, types.AtxId(types.Hash32{3}), 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&types.Hash32{}, poetRef)),
 	}
 
 	builder.AtxPool.Put(atxs[0].Id(), atxs[0])
@@ -345,7 +345,7 @@ func TestBlockBuilder_Gossip_NotSynced(t *testing.T) {
 	atx := types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")},
 		coinbase,
 		1,
-		types.AtxId{types.Hash32{1}},
+		types.AtxId(types.Hash32{1}),
 		5,
 		1,
 		types.AtxId{},
@@ -403,11 +403,11 @@ var (
 )
 
 var (
-	atx1 = types.AtxId{Hash32: one}
-	atx2 = types.AtxId{Hash32: two}
-	atx3 = types.AtxId{Hash32: three}
-	atx4 = types.AtxId{Hash32: four}
-	atx5 = types.AtxId{Hash32: five}
+	atx1 = types.AtxId(one)
+	atx2 = types.AtxId(two)
+	atx3 = types.AtxId(three)
+	atx4 = types.AtxId(four)
+	atx5 = types.AtxId(five)
 )
 
 func Test_selectAtxs(t *testing.T) {

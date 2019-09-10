@@ -1,8 +1,10 @@
 package sync
 
 import (
+	"github.com/golang/protobuf/ptypes/duration"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/timesync"
 	"math/big"
 )
 
@@ -144,4 +146,46 @@ func (MockAtxMemPool) Put(id types.AtxId, item *types.ActivationTx) {
 
 func (MockAtxMemPool) Invalidate(id types.AtxId) {
 
+}
+
+type MockClock struct {
+	ch         map[timesync.LayerTimer]int
+	ids        map[int]timesync.LayerTimer
+	countSub   int
+	countUnsub int
+	Interval   duration.Duration
+	Layer      types.LayerID
+}
+
+func (c *MockClock) Tick() {
+	go func() {
+		l := c.GetCurrentLayer()
+		for _, c := range c.ids {
+			c <- l
+		}
+	}()
+}
+
+func (c *MockClock) GetCurrentLayer() types.LayerID {
+	return c.Layer
+}
+
+func (c *MockClock) Subscribe() timesync.LayerTimer {
+	c.countSub++
+
+	if c.ch == nil {
+		c.ch = make(map[timesync.LayerTimer]int)
+		c.ids = make(map[int]timesync.LayerTimer)
+	}
+	newCh := make(chan types.LayerID, 1)
+	c.ch[newCh] = len(c.ch)
+	c.ids[len(c.ch)] = newCh
+
+	return newCh
+}
+
+func (c *MockClock) Unsubscribe(timer timesync.LayerTimer) {
+	c.countUnsub++
+	delete(c.ids, c.ch[timer])
+	delete(c.ch, timer)
 }
