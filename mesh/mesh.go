@@ -193,7 +193,7 @@ func (m *Mesh) PushTransactions(oldBase, newBase types.LayerID) {
 				log.LayerId(uint64(i)), log.Uint32("num_failed_txs", numFailedTxs), log.Err(err))
 		}
 		if err := m.removeFromMeshTxs(validBlockTxs, invalidBlockTxs, i); err != nil {
-			m.With().Error("failed to remove from meshTxs", log.Err(err))
+			m.With().Error("failed to remove from meshTxs", log.LayerId(uint64(i)), log.Err(err))
 		}
 		if m.blockBuilder != nil {
 			for _, tx := range invalidBlockTxs {

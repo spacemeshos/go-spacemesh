@@ -65,9 +65,9 @@ func (t *TxMempool) GetTxsForBlock(numOfTxs int, seed []byte, getState func(addr
 func getRandIdxs(numOfTxs, spaceSize int, seed []byte) map[uint64]struct{} {
 	idxs := make(map[uint64]struct{})
 	i := uint64(0)
+	message := make([]byte, len(seed)+binary.Size(i))
+	copy(message, seed)
 	for len(idxs) < numOfTxs {
-		message := make([]byte, len(seed)+binary.Size(i))
-		copy(message, seed)
 		binary.LittleEndian.PutUint64(message[len(seed):], i)
 		msgHash := sha256.Sum256(message)
 		msgInt := binary.LittleEndian.Uint64(msgHash[:8])
