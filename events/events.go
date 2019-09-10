@@ -35,6 +35,8 @@ func InitializeEventPubsub(ur string) {
 	publisher, err = NewEventPublisher(ur)
 	if err != nil {
 		log.Panic("cannot init pubsub: %v", err)
+	} else {
+		log.Info("pubsub created")
 	}
 }
 

@@ -131,7 +131,7 @@ func newPublisher(url string) (*Publisher, error) {
 
 func (p *Publisher) publish(topic channelId, payload []byte) error {
 	msg := append([]byte{byte(topic)}, payload...)
-	log.Info("sending message %v", string(msg))
+	log.Debug("sending message %v", string(msg))
 	err := p.sock.Send(msg)
 	return err
 }
