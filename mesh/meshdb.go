@@ -316,12 +316,12 @@ func (m *MeshDB) writeTransactions(txs []*types.Transaction) error {
 	for _, t := range txs {
 		bytes, err := types.InterfaceToBytes(t)
 		if err != nil {
-			return fmt.Errorf("could not marshall tx %v to bytes: %v", t.Id().Short(), err)
+			return fmt.Errorf("could not marshall tx %v to bytes: %v", t.Id().ShortString(), err)
 		}
 		if err := batch.Put(t.Id().Bytes(), bytes); err != nil {
-			return fmt.Errorf("could not write tx %v to database: %v", t.Id().Short(), err)
+			return fmt.Errorf("could not write tx %v to database: %v", t.Id().ShortString(), err)
 		}
-		m.Debug("wrote tx %v to db", t.Id().Short())
+		m.Debug("wrote tx %v to db", t.Id().ShortString())
 	}
 	err := batch.Write()
 	if err != nil {
@@ -454,7 +454,7 @@ func (m *MeshDB) GetTransactions(transactions []types.TransactionId) (
 	for _, id := range transactions {
 		t, err := m.GetTransaction(id)
 		if err != nil {
-			m.With().Warning("could not fetch tx", log.TxId(id.Short()), log.Err(err))
+			m.With().Warning("could not fetch tx", log.TxId(id.ShortString()), log.Err(err))
 			mIds = append(mIds, id)
 		} else {
 			ts[id] = t

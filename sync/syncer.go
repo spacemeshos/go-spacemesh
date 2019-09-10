@@ -636,7 +636,7 @@ func (s *Syncer) syncTxs(txids []types.TransactionId) ([]*types.Transaction, err
 			for _, tx := range ntxs {
 				tmp := tx
 				if !s.txValidator.AddressExists(tmp.Origin()) {
-					s.With().Warning("tx origin does not exist", log.TxId(tmp.Id().Short()),
+					s.With().Warning("tx origin does not exist", log.TxId(tmp.Id().ShortString()),
 						log.String("origin", tmp.Origin().String()))
 					continue
 				}
@@ -652,7 +652,7 @@ func (s *Syncer) syncTxs(txids []types.TransactionId) ([]*types.Transaction, err
 		} else if _, ok := dbTxs[id]; ok {
 			continue
 		} else {
-			return nil, fmt.Errorf("could not fetch tx with id: %v", id.Short())
+			return nil, fmt.Errorf("could not fetch tx with id: %v", id.ShortString())
 		}
 	}
 	return txs, nil

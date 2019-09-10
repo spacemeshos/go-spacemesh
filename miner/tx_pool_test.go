@@ -62,7 +62,7 @@ func TestTxPoolWithAccounts_GetRandomTxs(t *testing.T) {
 	for i := uint64(0); i < numTxs; i++ {
 		id, tx := newTx(origin, prevNonce+i, 50)
 		ids[i] = id
-		fmt.Printf("%d: %v\n", i, id.String())
+		fmt.Printf("%d: %v\n", i, id.ShortString())
 		pool.Put(id, tx)
 	}
 

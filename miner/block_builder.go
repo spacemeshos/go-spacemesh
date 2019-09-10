@@ -274,11 +274,11 @@ func (t *BlockBuilder) listenForTx() {
 			}
 
 			if err := t.ValidateAndAddTxToPool(tx, func() {
-				t.Log.With().Info("got new tx", log.TxId(tx.Id().Short()))
+				t.Log.With().Info("got new tx", log.TxId(tx.Id().ShortString()))
 				data.ReportValidation(IncomingTxProtocol)
 			}); err != nil {
 				t.With().Error("Transaction validation failed",
-					log.TxId(tx.Id().Short()), log.String("origin", tx.Origin().String()), log.Err(err))
+					log.TxId(tx.Id().ShortString()), log.String("origin", tx.Origin().String()), log.Err(err))
 				continue
 			}
 		}

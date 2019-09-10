@@ -220,7 +220,7 @@ func (m *Mesh) PushTransactions(oldBase, newBase types.LayerID) {
 				// We ignore errors here, since they mean that the tx is no longer valid and we shouldn't re-add it
 				if err == nil {
 					m.With().Info("transaction from contextually invalid block re-added to mempool",
-						log.TxId(tx.Id().Short()))
+						log.TxId(tx.Id().ShortString()))
 				}
 			}
 		}

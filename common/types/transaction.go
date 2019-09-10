@@ -1,25 +1,28 @@
 package types
 
 import (
-	"fmt"
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/sha256-simd"
 )
 
-type TransactionId [32]byte
+type TransactionId Hash32
 
-func (id TransactionId) Bytes() []byte {
-	return id[:]
+func (id TransactionId) Hash32() Hash32 {
+	return Hash32(id)
+}
+
+func (id TransactionId) ShortString() string {
+	return id.Hash32().ShortString()
 }
 
 func (id TransactionId) String() string {
-	return fmt.Sprintf("%x", id.Bytes())
+	return id.Hash32().String()
 }
 
-func (id TransactionId) Short() string {
-	return fmt.Sprintf("%.3x", id.Bytes())
+func (id TransactionId) Bytes() []byte {
+	return id[:]
 }
 
 var EmptyTransactionId = TransactionId{}
