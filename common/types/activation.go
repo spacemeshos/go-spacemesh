@@ -106,6 +106,10 @@ type SignedAtx struct {
 	Sig []byte
 }
 
+func (signed *SignedAtx) AtxBytes() ([]byte, error) {
+	return InterfaceToBytes(signed.ActivationTx)
+}
+
 func NewActivationTx(NodeId NodeId,
 	Coinbase Address,
 	Sequence uint64,

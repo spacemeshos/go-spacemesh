@@ -86,6 +86,10 @@ func (m *mockMsg) ReportValidation(protocol string, isValid bool) {
 
 type mockAtxValidator struct{}
 
+func (mockAtxValidator) ValidateSignedAtx(signedAtx *types.SignedAtx) error {
+	return nil
+}
+
 func (mockAtxValidator) SyntacticallyValidateAtx(atx *types.ActivationTx) error { return nil }
 
 type mockTxProcessor struct {

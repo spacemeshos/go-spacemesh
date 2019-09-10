@@ -41,6 +41,7 @@ type TxValidator interface {
 
 type AtxValidator interface {
 	SyntacticallyValidateAtx(atx *types.ActivationTx) error
+	ValidateSignedAtx(signedAtx *types.SignedAtx) error
 }
 
 type Syncer interface {
@@ -333,7 +334,7 @@ func (t *BlockBuilder) handleGossipAtx(data service.GossipMessage) {
 		return
 	}
 
-	err = types.ValidateSignedAtx(signedAtx)
+	err = t.atxValidator.ValidateSignedAtx(signedAtx)
 	if err != nil {
 		log.Error("cannot validate atx sig atx id %v err %v", signedAtx.Id(), err)
 		return

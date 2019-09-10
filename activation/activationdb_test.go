@@ -9,6 +9,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/nipst"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sync"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -838,6 +839,55 @@ func TestActivationDb_TopAtx(t *testing.T) {
 	topAtx, err = atxdb.getTopAtx()
 	r.NoError(err)
 	r.NotEqual(atx.Id(), topAtx.AtxId)
+}
+
+func createAndValidateSignedATX(r *require.Assertions, atxdb *ActivationDb, ed *signing.EdSigner, atx *types.ActivationTx) (*types.SignedAtx, error) {
+	atxBytes, err := types.InterfaceToBytes(atx)
+	r.NoError(err)
+	sig := ed.Sign(atxBytes)
+
+	signedAtx := &types.SignedAtx{atx, sig}
+	return signedAtx, atxdb.ValidateSignedAtx(signedAtx)
+}
+
+func TestActivationDb_ValidateSignedAtx(t *testing.T) {
+	r := require.New(t)
+	lg := log.NewDefault("sigValidation")
+	idStore := NewIdentityStore(database.NewMemDatabase())
+	memesh := mesh.NewMemMeshDB(lg.WithName("meshDB"))
+	atxdb := NewActivationDb(database.NewMemDatabase(), idStore, memesh, layersPerEpochBig, &ValidatorMock{}, lg.WithName("atxDB"))
+
+	ed := signing.NewEdSigner()
+	nodeId := types.NodeId{ed.PublicKey().String(), []byte("bbbbb")}
+
+	// test happy flow of first ATX
+	emptyAtx := types.EmptyAtxId
+	atx := types.NewActivationTx(nodeId, coinbase, 1, *emptyAtx, 15, 1, *emptyAtx, 5, []types.BlockID{1, 2, 3}, npst)
+	_, err := createAndValidateSignedATX(r, atxdb, ed, atx)
+	r.NoError(err)
+
+	// test negative flow no atx found in idstore
+	prevAtx := types.AtxId(types.HexToHash32("0x111"))
+	atx = types.NewActivationTx(nodeId, coinbase, 1, prevAtx, 15, 1, prevAtx, 5, []types.BlockID{1, 2, 3}, npst)
+	signedAtx, err := createAndValidateSignedATX(r, atxdb, ed, atx)
+	r.Equal(errInvalidSig, err)
+
+	// test happy flow not first ATX
+	err = idStore.StoreNodeIdentity(nodeId)
+	r.NoError(err)
+	_, err = createAndValidateSignedATX(r, atxdb, ed, atx)
+	r.NoError(err)
+
+	// test negative flow not first ATX, invalid sig
+	signedAtx.Sig[0] = signedAtx.Sig[0] - 1
+	err = atxdb.ValidateSignedAtx(signedAtx)
+	r.Error(err)
+
+	// test negative flow not first ATX, no sig
+	signedAtx.Sig = []byte{}
+	err = atxdb.ValidateSignedAtx(signedAtx)
+	r.Error(err)
+	r.NotEqual(err, errInvalidSig)
 }
 
 func createAndStoreAtx(atxdb *ActivationDb, layer types.LayerID) (*types.ActivationTx, error) {

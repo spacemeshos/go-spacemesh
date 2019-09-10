@@ -505,14 +505,16 @@ func TestBuilder_SignAtx(t *testing.T) {
 	assert.NoError(t, err)
 	signed, err := b.signAtx(atx)
 	assert.NoError(t, err)
+
+	pubkey, err := ed25519.ExtractPublicKey(atxBytes, signed.Sig)
+	assert.NoError(t, err)
+	assert.Equal(t, ed.PublicKey().Bytes(), []byte(pubkey))
+
 	ok := signing.Verify(signing.NewPublicKey(util.Hex2Bytes(atx.NodeId.Key)), atxBytes, signed.Sig)
 	assert.True(t, ok)
 
-	ok2 := types.ValidateSignedAtx(signed)
-	assert.NoError(t, ok2)
-
 	signed.Sig[0] = signed.Sig[0] - 1
-	err = types.ValidateSignedAtx(signed)
+	pubkey, err = ed25519.ExtractPublicKey(atxBytes, signed.Sig)
 	assert.Error(t, err)
 }
 

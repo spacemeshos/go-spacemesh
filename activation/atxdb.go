@@ -4,14 +4,18 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"sync"
 )
 
 const topAtxKey = "topAtxKey"
+
+var errInvalidSig = fmt.Errorf("identity not found when validating signature, invalid atx")
 
 type ActivationDb struct {
 	sync.RWMutex
@@ -532,4 +536,30 @@ func (db *ActivationDb) IsIdentityActive(edId string, layer types.LayerID) (*typ
 
 	// lastAtxTargetEpoch = epoch
 	return &nodeId, atx.TargetEpoch(db.LayersPerEpoch) == epoch, atx.Id(), nil
+}
+
+// ValidateSignedAtx extracts public key from message and verifies public key exists in IdStore, this is how we validate
+// ATX signature. If this is the first ATX it is considered valid anyways and ATX syntactic validation will determine ATX validity
+func (db *ActivationDb) ValidateSignedAtx(signedAtx *types.SignedAtx) error {
+	// this is the first occurrence of this identity, we cannot validate simply by extracting public key
+	// pass it down to Atx handling so that atx can be syntactically verified and identity could be registered.
+	if signedAtx.PrevATXId == *types.EmptyAtxId {
+		return nil
+	}
+	bts, err := signedAtx.AtxBytes()
+	if err != nil {
+		return err
+	}
+
+	pubKey, err := ed25519.ExtractPublicKey(bts, signedAtx.Sig)
+	if err != nil {
+		return err
+	}
+
+	pubString := signing.NewPublicKey(pubKey).String()
+	_, err = db.GetIdentity(pubString)
+	if err != nil { // means there is no such identity
+		return errInvalidSig
+	}
+	return nil
 }
