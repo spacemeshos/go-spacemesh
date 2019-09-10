@@ -169,7 +169,7 @@ func (vq *blockQueue) removefromDepMaps(block types.Hash32, valid bool, doneBloc
 		delete(vq.depMap[dep], block)
 		if len(vq.depMap[dep]) == 0 {
 			delete(vq.depMap, dep)
-			vq.Info("run callback for %v, %v", dep, reflect.TypeOf(dep))
+			vq.Debug("run callback for %v, %v", dep, reflect.TypeOf(dep))
 			if callback, ok := vq.callbacks[dep]; ok {
 				delete(vq.callbacks, dep)
 				if err := callback(valid); err != nil {
