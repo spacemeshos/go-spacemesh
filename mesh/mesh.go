@@ -187,9 +187,10 @@ func (m *Mesh) PushTransactions(oldBase, newBase types.LayerID) {
 		}
 
 		validBlockTxs, invalidBlockTxs := m.ExtractUniqueTransactions(l)
-		numAppliedTxs, err := m.ApplyTransactions(i, validBlockTxs)
+		numFailedTxs, err := m.ApplyTransactions(i, validBlockTxs)
 		if err != nil {
-			m.With().Error("cannot apply transactions", log.Err(err))
+			m.With().Error("cannot apply transactions",
+				log.LayerId(uint64(i)), log.Uint32("num_failed_txs", numFailedTxs), log.Err(err))
 		}
 		if err := m.removeFromMeshTxs(validBlockTxs, invalidBlockTxs, i); err != nil {
 			m.With().Error("failed to remove from meshTxs", log.Err(err))
@@ -208,7 +209,7 @@ func (m *Mesh) PushTransactions(oldBase, newBase types.LayerID) {
 			log.Int("valid_block_txs", len(validBlockTxs)),
 			log.Int("invalid_block_txs", len(invalidBlockTxs)),
 			log.Uint64("new_base", uint64(newBase)),
-			log.Uint32("num_applied_txs", numAppliedTxs),
+			log.Uint32("num_failed_txs", numFailedTxs),
 		)
 	}
 }
