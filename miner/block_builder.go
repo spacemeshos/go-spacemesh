@@ -269,7 +269,7 @@ func (t *BlockBuilder) listenForTx() {
 
 			tx, err := types.BytesAsTransaction(data.Bytes())
 			if err != nil {
-				t.Log.Error("cannot parse incoming TX")
+				t.With().Error("cannot parse incoming TX", log.Err(err))
 				continue
 			}
 
