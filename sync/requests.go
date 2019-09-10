@@ -114,14 +114,14 @@ func atxsAsItems(msg []byte) ([]Item, error) {
 }
 
 func txsAsItems(msg []byte) ([]Item, error) {
-	var txs []types.Transaction
+	var txs []*types.Transaction
 	err := types.BytesToInterface(msg, &txs)
 	if err != nil || txs == nil {
 		return nil, err
 	}
 	items := make([]Item, len(txs))
 	for i := range txs {
-		items[i] = &txs[i]
+		items[i] = txs[i]
 	}
 	return items, nil
 }

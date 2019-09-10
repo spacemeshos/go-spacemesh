@@ -30,20 +30,6 @@ func CalculateLayerReward(id types.LayerID, params Config) *big.Int {
 	return params.BaseReward
 }
 
-func MergeDoubles(transactions []*types.Transaction) []*types.Transaction {
-	transactionSet := make(map[types.TransactionId]struct{})
-	merged := make([]*types.Transaction, 0, len(transactions))
-	for _, trns := range transactions {
-		if _, ok := transactionSet[trns.Id()]; !ok {
-			transactionSet[trns.Id()] = struct{}{}
-			merged = append(merged, trns)
-		} else {
-			log.Debug("double trans merged %v", trns)
-		}
-	}
-	return merged
-}
-
 func calculateActualRewards(rewards *big.Int, numBlocks *big.Int, params Config, underQuotaBlocks int) (*big.Int, *big.Int) {
 	log.Info("rewards %v blocks %v penalty_percent %v under_quota %v", rewards.Int64(), numBlocks.Int64(), params.PenaltyPercent.Int64(), underQuotaBlocks)
 	mod := new(big.Int)

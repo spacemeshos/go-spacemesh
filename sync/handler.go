@@ -91,22 +91,17 @@ func newTxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 			return nil
 		}
 		logger.Info("handle tx request ")
-		txs, missinDB := s.GetTransactions(txids)
+		txs, missingDB := s.GetTransactions(txids)
 
-		for _, t := range missinDB {
+		for _, t := range missingDB {
 			if tx, err := s.txpool.Get(t); err == nil {
-				txs[t] = &tx
+				txs = append(txs, &tx)
 			} else {
 				logger.Error("Error handling tx request message, for id: %v", hex.EncodeToString(t[:]))
 			}
 		}
 
-		var transactions []types.Transaction
-		for _, tx := range txs {
-			transactions = append(transactions, *tx)
-		}
-
-		bbytes, err := types.InterfaceToBytes(transactions)
+		bbytes, err := types.InterfaceToBytes(txs)
 		if err != nil {
 			logger.Error("Error marshaling transactions response message , with ids %v and err:", txs, err)
 			return nil

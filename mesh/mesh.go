@@ -146,21 +146,13 @@ func (m *Mesh) ValidateLayer(lyr *types.Layer) {
 	m.Info("done validating layer %v", lyr.Index())
 }
 
-func SortBlocks(blocks []*types.Block) []*types.Block {
-	//not final sorting method, need to talk about this
-	sort.Slice(blocks, func(i, j int) bool { return blocks[i].ID() < blocks[j].ID() })
-	return blocks
-}
-
-func (m *Mesh) ExtractUniqueOrderedTransactions(l *types.Layer) (validBlocks, invalidBlocks []*types.Transaction) {
-	sortedBlocks := SortBlocks(l.Blocks())
-
+func (m *Mesh) ExtractUniqueTransactions(l *types.Layer) (validBlocks, invalidBlocks []*types.Transaction) {
 	txids := map[bool]map[types.TransactionId]struct{}{
 		true:  make(map[types.TransactionId]struct{}),
 		false: make(map[types.TransactionId]struct{}),
 	}
 
-	for _, b := range sortedBlocks {
+	for _, b := range l.Blocks() {
 		valid, err := m.ContextualValidity(b.ID())
 		if err != nil {
 			m.With().Error("could not get contextual validity for block", log.BlockId(uint64(b.ID())), log.Err(err))
@@ -175,27 +167,15 @@ func (m *Mesh) ExtractUniqueOrderedTransactions(l *types.Layer) (validBlocks, in
 		}
 	}
 
-	return m.getUniqueTxs(txids[true], l), m.getUniqueTxs(txids[false], l)
+	return m.getTxs(txids[true], l), m.getTxs(txids[false], l)
 }
 
-func (m *Mesh) getUniqueTxs(txids map[types.TransactionId]struct{}, l *types.Layer) []*types.Transaction {
-	txs := make([]*types.Transaction, 0, layerSize)
-	idSlice := make([]types.TransactionId, 0, len(txids))
-	for id := range txids {
-		idSlice = append(idSlice, id)
-	}
-
-	stxs, missing := m.GetTransactions(idSlice)
+func (m *Mesh) getTxs(txIds map[types.TransactionId]struct{}, l *types.Layer) []*types.Transaction {
+	txs, missing := m.GetTransactionsFromMap(txIds)
 	if len(missing) != 0 {
 		m.Panic("could not find transactions %v from layer %v", missing, l.Index())
 	}
-
-	for _, tx := range stxs {
-		//todo: think about these conversions.. are they needed?
-		txs = append(txs, tx)
-	}
-
-	return MergeDoubles(txs)
+	return txs
 }
 
 func (m *Mesh) PushTransactions(oldBase, newBase types.LayerID) {
@@ -206,7 +186,7 @@ func (m *Mesh) PushTransactions(oldBase, newBase types.LayerID) {
 			return
 		}
 
-		validBlockTxs, invalidBlockTxs := m.ExtractUniqueOrderedTransactions(l)
+		validBlockTxs, invalidBlockTxs := m.ExtractUniqueTransactions(l)
 		numAppliedTxs, err := m.ApplyTransactions(i, validBlockTxs)
 		if err != nil {
 			m.With().Error("cannot apply transactions", log.Err(err))
@@ -413,7 +393,7 @@ func (m *Mesh) AccumulateRewards(rewardLayer types.LayerID, params Config) {
 		}
 	}
 	//accumulate all blocks rewards
-	merged, _ := m.ExtractUniqueOrderedTransactions(l)
+	merged, _ := m.ExtractUniqueTransactions(l)
 
 	rewards := &big.Int{}
 	processed := 0

@@ -449,22 +449,40 @@ func (m *MeshDB) GetProjection(addr types.Address, prevNonce, prevBalance uint64
 	return nonce, balance, nil
 }
 
-func (m *MeshDB) GetTransactions(transactions []types.TransactionId) (
-	map[types.TransactionId]*types.Transaction,
-	[]types.TransactionId) {
+type txGetter struct {
+	missingIds []types.TransactionId
+	txs        []*types.Transaction
+	mesh       *MeshDB
+}
 
-	var mIds []types.TransactionId
-	ts := make(map[types.TransactionId]*types.Transaction, len(transactions))
-	for _, id := range transactions {
-		t, err := m.GetTransaction(id)
-		if err != nil {
-			m.With().Warning("could not fetch tx", log.TxId(id.ShortString()), log.Err(err))
-			mIds = append(mIds, id)
-		} else {
-			ts[id] = t
-		}
+func (g *txGetter) Get(id types.TransactionId) {
+	t, err := g.mesh.GetTransaction(id)
+	if err != nil {
+		g.mesh.With().Warning("could not fetch tx", log.TxId(id.ShortString()), log.Err(err))
+		g.missingIds = append(g.missingIds, id)
+	} else {
+		g.txs = append(g.txs, t)
 	}
-	return ts, mIds
+}
+
+func newGetter(m *MeshDB) *txGetter {
+	return &txGetter{mesh: m}
+}
+
+func (m *MeshDB) GetTransactions(transactions []types.TransactionId) ([]*types.Transaction, []types.TransactionId) {
+	getter := newGetter(m)
+	for _, id := range transactions {
+		getter.Get(id)
+	}
+	return getter.txs, getter.missingIds
+}
+
+func (m *MeshDB) GetTransactionsFromMap(transactions map[types.TransactionId]struct{}) ([]*types.Transaction, []types.TransactionId) {
+	getter := newGetter(m)
+	for id := range transactions {
+		getter.Get(id)
+	}
+	return getter.txs, getter.missingIds
 }
 
 func (m *MeshDB) GetTransaction(id types.TransactionId) (*types.Transaction, error) {

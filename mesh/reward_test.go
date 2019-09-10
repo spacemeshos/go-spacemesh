@@ -260,19 +260,3 @@ func TestMesh_calcRewards(t *testing.T) {
 	assert.Equal(t, int64(1065), bonus.Int64())
 	assert.Equal(t, int64(935), penalty.Int64())
 }
-
-func TestMesh_MergeDoubles(t *testing.T) {
-	s := &MockMapState{Rewards: make(map[types.Address]*big.Int)}
-	layers, _ := getMeshWithMapState("t1", s)
-	defer layers.Close()
-	dst := types.HexToAddress("2")
-	transactions := []*types.Transaction{
-		types.NewTxWithOrigin(1, types.HexToAddress("1"), dst, 10, 100, 1),
-		types.NewTxWithOrigin(1, types.HexToAddress("1"), dst, 10, 100, 1),
-		types.NewTxWithOrigin(1, types.HexToAddress("1"), dst, 10, 100, 1),
-	}
-
-	txs := MergeDoubles(transactions)
-
-	assert.Equal(t, 1, len(txs))
-}

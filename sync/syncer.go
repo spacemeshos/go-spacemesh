@@ -697,8 +697,8 @@ func (s *Syncer) txCheckLocal(txIds []types.Hash32) (map[types.Hash32]Item, map[
 	dbTxs, missing := s.GetTransactions(missingInPool)
 
 	dbItems := make(map[types.Hash32]Item, len(dbTxs))
-	for i, k := range dbTxs {
-		dbItems[i.Hash32()] = k
+	for _, k := range dbTxs {
+		dbItems[k.Hash32()] = k
 	}
 
 	missingItems := make([]types.Hash32, 0, len(missing))
@@ -711,7 +711,7 @@ func (s *Syncer) txCheckLocal(txIds []types.Hash32) (map[types.Hash32]Item, map[
 
 func (s *Syncer) blockCheckLocal(blockIds []types.Hash32) (map[types.Hash32]Item, map[types.Hash32]Item, []types.Hash32) {
 	//look in pool
-	var dbItems map[types.Hash32]Item
+	dbItems := make(map[types.Hash32]Item)
 	for _, itemId := range blockIds {
 		var id = util.BytesToUint64(itemId.Bytes())
 		res, err := s.GetBlock(types.BlockID(id))
