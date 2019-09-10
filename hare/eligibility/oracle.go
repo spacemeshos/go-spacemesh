@@ -224,7 +224,7 @@ func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
 	safeEp := sl.GetEpoch(o.layersPerEpoch)
 
 	// check genesis
-	if safeEp.IsGenesis() {
+	if ep := layer.GetEpoch(o.layersPerEpoch); ep.IsGenesis() {
 		return nil, errGenesis
 	}
 

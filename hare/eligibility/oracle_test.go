@@ -306,7 +306,7 @@ func TestOracle_actives(t *testing.T) {
 	r.EqualError(err, errGenesis.Error())
 
 	o.blocksProvider = mockBlocksProvider{mp: make(map[types.BlockID]struct{})}
-	_, err = o.actives(100)
+	_, err = o.actives(types.LayerID(cfg.ConfidenceParam / 2))
 	r.EqualError(err, errNoContextualBlocks.Error())
 
 	o.blocksProvider = mockBlocksProvider{}
@@ -329,7 +329,7 @@ func TestOracle_actives(t *testing.T) {
 		return createMapWithSize(9), someErr
 	}
 	_, err = o.actives(200)
-	r.Equal(someErr, err)
+	r.EqualError(err, someErr.Error())
 }
 
 type bProvider struct {
