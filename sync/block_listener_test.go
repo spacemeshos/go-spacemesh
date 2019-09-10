@@ -34,14 +34,6 @@ func (pm PeersMock) Close() {
 	return
 }
 
-type mockTxProcessor struct {
-	notValid bool
-}
-
-func (m mockTxProcessor) AddressExists(addr types.Address) bool {
-	return !m.notValid
-}
-
 func ListenerFactory(serv service.Service, peers p2p.Peers, name string, layer types.LayerID) *BlockListener {
 	sync := SyncFactory(name, serv)
 	sync.Peers = peers
@@ -55,7 +47,7 @@ func SyncFactory(name string, serv service.Service) *Syncer {
 	l := log.New(name, "", "")
 	poetDb := activation.NewPoetDb(database.NewMemDatabase(), l.WithName("poetDb"))
 	blockValidator := BlockEligibilityValidatorMock{}
-	sync := NewSync(serv, getMesh(memoryDB, name), miner.NewTxMemPool(), miner.NewAtxMemPool(), mockTxProcessor{}, blockValidator, poetDb, conf, ts, l)
+	sync := NewSync(serv, getMesh(memoryDB, name), miner.NewTxMemPool(), miner.NewAtxMemPool(), blockValidator, poetDb, conf, ts, l)
 	return sync
 }
 

@@ -143,7 +143,7 @@ type txQueue struct {
 	fetchQueue
 }
 
-func NewTxQueue(s *Syncer, txValidator TxValidator) *txQueue {
+func NewTxQueue(s *Syncer) *txQueue {
 	//todo buffersize
 	q := &txQueue{
 		fetchQueue: fetchQueue{
@@ -156,7 +156,7 @@ func NewTxQueue(s *Syncer, txValidator TxValidator) *txQueue {
 			queue:               make(chan []types.Hash32, 10000)},
 	}
 
-	q.handleFetch = updateTxDependencies(q.invalidate, s.txpool, txValidator.AddressExists)
+	q.handleFetch = updateTxDependencies(q.invalidate, s.txpool)
 	go q.work()
 	return q
 }
@@ -181,7 +181,7 @@ func (tx txQueue) HandleTxs(txids []types.TransactionId) ([]*types.Transaction, 
 	return txs, nil
 }
 
-func updateTxDependencies(invalidate func(id types.Hash32, valid bool), txpool TxMemPool, addressExists func(addr types.Address) bool) func(fj fetchJob) {
+func updateTxDependencies(invalidate func(id types.Hash32, valid bool), txpool TxMemPool) func(fj fetchJob) {
 	return func(fj fetchJob) {
 		if len(fj.items) == 0 {
 			return
@@ -195,13 +195,11 @@ func updateTxDependencies(invalidate func(id types.Hash32, valid bool), txpool T
 
 		for _, id := range fj.ids {
 			if item, ok := mp[id]; ok {
-				if addressExists(item.Origin()) {
-					txpool.Put(types.TransactionId(id), item)
-					invalidate(id, true)
-					continue
-				}
+				txpool.Put(types.TransactionId(id), item)
+				invalidate(id, true)
+			} else {
+				invalidate(id, false)
 			}
-			invalidate(id, false)
 		}
 	}
 }

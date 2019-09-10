@@ -77,13 +77,6 @@ func (app *SyncApp) Cleanup() {
 	}
 }
 
-type mockTxProcessor struct {
-}
-
-func (mockTxProcessor) AddressExists(addr types.Address) bool {
-	return true
-}
-
 func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	// start p2p services
 	lg := log.New("sync_test", "", "")
@@ -134,7 +127,7 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	clock := sync.MockClock{}
 	clock.Layer = types.LayerID(expectedLayers + 1)
 	lg.Info("current layer %v", clock.GetCurrentLayer())
-	app.sync = sync.NewSync(swarm, msh, txpool, atxpool, mockTxProcessor{}, sync.BlockEligibilityValidatorMock{}, poetDb, conf, &clock, lg.WithName("sync"))
+	app.sync = sync.NewSync(swarm, msh, txpool, atxpool, sync.BlockEligibilityValidatorMock{}, poetDb, conf, &clock, lg.WithName("sync"))
 	if err = swarm.Start(); err != nil {
 		log.Panic("error starting p2p err=%v", err)
 	}
