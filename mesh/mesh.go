@@ -57,6 +57,7 @@ type Mesh struct {
 	*MeshDB
 	AtxDB
 	TxProcessor
+	MeshValidator
 	blockBuilder   BlockBuilder
 	txInvalidator  TxMemPoolInValidator
 	atxInvalidator AtxMemPoolInValidator
@@ -67,7 +68,6 @@ type Mesh struct {
 	lkMutex        sync.RWMutex
 	lcMutex        sync.RWMutex
 	lvMutex        sync.RWMutex
-	tortoise       MeshValidator
 	orphMutex      sync.RWMutex
 	done           chan struct{}
 }
@@ -76,7 +76,7 @@ func NewMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh MeshValidator, t
 	//todo add boot from disk
 	ll := &Mesh{
 		Log:            logger,
-		tortoise:       mesh,
+		MeshValidator:  mesh,
 		txInvalidator:  txInvalidator,
 		atxInvalidator: atxInvalidator,
 		TxProcessor:    pr,
@@ -135,7 +135,7 @@ func (m *Mesh) ValidateLayer(lyr *types.Layer) {
 		m.AccumulateRewards(lyr.Index()-m.config.RewardMaturity, m.config)
 	}
 
-	oldPbase, newPbase := m.tortoise.HandleIncomingLayer(lyr)
+	oldPbase, newPbase := m.HandleIncomingLayer(lyr)
 	m.lvMutex.Lock()
 	m.validatedLayer = lyr.Index()
 	m.lvMutex.Unlock()

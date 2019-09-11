@@ -3,9 +3,11 @@ package sync
 import (
 	"github.com/golang/protobuf/ptypes/duration"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"math/big"
+	"time"
 )
 
 type PoetDbMock struct{}
@@ -43,7 +45,27 @@ func (SyntacticValidatorMock) SyntacticallyValid(block *types.BlockHeader) (bool
 	return true, nil
 }
 
-type MeshValidatorMock struct{}
+type MeshValidatorMock struct {
+	delay           time.Duration
+	calls           int
+	layers          *mesh.Mesh
+	vl              types.LayerID // the validated layer
+	countValidated  int
+	countValidate   int
+	validatedLayers map[types.LayerID]struct{}
+}
+
+func (m *MeshValidatorMock) HandleIncomingLayer(lyr *types.Layer) (types.LayerID, types.LayerID) {
+	m.countValidate++
+	m.calls++
+	m.vl = lyr.Index()
+	if m.validatedLayers == nil {
+		m.validatedLayers = make(map[types.LayerID]struct{})
+	}
+	m.validatedLayers[lyr.Index()] = struct{}{}
+	time.Sleep(m.delay)
+	return lyr.Index(), lyr.Index() - 1
+}
 
 func (m *MeshValidatorMock) GetGoodPatternBlocks(layer types.LayerID) (map[types.BlockID]struct{}, error) {
 	panic("implement me")
@@ -52,10 +74,6 @@ func (m *MeshValidatorMock) GetGoodPatternBlocks(layer types.LayerID) (map[types
 func (m *MeshValidatorMock) HandleLateBlock(bl *types.Block)              {}
 func (m *MeshValidatorMock) RegisterLayerCallback(func(id types.LayerID)) {}
 func (mlg *MeshValidatorMock) ContextualValidity(id types.BlockID) bool   { return true }
-
-func (m *MeshValidatorMock) HandleIncomingLayer(layer *types.Layer) (types.LayerID, types.LayerID) {
-	return layer.Index() - 1, layer.Index()
-}
 
 type StateMock struct{}
 
@@ -158,12 +176,11 @@ type MockClock struct {
 }
 
 func (c *MockClock) Tick() {
-	go func() {
-		l := c.GetCurrentLayer()
-		for _, c := range c.ids {
-			c <- l
-		}
-	}()
+	l := c.GetCurrentLayer()
+	log.Info("tick %v", l)
+	for _, c := range c.ids {
+		c <- l
+	}
 }
 
 func (c *MockClock) GetCurrentLayer() types.LayerID {
