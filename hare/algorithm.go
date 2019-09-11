@@ -199,10 +199,7 @@ func (proc *ConsensusProcess) eventLoop() {
 		log.LayerId(uint64(proc.instanceId)), log.Int("exp_leaders", proc.cfg.ExpectedLeaders), log.String("current_set", proc.s.String()))
 
 	// check participation
-	if !proc.shouldParticipate() {
-		proc.With().Info("Should not participate", log.Int32("round", proc.k),
-			log.Uint64("layer_id", uint64(proc.instanceId)))
-	} else {
+	if proc.shouldParticipate() {
 		// set pre-round InnerMsg and send
 		builder, err := proc.initDefaultBuilder(proc.s)
 		if err != nil {
@@ -432,8 +429,6 @@ func (proc *ConsensusProcess) beginRound3() {
 
 		// check participation
 		if !proc.shouldParticipate() {
-			proc.With().Info("Should not participate", log.Int32("round", proc.k),
-				log.Uint64("layer_id", uint64(proc.instanceId)))
 			return
 		}
 
@@ -457,8 +452,6 @@ func (proc *ConsensusProcess) beginRound4() {
 
 	// check participation
 	if !proc.shouldParticipate() {
-		proc.With().Info("Should not participate", log.Int32("round", proc.k),
-			log.Uint64("layer_id", uint64(proc.instanceId)))
 		return
 	}
 
