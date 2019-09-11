@@ -74,7 +74,7 @@ func (vq *blockQueue) handleBlock(bjb fetchJob) {
 		block, found := mp[id]
 		if !found {
 			vq.updateDependencies(id, false)
-			vq.Error(fmt.Sprintf("could not retrieve a block in view "))
+			vq.Error("could not retrieve a block in view %v", id.ShortString())
 			continue
 		}
 
@@ -82,7 +82,7 @@ func (vq *blockQueue) handleBlock(bjb fetchJob) {
 		if err := vq.fastValidation(block); err != nil {
 			vq.Error("ValidationQueue: block validation failed", log.BlockId(uint64(block.ID())), log.Err(err))
 			vq.updateDependencies(id, false)
-			return
+			continue
 		}
 
 		vq.handleBlockDependencies(block)
