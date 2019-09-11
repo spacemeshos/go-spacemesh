@@ -25,8 +25,6 @@ func NewAlgorithm(layerSize int, mdb *mesh.MeshDB, hdist int, lg log.Log) *Algor
 	return alg
 }
 func (alg *Algorithm) HandleLateBlock(b *types.Block) {
-	alg.Lock()
-	defer alg.Unlock()
 	//todo feed all layers from b's layer to tortoise
 	l := types.Layer{}
 	l.AddBlock(b)
