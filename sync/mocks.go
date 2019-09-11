@@ -3,6 +3,7 @@ package sync
 import (
 	"github.com/golang/protobuf/ptypes/duration"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"math/big"
@@ -175,12 +176,11 @@ type MockClock struct {
 }
 
 func (c *MockClock) Tick() {
-	go func() {
-		l := c.GetCurrentLayer()
-		for _, c := range c.ids {
-			c <- l
-		}
-	}()
+	l := c.GetCurrentLayer()
+	log.Info("tick %v", l)
+	for _, c := range c.ids {
+		c <- l
+	}
 }
 
 func (c *MockClock) GetCurrentLayer() types.LayerID {
