@@ -1,6 +1,8 @@
 import json
 from datetime import datetime, timedelta
 import random
+from enum import Enum
+
 from tests import queries, analyse
 from tests import pod, deployment, statefulset
 from tests.fixtures import load_config, DeploymentInfo, NetworkDeploymentInfo
@@ -36,20 +38,6 @@ POET_SERVER_PORT = 50002
 ELASTICSEARCH_URL = "http://{0}".format(testconfig['elastic']['host'])
 
 GENESIS_TIME = pytz.utc.localize(datetime.utcnow() + timedelta(seconds=testconfig['genesis_delta']))
-
-
-def query_bootstrap_es(indx, namespace, bootstrap_po_name):
-    es = ES.get_search_api()
-    fltr = Q("match_phrase", kubernetes__namespace_name=namespace) & \
-           Q("match_phrase", kubernetes__pod_name=bootstrap_po_name) & \
-           Q("match_phrase", M="Local node identity")
-    s = Search(index=indx, using=es).query('bool', filter=[fltr])
-    hits = list(s.scan())
-    for h in hits:
-        match = re.search(r"Local node identity \w+ (?P<bootstrap_key>\w+)", h.log)
-        if match:
-            return match.group('bootstrap_key')
-    return None
 
 
 def get_conf(bs_info, client_config, setup_oracle=None, setup_poet=None, args=None):
@@ -245,7 +233,7 @@ def wait_genesis():
         time.sleep(delta_from_genesis)
 
 
-# The following fixture is currently not in used and mark for deprecattion
+# The following fixture is currently not in used and mark for deprecation
 @pytest.fixture(scope='module')
 def create_configmap(request):
     def _create_configmap_in_namespace(nspace):
@@ -283,7 +271,7 @@ def save_log_on_exit(request):
     if testconfig['script_on_exit'] != '' and request.session.testsfailed == 1:
         p = subprocess.Popen([testconfig['script_on_exit'], testconfig['namespace']],
                              stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        (out, err) = p.communicate()
+        p.communicate()
 
 
 @pytest.fixture(scope='module')
@@ -292,8 +280,7 @@ def add_curl(request, init_session, setup_bootstrap):
         if not setup_bootstrap.pods:
             raise Exception("Could not find bootstrap node")
 
-        resp = pod.create_pod(CURL_POD_FILE,
-                              testconfig['namespace'])
+        pod.create_pod(CURL_POD_FILE, testconfig['namespace'])
         return True
 
     return _run_curl_pod()
@@ -304,49 +291,57 @@ def add_curl(request, init_session, setup_bootstrap):
 # ==============================================================================
 
 dt = datetime.now()
-todaydate = dt.strftime("%Y.%m.%d")
-current_index = 'kubernetes_cluster-' + todaydate
+today_date = dt.strftime("%Y.%m.%d")
+current_index = 'kubernetes_cluster-' + today_date
+
+
+class Api(Enum):
+    NONCE = 'v1/nonce'
+    SUBMIT_TRANSACTION = 'v1/submittransaction'
+    BALANCE = 'v1/balance'
+
+
+class ClientWrapper:
+    def __init__(self, client_ip, namespace):
+        self.client_ip = client_ip
+        self.namespace = namespace
+
+    def call(self, api, data):
+        print("calling api: {} ({})...".format(api.name, api.value), end="")
+        out = api_call(self.client_ip, json.dumps(data), api.value, self.namespace)
+        print(" result:", out.replace("'", '"'))
+        return json.loads(out.replace("'", '"'))
 
 
 def test_transaction(setup_network):
     ns = testconfig['namespace']
 
     # choose client to run on
-    client_ip = setup_network.clients.pods[0]['pod_ip']
+    client_wrapper = ClientWrapper(setup_network.clients.pods[0]['pod_ip'], ns)
 
-    api = 'v1/nonce'
-    data = '{"address":"1"}'
-    print("checking nonce")
-    out = api_call(client_ip, data, api, testconfig['namespace'])
-    assert "{'value': '0'}" in out
+    out = client_wrapper.call(Api.NONCE, {'address': '1'})
+    assert out.get('value') == '0'
     print("nonce ok")
 
-    api = 'v1/submittransaction'
-
-    txGen = tx_generator.TxGenerator()
-    txBytes = txGen.generate("0000000000000000000000000000000000002222", 0, 123, 321, 100)
-    data = '{"tx":'+ str(list(txBytes)) + '}'
-
-    print("submitting transaction")
-    out = api_call(client_ip, data, api, testconfig['namespace'])
-    print(out)
-    assert "{'value': 'ok'" in out
+    tx_gen = tx_generator.TxGenerator()
+    dst = "0000000000000000000000000000000000002222"
+    tx_bytes = tx_gen.generate(dst, nonce=0, gasLimit=123, price=321, amount=100)
+    out = client_wrapper.call(Api.SUBMIT_TRANSACTION, {'tx': list(tx_bytes)})
+    assert out.get('value') == 'ok'
     print("submit transaction ok")
     print("wait for confirmation ")
-    api = 'v1/balance'
-    data = '{"address":"0000000000000000000000000000000000002222"}'
     end = start = time.time()
 
     for x in range(7):
         time.sleep(60)
         print("... ")
-        out = api_call(client_ip, data, api, testconfig['namespace'])
-        if "{'value': '100'}" in out:
+        out = client_wrapper.call(Api.BALANCE, {'address': dst})
+        if out.get('value') == '100':
             end = time.time()
             break
 
     print("test took {:.3f} seconds ".format(end - start))
-    assert "{'value': '100'}" in out
+    assert out.get('value') == '100'
     print("balance ok")
 
     validate_hare(current_index, ns)  # validate hare
@@ -354,18 +349,23 @@ def test_transaction(setup_network):
 
 def test_transactions(setup_network):
 
-    DEBUG = False
+    debug = False
 
     tap_init_amount  = 10000
     tap = "7be017a967db77fd10ac7c891b3d6d946dea7e3e14756e2f0f9e09b9663f0d9c"
 
-    tx_cost = 3 #.Mul(trans.GasPrice, tp.gasCost.BasicTxCost)
+    tx_cost = 3  # .Mul(trans.GasPrice, tp.gasCost.BasicTxCost)
 
-    nonceapi = 'v1/nonce'
-    submitapi = 'v1/submittransaction'
-    balanceapi = 'v1/balance'
+    nonce_api = 'v1/nonce'
+    submit_api = 'v1/submittransaction'
+    balance_api = 'v1/balance'
 
-    accounts = { tap: { "priv": "81c90dd832e18d1cf9758254327cb3135961af6688ac9c2a8c5d71f73acc5ce5", "nonce": 0, "send": [], "recv": [] } }
+    accounts = {tap: {
+        "priv": "81c90dd832e18d1cf9758254327cb3135961af6688ac9c2a8c5d71f73acc5ce5",
+        "nonce": 0,
+        "send": [],
+        "recv": [],
+    }}
 
     def random_node():
         # rnd = random.randint(0, len(setup_network.clients.pods)-1)
@@ -373,7 +373,7 @@ def test_transactions(setup_network):
 
     def expected_balance(acc):
         balance = sum([int(tx["amount"]) for tx in accounts[acc]["recv"]]) - sum(int(int(tx["amount"]) + (int(tx["gasprice"])*tx_cost)) for tx in accounts[acc]["send"])
-        if DEBUG:
+        if debug:
             print("balance calculated for {0}, {1}, everything: {2}", acc, balance, pprint.pformat(accounts[acc]))
         return balance
 
@@ -400,15 +400,15 @@ def test_transactions(setup_network):
         accounts[frm]['nonce'] += 1
         data = '{"tx":'+ str(list(txBytes)) + '}'
         print("submit transaction from {3} to {0} of {1} with gasprice {2}".format(to, amount, gasprice, frm))
-        out = api_call(pod_ip, data, submitapi, testconfig['namespace'])
-        if DEBUG:
+        out = api_call(pod_ip, data, submit_api, testconfig['namespace'])
+        if debug:
             print(data)
             print(out)
         if "{'value': 'ok'}" in out:
             accounts[to]["recv"].append({ "from": bytes.hex(txGen.publicK), "amount": amount, "gasprice": gasprice})
             accounts[frm]["send"].append({"to": to, "amount": amount, "gasprice": gasprice})
             return True
-        if DEBUG:
+        if debug:
             print("THE ERROR")
             print(out)
             print('/THE ERROR')
@@ -417,45 +417,44 @@ def test_transactions(setup_network):
     def test_account(acc, init_amount=0):
         pod_ip, pod_name = random_node()
         #check nonce
-        data = '{"address":"'+ acc +'"}'
+        data = '{"address":"' + acc + '"}'
         print("checking {0} nonce".format(acc))
-        out = api_call(pod_ip, data, nonceapi, testconfig['namespace'])
-        if DEBUG:
+        out = api_call(pod_ip, data, nonce_api, testconfig['namespace'])
+        if debug:
             print(out)
         if str(accounts[acc]['nonce']) in out:
             # check balance
             data = '{"address":"' + str(acc) + '"}'
-            if DEBUG:
+            if debug:
                 print(data)
-            out = api_call(pod_ip, data, balanceapi, testconfig['namespace'])
-            if DEBUG:
+            out = api_call(pod_ip, data, balance_api, testconfig['namespace'])
+            if debug:
                 print(out)
             balance = init_amount
             balance = balance + expected_balance(acc)
             print("expecting balance: {0}".format(balance))
             if "{'value': '" + str(balance) + "'}" in out:
-                print( "{0}, balance ok ({1})".format(str(acc), out))
+                print("{0}, balance ok ({1})".format(str(acc), out))
                 return True
             return False
         return False
 
-
     # send tx to client via rpc
-    TEST_TXS = 10
-    for i in range(TEST_TXS):
+    test_txs = 10
+    for i in range(test_txs):
         pod_ip, pod_name = random_node()
-        print(str("Sending tx from client: {0}/{1}").format(pod_name, pod_ip))
+        print("Sending tx from client: {}/{}".format(pod_name, pod_ip))
         balance = tap_init_amount + expected_balance(tap)
-        if balance < 10: # Stop sending if the tap is out of money
+        if balance < 10:  # Stop sending if the tap is out of money
             break
         amount = random.randint(1, int(balance/2))
         strpub = new_account()
-        print("TAP NONCE {0}".format(accounts[tap]['nonce']))
+        print("TAP NONCE {}".format(accounts[tap]['nonce']))
         assert transfer(tap, strpub, amount=amount), "Transfer from tap failed"
-        print("TAP NONCE {0}".format(accounts[tap]['nonce']))
+        print("TAP NONCE {}".format(accounts[tap]['nonce']))
 
     ready = 0
-    for x in range(int(testconfig['client']['args']['layers-per-epoch'])*2): # wait for two epochs (genesis)
+    for x in range(int(testconfig['client']['args']['layers-per-epoch'])*2):  # wait for two epochs (genesis)
         ready = 0
         print("...")
         time.sleep(float(testconfig['client']['args']['layer-duration-sec']))
@@ -468,43 +467,44 @@ def test_transactions(setup_network):
                 print("checking account")
                 print(pk)
                 assert test_account(pk), "account {0} didn't have the expected nonce and balance".format(pk)
-                ready+=1
+                ready += 1
             break
-    assert ready == len(accounts)-1, "Not all accounts received sent txs" # one for 0 counting and one for tap.
+    assert ready == len(accounts)-1, "Not all accounts received sent txs"  # one for 0 counting and one for tap.
 
-
-    def is_there_a_valid_acc(min_balance, excpect=[]):
+    def is_there_a_valid_acc(min_balance, expect=None):
+        if expect is None:
+            expect = []
         for acc in accounts:
-            if expected_balance(acc) - 1*tx_cost > min_balance and acc not in excpect:
+            if expected_balance(acc) - 1*tx_cost > min_balance and acc not in expect:
                 return True
         return False
 
-    ## IF LOGEVITY THE CODE BELOW SHOULD RUN FOREVER
+    # IF LONGEVITY THE CODE BELOW SHOULD RUN FOREVER
 
-    TEST_TXS2 = 10
-    newaccounts = []
-    for i in range(TEST_TXS2):
-        if not is_there_a_valid_acc(100, newaccounts):
+    test_txs2 = 10
+    new_accounts = []
+    for i in range(test_txs2):
+        if not is_there_a_valid_acc(100, new_accounts):
             break
 
         pod_ip, pod_name = random_node()
-        print("Sending tx from client: {0}/{1}".format(pod_name, pod_ip))
+        print("Sending tx from client: {}/{}".format(pod_name, pod_ip))
         if i % 2 == 0:
             # create new acc
             acc = random_account()
-            while acc in newaccounts or expected_balance(acc) < 100:
+            while acc in new_accounts or expected_balance(acc) < 100:
                 acc = random_account()
 
             pub = new_account()
-            newaccounts.append(pub)
-            assert transfer(acc, pub), "Transfer from {0} to {1} (new account) failed".format(acc, pub)
+            new_accounts.append(pub)
+            assert transfer(acc, pub), "Transfer from {} to {} (new account) failed".format(acc, pub)
         else:
-            accfrom = random_account()
-            accto = random_account()
-            while accfrom == accto or accfrom in newaccounts or expected_balance(accfrom) < 100:
-                accfrom = random_account()
-                accto = random_account()
-            assert transfer(accfrom, accto), "Transfer from {0} to {1} failed".format(accfrom, accto)
+            acc_from = random_account()
+            acc_to = random_account()
+            while acc_from == acc_to or acc_from in new_accounts or expected_balance(acc_from) < 100:
+                acc_from = random_account()
+                acc_to = random_account()
+            assert transfer(acc_from, acc_to), "Transfer from {} to {} failed".format(acc_from, acc_to)
 
     ready = 0
 
@@ -514,12 +514,12 @@ def test_transactions(setup_network):
         ready = 0
         for pk in accounts:
             if test_account(pk, init_amount=tap_init_amount if pk is tap else 0):
-                ready+=1
+                ready += 1
 
         if ready == len(accounts):
             break
 
-    assert ready == len(accounts), "Not all accounts got the sent txs got: {0}, want: {1}".format(ready, len(accounts)-1)
+    assert ready == len(accounts), "Not all accounts got the sent txs got: {}, want: {}".format(ready, len(accounts)-1)
 
 
 def test_mining(setup_network):
@@ -528,26 +528,22 @@ def test_mining(setup_network):
     # choose client to run on
     client_ip = setup_network.clients.pods[0]['pod_ip']
 
-    api = 'v1/nonce'
-    data = '{"address":"1"}'
     print("checking nonce")
-    out = api_call(client_ip, data, api, testconfig['namespace'])
+    out = api_call(client_ip, data='{"address":"1"}', api='v1/nonce', namespace=testconfig['namespace'])
     # assert "{'value': '0'}" in out
     # print("nonce ok")
     nonce = int(json.loads(out.replace("\'", "\""))['value'])
 
     api = 'v1/submittransaction'
-    txGen = tx_generator.TxGenerator()
-    txBytes = txGen.generate("0000000000000000000000000000000000002222", nonce, 246, 642, 100)
-    data = '{"tx":'+ str(list(txBytes)) + '}'
+    tx_gen = tx_generator.TxGenerator()
+    tx_bytes = tx_gen.generate("0000000000000000000000000000000000002222", nonce, 246, 642, 100)
+    data = '{"tx":' + str(list(tx_bytes)) + '}'
     print("submitting transaction")
     out = api_call(client_ip, data, api, testconfig['namespace'])
     print(out)
     assert "{'value': 'ok'" in out
     print("submit transaction ok")
     print("wait for confirmation ")
-    api = 'v1/balance'
-    data = '{"address":"0000000000000000000000000000000000002222"}'
     end = start = time.time()
 
     layer_avg_size = testconfig['client']['args']['layer-average-size']
