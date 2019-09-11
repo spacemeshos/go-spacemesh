@@ -7,7 +7,6 @@ import (
 	"github.com/spacemeshos/poet/rpc/api"
 	"github.com/spacemeshos/poet/service"
 	"google.golang.org/grpc"
-	"time"
 )
 
 // RPCPoetClient implements PoetProvingServiceClient interface.
@@ -52,8 +51,8 @@ func NewRPCPoetClient(client api.PoetClient, cleanUp func() error) *RPCPoetClien
 
 // NewRemoteRPCPoetClient returns a new instance of
 // RPCPoetClient for the specified target.
-func NewRemoteRPCPoetClient(target string, timeout time.Duration) (*RPCPoetClient, error) {
-	conn, err := newClientConn(target, timeout)
+func NewRemoteRPCPoetClient(target string, ctx context.Context) (*RPCPoetClient, error) {
+	conn, err := newClientConn(target, ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -68,13 +67,11 @@ func NewRemoteRPCPoetClient(target string, timeout time.Duration) (*RPCPoetClien
 
 // newClientConn returns a new gRPC client
 // connection to the specified target.
-func newClientConn(target string, timeout time.Duration) (*grpc.ClientConn, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+func newClientConn(target string, ctx context.Context) (*grpc.ClientConn, error) {
 	opts := []grpc.DialOption{
 		grpc.WithInsecure(),
 		grpc.WithBlock(),
 	}
-	defer cancel()
 
 	conn, err := grpc.DialContext(ctx, target, opts...)
 	if err != nil {
