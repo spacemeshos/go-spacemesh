@@ -99,6 +99,11 @@ func (bl *BlockListener) handleBlock(data service.GossipMessage) {
 		bl.With().Error("failed to add block to database", log.BlockId(uint64(blk.ID())), log.Err(err))
 		return
 	}
+
+	if blk.Layer() < bl.ValidatedLayer() {
+		bl.Syncer.HandleLateBlock(&blk)
+	}
+
 	bl.With().Info("added block to database", log.BlockId(uint64(blk.ID())))
 	return
 }
