@@ -123,6 +123,7 @@ func (s *Syncer) Close() {
 	s.Info("Closing syncer")
 	close(s.exit)
 	close(s.forceSync)
+	s.Peers.Close()
 	// TODO: broadly implement a better mechanism for shutdown
 	time.Sleep(5 * time.Millisecond) // "ensures" no more sync routines can be created, ok for now
 	s.syncRoutineWg.Wait()           // must be called after we ensure no more sync routines can be created
