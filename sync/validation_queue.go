@@ -206,13 +206,17 @@ func (vq *blockQueue) addDependencies(jobId interface{}, blks []types.BlockID, f
 			}
 		}
 	}
-	vq.Unlock()
 
+	// addToPending needs the mutex so we must release before
+	vq.Unlock()
 	if len(idsToPush) > 0 {
 		vq.Debug("add %v to queue %v", len(idsToPush), jobId)
 		vq.addToPending(idsToPush)
 	}
 
+	//lock to protect depMap and callback map
+	vq.Lock()
+	defer vq.Unlock()
 	//todo better this is a little hacky
 	if len(dependencys) == 0 {
 		delete(vq.callbacks, jobId)
