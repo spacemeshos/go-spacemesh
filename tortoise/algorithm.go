@@ -4,10 +4,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"sync"
 )
 
 type Algorithm struct {
 	Tortoise
+	sync.Mutex
 }
 
 type Tortoise interface {
@@ -23,14 +25,18 @@ func NewAlgorithm(layerSize int, mdb *mesh.MeshDB, hdist int, lg log.Log) *Algor
 	return alg
 }
 func (alg *Algorithm) HandleLateBlock(b *types.Block) {
+	alg.Lock()
+	defer alg.Unlock()
 	//todo feed all layers from b's layer to tortoise
 	l := types.Layer{}
 	l.AddBlock(b)
 	alg.HandleIncomingLayer(&l)
-	log.Info("received block with mesh.LayerID %v block id: %v ", b.Layer(), b.ID())
+	log.Info("received block with layer id %v block id: %v ", b.Layer(), b.ID())
 }
 
 func (alg *Algorithm) HandleIncomingLayer(ll *types.Layer) (types.LayerID, types.LayerID) {
+	alg.Lock()
+	defer alg.Unlock()
 	oldPbase := alg.latestComplete()
 	alg.Tortoise.handleIncomingLayer(ll)
 	newPbase := alg.latestComplete()

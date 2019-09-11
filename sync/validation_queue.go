@@ -16,6 +16,8 @@ type ValidationInfra interface {
 	GetBlock(id types.BlockID) (*types.Block, error)
 	ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) (bool, error)) error
 	fastValidation(block *types.Block) error
+	HandleLateBlock(bl *types.Block)
+	ValidatedLayer() types.LayerID
 }
 
 type blockQueue struct {
@@ -135,7 +137,9 @@ func (vq *blockQueue) finishBlockCallback(block *types.Block) func(res bool) err
 			return err
 		}
 
-		s.HandleLateBlock(block)
+		if block.Layer() < vq.ValidatedLayer() {
+			vq.HandleLateBlock(block)
+		}
 
 		return nil
 	}
