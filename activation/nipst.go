@@ -1,4 +1,4 @@
-package nipst
+package activation
 
 import (
 	"errors"
@@ -84,7 +84,7 @@ type NIPSTBuilder struct {
 	id         []byte
 	postProver PostProverClient
 	poetProver PoetProvingServiceClient
-	poetDb     PoetDb
+	poetDb     PoetDbApi
 
 	stop    bool
 	stopM   sync.Mutex
@@ -94,13 +94,13 @@ type NIPSTBuilder struct {
 	log log.Log
 }
 
-type PoetDb interface {
+type PoetDbApi interface {
 	SubscribeToProofRef(poetId [types.PoetServiceIdLength]byte, roundId uint64) chan []byte
 	GetMembershipMap(proofRef []byte) (map[types.Hash32]bool, error)
 }
 
 func NewNIPSTBuilder(id []byte, postProver PostProverClient,
-	poetProver PoetProvingServiceClient, poetDb PoetDb, log log.Log) *NIPSTBuilder {
+	poetProver PoetProvingServiceClient, poetDb PoetDbApi, log log.Log) *NIPSTBuilder {
 	return newNIPSTBuilder(
 		id,
 		postProver,
@@ -114,7 +114,7 @@ func newNIPSTBuilder(
 	id []byte,
 	postProver PostProverClient,
 	poetProver PoetProvingServiceClient,
-	poetDb PoetDb,
+	poetDb PoetDbApi,
 	log log.Log,
 ) *NIPSTBuilder {
 	return &NIPSTBuilder{

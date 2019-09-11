@@ -1,4 +1,4 @@
-package nipst
+package activation
 
 import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -58,8 +58,8 @@ func (p *poetProvingServiceClientMock) getPoetServiceId() ([types.PoetServiceIdL
 
 type poetDbMock struct{}
 
-// A compile time check to ensure that poetDbMock fully implements PoetDb.
-var _ PoetDb = (*poetDbMock)(nil)
+// A compile time check to ensure that poetDbMock fully implements PoetDbApi.
+var _ PoetDbApi = (*poetDbMock)(nil)
 
 func (*poetDbMock) SubscribeToProofRef(poetId [types.PoetServiceIdLength]byte, roundId uint64) chan []byte {
 	ch := make(chan []byte)
@@ -136,7 +136,7 @@ func TestNIPSTBuilderWithClients(t *testing.T) {
 	r.NoError(err)
 }
 
-func buildNIPST(r *require.Assertions, postCfg config.Config, nipstChallenge types.Hash32, poetDb PoetDb) *types.NIPST {
+func buildNIPST(r *require.Assertions, postCfg config.Config, nipstChallenge types.Hash32, poetDb PoetDbApi) *types.NIPST {
 	poetProver, err := newRPCPoetHarnessClient()
 	r.NotNil(poetProver)
 	defer func() {
@@ -244,7 +244,7 @@ func TestValidator_Validate(t *testing.T) {
 	r.EqualError(err, "NIPST challenge is not equal to expected challenge")
 }
 
-func validateNIPST(npst *types.NIPST, postCfg config.Config, nipstChallenge types.Hash32, poetDb PoetDb) error {
+func validateNIPST(npst *types.NIPST, postCfg config.Config, nipstChallenge types.Hash32, poetDb PoetDbApi) error {
 	v := &Validator{&postCfg, poetDb}
 	return v.Validate(npst, nipstChallenge)
 }

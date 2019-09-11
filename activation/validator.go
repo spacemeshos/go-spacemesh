@@ -1,4 +1,4 @@
-package nipst
+package activation
 
 import (
 	"bytes"
@@ -12,10 +12,10 @@ type verifyPostFunc func(proof *types.PostProof, space uint64, numberOfProvenLab
 
 type Validator struct {
 	postCfg *config.Config
-	poetDb  PoetDb
+	poetDb  PoetDbApi
 }
 
-func NewValidator(postCfg *config.Config, poetDb PoetDb) *Validator {
+func NewValidator(postCfg *config.Config, poetDb PoetDbApi) *Validator {
 	return &Validator{
 		postCfg: postCfg,
 		poetDb:  poetDb,

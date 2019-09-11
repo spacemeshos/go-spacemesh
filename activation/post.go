@@ -1,4 +1,4 @@
-package nipst
+package activation
 
 import (
 	"fmt"

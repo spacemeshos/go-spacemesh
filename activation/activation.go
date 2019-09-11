@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/post/shared"
 	"sync"
 	"sync/atomic"
@@ -77,7 +76,7 @@ type Builder struct {
 	layersPerEpoch  uint16
 	tickProvider    PoETNumberOfTickProvider
 	nipstBuilder    NipstBuilder
-	postProver      nipst.PostProverClient
+	postProver      PostProverClient
 	challenge       *types.NIPSTChallenge
 	nipst           *types.NIPST
 	commitment      *types.PostProof
@@ -96,7 +95,7 @@ type Builder struct {
 }
 
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
-func NewBuilder(nodeId types.NodeId, coinbaseAccount types.Address, db ATXDBProvider, net Broadcaster, mesh MeshProvider, layersPerEpoch uint16, nipstBuilder NipstBuilder, postProver nipst.PostProverClient, layerClock chan types.LayerID, isSyncedFunc func() bool, store BytesStore, log log.Log) *Builder {
+func NewBuilder(nodeId types.NodeId, coinbaseAccount types.Address, db ATXDBProvider, net Broadcaster, mesh MeshProvider, layersPerEpoch uint16, nipstBuilder NipstBuilder, postProver PostProverClient, layerClock chan types.LayerID, isSyncedFunc func() bool, store BytesStore, log log.Log) *Builder {
 	return &Builder{
 		nodeId:          nodeId,
 		coinbaseAccount: coinbaseAccount,
