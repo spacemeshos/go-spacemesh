@@ -135,6 +135,8 @@ func (vq *blockQueue) finishBlockCallback(block *types.Block) func(res bool) err
 			return err
 		}
 
+		s.HandleLateBlock(block)
+
 		return nil
 	}
 }
