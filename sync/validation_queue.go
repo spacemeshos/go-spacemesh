@@ -27,7 +27,6 @@ type blockQueue struct {
 	callbacks     map[interface{}]func(res bool) error
 	depMap        map[interface{}]map[types.Hash32]struct{}
 	reverseDepMap map[types.Hash32][]interface{}
-	visited       map[types.Hash32]struct{}
 }
 
 func NewValidationQueue(srvr WorkerInfra, conf Configuration, msh ValidationInfra, checkLocal CheckLocalFunc, lg log.Log) *blockQueue {
@@ -42,7 +41,6 @@ func NewValidationQueue(srvr WorkerInfra, conf Configuration, msh ValidationInfr
 			queue:               make(chan []types.Hash32, 1000),
 		},
 		Configuration:   conf,
-		visited:         make(map[types.Hash32]struct{}),
 		depMap:          make(map[interface{}]map[types.Hash32]struct{}),
 		reverseDepMap:   make(map[types.Hash32][]interface{}),
 		callbacks:       make(map[interface{}]func(res bool) error),
@@ -56,11 +54,6 @@ func NewValidationQueue(srvr WorkerInfra, conf Configuration, msh ValidationInfr
 
 func (vq *blockQueue) inQueue(id types.Hash32) bool {
 	_, ok := vq.reverseDepMap[id]
-	if ok {
-		return true
-	}
-
-	_, ok = vq.visited[id]
 	if ok {
 		return true
 	}
@@ -86,7 +79,6 @@ func (vq *blockQueue) handleBlock(bjb fetchJob) {
 		}
 
 		vq.Info("fetched  %v", id.String())
-		vq.visited[id] = struct{}{}
 		if err := vq.fastValidation(block); err != nil {
 			vq.Error("ValidationQueue: block validation failed", log.BlockId(uint64(block.ID())), log.Err(err))
 			vq.updateDependencies(id, false)
@@ -153,7 +145,6 @@ func (vq *blockQueue) updateDependencies(block types.Hash32, valid bool) {
 	//clean after block
 	delete(vq.depMap, block)
 	delete(vq.callbacks, block)
-	delete(vq.visited, block)
 
 	doneQueue := make([]types.Hash32, 0, len(vq.depMap))
 	doneQueue = vq.removefromDepMaps(block, valid, doneQueue)
@@ -224,6 +215,7 @@ func (vq *blockQueue) addDependencies(jobId interface{}, blks []types.BlockID, f
 
 	//todo better this is a little hacky
 	if len(dependencys) == 0 {
+		delete(vq.callbacks, jobId)
 		return false, finishCallback(true)
 	}
 
