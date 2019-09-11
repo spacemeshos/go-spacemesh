@@ -72,6 +72,7 @@ type Mesh interface {
 type ninjaTortoise struct {
 	log.Log
 	Mesh         //block cache
+	last         types.LayerID
 	hdist        types.LayerID
 	evict        types.LayerID
 	avgLayerSize int
@@ -341,8 +342,7 @@ func (ni *ninjaTortoise) findMinimalNewlyGoodLayer(lyr *types.Layer) types.Layer
 			//if a majority supports p (p is good)
 			//according to tal we dont have to know the exact amount, we can multiply layer size by number of layers
 			jGood, found := ni.tGood[j]
-			threshold := 0.5 * float64(types.LayerID(ni.avgLayerSize)*(lyr.Index()-p.Layer()))
-
+			threshold := 0.5 * float64(types.LayerID(ni.avgLayerSize)*(ni.last-p.Layer()))
 			if (jGood != p || !found) && float64(ni.tSupport[p]) > threshold {
 				ni.tGood[p.Layer()] = p
 				//if p is the new minimal good layer
@@ -353,7 +353,7 @@ func (ni *ninjaTortoise) findMinimalNewlyGoodLayer(lyr *types.Layer) types.Layer
 		}
 	}
 
-	ni.Info("found minimal good layer %d", minGood)
+	ni.Info("found minimal good layer %d, %d", minGood, ni.tGood[minGood].id)
 	return minGood
 }
 
@@ -447,7 +447,7 @@ func (ni *ninjaTortoise) handleGenesis(genesis *types.Layer) {
 }
 
 //todo send map instead of ni
-func updatePatSupport(ni *ninjaTortoise, p votingPattern, bids []types.BlockID, idx types.LayerID) {
+func (ni *ninjaTortoise) updatePatSupport(p votingPattern, bids []types.BlockID, idx types.LayerID) {
 	if val, found := ni.tPatSupport[p]; !found || val == nil {
 		ni.tPatSupport[p] = make(map[types.LayerID]votingPattern)
 	}
@@ -489,6 +489,11 @@ func (ni *ninjaTortoise) getVote(id types.BlockID) vec {
 
 func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) {
 	ni.With().Info("Tortoise update tables", log.LayerId(uint64(newlyr.Index())), log.Int("n_blocks", len(newlyr.Blocks())))
+
+	if newlyr.Index() > ni.last {
+		ni.last = newlyr.Index()
+	}
+
 	defer ni.evictOutOfPbase()
 	ni.processBlocks(newlyr)
 
@@ -564,7 +569,7 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) {
 				}
 
 				if idx > ni.pBase.Layer() {
-					updatePatSupport(ni, p, bids, idx)
+					ni.updatePatSupport(p, bids, idx)
 				}
 			}
 
