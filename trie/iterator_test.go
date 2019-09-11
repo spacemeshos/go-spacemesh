@@ -19,11 +19,12 @@ package trie
 import (
 	"bytes"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"testing"
 
-	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 func TestIterator(t *testing.T) {
@@ -67,8 +68,8 @@ func TestIteratorLargeData(t *testing.T) {
 	vals := make(map[string]*kv)
 
 	for i := byte(0); i < 255; i++ {
-		value := &kv{common.LeftPadBytes([]byte{i}, 32), []byte{i}, false}
-		value2 := &kv{common.LeftPadBytes([]byte{10, i}, 32), []byte{i}, false}
+		value := &kv{util.LeftPadBytes([]byte{i}, 32), []byte{i}, false}
+		value2 := &kv{util.LeftPadBytes([]byte{10, i}, 32), []byte{i}, false}
 		trie.Update(value.k, value.v)
 		trie.Update(value2.k, value2.v)
 		vals[string(value.k)] = value
@@ -101,9 +102,9 @@ func TestNodeIteratorCoverage(t *testing.T) {
 	db, trie, _ := makeTestTrie()
 
 	// Gather all the node hashes found by the iterator
-	hashes := make(map[common.Hash]struct{})
+	hashes := make(map[types.Hash32]struct{})
 	for it := trie.NodeIterator(nil); it.Next(true); {
-		if it.Hash() != (common.Hash{}) {
+		if it.Hash() != (types.Hash32{}) {
 			hashes[it.Hash()] = struct{}{}
 		}
 	}
@@ -114,14 +115,14 @@ func TestNodeIteratorCoverage(t *testing.T) {
 		}
 	}
 	for hash, obj := range db.nodes {
-		if obj != nil && hash != (common.Hash{}) {
+		if obj != nil && hash != (types.Hash32{}) {
 			if _, ok := hashes[hash]; !ok {
 				t.Errorf("state entry not reported %x", hash)
 			}
 		}
 	}
 	for _, key := range db.diskdb.(*database.MemDatabase).Keys() {
-		if _, ok := hashes[common.BytesToHash(key)]; !ok {
+		if _, ok := hashes[types.BytesToHash(key)]; !ok {
 			t.Errorf("state entry not reported %x", key)
 		}
 	}
@@ -292,7 +293,7 @@ func testIteratorContinueAfterError(t *testing.T, memonly bool) {
 	diskdb := database.NewMemDatabase()
 	triedb := NewDatabase(diskdb)
 
-	tr, _ := New(common.Hash{}, triedb)
+	tr, _ := New(types.Hash32{}, triedb)
 	for _, val := range testdata1 {
 		tr.Update([]byte(val.k), []byte(val.v))
 	}
@@ -304,7 +305,7 @@ func testIteratorContinueAfterError(t *testing.T, memonly bool) {
 
 	var (
 		diskKeys [][]byte
-		memKeys  []common.Hash
+		memKeys  []types.Hash32
 	)
 	if memonly {
 		memKeys = triedb.Nodes()
@@ -318,7 +319,7 @@ func testIteratorContinueAfterError(t *testing.T, memonly bool) {
 		// Remove a random node from the database. It can't be the root node
 		// because that one is already loaded.
 		var (
-			rkey common.Hash
+			rkey types.Hash32
 			rval []byte
 			robj *cachedNode
 		)
@@ -379,7 +380,7 @@ func testIteratorContinueAfterSeekError(t *testing.T, memonly bool) {
 	diskdb := database.NewMemDatabase()
 	triedb := NewDatabase(diskdb)
 
-	ctr, _ := New(common.Hash{}, triedb)
+	ctr, _ := New(types.Hash32{}, triedb)
 	for _, val := range testdata1 {
 		ctr.Update([]byte(val.k), []byte(val.v))
 	}
@@ -387,7 +388,7 @@ func testIteratorContinueAfterSeekError(t *testing.T, memonly bool) {
 	if !memonly {
 		triedb.Commit(root, true)
 	}
-	barNodeHash := common.HexToHash("05041990364eb72fcb1127652ce40d8bab765f2bfe53225b1170d276cc101c2e")
+	barNodeHash := types.HexToHash32("05041990364eb72fcb1127652ce40d8bab765f2bfe53225b1170d276cc101c2e")
 	var (
 		barNodeBlob []byte
 		barNodeObj  *cachedNode

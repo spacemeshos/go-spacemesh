@@ -2,8 +2,8 @@ package hare
 
 import (
 	"errors"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/types"
 )
 
 type messageValidator interface {
@@ -35,7 +35,7 @@ func (ev *eligibilityValidator) validateRole(m *Msg) (bool, error) {
 	}
 
 	if m.InnerMsg == nil {
-		ev.Warning("Eligibility validator: InnerMsg is nil")
+		ev.Error("Eligibility validator: InnerMsg is nil")
 		return false, errors.New("fatal: nil inner message")
 	}
 
@@ -47,18 +47,18 @@ func (ev *eligibilityValidator) validateRole(m *Msg) (bool, error) {
 
 	nId, err := ev.identityProvider.GetIdentity(pub.String())
 	if err != nil {
-		ev.With().Error("Eligibility validator: GetIdentity failed", log.Err(err), log.String("sender_id", pub.ShortString()))
+		ev.With().Error("Eligibility validator: GetIdentity failed (ignore if the safe layer is in genesis)", log.Err(err), log.String("sender_id", pub.ShortString()))
 		return false, err
 	}
 
 	// validate role
 	res, err := ev.oracle.Eligible(layer, m.InnerMsg.K, expectedCommitteeSize(m.InnerMsg.K, ev.maxExpActives, ev.expLeaders), nId, m.InnerMsg.RoleProof)
 	if err != nil {
-		ev.Error("Could not retrieve eligibility result err=%v", err)
+		ev.With().Error("Eligibility validator: could not retrieve eligibility result", log.Err(err))
 		return false, err
 	}
 	if !res {
-		ev.Warning("Role validation failed for %v", pub.ShortString())
+		ev.With().Error("Eligibility validator: sender is not eligible to participate", log.String("sender_pub", pub.ShortString()))
 		return false, nil
 	}
 

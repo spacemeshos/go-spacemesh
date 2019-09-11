@@ -19,9 +19,9 @@ package trie
 import (
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common"
-	"github.com/spacemeshos/go-spacemesh/common/prque"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/prque"
 )
 
 // Putter wraps the database write operation supported by both batches and regular databases.
@@ -39,9 +39,9 @@ var ErrAlreadyProcessed = errors.New("already processed")
 
 // request represents a scheduled or already in-flight state retrieval request.
 type request struct {
-	hash common.Hash // Hash of the node data content to retrieve
-	data []byte      // Data content of the node, cached until all subtrees complete
-	raw  bool        // Whether this is a raw entry (code) or a trie node
+	hash types.Hash32 // Hash of the node data content to retrieve
+	data []byte       // Data content of the node, cached until all subtrees complete
+	raw  bool         // Whether this is a raw entry (code) or a trie node
 
 	parents []*request // Parent state nodes referencing this entry (notify all upon completion)
 	depth   int        // Depth level within the trie the node is located to prioritise DFS
@@ -53,22 +53,22 @@ type request struct {
 // SyncResult is a simple list to return missing nodes along with their request
 // hashes.
 type SyncResult struct {
-	Hash common.Hash // Hash of the originally unknown trie node
-	Data []byte      // Data content of the retrieved node
+	Hash types.Hash32 // Hash of the originally unknown trie node
+	Data []byte       // Data content of the retrieved node
 }
 
 // syncMemBatch is an in-memory buffer of successfully downloaded but not yet
 // persisted data items.
 type syncMemBatch struct {
-	batch map[common.Hash][]byte // In-memory membatch of recently completed items
-	order []common.Hash          // Order of completion to prevent out-of-order data loss
+	batch map[types.Hash32][]byte // In-memory membatch of recently completed items
+	order []types.Hash32          // Order of completion to prevent out-of-order data loss
 }
 
 // newSyncMemBatch allocates a new memory-buffer for not-yet persisted trie nodes.
 func newSyncMemBatch() *syncMemBatch {
 	return &syncMemBatch{
-		batch: make(map[common.Hash][]byte),
-		order: make([]common.Hash, 0, 256),
+		batch: make(map[types.Hash32][]byte),
+		order: make([]types.Hash32, 0, 256),
 	}
 }
 
@@ -76,26 +76,26 @@ func newSyncMemBatch() *syncMemBatch {
 // unknown trie hashes to retrieve, accepts node data associated with said hashes
 // and reconstructs the trie step by step until all is done.
 type Sync struct {
-	database DatabaseReader           // Persistent database to check for existing entries
-	membatch *syncMemBatch            // Memory buffer to avoid frequent database writes
-	requests map[common.Hash]*request // Pending requests pertaining to a key hash
-	queue    *prque.Prque             // Priority queue with the pending requests
+	database DatabaseReader            // Persistent database to check for existing entries
+	membatch *syncMemBatch             // Memory buffer to avoid frequent database writes
+	requests map[types.Hash32]*request // Pending requests pertaining to a key hash
+	queue    *prque.Prque              // Priority queue with the pending requests
 }
 
 // NewSync creates a new trie data download scheduler.
-func NewSync(root common.Hash, database DatabaseReader, callback LeafCallback) *Sync {
+func NewSync(root types.Hash32, database DatabaseReader, callback LeafCallback) *Sync {
 	ts := &Sync{
 		database: database,
 		membatch: newSyncMemBatch(),
-		requests: make(map[common.Hash]*request),
+		requests: make(map[types.Hash32]*request),
 		queue:    prque.New(nil),
 	}
-	ts.AddSubTrie(root, 0, common.Hash{}, callback)
+	ts.AddSubTrie(root, 0, types.Hash32{}, callback)
 	return ts
 }
 
 // AddSubTrie registers a new trie to the sync code, rooted at the designated parent.
-func (s *Sync) AddSubTrie(root common.Hash, depth int, parent common.Hash, callback LeafCallback) {
+func (s *Sync) AddSubTrie(root types.Hash32, depth int, parent types.Hash32, callback LeafCallback) {
 	// Short circuit if the trie is empty or already known
 	if root == emptyRoot {
 		return
@@ -115,7 +115,7 @@ func (s *Sync) AddSubTrie(root common.Hash, depth int, parent common.Hash, callb
 		callback: callback,
 	}
 	// If this sub-trie has a designated parent, link them together
-	if parent != (common.Hash{}) {
+	if parent != (types.Hash32{}) {
 		ancestor := s.requests[parent]
 		if ancestor == nil {
 			log.Panic(fmt.Sprintf("sub-trie ancestor not found: %x", parent))
@@ -130,7 +130,7 @@ func (s *Sync) AddSubTrie(root common.Hash, depth int, parent common.Hash, callb
 // interpreted as a trie node, but rather accepted and stored into the database
 // as is. This method's goal is to support misc state metadata retrievals (e.g.
 // contract code).
-func (s *Sync) AddRawEntry(hash common.Hash, depth int, parent common.Hash) {
+func (s *Sync) AddRawEntry(hash types.Hash32, depth int, parent types.Hash32) {
 	// Short circuit if the entry is empty or already known
 	if hash == emptyState {
 		return
@@ -148,7 +148,7 @@ func (s *Sync) AddRawEntry(hash common.Hash, depth int, parent common.Hash) {
 		depth: depth,
 	}
 	// If this sub-trie has a designated parent, link them together
-	if parent != (common.Hash{}) {
+	if parent != (types.Hash32{}) {
 		ancestor := s.requests[parent]
 		if ancestor == nil {
 			log.Panic(fmt.Sprintf("raw-entry ancestor not found: %x", parent))
@@ -160,10 +160,10 @@ func (s *Sync) AddRawEntry(hash common.Hash, depth int, parent common.Hash) {
 }
 
 // Missing retrieves the known missing nodes from the trie for retrieval.
-func (s *Sync) Missing(max int) []common.Hash {
-	requests := []common.Hash{}
+func (s *Sync) Missing(max int) []types.Hash32 {
+	requests := []types.Hash32{}
 	for !s.queue.Empty() && (max == 0 || len(requests) < max) {
-		requests = append(requests, s.queue.PopItem().(common.Hash))
+		requests = append(requests, s.queue.PopItem().(types.Hash32))
 	}
 	return requests
 }
@@ -292,7 +292,7 @@ func (s *Sync) children(req *request, object node) ([]*request, error) {
 		// If the child references another node, resolve or schedule
 		if node, ok := (child.node).(hashNode); ok {
 			// Try to resolve the node from the local database
-			hash := common.BytesToHash(node)
+			hash := types.BytesToHash(node)
 			if _, ok := s.membatch.batch[hash]; ok {
 				continue
 			}

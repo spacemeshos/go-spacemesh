@@ -18,17 +18,18 @@ package trie
 
 import (
 	"bytes"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"runtime"
 	"sync"
 	"testing"
 
-	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 func newEmptySecure() *SecureTrie {
-	trie, _ := NewSecure(common.Hash{}, NewDatabase(database.NewMemDatabase()), 0)
+	trie, _ := NewSecure(types.Hash32{}, NewDatabase(database.NewMemDatabase()), 0)
 	return trie
 }
 
@@ -37,23 +38,23 @@ func makeTestSecureTrie() (*Database, *SecureTrie, map[string][]byte) {
 	// Create an empty trie
 	triedb := NewDatabase(database.NewMemDatabase())
 
-	trie, _ := NewSecure(common.Hash{}, triedb, 0)
+	trie, _ := NewSecure(types.Hash32{}, triedb, 0)
 
 	// Fill it with some arbitrary data
 	content := make(map[string][]byte)
 	for i := byte(0); i < 255; i++ {
 		// Map the same data under multiple keys
-		key, val := common.LeftPadBytes([]byte{1, i}, 32), []byte{i}
+		key, val := util.LeftPadBytes([]byte{1, i}, 32), []byte{i}
 		content[string(key)] = val
 		trie.Update(key, val)
 
-		key, val = common.LeftPadBytes([]byte{2, i}, 32), []byte{i}
+		key, val = util.LeftPadBytes([]byte{2, i}, 32), []byte{i}
 		content[string(key)] = val
 		trie.Update(key, val)
 
 		// Add some other data to inflate the trie
 		for j := byte(3); j < 13; j++ {
-			key, val = common.LeftPadBytes([]byte{j, i}, 32), []byte{j, i}
+			key, val = util.LeftPadBytes([]byte{j, i}, 32), []byte{j, i}
 			content[string(key)] = val
 			trie.Update(key, val)
 		}
@@ -84,7 +85,7 @@ func TestSecureDelete(t *testing.T) {
 		}
 	}
 	hash := trie.Hash()
-	exp := common.HexToHash("29b235a58c3c25ab83010c327d5932bcf05324b7d6b1185e650798034783ca9d")
+	exp := types.HexToHash32("29b235a58c3c25ab83010c327d5932bcf05324b7d6b1185e650798034783ca9d")
 	if hash != exp {
 		t.Errorf("expected %x got %x", exp, hash)
 	}
@@ -125,15 +126,15 @@ func TestSecureTrieConcurrency(t *testing.T) {
 
 			for j := byte(0); j < 255; j++ {
 				// Map the same data under multiple keys
-				key, val := common.LeftPadBytes([]byte{byte(index), 1, j}, 32), []byte{j}
+				key, val := util.LeftPadBytes([]byte{byte(index), 1, j}, 32), []byte{j}
 				tries[index].Update(key, val)
 
-				key, val = common.LeftPadBytes([]byte{byte(index), 2, j}, 32), []byte{j}
+				key, val = util.LeftPadBytes([]byte{byte(index), 2, j}, 32), []byte{j}
 				tries[index].Update(key, val)
 
 				// Add some other data to inflate the trie
 				for k := byte(3); k < 13; k++ {
-					key, val = common.LeftPadBytes([]byte{byte(index), k, j}, 32), []byte{k, j}
+					key, val = util.LeftPadBytes([]byte{byte(index), k, j}, 32), []byte{k, j}
 					tries[index].Update(key, val)
 				}
 			}

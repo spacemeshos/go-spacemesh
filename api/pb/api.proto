@@ -121,5 +121,11 @@ service SpacemeshService {
           body: "*"
         };
     }
+    rpc GetUpcomingAwards(google.protobuf.Empty) returns (EligibleLayers) {
+        option (google.api.http) = {
+          post: "/v1/getupcomingawards"
+          body: "*"
+        };
+    }
 }
 

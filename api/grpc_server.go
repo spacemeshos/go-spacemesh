@@ -6,12 +6,11 @@ import (
 	"fmt"
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/api/pb"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/miner"
-	"github.com/spacemeshos/go-spacemesh/types"
 	"net"
 	"strconv"
 
@@ -40,7 +39,7 @@ func (s SpacemeshGrpcService) Echo(ctx context.Context, in *pb.SimpleMessage) (*
 // Echo returns the response for an echo api request
 func (s SpacemeshGrpcService) GetBalance(ctx context.Context, in *pb.AccountId) (*pb.SimpleMessage, error) {
 	log.Info("GRPC GetBalance msg")
-	addr := address.HexToAddress(in.Address)
+	addr := types.HexToAddress(in.Address)
 	log.Info("GRPC GetBalance for address %x (len %v)", addr, len(addr))
 	if s.StateApi.Exist(addr) != true {
 		log.Error("GRPC GetBalance returned error msg: account does not exist, address %x", addr)
@@ -56,7 +55,7 @@ func (s SpacemeshGrpcService) GetBalance(ctx context.Context, in *pb.AccountId) 
 // Echo returns the response for an echo api request
 func (s SpacemeshGrpcService) GetNonce(ctx context.Context, in *pb.AccountId) (*pb.SimpleMessage, error) {
 	log.Info("GRPC GetNonce msg")
-	addr := address.HexToAddress(in.Address)
+	addr := types.HexToAddress(in.Address)
 
 	if s.StateApi.Exist(addr) != true {
 		log.Error("GRPC GetNonce got error msg: account does not exist, %v", addr)
@@ -125,7 +124,7 @@ func (s SpacemeshGrpcService) StopService() {
 }
 
 type TxAPI interface {
-	ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (address.Address, error)
+	ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (types.Address, error)
 }
 
 // NewGrpcService create a new grpc service using config data.
@@ -175,7 +174,7 @@ func (s SpacemeshGrpcService) startServiceInternal() {
 
 func (s SpacemeshGrpcService) StartMining(ctx context.Context, message *pb.InitPost) (*pb.SimpleMessage, error) {
 	log.Info("GRPC StartMining msg")
-	addr, err := address.StringToAddress(message.Coinbase)
+	addr, err := types.StringToAddress(message.Coinbase)
 	if err != nil {
 		return nil, err
 	}
@@ -188,7 +187,7 @@ func (s SpacemeshGrpcService) StartMining(ctx context.Context, message *pb.InitP
 
 func (s SpacemeshGrpcService) SetAwardsAddress(ctx context.Context, id *pb.AccountId) (*pb.SimpleMessage, error) {
 	log.Info("GRPC SetAwardsAddress msg")
-	addr, err := address.StringToAddress(id.Address)
+	addr, err := types.StringToAddress(id.Address)
 	if err != nil {
 		return &pb.SimpleMessage{}, err
 	}

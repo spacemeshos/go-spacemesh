@@ -3,7 +3,7 @@ package discovery
 import (
 	"context"
 	"errors"
-	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
@@ -78,7 +78,7 @@ func (r *refresher) Bootstrap(ctx context.Context, numpeers int) error {
 loop:
 	for {
 		srv := r.book.AddressCache() // get fresh members to query
-		servers = srv[:common.Min(numpeers, len(srv))]
+		servers = srv[:util.Min(numpeers, len(srv))]
 		res := r.requestAddresses(servers)
 		tries++
 		r.logger.Info("Bootstrap : %d try gave %v results", tries, len(res))

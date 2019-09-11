@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"github.com/spacemeshos/ed25519"
-	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -21,7 +21,7 @@ func (p *PublicKey) Bytes() []byte {
 }
 
 func (p *PublicKey) String() string {
-	return common.Bytes2Hex(p.Bytes())
+	return util.Bytes2Hex(p.Bytes())
 }
 
 func (p *PublicKey) ShortString() string {

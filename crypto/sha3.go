@@ -1,7 +1,7 @@
 package crypto
 
 import (
-	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/crypto/sha3"
 )
 
@@ -17,7 +17,7 @@ func Sha256(data ...[]byte) []byte {
 
 // Keccak256Hash calculates and returns the Keccak256 hash of the input data,
 // converting it to an internal Hash data structure.
-func Keccak256Hash(data ...[]byte) (h common.Hash) {
+func Keccak256Hash(data ...[]byte) (h types.Hash32) {
 	d := sha3.NewKeccak256()
 	for _, b := range data {
 		d.Write(b)

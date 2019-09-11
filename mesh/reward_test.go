@@ -2,10 +2,9 @@ package mesh
 
 import (
 	"github.com/google/uuid"
-	"github.com/spacemeshos/go-spacemesh/address"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/rand"
-	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
 	"math/big"
 	"strconv"
@@ -13,19 +12,19 @@ import (
 )
 
 type MockMapState struct {
-	Rewards map[address.Address]*big.Int
+	Rewards map[types.Address]*big.Int
 	Total   int64
 }
 
-func (MockMapState) ValidateSignature(signed types.Signed) (address.Address, error) {
-	return address.Address{}, nil
+func (MockMapState) ValidateSignature(signed types.Signed) (types.Address, error) {
+	return types.Address{}, nil
 }
 
 func (MockMapState) ApplyTransactions(layer types.LayerID, txs Transactions) (uint32, error) {
 	return 0, nil
 }
 
-func (s *MockMapState) ApplyRewards(layer types.LayerID, miners []address.Address, underQuota map[address.Address]int, bonusReward, diminishedReward *big.Int) {
+func (s *MockMapState) ApplyRewards(layer types.LayerID, miners []types.Address, underQuota map[types.Address]int, bonusReward, diminishedReward *big.Int) {
 	for _, minerId := range miners {
 		if _, has := underQuota[minerId]; !has {
 			s.Rewards[minerId] = bonusReward
@@ -37,8 +36,8 @@ func (s *MockMapState) ApplyRewards(layer types.LayerID, miners []address.Addres
 
 }
 
-func (s *MockMapState) ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (address.Address, error) {
-	return address.Address{}, nil
+func (s *MockMapState) ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (types.Address, error) {
+	return types.Address{}, nil
 }
 
 func ConfigTst() Config {
@@ -69,8 +68,8 @@ func addTransactionsWithGas(mesh *MeshDB, bl *types.Block, numOfTxs int, gasPric
 	for i := 0; i < numOfTxs; i++ {
 		addr := rand.Int63n(10000)
 		//log.Info("adding tx with gas price %v nonce %v", gasPrice, i)
-		tx := types.NewAddressableTx(uint64(i), address.HexToAddress("1"),
-			address.HexToAddress(strconv.FormatUint(uint64(addr), 10)),
+		tx := types.NewAddressableTx(uint64(i), types.HexToAddress("1"),
+			types.HexToAddress(strconv.FormatUint(uint64(addr), 10)),
 			10,
 			100,
 			uint64(gasPrice))
@@ -83,14 +82,14 @@ func addTransactionsWithGas(mesh *MeshDB, bl *types.Block, numOfTxs int, gasPric
 }
 
 func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
-	s := &MockMapState{Rewards: make(map[address.Address]*big.Int)}
+	s := &MockMapState{Rewards: make(map[types.Address]*big.Int)}
 	layers, atxdb := getMeshWithMapState("t1", s)
 	defer layers.Close()
 
 	var totalRewards int64
 	block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data1"))
 
-	coinbase1 := address.HexToAddress("0xaaa")
+	coinbase1 := types.HexToAddress("0xaaa")
 	atx := types.NewActivationTx(types.NodeId{"1", []byte("bbbbb")}, coinbase1, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 10, []types.BlockID{}, &types.NIPST{})
 	atxdb.AddAtx(atx.Id(), atx)
 	block1.ATXID = atx.Id()
@@ -98,7 +97,7 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 
 	block2 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data2"))
 
-	coinbase2 := address.HexToAddress("0xbbb")
+	coinbase2 := types.HexToAddress("0xbbb")
 	atx = types.NewActivationTx(types.NodeId{"2", []byte("bbbbb")}, coinbase2, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 10, []types.BlockID{}, &types.NIPST{})
 	atxdb.AddAtx(atx.Id(), atx)
 	block2.ATXID = atx.Id()
@@ -106,7 +105,7 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 
 	block3 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data3"))
 
-	coinbase3 := address.HexToAddress("0xccc")
+	coinbase3 := types.HexToAddress("0xccc")
 	atx = types.NewActivationTx(types.NodeId{"3", []byte("bbbbb")}, coinbase3, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 10, []types.BlockID{}, &types.NIPST{})
 	atxdb.AddAtx(atx.Id(), atx)
 	block3.ATXID = atx.Id()
@@ -114,7 +113,7 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 
 	block4 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data4"))
 
-	coinbase4 := address.HexToAddress("0xddd")
+	coinbase4 := types.HexToAddress("0xddd")
 	atx = types.NewActivationTx(types.NodeId{"4", []byte("bbbbb")}, coinbase4, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 10, []types.BlockID{}, &types.NIPST{})
 	atxdb.AddAtx(atx.Id(), atx)
 	block4.ATXID = atx.Id()
@@ -153,35 +152,35 @@ func NewTestRewardParams() Config {
 }
 
 func TestMesh_AccumulateRewards_underQuota(t *testing.T) {
-	s := &MockMapState{Rewards: make(map[address.Address]*big.Int)}
+	s := &MockMapState{Rewards: make(map[types.Address]*big.Int)}
 	layers, atxdb := getMeshWithMapState("t1", s)
 	defer layers.Close()
 
 	var totalRewards int64
 
 	block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data1"))
-	coinbase1 := address.HexToAddress("0xaaa")
+	coinbase1 := types.HexToAddress("0xaaa")
 	totalRewards += addTransactionsWithGas(layers.MeshDB, block1, 10, 8)
 	atx1 := types.NewActivationTx(types.NodeId{"aaaaaa", []byte("bbbbb")}, coinbase1, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 10, []types.BlockID{}, &types.NIPST{})
 	atxdb.AddAtx(atx1.Id(), atx1)
 	block1.ATXID = atx1.Id()
 
 	block2 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data2"))
-	coinbase2 := address.HexToAddress("0xbbb")
+	coinbase2 := types.HexToAddress("0xbbb")
 	totalRewards += addTransactionsWithGas(layers.MeshDB, block2, 10, 9)
 	atx2 := types.NewActivationTx(types.NodeId{"aaaaaa", []byte("bbbbb")}, coinbase2, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 10, []types.BlockID{}, &types.NIPST{})
 	atxdb.AddAtx(atx2.Id(), atx2)
 	block2.ATXID = atx2.Id()
 
 	block3 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data3"))
-	coinbase3 := address.HexToAddress("0xccc")
+	coinbase3 := types.HexToAddress("0xccc")
 	totalRewards += addTransactionsWithGas(layers.MeshDB, block3, 17, 10)
 	atx3 := types.NewActivationTx(types.NodeId{"aaaaaa", []byte("bbbbb")}, coinbase3, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 10, []types.BlockID{}, &types.NIPST{})
 	atxdb.AddAtx(atx3.Id(), atx3)
 	block3.ATXID = atx3.Id()
 
 	block4 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data4"))
-	coinbase4 := address.HexToAddress("0xddd")
+	coinbase4 := types.HexToAddress("0xddd")
 	totalRewards += addTransactionsWithGas(layers.MeshDB, block4, 16, 11)
 	atx4 := types.NewActivationTx(types.NodeId{"aaaaaa", []byte("bbbbb")}, coinbase4, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 10, []types.BlockID{}, &types.NIPST{})
 	atxdb.AddAtx(atx4.Id(), atx4)
@@ -209,7 +208,7 @@ func createLayer(mesh *Mesh, id types.LayerID, numOfBlocks, maxTransactions int,
 	for i := 0; i < numOfBlocks; i++ {
 		block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), id, []byte("data1"))
 		nodeid := types.NodeId{strconv.Itoa(i), []byte("bbbbb")}
-		coinbase := address.HexToAddress(nodeid.Key)
+		coinbase := types.HexToAddress(nodeid.Key)
 		atx := types.NewActivationTx(nodeid, coinbase, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 10, []types.BlockID{}, &types.NIPST{})
 		atxdb.AddAtx(atx.Id(), atx)
 		block1.ATXID = atx.Id()
@@ -224,7 +223,7 @@ func TestMesh_integration(t *testing.T) {
 	numofBlocks := 10
 	maxTxs := 20
 
-	s := &MockMapState{Rewards: make(map[address.Address]*big.Int)}
+	s := &MockMapState{Rewards: make(map[types.Address]*big.Int)}
 	layers, atxdb := getMeshWithMapState("t1", s)
 	defer layers.Close()
 
@@ -263,14 +262,14 @@ func TestMesh_calcRewards(t *testing.T) {
 }
 
 func TestMesh_MergeDoubles(t *testing.T) {
-	s := &MockMapState{Rewards: make(map[address.Address]*big.Int)}
+	s := &MockMapState{Rewards: make(map[types.Address]*big.Int)}
 	layers, _ := getMeshWithMapState("t1", s)
 	defer layers.Close()
-	dst := address.HexToAddress("2")
+	dst := types.HexToAddress("2")
 	transactions := []*Transaction{
 		{
 			AccountNonce: 1,
-			Origin:       address.HexToAddress("1"),
+			Origin:       types.HexToAddress("1"),
 			Recipient:    &dst,
 			Amount:       big.NewInt(10),
 			GasLimit:     100,
@@ -279,7 +278,7 @@ func TestMesh_MergeDoubles(t *testing.T) {
 		},
 		{
 			AccountNonce: 1,
-			Origin:       address.HexToAddress("1"),
+			Origin:       types.HexToAddress("1"),
 			Recipient:    &dst,
 			Amount:       big.NewInt(10),
 			GasLimit:     100,
@@ -288,7 +287,7 @@ func TestMesh_MergeDoubles(t *testing.T) {
 		},
 		{
 			AccountNonce: 1,
-			Origin:       address.HexToAddress("1"),
+			Origin:       types.HexToAddress("1"),
 			Recipient:    &dst,
 			Amount:       big.NewInt(10),
 			GasLimit:     100,

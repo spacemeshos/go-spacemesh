@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 
 from tests import queries, analyse
-from tests import pod, deployment
+from tests import pod, deployment, statefulset
 from tests.fixtures import load_config, DeploymentInfo, NetworkDeploymentInfo
 from tests.fixtures import init_session, set_namespace, set_docker_images, session_id
 from tests import tx_generator
@@ -16,12 +16,13 @@ from kubernetes.stream import stream
 from pytest_testconfig import config as testconfig
 from elasticsearch_dsl import Search, Q
 from tests.misc import ContainerSpec, CoreV1ApiClient
-from tests.queries import ES
+from tests.context import ES
 from tests.hare.assert_hare import validate_hare
 
 BOOT_DEPLOYMENT_FILE = './k8s/bootstrapoet-w-conf.yml'
+BOOT_STATEFULSET_FILE = './k8s/bootstrapoet-w-conf-ss.yml'
 CLIENT_DEPLOYMENT_FILE = './k8s/client-w-conf.yml'
-CLIENT_POD_FILE = './k8s/single-client-w-conf.yml'
+CLIENT_STATEFULSET_FILE = './k8s/client-w-conf-ss.yml'
 CURL_POD_FILE = './k8s/curl.yml'
 
 BOOTSTRAP_PORT = 7513
@@ -47,6 +48,63 @@ def query_bootstrap_es(indx, namespace, bootstrap_po_name):
     return None
 
 
+def get_conf(bs_info, client_config, setup_oracle=None, setup_poet=None, args=None):
+
+    client_args = {} if 'args' not in client_config else client_config['args']
+
+    if args is not None:
+        for arg in args:
+            client_args[arg] = args[arg]
+
+    cspec = ContainerSpec(cname='client', specs=client_config)
+
+    if setup_oracle:
+        client_args['oracle_server'] = 'http://{0}:{1}'.format(setup_oracle, ORACLE_SERVER_PORT)
+
+    if setup_poet:
+        client_args['poet_server'] = '{0}:{1}'.format(setup_poet, POET_SERVER_PORT)
+
+    cspec.append_args(bootnodes=node_string(bs_info['key'], bs_info['pod_ip'], BOOTSTRAP_PORT, BOOTSTRAP_PORT),
+                      genesis_time=GENESIS_TIME.isoformat('T', 'seconds'))
+
+    if len(client_args) > 0:
+        cspec.append_args(**client_args)
+    return cspec
+
+
+def add_multi_clients(deployment_id, container_specs, size=2):
+
+    k8s_file, k8s_create_func = choose_k8s_object_create(testconfig['client'],
+                                                         CLIENT_DEPLOYMENT_FILE,
+                                                         CLIENT_STATEFULSET_FILE)
+    resp = k8s_create_func(k8s_file, testconfig['namespace'],
+                           deployment_id=deployment_id,
+                           replica_size=size,
+                           container_specs=container_specs,
+                           time_out=testconfig['deployment_ready_time_out'])
+
+    client_pods = CoreV1ApiClient().list_namespaced_pod(testconfig['namespace'],
+                                                        include_uninitialized=True,
+                                                        label_selector=("name={0}".format(
+                                                            resp.metadata._name.split('-')[1]))).items
+    pods = []
+    for c in client_pods:
+        pod_name = c.metadata.name
+        if pod_name.startswith(resp.metadata.name):
+            pods.append(pod_name)
+    return pods
+
+
+def choose_k8s_object_create(config, deployment_file, statefulset_file):
+    dep_type = 'deployment' if 'deployment_type' not in config else config['deployment_type']
+    if dep_type == 'deployment':
+        return deployment_file, deployment.create_deployment
+    elif dep_type == 'statefulset':
+        return statefulset_file, statefulset.create_statefulset
+    else:
+        raise Exception("Unknown deployment type in configuration. Please check your config.yaml")
+
+
 def setup_bootstrap_in_namespace(namespace, bs_deployment_info, bootstrap_config, oracle=None, poet=None, dep_time_out=120):
 
     bootstrap_args = {} if 'args' not in bootstrap_config else bootstrap_config['args']
@@ -61,11 +119,14 @@ def setup_bootstrap_in_namespace(namespace, bs_deployment_info, bootstrap_config
     cspec.append_args(genesis_time=GENESIS_TIME.isoformat('T', 'seconds'),
                       **bootstrap_args)
 
-    resp = deployment.create_deployment(BOOT_DEPLOYMENT_FILE, namespace,
-                                        deployment_id=bs_deployment_info.deployment_id,
-                                        replica_size=bootstrap_config['replicas'],
-                                        container_specs=cspec,
-                                        time_out=dep_time_out)
+    k8s_file, k8s_create_func = choose_k8s_object_create(bootstrap_config,
+                                                         BOOT_DEPLOYMENT_FILE,
+                                                         BOOT_STATEFULSET_FILE)
+    resp = k8s_create_func(k8s_file, namespace,
+                           deployment_id=bs_deployment_info.deployment_id,
+                           replica_size=bootstrap_config['replicas'],
+                           container_specs=cspec,
+                           time_out=dep_time_out)
 
     bs_deployment_info.deployment_name = resp.metadata._name
     # The tests assume we deploy only 1 bootstrap
@@ -94,90 +155,20 @@ def setup_bootstrap_in_namespace(namespace, bs_deployment_info, bootstrap_config
     bs_deployment_info.pods = [bs_pod]
     return bs_deployment_info
 
-# ==============================================================================
-#    Fixtures
-# ==============================================================================
-
-
-def setup_server(deployment_name, deployment_file, namespace):
-    deployment_name_prefix = deployment_name.split('-')[1]
-    namespaced_pods = CoreV1ApiClient().list_namespaced_pod(namespace,
-                                                            label_selector=(
-                                                                "name={0}".format(deployment_name_prefix))).items
-    if namespaced_pods:
-        # if server already exist -> delete it
-        deployment.delete_deployment(deployment_name, namespace)
-
-    resp = deployment.create_deployment(deployment_file, namespace, time_out=testconfig['deployment_ready_time_out'])
-    namespaced_pods = CoreV1ApiClient().list_namespaced_pod(namespace,
-                                                            label_selector=(
-                                                                "name={0}".format(deployment_name_prefix))).items
-    if not namespaced_pods:
-        raise Exception('Could not setup Server: {0}'.format(deployment_name))
-
-    ip = namespaced_pods[0].status.pod_ip
-    if ip is None:
-        print("{0} IP was None, trying again..".format(deployment_name_prefix))
-        time.sleep(3)
-        # retry
-        namespaced_pods = CoreV1ApiClient().list_namespaced_pod(namespace,
-                                                                label_selector=(
-                                                                    "name={0}".format(deployment_name_prefix))).items
-        ip = namespaced_pods[0].status.pod_ip
-        if ip is None:
-            raise Exception("Failed to retrieve {0} ip address".format(deployment_name_prefix))
-
-    return ip
-
-
-@pytest.fixture(scope='module')
-def setup_bootstrap(request, init_session):
-    bootstrap_deployment_info = DeploymentInfo(dep_id=init_session)
-
-    return setup_bootstrap_in_namespace(testconfig['namespace'],
-                                        bootstrap_deployment_info,
-                                        testconfig['bootstrap'],
-                                        dep_time_out=testconfig['deployment_ready_time_out'])
-
-
-def node_string(key, ip, port, discport):
-    return "spacemesh://{0}@{1}:{2}?disc={3}".format(key, ip, port, discport)
-
-
-def get_conf(bs_info, client_config, setup_oracle=None, setup_poet=None, args=None):
-
-    client_args = {} if 'args' not in client_config else client_config['args']
-
-    if args is not None:
-        for arg in args:
-            client_args[arg] = args[arg]
-
-    cspec = ContainerSpec(cname='client', specs=client_config)
-
-    if setup_oracle:
-        client_args['oracle_server'] = 'http://{0}:{1}'.format(setup_oracle, ORACLE_SERVER_PORT)
-
-    if setup_poet:
-        client_args['poet_server'] = '{0}:{1}'.format(setup_poet, POET_SERVER_PORT)
-
-    cspec.append_args(bootnodes=node_string(bs_info['key'], bs_info['pod_ip'], BOOTSTRAP_PORT, BOOTSTRAP_PORT),
-                      genesis_time=GENESIS_TIME.isoformat('T', 'seconds'))
-
-    if len(client_args) > 0:
-        cspec.append_args(**client_args)
-    return cspec
-
 
 def setup_clients_in_namespace(namespace, bs_deployment_info, client_deployment_info, client_config,
                                oracle=None, poet=None, dep_time_out=120):
 
     cspec = get_conf(bs_deployment_info, client_config, oracle, poet)
 
-    resp = deployment.create_deployment(CLIENT_DEPLOYMENT_FILE, namespace,
-                                        deployment_id=client_deployment_info.deployment_id,
-                                        replica_size=client_config['replicas'],
-                                        container_specs=cspec,
-                                        time_out=dep_time_out)
+    k8s_file, k8s_create_func = choose_k8s_object_create(client_config,
+                                                         CLIENT_DEPLOYMENT_FILE,
+                                                         CLIENT_STATEFULSET_FILE)
+    resp = k8s_create_func(k8s_file, namespace,
+                           deployment_id=client_deployment_info.deployment_id,
+                           replica_size=client_config['replicas'],
+                           container_specs=cspec,
+                           time_out=dep_time_out)
 
     client_deployment_info.deployment_name = resp.metadata._name
     client_pods = (
@@ -188,6 +179,33 @@ def setup_clients_in_namespace(namespace, bs_deployment_info, client_deployment_
 
     client_deployment_info.pods = [{'name': c.metadata.name, 'pod_ip': c.status.pod_ip} for c in client_pods]
     return client_deployment_info
+
+
+def api_call(client_ip, data, api, namespace):
+    # todo: this won't work with long payloads - ( `Argument list too long` ). try port-forward ?
+    res = stream(CoreV1ApiClient().connect_post_namespaced_pod_exec, name="curl", namespace=namespace,
+                 command=["curl", "-s", "--request", "POST", "--data", data, "http://" + client_ip + ":9090/" + api],
+                 stderr=True, stdin=False, stdout=True, tty=False, _request_timeout=90)
+    return res
+
+
+def node_string(key, ip, port, discport):
+    return "spacemesh://{0}@{1}:{2}?disc={3}".format(key, ip, port, discport)
+
+
+# ==============================================================================
+#    Fixtures
+# ==============================================================================
+
+
+@pytest.fixture(scope='module')
+def setup_bootstrap(request, init_session):
+    bootstrap_deployment_info = DeploymentInfo(dep_id=init_session)
+
+    return setup_bootstrap_in_namespace(testconfig['namespace'],
+                                        bootstrap_deployment_info,
+                                        testconfig['bootstrap'],
+                                        dep_time_out=testconfig['deployment_ready_time_out'])
 
 
 @pytest.fixture(scope='module')
@@ -210,55 +228,6 @@ def setup_network(request, init_session, setup_bootstrap, setup_clients, add_cur
     return network_deployment
 
 
-def add_single_client(deployment_id, container_specs):
-    resp = pod.create_pod(CLIENT_POD_FILE,
-                          testconfig['namespace'],
-                          deployment_id=deployment_id,
-                          container_specs=container_specs)
-
-    client_name = resp.metadata.name
-    print("Add new client: {0}".format(client_name))
-    return client_name
-
-
-def add_multi_clients(deployment_id, container_specs, size=2):
-    resp = deployment.create_deployment(file_name=CLIENT_DEPLOYMENT_FILE,
-                                        name_space=testconfig['namespace'],
-                                        deployment_id=deployment_id,
-                                        replica_size=size,
-                                        container_specs=container_specs,
-                                        time_out=testconfig['deployment_ready_time_out'])
-    client_pods = CoreV1ApiClient().list_namespaced_pod(testconfig['namespace'],
-                                                        include_uninitialized=True,
-                                                        label_selector=("name={0}".format(
-                                                            resp.metadata._name.split('-')[1]))).items
-    pods = []
-    for c in client_pods:
-        pod_name = c.metadata.name
-        if pod_name.startswith(resp.metadata.name):
-            pods.append(pod_name)
-    return pods
-
-
-# The following fixture should not be used if you wish to add many clients during test.
-# Instead you should call add_single_client directly
-@pytest.fixture()
-def add_client(request, setup_bootstrap, setup_clients):
-    global client_name
-
-    def _add_single_client():
-        global client_name
-        if not setup_bootstrap.pods:
-            raise Exception("Could not find bootstrap node")
-
-        bs_info = setup_bootstrap.pods[0]
-        cspec = get_conf(bs_info, testconfig['client'])
-        client_name = add_single_client(setup_bootstrap.deployment_id, cspec)
-        return client_name
-
-    return _add_single_client()
-
-
 @pytest.fixture(scope='module')
 def wait_genesis():
     # Make sure genesis time has not passed yet and sleep for the rest
@@ -271,13 +240,6 @@ def wait_genesis():
         print('sleep for {0} sec until genesis time'.format(delta_from_genesis))
         time.sleep(delta_from_genesis)
 
-
-def api_call(client_ip, data, api, namespace):
-    # todo: this won't work with long payloads - ( `Argument list too long` ). try port-forward ?
-    res = stream(CoreV1ApiClient().connect_post_namespaced_pod_exec, name="curl", namespace=namespace,
-                 command=["curl", "-s", "--request", "POST", "--data", data, "http://" + client_ip + ":9090/" + api],
-                 stderr=True, stdin=False, stdout=True, tty=False, _request_timeout=90)
-    return res
 
 # The following fixture is currently not in used and mark for deprecattion
 @pytest.fixture(scope='module')
@@ -336,7 +298,6 @@ def add_curl(request, init_session, setup_bootstrap):
 # ==============================================================================
 #    TESTS
 # ==============================================================================
-
 
 dt = datetime.now()
 todaydate = dt.strftime("%Y.%m.%d")

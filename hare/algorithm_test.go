@@ -3,14 +3,15 @@ package hare
 import (
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/amcl/BLS381"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
 )
@@ -45,7 +46,7 @@ func (mr *mockRolacle) Eligible(layer types.LayerID, round int32, committeeSize 
 	return mr.isEligible, mr.err
 }
 
-func (mr *mockRolacle) Proof(id types.NodeId, layer types.LayerID, round int32) ([]byte, error) {
+func (mr *mockRolacle) Proof(layer types.LayerID, round int32) ([]byte, error) {
 	return []byte{}, nil
 }
 
@@ -57,6 +58,7 @@ func (mr *mockRolacle) Unregister(id string) {
 
 type mockP2p struct {
 	count int
+	err   error
 }
 
 func (m *mockP2p) RegisterGossipProtocol(protocol string) chan service.GossipMessage {
@@ -65,7 +67,7 @@ func (m *mockP2p) RegisterGossipProtocol(protocol string) chan service.GossipMes
 
 func (m *mockP2p) Broadcast(protocol string, payload []byte) error {
 	m.count++
-	return nil
+	return m.err
 }
 
 type mockProposalTracker struct {
@@ -305,24 +307,25 @@ func TestConsensusProcess_isEligible(t *testing.T) {
 }
 
 func TestConsensusProcess_sendMessage(t *testing.T) {
+	r := require.New(t)
 	net := &mockP2p{}
-	oracle := &mockRolacle{MockStateQuerier: MockStateQuerier{true, nil}}
 
 	proc := generateConsensusProcess(t)
-	proc.oracle = oracle
 	proc.network = net
 
-	proc.sendMessage(nil)
-	assert.Equal(t, 0, net.count)
+	b := proc.sendMessage(nil)
+	r.Equal(0, net.count)
+	r.False(b)
 	msg := buildStatusMsg(generateSigning(t), proc.s, 0)
 
-	oracle.isEligible = false
-	proc.sendMessage(msg)
-	assert.Equal(t, 0, net.count)
+	net.err = errors.New("mock network failed error")
+	b = proc.sendMessage(msg)
+	r.False(b)
+	r.Equal(1, net.count)
 
-	oracle.isEligible = true
-	proc.sendMessage(msg)
-	assert.Equal(t, 1, net.count)
+	net.err = nil
+	b = proc.sendMessage(msg)
+	r.True(b)
 }
 
 func TestConsensusProcess_procPre(t *testing.T) {
@@ -517,16 +520,35 @@ func TestConsensusProcess_beginRound3(t *testing.T) {
 	assert.Equal(t, 1, network.count)
 }
 
+type mockNet struct {
+	callBroadcast int
+	callRegister  int
+	err           error
+}
+
+func (m *mockNet) Broadcast(protocol string, payload []byte) error {
+	m.callBroadcast++
+	return m.err
+}
+
+func (m *mockNet) RegisterGossipProtocol(protocol string) chan service.GossipMessage {
+	m.callRegister++
+	return nil
+}
+
 func TestConsensusProcess_beginRound4(t *testing.T) {
+	r := require.New(t)
+
 	proc := generateConsensusProcess(t)
 	proc.beginRound1()
 	proc.beginRound2()
 	proc.beginRound3()
-	assert.NotNil(t, proc.commitTracker)
-	assert.NotNil(t, proc.proposalTracker)
+
+	net := &mockNet{}
+	proc.network = net
 	proc.beginRound4()
-	assert.Nil(t, proc.commitTracker)
-	assert.Nil(t, proc.proposalTracker)
+	r.Equal(1, net.callBroadcast)
+	r.True(proc.notifySent)
 }
 
 func TestConsensusProcess_handlePending(t *testing.T) {
@@ -544,39 +566,64 @@ func TestConsensusProcess_handlePending(t *testing.T) {
 }
 
 func TestConsensusProcess_endOfRound3(t *testing.T) {
+	r := require.New(t)
+
 	proc := generateConsensusProcess(t)
 	net := &mockP2p{}
 	proc.network = net
 	mpt := &mockProposalTracker{}
-	proc.proposalTracker = mpt
 	mct := &mockCommitTracker{}
+	proc.proposalTracker = mpt
 	proc.commitTracker = mct
-	proc.notifySent = true
 	proc.endOfRound3()
-	proc.notifySent = false
-	assert.Equal(t, 0, mpt.countIsConflicting)
+	r.Equal(1, mpt.countIsConflicting)
+	r.Nil(proc.proposalTracker)
+	r.Nil(proc.commitTracker)
+
+	proc.proposalTracker = mpt
+	proc.commitTracker = mct
 	mpt.isConflicting = true
 	proc.endOfRound3()
-	assert.Equal(t, 1, mpt.countIsConflicting)
-	assert.Equal(t, 0, mct.countHasEnoughCommits)
+	r.Equal(2, mpt.countIsConflicting)
+	r.Equal(1, mct.countHasEnoughCommits)
+	r.Nil(proc.proposalTracker)
+	r.Nil(proc.commitTracker)
+
+	proc.proposalTracker = mpt
+	proc.commitTracker = mct
 	mpt.isConflicting = false
 	mct.hasEnoughCommits = false
 	proc.endOfRound3()
-	assert.Equal(t, 0, mct.countBuildCertificate)
+	r.Equal(0, mct.countBuildCertificate)
+	r.Nil(proc.proposalTracker)
+	r.Nil(proc.commitTracker)
+
+	proc.proposalTracker = mpt
+	proc.commitTracker = mct
 	mct.hasEnoughCommits = true
 	mct.certificate = nil
 	proc.endOfRound3()
-	assert.Equal(t, 1, mct.countBuildCertificate)
-	assert.Equal(t, 0, mpt.countProposedSet)
+	r.Equal(1, mct.countBuildCertificate)
+	r.Equal(0, mpt.countProposedSet)
+	r.Nil(proc.proposalTracker)
+	r.Nil(proc.commitTracker)
+
+	proc.proposalTracker = mpt
+	proc.commitTracker = mct
 	mct.certificate = &Certificate{}
-	proc.endOfRound3()
 	mpt.proposedSet = nil
 	proc.s = NewSmallEmptySet()
 	proc.endOfRound3()
-	assert.NotNil(t, proc.s)
+	r.NotNil(proc.s)
+	r.Nil(proc.proposalTracker)
+	r.Nil(proc.commitTracker)
+
+	proc.proposalTracker = mpt
+	proc.commitTracker = mct
 	mpt.proposedSet = NewSetFromValues(value1)
 	proc.endOfRound3()
-	assert.True(t, proc.s.Equals(mpt.proposedSet))
-	assert.Equal(t, mct.certificate, proc.certificate)
-	assert.True(t, proc.notifySent)
+	r.True(proc.s.Equals(mpt.proposedSet))
+	r.Equal(mct.certificate, proc.certificate)
+	r.Nil(proc.proposalTracker)
+	r.Nil(proc.commitTracker)
 }

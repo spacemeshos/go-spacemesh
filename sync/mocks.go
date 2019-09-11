@@ -1,11 +1,13 @@
 package sync
 
 import (
-	"github.com/spacemeshos/go-spacemesh/address"
-	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/golang/protobuf/ptypes/duration"
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
-	"github.com/spacemeshos/go-spacemesh/types"
+	"github.com/spacemeshos/go-spacemesh/timesync"
 	"math/big"
+	"time"
 )
 
 type PoetDbMock struct{}
@@ -24,9 +26,9 @@ func (*PoetDbMock) SubscribeToProofRef(poetId [types.PoetServiceIdLength]byte, r
 	return ch
 }
 
-func (*PoetDbMock) GetMembershipMap(poetRoot []byte) (map[common.Hash]bool, error) {
-	hash := common.BytesToHash([]byte("anton"))
-	return map[common.Hash]bool{hash: true}, nil
+func (*PoetDbMock) GetMembershipMap(poetRoot []byte) (map[types.Hash32]bool, error) {
+	hash := types.BytesToHash([]byte("anton"))
+	return map[types.Hash32]bool{hash: true}, nil
 }
 
 type BlockEligibilityValidatorMock struct {
@@ -43,7 +45,27 @@ func (SyntacticValidatorMock) SyntacticallyValid(block *types.BlockHeader) (bool
 	return true, nil
 }
 
-type MeshValidatorMock struct{}
+type MeshValidatorMock struct {
+	delay           time.Duration
+	calls           int
+	layers          *mesh.Mesh
+	vl              types.LayerID // the validated layer
+	countValidated  int
+	countValidate   int
+	validatedLayers map[types.LayerID]struct{}
+}
+
+func (m *MeshValidatorMock) HandleIncomingLayer(lyr *types.Layer) (types.LayerID, types.LayerID) {
+	m.countValidate++
+	m.calls++
+	m.vl = lyr.Index()
+	if m.validatedLayers == nil {
+		m.validatedLayers = make(map[types.LayerID]struct{})
+	}
+	m.validatedLayers[lyr.Index()] = struct{}{}
+	time.Sleep(m.delay)
+	return lyr.Index(), lyr.Index() - 1
+}
 
 func (m *MeshValidatorMock) GetGoodPatternBlocks(layer types.LayerID) (map[types.BlockID]struct{}, error) {
 	panic("implement me")
@@ -52,10 +74,6 @@ func (m *MeshValidatorMock) GetGoodPatternBlocks(layer types.LayerID) (map[types
 func (m *MeshValidatorMock) HandleLateBlock(bl *types.Block)              {}
 func (m *MeshValidatorMock) RegisterLayerCallback(func(id types.LayerID)) {}
 func (mlg *MeshValidatorMock) ContextualValidity(id types.BlockID) bool   { return true }
-
-func (m *MeshValidatorMock) HandleIncomingLayer(layer *types.Layer) (types.LayerID, types.LayerID) {
-	return layer.Index() - 1, layer.Index()
-}
 
 type StateMock struct{}
 
@@ -79,15 +97,15 @@ func (MockState) ApplyTransactions(layer types.LayerID, txs mesh.Transactions) (
 	return 0, nil
 }
 
-func (MockState) ValidateSignature(signed types.Signed) (address.Address, error) {
-	return address.Address{}, nil
+func (MockState) ValidateSignature(signed types.Signed) (types.Address, error) {
+	return types.Address{}, nil
 }
 
-func (MockState) ApplyRewards(layer types.LayerID, miners []address.Address, underQuota map[address.Address]int, bonusReward, diminishedReward *big.Int) {
+func (MockState) ApplyRewards(layer types.LayerID, miners []types.Address, underQuota map[types.Address]int, bonusReward, diminishedReward *big.Int) {
 }
 
-func (MockState) ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (address.Address, error) {
-	return address.Address{}, nil
+func (MockState) ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (types.Address, error) {
+	return types.Address{}, nil
 }
 
 func (s *StateMock) ApplyRewards(layer types.LayerID, miners []string, underQuota map[string]int, bonusReward, diminishedReward *big.Int) {
@@ -107,7 +125,11 @@ func (*MockIStore) GetIdentity(id string) (types.NodeId, error) {
 
 type ValidatorMock struct{}
 
-func (*ValidatorMock) Validate(nipst *types.NIPST, expectedChallenge common.Hash) error {
+func (*ValidatorMock) Validate(nipst *types.NIPST, expectedChallenge types.Hash32) error {
+	return nil
+}
+
+func (*ValidatorMock) VerifyPost(proof *types.PostProof, space uint64) error {
 	return nil
 }
 
@@ -142,4 +164,45 @@ func (MockAtxMemPool) Put(id types.AtxId, item *types.ActivationTx) {
 
 func (MockAtxMemPool) Invalidate(id types.AtxId) {
 
+}
+
+type MockClock struct {
+	ch         map[timesync.LayerTimer]int
+	ids        map[int]timesync.LayerTimer
+	countSub   int
+	countUnsub int
+	Interval   duration.Duration
+	Layer      types.LayerID
+}
+
+func (c *MockClock) Tick() {
+	l := c.GetCurrentLayer()
+	log.Info("tick %v", l)
+	for _, c := range c.ids {
+		c <- l
+	}
+}
+
+func (c *MockClock) GetCurrentLayer() types.LayerID {
+	return c.Layer
+}
+
+func (c *MockClock) Subscribe() timesync.LayerTimer {
+	c.countSub++
+
+	if c.ch == nil {
+		c.ch = make(map[timesync.LayerTimer]int)
+		c.ids = make(map[int]timesync.LayerTimer)
+	}
+	newCh := make(chan types.LayerID, 1)
+	c.ch[newCh] = len(c.ch)
+	c.ids[len(c.ch)] = newCh
+
+	return newCh
+}
+
+func (c *MockClock) Unsubscribe(timer timesync.LayerTimer) {
+	c.countUnsub++
+	delete(c.ids, c.ch[timer])
+	delete(c.ch, timer)
 }

@@ -3,16 +3,15 @@ package oracle
 import (
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/address"
 	"github.com/spacemeshos/go-spacemesh/amcl/BLS381"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/types"
 	"github.com/stretchr/testify/require"
 	"testing"
 )
 
-var atxID = types.AtxId{Hash: [32]byte{1, 3, 3, 7}}
+var atxID = types.AtxId([32]byte{1, 3, 3, 7})
 var nodeID, vrfSigner = generateNodeIDAndSigner()
 var validateVrf = BLS381.Verify2
 var privateKey, publicKey = BLS381.GenKeyPair(BLS381.DefaultSeed())
@@ -292,7 +291,7 @@ func newBlockWithEligibility(layerID types.LayerID, nodeID types.NodeId, atxID t
 
 func TestBlockEligibility_calc(t *testing.T) {
 	r := require.New(t)
-	atxH := types.NewActivationTxWithChallenge(types.NIPSTChallenge{PubLayerIdx: 0}, address.Address{}, 1, nil, nil)
+	atxH := types.NewActivationTxWithChallenge(types.NIPSTChallenge{PubLayerIdx: 0}, types.Address{}, 1, nil, nil, nil)
 	atxH.ActiveSetSize = 10
 	atxDb := &mockAtxDB{atxH: &atxH.ActivationTxHeader}
 	genSetSize := uint32(0)

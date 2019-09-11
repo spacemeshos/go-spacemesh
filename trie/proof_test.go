@@ -19,13 +19,12 @@ package trie
 import (
 	"bytes"
 	crand "crypto/rand"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/database"
 	mrand "github.com/spacemeshos/go-spacemesh/rand"
 	"testing"
 	"time"
-
-	"github.com/spacemeshos/go-spacemesh/common"
 )
 
 func init() {
@@ -196,8 +195,8 @@ func randomTrie(n int) (*Trie, map[string]*kv) {
 	trie := new(Trie)
 	vals := make(map[string]*kv)
 	for i := byte(0); i < 100; i++ {
-		value := &kv{common.LeftPadBytes([]byte{i}, 32), []byte{i}, false}
-		value2 := &kv{common.LeftPadBytes([]byte{i + 10}, 32), []byte{i}, false}
+		value := &kv{util.LeftPadBytes([]byte{i}, 32), []byte{i}, false}
+		value2 := &kv{util.LeftPadBytes([]byte{i + 10}, 32), []byte{i}, false}
 		trie.Update(value.k, value.v)
 		trie.Update(value2.k, value2.v)
 		vals[string(value.k)] = value

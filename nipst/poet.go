@@ -3,8 +3,7 @@ package nipst
 import (
 	"context"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common"
-	"github.com/spacemeshos/go-spacemesh/types"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/poet/rpc/api"
 	"github.com/spacemeshos/poet/service"
 	"google.golang.org/grpc"
@@ -19,7 +18,7 @@ type RPCPoetClient struct {
 // A compile time check to ensure that RPCPoetClient fully implements PoetProvingServiceClient.
 var _ PoetProvingServiceClient = (*RPCPoetClient)(nil)
 
-func (c *RPCPoetClient) submit(challenge common.Hash) (*types.PoetRound, error) {
+func (c *RPCPoetClient) submit(challenge types.Hash32) (*types.PoetRound, error) {
 	req := api.SubmitRequest{Challenge: challenge[:]}
 	res, err := c.client.Submit(context.Background(), &req)
 	if err != nil {

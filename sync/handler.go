@@ -1,30 +1,32 @@
 package sync
 
 import (
+	"encoding/hex"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
-	"github.com/spacemeshos/go-spacemesh/types"
 )
 
 func newLayerHashRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg []byte) []byte {
 	return func(msg []byte) []byte {
-		logger.Debug("handle layer hash request")
-		lyrid := common.BytesToUint64(msg)
+		lyrid := util.BytesToUint64(msg)
+		logger.With().Info("handle layer hash request", log.LayerId(lyrid))
 		layer, err := layers.GetLayer(types.LayerID(lyrid))
 		if err != nil {
 			logger.With().Error("Error handling layer request message", log.LayerId(lyrid), log.Err(err))
 			return nil
 		}
-		return layer.Hash()
+		hash := layer.Hash()
+		return hash[:]
 	}
 }
 
 func newLayerBlockIdsRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg []byte) []byte {
 	return func(msg []byte) []byte {
 		logger.Debug("handle blockIds request")
-		lyrid := common.BytesToUint64(msg)
+		lyrid := util.BytesToUint64(msg)
 		layer, err := layers.GetLayer(types.LayerID(lyrid))
 		if err != nil {
 			logger.Error("Error handling ids request message with LayerID: %d and error: %s", lyrid, err.Error())
@@ -49,24 +51,33 @@ func newLayerBlockIdsRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg 
 	}
 }
 
+//todo better logs
 func newBlockRequestHandler(msh *mesh.Mesh, logger log.Log) func(msg []byte) []byte {
 	return func(msg []byte) []byte {
-		blockid := types.BlockID(common.BytesToUint64(msg))
-		logger.Debug("handle block %v request", blockid)
-		blk, err := msh.GetBlock(blockid)
-		if err != nil {
-			logger.Error("Error handling block request message, with BlockID: %d and err: %v", blockid, err)
+		var blockids []types.Hash32
+		if err := types.BytesToInterface(msg, &blockids); err != nil {
+			logger.Error("Error handling block request message", err)
 			return nil
 		}
 
-		bbytes, err := types.InterfaceToBytes(blk)
+		var blocks []types.Block
+		for _, bid := range blockids {
+			var id = util.BytesToUint64(bid.Bytes())
+			logger.Debug("handle block %v request", id)
+			blk, err := msh.GetBlock(types.BlockID(id))
+			if err != nil {
+				logger.Error("Error handling block request message, with BlockID: %d and err: %v", id, err)
+				continue
+			}
+			blocks = append(blocks, *blk)
+		}
+		bbytes, err := types.InterfaceToBytes(blocks)
 		if err != nil {
-			logger.Error("Error marshaling response message (FetchBlockResp), with BlockID: %d, LayerID: %d and err:", blk.ID(), blk.Layer(), err)
+			logger.Error("Error marshaling response message (FetchBlockResp) ", err)
 			return nil
 		}
 
-		logger.Debug("send block response, block %v", blk.ID())
-
+		logger.Debug("send block response")
 		return bbytes
 	}
 }
@@ -86,8 +97,7 @@ func newTxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 			if tx, err := s.txpool.Get(t); err == nil {
 				txs[t] = &tx
 			} else {
-				logger.Error("Error handling tx request message, with ids: %d", msg)
-				return nil
+				logger.Error("Error handling tx request message, for id: %v", hex.EncodeToString(t[:]))
 			}
 		}
 
@@ -122,9 +132,7 @@ func newATxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 			if tx, err := s.atxpool.Get(t); err == nil {
 				atxs[t] = &tx
 			} else {
-				logger.With().Error("error handling atx request message",
-					log.AtxId(t.ShortId()), log.String("atx_ids", fmt.Sprintf("%x", atxids)))
-				return nil
+				logger.With().Error("error handling atx request message", log.AtxId(t.ShortString()), log.String("atx_ids", fmt.Sprintf("%x", atxids)))
 			}
 		}
 
@@ -148,7 +156,7 @@ func newATxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 func newPoetRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 	return func(proofRef []byte) []byte {
 		proofMessage, err := s.poetDb.GetProofMessage(proofRef)
-		shortPoetRef := proofRef[:common.Min(5, len(proofRef))]
+		shortPoetRef := proofRef[:util.Min(5, len(proofRef))]
 		if err != nil {
 			logger.Warning("unfamiliar PoET proof was requested (id: %x): %v", shortPoetRef, err)
 			return nil

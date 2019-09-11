@@ -1,8 +1,8 @@
 package events
 
 import (
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/types"
 )
 
 const (
@@ -35,6 +35,8 @@ func InitializeEventPubsub(ur string) {
 	publisher, err = NewEventPublisher(ur)
 	if err != nil {
 		log.Panic("cannot init pubsub: %v", err)
+	} else {
+		log.Info("pubsub created")
 	}
 }
 

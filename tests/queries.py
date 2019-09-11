@@ -1,40 +1,14 @@
-import os
 import re
 import time
 import collections
 from datetime import datetime
-
-from elasticsearch import Elasticsearch
 from elasticsearch_dsl import Search, Q
+
+from tests.context import ES
 
 dt = datetime.now()
 todaydate = dt.strftime("%Y.%m.%d")
 current_index = 'kubernetes_cluster-' + todaydate
-
-
-def singleton(cls):
-    instance = [None]
-
-    def wrapper(*args, **kwargs):
-        if instance[0] is None:
-            instance[0] = cls(*args, **kwargs)
-        return instance[0]
-
-    return wrapper
-
-
-@singleton
-class ES:
-
-    def __init__(self):
-        ES_PASSWD = os.getenv("ES_PASSWD")
-        if not ES_PASSWD:
-            raise Exception("Unknown Elasticsearch password. Please check 'ES_PASSWD' environment variable")
-        self.es = Elasticsearch("http://elastic.spacemesh.io",
-                                http_auth=("spacemesh", ES_PASSWD), port=80, timeout=90)
-
-    def get_search_api(self):
-        return self.es
 
 
 def get_podlist(namespace, depname):
@@ -310,24 +284,24 @@ def find_missing(indx, namespace, client_po_name, fields, min=1):
 
 def query_hare_output_set(indx, ns, layer):
     hits = query_message(indx, ns, ns, {'M': 'Consensus process terminated', 'layer_id': str(layer)}, True)
-    lst = [h.set_values for h in hits]
+    lst = [h.current_set for h in hits]
 
     return lst
 
 
 def query_round_1(indx, ns, layer):
-    return query_message(indx, ns, ns, {'M': 'Round 1 ended', 'is_svp_ready': 'true', 'layer_id': str(layer)}, True)
+    return query_message(indx, ns, ns, {'M': 'Round 1 ended', 'is_svp_ready': 'true', 'layer_id': str(layer)}, False)
 
 
 def query_round_2(indx, ns, layer):
-    hits = query_message(indx, ns, ns, {'M': 'Round 2 ended', 'layer_id': str(layer)}, True)
+    hits = query_message(indx, ns, ns, {'M': 'Round 2 ended', 'layer_id': str(layer)}, False)
     filtered = list(filter(lambda x: x.proposed_set != "nil", hits))
 
     return filtered
 
 
 def query_round_3(indx, ns, layer):
-    return query_message(indx, ns, ns, {'M': 'Round 3 ended: committing', 'layer_id': str(layer)}, True)
+    return query_message(indx, ns, ns, {'M': 'message sent', 'msg_type': 'Commit', 'layer_id': str(layer)}, False)
 
 
 def query_pre_round(indx, ns, layer):
@@ -348,3 +322,7 @@ def query_new_iteration(indx, ns):
 
 def query_mem_usage(indx, ns):
     return query_message(indx, ns, ns, {'M': 'json_mem_data'}, False)
+
+
+def query_atx_published(indx, ns, layer):
+    return query_message(indx, ns, ns, {'M': 'atx published', 'layer_id': str(layer)}, False)

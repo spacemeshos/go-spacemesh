@@ -18,7 +18,7 @@ package trie
 
 import (
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/rlp"
 	"io"
@@ -187,7 +187,7 @@ func decodeFull(hash, elems []byte, cachegen uint16) (*fullNode, error) {
 	return n, nil
 }
 
-const hashLen = len(common.Hash{})
+const hashLen = len(types.Hash32{})
 
 func decodeRef(buf []byte, cachegen uint16) (node, []byte, error) {
 	kind, val, rest, err := rlp.Split(buf)

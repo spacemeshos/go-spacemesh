@@ -6,13 +6,11 @@ import (
 	"fmt"
 	xdr "github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/ed25519"
-	"github.com/spacemeshos/go-spacemesh/address"
-	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/trie"
-	"github.com/spacemeshos/go-spacemesh/types"
 	"math/big"
 	"sort"
 	"sync"
@@ -24,7 +22,7 @@ type PseudoRandomizer interface {
 }
 
 type StatePreImages struct {
-	rootHash  common.Hash
+	rootHash  types.Hash32
 	preImages mesh.Transactions
 }
 
@@ -42,9 +40,9 @@ type TransactionProcessor struct {
 	log.Log
 	rand         PseudoRandomizer
 	globalState  *StateDB
-	prevStates   map[types.LayerID]common.Hash
+	prevStates   map[types.LayerID]types.Hash32
 	currentLayer types.LayerID
-	rootHash     common.Hash
+	rootHash     types.Hash32
 	stateQueue   list.List
 	gasCost      GasConfig
 	db           *trie.Database
@@ -58,9 +56,9 @@ func NewTransactionProcessor(rnd PseudoRandomizer, db *StateDB, gasParams GasCon
 		Log:          logger,
 		rand:         rnd,
 		globalState:  db,
-		prevStates:   make(map[types.LayerID]common.Hash),
+		prevStates:   make(map[types.LayerID]types.Hash32),
 		currentLayer: 0,
-		rootHash:     common.Hash{},
+		rootHash:     types.Hash32{},
 		stateQueue:   list.List{},
 		gasCost:      gasParams,
 		db:           db.TrieDB(),
@@ -68,29 +66,29 @@ func NewTransactionProcessor(rnd PseudoRandomizer, db *StateDB, gasParams GasCon
 	}
 }
 
-func PublicKeyToAccountAddress(pub ed25519.PublicKey) address.Address {
-	var addr address.Address
+func PublicKeyToAccountAddress(pub ed25519.PublicKey) types.Address {
+	var addr types.Address
 	addr.SetBytes(pub)
 	return addr
 }
 
 // Validate the signature by extracting the source account and validating its existence.
 // Return the src acount address and error in case of failure
-func (tp *TransactionProcessor) ValidateSignature(s types.Signed) (address.Address, error) {
+func (tp *TransactionProcessor) ValidateSignature(s types.Signed) (types.Address, error) {
 	var w bytes.Buffer
 	_, err := xdr.Marshal(&w, s.Data())
 	if err != nil {
-		return address.Address{}, err
+		return types.Address{}, err
 	}
 
 	pubKey, err := ed25519.ExtractPublicKey(w.Bytes(), s.Sig())
 	if err != nil {
-		return address.Address{}, err
+		return types.Address{}, err
 	}
 
 	addr := PublicKeyToAccountAddress(pubKey)
 	if !tp.globalState.Exist(addr) {
-		return address.Address{}, fmt.Errorf("failed to validate tx signature, unknown src account %v", addr)
+		return types.Address{}, fmt.Errorf("failed to validate tx signature, unknown src account %v", addr)
 	}
 
 	return addr, nil
@@ -98,19 +96,19 @@ func (tp *TransactionProcessor) ValidateSignature(s types.Signed) (address.Addre
 
 // Validate the tx's signature by extracting the source account and validating its existence.
 // Return the src acount address and error in case of failure
-func (tp *TransactionProcessor) ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (address.Address, error) {
+func (tp *TransactionProcessor) ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (types.Address, error) {
 	buf, err := types.InterfaceToBytes(&tx.InnerSerializableSignedTransaction)
 	if err != nil {
-		return address.Address{}, err
+		return types.Address{}, err
 	}
 	pubKey, err := ed25519.ExtractPublicKey(buf, tx.Signature[:])
 	if err != nil {
-		return address.Address{}, err
+		return types.Address{}, err
 	}
 
 	addr := PublicKeyToAccountAddress(pubKey)
 	if !tp.globalState.Exist(addr) {
-		return address.Address{}, fmt.Errorf("failed to validate tx signature, unknown src account %v", addr)
+		return types.Address{}, fmt.Errorf("failed to validate tx signature, unknown src account %v", addr)
 	}
 
 	return addr, nil
@@ -152,18 +150,18 @@ func (tp *TransactionProcessor) ApplyTransactions(layer types.LayerID, txs mesh.
 	return failed, nil
 }
 
-func (tp *TransactionProcessor) addStateToHistory(layer types.LayerID, newHash common.Hash) {
+func (tp *TransactionProcessor) addStateToHistory(layer types.LayerID, newHash types.Hash32) {
 	tp.stateQueue.PushBack(newHash)
 	if tp.stateQueue.Len() > maxPastStates {
 		hash := tp.stateQueue.Remove(tp.stateQueue.Back())
-		tp.db.Commit(hash.(common.Hash), false)
+		tp.db.Commit(hash.(types.Hash32), false)
 	}
 	tp.prevStates[layer] = newHash
-	tp.db.Reference(newHash, common.Hash{})
+	tp.db.Reference(newHash, types.Hash32{})
 
 }
 
-func (tp *TransactionProcessor) ApplyRewards(layer types.LayerID, minersAccounts []address.Address, underQuota map[address.Address]int, bonusReward, diminishedReward *big.Int) {
+func (tp *TransactionProcessor) ApplyRewards(layer types.LayerID, minersAccounts []types.Address, underQuota map[types.Address]int, bonusReward, diminishedReward *big.Int) {
 	for _, account := range minersAccounts {
 		reward := bonusReward
 		//if we have 2 blocks in same layer, one of them can receive a diminished reward and the other cannot
@@ -221,8 +219,8 @@ func (tp *TransactionProcessor) randomSort(transactions mesh.Transactions) mesh.
 	return transactions
 }
 
-func (tp *TransactionProcessor) coalescTransactionsBySender(transactions mesh.Transactions) map[address.Address][]*mesh.Transaction {
-	trnsBySender := make(map[address.Address][]*mesh.Transaction)
+func (tp *TransactionProcessor) coalescTransactionsBySender(transactions mesh.Transactions) map[types.Address][]*mesh.Transaction {
+	trnsBySender := make(map[types.Address][]*mesh.Transaction)
 	for _, trns := range transactions {
 		trnsBySender[trns.Origin] = append(trnsBySender[trns.Origin], trns)
 	}
@@ -240,9 +238,9 @@ func (tp *TransactionProcessor) coalescTransactionsBySender(transactions mesh.Tr
 	return trnsBySender
 }
 
-func (tp *TransactionProcessor) Process(transactions mesh.Transactions, trnsBySender map[address.Address][]*mesh.Transaction) (errors uint32) {
-	senderPut := make(map[address.Address]struct{})
-	sortedOriginByTransactions := make([]address.Address, 0, 10)
+func (tp *TransactionProcessor) Process(transactions mesh.Transactions, trnsBySender map[types.Address][]*mesh.Transaction) (errors uint32) {
+	senderPut := make(map[types.Address]struct{})
+	sortedOriginByTransactions := make([]types.Address, 0, 10)
 	errors = 0
 	// The order of the mesh.Transactions determines the order addresses by which we take mesh.Transactions
 	// Maybe refactor this
@@ -333,7 +331,7 @@ func (tp *TransactionProcessor) ApplyTransaction(trans *mesh.Transaction) error 
 	return nil
 }
 
-func transfer(db GlobalStateDB, sender, recipient address.Address, amount *big.Int) {
+func transfer(db GlobalStateDB, sender, recipient types.Address, amount *big.Int) {
 	db.SubBalance(sender, amount)
 	db.AddBalance(recipient, amount)
 }

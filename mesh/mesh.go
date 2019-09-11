@@ -3,22 +3,21 @@ package mesh
 import (
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/address"
-	"github.com/spacemeshos/go-spacemesh/common"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/crypto/sha3"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/rlp"
-	"github.com/spacemeshos/go-spacemesh/types"
 	"math/big"
 	"sort"
 	"sync"
 )
 
 const (
-	layerSize = 200
-	Genesis   = types.LayerID(0)
-	GenesisId = 420
+	layerSize   = 200
+	Genesis     = types.LayerID(0)
+	GenesisId   = 420
+	TxCacheSize = 1000
 )
 
 var TRUE = []byte{1}
@@ -31,9 +30,9 @@ type MeshValidator interface {
 
 type TxProcessor interface {
 	ApplyTransactions(layer types.LayerID, transactions Transactions) (uint32, error)
-	ApplyRewards(layer types.LayerID, miners []address.Address, underQuota map[address.Address]int, bonusReward, diminishedReward *big.Int)
-	ValidateSignature(s types.Signed) (address.Address, error)
-	ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (address.Address, error) //todo use validate signature across the bord and remove this
+	ApplyRewards(layer types.LayerID, miners []types.Address, underQuota map[types.Address]int, bonusReward, diminishedReward *big.Int)
+	ValidateSignature(s types.Signed) (types.Address, error)
+	ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (types.Address, error) //todo use validate signature across the bord and remove this
 }
 
 type TxMemPoolInValidator interface {
@@ -56,6 +55,7 @@ type Mesh struct {
 	*MeshDB
 	AtxDB
 	TxProcessor
+	MeshValidator
 	txInvalidator  TxMemPoolInValidator
 	atxInvalidator AtxMemPoolInValidator
 	config         Config
@@ -65,7 +65,6 @@ type Mesh struct {
 	lkMutex        sync.RWMutex
 	lcMutex        sync.RWMutex
 	lvMutex        sync.RWMutex
-	tortoise       MeshValidator
 	orphMutex      sync.RWMutex
 	done           chan struct{}
 }
@@ -74,7 +73,7 @@ func NewMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh MeshValidator, t
 	//todo add boot from disk
 	ll := &Mesh{
 		Log:            logger,
-		tortoise:       mesh,
+		MeshValidator:  mesh,
 		txInvalidator:  txInvalidator,
 		atxInvalidator: atxInvalidator,
 		TxProcessor:    pr,
@@ -92,17 +91,17 @@ type Transaction struct {
 	AccountNonce uint64
 	GasPrice     *big.Int
 	GasLimit     uint64
-	Recipient    *address.Address
-	Origin       address.Address //todo: remove this, should be calculated from sig.
+	Recipient    *types.Address
+	Origin       types.Address //todo: remove this, should be calculated from sig.
 	Amount       *big.Int
 	Payload      []byte
 
 	//todo: add signatures
 
-	hash *common.Hash
+	hash *types.Hash32
 }
 
-func (tx *Transaction) Hash() common.Hash {
+func (tx *Transaction) Hash() types.Hash32 {
 	if tx.hash == nil {
 		hash := rlpHash(tx)
 		tx.hash = &hash
@@ -112,7 +111,7 @@ func (tx *Transaction) Hash() common.Hash {
 
 type Transactions []*Transaction
 
-func NewTransaction(nonce uint64, origin address.Address, destination address.Address,
+func NewTransaction(nonce uint64, origin types.Address, destination types.Address,
 	amount *big.Int, gasLimit uint64, gasPrice *big.Int) *Transaction {
 	return &Transaction{
 		AccountNonce: nonce,
@@ -126,7 +125,7 @@ func NewTransaction(nonce uint64, origin address.Address, destination address.Ad
 	}
 }
 
-func rlpHash(x interface{}) (h common.Hash) {
+func rlpHash(x interface{}) (h types.Hash32) {
 	hw := sha3.NewKeccak256()
 	rlp.Encode(hw, x)
 	hw.Sum(h[:0])
@@ -184,7 +183,7 @@ func (m *Mesh) ValidateLayer(lyr *types.Layer) {
 		m.AccumulateRewards(lyr.Index()-m.config.RewardMaturity, m.config)
 	}
 
-	oldPbase, newPbase := m.tortoise.HandleIncomingLayer(lyr)
+	oldPbase, newPbase := m.HandleIncomingLayer(lyr)
 	m.lvMutex.Lock()
 	m.validatedLayer = lyr.Index()
 	m.lvMutex.Unlock()
@@ -280,7 +279,7 @@ func (m *Mesh) GetLatestView() []types.BlockID {
 	}
 	view := make([]types.BlockID, 0, len(layer.Blocks()))
 	for _, blk := range layer.Blocks() {
-		view = append(view, blk.Id)
+		view = append(view, blk.ID())
 	}
 	return view
 }
@@ -303,12 +302,10 @@ func (m *Mesh) AddBlock(blk *types.Block) error {
 func (m *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.AddressableSignedTransaction, atxs []*types.ActivationTx) error {
 	m.Debug("add block %d", blk.ID())
 
-	events.Publish(events.NewBlock{Id: uint64(blk.Id), Atx: blk.ATXID.String(), Layer: uint64(blk.LayerIndex)})
-	atxids := make([]types.AtxId, 0, len(atxs))
+	events.Publish(events.NewBlock{Id: uint64(blk.ID()), Atx: blk.ATXID.ShortString(), Layer: uint64(blk.LayerIndex)})
 	for _, t := range atxs {
 		//todo this should return an error
 		m.AtxDB.ProcessAtx(t)
-		atxids = append(atxids, t.Id())
 	}
 
 	err := m.writeTransactions(txs)
@@ -316,8 +313,8 @@ func (m *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.AddressableSignedT
 		return fmt.Errorf("could not write transactions of block %v database %v", blk.ID(), err)
 	}
 
-	if err := m.MeshDB.AddBlock(blk); err != nil {
-		m.Error("failed to add block %v  %v", blk.ID(), err)
+	if err := m.MeshDB.AddBlock(blk); err != nil && err != ErrAlreadyExist {
+		m.With().Error("failed to add block", log.BlockId(uint64(blk.ID())), log.Err(err))
 		return err
 	}
 
@@ -421,15 +418,15 @@ func (m *Mesh) AccumulateRewards(rewardLayer types.LayerID, params Config) {
 		return
 	}
 
-	ids := make([]address.Address, 0, len(l.Blocks()))
-	uq := make(map[address.Address]int)
+	ids := make([]types.Address, 0, len(l.Blocks()))
+	uq := make(map[types.Address]int)
 
 	// TODO: instead of the following code we need to validate the eligibility of each block individually using the
 	//  proof included in each block
 	for _, bl := range l.Blocks() {
 		atx, err := m.AtxDB.GetAtx(bl.ATXID)
 		if err != nil {
-			m.With().Warning("Atx from block not found in db", log.Err(err), log.BlockId(uint64(bl.Id)), log.AtxId(bl.ATXID.ShortString()))
+			m.With().Warning("Atx from block not found in db", log.Err(err), log.BlockId(uint64(bl.ID())), log.AtxId(bl.ATXID.ShortString()))
 			continue
 		}
 		ids = append(ids, atx.Coinbase)
@@ -481,7 +478,7 @@ func (m *Mesh) GetATXs(atxIds []types.AtxId) (map[types.AtxId]*types.ActivationT
 	for _, id := range atxIds {
 		t, err := m.GetFullAtx(id)
 		if err != nil {
-			m.Warning("could not get atx %v  from database, %v", id.ShortId(), err)
+			m.Warning("could not get atx %v  from database, %v", id.ShortString(), err)
 			mIds = append(mIds, id)
 		} else {
 			atxs[t.Id()] = t

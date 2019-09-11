@@ -5,9 +5,9 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/types"
 	"sync"
 )
 
@@ -75,9 +75,12 @@ func (m *MeshDB) Close() {
 	m.contextualValidity.Close()
 }
 
+var ErrAlreadyExist = errors.New("block already exist in database")
+
 func (m *MeshDB) AddBlock(bl *types.Block) error {
-	if _, err := m.getMiniBlockBytes(bl.ID()); err == nil {
-		return errors.New(fmt.Sprintf("block %v already exists in database", bl.ID()))
+	if _, err := m.getBlockBytes(bl.ID()); err == nil {
+		m.With().Warning("Block already exist in database", log.BlockId(uint64(bl.ID())))
+		return ErrAlreadyExist
 	}
 	if err := m.writeBlock(bl); err != nil {
 		return err
@@ -86,12 +89,16 @@ func (m *MeshDB) AddBlock(bl *types.Block) error {
 }
 
 func (m *MeshDB) GetBlock(id types.BlockID) (*types.Block, error) {
+	if id == GenesisBlock.ID() {
+		//todo fit real genesis here
+		return &GenesisBlock, nil
+	}
 
 	if blkh := m.blockCache.Get(id); blkh != nil {
 		return blkh, nil
 	}
 
-	b, err := m.getMiniBlockBytes(id)
+	b, err := m.getBlockBytes(id)
 	if err != nil {
 		return nil, err
 	}
@@ -199,7 +206,7 @@ func (m *MeshDB) layerBlockIds(index types.LayerID) ([]types.BlockID, error) {
 	return idSet, nil
 }
 
-func (m *MeshDB) getMiniBlockBytes(id types.BlockID) ([]byte, error) {
+func (m *MeshDB) getBlockBytes(id types.BlockID) ([]byte, error) {
 	return m.blocks.Get(id.ToBytes())
 }
 
@@ -218,6 +225,7 @@ func (m *MeshDB) SaveContextualValidity(id types.BlockID, valid bool) error {
 	} else {
 		v = FALSE
 	}
+	m.Debug("save contextual validity %v %v", id, valid)
 	err := m.contextualValidity.Put(id.ToBytes(), v)
 	if err != nil {
 		return err
@@ -232,7 +240,7 @@ func (m *MeshDB) writeBlock(bl *types.Block) error {
 	}
 
 	if err := m.blocks.Put(bl.ID().ToBytes(), bytes); err != nil {
-		return fmt.Errorf("could not add bl to %v databacse %v", bl.ID(), err)
+		return fmt.Errorf("could not add bl %v to database %v", bl.ID(), err)
 	}
 
 	m.updateLayerWithBlock(&bl.MiniBlock)
@@ -385,15 +393,4 @@ func (m *MeshDB) ContextuallyValidBlock(layer types.LayerID) (map[types.BlockID]
 	}
 
 	return validBlks, nil
-}
-
-func (m *MeshDB) SaveGoodPattern(layer types.LayerID, blks map[types.BlockID]struct{}) error {
-	m.Info("write good pattern for layer %v to database", layer)
-	bts, err := types.InterfaceToBytes(blks)
-	if err != nil {
-		return fmt.Errorf("could not save good pattern for layer %v %v", layer, err)
-	}
-
-	m.patterns.Put(layer.ToBytes(), bts)
-	return nil
 }
