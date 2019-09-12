@@ -37,8 +37,9 @@ func (closer *Closer) CloseChannel() chan struct{} {
 }
 
 const (
-	invalid = false
-	valid   = true
+	unregistered = iota
+	notSynced
+	active
 )
 
 // Broker is responsible for dispatching hare Messages to the matching set objectId listener
@@ -51,12 +52,13 @@ type Broker struct {
 	isNodeSynced   syncStateFunc
 	layersPerEpoch uint16
 	inbox          chan service.GossipMessage
-	layerState     map[InstanceId]bool
+	layerState     map[InstanceId]uint8
 	outbox         map[InstanceId]chan *Msg
 	pending        map[InstanceId][]*Msg
 	tasks          chan func()
 	latestLayer    InstanceId
 	isStarted      bool
+	lastDeleted    InstanceId
 }
 
 func NewBroker(networkService NetworkService, eValidator Validator, stateQuerier StateQuerier, syncState syncStateFunc, layersPerEpoch uint16, closer Closer, log log.Log) *Broker {
@@ -68,11 +70,12 @@ func NewBroker(networkService NetworkService, eValidator Validator, stateQuerier
 		stateQuerier:   stateQuerier,
 		isNodeSynced:   syncState,
 		layersPerEpoch: layersPerEpoch,
-		layerState:     make(map[InstanceId]bool),
+		layerState:     make(map[InstanceId]uint8),
 		outbox:         make(map[InstanceId]chan *Msg),
 		pending:        make(map[InstanceId][]*Msg),
 		tasks:          make(chan func()),
 		latestLayer:    0,
+		lastDeleted:    0,
 	}
 }
 
@@ -113,16 +116,24 @@ func (b *Broker) eventLoop() {
 				continue
 			}
 
-			msgInstId := InstanceId(hareMsg.InnerMsg.InstanceId)
+			msgInstId := hareMsg.InnerMsg.InstanceId
+			if msgInstId < b.lastDeleted {
+				b.Info("Ignoring message because the msg's layer id is old")
+				return
+			}
+
 			state, exist := b.layerState[msgInstId]
-			if exist && state == invalid { // invalid instance, ignore
-				if !b.isSynced(msgInstId) {
-					b.With().Debug("Ignoring message because the layer is out of sync",
-						log.Uint64("layer_id", uint64(msgInstId)))
-				} else {
-					b.With().Debug("Ignoring message because the layer has already unregistered",
-						log.Uint64("layer_id", uint64(msgInstId)))
-				}
+
+			// if doesn't exist for prev layer - means deleted
+			if !exist && msgInstId < b.latestLayer {
+				b.With().Debug("Ignoring message because the layer has already unregistered",
+					log.Uint64("layer_id", uint64(msgInstId)))
+				continue
+			}
+
+			if exist && state != active { // invalid instance, ignore
+				b.With().Debug("Ignoring message because the layer is out of sync",
+					log.Uint64("layer_id", uint64(msgInstId)))
 				continue
 			}
 
@@ -194,11 +205,19 @@ func (b *Broker) eventLoop() {
 
 func (b *Broker) updateLatestLayer(id InstanceId) {
 	if id <= b.latestLayer { // should expect to update only newer layers
-		b.Error("Tried to update a previous layer expected %v > %v", id, b.latestLayer)
+		b.Panic("Tried to update a previous layer expected %v > %v", id, b.latestLayer)
 		return
 	}
 
 	b.latestLayer = id
+}
+
+func (b *Broker) cleanOldLayers() {
+	for i := b.lastDeleted; i < b.latestLayer; i++ {
+		if b.layerState[i] != active { // invalid
+			delete(b.layerState, i) // remove it
+		}
+	}
 }
 
 func (b *Broker) updateSynchronicity(id InstanceId) {
@@ -210,11 +229,11 @@ func (b *Broker) updateSynchronicity(id InstanceId) {
 
 	if !b.isNodeSynced() {
 		b.Info("Note: node is not synced. Marking layer %v as invalid", id)
-		b.layerState[id] = invalid // mark invalid
+		b.layerState[id] = notSynced // mark invalid
 		return
 	}
 
-	b.layerState[id] = valid // mark valid
+	b.layerState[id] = active // mark valid
 }
 
 func (b *Broker) isSynced(id InstanceId) bool {
@@ -225,7 +244,7 @@ func (b *Broker) isSynced(id InstanceId) bool {
 		log.Panic("layerState doesn't contain a value after call to updateSynchronicity")
 	}
 
-	return state == valid
+	return state == active
 }
 
 // Register a listener to Messages
@@ -268,8 +287,8 @@ func (b *Broker) Unregister(id InstanceId) {
 
 	wg.Add(1)
 	b.tasks <- func() {
-		b.layerState[id] = invalid // mark unregistered (invalid)
-		delete(b.outbox, id)       // delete outbox for if
+		b.layerState[id] = unregistered // mark unregistered (invalid), we will delete it later when the this layer is old
+		delete(b.outbox, id)            // delete matching outbox
 		b.Info("Unregistered layer %v ", id)
 		wg.Done()
 	}

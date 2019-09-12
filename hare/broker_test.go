@@ -341,8 +341,8 @@ func TestBroker_updateInstance(t *testing.T) {
 	r.Equal(InstanceId(0), b.latestLayer)
 	b.updateLatestLayer(1)
 	r.Equal(InstanceId(1), b.latestLayer)
-	b.updateLatestLayer(0)
-	r.Equal(InstanceId(1), b.latestLayer)
+	b.updateLatestLayer(2)
+	r.Equal(InstanceId(2), b.latestLayer)
 }
 
 func TestBroker_updateSynchronicity(t *testing.T) {
@@ -436,7 +436,7 @@ func TestBroker_eventLoop2(t *testing.T) {
 	b.inbox <- msg
 	v, ok := b.layerState[instanceId4]
 	r.True(ok)
-	r.Equal(invalid, v)
+	r.NotEqual(active, v)
 
 	// valid but not early
 	m.InnerMsg.InstanceId = instanceId6
