@@ -234,7 +234,7 @@ func TestBlockListener_ValidateVotesGoodFlow(t *testing.T) {
 	bl1.MeshDB.AddBlock(block6)
 	bl1.MeshDB.AddBlock(block7)
 
-	assert.True(t, validateVotes(block1, bl1.ForBlockInView, bl1.Hdist))
+	assert.True(t, validateVotes(block1, bl1.ForBlockInView, bl1.Hdist, log.New("", "", "")))
 }
 
 func TestBlockListener_ValidateVotesBadFlow(t *testing.T) {
@@ -289,7 +289,7 @@ func TestBlockListener_ValidateVotesBadFlow(t *testing.T) {
 	bl1.MeshDB.AddBlock(block6)
 	bl1.MeshDB.AddBlock(block7)
 
-	assert.False(t, validateVotes(block1, bl1.ForBlockInView, bl1.Hdist))
+	assert.False(t, validateVotes(block1, bl1.ForBlockInView, bl1.Hdist, log.New("", "", "")))
 }
 
 func TestBlockListenerViewTraversal(t *testing.T) {
@@ -300,9 +300,11 @@ func TestBlockListenerViewTraversal(t *testing.T) {
 
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
+	n3 := sim.NewNode()
 
 	bl1 := ListenerFactory(n1, PeersMock{func() []p2p.Peer { return []p2p.Peer{n2.PublicKey()} }}, "TestBlockListener_1", 2)
-	bl2 := ListenerFactory(n2, PeersMock{func() []p2p.Peer { return []p2p.Peer{n1.PublicKey()} }}, "TestBlockListener_2", 2)
+	bl2 := ListenerFactory(n2, PeersMock{func() []p2p.Peer { return []p2p.Peer{n1.PublicKey(), n3.PublicKey()} }}, "TestBlockListener_2", 2)
+	bl3 := ListenerFactory(n3, PeersMock{func() []p2p.Peer { return []p2p.Peer{n2.PublicKey()} }}, "TestBlockListener_2", 2)
 	defer bl2.Close()
 	defer bl1.Close()
 	bl2.Start()
@@ -395,11 +397,21 @@ func TestBlockListenerViewTraversal(t *testing.T) {
 	bl1.AddBlock(block8)
 	bl1.AddBlock(block9)
 	bl1.AddBlock(block10)
-	bl1.AddBlock(block11)
+	bl3.AddBlock(block11)
 
 	bl2.syncLayer(1, []types.BlockID{block10.Id, block11.Id})
 
-	b, err := bl1.GetBlock(block1.Id)
+	b, err := bl2.GetBlock(block10.Id)
+	if err != nil {
+		t.Error(err)
+	}
+
+	b, err = bl2.GetBlock(block11.Id)
+	if err != nil {
+		t.Error(err)
+	}
+
+	b, err = bl1.GetBlock(block1.Id)
 	if err != nil {
 		t.Error(err)
 	}

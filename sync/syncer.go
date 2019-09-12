@@ -209,7 +209,7 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool A
 
 	srvr := &workerInfra{
 		RequestTimeout: conf.RequestTimeout,
-		MessageServer:  server.NewMsgServer(srv.(server.Service), syncProtocol, conf.RequestTimeout, make(chan service.DirectMessage, p2pconf.ConfigValues.BufferSize), logger.WithName("srv")),
+		MessageServer:  server.NewMsgServer(srv.(server.Service), syncProtocol, conf.RequestTimeout, make(chan service.DirectMessage, p2pconf.ConfigValues.BufferSize), logger),
 		Peers:          p2p.NewPeers(srv, logger.WithName("peers")),
 	}
 
@@ -458,7 +458,7 @@ func (s *Syncer) blockSyntacticValidation(block *types.Block) ([]*types.Transact
 	}
 
 	//validate block's votes
-	if valid := validateVotes(block, s.ForBlockInView, s.Hdist); valid == false {
+	if valid := validateVotes(block, s.ForBlockInView, s.Hdist, s.Log); valid == false {
 		return nil, nil, errors.New(fmt.Sprintf("validate votes failed for block %v", block.ID()))
 	}
 
@@ -482,7 +482,7 @@ func (s *Syncer) validateBlockView(blk *types.Block) bool {
 	return <-ch
 }
 
-func validateVotes(blk *types.Block, forBlockfunc ForBlockInView, depth int) bool {
+func validateVotes(blk *types.Block, forBlockfunc ForBlockInView, depth int, lg log.Log) bool {
 	view := map[types.BlockID]struct{}{}
 	for _, blk := range blk.ViewEdges {
 		view[blk] = struct{}{}
@@ -509,6 +509,11 @@ func validateVotes(blk *types.Block, forBlockfunc ForBlockInView, depth int) boo
 	if err == nil && len(vote) > 0 {
 		err = fmt.Errorf("voting on blocks out of view (or out of Hdist), %v", vote)
 	}
+
+	if err != nil {
+		lg.Error("validate votes failed", err)
+	}
+
 	return err == nil
 }
 
@@ -576,9 +581,9 @@ func (s *Syncer) fetchLayerBlockIds(m map[types.Hash32][]p2p.Peer, lyr types.Lay
 						s.With().Error("Peer: got invalid layer ids", log.String("peer", peer.String()), log.Err(err))
 						break
 					}
+
 					if h != res {
-						s.Error("Peer: %v layer ids hash does not match request", peer)
-						break
+						s.Warning("Peer: %v layer ids hash does not match request", peer)
 					}
 
 					for _, bid := range v.([]types.BlockID) {

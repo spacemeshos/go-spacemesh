@@ -41,9 +41,9 @@ func (fq *fetchQueue) Close() {
 
 func concatShortIds(items []types.Hash32) string {
 	str := ""
-	//for _, i := range items {
-	//	str += str + i.ShortString()
-	//}
+	for _, i := range items {
+		str += " " + i.ShortString()
+	}
 	return str
 }
 
@@ -97,7 +97,9 @@ func (fq *fetchQueue) addToPending(ids []types.Hash32) []chan bool {
 		fq.pending[id] = append(fq.pending[id], ch)
 	}
 	fq.Unlock()
-	fq.queue <- idsToAdd
+	if len(idsToAdd) > 0 {
+		fq.queue <- idsToAdd
+	}
 	return deps
 }
 
