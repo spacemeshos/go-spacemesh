@@ -142,12 +142,12 @@ func NewGrpcService(net NetworkAPI, state StateAPI, tx TxAPI, mining MiningAPI, 
 }
 
 // StartService starts the grpc service.
-func (s SpacemeshGrpcService) StartService(status chan bool) {
-	go s.startServiceInternal(status)
+func (s SpacemeshGrpcService) StartService() {
+	go s.startServiceInternal()
 }
 
 // This is a blocking method designed to be called using a go routine
-func (s SpacemeshGrpcService) startServiceInternal(status chan bool) {
+func (s SpacemeshGrpcService) startServiceInternal() {
 	port := config.ConfigValues.GrpcServerPort
 	addr := ":" + strconv.Itoa(int(port))
 
@@ -164,17 +164,9 @@ func (s SpacemeshGrpcService) startServiceInternal(status chan bool) {
 
 	log.Debug("grpc API listening on port %d", port)
 
-	if status != nil {
-		status <- true
-	}
-
 	// start serving - this blocks until err or server is stopped
 	if err := s.Server.Serve(lis); err != nil {
 		log.Error("grpc stopped serving", err)
-	}
-
-	if status != nil {
-		status <- true
 	}
 
 }
