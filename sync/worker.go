@@ -149,32 +149,56 @@ func NewFetchWorker(s WorkerInfra, count int, reqFactory BatchRequestFactory, id
 				lg.Info("close fetch worker ")
 				return
 			}
-			idsStr := concatShortIds(ids)
-			retrived := false
+			leftToFetch := toMap(ids)
+			var fetched []Item
 		next:
 			for _, p := range s.GetPeers() {
 				peer := p
+				remainingItems := toSlice(leftToFetch)
+				idsStr := concatShortIds(remainingItems)
 				lg.Info("send fetch request to Peer: %v ids: %v", peer.String(), idsStr)
-				ch, _ := reqFactory(s, peer, ids)
+				ch, _ := reqFactory(s, peer, remainingItems)
 				timeout := time.After(s.GetTimeout())
 				select {
 				case <-timeout:
 					lg.Error("fetch request to %v on %v timed out %s", peer.String(), idsStr)
 				case v := <-ch:
 					if v != nil && len(v) > 0 {
-						retrived = true
 						lg.Info("Peer: %v responded to fetch request %s", peer.String(), idsStr)
-						output <- fetchJob{ids: ids, items: v}
-						break next
+						// 	remove ids from leftToFetch add to fetched
+						for _, itm := range v {
+							fetched = append(fetched, itm)
+							delete(leftToFetch, itm.Hash32())
+						}
+
+						//if no more left to fetch
+						if len(leftToFetch) == 0 {
+							break next
+						}
+
 					}
 					lg.Info("next peer")
 				}
 			}
-			if !retrived {
-				output <- fetchJob{ids: ids, items: nil}
-			}
+			//finished pass results to chan
+			output <- fetchJob{ids: ids, items: fetched}
 		}
 	}
-
 	return worker{Logger: lg, Once: mu, WaitGroup: &sync.WaitGroup{}, workCount: &acount, output: output, work: workFunc}
+}
+
+func toMap(ids []types.Hash32) map[types.Hash32]struct{} {
+	mp := make(map[types.Hash32]struct{}, len(ids))
+	for _, id := range ids {
+		mp[id] = struct{}{}
+	}
+	return mp
+}
+
+func toSlice(mp map[types.Hash32]struct{}) []types.Hash32 {
+	sl := make([]types.Hash32, 0, len(mp))
+	for id := range mp {
+		sl = append(sl, id)
+	}
+	return sl
 }
