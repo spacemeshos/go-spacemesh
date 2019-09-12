@@ -100,7 +100,7 @@ func (bl *BlockListener) handleBlock(data service.GossipMessage) {
 		return
 	}
 
-	if blk.Layer() < bl.ValidatedLayer() {
+	if blk.Layer() <= bl.ValidatedLayer() {
 		bl.Syncer.HandleLateBlock(&blk)
 	}
 

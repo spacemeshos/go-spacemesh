@@ -94,7 +94,7 @@ func (vq *blockQueue) handleBlock(bjb fetchJob) {
 // handles new block dependencies
 // if there are unknown blocks in the view they are added to the fetch queue
 func (vq *blockQueue) handleBlockDependencies(blk *types.Block) {
-	vq.Info("handle dependencies view Block %v", blk.ID())
+	vq.Info("handle Block %v", blk.ID())
 	res, err := vq.addDependencies(blk.ID(), blk.ViewEdges, vq.finishBlockCallback(blk))
 
 	if err != nil {
@@ -122,7 +122,7 @@ func (vq *blockQueue) finishBlockCallback(block *types.Block) func(res bool) err
 		}
 
 		//validate block's votes
-		if valid := validateVotes(block, vq.ForBlockInView, vq.Hdist); valid == false {
+		if valid := validateVotes(block, vq.ForBlockInView, vq.Hdist, vq.Log); valid == false {
 			return errors.New(fmt.Sprintf("validate votes failed for block %v", block.ID()))
 		}
 
@@ -130,10 +130,11 @@ func (vq *blockQueue) finishBlockCallback(block *types.Block) func(res bool) err
 			return err
 		}
 
-		if block.Layer() < vq.ValidatedLayer() {
+		if block.Layer() <= vq.ValidatedLayer() {
 			vq.HandleLateBlock(block)
 		}
 
+		vq.Info("finished handle block %v", block.ID())
 		return nil
 	}
 }
