@@ -82,6 +82,7 @@ func (m *MeshDB) Close() {
 	m.blocks.Close()
 	m.layers.Close()
 	m.transactions.Close()
+	m.meshTxs.Close()
 	m.patterns.Close()
 	m.contextualValidity.Close()
 }
