@@ -74,6 +74,11 @@ def set_namespace(request, session_id, load_config):
             testconfig['namespace'] = session_id
 
         print("\nRun tests in namespace: {0}".format(testconfig['namespace']))
+        print("Kibana URL: http://kibana.spacemesh.io/app/kibana#/discover?_g=(refreshInterval:(pause:!t,value:0))&_a=("
+              "columns:!(M),filters:!(('$state':(store:appState),meta:(alias:!n,disabled:!f,index:'8a91d9d0-c24f-11e9-9"
+              "a59-a76b835079b3',key:kubernetes.namespace_name,negate:!f,params:(query:{0},type:phrase),type:phrase,val"
+              "ue:{0}),query:(match:(kubernetes.namespace_name:(query:{0},type:phrase))))))"
+              .format(testconfig['namespace']))
         namespaces_list = [ns.metadata.name for ns in v1.list_namespace().items]
         if testconfig['namespace'] in namespaces_list:
             return

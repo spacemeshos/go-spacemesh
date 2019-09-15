@@ -115,7 +115,7 @@ func (tp *TransactionProcessor) ValidateNonceAndBalance(tx *types.Transaction) e
 		return fmt.Errorf("incorrect account nonce! Expected: %d, Actual: %d", nonce, tx.AccountNonce)
 	}
 	if (tx.Amount + tx.GasPrice) > balance { // TODO: GasPrice represents the absolute fee here, as a temporarily hack
-		return fmt.Errorf("insufficient balance! Available: %d, Attempting to spend: %d+%d=%d",
+		return fmt.Errorf("insufficient balance! Available: %d, Attempting to spend: %d[amount]+%d[fee]=%d",
 			balance, tx.Amount, tx.GasPrice, tx.Amount+tx.GasPrice)
 	}
 	return nil
@@ -261,7 +261,7 @@ func (tp *TransactionProcessor) Process(transactions []*types.Transaction, trnsB
 				Gas:         trns.GasPrice})
 			if err != nil {
 				errors++
-				tp.Log.Error("transaction aborted: %v", err)
+				tp.With().Error("transaction aborted", log.Err(err), log.String("transaction", trns.String()))
 			}
 			events.Publish(events.ValidTx{Id: trns.Id().String(), Valid: err == nil})
 		}
@@ -324,8 +324,7 @@ func (tp *TransactionProcessor) ApplyTransaction(trans *types.Transaction) error
 
 	//subtract gas from account, gas will be sent to miners in layers after
 	tp.globalState.SubBalance(trans.Origin(), new(big.Int).SetUint64(gas))
-	tp.Log.Info("transaction processed, s_account: %s d_account: %s, amount: %v shmekels tx nonce: %v, gas limit: %v gas price: %v",
-		trans.Origin().Short(), trans.Recipient.Short(), trans.Amount, trans.AccountNonce, trans.GasLimit, trans.GasPrice)
+	tp.With().Info("transaction processed", log.String("transaction", trans.String()))
 	return nil
 }
 

@@ -278,7 +278,7 @@ func (t *BlockBuilder) listenForTx() {
 				data.ReportValidation(IncomingTxProtocol)
 			}); err != nil {
 				t.With().Error("Transaction validation failed",
-					log.TxId(tx.Id().ShortString()), log.String("origin", tx.Origin().String()), log.Err(err))
+					log.String("transaction", tx.String()), log.String("origin", tx.Origin().String()), log.Err(err))
 				continue
 			}
 		}

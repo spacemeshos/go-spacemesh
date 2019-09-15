@@ -1,6 +1,7 @@
 package types
 
 import (
+	"fmt"
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -73,6 +74,11 @@ func (t *Transaction) Hash32() Hash32 {
 
 func (t *Transaction) ShortString() string {
 	return t.Id().ShortString()
+}
+
+func (t *Transaction) String() string {
+	return fmt.Sprintf("<id: %s, origin: %s, recipient: %s, amount: %v, nonce: %v, gas_limit: %v, gas_price: %v>",
+		t.Id().ShortString(), t.Origin().Short(), t.Recipient.Short(), t.Amount, t.AccountNonce, t.GasLimit, t.GasPrice)
 }
 
 type InnerTransaction struct {
