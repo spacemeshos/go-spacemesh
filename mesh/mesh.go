@@ -49,7 +49,7 @@ type AtxDB interface {
 }
 
 type BlockBuilder interface {
-	ValidateAndAddTxToPool(tx *types.Transaction, postValidationFunc func()) error
+	ValidateAndAddTxToPool(tx *types.Transaction) error
 }
 
 type Mesh struct {
@@ -197,7 +197,7 @@ func (m *Mesh) PushTransactions(oldBase, newBase types.LayerID) {
 		}
 		if m.blockBuilder != nil {
 			for _, tx := range invalidBlockTxs {
-				err = m.blockBuilder.ValidateAndAddTxToPool(tx, nil)
+				err = m.blockBuilder.ValidateAndAddTxToPool(tx)
 				// We ignore errors here, since they mean that the tx is no longer valid and we shouldn't re-add it
 				if err == nil {
 					m.With().Info("transaction from contextually invalid block re-added to mempool",

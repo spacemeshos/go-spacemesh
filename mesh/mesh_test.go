@@ -262,7 +262,7 @@ type MockBlockBuilder struct {
 	txs []*types.Transaction
 }
 
-func (m *MockBlockBuilder) ValidateAndAddTxToPool(tx *types.Transaction, postValidationFunc func()) error {
+func (m *MockBlockBuilder) ValidateAndAddTxToPool(tx *types.Transaction) error {
 	m.txs = append(m.txs, tx)
 	return nil
 }

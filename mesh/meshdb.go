@@ -317,10 +317,24 @@ func (m *MeshDB) getLayerMutex(index types.LayerID) *layerMutex {
 	return ll
 }
 
+type DbTransaction struct {
+	*types.Transaction
+	Origin types.Address
+}
+
+func NewDbTransaction(tx *types.Transaction) *DbTransaction {
+	return &DbTransaction{Transaction: tx, Origin: tx.Origin()}
+}
+
+func (t DbTransaction) GetTransaction() *types.Transaction {
+	t.Transaction.SetOrigin(t.Origin)
+	return t.Transaction
+}
+
 func (m *MeshDB) writeTransactions(txs []*types.Transaction) error {
 	batch := m.transactions.NewBatch()
 	for _, t := range txs {
-		bytes, err := types.InterfaceToBytes(t)
+		bytes, err := types.InterfaceToBytes(NewDbTransaction(t))
 		if err != nil {
 			return fmt.Errorf("could not marshall tx %v to bytes: %v", t.Id().ShortString(), err)
 		}
@@ -492,7 +506,12 @@ func (m *MeshDB) GetTransaction(id types.TransactionId) (*types.Transaction, err
 	if err != nil {
 		return nil, fmt.Errorf("could not find transaction in database %v err=%v", hex.EncodeToString(id[:]), err)
 	}
-	return types.BytesAsTransaction(tBytes)
+	var dbTx DbTransaction
+	err = types.BytesToInterface(tBytes, &dbTx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal transaction: %v", err)
+	}
+	return dbTx.GetTransaction(), nil
 }
 
 // ContextuallyValidBlock - returns the contextually valid blocks for the provided layer

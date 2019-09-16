@@ -272,29 +272,30 @@ func (t *BlockBuilder) listenForTx() {
 				t.With().Error("cannot parse incoming TX", log.Err(err))
 				continue
 			}
-
-			if err := t.ValidateAndAddTxToPool(tx, func() {
-				t.Log.With().Info("got new tx", log.TxId(tx.Id().ShortString()))
-				data.ReportValidation(IncomingTxProtocol)
-			}); err != nil {
-				t.With().Error("Transaction validation failed",
-					log.String("transaction", tx.String()), log.String("origin", tx.Origin().String()), log.Err(err))
+			if err := tx.CalcAndSetOrigin(); err != nil {
+				t.With().Error("failed to calc transaction origin", log.TxId(tx.Id().ShortString()), log.Err(err))
 				continue
 			}
+			if !t.txValidator.AddressExists(tx.Origin()) {
+				t.With().Error("transaction origin does not exist", log.String("transaction", tx.String()),
+					log.TxId(tx.Id().ShortString()), log.String("origin", tx.Origin().Short()), log.Err(err))
+				continue
+			}
+			if err := t.txValidator.ValidateNonceAndBalance(tx); err != nil {
+				t.With().Error("failed to calc transaction origin", log.TxId(tx.Id().ShortString()), log.Err(err))
+				continue
+			}
+			t.Log.With().Info("got new tx", log.TxId(tx.Id().ShortString()))
+			data.ReportValidation(IncomingTxProtocol)
+			t.TransactionPool.Put(tx.Id(), tx)
 		}
 	}
 }
 
-func (t *BlockBuilder) ValidateAndAddTxToPool(tx *types.Transaction, postValidationFunc func()) error {
-	if !t.txValidator.AddressExists(tx.Origin()) {
-		return fmt.Errorf("transaction origin does not exist")
-	}
+func (t *BlockBuilder) ValidateAndAddTxToPool(tx *types.Transaction) error {
 	err := t.txValidator.ValidateNonceAndBalance(tx)
 	if err != nil {
 		return err
-	}
-	if postValidationFunc != nil {
-		postValidationFunc()
 	}
 	t.TransactionPool.Put(tx.Id(), tx)
 	return nil

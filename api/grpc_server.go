@@ -71,23 +71,26 @@ func (s SpacemeshGrpcService) GetNonce(ctx context.Context, in *pb.AccountId) (*
 func (s SpacemeshGrpcService) SubmitTransaction(ctx context.Context, in *pb.SignedTransaction) (*pb.TxConfirmation, error) {
 	log.Info("GRPC SubmitTransaction msg")
 
-	signedTx := &types.Transaction{}
-	err := types.BytesToInterface(in.Tx, signedTx)
+	tx, err := types.BytesAsTransaction(in.Tx)
 	if err != nil {
 		log.Error("failed to deserialize tx, error %v", err)
 		return nil, err
 	}
-	log.Info("GRPC SubmitTransaction to address: %s (len: %v), amount: %v gaslimit: %v, price: %v", signedTx.Recipient.Short(), len(signedTx.Recipient), signedTx.Amount, signedTx.GasLimit, signedTx.GasPrice)
-	if !s.Tx.AddressExists(signedTx.Origin()) {
+	log.Info("GRPC SubmitTransaction to address: %s (len: %v), amount: %v gaslimit: %v, price: %v",
+		tx.Recipient.Short(), len(tx.Recipient), tx.Amount, tx.GasLimit, tx.GasPrice)
+	if err := tx.CalcAndSetOrigin(); err != nil {
+		log.With().Error("failed to calc origin", log.Err(err))
+		return nil, err
+	}
+	if !s.Tx.AddressExists(tx.Origin()) {
 		log.Error("tx failed to validate signature")
 		return nil, err
 	}
-	id := signedTx.Id()
-	hexIdStr := hex.EncodeToString(id[:])
-	log.Info("GRPC SubmitTransaction BROADCAST tx. address %x (len %v), gaslimit %v, price %v id %v", signedTx.Recipient, len(signedTx.Recipient), signedTx.GasLimit, signedTx.GasPrice, hexIdStr[:5])
+	log.Info("GRPC SubmitTransaction BROADCAST tx. address %x (len %v), gaslimit %v, price %v id %v",
+		tx.Recipient, len(tx.Recipient), tx.GasLimit, tx.GasPrice, tx.Id().ShortString())
 	go s.Network.Broadcast(miner.IncomingTxProtocol, in.Tx)
 	log.Info("GRPC SubmitTransaction returned msg ok")
-	return &pb.TxConfirmation{Value: "ok", Id: hexIdStr}, nil
+	return &pb.TxConfirmation{Value: "ok", Id: hex.EncodeToString(tx.Id().Bytes())}, nil
 }
 
 // P2P API

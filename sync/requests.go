@@ -121,6 +121,11 @@ func txsAsItems(msg []byte) ([]Item, error) {
 	}
 	items := make([]Item, len(txs))
 	for i := range txs {
+		err := txs[i].CalcAndSetOrigin()
+		if err != nil {
+			return nil, fmt.Errorf("failed to calc transaction origin (id: %s): %v",
+				txs[i].Id().ShortString(), err)
+		}
 		items[i] = txs[i]
 	}
 	return items, nil

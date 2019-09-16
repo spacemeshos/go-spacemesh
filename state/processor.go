@@ -99,8 +99,7 @@ func (tp *TransactionProcessor) ValidateSignature(s types.Signed) (types.Address
 	return addr, nil
 }
 
-// Validate the tx's signature by extracting the source account and validating its existence.
-// Return the src acount address and error in case of failure
+// AddressExists checks if an account address exists in this node's global state
 func (tp *TransactionProcessor) AddressExists(addr types.Address) bool {
 	return tp.globalState.Exist(addr)
 }

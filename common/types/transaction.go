@@ -36,22 +36,29 @@ type Transaction struct {
 }
 
 func (t *Transaction) Origin() Address {
-	if t.origin != nil {
-		return *t.origin
+	if t.origin == nil {
+		panic("origin not set")
 	}
+	return *t.origin
+}
 
+func (t *Transaction) SetOrigin(origin Address) {
+	t.origin = &origin
+}
+
+func (t *Transaction) CalcAndSetOrigin() error {
 	txBytes, err := InterfaceToBytes(&t.InnerTransaction)
 	if err != nil {
-		panic("failed to marshal transaction: " + err.Error())
+		return fmt.Errorf("failed to marshal transaction: %v", err)
 	}
 	pubKey, err := ed25519.ExtractPublicKey(txBytes, t.Signature[:])
 	if err != nil {
-		panic("failed to extract transaction pubkey: " + err.Error())
+		return fmt.Errorf("failed to extract transaction pubkey: %v", err)
 	}
 
 	t.origin = &Address{}
 	t.origin.SetBytes(pubKey)
-	return *t.origin
+	return nil
 }
 
 func (t *Transaction) Id() TransactionId {
