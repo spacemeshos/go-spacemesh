@@ -210,13 +210,16 @@ func newChallenge(nodeId types.NodeId, sequence uint64, prevAtxId, posAtxId type
 
 func newAtx(challenge types.NIPSTChallenge, ActiveSetSize uint32, View []types.BlockID, nipst *types.NIPST) *types.ActivationTx {
 	activationTx := &types.ActivationTx{
-		ActivationTxHeader: types.ActivationTxHeader{
-			NIPSTChallenge: challenge,
-			Coinbase:       coinbase,
-			ActiveSetSize:  ActiveSetSize,
+		&types.InnerActivationTx{
+			ActivationTxHeader: types.ActivationTxHeader{
+				NIPSTChallenge: challenge,
+				Coinbase:       coinbase,
+				ActiveSetSize:  ActiveSetSize,
+			},
+			Nipst: nipst,
+			View:  View,
 		},
-		Nipst: nipst,
-		View:  View,
+		nil,
 	}
 	activationTx.CalcAndSetId()
 	return activationTx
@@ -240,17 +243,17 @@ func setActivesetSizeInCache(t *testing.T, activesetSize uint32) {
 }
 
 func lastTransmittedAtx(t *testing.T) types.ActivationTx {
-	var signedAtx types.SignedAtx
+	var signedAtx types.ActivationTx
 	err := types.BytesToInterface(net.lastTransmission, &signedAtx)
 	require.NoError(t, err)
-	return *signedAtx.ActivationTx
+	return signedAtx
 }
 
 func assertLastAtx(r *require.Assertions, posAtx, prevAtx *types.ActivationTxHeader, layersPerEpoch uint16) {
-	sigAtx, err := types.BytesAsSignedAtx(net.lastTransmission)
+	sigAtx, err := types.BytesAsAtx(net.lastTransmission, *types.EmptyAtxId)
 	r.NoError(err)
 
-	atx := sigAtx.ActivationTx
+	atx := sigAtx
 	r.Equal(nodeId, atx.NodeId)
 	if prevAtx != nil {
 		r.Equal(prevAtx.Sequence+1, atx.Sequence)
@@ -501,9 +504,9 @@ func TestBuilder_SignAtx(t *testing.T) {
 
 	prevAtx := types.AtxId(types.HexToHash32("0x111"))
 	atx := types.NewActivationTx(nodeId, coinbase, 1, prevAtx, 15, 1, prevAtx, 5, []types.BlockID{1, 2, 3}, npst)
-	atxBytes, err := types.InterfaceToBytes(atx)
+	atxBytes, err := types.InterfaceToBytes(atx.InnerActivationTx)
 	assert.NoError(t, err)
-	signed, err := b.signAtx(atx)
+	signed, err := b.SignAtx(atx)
 	assert.NoError(t, err)
 
 	pubkey, err := ed25519.ExtractPublicKey(atxBytes, signed.Sig)
@@ -513,9 +516,6 @@ func TestBuilder_SignAtx(t *testing.T) {
 	ok := signing.Verify(signing.NewPublicKey(util.Hex2Bytes(atx.NodeId.Key)), atxBytes, signed.Sig)
 	assert.True(t, ok)
 
-	signed.Sig[0] = signed.Sig[0] - 1
-	pubkey, err = ed25519.ExtractPublicKey(atxBytes, signed.Sig)
-	assert.Error(t, err)
 }
 
 func TestBuilder_NipstPublishRecovery(t *testing.T) {
@@ -568,7 +568,7 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	layers.latestLayer = 22
 	err = b.PublishActivationTx(1)
 	assert.NoError(t, err)
-	signed, err := b.signAtx(act)
+	signed, err := b.SignAtx(act)
 	assert.NoError(t, err)
 	bts, err := types.InterfaceToBytes(signed)
 	assert.NoError(t, err)

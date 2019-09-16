@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
@@ -192,6 +191,14 @@ func (db *ActivationDb) CalcActiveSetFromView(view []types.BlockID, pubEpoch typ
 // - ATX LayerID is NipstLayerTime or less after the PositioningATX LayerID.
 // - The ATX view of the previous epoch contains ActiveSetSize activations.
 func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
+	pub, err := types.ExtractPublicKey(atx)
+	if err != nil {
+		return fmt.Errorf("cannot validate atx sig atx id %v err %v", atx.ShortString(), err)
+	}
+	err = db.ValidateSignedAtx(*pub, atx)
+	if err != nil { // means there is no such identity
+		return fmt.Errorf("no id found %v err %v", atx.ShortString(), err)
+	}
 	if atx.PrevATXId != *types.EmptyAtxId {
 		prevATX, err := db.GetAtx(atx.PrevATXId)
 		if err != nil {
@@ -542,24 +549,15 @@ func (db *ActivationDb) IsIdentityActive(edId string, layer types.LayerID) (*typ
 
 // ValidateSignedAtx extracts public key from message and verifies public key exists in IdStore, this is how we validate
 // ATX signature. If this is the first ATX it is considered valid anyways and ATX syntactic validation will determine ATX validity
-func (db *ActivationDb) ValidateSignedAtx(signedAtx *types.SignedAtx) error {
+func (db *ActivationDb) ValidateSignedAtx(pubKey signing.PublicKey, signedAtx *types.ActivationTx) error {
 	// this is the first occurrence of this identity, we cannot validate simply by extracting public key
 	// pass it down to Atx handling so that atx can be syntactically verified and identity could be registered.
 	if signedAtx.PrevATXId == *types.EmptyAtxId {
 		return nil
 	}
-	bts, err := signedAtx.AtxBytes()
-	if err != nil {
-		return err
-	}
 
-	pubKey, err := ed25519.ExtractPublicKey(bts, signedAtx.Sig)
-	if err != nil {
-		return err
-	}
-
-	pubString := signing.NewPublicKey(pubKey).String()
-	_, err = db.GetIdentity(pubString)
+	pubString := pubKey.String()
+	_, err := db.GetIdentity(pubString)
 	if err != nil { // means there is no such identity
 		return errInvalidSig
 	}

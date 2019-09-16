@@ -261,7 +261,7 @@ func TestSyncer_FetchPoetProofAvailableAndValid(t *testing.T) {
 
 func TestSyncer_SyncAtxs_FetchPoetProof(t *testing.T) {
 	r := require.New(t)
-
+	signer := signing.NewEdSigner()
 	syncs, nodes, _ := SyncMockFactory(2, conf, t.Name(), memoryDB, newMemPoetDb)
 	s0 := syncs[0]
 	s1 := syncs[1]
@@ -280,6 +280,8 @@ func TestSyncer_SyncAtxs_FetchPoetProof(t *testing.T) {
 
 	atx1 := atx()
 	atx1.Nipst.PostProof.Challenge = poetRef[:]
+	_, err = types.SignAtx(signer, atx1)
+	assert.NoError(t, err)
 	s0.AtxDB.ProcessAtx(atx1)
 
 	// Make sure that s1 syncAtxs would fetch the missing poet proof.

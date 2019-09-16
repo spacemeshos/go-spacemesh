@@ -137,15 +137,13 @@ func (b *Builder) Stop() {
 	b.finished <- struct{}{}
 }
 
-func (b Builder) signAtx(atx *types.ActivationTx) (*types.SignedAtx, error) {
-	bts, err := types.InterfaceToBytes(atx)
+func (b Builder) SignAtx(atx *types.ActivationTx) (*types.ActivationTx, error) {
+	bts, err := types.InterfaceToBytes(atx.InnerActivationTx)
 	if err != nil {
 		return nil, err
 	}
-	sig := b.Sign(bts)
-	return &types.SignedAtx{
-		atx, sig,
-	}, nil
+	atx.Sig = b.Sign(bts)
+	return atx, nil
 }
 
 // loop is the main loop that tries to create an atx per tick received from the global clock
@@ -467,7 +465,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 	b.log.With().Info("active ids seen for epoch", log.Uint64("pos_atx_epoch", uint64(posEpoch)),
 		log.Uint32("view_cnt", activeSetSize))
 
-	signedAtx, err := b.signAtx(atx)
+	signedAtx, err := b.SignAtx(atx)
 	if err != nil {
 		return err
 	}

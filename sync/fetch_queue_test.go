@@ -4,6 +4,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/sha256-simd"
 	"github.com/stretchr/testify/assert"
 	"testing"
@@ -182,6 +183,7 @@ func TestBlockListener_TestTxQueueHandle(t *testing.T) {
 
 func TestBlockListener_TestAtxQueueHandle(t *testing.T) {
 	sim := service.NewSimulator()
+	signer := signing.NewEdSigner()
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
 	//n2.RegisterGossipProtocol(NewBlockProtocol)
@@ -203,10 +205,16 @@ func TestBlockListener_TestAtxQueueHandle(t *testing.T) {
 	block1 := types.NewExistingBlock(types.BlockID(111), 1, nil)
 	atx1 := atx()
 	atx1.Nipst.PostProof.Challenge = poetRef[:]
+	_, err = types.SignAtx(signer, atx1)
+	assert.NoError(t, err)
 	atx2 := atx()
 	atx2.Nipst.PostProof.Challenge = poetRef[:]
+	_, err = types.SignAtx(signer, atx2)
+	assert.NoError(t, err)
 	atx3 := atx()
 	atx3.Nipst.PostProof.Challenge = poetRef[:]
+	_, err = types.SignAtx(signer, atx3)
+	assert.NoError(t, err)
 
 	bl2.AddBlockWithTxs(block1, []*types.AddressableSignedTransaction{}, []*types.ActivationTx{atx1, atx2, atx3})
 

@@ -90,7 +90,7 @@ func (mockAtxValidator) GetIdentity(id string) (types.NodeId, error) {
 	return types.NodeId{}, nil
 }
 
-func (mockAtxValidator) ValidateSignedAtx(signedAtx *types.SignedAtx) error {
+func (mockAtxValidator) ValidateSignedAtx(signedAtx *types.ActivationTx) error {
 	return nil
 }
 

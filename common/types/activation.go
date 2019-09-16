@@ -3,6 +3,7 @@ package types
 import (
 	"encoding/hex"
 	"fmt"
+	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/poet/service"
@@ -93,7 +94,7 @@ func (challenge *NIPSTChallenge) String() string {
 		challenge.PositioningAtx.ShortString())
 }
 
-type ActivationTx struct {
+type InnerActivationTx struct {
 	ActivationTxHeader
 	Nipst      *NIPST
 	View       []BlockID
@@ -101,13 +102,13 @@ type ActivationTx struct {
 	//todo: add sig
 }
 
-type SignedAtx struct {
-	*ActivationTx
+type ActivationTx struct {
+	*InnerActivationTx
 	Sig []byte
 }
 
-func (signed *SignedAtx) AtxBytes() ([]byte, error) {
-	return InterfaceToBytes(signed.ActivationTx)
+func (signed *ActivationTx) AtxBytes() ([]byte, error) {
+	return InterfaceToBytes(signed.InnerActivationTx)
 }
 
 func NewActivationTx(NodeId NodeId,
@@ -121,20 +122,23 @@ func NewActivationTx(NodeId NodeId,
 	View []BlockID,
 	nipst *NIPST) *ActivationTx {
 	atx := &ActivationTx{
-		ActivationTxHeader: ActivationTxHeader{
-			NIPSTChallenge: NIPSTChallenge{
-				NodeId:         NodeId,
-				Sequence:       Sequence,
-				PrevATXId:      PrevATX,
-				PubLayerIdx:    LayerIndex,
-				StartTick:      StartTick,
-				PositioningAtx: PositioningATX,
+		&InnerActivationTx{
+			ActivationTxHeader: ActivationTxHeader{
+				NIPSTChallenge: NIPSTChallenge{
+					NodeId:         NodeId,
+					Sequence:       Sequence,
+					PrevATXId:      PrevATX,
+					PubLayerIdx:    LayerIndex,
+					StartTick:      StartTick,
+					PositioningAtx: PositioningATX,
+				},
+				Coinbase:      Coinbase,
+				ActiveSetSize: ActiveSetSize,
 			},
-			Coinbase:      Coinbase,
-			ActiveSetSize: ActiveSetSize,
+			Nipst: nipst,
+			View:  View,
 		},
-		Nipst: nipst,
-		View:  View,
+		nil,
 	}
 	atx.CalcAndSetId()
 	return atx
@@ -144,14 +148,17 @@ func NewActivationTxWithChallenge(poetChallenge NIPSTChallenge, coinbase Address
 	View []BlockID, nipst *NIPST, commitment *PostProof) *ActivationTx {
 
 	atx := &ActivationTx{
-		ActivationTxHeader: ActivationTxHeader{
-			NIPSTChallenge: poetChallenge,
-			Coinbase:       coinbase,
-			ActiveSetSize:  ActiveSetSize,
+		&InnerActivationTx{
+			ActivationTxHeader: ActivationTxHeader{
+				NIPSTChallenge: poetChallenge,
+				Coinbase:       coinbase,
+				ActiveSetSize:  ActiveSetSize,
+			},
+			Nipst:      nipst,
+			View:       View,
+			Commitment: commitment,
 		},
-		Nipst:      nipst,
-		View:       View,
-		Commitment: commitment,
+		nil,
 	}
 	atx.CalcAndSetId()
 	return atx
@@ -185,16 +192,30 @@ func (atx *ActivationTx) GetShortPoetProofRef() []byte {
 	return atx.Nipst.PostProof.Challenge[:util.Min(5, len(atx.Nipst.PostProof.Challenge))]
 }
 
-func ValidateSignedAtx(signedAtx *SignedAtx) error {
-	atxBytes, err := InterfaceToBytes(signedAtx.ActivationTx)
+// ValidateSignedAtx extracts public key from message and verifies public key exists in IdStore, this is how we validate
+// ATX signature. If this is the first ATX it is considered valid anyways and ATX syntactic validation will determine ATX validity
+func ExtractPublicKey(signedAtx *ActivationTx) (*signing.PublicKey, error) {
+	bts, err := signedAtx.AtxBytes()
 	if err != nil {
-		return err
+		return nil, err
 	}
-	verified := signing.Verify(signing.NewPublicKey(util.Hex2Bytes(signedAtx.NodeId.Key)), atxBytes, signedAtx.Sig)
-	if !verified {
-		return fmt.Errorf("invalid signature")
+
+	pubKey, err := ed25519.ExtractPublicKey(bts, signedAtx.Sig)
+	if err != nil {
+		return nil, err
 	}
-	return nil
+
+	pub := signing.NewPublicKey(pubKey)
+	return pub, nil
+}
+
+func SignAtx(signer *signing.EdSigner, atx *ActivationTx) (*ActivationTx, error) {
+	bts, err := atx.AtxBytes()
+	if err != nil {
+		return nil, err
+	}
+	atx.Sig = signer.Sign(bts)
+	return atx, nil
 }
 
 type PoetProof struct {

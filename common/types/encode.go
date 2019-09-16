@@ -46,17 +46,6 @@ func BytesAsAtx(b []byte, id AtxId) (*ActivationTx, error) {
 	return &atx, nil
 }
 
-func BytesAsSignedAtx(b []byte) (*SignedAtx, error) {
-	buf := bytes.NewReader(b)
-	var atx SignedAtx
-	_, err := xdr.Unmarshal(buf, &atx)
-	if err != nil {
-		return nil, err
-	}
-	atx.CalcAndSetId()
-	return &atx, nil
-}
-
 func TxIdsAsBytes(ids []TransactionId) ([]byte, error) {
 	var w bytes.Buffer
 	if _, err := xdr.Marshal(&w, &ids); err != nil {
