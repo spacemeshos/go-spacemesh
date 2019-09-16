@@ -257,7 +257,8 @@ func TestBlockBuilder_SerializeTrans(t *testing.T) {
 
 	ntx, err := types.BytesAsTransaction(buf)
 	assert.NoError(t, err)
-	ntx.Origin()
+	err = ntx.CalcAndSetOrigin()
+	assert.NoError(t, err)
 
 	assert.Equal(t, *tx, *ntx)
 }
