@@ -52,7 +52,7 @@ type Broker struct {
 	tasks          chan func()
 	latestLayer    InstanceId
 	isStarted      bool
-	lastDeleted    InstanceId
+	minDeleted     InstanceId
 }
 
 func NewBroker(networkService NetworkService, eValidator Validator, stateQuerier StateQuerier, syncState syncStateFunc, layersPerEpoch uint16, closer Closer, log log.Log) *Broker {
@@ -69,7 +69,7 @@ func NewBroker(networkService NetworkService, eValidator Validator, stateQuerier
 		pending:        make(map[InstanceId][]*Msg),
 		tasks:          make(chan func()),
 		latestLayer:    0,
-		lastDeleted:    0,
+		minDeleted:     0,
 	}
 }
 
@@ -231,9 +231,12 @@ func (b *Broker) updateLatestLayer(id InstanceId) {
 }
 
 func (b *Broker) cleanOldLayers() {
-	for i := b.lastDeleted; i < b.latestLayer; i++ {
-		if !b.syncState[i] { // invalid
-			delete(b.syncState, i) // remove it
+	for i := b.minDeleted + 1; i < b.latestLayer; i++ {
+		if _, exist := b.outbox[i]; !exist { // unregistered
+			delete(b.syncState, i) // clean sync state
+			b.minDeleted++
+		} else { // encountered first still running layer
+			break
 		}
 	}
 }
@@ -305,8 +308,8 @@ func (b *Broker) Unregister(id InstanceId) {
 
 	wg.Add(1)
 	b.tasks <- func() {
-		delete(b.outbox, id)    // delete matching outbox
-		delete(b.syncState, id) // delete matching state
+		delete(b.outbox, id) // delete matching outbox
+		b.cleanOldLayers()
 		b.Info("Unregistered layer %v ", id)
 		wg.Done()
 	}

@@ -474,3 +474,59 @@ func Test_validate(t *testing.T) {
 	e = b.validate(m.Message)
 	r.Nil(e)
 }
+
+func TestBroker_clean(t *testing.T) {
+	r := require.New(t)
+	b := buildBroker(service.NewSimulator().NewNode(), t.Name())
+
+	for i := InstanceId(1); i < 10; i++ {
+		b.syncState[i] = true
+	}
+
+	b.latestLayer = 9
+	b.outbox[5] = make(chan *Msg)
+	b.cleanOldLayers()
+	r.Equal(InstanceId(4), b.minDeleted)
+	r.Equal(5, len(b.syncState))
+
+	delete(b.outbox, 5)
+	b.cleanOldLayers()
+	r.Equal(1, len(b.syncState))
+}
+
+func TestBroker_Flow(t *testing.T) {
+	r := require.New(t)
+	b := buildBroker(service.NewSimulator().NewNode(), t.Name())
+
+	b.Start()
+
+	m := BuildStatusMsg(signing.NewEdSigner(), NewSmallEmptySet())
+	m.InnerMsg.InstanceId = 1
+	b.inbox <- newMockGossipMsg(m.Message)
+	ch1, e := b.Register(1)
+	r.Nil(e)
+	<-ch1
+
+	m2 := BuildStatusMsg(signing.NewEdSigner(), NewSmallEmptySet())
+	m2.InnerMsg.InstanceId = 2
+	ch2, e := b.Register(2)
+	r.Nil(e)
+
+	b.inbox <- newMockGossipMsg(m.Message)
+	b.inbox <- newMockGossipMsg(m2.Message)
+
+	<-ch2
+	<-ch1
+
+	b.Register(3)
+	b.Register(4)
+	b.Unregister(2)
+	r.Equal(instanceId0, b.minDeleted)
+
+	// check still receiving msgs on ch1
+	b.inbox <- newMockGossipMsg(m.Message)
+	<-ch1
+
+	b.Unregister(1)
+	r.Equal(instanceId2, b.minDeleted)
+}
