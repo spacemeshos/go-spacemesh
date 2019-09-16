@@ -434,9 +434,9 @@ func TestBroker_eventLoop2(t *testing.T) {
 	m.InnerMsg.InstanceId = instanceId4
 	msg := newMockGossipMsg(m)
 	b.inbox <- msg
-	v, ok := b.layerState[instanceId4]
+	v, ok := b.syncState[instanceId4]
 	r.True(ok)
-	r.NotEqual(active, v)
+	r.NotEqual(true, v)
 
 	// valid but not early
 	m.InnerMsg.InstanceId = instanceId6
