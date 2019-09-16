@@ -445,3 +445,32 @@ func TestBroker_eventLoop2(t *testing.T) {
 	_, ok = b.outbox[instanceId6]
 	r.False(ok)
 }
+
+func Test_validate(t *testing.T) {
+	r := require.New(t)
+	b := buildBroker(service.NewSimulator().NewNode(), t.Name())
+
+	m := BuildStatusMsg(signing.NewEdSigner(), NewSmallEmptySet())
+	m.InnerMsg.InstanceId = 1
+	b.latestLayer = 2
+	e := b.validate(m.Message)
+	r.EqualError(e, errUnregistered.Error())
+
+	m.InnerMsg.InstanceId = 2
+	e = b.validate(m.Message)
+	r.EqualError(e, errRegistration.Error())
+
+	m.InnerMsg.InstanceId = 3
+	e = b.validate(m.Message)
+	r.EqualError(e, errEarlyMsg.Error())
+
+	m.InnerMsg.InstanceId = 2
+	b.outbox[2] = make(chan *Msg)
+	b.syncState[2] = false
+	e = b.validate(m.Message)
+	r.EqualError(e, errNotSynced.Error())
+
+	b.syncState[2] = true
+	e = b.validate(m.Message)
+	r.Nil(e)
+}
