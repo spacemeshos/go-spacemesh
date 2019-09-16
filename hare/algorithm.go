@@ -344,7 +344,9 @@ func (proc *ConsensusProcess) sendMessage(msg *Msg) bool {
 		return false
 	}
 
-	proc.With().Info("message sent", log.String("msg_type", msg.InnerMsg.Type.String()),
+	proc.With().Info("message sent",
+		log.String("current_set", proc.s.String()),
+		log.String("msg_type", msg.InnerMsg.Type.String()),
 		log.Uint64("layer_id", uint64(proc.instanceId)))
 	return true
 }
@@ -444,11 +446,43 @@ func (proc *ConsensusProcess) beginRound3() {
 }
 
 func (proc *ConsensusProcess) beginRound4() {
+	// release proposal & commit trackers
+	defer func() {
+		proc.commitTracker = nil
+		proc.proposalTracker = nil
+	}()
+
 	// send notify message only once
 	if proc.notifySent {
-		proc.Info("Notify already sent")
+		proc.Info("Begin Round 4: notify already sent")
 		return
 	}
+
+	if proc.proposalTracker.IsConflicting() {
+		proc.Warning("Begin Round 4: proposal is conflicting")
+		return
+	}
+
+	if !proc.commitTracker.HasEnoughCommits() {
+		proc.Warning("Begin Round 4: not enough commits")
+		return
+	}
+
+	cert := proc.commitTracker.BuildCertificate()
+	if cert == nil {
+		proc.Error("Begin Round 4: Build certificate returned nil")
+		return
+	}
+
+	s := proc.proposalTracker.ProposedSet()
+	if s == nil {
+		proc.Error("Begin Round 4: ProposedSet returned nil")
+		return
+	}
+
+	// update set & matching certificate
+	proc.s = s
+	proc.certificate = cert
 
 	// check participation
 	if !proc.shouldParticipate() {
@@ -461,7 +495,7 @@ func (proc *ConsensusProcess) beginRound4() {
 		proc.Error("init default builder failed: %v", err)
 		return
 	}
-	proc.Event().Info("Begin Round 4", log.String("current_set", proc.s.String()), log.LayerId(uint64(proc.instanceId)))
+
 	builder = builder.SetType(Notify).SetCertificate(proc.certificate).Sign(proc.signing)
 	notifyMsg := builder.Build()
 	if proc.sendMessage(notifyMsg) { // on success, mark sent
@@ -593,37 +627,7 @@ func (proc *ConsensusProcess) endOfRound1() {
 }
 
 func (proc *ConsensusProcess) endOfRound3() {
-	// release proposal & commit trackers
-	defer func() {
-		proc.commitTracker = nil
-		proc.proposalTracker = nil
-	}()
-
-	if proc.proposalTracker.IsConflicting() {
-		proc.Warning("Round 3 ended: proposal is conflicting")
-		return
-	}
-
-	if !proc.commitTracker.HasEnoughCommits() {
-		proc.Warning("Round 3 ended: not enough commits")
-		return
-	}
-
-	cert := proc.commitTracker.BuildCertificate()
-	if cert == nil {
-		proc.Error("Round 3 ended: Build certificate returned nil")
-		return
-	}
-
-	s := proc.proposalTracker.ProposedSet()
-	if s == nil {
-		proc.Error("Round 3 ended: ProposedSet returned nil")
-		return
-	}
-
-	// update set & matching certificate
-	proc.s = s
-	proc.certificate = cert
+	proc.With().Info("Round 3 ended", log.LayerId(uint64(proc.instanceId)))
 }
 
 func (proc *ConsensusProcess) shouldParticipate() bool {

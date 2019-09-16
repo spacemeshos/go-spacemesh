@@ -536,21 +536,6 @@ func (m *mockNet) RegisterGossipProtocol(protocol string) chan service.GossipMes
 	return nil
 }
 
-func TestConsensusProcess_beginRound4(t *testing.T) {
-	r := require.New(t)
-
-	proc := generateConsensusProcess(t)
-	proc.beginRound1()
-	proc.beginRound2()
-	proc.beginRound3()
-
-	net := &mockNet{}
-	proc.network = net
-	proc.beginRound4()
-	r.Equal(1, net.callBroadcast)
-	r.True(proc.notifySent)
-}
-
 func TestConsensusProcess_handlePending(t *testing.T) {
 	proc := generateConsensusProcess(t)
 	proc.SetInbox(make(chan *Msg, 100))
@@ -565,17 +550,17 @@ func TestConsensusProcess_handlePending(t *testing.T) {
 	assert.Equal(t, count, len(proc.inbox))
 }
 
-func TestConsensusProcess_endOfRound3(t *testing.T) {
+func TestConsensusProcess_beginRound4(t *testing.T) {
 	r := require.New(t)
 
 	proc := generateConsensusProcess(t)
-	net := &mockP2p{}
+	net := &mockNet{}
 	proc.network = net
 	mpt := &mockProposalTracker{}
 	mct := &mockCommitTracker{}
 	proc.proposalTracker = mpt
 	proc.commitTracker = mct
-	proc.endOfRound3()
+	proc.beginRound4()
 	r.Equal(1, mpt.countIsConflicting)
 	r.Nil(proc.proposalTracker)
 	r.Nil(proc.commitTracker)
@@ -583,7 +568,7 @@ func TestConsensusProcess_endOfRound3(t *testing.T) {
 	proc.proposalTracker = mpt
 	proc.commitTracker = mct
 	mpt.isConflicting = true
-	proc.endOfRound3()
+	proc.beginRound4()
 	r.Equal(2, mpt.countIsConflicting)
 	r.Equal(1, mct.countHasEnoughCommits)
 	r.Nil(proc.proposalTracker)
@@ -593,7 +578,7 @@ func TestConsensusProcess_endOfRound3(t *testing.T) {
 	proc.commitTracker = mct
 	mpt.isConflicting = false
 	mct.hasEnoughCommits = false
-	proc.endOfRound3()
+	proc.beginRound4()
 	r.Equal(0, mct.countBuildCertificate)
 	r.Nil(proc.proposalTracker)
 	r.Nil(proc.commitTracker)
@@ -602,7 +587,7 @@ func TestConsensusProcess_endOfRound3(t *testing.T) {
 	proc.commitTracker = mct
 	mct.hasEnoughCommits = true
 	mct.certificate = nil
-	proc.endOfRound3()
+	proc.beginRound4()
 	r.Equal(1, mct.countBuildCertificate)
 	r.Equal(0, mpt.countProposedSet)
 	r.Nil(proc.proposalTracker)
@@ -613,7 +598,7 @@ func TestConsensusProcess_endOfRound3(t *testing.T) {
 	mct.certificate = &Certificate{}
 	mpt.proposedSet = nil
 	proc.s = NewSmallEmptySet()
-	proc.endOfRound3()
+	proc.beginRound4()
 	r.NotNil(proc.s)
 	r.Nil(proc.proposalTracker)
 	r.Nil(proc.commitTracker)
@@ -621,9 +606,11 @@ func TestConsensusProcess_endOfRound3(t *testing.T) {
 	proc.proposalTracker = mpt
 	proc.commitTracker = mct
 	mpt.proposedSet = NewSetFromValues(value1)
-	proc.endOfRound3()
+	proc.beginRound4()
 	r.True(proc.s.Equals(mpt.proposedSet))
 	r.Equal(mct.certificate, proc.certificate)
 	r.Nil(proc.proposalTracker)
 	r.Nil(proc.commitTracker)
+	r.Equal(1, net.callBroadcast)
+	r.True(proc.notifySent)
 }
