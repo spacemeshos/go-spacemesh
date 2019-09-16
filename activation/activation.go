@@ -6,6 +6,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/nipst"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/post/shared"
 	"sync"
 	"sync/atomic"
@@ -46,8 +47,8 @@ type IdStore interface {
 }
 
 type NipstValidator interface {
-	Validate(nipst *types.NIPST, expectedChallenge types.Hash32) error
-	VerifyPost(proof *types.PostProof, space uint64) error
+	Validate(id signing.PublicKey, nipst *types.NIPST, expectedChallenge types.Hash32) error
+	VerifyPost(id signing.PublicKey, proof *types.PostProof, space uint64) error
 }
 
 type ATXDBProvider interface {

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -232,8 +233,8 @@ func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error 
 		if !bytes.Equal(atx.Commitment.MerkleRoot, atx.CommitmentMerkleRoot) {
 			return errors.New("commitment merkle root included in challenge is not equal to the merkle root included in the proof")
 		}
-
-		if err := db.nipstValidator.VerifyPost(atx.Commitment, atx.Nipst.Space); err != nil {
+		id := signing.NewPublicKey(util.Hex2Bytes(atx.NodeId.Key))
+		if err := db.nipstValidator.VerifyPost(*id, atx.Commitment, atx.Nipst.Space); err != nil {
 			return fmt.Errorf("invalid commitment proof: %v", err)
 		}
 	}
@@ -273,7 +274,8 @@ func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error 
 	}
 	db.log.With().Info("Validated NIPST", log.String("challenge_hash", hash.ShortString()), log.AtxId(atx.ShortString()))
 
-	if err = db.nipstValidator.Validate(atx.Nipst, *hash); err != nil {
+	pubKey := signing.NewPublicKey(util.Hex2Bytes(atx.NodeId.Key))
+	if err = db.nipstValidator.Validate(*pubKey, atx.Nipst, *hash); err != nil {
 		return fmt.Errorf("NIPST not valid: %v", err)
 	}
 

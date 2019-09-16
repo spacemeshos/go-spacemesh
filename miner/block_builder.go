@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -16,6 +17,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/oracle"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"math/rand"
 	"sync"
 	"time"
@@ -42,6 +44,7 @@ type TxValidator interface {
 type AtxValidator interface {
 	SyntacticallyValidateAtx(atx *types.ActivationTx) error
 	ValidateSignedAtx(signedAtx *types.SignedAtx) error
+	GetIdentity(id string) (types.NodeId, error)
 }
 
 type Syncer interface {
@@ -324,6 +327,23 @@ func (t *BlockBuilder) listenForAtx() {
 	}
 }
 
+// ValidateSignedAtx extracts public key from message and verifies public key exists in IdStore, this is how we validate
+// ATX signature. If this is the first ATX it is considered valid anyways and ATX syntactic validation will determine ATX validity
+func (t *BlockBuilder) ExtractPublicKey(signedAtx *types.SignedAtx) (*signing.PublicKey, error) {
+	bts, err := signedAtx.AtxBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	pubKey, err := ed25519.ExtractPublicKey(bts, signedAtx.Sig)
+	if err != nil {
+		return nil, err
+	}
+
+	pub := signing.NewPublicKey(pubKey)
+	return pub, nil
+}
+
 func (t *BlockBuilder) handleGossipAtx(data service.GossipMessage) {
 	if data == nil {
 		return
@@ -334,10 +354,23 @@ func (t *BlockBuilder) handleGossipAtx(data service.GossipMessage) {
 		return
 	}
 
-	err = t.atxValidator.ValidateSignedAtx(signedAtx)
+	/*err = t.atxValidator.ValidateSignedAtx(signedAtx)
 	if err != nil {
 		log.Error("cannot validate atx sig atx id %v err %v", signedAtx.Id(), err)
 		return
+	}*/
+	pub, err := t.ExtractPublicKey(signedAtx)
+	if err != nil {
+		log.Error("cannot validate atx sig atx id %v err %v", signedAtx.Id(), err)
+		return
+	}
+
+	if signedAtx.ActivationTx.PrevATXId != *types.EmptyAtxId {
+		_, err = t.atxValidator.GetIdentity(pub.String())
+		if err != nil { // means there is no such identity
+			log.Error("no id found %v err %v", signedAtx.Id(), err)
+			return
+		}
 	}
 
 	atx := signedAtx.ActivationTx

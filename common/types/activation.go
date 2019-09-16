@@ -247,8 +247,8 @@ type NIPST struct {
 type PostProof proving.Proof
 
 func (p *PostProof) String() string {
-	return fmt.Sprintf("id: %v, challenge: %v, root: %v",
-		bytesToShortString(p.Identity), bytesToShortString(p.Challenge), bytesToShortString(p.MerkleRoot))
+	return fmt.Sprintf("challenge: %v, root: %v",
+		bytesToShortString(p.Challenge), bytesToShortString(p.MerkleRoot))
 }
 
 func bytesToShortString(b []byte) string {

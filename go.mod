@@ -39,3 +39,5 @@ require (
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 	nanomsg.org/go-mangos v1.4.0
 )
+
+replace github.com/spacemeshos/post v0.0.0-20190901120255-d42405e2036e => /Users/anton/go/src/github.com/spacemeshos/post

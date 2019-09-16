@@ -44,7 +44,7 @@ var (
 	postProver   = &postProverClientMock{}
 	npst         = nipst.NewNIPSTWithChallenge(&chlng, poetRef)
 	commitment   = &types.PostProof{
-		Identity:     []byte(nil),
+		//Identity:     []byte(nil),
 		Challenge:    []byte(nil),
 		MerkleRoot:   []byte("1"),
 		ProofNodes:   [][]byte(nil),
@@ -144,11 +144,11 @@ func (*MockIdStore) GetIdentity(id string) (types.NodeId, error) {
 
 type ValidatorMock struct{}
 
-func (*ValidatorMock) Validate(nipst *types.NIPST, expectedChallenge types.Hash32) error {
+func (*ValidatorMock) Validate(id signing.PublicKey, nipst *types.NIPST, expectedChallenge types.Hash32) error {
 	return nil
 }
 
-func (*ValidatorMock) VerifyPost(proof *types.PostProof, space uint64) error {
+func (*ValidatorMock) VerifyPost(id signing.PublicKey, proof *types.PostProof, space uint64) error {
 	return nil
 }
 
