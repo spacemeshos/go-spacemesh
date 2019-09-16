@@ -5,7 +5,6 @@ import (
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/sha256-simd"
 )
 
 type TransactionId Hash32
@@ -70,7 +69,7 @@ func (t *Transaction) Id() TransactionId {
 	if err != nil {
 		panic("failed to marshal transaction: " + err.Error())
 	}
-	id := TransactionId(sha256.Sum256(txBytes))
+	id := TransactionId(CalcHash32(txBytes))
 	t.id = &id
 	return id
 }
