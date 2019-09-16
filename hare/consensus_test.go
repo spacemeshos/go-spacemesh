@@ -5,7 +5,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	signing2 "github.com/spacemeshos/go-spacemesh/signing"
 	"testing"
@@ -134,7 +133,7 @@ func (test *ConsensusTest) Start() {
 	go startProcs(test.dishonest)
 }
 
-func createConsensusProcess(isHonest bool, cfg config.Config, oracle fullRolacle, network p2p.Service, initialSet *Set, name string) *ConsensusProcess {
+func createConsensusProcess(isHonest bool, cfg config.Config, oracle fullRolacle, network NetworkService, initialSet *Set, name string) *ConsensusProcess {
 	broker := buildBroker(network, name)
 	broker.Start()
 	output := make(chan TerminationOutput, 1)
@@ -161,7 +160,7 @@ func TestConsensusFixedOracle(t *testing.T) {
 	set1 := NewSetFromValues(value1)
 	test.fill(set1, 0, totalNodes-1)
 	test.honestSets = []*Set{set1}
-	oracle := eligibility.New()
+	oracle := &trueOracle{}
 	i := 0
 	creationFunc := func() {
 		s := sim.NewNode()
