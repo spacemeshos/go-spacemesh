@@ -226,6 +226,8 @@ github.com/spacemeshos/post v0.0.0-20190508113329-07bdc2589d98 h1:dB9yxkhtbDYGlW
 github.com/spacemeshos/post v0.0.0-20190508113329-07bdc2589d98/go.mod h1:n8EGjskKs9gKrxfCWqgrEH5zBiYFLZ70LezPb0CRXPg=
 github.com/spacemeshos/post v0.0.0-20190901120255-d42405e2036e h1:mphyzz2LwqIMx/utunaSJz2r0Q5Is3q+sWyTCyYVVpk=
 github.com/spacemeshos/post v0.0.0-20190901120255-d42405e2036e/go.mod h1:43GwKHD+nI5wUzzUMwRbpJdC2r9dURZ6V3Jkc9eUMSE=
+github.com/spacemeshos/post v0.0.0-20190916103818-78ec0fc25f10 h1:33FE6W1Q+xoWiEwRbU0JqIGi8jEU83QMgBt6RsH1bX0=
+github.com/spacemeshos/post v0.0.0-20190916103818-78ec0fc25f10/go.mod h1:43GwKHD+nI5wUzzUMwRbpJdC2r9dURZ6V3Jkc9eUMSE=
 github.com/spacemeshos/sha256-simd v0.0.0-20190111104731-8575aafc88c9 h1:Cc+np6ORem5wrvO+YHQ1sdu71ItiQVRiYB4ugazpgxM=
 github.com/spacemeshos/sha256-simd v0.0.0-20190111104731-8575aafc88c9/go.mod h1:Pz5LyRghtiEuSixOVGO0da5AxKBZa6+Yq8ZJfjTAPI0=
 github.com/spacemeshos/smutil v0.0.0-20190604133034-b5189449f5c5 h1:a+uIX0wjwWdK2JpsQnNhSdp3KDkqGg6P7Jp3nMZP8BM=
