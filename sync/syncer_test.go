@@ -1033,21 +1033,21 @@ func TestSyncer_Synchronise2(t *testing.T) {
 	lv := &mockLayerValidator{0, 0, 0, nil}
 	sync.lValidator = lv
 	sync.currentLayer = 1
-	r.False(sync.p2pSynced)
+	r.False(sync.gossipSynced)
 
 	// current layer = 0
 	sync.currentLayer = 0
 	sync.syncRoutineWg.Add(1)
 	sync.Synchronise()
 	r.Equal(0, lv.countValidate)
-	r.True(sync.p2pSynced)
+	r.True(sync.gossipSynced)
 
 	// current layer = 1
 	sync.currentLayer = 1
 	sync.syncRoutineWg.Add(1)
 	sync.Synchronise()
 	r.Equal(0, lv.countValidate)
-	r.True(sync.p2pSynced)
+	r.True(sync.gossipSynced)
 
 	// validated layer = 5 && current layer = 6 -> don't call validate
 	lv = &mockLayerValidator{5, 0, 0, nil}
@@ -1057,7 +1057,7 @@ func TestSyncer_Synchronise2(t *testing.T) {
 	sync.SetLatestLayer(5)
 	sync.Synchronise()
 	r.Equal(0, lv.countValidate)
-	r.True(sync.p2pSynced)
+	r.True(sync.gossipSynced)
 
 	// current layer != 1 && weakly-synced
 	lv = &mockLayerValidator{0, 0, 0, nil}
@@ -1067,7 +1067,7 @@ func TestSyncer_Synchronise2(t *testing.T) {
 	sync.syncRoutineWg.Add(1)
 	sync.Synchronise()
 	r.Equal(1, lv.countValidate)
-	r.True(sync.p2pSynced)
+	r.True(sync.gossipSynced)
 }
 
 func TestSyncer_handleNotSyncedFlow(t *testing.T) {
@@ -1240,7 +1240,7 @@ func TestSyncProtocol_NilResponse(t *testing.T) {
 	ch := syncs[0].txQueue.addToPendingGetCh([]types.Hash32{nonExistingTxId.Hash32()})
 	select {
 	case out := <-ch:
-		assert.True(t, out == false)
+		assert.False(t, out)
 	case <-time.After(timeout):
 
 	}
@@ -1250,7 +1250,7 @@ func TestSyncProtocol_NilResponse(t *testing.T) {
 	// PoET
 	select {
 	case out := <-ch:
-		assert.True(t, out == false)
+		assert.False(t, out)
 	case <-time.After(timeout):
 
 	}
@@ -1266,7 +1266,7 @@ func TestSyncProtocol_NilResponse(t *testing.T) {
 }
 
 func TestSyncProtocol_BadResponse(t *testing.T) {
-	syncs, _, _ := SyncMockFactory(2, conf, "TestSyncProtocol_NilResponse", memoryDB, newMemPoetDb)
+	syncs, _, _ := SyncMockFactory(2, conf, t.Name(), memoryDB, newMemPoetDb)
 	defer syncs[0].Close()
 	defer syncs[1].Close()
 
