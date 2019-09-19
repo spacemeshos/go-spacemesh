@@ -230,7 +230,7 @@ func Test_multipleCPs(t *testing.T) {
 	totalCp := 3
 	test := newHareWrapper(totalCp)
 	totalNodes := 20
-	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, RoundDuration: 5, ExpectedLeaders: 5}
+	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, RoundDuration: 3, ExpectedLeaders: 5}
 	rng := BLS381.DefaultSeed()
 	sim := service.NewSimulator()
 	test.initialSets = make([]*Set, totalNodes)
@@ -262,10 +262,10 @@ func Test_multipleCPs(t *testing.T) {
 // Test - run multiple CPs where one of them runs more than one iteration
 func Test_multipleCPsAndIterations(t *testing.T) {
 	r := require.New(t)
-	totalCp := 5
+	totalCp := 4
 	test := newHareWrapper(totalCp)
 	totalNodes := 20
-	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, RoundDuration: 5, ExpectedLeaders: 5}
+	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, RoundDuration: 3, ExpectedLeaders: 5}
 	rng := BLS381.DefaultSeed()
 	sim := service.NewSimulator()
 	test.initialSets = make([]*Set, totalNodes)
@@ -291,5 +291,5 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 		}
 	}()
 
-	test.WaitForTimedTermination(t, 30*time.Second)
+	test.WaitForTimedTermination(t, 40*time.Second)
 }
