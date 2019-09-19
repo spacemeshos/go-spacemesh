@@ -106,8 +106,8 @@ type Syncer struct {
 	exit              chan struct{}
 	currentLayerMutex sync.RWMutex
 	syncRoutineWg     sync.WaitGroup
-	p2pLock           sync.RWMutex
-	p2pSynced         bool
+	gossipLock        sync.RWMutex
+	gossipSynced      bool
 
 	//todo fetch server
 	blockQueue *blockQueue
@@ -151,23 +151,23 @@ func (s *Syncer) WeaklySynced() bool {
 	return s.LatestLayer()+1 >= s.lastTickedLayer()
 }
 
-func (s *Syncer) getP2pSynced() bool {
-	s.p2pLock.RLock()
-	b := s.p2pSynced
-	s.p2pLock.RUnlock()
+func (s *Syncer) getGossipSynced() bool {
+	s.gossipLock.RLock()
+	b := s.gossipSynced
+	s.gossipLock.RUnlock()
 
 	return b
 }
 
 func (s *Syncer) setGossipSynced(b bool) {
-	s.p2pLock.Lock()
-	s.p2pSynced = b
-	s.p2pLock.Unlock()
+	s.gossipLock.Lock()
+	s.gossipSynced = b
+	s.gossipLock.Unlock()
 }
 
 func (s *Syncer) IsSynced() bool {
 	s.Log.Info("latest: %v, maxSynced %v", s.LatestLayer(), s.lastTickedLayer())
-	return s.WeaklySynced() && s.getP2pSynced()
+	return s.WeaklySynced() && s.getGossipSynced()
 }
 
 func (s *Syncer) Start() {
@@ -234,7 +234,7 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool A
 		currentLayer:         clock.GetCurrentLayer(),
 		LayerCh:              clock.Subscribe(),
 		exit:                 make(chan struct{}),
-		p2pSynced:            false,
+		gossipSynced:         false,
 	}
 
 	s.blockQueue = NewValidationQueue(srvr, s.Configuration, s, s.blockCheckLocal, logger.WithName("validQ"))
