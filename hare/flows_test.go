@@ -212,14 +212,14 @@ func (mbp *mockBlockProvider) GetUnverifiedLayerBlocks(layerId types.LayerID) ([
 	return buildSet(), nil
 }
 
-func createMaatuf(tcfg config.Config, rng *amcl.RAND, layersCh chan types.LayerID, p2p NetworkService, rolacle Rolacle) *Hare {
+func createMaatuf(tcfg config.Config, rng *amcl.RAND, layersCh chan types.LayerID, p2p NetworkService, rolacle Rolacle, name string) *Hare {
 	ed := signing.NewEdSigner()
 	pub := ed.PublicKey()
 	_, vrfPub := BLS381.GenKeyPair(rng)
 	//vrfSigner := BLS381.NewBlsSigner(vrfPriv)
 	nodeID := types.NodeId{Key: pub.String(), VRFPublicKey: vrfPub}
 	hare := New(tcfg, p2p, ed, nodeID, validateBlock, isSynced, &mockBlockProvider{}, rolacle, 10, &mockIdentityP{nid: nodeID},
-		&MockStateQuerier{true, nil}, layersCh, log.NewDefault(ed.PublicKey().ShortString()))
+		&MockStateQuerier{true, nil}, layersCh, log.NewDefault(name+"_"+ed.PublicKey().ShortString()))
 
 	return hare
 }
@@ -230,7 +230,7 @@ func Test_multipleCPs(t *testing.T) {
 	totalCp := 3
 	test := newHareWrapper(totalCp)
 	totalNodes := 20
-	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, RoundDuration: 2, ExpectedLeaders: 5}
+	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, RoundDuration: 5, ExpectedLeaders: 5}
 	rng := BLS381.DefaultSeed()
 	sim := service.NewSimulator()
 	test.initialSets = make([]*Set, totalNodes)
@@ -239,7 +239,7 @@ func Test_multipleCPs(t *testing.T) {
 		s := sim.NewNode()
 		//p2pm := &p2pManipulator{nd: s, err: errors.New("fake err")}
 		test.lCh = append(test.lCh, make(chan types.LayerID, 1))
-		h := createMaatuf(cfg, rng, test.lCh[i], s, oracle)
+		h := createMaatuf(cfg, rng, test.lCh[i], s, oracle, t.Name())
 		test.hare = append(test.hare, h)
 		e := h.Start()
 		r.NoError(e)
@@ -265,7 +265,7 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 	totalCp := 5
 	test := newHareWrapper(totalCp)
 	totalNodes := 20
-	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, RoundDuration: 2, ExpectedLeaders: 5}
+	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, RoundDuration: 5, ExpectedLeaders: 5}
 	rng := BLS381.DefaultSeed()
 	sim := service.NewSimulator()
 	test.initialSets = make([]*Set, totalNodes)
@@ -274,7 +274,7 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 		s := sim.NewNode()
 		mp2p := &p2pManipulator{nd: s, stalledLayer: 1, err: errors.New("fake err")}
 		test.lCh = append(test.lCh, make(chan types.LayerID, 1))
-		h := createMaatuf(cfg, rng, test.lCh[i], mp2p, oracle)
+		h := createMaatuf(cfg, rng, test.lCh[i], mp2p, oracle, t.Name())
 		test.hare = append(test.hare, h)
 		e := h.Start()
 		r.NoError(e)
