@@ -160,7 +160,7 @@ func TestConsensusFixedOracle(t *testing.T) {
 	set1 := NewSetFromValues(value1)
 	test.fill(set1, 0, totalNodes-1)
 	test.honestSets = []*Set{set1}
-	oracle := &trueOracle{}
+	oracle := eligibility.New()
 	i := 0
 	creationFunc := func() {
 		s := sim.NewNode()
