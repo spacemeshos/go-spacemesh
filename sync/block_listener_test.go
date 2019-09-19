@@ -161,9 +161,9 @@ func TestBlockListener_DataAvailability(t *testing.T) {
 	// Verify that bl2 doesn't have them in mempool.
 
 	_, err = bl2.txpool.Get(tx1.Id())
-	require.Error(t, err)
+	require.EqualError(t, err, "transaction not found in mempool")
 	_, err = bl2.atxpool.Get(atx1.Id())
-	require.Error(t, err)
+	require.EqualError(t, err, "cannot find ATX in mempool")
 
 	// Sync bl2.
 
