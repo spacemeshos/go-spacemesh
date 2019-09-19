@@ -1239,8 +1239,8 @@ func TestSyncProtocol_NilResponse(t *testing.T) {
 
 	ch := syncs[0].txQueue.addToPendingGetCh([]types.Hash32{nonExistingTxId.Hash32()})
 	select {
-	case <-ch:
-		t.Error(t, "should not return ")
+	case out := <-ch:
+		assert.True(t, out == false)
 	case <-time.After(timeout):
 
 	}
