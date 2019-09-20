@@ -14,10 +14,7 @@ func testAddrBook(name string) *addrBook {
 func TestStartStop(t *testing.T) {
 	n := NewAddrBook(generateDiscNode(), config.DefaultConfig().SwarmConfig, GetTestLogger("starttest"))
 	n.Start()
-	err := n.Stop()
-	if err != nil {
-		t.Fatalf("Address Manager failed to stop: %v", err)
-	}
+	n.Stop()
 }
 
 func TestAttempt(t *testing.T) {

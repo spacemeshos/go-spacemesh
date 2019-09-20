@@ -16,6 +16,8 @@ type ValidationInfra interface {
 	GetBlock(id types.BlockID) (*types.Block, error)
 	ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) (bool, error)) error
 	fastValidation(block *types.Block) error
+	HandleLateBlock(bl *types.Block)
+	ValidatedLayer() types.LayerID
 }
 
 type blockQueue struct {
@@ -25,7 +27,6 @@ type blockQueue struct {
 	callbacks     map[interface{}]func(res bool) error
 	depMap        map[interface{}]map[types.Hash32]struct{}
 	reverseDepMap map[types.Hash32][]interface{}
-	visited       map[types.Hash32]struct{}
 }
 
 func NewValidationQueue(srvr WorkerInfra, conf Configuration, msh ValidationInfra, checkLocal CheckLocalFunc, lg log.Log) *blockQueue {
@@ -40,7 +41,6 @@ func NewValidationQueue(srvr WorkerInfra, conf Configuration, msh ValidationInfr
 			queue:               make(chan []types.Hash32, 1000),
 		},
 		Configuration:   conf,
-		visited:         make(map[types.Hash32]struct{}),
 		depMap:          make(map[interface{}]map[types.Hash32]struct{}),
 		reverseDepMap:   make(map[types.Hash32][]interface{}),
 		callbacks:       make(map[interface{}]func(res bool) error),
@@ -54,11 +54,6 @@ func NewValidationQueue(srvr WorkerInfra, conf Configuration, msh ValidationInfr
 
 func (vq *blockQueue) inQueue(id types.Hash32) bool {
 	_, ok := vq.reverseDepMap[id]
-	if ok {
-		return true
-	}
-
-	_, ok = vq.visited[id]
 	if ok {
 		return true
 	}
@@ -79,16 +74,15 @@ func (vq *blockQueue) handleBlock(bjb fetchJob) {
 		block, found := mp[id]
 		if !found {
 			vq.updateDependencies(id, false)
-			vq.Error(fmt.Sprintf("could not retrieve a block in view "))
+			vq.Error("could not retrieve a block in view %v", id.ShortString())
 			continue
 		}
 
 		vq.Info("fetched  %v", id.String())
-		vq.visited[id] = struct{}{}
 		if err := vq.fastValidation(block); err != nil {
 			vq.Error("ValidationQueue: block validation failed", log.BlockId(uint64(block.ID())), log.Err(err))
 			vq.updateDependencies(id, false)
-			return
+			continue
 		}
 
 		vq.handleBlockDependencies(block)
@@ -100,7 +94,7 @@ func (vq *blockQueue) handleBlock(bjb fetchJob) {
 // handles new block dependencies
 // if there are unknown blocks in the view they are added to the fetch queue
 func (vq *blockQueue) handleBlockDependencies(blk *types.Block) {
-	vq.Info("handle dependencies view Block %v", blk.ID())
+	vq.Info("handle Block %v", blk.ID())
 	res, err := vq.addDependencies(blk.ID(), blk.ViewEdges, vq.finishBlockCallback(blk))
 
 	if err != nil {
@@ -128,7 +122,7 @@ func (vq *blockQueue) finishBlockCallback(block *types.Block) func(res bool) err
 		}
 
 		//validate block's votes
-		if valid := validateVotes(block, vq.ForBlockInView, vq.Hdist); valid == false {
+		if valid := validateVotes(block, vq.ForBlockInView, vq.Hdist, vq.Log); valid == false {
 			return errors.New(fmt.Sprintf("validate votes failed for block %v", block.ID()))
 		}
 
@@ -136,6 +130,11 @@ func (vq *blockQueue) finishBlockCallback(block *types.Block) func(res bool) err
 			return err
 		}
 
+		if block.Layer() <= vq.ValidatedLayer() {
+			vq.HandleLateBlock(block)
+		}
+
+		vq.Info("finished handle block %v", block.ID())
 		return nil
 	}
 }
@@ -147,7 +146,6 @@ func (vq *blockQueue) updateDependencies(block types.Hash32, valid bool) {
 	//clean after block
 	delete(vq.depMap, block)
 	delete(vq.callbacks, block)
-	delete(vq.visited, block)
 
 	doneQueue := make([]types.Hash32, 0, len(vq.depMap))
 	doneQueue = vq.removefromDepMaps(block, valid, doneQueue)
@@ -169,7 +167,7 @@ func (vq *blockQueue) removefromDepMaps(block types.Hash32, valid bool, doneBloc
 		delete(vq.depMap[dep], block)
 		if len(vq.depMap[dep]) == 0 {
 			delete(vq.depMap, dep)
-			vq.Info("run callback for %v, %v", dep, reflect.TypeOf(dep))
+			vq.Debug("run callback for %v, %v", dep, reflect.TypeOf(dep))
 			if callback, ok := vq.callbacks[dep]; ok {
 				delete(vq.callbacks, dep)
 				if err := callback(valid); err != nil {
@@ -209,15 +207,20 @@ func (vq *blockQueue) addDependencies(jobId interface{}, blks []types.BlockID, f
 			}
 		}
 	}
-	vq.Unlock()
 
+	// addToPending needs the mutex so we must release before
+	vq.Unlock()
 	if len(idsToPush) > 0 {
 		vq.Debug("add %v to queue %v", len(idsToPush), jobId)
 		vq.addToPending(idsToPush)
 	}
 
+	//lock to protect depMap and callback map
+	vq.Lock()
+	defer vq.Unlock()
 	//todo better this is a little hacky
 	if len(dependencys) == 0 {
+		delete(vq.callbacks, jobId)
 		return false, finishCallback(true)
 	}
 

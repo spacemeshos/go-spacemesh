@@ -53,11 +53,11 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 
 	nodeId, active, atxid, err := v.activationDb.IsIdentityActive(pubString, block.Layer())
 	if err != nil {
-		return false, errors.New(fmt.Sprintf("error while checking IsIdentityActive for %v %v ", block.ID(), err))
+		return false, errors.New(fmt.Sprintf("error while checking IsIdentityActive for %v %v", block.ID(), err))
 	}
 
 	if !active {
-		return false, errors.New(fmt.Sprintf("block %v identity activation check failed ", block.ID()))
+		return false, errors.New(fmt.Sprintf("block %v identity activation check failed (ignore if the publication layer is in genesis)", block.ID()))
 	}
 
 	if atxid != block.ATXID {

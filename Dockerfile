@@ -46,3 +46,6 @@ EXPOSE 7513
 
 # profiling port
 EXPOSE 6060
+
+# pubsub port
+EXPOSE 56565

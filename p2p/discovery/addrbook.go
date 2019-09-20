@@ -462,17 +462,17 @@ func (a *addrBook) Start() {
 }
 
 // Stop gracefully shuts down the address manager by stopping the main handler.
-func (a *addrBook) Stop() error {
+func (a *addrBook) Stop() {
 	if atomic.AddInt32(&a.shutdown, 1) != 1 {
 		a.logger.Warning("Address manager is already in the process of " +
 			"shutting down")
-		return nil
+		return
 	}
 
 	a.logger.Info("Address manager shutting down")
 	close(a.quit)
 	a.wg.Wait()
-	return nil
+	return
 }
 
 // expireNew makes space in the new buckets by expiring the really bad entries.

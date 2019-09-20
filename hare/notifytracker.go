@@ -56,6 +56,7 @@ func calcId(k int32, set *Set) uint32 {
 	binary.LittleEndian.PutUint32(buff, uint32(k)) // K>=0 because this not pre-round
 	hash.Write(buff)
 
+	// TODO: is this hash enough for this usage?
 	// write set objectId
 	buff = make([]byte, 4)
 	binary.LittleEndian.PutUint32(buff, uint32(set.Id()))

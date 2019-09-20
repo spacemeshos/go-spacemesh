@@ -135,6 +135,7 @@ func (b *Builder) Start() {
 // Stop stops the atx builder.
 func (b *Builder) Stop() {
 	b.finished <- struct{}{}
+	close(b.stop)
 }
 
 func (b Builder) SignAtx(atx *types.ActivationTx) (*types.ActivationTx, error) {
@@ -445,6 +446,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 	var activeSetSize uint32
 	if pubEpoch > 0 {
 		var err error
+		b.log.With().Info("calculating active ids")
 		activeSetSize, err = b.db.CalcActiveSetFromView(view, pubEpoch)
 		if err != nil {
 			return fmt.Errorf("failed to calculate activeset: %v", err)
