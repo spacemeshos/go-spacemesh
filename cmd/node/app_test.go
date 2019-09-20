@@ -392,7 +392,7 @@ func TestShutdown(t *testing.T) {
 
 	smApp := NewSpacemeshApp()
 	genesisTime := time.Now().Add(time.Second * 10)
-	smApp.Config.POST = nipst.DefaultConfig()
+	smApp.Config.POST = activation.DefaultConfig()
 	smApp.Config.POST.Difficulty = 5
 	smApp.Config.POST.NumProvenLabels = 10
 	smApp.Config.POST.SpacePerUnit = 1 << 10 // 1KB.
@@ -433,7 +433,7 @@ func TestShutdown(t *testing.T) {
 	hareOracle := oracle.NewLocalOracle(rolacle, 5, nodeID)
 	hareOracle.Register(true, pub.String())
 
-	postClient, err := nipst.NewPostClient(&smApp.Config.POST, util.Hex2Bytes(nodeID.Key))
+	postClient, err := activation.NewPostClient(&smApp.Config.POST, util.Hex2Bytes(nodeID.Key))
 	r.NoError(err)
 	r.NotNil(postClient)
 
