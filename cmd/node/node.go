@@ -1,6 +1,7 @@
 package node
 
 import (
+	"context"
 	"fmt"
 	"github.com/seehuhn/mt19937"
 	"github.com/spacemeshos/go-spacemesh/activation"
@@ -81,25 +82,25 @@ func init() {
 // SpacemeshApp is the cli app singleton
 type SpacemeshApp struct {
 	*cobra.Command
-	nodeId           types.NodeId
-	P2P              p2p.Service
-	Config           *cfg.Config
-	NodeInitCallback chan bool
-	grpcAPIService   *api.SpacemeshGrpcService
-	jsonAPIService   *api.JSONHTTPServer
-	syncer           *sync.Syncer
-	blockListener    *sync.BlockListener
-	state            *state.StateDB
-	blockProducer    *miner.BlockBuilder
-	oracle           *oracle.MinerBlockOracle
-	txProcessor      *state.TransactionProcessor
-	mesh             *mesh.Mesh
-	clock            *timesync.Ticker
-	hare             *hare.Hare
-	atxBuilder       *activation.Builder
-	poetListener     *activation.PoetListener
-	edSgn            *signing.EdSigner
-	log              log.Log
+	nodeId         types.NodeId
+	P2P            p2p.Service
+	Config         *cfg.Config
+	grpcAPIService *api.SpacemeshGrpcService
+	jsonAPIService *api.JSONHTTPServer
+	syncer         *sync.Syncer
+	blockListener  *sync.BlockListener
+	state          *state.StateDB
+	blockProducer  *miner.BlockBuilder
+	oracle         *oracle.MinerBlockOracle
+	txProcessor    *state.TransactionProcessor
+	mesh           *mesh.Mesh
+	clock          *timesync.Ticker
+	hare           *hare.Hare
+	atxBuilder     *activation.Builder
+	poetListener   *activation.PoetListener
+	edSgn          *signing.EdSigner
+	closers        []interface{ Close() }
+	log            log.Log
 }
 
 // ParseConfig unmarshal config file into struct
@@ -132,8 +133,7 @@ func NewSpacemeshApp() *SpacemeshApp {
 
 	defaultConfig := cfg.DefaultConfig()
 	node := &SpacemeshApp{
-		Config:           &defaultConfig,
-		NodeInitCallback: make(chan bool, 1),
+		Config: &defaultConfig,
 	}
 
 	return node
@@ -232,19 +232,7 @@ func (app *SpacemeshApp) getAppInfo() string {
 // Post Execute tasks
 func (app *SpacemeshApp) Cleanup(cmd *cobra.Command, args []string) (err error) {
 	log.Info("App Cleanup starting...")
-
-	if app.jsonAPIService != nil {
-		log.Info("Stopping JSON service api...")
-		app.jsonAPIService.StopService()
-	}
-
-	if app.grpcAPIService != nil {
-		log.Info("Stopping GRPC service ...")
-		app.grpcAPIService.StopService()
-	}
-
 	app.stopServices()
-
 	// add any other Cleanup tasks here....
 	log.Info("App Cleanup completed\n\n")
 
@@ -309,6 +297,8 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	if err != nil {
 		return err
 	}
+	app.closers = append(app.closers, db)
+
 	st, err := state.New(types.Hash32{}, state.NewDatabase(db)) //todo: we probably should load DB with latest hash
 	if err != nil {
 		return err
@@ -328,22 +318,27 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	if err != nil {
 		return err
 	}
+	app.closers = append(app.closers, atxdbstore)
 
 	poetDbStore, err := database.NewLDBDatabase(dbStorepath+"poet", 0, 0, lg.WithName("poetDbStore"))
 	if err != nil {
 		return err
 	}
+	app.closers = append(app.closers, poetDbStore)
 
 	//todo: put in config
 	iddbstore, err := database.NewLDBDatabase(dbStorepath+"ids", 0, 0, lg.WithName("stateDbStore"))
 	if err != nil {
 		return err
 	}
+	app.closers = append(app.closers, iddbstore)
 
 	store, err := database.NewLDBDatabase(dbStorepath+"store", 0, 0, lg.WithName("store"))
 	if err != nil {
 		return err
 	}
+	app.closers = append(app.closers, store)
+
 	idStore := activation.NewIdentityStore(iddbstore)
 	poetDb := activation.NewPoetDb(poetDbStore, lg.WithName("poetDb"))
 	//todo: this is initialized twice, need to refactor
@@ -439,6 +434,7 @@ func (app *SpacemeshApp) startServices() {
 	if err != nil {
 		log.Panic("cannot start block producer")
 	}
+
 	app.poetListener.Start()
 
 	if app.Config.StartMining {
@@ -457,32 +453,64 @@ func (app *SpacemeshApp) startServices() {
 
 func (app *SpacemeshApp) stopServices() {
 
-	log.Info("%v closing services ", app.nodeId.Key)
-
-	if err := app.blockProducer.Close(); err != nil {
-		log.Error("cannot stop block producer %v", err)
+	if app.jsonAPIService != nil {
+		log.Info("Stopping JSON service api...")
+		app.jsonAPIService.StopService()
 	}
 
-	log.Info("%v closing clock", app.nodeId.Key)
-	app.clock.Close()
+	if app.grpcAPIService != nil {
+		log.Info("Stopping GRPC service ...")
+		app.grpcAPIService.StopService()
+	}
 
-	app.log.Info("closing PoET listener")
-	app.poetListener.Close()
+	if app.blockProducer != nil {
+		app.log.Info("%v closing block producer", app.nodeId.Key)
+		if err := app.blockProducer.Close(); err != nil {
+			log.Error("cannot stop block producer %v", err)
+		}
+	}
 
-	app.log.Info("closing atx builder")
-	app.atxBuilder.Stop()
+	if app.clock != nil {
+		app.log.Info("%v closing clock", app.nodeId.Key)
+		app.clock.Close()
+	}
 
-	log.Info("%v closing blockListener", app.nodeId.Key)
-	app.blockListener.Close()
+	if app.poetListener != nil {
+		app.log.Info("closing PoET listener")
+		app.poetListener.Close()
+	}
 
-	log.Info("%v closing Hare", app.nodeId.Key)
-	app.hare.Close() //todo: need to add this
+	if app.atxBuilder != nil {
+		app.log.Info("closing atx builder")
+		app.atxBuilder.Stop()
+	}
 
-	log.Info("%v closing p2p", app.nodeId.Key)
-	app.P2P.Shutdown()
+	if app.blockListener != nil {
+		app.log.Info("%v closing blockListener", app.nodeId.Key)
+		app.blockListener.Close()
+	}
 
-	log.Info("%v closing mesh", app.nodeId.Key)
-	app.mesh.Close()
+	if app.hare != nil {
+		app.log.Info("%v closing Hare", app.nodeId.Key)
+		app.hare.Close() //todo: need to add this
+	}
+
+	if app.P2P != nil {
+		app.log.Info("%v closing p2p", app.nodeId.Key)
+		app.P2P.Shutdown()
+	}
+
+	if app.mesh != nil {
+		app.log.Info("%v closing mesh", app.nodeId.Key)
+		app.mesh.Close()
+	}
+
+	// Close all databases. todo: consider moving all services to close this way
+	for _, closer := range app.closers {
+		if closer != nil {
+			closer.Close()
+		}
+	}
 
 }
 
@@ -577,12 +605,15 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 
 	if app.Config.PprofHttpServer {
 		log.Info("Starting pprof server")
+		srv := &http.Server{Addr: ":6060"}
+		defer srv.Shutdown(context.TODO())
 		go func() {
-			err := http.ListenAndServe(":6060", nil)
+			err := srv.ListenAndServe()
 			if err != nil {
 				log.Error("cannot start http server", err)
 			}
 		}()
+
 	}
 
 	// start p2p services
@@ -601,7 +632,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	}
 
 	log.Info("connecting to POET on IP %v", app.Config.PoETServer)
-	poetClient, err := activation.NewRemoteRPCPoetClient(app.Config.PoETServer, 30*time.Second)
+	poetClient, err := activation.NewRemoteRPCPoetClient(app.Config.PoETServer, cmdp.Ctx)
 	if err != nil {
 		log.Error("poet server not found on addr %v, err: %v", app.Config.PoETServer, err)
 		return
@@ -656,20 +687,17 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	if apiConf.StartGrpcServer || apiConf.StartJSONServer {
 		// start grpc if specified or if json rpc specified
 		app.grpcAPIService = api.NewGrpcService(app.P2P, app.state, app.mesh.TxProcessor, app.atxBuilder, app.oracle, app.clock)
-		app.grpcAPIService.StartService(nil)
+		app.grpcAPIService.StartService()
 	}
 
 	if apiConf.StartJSONServer {
 		app.jsonAPIService = api.NewJSONHTTPServer()
-		app.jsonAPIService.StartService(nil)
+		app.jsonAPIService.StartService()
 	}
 
 	log.Info("App started.")
 
 	// app blocks until it receives a signal to exit
 	// this signal may come from the node or from sig-abort (ctrl-c)
-	app.NodeInitCallback <- true
-
 	<-cmdp.Ctx.Done()
-	//return nil
 }

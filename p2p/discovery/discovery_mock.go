@@ -95,6 +95,10 @@ func (m *MockPeerStore) Size() int {
 	return m.updateCount
 }
 
+func (m *MockPeerStore) Shutdown() {
+
+}
+
 func (m *MockPeerStore) Good(key p2pcrypto.PublicKey) {
 	if m.GoodFunc != nil {
 		m.GoodFunc(key)
@@ -124,6 +128,10 @@ type mockAddrBook struct {
 
 	GoodFunc    func(key p2pcrypto.PublicKey)
 	AttemptFunc func(key p2pcrypto.PublicKey)
+}
+
+func (m *mockAddrBook) Stop() {
+
 }
 
 func (m *mockAddrBook) RemoveAddress(key p2pcrypto.PublicKey) {

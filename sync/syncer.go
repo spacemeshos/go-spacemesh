@@ -106,8 +106,8 @@ type Syncer struct {
 	exit              chan struct{}
 	currentLayerMutex sync.RWMutex
 	syncRoutineWg     sync.WaitGroup
-	p2pLock           sync.RWMutex
-	p2pSynced         bool
+	gossipLock        sync.RWMutex
+	gossipSynced      bool
 
 	//todo fetch server
 	blockQueue *blockQueue
@@ -123,6 +123,7 @@ func (s *Syncer) Close() {
 	s.Info("Closing syncer")
 	close(s.exit)
 	close(s.forceSync)
+	s.Peers.Close()
 	// TODO: broadly implement a better mechanism for shutdown
 	time.Sleep(5 * time.Millisecond) // "ensures" no more sync routines can be created, ok for now
 	s.syncRoutineWg.Wait()           // must be called after we ensure no more sync routines can be created
@@ -150,23 +151,23 @@ func (s *Syncer) WeaklySynced() bool {
 	return s.LatestLayer()+1 >= s.lastTickedLayer()
 }
 
-func (s *Syncer) getP2pSynced() bool {
-	s.p2pLock.RLock()
-	b := s.p2pSynced
-	s.p2pLock.RUnlock()
+func (s *Syncer) getGossipSynced() bool {
+	s.gossipLock.RLock()
+	b := s.gossipSynced
+	s.gossipLock.RUnlock()
 
 	return b
 }
 
 func (s *Syncer) setGossipSynced(b bool) {
-	s.p2pLock.Lock()
-	s.p2pSynced = b
-	s.p2pLock.Unlock()
+	s.gossipLock.Lock()
+	s.gossipSynced = b
+	s.gossipLock.Unlock()
 }
 
 func (s *Syncer) IsSynced() bool {
 	s.Log.Info("latest: %v, maxSynced %v", s.LatestLayer(), s.lastTickedLayer())
-	return s.WeaklySynced() && s.getP2pSynced()
+	return s.WeaklySynced() && s.getGossipSynced()
 }
 
 func (s *Syncer) Start() {
@@ -212,7 +213,7 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool A
 
 	srvr := &workerInfra{
 		RequestTimeout: conf.RequestTimeout,
-		MessageServer:  server.NewMsgServer(srv.(server.Service), syncProtocol, conf.RequestTimeout, make(chan service.DirectMessage, p2pconf.ConfigValues.BufferSize), logger.WithName("srv")),
+		MessageServer:  server.NewMsgServer(srv.(server.Service), syncProtocol, conf.RequestTimeout, make(chan service.DirectMessage, p2pconf.ConfigValues.BufferSize), logger),
 		Peers:          p2p.NewPeers(srv, logger.WithName("peers")),
 	}
 
@@ -233,7 +234,7 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool A
 		currentLayer:         clock.GetCurrentLayer(),
 		LayerCh:              clock.Subscribe(),
 		exit:                 make(chan struct{}),
-		p2pSynced:            false,
+		gossipSynced:         false,
 	}
 
 	s.blockQueue = NewValidationQueue(srvr, s.Configuration, s, s.blockCheckLocal, logger.WithName("validQ"))
@@ -461,7 +462,7 @@ func (s *Syncer) blockSyntacticValidation(block *types.Block) ([]*types.Addressa
 	}
 
 	//validate block's votes
-	if valid := validateVotes(block, s.ForBlockInView, s.Hdist); valid == false {
+	if valid := validateVotes(block, s.ForBlockInView, s.Hdist, s.Log); valid == false {
 		return nil, nil, errors.New(fmt.Sprintf("validate votes failed for block %v", block.ID()))
 	}
 
@@ -485,7 +486,7 @@ func (s *Syncer) validateBlockView(blk *types.Block) bool {
 	return <-ch
 }
 
-func validateVotes(blk *types.Block, forBlockfunc ForBlockInView, depth int) bool {
+func validateVotes(blk *types.Block, forBlockfunc ForBlockInView, depth int, lg log.Log) bool {
 	view := map[types.BlockID]struct{}{}
 	for _, blk := range blk.ViewEdges {
 		view[blk] = struct{}{}
@@ -512,6 +513,11 @@ func validateVotes(blk *types.Block, forBlockfunc ForBlockInView, depth int) boo
 	if err == nil && len(vote) > 0 {
 		err = fmt.Errorf("voting on blocks out of view (or out of Hdist), %v", vote)
 	}
+
+	if err != nil {
+		lg.Error("validate votes failed", err)
+	}
+
 	return err == nil
 }
 
@@ -579,9 +585,9 @@ func (s *Syncer) fetchLayerBlockIds(m map[types.Hash32][]p2p.Peer, lyr types.Lay
 						s.With().Error("Peer: got invalid layer ids", log.String("peer", peer.String()), log.Err(err))
 						break
 					}
+
 					if h != res {
-						s.Error("Peer: %v layer ids hash does not match request", peer)
-						break
+						s.Warning("Peer: %v layer ids hash does not match request", peer)
 					}
 
 					for _, bid := range v.([]types.BlockID) {
