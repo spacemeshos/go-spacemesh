@@ -1,7 +1,9 @@
 package activation
 
 import (
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/shared"
@@ -20,43 +22,76 @@ func init() {
 	postCfg.NumFiles = 1
 }
 
-type postProverClientMock struct{}
+type postProverClientMock struct {
+	called   int
+	setError bool
+}
 
 // A compile time check to ensure that postProverClientMock fully implements PostProverClient.
 var _ PostProverClient = (*postProverClientMock)(nil)
 
-func (*postProverClientMock) Initialize() (*types.PostProof, error) { return &types.PostProof{}, nil }
-
-func (*postProverClientMock) Execute(challenge []byte) (*types.PostProof, error) {
+func (p *postProverClientMock) Initialize() (*types.PostProof, error) {
+	//p.called++
 	return &types.PostProof{}, nil
 }
 
-func (*postProverClientMock) Reset() error { return nil }
+func (p *postProverClientMock) Execute(challenge []byte) (*types.PostProof, error) {
+	p.called++
+	if p.setError {
+		return nil, fmt.Errorf("error")
+	}
+	return &types.PostProof{}, nil
+}
 
-func (*postProverClientMock) IsInitialized() (bool, error) { return true, nil }
+func (p *postProverClientMock) Reset() error {
+	p.called++
+	return nil
+}
 
-func (*postProverClientMock) VerifyInitAllowed() error { return nil }
+func (p *postProverClientMock) IsInitialized() (bool, error) {
+	//p.called++
+	return true, nil
+}
 
-func (*postProverClientMock) SetLogger(shared.Logger) {}
+func (p *postProverClientMock) VerifyInitAllowed() error {
+	p.called++
+	return nil
+}
 
-func (*postProverClientMock) SetParams(datadir string, space uint64) error { return nil }
+func (p *postProverClientMock) SetLogger(shared.Logger) {
+	p.called++
+}
 
-func (*postProverClientMock) Cfg() *config.Config { return &config.Config{} }
+func (p *postProverClientMock) SetParams(datadir string, space uint64) error {
+	p.called++
+	return nil
+}
 
-type poetProvingServiceClientMock struct{}
+func (p *postProverClientMock) Cfg() *config.Config {
+	//p.called++
+	return &config.Config{}
+}
+
+type poetProvingServiceClientMock struct {
+	called int
+}
 
 // A compile time check to ensure that poetProvingServiceClientMock fully implements PoetProvingServiceClient.
 var _ PoetProvingServiceClient = (*poetProvingServiceClientMock)(nil)
 
 func (p *poetProvingServiceClientMock) submit(challenge types.Hash32) (*types.PoetRound, error) {
+	p.called++
 	return &types.PoetRound{}, nil
 }
 
 func (p *poetProvingServiceClientMock) getPoetServiceId() ([types.PoetServiceIdLength]byte, error) {
+	p.called++
 	return [32]byte{}, nil
 }
 
-type poetDbMock struct{}
+type poetDbMock struct {
+	errOn bool
+}
 
 // A compile time check to ensure that poetDbMock fully implements PoetDbApi.
 var _ PoetDbApi = (*poetDbMock)(nil)
@@ -69,7 +104,10 @@ func (*poetDbMock) SubscribeToProofRef(poetId [types.PoetServiceIdLength]byte, r
 	return ch
 }
 
-func (*poetDbMock) GetMembershipMap(poetRoot []byte) (map[types.Hash32]bool, error) {
+func (p *poetDbMock) GetMembershipMap(poetRoot []byte) (map[types.Hash32]bool, error) {
+	if p.errOn {
+		return map[types.Hash32]bool{}, nil
+	}
 	hash := types.BytesToHash([]byte("anton"))
 	return map[types.Hash32]bool{hash: true}, nil
 }
@@ -83,7 +121,7 @@ func TestNIPSTBuilderWithMocks(t *testing.T) {
 	poetDb := &poetDbMock{}
 
 	nb := newNIPSTBuilder(minerID, postProver, poetProver,
-		poetDb, log.NewDefault(string(minerID)))
+		poetDb, database.NewMemDatabase(), log.NewDefault(string(minerID)))
 	hash := types.BytesToHash([]byte("anton"))
 	npst, err := nb.BuildNIPST(&hash)
 	assert.NoError(err)
@@ -101,7 +139,7 @@ func TestInitializePost(t *testing.T) {
 	poetDb := &poetDbMock{}
 
 	nb := newNIPSTBuilder(minerID, postProver, poetProver,
-		poetDb, log.NewDefault(string(minerID)))
+		poetDb, database.NewMemDatabase(), log.NewDefault(string(minerID)))
 	datadir := "/tmp/anton"
 	space := uint64(2048)
 
@@ -158,7 +196,7 @@ func buildNIPST(r *require.Assertions, postCfg config.Config, nipstChallenge typ
 	r.NotNil(commitment)
 
 	nb := newNIPSTBuilder(minerID, postProver, poetProver,
-		poetDb, log.NewDefault(string(minerID)))
+		poetDb, database.NewMemDatabase(), log.NewDefault(string(minerID)))
 
 	npst, err := nb.BuildNIPST(&nipstChallenge)
 	r.NoError(err)
@@ -188,7 +226,7 @@ func TestNewNIPSTBuilderNotInitialized(t *testing.T) {
 	r.NoError(err)
 	poetDb := &poetDbMock{}
 	nb := newNIPSTBuilder(minerIDNotInitialized, postProver, poetProver,
-		poetDb, log.NewDefault(string(minerID)))
+		poetDb, database.NewMemDatabase(), log.NewDefault(string(minerID)))
 
 	npst, err := nb.BuildNIPST(&nipstChallenge)
 	r.EqualError(err, "PoST not initialized")
@@ -208,6 +246,57 @@ func TestNewNIPSTBuilderNotInitialized(t *testing.T) {
 
 	err = validateNIPST(npst, postCfg, nipstChallenge, poetDb)
 	r.NoError(err)
+}
+
+func TestNIPSTBuilder_BuildNIPST(t *testing.T) {
+	assert := require.New(t)
+
+	postProver := &postProverClientMock{}
+	poetProver := &poetProvingServiceClientMock{}
+
+	poetDb := &poetDbMock{errOn: false}
+
+	nb := newNIPSTBuilder(minerID, postProver, poetProver,
+		poetDb, database.NewMemDatabase(), log.NewDefault(string(minerID)))
+	hash := types.BytesToHash([]byte("anton"))
+	npst, err := nb.BuildNIPST(&hash)
+	assert.NoError(err)
+	assert.NotNil(npst)
+
+	assert.Equal(builderState{nipst: &types.NIPST{}}, *nb.state)
+
+	//fail after getting proof ref
+	poetDb.errOn = true
+	npst, err = nb.BuildNIPST(&hash)
+	assert.Nil(npst)
+	assert.Error(err)
+
+	//check that proof ref is not called again
+	npst, err = nb.BuildNIPST(&hash)
+	assert.Equal(4, poetProver.called)
+	assert.Nil(npst)
+	assert.Error(err)
+
+	//fail post exec
+	poetDb.errOn = false
+	postProver.setError = true
+	//check that proof ref is not called again
+	npst, err = nb.BuildNIPST(&hash)
+	assert.Equal(4, poetProver.called)
+	assert.Nil(npst)
+	assert.Error(err)
+
+	//fail post exec
+	poetDb.errOn = false
+	postProver.setError = false
+	//check that proof ref is not called again
+	npst, err = nb.BuildNIPST(&hash)
+	assert.Equal(4, poetProver.called)
+	assert.NotNil(npst)
+	assert.NoError(err)
+
+	assert.Equal(3, postProver.called)
+
 }
 
 func TestValidator_Validate(t *testing.T) {

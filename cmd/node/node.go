@@ -405,13 +405,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 
 	poetListener := activation.NewPoetListener(swarm, poetDb, lg.WithName("poetListener"))
 
-	nipstBuilder := activation.NewNIPSTBuilder(
-		util.Hex2Bytes(nodeID.Key), // TODO: use both keys in the nodeID
-		postClient,
-		poetClient,
-		poetDb,
-		lg.WithName("nipstBuilder"),
-	)
+	nipstBuilder := activation.NewNIPSTBuilder(util.Hex2Bytes(nodeID.Key), postClient, poetClient, poetDb, store, lg.WithName("nipstBuilder"))
 
 	coinBase := types.HexToAddress(app.Config.CoinbaseAccount)
 

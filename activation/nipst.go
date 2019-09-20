@@ -72,12 +72,33 @@ type builderState struct {
 	PoetProofRef []byte
 }
 
-func (s *builderState) load() {
-
+func nipstBuildStateKey() []byte {
+	return []byte("nipstate")
 }
 
-func (s *builderState) persist() {
-	// TODO(noamnelke): implement
+func (s *NIPSTBuilder) load() {
+	bts, err := s.store.Get(nipstBuildStateKey())
+	if err != nil {
+		s.log.Warning("cannot load nipst state %v", err)
+		return
+	}
+	if len(bts) > 0 {
+		var state builderState
+		err = types.BytesToInterface(bts, &state)
+		s.log.Error("cannot load nipst state %v", err)
+	}
+}
+
+func (s *NIPSTBuilder) persist() {
+	bts, err := types.InterfaceToBytes(&s.state)
+	if err != nil {
+		s.log.Warning("cannot store nipst state %v", err)
+		return
+	}
+	err = s.store.Put(nipstBuildStateKey(), bts)
+	if err != nil {
+		s.log.Warning("cannot store nipst state %v", err)
+	}
 }
 
 type NIPSTBuilder struct {
@@ -90,8 +111,8 @@ type NIPSTBuilder struct {
 	stopM   sync.Mutex
 	errChan chan error
 	state   *builderState
-
-	log log.Log
+	store   BytesStore
+	log     log.Log
 }
 
 type PoetDbApi interface {
@@ -99,13 +120,13 @@ type PoetDbApi interface {
 	GetMembershipMap(proofRef []byte) (map[types.Hash32]bool, error)
 }
 
-func NewNIPSTBuilder(id []byte, postProver PostProverClient,
-	poetProver PoetProvingServiceClient, poetDb PoetDbApi, log log.Log) *NIPSTBuilder {
+func NewNIPSTBuilder(id []byte, postProver PostProverClient, poetProver PoetProvingServiceClient, poetDb PoetDbApi, store BytesStore, log log.Log) *NIPSTBuilder {
 	return newNIPSTBuilder(
 		id,
 		postProver,
 		poetProver,
 		poetDb,
+		store,
 		log,
 	)
 }
@@ -115,6 +136,7 @@ func newNIPSTBuilder(
 	postProver PostProverClient,
 	poetProver PoetProvingServiceClient,
 	poetDb PoetDbApi,
+	store BytesStore,
 	log log.Log,
 ) *NIPSTBuilder {
 	return &NIPSTBuilder{
@@ -124,6 +146,7 @@ func newNIPSTBuilder(
 		poetDb:     poetDb,
 		stop:       false,
 		errChan:    make(chan error),
+		store:      store,
 		log:        log,
 		state: &builderState{
 			nipst: &types.NIPST{},
@@ -132,7 +155,7 @@ func newNIPSTBuilder(
 }
 
 func (nb *NIPSTBuilder) BuildNIPST(challenge *types.Hash32) (*types.NIPST, error) {
-	nb.state.load()
+	nb.load()
 
 	if initialized, err := nb.postProver.IsInitialized(); !initialized || err != nil {
 		return nil, errors.New("PoST not initialized")
@@ -166,7 +189,7 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *types.Hash32) (*types.NIPST, error
 
 		nipst.NipstChallenge = poetChallenge
 		nb.state.PoetRound = round
-		nb.state.persist()
+		nb.persist()
 	}
 
 	// Phase 1: receive proofs from PoET service
@@ -184,7 +207,7 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *types.Hash32) (*types.NIPST, error
 				nb.state.PoetServiceId, nb.state.PoetRound.Id) // TODO(noamnelke): handle this case!
 		}
 		nb.state.PoetProofRef = poetProofRef
-		nb.state.persist()
+		nb.persist()
 	}
 
 	// Phase 2: PoST execution.
@@ -200,7 +223,7 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *types.Hash32) (*types.NIPST, error
 			log.String("proof merkle root", fmt.Sprintf("%x", proof.MerkleRoot)))
 
 		nipst.PostProof = proof
-		nb.state.persist()
+		nb.persist()
 	}
 
 	nb.log.Info("finished NIPST construction")
@@ -208,6 +231,7 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *types.Hash32) (*types.NIPST, error
 	nb.state = &builderState{
 		nipst: &types.NIPST{},
 	}
+	nb.persist()
 	return nipst, nil
 }
 
