@@ -68,11 +68,6 @@ func (fq *fetchQueue) work() error {
 			return fmt.Errorf("channel closed")
 		}
 
-		if len(bjb.items) == 0 {
-			fq.Warning("could not fetch any items %s", concatShortIds(bjb.ids))
-			continue
-		}
-
 		fq.Debug("fetched items %s", concatShortIds(bjb.ids))
 		fq.handleFetch(bjb)
 		fq.Debug("next batch")
@@ -186,9 +181,6 @@ func (tx txQueue) HandleTxs(txids []types.TransactionId) ([]*types.AddressableSi
 
 func updateTxDependencies(invalidate func(id types.Hash32, valid bool), txpool TxMemPool, getValidAddrTx GetValidAddressableTxFunc) func(fj fetchJob) {
 	return func(fj fetchJob) {
-		if len(fj.items) == 0 {
-			return
-		}
 
 		mp := map[types.Hash32]*types.SerializableSignedTransaction{}
 
@@ -255,10 +247,6 @@ func (atx atxQueue) HandleAtxs(atxids []types.AtxId) ([]*types.ActivationTx, err
 
 func updateAtxDependencies(invalidate func(id types.Hash32, valid bool), sValidateAtx SValidateAtxFunc, atxpool AtxMemPool, fetchProof FetchPoetProofFunc) func(fj fetchJob) {
 	return func(fj fetchJob) {
-		if len(fj.items) == 0 {
-			return
-		}
-
 		fetchProofCalcId(fetchProof, fj)
 
 		mp := map[types.Hash32]*types.ActivationTx{}
