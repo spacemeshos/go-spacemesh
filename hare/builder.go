@@ -15,6 +15,8 @@ type Message struct {
 	InnerMsg *InnerMessage
 }
 
+// MessageFromBuffer builds an Hare message from the provided bytes buffer.
+// It returns an error if unmarshal of the provided byte slice failed.
 func MessageFromBuffer(buffer []byte) (*Message, error) {
 	rdr := bytes.NewReader(buffer)
 	hareMsg := &Message{}
@@ -74,12 +76,15 @@ func (im *InnerMessage) String() string {
 	return fmt.Sprintf("Type: %v InstanceId: %v K: %v Ki: %v", im.Type, im.InstanceId, im.K, im.Ki)
 }
 
-// Used to build proto Messages
+// MessageBuilder is the impl of the builder DP.
+// It allows the user to set the different fields of the builder and eventually Build the message.
 type MessageBuilder struct {
 	msg   *Msg
 	inner *InnerMessage
 }
 
+// NewMessageBuilder returns a new, empty message builder.
+// One should not assume any values are pre-set.
 func NewMessageBuilder() *MessageBuilder {
 	m := &MessageBuilder{&Msg{&Message{}, nil}, &InnerMessage{}}
 	m.msg.InnerMsg = m.inner
@@ -87,6 +92,7 @@ func NewMessageBuilder() *MessageBuilder {
 	return m
 }
 
+// Build returns the protocol message as type Msg.
 func (builder *MessageBuilder) Build() *Msg {
 	return builder.msg
 }
@@ -96,6 +102,7 @@ func (builder *MessageBuilder) SetCertificate(certificate *Certificate) *Message
 	return builder
 }
 
+// Sign calls the provided signer to calculate the signature and then set it accordingly.
 func (builder *MessageBuilder) Sign(signing Signer) *MessageBuilder {
 	builder.msg.Sig = signing.Sign(builder.inner.Bytes())
 
