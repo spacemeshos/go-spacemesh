@@ -59,7 +59,9 @@ type PoetProvingServiceClient interface {
 }
 
 type builderState struct {
-	nipst *types.NIPST
+	Challenge types.Hash32
+
+	Nipst *types.NIPST
 
 	// PoetRound is the round of the PoET proving service
 	// in which the PoET challenge was included in.
@@ -76,28 +78,35 @@ func nipstBuildStateKey() []byte {
 	return []byte("nipstate")
 }
 
-func (s *NIPSTBuilder) load() {
+func (s *NIPSTBuilder) load(challenge types.Hash32) {
 	bts, err := s.store.Get(nipstBuildStateKey())
 	if err != nil {
-		s.log.Warning("cannot load nipst state %v", err)
+		s.log.Warning("cannot load Nipst state %v", err)
 		return
 	}
 	if len(bts) > 0 {
 		var state builderState
 		err = types.BytesToInterface(bts, &state)
-		s.log.Error("cannot load nipst state %v", err)
+		if err != nil {
+			s.log.Error("cannot load Nipst state %v", err)
+		}
+		if state.Challenge == challenge {
+			s.state = &state
+		} else {
+			s.state = &builderState{Challenge: challenge, Nipst: &types.NIPST{}}
+		}
 	}
 }
 
 func (s *NIPSTBuilder) persist() {
 	bts, err := types.InterfaceToBytes(&s.state)
 	if err != nil {
-		s.log.Warning("cannot store nipst state %v", err)
+		s.log.Warning("cannot store Nipst state %v", err)
 		return
 	}
 	err = s.store.Put(nipstBuildStateKey(), bts)
 	if err != nil {
-		s.log.Warning("cannot store nipst state %v", err)
+		s.log.Warning("cannot store Nipst state %v", err)
 	}
 }
 
@@ -149,20 +158,20 @@ func newNIPSTBuilder(
 		store:      store,
 		log:        log,
 		state: &builderState{
-			nipst: &types.NIPST{},
+			Nipst: &types.NIPST{},
 		},
 	}
 }
 
 func (nb *NIPSTBuilder) BuildNIPST(challenge *types.Hash32) (*types.NIPST, error) {
-	nb.load()
+	nb.load(*challenge)
 
 	if initialized, err := nb.postProver.IsInitialized(); !initialized || err != nil {
 		return nil, errors.New("PoST not initialized")
 	}
 
 	cfg := nb.postProver.Cfg()
-	nipst := nb.state.nipst
+	nipst := nb.state.Nipst
 
 	nipst.Space = cfg.SpacePerUnit
 
@@ -175,6 +184,7 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *types.Hash32) (*types.NIPST, error
 		nb.state.PoetServiceId = poetServiceId
 
 		poetChallenge := challenge
+		nb.state.Challenge = *challenge
 
 		nb.log.Debug("submitting challenge to PoET proving service (PoET id: %x, challenge: %x)",
 			nb.state.PoetServiceId, poetChallenge)
@@ -229,7 +239,7 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *types.Hash32) (*types.NIPST, error
 	nb.log.Info("finished NIPST construction")
 
 	nb.state = &builderState{
-		nipst: &types.NIPST{},
+		Nipst: &types.NIPST{},
 	}
 	nb.persist()
 	return nipst, nil

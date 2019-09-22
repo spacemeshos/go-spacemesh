@@ -109,7 +109,8 @@ func (p *poetDbMock) GetMembershipMap(poetRoot []byte) (map[types.Hash32]bool, e
 		return map[types.Hash32]bool{}, nil
 	}
 	hash := types.BytesToHash([]byte("anton"))
-	return map[types.Hash32]bool{hash: true}, nil
+	hash2 := types.BytesToHash([]byte("anton1"))
+	return map[types.Hash32]bool{hash: true, hash2: true}, nil
 }
 
 func TestNIPSTBuilderWithMocks(t *testing.T) {
@@ -262,22 +263,25 @@ func TestNIPSTBuilder_BuildNIPST(t *testing.T) {
 	npst, err := nb.BuildNIPST(&hash)
 	assert.NoError(err)
 	assert.NotNil(npst)
-
-	assert.Equal(builderState{nipst: &types.NIPST{}}, *nb.state)
+	db := database.NewMemDatabase()
+	assert.Equal(builderState{Nipst: &types.NIPST{}}, *nb.state)
 
 	//fail after getting proof ref
+	nb = newNIPSTBuilder(minerID, postProver, poetProver, poetDb, db, log.NewDefault(string(minerID)))
 	poetDb.errOn = true
 	npst, err = nb.BuildNIPST(&hash)
 	assert.Nil(npst)
 	assert.Error(err)
 
 	//check that proof ref is not called again
+	nb = newNIPSTBuilder(minerID, postProver, poetProver, poetDb, db, log.NewDefault(string(minerID)))
 	npst, err = nb.BuildNIPST(&hash)
 	assert.Equal(4, poetProver.called)
 	assert.Nil(npst)
 	assert.Error(err)
 
 	//fail post exec
+	nb = newNIPSTBuilder(minerID, postProver, poetProver, poetDb, db, log.NewDefault(string(minerID)))
 	poetDb.errOn = false
 	postProver.setError = true
 	//check that proof ref is not called again
@@ -287,6 +291,7 @@ func TestNIPSTBuilder_BuildNIPST(t *testing.T) {
 	assert.Error(err)
 
 	//fail post exec
+	nb = newNIPSTBuilder(minerID, postProver, poetProver, poetDb, db, log.NewDefault(string(minerID)))
 	poetDb.errOn = false
 	postProver.setError = false
 	//check that proof ref is not called again
@@ -296,6 +301,14 @@ func TestNIPSTBuilder_BuildNIPST(t *testing.T) {
 	assert.NoError(err)
 
 	assert.Equal(3, postProver.called)
+	//test state not loading if other challenge provided
+	hash2 := types.BytesToHash([]byte("anton1"))
+	npst, err = nb.BuildNIPST(&hash2)
+	assert.Equal(6, poetProver.called)
+	assert.Equal(4, postProver.called)
+
+	assert.NotNil(npst)
+	assert.NoError(err)
 
 }
 

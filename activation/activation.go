@@ -147,7 +147,7 @@ func (b *Builder) loop() {
 			}
 
 			if atomic.LoadInt32(&b.initStatus) != InitDone {
-				b.log.Info("post is not initialized yet, not building nipst")
+				b.log.Info("post is not initialized yet, not building Nipst")
 				break
 			}
 			if b.working {
@@ -195,7 +195,7 @@ func (b *Builder) buildNipstChallenge(epoch types.EpochId) error {
 
 	if b.prevATX == nil {
 		// if and only if it's the first ATX, the merkle root of the initial PoST proof,
-		// the commitment, is included in the nipst challenge. This is done in order to prove
+		// the commitment, is included in the Nipst challenge. This is done in order to prove
 		// that it existed before the PoET start time.
 		commitmentMerkleRoot = b.commitment.MerkleRoot
 	} else {
@@ -336,7 +336,7 @@ func (b *Builder) getCoinbaseAccount() types.Address {
 }
 
 func (b Builder) getNipstKey() []byte {
-	return []byte("nipst")
+	return []byte("Nipst")
 }
 
 func (b *Builder) storeChallenge(ch *types.NIPSTChallenge) error {
@@ -399,7 +399,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 		}
 		b.nipst, err = b.nipstBuilder.BuildNIPST(hash)
 		if err != nil {
-			return fmt.Errorf("cannot create nipst: %v", err)
+			return fmt.Errorf("cannot create Nipst: %v", err)
 		}
 	}
 	if b.mesh.LatestLayer().GetEpoch(b.layersPerEpoch) < b.challenge.PubLayerIdx.GetEpoch(b.layersPerEpoch) {
@@ -468,7 +468,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 
 	err = b.discardChallenge()
 	if err != nil {
-		log.Error("cannot discard nipst challenge %s", err)
+		log.Error("cannot discard Nipst challenge %s", err)
 	}
 
 	b.log.Event().Info("atx published!", log.AtxId(atx.ShortString()), log.String("prev_atx_id", atx.PrevATXId.ShortString()),

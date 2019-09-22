@@ -117,7 +117,7 @@ func (np *NipstBuilderMock) BuildNIPST(challenge *types.Hash32) (*types.NIPST, e
 type NipstErrBuilderMock struct{}
 
 func (np *NipstErrBuilderMock) BuildNIPST(challenge *types.Hash32) (*types.NIPST, error) {
-	return nil, fmt.Errorf("nipst builder error")
+	return nil, fmt.Errorf("Nipst builder error")
 }
 
 type MockIdStore struct{}
@@ -419,7 +419,7 @@ func TestBuilder_PublishActivationTx_FailsWhenNipstBuilderFails(t *testing.T) {
 	storeAtx(r, activationDb, posAtx, log.NewDefault("storeAtx"))
 
 	published, err := publishAtx(b, postGenesisEpochLayer+1, postGenesisEpoch, layersPerEpoch)
-	r.EqualError(err, "cannot create nipst: nipst builder error")
+	r.EqualError(err, "cannot create Nipst: Nipst builder error")
 	r.False(published)
 }
 
@@ -536,7 +536,7 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	err = b.PublishActivationTx(1)
 	assert.Error(t, err)
 	db.hadNone = false
-	//test load challenge in later epoch - nipst should be truncated
+	//test load challenge in later epoch - Nipst should be truncated
 	b = NewBuilder(id, coinbase, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, postProver, nil, func() bool { return true }, db, lg.WithName("atxBuilder"))
 	assert.Error(t, err)
 	err = b.loadChallenge()
