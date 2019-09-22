@@ -195,14 +195,12 @@ func (m *Mesh) PushTransactions(oldBase, newBase types.LayerID) {
 		if err := m.removeFromMeshTxs(validBlockTxs, invalidBlockTxs, i); err != nil {
 			m.With().Error("failed to remove from meshTxs", log.LayerId(uint64(i)), log.Err(err))
 		}
-		if m.blockBuilder != nil {
-			for _, tx := range invalidBlockTxs {
-				err = m.blockBuilder.ValidateAndAddTxToPool(tx)
-				// We ignore errors here, since they mean that the tx is no longer valid and we shouldn't re-add it
-				if err == nil {
-					m.With().Info("transaction from contextually invalid block re-added to mempool",
-						log.TxId(tx.Id().ShortString()))
-				}
+		for _, tx := range invalidBlockTxs {
+			err = m.blockBuilder.ValidateAndAddTxToPool(tx)
+			// We ignore errors here, since they mean that the tx is no longer valid and we shouldn't re-add it
+			if err == nil {
+				m.With().Info("transaction from contextually invalid block re-added to mempool",
+					log.TxId(tx.Id().ShortString()))
 			}
 		}
 		m.With().Info("applied transactions",
