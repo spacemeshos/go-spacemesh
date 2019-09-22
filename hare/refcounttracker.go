@@ -2,7 +2,7 @@ package hare
 
 type objectId uint64
 
-// Tracks the number of references of any identifiable instance
+// RefCountTracker tracks the number of references of any object id.
 type RefCountTracker struct {
 	table map[objectId]uint32
 }
@@ -14,7 +14,7 @@ func NewRefCountTracker() *RefCountTracker {
 	return t
 }
 
-// Returns the number of references to the given id
+// CountStatus returns the number of references to the given id.
 func (tracker *RefCountTracker) CountStatus(id objectId) uint32 {
 	count, exist := tracker.table[id]
 	if !exist {
@@ -24,7 +24,7 @@ func (tracker *RefCountTracker) CountStatus(id objectId) uint32 {
 	return count
 }
 
-// Tracks count for the provided id
+// Track increases the count for the given object id.
 func (tracker *RefCountTracker) Track(id objectId) {
 	if _, exist := tracker.table[id]; !exist {
 		tracker.table[id] = 1

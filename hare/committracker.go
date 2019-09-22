@@ -11,7 +11,7 @@ type commitTracker interface {
 	BuildCertificate() *Certificate
 }
 
-// Tracks commit Messages
+// CommitTracker tracks commit messages and build the certificate according to the tracked messages.
 type CommitTracker struct {
 	seenSenders map[string]bool // tracks seen senders
 	commits     []*Message      // tracks Set->Commits
@@ -29,7 +29,7 @@ func NewCommitTracker(threshold int, expectedSize int, proposedSet *Set) *Commit
 	return ct
 }
 
-// Tracks the provided commit InnerMsg
+// OnCommit tracks the given commit message
 func (ct *CommitTracker) OnCommit(msg *Msg) {
 	if ct.proposedSet == nil { // no valid proposed set
 		return
@@ -56,7 +56,7 @@ func (ct *CommitTracker) OnCommit(msg *Msg) {
 	ct.commits = append(ct.commits, msg.Message)
 }
 
-// Checks if the tracker received enough commits to build a certificate
+// HasEnoughCommits returns true if the tracker can build a certificate, false otherwise.
 func (ct *CommitTracker) HasEnoughCommits() bool {
 	if ct.proposedSet == nil {
 		return false
@@ -65,7 +65,7 @@ func (ct *CommitTracker) HasEnoughCommits() bool {
 	return len(ct.commits) >= ct.threshold
 }
 
-// Builds the certificate
+// BuildCertificate returns a certificate if there are enough commits, nil otherwise
 // Returns the certificate if has enough commit Messages, nil otherwise
 func (ct *CommitTracker) BuildCertificate() *Certificate {
 	if !ct.HasEnoughCommits() {
