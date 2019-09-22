@@ -708,7 +708,7 @@ func (s *Syncer) txCheckLocal(txIds []types.Hash32) (map[types.Hash32]Item, map[
 	}
 
 	missingItems := make([]types.Hash32, 0, len(missing))
-	for _, i := range missing {
+	for i := range missing {
 		missingItems = append(missingItems, i.Hash32())
 	}
 
