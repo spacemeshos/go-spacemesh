@@ -211,16 +211,16 @@ func TestBlockListener_DataAvailabilityBadFlow(t *testing.T) {
 
 	block := types.NewExistingBlock(types.BlockID(2), 1, nil)
 	block.Signature = signer.Sign(block.Bytes())
-	block.TxIds = append(block.TxIds, types.GetTransactionId(tx1.SerializableSignedTransaction))
+	block.TxIds = append(block.TxIds, tx1.Id())
 	block.AtxIds = append(block.AtxIds, atx1.Id())
-	err = bl1.AddBlockWithTxs(block, []*types.AddressableSignedTransaction{}, []*types.ActivationTx{atx1})
+	err = bl1.AddBlockWithTxs(block, []*types.Transaction{}, []*types.ActivationTx{atx1})
 	require.NoError(t, err)
 
 	_, err = bl1.GetBlock(block.ID())
 	require.NoError(t, err)
 	// Sync bl2.
 
-	_, _, err = bl2.DataAvailabilty(block)
+	_, _, err = bl2.DataAvailability(block)
 	require.Error(t, err)
 }
 
