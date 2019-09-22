@@ -113,7 +113,7 @@ func (b *Broker) eventLoop() {
 				continue
 			}
 
-			msgInstId := InstanceId(hareMsg.InnerMsg.InstanceId)
+			msgInstId := hareMsg.InnerMsg.InstanceId
 			state, exist := b.layerState[msgInstId]
 			if exist && state == invalid { // invalid instance, ignore
 				if !b.isSynced(msgInstId) {
