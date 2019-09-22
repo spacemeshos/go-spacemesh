@@ -338,7 +338,7 @@ func TestConsensusProcess_procPre(t *testing.T) {
 
 func TestConsensusProcess_procStatus(t *testing.T) {
 	proc := generateConsensusProcess(t)
-	proc.beginRound1()
+	proc.beginStatusRound()
 	s := NewSmallEmptySet()
 	m := BuildStatusMsg(generateSigning(t), s)
 	proc.processStatusMsg(m)
@@ -470,7 +470,7 @@ func TestConsensusProcess_beginRound1(t *testing.T) {
 
 	preStatusTracker := proc.statusesTracker
 	oracle.isEligible = true
-	proc.beginRound1()
+	proc.beginStatusRound()
 	assert.Equal(t, 1, network.count)
 	assert.NotEqual(t, preStatusTracker, proc.statusesTracker)
 }
@@ -492,7 +492,7 @@ func TestConsensusProcess_beginRound2(t *testing.T) {
 
 	proc.k = 1
 	proc.SetInbox(make(chan *Msg, 1))
-	proc.beginRound2()
+	proc.beginProposalRound()
 
 	assert.Equal(t, 1, network.count)
 	assert.Nil(t, proc.statusesTracker)
@@ -509,14 +509,14 @@ func TestConsensusProcess_beginRound3(t *testing.T) {
 	mpt.proposedSet = NewSetFromValues(value1)
 
 	preCommitTracker := proc.commitTracker
-	proc.beginRound3()
+	proc.beginCommitRound()
 	assert.NotEqual(t, preCommitTracker, proc.commitTracker)
 
 	mpt.isConflicting = false
 	mpt.proposedSet = NewSetFromValues(value1)
 	oracle.isEligible = true
 	proc.SetInbox(make(chan *Msg, 1))
-	proc.beginRound3()
+	proc.beginCommitRound()
 	assert.Equal(t, 1, network.count)
 }
 
@@ -560,7 +560,7 @@ func TestConsensusProcess_beginRound4(t *testing.T) {
 	mct := &mockCommitTracker{}
 	proc.proposalTracker = mpt
 	proc.commitTracker = mct
-	proc.beginRound4()
+	proc.beginNotifyRound()
 	r.Equal(1, mpt.countIsConflicting)
 	r.Nil(proc.proposalTracker)
 	r.Nil(proc.commitTracker)
@@ -568,7 +568,7 @@ func TestConsensusProcess_beginRound4(t *testing.T) {
 	proc.proposalTracker = mpt
 	proc.commitTracker = mct
 	mpt.isConflicting = true
-	proc.beginRound4()
+	proc.beginNotifyRound()
 	r.Equal(2, mpt.countIsConflicting)
 	r.Equal(1, mct.countHasEnoughCommits)
 	r.Nil(proc.proposalTracker)
@@ -578,7 +578,7 @@ func TestConsensusProcess_beginRound4(t *testing.T) {
 	proc.commitTracker = mct
 	mpt.isConflicting = false
 	mct.hasEnoughCommits = false
-	proc.beginRound4()
+	proc.beginNotifyRound()
 	r.Equal(0, mct.countBuildCertificate)
 	r.Nil(proc.proposalTracker)
 	r.Nil(proc.commitTracker)
@@ -587,7 +587,7 @@ func TestConsensusProcess_beginRound4(t *testing.T) {
 	proc.commitTracker = mct
 	mct.hasEnoughCommits = true
 	mct.certificate = nil
-	proc.beginRound4()
+	proc.beginNotifyRound()
 	r.Equal(1, mct.countBuildCertificate)
 	r.Equal(0, mpt.countProposedSet)
 	r.Nil(proc.proposalTracker)
@@ -598,7 +598,7 @@ func TestConsensusProcess_beginRound4(t *testing.T) {
 	mct.certificate = &Certificate{}
 	mpt.proposedSet = nil
 	proc.s = NewSmallEmptySet()
-	proc.beginRound4()
+	proc.beginNotifyRound()
 	r.NotNil(proc.s)
 	r.Nil(proc.proposalTracker)
 	r.Nil(proc.commitTracker)
@@ -606,7 +606,7 @@ func TestConsensusProcess_beginRound4(t *testing.T) {
 	proc.proposalTracker = mpt
 	proc.commitTracker = mct
 	mpt.proposedSet = NewSetFromValues(value1)
-	proc.beginRound4()
+	proc.beginNotifyRound()
 	r.True(proc.s.Equals(mpt.proposedSet))
 	r.Equal(mct.certificate, proc.certificate)
 	r.Nil(proc.proposalTracker)

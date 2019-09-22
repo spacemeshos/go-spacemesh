@@ -290,11 +290,11 @@ def query_hare_output_set(indx, ns, layer):
 
 
 def query_round_1(indx, ns, layer):
-    return query_message(indx, ns, ns, {'M': 'Round 1 ended', 'is_svp_ready': 'true', 'layer_id': str(layer)}, False)
+    return query_message(indx, ns, ns, {'M': 'status round ended', 'is_svp_ready': 'true', 'layer_id': str(layer)}, False)
 
 
 def query_round_2(indx, ns, layer):
-    hits = query_message(indx, ns, ns, {'M': 'Round 2 ended', 'layer_id': str(layer)}, False)
+    hits = query_message(indx, ns, ns, {'M': 'proposal round ended', 'layer_id': str(layer)}, False)
     filtered = list(filter(lambda x: x.proposed_set != "nil", hits))
 
     return filtered
@@ -309,7 +309,7 @@ def query_pre_round(indx, ns, layer):
 
 
 def query_no_svp(indx, ns):
-    return query_message(indx, ns, ns, {'M': 'Round 1 ended', 'is_svp_ready': 'false'}, False)
+    return query_message(indx, ns, ns, {'M': 'status round ended', 'is_svp_ready': 'false'}, False)
 
 
 def query_empty_set(indx, ns):
