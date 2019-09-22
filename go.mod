@@ -10,7 +10,6 @@ require (
 	github.com/go-kit/kit v0.8.0
 	github.com/gogo/protobuf v1.2.1
 	github.com/golang/protobuf v1.3.1
-	github.com/golang/snappy v0.0.1 // indirect
 	github.com/google/uuid v1.1.0
 	github.com/grpc-ecosystem/grpc-gateway v1.9.0
 	github.com/hashicorp/golang-lru v0.5.1
