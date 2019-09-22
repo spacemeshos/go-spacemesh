@@ -15,7 +15,7 @@ const LayerBuffer = 20
 
 type consensusFactory func(cfg config.Config, instanceId InstanceId, s *Set, oracle Rolacle, signing Signer, p2p NetworkService, terminationReport chan TerminationOutput) Consensus
 
-// Consensus represents a consensus
+// Consensus represents an item that acts like a consensus process.
 type Consensus interface {
 	Id() InstanceId
 	Close()
@@ -25,7 +25,7 @@ type Consensus interface {
 	SetInbox(chan *Msg)
 }
 
-// TerminationOutput is a result of a process terminated with output.
+// TerminationOutput represents an output of a consensus process.
 type TerminationOutput interface {
 	Id() InstanceId
 	Set() *Set
@@ -38,7 +38,7 @@ type orphanBlockProvider interface {
 // checks if the collected output is valid
 type outputValidationFunc func(blocks []types.BlockID) bool
 
-// Hare is an orchestrator that shoots consensus processes and collects their termination output
+// Hare is the orchestrator that starts new consensus processes and collects their output.
 type Hare struct {
 	Closer
 	log.Log
@@ -111,6 +111,7 @@ func New(conf config.Config, p2p NetworkService, sign Signer, nid types.NodeId, 
 	return h
 }
 
+// checks if the provided id is too late/old to be requested.
 func (h *Hare) isTooLate(id InstanceId) bool {
 	if id < InstanceId(h.oldestResultInBuffer()) { // bufferSize>=0
 		return true
@@ -135,6 +136,7 @@ func (h *Hare) oldestResultInBuffer() types.LayerID {
 // ErrTooLate means that the consensus was terminated too late
 var ErrTooLate = errors.New("consensus process %v finished too late")
 
+// records the provided output.
 func (h *Hare) collectOutput(output TerminationOutput) error {
 	set := output.Set()
 	blocks := make([]types.BlockID, len(set.values))
@@ -169,6 +171,8 @@ func (h *Hare) collectOutput(output TerminationOutput) error {
 	return nil
 }
 
+// the logic that happens when a new layer arrives.
+// this function triggers the start of new CPs.
 func (h *Hare) onTick(id types.LayerID) {
 	h.layerLock.Lock()
 	if id > h.lastLayer {
@@ -223,7 +227,8 @@ var (
 	ErrTooEarly = errors.New("results for that layer haven't arrived yet")
 )
 
-// GetResults returns the hare output for a given LayerID. returns error if we don't have results yet.
+// GetResult returns the hare output for the provided range.
+// Returns error iff the request for the upper is too old.
 func (h *Hare) GetResult(lower types.LayerID, upper types.LayerID) ([]types.BlockID, error) {
 
 	if h.isTooLate(InstanceId(upper)) {
@@ -244,6 +249,7 @@ func (h *Hare) GetResult(lower types.LayerID, upper types.LayerID) ([]types.Bloc
 	return results, nil
 }
 
+// listens to outputs arriving from consensus processes.
 func (h *Hare) outputCollectionLoop() {
 	for {
 		select {
@@ -260,6 +266,7 @@ func (h *Hare) outputCollectionLoop() {
 	}
 }
 
+// listens to new layers.
 func (h *Hare) tickLoop() {
 	for {
 		select {
@@ -271,7 +278,7 @@ func (h *Hare) tickLoop() {
 	}
 }
 
-// Start starts listening on layers to participate in.
+// Start starts listening for layers and outputs.
 func (h *Hare) Start() error {
 	h.Log.Info("Starting %v", protoName)
 	err := h.broker.Start()

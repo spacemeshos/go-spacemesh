@@ -28,6 +28,7 @@ func NewEligibilityValidator(oracle Rolacle, layersPerEpoch uint16, idProvider I
 	return &eligibilityValidator{oracle, layersPerEpoch, idProvider, maxExpActives, expLeaders, logger}
 }
 
+// check eligibility of the provided message by the oracle.
 func (ev *eligibilityValidator) validateRole(m *Msg) (bool, error) {
 	if m == nil {
 		ev.Error("Eligibility validator: called with nil")
@@ -65,7 +66,7 @@ func (ev *eligibilityValidator) validateRole(m *Msg) (bool, error) {
 	return true, nil
 }
 
-// Validates eligibility and signature of the provided message
+// Validate the eligibility of the provided message.
 func (ev *eligibilityValidator) Validate(m *Msg) bool {
 	res, err := ev.validateRole(m)
 	if err != nil {
@@ -94,7 +95,8 @@ func newSyntaxContextValidator(signing Signer, threshold int, validator func(m *
 	return &syntaxContextValidator{signing, threshold, validator, stateQuerier, layersPerEpoch, logger}
 }
 
-var ( // contextual validation errors
+// contextual validation errors
+var (
 	errNilInner       = errors.New("nil inner message")
 	errEarlyMsg       = errors.New("early message")
 	errInvalidIter    = errors.New("incorrect iteration number")
@@ -102,10 +104,9 @@ var ( // contextual validation errors
 	errUnexpectedType = errors.New("unexpected message type")
 )
 
-const firstNotifyRound = 3
-
-// Validates the InnerMsg is contextually valid
-// Note: we can count on m.InnerMsg.K because we assume m is syntactically valid
+// ContextuallyValidateMessage checks if the message is contextually valid.
+// Returns nil if the message is contextually valid or a suitable error otherwise.
+// Note: we assume m is syntactically valid (int that case, m.InnerMsg.K is a valid expression).
 func (validator *syntaxContextValidator) ContextuallyValidateMessage(m *Msg, currentK int32) error {
 	if m.InnerMsg == nil {
 		return errNilInner
@@ -184,7 +185,7 @@ func (validator *syntaxContextValidator) ContextuallyValidateMessage(m *Msg, cur
 	return errUnexpectedType
 }
 
-// Validates the syntax of the provided InnerMsg
+// SyntacticallyValidateMessage the syntax of the provided message.
 func (validator *syntaxContextValidator) SyntacticallyValidateMessage(m *Msg) bool {
 	if m == nil {
 		validator.Warning("Syntax validation failed: m is nil")
@@ -229,6 +230,7 @@ func (validator *syntaxContextValidator) SyntacticallyValidateMessage(m *Msg) bo
 	}
 }
 
+// validate the provided aggregated messages by the provided validators.
 func (validator *syntaxContextValidator) validateAggregatedMessage(aggMsg *AggregatedMessages, validators []func(m *Msg) bool) bool {
 	if validators == nil {
 		validator.Error("Aggregated validation failed: validators param is nil")

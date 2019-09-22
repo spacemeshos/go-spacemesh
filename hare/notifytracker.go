@@ -7,7 +7,8 @@ import (
 	"hash/fnv"
 )
 
-// Tracks notify Messages
+// NotifyTracker tracks notify messages.
+// It also provides the number of notifications tracked for a given set.
 type NotifyTracker struct {
 	notifies     map[string]struct{} // tracks PubKey->Notification
 	tracker      *RefCountTracker    // tracks ref count to each seen set
@@ -23,7 +24,7 @@ func NewNotifyTracker(expectedSize int) *NotifyTracker {
 	return nt
 }
 
-// Track the provided notification InnerMsg
+// OnNotify tracks the provided notification message.
 // Returns true if the InnerMsg didn't affect the state, false otherwise
 func (nt *NotifyTracker) OnNotify(msg *Msg) bool {
 	pub := msg.PubKey
@@ -43,11 +44,12 @@ func (nt *NotifyTracker) OnNotify(msg *Msg) bool {
 	return false
 }
 
-// Returns the notification count tracked for the provided set
+// NotificationsCount returns the number of notifications tracked for the provided set
 func (nt *NotifyTracker) NotificationsCount(s *Set) int {
 	return int(nt.tracker.CountStatus(s.Id()))
 }
 
+// calculates a unique id for the provided k and set.
 func calcId(k int32, set *Set) uint32 {
 	hash := fnv.New32()
 
@@ -65,11 +67,12 @@ func calcId(k int32, set *Set) uint32 {
 	return hash.Sum32()
 }
 
+// tracks certificates
 func (nt *NotifyTracker) onCertificate(k int32, set *Set) {
 	nt.certificates[calcId(k, set)] = struct{}{}
 }
 
-// Checks if a certificates exist for the provided set in round K
+// HasCertificate returns true if a certificate exist for the provided set in the provided round, false otherwise.
 func (nt *NotifyTracker) HasCertificate(k int32, set *Set) bool {
 	_, exist := nt.certificates[calcId(k, set)]
 	return exist

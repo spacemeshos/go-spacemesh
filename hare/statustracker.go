@@ -4,7 +4,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-// Tracks status Messages
+// StatusTracker tracks status messages.
+// Provides functions to build a proposal and validate the statuses.
 type StatusTracker struct {
 	statuses  map[string]*Msg // maps PubKey->StatusMsg
 	threshold int             // threshold to indicate a set can be proved
@@ -25,7 +26,7 @@ func NewStatusTracker(threshold int, expectedSize int) *StatusTracker {
 	return st
 }
 
-// Records the given status InnerMsg
+// RecordStatus records the given status message
 func (st *StatusTracker) RecordStatus(msg *Msg) {
 	pub := msg.PubKey
 	_, exist := st.statuses[pub.String()]
@@ -37,7 +38,7 @@ func (st *StatusTracker) RecordStatus(msg *Msg) {
 	st.statuses[pub.String()] = msg
 }
 
-// Analyzes the recorded status Messages according to the validation function
+// AnalyzeStatuses analyzes the recorded status messages by the validation function.
 func (st *StatusTracker) AnalyzeStatuses(isValid func(m *Msg) bool) {
 	count := 0
 	for key, m := range st.statuses {
@@ -55,12 +56,12 @@ func (st *StatusTracker) AnalyzeStatuses(isValid func(m *Msg) bool) {
 	st.analyzed = true
 }
 
-// Checks if the SVP is ready
+// IsSVPReady returns true if theere are enough statuses to build an SVP, false otherwise.
 func (st *StatusTracker) IsSVPReady() bool {
 	return st.analyzed && len(st.statuses) == st.threshold
 }
 
-// Returns the proposed set if available, nil otherwise
+// ProposalSet returns the proposed set if available, nil otherwise.
 func (st *StatusTracker) ProposalSet(expectedSize int) *Set {
 	if st.maxKi == -1 {
 		return st.buildUnionSet(expectedSize)
@@ -73,7 +74,7 @@ func (st *StatusTracker) ProposalSet(expectedSize int) *Set {
 	return st.maxSet
 }
 
-// Returns the union set of all status Messages collected
+// returns the union set of all status Messages collected
 func (st *StatusTracker) buildUnionSet(expectedSize int) *Set {
 	unionSet := NewEmptySet(expectedSize)
 	for _, m := range st.statuses {
@@ -85,8 +86,7 @@ func (st *StatusTracker) buildUnionSet(expectedSize int) *Set {
 	return unionSet
 }
 
-// Builds the SVP
-// Returns the SVP if available, nil otherwise
+// BuildSVP builds the SVP if avilable and returns it, it return false otherwise.
 func (st *StatusTracker) BuildSVP() *AggregatedMessages {
 	if !st.IsSVPReady() {
 		return nil
