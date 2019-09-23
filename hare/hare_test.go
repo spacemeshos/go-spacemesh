@@ -268,7 +268,7 @@ func TestHare_onTick(t *testing.T) {
 
 	layerTicker := make(chan types.LayerID)
 
-	oracle := NewMockHashOracle(numOfClients)
+	oracle := newMockHashOracle(numOfClients)
 	signing := signing2.NewEdSigner()
 
 	blockset := []types.BlockID{types.BlockID(0), types.BlockID(1), types.BlockID(2)}

@@ -18,6 +18,14 @@ import (
 
 const protoName = "HARE_PROTOCOL"
 
+type role byte
+
+const ( // constants of the different roles
+	passive = role(0)
+	active  = role(1)
+	leader  = role(2)
+)
+
 // Rolacle is the roles oracle provider.
 type Rolacle interface {
 	Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeId, sig []byte) (bool, error)
@@ -682,7 +690,7 @@ func (proc *ConsensusProcess) shouldParticipate() bool {
 		return false
 	}
 
-	if role := proc.currentRole(); role == Passive {
+	if role := proc.currentRole(); role == passive {
 		proc.With().Info("Should not participate: passive",
 			log.Int32("round", proc.k), log.Uint64("layer_id", uint64(proc.instanceId)))
 		return false
@@ -693,27 +701,27 @@ func (proc *ConsensusProcess) shouldParticipate() bool {
 }
 
 // Returns the role matching the current round if eligible for this round, false otherwise
-func (proc *ConsensusProcess) currentRole() Role {
+func (proc *ConsensusProcess) currentRole() role {
 	proof, err := proc.oracle.Proof(types.LayerID(proc.instanceId), proc.k)
 	if err != nil {
 		proc.With().Error("Could not retrieve proof from oracle", log.Err(err))
-		return Passive
+		return passive
 	}
 
 	res, err := proc.oracle.Eligible(types.LayerID(proc.instanceId), proc.k, expectedCommitteeSize(proc.k, proc.cfg.N, proc.cfg.ExpectedLeaders), proc.nid, proof)
 	if err != nil {
 		proc.With().Error("Could not check our eligibility", log.Err(err))
-		return Passive
+		return passive
 	}
 
 	if res { // eligible
 		if proc.currentRound() == proposalRound {
-			return Leader
+			return leader
 		}
-		return Active
+		return active
 	}
 
-	return Passive
+	return passive
 }
 
 // Returns the expected committee size for the given round assuming maxExpActives is the default size

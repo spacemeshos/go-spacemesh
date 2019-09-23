@@ -11,20 +11,20 @@ type messageValidator interface {
 	ContextuallyValidateMessage(m *Msg, expectedK int32) error
 }
 
-type IdentityProvider interface {
+type identityProvider interface {
 	GetIdentity(edId string) (types.NodeId, error)
 }
 
 type eligibilityValidator struct {
 	oracle           Rolacle
 	layersPerEpoch   uint16
-	identityProvider IdentityProvider
+	identityProvider identityProvider
 	maxExpActives    int // the maximal expected committee size
 	expLeaders       int // the expected number of leaders
 	log.Log
 }
 
-func NewEligibilityValidator(oracle Rolacle, layersPerEpoch uint16, idProvider IdentityProvider, maxExpActives, expLeaders int, logger log.Log) *eligibilityValidator {
+func newEligibilityValidator(oracle Rolacle, layersPerEpoch uint16, idProvider identityProvider, maxExpActives, expLeaders int, logger log.Log) *eligibilityValidator {
 	return &eligibilityValidator{oracle, layersPerEpoch, idProvider, maxExpActives, expLeaders, logger}
 }
 

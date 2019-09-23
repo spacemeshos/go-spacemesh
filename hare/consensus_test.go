@@ -16,7 +16,7 @@ import (
 var skipBlackBox = false
 
 type fullRolacle interface {
-	Registrable
+	registrable
 	Rolacle
 }
 
