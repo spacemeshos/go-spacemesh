@@ -36,21 +36,22 @@ func (closer *Closer) CloseChannel() chan struct{} {
 	return closer.channel
 }
 
-// Broker is responsible for dispatching hare Messages to the matching set objectId listener
+// Broker is the dispatcher of incoming Hare messages.
+// The broker validates that the sender is eligible and active and forwards the message to the corresponding outbox.
 type Broker struct {
 	Closer
 	log.Log
 	network        NetworkService
-	eValidator     Validator
-	stateQuerier   StateQuerier
-	isNodeSynced   syncStateFunc
+	eValidator     Validator     // provides eligibility validation
+	stateQuerier   StateQuerier  // provides activeness check
+	isNodeSynced   syncStateFunc // provider function to check if the node is currently synced
 	layersPerEpoch uint16
 	inbox          chan service.GossipMessage
 	syncState      map[InstanceId]bool
 	outbox         map[InstanceId]chan *Msg
-	pending        map[InstanceId][]*Msg
-	tasks          chan func()
-	latestLayer    InstanceId
+	pending        map[InstanceId][]*Msg // the buffer of pending messages for the next layer
+	tasks          chan func()           // a channel to synchronize tasks (register/unregister) with incoming messages handling
+	latestLayer    InstanceId            // the latest layer to attempt register (successfully or unsuccessfully)
 	isStarted      bool
 	minDeleted     InstanceId
 }
@@ -73,7 +74,7 @@ func NewBroker(networkService NetworkService, eValidator Validator, stateQuerier
 	}
 }
 
-// Start listening to protocol Messages and dispatch Messages (non-blocking)
+// Start listening to Hare messages (non-blocking).
 func (b *Broker) Start() error {
 	if b.isStarted { // Start has been called at least twice
 		b.Error("Could not start instance")
@@ -95,6 +96,8 @@ var (
 	errRegistration = errors.New("failed during registration")
 )
 
+// validate the message is contextually valid and that the target layer is synced.
+// note: it is important to check synchronicity after contextual to avoid memory leak in syncState.
 func (b *Broker) validate(m *Message) error {
 	msgInstId := m.InnerMsg.InstanceId
 
@@ -129,7 +132,7 @@ func (b *Broker) validate(m *Message) error {
 	return nil
 }
 
-// Dispatch incoming Messages to the matching set objectId instance
+// listens to incoming messages and incoming tasks
 func (b *Broker) eventLoop() {
 	for {
 		select {
@@ -268,8 +271,8 @@ func (b *Broker) isSynced(id InstanceId) bool {
 	return synced
 }
 
-// Register a listener to Messages
-// Note: the registering instance is assumed to be started and accepting Messages
+// Register a layer to receive messages
+// Note: the registering instance is assumed to be started and accepting messages
 func (b *Broker) Register(id InstanceId) (chan *Msg, error) {
 	res := make(chan chan *Msg, 1)
 	regRequest := func() {
@@ -302,7 +305,7 @@ func (b *Broker) Register(id InstanceId) (chan *Msg, error) {
 	return result, nil // reg ok
 }
 
-// Unregister a listener
+// Unregister a layer from receiving messages
 func (b *Broker) Unregister(id InstanceId) {
 	wg := sync.WaitGroup{}
 
