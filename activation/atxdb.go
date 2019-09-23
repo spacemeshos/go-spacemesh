@@ -195,11 +195,14 @@ func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error 
 	if err != nil {
 		return fmt.Errorf("cannot validate atx sig atx id %v err %v", atx.ShortString(), err)
 	}
-	err = db.ValidateSignedAtx(*pub, atx)
-	if err != nil { // means there is no such identity
-		return fmt.Errorf("no id found %v err %v", atx.ShortString(), err)
+	if atx.NodeId.Key != pub.String() {
+		return fmt.Errorf("node ids don't match" )
 	}
 	if atx.PrevATXId != *types.EmptyAtxId {
+		err = db.ValidateSignedAtx(*pub, atx)
+		if err != nil { // means there is no such identity
+			return fmt.Errorf("no id found %v err %v", atx.ShortString(), err)
+		}
 		prevATX, err := db.GetAtx(atx.PrevATXId)
 		if err != nil {
 			return fmt.Errorf("validation failed: prevATX not found: %v", err)
@@ -240,8 +243,7 @@ func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error 
 		if !bytes.Equal(atx.Commitment.MerkleRoot, atx.CommitmentMerkleRoot) {
 			return errors.New("commitment merkle root included in challenge is not equal to the merkle root included in the proof")
 		}
-		id := signing.NewPublicKey(util.Hex2Bytes(atx.NodeId.Key))
-		if err := db.nipstValidator.VerifyPost(*id, atx.Commitment, atx.Nipst.Space); err != nil {
+		if err := db.nipstValidator.VerifyPost(*pub, atx.Commitment, atx.Nipst.Space); err != nil {
 			return fmt.Errorf("invalid commitment proof: %v", err)
 		}
 	}

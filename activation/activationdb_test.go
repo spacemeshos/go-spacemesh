@@ -614,6 +614,15 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	assert.NoError(t, err)
 	err = atxdb.SyntacticallyValidateAtx(atx)
 	assert.EqualError(t, err, "prevAtx epoch (0) isn't older than current atx epoch (0)")
+
+	// NodeId and etracted pubkey dont match
+	atx = types.NewActivationTx(idx2, coinbase, 0, *types.EmptyAtxId, 1012, 0, posAtx.Id(), 3, []types.BlockID{}, &types.NIPST{})
+	atx.Commitment = commitment
+	atx.CommitmentMerkleRoot = append([]byte{}, commitment.MerkleRoot...)
+	_, err = types.SignAtx(signer, atx)
+	assert.NoError(t, err)
+	err = atxdb.SyntacticallyValidateAtx(atx)
+	assert.EqualError(t, err, "node ids don't match")
 }
 
 func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
@@ -923,7 +932,9 @@ func TestActivationDb_ValidateSignedAtx(t *testing.T) {
 	r.NoError(err)
 
 	// test negative flow not first ATX, invalid sig
-	signedAtx.Sig[0] = signedAtx.Sig[0] - 1
+	signedAtx.Sig[0] = 0
+	signedAtx.Sig[1] = 0
+	signedAtx.Sig[2] = 0
 	_, err = types.ExtractPublicKey(signedAtx)
 	r.Error(err)
 

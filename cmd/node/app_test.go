@@ -452,5 +452,10 @@ func TestShutdown(t *testing.T) {
 	time.Sleep(3 * time.Second)
 	g_count2 := runtime.NumGoroutine()
 
+	if g_count != g_count2 {
+		buf := make([]byte, 4096)
+		runtime.Stack(buf, true)
+		log.Error(string(buf))
+	}
 	require.Equal(t, g_count, g_count2)
 }

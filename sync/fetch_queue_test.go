@@ -74,7 +74,7 @@ func TestBlockListener_TestAtxQueue(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
-	//n2.RegisterGossipProtocol(NewBlockProtocol)
+	signer := signing.NewEdSigner()
 
 	bl1 := SyncFactory("TextAtxQueue_1", n1)
 	bl1.Peers = PeersMock{func() []p2p.Peer { return []p2p.Peer{n2.PublicKey()} }}
@@ -86,10 +86,10 @@ func TestBlockListener_TestAtxQueue(t *testing.T) {
 	queue := bl1.atxQueue
 
 	block1 := types.NewExistingBlock(types.BlockID(111), 1, nil)
-	atx1 := atx()
-	atx2 := atx()
-	atx3 := atx()
-	atx4 := atx()
+	atx1 := atx(signer.PublicKey().String())
+	atx2 := atx(signer.PublicKey().String())
+	atx3 := atx(signer.PublicKey().String())
+	atx4 := atx(signer.PublicKey().String())
 
 	proofMessage := makePoetProofMessage(t)
 	if err := bl1.poetDb.ValidateAndStore(&proofMessage); err != nil {
@@ -102,9 +102,17 @@ func TestBlockListener_TestAtxQueue(t *testing.T) {
 	poetRef := sha256.Sum256(poetProofBytes)
 
 	atx1.Nipst.PostProof.Challenge = poetRef[:]
+	_, err = types.SignAtx(signer, atx1)
+	assert.NoError(t, err)
 	atx2.Nipst.PostProof.Challenge = poetRef[:]
+	_, err = types.SignAtx(signer, atx2)
+	assert.NoError(t, err)
 	atx3.Nipst.PostProof.Challenge = poetRef[:]
+	_, err = types.SignAtx(signer, atx3)
+	assert.NoError(t, err)
 	atx4.Nipst.PostProof.Challenge = poetRef[:]
+	_, err = types.SignAtx(signer, atx4)
+	assert.NoError(t, err)
 
 	bl1.ProcessAtx(atx1)
 
@@ -203,15 +211,15 @@ func TestBlockListener_TestAtxQueueHandle(t *testing.T) {
 	poetRef := sha256.Sum256(poetProofBytes)
 
 	block1 := types.NewExistingBlock(types.BlockID(111), 1, nil)
-	atx1 := atx()
+	atx1 := atx(signer.PublicKey().String())
 	atx1.Nipst.PostProof.Challenge = poetRef[:]
 	_, err = types.SignAtx(signer, atx1)
 	assert.NoError(t, err)
-	atx2 := atx()
+	atx2 := atx(signer.PublicKey().String())
 	atx2.Nipst.PostProof.Challenge = poetRef[:]
 	_, err = types.SignAtx(signer, atx2)
 	assert.NoError(t, err)
-	atx3 := atx()
+	atx3 := atx(signer.PublicKey().String())
 	atx3.Nipst.PostProof.Challenge = poetRef[:]
 	_, err = types.SignAtx(signer, atx3)
 	assert.NoError(t, err)
