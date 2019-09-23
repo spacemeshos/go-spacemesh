@@ -22,11 +22,11 @@ func validateBlocks(blocks []types.BlockID) bool {
 }
 
 type mockOutput struct {
-	id  InstanceId
+	id  instanceId
 	set *Set
 }
 
-func (m mockOutput) Id() InstanceId {
+func (m mockOutput) Id() instanceId {
 	return m.id
 }
 func (m mockOutput) Set() *Set {
@@ -36,7 +36,7 @@ func (m mockOutput) Set() *Set {
 type mockConsensusProcess struct {
 	Closer
 	t    chan TerminationOutput
-	id   InstanceId
+	id   instanceId
 	term chan struct{}
 	set  *Set
 }
@@ -50,7 +50,7 @@ func (mcp *mockConsensusProcess) Start() error {
 	return nil
 }
 
-func (mcp *mockConsensusProcess) Id() InstanceId {
+func (mcp *mockConsensusProcess) Id() instanceId {
 	return mcp.id
 }
 
@@ -65,7 +65,7 @@ func (mip *mockIdProvider) GetIdentity(edId string) (types.NodeId, error) {
 	return types.NodeId{Key: edId, VRFPublicKey: []byte{}}, mip.err
 }
 
-func NewMockConsensusProcess(cfg config.Config, instanceId InstanceId, s *Set, oracle Rolacle, signing Signer, p2p NetworkService, outputChan chan TerminationOutput) *mockConsensusProcess {
+func NewMockConsensusProcess(cfg config.Config, instanceId instanceId, s *Set, oracle Rolacle, signing Signer, p2p NetworkService, outputChan chan TerminationOutput) *mockConsensusProcess {
 	mcp := new(mockConsensusProcess)
 	mcp.Closer = NewCloser()
 	mcp.id = instanceId
@@ -117,7 +117,7 @@ func TestHare_GetResult(t *testing.T) {
 	r.Nil(err)
 	r.Nil(res)
 
-	mockid := InstanceId(0)
+	mockid := instanceId(0)
 	set := NewSetFromValues(value1)
 
 	h.collectOutput(mockOutput{mockid, set})
@@ -141,14 +141,15 @@ func TestHare_GetResult2(t *testing.T) {
 
 	h.networkDelta = 0
 
-	h.factory = func(cfg config.Config, instanceId InstanceId, s *Set, oracle Rolacle, signing Signer, p2p NetworkService, outputChan chan TerminationOutput) Consensus {
+	h.factory = func(cfg config.Config, instanceId instanceId, s *Set, oracle Rolacle, signing Signer, p2p NetworkService, outputChan chan TerminationOutput) Consensus {
 		return NewMockConsensusProcess(cfg, instanceId, s, oracle, signing, p2p, outputChan)
 	}
 
 	h.Start()
 
-	for i := 0; i < h.bufferSize+1; i++ {
+	for i := 1; i < h.bufferSize+1; i++ {
 		h.beginLayer <- types.LayerID(i)
+		time.Sleep(10 * time.Millisecond)
 	}
 	time.Sleep(100 * time.Millisecond)
 
@@ -170,7 +171,7 @@ func TestHare_collectOutputCheckValidation(t *testing.T) {
 	h := createHare(n1)
 
 	mockid := instanceId1
-	set := NewSetFromValues(Value{0})
+	set := NewSetFromValues(blockID{0})
 
 	// default validation is true
 	h.collectOutput(mockOutput{mockid, set})
@@ -198,7 +199,7 @@ func TestHare_collectOutput(t *testing.T) {
 	h := createHare(n1)
 
 	mockid := instanceId1
-	set := NewSetFromValues(Value{0})
+	set := NewSetFromValues(blockID{0})
 
 	h.collectOutput(mockOutput{mockid, set})
 	output, ok := h.outputs[types.LayerID(mockid)]
@@ -221,7 +222,7 @@ func TestHare_collectOutput2(t *testing.T) {
 	h.bufferSize = 1
 	h.lastLayer = 0
 	mockid := instanceId0
-	set := NewSetFromValues(Value{0})
+	set := NewSetFromValues(blockID{0})
 
 	h.collectOutput(mockOutput{mockid, set})
 	output, ok := h.outputs[types.LayerID(mockid)]
@@ -268,7 +269,7 @@ func TestHare_onTick(t *testing.T) {
 
 	layerTicker := make(chan types.LayerID)
 
-	oracle := NewMockHashOracle(numOfClients)
+	oracle := newMockHashOracle(numOfClients)
 	signing := signing2.NewEdSigner()
 
 	blockset := []types.BlockID{types.BlockID(0), types.BlockID(1), types.BlockID(2)}
@@ -284,7 +285,7 @@ func TestHare_onTick(t *testing.T) {
 	createdChan := make(chan struct{})
 
 	var nmcp *mockConsensusProcess
-	h.factory = func(cfg config.Config, instanceId InstanceId, s *Set, oracle Rolacle, signing Signer, p2p NetworkService, outputChan chan TerminationOutput) Consensus {
+	h.factory = func(cfg config.Config, instanceId instanceId, s *Set, oracle Rolacle, signing Signer, p2p NetworkService, outputChan chan TerminationOutput) Consensus {
 		nmcp = NewMockConsensusProcess(cfg, instanceId, s, oracle, signing, p2p, outputChan)
 		createdChan <- struct{}{}
 		return nmcp
@@ -296,7 +297,7 @@ func TestHare_onTick(t *testing.T) {
 	wg.Add(2)
 	go func() {
 		wg.Done()
-		layerTicker <- 0
+		layerTicker <- 1
 		<-createdChan
 		<-nmcp.CloseChannel()
 		wg.Done()
@@ -305,7 +306,7 @@ func TestHare_onTick(t *testing.T) {
 	//collect output one more time
 	wg.Wait()
 	time.Sleep(100 * time.Millisecond)
-	res2, err := h.GetResult(types.LayerID(0), types.LayerID(0))
+	res2, err := h.GetResult(types.LayerID(1), types.LayerID(1))
 	require.NoError(t, err)
 
 	SortBlockIDs(res2)
@@ -316,14 +317,14 @@ func TestHare_onTick(t *testing.T) {
 	wg.Add(2)
 	go func() {
 		wg.Done()
-		layerTicker <- 1
+		layerTicker <- 2
 		h.Close()
 		wg.Done()
 	}()
 
 	//collect output one more time
 	wg.Wait()
-	res, err := h.GetResult(types.LayerID(1), types.LayerID(1))
+	res, err := h.GetResult(types.LayerID(2), types.LayerID(2))
 	require.Nil(t, err)
 	require.Equal(t, []types.BlockID(nil), res)
 

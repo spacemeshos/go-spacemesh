@@ -5,22 +5,22 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-type proposalTracker interface {
+type proposalTrackerProvider interface {
 	OnProposal(msg *Msg)
 	OnLateProposal(msg *Msg)
 	IsConflicting() bool
 	ProposedSet() *Set
 }
 
-// Tracks proposal Messages
-type ProposalTracker struct {
+// proposalTracker tracks proposal messages
+type proposalTracker struct {
 	log.Log
 	proposal      *Msg // maps PubKey->Proposal
 	isConflicting bool // maps PubKey->ConflictStatus
 }
 
-func NewProposalTracker(log log.Log) *ProposalTracker {
-	pt := &ProposalTracker{}
+func newProposalTracker(log log.Log) *proposalTracker {
+	pt := &proposalTracker{}
 	pt.proposal = nil
 	pt.isConflicting = false
 	pt.Log = log
@@ -28,8 +28,9 @@ func NewProposalTracker(log log.Log) *ProposalTracker {
 	return pt
 }
 
-// Tracks the provided proposal InnerMsg assuming it was received on the expected round
-func (pt *ProposalTracker) OnProposal(msg *Msg) {
+// OnProposal tracks the provided proposal message.
+// It assumes the proposal message is syntactically valid and that it was received on the proposal round.
+func (pt *proposalTracker) OnProposal(msg *Msg) {
 	if pt.proposal == nil { // first leader
 		pt.proposal = msg // just update
 		return
@@ -57,8 +58,9 @@ func (pt *ProposalTracker) OnProposal(msg *Msg) {
 	pt.isConflicting = false // assume no conflict
 }
 
-// Tracks the provided proposal InnerMsg assuming it was late
-func (pt *ProposalTracker) OnLateProposal(msg *Msg) {
+// OnLateProposal tracks the given proposal message.
+// It assumes the proposal message is syntactically valid and that it was not received on the proposal round (late).
+func (pt *proposalTracker) OnLateProposal(msg *Msg) {
 	if pt.proposal == nil {
 		return
 	}
@@ -82,14 +84,13 @@ func (pt *ProposalTracker) OnLateProposal(msg *Msg) {
 	}
 }
 
-// Checks if there was a conflict of proposals
-// Returns true if there was a conflict, false otherwise
-func (pt *ProposalTracker) IsConflicting() bool {
+// IsConflicting returns true if there was a conflict, false otherwise.
+func (pt *proposalTracker) IsConflicting() bool {
 	return pt.isConflicting
 }
 
-// Returns the proposed set if valid, nil otherwise
-func (pt *ProposalTracker) ProposedSet() *Set {
+// ProposedSet returns the proposed set if there is a valid proposal, nil otherwise.
+func (pt *proposalTracker) ProposedSet() *Set {
 	if pt.proposal == nil {
 		return nil
 	}

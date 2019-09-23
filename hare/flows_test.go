@@ -20,7 +20,7 @@ type HareWrapper struct {
 	lCh         []chan types.LayerID
 	hare        []*Hare
 	initialSets []*Set // all initial sets
-	outputs     map[InstanceId][]*Set
+	outputs     map[instanceId][]*Set
 	name        string
 }
 
@@ -29,7 +29,7 @@ func newHareWrapper(totalCp int) *HareWrapper {
 	hs.lCh = make([]chan types.LayerID, 0)
 	hs.totalCP = totalCp
 	hs.termination = NewCloser()
-	hs.outputs = make(map[InstanceId][]*Set, 0)
+	hs.outputs = make(map[instanceId][]*Set, 0)
 
 	return hs
 }
@@ -67,9 +67,9 @@ func (his *HareWrapper) waitForTermination() {
 			s := NewEmptySet(10)
 			blks, _ := p.GetResult(i, i)
 			for _, b := range blks {
-				s.Add(Value{b})
+				s.Add(blockID{b})
 			}
-			his.outputs[InstanceId(i)] = append(his.outputs[InstanceId(i)], s)
+			his.outputs[instanceId(i)] = append(his.outputs[instanceId(i)], s)
 		}
 	}
 
@@ -85,13 +85,13 @@ func (his *HareWrapper) WaitForTimedTermination(t *testing.T, timeout time.Durat
 		return
 	case <-his.termination.CloseChannel():
 		for i := 1; i <= his.totalCP; i++ {
-			his.checkResult(t, InstanceId(i))
+			his.checkResult(t, instanceId(i))
 		}
 		return
 	}
 }
 
-func (his *HareWrapper) checkResult(t *testing.T, id InstanceId) {
+func (his *HareWrapper) checkResult(t *testing.T, id instanceId) {
 	// check consistency
 	out := his.outputs[id]
 	for i := 0; i < len(out)-1; i++ {
@@ -103,7 +103,7 @@ func (his *HareWrapper) checkResult(t *testing.T, id InstanceId) {
 
 type p2pManipulator struct {
 	nd           *service.Node
-	stalledLayer InstanceId
+	stalledLayer instanceId
 	err          error
 }
 
