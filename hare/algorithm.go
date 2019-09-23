@@ -39,11 +39,11 @@ type Signer interface {
 
 // procOutput is the tuple (id, set) which is the output of the consensus process.
 type procOutput struct {
-	id  InstanceId
+	id  instanceId
 	set *Set
 }
 
-func (cpo procOutput) Id() InstanceId {
+func (cpo procOutput) Id() instanceId {
 	return cpo.id
 }
 
@@ -126,7 +126,7 @@ type ConsensusProcess struct {
 	log.Log
 	State
 	Closer
-	instanceId        InstanceId // the layer id
+	instanceId        instanceId // the layer id
 	oracle            Rolacle    // the roles oracle provider
 	signing           Signer
 	nid               types.NodeId
@@ -147,7 +147,7 @@ type ConsensusProcess struct {
 }
 
 // NewConsensusProcess creates a new consensus process instance.
-func NewConsensusProcess(cfg config.Config, instanceId InstanceId, s *Set, oracle Rolacle, stateQuerier StateQuerier, layersPerEpoch uint16, signing Signer, nid types.NodeId, p2p NetworkService, terminationReport chan TerminationOutput, logger log.Log) *ConsensusProcess {
+func NewConsensusProcess(cfg config.Config, instanceId instanceId, s *Set, oracle Rolacle, stateQuerier StateQuerier, layersPerEpoch uint16, signing Signer, nid types.NodeId, p2p NetworkService, terminationReport chan TerminationOutput, logger log.Log) *ConsensusProcess {
 	proc := &ConsensusProcess{
 		State:             State{-1, -1, s.Clone(), nil},
 		Closer:            NewCloser(),
@@ -201,7 +201,7 @@ func (proc *ConsensusProcess) Start() error {
 }
 
 // Id returns the instance id.
-func (proc *ConsensusProcess) Id() InstanceId {
+func (proc *ConsensusProcess) Id() instanceId {
 	return proc.instanceId
 }
 
@@ -229,7 +229,7 @@ func (proc *ConsensusProcess) eventLoop() {
 			proc.Error("init default builder failed: %v", err)
 			return
 		}
-		m := builder.SetType(Pre).Sign(proc.signing).Build()
+		m := builder.SetType(pre).Sign(proc.signing).Build()
 		proc.sendMessage(m)
 	}
 
@@ -302,7 +302,7 @@ func (proc *ConsensusProcess) onEarlyMessage(m *Msg) {
 
 // the very first step of handling a message
 func (proc *ConsensusProcess) handleMessage(m *Msg) {
-	// Note: InstanceId is already verified by the broker
+	// Note: instanceId is already verified by the broker
 
 	proc.Debug("Received message %v", m)
 
@@ -311,7 +311,7 @@ func (proc *ConsensusProcess) handleMessage(m *Msg) {
 		return
 	}
 
-	mType := MessageType(m.InnerMsg.Type).String()
+	mType := messageType(m.InnerMsg.Type).String()
 	// validate InnerMsg for this or next round
 	err := proc.validator.ContextuallyValidateMessage(m, proc.k)
 	if err != nil {
@@ -329,7 +329,7 @@ func (proc *ConsensusProcess) handleMessage(m *Msg) {
 		return
 	}
 
-	if m.InnerMsg.Type == Pre && proc.k != -1 {
+	if m.InnerMsg.Type == pre && proc.k != -1 {
 		proc.Warning("Encountered late PreRound message")
 	}
 
@@ -343,15 +343,15 @@ func (proc *ConsensusProcess) processMsg(m *Msg) {
 	metrics.MessageTypeCounter.With("type_id", m.InnerMsg.Type.String()).Add(1)
 
 	switch m.InnerMsg.Type {
-	case Pre:
+	case pre:
 		proc.processPreRoundMsg(m)
-	case Status: // end of round 1
+	case status: // end of round 1
 		proc.processStatusMsg(m)
-	case Proposal: // end of round 2
+	case proposal: // end of round 2
 		proc.processProposalMsg(m)
-	case Commit: // end of round 3
+	case commit: // end of round 3
 		proc.processCommitMsg(m)
-	case Notify: // end of round 4
+	case notify: // end of round 4
 		proc.processNotifyMsg(m)
 	default:
 		proc.Warning("Unknown message type: %v , pubkey %v", m.InnerMsg.Type, m.PubKey.ShortString())
@@ -385,9 +385,9 @@ func (proc *ConsensusProcess) onRoundEnd() {
 
 	// reset trackers
 	switch proc.currentRound() {
-	case StatusRound:
+	case statusRound:
 		proc.endOfStatusRound()
-	case ProposalRound:
+	case proposalRound:
 		s := proc.proposalTracker.ProposedSet()
 		sStr := "nil"
 		if s != nil {
@@ -397,7 +397,7 @@ func (proc *ConsensusProcess) onRoundEnd() {
 			log.String("proposed_set", sStr),
 			log.Bool("is_conflicting", proc.proposalTracker.IsConflicting()),
 			log.Uint64("layer_id", uint64(proc.instanceId)))
-	case CommitRound:
+	case commitRound:
 		proc.With().Info("commit round ended", log.LayerId(uint64(proc.instanceId)))
 	}
 }
@@ -425,7 +425,7 @@ func (proc *ConsensusProcess) beginStatusRound() {
 		proc.Error("init default builder failed: %v", err)
 		return
 	}
-	statusMsg := b.SetType(Status).Sign(proc.signing).Build()
+	statusMsg := b.SetType(status).Sign(proc.signing).Build()
 	proc.sendMessage(statusMsg)
 }
 
@@ -443,7 +443,7 @@ func (proc *ConsensusProcess) beginProposalRound() {
 		}
 		svp := proc.statusesTracker.BuildSVP()
 		if svp != nil {
-			proposalMsg := builder.SetType(Proposal).SetSVP(svp).Sign(proc.signing).Build()
+			proposalMsg := builder.SetType(proposal).SetSVP(svp).Sign(proc.signing).Build()
 			proc.sendMessage(proposalMsg)
 		} else {
 			proc.Error("Failed to build SVP (nil) after verifying SVP is ready ")
@@ -469,7 +469,7 @@ func (proc *ConsensusProcess) beginCommitRound() {
 			proc.Error("init default builder failed: %v", err)
 			return
 		}
-		builder = builder.SetType(Commit).Sign(proc.signing)
+		builder = builder.SetType(commit).Sign(proc.signing)
 		commitMsg := builder.Build()
 		proc.sendMessage(commitMsg)
 	}
@@ -526,7 +526,7 @@ func (proc *ConsensusProcess) beginNotifyRound() {
 		return
 	}
 
-	builder = builder.SetType(Notify).SetCertificate(proc.certificate).Sign(proc.signing)
+	builder = builder.SetType(notify).SetCertificate(proc.certificate).Sign(proc.signing)
 	notifyMsg := builder.Build()
 	if proc.sendMessage(notifyMsg) { // on success, mark sent
 		proc.notifySent = true
@@ -545,13 +545,13 @@ func (proc *ConsensusProcess) handlePending(pending map[string]*Msg) {
 func (proc *ConsensusProcess) onRoundBegin() {
 	// reset trackers
 	switch proc.currentRound() {
-	case StatusRound:
+	case statusRound:
 		proc.beginStatusRound()
-	case ProposalRound:
+	case proposalRound:
 		proc.beginProposalRound()
-	case CommitRound:
+	case commitRound:
 		proc.beginCommitRound()
-	case NotifyRound:
+	case notifyRound:
 		proc.beginNotifyRound()
 	default:
 		proc.Panic("Current round out of bounds. Expected: 0-3, Found: ", proc.currentRound())
@@ -592,9 +592,9 @@ func (proc *ConsensusProcess) processStatusMsg(msg *Msg) {
 func (proc *ConsensusProcess) processProposalMsg(msg *Msg) {
 	currRnd := proc.currentRound()
 
-	if currRnd == ProposalRound { // regular proposal
+	if currRnd == proposalRound { // regular proposal
 		proc.proposalTracker.OnProposal(msg)
-	} else if currRnd == CommitRound { // late proposal
+	} else if currRnd == commitRound { // late proposal
 		proc.proposalTracker.OnLateProposal(msg)
 	} else {
 		proc.Error("Received proposal message for processing in an invalid context: K=%v", msg.InnerMsg.K)
@@ -613,7 +613,7 @@ func (proc *ConsensusProcess) processNotifyMsg(msg *Msg) {
 		return
 	}
 
-	if proc.currentRound() == NotifyRound { // not necessary to update otherwise
+	if proc.currentRound() == notifyRound { // not necessary to update otherwise
 		// we assume that this expression was checked before
 		if int32(msg.InnerMsg.Cert.AggMsgs.Messages[0].InnerMsg.K) >= proc.ki { // update state iff K >= Ki
 			proc.s = s
@@ -707,7 +707,7 @@ func (proc *ConsensusProcess) currentRole() Role {
 	}
 
 	if res { // eligible
-		if proc.currentRound() == ProposalRound {
+		if proc.currentRound() == proposalRound {
 			return Leader
 		}
 		return Active
@@ -718,7 +718,7 @@ func (proc *ConsensusProcess) currentRole() Role {
 
 // Returns the expected committee size for the given round assuming maxExpActives is the default size
 func expectedCommitteeSize(k int32, maxExpActive, expLeaders int) int {
-	if k%4 == ProposalRound {
+	if k%4 == proposalRound {
 		return expLeaders // expected number of leaders
 	}
 

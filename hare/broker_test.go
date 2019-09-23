@@ -14,14 +14,14 @@ import (
 	"time"
 )
 
-var instanceId0 = InstanceId(0)
-var instanceId1 = InstanceId(1)
-var instanceId2 = InstanceId(2)
-var instanceId3 = InstanceId(3)
-var instanceId4 = InstanceId(4)
-var instanceId5 = InstanceId(5)
-var instanceId6 = InstanceId(6)
-var instanceId7 = InstanceId(7)
+var instanceId0 = instanceId(0)
+var instanceId1 = instanceId(1)
+var instanceId2 = instanceId(2)
+var instanceId3 = instanceId(3)
+var instanceId4 = instanceId(4)
+var instanceId5 = instanceId(5)
+var instanceId6 = instanceId(6)
+var instanceId7 = instanceId(7)
 
 func trueFunc() bool {
 	return true
@@ -32,7 +32,7 @@ func falseFunc() bool {
 }
 
 type mockClient struct {
-	id InstanceId
+	id instanceId
 }
 
 type MockStateQuerier struct {
@@ -48,7 +48,7 @@ func (msq MockStateQuerier) IsIdentityActiveOnConsensusView(edId string, layer t
 	return msq.res, msq.err
 }
 
-func createMessage(t *testing.T, instanceId InstanceId) []byte {
+func createMessage(t *testing.T, instanceId instanceId) []byte {
 	sr := signing.NewEdSigner()
 	b := NewMessageBuilder()
 	msg := b.SetPubKey(sr.PublicKey()).SetInstanceId(instanceId).Sign(sr).Build()
@@ -113,13 +113,13 @@ func TestBroker_Abort(t *testing.T) {
 	}
 }
 
-func sendMessages(t *testing.T, instanceId InstanceId, n *service.Node, count int) {
+func sendMessages(t *testing.T, instanceId instanceId, n *service.Node, count int) {
 	for i := 0; i < count; i++ {
 		n.Broadcast(protoName, createMessage(t, instanceId))
 	}
 }
 
-func waitForMessages(t *testing.T, inbox chan *Msg, instanceId InstanceId, msgCount int) {
+func waitForMessages(t *testing.T, inbox chan *Msg, instanceId instanceId, msgCount int) {
 	i := 0
 	for {
 		tm := time.NewTimer(3 * time.Second)
@@ -338,11 +338,11 @@ func Test_newMsg(t *testing.T) {
 func TestBroker_updateInstance(t *testing.T) {
 	r := require.New(t)
 	b := buildBroker(service.NewSimulator().NewNode(), t.Name())
-	r.Equal(InstanceId(0), b.latestLayer)
+	r.Equal(instanceId(0), b.latestLayer)
 	b.updateLatestLayer(1)
-	r.Equal(InstanceId(1), b.latestLayer)
+	r.Equal(instanceId(1), b.latestLayer)
 	b.updateLatestLayer(0)
-	r.Equal(InstanceId(1), b.latestLayer)
+	r.Equal(instanceId(1), b.latestLayer)
 }
 
 func TestBroker_updateSynchronicity(t *testing.T) {

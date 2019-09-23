@@ -133,7 +133,7 @@ func (test *ConsensusTest) Start() {
 	go startProcs(test.dishonest)
 }
 
-func createConsensusProcess(isHonest bool, cfg config.Config, oracle fullRolacle, network NetworkService, initialSet *Set, layer InstanceId, name string) *ConsensusProcess {
+func createConsensusProcess(isHonest bool, cfg config.Config, oracle fullRolacle, network NetworkService, initialSet *Set, layer instanceId, name string) *ConsensusProcess {
 	broker := buildBroker(network, name)
 	broker.Start()
 	output := make(chan TerminationOutput, 1)

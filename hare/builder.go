@@ -52,8 +52,8 @@ type aggregatedMessages struct {
 
 // innerMessage is the actual set of fields that describe a message in the Hare protocol.
 type innerMessage struct {
-	Type       MessageType
-	InstanceId InstanceId
+	Type       messageType
+	InstanceId instanceId
 	K          int32 // the round counter
 	Ki         int32
 	Values     []uint64            // the set S. optional for commit InnerMsg in a certificate
@@ -117,12 +117,12 @@ func (builder *messageBuilder) SetPubKey(pub *signing.PublicKey) *messageBuilder
 	return builder
 }
 
-func (builder *messageBuilder) SetType(msgType MessageType) *messageBuilder {
+func (builder *messageBuilder) SetType(msgType messageType) *messageBuilder {
 	builder.inner.Type = msgType
 	return builder
 }
 
-func (builder *messageBuilder) SetInstanceId(id InstanceId) *messageBuilder {
+func (builder *messageBuilder) SetInstanceId(id instanceId) *messageBuilder {
 	builder.inner.InstanceId = id
 	return builder
 }
@@ -142,7 +142,7 @@ func (builder *messageBuilder) SetValues(set *Set) *messageBuilder {
 	return builder
 }
 
-func (builder *messageBuilder) SetRoleProof(sig Signature) *messageBuilder {
+func (builder *messageBuilder) SetRoleProof(sig []byte) *messageBuilder {
 	builder.inner.RoleProof = sig
 	return builder
 }

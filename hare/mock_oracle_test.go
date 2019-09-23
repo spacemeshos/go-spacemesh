@@ -55,7 +55,7 @@ func TestMockHashOracle_Concurrency(t *testing.T) {
 	assert.Equal(t, len(oracle.clients), 100)
 }
 
-func genSig() Signature {
+func genSig() []byte {
 	s1 := rand.NewSource(time.Now().UnixNano())
 	r1 := rand.New(s1)
 	sig := make([]byte, 4, 4)

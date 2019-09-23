@@ -151,7 +151,7 @@ func (mev *mockEligibilityValidator) Validate(m *Msg) bool {
 type mockOracle struct {
 }
 
-func (mo *mockOracle) Eligible(instanceId InstanceId, k int32, pubKey string, proof []byte) bool {
+func (mo *mockOracle) Eligible(instanceId instanceId, k int32, pubKey string, proof []byte) bool {
 	return true
 }
 
@@ -287,7 +287,7 @@ func TestConsensusProcess_InitDefaultBuilder(t *testing.T) {
 	assert.Nil(t, verifier)
 	assert.Equal(t, builder.inner.K, proc.k)
 	assert.Equal(t, builder.inner.Ki, proc.ki)
-	assert.Equal(t, InstanceId(builder.inner.InstanceId), proc.instanceId)
+	assert.Equal(t, instanceId(builder.inner.InstanceId), proc.instanceId)
 }
 
 func TestConsensusProcess_isEligible(t *testing.T) {
@@ -389,7 +389,7 @@ func TestConsensusProcess_procNotify(t *testing.T) {
 	proc.ki = 0
 	m.InnerMsg.K = proc.ki
 	proc.s.Add(value5)
-	proc.k = NotifyRound
+	proc.k = notifyRound
 	proc.processNotifyMsg(m)
 	assert.True(t, s.Equals(proc.s))
 }
@@ -418,13 +418,13 @@ func TestConsensusProcess_Termination(t *testing.T) {
 func TestConsensusProcess_currentRound(t *testing.T) {
 	proc := generateConsensusProcess(t)
 	proc.advanceToNextRound()
-	assert.Equal(t, StatusRound, proc.currentRound())
+	assert.Equal(t, statusRound, proc.currentRound())
 	proc.advanceToNextRound()
-	assert.Equal(t, ProposalRound, proc.currentRound())
+	assert.Equal(t, proposalRound, proc.currentRound())
 	proc.advanceToNextRound()
-	assert.Equal(t, CommitRound, proc.currentRound())
+	assert.Equal(t, commitRound, proc.currentRound())
 	proc.advanceToNextRound()
-	assert.Equal(t, NotifyRound, proc.currentRound())
+	assert.Equal(t, notifyRound, proc.currentRound())
 }
 
 func TestConsensusProcess_onEarlyMessage(t *testing.T) {

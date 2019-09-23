@@ -12,20 +12,20 @@ const (
 	lowDefaultSize = 100
 )
 
-var value1 = Value{1}
-var value2 = Value{2}
-var value3 = Value{3}
-var value4 = Value{4}
-var value5 = Value{5}
-var value6 = Value{6}
-var value7 = Value{7}
-var value8 = Value{8}
-var value9 = Value{9}
-var value10 = Value{10}
+var value1 = blockID{1}
+var value2 = blockID{2}
+var value3 = blockID{3}
+var value4 = blockID{4}
+var value5 = blockID{5}
+var value6 = blockID{6}
+var value7 = blockID{7}
+var value8 = blockID{8}
+var value9 = blockID{9}
+var value10 = blockID{10}
 
 func BuildPreRoundMsg(signing Signer, s *Set) *Msg {
 	builder := NewMessageBuilder()
-	builder.SetType(Pre).SetInstanceId(instanceId1).SetRoundCounter(k).SetKi(ki).SetValues(s)
+	builder.SetType(pre).SetInstanceId(instanceId1).SetRoundCounter(k).SetKi(ki).SetValues(s)
 	builder = builder.SetPubKey(signing.PublicKey()).Sign(signing)
 
 	return builder.Build()

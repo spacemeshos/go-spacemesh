@@ -54,11 +54,11 @@ type Broker struct {
 	isNodeSynced   syncStateFunc
 	layersPerEpoch uint16
 	inbox          chan service.GossipMessage
-	layerState     map[InstanceId]bool
-	outbox         map[InstanceId]chan *Msg
-	pending        map[InstanceId][]*Msg
+	layerState     map[instanceId]bool
+	outbox         map[instanceId]chan *Msg
+	pending        map[instanceId][]*Msg
 	tasks          chan func()
-	latestLayer    InstanceId
+	latestLayer    instanceId
 	isStarted      bool
 }
 
@@ -72,9 +72,9 @@ func NewBroker(networkService NetworkService, eValidator Validator, stateQuerier
 		stateQuerier:   stateQuerier,
 		isNodeSynced:   syncState,
 		layersPerEpoch: layersPerEpoch,
-		layerState:     make(map[InstanceId]bool),
-		outbox:         make(map[InstanceId]chan *Msg),
-		pending:        make(map[InstanceId][]*Msg),
+		layerState:     make(map[instanceId]bool),
+		outbox:         make(map[instanceId]chan *Msg),
+		pending:        make(map[instanceId][]*Msg),
 		tasks:          make(chan func()),
 		latestLayer:    0,
 	}
@@ -196,7 +196,7 @@ func (b *Broker) eventLoop() {
 	}
 }
 
-func (b *Broker) updateLatestLayer(id InstanceId) {
+func (b *Broker) updateLatestLayer(id instanceId) {
 	if id <= b.latestLayer { // should expect to update only newer layers
 		b.Error("Tried to update a previous layer expected %v > %v", id, b.latestLayer)
 		return
@@ -205,7 +205,7 @@ func (b *Broker) updateLatestLayer(id InstanceId) {
 	b.latestLayer = id
 }
 
-func (b *Broker) updateSynchronicity(id InstanceId) {
+func (b *Broker) updateSynchronicity(id instanceId) {
 	if _, ok := b.layerState[id]; ok { // already has result
 		return
 	}
@@ -221,7 +221,7 @@ func (b *Broker) updateSynchronicity(id InstanceId) {
 	b.layerState[id] = valid // mark valid
 }
 
-func (b *Broker) isSynced(id InstanceId) bool {
+func (b *Broker) isSynced(id instanceId) bool {
 	b.updateSynchronicity(id)
 
 	state, ok := b.layerState[id]
@@ -234,7 +234,7 @@ func (b *Broker) isSynced(id InstanceId) bool {
 
 // Register a listener to Messages
 // Note: the registering instance is assumed to be started and accepting Messages
-func (b *Broker) Register(id InstanceId) (chan *Msg, error) {
+func (b *Broker) Register(id instanceId) (chan *Msg, error) {
 	res := make(chan chan *Msg, 1)
 	regRequest := func() {
 		b.updateLatestLayer(id)
@@ -267,7 +267,7 @@ func (b *Broker) Register(id InstanceId) (chan *Msg, error) {
 }
 
 // Unregister a listener
-func (b *Broker) Unregister(id InstanceId) {
+func (b *Broker) Unregister(id instanceId) {
 	wg := sync.WaitGroup{}
 
 	wg.Add(1)

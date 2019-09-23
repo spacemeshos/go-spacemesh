@@ -6,16 +6,16 @@ import (
 	"testing"
 )
 
-func buildProposalMsg(signing Signer, s *Set, signature Signature) *Msg {
+func buildProposalMsg(signing Signer, s *Set, signature []byte) *Msg {
 	builder := NewMessageBuilder().SetRoleProof(signature)
-	builder.SetType(Proposal).SetInstanceId(instanceId1).SetRoundCounter(ProposalRound).SetKi(ki).SetValues(s).SetSVP(buildSVP(ki, NewSetFromValues(value1)))
+	builder.SetType(proposal).SetInstanceId(instanceId1).SetRoundCounter(proposalRound).SetKi(ki).SetValues(s).SetSVP(buildSVP(ki, NewSetFromValues(value1)))
 	builder = builder.SetPubKey(signing.PublicKey()).Sign(signing)
 
 	return builder.Build()
 }
 
 func BuildProposalMsg(signing Signer, s *Set) *Msg {
-	return buildProposalMsg(signing, s, Signature{})
+	return buildProposalMsg(signing, s, []byte{})
 }
 
 func TestProposalTracker_OnProposalConflict(t *testing.T) {
@@ -61,16 +61,16 @@ func TestProposalTracker_ProposedSet(t *testing.T) {
 	proposedSet := tracker.ProposedSet()
 	assert.Nil(t, proposedSet)
 	s1 := NewSetFromValues(value1, value2)
-	tracker.OnProposal(buildProposalMsg(generateSigning(t), s1, Signature{1, 2, 3}))
+	tracker.OnProposal(buildProposalMsg(generateSigning(t), s1, []byte{1, 2, 3}))
 	proposedSet = tracker.ProposedSet()
 	assert.NotNil(t, proposedSet)
 	assert.True(t, s1.Equals(proposedSet))
 	s2 := NewSetFromValues(value3, value4, value5)
 	pub := generateSigning(t)
-	tracker.OnProposal(buildProposalMsg(pub, s2, Signature{0}))
+	tracker.OnProposal(buildProposalMsg(pub, s2, []byte{0}))
 	proposedSet = tracker.ProposedSet()
 	assert.True(t, s2.Equals(proposedSet))
-	tracker.OnProposal(buildProposalMsg(pub, s1, Signature{0}))
+	tracker.OnProposal(buildProposalMsg(pub, s1, []byte{0}))
 	proposedSet = tracker.ProposedSet()
 	assert.Nil(t, proposedSet)
 }

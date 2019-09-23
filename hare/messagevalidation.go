@@ -119,11 +119,11 @@ func (validator *syntaxContextValidator) ContextuallyValidateMessage(m *Msg, cur
 
 	// first validate pre-round and notify
 	switch m.InnerMsg.Type {
-	case Pre:
+	case pre:
 		return nil
-	case Notify:
+	case notify:
 		// notify before notify could be created for this iteration
-		if currentRound < CommitRound && sameIter {
+		if currentRound < commitRound && sameIter {
 			return errInvalidRound
 		}
 
@@ -133,7 +133,7 @@ func (validator *syntaxContextValidator) ContextuallyValidateMessage(m *Msg, cur
 		}
 
 		// early notify detected
-		if m.InnerMsg.K == currentK+1 && currentRound == CommitRound {
+		if m.InnerMsg.K == currentK+1 && currentRound == commitRound {
 			return errEarlyMsg
 		}
 
@@ -143,37 +143,37 @@ func (validator *syntaxContextValidator) ContextuallyValidateMessage(m *Msg, cur
 
 	// check status, proposal & commit types
 	switch m.InnerMsg.Type {
-	case Status:
-		if currentRound == PreRound && sameIter {
+	case status:
+		if currentRound == preRound && sameIter {
 			return errEarlyMsg
 		}
-		if currentRound == NotifyRound && currentIteration+1 == msgIteration {
+		if currentRound == notifyRound && currentIteration+1 == msgIteration {
 			return errEarlyMsg
 		}
-		if currentRound == StatusRound && sameIter {
+		if currentRound == statusRound && sameIter {
 			return nil
 		}
 		if !sameIter {
 			return errInvalidIter
 		}
 		return errInvalidRound
-	case Proposal:
-		if currentRound == StatusRound && sameIter {
+	case proposal:
+		if currentRound == statusRound && sameIter {
 			return errEarlyMsg
 		}
 		// a late proposal is also contextually valid
-		if (currentRound == ProposalRound || currentRound == CommitRound) && sameIter {
+		if (currentRound == proposalRound || currentRound == commitRound) && sameIter {
 			return nil
 		}
 		if !sameIter {
 			return errInvalidIter
 		}
 		return errInvalidRound
-	case Commit:
-		if currentRound == ProposalRound && sameIter {
+	case commit:
+		if currentRound == proposalRound && sameIter {
 			return errEarlyMsg
 		}
-		if currentRound == CommitRound && sameIter {
+		if currentRound == commitRound && sameIter {
 			return nil
 		}
 		if !sameIter {
@@ -214,15 +214,15 @@ func (validator *syntaxContextValidator) SyntacticallyValidateMessage(m *Msg) bo
 
 	claimedRound := m.InnerMsg.K % 4
 	switch m.InnerMsg.Type {
-	case Pre:
+	case pre:
 		return true
-	case Status:
-		return claimedRound == StatusRound
-	case Proposal:
-		return claimedRound == ProposalRound && validator.validateSVP(m)
-	case Commit:
-		return claimedRound == CommitRound
-	case Notify:
+	case status:
+		return claimedRound == statusRound
+	case proposal:
+		return claimedRound == proposalRound && validator.validateSVP(m)
+	case commit:
+		return claimedRound == commitRound
+	case notify:
 		return validator.validateCertificate(m.InnerMsg.Cert)
 	default:
 		validator.Error("Unknown message type encountered during syntactic validator: ", m.InnerMsg.Type)
@@ -366,11 +366,11 @@ func (validator *syntaxContextValidator) validateCertificate(cert *certificate) 
 }
 
 func validateCommitType(m *Msg) bool {
-	return MessageType(m.InnerMsg.Type) == Commit
+	return messageType(m.InnerMsg.Type) == commit
 }
 
 func validateStatusType(m *Msg) bool {
-	return MessageType(m.InnerMsg.Type) == Status
+	return messageType(m.InnerMsg.Type) == status
 }
 
 // validate SVP for type A (where all Ki=-1)

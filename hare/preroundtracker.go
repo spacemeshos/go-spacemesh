@@ -47,7 +47,7 @@ func (pre *preRoundTracker) OnPreRound(msg *Msg) {
 
 // CanProveValue returns true if the given value is provable, false otherwise.
 // a value is said to be provable if it has at least threshold pre-round messages to support it.
-func (pre *preRoundTracker) CanProveValue(value Value) bool {
+func (pre *preRoundTracker) CanProveValue(value blockID) bool {
 	// at least threshold occurrences of a given value
 	return pre.tracker.CountStatus(value.Id()) >= pre.threshold
 }

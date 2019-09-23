@@ -173,14 +173,14 @@ func TestMessageValidator_ValidateMessage(t *testing.T) {
 	v := proc.validator
 	b, err := proc.initDefaultBuilder(proc.s)
 	assert.Nil(t, err)
-	preround := b.SetType(Pre).Sign(proc.signing).Build()
+	preround := b.SetType(pre).Sign(proc.signing).Build()
 	preround.PubKey = proc.signing.PublicKey()
 	assert.True(t, v.SyntacticallyValidateMessage(preround))
 	e := v.ContextuallyValidateMessage(preround, 0)
 	assert.Nil(t, e)
 	b, err = proc.initDefaultBuilder(proc.s)
 	assert.Nil(t, err)
-	status := b.SetType(Status).Sign(proc.signing).Build()
+	status := b.SetType(status).Sign(proc.signing).Build()
 	status.PubKey = proc.signing.PublicKey()
 	e = v.ContextuallyValidateMessage(status, 0)
 	assert.Nil(t, e)
@@ -230,7 +230,7 @@ func TestMessageValidator_validateSVP(t *testing.T) {
 	m := buildProposalMsg(signing.NewEdSigner(), NewSetFromValues(value1, value2, value3), []byte{})
 	s1 := NewSetFromValues(value1)
 	m.InnerMsg.Svp = buildSVP(-1, s1)
-	m.InnerMsg.Svp.Messages[0].InnerMsg.Type = Commit
+	m.InnerMsg.Svp.Messages[0].InnerMsg.Type = commit
 	assert.False(t, validator.validateSVP(m))
 	m.InnerMsg.Svp = buildSVP(-1, s1)
 	m.InnerMsg.Svp.Messages[0].InnerMsg.K = 4
@@ -257,7 +257,7 @@ func buildSVP(ki int32, S ...*Set) *aggregatedMessages {
 	return svp
 }
 
-func validateMatrix(t *testing.T, mType MessageType, msgK int32, exp []error) {
+func validateMatrix(t *testing.T, mType messageType, msgK int32, exp []error) {
 	r := require.New(t)
 	rounds := []int32{-1, 0, 1, 2, 3, 4, 5, 6, 7}
 	v := defaultValidator()
@@ -265,13 +265,13 @@ func validateMatrix(t *testing.T, mType MessageType, msgK int32, exp []error) {
 	set := NewEmptySet(1)
 	var m *Msg = nil
 	switch mType {
-	case Status:
+	case status:
 		m = BuildStatusMsg(sgn, set)
-	case Proposal:
+	case proposal:
 		m = BuildProposalMsg(sgn, set)
-	case Commit:
+	case commit:
 		m = BuildCommitMsg(sgn, set)
-	case Notify:
+	case notify:
 		m = BuildNotifyMsg(sgn, set)
 	default:
 		panic("unexpected msg type")
@@ -287,27 +287,27 @@ func validateMatrix(t *testing.T, mType MessageType, msgK int32, exp []error) {
 func TestSyntaxContextValidator_StatusContextMatrix(t *testing.T) {
 	msg0 := []error{errEarlyMsg, nil, errInvalidRound, errInvalidRound, errInvalidRound, errInvalidIter, errInvalidIter, errInvalidIter, errInvalidIter}
 	msg4 := []error{errInvalidIter, errInvalidIter, errInvalidIter, errInvalidIter, errEarlyMsg, nil, errInvalidRound, errInvalidRound, errInvalidRound}
-	validateMatrix(t, Status, 0, msg0)
-	validateMatrix(t, Status, 4, msg4)
+	validateMatrix(t, status, 0, msg0)
+	validateMatrix(t, status, 4, msg4)
 }
 
 func TestSyntaxContextValidator_ProposalContextMatrix(t *testing.T) {
 	msg1 := []error{errInvalidRound, errEarlyMsg, nil, nil, errInvalidRound, errInvalidIter, errInvalidIter, errInvalidIter, errInvalidIter}
 	msg5 := []error{errInvalidIter, errInvalidIter, errInvalidIter, errInvalidIter, errInvalidIter, errEarlyMsg, nil, nil, errInvalidRound}
-	validateMatrix(t, Proposal, 1, msg1)
-	validateMatrix(t, Proposal, 5, msg5)
+	validateMatrix(t, proposal, 1, msg1)
+	validateMatrix(t, proposal, 5, msg5)
 }
 
 func TestSyntaxContextValidator_CommitContextMatrix(t *testing.T) {
 	msg2 := []error{errInvalidRound, errInvalidRound, errEarlyMsg, nil, errInvalidRound, errInvalidIter, errInvalidIter, errInvalidIter, errInvalidIter}
 	msg6 := []error{errInvalidIter, errInvalidIter, errInvalidIter, errInvalidIter, errInvalidIter, errInvalidRound, errEarlyMsg, nil, errInvalidRound}
-	validateMatrix(t, Commit, 2, msg2)
-	validateMatrix(t, Commit, 6, msg6)
+	validateMatrix(t, commit, 2, msg2)
+	validateMatrix(t, commit, 6, msg6)
 }
 
 func TestSyntaxContextValidator_NotifyContextMatrix(t *testing.T) {
 	msg3 := []error{errInvalidRound, errInvalidRound, errInvalidRound, errEarlyMsg, nil, nil, nil, nil, nil}
 	msg7 := []error{errInvalidIter, errInvalidIter, errInvalidIter, errInvalidIter, errInvalidIter, errInvalidRound, errInvalidRound, errEarlyMsg, nil}
-	validateMatrix(t, Notify, 3, msg3)
-	validateMatrix(t, Notify, 7, msg7)
+	validateMatrix(t, notify, 3, msg3)
+	validateMatrix(t, notify, 7, msg7)
 }

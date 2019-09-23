@@ -11,82 +11,76 @@ import (
 )
 
 type bytes32 [32]byte
-type Signature []byte
 
-type Value struct {
+type blockID struct {
 	types.BlockID
 }
-type InstanceId types.LayerID
+type instanceId types.LayerID
 
-type MessageType byte
+type messageType byte
 
+// declare all known message types
 const (
-	Status   MessageType = 0
-	Proposal MessageType = 1
-	Commit   MessageType = 2
-	Notify   MessageType = 3
-	Pre      MessageType = 10
+	status   messageType = 0
+	proposal messageType = 1
+	commit   messageType = 2
+	notify   messageType = 3
+	pre      messageType = 10
 )
 
+// declare round identifiers
 const (
-	PreRound      = -1
-	StatusRound   = 0
-	ProposalRound = 1
-	CommitRound   = 2
-	NotifyRound   = 3
+	preRound      = -1
+	statusRound   = 0
+	proposalRound = 1
+	commitRound   = 2
+	notifyRound   = 3
 )
 
 const defaultSetSize = 200
 
-func (mType MessageType) String() string {
+func (mType messageType) String() string {
 	switch mType {
-	case Status:
+	case status:
 		return "Status"
-	case Proposal:
+	case proposal:
 		return "Proposal"
-	case Commit:
+	case commit:
 		return "Commit"
-	case Notify:
+	case notify:
 		return "Notify"
-	case Pre:
+	case pre:
 		return "PreRound"
 	default:
 		return "Unknown message type"
 	}
 }
 
-func (id InstanceId) Bytes() []byte {
+func (id instanceId) Bytes() []byte {
 	idInBytes := make([]byte, 4)
 	binary.LittleEndian.PutUint32(idInBytes, uint32(id))
 
 	return idInBytes
 }
 
-func NewValue(value uint64) Value {
-	return Value{types.BlockID(value)}
+func newValue(value uint64) blockID {
+	return blockID{types.BlockID(value)}
 }
 
-func (v Value) Id() objectId {
+func (v blockID) Id() objectId {
 	return objectId(v.BlockID)
 
 }
 
-func (v Value) Bytes() []byte {
+func (v blockID) Bytes() []byte {
 	b := make([]byte, 8)
 	binary.LittleEndian.PutUint64(b, uint64(v.BlockID))
 	return b
 }
 
-func (v Value) String() string {
+func (v blockID) String() string {
 	return strconv.FormatUint(uint64(v.BlockID), 10)
 
-}
-
-func NewBytes32(buff []byte) bytes32 {
-	x := bytes32{}
-	copy(x[:], buff)
-
-	return x
 }
 
 func (b32 bytes32) Id() objectId {
@@ -106,7 +100,7 @@ func (b32 bytes32) String() string {
 
 // Represents a unique set of Values
 type Set struct {
-	values    map[objectId]Value
+	values    map[objectId]blockID
 	id        objectId
 	isIdValid bool
 }
@@ -119,7 +113,7 @@ func NewSmallEmptySet() *Set {
 // Constructs an empty set
 func NewEmptySet(expectedSize int) *Set {
 	s := &Set{}
-	s.values = make(map[objectId]Value, expectedSize)
+	s.values = make(map[objectId]blockID, expectedSize)
 	s.id = 0
 	s.isIdValid = false
 
@@ -127,9 +121,9 @@ func NewEmptySet(expectedSize int) *Set {
 }
 
 // Constructs an empty set
-func NewSetFromValues(values ...Value) *Set {
+func NewSetFromValues(values ...blockID) *Set {
 	s := &Set{}
-	s.values = make(map[objectId]Value, len(values))
+	s.values = make(map[objectId]blockID, len(values))
 	for _, v := range values {
 		s.Add(v)
 	}
@@ -145,10 +139,10 @@ func NewSet(data []uint64) *Set {
 	s := &Set{}
 	s.isIdValid = false
 
-	s.values = make(map[objectId]Value, len(data))
+	s.values = make(map[objectId]blockID, len(data))
 	for i := 0; i < len(data); i++ {
 		bid := data[i]
-		s.values[objectId(bid)] = Value{types.BlockID(bid)}
+		s.values[objectId(bid)] = blockID{types.BlockID(bid)}
 	}
 
 	return s
@@ -165,13 +159,13 @@ func (s *Set) Clone() *Set {
 }
 
 // Checks if a value is contained in the  set s
-func (s *Set) Contains(id Value) bool {
+func (s *Set) Contains(id blockID) bool {
 	_, exist := s.values[id.Id()]
 	return exist
 }
 
 // Adds a value to the set if it doesn't exist already
-func (s *Set) Add(id Value) {
+func (s *Set) Add(id blockID) {
 	if _, exist := s.values[id.Id()]; exist {
 		return
 	}
@@ -181,7 +175,7 @@ func (s *Set) Add(id Value) {
 }
 
 // Removes a value from the set if exist
-func (s *Set) Remove(id Value) {
+func (s *Set) Remove(id blockID) {
 	if _, exist := s.values[id.Id()]; !exist {
 		return
 	}
