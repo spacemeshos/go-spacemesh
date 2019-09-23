@@ -147,8 +147,9 @@ func TestHare_GetResult2(t *testing.T) {
 
 	h.Start()
 
-	for i := 0; i < h.bufferSize+1; i++ {
+	for i := 1; i < h.bufferSize+1; i++ {
 		h.beginLayer <- types.LayerID(i)
+		time.Sleep(10 * time.Millisecond)
 	}
 	time.Sleep(100 * time.Millisecond)
 
@@ -296,7 +297,7 @@ func TestHare_onTick(t *testing.T) {
 	wg.Add(2)
 	go func() {
 		wg.Done()
-		layerTicker <- 0
+		layerTicker <- 1
 		<-createdChan
 		<-nmcp.CloseChannel()
 		wg.Done()
@@ -305,7 +306,7 @@ func TestHare_onTick(t *testing.T) {
 	//collect output one more time
 	wg.Wait()
 	time.Sleep(100 * time.Millisecond)
-	res2, err := h.GetResult(types.LayerID(0), types.LayerID(0))
+	res2, err := h.GetResult(types.LayerID(1), types.LayerID(1))
 	require.NoError(t, err)
 
 	SortBlockIDs(res2)
@@ -316,14 +317,14 @@ func TestHare_onTick(t *testing.T) {
 	wg.Add(2)
 	go func() {
 		wg.Done()
-		layerTicker <- 1
+		layerTicker <- 2
 		h.Close()
 		wg.Done()
 	}()
 
 	//collect output one more time
 	wg.Wait()
-	res, err := h.GetResult(types.LayerID(1), types.LayerID(1))
+	res, err := h.GetResult(types.LayerID(2), types.LayerID(2))
 	require.Nil(t, err)
 	require.Equal(t, []types.BlockID(nil), res)
 
