@@ -86,7 +86,7 @@ func New(conf config.Config, p2p NetworkService, sign Signer, nid types.NodeId, 
 	h.network = p2p
 	h.beginLayer = beginLayer
 
-	h.broker = NewBroker(p2p, newEligibilityValidator(rolacle, layersPerEpoch, idProvider, conf.N, conf.ExpectedLeaders, logger), stateQ, syncState, layersPerEpoch, h.Closer, logger)
+	h.broker = newBroker(p2p, newEligibilityValidator(rolacle, layersPerEpoch, idProvider, conf.N, conf.ExpectedLeaders, logger), stateQ, syncState, layersPerEpoch, h.Closer, logger)
 
 	h.sign = sign
 

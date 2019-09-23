@@ -136,7 +136,7 @@ func buildMessage(msg *Message) *Msg {
 }
 
 func buildBroker(net NetworkService, testName string) *Broker {
-	return NewBroker(net, &mockEligibilityValidator{true}, MockStateQuerier{true, nil},
+	return newBroker(net, &mockEligibilityValidator{true}, MockStateQuerier{true, nil},
 		(&mockSyncer{true}).IsSynced, 10, Closer{make(chan struct{})}, log.NewDefault(testName))
 }
 

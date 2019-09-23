@@ -188,17 +188,17 @@ func iterationFromCounter(roundCounter int32) int32 {
 func (proc *ConsensusProcess) Start() error {
 	if proc.isStarted { // called twice on same instance
 		proc.Error("ConsensusProcess has already been started")
-		return StartInstanceError(errors.New("instance already started"))
+		return startInstanceError(errors.New("instance already started"))
 	}
 
 	if proc.s.Size() == 0 { // empty set is not valid
 		proc.Error("ConsensusProcess cannot be started with an empty set")
-		return StartInstanceError(errors.New("instance started with an empty set"))
+		return startInstanceError(errors.New("instance started with an empty set"))
 	}
 
 	if proc.inbox == nil { // no inbox
 		proc.Error("ConsensusProcess cannot be started with nil inbox")
-		return StartInstanceError(errors.New("instance started with nil inbox"))
+		return startInstanceError(errors.New("instance started with nil inbox"))
 	}
 
 	proc.isStarted = true

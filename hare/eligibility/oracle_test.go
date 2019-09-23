@@ -59,12 +59,12 @@ func buildVerifier(result bool, err error) verifierFunc {
 	}
 }
 
-type signer struct {
+type mockSigner struct {
 	sig []byte
 	err error
 }
 
-func (s *signer) Sign(msg []byte) ([]byte, error) {
+func (s *mockSigner) Sign(msg []byte) ([]byte, error) {
 	return s.sig, s.err
 }
 
@@ -131,14 +131,14 @@ func Test_safeLayer(t *testing.T) {
 }
 
 func Test_ZeroParticipants(t *testing.T) {
-	o := New(&mockValueProvider{1, nil}, (&mockActiveSetProvider{5}).ActiveSet, buildVerifier(true, nil), &signer{}, defLayersPerEpoch, genActive, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{1, nil}, (&mockActiveSetProvider{5}).ActiveSet, buildVerifier(true, nil), &mockSigner{}, defLayersPerEpoch, genActive, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
 	res, err := o.Eligible(1, 0, 0, types.NodeId{Key: ""}, []byte{1})
 	assert.Nil(t, err)
 	assert.False(t, res)
 }
 
 func Test_AllParticipants(t *testing.T) {
-	o := New(&mockValueProvider{1, nil}, (&mockActiveSetProvider{5}).ActiveSet, buildVerifier(true, nil), &signer{}, 10, genActive, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{1, nil}, (&mockActiveSetProvider{5}).ActiveSet, buildVerifier(true, nil), &mockSigner{}, 10, genActive, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
 	res, err := o.Eligible(0, 0, 5, types.NodeId{Key: ""}, []byte{1})
 	assert.Nil(t, err)
 	assert.True(t, res)
@@ -155,7 +155,7 @@ func genBytes() []byte {
 func Test_ExpectedCommitteeSize(t *testing.T) {
 	setSize := 1024
 	commSize := 1000
-	o := New(&mockValueProvider{1, nil}, (&mockActiveSetProvider{setSize}).ActiveSet, buildVerifier(true, nil), &signer{}, 10, genActive, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{1, nil}, (&mockActiveSetProvider{setSize}).ActiveSet, buildVerifier(true, nil), &mockSigner{}, 10, genActive, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
 	count := 0
 	for i := 0; i < setSize; i++ {
 		res, err := o.Eligible(0, 0, commSize, types.NodeId{Key: ""}, genBytes())
@@ -198,7 +198,7 @@ func Test_ActiveSetSize(t *testing.T) {
 	m[types.EpochId(19)] = 2
 	m[types.EpochId(29)] = 3
 	m[types.EpochId(39)] = 5
-	o := New(&mockValueProvider{1, nil}, (&mockBufferedActiveSetProvider{m}).ActiveSet, buildVerifier(true, nil), &signer{}, 10, genActive, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{1, nil}, (&mockBufferedActiveSetProvider{m}).ActiveSet, buildVerifier(true, nil), &mockSigner{}, 10, genActive, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
 	// TODO: remove this comment after inception problem is addressed
 	//assert.Equal(t, o.getActiveSet.ActiveSet(0), o.activeSetSize(1))
 	l := 19 + defSafety
@@ -235,26 +235,26 @@ func Test_BlsSignVerify(t *testing.T) {
 }
 
 func TestOracle_Proof(t *testing.T) {
-	o := New(&mockValueProvider{0, myErr}, (&mockActiveSetProvider{10}).ActiveSet, buildVerifier(true, nil), &signer{}, 10, genActive, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{0, myErr}, (&mockActiveSetProvider{10}).ActiveSet, buildVerifier(true, nil), &mockSigner{}, 10, genActive, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
 	sig, err := o.Proof(2, 3)
 	assert.Nil(t, sig)
 	assert.NotNil(t, err)
 	assert.Equal(t, myErr, err)
 	o.beacon = &mockValueProvider{0, nil}
-	o.vrfSigner = &signer{nil, myErr}
+	o.vrfSigner = &mockSigner{nil, myErr}
 	sig, err = o.Proof(2, 3)
 	assert.Nil(t, sig)
 	assert.NotNil(t, err)
 	assert.Equal(t, myErr, err)
 	mySig := []byte{1, 2}
-	o.vrfSigner = &signer{mySig, nil}
+	o.vrfSigner = &mockSigner{mySig, nil}
 	sig, err = o.Proof(2, 3)
 	assert.Nil(t, err)
 	assert.Equal(t, mySig, sig)
 }
 
 func TestOracle_Eligible(t *testing.T) {
-	o := New(&mockValueProvider{0, myErr}, (&mockActiveSetProvider{10}).ActiveSet, buildVerifier(true, nil), &signer{}, 10, genActive, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{0, myErr}, (&mockActiveSetProvider{10}).ActiveSet, buildVerifier(true, nil), &mockSigner{}, 10, genActive, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
 	res, err := o.Eligible(1, 2, 3, types.NodeId{}, []byte{})
 	assert.False(t, res)
 	assert.NotNil(t, err)
