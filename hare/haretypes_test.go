@@ -75,7 +75,7 @@ func TestSet_Intersection(t *testing.T) {
 }
 
 func TestSet_Contains(t *testing.T) {
-	s := NewSmallEmptySet()
+	s := NewDefaultEmptySet()
 	assert.False(t, s.Contains(value1))
 	s.Add(value1)
 	assert.True(t, s.Contains(value1))

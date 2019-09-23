@@ -27,7 +27,7 @@ func newPreRoundTracker(threshold int, expectedSize int) *preRoundTracker {
 func (pre *preRoundTracker) OnPreRound(msg *Msg) {
 	pub := msg.PubKey
 	sToTrack := NewSet(msg.InnerMsg.Values) // assume track all Values
-	alreadyTracked := NewSmallEmptySet()    // assume nothing tracked so far
+	alreadyTracked := NewDefaultEmptySet()  // assume nothing tracked so far
 
 	if set, exist := pre.preRound[pub.String()]; exist { // not first pre-round msg from this sender
 		log.Debug("Duplicate sender %v", pub.String())

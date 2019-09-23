@@ -166,7 +166,7 @@ func TestConsensusProcess_Start(t *testing.T) {
 	broker := buildBroker(n1, t.Name())
 	broker.Start()
 	proc := generateConsensusProcess(t)
-	proc.s = NewSmallEmptySet()
+	proc.s = NewDefaultEmptySet()
 	inbox, _ := broker.Register(proc.Id())
 	proc.SetInbox(inbox)
 	err := proc.Start()
@@ -330,7 +330,7 @@ func TestConsensusProcess_sendMessage(t *testing.T) {
 
 func TestConsensusProcess_procPre(t *testing.T) {
 	proc := generateConsensusProcess(t)
-	s := NewSmallEmptySet()
+	s := NewDefaultEmptySet()
 	m := BuildPreRoundMsg(generateSigning(t), s)
 	proc.processPreRoundMsg(m)
 	assert.Equal(t, 1, len(proc.preRoundTracker.preRound))
@@ -339,7 +339,7 @@ func TestConsensusProcess_procPre(t *testing.T) {
 func TestConsensusProcess_procStatus(t *testing.T) {
 	proc := generateConsensusProcess(t)
 	proc.beginStatusRound()
-	s := NewSmallEmptySet()
+	s := NewDefaultEmptySet()
 	m := BuildStatusMsg(generateSigning(t), s)
 	proc.processStatusMsg(m)
 	assert.Equal(t, 1, len(proc.statusesTracker.statuses))
@@ -369,7 +369,7 @@ func TestConsensusProcess_procProposal(t *testing.T) {
 func TestConsensusProcess_procCommit(t *testing.T) {
 	proc := generateConsensusProcess(t)
 	proc.advanceToNextRound()
-	s := NewSmallEmptySet()
+	s := NewDefaultEmptySet()
 	proc.commitTracker = newCommitTracker(1, 1, s)
 	m := BuildCommitMsg(generateSigning(t), s)
 	mct := &mockCommitTracker{}
@@ -429,7 +429,7 @@ func TestConsensusProcess_currentRound(t *testing.T) {
 
 func TestConsensusProcess_onEarlyMessage(t *testing.T) {
 	proc := generateConsensusProcess(t)
-	m := BuildPreRoundMsg(generateSigning(t), NewSmallEmptySet())
+	m := BuildPreRoundMsg(generateSigning(t), NewDefaultEmptySet())
 	proc.advanceToNextRound()
 	proc.onEarlyMessage(buildMessage(nil))
 	assert.Equal(t, 0, len(proc.pending))
@@ -445,7 +445,7 @@ func TestProcOutput_Id(t *testing.T) {
 }
 
 func TestProcOutput_Set(t *testing.T) {
-	es := NewSmallEmptySet()
+	es := NewDefaultEmptySet()
 	po := procOutput{instanceId1, es}
 	assert.True(t, es.Equals(po.Set()))
 }
@@ -464,7 +464,7 @@ func TestConsensusProcess_beginRound1(t *testing.T) {
 	proc.network = network
 	oracle := &mockRolacle{MockStateQuerier: MockStateQuerier{true, nil}}
 	proc.oracle = oracle
-	s := NewSmallEmptySet()
+	s := NewDefaultEmptySet()
 	m := BuildPreRoundMsg(generateSigning(t), s)
 	proc.statusesTracker.RecordStatus(m)
 
@@ -597,7 +597,7 @@ func TestConsensusProcess_beginRound4(t *testing.T) {
 	proc.commitTracker = mct
 	mct.certificate = &certificate{}
 	mpt.proposedSet = nil
-	proc.s = NewSmallEmptySet()
+	proc.s = NewDefaultEmptySet()
 	proc.beginNotifyRound()
 	r.NotNil(proc.s)
 	r.Nil(proc.proposalTracker)

@@ -98,29 +98,30 @@ func (b32 bytes32) String() string {
 	return string(b32.Id())
 }
 
-// Represents a unique set of Values
+// Set represents a unique set of values.
 type Set struct {
 	values    map[objectId]blockID
 	id        objectId
 	isIdValid bool
 }
 
-// Constructs an empty set
-func NewSmallEmptySet() *Set {
+// NewDefaultEmptySet creates an empty set with the default size.
+func NewDefaultEmptySet() *Set {
 	return NewEmptySet(defaultSetSize)
 }
 
-// Constructs an empty set
-func NewEmptySet(expectedSize int) *Set {
+// NewEmptySet creates an empty set with the provided size.
+func NewEmptySet(size int) *Set {
 	s := &Set{}
-	s.values = make(map[objectId]blockID, expectedSize)
+	s.values = make(map[objectId]blockID, size)
 	s.id = 0
 	s.isIdValid = false
 
 	return s
 }
 
-// Constructs an empty set
+// NewSetFromValues creates a set of the provided values.
+// Note: duplicated values are ignored.
 func NewSetFromValues(values ...blockID) *Set {
 	s := &Set{}
 	s.values = make(map[objectId]blockID, len(values))
@@ -133,8 +134,8 @@ func NewSetFromValues(values ...blockID) *Set {
 	return s
 }
 
-// Constructs a new set from a 2D slice
-// Each row represents a single value
+// NewSet creates a set from the provided array of values.
+// Note: duplicated values are ignored.
 func NewSet(data []uint64) *Set {
 	s := &Set{}
 	s.isIdValid = false
@@ -148,7 +149,7 @@ func NewSet(data []uint64) *Set {
 	return s
 }
 
-// Clones the set
+// Clone creates a copy of the set.
 func (s *Set) Clone() *Set {
 	clone := NewEmptySet(len(s.values))
 	for _, v := range s.values {
@@ -158,13 +159,14 @@ func (s *Set) Clone() *Set {
 	return clone
 }
 
-// Checks if a value is contained in the  set s
+// Contains returns true if the provided value is contained in the set, false otherwise.
 func (s *Set) Contains(id blockID) bool {
 	_, exist := s.values[id.Id()]
 	return exist
 }
 
-// Adds a value to the set if it doesn't exist already
+// Add a value to the set.
+// It has no effect if the value already exists in the set.
 func (s *Set) Add(id blockID) {
 	if _, exist := s.values[id.Id()]; exist {
 		return
@@ -174,7 +176,8 @@ func (s *Set) Add(id blockID) {
 	s.values[id.Id()] = id
 }
 
-// Removes a value from the set if exist
+// Remove a value from the set.
+// It has no effect if the value doesn't exist in the set.
 func (s *Set) Remove(id blockID) {
 	if _, exist := s.values[id.Id()]; !exist {
 		return
@@ -184,7 +187,7 @@ func (s *Set) Remove(id blockID) {
 	delete(s.values, id.Id())
 }
 
-// Returns true if s and g represents the same set, false otherwise
+// Equals returns true if the provided set represents this set, false otherwise.
 func (s *Set) Equals(g *Set) bool {
 	if len(s.values) != len(g.values) {
 		return false
@@ -199,7 +202,7 @@ func (s *Set) Equals(g *Set) bool {
 	return true
 }
 
-// ToSlice returns the array representation of the set
+// ToSlice returns the array representation of the set.
 func (s *Set) ToSlice() []uint64 {
 	// order keys
 	keys := make([]objectId, len(s.values))
@@ -238,7 +241,7 @@ func (s *Set) updateId() {
 	s.isIdValid = true
 }
 
-// Returns the objectId of the set
+// Id returns the objectId of the set.
 func (s *Set) Id() objectId {
 	if !s.isIdValid {
 		s.updateId()
@@ -259,7 +262,7 @@ func (s *Set) String() string {
 	return b.String()
 }
 
-// Check if s is a subset of g
+// IsSubSetOf returns true if s is a subset of g, false otherwise.
 func (s *Set) IsSubSetOf(g *Set) bool {
 	for _, v := range s.values {
 		if !g.Contains(v) {
@@ -270,7 +273,7 @@ func (s *Set) IsSubSetOf(g *Set) bool {
 	return true
 }
 
-// Returns the intersection set of s and g
+// Intersection returns the intersection a new set which represents the intersection of s and g.
 func (s *Set) Intersection(g *Set) *Set {
 	both := NewEmptySet(len(s.values))
 	for _, v := range s.values {
@@ -282,7 +285,7 @@ func (s *Set) Intersection(g *Set) *Set {
 	return both
 }
 
-// Returns the union set of s and g
+// Union returns a new set which represetns the union set of s and g.
 func (s *Set) Union(g *Set) *Set {
 	union := NewEmptySet(len(s.values) + len(g.values))
 
@@ -297,7 +300,7 @@ func (s *Set) Union(g *Set) *Set {
 	return union
 }
 
-// Returns the complement of s relatively to the world u
+// Complement returns a new set that represents the complement of s relatively to the world u.
 func (s *Set) Complement(u *Set) *Set {
 	comp := NewEmptySet(len(u.values))
 	for _, v := range u.values {
@@ -309,14 +312,14 @@ func (s *Set) Complement(u *Set) *Set {
 	return comp
 }
 
-// Subtract g from s
+// Subtract g from s.
 func (s *Set) Subtract(g *Set) {
 	for _, v := range g.values {
 		s.Remove(v)
 	}
 }
 
-// Returns the size of the set
+// Size returns the number of elements in the set.
 func (s *Set) Size() int {
 	return len(s.values)
 }
