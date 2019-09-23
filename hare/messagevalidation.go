@@ -11,23 +11,24 @@ type messageValidator interface {
 	ContextuallyValidateMessage(m *Msg, expectedK int32) error
 }
 
-type IdentityProvider interface {
+type identityProvider interface {
 	GetIdentity(edId string) (types.NodeId, error)
 }
 
 type eligibilityValidator struct {
 	oracle           Rolacle
 	layersPerEpoch   uint16
-	identityProvider IdentityProvider
+	identityProvider identityProvider
 	maxExpActives    int // the maximal expected committee size
 	expLeaders       int // the expected number of leaders
 	log.Log
 }
 
-func NewEligibilityValidator(oracle Rolacle, layersPerEpoch uint16, idProvider IdentityProvider, maxExpActives, expLeaders int, logger log.Log) *eligibilityValidator {
+func newEligibilityValidator(oracle Rolacle, layersPerEpoch uint16, idProvider identityProvider, maxExpActives, expLeaders int, logger log.Log) *eligibilityValidator {
 	return &eligibilityValidator{oracle, layersPerEpoch, idProvider, maxExpActives, expLeaders, logger}
 }
 
+// check eligibility of the provided message by the oracle.
 func (ev *eligibilityValidator) validateRole(m *Msg) (bool, error) {
 	if m == nil {
 		ev.Error("Eligibility validator: called with nil")
@@ -65,7 +66,7 @@ func (ev *eligibilityValidator) validateRole(m *Msg) (bool, error) {
 	return true, nil
 }
 
-// Validates eligibility and signature of the provided message
+// Validate the eligibility of the provided message.
 func (ev *eligibilityValidator) Validate(m *Msg) bool {
 	res, err := ev.validateRole(m)
 	if err != nil {
@@ -94,7 +95,8 @@ func newSyntaxContextValidator(signing Signer, threshold int, validator func(m *
 	return &syntaxContextValidator{signing, threshold, validator, stateQuerier, layersPerEpoch, logger}
 }
 
-var ( // contextual validation errors
+// contextual validation errors
+var (
 	errNilInner       = errors.New("nil inner message")
 	errEarlyMsg       = errors.New("early message")
 	errInvalidIter    = errors.New("incorrect iteration number")
@@ -102,10 +104,9 @@ var ( // contextual validation errors
 	errUnexpectedType = errors.New("unexpected message type")
 )
 
-const firstNotifyRound = 3
-
-// Validates the InnerMsg is contextually valid
-// Note: we can count on m.InnerMsg.K because we assume m is syntactically valid
+// ContextuallyValidateMessage checks if the message is contextually valid.
+// Returns nil if the message is contextually valid or a suitable error otherwise.
+// Note: we assume m is syntactically valid (int that case, m.InnerMsg.K is a valid expression).
 func (validator *syntaxContextValidator) ContextuallyValidateMessage(m *Msg, currentK int32) error {
 	if m.InnerMsg == nil {
 		return errNilInner
@@ -118,11 +119,11 @@ func (validator *syntaxContextValidator) ContextuallyValidateMessage(m *Msg, cur
 
 	// first validate pre-round and notify
 	switch m.InnerMsg.Type {
-	case Pre:
+	case pre:
 		return nil
-	case Notify:
+	case notify:
 		// notify before notify could be created for this iteration
-		if currentRound < CommitRound && sameIter {
+		if currentRound < commitRound && sameIter {
 			return errInvalidRound
 		}
 
@@ -132,7 +133,7 @@ func (validator *syntaxContextValidator) ContextuallyValidateMessage(m *Msg, cur
 		}
 
 		// early notify detected
-		if m.InnerMsg.K == currentK+1 && currentRound == CommitRound {
+		if m.InnerMsg.K == currentK+1 && currentRound == commitRound {
 			return errEarlyMsg
 		}
 
@@ -142,37 +143,37 @@ func (validator *syntaxContextValidator) ContextuallyValidateMessage(m *Msg, cur
 
 	// check status, proposal & commit types
 	switch m.InnerMsg.Type {
-	case Status:
-		if currentRound == PreRound && sameIter {
+	case status:
+		if currentRound == preRound && sameIter {
 			return errEarlyMsg
 		}
-		if currentRound == NotifyRound && currentIteration+1 == msgIteration {
+		if currentRound == notifyRound && currentIteration+1 == msgIteration {
 			return errEarlyMsg
 		}
-		if currentRound == StatusRound && sameIter {
+		if currentRound == statusRound && sameIter {
 			return nil
 		}
 		if !sameIter {
 			return errInvalidIter
 		}
 		return errInvalidRound
-	case Proposal:
-		if currentRound == StatusRound && sameIter {
+	case proposal:
+		if currentRound == statusRound && sameIter {
 			return errEarlyMsg
 		}
 		// a late proposal is also contextually valid
-		if (currentRound == ProposalRound || currentRound == CommitRound) && sameIter {
+		if (currentRound == proposalRound || currentRound == commitRound) && sameIter {
 			return nil
 		}
 		if !sameIter {
 			return errInvalidIter
 		}
 		return errInvalidRound
-	case Commit:
-		if currentRound == ProposalRound && sameIter {
+	case commit:
+		if currentRound == proposalRound && sameIter {
 			return errEarlyMsg
 		}
-		if currentRound == CommitRound && sameIter {
+		if currentRound == commitRound && sameIter {
 			return nil
 		}
 		if !sameIter {
@@ -184,7 +185,7 @@ func (validator *syntaxContextValidator) ContextuallyValidateMessage(m *Msg, cur
 	return errUnexpectedType
 }
 
-// Validates the syntax of the provided InnerMsg
+// SyntacticallyValidateMessage the syntax of the provided message.
 func (validator *syntaxContextValidator) SyntacticallyValidateMessage(m *Msg) bool {
 	if m == nil {
 		validator.Warning("Syntax validation failed: m is nil")
@@ -213,15 +214,15 @@ func (validator *syntaxContextValidator) SyntacticallyValidateMessage(m *Msg) bo
 
 	claimedRound := m.InnerMsg.K % 4
 	switch m.InnerMsg.Type {
-	case Pre:
+	case pre:
 		return true
-	case Status:
-		return claimedRound == StatusRound
-	case Proposal:
-		return claimedRound == ProposalRound && validator.validateSVP(m)
-	case Commit:
-		return claimedRound == CommitRound
-	case Notify:
+	case status:
+		return claimedRound == statusRound
+	case proposal:
+		return claimedRound == proposalRound && validator.validateSVP(m)
+	case commit:
+		return claimedRound == commitRound
+	case notify:
 		return validator.validateCertificate(m.InnerMsg.Cert)
 	default:
 		validator.Error("Unknown message type encountered during syntactic validator: ", m.InnerMsg.Type)
@@ -229,7 +230,8 @@ func (validator *syntaxContextValidator) SyntacticallyValidateMessage(m *Msg) bo
 	}
 }
 
-func (validator *syntaxContextValidator) validateAggregatedMessage(aggMsg *AggregatedMessages, validators []func(m *Msg) bool) bool {
+// validate the provided aggregated messages by the provided validators.
+func (validator *syntaxContextValidator) validateAggregatedMessage(aggMsg *aggregatedMessages, validators []func(m *Msg) bool) bool {
 	if validators == nil {
 		validator.Error("Aggregated validation failed: validators param is nil")
 		return false
@@ -330,7 +332,7 @@ func (validator *syntaxContextValidator) validateSVP(msg *Msg) bool {
 	return true
 }
 
-func (validator *syntaxContextValidator) validateCertificate(cert *Certificate) bool {
+func (validator *syntaxContextValidator) validateCertificate(cert *certificate) bool {
 	if cert == nil {
 		validator.Warning("Certificate validation failed: certificate is nil")
 		return false
@@ -364,11 +366,11 @@ func (validator *syntaxContextValidator) validateCertificate(cert *Certificate) 
 }
 
 func validateCommitType(m *Msg) bool {
-	return MessageType(m.InnerMsg.Type) == Commit
+	return messageType(m.InnerMsg.Type) == commit
 }
 
 func validateStatusType(m *Msg) bool {
-	return MessageType(m.InnerMsg.Type) == Status
+	return messageType(m.InnerMsg.Type) == status
 }
 
 // validate SVP for type A (where all Ki=-1)

@@ -7,31 +7,33 @@ import (
 	"sync"
 )
 
-const InboxCapacity = 1024 // inbox size per instance
+const inboxCapacity = 1024 // inbox size per instance
 
-type StartInstanceError error
+type startInstanceError error
 
 type syncStateFunc func() bool
 
-type Validator interface {
+type validator interface {
 	Validate(m *Msg) bool
 }
 
-// Closer is used to add closeability to an object
+// Closer adds the ability to close objects.
 type Closer struct {
 	channel chan struct{} // closeable go routines listen to this channel
 }
 
+// NewCloser creates a new (not closed) closer.
 func NewCloser() Closer {
 	return Closer{make(chan struct{})}
 }
 
-// Closes all listening instances (should be called only once)
+// Close signals all listening instances to close.
+// Note: should be called only once.
 func (closer *Closer) Close() {
 	close(closer.channel)
 }
 
-// CloseChannel returns the channel to wait on
+// CloseChannel returns the channel to wait on for close signal.
 func (closer *Closer) CloseChannel() chan struct{} {
 	return closer.channel
 }
@@ -42,21 +44,21 @@ type Broker struct {
 	Closer
 	log.Log
 	network        NetworkService
-	eValidator     Validator     // provides eligibility validation
+	eValidator     validator     // provides eligibility validation
 	stateQuerier   StateQuerier  // provides activeness check
 	isNodeSynced   syncStateFunc // provider function to check if the node is currently synced
 	layersPerEpoch uint16
 	inbox          chan service.GossipMessage
-	syncState      map[InstanceId]bool
-	outbox         map[InstanceId]chan *Msg
-	pending        map[InstanceId][]*Msg // the buffer of pending messages for the next layer
+	syncState      map[instanceId]bool
+	outbox         map[instanceId]chan *Msg
+	pending        map[instanceId][]*Msg // the buffer of pending messages for the next layer
 	tasks          chan func()           // a channel to synchronize tasks (register/unregister) with incoming messages handling
-	latestLayer    InstanceId            // the latest layer to attempt register (successfully or unsuccessfully)
+	latestLayer    instanceId            // the latest layer to attempt register (successfully or unsuccessfully)
 	isStarted      bool
-	minDeleted     InstanceId
+	minDeleted     instanceId
 }
 
-func NewBroker(networkService NetworkService, eValidator Validator, stateQuerier StateQuerier, syncState syncStateFunc, layersPerEpoch uint16, closer Closer, log log.Log) *Broker {
+func newBroker(networkService NetworkService, eValidator validator, stateQuerier StateQuerier, syncState syncStateFunc, layersPerEpoch uint16, closer Closer, log log.Log) *Broker {
 	return &Broker{
 		Closer:         closer,
 		Log:            log,
@@ -65,9 +67,9 @@ func NewBroker(networkService NetworkService, eValidator Validator, stateQuerier
 		stateQuerier:   stateQuerier,
 		isNodeSynced:   syncState,
 		layersPerEpoch: layersPerEpoch,
-		syncState:      make(map[InstanceId]bool),
-		outbox:         make(map[InstanceId]chan *Msg),
-		pending:        make(map[InstanceId][]*Msg),
+		syncState:      make(map[instanceId]bool),
+		outbox:         make(map[instanceId]chan *Msg),
+		pending:        make(map[instanceId][]*Msg),
 		tasks:          make(chan func()),
 		latestLayer:    0,
 		minDeleted:     0,
@@ -78,7 +80,7 @@ func NewBroker(networkService NetworkService, eValidator Validator, stateQuerier
 func (b *Broker) Start() error {
 	if b.isStarted { // Start has been called at least twice
 		b.Error("Could not start instance")
-		return StartInstanceError(errors.New("instance already started"))
+		return startInstanceError(errors.New("instance already started"))
 	}
 
 	b.isStarted = true
@@ -199,9 +201,9 @@ func (b *Broker) eventLoop() {
 				}
 				// we want to write all buffered messages to a chan with InboxCapacity len
 				// hence, we limit the buffer for pending messages
-				if len(b.pending[msgInstId]) == InboxCapacity {
+				if len(b.pending[msgInstId]) == inboxCapacity {
 					b.Error("Reached %v pending messages. Ignoring message for layer %v sent from %v",
-						InboxCapacity, msgInstId, iMsg.PubKey.ShortString())
+						inboxCapacity, msgInstId, iMsg.PubKey.ShortString())
 					continue
 				}
 				b.pending[msgInstId] = append(b.pending[msgInstId], iMsg)
@@ -224,7 +226,7 @@ func (b *Broker) eventLoop() {
 	}
 }
 
-func (b *Broker) updateLatestLayer(id InstanceId) {
+func (b *Broker) updateLatestLayer(id instanceId) {
 	if id <= b.latestLayer { // should expect to update only newer layers
 		b.Panic("Tried to update a previous layer expected %v > %v", id, b.latestLayer)
 		return
@@ -244,7 +246,7 @@ func (b *Broker) cleanOldLayers() {
 	}
 }
 
-func (b *Broker) updateSynchronicity(id InstanceId) {
+func (b *Broker) updateSynchronicity(id instanceId) {
 	if _, ok := b.syncState[id]; ok { // already has result
 		return
 	}
@@ -260,7 +262,7 @@ func (b *Broker) updateSynchronicity(id InstanceId) {
 	b.syncState[id] = true // mark valid
 }
 
-func (b *Broker) isSynced(id InstanceId) bool {
+func (b *Broker) isSynced(id instanceId) bool {
 	b.updateSynchronicity(id)
 
 	synced, ok := b.syncState[id]
@@ -273,13 +275,13 @@ func (b *Broker) isSynced(id InstanceId) bool {
 
 // Register a layer to receive messages
 // Note: the registering instance is assumed to be started and accepting messages
-func (b *Broker) Register(id InstanceId) (chan *Msg, error) {
+func (b *Broker) Register(id instanceId) (chan *Msg, error) {
 	res := make(chan chan *Msg, 1)
 	regRequest := func() {
 		b.updateLatestLayer(id)
 
 		if b.isSynced(id) {
-			b.outbox[id] = make(chan *Msg, InboxCapacity)
+			b.outbox[id] = make(chan *Msg, inboxCapacity)
 
 			pendingForInstance := b.pending[id]
 			if pendingForInstance != nil {
@@ -306,7 +308,7 @@ func (b *Broker) Register(id InstanceId) (chan *Msg, error) {
 }
 
 // Unregister a layer from receiving messages
-func (b *Broker) Unregister(id InstanceId) {
+func (b *Broker) Unregister(id instanceId) {
 	wg := sync.WaitGroup{}
 
 	wg.Add(1)
