@@ -53,7 +53,7 @@ func (m *mockActiveSetProvider) ActiveSet(epoch types.EpochId, blocks map[types.
 	return createMapWithSize(m.size), nil
 }
 
-func buildVerifier(result bool, err error) VerifierFunc {
+func buildVerifier(result bool, err error) verifierFunc {
 	return func(msg, sig []byte, pub []byte) (bool, error) {
 		return result, err
 	}

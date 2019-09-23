@@ -438,7 +438,7 @@ func (proc *ConsensusProcess) beginStatusRound() {
 }
 
 func (proc *ConsensusProcess) beginProposalRound() {
-	proc.proposalTracker = NewProposalTracker(proc.Log)
+	proc.proposalTracker = newProposalTracker(proc.Log)
 
 	// done with building proposal, reset statuses tracking
 	defer func() { proc.statusesTracker = nil }()

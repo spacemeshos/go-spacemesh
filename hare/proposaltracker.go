@@ -19,7 +19,7 @@ type proposalTracker struct {
 	isConflicting bool // maps PubKey->ConflictStatus
 }
 
-func NewProposalTracker(log log.Log) *proposalTracker {
+func newProposalTracker(log log.Log) *proposalTracker {
 	pt := &proposalTracker{}
 	pt.proposal = nil
 	pt.isConflicting = false
