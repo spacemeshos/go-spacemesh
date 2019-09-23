@@ -58,7 +58,7 @@ type State struct {
 	k           int32        // the round counter (k%4 is the round number)
 	ki          int32        // indicates when S was first committed upon
 	s           *Set         // the set of values
-	certificate *Certificate // the certificate
+	certificate *certificate // the certificate
 }
 
 // StateQuerier provides a query to check if an Ed public key is active on the current consensus view.
@@ -79,6 +79,8 @@ func (m *Msg) String() string {
 	return fmt.Sprintf("Pubkey: %v Message: %v", m.PubKey.ShortString(), m.Message.String())
 }
 
+// Bytes returns the message as bytes (without the public key).
+// It panics if the message erred on unmarshal.
 func (m *Msg) Bytes() []byte {
 	var w bytes.Buffer
 	_, err := xdr.Marshal(&w, m.Message)
@@ -133,18 +135,18 @@ type ConsensusProcess struct {
 	inbox             chan *Msg
 	terminationReport chan TerminationOutput
 	validator         messageValidator
-	preRoundTracker   *PreRoundTracker
-	statusesTracker   *StatusTracker
-	proposalTracker   proposalTracker
-	commitTracker     commitTracker
-	notifyTracker     *NotifyTracker
+	preRoundTracker   *preRoundTracker
+	statusesTracker   *statusTracker
+	proposalTracker   proposalTrackerProvider
+	commitTracker     commitTrackerProvider
+	notifyTracker     *notifyTracker
 	terminating       bool
 	cfg               config.Config
 	pending           map[string]*Msg // buffer for early messages that are pending process
 	notifySent        bool            // flag to set in case a notification had already been sent by this instance
 }
 
-// Creates a new consensus process instance.
+// NewConsensusProcess creates a new consensus process instance.
 func NewConsensusProcess(cfg config.Config, instanceId InstanceId, s *Set, oracle Rolacle, stateQuerier StateQuerier, layersPerEpoch uint16, signing Signer, nid types.NodeId, p2p NetworkService, terminationReport chan TerminationOutput, logger log.Log) *ConsensusProcess {
 	proc := &ConsensusProcess{
 		State:             State{-1, -1, s.Clone(), nil},
@@ -154,8 +156,8 @@ func NewConsensusProcess(cfg config.Config, instanceId InstanceId, s *Set, oracl
 		signing:           signing,
 		nid:               nid,
 		network:           p2p,
-		preRoundTracker:   NewPreRoundTracker(cfg.F+1, cfg.N),
-		notifyTracker:     NewNotifyTracker(cfg.N),
+		preRoundTracker:   newPreRoundTracker(cfg.F+1, cfg.N),
+		notifyTracker:     newNotifyTracker(cfg.N),
 		cfg:               cfg,
 		terminationReport: terminationReport,
 		pending:           make(map[string]*Msg, cfg.N),
@@ -171,7 +173,7 @@ func iterationFromCounter(roundCounter int32) int32 {
 	return roundCounter / 4
 }
 
-// Starts the consensus process.
+// Start the consensus process.
 // It starts the PreRound round and then iterates through the rounds until consensus is reached or the instance is cancelled.
 // It is assumed that the inbox is set before the call to Start.
 // It returns an error if Start has been called more than once, the set size is zero (no values) or the inbox is nil.
@@ -198,12 +200,12 @@ func (proc *ConsensusProcess) Start() error {
 	return nil
 }
 
-// Returns the id of this instance
+// Id returns the instance id.
 func (proc *ConsensusProcess) Id() InstanceId {
 	return proc.instanceId
 }
 
-// Sets the inbox channel
+// SetInbox sets the inbox channel for incoming messages.
 func (proc *ConsensusProcess) SetInbox(inbox chan *Msg) {
 	if inbox == nil {
 		proc.Error("ConsensusProcess tried to SetInbox with nil")
@@ -410,7 +412,7 @@ func (proc *ConsensusProcess) advanceToNextRound() {
 }
 
 func (proc *ConsensusProcess) beginStatusRound() {
-	proc.statusesTracker = NewStatusTracker(proc.cfg.F+1, proc.cfg.N)
+	proc.statusesTracker = newStatusTracker(proc.cfg.F+1, proc.cfg.N)
 	proc.statusesTracker.Log = proc.Log
 
 	// check participation
@@ -453,7 +455,7 @@ func (proc *ConsensusProcess) beginCommitRound() {
 	proposedSet := proc.proposalTracker.ProposedSet()
 
 	// proposedSet may be nil, in such case the tracker will ignore Messages
-	proc.commitTracker = NewCommitTracker(proc.cfg.F+1, proc.cfg.N, proposedSet) // track commits for proposed set
+	proc.commitTracker = newCommitTracker(proc.cfg.F+1, proc.cfg.N, proposedSet) // track commits for proposed set
 
 	if proposedSet != nil { // has proposal to commit on
 
@@ -565,7 +567,7 @@ func (proc *ConsensusProcess) onRoundBegin() {
 }
 
 // init a new message builder with the current state (s, k, ki) for this instance
-func (proc *ConsensusProcess) initDefaultBuilder(s *Set) (*MessageBuilder, error) {
+func (proc *ConsensusProcess) initDefaultBuilder(s *Set) (*messageBuilder, error) {
 	builder := NewMessageBuilder().SetInstanceId(proc.instanceId)
 	builder = builder.SetRoundCounter(proc.k).SetKi(proc.ki).SetValues(s)
 	proof, err := proc.oracle.Proof(types.LayerID(proc.instanceId), proc.k)

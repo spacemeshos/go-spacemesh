@@ -7,16 +7,16 @@ import (
 	"hash/fnv"
 )
 
-// NotifyTracker tracks notify messages.
+// notifyTracker tracks notify messages.
 // It also provides the number of notifications tracked for a given set.
-type NotifyTracker struct {
+type notifyTracker struct {
 	notifies     map[string]struct{} // tracks PubKey->Notification
 	tracker      *RefCountTracker    // tracks ref count to each seen set
 	certificates map[uint32]struct{} // tracks Set->certificate
 }
 
-func NewNotifyTracker(expectedSize int) *NotifyTracker {
-	nt := &NotifyTracker{}
+func newNotifyTracker(expectedSize int) *notifyTracker {
+	nt := &notifyTracker{}
 	nt.notifies = make(map[string]struct{}, expectedSize)
 	nt.tracker = NewRefCountTracker()
 	nt.certificates = make(map[uint32]struct{}, expectedSize)
@@ -26,7 +26,7 @@ func NewNotifyTracker(expectedSize int) *NotifyTracker {
 
 // OnNotify tracks the provided notification message.
 // Returns true if the InnerMsg didn't affect the state, false otherwise
-func (nt *NotifyTracker) OnNotify(msg *Msg) bool {
+func (nt *notifyTracker) OnNotify(msg *Msg) bool {
 	pub := msg.PubKey
 	if _, exist := nt.notifies[pub.String()]; exist { // already seenSenders
 		return true // ignored
@@ -45,7 +45,7 @@ func (nt *NotifyTracker) OnNotify(msg *Msg) bool {
 }
 
 // NotificationsCount returns the number of notifications tracked for the provided set
-func (nt *NotifyTracker) NotificationsCount(s *Set) int {
+func (nt *notifyTracker) NotificationsCount(s *Set) int {
 	return int(nt.tracker.CountStatus(s.Id()))
 }
 
@@ -68,12 +68,12 @@ func calcId(k int32, set *Set) uint32 {
 }
 
 // tracks certificates
-func (nt *NotifyTracker) onCertificate(k int32, set *Set) {
+func (nt *notifyTracker) onCertificate(k int32, set *Set) {
 	nt.certificates[calcId(k, set)] = struct{}{}
 }
 
 // HasCertificate returns true if a certificate exist for the provided set in the provided round, false otherwise.
-func (nt *NotifyTracker) HasCertificate(k int32, set *Set) bool {
+func (nt *notifyTracker) HasCertificate(k int32, set *Set) bool {
 	_, exist := nt.certificates[calcId(k, set)]
 	return exist
 }

@@ -10,7 +10,7 @@ import (
 	"strconv"
 )
 
-type Bytes32 [32]byte
+type bytes32 [32]byte
 type Signature []byte
 
 type Value struct {
@@ -82,24 +82,24 @@ func (v Value) String() string {
 
 }
 
-func NewBytes32(buff []byte) Bytes32 {
-	x := Bytes32{}
+func NewBytes32(buff []byte) bytes32 {
+	x := bytes32{}
 	copy(x[:], buff)
 
 	return x
 }
 
-func (b32 Bytes32) Id() objectId {
+func (b32 bytes32) Id() objectId {
 	h := fnv.New32()
 	h.Write(b32[:])
 	return objectId(h.Sum32())
 }
 
-func (b32 Bytes32) Bytes() []byte {
+func (b32 bytes32) Bytes() []byte {
 	return b32[:]
 }
 
-func (b32 Bytes32) String() string {
+func (b32 bytes32) String() string {
 	// TODO: should improve
 	return string(b32.Id())
 }

@@ -5,22 +5,22 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare/metrics"
 )
 
-type commitTracker interface {
+type commitTrackerProvider interface {
 	OnCommit(msg *Msg)
 	HasEnoughCommits() bool
-	BuildCertificate() *Certificate
+	BuildCertificate() *certificate
 }
 
-// CommitTracker tracks commit messages and build the certificate according to the tracked messages.
-type CommitTracker struct {
+// commitTracker tracks commit messages and build the certificate according to the tracked messages.
+type commitTracker struct {
 	seenSenders map[string]bool // tracks seen senders
 	commits     []*Message      // tracks Set->Commits
 	proposedSet *Set            // follows the set who has max number of commits
 	threshold   int             // the number of required commits
 }
 
-func NewCommitTracker(threshold int, expectedSize int, proposedSet *Set) *CommitTracker {
-	ct := &CommitTracker{}
+func newCommitTracker(threshold int, expectedSize int, proposedSet *Set) *commitTracker {
+	ct := &commitTracker{}
 	ct.seenSenders = make(map[string]bool, expectedSize)
 	ct.commits = make([]*Message, 0, threshold)
 	ct.proposedSet = proposedSet
@@ -30,7 +30,7 @@ func NewCommitTracker(threshold int, expectedSize int, proposedSet *Set) *Commit
 }
 
 // OnCommit tracks the given commit message
-func (ct *CommitTracker) OnCommit(msg *Msg) {
+func (ct *commitTracker) OnCommit(msg *Msg) {
 	if ct.proposedSet == nil { // no valid proposed set
 		return
 	}
@@ -57,7 +57,7 @@ func (ct *CommitTracker) OnCommit(msg *Msg) {
 }
 
 // HasEnoughCommits returns true if the tracker can build a certificate, false otherwise.
-func (ct *CommitTracker) HasEnoughCommits() bool {
+func (ct *commitTracker) HasEnoughCommits() bool {
 	if ct.proposedSet == nil {
 		return false
 	}
@@ -67,14 +67,14 @@ func (ct *CommitTracker) HasEnoughCommits() bool {
 
 // BuildCertificate returns a certificate if there are enough commits, nil otherwise
 // Returns the certificate if has enough commit Messages, nil otherwise
-func (ct *CommitTracker) BuildCertificate() *Certificate {
+func (ct *commitTracker) BuildCertificate() *certificate {
 	if !ct.HasEnoughCommits() {
 		return nil
 	}
 
-	c := &Certificate{}
+	c := &certificate{}
 	c.Values = ct.proposedSet.ToSlice()
-	c.AggMsgs = &AggregatedMessages{}
+	c.AggMsgs = &aggregatedMessages{}
 	c.AggMsgs.Messages = ct.commits[:ct.threshold]
 
 	// optimize msg size by setting Values to nil

@@ -7,6 +7,7 @@ type RefCountTracker struct {
 	table map[objectId]uint32
 }
 
+// NewRefCountTracker creates a new reference count tracker.
 func NewRefCountTracker() *RefCountTracker {
 	t := &RefCountTracker{}
 	t.table = make(map[objectId]uint32)

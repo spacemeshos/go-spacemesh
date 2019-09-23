@@ -5,17 +5,17 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-// PreRoundTracker tracks pre-round messages.
+// preRoundTracker tracks pre-round messages.
 // The tracker can be queried to check if a value or a set is provable.
 // It also provides the ability to filter set from unprovable values.
-type PreRoundTracker struct {
+type preRoundTracker struct {
 	preRound  map[string]*Set  // maps PubKey->Set of already tracked Values
 	tracker   *RefCountTracker // keeps track of seen Values
 	threshold uint32           // the threshold to prove a value
 }
 
-func NewPreRoundTracker(threshold int, expectedSize int) *PreRoundTracker {
-	pre := &PreRoundTracker{}
+func newPreRoundTracker(threshold int, expectedSize int) *preRoundTracker {
+	pre := &preRoundTracker{}
 	pre.preRound = make(map[string]*Set, expectedSize)
 	pre.tracker = NewRefCountTracker()
 	pre.threshold = uint32(threshold)
@@ -24,7 +24,7 @@ func NewPreRoundTracker(threshold int, expectedSize int) *PreRoundTracker {
 }
 
 // OnPreRound tracks pre-round messages
-func (pre *PreRoundTracker) OnPreRound(msg *Msg) {
+func (pre *preRoundTracker) OnPreRound(msg *Msg) {
 	pub := msg.PubKey
 	sToTrack := NewSet(msg.InnerMsg.Values) // assume track all Values
 	alreadyTracked := NewSmallEmptySet()    // assume nothing tracked so far
@@ -47,14 +47,14 @@ func (pre *PreRoundTracker) OnPreRound(msg *Msg) {
 
 // CanProveValue returns true if the given value is provable, false otherwise.
 // a value is said to be provable if it has at least threshold pre-round messages to support it.
-func (pre *PreRoundTracker) CanProveValue(value Value) bool {
+func (pre *preRoundTracker) CanProveValue(value Value) bool {
 	// at least threshold occurrences of a given value
 	return pre.tracker.CountStatus(value.Id()) >= pre.threshold
 }
 
 // CanProveSet returns true if the give set is provable, false otherwise.
 // a set is said to be provable if all his values are provable.
-func (pre *PreRoundTracker) CanProveSet(set *Set) bool {
+func (pre *preRoundTracker) CanProveSet(set *Set) bool {
 	// a set is provable iff all its Values are provable
 	for _, bid := range set.values {
 		if !pre.CanProveValue(bid) {
@@ -66,7 +66,7 @@ func (pre *PreRoundTracker) CanProveSet(set *Set) bool {
 }
 
 // FilterSet filters out non-provable values from the given set
-func (pre *PreRoundTracker) FilterSet(set *Set) {
+func (pre *preRoundTracker) FilterSet(set *Set) {
 	for _, v := range set.values {
 		if !pre.CanProveValue(v) { // not enough witnesses
 			set.Remove(v)

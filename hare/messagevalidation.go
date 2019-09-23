@@ -231,7 +231,7 @@ func (validator *syntaxContextValidator) SyntacticallyValidateMessage(m *Msg) bo
 }
 
 // validate the provided aggregated messages by the provided validators.
-func (validator *syntaxContextValidator) validateAggregatedMessage(aggMsg *AggregatedMessages, validators []func(m *Msg) bool) bool {
+func (validator *syntaxContextValidator) validateAggregatedMessage(aggMsg *aggregatedMessages, validators []func(m *Msg) bool) bool {
 	if validators == nil {
 		validator.Error("Aggregated validation failed: validators param is nil")
 		return false
@@ -332,7 +332,7 @@ func (validator *syntaxContextValidator) validateSVP(msg *Msg) bool {
 	return true
 }
 
-func (validator *syntaxContextValidator) validateCertificate(cert *Certificate) bool {
+func (validator *syntaxContextValidator) validateCertificate(cert *certificate) bool {
 	if cert == nil {
 		validator.Warning("Certificate validation failed: certificate is nil")
 		return false

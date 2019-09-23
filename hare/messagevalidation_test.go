@@ -23,9 +23,9 @@ func TestMessageValidator_CommitStatus(t *testing.T) {
 func TestMessageValidator_ValidateCertificate(t *testing.T) {
 	validator := defaultValidator()
 	assert.False(t, validator.validateCertificate(nil))
-	cert := &Certificate{}
+	cert := &certificate{}
 	assert.False(t, validator.validateCertificate(cert))
-	cert.AggMsgs = &AggregatedMessages{}
+	cert.AggMsgs = &aggregatedMessages{}
 	assert.False(t, validator.validateCertificate(cert))
 	msgs := make([]*Message, 0, validator.threshold)
 	cert.AggMsgs.Messages = msgs
@@ -97,7 +97,7 @@ func TestMessageValidator_IsStructureValid(t *testing.T) {
 	assert.False(t, validator.SyntacticallyValidateMessage(m))
 	m.PubKey = generateSigning(t).PublicKey()
 	assert.False(t, validator.SyntacticallyValidateMessage(m))
-	m.InnerMsg = &InnerMessage{}
+	m.InnerMsg = &innerMessage{}
 	assert.False(t, validator.SyntacticallyValidateMessage(m))
 	m.InnerMsg.Values = nil
 	assert.False(t, validator.SyntacticallyValidateMessage(m))
@@ -111,7 +111,7 @@ func TestMessageValidator_Aggregated(t *testing.T) {
 	funcs := make([]func(m *Msg) bool, 0)
 	assert.False(t, validator.validateAggregatedMessage(nil, funcs))
 
-	agg := &AggregatedMessages{}
+	agg := &aggregatedMessages{}
 	assert.False(t, validator.validateAggregatedMessage(agg, funcs))
 	msgs := make([]*Message, validator.threshold)
 	for i := 0; i < validator.threshold; i++ {
@@ -246,13 +246,13 @@ func TestMessageValidator_validateSVP(t *testing.T) {
 	assert.True(t, validator.validateSVP(m))
 }
 
-func buildSVP(ki int32, S ...*Set) *AggregatedMessages {
+func buildSVP(ki int32, S ...*Set) *aggregatedMessages {
 	msgs := make([]*Message, 0, len(S))
 	for _, s := range S {
 		msgs = append(msgs, buildStatusMsg(signing.NewEdSigner(), s, ki).Message)
 	}
 
-	svp := &AggregatedMessages{}
+	svp := &aggregatedMessages{}
 	svp.Messages = msgs
 	return svp
 }

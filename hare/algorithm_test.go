@@ -102,7 +102,7 @@ type mockCommitTracker struct {
 	countHasEnoughCommits int
 	countBuildCertificate int
 	hasEnoughCommits      bool
-	certificate           *Certificate
+	certificate           *certificate
 }
 
 func (mct *mockCommitTracker) OnCommit(msg *Msg) {
@@ -114,7 +114,7 @@ func (mct *mockCommitTracker) HasEnoughCommits() bool {
 	return mct.hasEnoughCommits
 }
 
-func (mct *mockCommitTracker) BuildCertificate() *Certificate {
+func (mct *mockCommitTracker) BuildCertificate() *certificate {
 	mct.countBuildCertificate++
 	return mct.certificate
 }
@@ -370,7 +370,7 @@ func TestConsensusProcess_procCommit(t *testing.T) {
 	proc := generateConsensusProcess(t)
 	proc.advanceToNextRound()
 	s := NewSmallEmptySet()
-	proc.commitTracker = NewCommitTracker(1, 1, s)
+	proc.commitTracker = newCommitTracker(1, 1, s)
 	m := BuildCommitMsg(generateSigning(t), s)
 	mct := &mockCommitTracker{}
 	proc.commitTracker = mct
@@ -484,7 +484,7 @@ func TestConsensusProcess_beginRound2(t *testing.T) {
 	proc.oracle = oracle
 	oracle.isEligible = true
 
-	statusTracker := NewStatusTracker(1, 1)
+	statusTracker := newStatusTracker(1, 1)
 	s := NewSetFromValues(value1)
 	statusTracker.RecordStatus(BuildStatusMsg(generateSigning(t), s))
 	statusTracker.analyzed = true
@@ -595,7 +595,7 @@ func TestConsensusProcess_beginRound4(t *testing.T) {
 
 	proc.proposalTracker = mpt
 	proc.commitTracker = mct
-	mct.certificate = &Certificate{}
+	mct.certificate = &certificate{}
 	mpt.proposedSet = nil
 	proc.s = NewSmallEmptySet()
 	proc.beginNotifyRound()

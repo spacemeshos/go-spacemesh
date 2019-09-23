@@ -9,9 +9,9 @@ func BuildNotifyMsg(signing Signer, s *Set) *Msg {
 	builder := NewMessageBuilder()
 	builder.SetType(Notify).SetInstanceId(instanceId1).SetRoundCounter(NotifyRound).SetKi(ki).SetValues(s)
 	builder = builder.SetPubKey(signing.PublicKey()).Sign(signing)
-	cert := &Certificate{}
+	cert := &certificate{}
 	cert.Values = NewSetFromValues(value1).ToSlice()
-	cert.AggMsgs = &AggregatedMessages{}
+	cert.AggMsgs = &aggregatedMessages{}
 	cert.AggMsgs.Messages = []*Message{BuildCommitMsg(signing, s).Message}
 	builder.SetCertificate(cert)
 
@@ -24,7 +24,7 @@ func TestNotifyTracker_OnNotify(t *testing.T) {
 	s.Add(value2)
 	verifier := generateSigning(t)
 
-	tracker := NewNotifyTracker(lowDefaultSize)
+	tracker := newNotifyTracker(lowDefaultSize)
 	exist := tracker.OnNotify(BuildNotifyMsg(verifier, s))
 	assert.Equal(t, 1, tracker.NotificationsCount(s))
 	assert.False(t, exist)
@@ -39,7 +39,7 @@ func TestNotifyTracker_OnNotify(t *testing.T) {
 func TestNotifyTracker_NotificationsCount(t *testing.T) {
 	s := NewEmptySet(lowDefaultSize)
 	s.Add(value1)
-	tracker := NewNotifyTracker(lowDefaultSize)
+	tracker := newNotifyTracker(lowDefaultSize)
 	tracker.OnNotify(BuildNotifyMsg(generateSigning(t), s))
 	assert.Equal(t, 1, tracker.NotificationsCount(s))
 	tracker.OnNotify(BuildNotifyMsg(generateSigning(t), s))

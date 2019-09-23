@@ -9,10 +9,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
-// top InnerMsg of the protocol
+// Message is the tuple of a message and its corresponding signature.
 type Message struct {
 	Sig      []byte
-	InnerMsg *InnerMessage
+	InnerMsg *innerMessage
 }
 
 // MessageFromBuffer builds an Hare message from the provided bytes buffer.
@@ -38,31 +38,32 @@ func (m *Message) String() string {
 	return fmt.Sprintf("Sig: %v… InnerMsg: %v", sig[:l], m.InnerMsg.String())
 }
 
-// the certificate
-type Certificate struct {
+// certificate is a collection of messages and the set of values.
+// Typically used as a collection of commit messages.
+type certificate struct {
 	Values  []uint64 // the committed set S
-	AggMsgs *AggregatedMessages
+	AggMsgs *aggregatedMessages
 }
 
-// Aggregated Messages
-type AggregatedMessages struct {
-	Messages []*Message // a collection of Messages
-	AggSig   []byte
+// aggregatedMessages is a collection of messages.
+type aggregatedMessages struct {
+	Messages []*Message
 }
 
-// basic InnerMsg
-type InnerMessage struct {
+// innerMessage is the actual set of fields that describe a message in the Hare protocol.
+type innerMessage struct {
 	Type       MessageType
 	InstanceId InstanceId
 	K          int32 // the round counter
 	Ki         int32
 	Values     []uint64            // the set S. optional for commit InnerMsg in a certificate
 	RoleProof  []byte              // role is implicit by InnerMsg type, this is the proof
-	Svp        *AggregatedMessages // optional. only for proposal Messages
-	Cert       *Certificate        // optional
+	Svp        *aggregatedMessages // optional. only for proposal Messages
+	Cert       *certificate        // optional
 }
 
-func (im *InnerMessage) Bytes() []byte {
+// Bytes returns the message as bytes.
+func (im *innerMessage) Bytes() []byte {
 	var w bytes.Buffer
 	_, err := xdr.Marshal(&w, im)
 	if err != nil {
@@ -72,79 +73,81 @@ func (im *InnerMessage) Bytes() []byte {
 	return w.Bytes()
 }
 
-func (im *InnerMessage) String() string {
+func (im *innerMessage) String() string {
 	return fmt.Sprintf("Type: %v InstanceId: %v K: %v Ki: %v", im.Type, im.InstanceId, im.K, im.Ki)
 }
 
-// MessageBuilder is the impl of the builder DP.
+// messageBuilder is the impl of the builder DP.
 // It allows the user to set the different fields of the builder and eventually Build the message.
-type MessageBuilder struct {
+type messageBuilder struct {
 	msg   *Msg
-	inner *InnerMessage
+	inner *innerMessage
 }
 
 // NewMessageBuilder returns a new, empty message builder.
 // One should not assume any values are pre-set.
-func NewMessageBuilder() *MessageBuilder {
-	m := &MessageBuilder{&Msg{&Message{}, nil}, &InnerMessage{}}
+func NewMessageBuilder() *messageBuilder {
+	m := &messageBuilder{&Msg{&Message{}, nil}, &innerMessage{}}
 	m.msg.InnerMsg = m.inner
 
 	return m
 }
 
 // Build returns the protocol message as type Msg.
-func (builder *MessageBuilder) Build() *Msg {
+func (builder *messageBuilder) Build() *Msg {
 	return builder.msg
 }
 
-func (builder *MessageBuilder) SetCertificate(certificate *Certificate) *MessageBuilder {
+func (builder *messageBuilder) SetCertificate(certificate *certificate) *messageBuilder {
 	builder.msg.InnerMsg.Cert = certificate
 	return builder
 }
 
 // Sign calls the provided signer to calculate the signature and then set it accordingly.
-func (builder *MessageBuilder) Sign(signing Signer) *MessageBuilder {
+func (builder *messageBuilder) Sign(signing Signer) *messageBuilder {
 	builder.msg.Sig = signing.Sign(builder.inner.Bytes())
 
 	return builder
 }
 
-func (builder *MessageBuilder) SetPubKey(pub *signing.PublicKey) *MessageBuilder {
+// SetPubKey sets the public key of the message.
+// Note: the message itself does not contain the public key. The builder returns the wrapper of the message which does.
+func (builder *messageBuilder) SetPubKey(pub *signing.PublicKey) *messageBuilder {
 	builder.msg.PubKey = pub
 	return builder
 }
 
-func (builder *MessageBuilder) SetType(msgType MessageType) *MessageBuilder {
+func (builder *messageBuilder) SetType(msgType MessageType) *messageBuilder {
 	builder.inner.Type = msgType
 	return builder
 }
 
-func (builder *MessageBuilder) SetInstanceId(id InstanceId) *MessageBuilder {
+func (builder *messageBuilder) SetInstanceId(id InstanceId) *messageBuilder {
 	builder.inner.InstanceId = id
 	return builder
 }
 
-func (builder *MessageBuilder) SetRoundCounter(k int32) *MessageBuilder {
+func (builder *messageBuilder) SetRoundCounter(k int32) *messageBuilder {
 	builder.inner.K = k
 	return builder
 }
 
-func (builder *MessageBuilder) SetKi(ki int32) *MessageBuilder {
+func (builder *messageBuilder) SetKi(ki int32) *messageBuilder {
 	builder.inner.Ki = ki
 	return builder
 }
 
-func (builder *MessageBuilder) SetValues(set *Set) *MessageBuilder {
+func (builder *messageBuilder) SetValues(set *Set) *messageBuilder {
 	builder.inner.Values = set.ToSlice()
 	return builder
 }
 
-func (builder *MessageBuilder) SetRoleProof(sig Signature) *MessageBuilder {
+func (builder *messageBuilder) SetRoleProof(sig Signature) *messageBuilder {
 	builder.inner.RoleProof = sig
 	return builder
 }
 
-func (builder *MessageBuilder) SetSVP(svp *AggregatedMessages) *MessageBuilder {
+func (builder *messageBuilder) SetSVP(svp *aggregatedMessages) *messageBuilder {
 	builder.inner.Svp = svp
 	return builder
 }

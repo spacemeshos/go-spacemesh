@@ -7,26 +7,29 @@ import (
 	"sync"
 )
 
-const InboxCapacity = 1024 // inbox size per instance
+const inboxCapacity = 1024 // inbox size per instance
 
+// StartInstanceError is a typed error that describes errors that have occurred in the call to Start.
 type StartInstanceError error
 
 type syncStateFunc func() bool
 
+// Validator returns true if the provided message is valid, false otherwise.
 type Validator interface {
 	Validate(m *Msg) bool
 }
 
-// Closer is used to add closeability to an object
+// Closer adds the ability to close an object
 type Closer struct {
 	channel chan struct{} // closeable go routines listen to this channel
 }
 
+// NewCloser creates a new (unclosed) closer.
 func NewCloser() Closer {
 	return Closer{make(chan struct{})}
 }
 
-// Closes all listening instances (should be called only once)
+// Close all listening instances (should be called only once)
 func (closer *Closer) Close() {
 	close(closer.channel)
 }
@@ -59,6 +62,7 @@ type Broker struct {
 	isStarted      bool
 }
 
+// NewBroker creates a new, ready to be started broker.
 func NewBroker(networkService NetworkService, eValidator Validator, stateQuerier StateQuerier, syncState syncStateFunc, layersPerEpoch uint16, closer Closer, log log.Log) *Broker {
 	return &Broker{
 		Closer:         closer,
@@ -169,11 +173,11 @@ func (b *Broker) eventLoop() {
 				if _, exist := b.pending[msgInstId]; !exist { // create buffer if first msg
 					b.pending[msgInstId] = make([]*Msg, 0)
 				}
-				// we want to write all buffered messages to a chan with InboxCapacity len
+				// we want to write all buffered messages to a chan with inboxCapacity len
 				// hence, we limit the buffer for pending messages
-				if len(b.pending[msgInstId]) == InboxCapacity {
+				if len(b.pending[msgInstId]) == inboxCapacity {
 					b.Error("Reached %v pending messages. Ignoring message for layer %v sent from %v",
-						InboxCapacity, msgInstId, iMsg.PubKey.ShortString())
+						inboxCapacity, msgInstId, iMsg.PubKey.ShortString())
 					continue
 				}
 				b.pending[msgInstId] = append(b.pending[msgInstId], iMsg)
@@ -236,7 +240,7 @@ func (b *Broker) Register(id InstanceId) (chan *Msg, error) {
 		b.updateLatestLayer(id)
 
 		if b.isSynced(id) {
-			b.outbox[id] = make(chan *Msg, InboxCapacity)
+			b.outbox[id] = make(chan *Msg, inboxCapacity)
 
 			pendingForInstance := b.pending[id]
 			if pendingForInstance != nil {
