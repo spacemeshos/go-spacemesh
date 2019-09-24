@@ -284,7 +284,7 @@ func TestSyncer_SyncAtxs_FetchPoetProof(t *testing.T) {
 	r.NoError(err)
 	poetRef := sha256.Sum256(poetProofBytes)
 
-	atx1 := atx("")
+	atx1 := atx(signer.PublicKey().String())
 	atx1.Nipst.PostProof.Challenge = poetRef[:]
 	_, err = types.SignAtx(signer, atx1)
 	assert.NoError(t, err)
