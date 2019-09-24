@@ -196,7 +196,7 @@ func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error 
 		return fmt.Errorf("cannot validate atx sig atx id %v err %v", atx.ShortString(), err)
 	}
 	if atx.NodeId.Key != pub.String() {
-		return fmt.Errorf("node ids don't match" )
+		return fmt.Errorf("node ids don't match")
 	}
 	if atx.PrevATXId != *types.EmptyAtxId {
 		err = db.ValidateSignedAtx(*pub, atx)
