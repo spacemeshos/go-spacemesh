@@ -282,7 +282,7 @@ func (t *BlockBuilder) listenForTx() {
 				continue
 			}
 			if err := t.txValidator.ValidateNonceAndBalance(tx); err != nil {
-				t.With().Error("failed to calc transaction origin", log.TxId(tx.Id().ShortString()), log.Err(err))
+				t.With().Error("nonce and balance validation failed", log.TxId(tx.Id().ShortString()), log.Err(err))
 				continue
 			}
 			t.Log.With().Info("got new tx", log.TxId(tx.Id().ShortString()))
