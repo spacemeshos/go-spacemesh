@@ -12,20 +12,20 @@ const (
 	lowDefaultSize = 100
 )
 
-var value1 = Value{1}
-var value2 = Value{2}
-var value3 = Value{3}
-var value4 = Value{4}
-var value5 = Value{5}
-var value6 = Value{6}
-var value7 = Value{7}
-var value8 = Value{8}
-var value9 = Value{9}
-var value10 = Value{10}
+var value1 = blockID{1}
+var value2 = blockID{2}
+var value3 = blockID{3}
+var value4 = blockID{4}
+var value5 = blockID{5}
+var value6 = blockID{6}
+var value7 = blockID{7}
+var value8 = blockID{8}
+var value9 = blockID{9}
+var value10 = blockID{10}
 
 func BuildPreRoundMsg(signing Signer, s *Set) *Msg {
 	builder := NewMessageBuilder()
-	builder.SetType(Pre).SetInstanceId(instanceId1).SetRoundCounter(k).SetKi(ki).SetValues(s)
+	builder.SetType(pre).SetInstanceId(instanceId1).SetRoundCounter(k).SetKi(ki).SetValues(s)
 	builder = builder.SetPubKey(signing.PublicKey()).Sign(signing)
 
 	return builder.Build()
@@ -38,7 +38,7 @@ func TestPreRoundTracker_OnPreRound(t *testing.T) {
 	verifier := generateSigning(t)
 
 	m1 := BuildPreRoundMsg(verifier, s)
-	tracker := NewPreRoundTracker(lowThresh10, lowThresh10)
+	tracker := newPreRoundTracker(lowThresh10, lowThresh10)
 	tracker.OnPreRound(m1)
 	assert.Equal(t, 1, len(tracker.preRound))      // one msg
 	assert.Equal(t, 2, len(tracker.tracker.table)) // two Values
@@ -63,7 +63,7 @@ func TestPreRoundTracker_OnPreRound(t *testing.T) {
 
 func TestPreRoundTracker_CanProveValueAndSet(t *testing.T) {
 	s := NewSetFromValues(value1, value2)
-	tracker := NewPreRoundTracker(lowThresh10, lowThresh10)
+	tracker := newPreRoundTracker(lowThresh10, lowThresh10)
 
 	for i := 0; i < lowThresh10; i++ {
 		assert.False(t, tracker.CanProveSet(s))
@@ -77,7 +77,7 @@ func TestPreRoundTracker_CanProveValueAndSet(t *testing.T) {
 }
 
 func TestPreRoundTracker_UpdateSet(t *testing.T) {
-	tracker := NewPreRoundTracker(2, 2)
+	tracker := newPreRoundTracker(2, 2)
 	s1 := NewSetFromValues(value1, value2, value3)
 	s2 := NewSetFromValues(value1, value2, value4)
 	prMsg1 := BuildPreRoundMsg(generateSigning(t), s1)
@@ -91,7 +91,7 @@ func TestPreRoundTracker_UpdateSet(t *testing.T) {
 }
 
 func TestPreRoundTracker_OnPreRound2(t *testing.T) {
-	tracker := NewPreRoundTracker(2, 2)
+	tracker := newPreRoundTracker(2, 2)
 	s1 := NewSetFromValues(value1)
 	verifier := generateSigning(t)
 	prMsg1 := BuildPreRoundMsg(verifier, s1)
@@ -103,7 +103,7 @@ func TestPreRoundTracker_OnPreRound2(t *testing.T) {
 }
 
 func TestPreRoundTracker_FilterSet(t *testing.T) {
-	tracker := NewPreRoundTracker(2, 2)
+	tracker := newPreRoundTracker(2, 2)
 	s1 := NewSetFromValues(value1, value2)
 	prMsg1 := BuildPreRoundMsg(generateSigning(t), s1)
 	tracker.OnPreRound(prMsg1)

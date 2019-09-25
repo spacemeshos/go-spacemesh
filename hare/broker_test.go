@@ -14,14 +14,14 @@ import (
 	"time"
 )
 
-var instanceId0 = InstanceId(0)
-var instanceId1 = InstanceId(1)
-var instanceId2 = InstanceId(2)
-var instanceId3 = InstanceId(3)
-var instanceId4 = InstanceId(4)
-var instanceId5 = InstanceId(5)
-var instanceId6 = InstanceId(6)
-var instanceId7 = InstanceId(7)
+var instanceId0 = instanceId(0)
+var instanceId1 = instanceId(1)
+var instanceId2 = instanceId(2)
+var instanceId3 = instanceId(3)
+var instanceId4 = instanceId(4)
+var instanceId5 = instanceId(5)
+var instanceId6 = instanceId(6)
+var instanceId7 = instanceId(7)
 
 func trueFunc() bool {
 	return true
@@ -32,7 +32,7 @@ func falseFunc() bool {
 }
 
 type mockClient struct {
-	id InstanceId
+	id instanceId
 }
 
 type MockStateQuerier struct {
@@ -48,7 +48,7 @@ func (msq MockStateQuerier) IsIdentityActiveOnConsensusView(edId string, layer t
 	return msq.res, msq.err
 }
 
-func createMessage(t *testing.T, instanceId InstanceId) []byte {
+func createMessage(t *testing.T, instanceId instanceId) []byte {
 	sr := signing.NewEdSigner()
 	b := NewMessageBuilder()
 	msg := b.SetPubKey(sr.PublicKey()).SetInstanceId(instanceId).Sign(sr).Build()
@@ -113,13 +113,13 @@ func TestBroker_Abort(t *testing.T) {
 	}
 }
 
-func sendMessages(t *testing.T, instanceId InstanceId, n *service.Node, count int) {
+func sendMessages(t *testing.T, instanceId instanceId, n *service.Node, count int) {
 	for i := 0; i < count; i++ {
 		n.Broadcast(protoName, createMessage(t, instanceId))
 	}
 }
 
-func waitForMessages(t *testing.T, inbox chan *Msg, instanceId InstanceId, msgCount int) {
+func waitForMessages(t *testing.T, inbox chan *Msg, instanceId instanceId, msgCount int) {
 	i := 0
 	for {
 		tm := time.NewTimer(3 * time.Second)
@@ -338,11 +338,11 @@ func Test_newMsg(t *testing.T) {
 func TestBroker_updateInstance(t *testing.T) {
 	r := require.New(t)
 	b := buildBroker(service.NewSimulator().NewNode(), t.Name())
-	r.Equal(InstanceId(0), b.latestLayer)
+	r.Equal(instanceId(0), b.latestLayer)
 	b.updateLatestLayer(1)
-	r.Equal(InstanceId(1), b.latestLayer)
-	b.updateLatestLayer(0)
-	r.Equal(InstanceId(1), b.latestLayer)
+	r.Equal(instanceId(1), b.latestLayer)
+	b.updateLatestLayer(2)
+	r.Equal(instanceId(2), b.latestLayer)
 }
 
 func TestBroker_updateSynchronicity(t *testing.T) {
@@ -434,9 +434,9 @@ func TestBroker_eventLoop2(t *testing.T) {
 	m.InnerMsg.InstanceId = instanceId4
 	msg := newMockGossipMsg(m)
 	b.inbox <- msg
-	v, ok := b.layerState[instanceId4]
+	v, ok := b.syncState[instanceId4]
 	r.True(ok)
-	r.Equal(invalid, v)
+	r.NotEqual(true, v)
 
 	// valid but not early
 	m.InnerMsg.InstanceId = instanceId6
@@ -444,4 +444,89 @@ func TestBroker_eventLoop2(t *testing.T) {
 	b.inbox <- msg
 	_, ok = b.outbox[instanceId6]
 	r.False(ok)
+}
+
+func Test_validate(t *testing.T) {
+	r := require.New(t)
+	b := buildBroker(service.NewSimulator().NewNode(), t.Name())
+
+	m := BuildStatusMsg(signing.NewEdSigner(), NewDefaultEmptySet())
+	m.InnerMsg.InstanceId = 1
+	b.latestLayer = 2
+	e := b.validate(m.Message)
+	r.EqualError(e, errUnregistered.Error())
+
+	m.InnerMsg.InstanceId = 2
+	e = b.validate(m.Message)
+	r.EqualError(e, errRegistration.Error())
+
+	m.InnerMsg.InstanceId = 3
+	e = b.validate(m.Message)
+	r.EqualError(e, errEarlyMsg.Error())
+
+	m.InnerMsg.InstanceId = 2
+	b.outbox[2] = make(chan *Msg)
+	b.syncState[2] = false
+	e = b.validate(m.Message)
+	r.EqualError(e, errNotSynced.Error())
+
+	b.syncState[2] = true
+	e = b.validate(m.Message)
+	r.Nil(e)
+}
+
+func TestBroker_clean(t *testing.T) {
+	r := require.New(t)
+	b := buildBroker(service.NewSimulator().NewNode(), t.Name())
+
+	for i := instanceId(1); i < 10; i++ {
+		b.syncState[i] = true
+	}
+
+	b.latestLayer = 9
+	b.outbox[5] = make(chan *Msg)
+	b.cleanOldLayers()
+	r.Equal(instanceId(4), b.minDeleted)
+	r.Equal(5, len(b.syncState))
+
+	delete(b.outbox, 5)
+	b.cleanOldLayers()
+	r.Equal(1, len(b.syncState))
+}
+
+func TestBroker_Flow(t *testing.T) {
+	r := require.New(t)
+	b := buildBroker(service.NewSimulator().NewNode(), t.Name())
+
+	b.Start()
+
+	m := BuildStatusMsg(signing.NewEdSigner(), NewDefaultEmptySet())
+	m.InnerMsg.InstanceId = 1
+	b.inbox <- newMockGossipMsg(m.Message)
+	ch1, e := b.Register(1)
+	r.Nil(e)
+	<-ch1
+
+	m2 := BuildStatusMsg(signing.NewEdSigner(), NewDefaultEmptySet())
+	m2.InnerMsg.InstanceId = 2
+	ch2, e := b.Register(2)
+	r.Nil(e)
+
+	b.inbox <- newMockGossipMsg(m.Message)
+	b.inbox <- newMockGossipMsg(m2.Message)
+
+	<-ch2
+	<-ch1
+
+	b.Register(3)
+	b.Register(4)
+	b.Unregister(2)
+	r.Equal(instanceId0, b.minDeleted)
+
+	// check still receiving msgs on ch1
+	b.inbox <- newMockGossipMsg(m.Message)
+	<-ch1
+
+	b.Unregister(1)
+	r.Equal(instanceId2, b.minDeleted)
 }

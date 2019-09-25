@@ -13,11 +13,11 @@ import (
 // LayerBuffer is the number of layer results we keep at a given time.
 const LayerBuffer = 20
 
-type consensusFactory func(cfg config.Config, instanceId InstanceId, s *Set, oracle Rolacle, signing Signer, p2p NetworkService, terminationReport chan TerminationOutput) Consensus
+type consensusFactory func(cfg config.Config, instanceId instanceId, s *Set, oracle Rolacle, signing Signer, p2p NetworkService, terminationReport chan TerminationOutput) Consensus
 
-// Consensus represents a consensus
+// Consensus represents an item that acts like a consensus process.
 type Consensus interface {
-	Id() InstanceId
+	Id() instanceId
 	Close()
 	CloseChannel() chan struct{}
 
@@ -25,9 +25,9 @@ type Consensus interface {
 	SetInbox(chan *Msg)
 }
 
-// TerminationOutput is a result of a process terminated with output.
+// TerminationOutput represents an output of a consensus process.
 type TerminationOutput interface {
-	Id() InstanceId
+	Id() instanceId
 	Set() *Set
 }
 
@@ -38,7 +38,7 @@ type orphanBlockProvider interface {
 // checks if the collected output is valid
 type outputValidationFunc func(blocks []types.BlockID) bool
 
-// Hare is an orchestrator that shoots consensus processes and collects their termination output
+// Hare is the orchestrator that starts new consensus processes and collects their output.
 type Hare struct {
 	Closer
 	log.Log
@@ -73,7 +73,7 @@ type Hare struct {
 // New returns a new Hare struct.
 func New(conf config.Config, p2p NetworkService, sign Signer, nid types.NodeId, validate outputValidationFunc,
 	syncState syncStateFunc, obp orphanBlockProvider, rolacle Rolacle,
-	layersPerEpoch uint16, idProvider IdentityProvider, stateQ StateQuerier,
+	layersPerEpoch uint16, idProvider identityProvider, stateQ StateQuerier,
 	beginLayer chan types.LayerID, logger log.Log) *Hare {
 	h := new(Hare)
 
@@ -86,7 +86,7 @@ func New(conf config.Config, p2p NetworkService, sign Signer, nid types.NodeId, 
 	h.network = p2p
 	h.beginLayer = beginLayer
 
-	h.broker = NewBroker(p2p, NewEligibilityValidator(rolacle, layersPerEpoch, idProvider, conf.N, conf.ExpectedLeaders, logger), stateQ, syncState, layersPerEpoch, h.Closer, logger)
+	h.broker = newBroker(p2p, newEligibilityValidator(rolacle, layersPerEpoch, idProvider, conf.N, conf.ExpectedLeaders, logger), stateQ, syncState, layersPerEpoch, h.Closer, logger)
 
 	h.sign = sign
 
@@ -102,7 +102,7 @@ func New(conf config.Config, p2p NetworkService, sign Signer, nid types.NodeId, 
 	h.outputChan = make(chan TerminationOutput, h.bufferSize)
 	h.outputs = make(map[types.LayerID][]types.BlockID, h.bufferSize) //  we keep results about LayerBuffer past layers
 
-	h.factory = func(conf config.Config, instanceId InstanceId, s *Set, oracle Rolacle, signing Signer, p2p NetworkService, terminationReport chan TerminationOutput) Consensus {
+	h.factory = func(conf config.Config, instanceId instanceId, s *Set, oracle Rolacle, signing Signer, p2p NetworkService, terminationReport chan TerminationOutput) Consensus {
 		return NewConsensusProcess(conf, instanceId, s, oracle, stateQ, layersPerEpoch, signing, nid, p2p, terminationReport, logger)
 	}
 
@@ -111,8 +111,9 @@ func New(conf config.Config, p2p NetworkService, sign Signer, nid types.NodeId, 
 	return h
 }
 
-func (h *Hare) isTooLate(id InstanceId) bool {
-	if id < InstanceId(h.oldestResultInBuffer()) { // bufferSize>=0
+// checks if the provided id is too late/old to be requested.
+func (h *Hare) isTooLate(id instanceId) bool {
+	if id < instanceId(h.oldestResultInBuffer()) { // bufferSize>=0
 		return true
 	}
 	return false
@@ -135,6 +136,7 @@ func (h *Hare) oldestResultInBuffer() types.LayerID {
 // ErrTooLate means that the consensus was terminated too late
 var ErrTooLate = errors.New("consensus process %v finished too late")
 
+// records the provided output.
 func (h *Hare) collectOutput(output TerminationOutput) error {
 	set := output.Set()
 	blocks := make([]types.BlockID, len(set.values))
@@ -158,7 +160,7 @@ func (h *Hare) collectOutput(output TerminationOutput) error {
 	h.mu.Lock()
 	if len(h.outputs) == h.bufferSize {
 		for k := range h.outputs {
-			if h.isTooLate(InstanceId(k)) {
+			if h.isTooLate(instanceId(k)) {
 				delete(h.outputs, k)
 			}
 		}
@@ -169,6 +171,8 @@ func (h *Hare) collectOutput(output TerminationOutput) error {
 	return nil
 }
 
+// the logic that happens when a new layer arrives.
+// this function triggers the start of new CPs.
 func (h *Hare) onTick(id types.LayerID) {
 	h.layerLock.Lock()
 	if id > h.lastLayer {
@@ -196,10 +200,10 @@ func (h *Hare) onTick(id types.LayerID) {
 	h.Debug("received %v new blocks ", len(blocks))
 	set := NewEmptySet(len(blocks))
 	for _, b := range blocks {
-		set.Add(Value{b})
+		set.Add(blockID{b})
 	}
 
-	instId := InstanceId(id)
+	instId := instanceId(id)
 	c, err := h.broker.Register(instId)
 	if err != nil {
 		h.Warning("Could not register CP for layer %v on broker err=%v", id, err)
@@ -223,10 +227,11 @@ var (
 	ErrTooEarly = errors.New("results for that layer haven't arrived yet")
 )
 
-// GetResults returns the hare output for a given LayerID. returns error if we don't have results yet.
+// GetResult returns the hare output for the provided range.
+// Returns error iff the request for the upper is too old.
 func (h *Hare) GetResult(lower types.LayerID, upper types.LayerID) ([]types.BlockID, error) {
 
-	if h.isTooLate(InstanceId(upper)) {
+	if h.isTooLate(instanceId(upper)) {
 		return nil, ErrTooOld
 	}
 
@@ -244,6 +249,7 @@ func (h *Hare) GetResult(lower types.LayerID, upper types.LayerID) ([]types.Bloc
 	return results, nil
 }
 
+// listens to outputs arriving from consensus processes.
 func (h *Hare) outputCollectionLoop() {
 	for {
 		select {
@@ -260,6 +266,7 @@ func (h *Hare) outputCollectionLoop() {
 	}
 }
 
+// listens to new layers.
 func (h *Hare) tickLoop() {
 	for {
 		select {
@@ -271,7 +278,7 @@ func (h *Hare) tickLoop() {
 	}
 }
 
-// Start starts listening on layers to participate in.
+// Start starts listening for layers and outputs.
 func (h *Hare) Start() error {
 	h.Log.Info("Starting %v", protoName)
 	err := h.broker.Start()
