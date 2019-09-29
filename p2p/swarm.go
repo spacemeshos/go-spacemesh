@@ -379,8 +379,9 @@ func (s *swarm) RegisterGossipProtocol(protocol string) chan service.GossipMessa
 // Shutdown sends a shutdown signal to all running services of swarm and then runs an internal shutdown to cleanup.
 func (s *swarm) Shutdown() {
 	close(s.shutdown)
-	s.network.Shutdown()
+	s.gossip.Close()
 	s.cPool.Shutdown()
+	s.network.Shutdown()
 	s.udpServer.Shutdown()
 	s.discover.Shutdown()
 
@@ -529,9 +530,9 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 	p2pmeta := service.P2PMetadata{msg.Conn.RemoteAddr()}
 
 	// TODO: get rid of mutexes. (Blocker: registering protocols after `Start`. currently only known place is Test_Gossiping
-	s.protocolHandlerMutex.Lock()
+	s.protocolHandlerMutex.RLock()
 	_, ok := s.gossipProtocolHandlers[pm.Metadata.NextProtocol]
-	s.protocolHandlerMutex.Unlock()
+	s.protocolHandlerMutex.RUnlock()
 
 	s.lNode.Debug("Handle %v message from <<  %v", pm.Metadata.NextProtocol, msg.Conn.RemotePublicKey().String())
 
