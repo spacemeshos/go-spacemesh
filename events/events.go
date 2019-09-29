@@ -76,6 +76,7 @@ func (p *EventPublisher) Close() error {
 }
 
 type NewBlock struct {
+	Ts    int64
 	Id    uint64
 	Layer uint64
 	Atx   string
