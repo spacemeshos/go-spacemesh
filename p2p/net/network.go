@@ -6,7 +6,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
-	"github.com/spacemeshos/go-spacemesh/p2p/delimited"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/version"
@@ -188,8 +187,7 @@ func (n *Net) createConnection(address string, remotePub p2pcrypto.PublicKey, se
 	}
 
 	n.logger.Debug("Connected to %s...", address)
-	formatter := delimited.NewChan(1000)
-	return newConnection(netConn, n, formatter, remotePub, session, n.config.MsgSizeLimit, n.logger), nil
+	return newConnection(netConn, n, remotePub, session, n.config.MsgSizeLimit, n.config.ResponseTimeout, n.logger), nil
 }
 
 func (n *Net) createSecuredConnection(address string, remotePubkey p2pcrypto.PublicKey, timeOut time.Duration,

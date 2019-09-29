@@ -4,7 +4,7 @@ import (
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
-	"github.com/spacemeshos/go-spacemesh/p2p/metrics"
+	"github.com/spacemeshos/go-spacemesh/p2p/delimited"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"time"
 
@@ -14,7 +14,6 @@ import (
 	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/crypto"
-	"github.com/spacemeshos/go-spacemesh/p2p/net/wire"
 )
 
 var (
@@ -47,7 +46,7 @@ type Connection interface {
 	SetSession(session NetworkSession)
 
 	Send(m []byte) error
-	Close()
+	Close() error
 	Closed() bool
 }
 
@@ -55,36 +54,55 @@ type Connection interface {
 // A network connection supporting full-duplex messaging
 type FormattedConnection struct {
 	// metadata for logging / debugging
-	logger       log.Log
-	id           string // uuid for logging
-	created      time.Time
-	remotePub    p2pcrypto.PublicKey
-	remoteAddr   net.Addr
-	closeChan    chan struct{}
-	formatter    wire.Formatter // format messages in some way
-	networker    networker      // network context
-	session      NetworkSession
-	closeOnce    sync.Once
-	closed       bool
+	logger     log.Log
+	id         string // uuid for logging
+	created    time.Time
+	remotePub  p2pcrypto.PublicKey
+	remoteAddr net.Addr
+	networker  networker // network context
+	session    NetworkSession
+	deadline   time.Duration
+	timeout    time.Duration
+	r          formattedReader
+	wmtx       sync.Mutex
+	w          formattedWriter
+	closed     bool
+	deadliner  deadliner
+	close      io.Closer
+
 	msgSizeLimit int
 }
 
 type networker interface {
 	HandlePreSessionIncomingMessage(c Connection, msg []byte) error
 	EnqueueMessage(ime IncomingMessageEvent)
-	SubscribeClosingConnections(func(Connection))
-	publishClosingConnection(c Connection)
+	SubscribeClosingConnections(func(c ConnectionWithErr))
+	publishClosingConnection(c ConnectionWithErr)
 	NetworkID() int8
 }
 
 type readWriteCloseAddresser interface {
 	io.ReadWriteCloser
+	deadliner
 	RemoteAddr() net.Addr
 }
 
+type deadliner interface {
+	SetReadDeadline(t time.Time) error
+	SetWriteDeadline(t time.Time) error
+}
+
+type formattedReader interface {
+	Next() ([]byte, error)
+}
+
+type formattedWriter interface {
+	WriteRecord([]byte) (int, error)
+}
+
 // Create a new connection wrapping a net.Conn with a provided connection manager
-func newConnection(conn readWriteCloseAddresser, netw networker, formatter wire.Formatter,
-	remotePub p2pcrypto.PublicKey, session NetworkSession, msgSizeLimit int, log log.Log) *FormattedConnection {
+func newConnection(conn readWriteCloseAddresser, netw networker,
+	remotePub p2pcrypto.PublicKey, session NetworkSession, msgSizeLimit int, deadline time.Duration, log log.Log) *FormattedConnection {
 
 	// todo parametrize channel size - hard-coded for now
 	connection := &FormattedConnection{
@@ -93,14 +111,16 @@ func newConnection(conn readWriteCloseAddresser, netw networker, formatter wire.
 		created:      time.Now(),
 		remotePub:    remotePub,
 		remoteAddr:   conn.RemoteAddr(),
-		formatter:    formatter,
+		r:            delimited.NewReader(conn),
+		w:            delimited.NewWriter(conn),
+		close:        conn,
+		deadline:     deadline,
+		deadliner:    conn,
 		networker:    netw,
 		session:      session,
-		closeChan:    make(chan struct{}),
 		msgSizeLimit: msgSizeLimit,
 	}
 
-	connection.formatter.Pipe(conn)
 	return connection
 }
 
@@ -143,111 +163,164 @@ func (c *FormattedConnection) publish(message []byte) {
 	c.networker.EnqueueMessage(IncomingMessageEvent{c, message})
 }
 
-// incomingChannel returns the incoming messages channel
-func (c *FormattedConnection) incomingChannel() chan []byte {
-	return c.formatter.In()
-}
+// NOTE: this is left here intended to help debugging in the future.
+//func (c *FormattedConnection) measureSend() context.CancelFunc {
+//	ctx, cancel := context.WithCancel(context.Background())
+//	go func(ctx context.Context) {
+//		timer := time.NewTimer(time.Second * 20)
+//		select {
+//		case <-timer.C:
+//			i := crypto.UUIDString()
+//			c.logger.With().Info("sending message is taking more than 20 seconds", log.String("peer", c.RemotePublicKey().String()), log.String("file", fmt.Sprintf("/tmp/stacktrace%v", i)))
+//			buf := make([]byte, 1024)
+//			for {
+//				n := runtime.Stack(buf, true)
+//				if n < len(buf) {
+//					break
+//				}
+//				buf = make([]byte, 2*len(buf))
+//			}
+//			err := ioutil.WriteFile(fmt.Sprintf("/tmp/stacktrace%v", i), buf, 0644)
+//			if err != nil {
+//				c.logger.Error("ERR WIRTING FILE %v", err)
+//			}
+//		case <-ctx.Done():
+//			return
+//		}
+//	}(ctx)
+//	return cancel
+//}
 
-// Send binary data to a connection
-// data is copied over so caller can get rid of the data
-// Concurrency: can be called from any go routine
 func (c *FormattedConnection) Send(m []byte) error {
-	err := c.formatter.Out(m)
+	c.wmtx.Lock()
+	defer c.wmtx.Unlock()
+	if c.closed {
+		return fmt.Errorf("connection was closed")
+	}
+
+	c.deadliner.SetWriteDeadline(time.Now().Add(c.deadline))
+	_, err := c.w.WriteRecord(m)
 	if err != nil {
+		cerr := c.closeUnlocked()
+		if cerr != ErrAlreadyClosed {
+			c.networker.publishClosingConnection(ConnectionWithErr{c, err}) // todo: reconsider
+		}
 		return err
 	}
-	metrics.PeerRecv.With(metrics.PeerIdLabel, c.remotePub.String()).Add(float64(len(m)))
+	//metrics.PeerRecv.With(metrics.PeerIdLabel, c.remotePub.String()).Add(float64(len(m)))
+	return nil
+}
+
+var ErrAlreadyClosed = errors.New("connection is already closed")
+
+func (c *FormattedConnection) closeUnlocked() error {
+	if c.closed {
+		return ErrAlreadyClosed
+	}
+	err := c.close.Close()
+	c.closed = true
+	if err != nil {
+		c.logger.Warning("error while closing with connection %v, err: %v", c.RemotePublicKey().String(), err)
+		return err
+	}
 	return nil
 }
 
 // Close closes the connection (implements io.Closer). It is go safe.
-func (c *FormattedConnection) Close() {
-	c.closeOnce.Do(func() {
-		close(c.closeChan)
-	})
+func (c *FormattedConnection) Close() error {
+	c.wmtx.Lock()
+	err := c.closeUnlocked()
+	c.wmtx.Unlock()
+	return err
 }
 
-// Closed Reports whether the connection was closed. It is go safe.
+// Closed returns whether the connection is closed
 func (c *FormattedConnection) Closed() bool {
+	c.wmtx.Lock()
+	defer c.wmtx.Unlock()
 	return c.closed
 }
 
-func (c *FormattedConnection) shutdown(err error) {
-	c.closed = true
-	c.logger.Debug("Shutting down conn with %v err=%v", c.RemotePublicKey().String(), err)
-	if err != ErrConnectionClosed {
-		c.networker.publishClosingConnection(c)
-	}
-	c.formatter.Close()
-}
-
-var (
-	ErrTriedToSetupExistingConn = errors.New("tried to setup existing connection")
-	ErrIncomingSessionTimeout   = errors.New("timeout waiting for handshake message")
-	ErrMsgExceededLimit         = errors.New("message size exceeded limit")
-)
+var ErrTriedToSetupExistingConn = errors.New("tried to setup existing connection")
+var ErrIncomingSessionTimeout = errors.New("timeout waiting for handshake message")
+var ErrMsgExceededLimit = errors.New("message size exceeded limit")
 
 func (c *FormattedConnection) setupIncoming(timeout time.Duration) error {
-	var err error
-	tm := time.NewTimer(timeout)
-	select {
-	case msg, ok := <-c.formatter.In():
-		if !ok { // chan closed
-			err = ErrClosedIncomingChannel
-			break
-		}
+	be := make(chan struct {
+		b []byte
+		e error
+	})
 
-		if c.msgSizeLimit != config.UnlimitedMsgSize && len(msg) > c.msgSizeLimit {
-			c.logger.With().Error("setupIncoming: message is too big",
-				log.Int("limit", c.msgSizeLimit), log.Int("actual", len(msg)))
-			err = ErrMsgExceededLimit
-			break
-		}
+	go func() {
+		// TODO: some other way to make sure this groutine closes
+		c.deadliner.SetReadDeadline(time.Now().Add(timeout))
+		msg, err := c.r.Next()
+		c.deadliner.SetReadDeadline(time.Time{}) // disable read deadline
+		be <- struct {
+			b []byte
+			e error
+		}{b: msg, e: err}
+	}()
 
-		if c.session == nil {
-			err = c.networker.HandlePreSessionIncomingMessage(c, msg)
-			if err != nil {
-				break
-			}
-			return nil
-		}
-		err = ErrTriedToSetupExistingConn
-		break
-	case <-tm.C:
-		err = ErrIncomingSessionTimeout
+	msgbe := <-be
+	msg := msgbe.b
+	err := msgbe.e
+
+	if err != nil {
+		c.Close()
+		return err
 	}
 
-	c.Close()
-	return err
+	if c.msgSizeLimit != config.UnlimitedMsgSize && len(msg) > c.msgSizeLimit {
+		c.logger.With().Error("setupIncoming: message is too big",
+			log.Int("limit", c.msgSizeLimit), log.Int("actual", len(msg)))
+		return ErrMsgExceededLimit
+	}
+
+	if c.session != nil {
+		c.Close()
+		return errors.New("setup connection twice")
+	}
+
+	err = c.networker.HandlePreSessionIncomingMessage(c, msg)
+	if err != nil {
+		c.Close()
+		return err
+	}
+
+	return nil
 }
 
 // Push outgoing message to the connections
 // Read from the incoming new messages and send down the connection
 func (c *FormattedConnection) beginEventProcessing() {
-
+	//TODO: use a buffer pool
 	var err error
-
-Loop:
+	var buf []byte
 	for {
-		select {
-		case msg, ok := <-c.formatter.In():
-			if !ok { // chan closed
-				err = ErrClosedIncomingChannel
-				break Loop
-			}
+		buf, err = c.r.Next()
+		if err != nil && err != io.EOF {
+			break
+		}
 
-			if c.session == nil {
-				err = ErrTriedToSetupExistingConn
-				break Loop
-			}
+		if c.session == nil {
+			err = ErrTriedToSetupExistingConn
+			break
+		}
 
-			metrics.PeerRecv.With(metrics.PeerIdLabel, c.remotePub.String()).Add(float64(len(msg)))
-			c.publish(msg)
+		if len(buf) > 0 {
+			newbuf := make([]byte, len(buf))
+			copy(newbuf, buf)
+			c.publish(newbuf)
+		}
 
-		case <-c.closeChan:
-			err = ErrConnectionClosed
-			break Loop
+		if err != nil {
+			break
 		}
 	}
-	c.shutdown(err)
+
+	cerr := c.Close()
+	if cerr != ErrAlreadyClosed {
+		c.networker.publishClosingConnection(ConnectionWithErr{c, err})
+	}
 }
