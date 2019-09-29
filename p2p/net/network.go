@@ -12,6 +12,7 @@ import (
 	"net"
 	"strconv"
 	"sync"
+	//"syscall"
 	"time"
 )
 
@@ -30,7 +31,6 @@ type IncomingMessageEvent struct {
 // ManagedConnection in an interface extending Connection with some internal methods that are required for Net to manage Connections
 type ManagedConnection interface {
 	Connection
-	incomingChannel() chan []byte
 	beginEventProcessing()
 }
 
@@ -166,11 +166,53 @@ func (n *Net) publishClosingConnection(connection ConnectionWithErr) {
 func dial(keepAlive, timeOut time.Duration, address string) (net.Conn, error) {
 	// connect via dialer so we can set tcp network params
 	dialer := &net.Dialer{}
-	dialer.KeepAlive = keepAlive // drop connections after a period of inactivity
-	dialer.Timeout = timeOut     // max time bef
+	dialer.Timeout = timeOut // max time bef
 
 	netConn, err := dialer.Dial("tcp", address)
+	if err == nil {
+		tcpconn := netConn.(*net.TCPConn)
+		tcpSocketConfig(tcpconn)
+		return tcpconn, nil
+		//netConn = tcpconn
+	}
 	return netConn, err
+}
+
+func tcpSocketConfig(tcpconn *net.TCPConn) {
+	// TODO: Error handling, what if only certain flags are supported
+	// TODO: Parameters, try to find right buffers based on something or os/net-interface input?
+	tcpconn.SetReadBuffer(1024 * 64)
+	tcpconn.SetWriteBuffer(1024 * 64)
+
+	tcpconn.SetKeepAlive(true)
+	tcpconn.SetKeepAlivePeriod(time.Second * 10)
+	// TODO: the code below doesn't work on certain version of go. reconsider it.
+	//rawConn, err := tcpconn.SyscallConn()
+	//if err != nil {
+	//	log.Warning("on getting raw connection object for keepalive parameter setting", err.Error())
+	//	return
+	//}
+	//
+	//err = rawConn.Control(
+	//	func(fdPtr uintptr) {
+	//		// got socket file descriptor. Setting parameters.
+	//		fd := int(fdPtr)
+	//		//Number of probes.
+	//		err := syscall.SetsockoptInt(fd, syscall.IPPROTO_TCP, syscall.TCP_KEEPCNT, 3)
+	//		if err != nil {
+	//			log.Warning("on setting keepalive probe count", err.Error())
+	//		}
+	//		//Wait time after an unsuccessful probe.
+	//		err = syscall.SetsockoptInt(fd, syscall.IPPROTO_TCP, syscall.TCP_KEEPINTVL, 3)
+	//		if err != nil {
+	//			log.Warning("on setting keepalive retry interval", err.Error())
+	//		}
+	//	})
+	//if err != nil {
+	//	log.Warning("Error using control")
+	//	return
+	//}
+
 }
 
 func (n *Net) createConnection(address string, remotePub p2pcrypto.PublicKey, session NetworkSession,
@@ -275,16 +317,24 @@ func (n *Net) accept(listen net.Listener) {
 		netConn, err := listen.Accept()
 		if err != nil {
 
-			if !n.isShuttingDown {
-				n.logger.Error("Failed to accept connection request %v", err)
+			if n.isShuttingDown {
+				return
 				//TODO only print to log and return? The node will continue running without the listener, doesn't sound healthy
 			}
-			return
+			if !Temporary(err) {
+				n.logger.Error("Listener errored while accepting connections: err: %v", err)
+				return
+			}
+
+			n.logger.Warning("Failed to accept connection request err:%v", err)
+			pending <- struct{}{}
+			continue
 		}
 
 		n.logger.Debug("Got new connection... Remote Address: %s", netConn.RemoteAddr())
-		formatter := delimited.NewChan(1000)
-		c := newConnection(netConn, n, formatter, nil, nil, n.config.MsgSizeLimit, n.logger)
+		conn := netConn.(*net.TCPConn)
+		tcpSocketConfig(conn) // TODO maybe only set this after session handshake to prevent denial of service with big messages
+		c := newConnection(netConn, n, nil, nil, n.config.MsgSizeLimit, n.config.ResponseTimeout, n.logger)
 		go func(con Connection) {
 			defer func() { pending <- struct{}{} }()
 			err := c.setupIncoming(n.config.SessionTimeout)

@@ -1,6 +1,7 @@
 package net
 
 import (
+	"encoding/hex"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
