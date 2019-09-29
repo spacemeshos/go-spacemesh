@@ -50,7 +50,7 @@ type NetworkMock struct {
 	preSessionCount  int32
 	regNewRemoteConn []func(NewConnectionEvent)
 	networkId        int8
-	closingConn      []func(Connection)
+	closingConn      []func(ConnectionWithErr)
 	incomingMessages []chan IncomingMessageEvent
 	dialSessionID    []byte
 	logger           log.Log
@@ -60,7 +60,7 @@ type NetworkMock struct {
 func NewNetworkMock() *NetworkMock {
 	return &NetworkMock{
 		regNewRemoteConn: make([]func(NewConnectionEvent), 0, 3),
-		closingConn:      make([]func(Connection), 0, 3),
+		closingConn:      make([]func(ConnectionWithErr), 0, 3),
 		logger:           getTestLogger("network mock"),
 		incomingMessages: []chan IncomingMessageEvent{make(chan IncomingMessageEvent, 256)},
 	}
@@ -119,19 +119,19 @@ func (n NetworkMock) PublishNewRemoteConnection(nce NewConnectionEvent) {
 }
 
 // SubscribeClosingConnections subscribes on new connections
-func (n *NetworkMock) SubscribeClosingConnections(f func(connection Connection)) {
+func (n *NetworkMock) SubscribeClosingConnections(f func(connection ConnectionWithErr)) {
 	n.closingConn = append(n.closingConn, f)
 }
 
 // publishClosingConnection and stuff
-func (n NetworkMock) publishClosingConnection(con Connection) {
+func (n NetworkMock) publishClosingConnection(con ConnectionWithErr) {
 	for _, f := range n.closingConn {
 		f(con)
 	}
 }
 
 // PublishClosingConnection is a hack to expose the above method in the mock but still impl the same interface
-func (n NetworkMock) PublishClosingConnection(con Connection) {
+func (n NetworkMock) PublishClosingConnection(con ConnectionWithErr) {
 	n.publishClosingConnection(con)
 }
 

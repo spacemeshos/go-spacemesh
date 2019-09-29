@@ -57,7 +57,7 @@ type Net struct {
 	regNewRemoteConn []func(NewConnectionEvent)
 
 	clsMutex           sync.RWMutex
-	closingConnections []func(Connection)
+	closingConnections []func(ConnectionWithErr)
 
 	queuesCount           uint
 	incomingMessagesQueue []chan IncomingMessageEvent
@@ -86,7 +86,7 @@ func NewNet(conf config.Config, localEntity *node.LocalNode) (*Net, error) {
 		logger:                localEntity.Log,
 		listenAddress:         tcpAddress,
 		regNewRemoteConn:      make([]func(NewConnectionEvent), 0, 3),
-		closingConnections:    make([]func(Connection), 0, 3),
+		closingConnections:    make([]func(cwe ConnectionWithErr), 0, 3),
 		queuesCount:           qcount,
 		incomingMessagesQueue: make([]chan IncomingMessageEvent, qcount, qcount),
 		config:                conf,
@@ -150,13 +150,13 @@ func (n *Net) IncomingMessages() []chan IncomingMessageEvent {
 }
 
 // SubscribeClosingConnections registers a callback for a new connection event. all registered callbacks are called before moving.
-func (n *Net) SubscribeClosingConnections(f func(connection Connection)) {
+func (n *Net) SubscribeClosingConnections(f func(connection ConnectionWithErr)) {
 	n.clsMutex.Lock()
 	n.closingConnections = append(n.closingConnections, f)
 	n.clsMutex.Unlock()
 }
 
-func (n *Net) publishClosingConnection(connection Connection) {
+func (n *Net) publishClosingConnection(connection ConnectionWithErr) {
 	n.clsMutex.RLock()
 	for _, f := range n.closingConnections {
 		f(connection)

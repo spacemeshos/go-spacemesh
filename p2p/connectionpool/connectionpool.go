@@ -19,7 +19,7 @@ type networker interface {
 	Dial(address string, remotePublicKey p2pcrypto.PublicKey) (net.Connection, error) // Connect to a remote node. Can send when no error.
 	SubscribeOnNewRemoteConnections(func(event net.NewConnectionEvent))
 	NetworkID() int8
-	SubscribeClosingConnections(func(net.Connection))
+	SubscribeClosingConnections(func(net.ConnectionWithErr))
 	Logger() log.Log
 }
 
@@ -54,18 +54,20 @@ func NewConnectionPool(network networker, lPub p2pcrypto.PublicKey) *ConnectionP
 	return cPool
 }
 
-func (cp *ConnectionPool) OnNewConnection(nce net.NewConnectionEvent) {
+func (cp *ConnectionPool) OnNewConnection(nce net.NewConnectionEvent) error {
 	if cp.isShuttingDown() {
-		return
+		return errors.New("shutting down")
 	}
-	cp.handleNewConnection(nce.Conn.RemotePublicKey(), nce.Conn, net.Remote)
+	return cp.handleNewConnection(nce.Conn.RemotePublicKey(), nce.Conn, net.Remote)
 }
 
-func (cp *ConnectionPool) OnClosedConnection(c net.Connection) {
+func (cp *ConnectionPool) OnClosedConnection(cwe net.ConnectionWithErr) {
 	if cp.isShuttingDown() {
 		return
 	}
-	cp.handleClosedConnection(c)
+	conn := cwe.Conn
+	cp.net.Logger().With().Info("connection_closed", log.String("id", conn.String()), log.String("remote", conn.RemotePublicKey().String()), log.Err(cwe.Err))
+	cp.handleClosedConnection(conn)
 }
 
 func (cp *ConnectionPool) isShuttingDown() bool {
@@ -118,7 +120,7 @@ func compareConnections(conn1 net.Connection, conn2 net.Connection) int {
 	return bytes.Compare(conn1.Session().ID().Bytes(), conn2.Session().ID().Bytes())
 }
 
-func (cp *ConnectionPool) handleNewConnection(rPub p2pcrypto.PublicKey, newConn net.Connection, source net.ConnectionSource) {
+func (cp *ConnectionPool) handleNewConnection(rPub p2pcrypto.PublicKey, newConn net.Connection, source net.ConnectionSource) error {
 	cp.connMutex.Lock()
 	var srcPub, dstPub string
 	if source == net.Local {
@@ -136,6 +138,8 @@ func (cp *ConnectionPool) handleNewConnection(rPub p2pcrypto.PublicKey, newConn 
 		// We need both peers to agree on which connection to keep and which one to close otherwise they might end up closing both connections (bug #195)
 		res := compareConnections(curConn, newConn)
 		var closeConn net.Connection
+		var err error
+
 		if res <= 0 { // newConn >= curConn
 			if res == 0 { // newConn == curConn
 				// TODO Is it a potential threat (session hijacking)? Should we keep the existing connection?
@@ -148,6 +152,7 @@ func (cp *ConnectionPool) handleNewConnection(rPub p2pcrypto.PublicKey, newConn 
 		} else { // newConn < curConn
 			cp.net.Logger().Warning("connection created while connection already exists between peers, closing new connection. existing session ID=%v, new session ID=%v, remote=%s", curConn.Session().ID(), newConn.Session().ID(), rPub)
 			closeConn = newConn
+			err = errors.New("closing connection")
 		}
 		cp.connMutex.Unlock()
 		if closeConn != nil {
@@ -155,7 +160,7 @@ func (cp *ConnectionPool) handleNewConnection(rPub p2pcrypto.PublicKey, newConn 
 		}
 
 		// we don't need to update on the new connection since there were already a connection in the table and there shouldn't be any registered channel waiting for updates
-		return
+		return err
 	}
 	cp.connections[rPub] = newConn
 	cp.connMutex.Unlock()
@@ -163,6 +168,7 @@ func (cp *ConnectionPool) handleNewConnection(rPub p2pcrypto.PublicKey, newConn 
 	// update all registered channels
 	res := dialResult{newConn, nil}
 	cp.handleDialResult(rPub, res)
+	return nil
 }
 
 func (cp *ConnectionPool) handleClosedConnection(conn net.Connection) {

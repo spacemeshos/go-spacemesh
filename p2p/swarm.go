@@ -159,18 +159,19 @@ func newSwarm(ctx context.Context, config config.Config, newNode bool, persist b
 	mux := NewUDPMux(s.lNode, s.lookupFunc, udpnet, s.lNode.Log)
 	s.udpServer = mux
 
-	if err != nil {
-		return nil, err
-	}
 	// todo : if discovery on
 	s.discover = discovery.New(l, config.SwarmConfig, s.udpServer) // create table and discovery protocol
 
 	cpool := connectionpool.NewConnectionPool(s.network, l.PublicKey())
 
-	s.network.SubscribeOnNewRemoteConnections(cpool.OnNewConnection)
+	s.network.SubscribeOnNewRemoteConnections(func(nce net.NewConnectionEvent) {
+		err := cpool.OnNewConnection(nce)
+		if err != nil {
+			return
+		}
+		s.onNewConnection(nce)
+	})
 	s.network.SubscribeClosingConnections(cpool.OnClosedConnection)
-
-	s.network.SubscribeOnNewRemoteConnections(s.onNewConnection)
 	s.network.SubscribeClosingConnections(s.onClosedConnection)
 
 	s.cPool = cpool
@@ -189,15 +190,18 @@ func (s *swarm) onNewConnection(nce net.NewConnectionEvent) {
 	// todo: consider doing cpool actions from here instead of registering cpool as well.
 	err := s.addIncomingPeer(nce.Node.PublicKey())
 	if err != nil {
+		s.lNode.Warning("Error adding new connection %v, err: %v", nce.Node.PublicKey(), err)
 		// todo: send rejection reason
+		// todo: remove from connection pool
 		nce.Conn.Close()
 	}
 }
 
-func (s *swarm) onClosedConnection(c net.Connection) {
+func (s *swarm) onClosedConnection(cwe net.ConnectionWithErr) {
 	// we don't want to block, we know this node's connection was closed.
-	// todo: consider recconnecting
-	s.Disconnect(c.RemotePublicKey())
+	// todo: pass on closing reason, if we closed the connection.
+	// 	mark address book or ban if malicious activity recognised
+	s.Disconnect(cwe.Conn.RemotePublicKey())
 }
 
 // Start starts the p2p service. if configured, bootstrap is started in the background.
