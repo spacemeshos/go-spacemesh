@@ -19,7 +19,7 @@ import (
 const DefaultQueueCount uint = 6
 
 // DefaultMessageQueueSize is the buffer size of each queue mentioned above. (queues are buffered channels)
-const DefaultMessageQueueSize uint = 256
+const DefaultMessageQueueSize uint = 5120
 
 // IncomingMessageEvent is the event reported on new incoming message, it contains the message and the Connection carrying the message
 type IncomingMessageEvent struct {
