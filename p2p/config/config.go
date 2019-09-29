@@ -77,13 +77,13 @@ func DefaultConfig() Config {
 		DialTimeout:           duration("1m"),
 		ConnKeepAlive:         duration("48h"),
 		NetworkID:             TestNet,
-		ResponseTimeout:       duration("15s"),
-		SessionTimeout:        duration("5s"),
+		ResponseTimeout:       duration("60s"),
+		SessionTimeout:        duration("15s"),
 		MaxPendingConnections: 100,
 		OutboundPeersTarget:   10,
 		MaxInboundPeers:       100,
 		SwarmConfig:           SwarmConfigValues,
-		BufferSize:            100,
+		BufferSize:            10000,
 		MsgSizeLimit:          UnlimitedMsgSize,
 	}
 }
