@@ -141,12 +141,12 @@ func (vq *blockQueue) finishBlockCallback(block *types.Block) func(res bool) err
 
 // removes all dependencies for are block
 func (vq *blockQueue) updateDependencies(block types.Hash32, valid bool) {
-	vq.invalidate(block, valid)
+	vq.Info("invalidate %v", block.ShortString())
 	vq.Lock()
-	defer vq.Unlock()
 	//clean after block
 	delete(vq.depMap, block)
 	delete(vq.callbacks, block)
+	vq.Unlock()
 
 	doneQueue := make([]types.Hash32, 0, len(vq.depMap))
 	doneQueue = vq.removefromDepMaps(block, valid, doneQueue)
@@ -164,6 +164,9 @@ func (vq *blockQueue) updateDependencies(block types.Hash32, valid bool) {
 // dependencies can be of type block/layer
 // for block jobs we need to return  a list of finished blocks
 func (vq *blockQueue) removefromDepMaps(block types.Hash32, valid bool, doneBlocks []types.Hash32) []types.Hash32 {
+	vq.invalidate(block, valid)
+	vq.Lock()
+	defer vq.Unlock()
 	for _, dep := range vq.reverseDepMap[block] {
 		delete(vq.depMap[dep], block)
 		if len(vq.depMap[dep]) == 0 {
