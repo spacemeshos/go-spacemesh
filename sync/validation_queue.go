@@ -141,6 +141,7 @@ func (vq *blockQueue) finishBlockCallback(block *types.Block) func(res bool) err
 
 // removes all dependencies for are block
 func (vq *blockQueue) updateDependencies(block types.Hash32, valid bool) {
+	vq.invalidate(block, valid)
 	vq.Lock()
 	defer vq.Unlock()
 	//clean after block
