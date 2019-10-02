@@ -327,10 +327,11 @@ func makePoetProofMessage(t *testing.T) types.PoetProofMessage {
 
 func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 	syncs, nodes, _ := SyncMockFactory(2, conf, t.Name(), memoryDB, newMockPoetDb)
-	atx1 := atx("")
-	atx2 := atx("")
-	atx3 := atx("")
-	atx4 := atx("")
+	signer := signing.NewEdSigner()
+	atx1 := atx(signer.PublicKey().String())
+	atx2 := atx(signer.PublicKey().String())
+	atx3 := atx(signer.PublicKey().String())
+	atx4 := atx(signer.PublicKey().String())
 	syncObj := syncs[0]
 	defer syncObj.Close()
 	syncObj1 := syncs[1]
@@ -377,10 +378,11 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 
 func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	syncs, nodes, _ := SyncMockFactory(2, conf, t.Name(), memoryDB, newMockPoetDb)
-	atx1 := atx("")
+	signer := signing.NewEdSigner()
+	atx1 := atx(signer.PublicKey().String())
 
-	atx2 := atx("")
-	atx3 := atx("")
+	atx2 := atx(signer.PublicKey().String())
+	atx3 := atx(signer.PublicKey().String())
 	syncObj1 := syncs[0]
 	defer syncObj1.Close()
 	syncObj2 := syncs[1]
