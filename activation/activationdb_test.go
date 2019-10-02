@@ -932,9 +932,7 @@ func TestActivationDb_ValidateSignedAtx(t *testing.T) {
 	r.NoError(err)
 
 	// test negative flow not first ATX, invalid sig
-	signedAtx.Sig[0] = 0
-	signedAtx.Sig[1] = 0
-	signedAtx.Sig[2] = 0
+	signedAtx.Sig = []byte("anton")
 	_, err = types.ExtractPublicKey(signedAtx)
 	r.Error(err)
 
