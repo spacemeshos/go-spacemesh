@@ -3,7 +3,6 @@ package node
 import (
 	"context"
 	"fmt"
-	"github.com/seehuhn/mt19937"
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/amcl"
 	"github.com/spacemeshos/go-spacemesh/amcl/BLS381"
@@ -29,7 +28,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/version"
 	"github.com/spacemeshos/post/shared"
 	"io/ioutil"
-	"math/rand"
 	"net/http"
 	"os"
 	"os/signal"
@@ -354,8 +352,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	atxpool := miner.NewAtxMemPool()
 	meshAndPoolProjector := pending_txs.NewMeshAndPoolProjector(mdb, txpool)
 
-	rng := rand.New(mt19937.New())
-	processor := state.NewTransactionProcessor(rng, st, meshAndPoolProjector, app.Config.GAS, lg.WithName("state"))
+	processor := state.NewTransactionProcessor(st, meshAndPoolProjector, app.Config.GAS, lg.WithName("state"))
 
 	atxdb := activation.NewActivationDb(atxdbstore, idStore, mdb, layersPerEpoch, validator, lg.WithName("atxDb"))
 	beaconProvider := &oracle.EpochBeaconProvider{}

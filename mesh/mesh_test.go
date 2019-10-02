@@ -49,7 +49,7 @@ func (MockState) ValidateSignature(signed types.Signed) (types.Address, error) {
 	return types.Address{}, nil
 }
 
-func (MockState) ApplyTransactions(layer types.LayerID, txs []*types.Transaction) (uint32, error) {
+func (MockState) ApplyTransactions(layer types.LayerID, txs []*types.Transaction) (int, error) {
 	return 0, nil
 }
 
@@ -159,6 +159,7 @@ func TestLayers_AddWrongLayer(t *testing.T) {
 	block3 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 4, []byte("data data data"))
 	l1 := types.NewExistingLayer(1, []*types.Block{block1})
 	layers.AddBlock(block1)
+	layers.SaveContextualValidity(block1.Id, true)
 	layers.ValidateLayer(l1)
 	l2 := types.NewExistingLayer(2, []*types.Block{block2})
 	layers.AddBlock(block2)
@@ -294,7 +295,7 @@ func TestMesh_AddBlockWithTxs_PushTransactions_UpdateMeshTxs(t *testing.T) {
 	}
 
 	msh.PushTransactions(1, 2)
-	r.ElementsMatch(GetTransactionIds(tx4, tx5), GetTransactionIds(blockBuilder.txs...))
+	r.ElementsMatch(GetTransactionIds(tx5), GetTransactionIds(blockBuilder.txs...))
 
 	txns = getTxns(r, msh.MeshDB, origin)
 	r.Empty(txns)
@@ -319,10 +320,11 @@ func TestMesh_ExtractUniqueOrderedTransactions(t *testing.T) {
 	l, err := msh.GetLayer(layerID)
 	r.NoError(err)
 
-	validBlocks, invalidBlocks := msh.ExtractUniqueTransactions(l)
+	validBlocks, invalidBlocks, err := msh.ExtractUniqueOrderedTransactions(l)
+	r.NoError(err)
 
 	r.ElementsMatch(GetTransactionIds(tx1, tx2, tx3, tx4), GetTransactionIds(validBlocks...))
-	r.ElementsMatch(GetTransactionIds(tx4, tx5), GetTransactionIds(invalidBlocks...))
+	r.ElementsMatch(GetTransactionIds(tx5), GetTransactionIds(invalidBlocks...))
 }
 
 func GetTransactionIds(txs ...*types.Transaction) []types.TransactionId {

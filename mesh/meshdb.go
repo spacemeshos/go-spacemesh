@@ -493,14 +493,6 @@ func (m *MeshDB) GetTransactions(transactions []types.TransactionId) ([]*types.T
 	return getter.txs, getter.missingIds
 }
 
-func (m *MeshDB) GetTransactionsFromMap(transactions map[types.TransactionId]struct{}) ([]*types.Transaction, map[types.TransactionId]struct{}) {
-	getter := newGetter(m)
-	for id := range transactions {
-		getter.Get(id)
-	}
-	return getter.txs, getter.missingIds
-}
-
 func (m *MeshDB) GetTransaction(id types.TransactionId) (*types.Transaction, error) {
 	tBytes, err := m.transactions.Get(id[:])
 	if err != nil {

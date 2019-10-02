@@ -11,14 +11,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/trie"
 	"math/big"
-	"sort"
 	"sync"
 )
-
-type PseudoRandomizer interface {
-	Uint32() uint32
-	Uint64() uint64
-}
 
 type StatePreImages struct {
 	rootHash  types.Hash32
@@ -41,7 +35,6 @@ type Projector interface {
 
 type TransactionProcessor struct {
 	log.Log
-	rand         PseudoRandomizer
 	globalState  *StateDB
 	prevStates   map[types.LayerID]types.Hash32
 	currentLayer types.LayerID
@@ -55,10 +48,9 @@ type TransactionProcessor struct {
 
 const maxPastStates = 20
 
-func NewTransactionProcessor(rnd PseudoRandomizer, db *StateDB, projector Projector, gasParams GasConfig, logger log.Log) *TransactionProcessor {
+func NewTransactionProcessor(db *StateDB, projector Projector, gasParams GasConfig, logger log.Log) *TransactionProcessor {
 	return &TransactionProcessor{
 		Log:          logger,
-		rand:         rnd,
 		globalState:  db,
 		prevStates:   make(map[types.LayerID]types.Hash32),
 		currentLayer: 0,
@@ -120,23 +112,29 @@ func (tp *TransactionProcessor) ValidateNonceAndBalance(tx *types.Transaction) e
 	return nil
 }
 
-//should receive sort predicate
 // ApplyTransaction receives a batch of transaction to apply on state. Returns the number of transaction that failed to apply.
-func (tp *TransactionProcessor) ApplyTransactions(layer types.LayerID, txs []*types.Transaction) (uint32, error) {
-	//todo: need to seed the mersenne twister with random beacon seed
+func (tp *TransactionProcessor) ApplyTransactions(layer types.LayerID, txs []*types.Transaction) (int, error) {
 	if len(txs) == 0 {
 		return 0, nil
 	}
 
-	//txs := MergeDoubles(mesh.Transactions)
 	tp.mu.Lock()
 	defer tp.mu.Unlock()
-	failed := tp.Process(tp.randomSort(txs), tp.coalescTransactionsBySender(txs))
+	remaining := txs
+	remainingCount := len(remaining)
+	for i := 0; i < 100; i++ { // Capped to 100 iterations TODO: Should this be capped? Extract to config / const
+		remaining = tp.Process(remaining)
+		if remainingCount == len(remaining) {
+			break
+		}
+		remainingCount = len(remaining)
+	}
+
 	newHash, err := tp.globalState.Commit(false)
 
 	if err != nil {
 		tp.Log.Error("db write error %v", err)
-		return failed, err
+		return remainingCount, err
 	}
 
 	tp.Log.Info("new state root for layer %v is %x", layer, newHash)
@@ -144,7 +142,7 @@ func (tp *TransactionProcessor) ApplyTransactions(layer types.LayerID, txs []*ty
 
 	tp.addStateToHistory(layer, newHash)
 
-	return failed, nil
+	return remainingCount, nil
 }
 
 func (tp *TransactionProcessor) addStateToHistory(layer types.LayerID, newHash types.Hash32) {
@@ -207,65 +205,22 @@ func (tp *TransactionProcessor) Reset(layer types.LayerID) {
 	}
 }
 
-func (tp *TransactionProcessor) randomSort(transactions []*types.Transaction) []*types.Transaction {
-	vecLen := len(transactions)
-	for i := range transactions {
-		swp := int(tp.rand.Uint32()) % vecLen
-		transactions[i], transactions[swp] = transactions[swp], transactions[i]
-	}
-	return transactions
-}
-
-func (tp *TransactionProcessor) coalescTransactionsBySender(transactions []*types.Transaction) map[types.Address][]*types.Transaction {
-	trnsBySender := make(map[types.Address][]*types.Transaction)
-	for _, trns := range transactions {
-		trnsBySender[trns.Origin()] = append(trnsBySender[trns.Origin()], trns)
-	}
-
-	for key := range trnsBySender {
-		sort.Slice(trnsBySender[key], func(i, j int) bool {
-			//todo: add fix here:
-			if trnsBySender[key][i].AccountNonce == trnsBySender[key][j].AccountNonce {
-				return bytes.Compare(trnsBySender[key][i].Id().Bytes(), trnsBySender[key][j].Id().Bytes()) > 1
-			}
-			return trnsBySender[key][i].AccountNonce < trnsBySender[key][j].AccountNonce
-		})
-	}
-
-	return trnsBySender
-}
-
-func (tp *TransactionProcessor) Process(transactions []*types.Transaction, trnsBySender map[types.Address][]*types.Transaction) (errors uint32) {
-	senderPut := make(map[types.Address]struct{})
-	sortedOriginByTransactions := make([]types.Address, 0, 10)
-	errors = 0
-	// The order of the mesh.Transactions determines the order addresses by which we take mesh.Transactions
-	// Maybe refactor this
-	for _, trans := range transactions {
-		if _, ok := senderPut[trans.Origin()]; !ok {
-			sortedOriginByTransactions = append(sortedOriginByTransactions, trans.Origin())
-			senderPut[trans.Origin()] = struct{}{}
+func (tp *TransactionProcessor) Process(txs []*types.Transaction) (remaining []*types.Transaction) {
+	for _, tx := range txs {
+		err := tp.ApplyTransaction(tx)
+		if err != nil {
+			tp.With().Warning("failed to apply transaction", log.TxId(tx.Id().ShortString()), log.Err(err))
+			remaining = append(remaining, tx)
 		}
+		events.Publish(events.ValidTx{Id: tx.Id().String(), Valid: err == nil})
+		events.Publish(events.NewTx{
+			Id:          tx.Id().String(),
+			Origin:      tx.Origin().String(),
+			Destination: tx.Recipient.String(),
+			Amount:      tx.Amount,
+			Gas:         tx.GasPrice})
 	}
-
-	for _, origin := range sortedOriginByTransactions {
-		for _, trns := range trnsBySender[origin] {
-			//todo: should we abort all transaction processing if we failed this one?
-			err := tp.ApplyTransaction(trns)
-			//todo: think maybe moving these to another validation process before palying transactions.
-			events.Publish(events.NewTx{Id: trns.Id().String(),
-				Origin:      trns.Origin().String(),
-				Destination: trns.Recipient.String(),
-				Amount:      trns.Amount,
-				Gas:         trns.GasPrice})
-			if err != nil {
-				errors++
-				tp.With().Error("transaction aborted", log.Err(err), log.String("transaction", trns.String()))
-			}
-			events.Publish(events.ValidTx{Id: trns.Id().String(), Valid: err == nil})
-		}
-	}
-	return errors
+	return
 }
 
 func (tp *TransactionProcessor) pruneAfterRevert(targetLayerID types.LayerID) {

@@ -103,7 +103,7 @@ func (s *stateMock) ApplyRewards(layer types.LayerID, miners []types.Address, un
 
 }
 
-func (s *stateMock) ApplyTransactions(id types.LayerID, tx []*types.Transaction) (uint32, error) {
+func (s *stateMock) ApplyTransactions(layer types.LayerID, txs []*types.Transaction) (int, error) {
 	return 0, nil
 }
 

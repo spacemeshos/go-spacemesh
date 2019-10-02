@@ -2,7 +2,6 @@ package state
 
 import (
 	crand "crypto/rand"
-	"github.com/seehuhn/mt19937"
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
@@ -34,13 +33,12 @@ func (p *ProjectorMock) GetProjection(addr types.Address, prevNonce, prevBalance
 }
 
 func (s *ProcessorStateSuite) SetupTest() {
-	rng := rand.New(mt19937.New())
 	lg := log.New("proc_logger", "", "")
 	s.db = database.NewMemDatabase()
 	s.state, _ = New(types.Hash32{}, NewDatabase(s.db))
 	s.projector = &ProjectorMock{}
 
-	s.processor = NewTransactionProcessor(rng, s.state, s.projector, GasConfig{big.NewInt(5)}, lg)
+	s.processor = NewTransactionProcessor(s.state, s.projector, GasConfig{big.NewInt(5)}, lg)
 }
 
 func createAccount(state *StateDB, addr types.Address, balance int64, nonce uint64) *StateObj {
@@ -433,38 +431,6 @@ func TestTransactionProcessor_ApplyTransactionTestSuite(t *testing.T) {
 	suite.Run(t, new(ProcessorStateSuite))
 }
 
-func TestTransactionProcessor_randomSort(t *testing.T) {
-	rng := rand.New(mt19937.New())
-	rng.Seed(1)
-	db := database.NewMemDatabase()
-	state, _ := New(types.Hash32{}, NewDatabase(db))
-	lg := log.New("proc_logger", "", "")
-	processor := NewTransactionProcessor(rng, state, &ProjectorMock{}, GasConfig{big.NewInt(5)}, lg)
-
-	obj1 := createAccount(state, toAddr([]byte{0x01}), 2, 0)
-	obj2 := createAccount(state, toAddr([]byte{0x01, 02}), 1, 10)
-
-	transactions := []*types.Transaction{
-		createTransaction(obj1.Nonce(), obj1.address, obj2.address, 1),
-		createTransaction(obj1.Nonce(), obj1.address, obj2.address, 2),
-		createTransaction(obj1.Nonce(), obj2.address, obj1.address, 3),
-		createTransaction(obj1.Nonce(), obj1.address, obj2.address, 4),
-		createTransaction(obj1.Nonce(), obj2.address, obj1.address, 5),
-	}
-
-	expected := []*types.Transaction{
-		transactions[4],
-		transactions[3],
-		transactions[1],
-		transactions[0],
-		transactions[2],
-	}
-
-	trans := processor.randomSort(transactions)
-
-	assert.Equal(t, expected, trans)
-}
-
 func createXdrSignedTransaction(t *testing.T, key ed25519.PrivateKey) *types.Transaction {
 	r := require.New(t)
 	signer, err := signing.NewEdSignerFromBuffer(key)
@@ -475,12 +441,10 @@ func createXdrSignedTransaction(t *testing.T, key ed25519.PrivateKey) *types.Tra
 }
 
 func TestValidateTxSignature(t *testing.T) {
-	rng := rand.New(mt19937.New())
-	rng.Seed(1)
 	db := database.NewMemDatabase()
 	state, _ := New(types.Hash32{}, NewDatabase(db))
 	lg := log.New("proc_logger", "", "")
-	proc := NewTransactionProcessor(rng, state, &ProjectorMock{}, GasConfig{big.NewInt(5)}, lg)
+	proc := NewTransactionProcessor(state, &ProjectorMock{}, GasConfig{big.NewInt(5)}, lg)
 
 	// positive flow
 	pub, pri, _ := ed25519.GenerateKey(crand.Reader)

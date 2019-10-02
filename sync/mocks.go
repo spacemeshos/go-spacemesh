@@ -93,7 +93,7 @@ func ConfigTst() mesh.Config {
 
 type MockState struct{}
 
-func (MockState) ApplyTransactions(layer types.LayerID, txs []*types.Transaction) (uint32, error) {
+func (MockState) ApplyTransactions(layer types.LayerID, txs []*types.Transaction) (int, error) {
 	return 0, nil
 }
 

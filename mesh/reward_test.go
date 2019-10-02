@@ -20,7 +20,7 @@ func (MockMapState) ValidateSignature(signed types.Signed) (types.Address, error
 	return types.Address{}, nil
 }
 
-func (MockMapState) ApplyTransactions(layer types.LayerID, txs []*types.Transaction) (uint32, error) {
+func (MockMapState) ApplyTransactions(layer types.LayerID, txs []*types.Transaction) (int, error) {
 	return 0, nil
 }
 
