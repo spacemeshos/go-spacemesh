@@ -216,7 +216,6 @@ func NewNIPSTWithChallenge(challenge *types.Hash32, poetRef []byte) *types.NIPST
 		Space:          0,
 		NipstChallenge: challenge,
 		PostProof: &types.PostProof{
-			Identity:     []byte(nil),
 			Challenge:    poetRef,
 			MerkleRoot:   []byte(nil),
 			ProofNodes:   [][]byte(nil),

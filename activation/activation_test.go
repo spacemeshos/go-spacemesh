@@ -2,12 +2,14 @@ package activation
 
 import (
 	"fmt"
+	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/nipst"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/shared"
 	"github.com/stretchr/testify/assert"
@@ -28,7 +30,8 @@ const (
 )
 
 var (
-	nodeId       = types.NodeId{Key: "11111", VRFPublicKey: []byte("22222")}
+	pub, _, _    = ed25519.GenerateKey(nil)
+	nodeId       = types.NodeId{Key: util.Bytes2Hex(pub), VRFPublicKey: []byte("22222")}
 	otherNodeId  = types.NodeId{Key: "00000", VRFPublicKey: []byte("00000")}
 	coinbase     = types.HexToAddress("33333")
 	prevAtxId    = types.AtxId(types.HexToHash32("44444"))
@@ -41,7 +44,7 @@ var (
 	postProver   = &postProverClientMock{}
 	npst         = nipst.NewNIPSTWithChallenge(&chlng, poetRef)
 	commitment   = &types.PostProof{
-		Identity:     []byte(nil),
+		//Identity:     []byte(nil),
 		Challenge:    []byte(nil),
 		MerkleRoot:   []byte("1"),
 		ProofNodes:   [][]byte(nil),
@@ -77,6 +80,13 @@ type NetMock struct {
 func (n *NetMock) Broadcast(id string, d []byte) error {
 	n.lastTransmission = d
 	return nil
+}
+
+type MockSigning struct {
+}
+
+func (ms *MockSigning) Sign(m []byte) []byte {
+	return m
 }
 
 type postProverClientMock struct{}
@@ -134,11 +144,11 @@ func (*MockIdStore) GetIdentity(id string) (types.NodeId, error) {
 
 type ValidatorMock struct{}
 
-func (*ValidatorMock) Validate(nipst *types.NIPST, expectedChallenge types.Hash32) error {
+func (*ValidatorMock) Validate(id signing.PublicKey, nipst *types.NIPST, expectedChallenge types.Hash32) error {
 	return nil
 }
 
-func (*ValidatorMock) VerifyPost(proof *types.PostProof, space uint64) error {
+func (*ValidatorMock) VerifyPost(id signing.PublicKey, proof *types.PostProof, space uint64) error {
 	return nil
 }
 
@@ -200,20 +210,23 @@ func newChallenge(nodeId types.NodeId, sequence uint64, prevAtxId, posAtxId type
 
 func newAtx(challenge types.NIPSTChallenge, ActiveSetSize uint32, View []types.BlockID, nipst *types.NIPST) *types.ActivationTx {
 	activationTx := &types.ActivationTx{
-		ActivationTxHeader: types.ActivationTxHeader{
-			NIPSTChallenge: challenge,
-			Coinbase:       coinbase,
-			ActiveSetSize:  ActiveSetSize,
+		&types.InnerActivationTx{
+			ActivationTxHeader: types.ActivationTxHeader{
+				NIPSTChallenge: challenge,
+				Coinbase:       coinbase,
+				ActiveSetSize:  ActiveSetSize,
+			},
+			Nipst: nipst,
+			View:  View,
 		},
-		Nipst: nipst,
-		View:  View,
+		nil,
 	}
 	activationTx.CalcAndSetId()
 	return activationTx
 }
 
 func newBuilder(activationDb ATXDBProvider) *Builder {
-	b := NewBuilder(nodeId, coinbase, activationDb, net, meshProvider, layersPerEpoch, nipstBuilder, postProver, nil, isSynced(true), NewMockDB(), lg.WithName("atxBuilder"))
+	b := NewBuilder(nodeId, coinbase, &MockSigning{}, activationDb, net, meshProvider, layersPerEpoch, nipstBuilder, postProver, nil, isSynced(true), NewMockDB(), lg.WithName("atxBuilder"))
 	b.commitment = commitment
 	return b
 }
@@ -229,16 +242,18 @@ func setActivesetSizeInCache(t *testing.T, activesetSize uint32) {
 	activesetCache.put(h, activesetSize)
 }
 
-func lastTransmittedAtx(t *testing.T) (atx types.ActivationTx) {
-	err := types.BytesToInterface(net.lastTransmission, &atx)
+func lastTransmittedAtx(t *testing.T) types.ActivationTx {
+	var signedAtx types.ActivationTx
+	err := types.BytesToInterface(net.lastTransmission, &signedAtx)
 	require.NoError(t, err)
-	return atx
+	return signedAtx
 }
 
 func assertLastAtx(r *require.Assertions, posAtx, prevAtx *types.ActivationTxHeader, layersPerEpoch uint16) {
-	atx, err := types.BytesAsAtx(net.lastTransmission, *types.EmptyAtxId)
+	sigAtx, err := types.BytesAsAtx(net.lastTransmission, *types.EmptyAtxId)
 	r.NoError(err)
 
+	atx := sigAtx
 	r.Equal(nodeId, atx.NodeId)
 	if prevAtx != nil {
 		r.Equal(prevAtx.Sequence+1, atx.Sequence)
@@ -413,7 +428,7 @@ func TestBuilder_PublishActivationTx_FailsWhenNipstBuilderFails(t *testing.T) {
 
 	activationDb := newActivationDb()
 	nipstBuilder := &NipstErrBuilderMock{} // 👀 mock that returns error from BuildNipst()
-	b := NewBuilder(nodeId, coinbase, activationDb, net, meshProvider, layersPerEpoch, nipstBuilder, postProver, nil, isSynced(true), NewMockDB(), lg.WithName("atxBuilder"))
+	b := NewBuilder(nodeId, coinbase, &MockSigning{}, activationDb, net, meshProvider, layersPerEpoch, nipstBuilder, postProver, nil, isSynced(true), NewMockDB(), lg.WithName("atxBuilder"))
 	b.commitment = commitment
 
 	challenge := newChallenge(otherNodeId /*👀*/, 1, prevAtxId, prevAtxId, postGenesisEpochLayer)
@@ -481,6 +496,28 @@ func TestBuilder_PublishActivationTx_PosAtxOnSameLayerAsPrevAtx(t *testing.T) {
 	r.Equal(prevATX.PubLayerIdx, posAtx.PubLayerIdx)
 }
 
+func TestBuilder_SignAtx(t *testing.T) {
+	ed := signing.NewEdSigner()
+	nodeId := types.NodeId{ed.PublicKey().String(), []byte("bbbbb")}
+	activationDb := NewActivationDb(database.NewMemDatabase(), &MockIdStore{}, mesh.NewMemMeshDB(lg.WithName("meshDB")), layersPerEpoch, &ValidatorMock{}, lg.WithName("atxDB1"))
+	b := NewBuilder(nodeId, coinbase, ed, activationDb, net, meshProvider, layersPerEpoch, nipstBuilder, postProver, nil, isSynced(true), NewMockDB(), lg.WithName("atxBuilder"))
+
+	prevAtx := types.AtxId(types.HexToHash32("0x111"))
+	atx := types.NewActivationTx(nodeId, coinbase, 1, prevAtx, 15, 1, prevAtx, 5, []types.BlockID{1, 2, 3}, npst)
+	atxBytes, err := types.InterfaceToBytes(atx.InnerActivationTx)
+	assert.NoError(t, err)
+	signed, err := b.SignAtx(atx)
+	assert.NoError(t, err)
+
+	pubkey, err := ed25519.ExtractPublicKey(atxBytes, signed.Sig)
+	assert.NoError(t, err)
+	assert.Equal(t, ed.PublicKey().Bytes(), []byte(pubkey))
+
+	ok := signing.Verify(signing.NewPublicKey(util.Hex2Bytes(atx.NodeId.Key)), atxBytes, signed.Sig)
+	assert.True(t, ok)
+
+}
+
 func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	id := types.NodeId{"aaaaaa", []byte("bbbbb")}
 	coinbase := types.HexToAddress("0xaaa")
@@ -490,8 +527,9 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	layersPerEpoch := uint16(10)
 	lg := log.NewDefault(id.Key[:5])
 	db := NewMockDB()
+	sig := &MockSigning{}
 	activationDb := NewActivationDb(database.NewMemDatabase(), &MockIdStore{}, mesh.NewMemMeshDB(lg.WithName("meshDB")), layersPerEpoch, &ValidatorMock{}, lg.WithName("atxDB1"))
-	b := NewBuilder(id, coinbase, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, postProver, nil, func() bool { return true }, db, lg.WithName("atxBuilder"))
+	b := NewBuilder(id, coinbase, sig, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, postProver, nil, func() bool { return true }, db, lg.WithName("atxBuilder"))
 	prevAtx := types.AtxId(types.HexToHash32("0x111"))
 	chlng := types.HexToHash32("0x3333")
 	poetRef := []byte{0xbe, 0xef}
@@ -524,22 +562,24 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	assert.Error(t, err)
 
 	//test load in correct epoch
-	b = NewBuilder(id, coinbase, activationDb, net, layers, layersPerEpoch, nipstBuilder, postProver, nil, func() bool { return true }, db, lg.WithName("atxBuilder"))
+	b = NewBuilder(id, coinbase, &MockSigning{}, activationDb, net, layers, layersPerEpoch, nipstBuilder, postProver, nil, func() bool { return true }, db, lg.WithName("atxBuilder"))
 	err = b.loadChallenge()
 	assert.NoError(t, err)
 	layers.latestLayer = 22
 	err = b.PublishActivationTx(1)
 	assert.NoError(t, err)
-	bts, err := types.InterfaceToBytes(act)
+	signed, err := b.SignAtx(act)
+	assert.NoError(t, err)
+	bts, err := types.InterfaceToBytes(signed)
 	assert.NoError(t, err)
 	assert.Equal(t, bts, net.lastTransmission)
 
-	b = NewBuilder(id, coinbase, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, postProver, nil, func() bool { return true }, db, lg.WithName("atxBuilder"))
+	b = NewBuilder(id, coinbase, &MockSigning{}, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, postProver, nil, func() bool { return true }, db, lg.WithName("atxBuilder"))
 	err = b.PublishActivationTx(1)
 	assert.Error(t, err)
 	db.hadNone = false
 	//test load challenge in later epoch - nipst should be truncated
-	b = NewBuilder(id, coinbase, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, postProver, nil, func() bool { return true }, db, lg.WithName("atxBuilder"))
+	b = NewBuilder(id, coinbase, &MockSigning{}, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, postProver, nil, func() bool { return true }, db, lg.WithName("atxBuilder"))
 	assert.Error(t, err)
 	err = b.loadChallenge()
 	assert.NoError(t, err)
@@ -575,7 +615,7 @@ func TestStartPost(t *testing.T) {
 	}()
 
 	activationDb := NewActivationDb(database.NewMemDatabase(), &MockIdStore{}, mesh.NewMemMeshDB(lg.WithName("meshDB")), layersPerEpoch, &ValidatorMock{}, lg.WithName("atxDB1"))
-	builder := NewBuilder(id, coinbase, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, postProver, nil, func() bool { return true }, db, lg.WithName("atxBuilder"))
+	builder := NewBuilder(id, coinbase, &MockSigning{}, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, postProver, nil, func() bool { return true }, db, lg.WithName("atxBuilder"))
 
 	// Attempt to initialize with invalid space.
 	// This test verifies that the params are being set in the post client.
@@ -601,7 +641,7 @@ func TestStartPost(t *testing.T) {
 	// Instantiate a new builder and call StartPost on the same datadir, which is already initialized,
 	// and so will result in running the execution phase instead of the initialization phase.
 	// This test verifies that a call to StartPost with a different space param will return an error.
-	execBuilder := NewBuilder(id, coinbase, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, postProver, nil, func() bool { return true }, db, lg.WithName("atxBuilder"))
+	execBuilder := NewBuilder(id, coinbase, &MockSigning{}, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, postProver, nil, func() bool { return true }, db, lg.WithName("atxBuilder"))
 	err = execBuilder.StartPost(coinbase2, drive, 2048)
 	assert.EqualError(t, err, "config mismatch")
 

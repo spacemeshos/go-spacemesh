@@ -6,6 +6,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/nipst"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/post/shared"
 	"sync"
 	"sync/atomic"
@@ -46,8 +47,8 @@ type IdStore interface {
 }
 
 type NipstValidator interface {
-	Validate(nipst *types.NIPST, expectedChallenge types.Hash32) error
-	VerifyPost(proof *types.PostProof, space uint64) error
+	Validate(id signing.PublicKey, nipst *types.NIPST, expectedChallenge types.Hash32) error
+	VerifyPost(id signing.PublicKey, proof *types.PostProof, space uint64) error
 }
 
 type ATXDBProvider interface {
@@ -62,6 +63,10 @@ type BytesStore interface {
 	Get(key []byte) ([]byte, error)
 }
 
+type Signer interface {
+	Sign(m []byte) []byte
+}
+
 const (
 	InitIdle = 1 + iota
 	InitInProgress
@@ -69,6 +74,7 @@ const (
 )
 
 type Builder struct {
+	Signer
 	nodeId          types.NodeId
 	coinbaseAccount types.Address
 	db              ATXDBProvider
@@ -96,8 +102,9 @@ type Builder struct {
 }
 
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
-func NewBuilder(nodeId types.NodeId, coinbaseAccount types.Address, db ATXDBProvider, net Broadcaster, mesh MeshProvider, layersPerEpoch uint16, nipstBuilder NipstBuilder, postProver nipst.PostProverClient, layerClock chan types.LayerID, isSyncedFunc func() bool, store BytesStore, log log.Log) *Builder {
+func NewBuilder(nodeId types.NodeId, coinbaseAccount types.Address, signer Signer, db ATXDBProvider, net Broadcaster, mesh MeshProvider, layersPerEpoch uint16, nipstBuilder NipstBuilder, postProver nipst.PostProverClient, layerClock chan types.LayerID, isSyncedFunc func() bool, store BytesStore, log log.Log) *Builder {
 	return &Builder{
+		Signer:          signer,
 		nodeId:          nodeId,
 		coinbaseAccount: coinbaseAccount,
 		db:              db,
@@ -129,6 +136,15 @@ func (b *Builder) Start() {
 func (b *Builder) Stop() {
 	b.finished <- struct{}{}
 	close(b.stop)
+}
+
+func (b Builder) SignAtx(atx *types.ActivationTx) (*types.ActivationTx, error) {
+	bts, err := types.InterfaceToBytes(atx.InnerActivationTx)
+	if err != nil {
+		return nil, err
+	}
+	atx.Sig = b.Sign(bts)
+	return atx, nil
 }
 
 // loop is the main loop that tries to create an atx per tick received from the global clock
@@ -451,7 +467,12 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 	b.log.With().Info("active ids seen for epoch", log.Uint64("pos_atx_epoch", uint64(posEpoch)),
 		log.Uint32("view_cnt", activeSetSize))
 
-	buf, err := types.InterfaceToBytes(atx)
+	signedAtx, err := b.SignAtx(atx)
+	if err != nil {
+		return err
+	}
+
+	buf, err := types.InterfaceToBytes(signedAtx)
 	if err != nil {
 		return err
 	}
