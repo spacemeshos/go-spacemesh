@@ -78,9 +78,9 @@ func (vq *blockQueue) handleBlock(bjb fetchJob) {
 			continue
 		}
 
-		vq.Info("fetched  %v", id.String())
+		vq.Info("fetched  %v", block.ID())
 		if err := vq.fastValidation(block); err != nil {
-			vq.Error("ValidationQueue: block validation failed", log.BlockId(uint64(block.ID())), log.Err(err))
+			vq.Error("block validation failed", log.BlockId(uint64(block.ID())), log.Err(err))
 			vq.updateDependencies(id, false)
 			continue
 		}
@@ -94,12 +94,12 @@ func (vq *blockQueue) handleBlock(bjb fetchJob) {
 // handles new block dependencies
 // if there are unknown blocks in the view they are added to the fetch queue
 func (vq *blockQueue) handleBlockDependencies(blk *types.Block) {
-	vq.Info("handle Block %v", blk.ID())
+	vq.Info("handle dependencies Block %v", blk.ID())
 	res, err := vq.addDependencies(blk.ID(), blk.ViewEdges, vq.finishBlockCallback(blk))
 
 	if err != nil {
 		vq.updateDependencies(blk.Hash32(), false)
-		vq.Error(fmt.Sprintf("failed to add pending for Block %v %v", blk.ShortString(), err))
+		vq.Error(fmt.Sprintf("failed to add pending for Block %v %v", blk.ID(), err))
 	}
 
 	if res == false {
@@ -111,7 +111,7 @@ func (vq *blockQueue) handleBlockDependencies(blk *types.Block) {
 func (vq *blockQueue) finishBlockCallback(block *types.Block) func(res bool) error {
 	return func(res bool) error {
 		if !res {
-			vq.Info("finished block %v block invalid", block.ID())
+			vq.Info("finished block %v block, invalid", block.ID())
 			return nil
 		}
 
@@ -134,7 +134,7 @@ func (vq *blockQueue) finishBlockCallback(block *types.Block) func(res bool) err
 			vq.HandleLateBlock(block)
 		}
 
-		vq.Info("finished handle block %v", block.ID())
+		vq.Info("finished block %v, valid", block.ID())
 		return nil
 	}
 }
@@ -171,7 +171,7 @@ func (vq *blockQueue) removefromDepMaps(block types.Hash32, valid bool, doneBloc
 			if callback, ok := vq.callbacks[dep]; ok {
 				delete(vq.callbacks, dep)
 				if err := callback(valid); err != nil {
-					vq.Error(" %v callback Failed", dep)
+					vq.Error(" %v callback Failed %v", dep, err)
 					continue
 				}
 				switch id := dep.(type) {
