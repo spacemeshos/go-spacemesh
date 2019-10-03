@@ -53,3 +53,36 @@ func TestSpacemeshApp_getEdIdentity(t *testing.T) {
 	_, err = app.LoadOrCreateEdSigner()
 	r.EqualError(err, fmt.Sprintf("identity file path ('tmp/wrong name') does not match public key (%v)", sgn.PublicKey().String()))
 }
+
+func TestSpacemeshApp_SetLoggers(t *testing.T) {
+	r := require.New(t)
+
+	app := NewSpacemeshApp()
+	mylogger := "anton"
+	tmpDir := os.TempDir()
+	tmpFile, err := ioutil.TempFile(tmpDir, "tmp_")
+	r.NoError(err)
+	myLog := log.New("logger", tmpDir, tmpFile.Name())
+	//myLog := log.NewDefault("logger")
+	app.log = app.addLogger(mylogger, myLog)
+	app.log.Info("hi there")
+	err = app.SetLogLevel("anton", "warn")
+	r.NoError(err)
+	r.Equal("warn", app.loggers["anton"].String())
+
+	app.log.Info("hi again")
+	err = app.SetLogLevel("anton", "info")
+	r.NoError(err)
+
+	app.log.Info("hi again 2")
+	r.Equal("info", app.loggers["anton"].String())
+
+	// test wrong logger called
+	err = app.SetLogLevel("anton3", "warn")
+	r.Error(err)
+
+	// test wrong loglevel
+	err = app.SetLogLevel("anton", "lulu")
+	r.Error(err)
+	r.Equal("info", app.loggers["anton"].String())
+}

@@ -27,6 +27,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 	"github.com/spacemeshos/go-spacemesh/version"
 	"github.com/spacemeshos/post/shared"
+	"go.uber.org/zap"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
@@ -52,6 +53,31 @@ import (
 import _ "net/http/pprof"
 
 const edKeyFileName = "key.bin"
+
+const (
+	AppLogger            = "app"
+	PostLogger           = "post"
+	StateDbLogger        = "stateDbStore"
+	StateLogger          = "state"
+	AtxDbStoreLogger     = "atxDbStore"
+	PoetDbStoreLogger    = "poetDbStore"
+	StoreLogger          = "store"
+	PoetDbLogger         = "poetDb"
+	MeshDBLogger         = "meshDb"
+	TrtlLogger           = "trtl"
+	AtxDbLogger          = "atxDb"
+	BlkEligibilityLogger = "blkElgValidator"
+	MeshLogger           = "mesh"
+	SyncLogger           = "sync"
+	BlockOracle          = "blockOracle"
+	HareOracleLogger     = "hareOracle"
+	HareLogger           = "hare"
+	BlockBuilderLogger   = "blockBuilder"
+	BlockListenerLogger  = "blockListener"
+	PoetListenerLogger   = "poetListener"
+	NipstBuilderLogger   = "nipstBuilder"
+	AtxBuilderLogger     = "atxBuilder"
+)
 
 // VersionCmd returns the current version of spacemesh
 var Cmd = &cobra.Command{
@@ -102,6 +128,7 @@ type SpacemeshApp struct {
 	edSgn          *signing.EdSigner
 	closers        []interface{ Close() }
 	log            log.Log
+	loggers        map[string]*zap.AtomicLevel
 }
 
 // ParseConfig unmarshal config file into struct
@@ -134,7 +161,8 @@ func NewSpacemeshApp() *SpacemeshApp {
 
 	defaultConfig := cfg.DefaultConfig()
 	node := &SpacemeshApp{
-		Config: &defaultConfig,
+		Config:  &defaultConfig,
+		loggers: make(map[string]*zap.AtomicLevel),
 	}
 
 	return node
@@ -282,6 +310,24 @@ func (weakCoinStub) GetResult() bool {
 	return true
 }
 
+func (app *SpacemeshApp) addLogger(name string, logger log.Log) log.Log {
+	lvl := zap.NewAtomicLevelAt(log.LogLvl())
+	app.loggers[name] = &lvl
+	return logger.WithName(name).WithOptions(log.AddDynamicLevel(&lvl))
+}
+
+func (app *SpacemeshApp) SetLogLevel(name, loglevel string) error {
+	if lvl, ok := app.loggers[name]; ok {
+		err := lvl.UnmarshalText([]byte(loglevel))
+		if err != nil {
+			return err
+		}
+	} else {
+		return fmt.Errorf("cannot find logger %v", name)
+	}
+	return nil
+}
+
 func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service, dbStorepath string, sgn hare.Signer, isFixedOracle bool, rolacle hare.Rolacle, layerSize uint32, postClient nipst.PostProverClient, poetClient nipst.PoetProvingServiceClient, vrfSigner *BLS381.BlsSigner, layersPerEpoch uint16) error {
 
 	app.nodeId = nodeID
@@ -290,11 +336,12 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	name := nodeID.ShortString()
 
 	lg := log.NewDefault(name).WithFields(log.NodeId(name))
-	app.log = lg.WithName("app")
 
-	postClient.SetLogger(lg.WithName("post"))
+	app.log = app.addLogger(AppLogger, lg)
 
-	db, err := database.NewLDBDatabase(dbStorepath, 0, 0, lg.WithName("stateDbStore"))
+	postClient.SetLogger(app.addLogger(PostLogger, lg))
+
+	db, err := database.NewLDBDatabase(dbStorepath, 0, 0, app.addLogger(StateDbLogger, lg))
 	if err != nil {
 		return err
 	}
@@ -305,7 +352,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 		return err
 	}
 	rng := rand.New(mt19937.New())
-	processor := state.NewTransactionProcessor(rng, st, app.Config.GAS, lg.WithName("state"))
+	processor := state.NewTransactionProcessor(rng, st, app.Config.GAS, app.addLogger(StateLogger, lg))
 
 	coinToss := weakCoinStub{}
 	gTime, err := time.Parse(time.RFC3339, app.Config.GenesisTime)
@@ -315,58 +362,58 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
 	clock := timesync.NewTicker(timesync.RealClock{}, ld, gTime)
 
-	atxdbstore, err := database.NewLDBDatabase(dbStorepath+"atx", 0, 0, lg.WithName("atxDbStore"))
+	atxdbstore, err := database.NewLDBDatabase(dbStorepath+"atx", 0, 0, app.addLogger(AtxDbStoreLogger, lg))
 	if err != nil {
 		return err
 	}
 	app.closers = append(app.closers, atxdbstore)
 
-	poetDbStore, err := database.NewLDBDatabase(dbStorepath+"poet", 0, 0, lg.WithName("poetDbStore"))
+	poetDbStore, err := database.NewLDBDatabase(dbStorepath+"poet", 0, 0, app.addLogger(PoetDbStoreLogger, lg))
 	if err != nil {
 		return err
 	}
 	app.closers = append(app.closers, poetDbStore)
 
 	//todo: put in config
-	iddbstore, err := database.NewLDBDatabase(dbStorepath+"ids", 0, 0, lg.WithName("stateDbStore"))
+	iddbstore, err := database.NewLDBDatabase(dbStorepath+"ids", 0, 0, app.addLogger(StateDbLogger, lg))
 	if err != nil {
 		return err
 	}
 	app.closers = append(app.closers, iddbstore)
 
-	store, err := database.NewLDBDatabase(dbStorepath+"store", 0, 0, lg.WithName("store"))
+	store, err := database.NewLDBDatabase(dbStorepath+StoreLogger, 0, 0, app.addLogger(StoreLogger, lg))
 	if err != nil {
 		return err
 	}
 	app.closers = append(app.closers, store)
 
 	idStore := activation.NewIdentityStore(iddbstore)
-	poetDb := activation.NewPoetDb(poetDbStore, lg.WithName("poetDb"))
+	poetDb := activation.NewPoetDb(poetDbStore, app.addLogger(PoetDbLogger, lg))
 	//todo: this is initialized twice, need to refactor
 	validator := nipst.NewValidator(&app.Config.POST, poetDb)
-	mdb, err := mesh.NewPersistentMeshDB(dbStorepath, lg.WithName("meshDb"))
+	mdb, err := mesh.NewPersistentMeshDB(dbStorepath, app.addLogger(MeshDBLogger, lg))
 	if err != nil {
 		return err
 	}
 
-	trtl := tortoise.NewAlgorithm(int(layerSize), mdb, app.Config.Hdist, lg.WithName("trtl"))
+	trtl := tortoise.NewAlgorithm(int(layerSize), mdb, app.Config.Hdist, app.addLogger(TrtlLogger, lg))
 
-	atxdb := activation.NewActivationDb(atxdbstore, idStore, mdb, layersPerEpoch, validator, lg.WithName("atxDb"))
+	atxdb := activation.NewActivationDb(atxdbstore, idStore, mdb, layersPerEpoch, validator, app.addLogger(AtxDbLogger, lg))
 	beaconProvider := &oracle.EpochBeaconProvider{}
-	eValidator := oracle.NewBlockEligibilityValidator(layerSize, uint32(app.Config.GenesisActiveSet), layersPerEpoch, atxdb, beaconProvider, BLS381.Verify2, lg.WithName("blkElgValidator"))
+	eValidator := oracle.NewBlockEligibilityValidator(layerSize, uint32(app.Config.GenesisActiveSet), layersPerEpoch, atxdb, beaconProvider, BLS381.Verify2, app.addLogger(BlkEligibilityLogger, lg))
 
 	txpool := miner.NewTypesTransactionIdMemPool()
 	atxpool := miner.NewTypesAtxIdMemPool()
 
-	msh := mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, txpool, atxpool, processor, lg.WithName("mesh")) //todo: what to do with the logger?
+	msh := mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, txpool, atxpool, processor, app.addLogger(MeshLogger, lg)) //todo: what to do with the logger?
 
 	conf := sync.Configuration{Concurrency: 4, LayerSize: int(layerSize), LayersPerEpoch: layersPerEpoch, RequestTimeout: time.Duration(app.Config.SyncRequestTimeout) * time.Millisecond, Hdist: app.Config.Hdist, AtxsLimit: app.Config.AtxsPerBlock}
 	if app.Config.AtxsPerBlock > miner.AtxsPerBlockLimit { // validate limit
 		app.log.Panic("Number of atxs per block required is bigger than the limit atxsPerBlock=%v limit=%v", app.Config.AtxsPerBlock, miner.AtxsPerBlockLimit)
 	}
 
-	syncer := sync.NewSync(swarm, msh, txpool, atxpool, processor, eValidator, poetDb, conf, clock, lg.WithName("sync"))
-	blockOracle := oracle.NewMinerBlockOracle(layerSize, uint32(app.Config.GenesisActiveSet), uint16(layersPerEpoch), atxdb, beaconProvider, vrfSigner, nodeID, syncer.WeaklySynced, lg.WithName("blockOracle"))
+	syncer := sync.NewSync(swarm, msh, txpool, atxpool, processor, eValidator, poetDb, conf, clock, app.addLogger(SyncLogger, lg))
+	blockOracle := oracle.NewMinerBlockOracle(layerSize, uint32(app.Config.GenesisActiveSet), uint16(layersPerEpoch), atxdb, beaconProvider, vrfSigner, nodeID, syncer.WeaklySynced, app.addLogger(BlockOracle, lg))
 
 	// TODO: we should probably decouple the apptest and the node (and duplicate as necessary)
 	var hOracle hare.Rolacle
@@ -374,7 +421,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 		hOracle = rolacle
 	} else { // regular oracle, build and use it
 		beacon := eligibility.NewBeacon(mdb, app.Config.HareEligibility.ConfidenceParam)
-		hOracle = eligibility.New(beacon, atxdb.CalcActiveSetSize, BLS381.Verify2, vrfSigner, uint16(app.Config.LayersPerEpoch), app.Config.GenesisActiveSet, mdb, app.Config.HareEligibility, lg.WithName("hareOracle"))
+		hOracle = eligibility.New(beacon, atxdb.CalcActiveSetSize, BLS381.Verify2, vrfSigner, uint16(app.Config.LayersPerEpoch), app.Config.GenesisActiveSet, mdb, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
 	}
 
 	// a function to validate we know the blocks
@@ -394,19 +441,19 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 
 		return true
 	}
-	ha := hare.New(app.Config.HARE, swarm, sgn, nodeID, validationFunc, syncer.IsSynced, msh, hOracle, uint16(app.Config.LayersPerEpoch), idStore, hOracle, clock.Subscribe(), lg.WithName("hare"))
+	ha := hare.New(app.Config.HARE, swarm, sgn, nodeID, validationFunc, syncer.IsSynced, msh, hOracle, uint16(app.Config.LayersPerEpoch), idStore, hOracle, clock.Subscribe(), app.addLogger(HareLogger, lg))
 
-	blockProducer := miner.NewBlockBuilder(nodeID, sgn, swarm, clock.Subscribe(), app.Config.Hdist, txpool, atxpool, coinToss, msh, ha, blockOracle, processor, atxdb, syncer, app.Config.AtxsPerBlock, lg.WithName("blockBuilder"))
-	blockListener := sync.NewBlockListener(swarm, syncer, 4, lg.WithName("blockListener"))
+	blockProducer := miner.NewBlockBuilder(nodeID, sgn, swarm, clock.Subscribe(), app.Config.Hdist, txpool, atxpool, coinToss, msh, ha, blockOracle, processor, atxdb, syncer, app.Config.AtxsPerBlock, app.addLogger(BlockBuilderLogger, lg))
+	blockListener := sync.NewBlockListener(swarm, syncer, 4, app.addLogger(BlockListenerLogger, lg))
 
-	poetListener := activation.NewPoetListener(swarm, poetDb, lg.WithName("poetListener"))
+	poetListener := activation.NewPoetListener(swarm, poetDb, app.addLogger(PoetListenerLogger, lg))
 
 	nipstBuilder := nipst.NewNIPSTBuilder(
 		util.Hex2Bytes(nodeID.Key), // TODO: use both keys in the nodeID
 		postClient,
 		poetClient,
 		poetDb,
-		lg.WithName("nipstBuilder"),
+		app.addLogger(NipstBuilderLogger, lg),
 	)
 
 	coinBase := types.HexToAddress(app.Config.CoinbaseAccount)
@@ -414,7 +461,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	if coinBase.Big().Uint64() == 0 && app.Config.StartMining {
 		app.log.Panic("invalid Coinbase account")
 	}
-	atxBuilder := activation.NewBuilder(nodeID, coinBase, atxdb, swarm, msh, layersPerEpoch, nipstBuilder, postClient, clock.Subscribe(), syncer.WeaklySynced, store, lg.WithName("atxBuilder"))
+	atxBuilder := activation.NewBuilder(nodeID, coinBase, atxdb, swarm, msh, layersPerEpoch, nipstBuilder, postClient, clock.Subscribe(), syncer.WeaklySynced, store, app.addLogger(AtxBuilderLogger, lg))
 
 	app.blockProducer = &blockProducer
 	app.blockListener = blockListener
@@ -693,7 +740,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	// start api servers
 	if apiConf.StartGrpcServer || apiConf.StartJSONServer {
 		// start grpc if specified or if json rpc specified
-		app.grpcAPIService = api.NewGrpcService(app.P2P, app.state, app.mesh.TxProcessor, app.atxBuilder, app.oracle, app.clock)
+		app.grpcAPIService = api.NewGrpcService(app.P2P, app.state, app.mesh.TxProcessor, app.atxBuilder, app.oracle, app.clock, app)
 		app.grpcAPIService.StartService()
 	}
 
