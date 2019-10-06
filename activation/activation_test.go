@@ -87,10 +87,8 @@ func (ms *MockSigning) Sign(m []byte) []byte {
 	return m
 }
 
-
 // A compile time check to ensure that postProverClientMock fully implements PostProverClient.
 var _ PostProverClient = (*postProverClientMock)(nil)
-
 
 type NipstBuilderMock struct {
 	poetRef        []byte
