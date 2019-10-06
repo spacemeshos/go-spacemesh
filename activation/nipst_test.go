@@ -5,6 +5,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/shared"
 	"github.com/stretchr/testify/require"
@@ -348,5 +349,5 @@ func TestValidator_Validate(t *testing.T) {
 
 func validateNIPST(npst *types.NIPST, postCfg config.Config, nipstChallenge types.Hash32, poetDb PoetDbApi) error {
 	v := &Validator{&postCfg, poetDb}
-	return v.Validate(npst, nipstChallenge)
+	return v.Validate(*signing.NewPublicKey(minerID), npst, nipstChallenge)
 }

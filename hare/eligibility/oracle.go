@@ -34,7 +34,7 @@ type casher interface {
 	Get(key interface{}) (value interface{}, ok bool)
 }
 
-type Signer interface {
+type signer interface {
 	Sign(msg []byte) ([]byte, error)
 }
 
@@ -42,14 +42,15 @@ type goodBlocksProvider interface {
 	ContextuallyValidBlock(layer types.LayerID) (map[types.BlockID]struct{}, error)
 }
 
-type VerifierFunc = func(msg, sig, pub []byte) (bool, error)
+// a function to verify the message with the signature and its public key.
+type verifierFunc = func(msg, sig, pub []byte) (bool, error)
 
 // Oracle is the hare eligibility oracle
 type Oracle struct {
 	beacon               valueProvider
 	getActiveSet         activeSetFunc
-	vrfSigner            Signer
-	vrfVerifier          VerifierFunc
+	vrfSigner            signer
+	vrfVerifier          verifierFunc
 	layersPerEpoch       uint16
 	cache                casher
 	genesisActiveSetSize int
@@ -91,8 +92,8 @@ func roundedSafeLayer(layer types.LayerID, safetyParam types.LayerID,
 	return threshold - types.LayerID(layersPerEpoch)
 }
 
-// New returns a new eligibility oracle instance
-func New(beacon valueProvider, activeSetFunc activeSetFunc, vrfVerifier VerifierFunc, vrfSigner Signer,
+// New returns a new eligibility oracle instance.
+func New(beacon valueProvider, activeSetFunc activeSetFunc, vrfVerifier verifierFunc, vrfSigner signer,
 	layersPerEpoch uint16, genesisActiveSet int, goodBlocksProvider goodBlocksProvider,
 	cfg eCfg.Config, log log.Log) *Oracle {
 	c, e := lru.New(cacheSize)
@@ -261,6 +262,8 @@ func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
 	return activeMap, nil
 }
 
+// IsIdentityActiveOnConsensusView returns true if the provided identity is active on the consensus view derived
+// from the specified layer, false otherwise.
 func (o *Oracle) IsIdentityActiveOnConsensusView(edId string, layer types.LayerID) (bool, error) {
 	actives, err := o.actives(layer)
 	if err != nil {

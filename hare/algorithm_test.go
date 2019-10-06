@@ -102,7 +102,7 @@ type mockCommitTracker struct {
 	countHasEnoughCommits int
 	countBuildCertificate int
 	hasEnoughCommits      bool
-	certificate           *Certificate
+	certificate           *certificate
 }
 
 func (mct *mockCommitTracker) OnCommit(msg *Msg) {
@@ -114,7 +114,7 @@ func (mct *mockCommitTracker) HasEnoughCommits() bool {
 	return mct.hasEnoughCommits
 }
 
-func (mct *mockCommitTracker) BuildCertificate() *Certificate {
+func (mct *mockCommitTracker) BuildCertificate() *certificate {
 	mct.countBuildCertificate++
 	return mct.certificate
 }
@@ -136,7 +136,7 @@ func buildMessage(msg *Message) *Msg {
 }
 
 func buildBroker(net NetworkService, testName string) *Broker {
-	return NewBroker(net, &mockEligibilityValidator{true}, MockStateQuerier{true, nil},
+	return newBroker(net, &mockEligibilityValidator{true}, MockStateQuerier{true, nil},
 		(&mockSyncer{true}).IsSynced, 10, Closer{make(chan struct{})}, log.NewDefault(testName))
 }
 
@@ -151,7 +151,7 @@ func (mev *mockEligibilityValidator) Validate(m *Msg) bool {
 type mockOracle struct {
 }
 
-func (mo *mockOracle) Eligible(instanceId InstanceId, k int32, pubKey string, proof []byte) bool {
+func (mo *mockOracle) Eligible(instanceId instanceId, k int32, pubKey string, proof []byte) bool {
 	return true
 }
 
@@ -166,7 +166,7 @@ func TestConsensusProcess_Start(t *testing.T) {
 	broker := buildBroker(n1, t.Name())
 	broker.Start()
 	proc := generateConsensusProcess(t)
-	proc.s = NewSmallEmptySet()
+	proc.s = NewDefaultEmptySet()
 	inbox, _ := broker.Register(proc.Id())
 	proc.SetInbox(inbox)
 	err := proc.Start()
@@ -287,7 +287,7 @@ func TestConsensusProcess_InitDefaultBuilder(t *testing.T) {
 	assert.Nil(t, verifier)
 	assert.Equal(t, builder.inner.K, proc.k)
 	assert.Equal(t, builder.inner.Ki, proc.ki)
-	assert.Equal(t, InstanceId(builder.inner.InstanceId), proc.instanceId)
+	assert.Equal(t, instanceId(builder.inner.InstanceId), proc.instanceId)
 }
 
 func TestConsensusProcess_isEligible(t *testing.T) {
@@ -330,7 +330,7 @@ func TestConsensusProcess_sendMessage(t *testing.T) {
 
 func TestConsensusProcess_procPre(t *testing.T) {
 	proc := generateConsensusProcess(t)
-	s := NewSmallEmptySet()
+	s := NewDefaultEmptySet()
 	m := BuildPreRoundMsg(generateSigning(t), s)
 	proc.processPreRoundMsg(m)
 	assert.Equal(t, 1, len(proc.preRoundTracker.preRound))
@@ -338,8 +338,8 @@ func TestConsensusProcess_procPre(t *testing.T) {
 
 func TestConsensusProcess_procStatus(t *testing.T) {
 	proc := generateConsensusProcess(t)
-	proc.beginRound1()
-	s := NewSmallEmptySet()
+	proc.beginStatusRound()
+	s := NewDefaultEmptySet()
 	m := BuildStatusMsg(generateSigning(t), s)
 	proc.processStatusMsg(m)
 	assert.Equal(t, 1, len(proc.statusesTracker.statuses))
@@ -369,8 +369,8 @@ func TestConsensusProcess_procProposal(t *testing.T) {
 func TestConsensusProcess_procCommit(t *testing.T) {
 	proc := generateConsensusProcess(t)
 	proc.advanceToNextRound()
-	s := NewSmallEmptySet()
-	proc.commitTracker = NewCommitTracker(1, 1, s)
+	s := NewDefaultEmptySet()
+	proc.commitTracker = newCommitTracker(1, 1, s)
 	m := BuildCommitMsg(generateSigning(t), s)
 	mct := &mockCommitTracker{}
 	proc.commitTracker = mct
@@ -389,7 +389,7 @@ func TestConsensusProcess_procNotify(t *testing.T) {
 	proc.ki = 0
 	m.InnerMsg.K = proc.ki
 	proc.s.Add(value5)
-	proc.k = NotifyRound
+	proc.k = notifyRound
 	proc.processNotifyMsg(m)
 	assert.True(t, s.Equals(proc.s))
 }
@@ -418,18 +418,18 @@ func TestConsensusProcess_Termination(t *testing.T) {
 func TestConsensusProcess_currentRound(t *testing.T) {
 	proc := generateConsensusProcess(t)
 	proc.advanceToNextRound()
-	assert.Equal(t, StatusRound, proc.currentRound())
+	assert.Equal(t, statusRound, proc.currentRound())
 	proc.advanceToNextRound()
-	assert.Equal(t, ProposalRound, proc.currentRound())
+	assert.Equal(t, proposalRound, proc.currentRound())
 	proc.advanceToNextRound()
-	assert.Equal(t, CommitRound, proc.currentRound())
+	assert.Equal(t, commitRound, proc.currentRound())
 	proc.advanceToNextRound()
-	assert.Equal(t, NotifyRound, proc.currentRound())
+	assert.Equal(t, notifyRound, proc.currentRound())
 }
 
 func TestConsensusProcess_onEarlyMessage(t *testing.T) {
 	proc := generateConsensusProcess(t)
-	m := BuildPreRoundMsg(generateSigning(t), NewSmallEmptySet())
+	m := BuildPreRoundMsg(generateSigning(t), NewDefaultEmptySet())
 	proc.advanceToNextRound()
 	proc.onEarlyMessage(buildMessage(nil))
 	assert.Equal(t, 0, len(proc.pending))
@@ -445,7 +445,7 @@ func TestProcOutput_Id(t *testing.T) {
 }
 
 func TestProcOutput_Set(t *testing.T) {
-	es := NewSmallEmptySet()
+	es := NewDefaultEmptySet()
 	po := procOutput{instanceId1, es}
 	assert.True(t, es.Equals(po.Set()))
 }
@@ -464,13 +464,13 @@ func TestConsensusProcess_beginRound1(t *testing.T) {
 	proc.network = network
 	oracle := &mockRolacle{MockStateQuerier: MockStateQuerier{true, nil}}
 	proc.oracle = oracle
-	s := NewSmallEmptySet()
+	s := NewDefaultEmptySet()
 	m := BuildPreRoundMsg(generateSigning(t), s)
 	proc.statusesTracker.RecordStatus(m)
 
 	preStatusTracker := proc.statusesTracker
 	oracle.isEligible = true
-	proc.beginRound1()
+	proc.beginStatusRound()
 	assert.Equal(t, 1, network.count)
 	assert.NotEqual(t, preStatusTracker, proc.statusesTracker)
 }
@@ -484,7 +484,7 @@ func TestConsensusProcess_beginRound2(t *testing.T) {
 	proc.oracle = oracle
 	oracle.isEligible = true
 
-	statusTracker := NewStatusTracker(1, 1)
+	statusTracker := newStatusTracker(1, 1)
 	s := NewSetFromValues(value1)
 	statusTracker.RecordStatus(BuildStatusMsg(generateSigning(t), s))
 	statusTracker.analyzed = true
@@ -492,7 +492,7 @@ func TestConsensusProcess_beginRound2(t *testing.T) {
 
 	proc.k = 1
 	proc.SetInbox(make(chan *Msg, 1))
-	proc.beginRound2()
+	proc.beginProposalRound()
 
 	assert.Equal(t, 1, network.count)
 	assert.Nil(t, proc.statusesTracker)
@@ -509,14 +509,14 @@ func TestConsensusProcess_beginRound3(t *testing.T) {
 	mpt.proposedSet = NewSetFromValues(value1)
 
 	preCommitTracker := proc.commitTracker
-	proc.beginRound3()
+	proc.beginCommitRound()
 	assert.NotEqual(t, preCommitTracker, proc.commitTracker)
 
 	mpt.isConflicting = false
 	mpt.proposedSet = NewSetFromValues(value1)
 	oracle.isEligible = true
 	proc.SetInbox(make(chan *Msg, 1))
-	proc.beginRound3()
+	proc.beginCommitRound()
 	assert.Equal(t, 1, network.count)
 }
 
@@ -560,7 +560,7 @@ func TestConsensusProcess_beginRound4(t *testing.T) {
 	mct := &mockCommitTracker{}
 	proc.proposalTracker = mpt
 	proc.commitTracker = mct
-	proc.beginRound4()
+	proc.beginNotifyRound()
 	r.Equal(1, mpt.countIsConflicting)
 	r.Nil(proc.proposalTracker)
 	r.Nil(proc.commitTracker)
@@ -568,7 +568,7 @@ func TestConsensusProcess_beginRound4(t *testing.T) {
 	proc.proposalTracker = mpt
 	proc.commitTracker = mct
 	mpt.isConflicting = true
-	proc.beginRound4()
+	proc.beginNotifyRound()
 	r.Equal(2, mpt.countIsConflicting)
 	r.Equal(1, mct.countHasEnoughCommits)
 	r.Nil(proc.proposalTracker)
@@ -578,7 +578,7 @@ func TestConsensusProcess_beginRound4(t *testing.T) {
 	proc.commitTracker = mct
 	mpt.isConflicting = false
 	mct.hasEnoughCommits = false
-	proc.beginRound4()
+	proc.beginNotifyRound()
 	r.Equal(0, mct.countBuildCertificate)
 	r.Nil(proc.proposalTracker)
 	r.Nil(proc.commitTracker)
@@ -587,7 +587,7 @@ func TestConsensusProcess_beginRound4(t *testing.T) {
 	proc.commitTracker = mct
 	mct.hasEnoughCommits = true
 	mct.certificate = nil
-	proc.beginRound4()
+	proc.beginNotifyRound()
 	r.Equal(1, mct.countBuildCertificate)
 	r.Equal(0, mpt.countProposedSet)
 	r.Nil(proc.proposalTracker)
@@ -595,10 +595,10 @@ func TestConsensusProcess_beginRound4(t *testing.T) {
 
 	proc.proposalTracker = mpt
 	proc.commitTracker = mct
-	mct.certificate = &Certificate{}
+	mct.certificate = &certificate{}
 	mpt.proposedSet = nil
-	proc.s = NewSmallEmptySet()
-	proc.beginRound4()
+	proc.s = NewDefaultEmptySet()
+	proc.beginNotifyRound()
 	r.NotNil(proc.s)
 	r.Nil(proc.proposalTracker)
 	r.Nil(proc.commitTracker)
@@ -606,7 +606,7 @@ func TestConsensusProcess_beginRound4(t *testing.T) {
 	proc.proposalTracker = mpt
 	proc.commitTracker = mct
 	mpt.proposedSet = NewSetFromValues(value1)
-	proc.beginRound4()
+	proc.beginNotifyRound()
 	r.True(proc.s.Equals(mpt.proposedSet))
 	r.Equal(mct.certificate, proc.certificate)
 	r.Nil(proc.proposalTracker)

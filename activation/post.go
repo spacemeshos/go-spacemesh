@@ -3,6 +3,7 @@ package activation
 import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/initialization"
 	"github.com/spacemeshos/post/proving"
@@ -15,7 +16,7 @@ func DefaultConfig() config.Config {
 	return *config.DefaultConfig()
 }
 
-func verifyPost(proof *types.PostProof, space uint64, numProvenLabels uint, difficulty uint) error {
+func verifyPost(key signing.PublicKey, proof *types.PostProof, space uint64, numProvenLabels uint, difficulty uint) error {
 	if space%config.LabelGroupSize != 0 {
 		return fmt.Errorf("space (%d) is not a multiple of LabelGroupSize (%d)", space, config.LabelGroupSize)
 	}
@@ -31,7 +32,7 @@ func verifyPost(proof *types.PostProof, space uint64, numProvenLabels uint, diff
 	if err != nil {
 		return err
 	}
-	if err := v.Validate((*proving.Proof)(proof)); err != nil {
+	if err := v.Validate(key.Bytes(), (*proving.Proof)(proof)); err != nil {
 		return err
 	}
 

@@ -30,6 +30,9 @@ type beacon struct {
 	cache           addGet
 }
 
+// NewBeacon returns a new beacon.
+// patternProvider provides the contextually valid blocks.
+// confidenceParam is the number of layers that the beacon assumes for consensus view.
 func NewBeacon(patternProvider patternProvider, confidenceParam uint64) *beacon {
 	c, e := lru.New(cacheSize)
 	if e != nil {

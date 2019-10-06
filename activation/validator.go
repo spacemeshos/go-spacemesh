@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/post/config"
 )
 
@@ -22,7 +23,7 @@ func NewValidator(postCfg *config.Config, poetDb PoetDbApi) *Validator {
 	}
 }
 
-func (v *Validator) Validate(nipst *types.NIPST, expectedChallenge types.Hash32) error {
+func (v *Validator) Validate(id signing.PublicKey, nipst *types.NIPST, expectedChallenge types.Hash32) error {
 	if !bytes.Equal(nipst.NipstChallenge[:], expectedChallenge[:]) {
 		return errors.New("NIPST challenge is not equal to expected challenge")
 	}
@@ -35,13 +36,13 @@ func (v *Validator) Validate(nipst *types.NIPST, expectedChallenge types.Hash32)
 		return fmt.Errorf("PoST space (%d) is less than a single space unit (%d)", nipst.Space, v.postCfg.SpacePerUnit)
 	}
 
-	if err := v.VerifyPost(nipst.PostProof, nipst.Space); err != nil {
+	if err := v.VerifyPost(id, nipst.PostProof, nipst.Space); err != nil {
 		return fmt.Errorf("PoST proof invalid: %v", err)
 	}
 
 	return nil
 }
 
-func (v *Validator) VerifyPost(proof *types.PostProof, space uint64) error {
-	return verifyPost(proof, space, v.postCfg.NumProvenLabels, v.postCfg.Difficulty)
+func (v *Validator) VerifyPost(id signing.PublicKey, proof *types.PostProof, space uint64) error {
+	return verifyPost(id, proof, space, v.postCfg.NumProvenLabels, v.postCfg.Difficulty)
 }

@@ -55,7 +55,6 @@ var (
 )
 
 var commitment = &types.PostProof{
-	Identity:     []byte(nil),
 	Challenge:    []byte(nil),
 	MerkleRoot:   []byte("1"),
 	ProofNodes:   [][]byte(nil),
@@ -186,7 +185,10 @@ func TestSyncer_Close(t *testing.T) {
 }
 
 func TestSyncProtocol_BlockRequest(t *testing.T) {
-	atx1 := atx()
+	signer := signing.NewEdSigner()
+	atx1 := atx(signer.PublicKey().String())
+	_, err := types.SignAtx(signer, atx1)
+	assert.NoError(t, err)
 	syncs, nodes, _ := SyncMockFactory(2, conf, t.Name(), memoryDB, newMockPoetDb)
 	syncObj := syncs[0]
 	syncObj2 := syncs[1]
@@ -215,7 +217,10 @@ func TestSyncProtocol_BlockRequest(t *testing.T) {
 
 func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 	syncs, nodes, _ := SyncMockFactory(2, conf, t.Name(), memoryDB, newMockPoetDb)
-	atx1 := atx()
+	signer := signing.NewEdSigner()
+	atx1 := atx(signer.PublicKey().String())
+	_, err := types.SignAtx(signer, atx1)
+	assert.NoError(t, err)
 	syncObj1 := syncs[0]
 	defer syncObj1.Close()
 	syncObj2 := syncs[1]
@@ -261,7 +266,7 @@ func TestSyncer_FetchPoetProofAvailableAndValid(t *testing.T) {
 
 func TestSyncer_SyncAtxs_FetchPoetProof(t *testing.T) {
 	r := require.New(t)
-
+	signer := signing.NewEdSigner()
 	syncs, nodes, _ := SyncMockFactory(2, conf, t.Name(), memoryDB, newMemPoetDb)
 	s0 := syncs[0]
 	s1 := syncs[1]
@@ -278,8 +283,10 @@ func TestSyncer_SyncAtxs_FetchPoetProof(t *testing.T) {
 	r.NoError(err)
 	poetRef := sha256.Sum256(poetProofBytes)
 
-	atx1 := atx()
+	atx1 := atx(signer.PublicKey().String())
 	atx1.Nipst.PostProof.Challenge = poetRef[:]
+	_, err = types.SignAtx(signer, atx1)
+	assert.NoError(t, err)
 	s0.AtxDB.ProcessAtx(atx1)
 
 	// Make sure that s1 syncAtxs would fetch the missing poet proof.
@@ -319,10 +326,11 @@ func makePoetProofMessage(t *testing.T) types.PoetProofMessage {
 
 func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 	syncs, nodes, _ := SyncMockFactory(2, conf, t.Name(), memoryDB, newMockPoetDb)
-	atx1 := atx()
-	atx2 := atx()
-	atx3 := atx()
-	atx4 := atx()
+	signer := signing.NewEdSigner()
+	atx1 := atx(signer.PublicKey().String())
+	atx2 := atx(signer.PublicKey().String())
+	atx3 := atx(signer.PublicKey().String())
+	atx4 := atx(signer.PublicKey().String())
 	syncObj := syncs[0]
 	defer syncObj.Close()
 	syncObj1 := syncs[1]
@@ -369,10 +377,11 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 
 func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	syncs, nodes, _ := SyncMockFactory(2, conf, t.Name(), memoryDB, newMockPoetDb)
-	atx1 := atx()
+	signer := signing.NewEdSigner()
+	atx1 := atx(signer.PublicKey().String())
 
-	atx2 := atx()
-	atx3 := atx()
+	atx2 := atx(signer.PublicKey().String())
+	atx3 := atx(signer.PublicKey().String())
 	syncObj1 := syncs[0]
 	defer syncObj1.Close()
 	syncObj2 := syncs[1]
@@ -881,13 +890,13 @@ func RandStringRunes(n int) string {
 	return string(b)
 }
 
-func atx() *types.ActivationTx {
+func atx(pubkey string) *types.ActivationTx {
 	coinbase := types.HexToAddress("aaaa")
 	chlng := types.HexToHash32("0x3333")
 	poetRef := []byte{0xde, 0xad}
 	npst := activation.NewNIPSTWithChallenge(&chlng, poetRef)
 
-	atx := types.NewActivationTx(types.NodeId{Key: RandStringRunes(8), VRFPublicKey: []byte(RandStringRunes(8))}, coinbase, 0, *types.EmptyAtxId, 5, 1, *types.EmptyAtxId, 0, []types.BlockID{1, 2, 3}, npst)
+	atx := types.NewActivationTx(types.NodeId{Key: pubkey, VRFPublicKey: []byte(RandStringRunes(8))}, coinbase, 0, *types.EmptyAtxId, 5, 1, *types.EmptyAtxId, 0, []types.BlockID{1, 2, 3}, npst)
 	atx.Commitment = commitment
 	atx.CommitmentMerkleRoot = commitment.MerkleRoot
 	atx.CalcAndSetId()
@@ -1297,7 +1306,7 @@ func TestSyncProtocol_BadResponse(t *testing.T) {
 
 	atxHandlerMock := func([]byte) []byte {
 		t.Log("return fake atx")
-		byts, _ := types.InterfaceToBytes([]types.ActivationTx{*atx()})
+		byts, _ := types.InterfaceToBytes([]types.ActivationTx{*atx("")})
 		return byts
 	}
 
@@ -1424,7 +1433,7 @@ func TestSyncer_BlockSyntacticValidation(t *testing.T) {
 }
 
 func TestSyncer_AtxSetID(t *testing.T) {
-	a := atx()
+	a := atx("")
 	bbytes, _ := types.InterfaceToBytes(*a)
 	var b types.ActivationTx
 	types.BytesToInterface(bbytes, &b)
