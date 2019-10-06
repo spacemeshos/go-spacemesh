@@ -18,7 +18,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/miner"
-	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/oracle"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -282,7 +281,7 @@ func (weakCoinStub) GetResult() bool {
 	return true
 }
 
-func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service, dbStorepath string, sgn hare.Signer, isFixedOracle bool, rolacle hare.Rolacle, layerSize uint32, postClient nipst.PostProverClient, poetClient nipst.PoetProvingServiceClient, vrfSigner *BLS381.BlsSigner, layersPerEpoch uint16) error {
+func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service, dbStorepath string, sgn hare.Signer, isFixedOracle bool, rolacle hare.Rolacle, layerSize uint32, postClient activation.PostProverClient, poetClient activation.PoetProvingServiceClient, vrfSigner *BLS381.BlsSigner, layersPerEpoch uint16) error {
 
 	app.nodeId = nodeID
 	//todo: should we add all components to a single struct?
@@ -343,7 +342,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	idStore := activation.NewIdentityStore(iddbstore)
 	poetDb := activation.NewPoetDb(poetDbStore, lg.WithName("poetDb"))
 	//todo: this is initialized twice, need to refactor
-	validator := nipst.NewValidator(&app.Config.POST, poetDb)
+	validator := activation.NewValidator(&app.Config.POST, poetDb)
 	mdb, err := mesh.NewPersistentMeshDB(dbStorepath, lg.WithName("meshDb"))
 	if err != nil {
 		return err
@@ -401,13 +400,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 
 	poetListener := activation.NewPoetListener(swarm, poetDb, lg.WithName("poetListener"))
 
-	nipstBuilder := nipst.NewNIPSTBuilder(
-		util.Hex2Bytes(nodeID.Key), // TODO: use both keys in the nodeID
-		postClient,
-		poetClient,
-		poetDb,
-		lg.WithName("nipstBuilder"),
-	)
+	nipstBuilder := activation.NewNIPSTBuilder(util.Hex2Bytes(nodeID.Key), postClient, poetClient, poetDb, store, lg.WithName("nipstBuilder"))
 
 	coinBase := types.HexToAddress(app.Config.CoinbaseAccount)
 
@@ -639,7 +632,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	}
 
 	log.Info("connecting to POET on IP %v", app.Config.PoETServer)
-	poetClient, err := nipst.NewRemoteRPCPoetClient(app.Config.PoETServer, cmdp.Ctx)
+	poetClient, err := activation.NewRemoteRPCPoetClient(app.Config.PoETServer, cmdp.Ctx)
 	if err != nil {
 		log.Error("poet server not found on addr %v, err: %v", app.Config.PoETServer, err)
 		return
@@ -652,7 +645,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	vrfSigner := BLS381.NewBlsSigner(vrfPriv)
 	nodeID := types.NodeId{Key: app.edSgn.PublicKey().String(), VRFPublicKey: vrfPub}
 
-	postClient, err := nipst.NewPostClient(&app.Config.POST, util.Hex2Bytes(nodeID.Key))
+	postClient, err := activation.NewPostClient(&app.Config.POST, util.Hex2Bytes(nodeID.Key))
 	if err != nil {
 		log.Error("failed to create post client: %v", err)
 	}

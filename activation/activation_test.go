@@ -8,10 +8,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
-	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/post/config"
-	"github.com/spacemeshos/post/shared"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"sort"
@@ -42,7 +40,7 @@ var (
 	meshProvider = &MeshProviderMock{latestLayer: 12}
 	nipstBuilder = &NipstBuilderMock{}
 	postProver   = &postProverClientMock{}
-	npst         = nipst.NewNIPSTWithChallenge(&chlng, poetRef)
+	npst         = NewNIPSTWithChallenge(&chlng, poetRef)
 	commitment   = &types.PostProof{
 		//Identity:     []byte(nil),
 		Challenge:    []byte(nil),
@@ -89,28 +87,8 @@ func (ms *MockSigning) Sign(m []byte) []byte {
 	return m
 }
 
-type postProverClientMock struct{}
-
 // A compile time check to ensure that postProverClientMock fully implements PostProverClient.
-var _ nipst.PostProverClient = (*postProverClientMock)(nil)
-
-func (*postProverClientMock) Initialize() (*types.PostProof, error) { return &types.PostProof{}, nil }
-
-func (*postProverClientMock) Execute(challenge []byte) (*types.PostProof, error) {
-	return &types.PostProof{}, nil
-}
-
-func (*postProverClientMock) Reset() error { return nil }
-
-func (*postProverClientMock) IsInitialized() (bool, error) { return true, nil }
-
-func (*postProverClientMock) VerifyInitAllowed() error { return nil }
-
-func (*postProverClientMock) SetLogger(shared.Logger) {}
-
-func (*postProverClientMock) SetParams(datadir string, space uint64) error { return nil }
-
-func (*postProverClientMock) Cfg() *config.Config { return nil }
+var _ PostProverClient = (*postProverClientMock)(nil)
 
 type NipstBuilderMock struct {
 	poetRef        []byte
@@ -123,13 +101,13 @@ func (np *NipstBuilderMock) BuildNIPST(challenge *types.Hash32) (*types.NIPST, e
 	if np.buildNipstFunc != nil {
 		return np.buildNipstFunc(challenge)
 	}
-	return nipst.NewNIPSTWithChallenge(challenge, np.poetRef), nil
+	return NewNIPSTWithChallenge(challenge, np.poetRef), nil
 }
 
 type NipstErrBuilderMock struct{}
 
 func (np *NipstErrBuilderMock) BuildNIPST(challenge *types.Hash32) (*types.NIPST, error) {
-	return nil, fmt.Errorf("nipst builder error")
+	return nil, fmt.Errorf("Nipst builder error")
 }
 
 type MockIdStore struct{}
@@ -285,7 +263,7 @@ func publishAtx(b *Builder, meshLayer types.LayerID, clockEpoch types.EpochId, b
 	meshProvider.latestLayer = meshLayer
 	nipstBuilder.buildNipstFunc = func(challenge *types.Hash32) (*types.NIPST, error) {
 		meshProvider.latestLayer = meshLayer.Add(buildNipstLayerDuration)
-		return nipst.NewNIPSTWithChallenge(challenge, poetRef), nil
+		return NewNIPSTWithChallenge(challenge, poetRef), nil
 	}
 	err = b.PublishActivationTx(clockEpoch)
 	nipstBuilder.buildNipstFunc = nil
@@ -436,7 +414,7 @@ func TestBuilder_PublishActivationTx_FailsWhenNipstBuilderFails(t *testing.T) {
 	storeAtx(r, activationDb, posAtx, log.NewDefault("storeAtx"))
 
 	published, err := publishAtx(b, postGenesisEpochLayer+1, postGenesisEpoch, layersPerEpoch)
-	r.EqualError(err, "cannot create nipst: nipst builder error")
+	r.EqualError(err, "cannot create Nipst: Nipst builder error")
 	r.False(published)
 }
 
@@ -534,7 +512,7 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	chlng := types.HexToHash32("0x3333")
 	poetRef := []byte{0xbe, 0xef}
 	nipstBuilder.poetRef = poetRef
-	npst := nipst.NewNIPSTWithChallenge(&chlng, poetRef)
+	npst := NewNIPSTWithChallenge(&chlng, poetRef)
 
 	atx := types.NewActivationTx(types.NodeId{"aaaaaa", []byte("bbbbb")}, coinbase, 1, prevAtx, 15, 1, prevAtx, 5, []types.BlockID{1, 2, 3}, npst)
 
@@ -552,7 +530,7 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	}
 
 	bytes, err := challenge.Hash()
-	npst2 := nipst.NewNIPSTWithChallenge(bytes, poetRef)
+	npst2 := NewNIPSTWithChallenge(bytes, poetRef)
 	assert.NoError(t, err)
 
 	setActivesetSizeInCache(t, defaultActiveSetSize)
@@ -578,7 +556,7 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	err = b.PublishActivationTx(1)
 	assert.Error(t, err)
 	db.hadNone = false
-	//test load challenge in later epoch - nipst should be truncated
+	//test load challenge in later epoch - Nipst should be truncated
 	b = NewBuilder(id, coinbase, &MockSigning{}, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, postProver, nil, func() bool { return true }, db, lg.WithName("atxBuilder"))
 	assert.Error(t, err)
 	err = b.loadChallenge()
@@ -607,7 +585,7 @@ func TestStartPost(t *testing.T) {
 	postCfg.SpacePerUnit = 1 << 10 // 1KB.
 	postCfg.NumFiles = 1
 
-	postProver, err := nipst.NewPostClient(&postCfg, util.Hex2Bytes(id.Key))
+	postProver, err := NewPostClient(&postCfg, util.Hex2Bytes(id.Key))
 	assert.NoError(t, err)
 	assert.NotNil(t, postProver)
 	defer func() {
