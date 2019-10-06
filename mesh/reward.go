@@ -8,7 +8,6 @@ import (
 
 type Config struct {
 	// reward config
-	SimpleTxCost   *big.Int
 	BaseReward     *big.Int
 	PenaltyPercent *big.Int
 	TxQuota        uint32
@@ -17,7 +16,6 @@ type Config struct {
 
 func DefaultMeshConfig() Config {
 	return Config{
-		big.NewInt(10),
 		big.NewInt(5000),
 		big.NewInt(19),
 		15,

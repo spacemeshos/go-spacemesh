@@ -158,7 +158,7 @@ func TestBlockBuilder_StartStop(t *testing.T) {
 
 	addr1 := types.BytesToAddress([]byte{0x02})
 	addr2 := types.BytesToAddress([]byte{0x01})
-	err = builder.AddTransaction(types.NewTxWithOrigin(1, addr1, addr2, 1, DefaultGasLimit, DefaultGas))
+	err = builder.AddTransaction(types.NewTxWithOrigin(1, addr1, addr2, 1, DefaultGasLimit, DefaultFee))
 	assert.Error(t, err)
 }
 
@@ -203,9 +203,9 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 	addr2 := types.BytesToAddress([]byte{0x01})
 
 	trans := []*types.Transaction{
-		types.NewTxWithOrigin(1, addr1, addr2, 1, DefaultGasLimit, DefaultGas),
-		types.NewTxWithOrigin(2, addr1, addr2, 1, DefaultGasLimit, DefaultGas),
-		types.NewTxWithOrigin(3, addr1, addr2, 1, DefaultGasLimit, DefaultGas),
+		types.NewTxWithOrigin(1, addr1, addr2, 1, DefaultGasLimit, DefaultFee),
+		types.NewTxWithOrigin(2, addr1, addr2, 1, DefaultGasLimit, DefaultFee),
+		types.NewTxWithOrigin(3, addr1, addr2, 1, DefaultGasLimit, DefaultFee),
 	}
 
 	transids := []types.TransactionId{trans[0].Id(), trans[1].Id(), trans[2].Id()}

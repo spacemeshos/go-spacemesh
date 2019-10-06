@@ -38,7 +38,7 @@ func (s *ProcessorStateSuite) SetupTest() {
 	s.state, _ = New(types.Hash32{}, NewDatabase(s.db))
 	s.projector = &ProjectorMock{}
 
-	s.processor = NewTransactionProcessor(s.state, s.projector, GasConfig{big.NewInt(5)}, lg)
+	s.processor = NewTransactionProcessor(s.state, s.projector, lg)
 }
 
 func createAccount(state *StateDB, addr types.Address, balance int64, nonce uint64) *StateObj {
@@ -50,7 +50,7 @@ func createAccount(state *StateDB, addr types.Address, balance int64, nonce uint
 }
 
 func createTransaction(nonce uint64, origin types.Address, destination types.Address, amount uint64) *types.Transaction {
-	return types.NewTxWithOrigin(nonce, origin, destination, amount, 100, 1)
+	return types.NewTxWithOrigin(nonce, origin, destination, amount, 100, 5)
 }
 
 func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction() {
@@ -444,7 +444,7 @@ func TestValidateTxSignature(t *testing.T) {
 	db := database.NewMemDatabase()
 	state, _ := New(types.Hash32{}, NewDatabase(db))
 	lg := log.New("proc_logger", "", "")
-	proc := NewTransactionProcessor(state, &ProjectorMock{}, GasConfig{big.NewInt(5)}, lg)
+	proc := NewTransactionProcessor(state, &ProjectorMock{}, lg)
 
 	// positive flow
 	pub, pri, _ := ed25519.GenerateKey(crand.Reader)

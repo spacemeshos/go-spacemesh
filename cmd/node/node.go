@@ -352,7 +352,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	atxpool := miner.NewAtxMemPool()
 	meshAndPoolProjector := pending_txs.NewMeshAndPoolProjector(mdb, txpool)
 
-	processor := state.NewTransactionProcessor(st, meshAndPoolProjector, app.Config.GAS, lg.WithName("state"))
+	processor := state.NewTransactionProcessor(st, meshAndPoolProjector, lg.WithName("state"))
 
 	atxdb := activation.NewActivationDb(atxdbstore, idStore, mdb, layersPerEpoch, validator, lg.WithName("atxDb"))
 	beaconProvider := &oracle.EpochBeaconProvider{}

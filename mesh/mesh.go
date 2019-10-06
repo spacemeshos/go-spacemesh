@@ -455,7 +455,7 @@ func (m *Mesh) AccumulateRewards(rewardLayer types.LayerID, params Config) {
 	rewards := &big.Int{}
 	processed := 0
 	for _, tx := range merged {
-		res := new(big.Int).SetUint64(tx.GasPrice * params.SimpleTxCost.Uint64())
+		res := new(big.Int).SetUint64(tx.Fee)
 		processed++
 		rewards.Add(rewards, res)
 	}
@@ -467,7 +467,7 @@ func (m *Mesh) AccumulateRewards(rewardLayer types.LayerID, params Config) {
 	log.Info("fees reward: %v total processed %v total txs %v merged %v blocks: %v", rewards.Uint64(), processed, len(merged), len(merged), numBlocks)
 
 	bonusReward, diminishedReward := calculateActualRewards(rewards, numBlocks, params, len(uq))
-	m.ApplyRewards(types.LayerID(rewardLayer), ids, uq, bonusReward, diminishedReward)
+	m.ApplyRewards(rewardLayer, ids, uq, bonusReward, diminishedReward)
 	//todo: should miner id be sorted in a deterministic order prior to applying rewards?
 
 }

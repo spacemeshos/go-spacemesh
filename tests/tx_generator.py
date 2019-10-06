@@ -11,14 +11,14 @@ class TxGenerator:
         self.publicK = bytes.fromhex(pub)
         self.privateK = bytes.fromhex(pri)
 
-    def generate(self, dst, nonce, gasLimit, price, amount):
+    def generate(self, dst, nonce, gasLimit, fee, amount):
         p = xdrlib.Packer()
         p.pack_hyper(nonce)
         dstBytes = bytes.fromhex(dst)
         addr = dstBytes[len(dstBytes)-20:]
         p.pack_fstring(ADDRESS_SIZE, addr)
         p.pack_hyper(gasLimit)
-        p.pack_hyper(price)
+        p.pack_hyper(fee)
         p.pack_hyper(amount)
 
         data = p.get_buffer()

@@ -341,7 +341,7 @@ def test_transaction(setup_network):
 
     tx_gen = tx_generator.TxGenerator()
     dst = "0000000000000000000000000000000000002222"
-    tx_bytes = tx_gen.generate(dst, nonce=0, gasLimit=123, price=321, amount=100)
+    tx_bytes = tx_gen.generate(dst, nonce=0, gasLimit=123, fee=321, amount=100)
     out = client_wrapper.call(Api.SUBMIT_TRANSACTION, {'tx': list(tx_bytes)})
     assert out.get('value') == 'ok'
     print("submit transaction ok")
@@ -372,17 +372,15 @@ def test_transactions(setup_network):
     tap_init_amount = 10000
     tap = "7be017a967db77fd10ac7c891b3d6d946dea7e3e14756e2f0f9e09b9663f0d9c"
 
-    tx_cost = 3  # .Mul(trans.GasPrice, tp.gasCost.BasicTxCost)
-
     class Transaction:
-        def __init__(self, amount: int, gas_price: int, origin: str = None, dest: str = None):
+        def __init__(self, amount: int, fee: int, origin: str = None, dest: str = None):
             self.amount = amount
-            self.gas_price = gas_price
+            self.fee = fee
             self.origin = origin
             self.dest = dest
 
         def __repr__(self):
-            return "<TX: amount={0.amount}, gas_price={0.gas_price}, origin={0.origin}, dest={0.dest}>".format(self)
+            return "<TX: amount={0.amount}, fee={0.fee}, origin={0.origin}, dest={0.dest}>".format(self)
 
     class Account:
         def __init__(self, priv: str, nonce: int = 0, send: List[Transaction] = None, recv: List[Transaction] = None):
@@ -404,7 +402,7 @@ def test_transactions(setup_network):
     def expected_balance(acc: str, accounts_snapshot: dict = None):
         accounts_snapshot = accounts if accounts_snapshot is None else accounts_snapshot
         balance = (sum([tx.amount for tx in accounts_snapshot[acc].recv]) -
-                   sum(tx.amount + (tx.gas_price*tx_cost) for tx in accounts_snapshot[acc].send))
+                   sum(tx.amount + tx.fee for tx in accounts_snapshot[acc].send))
         if debug:
             print("account={}, balance={}, everything={}".format(acc[-40:][:5], balance, pprint.pformat(accounts_snapshot[acc])))
         return balance
@@ -419,28 +417,27 @@ def test_transactions(setup_network):
         accounts[str_pub] = Account(priv=bytes.hex(priv))
         return str_pub
 
-    def transfer(client_wrapper: ClientWrapper, frm: str, to: str, amount=None, gas_price=None, gas_limit=None,
+    def transfer(client_wrapper: ClientWrapper, frm: str, to: str, amount=None, fee=None, gas_limit=None,
                  accounts_snapshot: dict = None):
         tx_gen = tx_generator.TxGenerator(pub=frm, pri=accounts[frm].priv)
         if amount is None:
-            amount = random.randint(1, expected_balance(frm, accounts_snapshot) - (1*tx_cost))
-        if gas_price is None:
-            gas_price = 1
+            amount = random.randint(1, expected_balance(frm, accounts_snapshot) - 1)
+        if fee is None:
+            fee = 1
         if gas_limit is None:
-            gas_limit = gas_price + 1
-        tx_bytes = tx_gen.generate(to, accounts[frm].nonce, gas_limit, gas_price, amount)
+            gas_limit = fee + 1
+        tx_bytes = tx_gen.generate(to, accounts[frm].nonce, gas_limit, fee, amount)
         accounts[frm].nonce += 1
         data = {'tx': list(tx_bytes)}
         if debug:
             print(data)
-        print("submit transaction from {} to {} of {} with gas price {}".format(frm[-40:][:5], to[-40:][:5], amount,
-                                                                                gas_price))
+        print("submit transaction from {} to {} of {} with fee {}".format(frm[-40:][:5], to[-40:][:5], amount, fee))
         out = client_wrapper.call(Api.SUBMIT_TRANSACTION, data)
         if out.get('value') == 'ok':
-            accounts[to].recv.append(Transaction(amount, gas_price, origin=frm))
-            accounts[frm].send.append(Transaction(amount, gas_price, dest=to))
+            accounts[to].recv.append(Transaction(amount, fee, origin=frm))
+            accounts[frm].send.append(Transaction(amount, fee, dest=to))
             if accounts_snapshot:
-                accounts_snapshot[frm].send.append(Transaction(amount, gas_price, dest=to))
+                accounts_snapshot[frm].send.append(Transaction(amount, fee, dest=to))
             return True
         return False
 
@@ -513,7 +510,7 @@ def test_transactions(setup_network):
     def is_there_a_valid_acc(min_balance, accounts_snapshot: dict = None):
         accounts_snapshot = accounts if accounts_snapshot is None else accounts_snapshot
         for acc in accounts_snapshot:
-            if expected_balance(acc, accounts_snapshot) - 1*tx_cost > min_balance:
+            if expected_balance(acc, accounts_snapshot) - 1 > min_balance:
                 return True
         return False
 

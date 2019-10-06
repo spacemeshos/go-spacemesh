@@ -90,7 +90,6 @@ func (mock *ATXDBMock) GetPrevAtxId(node types.NodeId) (*types.AtxId, error) {
 
 func ConfigTst() mesh.Config {
 	return mesh.Config{
-		SimpleTxCost:   big.NewInt(10),
 		BaseReward:     big.NewInt(5000),
 		PenaltyPercent: big.NewInt(15),
 		TxQuota:        15,

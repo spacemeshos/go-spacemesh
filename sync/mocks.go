@@ -83,7 +83,6 @@ func (s *StateMock) ApplyTransactions(id types.LayerID, tx []*types.Transaction)
 
 func ConfigTst() mesh.Config {
 	return mesh.Config{
-		SimpleTxCost:   big.NewInt(10),
 		BaseReward:     big.NewInt(5000),
 		PenaltyPercent: big.NewInt(15),
 		TxQuota:        15,

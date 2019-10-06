@@ -19,16 +19,6 @@ type StatePreImages struct {
 	preImages []*types.Transaction
 }
 
-type GasConfig struct {
-	BasicTxCost *big.Int
-}
-
-func DefaultConfig() GasConfig {
-	return GasConfig{
-		big.NewInt(3),
-	}
-}
-
 type Projector interface {
 	GetProjection(addr types.Address, prevNonce, prevBalance uint64) (nonce, balance uint64, err error)
 }
@@ -41,14 +31,13 @@ type TransactionProcessor struct {
 	rootHash     types.Hash32
 	stateQueue   list.List
 	projector    Projector
-	gasCost      GasConfig
 	db           *trie.Database
 	mu           sync.Mutex
 }
 
 const maxPastStates = 20
 
-func NewTransactionProcessor(db *StateDB, projector Projector, gasParams GasConfig, logger log.Log) *TransactionProcessor {
+func NewTransactionProcessor(db *StateDB, projector Projector, logger log.Log) *TransactionProcessor {
 	return &TransactionProcessor{
 		Log:          logger,
 		globalState:  db,
@@ -57,7 +46,6 @@ func NewTransactionProcessor(db *StateDB, projector Projector, gasParams GasConf
 		rootHash:     types.Hash32{},
 		stateQueue:   list.List{},
 		projector:    projector,
-		gasCost:      gasParams,
 		db:           db.TrieDB(),
 		mu:           sync.Mutex{}, //sync between reset and apply mesh.Transactions
 	}
@@ -105,9 +93,9 @@ func (tp *TransactionProcessor) ValidateNonceAndBalance(tx *types.Transaction) e
 	if tx.AccountNonce != nonce {
 		return fmt.Errorf("incorrect account nonce! Expected: %d, Actual: %d", nonce, tx.AccountNonce)
 	}
-	if (tx.Amount + tx.GasPrice) > balance { // TODO: GasPrice represents the absolute fee here, as a temporarily hack
+	if (tx.Amount + tx.Fee) > balance { // TODO: Fee represents the absolute fee here, as a temporarily hack
 		return fmt.Errorf("insufficient balance! Available: %d, Attempting to spend: %d[amount]+%d[fee]=%d",
-			balance, tx.Amount, tx.GasPrice, tx.Amount+tx.GasPrice)
+			balance, tx.Amount, tx.Fee, tx.Amount+tx.Fee)
 	}
 	return nil
 }
@@ -218,7 +206,7 @@ func (tp *TransactionProcessor) Process(txs []*types.Transaction) (remaining []*
 			Origin:      tx.Origin().String(),
 			Destination: tx.Recipient.String(),
 			Amount:      tx.Amount,
-			Gas:         tx.GasPrice})
+			Fee:         tx.Fee})
 	}
 	return
 }
@@ -254,17 +242,11 @@ func (tp *TransactionProcessor) ApplyTransaction(trans *types.Transaction) error
 
 	origin := tp.globalState.GetOrNewStateObj(trans.Origin())
 
-	gas := trans.GasPrice * tp.gasCost.BasicTxCost.Uint64()
-
-	/*if gas < trans.GasLimit {
-
-	}*/
-
-	amountWithGas := gas + trans.Amount
+	amountWithFee := trans.Fee + trans.Amount
 
 	//todo: should we allow to spend all accounts balance?
-	if origin.Balance().Uint64() <= amountWithGas {
-		tp.Log.Error(ErrFunds+" have: %v need: %v", origin.Balance(), amountWithGas)
+	if origin.Balance().Uint64() <= amountWithFee {
+		tp.Log.Error(ErrFunds+" have: %v need: %v", origin.Balance(), amountWithFee)
 		return fmt.Errorf(ErrFunds)
 	}
 
@@ -276,8 +258,8 @@ func (tp *TransactionProcessor) ApplyTransaction(trans *types.Transaction) error
 	tp.globalState.SetNonce(trans.Origin(), tp.globalState.GetNonce(trans.Origin())+1) // TODO: Not thread-safe
 	transfer(tp.globalState, trans.Origin(), trans.Recipient, new(big.Int).SetUint64(trans.Amount))
 
-	//subtract gas from account, gas will be sent to miners in layers after
-	tp.globalState.SubBalance(trans.Origin(), new(big.Int).SetUint64(gas))
+	//subtract fee from account, fee will be sent to miners in layers after
+	tp.globalState.SubBalance(trans.Origin(), new(big.Int).SetUint64(trans.Fee))
 	tp.With().Info("transaction processed", log.String("transaction", trans.String()))
 	return nil
 }

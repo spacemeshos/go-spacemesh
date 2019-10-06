@@ -110,7 +110,7 @@ func TestLayers_AddBlock(t *testing.T) {
 	block2 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 2, []byte("data2"))
 	block3 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 3, []byte("data3"))
 
-	addTransactionsWithGas(layers.MeshDB, block1, 4, rand.Int63n(100))
+	addTransactionsWithFee(layers.MeshDB, block1, 4, rand.Int63n(100))
 
 	err := layers.AddBlock(block1)
 	assert.NoError(t, err)

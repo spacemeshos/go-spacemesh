@@ -22,7 +22,7 @@ const MaxTransactionsPerBlock = 200 //todo: move to config
 const MaxAtxPerBlock = 200          //todo: move to config
 
 const DefaultGasLimit = 10
-const DefaultGas = 1
+const DefaultFee = 1
 
 const IncomingTxProtocol = "TxGossip"
 

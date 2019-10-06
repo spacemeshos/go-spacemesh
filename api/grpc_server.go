@@ -76,8 +76,8 @@ func (s SpacemeshGrpcService) SubmitTransaction(ctx context.Context, in *pb.Sign
 		log.Error("failed to deserialize tx, error %v", err)
 		return nil, err
 	}
-	log.Info("GRPC SubmitTransaction to address: %s (len: %v), amount: %v gaslimit: %v, price: %v",
-		tx.Recipient.Short(), len(tx.Recipient), tx.Amount, tx.GasLimit, tx.GasPrice)
+	log.Info("GRPC SubmitTransaction to address: %s (len: %v), amount: %v gaslimit: %v, fee: %v",
+		tx.Recipient.Short(), len(tx.Recipient), tx.Amount, tx.GasLimit, tx.Fee)
 	if err := tx.CalcAndSetOrigin(); err != nil {
 		log.With().Error("failed to calc origin", log.Err(err))
 		return nil, err
@@ -86,8 +86,8 @@ func (s SpacemeshGrpcService) SubmitTransaction(ctx context.Context, in *pb.Sign
 		log.Error("tx failed to validate signature")
 		return nil, err
 	}
-	log.Info("GRPC SubmitTransaction BROADCAST tx. address %x (len %v), gaslimit %v, price %v id %v",
-		tx.Recipient, len(tx.Recipient), tx.GasLimit, tx.GasPrice, tx.Id().ShortString())
+	log.Info("GRPC SubmitTransaction BROADCAST tx. address %x (len %v), gaslimit %v, fee %v id %v",
+		tx.Recipient, len(tx.Recipient), tx.GasLimit, tx.Fee, tx.Id().ShortString())
 	go s.Network.Broadcast(miner.IncomingTxProtocol, in.Tx)
 	log.Info("GRPC SubmitTransaction returned msg ok")
 	return &pb.TxConfirmation{Value: "ok", Id: hex.EncodeToString(tx.Id().Bytes())}, nil

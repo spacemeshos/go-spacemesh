@@ -83,26 +83,26 @@ func (t *Transaction) ShortString() string {
 }
 
 func (t *Transaction) String() string {
-	return fmt.Sprintf("<id: %s, origin: %s, recipient: %s, amount: %v, nonce: %v, gas_limit: %v, gas_price: %v>",
-		t.Id().ShortString(), t.Origin().Short(), t.Recipient.Short(), t.Amount, t.AccountNonce, t.GasLimit, t.GasPrice)
+	return fmt.Sprintf("<id: %s, origin: %s, recipient: %s, amount: %v, nonce: %v, gas_limit: %v, fee: %v>",
+		t.Id().ShortString(), t.Origin().Short(), t.Recipient.Short(), t.Amount, t.AccountNonce, t.GasLimit, t.Fee)
 }
 
 type InnerTransaction struct {
 	AccountNonce uint64
 	Recipient    Address
 	GasLimit     uint64
-	GasPrice     uint64
+	Fee          uint64
 	Amount       uint64
 }
 
 // TEST ONLY
-func NewTxWithOrigin(nonce uint64, orig, rec Address, amount, gasLimit, gasPrice uint64) *Transaction {
+func NewTxWithOrigin(nonce uint64, orig, rec Address, amount, gasLimit, fee uint64) *Transaction {
 	inner := InnerTransaction{
 		AccountNonce: nonce,
 		Recipient:    rec,
 		Amount:       amount,
 		GasLimit:     gasLimit,
-		GasPrice:     gasPrice,
+		Fee:          fee,
 	}
 	return &Transaction{
 		InnerTransaction: inner,
@@ -111,13 +111,13 @@ func NewTxWithOrigin(nonce uint64, orig, rec Address, amount, gasLimit, gasPrice
 }
 
 // TEST ONLY
-func NewSignedTx(nonce uint64, rec Address, amount, gas, price uint64, signer *signing.EdSigner) (*Transaction, error) {
+func NewSignedTx(nonce uint64, rec Address, amount, gas, fee uint64, signer *signing.EdSigner) (*Transaction, error) {
 	inner := InnerTransaction{
 		AccountNonce: nonce,
 		Recipient:    rec,
 		Amount:       amount,
 		GasLimit:     gas,
-		GasPrice:     price,
+		Fee:          fee,
 	}
 
 	buf, err := InterfaceToBytes(&inner)

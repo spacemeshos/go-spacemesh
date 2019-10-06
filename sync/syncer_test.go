@@ -120,7 +120,6 @@ func (mbp mockBlocksProvider) GetGoodPatternBlocks(layer types.LayerID) (map[typ
 }
 
 var rewardConf = mesh.Config{
-	big.NewInt(10),
 	big.NewInt(5000),
 	big.NewInt(15),
 	15,
@@ -865,11 +864,11 @@ end:
 }
 
 func tx() *types.Transaction {
-	gasPrice := rand.Uint64()
+	fee := rand.Uint64()
 	addr := rand.Int63n(1000000)
 	tx := types.NewTxWithOrigin(1, types.HexToAddress(RandStringRunes(8)),
 		types.HexToAddress(strconv.FormatUint(uint64(addr), 10)),
-		10, 100, gasPrice)
+		10, 100, fee)
 
 	return tx
 }
