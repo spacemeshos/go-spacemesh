@@ -239,6 +239,8 @@ func (m *Mesh) PushTransactions(oldBase, newBase types.LayerID) {
 		if err != nil {
 			m.With().Error("cannot apply transactions",
 				log.LayerId(uint64(i)), log.Int("num_failed_txs", numFailedTxs), log.Err(err))
+			// TODO: We want to panic here once we have a way to "remember" that we didn't apply these txs
+			//  e.g. persist the last layer transactions were applied from and use that instead of `oldBase`
 		}
 		m.removeFromUnappliedTxs(validBlockTxs, invalidBlockTxs, i)
 		for _, tx := range invalidBlockTxs {

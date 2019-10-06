@@ -121,8 +121,7 @@ func (tp *TransactionProcessor) ApplyTransactions(layer types.LayerID, txs []*ty
 	newHash, err := tp.globalState.Commit(false)
 
 	if err != nil {
-		tp.Log.Error("db write error %v", err)
-		return remainingCount, err
+		return remainingCount, fmt.Errorf("failed to commit global state: %v", err)
 	}
 
 	tp.Log.Info("new state root for layer %v is %x", layer, newHash)
