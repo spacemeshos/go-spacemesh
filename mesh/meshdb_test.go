@@ -303,7 +303,7 @@ func TestMeshDB_GetStateProjection(t *testing.T) {
 
 	mdb := NewMemMeshDB(log.NewDefault("MeshDB.GetStateProjection"))
 	signer, origin := newSignerAndAddress(r, "123")
-	err := mdb.addToMeshTxs([]*types.Transaction{
+	err := mdb.addToUnappliedTxs([]*types.Transaction{
 		newTx(r, signer, 0, 10),
 		newTx(r, signer, 1, 20),
 	}, 1)
@@ -320,7 +320,7 @@ func TestMeshDB_GetStateProjection_WrongNonce(t *testing.T) {
 
 	mdb := NewMemMeshDB(log.New("TestForEachInView", "", ""))
 	signer, origin := newSignerAndAddress(r, "123")
-	err := mdb.addToMeshTxs([]*types.Transaction{
+	err := mdb.addToUnappliedTxs([]*types.Transaction{
 		newTx(r, signer, 1, 10),
 		newTx(r, signer, 2, 20),
 	}, 1)
@@ -337,7 +337,7 @@ func TestMeshDB_GetStateProjection_DetectNegativeBalance(t *testing.T) {
 
 	mdb := NewMemMeshDB(log.New("TestForEachInView", "", ""))
 	signer, origin := newSignerAndAddress(r, "123")
-	err := mdb.addToMeshTxs([]*types.Transaction{
+	err := mdb.addToUnappliedTxs([]*types.Transaction{
 		newTx(r, signer, 0, 10),
 		newTx(r, signer, 1, 95),
 	}, 1)
@@ -360,14 +360,14 @@ func TestMeshDB_GetStateProjection_NothingToApply(t *testing.T) {
 	r.Equal(uint64(initialBalance), balance)
 }
 
-func TestMeshDB_MeshTxs(t *testing.T) {
+func TestMeshDB_UnappliedTxs(t *testing.T) {
 	r := require.New(t)
 
 	mdb := NewMemMeshDB(log.New("TestForEachInView", "", ""))
 
 	signer1, origin1 := newSignerAndAddress(r, "thc")
 	signer2, origin2 := newSignerAndAddress(r, "cbd")
-	err := mdb.addToMeshTxs([]*types.Transaction{
+	err := mdb.addToUnappliedTxs([]*types.Transaction{
 		newTx(r, signer1, 420, 240),
 		newTx(r, signer1, 421, 241),
 		newTx(r, signer2, 0, 100),
@@ -389,7 +389,7 @@ func TestMeshDB_MeshTxs(t *testing.T) {
 	r.Equal(100, int(txns2[0].TotalAmount))
 	r.Equal(101, int(txns2[1].TotalAmount))
 
-	mdb.removeFromMeshTxs([]*types.Transaction{
+	mdb.removeFromUnappliedTxs([]*types.Transaction{
 		newTx(r, signer2, 0, 100),
 	}, nil, 1)
 
@@ -413,7 +413,7 @@ type TinyTx struct {
 }
 
 func getTxns(r *require.Assertions, mdb *MeshDB, origin types.Address) []TinyTx {
-	txnsB, err := mdb.meshTxs.Get(origin.Bytes())
+	txnsB, err := mdb.unappliedTxs.Get(origin.Bytes())
 	if err == database.ErrNotFound {
 		return []TinyTx{}
 	}

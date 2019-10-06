@@ -242,7 +242,7 @@ func (m *Mesh) PushTransactions(oldBase, newBase types.LayerID) {
 			m.With().Error("cannot apply transactions",
 				log.LayerId(uint64(i)), log.Int("num_failed_txs", numFailedTxs), log.Err(err))
 		}
-		m.removeFromMeshTxs(validBlockTxs, invalidBlockTxs, i)
+		m.removeFromUnappliedTxs(validBlockTxs, invalidBlockTxs, i)
 		for _, tx := range invalidBlockTxs {
 			err = m.blockBuilder.ValidateAndAddTxToPool(tx)
 			// We ignore errors here, since they mean that the tx is no longer valid and we shouldn't re-add it
@@ -308,8 +308,8 @@ func (m *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.Transaction, atxs 
 	if err != nil {
 		return fmt.Errorf("could not write transactions of block %v database: %v", blk.ID(), err)
 	}
-	if err := m.addToMeshTxs(txs, blk.LayerIndex); err != nil {
-		return fmt.Errorf("failed to add to meshTxs: %v", err)
+	if err := m.addToUnappliedTxs(txs, blk.LayerIndex); err != nil {
+		return fmt.Errorf("failed to add to unappliedTxs: %v", err)
 	}
 
 	// Store block (delete if storing ATXs fails)

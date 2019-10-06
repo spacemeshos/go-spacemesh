@@ -26,8 +26,8 @@ type MeshDB struct {
 	transactions       database.Database
 	contextualValidity database.DB //map blockId to contextualValidation state of block
 	patterns           database.DB //map blockId to contextualValidation state of block
-	meshTxs            database.Database
-	meshTxsMutex       sync.Mutex
+	unappliedTxs       database.Database
+	unappliedTxsMutex  sync.Mutex
 	orphanBlocks       map[types.LayerID]map[types.BlockID]struct{}
 	layerMutex         map[types.LayerID]*layerMutex
 	lhMutex            sync.Mutex
@@ -42,7 +42,7 @@ func NewPersistentMeshDB(path string, log log.Log) (*MeshDB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize transactions db: %v", err)
 	}
-	mtx, err := database.NewLDBDatabase(path+"meshTxs", 0, 0, log)
+	utx, err := database.NewLDBDatabase(path+"unappliedTxs", 0, 0, log)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize mesh transactions db: %v", err)
 	}
@@ -55,7 +55,7 @@ func NewPersistentMeshDB(path string, log log.Log) (*MeshDB, error) {
 		transactions:       tdb,
 		patterns:           pdb,
 		contextualValidity: vdb,
-		meshTxs:            mtx,
+		unappliedTxs:       utx,
 		orphanBlocks:       make(map[types.LayerID]map[types.BlockID]struct{}),
 		layerMutex:         make(map[types.LayerID]*layerMutex),
 	}
@@ -71,7 +71,7 @@ func NewMemMeshDB(log log.Log) *MeshDB {
 		contextualValidity: database.NewMemDatabase(),
 		transactions:       database.NewMemDatabase(),
 		patterns:           database.NewMemDatabase(),
-		meshTxs:            database.NewMemDatabase(),
+		unappliedTxs:       database.NewMemDatabase(),
 		orphanBlocks:       make(map[types.LayerID]map[types.BlockID]struct{}),
 		layerMutex:         make(map[types.LayerID]*layerMutex),
 	}
@@ -82,7 +82,7 @@ func (m *MeshDB) Close() {
 	m.blocks.Close()
 	m.layers.Close()
 	m.transactions.Close()
-	m.meshTxs.Close()
+	m.unappliedTxs.Close()
 	m.patterns.Close()
 	m.contextualValidity.Close()
 }
@@ -350,7 +350,7 @@ func (m *MeshDB) writeTransactions(txs []*types.Transaction) error {
 	return nil
 }
 
-func (m *MeshDB) addToMeshTxs(txs []*types.Transaction, layer types.LayerID) error {
+func (m *MeshDB) addToUnappliedTxs(txs []*types.Transaction, layer types.LayerID) error {
 	groupedTxs := groupByOrigin(txs)
 
 	for addr, accountTxs := range groupedTxs {
@@ -362,8 +362,8 @@ func (m *MeshDB) addToMeshTxs(txs []*types.Transaction, layer types.LayerID) err
 }
 
 func (m *MeshDB) addToAccountTxs(addr types.Address, accountTxs []*types.Transaction, layer types.LayerID) error {
-	m.meshTxsMutex.Lock()
-	defer m.meshTxsMutex.Unlock()
+	m.unappliedTxsMutex.Lock()
+	defer m.unappliedTxsMutex.Unlock()
 
 	// TODO: instead of storing a list, use LevelDB's prefixed keys and then iterate all relevant keys
 	pending, err := m.getAccountPendingTxs(addr)
@@ -377,7 +377,7 @@ func (m *MeshDB) addToAccountTxs(addr types.Address, accountTxs []*types.Transac
 	return nil
 }
 
-func (m *MeshDB) removeFromMeshTxs(accepted, rejected []*types.Transaction, layer types.LayerID) {
+func (m *MeshDB) removeFromUnappliedTxs(accepted, rejected []*types.Transaction, layer types.LayerID) {
 	gAccepted := groupByOrigin(accepted)
 	gRejected := groupByOrigin(rejected)
 	accounts := make(map[types.Address]struct{})
@@ -394,8 +394,8 @@ func (m *MeshDB) removeFromMeshTxs(accepted, rejected []*types.Transaction, laye
 }
 
 func (m *MeshDB) removeFromAccountTxs(account types.Address, gAccepted, gRejected map[types.Address][]*types.Transaction, layer types.LayerID) {
-	m.meshTxsMutex.Lock()
-	defer m.meshTxsMutex.Unlock()
+	m.unappliedTxsMutex.Lock()
+	defer m.unappliedTxsMutex.Unlock()
 
 	// TODO: instead of storing a list, use LevelDB's prefixed keys and then iterate all relevant keys
 	pending, err := m.getAccountPendingTxs(account)
@@ -413,21 +413,21 @@ func (m *MeshDB) removeFromAccountTxs(account types.Address, gAccepted, gRejecte
 
 func (m *MeshDB) storeAccountPendingTxs(account types.Address, pending *pending_txs.AccountPendingTxs) error {
 	if pending.IsEmpty() {
-		if err := m.meshTxs.Delete(account.Bytes()); err != nil {
+		if err := m.unappliedTxs.Delete(account.Bytes()); err != nil {
 			return fmt.Errorf("failed to delete empty pending txs for account %v: %v", account.Short(), err)
 		}
 		return nil
 	}
 	if accountTxsBytes, err := types.InterfaceToBytes(&pending); err != nil {
 		return fmt.Errorf("failed to marshal account pending txs: %v", err)
-	} else if err := m.meshTxs.Put(account.Bytes(), accountTxsBytes); err != nil {
+	} else if err := m.unappliedTxs.Put(account.Bytes(), accountTxsBytes); err != nil {
 		return fmt.Errorf("failed to store mesh txs for address %s", account.Short())
 	}
 	return nil
 }
 
 func (m *MeshDB) getAccountPendingTxs(addr types.Address) (*pending_txs.AccountPendingTxs, error) {
-	accountTxsBytes, err := m.meshTxs.Get(addr.Bytes())
+	accountTxsBytes, err := m.unappliedTxs.Get(addr.Bytes())
 	if err != nil && err != database.ErrNotFound {
 		return nil, fmt.Errorf("failed to get mesh txs for account %s", addr.Short())
 	}

@@ -269,7 +269,7 @@ func (m *MockBlockBuilder) ValidateAndAddTxToPool(tx *types.Transaction) error {
 	return nil
 }
 
-func TestMesh_AddBlockWithTxs_PushTransactions_UpdateMeshTxs(t *testing.T) {
+func TestMesh_AddBlockWithTxs_PushTransactions_UpdateUnappliedTxs(t *testing.T) {
 	r := require.New(t)
 
 	msh := getMesh("mesh")
