@@ -105,7 +105,8 @@ func TestBlockListener_TestAtxQueue(t *testing.T) {
 	atx3.Nipst.PostProof.Challenge = poetRef[:]
 	atx4.Nipst.PostProof.Challenge = poetRef[:]
 
-	bl1.ProcessAtx(atx1)
+	err = bl1.ProcessAtxs([]*types.ActivationTx{atx1})
+	assert.NoError(t, err)
 
 	bl2.AddBlockWithTxs(block1, []*types.Transaction{}, []*types.ActivationTx{atx1, atx2, atx3})
 

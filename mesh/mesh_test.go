@@ -2,6 +2,7 @@ package mesh
 
 import (
 	"bytes"
+	"fmt"
 	"github.com/google/uuid"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -352,4 +353,30 @@ func addBlockWithTxs(r *require.Assertions, msh *Mesh, id types.LayerID, valid b
 	err = msh.AddBlockWithTxs(blk, txs, nil)
 	r.NoError(err)
 	return blk
+}
+
+type FailingAtxDbMock struct{}
+
+func (FailingAtxDbMock) ProcessAtxs(atxs []*types.ActivationTx) error { return fmt.Errorf("💥") }
+
+func (FailingAtxDbMock) GetAtx(id types.AtxId) (*types.ActivationTxHeader, error) {
+	panic("implement me")
+}
+
+func (FailingAtxDbMock) GetFullAtx(id types.AtxId) (*types.ActivationTx, error) { panic("implement me") }
+
+func (FailingAtxDbMock) SyntacticallyValidateAtx(atx *types.ActivationTx) error { panic("implement me") }
+
+func TestMesh_AddBlockWithTxs(t *testing.T) {
+	r := require.New(t)
+	lg := log.New("id", "", "")
+	meshDB := NewMemMeshDB(lg)
+	mesh := NewMesh(meshDB, &FailingAtxDbMock{}, ConfigTst(), &MeshValidatorMock{mdb: meshDB}, MockTxMemPool{}, MockAtxMemPool{}, &MockState{}, lg)
+
+	blk := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data"))
+
+	err := mesh.AddBlockWithTxs(blk, nil, nil)
+	r.EqualError(err, "failed to process ATXs: 💥")
+	_, err = meshDB.blocks.Get(blk.ID().ToBytes())
+	r.EqualError(err, "leveldb: not found")
 }

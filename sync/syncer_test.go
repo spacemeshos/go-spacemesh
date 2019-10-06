@@ -281,7 +281,8 @@ func TestSyncer_SyncAtxs_FetchPoetProof(t *testing.T) {
 
 	atx1 := atx()
 	atx1.Nipst.PostProof.Challenge = poetRef[:]
-	s0.AtxDB.ProcessAtx(atx1)
+	err = s0.AtxDB.ProcessAtxs([]*types.ActivationTx{atx1})
+	r.NoError(err)
 
 	// Make sure that s1 syncAtxs would fetch the missing poet proof.
 
@@ -382,7 +383,8 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	syncObj1.Log.Info("started fetch_blocks")
 	syncObj2.Peers = pm1 //override peers with
 
-	syncObj1.ProcessAtx(atx3)
+	err := syncObj1.ProcessAtxs([]*types.ActivationTx{atx3})
+	assert.NoError(t, err)
 	block1 := types.NewExistingBlock(types.BlockID(123), 0, nil)
 	block1.ATXID = atx3.Id()
 	block2 := types.NewExistingBlock(types.BlockID(321), 1, nil)

@@ -47,7 +47,7 @@ type AtxMemPoolInValidator interface {
 }
 
 type AtxDB interface {
-	ProcessAtx(atx *types.ActivationTx)
+	ProcessAtxs(atxs []*types.ActivationTx) error
 	GetAtx(id types.AtxId) (*types.ActivationTxHeader, error)
 	GetFullAtx(id types.AtxId) (*types.ActivationTx, error)
 	SyntacticallyValidateAtx(atx *types.ActivationTx) error
@@ -303,14 +303,9 @@ func (m *Mesh) AddBlock(blk *types.Block) error {
 }
 
 func (m *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.Transaction, atxs []*types.ActivationTx) error {
-	m.Debug("add block %d", blk.ID())
+	m.With().Debug("adding block", log.BlockId(uint64(blk.ID())))
 
-	events.Publish(events.NewBlock{Id: uint64(blk.ID()), Atx: blk.ATXID.ShortString(), Layer: uint64(blk.LayerIndex)})
-	for _, t := range atxs {
-		//todo this should return an error
-		m.AtxDB.ProcessAtx(t)
-	}
-
+	// Store transactions (doesn't have to be rolled back if other writes fail)
 	err := m.writeTransactions(txs)
 	if err != nil {
 		return fmt.Errorf("could not write transactions of block %v database: %v", blk.ID(), err)
@@ -319,9 +314,20 @@ func (m *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.Transaction, atxs 
 		return fmt.Errorf("failed to add to meshTxs: %v", err)
 	}
 
+	// Store block (delete if storing ATXs fails)
 	if err := m.MeshDB.AddBlock(blk); err != nil && err != ErrAlreadyExist {
 		m.With().Error("failed to add block", log.BlockId(uint64(blk.ID())), log.Err(err))
 		return err
+	}
+
+	// Store ATXs (atomically, delete the block on failure)
+	err = m.AtxDB.ProcessAtxs(atxs)
+	if err != nil {
+		// Roll back adding the block (delete it)
+		if err := m.blocks.Delete(blk.ID().ToBytes()); err != nil {
+			m.With().Warning("failed to roll back adding a block", log.Err(err), log.BlockId(uint64(blk.ID())))
+		}
+		return fmt.Errorf("failed to process ATXs: %v", err)
 	}
 
 	m.SetLatestLayer(blk.Layer())
@@ -331,7 +337,8 @@ func (m *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.Transaction, atxs 
 	//invalidate txs and atxs from pool
 	m.invalidateFromPools(&blk.MiniBlock)
 
-	m.Debug("added block %d", blk.ID())
+	events.Publish(events.NewBlock{Id: uint64(blk.ID()), Atx: blk.ATXID.ShortString(), Layer: uint64(blk.LayerIndex)})
+	m.With().Debug("added block", log.BlockId(uint64(blk.ID())))
 	return nil
 }
 

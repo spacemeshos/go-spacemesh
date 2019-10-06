@@ -81,11 +81,11 @@ func TestBlockListener(t *testing.T) {
 	atx2.Nipst.PostProof.Challenge = poetRef[:]
 	atx3.Nipst.PostProof.Challenge = poetRef[:]
 
-	bl1.ProcessAtx(atx1)
-	bl1.ProcessAtx(atx2)
-	bl1.ProcessAtx(atx3)
+	err = bl1.ProcessAtxs([]*types.ActivationTx{atx1, atx2, atx3})
+	assert.NoError(t, err)
 
-	bl2.ProcessAtx(atx1)
+	err = bl2.ProcessAtxs([]*types.ActivationTx{atx1})
+	assert.NoError(t, err)
 
 	block1 := types.NewExistingBlock(types.BlockID(123), 1, nil)
 	block1.Signature = signer.Sign(block1.Bytes())
@@ -358,8 +358,10 @@ func TestBlockListenerViewTraversal(t *testing.T) {
 	types.BytesToInterface(byts, &atx1)
 	atx1.CalcAndSetId()
 
-	bl1.ProcessAtx(atx)
-	bl2.ProcessAtx(&atx1)
+	err := bl1.ProcessAtxs([]*types.ActivationTx{atx})
+	assert.NoError(t, err)
+	err = bl2.ProcessAtxs([]*types.ActivationTx{&atx1})
+	assert.NoError(t, err)
 
 	block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
 	block1.ATXID = *types.EmptyAtxId
@@ -509,8 +511,10 @@ func TestBlockListener_TraverseViewBadFlow(t *testing.T) {
 	types.BytesToInterface(byts, &atx1)
 	atx1.CalcAndSetId()
 
-	bl1.ProcessAtx(atx)
-	bl2.ProcessAtx(&atx1)
+	err := bl1.ProcessAtxs([]*types.ActivationTx{atx})
+	assert.NoError(t, err)
+	err = bl2.ProcessAtxs([]*types.ActivationTx{&atx1})
+	assert.NoError(t, err)
 
 	block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
 	block1.Id = 1
