@@ -377,7 +377,7 @@ func (m *MeshDB) addToAccountTxs(addr types.Address, accountTxs []*types.Transac
 	return nil
 }
 
-func (m *MeshDB) removeFromMeshTxs(accepted, rejected []*types.Transaction, layer types.LayerID) error {
+func (m *MeshDB) removeFromMeshTxs(accepted, rejected []*types.Transaction, layer types.LayerID) {
 	gAccepted := groupByOrigin(accepted)
 	gRejected := groupByOrigin(rejected)
 	accounts := make(map[types.Address]struct{})
@@ -389,27 +389,26 @@ func (m *MeshDB) removeFromMeshTxs(accepted, rejected []*types.Transaction, laye
 	}
 
 	for account := range accounts {
-		if err := m.removeFromAccountTxs(account, gAccepted, gRejected, layer); err != nil {
-			return err
-		}
+		m.removeFromAccountTxs(account, gAccepted, gRejected, layer)
 	}
-	return nil
 }
 
-func (m *MeshDB) removeFromAccountTxs(account types.Address, gAccepted, gRejected map[types.Address][]*types.Transaction, layer types.LayerID) error {
+func (m *MeshDB) removeFromAccountTxs(account types.Address, gAccepted, gRejected map[types.Address][]*types.Transaction, layer types.LayerID) {
 	m.meshTxsMutex.Lock()
 	defer m.meshTxsMutex.Unlock()
 
 	// TODO: instead of storing a list, use LevelDB's prefixed keys and then iterate all relevant keys
 	pending, err := m.getAccountPendingTxs(account)
 	if err != nil {
-		return err
+		m.With().Error("failed to get account pending txs",
+			log.LayerId(uint64(layer)), log.String("address", account.Short()), log.Err(err))
+		return
 	}
 	pending.Remove(gAccepted[account], gRejected[account], layer)
 	if err := m.storeAccountPendingTxs(account, pending); err != nil {
-		return err
+		m.With().Error("failed to store account pending txs",
+			log.LayerId(uint64(layer)), log.String("address", account.Short()), log.Err(err))
 	}
-	return nil
 }
 
 func (m *MeshDB) storeAccountPendingTxs(account types.Address, pending *pending_txs.AccountPendingTxs) error {

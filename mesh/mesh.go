@@ -242,9 +242,7 @@ func (m *Mesh) PushTransactions(oldBase, newBase types.LayerID) {
 			m.With().Error("cannot apply transactions",
 				log.LayerId(uint64(i)), log.Int("num_failed_txs", numFailedTxs), log.Err(err))
 		}
-		if err := m.removeFromMeshTxs(validBlockTxs, invalidBlockTxs, i); err != nil {
-			m.With().Error("failed to remove from meshTxs", log.LayerId(uint64(i)), log.Err(err))
-		}
+		m.removeFromMeshTxs(validBlockTxs, invalidBlockTxs, i)
 		for _, tx := range invalidBlockTxs {
 			err = m.blockBuilder.ValidateAndAddTxToPool(tx)
 			// We ignore errors here, since they mean that the tx is no longer valid and we shouldn't re-add it

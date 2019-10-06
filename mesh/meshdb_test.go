@@ -389,10 +389,9 @@ func TestMeshDB_MeshTxs(t *testing.T) {
 	r.Equal(100, int(txns2[0].TotalAmount))
 	r.Equal(101, int(txns2[1].TotalAmount))
 
-	err = mdb.removeFromMeshTxs([]*types.Transaction{
+	mdb.removeFromMeshTxs([]*types.Transaction{
 		newTx(r, signer2, 0, 100),
 	}, nil, 1)
-	r.NoError(err)
 
 	txns1 = getTxns(r, mdb, origin1)
 	r.Len(txns1, 2)
