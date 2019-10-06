@@ -101,7 +101,7 @@ type Builder struct {
 }
 
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
-func NewBuilder(nodeId types.NodeId, coinbaseAccount types.Address, signer Signer, db ATXDBProvider, net Broadcaster, mesh MeshProvider, layersPerEpoch uint16, nipstBuilder NipstBuilder, postProver nipst.PostProverClient, layerClock chan types.LayerID, isSyncedFunc func() bool, store BytesStore, log log.Log) *Builder {
+func NewBuilder(nodeId types.NodeId, coinbaseAccount types.Address, signer Signer, db ATXDBProvider, net Broadcaster, mesh MeshProvider, layersPerEpoch uint16, nipstBuilder NipstBuilder, postProver PostProverClient, layerClock chan types.LayerID, isSyncedFunc func() bool, store BytesStore, log log.Log) *Builder {
 	return &Builder{
 		Signer:          signer,
 		nodeId:          nodeId,

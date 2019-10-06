@@ -8,6 +8,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/post/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -86,29 +87,11 @@ func (ms *MockSigning) Sign(m []byte) []byte {
 	return m
 }
 
-type postProverClientMock struct{}
 
 // A compile time check to ensure that postProverClientMock fully implements PostProverClient.
 var _ PostProverClient = (*postProverClientMock)(nil)
 
-/*func (*postProverClientMock) Initialize() (*types.PostProof, error) { return &types.PostProof{}, nil }
 
-func (*postProverClientMock) Execute(challenge []byte) (*types.PostProof, error) {
-	return &types.PostProof{}, nil
-}
-
-func (*postProverClientMock) Reset() error { return nil }
-
-func (*postProverClientMock) IsInitialized() (bool, error) { return true, nil }
-
-func (*postProverClientMock) VerifyInitAllowed() error { return nil }
-
-func (*postProverClientMock) SetLogger(shared.Logger) {}
-
-func (*postProverClientMock) SetParams(datadir string, space uint64) error { return nil }
-
-func (*postProverClientMock) Cfg() *config.Config { return nil }
-*/
 type NipstBuilderMock struct {
 	poetRef        []byte
 	buildNipstFunc func(challenge *types.Hash32) (*types.NIPST, error)

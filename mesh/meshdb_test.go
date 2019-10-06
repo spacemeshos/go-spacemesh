@@ -51,7 +51,6 @@ func TestMeshDB_AddBlock(t *testing.T) {
 		Space:          0,
 		NipstChallenge: &types.Hash32{},
 		PostProof: &types.PostProof{
-			Identity:     []byte(nil),
 			Challenge:    poetRef,
 			MerkleRoot:   []byte(nil),
 			ProofNodes:   [][]byte(nil),
