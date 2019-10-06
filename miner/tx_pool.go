@@ -1,13 +1,11 @@
 package miner
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/pending_txs"
 	"github.com/spacemeshos/go-spacemesh/rand"
-	"sort"
 	"sync"
 )
 
@@ -51,11 +49,9 @@ func (t *TxMempool) GetTxsForBlock(numOfTxs int, getState func(addr types.Addres
 		return txIds, nil
 	}
 
-	sort.Slice(txIds, func(i, j int) bool {
-		return bytes.Compare(txIds[i].Bytes(), txIds[j].Bytes()) < 0
-	})
 	var ret []types.TransactionId
 	for idx := range getRandIdxs(numOfTxs, len(txIds)) {
+		//noinspection GoNilness
 		ret = append(ret, txIds[idx])
 	}
 	return ret, nil
