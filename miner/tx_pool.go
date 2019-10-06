@@ -2,12 +2,11 @@ package miner
 
 import (
 	"bytes"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/pending_txs"
-	"github.com/spacemeshos/sha256-simd"
+	"github.com/spacemeshos/go-spacemesh/rand"
 	"sort"
 	"sync"
 )
@@ -35,7 +34,7 @@ func (t *TxMempool) Get(id types.TransactionId) (types.Transaction, error) {
 	return types.Transaction{}, errors.New("transaction not found in mempool")
 }
 
-func (t *TxMempool) GetTxsForBlock(numOfTxs int, seed []byte, getState func(addr types.Address) (nonce, balance uint64, err error)) ([]types.TransactionId, error) {
+func (t *TxMempool) GetTxsForBlock(numOfTxs int, getState func(addr types.Address) (nonce, balance uint64, err error)) ([]types.TransactionId, error) {
 	var txIds []types.TransactionId
 	t.mu.RLock()
 	for addr, account := range t.accounts {
@@ -56,24 +55,18 @@ func (t *TxMempool) GetTxsForBlock(numOfTxs int, seed []byte, getState func(addr
 		return bytes.Compare(txIds[i].Bytes(), txIds[j].Bytes()) < 0
 	})
 	var ret []types.TransactionId
-	for idx := range getRandIdxs(numOfTxs, len(txIds), seed) {
+	for idx := range getRandIdxs(numOfTxs, len(txIds)) {
 		ret = append(ret, txIds[idx])
 	}
 	return ret, nil
 }
 
-func getRandIdxs(numOfTxs, spaceSize int, seed []byte) map[uint64]struct{} {
+func getRandIdxs(numOfTxs, spaceSize int) map[uint64]struct{} {
 	idxs := make(map[uint64]struct{})
-	i := uint64(0)
-	message := make([]byte, len(seed)+binary.Size(i))
-	copy(message, seed)
 	for len(idxs) < numOfTxs {
-		binary.LittleEndian.PutUint64(message[len(seed):], i)
-		msgHash := sha256.Sum256(message)
-		msgInt := binary.LittleEndian.Uint64(msgHash[:8])
-		idx := msgInt % uint64(spaceSize)
+		rndInt := rand.Uint64()
+		idx := rndInt % uint64(spaceSize)
 		idxs[idx] = struct{}{}
-		i++
 	}
 	return idxs
 }

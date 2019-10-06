@@ -47,7 +47,7 @@ type Syncer interface {
 }
 
 type TxPool interface {
-	GetTxsForBlock(numOfTxs int, seed []byte, getState func(addr types.Address) (nonce, balance uint64, err error)) ([]types.TransactionId, error)
+	GetTxsForBlock(numOfTxs int, getState func(addr types.Address) (nonce, balance uint64, err error)) ([]types.TransactionId, error)
 	Put(id types.TransactionId, item *types.Transaction)
 	Invalidate(id types.TransactionId)
 }
@@ -381,7 +381,7 @@ func (t *BlockBuilder) acceptBlockData() {
 			}
 
 			for _, eligibilityProof := range proofs {
-				txList, err := t.TransactionPool.GetTxsForBlock(MaxTransactionsPerBlock, eligibilityProof.Sig, t.projector.GetProjection)
+				txList, err := t.TransactionPool.GetTxsForBlock(MaxTransactionsPerBlock, t.projector.GetProjection)
 				if err != nil {
 					t.With().Error("failed to get txs for block", log.LayerId(uint64(layerID)), log.Err(err))
 					continue

@@ -1,8 +1,10 @@
 package miner
 
 import (
+	"encoding/binary"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/stretchr/testify/require"
 	"strconv"
 	"sync"
@@ -39,8 +41,9 @@ func TestNewTxPoolWithAccounts(t *testing.T) {
 	r.Equal(prevNonce+2, nonce)
 	r.Equal(prevBalance-50-150, balance)
 
-	seed := []byte("seed")
-	items, err := pool.GetTxsForBlock(1, seed, getState)
+	seed := []byte("seedseed")
+	rand.Seed(int64(binary.LittleEndian.Uint64(seed)))
+	items, err := pool.GetTxsForBlock(1, getState)
 	r.NoError(err)
 	r.Len(items, 1)
 	r.Equal(tx2.Id(), items[0])
@@ -70,44 +73,44 @@ func TestTxPoolWithAccounts_GetRandomTxs(t *testing.T) {
 	r.Equal(prevNonce+numTxs, nonce)
 	r.Equal(prevBalance-(50*numTxs), balance)
 
-	seed := []byte("seed")
-	txs, err := pool.GetTxsForBlock(5, seed, getState)
+	seed := []byte("seedseed")
+	rand.Seed(int64(binary.LittleEndian.Uint64(seed)))
+	txs, err := pool.GetTxsForBlock(5, getState)
 	r.NoError(err)
 	r.Len(txs, 5)
 	var txIds []types.TransactionId
 	for _, tx := range txs {
 		txIds = append(txIds, tx)
 	}
-	r.ElementsMatch([]types.TransactionId{ids[5], ids[0], ids[9], ids[3], ids[7]}, txIds)
+	r.ElementsMatch([]types.TransactionId{ids[7], ids[9], ids[8], ids[1], ids[4]}, txIds)
 	/*
-		e960de27caffa83e6e8bbcf126268115d7b0284b15b67e3d1394db63ddf551cc
-		b791d54444fa6fec3be511c3e02906ccab7dec03611d61b8b5fc6a5a8015320f
-		064d86ea163b6b9e2bdf476e2f4da78bf05f1cf90d87d561605498451a0ff56c
-		6e1409da76706c440385655be5730b34c0e02545f2d1b54ec9e407d3c6fef8e4
 		b21487d43b2bcd27fe1caadff4ddf846e10e0722a78174780a67200bf1dab27e
+		064d86ea163b6b9e2bdf476e2f4da78bf05f1cf90d87d561605498451a0ff56c
+		00ff5da64513acf922b76a31c495c9c4be0af417734db94126d98b1c8b9e8e4f
+		b554c66ebf9f9f335d6dc1facc0ee86e0b6aaf283e5a60b7d2846754808b230d
+		570ba6339ad10894fc56e158215c3674207f144a40d29871d01603b08fc07ad1
 	*/
 }
 
 func TestGetRandIdxs(t *testing.T) {
-	seed := []byte("seed")
+	seed := []byte("seedseed")
+	rand.Seed(int64(binary.LittleEndian.Uint64(seed)))
 
-	idxs := getRandIdxs(5, 10, seed)
+	idxs := getRandIdxs(5, 10)
 
 	var idsList []uint64
 	for id := range idxs {
 		idsList = append(idsList, id)
 	}
-	require.ElementsMatch(t, []uint64{1, 5, 6, 8, 9}, idsList)
+	require.ElementsMatch(t, []uint64{0, 1, 4, 6, 7}, idsList)
 
-	otherSeed := []byte("other seed")
-
-	idxs = getRandIdxs(5, 10, otherSeed)
+	idxs = getRandIdxs(5, 10)
 
 	idsList = []uint64{}
 	for id := range idxs {
 		idsList = append(idsList, id)
 	}
-	require.ElementsMatch(t, []uint64{2, 4, 6, 7, 8}, idsList) // different seed -> different indices
+	require.ElementsMatch(t, []uint64{2, 5, 6, 7, 9}, idsList) // new call -> different indices
 }
 
 func newTx(origin types.Address, nonce, totalAmount uint64) (types.TransactionId, *types.Transaction) {
