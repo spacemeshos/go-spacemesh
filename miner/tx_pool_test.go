@@ -82,12 +82,12 @@ func TestTxPoolWithAccounts_GetRandomTxs(t *testing.T) {
 	for _, tx := range txs {
 		txIds = append(txIds, tx)
 	}
-	r.ElementsMatch([]types.TransactionId{ids[7], ids[9], ids[8], ids[1], ids[4]}, txIds)
+	r.ElementsMatch([]types.TransactionId{ids[6], ids[1], ids[0], ids[7], ids[4]}, txIds)
 	/*
-		b21487d43b2bcd27fe1caadff4ddf846e10e0722a78174780a67200bf1dab27e
-		064d86ea163b6b9e2bdf476e2f4da78bf05f1cf90d87d561605498451a0ff56c
-		00ff5da64513acf922b76a31c495c9c4be0af417734db94126d98b1c8b9e8e4f
+		4cb91d90ed9c895dc96a0871fa60dab971f5e3b521672522ebbdbb1c4913732b
 		b554c66ebf9f9f335d6dc1facc0ee86e0b6aaf283e5a60b7d2846754808b230d
+		b791d54444fa6fec3be511c3e02906ccab7dec03611d61b8b5fc6a5a8015320f
+		b21487d43b2bcd27fe1caadff4ddf846e10e0722a78174780a67200bf1dab27e
 		570ba6339ad10894fc56e158215c3674207f144a40d29871d01603b08fc07ad1
 	*/
 }
