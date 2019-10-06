@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"hash/fnv"
 	"math"
@@ -590,15 +591,15 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) {
 }
 
 func (ni *ninjaTortoise) SaveOpinion(p votingPattern) {
-	for blk, vec := range ni.tVote[p] {
-		valid := false
-		if vec == Support {
-			valid = true
+	for bid, vec := range ni.tVote[p] {
+		valid := vec == Support
+		if err := ni.SaveContextualValidity(bid, valid); err != nil {
+			ni.Error("could not write contextual validity for block %v ", bid)
 		}
 
-		if err := ni.SaveContextualValidity(blk, valid); err != nil {
-			ni.Error("could not write contextual validity for block %v ", blk)
+		if !valid {
+			ni.With().Warning("block is contextually invalid", log.BlockId(uint64(bid)))
 		}
-
+		events.Publish(events.ValidBlock{Id: uint64(bid), Valid: valid})
 	}
 }

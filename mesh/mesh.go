@@ -159,12 +159,10 @@ func (m *Mesh) ExtractUniqueOrderedTransactions(l *types.Layer) (validBlockTxs, 
 		if err != nil {
 			return nil, nil, fmt.Errorf("could not get contextual validity for block %v: %v", b.ID(), err)
 		}
-		events.Publish(events.ValidBlock{Id: uint64(b.ID()), Valid: valid})
 		if valid {
 			validBlocks = append(validBlocks, b)
 		} else {
 			invalidBlocks = append(invalidBlocks, b)
-			m.With().Warning("block not contextually valid", log.BlockId(uint64(b.ID()))) // TODO: do we want this log?
 		}
 	}
 
