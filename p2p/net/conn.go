@@ -5,6 +5,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/delimited"
+	"github.com/spacemeshos/go-spacemesh/p2p/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"time"
 
@@ -207,7 +208,7 @@ func (c *FormattedConnection) Send(m []byte) error {
 		}
 		return err
 	}
-	//metrics.PeerRecv.With(metrics.PeerIdLabel, c.remotePub.String()).Add(float64(len(m)))
+	metrics.PeerRecv.With(metrics.PeerIdLabel, c.remotePub.String()).Add(float64(len(m)))
 	return nil
 }
 
@@ -220,7 +221,6 @@ func (c *FormattedConnection) closeUnlocked() error {
 	err := c.close.Close()
 	c.closed = true
 	if err != nil {
-		c.logger.Warning("error while closing with connection %v, err: %v", c.RemotePublicKey().String(), err)
 		return err
 	}
 	return nil

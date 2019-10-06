@@ -1,6 +1,7 @@
 package connectionpool
 
 import (
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
@@ -150,9 +151,8 @@ func (cp *ConnectionPool) handleNewConnection(rPub p2pcrypto.PublicKey, newConn 
 			closeConn = curConn
 			cp.connections[rPub] = newConn
 		} else { // newConn < curConn
-			cp.net.Logger().Warning("connection created while connection already exists between peers, closing new connection. existing session ID=%v, new session ID=%v, remote=%s", curConn.Session().ID(), newConn.Session().ID(), rPub)
 			closeConn = newConn
-			err = errors.New("closing connection")
+			err = fmt.Errorf("connection created while connection already exists between peers, closing new connection. existing session ID=%v, new session ID=%v, remote=%s", curConn.Session().ID(), newConn.Session().ID(), rPub)
 		}
 		cp.connMutex.Unlock()
 		if closeConn != nil {

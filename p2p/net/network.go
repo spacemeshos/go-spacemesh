@@ -186,33 +186,6 @@ func tcpSocketConfig(tcpconn *net.TCPConn) {
 
 	tcpconn.SetKeepAlive(true)
 	tcpconn.SetKeepAlivePeriod(time.Second * 10)
-	// TODO: the code below doesn't work on certain version of go. reconsider it.
-	//rawConn, err := tcpconn.SyscallConn()
-	//if err != nil {
-	//	log.Warning("on getting raw connection object for keepalive parameter setting", err.Error())
-	//	return
-	//}
-	//
-	//err = rawConn.Control(
-	//	func(fdPtr uintptr) {
-	//		// got socket file descriptor. Setting parameters.
-	//		fd := int(fdPtr)
-	//		//Number of probes.
-	//		err := syscall.SetsockoptInt(fd, syscall.IPPROTO_TCP, syscall.TCP_KEEPCNT, 3)
-	//		if err != nil {
-	//			log.Warning("on setting keepalive probe count", err.Error())
-	//		}
-	//		//Wait time after an unsuccessful probe.
-	//		err = syscall.SetsockoptInt(fd, syscall.IPPROTO_TCP, syscall.TCP_KEEPINTVL, 3)
-	//		if err != nil {
-	//			log.Warning("on setting keepalive retry interval", err.Error())
-	//		}
-	//	})
-	//if err != nil {
-	//	log.Warning("Error using control")
-	//	return
-	//}
-
 }
 
 func (n *Net) createConnection(address string, remotePub p2pcrypto.PublicKey, session NetworkSession,
@@ -316,10 +289,8 @@ func (n *Net) accept(listen net.Listener) {
 		<-pending
 		netConn, err := listen.Accept()
 		if err != nil {
-
 			if n.isShuttingDown {
 				return
-				//TODO only print to log and return? The node will continue running without the listener, doesn't sound healthy
 			}
 			if !Temporary(err) {
 				n.logger.Error("Listener errored while accepting connections: err: %v", err)

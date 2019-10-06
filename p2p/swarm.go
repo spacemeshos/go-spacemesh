@@ -167,6 +167,8 @@ func newSwarm(ctx context.Context, config config.Config, newNode bool, persist b
 	s.network.SubscribeOnNewRemoteConnections(func(nce net.NewConnectionEvent) {
 		err := cpool.OnNewConnection(nce)
 		if err != nil {
+			s.lNode.Warning("adding incoming connection err=", err)
+			// no need to continue since this means connection already exists.
 			return
 		}
 		s.onNewConnection(nce)
