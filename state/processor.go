@@ -122,7 +122,7 @@ func (tp *TransactionProcessor) ApplyTransactions(layer types.LayerID, txs []*ty
 	defer tp.mu.Unlock()
 	remaining := txs
 	remainingCount := len(remaining)
-	for i := 0; i < 100; i++ { // Capped to 100 iterations TODO: Should this be capped? Extract to config / const
+	for { // Loop until there's nothing left to process
 		remaining = tp.Process(remaining)
 		if remainingCount == len(remaining) {
 			break
