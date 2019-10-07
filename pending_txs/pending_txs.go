@@ -35,7 +35,7 @@ func (apt *AccountPendingTxs) Add(layer types.LayerID, txs ...*types.Transaction
 		}
 		existing[tx.Id()] = nanoTx{
 			Amount:                 tx.Amount,
-			Fee:                    tx.Fee, // TODO: Filthy hack!
+			Fee:                    tx.Fee,
 			HighestLayerIncludedIn: layer,
 		}
 	}
@@ -89,7 +89,8 @@ func (apt *AccountPendingTxs) ValidTxs(prevNonce, prevBalance uint64) (txIds []t
 			break // all transactions would overdraft the account
 		}
 		txIds = append(txIds, id)
-		balance -= txs[id].Amount + txs[id].Fee
+		tx := txs[id]
+		balance -= tx.Amount + tx.Fee
 		nonce++
 	}
 	apt.mu.RUnlock()

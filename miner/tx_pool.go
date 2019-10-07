@@ -102,6 +102,7 @@ func (t *TxMempool) GetProjection(addr types.Address, prevNonce, prevBalance uin
 	return account.GetProjection(prevNonce, prevBalance)
 }
 
+// ⚠️ must be called under write-lock
 func (t *TxMempool) getOrCreate(addr types.Address) *pending_txs.AccountPendingTxs {
 	account, found := t.accounts[addr]
 	if !found {
