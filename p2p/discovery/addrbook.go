@@ -660,7 +660,8 @@ func NewAddrBook(localAddress *node.NodeInfo, config config.SwarmConfig, logger 
 			am.logger.Warning("Skipping loading peers to addrbook, data dir not found err=%v", err)
 		}
 
-		go am.saveRoutine()
+		am.wg.Add(1)
+		go func() { am.saveRoutine(); am.wg.Done() }()
 	}
 	return &am
 }

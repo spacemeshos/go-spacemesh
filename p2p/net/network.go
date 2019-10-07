@@ -6,13 +6,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
-	"github.com/spacemeshos/go-spacemesh/p2p/delimited"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/version"
 	"net"
 	"strconv"
 	"sync"
+	//"syscall"
 	"time"
 )
 
@@ -20,7 +20,7 @@ import (
 const DefaultQueueCount uint = 6
 
 // DefaultMessageQueueSize is the buffer size of each queue mentioned above. (queues are buffered channels)
-const DefaultMessageQueueSize uint = 256
+const DefaultMessageQueueSize uint = 5120
 
 // IncomingMessageEvent is the event reported on new incoming message, it contains the message and the Connection carrying the message
 type IncomingMessageEvent struct {
@@ -31,7 +31,6 @@ type IncomingMessageEvent struct {
 // ManagedConnection in an interface extending Connection with some internal methods that are required for Net to manage Connections
 type ManagedConnection interface {
 	Connection
-	incomingChannel() chan []byte
 	beginEventProcessing()
 }
 
@@ -57,7 +56,7 @@ type Net struct {
 	regNewRemoteConn []func(NewConnectionEvent)
 
 	clsMutex           sync.RWMutex
-	closingConnections []func(Connection)
+	closingConnections []func(ConnectionWithErr)
 
 	queuesCount           uint
 	incomingMessagesQueue []chan IncomingMessageEvent
@@ -86,7 +85,7 @@ func NewNet(conf config.Config, localEntity *node.LocalNode) (*Net, error) {
 		logger:                localEntity.Log,
 		listenAddress:         tcpAddress,
 		regNewRemoteConn:      make([]func(NewConnectionEvent), 0, 3),
-		closingConnections:    make([]func(Connection), 0, 3),
+		closingConnections:    make([]func(cwe ConnectionWithErr), 0, 3),
 		queuesCount:           qcount,
 		incomingMessagesQueue: make([]chan IncomingMessageEvent, qcount, qcount),
 		config:                conf,
@@ -150,13 +149,13 @@ func (n *Net) IncomingMessages() []chan IncomingMessageEvent {
 }
 
 // SubscribeClosingConnections registers a callback for a new connection event. all registered callbacks are called before moving.
-func (n *Net) SubscribeClosingConnections(f func(connection Connection)) {
+func (n *Net) SubscribeClosingConnections(f func(connection ConnectionWithErr)) {
 	n.clsMutex.Lock()
 	n.closingConnections = append(n.closingConnections, f)
 	n.clsMutex.Unlock()
 }
 
-func (n *Net) publishClosingConnection(connection Connection) {
+func (n *Net) publishClosingConnection(connection ConnectionWithErr) {
 	n.clsMutex.RLock()
 	for _, f := range n.closingConnections {
 		f(connection)
@@ -167,11 +166,26 @@ func (n *Net) publishClosingConnection(connection Connection) {
 func dial(keepAlive, timeOut time.Duration, address string) (net.Conn, error) {
 	// connect via dialer so we can set tcp network params
 	dialer := &net.Dialer{}
-	dialer.KeepAlive = keepAlive // drop connections after a period of inactivity
-	dialer.Timeout = timeOut     // max time bef
+	dialer.Timeout = timeOut // max time bef
 
 	netConn, err := dialer.Dial("tcp", address)
+	if err == nil {
+		tcpconn := netConn.(*net.TCPConn)
+		tcpSocketConfig(tcpconn)
+		return tcpconn, nil
+		//netConn = tcpconn
+	}
 	return netConn, err
+}
+
+func tcpSocketConfig(tcpconn *net.TCPConn) {
+	// TODO: Error handling, what if only certain flags are supported
+	// TODO: Parameters, try to find right buffers based on something or os/net-interface input?
+	tcpconn.SetReadBuffer(1024 * 64)
+	tcpconn.SetWriteBuffer(1024 * 64)
+
+	tcpconn.SetKeepAlive(true)
+	tcpconn.SetKeepAlivePeriod(time.Second * 10)
 }
 
 func (n *Net) createConnection(address string, remotePub p2pcrypto.PublicKey, session NetworkSession,
@@ -188,8 +202,7 @@ func (n *Net) createConnection(address string, remotePub p2pcrypto.PublicKey, se
 	}
 
 	n.logger.Debug("Connected to %s...", address)
-	formatter := delimited.NewChan(1000)
-	return newConnection(netConn, n, formatter, remotePub, session, n.config.MsgSizeLimit, n.logger), nil
+	return newConnection(netConn, n, remotePub, session, n.config.MsgSizeLimit, n.config.ResponseTimeout, n.logger), nil
 }
 
 func (n *Net) createSecuredConnection(address string, remotePubkey p2pcrypto.PublicKey, timeOut time.Duration,
@@ -276,17 +289,23 @@ func (n *Net) accept(listen net.Listener) {
 		<-pending
 		netConn, err := listen.Accept()
 		if err != nil {
-
-			if !n.isShuttingDown {
-				n.logger.Error("Failed to accept connection request %v", err)
-				//TODO only print to log and return? The node will continue running without the listener, doesn't sound healthy
+			if n.isShuttingDown {
+				return
 			}
-			return
+			if !Temporary(err) {
+				n.logger.Error("Listener errored while accepting connections: err: %v", err)
+				return
+			}
+
+			n.logger.Warning("Failed to accept connection request err:%v", err)
+			pending <- struct{}{}
+			continue
 		}
 
 		n.logger.Debug("Got new connection... Remote Address: %s", netConn.RemoteAddr())
-		formatter := delimited.NewChan(1000)
-		c := newConnection(netConn, n, formatter, nil, nil, n.config.MsgSizeLimit, n.logger)
+		conn := netConn.(*net.TCPConn)
+		tcpSocketConfig(conn) // TODO maybe only set this after session handshake to prevent denial of service with big messages
+		c := newConnection(netConn, n, nil, nil, n.config.MsgSizeLimit, n.config.ResponseTimeout, n.logger)
 		go func(con Connection) {
 			defer func() { pending <- struct{}{} }()
 			err := c.setupIncoming(n.config.SessionTimeout)

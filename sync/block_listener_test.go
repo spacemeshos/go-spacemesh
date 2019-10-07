@@ -61,9 +61,10 @@ func TestBlockListener(t *testing.T) {
 	defer bl2.Close()
 	defer bl1.Close()
 	bl2.Start()
-	atx1 := atx()
-	atx2 := atx()
-	atx3 := atx()
+	atx1 := atx(signer.PublicKey().String())
+
+	atx2 := atx(signer.PublicKey().String())
+	atx3 := atx(signer.PublicKey().String())
 
 	bl2.Start()
 
@@ -80,6 +81,13 @@ func TestBlockListener(t *testing.T) {
 	atx1.Nipst.PostProof.Challenge = poetRef[:]
 	atx2.Nipst.PostProof.Challenge = poetRef[:]
 	atx3.Nipst.PostProof.Challenge = poetRef[:]
+
+	_, err = types.SignAtx(signer, atx1)
+	assert.NoError(t, err)
+	_, err = types.SignAtx(signer, atx2)
+	assert.NoError(t, err)
+	_, err = types.SignAtx(signer, atx3)
+	assert.NoError(t, err)
 
 	err = bl1.ProcessAtxs([]*types.ActivationTx{atx1, atx2, atx3})
 	assert.NoError(t, err)
@@ -132,7 +140,7 @@ func TestBlockListener_DataAvailability(t *testing.T) {
 	defer bl1.Close()
 	bl2.Start()
 
-	atx1 := atx()
+	atx1 := atx(signer.PublicKey().String())
 
 	// Push atx1 poet proof into bl1.
 
@@ -145,7 +153,8 @@ func TestBlockListener_DataAvailability(t *testing.T) {
 	poetRef := sha256.Sum256(poetProofBytes)
 
 	atx1.Nipst.PostProof.Challenge = poetRef[:]
-
+	_, err = types.SignAtx(signer, atx1)
+	assert.NoError(t, err)
 	// Push a block with tx1 and and atx1 into bl1.
 
 	block := types.NewExistingBlock(types.BlockID(2), 1, nil)
@@ -193,7 +202,7 @@ func TestBlockListener_DataAvailabilityBadFlow(t *testing.T) {
 	defer bl1.Close()
 	bl2.Start()
 
-	atx1 := atx()
+	atx1 := atx(signer.PublicKey().String())
 
 	// Push atx1 poet proof into bl1.
 
@@ -351,7 +360,7 @@ func TestBlockListenerViewTraversal(t *testing.T) {
 	defer bl1.Close()
 	bl2.Start()
 
-	atx := atx()
+	atx := atx(signer.PublicKey().String())
 
 	byts, _ := types.InterfaceToBytes(atx)
 	var atx1 types.ActivationTx
@@ -504,7 +513,7 @@ func TestBlockListener_TraverseViewBadFlow(t *testing.T) {
 	defer bl1.Close()
 	bl2.Start()
 
-	atx := atx()
+	atx := atx(signer.PublicKey().String())
 
 	byts, _ := types.InterfaceToBytes(atx)
 	var atx1 types.ActivationTx
@@ -594,8 +603,9 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 	blk := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data1"))
 	blk.ViewEdges = append(blk.ViewEdges, mesh.GenesisBlock.ID())
 	tx := types.NewTxWithOrigin(0, types.BytesToAddress([]byte{0x01}), types.BytesToAddress([]byte{0x02}), 10, 10, 10)
+	signer := signing.NewEdSigner()
+	atx := atx(signer.PublicKey().String())
 
-	atx := atx()
 	proofMessage := makePoetProofMessage(t)
 	if err := bl1.poetDb.ValidateAndStore(&proofMessage); err != nil {
 		t.Error(err)
@@ -606,11 +616,11 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 	}
 	poetRef := sha256.Sum256(poetProofBytes)
 	atx.Nipst.PostProof.Challenge = poetRef[:]
-
+	_, err = types.SignAtx(signer, atx)
+	assert.NoError(t, err)
 	bl2.AddBlockWithTxs(blk, []*types.Transaction{tx}, []*types.ActivationTx{atx})
 
 	mblk := types.Block{MiniBlock: types.MiniBlock{BlockHeader: blk.BlockHeader, TxIds: []types.TransactionId{tx.Id()}, AtxIds: []types.AtxId{atx.Id()}}}
-	signer := signing.NewEdSigner()
 	mblk.Signature = signer.Sign(mblk.Bytes())
 
 	data, err := types.InterfaceToBytes(&mblk)
@@ -649,8 +659,8 @@ func TestBlockListener_AtxCache(t *testing.T) {
 
 	defer bl1.Close()
 
-	atx1 := atx()
-	atx2 := atx()
+	atx1 := atx(signer.PublicKey().String())
+	atx2 := atx(signer.PublicKey().String())
 
 	// Push block with tx1 and and atx1 into bl1.
 	blk1 := types.NewExistingBlock(types.BlockID(1), 1, nil)
