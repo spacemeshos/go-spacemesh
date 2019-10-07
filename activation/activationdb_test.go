@@ -104,15 +104,15 @@ func (MockTxMemPool) Invalidate(id types.TransactionId) {
 
 type MockAtxMemPool struct{}
 
-func (MockAtxMemPool) Get(id types.AtxId) (types.ActivationTx, error) {
-	return types.ActivationTx{}, nil
+func (MockAtxMemPool) Get(id types.AtxId) (*types.ActivationTx, error) {
+	return &types.ActivationTx{}, nil
 }
 
 func (MockAtxMemPool) PopItems(size int) []types.ActivationTx {
 	return nil
 }
 
-func (MockAtxMemPool) Put(id types.AtxId, item *types.ActivationTx) {
+func (MockAtxMemPool) Put(atx *types.ActivationTx) {
 
 }
 

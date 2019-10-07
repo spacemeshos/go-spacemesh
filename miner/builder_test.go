@@ -228,9 +228,9 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 		types.NewActivationTx(types.NodeId{"cccc", []byte("bbb")}, coinbase, 1, types.AtxId(types.Hash32{3}), 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, activation.NewNIPSTWithChallenge(&types.Hash32{}, poetRef)),
 	}
 
-	builder.AtxPool.Put(atxs[0].Id(), atxs[0])
-	builder.AtxPool.Put(atxs[1].Id(), atxs[1])
-	builder.AtxPool.Put(atxs[2].Id(), atxs[2])
+	builder.AtxPool.Put(atxs[0])
+	builder.AtxPool.Put(atxs[1])
+	builder.AtxPool.Put(atxs[2])
 
 	go func() { beginRound <- 2 }()
 	select {

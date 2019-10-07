@@ -8,42 +8,42 @@ import (
 )
 
 type AtxMemPool struct {
-	mu    sync.RWMutex
-	txMap map[types.AtxId]*types.ActivationTx
+	mu     sync.RWMutex
+	atxMap map[types.AtxId]*types.ActivationTx
 }
 
 func NewAtxMemPool() *AtxMemPool {
 	return &AtxMemPool{sync.RWMutex{}, make(map[types.AtxId]*types.ActivationTx)}
 }
 
-func (mem *AtxMemPool) Get(id types.AtxId) (types.ActivationTx, error) {
+func (mem *AtxMemPool) Get(id types.AtxId) (*types.ActivationTx, error) {
 	mem.mu.RLock()
 	defer mem.mu.RUnlock()
-	val, ok := mem.txMap[id]
+	atx, ok := mem.atxMap[id]
 	if !ok {
-		return *new(types.ActivationTx), fmt.Errorf("cannot find ATX in mempool")
+		return nil, fmt.Errorf("cannot find ATX in mempool")
 	}
-	return *val, nil
+	return atx, nil
 }
 
-func (mem *AtxMemPool) GetAllItems() []types.ActivationTx {
+func (mem *AtxMemPool) GetAllItems() []*types.ActivationTx {
 	mem.mu.RLock()
 	defer mem.mu.RUnlock()
-	var txList []types.ActivationTx
-	for _, k := range mem.txMap {
-		txList = append(txList, *k)
+	var atxList []*types.ActivationTx
+	for _, k := range mem.atxMap {
+		atxList = append(atxList, k)
 	}
-	return txList
+	return atxList
 }
 
-func (mem *AtxMemPool) Put(id types.AtxId, item *types.ActivationTx) {
+func (mem *AtxMemPool) Put(atx *types.ActivationTx) {
 	mem.mu.Lock()
-	mem.txMap[id] = item
+	mem.atxMap[atx.Id()] = atx
 	mem.mu.Unlock()
 }
 
 func (mem *AtxMemPool) Invalidate(id types.AtxId) {
 	mem.mu.Lock()
 	defer mem.mu.Unlock()
-	delete(mem.txMap, id)
+	delete(mem.atxMap, id)
 }

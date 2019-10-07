@@ -123,7 +123,7 @@ func newATxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 		atxs, missinDB := s.GetATXs(atxids)
 		for _, t := range missinDB {
 			if tx, err := s.atxpool.Get(t); err == nil {
-				atxs[t] = &tx
+				atxs[t] = tx
 			} else {
 				logger.With().Error("error handling atx request message", log.AtxId(t.ShortString()), log.String("atx_ids", fmt.Sprintf("%x", atxids)))
 			}

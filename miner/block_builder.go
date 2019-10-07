@@ -352,7 +352,7 @@ func (t *BlockBuilder) handleGossipAtx(data service.GossipMessage) {
 		return
 	}
 
-	t.AtxPool.Put(atx.Id(), atx)
+	t.AtxPool.Put(atx)
 	data.ReportValidation(activation.AtxProtocol)
 	t.With().Info("stored and propagated new syntactically valid ATX", log.AtxId(atx.ShortString()))
 }

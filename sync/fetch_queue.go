@@ -255,7 +255,7 @@ func updateAtxDependencies(invalidate func(id types.Hash32, valid bool), sValida
 			if atx, ok := mp[id]; ok {
 				err := sValidateAtx(atx)
 				if err == nil {
-					atxpool.Put(atx.Id(), atx)
+					atxpool.Put(atx)
 					invalidate(id, true)
 					continue
 				}
