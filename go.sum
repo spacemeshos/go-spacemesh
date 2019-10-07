@@ -196,8 +196,6 @@ github.com/spacemeshos/merkle-tree v0.0.0-20190508113057-1a71b988924a h1:/CO5P93
 github.com/spacemeshos/merkle-tree v0.0.0-20190508113057-1a71b988924a/go.mod h1:mPxjt4RONPxSUhxOq4bhSJyKVGQJ0VMSyRiE51dDLgE=
 github.com/spacemeshos/merkle-tree v0.0.0-20190612125135-48574fd5f419 h1:h01wKBJ33d4/4yRTyCZv/LKcLMokl6mLcZCfitQk7xw=
 github.com/spacemeshos/merkle-tree v0.0.0-20190612125135-48574fd5f419/go.mod h1:mPxjt4RONPxSUhxOq4bhSJyKVGQJ0VMSyRiE51dDLgE=
-github.com/spacemeshos/poet v0.0.0-20190909102033-617260562f1b h1:KPHvz+5+D+znol69tP52sTI9fjWmGl+vOzzyhxWUZnA=
-github.com/spacemeshos/poet v0.0.0-20190909102033-617260562f1b/go.mod h1:RfpiEOJp0GLmlAHpcVak91LtHBqQ9wTl6ya2nUGM9bw=
 github.com/spacemeshos/poet v0.0.0-20191007095323-0c943a6593a3 h1:5zQp1V+vkRArw3USw0EjBkg3kCcnz/7551m2BbKDqV0=
 github.com/spacemeshos/poet v0.0.0-20191007095323-0c943a6593a3/go.mod h1:kUsJUBv9WonNz6JQSAAg0ngMgtrCwaobw79zPBocOPQ=
 github.com/spacemeshos/post v0.0.0-20190923094851-82e76dc5fa3e h1:Z0M3OK0G3mo1P3OEgjZ40w/0fBFY003lN5OKmgIOj+k=
