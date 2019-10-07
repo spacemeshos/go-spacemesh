@@ -83,7 +83,8 @@ func (s SpacemeshGrpcService) SubmitTransaction(ctx context.Context, in *pb.Sign
 		return nil, err
 	}
 	if !s.Tx.AddressExists(tx.Origin()) {
-		log.Error("tx failed to validate signature")
+		log.With().Error("tx failed to validate signature",
+			log.TxId(tx.Id().ShortString()), log.String("origin", tx.Origin().Short()))
 		return nil, err
 	}
 	log.Info("GRPC SubmitTransaction BROADCAST tx. address %x (len %v), gaslimit %v, fee %v id %v",
