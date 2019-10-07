@@ -230,7 +230,7 @@ func (m *MeshDB) ContextualValidity(id types.BlockID) (bool, error) {
 	return b[0] == 1, nil //bytes to bool
 }
 
-func (m *MeshDB) SaveContextualValidity(id types.BlockID, valid bool) error {
+func (m *MeshDB) SaveContextualValidity(id types.BlockID, valid bool) {
 	var v []byte
 	if valid {
 		v = TRUE
@@ -240,9 +240,10 @@ func (m *MeshDB) SaveContextualValidity(id types.BlockID, valid bool) error {
 	m.Debug("save contextual validity %v %v", id, valid)
 	err := m.contextualValidity.Put(id.ToBytes(), v)
 	if err != nil {
-		return err
+		m.With().Error("storing contextual validity failed",
+			log.BlockId(uint64(id)), log.Bool("valid", valid))
+		// TODO: We want to panic here once we have a way to recover from this scenario
 	}
-	return nil
 }
 
 func (m *MeshDB) writeBlock(bl *types.Block) error {

@@ -227,7 +227,9 @@ func (m *Mesh) PushTransactions(oldBase, newBase types.LayerID) {
 	for i := oldBase; i < newBase; i++ {
 		l, err := m.GetLayer(i)
 		if err != nil || l == nil {
-			m.Error("could not get layer %v  !!!!!!!!!!!!!!!! %v ", i, err) //todo handle error
+			m.With().Error("failed to retrieve layer", log.LayerId(uint64(i)), log.Err(err))
+			// TODO: We want to panic here once we have a way to "remember" that we didn't apply these txs
+			//  e.g. persist the last layer transactions were applied from and use that instead of `oldBase`
 			return
 		}
 
@@ -237,7 +239,7 @@ func (m *Mesh) PushTransactions(oldBase, newBase types.LayerID) {
 		}
 		numFailedTxs, err := m.ApplyTransactions(i, validBlockTxs)
 		if err != nil {
-			m.With().Error("cannot apply transactions",
+			m.With().Error("failed to apply transactions",
 				log.LayerId(uint64(i)), log.Int("num_failed_txs", numFailedTxs), log.Err(err))
 			// TODO: We want to panic here once we have a way to "remember" that we didn't apply these txs
 			//  e.g. persist the last layer transactions were applied from and use that instead of `oldBase`

@@ -66,7 +66,7 @@ type Mesh interface {
 	GetBlock(id types.BlockID) (*types.Block, error)
 	LayerBlockIds(id types.LayerID) ([]types.BlockID, error)
 	ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, foo func(block *types.Block) (bool, error)) error
-	SaveContextualValidity(id types.BlockID, valid bool) error
+	SaveContextualValidity(id types.BlockID, valid bool)
 }
 
 //todo memory optimizations
@@ -593,9 +593,7 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) {
 func (ni *ninjaTortoise) SaveOpinion(p votingPattern) {
 	for bid, vec := range ni.tVote[p] {
 		valid := vec == Support
-		if err := ni.SaveContextualValidity(bid, valid); err != nil {
-			ni.Error("could not write contextual validity for block %v ", bid)
-		}
+		ni.SaveContextualValidity(bid, valid)
 
 		if !valid {
 			ni.With().Warning("block is contextually invalid", log.BlockId(uint64(bid)))
