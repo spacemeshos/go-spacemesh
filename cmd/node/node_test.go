@@ -63,6 +63,8 @@ func TestSpacemeshApp_SetLoggers(t *testing.T) {
 	tmpFile, err := ioutil.TempFile(tmpDir, "tmp_")
 	r.NoError(err)
 	myLog := log.New("logger", tmpDir, tmpFile.Name())
+	myLog2 := log.New("logger2", tmpDir, tmpFile.Name())
+
 	//myLog := log.NewDefault("logger")
 	app.log = app.addLogger(mylogger, myLog)
 	app.log.Info("hi there")
@@ -70,7 +72,10 @@ func TestSpacemeshApp_SetLoggers(t *testing.T) {
 	r.NoError(err)
 	r.Equal("warn", app.loggers["anton"].String())
 
+	myLog2.Info("other logger")
 	app.log.Info("hi again")
+	app.log.Warning("warn")
+
 	err = app.SetLogLevel("anton", "info")
 	r.NoError(err)
 
@@ -85,4 +90,18 @@ func TestSpacemeshApp_SetLoggers(t *testing.T) {
 	err = app.SetLogLevel("anton", "lulu")
 	r.Error(err)
 	r.Equal("info", app.loggers["anton"].String())
+}
+
+func TestSpacemeshApp_AddLogger(t *testing.T) {
+	r := require.New(t)
+
+	app := NewSpacemeshApp()
+	app.Config.LOGGING.HareLoggerLevel = "warn"
+	tmpDir := os.TempDir()
+	tmpFile, err := ioutil.TempFile(tmpDir, "tmp_")
+	r.NoError(err)
+	myLog := log.New("logger", tmpDir, tmpFile.Name())
+	l := app.addLogger(HareLogger, myLog)
+	r.Equal("warn", app.loggers["hare"].String())
+	l.Info("not supposed to be printed")
 }

@@ -62,3 +62,26 @@ hare-committee-size = 10
 hare-max-adversaries = 5
 hare-wakeup-delta = 5
 
+[logging]
+app = "info"
+post = "info"
+stateDb= "info"
+state = "info"
+atxDb = "info"
+poetDb = "info"
+store = "info"
+poetDb = "info"
+meshDb = "info"
+trtl = "info"
+atxDb = "info"
+block-eligibility = "info"
+mesh = "info"
+sync = "info"
+block-oracle = "info"
+hare-oracle = "info"
+hare = "info"
+block-builder = "info"
+block-listener = "info"
+poet = "info"
+nipst = "info"
+atx-builder = "info"
