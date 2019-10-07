@@ -38,6 +38,7 @@ func (t *TxMempool) GetTxsForBlock(numOfTxs int, getState func(addr types.Addres
 	for addr, account := range t.accounts {
 		nonce, balance, err := getState(addr)
 		if err != nil {
+			t.mu.RUnlock()
 			return nil, fmt.Errorf("failed to get state for addr %s: %v", addr.Short(), err)
 		}
 		accountTxIds, _, _ := account.ValidTxs(nonce, balance)
