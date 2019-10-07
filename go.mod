@@ -37,7 +37,7 @@ require (
 	golang.org/x/sync v0.0.0-20190423024810-112230192c58
 	google.golang.org/api v0.7.0
 	google.golang.org/genproto v0.0.0-20190502173448-54afdca5d873
-	google.golang.org/grpc v1.21.0
+	google.golang.org/grpc v1.21.2
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 	nanomsg.org/go-mangos v1.4.0
 )
