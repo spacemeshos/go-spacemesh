@@ -6,7 +6,6 @@ require (
 	github.com/VividCortex/gohistogram v1.0.0 // indirect
 	github.com/btcsuite/btcd v0.0.0-20190629003639-c26ffa870fd8
 	github.com/btcsuite/btcutil v0.0.0-20190425235716-9e5f4b9a998d
-	github.com/cheekybits/genny v1.0.0
 	github.com/go-kit/kit v0.8.0
 	github.com/gogo/protobuf v1.2.1
 	github.com/golang/protobuf v1.3.1

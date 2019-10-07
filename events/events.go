@@ -116,7 +116,7 @@ type NewTx struct {
 	Origin      string
 	Destination string
 	Amount      uint64
-	Gas         uint64
+	Fee         uint64
 }
 
 func (NewTx) getChannel() channelId {

@@ -1,7 +1,6 @@
 package sync
 
 import (
-	"encoding/hex"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -91,23 +90,17 @@ func newTxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 			return nil
 		}
 		logger.Info("handle tx request ")
-		txs, missinDB := s.GetTransactions(txids)
+		txs, missingDB := s.GetTransactions(txids)
 
-		for _, t := range missinDB {
+		for t := range missingDB {
 			if tx, err := s.txpool.Get(t); err == nil {
-				txs[t] = &tx
+				txs = append(txs, &tx)
 			} else {
-				logger.Error("Error handling tx request message, for id: %v", hex.EncodeToString(t[:]))
+				logger.Error("Error handling tx request message, for id: %v", t.ShortString())
 			}
 		}
 
-		var transactions []types.SerializableSignedTransaction
-		for _, value := range txs {
-			tx := *value.SerializableSignedTransaction
-			transactions = append(transactions, tx)
-		}
-
-		bbytes, err := types.InterfaceToBytes(transactions)
+		bbytes, err := types.InterfaceToBytes(txs)
 		if err != nil {
 			logger.Error("Error marshaling transactions response message , with ids %v and err:", txs, err)
 			return nil
@@ -130,7 +123,7 @@ func newATxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 		atxs, missinDB := s.GetATXs(atxids)
 		for _, t := range missinDB {
 			if tx, err := s.atxpool.Get(t); err == nil {
-				atxs[t] = &tx
+				atxs[t] = tx
 			} else {
 				logger.With().Error("error handling atx request message", log.AtxId(t.ShortString()), log.String("atx_ids", fmt.Sprintf("%x", atxids)))
 			}

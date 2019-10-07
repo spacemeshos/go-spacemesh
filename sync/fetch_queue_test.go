@@ -25,16 +25,16 @@ func TestBlockListener_TestTxQueue(t *testing.T) {
 	bl1.Start()
 	bl2.Start()
 	queue := bl1.txQueue
-	id1 := types.GetTransactionId(tx1.SerializableSignedTransaction)
-	id2 := types.GetTransactionId(tx2.SerializableSignedTransaction)
-	id3 := types.GetTransactionId(tx3.SerializableSignedTransaction)
+	id1 := tx1.Id()
+	id2 := tx2.Id()
+	id3 := tx3.Id()
 
 	//missing
-	id4 := types.GetTransactionId(tx4.SerializableSignedTransaction)
+	id4 := tx4.Id()
 
 	block1 := types.NewExistingBlock(types.BlockID(111), 1, nil)
 	block1.TxIds = []types.TransactionId{id1, id2, id3}
-	bl2.AddBlockWithTxs(block1, []*types.AddressableSignedTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
+	bl2.AddBlockWithTxs(block1, []*types.Transaction{tx1, tx2, tx3}, []*types.ActivationTx{})
 
 	ch := queue.addToPendingGetCh([]types.Hash32{id1.Hash32(), id2.Hash32(), id3.Hash32()})
 	timeout := time.After(1 * time.Second)
@@ -114,9 +114,10 @@ func TestBlockListener_TestAtxQueue(t *testing.T) {
 	_, err = types.SignAtx(signer, atx4)
 	assert.NoError(t, err)
 
-	bl1.ProcessAtx(atx1)
+	err = bl1.ProcessAtxs([]*types.ActivationTx{atx1})
+	assert.NoError(t, err)
 
-	bl2.AddBlockWithTxs(block1, []*types.AddressableSignedTransaction{}, []*types.ActivationTx{atx1, atx2, atx3})
+	bl2.AddBlockWithTxs(block1, []*types.Transaction{}, []*types.ActivationTx{atx1, atx2, atx3})
 
 	ch := queue.addToPendingGetCh([]types.Hash32{atx1.Hash32(), atx2.Hash32(), atx3.Hash32()})
 	timeout := time.After(1 * time.Second)
@@ -165,13 +166,13 @@ func TestBlockListener_TestTxQueueHandle(t *testing.T) {
 	bl1.Start()
 	bl2.Start()
 	queue := bl1.txQueue
-	id1 := types.GetTransactionId(tx1.SerializableSignedTransaction)
-	id2 := types.GetTransactionId(tx2.SerializableSignedTransaction)
-	id3 := types.GetTransactionId(tx3.SerializableSignedTransaction)
+	id1 := tx1.Id()
+	id2 := tx2.Id()
+	id3 := tx3.Id()
 
 	block1 := types.NewExistingBlock(types.BlockID(111), 1, nil)
 	block1.TxIds = []types.TransactionId{id1, id2, id3}
-	bl2.AddBlockWithTxs(block1, []*types.AddressableSignedTransaction{tx1, tx2, tx3}, []*types.ActivationTx{})
+	bl2.AddBlockWithTxs(block1, []*types.Transaction{tx1, tx2, tx3}, []*types.ActivationTx{})
 
 	res, err := queue.handle([]types.Hash32{id1.Hash32(), id2.Hash32(), id3.Hash32()})
 	if err != nil {
@@ -224,7 +225,7 @@ func TestBlockListener_TestAtxQueueHandle(t *testing.T) {
 	_, err = types.SignAtx(signer, atx3)
 	assert.NoError(t, err)
 
-	bl2.AddBlockWithTxs(block1, []*types.AddressableSignedTransaction{}, []*types.ActivationTx{atx1, atx2, atx3})
+	bl2.AddBlockWithTxs(block1, []*types.Transaction{}, []*types.ActivationTx{atx1, atx2, atx3})
 
 	res, err := bl1.atxQueue.handle([]types.Hash32{atx1.Hash32(), atx2.Hash32(), atx3.Hash32()})
 	if err != nil {

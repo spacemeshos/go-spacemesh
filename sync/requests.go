@@ -114,14 +114,19 @@ func atxsAsItems(msg []byte) ([]Item, error) {
 }
 
 func txsAsItems(msg []byte) ([]Item, error) {
-	var txs []types.SerializableSignedTransaction
+	var txs []*types.Transaction
 	err := types.BytesToInterface(msg, &txs)
 	if err != nil || txs == nil {
 		return nil, err
 	}
 	items := make([]Item, len(txs))
 	for i := range txs {
-		items[i] = &txs[i]
+		err := txs[i].CalcAndSetOrigin()
+		if err != nil {
+			return nil, fmt.Errorf("failed to calc transaction origin (id: %s): %v",
+				txs[i].Id().ShortString(), err)
+		}
+		items[i] = txs[i]
 	}
 	return items, nil
 }

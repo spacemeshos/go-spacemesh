@@ -201,7 +201,7 @@ func (self *StateDB) GetOrNewStateObj(addr types.Address) *StateObj {
 func (self *StateDB) createObject(addr types.Address) (newobj, prev *StateObj) {
 	prev = self.getStateObj(addr)
 	newobj = newObject(self, addr, Account{})
-	newobj.setNonce(0) // sets the object to dirty
+	newobj.setNonce(0)
 	/*if prev == nil {
 		self.journal.append(createObjectChange{account: &addr})
 	} else {

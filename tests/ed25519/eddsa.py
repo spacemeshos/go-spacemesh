@@ -1,5 +1,11 @@
 from pure25519.eddsa import H, Hint
 from pure25519.basic import (bytes_to_clamped_scalar, bytes_to_element, bytes_to_scalar, scalar_to_bytes, Base, L)
+from pure25519.eddsa import create_signing_key, create_verifying_key
+
+
+def genkeypair():
+    pri = create_signing_key()
+    return pri, create_verifying_key(pri)
 
 
 def inv2(x):

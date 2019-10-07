@@ -8,7 +8,6 @@ import (
 
 type Config struct {
 	// reward config
-	SimpleTxCost   *big.Int
 	BaseReward     *big.Int
 	PenaltyPercent *big.Int
 	TxQuota        uint32
@@ -17,7 +16,6 @@ type Config struct {
 
 func DefaultMeshConfig() Config {
 	return Config{
-		big.NewInt(10),
 		big.NewInt(5000),
 		big.NewInt(19),
 		15,
@@ -28,20 +26,6 @@ func DefaultMeshConfig() Config {
 func CalculateLayerReward(id types.LayerID, params Config) *big.Int {
 	//todo: add inflation rules here
 	return params.BaseReward
-}
-
-func MergeDoubles(transactions []*Transaction) []*Transaction {
-	transactionSet := make(map[types.Hash32]struct{})
-	merged := make([]*Transaction, 0, len(transactions))
-	for _, trns := range transactions {
-		if _, ok := transactionSet[trns.Hash()]; !ok {
-			transactionSet[trns.Hash()] = struct{}{}
-			merged = append(merged, trns)
-		} else {
-			log.Debug("double trans merged %v", trns)
-		}
-	}
-	return merged
 }
 
 func calculateActualRewards(rewards *big.Int, numBlocks *big.Int, params Config, underQuotaBlocks int) (*big.Int, *big.Int) {
