@@ -2,6 +2,7 @@ package pending_txs
 
 import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"sync"
 )
 
 type nanoTx struct {
@@ -12,6 +13,7 @@ type nanoTx struct {
 
 type AccountPendingTxs struct {
 	PendingTxs map[uint64]map[types.TransactionId]nanoTx
+	mu         sync.RWMutex
 }
 
 func NewAccountPendingTxs() *AccountPendingTxs {
@@ -21,6 +23,7 @@ func NewAccountPendingTxs() *AccountPendingTxs {
 }
 
 func (apt *AccountPendingTxs) Add(layer types.LayerID, txs ...*types.Transaction) {
+	apt.mu.Lock()
 	for _, tx := range txs {
 		existing, found := apt.PendingTxs[tx.AccountNonce]
 		if !found {
@@ -36,9 +39,11 @@ func (apt *AccountPendingTxs) Add(layer types.LayerID, txs ...*types.Transaction
 			HighestLayerIncludedIn: layer,
 		}
 	}
+	apt.mu.Unlock()
 }
 
 func (apt *AccountPendingTxs) Remove(accepted, rejected []*types.Transaction, layer types.LayerID) {
+	apt.mu.Lock()
 	for _, tx := range accepted {
 		delete(apt.PendingTxs, tx.AccountNonce)
 	}
@@ -54,13 +59,16 @@ func (apt *AccountPendingTxs) Remove(accepted, rejected []*types.Transaction, la
 			}
 		}
 	}
+	apt.mu.Unlock()
 }
 
 func (apt *AccountPendingTxs) RemoveNonce(nonce uint64, deleteTx func(id types.TransactionId)) {
+	apt.mu.Lock()
 	for id := range apt.PendingTxs[nonce] {
 		deleteTx(id)
 	}
 	delete(apt.PendingTxs, nonce)
+	apt.mu.Unlock()
 }
 
 func (apt *AccountPendingTxs) GetProjection(prevNonce, prevBalance uint64) (nonce, balance uint64) {
@@ -70,6 +78,7 @@ func (apt *AccountPendingTxs) GetProjection(prevNonce, prevBalance uint64) (nonc
 
 func (apt *AccountPendingTxs) ValidTxs(prevNonce, prevBalance uint64) (txIds []types.TransactionId, nonce, balance uint64) {
 	nonce, balance = prevNonce, prevBalance
+	apt.mu.RLock()
 	for {
 		txs, found := apt.PendingTxs[nonce]
 		if !found {
@@ -83,10 +92,13 @@ func (apt *AccountPendingTxs) ValidTxs(prevNonce, prevBalance uint64) (txIds []t
 		balance -= txs[id].Amount + txs[id].Fee
 		nonce++
 	}
+	apt.mu.RUnlock()
 	return txIds, nonce, balance
 }
 
 func (apt *AccountPendingTxs) IsEmpty() bool {
+	apt.mu.RLock()
+	defer apt.mu.RUnlock()
 	return len(apt.PendingTxs) == 0
 }
 

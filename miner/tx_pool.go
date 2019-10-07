@@ -79,6 +79,8 @@ func (t *TxMempool) Invalidate(id types.TransactionId) {
 	t.mu.Lock()
 	if tx, found := t.txs[id]; found {
 		if pendingTxs, found := t.accounts[tx.Origin()]; found {
+			// Once a tx appears in a block we want to invalidate all of this nonce's variants. The mempool currently
+			// only accepts one version, but this future-proofs it.
 			pendingTxs.RemoveNonce(tx.AccountNonce, func(id types.TransactionId) {
 				delete(t.txs, id)
 			})
