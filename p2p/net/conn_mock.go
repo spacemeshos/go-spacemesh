@@ -1,6 +1,7 @@
 package net
 
 import (
+	"errors"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"net"
@@ -90,8 +91,12 @@ func (cm ConnectionMock) Closed() bool {
 	return cm.closed
 }
 
-func (cm *ConnectionMock) Close() {
+func (cm *ConnectionMock) Close() error {
+	if cm.closed == true {
+		return errors.New("already closed")
+	}
 	cm.closed = true
+	return nil
 }
 
 func (cm *ConnectionMock) beginEventProcessing() {

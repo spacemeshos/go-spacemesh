@@ -5,6 +5,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"math/big"
 	"time"
@@ -125,11 +126,11 @@ func (*MockIStore) GetIdentity(id string) (types.NodeId, error) {
 
 type ValidatorMock struct{}
 
-func (*ValidatorMock) Validate(nipst *types.NIPST, expectedChallenge types.Hash32) error {
+func (*ValidatorMock) Validate(id signing.PublicKey, nipst *types.NIPST, expectedChallenge types.Hash32) error {
 	return nil
 }
 
-func (*ValidatorMock) VerifyPost(proof *types.PostProof, space uint64) error {
+func (*ValidatorMock) VerifyPost(id signing.PublicKey, proof *types.PostProof, space uint64) error {
 	return nil
 }
 

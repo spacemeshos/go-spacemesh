@@ -12,7 +12,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/miner"
-	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/oracle"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -45,7 +44,7 @@ func (suite *AppTestSuite) SetupTest() {
 // NewRPCPoetHarnessClient returns a new instance of RPCPoetClient
 // which utilizes a local self-contained poet server instance
 // in order to exercise functionality.
-func NewRPCPoetHarnessClient() (*nipst.RPCPoetClient, error) {
+func NewRPCPoetHarnessClient() (*activation.RPCPoetClient, error) {
 	cfg, err := integration.DefaultConfig()
 	if err != nil {
 		return nil, err
@@ -58,7 +57,7 @@ func NewRPCPoetHarnessClient() (*nipst.RPCPoetClient, error) {
 		return nil, err
 	}
 
-	return nipst.NewRPCPoetClient(h.PoetClient, h.TearDown), nil
+	return activation.NewRPCPoetClient(h.PoetClient, h.TearDown), nil
 }
 
 func (suite *AppTestSuite) TearDownTest() {
@@ -87,12 +86,12 @@ func (suite *AppTestSuite) TearDownTest() {
 
 var net = service.NewSimulator()
 
-func (suite *AppTestSuite) initSingleInstance(i int, genesisTime string, rng *amcl.RAND, storeFormat string, name string, rolacle *eligibility.FixedRolacle, poetClient *nipst.RPCPoetClient) {
+func (suite *AppTestSuite) initSingleInstance(i int, genesisTime string, rng *amcl.RAND, storeFormat string, name string, rolacle *eligibility.FixedRolacle, poetClient *activation.RPCPoetClient) {
 	r := require.New(suite.T())
 
 	smApp := NewSpacemeshApp()
 
-	smApp.Config.POST = nipst.DefaultConfig()
+	smApp.Config.POST = activation.DefaultConfig()
 	smApp.Config.POST.Difficulty = 5
 	smApp.Config.POST.NumProvenLabels = 10
 	smApp.Config.POST.SpacePerUnit = 1 << 10 // 1KB.
@@ -127,7 +126,7 @@ func (suite *AppTestSuite) initSingleInstance(i int, genesisTime string, rng *am
 	hareOracle := oracle.NewLocalOracle(rolacle, 5, nodeID)
 	hareOracle.Register(true, pub.String())
 
-	postClient, err := nipst.NewPostClient(&smApp.Config.POST, util.Hex2Bytes(nodeID.Key))
+	postClient, err := activation.NewPostClient(&smApp.Config.POST, util.Hex2Bytes(nodeID.Key))
 	r.NoError(err)
 	r.NotNil(postClient)
 
@@ -139,7 +138,7 @@ func (suite *AppTestSuite) initSingleInstance(i int, genesisTime string, rng *am
 	suite.dbs = append(suite.dbs, dbStorepath)
 }
 
-func (suite *AppTestSuite) initMultipleInstances(rolacle *eligibility.FixedRolacle, rng *amcl.RAND, numOfInstances int, storeFormat string, genesisTime string, poetClient *nipst.RPCPoetClient) {
+func (suite *AppTestSuite) initMultipleInstances(rolacle *eligibility.FixedRolacle, rng *amcl.RAND, numOfInstances int, storeFormat string, genesisTime string, poetClient *activation.RPCPoetClient) {
 	name := 'a'
 	for i := 0; i < numOfInstances; i++ {
 		suite.initSingleInstance(i, genesisTime, rng, storeFormat, string(name), rolacle, poetClient)
@@ -393,7 +392,7 @@ func TestShutdown(t *testing.T) {
 
 	smApp := NewSpacemeshApp()
 	genesisTime := time.Now().Add(time.Second * 10)
-	smApp.Config.POST = nipst.DefaultConfig()
+	smApp.Config.POST = activation.DefaultConfig()
 	smApp.Config.POST.Difficulty = 5
 	smApp.Config.POST.NumProvenLabels = 10
 	smApp.Config.POST.SpacePerUnit = 1 << 10 // 1KB.
@@ -434,7 +433,7 @@ func TestShutdown(t *testing.T) {
 	hareOracle := oracle.NewLocalOracle(rolacle, 5, nodeID)
 	hareOracle.Register(true, pub.String())
 
-	postClient, err := nipst.NewPostClient(&smApp.Config.POST, util.Hex2Bytes(nodeID.Key))
+	postClient, err := activation.NewPostClient(&smApp.Config.POST, util.Hex2Bytes(nodeID.Key))
 	r.NoError(err)
 	r.NotNil(postClient)
 
@@ -452,5 +451,10 @@ func TestShutdown(t *testing.T) {
 	time.Sleep(3 * time.Second)
 	g_count2 := runtime.NumGoroutine()
 
+	if g_count != g_count2 {
+		buf := make([]byte, 4096)
+		runtime.Stack(buf, true)
+		log.Error(string(buf))
+	}
 	require.Equal(t, g_count, g_count2)
 }

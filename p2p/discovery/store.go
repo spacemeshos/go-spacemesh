@@ -219,7 +219,6 @@ func (a *addrBook) saveRoutine() {
 		a.logger.Warning("IMPORTANT : Data directory path can't be reached. peer files are not being saved.")
 		return
 	}
-	a.wg.Add(1)
 	finalPath := path + "/" + a.localAddress.ID.String() + "/" + defaultPeersFileName
 
 	dumpAddressTicker := time.NewTicker(saveRoutineInterval)
@@ -238,7 +237,6 @@ out:
 
 	a.logger.Debug("Saving peer before exit to file %v", finalPath)
 	a.savePeers(finalPath)
-	a.wg.Done()
 	log.Debug("Address handler done")
 
 }

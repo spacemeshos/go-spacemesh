@@ -18,7 +18,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/miner"
-	"github.com/spacemeshos/go-spacemesh/nipst"
 	"github.com/spacemeshos/go-spacemesh/oracle"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -385,7 +384,7 @@ func (app *SpacemeshApp) SetLogLevel(name, loglevel string) error {
 	return nil
 }
 
-func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service, dbStorepath string, sgn hare.Signer, isFixedOracle bool, rolacle hare.Rolacle, layerSize uint32, postClient nipst.PostProverClient, poetClient nipst.PoetProvingServiceClient, vrfSigner *BLS381.BlsSigner, layersPerEpoch uint16) error {
+func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service, dbStorepath string, sgn hare.Signer, isFixedOracle bool, rolacle hare.Rolacle, layerSize uint32, postClient activation.PostProverClient, poetClient activation.PoetProvingServiceClient, vrfSigner *BLS381.BlsSigner, layersPerEpoch uint16) error {
 
 	app.nodeId = nodeID
 	//todo: should we add all components to a single struct?
@@ -447,7 +446,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	idStore := activation.NewIdentityStore(iddbstore)
 	poetDb := activation.NewPoetDb(poetDbStore, app.addLogger(PoetDbLogger, lg))
 	//todo: this is initialized twice, need to refactor
-	validator := nipst.NewValidator(&app.Config.POST, poetDb)
+	validator := activation.NewValidator(&app.Config.POST, poetDb)
 	mdb, err := mesh.NewPersistentMeshDB(dbStorepath, app.addLogger(MeshDBLogger, lg))
 	if err != nil {
 		return err
@@ -505,20 +504,14 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 
 	poetListener := activation.NewPoetListener(swarm, poetDb, app.addLogger(PoetListenerLogger, lg))
 
-	nipstBuilder := nipst.NewNIPSTBuilder(
-		util.Hex2Bytes(nodeID.Key), // TODO: use both keys in the nodeID
-		postClient,
-		poetClient,
-		poetDb,
-		app.addLogger(NipstBuilderLogger, lg),
-	)
+	nipstBuilder := activation.NewNIPSTBuilder(util.Hex2Bytes(nodeID.Key), postClient, poetClient, poetDb, store, app.addLogger(NipstBuilderLogger, lg))
 
 	coinBase := types.HexToAddress(app.Config.CoinbaseAccount)
 
 	if coinBase.Big().Uint64() == 0 && app.Config.StartMining {
 		app.log.Panic("invalid Coinbase account")
 	}
-	atxBuilder := activation.NewBuilder(nodeID, coinBase, atxdb, swarm, msh, layersPerEpoch, nipstBuilder, postClient, clock.Subscribe(), syncer.WeaklySynced, store, app.addLogger(AtxBuilderLogger, lg))
+	atxBuilder := activation.NewBuilder(nodeID, coinBase, sgn, atxdb, swarm, msh, layersPerEpoch, nipstBuilder, postClient, clock.Subscribe(), syncer.WeaklySynced, store, app.addLogger("atxBuilder", lg))
 
 	app.blockProducer = &blockProducer
 	app.blockListener = blockListener
@@ -743,7 +736,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	}
 
 	log.Info("connecting to POET on IP %v", app.Config.PoETServer)
-	poetClient, err := nipst.NewRemoteRPCPoetClient(app.Config.PoETServer, cmdp.Ctx)
+	poetClient, err := activation.NewRemoteRPCPoetClient(app.Config.PoETServer, cmdp.Ctx)
 	if err != nil {
 		log.Error("poet server not found on addr %v, err: %v", app.Config.PoETServer, err)
 		return
@@ -756,7 +749,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	vrfSigner := BLS381.NewBlsSigner(vrfPriv)
 	nodeID := types.NodeId{Key: app.edSgn.PublicKey().String(), VRFPublicKey: vrfPub}
 
-	postClient, err := nipst.NewPostClient(&app.Config.POST, util.Hex2Bytes(nodeID.Key))
+	postClient, err := activation.NewPostClient(&app.Config.POST, util.Hex2Bytes(nodeID.Key))
 	if err != nil {
 		log.Error("failed to create post client: %v", err)
 	}
