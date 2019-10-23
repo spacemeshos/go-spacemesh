@@ -548,9 +548,11 @@ func (proc *ConsensusProcess) beginNotifyRound() {
 
 // passes all pending messages to the inbox of the process so they will be handled
 func (proc *ConsensusProcess) handlePending(pending map[string]*Msg) {
+	proc.With().Info("Writing pending messages to inbox", log.Int("pending_size", len(pending)))
 	for _, m := range pending {
 		proc.inbox <- m
 	}
+	proc.Info("Done writing pending messages")
 }
 
 // runs the logic of the beginning of a round by its type
@@ -686,9 +688,10 @@ func (proc *ConsensusProcess) endOfStatusRound() {
 	}
 
 	// assumption: AnalyzeStatuses calls vtFunc for every recorded status message
+	before := time.Now()
 	proc.statusesTracker.AnalyzeStatuses(vtFunc)
 	proc.Event().Info("status round ended", log.Bool("is_svp_ready", proc.statusesTracker.IsSVPReady()),
-		log.Uint64("layer_id", uint64(proc.instanceId)))
+		log.Uint64("layer_id", uint64(proc.instanceId)), log.String("analyze_duration", time.Since(before).String()))
 }
 
 // checks if we should participate in the current round
