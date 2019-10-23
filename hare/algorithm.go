@@ -152,12 +152,14 @@ type ConsensusProcess struct {
 	cfg               config.Config
 	pending           map[string]*Msg // buffer for early messages that are pending process
 	notifySent        bool            // flag to set in case a notification had already been sent by this instance
+	mTracker          *msgsTracker    // tracks valid messages
 }
 
 // NewConsensusProcess creates a new consensus process instance.
 func NewConsensusProcess(cfg config.Config, instanceId instanceId, s *Set, oracle Rolacle, stateQuerier StateQuerier,
 	layersPerEpoch uint16, signing Signer, nid types.NodeId, p2p NetworkService,
 	terminationReport chan TerminationOutput, ev roleValidator, logger log.Log) *ConsensusProcess {
+	msgsTracker := NewMsgsTracker()
 	proc := &ConsensusProcess{
 		State:             State{-1, -1, s.Clone(), nil},
 		Closer:            NewCloser(),
@@ -172,8 +174,9 @@ func NewConsensusProcess(cfg config.Config, instanceId instanceId, s *Set, oracl
 		terminationReport: terminationReport,
 		pending:           make(map[string]*Msg, cfg.N),
 		Log:               logger,
+		mTracker:          msgsTracker,
 	}
-	proc.validator = newSyntaxContextValidator(signing, cfg.F+1, proc.statusValidator(), stateQuerier, layersPerEpoch, ev, logger)
+	proc.validator = newSyntaxContextValidator(signing, cfg.F+1, proc.statusValidator(), stateQuerier, layersPerEpoch, ev, msgsTracker, logger)
 
 	return proc
 }
@@ -612,6 +615,7 @@ func (proc *ConsensusProcess) processProposalMsg(msg *Msg) {
 }
 
 func (proc *ConsensusProcess) processCommitMsg(msg *Msg) {
+	proc.mTracker.Track(msg) // a commit msg passed for processing is assumed to be valid
 	proc.commitTracker.OnCommit(msg)
 }
 
@@ -670,7 +674,19 @@ func (proc *ConsensusProcess) statusValidator() func(m *Msg) bool {
 }
 
 func (proc *ConsensusProcess) endOfStatusRound() {
-	proc.statusesTracker.AnalyzeStatuses(proc.statusValidator())
+	// validate and track wrapper for validation func
+	vtFunc := func(m *Msg) bool {
+		valid := proc.statusValidator()
+		if valid(m) {
+			proc.mTracker.Track(m)
+			return true
+		}
+
+		return false
+	}
+
+	// assumption: AnalyzeStatuses calls vtFunc for every recorded status message
+	proc.statusesTracker.AnalyzeStatuses(vtFunc)
 	proc.Event().Info("status round ended", log.Bool("is_svp_ready", proc.statusesTracker.IsSVPReady()),
 		log.Uint64("layer_id", uint64(proc.instanceId)))
 }

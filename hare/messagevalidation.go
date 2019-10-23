@@ -4,6 +4,7 @@ import (
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 type messageValidator interface {
@@ -86,18 +87,23 @@ type roleValidator interface {
 	Validate(m *Msg) bool
 }
 
+type pubKeyGetter interface {
+	PublicKey(m *Message) *signing.PublicKey
+}
+
 type syntaxContextValidator struct {
-	signing         Signer
-	threshold       int
-	statusValidator func(m *Msg) bool // used to validate status Messages in SVP
-	stateQuerier    StateQuerier
-	layersPerEpoch  uint16
-	roleValidator   roleValidator
+	signing          Signer
+	threshold        int
+	statusValidator  func(m *Msg) bool // used to validate status Messages in SVP
+	stateQuerier     StateQuerier
+	layersPerEpoch   uint16
+	roleValidator    roleValidator
+	validMsgsTracker pubKeyGetter // used to check for public keys in the valid messages tracker
 	log.Log
 }
 
-func newSyntaxContextValidator(signing Signer, threshold int, validator func(m *Msg) bool, stateQuerier StateQuerier, layersPerEpoch uint16, ev roleValidator, logger log.Log) *syntaxContextValidator {
-	return &syntaxContextValidator{signing, threshold, validator, stateQuerier, layersPerEpoch, ev, logger}
+func newSyntaxContextValidator(sgr Signer, threshold int, validator func(m *Msg) bool, stateQuerier StateQuerier, layersPerEpoch uint16, ev roleValidator, validMsgsTracker pubKeyGetter, logger log.Log) *syntaxContextValidator {
+	return &syntaxContextValidator{sgr, threshold, validator, stateQuerier, layersPerEpoch, ev, validMsgsTracker, logger}
 }
 
 // contextual validation errors
@@ -261,6 +267,19 @@ func (v *syntaxContextValidator) validateAggregatedMessage(aggMsg *aggregatedMes
 	senders := make(map[string]struct{})
 	for _, innerMsg := range aggMsg.Messages {
 
+		// check if exist in cache of valid messages
+		if pub := v.validMsgsTracker.PublicKey(innerMsg); pub != nil {
+			// validate unique sender
+			if _, exist := senders[pub.String()]; exist { // pub already exist
+				v.Warning("Aggregated validation failed: detected same pubKey for different Messages")
+				return false
+			}
+			senders[pub.String()] = struct{}{} // mark sender as exist
+
+			// passed validation, continue to next message
+			continue
+		}
+
 		// extract public key
 		iMsg, err := newMsg(innerMsg, v.stateQuerier, v.layersPerEpoch)
 		if err != nil {
@@ -268,8 +287,8 @@ func (v *syntaxContextValidator) validateAggregatedMessage(aggMsg *aggregatedMes
 			return false
 		}
 
-		// validate unique sender
 		pub := iMsg.PubKey
+		// validate unique sender
 		if _, exist := senders[pub.String()]; exist { // pub already exist
 			v.Warning("Aggregated validation failed: detected same pubKey for different Messages")
 			return false

@@ -21,7 +21,7 @@ func defaultValidator() *syntaxContextValidator {
 		return true
 	}
 
-	return newSyntaxContextValidator(signing.NewEdSigner(), lowThresh10, trueValidator, &MockStateQuerier{true, nil}, 10, truer{}, log.NewDefault("Validator"))
+	return newSyntaxContextValidator(signing.NewEdSigner(), lowThresh10, trueValidator, &MockStateQuerier{true, nil}, 10, truer{}, pubGetter{}, log.NewDefault("Validator"))
 }
 
 func TestMessageValidator_CommitStatus(t *testing.T) {
@@ -196,13 +196,15 @@ func TestMessageValidator_ValidateMessage(t *testing.T) {
 	assert.True(t, v.SyntacticallyValidateMessage(status))
 }
 
-func assertNoErr(r *require.Assertions, expect bool, actual bool, err error) {
-	r.NoError(err)
-	r.Equal(expect, actual)
+type pubGetter struct {
+}
+
+func (pubGetter) PublicKey(m *Message) *signing.PublicKey {
+	return nil
 }
 
 func TestMessageValidator_SyntacticallyValidateMessage(t *testing.T) {
-	validator := newSyntaxContextValidator(signing.NewEdSigner(), 1, validate, &MockStateQuerier{true, nil}, 10, truer{}, log.NewDefault("Validator"))
+	validator := newSyntaxContextValidator(signing.NewEdSigner(), 1, validate, &MockStateQuerier{true, nil}, 10, truer{}, pubGetter{}, log.NewDefault("Validator"))
 	m := BuildPreRoundMsg(generateSigning(t), NewDefaultEmptySet())
 	assert.False(t, validator.SyntacticallyValidateMessage(m))
 	m = BuildPreRoundMsg(generateSigning(t), NewSetFromValues(value1))
@@ -235,7 +237,7 @@ func TestMessageValidator_validateSVPTypeB(t *testing.T) {
 }
 
 func TestMessageValidator_validateSVP(t *testing.T) {
-	validator := newSyntaxContextValidator(signing.NewEdSigner(), 1, validate, &MockStateQuerier{true, nil}, 10, truer{}, log.NewDefault("Validator"))
+	validator := newSyntaxContextValidator(signing.NewEdSigner(), 1, validate, &MockStateQuerier{true, nil}, 10, truer{}, pubGetter{}, log.NewDefault("Validator"))
 	m := buildProposalMsg(signing.NewEdSigner(), NewSetFromValues(value1, value2, value3), []byte{})
 	s1 := NewSetFromValues(value1)
 	m.InnerMsg.Svp = buildSVP(-1, s1)
