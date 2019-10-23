@@ -317,7 +317,7 @@ func (proc *ConsensusProcess) onEarlyMessage(m *Msg) {
 func (proc *ConsensusProcess) handleMessage(m *Msg) {
 	// Note: instanceId is already verified by the broker
 
-	proc.Debug("Received message %v", m)
+	proc.With().Info("Received message", log.String("msg_type", m.InnerMsg.Type.String()))
 
 	if !proc.validator.SyntacticallyValidateMessage(m) {
 		proc.Warning("Syntactically validation failed, pubkey %v", m.PubKey.ShortString())
@@ -664,7 +664,7 @@ func (proc *ConsensusProcess) statusValidator() func(m *Msg) bool {
 			if proc.preRoundTracker.CanProveSet(s) { // can prove s
 				return true
 			}
-		} else { // Ki>=0, we should have received a certificate for that set
+		} else {                                                     // Ki>=0, we should have received a certificate for that set
 			if proc.notifyTracker.HasCertificate(m.InnerMsg.Ki, s) { // can prove s
 				return true
 			}
@@ -677,8 +677,8 @@ func (proc *ConsensusProcess) statusValidator() func(m *Msg) bool {
 
 func (proc *ConsensusProcess) endOfStatusRound() {
 	// validate and track wrapper for validation func
+	valid := proc.statusValidator()
 	vtFunc := func(m *Msg) bool {
-		valid := proc.statusValidator()
 		if valid(m) {
 			proc.mTracker.Track(m)
 			return true
