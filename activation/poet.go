@@ -7,6 +7,8 @@ import (
 	"github.com/spacemeshos/poet/rpc/api"
 	"github.com/spacemeshos/poet/service"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/keepalive"
+	"time"
 )
 
 // RPCPoetClient implements PoetProvingServiceClient interface.
@@ -71,7 +73,13 @@ func newClientConn(target string, ctx context.Context) (*grpc.ClientConn, error)
 	opts := []grpc.DialOption{
 		grpc.WithInsecure(),
 		grpc.WithBlock(),
-	}
+		// XXX: this is done to prevent routers from cleaning up our connections (e.g aws load balances..)
+		// TODO: these parameters work for now but we might need to revisit or add them as configuration
+		grpc.WithKeepaliveParams(keepalive.ClientParameters{
+			time.Minute,
+			time.Minute * 3,
+			true,
+		})}
 
 	conn, err := grpc.DialContext(ctx, target, opts...)
 	if err != nil {
