@@ -134,21 +134,28 @@ func (m *Mesh) GetLayer(index types.LayerID) (*types.Layer, error) {
 }
 
 func (m *Mesh) ValidateLayer(lyr *types.Layer) {
-	m.Info("Validate layer %d", lyr.Index())
-
-	if lyr.Index() >= m.config.RewardMaturity {
-		m.AccumulateRewards(lyr.Index()-m.config.RewardMaturity, m.config)
-	}
+	layerId := lyr.Index()
+	m.Info("Validate layer %d", layerId)
 
 	oldPbase, newPbase := m.HandleIncomingLayer(lyr)
 	m.lvMutex.Lock()
-	m.validatedLayer = lyr.Index()
+	m.validatedLayer = layerId
 	m.lvMutex.Unlock()
 
-	if newPbase > oldPbase {
-		m.PushTransactions(oldPbase, newPbase)
+	if layerId >= m.config.RewardMaturity && layerId-m.config.RewardMaturity < oldPbase {
+		m.AccumulateRewards(layerId-m.config.RewardMaturity, m.config)
 	}
-	m.Info("done validating layer %v", lyr.Index())
+
+	for layerId := oldPbase; layerId < newPbase; layerId++ {
+		if layerId >= m.config.RewardMaturity && layerId-m.config.RewardMaturity >= oldPbase {
+			m.AccumulateRewards(layerId-m.config.RewardMaturity, m.config)
+		}
+		if err := m.PushTransactions(layerId); err != nil {
+			m.With().Error("failed to push transactions", log.Err(err))
+			break
+		}
+	}
+	m.Info("done validating layer %v", layerId)
 }
 
 func (m *Mesh) ExtractUniqueOrderedTransactions(l *types.Layer) (validBlockTxs, invalidBlockTxs []*types.Transaction, err error) {
@@ -223,43 +230,41 @@ func (m *Mesh) getTxs(txIds []types.TransactionId, l *types.Layer) []*types.Tran
 	return txs
 }
 
-func (m *Mesh) PushTransactions(oldBase, newBase types.LayerID) {
-	for i := oldBase; i < newBase; i++ {
-		l, err := m.GetLayer(i)
-		if err != nil || l == nil {
-			m.With().Error("failed to retrieve layer", log.LayerId(uint64(i)), log.Err(err))
-			// TODO: We want to panic here once we have a way to "remember" that we didn't apply these txs
-			//  e.g. persist the last layer transactions were applied from and use that instead of `oldBase`
-			return
-		}
-
-		validBlockTxs, invalidBlockTxs, err := m.ExtractUniqueOrderedTransactions(l)
-		if err != nil {
-			panic("failed to extract txs: " + err.Error())
-		}
-		numFailedTxs, err := m.ApplyTransactions(i, validBlockTxs)
-		if err != nil {
-			m.With().Error("failed to apply transactions",
-				log.LayerId(uint64(i)), log.Int("num_failed_txs", numFailedTxs), log.Err(err))
-			// TODO: We want to panic here once we have a way to "remember" that we didn't apply these txs
-			//  e.g. persist the last layer transactions were applied from and use that instead of `oldBase`
-		}
-		m.removeFromUnappliedTxs(validBlockTxs, invalidBlockTxs, i)
-		for _, tx := range invalidBlockTxs {
-			err = m.blockBuilder.ValidateAndAddTxToPool(tx)
-			// We ignore errors here, since they mean that the tx is no longer valid and we shouldn't re-add it
-			if err == nil {
-				m.With().Info("transaction from contextually invalid block re-added to mempool",
-					log.TxId(tx.Id().ShortString()))
-			}
-		}
-		m.With().Info("applied transactions",
-			log.Int("valid_block_txs", len(validBlockTxs)),
-			log.Int("invalid_block_txs", len(invalidBlockTxs)),
-			log.Uint64("new_base", uint64(newBase)),
-			log.Int("num_failed_txs", numFailedTxs),
-		)
+func (m *Mesh) PushTransactions(layerId types.LayerID) error {
+	l, err := m.GetLayer(layerId)
+	if err != nil || l == nil {
+		// TODO: We want to panic here once we have a way to "remember" that we didn't apply these txs
+		//  e.g. persist the last layer transactions were applied from and use that instead of `oldBase`
+		return fmt.Errorf("failed to retrieve layer %v: %v", layerId, err)
 	}
+
+	validBlockTxs, invalidBlockTxs, err := m.ExtractUniqueOrderedTransactions(l)
+	if err != nil {
+		panic("failed to extract txs: " + err.Error())
+	}
+	numFailedTxs, err := m.ApplyTransactions(layerId, validBlockTxs)
+	if err != nil {
+		m.With().Error("failed to apply transactions",
+			log.LayerId(uint64(layerId)), log.Int("num_failed_txs", numFailedTxs), log.Err(err))
+		// TODO: We want to panic here once we have a way to "remember" that we didn't apply these txs
+		//  e.g. persist the last layer transactions were applied from and use that instead of `oldBase`
+	}
+	m.removeFromUnappliedTxs(validBlockTxs, invalidBlockTxs, layerId)
+	for _, tx := range invalidBlockTxs {
+		err = m.blockBuilder.ValidateAndAddTxToPool(tx)
+		// We ignore errors here, since they mean that the tx is no longer valid and we shouldn't re-add it
+		if err == nil {
+			m.With().Info("transaction from contextually invalid block re-added to mempool",
+				log.TxId(tx.Id().ShortString()))
+		}
+	}
+	m.With().Info("applied transactions",
+		log.Int("valid_block_txs", len(validBlockTxs)),
+		log.Int("invalid_block_txs", len(invalidBlockTxs)),
+		log.LayerId(uint64(layerId)),
+		log.Int("num_failed_txs", numFailedTxs),
+	)
+	return nil
 }
 
 //todo consider adding a boolean for layer validity instead error

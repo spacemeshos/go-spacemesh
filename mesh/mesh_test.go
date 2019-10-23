@@ -295,7 +295,7 @@ func TestMesh_AddBlockWithTxs_PushTransactions_UpdateUnappliedTxs(t *testing.T) 
 		r.Equal(111, int(txns[i].TotalAmount))
 	}
 
-	msh.PushTransactions(1, 2)
+	msh.PushTransactions(1)
 	r.ElementsMatch(GetTransactionIds(tx5), GetTransactionIds(blockBuilder.txs...))
 
 	txns = getTxns(r, msh.MeshDB, origin)
