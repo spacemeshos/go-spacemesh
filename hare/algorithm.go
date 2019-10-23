@@ -155,7 +155,9 @@ type ConsensusProcess struct {
 }
 
 // NewConsensusProcess creates a new consensus process instance.
-func NewConsensusProcess(cfg config.Config, instanceId instanceId, s *Set, oracle Rolacle, stateQuerier StateQuerier, layersPerEpoch uint16, signing Signer, nid types.NodeId, p2p NetworkService, terminationReport chan TerminationOutput, logger log.Log) *ConsensusProcess {
+func NewConsensusProcess(cfg config.Config, instanceId instanceId, s *Set, oracle Rolacle, stateQuerier StateQuerier,
+	layersPerEpoch uint16, signing Signer, nid types.NodeId, p2p NetworkService,
+	terminationReport chan TerminationOutput, ev roleValidator, logger log.Log) *ConsensusProcess {
 	proc := &ConsensusProcess{
 		State:             State{-1, -1, s.Clone(), nil},
 		Closer:            NewCloser(),
@@ -171,7 +173,7 @@ func NewConsensusProcess(cfg config.Config, instanceId instanceId, s *Set, oracl
 		pending:           make(map[string]*Msg, cfg.N),
 		Log:               logger,
 	}
-	proc.validator = newSyntaxContextValidator(signing, cfg.F+1, proc.statusValidator(), stateQuerier, layersPerEpoch, logger)
+	proc.validator = newSyntaxContextValidator(signing, cfg.F+1, proc.statusValidator(), stateQuerier, layersPerEpoch, ev, logger)
 
 	return proc
 }

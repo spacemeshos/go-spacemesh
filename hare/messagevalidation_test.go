@@ -9,10 +9,19 @@ import (
 	"testing"
 )
 
+type truer struct {
+}
+
+func (truer) Validate(m *Msg) bool {
+	return true
+}
+
 func defaultValidator() *syntaxContextValidator {
-	return newSyntaxContextValidator(signing.NewEdSigner(), lowThresh10, func(m *Msg) bool {
+	trueValidator := func(m *Msg) bool {
 		return true
-	}, &MockStateQuerier{true, nil}, 10, log.NewDefault("Validator"))
+	}
+
+	return newSyntaxContextValidator(signing.NewEdSigner(), lowThresh10, trueValidator, &MockStateQuerier{true, nil}, 10, truer{}, log.NewDefault("Validator"))
 }
 
 func TestMessageValidator_CommitStatus(t *testing.T) {
@@ -193,7 +202,7 @@ func assertNoErr(r *require.Assertions, expect bool, actual bool, err error) {
 }
 
 func TestMessageValidator_SyntacticallyValidateMessage(t *testing.T) {
-	validator := newSyntaxContextValidator(signing.NewEdSigner(), 1, validate, &MockStateQuerier{true, nil}, 10, log.NewDefault("Validator"))
+	validator := newSyntaxContextValidator(signing.NewEdSigner(), 1, validate, &MockStateQuerier{true, nil}, 10, truer{}, log.NewDefault("Validator"))
 	m := BuildPreRoundMsg(generateSigning(t), NewDefaultEmptySet())
 	assert.False(t, validator.SyntacticallyValidateMessage(m))
 	m = BuildPreRoundMsg(generateSigning(t), NewSetFromValues(value1))
@@ -226,7 +235,7 @@ func TestMessageValidator_validateSVPTypeB(t *testing.T) {
 }
 
 func TestMessageValidator_validateSVP(t *testing.T) {
-	validator := newSyntaxContextValidator(signing.NewEdSigner(), 1, validate, &MockStateQuerier{true, nil}, 10, log.NewDefault("Validator"))
+	validator := newSyntaxContextValidator(signing.NewEdSigner(), 1, validate, &MockStateQuerier{true, nil}, 10, truer{}, log.NewDefault("Validator"))
 	m := buildProposalMsg(signing.NewEdSigner(), NewSetFromValues(value1, value2, value3), []byte{})
 	s1 := NewSetFromValues(value1)
 	m.InnerMsg.Svp = buildSVP(-1, s1)
