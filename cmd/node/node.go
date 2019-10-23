@@ -364,6 +364,12 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 		app.log.Panic("Number of atxs per block required is bigger than the limit atxsPerBlock=%v limit=%v", app.Config.AtxsPerBlock, miner.AtxsPerBlockLimit)
 	}
 
+	// we can't have an epoch offset which is greater/equal than the number of layers in an epoch
+	if app.Config.HareEligibility.EpochOffset >= app.Config.BaseConfig.LayersPerEpoch {
+		app.log.Panic("Epoch offset cannot be greater than or equal to the number of layers per epoch EpochOffset=%v LayersPerEpoch=%v",
+			app.Config.HareEligibility.EpochOffset, app.Config.BaseConfig.LayersPerEpoch)
+	}
+
 	syncer := sync.NewSync(swarm, msh, txpool, atxpool, eValidator, poetDb, conf, clock, lg.WithName("sync"))
 	blockOracle := oracle.NewMinerBlockOracle(layerSize, uint32(app.Config.GenesisActiveSet), layersPerEpoch, atxdb, beaconProvider, vrfSigner, nodeID, syncer.WeaklySynced, lg.WithName("blockOracle"))
 

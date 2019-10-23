@@ -74,22 +74,22 @@ func roundedSafeLayer(layer types.LayerID, safetyParam types.LayerID,
 
 	sl := safeLayer(layer, safetyParam)
 	if sl == config.Genesis {
-		return sl
+		return config.Genesis
 	}
 
-	ep := types.LayerID(sl.GetEpoch(layersPerEpoch))
+	se := types.LayerID(sl.GetEpoch(layersPerEpoch)) // the safe epoch
 
-	threshold := ep*types.LayerID(layersPerEpoch) + epochOffset
-	if sl >= threshold { // the safe layer is after the rounding threshold
-		return threshold // round to threshold
+	roundedLayer := se*types.LayerID(layersPerEpoch) + epochOffset
+	if sl >= roundedLayer { // the safe layer is after the rounding threshold
+		return roundedLayer // round to threshold
 	}
 
-	if threshold <= types.LayerID(layersPerEpoch) { // we can't go before genesis
+	if roundedLayer <= types.LayerID(layersPerEpoch) { // we can't go before genesis
 		return config.Genesis // just return genesis
 	}
 
 	// round to the previous epoch threshold
-	return threshold - types.LayerID(layersPerEpoch)
+	return roundedLayer - types.LayerID(layersPerEpoch)
 }
 
 // New returns a new eligibility oracle instance.
