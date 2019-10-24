@@ -317,7 +317,7 @@ func (proc *ConsensusProcess) onEarlyMessage(m *Msg) {
 func (proc *ConsensusProcess) handleMessage(m *Msg) {
 	// Note: instanceId is already verified by the broker
 
-	proc.With().Info("Received message", log.String("msg_type", m.InnerMsg.Type.String()))
+	proc.With().Debug("Received message", log.String("msg_type", m.InnerMsg.Type.String()))
 
 	// validate context
 	err := proc.validator.ContextuallyValidateMessage(m, proc.k)
@@ -552,11 +552,9 @@ func (proc *ConsensusProcess) beginNotifyRound() {
 
 // passes all pending messages to the inbox of the process so they will be handled
 func (proc *ConsensusProcess) handlePending(pending map[string]*Msg) {
-	proc.With().Info("Writing pending messages to inbox", log.Int("pending_size", len(pending)))
 	for _, m := range pending {
 		proc.inbox <- m
 	}
-	proc.Info("Done writing pending messages")
 }
 
 // runs the logic of the beginning of a round by its type
