@@ -20,8 +20,7 @@ var cfg = config.Config{N: 10, F: 5, RoundDuration: 2, ExpectedLeaders: 5}
 
 type mockMessageValidator struct {
 	syntaxValid  bool
-	contextValid bool
-	err          error
+	contextValid error
 	countSyntax  int
 	countContext int
 }
@@ -33,7 +32,7 @@ func (mmv *mockMessageValidator) SyntacticallyValidateMessage(m *Msg) bool {
 
 func (mmv *mockMessageValidator) ContextuallyValidateMessage(m *Msg, expectedK int32) error {
 	mmv.countContext++
-	return mmv.err
+	return mmv.contextValid
 }
 
 type mockRolacle struct {
@@ -196,6 +195,7 @@ func TestConsensusProcess_eventLoop(t *testing.T) {
 }
 
 func TestConsensusProcess_handleMessage(t *testing.T) {
+	r := require.New(t)
 	net := &mockP2p{}
 	broker := buildBroker(net, t.Name())
 	broker.Start()
@@ -210,20 +210,24 @@ func TestConsensusProcess_handleMessage(t *testing.T) {
 	oracle.isEligible = true
 	mValidator.syntaxValid = false
 	proc.handleMessage(msg)
-	assert.Equal(t, 1, mValidator.countSyntax)
+	r.Equal(1, mValidator.countSyntax)
+	r.Equal(1, mValidator.countContext)
 	mValidator.syntaxValid = true
 	proc.handleMessage(msg)
-	assert.NotEqual(t, 0, mValidator.countContext)
-	mValidator.contextValid = true
+	r.NotEqual(0, mValidator.countContext)
+	mValidator.contextValid = nil
 	proc.handleMessage(msg)
-	assert.Equal(t, 0, len(proc.pending))
-	mValidator.contextValid = false
+	r.Equal(0, len(proc.pending))
+	r.Equal(3, mValidator.countContext)
+	r.Equal(3, mValidator.countSyntax)
+	mValidator.contextValid = errors.New("not valid")
 	proc.handleMessage(msg)
-	assert.Equal(t, 0, len(proc.pending))
-	mValidator.contextValid = false
-	mValidator.err = errEarlyMsg
+	r.Equal(4, mValidator.countContext)
+	r.Equal(3, mValidator.countSyntax)
+	r.Equal(0, len(proc.pending))
+	mValidator.contextValid = errEarlyMsg
 	proc.handleMessage(msg)
-	assert.Equal(t, 1, len(proc.pending))
+	r.Equal(1, len(proc.pending))
 }
 
 func TestConsensusProcess_nextRound(t *testing.T) {
