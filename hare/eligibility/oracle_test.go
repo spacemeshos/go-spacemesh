@@ -297,6 +297,14 @@ func TestOracle_roundedSafeLayer(t *testing.T) {
 	r.Equal(config.Genesis, v)
 	v = roundedSafeLayer(10, 1, 4, offset)
 	r.Equal(types.LayerID(4+offset), v)
+
+	// examples
+	// sl is after rounded layer
+	v = roundedSafeLayer(11, 5, 5, 1)
+	r.Equal(types.LayerID(6), v)
+	// sl is before rounded layer
+	v = roundedSafeLayer(11, 5, 5, 3)
+	r.Equal(types.LayerID(3), v)
 }
 
 func TestOracle_actives(t *testing.T) {
