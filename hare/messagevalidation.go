@@ -108,6 +108,7 @@ func newSyntaxContextValidator(sgr Signer, threshold int, validator func(m *Msg)
 
 // contextual validation errors
 var (
+	errNilMsg         = errors.New("nil message")
 	errNilInner       = errors.New("nil inner message")
 	errEarlyMsg       = errors.New("early message")
 	errInvalidIter    = errors.New("incorrect iteration number")
@@ -117,8 +118,11 @@ var (
 
 // ContextuallyValidateMessage checks if the message is contextually valid.
 // Returns nil if the message is contextually valid or a suitable error otherwise.
-// Note: we assume m is syntactically valid (int that case, m.InnerMsg.K is a valid expression).
 func (v *syntaxContextValidator) ContextuallyValidateMessage(m *Msg, currentK int32) error {
+	if m == nil {
+		return errNilMsg
+	}
+
 	if m.InnerMsg == nil {
 		return errNilInner
 	}

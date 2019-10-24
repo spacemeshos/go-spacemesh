@@ -319,16 +319,13 @@ func (proc *ConsensusProcess) handleMessage(m *Msg) {
 
 	proc.With().Info("Received message", log.String("msg_type", m.InnerMsg.Type.String()))
 
-	if !proc.validator.SyntacticallyValidateMessage(m) {
-		proc.Warning("Syntactically validation failed, pubkey %v", m.PubKey.ShortString())
-		return
-	}
-
-	mType := messageType(m.InnerMsg.Type).String()
-	// validate InnerMsg for this or next round
+	// validate context
 	err := proc.validator.ContextuallyValidateMessage(m, proc.k)
 	if err != nil {
-		if err == errEarlyMsg { // early message, keep for later
+		mType := messageType(m.InnerMsg.Type).String()
+
+		// early message, keep for later
+		if err == errEarlyMsg {
 			proc.Debug("Early message of type %v detected. Keeping message, pubkey %v", mType, m.PubKey.ShortString())
 			proc.onEarlyMessage(m)
 			return
@@ -342,6 +339,13 @@ func (proc *ConsensusProcess) handleMessage(m *Msg) {
 		return
 	}
 
+	// validate syntax
+	if !proc.validator.SyntacticallyValidateMessage(m) {
+		proc.Warning("Syntactically validation failed, pubkey %v", m.PubKey.ShortString())
+		return
+	}
+
+	// warn on late pre-round msgs
 	if m.InnerMsg.Type == pre && proc.k != -1 {
 		proc.Warning("Encountered late PreRound message")
 	}
@@ -664,7 +668,7 @@ func (proc *ConsensusProcess) statusValidator() func(m *Msg) bool {
 			if proc.preRoundTracker.CanProveSet(s) { // can prove s
 				return true
 			}
-		} else {                                                     // Ki>=0, we should have received a certificate for that set
+		} else { // Ki>=0, we should have received a certificate for that set
 			if proc.notifyTracker.HasCertificate(m.InnerMsg.Ki, s) { // can prove s
 				return true
 			}
