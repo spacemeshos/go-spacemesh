@@ -114,27 +114,69 @@ func TestMessageValidator_IsStructureValid(t *testing.T) {
 	assert.False(t, validator.SyntacticallyValidateMessage(m))
 }
 
+type mockValidator struct {
+	res bool
+}
+
+func (m mockValidator) Validate(*Msg) bool {
+	return m.res
+}
+
 func TestMessageValidator_Aggregated(t *testing.T) {
+	r := require.New(t)
 	validator := defaultValidator()
-	assert.False(t, validator.validateAggregatedMessage(nil, nil))
+	r.Equal(errNilValidators, validator.validateAggregatedMessage(nil, nil))
 	funcs := make([]func(m *Msg) bool, 0)
-	assert.False(t, validator.validateAggregatedMessage(nil, funcs))
+	r.Equal(errNilAggMsgs, validator.validateAggregatedMessage(nil, funcs))
 
 	agg := &aggregatedMessages{}
-	assert.False(t, validator.validateAggregatedMessage(agg, funcs))
-	msgs := make([]*Message, validator.threshold)
-	for i := 0; i < validator.threshold; i++ {
-		iMsg := BuildStatusMsg(generateSigning(t), NewSetFromValues(value1))
-		msgs[i] = iMsg.Message
-	}
-	agg.Messages = msgs
-	assert.True(t, validator.validateAggregatedMessage(agg, funcs))
-	msgs[0].Sig = []byte{1}
-	assert.False(t, validator.validateAggregatedMessage(agg, funcs))
+	r.Equal(errNilMsgsSlice, validator.validateAggregatedMessage(agg, funcs))
 
+	agg.Messages = make([]*Message, validator.threshold+1)
+	r.Equal(errMsgsCountMismatch, validator.validateAggregatedMessage(agg, funcs))
+
+	pg := &pubGetter{make(map[string]*signing.PublicKey)}
+	msgs := make([]*Message, validator.threshold)
+	sgn := generateSigning(t)
+	for i := 0; i < validator.threshold; i++ {
+		sgn = generateSigning(t) // hold some sgn
+		iMsg := BuildStatusMsg(sgn, NewSetFromValues(value1))
+		msgs[i] = iMsg.Message
+		pg.Add(iMsg)
+	}
+
+	validator.validMsgsTracker = pg
+	agg.Messages = msgs
+	r.Nil(validator.validateAggregatedMessage(agg, funcs))
+
+	validator.validMsgsTracker = &pubGetter{}
+	tmp := msgs[0].Sig
+	msgs[0].Sig = []byte{1}
+	r.Error(validator.validateAggregatedMessage(agg, funcs))
+
+	msgs[0].Sig = tmp
+	inner := msgs[0].InnerMsg.Values
+	msgs[0].InnerMsg.Values = nil
+	r.Equal(errInnerSyntax, validator.validateAggregatedMessage(agg, funcs))
+
+	msgs[0].InnerMsg.Values = inner
+	validator.roleValidator = &mockValidator{}
+	r.Equal(errInnerEligibility, validator.validateAggregatedMessage(agg, funcs))
+
+	validator.roleValidator = &mockValidator{true}
 	funcs = make([]func(m *Msg) bool, 1)
 	funcs[0] = func(m *Msg) bool { return false }
-	assert.False(t, validator.validateAggregatedMessage(agg, funcs))
+	r.Equal(errInnerFunc, validator.validateAggregatedMessage(agg, funcs))
+
+	funcs[0] = func(m *Msg) bool { return true }
+	m0 := msgs[0]
+	msgs[0] = BuildStatusMsg(sgn, NewSetFromValues(value1)).Message
+	r.Equal(errDupSender, validator.validateAggregatedMessage(agg, funcs))
+
+	validator.validMsgsTracker = pg
+	msgs[0] = m0
+	msgs[len(msgs)-1] = m0
+	r.Equal(errDupSender, validator.validateAggregatedMessage(agg, funcs))
 }
 
 func TestSyntaxContextValidator_PreRoundContext(t *testing.T) {
@@ -197,10 +239,24 @@ func TestMessageValidator_ValidateMessage(t *testing.T) {
 }
 
 type pubGetter struct {
+	mp map[string]*signing.PublicKey
 }
 
-func (pubGetter) PublicKey(m *Message) *signing.PublicKey {
-	return nil
+func (pg pubGetter) Add(m *Msg) {
+	pg.mp[string(m.Sig)] = m.PubKey
+}
+
+func (pg pubGetter) PublicKey(m *Message) *signing.PublicKey {
+	if pg.mp == nil {
+		return nil
+	}
+
+	p, ok := pg.mp[string(m.Sig)]
+	if !ok {
+		return nil
+	}
+
+	return p
 }
 
 func TestMessageValidator_SyntacticallyValidateMessage(t *testing.T) {

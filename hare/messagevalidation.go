@@ -245,27 +245,35 @@ func (v *syntaxContextValidator) SyntacticallyValidateMessage(m *Msg) bool {
 	}
 }
 
+var (
+	errNilValidators     = errors.New("validators param is nil")
+	errNilAggMsgs        = errors.New("aggMsg is nil")
+	errNilMsgsSlice      = errors.New("messages slice is nil")
+	errMsgsCountMismatch = errors.New("number of messages does not match the threshold")
+	errDupSender         = errors.New("duplicate sender detected")
+	errInnerSyntax       = errors.New("invalid syntax for inner message")
+	errInnerEligibility  = errors.New("inner message is not eligible")
+	errInnerFunc         = errors.New("inner message did not pass validation function")
+)
+
 // validate the provided aggregated messages by the provided validators.
-func (v *syntaxContextValidator) validateAggregatedMessage(aggMsg *aggregatedMessages, validators []func(m *Msg) bool) bool {
+func (v *syntaxContextValidator) validateAggregatedMessage(aggMsg *aggregatedMessages, validators []func(m *Msg) bool) error {
 	if validators == nil {
-		v.Error("Aggregated validation failed: validators param is nil")
-		return false
+		return errNilValidators
 	}
 
 	if aggMsg == nil {
-		v.Warning("Aggregated validation failed: aggMsg is nil")
-		return false
+		return errNilAggMsgs
 	}
 
 	if aggMsg.Messages == nil { // must contain status Messages
-		v.Warning("Aggregated validation failed: Messages slice is nil")
-		return false
+		return errNilMsgsSlice
 	}
 
 	if len(aggMsg.Messages) != v.threshold { // must include exactly f+1 Messages
-		v.Warning("Aggregated validation failed: number of Messages does not match. Expected: %v Actual: %v",
+		v.Warning("Aggregated validation failed: number of messages does not match. Expected: %v Actual: %v",
 			v.threshold, len(aggMsg.Messages))
-		return false
+		return errMsgsCountMismatch
 	}
 
 	senders := make(map[string]struct{})
@@ -275,8 +283,7 @@ func (v *syntaxContextValidator) validateAggregatedMessage(aggMsg *aggregatedMes
 		if pub := v.validMsgsTracker.PublicKey(innerMsg); pub != nil {
 			// validate unique sender
 			if _, exist := senders[pub.String()]; exist { // pub already exist
-				v.Warning("Aggregated validation failed: detected same pubKey for different Messages")
-				return false
+				return errDupSender
 			}
 			senders[pub.String()] = struct{}{} // mark sender as exist
 
@@ -287,39 +294,34 @@ func (v *syntaxContextValidator) validateAggregatedMessage(aggMsg *aggregatedMes
 		// extract public key
 		iMsg, err := newMsg(innerMsg, v.stateQuerier, v.layersPerEpoch)
 		if err != nil {
-			v.Warning("Aggregated validation failed: could not construct msg err=%v", err)
-			return false
+			return err
 		}
 
 		pub := iMsg.PubKey
 		// validate unique sender
 		if _, exist := senders[pub.String()]; exist { // pub already exist
-			v.Warning("Aggregated validation failed: detected same pubKey for different Messages")
-			return false
+			return errDupSender
 		}
 		senders[pub.String()] = struct{}{} // mark sender as exist
 
 		if !v.SyntacticallyValidateMessage(iMsg) {
-			v.Warning("Aggregated validation failed: identified an invalid inner message %v", iMsg)
-			return false
+			return errInnerSyntax
 		}
 
 		// validate role
 		if !v.roleValidator.Validate(iMsg) {
-			v.Warning("Aggregated validation failed: inner message is not eligible")
-			return false
+			return errInnerEligibility
 		}
 
 		// validate with attached validators
 		for _, vFunc := range validators {
 			if !vFunc(iMsg) {
-				v.Warning("Aggregated validation failed: attached vFunc failed")
-				return false
+				return errInnerFunc
 			}
 		}
 	}
 
-	return true
+	return nil
 }
 
 func (v *syntaxContextValidator) validateSVP(msg *Msg) bool {
@@ -335,8 +337,8 @@ func (v *syntaxContextValidator) validateSVP(msg *Msg) bool {
 		return true
 	}
 	validators := []func(m *Msg) bool{validateStatusType, validateSameIteration, v.statusValidator}
-	if !v.validateAggregatedMessage(msg.InnerMsg.Svp, validators) {
-		v.Warning("Proposal validation failed: failed to validate aggregated message")
+	if err := v.validateAggregatedMessage(msg.InnerMsg.Svp, validators); err != nil {
+		v.With().Warning("Proposal validation failed: failed to validate aggregated messages", log.Err(err))
 		return false
 	}
 
@@ -390,8 +392,8 @@ func (v *syntaxContextValidator) validateCertificate(cert *certificate) bool {
 	// Note: no need to validate notify.Values=commits.Values because we refill the InnerMsg with notify.Values
 	validateSameK := func(m *Msg) bool { return m.InnerMsg.K == cert.AggMsgs.Messages[0].InnerMsg.K }
 	validators := []func(m *Msg) bool{validateCommitType, validateSameK}
-	if !v.validateAggregatedMessage(cert.AggMsgs, validators) {
-		v.Warning("Certificate validation failed: aggregated Messages validation failed")
+	if err := v.validateAggregatedMessage(cert.AggMsgs, validators); err != nil {
+		v.With().Warning("Certificate validation failed: aggregated messages validation failed", log.Err(err))
 		return false
 	}
 
