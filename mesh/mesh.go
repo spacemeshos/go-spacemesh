@@ -134,28 +134,28 @@ func (m *Mesh) GetLayer(index types.LayerID) (*types.Layer, error) {
 }
 
 func (m *Mesh) ValidateLayer(lyr *types.Layer) {
-	layerId := lyr.Index()
-	m.Info("Validate layer %d", layerId)
+	currLayerId := lyr.Index()
+	m.Info("Validate layer %d", currLayerId)
 
 	oldPbase, newPbase := m.HandleIncomingLayer(lyr)
 	m.lvMutex.Lock()
-	m.validatedLayer = layerId
+	m.validatedLayer = currLayerId
 	m.lvMutex.Unlock()
 
-	if layerId >= m.config.RewardMaturity && layerId-m.config.RewardMaturity < oldPbase {
-		m.AccumulateRewards(layerId-m.config.RewardMaturity, m.config)
+	if currLayerId >= m.config.RewardMaturity && currLayerId-m.config.RewardMaturity < oldPbase {
+		m.AccumulateRewards(currLayerId-m.config.RewardMaturity, m.config)
 	}
 
 	for layerId := oldPbase; layerId < newPbase; layerId++ {
-		if layerId >= m.config.RewardMaturity && layerId-m.config.RewardMaturity >= oldPbase {
-			m.AccumulateRewards(layerId-m.config.RewardMaturity, m.config)
+		if currLayerId >= m.config.RewardMaturity && currLayerId-m.config.RewardMaturity >= layerId {
+			m.AccumulateRewards(layerId, m.config)
 		}
 		if err := m.PushTransactions(layerId); err != nil {
 			m.With().Error("failed to push transactions", log.Err(err))
 			break
 		}
 	}
-	m.Info("done validating layer %v", layerId)
+	m.Info("done validating layer %v", currLayerId)
 }
 
 func (m *Mesh) ExtractUniqueOrderedTransactions(l *types.Layer) (validBlockTxs, invalidBlockTxs []*types.Transaction, err error) {
