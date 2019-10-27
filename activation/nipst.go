@@ -55,7 +55,7 @@ type PoetProvingServiceClient interface {
 	// open round suited for the specified duration.
 	submit(challenge types.Hash32) (*types.PoetRound, error)
 
-	getPoetServiceId() ([types.PoetServiceIdLength]byte, error)
+	getPoetServiceId() ([]byte, error)
 }
 
 type builderState struct {
@@ -68,7 +68,7 @@ type builderState struct {
 	PoetRound *types.PoetRound
 
 	// PoetServiceId is the public key of the PoET proving service.
-	PoetServiceId [types.PoetServiceIdLength]byte
+	PoetServiceId []byte
 
 	// PoetProofRef is the root of the proof received from the PoET service.
 	PoetProofRef []byte
@@ -125,7 +125,7 @@ type NIPSTBuilder struct {
 }
 
 type PoetDbApi interface {
-	SubscribeToProofRef(poetId [types.PoetServiceIdLength]byte, roundId uint64) chan []byte
+	SubscribeToProofRef(poetId []byte, roundId string) chan []byte
 	GetMembershipMap(proofRef []byte) (map[types.Hash32]bool, error)
 }
 
@@ -213,7 +213,7 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *types.Hash32) (*types.NIPST, error
 			return nil, fmt.Errorf("failed to fetch membership for PoET proof") // inconsistent state
 		}
 		if !membership[*nipst.NipstChallenge] {
-			return nil, fmt.Errorf("not a member of this round (poetId: %x, roundId: %d)",
+			return nil, fmt.Errorf("not a member of this round (poetId: %x, roundId: %s)",
 				nb.state.PoetServiceId, nb.state.PoetRound.Id) // TODO(noamnelke): handle this case!
 		}
 		nb.state.PoetProofRef = poetProofRef

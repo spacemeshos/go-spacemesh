@@ -76,6 +76,7 @@ github.com/golang/protobuf v1.3.0 h1:kbxbvI4Un1LUWKxufD+BiE6AEExYYgkQLQmLFqA1LFk
 github.com/golang/protobuf v1.3.0/go.mod h1:Qd/q+1AKNOZr9uGQzbzCmRO6sUih6GTPZv6a1/R87v0=
 github.com/golang/protobuf v1.3.1 h1:YF8+flBXS5eO826T4nzqPrxfhQThhXl0YzfuUPu4SBg=
 github.com/golang/protobuf v1.3.1/go.mod h1:6lQm79b+lXiMfvg/cZm0SGofjICqVBUtrP5yJMmIC1U=
+github.com/golang/snappy v0.0.0-20180518054509-2e65f85255db/go.mod h1:/XxbfmMg8lxefKM7IXC3fBNl/7bRcc72aCRzEWrmP2Q=
 github.com/golang/snappy v0.0.1 h1:Qgr9rKW7uDUkrbSmQeiDsGa8SjGyCOGtuasMWwvp2P4=
 github.com/golang/snappy v0.0.1/go.mod h1:/XxbfmMg8lxefKM7IXC3fBNl/7bRcc72aCRzEWrmP2Q=
 github.com/google/btree v0.0.0-20180813153112-4030bb1f1f0c/go.mod h1:lNA+9X1NB3Zf8V7Ke586lFgjr2dZNuvo3lPJSGZ5JPQ=
@@ -194,8 +195,16 @@ github.com/spacemeshos/merkle-tree v0.0.0-20190508113057-1a71b988924a h1:/CO5P93
 github.com/spacemeshos/merkle-tree v0.0.0-20190508113057-1a71b988924a/go.mod h1:mPxjt4RONPxSUhxOq4bhSJyKVGQJ0VMSyRiE51dDLgE=
 github.com/spacemeshos/merkle-tree v0.0.0-20190612125135-48574fd5f419 h1:h01wKBJ33d4/4yRTyCZv/LKcLMokl6mLcZCfitQk7xw=
 github.com/spacemeshos/merkle-tree v0.0.0-20190612125135-48574fd5f419/go.mod h1:mPxjt4RONPxSUhxOq4bhSJyKVGQJ0VMSyRiE51dDLgE=
+github.com/spacemeshos/merkle-tree v0.0.0-20190906064112-506526aad109 h1:Ykw2JdoD7aWbSmIzGMwYsikZUgos8/gMbTiK4PuCCZI=
+github.com/spacemeshos/merkle-tree v0.0.0-20190906064112-506526aad109/go.mod h1:mPxjt4RONPxSUhxOq4bhSJyKVGQJ0VMSyRiE51dDLgE=
 github.com/spacemeshos/poet v0.0.0-20191007095323-0c943a6593a3 h1:5zQp1V+vkRArw3USw0EjBkg3kCcnz/7551m2BbKDqV0=
 github.com/spacemeshos/poet v0.0.0-20191007095323-0c943a6593a3/go.mod h1:kUsJUBv9WonNz6JQSAAg0ngMgtrCwaobw79zPBocOPQ=
+github.com/spacemeshos/poet v0.0.0-20191022081718-6a7adf423ac3 h1:cXciLTG4qO7mxTz9aS19BZ5X3ibnFVOfZsj9i7/uNJY=
+github.com/spacemeshos/poet v0.0.0-20191022081718-6a7adf423ac3/go.mod h1:tFzuccGHYCL88t7nhGO2oVgGE0+lJysSbyP2TFESTZ4=
+github.com/spacemeshos/poet v0.0.0-20191023144721-49e459c981fd h1:hV8vlIEcgYQZRZygW7FLqaZhiDeHww7EC8yo3uHOa/A=
+github.com/spacemeshos/poet v0.0.0-20191023144721-49e459c981fd/go.mod h1:tFzuccGHYCL88t7nhGO2oVgGE0+lJysSbyP2TFESTZ4=
+github.com/spacemeshos/poet v0.0.0-20191026185043-0b14cf83180c h1:CHIiw8Hqm3ReODjpJo7Pdr8vWIvYwDT2GZIlqfFAHa0=
+github.com/spacemeshos/poet v0.0.0-20191026185043-0b14cf83180c/go.mod h1:tFzuccGHYCL88t7nhGO2oVgGE0+lJysSbyP2TFESTZ4=
 github.com/spacemeshos/post v0.0.0-20190923094851-82e76dc5fa3e h1:Z0M3OK0G3mo1P3OEgjZ40w/0fBFY003lN5OKmgIOj+k=
 github.com/spacemeshos/post v0.0.0-20190923094851-82e76dc5fa3e/go.mod h1:43GwKHD+nI5wUzzUMwRbpJdC2r9dURZ6V3Jkc9eUMSE=
 github.com/spacemeshos/sha256-simd v0.0.0-20190111104731-8575aafc88c9 h1:Cc+np6ORem5wrvO+YHQ1sdu71ItiQVRiYB4ugazpgxM=
@@ -226,6 +235,8 @@ github.com/stretchr/testify v1.3.0 h1:TivCn/peBQ7UY8ooIcPgZFpTNSz0Q2U6UrFlUfqbe0
 github.com/stretchr/testify v1.3.0/go.mod h1:M5WIy9Dh21IEIfnGCwXGc5bZfKNJtfHm1UVUgZn+9EI=
 github.com/syndtr/goleveldb v0.0.0-20181128100959-b001fa50d6b2 h1:GnOzE5fEFN3b2zDhJJABEofdb51uMRNb8eqIVtdducs=
 github.com/syndtr/goleveldb v0.0.0-20181128100959-b001fa50d6b2/go.mod h1:Z4AUp2Km+PwemOoO/VB5AOx9XSsIItzFjoJlOSiYmn0=
+github.com/syndtr/goleveldb v1.0.0 h1:fBdIW9lB4Iz0n9khmH8w27SJ3QEJ7+IgjPEwGSZiFdE=
+github.com/syndtr/goleveldb v1.0.0/go.mod h1:ZVVdQEZoIme9iO1Ch2Jdy24qqXrMMOU6lpPAyBWyWuQ=
 github.com/tmc/grpc-websocket-proxy v0.0.0-20190109142713-0ad062ec5ee5/go.mod h1:ncp9v5uamzpCO7NfCPTXjqaC+bZgJeR0sMTm6dMHP7U=
 github.com/ugorji/go v1.1.4/go.mod h1:uQMGLiO92mf5W77hV/PUCpI3pbzQx3CRekS0kk+RGrc=
 github.com/ugorji/go/codec v0.0.0-20181204163529-d75b2dcb6bc8/go.mod h1:VFNgLljTbGfSG7qAOspJ7OScBnGdDN/yBr0sguwnwf0=
