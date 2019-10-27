@@ -45,10 +45,8 @@ func (c *RPCPoetClient) getPoetServiceId() ([]byte, error) {
 	if err != nil {
 		return []byte{}, fmt.Errorf("rpc failure: %v", err)
 	}
-	var poetServiceId []byte
-	copy(poetServiceId[:], res.ServicePubKey)
 
-	return poetServiceId, nil
+	return res.ServicePubKey, nil
 }
 
 // NewRPCPoetClient returns a new RPCPoetClient instance for the provided
