@@ -49,6 +49,7 @@ func NewRPCPoetHarnessClient() (*activation.RPCPoetClient, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	cfg.N = 18
 	cfg.InitialRoundDuration = time.Duration(5 * time.Second).String()
 
@@ -191,6 +192,10 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	}
 
 	activateGrpcServer(suite.apps[0])
+
+	if err := poetClient.Start("127.0.0.1:9091"); err != nil {
+		log.Panic("failed to start poet server: %v", err)
+	}
 
 	startInLayer := 5 // delayed pod will start in this layer
 	/*go func() {
