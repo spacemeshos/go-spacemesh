@@ -319,6 +319,12 @@ func (proc *ConsensusProcess) handleMessage(m *Msg) {
 
 	proc.With().Debug("Received message", log.String("msg_type", m.InnerMsg.Type.String()))
 
+	// validate syntax
+	if !proc.validator.SyntacticallyValidateMessage(m) {
+		proc.Warning("Syntactically validation failed, pubkey %v", m.PubKey.ShortString())
+		return
+	}
+
 	// validate context
 	err := proc.validator.ContextuallyValidateMessage(m, proc.k)
 	if err != nil {
@@ -336,12 +342,6 @@ func (proc *ConsensusProcess) handleMessage(m *Msg) {
 			log.String("msg_type", mType), log.String("sender_id", m.PubKey.ShortString()),
 			log.Int32("current_k", proc.k), log.Int32("msg_k", m.InnerMsg.K),
 			log.LayerId(uint64(proc.instanceId)), log.Err(err))
-		return
-	}
-
-	// validate syntax
-	if !proc.validator.SyntacticallyValidateMessage(m) {
-		proc.Warning("Syntactically validation failed, pubkey %v", m.PubKey.ShortString())
 		return
 	}
 
