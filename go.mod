@@ -19,8 +19,8 @@ require (
 	github.com/seehuhn/mt19937 v0.0.0-20180715112136-cc7708819361
 	github.com/smartystreets/goconvey v0.0.0-20190731233626-505e41936337 // indirect
 	github.com/spacemeshos/ed25519 v0.0.0-20190530014421-e235766d15a1
-	github.com/spacemeshos/merkle-tree v0.0.0-20190906064112-506526aad109
-	github.com/spacemeshos/poet v0.0.0-20191022081718-6a7adf423ac3
+	github.com/spacemeshos/merkle-tree v0.0.0-20191028110812-1908c3126c82
+	github.com/spacemeshos/poet v0.0.0-20191028112556-47d931183cc3
 	github.com/spacemeshos/post v0.0.0-20190923094851-82e76dc5fa3e
 	github.com/spacemeshos/sha256-simd v0.0.0-20190111104731-8575aafc88c9
 	github.com/spf13/afero v1.2.0 // indirect
