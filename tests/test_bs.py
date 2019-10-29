@@ -161,7 +161,7 @@ def setup_bootstrap_in_namespace(namespace, bs_deployment_info, bootstrap_config
 
     print("Starting PoET")
     out = api_call(bs_pod['pod_ip'], '{ "nodeAddress": "127.0.0.1:9091" }',  'v1/start', namespace, "80")
-    assert out == "{}"
+    assert out == "{}", "PoET start returned error {0}".format(out)
     print("PoET started")
 
     return bs_deployment_info
