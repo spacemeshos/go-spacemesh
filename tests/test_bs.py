@@ -153,12 +153,6 @@ def setup_bootstrap_in_namespace(namespace, bs_deployment_info, bootstrap_config
     if not match:
         raise Exception("Failed to read container logs in {0}".format("poet"))
 
-    match = pod.search_phrase_in_pod_log(bs_pod['name'], namespace, 'bootstrap',
-                                             "App started.")
-    if not match:
-        raise Exception("Failed to read container logs in {0}".format("bootstrap"))
-
-
     print("Starting PoET")
     out = api_call(bs_pod['pod_ip'], '{ "nodeAddress": "127.0.0.1:9091" }',  'v1/start', namespace, "80")
     assert out == "{}", "PoET start returned error {0}".format(out)
