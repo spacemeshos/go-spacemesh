@@ -26,9 +26,8 @@ func TestPoetDbHappyFlow(t *testing.T) {
 	_, err = xdr.Unmarshal(file, &poetProof)
 	r.NoError(err)
 	r.EqualValues([][]byte{[]byte("1"), []byte("2"), []byte("3")}, poetProof.Members)
-	var poetId [types.PoetServiceIdLength]byte
-	copy(poetId[:], "poet id")
-	roundId := uint64(1337)
+	poetId := []byte("poet_id_123456")
+	roundId := "1337"
 
 	err = poetDb.Validate(poetProof, poetId, roundId, nil)
 	r.NoError(err)
@@ -68,9 +67,8 @@ func TestPoetDbInvalidPoetProof(t *testing.T) {
 	_, err = xdr.Unmarshal(file, &poetProof)
 	r.NoError(err)
 	r.EqualValues([][]byte{[]byte("1"), []byte("2"), []byte("3")}, poetProof.Members)
-	var poetId [types.PoetServiceIdLength]byte
-	copy(poetId[:], "poet id")
-	roundId := uint64(1337)
+	poetId := []byte("poet_id_123456")
+	roundId := "1337"
 	poetProof.Root = []byte("some other root")
 
 	err = poetDb.Validate(poetProof, poetId, roundId, nil)
@@ -84,10 +82,9 @@ func TestPoetDbNonExistingKeys(t *testing.T) {
 
 	poetDb := NewPoetDb(database.NewMemDatabase(), log.NewDefault("poetdb_test"))
 
-	var poetId [types.PoetServiceIdLength]byte
-	copy(poetId[:], "abc")
+	poetId := []byte("poet_id_123456")
 
-	key := makeKey(poetId, 0)
+	key := makeKey(poetId, "0")
 	_, err := poetDb.getProofRef(key)
 	r.EqualError(err, fmt.Sprintf("could not fetch poet proof for key %x: leveldb: not found", key[:5]))
 
@@ -101,10 +98,9 @@ func TestPoetDb_SubscribeToPoetProofRef(t *testing.T) {
 
 	poetDb := NewPoetDb(database.NewMemDatabase(), log.NewDefault("poetdb_test"))
 
-	var poetId [types.PoetServiceIdLength]byte
-	copy(poetId[:], "abc")
+	poetId := []byte("poet_id_123456")
 
-	ch := poetDb.SubscribeToProofRef(poetId, 0)
+	ch := poetDb.SubscribeToProofRef(poetId, "0")
 
 	select {
 	case <-ch:
@@ -119,14 +115,14 @@ func TestPoetDb_SubscribeToPoetProofRef(t *testing.T) {
 	_, err = xdr.Unmarshal(file, &poetProof)
 	r.NoError(err)
 
-	err = poetDb.Validate(poetProof, poetId, 0, nil)
+	err = poetDb.Validate(poetProof, poetId, "0", nil)
 	r.NoError(err)
 	r.False(types.IsProcessingError(err))
 
 	err = poetDb.storeProof(&types.PoetProofMessage{
 		PoetProof:     poetProof,
 		PoetServiceId: poetId,
-		RoundId:       0,
+		RoundId:       "0",
 		Signature:     nil,
 	})
 	r.NoError(err)
@@ -142,7 +138,7 @@ func TestPoetDb_SubscribeToPoetProofRef(t *testing.T) {
 	_, ok := <-ch
 	r.False(ok, "channel should be closed")
 
-	newCh := poetDb.SubscribeToProofRef(poetId, 0)
+	newCh := poetDb.SubscribeToProofRef(poetId, "0")
 
 	select {
 	case proofRef := <-newCh:

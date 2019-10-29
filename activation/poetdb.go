@@ -1,7 +1,6 @@
 package activation
 
 import (
-	"encoding/binary"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
@@ -43,16 +42,16 @@ func (db *PoetDb) ValidateAndStore(proofMessage *types.PoetProofMessage) error {
 	return err
 }
 
-func (db *PoetDb) Validate(proof types.PoetProof, poetId [types.PoetServiceIdLength]byte, roundId uint64,
+func (db *PoetDb) Validate(proof types.PoetProof, poetId []byte, roundId string,
 	signature []byte) error {
 
 	root, err := calcRoot(proof.Members)
 	if err != nil {
-		return types.ProcessingError(fmt.Sprintf("failed to calculate membership root for poetId %x round %d: %v",
+		return types.ProcessingError(fmt.Sprintf("failed to calculate membership root for poetId %x round %s: %v",
 			poetId[:5], roundId, err))
 	}
 	if err := validatePoet(root, proof.MerkleProof, proof.LeafCount); err != nil {
-		return fmt.Errorf("failed to validate poet proof for poetId %x round %d: %v",
+		return fmt.Errorf("failed to validate poet proof for poetId %x round %s: %v",
 			poetId[:5], roundId, err)
 	}
 	// TODO(noamnelke): validate signature (or extract public key and use for salting merkle hashes)
@@ -73,16 +72,16 @@ func (db *PoetDb) storeProof(proofMessage *types.PoetProofMessage) error {
 
 	batch := db.store.NewBatch()
 	if err := batch.Put(ref, messageBytes); err != nil {
-		return fmt.Errorf("failed to store poet proof for poetId %x round %d: %v",
+		return fmt.Errorf("failed to store poet proof for poetId %x round %s: %v",
 			proofMessage.PoetServiceId[:5], proofMessage.RoundId, err)
 	}
 	key := makeKey(proofMessage.PoetServiceId, proofMessage.RoundId)
 	if err := batch.Put(key[:], ref); err != nil {
-		return fmt.Errorf("failed to store poet proof index entry for poetId %x round %d: %v",
+		return fmt.Errorf("failed to store poet proof index entry for poetId %x round %s: %v",
 			proofMessage.PoetServiceId[:5], proofMessage.RoundId, err)
 	}
 	if err := batch.Write(); err != nil {
-		return fmt.Errorf("failed to store poet proof and index for poetId %x round %d: %v",
+		return fmt.Errorf("failed to store poet proof and index for poetId %x round %s: %v",
 			proofMessage.PoetServiceId[:5], proofMessage.RoundId, err)
 	}
 	db.log.Debug("stored proof (id: %x) for round %d PoET id %x", ref[:5], proofMessage.RoundId, proofMessage.PoetServiceId[:5])
@@ -90,7 +89,7 @@ func (db *PoetDb) storeProof(proofMessage *types.PoetProofMessage) error {
 	return nil
 }
 
-func (db *PoetDb) SubscribeToProofRef(poetId [types.PoetServiceIdLength]byte, roundId uint64) chan []byte {
+func (db *PoetDb) SubscribeToProofRef(poetId []byte, roundId string) chan []byte {
 	key := makeKey(poetId, roundId)
 	ch := make(chan []byte)
 
@@ -148,10 +147,8 @@ func (db *PoetDb) GetMembershipMap(proofRef []byte) (map[types.Hash32]bool, erro
 	return membershipSliceToMap(proofMessage.Members), nil
 }
 
-func makeKey(poetId [types.PoetServiceIdLength]byte, roundId uint64) poetProofKey {
-	roundIdBytes := make([]byte, 8)
-	binary.LittleEndian.PutUint64(roundIdBytes, roundId)
-	sum := sha256.Sum256(append(poetId[:], roundIdBytes...))
+func makeKey(poetId []byte, roundId string) poetProofKey {
+	sum := sha256.Sum256(append(poetId[:], []byte(roundId)...))
 	return sum
 }
 

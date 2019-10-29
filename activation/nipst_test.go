@@ -85,9 +85,9 @@ func (p *poetProvingServiceClientMock) submit(challenge types.Hash32) (*types.Po
 	return &types.PoetRound{}, nil
 }
 
-func (p *poetProvingServiceClientMock) getPoetServiceId() ([types.PoetServiceIdLength]byte, error) {
+func (p *poetProvingServiceClientMock) getPoetServiceId() ([]byte, error) {
 	p.called++
-	return [32]byte{}, nil
+	return []byte{}, nil
 }
 
 type poetDbMock struct {
@@ -97,7 +97,7 @@ type poetDbMock struct {
 // A compile time check to ensure that poetDbMock fully implements PoetDbApi.
 var _ PoetDbApi = (*poetDbMock)(nil)
 
-func (*poetDbMock) SubscribeToProofRef(poetId [types.PoetServiceIdLength]byte, roundId uint64) chan []byte {
+func (*poetDbMock) SubscribeToProofRef(poetId []byte, roundId string) chan []byte {
 	ch := make(chan []byte)
 	go func() {
 		ch <- []byte("hello there")
@@ -180,7 +180,7 @@ func buildNIPST(r *require.Assertions, postCfg config.Config, nipstChallenge typ
 	poetProver, err := newRPCPoetHarnessClient()
 	r.NotNil(poetProver)
 	defer func() {
-		err = poetProver.CleanUp()
+		err = poetProver.Teardown(true)
 		r.NoError(err)
 	}()
 	r.NoError(err)
@@ -222,7 +222,7 @@ func TestNewNIPSTBuilderNotInitialized(t *testing.T) {
 	poetProver, err := newRPCPoetHarnessClient()
 	r.NotNil(poetProver)
 	defer func() {
-		err = poetProver.CleanUp()
+		err = poetProver.Teardown(true)
 		r.NoError(err)
 	}()
 	r.NoError(err)
