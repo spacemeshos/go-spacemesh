@@ -4,38 +4,13 @@ from kubernetes import client
 
 from tests.deployment import create_deployment, delete_deployment
 from tests.fixtures import set_namespace, load_config, init_session, set_docker_images, session_id, DeploymentInfo, init_session
-from tests.test_bs import setup_clients, save_log_on_exit, setup_bootstrap, create_configmap, add_curl
+from tests.test_bs import setup_clients, save_log_on_exit, setup_bootstrap, create_configmap, add_curl, start_poet
 from tests.test_bs import current_index, wait_genesis, GENESIS_TIME, BOOT_DEPLOYMENT_FILE, CLIENT_DEPLOYMENT_FILE, get_conf
 from tests.misc import CoreV1ApiClient
 from tests.queries import ES, query_message, query_atx_published
 from elasticsearch_dsl import Search, Q
 from tests.hare.assert_hare import expect_hare
 
-
-# ==============================================================================
-#    TESTS
-# ==============================================================================
-
-def setup_clients_in_namespace(namespace, bs_deployment_info, client_deployment_info, client_config,
-                               oracle=None, poet=None, dep_time_out=120):
-
-    cspec = get_conf(bs_deployment_info, client_config, oracle, poet)
-
-    resp = deployment.create_deployment(CLIENT_DEPLOYMENT_FILE, namespace,
-                                        deployment_id=client_deployment_info.deployment_id,
-                                        replica_size=client_config['replicas'],
-                                        container_specs=cspec,
-                                        time_out=dep_time_out)
-
-    client_deployment_info.deployment_name = resp.metadata._name
-    client_pods = (
-        CoreV1ApiClient().list_namespaced_pod(namespace,
-                                              include_uninitialized=True,
-                                              label_selector=("name={0}".format(
-                                                  client_deployment_info.deployment_name.split('-')[1]))).items)
-
-    client_deployment_info.pods = [{'name': c.metadata.name, 'pod_ip': c.status.pod_ip} for c in client_pods]
-    return client_deployment_info
 
 def new_client_in_namespace(name_space, setup_bootstrap, cspec, num):
     resp = create_deployment(CLIENT_DEPLOYMENT_FILE, name_space,
@@ -83,7 +58,12 @@ def sleep_and_print(duration):
     time.sleep(rem)
     print("Done")
 
-def test_add_delayed_nodes(init_session, setup_bootstrap, save_log_on_exit):
+# ==============================================================================
+#    TESTS
+# ==============================================================================
+
+
+def test_add_delayed_nodes(init_session, add_curl, setup_bootstrap, start_poet, save_log_on_exit):
     bs_info = setup_bootstrap.pods[0]
     cspec = get_conf(bs_info, testconfig['client'], None, setup_bootstrap.pods[0]['pod_ip'])
     ns = testconfig['namespace']
