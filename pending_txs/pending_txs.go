@@ -1,6 +1,7 @@
 package pending_txs
 
 import (
+	"bytes"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"sync"
 )
@@ -107,7 +108,9 @@ func validTxWithHighestFee(txs map[types.TransactionId]nanoTx, balance uint64) t
 	bestId := types.EmptyTransactionId
 	var maxFee uint64
 	for id, tx := range txs {
-		if tx.Fee > maxFee && balance >= (tx.Amount+tx.Fee) {
+		if (tx.Fee > maxFee || (tx.Fee == maxFee && bytes.Compare(id[:], bestId[:]) < 0)) &&
+			balance >= (tx.Amount+tx.Fee) {
+
 			maxFee = tx.Fee
 			bestId = id
 		}
