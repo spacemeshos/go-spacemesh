@@ -6,13 +6,10 @@ import (
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/poet/service"
 	"github.com/spacemeshos/poet/shared"
 	"github.com/spacemeshos/post/proving"
 	"github.com/spacemeshos/sha256-simd"
 )
-
-const PoetServiceIdLength = service.PoetServiceIdLength
 
 type EpochId uint64
 
@@ -226,15 +223,15 @@ type PoetProof struct {
 
 type PoetProofMessage struct {
 	PoetProof
-	PoetServiceId [PoetServiceIdLength]byte
-	RoundId       uint64
+	PoetServiceId []byte
+	RoundId       string
 	Signature     []byte
 }
 
 func (proofMessage PoetProofMessage) Ref() ([]byte, error) {
 	poetProofBytes, err := InterfaceToBytes(&proofMessage.PoetProof)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal poet proof for poetId %x round %d: %v",
+		return nil, fmt.Errorf("failed to marshal poet proof for poetId %x round %v: %v",
 			proofMessage.PoetServiceId, proofMessage.RoundId, err)
 	}
 
@@ -243,7 +240,7 @@ func (proofMessage PoetProofMessage) Ref() ([]byte, error) {
 }
 
 type PoetRound struct {
-	Id uint64
+	Id string
 }
 
 // NIPST is Non-Interactive Proof of Space-Time.
