@@ -147,6 +147,23 @@ def setup_bootstrap_in_namespace(namespace, bs_deployment_info, bootstrap_config
 
     bs_pod['key'] = match.group('bootstrap_key')
     bs_deployment_info.pods = [bs_pod]
+
+    match = pod.search_phrase_in_pod_log(bs_pod['name'], namespace, 'poet',
+                                         "REST proxy start listening on 0.0.0.0:80")
+    if not match:
+        raise Exception("Failed to read container logs in {0}".format("poet"))
+
+    match = pod.search_phrase_in_pod_log(bs_pod['name'], namespace, 'bootstrap',
+                                             "App started.")
+    if not match:
+        raise Exception("Failed to read container logs in {0}".format("bootstrap"))
+
+
+    print("Starting PoET")
+    out = api_call(bs_pod['pod_ip'], '{ "nodeAddress": "127.0.0.1:9091" }',  'v1/start', namespace, "80")
+    assert out == "{}", "PoET start returned error {0}".format(out)
+    print("PoET started")
+
     return bs_deployment_info
 
 
@@ -175,10 +192,10 @@ def setup_clients_in_namespace(namespace, bs_deployment_info, client_deployment_
     return client_deployment_info
 
 
-def api_call(client_ip, data, api, namespace):
+def api_call(client_ip, data, api, namespace, port="9090"):
     # todo: this won't work with long payloads - ( `Argument list too long` ). try port-forward ?
     res = stream(CoreV1ApiClient().connect_post_namespaced_pod_exec, name="curl", namespace=namespace,
-                 command=["curl", "-s", "--request", "POST", "--data", data, "http://" + client_ip + ":9090/" + api],
+                 command=["curl", "-s", "--request", "POST", "--data", data, "http://" + client_ip + ":" + port + "/" + api],
                  stderr=True, stdin=False, stdout=True, tty=False, _request_timeout=90)
     return res
 
@@ -193,7 +210,7 @@ def node_string(key, ip, port, discport):
 
 
 @pytest.fixture(scope='module')
-def setup_bootstrap(request, init_session):
+def setup_bootstrap(request, init_session, add_curl):
     bootstrap_deployment_info = DeploymentInfo(dep_id=init_session)
 
     return setup_bootstrap_in_namespace(testconfig['namespace'],
@@ -277,11 +294,8 @@ def save_log_on_exit(request):
 
 
 @pytest.fixture(scope='module')
-def add_curl(request, init_session, setup_bootstrap):
+def add_curl(request, init_session):
     def _run_curl_pod():
-        if not setup_bootstrap.pods:
-            raise Exception("Could not find bootstrap node")
-
         pod.create_pod(CURL_POD_FILE, testconfig['namespace'])
         return True
 
