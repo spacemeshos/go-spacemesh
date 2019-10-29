@@ -85,8 +85,6 @@ func (s *StateMock) ApplyTransactions(id types.LayerID, tx []*types.Transaction)
 func ConfigTst() mesh.Config {
 	return mesh.Config{
 		BaseReward:     big.NewInt(5000),
-		PenaltyPercent: big.NewInt(15),
-		TxQuota:        15,
 		RewardMaturity: 5,
 	}
 }
@@ -101,7 +99,7 @@ func (MockState) ValidateSignature(signed types.Signed) (types.Address, error) {
 	return types.Address{}, nil
 }
 
-func (MockState) ApplyRewards(layer types.LayerID, miners []types.Address, underQuota map[types.Address]int, bonusReward, diminishedReward *big.Int) {
+func (MockState) ApplyRewards(layer types.LayerID, miners []types.Address, reward *big.Int) {
 }
 
 func (MockState) AddressExists(addr types.Address) bool {

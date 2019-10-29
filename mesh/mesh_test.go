@@ -41,8 +41,7 @@ type MeshValidatorMock struct {
 func (m *MeshValidatorMock) HandleIncomingLayer(layer *types.Layer) (types.LayerID, types.LayerID) {
 	return layer.Index() - 1, layer.Index()
 }
-func (m *MeshValidatorMock) HandleLateBlock(bl *types.Block)              {}
-func (m *MeshValidatorMock) RegisterLayerCallback(func(id types.LayerID)) {}
+func (m *MeshValidatorMock) HandleLateBlock(bl *types.Block) {}
 
 type MockState struct{}
 
@@ -54,7 +53,7 @@ func (MockState) ApplyTransactions(layer types.LayerID, txs []*types.Transaction
 	return 0, nil
 }
 
-func (MockState) ApplyRewards(layer types.LayerID, miners []types.Address, underQuota map[types.Address]int, bonusReward, diminishedReward *big.Int) {
+func (MockState) ApplyRewards(layer types.LayerID, miners []types.Address, reward *big.Int) {
 }
 
 func (MockState) AddressExists(addr types.Address) bool {

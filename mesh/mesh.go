@@ -33,7 +33,7 @@ type MeshValidator interface {
 
 type TxProcessor interface {
 	ApplyTransactions(layer types.LayerID, txs []*types.Transaction) (int, error)
-	ApplyRewards(layer types.LayerID, miners []types.Address, underQuota map[types.Address]int, bonusReward, diminishedReward *big.Int)
+	ApplyRewards(layer types.LayerID, miners []types.Address, reward *big.Int)
 	ValidateSignature(s types.Signed) (types.Address, error)
 	AddressExists(addr types.Address) bool
 }
@@ -437,33 +437,34 @@ func (m *Mesh) AccumulateRewards(rewardLayer types.LayerID, params Config) {
 	}
 
 	ids := make([]types.Address, 0, len(l.Blocks()))
-	uq := make(map[types.Address]int)
-
-	// TODO: instead of the following code we need to validate the eligibility of each block individually using the
-	//  proof included in each block
 	for _, bl := range l.Blocks() {
+		valid, err := m.ContextualValidity(bl.ID())
+		if err != nil {
+			panic("failed to determine contextual validity: " + err.Error())
+		}
+		if !valid {
+			m.With().Info("Withheld reward for contextually invalid block",
+				log.BlockId(uint64(bl.ID())),
+				log.LayerId(uint64(rewardLayer)),
+			)
+			continue
+		}
 		atx, err := m.AtxDB.GetAtx(bl.ATXID)
 		if err != nil {
 			m.With().Warning("Atx from block not found in db", log.Err(err), log.BlockId(uint64(bl.ID())), log.AtxId(bl.ATXID.ShortString()))
 			continue
 		}
 		ids = append(ids, atx.Coinbase)
-		if uint32(len(bl.TxIds)) < params.TxQuota {
-			//todo: think of giving out reward for unique txs as well
-			uq[atx.Coinbase] = uq[atx.Coinbase] + 1
-		}
 	}
 	//accumulate all blocks rewards
-	merged, _, err := m.ExtractUniqueOrderedTransactions(l)
+	txs, _, err := m.ExtractUniqueOrderedTransactions(l)
 	if err != nil {
 		panic("failed to extract txs")
 	}
 
 	rewards := &big.Int{}
-	processed := 0
-	for _, tx := range merged {
+	for _, tx := range txs {
 		res := new(big.Int).SetUint64(tx.Fee)
-		processed++
 		rewards.Add(rewards, res)
 	}
 
@@ -471,10 +472,9 @@ func (m *Mesh) AccumulateRewards(rewardLayer types.LayerID, params Config) {
 	rewards.Add(rewards, layerReward)
 
 	numBlocks := big.NewInt(int64(len(l.Blocks())))
-	log.Info("fees reward: %v total processed %v total txs %v merged %v blocks: %v", rewards.Uint64(), processed, len(merged), len(merged), numBlocks)
 
-	bonusReward, diminishedReward := calculateActualRewards(rewards, numBlocks, params, len(uq))
-	m.ApplyRewards(rewardLayer, ids, uq, bonusReward, diminishedReward)
+	blockReward := calculateActualRewards(rewards, numBlocks)
+	m.ApplyRewards(rewardLayer, ids, blockReward)
 	//todo: should miner id be sorted in a deterministic order prior to applying rewards?
 
 }
