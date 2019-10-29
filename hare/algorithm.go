@@ -262,6 +262,8 @@ PreRound:
 	proc.preRoundTracker.FilterSet(proc.s)
 	if proc.s.Size() == 0 {
 		proc.Event().Error("Fatal: PreRound ended with empty set", log.LayerId(uint64(proc.instanceId)))
+	} else {
+		proc.Info("PreRound ended")
 	}
 	proc.advanceToNextRound() // K was initialized to -1, K should be 0
 
@@ -319,12 +321,6 @@ func (proc *ConsensusProcess) handleMessage(m *Msg) {
 
 	proc.With().Debug("Received message", log.String("msg_type", m.InnerMsg.Type.String()))
 
-	// validate syntax
-	if !proc.validator.SyntacticallyValidateMessage(m) {
-		proc.Warning("Syntactically validation failed, pubkey %v", m.PubKey.ShortString())
-		return
-	}
-
 	// validate context
 	err := proc.validator.ContextuallyValidateMessage(m, proc.k)
 	if err != nil {
@@ -333,6 +329,13 @@ func (proc *ConsensusProcess) handleMessage(m *Msg) {
 		// early message, keep for later
 		if err == errEarlyMsg {
 			proc.Debug("Early message of type %v detected. Keeping message, pubkey %v", mType, m.PubKey.ShortString())
+
+			// validate syntax for early messages
+			if !proc.validator.SyntacticallyValidateMessage(m) {
+				proc.Warning("Syntactically validation failed, pubkey %v", m.PubKey.ShortString())
+				return
+			}
+
 			proc.onEarlyMessage(m)
 			return
 		}
@@ -342,6 +345,12 @@ func (proc *ConsensusProcess) handleMessage(m *Msg) {
 			log.String("msg_type", mType), log.String("sender_id", m.PubKey.ShortString()),
 			log.Int32("current_k", proc.k), log.Int32("msg_k", m.InnerMsg.K),
 			log.LayerId(uint64(proc.instanceId)), log.Err(err))
+		return
+	}
+
+	// validate syntax for contextually valid messages
+	if !proc.validator.SyntacticallyValidateMessage(m) {
+		proc.Warning("Syntactically validation failed, pubkey %v", m.PubKey.ShortString())
 		return
 	}
 
@@ -356,7 +365,7 @@ func (proc *ConsensusProcess) handleMessage(m *Msg) {
 
 // process the message by its type
 func (proc *ConsensusProcess) processMsg(m *Msg) {
-	proc.Debug("Processing message of type %v", m.InnerMsg.Type.String())
+	proc.Info("Processing message of type %v", m.InnerMsg.Type.String())
 	metrics.MessageTypeCounter.With("type_id", m.InnerMsg.Type.String()).Add(1)
 
 	switch m.InnerMsg.Type {

@@ -88,6 +88,7 @@ type roleValidator interface {
 }
 
 type pubKeyGetter interface {
+	Track(m *Msg)
 	PublicKey(m *Message) *signing.PublicKey
 }
 
@@ -319,14 +320,17 @@ func (v *syntaxContextValidator) validateAggregatedMessage(aggMsg *aggregatedMes
 				return errInnerFunc
 			}
 		}
+
+		// the message is valid, track it
+		v.validMsgsTracker.Track(iMsg)
 	}
 
 	return nil
 }
 
 func (v *syntaxContextValidator) validateSVP(msg *Msg) bool {
+	proposalIter := iterationFromCounter(msg.InnerMsg.K)
 	validateSameIteration := func(m *Msg) bool {
-		proposalIter := iterationFromCounter(msg.InnerMsg.K)
 		statusIter := iterationFromCounter(m.InnerMsg.K)
 		if proposalIter != statusIter { // not same iteration
 			v.Warning("Proposal validation failed: not same iteration. Expected: %v Actual: %v",

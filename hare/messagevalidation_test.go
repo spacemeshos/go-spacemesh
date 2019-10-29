@@ -142,7 +142,7 @@ func TestMessageValidator_Aggregated(t *testing.T) {
 		sgn = generateSigning(t) // hold some sgn
 		iMsg := BuildStatusMsg(sgn, NewSetFromValues(value1))
 		msgs[i] = iMsg.Message
-		pg.Add(iMsg)
+		pg.Track(iMsg)
 	}
 
 	validator.validMsgsTracker = pg
@@ -242,7 +242,7 @@ type pubGetter struct {
 	mp map[string]*signing.PublicKey
 }
 
-func (pg pubGetter) Add(m *Msg) {
+func (pg pubGetter) Track(m *Msg) {
 	pg.mp[string(m.Sig)] = m.PubKey
 }
 
