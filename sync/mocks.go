@@ -84,8 +84,7 @@ func (s *StateMock) ApplyTransactions(id types.LayerID, tx []*types.Transaction)
 
 func ConfigTst() mesh.Config {
 	return mesh.Config{
-		BaseReward:     big.NewInt(5000),
-		RewardMaturity: 5,
+		BaseReward: big.NewInt(5000),
 	}
 }
 

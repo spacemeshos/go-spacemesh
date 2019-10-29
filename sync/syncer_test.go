@@ -118,8 +118,7 @@ func (mbp mockBlocksProvider) GetGoodPatternBlocks(layer types.LayerID) (map[typ
 }
 
 var rewardConf = mesh.Config{
-	BaseReward:     big.NewInt(5000),
-	RewardMaturity: 5,
+	BaseReward: big.NewInt(5000),
 }
 
 func getMeshWithLevelDB(id string) *mesh.Mesh {

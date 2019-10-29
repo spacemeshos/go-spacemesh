@@ -8,14 +8,12 @@ import (
 
 type Config struct {
 	// reward config
-	BaseReward     *big.Int
-	RewardMaturity types.LayerID
+	BaseReward *big.Int
 }
 
 func DefaultMeshConfig() Config {
 	return Config{
-		BaseReward:     big.NewInt(5000),
-		RewardMaturity: 5,
+		BaseReward: big.NewInt(5000),
 	}
 }
 

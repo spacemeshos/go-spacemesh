@@ -37,8 +37,7 @@ func (s *MockMapState) AddressExists(addr types.Address) bool {
 
 func ConfigTst() Config {
 	return Config{
-		BaseReward:     big.NewInt(5000),
-		RewardMaturity: 5,
+		BaseReward: big.NewInt(5000),
 	}
 }
 
@@ -129,8 +128,7 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 
 func NewTestRewardParams() Config {
 	return Config{
-		BaseReward:     big.NewInt(5000),
-		RewardMaturity: 10,
+		BaseReward: big.NewInt(5000),
 	}
 }
 
@@ -167,17 +165,9 @@ func TestMesh_integration(t *testing.T) {
 		}
 	}
 
-	oldTotal := s.TotalReward
 	l4, err := layers.GetLayer(4)
 	assert.NoError(t, err)
-	l5, err := layers.GetLayer(5)
-	assert.NoError(t, err)
-	//test negative case
 	layers.ValidateLayer(l4)
-	assert.Equal(t, oldTotal, s.TotalReward)
-
-	//reward maturity is 5, when processing layer 5 rewards will be applied
-	layers.ValidateLayer(l5)
 	//since there can be a difference of up to x lerners where x is the number of blocks due to round up of penalties when distributed among all blocks
 	totalPayout := rewards + ConfigTst().BaseReward.Int64()
 	assert.True(t, totalPayout-s.TotalReward < int64(numofBlocks), " rewards : %v, total %v blocks %v", totalPayout, s.TotalReward, int64(numofBlocks))

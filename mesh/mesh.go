@@ -142,14 +142,8 @@ func (m *Mesh) ValidateLayer(lyr *types.Layer) {
 	m.validatedLayer = currLayerId
 	m.lvMutex.Unlock()
 
-	if currLayerId >= m.config.RewardMaturity && currLayerId-m.config.RewardMaturity < oldPbase {
-		m.AccumulateRewards(currLayerId-m.config.RewardMaturity, m.config)
-	}
-
 	for layerId := oldPbase; layerId < newPbase; layerId++ {
-		if currLayerId >= m.config.RewardMaturity && currLayerId-m.config.RewardMaturity >= layerId {
-			m.AccumulateRewards(layerId, m.config)
-		}
+		m.AccumulateRewards(layerId, m.config)
 		if err := m.PushTransactions(layerId); err != nil {
 			m.With().Error("failed to push transactions", log.Err(err))
 			break
