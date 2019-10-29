@@ -8,5 +8,5 @@ type Config struct {
 
 // DefaultConfig returns the default configuration for the oracle package.
 func DefaultConfig() Config {
-	return Config{25, 30}
+	return Config{25, 0}
 }
