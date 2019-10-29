@@ -6,7 +6,7 @@ from tests import pod, deployment
 from tests.fixtures import DeploymentInfo
 from tests.fixtures import init_session, load_config, set_namespace, session_id, set_docker_images
 from tests.hare.assert_hare import expect_hare, assert_all, get_max_mem_usage
-from tests.test_bs import current_index, setup_bootstrap_in_namespace, setup_clients_in_namespace, create_configmap, wait_genesis
+from tests.test_bs import current_index, setup_bootstrap_in_namespace, setup_clients_in_namespace, add_curl, create_configmap, wait_genesis
 from tests.misc import ContainerSpec, CoreV1ApiClient
 
 ORACLE_DEPLOYMENT_FILE = './k8s/oracle.yml'
