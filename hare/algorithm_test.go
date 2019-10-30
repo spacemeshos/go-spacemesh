@@ -104,6 +104,10 @@ type mockCommitTracker struct {
 	certificate           *certificate
 }
 
+func (mct *mockCommitTracker) CommitCount() int {
+	return 0
+}
+
 func (mct *mockCommitTracker) OnCommit(msg *Msg) {
 	mct.countOnCommit++
 }

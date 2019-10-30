@@ -232,7 +232,7 @@ func (proc *ConsensusProcess) SetInbox(inbox chan *Msg) {
 func (proc *ConsensusProcess) eventLoop() {
 	proc.With().Info("Consensus Process Started",
 		log.Int("Hare-N", proc.cfg.N), log.Int("f", proc.cfg.F), log.String("duration", (time.Duration(proc.cfg.RoundDuration)*time.Second).String()),
-		log.LayerId(uint64(proc.instanceId)), log.Int("exp_leaders", proc.cfg.ExpectedLeaders), log.String("current_set", proc.s.String()))
+		log.LayerId(uint64(proc.instanceId)), log.Int("exp_leaders", proc.cfg.ExpectedLeaders), log.String("current_set", proc.s.String()), log.Int("set_size", proc.s.Size()))
 
 	// check participation
 	if proc.shouldParticipate() {
@@ -520,7 +520,7 @@ func (proc *ConsensusProcess) beginNotifyRound() {
 	}
 
 	if !proc.commitTracker.HasEnoughCommits() {
-		proc.Warning("Begin notify round: not enough commits")
+		proc.With().Warning("Begin notify round: not enough commits", log.Int("expected", proc.cfg.F+1), log.Int("actual", proc.commitTracker.CommitCount()))
 		return
 	}
 
@@ -657,7 +657,8 @@ func (proc *ConsensusProcess) processNotifyMsg(msg *Msg) {
 
 	// enough notifications, should terminate
 	proc.s = s // update to the agreed set
-	proc.Event().Info("Consensus process terminated", log.String("current_set", proc.s.String()), log.LayerId(uint64(proc.instanceId)))
+	proc.Event().Info("Consensus process terminated", log.String("current_set", proc.s.String()),
+		log.LayerId(uint64(proc.instanceId)), log.Int("set_size", proc.s.Size()))
 	proc.terminationReport <- procOutput{proc.instanceId, proc.s}
 	proc.Close()
 	proc.terminating = true // ensures immediate termination

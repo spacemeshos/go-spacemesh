@@ -219,12 +219,12 @@ func (v *syntaxContextValidator) SyntacticallyValidateMessage(m *Msg) bool {
 	}
 
 	if m.InnerMsg.Values == nil {
-		v.Warning("Syntax validation failed: Values is nil in msg: %v", m.String())
+		v.With().Warning("Syntax validation failed: set is nil", log.String("msg", m.String()))
 		return false
 	}
 
 	if len(m.InnerMsg.Values) == 0 {
-		v.Warning("Syntax validation failed: Values is empty: %v", m.String())
+		v.With().Warning("Syntax validation failed: set is empty", log.String("msg", m.String()))
 		return false
 	}
 
