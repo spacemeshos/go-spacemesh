@@ -140,7 +140,7 @@ func (b *Broker) eventLoop() {
 		select {
 		case msg := <-b.inbox:
 			if msg == nil {
-				b.With().Error("Message validation failed: called with nil",
+				b.With().Error("Broker message validation failed: called with nil",
 					log.Uint64("latest_layer", uint64(b.latestLayer)))
 				continue
 			}
@@ -152,7 +152,7 @@ func (b *Broker) eventLoop() {
 			}
 
 			if hareMsg.InnerMsg == nil {
-				b.With().Error("Message validation failed",
+				b.With().Error("Broker message validation failed",
 					log.Err(errNilInner), log.Uint64("latest_layer", uint64(b.latestLayer)))
 				continue
 			}
@@ -162,7 +162,7 @@ func (b *Broker) eventLoop() {
 			if err := b.validate(hareMsg); err != nil {
 				if err != errEarlyMsg {
 					// not early, validation failed
-					b.With().Info("Message contextual validation failed",
+					b.With().Debug("Broker received a message to a CP that is not registered",
 						log.Err(err),
 						log.Uint64("msg_layer_id", uint64(msgInstId)),
 						log.Uint64("latest_layer", uint64(b.latestLayer)))
