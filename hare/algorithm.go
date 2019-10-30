@@ -365,7 +365,7 @@ func (proc *ConsensusProcess) handleMessage(m *Msg) {
 
 // process the message by its type
 func (proc *ConsensusProcess) processMsg(m *Msg) {
-	proc.Info("Processing message of type %v", m.InnerMsg.Type.String())
+	proc.Debug("Processing message of type %v", m.InnerMsg.Type.String())
 	metrics.MessageTypeCounter.With("type_id", m.InnerMsg.Type.String()).Add(1)
 
 	switch m.InnerMsg.Type {
