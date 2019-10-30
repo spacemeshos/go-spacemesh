@@ -148,22 +148,6 @@ def setup_bootstrap_in_namespace(namespace, bs_deployment_info, bootstrap_config
     bs_pod['key'] = match.group('bootstrap_key')
     bs_deployment_info.pods = [bs_pod]
 
-    match = pod.search_phrase_in_pod_log(bs_pod['name'], namespace, 'poet',
-                                         "REST proxy start listening on 0.0.0.0:80")
-    if not match:
-        raise Exception("Failed to read container logs in {0}".format("poet"))
-
-    match = pod.search_phrase_in_pod_log(bs_pod['name'], namespace, 'bootstrap',
-                                             "App started.")
-    if not match:
-        raise Exception("Failed to read container logs in {0}".format("bootstrap"))
-
-
-    print("Starting PoET")
-    out = api_call(bs_pod['pod_ip'], '{ "nodeAddress": "127.0.0.1:9091" }',  'v1/start', namespace, "80")
-    assert out == "{}", "PoET start returned error {0}".format(out)
-    print("PoET started")
-
     return bs_deployment_info
 
 
@@ -210,7 +194,7 @@ def node_string(key, ip, port, discport):
 
 
 @pytest.fixture(scope='module')
-def setup_bootstrap(request, init_session, add_curl):
+def setup_bootstrap(request, init_session):
     bootstrap_deployment_info = DeploymentInfo(dep_id=init_session)
 
     return setup_bootstrap_in_namespace(testconfig['namespace'],
@@ -229,9 +213,23 @@ def setup_clients(request, init_session, setup_bootstrap):
                                       poet=setup_bootstrap.pods[0]['pod_ip'],
                                       dep_time_out=testconfig['deployment_ready_time_out'])
 
+@pytest.fixture(scope='module')
+def start_poet(init_session, add_curl, setup_bootstrap):
+    bs_pod = setup_bootstrap.pods[0]
+    namespace = testconfig['namespace']
+
+    match = pod.search_phrase_in_pod_log(bs_pod['name'], namespace, 'poet',
+                                         "REST proxy start listening on 0.0.0.0:80")
+    if not match:
+        raise Exception("Failed to read container logs in {0}".format("poet"))
+
+    print("Starting PoET")
+    out = api_call(bs_pod['pod_ip'], '{ "nodeAddress": "127.0.0.1:9091" }',  'v1/start', namespace, "80")
+    assert out == "{}", "PoET start returned error {0}".format(out)
+    print("PoET started")
 
 @pytest.fixture(scope='module')
-def setup_network(request, init_session, setup_bootstrap, setup_clients, add_curl, wait_genesis):
+def setup_network(request, init_session,add_curl, setup_bootstrap, start_poet, setup_clients, wait_genesis):
     # This fixture deploy a complete Spacemesh network and returns only after genesis time is over
     network_deployment = NetworkDeploymentInfo(dep_id=init_session,
                                                bs_deployment_info=setup_bootstrap,
