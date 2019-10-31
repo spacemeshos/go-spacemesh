@@ -3,11 +3,13 @@ import pytest
 import string
 import random
 from tests import pod
-from kubernetes import config
+from kubernetes import config as k8s_config
 from kubernetes import client
 from pytest_testconfig import config as testconfig
 from tests.misc import CoreV1ApiClient
 from tests.context import Context
+
+S = ' during'
 
 
 def random_id(length):
@@ -16,19 +18,27 @@ def random_id(length):
     return ''.join((random.choice(chars)) for x in range(length))
 
 
-class DeploymentInfo():
+class DeploymentInfo:
     def __init__(self, dep_id=None):
         self.deployment_name = ''
         self.deployment_id = dep_id if dep_id else random_id(length=4)
         self.pods = []
 
+    def __str__(self):
+        return f"   deployment name: {self.deployment_name}\n   deployment id: {self.deployment_id}\n" \
+               f"   pods number: {len(self.pods)}"
 
-class NetworkDeploymentInfo():
+
+class NetworkDeploymentInfo:
     def __init__(self, dep_id, bs_deployment_info, cl_deployment_info):
         self.deployment_name = ''
         self.deployment_id = dep_id
         self.bootstrap = bs_deployment_info
         self.clients = cl_deployment_info
+
+    def __str__(self):
+        return f"   deployment name: {self.deployment_name}\n  deployment id: {self.deployment_id}\n" \
+               f"   bootstrap info: \n{self.bootstrap}\n    client info: \n{self.clients}"
 
 
 @pytest.fixture(scope='session')
@@ -39,14 +49,14 @@ def load_config():
     if os.path.isfile(kube_config_path):
         kube_config_context = Context().get()
         print("Loading config: {0} context: {1}".format(kube_config_path, kube_config_context))
-        config.load_kube_config(config_file=kube_config_path, context=kube_config_context)
+        k8s_config.load_kube_config(config_file=kube_config_path, context=kube_config_context)
     else:
         # Assuming in cluster config
         try:
             print("Loading incluster config")
-            config.load_incluster_config()
-        except:
-            raise Exception("KUBECONFIG file not found: {0}".format(kube_config_path))
+            k8s_config.load_incluster_config()
+        except Exception as e:
+            raise Exception("KUBECONFIG file not found: {0}\nException: {1}".format(kube_config_path, e))
 
 
 @pytest.fixture(scope='session')
@@ -91,7 +101,7 @@ def set_namespace(request, session_id, load_config):
         # On teardown we wish to report on pods that were restarted by k8s during the test
         restarted_pods = pod.check_for_restarted_pods(testconfig['namespace'])
         if restarted_pods:
-            print('\n\nAttention!!! The following pods were restarted during test: {0}\n\n'.format(restarted_pods))
+            print('\n\nAttention!!! The following pods were restarted{1} test: {0}\n\n'.format(restarted_pods, S))
 
         if hasattr(request, 'param') and request.param == 'doNotDeleteNameSpace':
             print("\nDo not delete namespace: {0}".format(testconfig['namespace']))
@@ -104,5 +114,5 @@ def set_namespace(request, session_id, load_config):
 
 
 @pytest.fixture(scope='session')
-def init_session(request, load_config, set_namespace, set_docker_images, session_id):
+def init_session(load_config, set_namespace, set_docker_images, session_id):
     return session_id

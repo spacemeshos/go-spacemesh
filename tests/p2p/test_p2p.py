@@ -221,6 +221,15 @@ def test_many_gossip_sim(setup_clients, add_curl):
     assert total_expected_gossip == len(after), "test_many_gossip_sim: Total gossip messages in ES is not as expected"
 
 
+# - Deploy X peers
+# - Wait for bootstrap
+# - Broadcast 5 messages (make sure that all of them are live simultaneously)
+# - Validate that all nodes got exactly 5 messages
+# - Sample few nodes and validate that they got all 5 messages
+def test_msg_rcv(setup_bootstrap, setup_clients):
+    pass
+
+
 # NOTE : this test is ran in the end because it affects the network structure,
 # it creates more pods and bootstrap them which will affect final query results
 # an alternative to that would be to kill the pods when the test ends.

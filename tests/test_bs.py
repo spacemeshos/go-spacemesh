@@ -95,6 +95,8 @@ def choose_k8s_object_create(config, deployment_file, statefulset_file):
     if dep_type == 'deployment':
         return deployment_file, deployment.create_deployment
     elif dep_type == 'statefulset':
+        # StatefulSets are intended to be used with stateful applications and distributed systems.
+        # Pods in a StatefulSet have a unique ordinal index and a stable network identity.
         return statefulset_file, statefulset.create_statefulset
     else:
         raise Exception("Unknown deployment type in configuration. Please check your config.yaml")
@@ -114,9 +116,11 @@ def setup_bootstrap_in_namespace(namespace, bs_deployment_info, bootstrap_config
     cspec.append_args(genesis_time=GENESIS_TIME.isoformat('T', 'seconds'),
                       **bootstrap_args)
 
+    # choose k8s creation function (deployment/stateful) and the matching k8s file
     k8s_file, k8s_create_func = choose_k8s_object_create(bootstrap_config,
                                                          BOOT_DEPLOYMENT_FILE,
                                                          BOOT_STATEFULSET_FILE)
+    # run the chosen creation function
     resp = k8s_create_func(k8s_file, namespace,
                            deployment_id=bs_deployment_info.deployment_id,
                            replica_size=bootstrap_config['replicas'],
@@ -195,24 +199,40 @@ def node_string(key, ip, port, discport):
 
 
 @pytest.fixture(scope='module')
-def setup_bootstrap(request, init_session):
+def setup_bootstrap(init_session):
+    """
+    setup bootstrap initializes a session and adds a single bootstrap node
+    :param init_session: sets up a new k8s env
+    :return: DeploymentInfo type, containing the settings info of the new node
+    """
     bootstrap_deployment_info = DeploymentInfo(dep_id=init_session)
 
-    return setup_bootstrap_in_namespace(testconfig['namespace'],
-                                        bootstrap_deployment_info,
-                                        testconfig['bootstrap'],
-                                        dep_time_out=testconfig['deployment_ready_time_out'])
+    bootstrap_deployment_info = setup_bootstrap_in_namespace(testconfig['namespace'],
+                                                             bootstrap_deployment_info,
+                                                             testconfig['bootstrap'],
+                                                             dep_time_out=testconfig['deployment_ready_time_out'])
+
+    return bootstrap_deployment_info
 
 
 @pytest.fixture(scope='module')
-def setup_clients(request, init_session, setup_bootstrap):
-
+def setup_clients(init_session, setup_bootstrap):
+    """
+    setup clients adds new client nodes
+    :param init_session: setup a new k8s env
+    :param setup_bootstrap: adds a single bootstrap node
+    :return: client_info of type DeploymentInfo
+             contains the settings info of the new client node
+    """
     client_info = DeploymentInfo(dep_id=setup_bootstrap.deployment_id)
-    return setup_clients_in_namespace(testconfig['namespace'], setup_bootstrap.pods[0],
-                                      client_info,
-                                      testconfig['client'],
-                                      poet=setup_bootstrap.pods[0]['pod_ip'],
-                                      dep_time_out=testconfig['deployment_ready_time_out'])
+    client_info = setup_clients_in_namespace(testconfig['namespace'],
+                                             setup_bootstrap.pods[0],
+                                             client_info,
+                                             testconfig['client'],
+                                             poet=setup_bootstrap.pods[0]['pod_ip'],
+                                             dep_time_out=testconfig['deployment_ready_time_out'])
+    return client_info
+
 
 @pytest.fixture(scope='module')
 def start_poet(init_session, add_curl, setup_bootstrap):
@@ -229,8 +249,9 @@ def start_poet(init_session, add_curl, setup_bootstrap):
     assert out == "{}", "PoET start returned error {0}".format(out)
     print("PoET started")
 
+
 @pytest.fixture(scope='module')
-def setup_network(request, init_session,add_curl, setup_bootstrap, start_poet, setup_clients, wait_genesis):
+def setup_network(init_session,add_curl, setup_bootstrap, start_poet, setup_clients, wait_genesis):
     # This fixture deploy a complete Spacemesh network and returns only after genesis time is over
     network_deployment = NetworkDeploymentInfo(dep_id=init_session,
                                                bs_deployment_info=setup_bootstrap,
@@ -293,8 +314,11 @@ def save_log_on_exit(request):
 
 
 @pytest.fixture(scope='module')
-def add_curl(request, init_session):
+def add_curl(request, init_session, setup_bootstrap):
     def _run_curl_pod():
+        if not setup_bootstrap.pods:
+            raise Exception("Could not find bootstrap node")
+
         pod.create_pod(CURL_POD_FILE, testconfig['namespace'])
         return True
 
