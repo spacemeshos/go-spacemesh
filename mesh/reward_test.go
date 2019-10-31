@@ -155,13 +155,13 @@ func TestMesh_integration(t *testing.T) {
 	layers, atxdb := getMeshWithMapState("t1", s)
 	defer layers.Close()
 
-	var rewards int64
+	var l3Rewards int64
 	for i := 0; i < numofLayers; i++ {
 		reward := createLayer(layers, types.LayerID(i), numofBlocks, maxTxs, atxdb)
 		// rewards are applied to layers in the past according to the reward maturity param
-		if rewards == 0 {
-			rewards += reward
-			log.Info("reward %v", rewards)
+		if i == 3 {
+			l3Rewards = reward
+			log.Info("reward %v", l3Rewards)
 		}
 	}
 
@@ -169,7 +169,7 @@ func TestMesh_integration(t *testing.T) {
 	assert.NoError(t, err)
 	layers.ValidateLayer(l4)
 	//since there can be a difference of up to x lerners where x is the number of blocks due to round up of penalties when distributed among all blocks
-	totalPayout := rewards + ConfigTst().BaseReward.Int64()
+	totalPayout := l3Rewards + ConfigTst().BaseReward.Int64()
 	assert.True(t, totalPayout-s.TotalReward < int64(numofBlocks), " rewards : %v, total %v blocks %v", totalPayout, s.TotalReward, int64(numofBlocks))
 }
 
