@@ -1,5 +1,6 @@
 import copy
 import json
+import sys
 from datetime import datetime, timedelta
 import random
 from enum import Enum
@@ -325,6 +326,10 @@ class Ansi:
     BRIGHT_YELLOW = "\u001b[33;1m"
 
     RESET = "\u001b[0m"
+
+
+if not hasattr(sys.stderr, "isatty") or not sys.stderr.isatty():
+    [setattr(Ansi, color, '') for color in dir(Ansi) if color[0] != '_']
 
 
 class ClientWrapper:
