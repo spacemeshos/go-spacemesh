@@ -328,7 +328,7 @@ class Ansi:
     RESET = "\u001b[0m"
 
 
-if hasattr(sys.stderr, "isatty") and sys.stderr.isatty():
+if not hasattr(sys.stderr, "isatty") or not sys.stderr.isatty():
     [setattr(Ansi, color, '') for color in dir(Ansi) if color[0] != '_']
 
 
