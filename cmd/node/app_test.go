@@ -155,7 +155,7 @@ func (suite *AppTestSuite) initMultipleInstances(rolacle *eligibility.FixedRolac
 
 func activateGrpcServer(smApp *SpacemeshApp) {
 	smApp.Config.API.StartGrpcServer = true
-	smApp.grpcAPIService = api.NewGrpcService(smApp.P2P, smApp.state, smApp.txProcessor, smApp.atxBuilder, smApp.oracle, smApp.clock)
+	smApp.grpcAPIService = api.NewGrpcService(smApp.P2P, smApp.state, smApp.txProcessor, smApp.txPool, smApp.atxBuilder, smApp.oracle, smApp.clock)
 	smApp.grpcAPIService.StartService()
 }
 

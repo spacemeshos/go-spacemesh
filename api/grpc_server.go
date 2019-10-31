@@ -21,14 +21,42 @@ import (
 
 // SpacemeshGrpcService is a grpc server providing the Spacemesh api
 type SpacemeshGrpcService struct {
-	Server   *grpc.Server
-	Port     uint
-	StateApi StateAPI
-	Network  NetworkAPI
-	Tx       TxAPI
-	Mining   MiningAPI
-	Oracle   OracleAPI
-	GenTime  GenesisTimeAPI
+	Server    *grpc.Server
+	Port      uint
+	StateApi  StateAPI         // State DB
+	Network   NetworkAPI       // P2P Swarm
+	Tx        TxAPI            // Mesh
+	TxMempool *miner.TxMempool // TX Mempool
+	Mining    MiningAPI        // ATX Builder
+	Oracle    OracleAPI
+	GenTime   GenesisTimeAPI
+}
+
+func (s SpacemeshGrpcService) GetTransaction(ctx context.Context, txId *pb.TransactionId) (*pb.Transaction, error) {
+
+	// TODO: try to find tx in mesh, and determine if it's been played already
+
+	id := types.TransactionId{}
+	copy(id[:], txId.Id)
+	tx, err := s.TxMempool.Get(id)
+	if err != nil {
+		return nil, err
+	}
+
+	return &pb.Transaction{
+		TxId: txId,
+		Sender: &pb.AccountId{
+			Address: tx.Origin().Bytes(),
+		},
+		Receiver: &pb.AccountId{
+			Address: tx.Recipient.Bytes(),
+		},
+		Amount:    tx.Amount,
+		Fee:       tx.Fee,
+		Status:    pb.TxStatus_PENDING,
+		LayerId:   0,
+		Timestamp: 0,
+	}, nil
 }
 
 // Echo returns the response for an echo api request
@@ -39,7 +67,7 @@ func (s SpacemeshGrpcService) Echo(ctx context.Context, in *pb.SimpleMessage) (*
 // Echo returns the response for an echo api request
 func (s SpacemeshGrpcService) GetBalance(ctx context.Context, in *pb.AccountId) (*pb.SimpleMessage, error) {
 	log.Info("GRPC GetBalance msg")
-	addr := types.HexToAddress(in.Address)
+	addr := types.BytesToAddress(in.Address)
 	log.Info("GRPC GetBalance for address %x (len %v)", addr, len(addr))
 	if s.StateApi.Exist(addr) != true {
 		log.Error("GRPC GetBalance returned error msg: account does not exist, address %x", addr)
@@ -55,7 +83,7 @@ func (s SpacemeshGrpcService) GetBalance(ctx context.Context, in *pb.AccountId) 
 // Echo returns the response for an echo api request
 func (s SpacemeshGrpcService) GetNonce(ctx context.Context, in *pb.AccountId) (*pb.SimpleMessage, error) {
 	log.Info("GRPC GetNonce msg")
-	addr := types.HexToAddress(in.Address)
+	addr := types.BytesToAddress(in.Address)
 
 	if s.StateApi.Exist(addr) != true {
 		log.Error("GRPC GetNonce got error msg: account does not exist, %v", addr)
@@ -131,17 +159,19 @@ type TxAPI interface {
 }
 
 // NewGrpcService create a new grpc service using config data.
-func NewGrpcService(net NetworkAPI, state StateAPI, tx TxAPI, mining MiningAPI, oracle OracleAPI, genTime GenesisTimeAPI) *SpacemeshGrpcService {
+func NewGrpcService(net NetworkAPI, state StateAPI, tx TxAPI, txMempool *miner.TxMempool, mining MiningAPI, oracle OracleAPI, genTime GenesisTimeAPI) *SpacemeshGrpcService {
 	port := config.ConfigValues.GrpcServerPort
 	server := grpc.NewServer()
-	return &SpacemeshGrpcService{Server: server,
-		Port:     uint(port),
-		StateApi: state,
-		Network:  net,
-		Tx:       tx,
-		Mining:   mining,
-		Oracle:   oracle,
-		GenTime:  genTime,
+	return &SpacemeshGrpcService{
+		Server:    server,
+		Port:      uint(port),
+		StateApi:  state,
+		Network:   net,
+		Tx:        tx,
+		TxMempool: txMempool,
+		Mining:    mining,
+		Oracle:    oracle,
+		GenTime:   genTime,
 	}
 }
 
@@ -190,10 +220,7 @@ func (s SpacemeshGrpcService) StartMining(ctx context.Context, message *pb.InitP
 
 func (s SpacemeshGrpcService) SetAwardsAddress(ctx context.Context, id *pb.AccountId) (*pb.SimpleMessage, error) {
 	log.Info("GRPC SetAwardsAddress msg")
-	addr, err := types.StringToAddress(id.Address)
-	if err != nil {
-		return &pb.SimpleMessage{}, err
-	}
+	addr := types.BytesToAddress(id.Address)
 	s.Mining.SetCoinbaseAccount(addr)
 	return &pb.SimpleMessage{Value: "ok"}, nil
 }

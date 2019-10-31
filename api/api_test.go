@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -130,7 +129,7 @@ func TestServersConfig(t *testing.T) {
 
 	config.ConfigValues.JSONServerPort = port1
 	config.ConfigValues.GrpcServerPort = port2
-	grpcService := NewGrpcService(&networkMock, ap, &tx, &mining, &oracle, nil)
+	grpcService := NewGrpcService(&networkMock, ap, &tx, nil, &mining, &oracle, nil)
 	jsonService := NewJSONHTTPServer()
 
 	assert.Equal(t, grpcService.Port, uint(config.ConfigValues.GrpcServerPort), "Expected same port")
@@ -148,7 +147,7 @@ func TestGrpcApi(t *testing.T) {
 
 	const message = "Hello World"
 
-	grpcService := NewGrpcService(&networkMock, ap, &tx, &mining, &oracle, nil)
+	grpcService := NewGrpcService(&networkMock, ap, &tx, nil, &mining, &oracle, nil)
 
 	// start a server
 	grpcService.StartService()
@@ -187,7 +186,7 @@ func TestJsonApi(t *testing.T) {
 	ap := NodeAPIMock{}
 	net := NetworkMock{}
 	tx := TxAPIMock{}
-	grpcService := NewGrpcService(&net, ap, &tx, &mining, &oracle, nil)
+	grpcService := NewGrpcService(&net, ap, &tx, nil, &mining, &oracle, nil)
 	jsonService := NewJSONHTTPServer()
 
 	// start grp and json server
@@ -255,7 +254,7 @@ func TestJsonWalletApi(t *testing.T) {
 	ap.nonces[addr] = 10
 	ap.balances[addr] = big.NewInt(100)
 	txApi := TxAPIMock{}
-	grpcService := NewGrpcService(&net, ap, &txApi, &mining, &oracle, &genTime)
+	grpcService := NewGrpcService(&net, ap, &txApi, nil, &mining, &oracle, &genTime)
 	jsonService := NewJSONHTTPServer()
 
 	// start grp and json server
@@ -266,7 +265,7 @@ func TestJsonWalletApi(t *testing.T) {
 	const contentType = "application/json"
 
 	// generate request payload (api input params)
-	reqParams := pb.AccountId{Address: util.Bytes2Hex(addrBytes)}
+	reqParams := pb.AccountId{Address: addrBytes}
 	var m jsonpb.Marshaler
 	payload, err := m.MarshalToString(&reqParams)
 	assert.NoError(t, err, "failed to marshal to string")
@@ -430,7 +429,7 @@ func TestJsonWalletApi_Errors(t *testing.T) {
 	ap := NewNodeAPIMock()
 	net := NetworkMock{}
 	tx := TxAPIMock{}
-	grpcService := NewGrpcService(&net, ap, &tx, &mining, &oracle, nil)
+	grpcService := NewGrpcService(&net, ap, &tx, nil, &mining, &oracle, nil)
 	jsonService := NewJSONHTTPServer()
 
 	// start grp and json server
@@ -441,7 +440,7 @@ func TestJsonWalletApi_Errors(t *testing.T) {
 	const contentType = "application/json"
 
 	// generate request payload (api input params)
-	reqParams := pb.AccountId{Address: util.Bytes2Hex(addrBytes)}
+	reqParams := pb.AccountId{Address: addrBytes}
 	var m jsonpb.Marshaler
 	payload, err := m.MarshalToString(&reqParams)
 	assert.NoError(t, err, "failed to marshal to string")
@@ -495,7 +494,7 @@ func TestSpaceMeshGrpcService_Broadcast(t *testing.T) {
 	ap := NewNodeAPIMock()
 	net := NetworkMock{broadcasted: []byte{0x00}}
 	tx := TxAPIMock{}
-	grpcService := NewGrpcService(&net, ap, &tx, &mining, &oracle, nil)
+	grpcService := NewGrpcService(&net, ap, &tx, nil, &mining, &oracle, nil)
 	jsonService := NewJSONHTTPServer()
 
 	// start grp and json server
@@ -557,7 +556,7 @@ func TestSpaceMeshGrpcService_BroadcastErrors(t *testing.T) {
 	net := NetworkMock{broadcasted: []byte{0x00}}
 	net.broadCastErr = true
 	tx := TxAPIMock{}
-	grpcService := NewGrpcService(&net, ap, &tx, &mining, &oracle, nil)
+	grpcService := NewGrpcService(&net, ap, &tx, nil, &mining, &oracle, nil)
 	jsonService := NewJSONHTTPServer()
 
 	// start grp and json server

@@ -100,6 +100,7 @@ type SpacemeshApp struct {
 	edSgn          *signing.EdSigner
 	closers        []interface{ Close() }
 	log            log.Log
+	txPool         *miner.TxMempool
 }
 
 // ParseConfig unmarshal config file into struct
@@ -347,9 +348,9 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 
 	trtl := tortoise.NewAlgorithm(int(layerSize), mdb, app.Config.Hdist, lg.WithName("trtl"))
 
-	txpool := miner.NewTxMemPool()
+	app.txPool = miner.NewTxMemPool()
 	atxpool := miner.NewAtxMemPool()
-	meshAndPoolProjector := pending_txs.NewMeshAndPoolProjector(mdb, txpool)
+	meshAndPoolProjector := pending_txs.NewMeshAndPoolProjector(mdb, app.txPool)
 
 	processor := state.NewTransactionProcessor(st, meshAndPoolProjector, lg.WithName("state"))
 
@@ -357,7 +358,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	beaconProvider := &oracle.EpochBeaconProvider{}
 	eValidator := oracle.NewBlockEligibilityValidator(layerSize, uint32(app.Config.GenesisActiveSet), layersPerEpoch, atxdb, beaconProvider, BLS381.Verify2, lg.WithName("blkElgValidator"))
 
-	msh := mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, txpool, atxpool, processor, lg.WithName("mesh")) //todo: what to do with the logger?
+	msh := mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, app.txPool, atxpool, processor, lg.WithName("mesh")) //todo: what to do with the logger?
 
 	conf := sync.Configuration{Concurrency: 4, LayerSize: int(layerSize), LayersPerEpoch: layersPerEpoch, RequestTimeout: time.Duration(app.Config.SyncRequestTimeout) * time.Millisecond, Hdist: app.Config.Hdist, AtxsLimit: app.Config.AtxsPerBlock}
 	if app.Config.AtxsPerBlock > miner.AtxsPerBlockLimit { // validate limit
@@ -370,7 +371,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 			app.Config.HareEligibility.EpochOffset, app.Config.BaseConfig.LayersPerEpoch)
 	}
 
-	syncer := sync.NewSync(swarm, msh, txpool, atxpool, eValidator, poetDb, conf, clock, lg.WithName("sync"))
+	syncer := sync.NewSync(swarm, msh, app.txPool, atxpool, eValidator, poetDb, conf, clock, lg.WithName("sync"))
 	blockOracle := oracle.NewMinerBlockOracle(layerSize, uint32(app.Config.GenesisActiveSet), layersPerEpoch, atxdb, beaconProvider, vrfSigner, nodeID, syncer.WeaklySynced, lg.WithName("blockOracle"))
 
 	// TODO: we should probably decouple the apptest and the node (and duplicate as necessary)
@@ -402,7 +403,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	ha := hare.New(app.Config.HARE, swarm, sgn, nodeID, validationFunc, syncer.IsSynced, msh, hOracle, uint16(app.Config.LayersPerEpoch), idStore, hOracle, clock.Subscribe(), lg.WithName("hare"))
 
 	stateAndMeshProjector := pending_txs.NewStateAndMeshProjector(st, msh)
-	blockProducer := miner.NewBlockBuilder(nodeID, sgn, swarm, clock.Subscribe(), app.Config.Hdist, txpool, atxpool, coinToss, msh, ha, blockOracle, processor, atxdb, syncer, app.Config.AtxsPerBlock, stateAndMeshProjector, lg.WithName("blockBuilder"))
+	blockProducer := miner.NewBlockBuilder(nodeID, sgn, swarm, clock.Subscribe(), app.Config.Hdist, app.txPool, atxpool, coinToss, msh, ha, blockOracle, processor, atxdb, syncer, app.Config.AtxsPerBlock, stateAndMeshProjector, lg.WithName("blockBuilder"))
 	blockListener := sync.NewBlockListener(swarm, syncer, 4, lg.WithName("blockListener"))
 
 	msh.SetBlockBuilder(blockProducer)
@@ -695,7 +696,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	// start api servers
 	if apiConf.StartGrpcServer || apiConf.StartJSONServer {
 		// start grpc if specified or if json rpc specified
-		app.grpcAPIService = api.NewGrpcService(app.P2P, app.state, app.mesh.TxProcessor, app.atxBuilder, app.oracle, app.clock)
+		app.grpcAPIService = api.NewGrpcService(app.P2P, app.state, app.mesh.TxProcessor, app.txPool, app.atxBuilder, app.oracle, app.clock)
 		app.grpcAPIService.StartService()
 	}
 
