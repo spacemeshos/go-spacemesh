@@ -40,6 +40,14 @@ func logLevel() zap.LevelEnablerFunc {
 	}
 }
 
+func LogLvl() zapcore.Level {
+	if debugMode {
+		return zapcore.DebugLevel
+	} else {
+		return zapcore.InfoLevel
+	}
+}
+
 type Logger interface {
 	Info(format string, args ...interface{})
 	Debug(format string, args ...interface{})

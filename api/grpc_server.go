@@ -29,6 +29,7 @@ type SpacemeshGrpcService struct {
 	Mining   MiningAPI
 	Oracle   OracleAPI
 	GenTime  GenesisTimeAPI
+	Logging  LoggingAPI
 }
 
 // Echo returns the response for an echo api request
@@ -131,7 +132,7 @@ type TxAPI interface {
 }
 
 // NewGrpcService create a new grpc service using config data.
-func NewGrpcService(net NetworkAPI, state StateAPI, tx TxAPI, mining MiningAPI, oracle OracleAPI, genTime GenesisTimeAPI) *SpacemeshGrpcService {
+func NewGrpcService(net NetworkAPI, state StateAPI, tx TxAPI, mining MiningAPI, oracle OracleAPI, genTime GenesisTimeAPI, logging LoggingAPI) *SpacemeshGrpcService {
 	port := config.ConfigValues.GrpcServerPort
 	server := grpc.NewServer()
 	return &SpacemeshGrpcService{Server: server,
@@ -142,6 +143,7 @@ func NewGrpcService(net NetworkAPI, state StateAPI, tx TxAPI, mining MiningAPI, 
 		Mining:   mining,
 		Oracle:   oracle,
 		GenTime:  genTime,
+		Logging:  logging,
 	}
 }
 
@@ -224,4 +226,13 @@ func (s SpacemeshGrpcService) GetUpcomingAwards(ctx context.Context, empty *empt
 func (s SpacemeshGrpcService) GetGenesisTime(ctx context.Context, empty *empty.Empty) (*pb.SimpleMessage, error) {
 	log.Info("GRPC GetGenesisTime msg")
 	return &pb.SimpleMessage{Value: s.GenTime.GetGenesisTime().String()}, nil
+}
+
+func (s SpacemeshGrpcService) SetLoggerLevel(ctx context.Context, msg *pb.SetLogLevel) (*pb.SimpleMessage, error) {
+	log.Info("GRPC SetLogLevel msg")
+	err := s.Logging.SetLogLevel(msg.LoggerName, msg.Severity)
+	if err != nil {
+		return nil, err
+	}
+	return &pb.SimpleMessage{Value: "ok"}, nil
 }
