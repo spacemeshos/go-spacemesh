@@ -36,3 +36,7 @@ type OracleAPI interface {
 type GenesisTimeAPI interface {
 	GetGenesisTime() time.Time
 }
+
+type LoggingAPI interface {
+	SetLogLevel(loggerName, severity string) error
+}
