@@ -320,8 +320,7 @@ func TestMesh_ExtractUniqueOrderedTransactions(t *testing.T) {
 	l, err := msh.GetLayer(layerID)
 	r.NoError(err)
 
-	validBlocks, invalidBlocks, err := msh.ExtractUniqueOrderedTransactions(l)
-	r.NoError(err)
+	validBlocks, invalidBlocks := msh.ExtractUniqueOrderedTransactions(l)
 
 	r.ElementsMatch(GetTransactionIds(tx1, tx2, tx3, tx4), GetTransactionIds(validBlocks...))
 	r.ElementsMatch(GetTransactionIds(tx5), GetTransactionIds(invalidBlocks...))

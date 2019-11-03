@@ -152,13 +152,13 @@ func (m *Mesh) ValidateLayer(lyr *types.Layer) {
 	m.Info("done validating layer %v", currLayerId)
 }
 
-func (m *Mesh) ExtractUniqueOrderedTransactions(l *types.Layer) (validBlockTxs, invalidBlockTxs []*types.Transaction, err error) {
+func (m *Mesh) ExtractUniqueOrderedTransactions(l *types.Layer) (validBlockTxs, invalidBlockTxs []*types.Transaction) {
 	// Separate blocks by validity
 	var validBlocks, invalidBlocks []*types.Block
 	for _, b := range l.Blocks() {
 		valid, err := m.ContextualValidity(b.ID())
 		if err != nil {
-			return nil, nil, fmt.Errorf("could not get contextual validity for block %v: %v", b.ID(), err)
+			m.With().Error("could not get contextual validity", log.BlockId(uint64(b.ID())), log.Err(err))
 		}
 		if valid {
 			validBlocks = append(validBlocks, b)
@@ -190,7 +190,7 @@ func (m *Mesh) ExtractUniqueOrderedTransactions(l *types.Layer) (validBlockTxs, 
 
 	// Get and return unique transactions
 	seenTxIds := map[types.TransactionId]struct{}{}
-	return m.getTxs(uniqueTxIds(validBlocks, seenTxIds), l), m.getTxs(uniqueTxIds(invalidBlocks, seenTxIds), l), nil
+	return m.getTxs(uniqueTxIds(validBlocks, seenTxIds), l), m.getTxs(uniqueTxIds(invalidBlocks, seenTxIds), l)
 }
 
 func toUint64Slice(b []byte) []uint64 {
@@ -232,10 +232,7 @@ func (m *Mesh) PushTransactions(layerId types.LayerID) error {
 		return fmt.Errorf("failed to retrieve layer %v: %v", layerId, err)
 	}
 
-	validBlockTxs, invalidBlockTxs, err := m.ExtractUniqueOrderedTransactions(l)
-	if err != nil {
-		panic("failed to extract txs: " + err.Error())
-	}
+	validBlockTxs, invalidBlockTxs := m.ExtractUniqueOrderedTransactions(l)
 	numFailedTxs, err := m.ApplyTransactions(layerId, validBlockTxs)
 	if err != nil {
 		m.With().Error("failed to apply transactions",
@@ -434,7 +431,7 @@ func (m *Mesh) AccumulateRewards(rewardLayer types.LayerID, params Config) {
 	for _, bl := range l.Blocks() {
 		valid, err := m.ContextualValidity(bl.ID())
 		if err != nil {
-			panic("failed to determine contextual validity: " + err.Error())
+			m.With().Error("could not get contextual validity", log.BlockId(uint64(bl.ID())), log.Err(err))
 		}
 		if !valid {
 			m.With().Info("Withheld reward for contextually invalid block",
@@ -451,10 +448,7 @@ func (m *Mesh) AccumulateRewards(rewardLayer types.LayerID, params Config) {
 		ids = append(ids, atx.Coinbase)
 	}
 	//accumulate all blocks rewards
-	txs, _, err := m.ExtractUniqueOrderedTransactions(l)
-	if err != nil {
-		panic("failed to extract txs")
-	}
+	txs, _ := m.ExtractUniqueOrderedTransactions(l)
 
 	rewards := &big.Int{}
 	for _, tx := range txs {
