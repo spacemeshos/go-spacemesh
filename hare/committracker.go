@@ -9,6 +9,7 @@ type commitTrackerProvider interface {
 	OnCommit(msg *Msg)
 	HasEnoughCommits() bool
 	BuildCertificate() *certificate
+	CommitCount() int
 }
 
 // commitTracker tracks commit messages and build the certificate according to the tracked messages.
@@ -63,6 +64,10 @@ func (ct *commitTracker) HasEnoughCommits() bool {
 	}
 
 	return len(ct.commits) >= ct.threshold
+}
+
+func (ct *commitTracker) CommitCount() int {
+	return len(ct.commits)
 }
 
 // BuildCertificate returns a certificate if there are enough commits, nil otherwise

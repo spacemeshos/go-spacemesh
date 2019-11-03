@@ -1,4 +1,4 @@
-package nipst
+package activation
 
 import (
 	"errors"
@@ -55,57 +55,87 @@ type PoetProvingServiceClient interface {
 	// open round suited for the specified duration.
 	submit(challenge types.Hash32) (*types.PoetRound, error)
 
-	getPoetServiceId() ([types.PoetServiceIdLength]byte, error)
+	getPoetServiceId() ([]byte, error)
 }
 
 type builderState struct {
-	nipst *types.NIPST
+	Challenge types.Hash32
+
+	Nipst *types.NIPST
 
 	// PoetRound is the round of the PoET proving service
 	// in which the PoET challenge was included in.
 	PoetRound *types.PoetRound
 
 	// PoetServiceId is the public key of the PoET proving service.
-	PoetServiceId [types.PoetServiceIdLength]byte
+	PoetServiceId []byte
 
 	// PoetProofRef is the root of the proof received from the PoET service.
 	PoetProofRef []byte
 }
 
-func (s *builderState) load() {
-
+func nipstBuildStateKey() []byte {
+	return []byte("nipstate")
 }
 
-func (s *builderState) persist() {
-	// TODO(noamnelke): implement
+func (s *NIPSTBuilder) load(challenge types.Hash32) {
+	bts, err := s.store.Get(nipstBuildStateKey())
+	if err != nil {
+		s.log.Warning("cannot load Nipst state %v", err)
+		return
+	}
+	if len(bts) > 0 {
+		var state builderState
+		err = types.BytesToInterface(bts, &state)
+		if err != nil {
+			s.log.Error("cannot load Nipst state %v", err)
+		}
+		if state.Challenge == challenge {
+			s.state = &state
+		} else {
+			s.state = &builderState{Challenge: challenge, Nipst: &types.NIPST{}}
+		}
+	}
+}
+
+func (s *NIPSTBuilder) persist() {
+	bts, err := types.InterfaceToBytes(&s.state)
+	if err != nil {
+		s.log.Warning("cannot store Nipst state %v", err)
+		return
+	}
+	err = s.store.Put(nipstBuildStateKey(), bts)
+	if err != nil {
+		s.log.Warning("cannot store Nipst state %v", err)
+	}
 }
 
 type NIPSTBuilder struct {
 	id         []byte
 	postProver PostProverClient
 	poetProver PoetProvingServiceClient
-	poetDb     PoetDb
+	poetDb     PoetDbApi
 
 	stop    bool
 	stopM   sync.Mutex
 	errChan chan error
 	state   *builderState
-
-	log log.Log
+	store   BytesStore
+	log     log.Log
 }
 
-type PoetDb interface {
-	SubscribeToProofRef(poetId [types.PoetServiceIdLength]byte, roundId uint64) chan []byte
+type PoetDbApi interface {
+	SubscribeToProofRef(poetId []byte, roundId string) chan []byte
 	GetMembershipMap(proofRef []byte) (map[types.Hash32]bool, error)
 }
 
-func NewNIPSTBuilder(id []byte, postProver PostProverClient,
-	poetProver PoetProvingServiceClient, poetDb PoetDb, log log.Log) *NIPSTBuilder {
+func NewNIPSTBuilder(id []byte, postProver PostProverClient, poetProver PoetProvingServiceClient, poetDb PoetDbApi, store BytesStore, log log.Log) *NIPSTBuilder {
 	return newNIPSTBuilder(
 		id,
 		postProver,
 		poetProver,
 		poetDb,
+		store,
 		log,
 	)
 }
@@ -114,7 +144,8 @@ func newNIPSTBuilder(
 	id []byte,
 	postProver PostProverClient,
 	poetProver PoetProvingServiceClient,
-	poetDb PoetDb,
+	poetDb PoetDbApi,
+	store BytesStore,
 	log log.Log,
 ) *NIPSTBuilder {
 	return &NIPSTBuilder{
@@ -124,22 +155,23 @@ func newNIPSTBuilder(
 		poetDb:     poetDb,
 		stop:       false,
 		errChan:    make(chan error),
+		store:      store,
 		log:        log,
 		state: &builderState{
-			nipst: &types.NIPST{},
+			Nipst: &types.NIPST{},
 		},
 	}
 }
 
 func (nb *NIPSTBuilder) BuildNIPST(challenge *types.Hash32) (*types.NIPST, error) {
-	nb.state.load()
+	nb.load(*challenge)
 
 	if initialized, err := nb.postProver.IsInitialized(); !initialized || err != nil {
 		return nil, errors.New("PoST not initialized")
 	}
 
 	cfg := nb.postProver.Cfg()
-	nipst := nb.state.nipst
+	nipst := nb.state.Nipst
 
 	nipst.Space = cfg.SpacePerUnit
 
@@ -152,6 +184,7 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *types.Hash32) (*types.NIPST, error
 		nb.state.PoetServiceId = poetServiceId
 
 		poetChallenge := challenge
+		nb.state.Challenge = *challenge
 
 		nb.log.Debug("submitting challenge to PoET proving service (PoET id: %x, challenge: %x)",
 			nb.state.PoetServiceId, poetChallenge)
@@ -166,7 +199,7 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *types.Hash32) (*types.NIPST, error
 
 		nipst.NipstChallenge = poetChallenge
 		nb.state.PoetRound = round
-		nb.state.persist()
+		nb.persist()
 	}
 
 	// Phase 1: receive proofs from PoET service
@@ -180,11 +213,11 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *types.Hash32) (*types.NIPST, error
 			return nil, fmt.Errorf("failed to fetch membership for PoET proof") // inconsistent state
 		}
 		if !membership[*nipst.NipstChallenge] {
-			return nil, fmt.Errorf("not a member of this round (poetId: %x, roundId: %d)",
+			return nil, fmt.Errorf("not a member of this round (poetId: %x, roundId: %s)",
 				nb.state.PoetServiceId, nb.state.PoetRound.Id) // TODO(noamnelke): handle this case!
 		}
 		nb.state.PoetProofRef = poetProofRef
-		nb.state.persist()
+		nb.persist()
 	}
 
 	// Phase 2: PoST execution.
@@ -200,14 +233,15 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *types.Hash32) (*types.NIPST, error
 			log.String("proof merkle root", fmt.Sprintf("%x", proof.MerkleRoot)))
 
 		nipst.PostProof = proof
-		nb.state.persist()
+		nb.persist()
 	}
 
 	nb.log.Info("finished NIPST construction")
 
 	nb.state = &builderState{
-		nipst: &types.NIPST{},
+		Nipst: &types.NIPST{},
 	}
+	nb.persist()
 	return nipst, nil
 }
 
@@ -216,7 +250,6 @@ func NewNIPSTWithChallenge(challenge *types.Hash32, poetRef []byte) *types.NIPST
 		Space:          0,
 		NipstChallenge: challenge,
 		PostProof: &types.PostProof{
-			Identity:     []byte(nil),
 			Challenge:    poetRef,
 			MerkleRoot:   []byte(nil),
 			ProofNodes:   [][]byte(nil),

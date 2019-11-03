@@ -1,17 +1,22 @@
 package mesh
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/google/uuid"
+	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/nipst"
+	"github.com/spacemeshos/go-spacemesh/pending_txs"
 	"github.com/spacemeshos/go-spacemesh/rand"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"math"
 	"os"
 	"path"
+	"sort"
 	"testing"
 	"time"
 )
@@ -45,10 +50,19 @@ func TestMeshDB_AddBlock(t *testing.T) {
 
 	block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data1"))
 
-	addTransactionsWithGas(mdb, block1, 4, rand.Int63n(100))
+	addTransactionsWithFee(mdb, block1, 4, rand.Int63n(100))
 
 	poetRef := []byte{0xba, 0x05}
-	atx := types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")}, coinbase, 1, types.AtxId{}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, nipst.NewNIPSTWithChallenge(&types.Hash32{}, poetRef))
+	atx := types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")}, coinbase, 1, types.AtxId{}, 5, 1, types.AtxId{}, 5, []types.BlockID{1, 2, 3}, &types.NIPST{
+		Space:          0,
+		NipstChallenge: &types.Hash32{},
+		PostProof: &types.PostProof{
+			Challenge:    poetRef,
+			MerkleRoot:   []byte(nil),
+			ProofNodes:   [][]byte(nil),
+			ProvenLeaves: [][]byte(nil),
+		},
+	})
 
 	block1.AtxIds = append(block1.AtxIds, atx.Id())
 	err := mdb.AddBlock(block1)
@@ -59,7 +73,7 @@ func TestMeshDB_AddBlock(t *testing.T) {
 
 	assert.True(t, len(rBlock1.TxIds) == len(block1.TxIds), "block content was wrong")
 	assert.True(t, len(rBlock1.AtxIds) == len(block1.AtxIds), "block content was wrong")
-	//assert.True(t, bytes.Compare(rBlock2.Data, []byte("data2")) == 0, "block content was wrong")
+	// assert.True(t, bytes.Compare(rBlock2.Data, []byte("data2")) == 0, "block content was wrong")
 }
 
 func chooseRandomPattern(blocksInLayer int, patternSize int) []int {
@@ -260,4 +274,169 @@ func BenchmarkNewPersistentMeshDB(b *testing.B) {
 		}
 	}
 	fmt.Printf("\n>>> Total time: %v\n\n", time.Since(start))
+}
+
+const (
+	initialNonce   = 0
+	initialBalance = 100
+)
+
+func address() types.Address {
+	var addr [20]byte
+	copy(addr[:], "12345678901234567890")
+	return addr
+}
+
+func newTx(r *require.Assertions, signer *signing.EdSigner, nonce, totalAmount uint64) *types.Transaction {
+	feeAmount := uint64(1)
+	tx, err := types.NewSignedTx(nonce, types.Address{}, totalAmount-feeAmount, 3, feeAmount, signer)
+	r.NoError(err)
+	return tx
+}
+
+func newSignerAndAddress(r *require.Assertions, seedStr string) (*signing.EdSigner, types.Address) {
+	seed := make([]byte, 32)
+	copy(seed, seedStr)
+	_, privKey, err := ed25519.GenerateKey(bytes.NewReader(seed))
+	r.NoError(err)
+	signer, err := signing.NewEdSignerFromBuffer(privKey)
+	r.NoError(err)
+	var addr types.Address
+	addr.SetBytes(signer.PublicKey().Bytes())
+	return signer, addr
+}
+
+func TestMeshDB_GetStateProjection(t *testing.T) {
+	r := require.New(t)
+
+	mdb := NewMemMeshDB(log.NewDefault("MeshDB.GetStateProjection"))
+	signer, origin := newSignerAndAddress(r, "123")
+	err := mdb.addToUnappliedTxs([]*types.Transaction{
+		newTx(r, signer, 0, 10),
+		newTx(r, signer, 1, 20),
+	}, 1)
+	r.NoError(err)
+
+	nonce, balance, err := mdb.GetProjection(origin, initialNonce, initialBalance)
+	r.NoError(err)
+	r.Equal(initialNonce+2, int(nonce))
+	r.Equal(initialBalance-30, int(balance))
+}
+
+func TestMeshDB_GetStateProjection_WrongNonce(t *testing.T) {
+	r := require.New(t)
+
+	mdb := NewMemMeshDB(log.New("TestForEachInView", "", ""))
+	signer, origin := newSignerAndAddress(r, "123")
+	err := mdb.addToUnappliedTxs([]*types.Transaction{
+		newTx(r, signer, 1, 10),
+		newTx(r, signer, 2, 20),
+	}, 1)
+	r.NoError(err)
+
+	nonce, balance, err := mdb.GetProjection(origin, initialNonce, initialBalance)
+	r.NoError(err)
+	r.Equal(initialNonce, int(nonce))
+	r.Equal(initialBalance, int(balance))
+}
+
+func TestMeshDB_GetStateProjection_DetectNegativeBalance(t *testing.T) {
+	r := require.New(t)
+
+	mdb := NewMemMeshDB(log.New("TestForEachInView", "", ""))
+	signer, origin := newSignerAndAddress(r, "123")
+	err := mdb.addToUnappliedTxs([]*types.Transaction{
+		newTx(r, signer, 0, 10),
+		newTx(r, signer, 1, 95),
+	}, 1)
+	r.NoError(err)
+
+	nonce, balance, err := mdb.GetProjection(origin, initialNonce, initialBalance)
+	r.NoError(err)
+	r.Equal(1, int(nonce))
+	r.Equal(initialBalance-10, int(balance))
+}
+
+func TestMeshDB_GetStateProjection_NothingToApply(t *testing.T) {
+	r := require.New(t)
+
+	mdb := NewMemMeshDB(log.New("TestForEachInView", "", ""))
+
+	nonce, balance, err := mdb.GetProjection(address(), initialNonce, initialBalance)
+	r.NoError(err)
+	r.Equal(uint64(initialNonce), nonce)
+	r.Equal(uint64(initialBalance), balance)
+}
+
+func TestMeshDB_UnappliedTxs(t *testing.T) {
+	r := require.New(t)
+
+	mdb := NewMemMeshDB(log.New("TestForEachInView", "", ""))
+
+	signer1, origin1 := newSignerAndAddress(r, "thc")
+	signer2, origin2 := newSignerAndAddress(r, "cbd")
+	err := mdb.addToUnappliedTxs([]*types.Transaction{
+		newTx(r, signer1, 420, 240),
+		newTx(r, signer1, 421, 241),
+		newTx(r, signer2, 0, 100),
+		newTx(r, signer2, 1, 101),
+	}, 1)
+	r.NoError(err)
+
+	txns1 := getTxns(r, mdb, origin1)
+	r.Len(txns1, 2)
+	r.Equal(420, int(txns1[0].Nonce))
+	r.Equal(421, int(txns1[1].Nonce))
+	r.Equal(240, int(txns1[0].TotalAmount))
+	r.Equal(241, int(txns1[1].TotalAmount))
+
+	txns2 := getTxns(r, mdb, origin2)
+	r.Len(txns2, 2)
+	r.Equal(0, int(txns2[0].Nonce))
+	r.Equal(1, int(txns2[1].Nonce))
+	r.Equal(100, int(txns2[0].TotalAmount))
+	r.Equal(101, int(txns2[1].TotalAmount))
+
+	mdb.removeFromUnappliedTxs([]*types.Transaction{
+		newTx(r, signer2, 0, 100),
+	}, nil, 1)
+
+	txns1 = getTxns(r, mdb, origin1)
+	r.Len(txns1, 2)
+	r.Equal(420, int(txns1[0].Nonce))
+	r.Equal(421, int(txns1[1].Nonce))
+	r.Equal(240, int(txns1[0].TotalAmount))
+	r.Equal(241, int(txns1[1].TotalAmount))
+
+	txns2 = getTxns(r, mdb, origin2)
+	r.Len(txns2, 1)
+	r.Equal(1, int(txns2[0].Nonce))
+	r.Equal(101, int(txns2[0].TotalAmount))
+}
+
+type TinyTx struct {
+	Id          types.TransactionId
+	Nonce       uint64
+	TotalAmount uint64
+}
+
+func getTxns(r *require.Assertions, mdb *MeshDB, origin types.Address) []TinyTx {
+	txnsB, err := mdb.unappliedTxs.Get(origin.Bytes())
+	if err == database.ErrNotFound {
+		return []TinyTx{}
+	}
+	r.NoError(err)
+	var txns pending_txs.AccountPendingTxs
+	err = types.BytesToInterface(txnsB, &txns)
+	r.NoError(err)
+	var ret []TinyTx
+	for nonce, nonceTxs := range txns.PendingTxs {
+		for id, tx := range nonceTxs {
+			ret = append(ret, TinyTx{Id: id, Nonce: nonce, TotalAmount: tx.Amount + tx.Fee})
+		}
+	}
+	sort.Slice(ret, func(i, j int) bool {
+		return ret[i].Nonce < ret[j].Nonce
+	})
+	return ret
 }

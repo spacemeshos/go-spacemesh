@@ -77,22 +77,6 @@ func (app *SyncApp) Cleanup() {
 	}
 }
 
-type mockTxProcessor struct {
-}
-
-func (processor mockTxProcessor) GetValidAddressableTx(tx *types.SerializableSignedTransaction) (*types.AddressableSignedTransaction, error) {
-	addr, err := processor.ValidateTransactionSignature(tx)
-	if err != nil {
-		return nil, err
-	}
-
-	return &types.AddressableSignedTransaction{SerializableSignedTransaction: tx, Address: addr}, nil
-}
-
-func (mockTxProcessor) ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (types.Address, error) {
-	return types.HexToAddress("0xFFFF"), nil
-}
-
 func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	// start p2p services
 	lg := log.New("sync_test", "", "")
@@ -135,15 +119,15 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	atxdbStore, _ := database.NewLDBDatabase(app.Config.DataDir+"atx", 0, 0, lg)
 	atxdb := activation.NewActivationDb(atxdbStore, &sync.MockIStore{}, mshdb, uint16(1000), &sync.ValidatorMock{}, lg.WithName("atxDB").WithOptions(log.Nop))
 
-	txpool := miner.NewTypesTransactionIdMemPool()
-	atxpool := miner.NewTypesAtxIdMemPool()
+	txpool := miner.NewTxMemPool()
+	atxpool := miner.NewAtxMemPool()
 	msh := mesh.NewMesh(mshdb, atxdb, sync.ConfigTst(), &sync.MeshValidatorMock{}, txpool, atxpool, &sync.MockState{}, lg.WithOptions(log.Nop))
 	defer msh.Close()
 	msh.AddBlock(&mesh.GenesisBlock)
 	clock := sync.MockClock{}
 	clock.Layer = types.LayerID(expectedLayers + 1)
 	lg.Info("current layer %v", clock.GetCurrentLayer())
-	app.sync = sync.NewSync(swarm, msh, txpool, atxpool, mockTxProcessor{}, sync.BlockEligibilityValidatorMock{}, poetDb, conf, &clock, lg.WithName("sync"))
+	app.sync = sync.NewSync(swarm, msh, txpool, atxpool, sync.BlockEligibilityValidatorMock{}, poetDb, conf, &clock, lg.WithName("sync"))
 	if err = swarm.Start(); err != nil {
 		log.Panic("error starting p2p err=%v", err)
 	}

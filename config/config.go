@@ -2,15 +2,14 @@ package config
 
 import (
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/activation"
 	apiConfig "github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 	hareConfig "github.com/spacemeshos/go-spacemesh/hare/config"
 	eligConfig "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
-	"github.com/spacemeshos/go-spacemesh/nipst"
 	p2pConfig "github.com/spacemeshos/go-spacemesh/p2p/config"
-	"github.com/spacemeshos/go-spacemesh/state"
 	timeConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
 	postConfig "github.com/spacemeshos/post/config"
 	"github.com/spf13/viper"
@@ -45,7 +44,6 @@ type Config struct {
 	HARE            hareConfig.Config     `mapstructure:"hare"`
 	HareEligibility eligConfig.Config     `mapstructure:"hare-eligibility"`
 	TIME            timeConfig.TimeConfig `mapstructure:"time"`
-	GAS             state.GasConfig       `mapstructure:"gas"`
 	REWARD          mesh.Config           `mapstructure:"reward"`
 	POST            postConfig.Config     `mapstructure:"post"`
 }
@@ -108,9 +106,8 @@ func DefaultConfig() Config {
 		HARE:            hareConfig.DefaultConfig(),
 		HareEligibility: eligConfig.DefaultConfig(),
 		TIME:            timeConfig.DefaultConfig(),
-		GAS:             state.DefaultConfig(),
 		REWARD:          mesh.DefaultMeshConfig(),
-		POST:            nipst.DefaultConfig(),
+		POST:            activation.DefaultConfig(),
 	}
 }
 

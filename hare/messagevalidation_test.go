@@ -9,10 +9,19 @@ import (
 	"testing"
 )
 
+type truer struct {
+}
+
+func (truer) Validate(m *Msg) bool {
+	return true
+}
+
 func defaultValidator() *syntaxContextValidator {
-	return newSyntaxContextValidator(signing.NewEdSigner(), lowThresh10, func(m *Msg) bool {
+	trueValidator := func(m *Msg) bool {
 		return true
-	}, &MockStateQuerier{true, nil}, 10, log.NewDefault("Validator"))
+	}
+
+	return newSyntaxContextValidator(signing.NewEdSigner(), lowThresh10, trueValidator, &MockStateQuerier{true, nil}, 10, truer{}, newPubGetter(), log.NewDefault("Validator"))
 }
 
 func TestMessageValidator_CommitStatus(t *testing.T) {
@@ -105,27 +114,80 @@ func TestMessageValidator_IsStructureValid(t *testing.T) {
 	assert.False(t, validator.SyntacticallyValidateMessage(m))
 }
 
+type mockValidator struct {
+	res bool
+}
+
+func (m mockValidator) Validate(*Msg) bool {
+	return m.res
+}
+
+func initPg(t *testing.T, validator *syntaxContextValidator) (*pubGetter, []*Message, Signer) {
+	pg := newPubGetter()
+	msgs := make([]*Message, validator.threshold)
+	sgn := generateSigning(t)
+	for i := 0; i < validator.threshold; i++ {
+		sgn = generateSigning(t) // hold some sgn
+		iMsg := BuildStatusMsg(sgn, NewSetFromValues(value1))
+		msgs[i] = iMsg.Message
+		pg.Track(iMsg)
+	}
+
+	return pg, msgs, sgn
+}
+
 func TestMessageValidator_Aggregated(t *testing.T) {
+	r := require.New(t)
 	validator := defaultValidator()
-	assert.False(t, validator.validateAggregatedMessage(nil, nil))
+	r.Equal(errNilValidators, validator.validateAggregatedMessage(nil, nil))
 	funcs := make([]func(m *Msg) bool, 0)
-	assert.False(t, validator.validateAggregatedMessage(nil, funcs))
+	r.Equal(errNilAggMsgs, validator.validateAggregatedMessage(nil, funcs))
 
 	agg := &aggregatedMessages{}
-	assert.False(t, validator.validateAggregatedMessage(agg, funcs))
-	msgs := make([]*Message, validator.threshold)
-	for i := 0; i < validator.threshold; i++ {
-		iMsg := BuildStatusMsg(generateSigning(t), NewSetFromValues(value1))
-		msgs[i] = iMsg.Message
-	}
-	agg.Messages = msgs
-	assert.True(t, validator.validateAggregatedMessage(agg, funcs))
-	msgs[0].Sig = []byte{1}
-	assert.False(t, validator.validateAggregatedMessage(agg, funcs))
+	r.Equal(errNilMsgsSlice, validator.validateAggregatedMessage(agg, funcs))
 
+	agg.Messages = make([]*Message, validator.threshold+1)
+	r.Equal(errMsgsCountMismatch, validator.validateAggregatedMessage(agg, funcs))
+
+	pg, msgs, sgn := initPg(t, validator)
+
+	validator.validMsgsTracker = pg
+	agg.Messages = msgs
+	r.Nil(validator.validateAggregatedMessage(agg, funcs))
+
+	validator.validMsgsTracker = newPubGetter()
+	tmp := msgs[0].Sig
+	msgs[0].Sig = []byte{1}
+	r.Error(validator.validateAggregatedMessage(agg, funcs))
+
+	msgs[0].Sig = tmp
+	inner := msgs[0].InnerMsg.Values
+	msgs[0].InnerMsg.Values = nil
+	r.Equal(errInnerSyntax, validator.validateAggregatedMessage(agg, funcs))
+
+	msgs[0].InnerMsg.Values = inner
+	validator.roleValidator = &mockValidator{}
+	r.Equal(errInnerEligibility, validator.validateAggregatedMessage(agg, funcs))
+
+	validator.roleValidator = &mockValidator{true}
 	funcs = make([]func(m *Msg) bool, 1)
 	funcs[0] = func(m *Msg) bool { return false }
-	assert.False(t, validator.validateAggregatedMessage(agg, funcs))
+	r.Equal(errInnerFunc, validator.validateAggregatedMessage(agg, funcs))
+
+	funcs[0] = func(m *Msg) bool { return true }
+	m0 := msgs[0]
+	msgs[0] = BuildStatusMsg(sgn, NewSetFromValues(value1)).Message
+	r.Equal(errDupSender, validator.validateAggregatedMessage(agg, funcs))
+
+	validator.validMsgsTracker = pg
+	msgs[0] = m0
+	msgs[len(msgs)-1] = m0
+	r.Equal(errDupSender, validator.validateAggregatedMessage(agg, funcs))
+
+	msgs[0] = BuildStatusMsg(generateSigning(t), NewSetFromValues(value1)).Message
+	r.Nil(pg.PublicKey(msgs[0]))
+	validator.validateAggregatedMessage(agg, funcs)
+	r.NotNil(pg.PublicKey(msgs[0]))
 }
 
 func TestSyntaxContextValidator_PreRoundContext(t *testing.T) {
@@ -187,13 +249,33 @@ func TestMessageValidator_ValidateMessage(t *testing.T) {
 	assert.True(t, v.SyntacticallyValidateMessage(status))
 }
 
-func assertNoErr(r *require.Assertions, expect bool, actual bool, err error) {
-	r.NoError(err)
-	r.Equal(expect, actual)
+type pubGetter struct {
+	mp map[string]*signing.PublicKey
+}
+
+func newPubGetter() *pubGetter {
+	return &pubGetter{make(map[string]*signing.PublicKey)}
+}
+
+func (pg pubGetter) Track(m *Msg) {
+	pg.mp[string(m.Sig)] = m.PubKey
+}
+
+func (pg pubGetter) PublicKey(m *Message) *signing.PublicKey {
+	if pg.mp == nil {
+		return nil
+	}
+
+	p, ok := pg.mp[string(m.Sig)]
+	if !ok {
+		return nil
+	}
+
+	return p
 }
 
 func TestMessageValidator_SyntacticallyValidateMessage(t *testing.T) {
-	validator := newSyntaxContextValidator(signing.NewEdSigner(), 1, validate, &MockStateQuerier{true, nil}, 10, log.NewDefault("Validator"))
+	validator := newSyntaxContextValidator(signing.NewEdSigner(), 1, validate, &MockStateQuerier{true, nil}, 10, truer{}, newPubGetter(), log.NewDefault("Validator"))
 	m := BuildPreRoundMsg(generateSigning(t), NewDefaultEmptySet())
 	assert.False(t, validator.SyntacticallyValidateMessage(m))
 	m = BuildPreRoundMsg(generateSigning(t), NewSetFromValues(value1))
@@ -226,7 +308,7 @@ func TestMessageValidator_validateSVPTypeB(t *testing.T) {
 }
 
 func TestMessageValidator_validateSVP(t *testing.T) {
-	validator := newSyntaxContextValidator(signing.NewEdSigner(), 1, validate, &MockStateQuerier{true, nil}, 10, log.NewDefault("Validator"))
+	validator := newSyntaxContextValidator(signing.NewEdSigner(), 1, validate, &MockStateQuerier{true, nil}, 10, truer{}, newPubGetter(), log.NewDefault("Validator"))
 	m := buildProposalMsg(signing.NewEdSigner(), NewSetFromValues(value1, value2, value3), []byte{})
 	s1 := NewSetFromValues(value1)
 	m.InnerMsg.Svp = buildSVP(-1, s1)

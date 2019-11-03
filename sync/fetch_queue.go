@@ -9,7 +9,6 @@ import (
 )
 
 type FetchPoetProofFunc func(poetProofRef []byte) error
-type GetValidAddressableTxFunc func(tx *types.SerializableSignedTransaction) (*types.AddressableSignedTransaction, error)
 type SValidateAtxFunc func(atx *types.ActivationTx) error
 type CheckLocalFunc func(ids []types.Hash32) (map[types.Hash32]Item, map[types.Hash32]Item, []types.Hash32)
 
@@ -35,9 +34,9 @@ type fetchQueue struct {
 	queue       chan []types.Hash32 //types.TransactionId //todo make buffered
 }
 
-func (vq *fetchQueue) Close() {
-	vq.Info("done")
-	close(vq.queue)
+func (fq *fetchQueue) Close() {
+	fq.Info("done")
+	close(fq.queue)
 }
 
 func concatShortIds(items []types.Hash32) string {
@@ -112,22 +111,22 @@ func (fq *fetchQueue) invalidate(id types.Hash32, valid bool) {
 }
 
 //returns items out of itemIds that are not in the local database
-func (tq *fetchQueue) handle(itemIds []types.Hash32) (map[types.Hash32]Item, error) {
+func (fq *fetchQueue) handle(itemIds []types.Hash32) (map[types.Hash32]Item, error) {
 	if len(itemIds) == 0 {
-		tq.Debug("handle empty item ids slice")
+		fq.Debug("handle empty item ids slice")
 		return nil, nil
 	}
 
-	unprocessedItems, _, missing := tq.checkLocal(itemIds)
+	unprocessedItems, _, missing := fq.checkLocal(itemIds)
 	if len(missing) > 0 {
 
-		output := tq.addToPendingGetCh(missing)
+		output := fq.addToPendingGetCh(missing)
 
 		if success := <-output; !success {
 			return nil, errors.New(fmt.Sprintf("could not fetch all items"))
 		}
 
-		unprocessedItems, _, missing = tq.checkLocal(itemIds)
+		unprocessedItems, _, missing = fq.checkLocal(itemIds)
 		if len(missing) > 0 {
 			return nil, errors.New("could not find all items even though fetch was successful")
 		}
@@ -141,7 +140,7 @@ type txQueue struct {
 	fetchQueue
 }
 
-func NewTxQueue(s *Syncer, txValidator TxValidator) *txQueue {
+func NewTxQueue(s *Syncer) *txQueue {
 	//todo buffersize
 	q := &txQueue{
 		fetchQueue: fetchQueue{
@@ -154,13 +153,13 @@ func NewTxQueue(s *Syncer, txValidator TxValidator) *txQueue {
 			queue:               make(chan []types.Hash32, 10000)},
 	}
 
-	q.handleFetch = updateTxDependencies(q.invalidate, s.txpool, txValidator.GetValidAddressableTx)
+	q.handleFetch = updateTxDependencies(q.invalidate, s.txpool)
 	go q.work()
 	return q
 }
 
 //we could get rid of this if we had a unified id type
-func (tx txQueue) HandleTxs(txids []types.TransactionId) ([]*types.AddressableSignedTransaction, error) {
+func (tx txQueue) HandleTxs(txids []types.TransactionId) ([]*types.Transaction, error) {
 	txItems := make([]types.Hash32, 0, len(txids))
 	for _, i := range txids {
 		txItems = append(txItems, i.Hash32())
@@ -171,33 +170,30 @@ func (tx txQueue) HandleTxs(txids []types.TransactionId) ([]*types.AddressableSi
 		return nil, err
 	}
 
-	txs := make([]*types.AddressableSignedTransaction, 0, len(txres))
+	txs := make([]*types.Transaction, 0, len(txres))
 	for _, i := range txres {
-		txs = append(txs, i.(*types.AddressableSignedTransaction))
+		txs = append(txs, i.(*types.Transaction))
 	}
 
 	return txs, nil
 }
 
-func updateTxDependencies(invalidate func(id types.Hash32, valid bool), txpool TxMemPool, getValidAddrTx GetValidAddressableTxFunc) func(fj fetchJob) {
+func updateTxDependencies(invalidate func(id types.Hash32, valid bool), txpool TxMemPool) func(fj fetchJob) {
 	return func(fj fetchJob) {
 
-		mp := map[types.Hash32]*types.SerializableSignedTransaction{}
+		mp := map[types.Hash32]*types.Transaction{}
 
 		for _, item := range fj.items {
-			mp[item.Hash32()] = item.(*types.SerializableSignedTransaction)
+			mp[item.Hash32()] = item.(*types.Transaction)
 		}
 
 		for _, id := range fj.ids {
 			if item, ok := mp[id]; ok {
-				tx, err := getValidAddrTx(item)
-				if err == nil {
-					txpool.Put(types.TransactionId(id), tx)
-					invalidate(id, true)
-					continue
-				}
+				txpool.Put(types.TransactionId(id), item)
+				invalidate(id, true)
+			} else {
+				invalidate(id, false)
 			}
-			invalidate(id, false)
 		}
 	}
 }
@@ -259,7 +255,7 @@ func updateAtxDependencies(invalidate func(id types.Hash32, valid bool), sValida
 			if atx, ok := mp[id]; ok {
 				err := sValidateAtx(atx)
 				if err == nil {
-					atxpool.Put(atx.Id(), atx)
+					atxpool.Put(atx)
 					invalidate(id, true)
 					continue
 				}

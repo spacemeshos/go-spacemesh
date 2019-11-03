@@ -22,17 +22,13 @@ import (
 type ForBlockInView func(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) (bool, error)) error
 
 type TxMemPool interface {
-	Get(id types.TransactionId) (types.AddressableSignedTransaction, error)
-	PopItems(size int) []types.AddressableSignedTransaction
-	Put(id types.TransactionId, item *types.AddressableSignedTransaction)
-	Invalidate(id types.TransactionId)
+	Get(id types.TransactionId) (types.Transaction, error)
+	Put(id types.TransactionId, item *types.Transaction)
 }
 
 type AtxMemPool interface {
-	Get(id types.AtxId) (types.ActivationTx, error)
-	PopItems(size int) []types.ActivationTx
-	Put(id types.AtxId, item *types.ActivationTx)
-	Invalidate(id types.AtxId)
+	Get(id types.AtxId) (*types.ActivationTx, error)
+	Put(atx *types.ActivationTx)
 }
 
 type PoetDb interface {
@@ -50,7 +46,7 @@ type EligibilityValidator interface {
 }
 
 type TxValidator interface {
-	GetValidAddressableTx(tx *types.SerializableSignedTransaction) (*types.AddressableSignedTransaction, error)
+	AddressExists(addr types.Address) bool
 }
 
 type TickProvider interface {
@@ -209,7 +205,7 @@ func (s *Syncer) run() {
 }
 
 //fires a sync every sm.syncInterval or on force space from outside
-func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool AtxMemPool, sv TxValidator, bv BlockValidator, poetdb PoetDb, conf Configuration, clock TickProvider, logger log.Log) *Syncer {
+func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool AtxMemPool, bv BlockValidator, poetdb PoetDb, conf Configuration, clock TickProvider, logger log.Log) *Syncer {
 
 	srvr := &workerInfra{
 		RequestTimeout: conf.RequestTimeout,
@@ -238,7 +234,7 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool A
 	}
 
 	s.blockQueue = NewValidationQueue(srvr, s.Configuration, s, s.blockCheckLocal, logger.WithName("validQ"))
-	s.txQueue = NewTxQueue(s, sv)
+	s.txQueue = NewTxQueue(s)
 	s.atxQueue = NewAtxQueue(s, s.FetchPoetProof)
 
 	srvr.RegisterBytesMsgHandler(LAYER_HASH, newLayerHashRequestHandler(layers, logger))
@@ -443,14 +439,14 @@ func validateUniqueTxAtx(b *types.Block) error {
 	return nil
 }
 
-func (s *Syncer) blockSyntacticValidation(block *types.Block) ([]*types.AddressableSignedTransaction, []*types.ActivationTx, error) {
+func (s *Syncer) blockSyntacticValidation(block *types.Block) ([]*types.Transaction, []*types.ActivationTx, error) {
 	// validate unique tx atx
 	if err := s.fastValidation(block); err != nil {
 		return nil, nil, err
 	}
 
 	//data availability
-	txs, atxs, err := s.DataAvailabilty(block)
+	txs, atxs, err := s.DataAvailability(block)
 	if err != nil {
 		return nil, nil, fmt.Errorf("DataAvailabilty failed for block %v err: %v", block, err)
 	}
@@ -521,11 +517,11 @@ func validateVotes(blk *types.Block, forBlockfunc ForBlockInView, depth int, lg 
 	return err == nil
 }
 
-func (s *Syncer) DataAvailabilty(blk *types.Block) ([]*types.AddressableSignedTransaction, []*types.ActivationTx, error) {
+func (s *Syncer) DataAvailability(blk *types.Block) ([]*types.Transaction, []*types.ActivationTx, error) {
 
 	wg := sync.WaitGroup{}
 	wg.Add(2)
-	var txres []*types.AddressableSignedTransaction
+	var txres []*types.Transaction
 	var txerr error
 
 	go func() {
@@ -667,7 +663,7 @@ func (s *Syncer) atxCheckLocal(atxIds []types.Hash32) (map[types.Hash32]Item, ma
 		if x, err := s.atxpool.Get(id); err == nil {
 			atx := x
 			s.Debug("found atx, %v in atx pool", id.ShortString())
-			unprocessedItems[id.Hash32()] = &atx
+			unprocessedItems[id.Hash32()] = atx
 		} else {
 			s.Debug("atx %v not in atx pool", id.ShortString())
 			missingInPool = append(missingInPool, id)
@@ -707,12 +703,12 @@ func (s *Syncer) txCheckLocal(txIds []types.Hash32) (map[types.Hash32]Item, map[
 	dbTxs, missing := s.GetTransactions(missingInPool)
 
 	dbItems := make(map[types.Hash32]Item, len(dbTxs))
-	for i, k := range dbTxs {
-		dbItems[i.Hash32()] = k
+	for _, k := range dbTxs {
+		dbItems[k.Hash32()] = k
 	}
 
 	missingItems := make([]types.Hash32, 0, len(missing))
-	for _, i := range missing {
+	for i := range missing {
 		missingItems = append(missingItems, i.Hash32())
 	}
 
@@ -721,7 +717,7 @@ func (s *Syncer) txCheckLocal(txIds []types.Hash32) (map[types.Hash32]Item, map[
 
 func (s *Syncer) blockCheckLocal(blockIds []types.Hash32) (map[types.Hash32]Item, map[types.Hash32]Item, []types.Hash32) {
 	//look in pool
-	var dbItems map[types.Hash32]Item
+	dbItems := make(map[types.Hash32]Item)
 	for _, itemId := range blockIds {
 		var id = util.BytesToUint64(itemId.Bytes())
 		res, err := s.GetBlock(types.BlockID(id))

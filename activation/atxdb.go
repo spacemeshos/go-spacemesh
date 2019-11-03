@@ -5,19 +5,23 @@ import (
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"sync"
 )
 
 const topAtxKey = "topAtxKey"
 
+var errInvalidSig = fmt.Errorf("identity not found when validating signature, invalid atx")
+
 type ActivationDb struct {
 	sync.RWMutex
 	//todo: think about whether we need one db or several
 	IdStore
-	atxs            database.DB
+	atxs            database.Database
 	atxCache        AtxCache
 	meshDb          *mesh.MeshDB
 	LayersPerEpoch  uint16
@@ -26,21 +30,41 @@ type ActivationDb struct {
 	processAtxMutex sync.Mutex
 }
 
-func NewActivationDb(dbstore database.DB, idstore IdStore, meshDb *mesh.MeshDB, layersPerEpoch uint16, nipstValidator NipstValidator, log log.Log) *ActivationDb {
+func NewActivationDb(dbstore database.Database, idstore IdStore, meshDb *mesh.MeshDB, layersPerEpoch uint16, nipstValidator NipstValidator, log log.Log) *ActivationDb {
 	return &ActivationDb{atxs: dbstore, atxCache: NewAtxCache(20), meshDb: meshDb, nipstValidator: nipstValidator, LayersPerEpoch: layersPerEpoch, IdStore: idstore, log: log}
+}
+
+func (db *ActivationDb) ProcessAtxs(atxs []*types.ActivationTx) error {
+	batch := db.atxs.NewBatch()
+	seenMinerIds := map[string]struct{}{}
+	for _, atx := range atxs {
+		minerId := atx.NodeId.Key
+		if _, found := seenMinerIds[minerId]; found {
+			// TODO: Blacklist this miner
+			// TODO: Ensure that these are two different, syntactically valid ATXs for the same epoch, otherwise the
+			//  miner did nothing wrong
+			db.log.With().Error("found miner with multiple ATXs published in same block",
+				log.NodeId(atx.NodeId.ShortString()), log.AtxId(atx.ShortString()))
+		}
+		err := db.ProcessAtx(batch, atx)
+		if err != nil {
+			return err
+		}
+	}
+	return batch.Write()
 }
 
 // ProcessAtx validates the active set size declared in the atx, and contextually validates the atx according to atx
 // validation rules it then stores the atx with flag set to validity of the atx.
 //
 // ATXs received as input must be already syntactically valid. Only contextual validation is performed.
-func (db *ActivationDb) ProcessAtx(atx *types.ActivationTx) {
+func (db *ActivationDb) ProcessAtx(batch database.Batch, atx *types.ActivationTx) error {
 	db.processAtxMutex.Lock()
 	defer db.processAtxMutex.Unlock()
 
 	eatx, _ := db.GetAtx(atx.Id())
-	if eatx != nil {
-		return
+	if eatx != nil { // Already processed
+		return nil
 	}
 	epoch := atx.PubLayerIdx.GetEpoch(db.LayersPerEpoch)
 	db.log.With().Info("processing atx", log.AtxId(atx.ShortString()), log.EpochId(uint64(epoch)),
@@ -48,18 +72,20 @@ func (db *ActivationDb) ProcessAtx(atx *types.ActivationTx) {
 	err := db.ContextuallyValidateAtx(&atx.ActivationTxHeader)
 	if err != nil {
 		db.log.With().Error("ATX failed contextual validation", log.AtxId(atx.ShortString()), log.Err(err))
+		// TODO: Blacklist this miner
 	} else {
 		db.log.With().Info("ATX is valid", log.AtxId(atx.ShortString()))
 	}
 	err = db.StoreAtx(epoch, atx)
 	if err != nil {
-		db.log.With().Error("cannot store atx", log.AtxId(atx.ShortString()), log.Err(err))
+		return fmt.Errorf("cannot store atx %s: %v", atx.ShortString(), err)
 	}
 
 	err = db.StoreNodeIdentity(atx.NodeId)
 	if err != nil {
 		db.log.With().Error("cannot store node identity", log.NodeId(atx.NodeId.ShortString()), log.AtxId(atx.ShortString()), log.Err(err))
 	}
+	return nil
 }
 
 func (db *ActivationDb) createTraversalActiveSetCounterFunc(countedAtxs map[string]types.AtxId, penalties map[string]struct{}, layersPerEpoch uint16, epoch types.EpochId) func(b *types.Block) (bool, error) {
@@ -187,7 +213,18 @@ func (db *ActivationDb) CalcActiveSetFromView(view []types.BlockID, pubEpoch typ
 // - ATX LayerID is NipstLayerTime or less after the PositioningATX LayerID.
 // - The ATX view of the previous epoch contains ActiveSetSize activations.
 func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
+	pub, err := types.ExtractPublicKey(atx)
+	if err != nil {
+		return fmt.Errorf("cannot validate atx sig atx id %v err %v", atx.ShortString(), err)
+	}
+	if atx.NodeId.Key != pub.String() {
+		return fmt.Errorf("node ids don't match")
+	}
 	if atx.PrevATXId != *types.EmptyAtxId {
+		err = db.ValidateSignedAtx(*pub, atx)
+		if err != nil { // means there is no such identity
+			return fmt.Errorf("no id found %v err %v", atx.ShortString(), err)
+		}
 		prevATX, err := db.GetAtx(atx.PrevATXId)
 		if err != nil {
 			return fmt.Errorf("validation failed: prevATX not found: %v", err)
@@ -228,8 +265,7 @@ func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error 
 		if !bytes.Equal(atx.Commitment.MerkleRoot, atx.CommitmentMerkleRoot) {
 			return errors.New("commitment merkle root included in challenge is not equal to the merkle root included in the proof")
 		}
-
-		if err := db.nipstValidator.VerifyPost(atx.Commitment, atx.Nipst.Space); err != nil {
+		if err := db.nipstValidator.VerifyPost(*pub, atx.Commitment, atx.Nipst.Space); err != nil {
 			return fmt.Errorf("invalid commitment proof: %v", err)
 		}
 	}
@@ -269,7 +305,8 @@ func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error 
 	}
 	db.log.With().Info("Validated NIPST", log.String("challenge_hash", hash.ShortString()), log.AtxId(atx.ShortString()))
 
-	if err = db.nipstValidator.Validate(atx.Nipst, *hash); err != nil {
+	pubKey := signing.NewPublicKey(util.Hex2Bytes(atx.NodeId.Key))
+	if err = db.nipstValidator.Validate(*pubKey, atx.Nipst, *hash); err != nil {
 		return fmt.Errorf("NIPST not valid: %v", err)
 	}
 
@@ -532,4 +569,21 @@ func (db *ActivationDb) IsIdentityActive(edId string, layer types.LayerID) (*typ
 
 	// lastAtxTargetEpoch = epoch
 	return &nodeId, atx.TargetEpoch(db.LayersPerEpoch) == epoch, atx.Id(), nil
+}
+
+// ValidateSignedAtx extracts public key from message and verifies public key exists in IdStore, this is how we validate
+// ATX signature. If this is the first ATX it is considered valid anyways and ATX syntactic validation will determine ATX validity
+func (db *ActivationDb) ValidateSignedAtx(pubKey signing.PublicKey, signedAtx *types.ActivationTx) error {
+	// this is the first occurrence of this identity, we cannot validate simply by extracting public key
+	// pass it down to Atx handling so that atx can be syntactically verified and identity could be registered.
+	if signedAtx.PrevATXId == *types.EmptyAtxId {
+		return nil
+	}
+
+	pubString := pubKey.String()
+	_, err := db.GetIdentity(pubString)
+	if err != nil { // means there is no such identity
+		return errInvalidSig
+	}
+	return nil
 }

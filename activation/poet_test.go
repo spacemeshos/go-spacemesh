@@ -1,4 +1,4 @@
-package nipst
+package activation
 
 import (
 	"crypto/rand"
@@ -44,7 +44,7 @@ func TestRPCPoet(t *testing.T) {
 	c, err := newRPCPoetHarnessClient()
 	assert.NotNil(c)
 	defer func() {
-		err := c.CleanUp()
+		err := c.Teardown(true)
 		assert.NoError(err)
 	}()
 	assert.NoError(err)

@@ -1,8 +1,9 @@
-package nipst
+package activation
 
 import (
 	"crypto/rand"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/require"
 	"testing"
 )
@@ -26,7 +27,8 @@ func TestPostClient(t *testing.T) {
 		assert.NoError(err)
 	}()
 
-	err = verifyPost(commitment, postCfg.SpacePerUnit, postCfg.NumProvenLabels, postCfg.Difficulty)
+	key_id := signing.NewPublicKey(id)
+	err = verifyPost(*key_id, commitment, postCfg.SpacePerUnit, postCfg.NumProvenLabels, postCfg.Difficulty)
 	assert.NoError(err)
 
 	challenge := []byte("this is a challenge")
@@ -36,6 +38,6 @@ func TestPostClient(t *testing.T) {
 	assert.Equal([]byte(proof.Challenge), challenge[:])
 
 	log.Info("space %v", postCfg.SpacePerUnit)
-	err = verifyPost(proof, postCfg.SpacePerUnit, postCfg.NumProvenLabels, postCfg.Difficulty)
+	err = verifyPost(*key_id, proof, postCfg.SpacePerUnit, postCfg.NumProvenLabels, postCfg.Difficulty)
 	assert.NoError(err)
 }

@@ -159,18 +159,21 @@ func newSwarm(ctx context.Context, config config.Config, newNode bool, persist b
 	mux := NewUDPMux(s.lNode, s.lookupFunc, udpnet, s.lNode.Log)
 	s.udpServer = mux
 
-	if err != nil {
-		return nil, err
-	}
 	// todo : if discovery on
 	s.discover = discovery.New(l, config.SwarmConfig, s.udpServer) // create table and discovery protocol
 
 	cpool := connectionpool.NewConnectionPool(s.network, l.PublicKey())
 
-	s.network.SubscribeOnNewRemoteConnections(cpool.OnNewConnection)
+	s.network.SubscribeOnNewRemoteConnections(func(nce net.NewConnectionEvent) {
+		err := cpool.OnNewConnection(nce)
+		if err != nil {
+			s.lNode.Warning("adding incoming connection err=", err)
+			// no need to continue since this means connection already exists.
+			return
+		}
+		s.onNewConnection(nce)
+	})
 	s.network.SubscribeClosingConnections(cpool.OnClosedConnection)
-
-	s.network.SubscribeOnNewRemoteConnections(s.onNewConnection)
 	s.network.SubscribeClosingConnections(s.onClosedConnection)
 
 	s.cPool = cpool
@@ -189,15 +192,18 @@ func (s *swarm) onNewConnection(nce net.NewConnectionEvent) {
 	// todo: consider doing cpool actions from here instead of registering cpool as well.
 	err := s.addIncomingPeer(nce.Node.PublicKey())
 	if err != nil {
+		s.lNode.Warning("Error adding new connection %v, err: %v", nce.Node.PublicKey(), err)
 		// todo: send rejection reason
+		// todo: remove from connection pool
 		nce.Conn.Close()
 	}
 }
 
-func (s *swarm) onClosedConnection(c net.Connection) {
+func (s *swarm) onClosedConnection(cwe net.ConnectionWithErr) {
 	// we don't want to block, we know this node's connection was closed.
-	// todo: consider recconnecting
-	s.Disconnect(c.RemotePublicKey())
+	// todo: pass on closing reason, if we closed the connection.
+	// 	mark address book or ban if malicious activity recognised
+	s.Disconnect(cwe.Conn.RemotePublicKey())
 }
 
 // Start starts the p2p service. if configured, bootstrap is started in the background.
@@ -355,7 +361,7 @@ func (s *swarm) sendMessageImpl(peerPubKey p2pcrypto.PublicKey, protocol string,
 }
 
 // RegisterDirectProtocol registers an handler for direct messaging based `protocol`
-func (s *swarm) RegisterDirectProtocol(protocol string) chan service.DirectMessage {
+func (s *swarm) RegisterDirectProtocol(protocol string) chan service.DirectMessage { // TODO: not used - remove
 	mchan := make(chan service.DirectMessage, s.config.BufferSize)
 	s.protocolHandlerMutex.Lock()
 	s.directProtocolHandlers[protocol] = mchan
@@ -375,8 +381,9 @@ func (s *swarm) RegisterGossipProtocol(protocol string) chan service.GossipMessa
 // Shutdown sends a shutdown signal to all running services of swarm and then runs an internal shutdown to cleanup.
 func (s *swarm) Shutdown() {
 	close(s.shutdown)
-	s.network.Shutdown()
+	s.gossip.Close()
 	s.cPool.Shutdown()
+	s.network.Shutdown()
 	s.udpServer.Shutdown()
 	s.discover.Shutdown()
 
@@ -525,9 +532,9 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 	p2pmeta := service.P2PMetadata{msg.Conn.RemoteAddr()}
 
 	// TODO: get rid of mutexes. (Blocker: registering protocols after `Start`. currently only known place is Test_Gossiping
-	s.protocolHandlerMutex.Lock()
+	s.protocolHandlerMutex.RLock()
 	_, ok := s.gossipProtocolHandlers[pm.Metadata.NextProtocol]
-	s.protocolHandlerMutex.Unlock()
+	s.protocolHandlerMutex.RUnlock()
 
 	s.lNode.Debug("Handle %v message from <<  %v", pm.Metadata.NextProtocol, msg.Conn.RemotePublicKey().String())
 
