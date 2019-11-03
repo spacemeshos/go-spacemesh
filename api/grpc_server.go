@@ -72,24 +72,27 @@ func (s SpacemeshGrpcService) GetNonce(ctx context.Context, in *pb.AccountId) (*
 func (s SpacemeshGrpcService) SubmitTransaction(ctx context.Context, in *pb.SignedTransaction) (*pb.TxConfirmation, error) {
 	log.Info("GRPC SubmitTransaction msg")
 
-	signedTx := &types.SerializableSignedTransaction{}
-	err := types.BytesToInterface(in.Tx, signedTx)
+	tx, err := types.BytesAsTransaction(in.Tx)
 	if err != nil {
 		log.Error("failed to deserialize tx, error %v", err)
 		return nil, err
 	}
-	log.Info("GRPC SubmitTransaction to address: %s (len: %v), amount: %v gaslimit: %v, price: %v", signedTx.Recipient.Short(), len(signedTx.Recipient), signedTx.Amount, signedTx.GasLimit, signedTx.GasPrice)
-	_, err = s.Tx.ValidateTransactionSignature(signedTx)
-	if err != nil {
-		log.Error("tx failed to validate signature, error %v", err)
+	log.Info("GRPC SubmitTransaction to address: %s (len: %v), amount: %v gaslimit: %v, fee: %v",
+		tx.Recipient.Short(), len(tx.Recipient), tx.Amount, tx.GasLimit, tx.Fee)
+	if err := tx.CalcAndSetOrigin(); err != nil {
+		log.With().Error("failed to calc origin", log.Err(err))
 		return nil, err
 	}
-	id := types.GetTransactionId(signedTx)
-	hexIdStr := hex.EncodeToString(id[:])
-	log.Info("GRPC SubmitTransaction BROADCAST tx. address %x (len %v), gaslimit %v, price %v id %v", signedTx.Recipient, len(signedTx.Recipient), signedTx.GasLimit, signedTx.GasPrice, hexIdStr[:5])
+	if !s.Tx.AddressExists(tx.Origin()) {
+		log.With().Error("tx failed to validate signature",
+			log.TxId(tx.Id().ShortString()), log.String("origin", tx.Origin().Short()))
+		return nil, err
+	}
+	log.Info("GRPC SubmitTransaction BROADCAST tx. address %x (len %v), gaslimit %v, fee %v id %v",
+		tx.Recipient, len(tx.Recipient), tx.GasLimit, tx.Fee, tx.Id().ShortString())
 	go s.Network.Broadcast(miner.IncomingTxProtocol, in.Tx)
 	log.Info("GRPC SubmitTransaction returned msg ok")
-	return &pb.TxConfirmation{Value: "ok", Id: hexIdStr}, nil
+	return &pb.TxConfirmation{Value: "ok", Id: hex.EncodeToString(tx.Id().Bytes())}, nil
 }
 
 // P2P API
@@ -125,7 +128,7 @@ func (s SpacemeshGrpcService) StopService() {
 }
 
 type TxAPI interface {
-	ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (types.Address, error)
+	AddressExists(addr types.Address) bool
 }
 
 // NewGrpcService create a new grpc service using config data.

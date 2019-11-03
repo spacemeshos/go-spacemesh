@@ -50,8 +50,9 @@ func (t *AtxDbMock) GetNipst(id types.AtxId) (*types.NIPST, error) {
 	return t.nipsts[id], nil
 }
 
-func (t *AtxDbMock) ProcessAtx(atx *types.ActivationTx) {
-	t.ProcCnt++
+func (t *AtxDbMock) ProcessAtxs(atxs []*types.ActivationTx) error {
+	t.ProcCnt += len(atxs)
+	return nil
 }
 
 func (AtxDbMock) SyntacticallyValidateAtx(atx *types.ActivationTx) error {

@@ -50,10 +50,10 @@ jobs:
     script:
       - make dockertest-hare
     if: branch = develop AND type != pull_request
-  - name: "Run sync system tests"
-    script:
-      - make dockertest-sync
-    if: branch = develop AND type != pull_request
+#  - name: "Run sync system tests"
+#    script:
+#      - make dockertest-sync
+#    if: branch = develop AND type != pull_request
   - name: "Run late nodes system test"
     script:
       - make dockertest-late-nodes

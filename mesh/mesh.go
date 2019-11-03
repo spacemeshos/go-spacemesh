@@ -1,14 +1,17 @@
 package mesh
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/seehuhn/mt19937"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/crypto/sha3"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/rlp"
+	"github.com/spacemeshos/sha256-simd"
 	"math/big"
+	"math/rand"
 	"sort"
 	"sync"
 )
@@ -29,10 +32,10 @@ type MeshValidator interface {
 }
 
 type TxProcessor interface {
-	ApplyTransactions(layer types.LayerID, transactions Transactions) (uint32, error)
+	ApplyTransactions(layer types.LayerID, txs []*types.Transaction) (int, error)
 	ApplyRewards(layer types.LayerID, miners []types.Address, underQuota map[types.Address]int, bonusReward, diminishedReward *big.Int)
 	ValidateSignature(s types.Signed) (types.Address, error)
-	ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (types.Address, error) //todo use validate signature across the bord and remove this
+	AddressExists(addr types.Address) bool
 }
 
 type TxMemPoolInValidator interface {
@@ -44,10 +47,14 @@ type AtxMemPoolInValidator interface {
 }
 
 type AtxDB interface {
-	ProcessAtx(atx *types.ActivationTx)
+	ProcessAtxs(atxs []*types.ActivationTx) error
 	GetAtx(id types.AtxId) (*types.ActivationTxHeader, error)
 	GetFullAtx(id types.AtxId) (*types.ActivationTx, error)
 	SyntacticallyValidateAtx(atx *types.ActivationTx) error
+}
+
+type BlockBuilder interface {
+	ValidateAndAddTxToPool(tx *types.Transaction) error
 }
 
 type Mesh struct {
@@ -56,6 +63,7 @@ type Mesh struct {
 	AtxDB
 	TxProcessor
 	MeshValidator
+	blockBuilder   BlockBuilder
 	txInvalidator  TxMemPoolInValidator
 	atxInvalidator AtxMemPoolInValidator
 	config         Config
@@ -86,59 +94,8 @@ func NewMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh MeshValidator, t
 	return ll
 }
 
-//todo: this object should be splitted into two parts: one is the actual value serialized into trie, and an containig obj with caches
-type Transaction struct {
-	AccountNonce uint64
-	GasPrice     *big.Int
-	GasLimit     uint64
-	Recipient    *types.Address
-	Origin       types.Address //todo: remove this, should be calculated from sig.
-	Amount       *big.Int
-	Payload      []byte
-
-	//todo: add signatures
-
-	hash *types.Hash32
-}
-
-func (tx *Transaction) Hash() types.Hash32 {
-	if tx.hash == nil {
-		hash := rlpHash(tx)
-		tx.hash = &hash
-	}
-	return *tx.hash
-}
-
-type Transactions []*Transaction
-
-func NewTransaction(nonce uint64, origin types.Address, destination types.Address,
-	amount *big.Int, gasLimit uint64, gasPrice *big.Int) *Transaction {
-	return &Transaction{
-		AccountNonce: nonce,
-		Origin:       origin,
-		Recipient:    &destination,
-		Amount:       amount,
-		GasLimit:     gasLimit,
-		GasPrice:     gasPrice,
-		hash:         nil,
-		Payload:      nil,
-	}
-}
-
-func rlpHash(x interface{}) (h types.Hash32) {
-	hw := sha3.NewKeccak256()
-	rlp.Encode(hw, x)
-	hw.Sum(h[:0])
-	return h
-}
-
-func SerializableSignedTransaction2StateTransaction(tx *types.AddressableSignedTransaction) *Transaction {
-	price := &big.Int{}
-	price.SetUint64(tx.GasPrice)
-
-	amount := &big.Int{}
-	amount.SetUint64(tx.Amount)
-	return NewTransaction(tx.AccountNonce, tx.Address, tx.Recipient, amount, tx.GasLimit, price)
+func (m *Mesh) SetBlockBuilder(blockBuilder BlockBuilder) {
+	m.blockBuilder = blockBuilder
 }
 
 func (m *Mesh) ValidatedLayer() types.LayerID {
@@ -170,7 +127,7 @@ func (m *Mesh) GetLayer(index types.LayerID) (*types.Layer, error) {
 		return nil, err
 	}
 
-	l := types.NewLayer(types.LayerID(index))
+	l := types.NewLayer(index)
 	l.SetBlocks(mBlocks)
 
 	return l, nil
@@ -194,68 +151,114 @@ func (m *Mesh) ValidateLayer(lyr *types.Layer) {
 	m.Info("done validating layer %v", lyr.Index())
 }
 
-func SortBlocks(blocks []*types.Block) []*types.Block {
-	//not final sorting method, need to talk about this
-	sort.Slice(blocks, func(i, j int) bool { return blocks[i].ID() < blocks[j].ID() })
-	return blocks
-}
-
-func (m *Mesh) ExtractUniqueOrderedTransactions(l *types.Layer) []*Transaction {
-	txs := make([]*Transaction, 0, layerSize)
-	sortedBlocks := SortBlocks(l.Blocks())
-
-	txids := make(map[types.TransactionId]struct{})
-
-	for _, b := range sortedBlocks {
+func (m *Mesh) ExtractUniqueOrderedTransactions(l *types.Layer) (validBlockTxs, invalidBlockTxs []*types.Transaction, err error) {
+	// Separate blocks by validity
+	var validBlocks, invalidBlocks []*types.Block
+	for _, b := range l.Blocks() {
 		valid, err := m.ContextualValidity(b.ID())
-		events.Publish(events.ValidBlock{Id: uint64(b.ID()), Valid: valid})
-		if !valid {
-			if err != nil {
-				m.With().Error("could not get contextual validity for block", log.BlockId(uint64(b.ID())), log.Err(err))
-			}
-			m.With().Info("block not contextually valid", log.BlockId(uint64(b.ID()))) // TODO: do we want this log? is it info?
-			continue
+		if err != nil {
+			return nil, nil, fmt.Errorf("could not get contextual validity for block %v: %v", b.ID(), err)
 		}
-
-		for _, id := range b.TxIds {
-			txids[id] = struct{}{}
+		if valid {
+			validBlocks = append(validBlocks, b)
+		} else {
+			invalidBlocks = append(invalidBlocks, b)
 		}
 	}
 
-	idSlice := make([]types.TransactionId, 0, len(txids))
-	for id := range txids {
-		idSlice = append(idSlice, id)
+	// Deterministically sort valid blocks
+	sort.Slice(validBlocks, func(i, j int) bool {
+		return validBlocks[i].ID() < validBlocks[j].ID()
+	})
+
+	// `layerHash` is the sha256 sum of sorted layer block IDs
+	layerHash := sha256.New()
+	for _, b := range validBlocks {
+		layerHash.Write(b.ID().AsHash32().Bytes())
 	}
 
-	stxs, missing := m.GetTransactions(idSlice)
-	if len(missing) != 0 {
-		m.Error("could not find transactions %v from layer %v", missing, l.Index())
-		m.Panic("could not find transactions %v", missing)
-	}
+	// Initialize a Mersenne Twister seeded with layerHash
+	mt := mt19937.New()
+	mt.SeedFromSlice(toUint64Slice(layerHash.Sum(nil)))
+	rng := rand.New(mt)
 
-	for _, tx := range stxs {
-		//todo: think about these conversions.. are they needed?
-		txs = append(txs, SerializableSignedTransaction2StateTransaction(tx))
-	}
+	// Perform a Fisher-Yates shuffle on the blocks
+	rng.Shuffle(len(validBlocks), func(i, j int) {
+		validBlocks[i], validBlocks[j] = validBlocks[j], validBlocks[i]
+	})
 
-	return MergeDoubles(txs)
+	// Get and return unique transactions
+	seenTxIds := map[types.TransactionId]struct{}{}
+	return m.getTxs(uniqueTxIds(validBlocks, seenTxIds), l), m.getTxs(uniqueTxIds(invalidBlocks, seenTxIds), l), nil
 }
 
-func (m *Mesh) PushTransactions(oldBase types.LayerID, newBase types.LayerID) {
-	for i := oldBase; i < newBase; i++ {
+func toUint64Slice(b []byte) []uint64 {
+	l := len(b)
+	var s []uint64
+	for i := 0; i < l; i += 8 {
+		s = append(s, binary.LittleEndian.Uint64(b[i:util.Min(l, i+8)]))
+	}
+	return s
+}
 
+func uniqueTxIds(blocks []*types.Block, seenTxIds map[types.TransactionId]struct{}) []types.TransactionId {
+	var txIds []types.TransactionId
+	for _, b := range blocks {
+		for _, id := range b.TxIds {
+			if _, found := seenTxIds[id]; found {
+				continue
+			}
+			txIds = append(txIds, id)
+			seenTxIds[id] = struct{}{}
+		}
+	}
+	return txIds
+}
+
+func (m *Mesh) getTxs(txIds []types.TransactionId, l *types.Layer) []*types.Transaction {
+	txs, missing := m.GetTransactions(txIds)
+	if len(missing) != 0 {
+		m.Panic("could not find transactions %v from layer %v", missing, l.Index())
+	}
+	return txs
+}
+
+func (m *Mesh) PushTransactions(oldBase, newBase types.LayerID) {
+	for i := oldBase; i < newBase; i++ {
 		l, err := m.GetLayer(i)
 		if err != nil || l == nil {
-			m.Error("could not get layer %v  !!!!!!!!!!!!!!!! %v ", i, err) //todo handle error
+			m.With().Error("failed to retrieve layer", log.LayerId(uint64(i)), log.Err(err))
+			// TODO: We want to panic here once we have a way to "remember" that we didn't apply these txs
+			//  e.g. persist the last layer transactions were applied from and use that instead of `oldBase`
 			return
 		}
 
-		merged := m.ExtractUniqueOrderedTransactions(l)
-		x, err := m.ApplyTransactions(types.LayerID(i), merged)
+		validBlockTxs, invalidBlockTxs, err := m.ExtractUniqueOrderedTransactions(l)
 		if err != nil {
-			m.Log.Error("cannot apply transactions %v", err)
+			panic("failed to extract txs: " + err.Error())
 		}
-		m.Log.Info("applied %v transactions in new pbase is %d apply result was %d", len(merged), newBase, x)
+		numFailedTxs, err := m.ApplyTransactions(i, validBlockTxs)
+		if err != nil {
+			m.With().Error("failed to apply transactions",
+				log.LayerId(uint64(i)), log.Int("num_failed_txs", numFailedTxs), log.Err(err))
+			// TODO: We want to panic here once we have a way to "remember" that we didn't apply these txs
+			//  e.g. persist the last layer transactions were applied from and use that instead of `oldBase`
+		}
+		m.removeFromUnappliedTxs(validBlockTxs, invalidBlockTxs, i)
+		for _, tx := range invalidBlockTxs {
+			err = m.blockBuilder.ValidateAndAddTxToPool(tx)
+			// We ignore errors here, since they mean that the tx is no longer valid and we shouldn't re-add it
+			if err == nil {
+				m.With().Info("transaction from contextually invalid block re-added to mempool",
+					log.TxId(tx.Id().ShortString()))
+			}
+		}
+		m.With().Info("applied transactions",
+			log.Int("valid_block_txs", len(validBlockTxs)),
+			log.Int("invalid_block_txs", len(invalidBlockTxs)),
+			log.Uint64("new_base", uint64(newBase)),
+			log.Int("num_failed_txs", numFailedTxs),
+		)
 	}
 }
 
@@ -299,23 +302,32 @@ func (m *Mesh) AddBlock(blk *types.Block) error {
 	return nil
 }
 
-func (m *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.AddressableSignedTransaction, atxs []*types.ActivationTx) error {
-	m.Debug("add block %d", blk.ID())
+func (m *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.Transaction, atxs []*types.ActivationTx) error {
+	m.With().Debug("adding block", log.BlockId(uint64(blk.ID())))
 
-	events.Publish(events.NewBlock{Id: uint64(blk.ID()), Atx: blk.ATXID.ShortString(), Layer: uint64(blk.LayerIndex)})
-	for _, t := range atxs {
-		//todo this should return an error
-		m.AtxDB.ProcessAtx(t)
-	}
-
+	// Store transactions (doesn't have to be rolled back if other writes fail)
 	err := m.writeTransactions(txs)
 	if err != nil {
-		return fmt.Errorf("could not write transactions of block %v database %v", blk.ID(), err)
+		return fmt.Errorf("could not write transactions of block %v database: %v", blk.ID(), err)
+	}
+	if err := m.addToUnappliedTxs(txs, blk.LayerIndex); err != nil {
+		return fmt.Errorf("failed to add to unappliedTxs: %v", err)
 	}
 
+	// Store block (delete if storing ATXs fails)
 	if err := m.MeshDB.AddBlock(blk); err != nil && err != ErrAlreadyExist {
 		m.With().Error("failed to add block", log.BlockId(uint64(blk.ID())), log.Err(err))
 		return err
+	}
+
+	// Store ATXs (atomically, delete the block on failure)
+	err = m.AtxDB.ProcessAtxs(atxs)
+	if err != nil {
+		// Roll back adding the block (delete it)
+		if err := m.blocks.Delete(blk.ID().ToBytes()); err != nil {
+			m.With().Warning("failed to roll back adding a block", log.Err(err), log.BlockId(uint64(blk.ID())))
+		}
+		return fmt.Errorf("failed to process ATXs: %v", err)
 	}
 
 	m.SetLatestLayer(blk.Layer())
@@ -325,7 +337,8 @@ func (m *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.AddressableSignedT
 	//invalidate txs and atxs from pool
 	m.invalidateFromPools(&blk.MiniBlock)
 
-	m.Debug("added block %d", blk.ID())
+	events.Publish(events.NewBlock{Id: uint64(blk.ID()), Atx: blk.ATXID.ShortString(), Layer: uint64(blk.LayerIndex)})
+	m.With().Debug("added block", log.BlockId(uint64(blk.ID())))
 	return nil
 }
 
@@ -436,12 +449,15 @@ func (m *Mesh) AccumulateRewards(rewardLayer types.LayerID, params Config) {
 		}
 	}
 	//accumulate all blocks rewards
-	merged := m.ExtractUniqueOrderedTransactions(l)
+	merged, _, err := m.ExtractUniqueOrderedTransactions(l)
+	if err != nil {
+		panic("failed to extract txs")
+	}
 
 	rewards := &big.Int{}
 	processed := 0
 	for _, tx := range merged {
-		res := new(big.Int).Mul(tx.GasPrice, params.SimpleTxCost)
+		res := new(big.Int).SetUint64(tx.Fee)
 		processed++
 		rewards.Add(rewards, res)
 	}
@@ -453,7 +469,7 @@ func (m *Mesh) AccumulateRewards(rewardLayer types.LayerID, params Config) {
 	log.Info("fees reward: %v total processed %v total txs %v merged %v blocks: %v", rewards.Uint64(), processed, len(merged), len(merged), numBlocks)
 
 	bonusReward, diminishedReward := calculateActualRewards(rewards, numBlocks, params, len(uq))
-	m.ApplyRewards(types.LayerID(rewardLayer), ids, uq, bonusReward, diminishedReward)
+	m.ApplyRewards(rewardLayer, ids, uq, bonusReward, diminishedReward)
 	//todo: should miner id be sorted in a deterministic order prior to applying rewards?
 
 }

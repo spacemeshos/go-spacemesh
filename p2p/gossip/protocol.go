@@ -21,7 +21,6 @@ const protocolVer = "0"
 // Interface for the underlying p2p layer
 type baseNetwork interface {
 	SendMessage(peerPubkey p2pcrypto.PublicKey, protocol string, payload []byte) error
-	RegisterDirectProtocol(protocol string) chan service.DirectMessage
 	SubscribePeerEvents() (conn chan p2pcrypto.PublicKey, disc chan p2pcrypto.PublicKey)
 	ProcessGossipProtocolMessage(sender p2pcrypto.PublicKey, protocol string, data service.Data, validationCompletedChan chan service.MessageValidation) error
 }

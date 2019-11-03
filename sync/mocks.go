@@ -19,7 +19,7 @@ func (PoetDbMock) HasProof(proofRef []byte) bool { return true }
 
 func (PoetDbMock) ValidateAndStore(proofMessage *types.PoetProofMessage) error { return nil }
 
-func (*PoetDbMock) SubscribeToProofRef(poetId [types.PoetServiceIdLength]byte, roundId uint64) chan []byte {
+func (*PoetDbMock) SubscribeToProofRef(poetId []byte, roundId string) chan []byte {
 	ch := make(chan []byte)
 	go func() {
 		ch <- []byte("hello there")
@@ -78,13 +78,12 @@ func (mlg *MeshValidatorMock) ContextualValidity(id types.BlockID) bool   { retu
 
 type StateMock struct{}
 
-func (s *StateMock) ApplyTransactions(id types.LayerID, tx mesh.Transactions) (uint32, error) {
+func (s *StateMock) ApplyTransactions(id types.LayerID, tx []*types.Transaction) (uint32, error) {
 	return 0, nil
 }
 
 func ConfigTst() mesh.Config {
 	return mesh.Config{
-		SimpleTxCost:   big.NewInt(10),
 		BaseReward:     big.NewInt(5000),
 		PenaltyPercent: big.NewInt(15),
 		TxQuota:        15,
@@ -94,7 +93,7 @@ func ConfigTst() mesh.Config {
 
 type MockState struct{}
 
-func (MockState) ApplyTransactions(layer types.LayerID, txs mesh.Transactions) (uint32, error) {
+func (MockState) ApplyTransactions(layer types.LayerID, txs []*types.Transaction) (int, error) {
 	return 0, nil
 }
 
@@ -105,8 +104,8 @@ func (MockState) ValidateSignature(signed types.Signed) (types.Address, error) {
 func (MockState) ApplyRewards(layer types.LayerID, miners []types.Address, underQuota map[types.Address]int, bonusReward, diminishedReward *big.Int) {
 }
 
-func (MockState) ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (types.Address, error) {
-	return types.Address{}, nil
+func (MockState) AddressExists(addr types.Address) bool {
+	return true
 }
 
 func (s *StateMock) ApplyRewards(layer types.LayerID, miners []string, underQuota map[string]int, bonusReward, diminishedReward *big.Int) {
@@ -136,13 +135,13 @@ func (*ValidatorMock) VerifyPost(id signing.PublicKey, proof *types.PostProof, s
 
 type MockTxMemPool struct{}
 
-func (MockTxMemPool) Get(id types.TransactionId) (types.AddressableSignedTransaction, error) {
-	return types.AddressableSignedTransaction{}, nil
+func (MockTxMemPool) Get(id types.TransactionId) (types.Transaction, error) {
+	return types.Transaction{}, nil
 }
-func (MockTxMemPool) PopItems(size int) []types.AddressableSignedTransaction {
+func (MockTxMemPool) GetAllItems() []*types.Transaction {
 	return nil
 }
-func (MockTxMemPool) Put(id types.TransactionId, item *types.AddressableSignedTransaction) {
+func (MockTxMemPool) Put(id types.TransactionId, item *types.Transaction) {
 
 }
 func (MockTxMemPool) Invalidate(id types.TransactionId) {
@@ -151,15 +150,15 @@ func (MockTxMemPool) Invalidate(id types.TransactionId) {
 
 type MockAtxMemPool struct{}
 
-func (MockAtxMemPool) Get(id types.AtxId) (types.ActivationTx, error) {
-	return types.ActivationTx{}, nil
+func (MockAtxMemPool) Get(id types.AtxId) (*types.ActivationTx, error) {
+	return &types.ActivationTx{}, nil
 }
 
-func (MockAtxMemPool) PopItems(size int) []types.ActivationTx {
+func (MockAtxMemPool) GetAllItems() []types.ActivationTx {
 	return nil
 }
 
-func (MockAtxMemPool) Put(id types.AtxId, item *types.ActivationTx) {
+func (MockAtxMemPool) Put(atx *types.ActivationTx) {
 
 }
 

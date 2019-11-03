@@ -9,58 +9,43 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/trie"
 	"math/big"
-	"sort"
 	"sync"
 )
 
-type PseudoRandomizer interface {
-	Uint32() uint32
-	Uint64() uint64
-}
-
 type StatePreImages struct {
 	rootHash  types.Hash32
-	preImages mesh.Transactions
+	preImages []*types.Transaction
 }
 
-type GasConfig struct {
-	BasicTxCost *big.Int
-}
-
-func DefaultConfig() GasConfig {
-	return GasConfig{
-		big.NewInt(3),
-	}
+type Projector interface {
+	GetProjection(addr types.Address, prevNonce, prevBalance uint64) (nonce, balance uint64, err error)
 }
 
 type TransactionProcessor struct {
 	log.Log
-	rand         PseudoRandomizer
 	globalState  *StateDB
 	prevStates   map[types.LayerID]types.Hash32
 	currentLayer types.LayerID
 	rootHash     types.Hash32
 	stateQueue   list.List
-	gasCost      GasConfig
+	projector    Projector
 	db           *trie.Database
 	mu           sync.Mutex
 }
 
 const maxPastStates = 20
 
-func NewTransactionProcessor(rnd PseudoRandomizer, db *StateDB, gasParams GasConfig, logger log.Log) *TransactionProcessor {
+func NewTransactionProcessor(db *StateDB, projector Projector, logger log.Log) *TransactionProcessor {
 	return &TransactionProcessor{
 		Log:          logger,
-		rand:         rnd,
 		globalState:  db,
 		prevStates:   make(map[types.LayerID]types.Hash32),
 		currentLayer: 0,
 		rootHash:     types.Hash32{},
 		stateQueue:   list.List{},
-		gasCost:      gasParams,
+		projector:    projector,
 		db:           db.TrieDB(),
 		mu:           sync.Mutex{}, //sync between reset and apply mesh.Transactions
 	}
@@ -74,7 +59,7 @@ func PublicKeyToAccountAddress(pub ed25519.PublicKey) types.Address {
 
 // Validate the signature by extracting the source account and validating its existence.
 // Return the src acount address and error in case of failure
-func (tp *TransactionProcessor) ValidateSignature(s types.Signed) (types.Address, error) {
+func (tp *TransactionProcessor) ValidateSignature(s types.Signed) (types.Address, error) { // TODO: never used
 	var w bytes.Buffer
 	_, err := xdr.Marshal(&w, s.Data())
 	if err != nil {
@@ -94,52 +79,49 @@ func (tp *TransactionProcessor) ValidateSignature(s types.Signed) (types.Address
 	return addr, nil
 }
 
-// Validate the tx's signature by extracting the source account and validating its existence.
-// Return the src acount address and error in case of failure
-func (tp *TransactionProcessor) ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (types.Address, error) {
-	buf, err := types.InterfaceToBytes(&tx.InnerSerializableSignedTransaction)
-	if err != nil {
-		return types.Address{}, err
-	}
-	pubKey, err := ed25519.ExtractPublicKey(buf, tx.Signature[:])
-	if err != nil {
-		return types.Address{}, err
-	}
-
-	addr := PublicKeyToAccountAddress(pubKey)
-	if !tp.globalState.Exist(addr) {
-		return types.Address{}, fmt.Errorf("failed to validate tx signature, unknown src account %v", addr)
-	}
-
-	return addr, nil
+// AddressExists checks if an account address exists in this node's global state
+func (tp *TransactionProcessor) AddressExists(addr types.Address) bool {
+	return tp.globalState.Exist(addr)
 }
 
-func (tp *TransactionProcessor) GetValidAddressableTx(tx *types.SerializableSignedTransaction) (*types.AddressableSignedTransaction, error) {
-	addr, err := tp.ValidateTransactionSignature(tx)
+func (tp *TransactionProcessor) ValidateNonceAndBalance(tx *types.Transaction) error {
+	origin := tx.Origin()
+	nonce, balance, err := tp.projector.GetProjection(origin, tp.globalState.GetNonce(origin), tp.globalState.GetBalance(origin))
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("failed to project state for account %v: %v", origin.Short(), err)
 	}
-
-	return &types.AddressableSignedTransaction{SerializableSignedTransaction: tx, Address: addr}, nil
+	if tx.AccountNonce != nonce {
+		return fmt.Errorf("incorrect account nonce! Expected: %d, Actual: %d", nonce, tx.AccountNonce)
+	}
+	if (tx.Amount + tx.Fee) > balance { // TODO: Fee represents the absolute fee here, as a temporarily hack
+		return fmt.Errorf("insufficient balance! Available: %d, Attempting to spend: %d[amount]+%d[fee]=%d",
+			balance, tx.Amount, tx.Fee, tx.Amount+tx.Fee)
+	}
+	return nil
 }
 
-//should receive sort predicate
 // ApplyTransaction receives a batch of transaction to apply on state. Returns the number of transaction that failed to apply.
-func (tp *TransactionProcessor) ApplyTransactions(layer types.LayerID, txs mesh.Transactions) (uint32, error) {
-	//todo: need to seed the mersenne twister with random beacon seed
+func (tp *TransactionProcessor) ApplyTransactions(layer types.LayerID, txs []*types.Transaction) (int, error) {
 	if len(txs) == 0 {
 		return 0, nil
 	}
 
-	//txs := MergeDoubles(mesh.Transactions)
 	tp.mu.Lock()
 	defer tp.mu.Unlock()
-	failed := tp.Process(tp.randomSort(txs), tp.coalescTransactionsBySender(txs))
+	remaining := txs
+	remainingCount := len(remaining)
+	for { // Loop until there's nothing left to process
+		remaining = tp.Process(remaining)
+		if remainingCount == len(remaining) {
+			break
+		}
+		remainingCount = len(remaining)
+	}
+
 	newHash, err := tp.globalState.Commit(false)
 
 	if err != nil {
-		tp.Log.Error("db write error %v", err)
-		return failed, err
+		return remainingCount, fmt.Errorf("failed to commit global state: %v", err)
 	}
 
 	tp.Log.Info("new state root for layer %v is %x", layer, newHash)
@@ -147,7 +129,7 @@ func (tp *TransactionProcessor) ApplyTransactions(layer types.LayerID, txs mesh.
 
 	tp.addStateToHistory(layer, newHash)
 
-	return failed, nil
+	return remainingCount, nil
 }
 
 func (tp *TransactionProcessor) addStateToHistory(layer types.LayerID, newHash types.Hash32) {
@@ -210,65 +192,22 @@ func (tp *TransactionProcessor) Reset(layer types.LayerID) {
 	}
 }
 
-func (tp *TransactionProcessor) randomSort(transactions mesh.Transactions) mesh.Transactions {
-	vecLen := len(transactions)
-	for i := range transactions {
-		swp := int(tp.rand.Uint32()) % vecLen
-		transactions[i], transactions[swp] = transactions[swp], transactions[i]
-	}
-	return transactions
-}
-
-func (tp *TransactionProcessor) coalescTransactionsBySender(transactions mesh.Transactions) map[types.Address][]*mesh.Transaction {
-	trnsBySender := make(map[types.Address][]*mesh.Transaction)
-	for _, trns := range transactions {
-		trnsBySender[trns.Origin] = append(trnsBySender[trns.Origin], trns)
-	}
-
-	for key := range trnsBySender {
-		sort.Slice(trnsBySender[key], func(i, j int) bool {
-			//todo: add fix here:
-			if trnsBySender[key][i].AccountNonce == trnsBySender[key][j].AccountNonce {
-				return trnsBySender[key][i].Hash().Big().Cmp(trnsBySender[key][j].Hash().Big()) > 1
-			}
-			return trnsBySender[key][i].AccountNonce < trnsBySender[key][j].AccountNonce
-		})
-	}
-
-	return trnsBySender
-}
-
-func (tp *TransactionProcessor) Process(transactions mesh.Transactions, trnsBySender map[types.Address][]*mesh.Transaction) (errors uint32) {
-	senderPut := make(map[types.Address]struct{})
-	sortedOriginByTransactions := make([]types.Address, 0, 10)
-	errors = 0
-	// The order of the mesh.Transactions determines the order addresses by which we take mesh.Transactions
-	// Maybe refactor this
-	for _, trans := range transactions {
-		if _, ok := senderPut[trans.Origin]; !ok {
-			sortedOriginByTransactions = append(sortedOriginByTransactions, trans.Origin)
-			senderPut[trans.Origin] = struct{}{}
+func (tp *TransactionProcessor) Process(txs []*types.Transaction) (remaining []*types.Transaction) {
+	for _, tx := range txs {
+		err := tp.ApplyTransaction(tx)
+		if err != nil {
+			tp.With().Warning("failed to apply transaction", log.TxId(tx.Id().ShortString()), log.Err(err))
+			remaining = append(remaining, tx)
 		}
+		events.Publish(events.ValidTx{Id: tx.Id().String(), Valid: err == nil})
+		events.Publish(events.NewTx{
+			Id:          tx.Id().String(),
+			Origin:      tx.Origin().String(),
+			Destination: tx.Recipient.String(),
+			Amount:      tx.Amount,
+			Fee:         tx.Fee})
 	}
-
-	for _, origin := range sortedOriginByTransactions {
-		for _, trns := range trnsBySender[origin] {
-			//todo: should we abort all transaction processing if we failed this one?
-			err := tp.ApplyTransaction(trns)
-			//todo: think maybe moving these to another validation process before palying transactions.
-			events.Publish(events.NewTx{Id: trns.Hash().String(),
-				Origin:      trns.Origin.String(),
-				Destination: trns.Recipient.String(),
-				Amount:      trns.Amount.Uint64(),
-				Gas:         trns.GasPrice.Uint64()})
-			if err != nil {
-				errors++
-				tp.Log.Error("transaction aborted: %v", err)
-			}
-			events.Publish(events.ValidTx{Id: trns.Hash().String(), Valid: err == nil})
-		}
-	}
-	return errors
+	return
 }
 
 func (tp *TransactionProcessor) pruneAfterRevert(targetLayerID types.LayerID) {
@@ -285,8 +224,8 @@ func (tp *TransactionProcessor) pruneAfterRevert(targetLayerID types.LayerID) {
 	}
 }
 
-func (tp *TransactionProcessor) checkNonce(trns *mesh.Transaction) bool {
-	return tp.globalState.GetNonce(trns.Origin) == trns.AccountNonce
+func (tp *TransactionProcessor) checkNonce(trns *types.Transaction) bool {
+	return tp.globalState.GetNonce(trns.Origin()) == trns.AccountNonce
 }
 
 var (
@@ -295,39 +234,32 @@ var (
 	ErrNonce  = "incorrect nonce"
 )
 
-func (tp *TransactionProcessor) ApplyTransaction(trans *mesh.Transaction) error {
-	if !tp.globalState.Exist(trans.Origin) {
+func (tp *TransactionProcessor) ApplyTransaction(trans *types.Transaction) error {
+	if !tp.globalState.Exist(trans.Origin()) {
 		return fmt.Errorf(ErrOrigin)
 	}
 
-	origin := tp.globalState.GetOrNewStateObj(trans.Origin)
+	origin := tp.globalState.GetOrNewStateObj(trans.Origin())
 
-	gas := new(big.Int).Mul(trans.GasPrice, tp.gasCost.BasicTxCost)
-
-	/*if gas < trans.GasLimit {
-
-	}*/
-
-	amountWithGas := new(big.Int).Add(gas, trans.Amount)
+	amountWithFee := trans.Fee + trans.Amount
 
 	//todo: should we allow to spend all accounts balance?
-	if origin.Balance().Cmp(amountWithGas) <= 0 {
-		tp.Log.Error(ErrFunds+" have: %v need: %v", origin.Balance(), amountWithGas)
+	if origin.Balance().Uint64() <= amountWithFee {
+		tp.Log.Error(ErrFunds+" have: %v need: %v", origin.Balance(), amountWithFee)
 		return fmt.Errorf(ErrFunds)
 	}
 
 	if !tp.checkNonce(trans) {
-		tp.Log.Error(ErrNonce+" should be %v actual %v", tp.globalState.GetNonce(trans.Origin), trans.AccountNonce)
+		tp.Log.Error(ErrNonce+" should be %v actual %v", tp.globalState.GetNonce(trans.Origin()), trans.AccountNonce)
 		return fmt.Errorf(ErrNonce)
 	}
 
-	tp.globalState.SetNonce(trans.Origin, tp.globalState.GetNonce(trans.Origin)+1)
-	transfer(tp.globalState, trans.Origin, *trans.Recipient, trans.Amount)
+	tp.globalState.SetNonce(trans.Origin(), tp.globalState.GetNonce(trans.Origin())+1) // TODO: Not thread-safe
+	transfer(tp.globalState, trans.Origin(), trans.Recipient, new(big.Int).SetUint64(trans.Amount))
 
-	//subtract gas from account, gas will be sent to miners in layers after
-	tp.globalState.SubBalance(trans.Origin, gas)
-	tp.Log.Info("transaction processed, s_account: %s d_account: %s, amount: %v shmekels tx nonce: %v, gas limit: %v gas price: %v",
-		trans.Origin.Short(), trans.Recipient.Short(), trans.Amount, trans.AccountNonce, trans.GasLimit, trans.GasPrice)
+	//subtract fee from account, fee will be sent to miners in layers after
+	tp.globalState.SubBalance(trans.Origin(), new(big.Int).SetUint64(trans.Fee))
+	tp.With().Info("transaction processed", log.String("transaction", trans.String()))
 	return nil
 }
 

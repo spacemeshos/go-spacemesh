@@ -85,9 +85,9 @@ func (p *poetProvingServiceClientMock) submit(challenge types.Hash32) (*types.Po
 	return &types.PoetRound{}, nil
 }
 
-func (p *poetProvingServiceClientMock) getPoetServiceId() ([types.PoetServiceIdLength]byte, error) {
+func (p *poetProvingServiceClientMock) getPoetServiceId() ([]byte, error) {
 	p.called++
-	return [32]byte{}, nil
+	return []byte{}, nil
 }
 
 type poetDbMock struct {
@@ -97,7 +97,7 @@ type poetDbMock struct {
 // A compile time check to ensure that poetDbMock fully implements PoetDbApi.
 var _ PoetDbApi = (*poetDbMock)(nil)
 
-func (*poetDbMock) SubscribeToProofRef(poetId [types.PoetServiceIdLength]byte, roundId uint64) chan []byte {
+func (*poetDbMock) SubscribeToProofRef(poetId []byte, roundId string) chan []byte {
 	ch := make(chan []byte)
 	go func() {
 		ch <- []byte("hello there")
@@ -172,7 +172,7 @@ func TestNIPSTBuilderWithClients(t *testing.T) {
 
 	npst := buildNIPST(r, postCfg, nipstChallenge, poetDb)
 
-	err := validateNIPST(npst, postCfg, nipstChallenge, poetDb)
+	err := validateNIPST(npst, postCfg, nipstChallenge, poetDb, minerID)
 	r.NoError(err)
 }
 
@@ -180,7 +180,7 @@ func buildNIPST(r *require.Assertions, postCfg config.Config, nipstChallenge typ
 	poetProver, err := newRPCPoetHarnessClient()
 	r.NotNil(poetProver)
 	defer func() {
-		err = poetProver.CleanUp()
+		err = poetProver.Teardown(true)
 		r.NoError(err)
 	}()
 	r.NoError(err)
@@ -222,7 +222,7 @@ func TestNewNIPSTBuilderNotInitialized(t *testing.T) {
 	poetProver, err := newRPCPoetHarnessClient()
 	r.NotNil(poetProver)
 	defer func() {
-		err = poetProver.CleanUp()
+		err = poetProver.Teardown(true)
 		r.NoError(err)
 	}()
 	r.NoError(err)
@@ -246,7 +246,7 @@ func TestNewNIPSTBuilderNotInitialized(t *testing.T) {
 	r.NoError(err)
 	r.NotNil(npst)
 
-	err = validateNIPST(npst, postCfg, nipstChallenge, poetDb)
+	err = validateNIPST(npst, postCfg, nipstChallenge, poetDb, minerIDNotInitialized)
 	r.NoError(err)
 }
 
@@ -325,29 +325,29 @@ func TestValidator_Validate(t *testing.T) {
 
 	npst := buildNIPST(r, postCfg, nipstChallenge, poetDb)
 
-	err := validateNIPST(npst, postCfg, nipstChallenge, poetDb)
+	err := validateNIPST(npst, postCfg, nipstChallenge, poetDb, minerID)
 	r.NoError(err)
 
 	newPostCfg := postCfg
 	newPostCfg.SpacePerUnit += 1
-	err = validateNIPST(npst, newPostCfg, nipstChallenge, poetDb)
+	err = validateNIPST(npst, newPostCfg, nipstChallenge, poetDb, minerID)
 	r.EqualError(err, "PoST space (1024) is less than a single space unit (1025)")
 
 	newPostCfg = postCfg
 	newPostCfg.Difficulty += 1
-	err = validateNIPST(npst, newPostCfg, nipstChallenge, poetDb)
+	err = validateNIPST(npst, newPostCfg, nipstChallenge, poetDb, minerID)
 	r.EqualError(err, "PoST proof invalid: validation failed: number of derived leaf indices (8) doesn't match number of included proven leaves (9)")
 
 	newPostCfg = postCfg
 	newPostCfg.NumProvenLabels += 5
-	err = validateNIPST(npst, newPostCfg, nipstChallenge, poetDb)
+	err = validateNIPST(npst, newPostCfg, nipstChallenge, poetDb, minerID)
 	r.EqualError(err, "PoST proof invalid: validation failed: number of derived leaf indices (12) doesn't match number of included proven leaves (9)")
 
-	err = validateNIPST(npst, postCfg, types.BytesToHash([]byte("lerner")), poetDb)
+	err = validateNIPST(npst, postCfg, types.BytesToHash([]byte("lerner")), poetDb, minerID)
 	r.EqualError(err, "NIPST challenge is not equal to expected challenge")
 }
 
-func validateNIPST(npst *types.NIPST, postCfg config.Config, nipstChallenge types.Hash32, poetDb PoetDbApi) error {
+func validateNIPST(npst *types.NIPST, postCfg config.Config, nipstChallenge types.Hash32, poetDb PoetDbApi, minerId []byte) error {
 	v := &Validator{&postCfg, poetDb}
-	return v.Validate(*signing.NewPublicKey(minerID), npst, nipstChallenge)
+	return v.Validate(*signing.NewPublicKey(minerId), npst, nipstChallenge)
 }

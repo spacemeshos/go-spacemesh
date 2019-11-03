@@ -11,8 +11,8 @@ import (
 )
 
 type ValidationInfra interface {
-	DataAvailabilty(blk *types.Block) ([]*types.AddressableSignedTransaction, []*types.ActivationTx, error)
-	AddBlockWithTxs(blk *types.Block, txs []*types.AddressableSignedTransaction, atxs []*types.ActivationTx) error
+	DataAvailability(blk *types.Block) ([]*types.Transaction, []*types.ActivationTx, error)
+	AddBlockWithTxs(blk *types.Block, txs []*types.Transaction, atxs []*types.ActivationTx) error
 	GetBlock(id types.BlockID) (*types.Block, error)
 	ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) (bool, error)) error
 	fastValidation(block *types.Block) error
@@ -116,7 +116,7 @@ func (vq *blockQueue) finishBlockCallback(block *types.Block) func(res bool) err
 		}
 
 		//data availability
-		txs, atxs, err := vq.DataAvailabilty(block)
+		txs, atxs, err := vq.DataAvailability(block)
 		if err != nil {
 			return fmt.Errorf("DataAvailabilty failed for block %v err: %v", block, err)
 		}
@@ -141,11 +141,12 @@ func (vq *blockQueue) finishBlockCallback(block *types.Block) func(res bool) err
 
 // removes all dependencies for are block
 func (vq *blockQueue) updateDependencies(block types.Hash32, valid bool) {
+	vq.Debug("invalidate %v", block.ShortString())
 	vq.Lock()
-	defer vq.Unlock()
 	//clean after block
 	delete(vq.depMap, block)
 	delete(vq.callbacks, block)
+	vq.Unlock()
 
 	doneQueue := make([]types.Hash32, 0, len(vq.depMap))
 	doneQueue = vq.removefromDepMaps(block, valid, doneQueue)
@@ -163,6 +164,9 @@ func (vq *blockQueue) updateDependencies(block types.Hash32, valid bool) {
 // dependencies can be of type block/layer
 // for block jobs we need to return  a list of finished blocks
 func (vq *blockQueue) removefromDepMaps(block types.Hash32, valid bool, doneBlocks []types.Hash32) []types.Hash32 {
+	vq.fetchQueue.invalidate(block, valid)
+	vq.Lock()
+	defer vq.Unlock()
 	for _, dep := range vq.reverseDepMap[block] {
 		delete(vq.depMap[dep], block)
 		if len(vq.depMap[dep]) == 0 {

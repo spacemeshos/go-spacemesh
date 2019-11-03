@@ -2,11 +2,14 @@ package mesh
 
 import (
 	"bytes"
+	"fmt"
 	"github.com/google/uuid"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/rand"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"math/big"
 	"testing"
 	"time"
@@ -47,26 +50,26 @@ func (MockState) ValidateSignature(signed types.Signed) (types.Address, error) {
 	return types.Address{}, nil
 }
 
-func (MockState) ApplyTransactions(layer types.LayerID, txs Transactions) (uint32, error) {
+func (MockState) ApplyTransactions(layer types.LayerID, txs []*types.Transaction) (int, error) {
 	return 0, nil
 }
 
 func (MockState) ApplyRewards(layer types.LayerID, miners []types.Address, underQuota map[types.Address]int, bonusReward, diminishedReward *big.Int) {
 }
 
-func (MockState) ValidateTransactionSignature(tx *types.SerializableSignedTransaction) (types.Address, error) {
-	return types.Address{}, nil
+func (MockState) AddressExists(addr types.Address) bool {
+	return true
 }
 
 type MockTxMemPool struct{}
 
-func (MockTxMemPool) Get(id types.TransactionId) (types.AddressableSignedTransaction, error) {
-	return types.AddressableSignedTransaction{}, nil
+func (MockTxMemPool) Get(id types.TransactionId) (types.Transaction, error) {
+	return types.Transaction{}, nil
 }
-func (MockTxMemPool) PopItems(size int) []types.AddressableSignedTransaction {
+func (MockTxMemPool) GetAllItems() []*types.Transaction {
 	return nil
 }
-func (MockTxMemPool) Put(id types.TransactionId, item *types.AddressableSignedTransaction) {
+func (MockTxMemPool) Put(id types.TransactionId, item *types.Transaction) {
 
 }
 func (MockTxMemPool) Invalidate(id types.TransactionId) {
@@ -75,15 +78,15 @@ func (MockTxMemPool) Invalidate(id types.TransactionId) {
 
 type MockAtxMemPool struct{}
 
-func (MockAtxMemPool) Get(id types.AtxId) (types.ActivationTx, error) {
-	return types.ActivationTx{}, nil
+func (MockAtxMemPool) Get(id types.AtxId) (*types.ActivationTx, error) {
+	return &types.ActivationTx{}, nil
 }
 
-func (MockAtxMemPool) PopItems(size int) []types.ActivationTx {
+func (MockAtxMemPool) GetAllItems() []types.ActivationTx {
 	return nil
 }
 
-func (MockAtxMemPool) Put(id types.AtxId, item *types.ActivationTx) {
+func (MockAtxMemPool) Put(atx *types.ActivationTx) {
 
 }
 
@@ -107,7 +110,7 @@ func TestLayers_AddBlock(t *testing.T) {
 	block2 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 2, []byte("data2"))
 	block3 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 3, []byte("data3"))
 
-	addTransactionsWithGas(layers.MeshDB, block1, 4, rand.Int63n(100))
+	addTransactionsWithFee(layers.MeshDB, block1, 4, rand.Int63n(100))
 
 	err := layers.AddBlock(block1)
 	assert.NoError(t, err)
@@ -128,25 +131,25 @@ func TestLayers_AddBlock(t *testing.T) {
 }
 
 func TestLayers_AddLayer(t *testing.T) {
-	layers := getMesh("t2")
-	defer layers.Close()
-	id := types.LayerID(1)
-	block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), id, []byte("data"))
-	block2 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), id, []byte("data"))
-	block3 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), id, []byte("data"))
-	l, err := layers.GetLayer(id)
-	assert.True(t, err != nil, "error: ", err)
+	r := require.New(t)
 
-	err = layers.AddBlock(block1)
-	assert.NoError(t, err)
-	err = layers.AddBlock(block2)
-	assert.NoError(t, err)
-	err = layers.AddBlock(block3)
-	assert.NoError(t, err)
-	l, err = layers.GetLayer(id)
-	assert.NoError(t, err)
-	//assert.True(t, layers.VerifiedLayer() == 0, "wrong layer count")
-	assert.True(t, string(l.Blocks()[1].MiniBlock.Data) == "data", "wrong block data ")
+	msh := getMesh("t2")
+	defer msh.Close()
+
+	id := types.LayerID(1)
+
+	_, err := msh.GetLayer(id)
+	r.EqualError(err, "error getting layer 1 from database leveldb: not found")
+
+	err = msh.AddBlock(types.NewExistingBlock(types.BlockID(uuid.New().ID()), id, []byte("data")))
+	r.NoError(err)
+	err = msh.AddBlock(types.NewExistingBlock(types.BlockID(uuid.New().ID()), id, []byte("data")))
+	r.NoError(err)
+	err = msh.AddBlock(types.NewExistingBlock(types.BlockID(uuid.New().ID()), id, []byte("data")))
+	r.NoError(err)
+	l, err := msh.GetLayer(id)
+	r.NoError(err)
+	r.True(string(l.Blocks()[1].MiniBlock.Data) == "data", "wrong block data ")
 }
 
 func TestLayers_AddWrongLayer(t *testing.T) {
@@ -157,6 +160,7 @@ func TestLayers_AddWrongLayer(t *testing.T) {
 	block3 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 4, []byte("data data data"))
 	l1 := types.NewExistingLayer(1, []*types.Block{block1})
 	layers.AddBlock(block1)
+	layers.SaveContextualValidity(block1.Id, true)
 	layers.ValidateLayer(l1)
 	l2 := types.NewExistingLayer(2, []*types.Block{block2})
 	layers.AddBlock(block2)
@@ -254,4 +258,124 @@ func TestLayers_OrphanBlocksClearEmptyLayers(t *testing.T) {
 	assert.Equal(t, len(arr2), 2)
 	layers.AddBlock(block5)
 	assert.Equal(t, 1, len(layers.orphanBlocks))
+}
+
+type MockBlockBuilder struct {
+	txs []*types.Transaction
+}
+
+func (m *MockBlockBuilder) ValidateAndAddTxToPool(tx *types.Transaction) error {
+	m.txs = append(m.txs, tx)
+	return nil
+}
+
+func TestMesh_AddBlockWithTxs_PushTransactions_UpdateUnappliedTxs(t *testing.T) {
+	r := require.New(t)
+
+	msh := getMesh("mesh")
+	blockBuilder := &MockBlockBuilder{}
+	msh.SetBlockBuilder(blockBuilder)
+
+	layerID := types.LayerID(1)
+	signer, origin := newSignerAndAddress(r, "origin")
+	tx1 := addTxToMesh(r, msh, signer, 2468)
+	tx2 := addTxToMesh(r, msh, signer, 2469)
+	tx3 := addTxToMesh(r, msh, signer, 2470)
+	tx4 := addTxToMesh(r, msh, signer, 2471)
+	tx5 := addTxToMesh(r, msh, signer, 2472)
+	addBlockWithTxs(r, msh, layerID, true, tx1, tx2)
+	addBlockWithTxs(r, msh, layerID, true, tx2, tx3, tx4)
+	addBlockWithTxs(r, msh, layerID, false, tx4, tx5)
+	addBlockWithTxs(r, msh, layerID, false, tx5)
+
+	txns := getTxns(r, msh.MeshDB, origin)
+	r.Len(txns, 5)
+	for i := 0; i < 5; i++ {
+		r.Equal(2468+i, int(txns[i].Nonce))
+		r.Equal(111, int(txns[i].TotalAmount))
+	}
+
+	msh.PushTransactions(1, 2)
+	r.ElementsMatch(GetTransactionIds(tx5), GetTransactionIds(blockBuilder.txs...))
+
+	txns = getTxns(r, msh.MeshDB, origin)
+	r.Empty(txns)
+}
+
+func TestMesh_ExtractUniqueOrderedTransactions(t *testing.T) {
+	r := require.New(t)
+
+	msh := getMesh("t2")
+	defer msh.Close()
+	layerID := types.LayerID(1)
+	signer, _ := newSignerAndAddress(r, "origin")
+	tx1 := addTxToMesh(r, msh, signer, 2468)
+	tx2 := addTxToMesh(r, msh, signer, 2469)
+	tx3 := addTxToMesh(r, msh, signer, 2470)
+	tx4 := addTxToMesh(r, msh, signer, 2471)
+	tx5 := addTxToMesh(r, msh, signer, 2472)
+	addBlockWithTxs(r, msh, layerID, true, tx1, tx2)
+	addBlockWithTxs(r, msh, layerID, true, tx2, tx3, tx4)
+	addBlockWithTxs(r, msh, layerID, false, tx4, tx5)
+	addBlockWithTxs(r, msh, layerID, false, tx5)
+	l, err := msh.GetLayer(layerID)
+	r.NoError(err)
+
+	validBlocks, invalidBlocks, err := msh.ExtractUniqueOrderedTransactions(l)
+	r.NoError(err)
+
+	r.ElementsMatch(GetTransactionIds(tx1, tx2, tx3, tx4), GetTransactionIds(validBlocks...))
+	r.ElementsMatch(GetTransactionIds(tx5), GetTransactionIds(invalidBlocks...))
+}
+
+func GetTransactionIds(txs ...*types.Transaction) []types.TransactionId {
+	var res []types.TransactionId
+	for _, tx := range txs {
+		res = append(res, tx.Id())
+	}
+	return res
+}
+
+func addTxToMesh(r *require.Assertions, msh *Mesh, signer *signing.EdSigner, nonce uint64) *types.Transaction {
+	tx1 := newTx(r, signer, nonce, 111)
+	err := msh.writeTransactions([]*types.Transaction{tx1})
+	r.NoError(err)
+	return tx1
+}
+
+func addBlockWithTxs(r *require.Assertions, msh *Mesh, id types.LayerID, valid bool, txs ...*types.Transaction) *types.Block {
+	blk := types.NewExistingBlock(types.BlockID(uuid.New().ID()), id, []byte("data"))
+	for _, tx := range txs {
+		blk.TxIds = append(blk.TxIds, tx.Id())
+	}
+	msh.SaveContextualValidity(blk.Id, valid)
+	err := msh.AddBlockWithTxs(blk, txs, nil)
+	r.NoError(err)
+	return blk
+}
+
+type FailingAtxDbMock struct{}
+
+func (FailingAtxDbMock) ProcessAtxs(atxs []*types.ActivationTx) error { return fmt.Errorf("💥") }
+
+func (FailingAtxDbMock) GetAtx(id types.AtxId) (*types.ActivationTxHeader, error) {
+	panic("implement me")
+}
+
+func (FailingAtxDbMock) GetFullAtx(id types.AtxId) (*types.ActivationTx, error) { panic("implement me") }
+
+func (FailingAtxDbMock) SyntacticallyValidateAtx(atx *types.ActivationTx) error { panic("implement me") }
+
+func TestMesh_AddBlockWithTxs(t *testing.T) {
+	r := require.New(t)
+	lg := log.New("id", "", "")
+	meshDB := NewMemMeshDB(lg)
+	mesh := NewMesh(meshDB, &FailingAtxDbMock{}, ConfigTst(), &MeshValidatorMock{mdb: meshDB}, MockTxMemPool{}, MockAtxMemPool{}, &MockState{}, lg)
+
+	blk := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data"))
+
+	err := mesh.AddBlockWithTxs(blk, nil, nil)
+	r.EqualError(err, "failed to process ATXs: 💥")
+	_, err = meshDB.blocks.Get(blk.ID().ToBytes())
+	r.EqualError(err, "leveldb: not found")
 }

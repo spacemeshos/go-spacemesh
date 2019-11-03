@@ -51,13 +51,8 @@ type GossipMessage interface {
 // Service is an interface that represents a networking service (ideally p2p) that we can use to send messages or listen to incoming messages
 type Service interface {
 	Start() error
-	RegisterDirectProtocol(protocol string) chan DirectMessage
 	RegisterGossipProtocol(protocol string) chan GossipMessage
-	RegisterDirectProtocolWithChannel(protocol string, ingressChannel chan DirectMessage) chan DirectMessage
-	SendMessage(peerPubkey p2pcrypto.PublicKey, protocol string, payload []byte) error
 	SubscribePeerEvents() (new chan p2pcrypto.PublicKey, del chan p2pcrypto.PublicKey)
-	ProcessDirectProtocolMessage(sender p2pcrypto.PublicKey, protocol string, payload Data, metadata P2PMetadata) error
-	ProcessGossipProtocolMessage(sender p2pcrypto.PublicKey, protocol string, data Data, validationCompletedChan chan MessageValidation) error
 	Broadcast(protocol string, payload []byte) error
 	Shutdown()
 }

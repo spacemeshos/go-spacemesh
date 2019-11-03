@@ -6,20 +6,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 type BlockID uint64
-type TransactionId Hash32
-
-func (t *TransactionId) ShortString() string {
-	return t.Hash32().ShortString()
-}
-
-func (t *TransactionId) Hash32() Hash32 {
-	return Hash32(*t)
-}
-
 type LayerID uint64
 
 func (l LayerID) GetEpoch(layersPerEpoch uint16) EpochId {
@@ -108,78 +97,6 @@ func (t *Block) Bytes() []byte {
 type BlockEligibilityProof struct {
 	J   uint32
 	Sig []byte
-}
-
-// TODO rename to SerializableTransaction once we remove the old SerializableTransaction
-type InnerSerializableSignedTransaction struct {
-	AccountNonce uint64
-	Recipient    Address
-	GasLimit     uint64
-	GasPrice     uint64
-	Amount       uint64
-}
-
-// Once we support signed txs we should replace SerializableTransaction with this struct. Currently it is only used in the rpc server.
-type SerializableSignedTransaction struct {
-	InnerSerializableSignedTransaction
-	Signature [64]byte
-}
-
-func (t *SerializableSignedTransaction) Hash32() Hash32 {
-	id := GetTransactionId(t)
-	return id.Hash32()
-}
-
-func (t *SerializableSignedTransaction) ShortString() string {
-	id := GetTransactionId(t)
-	return id.ShortString()
-}
-
-func NewSignedTx(nonce uint64, rec Address, amount, gas, price uint64, signer *signing.EdSigner) (*SerializableSignedTransaction, error) {
-	inner := InnerSerializableSignedTransaction{
-		AccountNonce: nonce,
-		Recipient:    rec,
-		Amount:       amount,
-		GasLimit:     gas,
-		GasPrice:     price,
-	}
-
-	buf, err := InterfaceToBytes(&inner)
-	if err != nil {
-		log.Error("failed to marshal tx")
-		return nil, err
-	}
-
-	sst := &SerializableSignedTransaction{
-		InnerSerializableSignedTransaction: inner,
-	}
-
-	copy(sst.Signature[:], signer.Sign(buf))
-
-	return sst, nil
-}
-
-// Used to hold a signed transaction along with its address
-type AddressableSignedTransaction struct {
-	*SerializableSignedTransaction
-	Address
-}
-
-func NewAddressableTx(nonce uint64, orig, rec Address, amount, gasLimit, gasPrice uint64) *AddressableSignedTransaction {
-	inner := InnerSerializableSignedTransaction{
-		AccountNonce: nonce,
-		Recipient:    rec,
-		Amount:       amount,
-		GasLimit:     gasLimit,
-		GasPrice:     gasPrice,
-	}
-	sst := &SerializableSignedTransaction{
-		InnerSerializableSignedTransaction: inner,
-	}
-	return &AddressableSignedTransaction{
-		SerializableSignedTransaction: sst,
-		Address:                       orig,
-	}
 }
 
 func newBlockHeader(id BlockID, layerID LayerID, coin bool, data []byte, ts int64, viewEdges []BlockID, blockVotes []BlockID) *BlockHeader {

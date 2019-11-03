@@ -33,7 +33,7 @@ type AppTestSuite struct {
 
 	apps        []*SpacemeshApp
 	dbs         []string
-	poetCleanup func() error
+	poetCleanup func(cleanup bool) error
 }
 
 func (suite *AppTestSuite) SetupTest() {
@@ -49,7 +49,8 @@ func NewRPCPoetHarnessClient() (*activation.RPCPoetClient, error) {
 	if err != nil {
 		return nil, err
 	}
-	cfg.NodeAddress = "127.0.0.1:9091"
+
+	cfg.N = 18
 	cfg.InitialRoundDuration = time.Duration(5 * time.Second).String()
 
 	h, err := integration.NewHarness(cfg)
@@ -61,7 +62,7 @@ func NewRPCPoetHarnessClient() (*activation.RPCPoetClient, error) {
 }
 
 func (suite *AppTestSuite) TearDownTest() {
-	if err := suite.poetCleanup(); err != nil {
+	if err := suite.poetCleanup(true); err != nil {
 		log.Error("error while cleaning up PoET: %v", err)
 	}
 	for _, dbinst := range suite.dbs {
@@ -82,6 +83,12 @@ func (suite *AppTestSuite) TearDownTest() {
 			}
 		}
 	}
+}
+
+func Test_PoETHarnessSanity(t *testing.T) {
+	h, err := NewRPCPoetHarnessClient()
+	require.NoError(t, err)
+	require.NotNil(t, h)
 }
 
 var net = service.NewSimulator()
@@ -165,7 +172,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	if err != nil {
 		log.Panic("panicked creating signed tx err=%v", err)
 	}
-	txbytes, _ := types.SignedTransactionAsBytes(tx)
+	txbytes, _ := types.InterfaceToBytes(tx)
 	path := "../tmp/test/state_" + time.Now().String()
 
 	genesisTime := time.Now().Add(20 * time.Second).Format(time.RFC3339)
@@ -174,7 +181,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	if err != nil {
 		log.Panic("failed creating poet client harness: %v", err)
 	}
-	suite.poetCleanup = poetClient.CleanUp
+	suite.poetCleanup = poetClient.Teardown
 
 	rolacle := eligibility.New()
 	rng := BLS381.DefaultSeed()
@@ -185,6 +192,10 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	}
 
 	activateGrpcServer(suite.apps[0])
+
+	if err := poetClient.Start("127.0.0.1:9091"); err != nil {
+		log.Panic("failed to start poet server: %v", err)
+	}
 
 	startInLayer := 5 // delayed pod will start in this layer
 	/*go func() {
@@ -445,7 +456,7 @@ func TestShutdown(t *testing.T) {
 	smApp.startServices()
 	activateGrpcServer(smApp)
 
-	poetClient.CleanUp()
+	poetClient.Teardown(true)
 	smApp.stopServices()
 
 	time.Sleep(3 * time.Second)

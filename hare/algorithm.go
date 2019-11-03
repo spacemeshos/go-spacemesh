@@ -152,10 +152,14 @@ type ConsensusProcess struct {
 	cfg               config.Config
 	pending           map[string]*Msg // buffer for early messages that are pending process
 	notifySent        bool            // flag to set in case a notification had already been sent by this instance
+	mTracker          *msgsTracker    // tracks valid messages
 }
 
 // NewConsensusProcess creates a new consensus process instance.
-func NewConsensusProcess(cfg config.Config, instanceId instanceId, s *Set, oracle Rolacle, stateQuerier StateQuerier, layersPerEpoch uint16, signing Signer, nid types.NodeId, p2p NetworkService, terminationReport chan TerminationOutput, logger log.Log) *ConsensusProcess {
+func NewConsensusProcess(cfg config.Config, instanceId instanceId, s *Set, oracle Rolacle, stateQuerier StateQuerier,
+	layersPerEpoch uint16, signing Signer, nid types.NodeId, p2p NetworkService,
+	terminationReport chan TerminationOutput, ev roleValidator, logger log.Log) *ConsensusProcess {
+	msgsTracker := NewMsgsTracker()
 	proc := &ConsensusProcess{
 		State:             State{-1, -1, s.Clone(), nil},
 		Closer:            NewCloser(),
@@ -170,8 +174,9 @@ func NewConsensusProcess(cfg config.Config, instanceId instanceId, s *Set, oracl
 		terminationReport: terminationReport,
 		pending:           make(map[string]*Msg, cfg.N),
 		Log:               logger,
+		mTracker:          msgsTracker,
 	}
-	proc.validator = newSyntaxContextValidator(signing, cfg.F+1, proc.statusValidator(), stateQuerier, layersPerEpoch, logger)
+	proc.validator = newSyntaxContextValidator(signing, cfg.F+1, proc.statusValidator(), stateQuerier, layersPerEpoch, ev, msgsTracker, logger)
 
 	return proc
 }
@@ -227,7 +232,7 @@ func (proc *ConsensusProcess) SetInbox(inbox chan *Msg) {
 func (proc *ConsensusProcess) eventLoop() {
 	proc.With().Info("Consensus Process Started",
 		log.Int("Hare-N", proc.cfg.N), log.Int("f", proc.cfg.F), log.String("duration", (time.Duration(proc.cfg.RoundDuration)*time.Second).String()),
-		log.LayerId(uint64(proc.instanceId)), log.Int("exp_leaders", proc.cfg.ExpectedLeaders), log.String("current_set", proc.s.String()))
+		log.LayerId(uint64(proc.instanceId)), log.Int("exp_leaders", proc.cfg.ExpectedLeaders), log.String("current_set", proc.s.String()), log.Int("set_size", proc.s.Size()))
 
 	// check participation
 	if proc.shouldParticipate() {
@@ -257,6 +262,8 @@ PreRound:
 	proc.preRoundTracker.FilterSet(proc.s)
 	if proc.s.Size() == 0 {
 		proc.Event().Error("Fatal: PreRound ended with empty set", log.LayerId(uint64(proc.instanceId)))
+	} else {
+		proc.Info("PreRound ended")
 	}
 	proc.advanceToNextRound() // K was initialized to -1, K should be 0
 
@@ -312,19 +319,23 @@ func (proc *ConsensusProcess) onEarlyMessage(m *Msg) {
 func (proc *ConsensusProcess) handleMessage(m *Msg) {
 	// Note: instanceId is already verified by the broker
 
-	proc.Debug("Received message %v", m)
+	proc.With().Debug("Received message", log.String("msg_type", m.InnerMsg.Type.String()))
 
-	if !proc.validator.SyntacticallyValidateMessage(m) {
-		proc.Warning("Syntactically validation failed, pubkey %v", m.PubKey.ShortString())
-		return
-	}
-
-	mType := messageType(m.InnerMsg.Type).String()
-	// validate InnerMsg for this or next round
+	// validate context
 	err := proc.validator.ContextuallyValidateMessage(m, proc.k)
 	if err != nil {
-		if err == errEarlyMsg { // early message, keep for later
+		mType := messageType(m.InnerMsg.Type).String()
+
+		// early message, keep for later
+		if err == errEarlyMsg {
 			proc.Debug("Early message of type %v detected. Keeping message, pubkey %v", mType, m.PubKey.ShortString())
+
+			// validate syntax for early messages
+			if !proc.validator.SyntacticallyValidateMessage(m) {
+				proc.Warning("Syntactically validation failed, pubkey %v", m.PubKey.ShortString())
+				return
+			}
+
 			proc.onEarlyMessage(m)
 			return
 		}
@@ -337,6 +348,13 @@ func (proc *ConsensusProcess) handleMessage(m *Msg) {
 		return
 	}
 
+	// validate syntax for contextually valid messages
+	if !proc.validator.SyntacticallyValidateMessage(m) {
+		proc.Warning("Syntactically validation failed, pubkey %v", m.PubKey.ShortString())
+		return
+	}
+
+	// warn on late pre-round msgs
 	if m.InnerMsg.Type == pre && proc.k != -1 {
 		proc.Warning("Encountered late PreRound message")
 	}
@@ -502,7 +520,7 @@ func (proc *ConsensusProcess) beginNotifyRound() {
 	}
 
 	if !proc.commitTracker.HasEnoughCommits() {
-		proc.Warning("Begin notify round: not enough commits")
+		proc.With().Warning("Begin notify round: not enough commits", log.Int("expected", proc.cfg.F+1), log.Int("actual", proc.commitTracker.CommitCount()))
 		return
 	}
 
@@ -610,6 +628,7 @@ func (proc *ConsensusProcess) processProposalMsg(msg *Msg) {
 }
 
 func (proc *ConsensusProcess) processCommitMsg(msg *Msg) {
+	proc.mTracker.Track(msg) // a commit msg passed for processing is assumed to be valid
 	proc.commitTracker.OnCommit(msg)
 }
 
@@ -638,7 +657,8 @@ func (proc *ConsensusProcess) processNotifyMsg(msg *Msg) {
 
 	// enough notifications, should terminate
 	proc.s = s // update to the agreed set
-	proc.Event().Info("Consensus process terminated", log.String("current_set", proc.s.String()), log.LayerId(uint64(proc.instanceId)))
+	proc.Event().Info("Consensus process terminated", log.String("current_set", proc.s.String()),
+		log.LayerId(uint64(proc.instanceId)), log.Int("set_size", proc.s.Size()))
 	proc.terminationReport <- procOutput{proc.instanceId, proc.s}
 	proc.Close()
 	proc.terminating = true // ensures immediate termination
@@ -668,9 +688,22 @@ func (proc *ConsensusProcess) statusValidator() func(m *Msg) bool {
 }
 
 func (proc *ConsensusProcess) endOfStatusRound() {
-	proc.statusesTracker.AnalyzeStatuses(proc.statusValidator())
+	// validate and track wrapper for validation func
+	valid := proc.statusValidator()
+	vtFunc := func(m *Msg) bool {
+		if valid(m) {
+			proc.mTracker.Track(m)
+			return true
+		}
+
+		return false
+	}
+
+	// assumption: AnalyzeStatuses calls vtFunc for every recorded status message
+	before := time.Now()
+	proc.statusesTracker.AnalyzeStatuses(vtFunc)
 	proc.Event().Info("status round ended", log.Bool("is_svp_ready", proc.statusesTracker.IsSVPReady()),
-		log.Uint64("layer_id", uint64(proc.instanceId)))
+		log.Uint64("layer_id", uint64(proc.instanceId)), log.String("analyze_duration", time.Since(before).String()))
 }
 
 // checks if we should participate in the current round
