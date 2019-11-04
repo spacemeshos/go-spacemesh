@@ -184,11 +184,11 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyRewards() {
 		types.HexToAddress("ddd"),
 		types.HexToAddress("bbb"),
 		types.HexToAddress("aaa")},
-		map[types.Address]int{types.HexToAddress("aaa"): 1, types.HexToAddress("bbb"): 2},
-		big.NewInt(1000), big.NewInt(300))
+		big.NewInt(1000),
+	)
 
-	assert.Equal(s.T(), s.state.GetBalance(types.HexToAddress("aaa")), uint64(1300))
-	assert.Equal(s.T(), s.state.GetBalance(types.HexToAddress("bbb")), uint64(600))
+	assert.Equal(s.T(), s.state.GetBalance(types.HexToAddress("aaa")), uint64(2000))
+	assert.Equal(s.T(), s.state.GetBalance(types.HexToAddress("bbb")), uint64(2000))
 	assert.Equal(s.T(), s.state.GetBalance(types.HexToAddress("ccc")), uint64(1000))
 	assert.Equal(s.T(), s.state.GetBalance(types.HexToAddress("ddd")), uint64(1000))
 }

@@ -97,7 +97,7 @@ func (stateMock) ValidateSignature(signed types.Signed) (types.Address, error) {
 	return types.Address{}, nil
 }
 
-func (s *stateMock) ApplyRewards(layer types.LayerID, miners []types.Address, underQuota map[types.Address]int, bonusReward, diminishedReward *big.Int) {
+func (s *stateMock) ApplyRewards(layer types.LayerID, miners []types.Address, reward *big.Int) {
 
 }
 
@@ -118,10 +118,7 @@ func (mbp mockBlocksProvider) GetGoodPatternBlocks(layer types.LayerID) (map[typ
 }
 
 var rewardConf = mesh.Config{
-	big.NewInt(5000),
-	big.NewInt(15),
-	15,
-	5,
+	BaseReward: big.NewInt(5000),
 }
 
 func getMeshWithLevelDB(id string) *mesh.Mesh {

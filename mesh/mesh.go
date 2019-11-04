@@ -33,7 +33,7 @@ type MeshValidator interface {
 
 type TxProcessor interface {
 	ApplyTransactions(layer types.LayerID, txs []*types.Transaction) (int, error)
-	ApplyRewards(layer types.LayerID, miners []types.Address, underQuota map[types.Address]int, bonusReward, diminishedReward *big.Int)
+	ApplyRewards(layer types.LayerID, miners []types.Address, reward *big.Int)
 	ValidateSignature(s types.Signed) (types.Address, error)
 	AddressExists(addr types.Address) bool
 }
@@ -134,30 +134,31 @@ func (m *Mesh) GetLayer(index types.LayerID) (*types.Layer, error) {
 }
 
 func (m *Mesh) ValidateLayer(lyr *types.Layer) {
-	m.Info("Validate layer %d", lyr.Index())
-
-	if lyr.Index() >= m.config.RewardMaturity {
-		m.AccumulateRewards(lyr.Index()-m.config.RewardMaturity, m.config)
-	}
+	currLayerId := lyr.Index()
+	m.Info("Validate layer %d", currLayerId)
 
 	oldPbase, newPbase := m.HandleIncomingLayer(lyr)
 	m.lvMutex.Lock()
-	m.validatedLayer = lyr.Index()
+	m.validatedLayer = currLayerId
 	m.lvMutex.Unlock()
 
-	if newPbase > oldPbase {
-		m.PushTransactions(oldPbase, newPbase)
+	for layerId := oldPbase; layerId < newPbase; layerId++ {
+		m.AccumulateRewards(layerId, m.config)
+		if err := m.PushTransactions(layerId); err != nil {
+			m.With().Error("failed to push transactions", log.Err(err))
+			break
+		}
 	}
-	m.Info("done validating layer %v", lyr.Index())
+	m.Info("done validating layer %v", currLayerId)
 }
 
-func (m *Mesh) ExtractUniqueOrderedTransactions(l *types.Layer) (validBlockTxs, invalidBlockTxs []*types.Transaction, err error) {
+func (m *Mesh) ExtractUniqueOrderedTransactions(l *types.Layer) (validBlockTxs, invalidBlockTxs []*types.Transaction) {
 	// Separate blocks by validity
 	var validBlocks, invalidBlocks []*types.Block
 	for _, b := range l.Blocks() {
 		valid, err := m.ContextualValidity(b.ID())
 		if err != nil {
-			return nil, nil, fmt.Errorf("could not get contextual validity for block %v: %v", b.ID(), err)
+			m.With().Error("could not get contextual validity", log.BlockId(uint64(b.ID())), log.Err(err))
 		}
 		if valid {
 			validBlocks = append(validBlocks, b)
@@ -189,7 +190,7 @@ func (m *Mesh) ExtractUniqueOrderedTransactions(l *types.Layer) (validBlockTxs, 
 
 	// Get and return unique transactions
 	seenTxIds := map[types.TransactionId]struct{}{}
-	return m.getTxs(uniqueTxIds(validBlocks, seenTxIds), l), m.getTxs(uniqueTxIds(invalidBlocks, seenTxIds), l), nil
+	return m.getTxs(uniqueTxIds(validBlocks, seenTxIds), l), m.getTxs(uniqueTxIds(invalidBlocks, seenTxIds), l)
 }
 
 func toUint64Slice(b []byte) []uint64 {
@@ -223,43 +224,38 @@ func (m *Mesh) getTxs(txIds []types.TransactionId, l *types.Layer) []*types.Tran
 	return txs
 }
 
-func (m *Mesh) PushTransactions(oldBase, newBase types.LayerID) {
-	for i := oldBase; i < newBase; i++ {
-		l, err := m.GetLayer(i)
-		if err != nil || l == nil {
-			m.With().Error("failed to retrieve layer", log.LayerId(uint64(i)), log.Err(err))
-			// TODO: We want to panic here once we have a way to "remember" that we didn't apply these txs
-			//  e.g. persist the last layer transactions were applied from and use that instead of `oldBase`
-			return
-		}
-
-		validBlockTxs, invalidBlockTxs, err := m.ExtractUniqueOrderedTransactions(l)
-		if err != nil {
-			panic("failed to extract txs: " + err.Error())
-		}
-		numFailedTxs, err := m.ApplyTransactions(i, validBlockTxs)
-		if err != nil {
-			m.With().Error("failed to apply transactions",
-				log.LayerId(uint64(i)), log.Int("num_failed_txs", numFailedTxs), log.Err(err))
-			// TODO: We want to panic here once we have a way to "remember" that we didn't apply these txs
-			//  e.g. persist the last layer transactions were applied from and use that instead of `oldBase`
-		}
-		m.removeFromUnappliedTxs(validBlockTxs, invalidBlockTxs, i)
-		for _, tx := range invalidBlockTxs {
-			err = m.blockBuilder.ValidateAndAddTxToPool(tx)
-			// We ignore errors here, since they mean that the tx is no longer valid and we shouldn't re-add it
-			if err == nil {
-				m.With().Info("transaction from contextually invalid block re-added to mempool",
-					log.TxId(tx.Id().ShortString()))
-			}
-		}
-		m.With().Info("applied transactions",
-			log.Int("valid_block_txs", len(validBlockTxs)),
-			log.Int("invalid_block_txs", len(invalidBlockTxs)),
-			log.Uint64("new_base", uint64(newBase)),
-			log.Int("num_failed_txs", numFailedTxs),
-		)
+func (m *Mesh) PushTransactions(layerId types.LayerID) error {
+	l, err := m.GetLayer(layerId)
+	if err != nil || l == nil {
+		// TODO: We want to panic here once we have a way to "remember" that we didn't apply these txs
+		//  e.g. persist the last layer transactions were applied from and use that instead of `oldBase`
+		return fmt.Errorf("failed to retrieve layer %v: %v", layerId, err)
 	}
+
+	validBlockTxs, invalidBlockTxs := m.ExtractUniqueOrderedTransactions(l)
+	numFailedTxs, err := m.ApplyTransactions(layerId, validBlockTxs)
+	if err != nil {
+		m.With().Error("failed to apply transactions",
+			log.LayerId(uint64(layerId)), log.Int("num_failed_txs", numFailedTxs), log.Err(err))
+		// TODO: We want to panic here once we have a way to "remember" that we didn't apply these txs
+		//  e.g. persist the last layer transactions were applied from and use that instead of `oldBase`
+	}
+	m.removeFromUnappliedTxs(validBlockTxs, invalidBlockTxs, layerId)
+	for _, tx := range invalidBlockTxs {
+		err = m.blockBuilder.ValidateAndAddTxToPool(tx)
+		// We ignore errors here, since they mean that the tx is no longer valid and we shouldn't re-add it
+		if err == nil {
+			m.With().Info("transaction from contextually invalid block re-added to mempool",
+				log.TxId(tx.Id().ShortString()))
+		}
+	}
+	m.With().Info("applied transactions",
+		log.Int("valid_block_txs", len(validBlockTxs)),
+		log.Int("invalid_block_txs", len(invalidBlockTxs)),
+		log.LayerId(uint64(layerId)),
+		log.Int("num_failed_txs", numFailedTxs),
+	)
+	return nil
 }
 
 //todo consider adding a boolean for layer validity instead error
@@ -432,33 +428,31 @@ func (m *Mesh) AccumulateRewards(rewardLayer types.LayerID, params Config) {
 	}
 
 	ids := make([]types.Address, 0, len(l.Blocks()))
-	uq := make(map[types.Address]int)
-
-	// TODO: instead of the following code we need to validate the eligibility of each block individually using the
-	//  proof included in each block
 	for _, bl := range l.Blocks() {
+		valid, err := m.ContextualValidity(bl.ID())
+		if err != nil {
+			m.With().Error("could not get contextual validity", log.BlockId(uint64(bl.ID())), log.Err(err))
+		}
+		if !valid {
+			m.With().Info("Withheld reward for contextually invalid block",
+				log.BlockId(uint64(bl.ID())),
+				log.LayerId(uint64(rewardLayer)),
+			)
+			continue
+		}
 		atx, err := m.AtxDB.GetAtx(bl.ATXID)
 		if err != nil {
 			m.With().Warning("Atx from block not found in db", log.Err(err), log.BlockId(uint64(bl.ID())), log.AtxId(bl.ATXID.ShortString()))
 			continue
 		}
 		ids = append(ids, atx.Coinbase)
-		if uint32(len(bl.TxIds)) < params.TxQuota {
-			//todo: think of giving out reward for unique txs as well
-			uq[atx.Coinbase] = uq[atx.Coinbase] + 1
-		}
 	}
 	//accumulate all blocks rewards
-	merged, _, err := m.ExtractUniqueOrderedTransactions(l)
-	if err != nil {
-		panic("failed to extract txs")
-	}
+	txs, _ := m.ExtractUniqueOrderedTransactions(l)
 
 	rewards := &big.Int{}
-	processed := 0
-	for _, tx := range merged {
+	for _, tx := range txs {
 		res := new(big.Int).SetUint64(tx.Fee)
-		processed++
 		rewards.Add(rewards, res)
 	}
 
@@ -466,10 +460,9 @@ func (m *Mesh) AccumulateRewards(rewardLayer types.LayerID, params Config) {
 	rewards.Add(rewards, layerReward)
 
 	numBlocks := big.NewInt(int64(len(l.Blocks())))
-	log.Info("fees reward: %v total processed %v total txs %v merged %v blocks: %v", rewards.Uint64(), processed, len(merged), len(merged), numBlocks)
 
-	bonusReward, diminishedReward := calculateActualRewards(rewards, numBlocks, params, len(uq))
-	m.ApplyRewards(rewardLayer, ids, uq, bonusReward, diminishedReward)
+	blockReward := calculateActualRewards(rewards, numBlocks)
+	m.ApplyRewards(rewardLayer, ids, blockReward)
 	//todo: should miner id be sorted in a deterministic order prior to applying rewards?
 
 }
