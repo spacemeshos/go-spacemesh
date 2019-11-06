@@ -68,6 +68,8 @@ type Hare struct {
 	factory consensusFactory
 
 	validate outputValidationFunc
+
+	nid types.NodeId
 }
 
 // New returns a new Hare struct.
@@ -108,6 +110,8 @@ func New(conf config.Config, p2p NetworkService, sign Signer, nid types.NodeId, 
 	}
 
 	h.validate = validate
+
+	h.nid = nid
 
 	return h
 }
@@ -179,6 +183,10 @@ func (h *Hare) onTick(id types.LayerID) {
 	if id > h.lastLayer {
 		h.lastLayer = id
 	}
+
+	// call to start the calculation of active set size beforehand
+	go h.rolacle.IsIdentityActiveOnConsensusView(h.nid.Key, id)
+
 	h.layerLock.Unlock()
 	h.Debug("hare got tick, sleeping for %v", h.networkDelta)
 	ti := time.NewTimer(h.networkDelta)
