@@ -5,8 +5,10 @@ import (
 	"crypto/aes"
 	"encoding/hex"
 	"errors"
+
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/config"
 )
 
 // Registry maintains a list of known locked and unlocked accounts.
@@ -21,6 +23,7 @@ type Account struct {
 	PubKey     crypto.PublicKey
 	cryptoData CryptoData
 	kdParams   crypto.KDParams
+	NetworkID  int8
 }
 
 var (
@@ -101,11 +104,14 @@ func NewAccount(passphrase string) (*Account, error) {
 		Salt:    kdfParams.Salt,
 	}
 
+	NetworkID := config.ConfigValues.NetworkID
+
 	// save all data in newly created account obj
 	acct := &Account{priv,
 		pub,
 		cryptoData,
-		kdParams}
+		kdParams,
+		NetworkID}
 
 	Accounts.All[acct.String()] = acct
 

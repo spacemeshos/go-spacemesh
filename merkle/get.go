@@ -16,7 +16,7 @@ func (mt *merkleTreeImp) Get(k []byte) ([]byte, *stack, error) {
 
 	keyHexStr := hex.EncodeToString(k)
 
-	log.Info("Merkle get %s ...", keyHexStr)
+	log.Debug("Merkle get %s ...", keyHexStr)
 
 	s := newStack()
 
@@ -28,11 +28,11 @@ func (mt *merkleTreeImp) Get(k []byte) ([]byte, *stack, error) {
 	}
 
 	if userValue == nil {
-		log.Info("No data in Merkle tree for %s", keyHexStr)
+		log.Debug("No data in Merkle tree for %s", keyHexStr)
 		return nil, s, nil
 	}
 
-	log.Info("Found %s value in Merkle tree for key: %s", hex.EncodeToString(userValue), keyHexStr)
+	log.Debug("Found %s value in Merkle tree for key: %s", hex.EncodeToString(userValue), keyHexStr)
 
 	// pull the data from the user data store
 	value, err := mt.userData.Get(userValue, nil)

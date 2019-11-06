@@ -22,17 +22,17 @@ func (a *Account) String() string {
 func (a *Account) Log() {
 
 	pubKey := a.PubKey.String()
-	log.Info("Account id: %s", a.String())
+	log.Debug("Account id: %s", a.String())
 
 	if a.PrivKey != nil {
 		privKey := a.PrivKey.String()
-		log.Info(" Private key: %s", privKey)
+		log.Debug(" Private key: %s", privKey)
 	}
 
-	log.Info(" Public key: %s", pubKey)
-	log.Info(" IsUnlocked: %t ", a.IsAccountUnlocked())
-	log.Info(" Crypto params: %+v", a.cryptoData)
-	log.Info(" kdParams: %+v", a.kdParams)
+	log.Debug(" Public key: %s", pubKey)
+	log.Debug(" IsUnlocked: %t ", a.IsAccountUnlocked())
+	log.Debug(" Crypto params: %+v", a.cryptoData)
+	log.Debug(" kdParams: %+v", a.kdParams)
 }
 
 // IsAccountLocked returns true iff account is locked.

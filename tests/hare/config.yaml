@@ -1,0 +1,53 @@
+namespace: ''
+
+config_map_name: conf
+
+script_on_exit: '' #'./k8s/log-client-pods.sh'
+
+genesis_delta: 150
+deployment_ready_time_out: 120
+single_pod_ready_time_out: 60
+config_path: '../config.toml'
+
+bootstrap:
+  image: 'spacemeshos/go-spacemesh:develop'
+  command: '/bin/go-hare'
+  replicas: 1
+  resources:
+    requests:
+      memory: '256M'
+      cpu: '0.5'
+    limits:
+      memory: '512M'
+      cpu: '1'
+  args:
+    randcon: '8'
+    hare-committee-size: '20'
+    hare-max-adversaries: '9'
+    hare-round-duration-sec: '10'
+    hare-wakeup-delta: '5'
+    layer-duration-sec: '80'
+
+client:
+  image: 'spacemeshos/go-spacemesh:develop'
+  command: '/bin/go-hare'
+  replicas: 19
+  resources:
+    requests:
+      memory: '256M'
+      cpu: '0.5'
+    limits:
+      memory: '512M'
+      cpu: '1'
+  args:
+    randcon: '8'
+    hare-committee-size: '20'
+    hare-max-adversaries: '9'
+    hare-round-duration-sec: '10'
+    hare-wakeup-delta: '5'
+    layer-duration-sec: '80'
+
+elastic:
+  host: elastic.spacemesh.io
+  port: 9200
+  username: spacemesh

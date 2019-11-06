@@ -3,16 +3,24 @@
 package main
 
 import (
-	"github.com/spacemeshos/go-spacemesh/app"
+	"fmt"
+	"github.com/spacemeshos/go-spacemesh/cmd"
+	"github.com/spacemeshos/go-spacemesh/cmd/node"
+	"os"
 )
 
-// vars set by make from outside
 var (
-	commit  = ""
-	branch  = ""
-	version = "0.0.1"
+	version string
+	commit  string
+	branch  string
 )
 
 func main() { // run the app
-	app.Main(commit, branch, version)
+	cmd.Version = version
+	cmd.Commit = commit
+	cmd.Branch = branch
+	if err := node.Cmd.Execute(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 }

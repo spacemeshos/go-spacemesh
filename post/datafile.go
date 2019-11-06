@@ -101,6 +101,6 @@ func (d *dataFileImpl) create() error {
 		d.file = file
 		d.writer = bufio.NewWriter(file)
 	}
-	log.Info("Created table file at: %s", d.name)
+	log.Debug("Created table file at: %s", d.name)
 	return err
 }

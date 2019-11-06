@@ -1,16 +1,70 @@
 language: go
-go: 1.9.x
+sudo: false
+go: 1.11.x
+
+env: GO111MODULE=on
+
+services:
+  - docker
+
+# for some reason /usr/local is owned by a different user in travis, so we transfer ownership to the current user:
+before_install: sudo chown -R $(whoami) /usr/local
+
+install: make install
 
 branches:
-    only:
-        - master
-        - develop
+  only:
+  - develop
+
 jobs:
-    include:
-        - stage: lint
-          script:
-              - ./ci/validate-gofmt.sh
-              - go get -u github.com/golang/lint/golint
-              - ./ci/validate-lint.sh
-        - stage: test
-          script: go test github.com/spacemeshos/go-spacemesh/...
+  include:
+  - stage: test
+    name: lint
+    install: true # this skips the installation step
+    script: make lint
+  - name: test
+    script:
+      - make genproto
+      - make test
+  - name: test-tidy-fmt
+    script:
+      - make genproto
+      - make test-tidy
+      - make test-fmt
+  - stage: docker-push
+    name: "Push to dockerHub"
+    script:
+      - make dockerpush
+    if: branch = develop AND type != pull_request
+
+  - stage: system-test
+    name: "Run p2p system tests"
+    script:
+      - make dockertest-p2p
+    if: branch = develop AND type != pull_request
+  - name: "Run mining system tests"
+    script:
+      - make dockertest-mining
+    if: branch = develop AND type != pull_request
+  - name: "Run hare system tests"
+    script:
+      - make dockertest-hare
+    if: branch = develop AND type != pull_request
+#  - name: "Run sync system tests"
+#    script:
+#      - make dockertest-sync
+#    if: branch = develop AND type != pull_request
+  - name: "Run late nodes system test"
+    script:
+      - make dockertest-late-nodes
+    if: branch = develop AND type != pull_request
+
+cache:
+  directories:
+    - $GOPATH/pkg/mod
+notifications:
+  slack:
+    rooms:
+      secure: opr9EexG4WwF/o9ygOP4MdSMmaR2UBeBDReDJv8qF6eflL0Mh5OtN++vRttpfnt9/HnEaaiO7hfp4BptatyjaO2VOnIU5h4lPX2NthmS2V0tx5Xq/Oo8jvyJ3IOAzLCt8RT3etmlimk9NCJm/ut8AejpnKv0nZqIyK805by2cRAwdswNNXN2/cCNlQAENSphnlkWuyo6Bsdtj7CwtqVkX2il5UMdk37qd1LzX0hM3hl0HlEbxmFD536imgnDbs3+13PuU/UDo2ggSvgLKOevGW5VXYhaCaRra/jYdDh/Mn0wgMB5354lP5OY59WrZyvlujCURyF/vV3iN+7IrC/vtAKAHYZZLxLAXekex2Pe6RIj3AKUlrp5lLUR9JP4dtfukRzrPclsFkO/gIXs4NgvDj5opjl0g7fIphgsaXGgsrjgvunjWovOEUx+l1vRuSXJF/hNG0OQnRRTCy5OQpxXgYLKQb6JyGn2l0UXQG9fuq4aoQ2ePQn+UbjFiGDEfaECk7ia69JJspfix4LSuwoHa2fNxh6XaA4z+oUmV+gLGuaG5q0yMMERwqrLzuS59m5oaux41xKFeUc4fG6ait7jrm4NRb/2ug/lqae2jifEcEAr084b/PwtpVpAP2KLDj9BaDzhnFKRjkPaj6yU2p9WJqbePXtrkw5x2Zs78dzdwZs=
+    on_success: change
+    on_failure: always

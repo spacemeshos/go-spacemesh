@@ -3,12 +3,13 @@ package accounts
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/crypto"
-	"github.com/spacemeshos/go-spacemesh/filesystem"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"io/ioutil"
 	"path/filepath"
 	"strings"
+
+	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/go-spacemesh/filesystem"
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 // AccountData is used to persist an account.
@@ -16,6 +17,7 @@ type AccountData struct {
 	PublicKey  string          `json:"publicKey"`
 	CryptoData CryptoData      `json:"crypto"`
 	KDParams   crypto.KDParams `json:"kd"`
+	NetworkID  int8            `json:"networkId"`
 }
 
 // CryptoData is the data use to encrypt/decrypt locally stored account data.
@@ -60,7 +62,7 @@ func LoadAllAccounts() error {
 // accountsDataPath: os-specific full path to accounts data folder.
 func NewAccountFromStore(accountID string, accountsDataPath string) (*Account, error) {
 
-	log.Info("Loading account from store. Id: %s ...", accountID)
+	log.Debug("Loading account from store. ID: %s ...", accountID)
 
 	fileName := accountID + ".json"
 	dataFilePath := filepath.Join(accountsDataPath, fileName)
@@ -84,9 +86,10 @@ func NewAccountFromStore(accountID string, accountsDataPath string) (*Account, e
 	acct := &Account{nil,
 		pubKey,
 		accountData.CryptoData,
-		accountData.KDParams}
+		accountData.KDParams,
+		accountData.NetworkID}
 
-	log.Info("Loaded account from store: %s", pubKey.String())
+	log.Debug("Loaded account from store: %s", pubKey.String())
 
 	Accounts.All[acct.String()] = acct
 
@@ -105,6 +108,7 @@ func (a *Account) Persist(accountsDataPath string) (string, error) {
 		pubKeyStr,
 		a.cryptoData,
 		a.kdParams,
+		a.NetworkID,
 	}
 
 	bytes, err := json.MarshalIndent(data, "", "  ")
@@ -121,7 +125,7 @@ func (a *Account) Persist(accountsDataPath string) (string, error) {
 		return "", err
 	}
 
-	log.Info("Persisted account to store. Id: %s", a.String())
+	log.Debug("Persisted account to store. ID: %s", a.String())
 
 	return dataFilePath, nil
 }

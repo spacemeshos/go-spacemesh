@@ -3,9 +3,9 @@ package merkle
 import (
 	"bytes"
 	"encoding/hex"
-	"github.com/spacemeshos/go-spacemesh/assert"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/merkle/pb"
+	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
@@ -27,7 +27,7 @@ func TestLeafNode(t *testing.T) {
 
 	nodeHash := node.getNodeHash()
 	binData, err := node.marshal()
-	assert.NoErr(t, err, "failed to marshal node")
+	assert.NoError(t, err, "failed to marshal node")
 	assert.True(t, bytes.Equal(crypto.Sha256(binData), nodeHash), "unexpected node hash")
 
 }
@@ -50,6 +50,6 @@ func TestExtNode(t *testing.T) {
 
 	nodeHash := node.getNodeHash()
 	binData, err := node.marshal()
-	assert.NoErr(t, err, "failed to marshal node")
+	assert.NoError(t, err, "failed to marshal node")
 	assert.True(t, bytes.Equal(crypto.Sha256(binData), nodeHash), "unexpected node hash")
 }

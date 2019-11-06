@@ -1,11 +1,12 @@
 package accounts
 
 import (
-	"github.com/spacemeshos/go-spacemesh/assert"
-	"github.com/spacemeshos/go-spacemesh/filesystem"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"os"
 	"testing"
+
+	"github.com/spacemeshos/go-spacemesh/filesystem"
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestAccountLoading(t *testing.T) {
@@ -14,7 +15,7 @@ func TestAccountLoading(t *testing.T) {
 
 func TestAccountOps(t *testing.T) {
 
-	filesystem.DeleteSpacemeshDataFolders(t)
+	filesystem.SetupTestSpacemeshDataFolders(t, "account_ops")
 
 	const passphrase = "a-weak-passphrase-123"
 	accountsDataFolder, err := filesystem.GetAccountsDataDirectoryPath()
@@ -40,7 +41,7 @@ func TestAccountOps(t *testing.T) {
 	// uncomment to cleanup the account data file from store
 	//defer os.Remove(accountDataFilePath)
 
-	log.Info("Persisted account to: %s", accountDataFilePath)
+	log.Debug("Persisted account to: %s", accountDataFilePath)
 
 	// read the account back from store
 	account1, err := NewAccountFromStore(account.String(), accountsDataFolder)
@@ -74,7 +75,7 @@ func TestAccountOps(t *testing.T) {
 
 func TestPersistence(t *testing.T) {
 
-	filesystem.DeleteSpacemeshDataFolders(t)
+	filesystem.SetupTestSpacemeshDataFolders(t, "account_persistence")
 
 	const passphrase = "a-weak-passphrase-1234"
 	const wrongPassphrase = "a-weak-passphrase-1245"
@@ -106,14 +107,18 @@ func TestPersistence(t *testing.T) {
 	accountPubKey := account.PubKey.String()
 	account1PubKey := account1.PubKey.String()
 
+	accountNetworkID := account.NetworkID
+	account1NetworkID := account1.NetworkID
+
 	assert.Equal(t, accountPubKey, account1PubKey, "Expected same public id")
 	assert.Equal(t, account.String(), account1.String(), "Expected same id")
+	assert.Equal(t, accountNetworkID, account1NetworkID, "Expected same network id")
 	assert.True(t, account1.IsAccountLocked(), "Expected account1 to be locked")
 
 	// attempt to unlock
 	err = account1.UnlockAccount(wrongPassphrase)
 
-	assert.Err(t, err, "Expected unlock with wrong password op error")
+	assert.Error(t, err, "Expected unlock with wrong password op error")
 	assert.True(t, account1.IsAccountLocked(), "Expected account to be locked")
 	assert.Nil(t, account1.PrivKey, "expected nil private key for locked account")
 

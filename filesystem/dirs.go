@@ -2,13 +2,14 @@
 package filesystem
 
 import (
-	"github.com/spacemeshos/go-spacemesh/app/config"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"os"
 	"os/user"
 	"path"
 	"path/filepath"
 	"strings"
+
+	"github.com/spacemeshos/go-spacemesh/app/config"
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 // Using a function pointer to get the current user so we can more easily mock in tests
@@ -38,15 +39,7 @@ func GetSpacemeshDataDirectoryPath() (string, error) {
 
 // GetSpacemeshTempDirectoryPath gets the spacemesh temp files dir so we don't have to work with convoluted os specific temp folders.
 func GetSpacemeshTempDirectoryPath() (string, error) {
-
-	dataDir, err := GetFullDirectoryPath(config.ConfigValues.DataFilePath)
-	if err != nil {
-		log.Error("Failed to get data directory", err)
-		return "", err
-	}
-
-	pathName := filepath.Join(dataDir, "temp")
-	return GetFullDirectoryPath(pathName)
+	return ensureDataSubDirectory("temp")
 }
 
 // DeleteAllTempFiles deletes all temp files from the temp dir and creates a new temp dir.
@@ -75,7 +68,7 @@ func EnsureSpacemeshDataDirectories() (string, error) {
 		return "", err
 	}
 
-	log.Info("Data directory: %s", dataPath)
+	log.Debug("Data directory: %s", dataPath)
 
 	// ensure sub folders exist - create them on demand
 	_, err = GetAccountsDataDirectoryPath()
@@ -102,7 +95,7 @@ func ensureDataSubDirectory(dirName string) (string, error) {
 	pathName := filepath.Join(dataPath, dirName)
 	aPath, err := GetFullDirectoryPath(pathName)
 	if err != nil {
-		log.Error("Can't access spacemesh folder", pathName)
+		log.Error("Can't access spacemesh folder", pathName, "Erorr:", err)
 		return "", err
 	}
 	return aPath, nil
@@ -111,23 +104,13 @@ func ensureDataSubDirectory(dirName string) (string, error) {
 // GetAccountsDataDirectoryPath returns the path to the accounts data directory.
 // It will create the directory if it doesn't already exist.
 func GetAccountsDataDirectoryPath() (string, error) {
-	aPath, err := ensureDataSubDirectory(config.AccountsDirectoryName)
-	if err != nil {
-		log.Error("Can't access spacemesh accounts folder", err)
-		return "", err
-	}
-	return aPath, nil
+	return ensureDataSubDirectory(config.AccountsDirectoryName)
 }
 
 // GetLogsDataDirectoryPath returns the path to the app logs data directory.
 // It will create the directory if it doesn't already exist.
 func GetLogsDataDirectoryPath() (string, error) {
-	aPath, err := ensureDataSubDirectory(config.LogDirectoryName)
-	if err != nil {
-		log.Error("Can't access spacemesh logs folder", err)
-		return "", err
-	}
-	return aPath, nil
+	return ensureDataSubDirectory(config.LogDirectoryName)
 }
 
 // GetUserHomeDirectory returns the current user's home directory if one is set by the system.
@@ -167,4 +150,27 @@ func GetFullDirectoryPath(name string) (string, error) {
 	err := os.MkdirAll(aPath, OwnerReadWriteExec)
 
 	return aPath, err
+}
+
+// EnsureNodesDataDirectory Gets the os-specific full path to the nodes master data directory.
+// Attempts to create the directory on-demand.
+func EnsureNodesDataDirectory(nodesDirectoryName string) (string, error) {
+	dataPath, err := GetSpacemeshDataDirectoryPath()
+	if err != nil {
+		return "", err
+	}
+
+	nodesDir := filepath.Join(dataPath, nodesDirectoryName)
+	return GetFullDirectoryPath(nodesDir)
+}
+
+// EnsureNodeDataDirectory Gets the path to the node's data directory, e.g. /nodes/[node-id]/
+// Directory will be created on demand if it doesn't exist.
+func EnsureNodeDataDirectory(nodesDataDir string, nodeID string) (string, error) {
+	return GetFullDirectoryPath(filepath.Join(nodesDataDir, nodeID))
+}
+
+// NodeDataFile Returns the os-specific full path to the node's data file.
+func NodeDataFile(nodesDataDir, NodeDataFileName, nodeID string) string {
+	return filepath.Join(nodesDataDir, nodeID, NodeDataFileName)
 }

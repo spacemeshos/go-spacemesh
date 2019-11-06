@@ -18,70 +18,56 @@ import (
 type JSONHTTPServer struct {
 	Port   uint
 	server *http.Server
-	ctx    context.Context
-	stop   chan bool
 }
 
 // NewJSONHTTPServer creates a new json http server.
 func NewJSONHTTPServer() *JSONHTTPServer {
-	return &JSONHTTPServer{Port: uint(config.ConfigValues.JSONServerPort), stop: make(chan bool)}
+	return &JSONHTTPServer{Port: uint(config.ConfigValues.JSONServerPort)}
 }
 
 // StopService stops the server.
-func (s JSONHTTPServer) StopService() {
-	log.Info("Stopping json-http service...")
-	s.stop <- true
-}
-
-// Listens on gracefully stopping the server in the same routine.
-func (s JSONHTTPServer) listenStop() {
-	<-s.stop
-	log.Info("Shutting down json API server...")
-	if err := s.server.Shutdown(s.ctx); err != nil {
+func (s *JSONHTTPServer) StopService() {
+	log.Debug("Stopping json-http service...")
+	if err := s.server.Shutdown(context.TODO()); err != nil {
 		log.Error("Error during shutdown json API server : %v", err)
 	}
 }
 
 // StartService starts the json api server and listens for status (started, stopped).
-func (s JSONHTTPServer) StartService(status chan bool) {
-	go s.startInternal(status)
+func (s *JSONHTTPServer) StartService() {
+	go s.startInternal()
 }
 
-func (s JSONHTTPServer) startInternal(status chan bool) {
-	ctx := context.Background()
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	s.ctx = ctx
+func (s *JSONHTTPServer) startInternal() {
 
 	mux := runtime.NewServeMux()
 	opts := []grpc.DialOption{grpc.WithInsecure()}
 
 	// register the http server on the local grpc server
 	portStr := strconv.Itoa(int(config.ConfigValues.GrpcServerPort))
-	echoEndpoint := flag.String("api_endpoint", "localhost:"+portStr, "endpoint of api grpc service")
 
-	if err := gw.RegisterSpaceMeshServiceHandlerFromEndpoint(ctx, mux, *echoEndpoint, opts); err != nil {
+	const endpoint = "api_endpoint"
+	var echoEndpoint string
+
+	fl := flag.Lookup(endpoint)
+	if fl != nil {
+		flag.Set(endpoint, "localhost:"+portStr)
+		echoEndpoint = fl.Value.String()
+	} else {
+		echoEndpoint = *flag.String(endpoint, "localhost:"+portStr, "endpoint of api grpc service")
+	}
+	if err := gw.RegisterSpacemeshServiceHandlerFromEndpoint(context.Background(), mux, echoEndpoint, opts); err != nil {
 		log.Error("failed to register http endpoint with grpc", err)
 	}
 
 	addr := ":" + strconv.Itoa(int(s.Port))
 
-	log.Info("json API listening on port %d", s.Port)
-
-	go func() { s.listenStop() }()
-
-	if status != nil {
-		status <- true
-	}
+	log.Debug("json API listening on port %d", s.Port)
 
 	s.server = &http.Server{Addr: addr, Handler: mux}
 	err := s.server.ListenAndServe()
 
 	if err != nil {
-		log.Info("listen and serve stopped with status. %v", err)
-	}
-
-	if status != nil {
-		status <- true
+		log.Debug("listen and serve stopped with status. %v", err)
 	}
 }

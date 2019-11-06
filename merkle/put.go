@@ -39,12 +39,12 @@ func (mt *merkleTreeImp) Put(k, v []byte) error {
 
 	if res != nil && bytes.Equal(res, v) {
 		// value already stored in db
-		log.Info("Value already stored in the tree")
+		log.Debug("Value already stored in the tree")
 		return nil
 	}
 
 	hexKey := hex.EncodeToString(k)
-	log.Info("Merkle inserting user data for key: %s...", hexKey)
+	log.Debug("Merkle inserting user data for key: %s...", hexKey)
 
 	// todo - optimize this to avoid iteration over path
 	pos := mt.getPathLength(stack)
@@ -66,7 +66,7 @@ func (mt *merkleTreeImp) Put(k, v []byte) error {
 // k: key to value following the stack
 func (mt *merkleTreeImp) update(k string, s *stack) error {
 
-	log.Info("Persisting nodes for path %s", k)
+	log.Debug("Persisting nodes for path %s", k)
 
 	var lastRoot Node
 

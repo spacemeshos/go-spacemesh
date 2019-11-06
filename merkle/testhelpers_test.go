@@ -2,8 +2,8 @@ package merkle
 
 import (
 	"bytes"
-	"github.com/spacemeshos/go-spacemesh/assert"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
+	"github.com/stretchr/testify/assert"
 	"path/filepath"
 	"testing"
 )
@@ -14,20 +14,20 @@ import (
 func validateGet(t *testing.T, tree Tree, k, v []byte) {
 	t.Helper()
 	res, _, err := tree.Get(k)
-	assert.NoErr(t, err, "failed to get data")
+	assert.NoError(t, err, "failed to get data")
 	assert.True(t, bytes.Equal(res, v), "unexpected data")
 }
 
 func tryPut(t *testing.T, tree Tree, k, v []byte) {
 	t.Helper()
 	err := tree.Put(k, v)
-	assert.NoErr(t, err, "failed to put data.")
+	assert.NoError(t, err, "failed to put data.")
 }
 
 func getDbPaths(t *testing.T) (string, string) {
 	t.Helper()
 	tempDir, err := filesystem.GetSpacemeshTempDirectoryPath()
-	assert.NoErr(t, err, "failed to get temp dir")
+	assert.NoError(t, err, "failed to get temp dir")
 	userDb := filepath.Join(tempDir, "userdata.db")
 	treeDb := filepath.Join(tempDir, "tree.db")
 	return userDb, treeDb

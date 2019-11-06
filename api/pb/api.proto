@@ -2,15 +2,139 @@ syntax = "proto3";
 package pb;
 
 import "google/api/annotations.proto";
+import "google/protobuf/empty.proto";
 
 message SimpleMessage {
     string value = 1;
 }
 
-service SpaceMeshService {
+message TxConfirmation {
+    string value = 1;
+    string id = 2;
+}
+
+message AccountId {
+    string address =1;
+}
+
+message TransferFunds {
+    AccountId sender =1;
+    AccountId receiver =2;
+    uint64 nonce =3;
+    uint64 amount =4;
+}
+
+message InitPost {
+    string logicalDrive =1;
+    uint64 commitmentSize =2;
+    string coinbase =3;
+}
+
+message SignedTransaction {
+    bytes tx = 1; // serialized with XDR
+}
+
+message EligibleLayers {
+    repeated uint64 layers = 1;
+}
+
+message BroadcastMessage {
+    string data = 1;
+}
+
+message BinaryMessage {
+    bytes data = 1;
+}
+
+message CommitmentSizeMessage {
+    uint64 mbCommitted = 1;
+}
+
+message LogicalDriveMessage {
+    string logicalDrive = 1;
+}
+
+message MiningStats {
+    string dataDir = 1;
+    int32 status = 2;
+    string coinbase = 3;
+}
+
+message SetLogLevel {
+    string loggerName = 1;
+    string severity = 2;
+}
+
+service SpacemeshService {
     rpc Echo(SimpleMessage) returns (SimpleMessage) {
         option (google.api.http) = {
           post: "/v1/example/echo"
+          body: "*"
+        };
+    }
+    rpc GetNonce(AccountId) returns (SimpleMessage) {
+        option (google.api.http) = {
+          post: "/v1/nonce"
+          body: "*"
+        };
+    }
+    rpc GetBalance(AccountId) returns (SimpleMessage) {
+        option (google.api.http) = {
+          post: "/v1/balance"
+          body: "*"
+        };
+    }
+    rpc StartMining(InitPost) returns (SimpleMessage) {
+        option (google.api.http) = {
+          post: "/v1/startmining"
+          body: "*"
+        };
+    }
+    rpc SubmitTransaction(SignedTransaction) returns (TxConfirmation) {
+        option (google.api.http) = {
+          post: "/v1/submittransaction"
+          body: "*"
+        };
+    }
+    rpc Broadcast(BroadcastMessage) returns (SimpleMessage) {
+        option (google.api.http) = {
+          post: "/v1/broadcast"
+          body: "*"
+        };
+    }
+    rpc BroadcastPoet(BinaryMessage) returns (SimpleMessage) {
+        option (google.api.http) = {
+          post: "/v1/broadcastpoet"
+          body: "*"
+        };
+    }
+    rpc SetAwardsAddress(AccountId) returns (SimpleMessage) {
+        option (google.api.http) = {
+          post: "/v1/setawardsaddr"
+          body: "*"
+        };
+    }
+    rpc GetMiningStats(google.protobuf.Empty) returns (MiningStats) {
+        option (google.api.http) = {
+          post: "/v1/stats"
+          body: "*"
+        };
+    }
+    rpc GetGenesisTime(google.protobuf.Empty) returns (SimpleMessage) {
+        option (google.api.http) = {
+          post: "/v1/genesis"
+          body: "*"
+        };
+    }
+    rpc GetUpcomingAwards(google.protobuf.Empty) returns (EligibleLayers) {
+        option (google.api.http) = {
+          post: "/v1/getupcomingawards"
+          body: "*"
+        };
+    }
+    rpc SetLoggerLevel(SetLogLevel) returns (SimpleMessage) {
+        option (google.api.http) = {
+          post: "/v1/loggerlevel"
           body: "*"
         };
     }

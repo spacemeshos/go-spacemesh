@@ -1,6 +1,8 @@
 # See http://help.github.com/ignore-files/ for more about ignoring files.
 
+cmd/tmp
 /tmp
+/app/tmp
 */**/*un~
 */**/*.test
 */**/temp.js
@@ -18,7 +20,16 @@
 .vagrant
 
 /go-spacemesh
+/go-hare
 /cp.out
 /cover.out
 /cover-all.out
 */**/cover.out
+gcloud.json
+spacemesh.json
+**/pb/*.pb.go
+**/pb/*.pb.gw.go
+**/pb/*.swagger.json
+database/data
+app/state
+*.pyc

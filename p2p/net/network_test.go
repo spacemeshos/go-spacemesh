@@ -1,87 +1,181 @@
 package net
 
 import (
+	"encoding/hex"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/assert"
-	"github.com/spacemeshos/go-spacemesh/crypto"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/nodeconfig"
+	"github.com/spacemeshos/go-spacemesh/p2p/config"
+	"github.com/spacemeshos/go-spacemesh/p2p/node"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"math/rand"
+	"net"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
 
-func TestReadWrite(t *testing.T) {
+func Test_sumByteArray(t *testing.T) {
+	bytez := sumByteArray([]byte{0x1, 0x1, 0x1, 0x1, 0x1, 0x1, 0x1, 0x1, 0x1, 0x1, 0x1, 0x1, 0x1, 0x1, 0x1, 0x1, 0x1, 0x1, 0x1, 0x1})
+	assert.Equal(t, bytez, uint(20))
+	bytez2 := sumByteArray([]byte{0x5, 0x5, 0x5, 0x5, 0x5, 0x5, 0x5, 0x5, 0x5, 0x5, 0x5, 0x5, 0x5, 0x5, 0x5, 0x5, 0x5, 0x5, 0x5, 0x5})
+	assert.Equal(t, bytez2, uint(100))
+}
 
-	msg := []byte("hello spacemesh")
-	msgID := crypto.UUID()
-	port := crypto.GetRandomUserPort()
-	address := fmt.Sprintf("0.0.0.0:%d", port)
-	done := make(chan bool, 1)
+func TestNet_EnqueueMessage(t *testing.T) {
+	testnodes := 100
+	cfg := config.DefaultConfig()
+	ln, err := node.NewNodeIdentity(cfg, "0.0.0.0:0000", false)
+	assert.NoError(t, err)
+	n, err := NewNet(cfg, ln)
+	assert.NoError(t, err)
 
-	n, err := NewNet(address, nodeconfig.ConfigValues)
-	assert.Nil(t, err, "failed to create tcp server")
+	var rndmtx sync.Mutex
+	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
 
-	_, err = NewNet(address, nodeconfig.ConfigValues)
-	assert.Err(t, err, "Should not be able to create a new net on same address")
+	randmsg := func(b []byte) {
+		rndmtx.Lock()
+		rnd.Read(b)
+		rndmtx.Unlock()
+	}
 
-	// run a simple network events processor go routine
-	go func() {
-	Loop:
-		for {
+	var wg sync.WaitGroup
+	for i := 0; i < testnodes; i++ {
+		wg.Add(1)
+		go func() {
+			rnode := node.GenerateRandomNodeData()
+			sum := sumByteArray(rnode.PublicKey().Bytes())
+			msg := make([]byte, 10, 10)
+			randmsg(msg)
+			fmt.Printf("pushing %v to %v \r\n", hex.EncodeToString(msg), sum%n.queuesCount)
+			n.EnqueueMessage(IncomingMessageEvent{NewConnectionMock(rnode.PublicKey()), msg})
+			fmt.Printf("pushed %v to %v \r\n", hex.EncodeToString(msg), sum%n.queuesCount)
+			tx := time.NewTimer(time.Second * 2)
 			select {
-			case <-done:
-				break Loop
-
-			case c := <-n.GetNewConnections():
-				log.Info("Remote client connected. %v", c)
-
-			case m := <-n.GetIncomingMessage():
-				log.Info("Got remote message: %s", string(m.Message))
-				m.Connection.Close()
-				done <- true
-
-			case err := <-n.GetConnectionErrors():
-				t.Fatalf("Connection error: %v", err)
-
-			case err := <-n.GetMessageSendErrors():
-				t.Fatalf("Failed to send message to connection: %v", err)
-
-			case c := <-n.GetClosingConnections():
-				log.Info("Connection closed. %v", c)
-
-			case <-time.After(time.Second * 30):
-				t.Fatalf("Test timed out")
+			case _ = <-n.IncomingMessages()[sum%n.queuesCount]:
+				fmt.Printf("got %v \r\n", hex.EncodeToString(msg))
+				//assert.Equal(t, s.Message, msg)
+				//assert.Equal(t, s.Conn.RemotePublicKey(), rnode.PublicKey())
+				wg.Done()
+			case <-tx.C:
+				fmt.Println("didn't get ", hex.EncodeToString(msg))
+				t.FailNow()
 			}
-		}
+		}()
+	}
+	wg.Wait()
+}
+
+type mockListener struct {
+	calledCount  int32
+	connReleaser chan struct{}
+	accpetResErr error
+}
+
+func newMockListener() *mockListener {
+	return &mockListener{connReleaser: make(chan struct{})}
+}
+
+func (ml *mockListener) listenerFunc() (net.Listener, error) {
+	return ml, nil
+}
+
+func (ml *mockListener) Accept() (net.Conn, error) {
+	<-ml.connReleaser
+	atomic.AddInt32(&ml.calledCount, 1)
+	<-ml.connReleaser
+	var c net.Conn = nil
+	if ml.accpetResErr == nil {
+		c, _ = net.Pipe() // just for the interface lolz
+	}
+	return c, ml.accpetResErr
+}
+
+func (ml *mockListener) releaseConn() {
+	ml.connReleaser <- struct{}{}
+	ml.connReleaser <- struct{}{}
+}
+
+func (ml *mockListener) Close() error {
+	return nil
+}
+func (ml *mockListener) Addr() net.Addr {
+	return &net.IPAddr{IP: net.ParseIP("0.0.0.0"), Zone: "ipv4"}
+}
+
+type tempErr string
+
+func (t tempErr) Error() string {
+	return string(t)
+}
+
+func (t tempErr) Temporary() bool {
+	return true
+}
+
+func Test_Net_LimitedConnections(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.SessionTimeout = 100 * time.Millisecond
+
+	ln, err := node.NewNodeIdentity(cfg, "0.0.0.0:0000", false)
+	require.NoError(t, err)
+	n, err := NewNet(cfg, ln)
+	//n.SubscribeOnNewRemoteConnections(counter)
+	listener := newMockListener()
+	err = n.listen(listener.listenerFunc)
+	require.NoError(t, err)
+	listener.accpetResErr = tempErr("demo connection will close and allow more")
+	for i := 0; i < cfg.MaxPendingConnections; i++ {
+		listener.releaseConn()
+	}
+
+	require.Equal(t, atomic.LoadInt32(&listener.calledCount), int32(cfg.MaxPendingConnections))
+
+	done := make(chan struct{})
+	go func() {
+		done <- struct{}{}
+		listener.releaseConn()
+		done <- struct{}{}
 	}()
-
-	// we use the network to dial to itself over the local loop
-	c, err := n.DialTCP(address, time.Duration(10*time.Second), time.Duration(48*time.Hour))
-	assert.Nil(t, err, "failed to connect to tcp server")
-
-	log.Info("Sending message...")
-
-	//t1 := c.LastOpTime()
-
-	c.Send(msg, msgID)
-	log.Info("Message sent.")
-
-	// todo: test callbacks for messages
-
-	log.Info("Waiting for incoming messages...")
-
+	require.Equal(t, atomic.LoadInt32(&listener.calledCount), int32(cfg.MaxPendingConnections))
 	<-done
+	<-done
+	require.Equal(t, atomic.LoadInt32(&listener.calledCount), int32(cfg.MaxPendingConnections)+1)
+}
 
-	n.Shutdown()
-	_, err = n.DialTCP(address, time.Duration(10*time.Second), time.Duration(48*time.Hour))
-	assert.Err(t, err, "expected to fail dialing after calling shutdown")
-	//
-	//t2 := c.LastOpTime()
-	//
-	//// verify connection props
-	id := c.ID()
-	assert.True(t, len(id) > 0, "failed to get connection id")
-	//assert.True(t, t2.Sub(t1) > 0, "invalid last op time")
-	err = c.Close()
-	assert.NoErr(t, err, "error closing connection")
+func TestHandlePreSessionIncomingMessage2(t *testing.T) {
+	r := require.New(t)
+	var wg sync.WaitGroup
+
+	aliceNode, _ := node.GenerateTestNode(t)
+	bobNode, _ := node.GenerateTestNode(t)
+
+	bobsAliceConn := NewConnectionMock(aliceNode.PublicKey())
+	bobsAliceConn.addr = fmt.Sprintf("%v:%v", aliceNode.IP.String(), aliceNode.ProtocolPort)
+	bobsNet, err := NewNet(config.DefaultConfig(), bobNode)
+	r.NoError(err)
+	bobsNet.SubscribeOnNewRemoteConnections(func(event NewConnectionEvent) {
+		r.Equal(aliceNode.PublicKey().String(), event.Conn.Session().ID().String(), "wrong session received")
+		wg.Done()
+	})
+
+	aliceSessionWithBob := createSession(aliceNode.PrivateKey(), bobNode.PublicKey())
+	aliceHandshakeMessageToBob, err := generateHandshakeMessage(aliceSessionWithBob, 1, 123, aliceNode.PublicKey())
+	r.NoError(err)
+
+	wg.Add(1)
+
+	err = bobsNet.HandlePreSessionIncomingMessage(bobsAliceConn, aliceHandshakeMessageToBob)
+	r.NoError(err)
+	r.Equal(int32(0), bobsAliceConn.SendCount())
+
+	wg.Wait()
+
+	wg.Add(1)
+
+	err = bobsNet.HandlePreSessionIncomingMessage(bobsAliceConn, aliceHandshakeMessageToBob)
+	r.NoError(err)
+	r.Equal(int32(0), bobsAliceConn.SendCount())
+
+	wg.Wait()
 }

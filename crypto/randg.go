@@ -45,11 +45,6 @@ func GetRandomBytes(n int) ([]byte, error) {
 	return b, nil
 }
 
-// GetRandomUserPort returns a random port number in the range of [1024-49151).
-func GetRandomUserPort() uint32 {
-	return GetRandomUInt32(48127) + 1024
-}
-
 // GetRandomUInt32 returns a uint32 in the range [0 - max).
 func GetRandomUInt32(max uint32) uint32 {
 
@@ -57,8 +52,7 @@ func GetRandomUInt32(max uint32) uint32 {
 	_, err := rand.Read(b)
 
 	if err != nil {
-		log.Error("Failed to get entropy from system", err)
-		panic(err)
+		log.Panic("Failed to get entropy from system: ", err)
 	}
 
 	data := binary.BigEndian.Uint32(b)

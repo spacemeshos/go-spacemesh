@@ -2,8 +2,9 @@ package crypto
 
 import (
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestMinXY(t *testing.T) {
