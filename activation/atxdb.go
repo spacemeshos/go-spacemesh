@@ -68,7 +68,7 @@ func (db *ActivationDb) ProcessAtx(batch database.Batch, atx *types.ActivationTx
 	}
 	epoch := atx.PubLayerIdx.GetEpoch(db.LayersPerEpoch)
 	db.log.With().Info("processing atx", log.AtxId(atx.ShortString()), log.EpochId(uint64(epoch)),
-		log.NodeId(atx.NodeId.Key[:5]), log.LayerId(uint64(atx.PubLayerIdx)))
+		log.String("atx_node_id", atx.NodeId.Key[:5]), log.LayerId(uint64(atx.PubLayerIdx)))
 	err := db.ContextuallyValidateAtx(&atx.ActivationTxHeader)
 	if err != nil {
 		db.log.With().Error("ATX failed contextual validation", log.AtxId(atx.ShortString()), log.Err(err))
