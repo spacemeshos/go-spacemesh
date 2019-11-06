@@ -145,11 +145,10 @@ func createLayerWithRandVoting(msh *mesh.Mesh, index types.LayerID, prev []*type
 	return l
 }
 
-func atxWithProof(pubkey string, proof []byte) *types.ActivationTx {
+func atxWithProof(pubkey string, poetref []byte) *types.ActivationTx {
 	coinbase := types.HexToAddress("aaaa")
 	chlng := types.HexToHash32("0x3333")
-	poetRef := []byte{0xde, 0xad}
-	npst := activation.NewNIPSTWithChallenge(&chlng, poetRef)
+	npst := activation.NewNIPSTWithChallenge(&chlng, poetref)
 
 	atx := types.NewActivationTx(types.NodeId{Key: pubkey, VRFPublicKey: []byte(RandStringRunes(8))}, coinbase, 0, *types.EmptyAtxId, 5, 1, *types.EmptyAtxId, 0, []types.BlockID{1, 2, 3}, npst)
 	atx.Commitment = commitment
