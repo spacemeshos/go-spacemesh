@@ -115,4 +115,9 @@ def set_namespace(request, session_id, load_config):
 
 @pytest.fixture(scope='session')
 def init_session(load_config, set_namespace, set_docker_images, session_id):
+    """
+    init_session sets up a new testing environment using k8s with
+    the given yaml config file
+    :return: namespace id
+    """
     return session_id

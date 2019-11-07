@@ -1,3 +1,4 @@
+from pprint import pprint
 import random
 import re
 import time
@@ -26,7 +27,7 @@ timeout_factor = 1
 
 
 def query_bootstrap_es(indx, namespace, bootstrap_po_name):
-    hits = poll_query_message(current_index, namespace, bootstrap_po_name, { "M": "Local node identity" }, expected=1)
+    hits = poll_query_message(current_index, namespace, bootstrap_po_name, {"M": "Local node identity"}, expected=1)
     for h in hits:
         match = re.search(r"Local node identity >> (?P<bootstrap_key>\w+)", h.M)
         if match:
@@ -54,6 +55,43 @@ def add_client(request, setup_bootstrap, setup_clients):
         return client_name
 
     return _add_single_client()
+
+
+@pytest.fixture()
+def add_clients(setup_bootstrap, setup_clients):
+    """
+    add_clients returns a function that accepts number of replicas
+    and a version and gets the information from
+
+    :param setup_bootstrap:
+    :param setup_clients:
+    :return: _add_client function
+    """
+
+    def _add_clients(num_of_clients, version=None, version_separator='_'):
+        """
+        :param num_of_clients: number of replicas
+        :param version: string of the wanted client version
+        :param version_separator: a string type separator to separate between client key and client version
+        :return:  a list of all created client pods
+        """
+        if version and not isinstance(version, str):
+            raise ValueError("version must be type string")
+
+        if not setup_bootstrap.pods:
+            raise Exception("Could not find bootstrap node")
+
+        bs_info = setup_bootstrap.pods[0]
+
+        client_key = 'client'
+        if version:
+            client_key += f'{version_separator}{version}'
+
+        cspec = get_conf(bs_info, testconfig[client_key])
+        pods = add_multi_clients(setup_bootstrap.deployment_id, cspec, size=num_of_clients)
+        return pods
+
+    return _add_clients
 
 
 # ==============================================================================
@@ -155,8 +193,8 @@ def test_many_gossip_messages(setup_clients, add_curl):
 
     # *note*: this already waits for bootstrap so we can send the msg right away.
     # send message to client via rpc
-    TEST_MESSAGES = 10
-    for i in range(TEST_MESSAGES):
+    test_messages = 10
+    for i in range(test_messages):
         rnd = random.randint(0, len(setup_clients.pods) - 1)
         client_ip = setup_clients.pods[rnd]['pod_ip']
         podname = setup_clients.pods[rnd]['name']
@@ -182,59 +220,141 @@ def test_many_gossip_messages(setup_clients, add_curl):
                                    findFails=False,
                                    expected=total_expected_gossip)
 
-        assert total_expected_gossip == len(after), "test_many_gossip_messages: Total gossip messages in ES is not as expected"
+        assertion_msg = "test_many_gossip_messages: Total gossip messages in ES is not as expected"
+        assert total_expected_gossip == len(after), assertion_msg
 
 
-def test_many_gossip_sim(setup_clients, add_curl):
-    msg_size = 10000  # 1kb TODO: increase up to 2mb
-    fields = {'M': 'new_gossip_message', 'protocol': 'api_test_gossip'}
-    TEST_MESSAGES = 100
+def send_msgs(setup_clients, api, headers, total_expected_gossip, msg_size=10000, prop_sleep_time=20, num_of_msg=100,
+              expected_ret="{'value': 'ok'}", msg_field="data"):
+    """
+    sends a protocol message to a random node and asserts its' propagation
 
-    initial = len(query_message(current_index, testconfig['namespace'], setup_clients.deployment_name, fields))
-
-    for i in range(TEST_MESSAGES):
-        rnd = random.randint(0, len(setup_clients.pods) - 1)
+    :param setup_clients: clients info
+    :param api: api path
+    :param headers: protocol header fields
+    :param total_expected_gossip: expected hit result
+    :param msg_size:
+    :param prop_sleep_time:
+    :param num_of_msg:
+    :param expected_ret:
+    :param msg_field:
+    """
+    # in our case each pod contains one node
+    pods_num = len(setup_clients.pods)
+    for i in range(num_of_msg):
+        rnd = random.randint(0, pods_num - 1)
         client_ip = setup_clients.pods[rnd]['pod_ip']
-        podname = setup_clients.pods[rnd]['name']
-        print("Sending gossip from client ip: {0}/{1}".format(podname, client_ip))
+        pod_name = setup_clients.pods[rnd]['name']
+        print("Sending gossip from client ip: {0}/{1}".format(pod_name, client_ip))
 
         # todo: take out broadcast and rpcs to helper methods.
-        start = datetime.utcnow()
-        api = 'v1/broadcast'
-        msg = "".join(choice(ascii_lowercase) for i in range(msg_size))
-        data = '{"data":"' + msg + '"}'
+        msg = "".join(choice(ascii_lowercase) for _ in range(msg_size))
+        # TODO in the future this may be changed for a more generic function
+        data = '{{"{msg_field}": "{msg}"}}'.format(msg_field=msg_field, msg=msg)
         out = api_call(client_ip, data, api, testconfig['namespace'])
-        assert "{'value': 'ok'}" in out
+        expected_ret = expected_ret
+        ass_err = f"test_invalid_msg: expected \"{expected_ret}\" and got \"{out}\""
+        assert expected_ret in out, ass_err
 
-    gossip_propagation_sleep = (TEST_MESSAGES + 20) * timeout_factor  # currently we expect short propagation times.
+    # currently we expect short propagation times.
+    gossip_propagation_sleep = (num_of_msg + prop_sleep_time) * timeout_factor
     print('sleep for {0} sec to enable gossip propagation'.format(gossip_propagation_sleep))
     time.sleep(gossip_propagation_sleep)
 
-    total_expected_gossip = initial + len(setup_clients.pods) * TEST_MESSAGES
     after = poll_query_message(indx=current_index,
                                namespace=testconfig['namespace'],
                                client_po_name=setup_clients.deployment_name,
-                               fields=fields,
+                               fields=headers,
                                findFails=False,
                                expected=total_expected_gossip)
 
-    assert total_expected_gossip == len(after), "test_many_gossip_sim: Total gossip messages in ES is not as expected"
+    err_msg = "msg_testing: Total gossip messages in ES is not as expected"
+    err_msg += f"\nexpected {total_expected_gossip}, got {len(after)}"
+    assert total_expected_gossip == len(after), err_msg
 
 
-# - Deploy X peers
-# - Wait for bootstrap
-# - Broadcast 5 messages (make sure that all of them are live simultaneously)
-# - Validate that all nodes got exactly 5 messages
-# - Sample few nodes and validate that they got all 5 messages
-def test_msg_rcv(setup_bootstrap, setup_clients):
-    pass
+# Deploy X peers
+# Wait for bootstrap
+# Broadcast Y messages (make sure that all of them are live simultaneously)
+# Validate that all nodes got exactly Y messages (X*Y messages)
+# Sample few nodes and validate that they got all 5 messages
+def test_many_gossip_sim(setup_clients, add_curl):
+    api = 'v1/broadcast'
+    headers = {'M': 'new_gossip_message', 'protocol': 'api_test_gossip'}
+    msg_size = 10000  # 1kb TODO: increase up to 2mb
+    test_messages = 100
+    pods_num = len(setup_clients.pods)
+
+    prev_num_of_msg = len(query_message(current_index, testconfig['namespace'], setup_clients.deployment_name, headers))
+    # if msg is valid we should see the message at each node msg * pods(nodes)
+    total_expected_gossip = prev_num_of_msg + test_messages * pods_num
+
+    send_msgs(setup_clients, api, headers, total_expected_gossip, num_of_msg=test_messages)
+
+
+# Deploy X peers
+# Wait for bootstrap
+# Broadcast invalid message (test for each protocol)
+# Validate that the message wasn't received by any of the nodes
+def test_invalid_grpc_gossip_msg(setup_bootstrap, setup_clients, add_curl):
+    api = 'v1/broadcast'
+    headers = {'M': 'new_gossip_message', 'protocol': 'api_test_gossip'}
+    # msg_size = 10000  # 1kb TODO: increase up to 2mb
+    test_messages = 10
+
+    prev_num_of_msg = len(query_message(current_index, testconfig['namespace'], setup_clients.deployment_name, headers))
+    # add only the number of messages
+    # malformed GRPC message will appear only at the chosen nodes
+    # as new_gossip_message when querying for results
+    total_expected_gossip = prev_num_of_msg + test_messages
+
+    # create a GRPC error on msg_field
+    send_msgs(setup_clients, api, headers, total_expected_gossip, num_of_msg=test_messages, msg_field="d")
+
+
+def test_invalid_msg(setup_bootstrap, setup_clients, add_curl):
+    api = 'v1/broadcast'
+    # protocol is modified
+    headers = {'M': 'new_gossip_message', 'protocol': 'api_test_gossi'}
+    msg_size = 10000  # 1kb TODO: increase up to 2mb
+    test_messages = 10
+
+    prev_num_of_msg = len(query_message(current_index, testconfig['namespace'], setup_clients.deployment_name, headers))
+    # add only the number of previous messages
+    # when there's a problem in our protocol we're not even sending
+    total_expected_gossip = prev_num_of_msg
+
+    send_msgs(setup_clients, api, headers, total_expected_gossip, num_of_msg=test_messages)
+
+
+# Different client version on bootstrap:
+# Deploy X peers with client version A
+# Wait for bootstrap
+# Deploy new peer with client version B
+# Validate that the new node failed to bootstrap
+def test_diff_client_ver(setup_bootstrap, setup_clients, add_curl, add_clients):
+    sync_sleep_time = 10
+    num_of_v2_clients = 2
+    v2_version = "v2"
+
+    clients = add_clients(num_of_v2_clients, v2_version)
+
+    time.sleep(sync_sleep_time)
+    headers = {'M': 'discovery_bootstrap'}
+    for cl in clients:
+        hits = poll_query_message(indx=current_index,
+                                  namespace=setup_bootstrap.deployment_id,
+                                  client_po_name=cl,
+                                  fields=headers,
+                                  findFails=False)
+        ass_err = f"client is not supposed to discover bootstrap, on: {cl}"
+        assert len(hits) == 0, ass_err
 
 
 # NOTE : this test is ran in the end because it affects the network structure,
 # it creates more pods and bootstrap them which will affect final query results
 # an alternative to that would be to kill the pods when the test ends.
 def test_late_bootstraps(init_session, setup_bootstrap, setup_clients):
-    # Sleep a while before checking the node is bootstarped
     TEST_NUM = 10
     testnames = []
 
@@ -244,13 +364,15 @@ def test_late_bootstraps(init_session, setup_bootstrap, setup_clients):
                                    1)
         testnames.append((client[0], datetime.now()))
 
+    # Need to sleep for a while in order to enable the
+    # propagation of the gossip message
     time.sleep(TEST_NUM * timeout_factor)
 
     fields = {'M': 'discovery_bootstrap'}
     for i in testnames:
         hits = poll_query_message(indx=current_index,
                                   namespace=testconfig['namespace'],
-                                  client_po_name= i[0],
+                                  client_po_name=i[0],
                                   fields=fields,
                                   findFails=False,
                                   expected=1)

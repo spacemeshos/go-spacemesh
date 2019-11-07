@@ -44,30 +44,42 @@ GENESIS_TIME = pytz.utc.localize(datetime.utcnow() + timedelta(seconds=testconfi
 
 
 def get_conf(bs_info, client_config, setup_oracle=None, setup_poet=None, args=None):
+    """
+    get_conf gather specification information into one ContainerSpec object
 
+    :param bs_info: bootstrap info, type DeploymentInfo
+    :param client_config: client info
+    :param setup_oracle: oracle info
+    :param setup_poet: poet info
+    :param args: arguments for appendage
+    :return: ContainerSpec
+    """
     client_args = {} if 'args' not in client_config else client_config['args']
-
+    # append client arguments
     if args is not None:
         for arg in args:
             client_args[arg] = args[arg]
 
+    # create a new container spec with client configuration
     cspec = ContainerSpec(cname='client', specs=client_config)
 
+    # append oracle configuration
     if setup_oracle:
         client_args['oracle_server'] = 'http://{0}:{1}'.format(setup_oracle, ORACLE_SERVER_PORT)
 
+    # append poet configuration
     if setup_poet:
         client_args['poet_server'] = '{0}:{1}'.format(setup_poet, POET_SERVER_PORT)
 
     cspec.append_args(bootnodes=node_string(bs_info['key'], bs_info['pod_ip'], BOOTSTRAP_PORT, BOOTSTRAP_PORT),
                       genesis_time=GENESIS_TIME.isoformat('T', 'seconds'))
-
+    # append client config to ContainerSpec
     if len(client_args) > 0:
         cspec.append_args(**client_args)
     return cspec
 
 
-def add_multi_clients(deployment_id, container_specs, size=2):
+def add_multi_clients(deployment_id, container_specs, size=2, ret_pods=False):
 
     k8s_file, k8s_create_func = choose_k8s_object_create(testconfig['client'],
                                                          CLIENT_DEPLOYMENT_FILE,
@@ -82,12 +94,17 @@ def add_multi_clients(deployment_id, container_specs, size=2):
                                                         include_uninitialized=True,
                                                         label_selector=("name={0}".format(
                                                             resp.metadata._name.split('-')[1]))).items
-    pods = []
-    for c in client_pods:
-        pod_name = c.metadata.name
-        if pod_name.startswith(resp.metadata.name):
-            pods.append(pod_name)
-    return pods
+    if ret_pods:
+        ret_val = client_pods
+    else:
+        pods = []
+        for c in client_pods:
+            pod_name = c.metadata.name
+            if pod_name.startswith(resp.metadata.name):
+                pods.append(pod_name)
+        ret_val = pods
+
+    return ret_val
 
 
 def choose_k8s_object_create(config, deployment_file, statefulset_file):
@@ -156,8 +173,13 @@ def setup_bootstrap_in_namespace(namespace, bs_deployment_info, bootstrap_config
     return bs_deployment_info
 
 
-def setup_clients_in_namespace(namespace, bs_deployment_info, client_deployment_info, client_config,
+def setup_clients_in_namespace(namespace, bs_deployment_info, client_deployment_info, client_config, name="client",
                                oracle=None, poet=None, dep_time_out=120):
+    # this function used to be the way to extract the client title
+    # in case we want a different title (client_v2) we can specify it
+    # directly in "name" input
+    def _extract_label():
+        return client_deployment_info.deployment_name.split('-')[1]
 
     cspec = get_conf(bs_deployment_info, client_config, oracle, poet)
 
@@ -171,11 +193,12 @@ def setup_clients_in_namespace(namespace, bs_deployment_info, client_deployment_
                            time_out=dep_time_out)
 
     client_deployment_info.deployment_name = resp.metadata._name
+    print("#@!#@!\n\nlabel = \"{}\"\n\n".format(client_deployment_info.deployment_name.split('-')[1]))
+    print("#@!#@!\n\nname = \"{}\"\n\n#@!#@!".format(name))
     client_pods = (
         CoreV1ApiClient().list_namespaced_pod(namespace,
                                               include_uninitialized=True,
-                                              label_selector=("name={0}".format(
-                                                  client_deployment_info.deployment_name.split('-')[1]))).items)
+                                              label_selector=("name={0}".format(name))).items)
 
     client_deployment_info.pods = [{'name': c.metadata.name, 'pod_ip': c.status.pod_ip} for c in client_pods]
     return client_deployment_info
@@ -184,7 +207,7 @@ def setup_clients_in_namespace(namespace, bs_deployment_info, client_deployment_
 def api_call(client_ip, data, api, namespace, port="9090"):
     # todo: this won't work with long payloads - ( `Argument list too long` ). try port-forward ?
     res = stream(CoreV1ApiClient().connect_post_namespaced_pod_exec, name="curl", namespace=namespace,
-                 command=["curl", "-s", "--request", "POST", "--data", data, "http://" + client_ip + ":" + port + "/" + api],
+                 command=["curl", "-s", "--request", "POST", "--data", data, f"http://{client_ip}:{port}/{api}"],
                  stderr=True, stdin=False, stdout=True, tty=False, _request_timeout=90)
     return res
 
@@ -218,7 +241,8 @@ def setup_bootstrap(init_session):
 @pytest.fixture(scope='module')
 def setup_clients(init_session, setup_bootstrap):
     """
-    setup clients adds new client nodes
+    setup clients adds new client nodes from k8s suite file
+
     :param init_session: setup a new k8s env
     :param setup_bootstrap: adds a single bootstrap node
     :return: client_info of type DeploymentInfo
@@ -231,6 +255,7 @@ def setup_clients(init_session, setup_bootstrap):
                                              testconfig['client'],
                                              poet=setup_bootstrap.pods[0]['pod_ip'],
                                              dep_time_out=testconfig['deployment_ready_time_out'])
+
     return client_info
 
 
@@ -251,9 +276,10 @@ def start_poet(init_session, add_curl, setup_bootstrap):
 
 
 @pytest.fixture(scope='module')
-def setup_network(init_session,add_curl, setup_bootstrap, start_poet, setup_clients, wait_genesis):
+def setup_network(init_session, add_curl, setup_bootstrap, start_poet, setup_clients, wait_genesis):
     # This fixture deploy a complete Spacemesh network and returns only after genesis time is over
-    network_deployment = NetworkDeploymentInfo(dep_id=init_session,
+    _session_id = init_session
+    network_deployment = NetworkDeploymentInfo(dep_id=_session_id,
                                                bs_deployment_info=setup_bootstrap,
                                                cl_deployment_info=setup_clients)
     return network_deployment
