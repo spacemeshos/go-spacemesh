@@ -44,7 +44,7 @@ func (db *ActivationDb) ProcessAtxs(atxs []*types.ActivationTx) error {
 			// TODO: Ensure that these are two different, syntactically valid ATXs for the same epoch, otherwise the
 			//  miner did nothing wrong
 			db.log.With().Error("found miner with multiple ATXs published in same block",
-				log.NodeId(atx.NodeId.ShortString()), log.AtxId(atx.ShortString()))
+				log.String("atx_node_id", atx.NodeId.ShortString()), log.AtxId(atx.ShortString()))
 		}
 		err := db.ProcessAtx(batch, atx)
 		if err != nil {
@@ -83,7 +83,7 @@ func (db *ActivationDb) ProcessAtx(batch database.Batch, atx *types.ActivationTx
 
 	err = db.StoreNodeIdentity(atx.NodeId)
 	if err != nil {
-		db.log.With().Error("cannot store node identity", log.NodeId(atx.NodeId.ShortString()), log.AtxId(atx.ShortString()), log.Err(err))
+		db.log.With().Error("cannot store node identity", log.String("atx_node_id", atx.NodeId.ShortString()), log.AtxId(atx.ShortString()), log.Err(err))
 	}
 	return nil
 }
@@ -320,7 +320,7 @@ func (db *ActivationDb) ContextuallyValidateAtx(atx *types.ActivationTxHeader) e
 		lastAtx, err := db.GetNodeLastAtxId(atx.NodeId)
 		if err != nil {
 			db.log.With().Error("could not fetch node last ATX",
-				log.AtxId(atx.ShortString()), log.NodeId(atx.NodeId.ShortString()), log.Err(err))
+				log.AtxId(atx.ShortString()), log.String("atx_node_id", atx.NodeId.ShortString()), log.Err(err))
 			return fmt.Errorf("could not fetch node last ATX: %v", err)
 		}
 		// last atx is not the one referenced
