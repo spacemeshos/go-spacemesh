@@ -129,6 +129,9 @@ func (s SpacemeshGrpcService) StopService() {
 
 type TxAPI interface {
 	AddressExists(addr types.Address) bool
+	GetRewards(account types.Address) (rewards []types.Reward)
+	GetTransactionsByDestination(l types.LayerID, account types.Address) (txs []types.TransactionId)
+	GetTransactionsByOrigin(l types.LayerID, account types.Address) (txs []types.TransactionId)
 }
 
 // NewGrpcService create a new grpc service using config data.
@@ -235,4 +238,44 @@ func (s SpacemeshGrpcService) SetLoggerLevel(ctx context.Context, msg *pb.SetLog
 		return nil, err
 	}
 	return &pb.SimpleMessage{Value: "ok"}, nil
+}
+
+func (s SpacemeshGrpcService) GetAccountTxs(ctx context.Context, txsSinceLayer *pb.GetTxsSinceLayer) (*pb.AccountTxs, error) {
+	log.Info("GRPC GetAccountTxs msg")
+	acc, err := types.StringToAddress(txsSinceLayer.Account.Address)
+	if err != nil {
+		return &pb.AccountTxs{}, err
+	}
+	if txsSinceLayer.StartLayer > txsSinceLayer.EndLayer {
+		return &pb.AccountTxs{}, fmt.Errorf("invalid start layer")
+	}
+	var allTxs []types.TransactionId
+	for i := txsSinceLayer.StartLayer; i < txsSinceLayer.EndLayer; i++ {
+		txs := s.Tx.GetTransactionsByDestination(types.LayerID(txsSinceLayer.StartLayer), acc)
+		allTxs = append(allTxs, txs...)
+		moreTxs := s.Tx.GetTransactionsByOrigin(types.LayerID(txsSinceLayer.StartLayer), acc)
+		allTxs = append(allTxs, moreTxs...)
+	}
+
+	txs := pb.AccountTxs{}
+	for _, x := range allTxs {
+		txs.Txs = append(txs.Txs, x.String())
+	}
+	return &txs, nil
+}
+
+func (s SpacemeshGrpcService) GetAccountRewards(ctx context.Context, account *pb.AccountId) (*pb.AccountRewards, error) {
+	log.Info("GRPC GetAccountRewards msg")
+	acc, err := types.StringToAddress(account.Address)
+	if err != nil {
+		return &pb.AccountRewards{}, err
+	}
+
+	rewards := s.Tx.GetRewards(acc)
+	rewardsOut := pb.AccountRewards{}
+	for _, x := range rewards {
+		rewardsOut.Rewards = append(rewardsOut.Rewards, &pb.Reward{Reward: x.Amount, Layer: x.Layer.Uint64()})
+	}
+
+	return &rewardsOut, nil
 }
