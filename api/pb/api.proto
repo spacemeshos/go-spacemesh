@@ -85,6 +85,11 @@ message MiningStats {
     string coinbase = 3;
 }
 
+message SetLogLevel {
+    string loggerName = 1;
+    string severity = 2;
+}
+
 service SpacemeshService {
     rpc Echo (SimpleMessage) returns (SimpleMessage) {
         option (google.api.http) = {
@@ -155,6 +160,12 @@ service SpacemeshService {
     rpc GetUpcomingAwards (google.protobuf.Empty) returns (EligibleLayers) {
         option (google.api.http) = {
           post: "/v1/getupcomingawards"
+          body: "*"
+        };
+    }
+    rpc SetLoggerLevel(SetLogLevel) returns (SimpleMessage) {
+        option (google.api.http) = {
+          post: "/v1/loggerlevel"
           body: "*"
         };
     }

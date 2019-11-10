@@ -494,6 +494,8 @@ func TestBlockListenerViewTraversal(t *testing.T) {
 		t.Error(err)
 	}
 
+	assert.Equal(t, 0, len(bl2.blockQueue.pending))
+
 	t.Log("  ", b)
 	t.Log("done!")
 }
@@ -583,6 +585,8 @@ func TestBlockListener_TraverseViewBadFlow(t *testing.T) {
 
 	b, err = bl2.GetBlock(block5.Id)
 	assert.Error(t, err)
+
+	assert.Equal(t, 0, len(bl2.blockQueue.pending))
 
 	t.Log("  ", b)
 	t.Log("done!")
