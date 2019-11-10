@@ -88,8 +88,8 @@ def add_clients(setup_bootstrap, setup_clients):
             client_key += f'{version_separator}{version}'
 
         cspec = get_conf(bs_info, testconfig[client_key])
-        pods = add_multi_clients(setup_bootstrap.deployment_id, cspec, size=num_of_clients)
-        return pods
+        pods_names = add_multi_clients(setup_bootstrap.deployment_id, cspec, size=num_of_clients)
+        return pods_names
 
     return _add_clients
 
@@ -109,7 +109,7 @@ def test_bootstrap(init_session, setup_bootstrap):
 def test_client(init_session, setup_clients, add_curl, save_log_on_exit):
     fields = {'M': 'discovery_bootstrap'}
     timetowait = len(setup_clients.pods) * timeout_factor
-    print("Sleeping " + str(timetowait) + " before checking out bootstrap results")
+    print(f"Sleeping {str(timetowait)} before checking out bootstrap results")
     time.sleep(timetowait)
 
     peers = poll_query_message(indx=current_index,
@@ -229,15 +229,17 @@ def send_msgs(setup_clients, api, headers, total_expected_gossip, msg_size=10000
     """
     sends a protocol message to a random node and asserts its' propagation
 
-    :param setup_clients: clients info
-    :param api: api path
-    :param headers: protocol header fields
-    :param total_expected_gossip: expected hit result
-    :param msg_size:
-    :param prop_sleep_time:
-    :param num_of_msg:
-    :param expected_ret:
-    :param msg_field:
+    :param setup_clients: DeploymentInfo, clients info
+    :param api: string, api path
+    :param headers: string, protocol header fields
+    :param total_expected_gossip: int, expected number of hits result
+    :param msg_size: int, message size in bits
+    :param prop_sleep_time: int, time to sleep before propagation is done
+    :param num_of_msg: int
+    :param expected_ret: string, expected query return status
+    :param msg_field: string, message field
+    currently this argument gets only one value but in the future for a more
+    generic function we'll get a list of strings (10.11.19)
     """
     # in our case each pod contains one node
     pods_num = len(setup_clients.pods)
@@ -292,30 +294,10 @@ def test_many_gossip_sim(setup_clients, add_curl):
     send_msgs(setup_clients, api, headers, total_expected_gossip, num_of_msg=test_messages)
 
 
-# Deploy X peers
-# Wait for bootstrap
-# Broadcast invalid message (test for each protocol)
-# Validate that the message wasn't received by any of the nodes
-def test_invalid_grpc_gossip_msg(setup_bootstrap, setup_clients, add_curl):
-    api = 'v1/broadcast'
-    headers = {'M': 'new_gossip_message', 'protocol': 'api_test_gossip'}
-    # msg_size = 10000  # 1kb TODO: increase up to 2mb
-    test_messages = 10
-
-    prev_num_of_msg = len(query_message(current_index, testconfig['namespace'], setup_clients.deployment_name, headers))
-    # add only the number of messages
-    # malformed GRPC message will appear only at the chosen nodes
-    # as new_gossip_message when querying for results
-    total_expected_gossip = prev_num_of_msg + test_messages
-
-    # create a GRPC error on msg_field
-    send_msgs(setup_clients, api, headers, total_expected_gossip, num_of_msg=test_messages, msg_field="d")
-
-
-def test_invalid_msg(setup_bootstrap, setup_clients, add_curl):
+def test_unknown_protocol(setup_bootstrap, setup_clients, add_curl):
     api = 'v1/broadcast'
     # protocol is modified
-    headers = {'M': 'new_gossip_message', 'protocol': 'api_test_gossi'}
+    headers = {'M': 'new_gossip_message', 'protocol': 'unknown_protocol'}
     msg_size = 10000  # 1kb TODO: increase up to 2mb
     test_messages = 10
 
@@ -332,6 +314,8 @@ def test_invalid_msg(setup_bootstrap, setup_clients, add_curl):
 # Wait for bootstrap
 # Deploy new peer with client version B
 # Validate that the new node failed to bootstrap
+# NOTE : this test is ran in the end because it affects the network structure,
+# it creates an additional pod with a "v2" client
 def test_diff_client_ver(setup_bootstrap, setup_clients, add_curl, add_clients):
     sync_sleep_time = 10
     num_of_v2_clients = 2

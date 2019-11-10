@@ -25,8 +25,8 @@ class DeploymentInfo:
         self.pods = []
 
     def __str__(self):
-        return f"   deployment name: {self.deployment_name}\n   deployment id: {self.deployment_id}\n" \
-               f"   pods number: {len(self.pods)}"
+        return f"\n\tdeployment name: {self.deployment_name}\n\tdeployment id: {self.deployment_id}" \
+               f"\n\tpods number: {len(self.pods)}"
 
 
 class NetworkDeploymentInfo:
