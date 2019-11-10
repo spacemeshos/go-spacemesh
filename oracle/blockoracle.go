@@ -167,7 +167,7 @@ func getNumberOfEligibleBlocks(activeSetSize uint32, committeeSize uint32, layer
 func (bo *MinerBlockOracle) getLatestATXID() (types.AtxId, error) {
 	latestATXID, err := bo.activationDb.GetNodeLastAtxId(bo.nodeID)
 	if err != nil {
-		bo.log.With().Info("did not find ATX IDs for node", log.NodeId(bo.nodeID.ShortString()), log.Err(err))
+		bo.log.With().Info("did not find ATX IDs for node", log.String("atx_node_id", bo.nodeID.ShortString()), log.Err(err))
 		return types.AtxId{}, err
 	}
 	bo.log.With().Info("latest atx id found", log.AtxId(latestATXID.ShortString()))
