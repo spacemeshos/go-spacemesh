@@ -193,8 +193,6 @@ def setup_clients_in_namespace(namespace, bs_deployment_info, client_deployment_
                            time_out=dep_time_out)
 
     client_deployment_info.deployment_name = resp.metadata._name
-    print("#@!#@!\n\nlabel = \"{}\"\n\n".format(client_deployment_info.deployment_name.split('-')[1]))
-    print("#@!#@!\n\nname = \"{}\"\n\n#@!#@!".format(name))
     client_pods = (
         CoreV1ApiClient().list_namespaced_pod(namespace,
                                               include_uninitialized=True,
