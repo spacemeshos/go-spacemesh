@@ -141,10 +141,10 @@ lop:
 }
 
 func (its *IntegrationTestSuite) TearDownSuite() {
-	_, _ = its.ForAllAsync(context.Background(), func(idx int, s NodeTestInstance) error {
+	_ = its.ForAll(func(idx int, s NodeTestInstance) error {
 		s.Shutdown()
 		return nil
-	})
+	}, nil)
 }
 
 func createP2pInstance(t testing.TB, config config.Config) *swarm {
