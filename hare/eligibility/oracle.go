@@ -12,6 +12,7 @@ import (
 	eCfg "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"math"
+	"sync"
 )
 
 const cacheSize = 5 // we don't expect to handle more than three layers concurrently
@@ -47,6 +48,7 @@ type verifierFunc = func(msg, sig, pub []byte) (bool, error)
 
 // Oracle is the hare eligibility oracle
 type Oracle struct {
+	lock                 sync.Mutex
 	beacon               valueProvider
 	getActiveSet         activeSetFunc
 	vrfSigner            signer
@@ -229,14 +231,20 @@ func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
 		return nil, errGenesis
 	}
 
+	// lock until any return
+	// note: no need to lock per safeEp - we do not expect many concurrent requests per safeEp (max two)
+	o.lock.Lock()
+
 	// check cache
-	if val, exist := o.cache.Get(sl); exist {
+	if val, exist := o.cache.Get(safeEp); exist {
+		o.lock.Unlock()
 		return val.(map[string]struct{}), nil
 	}
 
 	// build a map of all blocks on the current layer
 	mp, err := o.blocksProvider.ContextuallyValidBlock(sl)
 	if err != nil {
+		o.lock.Unlock()
 		return nil, err
 	}
 
@@ -245,6 +253,7 @@ func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
 		o.Error("Could not calculate hare active set size: no contextually valid blocks",
 			log.Uint64("layer_id", uint64(layer)), log.Uint64("epoch_id", uint64(layer.GetEpoch(o.layersPerEpoch))),
 			log.Uint64("safe_layer_id", uint64(sl)), log.Uint64("safe_epoch_id", uint64(safeEp)))
+		o.lock.Unlock()
 		return nil, errNoContextualBlocks
 	}
 
@@ -253,12 +262,14 @@ func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
 		o.With().Error("Could not retrieve active set size", log.Err(err),
 			log.Uint64("layer_id", uint64(layer)), log.Uint64("epoch_id", uint64(layer.GetEpoch(o.layersPerEpoch))),
 			log.Uint64("safe_layer_id", uint64(sl)), log.Uint64("safe_epoch_id", uint64(safeEp)))
+		o.lock.Unlock()
 		return nil, err
 	}
 
 	// update
-	o.cache.Add(sl, activeMap)
+	o.cache.Add(safeEp, activeMap)
 
+	o.lock.Unlock()
 	return activeMap, nil
 }
 

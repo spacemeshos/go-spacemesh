@@ -17,7 +17,7 @@ TODO: Clearly describe the issue requirements here...
 TODO: Add links to relevant resources, specs, related issues, etc...
 
 # Contribution Guidelines
-Important: Issue assignment to developers will be by the order of their application and proficiency level according to the tasks complexity. We will not assign tasks to developers who have'nt introduced themselves on our Gitter [dev channel](https://gitter.im/spacemesh-os/Lobby)
+Important: Issue assignment to developers will be by the order of their application and proficiency level according to the tasks complexity. We will not assign tasks to developers who haven't introduced themselves on our Gitter [dev channel](https://gitter.im/spacemesh-os/Lobby)
 
 1. Introduce yourself on go-spacemesh [dev chat channel](https://gitter.im/spacemesh-os/Lobby) - ask our team any question you may have about this task
 2. Fork branch `develop` to your own repo and work in your repo
