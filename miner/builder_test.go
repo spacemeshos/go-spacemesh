@@ -53,6 +53,16 @@ type MockOrphans struct {
 	st []types.BlockID
 }
 
+func (m MockOrphans) GetLayer(index types.LayerID) (*types.Layer, error) {
+	l := types.NewLayer(index)
+	for _, e := range m.st {
+		b := types.NewExistingBlock(e, index, nil)
+		l.AddBlock(b)
+
+	}
+	return l, nil
+}
+
 func (m MockOrphans) GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error) {
 	return m.st, nil
 }
@@ -474,20 +484,21 @@ func TestBlockBuilder_createBlock(t *testing.T) {
 	beginRound := make(chan types.LayerID)
 	n1 := service.NewSimulator().NewNode()
 	hare := mockHare{}
-	builder1 := NewBlockBuilder(types.NodeId{Key: "a"}, &MockSigning{}, n1, beginRound, 5, NewTxMemPool(), NewAtxMemPool(), MockCoin{}, MockOrphans{st: []types.BlockID{1, 2, 3}}, hare, mockBlockOracle{}, mockTxProcessor{true}, &mockAtxValidator{}, &mockSyncer{}, selectCount, projector, log.NewDefault(t.Name()))
+	st := []types.BlockID{1, 2, 3}
+	builder1 := NewBlockBuilder(types.NodeId{Key: "a"}, &MockSigning{}, n1, beginRound, 5, NewTxMemPool(), NewAtxMemPool(), MockCoin{}, MockOrphans{st}, hare, mockBlockOracle{}, mockTxProcessor{true}, &mockAtxValidator{}, &mockSyncer{}, selectCount, projector, log.NewDefault(t.Name()))
 
 	builder1.hareResult = mockHare{err: err, ids: nil}
 	b, err := builder1.createBlock(5, types.AtxId{}, types.BlockEligibilityProof{}, nil, nil)
 	r.Nil(err)
-	r.Equal(b.BlockVotes, []types.BlockID{})
+	r.Equal(b.BlockVotes, st)
 
 	builder1.hareResult = mockHare{err: nil, ids: nil}
 	b, err = builder1.createBlock(5, types.AtxId{}, types.BlockEligibilityProof{}, nil, nil)
 	r.Nil(err)
-	r.Equal(b.BlockVotes, []types.BlockID{})
+	r.Equal(b.BlockVotes, st)
 
 	builder1.hareResult = mockHare{err: nil, ids: []types.BlockID{}}
 	b, err = builder1.createBlock(5, types.AtxId{}, types.BlockEligibilityProof{}, nil, nil)
 	r.Nil(err)
-	r.Equal(b.BlockVotes, []types.BlockID{})
+	r.Equal(b.BlockVotes, st)
 }

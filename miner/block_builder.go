@@ -151,6 +151,7 @@ type WeakCoinProvider interface {
 }
 
 type OrphanBlockProvider interface {
+	GetLayer(index types.LayerID) (*types.Layer, error)
 	GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error)
 }
 
@@ -194,9 +195,17 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 				log.Uint64("bottom", uint64(bottom)), log.Uint64("top", uint64(top)),
 				log.Uint64("hdist", uint64(t.hdist)), log.Err(err))
 		}
-		if votes == nil { // if no votes set to empty
-			t.Info("Votes is nil. Setting votes to an empty array")
-			votes = []types.BlockID{}
+		if votes == nil || len(votes) == 0 { // if no votes, vote as the whole layer
+			t.Info("Votes is nil. Reading the whole layer")
+			l, e := t.orphans.GetLayer(id)
+			if e != nil {
+				t.With().Error("Could not set votes to whole layer", log.Err(e))
+				return nil, e
+			}
+			votes = make([]types.BlockID, len(l.Blocks()))
+			for i, b := range l.Blocks() {
+				votes[i] = b.ID()
+			}
 		}
 	}
 
