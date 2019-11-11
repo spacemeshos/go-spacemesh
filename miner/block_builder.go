@@ -10,6 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/oracle"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -185,7 +186,7 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 	if id == config.Genesis {
 		return nil, errors.New("cannot create blockBytes in genesis layer")
 	} else if id == config.Genesis+1 {
-		votes = append(votes, config.GenesisId)
+		votes = append(votes, mesh.GenesisBlock.Id())
 	} else { // get from hare
 		bottom, top := calcHdistRange(id, t.hdist)
 		votes, err = t.hareResult.GetResult(bottom, top)
@@ -207,7 +208,6 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 
 	b := types.MiniBlock{
 		BlockHeader: types.BlockHeader{
-			Id:               types.BlockID(t.rnd.Int63()),
 			LayerIndex:       id,
 			ATXID:            atxID,
 			EligibilityProof: eligibilityProof,
@@ -221,15 +221,18 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 		TxIds:  txids,
 	}
 
-	t.Log.Event().Info(fmt.Sprintf("I've created a block in layer %v. id: %v, num of transactions: %v, votes: %d, viewEdges: %d atx %v, atxs:%v",
-		b.LayerIndex, b.ID(), len(b.TxIds), len(b.BlockVotes), len(b.ViewEdges), b.ATXID.ShortString(), len(b.AtxIds)))
-
 	blockBytes, err := types.InterfaceToBytes(b)
 	if err != nil {
 		return nil, err
 	}
 
-	return &types.Block{MiniBlock: b, Signature: t.Signer.Sign(blockBytes)}, nil
+	bl := &types.Block{MiniBlock: b, Signature: t.Signer.Sign(blockBytes)}
+	bl.SetId()
+
+	t.Log.Event().Info(fmt.Sprintf("I've created a block in layer %v. id: %v, num of transactions: %v, votes: %d, viewEdges: %d atx %v, atxs:%v",
+		b.LayerIndex, bl.Id(), len(b.TxIds), len(b.BlockVotes), len(b.ViewEdges), b.ATXID.ShortString(), len(b.AtxIds)))
+
+	return bl, nil
 }
 
 func selectAtxs(atxs []types.AtxId, atxsPerBlock int) []types.AtxId {

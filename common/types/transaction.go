@@ -3,8 +3,6 @@ package types
 import (
 	"fmt"
 	"github.com/spacemeshos/ed25519"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 type TransactionId Hash32
@@ -108,32 +106,4 @@ func NewTxWithOrigin(nonce uint64, orig, rec Address, amount, gasLimit, fee uint
 		InnerTransaction: inner,
 		origin:           &orig,
 	}
-}
-
-// TEST ONLY
-func NewSignedTx(nonce uint64, rec Address, amount, gas, fee uint64, signer *signing.EdSigner) (*Transaction, error) {
-	inner := InnerTransaction{
-		AccountNonce: nonce,
-		Recipient:    rec,
-		Amount:       amount,
-		GasLimit:     gas,
-		Fee:          fee,
-	}
-
-	buf, err := InterfaceToBytes(&inner)
-	if err != nil {
-		log.Error("failed to marshal tx")
-		return nil, err
-	}
-
-	sst := &Transaction{
-		InnerTransaction: inner,
-		Signature:        [64]byte{},
-		origin:           &Address{},
-	}
-
-	copy(sst.Signature[:], signer.Sign(buf))
-	sst.origin.SetBytes(signer.PublicKey().Bytes())
-
-	return sst, nil
 }

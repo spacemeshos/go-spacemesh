@@ -8,6 +8,7 @@ import (
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -322,7 +323,7 @@ func TestJsonWalletApi(t *testing.T) {
 	rec := types.BytesToAddress([]byte{0xde, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa})
 	signer, err := signing.NewEdSignerFromBuffer(key)
 	assert.NoError(t, err)
-	tx, err := types.NewSignedTx(1111, rec, 1234, 11, 321, signer)
+	tx, err := mesh.NewSignedTx(1111, rec, 1234, 11, 321, signer)
 	assert.NoError(t, err)
 	txBytes, err := types.InterfaceToBytes(tx)
 	assert.NoError(t, err)

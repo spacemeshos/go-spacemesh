@@ -6,6 +6,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -435,7 +436,7 @@ func createXdrSignedTransaction(t *testing.T, key ed25519.PrivateKey) *types.Tra
 	r := require.New(t)
 	signer, err := signing.NewEdSignerFromBuffer(key)
 	r.NoError(err)
-	tx, err := types.NewSignedTx(1111, toAddr([]byte{0xde}), 123, 11, 456, signer)
+	tx, err := mesh.NewSignedTx(1111, toAddr([]byte{0xde}), 123, 11, 456, signer)
 	r.NoError(err)
 	return tx
 }

@@ -37,7 +37,7 @@ func (pre *preRoundTracker) OnPreRound(msg *Msg) {
 
 	// record Values
 	for _, v := range sToTrack.values {
-		pre.tracker.Track(v.Id())
+		pre.tracker.Track(v)
 		metrics.PreRoundCounter.With("value", v.String()).Add(1)
 	}
 

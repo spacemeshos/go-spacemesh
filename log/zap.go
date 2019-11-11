@@ -2,6 +2,7 @@ package log
 
 import (
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"os"
@@ -106,8 +107,8 @@ func AtxId(val string) Field {
 }
 
 // BlockId return a Uint64 field (key - "block_id")
-func BlockId(val uint64) Field {
-	return Uint64("block_id", val)
+func BlockId(val types.BlockID) Field {
+	return String("block_id", val.String())
 }
 
 // EpochId return a Uint64 field (key - "epoch_id")

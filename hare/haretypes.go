@@ -63,26 +63,6 @@ func (id instanceId) Bytes() []byte {
 	return idInBytes
 }
 
-func newValue(value uint64) blockID {
-	return blockID{types.BlockID(value)}
-}
-
-func (v blockID) Id() objectId {
-	return objectId(v.BlockID)
-
-}
-
-func (v blockID) Bytes() []byte {
-	b := make([]byte, 8)
-	binary.LittleEndian.PutUint64(b, uint64(v.BlockID))
-	return b
-}
-
-func (v blockID) String() string {
-	return strconv.FormatUint(uint64(v.BlockID), 10)
-
-}
-
 func (b32 bytes32) Id() objectId {
 	h := fnv.New32()
 	h.Write(b32[:])
@@ -100,7 +80,7 @@ func (b32 bytes32) String() string {
 
 // Set represents a unique set of values.
 type Set struct {
-	values    map[objectId]blockID
+	values    map[objectId]types.BlockID
 	id        objectId
 	isIdValid bool
 }
@@ -113,7 +93,7 @@ func NewDefaultEmptySet() *Set {
 // NewEmptySet creates an empty set with the provided size.
 func NewEmptySet(size int) *Set {
 	s := &Set{}
-	s.values = make(map[objectId]blockID, size)
+	s.values = make(map[objectId]types.BlockID, size)
 	s.id = 0
 	s.isIdValid = false
 
@@ -122,9 +102,9 @@ func NewEmptySet(size int) *Set {
 
 // NewSetFromValues creates a set of the provided values.
 // Note: duplicated values are ignored.
-func NewSetFromValues(values ...blockID) *Set {
+func NewSetFromValues(values ...types.BlockID) *Set {
 	s := &Set{}
-	s.values = make(map[objectId]blockID, len(values))
+	s.values = make(map[objectId]types.BlockID, len(values))
 	for _, v := range values {
 		s.Add(v)
 	}
@@ -140,10 +120,10 @@ func NewSet(data []uint64) *Set {
 	s := &Set{}
 	s.isIdValid = false
 
-	s.values = make(map[objectId]blockID, len(data))
+	s.values = make(map[objectId]types.BlockID, len(data))
 	for i := 0; i < len(data); i++ {
 		bid := data[i]
-		s.values[objectId(bid)] = blockID{types.BlockID(bid)}
+		s.values[objectId(bid)] = types.BlockID(bid)
 	}
 
 	return s
@@ -160,14 +140,14 @@ func (s *Set) Clone() *Set {
 }
 
 // Contains returns true if the provided value is contained in the set, false otherwise.
-func (s *Set) Contains(id blockID) bool {
+func (s *Set) Contains(id types.BlockID) bool {
 	_, exist := s.values[id.Id()]
 	return exist
 }
 
 // Add a value to the set.
 // It has no effect if the value already exists in the set.
-func (s *Set) Add(id blockID) {
+func (s *Set) Add(id types.BlockID) {
 	if _, exist := s.values[id.Id()]; exist {
 		return
 	}
@@ -178,7 +158,7 @@ func (s *Set) Add(id blockID) {
 
 // Remove a value from the set.
 // It has no effect if the value doesn't exist in the set.
-func (s *Set) Remove(id blockID) {
+func (s *Set) Remove(id types.BlockID) {
 	if _, exist := s.values[id.Id()]; !exist {
 		return
 	}
@@ -215,7 +195,7 @@ func (s *Set) ToSlice() []uint64 {
 
 	l := make([]uint64, 0, len(s.values))
 	for i := range keys {
-		l = append(l, uint64(s.values[keys[i]].BlockID))
+		l = append(l, uint64(s.values[keys[i]]))
 	}
 	return l
 }
@@ -254,7 +234,7 @@ func (s *Set) String() string {
 	// TODO: should improve
 	b := new(bytes.Buffer)
 	for _, v := range s.values {
-		fmt.Fprintf(b, "%v,", v.Id())
+		fmt.Fprintf(b, "%v,", v.String())
 	}
 	if b.Len() >= 1 {
 		return b.String()[:b.Len()-1]

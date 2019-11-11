@@ -23,7 +23,6 @@ const (
 	defaultAccountFileName = "accounts"
 	defaultDataDirName     = "spacemesh"
 	Genesis                = mesh.Genesis
-	GenesisId              = mesh.GenesisId
 	NewBlockProtocol       = "newBlock"
 )
 

@@ -2,9 +2,7 @@ package tortoise
 
 import (
 	"fmt"
-	"github.com/google/uuid"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/rand"
@@ -134,6 +132,16 @@ func bToMb(b uint64) uint64 {
 	return b / 1024 / 1024
 }
 
+var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
+func RandStringRunes(n int) string {
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letterRunes[rand.Intn(len(letterRunes))]
+	}
+	return string(b)
+}
+
 func PrintMemUsage() {
 	runtime.GC()
 	var m runtime.MemStats
@@ -223,7 +231,7 @@ func TestNinjaTortoise_Abstain(t *testing.T) {
 	AddLayer(mdb, l4)
 	alg.handleIncomingLayer(l4)
 	assert.True(t, alg.pBase.Layer() == 3)
-	assert.True(t, alg.tTally[alg.tGood[3]][mesh.GenesisBlock.ID()][0] == 9)
+	assert.True(t, alg.tTally[alg.tGood[3]][mesh.GenesisBlock.Id()][0] == 9)
 }
 
 func TestNinjaTortoise_BlockByBlock(t *testing.T) {
@@ -329,10 +337,10 @@ func TestNinjaTortoise_LateBlocks(t *testing.T) {
 	alg := NewNinjaTortoise(10, mdb, 1, lg)
 
 	l01 := types.NewLayer(0)
-	l01.AddBlock(types.NewExistingBlock(123, 0, nil))
+	l01.AddBlock(types.NewExistingBlock(0, []byte(RandStringRunes(8))))
 
 	l02 := types.NewLayer(0)
-	l02.AddBlock(types.NewExistingBlock(321, 0, nil))
+	l02.AddBlock(types.NewExistingBlock(0, []byte(RandStringRunes(8))))
 
 	AddLayer(mdb, l01)
 	AddLayer(mdb, l02)
@@ -391,16 +399,16 @@ func createLayer(index types.LayerID, prev []*types.Layer, blocksInLayer int) *t
 	}
 	layerBlocks := make([]types.BlockID, 0, blocksInLayer)
 	for i := 0; i < blocksInLayer; i++ {
-		bl := types.NewExistingBlock(types.BlockID(uuid.New().ID()), index, []byte("data data data"))
-		layerBlocks = append(layerBlocks, bl.ID())
+		bl := types.NewExistingBlock(index, []byte(RandStringRunes(8)))
+		layerBlocks = append(layerBlocks, bl.Id())
 		for idx, pat := range patterns {
 			for _, id := range pat {
 				b := prev[idx].Blocks()[id]
-				bl.AddVote(types.BlockID(b.ID()))
+				bl.AddVote(types.BlockID(b.Id()))
 			}
 		}
 		for _, prevBloc := range prev[0].Blocks() {
-			bl.AddView(types.BlockID(prevBloc.ID()))
+			bl.AddView(types.BlockID(prevBloc.Id()))
 		}
 		l.AddBlock(bl)
 	}
@@ -503,7 +511,7 @@ func sanity(t *testing.T, mdb *mesh.MeshDB, layers int, layerSize int, patternSi
 		start := time.Now()
 		alg.handleIncomingLayer(lyr)
 		alg.Debug("Time to process layer: %v ", time.Since(start))
-		fmt.Println(fmt.Sprintf("lyr %v tally was %d", lyr.Index()-1, alg.tTally[alg.pBase][config.GenesisId]))
+		fmt.Println(fmt.Sprintf("lyr %v tally was %d", lyr.Index()-1, alg.tTally[alg.pBase][mesh.GenesisBlock.Id()]))
 		l = lyr
 	}
 
@@ -542,7 +550,7 @@ func TestNinjaTortoise_Sanity2(t *testing.T) {
 	for b, vec := range alg.tTally[alg.pBase] {
 		alg.Debug("------> tally for block %d according to complete pattern %d are %d", b, alg.pBase, vec)
 	}
-	assert.True(t, alg.tTally[alg.pBase][l.Blocks()[0].ID()] == vec{12, 0}, "lyr %d tally was %d insted of %d", 0, alg.tTally[alg.pBase][l.Blocks()[0].ID()], vec{12, 0})
+	assert.True(t, alg.tTally[alg.pBase][l.Blocks()[0].Id()] == vec{12, 0}, "lyr %d tally was %d insted of %d", 0, alg.tTally[alg.pBase][l.Blocks()[0].Id()], vec{12, 0})
 }
 
 func createLayerWithCorruptedPattern(index types.LayerID, prev *types.Layer, blocksInLayer int, patternSize int, badBlocks float64) *types.Layer {
@@ -556,13 +564,13 @@ func createLayerWithCorruptedPattern(index types.LayerID, prev *types.Layer, blo
 	gbs := int(float64(blocksInLayer) * (1 - badBlocks))
 	layerBlocks := make([]types.BlockID, 0, blocksInLayer)
 	for i := 0; i < gbs; i++ {
-		bl := addPattern(types.NewExistingBlock(types.BlockID(uuid.New().ID()), index, []byte("data data data")), goodPattern, prev)
-		layerBlocks = append(layerBlocks, bl.ID())
+		bl := addPattern(types.NewExistingBlock(index, []byte(RandStringRunes(8))), goodPattern, prev)
+		layerBlocks = append(layerBlocks, bl.Id())
 		l.AddBlock(bl)
 	}
 	for i := 0; i < blocksInLayer-gbs; i++ {
-		bl := addPattern(types.NewExistingBlock(types.BlockID(uuid.New().ID()), index, []byte("data data data")), badPattern, prev)
-		layerBlocks = append(layerBlocks, bl.ID())
+		bl := addPattern(types.NewExistingBlock(index, []byte(RandStringRunes(8))), badPattern, prev)
+		layerBlocks = append(layerBlocks, bl.Id())
 		l.AddBlock(bl)
 	}
 
@@ -573,10 +581,10 @@ func createLayerWithCorruptedPattern(index types.LayerID, prev *types.Layer, blo
 func addPattern(bl *types.Block, goodPattern []int, prev *types.Layer) *types.Block {
 	for _, id := range goodPattern {
 		b := prev.Blocks()[id]
-		bl.AddVote(types.BlockID(b.ID()))
+		bl.AddVote(types.BlockID(b.Id()))
 	}
 	for _, prevBloc := range prev.Blocks() {
-		bl.AddView(types.BlockID(prevBloc.ID()))
+		bl.AddView(types.BlockID(prevBloc.Id()))
 	}
 	return bl
 }
@@ -591,16 +599,16 @@ func createLayerWithRandVoting(index types.LayerID, prev []*types.Layer, blocksI
 	}
 	layerBlocks := make([]types.BlockID, 0, blocksInLayer)
 	for i := 0; i < blocksInLayer; i++ {
-		bl := types.NewExistingBlock(types.BlockID(uuid.New().ID()), index, []byte("data data data"))
-		layerBlocks = append(layerBlocks, bl.ID())
+		bl := types.NewExistingBlock(index, []byte(RandStringRunes(8)))
+		layerBlocks = append(layerBlocks, bl.Id())
 		for idx, pat := range patterns {
 			for _, id := range pat {
 				b := prev[idx].Blocks()[id]
-				bl.AddVote(types.BlockID(b.ID()))
+				bl.AddVote(types.BlockID(b.Id()))
 			}
 		}
 		for _, prevBloc := range prev[0].Blocks() {
-			bl.AddView(types.BlockID(prevBloc.ID()))
+			bl.AddView(types.BlockID(prevBloc.Id()))
 		}
 		l.AddBlock(bl)
 	}

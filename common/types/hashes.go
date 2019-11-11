@@ -34,7 +34,7 @@ func CalcBlocksHash12(view []BlockID) (Hash12, error) {
 	sortedView := make([]BlockID, len(view))
 	copy(sortedView, view)
 	sort.Slice(sortedView, func(i, j int) bool {
-		return sortedView[i] < sortedView[j]
+		return bytes.Compare(sortedView[i].ToBytes(), sortedView[j].ToBytes()) < 0
 	})
 	viewBytes, err := InterfaceToBytes(sortedView)
 	if err != nil {
@@ -47,7 +47,7 @@ func CalcBlocksHash32(view []BlockID) (Hash32, error) {
 	sortedView := make([]BlockID, len(view))
 	copy(sortedView, view)
 	sort.Slice(sortedView, func(i, j int) bool {
-		return sortedView[i] < sortedView[j]
+		return bytes.Compare(sortedView[i].ToBytes(), sortedView[j].ToBytes()) < 0
 	})
 	viewBytes, err := InterfaceToBytes(sortedView)
 	if err != nil {
@@ -197,4 +197,13 @@ func (h *Hash32) Scan(src interface{}) error {
 	}
 	copy(h[:], srcB)
 	return nil
+}
+
+func AllZero(s Hash32) bool {
+	for _, v := range s {
+		if v != 0 {
+			return false
+		}
+	}
+	return true
 }

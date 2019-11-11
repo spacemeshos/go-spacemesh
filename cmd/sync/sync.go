@@ -123,7 +123,7 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	atxpool := miner.NewAtxMemPool()
 	msh := mesh.NewMesh(mshdb, atxdb, sync.ConfigTst(), &sync.MeshValidatorMock{}, txpool, atxpool, &sync.MockState{}, lg.WithOptions(log.Nop))
 	defer msh.Close()
-	msh.AddBlock(&mesh.GenesisBlock)
+	msh.AddBlock(mesh.GenesisBlock)
 	clock := sync.MockClock{}
 	clock.Layer = types.LayerID(expectedLayers + 1)
 	lg.Info("current layer %v", clock.GetCurrentLayer())

@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -32,8 +33,9 @@ func TestBlockListener_TestTxQueue(t *testing.T) {
 	//missing
 	id4 := tx4.Id()
 
-	block1 := types.NewExistingBlock(types.BlockID(111), 1, nil)
+	block1 := types.NewExistingBlock(1, []byte(RandStringRunes(8)))
 	block1.TxIds = []types.TransactionId{id1, id2, id3}
+	block1.SetId()
 	bl2.AddBlockWithTxs(block1, []*types.Transaction{tx1, tx2, tx3}, []*types.ActivationTx{})
 
 	ch := queue.addToPendingGetCh([]types.Hash32{id1.Hash32(), id2.Hash32(), id3.Hash32()})
@@ -85,7 +87,7 @@ func TestBlockListener_TestAtxQueue(t *testing.T) {
 	bl2.Start()
 	queue := bl1.atxQueue
 
-	block1 := types.NewExistingBlock(types.BlockID(111), 1, nil)
+	block1 := types.NewExistingBlock(1, []byte(RandStringRunes(8)))
 	atx1 := atx(signer.PublicKey().String())
 	atx2 := atx(signer.PublicKey().String())
 	atx3 := atx(signer.PublicKey().String())
@@ -102,16 +104,16 @@ func TestBlockListener_TestAtxQueue(t *testing.T) {
 	poetRef := sha256.Sum256(poetProofBytes)
 
 	atx1.Nipst.PostProof.Challenge = poetRef[:]
-	_, err = types.SignAtx(signer, atx1)
+	_, err = activation.SignAtx(signer, atx1)
 	assert.NoError(t, err)
 	atx2.Nipst.PostProof.Challenge = poetRef[:]
-	_, err = types.SignAtx(signer, atx2)
+	_, err = activation.SignAtx(signer, atx2)
 	assert.NoError(t, err)
 	atx3.Nipst.PostProof.Challenge = poetRef[:]
-	_, err = types.SignAtx(signer, atx3)
+	_, err = activation.SignAtx(signer, atx3)
 	assert.NoError(t, err)
 	atx4.Nipst.PostProof.Challenge = poetRef[:]
-	_, err = types.SignAtx(signer, atx4)
+	_, err = activation.SignAtx(signer, atx4)
 	assert.NoError(t, err)
 
 	err = bl1.ProcessAtxs([]*types.ActivationTx{atx1})
@@ -170,7 +172,7 @@ func TestBlockListener_TestTxQueueHandle(t *testing.T) {
 	id2 := tx2.Id()
 	id3 := tx3.Id()
 
-	block1 := types.NewExistingBlock(types.BlockID(111), 1, nil)
+	block1 := types.NewExistingBlock(1, []byte(RandStringRunes(8)))
 	block1.TxIds = []types.TransactionId{id1, id2, id3}
 	bl2.AddBlockWithTxs(block1, []*types.Transaction{tx1, tx2, tx3}, []*types.ActivationTx{})
 
@@ -211,18 +213,18 @@ func TestBlockListener_TestAtxQueueHandle(t *testing.T) {
 	poetProofBytes, err := types.InterfaceToBytes(&proofMessage.PoetProof)
 	poetRef := sha256.Sum256(poetProofBytes)
 
-	block1 := types.NewExistingBlock(types.BlockID(111), 1, nil)
+	block1 := types.NewExistingBlock(1, []byte(RandStringRunes(8)))
 	atx1 := atx(signer.PublicKey().String())
 	atx1.Nipst.PostProof.Challenge = poetRef[:]
-	_, err = types.SignAtx(signer, atx1)
+	_, err = activation.SignAtx(signer, atx1)
 	assert.NoError(t, err)
 	atx2 := atx(signer.PublicKey().String())
 	atx2.Nipst.PostProof.Challenge = poetRef[:]
-	_, err = types.SignAtx(signer, atx2)
+	_, err = activation.SignAtx(signer, atx2)
 	assert.NoError(t, err)
 	atx3 := atx(signer.PublicKey().String())
 	atx3.Nipst.PostProof.Challenge = poetRef[:]
-	_, err = types.SignAtx(signer, atx3)
+	_, err = activation.SignAtx(signer, atx3)
 	assert.NoError(t, err)
 
 	bl2.AddBlockWithTxs(block1, []*types.Transaction{}, []*types.ActivationTx{atx1, atx2, atx3})

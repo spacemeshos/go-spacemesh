@@ -29,7 +29,7 @@ func (alg *Algorithm) HandleLateBlock(b *types.Block) {
 	l := types.Layer{}
 	l.AddBlock(b)
 	alg.HandleIncomingLayer(&l)
-	log.Info("late block with layer id %v block id: %v ", b.Layer(), b.ID())
+	log.Info("late block with layer id %v block id: %v ", b.Layer(), b.Id())
 }
 
 func (alg *Algorithm) HandleIncomingLayer(ll *types.Layer) (types.LayerID, types.LayerID) {

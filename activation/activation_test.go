@@ -1,6 +1,7 @@
 package activation
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -28,14 +29,18 @@ const (
 )
 
 var (
-	pub, _, _    = ed25519.GenerateKey(nil)
-	nodeId       = types.NodeId{Key: util.Bytes2Hex(pub), VRFPublicKey: []byte("22222")}
-	otherNodeId  = types.NodeId{Key: "00000", VRFPublicKey: []byte("00000")}
-	coinbase     = types.HexToAddress("33333")
-	prevAtxId    = types.AtxId(types.HexToHash32("44444"))
-	chlng        = types.HexToHash32("55555")
-	poetRef      = []byte("66666")
-	defaultView  = []types.BlockID{1, 2, 3}
+	pub, _, _   = ed25519.GenerateKey(nil)
+	nodeId      = types.NodeId{Key: util.Bytes2Hex(pub), VRFPublicKey: []byte("22222")}
+	otherNodeId = types.NodeId{Key: "00000", VRFPublicKey: []byte("00000")}
+	coinbase    = types.HexToAddress("33333")
+	prevAtxId   = types.AtxId(types.HexToHash32("44444"))
+	chlng       = types.HexToHash32("55555")
+	poetRef     = []byte("66666")
+	block1      = types.NewExistingBlock(0, []byte("11111"))
+	block2      = types.NewExistingBlock(0, []byte("22222"))
+	block3      = types.NewExistingBlock(0, []byte("33333"))
+
+	defaultView  = []types.BlockID{block1.Id(), block2.Id(), block3.Id()}
 	net          = &NetMock{}
 	meshProvider = &MeshProviderMock{latestLayer: 12}
 	nipstBuilder = &NipstBuilderMock{}
@@ -213,7 +218,7 @@ func setActivesetSizeInCache(t *testing.T, activesetSize uint32) {
 	view, err := meshProvider.GetOrphanBlocksBefore(meshProvider.LatestLayer())
 	assert.NoError(t, err)
 	sort.Slice(view, func(i, j int) bool {
-		return view[i] < view[j]
+		return bytes.Compare(view[i].ToBytes(), view[j].ToBytes()) < 0
 	})
 	h, err := types.CalcBlocksHash12(view)
 	assert.NoError(t, err)
@@ -424,7 +429,7 @@ func TestBuilder_PublishActivationTx_Serialize(t *testing.T) {
 	activationDb := newActivationDb()
 	b := newBuilder(activationDb)
 
-	atx := types.NewActivationTx(nodeId, coinbase, 1, prevAtxId, 5, 1, prevAtxId, defaultActiveSetSize, []types.BlockID{1, 2, 3}, npst)
+	atx := types.NewActivationTx(nodeId, coinbase, 1, prevAtxId, 5, 1, prevAtxId, defaultActiveSetSize, []types.BlockID{block1.Id(), block2.Id(), block3.Id()}, npst)
 	storeAtx(r, activationDb, atx, log.NewDefault("storeAtx"))
 
 	view, err := b.mesh.GetOrphanBlocksBefore(meshProvider.LatestLayer())
@@ -481,7 +486,7 @@ func TestBuilder_SignAtx(t *testing.T) {
 	b := NewBuilder(nodeId, coinbase, ed, activationDb, net, meshProvider, layersPerEpoch, nipstBuilder, postProver, nil, isSynced(true), NewMockDB(), lg.WithName("atxBuilder"))
 
 	prevAtx := types.AtxId(types.HexToHash32("0x111"))
-	atx := types.NewActivationTx(nodeId, coinbase, 1, prevAtx, 15, 1, prevAtx, 5, []types.BlockID{1, 2, 3}, npst)
+	atx := types.NewActivationTx(nodeId, coinbase, 1, prevAtx, 15, 1, prevAtx, 5, []types.BlockID{block1.Id(), block2.Id(), block3.Id()}, npst)
 	atxBytes, err := types.InterfaceToBytes(atx.InnerActivationTx)
 	assert.NoError(t, err)
 	signed, err := b.SignAtx(atx)
@@ -514,7 +519,7 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	nipstBuilder.poetRef = poetRef
 	npst := NewNIPSTWithChallenge(&chlng, poetRef)
 
-	atx := types.NewActivationTx(types.NodeId{"aaaaaa", []byte("bbbbb")}, coinbase, 1, prevAtx, 15, 1, prevAtx, 5, []types.BlockID{1, 2, 3}, npst)
+	atx := types.NewActivationTx(types.NodeId{"aaaaaa", []byte("bbbbb")}, coinbase, 1, prevAtx, 15, 1, prevAtx, 5, []types.BlockID{block1.Id(), block2.Id(), block3.Id()}, npst)
 
 	err := activationDb.StoreAtx(atx.PubLayerIdx.GetEpoch(layersPerEpoch), atx)
 	assert.NoError(t, err)

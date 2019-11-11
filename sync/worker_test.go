@@ -17,8 +17,8 @@ func TestNewPeerWorker(t *testing.T) {
 	defer syncObj1.Close()
 	syncObj2 := syncs[1]
 	defer syncObj2.Close()
-	lid := types.LayerID(1)
-	err := syncObj1.AddBlock(types.NewExistingBlock(types.BlockID(123), lid, nil))
+	bl1 := types.NewExistingBlock(1, []byte(RandStringRunes(8)))
+	err := syncObj1.AddBlock(bl1)
 	assert.NoError(t, err)
 
 	wrk, output := NewPeersWorker(syncObj2, []p2p.Peer{nodes[3].PublicKey(), nodes[2].PublicKey(), nodes[0].PublicKey()}, &sync.Once{}, LayerIdsReqFactory(1))
@@ -29,7 +29,7 @@ func TestNewPeerWorker(t *testing.T) {
 	timeout := time.NewTimer(1 * time.Second)
 	select {
 	case item := <-output:
-		assert.Equal(t, types.BlockID(123), item.([]types.BlockID)[0], "wrong ids")
+		assert.Equal(t, bl1.Id(), item.([]types.BlockID)[0], "wrong ids")
 	case <-timeout.C:
 		assert.Fail(t, "no message received on channel")
 	}

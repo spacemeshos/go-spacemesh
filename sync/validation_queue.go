@@ -78,9 +78,9 @@ func (vq *blockQueue) handleBlock(bjb fetchJob) {
 			continue
 		}
 
-		vq.Info("fetched  %v", block.ID())
+		vq.Info("fetched  %v", block.Id())
 		if err := vq.fastValidation(block); err != nil {
-			vq.Error("block validation failed", log.BlockId(uint64(block.ID())), log.Err(err))
+			vq.Error("block validation failed", log.BlockId(block.Id()), log.Err(err))
 			vq.updateDependencies(id, false)
 			continue
 		}
@@ -94,16 +94,16 @@ func (vq *blockQueue) handleBlock(bjb fetchJob) {
 // handles new block dependencies
 // if there are unknown blocks in the view they are added to the fetch queue
 func (vq *blockQueue) handleBlockDependencies(blk *types.Block) {
-	vq.Info("handle dependencies Block %v", blk.ID())
-	res, err := vq.addDependencies(blk.ID(), blk.ViewEdges, vq.finishBlockCallback(blk))
+	vq.Info("handle dependencies Block %v", blk.Id())
+	res, err := vq.addDependencies(blk.Id(), blk.ViewEdges, vq.finishBlockCallback(blk))
 
 	if err != nil {
 		vq.updateDependencies(blk.Hash32(), false)
-		vq.Error(fmt.Sprintf("failed to add pending for Block %v %v", blk.ID(), err))
+		vq.Error(fmt.Sprintf("failed to add pending for Block %v %v", blk.Id(), err))
 	}
 
 	if res == false {
-		vq.Info("pending done for %v", blk.ID())
+		vq.Info("pending done for %v", blk.Id())
 		vq.updateDependencies(blk.Hash32(), true)
 	}
 }
@@ -111,7 +111,7 @@ func (vq *blockQueue) handleBlockDependencies(blk *types.Block) {
 func (vq *blockQueue) finishBlockCallback(block *types.Block) func(res bool) error {
 	return func(res bool) error {
 		if !res {
-			vq.Info("finished block %v block, invalid", block.ID())
+			vq.Info("finished block %v block, invalid", block.Id())
 			return nil
 		}
 
@@ -123,7 +123,7 @@ func (vq *blockQueue) finishBlockCallback(block *types.Block) func(res bool) err
 
 		//validate block's votes
 		if valid := validateVotes(block, vq.ForBlockInView, vq.Hdist, vq.Log); valid == false {
-			return errors.New(fmt.Sprintf("validate votes failed for block %v", block.ID()))
+			return errors.New(fmt.Sprintf("validate votes failed for block %v", block.Id()))
 		}
 
 		if err := vq.AddBlockWithTxs(block, txs, atxs); err != nil && err != mesh.ErrAlreadyExist {
@@ -134,7 +134,7 @@ func (vq *blockQueue) finishBlockCallback(block *types.Block) func(res bool) err
 			vq.HandleLateBlock(block)
 		}
 
-		vq.Info("finished block %v, valid", block.ID())
+		vq.Info("finished block %v, valid", block.Id())
 		return nil
 	}
 }

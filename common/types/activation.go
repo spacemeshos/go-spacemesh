@@ -3,9 +3,7 @@ package types
 import (
 	"encoding/hex"
 	"fmt"
-	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/util"
-	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/poet/shared"
 	"github.com/spacemeshos/post/proving"
 	"github.com/spacemeshos/sha256-simd"
@@ -187,32 +185,6 @@ func (atx *ActivationTx) GetPoetProofRef() []byte {
 
 func (atx *ActivationTx) GetShortPoetProofRef() []byte {
 	return atx.Nipst.PostProof.Challenge[:util.Min(5, len(atx.Nipst.PostProof.Challenge))]
-}
-
-// ValidateSignedAtx extracts public key from message and verifies public key exists in IdStore, this is how we validate
-// ATX signature. If this is the first ATX it is considered valid anyways and ATX syntactic validation will determine ATX validity
-func ExtractPublicKey(signedAtx *ActivationTx) (*signing.PublicKey, error) {
-	bts, err := signedAtx.AtxBytes()
-	if err != nil {
-		return nil, err
-	}
-
-	pubKey, err := ed25519.ExtractPublicKey(bts, signedAtx.Sig)
-	if err != nil {
-		return nil, err
-	}
-
-	pub := signing.NewPublicKey(pubKey)
-	return pub, nil
-}
-
-func SignAtx(signer *signing.EdSigner, atx *ActivationTx) (*ActivationTx, error) {
-	bts, err := atx.AtxBytes()
-	if err != nil {
-		return nil, err
-	}
-	atx.Sig = signer.Sign(bts)
-	return atx, nil
 }
 
 type PoetProof struct {
