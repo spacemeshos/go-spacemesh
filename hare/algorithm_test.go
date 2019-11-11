@@ -181,6 +181,16 @@ func TestConsensusProcess_Start(t *testing.T) {
 	assert.Equal(t, "instance already started", err.Error())
 }
 
+func TestConsensusProcess_TerminationLimit(t *testing.T) {
+	p := generateConsensusProcess(t)
+	p.SetInbox(make(chan *Msg, 10))
+	p.cfg.Limit = 0
+	p.cfg.RoundDuration = 1
+	p.Start()
+	time.Sleep(time.Duration(6*p.cfg.RoundDuration) * time.Second)
+	assert.Equal(t, int32(1), p.k/4)
+}
+
 func TestConsensusProcess_eventLoop(t *testing.T) {
 	net := &mockP2p{}
 	broker := buildBroker(net, t.Name())

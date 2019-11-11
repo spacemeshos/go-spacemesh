@@ -503,6 +503,8 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 
 		return true
 	}
+
+	app.Config.HARE.Limit = 2 * (app.Config.Hdist + 1)
 	ha := hare.New(app.Config.HARE, swarm, sgn, nodeID, validationFunc, syncer.IsSynced, msh, hOracle, uint16(app.Config.LayersPerEpoch), idStore, hOracle, clock.Subscribe(), app.addLogger(HareLogger, lg))
 
 	stateAndMeshProjector := pending_txs.NewStateAndMeshProjector(st, msh)

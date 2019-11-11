@@ -234,23 +234,28 @@ func (proc *ConsensusProcess) eventLoop() {
 		log.Int("Hare-N", proc.cfg.N), log.Int("f", proc.cfg.F), log.String("duration", (time.Duration(proc.cfg.RoundDuration)*time.Second).String()),
 		log.LayerId(uint64(proc.instanceId)), log.Int("exp_leaders", proc.cfg.ExpectedLeaders), log.String("current_set", proc.s.String()), log.Int("set_size", proc.s.Size()))
 
-	// check participation
-	if proc.shouldParticipate() {
-		// set pre-round InnerMsg and send
-		builder, err := proc.initDefaultBuilder(proc.s)
-		if err != nil {
-			proc.Error("init default builder failed: %v", err)
-			return
-		}
-		m := builder.SetType(pre).Sign(proc.signing).Build()
-		proc.sendMessage(m)
-	}
-
-	// listen to pre-round Messages
+	// start the timer
 	timer := time.NewTimer(time.Duration(proc.cfg.RoundDuration) * time.Second)
+
+	// check participation and send message
+	go func() {
+		// check participation
+		if proc.shouldParticipate() {
+			// set pre-round InnerMsg and send
+			builder, err := proc.initDefaultBuilder(proc.s)
+			if err != nil {
+				proc.Error("init default builder failed: %v", err)
+				return
+			}
+			m := builder.SetType(pre).Sign(proc.signing).Build()
+			proc.sendMessage(m)
+		}
+	}()
+
 PreRound:
 	for {
 		select {
+		// listen to pre-round Messages
 		case msg := <-proc.inbox:
 			proc.handleMessage(msg)
 		case <-timer.C:
@@ -281,9 +286,16 @@ PreRound:
 		case <-ticker.C: // next round event
 			proc.onRoundEnd()
 			proc.advanceToNextRound()
+
+			// exit if we reached the limit on number of iterations
+			if proc.k/4 > int32(proc.cfg.Limit) {
+				proc.Info("terminating: reached iterations limit")
+				return
+			}
+
 			proc.onRoundBegin()
 		case <-proc.CloseChannel(): // close event
-			proc.Debug("Stop event loop, terminating")
+			proc.Debug("terminating: received termination signal")
 			return
 		}
 	}
