@@ -1,32 +1,26 @@
 import copy
-import json
-import sys
 from datetime import datetime, timedelta
-import random
 from enum import Enum
-from typing import List, Dict
-
-from tests import queries, analyse
-from tests import pod, deployment, statefulset
-from tests.fixtures import load_config, DeploymentInfo, NetworkDeploymentInfo
-from tests.fixtures import init_session, set_namespace, set_docker_images, session_id
-from tests import tx_generator
-import pytest
-import pytz
-import re
-import subprocess
-import time
+import json
 from kubernetes import client
 from kubernetes.client.rest import ApiException
 from kubernetes.stream import stream
-from pytest_testconfig import config as testconfig
-from elasticsearch_dsl import Search, Q
-from tests.misc import ContainerSpec, CoreV1ApiClient
-from tests.context import ES
-from tests.hare.assert_hare import validate_hare
 import pprint
+import pytest
+import pytz
+import random
+import subprocess
+import sys
+import time
+from typing import List
 
+from pytest_testconfig import config as testconfig
+from tests import analyse, pod, deployment, queries, statefulset, tx_generator
+from tests.conftest import DeploymentInfo, NetworkDeploymentInfo
 from tests.ed25519.eddsa import genkeypair
+from tests.hare.assert_hare import validate_hare
+from tests.misc import ContainerSpec, CoreV1ApiClient
+
 
 BOOT_DEPLOYMENT_FILE = './k8s/bootstrapoet-w-conf.yml'
 BOOT_STATEFULSET_FILE = './k8s/bootstrapoet-w-conf-ss.yml'
@@ -176,7 +170,7 @@ def setup_bootstrap_in_namespace(namespace, bs_deployment_info, bootstrap_config
 def setup_clients_in_namespace(namespace, bs_deployment_info, client_deployment_info, client_config, name="client",
                                oracle=None, poet=None, dep_time_out=120):
     # this function used to be the way to extract the client title
-    # in case we want a different title (client_v2) we can specify it
+    # in case we want a different title (client_v2 for example) we can specify it
     # directly in "name" input
     def _extract_label():
         return client_deployment_info.deployment_name.split('-')[1]

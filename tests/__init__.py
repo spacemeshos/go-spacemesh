@@ -1,2 +1,2 @@
 
-__all__ = ['test_bs', 'misc', 'fixtures' ,'ed25519']
+__all__ = ['test_bs', 'misc', 'conftest.py', 'ed25519']

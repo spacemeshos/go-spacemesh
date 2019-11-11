@@ -1,21 +1,17 @@
-from pprint import pprint
-import random
-import re
-import time
-import pytest
 from datetime import datetime
+import pytest
+import random
 from random import choice
+import re
 from string import ascii_lowercase
+import time
 
 from pytest_testconfig import config as testconfig
-
 # noinspection PyUnresolvedReferences
 from tests.context import ES
-from tests.fixtures import init_session, load_config, set_namespace, session_id, set_docker_images
 
 from tests.queries import query_message, poll_query_message
-from tests.test_bs import add_multi_clients, get_conf
-from tests.test_bs import api_call
+from tests.test_bs import api_call, add_multi_clients, get_conf
 # noinspection PyUnresolvedReferences
 from tests.test_bs import setup_bootstrap, setup_clients, save_log_on_exit, add_curl
 
@@ -294,7 +290,7 @@ def test_many_gossip_sim(setup_clients, add_curl):
     send_msgs(setup_clients, api, headers, total_expected_gossip, num_of_msg=test_messages)
 
 
-def test_unknown_protocol(setup_bootstrap, setup_clients, add_curl):
+def test_broadcast_unknown_protocol(setup_bootstrap, setup_clients, add_curl):
     api = 'v1/broadcast'
     # protocol is modified
     headers = {'M': 'new_gossip_message', 'protocol': 'unknown_protocol'}

@@ -1,0 +1,35 @@
+namespace: ''
+
+config_map_name: conf
+
+script_on_exit: '' # Uncomment this to save logs './k8s/log-client-pods.sh'
+
+genesis_delta: 150
+single_pod_ready_time_out: 60
+deployment_ready_time_out: 120 #default 120
+config_path: '../config.toml'
+
+bootstrap:
+  image: 'spacemeshos/go-spacemesh-dev:go_auto'
+  command: '/bin/go-p2p'
+  replicas: 1
+  resources:
+    requests:
+      memory: '256M'
+      cpu: '0.5'
+    limits:
+      memory: '512M'
+      cpu: '1'
+  args:
+    randcon: '8'
+    hare-committee-size: '20'
+    hare-max-adversaries: '9'
+    hare-round-duration-sec: '10'
+    layer-duration-sec: '60'
+    layer-average-size: '20'
+    hare-wakeup-delta: '10'
+  deployment_type: deployment # default:deployment
+elastic:
+  host: elastic.spacemesh.io
+  port: 9200
+  username: spacemesh
