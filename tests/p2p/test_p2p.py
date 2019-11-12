@@ -56,20 +56,22 @@ def add_client(request, setup_bootstrap, setup_clients):
 @pytest.fixture()
 def add_clients(setup_bootstrap, setup_clients):
     """
-    add_clients returns a function that accepts number of replicas
-    and a version and gets the information from
+    add_clients returns a function for the user to run with necessary client specifications
 
-    :param setup_bootstrap:
-    :param setup_clients:
-    :return: _add_client function
+    :param setup_bootstrap: DeploymentInfo, bootstrap info
+    :param setup_clients: DeploymentInfo, client info
+    :return: function, _add_client
     """
 
     def _add_clients(num_of_clients, version=None, version_separator='_'):
+        # TODO make a generic function that _add_clients can use
         """
-        :param num_of_clients: number of replicas
-        :param version: string of the wanted client version
-        :param version_separator: a string type separator to separate between client key and client version
-        :return:  a list of all created client pods
+        adds a clients to the bootstrap namespace
+
+        :param num_of_clients: int, number of replicas
+        :param version: string, the wanted client version
+        :param version_separator: string, separator to separate between client key and client version
+        :return: list, all created client pods
         """
         if version and not isinstance(version, str):
             raise ValueError("version must be type string")
