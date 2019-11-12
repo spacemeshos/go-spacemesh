@@ -75,7 +75,7 @@ def delete_pod(pod_name, name_space):
 
 
 def check_for_restarted_pods(namespace, specific_deployment_name=''):
-    pods=[]
+    pods = []
     try:
         if specific_deployment_name:
             pods = CoreV1ApiClient().list_namespaced_pod(namespace,

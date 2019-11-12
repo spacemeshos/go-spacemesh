@@ -9,8 +9,6 @@ from pytest_testconfig import config as testconfig
 from tests.misc import CoreV1ApiClient
 from tests.context import Context
 
-S = ' during'
-
 
 def random_id(length):
     # Just alphanumeric characters
@@ -101,7 +99,7 @@ def set_namespace(request, session_id, load_config):
         # On teardown we wish to report on pods that were restarted by k8s during the test
         restarted_pods = pod.check_for_restarted_pods(testconfig['namespace'])
         if restarted_pods:
-            print('\n\nAttention!!! The following pods were restarted{1} test: {0}\n\n'.format(restarted_pods, S))
+            print('\n\nAttention!!! The following pods were restarted during test: {0}\n\n'.format(restarted_pods))
 
         if hasattr(request, 'param') and request.param == 'doNotDeleteNameSpace':
             print("\nDo not delete namespace: {0}".format(testconfig['namespace']))
