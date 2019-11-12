@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: sm-bootstrapoet
+  name: sm-bootstrap
 spec:
   selector:
     matchLabels:
@@ -11,7 +11,7 @@ spec:
   template:
     metadata:
       labels:
-        name: bootstrapoet
+        name: bootstrap
         app: spacemesh
       annotations:
         cluster-autoscaler.kubernetes.io/safe-to-evict: 'false'

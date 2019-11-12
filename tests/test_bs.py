@@ -41,11 +41,11 @@ def get_conf(bs_info, client_config, setup_oracle=None, setup_poet=None, args=No
     """
     get_conf gather specification information into one ContainerSpec object
 
-    :param bs_info: bootstrap info, type DeploymentInfo
-    :param client_config: client info
-    :param setup_oracle: oracle info
-    :param setup_poet: poet info
-    :param args: arguments for appendage
+    :param bs_info: DeploymentInfo, bootstrap info
+    :param client_config: DeploymentInfo, client info
+    :param setup_oracle: string, oracle ip
+    :param setup_poet: string, poet ip
+    :param args: list of strings, arguments for appendage in specification
     :return: ContainerSpec
     """
     client_args = {} if 'args' not in client_config else client_config['args']
@@ -113,7 +113,42 @@ def choose_k8s_object_create(config, deployment_file, statefulset_file):
         raise Exception("Unknown deployment type in configuration. Please check your config.yaml")
 
 
-def setup_bootstrap_in_namespace(namespace, bs_deployment_info, bootstrap_config, oracle=None, poet=None, dep_time_out=120):
+def _setup_dep_ss_file_path(file_path, dep_type):
+    dep_file_path = BOOT_DEPLOYMENT_FILE
+    ss_file_path = BOOT_STATEFULSET_FILE
+    if file_path and dep_type == "statefulset":
+        print(f"setting up stateful file path to {file_path}\n")
+        ss_file_path = file_path
+    elif file_path and dep_type == "deployment":
+        print(f"setting up deployment file path to {file_path}\n")
+        dep_file_path = file_path
+
+    return dep_file_path, ss_file_path
+
+
+def setup_bootstrap_in_namespace(namespace, bs_deployment_info, bootstrap_config, oracle=None, poet=None,
+                                 file_path=None, dep_time_out=120):
+    """
+    adds a bootstrap node to a specific namespace
+
+    :param namespace: string, session id
+    :param bs_deployment_info: DeploymentInfo, bootstrap info, metadata
+    :param bootstrap_config: dictionary, bootstrap specifications
+    :param oracle: string, oracle ip
+    :param poet: string, poet ip
+    :param file_path: string, optional, full path to deployment yaml
+    :param dep_time_out: int, deployment timeout
+
+    :return: DeploymentInfo, bootstrap info with a list of active pods
+    """
+    # setting stateful and deployment configuration files
+    ss_file_path = dep_file_path = ""
+    if "deployment_type" in bootstrap_config.keys():
+        dep_file_path, ss_file_path = _setup_dep_ss_file_path(file_path, bootstrap_config["deployment_type"])
+
+    def _extract_label():
+        name = bs_deployment_info.deployment_name.split('-')[1]
+        return name
 
     bootstrap_args = {} if 'args' not in bootstrap_config else bootstrap_config['args']
     cspec = ContainerSpec(cname='bootstrap', specs=bootstrap_config)
@@ -129,8 +164,8 @@ def setup_bootstrap_in_namespace(namespace, bs_deployment_info, bootstrap_config
 
     # choose k8s creation function (deployment/stateful) and the matching k8s file
     k8s_file, k8s_create_func = choose_k8s_object_create(bootstrap_config,
-                                                         BOOT_DEPLOYMENT_FILE,
-                                                         BOOT_STATEFULSET_FILE)
+                                                         dep_file_path,
+                                                         ss_file_path)
     # run the chosen creation function
     resp = k8s_create_func(k8s_file, namespace,
                            deployment_id=bs_deployment_info.deployment_id,
@@ -144,7 +179,7 @@ def setup_bootstrap_in_namespace(namespace, bs_deployment_info, bootstrap_config
         CoreV1ApiClient().list_namespaced_pod(namespace=namespace,
                                               label_selector=(
                                                   "name={0}".format(
-                                                      bs_deployment_info.deployment_name.split('-')[1]))).items[0])
+                                                      _extract_label()))).items[0])
     bs_pod = {'name': bootstrap_pod_json.metadata.name}
 
     while True:

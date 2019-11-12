@@ -28,7 +28,7 @@ def wait_to_pod_to_be_deleted(pod_name, name_space, time_out=None):
     total_sleep_time = 0
     while True:
         try:
-            resp = CoreV1ApiClient().read_namespaced_pod(name=pod_name, namespace=name_space)
+            _ = CoreV1ApiClient().read_namespaced_pod(name=pod_name, namespace=name_space)
         except ApiException as e:
             if e.status == 404:
                 print("Total time waiting for delete pod {0}: {1} sec".format(pod_name, total_sleep_time))
@@ -59,6 +59,8 @@ def create_pod(file_name, name_space, deployment_id=None, container_specs=None):
 
 def delete_pod(pod_name, name_space):
     k8s_api = CoreV1ApiClient()
+    resp = None
+
     try:
         resp = k8s_api.delete_namespaced_pod(name=pod_name,
                                              namespace=name_space,
@@ -94,7 +96,7 @@ def check_for_restarted_pods(namespace, specific_deployment_name=''):
     return restarted_pods
 
 
-def search_phrase_in_pod_log(pod_name, name_space, container_name, phrase, time_out=60):
+def search_phrase_in_pod_log(pod_name, name_space, container_name, phrase, time_out=60, group=None):
 
     match = None
     total_sleep = 0
@@ -107,4 +109,6 @@ def search_phrase_in_pod_log(pod_name, name_space, container_name, phrase, time_
             time.sleep(1)
             total_sleep = total_sleep + 1
         else:
+            if match and group:
+                return match.group(group)
             return match

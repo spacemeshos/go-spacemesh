@@ -22,13 +22,14 @@ bootstrap:
       cpu: '1'
   args:
     randcon: '8'
+    data-folder: '/usr/share/spacemesh/'
     hare-committee-size: '20'
     hare-max-adversaries: '9'
     hare-round-duration-sec: '10'
     layer-duration-sec: '60'
     layer-average-size: '20'
     hare-wakeup-delta: '10'
-  deployment_type: deployment # default:deployment
+  deployment_type: statefulset
 elastic:
   host: elastic.spacemesh.io
   port: 9200

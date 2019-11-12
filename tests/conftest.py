@@ -88,7 +88,7 @@ def set_namespace(request, session_id, load_config):
               "columns:!(M),filters:!(('$state':(store:appState),meta:(alias:!n,disabled:!f,index:'8a91d9d0-c24f-11e9-9"
               "a59-a76b835079b3',key:kubernetes.namespace_name,negate:!f,params:(query:{0},type:phrase),type:phrase,val"
               "ue:{0}),query:(match:(kubernetes.namespace_name:(query:{0},type:phrase))))))"
-              .format(testconfig['namespace']))
+              .format(testconfig['namespace']), "\n")
         namespaces_list = [ns.metadata.name for ns in v1.list_namespace().items]
         if testconfig['namespace'] in namespaces_list:
             return
