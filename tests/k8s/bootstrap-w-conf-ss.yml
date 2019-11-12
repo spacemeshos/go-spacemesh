@@ -37,19 +37,6 @@ spec:
         volumeMounts:
         - name: bootstrap-vol
           mountPath: /usr/share/spacemesh
-      - name: poet
-        image: spacemeshos/poet:develop
-        imagePullPolicy: Always
-        args: ['--rpclisten', '0.0.0.0:50002', '--restlisten', '0.0.0.0:80', "--n", "19", "--core.n", "19"]
-        resources:
-          requests:
-            memory: "512M"
-            cpu: "1"
-          limits:
-            memory: "2048M"
-            cpu: "2"
-        ports:
-          - containerPort: 50002
       nodeSelector:
         role: tests
   volumeClaimTemplates:

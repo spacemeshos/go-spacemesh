@@ -7,6 +7,9 @@ from tests.test_bs import setup_bootstrap_in_namespace, add_curl, setup_bootstra
 from tests.misc import CoreV1ApiClient
 
 
+BOOTSTRAP_LABEL = 'bootstrap'
+
+
 # reboot bootstrap
 # add a new stateful bootstrap
 # kill bootstrap
@@ -17,7 +20,6 @@ def test_reboot_bootstrap(init_session):
     # test params
     sleep_time = 5
     session_id = init_session
-    bootstrap_key = 'bootstrap'
     bootstrap_group_id = 'bootstrap_key'
     ss_file_path = "/Users/amit/workspace/go-spacemesh/tests/k8s/bootstrap-w-conf-ss.yml"
     key_regex = r"Local node identity >> (?P<{bootstrap_group_id}>\w+)".format(bootstrap_group_id=bootstrap_group_id)
@@ -40,13 +42,15 @@ def test_reboot_bootstrap(init_session):
 
     pods = CoreV1ApiClient().list_namespaced_pod(session_id,
                                                  label_selector=(
-                                                     "name={0}".format(bootstrap_key))).items
+                                                     "name={0}".format(BOOTSTRAP_LABEL))).items
     pod_name = pods[0].spec.hostname
-    new_key = pod.search_phrase_in_pod_log(pod_name, session_id, bootstrap_key, key_regex, group=bootstrap_group_id)
+    new_key = pod.search_phrase_in_pod_log(pod_name, session_id, BOOTSTRAP_LABEL, key_regex, group=bootstrap_group_id)
     print(f"new key is: {new_key}")
     original_bs_key = bootstrap_deployment_info.pods[0]["key"]
     print(f"old key is: {original_bs_key}")
-    assert original_bs_key == new_key
+
+    ass_msg = f"keys did not match\noriginal key: {original_bs_key}\nnew key: {new_key}\n"
+    assert original_bs_key == new_key, ass_msg
 
 
 # Kill original bootstraps
