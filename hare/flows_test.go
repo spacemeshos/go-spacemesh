@@ -67,7 +67,7 @@ func (his *HareWrapper) waitForTermination() {
 			s := NewEmptySet(10)
 			blks, _ := p.GetResult(i, i)
 			for _, b := range blks {
-				s.Add(blockID{b})
+				s.Add(b)
 			}
 			his.outputs[instanceId(i)] = append(his.outputs[instanceId(i)], s)
 		}
@@ -198,8 +198,8 @@ func (m *mockIdentityP) GetIdentity(edId string) (types.NodeId, error) {
 func buildSet() []types.BlockID {
 	s := make([]types.BlockID, 200, 200)
 
-	for i := uint64(0); i < 200; i++ {
-		s = append(s, types.BlockID(i))
+	for i := types.LayerID(0); i < 200; i++ {
+		s = append(s, types.NewExistingBlock(i, []byte{}).Id())
 	}
 
 	return s

@@ -80,8 +80,8 @@ func (app *HareApp) Cleanup() {
 func buildSet() []types.BlockID {
 	s := make([]types.BlockID, 200, 200)
 
-	for i := uint64(0); i < 200; i++ {
-		s = append(s, types.BlockID(i))
+	for i := types.LayerID(0); i < 200; i++ {
+		s = append(s, types.NewExistingBlock(i, []byte{}).Id())
 	}
 
 	return s
