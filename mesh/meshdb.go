@@ -26,8 +26,8 @@ type MeshDB struct {
 	layers             database.Database
 	blocks             database.Database
 	transactions       database.Database
-	contextualValidity database.Database //map blockId to contextualValidation state of block
-	patterns           database.Database //map blockId to contextualValidation state of block
+	contextualValidity database.Database
+	patterns           database.Database
 	unappliedTxs       database.Database
 	unappliedTxsMutex  sync.Mutex
 	orphanBlocks       map[types.LayerID]map[types.BlockID]struct{}
@@ -42,15 +42,15 @@ func NewPersistentMeshDB(path string, log log.Log) (*MeshDB, error) {
 	}
 	ldb, err := database.NewLDBDatabase(path+"layers", 0, 0, log)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize transactions db: %v", err)
+		return nil, fmt.Errorf("failed to initialize layers db: %v", err)
 	}
 	vdb, err := database.NewLDBDatabase(path+"validity", 0, 0, log)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize transactions db: %v", err)
+		return nil, fmt.Errorf("failed to initialize validity db: %v", err)
 	}
 	pdb, err := database.NewLDBDatabase(path+"patterns", 0, 0, log)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize transactions db: %v", err)
+		return nil, fmt.Errorf("failed to initialize patterns db: %v", err)
 	}
 	tdb, err := database.NewLDBDatabase(path+"transactions", 0, 0, log)
 	if err != nil {
@@ -343,22 +343,22 @@ func getRewardSearchKey(account types.Address) []byte {
 }
 
 func getTransactionOriginKey(l types.LayerID, t *types.Transaction) []byte {
-	str := "a_orig_" + t.Origin().String() + "_" + strconv.FormatUint(l.Uint64(), 10) + "_" + t.Id().String()
+	str := string(getTransactionOriginKeyPrefix(l, t.Origin())) + "_" + t.Id().String()
 	return []byte(str)
 }
 
 func getTransactionDestKey(l types.LayerID, t *types.Transaction) []byte {
-	str := "a_dest_" + t.InnerTransaction.Recipient.String() + "_" + strconv.FormatUint(l.Uint64(), 10) + "_" + t.Id().String()
+	str := string(getTransactionDestKeyPrefix(l, t.Recipient)) + "_" + t.Id().String()
 	return []byte(str)
 }
 
 func getTransactionOriginKeyPrefix(l types.LayerID, account types.Address) []byte {
-	str := "a_orig_" + account.String() + "_" + strconv.FormatUint(l.Uint64(), 10)
+	str := "a_o_" + account.String() + "_" + strconv.FormatUint(l.Uint64(), 10)
 	return []byte(str)
 }
 
 func getTransactionDestKeyPrefix(l types.LayerID, account types.Address) []byte {
-	str := "a_dest_" + account.String() + "_" + strconv.FormatUint(l.Uint64(), 10)
+	str := "a_d_" + account.String() + "_" + strconv.FormatUint(l.Uint64(), 10)
 	return []byte(str)
 }
 
