@@ -68,7 +68,6 @@ func addTransactionsWithFee(mesh *MeshDB, bl *types.Block, numOfTxs int, fee int
 		txs = append(txs, tx)
 	}
 	mesh.writeTransactions(txs)
-	bl.SetId()
 	return totalFee
 }
 
@@ -140,7 +139,9 @@ func createLayer(mesh *Mesh, id types.LayerID, numOfBlocks, maxTransactions int,
 		atx := types.NewActivationTx(nodeid, coinbase, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 10, []types.BlockID{}, &types.NIPST{})
 		atxdb.AddAtx(atx.Id(), atx)
 		block1.ATXID = atx.Id()
+
 		totalRewards += addTransactionsWithFee(mesh.MeshDB, block1, rand.Intn(maxTransactions), rand.Int63n(100))
+		block1.SetId()
 		mesh.AddBlock(block1)
 	}
 	return totalRewards
