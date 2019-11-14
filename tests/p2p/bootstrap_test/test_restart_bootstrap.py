@@ -22,7 +22,6 @@ def test_reboot_bootstrap(init_session):
     sleep_time = 5
     session_id = init_session
     bootstrap_group_id = 'bootstrap_key'
-    # ss_file_path = "/Users/amit/workspace/go-spacemesh/tests/k8s/bootstrap-w-conf-ss.yml"
     ss_file_path = get_spec_file_path("bootstrap-w-conf-ss.yml")
     print(f"#@!#@!#@! ss_file path={ss_file_path}")
     key_regex = r"Local node identity >> (?P<{bootstrap_group_id}>\w+)".format(bootstrap_group_id=bootstrap_group_id)
