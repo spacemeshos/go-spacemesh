@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"net"
 	"strconv"
+	"time"
 
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -21,16 +22,17 @@ import (
 
 // SpacemeshGrpcService is a grpc server providing the Spacemesh api
 type SpacemeshGrpcService struct {
-	Server    *grpc.Server
-	Port      uint
-	StateApi  StateAPI         // State DB
-	Network   NetworkAPI       // P2P Swarm
-	Tx        TxAPI            // Mesh
-	TxMempool *miner.TxMempool // TX Mempool
-	Mining    MiningAPI        // ATX Builder
-	Oracle    OracleAPI
-	GenTime   GenesisTimeAPI
-	Logging   LoggingAPI
+	Server        *grpc.Server
+	Port          uint
+	StateApi      StateAPI         // State DB
+	Network       NetworkAPI       // P2P Swarm
+	Tx            TxAPI            // Mesh
+	TxMempool     *miner.TxMempool // TX Mempool
+	Mining        MiningAPI        // ATX Builder
+	Oracle        OracleAPI
+	GenTime       GenesisTimeAPI
+	LayerDuration time.Duration
+	Logging       LoggingAPI
 }
 
 func (s SpacemeshGrpcService) getTransaction(txId types.TransactionId) (*types.Transaction, *types.LayerID, pb.TxStatus, error) {
@@ -67,10 +69,13 @@ func (s SpacemeshGrpcService) GetTransaction(ctx context.Context, txId *pb.Trans
 		return nil, err
 	}
 
-	var layerId uint64
+	var layerId, timestamp uint64
 	if layerApplied != nil {
 		layerId = uint64(*layerApplied)
+		timestamp = uint64(s.GenTime.GetGenesisTime().Add(s.LayerDuration * time.Duration(layerId+1)).Unix())
+		// We use layerId + 1 so the timestamp is the end of the layer.
 	}
+
 	return &pb.Transaction{
 		TxId: txId,
 		Sender: &pb.AccountId{
@@ -83,7 +88,7 @@ func (s SpacemeshGrpcService) GetTransaction(ctx context.Context, txId *pb.Trans
 		Fee:       tx.Fee,
 		Status:    status,
 		LayerId:   layerId,
-		Timestamp: 0, // TODO: calculate timestamp from layerId
+		Timestamp: timestamp,
 	}, nil
 }
 
@@ -189,20 +194,21 @@ type TxAPI interface {
 }
 
 // NewGrpcService create a new grpc service using config data.
-func NewGrpcService(net NetworkAPI, state StateAPI, tx TxAPI, txMempool *miner.TxMempool, mining MiningAPI, oracle OracleAPI, genTime GenesisTimeAPI, logging LoggingAPI) *SpacemeshGrpcService {
+func NewGrpcService(net NetworkAPI, state StateAPI, tx TxAPI, txMempool *miner.TxMempool, mining MiningAPI, oracle OracleAPI, genTime GenesisTimeAPI, layerDurationSec int, logging LoggingAPI) *SpacemeshGrpcService {
 	port := config.ConfigValues.GrpcServerPort
 	server := grpc.NewServer()
 	return &SpacemeshGrpcService{
-		Server:    server,
-		Port:      uint(port),
-		StateApi:  state,
-		Network:   net,
-		Tx:        tx,
-		TxMempool: txMempool,
-		Mining:    mining,
-		Oracle:    oracle,
-		GenTime:   genTime,
-		Logging:   logging,
+		Server:        server,
+		Port:          uint(port),
+		StateApi:      state,
+		Network:       net,
+		Tx:            tx,
+		TxMempool:     txMempool,
+		Mining:        mining,
+		Oracle:        oracle,
+		GenTime:       genTime,
+		LayerDuration: time.Duration(layerDurationSec) * time.Second,
+		Logging:       logging,
 	}
 }
 

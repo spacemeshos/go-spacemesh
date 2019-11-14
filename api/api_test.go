@@ -120,16 +120,21 @@ func (t GenesisTimeMock) GetGenesisTime() time.Time {
 	return t.t
 }
 
+const (
+	genTimeUnix   = 1000000
+	layerDuration = 10
+)
+
 var (
 	ap          = NewNodeAPIMock()
 	networkMock = NetworkMock{}
+	mining      = MinigApiMock{}
+	oracle      = OracleMock{}
+	genTime     = GenesisTimeMock{time.Unix(genTimeUnix, 0)}
 	txApi       = &TxAPIMock{
 		returnTx:     make(map[types.TransactionId]*types.Transaction),
 		layerApplied: make(map[types.TransactionId]*types.LayerID),
 	}
-	mining  = MinigApiMock{}
-	oracle  = OracleMock{}
-	genTime = GenesisTimeMock{time.Now()}
 )
 
 func TestServersConfig(t *testing.T) {
@@ -139,7 +144,7 @@ func TestServersConfig(t *testing.T) {
 
 	config.ConfigValues.JSONServerPort = port1
 	config.ConfigValues.GrpcServerPort = port2
-	grpcService := NewGrpcService(&networkMock, ap, txApi, nil, &mining, &oracle, nil, nil)
+	grpcService := NewGrpcService(&networkMock, ap, txApi, nil, &mining, &oracle, nil, 0, nil)
 	jsonService := NewJSONHTTPServer()
 
 	require.Equal(t, grpcService.Port, uint(config.ConfigValues.GrpcServerPort), "Expected same port")
@@ -269,9 +274,9 @@ func TestSpacemeshGrpcService_GetTransaction(t *testing.T) {
 	respTx2 := getTx(t, tx2)
 	respTx3 := getTx(t, tx3)
 
-	assertTx(t, respTx1, tx1, "PENDING", 0)
-	assertTx(t, respTx2, tx2, "CONFIRMED", 1)
-	assertTx(t, respTx3, tx3, "REJECTED", 0)
+	assertTx(t, respTx1, tx1, "PENDING", 0, 0)
+	assertTx(t, respTx2, tx2, "CONFIRMED", 1, genTimeUnix+layerDuration*2)
+	assertTx(t, respTx3, tx3, "REJECTED", 0, 0)
 
 	shutDown()
 }
@@ -287,7 +292,7 @@ func getTx(t *testing.T, tx *types.Transaction) pb.Transaction {
 	return respTx
 }
 
-func assertTx(t *testing.T, respTx pb.Transaction, tx *types.Transaction, status string, layerId uint64) {
+func assertTx(t *testing.T, respTx pb.Transaction, tx *types.Transaction, status string, layerId, timestamp uint64) {
 	r := require.New(t)
 	r.Equal(tx.Id().Bytes(), respTx.TxId.Id)
 	r.Equal(tx.Fee, respTx.Fee)
@@ -296,7 +301,7 @@ func assertTx(t *testing.T, respTx pb.Transaction, tx *types.Transaction, status
 	r.Equal(tx.Origin().Bytes(), respTx.Sender.Address)
 	r.Equal(layerId, respTx.LayerId)
 	r.Equal(status, respTx.Status.String())
-	//r.Equal(0, respTx.Timestamp)
+	r.Equal(timestamp, respTx.Timestamp)
 }
 
 func submitTx(t *testing.T, tx *types.Transaction) {
@@ -331,7 +336,7 @@ func launchServer(t *testing.T) func() {
 		config.ConfigValues.GrpcServerPort = port2
 	}
 	networkMock.broadcasted = []byte{0x00}
-	grpcService := NewGrpcService(&networkMock, ap, txApi, nil, &mining, &oracle, &genTime, nil)
+	grpcService := NewGrpcService(&networkMock, ap, txApi, nil, &mining, &oracle, &genTime, layerDuration, nil)
 	jsonService := NewJSONHTTPServer()
 	// start gRPC and json server
 	grpcService.StartService()
