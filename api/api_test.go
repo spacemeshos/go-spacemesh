@@ -27,6 +27,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/api/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/suite"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 )
@@ -41,6 +42,26 @@ type NodeAPIMock struct {
 type NetworkMock struct {
 	broadCastErr bool
 	broadcasted  []byte
+}
+
+// Define the suite, and absorb the built-in basic suite
+// functionality from testify - including a T() method which
+// returns the current testing context
+type ExampleTestSuite struct {
+	suite.Suite
+	VariableThatShouldStartAtFive int
+}
+
+// Make sure that VariableThatShouldStartAtFive is set to five
+// before each test
+func (suite *ExampleTestSuite) SetupTest() {
+	suite.VariableThatShouldStartAtFive = 5
+}
+
+// In order for 'go test' to run this suite, we need to create
+// a normal test function and pass our suite to suite.Run
+func TestExampleTestSuite(t *testing.T) {
+	suite.Run(t, new(ExampleTestSuite))
 }
 
 func (s *NetworkMock) Broadcast(chanel string, payload []byte) error {
@@ -134,26 +155,26 @@ var (
 	genTime     = GenesisTimeMock{time.Now()}
 )
 
-func TestServersConfig(t *testing.T) {
+func (suite *ExampleTestSuite) TestServersConfig() {
 
 	port1, err := node.GetUnboundedPort()
 	port2, err := node.GetUnboundedPort()
-	assert.NoError(t, err, "Should be able to establish a connection on a port")
+	assert.NoError(suite.T(), err, "Should be able to establish a connection on a port")
 
 	config.ConfigValues.JSONServerPort = port1
 	config.ConfigValues.GrpcServerPort = port2
 	grpcService := NewGrpcService(&networkMock, ap, &tx, &mining, &oracle, nil, nil)
 	jsonService := NewJSONHTTPServer()
 
-	assert.Equal(t, grpcService.Port, uint(config.ConfigValues.GrpcServerPort), "Expected same port")
-	assert.Equal(t, jsonService.Port, uint(config.ConfigValues.JSONServerPort), "Expected same port")
+	assert.Equal(suite.T(), grpcService.Port, uint(config.ConfigValues.GrpcServerPort), "Expected same port")
+	assert.Equal(suite.T(), jsonService.Port, uint(config.ConfigValues.JSONServerPort), "Expected same port")
 }
 
-func TestGrpcApi(t *testing.T) {
+func (suite *ExampleTestSuite) TestGrpcApi() {
 
 	port1, err := node.GetUnboundedPort()
 	port2, err := node.GetUnboundedPort()
-	assert.NoError(t, err, "Should be able to establish a connection on a port")
+	assert.NoError(suite.T(), err, "Should be able to establish a connection on a port")
 
 	config.ConfigValues.JSONServerPort = port1
 	config.ConfigValues.GrpcServerPort = port2
@@ -171,7 +192,7 @@ func TestGrpcApi(t *testing.T) {
 	// Set up a connection to the server.
 	conn, err := grpc.Dial(addr, grpc.WithInsecure())
 	if err != nil {
-		t.Fatalf("did not connect. %v", err)
+		suite.T().Fatalf("did not connect. %v", err)
 	}
 	defer conn.Close()
 	c := pb.NewSpacemeshServiceClient(conn)
@@ -179,10 +200,10 @@ func TestGrpcApi(t *testing.T) {
 	// call echo and validate result
 	r, err := c.Echo(context.Background(), &pb.SimpleMessage{Value: message})
 	if err != nil {
-		t.Fatalf("could not greet. %v", err)
+		suite.T().Fatalf("could not greet. %v", err)
 	}
 
-	assert.Equal(t, message, r.Value, "Expected message to be echoed")
+	assert.Equal(suite.T(), message, r.Value, "Expected message to be echoed")
 
 	// stop the server
 	grpcService.StopService()
