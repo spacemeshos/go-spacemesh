@@ -533,6 +533,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	app.poetListener = poetListener
 	app.atxBuilder = atxBuilder
 	app.oracle = blockOracle
+	app.txProcessor = processor
 	return nil
 }
 

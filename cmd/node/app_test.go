@@ -7,13 +7,14 @@ import (
 	"github.com/spacemeshos/go-spacemesh/amcl/BLS381"
 	"github.com/spacemeshos/go-spacemesh/api"
 	apiCfg "github.com/spacemeshos/go-spacemesh/api/config"
+	"github.com/spacemeshos/go-spacemesh/api/pb"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/oracle"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/poet/integration"
 	"github.com/stretchr/testify/assert"
@@ -159,20 +160,199 @@ func activateGrpcServer(smApp *SpacemeshApp) {
 	smApp.grpcAPIService.StartService()
 }
 
+type ScenarioSetup func(suit *AppTestSuite, t *testing.T)
+
+type ScenarioTestCriteria func(suit *AppTestSuite, t *testing.T) bool
+
+type TestScenario struct {
+	Setup ScenarioSetup
+	Criteria ScenarioTestCriteria
+	Dependencies []int
+}
+
+
+
+var tests = []TestScenario{txWithRunningNonceGenerator([]int{}), sameRootTester([]int{0}), reachedEpochTester([]int{}), txWithUnorderedNonceGenerator([]int{2})}
+
+func txWithUnorderedNonceGenerator(dependancies []int) TestScenario {
+
+	acc1Signer, err := signing.NewEdSignerFromBuffer(util.FromHex(apiCfg.Account2Private))
+	addr := types.Address{}
+	addr.SetBytes(acc1Signer.PublicKey().Bytes())
+	dst := types.BytesToAddress([]byte{0x05})
+	txsSent := 25
+	setup := func(suite *AppTestSuite, t *testing.T) {
+		if err != nil {
+			log.Panic("Could not build ed signer err=%v", err)
+		}
+
+		nonces := []int{}
+		for i := 0; i < txsSent; i++ {
+			nonces = append(nonces, i)
+		}
+		for i := 0; i < txsSent; i++ {
+			// this puts a random unique number in nonces[i]
+			nonces[i] = nonces[int(rand.Int31n(int32(len(nonces) - i))) + i]
+			tx, err := types.NewSignedTx(uint64(nonces[i]), dst, 10, 1, 1, acc1Signer)
+			if err != nil {
+				log.Panic("panicked creating signed tx err=%v", err)
+			}
+			txbytes, _ := types.InterfaceToBytes(tx)
+			pbMsg := pb.SignedTransaction{Tx: txbytes}
+			_, err = suite.apps[0].grpcAPIService.SubmitTransaction(nil, &pbMsg)
+			assert.NoError(suite.T(), err)
+		}
+	}
+
+	teardown := func (suite *AppTestSuite, t *testing.T) bool{
+		ok := true
+		for _, app := range suite.apps {
+			log.Info("current balance: %d nonce %d", app.state.GetBalance(dst), app.state.GetNonce(addr))
+			ok = ok && 250 <= app.state.GetBalance(dst) && app.state.GetNonce(addr) == 0
+		}
+		if ok {
+			log.Info("addresses ok")
+		}
+		return ok
+	}
+
+	return TestScenario{setup, teardown, dependancies}
+}
+
+func txWithRunningNonceGenerator(dependancies []int) TestScenario {
+
+	acc1Signer, err := signing.NewEdSignerFromBuffer(util.FromHex(apiCfg.Account1Private))
+	addr := types.Address{}
+	addr.SetBytes(acc1Signer.PublicKey().Bytes())
+	dst := types.BytesToAddress([]byte{0x02})
+	txsSent := 25
+	setup := func(suite *AppTestSuite, t *testing.T) {
+		if err != nil {
+			log.Panic("Could not build ed signer err=%v", err)
+		}
+
+		for i := 0; i < txsSent; i++ {
+			tx, err := types.NewSignedTx(uint64(i), dst, 10, 1, 1, acc1Signer)
+			if err != nil {
+				log.Panic("panicked creating signed tx err=%v", err)
+			}
+			txbytes, _ := types.InterfaceToBytes(tx)
+			pbMsg := pb.SignedTransaction{Tx: txbytes}
+			//_ = suite.apps[0].P2P.Broadcast(miner.IncomingTxProtocol, txbytes)
+			_, err = suite.apps[0].grpcAPIService.SubmitTransaction(nil, &pbMsg)
+			assert.NoError(suite.T(), err)
+		}
+	}
+
+	teardown := func (suite *AppTestSuite, t *testing.T) bool{
+		ok := true
+		for _, app := range suite.apps {
+			log.Info("current balance: %d nonce %d", app.state.GetBalance(dst), app.state.GetNonce(addr))
+			ok = ok && 250 <= app.state.GetBalance(dst) && app.state.GetNonce(addr) == uint64(txsSent)
+		}
+		if ok {
+			log.Info("addresses ok")
+		}
+		return ok
+	}
+
+	return TestScenario{setup, teardown, dependancies}
+}
+
+func reachedEpochTester(dependancies []int) TestScenario {
+	const numberOfEpochs= 5 // first 2 epochs are genesis
+	setup := func(suite *AppTestSuite, t *testing.T) {}
+
+	test := func(suite *AppTestSuite, t * testing.T) bool {
+		ok := true
+		for _, app := range suite.apps {
+			ok = ok && uint32(app.mesh.LatestLayer()) >= numberOfEpochs*uint32(app.Config.LayersPerEpoch)
+			if ok {
+				suite.validateLastATXActiveSetSize(app)
+			}
+		}
+		if ok {
+			log.Info("epoch ok")
+		}
+		return ok
+	}
+	return TestScenario{setup, test, dependancies}
+}
+
+func sameRootTester(dependancies []int) TestScenario {
+	setup := func(suite *AppTestSuite, t *testing.T) {}
+
+	test := func (suite *AppTestSuite, t *testing.T) bool {
+		stickyClientsDone := 0
+		maxClientsDone := 0
+		for idx, app := range suite.apps {
+			clientsDone := 0
+			for idx2, app2 := range suite.apps {
+				if idx != idx2 {
+					r1 := app.state.IntermediateRoot(false).String()
+					r2 := app2.state.IntermediateRoot(false).String()
+					if r1 == r2 {
+						clientsDone++
+						if clientsDone == len(suite.apps)-1 {
+							log.Info("%d roots confirmed out of %d return ok", clientsDone, len(suite.apps))
+							return true
+						}
+					}
+				}
+			}
+			if clientsDone > maxClientsDone {
+				maxClientsDone = clientsDone
+			}
+		}
+
+		if maxClientsDone != stickyClientsDone {
+			stickyClientsDone = maxClientsDone
+			log.Info("%d roots confirmed out of %d", maxClientsDone, len(suite.apps))
+		}
+		return false
+	}
+
+	return TestScenario{setup, test, dependancies}
+}
+
+// run setup on all tests
+func setupTests(suite *AppTestSuite) {
+	for _, test := range tests {
+		test.Setup(suite, suite.T())
+	}
+}
+
+// run test criterias after setup
+func runTests(suite *AppTestSuite, finished map[int]bool) bool{
+	for i, test := range tests {
+		depsOk := true
+		for _, x := range test.Dependencies {
+			done, has := finished[x]
+			depsOk = depsOk && done && has
+		}
+		if depsOk && !finished[i] {
+			finished[i] = test.Criteria(suite, suite.T())
+			log.Info("test %d has finished with result %v", i, finished[i])
+		}
+	}
+	for i :=0; i < len(tests); i ++ {
+		testOk, hasTest := finished[i]
+		if hasTest {
+			if !testOk {
+				return false
+			}
+		} else {
+			//test didnt run yet
+			return false
+		}
+	}
+	return true
+}
+
 func (suite *AppTestSuite) TestMultipleNodes() {
 	//EntryPointCreated <- true
-	const numberOfEpochs = 5 // first 2 epochs are genesis
+	const numberOfEpochs= 5 // first 2 epochs are genesis
 	//addr := address.BytesToAddress([]byte{0x01})
-	dst := types.BytesToAddress([]byte{0x02})
-	acc1Signer, err := signing.NewEdSignerFromBuffer(util.FromHex(apiCfg.Account1Private))
-	if err != nil {
-		log.Panic("Could not build ed signer err=%v", err)
-	}
-	tx, err := types.NewSignedTx(0, dst, 10, 1, 1, acc1Signer)
-	if err != nil {
-		log.Panic("panicked creating signed tx err=%v", err)
-	}
-	txbytes, _ := types.InterfaceToBytes(tx)
 	path := "../tmp/test/state_" + time.Now().String()
 
 	genesisTime := time.Now().Add(20 * time.Second).Format(time.RFC3339)
@@ -198,19 +378,11 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	}
 
 	startInLayer := 5 // delayed pod will start in this layer
-	/*go func() {
-		delay := float32(suite.apps[0].Config.LayerDurationSec) * (float32(startInLayer) + 0.5)
-		<-time.After(time.Duration(delay) * time.Second)
-		suite.initSingleInstance(7, genesisTime, rng, path, "g", rolacle, poetClient)
-		suite.apps[len(suite.apps)-1].startServices()
-	}()
-	*/
 	defer suite.gracefulShutdown()
 
-	_ = suite.apps[0].P2P.Broadcast(miner.IncomingTxProtocol, txbytes)
 	timeout := time.After(6 * 60 * time.Second)
-
-	stickyClientsDone := 0
+	setupTests(suite)
+	finished := map[int]bool{}
 loop:
 	for {
 		select {
@@ -218,41 +390,16 @@ loop:
 		case <-timeout:
 			suite.T().Fatal("timed out")
 		default:
-			maxClientsDone := 0
-			for idx, app := range suite.apps {
-				if 10 <= app.state.GetBalance(dst) &&
-					uint32(suite.apps[idx].mesh.LatestLayer()) == numberOfEpochs*uint32(suite.apps[idx].Config.LayersPerEpoch) { // make sure all had 1 non-genesis layer
-					suite.validateLastATXActiveSetSize(app)
-					clientsDone := 0
-					for idx2, app2 := range suite.apps {
-						if idx != idx2 {
-							r1 := app.state.IntermediateRoot(false).String()
-							r2 := app2.state.IntermediateRoot(false).String()
-							if r1 == r2 {
-								clientsDone++
-								if clientsDone == len(suite.apps)-1 {
-									log.Info("%d roots confirmed out of %d", clientsDone, len(suite.apps))
-									break loop
-								}
-							}
-						}
-					}
-					if clientsDone > maxClientsDone {
-						maxClientsDone = clientsDone
-					}
-				}
-			}
-			if maxClientsDone != stickyClientsDone {
-				stickyClientsDone = maxClientsDone
-				log.Info("%d roots confirmed out of %d", maxClientsDone, len(suite.apps))
+			if runTests(suite, finished) {
+				break loop
 			}
 			time.Sleep(10 * time.Second)
 		}
 	}
 
 	suite.validateBlocksAndATXs(types.LayerID(numberOfEpochs*suite.apps[0].Config.LayersPerEpoch)-1, types.LayerID(startInLayer))
-
 }
+
 
 func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID, startInLayer types.LayerID) {
 	log.Info("untilLayer=%v", untilLayer)
