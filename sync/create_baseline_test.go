@@ -1,7 +1,6 @@
 package sync
 
 import (
-	"github.com/google/uuid"
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
@@ -113,18 +112,18 @@ func createLayerWithRandVoting(msh *mesh.Mesh, index types.LayerID, prev []*type
 	}
 	layerBlocks := make([]types.BlockID, 0, blocksInLayer)
 	for i := 0; i < blocksInLayer; i++ {
-		bl := types.NewExistingBlock(types.BlockID(uuid.New().ID()), index, []byte("data data data"))
+		bl := types.NewExistingBlock(index, []byte(RandStringRunes(8)))
 		signer := signing.NewEdSigner()
 		bl.Signature = signer.Sign(bl.Bytes())
-		layerBlocks = append(layerBlocks, bl.ID())
+		layerBlocks = append(layerBlocks, bl.Id())
 		for idx, pat := range patterns {
 			for _, id := range pat {
 				b := prev[idx].Blocks()[id]
-				bl.AddVote(types.BlockID(b.ID()))
+				bl.AddVote(types.BlockID(b.Id()))
 			}
 		}
 		for _, prevBloc := range prev[0].Blocks() {
-			bl.AddView(types.BlockID(prevBloc.ID()))
+			bl.AddView(types.BlockID(prevBloc.Id()))
 		}
 
 		//add txs
