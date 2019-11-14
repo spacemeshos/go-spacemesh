@@ -60,6 +60,7 @@ func newBlockRequestHandler(msh *mesh.Mesh, logger log.Log) func(msg []byte) []b
 		}
 
 		var blocks []types.Block
+		logger.Info("handle block request ids: %s", concatShortIds(blockids))
 		for _, bid := range blockids {
 			var id = util.BytesToUint64(bid.Bytes())
 			logger.Debug("handle block %v request", id)
@@ -76,7 +77,7 @@ func newBlockRequestHandler(msh *mesh.Mesh, logger log.Log) func(msg []byte) []b
 			return nil
 		}
 
-		logger.Debug("send block response")
+		logger.Info("send block response")
 		return bbytes
 	}
 }
