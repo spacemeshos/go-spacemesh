@@ -456,6 +456,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	if err != nil {
 		return err
 	}
+	app.closers = append(app.closers, appliedTxs)
 	processor := state.NewTransactionProcessor(st, appliedTxs, meshAndPoolProjector, lg.WithName("state"))
 
 	atxdb := activation.NewActivationDb(atxdbstore, idStore, mdb, layersPerEpoch, validator, app.addLogger(AtxDbLogger, lg))
