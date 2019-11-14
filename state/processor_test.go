@@ -32,13 +32,22 @@ func (p *ProjectorMock) GetProjection(addr types.Address, prevNonce, prevBalance
 	return prevNonce + p.nonceDiff, prevBalance - p.balanceDiff, nil
 }
 
+type appliedTxsMock struct{}
+
+func (appliedTxsMock) Put(key []byte, value []byte) error { return nil }
+func (appliedTxsMock) Delete(key []byte) error            { panic("implement me") }
+func (appliedTxsMock) Get(key []byte) ([]byte, error)     { panic("implement me") }
+func (appliedTxsMock) Has(key []byte) (bool, error)       { panic("implement me") }
+func (appliedTxsMock) Close()                             { panic("implement me") }
+func (appliedTxsMock) NewBatch() database.Batch           { panic("implement me") }
+
 func (s *ProcessorStateSuite) SetupTest() {
 	lg := log.New("proc_logger", "", "")
 	s.db = database.NewMemDatabase()
 	s.state, _ = New(types.Hash32{}, NewDatabase(s.db))
 	s.projector = &ProjectorMock{}
 
-	s.processor = NewTransactionProcessor(s.state, nil, s.projector, lg)
+	s.processor = NewTransactionProcessor(s.state, appliedTxsMock{}, s.projector, lg)
 }
 
 func createAccount(state *StateDB, addr types.Address, balance int64, nonce uint64) *StateObj {
@@ -444,7 +453,7 @@ func TestValidateTxSignature(t *testing.T) {
 	db := database.NewMemDatabase()
 	state, _ := New(types.Hash32{}, NewDatabase(db))
 	lg := log.New("proc_logger", "", "")
-	proc := NewTransactionProcessor(state, nil, &ProjectorMock{}, lg)
+	proc := NewTransactionProcessor(state, appliedTxsMock{}, &ProjectorMock{}, lg)
 
 	// positive flow
 	pub, pri, _ := ed25519.GenerateKey(crand.Reader)
