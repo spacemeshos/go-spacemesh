@@ -72,7 +72,7 @@ type BlockBuilder struct {
 	mu               sync.Mutex
 	network          p2p.Service
 	weakCoinToss     WeakCoinProvider
-	orphans          OrphanBlockProvider
+	meshProvider     meshProvider
 	blockOracle      oracle.BlockOracle
 	txValidator      TxValidator
 	atxValidator     AtxValidator
@@ -83,7 +83,7 @@ type BlockBuilder struct {
 }
 
 func NewBlockBuilder(minerID types.NodeId, sgn Signer, net p2p.Service, beginRoundEvent chan types.LayerID, hdist int,
-	txPool TxPool, atxPool *AtxMemPool, weakCoin WeakCoinProvider, orph OrphanBlockProvider, hare HareResultProvider,
+	txPool TxPool, atxPool *AtxMemPool, weakCoin WeakCoinProvider, orph meshProvider, hare HareResultProvider,
 	blockOracle oracle.BlockOracle, txValidator TxValidator, atxValidator AtxValidator, syncer Syncer, atxsPerBlock int,
 	projector Projector, lg log.Log) *BlockBuilder {
 
@@ -105,7 +105,7 @@ func NewBlockBuilder(minerID types.NodeId, sgn Signer, net p2p.Service, beginRou
 		mu:               sync.Mutex{},
 		network:          net,
 		weakCoinToss:     weakCoin,
-		orphans:          orph,
+		meshProvider:     orph,
 		blockOracle:      blockOracle,
 		txValidator:      txValidator,
 		atxValidator:     atxValidator,
@@ -150,7 +150,7 @@ type WeakCoinProvider interface {
 	GetResult() bool
 }
 
-type OrphanBlockProvider interface {
+type meshProvider interface {
 	GetLayer(index types.LayerID) (*types.Layer, error)
 	GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error)
 }
@@ -178,38 +178,60 @@ func calcHdistRange(id types.LayerID, hdist types.LayerID) (bottom types.LayerID
 	return bottom, top
 }
 
-func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibilityProof types.BlockEligibilityProof,
-	txids []types.TransactionId, atxids []types.AtxId) (*types.Block, error) {
-
+func (t *BlockBuilder) getVotes(id types.LayerID) ([]types.BlockID, error) {
 	var votes []types.BlockID = nil
-	var err error
+
+	// if genesis
 	if id == config.Genesis {
 		return nil, errors.New("cannot create blockBytes in genesis layer")
-	} else if id == config.Genesis+1 {
-		votes = append(votes, config.GenesisId)
-	} else { // get from hare
-		bottom, top := calcHdistRange(id, t.hdist)
-		votes, err = t.hareResult.GetResult(bottom, top)
-		if err != nil {
-			t.With().Warning("Could not get hare result during block creation",
-				log.Uint64("bottom", uint64(bottom)), log.Uint64("top", uint64(top)),
-				log.Uint64("hdist", uint64(t.hdist)), log.Err(err))
+	}
+
+	// if genesis+1
+	if id == config.Genesis+1 {
+		return append(votes, config.GenesisId), nil
+	}
+
+	// not genesis, get from hare
+	bottom, top := calcHdistRange(id, t.hdist)
+
+	votesBottom, err := t.hareResult.GetResult(bottom, bottom)
+	if votesBottom == nil || len(votesBottom) == 0 {
+		t.With().Info("bottom votes is nil or empty. adding the whole layer", log.LayerId(uint64(bottom)))
+		l, e := t.meshProvider.GetLayer(bottom)
+		if e != nil {
+			t.With().Error("Could not set votes to whole layer", log.Err(e))
+			return nil, e
 		}
-		if votes == nil || len(votes) == 0 { // if no votes, vote as the whole layer
-			t.Info("Votes is nil. Reading the whole layer")
-			l, e := t.orphans.GetLayer(id)
-			if e != nil {
-				t.With().Error("Could not set votes to whole layer", log.Err(e))
-				return nil, e
-			}
-			votes = make([]types.BlockID, len(l.Blocks()))
-			for i, b := range l.Blocks() {
-				votes[i] = b.ID()
-			}
+
+		// set votes to whole layer
+		for _, b := range l.Blocks() {
+			votes = append(votes, b.ID())
 		}
 	}
 
-	viewEdges, err := t.orphans.GetOrphanBlocksBefore(id)
+	// get votes normally
+	rangeVotes, err := t.hareResult.GetResult(bottom, top)
+	if err != nil {
+		t.With().Warning("Could not get hare result during block creation",
+			log.Uint64("bottom", uint64(bottom)), log.Uint64("top", uint64(top)),
+			log.Uint64("hdist", uint64(t.hdist)), log.Err(err))
+	}
+
+	// add rangeVotes to votes, rangeVotes can be nil
+	votes = append(votes, rangeVotes...)
+
+	return votes, nil
+}
+
+func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibilityProof types.BlockEligibilityProof,
+	txids []types.TransactionId, atxids []types.AtxId) (*types.Block, error) {
+
+	votes, err := t.getVotes(id)
+	if err != nil {
+		return nil, err
+	}
+
+	viewEdges, err := t.meshProvider.GetOrphanBlocksBefore(id)
 	if err != nil {
 		return nil, err
 	}

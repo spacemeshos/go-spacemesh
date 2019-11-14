@@ -10,10 +10,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"math/rand"
 	"testing"
 	"time"
 )
@@ -468,36 +468,131 @@ func Test_selectAtxs(t *testing.T) {
 	r.Equal(5, len(mp))
 }
 
-type mockHare struct {
+func genBlockIds() []types.BlockID {
+	bids := []types.BlockID{1, 2, 3, 4, 5, 6, 7}
+	for i := 0; i < len(bids)*2; i++ {
+		i := rand.Int() % len(bids)
+		j := rand.Int() % len(bids)
+		bids[i], bids[j] = bids[j], bids[i]
+	}
+
+	return bids
+}
+
+type mockResult struct {
 	err error
-	ids []types.BlockID
+	ids map[types.LayerID][]types.BlockID
 }
 
-func (m mockHare) GetResult(lower types.LayerID, upper types.LayerID) ([]types.BlockID, error) {
-	return m.ids, m.err
+func newMockResult() *mockResult {
+	m := &mockResult{}
+	m.ids = make(map[types.LayerID][]types.BlockID)
+	return m
 }
 
-var err = errors.New("example err")
+func (m *mockResult) set(id types.LayerID) []types.BlockID {
+	bids := genBlockIds()
+	m.ids[id] = bids
+
+	return bids
+}
+
+func (m *mockResult) GetResult(lower types.LayerID, upper types.LayerID) ([]types.BlockID, error) {
+	var all []types.BlockID = nil
+	for i := lower; i <= upper; i++ {
+		all = append(all, m.ids[i]...)
+	}
+
+	return all, m.err
+}
+
+var exampleErr = errors.New("example exampleErr")
+
+type mockMesh struct {
+	bids []types.BlockID
+	err  error
+}
+
+func (mm *mockMesh) GetLayer(index types.LayerID) (*types.Layer, error) {
+	l := types.NewLayer(index)
+	for _, b := range mm.bids {
+		l.AddBlock(types.NewExistingBlock(b, index, []byte{}))
+	}
+	return l, mm.err
+}
+
+func (mm *mockMesh) GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error) {
+	return mm.bids, mm.err
+}
+
+func TestBlockBuilder_getVotes(t *testing.T) {
+	rand.Seed(0)
+
+	r := require.New(t)
+	beginRound := make(chan types.LayerID)
+	n1 := service.NewSimulator().NewNode()
+	st := []types.BlockID{1, 2, 3}
+	bb := NewBlockBuilder(types.NodeId{Key: "a"}, &MockSigning{}, n1, beginRound, 5, NewTxMemPool(), NewAtxMemPool(), MockCoin{}, MockOrphans{st}, &mockResult{}, mockBlockOracle{}, mockTxProcessor{true}, &mockAtxValidator{}, &mockSyncer{}, selectCount, projector, log.NewDefault(t.Name()))
+	b, err := bb.getVotes(config.Genesis)
+	r.EqualError(err, "cannot create blockBytes in genesis layer")
+	r.Nil(b)
+
+	b, err = bb.getVotes(config.Genesis + 1)
+	r.Nil(err)
+	r.Equal(1, len(b))
+
+	id := types.LayerID(100)
+	bb.hdist = 5
+	bottom, top := calcHdistRange(id, bb.hdist)
+
+	// has bottom
+	mh := newMockResult()
+	barr := mh.set(bottom)
+	tarr := mh.set(top)
+	bb.hareResult = mh
+	b, err = bb.getVotes(id)
+	r.Nil(err)
+	r.Equal(append(barr, tarr...), b)
+
+	// no bottom
+	gbids := genBlockIds()
+	bb.meshProvider = &mockMesh{bids: gbids}
+	mh = newMockResult()
+	b1arr := mh.set(bottom + 1)
+	tarr = mh.set(top)
+	bb.hareResult = mh
+	b, err = bb.getVotes(id)
+	r.Nil(err)
+	exp := append(gbids, b1arr...)
+	exp = append(exp, tarr...)
+	r.Equal(exp, b)
+
+	// exampleErr on layer request
+	bb.meshProvider = &mockMesh{bids: gbids, err: exampleErr}
+	b, err = bb.getVotes(id)
+	r.Equal(exampleErr, err)
+
+}
 
 func TestBlockBuilder_createBlock(t *testing.T) {
 	r := require.New(t)
 	beginRound := make(chan types.LayerID)
 	n1 := service.NewSimulator().NewNode()
-	hare := mockHare{}
+	hare := &mockResult{}
 	st := []types.BlockID{1, 2, 3}
 	builder1 := NewBlockBuilder(types.NodeId{Key: "a"}, &MockSigning{}, n1, beginRound, 5, NewTxMemPool(), NewAtxMemPool(), MockCoin{}, MockOrphans{st}, hare, mockBlockOracle{}, mockTxProcessor{true}, &mockAtxValidator{}, &mockSyncer{}, selectCount, projector, log.NewDefault(t.Name()))
 
-	builder1.hareResult = mockHare{err: err, ids: nil}
+	builder1.hareResult = &mockResult{err: exampleErr, ids: nil}
 	b, err := builder1.createBlock(5, types.AtxId{}, types.BlockEligibilityProof{}, nil, nil)
 	r.Nil(err)
 	r.Equal(b.BlockVotes, st)
 
-	builder1.hareResult = mockHare{err: nil, ids: nil}
+	builder1.hareResult = &mockResult{err: nil, ids: nil}
 	b, err = builder1.createBlock(5, types.AtxId{}, types.BlockEligibilityProof{}, nil, nil)
 	r.Nil(err)
 	r.Equal(b.BlockVotes, st)
 
-	builder1.hareResult = mockHare{err: nil, ids: []types.BlockID{}}
+	//builder1.hareResult = &mockResult{exampleErr: nil, ids: []types.BlockID{}}
 	b, err = builder1.createBlock(5, types.AtxId{}, types.BlockEligibilityProof{}, nil, nil)
 	r.Nil(err)
 	r.Equal(b.BlockVotes, st)
