@@ -5,6 +5,7 @@ from tests.conftest import DeploymentInfo
 from tests import pod
 from tests.test_bs import setup_bootstrap_in_namespace, add_curl, setup_bootstrap
 from tests.misc import CoreV1ApiClient
+from tests.utils import get_spec_file_path
 
 
 BOOTSTRAP_LABEL = 'bootstrap'
@@ -21,7 +22,9 @@ def test_reboot_bootstrap(init_session):
     sleep_time = 5
     session_id = init_session
     bootstrap_group_id = 'bootstrap_key'
-    ss_file_path = "/Users/amit/workspace/go-spacemesh/tests/k8s/bootstrap-w-conf-ss.yml"
+    # ss_file_path = "/Users/amit/workspace/go-spacemesh/tests/k8s/bootstrap-w-conf-ss.yml"
+    ss_file_path = get_spec_file_path("bootstrap-w-conf-ss.yml")
+    print(f"#@!#@!#@! ss_file path={ss_file_path}")
     key_regex = r"Local node identity >> (?P<{bootstrap_group_id}>\w+)".format(bootstrap_group_id=bootstrap_group_id)
     # using the same logic as setup_bootstrap fixture but with an additional
     # file_path argument to load a none default yaml spec file
