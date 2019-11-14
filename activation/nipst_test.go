@@ -178,12 +178,12 @@ func TestNIPSTBuilderWithClients(t *testing.T) {
 
 func buildNIPST(r *require.Assertions, postCfg config.Config, nipstChallenge types.Hash32, poetDb PoetDbApi) *types.NIPST {
 	poetProver, err := newRPCPoetHarnessClient()
+	r.NoError(err)
 	r.NotNil(poetProver)
 	defer func() {
 		err = poetProver.Teardown(true)
 		r.NoError(err)
 	}()
-	r.NoError(err)
 
 	postProver, err := NewPostClient(&postCfg, minerID)
 	r.NoError(err)
@@ -220,12 +220,12 @@ func TestNewNIPSTBuilderNotInitialized(t *testing.T) {
 	r.NotNil(postProver)
 
 	poetProver, err := newRPCPoetHarnessClient()
+	r.NoError(err)
 	r.NotNil(poetProver)
 	defer func() {
 		err = poetProver.Teardown(true)
 		r.NoError(err)
 	}()
-	r.NoError(err)
 	poetDb := &poetDbMock{}
 	nb := newNIPSTBuilder(minerIDNotInitialized, postProver, poetProver,
 		poetDb, database.NewMemDatabase(), log.NewDefault(string(minerID)))
