@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -16,6 +17,18 @@ import (
 )
 
 type ContextualValidityMock struct {
+}
+
+func (m *ContextualValidityMock) Has(key []byte) (bool, error) {
+	return true, nil
+}
+
+func (m *ContextualValidityMock) NewBatch() database.Batch {
+	panic("implement me")
+}
+
+func (m *ContextualValidityMock) Find(key []byte) database.Iterator {
+	panic("implement me")
 }
 
 func (m *ContextualValidityMock) Put(key, value []byte) error {
@@ -336,7 +349,7 @@ func GetTransactionIds(txs ...*types.Transaction) []types.TransactionId {
 
 func addTxToMesh(r *require.Assertions, msh *Mesh, signer *signing.EdSigner, nonce uint64) *types.Transaction {
 	tx1 := newTx(r, signer, nonce, 111)
-	err := msh.writeTransactions([]*types.Transaction{tx1})
+	err := msh.writeTransactions(0, []*types.Transaction{tx1})
 	r.NoError(err)
 	return tx1
 }
