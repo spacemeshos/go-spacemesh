@@ -82,6 +82,18 @@ func (t *TxAPIMock) GetTransaction(id types.TransactionId) (*types.Transaction, 
 	return t.returnTx[id], nil
 }
 
+func (t *TxAPIMock) GetRewards(account types.Address) (rewards []types.Reward) {
+	return
+}
+
+func (t *TxAPIMock) GetTransactionsByDestination(l types.LayerID, account types.Address) (txs []types.TransactionId) {
+	return
+}
+
+func (t *TxAPIMock) GetTransactionsByOrigin(l types.LayerID, account types.Address) (txs []types.TransactionId) {
+	return
+}
+
 func (t *TxAPIMock) setMockOrigin(orig types.Address) {
 	t.mockOrigin = orig
 }
@@ -234,6 +246,31 @@ func TestJsonWalletApi(t *testing.T) {
 	respBody, respStatus = callEndpoint(t, "v1/genesis", "")
 	require.Equal(t, http.StatusOK, respStatus)
 	assertSimpleMessage(t, respBody, genTime.t.String())
+
+	// test get rewards per account
+	payload = marshalProto(t, &pb.AccountId{Address: addrBytes})
+	respBody, respStatus = callEndpoint(t, "v1/accountrewards", payload)
+	require.Equal(t, http.StatusOK, respStatus)
+
+	var rewards pb.AccountRewards
+	require.NoError(t, jsonpb.UnmarshalString(respBody, &rewards))
+	require.Empty(t, rewards.Rewards) // TODO: Test with actual data returned
+
+	// test get txs per account
+	payload = marshalProto(t, &pb.GetTxsSinceLayer{Account: &pb.AccountId{Address: addrBytes}, StartLayer: 1, EndLayer: 2})
+	respBody, respStatus = callEndpoint(t, "v1/accounttxs", payload)
+	require.Equal(t, http.StatusOK, respStatus)
+
+	var accounts pb.AccountTxs
+	require.NoError(t, jsonpb.UnmarshalString(respBody, &accounts))
+	require.Empty(t, accounts.Txs) // TODO: Test with actual data returned
+
+	// test get txs per account with wrong layer error
+	payload = marshalProto(t, &pb.GetTxsSinceLayer{Account: &pb.AccountId{Address: addrBytes}, StartLayer: 2, EndLayer: 1})
+	respBody, respStatus = callEndpoint(t, "v1/accounttxs", payload)
+	require.Equal(t, http.StatusInternalServerError, respStatus)
+	const ErrInvalidStartLayer = "{\"error\":\"invalid start layer\",\"message\":\"invalid start layer\",\"code\":2}"
+	require.Equal(t, ErrInvalidStartLayer, respBody)
 
 	// stop the services
 	shutDown()
