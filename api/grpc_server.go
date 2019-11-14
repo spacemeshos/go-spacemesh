@@ -30,20 +30,47 @@ type SpacemeshGrpcService struct {
 	Mining    MiningAPI        // ATX Builder
 	Oracle    OracleAPI
 	GenTime   GenesisTimeAPI
-	Logging  LoggingAPI
+	Logging   LoggingAPI
+}
+
+func (s SpacemeshGrpcService) getTransaction(txId types.TransactionId) (*types.Transaction, *types.LayerID, pb.TxStatus, error) {
+	tx, err := s.Tx.GetTransaction(txId) // have we seen this transaction in a block?
+	if err != nil {
+		tx, err = s.TxMempool.Get(txId) // do we have it in the mempool?
+		if err != nil {                 // we don't know this transaction
+			return nil, nil, 0, fmt.Errorf("transaction not found")
+		}
+		return tx, nil, pb.TxStatus_PENDING, nil
+	}
+
+	layerApplied := s.Tx.GetLayerApplied(txId)
+	var status pb.TxStatus
+	if layerApplied != nil {
+		status = pb.TxStatus_CONFIRMED
+	} else {
+		nonce := s.StateApi.GetNonce(tx.Origin())
+		if nonce > tx.AccountNonce {
+			status = pb.TxStatus_REJECTED
+		} else {
+			status = pb.TxStatus_PENDING
+		}
+	}
+	return tx, layerApplied, status, nil
 }
 
 func (s SpacemeshGrpcService) GetTransaction(ctx context.Context, txId *pb.TransactionId) (*pb.Transaction, error) {
-
-	// TODO: try to find tx in mesh, and determine if it's been played already
-
 	id := types.TransactionId{}
 	copy(id[:], txId.Id)
-	tx, err := s.TxMempool.Get(id)
+
+	tx, layerApplied, status, err := s.getTransaction(id)
 	if err != nil {
 		return nil, err
 	}
 
+	var layerId uint64
+	if layerApplied != nil {
+		layerId = uint64(*layerApplied)
+	}
 	return &pb.Transaction{
 		TxId: txId,
 		Sender: &pb.AccountId{
@@ -54,9 +81,9 @@ func (s SpacemeshGrpcService) GetTransaction(ctx context.Context, txId *pb.Trans
 		},
 		Amount:    tx.Amount,
 		Fee:       tx.Fee,
-		Status:    pb.TxStatus_PENDING,
-		LayerId:   0,
-		Timestamp: 0,
+		Status:    status,
+		LayerId:   layerId,
+		Timestamp: 0, // TODO: calculate timestamp from layerId
 	}, nil
 }
 
@@ -157,6 +184,8 @@ func (s SpacemeshGrpcService) StopService() {
 
 type TxAPI interface {
 	AddressExists(addr types.Address) bool
+	GetLayerApplied(txId types.TransactionId) *types.LayerID
+	GetTransaction(id types.TransactionId) (*types.Transaction, error)
 }
 
 // NewGrpcService create a new grpc service using config data.
@@ -173,7 +202,7 @@ func NewGrpcService(net NetworkAPI, state StateAPI, tx TxAPI, txMempool *miner.T
 		Mining:    mining,
 		Oracle:    oracle,
 		GenTime:   genTime,
-		Logging:  logging,
+		Logging:   logging,
 	}
 }
 

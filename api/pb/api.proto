@@ -117,7 +117,7 @@ service SpacemeshService {
     }
     rpc GetTransaction (TransactionId) returns (Transaction) {
         option (google.api.http) = {
-          post: "/v1/transaction"
+          post: "/v1/gettransaction"
           body: "*"
         };
     }

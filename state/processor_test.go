@@ -38,7 +38,7 @@ func (s *ProcessorStateSuite) SetupTest() {
 	s.state, _ = New(types.Hash32{}, NewDatabase(s.db))
 	s.projector = &ProjectorMock{}
 
-	s.processor = NewTransactionProcessor(s.state, s.projector, lg)
+	s.processor = NewTransactionProcessor(s.state, nil, s.projector, lg)
 }
 
 func createAccount(state *StateDB, addr types.Address, balance int64, nonce uint64) *StateObj {
@@ -161,18 +161,18 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_Errors()
 	assert.NoError(s.T(), err)
 	assert.True(s.T(), failed == 0)
 
-	err = s.processor.ApplyTransaction(createTransaction(0, obj1.address, obj2.address, 1))
+	err = s.processor.ApplyTransaction(createTransaction(0, obj1.address, obj2.address, 1), 0)
 	assert.Error(s.T(), err)
 	assert.Equal(s.T(), err.Error(), ErrNonce)
 
-	err = s.processor.ApplyTransaction(createTransaction(obj1.Nonce(), obj1.address, obj2.address, 21))
+	err = s.processor.ApplyTransaction(createTransaction(obj1.Nonce(), obj1.address, obj2.address, 21), 0)
 	assert.Error(s.T(), err)
 	assert.Equal(s.T(), err.Error(), ErrFunds)
 
 	addr := toAddr([]byte{0x01, 0x01})
 
 	//Test origin
-	err = s.processor.ApplyTransaction(createTransaction(obj1.Nonce(), addr, obj2.address, 21))
+	err = s.processor.ApplyTransaction(createTransaction(obj1.Nonce(), addr, obj2.address, 21), 0)
 	assert.Error(s.T(), err)
 	assert.Equal(s.T(), err.Error(), ErrOrigin)
 }
@@ -444,7 +444,7 @@ func TestValidateTxSignature(t *testing.T) {
 	db := database.NewMemDatabase()
 	state, _ := New(types.Hash32{}, NewDatabase(db))
 	lg := log.New("proc_logger", "", "")
-	proc := NewTransactionProcessor(state, &ProjectorMock{}, lg)
+	proc := NewTransactionProcessor(state, nil, &ProjectorMock{}, lg)
 
 	// positive flow
 	pub, pri, _ := ed25519.GenerateKey(crand.Reader)

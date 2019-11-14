@@ -61,7 +61,7 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 	}
 
 	if atxid != block.ATXID {
-		return false, errors.New(fmt.Sprintf("wrong associated atx got %v expected %v ", block.ATXID.ShortString(), atxid))
+		return false, errors.New(fmt.Sprintf("wrong associated atx got %v expected %v ", block.ATXID.ShortString(), atxid.ShortString()))
 	}
 
 	epochNumber := block.LayerIndex.GetEpoch(v.layersPerEpoch)

@@ -36,7 +36,6 @@ import (
 	"runtime/pprof"
 	"time"
 
-	"github.com/spacemeshos/go-spacemesh/accounts"
 	"github.com/spacemeshos/go-spacemesh/api"
 	cfg "github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
@@ -218,9 +217,6 @@ func (app *SpacemeshApp) Initialize(cmd *cobra.Command, args []string) (err erro
 
 	// ensure all data folders exist
 	filesystem.EnsureSpacemeshDataDirectories()
-
-	// load all accounts from store
-	accounts.LoadAllAccounts()
 
 	// todo: set coinbase account (and unlock it) based on flags
 
@@ -456,7 +452,11 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	atxpool := miner.NewAtxMemPool()
 	meshAndPoolProjector := pending_txs.NewMeshAndPoolProjector(mdb, app.txPool)
 
-	processor := state.NewTransactionProcessor(st, meshAndPoolProjector, lg.WithName("state"))
+	appliedTxs, err := database.NewLDBDatabase(dbStorepath+"appliedTxs", 0, 0, lg.WithName("appliedTxs"))
+	if err != nil {
+		return err
+	}
+	processor := state.NewTransactionProcessor(st, appliedTxs, meshAndPoolProjector, lg.WithName("state"))
 
 	atxdb := activation.NewActivationDb(atxdbstore, idStore, mdb, layersPerEpoch, validator, app.addLogger(AtxDbLogger, lg))
 	beaconProvider := &oracle.EpochBeaconProvider{}
@@ -800,7 +800,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	// start api servers
 	if apiConf.StartGrpcServer || apiConf.StartJSONServer {
 		// start grpc if specified or if json rpc specified
-		app.grpcAPIService = api.NewGrpcService(app.P2P, app.state, app.mesh.TxProcessor, app.txPool, app.atxBuilder, app.oracle, app.clock, app)
+		app.grpcAPIService = api.NewGrpcService(app.P2P, app.state, app.mesh, app.txPool, app.atxBuilder, app.oracle, app.clock, app)
 		app.grpcAPIService.StartService()
 	}
 
