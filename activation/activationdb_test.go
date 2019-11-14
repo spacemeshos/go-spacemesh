@@ -9,30 +9,20 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"math/big"
-	"math/rand"
 	"os"
 	"sort"
 	"testing"
 	"time"
 )
 
-var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
-
-func RandStringRunes(n int) string {
-	b := make([]rune, n)
-	for i := range b {
-		b[i] = letterRunes[rand.Intn(len(letterRunes))]
-	}
-	return string(b)
-}
-
 func createLayerWithAtx2(t require.TestingT, msh *mesh.Mesh, id types.LayerID, numOfBlocks int, atxs []*types.ActivationTx, votes []types.BlockID, views []types.BlockID) (created []types.BlockID) {
 	for i := 0; i < numOfBlocks; i++ {
-		block1 := types.NewExistingBlock(id, []byte(RandStringRunes(8)))
+		block1 := types.NewExistingBlock(id, []byte(rand.RandString(8)))
 		block1.BlockVotes = append(block1.BlockVotes, votes...)
 		for _, atx := range atxs {
 			block1.AtxIds = append(block1.AtxIds, atx.Id())
@@ -159,7 +149,7 @@ func createLayerWithAtx(t *testing.T, msh *mesh.Mesh, id types.LayerID, numOfBlo
 		panic("not supported")
 	}
 	for i := 0; i < numOfBlocks; i++ {
-		block1 := types.NewExistingBlock(id, []byte(RandStringRunes(8)))
+		block1 := types.NewExistingBlock(id, []byte(rand.RandString(8)))
 		block1.BlockVotes = append(block1.BlockVotes, votes...)
 		if i < len(atxs) {
 			block1.AtxIds = append(block1.AtxIds, atxs[i].Id())
@@ -290,13 +280,13 @@ func Test_CalcActiveSetFromView(t *testing.T) {
 		atx.Nipst = NewNIPSTWithChallenge(hash, poetRef)
 	}
 
-	block2 := types.NewExistingBlock(2200, []byte(RandStringRunes(8)))
+	block2 := types.NewExistingBlock(2200, []byte(rand.RandString(8)))
 
 	block2.ViewEdges = blocks
 	block2.SetId()
 	layers.AddBlockWithTxs(block2, nil, atxs2)
 
-	block3 := types.NewExistingBlock(2200, []byte(RandStringRunes(8)))
+	block3 := types.NewExistingBlock(2200, []byte(rand.RandString(8)))
 
 	block3.ViewEdges = blocks
 	block2.SetId()

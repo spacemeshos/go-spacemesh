@@ -32,19 +32,9 @@ func getMeshdb() *MeshDB {
 	return NewMemMeshDB(log.New("mdb", "", ""))
 }
 
-var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
-
-func RandStringRunes(n int) string {
-	b := make([]rune, n)
-	for i := range b {
-		b[i] = letterRunes[rand.Intn(len(letterRunes))]
-	}
-	return string(b)
-}
-
 func TestNewMeshDB(t *testing.T) {
 	mdb := getMeshdb()
-	bl := types.NewExistingBlock(1, []byte(RandStringRunes(8)))
+	bl := types.NewExistingBlock(1, []byte(rand.RandString(8)))
 	mdb.AddBlock(bl)
 	block, err := mdb.GetBlock(bl.Id())
 	assert.NoError(t, err)
@@ -105,7 +95,7 @@ func createLayerWithRandVoting(index types.LayerID, prev []*types.Layer, blocksI
 	}
 	layerBlocks := make([]types.BlockID, 0, blocksInLayer)
 	for i := 0; i < blocksInLayer; i++ {
-		bl := types.NewExistingBlock(0, []byte(RandStringRunes(8)))
+		bl := types.NewExistingBlock(0, []byte(rand.RandString(8)))
 		layerBlocks = append(layerBlocks, bl.Id())
 		for idx, pat := range patterns {
 			for _, id := range pat {

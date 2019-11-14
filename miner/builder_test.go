@@ -138,16 +138,6 @@ func (p *MockProjector) GetProjection(addr types.Address) (nonce, balance uint64
 
 var projector = &MockProjector{}
 
-var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
-
-func RandStringRunes(n int) string {
-	b := make([]rune, n)
-	for i := range b {
-		b[i] = letterRunes[rand.Intn(len(letterRunes))]
-	}
-	return string(b)
-}
-
 func TestBlockBuilder_StartStop(t *testing.T) {
 
 	net := service.NewSimulator()
@@ -155,10 +145,10 @@ func TestBlockBuilder_StartStop(t *testing.T) {
 	n := net.NewNode()
 	//receiver := net.NewNode()
 
-	block1 := types.NewExistingBlock(0, []byte(RandStringRunes(8)))
-	block2 := types.NewExistingBlock(0, []byte(RandStringRunes(8)))
-	block3 := types.NewExistingBlock(0, []byte(RandStringRunes(8)))
-	block4 := types.NewExistingBlock(0, []byte(RandStringRunes(8)))
+	block1 := types.NewExistingBlock(0, []byte(rand.RandString(8)))
+	block2 := types.NewExistingBlock(0, []byte(rand.RandString(8)))
+	block3 := types.NewExistingBlock(0, []byte(rand.RandString(8)))
+	block4 := types.NewExistingBlock(0, []byte(rand.RandString(8)))
 	hareRes := []types.BlockID{block1.Id(), block2.Id(), block3.Id(), block4.Id()}
 
 	hare := MockHare{res: map[types.LayerID][]types.BlockID{}}
@@ -192,10 +182,10 @@ func TestBlockBuilder_BlockIdGeneration(t *testing.T) {
 	n1 := net.NewNode()
 	n2 := net.NewNode()
 
-	block1 := types.NewExistingBlock(0, []byte(RandStringRunes(8)))
-	block2 := types.NewExistingBlock(0, []byte(RandStringRunes(8)))
-	block3 := types.NewExistingBlock(0, []byte(RandStringRunes(8)))
-	block4 := types.NewExistingBlock(0, []byte(RandStringRunes(8)))
+	block1 := types.NewExistingBlock(0, []byte(rand.RandString(8)))
+	block2 := types.NewExistingBlock(0, []byte(rand.RandString(8)))
+	block3 := types.NewExistingBlock(0, []byte(rand.RandString(8)))
+	block4 := types.NewExistingBlock(0, []byte(rand.RandString(8)))
 	hareRes := []types.BlockID{block1.Id(), block2.Id(), block3.Id(), block4.Id()}
 	hare := MockHare{res: map[types.LayerID][]types.BlockID{}}
 	hare.res[0] = hareRes
@@ -217,10 +207,10 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 	receiver := net.NewNode()
 	coinbase := types.HexToAddress("aaaa")
 
-	block1 := types.NewExistingBlock(0, []byte(RandStringRunes(8)))
-	block2 := types.NewExistingBlock(0, []byte(RandStringRunes(8)))
-	block3 := types.NewExistingBlock(0, []byte(RandStringRunes(8)))
-	block4 := types.NewExistingBlock(0, []byte(RandStringRunes(8)))
+	block1 := types.NewExistingBlock(0, []byte(rand.RandString(8)))
+	block2 := types.NewExistingBlock(0, []byte(rand.RandString(8)))
+	block3 := types.NewExistingBlock(0, []byte(rand.RandString(8)))
+	block4 := types.NewExistingBlock(0, []byte(rand.RandString(8)))
 	hareRes := []types.BlockID{block1.Id(), block2.Id(), block3.Id(), block4.Id()}
 	hare := MockHare{res: map[types.LayerID][]types.BlockID{}}
 	hare.res[1] = hareRes
@@ -321,10 +311,10 @@ func TestBlockBuilder_Validation(t *testing.T) {
 	beginRound := make(chan types.LayerID)
 	n1 := net.NewNode()
 
-	block1 := types.NewExistingBlock(0, []byte(RandStringRunes(8)))
-	block2 := types.NewExistingBlock(0, []byte(RandStringRunes(8)))
-	block3 := types.NewExistingBlock(0, []byte(RandStringRunes(8)))
-	block4 := types.NewExistingBlock(0, []byte(RandStringRunes(8)))
+	block1 := types.NewExistingBlock(0, []byte(rand.RandString(8)))
+	block2 := types.NewExistingBlock(0, []byte(rand.RandString(8)))
+	block3 := types.NewExistingBlock(0, []byte(rand.RandString(8)))
+	block4 := types.NewExistingBlock(0, []byte(rand.RandString(8)))
 	hareRes := []types.BlockID{block1.Id(), block2.Id(), block3.Id(), block4.Id()}
 	hare := MockHare{res: map[types.LayerID][]types.BlockID{}}
 	hare.res[0] = hareRes
@@ -355,10 +345,10 @@ func TestBlockBuilder_Gossip_NotSynced(t *testing.T) {
 	n1 := net.NewNode()
 	coinbase := types.HexToAddress("aaaa")
 
-	block1 := types.NewExistingBlock(0, []byte(RandStringRunes(8)))
-	block2 := types.NewExistingBlock(0, []byte(RandStringRunes(8)))
-	block3 := types.NewExistingBlock(0, []byte(RandStringRunes(8)))
-	block4 := types.NewExistingBlock(0, []byte(RandStringRunes(8)))
+	block1 := types.NewExistingBlock(0, []byte(rand.RandString(8)))
+	block2 := types.NewExistingBlock(0, []byte(rand.RandString(8)))
+	block3 := types.NewExistingBlock(0, []byte(rand.RandString(8)))
+	block4 := types.NewExistingBlock(0, []byte(rand.RandString(8)))
 	hareRes := []types.BlockID{block1.Id(), block2.Id(), block3.Id(), block4.Id()}
 	hare := MockHare{res: map[types.LayerID][]types.BlockID{}}
 	hare.res[0] = hareRes
@@ -506,9 +496,9 @@ func TestBlockBuilder_createBlock(t *testing.T) {
 	beginRound := make(chan types.LayerID)
 	n1 := service.NewSimulator().NewNode()
 	hare := mockHare{}
-	block1 := types.NewExistingBlock(0, []byte(RandStringRunes(8)))
-	block2 := types.NewExistingBlock(0, []byte(RandStringRunes(8)))
-	block3 := types.NewExistingBlock(0, []byte(RandStringRunes(8)))
+	block1 := types.NewExistingBlock(0, []byte(rand.RandString(8)))
+	block2 := types.NewExistingBlock(0, []byte(rand.RandString(8)))
+	block3 := types.NewExistingBlock(0, []byte(rand.RandString(8)))
 	builder1 := NewBlockBuilder(types.NodeId{Key: "a"}, &MockSigning{}, n1, beginRound, 5, NewTxMemPool(), NewAtxMemPool(), MockCoin{}, MockOrphans{st: []types.BlockID{block1.Id(), block2.Id(), block3.Id()}}, hare, mockBlockOracle{}, mockTxProcessor{true}, &mockAtxValidator{}, &mockSyncer{}, selectCount, projector, log.NewDefault(t.Name()))
 
 	builder1.hareResult = mockHare{err: err, ids: nil}

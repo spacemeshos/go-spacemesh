@@ -510,7 +510,7 @@ func validateVotes(blk *types.Block, forBlockfunc ForBlockInView, depth int, lg 
 	}
 
 	if err != nil {
-		lg.Error("validate votes failed", err)
+		lg.Error("validate votes failed for block %s err %s", blk.Id(), err)
 	}
 
 	return err == nil
@@ -723,7 +723,6 @@ func (s *Syncer) blockCheckLocal(blockIds []types.Hash32) (map[types.Hash32]Item
 			s.Debug("get block failed %v", id)
 			continue
 		}
-
 		dbItems[id] = res
 	}
 
