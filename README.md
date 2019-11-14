@@ -107,7 +107,7 @@ To build `go-spacemesh` for your current system architecture, from the project r
 make build
 ```
 
-This will (re-)generate protobuf files and build the `go-spacemesh` binary, saving it in the project root directory.
+This will (re-)generate protobuf files and build the `go-spacemesh` binary, saving it in the `build/` directory.
 
 To build a binary for a specific architecture directory use:
 ```
@@ -118,7 +118,7 @@ Platform-specific binaries are saved to the `/build` directory.
 
 ### Running
 ```
-./go-spacemesh
+./build/go-spacemesh
 ```
 
 ### Testing
