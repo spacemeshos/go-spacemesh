@@ -293,7 +293,7 @@ func TestBlockEligibility_calc(t *testing.T) {
 	r := require.New(t)
 	atxH := types.NewActivationTxWithChallenge(types.NIPSTChallenge{PubLayerIdx: 0}, types.Address{}, 1, nil, nil, nil)
 	atxH.ActiveSetSize = 10
-	atxDb := &mockAtxDB{atxH: &atxH.ActivationTxHeader}
+	atxDb := &mockAtxDB{atxH: atxH.ActivationTxHeader}
 	genSetSize := uint32(0)
 	o := NewMinerBlockOracle(10, genSetSize, 1, atxDb, &EpochBeaconProvider{}, vrfSigner, nodeID, func() bool { return true }, log.NewDefault(t.Name()))
 	err := o.calcEligibilityProofs(1)

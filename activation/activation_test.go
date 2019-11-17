@@ -189,7 +189,7 @@ func newChallenge(nodeId types.NodeId, sequence uint64, prevAtxId, posAtxId type
 func newAtx(challenge types.NIPSTChallenge, ActiveSetSize uint32, View []types.BlockID, nipst *types.NIPST) *types.ActivationTx {
 	activationTx := &types.ActivationTx{
 		&types.InnerActivationTx{
-			ActivationTxHeader: types.ActivationTxHeader{
+			ActivationTxHeader: &types.ActivationTxHeader{
 				NIPSTChallenge: challenge,
 				Coinbase:       coinbase,
 				ActiveSetSize:  ActiveSetSize,
@@ -289,7 +289,7 @@ func TestBuilder_PublishActivationTx_HappyFlow(t *testing.T) {
 	published, err := publishAtx(b, postGenesisEpochLayer+1, postGenesisEpoch, layersPerEpoch)
 	r.NoError(err)
 	r.True(published)
-	assertLastAtx(r, &prevAtx.ActivationTxHeader, &prevAtx.ActivationTxHeader, layersPerEpoch)
+	assertLastAtx(r, prevAtx.ActivationTxHeader, prevAtx.ActivationTxHeader, layersPerEpoch)
 }
 
 func TestBuilder_PublishActivationTx_NoPrevATX(t *testing.T) {
@@ -309,7 +309,7 @@ func TestBuilder_PublishActivationTx_NoPrevATX(t *testing.T) {
 	published, err := publishAtx(b, postGenesisEpochLayer+1, postGenesisEpoch, layersPerEpoch)
 	r.NoError(err)
 	r.True(published)
-	assertLastAtx(r, &posAtx.ActivationTxHeader, nil, layersPerEpoch)
+	assertLastAtx(r, posAtx.ActivationTxHeader, nil, layersPerEpoch)
 }
 
 func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
@@ -335,7 +335,7 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 	published, err := publishAtx(b, postGenesisEpochLayer+1, postGenesisEpoch, layersPerEpoch)
 	r.NoError(err)
 	r.True(published)
-	assertLastAtx(r, &posAtx.ActivationTxHeader, &prevAtx.ActivationTxHeader, layersPerEpoch)
+	assertLastAtx(r, posAtx.ActivationTxHeader, prevAtx.ActivationTxHeader, layersPerEpoch)
 }
 
 func TestBuilder_PublishActivationTx_FailsWhenNoPosAtx(t *testing.T) {
@@ -393,7 +393,7 @@ func TestBuilder_PublishActivationTx_DoesNotPublish2AtxsInSameEpoch(t *testing.T
 	published, err := publishAtx(b, postGenesisEpochLayer+1, postGenesisEpoch, layersPerEpoch)
 	r.NoError(err)
 	r.True(published)
-	assertLastAtx(r, &prevAtx.ActivationTxHeader, &prevAtx.ActivationTxHeader, layersPerEpoch)
+	assertLastAtx(r, prevAtx.ActivationTxHeader, prevAtx.ActivationTxHeader, layersPerEpoch)
 
 	// assert that another ATX cannot be published
 	published, err = publishAtx(b, postGenesisEpochLayer+1, postGenesisEpoch, layersPerEpoch) // 👀
@@ -455,7 +455,7 @@ func TestBuilder_PublishActivationTx_PosAtxOnSameLayerAsPrevAtx(t *testing.T) {
 
 	challenge := newChallenge(nodeId, 1, prevAtxId, prevAtxId, postGenesisEpochLayer+3)
 	prevATX := newAtx(challenge, 5, defaultView, npst)
-	b.prevATX = &prevATX.ActivationTxHeader
+	b.prevATX = prevATX.ActivationTxHeader
 
 	published, err := publishAtx(b, postGenesisEpochLayer+4, postGenesisEpoch, layersPerEpoch)
 	r.NoError(err)
@@ -467,7 +467,7 @@ func TestBuilder_PublishActivationTx_PosAtxOnSameLayerAsPrevAtx(t *testing.T) {
 	posAtx, err := activationDb.GetAtx(newAtx.PositioningAtx)
 	r.NoError(err)
 
-	assertLastAtx(r, posAtx, &prevATX.ActivationTxHeader, layersPerEpoch)
+	assertLastAtx(r, posAtx, prevATX.ActivationTxHeader, layersPerEpoch)
 
 	t.Skip("proves https://github.com/spacemeshos/go-spacemesh/issues/1166")
 	// check pos & prev has the same PubLayerIdx

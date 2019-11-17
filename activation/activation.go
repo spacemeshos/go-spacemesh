@@ -475,7 +475,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 	if err != nil {
 		return err
 	}
-	b.prevATX = &atx.ActivationTxHeader
+	b.prevATX = atx.ActivationTxHeader
 
 	// cleanup state
 	b.nipst = nil

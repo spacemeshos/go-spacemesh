@@ -32,7 +32,7 @@ func (t *AtxDbMock) GetAtx(id types.AtxId) (*types.ActivationTxHeader, error) {
 	}
 
 	if atx, ok := t.db[id]; ok {
-		return &atx.ActivationTxHeader, nil
+		return atx.ActivationTxHeader, nil
 	}
 	return nil, fmt.Errorf("cannot find atx")
 }

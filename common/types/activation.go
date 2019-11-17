@@ -92,7 +92,7 @@ func (challenge *NIPSTChallenge) String() string {
 }
 
 type InnerActivationTx struct {
-	ActivationTxHeader
+	*ActivationTxHeader
 	Nipst      *NIPST
 	View       []BlockID
 	Commitment *PostProof
@@ -120,7 +120,7 @@ func NewActivationTx(NodeId NodeId,
 	nipst *NIPST) *ActivationTx {
 	atx := &ActivationTx{
 		&InnerActivationTx{
-			ActivationTxHeader: ActivationTxHeader{
+			ActivationTxHeader: &ActivationTxHeader{
 				NIPSTChallenge: NIPSTChallenge{
 					NodeId:         NodeId,
 					Sequence:       Sequence,
@@ -146,7 +146,7 @@ func NewActivationTxWithChallenge(poetChallenge NIPSTChallenge, coinbase Address
 
 	atx := &ActivationTx{
 		&InnerActivationTx{
-			ActivationTxHeader: ActivationTxHeader{
+			ActivationTxHeader: &ActivationTxHeader{
 				NIPSTChallenge: poetChallenge,
 				Coinbase:       coinbase,
 				ActiveSetSize:  ActiveSetSize,
