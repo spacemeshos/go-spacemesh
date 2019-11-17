@@ -150,9 +150,8 @@ def setup_bootstrap_in_namespace(namespace, bs_deployment_info, bootstrap_config
     :return: DeploymentInfo, bootstrap info with a list of active pods
     """
     # setting stateful and deployment configuration files
-    ss_file_path = dep_file_path = ""
-    if "deployment_type" in bootstrap_config.keys():
-        dep_file_path, ss_file_path = _setup_dep_ss_file_path(file_path, bootstrap_config["deployment_type"])
+    dep_method = bootstrap_config["deployment_type"] if "deployment_type" in bootstrap_config.keys() else "deployment"
+    dep_file_path, ss_file_path = _setup_dep_ss_file_path(file_path, dep_method)
 
     def _extract_label():
         name = bs_deployment_info.deployment_name.split('-')[1]
@@ -211,7 +210,12 @@ def setup_bootstrap_in_namespace(namespace, bs_deployment_info, bootstrap_config
 
 
 def setup_clients_in_namespace(namespace, bs_deployment_info, client_deployment_info, client_config, name="client",
-                               oracle=None, poet=None, dep_time_out=120):
+                               file_path=None, oracle=None, poet=None, dep_time_out=120):
+    # setting stateful and deployment configuration files
+    dep_method = client_config["deployment_type"] if "deployment_type" in client_config.keys() else "deployment"
+    dep_file_path, ss_file_path = _setup_dep_ss_file_path(file_path, dep_method)
+    print(f"#@!#@!\n\n{ss_file_path}, {dep_file_path}\n\n")
+
     # this function used to be the way to extract the client title
     # in case we want a different title (client_v2 for example) we can specify it
     # directly in "name" input
@@ -221,8 +225,8 @@ def setup_clients_in_namespace(namespace, bs_deployment_info, client_deployment_
     cspec = get_conf(bs_deployment_info, client_config, oracle, poet)
 
     k8s_file, k8s_create_func = choose_k8s_object_create(client_config,
-                                                         CLIENT_DEPLOYMENT_FILE,
-                                                         CLIENT_STATEFULSET_FILE)
+                                                         dep_file_path,
+                                                         ss_file_path)
     resp = k8s_create_func(k8s_file, namespace,
                            deployment_id=client_deployment_info.deployment_id,
                            replica_size=client_config['replicas'],

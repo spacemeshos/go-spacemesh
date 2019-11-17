@@ -41,6 +41,8 @@ def wait_to_deployment_to_be_ready(deployment_name, name_space, time_out=None):
 
 
 def create_deployment(file_name, name_space, deployment_id=None, replica_size=1, container_specs=None, time_out=None):
+    print(f"#@!#@! path={os.path.join(os.path.dirname(__file__))}")
+    print(f"#@!#@! file={file_name}")
     with open(os.path.join(os.path.dirname(__file__), file_name)) as f:
         dep = yaml.safe_load(f)
 
