@@ -121,9 +121,26 @@ def choose_k8s_object_create(config, deployment_file, statefulset_file):
         raise Exception("Unknown deployment type in configuration. Please check your config.yaml")
 
 
-def _setup_dep_ss_file_path(file_path, dep_type):
-    dep_file_path = BOOT_DEPLOYMENT_FILE
-    ss_file_path = BOOT_STATEFULSET_FILE
+def _setup_dep_ss_file_path(file_path, dep_type, node_type):
+    # TODO we should implement this func just for deployment file
+    """
+    sets up deployment files
+    :param file_path: string, a file path to overwrite the default file path value (BOOT_DEPLOYMENT_FILE,
+    CLIENT_STATEFULSET_FILE, etc)
+    :param dep_type: string, stateful or deployment
+    :param node_type: string, client or bootstrap
+
+    :return: string, string, deployment and stateful specification files paths
+    """
+    if node_type == 'bootstrap':
+        dep_file_path = BOOT_DEPLOYMENT_FILE
+        ss_file_path = BOOT_STATEFULSET_FILE
+    elif node_type == 'client':
+        dep_file_path = CLIENT_DEPLOYMENT_FILE
+        ss_file_path = CLIENT_STATEFULSET_FILE
+    else:
+        raise ValueError(f"can not recognize node name: {node_type}")
+
     if file_path and dep_type == "statefulset":
         print(f"setting up stateful file path to {file_path}\n")
         ss_file_path = file_path
@@ -151,7 +168,11 @@ def setup_bootstrap_in_namespace(namespace, bs_deployment_info, bootstrap_config
     """
     # setting stateful and deployment configuration files
     dep_method = bootstrap_config["deployment_type"] if "deployment_type" in bootstrap_config.keys() else "deployment"
-    dep_file_path, ss_file_path = _setup_dep_ss_file_path(file_path, dep_method)
+    try:
+        dep_file_path, ss_file_path = _setup_dep_ss_file_path(file_path, dep_method, 'bootstrap')
+    except ValueError as e:
+        print(f"error setting up bootstrap specification file: {e}")
+        return None
 
     def _extract_label():
         name = bs_deployment_info.deployment_name.split('-')[1]
@@ -213,8 +234,11 @@ def setup_clients_in_namespace(namespace, bs_deployment_info, client_deployment_
                                file_path=None, oracle=None, poet=None, dep_time_out=120):
     # setting stateful and deployment configuration files
     dep_method = client_config["deployment_type"] if "deployment_type" in client_config.keys() else "deployment"
-    dep_file_path, ss_file_path = _setup_dep_ss_file_path(file_path, dep_method)
-    print(f"#@!#@!\n\n{ss_file_path}, {dep_file_path}\n\n")
+    try:
+        dep_file_path, ss_file_path = _setup_dep_ss_file_path(file_path, dep_method, 'bootstrap')
+    except ValueError as e:
+        print(f"error setting up client specification file: {e}")
+        return None
 
     # this function used to be the way to extract the client title
     # in case we want a different title (client_v2 for example) we can specify it
