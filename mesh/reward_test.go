@@ -141,7 +141,7 @@ func createLayer(mesh *Mesh, id types.LayerID, numOfBlocks, maxTransactions int,
 		block1.ATXID = atx.Id()
 
 		totalRewards += addTransactionsWithFee(mesh.MeshDB, block1, rand.Intn(maxTransactions), rand.Int63n(100))
-		block1.SetId()
+		block1.CalcAndSetId()
 		mesh.AddBlock(block1)
 	}
 	return totalRewards

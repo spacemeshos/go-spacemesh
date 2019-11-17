@@ -515,4 +515,6 @@ func TestBlockBuilder_createBlock(t *testing.T) {
 	b, err = builder1.createBlock(5, types.AtxId{}, types.BlockEligibilityProof{}, nil, nil)
 	r.Nil(err)
 	r.Equal(b.BlockVotes, []types.BlockID{})
+	emptyId := types.BlockID{}
+	r.NotEqual(b.Id(), emptyId)
 }

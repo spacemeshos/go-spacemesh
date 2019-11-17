@@ -84,7 +84,7 @@ func (bl *BlockListener) handleBlock(data service.GossipMessage) {
 		return
 	}
 	log.Info(blk.Id().String())
-	blk.SetId()
+	blk.CalcAndSetId()
 	log.Info(blk.Id().String())
 	bl.Log.With().Info("got new block", log.BlockId(blk.Id()), log.LayerId(uint64(blk.Layer())), log.Int("txs", len(blk.TxIds)), log.Int("atxs", len(blk.AtxIds)))
 	//check if known

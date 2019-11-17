@@ -199,9 +199,10 @@ func TestSyncProtocol_BlockRequest(t *testing.T) {
 	output := fetchWithFactory(NewFetchWorker(syncObj2, 1, newFetchReqFactory(BLOCK, blocksAsItems), ch))
 
 	timeout := time.NewTimer(2 * time.Second)
-
+	emptyId := types.BlockID{}
 	select {
 	case a := <-output:
+		assert.NotEqual(t, a.(fetchJob).items[0].(*types.Block).Id(), emptyId, "id not set")
 		assert.Equal(t, a.(fetchJob).ids[0], block.Hash32(), "wrong block")
 	case <-timeout.C:
 		assert.Fail(t, "no message received on channel")
@@ -392,9 +393,9 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	block2.ATXID = atx3.Id()
 	block3 := types.NewExistingBlock(2, []byte(rand.RandString(8)))
 	block3.ATXID = atx3.Id()
-	block1.SetId()
-	block2.SetId()
-	block3.SetId()
+	block1.CalcAndSetId()
+	block2.CalcAndSetId()
+	block3.CalcAndSetId()
 
 	syncObj1.AddBlockWithTxs(block1, []*types.Transaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8}, []*types.ActivationTx{atx1})
 	syncObj1.AddBlockWithTxs(block2, []*types.Transaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8}, []*types.ActivationTx{atx2})
@@ -711,16 +712,16 @@ func (sis *syncIntegrationTwoNodes) TestSyncProtocol_TwoNodes() {
 	block7.TxIds = []types.TransactionId{id7, id8}
 	block8.TxIds = []types.TransactionId{id7, id8}
 
-	block1.SetId()
-	block2.SetId()
-	block3.SetId()
-	block4.SetId()
-	block5.SetId()
-	block6.SetId()
-	block7.SetId()
-	block8.SetId()
-	block9.SetId()
-	block10.SetId()
+	block1.CalcAndSetId()
+	block2.CalcAndSetId()
+	block3.CalcAndSetId()
+	block4.CalcAndSetId()
+	block5.CalcAndSetId()
+	block6.CalcAndSetId()
+	block7.CalcAndSetId()
+	block8.CalcAndSetId()
+	block9.CalcAndSetId()
+	block10.CalcAndSetId()
 
 	syncObj2.AddBlock(block1)
 	syncObj2.AddBlock(block2)

@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"sync"
@@ -17,7 +18,7 @@ func TestNewPeerWorker(t *testing.T) {
 	defer syncObj1.Close()
 	syncObj2 := syncs[1]
 	defer syncObj2.Close()
-	bl1 := types.NewExistingBlock(1, []byte(RandStringRunes(8)))
+	bl1 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
 	err := syncObj1.AddBlock(bl1)
 	assert.NoError(t, err)
 

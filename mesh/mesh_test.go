@@ -344,7 +344,7 @@ func addBlockWithTxs(r *require.Assertions, msh *Mesh, id types.LayerID, valid b
 	for _, tx := range txs {
 		blk.TxIds = append(blk.TxIds, tx.Id())
 	}
-	blk.SetId()
+	blk.CalcAndSetId()
 	msh.SaveContextualValidity(blk.Id(), valid)
 	err := msh.AddBlockWithTxs(blk, txs, nil)
 	r.NoError(err)

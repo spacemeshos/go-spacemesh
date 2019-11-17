@@ -160,7 +160,7 @@ func createLayerWithAtx(t *testing.T, msh *mesh.Mesh, id types.LayerID, numOfBlo
 		if i < len(atxs) {
 			actualAtxs = atxs[i : i+1]
 		}
-		block1.SetId()
+		block1.CalcAndSetId()
 		err := msh.AddBlockWithTxs(block1, []*types.Transaction{}, actualAtxs)
 		require.NoError(t, err)
 		created = append(created, block1.Id())
@@ -283,13 +283,13 @@ func Test_CalcActiveSetFromView(t *testing.T) {
 	block2 := types.NewExistingBlock(2200, []byte(rand.RandString(8)))
 
 	block2.ViewEdges = blocks
-	block2.SetId()
+	block2.CalcAndSetId()
 	layers.AddBlockWithTxs(block2, nil, atxs2)
 
 	block3 := types.NewExistingBlock(2200, []byte(rand.RandString(8)))
 
 	block3.ViewEdges = blocks
-	block2.SetId()
+	block2.CalcAndSetId()
 	layers.AddBlockWithTxs(block3, nil, atxs2)
 
 	err = atxdb.ProcessAtxs(atxs2)

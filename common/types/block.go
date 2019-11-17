@@ -106,7 +106,7 @@ func (b *Block) Id() BlockID {
 }
 
 //should be used after all changed to a block are done
-func (b *Block) SetId() {
+func (b *Block) CalcAndSetId() {
 	blockBytes, err := InterfaceToBytes(b.MiniBlock)
 	if err != nil {
 		panic("failed to marshal transaction: " + err.Error())
@@ -201,7 +201,7 @@ func NewExistingBlock(layerIndex LayerID, data []byte) *Block {
 				Data:       data},
 		}}
 
-	b.SetId()
+	b.CalcAndSetId()
 	return &b
 }
 
