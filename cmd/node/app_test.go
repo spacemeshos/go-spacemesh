@@ -165,21 +165,17 @@ type ScenarioSetup func(suit *AppTestSuite, t *testing.T)
 type ScenarioTestCriteria func(suit *AppTestSuite, t *testing.T) bool
 
 type TestScenario struct {
-	Setup ScenarioSetup
-	Criteria ScenarioTestCriteria
+	Setup        ScenarioSetup
+	Criteria     ScenarioTestCriteria
 	Dependencies []int
 }
-
-
-
-var tests = []TestScenario{txWithRunningNonceGenerator([]int{}), sameRootTester([]int{0}), reachedEpochTester([]int{}), txWithUnorderedNonceGenerator([]int{2})}
 
 func txWithUnorderedNonceGenerator(dependancies []int) TestScenario {
 
 	acc1Signer, err := signing.NewEdSignerFromBuffer(util.FromHex(apiCfg.Account2Private))
 	addr := types.Address{}
 	addr.SetBytes(acc1Signer.PublicKey().Bytes())
-	dst := types.BytesToAddress([]byte{0x05})
+	dst := types.BytesToAddress([]byte{0x09})
 	txsSent := 25
 	setup := func(suite *AppTestSuite, t *testing.T) {
 		if err != nil {
@@ -192,7 +188,7 @@ func txWithUnorderedNonceGenerator(dependancies []int) TestScenario {
 		}
 		for i := 0; i < txsSent; i++ {
 			// this puts a random unique number in nonces[i]
-			nonces[i] = nonces[int(rand.Int31n(int32(len(nonces) - i))) + i]
+			nonces[i] = nonces[int(rand.Int31n(int32(len(nonces)-i)))+i]
 			tx, err := types.NewSignedTx(uint64(nonces[i]), dst, 10, 1, 1, acc1Signer)
 			if err != nil {
 				log.Panic("panicked creating signed tx err=%v", err)
@@ -204,14 +200,14 @@ func txWithUnorderedNonceGenerator(dependancies []int) TestScenario {
 		}
 	}
 
-	teardown := func (suite *AppTestSuite, t *testing.T) bool{
+	teardown := func(suite *AppTestSuite, t *testing.T) bool {
 		ok := true
 		for _, app := range suite.apps {
 			log.Info("current balance: %d nonce %d", app.state.GetBalance(dst), app.state.GetNonce(addr))
-			ok = ok && 250 <= app.state.GetBalance(dst) && app.state.GetNonce(addr) == 0
+			ok = ok && 0 == app.state.GetBalance(dst) && app.state.GetNonce(addr) == 0
 		}
 		if ok {
-			log.Info("addresses ok")
+			log.Info("zero addresses ok")
 		}
 		return ok
 	}
@@ -244,7 +240,7 @@ func txWithRunningNonceGenerator(dependancies []int) TestScenario {
 		}
 	}
 
-	teardown := func (suite *AppTestSuite, t *testing.T) bool{
+	teardown := func(suite *AppTestSuite, t *testing.T) bool {
 		ok := true
 		for _, app := range suite.apps {
 			log.Info("current balance: %d nonce %d", app.state.GetBalance(dst), app.state.GetNonce(addr))
@@ -260,10 +256,10 @@ func txWithRunningNonceGenerator(dependancies []int) TestScenario {
 }
 
 func reachedEpochTester(dependancies []int) TestScenario {
-	const numberOfEpochs= 5 // first 2 epochs are genesis
+	const numberOfEpochs = 5 // first 2 epochs are genesis
 	setup := func(suite *AppTestSuite, t *testing.T) {}
 
-	test := func(suite *AppTestSuite, t * testing.T) bool {
+	test := func(suite *AppTestSuite, t *testing.T) bool {
 		ok := true
 		for _, app := range suite.apps {
 			ok = ok && uint32(app.mesh.LatestLayer()) >= numberOfEpochs*uint32(app.Config.LayersPerEpoch)
@@ -282,7 +278,7 @@ func reachedEpochTester(dependancies []int) TestScenario {
 func sameRootTester(dependancies []int) TestScenario {
 	setup := func(suite *AppTestSuite, t *testing.T) {}
 
-	test := func (suite *AppTestSuite, t *testing.T) bool {
+	test := func(suite *AppTestSuite, t *testing.T) bool {
 		stickyClientsDone := 0
 		maxClientsDone := 0
 		for idx, app := range suite.apps {
@@ -323,7 +319,7 @@ func setupTests(suite *AppTestSuite) {
 }
 
 // run test criterias after setup
-func runTests(suite *AppTestSuite, finished map[int]bool) bool{
+func runTests(suite *AppTestSuite, finished map[int]bool) bool {
 	for i, test := range tests {
 		depsOk := true
 		for _, x := range test.Dependencies {
@@ -335,7 +331,7 @@ func runTests(suite *AppTestSuite, finished map[int]bool) bool{
 			log.Info("test %d has finished with result %v", i, finished[i])
 		}
 	}
-	for i :=0; i < len(tests); i ++ {
+	for i := 0; i < len(tests); i++ {
 		testOk, hasTest := finished[i]
 		if hasTest {
 			if !testOk {
@@ -349,9 +345,11 @@ func runTests(suite *AppTestSuite, finished map[int]bool) bool{
 	return true
 }
 
+var tests = []TestScenario{txWithRunningNonceGenerator([]int{}), sameRootTester([]int{0}), reachedEpochTester([]int{}), txWithUnorderedNonceGenerator([]int{1})}
+
 func (suite *AppTestSuite) TestMultipleNodes() {
 	//EntryPointCreated <- true
-	const numberOfEpochs= 5 // first 2 epochs are genesis
+	const numberOfEpochs = 5 // first 2 epochs are genesis
 	//addr := address.BytesToAddress([]byte{0x01})
 	path := "../tmp/test/state_" + time.Now().String()
 
@@ -399,7 +397,6 @@ loop:
 
 	suite.validateBlocksAndATXs(types.LayerID(numberOfEpochs*suite.apps[0].Config.LayersPerEpoch)-1, types.LayerID(startInLayer))
 }
-
 
 func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID, startInLayer types.LayerID) {
 	log.Info("untilLayer=%v", untilLayer)

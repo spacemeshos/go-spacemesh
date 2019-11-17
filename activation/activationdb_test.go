@@ -235,7 +235,7 @@ func TestMesh_ActiveSetForLayerView2(t *testing.T) {
 	assert.Nil(t, actives)
 }
 
-func Test_CalcActiveSetFromViewB(t *testing.T){
+func Test_CalcActiveSetFromViewB(t *testing.T) {
 	activesetCache.Purge()
 	atxdb, layers, _ := getAtxDb("t6")
 
