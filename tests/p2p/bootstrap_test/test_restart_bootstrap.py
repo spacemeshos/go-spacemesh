@@ -21,9 +21,8 @@ def test_reboot_bootstrap(init_session):
     # test params
     sleep_time = 5
     session_id = init_session
-    bootstrap_group_id = 'bootstrap_key'
     ss_file_path = get_spec_file_path("bootstrap-w-conf-ss.yml")
-    key_regex = r"Local node identity >> (?P<{bootstrap_group_id}>\w+)".format(bootstrap_group_id=bootstrap_group_id)
+    key_regex = r"Local node identity >> (?P<{bootstrap_group_id}>\w+)".format(bootstrap_group_id='bootstrap_key')
     # using the same logic as setup_bootstrap fixture but with an additional
     # file_path argument to load a none default yaml spec file
     bootstrap_deployment_info = DeploymentInfo(dep_id=session_id)
@@ -52,13 +51,3 @@ def test_reboot_bootstrap(init_session):
 
     ass_msg = f"keys did not match\noriginal key: {original_bs_key}\nnew key: {new_key}\n"
     assert original_bs_key == new_key, ass_msg
-
-
-# Kill original bootstraps
-# Deploy X peers with X bootstrap node
-# Wait for (network) bootstrap
-# Kill original bootstrap nodes
-# Reboot X clients (using saved routing table)
-# wait for and validate bootstrap in X rebooted clients
-def test_kill_bs():
-    pass
