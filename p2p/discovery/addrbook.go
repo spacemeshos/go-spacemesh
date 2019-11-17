@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
+	"github.com/spacemeshos/go-spacemesh/p2p/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"math/rand"
 	"net"
@@ -166,6 +167,7 @@ func (a *addrBook) updateAddress(netAddr, srcAddr *node.NodeInfo) {
 	// Add to new bucket.
 	ka.refs++
 	a.addrNew[bucket][netAddr.ID] = ka
+	metrics.AddrbookSize.Add(1)
 
 	a.logger.Debug("Added new address %s for a total of %d addresses", netAddr.String(), a.nTried+a.nNew)
 }
@@ -492,6 +494,8 @@ func (a *addrBook) expireNew(bucket int) {
 			if v.refs == 0 {
 				a.nNew--
 				delete(a.addrIndex, k)
+				metrics.AddrbookSize.Add(-1)
+
 			}
 			continue
 		}
@@ -509,6 +513,7 @@ func (a *addrBook) expireNew(bucket int) {
 		if oldest.refs == 0 {
 			a.nNew--
 			delete(a.addrIndex, key)
+			metrics.AddrbookSize.Add(-1)
 		}
 	}
 }
@@ -617,6 +622,7 @@ func (a *addrBook) RemoveAddress(key p2pcrypto.PublicKey) {
 	}
 
 	delete(a.addrIndex, id)
+	metrics.AddrbookSize.Add(-1)
 }
 
 // reset resets the address manager by reinitialising the random source
@@ -637,6 +643,8 @@ func (a *addrBook) reset() {
 	for i := range a.addrTried {
 		a.addrTried[i] = make(map[node.ID]*KnownAddress)
 	}
+
+	metrics.AddrbookSize.Set(0)
 }
 
 // New returns a new bitcoin address manager.

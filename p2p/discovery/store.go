@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"os"
 	"time"
@@ -106,6 +107,8 @@ func (a *addrBook) loadPeers(filePath string) {
 		a.reset()
 		return
 	}
+
+	metrics.AddrbookSize.Set(float64(a.numAddresses()))
 }
 
 func (a *addrBook) deserializePeers(filePath string) error {
