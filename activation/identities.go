@@ -9,10 +9,10 @@ import (
 
 type IdentityStore struct {
 	//todo: think about whether we need one db or several
-	ids database.DB
+	ids database.Database
 }
 
-func NewIdentityStore(db database.DB) *IdentityStore {
+func NewIdentityStore(db database.Database) *IdentityStore {
 	return &IdentityStore{db}
 }
 

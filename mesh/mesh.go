@@ -302,7 +302,7 @@ func (m *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.Transaction, atxs 
 	m.With().Debug("adding block", log.BlockId(uint64(blk.ID())))
 
 	// Store transactions (doesn't have to be rolled back if other writes fail)
-	err := m.writeTransactions(txs)
+	err := m.writeTransactions(blk.LayerIndex, txs)
 	if err != nil {
 		return fmt.Errorf("could not write transactions of block %v database: %v", blk.ID(), err)
 	}
@@ -446,6 +446,7 @@ func (m *Mesh) AccumulateRewards(rewardLayer types.LayerID, params Config) {
 			continue
 		}
 		ids = append(ids, atx.Coinbase)
+
 	}
 	//accumulate all blocks rewards
 	txs, _ := m.ExtractUniqueOrderedTransactions(l)
@@ -463,6 +464,10 @@ func (m *Mesh) AccumulateRewards(rewardLayer types.LayerID, params Config) {
 
 	blockReward := calculateActualRewards(rewards, numBlocks)
 	m.ApplyRewards(rewardLayer, ids, blockReward)
+	err = m.writeTransactionRewards(rewardLayer, ids, blockReward)
+	if err != nil {
+		m.Error("cannot write reward to db")
+	}
 	//todo: should miner id be sorted in a deterministic order prior to applying rewards?
 
 }
