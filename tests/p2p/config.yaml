@@ -6,7 +6,7 @@ script_on_exit: '' # Uncomment this to save logs './k8s/log-client-pods.sh'
 
 genesis_delta: 150
 single_pod_ready_time_out: 60
-deployment_ready_time_out: 120 #default 120
+deployment_ready_time_out: 300 #default 120
 config_path: '../config.toml'
 
 bootstrap:

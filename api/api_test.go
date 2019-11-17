@@ -75,6 +75,18 @@ type TxAPIMock struct {
 	mockOrigin types.Address
 }
 
+func (t *TxAPIMock) GetRewards(account types.Address) (rewards []types.Reward) {
+	return
+}
+
+func (t *TxAPIMock) GetTransactionsByDestination(l types.LayerID, account types.Address) (txs []types.TransactionId) {
+	return
+}
+
+func (t *TxAPIMock) GetTransactionsByOrigin(l types.LayerID, account types.Address) (txs []types.TransactionId) {
+	return
+}
+
 func (t *TxAPIMock) setMockOrigin(orig types.Address) {
 	t.mockOrigin = orig
 }
@@ -130,7 +142,7 @@ func TestServersConfig(t *testing.T) {
 
 	config.ConfigValues.JSONServerPort = port1
 	config.ConfigValues.GrpcServerPort = port2
-	grpcService := NewGrpcService(&networkMock, ap, &tx, &mining, &oracle, nil)
+	grpcService := NewGrpcService(&networkMock, ap, &tx, &mining, &oracle, nil, nil)
 	jsonService := NewJSONHTTPServer()
 
 	assert.Equal(t, grpcService.Port, uint(config.ConfigValues.GrpcServerPort), "Expected same port")
@@ -148,7 +160,7 @@ func TestGrpcApi(t *testing.T) {
 
 	const message = "Hello World"
 
-	grpcService := NewGrpcService(&networkMock, ap, &tx, &mining, &oracle, nil)
+	grpcService := NewGrpcService(&networkMock, ap, &tx, &mining, &oracle, nil, nil)
 
 	// start a server
 	grpcService.StartService()
@@ -187,7 +199,7 @@ func TestJsonApi(t *testing.T) {
 	ap := NodeAPIMock{}
 	net := NetworkMock{}
 	tx := TxAPIMock{}
-	grpcService := NewGrpcService(&net, ap, &tx, &mining, &oracle, nil)
+	grpcService := NewGrpcService(&net, ap, &tx, &mining, &oracle, nil, nil)
 	jsonService := NewJSONHTTPServer()
 
 	// start grp and json server
@@ -255,7 +267,7 @@ func TestJsonWalletApi(t *testing.T) {
 	ap.nonces[addr] = 10
 	ap.balances[addr] = big.NewInt(100)
 	txApi := TxAPIMock{}
-	grpcService := NewGrpcService(&net, ap, &txApi, &mining, &oracle, &genTime)
+	grpcService := NewGrpcService(&net, ap, &txApi, &mining, &oracle, &genTime, nil)
 	jsonService := NewJSONHTTPServer()
 
 	// start grp and json server
@@ -414,6 +426,56 @@ func TestJsonWalletApi(t *testing.T) {
 
 	assert.Equal(t, genTime.t.String(), msg.Value)
 
+	// test get rewards per account
+	reqParams = pb.AccountId{Address: util.Bytes2Hex(addrBytes)}
+	payload, err = m.MarshalToString(&reqParams)
+	url = fmt.Sprintf("http://127.0.0.1:%d/v1/accountrewards", config.ConfigValues.JSONServerPort)
+	resp, err = http.Post(url, contentType, strings.NewReader(payload))
+	assert.NoError(t, err, "failed to http post to api endpoint")
+
+	buf, err = ioutil.ReadAll(resp.Body)
+	resp.Body.Close()
+	assert.NoError(t, err, "failed to read response body")
+
+	got, want = resp.StatusCode, http.StatusOK
+	assert.Equal(t, want, got)
+
+	var rewards pb.AccountRewards
+	err = jsonpb.UnmarshalString(string(buf), &rewards)
+	assert.NoError(t, err)
+
+	// test get txs per account
+	reqParam := pb.GetTxsSinceLayer{Account: &pb.AccountId{Address: util.Bytes2Hex(addrBytes)}, StartLayer: 1, EndLayer: 2}
+	payload, err = m.MarshalToString(&reqParam)
+	url = fmt.Sprintf("http://127.0.0.1:%d/v1/accounttxs", config.ConfigValues.JSONServerPort)
+	resp, err = http.Post(url, contentType, strings.NewReader(payload))
+	assert.NoError(t, err, "failed to http post to api endpoint")
+
+	buf, err = ioutil.ReadAll(resp.Body)
+	resp.Body.Close()
+	assert.NoError(t, err, "failed to read response body")
+
+	got, want = resp.StatusCode, http.StatusOK
+	assert.Equal(t, want, got)
+
+	var accounts pb.AccountTxs
+	err = jsonpb.UnmarshalString(string(buf), &accounts)
+	assert.NoError(t, err)
+
+	// test get txs per account with wrong layer error
+	reqParam = pb.GetTxsSinceLayer{Account: &pb.AccountId{Address: util.Bytes2Hex(addrBytes)}, StartLayer: 2, EndLayer: 1}
+	payload, err = m.MarshalToString(&reqParam)
+	url = fmt.Sprintf("http://127.0.0.1:%d/v1/accounttxs", config.ConfigValues.JSONServerPort)
+	resp, err = http.Post(url, contentType, strings.NewReader(payload))
+	assert.NoError(t, err, "failed to http post to api endpoint")
+
+	buf, err = ioutil.ReadAll(resp.Body)
+	resp.Body.Close()
+	assert.NoError(t, err, "failed to read response body")
+	if got, want := resp.StatusCode, http.StatusInternalServerError; got != want {
+		t.Errorf("resp.StatusCode = %d; want %d", got, want)
+	}
+
 	// stop the services
 	jsonService.StopService()
 	grpcService.StopService()
@@ -430,7 +492,7 @@ func TestJsonWalletApi_Errors(t *testing.T) {
 	ap := NewNodeAPIMock()
 	net := NetworkMock{}
 	tx := TxAPIMock{}
-	grpcService := NewGrpcService(&net, ap, &tx, &mining, &oracle, nil)
+	grpcService := NewGrpcService(&net, ap, &tx, &mining, &oracle, nil, nil)
 	jsonService := NewJSONHTTPServer()
 
 	// start grp and json server
@@ -495,7 +557,7 @@ func TestSpaceMeshGrpcService_Broadcast(t *testing.T) {
 	ap := NewNodeAPIMock()
 	net := NetworkMock{broadcasted: []byte{0x00}}
 	tx := TxAPIMock{}
-	grpcService := NewGrpcService(&net, ap, &tx, &mining, &oracle, nil)
+	grpcService := NewGrpcService(&net, ap, &tx, &mining, &oracle, nil, nil)
 	jsonService := NewJSONHTTPServer()
 
 	// start grp and json server
@@ -557,7 +619,7 @@ func TestSpaceMeshGrpcService_BroadcastErrors(t *testing.T) {
 	net := NetworkMock{broadcasted: []byte{0x00}}
 	net.broadCastErr = true
 	tx := TxAPIMock{}
-	grpcService := NewGrpcService(&net, ap, &tx, &mining, &oracle, nil)
+	grpcService := NewGrpcService(&net, ap, &tx, &mining, &oracle, nil, nil)
 	jsonService := NewJSONHTTPServer()
 
 	// start grp and json server

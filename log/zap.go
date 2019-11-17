@@ -151,6 +151,31 @@ func (l Log) WithName(prefix string) Log {
 	}
 }
 
+func AddDynamicLevel(level *zap.AtomicLevel) zap.Option {
+	return zap.WrapCore(func(core zapcore.Core) zapcore.Core {
+		return &coreWithLevel{
+			Core: core,
+			lvl:  level,
+		}
+	})
+}
+
+type coreWithLevel struct {
+	zapcore.Core
+	lvl *zap.AtomicLevel
+}
+
+func (c *coreWithLevel) Enabled(level zapcore.Level) bool {
+	return c.lvl.Enabled(level)
+}
+
+func (c *coreWithLevel) Check(e zapcore.Entry, ce *zapcore.CheckedEntry) *zapcore.CheckedEntry {
+	if !c.lvl.Enabled(e.Level) {
+		return ce
+	}
+	return ce.AddCore(e, c.Core)
+}
+
 func (l Log) WithFields(fields ...Field) Log {
 	lgr := l.logger.With(unpack(fields...)...)
 	return Log{

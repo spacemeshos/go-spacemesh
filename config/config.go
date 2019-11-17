@@ -46,6 +46,7 @@ type Config struct {
 	TIME            timeConfig.TimeConfig `mapstructure:"time"`
 	REWARD          mesh.Config           `mapstructure:"reward"`
 	POST            postConfig.Config     `mapstructure:"post"`
+	LOGGING         LoggerConfig          `mapstructure:"logging"`
 }
 
 // BaseConfig defines the default configuration options for spacemesh app
@@ -95,6 +96,31 @@ type BaseConfig struct {
 	StartMining bool `mapstructure:"start-mining"`
 
 	AtxsPerBlock int `mapstructure:"atxs-per-block"`
+}
+
+type LoggerConfig struct {
+	AppLoggerLevel            string `mapstructure:"app"`
+	PostLoggerLevel           string `mapstructure:"post"`
+	StateDbLoggerLevel        string `mapstructure:"stateDb"`
+	StateLoggerLevel          string `mapstructure:"state"`
+	AtxDbStoreLoggerLevel     string `mapstructure:"atxDb"`
+	PoetDbStoreLoggerLevel    string `mapstructure:"poetDb"`
+	StoreLoggerLevel          string `mapstructure:"store"`
+	PoetDbLoggerLevel         string `mapstructure:"poetDb"`
+	MeshDBLoggerLevel         string `mapstructure:"meshDb"`
+	TrtlLoggerLevel           string `mapstructure:"trtl"`
+	AtxDbLoggerLevel          string `mapstructure:"atxDb"`
+	BlkEligibilityLoggerLevel string `mapstructure:"block-eligibility"`
+	MeshLoggerLevel           string `mapstructure:"mesh"`
+	SyncLoggerLevel           string `mapstructure:"sync"`
+	BlockOracleLevel          string `mapstructure:"block-oracle"`
+	HareOracleLoggerLevel     string `mapstructure:"hare-oracle"`
+	HareLoggerLevel           string `mapstructure:"hare"`
+	BlockBuilderLoggerLevel   string `mapstructure:"block-builder"`
+	BlockListenerLoggerLevel  string `mapstructure:"block-listener"`
+	PoetListenerLoggerLevel   string `mapstructure:"poet"`
+	NipstBuilderLoggerLevel   string `mapstructure:"nipst"`
+	AtxBuilderLoggerLevel     string `mapstructure:"atx-builder"`
 }
 
 // DefaultConfig returns the default configuration for a spacemesh node

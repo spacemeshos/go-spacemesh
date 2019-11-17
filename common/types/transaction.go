@@ -137,3 +137,8 @@ func NewSignedTx(nonce uint64, rec Address, amount, gas, fee uint64, signer *sig
 
 	return sst, nil
 }
+
+type Reward struct {
+	Layer  LayerID
+	Amount uint64
+}

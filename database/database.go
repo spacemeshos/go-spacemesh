@@ -35,6 +35,8 @@ const (
 	writePauseWarningThrottler = 1 * time.Minute
 )
 
+var ErrNotFound = errors.ErrNotFound
+
 var OpenFileLimit = 64
 
 type LDBDatabase struct {
@@ -118,6 +120,10 @@ func (db *LDBDatabase) Iterator() iterator.Iterator {
 // NewIteratorWithPrefix returns a iterator to iterate over subset of database content with a particular prefix.
 func (db *LDBDatabase) NewIteratorWithPrefix(prefix []byte) iterator.Iterator {
 	return db.db.NewIterator(util.BytesPrefix(prefix), nil)
+}
+
+func (db LDBDatabase) Find(key []byte) Iterator {
+	return db.db.NewIterator(util.BytesPrefix(key), nil)
 }
 
 func (db *LDBDatabase) Close() {
@@ -387,6 +393,10 @@ func (dt *table) Get(key []byte) ([]byte, error) {
 
 func (dt *table) Delete(key []byte) error {
 	return dt.db.Delete(append([]byte(dt.prefix), key...))
+}
+
+func (dt *table) Find(key []byte) Iterator {
+	return dt.db.Find(key)
 }
 
 func (dt *table) Close() {
