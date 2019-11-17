@@ -208,7 +208,7 @@ func (c *FormattedConnection) Send(m []byte) error {
 		}
 		return err
 	}
-	metrics.PeerRecv.With(metrics.PeerIdLabel, c.remotePub.String()).Add(float64(len(m)))
+	metrics.PeerSend.With(metrics.PeerIdLabel, c.remotePub.String()).Add(float64(len(m)))
 	return nil
 }
 
@@ -256,6 +256,7 @@ func (c *FormattedConnection) setupIncoming(timeout time.Duration) error {
 		c.deadliner.SetReadDeadline(time.Now().Add(timeout))
 		msg, err := c.r.Next()
 		c.deadliner.SetReadDeadline(time.Time{}) // disable read deadline
+		metrics.PeerRecv.With(metrics.PeerIdLabel, "unknown").Add(float64(len(msg)))
 		be <- struct {
 			b []byte
 			e error
@@ -299,6 +300,7 @@ func (c *FormattedConnection) beginEventProcessing() {
 	var buf []byte
 	for {
 		buf, err = c.r.Next()
+		metrics.PeerRecv.With(metrics.PeerIdLabel, c.remotePub.String()).Add(float64(len(buf)))
 		if err != nil && err != io.EOF {
 			break
 		}

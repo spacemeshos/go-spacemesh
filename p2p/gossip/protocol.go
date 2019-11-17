@@ -167,6 +167,7 @@ func (prot *Protocol) propagationEventLoop() {
 	var err error
 loop:
 	for {
+		metrics.PropagationQueueLen.Set(float64(len(prot.propagateQ)))
 		select {
 		case msgV := <-prot.propagateQ:
 			h := types.CalcMessageHash12(msgV.Message(), msgV.Protocol())

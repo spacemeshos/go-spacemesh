@@ -559,6 +559,8 @@ func (s *swarm) ProcessDirectProtocolMessage(sender p2pcrypto.PublicKey, protoco
 	}
 	s.lNode.Debug("Forwarding message to %v protocol", protocol)
 
+	metrics.QueueLength.With(metrics.ProtocolLabel, protocol).Set(float64(len(msgchan)))
+
 	msgchan <- directProtocolMessage{metadata, sender, data}
 
 	return nil
@@ -575,6 +577,8 @@ func (s *swarm) ProcessGossipProtocolMessage(sender p2pcrypto.PublicKey, protoco
 		return ErrNoProtocol
 	}
 	s.lNode.Debug("Forwarding message to %v protocol", protocol)
+
+	metrics.QueueLength.With(metrics.ProtocolLabel, protocol).Set(float64(len(msgchan)))
 
 	msgchan <- gossipProtocolMessage{sender, data, validationCompletedChan}
 

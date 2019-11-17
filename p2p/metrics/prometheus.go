@@ -67,8 +67,6 @@ var (
 	NewGossipMessages = totalGossipMessages.With(messageTypeLabel, "new")
 	// OldGossipMessages is a metric for old messages received (duplicates)
 	OldGossipMessages = totalGossipMessages.With(messageTypeLabel, "old")
-	// InvalidGossipMessages is a metric for invalid messages received
-	InvalidGossipMessages = totalGossipMessages.With(messageTypeLabel, "invalid")
 
 	// AddrbookSize is the current size of the discovery
 	AddrbookSize = prometheus.NewGaugeFrom(stdprometheus.GaugeOpts{
@@ -77,4 +75,20 @@ var (
 		Name:      "addrbook_size",
 		Help:      "Number of peers in the discovery",
 	}, []string{})
+
+	// GossipQueue is the current size of the gossip queue
+	PropagationQueueLen = prometheus.NewGaugeFrom(stdprometheus.GaugeOpts{
+		Namespace: Namespace,
+		Subsystem: MetricsSubsystem,
+		Name:      "propagate_queue_len",
+		Help:      "Number of messages in the gossip queue",
+	}, []string{})
+
+	// Queue is the current size queues
+	QueueLength = prometheus.NewGaugeFrom(stdprometheus.GaugeOpts{
+		Namespace: Namespace,
+		Subsystem: MetricsSubsystem,
+		Name:      "protocol_queue_len",
+		Help:      "Number of messages in the p2p queue",
+	}, []string{ProtocolLabel})
 )
