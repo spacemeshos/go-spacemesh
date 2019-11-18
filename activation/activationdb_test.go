@@ -71,7 +71,7 @@ func (mock *ATXDBMock) CalcActiveSetFromView(view []types.BlockID, pubEpoch type
 	return mock.activeSet, nil
 }
 
-func (mock *ATXDBMock) GetAtx(id types.AtxId) (*types.ActivationTxHeader, error) {
+func (mock *ATXDBMock) GetAtxHeader(id types.AtxId) (*types.ActivationTxHeader, error) {
 	panic("not implemented")
 }
 
@@ -720,10 +720,10 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, atx.Id(), id)
 
-	_, err = atxdb.GetAtx(id)
+	_, err = atxdb.GetAtxHeader(id)
 	assert.NoError(t, err)
 
-	_, err = atxdb.GetAtx(atx2id)
+	_, err = atxdb.GetAtxHeader(atx2id)
 	assert.NoError(t, err)
 
 	//test same sequence
@@ -871,10 +871,10 @@ func BenchmarkNewActivationDb(b *testing.B) {
 			eStart = time.Now()
 
 			for miner := 0; miner < numOfMiners; miner++ {
-				atx, err := atxdb.GetAtx(prevAtxs[miner])
+				atx, err := atxdb.GetAtxHeader(prevAtxs[miner])
 				r.NoError(err)
 				r.NotNil(atx)
-				atx, err = atxdb.GetAtx(pPrevAtxs[miner])
+				atx, err = atxdb.GetAtxHeader(pPrevAtxs[miner])
 				r.NoError(err)
 				r.NotNil(atx)
 			}

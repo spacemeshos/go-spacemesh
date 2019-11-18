@@ -73,7 +73,7 @@ func (db *ActivationDb) ProcessAtx(atx *types.ActivationTx) error {
 	db.processAtxMutex.Lock()
 	defer db.processAtxMutex.Unlock()
 
-	eatx, _ := db.GetAtx(atx.Id())
+	eatx, _ := db.GetAtxHeader(atx.Id())
 	if eatx != nil { // Already processed
 		return nil
 	}
@@ -110,7 +110,7 @@ func (db *ActivationDb) createTraversalActiveSetCounterFunc(countedAtxs map[stri
 
 		// count unique ATXs
 		for _, id := range b.AtxIds {
-			atx, err := db.GetAtx(id)
+			atx, err := db.GetAtxHeader(id)
 			if err != nil {
 				log.Panic("error fetching atx %v from database -- inconsistent state", id.ShortString()) // TODO: handle inconsistent state
 				return false, fmt.Errorf("error fetching atx %v from database -- inconsistent state", id.ShortString())
@@ -236,7 +236,7 @@ func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error 
 		if err != nil { // means there is no such identity
 			return fmt.Errorf("no id found %v err %v", atx.ShortString(), err)
 		}
-		prevATX, err := db.GetAtx(atx.PrevATXId)
+		prevATX, err := db.GetAtxHeader(atx.PrevATXId)
 		if err != nil {
 			return fmt.Errorf("validation failed: prevATX not found: %v", err)
 		}
@@ -282,7 +282,7 @@ func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error 
 	}
 
 	if atx.PositioningAtx != *types.EmptyAtxId {
-		posAtx, err := db.GetAtx(atx.PositioningAtx)
+		posAtx, err := db.GetAtxHeader(atx.PositioningAtx)
 		if err != nil {
 			return fmt.Errorf("positioning atx not found")
 		}
@@ -496,9 +496,9 @@ func (db *ActivationDb) GetPosAtxId(epochId types.EpochId) (*types.AtxId, error)
 	return &idAndLayer.AtxId, nil
 }
 
-// GetAtx returns the atx by the given id. this function is thread safe and will return error if the id is not found in the
-// atx db
-func (db *ActivationDb) GetAtx(id types.AtxId) (*types.ActivationTxHeader, error) {
+// GetAtxHeader returns the ATX header by the given ID. This function is thread safe and will return an error if the ID
+// is not found in the ATX DB.
+func (db *ActivationDb) GetAtxHeader(id types.AtxId) (*types.ActivationTxHeader, error) {
 	if id == *types.EmptyAtxId {
 		return nil, errors.New("trying to fetch empty atx id")
 	}
@@ -537,7 +537,7 @@ func (db *ActivationDb) GetFullAtx(id types.AtxId) (*types.ActivationTx, error) 
 	if err != nil {
 		return nil, err
 	}
-	header, err := db.GetAtx(id)
+	header, err := db.GetAtxHeader(id)
 	if err != nil {
 		return nil, err
 	}
@@ -564,7 +564,7 @@ func (db *ActivationDb) IsIdentityActive(edId string, layer types.LayerID) (*typ
 		db.log.Error("IsIdentityActive erred while getting last node atx id err=%v", err)
 		return nil, false, *types.EmptyAtxId, err
 	}
-	atx, err := db.GetAtx(atxId)
+	atx, err := db.GetAtxHeader(atxId)
 	if err != nil {
 		db.log.With().Error("IsIdentityActive erred while getting atx", log.AtxId(atxId.ShortString()), log.Err(err))
 		return nil, false, *types.EmptyAtxId, nil
@@ -584,7 +584,7 @@ func (db *ActivationDb) IsIdentityActive(edId string, layer types.LayerID) (*typ
 			return nil, false, *types.EmptyAtxId, nil
 		}
 		prevAtxId := atx.PrevATXId
-		atx, err = db.GetAtx(prevAtxId)
+		atx, err = db.GetAtxHeader(prevAtxId)
 		if err != nil {
 			db.log.With().Error("IsIdentityActive erred while getting atx for second newest", log.AtxId(prevAtxId.ShortString()), log.Err(err))
 			return nil, false, *types.EmptyAtxId, nil

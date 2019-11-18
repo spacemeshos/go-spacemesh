@@ -348,13 +348,13 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID, start
 	atxDb := firstAp.blockListener.AtxDB.(*activation.ActivationDb)
 	atxId, err := atxDb.GetNodeLastAtxId(firstAp.nodeId)
 	assert.NoError(suite.T(), err)
-	atx, err := atxDb.GetAtx(atxId)
+	atx, err := atxDb.GetAtxHeader(atxId)
 	assert.NoError(suite.T(), err)
 
 	totalAtxs := uint32(0)
 	for atx != nil {
 		totalAtxs += atx.ActiveSetSize
-		atx, err = atxDb.GetAtx(atx.PrevATXId)
+		atx, err = atxDb.GetAtxHeader(atx.PrevATXId)
 	}
 
 	// assert number of ATXs
