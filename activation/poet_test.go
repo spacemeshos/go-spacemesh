@@ -42,12 +42,12 @@ func TestRPCPoet(t *testing.T) {
 	assert := require.New(t)
 
 	c, err := newRPCPoetHarnessClient()
+	assert.NoError(err)
 	assert.NotNil(c)
 	defer func() {
 		err := c.Teardown(true)
 		assert.NoError(err)
 	}()
-	assert.NoError(err)
 
 	for _, testCase := range rpcPoetTestCases {
 		success := t.Run(testCase.name, func(t1 *testing.T) {

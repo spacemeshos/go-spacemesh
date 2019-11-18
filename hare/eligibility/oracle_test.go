@@ -340,6 +340,29 @@ func TestOracle_actives(t *testing.T) {
 	r.Equal(someErr, err)
 }
 
+func TestOracle_concurrentActives(t *testing.T) {
+	r := require.New(t)
+	o := New(&mockValueProvider{1, nil}, nil, nil, nil, 5, genActive, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
+
+	mc := newMockCasher()
+	o.cache = mc
+	mp := createMapWithSize(9)
+	o.getActiveSet = func(epoch types.EpochId, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
+		return mp, nil
+	}
+
+	// outstanding probability for concurrent access to calc active set size
+	for i := 0; i < 100; i++ {
+		go o.actives(100)
+	}
+
+	// make sure we wait at least two calls duration
+	o.actives(100)
+	o.actives(100)
+
+	r.Equal(1, mc.numAdd)
+}
+
 type bProvider struct {
 	mp map[types.LayerID]map[types.BlockID]struct{}
 }

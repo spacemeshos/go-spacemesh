@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -16,6 +17,18 @@ import (
 )
 
 type ContextualValidityMock struct {
+}
+
+func (m *ContextualValidityMock) Has(key []byte) (bool, error) {
+	return true, nil
+}
+
+func (m *ContextualValidityMock) NewBatch() database.Batch {
+	panic("implement me")
+}
+
+func (m *ContextualValidityMock) Find(key []byte) database.Iterator {
+	panic("implement me")
 }
 
 func (m *ContextualValidityMock) Put(key, value []byte) error {
@@ -41,8 +54,7 @@ type MeshValidatorMock struct {
 func (m *MeshValidatorMock) HandleIncomingLayer(layer *types.Layer) (types.LayerID, types.LayerID) {
 	return layer.Index() - 1, layer.Index()
 }
-func (m *MeshValidatorMock) HandleLateBlock(bl *types.Block)              {}
-func (m *MeshValidatorMock) RegisterLayerCallback(func(id types.LayerID)) {}
+func (m *MeshValidatorMock) HandleLateBlock(bl *types.Block) {}
 
 type MockState struct{}
 
@@ -54,7 +66,7 @@ func (MockState) ApplyTransactions(layer types.LayerID, txs []*types.Transaction
 	return 0, nil
 }
 
-func (MockState) ApplyRewards(layer types.LayerID, miners []types.Address, underQuota map[types.Address]int, bonusReward, diminishedReward *big.Int) {
+func (MockState) ApplyRewards(layer types.LayerID, miners []types.Address, reward *big.Int) {
 }
 
 func (MockState) AddressExists(addr types.Address) bool {
@@ -295,7 +307,7 @@ func TestMesh_AddBlockWithTxs_PushTransactions_UpdateUnappliedTxs(t *testing.T) 
 		r.Equal(111, int(txns[i].TotalAmount))
 	}
 
-	msh.PushTransactions(1, 2)
+	msh.PushTransactions(1)
 	r.ElementsMatch(GetTransactionIds(tx5), GetTransactionIds(blockBuilder.txs...))
 
 	txns = getTxns(r, msh.MeshDB, origin)
@@ -321,8 +333,7 @@ func TestMesh_ExtractUniqueOrderedTransactions(t *testing.T) {
 	l, err := msh.GetLayer(layerID)
 	r.NoError(err)
 
-	validBlocks, invalidBlocks, err := msh.ExtractUniqueOrderedTransactions(l)
-	r.NoError(err)
+	validBlocks, invalidBlocks := msh.ExtractUniqueOrderedTransactions(l)
 
 	r.ElementsMatch(GetTransactionIds(tx1, tx2, tx3, tx4), GetTransactionIds(validBlocks...))
 	r.ElementsMatch(GetTransactionIds(tx5), GetTransactionIds(invalidBlocks...))
@@ -338,7 +349,7 @@ func GetTransactionIds(txs ...*types.Transaction) []types.TransactionId {
 
 func addTxToMesh(r *require.Assertions, msh *Mesh, signer *signing.EdSigner, nonce uint64) *types.Transaction {
 	tx1 := newTx(r, signer, nonce, 111)
-	err := msh.writeTransactions([]*types.Transaction{tx1})
+	err := msh.writeTransactions(0, []*types.Transaction{tx1})
 	r.NoError(err)
 	return tx1
 }

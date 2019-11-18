@@ -3,9 +3,9 @@ from pytest_testconfig import config as testconfig
 from kubernetes import client
 
 from tests.deployment import create_deployment, delete_deployment
-from tests.fixtures import set_namespace, load_config, init_session, set_docker_images, session_id, DeploymentInfo, init_session
-from tests.test_bs import setup_clients, save_log_on_exit, setup_bootstrap, create_configmap
-from tests.test_bs import current_index, wait_genesis, GENESIS_TIME, BOOT_DEPLOYMENT_FILE, CLIENT_DEPLOYMENT_FILE, get_conf
+from tests.conftest import DeploymentInfo
+from tests.test_bs import save_log_on_exit, setup_bootstrap
+from tests.test_bs import current_index, CLIENT_DEPLOYMENT_FILE, get_conf
 from tests.misc import CoreV1ApiClient
 from tests.context import ES
 from tests.queries import query_message
