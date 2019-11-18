@@ -75,6 +75,10 @@ type TxAPIMock struct {
 	mockOrigin types.Address
 }
 
+func (t *TxAPIMock) LatestLayer() types.LayerID {
+	return 10
+}
+
 func (t *TxAPIMock) GetRewards(account types.Address) (rewards []types.Reward) {
 	return
 }
@@ -445,7 +449,7 @@ func TestJsonWalletApi(t *testing.T) {
 	assert.NoError(t, err)
 
 	// test get txs per account
-	reqParam := pb.GetTxsSinceLayer{Account: &pb.AccountId{Address: util.Bytes2Hex(addrBytes)}, StartLayer: 1, EndLayer: 2}
+	reqParam := pb.GetTxsSinceLayer{Account: &pb.AccountId{Address: util.Bytes2Hex(addrBytes)}, StartLayer: 1}
 	payload, err = m.MarshalToString(&reqParam)
 	url = fmt.Sprintf("http://127.0.0.1:%d/v1/accounttxs", config.ConfigValues.JSONServerPort)
 	resp, err = http.Post(url, contentType, strings.NewReader(payload))
@@ -463,7 +467,7 @@ func TestJsonWalletApi(t *testing.T) {
 	assert.NoError(t, err)
 
 	// test get txs per account with wrong layer error
-	reqParam = pb.GetTxsSinceLayer{Account: &pb.AccountId{Address: util.Bytes2Hex(addrBytes)}, StartLayer: 2, EndLayer: 1}
+	reqParam = pb.GetTxsSinceLayer{Account: &pb.AccountId{Address: util.Bytes2Hex(addrBytes)}, StartLayer: 11}
 	payload, err = m.MarshalToString(&reqParam)
 	url = fmt.Sprintf("http://127.0.0.1:%d/v1/accounttxs", config.ConfigValues.JSONServerPort)
 	resp, err = http.Post(url, contentType, strings.NewReader(payload))
