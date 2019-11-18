@@ -15,6 +15,18 @@ import (
 
 const topAtxKey = "topAtxKey"
 
+func getNodeIdKey(id types.NodeId) []byte {
+	return []byte(fmt.Sprintf("n_%v", id.Key))
+}
+
+func getAtxHeaderKey(atxId types.AtxId) []byte {
+	return []byte(fmt.Sprintf("h_%v", atxId.Bytes()))
+}
+
+func getAtxBodyKey(atxId types.AtxId) []byte {
+	return []byte(fmt.Sprintf("b_%v", atxId.Bytes()))
+}
+
 var errInvalidSig = fmt.Errorf("identity not found when validating signature, invalid atx")
 
 type ActivationDb struct {
@@ -22,7 +34,7 @@ type ActivationDb struct {
 	//todo: think about whether we need one db or several
 	IdStore
 	atxs            database.Database
-	atxCache        AtxCache
+	atxHeaderCache  AtxCache
 	meshDb          *mesh.MeshDB
 	LayersPerEpoch  uint16
 	nipstValidator  NipstValidator
@@ -31,11 +43,10 @@ type ActivationDb struct {
 }
 
 func NewActivationDb(dbstore database.Database, idstore IdStore, meshDb *mesh.MeshDB, layersPerEpoch uint16, nipstValidator NipstValidator, log log.Log) *ActivationDb {
-	return &ActivationDb{atxs: dbstore, atxCache: NewAtxCache(20), meshDb: meshDb, nipstValidator: nipstValidator, LayersPerEpoch: layersPerEpoch, IdStore: idstore, log: log}
+	return &ActivationDb{atxs: dbstore, atxHeaderCache: NewAtxCache(20), meshDb: meshDb, nipstValidator: nipstValidator, LayersPerEpoch: layersPerEpoch, IdStore: idstore, log: log}
 }
 
 func (db *ActivationDb) ProcessAtxs(atxs []*types.ActivationTx) error {
-	batch := db.atxs.NewBatch()
 	seenMinerIds := map[string]struct{}{}
 	for _, atx := range atxs {
 		minerId := atx.NodeId.Key
@@ -46,19 +57,19 @@ func (db *ActivationDb) ProcessAtxs(atxs []*types.ActivationTx) error {
 			db.log.With().Error("found miner with multiple ATXs published in same block",
 				log.String("atx_node_id", atx.NodeId.ShortString()), log.AtxId(atx.ShortString()))
 		}
-		err := db.ProcessAtx(batch, atx)
+		err := db.ProcessAtx(atx)
 		if err != nil {
 			return err
 		}
 	}
-	return batch.Write()
+	return nil
 }
 
 // ProcessAtx validates the active set size declared in the atx, and contextually validates the atx according to atx
 // validation rules it then stores the atx with flag set to validity of the atx.
 //
 // ATXs received as input must be already syntactically valid. Only contextual validation is performed.
-func (db *ActivationDb) ProcessAtx(batch database.Batch, atx *types.ActivationTx) error {
+func (db *ActivationDb) ProcessAtx(atx *types.ActivationTx) error {
 	db.processAtxMutex.Lock()
 	defer db.processAtxMutex.Unlock()
 
@@ -350,7 +361,7 @@ func (db *ActivationDb) StoreAtx(ech types.EpochId, atx *types.ActivationTx) err
 	defer db.Unlock()
 
 	//todo: maybe cleanup DB if failed by using defer
-	if b, err := db.atxs.Get(atx.Id().Bytes()); err == nil && len(b) > 0 {
+	if _, err := db.atxs.Get(getAtxHeaderKey(atx.Id())); err == nil {
 		// exists - how should we handle this?
 		return nil
 	}
@@ -375,16 +386,36 @@ func (db *ActivationDb) StoreAtx(ech types.EpochId, atx *types.ActivationTx) err
 }
 
 func (db *ActivationDb) storeAtxUnlocked(atx *types.ActivationTx) error {
-	b, err := types.InterfaceToBytes(atx)
+	atxHeaderBytes, err := types.InterfaceToBytes(atx.ActivationTxHeader)
+	if err != nil {
+		return err
+	}
+	err = db.atxs.Put(getAtxHeaderKey(atx.Id()), atxHeaderBytes)
 	if err != nil {
 		return err
 	}
 
-	err = db.atxs.Put(atx.Id().Bytes(), b)
+	atxBodyBytes, err := types.InterfaceToBytes(getAtxBody(atx))
+	if err != nil {
+		return err
+	}
+	err = db.atxs.Put(getAtxBodyKey(atx.Id()), atxBodyBytes)
 	if err != nil {
 		return err
 	}
 	return nil
+}
+
+func getAtxBody(atx *types.ActivationTx) *types.ActivationTx {
+	return &types.ActivationTx{
+		InnerActivationTx: &types.InnerActivationTx{
+			ActivationTxHeader: nil,
+			Nipst:              atx.Nipst,
+			View:               atx.View,
+			Commitment:         atx.Commitment,
+		},
+		Sig: atx.Sig,
+	}
 }
 
 type atxIdAndLayer struct {
@@ -432,14 +463,9 @@ func (db ActivationDb) getTopAtx() (atxIdAndLayer, error) {
 	return topAtx, nil
 }
 
-func getNodeIdKey(id types.NodeId) []byte {
-	return []byte(id.Key)
-}
-
 // addAtxToNodeId inserts activation atx id by node
 func (db *ActivationDb) addAtxToNodeId(nodeId types.NodeId, atx *types.ActivationTx) error {
-	key := getNodeIdKey(nodeId)
-	err := db.atxs.Put(key, atx.Id().Bytes())
+	err := db.atxs.Put(getNodeIdKey(nodeId), atx.Id().Bytes())
 	if err != nil {
 		return fmt.Errorf("failed to store ATX ID for node: %v", err)
 	}
@@ -448,10 +474,9 @@ func (db *ActivationDb) addAtxToNodeId(nodeId types.NodeId, atx *types.Activatio
 
 // GetNodeLastAtxId returns the last atx id that was received for node nodeId
 func (db *ActivationDb) GetNodeLastAtxId(nodeId types.NodeId) (types.AtxId, error) {
-	key := getNodeIdKey(nodeId)
 	db.log.Debug("fetching atxIDs for node %v", nodeId.ShortString())
 
-	id, err := db.atxs.Get(key)
+	id, err := db.atxs.Get(getNodeIdKey(nodeId))
 	if err != nil {
 		return *types.EmptyAtxId, err
 	}
@@ -471,32 +496,30 @@ func (db *ActivationDb) GetPosAtxId(epochId types.EpochId) (*types.AtxId, error)
 	return &idAndLayer.AtxId, nil
 }
 
-// getAtxUnlocked gets the atx from db, this function is not thread safe and should be called under db lock
-// this function returns a pointer to an atx and an error if failed to retrieve it
-func (db *ActivationDb) getAtxUnlocked(id types.AtxId) (*types.ActivationTx, error) {
-	if atx, gotIt := db.atxCache.Get(id); gotIt {
-		return atx, nil
-	}
-	b, err := db.atxs.Get(id.Bytes())
-	if err != nil {
-		return nil, err
-	}
-	atx, err := types.BytesAsAtx(b, id)
-	if err != nil {
-		return nil, err
-	}
-	db.atxCache.Add(id, atx)
-	return atx, nil
-}
-
 // GetAtx returns the atx by the given id. this function is thread safe and will return error if the id is not found in the
 // atx db
 func (db *ActivationDb) GetAtx(id types.AtxId) (*types.ActivationTxHeader, error) {
-	atx, err := db.GetFullAtx(id)
+	if id == *types.EmptyAtxId {
+		return nil, errors.New("trying to fetch empty atx id")
+	}
+
+	if atxHeader, gotIt := db.atxHeaderCache.Get(id); gotIt {
+		return atxHeader, nil
+	}
+	db.RLock()
+	atxHeaderBytes, err := db.atxs.Get(getAtxHeaderKey(id))
+	db.RUnlock()
 	if err != nil {
 		return nil, err
 	}
-	return atx.ActivationTxHeader, nil
+	var atxHeader types.ActivationTxHeader
+	err = types.BytesToInterface(atxHeaderBytes, &atxHeader)
+	if err != nil {
+		return nil, err
+	}
+	atxHeader.SetId(&id)
+	db.atxHeaderCache.Add(id, &atxHeader)
+	return &atxHeader, nil
 }
 
 func (db *ActivationDb) GetFullAtx(id types.AtxId) (*types.ActivationTx, error) {
@@ -504,20 +527,21 @@ func (db *ActivationDb) GetFullAtx(id types.AtxId) (*types.ActivationTx, error) 
 		return nil, errors.New("trying to fetch empty atx id")
 	}
 
-	if atx, gotIt := db.atxCache.Get(id); gotIt {
-		return atx, nil
-	}
 	db.RLock()
-	b, err := db.atxs.Get(id.Bytes())
+	atxBytes, err := db.atxs.Get(getAtxBodyKey(id))
 	db.RUnlock()
 	if err != nil {
 		return nil, err
 	}
-	atx, err := types.BytesAsAtx(b, id)
+	atx, err := types.BytesAsAtx(atxBytes)
 	if err != nil {
 		return nil, err
 	}
-	db.atxCache.Add(id, atx)
+	header, err := db.GetAtx(id)
+	if err != nil {
+		return nil, err
+	}
+	atx.ActivationTxHeader = header
 	return atx, nil
 }
 

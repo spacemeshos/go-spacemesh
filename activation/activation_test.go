@@ -217,7 +217,7 @@ func setActivesetSizeInCache(t *testing.T, activesetSize uint32) {
 	})
 	h, err := types.CalcBlocksHash12(view)
 	assert.NoError(t, err)
-	activesetCache.put(h, activesetSize)
+	activesetCache.Add(h, activesetSize)
 }
 
 func lastTransmittedAtx(t *testing.T) types.ActivationTx {
@@ -228,7 +228,7 @@ func lastTransmittedAtx(t *testing.T) types.ActivationTx {
 }
 
 func assertLastAtx(r *require.Assertions, posAtx, prevAtx *types.ActivationTxHeader, layersPerEpoch uint16) {
-	sigAtx, err := types.BytesAsAtx(net.lastTransmission, *types.EmptyAtxId)
+	sigAtx, err := types.BytesAsAtx(net.lastTransmission)
 	r.NoError(err)
 
 	atx := sigAtx
@@ -433,7 +433,7 @@ func TestBuilder_PublishActivationTx_Serialize(t *testing.T) {
 
 	bt, err := types.InterfaceToBytes(act)
 	assert.NoError(t, err)
-	a, err := types.BytesAsAtx(bt, *types.EmptyAtxId)
+	a, err := types.BytesAsAtx(bt)
 	assert.NoError(t, err)
 	bt2, err := types.InterfaceToBytes(a)
 	assert.Equal(t, bt, bt2)

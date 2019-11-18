@@ -306,7 +306,7 @@ func Test_CalcActiveSetFromView(t *testing.T) {
 	viewHash, err := types.CalcBlocksHash12(atx2.View)
 	assert.NoError(t, err)
 	activesetCache.Purge()
-	activesetCache.put(viewHash, 8)
+	activesetCache.Add(viewHash, 8)
 
 	num, err = atxdb.CalcActiveSetFromView(atx2.View, atx2.PubLayerIdx.GetEpoch(layersPerEpochBig))
 	assert.NoError(t, err)
@@ -319,7 +319,7 @@ func Test_CalcActiveSetFromView(t *testing.T) {
 	assert.NoError(t, err)
 	viewHash = types.CalcHash12(viewBytes)
 	activesetCache.Purge()
-	activesetCache.put(viewHash, 8)
+	activesetCache.Add(viewHash, 8)
 
 	num, err = atxdb.CalcActiveSetFromView(atx2.View, atx2.PubLayerIdx.GetEpoch(layersPerEpochBig))
 	assert.NoError(t, err)
@@ -754,15 +754,13 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 func TestActivationDb_ProcessAtx(t *testing.T) {
 	r := require.New(t)
 
-	atxdb, _, store := getAtxDb("t8")
+	atxdb, _, _ := getAtxDb("t8")
 	idx1 := types.NodeId{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}
 	coinbase := types.HexToAddress("aaaa")
 	atx := types.NewActivationTx(idx1, coinbase, 0, *types.EmptyAtxId, 100, 0, *types.EmptyAtxId, 3, []types.BlockID{}, &types.NIPST{})
 
-	batch := store.NewBatch()
-	err := atxdb.ProcessAtx(batch, atx)
+	err := atxdb.ProcessAtx(atx)
 	r.NoError(err)
-	err = batch.Write()
 	r.NoError(err)
 	res, err := atxdb.GetIdentity(idx1.Key)
 	r.Nil(err)
