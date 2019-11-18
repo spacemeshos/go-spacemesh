@@ -29,18 +29,20 @@ def wait_to_statefulset_to_be_ready(statefulset_name, name_space, time_out=None)
         total_sleep_time = (datetime.now()-start).total_seconds()
         if resp.status.replicas == resp.status.ready_replicas:
             ready_replicas = resp.status.ready_replicas
-            print("Total time waiting for statefulset {0} [size: {1}]: {2} sec".format(statefulset_name,
+            print("Total time waiting for statefulset {0} [size: {1}]: {2} sec\n".format(statefulset_name,
                                                                                        ready_replicas,
                                                                                        total_sleep_time))
             break
-        print("{0}/{1} pods ready {2} sec               ".format(resp.status.ready_replicas,resp.status.replicas,total_sleep_time), end="\r")
+        print("{0}/{1} pods ready {2} sec               ".format(resp.status.ready_replicas, resp.status.replicas,
+                                                                 total_sleep_time), end="\r")
         time.sleep(1)
 
         if time_out and total_sleep_time > time_out:
-            raise Exception("Timeout waiting to statefulset to be ready")
+            raise Exception("Timeout waiting for statefulset to be ready")
 
 
 def create_statefulset(file_name, name_space, deployment_id=None, replica_size=1, container_specs=None, time_out=None):
+    resp1 = None
     with open(os.path.join(os.path.dirname(__file__), file_name)) as f:
         dep = yaml.safe_load(f)
 
@@ -56,7 +58,7 @@ def create_statefulset(file_name, name_space, deployment_id=None, replica_size=1
         k8s_beta = client.AppsV1Api()
         resp1 = k8s_beta.create_namespaced_stateful_set(body=dep, namespace=name_space)
         wait_to_statefulset_to_be_ready(resp1.metadata._name, name_space, time_out=time_out)
-        return resp1
+    return resp1
 
 
 def delete_statefulset(statefulset_name, name_space):
