@@ -35,7 +35,7 @@ type SpacemeshGrpcService struct {
 	Logging       LoggingAPI
 }
 
-func (s SpacemeshGrpcService) getTransaction(txId types.TransactionId) (*types.Transaction, *types.LayerID, pb.TxStatus, error) {
+func (s SpacemeshGrpcService) getTransactionAndStatus(txId types.TransactionId) (*types.Transaction, *types.LayerID, pb.TxStatus, error) {
 	tx, err := s.Tx.GetTransaction(txId) // have we seen this transaction in a block?
 	if err != nil {
 		tx, err = s.TxMempool.Get(txId) // do we have it in the mempool?
@@ -64,7 +64,7 @@ func (s SpacemeshGrpcService) GetTransaction(ctx context.Context, txId *pb.Trans
 	id := types.TransactionId{}
 	copy(id[:], txId.Id)
 
-	tx, layerApplied, status, err := s.getTransaction(id)
+	tx, layerApplied, status, err := s.getTransactionAndStatus(id)
 	if err != nil {
 		return nil, err
 	}
