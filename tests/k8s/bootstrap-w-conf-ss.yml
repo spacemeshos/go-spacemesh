@@ -1,7 +1,7 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: sm-bootstrapoet
+  name: sm-bootstrap
 spec:
   selector:
     matchLabels:
@@ -11,7 +11,7 @@ spec:
   template:
     metadata:
       labels:
-        name: bootstrapoet
+        name: bootstrap
         app: spacemesh
       annotations:
         cluster-autoscaler.kubernetes.io/safe-to-evict: 'false'
@@ -23,7 +23,7 @@ spec:
       - name: bootstrap
         image: spacemeshos/go-spacemesh:develop
         imagePullPolicy: Always
-        args: ['--config', '/etc/config/config.toml', '--grpc-server', '--test-mode', '--coinbase', '0x1234', '--metrics', '--metrics-port', '2020', '--pprof-server', '--poet-server', '127.0.0.1:50002']
+        args: ['--config', '/etc/config/config.toml', '--grpc-server', '--test-mode', '--coinbase', '0x1234', '--metrics', '--metrics-port', '2020', '--pprof-server']
         resources:
           requests:
             memory: "512M"
@@ -37,19 +37,6 @@ spec:
         volumeMounts:
         - name: bootstrap-vol
           mountPath: /usr/share/spacemesh
-      - name: poet
-        image: spacemeshos/poet:develop
-        imagePullPolicy: Always
-        args: ['--rpclisten', '0.0.0.0:50002', '--restlisten', '0.0.0.0:80', "--n", "19", "--core.n", "19"]
-        resources:
-          requests:
-            memory: "512M"
-            cpu: "1"
-          limits:
-            memory: "2048M"
-            cpu: "2"
-        ports:
-          - containerPort: 50002
       nodeSelector:
         role: tests
   volumeClaimTemplates:
