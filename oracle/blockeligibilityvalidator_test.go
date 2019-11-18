@@ -27,7 +27,7 @@ func (m mockAtxDB) GetNodeLastAtxId(node types.NodeId) (types.AtxId, error) {
 	return types.AtxId{}, m.err
 }
 
-func (m mockAtxDB) GetAtx(id types.AtxId) (*types.ActivationTxHeader, error) {
+func (m mockAtxDB) GetAtxHeader(id types.AtxId) (*types.ActivationTxHeader, error) {
 	return m.atxH, m.err
 }
 

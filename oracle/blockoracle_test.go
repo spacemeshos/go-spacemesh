@@ -50,7 +50,7 @@ func (a mockActivationDB) GetNodeLastAtxId(node types.NodeId) (types.AtxId, erro
 	return atxID, nil
 }
 
-func (a mockActivationDB) GetAtx(id types.AtxId) (*types.ActivationTxHeader, error) {
+func (a mockActivationDB) GetAtxHeader(id types.AtxId) (*types.ActivationTxHeader, error) {
 	if id == atxID {
 		atxHeader := &types.ActivationTxHeader{
 			NIPSTChallenge: types.NIPSTChallenge{PubLayerIdx: a.atxPublicationLayer}, ActiveSetSize: a.activeSetSize,
