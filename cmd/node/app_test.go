@@ -345,7 +345,7 @@ func runTests(suite *AppTestSuite, finished map[int]bool) bool {
 	return true
 }
 
-var tests = []TestScenario{txWithRunningNonceGenerator([]int{}), sameRootTester([]int{0}), reachedEpochTester([]int{}), txWithUnorderedNonceGenerator([]int{1})}
+var tests = []TestScenario{txWithRunningNonceGenerator([]int{}), sameRootTester([]int{0}), reachedEpochTester([]int{}), /*txWithUnorderedNonceGenerator([]int{1})*/}
 
 func (suite *AppTestSuite) TestMultipleNodes() {
 	//EntryPointCreated <- true
