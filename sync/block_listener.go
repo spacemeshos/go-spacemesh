@@ -83,9 +83,10 @@ func (bl *BlockListener) handleBlock(data service.GossipMessage) {
 		bl.Error("received invalid block %v", data.Bytes(), err)
 		return
 	}
-	log.Info(blk.Id().String())
+
+	//set the block id when received
 	blk.CalcAndSetId()
-	log.Info(blk.Id().String())
+
 	bl.Log.With().Info("got new block", log.BlockId(blk.Id()), log.LayerId(uint64(blk.Layer())), log.Int("txs", len(blk.TxIds)), log.Int("atxs", len(blk.AtxIds)))
 	//check if known
 	if _, err := bl.GetBlock(blk.Id()); err == nil {

@@ -354,7 +354,7 @@ func (m *Mesh) handleOrphanBlocks(blk *types.Block) {
 		m.orphanBlocks[blk.Layer()] = make(map[types.BlockID]struct{})
 	}
 	m.orphanBlocks[blk.Layer()][blk.Id()] = struct{}{}
-	m.Info("Added block %s to orphans", blk.Id())
+	m.Debug("Added block %s to orphans", blk.Id())
 	for _, b := range blk.ViewEdges {
 		for layerId, layermap := range m.orphanBlocks {
 			if _, has := layermap[b]; has {

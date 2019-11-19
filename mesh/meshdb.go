@@ -116,6 +116,7 @@ func (m *MeshDB) GetBlock(id types.BlockID) (*types.Block, error) {
 	}
 	mbk := &types.Block{}
 	err = types.BytesToInterface(b, mbk)
+	mbk.CalcAndSetId()
 	return mbk, err
 }
 

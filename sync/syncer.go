@@ -447,7 +447,7 @@ func (s *Syncer) blockSyntacticValidation(block *types.Block) ([]*types.Transact
 	//data availability
 	txs, atxs, err := s.DataAvailability(block)
 	if err != nil {
-		return nil, nil, fmt.Errorf("DataAvailabilty failed for block %v err: %v", block, err)
+		return nil, nil, fmt.Errorf("DataAvailabilty failed for block %v err: %v", block.Id(), err)
 	}
 
 	//validate block's view
