@@ -61,7 +61,7 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 	}
 
 	if atxid != block.ATXID {
-		return false, errors.New(fmt.Sprintf("wrong associated atx got %v expected %v ", block.ATXID.ShortString(), atxid))
+		return false, errors.New(fmt.Sprintf("wrong associated atx got %v expected %v ", block.ATXID.ShortString(), atxid.ShortString()))
 	}
 
 	epochNumber := block.LayerIndex.GetEpoch(v.layersPerEpoch)
@@ -109,7 +109,7 @@ func (v BlockEligibilityValidator) getActiveSetSize(block *types.BlockHeader) (u
 	if blockEpoch.IsGenesis() {
 		return v.genesisActiveSetSize, nil
 	}
-	atx, err := v.activationDb.GetAtx(block.ATXID)
+	atx, err := v.activationDb.GetAtxHeader(block.ATXID)
 	if err != nil {
 		v.log.Error("getting ATX failed: %v %v ep(%v)", err, block.ATXID.ShortString(), blockEpoch)
 		return 0, fmt.Errorf("getting ATX failed: %v %v ep(%v)", err, block.ATXID.ShortString(), blockEpoch)

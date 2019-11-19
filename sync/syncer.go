@@ -22,7 +22,7 @@ import (
 type ForBlockInView func(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) (bool, error)) error
 
 type TxMemPool interface {
-	Get(id types.TransactionId) (types.Transaction, error)
+	Get(id types.TransactionId) (*types.Transaction, error)
 	Put(id types.TransactionId, item *types.Transaction)
 }
 
@@ -693,7 +693,7 @@ func (s *Syncer) txCheckLocal(txIds []types.Hash32) (map[types.Hash32]Item, map[
 		id := types.TransactionId(t)
 		if tx, err := s.txpool.Get(id); err == nil {
 			s.Debug("found tx, %v in tx pool", hex.EncodeToString(t[:]))
-			unprocessedItems[id.Hash32()] = &tx
+			unprocessedItems[id.Hash32()] = tx
 		} else {
 			s.Debug("tx %v not in atx pool", hex.EncodeToString(t[:]))
 			missingInPool = append(missingInPool, id)

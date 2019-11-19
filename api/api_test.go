@@ -2,16 +2,14 @@ package api
 
 import (
 	"bytes"
-	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/golang/protobuf/proto"
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/stretchr/testify/require"
 	"io/ioutil"
 	"math/big"
@@ -26,7 +24,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/api/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
-	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 )
@@ -72,7 +69,21 @@ func (n NodeAPIMock) Exist(address types.Address) bool {
 }
 
 type TxAPIMock struct {
-	mockOrigin types.Address
+	mockOrigin   types.Address
+	returnTx     map[types.TransactionId]*types.Transaction
+	layerApplied map[types.TransactionId]*types.LayerID
+}
+
+func (t *TxAPIMock) GetLayerApplied(txId types.TransactionId) *types.LayerID {
+	return t.layerApplied[txId]
+}
+
+func (t *TxAPIMock) GetTransaction(id types.TransactionId) (*types.Transaction, error) {
+	return t.returnTx[id], nil
+}
+
+func (t *TxAPIMock) LatestLayer() types.LayerID {
+	return 10
 }
 
 func (t *TxAPIMock) GetRewards(account types.Address) (rewards []types.Reward) {
@@ -125,536 +136,335 @@ func (t GenesisTimeMock) GetGenesisTime() time.Time {
 	return t.t
 }
 
+const (
+	genTimeUnix   = 1000000
+	layerDuration = 10
+)
+
 var (
-	ap          = NodeAPIMock{}
+	ap          = NewNodeAPIMock()
 	networkMock = NetworkMock{}
-	tx          = TxAPIMock{}
 	mining      = MinigApiMock{}
 	oracle      = OracleMock{}
-	genTime     = GenesisTimeMock{time.Now()}
+	genTime     = GenesisTimeMock{time.Unix(genTimeUnix, 0)}
+	txApi       = &TxAPIMock{
+		returnTx:     make(map[types.TransactionId]*types.Transaction),
+		layerApplied: make(map[types.TransactionId]*types.LayerID),
+	}
 )
 
 func TestServersConfig(t *testing.T) {
-
 	port1, err := node.GetUnboundedPort()
 	port2, err := node.GetUnboundedPort()
-	assert.NoError(t, err, "Should be able to establish a connection on a port")
+	require.NoError(t, err, "Should be able to establish a connection on a port")
 
 	config.ConfigValues.JSONServerPort = port1
 	config.ConfigValues.GrpcServerPort = port2
-	grpcService := NewGrpcService(&networkMock, ap, &tx, &mining, &oracle, nil, nil)
+	grpcService := NewGrpcService(&networkMock, ap, txApi, nil, &mining, &oracle, nil, 0, nil)
 	jsonService := NewJSONHTTPServer()
 
-	assert.Equal(t, grpcService.Port, uint(config.ConfigValues.GrpcServerPort), "Expected same port")
-	assert.Equal(t, jsonService.Port, uint(config.ConfigValues.JSONServerPort), "Expected same port")
+	require.Equal(t, grpcService.Port, uint(config.ConfigValues.GrpcServerPort), "Expected same port")
+	require.Equal(t, jsonService.Port, uint(config.ConfigValues.JSONServerPort), "Expected same port")
 }
 
 func TestGrpcApi(t *testing.T) {
-
-	port1, err := node.GetUnboundedPort()
-	port2, err := node.GetUnboundedPort()
-	assert.NoError(t, err, "Should be able to establish a connection on a port")
-
-	config.ConfigValues.JSONServerPort = port1
-	config.ConfigValues.GrpcServerPort = port2
+	shutDown := launchServer(t)
 
 	const message = "Hello World"
 
-	grpcService := NewGrpcService(&networkMock, ap, &tx, &mining, &oracle, nil, nil)
-
-	// start a server
-	grpcService.StartService()
-
 	// start a client
-	addr := "localhost:" + strconv.Itoa(int(config.ConfigValues.GrpcServerPort))
+	addr := "localhost:" + strconv.Itoa(config.ConfigValues.GrpcServerPort)
 
 	// Set up a connection to the server.
 	conn, err := grpc.Dial(addr, grpc.WithInsecure())
-	if err != nil {
-		t.Fatalf("did not connect. %v", err)
-	}
+	require.NoError(t, err)
 	defer conn.Close()
 	c := pb.NewSpacemeshServiceClient(conn)
 
 	// call echo and validate result
-	r, err := c.Echo(context.Background(), &pb.SimpleMessage{Value: message})
-	if err != nil {
-		t.Fatalf("could not greet. %v", err)
-	}
+	response, err := c.Echo(context.Background(), &pb.SimpleMessage{Value: message})
+	require.NoError(t, err)
 
-	assert.Equal(t, message, r.Value, "Expected message to be echoed")
+	require.Equal(t, message, response.Value)
 
 	// stop the server
-	grpcService.StopService()
+	shutDown()
 }
 
 func TestJsonApi(t *testing.T) {
-
-	port1, err := node.GetUnboundedPort()
-	port2, err := node.GetUnboundedPort()
-	assert.NoError(t, err, "Should be able to establish a connection on a port")
-
-	config.ConfigValues.JSONServerPort = port1
-	config.ConfigValues.GrpcServerPort = port2
-	ap := NodeAPIMock{}
-	net := NetworkMock{}
-	tx := TxAPIMock{}
-	grpcService := NewGrpcService(&net, ap, &tx, &mining, &oracle, nil, nil)
-	jsonService := NewJSONHTTPServer()
-
-	// start grp and json server
-	grpcService.StartService()
-
-	jsonService.StartService()
+	shutDown := launchServer(t)
 
 	const message = "hello world!"
-	const contentType = "application/json"
 
 	// generate request payload (api input params)
-	reqParams := pb.SimpleMessage{Value: message}
-	var m jsonpb.Marshaler
-	payload, err := m.MarshalToString(&reqParams)
-	assert.NoError(t, err, "failed to marshal to string")
+	payload := marshalProto(t, &pb.SimpleMessage{Value: message})
 
-	// Without this running this on Travis CI might generate a connection refused error
-	// because the server may not be ready to accept connections just yet.
-	time.Sleep(3 * time.Second)
-
-	url := fmt.Sprintf("http://127.0.0.1:%d/v1/example/echo", config.ConfigValues.JSONServerPort)
-	resp, err := http.Post(url, contentType, strings.NewReader(payload))
-	assert.NoError(t, err, "failed to http post to api endpoint")
-
-	defer resp.Body.Close()
-	buf, err := ioutil.ReadAll(resp.Body)
-	assert.NoError(t, err, "failed to read response body")
-
-	if got, want := resp.StatusCode, http.StatusOK; got != want {
-		t.Errorf("resp.StatusCode = %d; want %d", got, want)
-	}
-
-	var msg pb.SimpleMessage
-	if err := jsonpb.UnmarshalString(string(buf), &msg); err != nil {
-		t.Errorf("jsonpb.UnmarshalString(%s, &msg) failed with %v; want success", buf, err)
-		return
-	}
-
-	if got, want := msg.Value, message; got != want {
-		t.Errorf("msg.Value = %q; want %q", got, want)
-	}
-
-	if value := resp.Header.Get("Content-Type"); value != contentType {
-		t.Errorf("Content-Type was %s, wanted %s", value, contentType)
-	}
+	respBody, respStatus := callEndpoint(t, "v1/example/echo", payload)
+	require.Equal(t, http.StatusOK, respStatus)
+	assertSimpleMessage(t, respBody, message)
 
 	// stop the services
-	jsonService.StopService()
-	grpcService.StopService()
+	shutDown()
 }
 
 func TestJsonWalletApi(t *testing.T) {
+	shutDown := launchServer(t)
 
-	port1, err := node.GetUnboundedPort()
-	port2, err := node.GetUnboundedPort()
-	assert.NoError(t, err, "Should be able to establish a connection on a port")
 	addrBytes := []byte{0x01}
 	addr := types.BytesToAddress(addrBytes)
+	ap.nonces[addr] = 10
+	ap.balances[addr] = big.NewInt(100)
+
+	// generate request payload (api input params)
+	payload := marshalProto(t, &pb.AccountId{Address: addrBytes})
+
+	respBody, respStatus := callEndpoint(t, "v1/nonce", payload)
+	require.Equal(t, http.StatusOK, respStatus)
+	assertSimpleMessage(t, respBody, "10")
+
+	respBody, respStatus = callEndpoint(t, "v1/balance", payload)
+	require.Equal(t, http.StatusOK, respStatus)
+	assertSimpleMessage(t, respBody, "100")
+
+	// Test submit transaction
+	submitTx(t, genTx(t))
+
+	// test start mining
+	initPostRequest := pb.InitPost{Coinbase: "0x1234", LogicalDrive: "/tmp/aaa", CommitmentSize: 2048}
+	respBody, respStatus = callEndpoint(t, "v1/startmining", marshalProto(t, &initPostRequest))
+	require.Equal(t, http.StatusOK, respStatus)
+	assertSimpleMessage(t, respBody, "ok")
+
+	// test get statistics about init progress
+	respBody, respStatus = callEndpoint(t, "v1/stats", "")
+	require.Equal(t, http.StatusOK, respStatus)
+
+	var stats pb.MiningStats
+	require.NoError(t, jsonpb.UnmarshalString(respBody, &stats))
+
+	require.Equal(t, int32(1), stats.Status)
+	require.Equal(t, "/tmp", stats.DataDir)
+	require.Equal(t, "123456", stats.Coinbase)
+
+	// test get genesisTime
+	respBody, respStatus = callEndpoint(t, "v1/genesis", "")
+	require.Equal(t, http.StatusOK, respStatus)
+	assertSimpleMessage(t, respBody, genTime.t.String())
+
+	// test get rewards per account
+	payload = marshalProto(t, &pb.AccountId{Address: addrBytes})
+	respBody, respStatus = callEndpoint(t, "v1/accountrewards", payload)
+	require.Equal(t, http.StatusOK, respStatus)
+
+	var rewards pb.AccountRewards
+	require.NoError(t, jsonpb.UnmarshalString(respBody, &rewards))
+	require.Empty(t, rewards.Rewards) // TODO: Test with actual data returned
+
+	// test get txs per account
+	payload = marshalProto(t, &pb.GetTxsSinceLayer{Account: &pb.AccountId{Address: addrBytes}, StartLayer: 1})
+	respBody, respStatus = callEndpoint(t, "v1/accounttxs", payload)
+	require.Equal(t, http.StatusOK, respStatus)
+
+	var accounts pb.AccountTxs
+	require.NoError(t, jsonpb.UnmarshalString(respBody, &accounts))
+	require.Empty(t, accounts.Txs) // TODO: Test with actual data returned
+
+	// test get txs per account with wrong layer error
+	payload = marshalProto(t, &pb.GetTxsSinceLayer{Account: &pb.AccountId{Address: addrBytes}, StartLayer: 11})
+	respBody, respStatus = callEndpoint(t, "v1/accounttxs", payload)
+	require.Equal(t, http.StatusInternalServerError, respStatus)
+	const ErrInvalidStartLayer = "{\"error\":\"invalid start layer\",\"message\":\"invalid start layer\",\"code\":2}"
+	require.Equal(t, ErrInvalidStartLayer, respBody)
+
+	// stop the services
+	shutDown()
+}
+
+func asBytes(t *testing.T, tx *types.Transaction) []byte {
+	val, err := types.InterfaceToBytes(tx)
+	require.NoError(t, err)
+	return val
+}
+
+func assertSimpleMessage(t *testing.T, respBody, expectedValue string) {
+	var msg pb.SimpleMessage
+	require.NoError(t, jsonpb.UnmarshalString(respBody, &msg))
+	require.Equal(t, expectedValue, msg.Value)
+}
+
+func TestSpacemeshGrpcService_GetTransaction(t *testing.T) {
+	shutDown := launchServer(t)
+
+	tx1 := genTx(t)
+	txApi.returnTx[tx1.Id()] = tx1
+
+	tx2 := genTx(t)
+	txApi.returnTx[tx2.Id()] = tx2
+	layerApplied := types.LayerID(1)
+	txApi.layerApplied[tx2.Id()] = &layerApplied
+
+	tx3 := genTx(t)
+	txApi.returnTx[tx3.Id()] = tx3
+	ap.nonces[tx3.Origin()] = 2222
+
+	submitTx(t, tx1)
+	submitTx(t, tx2)
+	submitTx(t, tx3)
+
+	respTx1 := getTx(t, tx1)
+	respTx2 := getTx(t, tx2)
+	respTx3 := getTx(t, tx3)
+
+	assertTx(t, respTx1, tx1, "PENDING", 0, 0)
+	assertTx(t, respTx2, tx2, "CONFIRMED", 1, genTimeUnix+layerDuration*2)
+	assertTx(t, respTx3, tx3, "REJECTED", 0, 0)
+
+	shutDown()
+}
+
+func getTx(t *testing.T, tx *types.Transaction) pb.Transaction {
+	r := require.New(t)
+	idToSend := pb.TransactionId{Id: tx.Id().Bytes()}
+	respBody, respStatus := callEndpoint(t, "v1/gettransaction", marshalProto(t, &idToSend))
+	r.Equal(http.StatusOK, respStatus)
+	var respTx pb.Transaction
+	err := jsonpb.UnmarshalString(respBody, &respTx)
+	r.NoError(err)
+	return respTx
+}
+
+func assertTx(t *testing.T, respTx pb.Transaction, tx *types.Transaction, status string, layerId, timestamp uint64) {
+	r := require.New(t)
+	r.Equal(tx.Id().Bytes(), respTx.TxId.Id)
+	r.Equal(tx.Fee, respTx.Fee)
+	r.Equal(tx.Amount, respTx.Amount)
+	r.Equal(tx.Recipient.Bytes(), respTx.Receiver.Address)
+	r.Equal(tx.Origin().Bytes(), respTx.Sender.Address)
+	r.Equal(layerId, respTx.LayerId)
+	r.Equal(status, respTx.Status.String())
+	r.Equal(timestamp, respTx.Timestamp)
+}
+
+func submitTx(t *testing.T, tx *types.Transaction) {
+	r := require.New(t)
+
+	txToSend := pb.SignedTransaction{Tx: asBytes(t, tx)}
+	respBody, respStatus := callEndpoint(t, "v1/submittransaction", marshalProto(t, &txToSend))
+	r.Equal(http.StatusOK, respStatus)
+
+	txConfirmation := pb.TxConfirmation{}
+	r.NoError(jsonpb.UnmarshalString(respBody, &txConfirmation))
+
+	r.Equal("ok", txConfirmation.Value)
+	r.Equal(tx.Id().String()[2:], txConfirmation.Id)
+	r.Equal(asBytes(t, tx), networkMock.broadcasted)
+}
+
+func marshalProto(t *testing.T, msg proto.Message) string {
+	var buf bytes.Buffer
+	var m jsonpb.Marshaler
+	require.NoError(t, m.Marshal(&buf, msg))
+	return buf.String()
+}
+
+func launchServer(t *testing.T) func() {
+	port1, err := node.GetUnboundedPort()
+	require.NoError(t, err)
+	port2, err := node.GetUnboundedPort()
+	require.NoError(t, err)
 	if config.ConfigValues.JSONServerPort == 0 {
 		config.ConfigValues.JSONServerPort = port1
 		config.ConfigValues.GrpcServerPort = port2
 	}
-	ap := NewNodeAPIMock()
-	net := NetworkMock{broadcasted: []byte{0x00}}
-	ap.nonces[addr] = 10
-	ap.balances[addr] = big.NewInt(100)
-	txApi := TxAPIMock{}
-	grpcService := NewGrpcService(&net, ap, &txApi, &mining, &oracle, &genTime, nil)
+	networkMock.broadcasted = []byte{0x00}
+	grpcService := NewGrpcService(&networkMock, ap, txApi, nil, &mining, &oracle, &genTime, layerDuration, nil)
 	jsonService := NewJSONHTTPServer()
-
-	// start grp and json server
+	// start gRPC and json server
 	grpcService.StartService()
 	jsonService.StartService()
 
-	const message = "10"
-	const contentType = "application/json"
+	time.Sleep(3 * time.Second) // wait for server to be ready (critical on Travis)
 
-	// generate request payload (api input params)
-	reqParams := pb.AccountId{Address: util.Bytes2Hex(addrBytes)}
-	var m jsonpb.Marshaler
-	payload, err := m.MarshalToString(&reqParams)
-	assert.NoError(t, err, "failed to marshal to string")
+	return func() {
+		jsonService.StopService()
+		grpcService.StopService()
+	}
+}
 
-	// Without this running this on Travis CI might generate a connection refused error
-	// because the server may not be ready to accept connections just yet.
-	time.Sleep(3 * time.Second)
-
-	url := fmt.Sprintf("http://127.0.0.1:%d/v1/nonce", config.ConfigValues.JSONServerPort)
-	resp, err := http.Post(url, contentType, strings.NewReader(payload))
-	assert.NoError(t, err, "failed to http post to api endpoint")
-
+func callEndpoint(t *testing.T, endpoint, payload string) (string, int) {
+	url := fmt.Sprintf("http://127.0.0.1:%d/%s", config.ConfigValues.JSONServerPort, endpoint)
+	resp, err := http.Post(url, "application/json", strings.NewReader(payload))
+	require.NoError(t, err)
+	require.Equal(t, "application/json", resp.Header.Get("Content-Type"))
 	buf, err := ioutil.ReadAll(resp.Body)
-	assert.NoError(t, err, "failed to read response body")
-	resp.Body.Close()
+	require.NoError(t, err)
+	require.NoError(t, resp.Body.Close())
 
-	got, want := resp.StatusCode, http.StatusOK
-	assert.Equal(t, want, got)
+	return string(buf), resp.StatusCode
+}
 
-	var msg pb.SimpleMessage
-	err = jsonpb.UnmarshalString(string(buf), &msg)
-	assert.NoError(t, err)
-
-	gotVal, wantVal := msg.Value, message
-	assert.Equal(t, wantVal, gotVal)
-
-	value := resp.Header.Get("Content-Type")
-	assert.Equal(t, value, contentType)
-
-	url = fmt.Sprintf("http://127.0.0.1:%d/v1/balance", config.ConfigValues.JSONServerPort)
-	resp, err = http.Post(url, contentType, strings.NewReader(payload))
-	assert.NoError(t, err, "failed to http post to api endpoint")
-
-	buf, err = ioutil.ReadAll(resp.Body)
-	assert.NoError(t, err, "failed to read response body")
-	resp.Body.Close()
-	if got, want := resp.StatusCode, http.StatusOK; got != want {
-		t.Errorf("resp.StatusCode = %d; want %d", got, want)
-	}
-
-	err = jsonpb.UnmarshalString(string(buf), &msg)
-	assert.NoError(t, err)
-
-	gotV, wantV := msg.Value, "100"
-	assert.Equal(t, wantV, gotV)
-
-	value = resp.Header.Get("Content-Type")
-	assert.Equal(t, value, contentType)
-
-	sPub, key, _ := ed25519.GenerateKey(crand.Reader)
-	sAddr := state.PublicKeyToAccountAddress(sPub)
-	txApi.setMockOrigin(sAddr)
-	rec := types.BytesToAddress([]byte{0xde, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa, 0xaa})
+func genTx(t *testing.T) *types.Transaction {
+	_, key, err := ed25519.GenerateKey(crand.Reader)
+	require.NoError(t, err)
 	signer, err := signing.NewEdSignerFromBuffer(key)
-	assert.NoError(t, err)
-	tx, err := types.NewSignedTx(1111, rec, 1234, 11, 321, signer)
-	assert.NoError(t, err)
-	txBytes, err := types.InterfaceToBytes(tx)
-	assert.NoError(t, err)
-	txToSend := pb.SignedTransaction{Tx: txBytes}
+	require.NoError(t, err)
+	tx, err := types.NewSignedTx(1111, [20]byte{}, 1234, 11, 321, signer)
+	require.NoError(t, err)
 
-	var buf2 bytes.Buffer
-	err = m.Marshal(&buf2, &txToSend)
-	assert.NoError(t, err, "failed to marshal pb")
-
-	url = fmt.Sprintf("http://127.0.0.1:%d/v1/submittransaction", config.ConfigValues.JSONServerPort)
-	resp, err = http.Post(url, contentType, strings.NewReader(buf2.String())) //string(payload2))) //todo: we currently accept all kinds of payloads
-	assert.NoError(t, err, "failed to http post to api endpoint")
-
-	buf, err = ioutil.ReadAll(resp.Body)
-	assert.NoError(t, err, "failed to read response body")
-	resp.Body.Close()
-
-	if got, want := resp.StatusCode, http.StatusOK; got != want {
-		t.Errorf("resp.StatusCode = %d; want %d", got, want)
-	}
-
-	ret := pb.TxConfirmation{}
-	err = jsonpb.UnmarshalString(string(buf), &ret)
-	assert.NoError(t, err)
-
-	gotV, wantV = ret.Value, "ok"
-	assert.Equal(t, wantV, gotV)
-
-	id := tx.Id()
-	hexIdStr := hex.EncodeToString(id[:])
-
-	assert.Equal(t, hexIdStr, ret.Id)
-	val, err := types.InterfaceToBytes(tx)
-	assert.NoError(t, err)
-	assert.Equal(t, val, net.broadcasted)
-
-	value = resp.Header.Get("Content-Type")
-	assert.Equal(t, value, contentType)
-
-	reqPost := pb.InitPost{Coinbase: "0x1234", LogicalDrive: "/tmp/aaa", CommitmentSize: 2048}
-	payload, err = m.MarshalToString(&reqPost)
-	assert.NoError(t, err, "failed to marshal to string")
-
-	url = fmt.Sprintf("http://127.0.0.1:%d/v1/startmining", config.ConfigValues.JSONServerPort)
-	resp, err = http.Post(url, contentType, strings.NewReader(payload))
-	assert.NoError(t, err, "failed to http post to api endpoint")
-
-	buf, err = ioutil.ReadAll(resp.Body)
-	resp.Body.Close()
-	assert.NoError(t, err, "failed to read response body")
-
-	got, want = resp.StatusCode, http.StatusOK
-	assert.Equal(t, want, got)
-
-	// test get statistics about init progress
-	url = fmt.Sprintf("http://127.0.0.1:%d/v1/stats", config.ConfigValues.JSONServerPort)
-	resp, err = http.Post(url, contentType, nil)
-	assert.NoError(t, err, "failed to http post to api endpoint")
-
-	buf, err = ioutil.ReadAll(resp.Body)
-	resp.Body.Close()
-	assert.NoError(t, err, "failed to read response body")
-
-	got, want = resp.StatusCode, http.StatusOK
-	assert.Equal(t, want, got)
-
-	var stats pb.MiningStats
-	err = jsonpb.UnmarshalString(string(buf), &stats)
-	assert.NoError(t, err)
-
-	assert.Equal(t, int32(1), stats.Status)
-	assert.Equal(t, "/tmp", stats.DataDir)
-	assert.Equal(t, "123456", stats.Coinbase)
-
-	// test get genesisTime
-	url = fmt.Sprintf("http://127.0.0.1:%d/v1/genesis", config.ConfigValues.JSONServerPort)
-	resp, err = http.Post(url, contentType, nil)
-	assert.NoError(t, err, "failed to http post to api endpoint")
-
-	buf, err = ioutil.ReadAll(resp.Body)
-	resp.Body.Close()
-	assert.NoError(t, err, "failed to read response body")
-
-	got, want = resp.StatusCode, http.StatusOK
-	assert.Equal(t, want, got)
-
-	err = jsonpb.UnmarshalString(string(buf), &msg)
-	assert.NoError(t, err)
-
-	assert.Equal(t, genTime.t.String(), msg.Value)
-
-	// test get rewards per account
-	reqParams = pb.AccountId{Address: util.Bytes2Hex(addrBytes)}
-	payload, err = m.MarshalToString(&reqParams)
-	url = fmt.Sprintf("http://127.0.0.1:%d/v1/accountrewards", config.ConfigValues.JSONServerPort)
-	resp, err = http.Post(url, contentType, strings.NewReader(payload))
-	assert.NoError(t, err, "failed to http post to api endpoint")
-
-	buf, err = ioutil.ReadAll(resp.Body)
-	resp.Body.Close()
-	assert.NoError(t, err, "failed to read response body")
-
-	got, want = resp.StatusCode, http.StatusOK
-	assert.Equal(t, want, got)
-
-	var rewards pb.AccountRewards
-	err = jsonpb.UnmarshalString(string(buf), &rewards)
-	assert.NoError(t, err)
-
-	// test get txs per account
-	reqParam := pb.GetTxsSinceLayer{Account: &pb.AccountId{Address: util.Bytes2Hex(addrBytes)}, StartLayer: 1, EndLayer: 2}
-	payload, err = m.MarshalToString(&reqParam)
-	url = fmt.Sprintf("http://127.0.0.1:%d/v1/accounttxs", config.ConfigValues.JSONServerPort)
-	resp, err = http.Post(url, contentType, strings.NewReader(payload))
-	assert.NoError(t, err, "failed to http post to api endpoint")
-
-	buf, err = ioutil.ReadAll(resp.Body)
-	resp.Body.Close()
-	assert.NoError(t, err, "failed to read response body")
-
-	got, want = resp.StatusCode, http.StatusOK
-	assert.Equal(t, want, got)
-
-	var accounts pb.AccountTxs
-	err = jsonpb.UnmarshalString(string(buf), &accounts)
-	assert.NoError(t, err)
-
-	// test get txs per account with wrong layer error
-	reqParam = pb.GetTxsSinceLayer{Account: &pb.AccountId{Address: util.Bytes2Hex(addrBytes)}, StartLayer: 2, EndLayer: 1}
-	payload, err = m.MarshalToString(&reqParam)
-	url = fmt.Sprintf("http://127.0.0.1:%d/v1/accounttxs", config.ConfigValues.JSONServerPort)
-	resp, err = http.Post(url, contentType, strings.NewReader(payload))
-	assert.NoError(t, err, "failed to http post to api endpoint")
-
-	buf, err = ioutil.ReadAll(resp.Body)
-	resp.Body.Close()
-	assert.NoError(t, err, "failed to read response body")
-	if got, want := resp.StatusCode, http.StatusInternalServerError; got != want {
-		t.Errorf("resp.StatusCode = %d; want %d", got, want)
-	}
-
-	// stop the services
-	jsonService.StopService()
-	grpcService.StopService()
+	return tx
 }
 
 func TestJsonWalletApi_Errors(t *testing.T) {
-
-	port1, err := node.GetUnboundedPort()
-	port2, err := node.GetUnboundedPort()
-	assert.NoError(t, err, "Should be able to establish a connection on a port")
-	addrBytes := []byte{0x01}
-	config.ConfigValues.JSONServerPort = port1
-	config.ConfigValues.GrpcServerPort = port2
-	ap := NewNodeAPIMock()
-	net := NetworkMock{}
-	tx := TxAPIMock{}
-	grpcService := NewGrpcService(&net, ap, &tx, &mining, &oracle, nil, nil)
-	jsonService := NewJSONHTTPServer()
-
-	// start grp and json server
-	grpcService.StartService()
-
-	jsonService.StartService()
-
-	const contentType = "application/json"
+	shutDown := launchServer(t)
 
 	// generate request payload (api input params)
-	reqParams := pb.AccountId{Address: util.Bytes2Hex(addrBytes)}
-	var m jsonpb.Marshaler
-	payload, err := m.MarshalToString(&reqParams)
-	assert.NoError(t, err, "failed to marshal to string")
+	addrBytes := []byte{0x02} // address that does not exist
+	payload := marshalProto(t, &pb.AccountId{Address: addrBytes})
+	const expectedResponse = "{\"error\":\"account does not exist\",\"message\":\"account does not exist\",\"code\":2}"
 
-	// Without this running this on Travis CI might generate a connection refused error
-	// because the server may not be ready to accept connections just yet.
-	time.Sleep(3 * time.Second)
+	respBody, respStatus := callEndpoint(t, "v1/nonce", payload)
+	require.Equal(t, http.StatusInternalServerError, respStatus) // TODO: Should we change it to err 400 somehow?
+	require.Equal(t, expectedResponse, respBody)
 
-	url := fmt.Sprintf("http://127.0.0.1:%d/v1/nonce", config.ConfigValues.JSONServerPort)
-	resp, err := http.Post(url, contentType, strings.NewReader(payload))
-	assert.NoError(t, err, "failed to http post to api endpoint")
-
-	defer resp.Body.Close()
-	_, err = ioutil.ReadAll(resp.Body)
-	assert.NoError(t, err, "failed to read response body")
-
-	got, want := resp.StatusCode, http.StatusInternalServerError //todo: should we change it to err 400 somehow?
-	assert.Equal(t, want, got)
-
-	value := resp.Header.Get("Content-Type")
-	assert.Equal(t, value, contentType)
-
-	url = fmt.Sprintf("http://127.0.0.1:%d/v1/balance", config.ConfigValues.JSONServerPort)
-	resp, err = http.Post(url, contentType, strings.NewReader(payload))
-	assert.NoError(t, err, "failed to http post to api endpoint")
-
-	defer resp.Body.Close()
-
-	if got, want := resp.StatusCode, http.StatusInternalServerError; got != want {
-		t.Errorf("resp.StatusCode = %d; want %d", got, want)
-	}
-
-	value = resp.Header.Get("Content-Type")
-	assert.Equal(t, value, contentType)
+	respBody, respStatus = callEndpoint(t, "v1/balance", payload)
+	require.Equal(t, http.StatusInternalServerError, respStatus) // TODO: Should we change it to err 400 somehow?
+	require.Equal(t, expectedResponse, respBody)
 
 	// stop the services
-	jsonService.StopService()
-	grpcService.StopService()
+	shutDown()
 }
 
 func TestSpaceMeshGrpcService_Broadcast(t *testing.T) {
-
-	port1, err := node.GetUnboundedPort()
-	port2, err := node.GetUnboundedPort()
-	assert.NoError(t, err, "Should be able to establish a connection on a port")
-	Data := "l33t"
-	if config.ConfigValues.JSONServerPort == 0 {
-		config.ConfigValues.JSONServerPort = port1
-		config.ConfigValues.GrpcServerPort = port2
-	}
-	ap := NewNodeAPIMock()
-	net := NetworkMock{broadcasted: []byte{0x00}}
-	tx := TxAPIMock{}
-	grpcService := NewGrpcService(&net, ap, &tx, &mining, &oracle, nil, nil)
-	jsonService := NewJSONHTTPServer()
-
-	// start grp and json server
-	grpcService.StartService()
-
-	jsonService.StartService()
-
-	const message = "ok"
-	const contentType = "application/json"
+	shutDown := launchServer(t)
 
 	// generate request payload (api input params)
-	reqParams := pb.BroadcastMessage{Data: Data}
-	var m jsonpb.Marshaler
-	payload, err := m.MarshalToString(&reqParams)
-	assert.NoError(t, err, "failed to marshal to string")
+	Data := "l33t"
 
-	// Without this running this on Travis CI might generate a connection refused error
-	// because the server may not be ready to accept connections just yet.
-	time.Sleep(3 * time.Second)
+	respBody, respStatus := callEndpoint(t, "v1/broadcast", marshalProto(t, &pb.BroadcastMessage{Data: Data}))
+	require.Equal(t, http.StatusOK, respStatus)
+	assertSimpleMessage(t, respBody, "ok")
 
-	url := fmt.Sprintf("http://127.0.0.1:%d/v1/broadcast", config.ConfigValues.JSONServerPort)
-	resp, err := http.Post(url, contentType, strings.NewReader(payload))
-	assert.NoError(t, err, "failed to http post to api endpoint")
-
-	defer resp.Body.Close()
-	buf, err := ioutil.ReadAll(resp.Body)
-	assert.NoError(t, err, "failed to read response body")
-
-	got, want := resp.StatusCode, http.StatusOK
-	assert.Equal(t, want, got)
-
-	var msg pb.SimpleMessage
-	err = jsonpb.UnmarshalString(string(buf), &msg)
-	assert.NoError(t, err)
-
-	gotVal, wantVal := msg.Value, message
-	assert.Equal(t, wantVal, gotVal)
-
-	value := resp.Header.Get("Content-Type")
-	assert.Equal(t, value, contentType)
-
-	assert.Equal(t, Data, string(net.broadcasted))
+	require.Equal(t, Data, string(networkMock.broadcasted))
 
 	// stop the services
-	jsonService.StopService()
-	grpcService.StopService()
+	shutDown()
 }
 
 func TestSpaceMeshGrpcService_BroadcastErrors(t *testing.T) {
-	port1, err := node.GetUnboundedPort()
-	port2, err := node.GetUnboundedPort()
-	assert.NoError(t, err, "Should be able to establish a connection on a port")
+	shutDown := launchServer(t)
+	networkMock.broadCastErr = true
+	const expectedResponse = "{\"error\":\"error during broadcast\",\"message\":\"error during broadcast\",\"code\":2}"
+
 	Data := "l337"
-	if config.ConfigValues.JSONServerPort == 0 {
-		config.ConfigValues.JSONServerPort = port1
-		config.ConfigValues.GrpcServerPort = port2
-	}
-	ap := NewNodeAPIMock()
-	net := NetworkMock{broadcasted: []byte{0x00}}
-	net.broadCastErr = true
-	tx := TxAPIMock{}
-	grpcService := NewGrpcService(&net, ap, &tx, &mining, &oracle, nil, nil)
-	jsonService := NewJSONHTTPServer()
 
-	// start grp and json server
-	grpcService.StartService()
-	jsonService.StartService()
+	respBody, respStatus := callEndpoint(t, "v1/broadcast", marshalProto(t, &pb.BroadcastMessage{Data: Data}))
+	require.Equal(t, http.StatusInternalServerError, respStatus) // TODO: Should we change it to err 400 somehow?
+	require.Equal(t, expectedResponse, respBody)
 
-	const contentType = "application/json"
-
-	// generate request payload (api input params)
-	reqParams := pb.BroadcastMessage{Data: Data}
-	var m jsonpb.Marshaler
-	payload, err := m.MarshalToString(&reqParams)
-	assert.NoError(t, err, "failed to marshal to string")
-
-	// Without this running this on Travis CI might generate a connection refused error
-	// because the server may not be ready to accept connections just yet.
-	time.Sleep(3 * time.Second)
-
-	url := fmt.Sprintf("http://127.0.0.1:%d/v1/broadcast", config.ConfigValues.JSONServerPort)
-	resp, err := http.Post(url, contentType, strings.NewReader(payload))
-	assert.NoError(t, err, "failed to http post to api endpoint")
-
-	defer resp.Body.Close()
-	_, err = ioutil.ReadAll(resp.Body)
-	assert.NoError(t, err, "failed to read response body")
-
-	got, want := resp.StatusCode, http.StatusInternalServerError //todo: should we change it to err 400 somehow?
-	assert.Equal(t, want, got)
-
-	value := resp.Header.Get("Content-Type")
-	assert.Equal(t, value, contentType)
+	require.NotEqual(t, Data, string(networkMock.broadcasted))
 
 	// stop the services
-	jsonService.StopService()
-	grpcService.StopService()
+	shutDown()
 }
 
 type mockSrv struct {

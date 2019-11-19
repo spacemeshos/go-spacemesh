@@ -58,6 +58,10 @@ func (m *MeshValidatorMock) HandleLateBlock(bl *types.Block) {}
 
 type MockState struct{}
 
+func (MockState) GetLayerApplied(txId types.TransactionId) *types.LayerID {
+	panic("implement me")
+}
+
 func (MockState) ValidateSignature(signed types.Signed) (types.Address, error) {
 	return types.Address{}, nil
 }
@@ -75,8 +79,8 @@ func (MockState) AddressExists(addr types.Address) bool {
 
 type MockTxMemPool struct{}
 
-func (MockTxMemPool) Get(id types.TransactionId) (types.Transaction, error) {
-	return types.Transaction{}, nil
+func (MockTxMemPool) Get(id types.TransactionId) (*types.Transaction, error) {
+	return &types.Transaction{}, nil
 }
 func (MockTxMemPool) GetAllItems() []*types.Transaction {
 	return nil
@@ -369,7 +373,7 @@ type FailingAtxDbMock struct{}
 
 func (FailingAtxDbMock) ProcessAtxs(atxs []*types.ActivationTx) error { return fmt.Errorf("💥") }
 
-func (FailingAtxDbMock) GetAtx(id types.AtxId) (*types.ActivationTxHeader, error) {
+func (FailingAtxDbMock) GetAtxHeader(id types.AtxId) (*types.ActivationTxHeader, error) {
 	panic("implement me")
 }
 
