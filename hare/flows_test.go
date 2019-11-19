@@ -159,7 +159,7 @@ func Test_consensusIterations(t *testing.T) {
 	test := newConsensusTest()
 
 	totalNodes := 20
-	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, RoundDuration: 1, ExpectedLeaders: 5, Limit: 1000}
+	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, RoundDuration: 1, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100}
 	sim := service.NewSimulator()
 	test.initialSets = make([]*Set, totalNodes)
 	set1 := NewSetFromValues(value1)
@@ -230,7 +230,7 @@ func Test_multipleCPs(t *testing.T) {
 	totalCp := 3
 	test := newHareWrapper(totalCp)
 	totalNodes := 20
-	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, RoundDuration: 3, ExpectedLeaders: 5, Limit: 1000}
+	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, RoundDuration: 3, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100}
 	rng := BLS381.DefaultSeed()
 	sim := service.NewSimulator()
 	test.initialSets = make([]*Set, totalNodes)
@@ -265,7 +265,7 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 	totalCp := 4
 	test := newHareWrapper(totalCp)
 	totalNodes := 20
-	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, RoundDuration: 3, ExpectedLeaders: 5, Limit: 1000}
+	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, RoundDuration: 3, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100}
 	rng := BLS381.DefaultSeed()
 	sim := service.NewSimulator()
 	test.initialSets = make([]*Set, totalNodes)

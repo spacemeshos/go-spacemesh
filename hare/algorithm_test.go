@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-var cfg = config.Config{N: 10, F: 5, RoundDuration: 2, ExpectedLeaders: 5, Limit: 1000}
+var cfg = config.Config{N: 10, F: 5, RoundDuration: 2, ExpectedLeaders: 5, LimitIterations: 1000}
 
 type mockMessageValidator struct {
 	syntaxValid  bool
@@ -140,7 +140,7 @@ func buildMessage(msg *Message) *Msg {
 
 func buildBroker(net NetworkService, testName string) *Broker {
 	return newBroker(net, &mockEligibilityValidator{true}, MockStateQuerier{true, nil},
-		(&mockSyncer{true}).IsSynced, 10, cfg.Limit, Closer{make(chan struct{})}, log.NewDefault(testName))
+		(&mockSyncer{true}).IsSynced, 10, cfg.LimitIterations, Closer{make(chan struct{})}, log.NewDefault(testName))
 }
 
 type mockEligibilityValidator struct {
@@ -184,7 +184,7 @@ func TestConsensusProcess_Start(t *testing.T) {
 func TestConsensusProcess_TerminationLimit(t *testing.T) {
 	p := generateConsensusProcess(t)
 	p.SetInbox(make(chan *Msg, 10))
-	p.cfg.Limit = 0
+	p.cfg.LimitIterations = 0
 	p.cfg.RoundDuration = 1
 	p.Start()
 	time.Sleep(time.Duration(6*p.cfg.RoundDuration) * time.Second)
