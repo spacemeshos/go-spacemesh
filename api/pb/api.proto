@@ -13,21 +13,46 @@ message TxConfirmation {
     string id = 2;
 }
 
+enum TxStatus {
+    REJECTED = 0;
+//    INSUFFICIENT_FUNDS = 1;
+//    CONFLICTING = 2;
+    PENDING = 3;
+//    PROCESSING = 4;
+//    APPROVED = 5;
+    CONFIRMED = 6;
+}
+
+message TransactionId {
+    bytes id = 1;
+}
+
+message Transaction {
+    TransactionId txId = 1;
+    AccountId sender = 2;
+    AccountId receiver = 3;
+    uint64 amount = 4;
+    uint64 fee = 5;
+    TxStatus status = 6;
+    uint64 layerId = 7;
+    uint64 timestamp = 8;
+}
+
 message AccountId {
-    string address =1;
+    bytes address = 1;
 }
 
 message TransferFunds {
-    AccountId sender =1;
-    AccountId receiver =2;
-    uint64 nonce =3;
-    uint64 amount =4;
+    AccountId sender = 1;
+    AccountId receiver = 2;
+    uint64 nonce = 3;
+    uint64 amount = 4;
 }
 
 message InitPost {
-    string logicalDrive =1;
-    uint64 commitmentSize =2;
-    string coinbase =3;
+    string logicalDrive = 1;
+    uint64 commitmentSize = 2;
+    string coinbase = 3;
 }
 
 message SignedTransaction {
@@ -84,67 +109,73 @@ message AccountRewards {
 }
 
 service SpacemeshService {
-    rpc Echo(SimpleMessage) returns (SimpleMessage) {
+    rpc Echo (SimpleMessage) returns (SimpleMessage) {
         option (google.api.http) = {
           post: "/v1/example/echo"
           body: "*"
         };
     }
-    rpc GetNonce(AccountId) returns (SimpleMessage) {
+    rpc GetNonce (AccountId) returns (SimpleMessage) {
         option (google.api.http) = {
           post: "/v1/nonce"
           body: "*"
         };
     }
-    rpc GetBalance(AccountId) returns (SimpleMessage) {
+    rpc GetBalance (AccountId) returns (SimpleMessage) {
         option (google.api.http) = {
           post: "/v1/balance"
           body: "*"
         };
     }
-    rpc StartMining(InitPost) returns (SimpleMessage) {
+    rpc StartMining (InitPost) returns (SimpleMessage) {
         option (google.api.http) = {
           post: "/v1/startmining"
           body: "*"
         };
     }
-    rpc SubmitTransaction(SignedTransaction) returns (TxConfirmation) {
+    rpc GetTransaction (TransactionId) returns (Transaction) {
+        option (google.api.http) = {
+          post: "/v1/gettransaction"
+          body: "*"
+        };
+    }
+    rpc SubmitTransaction (SignedTransaction) returns (TxConfirmation) {
         option (google.api.http) = {
           post: "/v1/submittransaction"
           body: "*"
         };
     }
-    rpc Broadcast(BroadcastMessage) returns (SimpleMessage) {
+    rpc Broadcast (BroadcastMessage) returns (SimpleMessage) {
         option (google.api.http) = {
           post: "/v1/broadcast"
           body: "*"
         };
     }
-    rpc BroadcastPoet(BinaryMessage) returns (SimpleMessage) {
+    rpc BroadcastPoet (BinaryMessage) returns (SimpleMessage) {
         option (google.api.http) = {
           post: "/v1/broadcastpoet"
           body: "*"
         };
     }
-    rpc SetAwardsAddress(AccountId) returns (SimpleMessage) {
+    rpc SetAwardsAddress (AccountId) returns (SimpleMessage) {
         option (google.api.http) = {
           post: "/v1/setawardsaddr"
           body: "*"
         };
     }
-    rpc GetMiningStats(google.protobuf.Empty) returns (MiningStats) {
+    rpc GetMiningStats (google.protobuf.Empty) returns (MiningStats) {
         option (google.api.http) = {
           post: "/v1/stats"
           body: "*"
         };
     }
-    rpc GetGenesisTime(google.protobuf.Empty) returns (SimpleMessage) {
+    rpc GetGenesisTime (google.protobuf.Empty) returns (SimpleMessage) {
         option (google.api.http) = {
           post: "/v1/genesis"
           body: "*"
         };
     }
-    rpc GetUpcomingAwards(google.protobuf.Empty) returns (EligibleLayers) {
+    rpc GetUpcomingAwards (google.protobuf.Empty) returns (EligibleLayers) {
         option (google.api.http) = {
           post: "/v1/getupcomingawards"
           body: "*"
