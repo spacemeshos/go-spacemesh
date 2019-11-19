@@ -29,17 +29,12 @@ func BytesToBlockIds(blockIds []byte) ([]BlockID, error) {
 	return ids, nil
 }
 
-func BytesAsAtx(b []byte, id AtxId) (*ActivationTx, error) {
+func BytesAsAtx(b []byte) (*ActivationTx, error) {
 	buf := bytes.NewReader(b)
 	var atx ActivationTx
 	_, err := xdr.Unmarshal(buf, &atx)
 	if err != nil {
 		return nil, err
-	}
-	if id == *EmptyAtxId {
-		atx.CalcAndSetId()
-	} else {
-		atx.SetId(&id)
 	}
 	return &atx, nil
 }

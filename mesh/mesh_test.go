@@ -368,7 +368,7 @@ type FailingAtxDbMock struct{}
 
 func (FailingAtxDbMock) ProcessAtxs(atxs []*types.ActivationTx) error { return fmt.Errorf("💥") }
 
-func (FailingAtxDbMock) GetAtx(id types.AtxId) (*types.ActivationTxHeader, error) {
+func (FailingAtxDbMock) GetAtxHeader(id types.AtxId) (*types.ActivationTxHeader, error) {
 	panic("implement me")
 }
 

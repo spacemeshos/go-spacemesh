@@ -349,13 +349,13 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID, start
 	atxDb := firstAp.blockListener.AtxDB.(*activation.ActivationDb)
 	atxId, err := atxDb.GetNodeLastAtxId(firstAp.nodeId)
 	assert.NoError(suite.T(), err)
-	atx, err := atxDb.GetAtx(atxId)
+	atx, err := atxDb.GetAtxHeader(atxId)
 	assert.NoError(suite.T(), err)
 
 	totalAtxs := uint32(0)
 	for atx != nil {
 		totalAtxs += atx.ActiveSetSize
-		atx, err = atxDb.GetAtx(atx.PrevATXId)
+		atx, err = atxDb.GetAtxHeader(atx.PrevATXId)
 	}
 
 	// assert number of ATXs
@@ -367,7 +367,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID, start
 func (suite *AppTestSuite) validateLastATXActiveSetSize(app *SpacemeshApp) {
 	prevAtxId, err := app.atxBuilder.GetPrevAtxId(app.nodeId)
 	suite.NoError(err)
-	atx, err := app.mesh.GetAtx(prevAtxId)
+	atx, err := app.mesh.GetAtxHeader(prevAtxId)
 	suite.NoError(err)
 	suite.True(int(atx.ActiveSetSize) == len(suite.apps), "atx: %v node: %v", atx.ShortString(), app.nodeId.Key[:5])
 }

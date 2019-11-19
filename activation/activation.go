@@ -52,7 +52,7 @@ type NipstValidator interface {
 }
 
 type ATXDBProvider interface {
-	GetAtx(id types.AtxId) (*types.ActivationTxHeader, error)
+	GetAtxHeader(id types.AtxId) (*types.ActivationTxHeader, error)
 	CalcActiveSetFromView(view []types.BlockID, pubEpoch types.EpochId) (uint32, error)
 	GetNodeLastAtxId(nodeId types.NodeId) (types.AtxId, error)
 	GetPosAtxId(epochId types.EpochId) (*types.AtxId, error)
@@ -199,7 +199,7 @@ func (b *Builder) buildNipstChallenge(epoch types.EpochId) error {
 		if err != nil {
 			b.log.Info("no prev ATX found, starting fresh")
 		} else {
-			b.prevATX, err = b.db.GetAtx(prevAtxId)
+			b.prevATX, err = b.db.GetAtxHeader(prevAtxId)
 			if err != nil {
 				// TODO: handle inconsistent state
 				b.log.Panic("prevAtx (id: %v) not found in DB -- inconsistent state", prevAtxId.ShortString())
@@ -476,7 +476,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 	if err != nil {
 		return err
 	}
-	b.prevATX = &atx.ActivationTxHeader
+	b.prevATX = atx.ActivationTxHeader
 
 	// cleanup state
 	b.nipst = nil
@@ -535,7 +535,7 @@ func (b *Builder) GetLastSequence(node types.NodeId) uint64 {
 	if err != nil {
 		return 0
 	}
-	atx, err := b.db.GetAtx(atxId)
+	atx, err := b.db.GetAtxHeader(atxId)
 	if err != nil {
 		b.log.Error("wtf no atx in db %v", atxId)
 		return 0
@@ -554,7 +554,7 @@ func (b *Builder) GetPositioningAtx(epochId types.EpochId) (*types.ActivationTxH
 			return nil, fmt.Errorf("cannot find pos atx id: %v", err)
 		}
 	}
-	posAtx, err := b.db.GetAtx(*posAtxId)
+	posAtx, err := b.db.GetAtxHeader(*posAtxId)
 	if err != nil {
 		return nil, fmt.Errorf("cannot find pos atx: %v", err.Error())
 	}

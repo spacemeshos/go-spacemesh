@@ -44,16 +44,31 @@ type ActivationTxHeader struct {
 	ActiveSetSize uint32
 }
 
-func (t *ActivationTxHeader) ShortString() string {
-	return t.id.ShortString()
+func (atxh *ActivationTxHeader) ShortString() string {
+	return atxh.id.ShortString()
 }
 
-func (t *ActivationTxHeader) Hash32() Hash32 {
-	return Hash32(*t.id)
+func (atxh *ActivationTxHeader) Hash32() Hash32 {
+	return Hash32(*atxh.id)
 }
 
-func (t *ActivationTxHeader) Bytes() []byte {
-	return t.id.Bytes()
+func (atxh *ActivationTxHeader) Bytes() []byte {
+	return atxh.id.Bytes()
+}
+
+func (atxh *ActivationTxHeader) Id() AtxId {
+	if atxh.id == nil {
+		panic("id field must be set")
+	}
+	return *atxh.id
+}
+
+func (atxh *ActivationTxHeader) TargetEpoch(layersPerEpoch uint16) EpochId {
+	return atxh.PubLayerIdx.GetEpoch(layersPerEpoch) + 1
+}
+
+func (atxh *ActivationTxHeader) SetId(id *AtxId) {
+	atxh.id = id
 }
 
 type NIPSTChallenge struct {
@@ -90,11 +105,10 @@ func (challenge *NIPSTChallenge) String() string {
 }
 
 type InnerActivationTx struct {
-	ActivationTxHeader
+	*ActivationTxHeader
 	Nipst      *NIPST
 	View       []BlockID
 	Commitment *PostProof
-	//todo: add sig
 }
 
 type ActivationTx struct {
@@ -102,23 +116,12 @@ type ActivationTx struct {
 	Sig []byte
 }
 
-func (signed *ActivationTx) AtxBytes() ([]byte, error) {
-	return InterfaceToBytes(signed.InnerActivationTx)
-}
+func NewActivationTx(NodeId NodeId, Coinbase Address, Sequence uint64, PrevATX AtxId, LayerIndex LayerID,
+	StartTick uint64, PositioningATX AtxId, ActiveSetSize uint32, View []BlockID, nipst *NIPST) *ActivationTx {
 
-func NewActivationTx(NodeId NodeId,
-	Coinbase Address,
-	Sequence uint64,
-	PrevATX AtxId,
-	LayerIndex LayerID,
-	StartTick uint64,
-	PositioningATX AtxId,
-	ActiveSetSize uint32,
-	View []BlockID,
-	nipst *NIPST) *ActivationTx {
 	atx := &ActivationTx{
 		&InnerActivationTx{
-			ActivationTxHeader: ActivationTxHeader{
+			ActivationTxHeader: &ActivationTxHeader{
 				NIPSTChallenge: NIPSTChallenge{
 					NodeId:         NodeId,
 					Sequence:       Sequence,
@@ -144,7 +147,7 @@ func NewActivationTxWithChallenge(poetChallenge NIPSTChallenge, coinbase Address
 
 	atx := &ActivationTx{
 		&InnerActivationTx{
-			ActivationTxHeader: ActivationTxHeader{
+			ActivationTxHeader: &ActivationTxHeader{
 				NIPSTChallenge: poetChallenge,
 				Coinbase:       coinbase,
 				ActiveSetSize:  ActiveSetSize,
@@ -159,19 +162,8 @@ func NewActivationTxWithChallenge(poetChallenge NIPSTChallenge, coinbase Address
 	return atx
 }
 
-func (atxh *ActivationTxHeader) Id() AtxId {
-	if atxh.id == nil {
-		panic("id field must be set")
-	}
-	return *atxh.id
-}
-
-func (atxh *ActivationTxHeader) TargetEpoch(layersPerEpoch uint16) EpochId {
-	return atxh.PubLayerIdx.GetEpoch(layersPerEpoch) + 1
-}
-
-func (atxh *ActivationTxHeader) SetId(id *AtxId) {
-	atxh.id = id
+func (atx *ActivationTx) AtxBytes() ([]byte, error) {
+	return InterfaceToBytes(atx.InnerActivationTx)
 }
 
 func (atx *ActivationTx) CalcAndSetId() {
