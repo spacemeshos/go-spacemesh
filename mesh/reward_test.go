@@ -133,7 +133,7 @@ func NewTestRewardParams() Config {
 
 func createLayer(mesh *Mesh, id types.LayerID, numOfBlocks, maxTransactions int, atxdb *AtxDbMock) (totalRewards int64) {
 	for i := 0; i < numOfBlocks; i++ {
-		block1 := types.NewExistingBlock(types.LayerID(i), []byte(rand.RandString(8)))
+		block1 := types.NewExistingBlock(id, []byte(rand.RandString(8)))
 		nodeid := types.NodeId{strconv.Itoa(i), []byte("bbbbb")}
 		coinbase := types.HexToAddress(nodeid.Key)
 		atx := types.NewActivationTx(nodeid, coinbase, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 10, []types.BlockID{}, &types.NIPST{})

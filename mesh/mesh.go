@@ -300,12 +300,14 @@ func (m *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.Transaction, atxs 
 	m.With().Debug("adding block", log.BlockId(blk.Id()))
 
 	// Store transactions (doesn't have to be rolled back if other writes fail)
-	err := m.writeTransactions(blk.LayerIndex, txs)
-	if err != nil {
-		return fmt.Errorf("could not write transactions of block %v database: %v", blk.Id(), err)
-	}
-	if err := m.addToUnappliedTxs(txs, blk.LayerIndex); err != nil {
-		return fmt.Errorf("failed to add to unappliedTxs: %v", err)
+	if len(txs) > 0 {
+		if err := m.writeTransactions(blk.LayerIndex, txs); err != nil {
+			return fmt.Errorf("could not write transactions of block %v database: %v", blk.Id(), err)
+		}
+
+		if err := m.addToUnappliedTxs(txs, blk.LayerIndex); err != nil {
+			return fmt.Errorf("failed to add to unappliedTxs: %v", err)
+		}
 	}
 
 	// Store block (delete if storing ATXs fails)
@@ -315,8 +317,7 @@ func (m *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.Transaction, atxs 
 	}
 
 	// Store ATXs (atomically, delete the block on failure)
-	err = m.AtxDB.ProcessAtxs(atxs)
-	if err != nil {
+	if err := m.AtxDB.ProcessAtxs(atxs); err != nil {
 		// Roll back adding the block (delete it)
 		if err := m.blocks.Delete(blk.Id().ToBytes()); err != nil {
 			m.With().Warning("failed to roll back adding a block", log.Err(err), log.BlockId(blk.Id()))
