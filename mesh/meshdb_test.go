@@ -296,7 +296,7 @@ func newTx(r *require.Assertions, signer *signing.EdSigner, nonce, totalAmount u
 
 func newTxWithDest(r *require.Assertions, signer *signing.EdSigner, dest types.Address, nonce, totalAmount uint64) *types.Transaction {
 	feeAmount := uint64(1)
-	tx, err := types.NewSignedTx(nonce, dest, totalAmount-feeAmount, 3, feeAmount, signer)
+	tx, err := NewSignedTx(nonce, dest, totalAmount-feeAmount, 3, feeAmount, signer)
 	r.NoError(err)
 	return tx
 }

@@ -100,6 +100,7 @@ func (vq *blockQueue) handleBlockDependencies(blk *types.Block) {
 	if err != nil {
 		vq.updateDependencies(blk.Hash32(), false)
 		vq.Error(fmt.Sprintf("failed to add pending for Block %v %v", blk.Id(), err))
+		return
 	}
 
 	if res == false {
