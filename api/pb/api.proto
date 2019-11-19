@@ -71,7 +71,6 @@ message AccountTxs {
 
 message GetTxsSinceLayer {
     uint64 startLayer = 1;
-    uint64 endLayer = 2;
     AccountId account = 3;
 }
 

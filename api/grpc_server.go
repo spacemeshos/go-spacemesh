@@ -132,6 +132,7 @@ type TxAPI interface {
 	GetRewards(account types.Address) (rewards []types.Reward)
 	GetTransactionsByDestination(l types.LayerID, account types.Address) (txs []types.TransactionId)
 	GetTransactionsByOrigin(l types.LayerID, account types.Address) (txs []types.TransactionId)
+	LatestLayer() types.LayerID
 }
 
 // NewGrpcService create a new grpc service using config data.
@@ -246,14 +247,14 @@ func (s SpacemeshGrpcService) GetAccountTxs(ctx context.Context, txsSinceLayer *
 	if err != nil {
 		return &pb.AccountTxs{}, err
 	}
-	if txsSinceLayer.StartLayer > txsSinceLayer.EndLayer {
+	if txsSinceLayer.StartLayer > uint64(s.Tx.LatestLayer()) {
 		return &pb.AccountTxs{}, fmt.Errorf("invalid start layer")
 	}
 	var allTxs []types.TransactionId
-	for i := txsSinceLayer.StartLayer; i < txsSinceLayer.EndLayer; i++ {
-		txs := s.Tx.GetTransactionsByDestination(types.LayerID(txsSinceLayer.StartLayer), acc)
+	for i := txsSinceLayer.StartLayer; i < uint64(s.Tx.LatestLayer()); i++ {
+		txs := s.Tx.GetTransactionsByDestination(types.LayerID(i), acc)
 		allTxs = append(allTxs, txs...)
-		moreTxs := s.Tx.GetTransactionsByOrigin(types.LayerID(txsSinceLayer.StartLayer), acc)
+		moreTxs := s.Tx.GetTransactionsByOrigin(types.LayerID(i), acc)
 		allTxs = append(allTxs, moreTxs...)
 	}
 
