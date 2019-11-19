@@ -82,6 +82,10 @@ func (t *TxAPIMock) GetTransaction(id types.TransactionId) (*types.Transaction, 
 	return t.returnTx[id], nil
 }
 
+func (t *TxAPIMock) LatestLayer() types.LayerID {
+	return 10
+}
+
 func (t *TxAPIMock) GetRewards(account types.Address) (rewards []types.Reward) {
 	return
 }
@@ -257,7 +261,7 @@ func TestJsonWalletApi(t *testing.T) {
 	require.Empty(t, rewards.Rewards) // TODO: Test with actual data returned
 
 	// test get txs per account
-	payload = marshalProto(t, &pb.GetTxsSinceLayer{Account: &pb.AccountId{Address: addrBytes}, StartLayer: 1, EndLayer: 2})
+	payload = marshalProto(t, &pb.GetTxsSinceLayer{Account: &pb.AccountId{Address: addrBytes}, StartLayer: 1})
 	respBody, respStatus = callEndpoint(t, "v1/accounttxs", payload)
 	require.Equal(t, http.StatusOK, respStatus)
 
@@ -266,7 +270,7 @@ func TestJsonWalletApi(t *testing.T) {
 	require.Empty(t, accounts.Txs) // TODO: Test with actual data returned
 
 	// test get txs per account with wrong layer error
-	payload = marshalProto(t, &pb.GetTxsSinceLayer{Account: &pb.AccountId{Address: addrBytes}, StartLayer: 2, EndLayer: 1})
+	payload = marshalProto(t, &pb.GetTxsSinceLayer{Account: &pb.AccountId{Address: addrBytes}, StartLayer: 11})
 	respBody, respStatus = callEndpoint(t, "v1/accounttxs", payload)
 	require.Equal(t, http.StatusInternalServerError, respStatus)
 	const ErrInvalidStartLayer = "{\"error\":\"invalid start layer\",\"message\":\"invalid start layer\",\"code\":2}"
