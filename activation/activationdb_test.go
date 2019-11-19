@@ -15,6 +15,7 @@ import (
 	"math/rand"
 	"os"
 	"sort"
+	"sync"
 	"testing"
 	"time"
 )
@@ -69,6 +70,10 @@ type ATXDBMock struct {
 
 func (mock *ATXDBMock) CalcActiveSetFromView(view []types.BlockID, pubEpoch types.EpochId) (uint32, error) {
 	return mock.activeSet, nil
+}
+
+func (mock *ATXDBMock) CalcActiveSetSize(epoch types.EpochId, blocks map[types.BlockID]struct{}) (map[string]struct{}, error){
+	return map[string]struct{}{ "aaaaac": {}, "aaabddb": {}, "aaaccc": {}, }, nil
 }
 
 func (mock *ATXDBMock) GetAtx(id types.AtxId) (*types.ActivationTxHeader, error) {
@@ -233,6 +238,49 @@ func TestMesh_ActiveSetForLayerView2(t *testing.T) {
 	assert.Error(t, err)
 	assert.Equal(t, "tried to retrieve active set for epoch 0", err.Error())
 	assert.Nil(t, actives)
+}
+
+func TestActivationDb_CalcActiveSetFromViewWithCache(t *testing.T) {
+	activesetCache.Purge()
+	atxdb, layers, _ := getAtxDb("t6")
+
+	id1 := types.NodeId{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}
+	id2 := types.NodeId{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}
+	id3 := types.NodeId{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}
+	coinbase1 := types.HexToAddress("aaaa")
+	coinbase2 := types.HexToAddress("bbbb")
+	coinbase3 := types.HexToAddress("cccc")
+	atxs := []*types.ActivationTx{
+		types.NewActivationTx(id1, coinbase1, 0, *types.EmptyAtxId, 12, 0, *types.EmptyAtxId, 0, []types.BlockID{}, &types.NIPST{}),
+		types.NewActivationTx(id2, coinbase2, 0, *types.EmptyAtxId, 300, 0, *types.EmptyAtxId, 0, []types.BlockID{}, &types.NIPST{}),
+		types.NewActivationTx(id3, coinbase3, 0, *types.EmptyAtxId, 435, 0, *types.EmptyAtxId, 0, []types.BlockID{}, &types.NIPST{}),
+	}
+
+	poetRef := []byte{0xba, 0xb0}
+	for _, atx := range atxs {
+		hash, err := atx.NIPSTChallenge.Hash()
+		assert.NoError(t, err)
+		atx.Nipst = NewNIPSTWithChallenge(hash, poetRef)
+	}
+
+	blocks := createLayerWithAtx(t, layers, 1, 10, atxs, []types.BlockID{}, []types.BlockID{})
+	blocks = createLayerWithAtx(t, layers, 10, 10, []*types.ActivationTx{}, blocks, blocks)
+	blocks = createLayerWithAtx(t, layers, 100, 10, []*types.ActivationTx{}, blocks, blocks)
+
+	atx := types.NewActivationTx(id1, coinbase1, 1, atxs[0].Id(), 1000, 0, atxs[0].Id(), 3, blocks, &types.NIPST{})
+
+	wg := sync.WaitGroup{}
+	wg.Add(2)
+	for i := 0; i < 2; i ++ {
+		go func() {
+			num, err := atxdb.CalcActiveSetFromView(atx.View, atx.PubLayerIdx.GetEpoch(layersPerEpochBig))
+			assert.NoError(t, err)
+			assert.Equal(t, 3, int(num))
+			assert.NoError(t, err)
+			wg.Done()
+		}()
+	}
+	wg.Wait()
 }
 
 func Test_CalcActiveSetFromView(t *testing.T) {

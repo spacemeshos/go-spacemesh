@@ -21,17 +21,26 @@ type ActivationDb struct {
 	sync.RWMutex
 	//todo: think about whether we need one db or several
 	IdStore
-	atxs            database.Database
-	atxCache        AtxCache
-	meshDb          *mesh.MeshDB
-	LayersPerEpoch  uint16
-	nipstValidator  NipstValidator
-	log             log.Log
-	processAtxMutex sync.Mutex
+	atxs             database.Database
+	atxCache         AtxCache
+	meshDb           *mesh.MeshDB
+	LayersPerEpoch   uint16
+	nipstValidator   NipstValidator
+	pendingActiveSet map[types.Hash12]*sync.Mutex
+	log              log.Log
+	processAtxMutex  sync.Mutex
+	assLock          sync.Mutex
 }
 
 func NewActivationDb(dbstore database.Database, idstore IdStore, meshDb *mesh.MeshDB, layersPerEpoch uint16, nipstValidator NipstValidator, log log.Log) *ActivationDb {
-	return &ActivationDb{atxs: dbstore, atxCache: NewAtxCache(20), meshDb: meshDb, nipstValidator: nipstValidator, LayersPerEpoch: layersPerEpoch, IdStore: idstore, log: log}
+	return &ActivationDb{atxs: dbstore,
+		atxCache:         NewAtxCache(20),
+		meshDb:           meshDb,
+		nipstValidator:   nipstValidator,
+		LayersPerEpoch:   layersPerEpoch,
+		IdStore:          idstore,
+		pendingActiveSet: make(map[types.Hash12]*sync.Mutex),
+		log:              log}
 }
 
 func (db *ActivationDb) ProcessAtxs(atxs []*types.ActivationTx) error {
@@ -181,8 +190,28 @@ func (db *ActivationDb) CalcActiveSetFromView(view []types.BlockID, pubEpoch typ
 	if found {
 		return count, nil
 	}
+	//check if we have a running calculation for this hash
+	db.assLock.Lock()
+	mu, alreadyRunning := db.pendingActiveSet[viewHash]
+	if alreadyRunning {
+		db.assLock.Unlock()
+		// if there is a running calculation, wait for it to end and get the result
+		mu.Lock()
+		count, found := activesetCache.Get(viewHash)
+		if found {
+			mu.Unlock()
+			return count, nil
+		}
+		// if not found, keep running mutex and calculate active set size
+	} else {
+		// if no running calc, insert new one
+		db.pendingActiveSet[viewHash] = &sync.Mutex{}
+		db.pendingActiveSet[viewHash].Lock()
+		db.assLock.Unlock()
+	}
 
 	if pubEpoch < 1 {
+		db.releaseRunningLock(viewHash)
 		return 0, fmt.Errorf("publication epoch cannot be less than 1, found %v", pubEpoch)
 	}
 
@@ -193,12 +222,22 @@ func (db *ActivationDb) CalcActiveSetFromView(view []types.BlockID, pubEpoch typ
 
 	countedAtxs, err := db.CalcActiveSetSize(pubEpoch, mp)
 	if err != nil {
+		db.releaseRunningLock(viewHash)
 		return 0, err
 	}
 	activesetCache.Add(viewHash, uint32(len(countedAtxs)))
 
+	db.releaseRunningLock(viewHash)
+
 	return uint32(len(countedAtxs)), nil
 
+}
+
+func (db *ActivationDb) releaseRunningLock(viewHash types.Hash12) {
+	db.assLock.Lock()
+	db.pendingActiveSet[viewHash].Unlock()
+	delete(db.pendingActiveSet, viewHash)
+	db.assLock.Unlock()
 }
 
 // SyntacticallyValidateAtx ensures the following conditions apply, otherwise it returns an error.
