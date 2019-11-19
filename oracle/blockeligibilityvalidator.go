@@ -109,7 +109,7 @@ func (v BlockEligibilityValidator) getActiveSetSize(block *types.BlockHeader) (u
 	if blockEpoch.IsGenesis() {
 		return v.genesisActiveSetSize, nil
 	}
-	atx, err := v.activationDb.GetAtx(block.ATXID)
+	atx, err := v.activationDb.GetAtxHeader(block.ATXID)
 	if err != nil {
 		v.log.Error("getting ATX failed: %v %v ep(%v)", err, block.ATXID.ShortString(), blockEpoch)
 		return 0, fmt.Errorf("getting ATX failed: %v %v ep(%v)", err, block.ATXID.ShortString(), blockEpoch)

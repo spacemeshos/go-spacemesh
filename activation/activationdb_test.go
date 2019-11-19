@@ -75,7 +75,7 @@ func (mock *ATXDBMock) CalcActiveSetFromView(view []types.BlockID, pubEpoch type
 	return mock.activeSet, nil
 }
 
-func (mock *ATXDBMock) GetAtx(id types.AtxId) (*types.ActivationTxHeader, error) {
+func (mock *ATXDBMock) GetAtxHeader(id types.AtxId) (*types.ActivationTxHeader, error) {
 	panic("not implemented")
 }
 
@@ -310,7 +310,7 @@ func Test_CalcActiveSetFromView(t *testing.T) {
 	viewHash, err := types.CalcBlocksHash12(atx2.View)
 	assert.NoError(t, err)
 	activesetCache.Purge()
-	activesetCache.put(viewHash, 8)
+	activesetCache.Add(viewHash, 8)
 
 	num, err = atxdb.CalcActiveSetFromView(atx2.View, atx2.PubLayerIdx.GetEpoch(layersPerEpochBig))
 	assert.NoError(t, err)
@@ -323,7 +323,7 @@ func Test_CalcActiveSetFromView(t *testing.T) {
 	assert.NoError(t, err)
 	viewHash = types.CalcHash12(viewBytes)
 	activesetCache.Purge()
-	activesetCache.put(viewHash, 8)
+	activesetCache.Add(viewHash, 8)
 
 	num, err = atxdb.CalcActiveSetFromView(atx2.View, atx2.PubLayerIdx.GetEpoch(layersPerEpochBig))
 	assert.NoError(t, err)
@@ -495,7 +495,7 @@ func TestActivationDB_ValidateAtx(t *testing.T) {
 	err = atxdb.SyntacticallyValidateAtx(atx)
 	assert.NoError(t, err)
 
-	err = atxdb.ContextuallyValidateAtx(&atx.ActivationTxHeader)
+	err = atxdb.ContextuallyValidateAtx(atx.ActivationTxHeader)
 	assert.NoError(t, err)
 }
 
@@ -578,7 +578,7 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	err = atxdb.StoreAtx(1, atx)
 	assert.NoError(t, err)
 	atx = types.NewActivationTx(idx1, coinbase, 1, prevAtx.Id(), 12, 0, posAtx.Id(), 3, []types.BlockID{}, &types.NIPST{})
-	err = atxdb.ContextuallyValidateAtx(&atx.ActivationTxHeader)
+	err = atxdb.ContextuallyValidateAtx(atx.ActivationTxHeader)
 	assert.EqualError(t, err, "last atx is not the one referenced")
 
 	// Prev atx declared but not found.
@@ -589,7 +589,7 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	assert.NoError(t, err)
 	_, err = types.SignAtx(signer, atx)
 	assert.NoError(t, err)
-	err = atxdb.ContextuallyValidateAtx(&atx.ActivationTxHeader)
+	err = atxdb.ContextuallyValidateAtx(atx.ActivationTxHeader)
 	assert.EqualError(t, err, "could not fetch node last ATX: leveldb: not found")
 
 	// Prev atx not declared but commitment not included.
@@ -712,7 +712,7 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 	id4 := atx.Id()
 
 	atx = types.NewActivationTx(idx1, coinbase, 3, atx2id, 1012, 0, prevAtx.Id(), 0, []types.BlockID{}, &types.NIPST{})
-	err = atxdb.ContextuallyValidateAtx(&atx.ActivationTxHeader)
+	err = atxdb.ContextuallyValidateAtx(atx.ActivationTxHeader)
 	assert.EqualError(t, err, "last atx is not the one referenced")
 
 	err = atxdb.StoreAtx(1, atx)
@@ -724,10 +724,10 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, atx.Id(), id)
 
-	_, err = atxdb.GetAtx(id)
+	_, err = atxdb.GetAtxHeader(id)
 	assert.NoError(t, err)
 
-	_, err = atxdb.GetAtx(atx2id)
+	_, err = atxdb.GetAtxHeader(atx2id)
 	assert.NoError(t, err)
 
 	//test same sequence
@@ -747,7 +747,7 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 	assert.NoError(t, err)
 
 	atx = types.NewActivationTx(idx2, coinbase, 2, atxId, 1013, 0, atx.Id(), 0, []types.BlockID{}, &types.NIPST{})
-	err = atxdb.ContextuallyValidateAtx(&atx.ActivationTxHeader)
+	err = atxdb.ContextuallyValidateAtx(atx.ActivationTxHeader)
 	assert.EqualError(t, err, "last atx is not the one referenced")
 
 	err = atxdb.StoreAtx(1, atx)
@@ -758,15 +758,13 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 func TestActivationDb_ProcessAtx(t *testing.T) {
 	r := require.New(t)
 
-	atxdb, _, store := getAtxDb("t8")
+	atxdb, _, _ := getAtxDb("t8")
 	idx1 := types.NodeId{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}
 	coinbase := types.HexToAddress("aaaa")
 	atx := types.NewActivationTx(idx1, coinbase, 0, *types.EmptyAtxId, 100, 0, *types.EmptyAtxId, 3, []types.BlockID{}, &types.NIPST{})
 
-	batch := store.NewBatch()
-	err := atxdb.ProcessAtx(batch, atx)
+	err := atxdb.ProcessAtx(atx)
 	r.NoError(err)
-	err = batch.Write()
 	r.NoError(err)
 	res, err := atxdb.GetIdentity(idx1.Key)
 	r.Nil(err)
@@ -831,7 +829,7 @@ func BenchmarkActivationDb_SyntacticallyValidateAtx(b *testing.B) {
 	r.NoError(err)
 
 	start = time.Now()
-	err = atxdb.ContextuallyValidateAtx(&atx.ActivationTxHeader)
+	err = atxdb.ContextuallyValidateAtx(atx.ActivationTxHeader)
 	fmt.Printf("\nContextual validation took %v\n\n", time.Since(start))
 	r.NoError(err)
 }
@@ -877,10 +875,10 @@ func BenchmarkNewActivationDb(b *testing.B) {
 			eStart = time.Now()
 
 			for miner := 0; miner < numOfMiners; miner++ {
-				atx, err := atxdb.GetAtx(prevAtxs[miner])
+				atx, err := atxdb.GetAtxHeader(prevAtxs[miner])
 				r.NoError(err)
 				r.NotNil(atx)
-				atx, err = atxdb.GetAtx(pPrevAtxs[miner])
+				atx, err = atxdb.GetAtxHeader(pPrevAtxs[miner])
 				r.NoError(err)
 				r.NotNil(atx)
 			}
