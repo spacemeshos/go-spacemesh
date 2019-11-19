@@ -407,61 +407,51 @@ func createLayer(index types.LayerID, prev []*types.Layer, blocksInLayer int) *t
 }
 
 func TestNinjaTortoise_S10P9(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
+	t.Skip()
+
 	defer persistenceTeardown()
 	mdb := getMeshForBench()
 	sanity(t, mdb, 100, 10, 10, badblocks)
 }
 func TestNinjaTortoise_S50P49(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
+	t.Skip()
+
 	defer persistenceTeardown()
 	sanity(t, getMeshForBench(), 110, 50, 50, badblocks)
 }
 func TestNinjaTortoise_S100P99(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
+	t.Skip()
+
 	defer persistenceTeardown()
 	sanity(t, getMeshForBench(), 100, 100, 100, badblocks)
 }
 func TestNinjaTortoise_S10P7(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
+	t.Skip()
+
 	defer persistenceTeardown()
 	sanity(t, getMeshForBench(), 100, 10, 7, badblocks)
 }
 func TestNinjaTortoise_S50P35(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
+	t.Skip()
+
 	defer persistenceTeardown()
 	sanity(t, getMeshForBench(), 100, 50, 35, badblocks)
 }
 func TestNinjaTortoise_S100P70(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
+	t.Skip()
+
 	defer persistenceTeardown()
 	sanity(t, getMeshForBench(), 100, 100, 70, badblocks)
 }
 
 func TestNinjaTortoise_S200P199(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
+	t.Skip()
 	defer persistenceTeardown()
 	sanity(t, getMeshForBench(), 100, 200, 200, badblocks)
 }
 
 func TestNinjaTortoise_S200P140(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
+	t.Skip()
 	defer persistenceTeardown()
 	sanity(t, getMeshForBench(), 100, 200, 140, badblocks)
 }

@@ -67,7 +67,7 @@ func addTransactionsWithFee(mesh *MeshDB, bl *types.Block, numOfTxs int, fee int
 		totalFee += fee
 		txs = append(txs, tx)
 	}
-	mesh.writeTransactions(txs)
+	mesh.writeTransactions(0, txs)
 	return totalFee
 }
 

@@ -23,6 +23,10 @@ func (l LayerID) Add(layers uint16) LayerID {
 	return LayerID(uint64(l) + uint64(layers))
 }
 
+func (l LayerID) Uint64() uint64 {
+	return uint64(l)
+}
+
 //todo: choose which type is VRF
 type Vrf string
 

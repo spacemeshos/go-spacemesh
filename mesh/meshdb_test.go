@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"math"
+	"math/big"
 	"os"
 	"path"
 	"sort"
@@ -293,6 +294,13 @@ func newTx(r *require.Assertions, signer *signing.EdSigner, nonce, totalAmount u
 	return tx
 }
 
+func newTxWithDest(r *require.Assertions, signer *signing.EdSigner, dest types.Address, nonce, totalAmount uint64) *types.Transaction {
+	feeAmount := uint64(1)
+	tx, err := types.NewSignedTx(nonce, dest, totalAmount-feeAmount, 3, feeAmount, signer)
+	r.NoError(err)
+	return tx
+}
+
 func newSignerAndAddress(r *require.Assertions, seedStr string) (*signing.EdSigner, types.Address) {
 	seed := make([]byte, 32)
 	copy(seed, seedStr)
@@ -413,6 +421,36 @@ func TestMeshDB_UnappliedTxs(t *testing.T) {
 	r.Equal(101, int(txns2[0].TotalAmount))
 }
 
+func TestMeshDB_testGetTransactions(t *testing.T) {
+	r := require.New(t)
+
+	mdb := NewMemMeshDB(log.New("TestForEachInView", "", ""))
+
+	signer1, addr1 := newSignerAndAddress(r, "thc")
+	signer2, _ := newSignerAndAddress(r, "cbd")
+	_, addr3 := newSignerAndAddress(r, "cbe")
+	err := mdb.writeTransactions(1, []*types.Transaction{
+		newTx(r, signer1, 420, 240),
+		newTx(r, signer1, 421, 241),
+		newTxWithDest(r, signer2, addr1, 0, 100),
+		newTxWithDest(r, signer2, addr1, 1, 101),
+	})
+	r.NoError(err)
+
+	txs := mdb.GetTransactionsByOrigin(1, addr1)
+	r.Equal(2, len(txs))
+
+	txs = mdb.GetTransactionsByDestination(1, addr1)
+	r.Equal(2, len(txs))
+
+	// test negative case
+	txs = mdb.GetTransactionsByOrigin(1, addr3)
+	r.Equal(0, len(txs))
+
+	txs = mdb.GetTransactionsByDestination(1, addr3)
+	r.Equal(0, len(txs))
+}
+
 type TinyTx struct {
 	Id          types.TransactionId
 	Nonce       uint64
@@ -438,4 +476,32 @@ func getTxns(r *require.Assertions, mdb *MeshDB, origin types.Address) []TinyTx 
 		return ret[i].Nonce < ret[j].Nonce
 	})
 	return ret
+}
+
+func TestMeshDB_testGetRewards(t *testing.T) {
+	r := require.New(t)
+	mdb := NewMemMeshDB(log.New("TestForEachInView", "", ""))
+	_, addr1 := newSignerAndAddress(r, "123")
+	_, addr2 := newSignerAndAddress(r, "456")
+	_, addr3 := newSignerAndAddress(r, "789")
+	_, addr4 := newSignerAndAddress(r, "999")
+
+	err := mdb.writeTransactionRewards(1, []types.Address{addr1, addr2, addr3}, big.NewInt(10000))
+	r.NoError(err)
+
+	err = mdb.writeTransactionRewards(2, []types.Address{addr1, addr2}, big.NewInt(20000))
+	r.NoError(err)
+
+	err = mdb.writeTransactionRewards(3, []types.Address{addr2}, big.NewInt(30000))
+	r.NoError(err)
+
+	rewards := mdb.GetRewards(addr2)
+	r.Equal([]types.Reward{{Layer: 1, Amount: 10000}, {Layer: 2, Amount: 20000}, {Layer: 3, Amount: 30000}}, rewards)
+
+	rewards = mdb.GetRewards(addr1)
+	r.Equal([]types.Reward{{Layer: 1, Amount: 10000}, {Layer: 2, Amount: 20000}}, rewards)
+
+	rewards = mdb.GetRewards(addr4)
+	var expected []types.Reward
+	r.Equal(expected, rewards)
 }

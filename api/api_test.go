@@ -76,6 +76,18 @@ type TxAPIMock struct {
 	mockOrigin types.Address
 }
 
+func (t *TxAPIMock) GetRewards(account types.Address) (rewards []types.Reward) {
+	return
+}
+
+func (t *TxAPIMock) GetTransactionsByDestination(l types.LayerID, account types.Address) (txs []types.TransactionId) {
+	return
+}
+
+func (t *TxAPIMock) GetTransactionsByOrigin(l types.LayerID, account types.Address) (txs []types.TransactionId) {
+	return
+}
+
 func (t *TxAPIMock) setMockOrigin(orig types.Address) {
 	t.mockOrigin = orig
 }
@@ -414,6 +426,56 @@ func TestJsonWalletApi(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.Equal(t, genTime.t.String(), msg.Value)
+
+	// test get rewards per account
+	reqParams = pb.AccountId{Address: util.Bytes2Hex(addrBytes)}
+	payload, err = m.MarshalToString(&reqParams)
+	url = fmt.Sprintf("http://127.0.0.1:%d/v1/accountrewards", config.ConfigValues.JSONServerPort)
+	resp, err = http.Post(url, contentType, strings.NewReader(payload))
+	assert.NoError(t, err, "failed to http post to api endpoint")
+
+	buf, err = ioutil.ReadAll(resp.Body)
+	resp.Body.Close()
+	assert.NoError(t, err, "failed to read response body")
+
+	got, want = resp.StatusCode, http.StatusOK
+	assert.Equal(t, want, got)
+
+	var rewards pb.AccountRewards
+	err = jsonpb.UnmarshalString(string(buf), &rewards)
+	assert.NoError(t, err)
+
+	// test get txs per account
+	reqParam := pb.GetTxsSinceLayer{Account: &pb.AccountId{Address: util.Bytes2Hex(addrBytes)}, StartLayer: 1, EndLayer: 2}
+	payload, err = m.MarshalToString(&reqParam)
+	url = fmt.Sprintf("http://127.0.0.1:%d/v1/accounttxs", config.ConfigValues.JSONServerPort)
+	resp, err = http.Post(url, contentType, strings.NewReader(payload))
+	assert.NoError(t, err, "failed to http post to api endpoint")
+
+	buf, err = ioutil.ReadAll(resp.Body)
+	resp.Body.Close()
+	assert.NoError(t, err, "failed to read response body")
+
+	got, want = resp.StatusCode, http.StatusOK
+	assert.Equal(t, want, got)
+
+	var accounts pb.AccountTxs
+	err = jsonpb.UnmarshalString(string(buf), &accounts)
+	assert.NoError(t, err)
+
+	// test get txs per account with wrong layer error
+	reqParam = pb.GetTxsSinceLayer{Account: &pb.AccountId{Address: util.Bytes2Hex(addrBytes)}, StartLayer: 2, EndLayer: 1}
+	payload, err = m.MarshalToString(&reqParam)
+	url = fmt.Sprintf("http://127.0.0.1:%d/v1/accounttxs", config.ConfigValues.JSONServerPort)
+	resp, err = http.Post(url, contentType, strings.NewReader(payload))
+	assert.NoError(t, err, "failed to http post to api endpoint")
+
+	buf, err = ioutil.ReadAll(resp.Body)
+	resp.Body.Close()
+	assert.NoError(t, err, "failed to read response body")
+	if got, want := resp.StatusCode, http.StatusInternalServerError; got != want {
+		t.Errorf("resp.StatusCode = %d; want %d", got, want)
+	}
 
 	// stop the services
 	jsonService.StopService()

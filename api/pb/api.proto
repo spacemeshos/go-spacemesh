@@ -65,6 +65,25 @@ message SetLogLevel {
     string severity = 2;
 }
 
+message AccountTxs {
+    repeated string txs = 1;
+}
+
+message GetTxsSinceLayer {
+    uint64 startLayer = 1;
+    uint64 endLayer = 2;
+    AccountId account = 3;
+}
+
+message Reward {
+    uint64 layer = 1;
+    uint64 reward =2;
+}
+
+message AccountRewards {
+    repeated Reward rewards = 1;
+}
+
 service SpacemeshService {
     rpc Echo(SimpleMessage) returns (SimpleMessage) {
         option (google.api.http) = {
@@ -135,6 +154,18 @@ service SpacemeshService {
     rpc SetLoggerLevel(SetLogLevel) returns (SimpleMessage) {
         option (google.api.http) = {
           post: "/v1/loggerlevel"
+          body: "*"
+        };
+    }
+    rpc GetAccountTxs(GetTxsSinceLayer) returns (AccountTxs) {
+        option (google.api.http) = {
+          post: "/v1/accounttxs"
+          body: "*"
+        };
+    }
+    rpc GetAccountRewards(AccountId) returns (AccountRewards) {
+        option (google.api.http) = {
+          post: "/v1/accountrewards"
           body: "*"
         };
     }

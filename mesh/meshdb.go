@@ -10,6 +10,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/pending_txs"
 	"math/big"
+	"strconv"
+	"strings"
 	"sync"
 )
 
@@ -21,11 +23,11 @@ type layerMutex struct {
 type MeshDB struct {
 	log.Log
 	blockCache         blockCache
-	layers             database.DB
-	blocks             database.DB
+	layers             database.Database
+	blocks             database.Database
 	transactions       database.Database
-	contextualValidity database.DB //map blockId to contextualValidation state of block
-	patterns           database.DB //map blockId to contextualValidation state of block
+	contextualValidity database.Database
+	patterns           database.Database
 	unappliedTxs       database.Database
 	unappliedTxsMutex  sync.Mutex
 	orphanBlocks       map[types.LayerID]map[types.BlockID]struct{}
@@ -34,10 +36,22 @@ type MeshDB struct {
 }
 
 func NewPersistentMeshDB(path string, log log.Log) (*MeshDB, error) {
-	bdb := database.NewLevelDbStore(path+"blocks", nil, nil)
-	ldb := database.NewLevelDbStore(path+"layers", nil, nil)
-	vdb := database.NewLevelDbStore(path+"validity", nil, nil)
-	pdb := database.NewLevelDbStore(path+"patterns", nil, nil)
+	bdb, err := database.NewLDBDatabase(path+"blocks", 0, 0, log)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize transactions db: %v", err)
+	}
+	ldb, err := database.NewLDBDatabase(path+"layers", 0, 0, log)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize layers db: %v", err)
+	}
+	vdb, err := database.NewLDBDatabase(path+"validity", 0, 0, log)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize validity db: %v", err)
+	}
+	pdb, err := database.NewLDBDatabase(path+"patterns", 0, 0, log)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize patterns db: %v", err)
+	}
 	tdb, err := database.NewLDBDatabase(path+"transactions", 0, 0, log)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize transactions db: %v", err)
@@ -319,6 +333,36 @@ func (m *MeshDB) getLayerMutex(index types.LayerID) *layerMutex {
 	return ll
 }
 
+func getRewardKey(l types.LayerID, account types.Address) []byte {
+	str := "reward_" + account.String() + "_" + strconv.FormatUint(l.Uint64(), 10)
+	return []byte(str)
+}
+
+func getRewardSearchKey(account types.Address) []byte {
+	str := "reward_" + account.String()
+	return []byte(str)
+}
+
+func getTransactionOriginKey(l types.LayerID, t *types.Transaction) []byte {
+	str := string(getTransactionOriginKeyPrefix(l, t.Origin())) + "_" + t.Id().String()
+	return []byte(str)
+}
+
+func getTransactionDestKey(l types.LayerID, t *types.Transaction) []byte {
+	str := string(getTransactionDestKeyPrefix(l, t.Recipient)) + "_" + t.Id().String()
+	return []byte(str)
+}
+
+func getTransactionOriginKeyPrefix(l types.LayerID, account types.Address) []byte {
+	str := "a_o_" + account.String() + "_" + strconv.FormatUint(l.Uint64(), 10)
+	return []byte(str)
+}
+
+func getTransactionDestKeyPrefix(l types.LayerID, account types.Address) []byte {
+	str := "a_d_" + account.String() + "_" + strconv.FormatUint(l.Uint64(), 10)
+	return []byte(str)
+}
+
 type DbTransaction struct {
 	*types.Transaction
 	Origin types.Address
@@ -333,7 +377,7 @@ func (t DbTransaction) GetTransaction() *types.Transaction {
 	return t.Transaction
 }
 
-func (m *MeshDB) writeTransactions(txs []*types.Transaction) error {
+func (m *MeshDB) writeTransactions(l types.LayerID, txs []*types.Transaction) error {
 	batch := m.transactions.NewBatch()
 	for _, t := range txs {
 		bytes, err := types.InterfaceToBytes(NewDbTransaction(t))
@@ -343,6 +387,13 @@ func (m *MeshDB) writeTransactions(txs []*types.Transaction) error {
 		if err := batch.Put(t.Id().Bytes(), bytes); err != nil {
 			return fmt.Errorf("could not write tx %v to database: %v", t.Id().ShortString(), err)
 		}
+		// write extra index for querying txs by account
+		if err := batch.Put(getTransactionOriginKey(l, t), t.Id().Bytes()); err != nil {
+			return fmt.Errorf("could not write tx %v to database: %v", t.Id().ShortString(), err)
+		}
+		if err := batch.Put(getTransactionDestKey(l, t), t.Id().Bytes()); err != nil {
+			return fmt.Errorf("could not write tx %v to database: %v", t.Id().ShortString(), err)
+		}
 		m.Debug("wrote tx %v to db", t.Id().ShortString())
 	}
 	err := batch.Write()
@@ -350,6 +401,36 @@ func (m *MeshDB) writeTransactions(txs []*types.Transaction) error {
 		return fmt.Errorf("failed to write transactions: %v", err)
 	}
 	return nil
+}
+
+func (m *MeshDB) writeTransactionRewards(l types.LayerID, accounts []types.Address, reward *big.Int) error {
+	batch := m.transactions.NewBatch()
+	for _, account := range accounts {
+		if err := batch.Put(getRewardKey(l, account), reward.Bytes()); err != nil {
+			return fmt.Errorf("could not write reward to %v to database: %v", account.Short(), err)
+		}
+	}
+	return batch.Write()
+}
+
+func (m *MeshDB) GetRewards(account types.Address) (rewards []types.Reward) {
+	it := m.transactions.Find(getRewardSearchKey(account))
+	for it.Next() {
+		if it.Key() == nil {
+			break
+		}
+		str := string(it.Key())
+		strs := strings.Split(str, "_")
+		layer, err := strconv.ParseUint(strs[2], 10, 64)
+		if err != nil {
+			log.Error("wrong key in db " + string(it.Key()))
+			break
+		}
+		var amount big.Int
+		amount.SetBytes(it.Value())
+		rewards = append(rewards, types.Reward{Amount: amount.Uint64(), Layer: types.LayerID(layer)})
+	}
+	return
 }
 
 func (m *MeshDB) addToUnappliedTxs(txs []*types.Transaction, layer types.LayerID) error {
@@ -505,6 +586,40 @@ func (m *MeshDB) GetTransaction(id types.TransactionId) (*types.Transaction, err
 		return nil, fmt.Errorf("failed to unmarshal transaction: %v", err)
 	}
 	return dbTx.GetTransaction(), nil
+}
+
+func (m *MeshDB) GetTransactionsByDestination(l types.LayerID, account types.Address) (txs []types.TransactionId) {
+	it := m.transactions.Find(getTransactionDestKeyPrefix(l, account))
+	for it.Next() {
+		if it.Key() == nil {
+			break
+		}
+		var a types.TransactionId
+		err := types.BytesToInterface(it.Value(), &a)
+		if err != nil {
+			//log error
+			break
+		}
+		txs = append(txs, a)
+	}
+	return
+}
+
+func (m *MeshDB) GetTransactionsByOrigin(l types.LayerID, account types.Address) (txs []types.TransactionId) {
+	it := m.transactions.Find(getTransactionOriginKeyPrefix(l, account))
+	for it.Next() {
+		if it.Key() == nil {
+			break
+		}
+		var a types.TransactionId
+		err := types.BytesToInterface(it.Value(), &a)
+		if err != nil {
+			//log error
+			break
+		}
+		txs = append(txs, a)
+	}
+	return
 }
 
 // ContextuallyValidBlock - returns the contextually valid blocks for the provided layer
