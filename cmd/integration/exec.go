@@ -1,4 +1,4 @@
-package integration
+package main
 
 import (
 	"fmt"
@@ -29,6 +29,9 @@ func nodeExecutablePath(sourceCodePath string, execBaseDir string) (string, erro
 	compileMtx.Lock()
 	defer compileMtx.Unlock()
 
+	// TODO: #@! monkey patching
+	executablePath = "/bin/go-p2p"
+	// TODO: #@! end of monkey patching
 	// If mock node has already been compiled, just use that.
 	if len(executablePath) != 0 {
 		return executablePath, nil

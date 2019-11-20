@@ -1,8 +1,8 @@
-package integration
+package main
 
 import (
-	"bytes"
 	"fmt"
+	"os"
 	"os/exec"
 	"sync"
 )
@@ -12,10 +12,10 @@ const harnessPort = "9092"
 // ServerConfig contains all the args and data required to launch a node
 // server instance.
 type ServerConfig struct {
-	logLevel             string
-	rpcListen            string
-	baseDir              string
-	exe                  string
+	logLevel  string
+	rpcListen string
+	baseDir   string
+	exe       string
 }
 
 // DefaultConfig returns a newConfig with all default values.
@@ -44,7 +44,7 @@ func DefaultConfig(srcCodePath string) (*ServerConfig, error) {
 func (cfg *ServerConfig) genArgs() []string {
 	var args []string
 
-	args = append(args, cfg.rpcListen)
+	args = append(args)
 
 	return args
 }
@@ -62,28 +62,33 @@ type server struct {
 	quit chan struct{}
 	wg   sync.WaitGroup
 	// error channel for the server error messages
-	errChan chan error
+	errChan    chan error
+	stdoutChan chan string
 }
 
 // newServer creates a new node server instance according to the passed cfg.
 func newServer(cfg *ServerConfig) (*server, error) {
 	return &server{
 		cfg:     cfg,
-		errChan: make(chan error),
+		errChan: make(chan error, 5),
 	}, nil
 }
 
 // start launches a new running process of node server.
-func (s *server) start() error {
+func (s *server) start(addArgs []string) error {
 	s.quit = make(chan struct{})
 
 	args := s.cfg.genArgs()
+	// adding additional full go-spacemesh node arguments origin in
+	// yaml specification files, starting from index 1 to remove exec path
+	args = append(args, addArgs...)
+
 	s.cmd = exec.Command(s.cfg.exe, args...)
+	// Redirect stderr and stdout output to current harness buffers
+	s.cmd.Stderr = os.Stderr
+	s.cmd.Stdout = os.Stdout
 
-	// Redirect stderr output to buffer
-	var errb bytes.Buffer
-	s.cmd.Stderr = &errb
-
+	// start go-spacemesh server
 	if err := s.cmd.Start(); err != nil {
 		return err
 	}
@@ -99,9 +104,9 @@ func (s *server) start() error {
 
 		if err != nil {
 			// move err to error channel
-			s.errChan <- fmt.Errorf("%v\n%v\n", err, errb.String())
+			fmt.Println("an error has occurred during go-spacemesh command wait:", err)
+			s.errChan <- fmt.Errorf("%v\n", err)
 		}
-
 		// Signal any onlookers that this process has exited.
 		close(s.processExit)
 	}()

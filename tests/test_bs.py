@@ -459,13 +459,17 @@ class ClientWrapper:
         print(" done.", Ansi.BRIGHT_BLACK, out.replace("'", '"'), Ansi.RESET)
         return json.loads(out.replace("'", '"'))
 
+    def __str__(self):
+        return f"client wrapper:\n\tip={self.ip}\n\tname={self.name}\n\tnamespace={self.namespace}"
+
 
 def test_transaction(setup_network):
     ns = testconfig['namespace']
+    print(f"{setup_network}")
 
     # choose client to run on
     client_wrapper = ClientWrapper(setup_network.clients.pods[0], ns)
-
+    print(f"{client_wrapper}")
     out = client_wrapper.call(Api.NONCE, {'address': '1'})
     assert out.get('value') == '0'
     print("nonce ok")

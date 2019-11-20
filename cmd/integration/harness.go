@@ -1,4 +1,5 @@
-package integration
+package main
+
 
 import (
 	"bytes"
@@ -25,8 +26,19 @@ type Harness struct {
 	pb.SpacemeshServiceClient
 }
 
+
+func NewHarnessDefaultServerConfig(args []string) (*Harness, error) {
+	// set servers' configuration
+	// TODO #@! srcCodePath is empty string due to monkey patching in DefaultConfig function
+	cfg, errCfg := DefaultConfig("")
+	if errCfg != nil {
+		return nil, fmt.Errorf("failed to build mock node: %v", errCfg)
+	}
+	return NewHarness(cfg, args)
+}
+
 // NewHarness creates and initializes a new instance of Harness.
-func NewHarness(cfg *ServerConfig) (*Harness, error) {
+func NewHarness(cfg *ServerConfig, args []string) (*Harness, error) {
 	server, err := newServer(cfg)
 	if err != nil {
 		return nil, err
@@ -42,23 +54,23 @@ func NewHarness(cfg *ServerConfig) (*Harness, error) {
 
 	// Spawn a new mockNode server process.
 	fmt.Println("Full node server start listening on:", server.cfg.rpcListen + "\n")
-	if err := server.start(); err != nil {
+	if err := server.start(args); err != nil {
 		fmt.Println("Full node ERROR listening on:", server.cfg.rpcListen + "\n")
 		return nil, err
 	}
 
-	// Verify the client connectivity.
-	// If failed, shutdown the server.
-	conn, err := connectClient(cfg.rpcListen)
-	if err != nil {
-		_ = server.shutdown()
-		return nil, err
-	}
+	//// Verify the client connectivity.
+	//// If failed, shutdown the server.
+	//conn, err := connectClient(cfg.rpcListen)
+	//if err != nil {
+	//	_ = server.shutdown()
+	//	return nil, err
+	//}
 
 	h := &Harness{
 		server:                 server,
-		conn:                   conn,
-		SpacemeshServiceClient: pb.NewSpacemeshServiceClient(conn),
+		//conn:                   conn,
+		//SpacemeshServiceClient: pb.NewSpacemeshServiceClient(conn),
 	}
 
 	return h, nil
@@ -102,7 +114,7 @@ func connectClient(target string) (*grpc.ClientConn, error) {
 
 // baseDir is the directory path of the temp directory for all the harness files.
 func baseDir() (string, error) {
-	baseDir := filepath.Join(os.TempDir(), "mocknode")
+	baseDir := filepath.Join(os.TempDir(), "full_node")
 	err := os.MkdirAll(baseDir, 0755)
 	return baseDir, err
 }
@@ -143,4 +155,15 @@ func killProcess(address string) error {
 	}
 
 	return nil
+}
+
+
+func main() {
+	fmt.Println("received arguments =", os.Args)
+	_, err := NewHarnessDefaultServerConfig(os.Args[1:])
+	if err != nil {
+		fmt.Println("An error has occurred while generating a new harness:", err)
+	}
+	fmt.Println("sleeping for 3000 seconds (50 mins)")
+	time.Sleep(3000*time.Second)
 }
