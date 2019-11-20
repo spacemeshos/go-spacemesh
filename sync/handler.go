@@ -65,7 +65,7 @@ func newBlockRequestHandler(msh *mesh.Mesh, logger log.Log) func(msg []byte) []b
 			logger.Info("handle block %s request", bid.ShortString())
 			blk, err := msh.GetBlock(types.BlockID(bid))
 			if err != nil {
-				logger.With().Error("Error handling block request message", log.BlockId(types.BlockID(bid)), log.Err(err))
+				logger.With().Error("Error handling block request message", log.BlockId(bid.String()), log.Err(err))
 				continue
 			}
 

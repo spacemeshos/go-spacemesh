@@ -80,7 +80,7 @@ func (vq *blockQueue) handleBlock(bjb fetchJob) {
 
 		vq.Info("fetched  %v", block.Id())
 		if err := vq.fastValidation(block); err != nil {
-			vq.Error("block validation failed", log.BlockId(block.Id()), log.Err(err))
+			vq.Error("block validation failed", log.BlockId(block.Id().String()), log.Err(err))
 			vq.updateDependencies(id, false)
 			continue
 		}

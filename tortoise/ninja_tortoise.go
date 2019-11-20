@@ -594,7 +594,7 @@ func (ni *ninjaTortoise) SaveOpinion(p votingPattern) {
 		ni.SaveContextualValidity(bid, valid)
 
 		if !valid {
-			ni.With().Warning("block is contextually invalid", log.BlockId(bid))
+			ni.With().Warning("block is contextually invalid", log.BlockId(bid.String()))
 		}
 		events.Publish(events.ValidBlock{Id: bid.String(), Valid: valid})
 	}

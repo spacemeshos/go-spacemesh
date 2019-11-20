@@ -510,7 +510,7 @@ func validateVotes(blk *types.Block, forBlockfunc ForBlockInView, depth int, lg 
 	}
 
 	if err != nil {
-		lg.With().Error("validate votes failed err %s", log.BlockId(blk.Id()), log.Err(err))
+		lg.With().Error("validate votes failed err %s", log.BlockId(blk.Id().String()), log.Err(err))
 	}
 
 	return err == nil

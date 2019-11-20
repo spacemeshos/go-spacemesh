@@ -159,7 +159,7 @@ func (m *Mesh) ExtractUniqueOrderedTransactions(l *types.Layer) (validBlockTxs, 
 	for _, b := range l.Blocks() {
 		valid, err := m.ContextualValidity(b.Id())
 		if err != nil {
-			m.With().Error("could not get contextual validity", log.BlockId(b.Id()), log.Err(err))
+			m.With().Error("could not get contextual validity", log.BlockId(b.Id().String()), log.Err(err))
 		}
 		if valid {
 			validBlocks = append(validBlocks, b)
@@ -298,7 +298,7 @@ func (m *Mesh) AddBlock(blk *types.Block) error {
 }
 
 func (m *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.Transaction, atxs []*types.ActivationTx) error {
-	m.With().Debug("adding block", log.BlockId(blk.Id()))
+	m.With().Debug("adding block", log.BlockId(blk.Id().String()))
 
 	// Store transactions (doesn't have to be rolled back if other writes fail)
 	if len(txs) > 0 {
@@ -313,7 +313,7 @@ func (m *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.Transaction, atxs 
 
 	// Store block (delete if storing ATXs fails)
 	if err := m.MeshDB.AddBlock(blk); err != nil && err != ErrAlreadyExist {
-		m.With().Error("failed to add block", log.BlockId(blk.Id()), log.Err(err))
+		m.With().Error("failed to add block", log.BlockId(blk.Id().String()), log.Err(err))
 		return err
 	}
 
@@ -321,7 +321,7 @@ func (m *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.Transaction, atxs 
 	if err := m.AtxDB.ProcessAtxs(atxs); err != nil {
 		// Roll back adding the block (delete it)
 		if err := m.blocks.Delete(blk.Id().ToBytes()); err != nil {
-			m.With().Warning("failed to roll back adding a block", log.Err(err), log.BlockId(blk.Id()))
+			m.With().Warning("failed to roll back adding a block", log.Err(err), log.BlockId(blk.Id().String()))
 		}
 		return fmt.Errorf("failed to process ATXs: %v", err)
 	}
@@ -334,7 +334,7 @@ func (m *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.Transaction, atxs 
 	m.invalidateFromPools(&blk.MiniBlock)
 
 	events.Publish(events.NewBlock{Id: blk.Id().String(), Atx: blk.ATXID.ShortString(), Layer: uint64(blk.LayerIndex)})
-	m.With().Debug("added block", log.BlockId(blk.Id()))
+	m.With().Debug("added block", log.BlockId(blk.Id().String()))
 	return nil
 }
 
@@ -431,18 +431,18 @@ func (m *Mesh) AccumulateRewards(rewardLayer types.LayerID, params Config) {
 	for _, bl := range l.Blocks() {
 		valid, err := m.ContextualValidity(bl.Id())
 		if err != nil {
-			m.With().Error("could not get contextual validity", log.BlockId(bl.Id()), log.Err(err))
+			m.With().Error("could not get contextual validity", log.BlockId(bl.Id().String()), log.Err(err))
 		}
 		if !valid {
 			m.With().Info("Withheld reward for contextually invalid block",
-				log.BlockId(bl.Id()),
+				log.BlockId(bl.Id().String()),
 				log.LayerId(uint64(rewardLayer)),
 			)
 			continue
 		}
 		atx, err := m.AtxDB.GetAtxHeader(bl.ATXID)
 		if err != nil {
-			m.With().Warning("Atx from block not found in db", log.Err(err), log.BlockId(bl.Id()), log.AtxId(bl.ATXID.ShortString()))
+			m.With().Warning("Atx from block not found in db", log.Err(err), log.BlockId(bl.Id().String()), log.AtxId(bl.ATXID.ShortString()))
 			continue
 		}
 		ids = append(ids, atx.Coinbase)

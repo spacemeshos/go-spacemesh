@@ -105,7 +105,7 @@ var ErrAlreadyExist = errors.New("block already exist in database")
 
 func (m *MeshDB) AddBlock(bl *types.Block) error {
 	if _, err := m.getBlockBytes(bl.Id()); err == nil {
-		m.With().Warning("Block already exist in database", log.BlockId(bl.Id()))
+		m.With().Warning("Block already exist in database", log.BlockId(bl.Id().String()))
 		return ErrAlreadyExist
 	}
 	if err := m.writeBlock(bl); err != nil {
@@ -194,7 +194,7 @@ func (m *MeshDB) ForBlockInView(view map[types.BlockID]struct{}, layer types.Lay
 		}
 
 		if stop {
-			m.Log.With().Debug("ForBlockInView stopped", log.BlockId(block.Id()))
+			m.Log.With().Debug("ForBlockInView stopped", log.BlockId(block.Id().String()))
 			break
 		}
 
@@ -256,7 +256,7 @@ func (m *MeshDB) SaveContextualValidity(id types.BlockID, valid bool) {
 	err := m.contextualValidity.Put(id.ToBytes(), v)
 	if err != nil {
 		m.With().Error("storing contextual validity failed",
-			log.BlockId(id), log.Bool("valid", valid))
+			log.BlockId(id.String()), log.Bool("valid", valid))
 		// TODO: We want to panic here once we have a way to recover from this scenario
 	}
 }
