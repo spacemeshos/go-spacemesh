@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"sort"
 )
 
@@ -99,7 +100,7 @@ func (t *Block) Data() interface{} {
 func (t *Block) Bytes() []byte {
 	bytes, err := InterfaceToBytes(t.MiniBlock)
 	if err != nil {
-		panic(fmt.Sprintf("could not extract block bytes, %v", err))
+		log.Panic(fmt.Sprintf("could not extract block bytes, %v", err))
 	}
 	return bytes
 }
@@ -177,7 +178,7 @@ func (l *Layer) Hash() Hash32 {
 	}
 	hash, err := CalcBlocksHash32(keys)
 	if err != nil {
-		panic(fmt.Sprintf("failed to calculate layer's hash - layer Id %v", l.index))
+		log.Panic(fmt.Sprintf("failed to calculate layer's hash - layer Id %v", l.index))
 	}
 	return hash
 }
