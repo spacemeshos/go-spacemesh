@@ -7,6 +7,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -408,7 +409,7 @@ func genTx(t *testing.T) *types.Transaction {
 	require.NoError(t, err)
 	signer, err := signing.NewEdSignerFromBuffer(key)
 	require.NoError(t, err)
-	tx, err := types.NewSignedTx(1111, [20]byte{}, 1234, 11, 321, signer)
+	tx, err := mesh.NewSignedTx(1111, [20]byte{}, 1234, 11, 321, signer)
 	require.NoError(t, err)
 
 	return tx
