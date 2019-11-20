@@ -52,7 +52,7 @@ func TestAlgorithm_HandleLateBlock(t *testing.T) {
 	mdb := getMeshForBench()
 	alg := NewNinjaTortoise(8, mdb, 5, log.New("", "", ""))
 	a := Algorithm{Tortoise: alg}
-	blk := types.NewExistingBlock(1, 5, []byte{})
+	blk := types.NewExistingBlock(5, []byte("asdfasdfdgadsgdgr"))
 	a.HandleLateBlock(blk)
 	assert.True(t, blk.Layer() == types.LayerID(5))
 }
