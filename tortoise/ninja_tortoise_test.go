@@ -50,6 +50,15 @@ func getMeshForBench() *mesh.MeshDB {
 	return nil
 }
 
+func TestAlgorithm_HandleLateBlock(t *testing.T) {
+	mdb := getMeshForBench()
+	alg := NewNinjaTortoise(8, mdb, 5, log.New("", "", ""))
+	a := Algorithm{Tortoise: alg}
+	blk := types.NewExistingBlock(1, 5, []byte{})
+	a.HandleLateBlock(blk)
+	assert.True(t, blk.Layer() == types.LayerID(5))
+}
+
 func TestVec_Add(t *testing.T) {
 	v := vec{0, 0}
 	v = v.Add(vec{1, 0})
