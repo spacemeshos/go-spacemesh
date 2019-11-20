@@ -126,11 +126,14 @@ func (vq *blockQueue) finishBlockCallback(block *types.Block) func(res bool) err
 			return errors.New(fmt.Sprintf("validate votes failed for block %v", block.ID()))
 		}
 
-		if err := vq.AddBlockWithTxs(block, txs, atxs); err != nil && err != mesh.ErrAlreadyExist {
+		err = vq.AddBlockWithTxs(block, txs, atxs)
+
+		if err != nil && err != mesh.ErrAlreadyExist {
 			return err
 		}
 
-		if block.Layer() <= vq.ValidatedLayer() {
+		//run late block through tortoise only if its new to us
+		if block.Layer() <= vq.ValidatedLayer() && err != mesh.ErrAlreadyExist {
 			vq.HandleLateBlock(block)
 		}
 
