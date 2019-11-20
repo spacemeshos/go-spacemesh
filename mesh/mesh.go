@@ -36,6 +36,7 @@ type TxProcessor interface {
 	ApplyRewards(layer types.LayerID, miners []types.Address, reward *big.Int)
 	ValidateSignature(s types.Signed) (types.Address, error)
 	AddressExists(addr types.Address) bool
+	GetLayerApplied(txId types.TransactionId) *types.LayerID
 }
 
 type TxMemPoolInValidator interface {
@@ -48,7 +49,7 @@ type AtxMemPoolInValidator interface {
 
 type AtxDB interface {
 	ProcessAtxs(atxs []*types.ActivationTx) error
-	GetAtx(id types.AtxId) (*types.ActivationTxHeader, error)
+	GetAtxHeader(id types.AtxId) (*types.ActivationTxHeader, error)
 	GetFullAtx(id types.AtxId) (*types.ActivationTx, error)
 	SyntacticallyValidateAtx(atx *types.ActivationTx) error
 }
@@ -440,7 +441,7 @@ func (m *Mesh) AccumulateRewards(rewardLayer types.LayerID, params Config) {
 			)
 			continue
 		}
-		atx, err := m.AtxDB.GetAtx(bl.ATXID)
+		atx, err := m.AtxDB.GetAtxHeader(bl.ATXID)
 		if err != nil {
 			m.With().Warning("Atx from block not found in db", log.Err(err), log.BlockId(uint64(bl.ID())), log.AtxId(bl.ATXID.ShortString()))
 			continue
