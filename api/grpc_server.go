@@ -9,6 +9,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/api/pb"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"net"
@@ -79,10 +80,10 @@ func (s SpacemeshGrpcService) GetTransaction(ctx context.Context, txId *pb.Trans
 	return &pb.Transaction{
 		TxId: txId,
 		Sender: &pb.AccountId{
-			Address: tx.Origin().Bytes(),
+			Address: util.Bytes2Hex(tx.Origin().Bytes()),
 		},
 		Receiver: &pb.AccountId{
-			Address: tx.Recipient.Bytes(),
+			Address: util.Bytes2Hex(tx.Recipient.Bytes()),
 		},
 		Amount:    tx.Amount,
 		Fee:       tx.Fee,
@@ -100,7 +101,7 @@ func (s SpacemeshGrpcService) Echo(ctx context.Context, in *pb.SimpleMessage) (*
 // Echo returns the response for an echo api request
 func (s SpacemeshGrpcService) GetBalance(ctx context.Context, in *pb.AccountId) (*pb.SimpleMessage, error) {
 	log.Info("GRPC GetBalance msg")
-	addr := types.BytesToAddress(in.Address)
+	addr := types.HexToAddress(in.Address)
 	log.Info("GRPC GetBalance for address %x (len %v)", addr, len(addr))
 	if s.StateApi.Exist(addr) != true {
 		log.Error("GRPC GetBalance returned error msg: account does not exist, address %x", addr)
@@ -116,7 +117,7 @@ func (s SpacemeshGrpcService) GetBalance(ctx context.Context, in *pb.AccountId) 
 // Echo returns the response for an echo api request
 func (s SpacemeshGrpcService) GetNonce(ctx context.Context, in *pb.AccountId) (*pb.SimpleMessage, error) {
 	log.Info("GRPC GetNonce msg")
-	addr := types.BytesToAddress(in.Address)
+	addr := types.HexToAddress(in.Address)
 
 	if s.StateApi.Exist(addr) != true {
 		log.Error("GRPC GetNonce got error msg: account does not exist, %v", addr)
@@ -261,7 +262,7 @@ func (s SpacemeshGrpcService) StartMining(ctx context.Context, message *pb.InitP
 
 func (s SpacemeshGrpcService) SetAwardsAddress(ctx context.Context, id *pb.AccountId) (*pb.SimpleMessage, error) {
 	log.Info("GRPC SetAwardsAddress msg")
-	addr := types.BytesToAddress(id.Address)
+	addr := types.HexToAddress(id.Address)
 	s.Mining.SetCoinbaseAccount(addr)
 	return &pb.SimpleMessage{Value: "ok"}, nil
 }
@@ -305,7 +306,7 @@ func (s SpacemeshGrpcService) SetLoggerLevel(ctx context.Context, msg *pb.SetLog
 
 func (s SpacemeshGrpcService) GetAccountTxs(ctx context.Context, txsSinceLayer *pb.GetTxsSinceLayer) (*pb.AccountTxs, error) {
 	log.Info("GRPC GetAccountTxs msg")
-	acc := types.BytesToAddress(txsSinceLayer.Account.Address)
+	acc := types.HexToAddress(txsSinceLayer.Account.Address)
 	if txsSinceLayer.StartLayer > uint64(s.Tx.LatestLayer()) {
 		return &pb.AccountTxs{}, fmt.Errorf("invalid start layer")
 	}
@@ -326,7 +327,7 @@ func (s SpacemeshGrpcService) GetAccountTxs(ctx context.Context, txsSinceLayer *
 
 func (s SpacemeshGrpcService) GetAccountRewards(ctx context.Context, account *pb.AccountId) (*pb.AccountRewards, error) {
 	log.Info("GRPC GetAccountRewards msg")
-	acc := types.BytesToAddress(account.Address)
+	acc := types.HexToAddress(account.Address)
 
 	rewards := s.Tx.GetRewards(acc)
 	rewardsOut := pb.AccountRewards{}
