@@ -5,6 +5,7 @@ import (
 	"fmt"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/monitoring"
@@ -81,10 +82,8 @@ func (app *HareApp) Cleanup() {
 func buildSet() []types.BlockID {
 	s := make([]types.BlockID, 200, 200)
 
-	for i := int64(0); i < 200; i++ {
-		buf := make([]byte, binary.MaxVarintLen64)
-		n := binary.PutVarint(buf, i)
-		s = append(s, types.NewExistingBlock(1, buf[:n]).Id())
+	for i := uint64(0); i < 200; i++ {
+		s = append(s, types.NewExistingBlock(1, util.Uint64ToBytes(i)).Id())
 	}
 
 	return s
