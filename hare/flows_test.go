@@ -1,6 +1,7 @@
 package hare
 
 import (
+	"encoding/binary"
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/amcl"
 	"github.com/spacemeshos/go-spacemesh/amcl/BLS381"
@@ -198,8 +199,10 @@ func (m *mockIdentityP) GetIdentity(edId string) (types.NodeId, error) {
 func buildSet() []types.BlockID {
 	s := make([]types.BlockID, 200, 200)
 
-	for i := types.LayerID(0); i < 200; i++ {
-		s = append(s, types.NewExistingBlock(i, []byte{}).Id())
+	for i := int64(0); i < 200; i++ {
+		buf := make([]byte, binary.MaxVarintLen64)
+		n := binary.PutVarint(buf, i)
+		s = append(s, types.NewExistingBlock(1, buf[:n]).Id())
 	}
 
 	return s
