@@ -126,7 +126,7 @@ func newATxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 			if tx, err := s.atxpool.Get(t); err == nil {
 				atxs[t] = tx
 			} else {
-				logger.Error("error %v while handling atx request message ", err, log.String("atx_ids", fmt.Sprintf("%x", atxids)))
+				logger.With().Error("error handling atx request message", log.AtxId(t.ShortString()), log.String("atx_ids", fmt.Sprintf("%x", atxids)))
 			}
 		}
 

@@ -119,7 +119,7 @@ func (vq *blockQueue) finishBlockCallback(block *types.Block) func(res bool) err
 		//data availability
 		txs, atxs, err := vq.DataAvailability(block)
 		if err != nil {
-			return fmt.Errorf("DataAvailabilty failed for block %v err: %v", block, err)
+			return fmt.Errorf("DataAvailabilty failed for block %v err: %v", block.Id(), err)
 		}
 
 		//validate block's votes

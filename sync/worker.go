@@ -158,7 +158,6 @@ func NewFetchWorker(s WorkerInfra, count int, reqFactory BatchRequestFactory, id
 				idsStr := concatShortIds(remainingItems)
 				lg.Info("send fetch request to Peer: %v ids: %v", peer.String(), idsStr)
 				ch, _ := reqFactory(s, peer, remainingItems)
-				lg.Info(concatShortIds(remainingItems))
 				timeout := time.After(s.GetTimeout())
 				select {
 				case <-timeout:

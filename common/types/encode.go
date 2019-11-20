@@ -8,7 +8,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/util"
 )
 
-func (b BlockID) ToBytes() []byte { return b.AsHash32().Bytes() }
+func (id BlockID) ToBytes() []byte { return id.AsHash32().Bytes() }
 
 func (l LayerID) ToBytes() []byte { return util.Uint64ToBytes(uint64(l)) }
 

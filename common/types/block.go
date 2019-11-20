@@ -9,8 +9,12 @@ import (
 
 type BlockID Hash32
 
-func (l BlockID) String() string {
-	return l.AsHash32().ShortString()
+func (id BlockID) String() string {
+	return id.AsHash32().ShortString()
+}
+
+func (id BlockID) Compare(i BlockID) bool {
+	return bytes.Compare(id.ToBytes(), i.ToBytes()) < 0
 }
 
 type LayerID uint64
@@ -80,8 +84,8 @@ type MiniBlock struct {
 	AtxIds []AtxId
 }
 
-func (b BlockID) AsHash32() Hash32 {
-	return Hash32(b)
+func (id BlockID) AsHash32() Hash32 {
+	return Hash32(id)
 }
 
 func (t *Block) Sig() []byte {
@@ -217,11 +221,11 @@ func NewLayer(layerIndex LayerID) *Layer {
 }
 
 func SortBlockIds(ids []BlockID) []BlockID {
-	sort.Slice(ids, func(i, j int) bool { return bytes.Compare(ids[i].ToBytes(), ids[j].ToBytes()) < 0 })
+	sort.Slice(ids, func(i, j int) bool { return ids[i].Compare(ids[j]) })
 	return ids
 }
 
 func SortBlocks(ids []*Block) []*Block {
-	sort.Slice(ids, func(i, j int) bool { return bytes.Compare(ids[i].Id().ToBytes(), ids[j].Id().ToBytes()) < 0 })
+	sort.Slice(ids, func(i, j int) bool { return ids[i].Id().Compare(ids[j].Id()) })
 	return ids
 }

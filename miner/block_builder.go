@@ -227,6 +227,7 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 	}
 
 	bl := &types.Block{MiniBlock: b, Signature: t.Signer.Sign(blockBytes)}
+
 	bl.CalcAndSetId()
 
 	t.Log.Event().Info(fmt.Sprintf("I've created a block in layer %v. id: %v, num of transactions: %v, votes: %d, viewEdges: %d atx %v, atxs:%v",

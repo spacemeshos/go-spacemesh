@@ -561,7 +561,7 @@ func (b *Builder) GetPositioningAtx(epochId types.EpochId) (*types.ActivationTxH
 	return posAtx, nil
 }
 
-// ValidateSignedAtx extracts public key from message and verifies public key exists in IdStore, this is how we validate
+// ExtractPublicKey extracts public key from message and verifies public key exists in IdStore, this is how we validate
 // ATX signature. If this is the first ATX it is considered valid anyways and ATX syntactic validation will determine ATX validity
 func ExtractPublicKey(signedAtx *types.ActivationTx) (*signing.PublicKey, error) {
 	bts, err := signedAtx.AtxBytes()

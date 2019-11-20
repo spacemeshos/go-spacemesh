@@ -198,12 +198,3 @@ func (h *Hash32) Scan(src interface{}) error {
 	copy(h[:], srcB)
 	return nil
 }
-
-func AllZero(s Hash32) bool {
-	for _, v := range s {
-		if v != 0 {
-			return false
-		}
-	}
-	return true
-}
