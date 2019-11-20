@@ -352,11 +352,12 @@ func (t *BlockBuilder) handleGossipAtx(data service.GossipMessage) {
 	if data == nil {
 		return
 	}
-	atx, err := types.BytesAsAtx(data.Bytes(), *types.EmptyAtxId)
+	atx, err := types.BytesAsAtx(data.Bytes())
 	if err != nil {
 		t.Error("cannot parse incoming ATX")
 		return
 	}
+	atx.CalcAndSetId()
 
 	t.With().Info("got new ATX", log.AtxId(atx.ShortString()))
 

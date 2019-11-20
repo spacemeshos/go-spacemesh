@@ -26,13 +26,13 @@ func (t *AtxDbMock) GetPosAtxId(id types.EpochId) (types.AtxId, error) {
 	return types.AtxId{}, nil /*todo: mock if needed */
 }
 
-func (t *AtxDbMock) GetAtx(id types.AtxId) (*types.ActivationTxHeader, error) {
+func (t *AtxDbMock) GetAtxHeader(id types.AtxId) (*types.ActivationTxHeader, error) {
 	if id == *types.EmptyAtxId {
 		return nil, fmt.Errorf("trying to fetch empty atx id")
 	}
 
 	if atx, ok := t.db[id]; ok {
-		return &atx.ActivationTxHeader, nil
+		return atx.ActivationTxHeader, nil
 	}
 	return nil, fmt.Errorf("cannot find atx")
 }
