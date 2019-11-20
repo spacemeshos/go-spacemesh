@@ -28,7 +28,7 @@ func (alg *Algorithm) HandleLateBlock(b *types.Block) {
 	//todo feed all layers from b's layer to tortoise
 	l := types.NewLayer(b.Layer())
 	l.AddBlock(b)
-	alg.HandleIncomingLayer(&l)
+	alg.HandleIncomingLayer(l)
 	log.With().Info("late block ", log.LayerId(uint64(b.Layer())), log.BlockId(b.Id().String()))
 }
 
