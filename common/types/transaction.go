@@ -108,9 +108,6 @@ func NewTxWithOrigin(nonce uint64, orig, rec Address, amount, gasLimit, fee uint
 	}
 }
 
-type Signer interface {
-}
-
 type Reward struct {
 	Layer  LayerID
 	Amount uint64
