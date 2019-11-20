@@ -105,7 +105,7 @@ var ErrAlreadyExist = errors.New("block already exist in database")
 
 func (m *MeshDB) AddBlock(bl *types.Block) error {
 	if _, err := m.getBlockBytes(bl.Id()); err == nil {
-		m.With().Warning("Block already exist in database", log.BlockId(bl.Id().String()))
+		m.With().Warning(ErrAlreadyExist.Error(), log.BlockId(uint64(bl.ID())))
 		return ErrAlreadyExist
 	}
 	if err := m.writeBlock(bl); err != nil {
@@ -194,7 +194,7 @@ func (m *MeshDB) ForBlockInView(view map[types.BlockID]struct{}, layer types.Lay
 		}
 
 		if stop {
-			m.Log.With().Debug("ForBlockInView stopped", log.BlockId(block.Id().String()))
+			m.Log.With().Debug("ForBlockInView stopped", log.BlockId(uint64(block.ID())))
 			break
 		}
 
@@ -256,7 +256,7 @@ func (m *MeshDB) SaveContextualValidity(id types.BlockID, valid bool) {
 	err := m.contextualValidity.Put(id.ToBytes(), v)
 	if err != nil {
 		m.With().Error("storing contextual validity failed",
-			log.BlockId(id.String()), log.Bool("valid", valid))
+			log.BlockId(uint64(id)), log.Bool("valid", valid))
 		// TODO: We want to panic here once we have a way to recover from this scenario
 	}
 }
@@ -267,18 +267,18 @@ func (m *MeshDB) writeBlock(bl *types.Block) error {
 		return fmt.Errorf("could not encode bl")
 	}
 
-	if err := m.blocks.Put(bl.Id().ToBytes(), bytes); err != nil {
-		return fmt.Errorf("could not add bl %v to database %v", bl.Id(), err)
+	if err := m.blocks.Put(bl.ID().ToBytes(), bytes); err != nil {
+		return fmt.Errorf("could not add bl %v to database %v", bl.ID(), err)
 	}
 
-	m.updateLayerWithBlock(bl)
+	m.updateLayerWithBlock(&bl.MiniBlock)
 
 	m.blockCache.put(bl)
 
 	return nil
 }
 
-func (m *MeshDB) updateLayerWithBlock(blk *types.Block) error {
+func (m *MeshDB) updateLayerWithBlock(blk *types.MiniBlock) error {
 	lm := m.getLayerMutex(blk.LayerIndex)
 	defer m.endLayerWorker(blk.LayerIndex)
 	lm.m.Lock()
@@ -294,8 +294,8 @@ func (m *MeshDB) updateLayerWithBlock(blk *types.Block) error {
 			return errors.New("could not get all blocks from database ")
 		}
 	}
-	m.Debug("added block %v to layer %v", blk.Id(), blk.LayerIndex)
-	blockIds = append(blockIds, blk.Id())
+	m.Debug("added block %v to layer %v", blk.ID(), blk.LayerIndex)
+	blockIds = append(blockIds, blk.ID())
 	w, err := types.BlockIdsAsBytes(blockIds)
 	if err != nil {
 		return errors.New("could not encode layer blk ids")
@@ -648,17 +648,17 @@ func (m *MeshDB) ContextuallyValidBlock(layer types.LayerID) (map[types.BlockID]
 	validBlks := make(map[types.BlockID]struct{})
 
 	for _, b := range blks {
-		valid, err := m.ContextualValidity(b.Id())
+		valid, err := m.ContextualValidity(b.ID())
 
 		if err != nil {
-			m.Error("could not get contextual validity for block %v in layer %v err=%v", b.Id(), layer, err)
+			m.Error("could not get contextual validity for block %v in layer %v err=%v", b.ID(), layer, err)
 		}
 
 		if !valid {
 			continue
 		}
 
-		validBlks[b.Id()] = struct{}{}
+		validBlks[b.ID()] = struct{}{}
 	}
 
 	return validBlks, nil

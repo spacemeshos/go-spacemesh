@@ -107,6 +107,7 @@ func createLayerWithRandVoting(index types.LayerID, prev []*types.Layer, blocksI
 		for _, prevBloc := range prev[0].Blocks() {
 			bl.AddView(types.BlockID(prevBloc.Id()))
 		}
+		bl.LayerIndex = index
 		l.AddBlock(bl)
 	}
 	lg.Info("Created mesh.LayerID %d with blocks %d", l.Index(), layerBlocks)

@@ -166,6 +166,10 @@ func (l *Layer) Index() LayerID {
 	return l.index
 }
 
+func (l *Layer) SetIndex() LayerID {
+	return l.index
+}
+
 func (l *Layer) Blocks() []*Block {
 	return l.blocks
 }
@@ -184,7 +188,9 @@ func (l *Layer) Hash() Hash32 {
 }
 
 func (l *Layer) AddBlock(block *Block) {
-	block.LayerIndex = l.index
+	if block.LayerIndex != l.index {
+		log.Panic("add block with wrong layer number")
+	}
 	l.blocks = append(l.blocks, block)
 }
 
