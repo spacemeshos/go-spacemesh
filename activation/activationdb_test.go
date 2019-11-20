@@ -76,8 +76,8 @@ func (mock *ATXDBMock) CalcActiveSetFromView(view []types.BlockID, pubEpoch type
 	return mock.activeSet, nil
 }
 
-func (mock *ATXDBMock) CalcActiveSetSize(epoch types.EpochId, blocks map[types.BlockID]struct{}) (map[string]struct{}, error){
-	return map[string]struct{}{ "aaaaac": {}, "aaabddb": {}, "aaaccc": {}, }, nil
+func (mock *ATXDBMock) CalcActiveSetSize(epoch types.EpochId, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
+	return map[string]struct{}{"aaaaac": {}, "aaabddb": {}, "aaaccc": {}}, nil
 }
 
 func (mock *ATXDBMock) GetAtxHeader(id types.AtxId) (*types.ActivationTxHeader, error) {
@@ -275,7 +275,7 @@ func TestActivationDb_CalcActiveSetFromViewWithCache(t *testing.T) {
 
 	wg := sync.WaitGroup{}
 	wg.Add(2)
-	for i := 0; i < 2; i ++ {
+	for i := 0; i < 2; i++ {
 		go func() {
 			num, err := atxdb.CalcActiveSetFromView(atx.View, atx.PubLayerIdx.GetEpoch(layersPerEpochBig))
 			assert.NoError(t, err)

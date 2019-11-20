@@ -34,7 +34,7 @@ type ActivationDb struct {
 	//todo: think about whether we need one db or several
 	IdStore
 	atxs             database.Database
-	atxHeaderCache         AtxCache
+	atxHeaderCache   AtxCache
 	meshDb           *mesh.MeshDB
 	LayersPerEpoch   uint16
 	nipstValidator   NipstValidator
@@ -46,7 +46,7 @@ type ActivationDb struct {
 
 func NewActivationDb(dbstore database.Database, idstore IdStore, meshDb *mesh.MeshDB, layersPerEpoch uint16, nipstValidator NipstValidator, log log.Log) *ActivationDb {
 	return &ActivationDb{atxs: dbstore,
-		atxHeaderCache:         NewAtxCache(600),
+		atxHeaderCache:   NewAtxCache(600),
 		meshDb:           meshDb,
 		nipstValidator:   nipstValidator,
 		LayersPerEpoch:   layersPerEpoch,
