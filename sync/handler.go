@@ -95,7 +95,7 @@ func newTxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 
 		for t := range missingDB {
 			if tx, err := s.txpool.Get(t); err == nil {
-				txs = append(txs, &tx)
+				txs = append(txs, tx)
 			} else {
 				logger.Error("Error handling tx request message, for id: %v", t.ShortString())
 			}

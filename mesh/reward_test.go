@@ -15,6 +15,10 @@ type MockMapState struct {
 	TotalReward int64
 }
 
+func (MockMapState) GetLayerApplied(txId types.TransactionId) *types.LayerID {
+	panic("implement me")
+}
+
 func (MockMapState) ValidateSignature(signed types.Signed) (types.Address, error) {
 	return types.Address{}, nil
 }

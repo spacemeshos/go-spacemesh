@@ -92,6 +92,10 @@ func SyncMockFactory(number int, conf Configuration, name string, dbType string,
 
 type stateMock struct{}
 
+func (stateMock) GetLayerApplied(txId types.TransactionId) *types.LayerID {
+	panic("implement me")
+}
+
 func (stateMock) ValidateSignature(signed types.Signed) (types.Address, error) {
 	return types.Address{}, nil
 }

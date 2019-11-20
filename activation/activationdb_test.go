@@ -49,6 +49,10 @@ func (m *MeshValidatorMock) GetGoodPatternBlocks(layer types.LayerID) (map[types
 
 type MockState struct{}
 
+func (MockState) GetLayerApplied(txId types.TransactionId) *types.LayerID {
+	panic("implement me")
+}
+
 func (MockState) ApplyTransactions(layer types.LayerID, txs []*types.Transaction) (int, error) {
 	return 0, nil
 }
@@ -90,8 +94,8 @@ func (mock *ATXDBMock) GetPrevAtxId(node types.NodeId) (*types.AtxId, error) {
 
 type MockTxMemPool struct{}
 
-func (MockTxMemPool) Get(id types.TransactionId) (types.Transaction, error) {
-	return types.Transaction{}, nil
+func (MockTxMemPool) Get(id types.TransactionId) (*types.Transaction, error) {
+	return &types.Transaction{}, nil
 }
 func (MockTxMemPool) PopItems(size int) []types.Transaction {
 	return nil

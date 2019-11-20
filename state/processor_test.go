@@ -33,13 +33,23 @@ func (p *ProjectorMock) GetProjection(addr types.Address, prevNonce, prevBalance
 	return prevNonce + p.nonceDiff, prevBalance - p.balanceDiff, nil
 }
 
+type appliedTxsMock struct{}
+
+func (appliedTxsMock) Put(key []byte, value []byte) error { return nil }
+func (appliedTxsMock) Delete(key []byte) error            { panic("implement me") }
+func (appliedTxsMock) Get(key []byte) ([]byte, error)     { panic("implement me") }
+func (appliedTxsMock) Has(key []byte) (bool, error)       { panic("implement me") }
+func (appliedTxsMock) Close()                             { panic("implement me") }
+func (appliedTxsMock) NewBatch() database.Batch           { panic("implement me") }
+func (appliedTxsMock) Find(key []byte) database.Iterator  { panic("implement me") }
+
 func (s *ProcessorStateSuite) SetupTest() {
 	lg := log.New("proc_logger", "", "")
 	s.db = database.NewMemDatabase()
 	s.state, _ = New(types.Hash32{}, NewDatabase(s.db))
 	s.projector = &ProjectorMock{}
 
-	s.processor = NewTransactionProcessor(s.state, s.projector, lg)
+	s.processor = NewTransactionProcessor(s.state, appliedTxsMock{}, s.projector, lg)
 }
 
 func createAccount(state *StateDB, addr types.Address, balance int64, nonce uint64) *StateObj {
@@ -162,18 +172,18 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_Errors()
 	assert.NoError(s.T(), err)
 	assert.True(s.T(), failed == 0)
 
-	err = s.processor.ApplyTransaction(createTransaction(0, obj1.address, obj2.address, 1))
+	err = s.processor.ApplyTransaction(createTransaction(0, obj1.address, obj2.address, 1), 0)
 	assert.Error(s.T(), err)
 	assert.Equal(s.T(), err.Error(), ErrNonce)
 
-	err = s.processor.ApplyTransaction(createTransaction(obj1.Nonce(), obj1.address, obj2.address, 21))
+	err = s.processor.ApplyTransaction(createTransaction(obj1.Nonce(), obj1.address, obj2.address, 21), 0)
 	assert.Error(s.T(), err)
 	assert.Equal(s.T(), err.Error(), ErrFunds)
 
 	addr := toAddr([]byte{0x01, 0x01})
 
 	//Test origin
-	err = s.processor.ApplyTransaction(createTransaction(obj1.Nonce(), addr, obj2.address, 21))
+	err = s.processor.ApplyTransaction(createTransaction(obj1.Nonce(), addr, obj2.address, 21), 0)
 	assert.Error(s.T(), err)
 	assert.Equal(s.T(), err.Error(), ErrOrigin)
 }
@@ -445,7 +455,7 @@ func TestValidateTxSignature(t *testing.T) {
 	db := database.NewMemDatabase()
 	state, _ := New(types.Hash32{}, NewDatabase(db))
 	lg := log.New("proc_logger", "", "")
-	proc := NewTransactionProcessor(state, &ProjectorMock{}, lg)
+	proc := NewTransactionProcessor(state, appliedTxsMock{}, &ProjectorMock{}, lg)
 
 	// positive flow
 	pub, pri, _ := ed25519.GenerateKey(crand.Reader)
