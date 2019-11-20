@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/binary"
 	"fmt"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -80,8 +81,10 @@ func (app *HareApp) Cleanup() {
 func buildSet() []types.BlockID {
 	s := make([]types.BlockID, 200, 200)
 
-	for i := types.LayerID(0); i < 200; i++ {
-		s = append(s, types.NewExistingBlock(i, []byte{}).Id())
+	for i := int64(0); i < 200; i++ {
+		buf := make([]byte, binary.MaxVarintLen64)
+		n := binary.PutVarint(buf, i)
+		s = append(s, types.NewExistingBlock(1, buf[:n]).Id())
 	}
 
 	return s

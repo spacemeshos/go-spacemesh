@@ -1,6 +1,7 @@
 package hare
 
 import (
+	"encoding/binary"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/stretchr/testify/assert"
 	"testing"
@@ -14,7 +15,9 @@ const (
 )
 
 func genBlockId(i int) types.BlockID {
-	return types.NewExistingBlock(types.LayerID(i), []byte{byte(i)}).Id()
+	buf := make([]byte, binary.MaxVarintLen32)
+	n := binary.PutVarint(buf, int64(i))
+	return types.NewExistingBlock(types.LayerID(1), buf[:n]).Id()
 }
 
 var value1 = genBlockId(1)
