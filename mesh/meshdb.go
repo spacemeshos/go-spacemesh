@@ -105,7 +105,7 @@ var ErrAlreadyExist = errors.New("block already exist in database")
 
 func (m *MeshDB) AddBlock(bl *types.Block) error {
 	if _, err := m.getBlockBytes(bl.ID()); err == nil {
-		m.With().Warning("Block already exist in database", log.BlockId(uint64(bl.ID())))
+		m.With().Warning(ErrAlreadyExist.Error(), log.BlockId(uint64(bl.ID())))
 		return ErrAlreadyExist
 	}
 	if err := m.writeBlock(bl); err != nil {
