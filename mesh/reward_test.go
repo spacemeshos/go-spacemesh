@@ -1,7 +1,6 @@
 package mesh
 
 import (
-	"github.com/google/uuid"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/rand"
@@ -82,7 +81,7 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 	defer layers.Close()
 
 	var totalFee int64
-	block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data1"))
+	block1 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
 
 	coinbase1 := types.HexToAddress("0xaaa")
 	atx := types.NewActivationTx(types.NodeId{"1", []byte("bbbbb")}, coinbase1, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 10, []types.BlockID{}, &types.NIPST{})
@@ -90,7 +89,7 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 	block1.ATXID = atx.Id()
 	totalFee += addTransactionsWithFee(layers.MeshDB, block1, 15, 7)
 
-	block2 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data2"))
+	block2 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
 
 	coinbase2 := types.HexToAddress("0xbbb")
 	atx = types.NewActivationTx(types.NodeId{"2", []byte("bbbbb")}, coinbase2, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 10, []types.BlockID{}, &types.NIPST{})
@@ -98,7 +97,7 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 	block2.ATXID = atx.Id()
 	totalFee += addTransactionsWithFee(layers.MeshDB, block2, 13, rand.Int63n(100))
 
-	block3 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data3"))
+	block3 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
 
 	coinbase3 := types.HexToAddress("0xccc")
 	atx = types.NewActivationTx(types.NodeId{"3", []byte("bbbbb")}, coinbase3, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 10, []types.BlockID{}, &types.NIPST{})
@@ -106,7 +105,7 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 	block3.ATXID = atx.Id()
 	totalFee += addTransactionsWithFee(layers.MeshDB, block3, 17, rand.Int63n(100))
 
-	block4 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data4"))
+	block4 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
 
 	coinbase4 := types.HexToAddress("0xddd")
 	atx = types.NewActivationTx(types.NodeId{"4", []byte("bbbbb")}, coinbase4, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 10, []types.BlockID{}, &types.NIPST{})
@@ -138,13 +137,15 @@ func NewTestRewardParams() Config {
 
 func createLayer(mesh *Mesh, id types.LayerID, numOfBlocks, maxTransactions int, atxdb *AtxDbMock) (totalRewards int64) {
 	for i := 0; i < numOfBlocks; i++ {
-		block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), id, []byte("data1"))
+		block1 := types.NewExistingBlock(id, []byte(rand.RandString(8)))
 		nodeid := types.NodeId{strconv.Itoa(i), []byte("bbbbb")}
 		coinbase := types.HexToAddress(nodeid.Key)
 		atx := types.NewActivationTx(nodeid, coinbase, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 10, []types.BlockID{}, &types.NIPST{})
 		atxdb.AddAtx(atx.Id(), atx)
 		block1.ATXID = atx.Id()
+
 		totalRewards += addTransactionsWithFee(mesh.MeshDB, block1, rand.Intn(maxTransactions), rand.Int63n(100))
+		block1.CalcAndSetId()
 		mesh.AddBlock(block1)
 	}
 	return totalRewards

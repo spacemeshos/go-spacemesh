@@ -1,7 +1,6 @@
 package sync
 
 import (
-	"github.com/google/uuid"
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
@@ -76,7 +75,7 @@ func atxs(num int) ([]*types.ActivationTx, []types.AtxId) {
 	atxs := make([]*types.ActivationTx, 0, num)
 	ids := make([]types.AtxId, 0, num)
 	for i := 0; i < num; i++ {
-		atx := atxWithProof(RandStringRunes(8), proof)
+		atx := atxWithProof(rand.RandString(8), proof)
 		atxs = append(atxs, atx)
 		ids = append(ids, atx.Id())
 	}
@@ -113,18 +112,18 @@ func createLayerWithRandVoting(msh *mesh.Mesh, index types.LayerID, prev []*type
 	}
 	layerBlocks := make([]types.BlockID, 0, blocksInLayer)
 	for i := 0; i < blocksInLayer; i++ {
-		bl := types.NewExistingBlock(types.BlockID(uuid.New().ID()), index, []byte("data data data"))
+		bl := types.NewExistingBlock(index, []byte(rand.RandString(8)))
 		signer := signing.NewEdSigner()
 		bl.Signature = signer.Sign(bl.Bytes())
-		layerBlocks = append(layerBlocks, bl.ID())
+		layerBlocks = append(layerBlocks, bl.Id())
 		for idx, pat := range patterns {
 			for _, id := range pat {
 				b := prev[idx].Blocks()[id]
-				bl.AddVote(types.BlockID(b.ID()))
+				bl.AddVote(types.BlockID(b.Id()))
 			}
 		}
 		for _, prevBloc := range prev[0].Blocks() {
-			bl.AddView(types.BlockID(prevBloc.ID()))
+			bl.AddView(types.BlockID(prevBloc.Id()))
 		}
 
 		//add txs
@@ -150,7 +149,7 @@ func atxWithProof(pubkey string, poetref []byte) *types.ActivationTx {
 	chlng := types.HexToHash32("0x3333")
 	npst := activation.NewNIPSTWithChallenge(&chlng, poetref)
 
-	atx := types.NewActivationTx(types.NodeId{Key: pubkey, VRFPublicKey: []byte(RandStringRunes(8))}, coinbase, 0, *types.EmptyAtxId, 5, 1, *types.EmptyAtxId, 0, []types.BlockID{1, 2, 3}, npst)
+	atx := types.NewActivationTx(types.NodeId{Key: pubkey, VRFPublicKey: []byte(rand.RandString(8))}, coinbase, 0, *types.EmptyAtxId, 5, 1, *types.EmptyAtxId, 0, []types.BlockID{}, npst)
 	atx.Commitment = commitment
 	atx.CommitmentMerkleRoot = commitment.MerkleRoot
 	atx.CalcAndSetId()
