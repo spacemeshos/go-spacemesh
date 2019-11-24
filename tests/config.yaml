@@ -10,8 +10,8 @@ deployment_ready_time_out: 120
 config_path: '../config.toml'
 
 bootstrap:
-  image: 'spacemeshos/go-spacemesh:develop'
-  command: '/bin/go-spacemesh'
+  image: 'spacemeshos/go-spacemesh-dev:harness'
+  command: '/bin/go-harness'
   replicas: 1
   resources:
     requests:
@@ -34,9 +34,11 @@ bootstrap:
     eligibility-confidence-param: '5'
     eligibility-epoch-offset: '0'
     genesis-active-size: '50'
+    executable-path: '/bin/go-spacemesh'
+  deployment_type: deployment
 client:
-  image: 'spacemeshos/go-spacemesh:develop'
-  command: '/bin/go-spacemesh'
+  image: 'spacemeshos/go-spacemesh-dev:harness'
+  command: '/bin/go-harness'
   replicas: 49
   resources:
     requests:
@@ -59,6 +61,8 @@ client:
     eligibility-confidence-param: '5'
     eligibility-epoch-offset: '0'
     genesis-active-size: '50'
+    executable-path: '/bin/go-spacemesh'
+  deployment_type: deployment
 elastic:
   host: elastic.spacemesh.io
   port: 9200

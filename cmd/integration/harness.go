@@ -10,12 +10,26 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/api/pb"
 
 	"google.golang.org/grpc"
 )
+
+
+// Contains tells whether a contains x.
+// if it does it returns it's index otherwise -1
+func Contains(a []string, x string) int {
+	for ind, n := range a {
+		if strings.Contains(n, x) {
+			return ind
+		}
+	}
+
+	return -1
+}
 
 // Harness fully encapsulates an active node server process
 // along with client connection and full api, created for rpc integration
@@ -28,9 +42,19 @@ type Harness struct {
 
 
 func NewHarnessDefaultServerConfig(args []string) (*Harness, error) {
+	// same as in suite's yaml file
+	execPathLabel := "executable-path"
+	// find executable path label in args
+	execPathInd := Contains(args, execPathLabel)
+	if execPathInd == -1 {
+		return nil, fmt.Errorf("could not find executable path in arguments")
+	}
+	// next will be exec path value
+	execPath := args[execPathInd+1]
+	// remove executable path label and value
+	args = append(args[:execPathInd], args[execPathInd+2:]...)
 	// set servers' configuration
-	// TODO #@! srcCodePath is empty string due to monkey patching in DefaultConfig function
-	cfg, errCfg := DefaultConfig("")
+	cfg, errCfg := DefaultConfig(execPath)
 	if errCfg != nil {
 		return nil, fmt.Errorf("failed to build mock node: %v", errCfg)
 	}
@@ -113,6 +137,7 @@ func connectClient(target string) (*grpc.ClientConn, error) {
 }
 
 // baseDir is the directory path of the temp directory for all the harness files.
+// NOTICE: right now it's not in use, might be useful in the near future
 func baseDir() (string, error) {
 	baseDir := filepath.Join(os.TempDir(), "full_node")
 	err := os.MkdirAll(baseDir, 0755)
@@ -159,7 +184,7 @@ func killProcess(address string) error {
 
 
 func main() {
-	fmt.Println("received arguments =", os.Args)
+	// os.Args[0] contains the current process path
 	_, err := NewHarnessDefaultServerConfig(os.Args[1:])
 	if err != nil {
 		fmt.Println("An error has occurred while generating a new harness:", err)

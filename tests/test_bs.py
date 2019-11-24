@@ -122,7 +122,7 @@ def choose_k8s_object_create(config, deployment_file, statefulset_file):
 
 
 def _setup_dep_ss_file_path(file_path, dep_type, node_type):
-    # TODO we should implement this func just for deployment file
+    # TODO we should modify this func to be a generic one
     """
     sets up deployment files
     :param file_path: string, a file path to overwrite the default file path value (BOOT_DEPLOYMENT_FILE,
@@ -457,7 +457,12 @@ class ClientWrapper:
         print(Ansi.YELLOW + "calling api: {} ({})...".format(api.name, api.value), end="")
         out = api_call(self.ip, json.dumps(data), api.value, self.namespace)
         print(" done.", Ansi.BRIGHT_BLACK, out.replace("'", '"'), Ansi.RESET)
-        return json.loads(out.replace("'", '"'))
+
+        try:
+            out_json = json.loads(out.replace("'", '"'))
+            return out_json
+        except json.JSONDecodeError as e:
+            print(f"could not load json from api output: {e}\noutput={out}")
 
     def __str__(self):
         return f"client wrapper:\n\tip={self.ip}\n\tname={self.name}\n\tnamespace={self.namespace}"

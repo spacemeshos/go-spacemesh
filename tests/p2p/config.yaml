@@ -28,6 +28,7 @@ bootstrap:
     layer-duration-sec: '60'
     layer-average-size: '20'
     hare-wakeup-delta: '10'
+    executable-path: '/bin/go-p2p'
   deployment_type: deployment # default:deployment
 # IMPORTANT: all clients on the same suite should contain the same args (hare-committee-size, hare-max-adversaries etc)!
 client:
@@ -49,6 +50,7 @@ client:
     layer-duration-sec: '60'
     layer-average-size: '20'
     hare-wakeup-delta: '10'
+    executable-path: '/bin/go-p2p'
   deployment_type: deployment # default:deployment
 # IMPORTANT: all clients on the same suite should contain the same args (hare-committee-size, hare-max-adversaries etc)!
 client_v2:

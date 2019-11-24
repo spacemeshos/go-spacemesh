@@ -225,7 +225,7 @@ def test_many_gossip_messages(setup_clients, add_curl):
 def send_msgs(setup_clients, api, headers, total_expected_gossip, msg_size=10000, prop_sleep_time=20, num_of_msg=100,
               expected_ret="{'value': 'ok'}", msg_field="data"):
     """
-    sends a protocol message to a random node and asserts its' propagation
+    sends a protocol message to a random node and asserts it's propagation
 
     :param setup_clients: DeploymentInfo, clients info
     :param api: string, api path

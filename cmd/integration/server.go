@@ -14,27 +14,15 @@ const harnessPort = "9092"
 type ServerConfig struct {
 	logLevel  string
 	rpcListen string
-	baseDir   string
 	exe       string
 }
 
 // DefaultConfig returns a newConfig with all default values.
-func DefaultConfig(srcCodePath string) (*ServerConfig, error) {
-	baseDir, err := baseDir()
-	if err != nil {
-		return nil, err
-	}
-
-	nodePath, err := nodeExecutablePath(srcCodePath, baseDir)
-	if err != nil {
-		return nil, err
-	}
-
+func DefaultConfig(execPath string) (*ServerConfig, error) {
 	cfg := &ServerConfig{
 		logLevel:  "debug",
 		rpcListen: "127.0.0.1:" + harnessPort,
-		baseDir:   baseDir,
-		exe:       nodePath,
+		exe:       execPath,
 	}
 
 	return cfg, nil
@@ -82,6 +70,7 @@ func (s *server) start(addArgs []string) error {
 	// adding additional full go-spacemesh node arguments origin in
 	// yaml specification files, starting from index 1 to remove exec path
 	args = append(args, addArgs...)
+	//fmt.Println("adding arguments =", args)
 
 	s.cmd = exec.Command(s.cfg.exe, args...)
 	// Redirect stderr and stdout output to current harness buffers

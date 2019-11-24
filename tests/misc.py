@@ -48,7 +48,8 @@ class ContainerSpec:
                 break
         return dep
 
-    def _update_args(self, args_input_yaml, **kwargs):
+    @staticmethod
+    def _update_args(args_input_yaml, **kwargs):
         for k in kwargs:
             replaced = False
             if k in ContainerSpec.REPLACEABLE_ARGS:
