@@ -8,15 +8,11 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
 
-	"github.com/spacemeshos/go-spacemesh/api/pb"
 	"github.com/spacemeshos/go-spacemesh/log"
-
-	"google.golang.org/grpc"
 )
 
 const execPathLabel = "executable-path"
@@ -39,8 +35,6 @@ func Contains(a []string, x string) int {
 // tests and may be used for any other purpose.
 type Harness struct {
 	server *server
-	conn   *grpc.ClientConn
-	pb.SpacemeshServiceClient
 }
 
 func NewHarnessDefaultServerConfig(args []string) (*Harness, error) {
@@ -64,7 +58,7 @@ func NewHarnessDefaultServerConfig(args []string) (*Harness, error) {
 
 // NewHarness creates and initializes a new instance of Harness.
 func NewHarness(cfg *ServerConfig, args []string) (*Harness, error) {
-	fmt.Println("Starting harness")
+	log.Info("Starting harness")
 	server, err := newServer(cfg)
 	if err != nil {
 		return nil, err
@@ -91,50 +85,6 @@ func NewHarness(cfg *ServerConfig, args []string) (*Harness, error) {
 	}
 
 	return h, nil
-}
-
-// TearDown stops the harness running instance.
-// The created process is killed
-func (h *Harness) TearDown() error {
-	if err := h.server.shutdown(); err != nil {
-		return err
-	}
-
-	if err := h.conn.Close(); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// ProcessErrors returns a channel used for reporting any fatal process errors.
-func (h *Harness) ProcessErrors() <-chan error {
-	return h.server.errChan
-}
-
-// connectClient attempts to establish a gRPC Client connection
-// to the provided target.
-func connectClient(target string) (*grpc.ClientConn, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	opts := []grpc.DialOption{
-		grpc.WithInsecure(),
-		grpc.WithBlock(),
-	}
-	defer cancel()
-
-	conn, err := grpc.DialContext(ctx, target, opts...)
-	if err != nil {
-		return nil, fmt.Errorf("unable to connect to RPC server at %s: %v", target, err)
-	}
-	return conn, nil
-}
-
-// baseDir is the directory path of the temp directory for all the harness files.
-// NOTICE: right now it's not in use, might be useful in the near future
-func baseDir() (string, error) {
-	baseDir := filepath.Join(os.TempDir(), "full_node")
-	err := os.MkdirAll(baseDir, 0755)
-	return baseDir, err
 }
 
 func isListening(addr string) bool {
@@ -175,12 +125,22 @@ func killProcess(address string) error {
 	return nil
 }
 
-func main() {
-	// os.Args[0] contains the current process path
-	_, err := NewHarnessDefaultServerConfig(os.Args[1:])
+func startServer(args []string) (*Harness, error) {
+	harness, err := NewHarnessDefaultServerConfig(args)
 	if err != nil {
 		log.Error("An error has occurred while generating a new harness: ", err)
 	}
+
+	return harness, nil
+}
+
+func main() {
+	// os.Args[0] contains the current process path
+	_, err := startServer(os.Args[1:])
+	if err != nil {
+		log.Error("An error has occurred while generating a new harness: ", err)
+	}
+
 	srv := &http.Server{Addr: ":6060"}
 	defer func() {
 		if err := srv.Shutdown(context.TODO()); err != nil {
