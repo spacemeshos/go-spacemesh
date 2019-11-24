@@ -10,8 +10,8 @@ single_pod_ready_time_out: 60
 config_path: '../config.toml'
 
 bootstrap:
-  image: 'spacemeshos/go-spacemesh:develop'
-  command: '/bin/go-hare'
+  image: 'spacemeshos/go-spacemesh-dev:harness'
+  command: '/bin/go-harness'
   replicas: 1
   resources:
     requests:
@@ -27,10 +27,10 @@ bootstrap:
     hare-round-duration-sec: '10'
     hare-wakeup-delta: '5'
     layer-duration-sec: '80'
-
+    executable-path: '/bin/go-hare'
 client:
-  image: 'spacemeshos/go-spacemesh:develop'
-  command: '/bin/go-hare'
+  image: 'spacemeshos/go-spacemesh-dev:harness'
+  command: '/bin/go-harness'
   replicas: 19
   resources:
     requests:
@@ -46,7 +46,7 @@ client:
     hare-round-duration-sec: '10'
     hare-wakeup-delta: '5'
     layer-duration-sec: '80'
-
+    executable-path: '/bin/go-hare'
 elastic:
   host: elastic.spacemesh.io
   port: 9200

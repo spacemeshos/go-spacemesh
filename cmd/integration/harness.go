@@ -18,6 +18,8 @@ import (
 	"google.golang.org/grpc"
 )
 
+const execPathLabel = "executable-path"
+
 
 // Contains tells whether a contains x.
 // if it does it returns it's index otherwise -1
@@ -40,10 +42,8 @@ type Harness struct {
 	pb.SpacemeshServiceClient
 }
 
-
 func NewHarnessDefaultServerConfig(args []string) (*Harness, error) {
 	// same as in suite's yaml file
-	execPathLabel := "executable-path"
 	// find executable path label in args
 	execPathInd := Contains(args, execPathLabel)
 	if execPathInd == -1 {
@@ -63,6 +63,7 @@ func NewHarnessDefaultServerConfig(args []string) (*Harness, error) {
 
 // NewHarness creates and initializes a new instance of Harness.
 func NewHarness(cfg *ServerConfig, args []string) (*Harness, error) {
+	fmt.Println("Starting harness")
 	server, err := newServer(cfg)
 	if err != nil {
 		return nil, err
@@ -77,6 +78,7 @@ func NewHarness(cfg *ServerConfig, args []string) (*Harness, error) {
 	}
 
 	// Spawn a new mockNode server process.
+	fmt.Println("harness passing the following arguments:\n", args)
 	fmt.Println("Full node server start listening on:", server.cfg.rpcListen + "\n")
 	if err := server.start(args); err != nil {
 		fmt.Println("Full node ERROR listening on:", server.cfg.rpcListen + "\n")

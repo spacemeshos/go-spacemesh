@@ -10,8 +10,8 @@ deployment_ready_time_out: 120
 config_path: '../config.toml'
 
 bootstrap:
-  image: 'spacemeshos/go-spacemesh:develop'
-  command: '/bin/go-spacemesh'
+  image: 'spacemeshos/go-spacemesh-dev:harness'
+  command: '/bin/go-harness'
   replicas: 1
   args:
     randcon: '8'
@@ -29,9 +29,10 @@ bootstrap:
     genesis-active-size: '20'
     sync-request-timeout: '5000'
     hdist: '5'
+    executable-path: '/bin/go-spacemesh'
 client:
-  image: 'spacemeshos/go-spacemesh:develop'
-  command: '/bin/go-spacemesh'
+  image: 'spacemeshos/go-spacemesh-dev:harness'
+  command: '/bin/go-harness'
   replicas: 49
   args:
     randcon: '8'
@@ -49,6 +50,7 @@ client:
     genesis-active-size: '20'
     sync-request-timeout: '5000'
     hdist: '5'
+    executable-path: '/bin/go-spacemesh'
 elastic:
   host: elastic.spacemesh.io
   port: 9200
