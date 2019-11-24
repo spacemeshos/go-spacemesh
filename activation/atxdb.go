@@ -33,19 +33,20 @@ type ActivationDb struct {
 	sync.RWMutex
 	//todo: think about whether we need one db or several
 	IdStore
-	atxs             database.Database
-	atxHeaderCache   AtxCache
-	meshDb           *mesh.MeshDB
-	LayersPerEpoch   uint16
-	nipstValidator   NipstValidator
-	pendingActiveSet map[types.Hash12]*sync.Mutex
-	log              log.Log
-	processAtxMutex  sync.Mutex
-	assLock          sync.Mutex
+	atxs              database.Database
+	atxHeaderCache    AtxCache
+	meshDb            *mesh.MeshDB
+	LayersPerEpoch    uint16
+	nipstValidator    NipstValidator
+	pendingActiveSet  map[types.Hash12]*sync.Mutex
+	log               log.Log
+	calcActiveSetFunc func(epoch types.EpochId, blocks map[types.BlockID]struct{}) (map[string]struct{}, error)
+	processAtxMutex   sync.Mutex
+	assLock           sync.Mutex
 }
 
 func NewActivationDb(dbstore database.Database, idstore IdStore, meshDb *mesh.MeshDB, layersPerEpoch uint16, nipstValidator NipstValidator, log log.Log) *ActivationDb {
-	return &ActivationDb{atxs: dbstore,
+	db := &ActivationDb{atxs: dbstore,
 		atxHeaderCache:   NewAtxCache(600),
 		meshDb:           meshDb,
 		nipstValidator:   nipstValidator,
@@ -53,6 +54,8 @@ func NewActivationDb(dbstore database.Database, idstore IdStore, meshDb *mesh.Me
 		IdStore:          idstore,
 		pendingActiveSet: make(map[types.Hash12]*sync.Mutex),
 		log:              log}
+	db.calcActiveSetFunc = db.CalcActiveSetSize
+	return db
 }
 
 func (db *ActivationDb) ProcessAtxs(atxs []*types.ActivationTx) error {
@@ -231,7 +234,7 @@ func (db *ActivationDb) CalcActiveSetFromView(view []types.BlockID, pubEpoch typ
 		mp[blk] = struct{}{}
 	}
 
-	countedAtxs, err := db.CalcActiveSetSize(pubEpoch, mp)
+	countedAtxs, err := db.calcActiveSetFunc(pubEpoch, mp)
 	if err != nil {
 		db.releaseRunningLock(viewHash)
 		return 0, err

@@ -10,6 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"math/big"
 	"math/rand"
@@ -69,7 +70,10 @@ func (MockState) ValidateSignature(signed types.Signed) (types.Address, error) {
 }
 
 type ATXDBMock struct {
-	activeSet uint32
+	mock.Mock
+	counter     int
+	workSymLock sync.Mutex
+	activeSet   uint32
 }
 
 func (mock *ATXDBMock) CalcActiveSetFromView(view []types.BlockID, pubEpoch types.EpochId) (uint32, error) {
@@ -77,6 +81,11 @@ func (mock *ATXDBMock) CalcActiveSetFromView(view []types.BlockID, pubEpoch type
 }
 
 func (mock *ATXDBMock) CalcActiveSetSize(epoch types.EpochId, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
+	mock.counter++
+	defer mock.workSymLock.Unlock()
+	log.Info("working")
+	mock.workSymLock.Lock()
+	log.Info("done working")
 	return map[string]struct{}{"aaaaac": {}, "aaabddb": {}, "aaaccc": {}}, nil
 }
 
@@ -271,11 +280,13 @@ func TestActivationDb_CalcActiveSetFromViewWithCache(t *testing.T) {
 	blocks = createLayerWithAtx(t, layers, 10, 10, []*types.ActivationTx{}, blocks, blocks)
 	blocks = createLayerWithAtx(t, layers, 100, 10, []*types.ActivationTx{}, blocks, blocks)
 
+	mck := ATXDBMock{}
 	atx := types.NewActivationTx(id1, coinbase1, 1, atxs[0].Id(), 1000, 0, atxs[0].Id(), 3, blocks, &types.NIPST{})
-
+	atxdb.calcActiveSetFunc = mck.CalcActiveSetSize
 	wg := sync.WaitGroup{}
-	wg.Add(2)
-	for i := 0; i < 2; i++ {
+	wg.Add(100)
+	mck.workSymLock.Lock()
+	for i := 0; i < 100; i++ {
 		go func() {
 			num, err := atxdb.CalcActiveSetFromView(atx.View, atx.PubLayerIdx.GetEpoch(layersPerEpochBig))
 			assert.NoError(t, err)
@@ -284,7 +295,10 @@ func TestActivationDb_CalcActiveSetFromViewWithCache(t *testing.T) {
 			wg.Done()
 		}()
 	}
+	mck.workSymLock.Unlock()
 	wg.Wait()
+	assert.Equal(t, 1, mck.counter)
+	//mck.AssertNumberOfCalls(t, "CalcActiveSetSize", 1)
 }
 
 func Test_CalcActiveSetFromView(t *testing.T) {
