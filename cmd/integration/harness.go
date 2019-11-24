@@ -191,6 +191,7 @@ func main() {
 	if err != nil {
 		fmt.Println("An error has occurred while generating a new harness:", err)
 	}
+	// Sleeping here to enable the test run before harness terminates
 	fmt.Println("sleeping for 3000 seconds (50 mins)")
 	time.Sleep(3000*time.Second)
 }
