@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/api/pb"
+	"github.com/spacemeshos/go-spacemesh/log"
 
 	"google.golang.org/grpc"
 )
@@ -78,25 +79,15 @@ func NewHarness(cfg *ServerConfig, args []string) (*Harness, error) {
 	}
 
 	// Spawn a new mockNode server process.
-	fmt.Println("harness passing the following arguments:\n", args)
-	fmt.Println("Full node server start listening on:", server.cfg.rpcListen+"\n")
+	log.Info("harness passing the following arguments:\n", args)
+	log.Info("Full node server start listening on:", server.cfg.rpcListen+"\n")
 	if err := server.start(args); err != nil {
 		fmt.Println("Full node ERROR listening on:", server.cfg.rpcListen+"\n")
 		return nil, err
 	}
 
-	//// Verify the client connectivity.
-	//// If failed, shutdown the server.
-	//conn, err := connectClient(cfg.rpcListen)
-	//if err != nil {
-	//	_ = server.shutdown()
-	//	return nil, err
-	//}
-
 	h := &Harness{
 		server: server,
-		//conn:                   conn,
-		//SpacemeshServiceClient: pb.NewSpacemeshServiceClient(conn),
 	}
 
 	return h, nil
@@ -188,17 +179,17 @@ func main() {
 	// os.Args[0] contains the current process path
 	_, err := NewHarnessDefaultServerConfig(os.Args[1:])
 	if err != nil {
-		fmt.Println("An error has occurred while generating a new harness:", err)
+		log.Error("An error has occurred while generating a new harness: ", err)
 	}
 	srv := &http.Server{Addr: ":6060"}
 	defer func() {
 		if err := srv.Shutdown(context.TODO()); err != nil {
-			fmt.Println("cannot shutdown http server", err)
+			log.Error("cannot shutdown http server: ", err)
 		}
 	}()
 
 	err = srv.ListenAndServe()
 	if err != nil {
-		fmt.Println("cannot start http server", err)
+		log.Error("cannot start http server: ", err)
 	}
 }

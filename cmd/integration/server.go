@@ -5,6 +5,8 @@ import (
 	"os"
 	"os/exec"
 	"sync"
+
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 const harnessPort = "9092"
@@ -70,7 +72,6 @@ func (s *server) start(addArgs []string) error {
 	// adding additional full go-spacemesh node arguments origin in
 	// yaml specification files, starting from index 1 to remove exec path
 	args = append(args, addArgs...)
-	//fmt.Println("adding arguments =", args)
 
 	s.cmd = exec.Command(s.cfg.exe, args...)
 	// Redirect stderr and stdout output to current harness buffers
@@ -93,7 +94,7 @@ func (s *server) start(addArgs []string) error {
 
 		if err != nil {
 			// move err to error channel
-			fmt.Println("an error has occurred during go-spacemesh command wait:", err)
+			log.Error("an error has occurred during go-spacemesh command wait: ", err)
 			s.errChan <- fmt.Errorf("%v\n", err)
 		}
 		// Signal any onlookers that this process has exited.

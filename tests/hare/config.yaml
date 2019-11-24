@@ -10,7 +10,7 @@ single_pod_ready_time_out: 60
 config_path: '../config.toml'
 
 bootstrap:
-  image: 'spacemeshos/go-spacemesh-dev:harness'
+  image: 'spacemeshos/go-spacemesh:develop'
   command: '/bin/go-harness'
   replicas: 1
   resources:
@@ -29,7 +29,7 @@ bootstrap:
     layer-duration-sec: '80'
     executable-path: '/bin/go-hare'
 client:
-  image: 'spacemeshos/go-spacemesh-dev:harness'
+  image: 'spacemeshos/go-spacemesh:develop'
   command: '/bin/go-harness'
   replicas: 19
   resources:
