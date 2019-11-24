@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -19,6 +20,7 @@ import (
 
 const execPathLabel = "executable-path"
 
+// TODO: this should be a util function
 // Contains tells whether a contains x.
 // if it does it returns it's index otherwise -1
 func Contains(a []string, x string) int {
@@ -188,7 +190,15 @@ func main() {
 	if err != nil {
 		fmt.Println("An error has occurred while generating a new harness:", err)
 	}
-	// Sleeping here to enable the test run before harness terminates
-	fmt.Println("sleeping for 3000 seconds (50 mins)")
-	time.Sleep(3000 * time.Second)
+	srv := &http.Server{Addr: ":6060"}
+	defer func() {
+		if err := srv.Shutdown(context.TODO()); err != nil {
+			fmt.Println("cannot shutdown http server", err)
+		}
+	}()
+
+	err = srv.ListenAndServe()
+	if err != nil {
+		fmt.Println("cannot start http server", err)
+	}
 }
