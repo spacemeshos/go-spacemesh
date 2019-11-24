@@ -1,6 +1,5 @@
 package main
 
-
 import (
 	"bytes"
 	"context"
@@ -19,7 +18,6 @@ import (
 )
 
 const execPathLabel = "executable-path"
-
 
 // Contains tells whether a contains x.
 // if it does it returns it's index otherwise -1
@@ -79,9 +77,9 @@ func NewHarness(cfg *ServerConfig, args []string) (*Harness, error) {
 
 	// Spawn a new mockNode server process.
 	fmt.Println("harness passing the following arguments:\n", args)
-	fmt.Println("Full node server start listening on:", server.cfg.rpcListen + "\n")
+	fmt.Println("Full node server start listening on:", server.cfg.rpcListen+"\n")
 	if err := server.start(args); err != nil {
-		fmt.Println("Full node ERROR listening on:", server.cfg.rpcListen + "\n")
+		fmt.Println("Full node ERROR listening on:", server.cfg.rpcListen+"\n")
 		return nil, err
 	}
 
@@ -94,7 +92,7 @@ func NewHarness(cfg *ServerConfig, args []string) (*Harness, error) {
 	//}
 
 	h := &Harness{
-		server:                 server,
+		server: server,
 		//conn:                   conn,
 		//SpacemeshServiceClient: pb.NewSpacemeshServiceClient(conn),
 	}
@@ -184,7 +182,6 @@ func killProcess(address string) error {
 	return nil
 }
 
-
 func main() {
 	// os.Args[0] contains the current process path
 	_, err := NewHarnessDefaultServerConfig(os.Args[1:])
@@ -193,5 +190,5 @@ func main() {
 	}
 	// Sleeping here to enable the test run before harness terminates
 	fmt.Println("sleeping for 3000 seconds (50 mins)")
-	time.Sleep(3000*time.Second)
+	time.Sleep(3000 * time.Second)
 }
