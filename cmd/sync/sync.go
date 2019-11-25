@@ -101,7 +101,11 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	lg.Info("request timeout: ", timeout)
 	lg.Info("data version: ", version)
 	lg.Info("hdist: ", app.Config.Hdist)
+
 	path := app.Config.DataDir + version
+
+	lg.Info("local db path: ", path)
+
 	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P)
 
 	if err != nil {
@@ -243,7 +247,7 @@ func GetData(path, prefix string, lg log.Log) error {
 			continue
 		}
 
-		lg.Info("downloading:", attrs.Name)
+		lg.Info("downloading: %v to %v", attrs.Name, path+attrs.Name)
 
 		err = ioutil.WriteFile(path+attrs.Name, data, 0644)
 		if err != nil {
