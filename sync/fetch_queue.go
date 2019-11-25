@@ -67,8 +67,8 @@ func (fq *fetchQueue) work() error {
 			return fmt.Errorf("channel closed")
 		}
 
-		fq.Info("fetched items %s", concatShortIds(bjb.ids))
 		fq.handleFetch(bjb)
+		fq.Info("fetched items %s", concatShortIds(bjb.ids))
 		fq.Debug("next batch")
 	}
 	return nil
