@@ -7,6 +7,8 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -216,7 +218,7 @@ func TestJsonWalletApi(t *testing.T) {
 	ap.balances[addr] = big.NewInt(100)
 
 	// generate request payload (api input params)
-	payload := marshalProto(t, &pb.AccountId{Address: addrBytes})
+	payload := marshalProto(t, &pb.AccountId{Address: util.Bytes2Hex(addrBytes)})
 
 	respBody, respStatus := callEndpoint(t, "v1/nonce", payload)
 	require.Equal(t, http.StatusOK, respStatus)
@@ -252,7 +254,7 @@ func TestJsonWalletApi(t *testing.T) {
 	assertSimpleMessage(t, respBody, genTime.t.String())
 
 	// test get rewards per account
-	payload = marshalProto(t, &pb.AccountId{Address: addrBytes})
+	payload = marshalProto(t, &pb.AccountId{Address: util.Bytes2Hex(addrBytes)})
 	respBody, respStatus = callEndpoint(t, "v1/accountrewards", payload)
 	require.Equal(t, http.StatusOK, respStatus)
 
@@ -261,7 +263,7 @@ func TestJsonWalletApi(t *testing.T) {
 	require.Empty(t, rewards.Rewards) // TODO: Test with actual data returned
 
 	// test get txs per account
-	payload = marshalProto(t, &pb.GetTxsSinceLayer{Account: &pb.AccountId{Address: addrBytes}, StartLayer: 1})
+	payload = marshalProto(t, &pb.GetTxsSinceLayer{Account: &pb.AccountId{Address: util.Bytes2Hex(addrBytes)}, StartLayer: 1})
 	respBody, respStatus = callEndpoint(t, "v1/accounttxs", payload)
 	require.Equal(t, http.StatusOK, respStatus)
 
@@ -270,7 +272,7 @@ func TestJsonWalletApi(t *testing.T) {
 	require.Empty(t, accounts.Txs) // TODO: Test with actual data returned
 
 	// test get txs per account with wrong layer error
-	payload = marshalProto(t, &pb.GetTxsSinceLayer{Account: &pb.AccountId{Address: addrBytes}, StartLayer: 11})
+	payload = marshalProto(t, &pb.GetTxsSinceLayer{Account: &pb.AccountId{Address: util.Bytes2Hex(addrBytes)}, StartLayer: 11})
 	respBody, respStatus = callEndpoint(t, "v1/accounttxs", payload)
 	require.Equal(t, http.StatusInternalServerError, respStatus)
 	const ErrInvalidStartLayer = "{\"error\":\"invalid start layer\",\"message\":\"invalid start layer\",\"code\":2}"
@@ -338,8 +340,8 @@ func assertTx(t *testing.T, respTx pb.Transaction, tx *types.Transaction, status
 	r.Equal(tx.Id().Bytes(), respTx.TxId.Id)
 	r.Equal(tx.Fee, respTx.Fee)
 	r.Equal(tx.Amount, respTx.Amount)
-	r.Equal(tx.Recipient.Bytes(), respTx.Receiver.Address)
-	r.Equal(tx.Origin().Bytes(), respTx.Sender.Address)
+	r.Equal(util.Bytes2Hex(tx.Recipient.Bytes()), respTx.Receiver.Address)
+	r.Equal(util.Bytes2Hex(tx.Origin().Bytes()), respTx.Sender.Address)
 	r.Equal(layerId, respTx.LayerId)
 	r.Equal(status, respTx.Status.String())
 	r.Equal(timestamp, respTx.Timestamp)
@@ -408,7 +410,7 @@ func genTx(t *testing.T) *types.Transaction {
 	require.NoError(t, err)
 	signer, err := signing.NewEdSignerFromBuffer(key)
 	require.NoError(t, err)
-	tx, err := types.NewSignedTx(1111, [20]byte{}, 1234, 11, 321, signer)
+	tx, err := mesh.NewSignedTx(1111, [20]byte{}, 1234, 11, 321, signer)
 	require.NoError(t, err)
 
 	return tx
@@ -419,7 +421,7 @@ func TestJsonWalletApi_Errors(t *testing.T) {
 
 	// generate request payload (api input params)
 	addrBytes := []byte{0x02} // address that does not exist
-	payload := marshalProto(t, &pb.AccountId{Address: addrBytes})
+	payload := marshalProto(t, &pb.AccountId{Address: util.Bytes2Hex(addrBytes)})
 	const expectedResponse = "{\"error\":\"account does not exist\",\"message\":\"account does not exist\",\"code\":2}"
 
 	respBody, respStatus := callEndpoint(t, "v1/nonce", payload)

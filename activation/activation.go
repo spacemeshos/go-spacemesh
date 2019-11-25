@@ -3,6 +3,7 @@ package activation
 import (
 	"errors"
 	"fmt"
+	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -558,4 +559,30 @@ func (b *Builder) GetPositioningAtx(epochId types.EpochId) (*types.ActivationTxH
 		return nil, fmt.Errorf("cannot find pos atx: %v", err.Error())
 	}
 	return posAtx, nil
+}
+
+// ExtractPublicKey extracts public key from message and verifies public key exists in IdStore, this is how we validate
+// ATX signature. If this is the first ATX it is considered valid anyways and ATX syntactic validation will determine ATX validity
+func ExtractPublicKey(signedAtx *types.ActivationTx) (*signing.PublicKey, error) {
+	bts, err := signedAtx.AtxBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	pubKey, err := ed25519.ExtractPublicKey(bts, signedAtx.Sig)
+	if err != nil {
+		return nil, err
+	}
+
+	pub := signing.NewPublicKey(pubKey)
+	return pub, nil
+}
+
+func SignAtx(signer *signing.EdSigner, atx *types.ActivationTx) (*types.ActivationTx, error) {
+	bts, err := atx.AtxBytes()
+	if err != nil {
+		return nil, err
+	}
+	atx.Sig = signer.Sign(bts)
+	return atx, nil
 }
