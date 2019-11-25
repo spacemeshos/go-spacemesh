@@ -4,10 +4,8 @@ import (
 	"errors"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"hash/fnv"
-	"sort"
 )
 
 const nilVal = 0
@@ -77,11 +75,12 @@ func calcValue(bids map[types.BlockID]struct{}) uint32 {
 		keys = append(keys, k)
 	}
 
-	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
+	keys = types.SortBlockIds(keys)
+
 	// calc
 	h := fnv.New32()
 	for i := 0; i < len(keys); i++ {
-		_, err := h.Write(util.Uint32ToBytes(uint32(keys[i])))
+		_, err := h.Write(keys[i].ToBytes())
 		if err != nil {
 			log.Panic("Could not calculate beacon value. Hash write error=%v", err)
 		}

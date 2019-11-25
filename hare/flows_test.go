@@ -5,6 +5,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/amcl"
 	"github.com/spacemeshos/go-spacemesh/amcl/BLS381"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -67,7 +68,7 @@ func (his *HareWrapper) waitForTermination() {
 			s := NewEmptySet(10)
 			blks, _ := p.GetResult(i, i)
 			for _, b := range blks {
-				s.Add(blockID{b})
+				s.Add(b)
 			}
 			his.outputs[instanceId(i)] = append(his.outputs[instanceId(i)], s)
 		}
@@ -199,7 +200,7 @@ func buildSet() []types.BlockID {
 	s := make([]types.BlockID, 200, 200)
 
 	for i := uint64(0); i < 200; i++ {
-		s = append(s, types.BlockID(i))
+		s = append(s, types.NewExistingBlock(1, util.Uint64ToBytes(i)).Id())
 	}
 
 	return s
@@ -252,7 +253,7 @@ func Test_multipleCPs(t *testing.T) {
 				log.Info("sending for instance %v", i)
 				test.lCh[i] <- j
 			}
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(150 * time.Millisecond)
 		}
 	}()
 

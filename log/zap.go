@@ -106,8 +106,8 @@ func AtxId(val string) Field {
 }
 
 // BlockId return a Uint64 field (key - "block_id")
-func BlockId(val uint64) Field {
-	return Uint64("block_id", val)
+func BlockId(val string) Field {
+	return String("block_id", val)
 }
 
 // EpochId return a Uint64 field (key - "epoch_id")

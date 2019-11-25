@@ -4,7 +4,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -448,18 +447,18 @@ func (s *Syncer) blockSyntacticValidation(block *types.Block) ([]*types.Transact
 	//data availability
 	txs, atxs, err := s.DataAvailability(block)
 	if err != nil {
-		return nil, nil, fmt.Errorf("DataAvailabilty failed for block %v err: %v", block, err)
+		return nil, nil, fmt.Errorf("DataAvailabilty failed for block %v err: %v", block.Id(), err)
 	}
 
 	//validate block's view
 	valid := s.validateBlockView(block)
 	if valid == false {
-		return nil, nil, errors.New(fmt.Sprintf("block %v not syntacticly valid", block.ID()))
+		return nil, nil, errors.New(fmt.Sprintf("block %v not syntacticly valid", block.Id()))
 	}
 
 	//validate block's votes
 	if valid := validateVotes(block, s.ForBlockInView, s.Hdist, s.Log); valid == false {
-		return nil, nil, errors.New(fmt.Sprintf("validate votes failed for block %v", block.ID()))
+		return nil, nil, errors.New(fmt.Sprintf("validate votes failed for block %v", block.Id()))
 	}
 
 	return txs, atxs, nil
@@ -472,10 +471,10 @@ func (s *Syncer) validateBlockView(blk *types.Block) bool {
 		ch <- res
 		return nil
 	}
-	if res, err := s.blockQueue.addDependencies(blk.ID(), blk.ViewEdges, foo); res == false {
+	if res, err := s.blockQueue.addDependencies(blk.Id(), blk.ViewEdges, foo); res == false {
 		return true
 	} else if err != nil {
-		s.Error(fmt.Sprintf("block %v not syntactically valid ", blk.ID()))
+		s.Error(fmt.Sprintf("block %v not syntactically valid ", blk.Id()))
 		return false
 	}
 
@@ -494,8 +493,8 @@ func validateVotes(blk *types.Block, forBlockfunc ForBlockInView, depth int, lg 
 	}
 
 	traverse := func(b *types.Block) (stop bool, err error) {
-		if _, ok := vote[b.ID()]; ok {
-			delete(vote, b.ID())
+		if _, ok := vote[b.Id()]; ok {
+			delete(vote, b.Id())
 		}
 		return len(vote) == 0, nil
 	}
@@ -511,7 +510,7 @@ func validateVotes(blk *types.Block, forBlockfunc ForBlockInView, depth int, lg 
 	}
 
 	if err != nil {
-		lg.Error("validate votes failed", err)
+		lg.With().Error("validate votes failed err %s", log.BlockId(blk.Id().String()), log.Err(err))
 	}
 
 	return err == nil
@@ -543,14 +542,14 @@ func (s *Syncer) DataAvailability(blk *types.Block) ([]*types.Transaction, []*ty
 	wg.Wait()
 
 	if txerr != nil {
-		return nil, nil, fmt.Errorf("failed fetching block %v transactions %v", blk.ID(), txerr)
+		return nil, nil, fmt.Errorf("failed fetching block %v transactions %v", blk.Id(), txerr)
 	}
 
 	if atxerr != nil {
-		return nil, nil, fmt.Errorf("failed fetching block %v activation transactions %v", blk.ID(), atxerr)
+		return nil, nil, fmt.Errorf("failed fetching block %v activation transactions %v", blk.Id(), atxerr)
 	}
 
-	s.Info("fetched all block data %v", blk.ID())
+	s.Info("fetched all block data %v", blk.Id())
 	return txres, atxres, nil
 }
 
@@ -718,15 +717,13 @@ func (s *Syncer) txCheckLocal(txIds []types.Hash32) (map[types.Hash32]Item, map[
 func (s *Syncer) blockCheckLocal(blockIds []types.Hash32) (map[types.Hash32]Item, map[types.Hash32]Item, []types.Hash32) {
 	//look in pool
 	dbItems := make(map[types.Hash32]Item)
-	for _, itemId := range blockIds {
-		var id = util.BytesToUint64(itemId.Bytes())
+	for _, id := range blockIds {
 		res, err := s.GetBlock(types.BlockID(id))
 		if err != nil {
 			s.Debug("get block failed %v", id)
 			continue
 		}
-
-		dbItems[itemId] = res
+		dbItems[id] = res
 	}
 
 	return nil, dbItems, nil

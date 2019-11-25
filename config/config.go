@@ -23,13 +23,12 @@ const (
 	defaultAccountFileName = "accounts"
 	defaultDataDirName     = "spacemesh"
 	Genesis                = mesh.Genesis
-	GenesisId              = mesh.GenesisId
 	NewBlockProtocol       = "newBlock"
 )
 
 var (
 	defaultHomeDir    = filesystem.GetUserHomeDirectory()
-	defaultDataDir    = filepath.Join(defaultHomeDir, defaultDataDirName)
+	defaultDataDir    = filepath.Join(defaultHomeDir, defaultDataDirName, "/")
 	defaultConfigFile = filepath.Join(defaultHomeDir, defaultConfigFileName)
 	defaultLogDir     = filepath.Join(defaultHomeDir, defaultLogFileName)
 	defaultAccountDir = filepath.Join(defaultHomeDir, defaultAccountFileName)

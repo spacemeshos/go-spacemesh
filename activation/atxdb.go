@@ -266,7 +266,7 @@ func (db *ActivationDb) releaseRunningLock(viewHash types.Hash12) {
 // - ATX LayerID is NipstLayerTime or less after the PositioningATX LayerID.
 // - The ATX view of the previous epoch contains ActiveSetSize activations.
 func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
-	pub, err := types.ExtractPublicKey(atx)
+	pub, err := ExtractPublicKey(atx)
 	if err != nil {
 		return fmt.Errorf("cannot validate atx sig atx id %v err %v", atx.ShortString(), err)
 	}
