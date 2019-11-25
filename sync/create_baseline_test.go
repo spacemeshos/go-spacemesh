@@ -26,10 +26,10 @@ func TestCreateBaseline(t *testing.T) {
 	//t.Skip()
 
 	const (
-		numOfLayers    = 20 // 201
-		blocksPerLayer = 50 // 200
-		txPerBlock     = 10 // 50
-		atxPerBlock    = 5  // 5
+		numOfLayers    = 201 // 201
+		blocksPerLayer = 200 // 200
+		txPerBlock     = 10  // 50
+		atxPerBlock    = 5   // 5
 	)
 
 	id := Path
@@ -61,17 +61,6 @@ func TestCreateBaseline(t *testing.T) {
 
 	lg.Info("start creating baseline")
 	createBaseline(msh, numOfLayers, blocksPerLayer, blocksPerLayer, txPerBlock, atxPerBlock)
-
-	//i := 1
-	//for ; ; i++ {
-	//	if lyr, err2 := msh.GetLayer(types.LayerID(i)); err2 != nil || lyr == nil {
-	//		lg.Info("loaded %v layers from disk %v", i-1, err2)
-	//		break
-	//	} else {
-	//		lg.Info("loaded layer %v from disk ", i)
-	//		msh.ValidateLayer(lyr)
-	//	}
-	//}
 }
 
 func txs(num int) ([]*types.Transaction, []types.TransactionId) {
@@ -147,7 +136,7 @@ func createLayerWithRandVoting(msh *mesh.Mesh, index types.LayerID, prev []*type
 
 		bl.TxIds = txids
 		bl.AtxIds = atxids
-
+		bl.CalcAndSetId()
 		start := time.Now()
 		msh.AddBlockWithTxs(bl, txs, atxs)
 		log.Debug("added block %v", time.Since(start))
