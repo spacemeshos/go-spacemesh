@@ -142,7 +142,7 @@ func main() {
 			select {
 			case errMsg := <-h.server.errChan:
 				log.Error("harness received an err from subprocess: %v", errMsg)
-			case <- h.server.quit:
+			case <-h.server.quit:
 				log.Info("harness got quit signal from subprocess")
 				return
 			}
