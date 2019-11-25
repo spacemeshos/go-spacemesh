@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -64,7 +63,7 @@ func NewHarnessDefaultServerConfig(args []string) (*Harness, error) {
 
 // NewHarness creates and initializes a new instance of Harness.
 func NewHarness(cfg *ServerConfig, args []string) (*Harness, error) {
-	fmt.Println("Starting harness")
+	log.Info("Starting harness")
 	server, err := newServer(cfg)
 	if err != nil {
 		return nil, err
@@ -79,10 +78,10 @@ func NewHarness(cfg *ServerConfig, args []string) (*Harness, error) {
 	}
 
 	// Spawn a new mockNode server process.
-	log.Info("harness passing the following arguments:\n", args)
-	log.Info("Full node server start listening on:", server.cfg.rpcListen+"\n")
+	log.Info("harness passing the following arguments: %v", args)
+	log.Info("Full node server start listening on: %v", server.cfg.rpcListen)
 	if err := server.start(args); err != nil {
-		fmt.Println("Full node ERROR listening on:", server.cfg.rpcListen+"\n")
+		log.Error("Full node ERROR listening on: %v", server.cfg.rpcListen)
 		return nil, err
 	}
 
@@ -91,50 +90,6 @@ func NewHarness(cfg *ServerConfig, args []string) (*Harness, error) {
 	}
 
 	return h, nil
-}
-
-// TearDown stops the harness running instance.
-// The created process is killed
-func (h *Harness) TearDown() error {
-	if err := h.server.shutdown(); err != nil {
-		return err
-	}
-
-	if err := h.conn.Close(); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// ProcessErrors returns a channel used for reporting any fatal process errors.
-func (h *Harness) ProcessErrors() <-chan error {
-	return h.server.errChan
-}
-
-// connectClient attempts to establish a gRPC Client connection
-// to the provided target.
-func connectClient(target string) (*grpc.ClientConn, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	opts := []grpc.DialOption{
-		grpc.WithInsecure(),
-		grpc.WithBlock(),
-	}
-	defer cancel()
-
-	conn, err := grpc.DialContext(ctx, target, opts...)
-	if err != nil {
-		return nil, fmt.Errorf("unable to connect to RPC server at %s: %v", target, err)
-	}
-	return conn, nil
-}
-
-// baseDir is the directory path of the temp directory for all the harness files.
-// NOTICE: right now it's not in use, might be useful in the near future
-func baseDir() (string, error) {
-	baseDir := filepath.Join(os.TempDir(), "full_node")
-	err := os.MkdirAll(baseDir, 0755)
-	return baseDir, err
 }
 
 func isListening(addr string) bool {
@@ -177,10 +132,23 @@ func killProcess(address string) error {
 
 func main() {
 	// os.Args[0] contains the current process path
-	_, err := NewHarnessDefaultServerConfig(os.Args[1:])
+	h, err := NewHarnessDefaultServerConfig(os.Args[1:])
 	if err != nil {
-		log.Error("An error has occurred while generating a new harness: ", err)
+		log.Error("An error has occurred while generating a new harness: %v", err)
 	}
+	// listen on error channel, quit when process stops
+	go func() {
+		for {
+			select {
+			case errMsg := <-h.server.errChan:
+				log.Error("harness received an err from subprocess: %v", errMsg)
+			case <- h.server.quit:
+				log.Info("harness got quit signal from subprocess")
+				return
+			}
+		}
+	}()
+	// a dummy server so the main process won't be terminated before the tests are done running
 	srv := &http.Server{Addr: ":6060"}
 	defer func() {
 		if err := srv.Shutdown(context.TODO()); err != nil {
