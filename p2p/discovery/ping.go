@@ -52,6 +52,9 @@ func (p *protocol) verifyPinger(from net.Addr, pi *node.NodeInfo) error {
 		return err
 	}
 
+	// Check the address provided by pinging it (if we haven't already, recently).
+	// This helps prevent reflective DoS attacks.
+
 	//TODO: only accept local (unspecified/loopback) IPs from other local ips.
 	ipfrom, _, _ := net.SplitHostPort(from.String())
 	pi.IP = net.ParseIP(ipfrom)

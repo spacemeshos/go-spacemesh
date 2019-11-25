@@ -90,6 +90,9 @@ type addrBook struct {
 	addrNew   [newBucketCount]map[node.ID]*KnownAddress
 	addrTried [triedBucketCount]map[node.ID]*KnownAddress
 
+	// Keep track of how recently we've successfully completed a roundtrip ping with an address.
+	addrPinged map[node.ID]*KnownAddress
+
 	//todo: lock local for updates
 	localAddress *node.NodeInfo
 
