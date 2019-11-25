@@ -16,10 +16,23 @@ import (
 
 var proof []byte
 
+type blockBuilderMock struct{}
+
+func (blockBuilderMock) ValidateAndAddTxToPool(tx *types.Transaction) error {
+	return nil
+}
+
 func TestCreateBaseline(t *testing.T) {
-	t.Skip()
+	//t.Skip()
+
+	const (
+		numOfLayers    = 20 // 201
+		blocksPerLayer = 50 // 200
+		txPerBlock     = 10 // 50
+		atxPerBlock    = 5  // 5
+	)
+
 	id := Path
-	layerSize := 200
 	lg := log.New(id, "", "")
 	mshdb, _ := mesh.NewPersistentMeshDB(id, lg.WithOptions(log.Nop))
 	nipstStore, _ := database.NewLDBDatabase(id+"nipst", 0, 0, lg.WithName("nipstDbStore").WithOptions(log.Nop))
@@ -27,9 +40,10 @@ func TestCreateBaseline(t *testing.T) {
 	atxdbStore, _ := database.NewLDBDatabase(id+"atx", 0, 0, lg.WithOptions(log.Nop))
 	defer atxdbStore.Close()
 	atxdb := activation.NewActivationDb(atxdbStore, &MockIStore{}, mshdb, uint16(1000), &ValidatorMock{}, lg.WithName("atxDB").WithOptions(log.Nop))
-	trtl := tortoise.NewAlgorithm(int(layerSize), mshdb, 1, lg.WithName("trtl"))
+	trtl := tortoise.NewAlgorithm(blocksPerLayer, mshdb, 1, lg.WithName("trtl"))
 	msh := mesh.NewMesh(mshdb, atxdb, rewardConf, trtl, &MockTxMemPool{}, &MockAtxMemPool{}, &stateMock{}, lg.WithOptions(log.Nop))
 	defer msh.Close()
+	msh.SetBlockBuilder(&blockBuilderMock{})
 	poetDbStore, err := database.NewLDBDatabase(id+"poet", 0, 0, lg.WithName("poetDbStore").WithOptions(log.Nop))
 	if err != nil {
 		lg.Error("error: ", err)
@@ -46,18 +60,18 @@ func TestCreateBaseline(t *testing.T) {
 	poetDb.ValidateAndStore(&proofMessage)
 
 	lg.Info("start creating baseline")
-	createBaseline(msh, 201, layerSize, layerSize, 50, 5)
+	createBaseline(msh, numOfLayers, blocksPerLayer, blocksPerLayer, txPerBlock, atxPerBlock)
 
-	i := 1
-	for ; ; i++ {
-		if lyr, err2 := msh.GetLayer(types.LayerID(i)); err2 != nil || lyr == nil {
-			lg.Info("loaded %v layers from disk %v", i-1, err2)
-			break
-		} else {
-			lg.Info("loaded layer %v from disk ", i)
-			msh.ValidateLayer(lyr)
-		}
-	}
+	//i := 1
+	//for ; ; i++ {
+	//	if lyr, err2 := msh.GetLayer(types.LayerID(i)); err2 != nil || lyr == nil {
+	//		lg.Info("loaded %v layers from disk %v", i-1, err2)
+	//		break
+	//	} else {
+	//		lg.Info("loaded layer %v from disk ", i)
+	//		msh.ValidateLayer(lyr)
+	//	}
+	//}
 }
 
 func txs(num int) ([]*types.Transaction, []types.TransactionId) {
@@ -92,11 +106,11 @@ func createBaseline(msh *mesh.Mesh, layers int, layerSize int, patternSize int, 
 
 	lyrs = append(lyrs, l)
 	for i := 0; i < layers-1; i++ {
-		lg.Info("!!-------------------------new layer %v-------------------------!!!!", i)
+		lg.Debug("!!-------------------------new layer %v-------------------------!!!!", i)
 		start := time.Now()
 		lyr := createLayerWithRandVoting(msh, l.Index()+1, []*types.Layer{l}, layerSize, patternSize, txPerBlock, atxPerBlock)
 		lyrs = append(lyrs, lyr)
-		lg.Debug("Time inserting layer into db: %v ", time.Since(start))
+		lg.Info("Time inserting layer into db: %v ", time.Since(start))
 		l = lyr
 	}
 
@@ -119,11 +133,11 @@ func createLayerWithRandVoting(msh *mesh.Mesh, index types.LayerID, prev []*type
 		for idx, pat := range patterns {
 			for _, id := range pat {
 				b := prev[idx].Blocks()[id]
-				bl.AddVote(types.BlockID(b.Id()))
+				bl.AddVote(b.Id())
 			}
 		}
 		for _, prevBloc := range prev[0].Blocks() {
-			bl.AddView(types.BlockID(prevBloc.Id()))
+			bl.AddView(prevBloc.Id())
 		}
 
 		//add txs
@@ -136,7 +150,7 @@ func createLayerWithRandVoting(msh *mesh.Mesh, index types.LayerID, prev []*type
 
 		start := time.Now()
 		msh.AddBlockWithTxs(bl, txs, atxs)
-		log.Info("added block %v", time.Since(start))
+		log.Debug("added block %v", time.Since(start))
 		l.AddBlock(bl)
 
 	}

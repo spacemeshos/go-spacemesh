@@ -169,9 +169,7 @@ func TestBlockBuilder_StartStop(t *testing.T) {
 	err = builder.Close()
 	assert.Error(t, err)
 
-	addr1 := types.BytesToAddress([]byte{0x02})
-	addr2 := types.BytesToAddress([]byte{0x01})
-	err = builder.AddTransaction(types.NewTxWithOrigin(1, addr1, addr2, 1, DefaultGasLimit, DefaultFee))
+	err = builder.AddTransaction(NewTx(t, 1, types.BytesToAddress([]byte{0x01}), signing.NewEdSigner()))
 	assert.Error(t, err)
 }
 
@@ -220,13 +218,13 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 	err := builder.Start()
 	assert.NoError(t, err)
 
-	addr1 := types.BytesToAddress([]byte{0x02})
-	addr2 := types.BytesToAddress([]byte{0x01})
+	recipient := types.BytesToAddress([]byte{0x01})
+	signer := signing.NewEdSigner()
 
 	trans := []*types.Transaction{
-		types.NewTxWithOrigin(1, addr1, addr2, 1, DefaultGasLimit, DefaultFee),
-		types.NewTxWithOrigin(2, addr1, addr2, 1, DefaultGasLimit, DefaultFee),
-		types.NewTxWithOrigin(3, addr1, addr2, 1, DefaultGasLimit, DefaultFee),
+		NewTx(t, 1, recipient, signer),
+		NewTx(t, 2, recipient, signer),
+		NewTx(t, 3, recipient, signer),
 	}
 
 	transids := []types.TransactionId{trans[0].Id(), trans[1].Id(), trans[2].Id()}
@@ -270,9 +268,14 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 
 }
 
-func TestBlockBuilder_SerializeTrans(t *testing.T) {
-	tx, err := mesh.NewSignedTx(0, types.BytesToAddress([]byte{0x02}), 10, 10, 10, signing.NewEdSigner())
+func NewTx(t *testing.T, nonce uint64, recipient types.Address, signer *signing.EdSigner) *types.Transaction {
+	tx, err := mesh.NewSignedTx(nonce, recipient, 1, DefaultGasLimit, DefaultFee, signer)
 	assert.NoError(t, err)
+	return tx
+}
+
+func TestBlockBuilder_SerializeTrans(t *testing.T) {
+	tx := NewTx(t, 1, types.BytesToAddress([]byte{0x02}), signing.NewEdSigner())
 	buf, err := types.InterfaceToBytes(tx)
 	assert.NoError(t, err)
 
@@ -321,9 +324,7 @@ func TestBlockBuilder_Validation(t *testing.T) {
 
 	builder1 := NewBlockBuilder(types.NodeId{Key: "a"}, &MockSigning{}, n1, beginRound, 5, NewTxMemPool(), NewAtxMemPool(), MockCoin{}, MockOrphans{st: []types.BlockID{block1.Id(), block2.Id(), block3.Id()}}, hare, mockBlockOracle{}, mockTxProcessor{true}, &mockAtxValidator{}, &mockSyncer{}, selectCount, projector, log.New(n1.NodeInfo.ID.String(), "", ""))
 	builder1.Start()
-	ed := signing.NewEdSigner()
-	tx, e := mesh.NewSignedTx(5, types.HexToAddress("0xFF"), 2, 3, 4, ed)
-	assert.Nil(t, e)
+	tx := NewTx(t, 5, types.HexToAddress("0xFF"), signing.NewEdSigner())
 	b, e := types.InterfaceToBytes(tx)
 	assert.Nil(t, e)
 	n1.Broadcast(IncomingTxProtocol, b)
@@ -357,9 +358,7 @@ func TestBlockBuilder_Gossip_NotSynced(t *testing.T) {
 		"",
 		""))
 	builder1.Start()
-	ed := signing.NewEdSigner()
-	tx, e := mesh.NewSignedTx(0, types.HexToAddress("0xFF"), 2, 3, 4, ed)
-	assert.Nil(t, e)
+	tx := NewTx(t, 5, types.HexToAddress("0xFF"), signing.NewEdSigner())
 	b, e := types.InterfaceToBytes(tx)
 	assert.Nil(t, e)
 	err := n1.Broadcast(IncomingTxProtocol, b)
