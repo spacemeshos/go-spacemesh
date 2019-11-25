@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-var cfg = config.Config{N: 10, F: 5, RoundDuration: 2, ExpectedLeaders: 5, LimitIterations: 1000}
+var cfg = config.Config{N: 10, F: 5, RoundDuration: 2, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 1000}
 
 type mockMessageValidator struct {
 	syntaxValid  bool

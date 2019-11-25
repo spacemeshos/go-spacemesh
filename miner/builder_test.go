@@ -37,16 +37,12 @@ type MockHare struct {
 	res map[types.LayerID][]types.BlockID
 }
 
-func (m MockHare) GetResult(lower types.LayerID, upper types.LayerID) ([]types.BlockID, error) {
-	var results []types.BlockID
-	for id := lower; id <= upper; id++ {
-		blks, ok := m.res[id]
-		if !ok {
-			return nil, errors.New(fmt.Sprintf("hare result for layer%v was not in map", id))
-		}
-		results = append(results, blks...)
+func (m MockHare) GetResult(id types.LayerID) ([]types.BlockID, error) {
+	blks, ok := m.res[id]
+	if !ok {
+		return nil, errors.New(fmt.Sprintf("hare result for layer%v was not in map", id))
 	}
-	return results, nil
+	return blks, nil
 }
 
 type MockOrphans struct {
@@ -497,13 +493,12 @@ func (m *mockResult) set(id types.LayerID) []types.BlockID {
 	return bids
 }
 
-func (m *mockResult) GetResult(lower types.LayerID, upper types.LayerID) ([]types.BlockID, error) {
-	var all []types.BlockID = nil
-	for i := lower; i <= upper; i++ {
-		all = append(all, m.ids[i]...)
+func (m *mockResult) GetResult(id types.LayerID) ([]types.BlockID, error) {
+	bl, ok := m.ids[id]
+	if ok {
+		return bl, nil
 	}
-
-	return all, m.err
+	return nil, m.err
 }
 
 var exampleErr = errors.New("example exampleErr")
@@ -558,6 +553,7 @@ func TestBlockBuilder_getVotes(t *testing.T) {
 	gbids := genBlockIds()
 	bb.meshProvider = &mockMesh{bids: gbids}
 	mh = newMockResult()
+	mh.err = errors.New("no result")
 	b1arr := mh.set(bottom + 1)
 	tarr = mh.set(top)
 	bb.hareResult = mh
@@ -585,15 +581,10 @@ func TestBlockBuilder_createBlock(t *testing.T) {
 	builder1.hareResult = &mockResult{err: exampleErr, ids: nil}
 	b, err := builder1.createBlock(5, types.AtxId{}, types.BlockEligibilityProof{}, nil, nil)
 	r.Nil(err)
-	r.Equal(b.BlockVotes, st)
+	r.Equal(st, b.BlockVotes)
 
 	builder1.hareResult = &mockResult{err: nil, ids: nil}
 	b, err = builder1.createBlock(5, types.AtxId{}, types.BlockEligibilityProof{}, nil, nil)
 	r.Nil(err)
-	r.Equal(b.BlockVotes, st)
-
-	//builder1.hareResult = &mockResult{exampleErr: nil, ids: []types.BlockID{}}
-	b, err = builder1.createBlock(5, types.AtxId{}, types.BlockEligibilityProof{}, nil, nil)
-	r.Nil(err)
-	r.Equal(b.BlockVotes, st)
+	r.Equal([]types.BlockID(nil), b.BlockVotes)
 }

@@ -143,7 +143,7 @@ func (t *BlockBuilder) Close() error {
 }
 
 type HareResultProvider interface {
-	GetResult(lower types.LayerID, upper types.LayerID) ([]types.BlockID, error)
+	GetResult(lid types.LayerID) ([]types.BlockID, error)
 }
 
 type WeakCoinProvider interface {
@@ -194,9 +194,9 @@ func (t *BlockBuilder) getVotes(id types.LayerID) ([]types.BlockID, error) {
 	// not genesis, get from hare
 	bottom, top := calcHdistRange(id, t.hdist)
 
-	votesBottom, err := t.hareResult.GetResult(bottom, bottom)
-	if votesBottom == nil || len(votesBottom) == 0 {
-		t.With().Info("bottom votes is nil or empty. adding the whole layer", log.LayerId(uint64(bottom)))
+	if res, err := t.hareResult.GetResult(bottom); err != nil { // no result for bottom, take the whole layer
+		t.With().Info("could not get result for bottom layer. adding the whole layer instead", log.Err(err),
+			log.Uint64("bottom", uint64(bottom)), log.Uint64("top", uint64(top)), log.Uint64("hdist", uint64(t.hdist)))
 		l, e := t.meshProvider.GetLayer(bottom)
 		if e != nil {
 			t.With().Error("Could not set votes to whole layer", log.Err(e))
@@ -207,18 +207,20 @@ func (t *BlockBuilder) getVotes(id types.LayerID) ([]types.BlockID, error) {
 		for _, b := range l.Blocks() {
 			votes = append(votes, b.ID())
 		}
+	} else { // got result, just set
+		votes = res
 	}
 
-	// get votes normally
-	rangeVotes, err := t.hareResult.GetResult(bottom, top)
-	if err != nil {
-		t.With().Warning("Could not get hare result during block creation",
-			log.Uint64("bottom", uint64(bottom)), log.Uint64("top", uint64(top)),
-			log.Uint64("hdist", uint64(t.hdist)), log.Err(err))
+	// add rest of hdist range
+	for i := bottom + 1; i <= top; i++ {
+		res, err := t.hareResult.GetResult(i)
+		if err != nil {
+			t.With().Debug("could not get result for layer in range", log.LayerId(uint64(i)), log.Err(err),
+				log.Uint64("bottom", uint64(bottom)), log.Uint64("top", uint64(top)), log.Uint64("hdist", uint64(t.hdist)))
+			continue
+		}
+		votes = append(votes, res...)
 	}
-
-	// add rangeVotes to votes, rangeVotes can be nil
-	votes = append(votes, rangeVotes...)
 
 	return votes, nil
 }

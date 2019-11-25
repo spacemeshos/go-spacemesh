@@ -45,7 +45,7 @@ func (his *HareWrapper) waitForTermination() {
 		count := 0
 		for _, p := range his.hare {
 			for i := types.LayerID(1); i <= types.LayerID(his.totalCP); i++ {
-				blks, _ := p.GetResult(i, i)
+				blks, _ := p.GetResult(i)
 				if len(blks) > 0 {
 					count++
 				}
@@ -65,7 +65,7 @@ func (his *HareWrapper) waitForTermination() {
 	for _, p := range his.hare {
 		for i := types.LayerID(1); i <= types.LayerID(his.totalCP); i++ {
 			s := NewEmptySet(10)
-			blks, _ := p.GetResult(i, i)
+			blks, _ := p.GetResult(i)
 			for _, b := range blks {
 				s.Add(blockID{b})
 			}
@@ -291,5 +291,5 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 		}
 	}()
 
-	test.WaitForTimedTermination(t, 40*time.Second)
+	test.WaitForTimedTermination(t, 50*time.Second)
 }
