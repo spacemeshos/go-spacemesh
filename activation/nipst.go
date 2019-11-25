@@ -194,8 +194,8 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *types.Hash32) (*types.NIPST, error
 			return nil, fmt.Errorf("failed to submit challenge to poet service: %v", err)
 		}
 
-		nb.log.Info("challenge submitted to PoET proving service (PoET id: %x, round id: %v)",
-			nb.state.PoetServiceId, round.Id)
+		nb.log.Info("challenge submitted to PoET proving service (PoET id: %x, round id: %v, challenge: %x)",
+			nb.state.PoetServiceId, round.Id, poetChallenge)
 
 		nipst.NipstChallenge = poetChallenge
 		nb.state.PoetRound = round
@@ -213,8 +213,8 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *types.Hash32) (*types.NIPST, error
 			return nil, fmt.Errorf("failed to fetch membership for PoET proof") // inconsistent state
 		}
 		if !membership[*nipst.NipstChallenge] {
-			return nil, fmt.Errorf("not a member of this round (poetId: %x, roundId: %s)",
-				nb.state.PoetServiceId, nb.state.PoetRound.Id) // TODO(noamnelke): handle this case!
+			return nil, fmt.Errorf("not a member of this round (poetId: %x, roundId: %s, challenge: %x, num of members: %d)",
+				nb.state.PoetServiceId, nb.state.PoetRound.Id, *nipst.NipstChallenge, len(membership)) // TODO(noamnelke): handle this case!
 		}
 		nb.state.PoetProofRef = poetProofRef
 		nb.persist()
