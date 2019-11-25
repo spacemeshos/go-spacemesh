@@ -41,6 +41,7 @@ var Cmd = &cobra.Command{
 
 var expectedLayers int
 var bucket string
+var version string
 var remote bool
 var timeout int
 
@@ -56,6 +57,9 @@ func init() {
 
 	//request timeout
 	Cmd.PersistentFlags().IntVar(&timeout, "timeout", 200, "request timeout")
+
+	//request timeout
+	Cmd.PersistentFlags().StringVarP(&version, "verison", "v", "FullBlocks/", "data version")
 
 	cmdp.AddCommands(Cmd)
 }
@@ -77,6 +81,15 @@ func (app *SyncApp) Cleanup() {
 	}
 }
 
+type MockBlockBuilder struct {
+	txs []*types.Transaction
+}
+
+func (m *MockBlockBuilder) ValidateAndAddTxToPool(tx *types.Transaction) error {
+	m.txs = append(m.txs, tx)
+	return nil
+}
+
 func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	// start p2p services
 	lg := log.New("sync_test", "", "")
@@ -86,7 +99,9 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	lg.Info("download from remote storage: ", remote)
 	lg.Info("expected layers: ", expectedLayers)
 	lg.Info("request timeout: ", timeout)
+	lg.Info("data version: ", version)
 	lg.Info("hdist: ", app.Config.Hdist)
+	path := app.Config.DataDir + version
 	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P)
 
 	if err != nil {
@@ -102,12 +117,12 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	}
 
 	if remote {
-		if err := GetData(app.Config.DataDir, lg); err != nil {
+		if err := GetData(app.Config.DataDir, version, lg); err != nil {
 			lg.Error("could not download data for test", err)
 			return
 		}
 	}
-	poetDbStore, err := database.NewLDBDatabase(app.Config.DataDir+"poet", 0, 0, lg.WithName("poetDbStore"))
+	poetDbStore, err := database.NewLDBDatabase(path+"poet", 0, 0, lg.WithName("poetDbStore"))
 	if err != nil {
 		lg.Error("error: ", err)
 		return
@@ -115,13 +130,24 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 
 	poetDb := activation.NewPoetDb(poetDbStore, lg.WithName("poetDb").WithOptions(log.Nop))
 
-	mshdb, _ := mesh.NewPersistentMeshDB(app.Config.DataDir, lg.WithOptions(log.Nop))
-	atxdbStore, _ := database.NewLDBDatabase(app.Config.DataDir+"atx", 0, 0, lg)
+	mshdb, err := mesh.NewPersistentMeshDB(path, lg.WithOptions(log.Nop))
+	if err != nil {
+		lg.Error("error: ", err)
+		return
+	}
+	atxdbStore, err := database.NewLDBDatabase(path+"atx", 0, 0, lg)
+	if err != nil {
+		lg.Error("error: ", err)
+		return
+	}
+
 	atxdb := activation.NewActivationDb(atxdbStore, &sync.MockIStore{}, mshdb, uint16(1000), &sync.ValidatorMock{}, lg.WithName("atxDB").WithOptions(log.Nop))
 
 	txpool := miner.NewTxMemPool()
 	atxpool := miner.NewAtxMemPool()
 	msh := mesh.NewMesh(mshdb, atxdb, sync.ConfigTst(), &sync.MeshValidatorMock{}, txpool, atxpool, &sync.MockState{}, lg.WithOptions(log.Nop))
+	msh.SetBlockBuilder(&MockBlockBuilder{})
+
 	defer msh.Close()
 	msh.AddBlock(mesh.GenesisBlock)
 	clock := sync.MockClock{}
@@ -162,10 +188,10 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 }
 
 //download data from remote storage
-func GetData(path string, lg log.Log) error {
+func GetData(path, prefix string, lg log.Log) error {
 	dirs := []string{"poet", "atx", "nipst", "blocks", "ids", "layers", "transactions", "validity", "unappliedTxs"}
 	for _, dir := range dirs {
-		if err := os.MkdirAll(path+dir, 0777); err != nil {
+		if err := os.MkdirAll(path+prefix+"/"+dir, 0777); err != nil {
 			return err
 		}
 	}
@@ -186,7 +212,10 @@ func GetData(path string, lg log.Log) error {
 	if err != nil {
 		panic(err)
 	}
-	it := client.Bucket(bucket).Objects(ctx, nil)
+	it := client.Bucket(bucket).Objects(ctx, &storage.Query{
+		Prefix: prefix,
+	})
+
 	count := 0
 	for {
 		attrs, err := it.Next()
@@ -197,7 +226,6 @@ func GetData(path string, lg log.Log) error {
 			return err
 		}
 
-		lg.Info("downloading:", attrs.Name)
 		rc, err := client.Bucket(bucket).Object(attrs.Name).NewReader(ctx)
 		if err != nil {
 			return err
@@ -210,8 +238,16 @@ func GetData(path string, lg log.Log) error {
 			return err
 		}
 
+		//skip main folder
+		if attrs.Name == version {
+			continue
+		}
+
+		lg.Info("downloading:", attrs.Name)
+
 		err = ioutil.WriteFile(path+attrs.Name, data, 0644)
 		if err != nil {
+			lg.Info("%v", err)
 			return err
 		}
 		count++
