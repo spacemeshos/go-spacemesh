@@ -45,18 +45,29 @@ type server struct {
 	cfg *ServerConfig
 	cmd *exec.Cmd
 
+	// processExit is a channel that's closed once it's detected that the
+	// process this instance is bound to has exited.
+	processExit chan struct{}
+	// quit channel for an out source to quit process
+	quit chan struct{}
 	wg   sync.WaitGroup
+	// error channel for the server error messages
+	errChan    chan error
+	stdoutChan chan string
 }
 
 // newServer creates a new node server instance according to the passed cfg.
 func newServer(cfg *ServerConfig) (*server, error) {
 	return &server{
 		cfg:     cfg,
+		errChan: make(chan error, 5),
 	}, nil
 }
 
 // start launches a new running process of node server.
 func (s *server) start(addArgs []string) error {
+	s.quit = make(chan struct{})
+
 	args := s.cfg.genArgs()
 	// adding additional full go-spacemesh node arguments origin in
 	// yaml specification files, starting from index 1 to remove exec path
@@ -73,6 +84,8 @@ func (s *server) start(addArgs []string) error {
 	}
 
 	// Launch a new goroutine that bubbles up any potential fatal
+	// process errors to errChan.
+	s.processExit = make(chan struct{})
 	s.wg.Add(1)
 	go func() {
 		defer s.wg.Done()
@@ -82,7 +95,10 @@ func (s *server) start(addArgs []string) error {
 		if err != nil {
 			// move err to error channel
 			log.Error("an error has occurred during go-spacemesh command wait: ", err)
+			s.errChan <- fmt.Errorf("%v\n", err)
 		}
+		// Signal any onlookers that this process has exited.
+		close(s.processExit)
 	}()
 
 	return nil
@@ -101,11 +117,19 @@ func (s *server) shutdown() error {
 // stop kills the server running process, since it doesn't support
 // RPC-driven stop functionality.
 func (s *server) stop() error {
+	// Do nothing if the process is not running.
+	if s.processExit == nil {
+		return nil
+	}
+
 	if err := s.cmd.Process.Kill(); err != nil {
 		return fmt.Errorf("failed to kill process: %v", err)
 	}
 
+	close(s.quit)
 	s.wg.Wait()
 
+	s.quit = nil
+	s.processExit = nil
 	return nil
 }
