@@ -39,3 +39,5 @@ require (
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 	nanomsg.org/go-mangos v1.4.0
 )
+
+go 1.13

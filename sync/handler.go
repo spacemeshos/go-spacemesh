@@ -36,7 +36,7 @@ func newLayerBlockIdsRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg 
 
 		ids := make([]types.BlockID, 0, len(blocks))
 		for _, b := range blocks {
-			ids = append(ids, b.ID())
+			ids = append(ids, b.Id())
 		}
 
 		idbytes, err := types.BlockIdsAsBytes(ids)
@@ -62,13 +62,13 @@ func newBlockRequestHandler(msh *mesh.Mesh, logger log.Log) func(msg []byte) []b
 		var blocks []types.Block
 		logger.Info("handle block request ids: %s", concatShortIds(blockids))
 		for _, bid := range blockids {
-			var id = util.BytesToUint64(bid.Bytes())
-			logger.Debug("handle block %v request", id)
-			blk, err := msh.GetBlock(types.BlockID(id))
+			logger.Info("handle block %s request", bid.ShortString())
+			blk, err := msh.GetBlock(types.BlockID(bid))
 			if err != nil {
-				logger.Error("Error handling block request message, with BlockID: %d and err: %v", id, err)
+				logger.With().Error("Error handling block request message", log.BlockId(bid.String()), log.Err(err))
 				continue
 			}
+
 			blocks = append(blocks, *blk)
 		}
 		bbytes, err := types.InterfaceToBytes(blocks)
@@ -95,7 +95,7 @@ func newTxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 
 		for t := range missingDB {
 			if tx, err := s.txpool.Get(t); err == nil {
-				txs = append(txs, &tx)
+				txs = append(txs, tx)
 			} else {
 				logger.Error("Error handling tx request message, for id: %v", t.ShortString())
 			}

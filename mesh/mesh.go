@@ -9,10 +9,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/sha256-simd"
 	"math/big"
 	"math/rand"
-	"sort"
 	"sync"
 )
 
@@ -36,6 +36,7 @@ type TxProcessor interface {
 	ApplyRewards(layer types.LayerID, miners []types.Address, reward *big.Int)
 	ValidateSignature(s types.Signed) (types.Address, error)
 	AddressExists(addr types.Address) bool
+	GetLayerApplied(txId types.TransactionId) *types.LayerID
 }
 
 type TxMemPoolInValidator interface {
@@ -48,7 +49,7 @@ type AtxMemPoolInValidator interface {
 
 type AtxDB interface {
 	ProcessAtxs(atxs []*types.ActivationTx) error
-	GetAtx(id types.AtxId) (*types.ActivationTxHeader, error)
+	GetAtxHeader(id types.AtxId) (*types.ActivationTxHeader, error)
 	GetFullAtx(id types.AtxId) (*types.ActivationTx, error)
 	SyntacticallyValidateAtx(atx *types.ActivationTx) error
 }
@@ -156,9 +157,9 @@ func (m *Mesh) ExtractUniqueOrderedTransactions(l *types.Layer) (validBlockTxs, 
 	// Separate blocks by validity
 	var validBlocks, invalidBlocks []*types.Block
 	for _, b := range l.Blocks() {
-		valid, err := m.ContextualValidity(b.ID())
+		valid, err := m.ContextualValidity(b.Id())
 		if err != nil {
-			m.With().Error("could not get contextual validity", log.BlockId(uint64(b.ID())), log.Err(err))
+			m.With().Error("could not get contextual validity", log.BlockId(b.Id().String()), log.Err(err))
 		}
 		if valid {
 			validBlocks = append(validBlocks, b)
@@ -168,14 +169,12 @@ func (m *Mesh) ExtractUniqueOrderedTransactions(l *types.Layer) (validBlockTxs, 
 	}
 
 	// Deterministically sort valid blocks
-	sort.Slice(validBlocks, func(i, j int) bool {
-		return validBlocks[i].ID() < validBlocks[j].ID()
-	})
+	validBlocks = types.SortBlocks(validBlocks)
 
 	// `layerHash` is the sha256 sum of sorted layer block IDs
 	layerHash := sha256.New()
 	for _, b := range validBlocks {
-		layerHash.Write(b.ID().AsHash32().Bytes())
+		layerHash.Write(b.Id().AsHash32().Bytes())
 	}
 
 	// Initialize a Mersenne Twister seeded with layerHash
@@ -278,20 +277,20 @@ func (m *Mesh) GetLatestView() []types.BlockID {
 	}
 	view := make([]types.BlockID, 0, len(layer.Blocks()))
 	for _, blk := range layer.Blocks() {
-		view = append(view, blk.ID())
+		view = append(view, blk.Id())
 	}
 	return view
 }
 
 func (m *Mesh) AddBlock(blk *types.Block) error {
-	m.Debug("add block %d", blk.ID())
+	m.Debug("add block %d", blk.Id())
 	if err := m.MeshDB.AddBlock(blk); err != nil {
-		m.Warning("failed to add block %v  %v", blk.ID(), err)
+		m.Warning("failed to add block %v  %v", blk.Id(), err)
 		return err
 	}
 	m.SetLatestLayer(blk.Layer())
 	//new block add to orphans
-	m.handleOrphanBlocks(&blk.BlockHeader)
+	m.handleOrphanBlocks(blk)
 
 	//invalidate txs and atxs from pool
 	m.invalidateFromPools(&blk.MiniBlock)
@@ -299,42 +298,43 @@ func (m *Mesh) AddBlock(blk *types.Block) error {
 }
 
 func (m *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.Transaction, atxs []*types.ActivationTx) error {
-	m.With().Debug("adding block", log.BlockId(uint64(blk.ID())))
+	m.With().Debug("adding block", log.BlockId(blk.Id().String()))
 
 	// Store transactions (doesn't have to be rolled back if other writes fail)
-	err := m.writeTransactions(txs)
-	if err != nil {
-		return fmt.Errorf("could not write transactions of block %v database: %v", blk.ID(), err)
-	}
-	if err := m.addToUnappliedTxs(txs, blk.LayerIndex); err != nil {
-		return fmt.Errorf("failed to add to unappliedTxs: %v", err)
+	if len(txs) > 0 {
+		if err := m.writeTransactions(blk.LayerIndex, txs); err != nil {
+			return fmt.Errorf("could not write transactions of block %v database: %v", blk.Id(), err)
+		}
+
+		if err := m.addToUnappliedTxs(txs, blk.LayerIndex); err != nil {
+			return fmt.Errorf("failed to add to unappliedTxs: %v", err)
+		}
 	}
 
 	// Store block (delete if storing ATXs fails)
 	if err := m.MeshDB.AddBlock(blk); err != nil && err != ErrAlreadyExist {
-		m.With().Error("failed to add block", log.BlockId(uint64(blk.ID())), log.Err(err))
+		m.With().Error("failed to add block", log.BlockId(blk.Id().String()), log.Err(err))
 		return err
 	}
 
 	// Store ATXs (atomically, delete the block on failure)
-	err = m.AtxDB.ProcessAtxs(atxs)
-	if err != nil {
+	if err := m.AtxDB.ProcessAtxs(atxs); err != nil {
 		// Roll back adding the block (delete it)
-		if err := m.blocks.Delete(blk.ID().ToBytes()); err != nil {
-			m.With().Warning("failed to roll back adding a block", log.Err(err), log.BlockId(uint64(blk.ID())))
+		if err := m.blocks.Delete(blk.Id().ToBytes()); err != nil {
+			m.With().Warning("failed to roll back adding a block", log.Err(err), log.BlockId(blk.Id().String()))
 		}
 		return fmt.Errorf("failed to process ATXs: %v", err)
 	}
 
 	m.SetLatestLayer(blk.Layer())
 	//new block add to orphans
-	m.handleOrphanBlocks(&blk.BlockHeader)
+	m.handleOrphanBlocks(blk)
 
 	//invalidate txs and atxs from pool
 	m.invalidateFromPools(&blk.MiniBlock)
 
-	events.Publish(events.NewBlock{Id: uint64(blk.ID()), Atx: blk.ATXID.ShortString(), Layer: uint64(blk.LayerIndex)})
-	m.With().Debug("added block", log.BlockId(uint64(blk.ID())))
+	events.Publish(events.NewBlock{Id: blk.Id().String(), Atx: blk.ATXID.ShortString(), Layer: uint64(blk.LayerIndex)})
+	m.With().Debug("added block", log.BlockId(blk.Id().String()))
 	return nil
 }
 
@@ -349,14 +349,14 @@ func (m *Mesh) invalidateFromPools(blk *types.MiniBlock) {
 }
 
 //todo better thread safety
-func (m *Mesh) handleOrphanBlocks(blk *types.BlockHeader) {
+func (m *Mesh) handleOrphanBlocks(blk *types.Block) {
 	m.orphMutex.Lock()
 	defer m.orphMutex.Unlock()
 	if _, ok := m.orphanBlocks[blk.Layer()]; !ok {
 		m.orphanBlocks[blk.Layer()] = make(map[types.BlockID]struct{})
 	}
-	m.orphanBlocks[blk.Layer()][blk.ID()] = struct{}{}
-	m.Info("Added block %d to orphans", blk.ID())
+	m.orphanBlocks[blk.Layer()][blk.Id()] = struct{}{}
+	m.Debug("Added block %s to orphans", blk.Id())
 	for _, b := range blk.ViewEdges {
 		for layerId, layermap := range m.orphanBlocks {
 			if _, has := layermap[b]; has {
@@ -414,7 +414,7 @@ func (m *Mesh) GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error) {
 		idArr = append(idArr, i)
 	}
 
-	sort.Slice(idArr, func(i, j int) bool { return idArr[i] < idArr[j] })
+	idArr = types.SortBlockIds(idArr)
 
 	m.Info("orphans for layer %d are %v", l, idArr)
 	return idArr, nil
@@ -429,23 +429,24 @@ func (m *Mesh) AccumulateRewards(rewardLayer types.LayerID, params Config) {
 
 	ids := make([]types.Address, 0, len(l.Blocks()))
 	for _, bl := range l.Blocks() {
-		valid, err := m.ContextualValidity(bl.ID())
+		valid, err := m.ContextualValidity(bl.Id())
 		if err != nil {
-			m.With().Error("could not get contextual validity", log.BlockId(uint64(bl.ID())), log.Err(err))
+			m.With().Error("could not get contextual validity", log.BlockId(bl.Id().String()), log.Err(err))
 		}
 		if !valid {
 			m.With().Info("Withheld reward for contextually invalid block",
-				log.BlockId(uint64(bl.ID())),
+				log.BlockId(bl.Id().String()),
 				log.LayerId(uint64(rewardLayer)),
 			)
 			continue
 		}
-		atx, err := m.AtxDB.GetAtx(bl.ATXID)
+		atx, err := m.AtxDB.GetAtxHeader(bl.ATXID)
 		if err != nil {
-			m.With().Warning("Atx from block not found in db", log.Err(err), log.BlockId(uint64(bl.ID())), log.AtxId(bl.ATXID.ShortString()))
+			m.With().Warning("Atx from block not found in db", log.Err(err), log.BlockId(bl.Id().String()), log.AtxId(bl.ATXID.ShortString()))
 			continue
 		}
 		ids = append(ids, atx.Coinbase)
+
 	}
 	//accumulate all blocks rewards
 	txs, _ := m.ExtractUniqueOrderedTransactions(l)
@@ -463,21 +464,19 @@ func (m *Mesh) AccumulateRewards(rewardLayer types.LayerID, params Config) {
 
 	blockReward := calculateActualRewards(rewards, numBlocks)
 	m.ApplyRewards(rewardLayer, ids, blockReward)
+	err = m.writeTransactionRewards(rewardLayer, ids, blockReward)
+	if err != nil {
+		m.Error("cannot write reward to db")
+	}
 	//todo: should miner id be sorted in a deterministic order prior to applying rewards?
 
 }
 
-var GenesisBlock = types.Block{
-	MiniBlock: types.MiniBlock{
-		BlockHeader: types.BlockHeader{Id: types.BlockID(GenesisId),
-			LayerIndex: 0,
-			Data:       []byte("genesis")},
-	},
-}
+var GenesisBlock = types.NewExistingBlock(0, []byte("genesis"))
 
 func GenesisLayer() *types.Layer {
 	l := types.NewLayer(Genesis)
-	l.AddBlock(&GenesisBlock)
+	l.AddBlock(GenesisBlock)
 	return l
 }
 
@@ -494,4 +493,32 @@ func (m *Mesh) GetATXs(atxIds []types.AtxId) (map[types.AtxId]*types.ActivationT
 		}
 	}
 	return atxs, mIds
+}
+
+// TEST ONLY
+func NewSignedTx(nonce uint64, rec types.Address, amount, gas, fee uint64, signer *signing.EdSigner) (*types.Transaction, error) {
+	inner := types.InnerTransaction{
+		AccountNonce: nonce,
+		Recipient:    rec,
+		Amount:       amount,
+		GasLimit:     gas,
+		Fee:          fee,
+	}
+
+	buf, err := types.InterfaceToBytes(&inner)
+	if err != nil {
+		return nil, err
+	}
+
+	sst := &types.Transaction{
+		InnerTransaction: inner,
+		Signature:        [64]byte{},
+	}
+
+	copy(sst.Signature[:], signer.Sign(buf))
+	addr := types.Address{}
+	addr.SetBytes(signer.PublicKey().Bytes())
+	sst.SetOrigin(addr)
+
+	return sst, nil
 }

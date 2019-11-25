@@ -3,8 +3,8 @@ package mesh
 import (
 	"bytes"
 	"fmt"
-	"github.com/google/uuid"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -16,6 +16,18 @@ import (
 )
 
 type ContextualValidityMock struct {
+}
+
+func (m *ContextualValidityMock) Has(key []byte) (bool, error) {
+	return true, nil
+}
+
+func (m *ContextualValidityMock) NewBatch() database.Batch {
+	panic("implement me")
+}
+
+func (m *ContextualValidityMock) Find(key []byte) database.Iterator {
+	panic("implement me")
 }
 
 func (m *ContextualValidityMock) Put(key, value []byte) error {
@@ -45,6 +57,10 @@ func (m *MeshValidatorMock) HandleLateBlock(bl *types.Block) {}
 
 type MockState struct{}
 
+func (MockState) GetLayerApplied(txId types.TransactionId) *types.LayerID {
+	panic("implement me")
+}
+
 func (MockState) ValidateSignature(signed types.Signed) (types.Address, error) {
 	return types.Address{}, nil
 }
@@ -62,8 +78,8 @@ func (MockState) AddressExists(addr types.Address) bool {
 
 type MockTxMemPool struct{}
 
-func (MockTxMemPool) Get(id types.TransactionId) (types.Transaction, error) {
-	return types.Transaction{}, nil
+func (MockTxMemPool) Get(id types.TransactionId) (*types.Transaction, error) {
+	return &types.Transaction{}, nil
 }
 func (MockTxMemPool) GetAllItems() []*types.Transaction {
 	return nil
@@ -105,11 +121,11 @@ func TestLayers_AddBlock(t *testing.T) {
 	layers := getMesh("t1")
 	defer layers.Close()
 
-	block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data1"))
-	block2 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 2, []byte("data2"))
-	block3 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 3, []byte("data3"))
+	block1 := types.NewExistingBlock(1, []byte("data1"))
+	block2 := types.NewExistingBlock(2, []byte("data2"))
+	block3 := types.NewExistingBlock(3, []byte("data3"))
 
-	addTransactionsWithFee(layers.MeshDB, block1, 4, rand.Int63n(100))
+	addTransactionsWithFee(t, layers.MeshDB, block1, 4, rand.Int63n(100))
 
 	err := layers.AddBlock(block1)
 	assert.NoError(t, err)
@@ -118,10 +134,10 @@ func TestLayers_AddBlock(t *testing.T) {
 	err = layers.AddBlock(block3)
 	assert.NoError(t, err)
 
-	rBlock2, err := layers.GetBlock(block2.Id)
+	rBlock2, err := layers.GetBlock(block2.Id())
 	assert.NoError(t, err)
 
-	rBlock1, err := layers.GetBlock(block1.Id)
+	rBlock1, err := layers.GetBlock(block1.Id())
 	assert.NoError(t, err)
 
 	assert.True(t, len(rBlock1.TxIds) == len(block1.TxIds), "block content was wrong")
@@ -140,26 +156,25 @@ func TestLayers_AddLayer(t *testing.T) {
 	_, err := msh.GetLayer(id)
 	r.EqualError(err, "error getting layer 1 from database leveldb: not found")
 
-	err = msh.AddBlock(types.NewExistingBlock(types.BlockID(uuid.New().ID()), id, []byte("data")))
+	err = msh.AddBlock(types.NewExistingBlock(id, []byte("data1")))
 	r.NoError(err)
-	err = msh.AddBlock(types.NewExistingBlock(types.BlockID(uuid.New().ID()), id, []byte("data")))
+	err = msh.AddBlock(types.NewExistingBlock(id, []byte("data2")))
 	r.NoError(err)
-	err = msh.AddBlock(types.NewExistingBlock(types.BlockID(uuid.New().ID()), id, []byte("data")))
+	err = msh.AddBlock(types.NewExistingBlock(id, []byte("data3")))
 	r.NoError(err)
-	l, err := msh.GetLayer(id)
+	_, err = msh.GetLayer(id)
 	r.NoError(err)
-	r.True(string(l.Blocks()[1].MiniBlock.Data) == "data", "wrong block data ")
 }
 
 func TestLayers_AddWrongLayer(t *testing.T) {
 	layers := getMesh("t3")
 	defer layers.Close()
-	block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
-	block2 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 2, []byte("data data data"))
-	block3 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 4, []byte("data data data"))
+	block1 := types.NewExistingBlock(1, []byte("data data data1"))
+	block2 := types.NewExistingBlock(2, []byte("data data data2"))
+	block3 := types.NewExistingBlock(4, []byte("data data data3"))
 	l1 := types.NewExistingLayer(1, []*types.Block{block1})
 	layers.AddBlock(block1)
-	layers.SaveContextualValidity(block1.Id, true)
+	layers.SaveContextualValidity(block1.Id(), true)
 	layers.ValidateLayer(l1)
 	l2 := types.NewExistingLayer(2, []*types.Block{block2})
 	layers.AddBlock(block2)
@@ -176,9 +191,9 @@ func TestLayers_AddWrongLayer(t *testing.T) {
 func TestLayers_GetLayer(t *testing.T) {
 	layers := getMesh("t4")
 	defer layers.Close()
-	block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
-	block2 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
-	block3 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
+	block1 := types.NewExistingBlock(1, []byte("data data data1"))
+	block2 := types.NewExistingBlock(1, []byte("data data data2"))
+	block3 := types.NewExistingBlock(1, []byte("data data data3"))
 	l1 := types.NewExistingLayer(1, []*types.Block{block1})
 	layers.AddBlock(block1)
 	layers.ValidateLayer(l1)
@@ -211,15 +226,15 @@ func TestLayers_WakeUp(t *testing.T) {
 func TestLayers_OrphanBlocks(t *testing.T) {
 	layers := getMesh("t6")
 	defer layers.Close()
-	block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
-	block2 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
-	block3 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 2, []byte("data data data"))
-	block4 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 2, []byte("data data data"))
-	block5 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 3, []byte("data data data"))
-	block5.AddView(block1.ID())
-	block5.AddView(block2.ID())
-	block5.AddView(block3.ID())
-	block5.AddView(block4.ID())
+	block1 := types.NewExistingBlock(1, []byte("data data data1"))
+	block2 := types.NewExistingBlock(1, []byte("data data data2"))
+	block3 := types.NewExistingBlock(2, []byte("data data data3"))
+	block4 := types.NewExistingBlock(2, []byte("data data data4"))
+	block5 := types.NewExistingBlock(3, []byte("data data data5"))
+	block5.AddView(block1.Id())
+	block5.AddView(block2.Id())
+	block5.AddView(block3.Id())
+	block5.AddView(block4.Id())
 	layers.AddBlock(block1)
 	layers.AddBlock(block2)
 	layers.AddBlock(block3)
@@ -238,15 +253,15 @@ func TestLayers_OrphanBlocks(t *testing.T) {
 func TestLayers_OrphanBlocksClearEmptyLayers(t *testing.T) {
 	layers := getMesh("t6")
 	defer layers.Close()
-	block1 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
-	block2 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data data data"))
-	block3 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 2, []byte("data data data"))
-	block4 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 2, []byte("data data data"))
-	block5 := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 3, []byte("data data data"))
-	block5.AddView(block1.ID())
-	block5.AddView(block2.ID())
-	block5.AddView(block3.ID())
-	block5.AddView(block4.ID())
+	block1 := types.NewExistingBlock(1, []byte("data data data1"))
+	block2 := types.NewExistingBlock(1, []byte("data data data2"))
+	block3 := types.NewExistingBlock(2, []byte("data data data3"))
+	block4 := types.NewExistingBlock(2, []byte("data data data4"))
+	block5 := types.NewExistingBlock(3, []byte("data data data5"))
+	block5.AddView(block1.Id())
+	block5.AddView(block2.Id())
+	block5.AddView(block3.Id())
+	block5.AddView(block4.Id())
 	layers.AddBlock(block1)
 	layers.AddBlock(block2)
 	layers.AddBlock(block3)
@@ -336,17 +351,18 @@ func GetTransactionIds(txs ...*types.Transaction) []types.TransactionId {
 
 func addTxToMesh(r *require.Assertions, msh *Mesh, signer *signing.EdSigner, nonce uint64) *types.Transaction {
 	tx1 := newTx(r, signer, nonce, 111)
-	err := msh.writeTransactions([]*types.Transaction{tx1})
+	err := msh.writeTransactions(0, []*types.Transaction{tx1})
 	r.NoError(err)
 	return tx1
 }
 
 func addBlockWithTxs(r *require.Assertions, msh *Mesh, id types.LayerID, valid bool, txs ...*types.Transaction) *types.Block {
-	blk := types.NewExistingBlock(types.BlockID(uuid.New().ID()), id, []byte("data"))
+	blk := types.NewExistingBlock(id, []byte("data"))
 	for _, tx := range txs {
 		blk.TxIds = append(blk.TxIds, tx.Id())
 	}
-	msh.SaveContextualValidity(blk.Id, valid)
+	blk.CalcAndSetId()
+	msh.SaveContextualValidity(blk.Id(), valid)
 	err := msh.AddBlockWithTxs(blk, txs, nil)
 	r.NoError(err)
 	return blk
@@ -356,7 +372,7 @@ type FailingAtxDbMock struct{}
 
 func (FailingAtxDbMock) ProcessAtxs(atxs []*types.ActivationTx) error { return fmt.Errorf("💥") }
 
-func (FailingAtxDbMock) GetAtx(id types.AtxId) (*types.ActivationTxHeader, error) {
+func (FailingAtxDbMock) GetAtxHeader(id types.AtxId) (*types.ActivationTxHeader, error) {
 	panic("implement me")
 }
 
@@ -370,10 +386,10 @@ func TestMesh_AddBlockWithTxs(t *testing.T) {
 	meshDB := NewMemMeshDB(lg)
 	mesh := NewMesh(meshDB, &FailingAtxDbMock{}, ConfigTst(), &MeshValidatorMock{mdb: meshDB}, MockTxMemPool{}, MockAtxMemPool{}, &MockState{}, lg)
 
-	blk := types.NewExistingBlock(types.BlockID(uuid.New().ID()), 1, []byte("data"))
+	blk := types.NewExistingBlock(1, []byte("data"))
 
 	err := mesh.AddBlockWithTxs(blk, nil, nil)
 	r.EqualError(err, "failed to process ATXs: 💥")
-	_, err = meshDB.blocks.Get(blk.ID().ToBytes())
+	_, err = meshDB.blocks.Get(blk.Id().ToBytes())
 	r.EqualError(err, "leveldb: not found")
 }

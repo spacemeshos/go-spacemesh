@@ -1,4 +1,4 @@
-apiVersion: apps/v1beta1
+apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: sm-bootstrapoet
@@ -35,8 +35,6 @@ spec:
         - containerPort: 9091
         - containerPort: 9999
         volumeMounts:
-        - name: config-volume
-          mountPath: /etc/config
         - name: bootstrap-vol
           mountPath: /usr/share/spacemesh
       - name: poet
@@ -52,10 +50,6 @@ spec:
             cpu: "2"
         ports:
           - containerPort: 50002
-      volumes:
-        - name: config-volume
-          configMap:
-            name: conf
       nodeSelector:
         role: tests
   volumeClaimTemplates:

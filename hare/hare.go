@@ -146,8 +146,8 @@ func (h *Hare) collectOutput(output TerminationOutput) error {
 	set := output.Set()
 	blocks := make([]types.BlockID, len(set.values))
 	i := 0
-	for _, v := range set.values {
-		blocks[i] = v.BlockID
+	for v := range set.values {
+		blocks[i] = v
 		i++
 	}
 
@@ -209,7 +209,7 @@ func (h *Hare) onTick(id types.LayerID) {
 	h.Debug("received %v new blocks ", len(blocks))
 	set := NewEmptySet(len(blocks))
 	for _, b := range blocks {
-		set.Add(blockID{b})
+		set.Add(b)
 	}
 
 	instId := instanceId(id)

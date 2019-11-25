@@ -123,7 +123,7 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	atxpool := miner.NewAtxMemPool()
 	msh := mesh.NewMesh(mshdb, atxdb, sync.ConfigTst(), &sync.MeshValidatorMock{}, txpool, atxpool, &sync.MockState{}, lg.WithOptions(log.Nop))
 	defer msh.Close()
-	msh.AddBlock(&mesh.GenesisBlock)
+	msh.AddBlock(mesh.GenesisBlock)
 	clock := sync.MockClock{}
 	clock.Layer = types.LayerID(expectedLayers + 1)
 	lg.Info("current layer %v", clock.GetCurrentLayer())
@@ -163,7 +163,7 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 
 //download data from remote storage
 func GetData(path string, lg log.Log) error {
-	dirs := []string{"poet", "atx", "nipst", "blocks", "ids", "layers", "transactions", "validity"}
+	dirs := []string{"poet", "atx", "nipst", "blocks", "ids", "layers", "transactions", "validity", "unappliedTxs"}
 	for _, dir := range dirs {
 		if err := os.MkdirAll(path+dir, 0777); err != nil {
 			return err
@@ -210,7 +210,7 @@ func GetData(path string, lg log.Log) error {
 			return err
 		}
 
-		err = ioutil.WriteFile("bin/"+attrs.Name, data, 0644)
+		err = ioutil.WriteFile(path+attrs.Name, data, 0644)
 		if err != nil {
 			return err
 		}

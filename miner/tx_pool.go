@@ -22,14 +22,14 @@ func NewTxMemPool() *TxMempool {
 	}
 }
 
-func (t *TxMempool) Get(id types.TransactionId) (types.Transaction, error) {
+func (t *TxMempool) Get(id types.TransactionId) (*types.Transaction, error) {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 
 	if tx, found := t.txs[id]; found {
-		return *tx, nil
+		return tx, nil
 	}
-	return types.Transaction{}, errors.New("transaction not found in mempool")
+	return nil, errors.New("transaction not found in mempool")
 }
 
 func (t *TxMempool) GetTxsForBlock(numOfTxs int, getState func(addr types.Address) (nonce, balance uint64, err error)) ([]types.TransactionId, error) {

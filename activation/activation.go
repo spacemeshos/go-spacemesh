@@ -3,6 +3,7 @@ package activation
 import (
 	"errors"
 	"fmt"
+	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -51,7 +52,7 @@ type NipstValidator interface {
 }
 
 type ATXDBProvider interface {
-	GetAtx(id types.AtxId) (*types.ActivationTxHeader, error)
+	GetAtxHeader(id types.AtxId) (*types.ActivationTxHeader, error)
 	CalcActiveSetFromView(view []types.BlockID, pubEpoch types.EpochId) (uint32, error)
 	GetNodeLastAtxId(nodeId types.NodeId) (types.AtxId, error)
 	GetPosAtxId(epochId types.EpochId) (*types.AtxId, error)
@@ -198,7 +199,7 @@ func (b *Builder) buildNipstChallenge(epoch types.EpochId) error {
 		if err != nil {
 			b.log.Info("no prev ATX found, starting fresh")
 		} else {
-			b.prevATX, err = b.db.GetAtx(prevAtxId)
+			b.prevATX, err = b.db.GetAtxHeader(prevAtxId)
 			if err != nil {
 				// TODO: handle inconsistent state
 				b.log.Panic("prevAtx (id: %v) not found in DB -- inconsistent state", prevAtxId.ShortString())
@@ -475,7 +476,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 	if err != nil {
 		return err
 	}
-	b.prevATX = &atx.ActivationTxHeader
+	b.prevATX = atx.ActivationTxHeader
 
 	// cleanup state
 	b.nipst = nil
@@ -534,7 +535,7 @@ func (b *Builder) GetLastSequence(node types.NodeId) uint64 {
 	if err != nil {
 		return 0
 	}
-	atx, err := b.db.GetAtx(atxId)
+	atx, err := b.db.GetAtxHeader(atxId)
 	if err != nil {
 		b.log.Error("wtf no atx in db %v", atxId)
 		return 0
@@ -553,9 +554,35 @@ func (b *Builder) GetPositioningAtx(epochId types.EpochId) (*types.ActivationTxH
 			return nil, fmt.Errorf("cannot find pos atx id: %v", err)
 		}
 	}
-	posAtx, err := b.db.GetAtx(*posAtxId)
+	posAtx, err := b.db.GetAtxHeader(*posAtxId)
 	if err != nil {
 		return nil, fmt.Errorf("cannot find pos atx: %v", err.Error())
 	}
 	return posAtx, nil
+}
+
+// ExtractPublicKey extracts public key from message and verifies public key exists in IdStore, this is how we validate
+// ATX signature. If this is the first ATX it is considered valid anyways and ATX syntactic validation will determine ATX validity
+func ExtractPublicKey(signedAtx *types.ActivationTx) (*signing.PublicKey, error) {
+	bts, err := signedAtx.AtxBytes()
+	if err != nil {
+		return nil, err
+	}
+
+	pubKey, err := ed25519.ExtractPublicKey(bts, signedAtx.Sig)
+	if err != nil {
+		return nil, err
+	}
+
+	pub := signing.NewPublicKey(pubKey)
+	return pub, nil
+}
+
+func SignAtx(signer *signing.EdSigner, atx *types.ActivationTx) (*types.ActivationTx, error) {
+	bts, err := atx.AtxBytes()
+	if err != nil {
+		return nil, err
+	}
+	atx.Sig = signer.Sign(bts)
+	return atx, nil
 }

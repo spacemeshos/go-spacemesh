@@ -75,7 +75,7 @@ func (a *addrBook) savePeers(path string) {
 
 	w, err := os.Create(path)
 	if err != nil {
-		log.Error("Error opening file: %v", err)
+		log.Error("Error creating file: %v", err)
 		return
 	}
 	enc := json.NewEncoder(w)
@@ -219,7 +219,7 @@ func (a *addrBook) saveRoutine() {
 		a.logger.Warning("IMPORTANT : Data directory path can't be reached. peer files are not being saved.")
 		return
 	}
-	finalPath := path + "/" + a.localAddress.ID.String() + "/" + defaultPeersFileName
+	finalPath := path + "/" + defaultPeersFileName
 
 	dumpAddressTicker := time.NewTicker(saveRoutineInterval)
 	defer dumpAddressTicker.Stop()

@@ -6,16 +6,15 @@ import (
 	"fmt"
 	"github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/go-spacemesh/common/util"
-	"sort"
 )
 
-func (b BlockID) ToBytes() []byte { return util.Uint64ToBytes(uint64(b)) }
+func (id BlockID) ToBytes() []byte { return id.AsHash32().Bytes() }
 
 func (l LayerID) ToBytes() []byte { return util.Uint64ToBytes(uint64(l)) }
 
 func BlockIdsAsBytes(ids []BlockID) ([]byte, error) {
 	var w bytes.Buffer
-	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	SortBlockIds(ids)
 	if _, err := xdr.Marshal(&w, &ids); err != nil {
 		return nil, errors.New("error marshalling block ids ")
 	}
@@ -30,17 +29,12 @@ func BytesToBlockIds(blockIds []byte) ([]BlockID, error) {
 	return ids, nil
 }
 
-func BytesAsAtx(b []byte, id AtxId) (*ActivationTx, error) {
+func BytesAsAtx(b []byte) (*ActivationTx, error) {
 	buf := bytes.NewReader(b)
 	var atx ActivationTx
 	_, err := xdr.Unmarshal(buf, &atx)
 	if err != nil {
 		return nil, err
-	}
-	if id == *EmptyAtxId {
-		atx.CalcAndSetId()
-	} else {
-		atx.SetId(&id)
 	}
 	return &atx, nil
 }

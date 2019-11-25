@@ -34,14 +34,8 @@ spec:
         ports:
         - containerPort: 9090
         volumeMounts:
-        - name: config-volume
-          mountPath: /etc/config
         - name: client-vol
           mountPath: /usr/share/spacemesh          
-      volumes:
-      - name: config-volume
-        configMap:
-          name: conf
       nodeSelector:
         role: tests
   volumeClaimTemplates:

@@ -6,6 +6,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -32,13 +33,23 @@ func (p *ProjectorMock) GetProjection(addr types.Address, prevNonce, prevBalance
 	return prevNonce + p.nonceDiff, prevBalance - p.balanceDiff, nil
 }
 
+type appliedTxsMock struct{}
+
+func (appliedTxsMock) Put(key []byte, value []byte) error { return nil }
+func (appliedTxsMock) Delete(key []byte) error            { panic("implement me") }
+func (appliedTxsMock) Get(key []byte) ([]byte, error)     { panic("implement me") }
+func (appliedTxsMock) Has(key []byte) (bool, error)       { panic("implement me") }
+func (appliedTxsMock) Close()                             { panic("implement me") }
+func (appliedTxsMock) NewBatch() database.Batch           { panic("implement me") }
+func (appliedTxsMock) Find(key []byte) database.Iterator  { panic("implement me") }
+
 func (s *ProcessorStateSuite) SetupTest() {
 	lg := log.New("proc_logger", "", "")
 	s.db = database.NewMemDatabase()
 	s.state, _ = New(types.Hash32{}, NewDatabase(s.db))
 	s.projector = &ProjectorMock{}
 
-	s.processor = NewTransactionProcessor(s.state, s.projector, lg)
+	s.processor = NewTransactionProcessor(s.state, appliedTxsMock{}, s.projector, lg)
 }
 
 func createAccount(state *StateDB, addr types.Address, balance int64, nonce uint64) *StateObj {
@@ -49,8 +60,10 @@ func createAccount(state *StateDB, addr types.Address, balance int64, nonce uint
 	return obj1
 }
 
-func createTransaction(nonce uint64, origin types.Address, destination types.Address, amount uint64) *types.Transaction {
-	return types.NewTxWithOrigin(nonce, origin, destination, amount, 100, 5)
+func createTransaction(t *testing.T, nonce uint64, destination types.Address, amount, fee uint64, signer *signing.EdSigner) *types.Transaction {
+	tx, err := mesh.NewSignedTx(nonce, destination, amount, 100, fee, signer)
+	assert.NoError(t, err)
+	return tx
 }
 
 func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction() {
@@ -59,13 +72,20 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction() {
 	//test insufficient funds
 	//test wrong nonce
 	//test account doesn't exist
-	obj1 := createAccount(s.state, toAddr([]byte{0x01}), 21, 0)
+	signerBuf := []byte("22222222222222222222222222222222")
+	signerBuf = append(signerBuf, []byte{
+		94, 33, 44, 9, 128, 228, 179, 159, 192, 151, 33, 19, 74, 160, 33, 9,
+		55, 78, 223, 210, 96, 192, 211, 208, 60, 181, 1, 200, 214, 84, 87, 169,
+	}...)
+	signer, err := signing.NewEdSignerFromBuffer(signerBuf)
+	assert.NoError(s.T(), err)
+	obj1 := createAccount(s.state, SignerToAddr(signer), 21, 0)
 	obj2 := createAccount(s.state, toAddr([]byte{0x01, 02}), 1, 10)
 	createAccount(s.state, toAddr([]byte{0x02}), 44, 0)
 	s.state.Commit(false)
 
 	transactions := []*types.Transaction{
-		createTransaction(obj1.Nonce(), obj1.address, obj2.address, 1),
+		createTransaction(s.T(), obj1.Nonce(), obj2.address, 1, 5, signer),
 	}
 
 	failed, err := s.processor.ApplyTransactions(1, transactions)
@@ -78,12 +98,8 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction() {
 	assert.Equal(s.T(), uint64(1), s.state.GetNonce(obj1.address))
 
 	want := `{
-	"root": "8e80968ce4ed49cb0caf0036691d531fc0db419b7ea3018fe0a1263de9bd886c",
+	"root": "6de6ffd7eda4c1aa4de66051e4ad05afc1233e089f9e9afaf8174a4dc483fa57",
 	"accounts": {
-		"0000000000000000000000000000000000000001": {
-			"balance": "15",
-			"nonce": 1
-		},
 		"0000000000000000000000000000000000000002": {
 			"balance": "44",
 			"nonce": 0
@@ -91,12 +107,20 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction() {
 		"0000000000000000000000000000000000000102": {
 			"balance": "2",
 			"nonce": 10
+		},
+		"4aa02109374edfd260c0d3d03cb501c8d65457a9": {
+			"balance": "15",
+			"nonce": 1
 		}
 	}
 }`
 	if got != want {
 		s.T().Errorf("dump mismatch:\ngot: %s\nwant: %s\n", got, want)
 	}
+}
+
+func SignerToAddr(signer *signing.EdSigner) types.Address {
+	return types.BytesToAddress(signer.PublicKey().Bytes())
 }
 
 /*func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_DoubleTrans() {
@@ -148,31 +172,30 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction() {
 }*/
 
 func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_Errors() {
-	obj1 := createAccount(s.state, toAddr([]byte{0x01}), 21, 0)
+	signer1 := signing.NewEdSigner()
+	obj1 := createAccount(s.state, SignerToAddr(signer1), 21, 0)
 	obj2 := createAccount(s.state, toAddr([]byte{0x01, 02}), 1, 10)
 	createAccount(s.state, toAddr([]byte{0x02}), 44, 0)
 	s.state.Commit(false)
 
 	transactions := []*types.Transaction{
-		createTransaction(obj1.Nonce(), obj1.address, obj2.address, 1),
+		createTransaction(s.T(), obj1.Nonce(), obj2.address, 1, 5, signer1),
 	}
 
 	failed, err := s.processor.ApplyTransactions(1, transactions)
 	assert.NoError(s.T(), err)
 	assert.True(s.T(), failed == 0)
 
-	err = s.processor.ApplyTransaction(createTransaction(0, obj1.address, obj2.address, 1))
+	err = s.processor.ApplyTransaction(createTransaction(s.T(), 0, obj2.address, 1, 5, signer1), 0)
 	assert.Error(s.T(), err)
 	assert.Equal(s.T(), err.Error(), ErrNonce)
 
-	err = s.processor.ApplyTransaction(createTransaction(obj1.Nonce(), obj1.address, obj2.address, 21))
+	err = s.processor.ApplyTransaction(createTransaction(s.T(), obj1.Nonce(), obj2.address, 21, 5, signer1), 0)
 	assert.Error(s.T(), err)
 	assert.Equal(s.T(), err.Error(), ErrFunds)
 
-	addr := toAddr([]byte{0x01, 0x01})
-
 	//Test origin
-	err = s.processor.ApplyTransaction(createTransaction(obj1.Nonce(), addr, obj2.address, 21))
+	err = s.processor.ApplyTransaction(createTransaction(s.T(), obj1.Nonce(), obj2.address, 21, 5, signing.NewEdSigner()), 0)
 	assert.Error(s.T(), err)
 	assert.Equal(s.T(), err.Error(), ErrOrigin)
 }
@@ -194,16 +217,23 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyRewards() {
 }
 
 func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_OrderByNonce() {
-	obj1 := createAccount(s.state, toAddr([]byte{0x01}), 25, 0)
+	signerBuf := []byte("22222222222222222222222222222222")
+	signerBuf = append(signerBuf, []byte{
+		94, 33, 44, 9, 128, 228, 179, 159, 192, 151, 33, 19, 74, 160, 33, 9,
+		55, 78, 223, 210, 96, 192, 211, 208, 60, 181, 1, 200, 214, 84, 87, 169,
+	}...)
+	signer, err := signing.NewEdSignerFromBuffer(signerBuf)
+	assert.NoError(s.T(), err)
+	obj1 := createAccount(s.state, SignerToAddr(signer), 25, 0)
 	obj2 := createAccount(s.state, toAddr([]byte{0x01, 02}), 1, 10)
 	obj3 := createAccount(s.state, toAddr([]byte{0x02}), 44, 0)
 	s.state.Commit(false)
 
 	transactions := []*types.Transaction{
-		createTransaction(obj1.Nonce()+3, obj1.address, obj3.address, 1),
-		createTransaction(obj1.Nonce()+2, obj1.address, obj3.address, 1),
-		createTransaction(obj1.Nonce()+1, obj1.address, obj3.address, 1),
-		createTransaction(obj1.Nonce(), obj1.address, obj2.address, 1),
+		createTransaction(s.T(), obj1.Nonce()+3, obj3.address, 1, 5, signer),
+		createTransaction(s.T(), obj1.Nonce()+2, obj3.address, 1, 5, signer),
+		createTransaction(s.T(), obj1.Nonce()+1, obj3.address, 1, 5, signer),
+		createTransaction(s.T(), obj1.Nonce(), obj2.address, 1, 5, signer),
 	}
 
 	s.processor.ApplyTransactions(1, transactions)
@@ -215,12 +245,8 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_OrderByN
 	assert.Equal(s.T(), uint64(2), s.state.GetBalance(obj2.address))
 
 	want := `{
-	"root": "e5212ec1f253fc4d7f77a591f66770ccae676ece70823287638ad7c5f988bced",
+	"root": "0fb9e074115e49b9a1d33949de2578459c158d8885ca10ad9edcd5d3a84fd67c",
 	"accounts": {
-		"0000000000000000000000000000000000000001": {
-			"balance": "1",
-			"nonce": 4
-		},
 		"0000000000000000000000000000000000000002": {
 			"balance": "47",
 			"nonce": 0
@@ -228,6 +254,10 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_OrderByN
 		"0000000000000000000000000000000000000102": {
 			"balance": "2",
 			"nonce": 10
+		},
+		"4aa02109374edfd260c0d3d03cb501c8d65457a9": {
+			"balance": "1",
+			"nonce": 4
 		}
 	}
 }`
@@ -237,13 +267,28 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_OrderByN
 }
 
 func (s *ProcessorStateSuite) TestTransactionProcessor_Reset() {
-	obj1 := createAccount(s.state, toAddr([]byte{0x01}), 21, 0)
-	obj2 := createAccount(s.state, toAddr([]byte{0x01, 02}), 41, 10)
+	signer1Buf := []byte("22222222222222222222222222222222")
+	signer1Buf = append(signer1Buf, []byte{
+		94, 33, 44, 9, 128, 228, 179, 159, 192, 151, 33, 19, 74, 160, 33, 9,
+		55, 78, 223, 210, 96, 192, 211, 208, 60, 181, 1, 200, 214, 84, 87, 169,
+	}...)
+	signer2Buf := []byte("33333333333333333333333333333333")
+	signer2Buf = append(signer2Buf, []byte{
+		23, 203, 121, 251, 43, 65, 32, 242, 177, 236, 101, 228, 25, 141, 110, 8,
+		178, 142, 129, 63, 235, 1, 228, 164, 0, 131, 155, 133, 225, 128, 128, 206,
+	}...)
+
+	signer1, err := signing.NewEdSignerFromBuffer(signer1Buf)
+	assert.NoError(s.T(), err)
+	signer2, err := signing.NewEdSignerFromBuffer(signer2Buf)
+	assert.NoError(s.T(), err)
+	obj1 := createAccount(s.state, SignerToAddr(signer1), 21, 0)
+	obj2 := createAccount(s.state, SignerToAddr(signer2), 41, 10)
 	createAccount(s.state, toAddr([]byte{0x02}), 44, 0)
 	s.state.Commit(false)
 
 	transactions := []*types.Transaction{
-		createTransaction(obj1.Nonce(), obj1.address, obj2.address, 1),
+		createTransaction(s.T(), obj1.Nonce(), obj2.address, 1, 5, signer1),
 		//createTransaction(obj2.Nonce(),obj2.address, obj1.address, 1),
 	}
 
@@ -252,8 +297,8 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Reset() {
 	assert.True(s.T(), failed == 0)
 
 	transactions = []*types.Transaction{
-		createTransaction(obj1.Nonce(), obj1.address, obj2.address, 1),
-		createTransaction(obj2.Nonce(), obj2.address, obj1.address, 10),
+		createTransaction(s.T(), obj1.Nonce(), obj2.address, 1, 5, signer1),
+		createTransaction(s.T(), obj2.Nonce(), obj1.address, 10, 5, signer2),
 	}
 
 	failed, err = s.processor.ApplyTransactions(2, transactions)
@@ -263,19 +308,19 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Reset() {
 	got := string(s.processor.globalState.Dump())
 
 	want := `{
-	"root": "abe8e506a6a6aeb5e0eb14e7733c85d60f619a93cabe8579fc16c3c106a0ffb1",
+	"root": "4b7174d31e60ef1ed970137079e2b8044d9c381422dbcbe16e561d8a51a9f651",
 	"accounts": {
-		"0000000000000000000000000000000000000001": {
-			"balance": "19",
-			"nonce": 2
-		},
 		"0000000000000000000000000000000000000002": {
 			"balance": "44",
 			"nonce": 0
 		},
-		"0000000000000000000000000000000000000102": {
+		"198d6e08b28e813feb01e4a400839b85e18080ce": {
 			"balance": "28",
 			"nonce": 11
+		},
+		"4aa02109374edfd260c0d3d03cb501c8d65457a9": {
+			"balance": "19",
+			"nonce": 2
 		}
 	}
 }`
@@ -290,32 +335,25 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Reset() {
 	assert.Equal(s.T(), uint64(15), s.processor.globalState.GetBalance(obj1.address))
 
 	want = `{
-	"root": "351199c464a9be1b7c78aeecb6f83f04e38316fa98d7d45a2d9fc475d4c3b857",
+	"root": "9273645f6b9a62f32500021f5e0a89d3eb6ffd36b1b9f9f82fcaad4555951e97",
 	"accounts": {
-		"0000000000000000000000000000000000000001": {
-			"balance": "15",
-			"nonce": 1
-		},
 		"0000000000000000000000000000000000000002": {
 			"balance": "44",
 			"nonce": 0
 		},
-		"0000000000000000000000000000000000000102": {
+		"198d6e08b28e813feb01e4a400839b85e18080ce": {
 			"balance": "42",
 			"nonce": 10
+		},
+		"4aa02109374edfd260c0d3d03cb501c8d65457a9": {
+			"balance": "15",
+			"nonce": 1
 		}
 	}
 }`
 	if got != want {
 		s.T().Errorf("dump mismatch:\ngot: %s\nwant: %s\n", got, want)
 	}
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
 
 func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
@@ -327,14 +365,20 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 	revertAfterLayer := rand.Intn(testCycles - revertToLayer) //rand.Intn(min(testCycles - revertToLayer,maxPastStates))
 	log.Info("starting test: revert on layer %v, after %v layers received since that layer ", revertToLayer, revertAfterLayer)
 
-	obj1 := createAccount(s.state, toAddr([]byte{0x01}), 5218762487624, 0)
-	obj2 := createAccount(s.state, toAddr([]byte{0x01, 02}), 341578872634786, 10)
-	obj3 := createAccount(s.state, toAddr([]byte{0x02}), 1044987234, 0)
+	signers := []*signing.EdSigner{
+		signing.NewEdSigner(),
+		signing.NewEdSigner(),
+		signing.NewEdSigner(),
+	}
+	accounts := []*StateObj{
+		createAccount(s.state, toAddr(signers[0].PublicKey().Bytes()), 5218762487624, 0),
+		createAccount(s.state, toAddr(signers[1].PublicKey().Bytes()), 341578872634786, 10),
+		createAccount(s.state, toAddr(signers[2].PublicKey().Bytes()), 1044987234, 0),
+	}
 
 	s.state.Commit(false)
 
 	written := s.db.Len()
-	accounts := []*StateObj{obj1, obj2, obj3}
 
 	var want string
 	for i := 0; i < testCycles; i++ {
@@ -343,7 +387,8 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 		nonceTrack := make(map[*StateObj]int)
 		for j := 0; j < numOfTransactions; j++ {
 
-			srcAccount := accounts[int(rand.Uint32()%(uint32(len(accounts)-1)))]
+			src := int(rand.Uint32() % (uint32(len(accounts) - 1)))
+			srcAccount := accounts[src]
 			dstAccount := accounts[int(rand.Uint32()%(uint32(len(accounts)-1)))]
 
 			if _, ok := nonceTrack[srcAccount]; !ok {
@@ -355,8 +400,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 			for dstAccount == srcAccount {
 				dstAccount = accounts[int(rand.Uint32()%(uint32(len(accounts)-1)))]
 			}
-			t := createTransaction(s.processor.globalState.GetNonce(srcAccount.address)+uint64(nonceTrack[srcAccount]),
-				srcAccount.address, dstAccount.address, (rand.Uint64()%srcAccount.Balance().Uint64())/100)
+			t := createTransaction(s.T(), s.processor.globalState.GetNonce(srcAccount.address)+uint64(nonceTrack[srcAccount]), dstAccount.address, (rand.Uint64()%srcAccount.Balance().Uint64())/100, 5, signers[src])
 			trns = append(trns, t)
 
 			log.Info("transaction %v nonce %v amount %v", t.Origin().Hex(), t.AccountNonce, t.Amount)
@@ -386,44 +430,47 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 	assert.True(s.T(), writtenMore > written)
 }
 
-func newTx(origin types.Address, nonce, totalAmount uint64) *types.Transaction {
+func newTx(t *testing.T, nonce, totalAmount uint64, signer *signing.EdSigner) *types.Transaction {
 	feeAmount := uint64(1)
-	return types.NewTxWithOrigin(nonce, origin, types.Address{}, totalAmount-feeAmount, 3, feeAmount)
+	return createTransaction(t, nonce, types.Address{}, totalAmount-feeAmount, feeAmount, signer)
 }
 
 func (s *ProcessorStateSuite) TestTransactionProcessor_ValidateNonceAndBalance() {
 	r := require.New(s.T())
-	origin := types.BytesToAddress([]byte("abc"))
+	signer := signing.NewEdSigner()
+	origin := types.BytesToAddress(signer.PublicKey().Bytes())
 	s.processor.globalState.SetBalance(origin, big.NewInt(100))
 	s.processor.globalState.SetNonce(origin, 5)
 	s.projector.balanceDiff = 10
 	s.projector.nonceDiff = 2
 
-	err := s.processor.ValidateNonceAndBalance(newTx(origin, 7, 10))
+	err := s.processor.ValidateNonceAndBalance(newTx(s.T(), 7, 10, signer))
 	r.NoError(err)
 }
 
 func (s *ProcessorStateSuite) TestTransactionProcessor_ValidateNonceAndBalance_WrongNonce() {
 	r := require.New(s.T())
-	origin := types.BytesToAddress([]byte("abc"))
+	signer := signing.NewEdSigner()
+	origin := types.BytesToAddress(signer.PublicKey().Bytes())
 	s.processor.globalState.SetBalance(origin, big.NewInt(100))
 	s.processor.globalState.SetNonce(origin, 5)
 	s.projector.balanceDiff = 10
 	s.projector.nonceDiff = 2
 
-	err := s.processor.ValidateNonceAndBalance(newTx(origin, 8, 10))
+	err := s.processor.ValidateNonceAndBalance(newTx(s.T(), 8, 10, signer))
 	r.EqualError(err, "incorrect account nonce! Expected: 7, Actual: 8")
 }
 
 func (s *ProcessorStateSuite) TestTransactionProcessor_ValidateNonceAndBalance_InsufficientBalance() {
 	r := require.New(s.T())
-	origin := types.BytesToAddress([]byte("abc"))
+	signer := signing.NewEdSigner()
+	origin := types.BytesToAddress(signer.PublicKey().Bytes())
 	s.processor.globalState.SetBalance(origin, big.NewInt(100))
 	s.processor.globalState.SetNonce(origin, 5)
 	s.projector.balanceDiff = 10
 	s.projector.nonceDiff = 2
 
-	err := s.processor.ValidateNonceAndBalance(newTx(origin, 7, 95))
+	err := s.processor.ValidateNonceAndBalance(newTx(s.T(), 7, 95, signer))
 	r.EqualError(err, "insufficient balance! Available: 90, Attempting to spend: 94[amount]+1[fee]=95")
 }
 
@@ -435,7 +482,7 @@ func createXdrSignedTransaction(t *testing.T, key ed25519.PrivateKey) *types.Tra
 	r := require.New(t)
 	signer, err := signing.NewEdSignerFromBuffer(key)
 	r.NoError(err)
-	tx, err := types.NewSignedTx(1111, toAddr([]byte{0xde}), 123, 11, 456, signer)
+	tx, err := mesh.NewSignedTx(1111, toAddr([]byte{0xde}), 123, 11, 456, signer)
 	r.NoError(err)
 	return tx
 }
@@ -444,7 +491,7 @@ func TestValidateTxSignature(t *testing.T) {
 	db := database.NewMemDatabase()
 	state, _ := New(types.Hash32{}, NewDatabase(db))
 	lg := log.New("proc_logger", "", "")
-	proc := NewTransactionProcessor(state, &ProjectorMock{}, lg)
+	proc := NewTransactionProcessor(state, appliedTxsMock{}, &ProjectorMock{}, lg)
 
 	// positive flow
 	pub, pri, _ := ed25519.GenerateKey(crand.Reader)
