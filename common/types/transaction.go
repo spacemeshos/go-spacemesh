@@ -93,21 +93,6 @@ type InnerTransaction struct {
 	Amount       uint64
 }
 
-// TEST ONLY
-func NewTxWithOrigin(nonce uint64, orig, rec Address, amount, gasLimit, fee uint64) *Transaction {
-	inner := InnerTransaction{
-		AccountNonce: nonce,
-		Recipient:    rec,
-		Amount:       amount,
-		GasLimit:     gasLimit,
-		Fee:          fee,
-	}
-	return &Transaction{
-		InnerTransaction: inner,
-		origin:           &orig,
-	}
-}
-
 type Reward struct {
 	Layer  LayerID
 	Amount uint64

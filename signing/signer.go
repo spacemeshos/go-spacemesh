@@ -51,6 +51,7 @@ func NewEdSignerFromBuffer(buff []byte) (*EdSigner, error) {
 	sgn := &EdSigner{privKey: buff, pubKey: buff[32:]}
 	keyPair := ed25519.NewKeyFromSeed(sgn.privKey[:32])
 	if !bytes.Equal(keyPair[32:], sgn.pubKey) {
+		log.Info("%v", keyPair[32:])
 		log.Error("Public key and private key does not match")
 		return nil, errors.New("private and public does not match")
 	}

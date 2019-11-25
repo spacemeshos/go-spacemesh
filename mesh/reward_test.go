@@ -4,6 +4,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/rand"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
 	"math/big"
 	"strconv"
@@ -56,22 +57,19 @@ func getMeshWithMapState(id string, s TxProcessor) (*Mesh, *AtxDbMock) {
 	return NewMesh(mshdb, atxDb, ConfigTst(), &MeshValidatorMock{}, &MockTxMemPool{}, &MockAtxMemPool{}, s, lg), atxDb
 }
 
-func addTransactionsWithFee(mesh *MeshDB, bl *types.Block, numOfTxs int, fee int64) int64 {
+func addTransactionsWithFee(t testing.TB, mesh *MeshDB, bl *types.Block, numOfTxs int, fee int64) int64 {
 	var totalFee int64
 	var txs []*types.Transaction
 	for i := 0; i < numOfTxs; i++ {
-		addr := rand.Int63n(10000)
 		//log.Info("adding tx with fee %v nonce %v", fee, i)
-		tx := types.NewTxWithOrigin(uint64(i), types.HexToAddress("1"),
-			types.HexToAddress(strconv.FormatUint(uint64(addr), 10)),
-			10,
-			100,
-			uint64(fee))
+		tx, err := NewSignedTx(1, types.HexToAddress("1"), 10, 100, uint64(fee), signing.NewEdSigner())
+		assert.NoError(t, err)
 		bl.TxIds = append(bl.TxIds, tx.Id())
 		totalFee += fee
 		txs = append(txs, tx)
 	}
-	mesh.writeTransactions(0, txs)
+	err := mesh.writeTransactions(0, txs)
+	assert.NoError(t, err)
 	return totalFee
 }
 
@@ -87,7 +85,7 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 	atx := types.NewActivationTx(types.NodeId{"1", []byte("bbbbb")}, coinbase1, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 10, []types.BlockID{}, &types.NIPST{})
 	atxdb.AddAtx(atx.Id(), atx)
 	block1.ATXID = atx.Id()
-	totalFee += addTransactionsWithFee(layers.MeshDB, block1, 15, 7)
+	totalFee += addTransactionsWithFee(t, layers.MeshDB, block1, 15, 7)
 
 	block2 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
 
@@ -95,7 +93,7 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 	atx = types.NewActivationTx(types.NodeId{"2", []byte("bbbbb")}, coinbase2, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 10, []types.BlockID{}, &types.NIPST{})
 	atxdb.AddAtx(atx.Id(), atx)
 	block2.ATXID = atx.Id()
-	totalFee += addTransactionsWithFee(layers.MeshDB, block2, 13, rand.Int63n(100))
+	totalFee += addTransactionsWithFee(t, layers.MeshDB, block2, 13, rand.Int63n(100))
 
 	block3 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
 
@@ -103,7 +101,7 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 	atx = types.NewActivationTx(types.NodeId{"3", []byte("bbbbb")}, coinbase3, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 10, []types.BlockID{}, &types.NIPST{})
 	atxdb.AddAtx(atx.Id(), atx)
 	block3.ATXID = atx.Id()
-	totalFee += addTransactionsWithFee(layers.MeshDB, block3, 17, rand.Int63n(100))
+	totalFee += addTransactionsWithFee(t, layers.MeshDB, block3, 17, rand.Int63n(100))
 
 	block4 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
 
@@ -111,7 +109,7 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 	atx = types.NewActivationTx(types.NodeId{"4", []byte("bbbbb")}, coinbase4, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 10, []types.BlockID{}, &types.NIPST{})
 	atxdb.AddAtx(atx.Id(), atx)
 	block4.ATXID = atx.Id()
-	totalFee += addTransactionsWithFee(layers.MeshDB, block4, 16, rand.Int63n(100))
+	totalFee += addTransactionsWithFee(t, layers.MeshDB, block4, 16, rand.Int63n(100))
 
 	log.Info("total fees : %v", totalFee)
 	layers.AddBlock(block1)
@@ -135,7 +133,7 @@ func NewTestRewardParams() Config {
 	}
 }
 
-func createLayer(mesh *Mesh, id types.LayerID, numOfBlocks, maxTransactions int, atxdb *AtxDbMock) (totalRewards int64) {
+func createLayer(t testing.TB, mesh *Mesh, id types.LayerID, numOfBlocks, maxTransactions int, atxdb *AtxDbMock) (totalRewards int64) {
 	for i := 0; i < numOfBlocks; i++ {
 		block1 := types.NewExistingBlock(id, []byte(rand.RandString(8)))
 		nodeid := types.NodeId{strconv.Itoa(i), []byte("bbbbb")}
@@ -144,9 +142,10 @@ func createLayer(mesh *Mesh, id types.LayerID, numOfBlocks, maxTransactions int,
 		atxdb.AddAtx(atx.Id(), atx)
 		block1.ATXID = atx.Id()
 
-		totalRewards += addTransactionsWithFee(mesh.MeshDB, block1, rand.Intn(maxTransactions), rand.Int63n(100))
+		totalRewards += addTransactionsWithFee(t, mesh.MeshDB, block1, rand.Intn(maxTransactions), rand.Int63n(100))
 		block1.CalcAndSetId()
-		mesh.AddBlock(block1)
+		err := mesh.AddBlock(block1)
+		assert.NoError(t, err)
 	}
 	return totalRewards
 }
@@ -162,7 +161,7 @@ func TestMesh_integration(t *testing.T) {
 
 	var l3Rewards int64
 	for i := 0; i < numofLayers; i++ {
-		reward := createLayer(layers, types.LayerID(i), numofBlocks, maxTxs, atxdb)
+		reward := createLayer(t, layers, types.LayerID(i), numofBlocks, maxTxs, atxdb)
 		// rewards are applied to layers in the past according to the reward maturity param
 		if i == 3 {
 			l3Rewards = reward
@@ -210,7 +209,7 @@ func TestMesh_AccumulateRewards(t *testing.T) {
 
 	var firstLayerRewards int64
 	for i := 0; i < numOfLayers; i++ {
-		reward := createLayer(mesh, types.LayerID(i), numOfBlocks, maxTxs, atxDb)
+		reward := createLayer(t, mesh, types.LayerID(i), numOfBlocks, maxTxs, atxDb)
 		if i == 0 {
 			firstLayerRewards = reward
 			log.Info("reward %v", firstLayerRewards)
