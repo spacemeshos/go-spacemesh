@@ -22,17 +22,22 @@ func (p *protocol) newGetAddressesRequestHandler() func(msg server.Message) []by
 		// we must ensure that he's indeed listening on that address = check last pong
 		ka, err := p.table.LookupKnownAddress(msg.Sender())
 		if err != nil {
-			p.logger.Error("Error looking up message sender (GetAddress): %v", msg.Sender())
+			p.logger.Error("Error looking up message sender (GetAddress) Peer: %v", msg.Sender())
 			return nil
 		}
 		// Check if we've pinged this peer recently enough
+		// Should we attempt to send a ping here? It shouldn't be necessary, since the node
+		// requesting addresses should have pinged us first, and we should have already sent
+		// a ping in response.
 		if ka.NeedsPing() {
-			if err := p.Ping(msg.Sender()); err != nil {
-				p.logger.Error("Error pinging peer (GetAddress): %v", msg.Sender())
-				return nil
-			}
+			p.logger.Warning("Failed ping check (GetAddress) Peer: %v", msg.Sender())
+			return nil
+			//if err := p.Ping(msg.Sender()); err != nil {
+			//	p.logger.Error("Error pinging peer (GetAddress): %v", msg.Sender())
+			//	return nil
+			//}
 		}
-		p.logger.Debug("Passed ping check, recently pinged Peer %v", msg.Sender())
+		p.logger.Debug("Passed ping check, recently pinged (GetAddress) Peer: %v", msg.Sender())
 
 		results := p.table.AddressCache()
 		// remove the sender from the list
