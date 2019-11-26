@@ -7,14 +7,14 @@ import (
 )
 
 func TestSpacemeshApp_TestSyncCmd(t *testing.T) {
-	//t.Skip("skipped until sync test cloud resources are updated")
+	t.Skip("skipped until sync test cloud resources are updated")
 	syncApp := NewSyncApp()
 	defer syncApp.Cleanup()
 	syncApp.Initialize(Cmd)
 	syncApp.Config.DataDir = "bin/data/"
 	lg := log.New("", "", "")
 
-	if err := GetData(syncApp.Config.DataDir, lg); err != nil {
+	if err := GetData(syncApp.Config.DataDir, version, lg); err != nil {
 		t.Error("could not download data for test", err)
 		return
 	}
