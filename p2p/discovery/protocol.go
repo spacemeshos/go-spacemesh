@@ -3,6 +3,7 @@ package discovery
 import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"time"
@@ -13,6 +14,7 @@ type protocolRoutingTable interface {
 	AddAddresses(n []*node.NodeInfo, src *node.NodeInfo)
 	AddAddress(n *node.NodeInfo, src *node.NodeInfo)
 	AddressCache() []*node.NodeInfo
+	LookupKnownAddress(a p2pcrypto.PublicKey) (*KnownAddress, error)
 }
 
 type protocol struct {

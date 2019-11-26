@@ -54,6 +54,10 @@ const (
 	// address has vanished if we have not seen it announced  in that long.
 	numMissingDays = 30
 
+	// pingInterval is the interval, in hours, after which we must re-ping
+	// a known node at its advertised location to validate it.
+	pingInterval = 24
+
 	// numRetries is the number of tried without a single success before
 	// we assume an address is bad.
 	numRetries = 3
@@ -89,9 +93,6 @@ type addrBook struct {
 	// todo: use arrays instead of maps
 	addrNew   [newBucketCount]map[node.ID]*KnownAddress
 	addrTried [triedBucketCount]map[node.ID]*KnownAddress
-
-	// Keep track of how recently we've successfully completed a roundtrip ping with an address.
-	addrPinged map[node.ID]*KnownAddress
 
 	//todo: lock local for updates
 	localAddress *node.NodeInfo
@@ -254,6 +255,17 @@ func (a *addrBook) Lookup(addr p2pcrypto.PublicKey) (*node.NodeInfo, error) {
 		return nil, ErrLookupFailed
 	}
 	return d.na, nil
+}
+
+func (a *addrBook) LookupKnownAddress(addr p2pcrypto.PublicKey) (*KnownAddress, error) {
+	a.mtx.Lock()
+	d, ok := a.addrIndex[addr.Array()]
+	a.mtx.Unlock()
+	if !ok {
+		// Todo: just return empty without error ?
+		return nil, ErrLookupFailed
+	}
+	return d, nil
 }
 
 func (a *addrBook) find(addr p2pcrypto.PublicKey) *KnownAddress {

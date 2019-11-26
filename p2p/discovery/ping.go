@@ -54,6 +54,26 @@ func (p *protocol) verifyPinger(from net.Addr, pi *node.NodeInfo) error {
 
 	// Check the address provided by pinging it (if we haven't already, recently).
 	// This helps prevent reflective DoS attacks.
+	if ka, err := p.table.LookupKnownAddress(pi.PublicKey()); err != nil {
+		return err
+	} else {
+		if ka.NeedsPing() {
+			peer := ka.na.PublicKey()
+			foo := func() {
+				if err := p.Ping(peer); err != nil {
+					// All we can do here is print a warning. We've already responded with a pong,
+					// and the peer will not be added to the pingable list.
+					p.logger.Warning("Failed response to ping to Peer: %v", peer.String())
+				}
+				//else {
+				//	p.logger.Debug("Successfully roundtrip pinged at advertised address Peer: %v", peer.String())
+				//	ka.updatePing()
+				//}
+			}
+			// Send the new Ping in a coroutine so we first respond to the incoming Ping
+			go foo()
+		}
+	}
 
 	//TODO: only accept local (unspecified/loopback) IPs from other local ips.
 	ipfrom, _, _ := net.SplitHostPort(from.String())
@@ -106,6 +126,12 @@ func (p *protocol) Ping(peer p2pcrypto.PublicKey) error {
 		}
 		if !bytes.Equal(id, peer.Bytes()) {
 			return errors.New("got pong with different public key")
+		}
+		// Mark peer as having been pinged successfully
+		if ka, err := p.table.LookupKnownAddress(peer); err != nil {
+			return err
+		} else {
+			ka.updatePing()
 		}
 	case <-timeout.C:
 		return errors.New("ping timeouted")

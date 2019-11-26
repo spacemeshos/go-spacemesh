@@ -15,7 +15,7 @@ type KnownAddress struct {
 	lastSeen    time.Time
 	lastattempt time.Time
 	lastsuccess time.Time
-	lastpong	time.Time // last successful ping response
+	lastping	time.Time // last successful ping response
 	tried       bool
 	refs        int // reference count of new buckets
 }
@@ -27,6 +27,19 @@ func (ka *KnownAddress) DiscNode() *node.NodeInfo {
 // LastAttempt returns the last time the known address was attempted.
 func (ka *KnownAddress) LastAttempt() time.Time {
 	return ka.lastattempt
+}
+
+// NeedsPing returns whether we need to ping this node again.
+func (ka *KnownAddress) NeedsPing() bool {
+	if ka.lastping.Before(time.Now().Add(-1 * pingInterval * time.Hour)) {
+		return true
+	}
+	return false
+}
+
+// Mark this address as having just been successfully roundtrip pinged.
+func (ka *KnownAddress) updatePing() {
+	ka.lastping = time.Now()
 }
 
 // chance returns the selection probability for a known address.  The priority

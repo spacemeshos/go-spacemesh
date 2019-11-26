@@ -38,6 +38,7 @@ type addressBook interface {
 	RemoveAddress(key p2pcrypto.PublicKey)
 	NeedNewAddresses() bool
 	Lookup(key p2pcrypto.PublicKey) (*node.NodeInfo, error)
+	LookupKnownAddress(key p2pcrypto.PublicKey) (*KnownAddress, error)
 	AddAddress(addr, srcAddr *node.NodeInfo)
 	AddAddresses(addrs []*node.NodeInfo, srcAddr *node.NodeInfo)
 	AddressCache() []*node.NodeInfo

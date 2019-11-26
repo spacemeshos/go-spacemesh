@@ -20,6 +20,7 @@ type serializedKnownAddress struct {
 	LastSeen    int64
 	LastAttempt int64
 	LastSuccess int64
+	LastPing	int64
 	// no refcount or tried, that is available from context.
 }
 
@@ -51,6 +52,7 @@ func (a *addrBook) savePeers(path string) {
 		ska.Attempts = v.attempts
 		ska.LastAttempt = v.lastattempt.Unix()
 		ska.LastSuccess = v.lastsuccess.Unix()
+		ska.LastPing = v.lastping.Unix()
 		// Tried and refs are implicit in the rest of the structure
 		// and will be worked out from context on unserialisation.
 		sam.Addresses[i] = ska
@@ -148,6 +150,7 @@ func (a *addrBook) deserializePeers(filePath string) error {
 		ka.attempts = v.Attempts
 		ka.lastattempt = time.Unix(v.LastAttempt, 0)
 		ka.lastsuccess = time.Unix(v.LastSuccess, 0)
+		ka.lastping = time.Unix(v.LastPing, 0)
 		a.addrIndex[ka.na.ID] = ka
 	}
 
