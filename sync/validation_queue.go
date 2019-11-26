@@ -39,6 +39,7 @@ func NewValidationQueue(srvr WorkerInfra, conf Configuration, msh ValidationInfr
 			Mutex:               &sync.Mutex{},
 			pending:             make(map[types.Hash32][]chan bool),
 			queue:               make(chan []types.Hash32, 1000),
+			name:                "Block",
 		},
 		Configuration:   conf,
 		depMap:          make(map[interface{}]map[types.Hash32]struct{}),

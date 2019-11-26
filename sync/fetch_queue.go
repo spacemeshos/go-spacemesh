@@ -32,6 +32,7 @@ type fetchQueue struct {
 	handleFetch func(fj fetchJob)
 	checkLocal  CheckLocalFunc
 	queue       chan []types.Hash32 //types.TransactionId //todo make buffered
+	name        string
 }
 
 func (fq *fetchQueue) Close() {
@@ -49,7 +50,7 @@ func concatShortIds(items []types.Hash32) string {
 
 //todo batches
 func (fq *fetchQueue) work() error {
-	output := fetchWithFactory(NewFetchWorker(fq.workerInfra, 1, fq.BatchRequestFactory, fq.queue))
+	output := fetchWithFactory(NewFetchWorker(fq.workerInfra, 1, fq.BatchRequestFactory, fq.queue, fq.name))
 	for out := range output {
 		fq.Debug("new batch out of queue")
 		if out == nil {
@@ -66,9 +67,8 @@ func (fq *fetchQueue) work() error {
 		if len(bjb.ids) == 0 {
 			return fmt.Errorf("channel closed")
 		}
-
+		fq.Info("fetched %s's %s", fq.name, concatShortIds(bjb.ids))
 		fq.handleFetch(bjb)
-		fq.Info("fetched items %s", concatShortIds(bjb.ids))
 		fq.Debug("next batch")
 	}
 	return nil
@@ -99,7 +99,7 @@ func (fq *fetchQueue) addToPending(ids []types.Hash32) []chan bool {
 }
 
 func (fq *fetchQueue) invalidate(id types.Hash32, valid bool) {
-	fq.Debug("done with %v !!!!!!!!!!!!!!!! %v", id.ShortString(), valid)
+	fq.Info("done with %v !!!!!!!!!!!!!!!! %v", id.ShortString(), valid)
 	fq.Lock()
 	deps := fq.pending[id]
 	delete(fq.pending, id)
@@ -150,7 +150,9 @@ func NewTxQueue(s *Syncer) *txQueue {
 			BatchRequestFactory: TxFetchReqFactory,
 			checkLocal:          s.txCheckLocal,
 			pending:             make(map[types.Hash32][]chan bool),
-			queue:               make(chan []types.Hash32, 10000)},
+			queue:               make(chan []types.Hash32, 10000),
+			name:                "Tx",
+		},
 	}
 
 	q.handleFetch = updateTxDependencies(q.invalidate, s.txpool)
@@ -213,6 +215,7 @@ func NewAtxQueue(s *Syncer, fetchPoetProof FetchPoetProofFunc) *atxQueue {
 			checkLocal:          s.atxCheckLocal,
 			pending:             make(map[types.Hash32][]chan bool),
 			queue:               make(chan []types.Hash32, 10000),
+			name:                "Atx",
 		},
 	}
 
@@ -258,6 +261,8 @@ func updateAtxDependencies(invalidate func(id types.Hash32, valid bool), sValida
 					atxpool.Put(atx)
 					invalidate(id, true)
 					continue
+				} else {
+					log.Info("failed to validate %s %s", id.ShortString(), err)
 				}
 			}
 			invalidate(id, false)
