@@ -4,9 +4,10 @@ import (
 	"encoding/binary"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/rand"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/require"
-	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -19,18 +20,19 @@ func TestNewTxPoolWithAccounts(t *testing.T) {
 	prevNonce := uint64(4)
 	prevBalance := uint64(1000)
 
-	origin := types.BytesToAddress([]byte("abc"))
+	signer := signing.NewEdSigner()
+	origin := types.BytesToAddress(signer.PublicKey().Bytes())
 	nonce, balance := pool.GetProjection(origin, prevNonce, prevBalance)
 	r.Equal(prevNonce, nonce)
 	r.Equal(prevBalance, balance)
 
-	tx1Id, tx1 := newTx(origin, 4, 50)
+	tx1Id, tx1 := newTx(t, 4, 50, signer)
 	pool.Put(tx1Id, tx1)
 	nonce, balance = pool.GetProjection(origin, prevNonce, prevBalance)
 	r.Equal(prevNonce+1, nonce)
 	r.Equal(prevBalance-50, balance)
 
-	tx2Id, tx2 := newTx(origin, 5, 150)
+	tx2Id, tx2 := newTx(t, 5, 150, signer)
 	pool.Put(tx2Id, tx2)
 	nonce, balance = pool.GetProjection(origin, prevNonce, prevBalance)
 	r.Equal(prevNonce+2, nonce)
@@ -58,12 +60,13 @@ func TestTxPoolWithAccounts_GetRandomTxs(t *testing.T) {
 	pool := NewTxMemPool()
 	prevNonce := uint64(5)
 	prevBalance := uint64(1000)
-	origin := types.BytesToAddress([]byte("abc"))
+	signer := signing.NewEdSigner()
+	origin := types.BytesToAddress(signer.PublicKey().Bytes())
 	const numTxs = 10
 
 	ids := make([]types.TransactionId, numTxs)
 	for i := uint64(0); i < numTxs; i++ {
-		id, tx := newTx(origin, prevNonce+i, 50)
+		id, tx := newTx(t, prevNonce+i, 50, signer)
 		ids[i] = id
 		fmt.Printf("%d: %v\n", i, id.ShortString())
 		pool.Put(id, tx)
@@ -113,9 +116,10 @@ func TestGetRandIdxs(t *testing.T) {
 	require.ElementsMatch(t, []uint64{2, 5, 6, 7, 9}, idsList) // new call -> different indices
 }
 
-func newTx(origin types.Address, nonce, totalAmount uint64) (types.TransactionId, *types.Transaction) {
+func newTx(t testing.TB, nonce, totalAmount uint64, signer *signing.EdSigner) (types.TransactionId, *types.Transaction) {
 	feeAmount := uint64(1)
-	tx := types.NewTxWithOrigin(nonce, origin, types.Address{}, totalAmount-feeAmount, 3, feeAmount)
+	tx, err := mesh.NewSignedTx(nonce, types.Address{}, totalAmount-feeAmount, 3, feeAmount, signer)
+	require.NoError(t, err)
 	return tx.Id(), tx
 }
 
@@ -126,7 +130,8 @@ func BenchmarkTxPoolWithAccounts(b *testing.B) {
 	txBatches := make([][]*types.Transaction, numBatches)
 	txIdBatches := make([][]types.TransactionId, numBatches)
 	for i := 0; i < numBatches; i++ {
-		txBatches[i], txIdBatches[i] = createBatch(types.BytesToAddress([]byte("origin" + strconv.Itoa(i))))
+		signer := signing.NewEdSigner()
+		txBatches[i], txIdBatches[i] = createBatch(b, signer)
 	}
 
 	wg := &sync.WaitGroup{}
@@ -159,11 +164,11 @@ func invalidateBatch(pool *TxMempool, txIdBatch []types.TransactionId, wg *sync.
 	wg.Done()
 }
 
-func createBatch(origin types.Address) ([]*types.Transaction, []types.TransactionId) {
+func createBatch(t testing.TB, signer *signing.EdSigner) ([]*types.Transaction, []types.TransactionId) {
 	var txBatch []*types.Transaction
 	var txIdBatch []types.TransactionId
 	for i := uint64(0); i < 10000; i++ {
-		txId, tx := newTx(origin, 5+i, 50)
+		txId, tx := newTx(t, 5+i, 50, signer)
 		txBatch = append(txBatch, tx)
 		txIdBatch = append(txIdBatch, txId)
 	}

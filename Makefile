@@ -80,6 +80,14 @@ else
 endif
 .PHONY: sync
 
+harness:
+ifeq ($(OS),WINDOWS_NT)
+	cd cmd/integration ; go build -o $(BIN_DIR_WIN)/go-harness.exe; cd ..
+else
+	cd cmd/integration ; go build -o $(BIN_DIR)/go-harness; cd ..
+endif
+.PHONY: harness
+
 tidy:
 	go mod tidy
 .PHONY: tidy
@@ -205,6 +213,9 @@ endif
 
 dockertest-sync: dockerbuild-test dockerrun-sync
 .PHONY: dockertest-sync
+
+dockertest-harness: dockerbuild-test dockerrun-harness
+.PHONY: dockertest-harness
 
 # command for late nodes
 

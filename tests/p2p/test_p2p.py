@@ -191,8 +191,8 @@ def test_many_gossip_messages(setup_clients, add_curl):
 
     # *note*: this already waits for bootstrap so we can send the msg right away.
     # send message to client via rpc
-    TEST_MESSAGES = 10
-    for i in range(TEST_MESSAGES):
+    test_messages = 10
+    for i in range(test_messages):
         rnd = random.randint(0, len(setup_clients.pods) - 1)
         client_ip = setup_clients.pods[rnd]['pod_ip']
         podname = setup_clients.pods[rnd]['name']
@@ -225,7 +225,7 @@ def test_many_gossip_messages(setup_clients, add_curl):
 def send_msgs(setup_clients, api, headers, total_expected_gossip, msg_size=10000, prop_sleep_time=20, num_of_msg=100,
               expected_ret="{'value': 'ok'}", msg_field="data"):
     """
-    sends a protocol message to a random node and asserts its' propagation
+    sends a protocol message to a random node and asserts it's propagation
 
     :param setup_clients: DeploymentInfo, clients info
     :param api: string, api path

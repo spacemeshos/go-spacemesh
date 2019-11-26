@@ -39,7 +39,7 @@ def new_client_in_namespace(name_space, setup_bootstrap, cspec, num):
 def sleep_and_print(duration):
     print("Going to sleep total of %s" % duration)
 
-    interval = 30 # each 30 seconds
+    interval = 30  # each 30 seconds
     if duration <= interval:
         time.sleep(duration)
         return
@@ -47,8 +47,8 @@ def sleep_and_print(duration):
     iters = int(duration / interval)
     print("Number of iterations is %s" % iters)
     for i in range(0, iters):
-        print("Going to sleep for %s seconds" % interval) # print something for travis
-        time.sleep(interval) # sleep interval
+        print("Going to sleep for %s seconds" % interval)  # print something for travis
+        time.sleep(interval)  # sleep interval
 
     # sleep the rest
     rem = duration % interval
@@ -97,7 +97,7 @@ def test_add_delayed_nodes(init_session, add_curl, setup_bootstrap, start_poet, 
 
     # validate
     print("Waiting one layer for logs")
-    time.sleep(layerDuration) # wait one layer for logs to propagate
+    time.sleep(layerDuration)  # wait one layer for logs to propagate
 
     print("Running validation")
     expect_hare(current_index, ns, firstLayerOfLastEpoch, totalLayers-1, total, f) # validate hare
