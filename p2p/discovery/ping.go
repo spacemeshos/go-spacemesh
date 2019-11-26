@@ -65,10 +65,6 @@ func (p *protocol) verifyPinger(from net.Addr, pi *node.NodeInfo) error {
 					// and the peer will not be added to the pingable list.
 					p.logger.Warning("Failed response to ping to Peer: %v", peer.String())
 				}
-				//else {
-				//	p.logger.Debug("Successfully roundtrip pinged at advertised address Peer: %v", peer.String())
-				//	ka.updatePing()
-				//}
 			}
 			// Send the new Ping in a coroutine so we first respond to the incoming Ping
 			go foo()
