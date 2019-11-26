@@ -298,6 +298,10 @@ func (s SpacemeshGrpcService) GetGenesisTime(ctx context.Context, empty *empty.E
 
 func (s SpacemeshGrpcService) ResetPost(ctx context.Context, empty *empty.Empty) (*pb.SimpleMessage, error) {
 	log.Info("GRPC ResetPost msg")
+	stat, _, _ := s.Mining.MiningStats()
+	if stat == activation.InitInProgress {
+		return nil, fmt.Errorf("cannot reset, init in progress")
+	}
 	err := s.Post.Reset()
 	if err != nil {
 		return nil, err
