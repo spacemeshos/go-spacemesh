@@ -138,7 +138,7 @@ func NewNeighborhoodWorker(s WorkerInfra, count int, reqFactory RequestFactory) 
 
 }
 
-func NewFetchWorker(s WorkerInfra, count int, reqFactory BatchRequestFactory, idsChan chan []types.Hash32) worker {
+func NewFetchWorker(s WorkerInfra, count int, reqFactory BatchRequestFactory, idsChan chan []types.Hash32, name string) worker {
 	output := make(chan interface{}, count)
 	acount := int32(count)
 	mu := &sync.Once{}
@@ -156,15 +156,15 @@ func NewFetchWorker(s WorkerInfra, count int, reqFactory BatchRequestFactory, id
 				peer := p
 				remainingItems := toSlice(leftToFetch)
 				idsStr := concatShortIds(remainingItems)
-				lg.Info("send fetch request to Peer: %v ids: %v", peer.String(), idsStr)
+				lg.Info("send %s fetch request to Peer: %v ids: %v", name, peer.String(), idsStr)
 				ch, _ := reqFactory(s, peer, remainingItems)
 				timeout := time.After(s.GetTimeout())
 				select {
 				case <-timeout:
-					lg.Error("fetch request to %v on %v timed out %s", peer.String(), idsStr)
+					lg.Error("fetch %s request to %v on %v timed out %s", name, peer.String(), idsStr)
 				case v := <-ch:
 					if v != nil && len(v) > 0 {
-						lg.Info("Peer: %v responded to fetch request %s", peer.String(), idsStr)
+						lg.Info("Peer: %v responded to fetch %s request %s", peer.String(), name, idsStr)
 						// 	remove ids from leftToFetch add to fetched
 						for _, itm := range v {
 							fetched = append(fetched, itm)

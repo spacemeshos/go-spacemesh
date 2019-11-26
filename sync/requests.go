@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"reflect"
@@ -211,7 +212,15 @@ func validateItemIds(ids []types.Hash32, items []Item) (bool, error) {
 		if _, ok := mp[txid]; !ok {
 			return false, errors.New(fmt.Sprintf("received item that was not requested %v type %v", tx.ShortString(), reflect.TypeOf(tx)))
 		}
+		delete(mp, txid)
 	}
+
+	if len(mp) > 0 {
+		for id, _ := range mp {
+			log.Warning("item %s was not in response ", id.ShortString())
+		}
+	}
+
 	return true, nil
 }
 

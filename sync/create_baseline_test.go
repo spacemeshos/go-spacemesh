@@ -23,13 +23,12 @@ func (blockBuilderMock) ValidateAndAddTxToPool(tx *types.Transaction) error {
 }
 
 func TestCreateBaseline(t *testing.T) {
-	//t.Skip()
 
 	const (
-		numOfLayers    = 20 // 201
-		blocksPerLayer = 50 // 200
-		txPerBlock     = 10 // 50
-		atxPerBlock    = 5  // 5
+		numOfLayers    = 51  // 201
+		blocksPerLayer = 200 // 200
+		txPerBlock     = 5   // 50
+		atxPerBlock    = 5   // 5
 	)
 
 	id := Path
@@ -61,17 +60,6 @@ func TestCreateBaseline(t *testing.T) {
 
 	lg.Info("start creating baseline")
 	createBaseline(msh, numOfLayers, blocksPerLayer, blocksPerLayer, txPerBlock, atxPerBlock)
-
-	//i := 1
-	//for ; ; i++ {
-	//	if lyr, err2 := msh.GetLayer(types.LayerID(i)); err2 != nil || lyr == nil {
-	//		lg.Info("loaded %v layers from disk %v", i-1, err2)
-	//		break
-	//	} else {
-	//		lg.Info("loaded layer %v from disk ", i)
-	//		msh.ValidateLayer(lyr)
-	//	}
-	//}
 }
 
 func txs(num int) ([]*types.Transaction, []types.TransactionId) {
@@ -88,9 +76,14 @@ func txs(num int) ([]*types.Transaction, []types.TransactionId) {
 func atxs(num int) ([]*types.ActivationTx, []types.AtxId) {
 	atxs := make([]*types.ActivationTx, 0, num)
 	ids := make([]types.AtxId, 0, num)
+	signer := signing.NewEdSigner()
 	for i := 0; i < num; i++ {
-		atx := atxWithProof(rand.RandString(8), proof)
-		atxs = append(atxs, atx)
+		atx := atxWithProof(signer.PublicKey().String(), proof)
+		signed, err := activation.SignAtx(signer, atx)
+		if err != nil {
+			panic(err)
+		}
+		atxs = append(atxs, signed)
 		ids = append(ids, atx.Id())
 	}
 	return atxs, ids
@@ -147,7 +140,7 @@ func createLayerWithRandVoting(msh *mesh.Mesh, index types.LayerID, prev []*type
 
 		bl.TxIds = txids
 		bl.AtxIds = atxids
-
+		bl.CalcAndSetId()
 		start := time.Now()
 		msh.AddBlockWithTxs(bl, txs, atxs)
 		log.Debug("added block %v", time.Since(start))

@@ -334,7 +334,7 @@ func (m *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.Transaction, atxs 
 	m.invalidateFromPools(&blk.MiniBlock)
 
 	events.Publish(events.NewBlock{Id: blk.Id().String(), Atx: blk.ATXID.ShortString(), Layer: uint64(blk.LayerIndex)})
-	m.With().Debug("added block", log.BlockId(blk.Id().String()))
+	m.With().Info("added block %s to database ", log.BlockId(blk.Id().String()))
 	return nil
 }
 
