@@ -45,21 +45,36 @@ type Signer interface {
 	PublicKey() *signing.PublicKey
 }
 
-// procOutput is the tuple (id, set) which is the output of the consensus process.
-type procOutput struct {
-	id  instanceId
-	set *Set
+const (
+	completed    = true
+	notCompleted = false
+)
+
+// procReport is the termination report of the CP.
+// It consistes of the layer id, the set we agreed on (if available) and a flag to indicate if the CP completed.
+type procReport struct {
+	id        instanceId
+	set       *Set
+	completed bool
 }
 
-func (cpo procOutput) Id() instanceId {
+func (cpo procReport) Id() instanceId {
 	return cpo.id
 }
 
-func (cpo procOutput) Set() *Set {
+func (cpo procReport) Set() *Set {
 	return cpo.set
 }
 
-var _ TerminationOutput = (*procOutput)(nil)
+func (cpo procReport) Completed() bool {
+	return cpo.completed
+}
+
+func (proc *ConsensusProcess) report(completed bool) {
+	proc.terminationReport <- procReport{proc.instanceId, proc.s, completed}
+}
+
+var _ TerminationOutput = (*procReport)(nil)
 
 // State holds the current state of the consensus process (aka the participant).
 type State struct {
@@ -148,11 +163,11 @@ type ConsensusProcess struct {
 	proposalTracker   proposalTrackerProvider
 	commitTracker     commitTrackerProvider
 	notifyTracker     *notifyTracker
-	terminating       bool
 	cfg               config.Config
 	pending           map[string]*Msg // buffer for early messages that are pending process
 	notifySent        bool            // flag to set in case a notification had already been sent by this instance
 	mTracker          *msgsTracker    // tracks valid messages
+	terminating       bool
 }
 
 // NewConsensusProcess creates a new consensus process instance.
@@ -280,7 +295,6 @@ PreRound:
 		case msg := <-proc.inbox: // msg event
 			proc.handleMessage(msg)
 			if proc.terminating {
-				proc.Info("Detected terminating on. Exiting.")
 				return
 			}
 		case <-ticker.C: // next round event
@@ -290,12 +304,14 @@ PreRound:
 			// exit if we reached the limit on number of iterations
 			if proc.k/4 >= int32(proc.cfg.LimitIterations) {
 				proc.Info("terminating: reached iterations limit")
+				proc.report(notCompleted)
 				return
 			}
 
 			proc.onRoundBegin()
 		case <-proc.CloseChannel(): // close event
-			proc.Debug("terminating: received termination signal")
+			proc.Info("terminating: received termination signal")
+			proc.report(notCompleted)
 			return
 		}
 	}
@@ -671,9 +687,9 @@ func (proc *ConsensusProcess) processNotifyMsg(msg *Msg) {
 	proc.s = s // update to the agreed set
 	proc.Event().Info("Consensus process terminated", log.String("current_set", proc.s.String()),
 		log.LayerId(uint64(proc.instanceId)), log.Int("set_size", proc.s.Size()))
-	proc.terminationReport <- procOutput{proc.instanceId, proc.s}
-	proc.Close()
-	proc.terminating = true // ensures immediate termination
+	proc.report(completed)
+	close(proc.CloseChannel())
+	proc.terminating = true
 }
 
 func (proc *ConsensusProcess) currentRound() int {

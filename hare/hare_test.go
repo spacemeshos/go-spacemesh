@@ -21,16 +21,21 @@ func validateBlocks(blocks []types.BlockID) bool {
 	return true
 }
 
-type mockOutput struct {
+type mockReport struct {
 	id  instanceId
 	set *Set
+	c   bool
 }
 
-func (m mockOutput) Id() instanceId {
+func (m mockReport) Id() instanceId {
 	return m.id
 }
-func (m mockOutput) Set() *Set {
+func (m mockReport) Set() *Set {
 	return m.set
+}
+
+func (m mockReport) Completed() bool {
+	return m.c
 }
 
 type mockConsensusProcess struct {
@@ -46,7 +51,7 @@ func (mcp *mockConsensusProcess) Start() error {
 		<-mcp.term
 	}
 	mcp.Close()
-	mcp.t <- mockOutput{mcp.id, mcp.set}
+	mcp.t <- mockReport{mcp.id, mcp.set, true}
 	return nil
 }
 
@@ -120,7 +125,7 @@ func TestHare_GetResult(t *testing.T) {
 	mockid := instanceId(0)
 	set := NewSetFromValues(value1)
 
-	h.collectOutput(mockOutput{mockid, set})
+	h.collectOutput(mockReport{mockid, set, true})
 
 	res, err = h.GetResult(types.LayerID(0))
 	r.NoError(err)
@@ -147,7 +152,7 @@ func TestHare_GetResult2(t *testing.T) {
 
 	h.Start()
 
-	for i := 1; i < h.bufferSize+1; i++ {
+	for i := 1; i <= h.bufferSize; i++ {
 		h.beginLayer <- types.LayerID(i)
 		time.Sleep(10 * time.Millisecond)
 	}
@@ -174,7 +179,7 @@ func TestHare_collectOutputCheckValidation(t *testing.T) {
 	set := NewSetFromValues(value1)
 
 	// default validation is true
-	h.collectOutput(mockOutput{mockid, set})
+	h.collectOutput(mockReport{mockid, set, true})
 	output, ok := h.outputs[types.LayerID(mockid)]
 	require.True(t, ok)
 	require.Equal(t, output[0], value1)
@@ -187,7 +192,7 @@ func TestHare_collectOutputCheckValidation(t *testing.T) {
 	h.validate = func(blocks []types.BlockID) bool {
 		return false
 	}
-	h.collectOutput(mockOutput{mockid, set})
+	h.collectOutput(mockReport{mockid, set, true})
 	_, ok = h.outputs[types.LayerID(mockid)]
 	require.False(t, ok)
 }
@@ -201,7 +206,7 @@ func TestHare_collectOutput(t *testing.T) {
 	mockid := instanceId1
 	set := NewSetFromValues(value1)
 
-	h.collectOutput(mockOutput{mockid, set})
+	h.collectOutput(mockReport{mockid, set, true})
 	output, ok := h.outputs[types.LayerID(mockid)]
 	require.True(t, ok)
 	require.Equal(t, output[0], value1)
@@ -224,18 +229,18 @@ func TestHare_collectOutput2(t *testing.T) {
 	mockid := instanceId0
 	set := NewSetFromValues(value1)
 
-	h.collectOutput(mockOutput{mockid, set})
+	h.collectOutput(mockReport{mockid, set, true})
 	output, ok := h.outputs[types.LayerID(mockid)]
 	require.True(t, ok)
 	require.Equal(t, output[0], value1)
 
 	h.lastLayer = 3
 	newmockid := instanceId1
-	err := h.collectOutput(mockOutput{newmockid, set})
+	err := h.collectOutput(mockReport{newmockid, set, true})
 	require.Equal(t, err, ErrTooLate)
 
 	newmockid2 := instanceId2
-	err = h.collectOutput(mockOutput{newmockid2, set})
+	err = h.collectOutput(mockReport{newmockid2, set, true})
 	require.NoError(t, err)
 
 	_, ok = h.outputs[0]
@@ -249,7 +254,7 @@ func TestHare_OutputCollectionLoop(t *testing.T) {
 
 	h := createHare(n1)
 	h.Start()
-	mo := mockOutput{1, NewEmptySet(0)}
+	mo := mockReport{1, NewEmptySet(0), true}
 	h.broker.Register(mo.Id())
 	time.Sleep(1 * time.Second)
 	h.outputChan <- mo

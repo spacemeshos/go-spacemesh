@@ -29,6 +29,7 @@ type Consensus interface {
 type TerminationOutput interface {
 	Id() instanceId
 	Set() *Set
+	Completed() bool
 }
 
 type orphanBlockProvider interface {
@@ -259,10 +260,14 @@ func (h *Hare) outputCollectionLoop() {
 	for {
 		select {
 		case out := <-h.outputChan:
-			err := h.collectOutput(out)
-			if err != nil {
-				h.Warning("Err collecting output from hare err: %v", err)
+			if out.Completed() { // CP completed, collect the output
+				err := h.collectOutput(out)
+				if err != nil {
+					h.Warning("Err collecting output from hare err: %v", err)
+				}
 			}
+
+			// anyway, unregister from broker
 			h.broker.Unregister(out.Id()) // unregister from broker after termination
 			metrics.TotalConsensusProcesses.Add(-1)
 		case <-h.CloseChannel():
