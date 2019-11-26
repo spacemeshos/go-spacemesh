@@ -184,7 +184,7 @@ func TestConsensusProcess_Start(t *testing.T) {
 func TestConsensusProcess_TerminationLimit(t *testing.T) {
 	p := generateConsensusProcess(t)
 	p.SetInbox(make(chan *Msg, 10))
-	p.cfg.LimitIterations = 0
+	p.cfg.LimitIterations = 1
 	p.cfg.RoundDuration = 1
 	p.Start()
 	time.Sleep(time.Duration(6*p.cfg.RoundDuration) * time.Second)
