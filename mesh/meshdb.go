@@ -144,7 +144,7 @@ func (m *MeshDB) LayerBlocks(index types.LayerID) ([]*types.Block, error) {
 	for _, k := range ids {
 		block, err := m.GetBlock(k)
 		if err != nil {
-			return nil, fmt.Errorf("could not retrieve block %s %s", log.BlockId(k.String()), log.Err(err))
+			return nil, fmt.Errorf("could not retrieve block %s %s", k.String(), err)
 		}
 		blocks = append(blocks, block)
 	}
