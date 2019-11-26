@@ -63,7 +63,7 @@ func NewPersistentMeshDB(path string, log log.Log) (*MeshDB, error) {
 
 	ll := &MeshDB{
 		Log:                log,
-		blockCache:         NewBlockCache(100 * layerSize),
+		blockCache:         NewBlockCache(20 * layerSize),
 		blocks:             bdb,
 		layers:             ldb,
 		transactions:       tdb,
@@ -88,7 +88,7 @@ func (m *MeshDB) PersistentData() bool {
 func NewMemMeshDB(log log.Log) *MeshDB {
 	ll := &MeshDB{
 		Log:                log,
-		blockCache:         NewBlockCache(100 * layerSize),
+		blockCache:         NewBlockCache(20 * layerSize),
 		blocks:             database.NewMemDatabase(),
 		layers:             database.NewMemDatabase(),
 		general:            database.NewMemDatabase(),
@@ -186,9 +186,10 @@ func (m *MeshDB) ForBlockInView(view map[types.BlockID]struct{}, layer types.Lay
 	}
 	seenBlocks := make(map[types.BlockID]struct{})
 	for blocksToVisit.Len() > 0 {
-		block, err := m.GetBlock(blocksToVisit.Remove(blocksToVisit.Front()).(types.BlockID))
+		bid:=blocksToVisit.Remove(blocksToVisit.Front())
+		block, err := m.GetBlock(bid.(types.BlockID))
 		if err != nil {
-			return err
+			return fmt.Errorf("failed for %s %s",bid,err)
 		}
 
 		//catch blocks that were referenced after more than one layer, and slipped through the stop condition

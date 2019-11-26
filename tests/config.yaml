@@ -4,15 +4,16 @@ config_map_name: conf
 
 script_on_exit: '' # Uncomment this to save logs './k8s/log-client-pods.sh'
 
-genesis_delta: 170
+genesis_delta: 15
 single_pod_ready_time_out: 60
-deployment_ready_time_out: 120
+deployment_ready_time_out: 60
 config_path: '../config.toml'
 
 bootstrap:
-  image: 'spacemeshos/go-spacemesh:develop'
-  command: '/bin/go-harness'
+  image: 'spacemeshos/go-spacemesh-dev:barak232'
+  command: '/bin/go-spacemesh'
   replicas: 1
+#  deployment_type: 'statefulset'
   resources:
     requests:
       memory: '1024M'
@@ -22,24 +23,23 @@ bootstrap:
       cpu: '2'
   args:
     randcon: '8'
-    hare-committee-size: '50'
-    hare-max-adversaries: '24'
+    hare-committee-size: '15'
+    hare-max-adversaries: '5'
     hare-round-duration-sec: '10'
-    hare-exp-leaders: '10'
+    hare-exp-leaders: '4'
     layer-duration-sec: '60'
-    layer-average-size: '50'
+    layer-average-size: '200'
     hare-wakeup-delta: '10'
-    layers-per-epoch: '3'
+    layers-per-epoch: '5'
     coinbase: '0x4321'
-    eligibility-confidence-param: '5'
+    eligibility-confidence-param: '25'
     eligibility-epoch-offset: '0'
     genesis-active-size: '50'
-    executable-path: '/bin/go-spacemesh'
-  deployment_type: deployment
 client:
   image: 'spacemeshos/go-spacemesh:develop'
-  command: '/bin/go-harness'
+  command: '/bin/go-spacemesh'
   replicas: 49
+#  deployment_type: 'statefulset'
   resources:
     requests:
       memory: '1024M'
@@ -49,20 +49,18 @@ client:
       cpu: '2'
   args:
     randcon: '8'
-    hare-committee-size: '50'
-    hare-max-adversaries: '24'
+    hare-committee-size: '15'
+    hare-max-adversaries: '5'
     hare-round-duration-sec: '10'
-    hare-exp-leaders: '10'
+    hare-exp-leaders: '4'
     layer-duration-sec: '60'
-    layer-average-size: '50'
+    layer-average-size: '200'
     hare-wakeup-delta: '10'
-    layers-per-epoch: '3'
+    layers-per-epoch: '5'
     coinbase: '0x1234'
-    eligibility-confidence-param: '5'
+    eligibility-confidence-param: '25'
     eligibility-epoch-offset: '0'
     genesis-active-size: '50'
-    executable-path: '/bin/go-spacemesh'
-  deployment_type: deployment
 elastic:
   host: elastic.spacemesh.io
   port: 9200
