@@ -11,7 +11,7 @@ config_path: '../config.toml'
 
 bootstrap:
   image: 'spacemeshos/go-spacemesh:develop'
-  command: '/bin/go-p2p'
+  command: '/bin/go-harness'
   replicas: 1
   resources:
     requests:
@@ -28,11 +28,12 @@ bootstrap:
     layer-duration-sec: '60'
     layer-average-size: '20'
     hare-wakeup-delta: '10'
+    executable-path: '/bin/go-p2p'
   deployment_type: deployment # default:deployment
 # IMPORTANT: all clients on the same suite should contain the same args (hare-committee-size, hare-max-adversaries etc)!
 client:
   image: 'spacemeshos/go-spacemesh:develop'
-  command: '/bin/go-p2p'
+  command: '/bin/go-harness'
   replicas: 40 #default 40
   resources:
     requests:
@@ -49,6 +50,7 @@ client:
     layer-duration-sec: '60'
     layer-average-size: '20'
     hare-wakeup-delta: '10'
+    executable-path: '/bin/go-p2p'
   deployment_type: deployment # default:deployment
 # IMPORTANT: all clients on the same suite should contain the same args (hare-committee-size, hare-max-adversaries etc)!
 client_v2:
