@@ -139,6 +139,7 @@ func blocksAsItems(msg []byte) ([]Item, error) {
 	}
 	items := make([]Item, len(blocks))
 	for i := range blocks {
+		blocks[i].CalcAndSetId()
 		items[i] = &blocks[i]
 	}
 	return items, nil

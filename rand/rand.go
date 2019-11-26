@@ -10,6 +10,7 @@ import (
  */
 
 var globalRand = rand.New(rand.NewSource(time.Now().UnixNano()).(rand.Source64))
+var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
 // Seed uses the provided seed value to initialize the default Source to a
 // deterministic state. If Seed is not called, the generator behaves as
@@ -94,3 +95,12 @@ func NormFloat64() float64 { return globalRand.NormFloat64() }
 //  sample = ExpFloat64() / desiredRateParameter
 //
 func ExpFloat64() float64 { return globalRand.ExpFloat64() }
+
+// RandString returns an n sized random string
+func RandString(n int) string {
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letterRunes[rand.Intn(len(letterRunes))]
+	}
+	return string(b)
+}

@@ -10,6 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/oracle"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -188,7 +189,7 @@ func (t *BlockBuilder) getVotes(id types.LayerID) ([]types.BlockID, error) {
 
 	// if genesis+1
 	if id == config.Genesis+1 {
-		return append(votes, config.GenesisId), nil
+		return append(votes, mesh.GenesisBlock.Id()), nil
 	}
 
 	// not genesis, get from hare
@@ -205,7 +206,7 @@ func (t *BlockBuilder) getVotes(id types.LayerID) ([]types.BlockID, error) {
 
 		// set votes to whole layer
 		for _, b := range l.Blocks() {
-			votes = append(votes, b.ID())
+			votes = append(votes, b.Id())
 		}
 	} else { // got result, just set
 		votes = res
@@ -240,7 +241,6 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 
 	b := types.MiniBlock{
 		BlockHeader: types.BlockHeader{
-			Id:               types.BlockID(t.rnd.Int63()),
 			LayerIndex:       id,
 			ATXID:            atxID,
 			EligibilityProof: eligibilityProof,
@@ -254,15 +254,19 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 		TxIds:  txids,
 	}
 
-	t.Log.Event().Info(fmt.Sprintf("I've created a block in layer %v. id: %v, num of transactions: %v, votes: %d, viewEdges: %d atx %v, atxs:%v",
-		b.LayerIndex, b.ID(), len(b.TxIds), len(b.BlockVotes), len(b.ViewEdges), b.ATXID.ShortString(), len(b.AtxIds)))
-
 	blockBytes, err := types.InterfaceToBytes(b)
 	if err != nil {
 		return nil, err
 	}
 
-	return &types.Block{MiniBlock: b, Signature: t.Signer.Sign(blockBytes)}, nil
+	bl := &types.Block{MiniBlock: b, Signature: t.Signer.Sign(blockBytes)}
+
+	bl.CalcAndSetId()
+
+	t.Log.Event().Info(fmt.Sprintf("I've created a block in layer %v. id: %v, num of transactions: %v, votes: %d, viewEdges: %d atx %v, atxs:%v",
+		b.LayerIndex, bl.Id(), len(b.TxIds), len(b.BlockVotes), len(b.ViewEdges), b.ATXID.ShortString(), len(b.AtxIds)))
+
+	return bl, nil
 }
 
 func selectAtxs(atxs []types.AtxId, atxsPerBlock int) []types.AtxId {

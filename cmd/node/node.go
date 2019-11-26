@@ -290,7 +290,7 @@ func (app *SpacemeshApp) setupGenesis() {
 	}
 
 	app.state.Commit(false)
-	app.mesh.AddBlock(&mesh.GenesisBlock)
+	app.mesh.AddBlock(mesh.GenesisBlock)
 }
 
 func (app *SpacemeshApp) setupTestFeatures() {
@@ -493,11 +493,11 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 		for _, b := range ids {
 			res, err := mdb.GetBlock(b)
 			if err != nil {
-				app.log.With().Error("failed to validate block", log.BlockId(uint64(b)))
+				app.log.With().Error("failed to validate block", log.BlockId(b.String()))
 				return false
 			}
 			if res == nil {
-				app.log.With().Error("failed to validate block (BUG BUG BUG - GetBlock return err nil and res nil)", log.BlockId(uint64(b)))
+				app.log.With().Error("failed to validate block (BUG BUG BUG - GetBlock return err nil and res nil)", log.BlockId(b.String()))
 				return false
 			}
 

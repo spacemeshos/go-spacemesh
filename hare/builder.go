@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/nullstyle/go-xdr/xdr3"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
@@ -41,7 +42,7 @@ func (m *Message) String() string {
 // certificate is a collection of messages and the set of values.
 // Typically used as a collection of commit messages.
 type certificate struct {
-	Values  []uint64 // the committed set S
+	Values  []types.BlockID // the committed set S
 	AggMsgs *aggregatedMessages
 }
 
@@ -56,7 +57,7 @@ type innerMessage struct {
 	InstanceId instanceId
 	K          int32 // the round counter
 	Ki         int32
-	Values     []uint64            // the set S. optional for commit InnerMsg in a certificate
+	Values     []types.BlockID     // the set S. optional for commit InnerMsg in a certificate
 	RoleProof  []byte              // role is implicit by InnerMsg type, this is the proof
 	Svp        *aggregatedMessages // optional. only for proposal Messages
 	Cert       *certificate        // optional

@@ -98,9 +98,9 @@ func TestGetSpacemeshDataDirectoryPath(t *testing.T) {
 		expected string
 		error    bool
 	}{
-		{usr, "~" + RootFolder + ".spacemesh", false},
-		{users["bob"], users["bob"].HomeDir + RootFolder + ".spacemesh", true},
-		{users["alice"], users["alice"].HomeDir + RootFolder + ".spacemesh", true},
+		{usr, "~" + RootFolder + "spacemesh", false},
+		{users["bob"], users["bob"].HomeDir + RootFolder + "spacemesh", true},
+		{users["alice"], users["alice"].HomeDir + RootFolder + "spacemesh", true},
 	}
 
 	for _, testCase := range testCases {
@@ -123,7 +123,7 @@ func TestGetSpacemeshTempDirectoryPath(t *testing.T) {
 		expected string
 		error    bool
 	}{
-		{usr, "~" + RootFolder + ".spacemesh/temp", false},
+		{usr, "~" + RootFolder + "spacemesh/temp", false},
 		{users["bob"], "", true},
 		{users["alice"], "", true},
 	}
@@ -148,7 +148,7 @@ func TestEnsureDataSubDirectory(t *testing.T) {
 		expected string
 		error    bool
 	}{
-		{usr, "~" + RootFolder + ".spacemesh/temp", false},
+		{usr, "~" + RootFolder + "spacemesh/temp", false},
 		{users["bob"], "", true},
 		{users["alice"], "", true},
 	}
@@ -174,9 +174,9 @@ func TestDeleteAllTempFiles(t *testing.T) {
 		error    bool
 		exist    bool
 	}{
-		{usr, "~" + RootFolder + ".spacemesh/temp", false, true},
-		{users["bob"], users["bob"].HomeDir + RootFolder + ".spacemesh/temp", true, false},
-		{users["alice"], users["alice"].HomeDir + RootFolder + ".spacemesh/temp", true, false},
+		{usr, "~" + RootFolder + "spacemesh/temp", false, true},
+		{users["bob"], users["bob"].HomeDir + RootFolder + "spacemesh/temp", true, false},
+		{users["alice"], users["alice"].HomeDir + RootFolder + "spacemesh/temp", true, false},
 	}
 
 	for _, testCase := range testCases {
@@ -270,9 +270,9 @@ func TestEnsureSpacemeshDataDirectories(t *testing.T) {
 		expected string
 		error    bool
 	}{
-		{users["alice"], "", "~" + RootFolder + ".spacemesh", false},
-		{users["bob"], "", "~" + RootFolder + ".spacemesh", false},
-		{usr, usr.HomeDir, "~" + RootFolder + ".spacemesh", false},
+		{users["alice"], "", "~" + RootFolder + "spacemesh", false},
+		{users["bob"], "", "~" + RootFolder + "spacemesh", false},
+		{usr, usr.HomeDir, "~" + RootFolder + "spacemesh", false},
 	}
 
 	for _, testCase := range testCases {
@@ -287,5 +287,5 @@ func TestEnsureSpacemeshDataDirectories(t *testing.T) {
 	assert.NoError(t, err, "getting current user failed")
 	aPath, err := EnsureSpacemeshDataDirectories()
 	assert.NoError(t, err, "")
-	assert.Equal(t, aPath, usr.HomeDir+RootFolder+".spacemesh", "")
+	assert.Equal(t, aPath, usr.HomeDir+RootFolder+"spacemesh", "")
 }
