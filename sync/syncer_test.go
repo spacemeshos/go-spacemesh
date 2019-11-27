@@ -1034,21 +1034,21 @@ func TestSyncer_Synchronise2(t *testing.T) {
 	lv := &mockLayerValidator{0, 0, 0, nil}
 	sync.lValidator = lv
 	sync.currentLayer = 1
-	r.False(sync.gossipSynced)
+	r.False(sync.gossipSynced == Done)
 
 	// current layer = 0
 	sync.currentLayer = 0
 	sync.syncRoutineWg.Add(1)
 	sync.Synchronise()
 	r.Equal(0, lv.countValidate)
-	r.True(sync.gossipSynced)
+	r.True(sync.gossipSynced == Done)
 
 	// current layer = 1
 	sync.currentLayer = 1
 	sync.syncRoutineWg.Add(1)
 	sync.Synchronise()
 	r.Equal(0, lv.countValidate)
-	r.True(sync.gossipSynced)
+	r.True(sync.gossipSynced == Done)
 
 	// validated layer = 5 && current layer = 6 -> don't call validate
 	lv = &mockLayerValidator{5, 0, 0, nil}
@@ -1058,7 +1058,7 @@ func TestSyncer_Synchronise2(t *testing.T) {
 	sync.SetLatestLayer(5)
 	sync.Synchronise()
 	r.Equal(0, lv.countValidate)
-	r.True(sync.gossipSynced)
+	r.True(sync.gossipSynced == Done)
 
 	// current layer != 1 && weakly-synced
 	lv = &mockLayerValidator{0, 0, 0, nil}
@@ -1068,7 +1068,7 @@ func TestSyncer_Synchronise2(t *testing.T) {
 	sync.syncRoutineWg.Add(1)
 	sync.Synchronise()
 	r.Equal(1, lv.countValidate)
-	r.True(sync.gossipSynced)
+	r.True(sync.gossipSynced == Done)
 }
 
 func TestSyncer_handleNotSyncedFlow(t *testing.T) {

@@ -55,7 +55,7 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 			bl.Log.Info("listening  stopped")
 			return
 		case data := <-bl.receivedGossipBlocks:
-			if !bl.WeaklySynced() {
+			if !bl.weaklySynced() {
 				bl.With().Info("ignoring gossip blocks - not synced yet")
 				break
 			}
