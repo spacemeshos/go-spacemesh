@@ -9,6 +9,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -74,6 +75,10 @@ type TxAPIMock struct {
 	mockOrigin   types.Address
 	returnTx     map[types.TransactionId]*types.Transaction
 	layerApplied map[types.TransactionId]*types.LayerID
+}
+
+func (t *TxAPIMock) GetProjection(addr types.Address, prevNonce, prevBalance uint64) (nonce, balance uint64, err error) {
+	return prevNonce, prevBalance, nil
 }
 
 func (t *TxAPIMock) GetLayerApplied(txId types.TransactionId) *types.LayerID {
@@ -379,7 +384,7 @@ func launchServer(t *testing.T) func() {
 		config.ConfigValues.GrpcServerPort = port2
 	}
 	networkMock.broadcasted = []byte{0x00}
-	grpcService := NewGrpcService(&networkMock, ap, txApi, nil, &mining, &oracle, &genTime, layerDuration, nil)
+	grpcService := NewGrpcService(&networkMock, ap, txApi, miner.NewTxMemPool(), &mining, &oracle, &genTime, layerDuration, nil)
 	jsonService := NewJSONHTTPServer()
 	// start gRPC and json server
 	grpcService.StartService()

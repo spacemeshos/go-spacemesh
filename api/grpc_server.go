@@ -98,7 +98,20 @@ func (s SpacemeshGrpcService) Echo(ctx context.Context, in *pb.SimpleMessage) (*
 	return &pb.SimpleMessage{Value: in.Value}, nil
 }
 
-// Echo returns the response for an echo api request
+func (s SpacemeshGrpcService) getProjection(addr types.Address) (nonce, balance uint64, err error) {
+	nonce = s.StateApi.GetNonce(addr)
+	balance = s.StateApi.GetBalance(addr)
+	nonce, balance, err = s.Tx.GetProjection(addr, nonce, balance)
+	if err != nil {
+		return 0, 0, err
+	}
+	nonce, balance = s.TxMempool.GetProjection(addr, nonce, balance)
+	return nonce, balance, nil
+}
+
+// GetBalance returns the current account balance for the provided account ID. The balance is based on the global state
+// and all known transactions in unapplied blocks and the mempool that originate from the given account. Unapplied
+// transactions coming INTO the given account (from mempool or unapplied blocks) are NOT counted.
 func (s SpacemeshGrpcService) GetBalance(ctx context.Context, in *pb.AccountId) (*pb.SimpleMessage, error) {
 	log.Info("GRPC GetBalance msg")
 	addr := types.HexToAddress(in.Address)
@@ -108,13 +121,17 @@ func (s SpacemeshGrpcService) GetBalance(ctx context.Context, in *pb.AccountId) 
 		return nil, fmt.Errorf("account does not exist")
 	}
 
-	val := s.StateApi.GetBalance(addr)
-	valStr := strconv.FormatUint(val, 10)
-	log.Info("GRPC GetBalance returned msg %v", valStr)
-	return &pb.SimpleMessage{Value: valStr}, nil
+	_, balance, err := s.getProjection(addr)
+	if err != nil {
+		return nil, err
+	}
+	msg := &pb.SimpleMessage{Value: strconv.FormatUint(balance, 10)}
+	log.Info("GRPC GetBalance returned msg.Value %v", msg.Value)
+	return msg, nil
 }
 
-// Echo returns the response for an echo api request
+// GetNonce returns the current account nonce for the provided account ID. The nonce is based on the global state and
+// all known transactions in unapplied blocks and the mempool.
 func (s SpacemeshGrpcService) GetNonce(ctx context.Context, in *pb.AccountId) (*pb.SimpleMessage, error) {
 	log.Info("GRPC GetNonce msg")
 	addr := types.HexToAddress(in.Address)
@@ -124,10 +141,13 @@ func (s SpacemeshGrpcService) GetNonce(ctx context.Context, in *pb.AccountId) (*
 		return nil, fmt.Errorf("account does not exist")
 	}
 
-	val := s.StateApi.GetNonce(addr)
-	msg := pb.SimpleMessage{Value: strconv.FormatUint(val, 10)}
-	log.Info("GRPC GetNonce returned msg %v", strconv.FormatUint(val, 10))
-	return &msg, nil
+	nonce, _, err := s.getProjection(addr)
+	if err != nil {
+		return nil, err
+	}
+	msg := &pb.SimpleMessage{Value: strconv.FormatUint(nonce, 10)}
+	log.Info("GRPC GetNonce returned msg.Value %v", msg.Value)
+	return msg, nil
 }
 
 func (s SpacemeshGrpcService) SubmitTransaction(ctx context.Context, in *pb.SignedTransaction) (*pb.TxConfirmation, error) {
@@ -196,6 +216,7 @@ type TxAPI interface {
 	LatestLayer() types.LayerID
 	GetLayerApplied(txId types.TransactionId) *types.LayerID
 	GetTransaction(id types.TransactionId) (*types.Transaction, error)
+	GetProjection(addr types.Address, prevNonce, prevBalance uint64) (nonce, balance uint64, err error)
 }
 
 // NewGrpcService create a new grpc service using config data.
