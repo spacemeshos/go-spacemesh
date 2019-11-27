@@ -32,6 +32,20 @@ func (t *TxMempool) Get(id types.TransactionId) (*types.Transaction, error) {
 	return nil, errors.New("transaction not found in mempool")
 }
 
+func (t *TxMempool) GetTxIdsByAddress(addr types.Address) []types.TransactionId {
+	pendingTxs, found := t.accounts[addr]
+	if !found {
+		return nil
+	}
+	var ids []types.TransactionId
+	for _, txIds := range pendingTxs.PendingTxs { // pendingTxs.PendingTxs is map[nonce]map[TransactionId]nanoTx
+		for id := range txIds {
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
 func (t *TxMempool) GetTxsForBlock(numOfTxs int, getState func(addr types.Address) (nonce, balance uint64, err error)) ([]types.TransactionId, error) {
 	var txIds []types.TransactionId
 	t.mu.RLock()
