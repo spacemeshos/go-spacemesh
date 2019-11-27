@@ -196,6 +196,10 @@ func (db *ActivationDb) CalcActiveSetSize(epoch types.EpochId, blocks map[types.
 // in the epoch prior to the epoch that a was published at, this number is the number of active ids in the next epoch
 // the function returns error if the view is not found
 func (db *ActivationDb) CalcActiveSetFromView(view []types.BlockID, pubEpoch types.EpochId) (uint32, error) {
+	if pubEpoch < 1 {
+		return 0, fmt.Errorf("publication epoch cannot be less than 1, found %v", pubEpoch)
+	}
+
 	viewHash, err := types.CalcBlocksHash12(view)
 	if err != nil {
 		return 0, fmt.Errorf("failed to calc sorted view hash: %v", err)
@@ -222,11 +226,6 @@ func (db *ActivationDb) CalcActiveSetFromView(view []types.BlockID, pubEpoch typ
 		db.pendingActiveSet[viewHash] = &sync.Mutex{}
 		db.pendingActiveSet[viewHash].Lock()
 		db.assLock.Unlock()
-	}
-
-	if pubEpoch < 1 {
-		db.releaseRunningLock(viewHash)
-		return 0, fmt.Errorf("publication epoch cannot be less than 1, found %v", pubEpoch)
 	}
 
 	mp := map[types.BlockID]struct{}{}

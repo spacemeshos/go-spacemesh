@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	cfg "github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -187,6 +188,9 @@ func AddCommands(cmd *cobra.Command) {
 		config.LayersPerEpoch, "number of layers in epoch")
 
 	// Bind Flags to config
-	viper.BindPFlags(cmd.PersistentFlags())
+	err := viper.BindPFlags(cmd.PersistentFlags())
+	if err != nil {
+		fmt.Println("an error has occurred while binding flags:", err)
+	}
 
 }

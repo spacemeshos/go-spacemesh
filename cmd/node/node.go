@@ -76,7 +76,6 @@ const (
 	AtxBuilderLogger     = "atxBuilder"
 )
 
-// VersionCmd returns the current version of spacemesh
 var Cmd = &cobra.Command{
 	Use:   "node",
 	Short: "start node",
@@ -99,6 +98,7 @@ var VersionCmd = &cobra.Command{
 }
 
 func init() {
+	// TODO add commands actually adds flags
 	cmdp.AddCommands(Cmd)
 	Cmd.AddCommand(VersionCmd)
 }
