@@ -527,17 +527,19 @@ type mockMesh struct {
 	err error
 }
 
-func (m *mockMesh) GetLayer(index types.LayerID) (*types.Layer, error) {
+func (m *mockMesh) LayerBlockIds(index types.LayerID) ([]types.BlockID, error) {
 	if m.err != nil {
 		return nil, m.err
 	}
 	l := types.NewLayer(index)
+	var ids []types.BlockID
 	for _, e := range m.b {
 		e.LayerIndex = index
 		l.AddBlock(e)
-
+		ids = append(ids, e.Id())
 	}
-	return l, nil
+
+	return ids, nil
 }
 
 func (m *mockMesh) GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error) {

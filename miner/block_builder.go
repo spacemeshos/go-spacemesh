@@ -152,7 +152,7 @@ type WeakCoinProvider interface {
 }
 
 type meshProvider interface {
-	GetLayer(index types.LayerID) (*types.Layer, error)
+	LayerBlockIds(index types.LayerID) ([]types.BlockID, error)
 	GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error)
 }
 
@@ -196,18 +196,16 @@ func (t *BlockBuilder) getVotes(id types.LayerID) ([]types.BlockID, error) {
 	bottom, top := calcHdistRange(id, t.hdist)
 
 	if res, err := t.hareResult.GetResult(bottom); err != nil { // no result for bottom, take the whole layer
-		t.With().Info("could not get result for bottom layer. adding the whole layer instead", log.Err(err),
+		t.With().Warning("could not get result for bottom layer. adding the whole layer instead", log.Err(err),
 			log.Uint64("bottom", uint64(bottom)), log.Uint64("top", uint64(top)), log.Uint64("hdist", uint64(t.hdist)))
-		l, e := t.meshProvider.GetLayer(bottom)
+		ids, e := t.meshProvider.LayerBlockIds(bottom)
 		if e != nil {
 			t.With().Error("Could not set votes to whole layer", log.Err(e))
 			return nil, e
 		}
 
 		// set votes to whole layer
-		for _, b := range l.Blocks() {
-			votes = append(votes, b.Id())
-		}
+		votes = ids
 	} else { // got result, just set
 		votes = res
 	}
@@ -216,7 +214,7 @@ func (t *BlockBuilder) getVotes(id types.LayerID) ([]types.BlockID, error) {
 	for i := bottom + 1; i <= top; i++ {
 		res, err := t.hareResult.GetResult(i)
 		if err != nil {
-			t.With().Debug("could not get result for layer in range", log.LayerId(uint64(i)), log.Err(err),
+			t.With().Warning("could not get result for layer in range", log.LayerId(uint64(i)), log.Err(err),
 				log.Uint64("bottom", uint64(bottom)), log.Uint64("top", uint64(top)), log.Uint64("hdist", uint64(t.hdist)))
 			continue
 		}

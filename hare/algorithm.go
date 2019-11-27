@@ -303,7 +303,7 @@ PreRound:
 
 			// exit if we reached the limit on number of iterations
 			if proc.k/4 >= int32(proc.cfg.LimitIterations) {
-				proc.Info("terminating: reached iterations limit")
+				proc.Warning("terminating: reached iterations limit")
 				proc.report(notCompleted)
 				return
 			}
