@@ -32,6 +32,7 @@ type SpacemeshGrpcService struct {
 	Mining        MiningAPI        // ATX Builder
 	Oracle        OracleAPI
 	GenTime       GenesisTimeAPI
+	Post          PostAPI
 	LayerDuration time.Duration
 	Logging       LoggingAPI
 }
@@ -220,7 +221,7 @@ type TxAPI interface {
 }
 
 // NewGrpcService create a new grpc service using config data.
-func NewGrpcService(net NetworkAPI, state StateAPI, tx TxAPI, txMempool *miner.TxMempool, mining MiningAPI, oracle OracleAPI, genTime GenesisTimeAPI, layerDurationSec int, logging LoggingAPI) *SpacemeshGrpcService {
+func NewGrpcService(net NetworkAPI, state StateAPI, tx TxAPI, txMempool *miner.TxMempool, mining MiningAPI, oracle OracleAPI, genTime GenesisTimeAPI, post PostAPI, layerDurationSec int, logging LoggingAPI) *SpacemeshGrpcService {
 	port := config.ConfigValues.GrpcServerPort
 	server := grpc.NewServer()
 	return &SpacemeshGrpcService{
@@ -233,6 +234,7 @@ func NewGrpcService(net NetworkAPI, state StateAPI, tx TxAPI, txMempool *miner.T
 		Mining:        mining,
 		Oracle:        oracle,
 		GenTime:       genTime,
+		Post:          post,
 		LayerDuration: time.Duration(layerDurationSec) * time.Second,
 		Logging:       logging,
 	}
@@ -314,6 +316,19 @@ func (s SpacemeshGrpcService) GetUpcomingAwards(ctx context.Context, empty *empt
 func (s SpacemeshGrpcService) GetGenesisTime(ctx context.Context, empty *empty.Empty) (*pb.SimpleMessage, error) {
 	log.Info("GRPC GetGenesisTime msg")
 	return &pb.SimpleMessage{Value: s.GenTime.GetGenesisTime().String()}, nil
+}
+
+func (s SpacemeshGrpcService) ResetPost(ctx context.Context, empty *empty.Empty) (*pb.SimpleMessage, error) {
+	log.Info("GRPC ResetPost msg")
+	stat, _, _ := s.Mining.MiningStats()
+	if stat == activation.InitInProgress {
+		return nil, fmt.Errorf("cannot reset, init in progress")
+	}
+	err := s.Post.Reset()
+	if err != nil {
+		return nil, err
+	}
+	return &pb.SimpleMessage{Value: "ok"}, nil
 }
 
 func (s SpacemeshGrpcService) SetLoggerLevel(ctx context.Context, msg *pb.SetLogLevel) (*pb.SimpleMessage, error) {

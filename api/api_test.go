@@ -143,6 +143,13 @@ func (t GenesisTimeMock) GetGenesisTime() time.Time {
 	return t.t
 }
 
+type PostMock struct {
+}
+
+func (PostMock) Reset() error {
+	return nil
+}
+
 const (
 	genTimeUnix   = 1000000
 	layerDuration = 10
@@ -167,7 +174,7 @@ func TestServersConfig(t *testing.T) {
 
 	config.ConfigValues.JSONServerPort = port1
 	config.ConfigValues.GrpcServerPort = port2
-	grpcService := NewGrpcService(&networkMock, ap, txApi, nil, &mining, &oracle, nil, 0, nil)
+	grpcService := NewGrpcService(&networkMock, ap, txApi, nil, &mining, &oracle, nil, PostMock{}, 0, nil)
 	jsonService := NewJSONHTTPServer()
 
 	require.Equal(t, grpcService.Port, uint(config.ConfigValues.GrpcServerPort), "Expected same port")
@@ -283,6 +290,10 @@ func TestJsonWalletApi(t *testing.T) {
 	const ErrInvalidStartLayer = "{\"error\":\"invalid start layer\",\"message\":\"invalid start layer\",\"code\":2}"
 	require.Equal(t, ErrInvalidStartLayer, respBody)
 
+	// test call reset post
+	respBody, respStatus = callEndpoint(t, "v1/resetpost", "")
+	require.Equal(t, http.StatusOK, respStatus)
+
 	// stop the services
 	shutDown()
 }
@@ -384,7 +395,7 @@ func launchServer(t *testing.T) func() {
 		config.ConfigValues.GrpcServerPort = port2
 	}
 	networkMock.broadcasted = []byte{0x00}
-	grpcService := NewGrpcService(&networkMock, ap, txApi, miner.NewTxMemPool(), &mining, &oracle, &genTime, layerDuration, nil)
+	grpcService := NewGrpcService(&networkMock, ap, txApi, miner.NewTxMemPool(), &mining, &oracle, &genTime, PostMock{}, layerDuration, nil)
 	jsonService := NewJSONHTTPServer()
 	// start gRPC and json server
 	grpcService.StartService()
