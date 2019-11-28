@@ -116,11 +116,13 @@ func (m *MeshDB) AddBlock(bl *types.Block) error {
 
 func (m *MeshDB) GetBlock(id types.BlockID) (*types.Block, error) {
 	if id == GenesisBlock.Id() {
+		log.Info("Found block with id: ", id, "(genesis block)")
 		//todo fit real genesis here
 		return GenesisBlock, nil
 	}
 
 	if blkh := m.blockCache.Get(id); blkh != nil {
+		log.Info("Found block with id: ", blkh.Id().String())
 		return blkh, nil
 	}
 
