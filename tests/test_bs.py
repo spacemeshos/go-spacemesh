@@ -630,21 +630,21 @@ def test_transactions(setup_network):
             assert transfer(client_wrapper, tap, str_pub, amount), "Transfer from tap failed"
 
         print_title("Ensuring that all transactions were received")
-        ready = 0
         iterations_to_try = int(testconfig['client']['args']['layers-per-epoch']) * 2  # wait for two epochs (genesis)
+        ready_accounts = set()
         for x in range(iterations_to_try):
-            ready = 0
             layer_duration = testconfig['client']['args']['layer-duration-sec']
             print("\nSleeping layer duration ({}s)... {}/{}".format(layer_duration, x+1, iterations_to_try))
             time.sleep(float(layer_duration))
-            if test_account(client_wrapper, tap, tap_init_amount):
-                for pk in accounts:
-                    if pk == tap:
-                        continue
-                    assert test_account(client_wrapper, pk), "account {} didn't have the expected nonce and balance".format(pk)
-                    ready += 1
-                break
-        assert ready == len(accounts)-1, "Not all accounts received sent txs"  # one for 0 counting and one for tap.
+            if tap not in ready_accounts and test_account(client_wrapper, tap, tap_init_amount):
+                ready_accounts.add(tap)
+            for pk in accounts:
+                if pk == tap or pk in ready_accounts:
+                    continue
+                if test_account(client_wrapper, pk):
+                    ready_accounts.add(pk)
+        assert accounts.keys() == ready_accounts, \
+            "Not all accounts received sent txs. Accounts that aren't ready: %s" % (accounts.keys()-ready_accounts)
     send_txs_from_tap()
 
     def is_there_a_valid_acc(min_balance, accounts_snapshot: dict = None):
