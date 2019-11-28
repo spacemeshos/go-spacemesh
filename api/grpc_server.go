@@ -333,8 +333,8 @@ func (s SpacemeshGrpcService) GetAccountTxs(ctx context.Context, txsSinceLayer *
 
 	txs := pb.AccountTxs{ValidatedLayer: currentPBase.Uint64()}
 
-	blockTxIds := s.getBlockTxIds(minLayer, addr)
-	for _, txId := range blockTxIds {
+	meshTxIds := s.getTxIdsFromMesh(minLayer, addr)
+	for _, txId := range meshTxIds {
 		txs.Txs = append(txs.Txs, txId.String())
 	}
 
@@ -346,7 +346,7 @@ func (s SpacemeshGrpcService) GetAccountTxs(ctx context.Context, txsSinceLayer *
 	return &txs, nil
 }
 
-func (s SpacemeshGrpcService) getBlockTxIds(minLayer types.LayerID, addr types.Address) []types.TransactionId {
+func (s SpacemeshGrpcService) getTxIdsFromMesh(minLayer types.LayerID, addr types.Address) []types.TransactionId {
 	var txIds []types.TransactionId
 	for layerId := minLayer; layerId < s.Tx.LatestLayer(); layerId++ {
 		destTxIds := s.Tx.GetTransactionsByDestination(layerId, addr)
