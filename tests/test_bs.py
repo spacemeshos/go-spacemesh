@@ -643,6 +643,8 @@ def test_transactions(setup_network):
                     continue
                 if test_account(client_wrapper, pk):
                     ready_accounts.add(pk)
+            if accounts.keys() == ready_accounts:
+                break
         assert accounts.keys() == ready_accounts, \
             "Not all accounts received sent txs. Accounts that aren't ready: %s" % (accounts.keys()-ready_accounts)
     send_txs_from_tap()
