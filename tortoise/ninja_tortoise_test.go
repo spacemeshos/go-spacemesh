@@ -48,15 +48,6 @@ func getMeshForBench() *mesh.MeshDB {
 	return nil
 }
 
-func TestAlgorithm_HandleLateBlock(t *testing.T) {
-	mdb := getMeshForBench()
-	alg := NewNinjaTortoise(8, mdb, 5, log.New("", "", ""))
-	a := Algorithm{Tortoise: alg}
-	blk := types.NewExistingBlock(5, []byte("asdfasdfdgadsgdgr"))
-	a.HandleLateBlock(blk)
-	assert.True(t, blk.Layer() == types.LayerID(5))
-}
-
 func TestVec_Add(t *testing.T) {
 	v := vec{0, 0}
 	v = v.Add(vec{1, 0})
@@ -98,38 +89,38 @@ func TestNinjaTortoise_evict(t *testing.T) {
 	ni := sanity(t, getMeshForBench(), 150, 10, 100, badblocks)
 
 	for i := 1; i < 140; i++ {
-		for _, j := range ni.patterns[types.LayerID(i)] {
-			if _, ok := ni.tSupport[j]; ok {
+		for _, j := range ni.Patterns[types.LayerID(i)] {
+			if _, ok := ni.TSupport[j]; ok {
 				t.Fail()
 			}
-			if _, ok := ni.tPattern[j]; ok {
+			if _, ok := ni.TPattern[j]; ok {
 				t.Fail()
 			}
-			if _, ok := ni.tTally[j]; ok {
+			if _, ok := ni.TTally[j]; ok {
 				t.Fail()
 			}
-			if _, ok := ni.tVote[j]; ok {
+			if _, ok := ni.TVote[j]; ok {
 				t.Fail()
 			}
-			if _, ok := ni.tEffectiveToBlocks[j]; ok {
+			if _, ok := ni.TEffectiveToBlocks[j]; ok {
 				t.Fail()
 			}
-			if _, ok := ni.tComplete[j]; ok {
+			if _, ok := ni.TComplete[j]; ok {
 				t.Fail()
 			}
-			if _, ok := ni.tPatSupport[j]; ok {
+			if _, ok := ni.TPatSupport[j]; ok {
 				t.Fail()
 			}
 		}
 		ids, _ := ni.LayerBlockIds(49)
 		for _, j := range ids {
-			if _, ok := ni.tEffective[j]; ok {
+			if _, ok := ni.TEffective[j]; ok {
 				t.Fail()
 			}
-			if _, ok := ni.tCorrect[j]; ok {
+			if _, ok := ni.TCorrect[j]; ok {
 				t.Fail()
 			}
-			if _, ok := ni.tExplicit[j]; ok {
+			if _, ok := ni.TExplicit[j]; ok {
 				t.Fail()
 			}
 
@@ -200,7 +191,7 @@ func TestNinjaTortoise_VariableLayerSize(t *testing.T) {
 	AddLayer(mdb, l9)
 	alg.handleIncomingLayer(l9)
 
-	assert.True(t, alg.pBase.Layer() == 8)
+	assert.True(t, alg.PBase.Layer() == 8)
 
 }
 
@@ -229,8 +220,8 @@ func TestNinjaTortoise_Abstain(t *testing.T) {
 	l4 := createLayer(4, []*types.Layer{l3, l}, 3)
 	AddLayer(mdb, l4)
 	alg.handleIncomingLayer(l4)
-	assert.True(t, alg.pBase.Layer() == 3)
-	assert.True(t, alg.tTally[alg.tGood[3]][mesh.GenesisBlock.Id()][0] == 9)
+	assert.True(t, alg.PBase.Layer() == 3)
+	assert.True(t, alg.TTally[alg.TGood[3]][mesh.GenesisBlock.Id()][0] == 9)
 }
 
 func TestNinjaTortoise_BlockByBlock(t *testing.T) {
@@ -279,7 +270,7 @@ func TestNinjaTortoise_BlockByBlock(t *testing.T) {
 	AddLayer(mdb, l9)
 	handleLayerBlockByBlock(l9, alg)
 
-	assert.True(t, alg.pBase.Layer() == 8)
+	assert.True(t, alg.PBase.Layer() == 8)
 
 }
 
@@ -325,7 +316,7 @@ func TestNinjaTortoise_GoodLayerChanges(t *testing.T) {
 	AddLayer(mdb, l7)
 	handleLayerBlockByBlock(l7, alg)
 
-	assert.True(t, alg.pBase.Layer() == 6)
+	assert.True(t, alg.PBase.Layer() == 6)
 }
 
 func TestNinjaTortoise_LateBlocks(t *testing.T) {
@@ -380,7 +371,7 @@ func TestNinjaTortoise_LateBlocks(t *testing.T) {
 
 }
 
-func handleLayerBlockByBlock(lyr *types.Layer, algorithm *ninjaTortoise) {
+func handleLayerBlockByBlock(lyr *types.Layer, algorithm *NinjaTortoise) {
 	idx := lyr.Index()
 	for _, blk := range lyr.Blocks() {
 		lr := types.NewExistingLayer(idx, []*types.Block{blk})
@@ -416,51 +407,61 @@ func createLayer(index types.LayerID, prev []*types.Layer, blocksInLayer int) *t
 }
 
 func TestNinjaTortoise_S10P9(t *testing.T) {
-	t.Skip()
-
+	if testing.Short() {
+		t.Skip()
+	}
 	defer persistenceTeardown()
 	mdb := getMeshForBench()
 	sanity(t, mdb, 100, 10, 10, badblocks)
 }
 func TestNinjaTortoise_S50P49(t *testing.T) {
-	t.Skip()
-
+	if testing.Short() {
+		t.Skip()
+	}
 	defer persistenceTeardown()
 	sanity(t, getMeshForBench(), 110, 50, 50, badblocks)
 }
 func TestNinjaTortoise_S100P99(t *testing.T) {
-	t.Skip()
-
+	if testing.Short() {
+		t.Skip()
+	}
 	defer persistenceTeardown()
 	sanity(t, getMeshForBench(), 100, 100, 100, badblocks)
 }
 func TestNinjaTortoise_S10P7(t *testing.T) {
-	t.Skip()
-
+	if testing.Short() {
+		t.Skip()
+	}
 	defer persistenceTeardown()
 	sanity(t, getMeshForBench(), 100, 10, 7, badblocks)
 }
 func TestNinjaTortoise_S50P35(t *testing.T) {
-	t.Skip()
-
+	if testing.Short() {
+		t.Skip()
+	}
 	defer persistenceTeardown()
 	sanity(t, getMeshForBench(), 100, 50, 35, badblocks)
 }
 func TestNinjaTortoise_S100P70(t *testing.T) {
-	t.Skip()
-
+	if testing.Short() {
+		t.Skip()
+	}
 	defer persistenceTeardown()
 	sanity(t, getMeshForBench(), 100, 100, 70, badblocks)
 }
 
 func TestNinjaTortoise_S200P199(t *testing.T) {
-	t.Skip()
+	if testing.Short() {
+		t.Skip()
+	}
 	defer persistenceTeardown()
 	sanity(t, getMeshForBench(), 100, 200, 200, badblocks)
 }
 
 func TestNinjaTortoise_S200P140(t *testing.T) {
-	t.Skip()
+	if testing.Short() {
+		t.Skip()
+	}
 	defer persistenceTeardown()
 	sanity(t, getMeshForBench(), 100, 200, 140, badblocks)
 }
@@ -473,10 +474,10 @@ func TestNinjaTortoise_Sanity1(t *testing.T) {
 	layers := 5
 	mdb := getInMemMesh()
 	alg := sanity(t, mdb, layers, layerSize, patternSize, 0.2)
-	assert.True(t, alg.pBase.Layer() == types.LayerID(layers-1))
+	assert.True(t, alg.PBase.Layer() == types.LayerID(layers-1))
 }
 
-func sanity(t *testing.T, mdb *mesh.MeshDB, layers int, layerSize int, patternSize int, badBlks float64) *ninjaTortoise {
+func sanity(t *testing.T, mdb *mesh.MeshDB, layers int, layerSize int, patternSize int, badBlks float64) *NinjaTortoise {
 	lg := log.New(t.Name(), "", "")
 	l1 := mesh.GenesisLayer()
 	var lyrs []*types.Layer
@@ -500,7 +501,7 @@ func sanity(t *testing.T, mdb *mesh.MeshDB, layers int, layerSize int, patternSi
 		start := time.Now()
 		alg.handleIncomingLayer(lyr)
 		alg.Debug("Time to process layer: %v ", time.Since(start))
-		fmt.Println(fmt.Sprintf("lyr %v tally was %d", lyr.Index()-1, alg.tTally[alg.pBase][mesh.GenesisBlock.Id()]))
+		fmt.Println(fmt.Sprintf("lyr %v tally was %d", lyr.Index()-1, alg.TTally[alg.PBase][mesh.GenesisBlock.Id()]))
 		l = lyr
 	}
 
@@ -536,10 +537,10 @@ func TestNinjaTortoise_Sanity2(t *testing.T) {
 	alg.handleIncomingLayer(l3)
 	alg.handleIncomingLayer(l4)
 	alg.handleIncomingLayer(l5)
-	for b, vec := range alg.tTally[alg.pBase] {
-		alg.Debug("------> tally for block %d according to complete pattern %d are %d", b, alg.pBase, vec)
+	for b, vec := range alg.TTally[alg.PBase] {
+		alg.Debug("------> tally for block %d according to complete pattern %d are %d", b, alg.PBase, vec)
 	}
-	assert.True(t, alg.tTally[alg.pBase][l.Blocks()[0].Id()] == vec{12, 0}, "lyr %d tally was %d insted of %d", 0, alg.tTally[alg.pBase][l.Blocks()[0].Id()], vec{12, 0})
+	assert.True(t, alg.TTally[alg.PBase][l.Blocks()[0].Id()] == vec{12, 0}, "lyr %d tally was %d insted of %d", 0, alg.TTally[alg.PBase][l.Blocks()[0].Id()], vec{12, 0})
 }
 
 func createLayerWithCorruptedPattern(index types.LayerID, prev *types.Layer, blocksInLayer int, patternSize int, badBlocks float64) *types.Layer {
@@ -623,4 +624,48 @@ func AddLayer(m *mesh.MeshDB, layer *types.Layer) error {
 		}
 	}
 	return nil
+}
+
+func TestNinjaTortoise_Recovery(t *testing.T) {
+
+	lg := log.New(t.Name(), "", "")
+
+	mdb := getMeshForBench()
+	alg := NewNinjaTortoise(3, mdb, 5, lg)
+	l := mesh.GenesisLayer()
+	AddLayer(mdb, l)
+	alg.handleIncomingLayer(l)
+
+	l1 := createLayer(1, []*types.Layer{l}, 3)
+	AddLayer(mdb, l1)
+	alg.handleIncomingLayer(l1)
+
+	l2 := createLayer(2, []*types.Layer{l1, l}, 3)
+	AddLayer(mdb, l2)
+	alg.handleIncomingLayer(l2)
+
+	l31 := createLayer(3, []*types.Layer{l1, l}, 4)
+	l32 := createLayer(3, []*types.Layer{l31}, 5)
+
+	defer func() {
+		if r := recover(); r != nil {
+			t.Log("Recovered in f", r)
+		}
+		alg = NewNinjaTortoise(3, mdb, 5, lg)
+
+		alg.handleIncomingLayer(l2)
+
+		l3 := createLayer(3, []*types.Layer{l2, l}, 3)
+		AddLayer(mdb, l3)
+		alg.handleIncomingLayer(l3)
+
+		l4 := createLayer(4, []*types.Layer{l3, l2}, 3)
+		AddLayer(mdb, l4)
+		alg.handleIncomingLayer(l4)
+		assert.True(t, alg.PBase.Layer() == 3)
+		assert.Equal(t, 9, alg.TTally[alg.TGood[3]][mesh.GenesisBlock.Id()][0])
+		return
+	}()
+
+	alg.handleIncomingLayer(l32) //crash
 }

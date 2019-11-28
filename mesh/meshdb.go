@@ -1,7 +1,9 @@
 package mesh
 
 import (
+	"bytes"
 	"container/list"
+	"encoding/gob"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -27,7 +29,7 @@ type MeshDB struct {
 	blocks             database.Database
 	transactions       database.Database
 	contextualValidity database.Database
-	patterns           database.Database
+	general            database.Database
 	unappliedTxs       database.Database
 	unappliedTxsMutex  sync.Mutex
 	orphanBlocks       map[types.LayerID]map[types.BlockID]struct{}
@@ -48,11 +50,11 @@ func NewPersistentMeshDB(path string, log log.Log) (*MeshDB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize validity db: %v", err)
 	}
-	pdb, err := database.NewLDBDatabase(path+"patterns", 0, 0, log)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize patterns db: %v", err)
-	}
 	tdb, err := database.NewLDBDatabase(path+"transactions", 0, 0, log)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize transactions db: %v", err)
+	}
+	gdb, err := database.NewLDBDatabase(path+"general", 0, 0, log)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize transactions db: %v", err)
 	}
@@ -67,7 +69,7 @@ func NewPersistentMeshDB(path string, log log.Log) (*MeshDB, error) {
 		blocks:             bdb,
 		layers:             ldb,
 		transactions:       tdb,
-		patterns:           pdb,
+		general:            gdb,
 		contextualValidity: vdb,
 		unappliedTxs:       utx,
 		orphanBlocks:       make(map[types.LayerID]map[types.BlockID]struct{}),
@@ -82,9 +84,9 @@ func NewMemMeshDB(log log.Log) *MeshDB {
 		blockCache:         NewBlockCache(100 * layerSize),
 		blocks:             database.NewMemDatabase(),
 		layers:             database.NewMemDatabase(),
+		general:            database.NewMemDatabase(),
 		contextualValidity: database.NewMemDatabase(),
 		transactions:       database.NewMemDatabase(),
-		patterns:           database.NewMemDatabase(),
 		unappliedTxs:       database.NewMemDatabase(),
 		orphanBlocks:       make(map[types.LayerID]map[types.BlockID]struct{}),
 		layerMutex:         make(map[types.LayerID]*layerMutex),
@@ -97,7 +99,7 @@ func (m *MeshDB) Close() {
 	m.layers.Close()
 	m.transactions.Close()
 	m.unappliedTxs.Close()
-	m.patterns.Close()
+	m.general.Close()
 	m.contextualValidity.Close()
 }
 
@@ -126,7 +128,7 @@ func (m *MeshDB) GetBlock(id types.BlockID) (*types.Block, error) {
 
 	b, err := m.getBlockBytes(id)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf(" %s %s", id, err)
 	}
 	mbk := &types.Block{}
 	err = types.BytesToInterface(b, mbk)
@@ -245,7 +247,7 @@ func (m *MeshDB) ContextualValidity(id types.BlockID) (bool, error) {
 	return b[0] == 1, nil //bytes to bool
 }
 
-func (m *MeshDB) SaveContextualValidity(id types.BlockID, valid bool) {
+func (m *MeshDB) SaveContextualValidity(id types.BlockID, valid bool) error {
 	var v []byte
 	if valid {
 		v = TRUE
@@ -253,12 +255,7 @@ func (m *MeshDB) SaveContextualValidity(id types.BlockID, valid bool) {
 		v = FALSE
 	}
 	m.Debug("save contextual validity %v %v", id, valid)
-	err := m.contextualValidity.Put(id.ToBytes(), v)
-	if err != nil {
-		m.With().Error("storing contextual validity failed",
-			log.BlockId(id.String()), log.Bool("valid", valid))
-		// TODO: We want to panic here once we have a way to recover from this scenario
-	}
+	return m.contextualValidity.Put(id.ToBytes(), v)
 }
 
 func (m *MeshDB) writeBlock(bl *types.Block) error {
@@ -662,4 +659,34 @@ func (m *MeshDB) ContextuallyValidBlock(layer types.LayerID) (map[types.BlockID]
 	}
 
 	return validBlks, nil
+}
+
+func (m *MeshDB) Persist(key []byte, v interface{}) error {
+	var buf bytes.Buffer
+	enc := gob.NewEncoder(&buf)
+	err := enc.Encode(v)
+	if err != nil {
+		panic(err)
+	}
+	return m.general.Put(key, buf.Bytes())
+}
+
+func (m *MeshDB) Retrieve(key []byte, v interface{}) interface{} {
+	val, err := m.general.Get(key)
+	if err != nil {
+		m.Warning("failed retrieving object from db ", err)
+		return nil
+	}
+
+	if val == nil {
+		m.Info("no such value in database db ", err)
+	}
+
+	dec := gob.NewDecoder(bytes.NewBuffer(val))
+
+	if err := dec.Decode(v); err != nil {
+		m.Error("failed decoding object from db ", err)
+	}
+
+	return v
 }

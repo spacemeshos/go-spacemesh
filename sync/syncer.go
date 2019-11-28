@@ -470,8 +470,8 @@ func (s *Syncer) blockSyntacticValidation(block *types.Block) ([]*types.Transact
 	}
 
 	//validate block's votes
-	if valid := validateVotes(block, s.ForBlockInView, s.Hdist, s.Log); valid == false {
-		return nil, nil, errors.New(fmt.Sprintf("validate votes failed for block %v", block.Id()))
+	if valid, err := validateVotes(block, s.ForBlockInView, s.Hdist, s.Log); valid == false || err != nil {
+		return nil, nil, err
 	}
 
 	return txs, atxs, nil
@@ -487,14 +487,14 @@ func (s *Syncer) validateBlockView(blk *types.Block) bool {
 	if res, err := s.blockQueue.addDependencies(blk.Id(), blk.ViewEdges, foo); res == false {
 		return true
 	} else if err != nil {
-		s.Error(fmt.Sprintf("block %v not syntactically valid %", blk.Id()), err)
+		s.Error(fmt.Sprintf("block %s not syntactically valid %", blk.Id()), err)
 		return false
 	}
 
 	return <-ch
 }
 
-func validateVotes(blk *types.Block, forBlockfunc ForBlockInView, depth int, lg log.Log) bool {
+func validateVotes(blk *types.Block, forBlockfunc ForBlockInView, depth int, lg log.Log) (bool, error) {
 	view := map[types.BlockID]struct{}{}
 	for _, blk := range blk.ViewEdges {
 		view[blk] = struct{}{}
@@ -518,15 +518,19 @@ func validateVotes(blk *types.Block, forBlockfunc ForBlockInView, depth int, lg 
 		lowestLayer = 0
 	}
 	err := forBlockfunc(view, lowestLayer, traverse)
+
+	//errored
+	if err != nil {
+		return false, err
+	}
+
+	//did not find all blocks
 	if err == nil && len(vote) > 0 {
 		err = fmt.Errorf("voting on blocks out of view (or out of Hdist), %v", vote)
+		return false, err
 	}
 
-	if err != nil {
-		lg.With().Error("validate votes failed ", log.BlockId(blk.Id().String()), log.Err(err))
-	}
-
-	return err == nil
+	return true, nil
 }
 
 func (s *Syncer) DataAvailability(blk *types.Block) ([]*types.Transaction, []*types.ActivationTx, error) {
