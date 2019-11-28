@@ -23,6 +23,8 @@ const (
 	MaxRequestTries = 3
 	// RequestTriesInterval is the interval to wait between tries to ask ntp for the time
 	RequestTriesInterval = time.Second * 5
+	// MinResultsThreshold is the minimum number of successful ntp query results to calculate the drift
+	MinResultsThreshold = 3
 )
 
 // DefaultServer is a list of relay on more than one server.
@@ -157,23 +159,24 @@ func ntpTimeDrift() (time.Duration, error) {
 		}()
 	}
 
-	all := sortableDurations{}
+	res := sortableDurations{}
 	errors := []error{}
 	for i := 0; i < config.TimeConfigValues.NtpQueries; i++ {
 		select {
 		case err := <-errorChan:
 			errors = append(errors, err)
 		case result := <-resultsChan:
-			all = append(all, result)
+			res = append(res, result)
 		}
 	}
-	if len(errors) > len(all)/2 {
+
+	if config.TimeConfigValues.NtpQueries-len(errors) < MinResultsThreshold {
 		return zeroDuration, fmt.Errorf("NTP server errors %v", errors)
 	}
 	// remove edge cases from our results
-	all.RemoveExtremes()
+	res.RemoveExtremes()
 	// return an average of all values
-	return all.Average(), nil
+	return res.Average(), nil
 }
 
 // CheckSystemClockDrift is comparing our clock to the collected ntp data
