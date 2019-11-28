@@ -487,7 +487,7 @@ func (s *Syncer) validateBlockView(blk *types.Block) bool {
 	if res, err := s.blockQueue.addDependencies(blk.Id(), blk.ViewEdges, foo); res == false {
 		return true
 	} else if err != nil {
-		s.Error(fmt.Sprintf("block %v not syntactically valid ", blk.Id()))
+		s.Error(fmt.Sprintf("block %v not syntactically valid %", blk.Id()), err)
 		return false
 	}
 
