@@ -124,7 +124,7 @@ func (vq *blockQueue) finishBlockCallback(block *types.Block) func(res bool) err
 		}
 
 		//validate block's votes
-		if valid := validateVotes(block, vq.ForBlockInView, vq.Hdist, vq.Log); valid == false {
+		if valid, err := validateVotes(block, vq.ForBlockInView, vq.Hdist, vq.Log); valid == false || err != nil {
 			return errors.New(fmt.Sprintf("validate votes failed for block %v", block.Id()))
 		}
 

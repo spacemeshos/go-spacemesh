@@ -99,13 +99,13 @@ func NewMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh MeshValidator, t
 	}
 
 	if latest, err := db.general.Get(LATEST); err == nil {
-		logger.Warning("could not recover latest layer")
 		ll.latestLayer = types.LayerID(util.BytesToUint64(latest))
+		logger.Warning("recovered latest layer %d", ll.latestLayer)
 	}
 
 	if validated, err := db.general.Get(VALIDATED); err == nil {
-		logger.Warning("could not recover  validated layer")
 		ll.validatedLayer = types.LayerID(util.BytesToUint64(validated))
+		logger.Warning("recovered validated layer %d", ll.validatedLayer)
 	}
 
 	return ll
@@ -134,8 +134,9 @@ func (m *Mesh) SetLatestLayer(idx types.LayerID) {
 	if idx > m.latestLayer {
 		m.Info("set latest known layer to %v", idx)
 		m.latestLayer = idx
+		m.Info("persist validated layer")
 		if err := m.general.Put(LATEST, idx.ToBytes()); err != nil {
-			m.Panic("could persist validated layer index")
+			m.Panic("could persist Latest layer index")
 		}
 	}
 }
@@ -161,6 +162,7 @@ func (m *Mesh) ValidateLayer(lyr *types.Layer) {
 	m.lvMutex.Lock()
 	m.validatedLayer = currLayerId
 	m.validatedLayer = lyr.Index()
+	m.Info("persist validated layer")
 	if err := m.general.Put(VALIDATED, lyr.Index().ToBytes()); err != nil {
 		m.Panic("could persist validated layer index")
 	}
