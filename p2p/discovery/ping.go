@@ -60,15 +60,14 @@ func (p *protocol) verifyPinger(from net.Addr, pi *node.NodeInfo) error {
 	}
 	if ka.NeedsPing() {
 		peer := ka.na.PublicKey()
-		foo := func() {
+		// Send the new Ping in a coroutine so we first respond to the incoming Ping
+		go func() {
 			if err := p.Ping(peer); err != nil {
 				// All we can do here is print a warning. We've already responded with a pong,
 				// and the peer will not be added to the pingable list.
 				p.logger.Warning("Failed response to ping to Peer: %v", peer.String())
 			}
-		}
-		// Send the new Ping in a coroutine so we first respond to the incoming Ping
-		go foo()
+		}()
 	}
 
 	//TODO: only accept local (unspecified/loopback) IPs from other local ips.
