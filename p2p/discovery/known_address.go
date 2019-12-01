@@ -15,7 +15,7 @@ type KnownAddress struct {
 	lastSeen    time.Time
 	lastattempt time.Time
 	lastsuccess time.Time
-	lastping	time.Time // last successful ping response
+	lastping    time.Time // last successful ping response
 	tried       bool
 	refs        int // reference count of new buckets
 }

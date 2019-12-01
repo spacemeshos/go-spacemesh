@@ -20,7 +20,7 @@ type serializedKnownAddress struct {
 	LastSeen    int64
 	LastAttempt int64
 	LastSuccess int64
-	LastPing	int64
+	LastPing    int64
 	// no refcount or tried, that is available from context.
 }
 
