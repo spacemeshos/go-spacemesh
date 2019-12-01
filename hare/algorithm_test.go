@@ -16,7 +16,7 @@ import (
 	"time"
 )
 
-var cfg = config.Config{N: 10, F: 5, RoundDuration: 2, ExpectedLeaders: 5}
+var cfg = config.Config{N: 10, F: 5, RoundDuration: 2, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 1000}
 
 type mockMessageValidator struct {
 	syntaxValid  bool
@@ -140,7 +140,7 @@ func buildMessage(msg *Message) *Msg {
 
 func buildBroker(net NetworkService, testName string) *Broker {
 	return newBroker(net, &mockEligibilityValidator{true}, MockStateQuerier{true, nil},
-		(&mockSyncer{true}).IsSynced, 10, Closer{make(chan struct{})}, log.NewDefault(testName))
+		(&mockSyncer{true}).IsSynced, 10, cfg.LimitIterations, Closer{make(chan struct{})}, log.NewDefault(testName))
 }
 
 type mockEligibilityValidator struct {
@@ -179,6 +179,16 @@ func TestConsensusProcess_Start(t *testing.T) {
 	assert.Equal(t, nil, err)
 	err = proc.Start()
 	assert.Equal(t, "instance already started", err.Error())
+}
+
+func TestConsensusProcess_TerminationLimit(t *testing.T) {
+	p := generateConsensusProcess(t)
+	p.SetInbox(make(chan *Msg, 10))
+	p.cfg.LimitIterations = 1
+	p.cfg.RoundDuration = 1
+	p.Start()
+	time.Sleep(time.Duration(6*p.cfg.RoundDuration) * time.Second)
+	assert.Equal(t, int32(1), p.k/4)
 }
 
 func TestConsensusProcess_eventLoop(t *testing.T) {
@@ -448,13 +458,13 @@ func TestConsensusProcess_onEarlyMessage(t *testing.T) {
 }
 
 func TestProcOutput_Id(t *testing.T) {
-	po := procOutput{instanceId1, nil}
+	po := procReport{instanceId1, nil, false}
 	assert.Equal(t, po.Id(), instanceId1)
 }
 
 func TestProcOutput_Set(t *testing.T) {
 	es := NewDefaultEmptySet()
-	po := procOutput{instanceId1, es}
+	po := procReport{instanceId1, es, false}
 	assert.True(t, es.Equals(po.Set()))
 }
 
