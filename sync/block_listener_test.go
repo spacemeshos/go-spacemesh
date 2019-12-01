@@ -282,8 +282,9 @@ func TestBlockListener_ValidateVotesGoodFlow(t *testing.T) {
 	bl1.MeshDB.AddBlock(block5)
 	bl1.MeshDB.AddBlock(block6)
 	bl1.MeshDB.AddBlock(block7)
-
-	assert.True(t, validateVotes(block1, bl1.ForBlockInView, bl1.Hdist, log.New("", "", "")))
+	valid, err := validateVotes(block1, bl1.ForBlockInView, bl1.Hdist, log.New("", "", ""))
+	assert.NoError(t, err)
+	assert.True(t, valid)
 }
 
 func TestBlockListener_ValidateVotesBadFlow(t *testing.T) {
@@ -330,8 +331,9 @@ func TestBlockListener_ValidateVotesBadFlow(t *testing.T) {
 	bl1.MeshDB.AddBlock(block5)
 	bl1.MeshDB.AddBlock(block6)
 	bl1.MeshDB.AddBlock(block7)
-
-	assert.False(t, validateVotes(block1, bl1.ForBlockInView, bl1.Hdist, log.New("", "", "")))
+	valid, err := validateVotes(block1, bl1.ForBlockInView, bl1.Hdist, log.New("", "", ""))
+	assert.NoError(t, err)
+	assert.False(t, valid)
 }
 
 func TestBlockListenerViewTraversal(t *testing.T) {
