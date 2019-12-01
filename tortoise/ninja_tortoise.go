@@ -106,29 +106,24 @@ func NewNinjaTortoise(layerSize int, blocks Mesh, hdist int, log log.Log) *Ninja
 
 	trtl := &NinjaTortoise{Log: log, Mesh: blocks}
 
-	if ni := trtl.RecoverTortoise(); ni != nil {
-		trtl.ninjaTortoise = ni.(*ninjaTortoise)
-	} else {
+	trtl.ninjaTortoise = &ninjaTortoise{
+		Hdist:        types.LayerID(hdist),
+		AvgLayerSize: layerSize,
+		PBase:        ZeroPattern,
 
-		trtl.ninjaTortoise = &ninjaTortoise{
-			Hdist:        types.LayerID(hdist),
-			AvgLayerSize: layerSize,
-			PBase:        ZeroPattern,
+		Patterns:   map[types.LayerID][]votingPattern{},
+		TGood:      map[types.LayerID]votingPattern{},
+		TEffective: map[types.BlockID]votingPattern{},
+		TCorrect:   map[types.BlockID]map[types.BlockID]vec{},
+		TExplicit:  map[types.BlockID]map[types.LayerID]votingPattern{},
+		TSupport:   map[votingPattern]int{},
+		TPattern:   map[votingPattern]map[types.BlockID]struct{}{},
 
-			Patterns:   map[types.LayerID][]votingPattern{},
-			TGood:      map[types.LayerID]votingPattern{},
-			TEffective: map[types.BlockID]votingPattern{},
-			TCorrect:   map[types.BlockID]map[types.BlockID]vec{},
-			TExplicit:  map[types.BlockID]map[types.LayerID]votingPattern{},
-			TSupport:   map[votingPattern]int{},
-			TPattern:   map[votingPattern]map[types.BlockID]struct{}{},
-
-			TVote:              map[votingPattern]map[types.BlockID]vec{},
-			TTally:             map[votingPattern]map[types.BlockID]vec{},
-			TComplete:          map[votingPattern]struct{}{},
-			TEffectiveToBlocks: map[votingPattern][]types.BlockID{},
-			TPatSupport:        map[votingPattern]map[types.LayerID]votingPattern{},
-		}
+		TVote:              map[votingPattern]map[types.BlockID]vec{},
+		TTally:             map[votingPattern]map[types.BlockID]vec{},
+		TComplete:          map[votingPattern]struct{}{},
+		TEffectiveToBlocks: map[votingPattern][]types.BlockID{},
+		TPatSupport:        map[votingPattern]map[types.LayerID]votingPattern{},
 	}
 
 	return trtl

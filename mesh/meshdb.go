@@ -78,6 +78,15 @@ func NewPersistentMeshDB(path string, log log.Log) (*MeshDB, error) {
 	return ll, nil
 }
 
+func (m *MeshDB) RecoveredData() bool {
+	if _, err := m.general.Get(LATEST); err == nil {
+		m.Info("found data to recover on disc")
+		return true
+	}
+	m.Info("did not find data to recover on disc")
+	return false
+}
+
 func NewMemMeshDB(log log.Log) *MeshDB {
 	ll := &MeshDB{
 		Log:                log,

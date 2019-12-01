@@ -98,15 +98,37 @@ func NewMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh MeshValidator, t
 		AtxDB:          atxDb,
 	}
 
-	if latest, err := db.general.Get(LATEST); err == nil {
-		logger.Warning("could not recover latest layer")
-		ll.latestLayer = types.LayerID(util.BytesToUint64(latest))
+	return ll
+}
+
+func NewRecoveredMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh MeshValidator, txInvalidator TxMemPoolInValidator, atxInvalidator AtxMemPoolInValidator, pr TxProcessor, logger log.Log) *Mesh {
+	//todo add boot from disk
+	ll := &Mesh{
+		Log:            logger,
+		MeshValidator:  mesh,
+		txInvalidator:  txInvalidator,
+		atxInvalidator: atxInvalidator,
+		TxProcessor:    pr,
+		done:           make(chan struct{}),
+		MeshDB:         db,
+		config:         rewardConfig,
+		AtxDB:          atxDb,
 	}
 
-	if validated, err := db.general.Get(VALIDATED); err == nil {
-		logger.Warning("could not recover  validated layer")
-		ll.validatedLayer = types.LayerID(util.BytesToUint64(validated))
+	latest, err := db.general.Get(LATEST)
+	if err != nil {
+		logger.Panic("could not recover latest layer")
 	}
+
+	ll.latestLayer = types.LayerID(util.BytesToUint64(latest))
+
+	validated, err := db.general.Get(VALIDATED)
+	if err != nil {
+		logger.Panic("could not recover  validated layer")
+	}
+
+	ll.validatedLayer = types.LayerID(util.BytesToUint64(validated))
+	ll.Info("recovered mesh from disc latest layer %d validated layer %s", latest, validated)
 
 	return ll
 }
