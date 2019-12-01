@@ -45,7 +45,6 @@ func (p *protocol) newPingRequestHandler() func(msg server.Message) []byte {
 
 func (p *protocol) verifyPinger(from net.Addr, pi *node.NodeInfo) error {
 	// todo : Validate ToAddr or drop it.
-	// todo: check the address provided with an extra ping before updating. ( if we haven't checked it for a while )
 	// todo: decide on best way to know our ext address
 
 	if err := pi.Valid(); err != nil {
@@ -57,6 +56,9 @@ func (p *protocol) verifyPinger(from net.Addr, pi *node.NodeInfo) error {
 	ka, err := p.table.LookupKnownAddress(pi.PublicKey())
 	if err != nil {
 		return err
+	}
+	if ka == nil {
+		return errors.New("known address lookup failed")
 	}
 	if ka.NeedsPing() {
 		peer := ka.na.PublicKey()

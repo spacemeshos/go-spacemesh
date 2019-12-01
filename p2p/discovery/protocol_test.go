@@ -113,7 +113,28 @@ func TestPing_Ping_Concurrency(t *testing.T) {
 	<-done
 }
 
-// todo : test verifypinger
+func Addr() net.Addr {
+	return &net.IPAddr{IP: net.ParseIP("0.0.0.0"), Zone: "ipv4"}
+}
+
+func TestPing_VerifyPinger(t *testing.T) {
+	sim := service.NewSimulator()
+	p1 := newTestNode(sim)
+	p2 := newTestNode(sim)
+
+	// This lookup should fail
+	err := p1.dscv.verifyPinger(Addr(), p2.svc.NodeInfo)
+	require.Error(t, err)
+
+	// Initialize the address book
+	p1.d.AddressCacheResult = []*node.NodeInfo{p2.svc.NodeInfo}
+	p1.d.GetAddressRes = &KnownAddress{na: p2.svc.NodeInfo}
+	p1.dscv.table = p1.d
+
+	// This lookup should succeed
+	err = p1.dscv.verifyPinger(Addr(), p2.svc.NodeInfo)
+	require.NoError(t, err)
+}
 
 func TestFindNodeProtocol_FindNode(t *testing.T) {
 
