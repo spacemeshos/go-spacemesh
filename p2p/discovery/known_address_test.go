@@ -136,7 +136,7 @@ func TestNeedsPing(t *testing.T) {
 	}
 	// Test an address that was never pinged.
 	if !TstKnownAddressNeedsPing(TstNewKnownAddress(time.Now(),
-			0, time.Now(), time.Now(), never, false, 0)) {
+		0, time.Now(), time.Now(), never, false, 0)) {
 		t.Errorf("test case 2: never-pinged address should need ping.")
 	}
 
@@ -150,7 +150,7 @@ func TestNeedsPing(t *testing.T) {
 	// Test an address pinged just after the threshold. NOTE: a few ms will elapse between when we construct this test
 	// and when it actually runs, so add a minute here to be safe.
 	if TstKnownAddressNeedsPing(TstNewKnownAddress(time.Now(),
-		0, time.Now(), time.Now(), threshold.Add(1 * time.Minute), false, 0)) {
+		0, time.Now(), time.Now(), threshold.Add(1*time.Minute), false, 0)) {
 		t.Errorf("test case 4: address pinged just after threshold should not need ping.")
 	}
 }
