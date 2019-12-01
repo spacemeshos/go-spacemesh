@@ -19,6 +19,12 @@ const (
 	NtpOffset = 2208988800
 	// DefaultNtpPort is the ntp protocol port
 	DefaultNtpPort = "123"
+	// MaxRequestTries is the number of tries we try to query ntp before we give up when having errors.
+	MaxRequestTries = 3
+	// RequestTriesInterval is the interval to wait between tries to ask ntp for the time
+	RequestTriesInterval = time.Second * 5
+	// MinResultsThreshold is the minimum number of successful ntp query results to calculate the drift
+	MinResultsThreshold = 3
 )
 
 // DefaultServer is a list of relay on more than one server.
@@ -153,33 +159,42 @@ func ntpTimeDrift() (time.Duration, error) {
 		}()
 	}
 
-	all := sortableDurations{}
+	res := sortableDurations{}
 	errors := []error{}
 	for i := 0; i < config.TimeConfigValues.NtpQueries; i++ {
 		select {
 		case err := <-errorChan:
 			errors = append(errors, err)
 		case result := <-resultsChan:
-			all = append(all, result)
+			res = append(res, result)
 		}
 	}
-	if len(errors) > len(all) {
+
+	if config.TimeConfigValues.NtpQueries-len(errors) < MinResultsThreshold {
 		return zeroDuration, fmt.Errorf("NTP server errors %v", errors)
 	}
 	// remove edge cases from our results
-	all.RemoveExtremes()
+	res.RemoveExtremes()
 	// return an average of all values
-	return all.Average(), nil
+	return res.Average(), nil
 }
 
 // CheckSystemClockDrift is comparing our clock to the collected ntp data
 // return the drift and an error when drift reading failed or exceeds our preset MaxAllowedDrift
 func CheckSystemClockDrift() (time.Duration, error) {
 	// Read average drift form ntpTimeDrift
+	tries := 1
 	drift, err := ntpTimeDrift()
-	if err != nil {
-		return drift, err
+	for err != nil && tries < MaxRequestTries {
+		time.Sleep(RequestTriesInterval)
+		drift, err = ntpTimeDrift()
+		tries++
 	}
+
+	if err != nil {
+		return 0, err
+	}
+
 	// Check if drift exceeds our max allowed drift
 	if drift < -config.TimeConfigValues.MaxAllowedDrift || drift > config.TimeConfigValues.MaxAllowedDrift {
 		return drift, fmt.Errorf("System clock is %s away from NTP servers. please synchronize your OS ", drift)
