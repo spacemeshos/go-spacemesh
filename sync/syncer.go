@@ -83,7 +83,7 @@ type Status int
 const (
 	Pending    Status = 0
 	InProgress Status = 1
-	Done       Status = 1
+	Done       Status = 2
 )
 
 type LayerProvider interface {
