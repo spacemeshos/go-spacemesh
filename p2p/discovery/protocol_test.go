@@ -134,6 +134,8 @@ func TestPing_VerifyPinger(t *testing.T) {
 	// This lookup should succeed
 	err = p1.dscv.verifyPinger(Addr(), p2.svc.NodeInfo)
 	require.NoError(t, err)
+
+	// todo: verify that the ping gets sent (and received?)
 }
 
 func TestFindNodeProtocol_FindNode(t *testing.T) {
