@@ -127,9 +127,7 @@ func TestPing_VerifyPinger(t *testing.T) {
 	require.Error(t, err)
 
 	// Initialize the address book
-	p1.d.AddressCacheResult = []*node.NodeInfo{p2.svc.NodeInfo}
 	p1.d.GetAddressRes = &KnownAddress{na: p2.svc.NodeInfo}
-	p1.dscv.table = p1.d
 
 	// This lookup should succeed
 	err = p1.dscv.verifyPinger(Addr(), p2.svc.NodeInfo)

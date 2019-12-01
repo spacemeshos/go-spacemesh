@@ -31,10 +31,7 @@ func (ka *KnownAddress) LastAttempt() time.Time {
 
 // NeedsPing returns whether we need to ping this node again.
 func (ka *KnownAddress) NeedsPing() bool {
-	if ka.lastping.Before(time.Now().Add(-1 * pingInterval * time.Hour)) {
-		return true
-	}
-	return false
+	return ka.lastping.Before(time.Now().Add(-1 * pingInterval * time.Hour))
 }
 
 // Mark this address as having just been successfully roundtrip pinged.

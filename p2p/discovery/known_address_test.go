@@ -151,6 +151,6 @@ func TestNeedsPing(t *testing.T) {
 	// and when it actually runs, so add a minute here to be safe.
 	if TstKnownAddressNeedsPing(TstNewKnownAddress(time.Now(),
 		0, time.Now(), time.Now(), threshold.Add(1 * time.Minute), false, 0)) {
-		t.Errorf("test case 5: address pinged just after threshold should not need ping.")
+		t.Errorf("test case 4: address pinged just after threshold should not need ping.")
 	}
 }
