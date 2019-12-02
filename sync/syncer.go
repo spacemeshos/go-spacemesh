@@ -161,11 +161,12 @@ func (s *Syncer) getGossipSynced() Status {
 	return b
 }
 
+//api for other modules to check if they should listen to gossip
 func (s *Syncer) ListenToGossip() bool {
 	return s.getGossipSynced() != Pending
 }
 
-func (s *Syncer) setGossipSynced(b Status) {
+func (s *Syncer) setGossipStatus(b Status) {
 	s.gossipLock.Lock()
 	s.gossipSynced = b
 	s.gossipLock.Unlock()
@@ -269,17 +270,17 @@ func (s *Syncer) Synchronise() {
 	s.Info("start sincronize")
 	if s.lastTickedLayer() <= 1 { // skip validation for first layer
 		s.With().Info("Not syncing in layer <= 1", log.LayerId(uint64(s.lastTickedLayer())))
-		s.setGossipSynced(Done) // fully-synced, make sure we listen to p2p
+		s.setGossipStatus(Done) // fully-synced, make sure we listen to p2p
 		return
 	}
-	s.Info("step 1")
+
 	currentSyncLayer := s.lValidator.ValidatedLayer() + 1
 	if currentSyncLayer == s.lastTickedLayer() { // only validate if current < lastTicked
 		s.With().Info("Already synced for layer", log.Uint64("current_sync_layer", uint64(currentSyncLayer)))
-		s.setGossipSynced(Done) // fully-synced, make sure we listen to p2p
+		s.setGossipStatus(Done) // fully-synced, make sure we listen to p2p
 		return
 	}
-	s.Info("step 2")
+
 	if s.weaklySynced() { // we have all the data of the prev layers so we can simply validate
 		s.With().Info("Node is synced. Going to validate layer", log.LayerId(uint64(currentSyncLayer)))
 
@@ -291,7 +292,7 @@ func (s *Syncer) Synchronise() {
 		s.lValidator.ValidateLayer(lyr) // wait for layer validation
 		return
 	}
-	s.Info("step 3")
+
 	// node is not synced
 	s.handleNotSynced(currentSyncLayer)
 }
@@ -318,7 +319,7 @@ func (s *Syncer) fastValidation(block *types.Block) error {
 
 func (s *Syncer) handleNotSynced(currentSyncLayer types.LayerID) {
 	s.Info("Node is out of sync setting gossip-synced to false and starting sync")
-	s.setGossipSynced(Pending) // don't listen to gossip while not synced
+	s.setGossipStatus(Pending) // don't listen to gossip while not synced
 
 	// first, bring all the data of the prev layers
 	// Note: lastTicked() is not constant but updates as ticks are received
@@ -352,7 +353,7 @@ func (s *Syncer) handleNotSynced(currentSyncLayer types.LayerID) {
 // opening gossip in weakly-synced transition us to fully-synced
 func (s *Syncer) gossipSyncForOneFullLayer(currentSyncLayer types.LayerID) error {
 	//listen to gossip
-	s.setGossipSynced(InProgress)
+	s.setGossipStatus(InProgress)
 	// subscribe and wait for two ticks
 	s.Info("waiting for two ticks while p2p is open")
 	ch := s.TickProvider.Subscribe()
@@ -381,7 +382,7 @@ func (s *Syncer) gossipSyncForOneFullLayer(currentSyncLayer types.LayerID) error
 	s.Info("Done waiting for ticks and validation. setting gossip true")
 
 	// fully-synced - set gossip -synced to true
-	s.setGossipSynced(Done)
+	s.setGossipStatus(Done)
 
 	return nil
 }
