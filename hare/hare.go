@@ -29,6 +29,7 @@ type Consensus interface {
 type TerminationOutput interface {
 	Id() instanceId
 	Set() *Set
+	Completed() bool
 }
 
 type orphanBlockProvider interface {
@@ -89,7 +90,7 @@ func New(conf config.Config, p2p NetworkService, sign Signer, nid types.NodeId, 
 	h.beginLayer = beginLayer
 
 	ev := newEligibilityValidator(rolacle, layersPerEpoch, idProvider, conf.N, conf.ExpectedLeaders, logger)
-	h.broker = newBroker(p2p, ev, stateQ, syncState, layersPerEpoch, h.Closer, logger)
+	h.broker = newBroker(p2p, ev, stateQ, syncState, layersPerEpoch, conf.LimitConcurrent, h.Closer, logger)
 
 	h.sign = sign
 
@@ -230,32 +231,28 @@ func (h *Hare) onTick(id types.LayerID) {
 }
 
 var (
-	// ErrTooOld is an error we return when we've been requested output about old consensus procs
-	ErrTooOld = errors.New("results for that layer already deleted")
-	// ErrTooEarly is what we return when the requested layer consensus is still in process
-	ErrTooEarly = errors.New("results for that layer haven't arrived yet")
+	// ErrTooOld means the requested result has already been evacuated from the buffer because the layer is too old
+	ErrTooOld   = errors.New("layer has already been evacuated from buffer")
+	errNoResult = errors.New("no result for the requested layer")
 )
 
 // GetResult returns the hare output for the provided range.
 // Returns error iff the request for the upper is too old.
-func (h *Hare) GetResult(lower types.LayerID, upper types.LayerID) ([]types.BlockID, error) {
+func (h *Hare) GetResult(lid types.LayerID) ([]types.BlockID, error) {
 
-	if h.isTooLate(instanceId(upper)) {
+	if h.isTooLate(instanceId(lid)) {
 		return nil, ErrTooOld
 	}
 
-	var results []types.BlockID
 	h.mu.RLock()
-	for id := lower; id <= upper; id++ {
-		blks, ok := h.outputs[id]
-		if !ok {
-			continue
-		}
-		results = append(results, blks...)
+	blks, ok := h.outputs[lid]
+	if !ok {
+		h.mu.RUnlock()
+		return nil, errNoResult
 	}
-	h.mu.RUnlock()
 
-	return results, nil
+	h.mu.RUnlock()
+	return blks, nil
 }
 
 // listens to outputs arriving from consensus processes.
@@ -263,10 +260,14 @@ func (h *Hare) outputCollectionLoop() {
 	for {
 		select {
 		case out := <-h.outputChan:
-			err := h.collectOutput(out)
-			if err != nil {
-				h.Warning("Err collecting output from hare err: %v", err)
+			if out.Completed() { // CP completed, collect the output
+				err := h.collectOutput(out)
+				if err != nil {
+					h.Warning("Err collecting output from hare err: %v", err)
+				}
 			}
+
+			// anyway, unregister from broker
 			h.broker.Unregister(out.Id()) // unregister from broker after termination
 			metrics.TotalConsensusProcesses.Add(-1)
 		case <-h.CloseChannel():

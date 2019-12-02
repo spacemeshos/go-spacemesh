@@ -282,7 +282,6 @@ func TestBlockListener_ValidateVotesGoodFlow(t *testing.T) {
 	bl1.MeshDB.AddBlock(block5)
 	bl1.MeshDB.AddBlock(block6)
 	bl1.MeshDB.AddBlock(block7)
-
 	valid, err := validateVotes(block1, bl1.ForBlockInView, bl1.Hdist, log.New("", "", ""))
 	assert.NoError(t, err)
 	assert.True(t, valid)
@@ -333,8 +332,7 @@ func TestBlockListener_ValidateVotesBadFlow(t *testing.T) {
 	bl1.MeshDB.AddBlock(block6)
 	bl1.MeshDB.AddBlock(block7)
 	valid, err := validateVotes(block1, bl1.ForBlockInView, bl1.Hdist, log.New("", "", ""))
-	assert.NoError(t, err)
-	assert.True(t, valid)
+	assert.Error(t, err)
 	assert.False(t, valid)
 }
 
@@ -589,6 +587,7 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 	bl2 := ListenerFactory(n2, PeersMock{func() []p2p.Peer { return []p2p.Peer{n1.PublicKey()} }}, "TestBlockListener_ListenToGossipBlocks2", 1)
 
 	bl1.Start()
+	bl1.Syncer.Start()
 	bl2.Start()
 
 	tx, err := mesh.NewSignedTx(1, types.BytesToAddress([]byte{0x01}), 10, 100, 10, signing.NewEdSigner())
@@ -621,7 +620,7 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 
 	data, err := types.InterfaceToBytes(&blk)
 	require.NoError(t, err)
-
+	bl1.ForceSync()
 	err = n2.Broadcast(config.NewBlockProtocol, data)
 	assert.NoError(t, err)
 

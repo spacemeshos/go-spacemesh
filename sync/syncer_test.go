@@ -1071,7 +1071,7 @@ func TestSyncer_Synchronise2(t *testing.T) {
 	r.True(sync.gossipSynced == Done)
 }
 
-func TestSyncer_Synchronise3(t *testing.T) {
+func TestSyncer_ListenToGossip(t *testing.T) {
 	r := require.New(t)
 	syncs, _, _ := SyncMockFactory(1, conf, t.Name(), memoryDB, newMockPoetDb)
 	sync := syncs[0]
@@ -1079,41 +1079,15 @@ func TestSyncer_Synchronise3(t *testing.T) {
 	lv := &mockLayerValidator{0, 0, 0, nil}
 	sync.lValidator = lv
 	sync.currentLayer = 1
+	sync.SetLatestLayer(1)
 	r.False(sync.gossipSynced == Done)
+	assert.False(t, sync.ListenToGossip())
 
-	// current layer = 0
-	sync.currentLayer = 0
-	sync.syncRoutineWg.Add(1)
-	sync.Synchronise()
-	r.Equal(0, lv.countValidate)
-	r.True(sync.gossipSynced == Done)
+	//run sync
+	sync.getSyncRoutine()()
 
-	// current layer = 1
-	sync.currentLayer = 1
-	sync.syncRoutineWg.Add(1)
-	sync.Synchronise()
-	r.Equal(0, lv.countValidate)
-	r.True(sync.gossipSynced == Done)
-
-	// validated layer = 5 && current layer = 6 -> don't call validate
-	lv = &mockLayerValidator{5, 0, 0, nil}
-	sync.lValidator = lv
-	sync.currentLayer = 6
-	sync.syncRoutineWg.Add(1)
-	sync.SetLatestLayer(5)
-	sync.Synchronise()
-	r.Equal(0, lv.countValidate)
-	r.True(sync.gossipSynced == Done)
-
-	// current layer != 1 && weakly-synced
-	lv = &mockLayerValidator{0, 0, 0, nil}
-	sync.lValidator = lv
-	sync.currentLayer = 2
-	sync.SetLatestLayer(2)
-	sync.syncRoutineWg.Add(1)
-	sync.Synchronise()
-	r.Equal(1, lv.countValidate)
-	r.True(sync.gossipSynced == Done)
+	//check gossip open
+	assert.True(t, sync.ListenToGossip())
 }
 
 func TestSyncer_handleNotSyncedFlow(t *testing.T) {
