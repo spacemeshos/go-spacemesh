@@ -147,6 +147,10 @@ func AddCommands(cmd *cobra.Command) {
 		config.HARE.WakeupDelta, "Wakeup delta after tick for hare protocol")
 	cmd.PersistentFlags().IntVar(&config.HARE.ExpectedLeaders, "hare-exp-leaders",
 		config.HARE.ExpectedLeaders, "The expected number of leaders in the hare protocol")
+	cmd.PersistentFlags().IntVar(&config.HARE.LimitIterations, "hare-limit-iterations",
+		config.HARE.LimitIterations, "The limit of the number of iteration per consensus process")
+	cmd.PersistentFlags().IntVar(&config.HARE.LimitConcurrent, "hare-limit-concurrent",
+		config.HARE.LimitConcurrent, "The number of consensus processes running concurrently")
 
 	/**======================== Hare Eligibility Oracle Flags ========================== **/
 

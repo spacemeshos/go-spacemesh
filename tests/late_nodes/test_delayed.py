@@ -86,11 +86,12 @@ def test_add_delayed_nodes(init_session, add_curl, setup_bootstrap, start_poet, 
 
     print("Done adding clients. Going to wait for two epochs")
     # wait two more epochs
-    sleep_and_print(2*epochDuration)
+    waitEpochs = 3
+    sleep_and_print(waitEpochs*epochDuration)
 
     # total = bootstrap + first clients + added clients
     total = 1 + startCount + count * numToAdd
-    totalEpochs = 1 + count + 2
+    totalEpochs = 1 + count + waitEpochs  # first epoch + number of epochs adding clients + waited epochs
     totalLayers = layersPerEpoch * totalEpochs
     firstLayerOfLastEpoch = totalLayers-layersPerEpoch
     f = int(testconfig['client']['args']['hare-max-adversaries'])
@@ -100,6 +101,6 @@ def test_add_delayed_nodes(init_session, add_curl, setup_bootstrap, start_poet, 
     time.sleep(layerDuration)  # wait one layer for logs to propagate
 
     print("Running validation")
-    expect_hare(current_index, ns, firstLayerOfLastEpoch, totalLayers-1, total, f) # validate hare
+    expect_hare(current_index, ns, firstLayerOfLastEpoch, totalLayers-1, total, f)  # validate hare
     atxLastEpoch = query_atx_published(current_index, ns, firstLayerOfLastEpoch)
     assert len(atxLastEpoch) == total # validate #atxs in last epoch

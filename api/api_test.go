@@ -77,6 +77,10 @@ type TxAPIMock struct {
 	layerApplied map[types.TransactionId]*types.LayerID
 }
 
+func (t *TxAPIMock) GetProjection(addr types.Address, prevNonce, prevBalance uint64) (nonce, balance uint64, err error) {
+	return prevNonce, prevBalance, nil
+}
+
 func (t *TxAPIMock) ValidatedLayer() types.LayerID {
 	return ValidatedLayerId
 }
