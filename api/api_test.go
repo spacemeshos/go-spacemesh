@@ -222,6 +222,7 @@ func TestJsonApi(t *testing.T) {
 }
 
 func TestJsonWalletApi(t *testing.T) {
+	r := require.New(t)
 	shutDown := launchServer(t)
 
 	addrBytes := []byte{0x01}
@@ -233,11 +234,11 @@ func TestJsonWalletApi(t *testing.T) {
 	payload := marshalProto(t, &pb.AccountId{Address: util.Bytes2Hex(addrBytes)})
 
 	respBody, respStatus := callEndpoint(t, "v1/nonce", payload)
-	require.Equal(t, http.StatusOK, respStatus)
+	r.Equal(http.StatusOK, respStatus)
 	assertSimpleMessage(t, respBody, "10")
 
 	respBody, respStatus = callEndpoint(t, "v1/balance", payload)
-	require.Equal(t, http.StatusOK, respStatus)
+	r.Equal(http.StatusOK, respStatus)
 	assertSimpleMessage(t, respBody, "100")
 
 	// Test submit transaction
@@ -246,53 +247,53 @@ func TestJsonWalletApi(t *testing.T) {
 	// test start mining
 	initPostRequest := pb.InitPost{Coinbase: "0x1234", LogicalDrive: "/tmp/aaa", CommitmentSize: 2048}
 	respBody, respStatus = callEndpoint(t, "v1/startmining", marshalProto(t, &initPostRequest))
-	require.Equal(t, http.StatusOK, respStatus)
+	r.Equal(http.StatusOK, respStatus)
 	assertSimpleMessage(t, respBody, "ok")
 
 	// test get statistics about init progress
 	respBody, respStatus = callEndpoint(t, "v1/stats", "")
-	require.Equal(t, http.StatusOK, respStatus)
+	r.Equal(http.StatusOK, respStatus)
 
 	var stats pb.MiningStats
-	require.NoError(t, jsonpb.UnmarshalString(respBody, &stats))
+	r.NoError(jsonpb.UnmarshalString(respBody, &stats))
 
-	require.Equal(t, int32(1), stats.Status)
-	require.Equal(t, "/tmp", stats.DataDir)
-	require.Equal(t, "123456", stats.Coinbase)
+	r.Equal(int32(1), stats.Status)
+	r.Equal("/tmp", stats.DataDir)
+	r.Equal("123456", stats.Coinbase)
 
 	// test get genesisTime
 	respBody, respStatus = callEndpoint(t, "v1/genesis", "")
-	require.Equal(t, http.StatusOK, respStatus)
+	r.Equal(http.StatusOK, respStatus)
 	assertSimpleMessage(t, respBody, genTime.t.String())
 
 	// test get rewards per account
 	payload = marshalProto(t, &pb.AccountId{Address: util.Bytes2Hex(addrBytes)})
 	respBody, respStatus = callEndpoint(t, "v1/accountrewards", payload)
-	require.Equal(t, http.StatusOK, respStatus)
+	r.Equal(http.StatusOK, respStatus)
 
 	var rewards pb.AccountRewards
-	require.NoError(t, jsonpb.UnmarshalString(respBody, &rewards))
-	require.Empty(t, rewards.Rewards) // TODO: Test with actual data returned
+	r.NoError(jsonpb.UnmarshalString(respBody, &rewards))
+	r.Empty(rewards.Rewards) // TODO: Test with actual data returned
 
 	// test get txs per account
 	payload = marshalProto(t, &pb.GetTxsSinceLayer{Account: &pb.AccountId{Address: util.Bytes2Hex(addrBytes)}, StartLayer: 1})
 	respBody, respStatus = callEndpoint(t, "v1/accounttxs", payload)
-	require.Equal(t, http.StatusOK, respStatus)
+	r.Equal(http.StatusOK, respStatus)
 
 	var accounts pb.AccountTxs
-	require.NoError(t, jsonpb.UnmarshalString(respBody, &accounts))
-	require.Empty(t, accounts.Txs) // TODO: Test with actual data returned
+	r.NoError(jsonpb.UnmarshalString(respBody, &accounts))
+	r.Empty(accounts.Txs) // TODO: Test with actual data returned
 
 	// test get txs per account with wrong layer error
 	payload = marshalProto(t, &pb.GetTxsSinceLayer{Account: &pb.AccountId{Address: util.Bytes2Hex(addrBytes)}, StartLayer: 11})
 	respBody, respStatus = callEndpoint(t, "v1/accounttxs", payload)
-	require.Equal(t, http.StatusInternalServerError, respStatus)
+	r.Equal(http.StatusInternalServerError, respStatus)
 	const ErrInvalidStartLayer = "{\"error\":\"invalid start layer\",\"message\":\"invalid start layer\",\"code\":2}"
-	require.Equal(t, ErrInvalidStartLayer, respBody)
+	r.Equal(ErrInvalidStartLayer, respBody)
 
 	// test call reset post
 	respBody, respStatus = callEndpoint(t, "v1/resetpost", "")
-	require.Equal(t, http.StatusOK, respStatus)
+	r.Equal(http.StatusOK, respStatus)
 
 	// stop the services
 	shutDown()
