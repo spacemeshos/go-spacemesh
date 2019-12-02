@@ -154,7 +154,7 @@ func (s *Syncer) weaklySynced() bool {
 	return s.LatestLayer()+1 >= s.lastTickedLayer()
 }
 
-func (s *Syncer) getGossipSynced() Status {
+func (s *Syncer) getGossipStatus() Status {
 	s.gossipLock.RLock()
 	b := s.gossipSynced
 	s.gossipLock.RUnlock()
@@ -163,7 +163,7 @@ func (s *Syncer) getGossipSynced() Status {
 
 //api for other modules to check if they should listen to gossip
 func (s *Syncer) ListenToGossip() bool {
-	return s.getGossipSynced() != Pending
+	return s.getGossipStatus() != Pending
 }
 
 func (s *Syncer) setGossipStatus(b Status) {
@@ -174,7 +174,7 @@ func (s *Syncer) setGossipStatus(b Status) {
 
 func (s *Syncer) IsSynced() bool {
 	s.Log.Info("latest: %v, maxSynced %v", s.LatestLayer(), s.lastTickedLayer())
-	return s.weaklySynced() && s.getGossipSynced() == Done
+	return s.weaklySynced() && s.getGossipStatus() == Done
 }
 
 func (s *Syncer) Start() {
