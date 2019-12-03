@@ -40,7 +40,7 @@ type MeshDB struct {
 func NewPersistentMeshDB(path string, log log.Log) (*MeshDB, error) {
 	bdb, err := database.NewLDBDatabase(path+"blocks", 0, 0, log)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize transactions db: %v", err)
+		return nil, fmt.Errorf("failed to initialize blocks db: %v", err)
 	}
 	ldb, err := database.NewLDBDatabase(path+"layers", 0, 0, log)
 	if err != nil {
@@ -56,11 +56,11 @@ func NewPersistentMeshDB(path string, log log.Log) (*MeshDB, error) {
 	}
 	gdb, err := database.NewLDBDatabase(path+"general", 0, 0, log)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize transactions db: %v", err)
+		return nil, fmt.Errorf("failed to initialize general db: %v", err)
 	}
 	utx, err := database.NewLDBDatabase(path+"unappliedTxs", 0, 0, log)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize mesh transactions db: %v", err)
+		return nil, fmt.Errorf("failed to initialize mesh unappliedTxs db: %v", err)
 	}
 
 	ll := &MeshDB{
