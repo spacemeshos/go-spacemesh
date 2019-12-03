@@ -84,6 +84,7 @@ type swarm struct {
 	peerLock   sync.RWMutex
 	newPeerSub []chan p2pcrypto.PublicKey
 	delPeerSub []chan p2pcrypto.PublicKey
+	pq         *gossip.PriorityQ
 }
 
 func (s *swarm) waitForBoot() error {
@@ -178,7 +179,8 @@ func newSwarm(ctx context.Context, config config.Config, newNode bool, persist b
 
 	s.cPool = cpool
 
-	s.gossip = gossip.NewProtocol(config.SwarmConfig, s, s.LocalNode().PublicKey(), s.lNode.Log)
+	s.pq = gossip.NewPriorityQ(2) // TODO: set according to
+	s.gossip = gossip.NewProtocol(config.SwarmConfig, s, s.LocalNode().PublicKey(), s.pq, s.lNode.Log)
 
 	s.lNode.Debug("Created swarm for local node %s, %s", l.String())
 	return s, nil
@@ -370,9 +372,12 @@ func (s *swarm) RegisterDirectProtocol(protocol string) chan service.DirectMessa
 }
 
 // RegisterGossipProtocol registers an handler for gossip based `protocol`
-func (s *swarm) RegisterGossipProtocol(protocol string) chan service.GossipMessage {
+func (s *swarm) RegisterGossipProtocol(protocol string, prio int) chan service.GossipMessage {
 	mchan := make(chan service.GossipMessage, s.config.BufferSize)
 	s.protocolHandlerMutex.Lock()
+	if err := s.pq.Set(protocol, prio, cap(mchan)); err != nil {
+		s.lNode.With().Error("fatal: could not register protocol", log.Err(err), log.String("protocol_name", protocol))
+	}
 	s.gossipProtocolHandlers[protocol] = mchan
 	s.protocolHandlerMutex.Unlock()
 	return mchan

@@ -41,10 +41,11 @@ type Protocol struct {
 	oldMessageQ *types.DoubleCache
 
 	propagateQ chan service.MessageValidation
+	pq         *PriorityQ
 }
 
 // NewProtocol creates a new gossip protocol instance. Call Start to start reading peers
-func NewProtocol(config config.SwarmConfig, base baseNetwork, localNodePubkey p2pcrypto.PublicKey, log2 log.Log) *Protocol {
+func NewProtocol(config config.SwarmConfig, base baseNetwork, localNodePubkey p2pcrypto.PublicKey, pq *PriorityQ, log2 log.Log) *Protocol {
 	// intentionally not subscribing to peers events so that the channels won't block in case executing Start delays
 	return &Protocol{
 		Log:             log2,
@@ -55,6 +56,7 @@ func NewProtocol(config config.SwarmConfig, base baseNetwork, localNodePubkey p2
 		shutdown:        make(chan struct{}),
 		oldMessageQ:     types.NewDoubleCache(oldMessageCacheSize), // todo : remember to drain this
 		propagateQ:      make(chan service.MessageValidation, propagateHandleBufferSize),
+		pq:              pq,
 	}
 }
 
@@ -163,15 +165,27 @@ func (prot *Protocol) processMessage(sender p2pcrypto.PublicKey, protocol string
 	return prot.net.ProcessGossipProtocolMessage(sender, protocol, msg, prot.propagateQ)
 }
 
+func (prot *Protocol) handlePQ() {
+	for {
+		m := prot.pq.Read().(service.MessageValidation)
+		h := types.CalcMessageHash12(m.Message(), m.Protocol())
+		prot.propagateMessage(m.Message(), h, m.Protocol(), m.Sender())
+	}
+}
+
 func (prot *Protocol) propagationEventLoop() {
+	go prot.handlePQ()
+
 	var err error
 loop:
 	for {
 		select {
 		case msgV := <-prot.propagateQ:
-			h := types.CalcMessageHash12(msgV.Message(), msgV.Protocol())
 			prot.Log.With().Debug("new_gossip_message_relay", log.String("protocol", msgV.Protocol()), log.String("hash", util.Bytes2Hex(h[:])))
-			prot.propagateMessage(msgV.Message(), h, msgV.Protocol(), msgV.Sender())
+			if err := prot.pq.Write(msgV.Protocol(), msgV); err != nil {
+				prot.With().Error("fatal: could not write to priority queue", log.Err(err), log.String("protocol", msgV.Protocol()))
+			}
+
 		case <-prot.shutdown:
 			err = errors.New("protocol shutdown")
 			break loop
