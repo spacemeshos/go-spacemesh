@@ -32,6 +32,7 @@ class ES:
     def get_search_api(self):
         return self.es
 
+
 @singleton
 class Context:
 

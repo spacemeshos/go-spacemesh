@@ -58,7 +58,7 @@ def poll_query_message(indx, namespace, client_po_name, fields, findFails=False,
             break
 
         time.sleep(10)
-        time_passed+=10
+        time_passed += 10
         hits = query_message(indx, namespace, client_po_name, fields, findFails, startTime)
     return hits
 
