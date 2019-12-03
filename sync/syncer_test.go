@@ -3,7 +3,6 @@ package sync
 import (
 	"errors"
 	"fmt"
-	"github.com/google/uuid"
 	"github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -187,14 +186,13 @@ func TestSyncer_Close(t *testing.T) {
 func TestSyncProtocol_BlockRequest(t *testing.T) {
 	signer := signing.NewEdSigner()
 	atx1 := atx(signer.PublicKey().String())
-	_, err := types.SignAtx(signer, atx1)
+	_, err := activation.SignAtx(signer, atx1)
 	assert.NoError(t, err)
 	syncs, nodes, _ := SyncMockFactory(2, conf, t.Name(), memoryDB, newMockPoetDb)
 	syncObj := syncs[0]
 	syncObj2 := syncs[1]
 	defer syncObj.Close()
-	lid := types.LayerID(1)
-	block := types.NewExistingBlock(types.BlockID(uuid.New().ID()), lid, []byte("data data data"))
+	block := types.NewExistingBlock(1, []byte(rand.RandString(8)))
 
 	syncObj.AddBlockWithTxs(block, []*types.Transaction{tx1}, []*types.ActivationTx{atx1})
 	syncObj2.Peers = getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
@@ -202,12 +200,13 @@ func TestSyncProtocol_BlockRequest(t *testing.T) {
 	ch := make(chan []types.Hash32, 1)
 	ch <- []types.Hash32{block.Hash32()}
 
-	output := fetchWithFactory(NewFetchWorker(syncObj2, 1, newFetchReqFactory(BLOCK, blocksAsItems), ch))
+	output := fetchWithFactory(NewFetchWorker(syncObj2, 1, newFetchReqFactory(BLOCK, blocksAsItems), ch, ""))
 
 	timeout := time.NewTimer(2 * time.Second)
-
+	emptyId := types.BlockID{}
 	select {
 	case a := <-output:
+		assert.NotEqual(t, a.(fetchJob).items[0].(*types.Block).Id(), emptyId, "id not set")
 		assert.Equal(t, a.(fetchJob).ids[0], block.Hash32(), "wrong block")
 	case <-timeout.C:
 		assert.Fail(t, "no message received on channel")
@@ -219,14 +218,14 @@ func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 	syncs, nodes, _ := SyncMockFactory(2, conf, t.Name(), memoryDB, newMockPoetDb)
 	signer := signing.NewEdSigner()
 	atx1 := atx(signer.PublicKey().String())
-	_, err := types.SignAtx(signer, atx1)
+	_, err := activation.SignAtx(signer, atx1)
 	assert.NoError(t, err)
 	syncObj1 := syncs[0]
 	defer syncObj1.Close()
 	syncObj2 := syncs[1]
 	defer syncObj2.Close()
 	lid := types.LayerID(1)
-	block := types.NewExistingBlock(types.BlockID(123), lid, nil)
+	block := types.NewExistingBlock(1, []byte(rand.RandString(8)))
 	syncObj1.AddBlockWithTxs(block, []*types.Transaction{tx1}, []*types.ActivationTx{atx1})
 	//syncObj1.ValidateLayer(l) //this is to simulate the approval of the tortoise...
 	timeout := time.NewTimer(2 * time.Second)
@@ -285,7 +284,7 @@ func TestSyncer_SyncAtxs_FetchPoetProof(t *testing.T) {
 
 	atx1 := atx(signer.PublicKey().String())
 	atx1.Nipst.PostProof.Challenge = poetRef[:]
-	_, err = types.SignAtx(signer, atx1)
+	_, err = activation.SignAtx(signer, atx1)
 	r.NoError(err)
 	err = s0.AtxDB.ProcessAtxs([]*types.ActivationTx{atx1})
 	r.NoError(err)
@@ -337,16 +336,16 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 	defer syncObj1.Close()
 	lid := types.LayerID(1)
 	layer := types.NewExistingLayer(lid, make([]*types.Block, 0, 10))
-	block1 := types.NewExistingBlock(types.BlockID(123), lid, nil)
+	block1 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
 	syncObj1.AddBlockWithTxs(block1, []*types.Transaction{tx1}, []*types.ActivationTx{atx1})
 
-	block2 := types.NewExistingBlock(types.BlockID(132), lid, nil)
+	block2 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
 	syncObj1.AddBlockWithTxs(block2, []*types.Transaction{tx2}, []*types.ActivationTx{atx2})
 
-	block3 := types.NewExistingBlock(types.BlockID(153), lid, nil)
+	block3 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
 	syncObj1.AddBlockWithTxs(block3, []*types.Transaction{tx3}, []*types.ActivationTx{atx3})
 
-	block4 := types.NewExistingBlock(types.BlockID(222), lid, nil)
+	block4 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
 
 	syncObj1.AddBlockWithTxs(block4, []*types.Transaction{tx4}, []*types.ActivationTx{atx4})
 
@@ -361,7 +360,7 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 		for _, a := range layer.Blocks() {
 			found := false
 			for _, id := range ids {
-				if a.ID() == types.BlockID(id) {
+				if a.Id() == types.BlockID(id) {
 					found = true
 					break
 				}
@@ -392,12 +391,15 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 
 	err := syncObj1.ProcessAtxs([]*types.ActivationTx{atx3})
 	assert.NoError(t, err)
-	block1 := types.NewExistingBlock(types.BlockID(123), 0, nil)
+	block1 := types.NewExistingBlock(0, []byte(rand.RandString(8)))
 	block1.ATXID = atx3.Id()
-	block2 := types.NewExistingBlock(types.BlockID(321), 1, nil)
+	block2 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
 	block2.ATXID = atx3.Id()
-	block3 := types.NewExistingBlock(types.BlockID(222), 2, nil)
+	block3 := types.NewExistingBlock(2, []byte(rand.RandString(8)))
 	block3.ATXID = atx3.Id()
+	block1.CalcAndSetId()
+	block2.CalcAndSetId()
+	block3.CalcAndSetId()
 
 	syncObj1.AddBlockWithTxs(block1, []*types.Transaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8}, []*types.ActivationTx{atx1})
 	syncObj1.AddBlockWithTxs(block2, []*types.Transaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8}, []*types.ActivationTx{atx2})
@@ -408,7 +410,7 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	ch <- []types.Hash32{block2.Hash32()}
 	ch <- []types.Hash32{block3.Hash32()}
 	close(ch)
-	output := fetchWithFactory(NewFetchWorker(syncObj2, 1, newFetchReqFactory(BLOCK, blocksAsItems), ch))
+	output := fetchWithFactory(NewFetchWorker(syncObj2, 1, newFetchReqFactory(BLOCK, blocksAsItems), ch, ""))
 
 	for out := range output {
 		block := out.(fetchJob).items[0].(*types.Block)
@@ -445,21 +447,21 @@ func TestSyncProtocol_SyncNodes(t *testing.T) {
 
 	signer := signing.NewEdSigner()
 
-	block3 := types.NewExistingBlock(types.BlockID(333), 1, nil)
+	block3 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
 	block3.Signature = signer.Sign(block3.Bytes())
-	block4 := types.NewExistingBlock(types.BlockID(444), 1, nil)
+	block4 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
 	block4.Signature = signer.Sign(block4.Bytes())
-	block5 := types.NewExistingBlock(types.BlockID(555), 2, nil)
+	block5 := types.NewExistingBlock(2, []byte(rand.RandString(8)))
 	block5.Signature = signer.Sign(block5.Bytes())
-	block6 := types.NewExistingBlock(types.BlockID(666), 2, nil)
+	block6 := types.NewExistingBlock(2, []byte(rand.RandString(8)))
 	block6.Signature = signer.Sign(block6.Bytes())
-	block7 := types.NewExistingBlock(types.BlockID(777), 3, nil)
+	block7 := types.NewExistingBlock(3, []byte(rand.RandString(8)))
 	block7.Signature = signer.Sign(block7.Bytes())
-	block8 := types.NewExistingBlock(types.BlockID(888), 3, nil)
+	block8 := types.NewExistingBlock(3, []byte(rand.RandString(8)))
 	block8.Signature = signer.Sign(block8.Bytes())
-	block9 := types.NewExistingBlock(types.BlockID(999), 4, nil)
+	block9 := types.NewExistingBlock(4, []byte(rand.RandString(8)))
 	block9.Signature = signer.Sign(block9.Bytes())
-	block10 := types.NewExistingBlock(types.BlockID(101), 5, nil)
+	block10 := types.NewExistingBlock(5, []byte(rand.RandString(8)))
 	block10.Signature = signer.Sign(block10.Bytes())
 
 	syncObj1.AddBlockWithTxs(block3, []*types.Transaction{tx1, tx2, tx3}, []*types.ActivationTx{})
@@ -536,37 +538,37 @@ func syncTest(dpType string, t *testing.T) {
 
 	signer := signing.NewEdSigner()
 
-	block2 := types.NewExistingBlock(types.BlockID(222), 0, nil)
+	block2 := types.NewExistingBlock(0, []byte(rand.RandString(8)))
 	block2.Signature = signer.Sign(block2.Bytes())
 
-	block3 := types.NewExistingBlock(types.BlockID(333), 1, nil)
+	block3 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
 	block3.Signature = signer.Sign(block3.Bytes())
 
-	block4 := types.NewExistingBlock(types.BlockID(444), 1, nil)
+	block4 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
 	block4.Signature = signer.Sign(block4.Bytes())
 
-	block5 := types.NewExistingBlock(types.BlockID(555), 2, nil)
+	block5 := types.NewExistingBlock(2, []byte(rand.RandString(8)))
 	block5.Signature = signer.Sign(block5.Bytes())
 
-	block6 := types.NewExistingBlock(types.BlockID(666), 2, nil)
+	block6 := types.NewExistingBlock(2, []byte(rand.RandString(8)))
 	block6.Signature = signer.Sign(block6.Bytes())
 
-	block7 := types.NewExistingBlock(types.BlockID(777), 3, nil)
+	block7 := types.NewExistingBlock(3, []byte(rand.RandString(8)))
 	block7.Signature = signer.Sign(block7.Bytes())
 
-	block8 := types.NewExistingBlock(types.BlockID(888), 3, nil)
+	block8 := types.NewExistingBlock(3, []byte(rand.RandString(8)))
 	block8.Signature = signer.Sign(block8.Bytes())
 
-	block9 := types.NewExistingBlock(types.BlockID(999), 4, nil)
+	block9 := types.NewExistingBlock(4, []byte(rand.RandString(8)))
 	block9.Signature = signer.Sign(block9.Bytes())
 
-	block10 := types.NewExistingBlock(types.BlockID(101), 4, nil)
+	block10 := types.NewExistingBlock(4, []byte(rand.RandString(8)))
 	block10.Signature = signer.Sign(block10.Bytes())
 
-	block11 := types.NewExistingBlock(types.BlockID(101), 5, nil)
+	block11 := types.NewExistingBlock(5, []byte(rand.RandString(8)))
 	block10.Signature = signer.Sign(block10.Bytes())
 
-	block12 := types.NewExistingBlock(types.BlockID(101), 6, nil)
+	block12 := types.NewExistingBlock(6, []byte(rand.RandString(8)))
 	block10.Signature = signer.Sign(block10.Bytes())
 
 	syncObj1.ValidateLayer(mesh.GenesisLayer())
@@ -667,25 +669,25 @@ func (sis *syncIntegrationTwoNodes) TestSyncProtocol_TwoNodes() {
 	t := sis.T()
 	signer := signing.NewEdSigner()
 
-	block1 := types.NewExistingBlock(types.BlockID(111), 1, nil)
+	block1 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
 	block1.Signature = signer.Sign(block1.Bytes())
-	block2 := types.NewExistingBlock(types.BlockID(222), 1, nil)
+	block2 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
 	block2.Signature = signer.Sign(block2.Bytes())
-	block3 := types.NewExistingBlock(types.BlockID(333), 2, nil)
+	block3 := types.NewExistingBlock(2, []byte(rand.RandString(8)))
 	block3.Signature = signer.Sign(block3.Bytes())
-	block4 := types.NewExistingBlock(types.BlockID(444), 2, nil)
+	block4 := types.NewExistingBlock(2, []byte(rand.RandString(8)))
 	block4.Signature = signer.Sign(block4.Bytes())
-	block5 := types.NewExistingBlock(types.BlockID(555), 3, nil)
+	block5 := types.NewExistingBlock(3, []byte(rand.RandString(8)))
 	block5.Signature = signer.Sign(block5.Bytes())
-	block6 := types.NewExistingBlock(types.BlockID(666), 3, nil)
+	block6 := types.NewExistingBlock(3, []byte(rand.RandString(8)))
 	block6.Signature = signer.Sign(block6.Bytes())
-	block7 := types.NewExistingBlock(types.BlockID(777), 4, nil)
+	block7 := types.NewExistingBlock(4, []byte(rand.RandString(8)))
 	block7.Signature = signer.Sign(block7.Bytes())
-	block8 := types.NewExistingBlock(types.BlockID(888), 4, nil)
+	block8 := types.NewExistingBlock(4, []byte(rand.RandString(8)))
 	block8.Signature = signer.Sign(block8.Bytes())
-	block9 := types.NewExistingBlock(types.BlockID(999), 5, nil)
+	block9 := types.NewExistingBlock(5, []byte(rand.RandString(8)))
 	block9.Signature = signer.Sign(block9.Bytes())
-	block10 := types.NewExistingBlock(types.BlockID(101), 5, nil)
+	block10 := types.NewExistingBlock(5, []byte(rand.RandString(8)))
 	block10.Signature = signer.Sign(block10.Bytes())
 
 	syncObj0 := sis.syncers[0]
@@ -710,6 +712,17 @@ func (sis *syncIntegrationTwoNodes) TestSyncProtocol_TwoNodes() {
 	block6.TxIds = []types.TransactionId{id4, id5, id6}
 	block7.TxIds = []types.TransactionId{id7, id8}
 	block8.TxIds = []types.TransactionId{id7, id8}
+
+	block1.CalcAndSetId()
+	block2.CalcAndSetId()
+	block3.CalcAndSetId()
+	block4.CalcAndSetId()
+	block5.CalcAndSetId()
+	block6.CalcAndSetId()
+	block7.CalcAndSetId()
+	block8.CalcAndSetId()
+	block9.CalcAndSetId()
+	block10.CalcAndSetId()
 
 	syncObj2.AddBlock(block1)
 	syncObj2.AddBlock(block2)
@@ -781,25 +794,25 @@ func (sis *syncIntegrationMultipleNodes) TestSyncProtocol_MultipleNodes() {
 	t := sis.T()
 	signer := signing.NewEdSigner()
 
-	block2 := types.NewExistingBlock(types.BlockID(222), 0, nil)
+	block2 := types.NewExistingBlock(0, []byte(rand.RandString(8)))
 	block2.Signature = signer.Sign(block2.Bytes())
 
-	block3 := types.NewExistingBlock(types.BlockID(333), 1, nil)
+	block3 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
 	block3.Signature = signer.Sign(block3.Bytes())
 
-	block4 := types.NewExistingBlock(types.BlockID(444), 2, nil)
+	block4 := types.NewExistingBlock(2, []byte(rand.RandString(8)))
 	block4.Signature = signer.Sign(block4.Bytes())
 
-	block5 := types.NewExistingBlock(types.BlockID(555), 3, nil)
+	block5 := types.NewExistingBlock(3, []byte(rand.RandString(8)))
 	block5.Signature = signer.Sign(block5.Bytes())
 
-	block6 := types.NewExistingBlock(types.BlockID(666), 3, nil)
+	block6 := types.NewExistingBlock(3, []byte(rand.RandString(8)))
 	block6.Signature = signer.Sign(block6.Bytes())
 
-	block7 := types.NewExistingBlock(types.BlockID(777), 4, nil)
+	block7 := types.NewExistingBlock(4, []byte(rand.RandString(8)))
 	block7.Signature = signer.Sign(block7.Bytes())
 
-	block8 := types.NewExistingBlock(types.BlockID(888), 4, nil)
+	block8 := types.NewExistingBlock(4, []byte(rand.RandString(8)))
 	block8.Signature = signer.Sign(block8.Bytes())
 
 	syncObj1 := sis.syncers[0]
@@ -870,21 +883,11 @@ end:
 func tx() *types.Transaction {
 	fee := rand.Uint64()
 	addr := rand.Int63n(1000000)
-	tx := types.NewTxWithOrigin(1, types.HexToAddress(RandStringRunes(8)),
-		types.HexToAddress(strconv.FormatUint(uint64(addr), 10)),
-		10, 100, fee)
-
-	return tx
-}
-
-var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
-
-func RandStringRunes(n int) string {
-	b := make([]rune, n)
-	for i := range b {
-		b[i] = letterRunes[rand.Intn(len(letterRunes))]
+	tx, err := mesh.NewSignedTx(1, types.HexToAddress(strconv.FormatUint(uint64(addr), 10)), 10, 100, fee, signing.NewEdSigner())
+	if err != nil {
+		log.Panic("failed to create transaction: %v", err)
 	}
-	return string(b)
+	return tx
 }
 
 func atx(pubkey string) *types.ActivationTx {
@@ -893,7 +896,7 @@ func atx(pubkey string) *types.ActivationTx {
 	poetRef := []byte{0xde, 0xad}
 	npst := activation.NewNIPSTWithChallenge(&chlng, poetRef)
 
-	atx := types.NewActivationTx(types.NodeId{Key: pubkey, VRFPublicKey: []byte(RandStringRunes(8))}, coinbase, 0, *types.EmptyAtxId, 5, 1, *types.EmptyAtxId, 0, []types.BlockID{1, 2, 3}, npst)
+	atx := types.NewActivationTx(types.NodeId{Key: pubkey, VRFPublicKey: []byte(rand.RandString(8))}, coinbase, 0, *types.EmptyAtxId, 5, 1, *types.EmptyAtxId, 0, nil, npst)
 	atx.Commitment = commitment
 	atx.CommitmentMerkleRoot = commitment.MerkleRoot
 	atx.CalcAndSetId()
@@ -916,7 +919,7 @@ func TestSyncer_Txs(t *testing.T) {
 	syncObj3.Peers = pm3 //override peers with mock
 	defer syncObj3.Close()
 
-	block3 := types.NewExistingBlock(types.BlockID(333), 1, nil)
+	block3 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
 	id1 := tx1.Id()
 	id2 := tx2.Id()
 	id3 := tx3.Id()
@@ -934,8 +937,8 @@ func TestFetchLayerBlockIds(t *testing.T) {
 	pm2 := getPeersMock([]p2p.Peer{nodes[2].PublicKey()})
 	pm3 := getPeersMock([]p2p.Peer{nodes[0].PublicKey(), nodes[1].PublicKey()})
 
-	block1 := types.NewExistingBlock(types.BlockID(111), 1, nil)
-	block2 := types.NewExistingBlock(types.BlockID(222), 1, nil)
+	block1 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
+	block2 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
 
 	syncObj1 := syncs[0]
 	syncObj1.Peers = pm1 //override peers with mock
@@ -951,19 +954,19 @@ func TestFetchLayerBlockIds(t *testing.T) {
 	syncObj2.AddBlock(block2)
 
 	mp := map[types.Hash32][]p2p.Peer{}
-	hash1, _ := types.CalcBlocksHash32([]types.BlockID{block1.ID()})
+	hash1, _ := types.CalcBlocksHash32([]types.BlockID{block1.Id()})
 	mp[hash1] = append(mp[hash1], nodes[0].PublicKey())
-	hash2, _ := types.CalcBlocksHash32([]types.BlockID{block2.ID()})
+	hash2, _ := types.CalcBlocksHash32([]types.BlockID{block2.Id()})
 	mp[hash2] = append(mp[hash2], nodes[1].PublicKey())
 	ids, _ := syncObj3.fetchLayerBlockIds(mp, 1)
 
 	assert.True(t, len(ids) == 2)
 
-	if ids[0] != 111 && ids[1] != 111 {
+	if ids[0] != block1.Id() && ids[1] != block1.Id() {
 		t.Error("did not get ids from all peers")
 	}
 
-	if ids[0] != 222 && ids[1] != 222 {
+	if ids[0] != block2.Id() && ids[1] != block2.Id() {
 		panic("did not get ids from all peers")
 	}
 
@@ -1004,9 +1007,9 @@ func TestSyncer_Synchronise(t *testing.T) {
 	r.Equal(1, lv.countValidated)
 	r.Equal(0, lv.countValidate)
 
-	sync.AddBlock(types.NewExistingBlock(types.BlockID(1), 1, nil))
-	sync.AddBlock(types.NewExistingBlock(types.BlockID(2), 2, nil))
-	sync.AddBlock(types.NewExistingBlock(types.BlockID(3), 3, nil))
+	sync.AddBlock(types.NewExistingBlock(1, []byte(rand.RandString(8))))
+	sync.AddBlock(types.NewExistingBlock(2, []byte(rand.RandString(8))))
+	sync.AddBlock(types.NewExistingBlock(3, []byte(rand.RandString(8))))
 	lv = &mockLayerValidator{1, 0, 0, nil}
 	sync.lValidator = lv
 	sync.currentLayer = 3
@@ -1027,7 +1030,7 @@ func TestSyncer_Synchronise2(t *testing.T) {
 	r := require.New(t)
 	syncs, _, _ := SyncMockFactory(1, conf, t.Name(), memoryDB, newMockPoetDb)
 	sync := syncs[0]
-	sync.AddBlockWithTxs(types.NewExistingBlock(1, 1, nil), nil, nil)
+	sync.AddBlockWithTxs(types.NewExistingBlock(1, []byte(rand.RandString(8))), nil, nil)
 	lv := &mockLayerValidator{0, 0, 0, nil}
 	sync.lValidator = lv
 	sync.currentLayer = 1
@@ -1095,13 +1098,13 @@ func TestSyncer_p2pSyncForTwoLayers(t *testing.T) {
 	//ch := ts.Subscribe()
 	msh := getMesh(memoryDB, Path+t.Name()+"_"+time.Now().String())
 
-	msh.AddBlock(types.NewExistingBlock(types.BlockID(1), 1, nil))
-	msh.AddBlock(types.NewExistingBlock(types.BlockID(2), 2, nil))
-	msh.AddBlock(types.NewExistingBlock(types.BlockID(3), 3, nil))
-	msh.AddBlock(types.NewExistingBlock(types.BlockID(4), 4, nil))
-	msh.AddBlock(types.NewExistingBlock(types.BlockID(5), 5, nil))
-	msh.AddBlock(types.NewExistingBlock(types.BlockID(6), 6, nil))
-	msh.AddBlock(types.NewExistingBlock(types.BlockID(7), 7, nil))
+	msh.AddBlock(types.NewExistingBlock(1, []byte(rand.RandString(8))))
+	msh.AddBlock(types.NewExistingBlock(2, []byte(rand.RandString(8))))
+	msh.AddBlock(types.NewExistingBlock(3, []byte(rand.RandString(8))))
+	msh.AddBlock(types.NewExistingBlock(4, []byte(rand.RandString(8))))
+	msh.AddBlock(types.NewExistingBlock(5, []byte(rand.RandString(8))))
+	msh.AddBlock(types.NewExistingBlock(6, []byte(rand.RandString(8))))
+	msh.AddBlock(types.NewExistingBlock(7, []byte(rand.RandString(8))))
 
 	sync := NewSync(net, msh, txpool, atxpool, blockValidator, newMockPoetDb(), conf, timer, l)
 	lv := &mockLayerValidator{0, 0, 0, nil}
@@ -1171,9 +1174,9 @@ func TestSyncer_ConcurrentSynchronise(t *testing.T) {
 	sync.currentLayer = 3
 	lv := &mockTimedValidator{1 * time.Second, 0}
 	sync.lValidator = lv
-	sync.AddBlock(types.NewExistingBlock(types.BlockID(1), 1, nil))
-	sync.AddBlock(types.NewExistingBlock(types.BlockID(2), 2, nil))
-	sync.AddBlock(types.NewExistingBlock(types.BlockID(3), 3, nil))
+	sync.AddBlock(types.NewExistingBlock(1, []byte(rand.RandString(8))))
+	sync.AddBlock(types.NewExistingBlock(2, []byte(rand.RandString(8))))
+	sync.AddBlock(types.NewExistingBlock(3, []byte(rand.RandString(8))))
 	f := sync.getSyncRoutine()
 	go f()
 	time.Sleep(100 * time.Millisecond)
@@ -1188,7 +1191,7 @@ func TestSyncProtocol_NilResponse(t *testing.T) {
 	defer syncs[1].Close()
 
 	var nonExistingLayerId = types.LayerID(0)
-	var nonExistingBlockId = types.BlockID(0)
+	var nonExistingBlockId = types.BlockID{}
 	var nonExistingTxId types.TransactionId
 	var nonExistingAtxId types.AtxId
 	var nonExistingPoetRef []byte
@@ -1224,7 +1227,7 @@ func TestSyncProtocol_NilResponse(t *testing.T) {
 	bch := make(chan []types.Hash32, 1)
 	bch <- []types.Hash32{nonExistingBlockId.AsHash32()}
 
-	output = fetchWithFactory(NewFetchWorker(syncs[0], 1, newFetchReqFactory(BLOCK, blocksAsItems), bch))
+	output = fetchWithFactory(NewFetchWorker(syncs[0], 1, newFetchReqFactory(BLOCK, blocksAsItems), bch, ""))
 
 	select {
 	case out := <-output:
@@ -1271,9 +1274,14 @@ func TestSyncProtocol_BadResponse(t *testing.T) {
 	timeout := 1 * time.Second
 	timeoutErrMsg := "no message received on channel"
 
-	syncs[1].AddBlock(types.NewExistingBlock(types.BlockID(1), 1, nil))
-	syncs[1].AddBlock(types.NewExistingBlock(types.BlockID(2), 1, nil))
-	syncs[1].AddBlock(types.NewExistingBlock(types.BlockID(3), 1, nil))
+	bl1 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
+	bl2 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
+	bl3 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
+
+	syncs[1].AddBlock(bl1)
+	syncs[1].AddBlock(bl2)
+	syncs[1].AddBlock(bl3)
+
 	//setup mocks
 
 	layerHashesMock := func([]byte) []byte {
@@ -1283,7 +1291,7 @@ func TestSyncProtocol_BadResponse(t *testing.T) {
 
 	blockHandlerMock := func([]byte) []byte {
 		t.Log("return fake block")
-		blk := types.NewExistingBlock(types.BlockID(8), 1, nil)
+		blk := types.NewExistingBlock(1, []byte(rand.RandString(8)))
 		byts, _ := types.InterfaceToBytes([]types.Block{*blk})
 		return byts
 	}
@@ -1313,9 +1321,8 @@ func TestSyncProtocol_BadResponse(t *testing.T) {
 
 	// Block
 	ch := make(chan []types.Hash32, 1)
-	bid := types.BlockID(1)
-	ch <- []types.Hash32{bid.AsHash32()}
-	output := fetchWithFactory(NewFetchWorker(syncs[0], 1, newFetchReqFactory(BLOCK, blocksAsItems), ch))
+	ch <- []types.Hash32{bl1.Id().AsHash32()}
+	output := fetchWithFactory(NewFetchWorker(syncs[0], 1, newFetchReqFactory(BLOCK, blocksAsItems), ch, ""))
 
 	select {
 	case out := <-output:
@@ -1327,7 +1334,7 @@ func TestSyncProtocol_BadResponse(t *testing.T) {
 	// Tx
 	ch = make(chan []types.Hash32, 1)
 	ch <- []types.Hash32{[32]byte{1}}
-	output = fetchWithFactory(NewFetchWorker(syncs[0], 1, newFetchReqFactory(TX, txsAsItems), ch))
+	output = fetchWithFactory(NewFetchWorker(syncs[0], 1, newFetchReqFactory(TX, txsAsItems), ch, ""))
 
 	select {
 	case out := <-output:
@@ -1339,7 +1346,7 @@ func TestSyncProtocol_BadResponse(t *testing.T) {
 	// Atx
 	ch = make(chan []types.Hash32, 1)
 	ch <- []types.Hash32{[32]byte{1}}
-	output = fetchWithFactory(NewFetchWorker(syncs[0], 1, newFetchReqFactory(ATX, atxsAsItems), ch))
+	output = fetchWithFactory(NewFetchWorker(syncs[0], 1, newFetchReqFactory(ATX, atxsAsItems), ch, ""))
 
 	select {
 	case out := <-output:

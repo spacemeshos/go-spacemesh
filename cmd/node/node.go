@@ -290,7 +290,7 @@ func (app *SpacemeshApp) setupGenesis() {
 	}
 
 	app.state.Commit(false)
-	app.mesh.AddBlock(&mesh.GenesisBlock)
+	app.mesh.AddBlock(mesh.GenesisBlock)
 }
 
 func (app *SpacemeshApp) setupTestFeatures() {
@@ -493,11 +493,11 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 		for _, b := range ids {
 			res, err := mdb.GetBlock(b)
 			if err != nil {
-				app.log.With().Error("failed to validate block", log.BlockId(uint64(b)))
+				app.log.With().Error("failed to validate block", log.BlockId(b.String()))
 				return false
 			}
 			if res == nil {
-				app.log.With().Error("failed to validate block (BUG BUG BUG - GetBlock return err nil and res nil)", log.BlockId(uint64(b)))
+				app.log.With().Error("failed to validate block (BUG BUG BUG - GetBlock return err nil and res nil)", log.BlockId(b.String()))
 				return false
 			}
 
@@ -505,6 +505,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 
 		return true
 	}
+
 	ha := hare.New(app.Config.HARE, swarm, sgn, nodeID, validationFunc, syncer.IsSynced, msh, hOracle, uint16(app.Config.LayersPerEpoch), idStore, hOracle, clock.Subscribe(), app.addLogger(HareLogger, lg))
 
 	stateAndMeshProjector := pending_txs.NewStateAndMeshProjector(st, msh)
@@ -802,7 +803,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	if apiConf.StartGrpcServer || apiConf.StartJSONServer {
 		// start grpc if specified or if json rpc specified
 		layerDuration := app.Config.LayerDurationSec
-		app.grpcAPIService = api.NewGrpcService(app.P2P, app.state, app.mesh, app.txPool, app.atxBuilder, app.oracle, app.clock, layerDuration, app)
+		app.grpcAPIService = api.NewGrpcService(app.P2P, app.state, app.mesh, app.txPool, app.atxBuilder, app.oracle, app.clock, postClient, layerDuration, app)
 		app.grpcAPIService.StartService()
 	}
 

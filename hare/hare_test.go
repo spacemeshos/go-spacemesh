@@ -1,8 +1,8 @@
 package hare
 
 import (
+	"bytes"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -21,16 +21,21 @@ func validateBlocks(blocks []types.BlockID) bool {
 	return true
 }
 
-type mockOutput struct {
+type mockReport struct {
 	id  instanceId
 	set *Set
+	c   bool
 }
 
-func (m mockOutput) Id() instanceId {
+func (m mockReport) Id() instanceId {
 	return m.id
 }
-func (m mockOutput) Set() *Set {
+func (m mockReport) Set() *Set {
 	return m.set
+}
+
+func (m mockReport) Completed() bool {
+	return m.c
 }
 
 type mockConsensusProcess struct {
@@ -46,7 +51,7 @@ func (mcp *mockConsensusProcess) Start() error {
 		<-mcp.term
 	}
 	mcp.Close()
-	mcp.t <- mockOutput{mcp.id, mcp.set}
+	mcp.t <- mockReport{mcp.id, mcp.set, true}
 	return nil
 }
 
@@ -113,18 +118,18 @@ func TestHare_GetResult(t *testing.T) {
 
 	h := createHare(n1)
 
-	res, err := h.GetResult(types.LayerID(0), types.LayerID(0))
-	r.Nil(err)
+	res, err := h.GetResult(types.LayerID(0))
+	r.Equal(errNoResult, err)
 	r.Nil(res)
 
 	mockid := instanceId(0)
 	set := NewSetFromValues(value1)
 
-	h.collectOutput(mockOutput{mockid, set})
+	h.collectOutput(mockReport{mockid, set, true})
 
-	res, err = h.GetResult(types.LayerID(0), types.LayerID(0))
+	res, err = h.GetResult(types.LayerID(0))
 	r.NoError(err)
-	r.True(uint32(res[0]) == uint32(set.values[value1.Id()].Bytes()[0]))
+	r.Equal(res[0].ToBytes(), value1.ToBytes())
 }
 
 func TestHare_GetResult2(t *testing.T) {
@@ -133,7 +138,7 @@ func TestHare_GetResult2(t *testing.T) {
 
 	om := new(orphanMock)
 	om.f = func() []types.BlockID {
-		return []types.BlockID{1}
+		return []types.BlockID{value1}
 	}
 
 	h := createHare(n1)
@@ -147,20 +152,20 @@ func TestHare_GetResult2(t *testing.T) {
 
 	h.Start()
 
-	for i := 1; i < h.bufferSize+1; i++ {
+	for i := 1; i <= h.bufferSize; i++ {
 		h.beginLayer <- types.LayerID(i)
 		time.Sleep(10 * time.Millisecond)
 	}
 	time.Sleep(100 * time.Millisecond)
 
-	_, err := h.GetResult(types.LayerID(h.bufferSize), types.LayerID(h.bufferSize))
+	_, err := h.GetResult(types.LayerID(h.bufferSize))
 	require.NoError(t, err)
 
 	h.beginLayer <- types.LayerID(h.bufferSize + 1)
 
 	time.Sleep(100 * time.Millisecond)
 
-	_, err = h.GetResult(0, 0)
+	_, err = h.GetResult(0)
 	require.Equal(t, err, ErrTooOld)
 }
 
@@ -171,13 +176,13 @@ func TestHare_collectOutputCheckValidation(t *testing.T) {
 	h := createHare(n1)
 
 	mockid := instanceId1
-	set := NewSetFromValues(blockID{0})
+	set := NewSetFromValues(value1)
 
 	// default validation is true
-	h.collectOutput(mockOutput{mockid, set})
+	h.collectOutput(mockReport{mockid, set, true})
 	output, ok := h.outputs[types.LayerID(mockid)]
 	require.True(t, ok)
-	require.Equal(t, output[0], types.BlockID(util.BytesToUint32(set.values[0].Bytes())))
+	require.Equal(t, output[0], value1)
 
 	// make sure we panic for false
 	defer func() {
@@ -187,7 +192,7 @@ func TestHare_collectOutputCheckValidation(t *testing.T) {
 	h.validate = func(blocks []types.BlockID) bool {
 		return false
 	}
-	h.collectOutput(mockOutput{mockid, set})
+	h.collectOutput(mockReport{mockid, set, true})
 	_, ok = h.outputs[types.LayerID(mockid)]
 	require.False(t, ok)
 }
@@ -199,12 +204,12 @@ func TestHare_collectOutput(t *testing.T) {
 	h := createHare(n1)
 
 	mockid := instanceId1
-	set := NewSetFromValues(blockID{0})
+	set := NewSetFromValues(value1)
 
-	h.collectOutput(mockOutput{mockid, set})
+	h.collectOutput(mockReport{mockid, set, true})
 	output, ok := h.outputs[types.LayerID(mockid)]
 	require.True(t, ok)
-	require.Equal(t, output[0], types.BlockID(util.BytesToUint32(set.values[0].Bytes())))
+	require.Equal(t, output[0], value1)
 
 	mockid = instanceId2
 
@@ -222,20 +227,20 @@ func TestHare_collectOutput2(t *testing.T) {
 	h.bufferSize = 1
 	h.lastLayer = 0
 	mockid := instanceId0
-	set := NewSetFromValues(blockID{0})
+	set := NewSetFromValues(value1)
 
-	h.collectOutput(mockOutput{mockid, set})
+	h.collectOutput(mockReport{mockid, set, true})
 	output, ok := h.outputs[types.LayerID(mockid)]
 	require.True(t, ok)
-	require.Equal(t, output[0], types.BlockID(util.BytesToUint32(set.values[0].Bytes())))
+	require.Equal(t, output[0], value1)
 
 	h.lastLayer = 3
 	newmockid := instanceId1
-	err := h.collectOutput(mockOutput{newmockid, set})
+	err := h.collectOutput(mockReport{newmockid, set, true})
 	require.Equal(t, err, ErrTooLate)
 
 	newmockid2 := instanceId2
-	err = h.collectOutput(mockOutput{newmockid2, set})
+	err = h.collectOutput(mockReport{newmockid2, set, true})
 	require.NoError(t, err)
 
 	_, ok = h.outputs[0]
@@ -249,7 +254,7 @@ func TestHare_OutputCollectionLoop(t *testing.T) {
 
 	h := createHare(n1)
 	h.Start()
-	mo := mockOutput{1, NewEmptySet(0)}
+	mo := mockReport{1, NewEmptySet(0), true}
 	h.broker.Register(mo.Id())
 	time.Sleep(1 * time.Second)
 	h.outputChan <- mo
@@ -272,7 +277,7 @@ func TestHare_onTick(t *testing.T) {
 	oracle := newMockHashOracle(numOfClients)
 	signing := signing2.NewEdSigner()
 
-	blockset := []types.BlockID{types.BlockID(0), types.BlockID(1), types.BlockID(2)}
+	blockset := []types.BlockID{value1, value2, value3}
 	om := new(orphanMock)
 	om.f = func() []types.BlockID {
 		return blockset
@@ -306,7 +311,7 @@ func TestHare_onTick(t *testing.T) {
 	//collect output one more time
 	wg.Wait()
 	time.Sleep(100 * time.Millisecond)
-	res2, err := h.GetResult(types.LayerID(1), types.LayerID(1))
+	res2, err := h.GetResult(types.LayerID(1))
 	require.NoError(t, err)
 
 	SortBlockIDs(res2)
@@ -324,8 +329,8 @@ func TestHare_onTick(t *testing.T) {
 
 	//collect output one more time
 	wg.Wait()
-	res, err := h.GetResult(types.LayerID(2), types.LayerID(2))
-	require.Nil(t, err)
+	res, err := h.GetResult(types.LayerID(2))
+	require.Equal(t, errNoResult, err)
 	require.Equal(t, []types.BlockID(nil), res)
 
 }
@@ -333,7 +338,7 @@ func TestHare_onTick(t *testing.T) {
 type BlockIDSlice []types.BlockID
 
 func (p BlockIDSlice) Len() int           { return len(p) }
-func (p BlockIDSlice) Less(i, j int) bool { return p[i] < p[j] }
+func (p BlockIDSlice) Less(i, j int) bool { return bytes.Compare(p[i].ToBytes(), p[j].ToBytes()) == -1 }
 func (p BlockIDSlice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 
 // Sort is a convenience method.

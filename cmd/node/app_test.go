@@ -11,6 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/oracle"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -156,7 +157,7 @@ func (suite *AppTestSuite) initMultipleInstances(rolacle *eligibility.FixedRolac
 func activateGrpcServer(smApp *SpacemeshApp) {
 	smApp.Config.API.StartGrpcServer = true
 	layerDuration := smApp.Config.LayerDurationSec
-	smApp.grpcAPIService = api.NewGrpcService(smApp.P2P, smApp.state, smApp.mesh, smApp.txPool, smApp.atxBuilder, smApp.oracle, smApp.clock, layerDuration, nil)
+	smApp.grpcAPIService = api.NewGrpcService(smApp.P2P, smApp.state, smApp.mesh, smApp.txPool, smApp.atxBuilder, smApp.oracle, smApp.clock, nil, layerDuration, nil)
 	smApp.grpcAPIService.StartService()
 }
 
@@ -169,7 +170,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	if err != nil {
 		log.Panic("Could not build ed signer err=%v", err)
 	}
-	tx, err := types.NewSignedTx(0, dst, 10, 1, 1, acc1Signer)
+	tx, err := mesh.NewSignedTx(0, dst, 10, 1, 1, acc1Signer)
 	if err != nil {
 		log.Panic("panicked creating signed tx err=%v", err)
 	}
@@ -285,7 +286,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID, start
 				log.Error("ERROR: couldn't get a validated layer from db layer %v, %v", i, err)
 			}
 			for _, b := range lyr.Blocks() {
-				datamap[ap.nodeId.Key].layertoblocks[lyr.Index()] = append(datamap[ap.nodeId.Key].layertoblocks[lyr.Index()], b.ID())
+				datamap[ap.nodeId.Key].layertoblocks[lyr.Index()] = append(datamap[ap.nodeId.Key].layertoblocks[lyr.Index()], b.Id())
 			}
 		}
 	}

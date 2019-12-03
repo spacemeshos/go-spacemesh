@@ -347,7 +347,7 @@ func (v *syntaxContextValidator) validateSVP(msg *Msg) bool {
 	}
 
 	maxKi := int32(-1) // Ki>=-1
-	var maxSet []uint64 = nil
+	var maxSet []types.BlockID = nil
 	for _, status := range msg.InnerMsg.Svp.Messages {
 		// track max
 		if status.InnerMsg.Ki > maxKi {
@@ -419,8 +419,7 @@ func (v *syntaxContextValidator) validateSVPTypeA(m *Msg) bool {
 	for _, status := range m.InnerMsg.Svp.Messages {
 		statusSet := NewSet(status.InnerMsg.Values)
 		// build union
-		for _, buff := range statusSet.values {
-			bid := buff
+		for bid := range statusSet.values {
 			unionSet.Add(bid) // assuming add is unique
 		}
 	}

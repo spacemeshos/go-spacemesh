@@ -76,7 +76,7 @@ func (p *EventPublisher) Close() error {
 }
 
 type NewBlock struct {
-	Id    uint64
+	Id    string
 	Layer uint64
 	Atx   string
 }
@@ -86,7 +86,7 @@ func (NewBlock) getChannel() channelId {
 }
 
 type ValidBlock struct {
-	Id    uint64
+	Id    string
 	Valid bool
 }
 

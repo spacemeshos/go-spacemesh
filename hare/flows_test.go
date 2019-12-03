@@ -5,6 +5,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/amcl"
 	"github.com/spacemeshos/go-spacemesh/amcl/BLS381"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -45,7 +46,7 @@ func (his *HareWrapper) waitForTermination() {
 		count := 0
 		for _, p := range his.hare {
 			for i := types.LayerID(1); i <= types.LayerID(his.totalCP); i++ {
-				blks, _ := p.GetResult(i, i)
+				blks, _ := p.GetResult(i)
 				if len(blks) > 0 {
 					count++
 				}
@@ -65,9 +66,9 @@ func (his *HareWrapper) waitForTermination() {
 	for _, p := range his.hare {
 		for i := types.LayerID(1); i <= types.LayerID(his.totalCP); i++ {
 			s := NewEmptySet(10)
-			blks, _ := p.GetResult(i, i)
+			blks, _ := p.GetResult(i)
 			for _, b := range blks {
-				s.Add(blockID{b})
+				s.Add(b)
 			}
 			his.outputs[instanceId(i)] = append(his.outputs[instanceId(i)], s)
 		}
@@ -159,7 +160,7 @@ func Test_consensusIterations(t *testing.T) {
 	test := newConsensusTest()
 
 	totalNodes := 20
-	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, RoundDuration: 1, ExpectedLeaders: 5}
+	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, RoundDuration: 1, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100}
 	sim := service.NewSimulator()
 	test.initialSets = make([]*Set, totalNodes)
 	set1 := NewSetFromValues(value1)
@@ -199,7 +200,7 @@ func buildSet() []types.BlockID {
 	s := make([]types.BlockID, 200, 200)
 
 	for i := uint64(0); i < 200; i++ {
-		s = append(s, types.BlockID(i))
+		s = append(s, types.NewExistingBlock(1, util.Uint64ToBytes(i)).Id())
 	}
 
 	return s
@@ -230,7 +231,7 @@ func Test_multipleCPs(t *testing.T) {
 	totalCp := 3
 	test := newHareWrapper(totalCp)
 	totalNodes := 20
-	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, RoundDuration: 3, ExpectedLeaders: 5}
+	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, RoundDuration: 3, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100}
 	rng := BLS381.DefaultSeed()
 	sim := service.NewSimulator()
 	test.initialSets = make([]*Set, totalNodes)
@@ -252,7 +253,7 @@ func Test_multipleCPs(t *testing.T) {
 				log.Info("sending for instance %v", i)
 				test.lCh[i] <- j
 			}
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(150 * time.Millisecond)
 		}
 	}()
 
@@ -265,7 +266,7 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 	totalCp := 4
 	test := newHareWrapper(totalCp)
 	totalNodes := 20
-	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, RoundDuration: 3, ExpectedLeaders: 5}
+	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, RoundDuration: 3, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100}
 	rng := BLS381.DefaultSeed()
 	sim := service.NewSimulator()
 	test.initialSets = make([]*Set, totalNodes)
@@ -291,5 +292,5 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 		}
 	}()
 
-	test.WaitForTimedTermination(t, 40*time.Second)
+	test.WaitForTimedTermination(t, 50*time.Second)
 }

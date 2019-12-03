@@ -68,10 +68,10 @@ func TestCollectEvents(t *testing.T) {
 
 	c.Start(false)
 	time.Sleep(2 * time.Second)
-	orig := events.NewBlock{Layer: 1, Id: 234}
+	orig := events.NewBlock{Layer: 1, Id: "234"}
 	err = eventPublisher.PublishEvent(orig)
 
-	orig1 := events.ValidBlock{Id: 234, Valid: true}
+	orig1 := events.ValidBlock{Id: "234", Valid: true}
 	err = eventPublisher.PublishEvent(orig1)
 
 	orig2 := events.NewAtx{Id: "1234"}

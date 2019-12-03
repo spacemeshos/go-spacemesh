@@ -33,17 +33,29 @@ type ActivationDb struct {
 	sync.RWMutex
 	//todo: think about whether we need one db or several
 	IdStore
-	atxs            database.Database
-	atxHeaderCache  AtxCache
-	meshDb          *mesh.MeshDB
-	LayersPerEpoch  uint16
-	nipstValidator  NipstValidator
-	log             log.Log
-	processAtxMutex sync.Mutex
+	atxs              database.Database
+	atxHeaderCache    AtxCache
+	meshDb            *mesh.MeshDB
+	LayersPerEpoch    uint16
+	nipstValidator    NipstValidator
+	pendingActiveSet  map[types.Hash12]*sync.Mutex
+	log               log.Log
+	calcActiveSetFunc func(epoch types.EpochId, blocks map[types.BlockID]struct{}) (map[string]struct{}, error)
+	processAtxMutex   sync.Mutex
+	assLock           sync.Mutex
 }
 
 func NewActivationDb(dbstore database.Database, idstore IdStore, meshDb *mesh.MeshDB, layersPerEpoch uint16, nipstValidator NipstValidator, log log.Log) *ActivationDb {
-	return &ActivationDb{atxs: dbstore, atxHeaderCache: NewAtxCache(20), meshDb: meshDb, nipstValidator: nipstValidator, LayersPerEpoch: layersPerEpoch, IdStore: idstore, log: log}
+	db := &ActivationDb{atxs: dbstore,
+		atxHeaderCache:   NewAtxCache(600),
+		meshDb:           meshDb,
+		nipstValidator:   nipstValidator,
+		LayersPerEpoch:   layersPerEpoch,
+		IdStore:          idstore,
+		pendingActiveSet: make(map[types.Hash12]*sync.Mutex),
+		log:              log}
+	db.calcActiveSetFunc = db.CalcActiveSetSize
+	return db
 }
 
 func (db *ActivationDb) ProcessAtxs(atxs []*types.ActivationTx) error {
@@ -184,6 +196,10 @@ func (db *ActivationDb) CalcActiveSetSize(epoch types.EpochId, blocks map[types.
 // in the epoch prior to the epoch that a was published at, this number is the number of active ids in the next epoch
 // the function returns error if the view is not found
 func (db *ActivationDb) CalcActiveSetFromView(view []types.BlockID, pubEpoch types.EpochId) (uint32, error) {
+	if pubEpoch < 1 {
+		return 0, fmt.Errorf("publication epoch cannot be less than 1, found %v", pubEpoch)
+	}
+
 	viewHash, err := types.CalcBlocksHash12(view)
 	if err != nil {
 		return 0, fmt.Errorf("failed to calc sorted view hash: %v", err)
@@ -192,9 +208,24 @@ func (db *ActivationDb) CalcActiveSetFromView(view []types.BlockID, pubEpoch typ
 	if found {
 		return count, nil
 	}
-
-	if pubEpoch < 1 {
-		return 0, fmt.Errorf("publication epoch cannot be less than 1, found %v", pubEpoch)
+	//check if we have a running calculation for this hash
+	db.assLock.Lock()
+	mu, alreadyRunning := db.pendingActiveSet[viewHash]
+	if alreadyRunning {
+		db.assLock.Unlock()
+		// if there is a running calculation, wait for it to end and get the result
+		mu.Lock()
+		count, found := activesetCache.Get(viewHash)
+		if found {
+			mu.Unlock()
+			return count, nil
+		}
+		// if not found, keep running mutex and calculate active set size
+	} else {
+		// if no running calc, insert new one
+		db.pendingActiveSet[viewHash] = &sync.Mutex{}
+		db.pendingActiveSet[viewHash].Lock()
+		db.assLock.Unlock()
 	}
 
 	mp := map[types.BlockID]struct{}{}
@@ -202,14 +233,24 @@ func (db *ActivationDb) CalcActiveSetFromView(view []types.BlockID, pubEpoch typ
 		mp[blk] = struct{}{}
 	}
 
-	countedAtxs, err := db.CalcActiveSetSize(pubEpoch, mp)
+	countedAtxs, err := db.calcActiveSetFunc(pubEpoch, mp)
 	if err != nil {
+		db.releaseRunningLock(viewHash)
 		return 0, err
 	}
 	activesetCache.Add(viewHash, uint32(len(countedAtxs)))
 
+	db.releaseRunningLock(viewHash)
+
 	return uint32(len(countedAtxs)), nil
 
+}
+
+func (db *ActivationDb) releaseRunningLock(viewHash types.Hash12) {
+	db.assLock.Lock()
+	db.pendingActiveSet[viewHash].Unlock()
+	delete(db.pendingActiveSet, viewHash)
+	db.assLock.Unlock()
 }
 
 // SyntacticallyValidateAtx ensures the following conditions apply, otherwise it returns an error.
@@ -224,7 +265,7 @@ func (db *ActivationDb) CalcActiveSetFromView(view []types.BlockID, pubEpoch typ
 // - ATX LayerID is NipstLayerTime or less after the PositioningATX LayerID.
 // - The ATX view of the previous epoch contains ActiveSetSize activations.
 func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
-	pub, err := types.ExtractPublicKey(atx)
+	pub, err := ExtractPublicKey(atx)
 	if err != nil {
 		return fmt.Errorf("cannot validate atx sig atx id %v err %v", atx.ShortString(), err)
 	}

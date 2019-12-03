@@ -655,7 +655,7 @@ func NewAddrBook(localAddress *node.NodeInfo, config config.SwarmConfig, logger 
 
 		dataDir, err := filesystem.GetSpacemeshDataDirectoryPath()
 		if err == nil {
-			am.loadPeers(dataDir + "/" + localAddress.ID.String() + "/" + config.PeersFile)
+			am.loadPeers(dataDir + "/" + config.PeersFile)
 		} else {
 			am.logger.Warning("Skipping loading peers to addrbook, data dir not found err=%v", err)
 		}
