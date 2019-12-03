@@ -167,8 +167,14 @@ func (prot *Protocol) processMessage(sender p2pcrypto.PublicKey, protocol string
 
 func (prot *Protocol) handlePQ() {
 	for {
-		m := prot.pq.Read().(service.MessageValidation)
+		mi, err := prot.pq.Read()
+		if err != nil {
+			prot.With().Info("priority queue was closed, existing", log.Err(err))
+			return
+		}
+		m := mi.(service.MessageValidation)
 		h := types.CalcMessageHash12(m.Message(), m.Protocol())
+		prot.Log.With().Debug("new_gossip_message_relay", log.String("protocol", m.Protocol()), log.String("hash", util.Bytes2Hex(h[:])))
 		prot.propagateMessage(m.Message(), h, m.Protocol(), m.Sender())
 	}
 }
@@ -176,22 +182,19 @@ func (prot *Protocol) handlePQ() {
 func (prot *Protocol) propagationEventLoop() {
 	go prot.handlePQ()
 
-	var err error
-loop:
 	for {
 		select {
 		case msgV := <-prot.propagateQ:
-			prot.Log.With().Debug("new_gossip_message_relay", log.String("protocol", msgV.Protocol()), log.String("hash", util.Bytes2Hex(h[:])))
 			if err := prot.pq.Write(msgV.Protocol(), msgV); err != nil {
 				prot.With().Error("fatal: could not write to priority queue", log.Err(err), log.String("protocol", msgV.Protocol()))
 			}
 
 		case <-prot.shutdown:
-			err = errors.New("protocol shutdown")
-			break loop
+			prot.pq.Close()
+			prot.Error("propagate event loop stopped: protocol shutdown")
+			return
 		}
 	}
-	prot.Error("propagate event loop stopped. err: %v", err)
 }
 
 func (prot *Protocol) Relay(sender p2pcrypto.PublicKey, protocol string, msg service.Data) error {

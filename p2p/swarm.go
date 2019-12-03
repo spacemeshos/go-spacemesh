@@ -179,7 +179,7 @@ func newSwarm(ctx context.Context, config config.Config, newNode bool, persist b
 
 	s.cPool = cpool
 
-	s.pq = gossip.NewPriorityQ(2) // TODO: set according to
+	s.pq = gossip.NewPriorityQ(10) // TODO: set according to proto
 	s.gossip = gossip.NewProtocol(config.SwarmConfig, s, s.LocalNode().PublicKey(), s.pq, s.lNode.Log)
 
 	s.lNode.Debug("Created swarm for local node %s, %s", l.String())
