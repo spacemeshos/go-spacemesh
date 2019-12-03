@@ -729,7 +729,6 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 				log.Error("cannot start http server", err)
 			}
 		}()
-
 	}
 
 	// start p2p services
@@ -782,7 +781,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	}
 
 	if app.Config.CollectMetrics {
-		metrics.StartCollectingMetrics(app.Config.MetricsPort)
+		metrics.StartCollectingMetrics(cmdp.Ctx, app.Config.MetricsPort)
 	}
 	app.startServices()
 
