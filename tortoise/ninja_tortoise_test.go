@@ -426,6 +426,77 @@ func TestNinjaTortoise_LayerWithNoVotes(t *testing.T) {
 	alg.handleIncomingLayer(l14)
 }
 
+func TestNinjaTortoise_OneMoreLayerWithNoVotes(t *testing.T) {
+	lg := log.New(t.Name(), "", "")
+
+	mdb := getMeshForBench()
+	alg := NewNinjaTortoise(200, mdb, 5, lg)
+
+	l := createLayer2(0, nil, []*types.Layer{}, 147)
+	AddLayer(mdb, l)
+	alg.handleIncomingLayer(l)
+
+	l1 := createLayer2(1, l, []*types.Layer{l}, 150)
+	AddLayer(mdb, l1)
+	alg.handleIncomingLayer(l1)
+
+	l2 := createLayer2(2, l1, []*types.Layer{l1, l}, 140)
+	AddLayer(mdb, l2)
+	alg.handleIncomingLayer(l2)
+
+	l3 := createLayer2(3, l2, []*types.Layer{l2, l1, l}, 117)
+	AddLayer(mdb, l3)
+	alg.handleIncomingLayer(l3)
+
+	l4 := createLayer2(4, l3, []*types.Layer{l3, l2, l1, l}, 142)
+	AddLayer(mdb, l4)
+	alg.handleIncomingLayer(l4)
+
+	l5 := createLayer2(5, l4, []*types.Layer{l4, l3, l2, l1, l}, 147)
+	AddLayer(mdb, l5)
+	alg.handleIncomingLayer(l5)
+
+	l6 := createLayer2(6, l5, []*types.Layer{l4, l3, l2, l1}, 128)
+	AddLayer(mdb, l6)
+	alg.handleIncomingLayer(l6)
+	//
+	l7 := createLayer2(7, l6, []*types.Layer{l6, l5, l4, l3, l2}, 144)
+	AddLayer(mdb, l7)
+	alg.handleIncomingLayer(l7)
+
+	l8 := createLayer2(8, l7, []*types.Layer{l7, l6, l5, l4, l3}, 167)
+	AddLayer(mdb, l8)
+	alg.handleIncomingLayer(l8)
+
+	l9 := createLayer2(9, l8, []*types.Layer{l8, l7, l6, l5, l4}, 128)
+	AddLayer(mdb, l9)
+	alg.handleIncomingLayer(l9)
+
+	l10 := createLayer2(10, l9, []*types.Layer{l9, l8, l7, l6, l5}, 142)
+	AddLayer(mdb, l10)
+	alg.handleIncomingLayer(l10)
+
+	l11 := createLayer2(11, l10, []*types.Layer{l10, l9, l8, l7, l6}, 157)
+	AddLayer(mdb, l11)
+	alg.handleIncomingLayer(l11)
+
+	l12 := createLayer2(12, l11, []*types.Layer{l11, l10, l9, l8, l7}, 138)
+	AddLayer(mdb, l12)
+	alg.handleIncomingLayer(l12)
+
+	l13 := createLayer2(13, l12, []*types.Layer{l12, l11, l10, l9, l8}, 139)
+	AddLayer(mdb, l13)
+	alg.handleIncomingLayer(l13)
+
+	l14 := createLayer2(14, l13, []*types.Layer{l13, l12, l11, l10, l9}, 128)
+	AddLayer(mdb, l14)
+	alg.handleIncomingLayer(l14)
+
+	l15 := createLayer2(15, l14, []*types.Layer{l14, l13, l12, l11, l10}, 134)
+	AddLayer(mdb, l15)
+	alg.handleIncomingLayer(l15)
+}
+
 func TestNinjaTortoise_LateBlocks(t *testing.T) {
 
 	lg := log.New(t.Name(), "", "")
