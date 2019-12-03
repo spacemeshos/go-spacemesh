@@ -126,6 +126,7 @@ func (t *TxMempool) getOrCreate(addr types.Address) *pending_txs.AccountPendingT
 	return account
 }
 
+// ⚠️ must be called under write-lock
 func (t *TxMempool) addToAddr(addr types.Address, txId types.TransactionId) {
 	addrMap, found := t.txByAddr[addr]
 	if !found {
@@ -135,6 +136,7 @@ func (t *TxMempool) addToAddr(addr types.Address, txId types.TransactionId) {
 	addrMap[txId] = struct{}{}
 }
 
+// ⚠️ must be called under write-lock
 func (t *TxMempool) removeFromAddr(addr types.Address, txId types.TransactionId) {
 	addrMap := t.txByAddr[addr]
 	delete(addrMap, txId)
