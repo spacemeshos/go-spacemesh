@@ -463,7 +463,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 
 	var msh *mesh.Mesh
 	var trtl *tortoise.Algorithm
-	if mdb.RecoveredData() {
+	if mdb.PersistentData() {
 		trtl = tortoise.NewRecoveredAlgorithm(mdb, app.addLogger(TrtlLogger, lg))
 		msh = mesh.NewRecoveredMesh(mdb, atxdb, app.Config.REWARD, trtl, app.txPool, atxpool, processor, app.addLogger(MeshLogger, lg)) //todo: what to do with the logger?
 
