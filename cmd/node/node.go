@@ -731,6 +731,10 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 		}()
 	}
 
+	if app.Config.CollectMetrics {
+		metrics.StartCollectingMetrics(cmdp.Ctx, app.Config.MetricsPort)
+	}
+
 	// start p2p services
 	log.Info("Initializing P2P services")
 	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P)
@@ -780,9 +784,6 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 		app.setupTestFeatures()
 	}
 
-	if app.Config.CollectMetrics {
-		metrics.StartCollectingMetrics(cmdp.Ctx, app.Config.MetricsPort)
-	}
 	app.startServices()
 
 	err = app.P2P.Start()

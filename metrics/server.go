@@ -9,6 +9,7 @@ import (
 )
 
 func StartCollectingMetrics(ctx context.Context, metricsPort int) {
+	Enabled = true
 	log.Info("Start metrics server")
 	http.Handle("/metrics", promhttp.Handler())
 	srv := &http.Server{Addr: fmt.Sprintf(":%v", metricsPort)}
