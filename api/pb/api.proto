@@ -92,6 +92,7 @@ message SetLogLevel {
 
 message AccountTxs {
     repeated string txs = 1;
+    uint64 validatedLayer = 2;
 }
 
 message GetTxsSinceLayer {

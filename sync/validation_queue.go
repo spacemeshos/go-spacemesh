@@ -125,7 +125,7 @@ func (vq *blockQueue) finishBlockCallback(block *types.Block) func(res bool) err
 
 		//validate block's votes
 		if valid, err := validateVotes(block, vq.ForBlockInView, vq.Hdist, vq.Log); valid == false || err != nil {
-			return errors.New(fmt.Sprintf("validate votes failed for block %v", block.Id()))
+			return errors.New(fmt.Sprintf("validate votes failed for block %s %s", block.Id(), err))
 		}
 
 		err = vq.AddBlockWithTxs(block, txs, atxs)

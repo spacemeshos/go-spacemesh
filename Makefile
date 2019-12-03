@@ -235,7 +235,7 @@ dockertest-late-nodes: dockerbuild-test dockerrun-late-nodes
 .PHONY: dockertest-late-nodes
 
 # The following is used to run tests one after the other locally
-dockerrun-test: dockerbuild-test dockerrun-p2p dockerrun-mining dockerrun-hare dockerrun-sync
+dockerrun-test: dockerbuild-test dockerrun-p2p dockerrun-mining dockerrun-hare dockerrun-sync dockerrun-late-nodes
 .PHONY: dockerrun-test
 
 dockerrun-all: dockerpush dockerrun-test
