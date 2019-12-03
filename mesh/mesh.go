@@ -157,7 +157,7 @@ func (m *Mesh) SetLatestLayer(idx types.LayerID) {
 		m.Info("set latest known layer to %v", idx)
 		m.latestLayer = idx
 		if err := m.general.Put(LATEST, idx.ToBytes()); err != nil {
-			m.Panic("could persist validated layer index")
+			m.Panic("could persist Latest layer index")
 		}
 	}
 }
