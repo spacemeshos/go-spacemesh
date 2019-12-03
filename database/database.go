@@ -19,12 +19,14 @@ package database
 import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/errors"
 	"github.com/syndtr/goleveldb/leveldb/filter"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/util"
+	"path"
 	"strconv"
 	"strings"
 	"sync"
@@ -42,6 +44,19 @@ var OpenFileLimit = 64
 type LDBDatabase struct {
 	fn string      // filename for reporting
 	db *leveldb.DB // LevelDB instance
+
+	compTimeMeter      metrics.Gauge // Meter for measuring the total time spent in database compaction
+	compReadMeter      metrics.Gauge // Meter for measuring the data read during compaction
+	compWriteMeter     metrics.Gauge // Meter for measuring the data written during compaction
+	writeDelayNMeter   metrics.Gauge // Meter for measuring the write delay number due to database compaction
+	writeDelayMeter    metrics.Gauge // Meter for measuring the write delay duration due to database compaction
+	diskSizeGauge      metrics.Gauge // Gauge for tracking the size of all the levels in the database
+	diskReadMeter      metrics.Gauge // Meter for measuring the effective amount of data read
+	diskWriteMeter     metrics.Gauge // Meter for measuring the effective amount of data written
+	memCompGauge       metrics.Gauge // Gauge for tracking the number of memory compaction
+	level0CompGauge    metrics.Gauge // Gauge for tracking the number of table compaction in level0
+	nonlevel0CompGauge metrics.Gauge // Gauge for tracking the number of table compaction in non0 level
+	seekCompGauge      metrics.Gauge // Gauge for tracking the number of table compaction caused by read opt
 
 	quitLock sync.Mutex      // Mutex protecting the quit channel access
 	quitChan chan chan error // Quit channel to stop the metrics collection before closing the database
@@ -74,11 +89,29 @@ func NewLDBDatabase(file string, cache int, handles int, logger log.Log) (*LDBDa
 	if err != nil {
 		return nil, err
 	}
-	return &LDBDatabase{
+
+	ldb := &LDBDatabase{
 		fn:  file,
 		db:  db,
 		log: logger,
-	}, nil
+	}
+
+	name := path.Base(file)
+
+	ldb.compTimeMeter = metrics.NewGauge("compact/time", name, "db compaction time", nil)
+	ldb.compReadMeter = metrics.NewGauge("compact/input", name, "db compaction input", nil)
+	ldb.compWriteMeter = metrics.NewGauge("compact/output", name, "db compaction output", nil)
+	ldb.diskSizeGauge = metrics.NewGauge("disk/size", name, "db disk size", nil)
+	ldb.diskReadMeter = metrics.NewGauge("disk/read", name, "db read", nil)
+	ldb.diskWriteMeter = metrics.NewGauge("disk/write", name, "db write", nil)
+	ldb.writeDelayMeter = metrics.NewGauge("compact/writedelay/duration", name, "db write delay dur", nil)
+	ldb.writeDelayNMeter = metrics.NewGauge("compact/writedelay/counter", name, "db write delay counter", nil)
+	ldb.memCompGauge = metrics.NewGauge("compact/memory", name, "db compaction memory", nil)
+	ldb.level0CompGauge = metrics.NewGauge("compact/level0", name, "db level0 compaction", nil)
+	ldb.nonlevel0CompGauge = metrics.NewGauge("compact/nonlevel0", name, "db nonlevel0 compaction", nil)
+	ldb.seekCompGauge = metrics.NewGauge("compact/seek", name, "db seek compaction", nil)
+
+	return ldb, nil
 }
 
 // Path returns the path to the database directory.
@@ -240,15 +273,15 @@ func (db *LDBDatabase) meter(refresh time.Duration) {
 			}
 		}
 		// Update all the requested meters
-		/*if db.compTimeMeter != nil {
-			db.compTimeMeter.Mark(int64((compactions[i%2][0] - compactions[(i-1)%2][0]) * 1000 * 1000 * 1000))
+		if db.compTimeMeter != nil {
+			db.compTimeMeter.Set(float64((compactions[i%2][0] - compactions[(i-1)%2][0]) * 1000 * 1000 * 1000))
 		}
 		if db.compReadMeter != nil {
-			db.compReadMeter.Mark(int64((compactions[i%2][1] - compactions[(i-1)%2][1]) * 1024 * 1024))
+			db.compReadMeter.Set(float64((compactions[i%2][1] - compactions[(i-1)%2][1]) * 1024 * 1024))
 		}
 		if db.compWriteMeter != nil {
-			db.compWriteMeter.Mark(int64((compactions[i%2][2] - compactions[(i-1)%2][2]) * 1024 * 1024))
-		}*/
+			db.compWriteMeter.Set(float64((compactions[i%2][2] - compactions[(i-1)%2][2]) * 1024 * 1024))
+		}
 
 		// Retrieve the write delay statistic
 		writedelay, err := db.db.GetProperty("leveldb.writedelay")
@@ -274,12 +307,12 @@ func (db *LDBDatabase) meter(refresh time.Duration) {
 			merr = err
 			continue
 		}
-		/*if db.writeDelayNMeter != nil {
-			db.writeDelayNMeter.Mark(delayN - delaystats[0])
+		if db.writeDelayNMeter != nil {
+			db.writeDelayNMeter.Set(float64(delayN - delaystats[0]))
 		}
 		if db.writeDelayMeter != nil {
-			db.writeDelayMeter.Mark(duration.Nanoseconds() - delaystats[1])
-		}*/
+			db.writeDelayMeter.Set(float64(duration.Nanoseconds() - delaystats[1]))
+		}
 		// If a warning that db is performing compaction has been displayed, any subsequent
 		// warnings will be withheld for one minute not to overwhelm the user.
 		if paused && delayN-delaystats[0] == 0 && duration.Nanoseconds()-delaystats[1] == 0 &&

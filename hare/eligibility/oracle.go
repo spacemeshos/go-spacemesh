@@ -11,6 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/config"
 	eCfg "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/metrics"
 	"math"
 	"sync"
 )
@@ -109,7 +110,7 @@ func New(beacon valueProvider, activeSetFunc activeSetFunc, vrfVerifier verifier
 		vrfVerifier:          vrfVerifier,
 		vrfSigner:            vrfSigner,
 		layersPerEpoch:       layersPerEpoch,
-		cache:                c,
+		cache:                metrics.NewMeteredCache(c, "hare", "oracle", "cache for last oracle result", nil),
 		genesisActiveSetSize: genesisActiveSet,
 		blocksProvider:       goodBlocksProvider,
 		cfg:                  cfg,

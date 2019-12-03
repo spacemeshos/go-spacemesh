@@ -1,12 +1,29 @@
 package metrics
 
 import (
+	"context"
 	"fmt"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"net/http"
 )
 
-func StartCollectingMetrics(metricsPort int) {
+func StartCollectingMetrics(ctx context.Context, metricsPort int) {
+	log.Info("Start metrics server")
 	http.Handle("/metrics", promhttp.Handler())
-	go http.ListenAndServe(fmt.Sprintf(":%v", metricsPort), nil)
+	srv := &http.Server{Addr: fmt.Sprintf(":%v", metricsPort)}
+
+	go func() {
+		<-ctx.Done()
+		if err := srv.Shutdown(context.TODO()); err != nil {
+			log.Error("Error during shutdown err=%v", err)
+		}
+	}()
+
+	go func() {
+		err := srv.ListenAndServe()
+		if err != nil {
+			log.Error("cannot start http server", err)
+		}
+	}()
 }

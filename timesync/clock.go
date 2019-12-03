@@ -3,6 +3,7 @@ package timesync
 import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/metrics"
 	"sync"
 	"time"
 )
@@ -20,6 +21,8 @@ type Ticker struct {
 	stop            chan struct{}
 	subscribers     map[LayerTimer]struct{} // map subscribers by channel
 	started         bool
+
+	currentTick metrics.Gauge
 }
 
 type Clock interface {
@@ -40,6 +43,7 @@ func NewTicker(time Clock, tickInterval time.Duration, startEpoch time.Time) *Ti
 		time:            time,
 		stop:            make(chan struct{}),
 		subscribers:     make(map[LayerTimer]struct{}),
+		currentTick:     metrics.NewGauge("ticker", "time", "layer ticks that have passed", nil),
 	}
 	t.init()
 	return t
@@ -73,6 +77,7 @@ func (t *Ticker) notifyOnTick() {
 	}
 
 	t.m.Lock()
+	t.currentTick.Set(float64(t.nextLayerToTick))
 	log.Event().Info("release tick", log.LayerId(uint64(t.nextLayerToTick)))
 	count := 1
 	for ch := range t.subscribers {

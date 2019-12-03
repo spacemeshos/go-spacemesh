@@ -5,6 +5,7 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/metrics"
 	"hash/fnv"
 )
 
@@ -32,10 +33,11 @@ type beacon struct {
 // patternProvider provides the contextually valid blocks.
 // confidenceParam is the number of layers that the beacon assumes for consensus view.
 func NewBeacon(patternProvider patternProvider, confidenceParam uint64) *beacon {
-	c, e := lru.New(cacheSize)
+	ca, e := lru.New(cacheSize)
 	if e != nil {
 		log.Panic("Could not create lru cache err=%v", e)
 	}
+	c := metrics.NewMeteredCache(ca, "beacon", "eligibility", "caches beacon results", nil)
 	return &beacon{
 		patternProvider: patternProvider,
 		confidenceParam: confidenceParam,

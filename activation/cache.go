@@ -4,10 +4,16 @@ import (
 	"github.com/hashicorp/golang-lru"
 	"github.com/prometheus/common/log"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/metrics"
 )
 
+type Cache interface {
+	Add(key, value interface{}) (evicted bool)
+	Get(key interface{}) (value interface{}, ok bool)
+}
+
 type ActivesetCache struct {
-	*lru.Cache
+	Cache
 }
 
 func NewActivesetCache(size int) ActivesetCache {
@@ -15,7 +21,7 @@ func NewActivesetCache(size int) ActivesetCache {
 	if err != nil {
 		log.Fatal("could not initialize cache ", err)
 	}
-	return ActivesetCache{Cache: cache}
+	return ActivesetCache{Cache: metrics.NewMeteredCache(cache, "activation", "activeset", "cache of active set size calc ", nil)}
 }
 
 func (bc *ActivesetCache) Add(view types.Hash12, setSize uint32) {
@@ -32,7 +38,7 @@ func (bc ActivesetCache) Get(view types.Hash12) (uint32, bool) {
 }
 
 type AtxCache struct {
-	*lru.Cache
+	Cache
 }
 
 func NewAtxCache(size int) AtxCache {
@@ -40,7 +46,7 @@ func NewAtxCache(size int) AtxCache {
 	if err != nil {
 		log.Fatal("could not initialize cache ", err)
 	}
-	return AtxCache{Cache: cache}
+	return AtxCache{Cache: metrics.NewMeteredCache(cache, "activation", "atx", "new atx headers cache", nil)}
 }
 
 func (bc *AtxCache) Add(id types.AtxId, atxHeader *types.ActivationTxHeader) {
