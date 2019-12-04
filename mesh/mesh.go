@@ -157,7 +157,7 @@ func (m *Mesh) SetLatestLayer(idx types.LayerID) {
 		m.Info("set latest known layer to %v", idx)
 		m.latestLayer = idx
 		if err := m.general.Put(LATEST, idx.ToBytes()); err != nil {
-			m.Panic("could persist Latest layer index")
+			m.Panic("could not persist Latest layer index")
 		}
 	}
 }
@@ -184,7 +184,7 @@ func (m *Mesh) ValidateLayer(lyr *types.Layer) {
 	m.validatedLayer = currLayerId
 	m.validatedLayer = lyr.Index()
 	if err := m.general.Put(VALIDATED, lyr.Index().ToBytes()); err != nil {
-		m.Panic("could persist validated layer index")
+		m.Panic("could not persist validated layer index")
 	}
 	m.lvMutex.Unlock()
 
