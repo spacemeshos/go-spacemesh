@@ -490,7 +490,7 @@ type mockSrv struct {
 	called bool
 }
 
-func (m *mockSrv) RegisterGossipProtocol(string) chan service.GossipMessage {
+func (m *mockSrv) RegisterGossipProtocol(string, int) chan service.GossipMessage {
 	m.called = true
 	return m.c
 }

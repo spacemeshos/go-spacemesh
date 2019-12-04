@@ -25,6 +25,13 @@ type baseNetwork interface {
 	ProcessGossipProtocolMessage(sender p2pcrypto.PublicKey, protocol string, data service.Data, validationCompletedChan chan service.MessageValidation) error
 }
 
+type prioQ interface {
+	Set(name string, prio int, bufferSize int) error
+	Write(name string, m interface{}) error
+	Read() (interface{}, error)
+	Close()
+}
+
 // Protocol is the gossip protocol
 type Protocol struct {
 	log.Log
@@ -41,11 +48,11 @@ type Protocol struct {
 	oldMessageQ *types.DoubleCache
 
 	propagateQ chan service.MessageValidation
-	pq         *PriorityQ
+	pq         prioQ
 }
 
 // NewProtocol creates a new gossip protocol instance. Call Start to start reading peers
-func NewProtocol(config config.SwarmConfig, base baseNetwork, localNodePubkey p2pcrypto.PublicKey, pq *PriorityQ, log2 log.Log) *Protocol {
+func NewProtocol(config config.SwarmConfig, base baseNetwork, localNodePubkey p2pcrypto.PublicKey, pq prioQ, log2 log.Log) *Protocol {
 	// intentionally not subscribing to peers events so that the channels won't block in case executing Start delays
 	return &Protocol{
 		Log:             log2,
@@ -172,7 +179,11 @@ func (prot *Protocol) handlePQ() {
 			prot.With().Info("priority queue was closed, existing", log.Err(err))
 			return
 		}
-		m := mi.(service.MessageValidation)
+		m, ok := mi.(service.MessageValidation)
+		if !ok {
+			prot.Error("could not convert to message validation, ignoring message")
+			continue
+		}
 		h := types.CalcMessageHash12(m.Message(), m.Protocol())
 		prot.Log.With().Debug("new_gossip_message_relay", log.String("protocol", m.Protocol()), log.String("hash", util.Bytes2Hex(h[:])))
 		prot.propagateMessage(m.Message(), h, m.Protocol(), m.Sender())

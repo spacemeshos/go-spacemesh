@@ -108,8 +108,8 @@ type p2pManipulator struct {
 	err          error
 }
 
-func (m *p2pManipulator) RegisterGossipProtocol(protocol string) chan service.GossipMessage {
-	ch := m.nd.RegisterGossipProtocol(protocol)
+func (m *p2pManipulator) RegisterGossipProtocol(protocol string, prio int) chan service.GossipMessage {
+	ch := m.nd.RegisterGossipProtocol(protocol, prio)
 	wch := make(chan service.GossipMessage)
 
 	go func() {

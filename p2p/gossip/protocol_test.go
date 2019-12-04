@@ -1,6 +1,7 @@
 package gossip
 
 import (
+	"errors"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
@@ -81,7 +82,7 @@ func (mbn *mockBaseNetwork) RegisterDirectProtocol(protocol string) chan service
 	return mbn.directInbox
 }
 
-func (mbn *mockBaseNetwork) RegisterGossipProtocol(protocol string) chan service.GossipMessage {
+func (mbn *mockBaseNetwork) RegisterGossipProtocol(protocol string, prio int) chan service.GossipMessage {
 	return mbn.gossipInbox
 }
 
@@ -195,8 +196,45 @@ lop:
 
 //todo : more unit tests
 
+type mockPQ struct {
+	q chan interface{}
+}
+
+func newMockPQ() *mockPQ {
+	return &mockPQ{make(chan interface{}, 10)}
+}
+
+func (pq *mockPQ) Set(name string, prio int, bufferSize int) error {
+	return nil
+}
+
+func (pq *mockPQ) Write(name string, m interface{}) error {
+	pq.q <- m
+	return nil
+}
+
+func (pq *mockPQ) Read() (interface{}, error) {
+	ticker := time.NewTicker(100 * time.Millisecond)
+	for {
+		select {
+		case x := <-pq.q:
+			return x, nil
+		case <-ticker.C:
+			if pq.q == nil {
+				//fmt.Println("closing")
+				return service.MessageValidation{}, errors.New("some error")
+			}
+			continue
+		}
+	}
+}
+
+func (pq *mockPQ) Close() {
+	close(pq.q)
+}
+
 func TestNeighborhood_AddIncomingPeer(t *testing.T) {
-	n := NewProtocol(config.DefaultConfig().SwarmConfig, newMockBaseNetwork(), newPubkey(t), log.New("tesT", "", ""))
+	n := NewProtocol(config.DefaultConfig().SwarmConfig, newMockBaseNetwork(), newPubkey(t), newMockPQ(), log.New(t.Name(), "", ""))
 	n.Start()
 	pub := p2pcrypto.NewRandomPubkey()
 	n.addPeer(pub)
@@ -212,8 +250,8 @@ func TestNeighborhood_AddIncomingPeer(t *testing.T) {
 
 func TestNeighborhood_Relay(t *testing.T) {
 	net := newMockBaseNetwork()
-	_ = net.RegisterGossipProtocol("Someproto")
-	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newPubkey(t), log.New("tesT", "", ""))
+	_ = net.RegisterGossipProtocol("Someproto", 0)
+	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newPubkey(t), newMockPQ(), log.New(t.Name(), "", ""))
 	n.Start()
 
 	addPeersAndTest(t, 20, n, net, true)
@@ -233,7 +271,7 @@ func TestNeighborhood_Relay(t *testing.T) {
 
 func TestNeighborhood_Broadcast(t *testing.T) {
 	net := newMockBaseNetwork()
-	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newPubkey(t), log.New("tesT", "", ""))
+	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newPubkey(t), newMockPQ(), log.New(t.Name(), "", ""))
 	n.Start()
 	addPeersAndTest(t, 20, n, net, true)
 	net.msgwg.Add(20)
@@ -249,7 +287,7 @@ func TestNeighborhood_Broadcast(t *testing.T) {
 
 func TestNeighborhood_Relay2(t *testing.T) {
 	net := newMockBaseNetwork()
-	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newPubkey(t), log.New("tesT", "", ""))
+	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newPubkey(t), newMockPQ(), log.New(t.Name(), "", ""))
 	n.Start()
 
 	var pk p2pcrypto.PublicKey = nil
@@ -283,7 +321,7 @@ func TestNeighborhood_Relay2(t *testing.T) {
 
 func TestNeighborhood_Broadcast2(t *testing.T) {
 	net := newMockBaseNetwork()
-	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newPubkey(t), log.New("tesT", "", ""))
+	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newPubkey(t), newMockPQ(), log.New(t.Name(), "", ""))
 	n.Start()
 
 	payload := []byte("LOL")
@@ -317,7 +355,7 @@ func TestNeighborhood_Broadcast3(t *testing.T) {
 	// to test that the the next message doesn't get processed by the protocol we must create an exact copy of the message produced at `Broadcast`
 	net := newMockBaseNetwork()
 	pk := p2pcrypto.NewRandomPubkey()
-	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, pk, log.New("tesT", "", ""))
+	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, pk, newMockPQ(), log.New(t.Name(), "", ""))
 	n.Start()
 
 	addPeersAndTest(t, 20, n, net, true)
@@ -344,7 +382,7 @@ func TestNeighborhood_Broadcast4(t *testing.T) {
 	// todo : Fix this test, because the first message is broadcasted `Broadcast` attaches metadata to it with the current authoring timestamp
 	// to test that the the next message doesn't get processed by the protocol we must create an exact copy of the message produced at `Broadcast`
 	net := newMockBaseNetwork()
-	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newPubkey(t), log.New("tesT", "", ""))
+	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newPubkey(t), newMockPQ(), log.New(t.Name(), "", ""))
 	n.Start()
 
 	addPeersAndTest(t, 20, n, net, true)
@@ -370,7 +408,7 @@ func TestNeighborhood_Broadcast4(t *testing.T) {
 
 func TestNeighborhood_Relay3(t *testing.T) {
 	net := newMockBaseNetwork()
-	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newPubkey(t), log.New("tesT", "", ""))
+	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newPubkey(t), newMockPQ(), log.New(t.Name(), "", ""))
 	n.Start()
 
 	pk := p2pcrypto.NewRandomPubkey()
@@ -390,7 +428,7 @@ func TestNeighborhood_Relay3(t *testing.T) {
 
 func TestNeighborhood_Start(t *testing.T) {
 	net := newMockBaseNetwork()
-	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newPubkey(t), log.New("tesT", "", ""))
+	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newPubkey(t), newMockPQ(), log.New(t.Name(), "", ""))
 
 	// before Start
 	addPeersAndTest(t, 20, n, net, false)
@@ -402,7 +440,7 @@ func TestNeighborhood_Start(t *testing.T) {
 
 func TestNeighborhood_Close(t *testing.T) {
 	net := newMockBaseNetwork()
-	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newPubkey(t), log.New("tesT", "", ""))
+	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newPubkey(t), newMockPQ(), log.New(t.Name(), "", ""))
 
 	n.Start()
 	addPeersAndTest(t, 20, n, net, true)
@@ -413,7 +451,7 @@ func TestNeighborhood_Close(t *testing.T) {
 
 func TestNeighborhood_Disconnect(t *testing.T) {
 	net := newMockBaseNetwork()
-	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newPubkey(t), log.New("tesT", "", ""))
+	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newPubkey(t), newMockPQ(), log.New(t.Name(), "", ""))
 
 	n.Start()
 	pub1 := p2pcrypto.NewRandomPubkey()

@@ -238,7 +238,7 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 
 	go func() { beginRound <- 2 }()
 	select {
-	case output := <-receiver.RegisterGossipProtocol(config.NewBlockProtocol):
+	case output := <-receiver.RegisterGossipProtocol(config.NewBlockProtocol, 0):
 		b := types.MiniBlock{}
 		xdr.Unmarshal(bytes.NewBuffer(output.Bytes()), &b)
 

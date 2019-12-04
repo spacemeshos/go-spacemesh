@@ -46,7 +46,7 @@ func (its *IntegrationTestSuite) Test_Gossiping() {
 	exProto := RandString(10)
 
 	its.ForAll(func(idx int, s NodeTestInstance) error {
-		msgChans = append(msgChans, s.RegisterGossipProtocol(exProto))
+		msgChans = append(msgChans, s.RegisterGossipProtocol(exProto, 0))
 		return nil
 	}, nil)
 

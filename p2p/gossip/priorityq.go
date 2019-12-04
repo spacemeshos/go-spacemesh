@@ -1,6 +1,8 @@
 package gossip
 
-import "errors"
+import (
+	"errors"
+)
 
 var (
 	ErrAlreadySet  = errors.New("a queue is already associated with this name")
@@ -32,10 +34,10 @@ func (pq *PriorityQ) Set(name string, prio int, bufferSize int) error {
 	}
 
 	pq.prios[name] = prio
-	if pq.queues[prio] != nil { // allow multiple names to be attached to the same priority
+	if pq.queues[prio] == nil { // allow multiple names to be attached to the same priority
 		pq.queues[prio] = make(chan interface{}, bufferSize) // create queue for prio
-		pq.waitCh = make(chan struct{}, cap(pq.waitCh)+bufferSize) // update max concurrent writes
 	}
+	pq.waitCh = make(chan struct{}, cap(pq.waitCh)+bufferSize) // update max concurrent writes
 
 	return nil
 }
@@ -62,10 +64,15 @@ func (pq *PriorityQ) Read() (interface{}, error) {
 
 	// pick by priority
 	for _, q := range pq.queues {
+		if q == nil { // if not set just continue
+			continue
+		}
+
+		// if set, try read
 		select {
 		case m := <-q:
 			return m, nil
-		default:
+		default: // empty, try next
 			continue
 		}
 	}
@@ -78,7 +85,9 @@ func (pq *PriorityQ) Read() (interface{}, error) {
 // No messages should be expected to be read after a call to Close
 func (pq *PriorityQ) Close() {
 	for _, q := range pq.queues {
-		close(q)
+		if q != nil {
+			close(q)
+		}
 	}
 	close(pq.waitCh)
 }

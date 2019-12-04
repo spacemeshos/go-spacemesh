@@ -60,7 +60,7 @@ type mockP2p struct {
 	err   error
 }
 
-func (m *mockP2p) RegisterGossipProtocol(protocol string) chan service.GossipMessage {
+func (m *mockP2p) RegisterGossipProtocol(protocol string, prio int) chan service.GossipMessage {
 	return make(chan service.GossipMessage)
 }
 
@@ -549,7 +549,7 @@ func (m *mockNet) Broadcast(protocol string, payload []byte) error {
 	return m.err
 }
 
-func (m *mockNet) RegisterGossipProtocol(protocol string) chan service.GossipMessage {
+func (m *mockNet) RegisterGossipProtocol(protocol string, prio int) chan service.GossipMessage {
 	m.callRegister++
 	return nil
 }
