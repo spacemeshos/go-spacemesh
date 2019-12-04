@@ -44,7 +44,7 @@ type AtxValidator interface {
 
 type Syncer interface {
 	FetchPoetProof(poetProofRef []byte) error
-	WeaklySynced() bool
+	ListenToGossip() bool
 }
 
 type TxPool interface {
@@ -294,7 +294,7 @@ func (t *BlockBuilder) listenForTx() {
 		case <-t.stopChan:
 			return
 		case data := <-t.txGossipChannel:
-			if !t.syncer.WeaklySynced() {
+			if !t.syncer.ListenToGossip() {
 				// not accepting txs when not synced
 				continue
 			}
@@ -343,7 +343,7 @@ func (t *BlockBuilder) listenForAtx() {
 		case <-t.stopChan:
 			return
 		case data := <-t.atxGossipChannel:
-			if !t.syncer.WeaklySynced() {
+			if !t.syncer.ListenToGossip() {
 				// not accepting atxs when not synced
 				continue
 			}
