@@ -191,7 +191,7 @@ func (ni *NinjaTortoise) processBlock(b *types.Block) {
 		ni.Debug("block votes %d", bid)
 		bl, err := ni.GetBlock(bid)
 		if err != nil || bl == nil {
-			ni.Panic(fmt.Sprintf("error block not found ID %d , %v!!!!!", bid, err))
+			ni.Panic(fmt.Sprintf("error block not found  %v", err))
 		}
 		if _, found := patternMap[bl.Layer()]; !found {
 			patternMap[bl.Layer()] = map[types.BlockID]struct{}{}
@@ -278,7 +278,7 @@ func (ni *NinjaTortoise) updateCorrectionVectors(p votingPattern, bottomOfWindow
 		for _, bid := range ni.TEffectiveToBlocks[p] { //for all b whose effective vote is p
 			b, err := ni.GetBlock(bid)
 			if err != nil {
-				ni.Panic(fmt.Sprintf("error block not found ID %d", bid))
+				ni.Panic(fmt.Sprintf("error block not found %v", err))
 			}
 
 			if _, found := ni.TExplicit[b.Id()][x.Layer()]; found { //if Texplicit[b][x.layer]!=0 check correctness of x.layer and found
@@ -403,7 +403,7 @@ func (ni *NinjaTortoise) addPatternVote(p votingPattern, view map[types.BlockID]
 		var found bool
 		bl, err := ni.GetBlock(b)
 		if err != nil {
-			ni.Panic(fmt.Sprintf("error block not found ID %d %v", b, err))
+			ni.Panic(fmt.Sprintf("error block not found %v", err))
 		}
 
 		if ni.PBase != ZeroPattern && bl.Layer() <= ni.PBase.Layer() { //ignore under pbase
@@ -493,7 +493,7 @@ func (ni *NinjaTortoise) getVotes() map[types.BlockID]vec {
 func (ni *NinjaTortoise) getVote(id types.BlockID) vec {
 	block, err := ni.GetBlock(id)
 	if err != nil {
-		ni.Panic(fmt.Sprintf("error block not found ID %d, %v", id, err))
+		ni.Panic(fmt.Sprintf("error block not found  %v", err))
 	}
 
 	if block.Layer() > ni.PBase.Layer() {

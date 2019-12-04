@@ -622,7 +622,7 @@ func TestNinjaTortoise_Recovery(t *testing.T) {
 
 	lg := log.New(t.Name(), "", "")
 
-	mdb := getMeshForBench()
+	mdb := getPersistentMash()
 	alg := NewNinjaTortoise(3, mdb, 5, lg)
 	l := mesh.GenesisLayer()
 	AddLayer(mdb, l)
@@ -643,7 +643,7 @@ func TestNinjaTortoise_Recovery(t *testing.T) {
 		if r := recover(); r != nil {
 			t.Log("Recovered in f", r)
 		}
-		alg = NewNinjaTortoise(3, mdb, 5, lg)
+		alg := NewRecoveredAlgorithm(mdb, lg)
 
 		alg.handleIncomingLayer(l2)
 
@@ -654,8 +654,7 @@ func TestNinjaTortoise_Recovery(t *testing.T) {
 		l4 := createLayer(4, []*types.Layer{l3, l2}, 3)
 		AddLayer(mdb, l4)
 		alg.handleIncomingLayer(l4)
-		assert.True(t, alg.PBase.Layer() == 3)
-		assert.Equal(t, 9, alg.TTally[alg.TGood[3]][mesh.GenesisBlock.Id()][0])
+		assert.True(t, alg.latestComplete() == 3)
 		return
 	}()
 
