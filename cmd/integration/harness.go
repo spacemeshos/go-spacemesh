@@ -99,7 +99,7 @@ func main() {
 		}
 	}()
 	// a dummy server so the main process won't be terminated before the tests are done running
-	srv := &http.Server{Addr: ":6060"}
+	srv := &http.Server{Addr: ":7777"}
 	defer func() {
 		if err := srv.Shutdown(context.TODO()); err != nil {
 			log.Error("cannot shutdown http server: ", err)
