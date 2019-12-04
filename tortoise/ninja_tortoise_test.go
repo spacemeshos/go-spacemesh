@@ -641,7 +641,7 @@ func TestNinjaTortoise_Recovery(t *testing.T) {
 
 	defer func() {
 		if r := recover(); r != nil {
-			t.Log("Recovered in f", r)
+			t.Log("Recovered from", r)
 		}
 		alg := NewRecoveredAlgorithm(mdb, lg)
 
