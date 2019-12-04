@@ -245,7 +245,7 @@ func getIdsFromSet(bids map[types.BlockID]struct{}) PatternId {
 	return getId(keys)
 }
 
-func globalOpinion(v vec, layerSize int, delta float64, msg string) vec {
+func globalOpinion(v vec, layerSize int, delta float64) vec {
 	threshold := float64(GlobalThreshold*delta) * float64(layerSize)
 	if float64(v[0]) > threshold {
 		return Support
@@ -550,7 +550,7 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) {
 						ni.tVote[p] = make(map[types.BlockID]vec)
 					}
 
-					if vote := globalOpinion(ni.tTally[p][bid], ni.avgLayerSize, float64(p.LayerID-idx), fmt.Sprintf("gloabal opinion for %d layer %d on %s layer %d ", p.id, p.Layer().Uint64(), bid, idx)); vote != Abstain {
+					if vote := globalOpinion(ni.tTally[p][bid], ni.avgLayerSize, float64(p.LayerID-idx)); vote != Abstain {
 						ni.tVote[p][bid] = vote
 						if vote == Support {
 							bids = append(bids, bid)

@@ -85,11 +85,11 @@ func TestVec_Multiply(t *testing.T) {
 }
 
 func TestNinjaTortoise_GlobalOpinion(t *testing.T) {
-	glo := globalOpinion(vec{2, 0}, 2, 1, "")
+	glo := globalOpinion(vec{2, 0}, 2, 1)
 	assert.True(t, glo == Support, "vec was wrong %d", glo)
-	glo = globalOpinion(vec{1, 0}, 2, 1, "")
+	glo = globalOpinion(vec{1, 0}, 2, 1)
 	assert.True(t, glo == Abstain, "vec was wrong %d", glo)
-	glo = globalOpinion(vec{0, 2}, 2, 1, "")
+	glo = globalOpinion(vec{0, 2}, 2, 1)
 	assert.True(t, glo == Against, "vec was wrong %d", glo)
 }
 
