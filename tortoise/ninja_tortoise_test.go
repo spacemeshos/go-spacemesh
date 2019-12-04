@@ -362,7 +362,7 @@ func createLayer2(index types.LayerID, view *types.Layer, votes []*types.Layer, 
 func TestNinjaTortoise_LayerWithNoVotes(t *testing.T) {
 	lg := log.New(t.Name(), "", "")
 
-	mdb := getMeshForBench()
+	mdb := getPersistentMash()
 	alg := NewNinjaTortoise(200, mdb, 5, lg)
 
 	l := createLayer2(0, nil, []*types.Layer{}, 154)
@@ -424,6 +424,14 @@ func TestNinjaTortoise_LayerWithNoVotes(t *testing.T) {
 	l14 := createLayer2(14, l13, []*types.Layer{l13, l12, l11, l10, l9}, 148)
 	AddLayer(mdb, l14)
 	alg.handleIncomingLayer(l14)
+
+	l15 := createLayer2(15, l14, []*types.Layer{l14, l13, l12, l11, l10}, 150)
+	AddLayer(mdb, l15)
+	alg.handleIncomingLayer(l15)
+
+	l16 := createLayer2(16, l15, []*types.Layer{l15, l14, l13, l12, l11}, 121)
+	AddLayer(mdb, l16)
+	alg.handleIncomingLayer(l16)
 }
 
 func TestNinjaTortoise_OneMoreLayerWithNoVotes(t *testing.T) {
@@ -625,15 +633,14 @@ func TestNinjaTortoise_S100P70(t *testing.T) {
 }
 
 func TestNinjaTortoise_S200P199(t *testing.T) {
-	t.Skip()
+
 	defer persistenceTeardown()
-	sanity(t, getMeshForBench(), 100, 200, 200, badblocks)
+	sanity(t, getPersistentMash(), 100, 200, 200, badblocks)
 }
 
 func TestNinjaTortoise_S200P140(t *testing.T) {
-	t.Skip()
 	defer persistenceTeardown()
-	sanity(t, getMeshForBench(), 100, 200, 140, badblocks)
+	sanity(t, getPersistentMash(), 100, 200, 140, badblocks)
 }
 
 //vote explicitly only for previous layer
@@ -668,9 +675,7 @@ func sanity(t *testing.T, mdb *mesh.MeshDB, layers int, layerSize int, patternSi
 	alg := NewNinjaTortoise(layerSize, mdb, 5, lg)
 
 	for _, lyr := range lyrs {
-		start := time.Now()
 		alg.handleIncomingLayer(lyr)
-		alg.Debug("Time to process layer: %v ", time.Since(start))
 		fmt.Println(fmt.Sprintf("lyr %v tally was %d", lyr.Index()-1, alg.tTally[alg.pBase][mesh.GenesisBlock.Id()]))
 		l = lyr
 	}
