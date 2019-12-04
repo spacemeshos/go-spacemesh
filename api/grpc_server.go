@@ -32,6 +32,7 @@ type SpacemeshGrpcService struct {
 	Mining        MiningAPI        // ATX Builder
 	Oracle        OracleAPI
 	GenTime       GenesisTimeAPI
+	Post          PostAPI
 	LayerDuration time.Duration
 	Logging       LoggingAPI
 }
@@ -98,7 +99,20 @@ func (s SpacemeshGrpcService) Echo(ctx context.Context, in *pb.SimpleMessage) (*
 	return &pb.SimpleMessage{Value: in.Value}, nil
 }
 
-// Echo returns the response for an echo api request
+func (s SpacemeshGrpcService) getProjection(addr types.Address) (nonce, balance uint64, err error) {
+	nonce = s.StateApi.GetNonce(addr)
+	balance = s.StateApi.GetBalance(addr)
+	nonce, balance, err = s.Tx.GetProjection(addr, nonce, balance)
+	if err != nil {
+		return 0, 0, err
+	}
+	nonce, balance = s.TxMempool.GetProjection(addr, nonce, balance)
+	return nonce, balance, nil
+}
+
+// GetBalance returns the current account balance for the provided account ID. The balance is based on the global state
+// and all known transactions in unapplied blocks and the mempool that originate from the given account. Unapplied
+// transactions coming INTO the given account (from mempool or unapplied blocks) are NOT counted.
 func (s SpacemeshGrpcService) GetBalance(ctx context.Context, in *pb.AccountId) (*pb.SimpleMessage, error) {
 	log.Info("GRPC GetBalance msg")
 	addr := types.HexToAddress(in.Address)
@@ -108,13 +122,17 @@ func (s SpacemeshGrpcService) GetBalance(ctx context.Context, in *pb.AccountId) 
 		return nil, fmt.Errorf("account does not exist")
 	}
 
-	val := s.StateApi.GetBalance(addr)
-	valStr := strconv.FormatUint(val, 10)
-	log.Info("GRPC GetBalance returned msg %v", valStr)
-	return &pb.SimpleMessage{Value: valStr}, nil
+	_, balance, err := s.getProjection(addr)
+	if err != nil {
+		return nil, err
+	}
+	msg := &pb.SimpleMessage{Value: strconv.FormatUint(balance, 10)}
+	log.Info("GRPC GetBalance returned msg.Value %v", msg.Value)
+	return msg, nil
 }
 
-// Echo returns the response for an echo api request
+// GetNonce returns the current account nonce for the provided account ID. The nonce is based on the global state and
+// all known transactions in unapplied blocks and the mempool.
 func (s SpacemeshGrpcService) GetNonce(ctx context.Context, in *pb.AccountId) (*pb.SimpleMessage, error) {
 	log.Info("GRPC GetNonce msg")
 	addr := types.HexToAddress(in.Address)
@@ -124,10 +142,13 @@ func (s SpacemeshGrpcService) GetNonce(ctx context.Context, in *pb.AccountId) (*
 		return nil, fmt.Errorf("account does not exist")
 	}
 
-	val := s.StateApi.GetNonce(addr)
-	msg := pb.SimpleMessage{Value: strconv.FormatUint(val, 10)}
-	log.Info("GRPC GetNonce returned msg %v", strconv.FormatUint(val, 10))
-	return &msg, nil
+	nonce, _, err := s.getProjection(addr)
+	if err != nil {
+		return nil, err
+	}
+	msg := &pb.SimpleMessage{Value: strconv.FormatUint(nonce, 10)}
+	log.Info("GRPC GetNonce returned msg.Value %v", msg.Value)
+	return msg, nil
 }
 
 func (s SpacemeshGrpcService) SubmitTransaction(ctx context.Context, in *pb.SignedTransaction) (*pb.TxConfirmation, error) {
@@ -196,10 +217,12 @@ type TxAPI interface {
 	LatestLayer() types.LayerID
 	GetLayerApplied(txId types.TransactionId) *types.LayerID
 	GetTransaction(id types.TransactionId) (*types.Transaction, error)
+	GetProjection(addr types.Address, prevNonce, prevBalance uint64) (nonce, balance uint64, err error)
+	ValidatedLayer() types.LayerID
 }
 
 // NewGrpcService create a new grpc service using config data.
-func NewGrpcService(net NetworkAPI, state StateAPI, tx TxAPI, txMempool *miner.TxMempool, mining MiningAPI, oracle OracleAPI, genTime GenesisTimeAPI, layerDurationSec int, logging LoggingAPI) *SpacemeshGrpcService {
+func NewGrpcService(net NetworkAPI, state StateAPI, tx TxAPI, txMempool *miner.TxMempool, mining MiningAPI, oracle OracleAPI, genTime GenesisTimeAPI, post PostAPI, layerDurationSec int, logging LoggingAPI) *SpacemeshGrpcService {
 	port := config.ConfigValues.GrpcServerPort
 	server := grpc.NewServer()
 	return &SpacemeshGrpcService{
@@ -212,6 +235,7 @@ func NewGrpcService(net NetworkAPI, state StateAPI, tx TxAPI, txMempool *miner.T
 		Mining:        mining,
 		Oracle:        oracle,
 		GenTime:       genTime,
+		Post:          post,
 		LayerDuration: time.Duration(layerDurationSec) * time.Second,
 		Logging:       logging,
 	}
@@ -295,6 +319,19 @@ func (s SpacemeshGrpcService) GetGenesisTime(ctx context.Context, empty *empty.E
 	return &pb.SimpleMessage{Value: s.GenTime.GetGenesisTime().String()}, nil
 }
 
+func (s SpacemeshGrpcService) ResetPost(ctx context.Context, empty *empty.Empty) (*pb.SimpleMessage, error) {
+	log.Info("GRPC ResetPost msg")
+	stat, _, _ := s.Mining.MiningStats()
+	if stat == activation.InitInProgress {
+		return nil, fmt.Errorf("cannot reset, init in progress")
+	}
+	err := s.Post.Reset()
+	if err != nil {
+		return nil, err
+	}
+	return &pb.SimpleMessage{Value: "ok"}, nil
+}
+
 func (s SpacemeshGrpcService) SetLoggerLevel(ctx context.Context, msg *pb.SetLogLevel) (*pb.SimpleMessage, error) {
 	log.Info("GRPC SetLogLevel msg")
 	err := s.Logging.SetLogLevel(msg.LoggerName, msg.Severity)
@@ -306,23 +343,39 @@ func (s SpacemeshGrpcService) SetLoggerLevel(ctx context.Context, msg *pb.SetLog
 
 func (s SpacemeshGrpcService) GetAccountTxs(ctx context.Context, txsSinceLayer *pb.GetTxsSinceLayer) (*pb.AccountTxs, error) {
 	log.Info("GRPC GetAccountTxs msg")
-	acc := types.HexToAddress(txsSinceLayer.Account.Address)
-	if txsSinceLayer.StartLayer > uint64(s.Tx.LatestLayer()) {
+
+	currentPBase := s.Tx.ValidatedLayer()
+
+	addr := types.HexToAddress(txsSinceLayer.Account.Address)
+	minLayer := types.LayerID(txsSinceLayer.StartLayer)
+	if minLayer > s.Tx.LatestLayer() {
 		return &pb.AccountTxs{}, fmt.Errorf("invalid start layer")
 	}
-	var allTxs []types.TransactionId
-	for i := txsSinceLayer.StartLayer; i < uint64(s.Tx.LatestLayer()); i++ {
-		txs := s.Tx.GetTransactionsByDestination(types.LayerID(i), acc)
-		allTxs = append(allTxs, txs...)
-		moreTxs := s.Tx.GetTransactionsByOrigin(types.LayerID(i), acc)
-		allTxs = append(allTxs, moreTxs...)
+
+	txs := pb.AccountTxs{ValidatedLayer: currentPBase.Uint64()}
+
+	meshTxIds := s.getTxIdsFromMesh(minLayer, addr)
+	for _, txId := range meshTxIds {
+		txs.Txs = append(txs.Txs, txId.String())
 	}
 
-	txs := pb.AccountTxs{}
-	for _, x := range allTxs {
-		txs.Txs = append(txs.Txs, x.String())
+	mempoolTxIds := s.TxMempool.GetTxIdsByAddress(addr)
+	for _, txId := range mempoolTxIds {
+		txs.Txs = append(txs.Txs, txId.String())
 	}
+
 	return &txs, nil
+}
+
+func (s SpacemeshGrpcService) getTxIdsFromMesh(minLayer types.LayerID, addr types.Address) []types.TransactionId {
+	var txIds []types.TransactionId
+	for layerId := minLayer; layerId < s.Tx.LatestLayer(); layerId++ {
+		destTxIds := s.Tx.GetTransactionsByDestination(layerId, addr)
+		txIds = append(txIds, destTxIds...)
+		originTxIds := s.Tx.GetTransactionsByOrigin(layerId, addr)
+		txIds = append(txIds, originTxIds...)
+	}
+	return txIds
 }
 
 func (s SpacemeshGrpcService) GetAccountRewards(ctx context.Context, account *pb.AccountId) (*pb.AccountRewards, error) {

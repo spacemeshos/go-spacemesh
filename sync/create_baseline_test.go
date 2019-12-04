@@ -23,7 +23,7 @@ func (blockBuilderMock) ValidateAndAddTxToPool(tx *types.Transaction) error {
 }
 
 func TestCreateBaseline(t *testing.T) {
-
+	t.Skip()
 	const (
 		numOfLayers    = 51  // 201
 		blocksPerLayer = 200 // 200

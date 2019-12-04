@@ -92,6 +92,7 @@ message SetLogLevel {
 
 message AccountTxs {
     repeated string txs = 1;
+    uint64 validatedLayer = 2;
 }
 
 message GetTxsSinceLayer {
@@ -196,6 +197,12 @@ service SpacemeshService {
     rpc GetAccountRewards(AccountId) returns (AccountRewards) {
         option (google.api.http) = {
           post: "/v1/accountrewards"
+          body: "*"
+        };
+    }
+    rpc ResetPost (google.protobuf.Empty) returns (SimpleMessage) {
+        option (google.api.http) = {
+          post: "/v1/resetpost"
           body: "*"
         };
     }

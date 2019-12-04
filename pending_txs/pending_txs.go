@@ -13,7 +13,7 @@ type nanoTx struct {
 }
 
 type AccountPendingTxs struct {
-	PendingTxs map[uint64]map[types.TransactionId]nanoTx
+	PendingTxs map[uint64]map[types.TransactionId]nanoTx // nonce -> TxID -> nanoTx
 	mu         sync.RWMutex
 }
 

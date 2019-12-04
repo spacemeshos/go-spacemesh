@@ -12,6 +12,7 @@ import (
 type TxMempool struct {
 	txs      map[types.TransactionId]*types.Transaction
 	accounts map[types.Address]*pending_txs.AccountPendingTxs
+	txByAddr map[types.Address]map[types.TransactionId]struct{}
 	mu       sync.RWMutex
 }
 
@@ -19,6 +20,7 @@ func NewTxMemPool() *TxMempool {
 	return &TxMempool{
 		txs:      make(map[types.TransactionId]*types.Transaction),
 		accounts: make(map[types.Address]*pending_txs.AccountPendingTxs),
+		txByAddr: make(map[types.Address]map[types.TransactionId]struct{}),
 	}
 }
 
@@ -30,6 +32,14 @@ func (t *TxMempool) Get(id types.TransactionId) (*types.Transaction, error) {
 		return tx, nil
 	}
 	return nil, errors.New("transaction not found in mempool")
+}
+
+func (t *TxMempool) GetTxIdsByAddress(addr types.Address) []types.TransactionId {
+	var ids []types.TransactionId
+	for id := range t.txByAddr[addr] {
+		ids = append(ids, id)
+	}
+	return ids
 }
 
 func (t *TxMempool) GetTxsForBlock(numOfTxs int, getState func(addr types.Address) (nonce, balance uint64, err error)) ([]types.TransactionId, error) {
@@ -72,6 +82,8 @@ func (t *TxMempool) Put(id types.TransactionId, tx *types.Transaction) {
 	t.mu.Lock()
 	t.txs[id] = tx
 	t.getOrCreate(tx.Origin()).Add(0, tx)
+	t.addToAddr(tx.Origin(), id)
+	t.addToAddr(tx.Recipient, id)
 	t.mu.Unlock()
 }
 
@@ -88,6 +100,8 @@ func (t *TxMempool) Invalidate(id types.TransactionId) {
 				delete(t.accounts, tx.Origin())
 			}
 		}
+		t.removeFromAddr(tx.Origin(), id)
+		t.removeFromAddr(tx.Recipient, id)
 	}
 	t.mu.Unlock()
 }
@@ -110,4 +124,23 @@ func (t *TxMempool) getOrCreate(addr types.Address) *pending_txs.AccountPendingT
 		t.accounts[addr] = account
 	}
 	return account
+}
+
+// ⚠️ must be called under write-lock
+func (t *TxMempool) addToAddr(addr types.Address, txId types.TransactionId) {
+	addrMap, found := t.txByAddr[addr]
+	if !found {
+		addrMap = make(map[types.TransactionId]struct{})
+		t.txByAddr[addr] = addrMap
+	}
+	addrMap[txId] = struct{}{}
+}
+
+// ⚠️ must be called under write-lock
+func (t *TxMempool) removeFromAddr(addr types.Address, txId types.TransactionId) {
+	addrMap := t.txByAddr[addr]
+	delete(addrMap, txId)
+	if len(addrMap) == 0 {
+		delete(t.txByAddr, addr)
+	}
 }

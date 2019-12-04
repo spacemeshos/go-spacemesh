@@ -80,6 +80,14 @@ else
 endif
 .PHONY: sync
 
+harness:
+ifeq ($(OS),WINDOWS_NT)
+	cd cmd/integration ; go build -o $(BIN_DIR_WIN)/go-harness.exe; cd ..
+else
+	cd cmd/integration ; go build -o $(BIN_DIR)/go-harness; cd ..
+endif
+.PHONY: harness
+
 tidy:
 	go mod tidy
 .PHONY: tidy
@@ -206,6 +214,9 @@ endif
 dockertest-sync: dockerbuild-test dockerrun-sync
 .PHONY: dockertest-sync
 
+dockertest-harness: dockerbuild-test dockerrun-harness
+.PHONY: dockertest-harness
+
 # command for late nodes
 
 dockerrun-late-nodes:
@@ -224,7 +235,7 @@ dockertest-late-nodes: dockerbuild-test dockerrun-late-nodes
 .PHONY: dockertest-late-nodes
 
 # The following is used to run tests one after the other locally
-dockerrun-test: dockerbuild-test dockerrun-p2p dockerrun-mining dockerrun-hare dockerrun-sync
+dockerrun-test: dockerbuild-test dockerrun-p2p dockerrun-mining dockerrun-hare dockerrun-sync dockerrun-late-nodes
 .PHONY: dockerrun-test
 
 dockerrun-all: dockerpush dockerrun-test

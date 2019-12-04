@@ -76,7 +76,6 @@ const (
 	AtxBuilderLogger     = "atxBuilder"
 )
 
-// VersionCmd returns the current version of spacemesh
 var Cmd = &cobra.Command{
 	Use:   "node",
 	Short: "start node",
@@ -99,6 +98,7 @@ var VersionCmd = &cobra.Command{
 }
 
 func init() {
+	// TODO add commands actually adds flags
 	cmdp.AddCommands(Cmd)
 	Cmd.AddCommand(VersionCmd)
 }
@@ -477,7 +477,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	}
 
 	syncer := sync.NewSync(swarm, msh, app.txPool, atxpool, eValidator, poetDb, conf, clock, app.addLogger(SyncLogger, lg))
-	blockOracle := oracle.NewMinerBlockOracle(layerSize, uint32(app.Config.GenesisActiveSet), layersPerEpoch, atxdb, beaconProvider, vrfSigner, nodeID, syncer.WeaklySynced, app.addLogger(BlockOracle, lg))
+	blockOracle := oracle.NewMinerBlockOracle(layerSize, uint32(app.Config.GenesisActiveSet), layersPerEpoch, atxdb, beaconProvider, vrfSigner, nodeID, syncer.ListenToGossip, app.addLogger(BlockOracle, lg))
 
 	// TODO: we should probably decouple the apptest and the node (and duplicate as necessary)
 	var hOracle hare.Rolacle
@@ -505,6 +505,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 
 		return true
 	}
+
 	ha := hare.New(app.Config.HARE, swarm, sgn, nodeID, validationFunc, syncer.IsSynced, msh, hOracle, uint16(app.Config.LayersPerEpoch), idStore, hOracle, clock.Subscribe(), app.addLogger(HareLogger, lg))
 
 	stateAndMeshProjector := pending_txs.NewStateAndMeshProjector(st, msh)
@@ -522,7 +523,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	if coinBase.Big().Uint64() == 0 && app.Config.StartMining {
 		app.log.Panic("invalid Coinbase account")
 	}
-	atxBuilder := activation.NewBuilder(nodeID, coinBase, sgn, atxdb, swarm, msh, layersPerEpoch, nipstBuilder, postClient, clock.Subscribe(), syncer.WeaklySynced, store, app.addLogger("atxBuilder", lg))
+	atxBuilder := activation.NewBuilder(nodeID, coinBase, sgn, atxdb, swarm, msh, layersPerEpoch, nipstBuilder, postClient, clock.Subscribe(), syncer.ListenToGossip, store, app.addLogger("atxBuilder", lg))
 
 	app.blockProducer = blockProducer
 	app.blockListener = blockListener
@@ -802,7 +803,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	if apiConf.StartGrpcServer || apiConf.StartJSONServer {
 		// start grpc if specified or if json rpc specified
 		layerDuration := app.Config.LayerDurationSec
-		app.grpcAPIService = api.NewGrpcService(app.P2P, app.state, app.mesh, app.txPool, app.atxBuilder, app.oracle, app.clock, layerDuration, app)
+		app.grpcAPIService = api.NewGrpcService(app.P2P, app.state, app.mesh, app.txPool, app.atxBuilder, app.oracle, app.clock, postClient, layerDuration, app)
 		app.grpcAPIService.StartService()
 	}
 

@@ -122,7 +122,7 @@ def choose_k8s_object_create(config, deployment_file, statefulset_file):
 
 
 def _setup_dep_ss_file_path(file_path, dep_type, node_type):
-    # TODO we should implement this func just for deployment file
+    # TODO we should modify this func to be a generic one
     """
     sets up deployment files
     :param file_path: string, a file path to overwrite the default file path value (BOOT_DEPLOYMENT_FILE,
@@ -457,15 +457,24 @@ class ClientWrapper:
         print(Ansi.YELLOW + "calling api: {} ({})...".format(api.name, api.value), end="")
         out = api_call(self.ip, json.dumps(data), api.value, self.namespace)
         print(" done.", Ansi.BRIGHT_BLACK, out.replace("'", '"'), Ansi.RESET)
-        return json.loads(out.replace("'", '"'))
+
+        try:
+            out_json = json.loads(out.replace("'", '"'))
+            return out_json
+        except json.JSONDecodeError as e:
+            print(f"could not load json from api output: {e}\noutput={out}")
+
+    def __str__(self):
+        return f"client wrapper:\n\tip={self.ip}\n\tname={self.name}\n\tnamespace={self.namespace}"
 
 
 def test_transaction(setup_network):
     ns = testconfig['namespace']
+    print(f"{setup_network}")
 
     # choose client to run on
     client_wrapper = ClientWrapper(setup_network.clients.pods[0], ns)
-
+    print(f"{client_wrapper}")
     out = client_wrapper.call(Api.NONCE, {'address': '1'})
     assert out.get('value') == '0'
     print("nonce ok")
@@ -621,21 +630,23 @@ def test_transactions(setup_network):
             assert transfer(client_wrapper, tap, str_pub, amount), "Transfer from tap failed"
 
         print_title("Ensuring that all transactions were received")
-        ready = 0
         iterations_to_try = int(testconfig['client']['args']['layers-per-epoch']) * 2  # wait for two epochs (genesis)
+        ready_accounts = set()
         for x in range(iterations_to_try):
-            ready = 0
             layer_duration = testconfig['client']['args']['layer-duration-sec']
             print("\nSleeping layer duration ({}s)... {}/{}".format(layer_duration, x+1, iterations_to_try))
             time.sleep(float(layer_duration))
-            if test_account(client_wrapper, tap, tap_init_amount):
-                for pk in accounts:
-                    if pk == tap:
-                        continue
-                    assert test_account(client_wrapper, pk), "account {} didn't have the expected nonce and balance".format(pk)
-                    ready += 1
+            if tap not in ready_accounts and test_account(client_wrapper, tap, tap_init_amount):
+                ready_accounts.add(tap)
+            for pk in accounts:
+                if pk == tap or pk in ready_accounts:
+                    continue
+                if test_account(client_wrapper, pk):
+                    ready_accounts.add(pk)
+            if accounts.keys() == ready_accounts:
                 break
-        assert ready == len(accounts)-1, "Not all accounts received sent txs"  # one for 0 counting and one for tap.
+        assert accounts.keys() == ready_accounts, \
+            "Not all accounts received sent txs. Accounts that aren't ready: %s" % (accounts.keys()-ready_accounts)
     send_txs_from_tap()
 
     def is_there_a_valid_acc(min_balance, accounts_snapshot: dict = None):

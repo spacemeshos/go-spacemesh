@@ -23,8 +23,9 @@ class DeploymentInfo:
         self.pods = []
 
     def __str__(self):
-        return f"\n\tdeployment name: {self.deployment_name}\n\tdeployment id: {self.deployment_id}" \
-               f"\n\tpods number: {len(self.pods)}"
+        ret_str = f"DeploymentInfo:\n\tdeployment name: {self.deployment_name}\n\t"
+        ret_str += f"deployment id: {self.deployment_id}\n\tpods number: {len(self.pods)}"
+        return ret_str
 
 
 class NetworkDeploymentInfo:
@@ -35,8 +36,10 @@ class NetworkDeploymentInfo:
         self.clients = cl_deployment_info
 
     def __str__(self):
-        return f"   deployment name: {self.deployment_name}\n  deployment id: {self.deployment_id}\n" \
-               f"   bootstrap info: \n{self.bootstrap}\n    client info: \n{self.clients}"
+        ret_str = f"NetworkDeploymentInfo:\n\tdeployment name: {self.deployment_name}\n\t"
+        ret_str += f"deployment id: {self.deployment_id}\n\tbootstrap info:\n\t{self.bootstrap}\n\t"
+        ret_str += f"client info:\n\t{self.clients}"
+        return ret_str
 
 
 @pytest.fixture(scope='session')
