@@ -129,7 +129,25 @@ func NewNinjaTortoise(layerSize int, blocks Mesh, hdist int, log log.Log) *Ninja
 	return trtl
 }
 
+func (ni *NinjaTortoise) saveOpinion() error {
+	for bid, vec := range ni.TVote[ni.PBase] {
+		valid := vec == Support
+		if err := ni.SaveContextualValidity(bid, valid); err != nil {
+			return err
+		}
+
+		if !valid {
+			ni.With().Warning("block is contextually invalid", log.BlockId(bid.String()))
+		}
+		events.Publish(events.ValidBlock{Id: bid.String(), Valid: valid})
+	}
+	return nil
+}
+
 func (ni *NinjaTortoise) PersistTortoise() error {
+	if err := ni.saveOpinion(); err != nil {
+		return err
+	}
 	return ni.Persist(mesh.TORTOISE, ni.ninjaTortoise)
 }
 
@@ -596,25 +614,14 @@ func (ni *NinjaTortoise) handleIncomingLayer(newlyr *types.Layer) {
 			// update completeness of p
 			if _, found := ni.TComplete[p]; complete && !found {
 				ni.TComplete[p] = struct{}{}
-				ni.SaveOpinion(p)
 				ni.PBase = p
-				ni.PersistTortoise()
+				if err := ni.PersistTortoise(); err != nil {
+					ni.Error("Tortoise persistence failed %v", err)
+				}
 				ni.Debug("found new complete and good pattern for layer %d pattern %d with %d support ", l, p.id, ni.TSupport[p])
 			}
 		}
 	}
 	ni.With().Info("Tortoise finished layer", log.LayerId(uint64(newlyr.Index())), log.Uint64("pbase", uint64(ni.PBase.Layer())))
 	return
-}
-
-func (ni *NinjaTortoise) SaveOpinion(p votingPattern) {
-	for bid, vec := range ni.TVote[p] {
-		valid := vec == Support
-		ni.SaveContextualValidity(bid, valid)
-
-		if !valid {
-			ni.With().Warning("block is contextually invalid", log.BlockId(bid.String()))
-		}
-		events.Publish(events.ValidBlock{Id: bid.String(), Valid: valid})
-	}
 }
