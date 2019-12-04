@@ -55,7 +55,7 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 			bl.Log.Info("listening  stopped")
 			return
 		case data := <-bl.receivedGossipBlocks:
-			if !bl.WeaklySynced() {
+			if !bl.ListenToGossip() {
 				bl.With().Info("ignoring gossip blocks - not synced yet")
 				break
 			}
@@ -107,7 +107,5 @@ func (bl *BlockListener) handleBlock(data service.GossipMessage) {
 	if blk.Layer() <= bl.ValidatedLayer() {
 		bl.Syncer.HandleLateBlock(&blk)
 	}
-
-	bl.With().Info("added block to database", log.BlockId(blk.Id().String()))
 	return
 }

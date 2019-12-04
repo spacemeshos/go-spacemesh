@@ -218,6 +218,7 @@ type TxAPI interface {
 	GetLayerApplied(txId types.TransactionId) *types.LayerID
 	GetTransaction(id types.TransactionId) (*types.Transaction, error)
 	GetProjection(addr types.Address, prevNonce, prevBalance uint64) (nonce, balance uint64, err error)
+	ValidatedLayer() types.LayerID
 }
 
 // NewGrpcService create a new grpc service using config data.
@@ -342,23 +343,39 @@ func (s SpacemeshGrpcService) SetLoggerLevel(ctx context.Context, msg *pb.SetLog
 
 func (s SpacemeshGrpcService) GetAccountTxs(ctx context.Context, txsSinceLayer *pb.GetTxsSinceLayer) (*pb.AccountTxs, error) {
 	log.Info("GRPC GetAccountTxs msg")
-	acc := types.HexToAddress(txsSinceLayer.Account.Address)
-	if txsSinceLayer.StartLayer > uint64(s.Tx.LatestLayer()) {
+
+	currentPBase := s.Tx.ValidatedLayer()
+
+	addr := types.HexToAddress(txsSinceLayer.Account.Address)
+	minLayer := types.LayerID(txsSinceLayer.StartLayer)
+	if minLayer > s.Tx.LatestLayer() {
 		return &pb.AccountTxs{}, fmt.Errorf("invalid start layer")
 	}
-	var allTxs []types.TransactionId
-	for i := txsSinceLayer.StartLayer; i < uint64(s.Tx.LatestLayer()); i++ {
-		txs := s.Tx.GetTransactionsByDestination(types.LayerID(i), acc)
-		allTxs = append(allTxs, txs...)
-		moreTxs := s.Tx.GetTransactionsByOrigin(types.LayerID(i), acc)
-		allTxs = append(allTxs, moreTxs...)
+
+	txs := pb.AccountTxs{ValidatedLayer: currentPBase.Uint64()}
+
+	meshTxIds := s.getTxIdsFromMesh(minLayer, addr)
+	for _, txId := range meshTxIds {
+		txs.Txs = append(txs.Txs, txId.String())
 	}
 
-	txs := pb.AccountTxs{}
-	for _, x := range allTxs {
-		txs.Txs = append(txs.Txs, x.String())
+	mempoolTxIds := s.TxMempool.GetTxIdsByAddress(addr)
+	for _, txId := range mempoolTxIds {
+		txs.Txs = append(txs.Txs, txId.String())
 	}
+
 	return &txs, nil
+}
+
+func (s SpacemeshGrpcService) getTxIdsFromMesh(minLayer types.LayerID, addr types.Address) []types.TransactionId {
+	var txIds []types.TransactionId
+	for layerId := minLayer; layerId < s.Tx.LatestLayer(); layerId++ {
+		destTxIds := s.Tx.GetTransactionsByDestination(layerId, addr)
+		txIds = append(txIds, destTxIds...)
+		originTxIds := s.Tx.GetTransactionsByOrigin(layerId, addr)
+		txIds = append(txIds, originTxIds...)
+	}
+	return txIds
 }
 
 func (s SpacemeshGrpcService) GetAccountRewards(ctx context.Context, account *pb.AccountId) (*pb.AccountRewards, error) {

@@ -2,10 +2,8 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"net"
-	"net/http"
 	"os"
 	"os/exec"
 	"runtime"
@@ -148,16 +146,20 @@ func main() {
 			}
 		}
 	}()
-	// a dummy server so the main process won't be terminated before the tests are done running
-	srv := &http.Server{Addr: ":6060"}
-	defer func() {
-		if err := srv.Shutdown(context.TODO()); err != nil {
-			log.Error("cannot shutdown http server: ", err)
-		}
-	}()
 
-	err = srv.ListenAndServe()
-	if err != nil {
-		log.Error("cannot start http server: ", err)
-	}
+	// TODO: Expose server when it's needed to pass commands
+	// a dummy server so the main process won't be terminated before the tests are done running
+	//srv := &http.Server{Addr: ":9595"}
+	//defer func() {
+	//	if err := srv.Shutdown(context.TODO()); err != nil {
+	//		log.Error("cannot shutdown http server: ", err)
+	//	}
+	//}()
+	//
+	//err = srv.ListenAndServe()
+	//if err != nil {
+	//	log.Error("cannot start http server: ", err)
+	//}
+
+	select {} // block forever so it won't die
 }

@@ -97,7 +97,7 @@ func (m mockTxProcessor) AddressExists(addr types.Address) bool {
 type mockSyncer struct {
 }
 
-func (mockSyncer) WeaklySynced() bool {
+func (mockSyncer) ListenToGossip() bool {
 	return true
 }
 
@@ -109,7 +109,7 @@ type mockSyncerP struct {
 	synced bool
 }
 
-func (m mockSyncerP) WeaklySynced() bool {
+func (m mockSyncerP) ListenToGossip() bool {
 	return m.synced
 }
 
