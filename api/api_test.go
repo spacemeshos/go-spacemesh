@@ -97,7 +97,7 @@ func (t *TxAPIMock) LatestLayer() types.LayerID {
 	return 10
 }
 
-func (t *TxAPIMock) GetRewards(account types.Address) (rewards []types.Reward) {
+func (t *TxAPIMock) GetRewards(account types.Address) (rewards []types.Reward, err error) {
 	return
 }
 

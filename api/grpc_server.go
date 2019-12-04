@@ -211,7 +211,7 @@ func (s SpacemeshGrpcService) StopService() {
 
 type TxAPI interface {
 	AddressExists(addr types.Address) bool
-	GetRewards(account types.Address) (rewards []types.Reward)
+	GetRewards(account types.Address) (rewards []types.Reward, err error)
 	GetTransactionsByDestination(l types.LayerID, account types.Address) (txs []types.TransactionId)
 	GetTransactionsByOrigin(l types.LayerID, account types.Address) (txs []types.TransactionId)
 	LatestLayer() types.LayerID
@@ -382,10 +382,18 @@ func (s SpacemeshGrpcService) GetAccountRewards(ctx context.Context, account *pb
 	log.Info("GRPC GetAccountRewards msg")
 	acc := types.HexToAddress(account.Address)
 
-	rewards := s.Tx.GetRewards(acc)
+	rewards, err := s.Tx.GetRewards(acc)
+	if err != nil {
+		log.Error("failed to get rewards: %v", err)
+		return nil, err
+	}
 	rewardsOut := pb.AccountRewards{}
 	for _, x := range rewards {
-		rewardsOut.Rewards = append(rewardsOut.Rewards, &pb.Reward{Reward: x.Amount, Layer: x.Layer.Uint64()})
+		rewardsOut.Rewards = append(rewardsOut.Rewards, &pb.Reward{
+			Layer:               x.Layer.Uint64(),
+			TotalReward:         x.TotalReward,
+			LayerRewardEstimate: x.LayerRewardEstimate,
+		})
 	}
 
 	return &rewardsOut, nil
