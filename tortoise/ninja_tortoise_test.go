@@ -362,7 +362,7 @@ func createLayer2(index types.LayerID, view *types.Layer, votes []*types.Layer, 
 func TestNinjaTortoise_LayerWithNoVotes(t *testing.T) {
 	lg := log.New(t.Name(), "", "")
 
-	mdb := getPersistentMash()
+	mdb := getInMemMesh()
 	alg := NewNinjaTortoise(200, mdb, 5, lg)
 
 	l := createLayer2(0, nil, []*types.Layer{}, 154)
@@ -441,7 +441,7 @@ func TestNinjaTortoise_LayerWithNoVotes(t *testing.T) {
 func TestNinjaTortoise_LayerWithNoVotes2(t *testing.T) {
 	lg := log.New(t.Name(), "", "")
 
-	mdb := getPersistentMash()
+	mdb := getInMemMesh()
 	alg := NewNinjaTortoise(200, mdb, 5, lg)
 
 	l := createLayer2(0, nil, []*types.Layer{}, 154)
