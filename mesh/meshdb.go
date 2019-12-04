@@ -680,22 +680,22 @@ func (m *MeshDB) Persist(key []byte, v interface{}) error {
 	return m.general.Put(key, buf.Bytes())
 }
 
-func (m *MeshDB) Retrieve(key []byte, v interface{}) interface{} {
+func (m *MeshDB) Retrieve(key []byte, v interface{}) (interface{}, error) {
 	val, err := m.general.Get(key)
 	if err != nil {
 		m.Warning("failed retrieving object from db ", err)
-		return nil
+		return nil, err
 	}
 
 	if val == nil {
-		m.Info("no such value in database db ", err)
+		return nil, fmt.Errorf("no such value in database db ")
 	}
 
 	dec := gob.NewDecoder(bytes.NewBuffer(val))
 
 	if err := dec.Decode(v); err != nil {
-		m.Error("failed decoding object from db ", err)
+		return nil, fmt.Errorf("failed decoding object from db %v", err)
 	}
 
-	return v
+	return v, nil
 }

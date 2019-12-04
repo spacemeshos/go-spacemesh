@@ -67,7 +67,7 @@ type Mesh interface {
 	ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, foo func(block *types.Block) (bool, error)) error
 	SaveContextualValidity(id types.BlockID, valid bool) error
 	Persist(key []byte, v interface{}) error
-	Retrieve(key []byte, v interface{}) interface{}
+	Retrieve(key []byte, v interface{}) (interface{}, error)
 }
 
 //todo memory optimizations
@@ -151,7 +151,7 @@ func (ni *NinjaTortoise) PersistTortoise() error {
 	return ni.Persist(mesh.TORTOISE, ni.ninjaTortoise)
 }
 
-func (ni *NinjaTortoise) RecoverTortoise() interface{} {
+func (ni *NinjaTortoise) RecoverTortoise() (interface{}, error) {
 	return ni.Retrieve(mesh.TORTOISE, &ninjaTortoise{})
 }
 

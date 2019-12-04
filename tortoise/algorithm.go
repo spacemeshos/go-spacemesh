@@ -28,9 +28,9 @@ func NewAlgorithm(layerSize int, mdb *mesh.MeshDB, hdist int, lg log.Log) *Algor
 func NewRecoveredAlgorithm(mdb *mesh.MeshDB, lg log.Log) *Algorithm {
 	trtl := &NinjaTortoise{Log: lg, Mesh: mdb}
 
-	ni := trtl.RecoverTortoise()
-	if ni == nil {
-		lg.Panic("could not recover tortoise state from disc")
+	ni, err := trtl.RecoverTortoise()
+	if err != nil {
+		lg.Panic("could not recover tortoise state from disc ", err)
 	}
 
 	lg.Info("recovered tortoise from disc")
