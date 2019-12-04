@@ -633,14 +633,17 @@ func TestNinjaTortoise_S100P70(t *testing.T) {
 }
 
 func TestNinjaTortoise_S200P199(t *testing.T) {
+	t.Skip()
 
 	defer persistenceTeardown()
-	sanity(t, getPersistentMash(), 100, 200, 200, badblocks)
+	sanity(t, getMeshForBench(), 100, 200, 200, badblocks)
 }
 
 func TestNinjaTortoise_S200P140(t *testing.T) {
+	t.Skip()
+
 	defer persistenceTeardown()
-	sanity(t, getPersistentMash(), 100, 200, 140, badblocks)
+	sanity(t, getMeshForBench(), 100, 200, 140, badblocks)
 }
 
 //vote explicitly only for previous layer
