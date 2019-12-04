@@ -75,7 +75,7 @@ func NewPoetListener(net service.Service, poetDb *PoetDb, logger log.Log) *PoetL
 		Log:               logger,
 		net:               net,
 		poetDb:            poetDb,
-		poetProofMessages: net.RegisterGossipProtocol(PoetProofProtocol),
+		poetProofMessages: net.RegisterGossipProtocol(PoetProofProtocol, 2),
 		exit:              make(chan struct{}),
 	}
 }

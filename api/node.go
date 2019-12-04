@@ -7,7 +7,7 @@ import (
 )
 
 type Service interface {
-	RegisterGossipProtocol(string) chan service.GossipMessage
+	RegisterGossipProtocol(string, int) chan service.GossipMessage
 }
 
 type StateAPI interface {

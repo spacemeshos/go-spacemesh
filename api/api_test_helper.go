@@ -9,7 +9,7 @@ const APIGossipProtocol = "api_test_gossip"
 
 // ApproveAPIGossipMessages registers the gossip api test protocol and approves every message as valid
 func ApproveAPIGossipMessages(ctx context.Context, s Service) {
-	gm := s.RegisterGossipProtocol(APIGossipProtocol)
+	gm := s.RegisterGossipProtocol(APIGossipProtocol, 3)
 	go func() {
 		for {
 			select {

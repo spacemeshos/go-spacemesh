@@ -43,7 +43,7 @@ func NewBlockListener(net service.Service, sync *Syncer, concurrency int, logger
 		Log:                  logger,
 		semaphore:            make(chan struct{}, concurrency),
 		exit:                 make(chan struct{}),
-		receivedGossipBlocks: net.RegisterGossipProtocol(config.NewBlockProtocol),
+		receivedGossipBlocks: net.RegisterGossipProtocol(config.NewBlockProtocol, 0),
 	}
 	return &bl
 }

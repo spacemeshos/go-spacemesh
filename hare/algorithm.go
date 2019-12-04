@@ -35,7 +35,7 @@ type Rolacle interface {
 
 // NetworkService provides the registration and broadcast abilities in the network.
 type NetworkService interface {
-	RegisterGossipProtocol(protocol string) chan service.GossipMessage
+	RegisterGossipProtocol(protocol string, prio int) chan service.GossipMessage
 	Broadcast(protocol string, payload []byte) error
 }
 

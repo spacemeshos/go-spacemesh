@@ -87,7 +87,7 @@ func (b *Broker) Start() error {
 
 	b.isStarted = true
 
-	b.inbox = b.network.RegisterGossipProtocol(protoName)
+	b.inbox = b.network.RegisterGossipProtocol(protoName, 1)
 	go b.eventLoop()
 
 	return nil
