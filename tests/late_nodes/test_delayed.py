@@ -73,7 +73,7 @@ def test_add_delayed_nodes(init_session, add_curl, setup_bootstrap, start_poet, 
     # start with 20 miners
     startCount = 20
     inf = new_client_in_namespace(ns, setup_bootstrap, cspec, startCount)
-    sleep_and_print(epochDuration) # wait epoch duration
+    sleep_and_print(epochDuration)  # wait epoch duration
 
     # add 10 each epoch
     numToAdd = 10
