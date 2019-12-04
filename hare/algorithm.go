@@ -636,6 +636,7 @@ func (proc *ConsensusProcess) initDefaultBuilder(s *Set) (*messageBuilder, error
 
 func (proc *ConsensusProcess) processPreRoundMsg(msg *Msg) {
 	proc.preRoundTracker.OnPreRound(msg)
+	metrics.PreRoundCounter.With("instance_id", string(proc.instanceId.Bytes())).Add(1)
 }
 
 func (proc *ConsensusProcess) processStatusMsg(msg *Msg) {

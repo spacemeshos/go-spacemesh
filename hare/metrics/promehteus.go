@@ -43,7 +43,7 @@ var (
 		Subsystem: Subsystem,
 		Name:      "pre_round_counter",
 		Help:      "Number of pre-round msgs for each value",
-	}, []string{"value"})
+	}, []string{"instance_id"})
 
 	// TotalConsensusProcesses is the total number of current consensus processes.
 	TotalConsensusProcesses = prometheus.NewGaugeFrom(stdprometheus.GaugeOpts{
