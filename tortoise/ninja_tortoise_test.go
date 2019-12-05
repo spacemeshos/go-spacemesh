@@ -415,14 +415,27 @@ func TestNinjaTortoise_LayerWithNoVotes(t *testing.T) {
 
 	assert.True(t, alg.pBase.Layer() == 7)
 
-	// l7 has the exact amount of votes to be contextually valid which will make 12 complete
-	l12 := createLayer2(12, l11, []*types.Layer{l11, l10, l9, l8, l7}, 172)
+	//now l7 one votes to be contextually valid in the eyes of layer 12 good pattern
+	l12 := createLayer2(12, l11, []*types.Layer{l11, l10, l9, l8, l7}, 171)
 	AddLayer(mdb, l12)
 	alg.handleIncomingLayer(l12)
 
-	l13 := createLayer2(13, l12, []*types.Layer{l12, l11, l10, l9, l8}, 126)
+	assert.True(t, alg.pBase.Layer() == 7)
+
+	//now l7 has the exact amount of votes to be contextually valid which will make 12 good pattern complete
+	l121 := createLayer2(12, l11, []*types.Layer{l11, l10, l9, l8, l7}, 1)
+	AddLayer(mdb, l121)
+	alg.handleIncomingLayer(l121)
+
+	assert.True(t, alg.pBase.Layer() == 7)
+
+	l13 := createLayer2(13, l12, []*types.Layer{l12, l121, l11, l10, l9, l8}, 126)
 	AddLayer(mdb, l13)
 	alg.handleIncomingLayer(l13)
+
+	//now that we accumulated enough extra blocks to account for layer 8 not voting on 7
+	// 12 should become pbase
+	assert.True(t, alg.pBase.Layer() == 12)
 
 	l14 := createLayer2(14, l13, []*types.Layer{l13, l12, l11, l10, l9}, 148)
 	AddLayer(mdb, l14)
