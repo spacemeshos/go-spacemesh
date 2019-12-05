@@ -422,8 +422,6 @@ func TestNinjaTortoise_LayerWithNoVotes(t *testing.T) {
 
 	assert.True(t, alg.pBase.Layer() == 7)
 
-	assert.True(t, alg.pBase.Layer() == 7)
-
 	l13 := createLayer2(13, l12, []*types.Layer{l12, l11, l10, l9, l8}, 126)
 	AddLayer(mdb, l13)
 	alg.handleIncomingLayer(l13)
@@ -433,6 +431,8 @@ func TestNinjaTortoise_LayerWithNoVotes(t *testing.T) {
 	AddLayer(mdb, l121)
 	alg.handleIncomingLayer(l121)
 
+	assert.True(t, alg.pBase.Layer() == 7)
+
 	l14 := createLayer2(14, l13, []*types.Layer{l13, l12, l121, l11, l10, l9}, 148)
 	AddLayer(mdb, l14)
 	alg.handleIncomingLayer(l14)
@@ -440,6 +440,8 @@ func TestNinjaTortoise_LayerWithNoVotes(t *testing.T) {
 	l15 := createLayer2(15, l14, []*types.Layer{l14, l13, l121, l12, l11, l10}, 150)
 	AddLayer(mdb, l15)
 	alg.handleIncomingLayer(l15)
+
+	assert.True(t, alg.pBase.Layer() == 7)
 
 	l16 := createLayer2(16, l15, []*types.Layer{l15, l14, l121, l13, l12, l11}, 121)
 	AddLayer(mdb, l16)
