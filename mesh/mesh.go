@@ -36,6 +36,7 @@ type TxProcessor interface {
 	ApplyRewards(layer types.LayerID, miners []types.Address, reward *big.Int)
 	ValidateSignature(s types.Signed) (types.Address, error)
 	AddressExists(addr types.Address) bool
+	ValidateNonceAndBalance(transaction *types.Transaction) error
 	GetLayerApplied(txId types.TransactionId) *types.LayerID
 }
 
