@@ -168,6 +168,10 @@ func (s SpacemeshGrpcService) SubmitTransaction(ctx context.Context, in *pb.Sign
 	if !s.Tx.AddressExists(tx.Origin()) {
 		log.With().Error("tx failed to validate signature",
 			log.TxId(tx.Id().ShortString()), log.String("origin", tx.Origin().Short()))
+		return nil, fmt.Errorf("transaction origin (%v) not found in global state", tx.Origin())
+	}
+	if err := s.Tx.ValidateNonceAndBalance(tx); err != nil {
+		log.With().Error("tx failed nonce and balance check", log.Err(err))
 		return nil, err
 	}
 	log.Info("GRPC SubmitTransaction BROADCAST tx. address %x (len %v), gaslimit %v, fee %v id %v",
@@ -211,6 +215,7 @@ func (s SpacemeshGrpcService) StopService() {
 
 type TxAPI interface {
 	AddressExists(addr types.Address) bool
+	ValidateNonceAndBalance(transaction *types.Transaction) error
 	GetRewards(account types.Address) (rewards []types.Reward)
 	GetTransactionsByDestination(l types.LayerID, account types.Address) (txs []types.TransactionId)
 	GetTransactionsByOrigin(l types.LayerID, account types.Address) (txs []types.TransactionId)
