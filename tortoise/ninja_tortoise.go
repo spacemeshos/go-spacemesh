@@ -473,7 +473,7 @@ func (ni *NinjaTortoise) processBlocks(layer *types.Layer) {
 
 func (ni *NinjaTortoise) handleGenesis(genesis *types.Layer) {
 	for _, blk := range genesis.Blocks() {
-		ni.TExplicit[blk.Id()] = make(map[types.LayerID]votingPattern, int(ni.hdist)*ni.avgLayerSize)
+		ni.TExplicit[blk.Id()] = make(map[types.LayerID]votingPattern, int(ni.Hdist)*ni.AvgLayerSize)
 	}
 }
 
@@ -593,7 +593,7 @@ func (ni *NinjaTortoise) handleIncomingLayer(newlyr *types.Layer) {
 						}
 					} else {
 						ni.TVote[p][bid] = vote
-						ni.Debug(" %s no opinion on %s %s %s", p, bid, idx, vote, ni.tTally[p][bid])
+						ni.Debug(" %s no opinion on %s %s %s", p, bid, idx, vote, ni.TTally[p][bid])
 						complete = false //not complete
 					}
 				}
@@ -613,7 +613,7 @@ func (ni *NinjaTortoise) handleIncomingLayer(newlyr *types.Layer) {
 				if err := ni.PersistTortoise(); err != nil {
 					ni.Error("Tortoise persistence failed %v", err)
 				}
-				ni.Info("found new complete and good pattern for layer %d pattern %d with %d support ", p.Layer().Uint64(), p.id, ni.tSupport[p])
+				ni.Info("found new complete and good pattern for layer %d pattern %d with %d support ", p.Layer().Uint64(), p.id, ni.TSupport[p])
 			}
 		}
 	}

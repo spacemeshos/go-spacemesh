@@ -413,14 +413,14 @@ func TestNinjaTortoise_LayerWithNoVotes(t *testing.T) {
 	AddLayer(mdb, l11)
 	alg.handleIncomingLayer(l11)
 
-	assert.True(t, alg.pBase.Layer() == 7)
+	assert.True(t, alg.PBase.Layer() == 7)
 
 	//now l7 one votes to be contextually valid in the eyes of layer 12 good pattern
 	l12 := createLayer2(12, l11, []*types.Layer{l11, l10, l9, l8, l7}, 171)
 	AddLayer(mdb, l12)
 	alg.handleIncomingLayer(l12)
 
-	assert.True(t, alg.pBase.Layer() == 7)
+	assert.True(t, alg.PBase.Layer() == 7)
 
 	l13 := createLayer2(13, l12, []*types.Layer{l12, l11, l10, l9, l8}, 126)
 	AddLayer(mdb, l13)
@@ -431,7 +431,7 @@ func TestNinjaTortoise_LayerWithNoVotes(t *testing.T) {
 	AddLayer(mdb, l121)
 	alg.handleIncomingLayer(l121)
 
-	assert.True(t, alg.pBase.Layer() == 7)
+	assert.True(t, alg.PBase.Layer() == 7)
 
 	l14 := createLayer2(14, l13, []*types.Layer{l13, l12, l121, l11, l10, l9}, 148)
 	AddLayer(mdb, l14)
@@ -441,12 +441,12 @@ func TestNinjaTortoise_LayerWithNoVotes(t *testing.T) {
 	AddLayer(mdb, l15)
 	alg.handleIncomingLayer(l15)
 
-	assert.True(t, alg.pBase.Layer() == 7)
+	assert.True(t, alg.PBase.Layer() == 7)
 
 	l16 := createLayer2(16, l15, []*types.Layer{l15, l14, l121, l13, l12, l11}, 121)
 	AddLayer(mdb, l16)
 	alg.handleIncomingLayer(l16)
-	assert.True(t, alg.pBase.Layer() == 15)
+	assert.True(t, alg.PBase.Layer() == 15)
 }
 
 func TestNinjaTortoise_LayerWithNoVotes2(t *testing.T) {
@@ -502,7 +502,7 @@ func TestNinjaTortoise_LayerWithNoVotes2(t *testing.T) {
 	l11 := createLayer2(11, l10, []*types.Layer{l10, l9, l8, l7, l6}, 147)
 	AddLayer(mdb, l11)
 	alg.handleIncomingLayer(l11)
-	assert.True(t, alg.pBase.Layer() == 7)
+	assert.True(t, alg.PBase.Layer() == 7)
 
 	// l7 is missing exactly 1 vote to be contextually valid which will make 12 complete
 	l12 := createLayer2(12, l11, []*types.Layer{l11, l10, l9, l8, l7}, 171)
@@ -524,7 +524,7 @@ func TestNinjaTortoise_LayerWithNoVotes2(t *testing.T) {
 	l16 := createLayer2(16, l15, []*types.Layer{l15, l14, l13, l12, l11}, 121)
 	AddLayer(mdb, l16)
 	alg.handleIncomingLayer(l16)
-	assert.True(t, alg.pBase.Layer() == 7)
+	assert.True(t, alg.PBase.Layer() == 7)
 }
 
 func TestNinjaTortoise_OneMoreLayerWithNoVotes(t *testing.T) {
