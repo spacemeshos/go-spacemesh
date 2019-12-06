@@ -90,6 +90,10 @@ func ConfigTst() mesh.Config {
 
 type MockState struct{}
 
+func (MockState) ValidateNonceAndBalance(transaction *types.Transaction) error {
+	panic("implement me")
+}
+
 func (MockState) GetLayerApplied(txId types.TransactionId) *types.LayerID {
 	panic("implement me")
 }
