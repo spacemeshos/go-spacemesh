@@ -107,7 +107,7 @@ func (s *swarm) waitForGossip() error {
 func newSwarm(ctx context.Context, config config.Config, newNode bool, persist bool) (*swarm, error) {
 
 	port := config.TCPPort
-	address := inet.JoinHostPort("0.0.0.0", strconv.Itoa(port))
+	address := net.Address{"0.0.0.0", strconv.Itoa(port), "tcp"}
 
 	var l *node.LocalNode
 	var err error
