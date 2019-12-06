@@ -129,7 +129,7 @@ func NewRecoveredMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh MeshVal
 	}
 
 	ll.validatedLayer = types.LayerID(util.BytesToUint64(validated))
-	ll.Info("recovered mesh from disc latest layer %d validated layer %s", latest, validated)
+	ll.Info("recovered mesh from disc latest layer %d validated layer %d", ll.latestLayer, ll.validatedLayer)
 
 	return ll
 }
