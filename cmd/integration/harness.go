@@ -78,6 +78,7 @@ func NewHarness(cfg *ServerConfig, args []string) (*Harness, error) {
 }
 
 func main() {
+	dummyChan := make(chan string)
 	log.JSONLog(true)
 	// os.Args[0] contains the current process path
 	h, err := NewHarnessDefaultServerConfig(os.Args[1:])
@@ -85,13 +86,17 @@ func main() {
 		log.With().Error("An error has occurred while generating a new harness: ", log.Err(err))
 	}
 	// listen on error channel, quit when process stops
-	for {
-		select {
-		case errMsg := <-h.server.errChan:
-			log.With().Error("harness received an err from subprocess: ", log.Err(errMsg))
-		case <-h.server.quit:
-			log.With().Info("harness got a quit signal from subprocess")
-			return
+	go func() {
+		for {
+			select {
+			case errMsg := <-h.server.errChan:
+				log.With().Error("harness received an err from subprocess: ", log.Err(errMsg))
+			case <-h.server.quit:
+				log.With().Info("harness got a quit signal from subprocess")
+				break
+			}
 		}
-	}
+	}()
+
+	<-dummyChan
 }
