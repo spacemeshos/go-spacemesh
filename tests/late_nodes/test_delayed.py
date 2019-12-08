@@ -103,4 +103,4 @@ def test_add_delayed_nodes(init_session, add_curl, setup_bootstrap, start_poet, 
     print("Running validation")
     expect_hare(current_index, ns, firstLayerOfLastEpoch, totalLayers-1, total, f)  # validate hare
     atxLastEpoch = query_atx_published(current_index, ns, firstLayerOfLastEpoch)
-    assert len(atxLastEpoch) == total # validate #atxs in last epoch
+    assert len(atxLastEpoch) == total  # validate #atxs in last epoch
