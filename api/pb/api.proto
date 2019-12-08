@@ -15,11 +15,11 @@ message TxConfirmation {
 
 enum TxStatus {
     REJECTED = 0;
-//    INSUFFICIENT_FUNDS = 1;
-//    CONFLICTING = 2;
+    //INSUFFICIENT_FUNDS = 1;
+    //CONFLICTING = 2;
     PENDING = 3;
-//    PROCESSING = 4;
-//    APPROVED = 5;
+    //PROCESSING = 4;
+    //APPROVED = 5;
     CONFIRMED = 6;
 }
 
@@ -92,6 +92,7 @@ message SetLogLevel {
 
 message AccountTxs {
     repeated string txs = 1;
+    uint64 validatedLayer = 2;
 }
 
 message GetTxsSinceLayer {
@@ -101,7 +102,9 @@ message GetTxsSinceLayer {
 
 message Reward {
     uint64 layer = 1;
-    uint64 reward =2;
+    uint64 totalReward = 2;
+    uint64 layerRewardEstimate = 3;
+    // totalReward - layerRewardEstimate = feesEstimate
 }
 
 message AccountRewards {
@@ -181,19 +184,19 @@ service SpacemeshService {
           body: "*"
         };
     }
-    rpc SetLoggerLevel(SetLogLevel) returns (SimpleMessage) {
+    rpc SetLoggerLevel (SetLogLevel) returns (SimpleMessage) {
         option (google.api.http) = {
           post: "/v1/loggerlevel"
           body: "*"
         };
     }
-    rpc GetAccountTxs(GetTxsSinceLayer) returns (AccountTxs) {
+    rpc GetAccountTxs (GetTxsSinceLayer) returns (AccountTxs) {
         option (google.api.http) = {
           post: "/v1/accounttxs"
           body: "*"
         };
     }
-    rpc GetAccountRewards(AccountId) returns (AccountRewards) {
+    rpc GetAccountRewards (AccountId) returns (AccountRewards) {
         option (google.api.http) = {
           post: "/v1/accountrewards"
           body: "*"

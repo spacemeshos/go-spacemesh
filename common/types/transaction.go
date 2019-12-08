@@ -94,6 +94,7 @@ type InnerTransaction struct {
 }
 
 type Reward struct {
-	Layer  LayerID
-	Amount uint64
+	Layer               LayerID
+	TotalReward         uint64
+	LayerRewardEstimate uint64
 }

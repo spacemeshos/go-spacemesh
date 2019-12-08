@@ -707,23 +707,23 @@ def test_transactions(setup_network):
 def test_mining(setup_network):
     ns = testconfig['namespace']
 
-    # choose client to run on
-    client_ip = setup_network.clients.pods[0]['pod_ip']
+    client_wrapper = ClientWrapper(setup_network.clients.pods[0], ns)
+
+    tx_gen = tx_generator.TxGenerator()
+    addr = bytes.hex(tx_gen.publicK)
 
     print("checking nonce")
-    out = api_call(client_ip, data='{"address":"1"}', api='v1/nonce', namespace=testconfig['namespace'])
-    # assert "{'value': '0'}" in out
-    # print("nonce ok")
-    nonce = int(json.loads(out.replace("\'", "\""))['value'])
+    out = client_wrapper.call(Api.NONCE, {'address': addr})
+    nonce = int(out.get('value'))
+    print("checking balance")
+    out = client_wrapper.call(Api.BALANCE, {'address': addr})
+    balance = int(out.get('value'))
 
-    api = 'v1/submittransaction'
-    tx_gen = tx_generator.TxGenerator()
-    tx_bytes = tx_gen.generate("0000000000000000000000000000000000002222", nonce, 246, 642, 100)
-    data = '{"tx":' + str(list(tx_bytes)) + '}'
+    tx_bytes = tx_gen.generate("0000000000000000000000000000000000002222", nonce, 246, 1, min(100, balance-1))
     print("submitting transaction")
-    out = api_call(client_ip, data, api, testconfig['namespace'])
+    out = client_wrapper.call(Api.SUBMIT_TRANSACTION, {'tx': list(tx_bytes)})
     print(out)
-    assert "{'value': 'ok'" in out
+    assert out.get('value') == 'ok'
     print("submit transaction ok")
     print("wait for confirmation ")
     end = start = time.time()
