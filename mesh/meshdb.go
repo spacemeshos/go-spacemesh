@@ -340,11 +340,11 @@ func (m *MeshDB) getLayerMutex(index types.LayerID) *layerMutex {
 }
 
 func getRewardKey(l types.LayerID, account types.Address) []byte {
-	str := "reward_" + account.String() + "_" + strconv.FormatUint(l.Uint64(), 10)
+	str := string(getRewardKeyPrefix(account)) + "_" + strconv.FormatUint(l.Uint64(), 10)
 	return []byte(str)
 }
 
-func getRewardSearchKey(account types.Address) []byte {
+func getRewardKeyPrefix(account types.Address) []byte {
 	str := "reward_" + account.String()
 	return []byte(str)
 }
@@ -409,18 +409,27 @@ func (m *MeshDB) writeTransactions(l types.LayerID, txs []*types.Transaction) er
 	return nil
 }
 
-func (m *MeshDB) writeTransactionRewards(l types.LayerID, accounts []types.Address, reward *big.Int) error {
+type dbReward struct {
+	TotalReward         uint64
+	LayerRewardEstimate uint64
+	// TotalReward - LayerRewardEstimate = FeesEstimate
+}
+
+func (m *MeshDB) writeTransactionRewards(l types.LayerID, accounts []types.Address, totalReward, layerReward *big.Int) error {
 	batch := m.transactions.NewBatch()
 	for _, account := range accounts {
-		if err := batch.Put(getRewardKey(l, account), reward.Bytes()); err != nil {
+		reward := dbReward{TotalReward: totalReward.Uint64(), LayerRewardEstimate: layerReward.Uint64()}
+		if b, err := types.InterfaceToBytes(&reward); err != nil {
+			return fmt.Errorf("could not marshal reward for %v: %v", account.Short(), err)
+		} else if err := batch.Put(getRewardKey(l, account), b); err != nil {
 			return fmt.Errorf("could not write reward to %v to database: %v", account.Short(), err)
 		}
 	}
 	return batch.Write()
 }
 
-func (m *MeshDB) GetRewards(account types.Address) (rewards []types.Reward) {
-	it := m.transactions.Find(getRewardSearchKey(account))
+func (m *MeshDB) GetRewards(account types.Address) (rewards []types.Reward, err error) {
+	it := m.transactions.Find(getRewardKeyPrefix(account))
 	for it.Next() {
 		if it.Key() == nil {
 			break
@@ -429,12 +438,18 @@ func (m *MeshDB) GetRewards(account types.Address) (rewards []types.Reward) {
 		strs := strings.Split(str, "_")
 		layer, err := strconv.ParseUint(strs[2], 10, 64)
 		if err != nil {
-			log.Error("wrong key in db " + string(it.Key()))
-			break
+			return nil, fmt.Errorf("wrong key in db %s: %v", it.Key(), err)
 		}
-		var amount big.Int
-		amount.SetBytes(it.Value())
-		rewards = append(rewards, types.Reward{Amount: amount.Uint64(), Layer: types.LayerID(layer)})
+		var reward dbReward
+		err = types.BytesToInterface(it.Value(), &reward)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal reward: %v", err)
+		}
+		rewards = append(rewards, types.Reward{
+			Layer:               types.LayerID(layer),
+			TotalReward:         reward.TotalReward,
+			LayerRewardEstimate: reward.LayerRewardEstimate,
+		})
 	}
 	return
 }
