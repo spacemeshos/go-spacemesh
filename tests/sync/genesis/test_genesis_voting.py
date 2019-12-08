@@ -41,11 +41,12 @@ def test_unsync_while_genesis(init_session, setup_bootstrap, start_poet):
     # sleep until layer num layers_to_wait
     print(f"sleeping for {layer_duration * layers_to_wait} seconds")
     time.sleep(layer_duration * layers_to_wait)
-    # Done waiting for ticks and validation means the node has finished syncing
 
     # # Found by Almogs: "validate votes failed" error has occurred following a known bug
     # hits = q.get_all_msg_containing(init_session, init_session, "validate votes failed")
     # assert hits == [], 'got a "validate votes" failed message'
+    
+    # Done waiting for ticks and validation means the node has finished syncing
     print("querying for 'Done waiting for ticks' message")
     hits = q.get_all_msg_containing(init_session, init_session, "Done waiting for ticks and validation")
 
