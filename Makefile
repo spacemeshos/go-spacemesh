@@ -100,7 +100,7 @@ else
 endif
 .PHONY: $(PLATFORMS)
 
-pi: genproto
+arm6: genproto
 	GOOS=linux GOARCH=arm GOARM=6 go build ${LDFLAGS} -o $(CURR_DIR)/$(BINARY)
 .PHONY: pi
 
