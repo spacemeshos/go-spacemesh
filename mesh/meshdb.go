@@ -406,6 +406,7 @@ func (m *MeshDB) writeTransactions(l types.LayerID, txs []*types.Transaction) er
 type dbReward struct {
 	TotalReward         uint64
 	LayerRewardEstimate uint64
+	// TotalReward - LayerRewardEstimate = FeesEstimate
 }
 
 func (m *MeshDB) writeTransactionRewards(l types.LayerID, accounts []types.Address, totalReward, layerReward *big.Int) error {

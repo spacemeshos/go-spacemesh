@@ -104,6 +104,7 @@ message Reward {
     uint64 layer = 1;
     uint64 totalReward = 2;
     uint64 layerRewardEstimate = 3;
+    // totalReward - layerRewardEstimate = feesEstimate
 }
 
 message AccountRewards {
