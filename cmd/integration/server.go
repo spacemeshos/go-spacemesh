@@ -92,7 +92,6 @@ func (s *server) start(addArgs []string) error {
 	return nil
 }
 
-
 // shutdown terminates the running node server process, and cleans up
 // all files/directories created by it.
 func (s *server) shutdown() error {
