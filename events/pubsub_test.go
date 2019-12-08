@@ -84,7 +84,7 @@ func TestWhatever(t *testing.T) {
 }
 
 func TestPubSub(t *testing.T) {
-	topics := []channelId{'a', 'b'}
+	topics := []ChannelId{'a', 'b'}
 	url := "tcp://localhost:56565"
 	var p *Publisher
 	var err error
@@ -149,7 +149,7 @@ loop:
 }
 
 func TestPubSub_subscribeAll(t *testing.T) {
-	topics := []channelId{'a', 'b'}
+	topics := []ChannelId{'a', 'b'}
 	url := "tcp://localhost:56565"
 	var p *Publisher
 	var err error

@@ -7,15 +7,19 @@ import (
 	"github.com/spacemeshos/go-spacemesh/amcl/BLS381"
 	"github.com/spacemeshos/go-spacemesh/api"
 	apiCfg "github.com/spacemeshos/go-spacemesh/api/config"
+	"github.com/spacemeshos/go-spacemesh/collector"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/oracle"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/poet/integration"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -51,8 +55,8 @@ func NewRPCPoetHarnessClient() (*activation.RPCPoetClient, error) {
 		return nil, err
 	}
 
-	cfg.N = 18
-	cfg.InitialRoundDuration = time.Duration(5 * time.Second).String()
+	cfg.N = 10
+	cfg.InitialRoundDuration = time.Duration(3 * time.Second).String()
 
 	h, err := integration.NewHarness(cfg)
 	if err != nil {
@@ -94,33 +98,40 @@ func Test_PoETHarnessSanity(t *testing.T) {
 
 var net = service.NewSimulator()
 
-func (suite *AppTestSuite) initSingleInstance(i int, genesisTime string, rng *amcl.RAND, storeFormat string, name string, rolacle *eligibility.FixedRolacle, poetClient *activation.RPCPoetClient) {
+func getTestDefaultConfig() *config.Config {
+	cfg := config.DefaultConfig()
+
+	cfg.POST = activation.DefaultConfig()
+	cfg.POST.Difficulty = 5
+	cfg.POST.NumProvenLabels = 10
+	cfg.POST.SpacePerUnit = 1 << 10 // 1KB.
+	cfg.POST.NumFiles = 1
+
+	cfg.HARE.N = 5
+	cfg.HARE.F = 2
+	cfg.HARE.RoundDuration = 3
+	cfg.HARE.WakeupDelta = 5
+	cfg.HARE.ExpectedLeaders = 5
+	cfg.HARE.SuperHare = true
+	cfg.LayerAvgSize = 5
+	cfg.LayersPerEpoch = 3
+	cfg.Hdist = 5
+
+	cfg.LayerDurationSec = 20
+	cfg.HareEligibility.ConfidenceParam = 4
+	cfg.HareEligibility.EpochOffset = 0
+	cfg.StartMining = true
+	cfg.SyncRequestTimeout = 2000
+	return &cfg
+}
+
+func (suite *AppTestSuite) initSingleInstance(cfg config.Config, i int, genesisTime string, rng *amcl.RAND, storeFormat string, name string, rolacle *eligibility.FixedRolacle, poetClient *activation.RPCPoetClient, fastHare bool, clock TickProvider) {
 	r := require.New(suite.T())
 
 	smApp := NewSpacemeshApp()
-
-	smApp.Config.POST = activation.DefaultConfig()
-	smApp.Config.POST.Difficulty = 5
-	smApp.Config.POST.NumProvenLabels = 10
-	smApp.Config.POST.SpacePerUnit = 1 << 10 // 1KB.
-	smApp.Config.POST.NumFiles = 1
-
-	smApp.Config.HARE.N = 5
-	smApp.Config.HARE.F = 2
-	smApp.Config.HARE.RoundDuration = 3
-	smApp.Config.HARE.WakeupDelta = 5
-	smApp.Config.HARE.ExpectedLeaders = 5
+	smApp.Config = &cfg
 	smApp.Config.CoinbaseAccount = strconv.Itoa(i + 1)
-	smApp.Config.LayerAvgSize = 5
-	smApp.Config.LayersPerEpoch = 3
-	smApp.Config.Hdist = 5
 	smApp.Config.GenesisTime = genesisTime
-	smApp.Config.LayerDurationSec = 20
-	smApp.Config.HareEligibility.ConfidenceParam = 4
-	smApp.Config.HareEligibility.EpochOffset = 0
-	smApp.Config.StartMining = true
-	smApp.Config.SyncRequestTimeout = 2000
-
 	edSgn := signing.NewEdSigner()
 	pub := edSgn.PublicKey()
 
@@ -138,7 +149,7 @@ func (suite *AppTestSuite) initSingleInstance(i int, genesisTime string, rng *am
 	r.NoError(err)
 	r.NotNil(postClient)
 
-	err = smApp.initServices(nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(smApp.Config.LayerAvgSize), postClient, poetClient, vrfSigner, uint16(smApp.Config.LayersPerEpoch))
+	err = smApp.initServices(nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(smApp.Config.LayerAvgSize), postClient, poetClient, vrfSigner, uint16(smApp.Config.LayersPerEpoch), clock)
 	r.NoError(err)
 	smApp.setupGenesis()
 
@@ -146,10 +157,10 @@ func (suite *AppTestSuite) initSingleInstance(i int, genesisTime string, rng *am
 	suite.dbs = append(suite.dbs, dbStorepath)
 }
 
-func (suite *AppTestSuite) initMultipleInstances(rolacle *eligibility.FixedRolacle, rng *amcl.RAND, numOfInstances int, storeFormat string, genesisTime string, poetClient *activation.RPCPoetClient) {
+func (suite *AppTestSuite) initMultipleInstances(cfg *config.Config, rolacle *eligibility.FixedRolacle, rng *amcl.RAND, numOfInstances int, storeFormat string, genesisTime string, poetClient *activation.RPCPoetClient, fastHare bool, clock TickProvider) {
 	name := 'a'
 	for i := 0; i < numOfInstances; i++ {
-		suite.initSingleInstance(i, genesisTime, rng, storeFormat, string(name), rolacle, poetClient)
+		suite.initSingleInstance(*cfg, i, genesisTime, rng, storeFormat, string(name), rolacle, poetClient, fastHare, clock)
 		name++
 	}
 }
@@ -161,10 +172,14 @@ func activateGrpcServer(smApp *SpacemeshApp) {
 	smApp.grpcAPIService.StartService()
 }
 
-func (suite *AppTestSuite) TestMultipleNodes() {
+func (suite *AppTestSuite) TestMultipleNodesFast() {
 	//EntryPointCreated <- true
 	const numberOfEpochs = 5 // first 2 epochs are genesis
 	//addr := address.BytesToAddress([]byte{0x01})
+
+	cfg := getTestDefaultConfig()
+	cfg.LayerAvgSize = 100
+
 	dst := types.BytesToAddress([]byte{0x02})
 	acc1Signer, err := signing.NewEdSignerFromBuffer(util.FromHex(apiCfg.Account1Private))
 	if err != nil {
@@ -187,8 +202,138 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 
 	rolacle := eligibility.New()
 	rng := BLS381.DefaultSeed()
+	gTime, err := time.Parse(time.RFC3339, genesisTime)
+	if err != nil {
+		log.Error("cannot parse genesis time %v", err)
+	}
+	pubsubAddr := "tcp://localhost:56565"
+	events.InitializeEventPubsub(pubsubAddr)
+	numOfInstances := 100
+	clock := timesync.NewManualClock(gTime)
+	suite.initMultipleInstances(cfg, rolacle, rng, numOfInstances, path, genesisTime, poetClient, true, clock)
 
-	suite.initMultipleInstances(rolacle, rng, 5, path, genesisTime, poetClient)
+	eventDb := collector.NewMemoryCollector()
+	collector := collector.NewCollector(eventDb, pubsubAddr)
+	for _, a := range suite.apps {
+		a.startServices()
+	}
+	collector.Start(false)
+	activateGrpcServer(suite.apps[0])
+
+	if err := poetClient.Start("127.0.0.1:9091"); err != nil {
+		log.Panic("failed to start poet server: %v", err)
+	}
+
+	startInLayer := 5 // delayed pod will start in this layer
+	defer suite.gracefulShutdown()
+
+	_ = suite.apps[0].P2P.Broadcast(miner.IncomingTxProtocol, txbytes)
+	timeout := time.After(2 * 60 * time.Second)
+
+	stickyClientsDone := 0
+	startLayer := time.Now()
+	clock.Tick()
+loop:
+	for {
+		select {
+		// Got a timeout! fail with a timeout error
+		case <-timeout:
+			suite.T().Fatal("timed out")
+		default:
+			layer := clock.GetCurrentLayer()
+			if eventDb.GetBlockCreationDone(layer) < numOfInstances {
+				log.Info("blocks done in layer %v: %v", layer, eventDb.GetBlockCreationDone(layer))
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
+			log.Info("all miners tried to create block in %v", layer)
+			if eventDb.GetNumOfCreatedBlocks(layer)*numOfInstances != eventDb.GetReceivedBlocks(layer) {
+				log.Info("finished: %v, block received %v layer %v", eventDb.GetNumOfCreatedBlocks(layer), eventDb.GetReceivedBlocks(layer), layer)
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
+			if eventDb.GetAtxCreationDone(layer) != numOfInstances {
+				log.Info("atx not created %v", numOfInstances-eventDb.GetAtxCreationDone(layer))
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
+			log.Info("all miners finished layer %v in %v", layer, time.Since(startLayer))
+			if eventDb.GetReceivedATXs(layer)%numOfInstances == 0 {
+				startLayer = time.Now()
+				clock.Tick()
+			}
+
+			maxClientsDone := 0
+			for idx, app := range suite.apps {
+				if 10 <= app.state.GetBalance(dst) &&
+					uint32(suite.apps[idx].mesh.LatestLayer()) == numberOfEpochs*uint32(suite.apps[idx].Config.LayersPerEpoch) { // make sure all had 1 non-genesis layer
+					suite.validateLastATXActiveSetSize(app)
+					clientsDone := 0
+					for idx2, app2 := range suite.apps {
+						if idx != idx2 {
+							r1 := app.state.IntermediateRoot(false).String()
+							r2 := app2.state.IntermediateRoot(false).String()
+							if r1 == r2 {
+								clientsDone++
+								if clientsDone == len(suite.apps)-1 {
+									log.Info("%d roots confirmed out of %d", clientsDone, len(suite.apps))
+									break loop
+								}
+							}
+						}
+					}
+					if clientsDone > maxClientsDone {
+						maxClientsDone = clientsDone
+					}
+				}
+			}
+			if maxClientsDone != stickyClientsDone {
+				stickyClientsDone = maxClientsDone
+				log.Info("%d roots confirmed out of %d", maxClientsDone, len(suite.apps))
+			}
+			time.Sleep(200 * time.Millisecond)
+		}
+	}
+	collector.Stop()
+	suite.validateBlocksAndATXs(types.LayerID(numberOfEpochs*suite.apps[0].Config.LayersPerEpoch)-1, types.LayerID(startInLayer))
+
+}
+
+func (suite *AppTestSuite) TestMultipleNodes() {
+	//EntryPointCreated <- true
+	const numberOfEpochs = 5 // first 2 epochs are genesis
+	//addr := address.BytesToAddress([]byte{0x01})
+	dst := types.BytesToAddress([]byte{0x02})
+	cfg := getTestDefaultConfig()
+	acc1Signer, err := signing.NewEdSignerFromBuffer(util.FromHex(apiCfg.Account1Private))
+	if err != nil {
+		log.Panic("Could not build ed signer err=%v", err)
+	}
+	tx, err := mesh.NewSignedTx(0, dst, 10, 1, 1, acc1Signer)
+	if err != nil {
+		log.Panic("panicked creating signed tx err=%v", err)
+	}
+	txbytes, _ := types.InterfaceToBytes(tx)
+	path := "../tmp/test/state_" + time.Now().String()
+
+	genesisTime := time.Now().Add(20 * time.Second).Format(time.RFC3339)
+
+	poetClient, err := NewRPCPoetHarnessClient()
+	if err != nil {
+		log.Panic("failed creating poet client harness: %v", err)
+	}
+	suite.poetCleanup = poetClient.Teardown
+
+	rolacle := eligibility.New()
+	rng := BLS381.DefaultSeed()
+
+	gTime, err := time.Parse(time.RFC3339, genesisTime)
+	if err != nil {
+		log.Error("cannot parse genesis time %v", err)
+	}
+	ld := time.Duration(20) * time.Second
+	clock := timesync.NewTicker(timesync.RealClock{}, ld, gTime)
+	suite.initMultipleInstances(cfg, rolacle, rng, 5, path, genesisTime, poetClient, false, clock)
 	for _, a := range suite.apps {
 		a.startServices()
 	}
@@ -200,13 +345,6 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	}
 
 	startInLayer := 5 // delayed pod will start in this layer
-	/*go func() {
-		delay := float32(suite.apps[0].Config.LayerDurationSec) * (float32(startInLayer) + 0.5)
-		<-time.After(time.Duration(delay) * time.Second)
-		suite.initSingleInstance(7, genesisTime, rng, path, "g", rolacle, poetClient)
-		suite.apps[len(suite.apps)-1].startServices()
-	}()
-	*/
 	defer suite.gracefulShutdown()
 
 	_ = suite.apps[0].P2P.Broadcast(miner.IncomingTxProtocol, txbytes)
@@ -449,8 +587,10 @@ func TestShutdown(t *testing.T) {
 	postClient, err := activation.NewPostClient(&smApp.Config.POST, util.Hex2Bytes(nodeID.Key))
 	r.NoError(err)
 	r.NotNil(postClient)
-
-	err = smApp.initServices(nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(smApp.Config.LayerAvgSize), postClient, poetClient, vrfSigner, uint16(smApp.Config.LayersPerEpoch))
+	gTime := genesisTime
+	ld := time.Duration(20) * time.Second
+	clock := timesync.NewTicker(timesync.RealClock{}, ld, gTime)
+	err = smApp.initServices(nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(smApp.Config.LayerAvgSize), postClient, poetClient, vrfSigner, uint16(smApp.Config.LayersPerEpoch), clock)
 
 	r.NoError(err)
 	smApp.setupGenesis()

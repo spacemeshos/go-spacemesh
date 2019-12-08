@@ -27,6 +27,8 @@ type Db interface {
 	StoreAtx(event *events.NewAtx) error
 	StoreAtxValid(event *events.ValidAtx) error
 	StoreReward(event *events.RewardReceived) error
+	StoreBlockCreated(event *events.DoneCreatingBlock) error
+	StoreAtxCreated(event *events.AtxCreated) error
 }
 
 // Starts collecting events
@@ -46,7 +48,7 @@ func (c *eventsCollector) Stop() {
 func (c *eventsCollector) collectEvents(url string) {
 	sub, err := events.NewSubscriber(url)
 	if err != nil {
-		log.Info("cannot start subscriber")
+		log.Debug("cannot start subscriber")
 		return
 	}
 	blocks, err := sub.Subscribe(events.EventNewBlock)
@@ -56,9 +58,11 @@ func (c *eventsCollector) collectEvents(url string) {
 	atxs, err := sub.Subscribe(events.EventNewAtx)
 	atxsValid, err := sub.Subscribe(events.EventAtxValid)
 	reward, err := sub.Subscribe(events.EventRewardReceived)
+	created, err := sub.Subscribe(events.EventCreatedBlock)
+	createdAtx, err := sub.Subscribe(events.EventCreatedAtx)
 	sub.StartListening()
 	if err != nil {
-		log.Info("cannot start subscriber")
+		log.Debug("cannot start subscriber")
 		return
 	}
 	// get the size of message header
@@ -73,7 +77,7 @@ loop:
 			if err != nil {
 				log.Error("cannot parse received message %v", err)
 			}
-			log.Info("got new block %v", e)
+			log.Debug("got new block %v", e)
 			err = c.db.StoreBlock(&e)
 			if err != nil {
 				log.Error("cannot write message %v", err)
@@ -84,7 +88,7 @@ loop:
 			if err != nil {
 				log.Error("cannot parse received message %v", err)
 			}
-			log.Info("got new block validation %v", e)
+			log.Debug("got new block validation %v", e)
 			err = c.db.StoreBlockValid(&e)
 			if err != nil {
 				log.Error("cannot write message %v", err)
@@ -95,7 +99,7 @@ loop:
 			if err != nil {
 				log.Error("cannot parse received message %v", err)
 			}
-			log.Info("got new tx %v", e)
+			log.Debug("got new tx %v", e)
 			err = c.db.StoreTx(&e)
 			if err != nil {
 				log.Error("cannot write message %v", err)
@@ -106,7 +110,7 @@ loop:
 			if err != nil {
 				log.Error("cannot parse received message %v", err)
 			}
-			log.Info("got new tx validation %v", e)
+			log.Debug("got new tx validation %v", e)
 			err = c.db.StoreTxValid(&e)
 			if err != nil {
 				log.Error("cannot write message %v", err)
@@ -117,7 +121,7 @@ loop:
 			if err != nil {
 				log.Error("cannot parse received message %v", err)
 			}
-			log.Info("got new atx %v", e)
+			log.Debug("got new atx %v", e)
 			err = c.db.StoreAtx(&e)
 			if err != nil {
 				log.Error("cannot write message %v", err)
@@ -128,7 +132,7 @@ loop:
 			if err != nil {
 				log.Error("cannot parse received message %v", err)
 			}
-			log.Info("got new atx validation %v", e)
+			log.Debug("got new atx validation %v", e)
 			err = c.db.StoreAtxValid(&e)
 			if err != nil {
 				log.Error("cannot write message %v", err)
@@ -139,8 +143,30 @@ loop:
 			if err != nil {
 				log.Error("cannot parse received message %v", err)
 			}
-			log.Info("got new reward %v", e)
+			log.Debug("got new reward %v", e)
 			err = c.db.StoreReward(&e)
+			if err != nil {
+				log.Error("cannot write message %v", err)
+			}
+		case data := <-created:
+			var e events.DoneCreatingBlock
+			err := types.BytesToInterface(data[size:], &e)
+			if err != nil {
+				log.Error("cannot parse received message %v", err)
+			}
+			log.Debug("got new block created %v", e)
+			err = c.db.StoreBlockCreated(&e)
+			if err != nil {
+				log.Error("cannot write message %v", err)
+			}
+		case data := <-createdAtx:
+			var e events.AtxCreated
+			err := types.BytesToInterface(data[size:], &e)
+			if err != nil {
+				log.Error("cannot parse received message %v", err)
+			}
+			log.Debug("got new atx created %v", e)
+			err = c.db.StoreAtxCreated(&e)
 			if err != nil {
 				log.Error("cannot write message %v", err)
 			}
