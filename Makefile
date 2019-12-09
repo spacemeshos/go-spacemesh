@@ -100,6 +100,10 @@ else
 endif
 .PHONY: $(PLATFORMS)
 
+arm6: genproto
+	GOOS=linux GOARCH=arm GOARM=6 go build ${LDFLAGS} -o $(CURR_DIR)/$(BINARY)
+.PHONY: pi
+
 test: genproto
 	ulimit -n 500; go test -timeout 0 -p 1 ./...
 .PHONY: test
