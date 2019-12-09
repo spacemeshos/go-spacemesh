@@ -98,5 +98,6 @@ func main() {
 		}
 	}()
 
+	log.With().Info("harness: listening on a blocking dummy channel")
 	<-dummyChan
 }
