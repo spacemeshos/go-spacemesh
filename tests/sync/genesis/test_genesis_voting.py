@@ -3,7 +3,7 @@ from pytest_testconfig import config as testconfig
 
 import tests.queries as q
 from tests.sync.test_sync import new_client_in_namespace
-from tests.test_bs import get_conf, setup_bootstrap, start_poet
+from tests.test_bs import get_conf, setup_bootstrap, start_poet, add_curl
 
 # ==============================================================================
 #    TESTS
@@ -17,8 +17,8 @@ from tests.test_bs import get_conf, setup_bootstrap, start_poet
 # sleep until layer 4
 # validate no errors occurred
 # validate new node didn't receive any new blocks before being synced
-def test_unsync_while_genesis(init_session, setup_bootstrap, start_poet):
-    time_before_first_block = 90
+def test_unsync_while_genesis(init_session, setup_bootstrap, start_poet, add_curl):
+    time_before_first_block = 120
     layers_to_wait = 4
     layer_duration = int(testconfig['client']['args']['layer-duration-sec'])
 
@@ -30,7 +30,7 @@ def test_unsync_while_genesis(init_session, setup_bootstrap, start_poet):
     print(f"sleeping for {time_before_first_block} seconds in order to enable blocks to be published")
     time.sleep(time_before_first_block)
 
-    print("querying for all blocks")
+    print("querying for all block creations (I've created a block in layer)")
     nodes_published_block, _ = q.get_blocks_per_node_and_layer(init_session)
     # validate a block was published
     if not nodes_published_block:
@@ -43,26 +43,19 @@ def test_unsync_while_genesis(init_session, setup_bootstrap, start_poet):
     print(f"sleeping for {layer_duration * layers_to_wait} seconds")
     time.sleep(layer_duration * layers_to_wait)
 
-    # Done waiting for ticks and validation means the node has finished syncing
-    print("querying for 'Done waiting for ticks' message")
-    hits = q.get_all_msg_containing(init_session, init_session, "Done waiting for ticks and validation")
-
-    if not hits:
-        assert 0, f"New node did not sync after {layers_to_wait} layers"
-    # since we only created one late node we can assume there will be only one result for done waiting query
-    if len(hits) > 1:
-        assert 0, f"found more than one node who performed synchronization.\nnodes names{[n.name for n in hits]}"
-
     print("validating no 'validate votes failed' messages has arrived")
     # Found by Almogs: "validate votes failed" error has occurred following a known bug
     hits = q.get_all_msg_containing(init_session, init_session, "validate votes failed")
     assert hits == [], 'got a "validate votes" failed message'
     print("validation succeeded")
 
-    print("query has positively returned a single match, validating results")
-    # validate that the matched node with "Done waiting for ticks and validation" message
+    # Check if the new node has finished syncing
+    hits = q.get_done_syncing(init_session, unsynced_cl.pods[0]["name"])
+
+    if not hits:
+        assert 0, f"New node did not sync, waited for {layers_to_wait} layers"
+
+    # validate that the matched node who performed sync while we slept
     # is the same as the one we added late
-    unsync_pod_name = unsynced_cl.pods[0]["name"]
-    done_waiting_pod_name = hits[0].kubernetes.pod_name
-    ass_err = f"unsynced pod name, {unsync_pod_name} and newly synced node name, {done_waiting_pod_name} does not match"
-    assert unsync_pod_name == done_waiting_pod_name, ass_err
+    print(f"{hits[0].kubernetes.pod_name} has performed sync")
+    assert 1

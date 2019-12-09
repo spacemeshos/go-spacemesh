@@ -17,6 +17,10 @@ def get_pod_name_and_namespace_queries(pod_name, namespace):
            Q("match_phrase", kubernetes__namespace_name=namespace)
 
 
+def get_done_syncing(namespace, pod_name):
+    return get_all_msg_containing(namespace, pod_name, "Done waiting for ticks and validation")
+
+
 def get_all_msg_containing(namespace, pod_name, msg_data, find_fails=False):
     msg = {"M": msg_data}
     hit_lst = query_message(current_index, namespace, pod_name, msg, find_fails)
@@ -88,7 +92,6 @@ def get_blocks_and_layers(namespace, pod_name, find_fails=False):
     # I've created a block in layer %v. id: %v, num of transactions: %v, votes: %d,
     # viewEdges: %d, atx %v, atxs:%v
     blocks = get_all_msg_containing(namespace, pod_name, "I've created a block in layer")
-    print("get_blocks_and_layers found " + str(len(blocks)) + " blocks\n")
     nodes = sort_by_nodeid(blocks)
     layers = sort_by_layer(blocks)
 
