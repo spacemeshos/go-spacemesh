@@ -75,6 +75,11 @@ type TxAPIMock struct {
 	mockOrigin   types.Address
 	returnTx     map[types.TransactionId]*types.Transaction
 	layerApplied map[types.TransactionId]*types.LayerID
+	err          error
+}
+
+func (t *TxAPIMock) ValidateNonceAndBalance(transaction *types.Transaction) error {
+	return t.err
 }
 
 func (t *TxAPIMock) GetProjection(addr types.Address, prevNonce, prevBalance uint64) (nonce, balance uint64, err error) {
@@ -97,7 +102,7 @@ func (t *TxAPIMock) LatestLayer() types.LayerID {
 	return 10
 }
 
-func (t *TxAPIMock) GetRewards(account types.Address) (rewards []types.Reward) {
+func (t *TxAPIMock) GetRewards(account types.Address) (rewards []types.Reward, err error) {
 	return
 }
 
@@ -267,6 +272,14 @@ func TestJsonWalletApi(t *testing.T) {
 	// Test submit transaction
 	submitTx(t, genTx(t))
 
+	txToSend := pb.SignedTransaction{Tx: asBytes(t, genTx(t))}
+	msg := "nonce or balance validation failed"
+	txApi.err = fmt.Errorf(msg)
+	respBody, respStatus = callEndpoint(t, "v1/submittransaction", marshalProto(t, &txToSend))
+	txApi.err = nil
+	r.Equal(http.StatusInternalServerError, respStatus, http.StatusText(respStatus))
+	r.Equal("{\"error\":\""+msg+"\",\"message\":\""+msg+"\",\"code\":2}", respBody)
+
 	// test start mining
 	initPostRequest := pb.InitPost{Coinbase: "0x1234", LogicalDrive: "/tmp/aaa", CommitmentSize: 2048}
 	respBody, respStatus = callEndpoint(t, "v1/startmining", marshalProto(t, &initPostRequest))
@@ -432,7 +445,7 @@ func submitTx(t *testing.T, tx *types.Transaction) {
 
 	txToSend := pb.SignedTransaction{Tx: asBytes(t, tx)}
 	respBody, respStatus := callEndpoint(t, "v1/submittransaction", marshalProto(t, &txToSend))
-	r.Equal(http.StatusOK, respStatus)
+	r.Equal(http.StatusOK, respStatus, http.StatusText(respStatus))
 
 	txConfirmation := pb.TxConfirmation{}
 	r.NoError(jsonpb.UnmarshalString(respBody, &txConfirmation))

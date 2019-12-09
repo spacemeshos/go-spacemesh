@@ -36,6 +36,7 @@ type TxProcessor interface {
 	ApplyRewards(layer types.LayerID, miners []types.Address, reward *big.Int)
 	ValidateSignature(s types.Signed) (types.Address, error)
 	AddressExists(addr types.Address) bool
+	ValidateNonceAndBalance(transaction *types.Transaction) error
 	GetLayerApplied(txId types.TransactionId) *types.LayerID
 }
 
@@ -448,23 +449,24 @@ func (m *Mesh) AccumulateRewards(rewardLayer types.LayerID, params Config) {
 		ids = append(ids, atx.Coinbase)
 
 	}
-	//accumulate all blocks rewards
+	// aggregate all blocks' rewards
 	txs, _ := m.ExtractUniqueOrderedTransactions(l)
 
-	rewards := &big.Int{}
+	totalReward := &big.Int{}
 	for _, tx := range txs {
-		res := new(big.Int).SetUint64(tx.Fee)
-		rewards.Add(rewards, res)
+		totalReward.Add(totalReward, new(big.Int).SetUint64(tx.Fee))
 	}
 
 	layerReward := CalculateLayerReward(rewardLayer, params)
-	rewards.Add(rewards, layerReward)
+	totalReward.Add(totalReward, layerReward)
 
 	numBlocks := big.NewInt(int64(len(l.Blocks())))
 
-	blockReward := calculateActualRewards(rewards, numBlocks)
-	m.ApplyRewards(rewardLayer, ids, blockReward)
-	err = m.writeTransactionRewards(rewardLayer, ids, blockReward)
+	blockTotalReward := calculateActualRewards(totalReward, numBlocks)
+	m.ApplyRewards(rewardLayer, ids, blockTotalReward)
+
+	blockLayerReward := calculateActualRewards(layerReward, numBlocks)
+	err = m.writeTransactionRewards(rewardLayer, ids, blockTotalReward, blockLayerReward)
 	if err != nil {
 		m.Error("cannot write reward to db")
 	}
