@@ -8,7 +8,7 @@ import (
 
 const PoetProofProtocol = "PoetProof"
 
-type PoetDbI interface {
+type PoetValidatorPersistor interface {
 	Validate(proof types.PoetProof, poetId []byte, roundId string, signature []byte) error
 	storeProof(proofMessage *types.PoetProofMessage) error
 }
@@ -16,7 +16,7 @@ type PoetDbI interface {
 type PoetListener struct {
 	Log               log.Log
 	net               service.Service
-	poetDb            PoetDbI
+	poetDb            PoetValidatorPersistor
 	poetProofMessages chan service.GossipMessage
 	started           bool
 	exit              chan struct{}
@@ -76,7 +76,7 @@ func (l *PoetListener) handlePoetProofMessage(gossipMessage service.GossipMessag
 	}
 }
 
-func NewPoetListener(net service.Service, poetDb PoetDbI, logger log.Log) *PoetListener {
+func NewPoetListener(net service.Service, poetDb PoetValidatorPersistor, logger log.Log) *PoetListener {
 	return &PoetListener{
 		Log:               logger,
 		net:               net,
