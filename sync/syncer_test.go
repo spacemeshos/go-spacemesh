@@ -92,6 +92,10 @@ func SyncMockFactory(number int, conf Configuration, name string, dbType string,
 
 type stateMock struct{}
 
+func (stateMock) ValidateNonceAndBalance(transaction *types.Transaction) error {
+	panic("implement me")
+}
+
 func (stateMock) GetLayerApplied(txId types.TransactionId) *types.LayerID {
 	panic("implement me")
 }

@@ -197,6 +197,7 @@ func (vq *blockQueue) removefromDepMaps(block types.Hash32, valid bool, doneBloc
 func (vq *blockQueue) addDependencies(jobId interface{}, blks []types.BlockID, finishCallback func(res bool) error) (bool, error) {
 	vq.Lock()
 	if _, ok := vq.callbacks[jobId]; ok {
+		vq.Unlock()
 		return false, fmt.Errorf("job %s already exsits", jobId)
 	}
 
