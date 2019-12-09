@@ -103,18 +103,7 @@ func NewMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh MeshValidator, t
 }
 
 func NewRecoveredMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh MeshValidator, txInvalidator TxMemPoolInValidator, atxInvalidator AtxMemPoolInValidator, pr TxProcessor, logger log.Log) *Mesh {
-	//todo add boot from disk
-	ll := &Mesh{
-		Log:            logger,
-		MeshValidator:  mesh,
-		txInvalidator:  txInvalidator,
-		atxInvalidator: atxInvalidator,
-		TxProcessor:    pr,
-		done:           make(chan struct{}),
-		MeshDB:         db,
-		config:         rewardConfig,
-		AtxDB:          atxDb,
-	}
+	ll := NewMesh(db, atxDb, rewardConfig, mesh, txInvalidator, atxInvalidator, pr, logger)
 
 	latest, err := db.general.Get(LATEST)
 	if err != nil {
