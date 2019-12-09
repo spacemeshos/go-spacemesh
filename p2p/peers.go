@@ -44,9 +44,7 @@ func (pi PeersImpl) GetPeers() []Peer {
 	cpy := make([]Peer, len(peers))
 	copy(cpy, peers) //if we dont copy we will shuffle orig array
 	pi.With().Info("now connected", log.Int("n_peers", len(cpy)))
-	log.Info("", cpy)
-	Shuffle(cpy)
-	log.Info("", cpy)
+	Shuffle(cpy) //shuffle peers order
 	return cpy
 }
 
