@@ -249,6 +249,20 @@ func TestJsonApi(t *testing.T) {
 	shutDown()
 }
 
+func TestBroadcastPoet(t *testing.T) {
+	r := require.New(t)
+	shutDown := launchServer(t)
+
+	payload := "{\"data\":[1,2,3]}"
+	respBody, respStatus := callEndpoint(t, "v1/broadcastpoet", payload)
+	r.Equal(http.StatusOK, respStatus, http.StatusText(respStatus))
+	assertSimpleMessage(t, respBody, "ok")
+
+	r.Equal([]byte{1, 2, 3}, networkMock.broadcasted)
+
+	shutDown()
+}
+
 func TestJsonWalletApi(t *testing.T) {
 	r := require.New(t)
 	shutDown := launchServer(t)
