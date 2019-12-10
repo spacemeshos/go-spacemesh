@@ -6,6 +6,9 @@ from elasticsearch_dsl import Search, Q
 
 from tests.context import ES
 
+
+TS_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
+
 dt = datetime.now()
 todaydate = dt.strftime("%Y.%m.%d")
 current_index = 'kubernetes_cluster-' + todaydate
@@ -17,16 +20,88 @@ def get_pod_name_and_namespace_queries(pod_name, namespace):
            Q("match_phrase", kubernetes__namespace_name=namespace)
 
 
-def get_done_syncing(namespace, pod_name):
-    return get_all_msg_containing(namespace, pod_name, "Done waiting for ticks and validation")
+def set_time_frame_query(from_ts=None, to_ts=None):
+    if from_ts and to_ts:
+        res_q = Q({'bool': {'range': {'@timestamp': {'gte': from_ts, 'lte': to_ts}}}})
+    elif from_ts and not to_ts:
+        res_q = Q({'bool': {'range': {'@timestamp': {'gte': from_ts}}}})
+    elif to_ts:
+        res_q = Q({'bool': {'range': {'@timestamp': {'lte': to_ts}}}})
+    else:
+        print("could not set time frame, both time limits are None")
+        res_q = None
+
+    return res_q
 
 
-def get_all_msg_containing(namespace, pod_name, msg_data, find_fails=False):
+# ================================== MESSSAGE CONTENT ==================================
+
+def get_block_creation_msgs(namespace, pod_name, find_fails=False, from_ts=None, to_ts=None):
+    created_block_msg = "I've created a block in layer"
+    return get_all_msg_containing(namespace, pod_name, created_block_msg, find_fails, from_ts, to_ts)
+
+
+def get_done_syncing_msgs(namespace, pod_name):
+    done_waiting_msg = "Done waiting for ticks and validation"
+    return get_all_msg_containing(namespace, pod_name, done_waiting_msg)
+
+
+def get_app_started_msgs(namespace, pod_name):
+    app_started_msg = "App started"
+    return get_all_msg_containing(namespace, pod_name, app_started_msg)
+
+
+def get_all_msg_containing(namespace, pod_name, msg_data, find_fails=False, from_ts=None, to_ts=None):
+    """
+    Queries for all logs with msg_data in their content {"M": msg_data}
+    also, it's optional to add timestamps as time frame, if only one is passed
+    then messages will hit from from_ts on or from to_ts back
+
+    :param namespace: string, session id
+    :param pod_name: string, filter for pod name entry
+    :param msg_data: string, message content
+    :param find_fails: boolean, whether to print unmatched pods (query_message)
+    :param from_ts: string, find results from this time stamp on (%Y-%m-%dT%H:%M:%S.%fZ)
+    :param to_ts: string, find results before this time stamp (%Y-%m-%dT%H:%M:%S.%fZ)
+
+    :return: list, all matching hits
+    """
+
+    queries = []
+    if from_ts or to_ts:
+        queries = [set_time_frame_query(from_ts, to_ts)]
+
     msg = {"M": msg_data}
-    hit_lst = query_message(current_index, namespace, pod_name, msg, find_fails)
-    print(f"found {str(len(hit_lst))} messages containing (match_phrase): {msg_data}")
+    hit_lst = query_message(current_index, namespace, pod_name, msg, find_fails, queries=queries)
+    print(f"found {str(len(hit_lst))} messages containing (match_phrase): {msg_data}\n")
     return hit_lst
 
+
+def get_blocks_msgs_of_pod(namespace, pod_name):
+    return get_blocks_and_layers(namespace, pod_name)
+
+
+def get_blocks_per_node_and_layer(deployment):
+    return get_blocks_and_layers(deployment, deployment)
+
+
+def get_blocks_and_layers(namespace, pod_name, find_fails=False):
+    # I've created a block in layer %v. id: %v, num of transactions: %v, votes: %d,
+    # viewEdges: %d, atx %v, atxs:%v
+    blocks = get_all_msg_containing(namespace, pod_name, "I've created a block in layer", find_fails)
+    nodes = sort_by_nodeid(blocks)
+    layers = sort_by_layer(blocks)
+
+    return nodes, layers
+
+
+def get_layers(namespace, find_fails=True):
+    layers = get_all_msg_containing(namespace, namespace, "release tick", find_fails)
+    ids = [int(x.layer_id) for x in layers]
+    return ids
+
+
+# ============================== END MESSSAGE CONTENT ==================================
 
 def get_podlist(namespace, depname):
     api = ES().get_search_api()
@@ -80,36 +155,18 @@ def poll_query_message(indx, namespace, client_po_name, fields, findFails=False,
     return hits
 
 
-def get_blocks_msgs_of_pod(namespace, pod_name):
-    return get_blocks_and_layers(namespace, pod_name)
-
-
-def get_blocks_per_node_and_layer(deployment):
-    return get_blocks_and_layers(deployment, deployment)
-
-
-def get_blocks_and_layers(namespace, pod_name, find_fails=False):
-    # I've created a block in layer %v. id: %v, num of transactions: %v, votes: %d,
-    # viewEdges: %d, atx %v, atxs:%v
-    blocks = get_all_msg_containing(namespace, pod_name, "I've created a block in layer")
-    nodes = sort_by_nodeid(blocks)
-    layers = sort_by_layer(blocks)
-
-    return nodes, layers
-
-
-def get_layers(deployment, find_fails=True):
-    layers = get_all_msg_containing(deployment, deployment, "release tick", find_fails)
-    ids = [int(x.layer_id) for x in layers]
-    return ids
-
-
-def query_message(indx, namespace, client_po_name, fields, find_fails=False, start_time=None):
+def query_message(indx, namespace, client_po_name, fields, find_fails=False, start_time=None, queries=None):
     # TODO : break this to smaller functions ?
     es = ES().get_search_api()
     fltr = get_pod_name_and_namespace_queries(client_po_name, namespace)
-    for f in fields:
-        fltr = fltr & Q("match_phrase", **{f: fields[f]})
+    for key in fields:
+        fltr = fltr & Q("match_phrase", **{key: fields[key]})
+
+    # append extra queries
+    if queries:
+        for q in queries:
+            fltr = fltr & q
+
     s = Search(index=indx, using=es).query('bool', filter=[fltr])
     hits = list(s.scan())
 

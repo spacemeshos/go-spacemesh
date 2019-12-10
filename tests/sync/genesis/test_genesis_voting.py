@@ -1,4 +1,5 @@
 import time
+import pytest
 from pytest_testconfig import config as testconfig
 
 import tests.queries as q
@@ -17,45 +18,62 @@ from tests.test_bs import get_conf, setup_bootstrap, start_poet, add_curl
 # sleep until layer 4
 # validate no errors occurred
 # validate new node didn't receive any new blocks before being synced
+@pytest.mark.xfail(strict=True, reason="new pod creates blocks before being synced")
 def test_unsync_while_genesis(init_session, setup_bootstrap, start_poet, add_curl):
-    time_before_first_block = 120
+    time_before_first_block = 70
     layers_to_wait = 4
-    layer_duration = int(testconfig['client']['args']['layer-duration-sec'])
 
+    layer_duration = int(testconfig['client']['args']['layer-duration-sec'])
     bs_info = setup_bootstrap.pods[0]
     cspec = get_conf(bs_info, testconfig['client'], None, setup_bootstrap.pods[0]['pod_ip'])
 
-    # create a cluster of nodes
+    # Create a cluster of nodes
     _ = new_client_in_namespace(testconfig['namespace'], setup_bootstrap, cspec, 9)
-    print(f"sleeping for {time_before_first_block} seconds in order to enable blocks to be published")
+
+    # Sleep to enable block creation
+    print(f"sleeping for {time_before_first_block} seconds in order to enable blocks to be published\n")
     time.sleep(time_before_first_block)
 
-    print("querying for all block creations (I've created a block in layer)")
+    # Validate a block was published
     nodes_published_block, _ = q.get_blocks_per_node_and_layer(init_session)
-    # validate a block was published
     if not nodes_published_block:
         assert 0, f"no blocks were published during the first {time_before_first_block} seconds"
 
-    # create a new node in cluster
+    # Create a new node in cluster
     unsynced_cl = new_client_in_namespace(testconfig['namespace'], setup_bootstrap, cspec, 1)
 
-    # sleep until layer num layers_to_wait
-    print(f"sleeping for {layer_duration * layers_to_wait} seconds")
+    # Sleep until layers_to_wait layer, default is 4
+    print(f"sleeping for {layer_duration * layers_to_wait} seconds\n")
     time.sleep(layer_duration * layers_to_wait)
 
-    print("validating no 'validate votes failed' messages has arrived")
     # Found by Almogs: "validate votes failed" error has occurred following a known bug
-    hits = q.get_all_msg_containing(init_session, init_session, "validate votes failed")
-    assert hits == [], 'got a "validate votes" failed message'
+    print("validating no 'validate votes failed' messages has arrived")
+    hits_val_failed = q.get_all_msg_containing(init_session, init_session, "validate votes failed")
+    assert hits_val_failed == [], 'got a "validate votes" failed message'
     print("validation succeeded")
 
-    # Check if the new node has finished syncing
-    hits = q.get_done_syncing(init_session, unsynced_cl.pods[0]["name"])
+    # Get the msg when app started on the late node
+    app_started_hits = q.get_app_started_msgs(init_session, unsynced_cl.pods[0]["name"])
+    if not app_started_hits:
+        assert 0, f"app did not start for new node after {layers_to_wait} layers"
 
-    if not hits:
+    # Check if the new node has finished syncing
+    hits_synced = q.get_done_syncing_msgs(init_session, unsynced_cl.pods[0]["name"])
+    if not hits_synced:
         assert 0, f"New node did not sync, waited for {layers_to_wait} layers"
 
-    # validate that the matched node who performed sync while we slept
-    # is the same as the one we added late
-    print(f"{hits[0].kubernetes.pod_name} has performed sync")
+    print(f"{hits_synced[0].kubernetes.pod_name} has performed sync")
+
+    # validate no new blocks were received before being synced
+    sync_ts = hits_synced[0].T
+    app_started_ts = app_started_hits[0].T
+
+    hits_msg_block = q.get_block_creation_msgs(init_session, unsynced_cl.pods[0]["name"], from_ts=app_started_ts,
+                                               to_ts=sync_ts)
+
+    if hits_msg_block:
+        assert 0, f"node created blocks before syncing"
+
+    print("successfully finished")
+
     assert 1
