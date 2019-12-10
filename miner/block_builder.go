@@ -346,9 +346,6 @@ func (t *BlockBuilder) handleGossipAtx(data service.GossipMessage) {
 		return
 	}
 
-	id := atx.Id()
-	events.Publish(events.NewAtx{Id: id.Hash32().String(), LayerId: uint64(atx.PubLayerIdx)})
-
 	err = t.atxValidator.SyntacticallyValidateAtx(atx)
 	events.Publish(events.ValidAtx{Id: atx.ShortString(), Valid: err == nil})
 	if err != nil {

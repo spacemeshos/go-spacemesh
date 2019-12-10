@@ -10,8 +10,10 @@ type MemoryCollector struct {
 	events                 map[events.ChannelId][]Event
 	doneCreatingBlockEvent map[uint64][]*events.DoneCreatingBlock
 	doneCreatingAtxEvent   map[uint64][]*events.AtxCreated
+	createdAtxs            map[uint64][]string
 	gotBlockEvent          map[uint64][]*events.NewBlock
 	gotAtxEvent            map[uint64][]*events.NewAtx
+	Atxs                   map[string]uint64
 
 	lck sync.RWMutex
 }
@@ -23,6 +25,8 @@ func NewMemoryCollector() *MemoryCollector {
 		doneCreatingAtxEvent:   make(map[uint64][]*events.AtxCreated),
 		gotBlockEvent:          make(map[uint64][]*events.NewBlock),
 		gotAtxEvent:            make(map[uint64][]*events.NewAtx),
+		Atxs:                   make(map[string]uint64),
+		createdAtxs:            make(map[uint64][]string),
 	}
 }
 
@@ -63,6 +67,7 @@ func (c *MemoryCollector) StoreAtx(event *events.NewAtx) error {
 	c.lck.Lock()
 	c.events[event.GetChannel()] = append(c.events[event.GetChannel()], event)
 	c.gotAtxEvent[event.LayerId] = append(c.gotAtxEvent[event.LayerId], event)
+	c.Atxs[event.Id]++
 	c.lck.Unlock()
 	return nil
 }
@@ -93,29 +98,32 @@ func (c *MemoryCollector) StoreAtxCreated(event *events.AtxCreated) error {
 	c.lck.Lock()
 	c.events[event.GetChannel()] = append(c.events[event.GetChannel()], event)
 	c.doneCreatingAtxEvent[event.Layer] = append(c.doneCreatingAtxEvent[event.Layer], event)
+	if event.Created {
+		c.createdAtxs[event.Layer]= append(c.createdAtxs[event.Layer], event.Id)
+	}
 	c.lck.Unlock()
 	return nil
 }
 
-func (c *MemoryCollector) GetAtxCreationDone(layer types.LayerID) int {
+func (c *MemoryCollector) GetAtxCreationDone(layer types.EpochId) int {
 	c.lck.RLock()
 	defer c.lck.RUnlock()
 	return len(c.doneCreatingAtxEvent[uint64(layer)])
 }
 
+func (c *MemoryCollector) GetCreatedAtx(epoch types.EpochId)[]string{
+	c.lck.RLock()
+	defer c.lck.RUnlock()
+	return c.createdAtxs[uint64(epoch)]
+}
+
 func (c *MemoryCollector) GetNumOfCreatedATXs(layer types.LayerID) int {
 	c.lck.RLock()
 	defer c.lck.RUnlock()
-	created := 0
-	for _, atx := range c.doneCreatingAtxEvent[uint64(layer)] {
-		if atx.Created {
-			created++
-		}
-	}
-	return created
+	return len(c.createdAtxs[uint64(layer)])
 }
 
-func (c *MemoryCollector) GetReceivedATXs(layer types.LayerID) int {
+func (c *MemoryCollector) GetReceivedATXsNum(layer types.LayerID) int {
 	c.lck.RLock()
 	defer c.lck.RUnlock()
 	return len(c.gotAtxEvent[uint64(layer)])

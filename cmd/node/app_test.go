@@ -178,7 +178,8 @@ func (suite *AppTestSuite) TestMultipleNodesFast() {
 	//addr := address.BytesToAddress([]byte{0x01})
 
 	cfg := getTestDefaultConfig()
-	cfg.LayerAvgSize = 100
+	cfg.LayerAvgSize = 10
+	numOfInstances := 10
 
 	dst := types.BytesToAddress([]byte{0x02})
 	acc1Signer, err := signing.NewEdSignerFromBuffer(util.FromHex(apiCfg.Account1Private))
@@ -208,7 +209,6 @@ func (suite *AppTestSuite) TestMultipleNodesFast() {
 	}
 	pubsubAddr := "tcp://localhost:56565"
 	events.InitializeEventPubsub(pubsubAddr)
-	numOfInstances := 100
 	clock := timesync.NewManualClock(gTime)
 	suite.initMultipleInstances(cfg, rolacle, rng, numOfInstances, path, genesisTime, poetClient, true, clock)
 
@@ -252,16 +252,24 @@ loop:
 				time.Sleep(100 * time.Millisecond)
 				continue
 			}
-			if eventDb.GetAtxCreationDone(layer) != numOfInstances {
-				log.Info("atx not created %v", numOfInstances-eventDb.GetAtxCreationDone(layer))
+			epoch := layer.GetEpoch(uint16(cfg.LayersPerEpoch))
+			if !(eventDb.GetAtxCreationDone(epoch) >= numOfInstances &&  eventDb.GetAtxCreationDone(epoch) % numOfInstances == 0){
+				log.Info("atx not created %v", numOfInstances-eventDb.GetAtxCreationDone(layer.GetEpoch(uint16(cfg.LayersPerEpoch))))
 				time.Sleep(100 * time.Millisecond)
 				continue
 			}
 			log.Info("all miners finished layer %v in %v", layer, time.Since(startLayer))
-			if eventDb.GetReceivedATXs(layer)%numOfInstances == 0 {
-				startLayer = time.Now()
-				clock.Tick()
+			//foundAll := true
+			for _, atxId := range eventDb.GetCreatedAtx(epoch) {
+				if _, found := eventDb.Atxs[atxId]; !found {
+					log.Info("atx %v not propagated", atxId)
+					continue
+				}
 			}
+
+			startLayer = time.Now()
+			clock.Tick()
+
 
 			maxClientsDone := 0
 			for idx, app := range suite.apps {

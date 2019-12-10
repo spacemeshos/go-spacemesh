@@ -181,9 +181,7 @@ func (b *Builder) loop() {
 					} else {
 						b.log.Error("cannot create atx in epoch %v: %v", epoch, err)
 					}
-					events.Publish(events.AtxCreated{false, "asd", uint64(layer)})
-				} else {
-					events.Publish(events.AtxCreated{true, "asd", uint64(layer)})
+					events.Publish(events.AtxCreated{false, "asd", uint64(epoch)})
 				}
 
 				b.finished <- layer
@@ -410,6 +408,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 			err := b.buildNipstChallenge(epoch)
 			if err != nil {
 				if _, alreadyPublished := err.(alreadyPublishedErr); alreadyPublished {
+					events.Publish(events.AtxCreated{false, "asd", uint64(epoch)})
 					return nil
 				}
 				return err
@@ -498,6 +497,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 		log.Error("cannot discard Nipst challenge %s", err)
 	}
 
+	events.Publish(events.AtxCreated{true, atx.ShortString(), uint64(epoch)})
 	b.log.Event().Info("atx published!", log.AtxId(atx.ShortString()), log.String("prev_atx_id", atx.PrevATXId.ShortString()),
 		log.String("post_atx_id", atx.PositioningAtx.ShortString()), log.LayerId(uint64(atx.PubLayerIdx)), log.EpochId(uint64(atx.PubLayerIdx.GetEpoch(b.layersPerEpoch))),
 		log.Uint32("active_set", atx.ActiveSetSize), log.String("miner", b.nodeId.Key[:5]), log.Int("view", len(atx.View)))
