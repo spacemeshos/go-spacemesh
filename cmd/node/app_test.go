@@ -99,7 +99,10 @@ func Test_PoETHarnessSanity(t *testing.T) {
 var net = service.NewSimulator()
 
 func getTestDefaultConfig() *config.Config {
-	cfg := config.DefaultConfig()
+	cfg, err := LoadConfigFromFile()
+	if err != nil {
+		log.Error("cannot load config from file")
+	}
 
 	cfg.POST = activation.DefaultConfig()
 	cfg.POST.Difficulty = 5
@@ -122,7 +125,7 @@ func getTestDefaultConfig() *config.Config {
 	cfg.HareEligibility.EpochOffset = 0
 	cfg.StartMining = true
 	cfg.SyncRequestTimeout = 2000
-	return &cfg
+	return cfg
 }
 
 func (suite *AppTestSuite) initSingleInstance(cfg config.Config, i int, genesisTime string, rng *amcl.RAND, storeFormat string, name string, rolacle *eligibility.FixedRolacle, poetClient *activation.RPCPoetClient, fastHare bool, clock TickProvider) {
@@ -259,7 +262,6 @@ loop:
 				continue
 			}
 			log.Info("all miners finished layer %v in %v", layer, time.Since(startLayer))
-			//foundAll := true
 			for _, atxId := range eventDb.GetCreatedAtx(epoch) {
 				if _, found := eventDb.Atxs[atxId]; !found {
 					log.Info("atx %v not propagated", atxId)
@@ -269,7 +271,6 @@ loop:
 
 			startLayer = time.Now()
 			clock.Tick()
-
 
 			maxClientsDone := 0
 			for idx, app := range suite.apps {

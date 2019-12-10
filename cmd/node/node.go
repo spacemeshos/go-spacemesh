@@ -1,5 +1,6 @@
 package node
 
+import "C"
 import (
 	"context"
 	"fmt"
@@ -149,13 +150,12 @@ type SpacemeshApp struct {
 	loggers        map[string]*zap.AtomicLevel
 }
 
-// ParseConfig unmarshal config file into struct
-func (app *SpacemeshApp) ParseConfig() (err error) {
+func LoadConfigFromFile() (*cfg.Config, error){
 
 	fileLocation := viper.GetString("config")
 	vip := viper.New()
 	// read in default config if passed as param using viper
-	if err = cfg.LoadConfig(fileLocation, vip); err != nil {
+	if err := cfg.LoadConfig(fileLocation, vip); err != nil {
 		log.Error(fmt.Sprintf("couldn't load config file at location: %s swithing to defaults \n error: %v.",
 			fileLocation, err))
 		//return err
@@ -163,15 +163,21 @@ func (app *SpacemeshApp) ParseConfig() (err error) {
 
 	conf := cfg.DefaultConfig()
 	// load config if it was loaded to our viper
-	err = vip.Unmarshal(&conf)
+	err := vip.Unmarshal(&conf)
 	if err != nil {
 		log.Error("Failed to parse config\n")
-		return err
+		return nil, err
 	}
+	return &conf, nil
+}
 
-	app.Config = &conf
+// ParseConfig unmarshal config file into struct
+func (app *SpacemeshApp) ParseConfig() error {
 
-	return nil
+	conf, err := LoadConfigFromFile()
+	app.Config = conf
+
+	return err
 }
 
 // NewSpacemeshApp creates an instance of the spacemesh app
