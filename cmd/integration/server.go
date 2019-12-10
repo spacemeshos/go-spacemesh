@@ -71,27 +71,23 @@ func (s *server) start(addArgs []string) error {
 
 	s.cmd = exec.Command(s.cfg.exe, args...)
 	// Redirect stderr and stdout output to current harness buffers
-	s.cmd.Stderr = os.Stderr
 	s.cmd.Stdout = os.Stdout
+	s.cmd.Stderr = os.Stderr
 
 	// start go-spacemesh server
 	if err := s.cmd.Start(); err != nil {
 		return err
 	}
 
-	// Launch a new goroutine
-	s.wg.Add(1)
-	go func() {
-		defer s.wg.Done()
+	err := s.cmd.Wait()
 
-		err := s.cmd.Wait()
+	if err != nil {
+		// move err to error channel
+		log.Error("an error has occurred during go-spacemesh command wait: %v", err)
+		s.errChan <- fmt.Errorf("subprocess error: %v", err)
+	}
 
-		if err != nil {
-			// move err to error channel
-			log.Error("an error has occurred during go-spacemesh command wait: %v", err)
-			s.errChan <- fmt.Errorf("subprocess error: %v", err)
-		}
-	}()
+	log.With().Info("exiting integration server")
 
 	return nil
 }

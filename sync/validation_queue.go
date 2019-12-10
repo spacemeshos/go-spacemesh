@@ -124,8 +124,8 @@ func (vq *blockQueue) finishBlockCallback(block *types.Block) func(res bool) err
 		}
 
 		//validate block's votes
-		if valid := validateVotes(block, vq.ForBlockInView, vq.Hdist, vq.Log); valid == false {
-			return errors.New(fmt.Sprintf("validate votes failed for block %v", block.Id()))
+		if valid, err := validateVotes(block, vq.ForBlockInView, vq.Hdist, vq.Log); valid == false || err != nil {
+			return errors.New(fmt.Sprintf("validate votes failed for block %s %s", block.Id(), err))
 		}
 
 		err = vq.AddBlockWithTxs(block, txs, atxs)
@@ -196,6 +196,11 @@ func (vq *blockQueue) removefromDepMaps(block types.Hash32, valid bool, doneBloc
 
 func (vq *blockQueue) addDependencies(jobId interface{}, blks []types.BlockID, finishCallback func(res bool) error) (bool, error) {
 	vq.Lock()
+	if _, ok := vq.callbacks[jobId]; ok {
+		vq.Unlock()
+		return false, fmt.Errorf("job %s already exsits", jobId)
+	}
+
 	vq.callbacks[jobId] = finishCallback
 	dependencys := make(map[types.Hash32]struct{})
 	idsToPush := make([]types.Hash32, 0, len(blks))
