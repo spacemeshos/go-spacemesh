@@ -74,7 +74,7 @@ func newLocalNodeWithKeys(pubKey p2pcrypto.PublicKey, privKey p2pcrypto.PrivateK
 	host, port, err := net.SplitHostPort(address.String())
 
 	if err != nil {
-		log.Warning("Failed to parse inital IP address err=%v", err)
+		log.Warning("Failed to parse initial IP address err=%v", err)
 		host = "0.0.0.0"
 		port = "0" // Get a random port
 	}

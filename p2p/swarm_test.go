@@ -426,7 +426,8 @@ func TestSwarm_RegisterProtocol(t *testing.T) {
 
 func TestSwarm_onRemoteClientMessage(t *testing.T) {
 	cfg := config.DefaultConfig()
-	id, err := node.NewNodeIdentity(cfg, "0.0.0.0:0000", false)
+	address := types.IPAddr{"0.0.0.0", "0000", "tcp"}
+	id, err := node.NewNodeIdentity(cfg, address, false)
 	assert.NoError(t, err, "we cant make node ?")
 
 	p := p2pTestNoStart(t, cfg)
