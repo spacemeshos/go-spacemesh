@@ -227,7 +227,6 @@ func TestBlockListener_DataAvailabilityBadFlow(t *testing.T) {
 	block.TxIds = append(block.TxIds, tx1.Id())
 	block.AtxIds = append(block.AtxIds, atx1.Id())
 
-
 	// adding block to peer1
 	err = bl1.AddBlockWithTxs(block, []*types.Transaction{}, []*types.ActivationTx{atx1})
 	require.NoError(t, err)
