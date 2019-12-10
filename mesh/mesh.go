@@ -86,7 +86,6 @@ type Mesh struct {
 }
 
 func NewMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh MeshValidator, txInvalidator TxMemPoolInValidator, atxInvalidator AtxMemPoolInValidator, pr TxProcessor, logger log.Log) *Mesh {
-	//todo add boot from disk
 	ll := &Mesh{
 		Log:            logger,
 		MeshValidator:  mesh,
