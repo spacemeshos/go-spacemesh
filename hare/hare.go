@@ -99,7 +99,7 @@ func New(conf config.Config, p2p NetworkService, sign Signer, nid types.NodeId, 
 
 	h.networkDelta = time.Duration(conf.WakeupDelta) * time.Second
 	// todo: this should be loaded from global config
-	h.bufferSize = LayerBuffer
+	h.bufferSize = LayerBuffer // XXX: must be at least the size of `hdist`
 
 	h.lastLayer = 0
 
@@ -117,11 +117,16 @@ func New(conf config.Config, p2p NetworkService, sign Signer, nid types.NodeId, 
 	return h
 }
 
-// checks if the provided id is too late/old to be requested.
-func (h *Hare) isTooLate(id instanceId) bool {
+func (h *Hare) getLastLayer() types.LayerID {
 	h.layerLock.RLock()
 	lyr := h.lastLayer
 	h.layerLock.RUnlock()
+	return lyr
+}
+
+// checks if the provided id is too late/old to be requested.
+func (h *Hare) outOfBufferRange(id instanceId) bool {
+	lyr := h.getLastLayer()
 
 	if lyr <= types.LayerID(h.bufferSize) {
 		return false
@@ -136,9 +141,7 @@ func (h *Hare) isTooLate(id instanceId) bool {
 func (h *Hare) oldestResultInBuffer() types.LayerID {
 	// buffer is usually quite small so its cheap to iterate.
 	// TODO: if it gets bigger change `outputs` to array.
-	h.layerLock.RLock()
-	lyr := h.lastLayer
-	h.layerLock.RUnlock()
+	lyr := h.getLastLayer()
 	for k := range h.outputs {
 		if k < lyr {
 			lyr = k
@@ -167,7 +170,7 @@ func (h *Hare) collectOutput(output TerminationOutput) error {
 
 	id := output.Id()
 
-	if h.isTooLate(id) {
+	if h.outOfBufferRange(id) {
 		return ErrTooLate
 	}
 
@@ -244,7 +247,7 @@ var (
 // Returns error iff the request for the upper is too old.
 func (h *Hare) GetResult(lid types.LayerID) ([]types.BlockID, error) {
 
-	if h.isTooLate(instanceId(lid)) {
+	if h.outOfBufferRange(instanceId(lid)) {
 		return nil, ErrTooOld
 	}
 

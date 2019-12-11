@@ -399,7 +399,7 @@ func TestHare_IsTooLate(t *testing.T) {
 		require.Equal(t, exp, len(h.outputs))
 	}
 
-	require.True(t, h.isTooLate(instanceId(1)))
+	require.True(t, h.outOfBufferRange(instanceId(1)))
 }
 
 func TestHare_oldestInBuffer(t *testing.T) {
