@@ -15,7 +15,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/oracle"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/poet/integration"
 	"github.com/stretchr/testify/assert"
@@ -184,28 +183,22 @@ func txWithUnorderedNonceGenerator(dependancies []int) TestScenario {
 			log.Panic("Could not build ed signer err=%v", err)
 		}
 
-		nonces := []int{}
 		for i := 0; i < txsSent; i++ {
-			nonces = append(nonces, i)
-		}
-		for i := 0; i < txsSent; i++ {
-			// this puts a random unique number in nonces[i]
-			nonces[i] = nonces[int(rand.Int31n(int32(len(nonces)-i)))+i]
-			tx, err := types.NewSignedTx(uint64(nonces[i]), dst, 10, 1, 1, acc1Signer)
+			tx, err := mesh.NewSignedTx(uint64(txsSent - i ), dst, 10, 1, 1, acc1Signer)
 			if err != nil {
 				log.Panic("panicked creating signed tx err=%v", err)
 			}
 			txbytes, _ := types.InterfaceToBytes(tx)
 			pbMsg := pb.SignedTransaction{Tx: txbytes}
 			_, err = suite.apps[0].grpcAPIService.SubmitTransaction(nil, &pbMsg)
-			assert.NoError(suite.T(), err)
+			assert.Error(suite.T(), err)
 		}
 	}
 
 	teardown := func(suite *AppTestSuite, t *testing.T) bool {
 		ok := true
 		for _, app := range suite.apps {
-			log.Info("current balance: %d nonce %d", app.state.GetBalance(dst), app.state.GetNonce(addr))
+			log.Info("zero acc current balance: %d nonce %d", app.state.GetBalance(dst), app.state.GetNonce(addr))
 			ok = ok && 0 == app.state.GetBalance(dst) && app.state.GetNonce(addr) == 0
 		}
 		if ok {
@@ -229,7 +222,21 @@ func txWithRunningNonceGenerator(dependancies []int) TestScenario {
 			log.Panic("Could not build ed signer err=%v", err)
 		}
 
+		account := pb.AccountId{}
+		account.Address = addr.String()
+
 		for i := 0; i < txsSent; i++ {
+
+			nonceStr, err := suite.apps[0].grpcAPIService.GetNonce(nil, &account)
+			assert.NoError(suite.T(), err)
+			actNonce, err := strconv.Atoi(nonceStr.Value)
+			for actNonce != i {
+				log.Info("actual nonce: %v", nonceStr.Value)
+				time.Sleep(500 * time.Millisecond)
+				nonceStr, err = suite.apps[0].grpcAPIService.GetNonce(nil, &account)
+				assert.NoError(suite.T(), err)
+				actNonce, err = strconv.Atoi(nonceStr.Value)
+			}
 			tx, err := mesh.NewSignedTx(uint64(i), dst, 10, 1, 1, acc1Signer)
 			if err != nil {
 				log.Panic("panicked creating signed tx err=%v", err)
@@ -347,7 +354,7 @@ func runTests(suite *AppTestSuite, finished map[int]bool) bool {
 	return true
 }
 
-var tests = []TestScenario{txWithRunningNonceGenerator([]int{}), sameRootTester([]int{0}), reachedEpochTester([]int{}), /*txWithUnorderedNonceGenerator([]int{1})*/}
+var tests = []TestScenario{txWithRunningNonceGenerator([]int{}), sameRootTester([]int{0}), reachedEpochTester([]int{}), txWithUnorderedNonceGenerator([]int{1})}
 
 func (suite *AppTestSuite) TestMultipleNodes() {
 	//EntryPointCreated <- true
