@@ -126,16 +126,16 @@ func (h *Hare) isTooLate(id instanceId) bool {
 }
 
 func (h *Hare) oldestResultInBuffer() types.LayerID {
-
+	// buffer is usually quite small so its cheap to iterate.
+	// TODO: if it gets bigger change `outputs` to array.
 	h.layerLock.RLock()
-
-	if h.lastLayer <= types.LayerID(h.bufferSize) {
-		h.layerLock.RUnlock()
-		return 0
-	}
-
-	lyr := h.lastLayer - types.LayerID(h.bufferSize)
+	lyr := h.lastLayer
 	h.layerLock.RUnlock()
+	for k := range h.outputs {
+		if k < lyr {
+			lyr = k
+		}
+	}
 	return lyr
 }
 
@@ -164,12 +164,8 @@ func (h *Hare) collectOutput(output TerminationOutput) error {
 	}
 
 	h.mu.Lock()
-	if len(h.outputs) == h.bufferSize {
-		for k := range h.outputs {
-			if h.isTooLate(instanceId(k)) {
-				delete(h.outputs, k)
-			}
-		}
+	if len(h.outputs) >= h.bufferSize {
+		delete(h.outputs, h.oldestResultInBuffer())
 	}
 	h.outputs[types.LayerID(id)] = blocks
 	h.mu.Unlock()
