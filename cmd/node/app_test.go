@@ -184,7 +184,7 @@ func txWithUnorderedNonceGenerator(dependancies []int) TestScenario {
 		}
 
 		for i := 0; i < txsSent; i++ {
-			tx, err := mesh.NewSignedTx(uint64(txsSent - i ), dst, 10, 1, 1, acc1Signer)
+			tx, err := mesh.NewSignedTx(uint64(txsSent-i), dst, 10, 1, 1, acc1Signer)
 			if err != nil {
 				log.Panic("panicked creating signed tx err=%v", err)
 			}
