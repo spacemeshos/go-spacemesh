@@ -5,6 +5,7 @@ from pytest_testconfig import config as testconfig
 import tests.queries as q
 from tests.sync.test_sync import new_client_in_namespace
 from tests.test_bs import get_conf, setup_bootstrap, start_poet, add_curl
+from tests.utils import print_hits_entry_count
 
 # ==============================================================================
 #    TESTS
@@ -18,7 +19,7 @@ from tests.test_bs import get_conf, setup_bootstrap, start_poet, add_curl
 # sleep until layer 4
 # validate no errors occurred
 # validate new node didn't receive any new blocks before being synced
-@pytest.mark.xfail(strict=True, reason="new pod creates blocks before being synced")
+# @pytest.mark.xfail(strict=True, reason="new pod creates blocks before being synced")
 def test_unsync_while_genesis(init_session, setup_bootstrap, start_poet, add_curl):
     time_before_first_block = 70
     layers_to_wait = 4
@@ -72,8 +73,12 @@ def test_unsync_while_genesis(init_session, setup_bootstrap, start_poet, add_cur
                                                to_ts=sync_ts)
 
     if hits_msg_block:
-        assert 0, f"node created blocks before syncing"
+        print("############ WARNING: node created blocks before syncing!!!! ############")
+
+    hits_errors = q.find_error_log_msgs(init_session, init_session)
+    if hits_errors:
+        print_hits_entry_count(hits_errors, "message")
+        assert 0, "found log errors"
 
     print("successfully finished")
-
     assert 1

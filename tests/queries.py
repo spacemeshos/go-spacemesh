@@ -34,9 +34,18 @@ def set_time_frame_query(from_ts=None, to_ts=None):
     return res_q
 
 
-# ================================== MESSSAGE CONTENT ==================================
+# ===================================== LOG LEVEL =====================================
+
+def find_error_log_msgs(namespace, pod_name):
+    fields = {"L": "ERROR"}
+    return query_message(current_index, namespace, pod_name, fields)
+
+
+# ================================== MESSAGE CONTENT ==================================
 
 def get_block_creation_msgs(namespace, pod_name, find_fails=False, from_ts=None, to_ts=None):
+    # I've created a block in layer %v. id: %v, num of transactions: %v, votes: %d,
+    # viewEdges: %d, atx %v, atxs:%v
     created_block_msg = "I've created a block in layer"
     return get_all_msg_containing(namespace, pod_name, created_block_msg, find_fails, from_ts, to_ts)
 
@@ -86,9 +95,7 @@ def get_blocks_per_node_and_layer(deployment):
 
 
 def get_blocks_and_layers(namespace, pod_name, find_fails=False):
-    # I've created a block in layer %v. id: %v, num of transactions: %v, votes: %d,
-    # viewEdges: %d, atx %v, atxs:%v
-    blocks = get_all_msg_containing(namespace, pod_name, "I've created a block in layer", find_fails)
+    blocks = get_block_creation_msgs(namespace, pod_name, find_fails)
     nodes = sort_by_nodeid(blocks)
     layers = sort_by_layer(blocks)
 
@@ -101,7 +108,7 @@ def get_layers(namespace, find_fails=True):
     return ids
 
 
-# ============================== END MESSSAGE CONTENT ==================================
+# ============================== END MESSAGE CONTENT ==================================
 
 def get_podlist(namespace, depname):
     api = ES().get_search_api()
@@ -170,10 +177,13 @@ def query_message(indx, namespace, client_po_name, fields, find_fails=False, sta
     s = Search(index=indx, using=es).query('bool', filter=[fltr])
     hits = list(s.scan())
 
-    print("====================================================================")
-    print("Report for `{0}` in deployment -  {1}  ".format(fields, client_po_name))
+    # TODO just started changing the prints {WIP}
+    separator = "===================================================================="
+    print(f"\n{separator}")
+    print(f"A query has been made for `{fields}`\ndeployment - "
+          f"{namespace}\nall clients containing {client_po_name} in pod_name")
     print("Number of hits: ", len(hits))
-    print("====================================================================")
+    print(f"{separator}\n")
     print("Benchmark results:")
     if len(hits) > 0:
         ts = [hit["T"] for hit in hits]
@@ -185,7 +195,7 @@ def query_message(indx, namespace, client_po_name, fields, find_fails=False, sta
         delta = last - first
         print("First: {0}, Last: {1}, Delta: {2}".format(first, last, delta))
         # TODO: compare to previous runs.
-        print("====================================================================")
+        print(separator)
     else:
         print("no hits")
     if find_fails:
@@ -202,7 +212,7 @@ def query_message(indx, namespace, client_po_name, fields, find_fails=False, sta
             print("None. yay!")
         else:
             print(unsecpods)
-        print("====================================================================")
+        print(separator)
 
     s = list(hits)
     return s
