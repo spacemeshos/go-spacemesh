@@ -99,7 +99,6 @@ func (fq *fetchQueue) addToPending(ids []types.Hash32) []chan bool {
 }
 
 func (fq *fetchQueue) invalidate(id types.Hash32, valid bool) {
-	fq.Info("done with %v !!!!!!!!!!!!!!!! %v", id.ShortString(), valid)
 	fq.Lock()
 	deps := fq.pending[id]
 	delete(fq.pending, id)
@@ -108,6 +107,7 @@ func (fq *fetchQueue) invalidate(id types.Hash32, valid bool) {
 	for _, dep := range deps {
 		dep <- valid
 	}
+	fq.Info("invalidated %v %v", id.ShortString(), valid)
 }
 
 //returns items out of itemIds that are not in the local database
