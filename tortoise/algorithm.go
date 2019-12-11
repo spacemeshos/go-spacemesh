@@ -24,6 +24,23 @@ func NewAlgorithm(layerSize int, mdb *mesh.MeshDB, hdist int, lg log.Log) *Algor
 	alg.HandleIncomingLayer(mesh.GenesisLayer())
 	return alg
 }
+
+func NewRecoveredAlgorithm(mdb *mesh.MeshDB, lg log.Log) *Algorithm {
+	trtl := &NinjaTortoise{Log: lg, Mesh: mdb}
+
+	ni, err := trtl.RecoverTortoise()
+	if err != nil {
+		lg.Panic("could not recover tortoise state from disc ", err)
+	}
+
+	lg.Info("recovered tortoise from disc")
+	trtl.ninjaTortoise = ni.(*ninjaTortoise)
+
+	alg := &Algorithm{Tortoise: trtl}
+
+	return alg
+}
+
 func (alg *Algorithm) HandleLateBlock(b *types.Block) {
 	//todo feed all layers from b's layer to tortoise
 	l := types.NewLayer(b.Layer())
