@@ -100,7 +100,7 @@ func mod(d *DBIG) *BIG {
 		t := d.split(MODBITS)
 		b := NewBIGdcopy(d)
 
-		v := t.pmul(int(MConst))
+		v := t.pmul(int64(MConst))
 
 		t.add(b)
 		t.norm()
@@ -186,7 +186,7 @@ func (F *FP) reduce() {
 
 	if F.XES > 16 {
 		q := quo(F.x, m)
-		carry := r.pmul(q)
+		carry := r.pmul(int64(q))
 		r.w[NLEN-1] += carry << BASEBITS
 		F.x.sub(r)
 		F.x.norm()
@@ -293,7 +293,7 @@ func (F *FP) imul(c int) {
 		F.XES = 2
 	} else {
 		if F.XES*int32(c) <= FEXCESS {
-			F.x.pmul(c)
+			F.x.pmul(int64(c))
 			F.XES *= int32(c)
 		} else {
 			n := NewFPint(c)
@@ -352,7 +352,7 @@ func (F *FP) div2() {
 // See https://eprint.iacr.org/2018/1038
 // return this^(p-3)/4 or this^(p-5)/8
 func (F *FP) fpow() *FP {
-	ac := [11]int{1, 2, 3, 6, 12, 15, 30, 60, 120, 240, 255}
+	ac := [11]int64{1, 2, 3, 6, 12, 15, 30, 60, 120, 240, 255}
 	var xp []*FP
 	// phase 1
 	xp = append(xp, NewFPcopy(F))
@@ -376,7 +376,8 @@ func (F *FP) fpow() *FP {
 	xp[9].sqr()
 	xp = append(xp, NewFPcopy(xp[9]))
 	xp[10].mul(xp[5])
-	var n, c int
+	var n int
+	var c int64
 
 	n = int(MODBITS)
 	if MODTYPE == GENERALISED_MERSENNE { // Goldilocks ONLY
@@ -384,15 +385,15 @@ func (F *FP) fpow() *FP {
 	}
 	if MOD8 == 5 {
 		n -= 3
-		c = (int(MConst) + 5) / 8
+		c = (int64(MConst) + 5) / 8
 	} else {
 		n -= 2
-		c = (int(MConst) + 3) / 4
+		c = (int64(MConst) + 3) / 4
 
 	}
 
 	bw := 0
-	w := 1
+	w := int64(1)
 	for w < c {
 		w *= 2
 		bw += 1

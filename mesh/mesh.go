@@ -7,12 +7,15 @@ import (
 	"github.com/seehuhn/mt19937"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
-	"github.com/spacemeshos/go-spacemesh/events"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/sha256-simd"
-	"math/big"
 	"math/rand"
+
+	"github.com/spacemeshos/go-spacemesh/events"
+	"github.com/spacemeshos/go-spacemesh/log"
+
+	"math/big"
+
 	"sync"
 )
 
@@ -25,6 +28,9 @@ const (
 
 var TRUE = []byte{1}
 var FALSE = []byte{0}
+var LATEST = []byte("latest")
+var VALIDATED = []byte("validated")
+var TORTOISE = []byte("tortoise")
 
 type MeshValidator interface {
 	HandleIncomingLayer(layer *types.Layer) (types.LayerID, types.LayerID)
@@ -36,6 +42,7 @@ type TxProcessor interface {
 	ApplyRewards(layer types.LayerID, miners []types.Address, reward *big.Int)
 	ValidateSignature(s types.Signed) (types.Address, error)
 	AddressExists(addr types.Address) bool
+	ValidateNonceAndBalance(transaction *types.Transaction) error
 	GetLayerApplied(txId types.TransactionId) *types.LayerID
 }
 
@@ -79,7 +86,6 @@ type Mesh struct {
 }
 
 func NewMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh MeshValidator, txInvalidator TxMemPoolInValidator, atxInvalidator AtxMemPoolInValidator, pr TxProcessor, logger log.Log) *Mesh {
-	//todo add boot from disk
 	ll := &Mesh{
 		Log:            logger,
 		MeshValidator:  mesh,
@@ -91,6 +97,27 @@ func NewMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh MeshValidator, t
 		config:         rewardConfig,
 		AtxDB:          atxDb,
 	}
+
+	return ll
+}
+
+func NewRecoveredMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh MeshValidator, txInvalidator TxMemPoolInValidator, atxInvalidator AtxMemPoolInValidator, pr TxProcessor, logger log.Log) *Mesh {
+	ll := NewMesh(db, atxDb, rewardConfig, mesh, txInvalidator, atxInvalidator, pr, logger)
+
+	latest, err := db.general.Get(LATEST)
+	if err != nil {
+		logger.Panic("could not recover latest layer")
+	}
+
+	ll.latestLayer = types.LayerID(util.BytesToUint64(latest))
+
+	validated, err := db.general.Get(VALIDATED)
+	if err != nil {
+		logger.Panic("could not recover  validated layer")
+	}
+
+	ll.validatedLayer = types.LayerID(util.BytesToUint64(validated))
+	ll.Info("recovered mesh from disc latest layer %d validated layer %d", ll.latestLayer, ll.validatedLayer)
 
 	return ll
 }
@@ -118,6 +145,9 @@ func (m *Mesh) SetLatestLayer(idx types.LayerID) {
 	if idx > m.latestLayer {
 		m.Info("set latest known layer to %v", idx)
 		m.latestLayer = idx
+		if err := m.general.Put(LATEST, idx.ToBytes()); err != nil {
+			m.Error("could not persist Latest layer index")
+		}
 	}
 }
 
@@ -141,6 +171,10 @@ func (m *Mesh) ValidateLayer(lyr *types.Layer) {
 	oldPbase, newPbase := m.HandleIncomingLayer(lyr)
 	m.lvMutex.Lock()
 	m.validatedLayer = currLayerId
+	m.validatedLayer = lyr.Index()
+	if err := m.general.Put(VALIDATED, lyr.Index().ToBytes()); err != nil {
+		m.Error("could not persist validated layer index %d", lyr.Index())
+	}
 	m.lvMutex.Unlock()
 
 	for layerId := oldPbase; layerId < newPbase; layerId++ {
@@ -334,7 +368,7 @@ func (m *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.Transaction, atxs 
 	m.invalidateFromPools(&blk.MiniBlock)
 
 	events.Publish(events.NewBlock{Id: blk.Id().String(), Atx: blk.ATXID.ShortString(), Layer: uint64(blk.LayerIndex)})
-	m.With().Info("added block %s to database ", log.BlockId(blk.Id().String()))
+	m.With().Info("added block to database ", log.BlockId(blk.Id().String()))
 	return nil
 }
 
@@ -448,23 +482,24 @@ func (m *Mesh) AccumulateRewards(rewardLayer types.LayerID, params Config) {
 		ids = append(ids, atx.Coinbase)
 
 	}
-	//accumulate all blocks rewards
+	// aggregate all blocks' rewards
 	txs, _ := m.ExtractUniqueOrderedTransactions(l)
 
-	rewards := &big.Int{}
+	totalReward := &big.Int{}
 	for _, tx := range txs {
-		res := new(big.Int).SetUint64(tx.Fee)
-		rewards.Add(rewards, res)
+		totalReward.Add(totalReward, new(big.Int).SetUint64(tx.Fee))
 	}
 
 	layerReward := CalculateLayerReward(rewardLayer, params)
-	rewards.Add(rewards, layerReward)
+	totalReward.Add(totalReward, layerReward)
 
 	numBlocks := big.NewInt(int64(len(l.Blocks())))
 
-	blockReward := calculateActualRewards(rewards, numBlocks)
-	m.ApplyRewards(rewardLayer, ids, blockReward)
-	err = m.writeTransactionRewards(rewardLayer, ids, blockReward)
+	blockTotalReward := calculateActualRewards(totalReward, numBlocks)
+	m.ApplyRewards(rewardLayer, ids, blockTotalReward)
+
+	blockLayerReward := calculateActualRewards(layerReward, numBlocks)
+	err = m.writeTransactionRewards(rewardLayer, ids, blockTotalReward, blockLayerReward)
 	if err != nil {
 		m.Error("cannot write reward to db")
 	}

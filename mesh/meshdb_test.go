@@ -487,22 +487,31 @@ func TestMeshDB_testGetRewards(t *testing.T) {
 	_, addr3 := newSignerAndAddress(r, "789")
 	_, addr4 := newSignerAndAddress(r, "999")
 
-	err := mdb.writeTransactionRewards(1, []types.Address{addr1, addr2, addr3}, big.NewInt(10000))
+	err := mdb.writeTransactionRewards(1, []types.Address{addr1, addr2, addr3}, big.NewInt(10000), big.NewInt(9000))
 	r.NoError(err)
 
-	err = mdb.writeTransactionRewards(2, []types.Address{addr1, addr2}, big.NewInt(20000))
+	err = mdb.writeTransactionRewards(2, []types.Address{addr1, addr2}, big.NewInt(20000), big.NewInt(19000))
 	r.NoError(err)
 
-	err = mdb.writeTransactionRewards(3, []types.Address{addr2}, big.NewInt(30000))
+	err = mdb.writeTransactionRewards(3, []types.Address{addr2}, big.NewInt(30000), big.NewInt(29000))
 	r.NoError(err)
 
-	rewards := mdb.GetRewards(addr2)
-	r.Equal([]types.Reward{{Layer: 1, Amount: 10000}, {Layer: 2, Amount: 20000}, {Layer: 3, Amount: 30000}}, rewards)
+	rewards, err := mdb.GetRewards(addr2)
+	r.NoError(err)
+	r.Equal([]types.Reward{
+		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000},
+		{Layer: 2, TotalReward: 20000, LayerRewardEstimate: 19000},
+		{Layer: 3, TotalReward: 30000, LayerRewardEstimate: 29000},
+	}, rewards)
 
-	rewards = mdb.GetRewards(addr1)
-	r.Equal([]types.Reward{{Layer: 1, Amount: 10000}, {Layer: 2, Amount: 20000}}, rewards)
+	rewards, err = mdb.GetRewards(addr1)
+	r.NoError(err)
+	r.Equal([]types.Reward{
+		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000},
+		{Layer: 2, TotalReward: 20000, LayerRewardEstimate: 19000},
+	}, rewards)
 
-	rewards = mdb.GetRewards(addr4)
-	var expected []types.Reward
-	r.Equal(expected, rewards)
+	rewards, err = mdb.GetRewards(addr4)
+	r.NoError(err)
+	r.Nil(rewards)
 }

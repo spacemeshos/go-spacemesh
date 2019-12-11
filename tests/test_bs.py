@@ -630,21 +630,23 @@ def test_transactions(setup_network):
             assert transfer(client_wrapper, tap, str_pub, amount), "Transfer from tap failed"
 
         print_title("Ensuring that all transactions were received")
-        ready = 0
         iterations_to_try = int(testconfig['client']['args']['layers-per-epoch']) * 2  # wait for two epochs (genesis)
+        ready_accounts = set()
         for x in range(iterations_to_try):
-            ready = 0
             layer_duration = testconfig['client']['args']['layer-duration-sec']
             print("\nSleeping layer duration ({}s)... {}/{}".format(layer_duration, x+1, iterations_to_try))
             time.sleep(float(layer_duration))
-            if test_account(client_wrapper, tap, tap_init_amount):
-                for pk in accounts:
-                    if pk == tap:
-                        continue
-                    assert test_account(client_wrapper, pk), "account {} didn't have the expected nonce and balance".format(pk)
-                    ready += 1
+            if tap not in ready_accounts and test_account(client_wrapper, tap, tap_init_amount):
+                ready_accounts.add(tap)
+            for pk in accounts:
+                if pk == tap or pk in ready_accounts:
+                    continue
+                if test_account(client_wrapper, pk):
+                    ready_accounts.add(pk)
+            if accounts.keys() == ready_accounts:
                 break
-        assert ready == len(accounts)-1, "Not all accounts received sent txs"  # one for 0 counting and one for tap.
+        assert accounts.keys() == ready_accounts, \
+            "Not all accounts received sent txs. Accounts that aren't ready: %s" % (accounts.keys()-ready_accounts)
     send_txs_from_tap()
 
     def is_there_a_valid_acc(min_balance, accounts_snapshot: dict = None):
@@ -705,23 +707,23 @@ def test_transactions(setup_network):
 def test_mining(setup_network):
     ns = testconfig['namespace']
 
-    # choose client to run on
-    client_ip = setup_network.clients.pods[0]['pod_ip']
+    client_wrapper = ClientWrapper(setup_network.clients.pods[0], ns)
+
+    tx_gen = tx_generator.TxGenerator()
+    addr = bytes.hex(tx_gen.publicK)
 
     print("checking nonce")
-    out = api_call(client_ip, data='{"address":"1"}', api='v1/nonce', namespace=testconfig['namespace'])
-    # assert "{'value': '0'}" in out
-    # print("nonce ok")
-    nonce = int(json.loads(out.replace("\'", "\""))['value'])
+    out = client_wrapper.call(Api.NONCE, {'address': addr})
+    nonce = int(out.get('value'))
+    print("checking balance")
+    out = client_wrapper.call(Api.BALANCE, {'address': addr})
+    balance = int(out.get('value'))
 
-    api = 'v1/submittransaction'
-    tx_gen = tx_generator.TxGenerator()
-    tx_bytes = tx_gen.generate("0000000000000000000000000000000000002222", nonce, 246, 642, 100)
-    data = '{"tx":' + str(list(tx_bytes)) + '}'
+    tx_bytes = tx_gen.generate("0000000000000000000000000000000000002222", nonce, 246, 1, min(100, balance-1))
     print("submitting transaction")
-    out = api_call(client_ip, data, api, testconfig['namespace'])
+    out = client_wrapper.call(Api.SUBMIT_TRANSACTION, {'tx': list(tx_bytes)})
     print(out)
-    assert "{'value': 'ok'" in out
+    assert out.get('value') == 'ok'
     print("submit transaction ok")
     print("wait for confirmation ")
     end = start = time.time()
