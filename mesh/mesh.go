@@ -173,7 +173,7 @@ func (m *Mesh) ValidateLayer(lyr *types.Layer) {
 	m.validatedLayer = currLayerId
 	m.validatedLayer = lyr.Index()
 	if err := m.general.Put(VALIDATED, lyr.Index().ToBytes()); err != nil {
-		m.Error("could not persist validated layer index")
+		m.Error("could not persist validated layer index %d", lyr.Index())
 	}
 	m.lvMutex.Unlock()
 
