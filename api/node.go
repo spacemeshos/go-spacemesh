@@ -40,3 +40,7 @@ type GenesisTimeAPI interface {
 type LoggingAPI interface {
 	SetLogLevel(loggerName, severity string) error
 }
+
+type PostAPI interface {
+	Reset() error
+}

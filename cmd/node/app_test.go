@@ -12,6 +12,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/oracle"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/rand"
@@ -156,7 +157,8 @@ func (suite *AppTestSuite) initMultipleInstances(rolacle *eligibility.FixedRolac
 
 func activateGrpcServer(smApp *SpacemeshApp) {
 	smApp.Config.API.StartGrpcServer = true
-	smApp.grpcAPIService = api.NewGrpcService(smApp.P2P, smApp.state, smApp.txProcessor, smApp.atxBuilder, smApp.oracle, smApp.clock, nil)
+	layerDuration := smApp.Config.LayerDurationSec
+	smApp.grpcAPIService = api.NewGrpcService(smApp.P2P, smApp.state, smApp.mesh, smApp.txPool, smApp.atxBuilder, smApp.oracle, smApp.clock, nil, layerDuration, nil)
 	smApp.grpcAPIService.StartService()
 }
 
@@ -228,7 +230,7 @@ func txWithRunningNonceGenerator(dependancies []int) TestScenario {
 		}
 
 		for i := 0; i < txsSent; i++ {
-			tx, err := types.NewSignedTx(uint64(i), dst, 10, 1, 1, acc1Signer)
+			tx, err := mesh.NewSignedTx(uint64(i), dst, 10, 1, 1, acc1Signer)
 			if err != nil {
 				log.Panic("panicked creating signed tx err=%v", err)
 			}
@@ -428,7 +430,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID, start
 				log.Error("ERROR: couldn't get a validated layer from db layer %v, %v", i, err)
 			}
 			for _, b := range lyr.Blocks() {
-				datamap[ap.nodeId.Key].layertoblocks[lyr.Index()] = append(datamap[ap.nodeId.Key].layertoblocks[lyr.Index()], b.ID())
+				datamap[ap.nodeId.Key].layertoblocks[lyr.Index()] = append(datamap[ap.nodeId.Key].layertoblocks[lyr.Index()], b.Id())
 			}
 		}
 	}
@@ -492,13 +494,13 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID, start
 	atxDb := firstAp.blockListener.AtxDB.(*activation.ActivationDb)
 	atxId, err := atxDb.GetNodeLastAtxId(firstAp.nodeId)
 	assert.NoError(suite.T(), err)
-	atx, err := atxDb.GetAtx(atxId)
+	atx, err := atxDb.GetAtxHeader(atxId)
 	assert.NoError(suite.T(), err)
 
 	totalAtxs := uint32(0)
 	for atx != nil {
 		totalAtxs += atx.ActiveSetSize
-		atx, err = atxDb.GetAtx(atx.PrevATXId)
+		atx, err = atxDb.GetAtxHeader(atx.PrevATXId)
 	}
 
 	// assert number of ATXs
@@ -510,7 +512,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID, start
 func (suite *AppTestSuite) validateLastATXActiveSetSize(app *SpacemeshApp) {
 	prevAtxId, err := app.atxBuilder.GetPrevAtxId(app.nodeId)
 	suite.NoError(err)
-	atx, err := app.mesh.GetAtx(prevAtxId)
+	atx, err := app.mesh.GetAtxHeader(prevAtxId)
 	suite.NoError(err)
 	suite.True(int(atx.ActiveSetSize) == len(suite.apps), "atx: %v node: %v", atx.ShortString(), app.nodeId.Key[:5])
 }

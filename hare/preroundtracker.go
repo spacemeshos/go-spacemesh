@@ -1,7 +1,7 @@
 package hare
 
 import (
-	"github.com/spacemeshos/go-spacemesh/hare/metrics"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -36,9 +36,8 @@ func (pre *preRoundTracker) OnPreRound(msg *Msg) {
 	}
 
 	// record Values
-	for _, v := range sToTrack.values {
-		pre.tracker.Track(v.Id())
-		metrics.PreRoundCounter.With("value", v.String()).Add(1)
+	for v := range sToTrack.values {
+		pre.tracker.Track(v)
 	}
 
 	// update the union to include new Values
@@ -47,16 +46,16 @@ func (pre *preRoundTracker) OnPreRound(msg *Msg) {
 
 // CanProveValue returns true if the given value is provable, false otherwise.
 // a value is said to be provable if it has at least threshold pre-round messages to support it.
-func (pre *preRoundTracker) CanProveValue(value blockID) bool {
+func (pre *preRoundTracker) CanProveValue(value types.BlockID) bool {
 	// at least threshold occurrences of a given value
-	return pre.tracker.CountStatus(value.Id()) >= pre.threshold
+	return pre.tracker.CountStatus(value) >= pre.threshold
 }
 
 // CanProveSet returns true if the give set is provable, false otherwise.
 // a set is said to be provable if all his values are provable.
 func (pre *preRoundTracker) CanProveSet(set *Set) bool {
 	// a set is provable iff all its Values are provable
-	for _, bid := range set.values {
+	for bid := range set.values {
 		if !pre.CanProveValue(bid) {
 			return false
 		}
@@ -67,9 +66,9 @@ func (pre *preRoundTracker) CanProveSet(set *Set) bool {
 
 // FilterSet filters out non-provable values from the given set
 func (pre *preRoundTracker) FilterSet(set *Set) {
-	for _, v := range set.values {
-		if !pre.CanProveValue(v) { // not enough witnesses
-			set.Remove(v)
+	for bid := range set.values {
+		if !pre.CanProveValue(bid) { // not enough witnesses
+			set.Remove(bid)
 		}
 	}
 }

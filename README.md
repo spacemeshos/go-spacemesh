@@ -107,7 +107,7 @@ To build `go-spacemesh` for your current system architecture, from the project r
 make build
 ```
 
-This will (re-)generate protobuf files and build the `go-spacemesh` binary, saving it in the project root directory.
+This will (re-)generate protobuf files and build the `go-spacemesh` binary, saving it in the `build/` directory.
 
 To build a binary for a specific architecture directory use:
 ```
@@ -118,7 +118,7 @@ Platform-specific binaries are saved to the `/build` directory.
 
 ### Running
 ```
-./go-spacemesh
+./build/go-spacemesh
 ```
 
 ### Testing
@@ -152,7 +152,7 @@ You can then run the command `make install` followed by `make build` as on unix 
 - You can run a local Spacemesh Testent with 6 full nodes, 6 user accounts, and 1 POET support service on your computer using docker. 
 - The local testnet full nodes are built from this repo.
 - This is a great way to get a feel for the protocol and the platform and to start hacking on Spacemesh.
-- Follow the steps in our [Local Testnet Guide](https://testnet.spacemesh.io/#/local)
+- Follow the steps in our [Local Testnet Guide](https://testnet.spacemesh.io/#/README)
 
 #### Next Steps...
 - Please visit our [wiki](https://github.com/spacemeshos/go-spacemesh/wiki)

@@ -3,9 +3,7 @@ package types
 import (
 	"encoding/hex"
 	"fmt"
-	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/util"
-	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/poet/shared"
 	"github.com/spacemeshos/post/proving"
 	"github.com/spacemeshos/sha256-simd"
@@ -46,16 +44,31 @@ type ActivationTxHeader struct {
 	ActiveSetSize uint32
 }
 
-func (t *ActivationTxHeader) ShortString() string {
-	return t.id.ShortString()
+func (atxh *ActivationTxHeader) ShortString() string {
+	return atxh.id.ShortString()
 }
 
-func (t *ActivationTxHeader) Hash32() Hash32 {
-	return Hash32(*t.id)
+func (atxh *ActivationTxHeader) Hash32() Hash32 {
+	return Hash32(*atxh.id)
 }
 
-func (t *ActivationTxHeader) Bytes() []byte {
-	return t.id.Bytes()
+func (atxh *ActivationTxHeader) Bytes() []byte {
+	return atxh.id.Bytes()
+}
+
+func (atxh *ActivationTxHeader) Id() AtxId {
+	if atxh.id == nil {
+		panic("id field must be set")
+	}
+	return *atxh.id
+}
+
+func (atxh *ActivationTxHeader) TargetEpoch(layersPerEpoch uint16) EpochId {
+	return atxh.PubLayerIdx.GetEpoch(layersPerEpoch) + 1
+}
+
+func (atxh *ActivationTxHeader) SetId(id *AtxId) {
+	atxh.id = id
 }
 
 type NIPSTChallenge struct {
@@ -92,11 +105,10 @@ func (challenge *NIPSTChallenge) String() string {
 }
 
 type InnerActivationTx struct {
-	ActivationTxHeader
+	*ActivationTxHeader
 	Nipst      *NIPST
 	View       []BlockID
 	Commitment *PostProof
-	//todo: add sig
 }
 
 type ActivationTx struct {
@@ -104,23 +116,12 @@ type ActivationTx struct {
 	Sig []byte
 }
 
-func (signed *ActivationTx) AtxBytes() ([]byte, error) {
-	return InterfaceToBytes(signed.InnerActivationTx)
-}
+func NewActivationTx(NodeId NodeId, Coinbase Address, Sequence uint64, PrevATX AtxId, LayerIndex LayerID,
+	StartTick uint64, PositioningATX AtxId, ActiveSetSize uint32, View []BlockID, nipst *NIPST) *ActivationTx {
 
-func NewActivationTx(NodeId NodeId,
-	Coinbase Address,
-	Sequence uint64,
-	PrevATX AtxId,
-	LayerIndex LayerID,
-	StartTick uint64,
-	PositioningATX AtxId,
-	ActiveSetSize uint32,
-	View []BlockID,
-	nipst *NIPST) *ActivationTx {
 	atx := &ActivationTx{
 		&InnerActivationTx{
-			ActivationTxHeader: ActivationTxHeader{
+			ActivationTxHeader: &ActivationTxHeader{
 				NIPSTChallenge: NIPSTChallenge{
 					NodeId:         NodeId,
 					Sequence:       Sequence,
@@ -146,7 +147,7 @@ func NewActivationTxWithChallenge(poetChallenge NIPSTChallenge, coinbase Address
 
 	atx := &ActivationTx{
 		&InnerActivationTx{
-			ActivationTxHeader: ActivationTxHeader{
+			ActivationTxHeader: &ActivationTxHeader{
 				NIPSTChallenge: poetChallenge,
 				Coinbase:       coinbase,
 				ActiveSetSize:  ActiveSetSize,
@@ -161,19 +162,8 @@ func NewActivationTxWithChallenge(poetChallenge NIPSTChallenge, coinbase Address
 	return atx
 }
 
-func (atxh *ActivationTxHeader) Id() AtxId {
-	if atxh.id == nil {
-		panic("id field must be set")
-	}
-	return *atxh.id
-}
-
-func (atxh *ActivationTxHeader) TargetEpoch(layersPerEpoch uint16) EpochId {
-	return atxh.PubLayerIdx.GetEpoch(layersPerEpoch) + 1
-}
-
-func (atxh *ActivationTxHeader) SetId(id *AtxId) {
-	atxh.id = id
+func (atx *ActivationTx) AtxBytes() ([]byte, error) {
+	return InterfaceToBytes(atx.InnerActivationTx)
 }
 
 func (atx *ActivationTx) CalcAndSetId() {
@@ -187,32 +177,6 @@ func (atx *ActivationTx) GetPoetProofRef() []byte {
 
 func (atx *ActivationTx) GetShortPoetProofRef() []byte {
 	return atx.Nipst.PostProof.Challenge[:util.Min(5, len(atx.Nipst.PostProof.Challenge))]
-}
-
-// ValidateSignedAtx extracts public key from message and verifies public key exists in IdStore, this is how we validate
-// ATX signature. If this is the first ATX it is considered valid anyways and ATX syntactic validation will determine ATX validity
-func ExtractPublicKey(signedAtx *ActivationTx) (*signing.PublicKey, error) {
-	bts, err := signedAtx.AtxBytes()
-	if err != nil {
-		return nil, err
-	}
-
-	pubKey, err := ed25519.ExtractPublicKey(bts, signedAtx.Sig)
-	if err != nil {
-		return nil, err
-	}
-
-	pub := signing.NewPublicKey(pubKey)
-	return pub, nil
-}
-
-func SignAtx(signer *signing.EdSigner, atx *ActivationTx) (*ActivationTx, error) {
-	bts, err := atx.AtxBytes()
-	if err != nil {
-		return nil, err
-	}
-	atx.Sig = signer.Sign(bts)
-	return atx, nil
 }
 
 type PoetProof struct {

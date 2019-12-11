@@ -36,7 +36,6 @@ import (
 	"runtime/pprof"
 	"time"
 
-	"github.com/spacemeshos/go-spacemesh/accounts"
 	"github.com/spacemeshos/go-spacemesh/api"
 	cfg "github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
@@ -77,7 +76,6 @@ const (
 	AtxBuilderLogger     = "atxBuilder"
 )
 
-// VersionCmd returns the current version of spacemesh
 var Cmd = &cobra.Command{
 	Use:   "node",
 	Short: "start node",
@@ -100,6 +98,7 @@ var VersionCmd = &cobra.Command{
 }
 
 func init() {
+	// TODO add commands actually adds flags
 	cmdp.AddCommands(Cmd)
 	Cmd.AddCommand(VersionCmd)
 }
@@ -126,6 +125,7 @@ type SpacemeshApp struct {
 	edSgn          *signing.EdSigner
 	closers        []interface{ Close() }
 	log            log.Log
+	txPool         *miner.TxMempool
 	loggers        map[string]*zap.AtomicLevel
 }
 
@@ -218,9 +218,6 @@ func (app *SpacemeshApp) Initialize(cmd *cobra.Command, args []string) (err erro
 	// ensure all data folders exist
 	filesystem.EnsureSpacemeshDataDirectories()
 
-	// load all accounts from store
-	accounts.LoadAllAccounts()
-
 	// todo: set coinbase account (and unlock it) based on flags
 
 	return nil
@@ -293,7 +290,7 @@ func (app *SpacemeshApp) setupGenesis() {
 	}
 
 	app.state.Commit(false)
-	app.mesh.AddBlock(&mesh.GenesisBlock)
+	app.mesh.AddBlock(mesh.GenesisBlock)
 }
 
 func (app *SpacemeshApp) setupTestFeatures() {
@@ -449,19 +446,31 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 		return err
 	}
 
-	trtl := tortoise.NewAlgorithm(int(layerSize), mdb, app.Config.Hdist, app.addLogger(TrtlLogger, lg))
-
-	txpool := miner.NewTxMemPool()
+	app.txPool = miner.NewTxMemPool()
 	atxpool := miner.NewAtxMemPool()
-	meshAndPoolProjector := pending_txs.NewMeshAndPoolProjector(mdb, txpool)
+	meshAndPoolProjector := pending_txs.NewMeshAndPoolProjector(mdb, app.txPool)
 
-	processor := state.NewTransactionProcessor(st, meshAndPoolProjector, lg.WithName("state"))
+	appliedTxs, err := database.NewLDBDatabase(dbStorepath+"appliedTxs", 0, 0, lg.WithName("appliedTxs"))
+	if err != nil {
+		return err
+	}
+	app.closers = append(app.closers, appliedTxs)
+	processor := state.NewTransactionProcessor(st, appliedTxs, meshAndPoolProjector, lg.WithName("state"))
 
 	atxdb := activation.NewActivationDb(atxdbstore, idStore, mdb, layersPerEpoch, validator, app.addLogger(AtxDbLogger, lg))
 	beaconProvider := &oracle.EpochBeaconProvider{}
 	eValidator := oracle.NewBlockEligibilityValidator(layerSize, uint32(app.Config.GenesisActiveSet), layersPerEpoch, atxdb, beaconProvider, BLS381.Verify2, app.addLogger(BlkEligibilityLogger, lg))
 
-	msh := mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, txpool, atxpool, processor, app.addLogger(MeshLogger, lg)) //todo: what to do with the logger?
+	var msh *mesh.Mesh
+	var trtl *tortoise.Algorithm
+	if mdb.PersistentData() {
+		trtl = tortoise.NewRecoveredAlgorithm(mdb, app.addLogger(TrtlLogger, lg))
+		msh = mesh.NewRecoveredMesh(mdb, atxdb, app.Config.REWARD, trtl, app.txPool, atxpool, processor, app.addLogger(MeshLogger, lg))
+
+	} else {
+		trtl = tortoise.NewAlgorithm(int(layerSize), mdb, app.Config.Hdist, app.addLogger(TrtlLogger, lg))
+		msh = mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, app.txPool, atxpool, processor, app.addLogger(MeshLogger, lg))
+	}
 
 	conf := sync.Configuration{Concurrency: 4, LayerSize: int(layerSize), LayersPerEpoch: layersPerEpoch, RequestTimeout: time.Duration(app.Config.SyncRequestTimeout) * time.Millisecond, Hdist: app.Config.Hdist, AtxsLimit: app.Config.AtxsPerBlock}
 	if app.Config.AtxsPerBlock > miner.AtxsPerBlockLimit { // validate limit
@@ -474,8 +483,8 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 			app.Config.HareEligibility.EpochOffset, app.Config.BaseConfig.LayersPerEpoch)
 	}
 
-	syncer := sync.NewSync(swarm, msh, txpool, atxpool, eValidator, poetDb, conf, clock, app.addLogger(SyncLogger, lg))
-	blockOracle := oracle.NewMinerBlockOracle(layerSize, uint32(app.Config.GenesisActiveSet), layersPerEpoch, atxdb, beaconProvider, vrfSigner, nodeID, syncer.WeaklySynced, app.addLogger(BlockOracle, lg))
+	syncer := sync.NewSync(swarm, msh, app.txPool, atxpool, eValidator, poetDb, conf, clock, app.addLogger(SyncLogger, lg))
+	blockOracle := oracle.NewMinerBlockOracle(layerSize, uint32(app.Config.GenesisActiveSet), layersPerEpoch, atxdb, beaconProvider, vrfSigner, nodeID, syncer.ListenToGossip, app.addLogger(BlockOracle, lg))
 
 	// TODO: we should probably decouple the apptest and the node (and duplicate as necessary)
 	var hOracle hare.Rolacle
@@ -491,11 +500,11 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 		for _, b := range ids {
 			res, err := mdb.GetBlock(b)
 			if err != nil {
-				app.log.With().Error("failed to validate block", log.BlockId(uint64(b)))
+				app.log.With().Error("failed to validate block", log.BlockId(b.String()))
 				return false
 			}
 			if res == nil {
-				app.log.With().Error("failed to validate block (BUG BUG BUG - GetBlock return err nil and res nil)", log.BlockId(uint64(b)))
+				app.log.With().Error("failed to validate block (BUG BUG BUG - GetBlock return err nil and res nil)", log.BlockId(b.String()))
 				return false
 			}
 
@@ -503,10 +512,11 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 
 		return true
 	}
+
 	ha := hare.New(app.Config.HARE, swarm, sgn, nodeID, validationFunc, syncer.IsSynced, msh, hOracle, uint16(app.Config.LayersPerEpoch), idStore, hOracle, clock.Subscribe(), app.addLogger(HareLogger, lg))
 
 	stateAndMeshProjector := pending_txs.NewStateAndMeshProjector(st, msh)
-	blockProducer := miner.NewBlockBuilder(nodeID, sgn, swarm, clock.Subscribe(), app.Config.Hdist, txpool, atxpool, coinToss, msh, ha, blockOracle, processor, atxdb, syncer, app.Config.AtxsPerBlock, stateAndMeshProjector, app.addLogger(BlockBuilderLogger, lg))
+	blockProducer := miner.NewBlockBuilder(nodeID, sgn, swarm, clock.Subscribe(), app.Config.Hdist, app.txPool, atxpool, coinToss, msh, ha, blockOracle, processor, atxdb, syncer, app.Config.AtxsPerBlock, stateAndMeshProjector, app.addLogger(BlockBuilderLogger, lg))
 	blockListener := sync.NewBlockListener(swarm, syncer, 4, app.addLogger(BlockListenerLogger, lg))
 
 	msh.SetBlockBuilder(blockProducer)
@@ -520,7 +530,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	if coinBase.Big().Uint64() == 0 && app.Config.StartMining {
 		app.log.Panic("invalid Coinbase account")
 	}
-	atxBuilder := activation.NewBuilder(nodeID, coinBase, sgn, atxdb, swarm, msh, layersPerEpoch, nipstBuilder, postClient, clock.Subscribe(), syncer.WeaklySynced, store, app.addLogger("atxBuilder", lg))
+	atxBuilder := activation.NewBuilder(nodeID, coinBase, sgn, atxdb, swarm, msh, layersPerEpoch, nipstBuilder, postClient, clock.Subscribe(), syncer.ListenToGossip, store, app.addLogger("atxBuilder", lg))
 
 	app.blockProducer = blockProducer
 	app.blockListener = blockListener
@@ -800,7 +810,8 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	// start api servers
 	if apiConf.StartGrpcServer || apiConf.StartJSONServer {
 		// start grpc if specified or if json rpc specified
-		app.grpcAPIService = api.NewGrpcService(app.P2P, app.state, app.mesh.TxProcessor, app.atxBuilder, app.oracle, app.clock, app)
+		layerDuration := app.Config.LayerDurationSec
+		app.grpcAPIService = api.NewGrpcService(app.P2P, app.state, app.mesh, app.txPool, app.atxBuilder, app.oracle, app.clock, postClient, layerDuration, app)
 		app.grpcAPIService.StartService()
 	}
 

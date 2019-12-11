@@ -3,7 +3,7 @@ import pytest
 import string
 import random
 from tests import pod
-from kubernetes import config
+from kubernetes import config as k8s_config
 from kubernetes import client
 from pytest_testconfig import config as testconfig
 from tests.misc import CoreV1ApiClient
@@ -16,19 +16,30 @@ def random_id(length):
     return ''.join((random.choice(chars)) for x in range(length))
 
 
-class DeploymentInfo():
+class DeploymentInfo:
     def __init__(self, dep_id=None):
         self.deployment_name = ''
         self.deployment_id = dep_id if dep_id else random_id(length=4)
         self.pods = []
 
+    def __str__(self):
+        ret_str = f"DeploymentInfo:\n\tdeployment name: {self.deployment_name}\n\t"
+        ret_str += f"deployment id: {self.deployment_id}\n\tpods number: {len(self.pods)}"
+        return ret_str
 
-class NetworkDeploymentInfo():
+
+class NetworkDeploymentInfo:
     def __init__(self, dep_id, bs_deployment_info, cl_deployment_info):
         self.deployment_name = ''
         self.deployment_id = dep_id
         self.bootstrap = bs_deployment_info
         self.clients = cl_deployment_info
+
+    def __str__(self):
+        ret_str = f"NetworkDeploymentInfo:\n\tdeployment name: {self.deployment_name}\n\t"
+        ret_str += f"deployment id: {self.deployment_id}\n\tbootstrap info:\n\t{self.bootstrap}\n\t"
+        ret_str += f"client info:\n\t{self.clients}"
+        return ret_str
 
 
 @pytest.fixture(scope='session')
@@ -39,14 +50,14 @@ def load_config():
     if os.path.isfile(kube_config_path):
         kube_config_context = Context().get()
         print("Loading config: {0} context: {1}".format(kube_config_path, kube_config_context))
-        config.load_kube_config(config_file=kube_config_path, context=kube_config_context)
+        k8s_config.load_kube_config(config_file=kube_config_path, context=kube_config_context)
     else:
         # Assuming in cluster config
         try:
             print("Loading incluster config")
-            config.load_incluster_config()
-        except:
-            raise Exception("KUBECONFIG file not found: {0}".format(kube_config_path))
+            k8s_config.load_incluster_config()
+        except Exception as e:
+            raise Exception("KUBECONFIG file not found: {0}\nException: {1}".format(kube_config_path, e))
 
 
 @pytest.fixture(scope='session')
@@ -78,7 +89,7 @@ def set_namespace(request, session_id, load_config):
               "columns:!(M),filters:!(('$state':(store:appState),meta:(alias:!n,disabled:!f,index:'8a91d9d0-c24f-11e9-9"
               "a59-a76b835079b3',key:kubernetes.namespace_name,negate:!f,params:(query:{0},type:phrase),type:phrase,val"
               "ue:{0}),query:(match:(kubernetes.namespace_name:(query:{0},type:phrase))))))"
-              .format(testconfig['namespace']))
+              .format(testconfig['namespace']), "\n")
         namespaces_list = [ns.metadata.name for ns in v1.list_namespace().items]
         if testconfig['namespace'] in namespaces_list:
             return
@@ -104,5 +115,10 @@ def set_namespace(request, session_id, load_config):
 
 
 @pytest.fixture(scope='session')
-def init_session(request, load_config, set_namespace, set_docker_images, session_id):
+def init_session(load_config, set_namespace, set_docker_images, session_id):
+    """
+    init_session sets up a new testing environment using k8s with
+    the given yaml config file
+    :return: namespace id
+    """
     return session_id

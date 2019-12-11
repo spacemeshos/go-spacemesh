@@ -205,10 +205,10 @@ github.com/spacemeshos/merkle-tree v0.0.0-20190612125135-48574fd5f419 h1:h01wKBJ
 github.com/spacemeshos/merkle-tree v0.0.0-20190612125135-48574fd5f419/go.mod h1:mPxjt4RONPxSUhxOq4bhSJyKVGQJ0VMSyRiE51dDLgE=
 github.com/spacemeshos/merkle-tree v0.0.0-20191028110812-1908c3126c82 h1:FmAao0SylhJiAkJfC1+Ots9SS71b8Upvxx6yoBFqEsY=
 github.com/spacemeshos/merkle-tree v0.0.0-20191028110812-1908c3126c82/go.mod h1:mPxjt4RONPxSUhxOq4bhSJyKVGQJ0VMSyRiE51dDLgE=
-github.com/spacemeshos/poet v0.0.0-20191028134828-a10d25ef16d3 h1:0xZcL9WwceIzHD2u26oeZedMGV5CfPuRFEiszOfERB4=
-github.com/spacemeshos/poet v0.0.0-20191028134828-a10d25ef16d3/go.mod h1:XDfv7PF4aaIhYejtt4dl17bH59chcBVSiJ2ZFwLtOyc=
-github.com/spacemeshos/post v0.0.0-20190923094851-82e76dc5fa3e h1:Z0M3OK0G3mo1P3OEgjZ40w/0fBFY003lN5OKmgIOj+k=
-github.com/spacemeshos/post v0.0.0-20190923094851-82e76dc5fa3e/go.mod h1:43GwKHD+nI5wUzzUMwRbpJdC2r9dURZ6V3Jkc9eUMSE=
+github.com/spacemeshos/poet v0.0.0-20191125082746-67cc6f7a2243 h1:NXPpOG/MwFG19saXdWO4oNT4TSdBCSt5mFFnDfFFIEQ=
+github.com/spacemeshos/poet v0.0.0-20191125082746-67cc6f7a2243/go.mod h1:hxca04tOsB0MYhhQ3ydZID9KwlTaJauiKD81GBeNL4s=
+github.com/spacemeshos/post v0.0.0-20191126100540-3ade80883426 h1:4sKn0tEceiinYdmNLf+km0+5wEP6rz37pXdglrhvZHA=
+github.com/spacemeshos/post v0.0.0-20191126100540-3ade80883426/go.mod h1:43GwKHD+nI5wUzzUMwRbpJdC2r9dURZ6V3Jkc9eUMSE=
 github.com/spacemeshos/sha256-simd v0.0.0-20190111104731-8575aafc88c9 h1:Cc+np6ORem5wrvO+YHQ1sdu71ItiQVRiYB4ugazpgxM=
 github.com/spacemeshos/sha256-simd v0.0.0-20190111104731-8575aafc88c9/go.mod h1:Pz5LyRghtiEuSixOVGO0da5AxKBZa6+Yq8ZJfjTAPI0=
 github.com/spacemeshos/smutil v0.0.0-20190604133034-b5189449f5c5 h1:a+uIX0wjwWdK2JpsQnNhSdp3KDkqGg6P7Jp3nMZP8BM=
@@ -230,6 +230,7 @@ github.com/spf13/viper v1.3.2/go.mod h1:ZiWeW+zYFKm7srdB9IoDzzZXaJaI5eL9QjNiN/DM
 github.com/spf13/viper v1.4.0 h1:yXHLWeravcrgGyFSyCgdYpXQ9dR9c/WED3pg1RhxqEU=
 github.com/spf13/viper v1.4.0/go.mod h1:PTJ7Z/lr49W6bUbkmS1V3by4uWynFiR9p7+dSq/yZzE=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
+github.com/stretchr/objx v0.1.1 h1:2vfRuCMp5sSVIDSqO8oNnWJq7mPa6KVP3iPIwFBuy8A=
 github.com/stretchr/objx v0.1.1/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/stretchr/testify v1.2.2 h1:bSDNvY7ZPG5RlJ8otE/7V6gMiyenm9RtJ7IUVIAoJ1w=
 github.com/stretchr/testify v1.2.2/go.mod h1:a8OnRcib4nhh0OaRAV+Yts87kKdq0PP7pXfy6kDkUVs=

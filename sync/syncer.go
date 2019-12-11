@@ -4,7 +4,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -22,7 +21,7 @@ import (
 type ForBlockInView func(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) (bool, error)) error
 
 type TxMemPool interface {
-	Get(id types.TransactionId) (types.Transaction, error)
+	Get(id types.TransactionId) (*types.Transaction, error)
 	Put(id types.TransactionId, item *types.Transaction)
 }
 
@@ -79,6 +78,14 @@ var (
 	errTooManyAtxs = errors.New("too many atxs in blocks")
 )
 
+type Status int
+
+const (
+	Pending    Status = 0
+	InProgress Status = 1
+	Done       Status = 2
+)
+
 type LayerProvider interface {
 	GetLayer(index types.LayerID) (*types.Layer, error)
 }
@@ -103,7 +110,7 @@ type Syncer struct {
 	currentLayerMutex sync.RWMutex
 	syncRoutineWg     sync.WaitGroup
 	gossipLock        sync.RWMutex
-	gossipSynced      bool
+	gossipSynced      Status
 
 	//todo fetch server
 	blockQueue *blockQueue
@@ -141,21 +148,25 @@ const (
 	syncProtocol                    = "/sync/1.0/"
 )
 
-func (s *Syncer) WeaklySynced() bool {
+func (s *Syncer) weaklySynced() bool {
 	// equivalent to s.LatestLayer() >= s.lastTickedLayer()-1
 	// means we have data from the previous layer
 	return s.LatestLayer()+1 >= s.lastTickedLayer()
 }
 
-func (s *Syncer) getGossipSynced() bool {
+func (s *Syncer) getGossipBufferingStatus() Status {
 	s.gossipLock.RLock()
 	b := s.gossipSynced
 	s.gossipLock.RUnlock()
-
 	return b
 }
 
-func (s *Syncer) setGossipSynced(b bool) {
+//api for other modules to check if they should listen to gossip
+func (s *Syncer) ListenToGossip() bool {
+	return s.getGossipBufferingStatus() != Pending
+}
+
+func (s *Syncer) setGossipBufferingStatus(b Status) {
 	s.gossipLock.Lock()
 	s.gossipSynced = b
 	s.gossipLock.Unlock()
@@ -163,7 +174,7 @@ func (s *Syncer) setGossipSynced(b bool) {
 
 func (s *Syncer) IsSynced() bool {
 	s.Log.Info("latest: %v, maxSynced %v", s.LatestLayer(), s.lastTickedLayer())
-	return s.WeaklySynced() && s.getGossipSynced()
+	return s.weaklySynced() && s.getGossipBufferingStatus() == Done
 }
 
 func (s *Syncer) Start() {
@@ -230,7 +241,7 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool A
 		currentLayer:         clock.GetCurrentLayer(),
 		LayerCh:              clock.Subscribe(),
 		exit:                 make(chan struct{}),
-		gossipSynced:         false,
+		gossipSynced:         Pending,
 	}
 
 	s.blockQueue = NewValidationQueue(srvr, s.Configuration, s, s.blockCheckLocal, logger.WithName("validQ"))
@@ -256,20 +267,21 @@ func (s *Syncer) lastTickedLayer() types.LayerID {
 
 func (s *Syncer) Synchronise() {
 	defer s.syncRoutineWg.Done()
-
+	s.Info("start synchronize")
 	if s.lastTickedLayer() <= 1 { // skip validation for first layer
 		s.With().Info("Not syncing in layer <= 1", log.LayerId(uint64(s.lastTickedLayer())))
-		s.setGossipSynced(true) // fully-synced, make sure we listen to p2p
+		s.setGossipBufferingStatus(Done) // fully-synced, make sure we listen to p2p
 		return
 	}
 
 	currentSyncLayer := s.lValidator.ValidatedLayer() + 1
 	if currentSyncLayer == s.lastTickedLayer() { // only validate if current < lastTicked
 		s.With().Info("Already synced for layer", log.Uint64("current_sync_layer", uint64(currentSyncLayer)))
+		s.setGossipBufferingStatus(Done) // fully-synced, make sure we listen to p2p
 		return
 	}
 
-	if s.WeaklySynced() { // we have all the data of the prev layers so we can simply validate
+	if s.weaklySynced() { // we have all the data of the prev layers so we can simply validate
 		s.With().Info("Node is synced. Going to validate layer", log.LayerId(uint64(currentSyncLayer)))
 
 		lyr, err := s.GetLayer(currentSyncLayer)
@@ -307,7 +319,7 @@ func (s *Syncer) fastValidation(block *types.Block) error {
 
 func (s *Syncer) handleNotSynced(currentSyncLayer types.LayerID) {
 	s.Info("Node is out of sync setting gossip-synced to false and starting sync")
-	s.setGossipSynced(false) // don't listen to gossip while not synced
+	s.setGossipBufferingStatus(Pending) // don't listen to gossip while not synced
 
 	// first, bring all the data of the prev layers
 	// Note: lastTicked() is not constant but updates as ticks are received
@@ -340,6 +352,8 @@ func (s *Syncer) handleNotSynced(currentSyncLayer types.LayerID) {
 // after that we are assumed to have all the data required for validation so we can validate and open gossip
 // opening gossip in weakly-synced transition us to fully-synced
 func (s *Syncer) gossipSyncForOneFullLayer(currentSyncLayer types.LayerID) error {
+	//listen to gossip
+	s.setGossipBufferingStatus(InProgress)
 	// subscribe and wait for two ticks
 	s.Info("waiting for two ticks while p2p is open")
 	ch := s.TickProvider.Subscribe()
@@ -368,7 +382,7 @@ func (s *Syncer) gossipSyncForOneFullLayer(currentSyncLayer types.LayerID) error
 	s.Info("Done waiting for ticks and validation. setting gossip true")
 
 	// fully-synced - set gossip -synced to true
-	s.setGossipSynced(true)
+	s.setGossipBufferingStatus(Done)
 
 	return nil
 }
@@ -448,18 +462,18 @@ func (s *Syncer) blockSyntacticValidation(block *types.Block) ([]*types.Transact
 	//data availability
 	txs, atxs, err := s.DataAvailability(block)
 	if err != nil {
-		return nil, nil, fmt.Errorf("DataAvailabilty failed for block %v err: %v", block, err)
+		return nil, nil, fmt.Errorf("DataAvailabilty failed for block %v err: %v", block.Id(), err)
 	}
 
 	//validate block's view
 	valid := s.validateBlockView(block)
 	if valid == false {
-		return nil, nil, errors.New(fmt.Sprintf("block %v not syntacticly valid", block.ID()))
+		return nil, nil, errors.New(fmt.Sprintf("block %v not syntacticly valid", block.Id()))
 	}
 
 	//validate block's votes
-	if valid := validateVotes(block, s.ForBlockInView, s.Hdist, s.Log); valid == false {
-		return nil, nil, errors.New(fmt.Sprintf("validate votes failed for block %v", block.ID()))
+	if valid, err := validateVotes(block, s.ForBlockInView, s.Hdist, s.Log); valid == false || err != nil {
+		return nil, nil, errors.New(fmt.Sprintf("validate votes failed for block %v, %v", block.Id(), err))
 	}
 
 	return txs, atxs, nil
@@ -472,17 +486,17 @@ func (s *Syncer) validateBlockView(blk *types.Block) bool {
 		ch <- res
 		return nil
 	}
-	if res, err := s.blockQueue.addDependencies(blk.ID(), blk.ViewEdges, foo); res == false {
+	if res, err := s.blockQueue.addDependencies(blk.Id(), blk.ViewEdges, foo); res == false {
 		return true
 	} else if err != nil {
-		s.Error(fmt.Sprintf("block %v not syntactically valid ", blk.ID()))
+		s.Error(fmt.Sprintf("block %v not syntactically valid", blk.Id()), err)
 		return false
 	}
 
 	return <-ch
 }
 
-func validateVotes(blk *types.Block, forBlockfunc ForBlockInView, depth int, lg log.Log) bool {
+func validateVotes(blk *types.Block, forBlockfunc ForBlockInView, depth int, lg log.Log) (bool, error) {
 	view := map[types.BlockID]struct{}{}
 	for _, blk := range blk.ViewEdges {
 		view[blk] = struct{}{}
@@ -494,8 +508,8 @@ func validateVotes(blk *types.Block, forBlockfunc ForBlockInView, depth int, lg 
 	}
 
 	traverse := func(b *types.Block) (stop bool, err error) {
-		if _, ok := vote[b.ID()]; ok {
-			delete(vote, b.ID())
+		if _, ok := vote[b.Id()]; ok {
+			delete(vote, b.Id())
 		}
 		return len(vote) == 0, nil
 	}
@@ -507,14 +521,14 @@ func validateVotes(blk *types.Block, forBlockfunc ForBlockInView, depth int, lg 
 	}
 	err := forBlockfunc(view, lowestLayer, traverse)
 	if err == nil && len(vote) > 0 {
-		err = fmt.Errorf("voting on blocks out of view (or out of Hdist), %v", vote)
+		return false, fmt.Errorf("voting on blocks out of view (or out of Hdist), %v", vote)
 	}
 
 	if err != nil {
-		lg.Error("validate votes failed", err)
+		return false, err
 	}
 
-	return err == nil
+	return true, nil
 }
 
 func (s *Syncer) DataAvailability(blk *types.Block) ([]*types.Transaction, []*types.ActivationTx, error) {
@@ -543,14 +557,14 @@ func (s *Syncer) DataAvailability(blk *types.Block) ([]*types.Transaction, []*ty
 	wg.Wait()
 
 	if txerr != nil {
-		return nil, nil, fmt.Errorf("failed fetching block %v transactions %v", blk.ID(), txerr)
+		return nil, nil, fmt.Errorf("failed fetching block %v transactions %v", blk.Id(), txerr)
 	}
 
 	if atxerr != nil {
-		return nil, nil, fmt.Errorf("failed fetching block %v activation transactions %v", blk.ID(), atxerr)
+		return nil, nil, fmt.Errorf("failed fetching block %v activation transactions %v", blk.Id(), atxerr)
 	}
 
-	s.Info("fetched all block data %v", blk.ID())
+	s.Info("fetched all block data %v", blk.Id())
 	return txres, atxres, nil
 }
 
@@ -693,7 +707,7 @@ func (s *Syncer) txCheckLocal(txIds []types.Hash32) (map[types.Hash32]Item, map[
 		id := types.TransactionId(t)
 		if tx, err := s.txpool.Get(id); err == nil {
 			s.Debug("found tx, %v in tx pool", hex.EncodeToString(t[:]))
-			unprocessedItems[id.Hash32()] = &tx
+			unprocessedItems[id.Hash32()] = tx
 		} else {
 			s.Debug("tx %v not in atx pool", hex.EncodeToString(t[:]))
 			missingInPool = append(missingInPool, id)
@@ -718,15 +732,13 @@ func (s *Syncer) txCheckLocal(txIds []types.Hash32) (map[types.Hash32]Item, map[
 func (s *Syncer) blockCheckLocal(blockIds []types.Hash32) (map[types.Hash32]Item, map[types.Hash32]Item, []types.Hash32) {
 	//look in pool
 	dbItems := make(map[types.Hash32]Item)
-	for _, itemId := range blockIds {
-		var id = util.BytesToUint64(itemId.Bytes())
+	for _, id := range blockIds {
 		res, err := s.GetBlock(types.BlockID(id))
 		if err != nil {
 			s.Debug("get block failed %v", id)
 			continue
 		}
-
-		dbItems[itemId] = res
+		dbItems[id] = res
 	}
 
 	return nil, dbItems, nil

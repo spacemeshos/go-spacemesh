@@ -7,6 +7,8 @@ import (
 	xdr "github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/trie"
@@ -26,6 +28,7 @@ type Projector interface {
 type TransactionProcessor struct {
 	log.Log
 	globalState  *StateDB
+	appliedTxs   database.Database
 	prevStates   map[types.LayerID]types.Hash32
 	currentLayer types.LayerID
 	rootHash     types.Hash32
@@ -37,10 +40,11 @@ type TransactionProcessor struct {
 
 const maxPastStates = 20
 
-func NewTransactionProcessor(db *StateDB, projector Projector, logger log.Log) *TransactionProcessor {
+func NewTransactionProcessor(db *StateDB, appliedTxs database.Database, projector Projector, logger log.Log) *TransactionProcessor {
 	return &TransactionProcessor{
 		Log:          logger,
 		globalState:  db,
+		appliedTxs:   appliedTxs,
 		prevStates:   make(map[types.LayerID]types.Hash32),
 		currentLayer: 0,
 		rootHash:     types.Hash32{},
@@ -84,6 +88,15 @@ func (tp *TransactionProcessor) AddressExists(addr types.Address) bool {
 	return tp.globalState.Exist(addr)
 }
 
+func (tp *TransactionProcessor) GetLayerApplied(txId types.TransactionId) *types.LayerID {
+	layerIdBytes, err := tp.appliedTxs.Get(txId.Bytes())
+	if err != nil {
+		return nil
+	}
+	layerId := types.LayerID(util.BytesToUint64(layerIdBytes))
+	return &layerId
+}
+
 func (tp *TransactionProcessor) ValidateNonceAndBalance(tx *types.Transaction) error {
 	origin := tx.Origin()
 	nonce, balance, err := tp.projector.GetProjection(origin, tp.globalState.GetNonce(origin), tp.globalState.GetBalance(origin))
@@ -111,7 +124,7 @@ func (tp *TransactionProcessor) ApplyTransactions(layer types.LayerID, txs []*ty
 	remaining := txs
 	remainingCount := len(remaining)
 	for { // Loop until there's nothing left to process
-		remaining = tp.Process(remaining)
+		remaining = tp.Process(remaining, layer)
 		if remainingCount == len(remaining) {
 			break
 		}
@@ -180,9 +193,9 @@ func (tp *TransactionProcessor) Reset(layer types.LayerID) {
 	}
 }
 
-func (tp *TransactionProcessor) Process(txs []*types.Transaction) (remaining []*types.Transaction) {
+func (tp *TransactionProcessor) Process(txs []*types.Transaction, layerId types.LayerID) (remaining []*types.Transaction) {
 	for _, tx := range txs {
-		err := tp.ApplyTransaction(tx)
+		err := tp.ApplyTransaction(tx, layerId)
 		if err != nil {
 			tp.With().Warning("failed to apply transaction", log.TxId(tx.Id().ShortString()), log.Err(err))
 			remaining = append(remaining, tx)
@@ -222,7 +235,7 @@ var (
 	ErrNonce  = "incorrect nonce"
 )
 
-func (tp *TransactionProcessor) ApplyTransaction(trans *types.Transaction) error {
+func (tp *TransactionProcessor) ApplyTransaction(trans *types.Transaction, layerId types.LayerID) error {
 	if !tp.globalState.Exist(trans.Origin()) {
 		return fmt.Errorf(ErrOrigin)
 	}
@@ -247,6 +260,9 @@ func (tp *TransactionProcessor) ApplyTransaction(trans *types.Transaction) error
 
 	//subtract fee from account, fee will be sent to miners in layers after
 	tp.globalState.SubBalance(trans.Origin(), new(big.Int).SetUint64(trans.Fee))
+	if err := tp.appliedTxs.Put(trans.Id().Bytes(), layerId.ToBytes()); err != nil {
+		return fmt.Errorf("failed to add to applied txs: %v", err)
+	}
 	tp.With().Info("transaction processed", log.String("transaction", trans.String()))
 	return nil
 }

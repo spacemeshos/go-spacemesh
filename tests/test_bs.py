@@ -1,32 +1,26 @@
 import copy
-import json
-import sys
 from datetime import datetime, timedelta
-import random
 from enum import Enum
-from typing import List, Dict
-
-from tests import queries, analyse
-from tests import pod, deployment, statefulset
-from tests.fixtures import load_config, DeploymentInfo, NetworkDeploymentInfo
-from tests.fixtures import init_session, set_namespace, set_docker_images, session_id
-from tests import tx_generator
-import pytest
-import pytz
-import re
-import subprocess
-import time
+import json
 from kubernetes import client
 from kubernetes.client.rest import ApiException
 from kubernetes.stream import stream
-from pytest_testconfig import config as testconfig
-from elasticsearch_dsl import Search, Q
-from tests.misc import ContainerSpec, CoreV1ApiClient
-from tests.context import ES
-from tests.hare.assert_hare import validate_hare
 import pprint
+import pytest
+import pytz
+import random
+import subprocess
+import sys
+import time
+from typing import List
 
+from pytest_testconfig import config as testconfig
+from tests import analyse, pod, deployment, queries, statefulset, tx_generator
+from tests.conftest import DeploymentInfo, NetworkDeploymentInfo
 from tests.ed25519.eddsa import genkeypair
+from tests.hare.assert_hare import validate_hare
+from tests.misc import ContainerSpec, CoreV1ApiClient
+
 
 BOOT_DEPLOYMENT_FILE = './k8s/bootstrapoet-w-conf.yml'
 BOOT_STATEFULSET_FILE = './k8s/bootstrapoet-w-conf-ss.yml'
@@ -44,31 +38,51 @@ GENESIS_TIME = pytz.utc.localize(datetime.utcnow() + timedelta(seconds=testconfi
 
 
 def get_conf(bs_info, client_config, setup_oracle=None, setup_poet=None, args=None):
+    """
+    get_conf gather specification information into one ContainerSpec object
 
+    :param bs_info: DeploymentInfo, bootstrap info
+    :param client_config: DeploymentInfo, client info
+    :param setup_oracle: string, oracle ip
+    :param setup_poet: string, poet ip
+    :param args: list of strings, arguments for appendage in specification
+    :return: ContainerSpec
+    """
     client_args = {} if 'args' not in client_config else client_config['args']
-
+    # append client arguments
     if args is not None:
         for arg in args:
             client_args[arg] = args[arg]
 
+    # create a new container spec with client configuration
     cspec = ContainerSpec(cname='client', specs=client_config)
 
+    # append oracle configuration
     if setup_oracle:
         client_args['oracle_server'] = 'http://{0}:{1}'.format(setup_oracle, ORACLE_SERVER_PORT)
 
+    # append poet configuration
     if setup_poet:
         client_args['poet_server'] = '{0}:{1}'.format(setup_poet, POET_SERVER_PORT)
 
     cspec.append_args(bootnodes=node_string(bs_info['key'], bs_info['pod_ip'], BOOTSTRAP_PORT, BOOTSTRAP_PORT),
                       genesis_time=GENESIS_TIME.isoformat('T', 'seconds'))
-
+    # append client config to ContainerSpec
     if len(client_args) > 0:
         cspec.append_args(**client_args)
     return cspec
 
 
-def add_multi_clients(deployment_id, container_specs, size=2):
+def add_multi_clients(deployment_id, container_specs, size=2, ret_pods=False):
+    """
+    adds pods to a given namespace according to specification params
 
+    :param deployment_id: string, namespace id
+    :param container_specs:
+    :param size: int, number of replicas
+    :param ret_pods: boolean, if 'True' RETURN a pods list (V1PodList)
+    :return: list (strings), list of pods names
+    """
     k8s_file, k8s_create_func = choose_k8s_object_create(testconfig['client'],
                                                          CLIENT_DEPLOYMENT_FILE,
                                                          CLIENT_STATEFULSET_FILE)
@@ -82,12 +96,17 @@ def add_multi_clients(deployment_id, container_specs, size=2):
                                                         include_uninitialized=True,
                                                         label_selector=("name={0}".format(
                                                             resp.metadata._name.split('-')[1]))).items
-    pods = []
-    for c in client_pods:
-        pod_name = c.metadata.name
-        if pod_name.startswith(resp.metadata.name):
-            pods.append(pod_name)
-    return pods
+    if ret_pods:
+        ret_val = client_pods
+    else:
+        pods = []
+        for c in client_pods:
+            pod_name = c.metadata.name
+            if pod_name.startswith(resp.metadata.name):
+                pods.append(pod_name)
+        ret_val = pods
+
+    return ret_val
 
 
 def choose_k8s_object_create(config, deployment_file, statefulset_file):
@@ -95,12 +114,69 @@ def choose_k8s_object_create(config, deployment_file, statefulset_file):
     if dep_type == 'deployment':
         return deployment_file, deployment.create_deployment
     elif dep_type == 'statefulset':
+        # StatefulSets are intended to be used with stateful applications and distributed systems.
+        # Pods in a StatefulSet have a unique ordinal index and a stable network identity.
         return statefulset_file, statefulset.create_statefulset
     else:
         raise Exception("Unknown deployment type in configuration. Please check your config.yaml")
 
 
-def setup_bootstrap_in_namespace(namespace, bs_deployment_info, bootstrap_config, oracle=None, poet=None, dep_time_out=120):
+def _setup_dep_ss_file_path(file_path, dep_type, node_type):
+    # TODO we should modify this func to be a generic one
+    """
+    sets up deployment files
+    :param file_path: string, a file path to overwrite the default file path value (BOOT_DEPLOYMENT_FILE,
+    CLIENT_STATEFULSET_FILE, etc)
+    :param dep_type: string, stateful or deployment
+    :param node_type: string, client or bootstrap
+
+    :return: string, string, deployment and stateful specification files paths
+    """
+    if node_type == 'bootstrap':
+        dep_file_path = BOOT_DEPLOYMENT_FILE
+        ss_file_path = BOOT_STATEFULSET_FILE
+    elif node_type == 'client':
+        dep_file_path = CLIENT_DEPLOYMENT_FILE
+        ss_file_path = CLIENT_STATEFULSET_FILE
+    else:
+        raise ValueError(f"can not recognize node name: {node_type}")
+
+    if file_path and dep_type == "statefulset":
+        print(f"setting up stateful file path to {file_path}\n")
+        ss_file_path = file_path
+    elif file_path and dep_type == "deployment":
+        print(f"setting up deployment file path to {file_path}\n")
+        dep_file_path = file_path
+
+    return dep_file_path, ss_file_path
+
+
+def setup_bootstrap_in_namespace(namespace, bs_deployment_info, bootstrap_config, oracle=None, poet=None,
+                                 file_path=None, dep_time_out=120):
+    """
+    adds a bootstrap node to a specific namespace
+
+    :param namespace: string, session id
+    :param bs_deployment_info: DeploymentInfo, bootstrap info, metadata
+    :param bootstrap_config: dictionary, bootstrap specifications
+    :param oracle: string, oracle ip
+    :param poet: string, poet ip
+    :param file_path: string, optional, full path to deployment yaml
+    :param dep_time_out: int, deployment timeout
+
+    :return: DeploymentInfo, bootstrap info with a list of active pods
+    """
+    # setting stateful and deployment configuration files
+    dep_method = bootstrap_config["deployment_type"] if "deployment_type" in bootstrap_config.keys() else "deployment"
+    try:
+        dep_file_path, ss_file_path = _setup_dep_ss_file_path(file_path, dep_method, 'bootstrap')
+    except ValueError as e:
+        print(f"error setting up bootstrap specification file: {e}")
+        return None
+
+    def _extract_label():
+        name = bs_deployment_info.deployment_name.split('-')[1]
+        return name
 
     bootstrap_args = {} if 'args' not in bootstrap_config else bootstrap_config['args']
     cspec = ContainerSpec(cname='bootstrap', specs=bootstrap_config)
@@ -114,9 +190,11 @@ def setup_bootstrap_in_namespace(namespace, bs_deployment_info, bootstrap_config
     cspec.append_args(genesis_time=GENESIS_TIME.isoformat('T', 'seconds'),
                       **bootstrap_args)
 
+    # choose k8s creation function (deployment/stateful) and the matching k8s file
     k8s_file, k8s_create_func = choose_k8s_object_create(bootstrap_config,
-                                                         BOOT_DEPLOYMENT_FILE,
-                                                         BOOT_STATEFULSET_FILE)
+                                                         dep_file_path,
+                                                         ss_file_path)
+    # run the chosen creation function
     resp = k8s_create_func(k8s_file, namespace,
                            deployment_id=bs_deployment_info.deployment_id,
                            replica_size=bootstrap_config['replicas'],
@@ -129,7 +207,7 @@ def setup_bootstrap_in_namespace(namespace, bs_deployment_info, bootstrap_config
         CoreV1ApiClient().list_namespaced_pod(namespace=namespace,
                                               label_selector=(
                                                   "name={0}".format(
-                                                      bs_deployment_info.deployment_name.split('-')[1]))).items[0])
+                                                      _extract_label()))).items[0])
     bs_pod = {'name': bootstrap_pod_json.metadata.name}
 
     while True:
@@ -152,14 +230,28 @@ def setup_bootstrap_in_namespace(namespace, bs_deployment_info, bootstrap_config
     return bs_deployment_info
 
 
-def setup_clients_in_namespace(namespace, bs_deployment_info, client_deployment_info, client_config,
-                               oracle=None, poet=None, dep_time_out=120):
+def setup_clients_in_namespace(namespace, bs_deployment_info, client_deployment_info, client_config, name="client",
+                               file_path=None, oracle=None, poet=None, dep_time_out=120):
+    # setting stateful and deployment configuration files
+    # default deployment method is 'deployment'
+    dep_method = client_config["deployment_type"] if "deployment_type" in client_config.keys() else "deployment"
+    try:
+        dep_file_path, ss_file_path = _setup_dep_ss_file_path(file_path, dep_method, 'client')
+    except ValueError as e:
+        print(f"error setting up client specification file: {e}")
+        return None
+
+    # this function used to be the way to extract the client title
+    # in case we want a different title (client_v2 for example) we can specify it
+    # directly in "name" input
+    def _extract_label():
+        return client_deployment_info.deployment_name.split('-')[1]
 
     cspec = get_conf(bs_deployment_info, client_config, oracle, poet)
 
     k8s_file, k8s_create_func = choose_k8s_object_create(client_config,
-                                                         CLIENT_DEPLOYMENT_FILE,
-                                                         CLIENT_STATEFULSET_FILE)
+                                                         dep_file_path,
+                                                         ss_file_path)
     resp = k8s_create_func(k8s_file, namespace,
                            deployment_id=client_deployment_info.deployment_id,
                            replica_size=client_config['replicas'],
@@ -170,8 +262,7 @@ def setup_clients_in_namespace(namespace, bs_deployment_info, client_deployment_
     client_pods = (
         CoreV1ApiClient().list_namespaced_pod(namespace,
                                               include_uninitialized=True,
-                                              label_selector=("name={0}".format(
-                                                  client_deployment_info.deployment_name.split('-')[1]))).items)
+                                              label_selector=("name={0}".format(name))).items)
 
     client_deployment_info.pods = [{'name': c.metadata.name, 'pod_ip': c.status.pod_ip} for c in client_pods]
     return client_deployment_info
@@ -180,7 +271,7 @@ def setup_clients_in_namespace(namespace, bs_deployment_info, client_deployment_
 def api_call(client_ip, data, api, namespace, port="9090"):
     # todo: this won't work with long payloads - ( `Argument list too long` ). try port-forward ?
     res = stream(CoreV1ApiClient().connect_post_namespaced_pod_exec, name="curl", namespace=namespace,
-                 command=["curl", "-s", "--request", "POST", "--data", data, "http://" + client_ip + ":" + port + "/" + api],
+                 command=["curl", "-s", "--request", "POST", "--data", data, f"http://{client_ip}:{port}/{api}"],
                  stderr=True, stdin=False, stdout=True, tty=False, _request_timeout=90)
     return res
 
@@ -195,24 +286,42 @@ def node_string(key, ip, port, discport):
 
 
 @pytest.fixture(scope='module')
-def setup_bootstrap(request, init_session):
+def setup_bootstrap(init_session):
+    """
+    setup bootstrap initializes a session and adds a single bootstrap node
+    :param init_session: sets up a new k8s env
+    :return: DeploymentInfo type, containing the settings info of the new node
+    """
     bootstrap_deployment_info = DeploymentInfo(dep_id=init_session)
 
-    return setup_bootstrap_in_namespace(testconfig['namespace'],
-                                        bootstrap_deployment_info,
-                                        testconfig['bootstrap'],
-                                        dep_time_out=testconfig['deployment_ready_time_out'])
+    bootstrap_deployment_info = setup_bootstrap_in_namespace(testconfig['namespace'],
+                                                             bootstrap_deployment_info,
+                                                             testconfig['bootstrap'],
+                                                             dep_time_out=testconfig['deployment_ready_time_out'])
+
+    return bootstrap_deployment_info
 
 
 @pytest.fixture(scope='module')
-def setup_clients(request, init_session, setup_bootstrap):
+def setup_clients(init_session, setup_bootstrap):
+    """
+    setup clients adds new client nodes from k8s suite file
 
+    :param init_session: setup a new k8s env
+    :param setup_bootstrap: adds a single bootstrap node
+    :return: client_info of type DeploymentInfo
+             contains the settings info of the new client node
+    """
     client_info = DeploymentInfo(dep_id=setup_bootstrap.deployment_id)
-    return setup_clients_in_namespace(testconfig['namespace'], setup_bootstrap.pods[0],
-                                      client_info,
-                                      testconfig['client'],
-                                      poet=setup_bootstrap.pods[0]['pod_ip'],
-                                      dep_time_out=testconfig['deployment_ready_time_out'])
+    client_info = setup_clients_in_namespace(testconfig['namespace'],
+                                             setup_bootstrap.pods[0],
+                                             client_info,
+                                             testconfig['client'],
+                                             poet=setup_bootstrap.pods[0]['pod_ip'],
+                                             dep_time_out=testconfig['deployment_ready_time_out'])
+
+    return client_info
+
 
 @pytest.fixture(scope='module')
 def start_poet(init_session, add_curl, setup_bootstrap):
@@ -229,10 +338,12 @@ def start_poet(init_session, add_curl, setup_bootstrap):
     assert out == "{}", "PoET start returned error {0}".format(out)
     print("PoET started")
 
+
 @pytest.fixture(scope='module')
-def setup_network(request, init_session,add_curl, setup_bootstrap, start_poet, setup_clients, wait_genesis):
+def setup_network(init_session, add_curl, setup_bootstrap, start_poet, setup_clients, wait_genesis):
     # This fixture deploy a complete Spacemesh network and returns only after genesis time is over
-    network_deployment = NetworkDeploymentInfo(dep_id=init_session,
+    _session_id = init_session
+    network_deployment = NetworkDeploymentInfo(dep_id=_session_id,
                                                bs_deployment_info=setup_bootstrap,
                                                cl_deployment_info=setup_clients)
     return network_deployment
@@ -293,8 +404,11 @@ def save_log_on_exit(request):
 
 
 @pytest.fixture(scope='module')
-def add_curl(request, init_session):
+def add_curl(request, init_session, setup_bootstrap):
     def _run_curl_pod():
+        if not setup_bootstrap.pods:
+            raise Exception("Could not find bootstrap node")
+
         pod.create_pod(CURL_POD_FILE, testconfig['namespace'])
         return True
 
@@ -343,15 +457,24 @@ class ClientWrapper:
         print(Ansi.YELLOW + "calling api: {} ({})...".format(api.name, api.value), end="")
         out = api_call(self.ip, json.dumps(data), api.value, self.namespace)
         print(" done.", Ansi.BRIGHT_BLACK, out.replace("'", '"'), Ansi.RESET)
-        return json.loads(out.replace("'", '"'))
+
+        try:
+            out_json = json.loads(out.replace("'", '"'))
+            return out_json
+        except json.JSONDecodeError as e:
+            print(f"could not load json from api output: {e}\noutput={out}")
+
+    def __str__(self):
+        return f"client wrapper:\n\tip={self.ip}\n\tname={self.name}\n\tnamespace={self.namespace}"
 
 
 def test_transaction(setup_network):
     ns = testconfig['namespace']
+    print(f"{setup_network}")
 
     # choose client to run on
     client_wrapper = ClientWrapper(setup_network.clients.pods[0], ns)
-
+    print(f"{client_wrapper}")
     out = client_wrapper.call(Api.NONCE, {'address': '1'})
     assert out.get('value') == '0'
     print("nonce ok")
@@ -507,21 +630,23 @@ def test_transactions(setup_network):
             assert transfer(client_wrapper, tap, str_pub, amount), "Transfer from tap failed"
 
         print_title("Ensuring that all transactions were received")
-        ready = 0
         iterations_to_try = int(testconfig['client']['args']['layers-per-epoch']) * 2  # wait for two epochs (genesis)
+        ready_accounts = set()
         for x in range(iterations_to_try):
-            ready = 0
             layer_duration = testconfig['client']['args']['layer-duration-sec']
             print("\nSleeping layer duration ({}s)... {}/{}".format(layer_duration, x+1, iterations_to_try))
             time.sleep(float(layer_duration))
-            if test_account(client_wrapper, tap, tap_init_amount):
-                for pk in accounts:
-                    if pk == tap:
-                        continue
-                    assert test_account(client_wrapper, pk), "account {} didn't have the expected nonce and balance".format(pk)
-                    ready += 1
+            if tap not in ready_accounts and test_account(client_wrapper, tap, tap_init_amount):
+                ready_accounts.add(tap)
+            for pk in accounts:
+                if pk == tap or pk in ready_accounts:
+                    continue
+                if test_account(client_wrapper, pk):
+                    ready_accounts.add(pk)
+            if accounts.keys() == ready_accounts:
                 break
-        assert ready == len(accounts)-1, "Not all accounts received sent txs"  # one for 0 counting and one for tap.
+        assert accounts.keys() == ready_accounts, \
+            "Not all accounts received sent txs. Accounts that aren't ready: %s" % (accounts.keys()-ready_accounts)
     send_txs_from_tap()
 
     def is_there_a_valid_acc(min_balance, accounts_snapshot: dict = None):
@@ -582,23 +707,23 @@ def test_transactions(setup_network):
 def test_mining(setup_network):
     ns = testconfig['namespace']
 
-    # choose client to run on
-    client_ip = setup_network.clients.pods[0]['pod_ip']
+    client_wrapper = ClientWrapper(setup_network.clients.pods[0], ns)
+
+    tx_gen = tx_generator.TxGenerator()
+    addr = bytes.hex(tx_gen.publicK)
 
     print("checking nonce")
-    out = api_call(client_ip, data='{"address":"1"}', api='v1/nonce', namespace=testconfig['namespace'])
-    # assert "{'value': '0'}" in out
-    # print("nonce ok")
-    nonce = int(json.loads(out.replace("\'", "\""))['value'])
+    out = client_wrapper.call(Api.NONCE, {'address': addr})
+    nonce = int(out.get('value'))
+    print("checking balance")
+    out = client_wrapper.call(Api.BALANCE, {'address': addr})
+    balance = int(out.get('value'))
 
-    api = 'v1/submittransaction'
-    tx_gen = tx_generator.TxGenerator()
-    tx_bytes = tx_gen.generate("0000000000000000000000000000000000002222", nonce, 246, 642, 100)
-    data = '{"tx":' + str(list(tx_bytes)) + '}'
+    tx_bytes = tx_gen.generate("0000000000000000000000000000000000002222", nonce, 246, 1, min(100, balance-1))
     print("submitting transaction")
-    out = api_call(client_ip, data, api, testconfig['namespace'])
+    out = client_wrapper.call(Api.SUBMIT_TRANSACTION, {'tx': list(tx_bytes)})
     print(out)
-    assert "{'value': 'ok'" in out
+    assert out.get('value') == 'ok'
     print("submit transaction ok")
     print("wait for confirmation ")
     end = start = time.time()

@@ -19,8 +19,8 @@ require (
 	github.com/smartystreets/goconvey v0.0.0-20190731233626-505e41936337 // indirect
 	github.com/spacemeshos/ed25519 v0.0.0-20190530014421-e235766d15a1
 	github.com/spacemeshos/merkle-tree v0.0.0-20191028110812-1908c3126c82
-	github.com/spacemeshos/poet v0.0.0-20191028134828-a10d25ef16d3
-	github.com/spacemeshos/post v0.0.0-20190923094851-82e76dc5fa3e
+	github.com/spacemeshos/poet v0.0.0-20191125082746-67cc6f7a2243
+	github.com/spacemeshos/post v0.0.0-20191126100540-3ade80883426
 	github.com/spacemeshos/sha256-simd v0.0.0-20190111104731-8575aafc88c9
 	github.com/spf13/afero v1.2.0 // indirect
 	github.com/spf13/cobra v0.0.4
@@ -39,3 +39,5 @@ require (
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 	nanomsg.org/go-mangos v1.4.0
 )
+
+go 1.13

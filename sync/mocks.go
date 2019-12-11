@@ -90,6 +90,14 @@ func ConfigTst() mesh.Config {
 
 type MockState struct{}
 
+func (MockState) ValidateNonceAndBalance(transaction *types.Transaction) error {
+	panic("implement me")
+}
+
+func (MockState) GetLayerApplied(txId types.TransactionId) *types.LayerID {
+	panic("implement me")
+}
+
 func (MockState) ApplyTransactions(layer types.LayerID, txs []*types.Transaction) (int, error) {
 	return 0, nil
 }
@@ -132,8 +140,8 @@ func (*ValidatorMock) VerifyPost(id signing.PublicKey, proof *types.PostProof, s
 
 type MockTxMemPool struct{}
 
-func (MockTxMemPool) Get(id types.TransactionId) (types.Transaction, error) {
-	return types.Transaction{}, nil
+func (MockTxMemPool) Get(id types.TransactionId) (*types.Transaction, error) {
+	return &types.Transaction{}, nil
 }
 func (MockTxMemPool) GetAllItems() []*types.Transaction {
 	return nil

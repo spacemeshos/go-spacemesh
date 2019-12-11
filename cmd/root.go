@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	cfg "github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -146,6 +147,10 @@ func AddCommands(cmd *cobra.Command) {
 		config.HARE.WakeupDelta, "Wakeup delta after tick for hare protocol")
 	cmd.PersistentFlags().IntVar(&config.HARE.ExpectedLeaders, "hare-exp-leaders",
 		config.HARE.ExpectedLeaders, "The expected number of leaders in the hare protocol")
+	cmd.PersistentFlags().IntVar(&config.HARE.LimitIterations, "hare-limit-iterations",
+		config.HARE.LimitIterations, "The limit of the number of iteration per consensus process")
+	cmd.PersistentFlags().IntVar(&config.HARE.LimitConcurrent, "hare-limit-concurrent",
+		config.HARE.LimitConcurrent, "The number of consensus processes running concurrently")
 
 	/**======================== Hare Eligibility Oracle Flags ========================== **/
 
@@ -183,6 +188,9 @@ func AddCommands(cmd *cobra.Command) {
 		config.LayersPerEpoch, "number of layers in epoch")
 
 	// Bind Flags to config
-	viper.BindPFlags(cmd.PersistentFlags())
+	err := viper.BindPFlags(cmd.PersistentFlags())
+	if err != nil {
+		fmt.Println("an error has occurred while binding flags:", err)
+	}
 
 }
