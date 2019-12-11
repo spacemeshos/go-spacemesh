@@ -43,23 +43,23 @@ func (c *MemoryCollector) StoreBlock(event *events.NewBlock) error {
 }
 
 func (c *MemoryCollector) StoreBlockValid(event *events.ValidBlock) error {
-	c.lck.Lock()
+	/*c.lck.Lock()
 	c.events[event.GetChannel()] = append(c.events[event.GetChannel()], event)
-	c.lck.Unlock()
+	c.lck.Unlock()*/
 	return nil
 }
 
 func (c *MemoryCollector) StoreTx(event *events.NewTx) error {
-	c.lck.Lock()
+	/*c.lck.Lock()
 	c.events[event.GetChannel()] = append(c.events[event.GetChannel()], event)
-	c.lck.Unlock()
+	c.lck.Unlock()*/
 	return nil
 }
 
 func (c *MemoryCollector) StoreTxValid(event *events.ValidTx) error {
-	c.lck.Lock()
+	/*c.lck.Lock()
 	c.events[event.GetChannel()] = append(c.events[event.GetChannel()], event)
-	c.lck.Unlock()
+	c.lck.Unlock()*/
 	return nil
 }
 
@@ -73,16 +73,16 @@ func (c *MemoryCollector) StoreAtx(event *events.NewAtx) error {
 }
 
 func (c *MemoryCollector) StoreAtxValid(event *events.ValidAtx) error {
-	c.lck.Lock()
+	/*c.lck.Lock()
 	c.events[event.GetChannel()] = append(c.events[event.GetChannel()], event)
-	c.lck.Unlock()
+	c.lck.Unlock()*/
 	return nil
 }
 
 func (c *MemoryCollector) StoreReward(event *events.RewardReceived) error {
-	c.lck.Lock()
+	/*c.lck.Lock()
 	c.events[event.GetChannel()] = append(c.events[event.GetChannel()], event)
-	c.lck.Unlock()
+	c.lck.Unlock()*/
 	return nil
 }
 

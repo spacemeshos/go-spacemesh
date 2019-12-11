@@ -128,7 +128,7 @@ func getTestDefaultConfig() *config.Config {
 	return cfg
 }
 
-func initSingleInstance(t *testing.T, cfg config.Config, i int, genesisTime string, rng *amcl.RAND, storePath string, rolacle *eligibility.FixedRolacle, poetClient *activation.RPCPoetClient, fastHare bool, clock TickProvider) *SpacemeshApp{
+func initSingleInstance(t *testing.T, cfg config.Config, i int, genesisTime string, rng *amcl.RAND, storePath string, rolacle *eligibility.FixedRolacle, poetClient *activation.RPCPoetClient, fastHare bool, clock TickProvider) *SpacemeshApp {
 	r := require.New(t)
 
 	smApp := NewSpacemeshApp()
@@ -162,7 +162,7 @@ func initSingleInstance(t *testing.T, cfg config.Config, i int, genesisTime stri
 func (suite *AppTestSuite) initMultipleInstances(cfg *config.Config, rolacle *eligibility.FixedRolacle, rng *amcl.RAND, numOfInstances int, storeFormat string, genesisTime string, poetClient *activation.RPCPoetClient, fastHare bool, clock TickProvider) {
 	name := 'a'
 	for i := 0; i < numOfInstances; i++ {
-		dbStorepath :=  storeFormat + string(name)
+		dbStorepath := storeFormat + string(name)
 		smApp := initSingleInstance(suite.T(), *cfg, i, genesisTime, rng, dbStorepath, rolacle, poetClient, fastHare, clock)
 		suite.apps = append(suite.apps, smApp)
 		suite.dbs = append(suite.dbs, dbStorepath)
@@ -177,7 +177,7 @@ func activateGrpcServer(smApp *SpacemeshApp) {
 	smApp.grpcAPIService.StartService()
 }
 
-func  TestMultipleNodesFast(t *testing.T) {
+func TestMultipleNodesFast(t *testing.T) {
 	const db_paths = "../tmp/test/state_"
 
 	runTillLayer := 15
@@ -219,7 +219,7 @@ func  TestMultipleNodesFast(t *testing.T) {
 	apps := make([]*SpacemeshApp, 0, numOfInstances)
 	name := 'a'
 	for i := 0; i < numOfInstances; i++ {
-		dbStorepath :=  path + string(name)
+		dbStorepath := path + string(name)
 		smApp := initSingleInstance(t, *cfg, i, genesisTime, rng, dbStorepath, rolacle, poetClient, true, clock)
 		apps = append(apps, smApp)
 		name++
@@ -241,7 +241,7 @@ func  TestMultipleNodesFast(t *testing.T) {
 	defer gracefulShutdown(apps)
 
 	_ = apps[0].P2P.Broadcast(miner.IncomingTxProtocol, txbytes)
-	timeout := time.After(time.Duration(runTillLayer * 60) * time.Second)
+	timeout := time.After(time.Duration(runTillLayer*60) * time.Second)
 
 	//stickyClientsDone := 0
 	startLayer := time.Now()
@@ -256,22 +256,23 @@ loop:
 			layer := clock.GetCurrentLayer()
 			if eventDb.GetBlockCreationDone(layer) < numOfInstances {
 				log.Info("blocks done in layer %v: %v", layer, eventDb.GetBlockCreationDone(layer))
-				time.Sleep(100 * time.Millisecond)
+				time.Sleep(500 * time.Millisecond)
 				continue
 			}
 			log.Info("all miners tried to create block in %v", layer)
 			if eventDb.GetNumOfCreatedBlocks(layer)*numOfInstances != eventDb.GetReceivedBlocks(layer) {
 				log.Info("finished: %v, block received %v layer %v", eventDb.GetNumOfCreatedBlocks(layer), eventDb.GetReceivedBlocks(layer), layer)
-				time.Sleep(100 * time.Millisecond)
+				time.Sleep(500 * time.Millisecond)
 				continue
 			}
+			log.Info("all miners got blocks for layer: %v created: %v received: %v", layer, eventDb.GetNumOfCreatedBlocks(layer), eventDb.GetReceivedBlocks(layer))
 			epoch := layer.GetEpoch(uint16(cfg.LayersPerEpoch))
-			if !(eventDb.GetAtxCreationDone(epoch) >= numOfInstances &&  eventDb.GetAtxCreationDone(epoch) % numOfInstances == 0){
-				log.Info("atx not created %v", numOfInstances-eventDb.GetAtxCreationDone(layer.GetEpoch(uint16(cfg.LayersPerEpoch))))
-				time.Sleep(100 * time.Millisecond)
+			if !(eventDb.GetAtxCreationDone(epoch) >= numOfInstances && eventDb.GetAtxCreationDone(epoch)%numOfInstances == 0) {
+				log.Info("atx not created %v in epoch %v, created only %v atxs", numOfInstances-eventDb.GetAtxCreationDone(epoch), epoch, eventDb.GetAtxCreationDone(epoch))
+				time.Sleep(500 * time.Millisecond)
 				continue
 			}
-			log.Info("all miners finished layer %v in %v", layer, time.Since(startLayer))
+			log.Info("all miners finished reading %v atxs, layer %v done in %v", eventDb.GetAtxCreationDone(epoch), layer, time.Since(startLayer))
 			for _, atxId := range eventDb.GetCreatedAtx(epoch) {
 				if _, found := eventDb.Atxs[atxId]; !found {
 					log.Info("atx %v not propagated", atxId)
