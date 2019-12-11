@@ -119,7 +119,15 @@ func New(conf config.Config, p2p NetworkService, sign Signer, nid types.NodeId, 
 
 // checks if the provided id is too late/old to be requested.
 func (h *Hare) isTooLate(id instanceId) bool {
-	if id < instanceId(h.oldestResultInBuffer()) { // bufferSize>=0
+	h.layerLock.RLock()
+	lyr := h.lastLayer
+	h.layerLock.RUnlock()
+
+	if lyr <= types.LayerID(h.bufferSize) {
+		return false
+	}
+
+	if id < instanceId(lyr-types.LayerID(h.bufferSize)) { // bufferSize>=0
 		return true
 	}
 	return false
