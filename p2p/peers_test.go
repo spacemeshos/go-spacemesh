@@ -1,6 +1,8 @@
 package p2p
 
 import (
+	"bytes"
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -89,4 +91,36 @@ func TestPeers_RemovePeer(t *testing.T) {
 	time.Sleep(10 * time.Millisecond) //allow context switch
 	peers = pi.GetPeers()
 	assert.True(t, len(peers) == 1, "number of peers incorrect, length was ", len(peers))
+}
+
+func TestPeers_RandomPeers(t *testing.T) {
+	pi, n, _ := getPeers(service.NewSimulator().NewNode())
+	a := p2pcrypto.NewRandomPubkey()
+	b := p2pcrypto.NewRandomPubkey()
+	c := p2pcrypto.NewRandomPubkey()
+	d := p2pcrypto.NewRandomPubkey()
+	e := p2pcrypto.NewRandomPubkey()
+	n <- a
+	time.Sleep(10 * time.Millisecond) //allow context switch
+	peers := pi.GetPeers()
+	assert.True(t, len(peers) == 1, "number of peers incorrect, length was ", len(peers))
+	n <- b
+	n <- c
+	n <- d
+	n <- e
+	defer pi.Close()
+	time.Sleep(10 * time.Millisecond) //allow context switch
+	peers1 := pi.GetPeers()
+	peers2 := pi.GetPeers()
+	assert.True(t, len(peers1) == 5, "number of peers incorrect, length was ", len(peers1))
+
+	for p := range peers1 {
+		if bytes.Compare(peers1[p].Bytes(), peers2[p].Bytes()) != 0 {
+			t.Log("test done ")
+			return
+		}
+		t.Log(fmt.Sprintf("index %d same element %s %s", p, peers1[p].String(), peers2[p].String()))
+	}
+
+	t.Fail()
 }
