@@ -1,9 +1,7 @@
 package mesh
 
 import (
-	"bytes"
 	"container/list"
-	"encoding/gob"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -686,13 +684,11 @@ func (m *MeshDB) ContextuallyValidBlock(layer types.LayerID) (map[types.BlockID]
 }
 
 func (m *MeshDB) Persist(key []byte, v interface{}) error {
-	var buf bytes.Buffer
-	enc := gob.NewEncoder(&buf)
-	err := enc.Encode(v)
+	buf, err := types.InterfaceToBytes(v)
 	if err != nil {
 		panic(err)
 	}
-	return m.general.Put(key, buf.Bytes())
+	return m.general.Put(key, buf)
 }
 
 func (m *MeshDB) Retrieve(key []byte, v interface{}) (interface{}, error) {
@@ -706,9 +702,7 @@ func (m *MeshDB) Retrieve(key []byte, v interface{}) (interface{}, error) {
 		return nil, fmt.Errorf("no such value in database db ")
 	}
 
-	dec := gob.NewDecoder(bytes.NewBuffer(val))
-
-	if err := dec.Decode(v); err != nil {
+	if err := types.BytesToInterface(val, v); err != nil {
 		return nil, fmt.Errorf("failed decoding object from db %v", err)
 	}
 
