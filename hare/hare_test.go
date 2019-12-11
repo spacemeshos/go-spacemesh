@@ -347,3 +347,107 @@ func (p BlockIDSlice) Sort() { sort.Sort(p) }
 func SortBlockIDs(slice []types.BlockID) {
 	sort.Sort(BlockIDSlice(slice))
 }
+
+func TestHare_outputBuffer(t *testing.T) {
+	sim := service.NewSimulator()
+	n1 := sim.NewNode()
+
+	h := createHare(n1)
+	lasti := types.LayerID(0)
+
+	for i := types.LayerID(0); i < types.LayerID(h.bufferSize); i++ {
+		h.lastLayer = i
+		mockid := instanceId(i)
+		set := NewSetFromValues(value1)
+		h.collectOutput(mockReport{mockid, set, true})
+		_, ok := h.outputs[types.LayerID(mockid)]
+		require.True(t, ok)
+		require.Equal(t, int(i+1), len(h.outputs))
+		lasti = i
+	}
+
+	require.Equal(t, h.bufferSize, len(h.outputs))
+
+	// add another output
+	mockid := instanceId(lasti + 1)
+	set := NewSetFromValues(value1)
+	h.collectOutput(mockReport{mockid, set, true})
+	_, ok := h.outputs[types.LayerID(mockid)]
+	require.True(t, ok)
+	require.Equal(t, h.bufferSize, len(h.outputs))
+
+}
+
+func TestHare_IsTooLate(t *testing.T) {
+	sim := service.NewSimulator()
+	n1 := sim.NewNode()
+
+	h := createHare(n1)
+
+	for i := types.LayerID(0); i < types.LayerID(h.bufferSize*2); i++ {
+		mockid := instanceId(i)
+		set := NewSetFromValues(value1)
+		h.lastLayer = i
+		h.collectOutput(mockReport{mockid, set, true})
+		_, ok := h.outputs[types.LayerID(mockid)]
+		require.True(t, ok)
+		exp := int(i + 1)
+		if exp > h.bufferSize {
+			exp = h.bufferSize
+		}
+
+		require.Equal(t, exp, len(h.outputs))
+	}
+
+	require.True(t, h.outOfBufferRange(instanceId(1)))
+}
+
+func TestHare_oldestInBuffer(t *testing.T) {
+	sim := service.NewSimulator()
+	n1 := sim.NewNode()
+
+	h := createHare(n1)
+	lasti := types.LayerID(0)
+
+	for i := types.LayerID(0); i < types.LayerID(h.bufferSize); i++ {
+		mockid := instanceId(i)
+		set := NewSetFromValues(value1)
+		h.lastLayer = i
+		h.collectOutput(mockReport{mockid, set, true})
+		_, ok := h.outputs[types.LayerID(mockid)]
+		require.True(t, ok)
+		exp := int(i + 1)
+		if exp > h.bufferSize {
+			exp = h.bufferSize
+		}
+
+		require.Equal(t, exp, len(h.outputs))
+		lasti = i
+	}
+
+	lyr := h.oldestResultInBuffer()
+	require.True(t, lyr == 0)
+
+	mockid := instanceId(lasti + 1)
+	set := NewSetFromValues(value1)
+	h.lastLayer = lasti + 1
+	h.collectOutput(mockReport{mockid, set, true})
+	_, ok := h.outputs[types.LayerID(mockid)]
+	require.True(t, ok)
+	require.Equal(t, h.bufferSize, len(h.outputs))
+
+	lyr = h.oldestResultInBuffer()
+	require.True(t, lyr == 1)
+
+	mockid = instanceId(lasti + 2)
+	set = NewSetFromValues(value1)
+	h.lastLayer = lasti + 2
+	h.collectOutput(mockReport{mockid, set, true})
+	_, ok = h.outputs[types.LayerID(mockid)]
+	require.True(t, ok)
+	require.Equal(t, h.bufferSize, len(h.outputs))
+
+	lyr = h.oldestResultInBuffer()
+	require.True(t, lyr == 2)
+
+}

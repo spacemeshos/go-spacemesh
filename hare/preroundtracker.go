@@ -2,7 +2,6 @@ package hare
 
 import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/hare/metrics"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -39,7 +38,6 @@ func (pre *preRoundTracker) OnPreRound(msg *Msg) {
 	// record Values
 	for v := range sToTrack.values {
 		pre.tracker.Track(v)
-		metrics.PreRoundCounter.With("value", v.String()).Add(1)
 	}
 
 	// update the union to include new Values
