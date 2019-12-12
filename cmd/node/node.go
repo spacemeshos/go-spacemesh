@@ -150,7 +150,7 @@ type SpacemeshApp struct {
 	loggers        map[string]*zap.AtomicLevel
 }
 
-func LoadConfigFromFile() (*cfg.Config, error){
+func LoadConfigFromFile() (*cfg.Config, error) {
 
 	fileLocation := viper.GetString("config")
 	vip := viper.New()

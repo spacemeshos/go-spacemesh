@@ -12,10 +12,10 @@ var (
 )
 
 type Config struct {
-	NumberOfNodes int
+	NumberOfNodes  int
 	BlocksPerLayer int
-	RunUntilLayer uint32
-	DbLocation string
+	RunUntilLayer  uint32
+	DbLocation     string
 }
 
 func AddCommands(cmd *cobra.Command) {
@@ -38,12 +38,11 @@ var Cmd = &cobra.Command{
 	},
 }
 
-
 func init() {
 	AddCommands(Cmd)
 }
 
-func main(){
+func main() {
 	if err := Cmd.Execute(); err != nil {
 		log.Error("%v", err)
 		os.Exit(1)

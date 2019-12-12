@@ -8,8 +8,8 @@ type Config struct {
 	WakeupDelta     int `mapstructure:"hare-wakeup-delta"`       // the wakeup delta after tick
 	ExpectedLeaders int `mapstructure:"hare-exp-leaders"`        // the expected number of leaders
 	SuperHare       bool
-	LimitIterations int `mapstructure:"hare-limit-iterations"`   // limit on number of iterations
-	LimitConcurrent int `mapstructure:"hare-limit-concurrent"`   // limit number of concurrent CPs
+	LimitIterations int `mapstructure:"hare-limit-iterations"` // limit on number of iterations
+	LimitConcurrent int `mapstructure:"hare-limit-concurrent"` // limit number of concurrent CPs
 }
 
 // DefaultConfig returns the default configuration for the hare.

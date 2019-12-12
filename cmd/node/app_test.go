@@ -39,7 +39,6 @@ func (suite *AppTestSuite) SetupTest() {
 	suite.dbs = make([]string, 0, 0)
 }
 
-
 func (suite *AppTestSuite) TearDownTest() {
 	if err := suite.poetCleanup(true); err != nil {
 		log.Error("error while cleaning up PoET: %v", err)
@@ -81,10 +80,6 @@ func (suite *AppTestSuite) initMultipleInstances(cfg *config.Config, rolacle *el
 		name++
 	}
 }
-
-
-
-
 
 func (suite *AppTestSuite) TestMultipleNodes() {
 	//EntryPointCreated <- true
@@ -297,7 +292,6 @@ func (suite *AppTestSuite) validateLastATXActiveSetSize(app *SpacemeshApp) {
 	suite.NoError(err)
 	suite.True(int(atx.ActiveSetSize) == len(suite.apps), "atx: %v node: %v", atx.ShortString(), app.nodeId.Key[:5])
 }
-
 
 func TestAppTestSuite(t *testing.T) {
 	//defer leaktest.Check(t)()
