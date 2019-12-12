@@ -120,7 +120,7 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 		Hdist:          app.Config.Hdist,
 	}
 
-	if remote == 1 {
+	if remote {
 		if err := GetData(app.Config.DataDir, version, lg); err != nil {
 			lg.Error("could not download data for test", err)
 			return
