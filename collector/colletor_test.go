@@ -104,6 +104,6 @@ func TestCollectEvents(t *testing.T) {
 	c.Stop()
 
 	log.Info("got %v", len(m.msgs))
-	assert.Equal(t, 6, m.total)
+	assert.Equal(t, 10015, m.total)
 	assert.Equal(t, 6, len(m.msgs))
 }

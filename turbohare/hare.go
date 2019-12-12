@@ -27,16 +27,12 @@ func (h *SuperHare) Close() {
 
 }
 
-func (h *SuperHare) GetResult(lower types.LayerID, upper types.LayerID) ([]types.BlockID, error) {
-	var output []types.BlockID
-	for i := lower; i <= upper; i++ {
-		blks, err := h.blocks.GetUnverifiedLayerBlocks(types.LayerID(i))
-		if err != nil {
-			log.Error("WTF SUPERHARE?? %v err: %v", i, err)
-			return nil, err
-		}
-		sort.Slice(blks, func(i, j int) bool { return bytes.Compare(blks[i].ToBytes(), blks[j].ToBytes()) == -1 })
-		output = append(output, blks...)
+func (h *SuperHare) GetResult(id types.LayerID) ([]types.BlockID, error) {
+	blks, err := h.blocks.GetUnverifiedLayerBlocks(id)
+	if err != nil {
+		log.Error("WTF SUPERHARE?? %v err: %v", id, err)
+		return nil, err
 	}
-	return output, nil
+	sort.Slice(blks, func(i, j int) bool { return bytes.Compare(blks[i].ToBytes(), blks[j].ToBytes()) == -1 })
+	return blks, nil
 }

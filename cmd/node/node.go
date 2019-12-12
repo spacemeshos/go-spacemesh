@@ -112,7 +112,7 @@ type Service interface {
 
 type HareService interface {
 	Service
-	GetResult(lower types.LayerID, upper types.LayerID) ([]types.BlockID, error)
+	GetResult(id types.LayerID) ([]types.BlockID, error)
 }
 
 type TickProvider interface {

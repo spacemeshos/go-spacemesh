@@ -96,6 +96,7 @@ func (t *TimeClock) startClock(diff time.Duration) {
 		case <-tick.C:
 			t.notifyOnTick()
 		case <-t.stop:
+			t.started = false
 			return
 		}
 	}
@@ -111,6 +112,7 @@ type Ticker struct {
 	stop            chan struct{}
 	subscribers     map[LayerTimer]struct{} // map subscribers by channel
 	started         bool
+	once            sync.Once
 }
 
 type Clock interface {
@@ -129,7 +131,9 @@ func (t *Ticker) StartNotifying() {
 }
 
 func (t *Ticker) Close() {
-	//t.stop <- struct{}{}
+	t.once.Do(func() {
+		close(t.stop)
+	})
 }
 
 func (t *Ticker) notifyOnTick() {
