@@ -181,8 +181,8 @@ func dial(keepAlive, timeOut time.Duration, address net.Addr) (net.Conn, error) 
 func tcpSocketConfig(tcpconn *net.TCPConn) {
 	// TODO: Error handling, what if only certain flags are supported
 	// TODO: Parameters, try to find right buffers based on something or os/net-interface input?
-	tcpconn.SetReadBuffer(1024 * 64)
-	tcpconn.SetWriteBuffer(1024 * 64)
+	tcpconn.SetReadBuffer(1024 * 1024)
+	tcpconn.SetWriteBuffer(1024 * 1024)
 
 	tcpconn.SetKeepAlive(true)
 	tcpconn.SetKeepAlivePeriod(time.Second * 10)
