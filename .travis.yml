@@ -14,7 +14,12 @@ install: make install
 
 branches:
   only:
-  - develop
+    # This is where pull requests from "bors r+" are built.
+    - staging
+    # This is where pull requests from "bors try" are built.
+    - trying
+    # This causes pull requests to be built.
+    - develop
 
 jobs:
   include:
@@ -35,29 +40,29 @@ jobs:
     name: "Push to dockerHub"
     script:
       - make dockerpush
-    if: branch = develop AND type != pull_request
+    if: (branch = develop OR branch = staging OR branch = trying) AND type != pull_request
 
   - stage: system-test
     name: "Run p2p system tests"
     script:
       - make dockertest-p2p
-    if: branch = develop AND type != pull_request
+    if: (branch = develop OR branch = staging OR branch = trying) AND type != pull_request
   - name: "Run mining system tests"
     script:
       - make dockertest-mining
-    if: branch = develop AND type != pull_request
+    if: (branch = develop OR branch = staging OR branch = trying) AND type != pull_request
   - name: "Run hare system tests"
     script:
       - make dockertest-hare
-    if: branch = develop AND type != pull_request
+    if: (branch = develop OR branch = staging OR branch = trying) AND type != pull_request
   - name: "Run sync system tests"
     script:
       - make dockertest-sync
-    if: branch = develop AND type != pull_request
+    if: (branch = develop OR branch = staging OR branch = trying) AND type != pull_request
   - name: "Run late nodes system test"
     script:
       - make dockertest-late-nodes
-    if: branch = develop AND type != pull_request
+    if: (branch = develop OR branch = staging OR branch = trying) AND type != pull_request
 
 cache:
   directories:
