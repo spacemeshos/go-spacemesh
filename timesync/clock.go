@@ -150,7 +150,7 @@ func (t *Ticker) notifyOnTick() {
 		c := ch
 		go func(count int) {
 			c <- t.nextLayerToTick
-			log.Info("iv'e notified number : %v", count)
+			log.Debug("iv'e notified number : %v", count)
 			wg.Done()
 		}(count)
 		count++
