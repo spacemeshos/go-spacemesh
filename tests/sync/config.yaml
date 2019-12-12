@@ -40,7 +40,7 @@ client:
     data-folder: '/bin/data/'
     expected-layers: '50'
     storage-path: 'spacemesh-sync-data'
-    remote-data: '1'
+    remote-data: 'true'
     hdist: '1'
 clientv2:
   image: 'spacemeshos/go-spacemesh:develop'
@@ -57,7 +57,7 @@ clientv2:
     storage-path: 'spacemesh-sync-data'
     hdist: '1'
     data-folder: '/usr/share/spacemesh/'
-    remote-data: '0'
+    remote-data: 'false'
   deployment_type: statefulset
 elastic:
   host: elastic.spacemesh.io

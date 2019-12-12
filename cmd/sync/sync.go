@@ -42,7 +42,7 @@ var Cmd = &cobra.Command{
 var expectedLayers int
 var bucket string
 var version string
-var remote int
+var remote bool
 var timeout int
 
 func init() {
@@ -53,7 +53,7 @@ func init() {
 	Cmd.PersistentFlags().IntVar(&expectedLayers, "expected-layers", 101, "expected number of layers")
 
 	//fetch from remote
-	Cmd.PersistentFlags().IntVar(&remote, "remote-data", 0, "fetch from remote")
+	Cmd.PersistentFlags().BoolVar(&remote, "remote-data", false, "fetch from remote")
 
 	//request timeout
 	Cmd.PersistentFlags().IntVar(&timeout, "timeout", 200, "request timeout")
