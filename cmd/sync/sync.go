@@ -42,7 +42,7 @@ var Cmd = &cobra.Command{
 var expectedLayers int
 var bucket string
 var version string
-var remote bool
+var remote int
 var timeout int
 
 func init() {
@@ -53,7 +53,7 @@ func init() {
 	Cmd.PersistentFlags().IntVar(&expectedLayers, "expected-layers", 101, "expected number of layers")
 
 	//fetch from remote
-	Cmd.PersistentFlags().BoolVar(&remote, "remote-data", false, "fetch from remote")
+	Cmd.PersistentFlags().IntVar(&remote, "remote-data", 0, "fetch from remote")
 
 	//request timeout
 	Cmd.PersistentFlags().IntVar(&timeout, "timeout", 200, "request timeout")
@@ -120,7 +120,7 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 		Hdist:          app.Config.Hdist,
 	}
 
-	if remote {
+	if remote == 1 {
 		if err := GetData(app.Config.DataDir, version, lg); err != nil {
 			lg.Error("could not download data for test", err)
 			return
@@ -149,7 +149,16 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 
 	txpool := miner.NewTxMemPool()
 	atxpool := miner.NewAtxMemPool()
-	msh := mesh.NewMesh(mshdb, atxdb, sync.ConfigTst(), &sync.MeshValidatorMock{}, txpool, atxpool, &sync.MockState{}, lg.WithOptions(log.Nop))
+
+	var msh *mesh.Mesh
+	if mshdb.PersistentData() {
+		lg.Info("persistent data found ")
+		msh = mesh.NewRecoveredMesh(mshdb, atxdb, sync.ConfigTst(), &sync.MeshValidatorMock{}, txpool, atxpool, &sync.MockState{}, lg.WithOptions(log.Nop))
+	} else {
+		lg.Info("no persistent data found ")
+		msh = mesh.NewMesh(mshdb, atxdb, sync.ConfigTst(), &sync.MeshValidatorMock{}, txpool, atxpool, &sync.MockState{}, lg.WithOptions(log.Nop))
+	}
+
 	msh.SetBlockBuilder(&MockBlockBuilder{})
 
 	defer msh.Close()
