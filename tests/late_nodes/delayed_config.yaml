@@ -10,7 +10,7 @@ deployment_ready_time_out: 120
 config_path: '../config.toml'
 
 bootstrap:
-  image: 'spacemeshos/go-spacemesh:develop'
+  image: 'spacemeshos/go-spacemesh-dev:harness'
   command: '/bin/go-harness'
   replicas: 1
   args:
@@ -31,7 +31,7 @@ bootstrap:
     hdist: '5'
     executable-path: '/bin/go-spacemesh'
 client:
-  image: 'spacemeshos/go-spacemesh:develop'
+  image: 'spacemeshos/go-spacemesh-dev:harness'
   command: '/bin/go-harness'
   replicas: 49
   args:

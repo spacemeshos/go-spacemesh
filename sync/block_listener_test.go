@@ -239,8 +239,7 @@ func TestBlockListener_DataAvailabilityBadFlow(t *testing.T) {
 
 	// create a new ATX
 	atx2 := atx(signer.PublicKey().String())
-	// create a new poet proof
-	// (amit) should we do it for the second time or can we use the former? (in real life scenario we should use different proofs from same user)
+
 	poetProofBytes, err = types.InterfaceToBytes(&proofMessage.PoetProof)
 	require.NoError(t, err)
 	poetRef = sha256.Sum256(poetProofBytes)

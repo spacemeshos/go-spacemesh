@@ -19,9 +19,10 @@ from tests.utils import print_hits_entry_count
 # sleep until layer 4
 # validate no errors occurred
 # validate new node didn't receive any new blocks before being synced
-# @pytest.mark.xfail(strict=True, reason="new pod creates blocks before being synced")
+@pytest.mark.xfail(strict=True)
 def test_unsync_while_genesis(init_session, setup_bootstrap, start_poet, add_curl):
-    time_before_first_block = 70
+    time_to_create_block_since_startup = 10
+    time_before_first_block = testconfig["genesis_delta"] + time_to_create_block_since_startup
     layers_to_wait = 4
 
     layer_duration = int(testconfig['client']['args']['layer-duration-sec'])
@@ -37,8 +38,7 @@ def test_unsync_while_genesis(init_session, setup_bootstrap, start_poet, add_cur
 
     # Validate a block was published
     nodes_published_block, _ = q.get_blocks_per_node_and_layer(init_session)
-    if not nodes_published_block:
-        assert 0, f"no blocks were published during the first {time_before_first_block} seconds"
+    assert nodes_published_block, f"no blocks were published during the first {time_before_first_block} seconds"
 
     # Create a new node in cluster
     unsynced_cl = new_client_in_namespace(testconfig['namespace'], setup_bootstrap, cspec, 1)
@@ -55,13 +55,11 @@ def test_unsync_while_genesis(init_session, setup_bootstrap, start_poet, add_cur
 
     # Get the msg when app started on the late node
     app_started_hits = q.get_app_started_msgs(init_session, unsynced_cl.pods[0]["name"])
-    if not app_started_hits:
-        assert 0, f"app did not start for new node after {layers_to_wait} layers"
+    assert app_started_hits, f"app did not start for new node after {layers_to_wait} layers"
 
     # Check if the new node has finished syncing
     hits_synced = q.get_done_syncing_msgs(init_session, unsynced_cl.pods[0]["name"])
-    if not hits_synced:
-        assert 0, f"New node did not sync, waited for {layers_to_wait} layers"
+    assert hits_synced, f"New node did not sync, waited for {layers_to_wait} layers"
 
     print(f"{hits_synced[0].kubernetes.pod_name} has performed sync")
 
@@ -73,7 +71,7 @@ def test_unsync_while_genesis(init_session, setup_bootstrap, start_poet, add_cur
                                                to_ts=sync_ts)
 
     if hits_msg_block:
-        print("############ WARNING: node created blocks before syncing!!!! ############")
+        print("\n\n############ WARNING: node created blocks before syncing!!!! ############\n\n")
 
     hits_errors = q.find_error_log_msgs(init_session, init_session)
     if hits_errors:

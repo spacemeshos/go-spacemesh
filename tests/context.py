@@ -4,6 +4,9 @@ from elasticsearch import Elasticsearch
 from kubernetes import config
 
 
+ELASTIC_URL_FMT = "http://elastic-{0}.spacemesh.io"
+
+
 def singleton(cls):
     instance = [None]
 
@@ -35,7 +38,6 @@ class ES:
 
 @singleton
 class Context:
-
     def __init__(self):
 
         K8S_CONTEXT = os.getenv("KUBECONTEXT")
@@ -59,4 +61,4 @@ class Context:
 
 
 def generate_elastic_url(cluster_name):
-    return "http://elastic-{0}.spacemesh.io".format(cluster_name.split('-')[1])
+    return ELASTIC_URL_FMT.format(cluster_name.split('-')[1])
