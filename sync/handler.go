@@ -90,14 +90,14 @@ func newTxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 			logger.Error("Error marshalling request", err)
 			return nil
 		}
-		logger.Info("handle tx request ")
+		logger.Info("handle tx request ", log.String("atx_ids", fmt.Sprintf("%x", txids)))
 		txs, missingDB := s.GetTransactions(txids)
 
 		for t := range missingDB {
 			if tx, err := s.txpool.Get(t); err == nil {
 				txs = append(txs, tx)
 			} else {
-				logger.Error("Error handling tx request message, for id: %v", t.ShortString())
+				logger.With().Error("error handling tx request message", log.TxId(t.ShortString()))
 			}
 		}
 
@@ -120,13 +120,13 @@ func newATxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 			logger.Error("Error marshalling request", err)
 			return nil
 		}
-		logger.Info("handle atx request ")
+		logger.Info("handle atx request ", log.String("atx_ids", fmt.Sprintf("%x", atxids)))
 		atxs, missinDB := s.GetATXs(atxids)
 		for _, t := range missinDB {
 			if tx, err := s.atxpool.Get(t); err == nil {
 				atxs[t] = tx
 			} else {
-				logger.With().Error("error handling atx request message", log.AtxId(t.ShortString()), log.String("atx_ids", fmt.Sprintf("%x", atxids)))
+				logger.With().Error("error handling atx request message", log.AtxId(t.ShortString()))
 			}
 		}
 
