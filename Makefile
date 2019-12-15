@@ -235,11 +235,23 @@ endif
 
 .PHONY: dockerrun-late-nodes
 
+dockerrun-genesis-voting:
+ifndef ES_PASSWD
+	$(error ES_PASSWD is not set)
+endif
+
+	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
+		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
+		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
+		-it go-spacemesh-python:$(BRANCH) pytest -s -v sync/genesis/test_genesis_voting.py --tc-file=sync/genesis/config.yaml --tc-format=yaml
+
+.PHONY: dockerrun-genesis-voting
+
 dockertest-late-nodes: dockerbuild-test dockerrun-late-nodes
 .PHONY: dockertest-late-nodes
 
 # The following is used to run tests one after the other locally
-dockerrun-test: dockerbuild-test dockerrun-p2p dockerrun-mining dockerrun-hare dockerrun-sync dockerrun-late-nodes
+dockerrun-test: dockerbuild-test dockerrun-p2p dockerrun-mining dockerrun-hare dockerrun-sync dockerrun-late-nodes dockerrun-genesis-voting
 .PHONY: dockerrun-test
 
 dockerrun-all: dockerpush dockerrun-test
