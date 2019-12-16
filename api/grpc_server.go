@@ -42,7 +42,7 @@ func (s SpacemeshGrpcService) getTransactionAndStatus(txId types.TransactionId) 
 	if err != nil {
 		tx, err = s.TxMempool.Get(txId) // do we have it in the mempool?
 		if err != nil {                 // we don't know this transaction
-			return nil, nil, 0, fmt.Errorf("transaction not found")
+			return nil, nil, 0, fmt.Errorf("transaction not found, id: %s", util.Bytes2Hex(txId.Bytes()))
 		}
 		return tx, nil, pb.TxStatus_PENDING, nil
 	}
