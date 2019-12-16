@@ -55,13 +55,13 @@ func (p *protocol) verifyPinger(from net.Addr, pi *node.NodeInfo) error {
 	// This helps prevent reflective DoS attacks.
 	ka, err := p.table.LookupKnownAddress(pi.PublicKey())
 	if err != nil {
-                //TODO: only accept local (unspecified/loopback) IPs from other local ips.
-                ipfrom, _, _ := net.SplitHostPort(from.String())
-                pi.IP = net.ParseIP(ipfrom)
+		//TODO: only accept local (unspecified/loopback) IPs from other local ips.
+		ipfrom, _, _ := net.SplitHostPort(from.String())
+		pi.IP = net.ParseIP(ipfrom)
 
-                // inbound ping is the actual source of this node info
-                p.table.AddAddress(pi, pi)
-	        ka, _ = p.table.LookupKnownAddress(pi.PublicKey())
+		// inbound ping is the actual source of this node info
+		p.table.AddAddress(pi, pi)
+		ka, _ = p.table.LookupKnownAddress(pi.PublicKey())
 	}
 	if ka == nil {
 		return errors.New("known address lookup unexpected failure")
@@ -74,7 +74,7 @@ func (p *protocol) verifyPinger(from net.Addr, pi *node.NodeInfo) error {
 				// All we can do here is print a warning. We've already responded with a pong,
 				// and the peer will not be added to the pingable list.
 				p.logger.Warning("Failed response to ping to Peer: %v", peer.String())
-                                p.table.RemoveAddress(pi.PublicKey())
+				p.table.RemoveAddress(pi.PublicKey())
 			}
 		}()
 	}
