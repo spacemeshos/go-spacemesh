@@ -260,7 +260,7 @@ func (sn *Node) sleep(delay uint32) {
 func (sn *Node) Broadcast(protocol string, payload []byte) error {
 	go func() {
 		sn.sleep(sn.sndDelay)
-		sn.sim.mutex.RLock()
+		sn.sim.mutex.Lock()
 		var mychan chan GossipMessage
 
 		if me, ok := sn.sim.protocolGossipHandler[sn.PublicKey()][protocol]; ok {
@@ -277,7 +277,7 @@ func (sn *Node) Broadcast(protocol string, payload []byte) error {
 				sendees = append(sendees, c) // <- simGossipMessage{sn.NodeInfo.PublicKey(), DataBytes{Payload: payload}, nil}
 			}
 		}
-		sn.sim.mutex.RUnlock()
+		sn.sim.mutex.Unlock()
 
 		if mychan != nil {
 			mychan <- simGossipMessage{sn.NodeInfo.PublicKey(), DataBytes{Payload: payload}, nil}

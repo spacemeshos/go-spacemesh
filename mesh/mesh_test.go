@@ -57,6 +57,10 @@ func (m *MeshValidatorMock) HandleLateBlock(bl *types.Block) {}
 
 type MockState struct{}
 
+func (MockState) ValidateNonceAndBalance(transaction *types.Transaction) error {
+	panic("implement me")
+}
+
 func (MockState) GetLayerApplied(txId types.TransactionId) *types.LayerID {
 	panic("implement me")
 }
@@ -217,10 +221,42 @@ func TestLayers_LatestKnownLayer(t *testing.T) {
 }
 
 func TestLayers_WakeUp(t *testing.T) {
-	//layers := getMesh(make(chan Peer),  "t5")
-	//defer layers.Close()
-	//layers.SetLatestLayer(10)
-	//assert.True(t, layers.LocalLayerCount() == 10, "wrong layer")
+	layers := getMesh("t1")
+	defer layers.Close()
+
+	block1 := types.NewExistingBlock(1, []byte("data1"))
+	block2 := types.NewExistingBlock(2, []byte("data2"))
+	block3 := types.NewExistingBlock(3, []byte("data3"))
+
+	err := layers.AddBlock(block1)
+	assert.NoError(t, err)
+	err = layers.AddBlock(block2)
+	assert.NoError(t, err)
+	err = layers.AddBlock(block3)
+	assert.NoError(t, err)
+
+	rBlock2, err := layers.GetBlock(block2.Id())
+	assert.NoError(t, err)
+
+	rBlock1, err := layers.GetBlock(block1.Id())
+	assert.NoError(t, err)
+
+	assert.True(t, len(rBlock1.TxIds) == len(block1.TxIds), "block content was wrong")
+	assert.True(t, bytes.Compare(rBlock2.MiniBlock.Data, []byte("data2")) == 0, "block content was wrong")
+	assert.True(t, len(rBlock1.AtxIds) == len(block1.AtxIds))
+
+	recoverdMesh := NewMesh(layers.MeshDB, &AtxDbMock{}, ConfigTst(), &MeshValidatorMock{mdb: layers.MeshDB}, MockTxMemPool{}, MockAtxMemPool{}, &MockState{}, log.New("", "", ""))
+
+	rBlock2, err = recoverdMesh.GetBlock(block2.Id())
+	assert.NoError(t, err)
+
+	rBlock1, err = recoverdMesh.GetBlock(block1.Id())
+	assert.NoError(t, err)
+
+	assert.True(t, len(rBlock1.TxIds) == len(block1.TxIds), "block content was wrong")
+	assert.True(t, bytes.Compare(rBlock2.MiniBlock.Data, []byte("data2")) == 0, "block content was wrong")
+	assert.True(t, len(rBlock1.AtxIds) == len(block1.AtxIds))
+
 }
 
 func TestLayers_OrphanBlocks(t *testing.T) {

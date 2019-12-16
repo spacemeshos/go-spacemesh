@@ -27,7 +27,7 @@ type MeshDB struct {
 	blocks             database.Database
 	transactions       database.Database
 	contextualValidity database.Database
-	patterns           database.Database
+	general            database.Database
 	unappliedTxs       database.Database
 	unappliedTxsMutex  sync.Mutex
 	orphanBlocks       map[types.LayerID]map[types.BlockID]struct{}
@@ -38,7 +38,7 @@ type MeshDB struct {
 func NewPersistentMeshDB(path string, log log.Log) (*MeshDB, error) {
 	bdb, err := database.NewLDBDatabase(path+"blocks", 0, 0, log)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize transactions db: %v", err)
+		return nil, fmt.Errorf("failed to initialize blocks db: %v", err)
 	}
 	ldb, err := database.NewLDBDatabase(path+"layers", 0, 0, log)
 	if err != nil {
@@ -48,17 +48,17 @@ func NewPersistentMeshDB(path string, log log.Log) (*MeshDB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize validity db: %v", err)
 	}
-	pdb, err := database.NewLDBDatabase(path+"patterns", 0, 0, log)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize patterns db: %v", err)
-	}
 	tdb, err := database.NewLDBDatabase(path+"transactions", 0, 0, log)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize transactions db: %v", err)
 	}
+	gdb, err := database.NewLDBDatabase(path+"general", 0, 0, log)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize general db: %v", err)
+	}
 	utx, err := database.NewLDBDatabase(path+"unappliedTxs", 0, 0, log)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize mesh transactions db: %v", err)
+		return nil, fmt.Errorf("failed to initialize mesh unappliedTxs db: %v", err)
 	}
 
 	ll := &MeshDB{
@@ -67,7 +67,7 @@ func NewPersistentMeshDB(path string, log log.Log) (*MeshDB, error) {
 		blocks:             bdb,
 		layers:             ldb,
 		transactions:       tdb,
-		patterns:           pdb,
+		general:            gdb,
 		contextualValidity: vdb,
 		unappliedTxs:       utx,
 		orphanBlocks:       make(map[types.LayerID]map[types.BlockID]struct{}),
@@ -76,15 +76,24 @@ func NewPersistentMeshDB(path string, log log.Log) (*MeshDB, error) {
 	return ll, nil
 }
 
+func (m *MeshDB) PersistentData() bool {
+	if _, err := m.general.Get(LATEST); err == nil {
+		m.Info("found data to recover on disc")
+		return true
+	}
+	m.Info("did not find data to recover on disc")
+	return false
+}
+
 func NewMemMeshDB(log log.Log) *MeshDB {
 	ll := &MeshDB{
 		Log:                log,
 		blockCache:         NewBlockCache(100 * layerSize),
 		blocks:             database.NewMemDatabase(),
 		layers:             database.NewMemDatabase(),
+		general:            database.NewMemDatabase(),
 		contextualValidity: database.NewMemDatabase(),
 		transactions:       database.NewMemDatabase(),
-		patterns:           database.NewMemDatabase(),
 		unappliedTxs:       database.NewMemDatabase(),
 		orphanBlocks:       make(map[types.LayerID]map[types.BlockID]struct{}),
 		layerMutex:         make(map[types.LayerID]*layerMutex),
@@ -97,7 +106,7 @@ func (m *MeshDB) Close() {
 	m.layers.Close()
 	m.transactions.Close()
 	m.unappliedTxs.Close()
-	m.patterns.Close()
+	m.general.Close()
 	m.contextualValidity.Close()
 }
 
@@ -126,7 +135,7 @@ func (m *MeshDB) GetBlock(id types.BlockID) (*types.Block, error) {
 
 	b, err := m.getBlockBytes(id)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf(" %s %s", id, err)
 	}
 	mbk := &types.Block{}
 	err = types.BytesToInterface(b, mbk)
@@ -245,7 +254,7 @@ func (m *MeshDB) ContextualValidity(id types.BlockID) (bool, error) {
 	return b[0] == 1, nil //bytes to bool
 }
 
-func (m *MeshDB) SaveContextualValidity(id types.BlockID, valid bool) {
+func (m *MeshDB) SaveContextualValidity(id types.BlockID, valid bool) error {
 	var v []byte
 	if valid {
 		v = TRUE
@@ -253,12 +262,7 @@ func (m *MeshDB) SaveContextualValidity(id types.BlockID, valid bool) {
 		v = FALSE
 	}
 	m.Debug("save contextual validity %v %v", id, valid)
-	err := m.contextualValidity.Put(id.ToBytes(), v)
-	if err != nil {
-		m.With().Error("storing contextual validity failed",
-			log.BlockId(id.String()), log.Bool("valid", valid))
-		// TODO: We want to panic here once we have a way to recover from this scenario
-	}
+	return m.contextualValidity.Put(id.ToBytes(), v)
 }
 
 func (m *MeshDB) writeBlock(bl *types.Block) error {
@@ -334,11 +338,11 @@ func (m *MeshDB) getLayerMutex(index types.LayerID) *layerMutex {
 }
 
 func getRewardKey(l types.LayerID, account types.Address) []byte {
-	str := "reward_" + account.String() + "_" + strconv.FormatUint(l.Uint64(), 10)
+	str := string(getRewardKeyPrefix(account)) + "_" + strconv.FormatUint(l.Uint64(), 10)
 	return []byte(str)
 }
 
-func getRewardSearchKey(account types.Address) []byte {
+func getRewardKeyPrefix(account types.Address) []byte {
 	str := "reward_" + account.String()
 	return []byte(str)
 }
@@ -403,18 +407,27 @@ func (m *MeshDB) writeTransactions(l types.LayerID, txs []*types.Transaction) er
 	return nil
 }
 
-func (m *MeshDB) writeTransactionRewards(l types.LayerID, accounts []types.Address, reward *big.Int) error {
+type dbReward struct {
+	TotalReward         uint64
+	LayerRewardEstimate uint64
+	// TotalReward - LayerRewardEstimate = FeesEstimate
+}
+
+func (m *MeshDB) writeTransactionRewards(l types.LayerID, accounts []types.Address, totalReward, layerReward *big.Int) error {
 	batch := m.transactions.NewBatch()
 	for _, account := range accounts {
-		if err := batch.Put(getRewardKey(l, account), reward.Bytes()); err != nil {
+		reward := dbReward{TotalReward: totalReward.Uint64(), LayerRewardEstimate: layerReward.Uint64()}
+		if b, err := types.InterfaceToBytes(&reward); err != nil {
+			return fmt.Errorf("could not marshal reward for %v: %v", account.Short(), err)
+		} else if err := batch.Put(getRewardKey(l, account), b); err != nil {
 			return fmt.Errorf("could not write reward to %v to database: %v", account.Short(), err)
 		}
 	}
 	return batch.Write()
 }
 
-func (m *MeshDB) GetRewards(account types.Address) (rewards []types.Reward) {
-	it := m.transactions.Find(getRewardSearchKey(account))
+func (m *MeshDB) GetRewards(account types.Address) (rewards []types.Reward, err error) {
+	it := m.transactions.Find(getRewardKeyPrefix(account))
 	for it.Next() {
 		if it.Key() == nil {
 			break
@@ -423,12 +436,18 @@ func (m *MeshDB) GetRewards(account types.Address) (rewards []types.Reward) {
 		strs := strings.Split(str, "_")
 		layer, err := strconv.ParseUint(strs[2], 10, 64)
 		if err != nil {
-			log.Error("wrong key in db " + string(it.Key()))
-			break
+			return nil, fmt.Errorf("wrong key in db %s: %v", it.Key(), err)
 		}
-		var amount big.Int
-		amount.SetBytes(it.Value())
-		rewards = append(rewards, types.Reward{Amount: amount.Uint64(), Layer: types.LayerID(layer)})
+		var reward dbReward
+		err = types.BytesToInterface(it.Value(), &reward)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal reward: %v", err)
+		}
+		rewards = append(rewards, types.Reward{
+			Layer:               types.LayerID(layer),
+			TotalReward:         reward.TotalReward,
+			LayerRewardEstimate: reward.LayerRewardEstimate,
+		})
 	}
 	return
 }
@@ -662,4 +681,30 @@ func (m *MeshDB) ContextuallyValidBlock(layer types.LayerID) (map[types.BlockID]
 	}
 
 	return validBlks, nil
+}
+
+func (m *MeshDB) Persist(key []byte, v interface{}) error {
+	buf, err := types.InterfaceToBytes(v)
+	if err != nil {
+		panic(err)
+	}
+	return m.general.Put(key, buf)
+}
+
+func (m *MeshDB) Retrieve(key []byte, v interface{}) (interface{}, error) {
+	val, err := m.general.Get(key)
+	if err != nil {
+		m.Warning("failed retrieving object from db ", err)
+		return nil, err
+	}
+
+	if val == nil {
+		return nil, fmt.Errorf("no such value in database db ")
+	}
+
+	if err := types.BytesToInterface(val, v); err != nil {
+		return nil, fmt.Errorf("failed decoding object from db %v", err)
+	}
+
+	return v, nil
 }

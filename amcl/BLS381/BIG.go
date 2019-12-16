@@ -450,7 +450,7 @@ func (r *BIG) imul(c int) {
 }
 
 /* this*=x, where x is >NEXCESS */
-func (r *BIG) pmul(c int) Chunk {
+func (r *BIG) pmul(c int64) Chunk {
 	carry := Chunk(0)
 	//	r.norm();
 	for i := 0; i < NLEN; i++ {

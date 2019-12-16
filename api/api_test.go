@@ -75,10 +75,19 @@ type TxAPIMock struct {
 	mockOrigin   types.Address
 	returnTx     map[types.TransactionId]*types.Transaction
 	layerApplied map[types.TransactionId]*types.LayerID
+	err          error
+}
+
+func (t *TxAPIMock) ValidateNonceAndBalance(transaction *types.Transaction) error {
+	return t.err
 }
 
 func (t *TxAPIMock) GetProjection(addr types.Address, prevNonce, prevBalance uint64) (nonce, balance uint64, err error) {
 	return prevNonce, prevBalance, nil
+}
+
+func (t *TxAPIMock) ValidatedLayer() types.LayerID {
+	return ValidatedLayerId
 }
 
 func (t *TxAPIMock) GetLayerApplied(txId types.TransactionId) *types.LayerID {
@@ -93,15 +102,31 @@ func (t *TxAPIMock) LatestLayer() types.LayerID {
 	return 10
 }
 
-func (t *TxAPIMock) GetRewards(account types.Address) (rewards []types.Reward) {
+func (t *TxAPIMock) GetRewards(account types.Address) (rewards []types.Reward, err error) {
 	return
 }
 
 func (t *TxAPIMock) GetTransactionsByDestination(l types.LayerID, account types.Address) (txs []types.TransactionId) {
+	if l != TxReturnLayer {
+		return nil
+	}
+	for _, tx := range t.returnTx {
+		if tx.Recipient.String() == account.String() {
+			txs = append(txs, tx.Id())
+		}
+	}
 	return
 }
 
 func (t *TxAPIMock) GetTransactionsByOrigin(l types.LayerID, account types.Address) (txs []types.TransactionId) {
+	if l != TxReturnLayer {
+		return nil
+	}
+	for _, tx := range t.returnTx {
+		if tx.Origin().String() == account.String() {
+			txs = append(txs, tx.Id())
+		}
+	}
 	return
 }
 
@@ -151,8 +176,10 @@ func (PostMock) Reset() error {
 }
 
 const (
-	genTimeUnix   = 1000000
-	layerDuration = 10
+	genTimeUnix      = 1000000
+	layerDuration    = 10
+	ValidatedLayerId = 8
+	TxReturnLayer    = 1
 )
 
 var (
@@ -161,6 +188,7 @@ var (
 	mining      = MinigApiMock{}
 	oracle      = OracleMock{}
 	genTime     = GenesisTimeMock{time.Unix(genTimeUnix, 0)}
+	txMempool   = miner.NewTxMemPool()
 	txApi       = &TxAPIMock{
 		returnTx:     make(map[types.TransactionId]*types.Transaction),
 		layerApplied: make(map[types.TransactionId]*types.LayerID),
@@ -221,78 +249,141 @@ func TestJsonApi(t *testing.T) {
 	shutDown()
 }
 
-func TestJsonWalletApi(t *testing.T) {
+func TestBroadcastPoet(t *testing.T) {
+	r := require.New(t)
 	shutDown := launchServer(t)
 
-	addrBytes := []byte{0x01}
-	addr := types.BytesToAddress(addrBytes)
+	payload := "{\"data\":[1,2,3]}"
+	respBody, respStatus := callEndpoint(t, "v1/broadcastpoet", payload)
+	r.Equal(http.StatusOK, respStatus, http.StatusText(respStatus))
+	assertSimpleMessage(t, respBody, "ok")
+
+	r.Equal([]byte{1, 2, 3}, networkMock.broadcasted)
+
+	shutDown()
+}
+
+func TestJsonWalletApi(t *testing.T) {
+	r := require.New(t)
+	shutDown := launchServer(t)
+
+	signer := signing.NewEdSigner()
+	addr := types.BytesToAddress(signer.PublicKey().Bytes())
 	ap.nonces[addr] = 10
 	ap.balances[addr] = big.NewInt(100)
 
 	// generate request payload (api input params)
-	payload := marshalProto(t, &pb.AccountId{Address: util.Bytes2Hex(addrBytes)})
+	payload := marshalProto(t, &pb.AccountId{Address: util.Bytes2Hex(addr.Bytes())})
 
 	respBody, respStatus := callEndpoint(t, "v1/nonce", payload)
-	require.Equal(t, http.StatusOK, respStatus)
+	r.Equal(http.StatusOK, respStatus)
 	assertSimpleMessage(t, respBody, "10")
 
 	respBody, respStatus = callEndpoint(t, "v1/balance", payload)
-	require.Equal(t, http.StatusOK, respStatus)
+	r.Equal(http.StatusOK, respStatus)
 	assertSimpleMessage(t, respBody, "100")
 
 	// Test submit transaction
 	submitTx(t, genTx(t))
 
+	txToSend := pb.SignedTransaction{Tx: asBytes(t, genTx(t))}
+	msg := "nonce or balance validation failed"
+	txApi.err = fmt.Errorf(msg)
+	respBody, respStatus = callEndpoint(t, "v1/submittransaction", marshalProto(t, &txToSend))
+	txApi.err = nil
+	r.Equal(http.StatusInternalServerError, respStatus, http.StatusText(respStatus))
+	r.Equal("{\"error\":\""+msg+"\",\"message\":\""+msg+"\",\"code\":2}", respBody)
+
 	// test start mining
 	initPostRequest := pb.InitPost{Coinbase: "0x1234", LogicalDrive: "/tmp/aaa", CommitmentSize: 2048}
 	respBody, respStatus = callEndpoint(t, "v1/startmining", marshalProto(t, &initPostRequest))
-	require.Equal(t, http.StatusOK, respStatus)
+	r.Equal(http.StatusOK, respStatus)
 	assertSimpleMessage(t, respBody, "ok")
 
 	// test get statistics about init progress
 	respBody, respStatus = callEndpoint(t, "v1/stats", "")
-	require.Equal(t, http.StatusOK, respStatus)
+	r.Equal(http.StatusOK, respStatus)
 
 	var stats pb.MiningStats
-	require.NoError(t, jsonpb.UnmarshalString(respBody, &stats))
+	r.NoError(jsonpb.UnmarshalString(respBody, &stats))
 
-	require.Equal(t, int32(1), stats.Status)
-	require.Equal(t, "/tmp", stats.DataDir)
-	require.Equal(t, "123456", stats.Coinbase)
+	r.Equal(int32(1), stats.Status)
+	r.Equal("/tmp", stats.DataDir)
+	r.Equal("123456", stats.Coinbase)
 
 	// test get genesisTime
 	respBody, respStatus = callEndpoint(t, "v1/genesis", "")
-	require.Equal(t, http.StatusOK, respStatus)
+	r.Equal(http.StatusOK, respStatus)
 	assertSimpleMessage(t, respBody, genTime.t.String())
 
 	// test get rewards per account
-	payload = marshalProto(t, &pb.AccountId{Address: util.Bytes2Hex(addrBytes)})
+	payload = marshalProto(t, &pb.AccountId{Address: util.Bytes2Hex(addr.Bytes())})
 	respBody, respStatus = callEndpoint(t, "v1/accountrewards", payload)
-	require.Equal(t, http.StatusOK, respStatus)
+	r.Equal(http.StatusOK, respStatus)
 
 	var rewards pb.AccountRewards
-	require.NoError(t, jsonpb.UnmarshalString(respBody, &rewards))
-	require.Empty(t, rewards.Rewards) // TODO: Test with actual data returned
+	r.NoError(jsonpb.UnmarshalString(respBody, &rewards))
+	r.Empty(rewards.Rewards) // TODO: Test with actual data returned
 
-	// test get txs per account
-	payload = marshalProto(t, &pb.GetTxsSinceLayer{Account: &pb.AccountId{Address: util.Bytes2Hex(addrBytes)}, StartLayer: 1})
+	// test get txs per account:
+
+	// add incoming tx to mempool
+	mempoolTxIn, err := mesh.NewSignedTx(1337, addr, 420, 3, 42, signing.NewEdSigner())
+	r.NoError(err)
+	txMempool.Put(mempoolTxIn.Id(), mempoolTxIn)
+
+	// add outgoing tx to mempool
+	mempoolTxOut, err := mesh.NewSignedTx(1337, types.BytesToAddress([]byte{1}), 420, 3, 42, signer)
+	r.NoError(err)
+	txMempool.Put(mempoolTxOut.Id(), mempoolTxOut)
+
+	// add incoming tx to mesh
+	meshTxIn, err := mesh.NewSignedTx(1337, addr, 420, 3, 42, signing.NewEdSigner())
+	r.NoError(err)
+	txApi.returnTx[meshTxIn.Id()] = meshTxIn
+
+	// add outgoing tx to mesh
+	meshTxOut, err := mesh.NewSignedTx(1337, types.BytesToAddress([]byte{1}), 420, 3, 42, signer)
+	r.NoError(err)
+	txApi.returnTx[meshTxOut.Id()] = meshTxOut
+
+	// test with start layer that gets the mesh txs
+	payload = marshalProto(t, &pb.GetTxsSinceLayer{Account: &pb.AccountId{Address: util.Bytes2Hex(addr.Bytes())}, StartLayer: TxReturnLayer})
 	respBody, respStatus = callEndpoint(t, "v1/accounttxs", payload)
-	require.Equal(t, http.StatusOK, respStatus)
+	r.Equal(http.StatusOK, respStatus)
 
 	var accounts pb.AccountTxs
-	require.NoError(t, jsonpb.UnmarshalString(respBody, &accounts))
-	require.Empty(t, accounts.Txs) // TODO: Test with actual data returned
+	r.NoError(jsonpb.UnmarshalString(respBody, &accounts))
+	r.Equal(uint64(ValidatedLayerId), accounts.ValidatedLayer)
+	r.ElementsMatch([]string{
+		mempoolTxIn.Id().String(),
+		mempoolTxOut.Id().String(),
+		meshTxIn.Id().String(),
+		meshTxOut.Id().String(),
+	}, accounts.Txs)
+
+	// test with start layer that doesn't get the mesh txs (mempool txs return anyway)
+	payload = marshalProto(t, &pb.GetTxsSinceLayer{Account: &pb.AccountId{Address: util.Bytes2Hex(addr.Bytes())}, StartLayer: TxReturnLayer + 1})
+	respBody, respStatus = callEndpoint(t, "v1/accounttxs", payload)
+	r.Equal(http.StatusOK, respStatus)
+
+	r.NoError(jsonpb.UnmarshalString(respBody, &accounts))
+	r.Equal(uint64(ValidatedLayerId), accounts.ValidatedLayer)
+	r.ElementsMatch([]string{
+		mempoolTxIn.Id().String(),
+		mempoolTxOut.Id().String(),
+	}, accounts.Txs)
 
 	// test get txs per account with wrong layer error
-	payload = marshalProto(t, &pb.GetTxsSinceLayer{Account: &pb.AccountId{Address: util.Bytes2Hex(addrBytes)}, StartLayer: 11})
+	payload = marshalProto(t, &pb.GetTxsSinceLayer{Account: &pb.AccountId{Address: util.Bytes2Hex(addr.Bytes())}, StartLayer: 11})
 	respBody, respStatus = callEndpoint(t, "v1/accounttxs", payload)
-	require.Equal(t, http.StatusInternalServerError, respStatus)
+	r.Equal(http.StatusInternalServerError, respStatus)
 	const ErrInvalidStartLayer = "{\"error\":\"invalid start layer\",\"message\":\"invalid start layer\",\"code\":2}"
-	require.Equal(t, ErrInvalidStartLayer, respBody)
+	r.Equal(ErrInvalidStartLayer, respBody)
 
 	// test call reset post
 	respBody, respStatus = callEndpoint(t, "v1/resetpost", "")
-	require.Equal(t, http.StatusOK, respStatus)
+	r.Equal(http.StatusOK, respStatus)
 
 	// stop the services
 	shutDown()
@@ -368,7 +459,7 @@ func submitTx(t *testing.T, tx *types.Transaction) {
 
 	txToSend := pb.SignedTransaction{Tx: asBytes(t, tx)}
 	respBody, respStatus := callEndpoint(t, "v1/submittransaction", marshalProto(t, &txToSend))
-	r.Equal(http.StatusOK, respStatus)
+	r.Equal(http.StatusOK, respStatus, http.StatusText(respStatus))
 
 	txConfirmation := pb.TxConfirmation{}
 	r.NoError(jsonpb.UnmarshalString(respBody, &txConfirmation))
@@ -395,7 +486,7 @@ func launchServer(t *testing.T) func() {
 		config.ConfigValues.GrpcServerPort = port2
 	}
 	networkMock.broadcasted = []byte{0x00}
-	grpcService := NewGrpcService(&networkMock, ap, txApi, miner.NewTxMemPool(), &mining, &oracle, &genTime, PostMock{}, layerDuration, nil)
+	grpcService := NewGrpcService(&networkMock, ap, txApi, txMempool, &mining, &oracle, &genTime, PostMock{}, layerDuration, nil)
 	jsonService := NewJSONHTTPServer()
 	// start gRPC and json server
 	grpcService.StartService()

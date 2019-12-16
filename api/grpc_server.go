@@ -42,7 +42,7 @@ func (s SpacemeshGrpcService) getTransactionAndStatus(txId types.TransactionId) 
 	if err != nil {
 		tx, err = s.TxMempool.Get(txId) // do we have it in the mempool?
 		if err != nil {                 // we don't know this transaction
-			return nil, nil, 0, fmt.Errorf("transaction not found")
+			return nil, nil, 0, fmt.Errorf("transaction not found, id: %s", util.Bytes2Hex(txId.Bytes()))
 		}
 		return tx, nil, pb.TxStatus_PENDING, nil
 	}
@@ -168,10 +168,14 @@ func (s SpacemeshGrpcService) SubmitTransaction(ctx context.Context, in *pb.Sign
 	if !s.Tx.AddressExists(tx.Origin()) {
 		log.With().Error("tx failed to validate signature",
 			log.TxId(tx.Id().ShortString()), log.String("origin", tx.Origin().Short()))
+		return nil, fmt.Errorf("transaction origin (%v) not found in global state", tx.Origin())
+	}
+	if err := s.Tx.ValidateNonceAndBalance(tx); err != nil {
+		log.With().Error("tx failed nonce and balance check", log.Err(err))
 		return nil, err
 	}
-	log.Info("GRPC SubmitTransaction BROADCAST tx. address %x (len %v), gaslimit %v, fee %v id %v",
-		tx.Recipient, len(tx.Recipient), tx.GasLimit, tx.Fee, tx.Id().ShortString())
+	log.Info("GRPC SubmitTransaction BROADCAST tx. address %x (len %v), gaslimit %v, fee %v id %v nonce %v",
+		tx.Recipient, len(tx.Recipient), tx.GasLimit, tx.Fee, tx.Id().ShortString(), tx.AccountNonce)
 	go s.Network.Broadcast(miner.IncomingTxProtocol, in.Tx)
 	log.Info("GRPC SubmitTransaction returned msg ok")
 	return &pb.TxConfirmation{Value: "ok", Id: hex.EncodeToString(tx.Id().Bytes())}, nil
@@ -211,13 +215,15 @@ func (s SpacemeshGrpcService) StopService() {
 
 type TxAPI interface {
 	AddressExists(addr types.Address) bool
-	GetRewards(account types.Address) (rewards []types.Reward)
+	ValidateNonceAndBalance(transaction *types.Transaction) error
+	GetRewards(account types.Address) (rewards []types.Reward, err error)
 	GetTransactionsByDestination(l types.LayerID, account types.Address) (txs []types.TransactionId)
 	GetTransactionsByOrigin(l types.LayerID, account types.Address) (txs []types.TransactionId)
 	LatestLayer() types.LayerID
 	GetLayerApplied(txId types.TransactionId) *types.LayerID
 	GetTransaction(id types.TransactionId) (*types.Transaction, error)
 	GetProjection(addr types.Address, prevNonce, prevBalance uint64) (nonce, balance uint64, err error)
+	ValidatedLayer() types.LayerID
 }
 
 // NewGrpcService create a new grpc service using config data.
@@ -342,33 +348,57 @@ func (s SpacemeshGrpcService) SetLoggerLevel(ctx context.Context, msg *pb.SetLog
 
 func (s SpacemeshGrpcService) GetAccountTxs(ctx context.Context, txsSinceLayer *pb.GetTxsSinceLayer) (*pb.AccountTxs, error) {
 	log.Info("GRPC GetAccountTxs msg")
-	acc := types.HexToAddress(txsSinceLayer.Account.Address)
-	if txsSinceLayer.StartLayer > uint64(s.Tx.LatestLayer()) {
+
+	currentPBase := s.Tx.ValidatedLayer()
+
+	addr := types.HexToAddress(txsSinceLayer.Account.Address)
+	minLayer := types.LayerID(txsSinceLayer.StartLayer)
+	if minLayer > s.Tx.LatestLayer() {
 		return &pb.AccountTxs{}, fmt.Errorf("invalid start layer")
 	}
-	var allTxs []types.TransactionId
-	for i := txsSinceLayer.StartLayer; i < uint64(s.Tx.LatestLayer()); i++ {
-		txs := s.Tx.GetTransactionsByDestination(types.LayerID(i), acc)
-		allTxs = append(allTxs, txs...)
-		moreTxs := s.Tx.GetTransactionsByOrigin(types.LayerID(i), acc)
-		allTxs = append(allTxs, moreTxs...)
+
+	txs := pb.AccountTxs{ValidatedLayer: currentPBase.Uint64()}
+
+	meshTxIds := s.getTxIdsFromMesh(minLayer, addr)
+	for _, txId := range meshTxIds {
+		txs.Txs = append(txs.Txs, txId.String())
 	}
 
-	txs := pb.AccountTxs{}
-	for _, x := range allTxs {
-		txs.Txs = append(txs.Txs, x.String())
+	mempoolTxIds := s.TxMempool.GetTxIdsByAddress(addr)
+	for _, txId := range mempoolTxIds {
+		txs.Txs = append(txs.Txs, txId.String())
 	}
+
 	return &txs, nil
+}
+
+func (s SpacemeshGrpcService) getTxIdsFromMesh(minLayer types.LayerID, addr types.Address) []types.TransactionId {
+	var txIds []types.TransactionId
+	for layerId := minLayer; layerId < s.Tx.LatestLayer(); layerId++ {
+		destTxIds := s.Tx.GetTransactionsByDestination(layerId, addr)
+		txIds = append(txIds, destTxIds...)
+		originTxIds := s.Tx.GetTransactionsByOrigin(layerId, addr)
+		txIds = append(txIds, originTxIds...)
+	}
+	return txIds
 }
 
 func (s SpacemeshGrpcService) GetAccountRewards(ctx context.Context, account *pb.AccountId) (*pb.AccountRewards, error) {
 	log.Info("GRPC GetAccountRewards msg")
 	acc := types.HexToAddress(account.Address)
 
-	rewards := s.Tx.GetRewards(acc)
+	rewards, err := s.Tx.GetRewards(acc)
+	if err != nil {
+		log.Error("failed to get rewards: %v", err)
+		return nil, err
+	}
 	rewardsOut := pb.AccountRewards{}
 	for _, x := range rewards {
-		rewardsOut.Rewards = append(rewardsOut.Rewards, &pb.Reward{Reward: x.Amount, Layer: x.Layer.Uint64()})
+		rewardsOut.Rewards = append(rewardsOut.Rewards, &pb.Reward{
+			Layer:               x.Layer.Uint64(),
+			TotalReward:         x.TotalReward,
+			LayerRewardEstimate: x.LayerRewardEstimate,
+		})
 	}
 
 	return &rewardsOut, nil

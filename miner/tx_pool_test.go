@@ -31,17 +31,25 @@ func TestNewTxPoolWithAccounts(t *testing.T) {
 	nonce, balance = pool.GetProjection(origin, prevNonce, prevBalance)
 	r.Equal(prevNonce+1, nonce)
 	r.Equal(prevBalance-50, balance)
+	r.ElementsMatch([]types.TransactionId{tx1Id}, pool.GetTxIdsByAddress(origin))
+	r.ElementsMatch([]types.TransactionId{tx1Id}, pool.GetTxIdsByAddress(tx1.Recipient))
 
 	tx2Id, tx2 := newTx(t, 5, 150, signer)
 	pool.Put(tx2Id, tx2)
 	nonce, balance = pool.GetProjection(origin, prevNonce, prevBalance)
 	r.Equal(prevNonce+2, nonce)
 	r.Equal(prevBalance-50-150, balance)
+	r.ElementsMatch([]types.TransactionId{tx1Id, tx2Id}, pool.GetTxIdsByAddress(origin))
+	r.ElementsMatch([]types.TransactionId{tx1Id}, pool.GetTxIdsByAddress(tx1.Recipient))
+	r.ElementsMatch([]types.TransactionId{tx2Id}, pool.GetTxIdsByAddress(tx2.Recipient))
 
 	pool.Invalidate(tx1Id)
 	nonce, balance = pool.GetProjection(origin, prevNonce+1, prevBalance-50)
 	r.Equal(prevNonce+2, nonce)
 	r.Equal(prevBalance-50-150, balance)
+	r.ElementsMatch([]types.TransactionId{tx2Id}, pool.GetTxIdsByAddress(origin))
+	r.Empty(pool.GetTxIdsByAddress(tx1.Recipient))
+	r.ElementsMatch([]types.TransactionId{tx2Id}, pool.GetTxIdsByAddress(tx2.Recipient))
 
 	seed := []byte("seedseed")
 	rand.Seed(int64(binary.LittleEndian.Uint64(seed)))
@@ -118,7 +126,8 @@ func TestGetRandIdxs(t *testing.T) {
 
 func newTx(t testing.TB, nonce, totalAmount uint64, signer *signing.EdSigner) (types.TransactionId, *types.Transaction) {
 	feeAmount := uint64(1)
-	tx, err := mesh.NewSignedTx(nonce, types.Address{}, totalAmount-feeAmount, 3, feeAmount, signer)
+	rec := types.Address{byte(rand.Int()), byte(rand.Int()), byte(rand.Int()), byte(rand.Int())}
+	tx, err := mesh.NewSignedTx(nonce, rec, totalAmount-feeAmount, 3, feeAmount, signer)
 	require.NoError(t, err)
 	return tx.Id(), tx
 }
