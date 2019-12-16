@@ -15,6 +15,7 @@ type protocolRoutingTable interface {
 	AddAddress(n *node.NodeInfo, src *node.NodeInfo)
 	AddressCache() []*node.NodeInfo
 	LookupKnownAddress(a p2pcrypto.PublicKey) (*KnownAddress, error)
+	RemoveAddress(key p2pcrypto.PublicKey)
 }
 
 type protocol struct {

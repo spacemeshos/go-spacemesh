@@ -247,14 +247,11 @@ func (a *addrBook) GetAddress() *KnownAddress {
 }
 
 func (a *addrBook) Lookup(addr p2pcrypto.PublicKey) (*node.NodeInfo, error) {
-	a.mtx.Lock()
-	d, ok := a.addrIndex[addr.Array()]
-	a.mtx.Unlock()
-	if !ok {
-		// Todo: just return empty without error ?
-		return nil, ErrLookupFailed
+	if d, err := a.LookupKnownAddress(addr); err != nil {
+		return nil, err
+	} else {
+		return d.na, nil
 	}
-	return d.na, nil
 }
 
 func (a *addrBook) LookupKnownAddress(addr p2pcrypto.PublicKey) (*KnownAddress, error) {
