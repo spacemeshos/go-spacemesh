@@ -174,8 +174,8 @@ func (s SpacemeshGrpcService) SubmitTransaction(ctx context.Context, in *pb.Sign
 		log.With().Error("tx failed nonce and balance check", log.Err(err))
 		return nil, err
 	}
-	log.Info("GRPC SubmitTransaction BROADCAST tx. address %x (len %v), gaslimit %v, fee %v id %v",
-		tx.Recipient, len(tx.Recipient), tx.GasLimit, tx.Fee, tx.Id().ShortString())
+	log.Info("GRPC SubmitTransaction BROADCAST tx. address %x (len %v), gaslimit %v, fee %v id %v nonce %v",
+		tx.Recipient, len(tx.Recipient), tx.GasLimit, tx.Fee, tx.Id().ShortString(), tx.AccountNonce)
 	go s.Network.Broadcast(miner.IncomingTxProtocol, in.Tx)
 	log.Info("GRPC SubmitTransaction returned msg ok")
 	return &pb.TxConfirmation{Value: "ok", Id: hex.EncodeToString(tx.Id().Bytes())}, nil
