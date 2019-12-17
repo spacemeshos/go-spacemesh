@@ -163,12 +163,12 @@ func (n *Net) publishClosingConnection(connection ConnectionWithErr) {
 	n.clsMutex.RUnlock()
 }
 
-func dial(keepAlive, timeOut time.Duration, address string) (net.Conn, error) {
+func dial(keepAlive, timeOut time.Duration, address net.Addr) (net.Conn, error) {
 	// connect via dialer so we can set tcp network params
 	dialer := &net.Dialer{}
 	dialer.Timeout = timeOut // max time bef
 
-	netConn, err := dialer.Dial("tcp", address)
+	netConn, err := dialer.Dial("tcp", address.String())
 	if err == nil {
 		tcpconn := netConn.(*net.TCPConn)
 		tcpSocketConfig(tcpconn)
@@ -188,24 +188,24 @@ func tcpSocketConfig(tcpconn *net.TCPConn) {
 	tcpconn.SetKeepAlivePeriod(time.Second * 10)
 }
 
-func (n *Net) createConnection(address string, remotePub p2pcrypto.PublicKey, session NetworkSession,
+func (n *Net) createConnection(address net.Addr, remotePub p2pcrypto.PublicKey, session NetworkSession,
 	timeOut, keepAlive time.Duration) (ManagedConnection, error) {
 
 	if n.isShuttingDown {
 		return nil, fmt.Errorf("can't dial because the connection is shutting down")
 	}
 
-	n.logger.Debug("Dialing %v @ %v...", remotePub.String(), address)
+	n.logger.Debug("Dialing %v @ %v...", remotePub.String(), address.String())
 	netConn, err := dial(keepAlive, timeOut, address)
 	if err != nil {
 		return nil, err
 	}
 
-	n.logger.Debug("Connected to %s...", address)
+	n.logger.Debug("Connected to %s...", address.String())
 	return newConnection(netConn, n, remotePub, session, n.config.MsgSizeLimit, n.config.ResponseTimeout, n.logger), nil
 }
 
-func (n *Net) createSecuredConnection(address string, remotePubkey p2pcrypto.PublicKey, timeOut time.Duration,
+func (n *Net) createSecuredConnection(address net.Addr, remotePubkey p2pcrypto.PublicKey, timeOut time.Duration,
 	keepAlive time.Duration) (ManagedConnection, error) {
 
 	session := createSession(n.localNode.PrivateKey(), remotePubkey)
@@ -234,13 +234,13 @@ func createSession(privkey p2pcrypto.PrivateKey, remotePubkey p2pcrypto.PublicKe
 }
 
 // Dial a remote server with provided time out
-// address:: ip:port
+// address:: types.IPAddr struct
 // Returns established connection that local clients can send messages to or error if failed
 // to establish a connection, currently only secured connections are supported
-func (n *Net) Dial(address string, remotePubkey p2pcrypto.PublicKey) (Connection, error) {
+func (n *Net) Dial(address net.Addr, remotePubkey p2pcrypto.PublicKey) (Connection, error) {
 	conn, err := n.createSecuredConnection(address, remotePubkey, n.config.DialTimeout, n.config.ConnKeepAlive)
 	if err != nil {
-		return nil, fmt.Errorf("failed to Dail. err: %v", err)
+		return nil, fmt.Errorf("failed to Dial. err: %v", err)
 	}
 	go conn.beginEventProcessing()
 	return conn, nil

@@ -30,7 +30,7 @@ import (
 const ConnectingTimeout = 20 * time.Second //todo: add to the config
 
 type cPool interface {
-	GetConnection(address string, pk p2pcrypto.PublicKey) (net.Connection, error)
+	GetConnection(address inet.Addr, pk p2pcrypto.PublicKey) (net.Connection, error)
 	GetConnectionIfExists(pk p2pcrypto.PublicKey) (net.Connection, error)
 	Shutdown()
 }
@@ -720,7 +720,8 @@ func (s *swarm) getMorePeers(numpeers int) int {
 				reportChan <- cnErr{nd, errors.New("connection to self")}
 				return
 			}
-			_, err := s.cPool.GetConnection(inet.JoinHostPort(nd.IP.String(), strconv.Itoa(int(nd.ProtocolPort))), nd.PublicKey())
+			addr := types.IPAddr{nd.IP.String(), strconv.Itoa(int(nd.ProtocolPort)), "tcp"}
+			_, err := s.cPool.GetConnection(addr, nd.PublicKey())
 			reportChan <- cnErr{nd, err}
 		}(nds[i], res)
 	}

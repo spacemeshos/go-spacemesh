@@ -2,9 +2,11 @@ package node
 
 import (
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/stretchr/testify/assert"
+	"strconv"
 	"testing"
 )
 
@@ -21,7 +23,7 @@ func TestNodeLocalStore(t *testing.T) {
 	port1, err := GetUnboundedPort()
 	assert.NoError(t, err, "Should be able to establish a connection on a port")
 
-	address := fmt.Sprintf("0.0.0.0:%d", port1)
+	address := types.IPAddr{"0.0.0.0", strconv.Itoa(port1), "tcp"}
 
 	cfg := config.DefaultConfig()
 
