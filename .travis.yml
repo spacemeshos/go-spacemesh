@@ -65,7 +65,7 @@ jobs:
     if: (branch = develop OR branch = staging OR branch = trying) AND type != pull_request
   - name: "Run genesis votes test"
     script:
-      - make dockerrun-genesis-voting
+      - make dockertest-genesis-voting
     if: (branch = develop OR branch = staging OR branch = trying) AND type != pull_request
 
 cache:
