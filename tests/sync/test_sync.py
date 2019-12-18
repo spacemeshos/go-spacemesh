@@ -55,8 +55,8 @@ def search_pod_logs(namespace, pod_name, term):
     return False
 
 
-def check_pod(podName):
-    res = query_message(current_index, testconfig['namespace'], podName, {"M": "sync done"}, False)
+def check_pod(pod_name):
+    res = query_message(current_index, testconfig['namespace'], pod_name, {"M": "sync done"}, False)
     if res:
         return True
     return False
@@ -83,15 +83,15 @@ def test_sync_gradually_add_nodes(init_session, setup_bootstrap, save_log_on_exi
     clients[3] = new_client_in_namespace(testconfig['namespace'], setup_bootstrap, cspec, 1)
 
     start = time.time()
-    sleep = 30 # seconds
-    num_iter = 20 # total of 5 minutes
+    sleep = 30  # seconds
+    num_iter = 20  # total of 5 minutes
     for i in range(num_iter):
         done = 0
         for j in range(0, num_clients):
             podName = clients[j].pods[0]['name']
-            if not check_pod(podName): # not all done
+            if not check_pod(podName):  # not all done
                 print("pod " + podName + " still not done. Going to sleep")
-                break # stop check and sleep
+                break  # stop check and sleep
             else:
                 print("pod " + podName + " done")
                 done = done + 1

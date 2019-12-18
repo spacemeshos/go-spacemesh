@@ -222,19 +222,43 @@ func TestBlockListener_DataAvailabilityBadFlow(t *testing.T) {
 	atx1.Nipst.PostProof.Challenge = poetRef[:]
 
 	// Push a block with tx1 and and atx1 into bl1.
-
 	block := types.NewExistingBlock(1, []byte(rand.RandString(8)))
 	block.Signature = signer.Sign(block.Bytes())
 	block.TxIds = append(block.TxIds, tx1.Id())
 	block.AtxIds = append(block.AtxIds, atx1.Id())
+
+	// adding block to peer1
 	err = bl1.AddBlockWithTxs(block, []*types.Transaction{}, []*types.ActivationTx{atx1})
 	require.NoError(t, err)
 
 	_, err = bl1.GetBlock(block.Id())
 	require.NoError(t, err)
-	// Sync bl2.
 
 	_, _, err = bl2.DataAvailability(block)
+	require.Error(t, err)
+
+	// create a new ATX
+	atx2 := atx(signer.PublicKey().String())
+
+	poetProofBytes, err = types.InterfaceToBytes(&proofMessage.PoetProof)
+	require.NoError(t, err)
+	poetRef = sha256.Sum256(poetProofBytes)
+	// attach proof to ATX
+	atx2.Nipst.PostProof.Challenge = poetRef[:]
+	// create a block containing tx2 and atx2
+	tBlock := types.NewExistingBlock(1, []byte(rand.RandString(8)))
+	tBlock.Signature = signer.Sign(tBlock.Bytes())
+	tBlock.TxIds = append(tBlock.TxIds, tx2.Id())
+	tBlock.AtxIds = append(tBlock.AtxIds, atx2.Id())
+
+	// Push tx2 poet proof into bl1.
+	err = bl1.AddBlockWithTxs(tBlock, []*types.Transaction{tx2}, []*types.ActivationTx{})
+	require.NoError(t, err)
+
+	_, err = bl1.GetBlock(tBlock.Id())
+	require.NoError(t, err)
+
+	_, _, err = bl2.DataAvailability(tBlock)
 	require.Error(t, err)
 }
 
