@@ -2,12 +2,10 @@ package node
 
 import (
 	"errors"
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"net"
-	"strconv"
 	"testing"
 	"time"
 )
@@ -30,19 +28,19 @@ func GenerateTestNodeWithConfig(t *testing.T, config config.Config) (*LocalNode,
 		t.Error("failed to get a port to bind", err)
 	}
 
-	address := types.IPAddr{"0.0.0.0", strconv.Itoa(port), "tcp"}
+	addr := net.TCPAddr{net.ParseIP("0.0.0.0"), port, "ipv4"}
 
 	var localNode *LocalNode
 
 	if config.NodeID != "" {
-		localNode, err = NewLocalNode(config, address, false)
+		localNode, err = NewLocalNode(config, &addr, false)
 		if err != nil {
 			t.Error(ErrFailedToCreate)
 		}
 		return localNode, localNode.NodeInfo
 	}
 
-	localNode, err = NewNodeIdentity(config, address, false)
+	localNode, err = NewNodeIdentity(config, &addr, false)
 	if err != nil {
 		t.Error(ErrFailedToCreate, err)
 	}

@@ -3,12 +3,12 @@ package p2p
 import (
 	"context"
 	"errors"
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	"golang.org/x/sync/errgroup"
+	"net"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -23,8 +23,8 @@ func (its *IntegrationTestSuite) Test_SendingMessage() {
 
 	_ = node1.RegisterDirectProtocol(exProto)
 	ch2 := node2.RegisterDirectProtocol(exProto)
-	addr := types.IPAddr{node2.network.LocalAddr().String(), "80", "tcp"}
-	conn, err := node1.cPool.GetConnection(addr, node2.lNode.PublicKey())
+	addr := net.TCPAddr{net.ParseIP(node2.network.LocalAddr().String()), 80, "ipv4"}
+	conn, err := node1.cPool.GetConnection(&addr, node2.lNode.PublicKey())
 	require.NoError(its.T(), err)
 	err = node1.SendMessage(node2.LocalNode().NodeInfo.PublicKey(), exProto, []byte(exMsg))
 	require.NoError(its.T(), err)

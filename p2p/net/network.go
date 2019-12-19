@@ -234,7 +234,7 @@ func createSession(privkey p2pcrypto.PrivateKey, remotePubkey p2pcrypto.PublicKe
 }
 
 // Dial a remote server with provided time out
-// address:: types.IPAddr struct
+// address:: net.Addr
 // Returns established connection that local clients can send messages to or error if failed
 // to establish a connection, currently only secured connections are supported
 func (n *Net) Dial(address net.Addr, remotePubkey p2pcrypto.PublicKey) (Connection, error) {

@@ -3,7 +3,6 @@ package net
 import (
 	"encoding/hex"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/stretchr/testify/assert"
@@ -26,8 +25,8 @@ func Test_sumByteArray(t *testing.T) {
 func TestNet_EnqueueMessage(t *testing.T) {
 	testnodes := 100
 	cfg := config.DefaultConfig()
-	addr := types.IPAddr{"0.0.0.0", "0000", "tcp"}
-	ln, err := node.NewNodeIdentity(cfg, addr, false)
+	addr := net.TCPAddr{net.ParseIP("0.0.0.0"), 0000, "ipv4"}
+	ln, err := node.NewNodeIdentity(cfg, &addr, false)
 	assert.NoError(t, err)
 	n, err := NewNet(cfg, ln)
 	assert.NoError(t, err)
@@ -119,8 +118,8 @@ func Test_Net_LimitedConnections(t *testing.T) {
 	cfg := config.DefaultConfig()
 	cfg.SessionTimeout = 100 * time.Millisecond
 
-	addr := types.IPAddr{"0.0.0.0", "0000", "tcp"}
-	ln, err := node.NewNodeIdentity(cfg, addr, false)
+	addr := net.TCPAddr{net.ParseIP("0.0.0.0"), 0000, "ipv4"}
+	ln, err := node.NewNodeIdentity(cfg, &addr, false)
 	require.NoError(t, err)
 	n, err := NewNet(cfg, ln)
 	//n.SubscribeOnNewRemoteConnections(counter)

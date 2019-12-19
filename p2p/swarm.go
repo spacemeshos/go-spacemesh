@@ -20,7 +20,6 @@ import (
 	"strings"
 
 	inet "net"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -107,16 +106,16 @@ func (s *swarm) waitForGossip() error {
 func newSwarm(ctx context.Context, config config.Config, newNode bool, persist bool) (*swarm, error) {
 
 	port := config.TCPPort
-	address := types.IPAddr{"0.0.0.0", strconv.Itoa(port), "tcp"}
+	addr := inet.TCPAddr{inet.ParseIP("0.0.0.0"), port, "ipv4"}
 
 	var l *node.LocalNode
 	var err error
 	// Load an existing identity from file if exists.
 
 	if newNode {
-		l, err = node.NewNodeIdentity(config, address, persist)
+		l, err = node.NewNodeIdentity(config, &addr, persist)
 	} else {
-		l, err = node.NewLocalNode(config, address, persist)
+		l, err = node.NewLocalNode(config, &addr, persist)
 	}
 
 	if err != nil {
@@ -720,8 +719,8 @@ func (s *swarm) getMorePeers(numpeers int) int {
 				reportChan <- cnErr{nd, errors.New("connection to self")}
 				return
 			}
-			addr := types.IPAddr{nd.IP.String(), strconv.Itoa(int(nd.ProtocolPort)), "tcp"}
-			_, err := s.cPool.GetConnection(addr, nd.PublicKey())
+			addr := inet.TCPAddr{inet.ParseIP(nd.IP.String()), int(nd.ProtocolPort), "ipv4"}
+			_, err := s.cPool.GetConnection(&addr, nd.PublicKey())
 			reportChan <- cnErr{nd, err}
 		}(nds[i], res)
 	}
