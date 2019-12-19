@@ -5,16 +5,21 @@ from kubernetes import client
 from tests.deployment import create_deployment, delete_deployment
 from tests.conftest import DeploymentInfo
 from tests.test_bs import save_log_on_exit, setup_bootstrap
+from tests.test_bs import api_call, add_multi_clients, get_conf
 from tests.test_bs import current_index, CLIENT_DEPLOYMENT_FILE, get_conf
 from tests.misc import CoreV1ApiClient
 from tests.context import ES
 from tests.queries import query_message
 from elasticsearch_dsl import Search, Q
+from tests.pod import delete_pod
 
 # ==============================================================================
 #    TESTS
 # ==============================================================================
 
+
+PERSISTENT_DATA={"M": "persistent data found"}
+SYNC_DONE={"M": "sync done"}
 
 def new_client_in_namespace(name_space, setup_bootstrap, cspec, num):
     resp = create_deployment(CLIENT_DEPLOYMENT_FILE, name_space,
@@ -55,8 +60,8 @@ def search_pod_logs(namespace, pod_name, term):
     return False
 
 
-def check_pod(pod_name):
-    res = query_message(current_index, testconfig['namespace'], pod_name, {"M": "sync done"}, False)
+def check_pod_logs(podName,str):
+    res = query_message(current_index, testconfig['namespace'], podName, str, False)
     if res:
         return True
     return False
@@ -66,21 +71,31 @@ def test_sync_gradually_add_nodes(init_session, setup_bootstrap, save_log_on_exi
     bs_info = setup_bootstrap.pods[0]
 
     cspec = get_conf(bs_info, testconfig['client'])
+    cspec2 = get_conf(bs_info, testconfig['clientv2'])
 
-    inf = new_client_in_namespace(testconfig['namespace'], setup_bootstrap, cspec, 10)
+    inf = add_multi_clients(init_session, cspec, 10)
 
     del cspec.args['remote-data']
     cspec.args['data-folder'] = ""
 
     num_clients = 4
     clients = [None] * num_clients
-    clients[0] = new_client_in_namespace(testconfig['namespace'], setup_bootstrap, cspec, 1)
+    clients[0] = add_multi_clients(init_session, cspec2, 1,'clientv2')[0]
     time.sleep(10)
-    clients[1] = new_client_in_namespace(testconfig['namespace'], setup_bootstrap, cspec, 1)
+    clients[1] = add_multi_clients(init_session, cspec, 1,'client')[0]
     time.sleep(20)
-    clients[2] = new_client_in_namespace(testconfig['namespace'], setup_bootstrap, cspec, 1)
+    clients[2] = add_multi_clients(init_session, cspec, 1,'client')[0]
     time.sleep(20)
-    clients[3] = new_client_in_namespace(testconfig['namespace'], setup_bootstrap, cspec, 1)
+    clients[3] = add_multi_clients(init_session, cspec, 1,'client')[0]
+
+    print("take pod down ", clients[0])
+
+    delete_pod(testconfig['namespace'], clients[0])
+
+    print("sleep for 20 sec")
+    time.sleep(20)
+
+    print("waiting for pods to be done with sync")
 
     start = time.time()
     sleep = 30  # seconds
@@ -88,8 +103,8 @@ def test_sync_gradually_add_nodes(init_session, setup_bootstrap, save_log_on_exi
     for i in range(num_iter):
         done = 0
         for j in range(0, num_clients):
-            podName = clients[j].pods[0]['name']
-            if not check_pod(podName):  # not all done
+            podName = clients[j]
+            if not check_pod_logs(podName,SYNC_DONE):  # not all done
                 print("pod " + podName + " still not done. Going to sleep")
                 break  # stop check and sleep
             else:
@@ -107,7 +122,7 @@ def test_sync_gradually_add_nodes(init_session, setup_bootstrap, save_log_on_exi
 
     end = time.time()
 
-    delete_deployment(inf.deployment_name, testconfig['namespace'])
+    check_pod_logs(clients[0],PERSISTENT_DATA)
 
     print("it took " + str(end - start) + " to sync all nodes with " + cspec.args['expected-layers'] + "layers")
     print("done!!")
