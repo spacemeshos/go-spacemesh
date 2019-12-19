@@ -18,6 +18,9 @@ from tests.pod import delete_pod
 # ==============================================================================
 
 
+PERSISTENT_DATA={"M": "persistent data found"}
+SYNC_DONE={"M": "sync done"}
+
 def new_client_in_namespace(name_space, setup_bootstrap, cspec, num):
     resp = create_deployment(CLIENT_DEPLOYMENT_FILE, name_space,
                              deployment_id=setup_bootstrap.deployment_id,
@@ -70,20 +73,20 @@ def test_sync_gradually_add_nodes(init_session, setup_bootstrap, save_log_on_exi
     cspec = get_conf(bs_info, testconfig['client'])
     cspec2 = get_conf(bs_info, testconfig['clientv2'])
 
-    inf = add_multi_clients(setup_bootstrap.deployment_id, cspec, 10)
+    inf = add_multi_clients(init_session, cspec, 10)
 
     del cspec.args['remote-data']
     cspec.args['data-folder'] = ""
 
     num_clients = 4
     clients = [None] * num_clients
-    clients[0] = add_multi_clients(setup_bootstrap.deployment_id, cspec2, 1,'clientv2')[0]
+    clients[0] = add_multi_clients(init_session, cspec2, 1,'clientv2')[0]
     time.sleep(10)
-    clients[1] = add_multi_clients(setup_bootstrap.deployment_id, cspec, 1,'client')[0]
+    clients[1] = add_multi_clients(init_session, cspec, 1,'client')[0]
     time.sleep(20)
-    clients[2] = add_multi_clients(setup_bootstrap.deployment_id, cspec, 1,'client')[0]
+    clients[2] = add_multi_clients(init_session, cspec, 1,'client')[0]
     time.sleep(20)
-    clients[3] = add_multi_clients(setup_bootstrap.deployment_id, cspec, 1,'client')[0]
+    clients[3] = add_multi_clients(init_session, cspec, 1,'client')[0]
 
     print("take pod down ", clients[0])
 
@@ -101,7 +104,7 @@ def test_sync_gradually_add_nodes(init_session, setup_bootstrap, save_log_on_exi
         done = 0
         for j in range(0, num_clients):
             podName = clients[j]
-            if not check_pod(podName,{"M": "sync done"}):  # not all done
+            if not (podName,SYNC_DONE):  # not all done
                 print("pod " + podName + " still not done. Going to sleep")
                 break  # stop check and sleep
             else:
@@ -119,8 +122,7 @@ def test_sync_gradually_add_nodes(init_session, setup_bootstrap, save_log_on_exi
 
     end = time.time()
 
-    check_pod(clients[0],{"M": "persistent data found"})
+    check_pod(clients[0],PERSISTENT_DATA)
 
     print("it took " + str(end - start) + " to sync all nodes with " + cspec.args['expected-layers'] + "layers")
-    time.sleep(3*60)
     print("done!!")
