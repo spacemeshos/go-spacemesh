@@ -104,7 +104,7 @@ def test_sync_gradually_add_nodes(init_session, setup_bootstrap, save_log_on_exi
         done = 0
         for j in range(0, num_clients):
             podName = clients[j]
-            if not (podName,SYNC_DONE):  # not all done
+            if not check_pod_logs(podName,SYNC_DONE):  # not all done
                 print("pod " + podName + " still not done. Going to sleep")
                 break  # stop check and sleep
             else:
@@ -122,7 +122,7 @@ def test_sync_gradually_add_nodes(init_session, setup_bootstrap, save_log_on_exi
 
     end = time.time()
 
-    check_pod(clients[0],PERSISTENT_DATA)
+    check_pod_logs(clients[0],PERSISTENT_DATA)
 
     print("it took " + str(end - start) + " to sync all nodes with " + cspec.args['expected-layers'] + "layers")
     print("done!!")
