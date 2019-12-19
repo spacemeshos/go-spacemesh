@@ -95,15 +95,15 @@ def test_sync_gradually_add_nodes(init_session, setup_bootstrap, save_log_on_exi
     print("waiting for pods to be done with sync")
 
     start = time.time()
-    sleep = 30 # seconds
-    num_iter = 20 # total of 5 minutes
+    sleep = 30  # seconds
+    num_iter = 20  # total of 5 minutes
     for i in range(num_iter):
         done = 0
         for j in range(0, num_clients):
             podName = clients[j]
-            if not check_pod(podName,{"M": "sync done"}): # not all done
+            if not check_pod(podName,{"M": "sync done"}):  # not all done
                 print("pod " + podName + " still not done. Going to sleep")
-                break # stop check and sleep
+                break  # stop check and sleep
             else:
                 print("pod " + podName + " done")
                 done = done + 1

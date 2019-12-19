@@ -6,14 +6,113 @@ from elasticsearch_dsl import Search, Q
 
 from tests.context import ES
 
+
+TS_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
+
 dt = datetime.now()
 todaydate = dt.strftime("%Y.%m.%d")
 current_index = 'kubernetes_cluster-' + todaydate
 
 
+# for convenience
+def get_pod_name_and_namespace_queries(pod_name, namespace):
+    return Q("match_phrase", kubernetes__pod_name=pod_name) & \
+           Q("match_phrase", kubernetes__namespace_name=namespace)
+
+
+def set_time_frame_query(from_ts=None, to_ts=None):
+    if from_ts and to_ts:
+        res_q = Q({'bool': {'range': {'@timestamp': {'gte': from_ts, 'lte': to_ts}}}})
+    elif from_ts and not to_ts:
+        res_q = Q({'bool': {'range': {'@timestamp': {'gte': from_ts}}}})
+    elif to_ts:
+        res_q = Q({'bool': {'range': {'@timestamp': {'lte': to_ts}}}})
+    else:
+        print("could not set time frame, both time limits are None")
+        res_q = None
+
+    return res_q
+
+
+# ===================================== LOG LEVEL =====================================
+
+def find_error_log_msgs(namespace, pod_name):
+    fields = {"L": "ERROR"}
+    return query_message(current_index, namespace, pod_name, fields)
+
+
+# ================================== MESSAGE CONTENT ==================================
+
+def get_block_creation_msgs(namespace, pod_name, find_fails=False, from_ts=None, to_ts=None):
+    # I've created a block in layer %v. id: %v, num of transactions: %v, votes: %d,
+    # viewEdges: %d, atx %v, atxs:%v
+    created_block_msg = "I've created a block in layer"
+    return get_all_msg_containing(namespace, pod_name, created_block_msg, find_fails, from_ts, to_ts)
+
+
+def get_done_syncing_msgs(namespace, pod_name):
+    done_waiting_msg = "Done waiting for ticks and validation"
+    return get_all_msg_containing(namespace, pod_name, done_waiting_msg)
+
+
+def get_app_started_msgs(namespace, pod_name):
+    app_started_msg = "App started"
+    return get_all_msg_containing(namespace, pod_name, app_started_msg)
+
+
+def get_all_msg_containing(namespace, pod_name, msg_data, find_fails=False, from_ts=None, to_ts=None):
+    """
+    Queries for all logs with msg_data in their content {"M": msg_data}
+    also, it's optional to add timestamps as time frame, if only one is passed
+    then messages will hit from from_ts on or from to_ts back
+
+    :param namespace: string, session id
+    :param pod_name: string, filter for pod name entry
+    :param msg_data: string, message content
+    :param find_fails: boolean, whether to print unmatched pods (query_message)
+    :param from_ts: string, find results from this time stamp on (%Y-%m-%dT%H:%M:%S.%fZ)
+    :param to_ts: string, find results before this time stamp (%Y-%m-%dT%H:%M:%S.%fZ)
+
+    :return: list, all matching hits
+    """
+
+    queries = []
+    if from_ts or to_ts:
+        queries = [set_time_frame_query(from_ts, to_ts)]
+
+    msg = {"M": msg_data}
+    hit_lst = query_message(current_index, namespace, pod_name, msg, find_fails, queries=queries)
+    print(f"found {str(len(hit_lst))} messages containing (match_phrase): {msg_data}\n")
+    return hit_lst
+
+
+def get_blocks_msgs_of_pod(namespace, pod_name):
+    return get_blocks_and_layers(namespace, pod_name)
+
+
+def get_blocks_per_node_and_layer(deployment):
+    return get_blocks_and_layers(deployment, deployment)
+
+
+def get_blocks_and_layers(namespace, pod_name, find_fails=False):
+    blocks = get_block_creation_msgs(namespace, pod_name, find_fails)
+    nodes = sort_by_nodeid(blocks)
+    layers = sort_by_layer(blocks)
+
+    return nodes, layers
+
+
+def get_layers(namespace, find_fails=True):
+    layers = get_all_msg_containing(namespace, namespace, "release tick", find_fails)
+    ids = [int(x.layer_id) for x in layers]
+    return ids
+
+
+# ============================== END MESSAGE CONTENT ==================================
+
 def get_podlist(namespace, depname):
     api = ES().get_search_api()
-    fltr = Q("match_phrase", kubernetes__pod_name=depname) & Q("match_phrase", kubernetes__namespace_name=namespace)
+    fltr = get_pod_name_and_namespace_queries(depname, namespace)
     s = Search(index=current_index, using=api).query('bool').filter(fltr)
     hits = list(s.scan())
     podnames = set([hit.kubernetes.pod_name for hit in hits])
@@ -22,7 +121,7 @@ def get_podlist(namespace, depname):
 
 def get_pod_logs(namespace, pod_name):
     api = ES().get_search_api()
-    fltr = Q("match_phrase", kubernetes__pod_name=pod_name) & Q("match_phrase", kubernetes__namespace_name=namespace)
+    fltr = get_pod_name_and_namespace_queries(pod_name, namespace)
     s = Search(index=current_index, using=api).query('bool').filter(fltr).sort("time")
     res = s.execute()
     full = Search(index=current_index, using=api).query('bool').filter(fltr).sort("time").extra(size=res.hits.total)
@@ -58,44 +157,51 @@ def poll_query_message(indx, namespace, client_po_name, fields, findFails=False,
             break
 
         time.sleep(10)
-        time_passed+=10
+        time_passed += 10
         hits = query_message(indx, namespace, client_po_name, fields, findFails, startTime)
     return hits
 
 
-def query_message(indx, namespace, client_po_name, fields, findFails=False, startTime=None):
+def query_message(indx, namespace, client_po_name, fields, find_fails=False, start_time=None, queries=None):
     # TODO : break this to smaller functions ?
     es = ES().get_search_api()
-    fltr = Q("match_phrase", kubernetes__namespace_name=namespace) & \
-           Q("match_phrase", kubernetes__pod_name=client_po_name)
-    for f in fields:
-        fltr = fltr & Q("match_phrase", **{f: fields[f]})
+    fltr = get_pod_name_and_namespace_queries(client_po_name, namespace)
+    for key in fields:
+        fltr = fltr & Q("match_phrase", **{key: fields[key]})
+
+    # append extra queries
+    if queries:
+        for q in queries:
+            fltr = fltr & q
+
     s = Search(index=indx, using=es).query('bool', filter=[fltr])
     hits = list(s.scan())
 
-    print("====================================================================")
-    print("Report for `{0}` in deployment -  {1}  ".format(fields, client_po_name))
+    # TODO just started changing the prints {WIP}
+    separator = "===================================================================="
+    print(f"\n{separator}")
+    print(f"A query has been made for `{fields}`\ndeployment - "
+          f"{namespace}\nall clients containing {client_po_name} in pod_name")
     print("Number of hits: ", len(hits))
-    print("====================================================================")
+    print(f"{separator}\n")
     print("Benchmark results:")
     if len(hits) > 0:
         ts = [hit["T"] for hit in hits]
 
-        first = startTime if startTime is not None else datetime.strptime(min(ts).replace("T", " ", ).replace("Z", ""),
-                                                                          "%Y-%m-%d %H:%M:%S.%f")
+        first = start_time if start_time is not None else datetime.strptime(
+            min(ts).replace("T", " ", ).replace("Z", ""), "%Y-%m-%d %H:%M:%S.%f")
         last = datetime.strptime(max(ts).replace("T", " ", ).replace("Z", ""), "%Y-%m-%d %H:%M:%S.%f")
 
         delta = last - first
         print("First: {0}, Last: {1}, Delta: {2}".format(first, last, delta))
         # TODO: compare to previous runs.
-        print("====================================================================")
+        print(separator)
     else:
         print("no hits")
-    if findFails:
+    if find_fails:
         print("Looking for pods that didn't hit:")
         podnames = set([hit.kubernetes.pod_name for hit in hits])
-        newfltr = Q("match_phrase", kubernetes__namespace_name=namespace) & \
-                  Q("match_phrase", kubernetes__pod_name=client_po_name)
+        newfltr = get_pod_name_and_namespace_queries(client_po_name, namespace)
 
         for p in podnames:
             newfltr = newfltr & ~Q("match_phrase", kubernetes__pod_name=p)
@@ -106,7 +212,7 @@ def query_message(indx, namespace, client_po_name, fields, findFails=False, star
             print("None. yay!")
         else:
             print(unsecpods)
-        print("====================================================================")
+        print(separator)
 
     s = list(hits)
     return s
@@ -115,6 +221,7 @@ def query_message(indx, namespace, client_po_name, fields, findFails=False, star
 atx = collections.namedtuple('atx', ['atx_id', 'layer_id', 'published_in_epoch'])
 
 
+# TODO this can be a util function
 def parseAtx(log_messages):
     node2blocks = {}
     for x in log_messages:
@@ -127,6 +234,9 @@ def parseAtx(log_messages):
     return node2blocks
 
 
+# sets log messages into a dictionary where keys=node_id and
+# value is a dictionary of blocks and layers
+# TODO this can be a util function
 def sort_by_nodeid(log_messages):
     node2blocks = {}
     for x in log_messages:
@@ -145,6 +255,9 @@ def sort_by_nodeid(log_messages):
     return node2blocks
 
 
+# sets log messages into a dictionary where keys=layer_id and
+# value is a dictionary of blocks and layers
+# TODO this can be a util function
 def sort_by_layer(log_messages):
     blocks_per_layer = {}
     for x in log_messages:
@@ -157,6 +270,7 @@ def sort_by_layer(log_messages):
     return blocks_per_layer
 
 
+# TODO this can be a util function
 def print_node_stats(nodes):
     for node in nodes:
         print("node " + node + " blocks created: " + str(len(nodes[node]["blocks"])))
@@ -164,29 +278,13 @@ def print_node_stats(nodes):
             print("blocks created in layer " + str(layer) + " : " + str(len(nodes[node]["layers"][layer])))
 
 
+# TODO this can be a util function
 def print_layer_stat(layers):
     for l in layers:
         print("blocks created in layer " + str(l) + " : " + str(len(layers[l])))
 
 
-def get_blocks_per_node_and_layer(deployment):
-    # I've created a block in layer %v. id: %v, num of transactions: %v, votes: %d, viewEdges: %d, atx %v, atxs:%v
-    block_fields = {"M": "I've created a block in layer"}
-    blocks = query_message(current_index, deployment, deployment, block_fields, True)
-    print("found " + str(len(blocks)) + " blocks")
-    nodes = sort_by_nodeid(blocks)
-    layers = sort_by_layer(blocks)
-
-    return nodes, layers
-
-
-def get_layers(deployment):
-    block_fields = {"M": "release tick"}
-    layers = query_message(current_index, deployment, deployment, block_fields, True)
-    ids = [int(x.layer_id) for x in layers]
-    return ids
-
-
+# TODO this can be a util function
 def get_latest_layer(deployment):
     layers = get_layers(deployment)
     layers.sort(reverse=True)
@@ -205,7 +303,8 @@ def wait_for_latest_layer(deployment, min_layer_id, layers_per_epoch):
 
 
 def get_atx_per_node(deployment):
-    # based on log: atx published! id: %v, prevATXID: %v, posATXID: %v, layer: %v, published in epoch: %v, active set: %v miner: %v view %v
+    # based on log: atx published! id: %v, prevATXID: %v, posATXID: %v, layer: %v,
+    # published in epoch: %v, active set: %v miner: %v view %v
     block_fields = {"M": "atx published"}
     atx_logs = query_message(current_index, deployment, deployment, block_fields, True)
     print("found " + str(len(atx_logs)) + " atxs")
@@ -232,8 +331,7 @@ def find_dups(indx, namespace, client_po_name, fields, max=1):
     """
 
     es = ES().get_search_api()
-    fltr = Q("match_phrase", kubernetes__namespace_name=namespace) & \
-           Q("match_phrase", kubernetes__pod_name=client_po_name)
+    fltr = get_pod_name_and_namespace_queries(client_po_name, namespace)
     for f in fields:
         fltr = fltr & Q("match_phrase", **{f: fields[f]})
     s = Search(index=indx, using=es).query('bool', filter=[fltr])
@@ -258,8 +356,7 @@ def find_missing(indx, namespace, client_po_name, fields, min=1):
     # {'M':'new_gossip_message', 'protocol': 'api_test_gossip'}, 10)
 
     es = ES().get_search_api()
-    fltr = Q("match_phrase", kubernetes__namespace_name=namespace) & \
-           Q("match_phrase", kubernetes__pod_name=client_po_name)
+    fltr = get_pod_name_and_namespace_queries(client_po_name, namespace)
     for f in fields:
         fltr = fltr & Q("match_phrase", **{f: fields[f]})
     s = Search(index=indx, using=es).query('bool', filter=[fltr])
@@ -279,6 +376,10 @@ def find_missing(indx, namespace, client_po_name, fields, min=1):
     print("Total hits: {0}".format(len(hits)))
     print("Missing count {0}".format(len(miss)))
     print(miss)
+
+# =====================================================================================
+# Hare queries
+# =====================================================================================
 
 
 def query_hare_output_set(indx, ns, layer):

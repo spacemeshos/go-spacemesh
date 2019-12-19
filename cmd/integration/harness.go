@@ -78,26 +78,30 @@ func NewHarness(cfg *ServerConfig, args []string) (*Harness, error) {
 }
 
 func main() {
-	dummyChan := make(chan string)
+	// setup logger
 	log.JSONLog(true)
+	log.InitSpacemeshLoggingSystem("/tmp/", "spacemesh.log")
+
+	dummyChan := make(chan string)
 	// os.Args[0] contains the current process path
 	h, err := NewHarnessDefaultServerConfig(os.Args[1:])
 	if err != nil {
-		log.With().Error("An error has occurred while generating a new harness: ", log.Err(err))
+		log.With().Error("harness: an error has occurred while generating a new harness: ", log.Err(err))
 	}
 	// listen on error channel, quit when process stops
 	go func() {
 		for {
 			select {
 			case errMsg := <-h.server.errChan:
-				log.With().Error("harness received an err from subprocess: ", log.Err(errMsg))
+				log.With().Error("harness: received an err from subprocess: ", log.Err(errMsg))
+				log.Error("harness: the err is: %s", h.server.buff.String())
 			case <-h.server.quit:
-				log.With().Info("harness got a quit signal from subprocess")
+				log.With().Info("harness: got a quit signal from subprocess")
 				break
 			}
 		}
 	}()
 
-	log.With().Info("harness: listening on a blocking dummy channel")
+	log.With().Info("integration: harness is listening on a blocking dummy channel")
 	<-dummyChan
 }
