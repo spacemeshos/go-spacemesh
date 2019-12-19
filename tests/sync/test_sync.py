@@ -60,7 +60,7 @@ def search_pod_logs(namespace, pod_name, term):
     return False
 
 
-def check_pod(podName,str):
+def check_pod_logs(podName,str):
     res = query_message(current_index, testconfig['namespace'], podName, str, False)
     if res:
         return True
