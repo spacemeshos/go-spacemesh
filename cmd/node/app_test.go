@@ -612,7 +612,7 @@ func TestShutdown(t *testing.T) {
 	poetClient.Teardown(true)
 	smApp.stopServices()
 
-	time.Sleep(3 * time.Second)
+	time.Sleep(5 * time.Second)
 	g_count2 := runtime.NumGoroutine()
 
 	if g_count != g_count2 {
