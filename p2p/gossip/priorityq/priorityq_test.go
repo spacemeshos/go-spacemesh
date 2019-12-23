@@ -1,4 +1,4 @@
-package gossip
+package priorityq
 
 import (
 	"github.com/stretchr/testify/require"
@@ -8,42 +8,29 @@ import (
 )
 
 var (
-	name1 = "name1"
-	name2 = "name2"
-	name3 = "name3"
-
 	defLen = 1000
 )
 
-func TestPriorityQ_Set(t *testing.T) {
+func TestNewPriorityQ(t *testing.T) {
 	r := require.New(t)
-	pq := NewPriorityQ(10)
-	r.Equal(10, len(pq.queues))
-
-	// add prio 0
-	r.NoError(pq.Set(name1, 0, 10))
-	r.Equal(1, len(pq.prios))
-	r.NotNil(pq.queues[0])
-
-	// add again for same name
-	r.Equal(ErrAlreadySet, pq.Set(name1, 2, 10))
-
-	// add prio 0 again for different name
-	r.NoError(pq.Set(name2, 0, 10))
-	r.Equal(2, len(pq.prios))
+	pq := NewPriorityQ(defLen)
+	r.Equal(defLen, cap(pq.queues[High]))
+	r.Equal(defLen, cap(pq.queues[Mid]))
+	r.Equal(defLen, cap(pq.queues[Low]))
+	r.Equal(prioritiesCount, len(pq.queues))
+	r.Equal(prioritiesCount, cap(pq.queues))
+	r.Equal(defLen*prioritiesCount, cap(pq.waitCh))
 }
 
 func TestPriorityQ_Write(t *testing.T) {
 	r := require.New(t)
-	pq := NewPriorityQ(10)
-	r.NoError(pq.Set(name1, 0, defLen))
-	r.NoError(pq.Set(name2, 1, defLen))
+	pq := NewPriorityQ(defLen)
 	wg := sync.WaitGroup{}
 
 	wg.Add(1)
 	go func() {
 		for i := 0; i < defLen; i++ {
-			r.NoError(pq.Write(name1, 0))
+			r.NoError(pq.Write(High, 0))
 		}
 		wg.Done()
 	}()
@@ -51,28 +38,31 @@ func TestPriorityQ_Write(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		for i := 0; i < defLen; i++ {
-			r.NoError(pq.Write(name2, 1))
+			r.NoError(pq.Write(Low, 1))
 		}
 		wg.Done()
 	}()
 
 	wg.Wait()
-	r.Equal(defLen, len(pq.queues[0]))
-	r.Equal(defLen, len(pq.queues[1]))
+	r.Equal(defLen, len(pq.queues[High]))
+	r.Equal(defLen, len(pq.queues[Low]))
+}
+
+func TestPriorityQ_WriteError(t *testing.T) {
+	r := require.New(t)
+	pq := NewPriorityQ(defLen)
+	r.Equal(ErrUnknownPriority, pq.Write(3, 0))
 }
 
 func TestPriorityQ_Read(t *testing.T) {
 	r := require.New(t)
-	pq := NewPriorityQ(10)
-	r.NoError(pq.Set(name1, 0, defLen))
-	r.NoError(pq.Set(name2, 1, defLen))
-	r.NoError(pq.Set(name3, 2, defLen))
+	pq := NewPriorityQ(defLen)
 	wg := sync.WaitGroup{}
 
 	wg.Add(1)
 	go func() {
 		for i := 0; i < defLen; i++ {
-			r.NoError(pq.Write(name1, int(0)))
+			r.NoError(pq.Write(High, 0))
 		}
 		wg.Done()
 	}()
@@ -80,7 +70,7 @@ func TestPriorityQ_Read(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		for i := 0; i < defLen; i++ {
-			r.NoError(pq.Write(name2, int(1)))
+			r.NoError(pq.Write(Mid, 1))
 		}
 		wg.Done()
 	}()
@@ -88,7 +78,7 @@ func TestPriorityQ_Read(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		for i := 0; i < defLen; i++ {
-			r.NoError(pq.Write(name3, int(2)))
+			r.NoError(pq.Write(Low, 2))
 		}
 		wg.Done()
 	}()
