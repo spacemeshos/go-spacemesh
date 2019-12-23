@@ -63,6 +63,10 @@ jobs:
     script:
       - make dockertest-late-nodes
     if: (branch = develop OR branch = staging OR branch = trying) AND type != pull_request
+  - name: "Run genesis votes test"
+    script:
+      - make dockertest-genesis-voting
+    if: (branch = develop OR branch = staging OR branch = trying) AND type != pull_request
 
 cache:
   directories:
