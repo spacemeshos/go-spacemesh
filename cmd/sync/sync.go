@@ -59,7 +59,7 @@ func init() {
 	Cmd.PersistentFlags().IntVar(&timeout, "timeout", 200, "request timeout")
 
 	//request timeout
-	Cmd.PersistentFlags().StringVarP(&version, "verison", "v", "FullBlocks/", "data version")
+	Cmd.PersistentFlags().StringVarP(&version, "version", "v", "FullBlocks/", "data version")
 
 	cmdp.AddCommands(Cmd)
 }
@@ -266,7 +266,7 @@ func GetData(path, prefix string, lg log.Log) error {
 		count++
 	}
 
-	lg.Info("downloaded: %v files ", count)
+	lg.Info("Done downloading: %v files", count)
 	return nil
 }
 
