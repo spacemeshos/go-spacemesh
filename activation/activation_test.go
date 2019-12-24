@@ -341,9 +341,16 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 	// create and attempt to publish ATX
 	faultyNet.retErr = false
 	b = NewBuilder(nodeId, coinbase, &MockSigning{}, activationDb, faultyNet, meshProvider, layersPerEpoch, nipstBuilder, postProver, nil, isSynced(true), NewMockDB(), atxPool, lg.WithName("atxBuilder"))
+	b.broadcastTimeout = 5 * time.Millisecond
 	published, err = publishAtx(b, postGenesisEpochLayer+1, postGenesisEpoch, layersPerEpoch)
 	r.EqualError(err, "broadcast timeout")
 	r.False(published)
+
+	// if the network works - the ATX should be published in the next layer
+	b.net = net
+	published, err = publishAtx(b, postGenesisEpochLayer+layersPerEpoch+2, postGenesisEpoch+1, layersPerEpoch)
+	r.NoError(err)
+	r.True(published)
 }
 
 func TestBuilder_PublishActivationTx_NoPrevATX(t *testing.T) {

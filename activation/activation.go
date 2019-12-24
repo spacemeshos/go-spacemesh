@@ -80,53 +80,55 @@ type AtxPool interface {
 
 type Builder struct {
 	Signer
-	nodeId          types.NodeId
-	coinbaseAccount types.Address
-	db              ATXDBProvider
-	net             Broadcaster
-	mesh            MeshProvider
-	layersPerEpoch  uint16
-	tickProvider    PoETNumberOfTickProvider
-	nipstBuilder    NipstBuilder
-	postProver      PostProverClient
-	challenge       *types.NIPSTChallenge
-	nipst           *types.NIPST
-	commitment      *types.PostProof
-	posLayerID      types.LayerID
-	prevATX         *types.ActivationTxHeader
-	timer           chan types.LayerID
-	stop            chan struct{}
-	finished        chan struct{}
-	working         bool
-	started         uint32
-	store           BytesStore
-	isSynced        func() bool
-	accountLock     sync.RWMutex
-	initStatus      int32
-	log             log.Log
-	atxPool         AtxPool
+	nodeId           types.NodeId
+	coinbaseAccount  types.Address
+	db               ATXDBProvider
+	net              Broadcaster
+	mesh             MeshProvider
+	layersPerEpoch   uint16
+	tickProvider     PoETNumberOfTickProvider
+	nipstBuilder     NipstBuilder
+	postProver       PostProverClient
+	challenge        *types.NIPSTChallenge
+	nipst            *types.NIPST
+	commitment       *types.PostProof
+	posLayerID       types.LayerID
+	prevATX          *types.ActivationTxHeader
+	timer            chan types.LayerID
+	stop             chan struct{}
+	finished         chan struct{}
+	working          bool
+	started          uint32
+	store            BytesStore
+	isSynced         func() bool
+	accountLock      sync.RWMutex
+	initStatus       int32
+	atxPool          AtxPool
+	broadcastTimeout time.Duration
+	log              log.Log
 }
 
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
 func NewBuilder(nodeId types.NodeId, coinbaseAccount types.Address, signer Signer, db ATXDBProvider, net Broadcaster, mesh MeshProvider, layersPerEpoch uint16, nipstBuilder NipstBuilder, postProver PostProverClient, layerClock chan types.LayerID, isSyncedFunc func() bool, store BytesStore, pool AtxPool, log log.Log) *Builder {
 	return &Builder{
-		Signer:          signer,
-		nodeId:          nodeId,
-		coinbaseAccount: coinbaseAccount,
-		db:              db,
-		net:             net,
-		mesh:            mesh,
-		layersPerEpoch:  layersPerEpoch,
-		nipstBuilder:    nipstBuilder,
-		postProver:      postProver,
-		timer:           layerClock,
-		stop:            make(chan struct{}),
-		finished:        make(chan struct{}),
-		isSynced:        isSyncedFunc,
-		store:           store,
-		initStatus:      InitIdle,
-		atxPool:         pool,
-		log:             log,
+		Signer:           signer,
+		nodeId:           nodeId,
+		coinbaseAccount:  coinbaseAccount,
+		db:               db,
+		net:              net,
+		mesh:             mesh,
+		layersPerEpoch:   layersPerEpoch,
+		nipstBuilder:     nipstBuilder,
+		postProver:       postProver,
+		timer:            layerClock,
+		stop:             make(chan struct{}),
+		finished:         make(chan struct{}),
+		isSynced:         isSyncedFunc,
+		store:            store,
+		initStatus:       InitIdle,
+		atxPool:          pool,
+		broadcastTimeout: 10 * time.Second,
+		log:              log,
 	}
 }
 
@@ -501,7 +503,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 	select {
 	case <-atxReceived:
 		b.log.Event().Info("atx published!", fields...)
-	case <-time.After(5 * time.Second):
+	case <-time.After(b.broadcastTimeout):
 		b.log.With().Error("broadcast timeout when publishing ATX", fields...)
 		return fmt.Errorf("broadcast timeout")
 	}
