@@ -9,6 +9,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/require"
 	"testing"
@@ -108,7 +109,7 @@ type p2pManipulator struct {
 	err          error
 }
 
-func (m *p2pManipulator) RegisterGossipProtocol(protocol string, prio int) chan service.GossipMessage {
+func (m *p2pManipulator) RegisterGossipProtocol(protocol string, prio priorityq.Priority) chan service.GossipMessage {
 	ch := m.nd.RegisterGossipProtocol(protocol, prio)
 	wch := make(chan service.GossipMessage)
 

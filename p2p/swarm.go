@@ -15,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	timeSyncConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"strings"
@@ -84,7 +85,7 @@ type swarm struct {
 	peerLock   sync.RWMutex
 	newPeerSub []chan p2pcrypto.PublicKey
 	delPeerSub []chan p2pcrypto.PublicKey
-	pq         *gossip.PriorityQ
+	pq         *priorityq.PriorityQ
 }
 
 func (s *swarm) waitForBoot() error {
@@ -179,8 +180,7 @@ func newSwarm(ctx context.Context, config config.Config, newNode bool, persist b
 
 	s.cPool = cpool
 
-	s.pq = gossip.NewPriorityQ(10) // TODO: set according to proto
-	s.gossip = gossip.NewProtocol(config.SwarmConfig, s, s.LocalNode().PublicKey(), s.pq, s.lNode.Log)
+	s.gossip = gossip.NewProtocol(config.SwarmConfig, s.config.BufferSize, s, s.LocalNode().PublicKey(), s.lNode.Log)
 
 	s.lNode.Debug("Created swarm for local node %s, %s", l.String())
 	return s, nil
@@ -372,12 +372,10 @@ func (s *swarm) RegisterDirectProtocol(protocol string) chan service.DirectMessa
 }
 
 // RegisterGossipProtocol registers an handler for gossip based `protocol`
-func (s *swarm) RegisterGossipProtocol(protocol string, prio int) chan service.GossipMessage {
+func (s *swarm) RegisterGossipProtocol(protocol string, prio priorityq.Priority) chan service.GossipMessage {
 	mchan := make(chan service.GossipMessage, s.config.BufferSize)
 	s.protocolHandlerMutex.Lock()
-	if err := s.pq.Set(protocol, prio, cap(mchan)); err != nil {
-		s.lNode.With().Error("fatal: could not register protocol", log.Err(err), log.String("protocol_name", protocol))
-	}
+	s.gossip.SetPriority(protocol, prio)
 	s.gossipProtocolHandlers[protocol] = mchan
 	s.protocolHandlerMutex.Unlock()
 	return mchan

@@ -3,11 +3,12 @@ package api
 import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"time"
 )
 
 type Service interface {
-	RegisterGossipProtocol(string, int) chan service.GossipMessage
+	RegisterGossipProtocol(string, priorityq.Priority) chan service.GossipMessage
 }
 
 type StateAPI interface {

@@ -9,6 +9,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"sync"
 )
 
@@ -26,8 +27,7 @@ type baseNetwork interface {
 }
 
 type prioQ interface {
-	Set(name string, prio int, bufferSize int) error
-	Write(name string, m interface{}) error
+	Write(prio priorityq.Priority, m interface{}) error
 	Read() (interface{}, error)
 	Close()
 }
@@ -49,10 +49,11 @@ type Protocol struct {
 
 	propagateQ chan service.MessageValidation
 	pq         prioQ
+	priorities map[string]priorityq.Priority
 }
 
 // NewProtocol creates a new gossip protocol instance. Call Start to start reading peers
-func NewProtocol(config config.SwarmConfig, base baseNetwork, localNodePubkey p2pcrypto.PublicKey, pq prioQ, log2 log.Log) *Protocol {
+func NewProtocol(config config.SwarmConfig, bufferSize int, base baseNetwork, localNodePubkey p2pcrypto.PublicKey, log2 log.Log) *Protocol {
 	// intentionally not subscribing to peers events so that the channels won't block in case executing Start delays
 	return &Protocol{
 		Log:             log2,
@@ -63,7 +64,7 @@ func NewProtocol(config config.SwarmConfig, base baseNetwork, localNodePubkey p2
 		shutdown:        make(chan struct{}),
 		oldMessageQ:     types.NewDoubleCache(oldMessageCacheSize), // todo : remember to drain this
 		propagateQ:      make(chan service.MessageValidation, propagateHandleBufferSize),
-		pq:              pq,
+		pq:              priorityq.NewPriorityQ(bufferSize),
 	}
 }
 
@@ -190,13 +191,23 @@ func (prot *Protocol) handlePQ() {
 	}
 }
 
+func (prot *Protocol) getPriority(protoName string) priorityq.Priority {
+	v, exist := prot.priorities[protoName]
+	if !exist {
+		prot.With().Warning("note: no priority found for protocol", log.String("protoName", protoName))
+		return priorityq.Low
+	}
+
+	return v
+}
+
 func (prot *Protocol) propagationEventLoop() {
 	go prot.handlePQ()
 
 	for {
 		select {
 		case msgV := <-prot.propagateQ:
-			if err := prot.pq.Write(msgV.Protocol(), msgV); err != nil {
+			if err := prot.pq.Write(prot.getPriority(msgV.Protocol()), msgV); err != nil {
 				prot.With().Error("fatal: could not write to priority queue", log.Err(err), log.String("protocol", msgV.Protocol()))
 			}
 
@@ -244,4 +255,8 @@ func (prot *Protocol) hasPeer(key p2pcrypto.PublicKey) bool {
 	_, ok := prot.peers[key]
 	prot.peersMutex.RUnlock()
 	return ok
+}
+
+func (prot *Protocol) SetPriority(protoName string, priority priorityq.Priority) {
+	prot.priorities[protoName] = priority
 }

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"sync"
 )
 
@@ -87,7 +88,7 @@ func (b *Broker) Start() error {
 
 	b.isStarted = true
 
-	b.inbox = b.network.RegisterGossipProtocol(protoName, 1)
+	b.inbox = b.network.RegisterGossipProtocol(protoName, priorityq.Mid)
 	go b.eventLoop()
 
 	return nil

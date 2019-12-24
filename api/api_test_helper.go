@@ -3,13 +3,14 @@ package api
 import (
 	"context"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/priorityq"
 )
 
 const APIGossipProtocol = "api_test_gossip"
 
 // ApproveAPIGossipMessages registers the gossip api test protocol and approves every message as valid
 func ApproveAPIGossipMessages(ctx context.Context, s Service) {
-	gm := s.RegisterGossipProtocol(APIGossipProtocol, 3)
+	gm := s.RegisterGossipProtocol(APIGossipProtocol, priorityq.Low)
 	go func() {
 		for {
 			select {
