@@ -78,35 +78,35 @@ func nipstBuildStateKey() []byte {
 	return []byte("nipstate")
 }
 
-func (s *NIPSTBuilder) load(challenge types.Hash32) {
-	bts, err := s.store.Get(nipstBuildStateKey())
+func (nb *NIPSTBuilder) load(challenge types.Hash32) {
+	bts, err := nb.store.Get(nipstBuildStateKey())
 	if err != nil {
-		s.log.Warning("cannot load Nipst state %v", err)
+		nb.log.Warning("cannot load Nipst state %v", err)
 		return
 	}
 	if len(bts) > 0 {
 		var state builderState
 		err = types.BytesToInterface(bts, &state)
 		if err != nil {
-			s.log.Error("cannot load Nipst state %v", err)
+			nb.log.Error("cannot load Nipst state %v", err)
 		}
 		if state.Challenge == challenge {
-			s.state = &state
+			nb.state = &state
 		} else {
-			s.state = &builderState{Challenge: challenge, Nipst: &types.NIPST{}}
+			nb.state = &builderState{Challenge: challenge, Nipst: &types.NIPST{}}
 		}
 	}
 }
 
-func (s *NIPSTBuilder) persist() {
-	bts, err := types.InterfaceToBytes(&s.state)
+func (nb *NIPSTBuilder) persist() {
+	bts, err := types.InterfaceToBytes(&nb.state)
 	if err != nil {
-		s.log.Warning("cannot store Nipst state %v", err)
+		nb.log.Warning("cannot store Nipst state %v", err)
 		return
 	}
-	err = s.store.Put(nipstBuildStateKey(), bts)
+	err = nb.store.Put(nipstBuildStateKey(), bts)
 	if err != nil {
-		s.log.Warning("cannot store Nipst state %v", err)
+		nb.log.Warning("cannot store Nipst state %v", err)
 	}
 }
 

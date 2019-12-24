@@ -530,7 +530,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	if coinBase.Big().Uint64() == 0 && app.Config.StartMining {
 		app.log.Panic("invalid Coinbase account")
 	}
-	atxBuilder := activation.NewBuilder(nodeID, coinBase, sgn, atxdb, swarm, msh, layersPerEpoch, nipstBuilder, postClient, clock.Subscribe(), syncer.ListenToGossip, store, app.addLogger("atxBuilder", lg))
+	atxBuilder := activation.NewBuilder(nodeID, coinBase, sgn, atxdb, swarm, msh, layersPerEpoch, nipstBuilder, postClient, clock.Subscribe(), syncer.ListenToGossip, store, atxpool, app.addLogger("atxBuilder", lg))
 
 	app.blockProducer = blockProducer
 	app.blockListener = blockListener

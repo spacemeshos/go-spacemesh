@@ -10,6 +10,7 @@ import (
 	"github.com/spacemeshos/post/shared"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 const AtxProtocol = "AtxGossip"
@@ -73,6 +74,10 @@ const (
 	InitDone
 )
 
+type AtxPool interface {
+	SetListener(listener func(header *types.ActivationTxHeader))
+}
+
 type Builder struct {
 	Signer
 	nodeId          types.NodeId
@@ -99,10 +104,11 @@ type Builder struct {
 	accountLock     sync.RWMutex
 	initStatus      int32
 	log             log.Log
+	atxPool         AtxPool
 }
 
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
-func NewBuilder(nodeId types.NodeId, coinbaseAccount types.Address, signer Signer, db ATXDBProvider, net Broadcaster, mesh MeshProvider, layersPerEpoch uint16, nipstBuilder NipstBuilder, postProver PostProverClient, layerClock chan types.LayerID, isSyncedFunc func() bool, store BytesStore, log log.Log) *Builder {
+func NewBuilder(nodeId types.NodeId, coinbaseAccount types.Address, signer Signer, db ATXDBProvider, net Broadcaster, mesh MeshProvider, layersPerEpoch uint16, nipstBuilder NipstBuilder, postProver PostProverClient, layerClock chan types.LayerID, isSyncedFunc func() bool, store BytesStore, pool AtxPool, log log.Log) *Builder {
 	return &Builder{
 		Signer:          signer,
 		nodeId:          nodeId,
@@ -119,6 +125,7 @@ func NewBuilder(nodeId types.NodeId, coinbaseAccount types.Address, signer Signe
 		isSynced:        isSyncedFunc,
 		store:           store,
 		initStatus:      InitIdle,
+		atxPool:         pool,
 		log:             log,
 	}
 }
@@ -176,9 +183,11 @@ func (b *Builder) loop() {
 				err := b.PublishActivationTx(epoch)
 				if err != nil {
 					if err == tooSoonErr {
-						b.log.Warning("cannot create atx in epoch %v: %v", epoch, err)
+						b.log.With().Warning("failed to publish ATX",
+							log.LayerId(layer.Uint64()), log.EpochId(uint64(epoch)), log.Err(err))
 					} else {
-						b.log.Error("cannot create atx in epoch %v: %v", epoch, err)
+						b.log.With().Error("failed to publish ATX",
+							log.LayerId(layer.Uint64()), log.EpochId(uint64(epoch)), log.Err(err))
 					}
 				}
 				b.finished <- struct{}{}
@@ -467,14 +476,34 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 	b.log.With().Info("active ids seen for epoch", log.Uint64("pos_atx_epoch", uint64(posEpoch)),
 		log.Uint32("view_cnt", activeSetSize))
 
-	signedAtx, err := b.SignAtx(atx)
-	if err != nil {
+	atxReceived := make(chan struct{})
+	b.atxPool.SetListener(func(atxHeader *types.ActivationTxHeader) {
+		if atxHeader.Id() == atx.Id() {
+			close(atxReceived)
+			b.atxPool.SetListener(nil)
+		}
+	})
+
+	if err := b.signAndBroadcast(atx); err != nil {
 		return err
 	}
 
-	buf, err := types.InterfaceToBytes(signedAtx)
-	if err != nil {
-		return err
+	fields := []log.Field{
+		log.AtxId(atx.ShortString()),
+		log.String("prev_atx_id", atx.PrevATXId.ShortString()),
+		log.String("post_atx_id", atx.PositioningAtx.ShortString()),
+		log.LayerId(uint64(atx.PubLayerIdx)),
+		log.EpochId(uint64(atx.PubLayerIdx.GetEpoch(b.layersPerEpoch))),
+		log.Uint32("active_set", atx.ActiveSetSize),
+		log.String("miner", b.nodeId.Key[:5]),
+		log.Int("view", len(atx.View)),
+	}
+	select {
+	case <-atxReceived:
+		b.log.Event().Info("atx published!", fields...)
+	case <-time.After(5 * time.Second):
+		b.log.With().Error("broadcast timeout when publishing ATX", fields...)
+		return fmt.Errorf("broadcast timeout")
 	}
 	b.prevATX = atx.ActivationTxHeader
 
@@ -483,20 +512,21 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 	b.challenge = nil
 	b.posLayerID = 0
 
-	err = b.net.Broadcast(AtxProtocol, buf)
-	if err != nil {
-		return err
+	if err := b.discardChallenge(); err != nil {
+		log.Error("failed to discard Nipst challenge: %v", err)
 	}
 
-	err = b.discardChallenge()
-	if err != nil {
-		log.Error("cannot discard Nipst challenge %s", err)
+	return nil
+}
+
+func (b *Builder) signAndBroadcast(atx *types.ActivationTx) error {
+	if signedAtx, err := b.SignAtx(atx); err != nil {
+		return fmt.Errorf("failed to sign ATX: %v", err)
+	} else if buf, err := types.InterfaceToBytes(signedAtx); err != nil {
+		return fmt.Errorf("failed to serialize ATX: %v", err)
+	} else if err := b.net.Broadcast(AtxProtocol, buf); err != nil {
+		return fmt.Errorf("failed to broadcast ATX: %v", err)
 	}
-
-	b.log.Event().Info("atx published!", log.AtxId(atx.ShortString()), log.String("prev_atx_id", atx.PrevATXId.ShortString()),
-		log.String("post_atx_id", atx.PositioningAtx.ShortString()), log.LayerId(uint64(atx.PubLayerIdx)), log.EpochId(uint64(atx.PubLayerIdx.GetEpoch(b.layersPerEpoch))),
-		log.Uint32("active_set", atx.ActiveSetSize), log.String("miner", b.nodeId.Key[:5]), log.Int("view", len(atx.View)))
-
 	return nil
 }
 
