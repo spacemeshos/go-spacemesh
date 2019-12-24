@@ -508,17 +508,17 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 		return fmt.Errorf("broadcast timeout")
 	}
 	b.prevATX = atx.ActivationTxHeader
+	b.cleanupState()
+	return nil
+}
 
-	// cleanup state
+func (b *Builder) cleanupState() {
 	b.nipst = nil
 	b.challenge = nil
 	b.posLayerID = 0
-
 	if err := b.discardChallenge(); err != nil {
 		log.Error("failed to discard Nipst challenge: %v", err)
 	}
-
-	return nil
 }
 
 func (b *Builder) signAndBroadcast(atx *types.ActivationTx) error {
