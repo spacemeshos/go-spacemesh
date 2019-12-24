@@ -321,7 +321,7 @@ func (s SpacemeshGrpcService) GetUpcomingAwards(ctx context.Context, empty *empt
 
 func (s SpacemeshGrpcService) GetGenesisTime(ctx context.Context, empty *empty.Empty) (*pb.SimpleMessage, error) {
 	log.Info("GRPC GetGenesisTime msg")
-	return &pb.SimpleMessage{Value: s.GenTime.GetGenesisTime().String()}, nil
+	return &pb.SimpleMessage{Value: s.GenTime.GetGenesisTime().Format(time.RFC3339)}, nil
 }
 
 func (s SpacemeshGrpcService) ResetPost(ctx context.Context, empty *empty.Empty) (*pb.SimpleMessage, error) {
