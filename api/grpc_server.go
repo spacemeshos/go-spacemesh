@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/api/pb"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -227,8 +226,7 @@ type TxAPI interface {
 }
 
 // NewGrpcService create a new grpc service using config data.
-func NewGrpcService(net NetworkAPI, state StateAPI, tx TxAPI, txMempool *miner.TxMempool, mining MiningAPI, oracle OracleAPI, genTime GenesisTimeAPI, post PostAPI, layerDurationSec int, logging LoggingAPI) *SpacemeshGrpcService {
-	port := config.ConfigValues.GrpcServerPort
+func NewGrpcService(port int, net NetworkAPI, state StateAPI, tx TxAPI, txMempool *miner.TxMempool, mining MiningAPI, oracle OracleAPI, genTime GenesisTimeAPI, post PostAPI, layerDurationSec int, logging LoggingAPI) *SpacemeshGrpcService {
 	server := grpc.NewServer()
 	return &SpacemeshGrpcService{
 		Server:        server,
@@ -253,8 +251,7 @@ func (s SpacemeshGrpcService) StartService() {
 
 // This is a blocking method designed to be called using a go routine
 func (s SpacemeshGrpcService) startServiceInternal() {
-	port := config.ConfigValues.GrpcServerPort
-	addr := ":" + strconv.Itoa(int(port))
+	addr := ":" + strconv.Itoa(int(s.Port))
 
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -267,7 +264,7 @@ func (s SpacemeshGrpcService) startServiceInternal() {
 	// SubscribeOnNewConnections reflection service on gRPC server
 	reflection.Register(s.Server)
 
-	log.Debug("grpc API listening on port %d", port)
+	log.Info("grpc API listening on port %d", s.Port)
 
 	// start serving - this blocks until err or server is stopped
 	if err := s.Server.Serve(lis); err != nil {
