@@ -504,6 +504,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 	case <-atxReceived:
 		b.log.Event().Info("atx published!", fields...)
 	case <-time.After(b.broadcastTimeout):
+		b.atxPool.SetListener(nil)
 		b.log.With().Error("broadcast timeout when publishing ATX", fields...)
 		return fmt.Errorf("broadcast timeout")
 	}
