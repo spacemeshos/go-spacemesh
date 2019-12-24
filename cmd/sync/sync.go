@@ -43,7 +43,6 @@ var expectedLayers int
 var bucket string
 var version string
 var remote bool
-var timeout int
 
 func init() {
 	//path to remote storage
@@ -54,9 +53,6 @@ func init() {
 
 	//fetch from remote
 	Cmd.PersistentFlags().BoolVar(&remote, "remote-data", false, "fetch from remote")
-
-	//request timeout
-	Cmd.PersistentFlags().IntVar(&timeout, "timeout", 200, "request timeout")
 
 	//request timeout
 	Cmd.PersistentFlags().StringVarP(&version, "version", "v", "FullBlocks/", "data version")
@@ -98,8 +94,9 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	lg.Info("storage path: ", bucket)
 	lg.Info("download from remote storage: ", remote)
 	lg.Info("expected layers: ", expectedLayers)
-	lg.Info("request timeout: ", timeout)
+	lg.Info("request timeout: ", app.Config.SyncRequestTimeout)
 	lg.Info("data version: ", version)
+	lg.Info("layers per epoch: ", app.Config.LayersPerEpoch)
 	lg.Info("hdist: ", app.Config.Hdist)
 
 	path := app.Config.DataDir + version
@@ -116,7 +113,7 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 		Concurrency:    4,
 		AtxsLimit:      200,
 		LayerSize:      int(app.Config.LayerAvgSize),
-		RequestTimeout: time.Duration(timeout) * time.Millisecond,
+		RequestTimeout: time.Duration(app.Config.SyncRequestTimeout) * time.Millisecond,
 		Hdist:          app.Config.Hdist,
 	}
 
@@ -145,7 +142,7 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	atxdb := activation.NewActivationDb(atxdbStore, &sync.MockIStore{}, mshdb, uint16(1000), &sync.ValidatorMock{}, lg.WithName("atxDB").WithOptions(log.Nop))
+	atxdb := activation.NewActivationDb(atxdbStore, &sync.MockIStore{}, mshdb, uint16(app.Config.LayersPerEpoch), &sync.ValidatorMock{}, lg.WithName("atxDB").WithOptions(log.Nop))
 
 	txpool := miner.NewTxMemPool()
 	atxpool := miner.NewAtxMemPool()
