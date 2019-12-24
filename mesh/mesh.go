@@ -474,6 +474,11 @@ func (m *Mesh) AccumulateRewards(rewardLayer types.LayerID, params Config) {
 			)
 			continue
 		}
+		if bl.ATXID == *types.EmptyAtxId {
+			m.With().Info("skipping reward distribution for block with no ATX",
+				log.LayerId(uint64(bl.LayerIndex)), log.BlockId(bl.Id().String()))
+			continue
+		}
 		atx, err := m.AtxDB.GetAtxHeader(bl.ATXID)
 		if err != nil {
 			m.With().Warning("Atx from block not found in db", log.Err(err), log.BlockId(bl.Id().String()), log.AtxId(bl.ATXID.ShortString()))
