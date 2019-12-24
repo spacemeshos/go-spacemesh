@@ -230,6 +230,13 @@ func (pq *mockPQ) Close() {
 	close(pq.q)
 }
 
+func TestNewProtocol(t *testing.T) {
+	r := require.New(t)
+	p := NewProtocol(config.DefaultConfig().SwarmConfig, 0, newMockBaseNetwork(), newPubkey(t), log.NewDefault(t.Name()))
+	r.NotNil(p.pq)
+	r.NotNil(p.priorities)
+}
+
 func TestNeighborhood_AddIncomingPeer(t *testing.T) {
 	n := NewProtocol(config.DefaultConfig().SwarmConfig, 0, newMockBaseNetwork(), newPubkey(t), log.NewDefault(t.Name()))
 	n.Start()
