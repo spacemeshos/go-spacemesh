@@ -7,12 +7,15 @@ import (
 	"github.com/seehuhn/mt19937"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
-	"github.com/spacemeshos/go-spacemesh/events"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/sha256-simd"
-	"math/big"
 	"math/rand"
+
+	"github.com/spacemeshos/go-spacemesh/events"
+	"github.com/spacemeshos/go-spacemesh/log"
+
+	"math/big"
+
 	"sync"
 )
 
@@ -25,6 +28,9 @@ const (
 
 var TRUE = []byte{1}
 var FALSE = []byte{0}
+var LATEST = []byte("latest")
+var VALIDATED = []byte("validated")
+var TORTOISE = []byte("tortoise")
 
 type MeshValidator interface {
 	HandleIncomingLayer(layer *types.Layer) (types.LayerID, types.LayerID)
@@ -80,7 +86,6 @@ type Mesh struct {
 }
 
 func NewMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh MeshValidator, txInvalidator TxMemPoolInValidator, atxInvalidator AtxMemPoolInValidator, pr TxProcessor, logger log.Log) *Mesh {
-	//todo add boot from disk
 	ll := &Mesh{
 		Log:            logger,
 		MeshValidator:  mesh,
@@ -92,6 +97,27 @@ func NewMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh MeshValidator, t
 		config:         rewardConfig,
 		AtxDB:          atxDb,
 	}
+
+	return ll
+}
+
+func NewRecoveredMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh MeshValidator, txInvalidator TxMemPoolInValidator, atxInvalidator AtxMemPoolInValidator, pr TxProcessor, logger log.Log) *Mesh {
+	ll := NewMesh(db, atxDb, rewardConfig, mesh, txInvalidator, atxInvalidator, pr, logger)
+
+	latest, err := db.general.Get(LATEST)
+	if err != nil {
+		logger.Panic("could not recover latest layer")
+	}
+
+	ll.latestLayer = types.LayerID(util.BytesToUint64(latest))
+
+	validated, err := db.general.Get(VALIDATED)
+	if err != nil {
+		logger.Panic("could not recover  validated layer")
+	}
+
+	ll.validatedLayer = types.LayerID(util.BytesToUint64(validated))
+	ll.Info("recovered mesh from disc latest layer %d validated layer %d", ll.latestLayer, ll.validatedLayer)
 
 	return ll
 }
@@ -119,6 +145,9 @@ func (m *Mesh) SetLatestLayer(idx types.LayerID) {
 	if idx > m.latestLayer {
 		m.Info("set latest known layer to %v", idx)
 		m.latestLayer = idx
+		if err := m.general.Put(LATEST, idx.ToBytes()); err != nil {
+			m.Error("could not persist Latest layer index")
+		}
 	}
 }
 
@@ -142,6 +171,10 @@ func (m *Mesh) ValidateLayer(lyr *types.Layer) {
 	oldPbase, newPbase := m.HandleIncomingLayer(lyr)
 	m.lvMutex.Lock()
 	m.validatedLayer = currLayerId
+	m.validatedLayer = lyr.Index()
+	if err := m.general.Put(VALIDATED, lyr.Index().ToBytes()); err != nil {
+		m.Error("could not persist validated layer index %d", lyr.Index())
+	}
 	m.lvMutex.Unlock()
 
 	for layerId := oldPbase; layerId < newPbase; layerId++ {
@@ -439,6 +472,11 @@ func (m *Mesh) AccumulateRewards(rewardLayer types.LayerID, params Config) {
 				log.BlockId(bl.Id().String()),
 				log.LayerId(uint64(rewardLayer)),
 			)
+			continue
+		}
+		if bl.ATXID == *types.EmptyAtxId {
+			m.With().Info("skipping reward distribution for block with no ATX",
+				log.LayerId(uint64(bl.LayerIndex)), log.BlockId(bl.Id().String()))
 			continue
 		}
 		atx, err := m.AtxDB.GetAtxHeader(bl.ATXID)

@@ -20,7 +20,7 @@ func (m *mockAtxDB) IsIdentityActive(edId string, layer types.LayerID) (*types.N
 }
 
 func (m mockAtxDB) GetIdentity(edId string) (types.NodeId, error) {
-	return types.NodeId{Key: edId, VRFPublicKey: publicKey}, nil
+	return types.NodeId{Key: edId, VRFPublicKey: vrfPubkey}, nil
 }
 
 func (m mockAtxDB) GetNodeLastAtxId(node types.NodeId) (types.AtxId, error) {
@@ -31,27 +31,28 @@ func (m mockAtxDB) GetAtxHeader(id types.AtxId) (*types.ActivationTxHeader, erro
 	return m.atxH, m.err
 }
 
-func TestBlockEligibilityValidator_getActiveSet(t *testing.T) {
+func TestBlockEligibilityValidator_getValidAtx(t *testing.T) {
 	r := require.New(t)
 	atxdb := &mockAtxDB{err: someErr}
 	genActiveSetSize := uint32(5)
 	v := NewBlockEligibilityValidator(10, genActiveSetSize, 5, atxdb, &EpochBeaconProvider{},
 		validateVrf, log.NewDefault(t.Name()))
-	genBlock := &types.BlockHeader{LayerIndex: 0}
-	val, err := v.getActiveSetSize(genBlock)
-	r.NoError(err)
-	r.Equal(genActiveSetSize, val)
 
-	otherBlock := &types.BlockHeader{LayerIndex: 20} // non-genesis
-	_, err = v.getActiveSetSize(otherBlock)
-	r.Error(err)
+	block := &types.Block{MiniBlock: types.MiniBlock{BlockHeader: types.BlockHeader{LayerIndex: 20}}} // non-genesis
+	block.Signature = edSigner.Sign(block.Bytes())
+	_, err := v.getValidAtx(block)
+	r.EqualError(err, "getting ATX failed: some err 00000 ep(4)")
 
 	v.activationDb = &mockAtxDB{atxH: &types.ActivationTxHeader{}} // not same epoch
-	_, err = v.getActiveSetSize(otherBlock)
-	r.Error(err)
+	_, err = v.getValidAtx(block)
+	r.EqualError(err, "ATX target epoch (1) doesn't match block publication epoch (4)")
 
-	v.activationDb = &mockAtxDB{atxH: &types.ActivationTxHeader{ActiveSetSize: 7, NIPSTChallenge: types.NIPSTChallenge{PubLayerIdx: 18}}}
-	val, err = v.getActiveSetSize(otherBlock)
+	atxHeader := &types.ActivationTxHeader{ActiveSetSize: 7, NIPSTChallenge: types.NIPSTChallenge{
+		NodeId:      types.NodeId{Key: edSigner.PublicKey().String()},
+		PubLayerIdx: 18,
+	}}
+	v.activationDb = &mockAtxDB{atxH: atxHeader}
+	atx, err := v.getValidAtx(block)
 	r.NoError(err)
-	r.Equal(uint32(7), val)
+	r.Equal(atxHeader, atx)
 }
