@@ -85,7 +85,6 @@ type swarm struct {
 	peerLock   sync.RWMutex
 	newPeerSub []chan p2pcrypto.PublicKey
 	delPeerSub []chan p2pcrypto.PublicKey
-	pq         *priorityq.PriorityQ
 }
 
 func (s *swarm) waitForBoot() error {

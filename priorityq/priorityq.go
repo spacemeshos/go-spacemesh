@@ -18,20 +18,21 @@ const (
 	Low             = Priority(2)
 )
 
-type PriorityQ struct {
-	waitCh chan struct{}
-	queues []chan interface{}
+// Queue is the priority queue
+type Queue struct {
+	waitCh chan struct{}      // the channel that indicates if there is a message ready in the queue
+	queues []chan interface{} // the queues where the index is the priority
 }
 
-// NewPriorityQ returns a new priority queue where each priority has a buffer of prioQueueLimit
-func NewPriorityQ(prioQueueLimit int) *PriorityQ {
+// New returns a new priority queue where each priority has a buffer of prioQueueLimit
+func New(prioQueueLimit int) *Queue {
 	// set queue for each priority
 	qs := make([]chan interface{}, prioritiesCount)
 	for i := range qs {
 		qs[i] = make(chan interface{}, prioQueueLimit)
 	}
 
-	return &PriorityQ{
+	return &Queue{
 		waitCh: make(chan struct{}, prioQueueLimit*prioritiesCount),
 		queues: qs,
 	}
@@ -41,7 +42,7 @@ func NewPriorityQ(prioQueueLimit int) *PriorityQ {
 // This method blocks iff the queue is full
 // Returns an error iff a queue does not exist for the provided name
 // Note: writing to the pq after a call to close is forbidden and will result in a panic
-func (pq *PriorityQ) Write(prio Priority, m interface{}) error {
+func (pq *Queue) Write(prio Priority, m interface{}) error {
 	if int(prio) >= cap(pq.queues) {
 		return ErrUnknownPriority
 	}
@@ -53,7 +54,7 @@ func (pq *PriorityQ) Write(prio Priority, m interface{}) error {
 
 // Read returns the next message by priority
 // An error is set iff the priority queue has been closed
-func (pq *PriorityQ) Read() (interface{}, error) {
+func (pq *Queue) Read() (interface{}, error) {
 	<-pq.waitCh // wait for m
 
 	// pick by priority
@@ -77,7 +78,7 @@ func (pq *PriorityQ) Read() (interface{}, error) {
 
 // Close the priority queue
 // No messages should be expected to be read after a call to Close
-func (pq *PriorityQ) Close() {
+func (pq *Queue) Close() {
 	for _, q := range pq.queues {
 		if q != nil {
 			close(q)

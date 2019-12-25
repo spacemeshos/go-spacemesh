@@ -13,7 +13,7 @@ var (
 
 func TestNewPriorityQ(t *testing.T) {
 	r := require.New(t)
-	pq := NewPriorityQ(defLen)
+	pq := New(defLen)
 	r.Equal(defLen, cap(pq.queues[High]))
 	r.Equal(defLen, cap(pq.queues[Mid]))
 	r.Equal(defLen, cap(pq.queues[Low]))
@@ -24,7 +24,7 @@ func TestNewPriorityQ(t *testing.T) {
 
 func TestPriorityQ_Write(t *testing.T) {
 	r := require.New(t)
-	pq := NewPriorityQ(defLen)
+	pq := New(defLen)
 	wg := sync.WaitGroup{}
 
 	wg.Add(1)
@@ -50,13 +50,13 @@ func TestPriorityQ_Write(t *testing.T) {
 
 func TestPriorityQ_WriteError(t *testing.T) {
 	r := require.New(t)
-	pq := NewPriorityQ(defLen)
+	pq := New(defLen)
 	r.Equal(ErrUnknownPriority, pq.Write(3, 0))
 }
 
 func TestPriorityQ_Read(t *testing.T) {
 	r := require.New(t)
-	pq := NewPriorityQ(defLen)
+	pq := New(defLen)
 	wg := sync.WaitGroup{}
 
 	wg.Add(1)

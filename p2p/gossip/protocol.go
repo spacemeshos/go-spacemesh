@@ -64,7 +64,7 @@ func NewProtocol(config config.SwarmConfig, bufferSize int, base baseNetwork, lo
 		shutdown:        make(chan struct{}),
 		oldMessageQ:     types.NewDoubleCache(oldMessageCacheSize), // todo : remember to drain this
 		propagateQ:      make(chan service.MessageValidation, propagateHandleBufferSize),
-		pq:              priorityq.NewPriorityQ(bufferSize),
+		pq:              priorityq.New(bufferSize),
 		priorities:      make(map[string]priorityq.Priority),
 	}
 }
