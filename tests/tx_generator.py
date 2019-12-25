@@ -192,33 +192,31 @@ def test_transactions(walletApi, layers_per_epoch, layers_duration):
     assert ready == len(accounts) - 1, "Not all accounts received sent txs"  # one for 0 counting and one for tap.
 
     def is_there_a_valid_acc(min_balance, excpect=[]):
+        lst = []
         for acc in accounts:
             if expected_balance(acc) - 1 * tx_cost > min_balance and acc not in excpect:
-                return True
-        return False
+                lst.append(acc)
+        return lst
 
     ## IF LOGEVITY THE CODE BELOW SHOULD RUN FOREVER
 
     TEST_TXS2 = 10
     newaccounts = []
     for i in range(TEST_TXS2):
-        if not is_there_a_valid_acc(100, newaccounts):
+        accounts = is_there_a_valid_acc(100, newaccounts)
+        if len(accounts) == 0:
             break
 
+        acc = random.choice(accounts)
         if i % 2 == 0:
             # create new acc
-            acc = random_account()
-            while acc in newaccounts or expected_balance(acc) < 100:
-                acc = random_account()
-
             pub = new_account()
             newaccounts.append(pub)
             assert transfer(acc, pub), "Transfer from {0} to {1} (new account) failed".format(acc, pub)
         else:
-            accfrom = random_account()
+            accfrom = acc
             accto = random_account()
-            while accfrom == accto or accfrom in newaccounts or expected_balance(accfrom) < 100:
-                accfrom = random_account()
+            while accfrom == accto:
                 accto = random_account()
             assert transfer(accfrom, accto), "Transfer from {0} to {1} failed".format(accfrom, accto)
 
