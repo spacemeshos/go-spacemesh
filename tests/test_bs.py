@@ -73,7 +73,7 @@ def get_conf(bs_info, client_config, setup_oracle=None, setup_poet=None, args=No
     return cspec
 
 
-def add_multi_clients(deployment_id, container_specs, size=2, ret_pods=False):
+def add_multi_clients(deployment_id, container_specs, size=2, client='client',ret_pods=False):
     """
     adds pods to a given namespace according to specification params
 
@@ -83,7 +83,7 @@ def add_multi_clients(deployment_id, container_specs, size=2, ret_pods=False):
     :param ret_pods: boolean, if 'True' RETURN a pods list (V1PodList)
     :return: list (strings), list of pods names
     """
-    k8s_file, k8s_create_func = choose_k8s_object_create(testconfig['client'],
+    k8s_file, k8s_create_func = choose_k8s_object_create(testconfig[client],
                                                          CLIENT_DEPLOYMENT_FILE,
                                                          CLIENT_STATEFULSET_FILE)
     resp = k8s_create_func(k8s_file, testconfig['namespace'],
