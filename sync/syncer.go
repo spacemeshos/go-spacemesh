@@ -295,13 +295,15 @@ func (s *Syncer) Synchronise() {
 		lyr, err := s.GetLayer(currentSyncLayer)
 		if err != nil {
 			s.Panic("failed getting layer even though we are weakly-synced currentLayer=%v lastTicked=%v err=%v ", currentSyncLayer, s.lastTickedLayer(), err)
+
+			s.validatingLayer = ValidatingLayerNone
+			s.validatingLayerMutex.Unlock()
 			return
 		}
 		s.lValidator.ValidateLayer(lyr) // wait for layer validation
 
 		s.validatingLayer = ValidatingLayerNone
 		s.validatingLayerMutex.Unlock()
-
 		return
 	}
 
