@@ -36,7 +36,7 @@ def test_sync_stress(init_session, setup_bootstrap, save_log_on_exit):
     new_client = res_lst[0]
 
     curr_try = 0
-    max_retries = 2880  # two days in minutes
+    max_retries = 20
     interval_time = 60
     print("waiting for new pod to be synced")
     while True:
@@ -48,13 +48,15 @@ def test_sync_stress(init_session, setup_bootstrap, save_log_on_exit):
         time.sleep(interval_time)
 
         if curr_try >= max_retries:
-            assert 0, "node failed syncing!"
+            assert 0, f"node failed syncing after waiting for {max_retries} minutes"
 
         curr_try += 1
 
     # parsing sync start time
     start_sync_hits = q.get_all_msg_containing(init_session, new_client, START_SYNC, is_print=False)
-    st = convert_ts_to_datetime(start_sync_hits[-1]["T"])
+    last_sync_msg = start_sync_hits[-1]
+    st = convert_ts_to_datetime(last_sync_msg["T"])
+    et = convert_ts_to_datetime(hits[0]["T"])
     # total time since starting sync until finishing
-    print(f"new client is synced after {(datetime.now() - st).seconds} seconds, success!")
+    print(f"new client is synced after {str(et - st)}")
     assert 1
