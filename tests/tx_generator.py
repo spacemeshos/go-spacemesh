@@ -99,8 +99,8 @@ class WalletAPI:
 #layers_dur = testconfig['client']['args']['layer-duration-sec']
 
 
-def test_transactions(walletApi, layers_per_epoch, layers_duration):
-    DEBUG = False
+def test_transactions(wallet_api, layers_per_epoch, layers_duration):
+    debug = False
 
     tap_init_amount = 10000
     tap = "7be017a967db77fd10ac7c891b3d6d946dea7e3e14756e2f0f9e09b9663f0d9c"
@@ -114,7 +114,7 @@ def test_transactions(walletApi, layers_per_epoch, layers_duration):
     def expected_balance(acc):
         balance = sum([int(tx["amount"]) for tx in accounts[acc]["recv"]]) - sum(
             int(int(tx["amount"]) + (int(tx["gasprice"]) * tx_cost)) for tx in accounts[acc]["send"])
-        if DEBUG:
+        if debug:
             print("balance calculated for {0}, {1}, everything: {2}", acc, balance, pprint.pformat(accounts[acc]))
         return balance
 
@@ -136,7 +136,7 @@ def test_transactions(walletApi, layers_per_epoch, layers_duration):
             gasprice = 1
         if gaslimit is None:
             gaslimit = gasprice + 1
-        success = walletApi.SubmitTx(to, accounts[frm]['nonce'], gaslimit, gasprice, amount, txGen)
+        success = wallet_api.SubmitTx(to, accounts[frm]['nonce'], gaslimit, gasprice, amount, txGen)
         accounts[frm]['nonce'] += 1
         if success:
             accounts[to]["recv"].append({"from": bytes.hex(txGen.publicK), "amount": amount, "gasprice": gasprice})
@@ -145,15 +145,13 @@ def test_transactions(walletApi, layers_per_epoch, layers_duration):
         return False
 
     def test_account(acc, init_amount=0):
-        out = walletApi.CheckNonce(acc)
-        if DEBUG:
+        out = wallet_api.CheckNonce(acc)
+        if debug:
             print(out)
         if str(accounts[acc]['nonce']) in out:
-
-            if DEBUG:
+            if debug:
                 print(out)
-            balance = init_amount
-            balance = balance + expected_balance(acc)
+            balance = init_amount + expected_balance(acc)
             print("expecting balance: {0}".format(balance))
             if "{'value': '" + str(balance) + "'}" in out:
                 print("{0}, balance ok ({1})".format(str(acc), out))
@@ -207,14 +205,14 @@ def test_transactions(walletApi, layers_per_epoch, layers_duration):
         if len(accounts) == 0:
             break
 
-        acc = random.choice(accounts)
+        src_acc = random.choice(accounts)
         if i % 2 == 0:
             # create new acc
             pub = new_account()
             newaccounts.append(pub)
-            assert transfer(acc, pub), "Transfer from {0} to {1} (new account) failed".format(acc, pub)
+            assert transfer(src_acc, pub), "Transfer from {0} to {1} (new account) failed".format(acc, pub)
         else:
-            accfrom = acc
+            accfrom = src_acc
             accto = random_account()
             while accfrom == accto:
                 accto = random_account()
