@@ -179,7 +179,7 @@ func newSwarm(ctx context.Context, config config.Config, newNode bool, persist b
 
 	s.cPool = cpool
 
-	s.gossip = gossip.NewProtocol(config.SwarmConfig, s.config.BufferSize, s, s.LocalNode().PublicKey(), s.lNode.Log)
+	s.gossip = gossip.NewProtocol(config.SwarmConfig, s, s.LocalNode().PublicKey(), s.lNode.Log)
 
 	s.lNode.Debug("Created swarm for local node %s, %s", l.String())
 	return s, nil

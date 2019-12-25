@@ -53,7 +53,7 @@ type Protocol struct {
 }
 
 // NewProtocol creates a new gossip protocol instance. Call Start to start reading peers
-func NewProtocol(config config.SwarmConfig, bufferSize int, base baseNetwork, localNodePubkey p2pcrypto.PublicKey, log2 log.Log) *Protocol {
+func NewProtocol(config config.SwarmConfig, base baseNetwork, localNodePubkey p2pcrypto.PublicKey, log2 log.Log) *Protocol {
 	// intentionally not subscribing to peers events so that the channels won't block in case executing Start delays
 	return &Protocol{
 		Log:             log2,
@@ -64,7 +64,7 @@ func NewProtocol(config config.SwarmConfig, bufferSize int, base baseNetwork, lo
 		shutdown:        make(chan struct{}),
 		oldMessageQ:     types.NewDoubleCache(oldMessageCacheSize), // todo : remember to drain this
 		propagateQ:      make(chan service.MessageValidation, propagateHandleBufferSize),
-		pq:              priorityq.New(bufferSize),
+		pq:              priorityq.New(propagateHandleBufferSize),
 		priorities:      make(map[string]priorityq.Priority),
 	}
 }

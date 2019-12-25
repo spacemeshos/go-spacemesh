@@ -232,13 +232,13 @@ func (pq *mockPQ) Close() {
 
 func TestNewProtocol(t *testing.T) {
 	r := require.New(t)
-	p := NewProtocol(config.DefaultConfig().SwarmConfig, 0, newMockBaseNetwork(), newPubkey(t), log.NewDefault(t.Name()))
+	p := NewProtocol(config.DefaultConfig().SwarmConfig, newMockBaseNetwork(), newPubkey(t), log.NewDefault(t.Name()))
 	r.NotNil(p.pq)
 	r.NotNil(p.priorities)
 }
 
 func TestNeighborhood_AddIncomingPeer(t *testing.T) {
-	n := NewProtocol(config.DefaultConfig().SwarmConfig, 0, newMockBaseNetwork(), newPubkey(t), log.NewDefault(t.Name()))
+	n := NewProtocol(config.DefaultConfig().SwarmConfig, newMockBaseNetwork(), newPubkey(t), log.NewDefault(t.Name()))
 	n.Start()
 	pub := p2pcrypto.NewRandomPubkey()
 	n.addPeer(pub)
@@ -255,7 +255,7 @@ func TestNeighborhood_AddIncomingPeer(t *testing.T) {
 func TestNeighborhood_Relay(t *testing.T) {
 	net := newMockBaseNetwork()
 	_ = net.RegisterGossipProtocol("Someproto", priorityq.High)
-	n := NewProtocol(config.DefaultConfig().SwarmConfig, 0, net, newPubkey(t), log.NewDefault(t.Name()))
+	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newPubkey(t), log.NewDefault(t.Name()))
 	n.pq = newMockPQ()
 	n.Start()
 
@@ -276,7 +276,7 @@ func TestNeighborhood_Relay(t *testing.T) {
 
 func TestNeighborhood_Broadcast(t *testing.T) {
 	net := newMockBaseNetwork()
-	n := NewProtocol(config.DefaultConfig().SwarmConfig, 0, net, newPubkey(t), log.NewDefault(t.Name()))
+	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newPubkey(t), log.NewDefault(t.Name()))
 	n.pq = newMockPQ()
 	n.Start()
 	addPeersAndTest(t, 20, n, net, true)
@@ -293,7 +293,7 @@ func TestNeighborhood_Broadcast(t *testing.T) {
 
 func TestNeighborhood_Relay2(t *testing.T) {
 	net := newMockBaseNetwork()
-	n := NewProtocol(config.DefaultConfig().SwarmConfig, 0, net, newPubkey(t), log.NewDefault(t.Name()))
+	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newPubkey(t), log.NewDefault(t.Name()))
 	n.pq = newMockPQ()
 	n.Start()
 
@@ -328,7 +328,7 @@ func TestNeighborhood_Relay2(t *testing.T) {
 
 func TestNeighborhood_Broadcast2(t *testing.T) {
 	net := newMockBaseNetwork()
-	n := NewProtocol(config.DefaultConfig().SwarmConfig, 0, net, newPubkey(t), log.NewDefault(t.Name()))
+	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newPubkey(t), log.NewDefault(t.Name()))
 	n.pq = newMockPQ()
 	n.Start()
 
@@ -363,7 +363,7 @@ func TestNeighborhood_Broadcast3(t *testing.T) {
 	// to test that the the next message doesn't get processed by the protocol we must create an exact copy of the message produced at `Broadcast`
 	net := newMockBaseNetwork()
 	pk := p2pcrypto.NewRandomPubkey()
-	n := NewProtocol(config.DefaultConfig().SwarmConfig, 0, net, pk, log.NewDefault(t.Name()))
+	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, pk, log.NewDefault(t.Name()))
 	n.pq = newMockPQ()
 	n.Start()
 
@@ -391,7 +391,7 @@ func TestNeighborhood_Broadcast4(t *testing.T) {
 	// todo : Fix this test, because the first message is broadcasted `Broadcast` attaches metadata to it with the current authoring timestamp
 	// to test that the the next message doesn't get processed by the protocol we must create an exact copy of the message produced at `Broadcast`
 	net := newMockBaseNetwork()
-	n := NewProtocol(config.DefaultConfig().SwarmConfig, 0, net, newPubkey(t), log.NewDefault(t.Name()))
+	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newPubkey(t), log.NewDefault(t.Name()))
 	n.pq = newMockPQ()
 	n.Start()
 
@@ -418,7 +418,7 @@ func TestNeighborhood_Broadcast4(t *testing.T) {
 
 func TestNeighborhood_Relay3(t *testing.T) {
 	net := newMockBaseNetwork()
-	n := NewProtocol(config.DefaultConfig().SwarmConfig, 0, net, newPubkey(t), log.NewDefault(t.Name()))
+	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newPubkey(t), log.NewDefault(t.Name()))
 	n.pq = newMockPQ()
 	n.Start()
 
@@ -439,7 +439,7 @@ func TestNeighborhood_Relay3(t *testing.T) {
 
 func TestNeighborhood_Start(t *testing.T) {
 	net := newMockBaseNetwork()
-	n := NewProtocol(config.DefaultConfig().SwarmConfig, 0, net, newPubkey(t), log.NewDefault(t.Name()))
+	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newPubkey(t), log.NewDefault(t.Name()))
 	n.pq = newMockPQ()
 
 	// before Start
@@ -452,7 +452,7 @@ func TestNeighborhood_Start(t *testing.T) {
 
 func TestNeighborhood_Close(t *testing.T) {
 	net := newMockBaseNetwork()
-	n := NewProtocol(config.DefaultConfig().SwarmConfig, 0, net, newPubkey(t), log.NewDefault(t.Name()))
+	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newPubkey(t), log.NewDefault(t.Name()))
 	n.pq = newMockPQ()
 
 	n.Start()
@@ -464,7 +464,7 @@ func TestNeighborhood_Close(t *testing.T) {
 
 func TestNeighborhood_Disconnect(t *testing.T) {
 	net := newMockBaseNetwork()
-	n := NewProtocol(config.DefaultConfig().SwarmConfig, 0, net, newPubkey(t), log.NewDefault(t.Name()))
+	n := NewProtocol(config.DefaultConfig().SwarmConfig, net, newPubkey(t), log.NewDefault(t.Name()))
 	n.pq = newMockPQ()
 
 	n.Start()
