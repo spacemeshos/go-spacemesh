@@ -288,7 +288,9 @@ func (s *Syncer) Synchronise() {
 
 	if s.weaklySynced() { // we have all the data of the prev layers so we can simply validate
 		s.With().Info("Node is synced. Going to validate layer", log.LayerId(uint64(currentSyncLayer)))
-		s.GetAndValidateLayer(currentSyncLayer)
+		if err := s.GetAndValidateLayer(currentSyncLayer); err != nil {
+			s.Panic("failed getting layer even though we are weakly-synced currentLayer=%v lastTicked=%v err=%v ", currentSyncLayer, s.lastTickedLayer(), err)
+		}
 		return
 	}
 
@@ -365,10 +367,14 @@ func (s *Syncer) gossipSyncForOneFullLayer(currentSyncLayer types.LayerID) error
 	// just get the layers and validate
 
 	// get & validate first tick
-	s.GetAndValidateLayer(currentSyncLayer)
+	if err := s.GetAndValidateLayer(currentSyncLayer); err != nil {
+		return err
+	}
 
 	// get & validate second tick
-	s.GetAndValidateLayer(currentSyncLayer + 1)
+	if err := s.GetAndValidateLayer(currentSyncLayer + 1); err != nil {
+		return err
+	}
 
 	s.Info("Done waiting for ticks and validation. setting gossip true")
 
@@ -735,7 +741,7 @@ func (s *Syncer) blockCheckLocal(blockIds []types.Hash32) (map[types.Hash32]Item
 	return nil, dbItems, nil
 }
 
-func (s *Syncer) GetAndValidateLayer(id types.LayerID) {
+func (s *Syncer) GetAndValidateLayer(id types.LayerID) error {
 	s.validatingLayerMutex.Lock()
 	s.validatingLayer = id
 	defer func() {
@@ -745,10 +751,11 @@ func (s *Syncer) GetAndValidateLayer(id types.LayerID) {
 
 	lyr, err := s.GetLayer(id)
 	if err != nil {
-		s.Panic("failed getting layer even though we are weakly-synced currentLayer=%v lastTicked=%v err=%v ", id, s.lastTickedLayer(), err)
-		return
+		return err
 	}
 	s.lValidator.ValidateLayer(lyr) // wait for layer validation
+
+	return nil
 }
 
 func (s *Syncer) ValidatingLayer() types.LayerID {
