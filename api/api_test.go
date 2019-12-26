@@ -12,6 +12,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/require"
 	"io/ioutil"
@@ -581,7 +582,7 @@ type mockSrv struct {
 	called bool
 }
 
-func (m *mockSrv) RegisterGossipProtocol(string) chan service.GossipMessage {
+func (m *mockSrv) RegisterGossipProtocol(string, priorityq.Priority) chan service.GossipMessage {
 	m.called = true
 	return m.c
 }
