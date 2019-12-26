@@ -161,7 +161,7 @@ func (s *Syncer) getGossipBufferingStatus() Status {
 	return b
 }
 
-//api for other modules to check if they should listen to gossip
+//api for other models to check if they should listen to gossip
 func (s *Syncer) ListenToGossip() bool {
 	return s.getGossipBufferingStatus() != Pending
 }
