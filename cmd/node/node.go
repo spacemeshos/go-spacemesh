@@ -547,6 +547,26 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	return nil
 }
 
+// periodically checks that our clock is sync
+func (app *SpacemeshApp) checkTimeDrifts() {
+	checkTimeSync := time.NewTicker(app.Config.TIME.RefreshNtpInterval)
+	defer checkTimeSync.Stop()
+Loop:
+	for {
+		select {
+		case <-cmdp.Ctx.Done():
+			break Loop
+
+		case <-checkTimeSync.C:
+			_, err := timesync.CheckSystemClockDrift()
+			if err != nil {
+				app.log.Error("System time could'nt synchronize %s", err)
+				app.stopServices()
+			}
+		}
+	}
+}
+
 func (app *SpacemeshApp) startServices() {
 	app.blockListener.Start()
 	app.syncer.Start()
@@ -573,6 +593,7 @@ func (app *SpacemeshApp) startServices() {
 	}
 	app.atxBuilder.Start()
 	app.clock.StartNotifying()
+	go app.checkTimeDrifts()
 }
 
 func (app *SpacemeshApp) stopServices() {
