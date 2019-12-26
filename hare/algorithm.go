@@ -291,6 +291,8 @@ PreRound:
 	// start first iteration
 	proc.onRoundBegin()
 	ticker := time.NewTicker(time.Duration(proc.cfg.RoundDuration) * time.Second)
+	defer ticker.Stop()
+
 	for {
 		select {
 		case msg := <-proc.inbox: // msg event
