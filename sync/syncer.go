@@ -288,22 +288,7 @@ func (s *Syncer) Synchronise() {
 
 	if s.weaklySynced() { // we have all the data of the prev layers so we can simply validate
 		s.With().Info("Node is synced. Going to validate layer", log.LayerId(uint64(currentSyncLayer)))
-
-		s.validatingLayerMutex.Lock()
-		s.validatingLayer = currentSyncLayer
-
-		lyr, err := s.GetLayer(currentSyncLayer)
-		if err != nil {
-			s.Panic("failed getting layer even though we are weakly-synced currentLayer=%v lastTicked=%v err=%v ", currentSyncLayer, s.lastTickedLayer(), err)
-
-			s.validatingLayer = ValidatingLayerNone
-			s.validatingLayerMutex.Unlock()
-			return
-		}
-		s.lValidator.ValidateLayer(lyr) // wait for layer validation
-
-		s.validatingLayer = ValidatingLayerNone
-		s.validatingLayerMutex.Unlock()
+		s.GetAndValidateLayer(currentSyncLayer)
 		return
 	}
 
@@ -756,6 +741,22 @@ func (s *Syncer) blockCheckLocal(blockIds []types.Hash32) (map[types.Hash32]Item
 	}
 
 	return nil, dbItems, nil
+}
+
+func (s *Syncer) GetAndValidateLayer(id types.LayerID) {
+	s.validatingLayerMutex.Lock()
+	s.validatingLayer = id
+	defer func() {
+		s.validatingLayer = ValidatingLayerNone
+		s.validatingLayerMutex.Unlock()
+	}()
+
+	lyr, err := s.GetLayer(id)
+	if err != nil {
+		s.Panic("failed getting layer even though we are weakly-synced currentLayer=%v lastTicked=%v err=%v ", id, s.lastTickedLayer(), err)
+		return
+	}
+	s.lValidator.ValidateLayer(lyr) // wait for layer validation
 }
 
 func (s *Syncer) ValidatingLayer() types.LayerID {
