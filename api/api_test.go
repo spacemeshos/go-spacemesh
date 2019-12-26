@@ -201,13 +201,12 @@ func TestServersConfig(t *testing.T) {
 	port2, err := node.GetUnboundedPort()
 	require.NoError(t, err, "Should be able to establish a connection on a port")
 
-	config.ConfigValues.JSONServerPort = port1
-	config.ConfigValues.GrpcServerPort = port2
-	grpcService := NewGrpcService(&networkMock, ap, txApi, nil, &mining, &oracle, nil, PostMock{}, 0, nil)
-	jsonService := NewJSONHTTPServer()
+	grpcService := NewGrpcService(port1, &networkMock, ap, txApi, nil, &mining, &oracle, nil, PostMock{}, 0, nil)
+	require.Equal(t, grpcService.Port, uint(port1), "Expected same port")
 
-	require.Equal(t, grpcService.Port, uint(config.ConfigValues.GrpcServerPort), "Expected same port")
-	require.Equal(t, jsonService.Port, uint(config.ConfigValues.JSONServerPort), "Expected same port")
+	jsonService := NewJSONHTTPServer(port2, port1)
+	require.Equal(t, jsonService.Port, uint(port2), "Expected same port")
+	require.Equal(t, jsonService.GrpcPort, uint(port1), "Expected same port")
 }
 
 func TestGrpcApi(t *testing.T) {
@@ -216,7 +215,7 @@ func TestGrpcApi(t *testing.T) {
 	const message = "Hello World"
 
 	// start a client
-	addr := "localhost:" + strconv.Itoa(config.ConfigValues.GrpcServerPort)
+	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
 
 	// Set up a connection to the server.
 	conn, err := grpc.Dial(addr, grpc.WithInsecure())
@@ -477,18 +476,12 @@ func marshalProto(t *testing.T, msg proto.Message) string {
 	return buf.String()
 }
 
+var cfg = config.DefaultConfig()
+
 func launchServer(t *testing.T) func() {
-	port1, err := node.GetUnboundedPort()
-	require.NoError(t, err)
-	port2, err := node.GetUnboundedPort()
-	require.NoError(t, err)
-	if config.ConfigValues.JSONServerPort == 0 {
-		config.ConfigValues.JSONServerPort = port1
-		config.ConfigValues.GrpcServerPort = port2
-	}
 	networkMock.broadcasted = []byte{0x00}
-	grpcService := NewGrpcService(&networkMock, ap, txApi, txMempool, &mining, &oracle, &genTime, PostMock{}, layerDuration, nil)
-	jsonService := NewJSONHTTPServer()
+	grpcService := NewGrpcService(cfg.GrpcServerPort, &networkMock, ap, txApi, txMempool, &mining, &oracle, &genTime, PostMock{}, layerDuration, nil)
+	jsonService := NewJSONHTTPServer(cfg.JSONServerPort, cfg.GrpcServerPort)
 	// start gRPC and json server
 	grpcService.StartService()
 	jsonService.StartService()
@@ -502,7 +495,7 @@ func launchServer(t *testing.T) func() {
 }
 
 func callEndpoint(t *testing.T, endpoint, payload string) (string, int) {
-	url := fmt.Sprintf("http://127.0.0.1:%d/%s", config.ConfigValues.JSONServerPort, endpoint)
+	url := fmt.Sprintf("http://127.0.0.1:%d/%s", cfg.JSONServerPort, endpoint)
 	resp, err := http.Post(url, "application/json", strings.NewReader(payload))
 	require.NoError(t, err)
 	require.Equal(t, "application/json", resp.Header.Get("Content-Type"))
