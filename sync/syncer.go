@@ -365,19 +365,11 @@ func (s *Syncer) gossipSyncForOneFullLayer(currentSyncLayer types.LayerID) error
 	// just get the layers and validate
 
 	// get & validate first tick
-	lyr, err := s.GetLayer(currentSyncLayer)
-	if err != nil {
-		return err
-	}
-	s.lValidator.ValidateLayer(lyr)
+	s.GetAndValidateLayer(currentSyncLayer)
 
 	// get & validate second tick
-	currentSyncLayer++
-	lyr, err = s.GetLayer(currentSyncLayer)
-	if err != nil {
-		return err
-	}
-	s.lValidator.ValidateLayer(lyr)
+	s.GetAndValidateLayer(currentSyncLayer + 1)
+
 	s.Info("Done waiting for ticks and validation. setting gossip true")
 
 	// fully-synced - set gossip -synced to true
