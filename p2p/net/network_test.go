@@ -25,7 +25,7 @@ func Test_sumByteArray(t *testing.T) {
 func TestNet_EnqueueMessage(t *testing.T) {
 	testnodes := 100
 	cfg := config.DefaultConfig()
-	addr := net.TCPAddr{net.ParseIP("0.0.0.0"), 0000, "ipv4"}
+	addr := net.TCPAddr{net.ParseIP("0.0.0.0"), 0000, ""}
 	ln, err := node.NewNodeIdentity(cfg, &addr, false)
 	assert.NoError(t, err)
 	n, err := NewNet(cfg, ln)
@@ -101,7 +101,7 @@ func (ml *mockListener) Close() error {
 	return nil
 }
 func (ml *mockListener) Addr() net.Addr {
-	return &net.IPAddr{IP: net.ParseIP("0.0.0.0"), Zone: "ipv4"}
+	return &net.IPAddr{IP: net.ParseIP("0.0.0.0"), Zone: ""}
 }
 
 type tempErr string
@@ -118,7 +118,7 @@ func Test_Net_LimitedConnections(t *testing.T) {
 	cfg := config.DefaultConfig()
 	cfg.SessionTimeout = 100 * time.Millisecond
 
-	addr := net.TCPAddr{net.ParseIP("0.0.0.0"), 0000, "ipv4"}
+	addr := net.TCPAddr{net.ParseIP("0.0.0.0"), 0000, ""}
 	ln, err := node.NewNodeIdentity(cfg, &addr, false)
 	require.NoError(t, err)
 	n, err := NewNet(cfg, ln)

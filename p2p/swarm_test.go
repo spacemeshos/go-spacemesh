@@ -427,7 +427,7 @@ func TestSwarm_RegisterProtocol(t *testing.T) {
 
 func TestSwarm_onRemoteClientMessage(t *testing.T) {
 	cfg := config.DefaultConfig()
-	addr := inet.TCPAddr{inet.ParseIP("0.0.0.0"), 0000, "ipv4"}
+	addr := inet.TCPAddr{inet.ParseIP("0.0.0.0"), 0000, ""}
 
 	id, err := node.NewNodeIdentity(cfg, &addr, false)
 	assert.NoError(t, err, "we cant make node ?")
@@ -933,6 +933,6 @@ func TestNeighborhood_ReportConnectionResult(t *testing.T) {
 
 	n.getMorePeers(PeerNum)
 
-	require.Equal(t, goodcount, 2)
+	require.Equal(t, 2, goodcount)
 	require.True(t, attemptcount == PeerNum*2-2)
 }

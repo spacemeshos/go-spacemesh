@@ -22,7 +22,7 @@ func TestNodeLocalStore(t *testing.T) {
 	port1, err := GetUnboundedPort()
 	assert.NoError(t, err, "Should be able to establish a connection on a port")
 
-	addr := net.TCPAddr{net.ParseIP("0.0.0.0"), port1, "ipv4"}
+	addr := net.TCPAddr{net.ParseIP("0.0.0.0"), port1, ""}
 
 	cfg := config.DefaultConfig()
 

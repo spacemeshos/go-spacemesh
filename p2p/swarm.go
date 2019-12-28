@@ -106,7 +106,7 @@ func (s *swarm) waitForGossip() error {
 func newSwarm(ctx context.Context, config config.Config, newNode bool, persist bool) (*swarm, error) {
 
 	port := config.TCPPort
-	addr := inet.TCPAddr{inet.ParseIP("0.0.0.0"), port, "ipv4"}
+	addr := inet.TCPAddr{inet.ParseIP("0.0.0.0"), port, ""}
 
 	var l *node.LocalNode
 	var err error
@@ -719,7 +719,7 @@ func (s *swarm) getMorePeers(numpeers int) int {
 				reportChan <- cnErr{nd, errors.New("connection to self")}
 				return
 			}
-			addr := inet.TCPAddr{inet.ParseIP(nd.IP.String()), int(nd.ProtocolPort), "ipv4"}
+			addr := inet.TCPAddr{inet.ParseIP(nd.IP.String()), int(nd.ProtocolPort), ""}
 			_, err := s.cPool.GetConnection(&addr, nd.PublicKey())
 			reportChan <- cnErr{nd, err}
 		}(nds[i], res)
