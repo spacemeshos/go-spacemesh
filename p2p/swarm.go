@@ -15,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	timeSyncConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"strings"
@@ -369,9 +370,10 @@ func (s *swarm) RegisterDirectProtocol(protocol string) chan service.DirectMessa
 }
 
 // RegisterGossipProtocol registers an handler for gossip based `protocol`
-func (s *swarm) RegisterGossipProtocol(protocol string) chan service.GossipMessage {
+func (s *swarm) RegisterGossipProtocol(protocol string, prio priorityq.Priority) chan service.GossipMessage {
 	mchan := make(chan service.GossipMessage, s.config.BufferSize)
 	s.protocolHandlerMutex.Lock()
+	s.gossip.SetPriority(protocol, prio)
 	s.gossipProtocolHandlers[protocol] = mchan
 	s.protocolHandlerMutex.Unlock()
 	return mchan

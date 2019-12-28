@@ -5,6 +5,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
+	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"io"
 	"net"
@@ -306,7 +307,7 @@ func (sn *Node) RegisterDirectProtocol(protocol string) chan DirectMessage {
 }
 
 // RegisterGossipProtocol creates and returns a channel for a given gossip based protocol.
-func (sn *Node) RegisterGossipProtocol(protocol string) chan GossipMessage {
+func (sn *Node) RegisterGossipProtocol(protocol string, prio priorityq.Priority) chan GossipMessage {
 	c := make(chan GossipMessage, 1000)
 	sn.sim.mutex.Lock()
 	sn.sim.protocolGossipHandler[sn.NodeInfo.PublicKey()][protocol] = c

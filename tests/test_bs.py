@@ -334,7 +334,7 @@ def start_poet(init_session, add_curl, setup_bootstrap):
         raise Exception("Failed to read container logs in {0}".format("poet"))
 
     print("Starting PoET")
-    out = api_call(bs_pod['pod_ip'], '{ "nodeAddress": "127.0.0.1:9091" }',  'v1/start', namespace, "80")
+    out = api_call(bs_pod['pod_ip'], '{ "gatewayAddresses": ["127.0.0.1:9091"] }',  'v1/start', namespace, "80")
     assert out == "{}", "PoET start returned error {0}".format(out)
     print("PoET started")
 

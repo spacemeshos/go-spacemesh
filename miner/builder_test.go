@@ -11,6 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
@@ -238,7 +239,7 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 
 	go func() { beginRound <- 2 }()
 	select {
-	case output := <-receiver.RegisterGossipProtocol(config.NewBlockProtocol):
+	case output := <-receiver.RegisterGossipProtocol(config.NewBlockProtocol, priorityq.High):
 		b := types.MiniBlock{}
 		xdr.Unmarshal(bytes.NewBuffer(output.Bytes()), &b)
 
