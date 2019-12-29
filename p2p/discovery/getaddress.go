@@ -14,7 +14,9 @@ import (
 
 func (p *protocol) newGetAddressesRequestHandler() func(msg server.Message) []byte {
 	return func(msg server.Message) []byte {
-		p.logger.Debug("Got a get_address request from %v", msg.Sender().String())
+		t := time.Now()
+		plogger := p.logger.WithFields(log.String("type", "getaddresses"), log.String("from", msg.Sender().String()))
+		plogger.Debug("got request")
 
 		// TODO: if we don't know who is that peer (a.k.a first time we hear from this address)
 		// 		 we must ensure that he's indeed listening on that address = check last pong
@@ -34,11 +36,11 @@ func (p *protocol) newGetAddressesRequestHandler() func(msg server.Message) []by
 		resp, err := types.InterfaceToBytes(results)
 
 		if err != nil {
-			p.logger.Error("Error marshaling response message (GetAddress)")
+			plogger.Error("Error marshaling response message (GetAddress) %v", err)
 			return nil
 		}
 
-		p.logger.Debug("responding a get_address request from %v", msg.Sender().String())
+		plogger.With().Debug("Sending response", log.Int("size", len(results)), log.Duration("time_to_make", time.Since(t)))
 		return resp
 	}
 }
@@ -48,6 +50,10 @@ func (p *protocol) GetAddresses(server p2pcrypto.PublicKey) ([]*node.NodeInfo, e
 	start := time.Now()
 	var err error
 
+	plogger := p.logger.WithFields(log.String("type", "getaddresses"), log.String("to", server.String()))
+
+	plogger.Debug("sending request")
+
 	// response handler
 	ch := make(chan []*node.NodeInfo)
 	resHandler := func(msg []byte) {
@@ -56,12 +62,12 @@ func (p *protocol) GetAddresses(server p2pcrypto.PublicKey) ([]*node.NodeInfo, e
 		err := types.BytesToInterface(msg, &nodes)
 		//todo: check that we're not pass max results ?
 		if err != nil {
-			p.logger.Warning("could not deserialize bytes to NodeInfo, skipping packet err=", err)
+			plogger.Warning("could not deserialize bytes to NodeInfo, skipping packet err=", err)
 			return
 		}
 
 		if len(nodes) > getAddrMax {
-			p.logger.Warning("addresses response from %v size is too large, ignoring. got: %v, expected: < %v", server.String(), len(nodes), getAddrMax)
+			plogger.Warning("addresses response from %v size is too large, ignoring. got: %v, expected: < %v", server.String(), len(nodes), getAddrMax)
 			return
 		}
 
@@ -80,7 +86,7 @@ func (p *protocol) GetAddresses(server p2pcrypto.PublicKey) ([]*node.NodeInfo, e
 		if nodes == nil {
 			return nil, errors.New("empty result set")
 		}
-		p.logger.With().Debug("getaddress_time_to_recv", log.String("from", server.String()), log.Duration("time_elapsed", time.Now().Sub(start)))
+		plogger.With().Debug("getaddress_time_to_recv", log.Int("len", len(nodes)), log.Duration("time_elapsed", time.Now().Sub(start)))
 		return nodes, nil
 	case <-timeout.C:
 		return nil, errors.New("request timed out")

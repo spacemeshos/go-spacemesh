@@ -5,6 +5,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
+	inet "net"
 
 	"bytes"
 	"errors"
@@ -17,7 +18,7 @@ type dialResult struct {
 }
 
 type networker interface {
-	Dial(address string, remotePublicKey p2pcrypto.PublicKey) (net.Connection, error) // Connect to a remote node. Can send when no error.
+	Dial(address inet.Addr, remotePublicKey p2pcrypto.PublicKey) (net.Connection, error) // Connect to a remote node. Can send when no error.
 	SubscribeOnNewRemoteConnections(func(event net.NewConnectionEvent))
 	NetworkID() int8
 	SubscribeClosingConnections(func(net.ConnectionWithErr))
@@ -184,7 +185,7 @@ func (cp *ConnectionPool) handleClosedConnection(conn net.Connection) {
 }
 
 // GetConnection fetches or creates if don't exist a connection to the address which is associated with the remote public key
-func (cp *ConnectionPool) GetConnection(address string, remotePub p2pcrypto.PublicKey) (net.Connection, error) {
+func (cp *ConnectionPool) GetConnection(address inet.Addr, remotePub p2pcrypto.PublicKey) (net.Connection, error) {
 	cp.connMutex.RLock()
 	if cp.shutdown {
 		cp.connMutex.RUnlock()

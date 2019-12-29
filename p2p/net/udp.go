@@ -2,16 +2,15 @@ package net
 
 import (
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"net"
-
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
+	"net"
 )
 
 // TODO: we should remove this const. Should  not depend on the number of addresses.
 // TODO: the number of addresses should be derived from the limit provided in the config
-const maxMessageSize = 300 * 60 // @see 0getAddrMax
+const maxMessageSize = 30000 // @see getAddrMax
 
 // UDPMessageEvent is an event about a udp message. passed through a channel
 type UDPMessageEvent struct {
@@ -123,7 +122,7 @@ func (n *UDPNet) listenToUDPNetworkMessages(listener net.PacketConn) {
 			if temp, ok := err.(interface {
 				Temporary() bool
 			}); ok && temp.Temporary() {
-				n.logger.Debug("Temporary UDP error", err)
+				n.logger.Warning("Temporary UDP error", err)
 				continue
 			} else {
 				n.logger.With().Error("Listen UDP error, stopping server", log.Err(err))
@@ -144,26 +143,27 @@ func (n *UDPNet) listenToUDPNetworkMessages(listener net.PacketConn) {
 		msg, pk, err := p2pcrypto.ExtractPubkey(copybuf)
 
 		if err != nil {
-			n.logger.Debug("error can't extract public key from udp message. (addr=%v), err=%v", addr.String(), err)
+			n.logger.Warning("error can't extract public key from udp message. (addr=%v), err=%v", addr.String(), err)
 			continue
 		}
 
 		ns := n.cache.GetOrCreate(pk)
 
 		if ns == nil {
-			n.logger.Debug("coul'd not create session with %v:%v skipping message..", addr.String(), pk.String())
+			n.logger.Warning("coul'd not create session with %v:%v skipping message..", addr.String(), pk.String())
 			continue
 		}
 
 		final, err := ns.OpenMessage(msg)
 		if err != nil {
-			n.logger.Debug("skipping udp with session message err=%v msg=", err, copybuf)
+			n.logger.With().Warning("skipping udp with session message", log.Err(err), log.String("from", pk.String()), log.Int("msglen", len(msg)))
 			// todo: remove malfunctioning session, ban ip ?
 			continue
 		}
 
 		select {
 		case n.msgChan <- UDPMessageEvent{pk, addr, final}:
+			n.logger.With().Debug("recv udp message", log.String("from", pk.String()), log.String("fromaddr", addr.String()), log.Int("len", len(final)), log.Int("orig_size", size))
 		case <-n.shutdown:
 			return
 		}

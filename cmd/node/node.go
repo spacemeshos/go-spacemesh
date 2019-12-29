@@ -127,6 +127,7 @@ type SpacemeshApp struct {
 	log            log.Log
 	txPool         *miner.TxMempool
 	loggers        map[string]*zap.AtomicLevel
+	term           chan struct{} // this channel is closed when closing services, goroutines should wait on this channel in order to terminate
 }
 
 // ParseConfig unmarshal config file into struct
@@ -161,6 +162,7 @@ func NewSpacemeshApp() *SpacemeshApp {
 	node := &SpacemeshApp{
 		Config:  &defaultConfig,
 		loggers: make(map[string]*zap.AtomicLevel),
+		term:    make(chan struct{}),
 	}
 
 	return node
@@ -547,6 +549,27 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	return nil
 }
 
+// periodically checks that our clock is sync
+func (app *SpacemeshApp) checkTimeDrifts() {
+	checkTimeSync := time.NewTicker(app.Config.TIME.RefreshNtpInterval)
+	defer checkTimeSync.Stop() // close ticker
+
+	for {
+		select {
+		case <-app.term:
+			return
+
+		case <-checkTimeSync.C:
+			_, err := timesync.CheckSystemClockDrift()
+			if err != nil {
+				app.log.Error("System time couldn't synchronize %s", err)
+				app.stopServices()
+				return
+			}
+		}
+	}
+}
+
 func (app *SpacemeshApp) startServices() {
 	app.blockListener.Start()
 	app.syncer.Start()
@@ -573,9 +596,13 @@ func (app *SpacemeshApp) startServices() {
 	}
 	app.atxBuilder.Start()
 	app.clock.StartNotifying()
+	go app.checkTimeDrifts()
 }
 
 func (app *SpacemeshApp) stopServices() {
+	// all go-routines that listen to app.term will close
+	// note: there is no guarantee that a listening go-routine will close before stopServices exits
+	close(app.term)
 
 	if app.jsonAPIService != nil {
 		log.Info("Stopping JSON service api...")
@@ -635,7 +662,6 @@ func (app *SpacemeshApp) stopServices() {
 			closer.Close()
 		}
 	}
-
 }
 
 func (app *SpacemeshApp) LoadOrCreateEdSigner() (*signing.EdSigner, error) {

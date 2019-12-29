@@ -31,6 +31,8 @@ func (m *Monitor) monitor() {
 	for {
 		select {
 		case <-m.term:
+			m.updateTicker.Stop()
+			m.printTicker.Stop()
 			return
 		case <-m.updateTicker.C:
 			m.recorder.Update()
