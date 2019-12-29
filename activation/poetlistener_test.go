@@ -6,6 +6,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
@@ -17,7 +18,9 @@ type ServiceMock struct {
 
 func (ServiceMock) Start() error { panic("implement me") }
 
-func (s *ServiceMock) RegisterGossipProtocol(protocol string) chan service.GossipMessage { return s.ch }
+func (s *ServiceMock) RegisterGossipProtocol(protocol string, priority priorityq.Priority) chan service.GossipMessage {
+	return s.ch
+}
 
 func (ServiceMock) SubscribePeerEvents() (new chan p2pcrypto.PublicKey, del chan p2pcrypto.PublicKey) {
 	panic("implement me")

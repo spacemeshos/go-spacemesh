@@ -148,6 +148,7 @@ type SpacemeshApp struct {
 	log            log.Log
 	txPool         *miner.TxMempool
 	loggers        map[string]*zap.AtomicLevel
+	term           chan struct{} // this channel is closed when closing services, goroutines should wait on this channel in order to terminate
 }
 
 func LoadConfigFromFile() (*cfg.Config, error) {
@@ -187,6 +188,7 @@ func NewSpacemeshApp() *SpacemeshApp {
 	node := &SpacemeshApp{
 		Config:  &defaultConfig,
 		loggers: make(map[string]*zap.AtomicLevel),
+		term:    make(chan struct{}),
 	}
 
 	return node
@@ -561,7 +563,29 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId,
 	app.poetListener = poetListener
 	app.atxBuilder = atxBuilder
 	app.oracle = blockOracle
+	app.txProcessor = processor
 	return nil
+}
+
+// periodically checks that our clock is sync
+func (app *SpacemeshApp) checkTimeDrifts() {
+	checkTimeSync := time.NewTicker(app.Config.TIME.RefreshNtpInterval)
+	defer checkTimeSync.Stop() // close ticker
+
+	for {
+		select {
+		case <-app.term:
+			return
+
+		case <-checkTimeSync.C:
+			_, err := timesync.CheckSystemClockDrift()
+			if err != nil {
+				app.log.Error("System time couldn't synchronize %s", err)
+				app.stopServices()
+				return
+			}
+		}
+	}
 }
 
 func (app *SpacemeshApp) HareFactory(mdb *mesh.MeshDB, swarm service.Service, sgn hare.Signer, nodeID types.NodeId, syncer *sync.Syncer, msh *mesh.Mesh, hOracle hare.Rolacle, idStore *activation.IdentityStore, clock TickProvider, lg log.Log) HareService {
@@ -616,9 +640,13 @@ func (app *SpacemeshApp) startServices() {
 	}
 	app.atxBuilder.Start()
 	app.clock.StartNotifying()
+	go app.checkTimeDrifts()
 }
 
 func (app *SpacemeshApp) stopServices() {
+	// all go-routines that listen to app.term will close
+	// note: there is no guarantee that a listening go-routine will close before stopServices exits
+	close(app.term)
 
 	if app.jsonAPIService != nil {
 		log.Info("Stopping JSON service api...")
@@ -678,7 +706,6 @@ func (app *SpacemeshApp) stopServices() {
 			closer.Close()
 		}
 	}
-
 }
 
 func (app *SpacemeshApp) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
@@ -859,12 +886,12 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	if apiConf.StartGrpcServer || apiConf.StartJSONServer {
 		// start grpc if specified or if json rpc specified
 		layerDuration := app.Config.LayerDurationSec
-		app.grpcAPIService = api.NewGrpcService(app.P2P, app.state, app.mesh, app.txPool, app.atxBuilder, app.oracle, app.clock, postClient, layerDuration, app)
+		app.grpcAPIService = api.NewGrpcService(apiConf.GrpcServerPort, app.P2P, app.state, app.mesh, app.txPool, app.atxBuilder, app.oracle, app.clock, postClient, layerDuration, app)
 		app.grpcAPIService.StartService()
 	}
 
 	if apiConf.StartJSONServer {
-		app.jsonAPIService = api.NewJSONHTTPServer()
+		app.jsonAPIService = api.NewJSONHTTPServer(apiConf.JSONServerPort, apiConf.GrpcServerPort)
 		app.jsonAPIService.StartService()
 	}
 

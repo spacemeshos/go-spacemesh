@@ -32,6 +32,7 @@ endif
 all: install build
 .PHONY: all
 
+
 install:
 ifeq ($(OS),Windows_NT) 
 	setup_env.bat
@@ -39,6 +40,7 @@ else
 	./setup_env.sh
 endif
 .PHONY: install
+
 
 genproto:
 ifeq ($(OS),Windows_NT) 
@@ -48,6 +50,7 @@ else
 endif
 .PHONY: genproto
 
+
 build: genproto
 ifeq ($(OS),Windows_NT)
 	go build ${LDFLAGS} -o $(BIN_DIR_WIN)/$(BINARY).exe
@@ -55,6 +58,7 @@ else
 	go build ${LDFLAGS} -o $(BIN_DIR)/$(BINARY)
 endif
 .PHONY: build
+
 
 hare:
 ifeq ($(OS),Windows_NT)
@@ -64,6 +68,7 @@ else
 endif
 .PHONY: hare
 
+
 p2p:
 ifeq ($(OS),WINDOWS_NT)
 	cd cmd/p2p ; go build -o $(BIN_DIR_WIN)/go-p2p.exe; cd ..
@@ -71,6 +76,7 @@ else
 	cd cmd/p2p ; go build -o $(BIN_DIR)/go-p2p; cd ..
 endif
 .PHONY: p2p
+
 
 sync:
 ifeq ($(OS),WINDOWS_NT)
@@ -80,6 +86,7 @@ else
 endif
 .PHONY: sync
 
+
 harness:
 ifeq ($(OS),WINDOWS_NT)
 	cd cmd/integration ; go build -o $(BIN_DIR_WIN)/go-harness.exe; cd ..
@@ -88,9 +95,11 @@ else
 endif
 .PHONY: harness
 
+
 tidy:
 	go mod tidy
 .PHONY: tidy
+
 
 $(PLATFORMS): genproto
 ifeq ($(OS),Windows_NT)
@@ -100,13 +109,16 @@ else
 endif
 .PHONY: $(PLATFORMS)
 
+
 arm6: genproto
 	GOOS=linux GOARCH=arm GOARM=6 go build ${LDFLAGS} -o $(CURR_DIR)/$(BINARY)
 .PHONY: pi
 
+
 test: genproto
 	ulimit -n 500; go test -timeout 0 -p 1 ./...
 .PHONY: test
+
 
 test-tidy:
 	# Working directory must be clean, or this test would be destructive
@@ -115,6 +127,7 @@ test-tidy:
 	make tidy
 	git diff --exit-code || (git checkout . && exit 1)
 .PHONY: test-tidy
+
 
 test-fmt:
 	git diff --quiet || (echo "\033[0;31mWorking directory not clean!\033[0m" && exit 1)
@@ -127,6 +140,7 @@ lint:
 	./scripts/validate-lint.sh
 .PHONY: lint
 
+
 cover:
 	@echo "mode: count" > cover-all.out
 	@$(foreach pkg,$(PKGS),\
@@ -135,9 +149,11 @@ cover:
 	go tool cover -html=cover-all.out
 .PHONY: cover
 
+
 dockerbuild-go:
 	docker build -t $(DOCKER_IMAGE_REPO):$(BRANCH) .
 .PHONY: dockerbuild-go
+
 
 dockerbuild-test:
 	docker build -f DockerFileTests --build-arg GCLOUD_KEY="$(GCLOUD_KEY)" \
@@ -146,6 +162,7 @@ dockerbuild-test:
 	             --build-arg CLUSTER_ZONE="$(CLUSTER_ZONE)" \
 	             -t go-spacemesh-python:$(BRANCH) .
 .PHONY: dockerbuild-test
+
 
 dockerpush: dockerbuild-go
 	echo "$(DOCKER_PASSWORD)" | docker login -u "$(DOCKER_USERNAME)" --password-stdin
@@ -177,6 +194,7 @@ endif
 dockertest-p2p: dockerbuild-test dockerrun-p2p
 .PHONY: dockertest-p2p
 
+
 dockerrun-mining:
 ifndef ES_PASSWD
 	$(error ES_PASSWD is not set)
@@ -190,6 +208,7 @@ endif
 dockertest-mining: dockerbuild-test dockerrun-mining
 .PHONY: dockertest-mining
 
+
 dockerrun-hare:
 ifndef ES_PASSWD
 	$(error ES_PASSWD is not set)
@@ -200,8 +219,10 @@ endif
 		-it go-spacemesh-python:$(BRANCH) pytest -s -v hare/test_hare.py::test_hare_sanity --tc-file=hare/config.yaml --tc-format=yaml
 .PHONY: dockerrun-hare
 
+
 dockertest-hare: dockerbuild-test dockerrun-hare
 .PHONY: dockertest-hare
+
 
 dockerrun-sync:
 ifndef ES_PASSWD
@@ -238,8 +259,25 @@ endif
 dockertest-late-nodes: dockerbuild-test dockerrun-late-nodes
 .PHONY: dockertest-late-nodes
 
+
+dockerrun-genesis-voting:
+ifndef ES_PASSWD
+	$(error ES_PASSWD is not set)
+endif
+
+	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
+		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
+		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
+		-it go-spacemesh-python:$(BRANCH) pytest -s -v sync/genesis/test_genesis_voting.py --tc-file=sync/genesis/config.yaml --tc-format=yaml
+
+.PHONY: dockerrun-genesis-voting
+
+dockertest-genesis-voting: dockerbuild-test dockerrun-genesis-voting
+.PHONY: dockertest-genesis-voting
+
+
 # The following is used to run tests one after the other locally
-dockerrun-test: dockerbuild-test dockerrun-p2p dockerrun-mining dockerrun-hare dockerrun-sync dockerrun-late-nodes
+dockerrun-test: dockerbuild-test dockerrun-p2p dockerrun-mining dockerrun-hare dockerrun-sync dockerrun-late-nodes # dockerrun-genesis-voting
 .PHONY: dockerrun-test
 
 dockerrun-all: dockerpush dockerrun-test

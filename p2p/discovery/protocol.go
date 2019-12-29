@@ -34,10 +34,10 @@ func (d *protocol) SetLocalAddresses(tcp, udp int) {
 const Name = "/udp/v2/discovery"
 
 // MessageBufSize is the buf size we give to the messages channel
-const MessageBufSize = 100
+const MessageBufSize = 1000
 
 // MessageTimeout is the timeout we tolerate when waiting for a message reply
-const MessageTimeout = time.Second * 2 // TODO: Parametrize
+const MessageTimeout = time.Second * 5 // TODO: Parametrize
 
 // PINGPONG is the ping protocol ID
 const PINGPONG = 0
