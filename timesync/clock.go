@@ -124,6 +124,7 @@ func (t *Ticker) startClock(diff time.Duration) {
 	}
 	t.notifyOnTick()
 	tick := time.NewTicker(t.tickInterval)
+	defer tick.Stop()
 	log.Info("clock waiting on event, tick interval is %v", t.tickInterval)
 	for {
 		select {
@@ -133,6 +134,7 @@ func (t *Ticker) startClock(diff time.Duration) {
 			return
 		}
 	}
+
 }
 
 func (t Ticker) GetGenesisTime() time.Time {

@@ -17,7 +17,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/timesync"
-	timeSyncConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"strings"
 
 	inet "net"
@@ -244,8 +243,6 @@ func (s *swarm) Start() error {
 
 	// TODO : insert new addresses to discovery
 
-	go s.checkTimeDrifts()
-
 	if s.config.SwarmConfig.Bootstrap {
 		go func() {
 			b := time.Now()
@@ -446,26 +443,6 @@ func (s *swarm) listenToNetworkMessages() {
 		}(netqueues[nq])
 	}
 
-}
-
-// periodically checks that our clock is sync
-func (s *swarm) checkTimeDrifts() {
-	checkTimeSync := time.NewTicker(timeSyncConfig.TimeConfigValues.RefreshNtpInterval)
-Loop:
-	for {
-		select {
-		case <-s.shutdown:
-			break Loop
-
-		case <-checkTimeSync.C:
-			_, err := timesync.CheckSystemClockDrift()
-			if err != nil {
-				checkTimeSync.Stop()
-				s.lNode.Error("System time could'nt synchronize %s", err)
-				s.Shutdown()
-			}
-		}
-	}
 }
 
 // onRemoteClientMessage possible errors
