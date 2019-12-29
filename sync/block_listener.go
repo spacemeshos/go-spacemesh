@@ -5,6 +5,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -43,7 +44,7 @@ func NewBlockListener(net service.Service, sync *Syncer, concurrency int, logger
 		Log:                  logger,
 		semaphore:            make(chan struct{}, concurrency),
 		exit:                 make(chan struct{}),
-		receivedGossipBlocks: net.RegisterGossipProtocol(config.NewBlockProtocol),
+		receivedGossipBlocks: net.RegisterGossipProtocol(config.NewBlockProtocol, priorityq.High),
 	}
 	return &bl
 }

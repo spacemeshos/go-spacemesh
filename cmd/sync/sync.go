@@ -149,7 +149,16 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 
 	txpool := miner.NewTxMemPool()
 	atxpool := miner.NewAtxMemPool()
-	msh := mesh.NewMesh(mshdb, atxdb, sync.ConfigTst(), &sync.MeshValidatorMock{}, txpool, atxpool, &sync.MockState{}, lg.WithOptions(log.Nop))
+
+	var msh *mesh.Mesh
+	if mshdb.PersistentData() {
+		lg.Info("persistent data found ")
+		msh = mesh.NewRecoveredMesh(mshdb, atxdb, sync.ConfigTst(), &sync.MeshValidatorMock{}, txpool, atxpool, &sync.MockState{}, lg.WithOptions(log.Nop))
+	} else {
+		lg.Info("no persistent data found ")
+		msh = mesh.NewMesh(mshdb, atxdb, sync.ConfigTst(), &sync.MeshValidatorMock{}, txpool, atxpool, &sync.MockState{}, lg.WithOptions(log.Nop))
+	}
+
 	msh.SetBlockBuilder(&MockBlockBuilder{})
 
 	defer msh.Close()

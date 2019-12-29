@@ -4,14 +4,20 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/priorityq"
 )
 
 const PoetProofProtocol = "PoetProof"
 
+type PoetValidatorPersistor interface {
+	Validate(proof types.PoetProof, poetId []byte, roundId string, signature []byte) error
+	storeProof(proofMessage *types.PoetProofMessage) error
+}
+
 type PoetListener struct {
 	Log               log.Log
 	net               service.Service
-	poetDb            *PoetDb
+	poetDb            PoetValidatorPersistor
 	poetProofMessages chan service.GossipMessage
 	started           bool
 	exit              chan struct{}
@@ -47,6 +53,7 @@ func (l *PoetListener) loop() {
 }
 
 func (l *PoetListener) handlePoetProofMessage(gossipMessage service.GossipMessage) {
+	// ⚠️ IMPORTANT: We must not ensure that the node is synced! PoET messages must be propagated regardless.
 	var proofMessage types.PoetProofMessage
 	if err := types.BytesToInterface(gossipMessage.Bytes(), &proofMessage); err != nil {
 		l.Log.Error("failed to unmarshal PoET membership proof: %v", err)
@@ -70,12 +77,12 @@ func (l *PoetListener) handlePoetProofMessage(gossipMessage service.GossipMessag
 	}
 }
 
-func NewPoetListener(net service.Service, poetDb *PoetDb, logger log.Log) *PoetListener {
+func NewPoetListener(net service.Service, poetDb PoetValidatorPersistor, logger log.Log) *PoetListener {
 	return &PoetListener{
 		Log:               logger,
 		net:               net,
 		poetDb:            poetDb,
-		poetProofMessages: net.RegisterGossipProtocol(PoetProofProtocol),
+		poetProofMessages: net.RegisterGossipProtocol(PoetProofProtocol, priorityq.Low),
 		exit:              make(chan struct{}),
 	}
 }

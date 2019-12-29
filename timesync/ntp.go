@@ -139,7 +139,6 @@ func ntpTimeDrift() (time.Duration, error) {
 	// if more servers fail than succeed in DefaultTimeoutLatency timeout the node.
 	// TODO: possibly add retries when timeout
 	queriedServers := make(map[int]bool)
-	rand.Seed(time.Now().Unix()) // we don't need too special seed for that
 	sl := len(DefaultServers) - 1
 	for i := 0; i < config.TimeConfigValues.NtpQueries; i++ {
 		rndsrv := rand.Intn(sl)

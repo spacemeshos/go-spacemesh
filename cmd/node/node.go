@@ -446,8 +446,6 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 		return err
 	}
 
-	trtl := tortoise.NewAlgorithm(int(layerSize), mdb, app.Config.Hdist, app.addLogger(TrtlLogger, lg))
-
 	app.txPool = miner.NewTxMemPool()
 	atxpool := miner.NewAtxMemPool()
 	meshAndPoolProjector := pending_txs.NewMeshAndPoolProjector(mdb, app.txPool)
@@ -463,7 +461,16 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	beaconProvider := &oracle.EpochBeaconProvider{}
 	eValidator := oracle.NewBlockEligibilityValidator(layerSize, uint32(app.Config.GenesisActiveSet), layersPerEpoch, atxdb, beaconProvider, BLS381.Verify2, app.addLogger(BlkEligibilityLogger, lg))
 
-	msh := mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, app.txPool, atxpool, processor, app.addLogger(MeshLogger, lg)) //todo: what to do with the logger?
+	var msh *mesh.Mesh
+	var trtl *tortoise.Algorithm
+	if mdb.PersistentData() {
+		trtl = tortoise.NewRecoveredAlgorithm(mdb, app.addLogger(TrtlLogger, lg))
+		msh = mesh.NewRecoveredMesh(mdb, atxdb, app.Config.REWARD, trtl, app.txPool, atxpool, processor, app.addLogger(MeshLogger, lg))
+
+	} else {
+		trtl = tortoise.NewAlgorithm(int(layerSize), mdb, app.Config.Hdist, app.addLogger(TrtlLogger, lg))
+		msh = mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, app.txPool, atxpool, processor, app.addLogger(MeshLogger, lg))
+	}
 
 	conf := sync.Configuration{Concurrency: 4, LayerSize: int(layerSize), LayersPerEpoch: layersPerEpoch, RequestTimeout: time.Duration(app.Config.SyncRequestTimeout) * time.Millisecond, Hdist: app.Config.Hdist, AtxsLimit: app.Config.AtxsPerBlock}
 	if app.Config.AtxsPerBlock > miner.AtxsPerBlockLimit { // validate limit
@@ -536,6 +543,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	app.poetListener = poetListener
 	app.atxBuilder = atxBuilder
 	app.oracle = blockOracle
+	app.txProcessor = processor
 	return nil
 }
 
@@ -803,12 +811,12 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	if apiConf.StartGrpcServer || apiConf.StartJSONServer {
 		// start grpc if specified or if json rpc specified
 		layerDuration := app.Config.LayerDurationSec
-		app.grpcAPIService = api.NewGrpcService(app.P2P, app.state, app.mesh, app.txPool, app.atxBuilder, app.oracle, app.clock, postClient, layerDuration, app)
+		app.grpcAPIService = api.NewGrpcService(apiConf.GrpcServerPort, app.P2P, app.state, app.mesh, app.txPool, app.atxBuilder, app.oracle, app.clock, postClient, layerDuration, app)
 		app.grpcAPIService.StartService()
 	}
 
 	if apiConf.StartJSONServer {
-		app.jsonAPIService = api.NewJSONHTTPServer()
+		app.jsonAPIService = api.NewJSONHTTPServer(apiConf.JSONServerPort, apiConf.GrpcServerPort)
 		app.jsonAPIService.StartService()
 	}
 

@@ -4,6 +4,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/rand"
 	"sync/atomic"
 )
 
@@ -40,8 +41,11 @@ func (pi PeersImpl) Close() {
 
 func (pi PeersImpl) GetPeers() []Peer {
 	peers := pi.snapshot.Load().([]Peer)
-	pi.With().Info("now connected", log.Int("n_peers", len(peers)))
-	return peers
+	cpy := make([]Peer, len(peers))
+	copy(cpy, peers) //if we dont copy we will shuffle orig array
+	pi.With().Info("now connected", log.Int("n_peers", len(cpy)))
+	rand.Shuffle(len(cpy), func(i, j int) { cpy[i], cpy[j] = cpy[j], cpy[i] }) //shuffle peers order
+	return cpy
 }
 
 func (pi *PeersImpl) listenToPeers(newPeerC chan p2pcrypto.PublicKey, expiredPeerC chan p2pcrypto.PublicKey) {
