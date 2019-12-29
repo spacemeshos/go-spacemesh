@@ -314,7 +314,7 @@ func TestJsonWalletApi(t *testing.T) {
 	// test get genesisTime
 	respBody, respStatus = callEndpoint(t, "v1/genesis", "")
 	r.Equal(http.StatusOK, respStatus)
-	assertSimpleMessage(t, respBody, genTime.t.String())
+	assertSimpleMessage(t, respBody, genTime.t.Format(time.RFC3339))
 
 	// test get rewards per account
 	payload = marshalProto(t, &pb.AccountId{Address: util.Bytes2Hex(addr.Bytes())})
