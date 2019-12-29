@@ -39,11 +39,11 @@ func newFetchRequestTimer(msgtype server.MessageType) *prometheus.Timer {
 
 var (
 	gossipBlockTime = prometheus.NewSummary(prometheus.SummaryOpts{Name: "gossip_block_request_durations",
-		Help:       "block requests duration in milliseconds",
+		Help:       "gossip block handle duration in milliseconds",
 		Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001}})
 
 	syncLayerTime = prometheus.NewSummary(prometheus.SummaryOpts{Name: "sync_Layer_durations",
-		Help:       "block requests duration in milliseconds",
+		Help:       "Layer Fetch duration in milliseconds",
 		Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001}})
 
 	blockTime = prometheus.NewSummary(prometheus.SummaryOpts{Name: "block_request_durations",
@@ -54,7 +54,7 @@ var (
 		Help:       "tx requests duration in milliseconds",
 		Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001}})
 
-	atxTime = prometheus.NewSummary(prometheus.SummaryOpts{Name: "tx_request_durations",
-		Help:       "tx requests duration in milliseconds",
+	atxTime = prometheus.NewSummary(prometheus.SummaryOpts{Name: "atx_request_durations",
+		Help:       "atx requests duration in milliseconds",
 		Objectives: map[float64]float64{0.5: 0.05, 0.9: 0.01, 0.99: 0.001}})
 )
