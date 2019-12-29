@@ -16,7 +16,7 @@ import (
 const AtxProtocol = "AtxGossip"
 
 var activesetCache = NewActivesetCache(1000)
-var tooSoonErr = errors.New("received PoET proof too soon")
+var tooSoonErr = errors.New("received PoET proof before publication epoch")
 
 type MeshProvider interface {
 	GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error)
@@ -231,7 +231,7 @@ func (b *Builder) buildNipstChallenge(epoch types.EpochId) error {
 		//todo: handle this case for loading mem and recovering
 		//check if this node hasn't published an activation already
 		if b.prevATX.PubLayerIdx.GetEpoch(b.layersPerEpoch) == epoch+1 {
-			b.log.With().Info("atx already created, aborting", log.EpochId(uint64(epoch)))
+			b.log.With().Info("atx already created in this epoch, aborting", log.EpochId(uint64(epoch)))
 			return alreadyPublishedErr{}
 		}
 		prevAtxId = b.prevATX.Id()
@@ -398,43 +398,57 @@ func (b *Builder) discardChallenge() error {
 // PublishActivationTx attempts to publish an atx for the given epoch, it returns an error if an atx cannot be created
 // publish atx may not produce an atx each time it is called, that is expected behaviour as well.
 func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
-	if b.nipst != nil {
-		b.log.With().Info("re-entering atx creation in epoch %v", log.EpochId(uint64(epoch)))
+	if b.challenge != nil && b.challenge.PubLayerIdx.GetEpoch(b.layersPerEpoch)+1 < epoch {
+		b.log.With().Info("atx target epoch has already passed -- starting over",
+			log.Uint64("target_epoch", uint64(b.challenge.PubLayerIdx.GetEpoch(b.layersPerEpoch)+1)),
+			log.Uint64("start_epoch", uint64(epoch)),
+		)
+		b.cleanupState()
+	}
+	if b.challenge != nil {
+		b.log.With().Info("using existing challenge", log.EpochId(uint64(epoch)))
 	} else {
-		b.log.With().Info("starting build atx in epoch %v", log.EpochId(uint64(epoch)))
-		if b.challenge != nil {
-			if b.challenge.PubLayerIdx.GetEpoch(b.layersPerEpoch) < epoch {
-				log.Info("previous challenge loaded from store, but epoch has already passed, %s, %s", epoch, b.challenge.PubLayerIdx.GetEpoch(b.layersPerEpoch))
-				b.challenge = nil
-				err := b.discardChallenge()
-				if err != nil {
-					log.Error("cannot discard challenge")
-				}
+		b.log.With().Info("building new challenge", log.EpochId(uint64(epoch)))
+		err := b.buildNipstChallenge(epoch)
+		if err != nil {
+			if _, alreadyPublished := err.(alreadyPublishedErr); alreadyPublished {
+				// ATX already published in this epoch
+				return nil
 			}
+			return err
 		}
-		if b.challenge == nil {
-			err := b.buildNipstChallenge(epoch)
-			if err != nil {
-				if _, alreadyPublished := err.(alreadyPublishedErr); alreadyPublished {
-					return nil
-				}
-				return err
-			}
-		}
+	}
+
+	if b.nipst != nil {
+		b.log.With().Info("using existing nipst", log.EpochId(uint64(epoch)))
+	} else {
+		b.log.With().Info("building new nipst", log.EpochId(uint64(epoch)))
 		hash, err := b.challenge.Hash()
 		if err != nil {
 			return fmt.Errorf("getting challenge hash failed: %v", err)
 		}
-		b.nipst, err = b.nipstBuilder.BuildNIPST(hash)
+		b.nipst, err = b.nipstBuilder.BuildNIPST(hash) // this includes waiting for PoET, which should take ~1 epoch
 		if err != nil {
 			return fmt.Errorf("cannot create Nipst: %v", err)
 		}
 	}
-	if b.mesh.LatestLayer().GetEpoch(b.layersPerEpoch) < b.challenge.PubLayerIdx.GetEpoch(b.layersPerEpoch) {
+
+	if b.challenge.PubLayerIdx.GetEpoch(b.layersPerEpoch) > b.mesh.LatestLayer().GetEpoch(b.layersPerEpoch) {
 		// cannot determine active set size before mesh reaches publication epoch, will try again in next layer
-		b.log.Warning("received PoET proof too soon. ATX publication epoch: %v; mesh epoch: %v; started in clock-epoch: %v",
-			b.challenge.PubLayerIdx.GetEpoch(b.layersPerEpoch), b.mesh.LatestLayer().GetEpoch(b.layersPerEpoch), epoch)
+		b.log.With().Warning("received PoET proof before publication epoch",
+			log.Uint64("publication_epoch", uint64(b.challenge.PubLayerIdx.GetEpoch(b.layersPerEpoch))),
+			log.Uint64("mesh_epoch", uint64(b.mesh.LatestLayer().GetEpoch(b.layersPerEpoch))),
+			log.Uint64("started_in_epoch", uint64(epoch)),
+		)
 		return tooSoonErr
+	}
+	if b.challenge.PubLayerIdx.GetEpoch(b.layersPerEpoch)+1 < b.mesh.LatestLayer().GetEpoch(b.layersPerEpoch) {
+		b.log.With().Info("atx target epoch has already passed -- starting over",
+			log.Uint64("target_epoch", uint64(b.challenge.PubLayerIdx.GetEpoch(b.layersPerEpoch)+1)),
+			log.Uint64("mesh_epoch", uint64(b.mesh.LatestLayer().GetEpoch(b.layersPerEpoch))),
+		)
+		b.cleanupState()
+		return fmt.Errorf("atx target epoch has passed")
 	}
 
 	// when we reach here an epoch has passed
@@ -518,7 +532,7 @@ func (b *Builder) cleanupState() {
 	b.challenge = nil
 	b.posLayerID = 0
 	if err := b.discardChallenge(); err != nil {
-		log.Error("failed to discard Nipst challenge: %v", err)
+		b.log.Error("failed to discard Nipst challenge: %v", err)
 	}
 }
 
