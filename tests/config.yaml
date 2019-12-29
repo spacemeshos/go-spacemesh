@@ -10,7 +10,7 @@ deployment_ready_time_out: 60
 config_path: '../config.toml'
 
 bootstrap:
-  image: 'spacemeshos/go-spacemesh:develop'
+  image: 'spacemeshos/go-spacemesh-dev:barak232'
   command: '/bin/go-spacemesh'
   replicas: 1
 #  deployment_type: 'statefulset'
@@ -32,11 +32,9 @@ bootstrap:
     hare-wakeup-delta: '10'
     layers-per-epoch: '3'
     coinbase: '0x4321'
-    eligibility-confidence-param: '5'
+    eligibility-confidence-param: '25'
     eligibility-epoch-offset: '0'
-    genesis-active-size: '1'
-    post-labels: '20'
-    data-folder: '/usr/share/spacemesh/'
+    genesis-active-size: '50'
     post-labels: '20'
     data-folder: '/usr/share/spacemesh/'
 client:
