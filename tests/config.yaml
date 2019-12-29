@@ -4,13 +4,13 @@ config_map_name: conf
 
 script_on_exit: '' # Uncomment this to save logs './k8s/log-client-pods.sh'
 
-genesis_delta: 15
+genesis_delta: 40
 single_pod_ready_time_out: 60
 deployment_ready_time_out: 60
 config_path: '../config.toml'
 
 bootstrap:
-  image: 'spacemeshos/go-spacemesh-dev:barak232'
+  image: 'spacemeshos/go-spacemesh-dev:barak33'
   command: '/bin/go-spacemesh'
   replicas: 1
 #  deployment_type: 'statefulset'
@@ -22,23 +22,25 @@ bootstrap:
       memory: '2048M'
       cpu: '2'
   args:
-    randcon: '8'
-    hare-committee-size: '15'
-    hare-max-adversaries: '5'
-    hare-round-duration-sec: '10'
-    hare-exp-leaders: '4'
-    layer-duration-sec: '60'
-    layer-average-size: '200'
-    hare-wakeup-delta: '10'
-    layers-per-epoch: '5'
+    randcon: '0'
+    hare-committee-size: '1'
+    hare-max-adversaries: '0'
+    hare-round-duration-sec: '2'
+    hare-exp-leaders: '1'
+    layer-duration-sec: '20'
+    layer-average-size: '30'
+    hare-wakeup-delta: '11'
+    layers-per-epoch: '25'
     coinbase: '0x4321'
-    eligibility-confidence-param: '25'
+    eligibility-confidence-param: '9'
     eligibility-epoch-offset: '0'
-    genesis-active-size: '50'
+    genesis-active-size: '1'
+    post-labels: '20'
+    data-folder: '/usr/share/spacemesh/'
 client:
-  image: 'spacemeshos/go-spacemesh:develop'
+  image: 'spacemeshos/go-spacemesh-dev:barak232'
   command: '/bin/go-spacemesh'
-  replicas: 49
+  replicas: 0
 #  deployment_type: 'statefulset'
   resources:
     requests:
@@ -61,6 +63,8 @@ client:
     eligibility-confidence-param: '25'
     eligibility-epoch-offset: '0'
     genesis-active-size: '50'
+    post-labels: '20'
+    data-folder: '/usr/share/spacemesh/'
 elastic:
   host: elastic.spacemesh.io
   port: 9200

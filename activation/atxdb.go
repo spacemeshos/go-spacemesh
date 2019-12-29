@@ -48,7 +48,7 @@ type ActivationDb struct {
 
 func NewActivationDb(dbstore database.Database, idstore IdStore, meshDb *mesh.MeshDB, layersPerEpoch uint16, nipstValidator NipstValidator, log log.Log) *ActivationDb {
 	db := &ActivationDb{atxs: dbstore,
-		atxHeaderCache:   NewAtxCache(600),
+		atxHeaderCache:   NewAtxCache(5),
 		meshDb:           meshDb,
 		nipstValidator:   nipstValidator,
 		LayersPerEpoch:   layersPerEpoch,

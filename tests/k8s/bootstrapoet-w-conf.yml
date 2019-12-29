@@ -32,7 +32,7 @@ spec:
       - name: poet
         image: spacemeshos/poet:develop
         imagePullPolicy: Always
-        args: ['--rpclisten', '0.0.0.0:50002', '--restlisten', '0.0.0.0:80', "--n", "25", "--core.n", "25", "--jsonlog"]
+        args: ['--rpclisten', '0.0.0.0:50002', '--restlisten', '0.0.0.0:80', "--n", "21", "--core.n", "21", "--jsonlog"]
         resources:
           requests:
             memory: "512M"

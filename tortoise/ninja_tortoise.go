@@ -178,6 +178,8 @@ func (ni *NinjaTortoise) evictOutOfPbase() {
 				delete(ni.TSupport, p)
 				ni.Debug("evict pattern %v from maps ", p)
 			}
+			//delete(ni.TGood, lyr)
+			//delete(ni.Patterns, lyr)
 		}()
 		wg.Add(1)
 		go func() {
