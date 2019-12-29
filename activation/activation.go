@@ -522,8 +522,8 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 		b.log.With().Error("broadcast timeout when publishing ATX", fields...)
 		return fmt.Errorf("broadcast timeout")
 	}
-	b.prevATX = atx.ActivationTxHeader
 	b.cleanupState()
+	b.prevATX = atx.ActivationTxHeader
 	return nil
 }
 
@@ -534,6 +534,7 @@ func (b *Builder) cleanupState() {
 	if err := b.discardChallenge(); err != nil {
 		b.log.Error("failed to discard Nipst challenge: %v", err)
 	}
+	b.prevATX = nil
 }
 
 func (b *Builder) signAndBroadcast(atx *types.ActivationTx) error {
