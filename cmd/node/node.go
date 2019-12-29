@@ -127,6 +127,7 @@ type SpacemeshApp struct {
 	log            log.Log
 	txPool         *miner.TxMempool
 	loggers        map[string]*zap.AtomicLevel
+	term           chan struct{} // used to close checkTime
 }
 
 // ParseConfig unmarshal config file into struct
@@ -161,6 +162,7 @@ func NewSpacemeshApp() *SpacemeshApp {
 	node := &SpacemeshApp{
 		Config:  &defaultConfig,
 		loggers: make(map[string]*zap.AtomicLevel),
+		term:    make(chan struct{}, 1),
 	}
 
 	return node
@@ -550,11 +552,12 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 // periodically checks that our clock is sync
 func (app *SpacemeshApp) checkTimeDrifts() {
 	checkTimeSync := time.NewTicker(app.Config.TIME.RefreshNtpInterval)
-	defer checkTimeSync.Stop()
+	defer close(app.term)      // signal checkTimeDrifts closed
+	defer checkTimeSync.Stop() // first close ticker
 Loop:
 	for {
 		select {
-		case <-cmdp.Ctx.Done():
+		case <-app.term:
 			break Loop
 
 		case <-checkTimeSync.C:
@@ -597,6 +600,7 @@ func (app *SpacemeshApp) startServices() {
 }
 
 func (app *SpacemeshApp) stopServices() {
+	app.term <- struct{}{}
 
 	if app.jsonAPIService != nil {
 		log.Info("Stopping JSON service api...")
@@ -657,6 +661,7 @@ func (app *SpacemeshApp) stopServices() {
 		}
 	}
 
+	<-app.term // wait for close of checkTimeDrifts
 }
 
 func (app *SpacemeshApp) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
