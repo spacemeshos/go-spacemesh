@@ -153,9 +153,13 @@ func (mux *UDPMux) sendMessageImpl(peerPubkey p2pcrypto.PublicKey, protocol stri
 	// TODO: node.address should have IP address, UDP and TCP PORT.
 	// 		 for now assuming it's the same port for both.
 
-	mux.logger.Debug("Sending udp message to %v, %v", peer.String())
+	err = mux.network.Send(peer, data)
+	if err != nil {
+		return err
+	}
 
-	return mux.network.Send(peer, data)
+	mux.logger.With().Debug("Sent UDP message", log.String("protocol", protocol), log.String("to", peer.String()))
+	return nil
 }
 
 type udpProtocolMessage struct {
