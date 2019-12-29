@@ -168,7 +168,6 @@ func (ni *NinjaTortoise) evictOutOfPbase() {
 		go func() {
 			defer wg.Done()
 			for _, p := range ni.Patterns[lyr] {
-				delete(ni.TSupport, p)
 				delete(ni.TComplete, p)
 				delete(ni.TEffectiveToBlocks, p)
 				delete(ni.TVote, p)
