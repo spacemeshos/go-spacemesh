@@ -15,7 +15,7 @@ import (
 
 const AtxProtocol = "AtxGossip"
 
-var activesetCache = NewActivesetCache(1000)
+var activesetCache = NewActivesetCache(5)
 var tooSoonErr = errors.New("received PoET proof too soon")
 
 type MeshProvider interface {
