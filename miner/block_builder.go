@@ -364,7 +364,7 @@ func (t *BlockBuilder) handleGossipAtx(data service.GossipMessage) {
 	}
 	atx.CalcAndSetId()
 
-	t.With().Info("got new ATX", log.AtxId(atx.ShortString()))
+	t.With().Info("got new ATX", log.AtxId(atx.ShortString()), log.LayerId(uint64(atx.PubLayerIdx)))
 
 	//todo fetch from neighbour
 	if atx.Nipst == nil {
