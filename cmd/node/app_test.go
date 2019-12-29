@@ -121,6 +121,8 @@ func (suite *AppTestSuite) initSingleInstance(i int, genesisTime string, rng *am
 	smApp.Config.StartMining = true
 	smApp.Config.SyncRequestTimeout = 2000
 
+	smApp.Config.API = apiCfg.DefaultConfig()
+
 	edSgn := signing.NewEdSigner()
 	pub := edSgn.PublicKey()
 
@@ -155,9 +157,7 @@ func (suite *AppTestSuite) initMultipleInstances(rolacle *eligibility.FixedRolac
 }
 
 func activateGrpcServer(smApp *SpacemeshApp) {
-	smApp.Config.API.StartGrpcServer = true
-	layerDuration := smApp.Config.LayerDurationSec
-	smApp.grpcAPIService = api.NewGrpcService(smApp.P2P, smApp.state, smApp.mesh, smApp.txPool, smApp.atxBuilder, smApp.oracle, smApp.clock, nil, layerDuration, nil)
+	smApp.grpcAPIService = api.NewGrpcService(smApp.Config.API.GrpcServerPort, smApp.P2P, smApp.state, smApp.mesh, smApp.txPool, smApp.atxBuilder, smApp.oracle, smApp.clock, nil, smApp.Config.LayerDurationSec, nil)
 	smApp.grpcAPIService.StartService()
 }
 
