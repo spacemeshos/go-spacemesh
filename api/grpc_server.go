@@ -11,6 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/miner"
+	"google.golang.org/grpc/keepalive"
 	"net"
 	"strconv"
 	"time"
@@ -227,7 +228,19 @@ type TxAPI interface {
 
 // NewGrpcService create a new grpc service using config data.
 func NewGrpcService(port int, net NetworkAPI, state StateAPI, tx TxAPI, txMempool *miner.TxMempool, mining MiningAPI, oracle OracleAPI, genTime GenesisTimeAPI, post PostAPI, layerDurationSec int, logging LoggingAPI) *SpacemeshGrpcService {
-	server := grpc.NewServer()
+	options := []grpc.ServerOption{
+		// XXX: this is done to prevent routers from cleaning up our connections (e.g aws load balances..)
+		// TODO: these parameters work for now but we might need to revisit or add them as configuration
+		// TODO: Configure maxconns, maxconcurrentcons ..
+		grpc.KeepaliveParams(keepalive.ServerParameters{
+			time.Minute * 120,
+			time.Minute * 180,
+			time.Minute * 10,
+			time.Minute,
+			time.Minute * 3,
+		}),
+	}
+	server := grpc.NewServer(options...)
 	return &SpacemeshGrpcService{
 		Server:        server,
 		Port:          uint(port),
