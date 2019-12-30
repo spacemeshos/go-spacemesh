@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"net"
 	"time"
 
@@ -14,17 +15,18 @@ import (
 
 func (p *protocol) newPingRequestHandler() func(msg server.Message) []byte {
 	return func(msg server.Message) []byte {
-		p.logger.Info("handle ping request")
+		plogger := p.logger.WithFields(log.String("type", "ping"), log.String("from", msg.Sender().String()))
+		plogger.Debug("handle request")
 		pinged := &node.NodeInfo{}
 		err := types.BytesToInterface(msg.Bytes(), pinged)
 		if err != nil {
-			p.logger.Error("failed to deserialize ping message err=", err)
+			plogger.Error("failed to deserialize ping message err=", err)
 			panic("WTF")
 			return nil
 		}
 
 		if err := p.verifyPinger(msg.Metadata().FromAddress, pinged); err != nil {
-			p.logger.Error("msg contents were not valid err=", err)
+			plogger.Error("msg contents were not valid err=", err)
 			return nil
 		}
 
@@ -32,10 +34,11 @@ func (p *protocol) newPingRequestHandler() func(msg server.Message) []byte {
 		payload, err := types.InterfaceToBytes(p.local)
 		// TODO: include the resolved To address
 		if err != nil {
-			p.logger.Error("Error marshaling response message (Ping)")
+			plogger.Error("Error marshaling response message (Ping)")
 			return nil
 		}
 
+		plogger.Debug("Sending pong message")
 		return payload
 	}
 }
@@ -60,7 +63,9 @@ func (p *protocol) verifyPinger(from net.Addr, pi *node.NodeInfo) error {
 
 // Ping notifies `peer` about our p2p identity.
 func (p *protocol) Ping(peer p2pcrypto.PublicKey) error {
-	p.logger.Debug("send ping request Peer: %v", peer)
+	plogger := p.logger.WithFields(log.String("type", "ping"), log.String("to", peer.String()))
+
+	plogger.Debug("send request")
 
 	data, err := types.InterfaceToBytes(p.local)
 	if err != nil {
@@ -69,12 +74,12 @@ func (p *protocol) Ping(peer p2pcrypto.PublicKey) error {
 	ch := make(chan []byte)
 	foo := func(msg []byte) {
 		defer close(ch)
-		p.logger.Debug("handle ping response from %v", peer.String())
+		plogger.Debug("handle response")
 		sender := &node.NodeInfo{}
 		err := types.BytesToInterface(msg, sender)
 
 		if err != nil {
-			p.logger.Warning("got unreadable pong. err=%v", err)
+			plogger.Warning("got unreadable pong. err=%v", err)
 			return
 		}
 
