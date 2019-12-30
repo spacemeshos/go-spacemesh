@@ -15,7 +15,8 @@ import time
 from typing import List
 
 from pytest_testconfig import config as testconfig
-from tests import analyse, pod, deployment, queries, statefulset, tx_generator
+from tests import analyse, pod, deployment, queries, statefulset
+from tests.tx_generator.models import tx_generator
 from tests.conftest import DeploymentInfo, NetworkDeploymentInfo
 from tests.ed25519.eddsa import genkeypair
 from tests.hare.assert_hare import validate_hare
@@ -305,7 +306,7 @@ def setup_bootstrap(init_session):
 @pytest.fixture(scope='module')
 def setup_clients(init_session, setup_bootstrap):
     """
-    setup clients adds new client nodes from k8s suite file
+    setup clients adds new client nodes using suite file specifications
 
     :param init_session: setup a new k8s env
     :param setup_bootstrap: adds a single bootstrap node
@@ -334,7 +335,7 @@ def start_poet(init_session, add_curl, setup_bootstrap):
         raise Exception("Failed to read container logs in {0}".format("poet"))
 
     print("Starting PoET")
-    out = api_call(bs_pod['pod_ip'], '{ "nodeAddress": "127.0.0.1:9091" }',  'v1/start', namespace, "80")
+    out = api_call(bs_pod['pod_ip'], '{ "gatewayAddresses": ["127.0.0.1:9091"] }',  'v1/start', namespace, "80")
     assert out == "{}", "PoET start returned error {0}".format(out)
     print("PoET started")
 

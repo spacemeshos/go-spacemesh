@@ -1,4 +1,4 @@
-from random import random
+import random
 
 from tests.test_bs import api_call
 
@@ -17,15 +17,16 @@ class WalletAPI:
         self.clients_lst = clients_lst
         self.namespace = namespace
 
-    def submit_tx(self, to, src, gas_limit, gas_price, amount, txgen):
-        pod_ip, pod_name = self.random_node()
-        tx_bytes = txgen.generate(to, src, gas_limit, gas_price, amount)
+    def submit_tx(self, to, src, gas_price, amount, tx_bytes):
+
         print(f"submit transaction from {src} to {to} of {amount} with gas price {gas_price}")
+        pod_ip, pod_name = self.random_node()
+        print(f"using pod: {pod_name} to send tx")
         tx_field = '{"tx":' + str(list(tx_bytes)) + '}'
         out = api_call(pod_ip, tx_field, self.submit_api, self.namespace)
-        if self.DEBUG:
-            print(tx_field)
-            print(out)
+
+        print(f"submit_tx: transaction {tx_field}")
+        print(f"submit_tx: result {out}")
 
         return "{'value': 'ok'}" in out
 
@@ -46,7 +47,6 @@ class WalletAPI:
 
     def random_node(self):
         rnd = random.randint(0, len(self.clients_lst)-1)
-        # self.setup_network.clients.pods
         pod_ip, pod_name = self.clients_lst[rnd]['pod_ip'], self.clients_lst[rnd]['name']
         print(f"chosen pod ip = {pod_ip}, name = {pod_name}")
         return pod_ip, pod_name
