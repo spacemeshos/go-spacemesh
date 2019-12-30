@@ -277,7 +277,7 @@ dockertest-genesis-voting: dockerbuild-test dockerrun-genesis-voting
 
 
 # The following is used to run tests one after the other locally
-dockerrun-test: dockerbuild-test dockerrun-p2p dockerrun-mining dockerrun-hare dockerrun-sync dockerrun-late-nodes dockerrun-genesis-voting
+dockerrun-test: dockerbuild-test dockerrun-p2p dockerrun-mining dockerrun-hare dockerrun-sync dockerrun-late-nodes # dockerrun-genesis-voting
 .PHONY: dockerrun-test
 
 dockerrun-all: dockerpush dockerrun-test
