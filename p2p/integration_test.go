@@ -3,19 +3,31 @@ package p2p
 import (
 	"context"
 	"errors"
+	"github.com/google/uuid"
+	"github.com/spacemeshos/go-spacemesh/app/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
-	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/stretchr/testify/require"
+	"net"
+
+	//"github.com/spacemeshos/go-spacemesh/priorityq"
+	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/stretchr/testify/suite"
 	"golang.org/x/sync/errgroup"
-	"net"
+	"os"
 	"sync/atomic"
 	"testing"
 	"time"
 )
 
-func (its *IntegrationTestSuite) Test_SendingMessage() {
+var exampleProto = "example"
+
+type P2PIntegrationSuite struct {
+	protocols []chan service.GossipMessage
+	*IntegrationTestSuite
+}
+
+func (its *P2PIntegrationSuite) Test_SendingMessage() {
 	exProto := RandString(10)
 	exMsg := RandString(10)
 
@@ -43,15 +55,7 @@ func (its *IntegrationTestSuite) Test_SendingMessage() {
 	conn.Close()
 }
 
-func (its *IntegrationTestSuite) Test_Gossiping() {
-
-	msgChans := make([]chan service.GossipMessage, 0)
-	exProto := RandString(10)
-
-	its.ForAll(func(idx int, s NodeTestInstance) error {
-		msgChans = append(msgChans, s.RegisterGossipProtocol(exProto, priorityq.High))
-		return nil
-	}, nil)
+func (its *P2PIntegrationSuite) Test_Gossiping() {
 
 	ctx, _ := context.WithTimeout(context.Background(), time.Minute*180)
 	errg, ctx := errgroup.WithContext(ctx)
@@ -60,15 +64,15 @@ func (its *IntegrationTestSuite) Test_Gossiping() {
 	for i := 0; i < MSGS; i++ {
 		msg := []byte(RandString(108692))
 		rnd := rand.Int31n(int32(len(its.Instances)))
-		_ = its.Instances[rnd].Broadcast(exProto, []byte(msg))
-		for _, mc := range msgChans {
+		_ = its.Instances[rnd].Broadcast(exampleProto, []byte(msg))
+		for _, mc := range its.protocols {
 			ctx := ctx
 			mc := mc
 			numgot := &numgot
 			errg.Go(func() error {
 				select {
 				case got := <-mc:
-					got.ReportValidation(exProto)
+					got.ReportValidation(exampleProto)
 					atomic.AddInt32(numgot, 1)
 					return nil
 				case <-ctx.Done():
@@ -84,10 +88,29 @@ func (its *IntegrationTestSuite) Test_Gossiping() {
 	its.Equal(int(numgot), (its.BootstrappedNodeCount+its.BootstrapNodesCount)*MSGS)
 }
 
-func Test_ReallySmallP2PIntegrationSuite(t *testing.T) {
-	t.Skip("very long test") // TODO
+var runName = uuid.New().String()
 
-	s := new(IntegrationTestSuite)
+func p2pTestDir(test string) func() {
+	thedir := os.TempDir() + "/" + runName + "_" + test + "/"
+	os.RemoveAll(thedir)
+	config.ConfigValues.DataFilePath = thedir
+	err := os.MkdirAll(thedir, os.ModeDir)
+	if err != nil {
+		panic(err)
+	}
+	return func() { os.RemoveAll(thedir) }
+}
+
+func Test_ReallySmallP2PIntegrationSuite(t *testing.T) {
+	teardown := p2pTestDir(t.Name())
+	defer teardown()
+
+	s := new(P2PIntegrationSuite)
+	s.IntegrationTestSuite = new(IntegrationTestSuite)
+	s.protocols = make([]chan service.GossipMessage, 0, 100)
+	s.BeforeHook = func(idx int, nd NodeTestInstance) {
+		s.protocols = append(s.protocols, nd.RegisterGossipProtocol(exampleProto, priorityq.High))
+	}
 
 	s.BootstrappedNodeCount = 2
 	s.BootstrapNodesCount = 1
@@ -97,9 +120,16 @@ func Test_ReallySmallP2PIntegrationSuite(t *testing.T) {
 }
 
 func Test_SmallP2PIntegrationSuite(t *testing.T) {
-	t.Skip("very long test") // TODO
+	teardown := p2pTestDir(t.Name())
+	defer teardown()
 
-	s := new(IntegrationTestSuite)
+	s := new(P2PIntegrationSuite)
+	s.IntegrationTestSuite = new(IntegrationTestSuite)
+
+	s.protocols = make([]chan service.GossipMessage, 0, 100)
+	s.BeforeHook = func(idx int, nd NodeTestInstance) {
+		s.protocols = append(s.protocols, nd.RegisterGossipProtocol(exampleProto, priorityq.High))
+	}
 
 	s.BootstrappedNodeCount = 70
 	s.BootstrapNodesCount = 1
@@ -109,9 +139,16 @@ func Test_SmallP2PIntegrationSuite(t *testing.T) {
 }
 
 func Test_BigP2PIntegrationSuite(t *testing.T) {
-	t.Skip("very long test") // TODO
+	teardown := p2pTestDir(t.Name())
+	defer teardown()
 
-	s := new(IntegrationTestSuite)
+	s := new(P2PIntegrationSuite)
+	s.IntegrationTestSuite = new(IntegrationTestSuite)
+
+	s.protocols = make([]chan service.GossipMessage, 0, 100)
+	s.BeforeHook = func(idx int, nd NodeTestInstance) {
+		s.protocols = append(s.protocols, nd.RegisterGossipProtocol(exampleProto, priorityq.High))
+	}
 
 	s.BootstrappedNodeCount = 100
 	s.BootstrapNodesCount = 3
