@@ -142,7 +142,6 @@ loop:
 	suite.validateBlocksAndATXs(types.LayerID(numberOfEpochs*suite.apps[0].Config.LayersPerEpoch)-1, types.LayerID(startInLayer))
 }
 
-
 type ScenarioSetup func(suit *AppTestSuite, t *testing.T)
 
 type ScenarioTestCriteria func(suit *AppTestSuite, t *testing.T) bool
@@ -335,7 +334,6 @@ func runTests(suite *AppTestSuite, finished map[int]bool) bool {
 	}
 	return true
 }
-
 
 func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID, startInLayer types.LayerID) {
 	log.Info("untilLayer=%v", untilLayer)
