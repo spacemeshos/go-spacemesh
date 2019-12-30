@@ -690,6 +690,7 @@ func (m *MeshDB) Persist(key []byte, v interface{}) error {
 		panic(err)
 	}
 	return m.general.Put(key, buf)
+	return nil
 }
 
 func (m *MeshDB) Retrieve(key []byte, v interface{}) (interface{}, error) {

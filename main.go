@@ -4,9 +4,10 @@ package main
 
 import (
 	"fmt"
+	"os"
+
 	"github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/cmd/node"
-	"os"
 )
 
 var (

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
@@ -50,6 +51,7 @@ type server struct {
 	// quit channel for an out source to quit process
 	quit chan struct{}
 	wg   sync.WaitGroup
+	buff *bytes.Buffer
 }
 
 // newServer creates a new node server instance according to the passed cfg.
@@ -57,6 +59,7 @@ func newServer(cfg *ServerConfig) (*server, error) {
 	return &server{
 		cfg:     cfg,
 		errChan: make(chan error, 5),
+		buff:    &bytes.Buffer{},
 	}, nil
 }
 
@@ -72,11 +75,11 @@ func (s *server) start(addArgs []string) error {
 	s.cmd = exec.Command(s.cfg.exe, args...)
 	// Redirect stderr and stdout output to current harness buffers
 	s.cmd.Stdout = os.Stdout
-	s.cmd.Stderr = os.Stderr
+	s.cmd.Stderr = s.buff
 
 	// start go-spacemesh server
 	if err := s.cmd.Start(); err != nil {
-		return err
+		s.errChan <- fmt.Errorf("cmd.Start() failed with '%s'", err)
 	}
 
 	err := s.cmd.Wait()
@@ -84,7 +87,7 @@ func (s *server) start(addArgs []string) error {
 	if err != nil {
 		// move err to error channel
 		log.Error("an error has occurred during go-spacemesh command wait: %v", err)
-		s.errChan <- fmt.Errorf("subprocess error: %v", err)
+		s.errChan <- fmt.Errorf("cmd.Run() failed with %s", err)
 	}
 
 	log.With().Info("exiting integration server")

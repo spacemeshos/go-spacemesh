@@ -165,12 +165,10 @@ func (m *Mesh) GetLayer(index types.LayerID) (*types.Layer, error) {
 }
 
 func (m *Mesh) ValidateLayer(lyr *types.Layer) {
-	currLayerId := lyr.Index()
-	m.Info("Validate layer %d", currLayerId)
+	m.Info("Validate layer %d", lyr.Index())
 
 	oldPbase, newPbase := m.HandleIncomingLayer(lyr)
 	m.lvMutex.Lock()
-	m.validatedLayer = currLayerId
 	m.validatedLayer = lyr.Index()
 	if err := m.general.Put(VALIDATED, lyr.Index().ToBytes()); err != nil {
 		m.Error("could not persist validated layer index %d", lyr.Index())
@@ -184,7 +182,7 @@ func (m *Mesh) ValidateLayer(lyr *types.Layer) {
 			break
 		}
 	}
-	m.Info("done validating layer %v", currLayerId)
+	m.Info("done validating layer %v", lyr.Index())
 }
 
 func (m *Mesh) ExtractUniqueOrderedTransactions(l *types.Layer) (validBlockTxs, invalidBlockTxs []*types.Transaction) {
@@ -472,6 +470,11 @@ func (m *Mesh) AccumulateRewards(rewardLayer types.LayerID, params Config) {
 				log.BlockId(bl.Id().String()),
 				log.LayerId(uint64(rewardLayer)),
 			)
+			continue
+		}
+		if bl.ATXID == *types.EmptyAtxId {
+			m.With().Info("skipping reward distribution for block with no ATX",
+				log.LayerId(uint64(bl.LayerIndex)), log.BlockId(bl.Id().String()))
 			continue
 		}
 		atx, err := m.AtxDB.GetAtxHeader(bl.ATXID)

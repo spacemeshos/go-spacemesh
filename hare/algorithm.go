@@ -12,6 +12,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare/metrics"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"time"
 )
@@ -35,7 +36,7 @@ type Rolacle interface {
 
 // NetworkService provides the registration and broadcast abilities in the network.
 type NetworkService interface {
-	RegisterGossipProtocol(protocol string) chan service.GossipMessage
+	RegisterGossipProtocol(protocol string, prio priorityq.Priority) chan service.GossipMessage
 	Broadcast(protocol string, payload []byte) error
 }
 
@@ -290,6 +291,8 @@ PreRound:
 	// start first iteration
 	proc.onRoundBegin()
 	ticker := time.NewTicker(time.Duration(proc.cfg.RoundDuration) * time.Second)
+	defer ticker.Stop()
+
 	for {
 		select {
 		case msg := <-proc.inbox: // msg event

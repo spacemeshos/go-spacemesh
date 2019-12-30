@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/oracle"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"math/rand"
 	"sync"
 	"time"
@@ -100,8 +101,8 @@ func NewBlockBuilder(minerID types.NodeId, sgn Signer, net p2p.Service, beginRou
 		stopChan:         make(chan struct{}),
 		AtxPool:          atxPool,
 		TransactionPool:  txPool,
-		txGossipChannel:  net.RegisterGossipProtocol(IncomingTxProtocol),
-		atxGossipChannel: net.RegisterGossipProtocol(activation.AtxProtocol),
+		txGossipChannel:  net.RegisterGossipProtocol(IncomingTxProtocol, priorityq.Low),
+		atxGossipChannel: net.RegisterGossipProtocol(activation.AtxProtocol, priorityq.Low),
 		hareResult:       hare,
 		mu:               sync.Mutex{},
 		network:          net,
@@ -363,7 +364,7 @@ func (t *BlockBuilder) handleGossipAtx(data service.GossipMessage) {
 	}
 	atx.CalcAndSetId()
 
-	t.With().Info("got new ATX", log.AtxId(atx.ShortString()))
+	t.With().Info("got new ATX", log.AtxId(atx.ShortString()), log.LayerId(uint64(atx.PubLayerIdx)))
 
 	//todo fetch from neighbour
 	if atx.Nipst == nil {
