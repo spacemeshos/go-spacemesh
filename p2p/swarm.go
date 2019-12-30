@@ -17,11 +17,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/timesync"
-	timeSyncConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"strings"
 
 	inet "net"
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -31,7 +29,7 @@ import (
 const ConnectingTimeout = 20 * time.Second //todo: add to the config
 
 type cPool interface {
-	GetConnection(address string, pk p2pcrypto.PublicKey) (net.Connection, error)
+	GetConnection(address inet.Addr, pk p2pcrypto.PublicKey) (net.Connection, error)
 	GetConnectionIfExists(pk p2pcrypto.PublicKey) (net.Connection, error)
 	Shutdown()
 }
@@ -108,16 +106,16 @@ func (s *swarm) waitForGossip() error {
 func newSwarm(ctx context.Context, config config.Config, newNode bool, persist bool) (*swarm, error) {
 
 	port := config.TCPPort
-	address := inet.JoinHostPort("0.0.0.0", strconv.Itoa(port))
+	addr := inet.TCPAddr{inet.ParseIP("0.0.0.0"), port, ""}
 
 	var l *node.LocalNode
 	var err error
 	// Load an existing identity from file if exists.
 
 	if newNode {
-		l, err = node.NewNodeIdentity(config, address, persist)
+		l, err = node.NewNodeIdentity(config, &addr, persist)
 	} else {
-		l, err = node.NewLocalNode(config, address, persist)
+		l, err = node.NewLocalNode(config, &addr, persist)
 	}
 
 	if err != nil {
@@ -244,8 +242,6 @@ func (s *swarm) Start() error {
 	s.lNode.Debug("starting the udp server")
 
 	// TODO : insert new addresses to discovery
-
-	go s.checkTimeDrifts()
 
 	if s.config.SwarmConfig.Bootstrap {
 		go func() {
@@ -447,26 +443,6 @@ func (s *swarm) listenToNetworkMessages() {
 		}(netqueues[nq])
 	}
 
-}
-
-// periodically checks that our clock is sync
-func (s *swarm) checkTimeDrifts() {
-	checkTimeSync := time.NewTicker(timeSyncConfig.TimeConfigValues.RefreshNtpInterval)
-Loop:
-	for {
-		select {
-		case <-s.shutdown:
-			break Loop
-
-		case <-checkTimeSync.C:
-			_, err := timesync.CheckSystemClockDrift()
-			if err != nil {
-				checkTimeSync.Stop()
-				s.lNode.Error("System time could'nt synchronize %s", err)
-				s.Shutdown()
-			}
-		}
-	}
 }
 
 // onRemoteClientMessage possible errors
@@ -722,7 +698,8 @@ func (s *swarm) getMorePeers(numpeers int) int {
 				reportChan <- cnErr{nd, errors.New("connection to self")}
 				return
 			}
-			_, err := s.cPool.GetConnection(inet.JoinHostPort(nd.IP.String(), strconv.Itoa(int(nd.ProtocolPort))), nd.PublicKey())
+			addr := inet.TCPAddr{inet.ParseIP(nd.IP.String()), int(nd.ProtocolPort), ""}
+			_, err := s.cPool.GetConnection(&addr, nd.PublicKey())
 			reportChan <- cnErr{nd, err}
 		}(nds[i], res)
 	}

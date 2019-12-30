@@ -190,20 +190,21 @@ func TestUDPMux_ProcessUDP(t *testing.T) {
 func Test_RoundTrip(t *testing.T) {
 	nd, _ := node.GenerateTestNode(t)
 	udpnet, err := net.NewUDPNet(config.DefaultConfig(), nd, log.New("", "", ""))
-
 	require.NoError(t, err)
+
 	m := NewUDPMux(nd, nil, udpnet, log.New(test_str, "", ""))
 	require.NotNil(t, m)
 
 	nd2, _ := node.GenerateTestNode(t)
 	udpnet2, err := net.NewUDPNet(config.DefaultConfig(), nd2, log.New("", "", ""))
 	require.NoError(t, err)
-	m2 := NewUDPMux(nd2, nil, udpnet2, log.New(test_str+"2", "", ""))
 
+	m2 := NewUDPMux(nd2, nil, udpnet2, log.New(test_str+"2", "", ""))
 	require.NotNil(t, m2)
 
 	c := make(chan service.DirectMessage, 1)
 	m.RegisterDirectProtocolWithChannel(test_str, c)
+
 	c2 := make(chan service.DirectMessage, 1)
 	m2.RegisterDirectProtocolWithChannel(test_str, c2)
 
@@ -219,13 +220,8 @@ func Test_RoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	defer m2.Shutdown()
 
-	if nd2.NodeInfo.IP.IsUnspecified() {
-		if ip4 := nd2.IP.To4(); ip4 != nil {
-			nd2.NodeInfo.IP = net2.IP{127, 0, 0, 1}
-		} else if ip6 := nd2.IP.To16(); ip6 != nil {
-			nd2.NodeInfo.IP = net2.IPv6loopback
-		}
-	}
+	// use loopback IP for node 2
+	nd2.NodeInfo.IP = net2.IP{127, 0, 0, 1}
 
 	m.lookuper = func(key p2pcrypto.PublicKey) (*node.NodeInfo, error) {
 		return nd2.NodeInfo, nil

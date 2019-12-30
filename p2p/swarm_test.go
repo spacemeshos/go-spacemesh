@@ -6,6 +6,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/connectionpool"
 	"github.com/spacemeshos/go-spacemesh/p2p/discovery"
 	"github.com/stretchr/testify/require"
+	inet "net"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -25,11 +26,11 @@ import (
 const debug = false
 
 type cpoolMock struct {
-	f       func(address string, pk p2pcrypto.PublicKey) (net.Connection, error)
+	f       func(address inet.Addr, pk p2pcrypto.PublicKey) (net.Connection, error)
 	fExists func(pk p2pcrypto.PublicKey) (net.Connection, error)
 }
 
-func (cp *cpoolMock) GetConnection(address string, pk p2pcrypto.PublicKey) (net.Connection, error) {
+func (cp *cpoolMock) GetConnection(address inet.Addr, pk p2pcrypto.PublicKey) (net.Connection, error) {
 	if cp.f != nil {
 		return cp.f(address, pk)
 	}
@@ -152,7 +153,7 @@ func Test_ConnectionBeforeMessage(t *testing.T) {
 
 	//called := make(chan struct{}, numNodes)
 	cpm := new(cpoolMock)
-	cpm.f = func(address string, pk p2pcrypto.PublicKey) (net.Connection, error) {
+	cpm.f = func(address inet.Addr, pk p2pcrypto.PublicKey) (net.Connection, error) {
 		c, err := oldCpool.GetConnectionIfExists(pk)
 		if err != nil {
 			t.Fatal("Didn't get connection yet while SendMessage called GetConnection")
@@ -173,7 +174,7 @@ func Test_ConnectionBeforeMessage(t *testing.T) {
 			_ = p1.RegisterDirectProtocol(exampleProtocol)
 			require.NoError(t, p1.Start())
 			sa.add(p1)
-			_, err := p1.cPool.GetConnection(p2.network.LocalAddr().String(), p2.lNode.PublicKey())
+			_, err := p1.cPool.GetConnection(p2.network.LocalAddr(), p2.lNode.PublicKey())
 			require.NoError(t, err)
 			require.NoError(t, p1.SendMessage(p2.lNode.PublicKey(), exampleProtocol, payload))
 		}()
@@ -221,7 +222,7 @@ func TestSwarm_RoundTrip(t *testing.T) {
 	require.NoError(t, p1.Start())
 	require.NoError(t, p2.Start())
 
-	_, err := p2.cPool.GetConnection(p1.network.LocalAddr().String(), p1.lNode.PublicKey())
+	_, err := p2.cPool.GetConnection(p1.network.LocalAddr(), p1.lNode.PublicKey())
 	require.NoError(t, err)
 
 	sendDirectMessage(t, p2, p1.lNode.PublicKey(), exchan1, true)
@@ -246,7 +247,7 @@ func TestSwarm_MultipleMessages(t *testing.T) {
 	err := p2.SendMessage(p1.lNode.PublicKey(), exampleProtocol, []byte(examplePayload))
 	require.Error(t, err, "ERR") // should'nt be in routing table
 
-	_, err = p2.cPool.GetConnection(p1.network.LocalAddr().String(), p1.lNode.PublicKey())
+	_, err = p2.cPool.GetConnection(p1.network.LocalAddr(), p1.lNode.PublicKey())
 	require.NoError(t, err)
 
 	var wg sync.WaitGroup
@@ -318,7 +319,7 @@ func TestSwarm_MultipleMessagesFromMultipleSenders(t *testing.T) {
 			p := p2pTestNoStart(t, cfg)
 			require.NoError(t, p.Start())
 			sa.add(p)
-			p.cPool.GetConnection(p1.network.LocalAddr().String(), p1.lNode.PublicKey())
+			p.cPool.GetConnection(p1.network.LocalAddr(), p1.lNode.PublicKey())
 			mychan := make(chan struct{})
 			mu.Lock()
 			pend[p.lNode.NodeInfo.PublicKey().String()] = mychan
@@ -394,7 +395,7 @@ func TestSwarm_MultipleMessagesFromMultipleSendersToMultipleProtocols(t *testing
 			}
 
 			payload := []byte(RandString(10))
-			_, err := p.cPool.GetConnection(p1.network.LocalAddr().String(), p1.lNode.PublicKey())
+			_, err := p.cPool.GetConnection(p1.network.LocalAddr(), p1.lNode.PublicKey())
 			require.NoError(t, err)
 			err = p.SendMessage(p1.lNode.PublicKey(), protos[randProto], payload)
 			require.NoError(t, err)
@@ -426,7 +427,9 @@ func TestSwarm_RegisterProtocol(t *testing.T) {
 
 func TestSwarm_onRemoteClientMessage(t *testing.T) {
 	cfg := config.DefaultConfig()
-	id, err := node.NewNodeIdentity(cfg, "0.0.0.0:0000", false)
+	addr := inet.TCPAddr{inet.ParseIP("0.0.0.0"), 0000, ""}
+
+	id, err := node.NewNodeIdentity(cfg, &addr, false)
 	assert.NoError(t, err, "we cant make node ?")
 
 	p := p2pTestNoStart(t, cfg)
@@ -620,7 +623,7 @@ func Test_Swarm_getMorePeers3(t *testing.T) {
 	cpm := new(cpoolMock)
 
 	// test connection error
-	cpm.f = func(address string, pk p2pcrypto.PublicKey) (net.Connection, error) {
+	cpm.f = func(address inet.Addr, pk p2pcrypto.PublicKey) (net.Connection, error) {
 		return nil, errors.New("can't make connection")
 	}
 
@@ -773,7 +776,7 @@ func TestNeighborhood_Initial(t *testing.T) {
 	p = p2pTestNoStart(t, cfg)
 	p.discover = mdht
 	cpm := new(cpoolMock)
-	cpm.f = func(address string, pk p2pcrypto.PublicKey) (net.Connection, error) {
+	cpm.f = func(address inet.Addr, pk p2pcrypto.PublicKey) (net.Connection, error) {
 		return net.NewConnectionMock(pk), nil
 	}
 	p.cPool = cpm
@@ -930,6 +933,6 @@ func TestNeighborhood_ReportConnectionResult(t *testing.T) {
 
 	n.getMorePeers(PeerNum)
 
-	require.Equal(t, goodcount, 2)
+	require.Equal(t, 2, goodcount)
 	require.True(t, attemptcount == PeerNum*2-2)
 }
