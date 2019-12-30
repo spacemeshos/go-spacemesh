@@ -4,13 +4,13 @@ config_map_name: conf
 
 script_on_exit: '' # Uncomment this to save logs './k8s/log-client-pods.sh'
 
-genesis_delta: 40
+genesis_delta: 65
 single_pod_ready_time_out: 60
 deployment_ready_time_out: 60
 config_path: '../config.toml'
 
 bootstrap:
-  image: 'spacemeshos/go-spacemesh-dev:barak33'
+  image: 'spacemeshos/go-spacemesh-dev:barak_no_mper'
   command: '/bin/go-spacemesh'
   replicas: 1
 #  deployment_type: 'statefulset'
