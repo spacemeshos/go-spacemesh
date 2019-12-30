@@ -147,13 +147,8 @@ func (b *Builder) Stop() {
 	close(b.stop)
 }
 
-func (b Builder) SignAtx(atx *types.ActivationTx) (*types.ActivationTx, error) {
-	bts, err := types.InterfaceToBytes(atx.InnerActivationTx)
-	if err != nil {
-		return nil, err
-	}
-	atx.Sig = b.Sign(bts)
-	return atx, nil
+func (b Builder) SignAtx(atx *types.ActivationTx) error {
+	return SignAtx(b, atx)
 }
 
 // loop is the main loop that tries to create an atx per tick received from the global clock
@@ -538,9 +533,9 @@ func (b *Builder) cleanupState() {
 }
 
 func (b *Builder) signAndBroadcast(atx *types.ActivationTx) error {
-	if signedAtx, err := b.SignAtx(atx); err != nil {
+	if err := b.SignAtx(atx); err != nil {
 		return fmt.Errorf("failed to sign ATX: %v", err)
-	} else if buf, err := types.InterfaceToBytes(signedAtx); err != nil {
+	} else if buf, err := types.InterfaceToBytes(atx); err != nil {
 		return fmt.Errorf("failed to serialize ATX: %v", err)
 	} else if err := b.net.Broadcast(AtxProtocol, buf); err != nil {
 		return fmt.Errorf("failed to broadcast ATX: %v", err)
@@ -574,21 +569,6 @@ func (b *Builder) GetPositioningAtxId(epochId types.EpochId) (*types.AtxId, erro
 		return nil, err
 	}
 	return atxId, nil
-}
-
-// GetLastSequence retruns the last sequence number of atx reported by node id node
-// it will return 0 if no previous atx was found for the requested node
-func (b *Builder) GetLastSequence(node types.NodeId) uint64 {
-	atxId, err := b.GetPrevAtxId(node)
-	if err != nil {
-		return 0
-	}
-	atx, err := b.db.GetAtxHeader(atxId)
-	if err != nil {
-		b.log.Error("wtf no atx in db %v", atxId)
-		return 0
-	}
-	return atx.Sequence
 }
 
 // GetPositioningAtx return the atx object for the positioning atx according to requested epochId
@@ -626,11 +606,11 @@ func ExtractPublicKey(signedAtx *types.ActivationTx) (*signing.PublicKey, error)
 	return pub, nil
 }
 
-func SignAtx(signer *signing.EdSigner, atx *types.ActivationTx) (*types.ActivationTx, error) {
+func SignAtx(signer Signer, atx *types.ActivationTx) error {
 	bts, err := atx.AtxBytes()
 	if err != nil {
-		return nil, err
+		return err
 	}
 	atx.Sig = signer.Sign(bts)
-	return atx, nil
+	return nil
 }

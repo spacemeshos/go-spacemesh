@@ -190,7 +190,7 @@ func TestSyncer_Close(t *testing.T) {
 func TestSyncProtocol_BlockRequest(t *testing.T) {
 	signer := signing.NewEdSigner()
 	atx1 := atx(signer.PublicKey().String())
-	_, err := activation.SignAtx(signer, atx1)
+	err := activation.SignAtx(signer, atx1)
 	assert.NoError(t, err)
 	syncs, nodes, _ := SyncMockFactory(2, conf, t.Name(), memoryDB, newMockPoetDb)
 	syncObj := syncs[0]
@@ -222,7 +222,7 @@ func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 	syncs, nodes, _ := SyncMockFactory(2, conf, t.Name(), memoryDB, newMockPoetDb)
 	signer := signing.NewEdSigner()
 	atx1 := atx(signer.PublicKey().String())
-	_, err := activation.SignAtx(signer, atx1)
+	err := activation.SignAtx(signer, atx1)
 	assert.NoError(t, err)
 	syncObj1 := syncs[0]
 	defer syncObj1.Close()
@@ -288,7 +288,7 @@ func TestSyncer_SyncAtxs_FetchPoetProof(t *testing.T) {
 
 	atx1 := atx(signer.PublicKey().String())
 	atx1.Nipst.PostProof.Challenge = poetRef[:]
-	_, err = activation.SignAtx(signer, atx1)
+	err = activation.SignAtx(signer, atx1)
 	r.NoError(err)
 	err = s0.AtxDB.ProcessAtxs([]*types.ActivationTx{atx1})
 	r.NoError(err)

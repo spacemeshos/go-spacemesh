@@ -505,7 +505,7 @@ func TestBuilder_PublishActivationTx_Serialize(t *testing.T) {
 
 	view, err := b.mesh.GetOrphanBlocksBefore(meshProvider.LatestLayer())
 	assert.NoError(t, err)
-	act := types.NewActivationTx(b.nodeId, coinbase, b.GetLastSequence(b.nodeId)+1, atx.Id(), atx.PubLayerIdx+10, 0, atx.Id(), defaultActiveSetSize, view, npst)
+	act := types.NewActivationTx(b.nodeId, coinbase, 2, atx.Id(), atx.PubLayerIdx+10, 0, atx.Id(), defaultActiveSetSize, view, npst)
 
 	bt, err := types.InterfaceToBytes(act)
 	assert.NoError(t, err)
@@ -560,14 +560,14 @@ func TestBuilder_SignAtx(t *testing.T) {
 	atx := types.NewActivationTx(nodeId, coinbase, 1, prevAtx, 15, 1, prevAtx, 5, []types.BlockID{block1.Id(), block2.Id(), block3.Id()}, npst)
 	atxBytes, err := types.InterfaceToBytes(atx.InnerActivationTx)
 	assert.NoError(t, err)
-	signed, err := b.SignAtx(atx)
+	err = b.SignAtx(atx)
 	assert.NoError(t, err)
 
-	pubkey, err := ed25519.ExtractPublicKey(atxBytes, signed.Sig)
+	pubkey, err := ed25519.ExtractPublicKey(atxBytes, atx.Sig)
 	assert.NoError(t, err)
 	assert.Equal(t, ed.PublicKey().Bytes(), []byte(pubkey))
 
-	ok := signing.Verify(signing.NewPublicKey(util.Hex2Bytes(atx.NodeId.Key)), atxBytes, signed.Sig)
+	ok := signing.Verify(signing.NewPublicKey(util.Hex2Bytes(atx.NodeId.Key)), atxBytes, atx.Sig)
 	assert.True(t, ok)
 
 }
@@ -597,7 +597,7 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 
 	challenge := types.NIPSTChallenge{
 		NodeId:         b.nodeId,
-		Sequence:       b.GetLastSequence(b.nodeId) + 1,
+		Sequence:       2,
 		PrevATXId:      atx.Id(),
 		PubLayerIdx:    atx.PubLayerIdx.Add(b.layersPerEpoch),
 		StartTick:      atx.EndTick,
@@ -611,7 +611,7 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 
 	setActivesetSizeInCache(t, defaultActiveSetSize)
 
-	act := types.NewActivationTx(b.nodeId, coinbase, b.GetLastSequence(b.nodeId)+1, atx.Id(), atx.PubLayerIdx+10, 0, atx.Id(), defaultActiveSetSize, defaultView, npst2)
+	act := types.NewActivationTx(b.nodeId, coinbase, 2, atx.Id(), atx.PubLayerIdx+10, 0, atx.Id(), defaultActiveSetSize, defaultView, npst2)
 	err = b.PublishActivationTx(1)
 	assert.EqualError(t, err, tooSoonErr.Error())
 
@@ -622,9 +622,9 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	layers.latestLayer = 22
 	err = b.PublishActivationTx(1)
 	assert.NoError(t, err)
-	signed, err := b.SignAtx(act)
+	err = b.SignAtx(act)
 	assert.NoError(t, err)
-	bts, err := types.InterfaceToBytes(signed)
+	bts, err := types.InterfaceToBytes(act)
 	assert.NoError(t, err)
 	assert.Equal(t, bts, net.lastTransmission)
 
