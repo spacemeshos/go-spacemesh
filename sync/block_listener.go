@@ -68,9 +68,9 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 					bl.Error("got empty message while listening to gossip blocks")
 					return
 				}
-
+				tmr := newMilliTimer(gossipBlockTime)
 				bl.handleBlock(data)
-
+				tmr.ObserveDuration()
 			}()
 
 		}
