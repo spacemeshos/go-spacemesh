@@ -368,6 +368,39 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 	r.False(builtNipst)
 }
 
+func TestBuilder_PublishActivationTx_RebuildNipstWhenTargetEpochPassed(t *testing.T) {
+	r := require.New(t)
+
+	// setup
+	setActivesetSizeInCache(t, defaultActiveSetSize)
+	defer activesetCache.Purge()
+	activationDb := newActivationDb()
+	challenge := newChallenge(nodeId, 1, prevAtxId, prevAtxId, postGenesisEpochLayer)
+	prevAtx := newAtx(challenge, 5, defaultView, npst)
+	storeAtx(r, activationDb, prevAtx, log.NewDefault("storeAtx"))
+
+	// create and attempt to publish ATX
+	faultyNet := &FaultyNetMock{retErr: true}
+	b := NewBuilder(nodeId, coinbase, &MockSigning{}, activationDb, faultyNet, meshProvider, layersPerEpoch, nipstBuilder, postProver, nil, isSynced(true), NewMockDB(), atxPool, lg.WithName("atxBuilder"))
+	published, builtNipst, err := publishAtx(b, postGenesisEpochLayer+1, postGenesisEpoch, layersPerEpoch)
+	r.EqualError(err, "failed to broadcast ATX: faulty")
+	r.False(published)
+	r.True(builtNipst)
+
+	// We started building the NIPST in epoch 2, the publication epoch should have been 3. We should abort the ATX and
+	// start over if the target epoch (4) has passed, so we'll start the ATX builder in epoch 5 and ensure it builds a
+	// new NIPST.
+
+	// if the network works - the ATX should be published
+	b.net = net
+	posAtx := newAtx(newChallenge(nodeId, 1, prevAtxId, prevAtxId, postGenesisEpochLayer+(3*layersPerEpoch)), 5, defaultView, npst)
+	storeAtx(r, activationDb, posAtx, log.NewDefault("storeAtx"))
+	published, builtNipst, err = publishAtx(b, postGenesisEpochLayer+(3*layersPerEpoch)+1, postGenesisEpoch+3, layersPerEpoch)
+	r.NoError(err)
+	r.True(published)
+	r.True(builtNipst)
+}
+
 func TestBuilder_PublishActivationTx_NoPrevATX(t *testing.T) {
 	r := require.New(t)
 
