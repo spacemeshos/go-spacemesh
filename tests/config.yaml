@@ -10,7 +10,7 @@ deployment_ready_time_out: 60
 config_path: '../config.toml'
 
 bootstrap:
-  image: 'spacemeshos/go-spacemesh-dev:barak232'
+  image: 'spacemeshos/go-spacemesh-dev:barak24'
   command: '/bin/go-spacemesh'
   replicas: 1
 #  deployment_type: 'statefulset'
