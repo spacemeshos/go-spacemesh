@@ -16,6 +16,7 @@ from typing import List
 
 from pytest_testconfig import config as testconfig
 from tests import analyse, pod, deployment, queries, statefulset
+from tests.tx_generator import config as conf
 from tests.tx_generator.models import tx_generator
 from tests.conftest import DeploymentInfo, NetworkDeploymentInfo
 from tests.ed25519.eddsa import genkeypair
@@ -511,7 +512,7 @@ def test_transactions(setup_network):
     debug = False
 
     tap_init_amount = 10000
-    tap = "7be017a967db77fd10ac7c891b3d6d946dea7e3e14756e2f0f9e09b9663f0d9c"
+    tap = conf.acc_pub
 
     class Transaction:
         def __init__(self, amount: int, fee: int, origin: str = None, dest: str = None):

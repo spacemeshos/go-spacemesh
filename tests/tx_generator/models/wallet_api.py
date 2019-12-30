@@ -12,6 +12,7 @@ class WalletAPI:
     nonce_api = 'v1/nonce'
     submit_api = 'v1/submittransaction'
     balance_api = 'v1/balance'
+    a_ok = "'value': 'ok'"
 
     def __init__(self, namespace, clients_lst):
         self.clients_lst = clients_lst
@@ -28,7 +29,7 @@ class WalletAPI:
         print(f"submit_tx: transaction {tx_field}")
         print(f"submit_tx: result {out}")
 
-        return "{'value': 'ok'}" in out
+        return self.a_ok in out
 
     def get_nonce(self, acc):
         # check nonce

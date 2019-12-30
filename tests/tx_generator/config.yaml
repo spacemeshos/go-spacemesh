@@ -4,7 +4,7 @@ config_map_name: conf
 
 script_on_exit: '' # Uncomment this to save logs './k8s/log-client-pods.sh'
 
-genesis_delta: 150
+genesis_delta: 90
 single_pod_ready_time_out: 60
 deployment_ready_time_out: 120
 config_path: '../config.toml'
@@ -33,7 +33,7 @@ bootstrap:
 client:
   image: 'spacemeshos/go-spacemesh:develop'
   command: '/bin/go-harness'
-  replicas: 49
+  replicas: 9
   args:
     randcon: '8'
     hare-committee-size: '20'

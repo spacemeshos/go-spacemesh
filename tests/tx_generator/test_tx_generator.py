@@ -1,4 +1,5 @@
 import binascii
+from enum import Enum
 from pytest_testconfig import config as testconfig
 import pprint
 import random
@@ -10,16 +11,32 @@ from tests.tx_generator.models.wallet_api import WalletAPI
 from tests.tx_generator.models.tx_generator import TxGenerator
 from tests.ed25519.eddsa import genkeypair
 
-DEBUG = True
 TX_COST = 3  # .Mul(trans.GasPrice, tp.gasCost.BasicTxCost)
 
+ACCOUNTS = {"priv": "", "nonce": 0, "recv": [], "send": []}
+RECV = {"from_acc": "", "amount": 0, "gasprice": 0}
+SEND = {"to": "", "amount": 0, "gasprice": 0}
 
-def expected_balance(account, acc_pub):
+
+def set_account(priv, nonce, recv, send):
+    return dict(ACCOUNTS, priv=priv, nonce=nonce, recv=recv, send=send)
+
+
+def set_recv(_from, amount, gasprice):
+    return dict(RECV, from_acc=_from, amount=amount, gasprice=gasprice)
+
+
+def set_send(to, amount, gasprice):
+    return dict(SEND, to=to, amount=amount, gasprice=gasprice)
+
+
+def expected_balance(account, acc_pub, debug=False):
     """
     calculate the account's balance
 
     :param account: dictionary, account details
     :param acc_pub: string, account's public key
+    :param debug: bool, print balance or not
 
     :return: int, the balance after sending and receiving txs
     """
@@ -27,7 +44,9 @@ def expected_balance(account, acc_pub):
     balance = sum([int(tx["amount"]) for tx in account["recv"]]) - \
               sum(int(tx["amount"]) + (int(tx["gasprice"]) * TX_COST) for tx in account["send"])
 
-    print(f"balance calculated for {acc_pub}:\n{balance}\neverything:\n{pprint.pformat(account)}")
+    if debug:
+        print(f"balance calculated for {acc_pub}:\n{balance}\neverything:\n{pprint.pformat(account)}")
+
     return balance
 
 
@@ -47,7 +66,7 @@ def new_account(accounts):
 
     priv, pub = genkeypair()
     str_pub = bytes.hex(pub)
-    accounts[str_pub] = {"priv": bytes.hex(priv), "nonce": 0, "recv": [], "send": []}
+    accounts[str_pub] = set_account(bytes.hex(priv), 0, [], [])
     return str_pub
 
 
@@ -65,9 +84,10 @@ def transfer(wallet_api, accounts, frm, to, amount=None, gas_price=None, gas_lim
     # submit transaction
     success = wallet_api.submit_tx(to, frm, gas_price, amount, tx_bytes)
     accounts[frm]['nonce'] += 1
+    # append transactions into accounts data structure
     if success:
-        accounts[to]["recv"].append({"from": bytes.hex(tx_gen.publicK), "amount": amount, "gasprice": gas_price})
-        accounts[frm]["send"].append({"to": to, "amount": amount, "gasprice": gas_price})
+        accounts[to]["recv"].append(set_recv(bytes.hex(tx_gen.publicK), amount, gas_price))
+        accounts[frm]["send"].append(set_send(to, amount, gas_price))
         return True
     return False
 
@@ -89,8 +109,8 @@ def transfer(wallet_api, accounts, frm, to, amount=None, gas_price=None, gas_lim
 #     {
 #         "priv": "81c90dd832e18d1cf9758254327cb3135961af6688ac9c2a8c5d71f73acc5ce5",
 #         "nonce": 0,
-#         "send": {to: ..., amount: ..., gasprice: .},
-#         "recv": {from: , amount, gasprice}
+#         "send": [{to: ..., amount: ..., gasprice: .}, ...],
+#         "recv": [{from: ..., amount: ..., gasprice: ...}, ...],
 #     }
 def test_transactions(setup_network):
     wallet_api = WalletAPI(setup_network.bootstrap.deployment_id, setup_network.clients.pods)
@@ -101,8 +121,8 @@ def test_transactions(setup_network):
         acc: {
             "priv": conf.acc_priv,
             "nonce": 0,
-            "send": {},
-            "recv": {}
+            "send": [],
+            "recv": [],
         }
     }
 
@@ -117,13 +137,11 @@ def test_transactions(setup_network):
         print("TAP NONCE {0}".format(accounts[acc]['nonce']))
         assert transfer(wallet_api, accounts, acc, new_acc_pub, amount=amount), "Transfer from tap failed"
         print("TAP NONCE {0}".format(accounts[acc]['nonce']))
-        print("sleeping for 10 secs")
-        time.sleep(10)
 
-    print("sleeping for 180 secs")
-    time.sleep(180)
-    #
     # ready = 0
+    layers_per_epoch = testconfig["layers_per_epoch"]
+    layers_duration = testconfig["layers_duration"]
+
     # for x in range(int(layers_per_epoch) * 2):  # wait for two epochs (genesis)
     #     ready = 0
     #     print("...")
