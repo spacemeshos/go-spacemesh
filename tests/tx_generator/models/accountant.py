@@ -6,7 +6,7 @@ import tests.tx_generator.config as conf
 
 
 class Accountant:
-    ACCOUNTS = {"priv": "", "balance": 0, "nonce": 0, "recv": [], "send": []}
+    ACCOUNT = {"priv": "", "balance": 0, "nonce": 0, "recv": [], "send": []}
     RECV = {"from_acc": "", "amount": 0, "gasprice": 0}
     SEND = {"to": "", "amount": 0, "gasprice": 0}
 
@@ -14,11 +14,12 @@ class Accountant:
         self.accounts = accounts if accounts else {}
         self.tx_cost = tx_cost
 
-    def calc_balance(self, acc_pub, debug=False):
+    def calc_balance(self, acc_pub, init_amount=0, debug=False):
         """
         calculate the account's balance
 
         :param acc_pub: string, account's public key
+        :param init_amount: int, initial amount
         :param debug: bool, print balance or not
 
         :return: int, the balance after sending and receiving txs
@@ -31,11 +32,8 @@ class Accountant:
             print(f"balance calculated for {acc_pub}:\n{balance}\n"
                   f"everything:\n{pprint.pformat(self.accounts[acc_pub])}")
 
-        return balance
-
-    def random_account(self):
-        pk = random.choice(list(self.accounts.keys()))
-        return pk
+        self.accounts[acc_pub]["balance"] = balance + init_amount
+        return balance + init_amount
 
     def new_account(self):
         """
@@ -46,22 +44,51 @@ class Accountant:
 
         priv, pub = genkeypair()
         str_pub = bytes.hex(pub)
-        self.accounts[str_pub] = self.set_account(bytes.hex(priv), 0, [], [])
+        self.accounts[str_pub] = self.set_account(bytes.hex(priv), 0, 0, [], [])
         return str_pub
 
-    def set_acc_balance(self, acc_pub, init_amount=0):
-        balance = init_amount + self.calc_balance(acc_pub)
-        self.accounts[acc_pub]["balance"] = balance
+    def random_account(self):
+        pk = random.choice(list(self.accounts.keys()))
+        return pk
+
+    # ============= properties =============
+
+    def set_acc_send(self, acc, send):
+        self.accounts[acc]["send"].append(send)
+        init_amount = conf.init_amount if acc == conf.acc_pub else 0
+        self.calc_balance(acc, init_amount)
+
+    def set_acc_recv(self, acc, recv):
+        self.accounts[acc]["recv"].append(recv)
+        init_amount = conf.init_amount if acc == conf.acc_pub else 0
+        self.calc_balance(acc, init_amount)
+
+    def get_acc_priv(self, acc):
+        return self.accounts[acc]["priv"]
+
+    def get_acc(self, acc_pub):
+        return self.accounts[acc_pub]
+
+    def get_nonce(self, acc_pub):
+        return self.accounts[acc_pub]["nonce"]
+
+    def set_nonce(self, acc_pub, jump=1):
+        self.accounts[acc_pub]["nonce"] += jump
+
+    def get_balance(self, acc_pub):
+        return self.accounts[acc_pub]["balance"]
+
+    # =============== utils ================
 
     @staticmethod
     def set_tap_acc():
-        return dict(Accountant.ACCOUNTS, priv=conf.acc_priv, recv=[], send=[])
+        return dict(Accountant.ACCOUNT, balance=conf.init_amount, priv=conf.acc_priv, recv=[], send=[])
 
     @staticmethod
     def set_account(priv, balance=0, nonce=0, recv=None, send=None):
         receive = [] if not recv else recv
         send_lst = [] if not send else send
-        return dict(Accountant.ACCOUNTS, balance=balance, priv=priv, nonce=nonce, recv=receive, send=send_lst)
+        return dict(Accountant.ACCOUNT, balance=balance, priv=priv, nonce=nonce, recv=receive, send=send_lst)
 
     @staticmethod
     def set_recv(_from, amount, gasprice):

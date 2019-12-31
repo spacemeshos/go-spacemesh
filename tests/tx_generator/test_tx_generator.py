@@ -1,5 +1,3 @@
-import binascii
-from enum import Enum
 from pytest_testconfig import config as testconfig
 import pprint
 import random
@@ -10,160 +8,80 @@ from tests.test_bs import setup_network, add_curl, setup_bootstrap, start_poet, 
 import tests.tx_generator.config as conf
 from tests.tx_generator.models.wallet_api import WalletAPI
 from tests.tx_generator.models.tx_generator import TxGenerator
-from tests.ed25519.eddsa import genkeypair
-
-TX_COST = 1  # .Mul(trans.GasPrice, tp.gasCost.BasicTxCost)
-
-ACCOUNTS = {"priv": "", "nonce": 0, "recv": [], "send": []}
-RECV = {"from_acc": "", "amount": 0, "gasprice": 0}
-SEND = {"to": "", "amount": 0, "gasprice": 0}
 
 
-def set_tap_acc():
-    return dict(ACCOUNTS, priv=conf.acc_priv, recv=[], send=[])
-
-
-def set_account(priv, nonce=0, recv=None, send=None):
-    receive = [] if not recv else recv
-    send_lst = [] if not send else send
-    return dict(ACCOUNTS, priv=priv, nonce=nonce, recv=receive, send=send_lst)
-
-
-def set_recv(_from, amount, gasprice):
-    return dict(RECV, from_acc=_from, amount=amount, gasprice=gasprice)
-
-
-def set_send(to, amount, gasprice):
-    return dict(SEND, to=to, amount=amount, gasprice=gasprice)
-
-
-def expected_balance(account, acc_pub, debug=False):
-    """
-    calculate the account's balance
-
-    :param account: dictionary, account details
-    :param acc_pub: string, account's public key
-    :param debug: bool, print balance or not
-
-    :return: int, the balance after sending and receiving txs
-    """
-
-    balance = sum([int(tx["amount"]) for tx in account["recv"]]) - \
-              sum(int(tx["amount"]) + (int(tx["gasprice"]) * TX_COST) for tx in account["send"])
-
-    if debug:
-        print(f"balance calculated for {acc_pub}:\n{balance}\neverything:\n{pprint.pformat(account)}")
-
-    return balance
-
-
-def random_account(accounts):
-    pk = random.choice(list(accounts.keys()))
-    return pk
-
-
-def new_account(accounts):
-    """
-    create a new account and adds it to the accounts data structure
-
-    :param accounts: dictionary, all accounts
-
-    :return: string, public key of the new account
-    """
-
-    priv, pub = genkeypair()
-    str_pub = bytes.hex(pub)
-    accounts[str_pub] = set_account(bytes.hex(priv), 0, [], [])
-    return str_pub
-
-
-def transfer(wallet_api, accounts, frm, to, amount=None, gas_price=None, gas_limit=None):
-    tx_gen = TxGenerator(pub=frm, pri=accounts[frm]['priv'])
+def transfer(wallet_api, accountant, frm, to, amount=None, gas_price=None, gas_limit=None):
+    tx_gen = TxGenerator(pub=frm, pri=accountant.get_acc_priv(frm))
     if not amount:
-        amount = random.randint(1, expected_balance(accounts[frm], frm) - TX_COST)
+        amount = random.randint(1, accountant.get_balance(frm) - accountant.tx_cost)
     if not gas_price:
         gas_price = 1
     if not gas_limit:
         gas_limit = gas_price + 1
 
     # create transaction
-    tx_bytes = tx_gen.generate(to, accounts[frm]["nonce"], gas_limit, gas_price, amount)
+    tx_bytes = tx_gen.generate(to, accountant.get_nonce(frm), gas_limit, gas_price, amount)
     # submit transaction
     success = wallet_api.submit_tx(to, frm, gas_price, amount, tx_bytes)
-    accounts[frm]['nonce'] += 1
+    accountant.set_nonce(frm)
     # append transactions into accounts data structure
     if success:
-        accounts[to]["recv"].append(set_recv(bytes.hex(tx_gen.publicK), amount, gas_price))
-        accounts[frm]["send"].append(set_send(to, amount, gas_price))
+        accountant.set_acc_recv(to, Accountant.set_recv(bytes.hex(tx_gen.publicK), amount, gas_price))
+        accountant.set_acc_send(frm, Accountant.set_send(to, amount, gas_price))
         return True
+
     return False
 
 
-def validate_nonce(wallet_api, accounts, acc):
+def validate_nonce(wallet_api, acc, nonce):
     print(f"\nchecking nonce for {acc}")
     out = wallet_api.get_nonce(acc)
-    if str(accounts[acc]['nonce']) in out:
+    if str(nonce) in out:
         return True
 
     return False
 
 
-def validate_acc_amount(wallet_api, accounts, acc, init_amount=0):
+def validate_acc_amount(wallet_api, accountant, acc):
     print(f"\nvalidate balance for {acc}")
+    if acc == conf.acc_pub:
+        print("TAP")
+
     res_fmt = "{{'value': '{}'}}"
     out = wallet_api.get_balance(acc)
-    balance = init_amount + expected_balance(accounts[acc], acc)
+    balance = accountant.get_balance(acc)
 
     if res_fmt.format(str(balance)) in out:
-        print(f"{acc} balance ok ({out})")
+        print(f"balance ok (origin={balance})")
         return True
 
-    print(f"balance did not match: returned balance={out}, expected={balance}, init amount={init_amount}")
+    print(f"balance did not match: returned balance={out}, expected={balance}")
     return False
 
-# def validate_account_nonce(accounts, acc, init_amount=0):
-#     out = wallet_api.get_nonce(acc)
-#     print(out)
-#     if str(accounts[acc]['nonce']) in out:
-#         balance = init_amount + expected_balance(acc)
-#         print(f"expecting balance: {balance}")
-#         if "{'value': '" + str(balance) + "'}" in out:
-#             print("{0}, balance ok ({1})".format(str(acc), out))
-#             return True
-#         return False
-#     return False
 
-
-# account struct
-#     {
-#         "priv": "81c90dd832e18d1cf9758254327cb3135961af6688ac9c2a8c5d71f73acc5ce5",
-#         "nonce": 0,
-#         "send": [{to: ..., amount: ..., gasprice: .}, ...],
-#         "recv": [{from: ..., amount: ..., gasprice: ...}, ...],
-#     }
 def test_transactions(setup_network):
+    debug = False
     wallet_api = WalletAPI(setup_network.bootstrap.deployment_id, setup_network.clients.pods)
-    tap_init_amount = 10000
     acc = conf.acc_pub
-    accounts = {acc: set_tap_acc()}
+    accountant = Accountant({acc: Accountant.set_tap_acc()})
 
     # send txs via miners
     test_txs = 10
     for i in range(test_txs):
-        balance = tap_init_amount + expected_balance(accounts[acc], acc)
+        balance = accountant.get_balance(acc)
         amount = random.randint(1, int(balance / 10))
-        new_acc_pub = new_account(accounts)
-        print(f"\ntap nonce before transferring {accounts[acc]['nonce']}")
-        assert transfer(wallet_api, accounts, acc, new_acc_pub, amount=amount), "Transfer from tap failed"
-        print(f"tap nonce after transferring {accounts[acc]['nonce']}\n")
+        new_acc_pub = accountant.new_account()
+        print(f"\ntap nonce before transferring {accountant.get_nonce(acc)}")
+        assert transfer(wallet_api, accountant, acc, new_acc_pub, amount=amount), "Transfer from tap failed"
+        print(f"tap nonce after transferring {accountant.get_nonce(acc)}\n")
 
-    print(f"tap account {acc}:\n\n{pprint.pformat(accounts[acc])}\n")
+    print(f"TAP account {acc}:\n\n{pprint.pformat(accountant.get_acc(acc))}")
 
     layers_per_epoch = int(testconfig["client"]["args"]["layers-per-epoch"])
     layer_duration = int(testconfig["client"]["args"]["layer-duration-sec"])
 
     print("checking tap nonce")
-    is_valid = validate_nonce(wallet_api, accounts, acc)
+    is_valid = validate_nonce(wallet_api, acc, accountant.get_nonce(acc))
     assert is_valid, "tap account does not have the right nonce"
     print("nonce ok!")
 
@@ -171,28 +89,26 @@ def test_transactions(setup_network):
     epochs_sleep_limit = 2
     for x in range(layers_per_epoch * epochs_sleep_limit):
         ready_pods = 0
-        print(f"\n\nsleeping for a layer ({layer_duration} seconds)... {x}\n\n")
+        print(f"\n\nsleeping for a layer ({layer_duration} seconds)... {x+1}\n\n")
         time.sleep(layer_duration)
-        for pk in accounts:
-            init_amount = 0
-            if pk == acc:
-                # TODO 1000 should be a const
-                init_amount = 10000
+
+        for pk in accountant.accounts:
+            if validate_acc_amount(wallet_api, accountant, pk):
+                ready_pods += 1
                 continue
 
-            ass_err = f"account {pk} does not have the expected balance"
-            if validate_acc_amount(wallet_api, accounts, pk, init_amount):
-                ready_pods += 1
-            else:
-                print(f"account with {pk} is not ready yet")
-                break
-
-        if ready_pods == len(accounts) - 1:
-            print("all accounts got the expected amount")
+            print(f"account with {pk} is not ready yet")
             break
 
-    assert ready_pods == len(accounts) - 1, "Not all accounts received sent txs"  # one for 0 counting and one for tap.
-    #
+        if ready_pods == len(accountant.accounts):
+            print("\nall accounts got the expected amount\n")
+            break
+
+    if debug:
+        print(f"tap account {acc}:\n\n{pprint.pformat(accountant.accounts)}\n")
+
+    assert ready_pods == len(accountant.accounts), "Not all accounts received sent txs"
+
     # def is_there_a_valid_acc(min_balance, excpect=[]):
     #     lst = []
     #     for acc in accounts:
