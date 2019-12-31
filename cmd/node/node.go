@@ -408,12 +408,6 @@ func (app *SpacemeshApp) SetLogLevel(name, loglevel string) error {
 	return nil
 }
 
-func (app *SpacemeshApp) hareFactory(isMock bool) {
-	if isMock {
-
-	}
-}
-
 func (app *SpacemeshApp) initServices(nodeID types.NodeId,
 	swarm service.Service,
 	dbStorepath string,

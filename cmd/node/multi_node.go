@@ -140,24 +140,11 @@ func InitSingleInstance(cfg config.Config, i int, genesisTime string, rng *amcl.
 
 // Starts the run of a number of nodes, running in process consensus between them.
 // this also runs a single transaction between the nodes.
-func StartMultiNode(numOfinstances, layerAvgSize int, runUntilLayer uint32, dbPath string) {
-
-	runTillLayer := runUntilLayer
-
+func StartMultiNode(numOfinstances, layerAvgSize int, runTillLayer uint32, dbPath string) {
 	cfg := getTestDefaultConfig()
 	cfg.LayerAvgSize = layerAvgSize
 	numOfInstances := numOfinstances
 
-	dst := types.BytesToAddress([]byte{0x02})
-	acc1Signer, err := signing.NewEdSignerFromBuffer(util.FromHex(apiCfg.Account1Private))
-	if err != nil {
-		log.Panic("Could not build ed signer err=%v", err)
-	}
-	tx, err := mesh.NewSignedTx(0, dst, 10, 1, 1, acc1Signer)
-	if err != nil {
-		log.Panic("panicked creating signed tx err=%v", err)
-	}
-	txbytes, _ := types.InterfaceToBytes(tx)
 	path := dbPath + time.Now().Format("2006-01-02T15:04:05-0700")
 
 	genesisTime := time.Now().Add(20 * time.Second).Format(time.RFC3339)
@@ -206,12 +193,23 @@ func StartMultiNode(numOfinstances, layerAvgSize int, runUntilLayer uint32, dbPa
 	//startInLayer := 5 // delayed pod will start in this layer
 	defer GracefulShutdown(apps)
 
+	dst := types.BytesToAddress([]byte{0x02})
+	acc1Signer, err := signing.NewEdSignerFromBuffer(util.FromHex(apiCfg.Account1Private))
+	if err != nil {
+		log.Panic("Could not build ed signer err=%v", err)
+	}
+	tx, err := mesh.NewSignedTx(0, dst, 10, 1, 1, acc1Signer)
+	if err != nil {
+		log.Panic("panicked creating signed tx err=%v", err)
+	}
+	txbytes, _ := types.InterfaceToBytes(tx)
 	_ = apps[0].P2P.Broadcast(miner.IncomingTxProtocol, txbytes)
 	timeout := time.After(time.Duration(runTillLayer*60) * time.Second)
 
 	//stickyClientsDone := 0
 	startLayer := time.Now()
 	clock.Tick()
+	errors := 0
 loop:
 	for {
 		select {
@@ -220,16 +218,22 @@ loop:
 			log.Error("run timed out", err)
 			return
 		default:
+			if errors > 100 {
+				log.Error("too many errors and retries")
+				break loop
+			}
 			layer := clock.GetCurrentLayer()
 			if eventDb.GetBlockCreationDone(layer) < numOfInstances {
 				log.Info("blocks done in layer %v: %v", layer, eventDb.GetBlockCreationDone(layer))
 				time.Sleep(500 * time.Millisecond)
+				errors++
 				continue
 			}
 			log.Info("all miners tried to create block in %v", layer)
 			if eventDb.GetNumOfCreatedBlocks(layer)*numOfInstances != eventDb.GetReceivedBlocks(layer) {
 				log.Info("finished: %v, block received %v layer %v", eventDb.GetNumOfCreatedBlocks(layer), eventDb.GetReceivedBlocks(layer), layer)
 				time.Sleep(500 * time.Millisecond)
+				errors++
 				continue
 			}
 			log.Info("all miners got blocks for layer: %v created: %v received: %v", layer, eventDb.GetNumOfCreatedBlocks(layer), eventDb.GetReceivedBlocks(layer))
@@ -237,12 +241,14 @@ loop:
 			if !(eventDb.GetAtxCreationDone(epoch) >= numOfInstances && eventDb.GetAtxCreationDone(epoch)%numOfInstances == 0) {
 				log.Info("atx not created %v in epoch %v, created only %v atxs", numOfInstances-eventDb.GetAtxCreationDone(epoch), epoch, eventDb.GetAtxCreationDone(epoch))
 				time.Sleep(500 * time.Millisecond)
+				errors++
 				continue
 			}
 			log.Info("all miners finished reading %v atxs, layer %v done in %v", eventDb.GetAtxCreationDone(epoch), layer, time.Since(startLayer))
 			for _, atxId := range eventDb.GetCreatedAtx(epoch) {
 				if _, found := eventDb.Atxs[atxId]; !found {
 					log.Info("atx %v not propagated", atxId)
+					errors++
 					continue
 				}
 			}

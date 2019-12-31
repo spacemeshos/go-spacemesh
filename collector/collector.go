@@ -52,14 +52,51 @@ func (c *eventsCollector) collectEvents(url string) {
 		return
 	}
 	blocks, err := sub.Subscribe(events.EventNewBlock)
+	if err != nil {
+		log.Error("cannot start subscriber")
+		return
+	}
+
 	blocksValid, err := sub.Subscribe(events.EventBlockValid)
+	if err != nil {
+		log.Error("cannot start subscriber %v", events.EventBlockValid)
+		return
+	}
 	txs, err := sub.Subscribe(events.EventNewTx)
+	if err != nil {
+		log.Error("cannot start subscriber %v", events.EventNewTx)
+		return
+	}
 	txValid, err := sub.Subscribe(events.EventTxValid)
+	if err != nil {
+		log.Error("cannot start subscriber %v", events.EventTxValid)
+		return
+	}
 	atxs, err := sub.Subscribe(events.EventNewAtx)
+	if err != nil {
+		log.Error("cannot start subscriber %v", events.EventNewAtx)
+		return
+	}
 	atxsValid, err := sub.Subscribe(events.EventAtxValid)
+	if err != nil {
+		log.Error("cannot start subscriber %v", events.EventAtxValid)
+		return
+	}
 	reward, err := sub.Subscribe(events.EventRewardReceived)
+	if err != nil {
+		log.Error("cannot start subscriber %v", events.EventRewardReceived)
+		return
+	}
 	created, err := sub.Subscribe(events.EventCreatedBlock)
+	if err != nil {
+		log.Error("cannot start subscriber %v", events.EventCreatedBlock)
+		return
+	}
 	createdAtx, err := sub.Subscribe(events.EventCreatedAtx)
+	if err != nil {
+		log.Error("cannot start subscriber %v", events.EventCreatedAtx)
+		return
+	}
 	sub.StartListening()
 	if err != nil {
 		log.Debug("cannot start subscriber")

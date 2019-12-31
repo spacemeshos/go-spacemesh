@@ -639,20 +639,3 @@ func TestStartPost(t *testing.T) {
 	// the other from a zero-challenge execution phase.
 	assert.Equal(t, builder.commitment, execBuilder.commitment)
 }
-
-/*
-func TestBuilder_PublishActivationTx(t *testing.T) {
-	id := types.NodeId{"aaaaaa", []byte("bbbbb")}
-	drive := "/tmp/anton"
-	coinbase2 := types.HexToAddress("0xabb")
-
-	layers := &MeshProviderMock{}
-	db := NewMockDB()
-
-	activationDb := NewActivationDb(database.NewMemDatabase(), &MockIdStore{}, mesh.NewMemMeshDB(lg.WithName("meshDB")), layersPerEpoch, &ValidatorMock{}, lg.WithName("atxDB1"))
-	builder := NewBuilder(id, coinbase, &MockSigning{}, activationDb, &MeshProviderMock{}, layers, layersPerEpoch, nipstBuilder, postProver, nil, func() bool { return true }, db, lg.WithName("atxBuilder"))
-
-	err := builder.StartPost(coinbase2, drive, 1024)
-	assert.NoError(t, err)
-	builder.PublishActivationTx(1)
-}*/

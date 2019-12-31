@@ -119,7 +119,6 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 		log.Panic("failed to start poet server: %v", err)
 	}
 
-	startInLayer := 5 // delayed pod will start in this layer
 	defer GracefulShutdown(suite.apps)
 
 	timeout := time.After(6 * 60 * time.Second)
@@ -139,7 +138,7 @@ loop:
 		}
 	}
 
-	suite.validateBlocksAndATXs(types.LayerID(numberOfEpochs*suite.apps[0].Config.LayersPerEpoch)-1, types.LayerID(startInLayer))
+	suite.validateBlocksAndATXs(types.LayerID(numberOfEpochs*suite.apps[0].Config.LayersPerEpoch) - 1)
 }
 
 type ScenarioSetup func(suit *AppTestSuite, t *testing.T)
@@ -335,7 +334,7 @@ func runTests(suite *AppTestSuite, finished map[int]bool) bool {
 	return true
 }
 
-func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID, startInLayer types.LayerID) {
+func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 	log.Info("untilLayer=%v", untilLayer)
 
 	type nodeData struct {

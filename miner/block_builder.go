@@ -399,7 +399,7 @@ func (t *BlockBuilder) acceptBlockData() {
 			return
 
 		case layerID := <-t.beginRoundEvent:
-			t.Info("builder got layer %v", layerID)
+			t.Debug("builder got layer %v", layerID)
 			atxID, proofs, err := t.blockOracle.BlockEligible(layerID)
 			if err != nil {
 				events.Publish(events.DoneCreatingBlock{Eligible: true, Layer: uint64(layerID), Error: "failed to check for block eligibility"})
