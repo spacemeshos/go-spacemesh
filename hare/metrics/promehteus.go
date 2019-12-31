@@ -13,22 +13,6 @@ const (
 )
 
 var (
-	// CommitCounter is the number of valid commits for a set.
-	CommitCounter = prometheus.NewCounterFrom(stdprometheus.CounterOpts{
-		Namespace: Namespace,
-		Subsystem: Subsystem,
-		Name:      "commit_counter",
-		Help:      "Number of valid commit messages for a set",
-	}, []string{"set_id"})
-
-	// NotifyCounter is the number of valid notifications for a set.
-	NotifyCounter = prometheus.NewCounterFrom(stdprometheus.CounterOpts{
-		Namespace: Namespace,
-		Subsystem: Subsystem,
-		Name:      "notify_counter",
-		Help:      "Number of valid notifications for a set",
-	}, []string{"set_id"})
-
 	// MessageTypeCounter is the number of valid messages per type.
 	MessageTypeCounter = prometheus.NewCounterFrom(stdprometheus.CounterOpts{
 		Namespace: Namespace,
