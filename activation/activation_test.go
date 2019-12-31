@@ -10,6 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/post/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -42,7 +43,7 @@ var (
 
 	defaultView  = []types.BlockID{block1.Id(), block2.Id(), block3.Id()}
 	net          = &NetMock{}
-	atxPool      = &AtxPoolMock{}
+	layerClock   = &LayerClockMock{}
 	meshProvider = &MeshProviderMock{latestLayer: 12}
 	nipstBuilder = &NipstBuilderMock{}
 	postProver   = &postProverClientMock{}
@@ -79,19 +80,26 @@ func (mpm *MeshProviderMock) LatestLayer() types.LayerID {
 
 type NetMock struct {
 	lastTransmission []byte
+	atxDb            ATXDBProvider
 }
 
 func (n *NetMock) Broadcast(id string, d []byte) error {
 	n.lastTransmission = d
-	go hookToAtxPool(d)
+	go n.hookToAtxPool(d)
 	return nil
 }
 
-func hookToAtxPool(transmission []byte) {
+func (n *NetMock) hookToAtxPool(transmission []byte) {
 	if atx, err := types.BytesAsAtx(transmission); err == nil {
 		atx.CalcAndSetId()
-		if atxPool.listener != nil {
-			atxPool.listener(atx.ActivationTxHeader)
+
+		if n.atxDb != nil {
+			if atxDb, ok := n.atxDb.(*ActivationDb); ok {
+				err := atxDb.storeAtxUnlocked(atx)
+				if err != nil {
+					panic(err)
+				}
+			}
 		}
 	}
 }
@@ -223,16 +231,24 @@ func newAtx(challenge types.NIPSTChallenge, ActiveSetSize uint32, View []types.B
 	return activationTx
 }
 
-type AtxPoolMock struct {
-	listener func(header *types.ActivationTxHeader)
+type LayerClockMock struct{}
+
+func (l *LayerClockMock) Subscribe() timesync.LayerTimer {
+	return make(timesync.LayerTimer)
 }
 
-func (ap *AtxPoolMock) SetListener(listener func(header *types.ActivationTxHeader)) {
-	ap.listener = listener
+func (l *LayerClockMock) SubscribeLayer(layerId types.LayerID) chan struct{} {
+	ch := make(chan struct{})
+	go func() {
+		time.Sleep(10 * time.Millisecond)
+		close(ch)
+	}()
+	return ch
 }
 
 func newBuilder(activationDb ATXDBProvider) *Builder {
-	b := NewBuilder(nodeId, coinbase, &MockSigning{}, activationDb, net, meshProvider, layersPerEpoch, nipstBuilder, postProver, nil, isSynced(true), NewMockDB(), atxPool, lg.WithName("atxBuilder"))
+	net.atxDb = activationDb
+	b := NewBuilder(nodeId, coinbase, &MockSigning{}, activationDb, net, meshProvider, layersPerEpoch, nipstBuilder, postProver, layerClock, isSynced(true), NewMockDB(), lg.WithName("atxBuilder"))
 	b.commitment = commitment
 	return b
 }
@@ -334,38 +350,28 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 
 	// create and attempt to publish ATX
 	faultyNet := &FaultyNetMock{retErr: true}
-	b := NewBuilder(nodeId, coinbase, &MockSigning{}, activationDb, faultyNet, meshProvider, layersPerEpoch, nipstBuilder, postProver, nil, isSynced(true), NewMockDB(), atxPool, lg.WithName("atxBuilder"))
+	b := NewBuilder(nodeId, coinbase, &MockSigning{}, activationDb, faultyNet, meshProvider, layersPerEpoch, nipstBuilder, postProver, layerClock, isSynced(true), NewMockDB(), lg.WithName("atxBuilder"))
 	published, _, err := publishAtx(b, postGenesisEpochLayer+1, postGenesisEpoch, layersPerEpoch)
 	r.EqualError(err, "failed to broadcast ATX: faulty")
 	r.False(published)
 
 	// create and attempt to publish ATX
 	faultyNet.retErr = false
-	b = NewBuilder(nodeId, coinbase, &MockSigning{}, activationDb, faultyNet, meshProvider, layersPerEpoch, nipstBuilder, postProver, nil, isSynced(true), NewMockDB(), atxPool, lg.WithName("atxBuilder"))
-	b.broadcastTimeout = 5 * time.Millisecond
+	b = NewBuilder(nodeId, coinbase, &MockSigning{}, activationDb, faultyNet, meshProvider, layersPerEpoch, nipstBuilder, postProver, layerClock, isSynced(true), NewMockDB(), lg.WithName("atxBuilder"))
 	published, builtNipst, err := publishAtx(b, postGenesisEpochLayer+1, postGenesisEpoch, layersPerEpoch)
-	r.EqualError(err, "broadcast timeout")
+	r.EqualError(err, "target epoch has passed")
 	r.False(published)
 	r.True(builtNipst)
 
-	// the next time this runs (an epoch + a layer later), the nipst is NOT re-built
-	published, builtNipst, err = publishAtx(b, postGenesisEpochLayer+layersPerEpoch+2, postGenesisEpoch+1, layersPerEpoch)
-	r.EqualError(err, "broadcast timeout")
-	r.False(published)
-	r.False(builtNipst)
-
-	// the next time this runs (an epoch + a layer later), the nipst is NOT re-built
-	published, builtNipst, err = publishAtx(b, postGenesisEpochLayer+(2*layersPerEpoch)+1, postGenesisEpoch+2, layersPerEpoch)
-	r.EqualError(err, "broadcast timeout")
-	r.False(published)
-	r.False(builtNipst)
-
-	// if the network works - the ATX should be published in the next layer
+	// if the network works and we try to publish a new ATX, the timeout should result in a clean state (so a NIPST should be built)
 	b.net = net
+	net.atxDb = activationDb
+	posAtx := newAtx(newChallenge(nodeId, 1, prevAtxId, prevAtxId, postGenesisEpochLayer+layersPerEpoch+1), 5, defaultView, npst)
+	storeAtx(r, activationDb, posAtx, log.NewDefault("storeAtx"))
 	published, builtNipst, err = publishAtx(b, postGenesisEpochLayer+layersPerEpoch+2, postGenesisEpoch+1, layersPerEpoch)
 	r.NoError(err)
 	r.True(published)
-	r.False(builtNipst)
+	r.True(builtNipst)
 }
 
 func TestBuilder_PublishActivationTx_RebuildNipstWhenTargetEpochPassed(t *testing.T) {
@@ -381,7 +387,7 @@ func TestBuilder_PublishActivationTx_RebuildNipstWhenTargetEpochPassed(t *testin
 
 	// create and attempt to publish ATX
 	faultyNet := &FaultyNetMock{retErr: true}
-	b := NewBuilder(nodeId, coinbase, &MockSigning{}, activationDb, faultyNet, meshProvider, layersPerEpoch, nipstBuilder, postProver, nil, isSynced(true), NewMockDB(), atxPool, lg.WithName("atxBuilder"))
+	b := NewBuilder(nodeId, coinbase, &MockSigning{}, activationDb, faultyNet, meshProvider, layersPerEpoch, nipstBuilder, postProver, layerClock, isSynced(true), NewMockDB(), lg.WithName("atxBuilder"))
 	published, builtNipst, err := publishAtx(b, postGenesisEpochLayer+1, postGenesisEpoch, layersPerEpoch)
 	r.EqualError(err, "failed to broadcast ATX: faulty")
 	r.False(published)
@@ -393,6 +399,7 @@ func TestBuilder_PublishActivationTx_RebuildNipstWhenTargetEpochPassed(t *testin
 
 	// if the network works - the ATX should be published
 	b.net = net
+	net.atxDb = activationDb
 	posAtx := newAtx(newChallenge(nodeId, 1, prevAtxId, prevAtxId, postGenesisEpochLayer+(3*layersPerEpoch)), 5, defaultView, npst)
 	storeAtx(r, activationDb, posAtx, log.NewDefault("storeAtx"))
 	published, builtNipst, err = publishAtx(b, postGenesisEpochLayer+(3*layersPerEpoch)+1, postGenesisEpoch+3, layersPerEpoch)
@@ -515,7 +522,7 @@ func TestBuilder_PublishActivationTx_FailsWhenNipstBuilderFails(t *testing.T) {
 
 	activationDb := newActivationDb()
 	nipstBuilder := &NipstErrBuilderMock{} // 👀 mock that returns error from BuildNipst()
-	b := NewBuilder(nodeId, coinbase, &MockSigning{}, activationDb, net, meshProvider, layersPerEpoch, nipstBuilder, postProver, nil, isSynced(true), NewMockDB(), atxPool, lg.WithName("atxBuilder"))
+	b := NewBuilder(nodeId, coinbase, &MockSigning{}, activationDb, net, meshProvider, layersPerEpoch, nipstBuilder, postProver, layerClock, isSynced(true), NewMockDB(), lg.WithName("atxBuilder"))
 	b.commitment = commitment
 
 	challenge := newChallenge(otherNodeId /*👀*/, 1, prevAtxId, prevAtxId, postGenesisEpochLayer)
@@ -587,7 +594,7 @@ func TestBuilder_SignAtx(t *testing.T) {
 	ed := signing.NewEdSigner()
 	nodeId := types.NodeId{ed.PublicKey().String(), []byte("bbbbb")}
 	activationDb := NewActivationDb(database.NewMemDatabase(), &MockIdStore{}, mesh.NewMemMeshDB(lg.WithName("meshDB")), layersPerEpoch, &ValidatorMock{}, lg.WithName("atxDB1"))
-	b := NewBuilder(nodeId, coinbase, ed, activationDb, net, meshProvider, layersPerEpoch, nipstBuilder, postProver, nil, isSynced(true), NewMockDB(), atxPool, lg.WithName("atxBuilder"))
+	b := NewBuilder(nodeId, coinbase, ed, activationDb, net, meshProvider, layersPerEpoch, nipstBuilder, postProver, layerClock, isSynced(true), NewMockDB(), lg.WithName("atxBuilder"))
 
 	prevAtx := types.AtxId(types.HexToHash32("0x111"))
 	atx := types.NewActivationTx(nodeId, coinbase, 1, prevAtx, 15, 1, prevAtx, 5, []types.BlockID{block1.Id(), block2.Id(), block3.Id()}, npst)
@@ -616,7 +623,8 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	db := NewMockDB()
 	sig := &MockSigning{}
 	activationDb := NewActivationDb(database.NewMemDatabase(), &MockIdStore{}, mesh.NewMemMeshDB(lg.WithName("meshDB")), layersPerEpoch, &ValidatorMock{}, lg.WithName("atxDB1"))
-	b := NewBuilder(id, coinbase, sig, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, postProver, nil, func() bool { return true }, db, atxPool, lg.WithName("atxBuilder"))
+	net.atxDb = activationDb
+	b := NewBuilder(id, coinbase, sig, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, postProver, layerClock, func() bool { return true }, db, lg.WithName("atxBuilder"))
 	prevAtx := types.AtxId(types.HexToHash32("0x111"))
 	chlng := types.HexToHash32("0x3333")
 	poetRef := []byte{0xbe, 0xef}
@@ -649,7 +657,7 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	assert.EqualError(t, err, tooSoonErr.Error())
 
 	//test load in correct epoch
-	b = NewBuilder(id, coinbase, &MockSigning{}, activationDb, net, layers, layersPerEpoch, nipstBuilder, postProver, nil, func() bool { return true }, db, atxPool, lg.WithName("atxBuilder"))
+	b = NewBuilder(id, coinbase, &MockSigning{}, activationDb, net, layers, layersPerEpoch, nipstBuilder, postProver, layerClock, func() bool { return true }, db, lg.WithName("atxBuilder"))
 	err = b.loadChallenge()
 	assert.NoError(t, err)
 	layers.latestLayer = 22
@@ -661,12 +669,12 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, bts, net.lastTransmission)
 
-	b = NewBuilder(id, coinbase, &MockSigning{}, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, postProver, nil, func() bool { return true }, db, atxPool, lg.WithName("atxBuilder"))
+	b = NewBuilder(id, coinbase, &MockSigning{}, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, postProver, layerClock, func() bool { return true }, db, lg.WithName("atxBuilder"))
 	err = b.PublishActivationTx(1)
 	assert.EqualError(t, err, tooSoonErr.Error())
 	db.hadNone = false
 	//test load challenge in later epoch - Nipst should be truncated
-	b = NewBuilder(id, coinbase, &MockSigning{}, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, postProver, nil, func() bool { return true }, db, atxPool, lg.WithName("atxBuilder"))
+	b = NewBuilder(id, coinbase, &MockSigning{}, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, postProver, layerClock, func() bool { return true }, db, lg.WithName("atxBuilder"))
 	err = b.loadChallenge()
 	assert.NoError(t, err)
 	err = b.PublishActivationTx(4)
@@ -701,7 +709,7 @@ func TestStartPost(t *testing.T) {
 	}()
 
 	activationDb := NewActivationDb(database.NewMemDatabase(), &MockIdStore{}, mesh.NewMemMeshDB(lg.WithName("meshDB")), layersPerEpoch, &ValidatorMock{}, lg.WithName("atxDB1"))
-	builder := NewBuilder(id, coinbase, &MockSigning{}, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, postProver, nil, func() bool { return true }, db, atxPool, lg.WithName("atxBuilder"))
+	builder := NewBuilder(id, coinbase, &MockSigning{}, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, postProver, layerClock, func() bool { return true }, db, lg.WithName("atxBuilder"))
 
 	// Attempt to initialize with invalid space.
 	// This test verifies that the params are being set in the post client.
@@ -727,7 +735,7 @@ func TestStartPost(t *testing.T) {
 	// Instantiate a new builder and call StartPost on the same datadir, which is already initialized,
 	// and so will result in running the execution phase instead of the initialization phase.
 	// This test verifies that a call to StartPost with a different space param will return an error.
-	execBuilder := NewBuilder(id, coinbase, &MockSigning{}, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, postProver, nil, func() bool { return true }, db, atxPool, lg.WithName("atxBuilder"))
+	execBuilder := NewBuilder(id, coinbase, &MockSigning{}, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, postProver, layerClock, func() bool { return true }, db, lg.WithName("atxBuilder"))
 	err = execBuilder.StartPost(coinbase2, drive, 2048)
 	assert.EqualError(t, err, "config mismatch")
 

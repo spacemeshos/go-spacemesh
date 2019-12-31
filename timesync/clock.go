@@ -19,6 +19,7 @@ type Ticker struct {
 	time            Clock
 	stop            chan struct{}
 	subscribers     map[LayerTimer]struct{} // map subscribers by channel
+	layerChannels   map[types.LayerID]chan struct{}
 	started         bool
 }
 
@@ -40,6 +41,7 @@ func NewTicker(time Clock, tickInterval time.Duration, startEpoch time.Time) *Ti
 		time:            time,
 		stop:            make(chan struct{}),
 		subscribers:     make(map[LayerTimer]struct{}),
+		layerChannels:   make(map[types.LayerID]chan struct{}),
 	}
 	t.init()
 	return t
@@ -77,10 +79,14 @@ func (t *Ticker) notifyOnTick() {
 	count := 1
 	for ch := range t.subscribers {
 		ch <- t.nextLayerToTick
-		log.Debug("iv'e notified number : %v", count)
+		log.Debug("I've notified number: %v", count)
 		count++
 	}
-	log.Debug("Ive notified all")
+	if layerChan, found := t.layerChannels[t.nextLayerToTick]; found {
+		close(layerChan)
+		delete(t.layerChannels, t.nextLayerToTick)
+	}
+	log.Debug("I've notified all")
 	t.nextLayerToTick++
 	t.m.Unlock()
 }
@@ -105,6 +111,28 @@ func (t *Ticker) Unsubscribe(ch LayerTimer) {
 	t.m.Lock()
 	delete(t.subscribers, ch)
 	t.m.Unlock()
+}
+
+var closedChan = make(chan struct{})
+
+func init() {
+	close(closedChan)
+}
+
+func (t *Ticker) SubscribeLayer(layerId types.LayerID) chan struct{} {
+	t.m.Lock()
+	defer t.m.Unlock()
+
+	if t.nextLayerToTick > layerId {
+		return closedChan
+	}
+
+	ch := t.layerChannels[layerId]
+	if ch == nil {
+		ch = make(chan struct{})
+		t.layerChannels[layerId] = ch
+	}
+	return ch
 }
 
 func (t *Ticker) updateLayerID() {

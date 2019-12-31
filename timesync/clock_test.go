@@ -145,3 +145,8 @@ func TestTicker_SubscribeUnsubscribe(t *testing.T) {
 	ticker.Unsubscribe(c2)
 	r.Equal(0, len(ticker.subscribers))
 }
+
+// TODO
+//func TestTicker_SubscribeLayer(t *testing.T) {
+//
+//}

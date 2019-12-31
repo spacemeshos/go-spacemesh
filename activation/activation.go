@@ -7,10 +7,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/post/shared"
 	"sync"
 	"sync/atomic"
-	"time"
 )
 
 const AtxProtocol = "AtxGossip"
@@ -57,6 +57,7 @@ type ATXDBProvider interface {
 	CalcActiveSetFromView(view []types.BlockID, pubEpoch types.EpochId) (uint32, error)
 	GetNodeLastAtxId(nodeId types.NodeId) (types.AtxId, error)
 	GetPosAtxId(epochId types.EpochId) (*types.AtxId, error)
+	AwaitAtx(id types.AtxId) chan struct{}
 }
 
 type BytesStore interface {
@@ -74,61 +75,59 @@ const (
 	InitDone
 )
 
-type AtxPool interface {
-	SetListener(listener func(header *types.ActivationTxHeader))
-}
-
 type Builder struct {
 	Signer
-	nodeId           types.NodeId
-	coinbaseAccount  types.Address
-	db               ATXDBProvider
-	net              Broadcaster
-	mesh             MeshProvider
-	layersPerEpoch   uint16
-	tickProvider     PoETNumberOfTickProvider
-	nipstBuilder     NipstBuilder
-	postProver       PostProverClient
-	challenge        *types.NIPSTChallenge
-	nipst            *types.NIPST
-	commitment       *types.PostProof
-	posLayerID       types.LayerID
-	prevATX          *types.ActivationTxHeader
-	timer            chan types.LayerID
-	stop             chan struct{}
-	finished         chan struct{}
-	working          bool
-	started          uint32
-	store            BytesStore
-	isSynced         func() bool
-	accountLock      sync.RWMutex
-	initStatus       int32
-	atxPool          AtxPool
-	broadcastTimeout time.Duration
-	log              log.Log
+	nodeId          types.NodeId
+	coinbaseAccount types.Address
+	db              ATXDBProvider
+	net             Broadcaster
+	mesh            MeshProvider
+	layersPerEpoch  uint16
+	tickProvider    PoETNumberOfTickProvider
+	nipstBuilder    NipstBuilder
+	postProver      PostProverClient
+	challenge       *types.NIPSTChallenge
+	nipst           *types.NIPST
+	commitment      *types.PostProof
+	posLayerID      types.LayerID
+	prevATX         *types.ActivationTxHeader
+	timer           chan types.LayerID
+	layerClock      LayerClock
+	stop            chan struct{}
+	finished        chan struct{}
+	working         bool
+	started         uint32
+	store           BytesStore
+	isSynced        func() bool
+	accountLock     sync.RWMutex
+	initStatus      int32
+	log             log.Log
+}
+
+type LayerClock interface {
+	Subscribe() timesync.LayerTimer
+	SubscribeLayer(layerId types.LayerID) chan struct{}
 }
 
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
-func NewBuilder(nodeId types.NodeId, coinbaseAccount types.Address, signer Signer, db ATXDBProvider, net Broadcaster, mesh MeshProvider, layersPerEpoch uint16, nipstBuilder NipstBuilder, postProver PostProverClient, layerClock chan types.LayerID, isSyncedFunc func() bool, store BytesStore, pool AtxPool, log log.Log) *Builder {
+func NewBuilder(nodeId types.NodeId, coinbaseAccount types.Address, signer Signer, db ATXDBProvider, net Broadcaster, mesh MeshProvider, layersPerEpoch uint16, nipstBuilder NipstBuilder, postProver PostProverClient, layerClock LayerClock, isSyncedFunc func() bool, store BytesStore, log log.Log) *Builder {
 	return &Builder{
-		Signer:           signer,
-		nodeId:           nodeId,
-		coinbaseAccount:  coinbaseAccount,
-		db:               db,
-		net:              net,
-		mesh:             mesh,
-		layersPerEpoch:   layersPerEpoch,
-		nipstBuilder:     nipstBuilder,
-		postProver:       postProver,
-		timer:            layerClock,
-		stop:             make(chan struct{}),
-		finished:         make(chan struct{}),
-		isSynced:         isSyncedFunc,
-		store:            store,
-		initStatus:       InitIdle,
-		atxPool:          pool,
-		broadcastTimeout: 10 * time.Second,
-		log:              log,
+		Signer:          signer,
+		nodeId:          nodeId,
+		coinbaseAccount: coinbaseAccount,
+		db:              db,
+		net:             net,
+		mesh:            mesh,
+		layersPerEpoch:  layersPerEpoch,
+		nipstBuilder:    nipstBuilder,
+		postProver:      postProver,
+		layerClock:      layerClock,
+		stop:            make(chan struct{}),
+		finished:        make(chan struct{}),
+		isSynced:        isSyncedFunc,
+		store:           store,
+		initStatus:      InitIdle,
+		log:             log,
 	}
 }
 
@@ -138,6 +137,7 @@ func (b *Builder) Start() {
 		return
 	}
 	atomic.StoreUint32(&b.started, 1)
+	b.timer = b.layerClock.Subscribe()
 	go b.loop()
 }
 
@@ -487,19 +487,12 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 	b.log.With().Info("active ids seen for epoch", log.Uint64("pos_atx_epoch", uint64(posEpoch)),
 		log.Uint32("view_cnt", activeSetSize))
 
-	atxReceived := make(chan struct{})
-	b.atxPool.SetListener(func(atxHeader *types.ActivationTxHeader) {
-		if atxHeader.Id() == atx.Id() {
-			close(atxReceived)
-			b.atxPool.SetListener(nil)
-		}
-	})
-
+	atxReceived := b.db.AwaitAtx(atx.Id())
 	if err := b.signAndBroadcast(atx); err != nil {
 		return err
 	}
 
-	fields := []log.Field{
+	b.log.Event().Info("atx published!",
 		log.AtxId(atx.ShortString()),
 		log.String("prev_atx_id", atx.PrevATXId.ShortString()),
 		log.String("post_atx_id", atx.PositioningAtx.ShortString()),
@@ -508,14 +501,14 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 		log.Uint32("active_set", atx.ActiveSetSize),
 		log.String("miner", b.nodeId.Key[:5]),
 		log.Int("view", len(atx.View)),
-	}
+	)
+
 	select {
 	case <-atxReceived:
-		b.log.Event().Info("atx published!", fields...)
-	case <-time.After(b.broadcastTimeout):
-		b.atxPool.SetListener(nil)
-		b.log.With().Error("broadcast timeout when publishing ATX", fields...)
-		return fmt.Errorf("broadcast timeout")
+	case <-b.layerClock.SubscribeLayer((atx.TargetEpoch(b.layersPerEpoch) + 1).FirstLayer(b.layersPerEpoch)):
+		b.log.With().Error("target epoch has passed before atx was added to database")
+		b.cleanupState()
+		return fmt.Errorf("target epoch has passed")
 	}
 	b.cleanupState()
 	b.prevATX = atx.ActivationTxHeader

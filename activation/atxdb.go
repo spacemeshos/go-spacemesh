@@ -43,19 +43,45 @@ type ActivationDb struct {
 	calcActiveSetFunc func(epoch types.EpochId, blocks map[types.BlockID]struct{}) (map[string]struct{}, error)
 	processAtxMutex   sync.Mutex
 	assLock           sync.Mutex
+	atxChannels       map[types.AtxId]chan struct{}
 }
 
 func NewActivationDb(dbstore database.Database, idstore IdStore, meshDb *mesh.MeshDB, layersPerEpoch uint16, nipstValidator NipstValidator, log log.Log) *ActivationDb {
-	db := &ActivationDb{atxs: dbstore,
+	db := &ActivationDb{
+		IdStore:          idstore,
+		atxs:             dbstore,
 		atxHeaderCache:   NewAtxCache(600),
 		meshDb:           meshDb,
-		nipstValidator:   nipstValidator,
 		LayersPerEpoch:   layersPerEpoch,
-		IdStore:          idstore,
+		nipstValidator:   nipstValidator,
 		pendingActiveSet: make(map[types.Hash12]*sync.Mutex),
-		log:              log}
+		log:              log,
+		atxChannels:      make(map[types.AtxId]chan struct{}),
+	}
 	db.calcActiveSetFunc = db.CalcActiveSetSize
 	return db
+}
+
+var closedChan = make(chan struct{})
+
+func init() {
+	close(closedChan)
+}
+
+func (db *ActivationDb) AwaitAtx(id types.AtxId) chan struct{} {
+	db.Lock()
+	defer db.Unlock()
+
+	if _, err := db.atxs.Get(getAtxHeaderKey(id)); err == nil {
+		return closedChan
+	}
+
+	ch := db.atxChannels[id]
+	if ch == nil {
+		ch = make(chan struct{})
+		db.atxChannels[id] = ch
+	}
+	return ch
 }
 
 func (db *ActivationDb) ProcessAtxs(atxs []*types.ActivationTx) error {
@@ -444,6 +470,13 @@ func (db *ActivationDb) storeAtxUnlocked(atx *types.ActivationTx) error {
 	if err != nil {
 		return err
 	}
+
+	// notify subscribers
+	if ch, found := db.atxChannels[atx.Id()]; found {
+		close(ch)
+		delete(db.atxChannels, atx.Id())
+	}
+
 	return nil
 }
 
