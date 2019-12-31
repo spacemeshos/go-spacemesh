@@ -5,6 +5,7 @@ import pprint
 import random
 import time
 
+from tests.tx_generator.models.accountant import Accountant
 from tests.test_bs import setup_network, add_curl, setup_bootstrap, start_poet, setup_clients, wait_genesis
 import tests.tx_generator.config as conf
 from tests.tx_generator.models.wallet_api import WalletAPI
@@ -99,7 +100,7 @@ def transfer(wallet_api, accounts, frm, to, amount=None, gas_price=None, gas_lim
 
 
 def validate_nonce(wallet_api, accounts, acc):
-    print(f"checking nonce for {acc}")
+    print(f"\nchecking nonce for {acc}")
     out = wallet_api.get_nonce(acc)
     if str(accounts[acc]['nonce']) in out:
         return True
@@ -108,11 +109,12 @@ def validate_nonce(wallet_api, accounts, acc):
 
 
 def validate_acc_amount(wallet_api, accounts, acc, init_amount=0):
-    val_fmt = "{{'value': '{}'}}"
+    print(f"\nvalidate balance for {acc}")
+    res_fmt = "{{'value': '{}'}}"
     out = wallet_api.get_balance(acc)
-    print(f"balance response={out}")
     balance = init_amount + expected_balance(accounts[acc], acc)
-    if val_fmt.format(str(balance)) in out:
+
+    if res_fmt.format(str(balance)) in out:
         print(f"{acc} balance ok ({out})")
         return True
 
@@ -145,7 +147,7 @@ def test_transactions(setup_network):
     acc = conf.acc_pub
     accounts = {acc: set_tap_acc()}
 
-    # send tx to client via rpc
+    # send txs via miners
     test_txs = 10
     for i in range(test_txs):
         balance = tap_init_amount + expected_balance(accounts[acc], acc)
@@ -155,21 +157,22 @@ def test_transactions(setup_network):
         assert transfer(wallet_api, accounts, acc, new_acc_pub, amount=amount), "Transfer from tap failed"
         print(f"tap nonce after transferring {accounts[acc]['nonce']}\n")
 
-    print(f"tap account {acc}:\neverything:\n{pprint.pformat(accounts[acc])}")
+    print(f"tap account {acc}:\n\n{pprint.pformat(accounts[acc])}\n")
 
-    ready_pods = 0
     layers_per_epoch = int(testconfig["client"]["args"]["layers-per-epoch"])
     layer_duration = int(testconfig["client"]["args"]["layer-duration-sec"])
 
-    epochs_num = 2
-    tts = layer_duration * layers_per_epoch * epochs_num
-    tts = layer_duration
-    print(f"\nsleeping for {tts} secs ({epochs_num} epochs)")
-    time.sleep(tts)
-
     print("checking tap nonce")
-    if validate_nonce(wallet_api, accounts, acc):
-        print("nonce ok!")
+    is_valid = validate_nonce(wallet_api, accounts, acc)
+    assert is_valid, "tap account does not have the right nonce"
+    print("nonce ok!")
+
+    ready_pods = 0
+    epochs_sleep_limit = 2
+    for x in range(layers_per_epoch * epochs_sleep_limit):
+        ready_pods = 0
+        print(f"\n\nsleeping for a layer ({layer_duration} seconds)... {x}\n\n")
+        time.sleep(layer_duration)
         for pk in accounts:
             init_amount = 0
             if pk == acc:
@@ -177,13 +180,18 @@ def test_transactions(setup_network):
                 init_amount = 10000
                 continue
 
-            ass_err = f"account {pk} didn't have the expected balance"
-            assert validate_acc_amount(wallet_api, accounts, pk, init_amount), ass_err
-            ready_pods += 1
-    else:
-        assert 0, "tap account does not have the right nonce"
+            ass_err = f"account {pk} does not have the expected balance"
+            if validate_acc_amount(wallet_api, accounts, pk, init_amount):
+                ready_pods += 1
+            else:
+                print(f"account with {pk} is not ready yet")
+                break
 
-    assert ready_pods == len(accounts), "Not all accounts received sent txs"  # one for 0 counting and one for tap.
+        if ready_pods == len(accounts) - 1:
+            print("all accounts got the expected amount")
+            break
+
+    assert ready_pods == len(accounts) - 1, "Not all accounts received sent txs"  # one for 0 counting and one for tap.
     #
     # def is_there_a_valid_acc(min_balance, excpect=[]):
     #     lst = []

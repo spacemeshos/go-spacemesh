@@ -8,8 +8,7 @@ class WalletAPI:
     """
     TODO add docstring
     """
-    ADDRESS_SIZE = 20
-    DEBUG = False
+    ADDRESS_SIZE_HEX = 40
     nonce_api = 'v1/nonce'
     submit_api = 'v1/submittransaction'
     balance_api = 'v1/balance'
@@ -36,19 +35,18 @@ class WalletAPI:
         print(f"getting {acc} nonce")
         pod_ip, pod_name = self.random_node()
         data = '{"address":"' + acc + '"}'
-        return api_call(pod_ip, data, self.nonce_api, self.namespace)
+        out = api_call(pod_ip, data, self.nonce_api, self.namespace)
+        print(f"nonce output={out}")
+        return out
 
     def get_balance(self, acc):
         # check balance
-        pod_ip, pod_name = self.random_node()
         print(f"get balance for {acc}")
-        dst_bytes = bytes.fromhex(acc)
-        addr = dst_bytes[-self.ADDRESS_SIZE:]
-        data = '{"address":"' + str(addr) + '"}'
-        print("#@! acc", acc)
-        print("#@! dst_bytes", dst_bytes)
-        print("#@! addr", addr)
-        return api_call(pod_ip, data, self.balance_api, self.namespace)
+        pod_ip, pod_name = self.random_node()
+        data = '{"address":"' + acc[-self.ADDRESS_SIZE_HEX:] + '"}'
+        out = api_call(pod_ip, data, self.balance_api, self.namespace)
+        print(f"balance output={out}")
+        return out
 
     def random_node(self):
         rnd = random.randint(0, len(self.clients_lst)-1)
