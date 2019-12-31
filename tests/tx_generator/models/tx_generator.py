@@ -21,7 +21,8 @@ class TxGenerator:
         p = xdrlib.Packer()
         p.pack_hyper(nonce)
         dst_bytes = bytes.fromhex(dst)
-        addr = dst_bytes[len(dst_bytes) - 20:]
+        # get the LAST 20 bytes of the dst address
+        addr = dst_bytes[-ADDRESS_SIZE:]
         p.pack_fstring(ADDRESS_SIZE, addr)
         p.pack_hyper(gas_limit)
         p.pack_hyper(fee)

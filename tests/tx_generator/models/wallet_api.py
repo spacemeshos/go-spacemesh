@@ -1,4 +1,5 @@
 import random
+import time
 
 from tests.test_bs import api_call
 
@@ -7,7 +8,7 @@ class WalletAPI:
     """
     TODO add docstring
     """
-
+    ADDRESS_SIZE = 20
     DEBUG = False
     nonce_api = 'v1/nonce'
     submit_api = 'v1/submittransaction'
@@ -22,11 +23,10 @@ class WalletAPI:
 
         print(f"submit transaction from {src} to {to} of {amount} with gas price {gas_price}")
         pod_ip, pod_name = self.random_node()
-        print(f"using pod: {pod_name} to send tx")
+        print(f"submit_tx is using pod: {pod_name} to send tx")
         tx_field = '{"tx":' + str(list(tx_bytes)) + '}'
         out = api_call(pod_ip, tx_field, self.submit_api, self.namespace)
 
-        print(f"submit_tx: transaction {tx_field}")
         print(f"submit_tx: result {out}")
 
         return self.a_ok in out
@@ -35,15 +35,19 @@ class WalletAPI:
         # check nonce
         print(f"getting {acc} nonce")
         pod_ip, pod_name = self.random_node()
-        data = '{{"address":"' + acc + '"}'
+        data = '{"address":"' + acc + '"}'
         return api_call(pod_ip, data, self.nonce_api, self.namespace)
 
     def get_balance(self, acc):
         # check balance
         pod_ip, pod_name = self.random_node()
-        data = '{"address":"' + str(acc) + '"}'
-        if self.DEBUG:
-            print(data)
+        print(f"get balance for {acc}")
+        dst_bytes = bytes.fromhex(acc)
+        addr = dst_bytes[-self.ADDRESS_SIZE:]
+        data = '{"address":"' + str(addr) + '"}'
+        print("#@! acc", acc)
+        print("#@! dst_bytes", dst_bytes)
+        print("#@! addr", addr)
         return api_call(pod_ip, data, self.balance_api, self.namespace)
 
     def random_node(self):

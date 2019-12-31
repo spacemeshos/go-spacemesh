@@ -11,15 +11,21 @@ from tests.tx_generator.models.wallet_api import WalletAPI
 from tests.tx_generator.models.tx_generator import TxGenerator
 from tests.ed25519.eddsa import genkeypair
 
-TX_COST = 3  # .Mul(trans.GasPrice, tp.gasCost.BasicTxCost)
+TX_COST = 1  # .Mul(trans.GasPrice, tp.gasCost.BasicTxCost)
 
 ACCOUNTS = {"priv": "", "nonce": 0, "recv": [], "send": []}
 RECV = {"from_acc": "", "amount": 0, "gasprice": 0}
 SEND = {"to": "", "amount": 0, "gasprice": 0}
 
 
-def set_account(priv, nonce, recv, send):
-    return dict(ACCOUNTS, priv=priv, nonce=nonce, recv=recv, send=send)
+def set_tap_acc():
+    return dict(ACCOUNTS, priv=conf.acc_priv, recv=[], send=[])
+
+
+def set_account(priv, nonce=0, recv=None, send=None):
+    receive = [] if not recv else recv
+    send_lst = [] if not send else send
+    return dict(ACCOUNTS, priv=priv, nonce=nonce, recv=receive, send=send_lst)
 
 
 def set_recv(_from, amount, gasprice):
@@ -92,6 +98,27 @@ def transfer(wallet_api, accounts, frm, to, amount=None, gas_price=None, gas_lim
     return False
 
 
+def validate_nonce(wallet_api, accounts, acc):
+    print(f"checking nonce for {acc}")
+    out = wallet_api.get_nonce(acc)
+    if str(accounts[acc]['nonce']) in out:
+        return True
+
+    return False
+
+
+def validate_acc_amount(wallet_api, accounts, acc, init_amount=0):
+    val_fmt = "{{'value': '{}'}}"
+    out = wallet_api.get_balance(acc)
+    print(f"balance response={out}")
+    balance = init_amount + expected_balance(accounts[acc], acc)
+    if val_fmt.format(str(balance)) in out:
+        print(f"{acc} balance ok ({out})")
+        return True
+
+    print(f"balance did not match: returned balance={out}, expected={balance}, init amount={init_amount}")
+    return False
+
 # def validate_account_nonce(accounts, acc, init_amount=0):
 #     out = wallet_api.get_nonce(acc)
 #     print(out)
@@ -116,48 +143,47 @@ def test_transactions(setup_network):
     wallet_api = WalletAPI(setup_network.bootstrap.deployment_id, setup_network.clients.pods)
     tap_init_amount = 10000
     acc = conf.acc_pub
-
-    accounts = {
-        acc: {
-            "priv": conf.acc_priv,
-            "nonce": 0,
-            "send": [],
-            "recv": [],
-        }
-    }
+    accounts = {acc: set_tap_acc()}
 
     # send tx to client via rpc
     test_txs = 10
     for i in range(test_txs):
         balance = tap_init_amount + expected_balance(accounts[acc], acc)
-        if balance < 10:  # Stop sending if the tap is out of money
-            break
         amount = random.randint(1, int(balance / 10))
         new_acc_pub = new_account(accounts)
-        print("TAP NONCE {0}".format(accounts[acc]['nonce']))
+        print(f"\ntap nonce before transferring {accounts[acc]['nonce']}")
         assert transfer(wallet_api, accounts, acc, new_acc_pub, amount=amount), "Transfer from tap failed"
-        print("TAP NONCE {0}".format(accounts[acc]['nonce']))
+        print(f"tap nonce after transferring {accounts[acc]['nonce']}\n")
 
-    # ready = 0
-    layers_per_epoch = testconfig["layers_per_epoch"]
-    layers_duration = testconfig["layers_duration"]
+    print(f"tap account {acc}:\neverything:\n{pprint.pformat(accounts[acc])}")
 
-    # for x in range(int(layers_per_epoch) * 2):  # wait for two epochs (genesis)
-    #     ready = 0
-    #     print("...")
-    #     time.sleep(float(layers_duration))
-    #     print("checking tap nonce")
-    #     if test_account(acc, tap_init_amount):
-    #         print("nonce ok")
-    #         for pk in accounts:
-    #             if pk == acc:
-    #                 continue
-    #             print("checking account")
-    #             print(pk)
-    #             assert test_account(pk), "account {0} didn't have the expected nonce and balance".format(pk)
-    #             ready += 1
-    #         break
-    # assert ready == len(accounts) - 1, "Not all accounts received sent txs"  # one for 0 counting and one for tap.
+    ready_pods = 0
+    layers_per_epoch = int(testconfig["client"]["args"]["layers-per-epoch"])
+    layer_duration = int(testconfig["client"]["args"]["layer-duration-sec"])
+
+    epochs_num = 2
+    tts = layer_duration * layers_per_epoch * epochs_num
+    tts = layer_duration
+    print(f"\nsleeping for {tts} secs ({epochs_num} epochs)")
+    time.sleep(tts)
+
+    print("checking tap nonce")
+    if validate_nonce(wallet_api, accounts, acc):
+        print("nonce ok!")
+        for pk in accounts:
+            init_amount = 0
+            if pk == acc:
+                # TODO 1000 should be a const
+                init_amount = 10000
+                continue
+
+            ass_err = f"account {pk} didn't have the expected balance"
+            assert validate_acc_amount(wallet_api, accounts, pk, init_amount), ass_err
+            ready_pods += 1
+    else:
+        assert 0, "tap account does not have the right nonce"
+
+    assert ready_pods == len(accounts), "Not all accounts received sent txs"  # one for 0 counting and one for tap.
     #
     # def is_there_a_valid_acc(min_balance, excpect=[]):
     #     lst = []
@@ -203,17 +229,3 @@ def test_transactions(setup_network):
     #
     # assert ready == len(accounts), "Not all accounts got the sent txs got: {0}, want: {1}".format(ready,
     #                                                                                               len(accounts) - 1)
-
-#
-# if __name__ == "__main__":
-#     # execute only if run as a script
-#     gen = TxGenerator()
-#     data = gen.generate("0000000000000000000000000000000000001111", 12345, 56789, 24680, 86420)
-#     # data = gen.generate("0000000000000000000000000000000000002222", 0, 123, 321, 100)
-#     # x = (str(list(data)))
-#     # print('{"tx":'+ x + '}')
-#
-#     expected = "00000000000030390000000000000000000000000000000000001111000000000000ddd500000000000060680000000000" \
-#                "01519417a80a21b815334b3e9afd1bde2b78ab1e3b17932babd2dab33890c2dbf731f87252c68f3490cce3ee69fd97d450" \
-#                "d97d7fcf739b05104b63ddafa1c94dae0d0f"
-#     assert (binascii.hexlify(data)).decode('utf-8') == str(expected)
