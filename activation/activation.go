@@ -181,7 +181,7 @@ func (b *Builder) loop() {
 					} else {
 						b.log.Error("cannot create atx in epoch %v: %v", epoch, err)
 					}
-					events.Publish(events.AtxCreated{false, "deadbabe", uint64(epoch)})
+					events.Publish(events.AtxCreated{false, "", uint64(epoch)})
 				}
 
 				b.finished <- layer
@@ -408,7 +408,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 			err := b.buildNipstChallenge(epoch)
 			if err != nil {
 				if _, alreadyPublished := err.(alreadyPublishedErr); alreadyPublished {
-					events.Publish(events.AtxCreated{false, "deadbabe", uint64(epoch)})
+					events.Publish(events.AtxCreated{false, "", uint64(epoch)})
 					return nil
 				}
 				return err

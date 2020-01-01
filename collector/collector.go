@@ -98,10 +98,6 @@ func (c *eventsCollector) collectEvents(url string) {
 		return
 	}
 	sub.StartListening()
-	if err != nil {
-		log.Debug("cannot start subscriber")
-		return
-	}
 	// get the size of message header
 	size := unsafe.Sizeof(events.EventTxValid)
 
