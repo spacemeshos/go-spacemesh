@@ -1,12 +1,14 @@
 import argparse
-from pprint import pprint
 import random
+import re
 
 from tests.tx_generator import actions
 from tests.tx_generator import config as conf
 from tests.tx_generator import k8s_handler
 from tests.tx_generator.models.wallet_api import WalletAPI
 from tests.tx_generator.models.accountant import Accountant
+
+RES_PAT = "value\': \'(\d+)"
 
 
 def set_parser():
@@ -30,24 +32,30 @@ if __name__ == "__main__":
     # execute only if run as a script
     # parse cmd arguments
     args_parsed = set_parser()
-    print(f"\n\nreceived args:\n{pprint(args_parsed)}")
+    print(f"\n\nreceived args:\n{args_parsed}\n\n")
     namespace = args_parsed.namespace
     tx_num = args_parsed.tx_num
 
     # get a list of active pods
     pods_lst = k8s_handler.get_clients_names_and_ips(namespace)
-    print(f"\n\n#@! pods:\n{pods_lst}\n\n")
-
     wallet_api = WalletAPI(namespace, pods_lst)
     accountant = Accountant({conf.acc_pub: Accountant.set_tap_acc()})
+
+    curr_nonce_res = wallet_api.get_nonce(conf.acc_pub)
+    # TODO check if response is valid
+    match = re.search(RES_PAT, curr_nonce_res)
+    curr_nonce = 0
+    if match:
+        curr_nonce = match.group(1)
+    print(f"current nonce={curr_nonce}")
 
     tap_acc = conf.acc_pub
     balance = accountant.get_balance(tap_acc)
     amount = random.randint(1, int(balance / 10))
     new_acc_pub = accountant.new_account()
     print(f"\ntap nonce before transferring {accountant.get_nonce(tap_acc)}")
-    if actions.transfer(wallet_api, accountant, tap_acc, new_acc_pub, amount=amount):
-        print("Transfer from tap failed!!")
+    if actions.transfer(wallet_api, accountant, tap_acc, new_acc_pub, amount=amount, curr_nonce=curr_nonce):
+        print("transfer succeed")
 
-    print("transfer succeed")
+    # print("Transfer from tap failed!!")
     print(f"tap nonce after transferring {accountant.get_nonce(tap_acc)}\n")

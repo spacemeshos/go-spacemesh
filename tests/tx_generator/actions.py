@@ -5,7 +5,7 @@ from tests.tx_generator.models.accountant import Accountant
 from tests.tx_generator.models.tx_generator import TxGenerator
 
 
-def transfer(wallet_api, accountant, frm, to, amount=None, gas_price=None, gas_limit=None):
+def transfer(wallet_api, accountant, frm, to, amount=None, gas_price=None, gas_limit=None, curr_nonce=None):
     tx_gen = TxGenerator(pub=frm, pri=accountant.get_acc_priv(frm))
     if not amount:
         amount = random.randint(1, accountant.get_balance(frm) - accountant.tx_cost)
@@ -14,8 +14,9 @@ def transfer(wallet_api, accountant, frm, to, amount=None, gas_price=None, gas_l
     if not gas_limit:
         gas_limit = gas_price + 1
 
+    nonce = int(curr_nonce) if curr_nonce else accountant.get_nonce(frm)
     # create transaction
-    tx_bytes = tx_gen.generate(to, accountant.get_nonce(frm), gas_limit, gas_price, amount)
+    tx_bytes = tx_gen.generate(to, nonce, gas_limit, gas_price, amount)
     # submit transaction
     success = wallet_api.submit_tx(to, frm, gas_price, amount, tx_bytes)
     accountant.set_nonce(frm)

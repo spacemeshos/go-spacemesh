@@ -25,7 +25,7 @@ class WalletAPI:
     def submit_tx(self, to, src, gas_price, amount, tx_bytes):
         pod_ip, pod_name = self.random_node()
         print(f"submit transaction from {src} to {to}\nusing {pod_name}")
-        print(f"amount:{amount} gas price: {gas_price}")
+        print(f"amount: {amount}, gas-price: {gas_price}, total: {amount+gas_price}")
         tx_field = '{"tx":' + str(list(tx_bytes)) + '}'
         out = api_call(pod_ip, tx_field, self.submit_api, self.namespace)
         print(f"submit result: {out}")
@@ -36,7 +36,10 @@ class WalletAPI:
         # check nonce
         print(f"querying for nonce of {acc}")
         pod_ip, pod_name = self.random_node()
-        data = '{"address":"' + acc + '"}'
+        data = '{"address":"' + acc[-self.ADDRESS_SIZE_HEX:] + '"}'
+        if acc == conf.acc_pub:
+            data = '{"address":"' + acc + '"}'
+
         out = api_call(pod_ip, data, self.nonce_api, self.namespace)
         print(f"nonce output={out}")
         return out

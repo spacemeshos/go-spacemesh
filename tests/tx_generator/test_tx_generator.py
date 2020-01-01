@@ -18,11 +18,6 @@ def test_transactions(setup_network):
 
     # send txs via miners
     test_txs = 10
-    # #@! remove this, debugging
-    accountant.set_nonce(acc)
-    print("\n\nsleeping for 20 secs\n\n")
-    time.sleep(20)
-    # #@!
     for i in range(test_txs):
         balance = accountant.get_balance(acc)
         amount = random.randint(1, int(balance / 10))
@@ -41,6 +36,7 @@ def test_transactions(setup_network):
     assert is_valid, "tap account does not have the right nonce"
     print("nonce ok!")
 
+    # validate that each account has the expected amount
     ready_pods = 0
     epochs_sleep_limit = 2
     for x in range(layers_per_epoch * epochs_sleep_limit):
