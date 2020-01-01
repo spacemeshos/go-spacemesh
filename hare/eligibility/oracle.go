@@ -15,8 +15,8 @@ import (
 	"sync"
 )
 
-const vrfMsgCacheSize = 18 // each layer have 9 layers on average hence numConcurrentLayers*avgNumRounds = 2*9 = 18
-const activesCacheSize = 5 // we don't expect to handle more than three layers concurrently
+const vrfMsgCacheSize = 20 // numRounds per layer is <= 2. numConcurrentLayers<=10 (typically <=2) so numRounds*numConcurrentLayers <= 2*10 = 20 is a good upper bound
+const activesCacheSize = 5 // we don't expect to handle more than two layers concurrently
 
 var (
 	errGenesis            = errors.New("no data about active nodes for genesis")
