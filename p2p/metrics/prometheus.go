@@ -4,6 +4,7 @@ import (
 	"github.com/go-kit/kit/metrics"
 	"github.com/go-kit/kit/metrics/prometheus"
 	stdprometheus "github.com/prometheus/client_golang/prometheus"
+	mt "github.com/spacemeshos/go-spacemesh/metrics"
 )
 
 const (
@@ -21,6 +22,13 @@ const (
 
 	// PeerIdLabel holds the name we use to add a protocol label value
 	PeerIdLabel = "peer_id"
+)
+
+var (
+	// PropagationQueueLen is the current size of the gossip queue
+	PropagationQueueLen = mt.NewGauge("propagate_queue_len", MetricsSubsystem, "Number of messages in the gossip queue", nil)
+	// QueueLength is the current size of protocol queues
+	QueueLength = mt.NewGauge("protocol_queue_len", MetricsSubsystem, "len of protocol queues", []string{ProtocolLabel})
 )
 
 // todo: maybe add functions that attach peer_id and protocol. (or other labels) without writing label names.

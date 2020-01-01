@@ -211,6 +211,7 @@ func (prot *Protocol) propagationEventLoop() {
 			if err := prot.pq.Write(prot.getPriority(msgV.Protocol()), msgV); err != nil {
 				prot.With().Error("fatal: could not write to priority queue", log.Err(err), log.String("protocol", msgV.Protocol()))
 			}
+			metrics.PropagationQueueLen.Set(float64(len(prot.propagateQ)))
 
 		case <-prot.shutdown:
 			prot.pq.Close()
