@@ -5,7 +5,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/amcl"
 	"github.com/spacemeshos/go-spacemesh/amcl/BLS381"
 	"github.com/spacemeshos/go-spacemesh/api"
-	apiCfg "github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/collector"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -13,8 +12,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
-	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/oracle"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -145,7 +142,7 @@ func StartMultiNode(numOfinstances, layerAvgSize int, runTillLayer uint32, dbPat
 	cfg.LayerAvgSize = layerAvgSize
 	numOfInstances := numOfinstances
 
-	path := dbPath + time.Now().Format("2006-01-02T15:04:05-0700")
+	path := dbPath + time.Now().Format(time.RFC3339)
 
 	genesisTime := time.Now().Add(20 * time.Second).Format(time.RFC3339)
 
@@ -193,17 +190,6 @@ func StartMultiNode(numOfinstances, layerAvgSize int, runTillLayer uint32, dbPat
 	//startInLayer := 5 // delayed pod will start in this layer
 	defer GracefulShutdown(apps)
 
-	dst := types.BytesToAddress([]byte{0x02})
-	acc1Signer, err := signing.NewEdSignerFromBuffer(util.FromHex(apiCfg.Account1Private))
-	if err != nil {
-		log.Panic("Could not build ed signer err=%v", err)
-	}
-	tx, err := mesh.NewSignedTx(0, dst, 10, 1, 1, acc1Signer)
-	if err != nil {
-		log.Panic("panicked creating signed tx err=%v", err)
-	}
-	txbytes, _ := types.InterfaceToBytes(tx)
-	_ = apps[0].P2P.Broadcast(miner.IncomingTxProtocol, txbytes)
 	timeout := time.After(time.Duration(runTillLayer*60) * time.Second)
 
 	//stickyClientsDone := 0
