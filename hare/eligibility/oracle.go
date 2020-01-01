@@ -139,7 +139,7 @@ func (o *Oracle) buildVRFMessage(layer types.LayerID, round int32) ([]byte, erro
 		return val.([]byte), nil
 	}
 
-	o.lock.Lock() // TODO: handle locks
+	o.lock.Lock()
 
 	// check cache
 	if val, exist := o.vrfMsgCache.Get(key); exist {
@@ -147,6 +147,7 @@ func (o *Oracle) buildVRFMessage(layer types.LayerID, round int32) ([]byte, erro
 		return val.([]byte), nil
 	}
 
+	// get value from beacon
 	v, err := o.beacon.Value(layer)
 	if err != nil {
 		o.Error("Could not get Beacon value: %v", err)
@@ -154,6 +155,7 @@ func (o *Oracle) buildVRFMessage(layer types.LayerID, round int32) ([]byte, erro
 		return nil, err
 	}
 
+	// marshal message
 	var w bytes.Buffer
 	msg := vrfMessage{v, layer, round}
 	_, err = xdr.Marshal(&w, &msg)
@@ -164,7 +166,7 @@ func (o *Oracle) buildVRFMessage(layer types.LayerID, round int32) ([]byte, erro
 	}
 
 	val := w.Bytes()
-	o.vrfMsgCache.Add(key, val)
+	o.vrfMsgCache.Add(key, val) // update cache
 
 	o.lock.Unlock()
 	return val, nil

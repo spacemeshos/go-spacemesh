@@ -46,6 +46,7 @@ func NewBeacon(patternProvider patternProvider, confidenceParam uint64, lg log.L
 }
 
 // Value returns the unpredictable and agreed value for the given Layer
+// Note: Value is concurrency-safe but not concurrency-optimized
 func (b *beacon) Value(layer types.LayerID) (uint32, error) {
 	sl := safeLayer(layer, types.LayerID(b.confidenceParam))
 
@@ -54,6 +55,8 @@ func (b *beacon) Value(layer types.LayerID) (uint32, error) {
 		return val.(uint32), nil
 	}
 
+	// note: multiple concurrent calls to ContextuallyValidBlock and calcValue can be made
+	// consider adding a lock if concurrency-optimized is important
 	v, err := b.patternProvider.ContextuallyValidBlock(sl)
 	if err != nil {
 		b.Log.With().Error("Could not get pattern Id",
