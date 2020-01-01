@@ -1,7 +1,7 @@
 import random
-from tests.tx_generator import config as conf
 
-from tests.test_bs import api_call
+from tests.tx_generator.k8s_handler import api_call
+from tests.tx_generator import config as conf
 
 
 class WalletAPI:
