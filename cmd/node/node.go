@@ -69,6 +69,7 @@ const (
 	MeshLogger           = "mesh"
 	SyncLogger           = "sync"
 	BlockOracle          = "blockOracle"
+	HareBeaconLogger     = "hareBeacon"
 	HareOracleLogger     = "hareOracle"
 	HareLogger           = "hare"
 	BlockBuilderLogger   = "blockBuilder"
@@ -371,6 +372,8 @@ func (app *SpacemeshApp) addLogger(name string, logger log.Log) log.Log {
 		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.BlockOracleLevel))
 	case HareOracleLogger:
 		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.HareOracleLoggerLevel))
+	case HareBeaconLogger:
+		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.HareBeaconLoggerLevel))
 	case HareLogger:
 		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.HareLoggerLevel))
 	case BlockBuilderLogger:
@@ -523,7 +526,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId,
 	if isFixedOracle { // fixed rolacle, take the provided rolacle
 		hOracle = rolacle
 	} else { // regular oracle, build and use it
-		beacon := eligibility.NewBeacon(mdb, app.Config.HareEligibility.ConfidenceParam)
+		beacon := eligibility.NewBeacon(mdb, app.Config.HareEligibility.ConfidenceParam, app.addLogger(HareBeaconLogger, lg))
 		hOracle = eligibility.New(beacon, atxdb.CalcActiveSetSize, BLS381.Verify2, vrfSigner, uint16(app.Config.LayersPerEpoch), app.Config.GenesisActiveSet, mdb, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
 	}
 
