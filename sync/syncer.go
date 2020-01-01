@@ -208,6 +208,7 @@ func (s *Syncer) run() {
 		case layer := <-s.LayerCh:
 			s.currentLayerMutex.Lock()
 			s.currentLayer = layer
+			//s.Mesh.SetLatestLayer(layer)
 			s.currentLayerMutex.Unlock()
 			s.Debug("sync got tick for layer %v", layer)
 			go syncRoutine()
