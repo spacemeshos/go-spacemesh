@@ -5,18 +5,17 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/amcl"
 	"github.com/spacemeshos/go-spacemesh/amcl/BLS381"
-	"github.com/spacemeshos/go-spacemesh/api"
 	apiCfg "github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/api/pb"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/oracle"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/poet/integration"
+	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -24,7 +23,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
-	"sync"
 	"testing"
 	"time"
 )
@@ -40,26 +38,6 @@ type AppTestSuite struct {
 func (suite *AppTestSuite) SetupTest() {
 	suite.apps = make([]*SpacemeshApp, 0, 0)
 	suite.dbs = make([]string, 0, 0)
-}
-
-// NewRPCPoetHarnessClient returns a new instance of RPCPoetClient
-// which utilizes a local self-contained poet server instance
-// in order to exercise functionality.
-func NewRPCPoetHarnessClient() (*activation.RPCPoetClient, error) {
-	cfg, err := integration.DefaultConfig()
-	if err != nil {
-		return nil, err
-	}
-
-	cfg.N = 18
-	cfg.InitialRoundDuration = time.Duration(5 * time.Second).String()
-
-	h, err := integration.NewHarness(cfg)
-	if err != nil {
-		return nil, err
-	}
-
-	return activation.NewRPCPoetClient(h.PoetClient, h.TearDown), nil
 }
 
 func (suite *AppTestSuite) TearDownTest() {
@@ -92,73 +70,75 @@ func Test_PoETHarnessSanity(t *testing.T) {
 	require.NotNil(t, h)
 }
 
-var net = service.NewSimulator()
-
-func (suite *AppTestSuite) initSingleInstance(i int, genesisTime string, rng *amcl.RAND, storeFormat string, name string, rolacle *eligibility.FixedRolacle, poetClient *activation.RPCPoetClient) {
-	r := require.New(suite.T())
-
-	smApp := NewSpacemeshApp()
-
-	smApp.Config.POST = activation.DefaultConfig()
-	smApp.Config.POST.Difficulty = 5
-	smApp.Config.POST.NumProvenLabels = 10
-	smApp.Config.POST.SpacePerUnit = 1 << 10 // 1KB.
-	smApp.Config.POST.NumFiles = 1
-
-	smApp.Config.HARE.N = 5
-	smApp.Config.HARE.F = 2
-	smApp.Config.HARE.RoundDuration = 3
-	smApp.Config.HARE.WakeupDelta = 5
-	smApp.Config.HARE.ExpectedLeaders = 5
-	smApp.Config.CoinbaseAccount = strconv.Itoa(i + 1)
-	smApp.Config.LayerAvgSize = 5
-	smApp.Config.LayersPerEpoch = 3
-	smApp.Config.Hdist = 5
-	smApp.Config.GenesisTime = genesisTime
-	smApp.Config.LayerDurationSec = 20
-	smApp.Config.HareEligibility.ConfidenceParam = 4
-	smApp.Config.HareEligibility.EpochOffset = 0
-	smApp.Config.StartMining = true
-	smApp.Config.SyncRequestTimeout = 2000
-
-	smApp.Config.API = apiCfg.DefaultConfig()
-
-	edSgn := signing.NewEdSigner()
-	pub := edSgn.PublicKey()
-
-	vrfPriv, vrfPub := BLS381.GenKeyPair(rng)
-	vrfSigner := BLS381.NewBlsSigner(vrfPriv)
-	nodeID := types.NodeId{Key: pub.String(), VRFPublicKey: vrfPub}
-
-	swarm := net.NewNode()
-	dbStorepath := storeFormat + name
-
-	hareOracle := oracle.NewLocalOracle(rolacle, 5, nodeID)
-	hareOracle.Register(true, pub.String())
-
-	postClient, err := activation.NewPostClient(&smApp.Config.POST, util.Hex2Bytes(nodeID.Key))
-	r.NoError(err)
-	r.NotNil(postClient)
-
-	err = smApp.initServices(nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(smApp.Config.LayerAvgSize), postClient, poetClient, vrfSigner, uint16(smApp.Config.LayersPerEpoch))
-	r.NoError(err)
-	smApp.setupGenesis()
-
-	suite.apps = append(suite.apps, smApp)
-	suite.dbs = append(suite.dbs, dbStorepath)
-}
-
-func (suite *AppTestSuite) initMultipleInstances(rolacle *eligibility.FixedRolacle, rng *amcl.RAND, numOfInstances int, storeFormat string, genesisTime string, poetClient *activation.RPCPoetClient) {
+func (suite *AppTestSuite) initMultipleInstances(cfg *config.Config, rolacle *eligibility.FixedRolacle, rng *amcl.RAND, numOfInstances int, storeFormat string, genesisTime string, poetClient *activation.RPCPoetClient, fastHare bool, clock TickProvider) {
 	name := 'a'
 	for i := 0; i < numOfInstances; i++ {
-		suite.initSingleInstance(i, genesisTime, rng, storeFormat, string(name), rolacle, poetClient)
+		dbStorepath := storeFormat + string(name)
+		smApp, err := InitSingleInstance(*cfg, i, genesisTime, rng, dbStorepath, rolacle, poetClient, fastHare, clock)
+		assert.NoError(suite.T(), err)
+		suite.apps = append(suite.apps, smApp)
+		suite.dbs = append(suite.dbs, dbStorepath)
 		name++
 	}
 }
 
-func activateGrpcServer(smApp *SpacemeshApp) {
-	smApp.grpcAPIService = api.NewGrpcService(smApp.Config.API.GrpcServerPort, smApp.P2P, smApp.state, smApp.mesh, smApp.txPool, smApp.atxBuilder, smApp.oracle, smApp.clock, nil, smApp.Config.LayerDurationSec, nil)
-	smApp.grpcAPIService.StartService()
+var tests = []TestScenario{txWithRunningNonceGenerator([]int{}), sameRootTester([]int{0}), reachedEpochTester([]int{}), txWithUnorderedNonceGenerator([]int{1})}
+
+func (suite *AppTestSuite) TestMultipleNodes() {
+	//EntryPointCreated <- true
+	const numberOfEpochs = 5 // first 2 epochs are genesis
+	//addr := address.BytesToAddress([]byte{0x01})
+	cfg := getTestDefaultConfig()
+
+	path := "../tmp/test/state_" + time.Now().String()
+
+	genesisTime := time.Now().Add(20 * time.Second).Format(time.RFC3339)
+	poetClient, err := NewRPCPoetHarnessClient()
+	if err != nil {
+		log.Panic("failed creating poet client harness: %v", err)
+	}
+	suite.poetCleanup = poetClient.Teardown
+
+	rolacle := eligibility.New()
+	rng := BLS381.DefaultSeed()
+
+	gTime, err := time.Parse(time.RFC3339, genesisTime)
+	if err != nil {
+		log.Error("cannot parse genesis time %v", err)
+	}
+	ld := time.Duration(20) * time.Second
+	clock := timesync.NewTicker(timesync.RealClock{}, ld, gTime)
+	suite.initMultipleInstances(cfg, rolacle, rng, 5, path, genesisTime, poetClient, false, clock)
+	for _, a := range suite.apps {
+		a.startServices()
+	}
+
+	ActivateGrpcServer(suite.apps[0])
+
+	if err := poetClient.Start("127.0.0.1:9091"); err != nil {
+		log.Panic("failed to start poet server: %v", err)
+	}
+
+	defer GracefulShutdown(suite.apps)
+
+	timeout := time.After(6 * 60 * time.Second)
+	setupTests(suite)
+	finished := map[int]bool{}
+loop:
+	for {
+		select {
+		// Got a timeout! fail with a timeout error
+		case <-timeout:
+			suite.T().Fatal("timed out")
+		default:
+			if runTests(suite, finished) {
+				break loop
+			}
+			time.Sleep(10 * time.Second)
+		}
+	}
+
+	suite.validateBlocksAndATXs(types.LayerID(numberOfEpochs*suite.apps[0].Config.LayersPerEpoch) - 1)
 }
 
 type ScenarioSetup func(suit *AppTestSuite, t *testing.T)
@@ -354,60 +334,7 @@ func runTests(suite *AppTestSuite, finished map[int]bool) bool {
 	return true
 }
 
-var tests = []TestScenario{txWithRunningNonceGenerator([]int{}), sameRootTester([]int{0}), reachedEpochTester([]int{}), txWithUnorderedNonceGenerator([]int{1})}
-
-func (suite *AppTestSuite) TestMultipleNodes() {
-	//EntryPointCreated <- true
-	const numberOfEpochs = 5 // first 2 epochs are genesis
-	//addr := address.BytesToAddress([]byte{0x01})
-	path := "../tmp/test/state_" + time.Now().String()
-
-	genesisTime := time.Now().Add(20 * time.Second).Format(time.RFC3339)
-
-	poetClient, err := NewRPCPoetHarnessClient()
-	if err != nil {
-		log.Panic("failed creating poet client harness: %v", err)
-	}
-	suite.poetCleanup = poetClient.Teardown
-
-	rolacle := eligibility.New()
-	rng := BLS381.DefaultSeed()
-
-	suite.initMultipleInstances(rolacle, rng, 5, path, genesisTime, poetClient)
-	for _, a := range suite.apps {
-		a.startServices()
-	}
-
-	activateGrpcServer(suite.apps[0])
-
-	if err := poetClient.Start("127.0.0.1:9091"); err != nil {
-		log.Panic("failed to start poet server: %v", err)
-	}
-
-	startInLayer := 5 // delayed pod will start in this layer
-	defer suite.gracefulShutdown()
-
-	timeout := time.After(6 * 60 * time.Second)
-	setupTests(suite)
-	finished := map[int]bool{}
-loop:
-	for {
-		select {
-		// Got a timeout! fail with a timeout error
-		case <-timeout:
-			suite.T().Fatal("timed out")
-		default:
-			if runTests(suite, finished) {
-				break loop
-			}
-			time.Sleep(10 * time.Second)
-		}
-	}
-
-	suite.validateBlocksAndATXs(types.LayerID(numberOfEpochs*suite.apps[0].Config.LayersPerEpoch)-1, types.LayerID(startInLayer))
-}
-
-func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID, startInLayer types.LayerID) {
+func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 	log.Info("untilLayer=%v", untilLayer)
 
 	type nodeData struct {
@@ -524,22 +451,6 @@ func (suite *AppTestSuite) validateLastATXActiveSetSize(app *SpacemeshApp) {
 	suite.True(int(atx.ActiveSetSize) == len(suite.apps), "atx: %v node: %v", atx.ShortString(), app.nodeId.Key[:5])
 }
 
-func (suite *AppTestSuite) gracefulShutdown() {
-	log.Info("Graceful shutdown begin")
-
-	var wg sync.WaitGroup
-	for _, app := range suite.apps {
-		wg.Add(1)
-		go func(app *SpacemeshApp) {
-			app.stopServices()
-			wg.Done()
-		}(app)
-	}
-	wg.Wait()
-
-	log.Info("Graceful shutdown end")
-}
-
 func TestAppTestSuite(t *testing.T) {
 	//defer leaktest.Check(t)()
 	suite.Run(t, new(AppTestSuite))
@@ -600,14 +511,16 @@ func TestShutdown(t *testing.T) {
 	postClient, err := activation.NewPostClient(&smApp.Config.POST, util.Hex2Bytes(nodeID.Key))
 	r.NoError(err)
 	r.NotNil(postClient)
-
-	err = smApp.initServices(nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(smApp.Config.LayerAvgSize), postClient, poetClient, vrfSigner, uint16(smApp.Config.LayersPerEpoch))
+	gTime := genesisTime
+	ld := time.Duration(20) * time.Second
+	clock := timesync.NewTicker(timesync.RealClock{}, ld, gTime)
+	err = smApp.initServices(nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(smApp.Config.LayerAvgSize), postClient, poetClient, vrfSigner, uint16(smApp.Config.LayersPerEpoch), clock)
 
 	r.NoError(err)
 	smApp.setupGenesis()
 
 	smApp.startServices()
-	activateGrpcServer(smApp)
+	ActivateGrpcServer(smApp)
 
 	poetClient.Teardown(true)
 	smApp.stopServices()

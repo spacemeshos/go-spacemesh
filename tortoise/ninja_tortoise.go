@@ -431,7 +431,7 @@ func (ni *NinjaTortoise) addPatternVote(p votingPattern, view map[types.BlockID]
 		}
 
 		if vp, found = ni.TExplicit[b]; !found {
-			ni.Panic(fmt.Sprintf("block %s from layer %v has no explicit voting, something went wrong ", b, blk.Layer()))
+			ni.Panic(fmt.Sprintf("block %s from layer %v has no explicit voting, something went wrong ", b.String(), blk.Layer()))
 		}
 
 		for _, ex := range vp {

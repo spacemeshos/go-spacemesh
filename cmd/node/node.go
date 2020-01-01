@@ -1,5 +1,6 @@
 package node
 
+import "C"
 import (
 	"context"
 	"fmt"
@@ -24,6 +25,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/spacemeshos/go-spacemesh/sync"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
+	"github.com/spacemeshos/go-spacemesh/turbohare"
 	"github.com/spacemeshos/go-spacemesh/version"
 	"github.com/spacemeshos/post/shared"
 	"go.uber.org/zap"
@@ -103,6 +105,25 @@ func init() {
 	Cmd.AddCommand(VersionCmd)
 }
 
+type Service interface {
+	Start() error
+	Close()
+}
+
+type HareService interface {
+	Service
+	GetResult(id types.LayerID) ([]types.BlockID, error)
+}
+
+type TickProvider interface {
+	Subscribe() timesync.LayerTimer
+	Unsubscribe(timer timesync.LayerTimer)
+	GetCurrentLayer() types.LayerID
+	StartNotifying()
+	GetGenesisTime() time.Time
+	Close()
+}
+
 // SpacemeshApp is the cli app singleton
 type SpacemeshApp struct {
 	*cobra.Command
@@ -118,8 +139,8 @@ type SpacemeshApp struct {
 	oracle         *oracle.MinerBlockOracle
 	txProcessor    *state.TransactionProcessor
 	mesh           *mesh.Mesh
-	clock          *timesync.Ticker
-	hare           *hare.Hare
+	clock          TickProvider
+	hare           HareService
 	atxBuilder     *activation.Builder
 	poetListener   *activation.PoetListener
 	edSgn          *signing.EdSigner
@@ -130,13 +151,12 @@ type SpacemeshApp struct {
 	term           chan struct{} // this channel is closed when closing services, goroutines should wait on this channel in order to terminate
 }
 
-// ParseConfig unmarshal config file into struct
-func (app *SpacemeshApp) ParseConfig() (err error) {
+func LoadConfigFromFile() (*cfg.Config, error) {
 
 	fileLocation := viper.GetString("config")
 	vip := viper.New()
 	// read in default config if passed as param using viper
-	if err = cfg.LoadConfig(fileLocation, vip); err != nil {
+	if err := cfg.LoadConfig(fileLocation, vip); err != nil {
 		log.Error(fmt.Sprintf("couldn't load config file at location: %s swithing to defaults \n error: %v.",
 			fileLocation, err))
 		//return err
@@ -144,15 +164,21 @@ func (app *SpacemeshApp) ParseConfig() (err error) {
 
 	conf := cfg.DefaultConfig()
 	// load config if it was loaded to our viper
-	err = vip.Unmarshal(&conf)
+	err := vip.Unmarshal(&conf)
 	if err != nil {
 		log.Error("Failed to parse config\n")
-		return err
+		return nil, err
 	}
+	return &conf, nil
+}
 
-	app.Config = &conf
+// ParseConfig unmarshal config file into struct
+func (app *SpacemeshApp) ParseConfig() error {
 
-	return nil
+	conf, err := LoadConfigFromFile()
+	app.Config = conf
+
+	return err
 }
 
 // NewSpacemeshApp creates an instance of the spacemesh app
@@ -382,7 +408,17 @@ func (app *SpacemeshApp) SetLogLevel(name, loglevel string) error {
 	return nil
 }
 
-func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service, dbStorepath string, sgn hare.Signer, isFixedOracle bool, rolacle hare.Rolacle, layerSize uint32, postClient activation.PostProverClient, poetClient activation.PoetProvingServiceClient, vrfSigner *BLS381.BlsSigner, layersPerEpoch uint16) error {
+func (app *SpacemeshApp) initServices(nodeID types.NodeId,
+	swarm service.Service,
+	dbStorepath string,
+	sgn hare.Signer,
+	isFixedOracle bool,
+	rolacle hare.Rolacle,
+	layerSize uint32,
+	postClient activation.PostProverClient,
+	poetClient activation.PoetProvingServiceClient,
+	vrfSigner *BLS381.BlsSigner,
+	layersPerEpoch uint16, clock TickProvider) error {
 
 	app.nodeId = nodeID
 	//todo: should we add all components to a single struct?
@@ -407,12 +443,6 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 	}
 
 	coinToss := weakCoinStub{}
-	gTime, err := time.Parse(time.RFC3339, app.Config.GenesisTime)
-	if err != nil {
-		return err
-	}
-	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
-	clock := timesync.NewTicker(timesync.RealClock{}, ld, gTime)
 
 	atxdbstore, err := database.NewLDBDatabase(dbStorepath+"atx", 0, 0, app.addLogger(AtxDbStoreLogger, lg))
 	if err != nil {
@@ -497,25 +527,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId, swarm service.Service
 		hOracle = eligibility.New(beacon, atxdb.CalcActiveSetSize, BLS381.Verify2, vrfSigner, uint16(app.Config.LayersPerEpoch), app.Config.GenesisActiveSet, mdb, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
 	}
 
-	// a function to validate we know the blocks
-	validationFunc := func(ids []types.BlockID) bool {
-		for _, b := range ids {
-			res, err := mdb.GetBlock(b)
-			if err != nil {
-				app.log.With().Error("failed to validate block", log.BlockId(b.String()))
-				return false
-			}
-			if res == nil {
-				app.log.With().Error("failed to validate block (BUG BUG BUG - GetBlock return err nil and res nil)", log.BlockId(b.String()))
-				return false
-			}
-
-		}
-
-		return true
-	}
-
-	ha := hare.New(app.Config.HARE, swarm, sgn, nodeID, validationFunc, syncer.IsSynced, msh, hOracle, uint16(app.Config.LayersPerEpoch), idStore, hOracle, clock.Subscribe(), app.addLogger(HareLogger, lg))
+	ha := app.HareFactory(mdb, swarm, sgn, nodeID, syncer, msh, hOracle, idStore, clock, lg)
 
 	stateAndMeshProjector := pending_txs.NewStateAndMeshProjector(st, msh)
 	blockProducer := miner.NewBlockBuilder(nodeID, sgn, swarm, clock.Subscribe(), app.Config.Hdist, app.txPool, atxpool, coinToss, msh, ha, blockOracle, processor, atxdb, syncer, app.Config.AtxsPerBlock, stateAndMeshProjector, app.addLogger(BlockBuilderLogger, lg))
@@ -568,6 +580,32 @@ func (app *SpacemeshApp) checkTimeDrifts() {
 			}
 		}
 	}
+}
+
+func (app *SpacemeshApp) HareFactory(mdb *mesh.MeshDB, swarm service.Service, sgn hare.Signer, nodeID types.NodeId, syncer *sync.Syncer, msh *mesh.Mesh, hOracle hare.Rolacle, idStore *activation.IdentityStore, clock TickProvider, lg log.Log) HareService {
+	if app.Config.HARE.SuperHare {
+		return turbohare.New(msh)
+	}
+
+	// a function to validate we know the blocks
+	validationFunc := func(ids []types.BlockID) bool {
+		for _, b := range ids {
+			res, err := mdb.GetBlock(b)
+			if err != nil {
+				app.log.With().Error("failed to validate block", log.BlockId(b.String()))
+				return false
+			}
+			if res == nil {
+				app.log.With().Error("failed to validate block (BUG BUG BUG - GetBlock return err nil and res nil)", log.BlockId(b.String()))
+				return false
+			}
+
+		}
+
+		return true
+	}
+	ha := hare.New(app.Config.HARE, swarm, sgn, nodeID, validationFunc, syncer.IsSynced, msh, hOracle, uint16(app.Config.LayersPerEpoch), idStore, hOracle, clock.Subscribe(), app.addLogger(HareLogger, lg))
+	return ha
 }
 
 func (app *SpacemeshApp) startServices() {
@@ -802,8 +840,13 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 
 	apiConf := &app.Config.API
 	dbStorepath := app.Config.DataDir
-
-	err = app.initServices(nodeID, swarm, dbStorepath, app.edSgn, false, nil, uint32(app.Config.LayerAvgSize), postClient, poetClient, vrfSigner, uint16(app.Config.LayersPerEpoch))
+	gTime, err := time.Parse(time.RFC3339, app.Config.GenesisTime)
+	if err != nil {
+		log.Error("cannot parse genesis time %v", err)
+	}
+	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
+	clock := timesync.NewTicker(timesync.RealClock{}, ld, gTime)
+	err = app.initServices(nodeID, swarm, dbStorepath, app.edSgn, false, nil, uint32(app.Config.LayerAvgSize), postClient, poetClient, vrfSigner, uint16(app.Config.LayersPerEpoch), clock)
 	if err != nil {
 		log.Error("cannot start services %v", err.Error())
 		return
