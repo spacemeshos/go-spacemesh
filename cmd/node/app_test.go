@@ -511,7 +511,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID, start
 	}
 
 	// assert number of ATXs
-	exp = totalEpochs*allMiners - len(suite.apps) // minus last epoch #atxs
+	exp = totalEpochs * allMiners
 	act = int(totalAtxs)
 	assert.Equal(suite.T(), exp, act, fmt.Sprintf("not good num of atxs got: %v, want: %v", act, exp))
 }

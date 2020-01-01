@@ -1047,3 +1047,32 @@ func createAndStoreAtx(atxdb *ActivationDb, layer types.LayerID) (*types.Activat
 	}
 	return atx, nil
 }
+
+func TestActivationDb_AwaitAtx(t *testing.T) {
+	r := require.New(t)
+
+	lg := log.NewDefault("sigValidation")
+	idStore := NewIdentityStore(database.NewMemDatabase())
+	memesh := mesh.NewMemMeshDB(lg.WithName("meshDB"))
+	atxdb := NewActivationDb(database.NewMemDatabase(), idStore, memesh, layersPerEpochBig, &ValidatorMock{}, lg.WithName("atxDB"))
+	id := types.NodeId{Key: uuid.New().String(), VRFPublicKey: []byte("vrf")}
+	atx := types.NewActivationTx(id, coinbase, 0, *types.EmptyAtxId, 1,
+		0, *types.EmptyAtxId, 3, []types.BlockID{}, &types.NIPST{})
+
+	ch := atxdb.AwaitAtx(atx.Id())
+
+	select {
+	case <-ch:
+		r.Fail("notified before ATX was stored")
+	default:
+	}
+
+	err := atxdb.StoreAtx(atx.TargetEpoch(layersPerEpoch), atx)
+	r.NoError(err)
+
+	select {
+	case <-ch:
+	default:
+		r.Fail("not notified after ATX was stored")
+	}
+}

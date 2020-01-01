@@ -119,7 +119,7 @@ func init() {
 	close(closedChan)
 }
 
-func (t *Ticker) SubscribeLayer(layerId types.LayerID) chan struct{} {
+func (t *Ticker) AwaitLayer(layerId types.LayerID) chan struct{} {
 	t.m.Lock()
 	defer t.m.Unlock()
 

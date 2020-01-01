@@ -10,7 +10,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/post/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -231,16 +230,18 @@ func newAtx(challenge types.NIPSTChallenge, ActiveSetSize uint32, View []types.B
 	return activationTx
 }
 
-type LayerClockMock struct{}
-
-func (l *LayerClockMock) Subscribe() timesync.LayerTimer {
-	return make(timesync.LayerTimer)
+type LayerClockMock struct {
+	currentLayer types.LayerID
 }
 
-func (l *LayerClockMock) SubscribeLayer(layerId types.LayerID) chan struct{} {
+func (l *LayerClockMock) GetCurrentLayer() types.LayerID {
+	return l.currentLayer
+}
+
+func (l *LayerClockMock) AwaitLayer(layerId types.LayerID) chan struct{} {
 	ch := make(chan struct{})
 	go func() {
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(1 * time.Millisecond)
 		close(ch)
 	}()
 	return ch
@@ -308,9 +309,11 @@ func publishAtx(b *Builder, meshLayer types.LayerID, clockEpoch types.EpochId, b
 	nipstBuilder.buildNipstFunc = func(challenge *types.Hash32) (*types.NIPST, error) {
 		builtNipst = true
 		meshProvider.latestLayer = meshLayer.Add(buildNipstLayerDuration)
+		layerClock.currentLayer = layerClock.currentLayer.Add(buildNipstLayerDuration)
 		return NewNIPSTWithChallenge(challenge, poetRef), nil
 	}
-	err = b.PublishActivationTx(clockEpoch)
+	layerClock.currentLayer = clockEpoch.FirstLayer(layersPerEpoch) + 3
+	err = b.PublishActivationTx()
 	nipstBuilder.buildNipstFunc = nil
 	return net.lastTransmission != nil, builtNipst, err
 }
@@ -335,6 +338,15 @@ func TestBuilder_PublishActivationTx_HappyFlow(t *testing.T) {
 	r.NoError(err)
 	r.True(published)
 	assertLastAtx(r, prevAtx.ActivationTxHeader, prevAtx.ActivationTxHeader, layersPerEpoch)
+
+	// create and publish another ATX
+	publishedAtx, err := types.BytesAsAtx(net.lastTransmission)
+	r.NoError(err)
+	publishedAtx.CalcAndSetId()
+	published, _, err = publishAtx(b, postGenesisEpochLayer+layersPerEpoch+1, postGenesisEpoch+1, layersPerEpoch)
+	r.NoError(err)
+	r.True(published)
+	assertLastAtx(r, publishedAtx.ActivationTxHeader, publishedAtx.ActivationTxHeader, layersPerEpoch)
 }
 
 func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
@@ -652,17 +664,18 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 
 	setActivesetSizeInCache(t, defaultActiveSetSize)
 
-	act := types.NewActivationTx(b.nodeId, coinbase, 2, atx.Id(), atx.PubLayerIdx+10, 0, atx.Id(), defaultActiveSetSize, defaultView, npst2)
-	err = b.PublishActivationTx(1)
-	assert.EqualError(t, err, tooSoonErr.Error())
+	layerClock.currentLayer = types.EpochId(1).FirstLayer(layersPerEpoch) + 3
+	err = b.PublishActivationTx()
+	assert.EqualError(t, err, "target epoch has passed")
 
 	//test load in correct epoch
 	b = NewBuilder(id, coinbase, &MockSigning{}, activationDb, net, layers, layersPerEpoch, nipstBuilder, postProver, layerClock, func() bool { return true }, db, lg.WithName("atxBuilder"))
 	err = b.loadChallenge()
 	assert.NoError(t, err)
 	layers.latestLayer = 22
-	err = b.PublishActivationTx(1)
+	err = b.PublishActivationTx()
 	assert.NoError(t, err)
+	act := types.NewActivationTx(b.nodeId, coinbase, 2, atx.Id(), atx.PubLayerIdx+10, 0, atx.Id(), defaultActiveSetSize, defaultView, npst2)
 	err = b.SignAtx(act)
 	assert.NoError(t, err)
 	bts, err := types.InterfaceToBytes(act)
@@ -670,14 +683,15 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	assert.Equal(t, bts, net.lastTransmission)
 
 	b = NewBuilder(id, coinbase, &MockSigning{}, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, postProver, layerClock, func() bool { return true }, db, lg.WithName("atxBuilder"))
-	err = b.PublishActivationTx(1)
-	assert.EqualError(t, err, tooSoonErr.Error())
+	err = b.buildNipstChallenge(1)
+	assert.NoError(t, err)
 	db.hadNone = false
 	//test load challenge in later epoch - Nipst should be truncated
 	b = NewBuilder(id, coinbase, &MockSigning{}, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, postProver, layerClock, func() bool { return true }, db, lg.WithName("atxBuilder"))
 	err = b.loadChallenge()
 	assert.NoError(t, err)
-	err = b.PublishActivationTx(4)
+	layerClock.currentLayer = types.EpochId(4).FirstLayer(layersPerEpoch) + 3
+	err = b.PublishActivationTx()
 	// This 👇 ensures that handing of the challenge succeeded and the code moved on to the next part
 	assert.EqualError(t, err, "cannot find pos atx in epoch 4: cannot find pos atx id: current posAtx (epoch 1) does not belong to the requested epoch (4)")
 	assert.True(t, db.hadNone)
