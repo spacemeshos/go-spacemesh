@@ -9,7 +9,6 @@ import (
 	"github.com/spacemeshos/post/shared"
 	"sync"
 	"sync/atomic"
-	"time"
 )
 
 const AtxProtocol = "AtxGossip"
@@ -93,7 +92,7 @@ type Builder struct {
 	stop            chan struct{}
 	started         uint32
 	store           BytesStore
-	isSynced        func() bool
+	syncer          Syncer
 	accountLock     sync.RWMutex
 	initStatus      int32
 	initDone        chan struct{}
@@ -105,8 +104,12 @@ type LayerClock interface {
 	GetCurrentLayer() types.LayerID
 }
 
+type Syncer interface {
+	Await() chan struct{}
+}
+
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
-func NewBuilder(nodeId types.NodeId, coinbaseAccount types.Address, signer Signer, db ATXDBProvider, net Broadcaster, mesh MeshProvider, layersPerEpoch uint16, nipstBuilder NipstBuilder, postProver PostProverClient, layerClock LayerClock, isSyncedFunc func() bool, store BytesStore, log log.Log) *Builder {
+func NewBuilder(nodeId types.NodeId, coinbaseAccount types.Address, signer Signer, db ATXDBProvider, net Broadcaster, mesh MeshProvider, layersPerEpoch uint16, nipstBuilder NipstBuilder, postProver PostProverClient, layerClock LayerClock, syncer Syncer, store BytesStore, log log.Log) *Builder {
 	return &Builder{
 		Signer:          signer,
 		nodeId:          nodeId,
@@ -119,7 +122,7 @@ func NewBuilder(nodeId types.NodeId, coinbaseAccount types.Address, signer Signe
 		postProver:      postProver,
 		layerClock:      layerClock,
 		stop:            make(chan struct{}),
-		isSynced:        isSyncedFunc,
+		syncer:          syncer,
 		store:           store,
 		initStatus:      InitIdle,
 		initDone:        make(chan struct{}),
@@ -158,17 +161,6 @@ func (b *Builder) loop() {
 	}
 	<-b.layerClock.AwaitLayer(1)
 	for {
-		if b.isSynced() {
-			break
-		}
-		b.log.Info("cannot create atx: not synced")
-		select {
-		case <-time.After(10 * time.Second):
-		case <-b.stop:
-			return
-		}
-	}
-	for {
 		select {
 		case <-b.stop:
 			return
@@ -181,11 +173,7 @@ func (b *Builder) loop() {
 	}
 }
 
-type alreadyPublishedErr struct{}
-
-func (alreadyPublishedErr) Error() string { return "already published" }
-
-func (b *Builder) buildNipstChallenge(posEpoch types.EpochId) error {
+func (b *Builder) buildNipstChallenge() error {
 	if b.prevATX == nil {
 		prevAtxId, err := b.GetPrevAtxId(b.nodeId)
 		if err != nil {
@@ -201,6 +189,7 @@ func (b *Builder) buildNipstChallenge(posEpoch types.EpochId) error {
 	seq := uint64(0)
 	prevAtxId := *types.EmptyAtxId
 	commitmentMerkleRoot := []byte(nil)
+	posEpoch := types.EpochId(0)
 
 	if b.prevATX == nil {
 		// if and only if it's the first ATX, the merkle root of the initial PoST proof,
@@ -210,12 +199,11 @@ func (b *Builder) buildNipstChallenge(posEpoch types.EpochId) error {
 	} else {
 		seq = b.prevATX.Sequence + 1
 		//todo: handle this case for loading mem and recovering
-		//check if this node hasn't published an activation already
-		if b.prevATX.PubLayerIdx.GetEpoch(b.layersPerEpoch) == posEpoch+1 {
-			b.log.With().Info("atx already created in this epoch, aborting", log.EpochId(uint64(posEpoch)))
-			return alreadyPublishedErr{}
-		}
+		posEpoch = b.prevATX.PubLayerIdx.GetEpoch(b.layersPerEpoch)
 		prevAtxId = b.prevATX.Id()
+	}
+	if b.currentEpoch() > posEpoch {
+		posEpoch = b.currentEpoch()
 	}
 
 	posAtxEndTick := uint64(0)
@@ -381,17 +369,12 @@ func (b *Builder) discardChallenge() error {
 // publish atx may not produce an atx each time it is called, that is expected behaviour as well.
 func (b *Builder) PublishActivationTx() error {
 	b.refreshChallenge()
-	epoch := b.currentEpoch()
 	if b.challenge != nil {
-		b.log.With().Info("using existing challenge", log.EpochId(uint64(epoch)))
+		b.log.With().Info("using existing challenge", log.EpochId(uint64(b.currentEpoch())))
 	} else {
-		b.log.With().Info("building new challenge", log.EpochId(uint64(epoch)))
-		err := b.buildNipstChallenge(epoch)
+		b.log.With().Info("building new challenge", log.EpochId(uint64(b.currentEpoch())))
+		err := b.buildNipstChallenge()
 		if err != nil {
-			if _, alreadyPublished := err.(alreadyPublishedErr); alreadyPublished {
-				// ATX already published in this epoch
-				return nil
-			}
 			return err
 		}
 	}
@@ -401,9 +384,9 @@ func (b *Builder) PublishActivationTx() error {
 	targetEpoch := pubEpoch + 1
 
 	if b.nipst != nil {
-		b.log.With().Info("using existing nipst", log.EpochId(uint64(epoch)))
+		b.log.With().Info("using existing nipst", log.EpochId(uint64(posEpoch)))
 	} else {
-		b.log.With().Info("building new nipst", log.EpochId(uint64(epoch)))
+		b.log.With().Info("building new nipst", log.EpochId(uint64(posEpoch)))
 		hash, err := b.challenge.Hash()
 		if err != nil {
 			return fmt.Errorf("getting challenge hash failed: %v", err)
@@ -429,7 +412,7 @@ func (b *Builder) PublishActivationTx() error {
 	// we've completed the sequential work, now before publishing the atx,
 	// we need to provide number of atx seen in the epoch of the positioning atx.
 
-	// TODO: ensure we're sync'ed
+	<-b.syncer.Await() // ensure we are synced before generating the ATX's view
 	viewLayer := pubEpoch.FirstLayer(b.layersPerEpoch)
 	var view []types.BlockID
 	if viewLayer > 0 {
@@ -528,6 +511,7 @@ func (b *Builder) Load() *types.NIPSTChallenge {
 }
 
 func (b *Builder) GetPrevAtxId(node types.NodeId) (types.AtxId, error) {
+	<-b.syncer.Await()
 	id, err := b.db.GetNodeLastAtxId(node)
 	if err != nil {
 		return *types.EmptyAtxId, err
@@ -548,18 +532,17 @@ func (b *Builder) GetPositioningAtxId(epochId types.EpochId) (*types.AtxId, erro
 
 // GetPositioningAtx return the atx object for the positioning atx according to requested epochId
 func (b *Builder) GetPositioningAtx(epochId types.EpochId) (*types.ActivationTxHeader, error) {
+	if b.prevATX != nil && b.prevATX.PubLayerIdx.GetEpoch(b.layersPerEpoch) == epochId {
+		return b.prevATX, nil
+	}
+
 	posAtxId, err := b.GetPositioningAtxId(epochId)
 	if err != nil {
-		if b.prevATX != nil && b.prevATX.PubLayerIdx.GetEpoch(b.layersPerEpoch) == epochId {
-			//if the atx was created by this miner but have not propagated as an atx to the notwork yet, use the cached atx
-			return b.prevATX, nil
-		} else {
-			return nil, fmt.Errorf("cannot find pos atx id: %v", err)
-		}
+		return nil, fmt.Errorf("cannot find pos atx id: %v", err)
 	}
 	posAtx, err := b.db.GetAtxHeader(*posAtxId)
 	if err != nil {
-		return nil, fmt.Errorf("cannot find pos atx: %v", err.Error())
+		return nil, fmt.Errorf("inconsistent state: failed to get atx header: %v", err)
 	}
 	return posAtx, nil
 }

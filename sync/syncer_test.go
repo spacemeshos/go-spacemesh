@@ -1474,3 +1474,73 @@ func TestSyncer_AtxSetID(t *testing.T) {
 	b.CalcAndSetId()
 	assert.Equal(t, a.ShortString(), b.ShortString())
 }
+
+func TestSyncer_Await(t *testing.T) {
+	r := require.New(t)
+
+	syncs, _, _ := SyncMockFactory(1, conf, t.Name(), memoryDB, newMockPoetDb)
+	syncer := syncs[0]
+	err := syncer.AddBlockWithTxs(types.NewExistingBlock(1, []byte(rand.RandString(8))), nil, nil)
+	r.NoError(err)
+	lv := &mockLayerValidator{0, 0, 0, nil}
+	syncer.lValidator = lv
+	syncer.currentLayer = 1
+	syncer.SetLatestLayer(1)
+
+	ch := syncer.Await()
+	r.False(closed(ch))
+
+	//run sync
+	syncer.getSyncRoutine()()
+
+	r.True(closed(ch))
+}
+
+func TestSyncer_Await_LowLevel(t *testing.T) {
+	r := require.New(t)
+
+	syncer := &Syncer{
+		gossipSynced: Pending,
+		awaitCh:      make(chan struct{}),
+	}
+
+	ch := syncer.Await()
+	r.False(closed(ch))
+
+	// Pending -> InProgress keeps the channel open
+	syncer.setGossipBufferingStatus(InProgress)
+	r.False(closed(ch))
+
+	// InProgress -> InProgress has no effect
+	syncer.setGossipBufferingStatus(InProgress)
+	r.False(closed(ch))
+
+	// InProgress -> Done closes the channel
+	syncer.setGossipBufferingStatus(Done)
+	r.True(closed(ch))
+
+	// Done -> Done has no effect
+	syncer.setGossipBufferingStatus(Done)
+	r.True(closed(ch))
+
+	// Done -> Pending...
+	syncer.setGossipBufferingStatus(Pending)
+	// ...the channel from the previous call to `Await()` should still be closed...
+	r.True(closed(ch))
+	// ...but a new call to `Await()` should provide a new, open channel
+	newCh := syncer.Await()
+	r.False(closed(newCh))
+
+	// Pending -> Done should close the new channel
+	syncer.setGossipBufferingStatus(Done)
+	r.True(closed(newCh))
+}
+
+func closed(ch chan struct{}) bool {
+	select {
+	case <-ch:
+		return true
+	default:
+		return false
+	}
+}

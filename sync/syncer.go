@@ -111,6 +111,7 @@ type Syncer struct {
 	syncRoutineWg     sync.WaitGroup
 	gossipLock        sync.RWMutex
 	gossipSynced      Status
+	awaitCh           chan struct{}
 
 	//todo fetch server
 	blockQueue *blockQueue
@@ -166,10 +167,26 @@ func (s *Syncer) ListenToGossip() bool {
 	return s.getGossipBufferingStatus() != Pending
 }
 
-func (s *Syncer) setGossipBufferingStatus(b Status) {
+func (s *Syncer) setGossipBufferingStatus(status Status) {
 	s.gossipLock.Lock()
-	s.gossipSynced = b
+	s.notifySubscribers(s.gossipSynced, status)
+	s.gossipSynced = status
 	s.gossipLock.Unlock()
+}
+
+func (s *Syncer) notifySubscribers(prevStatus, status Status) {
+	if (status == Done) == (prevStatus == Done) {
+		return
+	}
+	if status == Done {
+		close(s.awaitCh)
+	} else {
+		s.awaitCh = make(chan struct{})
+	}
+}
+
+func (s *Syncer) Await() chan struct{} {
+	return s.awaitCh
 }
 
 func (s *Syncer) IsSynced() bool {
@@ -242,6 +259,7 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool A
 		LayerCh:              clock.Subscribe(),
 		exit:                 make(chan struct{}),
 		gossipSynced:         Pending,
+		awaitCh:              make(chan struct{}),
 	}
 
 	s.blockQueue = NewValidationQueue(srvr, s.Configuration, s, s.blockCheckLocal, logger.WithName("validQ"))
