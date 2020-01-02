@@ -120,7 +120,7 @@ type NipstBuilderMock struct {
 	SleepTime      int
 }
 
-func (np *NipstBuilderMock) BuildNIPST(challenge *types.Hash32) (*types.NIPST, error) {
+func (np *NipstBuilderMock) BuildNIPST(challenge *types.Hash32, timeout chan struct{}) (*types.NIPST, error) {
 	if np.buildNipstFunc != nil {
 		return np.buildNipstFunc(challenge)
 	}
@@ -129,8 +129,8 @@ func (np *NipstBuilderMock) BuildNIPST(challenge *types.Hash32) (*types.NIPST, e
 
 type NipstErrBuilderMock struct{}
 
-func (np *NipstErrBuilderMock) BuildNIPST(challenge *types.Hash32) (*types.NIPST, error) {
-	return nil, fmt.Errorf("Nipst builder error")
+func (np *NipstErrBuilderMock) BuildNIPST(challenge *types.Hash32, timeout chan struct{}) (*types.NIPST, error) {
+	return nil, fmt.Errorf("nipst builder error")
 }
 
 type MockIdStore struct{}
@@ -532,7 +532,7 @@ func TestBuilder_PublishActivationTx_FailsWhenNipstBuilderFails(t *testing.T) {
 	storeAtx(r, activationDb, posAtx, log.NewDefault("storeAtx"))
 
 	published, _, err := publishAtx(b, postGenesisEpochLayer+1, postGenesisEpoch, layersPerEpoch)
-	r.EqualError(err, "cannot create Nipst: Nipst builder error")
+	r.EqualError(err, "failed to build nipst: nipst builder error")
 	r.False(published)
 }
 

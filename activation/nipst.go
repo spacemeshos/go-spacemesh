@@ -127,6 +127,7 @@ type NIPSTBuilder struct {
 type PoetDbApi interface {
 	SubscribeToProofRef(poetId []byte, roundId string) chan []byte
 	GetMembershipMap(proofRef []byte) (map[types.Hash32]bool, error)
+	UnsubscribeFromProofRef(poetId []byte, roundId string)
 }
 
 func NewNIPSTBuilder(id []byte, postProver PostProverClient, poetProver PoetProvingServiceClient, poetDb PoetDbApi, store BytesStore, log log.Log) *NIPSTBuilder {
@@ -163,7 +164,7 @@ func newNIPSTBuilder(
 	}
 }
 
-func (nb *NIPSTBuilder) BuildNIPST(challenge *types.Hash32) (*types.NIPST, error) {
+func (nb *NIPSTBuilder) BuildNIPST(challenge *types.Hash32, timeout chan struct{}) (*types.NIPST, error) {
 	nb.load(*challenge)
 
 	if initialized, err := nb.postProver.IsInitialized(); !initialized || err != nil {
@@ -204,8 +205,13 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *types.Hash32) (*types.NIPST, error
 
 	// Phase 1: receive proofs from PoET service
 	if nb.state.PoetProofRef == nil {
-		proofRefChan := nb.poetDb.SubscribeToProofRef(nb.state.PoetServiceId, nb.state.PoetRound.Id)
-		poetProofRef := <-proofRefChan // TODO(noamnelke): handle timeout
+		var poetProofRef []byte
+		select {
+		case poetProofRef = <-nb.poetDb.SubscribeToProofRef(nb.state.PoetServiceId, nb.state.PoetRound.Id):
+		case <-timeout:
+			nb.poetDb.UnsubscribeFromProofRef(nb.state.PoetServiceId, nb.state.PoetRound.Id)
+			return nil, fmt.Errorf("timeout waiting for poet proof, atx target epoch ended")
+		}
 
 		membership, err := nb.poetDb.GetMembershipMap(poetProofRef)
 		if err != nil {

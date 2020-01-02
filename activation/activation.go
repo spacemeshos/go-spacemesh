@@ -36,7 +36,7 @@ func (provider *PoETNumberOfTickProvider) NumOfTicks() uint64 {
 }
 
 type NipstBuilder interface {
-	BuildNIPST(challenge *types.Hash32) (*types.NIPST, error)
+	BuildNIPST(challenge *types.Hash32, timeout chan struct{}) (*types.NIPST, error)
 }
 
 type IdStore interface {
@@ -315,10 +315,6 @@ func (b *Builder) loadChallenge() error {
 	return nil
 }
 
-func (b *Builder) discardChallenge() error {
-	return b.store.Put(b.getNipstKey(), []byte{})
-}
-
 // PublishActivationTx attempts to publish an atx, it returns an error if an atx cannot be created.
 func (b *Builder) PublishActivationTx() error {
 	b.refreshChallenge()
@@ -337,9 +333,10 @@ func (b *Builder) PublishActivationTx() error {
 	if err != nil {
 		return fmt.Errorf("getting challenge hash failed: %v", err)
 	}
-	nipst, err := b.nipstBuilder.BuildNIPST(hash) // this includes waiting for PoET, which should take ~1 epoch
+	// ⏳ the following method waits for a PoET proof, which should take ~1 epoch
+	nipst, err := b.nipstBuilder.BuildNIPST(hash, b.layerClock.AwaitLayer((pubEpoch + 2).FirstLayer(b.layersPerEpoch)))
 	if err != nil {
-		return fmt.Errorf("cannot create Nipst: %v", err)
+		return fmt.Errorf("failed to build nipst: %v", err)
 	}
 
 	b.log.With().Info("awaiting publication epoch",
@@ -412,11 +409,16 @@ func (b *Builder) PublishActivationTx() error {
 	case <-atxReceived:
 		b.log.Info("atx received in db")
 	case <-b.layerClock.AwaitLayer((atx.TargetEpoch(b.layersPerEpoch) + 1).FirstLayer(b.layersPerEpoch)):
-		b.log.With().Error("target epoch has passed before atx was added to database")
-		b.cleanupState()
-		return fmt.Errorf("target epoch has passed")
+		<-b.syncer.Await()
+		select {
+		case <-atxReceived:
+			b.log.Info("atx received in db (in the last moment)")
+		default:
+			b.log.With().Error("target epoch has passed before atx was added to database",
+				log.AtxId(atx.ShortString()))
+		}
 	}
-	b.cleanupState()
+	b.discardChallenge()
 	return nil
 }
 
@@ -424,9 +426,9 @@ func (b *Builder) currentEpoch() types.EpochId {
 	return b.layerClock.GetCurrentLayer().GetEpoch(b.layersPerEpoch)
 }
 
-func (b *Builder) cleanupState() {
+func (b *Builder) discardChallenge() {
 	b.challenge = nil
-	if err := b.discardChallenge(); err != nil {
+	if err := b.store.Put(b.getNipstKey(), []byte{}); err != nil {
 		b.log.Error("failed to discard Nipst challenge: %v", err)
 	}
 }
@@ -439,15 +441,6 @@ func (b *Builder) signAndBroadcast(atx *types.ActivationTx) error {
 	} else if err := b.net.Broadcast(AtxProtocol, buf); err != nil {
 		return fmt.Errorf("failed to broadcast ATX: %v", err)
 	}
-	return nil
-}
-
-func (b *Builder) Persist(c *types.NIPSTChallenge) {
-	//todo: implement storing to persistent media
-}
-
-func (b *Builder) Load() *types.NIPSTChallenge {
-	//todo: implement loading from persistent media
 	return nil
 }
 
@@ -478,7 +471,7 @@ func (b *Builder) refreshChallenge() bool {
 			log.Uint64("target_epoch", uint64(b.challenge.PubLayerIdx.GetEpoch(b.layersPerEpoch)+1)),
 			log.Uint64("current_epoch", uint64(b.currentEpoch())),
 		)
-		b.cleanupState()
+		b.discardChallenge()
 		return true
 	}
 	return false
