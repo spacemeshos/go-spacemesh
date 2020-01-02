@@ -517,9 +517,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID, start
 }
 
 func (suite *AppTestSuite) validateLastATXActiveSetSize(app *SpacemeshApp) {
-	prevAtxId, err := app.atxBuilder.GetPrevAtxId(app.nodeId)
-	suite.NoError(err)
-	atx, err := app.mesh.GetAtxHeader(prevAtxId)
+	atx, err := app.atxBuilder.GetPrevAtx(app.nodeId)
 	suite.NoError(err)
 	suite.True(int(atx.ActiveSetSize) == len(suite.apps), "atx: %v node: %v", atx.ShortString(), app.nodeId.Key[:5])
 }

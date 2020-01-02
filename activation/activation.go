@@ -53,7 +53,7 @@ type ATXDBProvider interface {
 	GetAtxHeader(id types.AtxId) (*types.ActivationTxHeader, error)
 	CalcActiveSetFromView(view []types.BlockID, pubEpoch types.EpochId) (uint32, error)
 	GetNodeLastAtxId(nodeId types.NodeId) (types.AtxId, error)
-	GetPosAtxId(epochId types.EpochId) (*types.AtxId, error)
+	GetPosAtxId() (types.AtxId, error)
 	AwaitAtx(id types.AtxId) chan struct{}
 }
 
@@ -84,10 +84,7 @@ type Builder struct {
 	nipstBuilder    NipstBuilder
 	postProver      PostProverClient
 	challenge       *types.NIPSTChallenge
-	nipst           *types.NIPST
 	commitment      *types.PostProof
-	posLayerID      types.LayerID
-	prevATX         *types.ActivationTxHeader
 	layerClock      LayerClock
 	stop            chan struct{}
 	started         uint32
@@ -159,7 +156,7 @@ func (b *Builder) loop() {
 		return
 	case <-b.initDone:
 	}
-	<-b.layerClock.AwaitLayer(1)
+	<-b.layerClock.AwaitLayer(1) // this doesn't block unless layer 1 hasn't arrived yet
 	for {
 		select {
 		case <-b.stop:
@@ -174,71 +171,28 @@ func (b *Builder) loop() {
 }
 
 func (b *Builder) buildNipstChallenge() error {
-	if b.prevATX == nil {
-		prevAtxId, err := b.GetPrevAtxId(b.nodeId)
-		if err != nil {
-			b.log.Info("no prev ATX found, starting fresh")
-		} else {
-			b.prevATX, err = b.db.GetAtxHeader(prevAtxId)
-			if err != nil {
-				// TODO: handle inconsistent state
-				b.log.Panic("prevAtx (id: %v) not found in DB -- inconsistent state", prevAtxId.ShortString())
-			}
+	<-b.syncer.Await()
+	challenge := &types.NIPSTChallenge{NodeId: b.nodeId}
+	if posAtx, err := b.GetPositioningAtx(); err != nil {
+		if !b.currentEpoch().IsGenesis() {
+			return fmt.Errorf("failed to get positioning ATX: %v", err)
 		}
-	}
-	seq := uint64(0)
-	prevAtxId := *types.EmptyAtxId
-	commitmentMerkleRoot := []byte(nil)
-	posEpoch := types.EpochId(0)
-
-	if b.prevATX == nil {
-		// if and only if it's the first ATX, the merkle root of the initial PoST proof,
-		// the commitment, is included in the Nipst challenge. This is done in order to prove
-		// that it existed before the PoET start time.
-		commitmentMerkleRoot = b.commitment.MerkleRoot
+		challenge.EndTick = b.tickProvider.NumOfTicks()
 	} else {
-		seq = b.prevATX.Sequence + 1
-		//todo: handle this case for loading mem and recovering
-		posEpoch = b.prevATX.PubLayerIdx.GetEpoch(b.layersPerEpoch)
-		prevAtxId = b.prevATX.Id()
+		challenge.PositioningAtx = posAtx.Id()
+		challenge.PubLayerIdx = posAtx.PubLayerIdx.Add(b.layersPerEpoch)
+		challenge.StartTick = posAtx.EndTick
+		challenge.EndTick = posAtx.EndTick + b.tickProvider.NumOfTicks()
 	}
-	if b.currentEpoch() > posEpoch {
-		posEpoch = b.currentEpoch()
-	}
-
-	posAtxEndTick := uint64(0)
-	b.posLayerID = types.LayerID(0)
-
-	//positioning atx is from this epoch as well, since we will be publishing the atx in the next epoch
-	//todo: what if no other atx was received in this epoch yet?
-	posAtxId := *types.EmptyAtxId
-	posAtx, err := b.GetPositioningAtx(posEpoch)
-	atxPubLayerID := types.LayerID(0)
-	if err == nil {
-		posAtxEndTick = posAtx.EndTick
-		b.posLayerID = posAtx.PubLayerIdx
-		atxPubLayerID = b.posLayerID.Add(b.layersPerEpoch)
-		posAtxId = posAtx.Id()
+	if prevAtx, err := b.GetPrevAtx(b.nodeId); err != nil {
+		challenge.CommitmentMerkleRoot = b.commitment.MerkleRoot
 	} else {
-		if !posEpoch.IsGenesis() {
-			return fmt.Errorf("cannot find pos atx in epoch %v: %v", posEpoch, err)
-		}
+		challenge.PrevATXId = prevAtx.Id()
+		challenge.Sequence = prevAtx.Sequence + 1
 	}
-
-	b.challenge = &types.NIPSTChallenge{
-		NodeId:               b.nodeId,
-		Sequence:             seq,
-		PrevATXId:            prevAtxId,
-		PubLayerIdx:          atxPubLayerID,
-		StartTick:            posAtxEndTick,
-		EndTick:              b.tickProvider.NumOfTicks(), //todo: add provider when
-		PositioningAtx:       posAtxId,
-		CommitmentMerkleRoot: commitmentMerkleRoot,
-	}
-
-	err = b.storeChallenge(b.challenge)
-	if err != nil {
-		log.Error("challenge cannot be stored: %s", err)
+	b.challenge = challenge
+	if err := b.storeChallenge(b.challenge); err != nil {
+		log.Error("failed to store nipst challenge: %v", err)
 	}
 	return nil
 }
@@ -365,8 +319,7 @@ func (b *Builder) discardChallenge() error {
 	return b.store.Put(b.getNipstKey(), []byte{})
 }
 
-// PublishActivationTx attempts to publish an atx for the given epoch, it returns an error if an atx cannot be created
-// publish atx may not produce an atx each time it is called, that is expected behaviour as well.
+// PublishActivationTx attempts to publish an atx, it returns an error if an atx cannot be created.
 func (b *Builder) PublishActivationTx() error {
 	b.refreshChallenge()
 	if b.challenge != nil {
@@ -378,23 +331,15 @@ func (b *Builder) PublishActivationTx() error {
 			return err
 		}
 	}
+	pubEpoch := b.challenge.PubLayerIdx.GetEpoch(b.layersPerEpoch)
 
-	posEpoch := b.posLayerID.GetEpoch(b.layersPerEpoch)
-	pubEpoch := b.challenge.PubLayerIdx.GetEpoch(b.layersPerEpoch) // can be 0 in first epoch
-	targetEpoch := pubEpoch + 1
-
-	if b.nipst != nil {
-		b.log.With().Info("using existing nipst", log.EpochId(uint64(posEpoch)))
-	} else {
-		b.log.With().Info("building new nipst", log.EpochId(uint64(posEpoch)))
-		hash, err := b.challenge.Hash()
-		if err != nil {
-			return fmt.Errorf("getting challenge hash failed: %v", err)
-		}
-		b.nipst, err = b.nipstBuilder.BuildNIPST(hash) // this includes waiting for PoET, which should take ~1 epoch
-		if err != nil {
-			return fmt.Errorf("cannot create Nipst: %v", err)
-		}
+	hash, err := b.challenge.Hash()
+	if err != nil {
+		return fmt.Errorf("getting challenge hash failed: %v", err)
+	}
+	nipst, err := b.nipstBuilder.BuildNIPST(hash) // this includes waiting for PoET, which should take ~1 epoch
+	if err != nil {
+		return fmt.Errorf("cannot create Nipst: %v", err)
 	}
 
 	b.log.With().Info("awaiting publication epoch",
@@ -432,19 +377,19 @@ func (b *Builder) PublishActivationTx() error {
 			return fmt.Errorf("failed to calculate activeset: %v", err)
 		}
 	}
-	if activeSetSize == 0 && !targetEpoch.IsGenesis() {
+	if activeSetSize == 0 && !(pubEpoch + 1).IsGenesis() {
 		return fmt.Errorf("empty active set size found! epochId: %v, len(view): %d, view: %v",
 			pubEpoch, len(view), view)
 	}
 
 	var commitment *types.PostProof
-	if b.prevATX == nil {
+	if b.challenge.PrevATXId == *types.EmptyAtxId {
 		commitment = b.commitment
 	}
 
-	atx := types.NewActivationTxWithChallenge(*b.challenge, b.getCoinbaseAccount(), activeSetSize, view, b.nipst, commitment)
+	atx := types.NewActivationTxWithChallenge(*b.challenge, b.getCoinbaseAccount(), activeSetSize, view, nipst, commitment)
 
-	b.log.With().Info("active ids seen for epoch", log.Uint64("pos_atx_epoch", uint64(posEpoch)),
+	b.log.With().Info("active ids seen for epoch", log.Uint64("atx_pub_epoch", uint64(pubEpoch)),
 		log.Uint32("view_cnt", activeSetSize))
 
 	atxReceived := b.db.AwaitAtx(atx.Id())
@@ -472,7 +417,6 @@ func (b *Builder) PublishActivationTx() error {
 		return fmt.Errorf("target epoch has passed")
 	}
 	b.cleanupState()
-	b.prevATX = atx.ActivationTxHeader
 	return nil
 }
 
@@ -481,13 +425,10 @@ func (b *Builder) currentEpoch() types.EpochId {
 }
 
 func (b *Builder) cleanupState() {
-	b.nipst = nil
 	b.challenge = nil
-	b.posLayerID = 0
 	if err := b.discardChallenge(); err != nil {
 		b.log.Error("failed to discard Nipst challenge: %v", err)
 	}
-	b.prevATX = nil
 }
 
 func (b *Builder) signAndBroadcast(atx *types.ActivationTx) error {
@@ -510,41 +451,25 @@ func (b *Builder) Load() *types.NIPSTChallenge {
 	return nil
 }
 
-func (b *Builder) GetPrevAtxId(node types.NodeId) (types.AtxId, error) {
-	<-b.syncer.Await()
-	id, err := b.db.GetNodeLastAtxId(node)
-	if err != nil {
-		return *types.EmptyAtxId, err
-	}
-	return id, nil
-}
-
-// GetPositioningAtxId returns the top ATX (highest layer number) from the provided epoch epochId.
-// It returns an error if the top ATX is from a different epoch.
-func (b *Builder) GetPositioningAtxId(epochId types.EpochId) (*types.AtxId, error) {
-	//todo: make this on blocking until an atx is received
-	atxId, err := b.db.GetPosAtxId(epochId)
-	if err != nil {
-		return nil, err
-	}
-	return atxId, nil
-}
-
-// GetPositioningAtx return the atx object for the positioning atx according to requested epochId
-func (b *Builder) GetPositioningAtx(epochId types.EpochId) (*types.ActivationTxHeader, error) {
-	if b.prevATX != nil && b.prevATX.PubLayerIdx.GetEpoch(b.layersPerEpoch) == epochId {
-		return b.prevATX, nil
-	}
-
-	posAtxId, err := b.GetPositioningAtxId(epochId)
-	if err != nil {
-		return nil, fmt.Errorf("cannot find pos atx id: %v", err)
-	}
-	posAtx, err := b.db.GetAtxHeader(*posAtxId)
-	if err != nil {
+// GetPositioningAtx return the latest atx to be used as a positioning atx
+func (b *Builder) GetPositioningAtx() (*types.ActivationTxHeader, error) {
+	if id, err := b.db.GetPosAtxId(); err != nil {
+		return nil, fmt.Errorf("cannot find pos atx: %v", err)
+	} else if atx, err := b.db.GetAtxHeader(id); err != nil {
 		return nil, fmt.Errorf("inconsistent state: failed to get atx header: %v", err)
+	} else {
+		return atx, nil
 	}
-	return posAtx, nil
+}
+
+func (b *Builder) GetPrevAtx(node types.NodeId) (*types.ActivationTxHeader, error) {
+	if id, err := b.db.GetNodeLastAtxId(node); err != nil {
+		return nil, fmt.Errorf("no prev atx found: %v", err)
+	} else if atx, err := b.db.GetAtxHeader(id); err != nil {
+		return nil, fmt.Errorf("inconsistent state: failed to get atx header: %v", err)
+	} else {
+		return atx, nil
+	}
 }
 
 func (b *Builder) refreshChallenge() bool {

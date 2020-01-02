@@ -94,7 +94,7 @@ func (n *NetMock) hookToAtxPool(transmission []byte) {
 
 		if n.atxDb != nil {
 			if atxDb, ok := n.atxDb.(*ActivationDb); ok {
-				err := atxDb.storeAtxUnlocked(atx)
+				err := atxDb.StoreAtx(atx.PubLayerIdx.GetEpoch(layersPerEpoch), atx)
 				if err != nil {
 					panic(err)
 				}
@@ -195,12 +195,6 @@ func (n *FaultyNetMock) Broadcast(id string, d []byte) error {
 
 func newActivationDb() *ActivationDb {
 	return NewActivationDb(database.NewMemDatabase(), &MockIdStore{}, mesh.NewMemMeshDB(lg.WithName("meshDB")), layersPerEpoch, &ValidatorMock{}, lg.WithName("atxDB"))
-}
-
-func isSynced(b bool) func() bool {
-	return func() bool {
-		return b
-	}
 }
 
 func newChallenge(nodeId types.NodeId, sequence uint64, prevAtxId, posAtxId types.AtxId, pubLayerId types.LayerID) types.NIPSTChallenge {
@@ -467,10 +461,10 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 	published, _, err := publishAtx(b, postGenesisEpochLayer+1, postGenesisEpoch, layersPerEpoch)
 	r.NoError(err)
 	r.True(published)
-	assertLastAtx(r, prevAtx.ActivationTxHeader, prevAtx.ActivationTxHeader, layersPerEpoch)
+	assertLastAtx(r, posAtx.ActivationTxHeader, prevAtx.ActivationTxHeader, layersPerEpoch)
 }
 
-func TestBuilder_PublishActivationTx_FailsWhenNoPosAtx(t *testing.T) {
+func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 	r := require.New(t)
 
 	// setup
@@ -483,29 +477,11 @@ func TestBuilder_PublishActivationTx_FailsWhenNoPosAtx(t *testing.T) {
 	posAtx := newAtx(challenge, 5, defaultView, npst)
 	storeAtx(r, activationDb, posAtx, log.NewDefault("storeAtx"))
 
-	// create and publish ATX
+	// create and publish ATX based on the best available posAtx, as long as the node is synced
 	published, _, err := publishAtx(b, postGenesisEpochLayer+1, postGenesisEpoch, layersPerEpoch)
-	r.EqualError(err, "cannot find pos atx in epoch 2: cannot find pos atx id: current posAtx (epoch 1) does not belong to the requested epoch (2)")
-	r.False(published)
-}
-
-func TestBuilder_PublishActivationTx_FailsWhenNoPosAtxButPrevAtxFromWrongEpochExists(t *testing.T) {
-	r := require.New(t)
-
-	// setup
-	activationDb := newActivationDb()
-	b := newBuilder(activationDb)
-	setActivesetSizeInCache(t, defaultActiveSetSize)
-	defer activesetCache.Purge()
-
-	challenge := newChallenge(nodeId, 1, prevAtxId, prevAtxId, postGenesisEpochLayer-layersPerEpoch /*👀*/)
-	prevAtx := newAtx(challenge, 5, defaultView, npst)
-	storeAtx(r, activationDb, prevAtx, log.NewDefault("storeAtx"))
-
-	// create and publish ATX
-	published, _, err := publishAtx(b, postGenesisEpochLayer+1, postGenesisEpoch, layersPerEpoch)
-	r.EqualError(err, "cannot find pos atx in epoch 2: cannot find pos atx id: current posAtx (epoch 1) does not belong to the requested epoch (2)")
-	r.False(published)
+	r.NoError(err)
+	r.True(published)
+	assertLastAtx(r, posAtx.ActivationTxHeader, nil, layersPerEpoch)
 }
 
 func TestBuilder_PublishActivationTx_DoesNotPublish2AtxsInSameEpoch(t *testing.T) {
@@ -599,7 +575,6 @@ func TestBuilder_PublishActivationTx_PosAtxOnSameLayerAsPrevAtx(t *testing.T) {
 	challenge := newChallenge(nodeId, 1, prevAtxId, prevAtxId, postGenesisEpochLayer+3)
 	prevATX := newAtx(challenge, 5, defaultView, npst)
 	storeAtx(r, activationDb, prevATX, lg)
-	b.prevATX = prevATX.ActivationTxHeader
 
 	published, _, err := publishAtx(b, postGenesisEpochLayer+4, postGenesisEpoch, layersPerEpoch)
 	r.NoError(err)
@@ -709,7 +684,7 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	layerClock.currentLayer = types.EpochId(4).FirstLayer(layersPerEpoch) + 3
 	err = b.PublishActivationTx()
 	// This 👇 ensures that handing of the challenge succeeded and the code moved on to the next part
-	assert.EqualError(t, err, "cannot find pos atx in epoch 4: cannot find pos atx id: current posAtx (epoch 1) does not belong to the requested epoch (4)")
+	assert.EqualError(t, err, "target epoch has passed")
 	assert.True(t, db.hadNone)
 }
 

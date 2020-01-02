@@ -558,16 +558,12 @@ func (db *ActivationDb) GetNodeLastAtxId(nodeId types.NodeId) (types.AtxId, erro
 }
 
 // GetPosAtxId returns the best (highest layer id), currently known to this node, pos atx id
-func (db *ActivationDb) GetPosAtxId(epochId types.EpochId) (*types.AtxId, error) {
+func (db *ActivationDb) GetPosAtxId() (types.AtxId, error) {
 	idAndLayer, err := db.getTopAtx()
 	if err != nil {
-		return types.EmptyAtxId, err
+		return *types.EmptyAtxId, err
 	}
-	if idAndLayer.LayerId.GetEpoch(db.LayersPerEpoch) != epochId {
-		return types.EmptyAtxId, fmt.Errorf("current posAtx (epoch %v) does not belong to the requested epoch (%v)",
-			idAndLayer.LayerId.GetEpoch(db.LayersPerEpoch), epochId)
-	}
-	return &idAndLayer.AtxId, nil
+	return idAndLayer.AtxId, nil
 }
 
 // GetAtxHeader returns the ATX header by the given ID. This function is thread safe and will return an error if the ID
