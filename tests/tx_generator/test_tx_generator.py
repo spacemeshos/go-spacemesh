@@ -23,7 +23,7 @@ def test_transactions(setup_network):
         amount = random.randint(1, int(balance / 10))
         new_acc_pub = accountant.new_account()
         print(f"\ntap nonce before transferring {accountant.get_nonce(acc)}")
-        assert transfer(wallet_api, accountant, acc, new_acc_pub, amount=amount), "Transfer from tap failed"
+        assert transfer(wallet_api, acc, new_acc_pub, amount, accountant=accountant), "Transfer from tap failed"
         print(f"tap nonce after transferring {accountant.get_nonce(acc)}\n")
 
     print(f"TAP account {acc}:\n\n{pprint.pformat(accountant.get_acc(acc))}")

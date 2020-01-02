@@ -10,7 +10,7 @@ class Accountant:
     RECV = {"from_acc": "", "amount": 0, "gasprice": 0}
     SEND = {"to": "", "amount": 0, "gasprice": 0}
 
-    def __init__(self, accounts=None, tx_cost=1):
+    def __init__(self, accounts=None, tx_cost=conf.tx_cost):
         self.accounts = accounts if accounts else {}
         self.tx_cost = tx_cost
 
@@ -74,11 +74,27 @@ class Accountant:
 
     def set_nonce(self, acc_pub, jump=1):
         self.accounts[acc_pub]["nonce"] += jump
+        return self.accounts[acc_pub]["nonce"]
 
     def get_balance(self, acc_pub):
         return self.accounts[acc_pub]["balance"]
 
     # =============== utils ================
+
+    @staticmethod
+    def new_untracked_account():
+
+        """
+        create a new account without adding it to an accounts data structure
+
+        :return: string, string: public and private key of the new account
+        """
+
+        priv, pub = genkeypair()
+        str_pub = bytes.hex(pub)
+        str_priv = bytes.hex(priv)
+        print(f"generated new untracked account:\npub: {str_pub}\npriv: {str_priv}")
+        return str_pub, str_priv
 
     @staticmethod
     def set_tap_acc():
