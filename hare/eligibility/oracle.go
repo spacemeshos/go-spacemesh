@@ -122,22 +122,17 @@ func New(beacon valueProvider, activeSetFunc activeSetFunc, vrfVerifier verifier
 
 type vrfMessage struct {
 	Beacon uint32
-	Layer  types.LayerID
 	Round  int32
+	Layer  types.LayerID
 }
 
 func buildKey(l types.LayerID, r int32) [2]uint64 {
 	return [2]uint64{uint64(l), uint64(r)}
 }
 
-// buildVRFMessage builds the VRF message used as input for the BLS (msg=Beacon##Id##Layer##Round)
+// buildVRFMessage builds the VRF message used as input for the BLS (msg=Beacon##Layer##Round)
 func (o *Oracle) buildVRFMessage(layer types.LayerID, round int32) ([]byte, error) {
 	key := buildKey(layer, round)
-
-	// check cache
-	if val, exist := o.vrfMsgCache.Get(key); exist {
-		return val.([]byte), nil
-	}
 
 	o.lock.Lock()
 
@@ -150,17 +145,17 @@ func (o *Oracle) buildVRFMessage(layer types.LayerID, round int32) ([]byte, erro
 	// get value from beacon
 	v, err := o.beacon.Value(layer)
 	if err != nil {
-		o.Error("Could not get Beacon value: %v", err)
+		o.With().Error("Could not get hare beacon value", log.Err(err))
 		o.lock.Unlock()
 		return nil, err
 	}
 
 	// marshal message
 	var w bytes.Buffer
-	msg := vrfMessage{v, layer, round}
+	msg := vrfMessage{Beacon: v, Round: round, Layer: layer}
 	_, err = xdr.Marshal(&w, &msg)
 	if err != nil {
-		o.Error("Fatal: could not marshal xdr")
+		o.With().Error("Fatal: could not marshal xdr", log.Err(err))
 		o.lock.Unlock()
 		return nil, err
 	}
@@ -259,11 +254,6 @@ func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
 	// check genesis
 	if safeEp.IsGenesis() {
 		return nil, errGenesis
-	}
-
-	// check cache
-	if val, exist := o.activesCache.Get(safeEp); exist {
-		return val.(map[string]struct{}), nil
 	}
 
 	// lock until any return
