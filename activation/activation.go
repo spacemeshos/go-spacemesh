@@ -36,7 +36,7 @@ func (provider *PoETNumberOfTickProvider) NumOfTicks() uint64 {
 }
 
 type NipstBuilder interface {
-	BuildNIPST(challenge *types.Hash32, timeout chan struct{}) (*types.NIPST, error)
+	BuildNIPST(challenge *types.Hash32, timeout chan struct{}, stop chan struct{}) (*types.NIPST, error)
 }
 
 type IdStore interface {
@@ -145,6 +145,10 @@ func (b Builder) SignAtx(atx *types.ActivationTx) error {
 	return SignAtx(b, atx)
 }
 
+type StopRequestedError struct{}
+
+func (s StopRequestedError) Error() string { return "stop requested" }
+
 // loop is the main loop that tries to create an atx per tick received from the global clock
 func (b *Builder) loop() {
 	err := b.loadChallenge()
@@ -164,6 +168,9 @@ func (b *Builder) loop() {
 		default:
 		}
 		if err := b.PublishActivationTx(); err != nil {
+			if _, stopRequested := err.(StopRequestedError); stopRequested {
+				return
+			}
 			b.log.With().Error("failed to publish ATX", log.Err(err))
 			<-b.layerClock.AwaitLayer(b.layerClock.GetCurrentLayer() + 1)
 		}
@@ -334,8 +341,11 @@ func (b *Builder) PublishActivationTx() error {
 		return fmt.Errorf("getting challenge hash failed: %v", err)
 	}
 	// ⏳ the following method waits for a PoET proof, which should take ~1 epoch
-	nipst, err := b.nipstBuilder.BuildNIPST(hash, b.layerClock.AwaitLayer((pubEpoch + 2).FirstLayer(b.layersPerEpoch)))
+	nipst, err := b.nipstBuilder.BuildNIPST(hash, b.layerClock.AwaitLayer((pubEpoch + 2).FirstLayer(b.layersPerEpoch)), b.stop)
 	if err != nil {
+		if _, stopRequested := err.(StopRequestedError); stopRequested {
+			return err
+		}
 		return fmt.Errorf("failed to build nipst: %v", err)
 	}
 
@@ -344,7 +354,11 @@ func (b *Builder) PublishActivationTx() error {
 		log.Uint64("pub_epoch_first_layer", uint64(pubEpoch.FirstLayer(b.layersPerEpoch))),
 		log.Uint64("current_layer", uint64(b.layerClock.GetCurrentLayer())),
 	)
-	<-b.layerClock.AwaitLayer(pubEpoch.FirstLayer(b.layersPerEpoch))
+	select {
+	case <-b.layerClock.AwaitLayer(pubEpoch.FirstLayer(b.layersPerEpoch)):
+	case <-b.stop:
+		return &StopRequestedError{}
+	}
 	b.log.Info("publication epoch has arrived!")
 	if b.refreshChallenge() {
 		return fmt.Errorf("atx target epoch has passed during nipst construction")
@@ -354,7 +368,11 @@ func (b *Builder) PublishActivationTx() error {
 	// we've completed the sequential work, now before publishing the atx,
 	// we need to provide number of atx seen in the epoch of the positioning atx.
 
-	<-b.syncer.Await() // ensure we are synced before generating the ATX's view
+	select {
+	case <-b.syncer.Await(): // ensure we are synced before generating the ATX's view
+	case <-b.stop:
+		return &StopRequestedError{}
+	}
 	viewLayer := pubEpoch.FirstLayer(b.layersPerEpoch)
 	var view []types.BlockID
 	if viewLayer > 0 {
@@ -409,14 +427,23 @@ func (b *Builder) PublishActivationTx() error {
 	case <-atxReceived:
 		b.log.Info("atx received in db")
 	case <-b.layerClock.AwaitLayer((atx.TargetEpoch(b.layersPerEpoch) + 1).FirstLayer(b.layersPerEpoch)):
-		<-b.syncer.Await()
+		select {
+		case <-b.syncer.Await():
+		case <-b.stop:
+			return &StopRequestedError{}
+		}
 		select {
 		case <-atxReceived:
 			b.log.Info("atx received in db (in the last moment)")
 		default:
+			// TODO: Unsubscribe from ATX (add subscriber counter)
 			b.log.With().Error("target epoch has passed before atx was added to database",
 				log.AtxId(atx.ShortString()))
+			b.discardChallenge()
+			return fmt.Errorf("target epoch has passed")
 		}
+	case <-b.stop:
+		return &StopRequestedError{}
 	}
 	b.discardChallenge()
 	return nil

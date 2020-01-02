@@ -120,7 +120,7 @@ type NipstBuilderMock struct {
 	SleepTime      int
 }
 
-func (np *NipstBuilderMock) BuildNIPST(challenge *types.Hash32, timeout chan struct{}) (*types.NIPST, error) {
+func (np *NipstBuilderMock) BuildNIPST(challenge *types.Hash32, timeout chan struct{}, stop chan struct{}) (*types.NIPST, error) {
 	if np.buildNipstFunc != nil {
 		return np.buildNipstFunc(challenge)
 	}
@@ -129,7 +129,7 @@ func (np *NipstBuilderMock) BuildNIPST(challenge *types.Hash32, timeout chan str
 
 type NipstErrBuilderMock struct{}
 
-func (np *NipstErrBuilderMock) BuildNIPST(challenge *types.Hash32, timeout chan struct{}) (*types.NIPST, error) {
+func (np *NipstErrBuilderMock) BuildNIPST(challenge *types.Hash32, timeout chan struct{}, stop chan struct{}) (*types.NIPST, error) {
 	return nil, fmt.Errorf("nipst builder error")
 }
 

@@ -164,7 +164,7 @@ func newNIPSTBuilder(
 	}
 }
 
-func (nb *NIPSTBuilder) BuildNIPST(challenge *types.Hash32, timeout chan struct{}) (*types.NIPST, error) {
+func (nb *NIPSTBuilder) BuildNIPST(challenge *types.Hash32, timeout chan struct{}, stop chan struct{}) (*types.NIPST, error) {
 	nb.load(*challenge)
 
 	if initialized, err := nb.postProver.IsInitialized(); !initialized || err != nil {
@@ -211,6 +211,8 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *types.Hash32, timeout chan struct{
 		case <-timeout:
 			nb.poetDb.UnsubscribeFromProofRef(nb.state.PoetServiceId, nb.state.PoetRound.Id)
 			return nil, fmt.Errorf("timeout waiting for poet proof, atx target epoch ended")
+		case <-stop:
+			return nil, &StopRequestedError{}
 		}
 
 		membership, err := nb.poetDb.GetMembershipMap(poetProofRef)
