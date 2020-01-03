@@ -168,7 +168,6 @@ func (ni *NinjaTortoise) evictOutOfPbase() {
 		go func() {
 			defer wg.Done()
 			for _, p := range ni.Patterns[lyr] {
-				delete(ni.TSupport, p)
 				delete(ni.TComplete, p)
 				delete(ni.TEffectiveToBlocks, p)
 				delete(ni.TVote, p)
@@ -178,6 +177,8 @@ func (ni *NinjaTortoise) evictOutOfPbase() {
 				delete(ni.TSupport, p)
 				ni.Debug("evict pattern %v from maps ", p)
 			}
+			delete(ni.TGood, lyr)
+			delete(ni.Patterns, lyr)
 		}()
 		wg.Add(1)
 		go func() {
@@ -430,7 +431,7 @@ func (ni *NinjaTortoise) addPatternVote(p votingPattern, view map[types.BlockID]
 		}
 
 		if vp, found = ni.TExplicit[b]; !found {
-			ni.Panic(fmt.Sprintf("block %s from layer %v has no explicit voting, something went wrong ", b, blk.Layer()))
+			ni.Panic(fmt.Sprintf("block %s from layer %v has no explicit voting, something went wrong ", b.String(), blk.Layer()))
 		}
 
 		for _, ex := range vp {

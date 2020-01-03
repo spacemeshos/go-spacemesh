@@ -170,7 +170,7 @@ func TestDoubleClose(t *testing.T) {
 func TestGettersToBoostCoverage(t *testing.T) {
 	netw := NewNetworkMock()
 	rwcam := NewReadWriteCloseAddresserMock()
-	addr := net.TCPAddr{net.ParseIP("1.1.1.1"), 555, "ipv4"}
+	addr := net.TCPAddr{net.ParseIP("1.1.1.1"), 555, ""}
 	rwcam.setRemoteAddrResult(&addr)
 	rPub := p2pcrypto.NewRandomPubkey()
 	conn := newConnection(rwcam, netw, rPub, &networkSessionImpl{}, msgSizeLimit, time.Second, netw.logger)

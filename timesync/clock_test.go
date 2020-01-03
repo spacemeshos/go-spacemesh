@@ -146,6 +146,14 @@ func TestTicker_SubscribeUnsubscribe(t *testing.T) {
 	r.Equal(0, len(ticker.subscribers))
 }
 
+func TestTicker_CloseTwice(t *testing.T) {
+	ld := time.Duration(20) * time.Second
+	clock := NewTicker(RealClock{}, ld, time.Now())
+	clock.StartNotifying()
+	clock.Close()
+	clock.Close()
+}
+
 func TestTicker_AwaitLayer(t *testing.T) {
 	r := require.New(t)
 

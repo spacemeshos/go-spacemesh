@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/post/shared"
@@ -172,6 +173,7 @@ func (b *Builder) loop() {
 				return
 			}
 			b.log.With().Error("failed to publish ATX", log.Err(err))
+			events.Publish(events.AtxCreated{false, "", uint64(b.currentEpoch())})
 			<-b.layerClock.AwaitLayer(b.layerClock.GetCurrentLayer() + 1)
 		}
 	}
@@ -426,6 +428,7 @@ func (b *Builder) PublishActivationTx() error {
 	select {
 	case <-atxReceived:
 		b.log.Info("atx received in db")
+		events.Publish(events.AtxCreated{true, atx.ShortString(), uint64(b.currentEpoch())})
 	case <-b.layerClock.AwaitLayer((atx.TargetEpoch(b.layersPerEpoch) + 1).FirstLayer(b.layersPerEpoch)):
 		select {
 		case <-b.syncer.Await():
@@ -435,6 +438,7 @@ func (b *Builder) PublishActivationTx() error {
 		select {
 		case <-atxReceived:
 			b.log.Info("atx received in db (in the last moment)")
+			events.Publish(events.AtxCreated{true, atx.ShortString(), uint64(b.currentEpoch())})
 		default:
 			// TODO: Unsubscribe from ATX (add subscriber counter)
 			b.log.With().Error("target epoch has passed before atx was added to database",

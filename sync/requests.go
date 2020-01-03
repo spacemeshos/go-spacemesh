@@ -92,10 +92,11 @@ func newFetchReqFactory(msgtype server.MessageType, asItems func(msg []byte) ([]
 			ch <- items
 		}
 
+		tmr := newFetchRequestTimer(msgtype)
 		if err := encodeAndSendRequest(msgtype, ids, infra, peer, foo); err != nil {
 			return nil, err
 		}
-
+		tmr.ObserveDuration()
 		return ch, nil
 	}
 }

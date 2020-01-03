@@ -68,7 +68,7 @@ func newMockPoetDb() PoetDb {
 	return &PoetDbMock{}
 }
 
-func SyncMockFactory(number int, conf Configuration, name string, dbType string, poetDb func() PoetDb) (syncs []*Syncer, p2ps []*service.Node, ticker *timesync.Ticker) {
+func SyncMockFactory(number int, conf Configuration, name string, dbType string, poetDb func() PoetDb) (syncs []*Syncer, p2ps []*service.Node, ticker *timesync.TimeClock) {
 	nodes := make([]*Syncer, 0, number)
 	p2ps = make([]*service.Node, 0, number)
 	sim := service.NewSimulator()
