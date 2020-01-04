@@ -13,6 +13,18 @@ type MockDb struct {
 	total int
 }
 
+func (m *MockDb) StoreBlockCreated(event *events.DoneCreatingBlock) error {
+	m.msgs[9]++
+	m.total++
+	return nil
+}
+
+func (m *MockDb) StoreAtxCreated(event *events.AtxCreated) error {
+	m.msgs[8]++
+	m.total++
+	return nil
+}
+
 func (m *MockDb) StoreReward(event *events.RewardReceived) error {
 	m.msgs[7]++
 	m.total++
@@ -68,8 +80,10 @@ func TestCollectEvents(t *testing.T) {
 
 	c.Start(false)
 	time.Sleep(2 * time.Second)
-	orig := events.NewBlock{Layer: 1, Id: "234"}
-	err = eventPublisher.PublishEvent(orig)
+	for i := 0; i < 10010; i++ {
+		orig := events.NewBlock{Layer: 1, Id: "234"}
+		err = eventPublisher.PublishEvent(orig)
+	}
 
 	orig1 := events.ValidBlock{Id: "234", Valid: true}
 	err = eventPublisher.PublishEvent(orig1)
@@ -90,6 +104,6 @@ func TestCollectEvents(t *testing.T) {
 	c.Stop()
 
 	log.Info("got %v", len(m.msgs))
-	assert.Equal(t, 6, m.total)
+	assert.Equal(t, 10015, m.total)
 	assert.Equal(t, 6, len(m.msgs))
 }

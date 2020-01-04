@@ -15,13 +15,13 @@ import (
 // channelBuffer defines the listening channel buffer size.
 const channelBuffer = 100
 
-// channelId is the Id on which subscribers must register in order to listen to messages on the channel.
-type channelId byte
+// ChannelId is the Id on which subscribers must register in order to listen to messages on the channel.
+type ChannelId byte
 
 // Subscriber defines the struct of the receiving end of the pubsub messages.
 type Subscriber struct {
 	sock      mangos.Socket
-	output    map[channelId]chan []byte
+	output    map[ChannelId]chan []byte
 	allOutput chan []byte
 	chanLock  sync.RWMutex
 }
@@ -34,6 +34,9 @@ func NewSubscriber(url string) (*Subscriber, error) {
 	}
 	socket.AddTransport(ipc.NewTransport())
 	socket.AddTransport(tcp.NewTransport())
+	socket.SetOption(mangos.OptionBestEffort, false)
+	socket.SetOption(mangos.OptionReadQLen, 10000)
+
 	err = socket.Dial(url)
 	if err != nil {
 		return nil, err
@@ -41,7 +44,7 @@ func NewSubscriber(url string) (*Subscriber, error) {
 
 	return &Subscriber{
 		socket,
-		make(map[channelId]chan []byte),
+		make(map[ChannelId]chan []byte, 100),
 		nil,
 		sync.RWMutex{},
 	}, nil
@@ -70,7 +73,7 @@ func (sub *Subscriber) StartListening() {
 			if sub.allOutput != nil {
 				sub.allOutput <- data
 			}
-			if c, ok := sub.output[channelId(data[0])]; ok {
+			if c, ok := sub.output[ChannelId(data[0])]; ok {
 				c <- data
 			}
 			sub.chanLock.RUnlock()
@@ -84,12 +87,12 @@ func (sub *Subscriber) Close() error {
 }
 
 // Subscribe subscribes to the given topic, returns a channel on which data from the topic is received.
-func (sub *Subscriber) Subscribe(topic channelId) (chan []byte, error) {
+func (sub *Subscriber) Subscribe(topic ChannelId) (chan []byte, error) {
 	sub.chanLock.Lock()
+	defer sub.chanLock.Unlock()
 	if _, ok := sub.output[topic]; !ok {
 		sub.output[topic] = make(chan []byte, channelBuffer)
 	}
-	sub.chanLock.Unlock()
 	err := sub.sock.SetOption(mangos.OptionSubscribe, []byte{byte(topic)})
 	if err != nil {
 		return nil, err
@@ -121,6 +124,8 @@ func newPublisher(url string) (*Publisher, error) {
 	}
 	sock.AddTransport(ipc.NewTransport())
 	sock.AddTransport(tcp.NewTransport())
+	sock.SetOption(mangos.OptionBestEffort, false)
+	sock.SetOption(mangos.OptionWriteQLen, 10000)
 	if err = sock.Listen(url); err != nil {
 		return nil, fmt.Errorf("can't listen on pub socket: %s", err.Error())
 	}
@@ -129,7 +134,7 @@ func newPublisher(url string) (*Publisher, error) {
 	return p, nil
 }
 
-func (p *Publisher) publish(topic channelId, payload []byte) error {
+func (p *Publisher) publish(topic ChannelId, payload []byte) error {
 	msg := append([]byte{byte(topic)}, payload...)
 	log.Debug("sending message %v", string(msg))
 	err := p.sock.Send(msg)
