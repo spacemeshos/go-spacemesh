@@ -127,13 +127,13 @@ func (s *Syncer) Close() {
 	close(s.exit)
 	close(s.forceSync)
 	s.Peers.Close()
-	// TODO: broadly implement a better mechanism for shutdown
-	time.Sleep(5 * time.Millisecond) // "ensures" no more sync routines can be created, ok for now
-	s.syncRoutineWg.Wait()           // must be called after we ensure no more sync routines can be created
 	s.blockQueue.Close()
 	s.atxQueue.Close()
 	s.txQueue.Close()
+	s.syncRoutineWg.Wait() // must be called after we ensure no more sync routines can be created
+	s.Info("closing msg server")
 	s.MessageServer.Close()
+	s.Info("syncer closed")
 }
 
 const (
