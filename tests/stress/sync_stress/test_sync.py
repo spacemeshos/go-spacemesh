@@ -47,8 +47,8 @@ def test_sync_stress(init_session, setup_bootstrap, save_log_on_exit):
         time.sleep(tts)
 
     curr_try = 0
-    # longest run witnessed = 14:30 minutes, 2.5 days data, 700+ layers
-    max_retries = 16
+    # longest run witnessed ~18:00 minutes (12:00 minutes is the shortest), 2.5 days data, 700+ layers
+    max_retries = 20
     interval_time = 60
     print("waiting for new client to be synced")
     while True:
@@ -60,11 +60,12 @@ def test_sync_stress(init_session, setup_bootstrap, save_log_on_exit):
         print(f"not synced after {curr_try}/{max_retries} tries of {interval_time} secs each", end="\r")
         time.sleep(interval_time)
 
-        assert curr_try <= max_retries, f"node failed syncing after waiting for {max_retries} minutes"
         curr_try += 1
+        assert curr_try <= max_retries, f"node failed syncing after waiting for {max_retries} minutes"
 
-    # there are several messages containing "start synchronize" according to Almog,
-    # we would like the timestamp of the latest one.
+    # There are several messages containing "start synchronize" according to Almog,
+    # this is due to a bug in the sync test binary.
+    # We would like the timestamp of the latest one.
     start_sync_hits = q.get_all_msg_containing(init_session, new_client, START_SYNC, is_print=False)
     last_sync_msg = start_sync_hits[-1]
     # parsing sync start time
