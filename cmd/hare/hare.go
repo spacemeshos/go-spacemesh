@@ -60,7 +60,7 @@ type HareApp struct {
 	oracle  *oracle.OracleClient
 	sgn     hare.Signer
 	ha      *hare.Hare
-	clock   *timesync.Ticker
+	clock   *timesync.TimeClock
 	updater *monitoring.MemoryUpdater
 	monitor *monitoring.Monitor
 }

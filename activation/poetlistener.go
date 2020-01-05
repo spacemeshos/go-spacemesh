@@ -4,6 +4,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/priorityq"
 )
 
 const PoetProofProtocol = "PoetProof"
@@ -81,7 +82,7 @@ func NewPoetListener(net service.Service, poetDb PoetValidatorPersistor, logger 
 		Log:               logger,
 		net:               net,
 		poetDb:            poetDb,
-		poetProofMessages: net.RegisterGossipProtocol(PoetProofProtocol),
+		poetProofMessages: net.RegisterGossipProtocol(PoetProofProtocol, priorityq.Low),
 		exit:              make(chan struct{}),
 	}
 }

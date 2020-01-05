@@ -9,6 +9,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -60,7 +61,7 @@ type mockP2p struct {
 	err   error
 }
 
-func (m *mockP2p) RegisterGossipProtocol(protocol string) chan service.GossipMessage {
+func (m *mockP2p) RegisterGossipProtocol(protocol string, prio priorityq.Priority) chan service.GossipMessage {
 	return make(chan service.GossipMessage)
 }
 
@@ -549,7 +550,7 @@ func (m *mockNet) Broadcast(protocol string, payload []byte) error {
 	return m.err
 }
 
-func (m *mockNet) RegisterGossipProtocol(protocol string) chan service.GossipMessage {
+func (m *mockNet) RegisterGossipProtocol(protocol string, prio priorityq.Priority) chan service.GossipMessage {
 	m.callRegister++
 	return nil
 }
