@@ -120,6 +120,7 @@ type LoggerConfig struct {
 	PoetListenerLoggerLevel   string `mapstructure:"poet"`
 	NipstBuilderLoggerLevel   string `mapstructure:"nipst"`
 	AtxBuilderLoggerLevel     string `mapstructure:"atx-builder"`
+	HareBeaconLoggerLevel     string `mapstructure:"hare-beacon"`
 }
 
 // DefaultConfig returns the default configuration for a spacemesh node

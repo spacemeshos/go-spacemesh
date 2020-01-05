@@ -3,6 +3,7 @@ package eligibility
 import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -29,7 +30,7 @@ func TestBeacon_Value(t *testing.T) {
 
 	r := require.New(t)
 
-	b := beacon{}
+	b := NewBeacon(nil, 0, log.NewDefault(t.Name()))
 	c := newMockCasher()
 	b.cache = c
 
@@ -67,7 +68,7 @@ func TestBeacon_Value(t *testing.T) {
 func TestNewBeacon(t *testing.T) {
 	r := require.New(t)
 	p := &mockPatternProvider{}
-	b := NewBeacon(p, 10)
+	b := NewBeacon(p, 10, log.NewDefault(t.Name()))
 	r.Equal(p, b.patternProvider)
 	r.Equal(uint64(10), b.confidenceParam)
 	r.NotNil(p, b.cache)
