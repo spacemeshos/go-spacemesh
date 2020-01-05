@@ -131,9 +131,7 @@ func (s *Syncer) Close() {
 	s.blockQueue.Close()
 	s.atxQueue.Close()
 	s.txQueue.Close()
-	s.Info("closing msg server")
 	s.MessageServer.Close()
-	s.Info("syncer closed")
 }
 
 const (
