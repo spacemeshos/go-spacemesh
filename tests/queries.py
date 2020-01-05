@@ -179,7 +179,6 @@ def query_message(indx, namespace, client_po_name, fields, find_fails=False, sta
     s = Search(index=indx, using=es).query('bool', filter=[fltr])
     hits = list(s.scan())
 
-    # TODO just started changing the prints {WIP}
     if is_print:
         print(f"\n{PRINT_SEP}")
         print(f"A query has been made for `{fields}`\ndeployment - {namespace}\n"

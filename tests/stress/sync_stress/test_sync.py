@@ -35,24 +35,39 @@ def test_sync_stress(init_session, setup_bootstrap, save_log_on_exit):
     res_lst = add_multi_clients(init_session, cspec, 1, 'client')
     new_client = res_lst[0]
 
+    # wait for the new node to start syncing
+    while True:
+        start_sync_hits = q.get_all_msg_containing(init_session, new_client, START_SYNC, is_print=False)
+        if start_sync_hits:
+            print(f"new client started syncing\n")
+            break
+
+        tts = 60
+        print(f"new client did not start syncing yet sleeping for {tts} secs")
+        time.sleep(tts)
+
     curr_try = 0
-    max_retries = 13
+    # longest run witnessed = 14:30 minutes, 2.5 days data, 700+ layers
+    max_retries = 16
     interval_time = 60
-    print("waiting for new pod to be synced")
+    print("waiting for new client to be synced")
     while True:
         hits = q.get_all_msg_containing(init_session, new_client, SYNC_DONE, is_print=False)
         if hits:
+            print(f"synced after {curr_try}/{max_retries} tries of {interval_time} seconds each\n")
             break
 
-        print(f"not synced after {curr_try} tries of {interval_time} secs each", end="\r")
+        print(f"not synced after {curr_try}/{max_retries} tries of {interval_time} secs each", end="\r")
         time.sleep(interval_time)
 
-        assert curr_try < max_retries, f"node failed syncing after waiting for {max_retries} minutes"
+        assert curr_try <= max_retries, f"node failed syncing after waiting for {max_retries} minutes"
         curr_try += 1
 
-    # parsing sync start time
+    # there are several messages containing "start synchronize" according to Almog,
+    # we would like the timestamp of the latest one.
     start_sync_hits = q.get_all_msg_containing(init_session, new_client, START_SYNC, is_print=False)
     last_sync_msg = start_sync_hits[-1]
+    # parsing sync start time
     st = convert_ts_to_datetime(last_sync_msg["T"])
     et = convert_ts_to_datetime(hits[0]["T"])
     # total time since starting sync until finishing
