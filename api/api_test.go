@@ -22,10 +22,10 @@ import (
 	"strings"
 	"testing"
 	"time"
-
 	crand "crypto/rand"
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/spacemeshos/go-spacemesh/api/config"
+	nodeconf "github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/api/pb"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"golang.org/x/net/context"
@@ -201,7 +201,11 @@ func TestServersConfig(t *testing.T) {
 	port2, err := node.GetUnboundedPort()
 	require.NoError(t, err, "Should be able to establish a connection on a port")
 
-	grpcService := NewGrpcService(port1, &networkMock, ap, txApi, nil, &mining, &oracle, nil, PostMock{}, 0, nil)
+	// need to pass some default conf here
+
+	nodeConf := nodeconf.DefaultConfig()
+
+	grpcService := NewGrpcService(&nodeConf, port1, &networkMock, ap, txApi, nil, &mining, &oracle, nil, PostMock{}, nil)
 	require.Equal(t, grpcService.Port, uint(port1), "Expected same port")
 
 	jsonService := NewJSONHTTPServer(port2, port1)
@@ -480,7 +484,11 @@ var cfg = config.DefaultConfig()
 
 func launchServer(t *testing.T) func() {
 	networkMock.broadcasted = []byte{0x00}
-	grpcService := NewGrpcService(cfg.GrpcServerPort, &networkMock, ap, txApi, txMempool, &mining, &oracle, &genTime, PostMock{}, layerDuration, nil)
+
+	cfg := config.DefaultConfig()
+	nodeConf := nodeconf.DefaultConfig()
+
+	grpcService := NewGrpcService(&nodeConf, cfg.GrpcServerPort, &networkMock, ap, txApi, txMempool, &mining, &oracle, nil, PostMock{}, nil)
 	jsonService := NewJSONHTTPServer(cfg.JSONServerPort, cfg.GrpcServerPort)
 	// start gRPC and json server
 	grpcService.StartService()
