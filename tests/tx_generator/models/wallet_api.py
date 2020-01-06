@@ -19,7 +19,7 @@ class WalletAPI:
     balance_api = 'v1/balance'
     a_ok = "'value': 'ok'"
 
-    def __init__(self, namespace, clients_lst):
+    def __init__(self, namespace, clients_lst, fixed_node=None):
         """
 
         :param namespace: string, namespace
@@ -27,6 +27,7 @@ class WalletAPI:
         """
         self.clients_lst = clients_lst
         self.namespace = namespace
+        self.fixed_node = fixed_node
 
     def submit_tx(self, to, src, gas_price, amount, tx_bytes):
         print(f"\nsubmit transaction\nfrom {src}\nto {to}")
@@ -73,7 +74,15 @@ class WalletAPI:
         return out
 
     def random_node(self):
-        rnd = random.randint(0, len(self.clients_lst)-1)
+        """
+        gets a random node from nodes list
+        if fixed is set then the node at the nodes[fixed]
+        will be returned, this may be useful in stress tests
+
+        :return: string string, chosen pod ip and chosen pod name
+        """
+
+        rnd = random.randint(0, len(self.clients_lst)-1) if not self.fixed_node else self.fixed_node
         pod_ip, pod_name = self.clients_lst[rnd]['pod_ip'], self.clients_lst[rnd]['name']
         print(f"random selected pod: ip = {pod_ip}, name = {pod_name}")
         return pod_ip, pod_name

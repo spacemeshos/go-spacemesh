@@ -4,14 +4,14 @@ from tests.tx_generator.models.tx_generator import TxGenerator
 
 
 def transfer(wallet_api, frm, to, amount, accountant=None, gas_price=1, gas_limit=None,
-             curr_nonce=None, priv=None):
+             curr_nonce=None, priv=None, fixed_node=None):
     # set private key
     if not priv:
         if not accountant:
             raise Exception("private key was not supplied can not perform the transfer")
 
         priv = accountant.get_acc_priv(frm)
-
+    # set gas limit
     if not gas_limit:
         gas_limit = gas_price + 1
     # set nonce

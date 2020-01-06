@@ -97,8 +97,8 @@ class Accountant:
         return str_pub, str_priv
 
     @staticmethod
-    def set_tap_acc():
-        return dict(Accountant.ACCOUNT, balance=conf.init_amount, priv=conf.acc_priv, recv=[], send=[])
+    def set_tap_acc(balance=conf.init_amount, nonce=0):
+        return dict(Accountant.ACCOUNT, balance=balance, priv=conf.acc_priv, nonce=nonce, recv=[], send=[])
 
     @staticmethod
     def set_account(priv, balance=0, nonce=0, recv=None, send=None):
