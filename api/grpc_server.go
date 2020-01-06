@@ -9,6 +9,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/api/pb"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	cfg "github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"google.golang.org/grpc/keepalive"
@@ -23,18 +24,19 @@ import (
 
 // SpacemeshGrpcService is a grpc server providing the Spacemesh api
 type SpacemeshGrpcService struct {
-	Server        *grpc.Server
-	Port          uint
-	StateApi      StateAPI         // State DB
-	Network       NetworkAPI       // P2P Swarm
-	Tx            TxAPI            // Mesh
-	TxMempool     *miner.TxMempool // TX Mempool
-	Mining        MiningAPI        // ATX Builder
-	Oracle        OracleAPI
-	GenTime       GenesisTimeAPI
-	Post          PostAPI
-	LayerDuration time.Duration
-	Logging       LoggingAPI
+	Server          *grpc.Server
+	Port            uint
+	StateApi        StateAPI         // State DB
+	Network         NetworkAPI       // P2P Swarm
+	Tx              TxAPI            // Mesh
+	TxMempool       *miner.TxMempool // TX Mempool
+	Mining          MiningAPI        // ATX Builder
+	Oracle          OracleAPI
+	GenTime         GenesisTimeAPI
+	Post            PostAPI
+	LayerDuration   time.Duration
+	Logging         LoggingAPI
+	NodeConfigParam *pb.NodeConfigParams
 }
 
 func (s SpacemeshGrpcService) getTransactionAndStatus(txId types.TransactionId) (*types.Transaction, *types.LayerID, pb.TxStatus, error) {
@@ -227,7 +229,7 @@ type TxAPI interface {
 }
 
 // NewGrpcService create a new grpc service using config data.
-func NewGrpcService(port int, net NetworkAPI, state StateAPI, tx TxAPI, txMempool *miner.TxMempool, mining MiningAPI, oracle OracleAPI, genTime GenesisTimeAPI, post PostAPI, layerDurationSec int, logging LoggingAPI) *SpacemeshGrpcService {
+func NewGrpcService(config *cfg.Config, port int, net NetworkAPI, state StateAPI, tx TxAPI, txMempool *miner.TxMempool, mining MiningAPI, oracle OracleAPI, genTime GenesisTimeAPI, post PostAPI, logging LoggingAPI) *SpacemeshGrpcService {
 	options := []grpc.ServerOption{
 		// XXX: this is done to prevent routers from cleaning up our connections (e.g aws load balances..)
 		// TODO: these parameters work for now but we might need to revisit or add them as configuration
@@ -240,20 +242,47 @@ func NewGrpcService(port int, net NetworkAPI, state StateAPI, tx TxAPI, txMempoo
 			time.Minute * 3,
 		}),
 	}
+
+	nodeConfigParams := &pb.NodeConfigParams{
+		TestMode:               config.TestMode,
+		LayerDurationSec:       uint32(config.LayerDurationSec),
+		LayerAvgSize:           uint32(config.LayerAvgSize),
+		LayersPerEpoch:         uint32(config.LayersPerEpoch),
+		Hdist:                  uint32(config.Hdist),
+		PoETServer:             config.PoETServer,
+		SyncRequestTimeout:     uint32(config.SyncRequestTimeout),
+		AtxsPerBlock:           uint32(config.AtxsPerBlock),
+		Bootstrap:              config.P2P.SwarmConfig.Bootstrap,
+		BootstrapNodes:         config.P2P.SwarmConfig.BootstrapNodes,
+		Randcon:                uint32(config.P2P.SwarmConfig.RandomConnections),
+		MaxInbound:             uint32(config.P2P.MaxInboundPeers),
+		HareWakeupDelta:        uint32(config.HARE.WakeupDelta),
+		HareRoundDuration:      uint32(config.HARE.RoundDuration),
+		HareCommitteeSize:      0,
+		HareMaxAdversaries:     0,
+		EligibilityConf:        uint32(config.HareEligibility.ConfidenceParam),
+		EligibilityEpochOffset: uint32(config.HareEligibility.EpochOffset),
+		GenesisActiveSize:      uint32(config.GenesisActiveSet),
+		PostSize:               config.POST.SpacePerUnit,
+		PostLabels:             config.POST.LabelsLogRate,
+		GenesisTime:            config.GenesisTime,
+	}
+
 	server := grpc.NewServer(options...)
 	return &SpacemeshGrpcService{
-		Server:        server,
-		Port:          uint(port),
-		StateApi:      state,
-		Network:       net,
-		Tx:            tx,
-		TxMempool:     txMempool,
-		Mining:        mining,
-		Oracle:        oracle,
-		GenTime:       genTime,
-		Post:          post,
-		LayerDuration: time.Duration(layerDurationSec) * time.Second,
-		Logging:       logging,
+		Server:          server,
+		Port:            uint(port),
+		StateApi:        state,
+		Network:         net,
+		Tx:              tx,
+		TxMempool:       txMempool,
+		Mining:          mining,
+		Oracle:          oracle,
+		GenTime:         genTime,
+		Post:            post,
+		LayerDuration:   time.Duration(config.LayerDurationSec) * time.Second,
+		Logging:         logging,
+		NodeConfigParam: nodeConfigParams,
 	}
 }
 
@@ -332,6 +361,11 @@ func (s SpacemeshGrpcService) GetUpcomingAwards(ctx context.Context, empty *empt
 func (s SpacemeshGrpcService) GetGenesisTime(ctx context.Context, empty *empty.Empty) (*pb.SimpleMessage, error) {
 	log.Info("GRPC GetGenesisTime msg")
 	return &pb.SimpleMessage{Value: s.GenTime.GetGenesisTime().Format(time.RFC3339)}, nil
+}
+
+func (s SpacemeshGrpcService) GetNodeParams(ctx context.Context, empty *empty.Empty) (*pb.NodeConfigParams, error) {
+	log.Info("GRPC GetNodeParams msg")
+	return s.NodeConfigParam, nil
 }
 
 func (s SpacemeshGrpcService) ResetPost(ctx context.Context, empty *empty.Empty) (*pb.SimpleMessage, error) {

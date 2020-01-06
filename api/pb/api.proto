@@ -55,6 +55,31 @@ message InitPost {
     string coinbase = 3;
 }
 
+message NodeConfigParams {
+     bool TestMode = 1;
+     uint32 LayerDurationSec = 2;
+     uint32 LayerAvgSize = 3;
+     uint32 LayersPerEpoch = 4;
+     uint32 Hdist = 5;
+     string PoETServer = 6;
+     uint32 SyncRequestTimeout = 7;
+     uint32 AtxsPerBlock = 8;
+     bool bootstrap = 9;
+     repeated string BootstrapNodes = 10;
+     uint32 Randcon = 11;
+     uint32 MaxInbound = 12;
+     uint32 HareWakeupDelta = 13;
+     uint32 HareRoundDuration = 14;
+     uint32 HareCommitteeSize = 15;
+     uint32 HareMaxAdversaries = 16;
+     uint32 EligibilityConf = 17;
+     uint32 EligibilityEpochOffset = 18;
+     uint32 GenesisActiveSize = 19;
+     uint64 PostSize = 20;
+     uint64 PostLabels = 21;
+     string GenesisTime = 22;
+}
+
 message SignedTransaction {
     bytes tx = 1; // serialized with XDR
 }
@@ -112,6 +137,13 @@ message AccountRewards {
 }
 
 service SpacemeshService {
+
+    rpc GetNodeParams (google.protobuf.Empty) returns (NodeConfigParams) {
+        option (google.api.http) = {
+              post: "/v1/nodeparams"
+              body: "*"
+            };
+    }
     rpc Echo (SimpleMessage) returns (SimpleMessage) {
         option (google.api.http) = {
           post: "/v1/example/echo"

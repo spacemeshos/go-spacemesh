@@ -882,8 +882,9 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	// start api servers
 	if apiConf.StartGrpcServer || apiConf.StartJSONServer {
 		// start grpc if specified or if json rpc specified
-		layerDuration := app.Config.LayerDurationSec
-		app.grpcAPIService = api.NewGrpcService(apiConf.GrpcServerPort, app.P2P, app.state, app.mesh, app.txPool, app.atxBuilder, app.oracle, app.clock, postClient, layerDuration, app)
+		//app.Config
+		//layerDuration := app.Config.LayerDurationSec
+		app.grpcAPIService = api.NewGrpcService(app.Config, apiConf.GrpcServerPort, app.P2P, app.state, app.mesh, app.txPool, app.atxBuilder, app.oracle, app.clock, postClient, app)
 		app.grpcAPIService.StartService()
 	}
 

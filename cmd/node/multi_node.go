@@ -55,8 +55,7 @@ func getTestDefaultConfig() *config.Config {
 // ActivateGrpcServer starts a grpc server on the provided node
 func ActivateGrpcServer(smApp *SpacemeshApp) {
 	smApp.Config.API.StartGrpcServer = true
-	layerDuration := smApp.Config.LayerDurationSec
-	smApp.grpcAPIService = api.NewGrpcService(smApp.Config.API.GrpcServerPort, smApp.P2P, smApp.state, smApp.mesh, smApp.txPool, smApp.atxBuilder, smApp.oracle, smApp.clock, nil, layerDuration, nil)
+	smApp.grpcAPIService = api.NewGrpcService(smApp.Config, smApp.Config.API.GrpcServerPort, smApp.P2P, smApp.state, smApp.mesh, smApp.txPool, smApp.atxBuilder, smApp.oracle, smApp.clock, nil, nil)
 	smApp.grpcAPIService.StartService()
 }
 
