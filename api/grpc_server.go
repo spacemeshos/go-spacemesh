@@ -26,17 +26,17 @@ import (
 type SpacemeshGrpcService struct {
 	Server          *grpc.Server
 	Port            uint
-	StateApi        StateAPI         // State DB
-	Network         NetworkAPI       // P2P Swarm
-	Tx              TxAPI            // Mesh
-	TxMempool       *miner.TxMempool // TX Mempool
-	Mining          MiningAPI        // ATX Builder
-	Oracle          OracleAPI
-	GenTime         GenesisTimeAPI
-	Post            PostAPI
-	LayerDuration   time.Duration
-	Logging         LoggingAPI
-	NodeConfigParam *pb.NodeConfigParams
+	StateApi         StateAPI         // State DB
+	Network          NetworkAPI       // P2P Swarm
+	Tx               TxAPI            // Mesh
+	TxMempool        *miner.TxMempool // TX Mempool
+	Mining           MiningAPI        // ATX Builder
+	Oracle           OracleAPI
+	GenTime          GenesisTimeAPI
+	Post             PostAPI
+	LayerDuration    time.Duration
+	Logging          LoggingAPI
+	NodeConfigParams *pb.NodeConfigParams
 }
 
 func (s SpacemeshGrpcService) getTransactionAndStatus(txId types.TransactionId) (*types.Transaction, *types.LayerID, pb.TxStatus, error) {
@@ -272,17 +272,17 @@ func NewGrpcService(config *cfg.Config, port int, net NetworkAPI, state StateAPI
 	return &SpacemeshGrpcService{
 		Server:          server,
 		Port:            uint(port),
-		StateApi:        state,
-		Network:         net,
-		Tx:              tx,
-		TxMempool:       txMempool,
-		Mining:          mining,
-		Oracle:          oracle,
-		GenTime:         genTime,
-		Post:            post,
-		LayerDuration:   time.Duration(config.LayerDurationSec) * time.Second,
-		Logging:         logging,
-		NodeConfigParam: nodeConfigParams,
+		StateApi:         state,
+		Network:          net,
+		Tx:               tx,
+		TxMempool:        txMempool,
+		Mining:           mining,
+		Oracle:           oracle,
+		GenTime:          genTime,
+		Post:             post,
+		LayerDuration:    time.Duration(config.LayerDurationSec) * time.Second,
+		Logging:          logging,
+		NodeConfigParams: nodeConfigParams,
 	}
 }
 
@@ -365,7 +365,7 @@ func (s SpacemeshGrpcService) GetGenesisTime(ctx context.Context, empty *empty.E
 
 func (s SpacemeshGrpcService) GetNodeParams(ctx context.Context, empty *empty.Empty) (*pb.NodeConfigParams, error) {
 	log.Info("GRPC GetNodeParams msg")
-	return s.NodeConfigParam, nil
+	return s.NodeConfigParams, nil
 }
 
 func (s SpacemeshGrpcService) ResetPost(ctx context.Context, empty *empty.Empty) (*pb.SimpleMessage, error) {
