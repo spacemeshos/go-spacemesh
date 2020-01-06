@@ -24,8 +24,8 @@ import (
 
 // SpacemeshGrpcService is a grpc server providing the Spacemesh api
 type SpacemeshGrpcService struct {
-	Server          *grpc.Server
-	Port            uint
+	Server           *grpc.Server
+	Port             uint
 	StateApi         StateAPI         // State DB
 	Network          NetworkAPI       // P2P Swarm
 	Tx               TxAPI            // Mesh
@@ -270,8 +270,8 @@ func NewGrpcService(config *cfg.Config, port int, net NetworkAPI, state StateAPI
 
 	server := grpc.NewServer(options...)
 	return &SpacemeshGrpcService{
-		Server:          server,
-		Port:            uint(port),
+		Server:           server,
+		Port:             uint(port),
 		StateApi:         state,
 		Network:          net,
 		Tx:               tx,
