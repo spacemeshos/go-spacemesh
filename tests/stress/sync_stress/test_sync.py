@@ -15,7 +15,11 @@ START_SYNC = "start synchronize"
 
 
 def test_sync_stress(init_session, setup_bootstrap, save_log_on_exit):
-    clients_num = 10
+    # currently the only data we have is for 2.5 days, ~700+ layers
+    max_time_in_mins = 20
+    max_time_for_sync_mins = max_time_in_mins
+
+    clients_num = testconfig["client"]["replicas"]
     bs_info = setup_bootstrap.pods[0]
     cspec = get_conf(bs_info, testconfig['client'])
     _ = add_multi_clients(init_session, cspec, clients_num)
@@ -48,7 +52,7 @@ def test_sync_stress(init_session, setup_bootstrap, save_log_on_exit):
 
     curr_try = 0
     # longest run witnessed ~18:00 minutes (12:00 minutes is the shortest), 2.5 days data, 700+ layers
-    max_retries = 20
+    max_retries = max_time_in_mins
     interval_time = 60
     print("waiting for new client to be synced")
     while True:
@@ -71,6 +75,11 @@ def test_sync_stress(init_session, setup_bootstrap, save_log_on_exit):
     # parsing sync start time
     st = convert_ts_to_datetime(last_sync_msg["T"])
     et = convert_ts_to_datetime(hits[0]["T"])
+
+    ass_err = f"it took too long for syncing: {str(et - st)}, max {max_retries} minutes"
+    passed_minutes = (et-st).seconds / 60
+    assert passed_minutes < max_time_for_sync_mins, ass_err
+
     # total time since starting sync until finishing
     print(f"new client is synced after {str(et - st)}")
     assert 1

@@ -186,9 +186,6 @@ def query_message(indx, namespace, client_po_name, fields, find_fails=False, sta
         print("Number of hits: ", len(hits))
         print(f"{PRINT_SEP}\n")
 
-        if not hits:
-            print("no hits")
-
     if find_fails:
         print("Looking for pods that didn't hit:")
         podnames = set([hit.kubernetes.pod_name for hit in hits])
