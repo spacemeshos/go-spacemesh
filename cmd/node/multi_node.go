@@ -238,6 +238,7 @@ loop:
 					continue
 				}
 			}
+			errors = 0
 
 			startLayer = time.Now()
 			clock.Tick()
