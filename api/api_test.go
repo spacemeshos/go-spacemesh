@@ -219,7 +219,7 @@ func TestGrpcApi(t *testing.T) {
 	const message = "Hello World"
 
 	// start a client
-	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
+	addr := "localhost:" + strconv.Itoa(apiCnfg.GrpcServerPort)
 
 	// Set up a connection to the server.
 	conn, err := grpc.Dial(addr, grpc.WithInsecure())
@@ -480,16 +480,15 @@ func marshalProto(t *testing.T, msg proto.Message) string {
 	return buf.String()
 }
 
-var cfg = config.DefaultConfig()
+var apiCnfg = config.DefaultConfig()
 
 func launchServer(t *testing.T) func() {
 	networkMock.broadcasted = []byte{0x00}
 
-	cfg := config.DefaultConfig()
 	nodeConf := nodeconf.DefaultConfig()
 
-	grpcService := NewGrpcService(&nodeConf, cfg.GrpcServerPort, &networkMock, ap, txApi, txMempool, &mining, &oracle, nil, PostMock{}, nil)
-	jsonService := NewJSONHTTPServer(cfg.JSONServerPort, cfg.GrpcServerPort)
+	grpcService := NewGrpcService(&nodeConf, apiCnfg.GrpcServerPort, &networkMock, ap, txApi, txMempool, &mining, &oracle, genTime, PostMock{}, nil)
+	jsonService := NewJSONHTTPServer(apiCnfg.JSONServerPort, apiCnfg.GrpcServerPort)
 	// start gRPC and json server
 	grpcService.StartService()
 	jsonService.StartService()
@@ -503,7 +502,7 @@ func launchServer(t *testing.T) func() {
 }
 
 func callEndpoint(t *testing.T, endpoint, payload string) (string, int) {
-	url := fmt.Sprintf("http://127.0.0.1:%d/%s", cfg.JSONServerPort, endpoint)
+	url := fmt.Sprintf("http://127.0.0.1:%d/%s", apiCnfg.JSONServerPort, endpoint)
 	resp, err := http.Post(url, "application/json", strings.NewReader(payload))
 	require.NoError(t, err)
 	require.Equal(t, "application/json", resp.Header.Get("Content-Type"))

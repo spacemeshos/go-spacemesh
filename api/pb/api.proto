@@ -78,6 +78,7 @@ message NodeConfigParams {
      uint64 PostSize = 20;
      uint64 PostLabels = 21;
      string GenesisTime = 22;
+     uint32 NetworkId = 23;
 }
 
 message SignedTransaction {

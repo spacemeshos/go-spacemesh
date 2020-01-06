@@ -266,6 +266,7 @@ func NewGrpcService(config *cfg.Config, port int, net NetworkAPI, state StateAPI
 		PostSize:               config.POST.SpacePerUnit,
 		PostLabels:             config.POST.LabelsLogRate,
 		GenesisTime:            config.GenesisTime,
+		NetworkId: 				uint32(config.P2P.NetworkID),
 	}
 
 	server := grpc.NewServer(options...)
