@@ -73,17 +73,18 @@ def get_conf(bs_info, client_config, setup_oracle=None, setup_poet=None, args=No
     return cspec
 
 
-def add_multi_clients(deployment_id, container_specs, size=2, client='client', ret_pods=False):
+def add_multi_clients(deployment_id, container_specs, size=2, client_title='client', ret_pods=False):
     """
     adds pods to a given namespace according to specification params
 
     :param deployment_id: string, namespace id
     :param container_specs:
     :param size: int, number of replicas
+    :param client_title: string, client title in yml file (client, client_v2 etc)
     :param ret_pods: boolean, if 'True' RETURN a pods list (V1PodList)
     :return: list (strings), list of pods names
     """
-    k8s_file, k8s_create_func = choose_k8s_object_create(testconfig[client],
+    k8s_file, k8s_create_func = choose_k8s_object_create(testconfig[client_title],
                                                          CLIENT_DEPLOYMENT_FILE,
                                                          CLIENT_STATEFULSET_FILE)
     resp = k8s_create_func(k8s_file, testconfig['namespace'],
@@ -92,10 +93,12 @@ def add_multi_clients(deployment_id, container_specs, size=2, client='client', r
                            container_specs=container_specs,
                            time_out=testconfig['deployment_ready_time_out'])
 
+    print("\nadding new clients")
     client_pods = CoreV1ApiClient().list_namespaced_pod(testconfig['namespace'],
                                                         include_uninitialized=True,
                                                         label_selector=("name={0}".format(
                                                             resp.metadata._name.split('-')[1]))).items
+
     if ret_pods:
         ret_val = client_pods
     else:
@@ -105,6 +108,7 @@ def add_multi_clients(deployment_id, container_specs, size=2, client='client', r
             if pod_name.startswith(resp.metadata.name):
                 pods.append(pod_name)
         ret_val = pods
+        print(f"added new clients: {pods}\n")
 
     return ret_val
 

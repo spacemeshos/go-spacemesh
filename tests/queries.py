@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from elasticsearch_dsl import Search, Q
 
 from tests.context import ES
+from tests.convenience import PRINT_SEP
 
 TS_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
 
@@ -60,7 +61,7 @@ def get_app_started_msgs(namespace, pod_name):
     return get_all_msg_containing(namespace, pod_name, app_started_msg)
 
 
-def get_all_msg_containing(namespace, pod_name, msg_data, find_fails=False, from_ts=None, to_ts=None):
+def get_all_msg_containing(namespace, pod_name, msg_data, find_fails=False, from_ts=None, to_ts=None, is_print=True):
     """
     Queries for all logs with msg_data in their content {"M": msg_data}
     also, it's optional to add timestamps as time frame, if only one is passed
@@ -72,6 +73,7 @@ def get_all_msg_containing(namespace, pod_name, msg_data, find_fails=False, from
     :param find_fails: boolean, whether to print unmatched pods (query_message)
     :param from_ts: string, find results from this time stamp on (%Y-%m-%dT%H:%M:%S.%fZ)
     :param to_ts: string, find results before this time stamp (%Y-%m-%dT%H:%M:%S.%fZ)
+    :param is_print: bool, whether to print query results or not
 
     :return: list, all matching hits
     """
@@ -81,8 +83,7 @@ def get_all_msg_containing(namespace, pod_name, msg_data, find_fails=False, from
         queries = [set_time_frame_query(from_ts, to_ts)]
 
     msg = {"M": msg_data}
-    hit_lst = query_message(current_index, namespace, pod_name, msg, find_fails, queries=queries)
-    print(f"found {str(len(hit_lst))} messages containing (match_phrase): {msg_data}\n")
+    hit_lst = query_message(current_index, namespace, pod_name, msg, find_fails, queries=queries, is_print=is_print)
     return hit_lst
 
 
@@ -162,7 +163,8 @@ def poll_query_message(indx, namespace, client_po_name, fields, findFails=False,
     return hits
 
 
-def query_message(indx, namespace, client_po_name, fields, find_fails=False, start_time=None, queries=None):
+def query_message(indx, namespace, client_po_name, fields, find_fails=False, start_time=None, queries=None,
+                  is_print=True):
     # TODO : break this to smaller functions ?
     es = ES().get_search_api()
     fltr = get_pod_name_and_namespace_queries(client_po_name, namespace)
@@ -177,27 +179,13 @@ def query_message(indx, namespace, client_po_name, fields, find_fails=False, sta
     s = Search(index=indx, using=es).query('bool', filter=[fltr])
     hits = list(s.scan())
 
-    # TODO just started changing the prints {WIP}
-    separator = "===================================================================="
-    print(f"\n{separator}")
-    print(f"A query has been made for `{fields}`\ndeployment - "
-          f"{namespace}\nall clients containing {client_po_name} in pod_name")
-    print("Number of hits: ", len(hits))
-    print(f"{separator}\n")
-    print("Benchmark results:")
-    if len(hits) > 0:
-        ts = [hit["T"] for hit in hits]
+    if is_print:
+        print(f"\n{PRINT_SEP}")
+        print(f"A query has been made for `{fields}`\ndeployment - {namespace}\n"
+              f"all clients containing {client_po_name} in pod_name")
+        print("Number of hits: ", len(hits))
+        print(f"{PRINT_SEP}\n")
 
-        first = start_time if start_time is not None else datetime.strptime(
-            min(ts).replace("T", " ", ).replace("Z", ""), "%Y-%m-%d %H:%M:%S.%f")
-        last = datetime.strptime(max(ts).replace("T", " ", ).replace("Z", ""), "%Y-%m-%d %H:%M:%S.%f")
-
-        delta = last - first
-        print("First: {0}, Last: {1}, Delta: {2}".format(first, last, delta))
-        # TODO: compare to previous runs.
-        print(separator)
-    else:
-        print("no hits")
     if find_fails:
         print("Looking for pods that didn't hit:")
         podnames = set([hit.kubernetes.pod_name for hit in hits])
@@ -212,7 +200,7 @@ def query_message(indx, namespace, client_po_name, fields, find_fails=False, sta
             print("None. yay!")
         else:
             print(unsecpods)
-        print(separator)
+        print(PRINT_SEP)
 
     s = list(hits)
     return s

@@ -98,7 +98,7 @@ func TestNinjaTortoise_evict(t *testing.T) {
 	ni := sanity(t, getMeshForBench(), 150, 10, 100, badblocks)
 
 	for i := 1; i < 140; i++ {
-		for _, j := range ni.Patterns[types.LayerID(i)] {
+		for j, _ := range ni.Patterns[types.LayerID(i)] {
 			if _, ok := ni.TSupport[j]; ok {
 				t.Fail()
 			}
