@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 
 from elasticsearch_dsl import Search, Q
 
+from tests import convenience
 from tests.context import ES
 from tests.convenience import PRINT_SEP
 
@@ -212,13 +213,13 @@ atx = collections.namedtuple('atx', ['atx_id', 'layer_id', 'published_in_epoch',
 # TODO this can be a util function
 def parseAtx(log_messages):
     node2blocks = {}
-    for x in log_messages:
-        nid = re.split(r'\.', x.N)[0]
-        matx = atx(x.atx_id, x.layer_id, x.epoch_id, x.T)
+    for log in log_messages:
+        nid = re.split(r'\.', log.N)[0]
+        matched_atx = atx(log.atx_id, log.layer_id, log.epoch_id, log.T)
         if nid in node2blocks:
-            node2blocks[nid].append(matx)
+            node2blocks[nid].append(matched_atx)
         else:
-            node2blocks[nid] = [matx]
+            node2blocks[nid] = [matched_atx]
     return node2blocks
 
 
@@ -227,9 +228,12 @@ def parseAtx(log_messages):
 # TODO this can be a util function
 def sort_by_nodeid(log_messages):
     node2blocks = {}
-    for x in log_messages:
-        id = re.split(r'\.', x.N)[0]
-        m = re.findall(r'\w+\b', x.M)
+    for log in log_messages:
+        # I've created a block in layer %v. id: %v, num of transactions: %v, votes: %d,
+        # viewEdges: %d, atx %v, atxs:%v
+        id = re.split(r'\.', log.N)[0]
+        m = re.findall(r'\w+\b', log.M)
+        # layer field
         layer = m[8]
         # blocks - list of all blocks, layers - map of blocks per layer
         if id in node2blocks:
@@ -248,13 +252,13 @@ def sort_by_nodeid(log_messages):
 # TODO this can be a util function
 def sort_by_layer(log_messages):
     blocks_per_layer = {}
-    for x in log_messages:
-        m = re.findall(r'\d+', x.M)
-        layer = m[0]
+    for log in log_messages:
+        fields = re.findall(r'\d+', log.M)
+        layer = fields[0]
         if layer in blocks_per_layer:
-            blocks_per_layer[layer].append(m)
+            blocks_per_layer[layer].append(fields)
         else:
-            blocks_per_layer[layer] = [m]
+            blocks_per_layer[layer] = [fields]
     return blocks_per_layer
 
 
@@ -420,10 +424,10 @@ def query_atx_published(indx, ns, layer):
 
 def message_propagation(deployment, query_fields):
     logs = query_message(current_index, deployment, deployment, query_fields, False)
-    srt = sorted(logs, key=lambda x: datetime.strptime(x.T, "%Y-%m-%dT%H:%M:%S.%fZ"))
+    srt = sorted(logs, key=lambda x: datetime.strptime(x.T, convenience.TIMESTAMP_FMT))
     if len(srt) > 0:
-        t1 = datetime.strptime(srt[0].T, "%Y-%m-%dT%H:%M:%S.%fZ")
-        t2 = datetime.strptime(srt[len(srt) - 1].T, "%Y-%m-%dT%H:%M:%S.%fZ")
+        t1 = datetime.strptime(srt[0].T, convenience.TIMESTAMP_FMT)
+        t2 = datetime.strptime(srt[len(srt) - 1].T, convenience.TIMESTAMP_FMT)
         diff = t2 - t1
         # print(diff)
         return diff, t2
@@ -437,13 +441,17 @@ def layer_block_max_propagation(deployment, layer):
     msg_time = None
     for x in logs:
         # id = re.split(r'\.', x.N)[0]
-        m = re.findall(r'\w+\b', x.M)
-        print(list(x), m[9])
-        block_recv_msg = {"M": "got new block", "block_id": m[9]}
+        fields = re.findall(r'\w+\b', x.M)
+        # block_id field
+        print(list(x), fields[9])
+        block_recv_msg = {"M": "got new block", "block_id": fields[9]}
+        # prop is the propagation delay delta between oldest and youngest message of this sort
         prop, max_time = message_propagation(deployment, block_recv_msg)
+        get_all_msg_containing("")
         print(prop, max_time)
+        # if we have a delta (we found 2 times to get the diff from, check if this delta is the greatest.)
         if prop is not None and (max_propagation is None or prop > max_propagation):
-            max_propagation, msg_time = prop, max_time - datetime.strptime(x.T, "%Y-%m-%dT%H:%M:%S.%fZ")
+            max_propagation, msg_time = prop, max_time - datetime.strptime(x.T, convenience.TIMESTAMP_FMT)
     return max_propagation, msg_time
 
 
@@ -455,8 +463,9 @@ def all_atx_max_propagation(deployment):
         for atx in nodes[n]:
             # id = re.split(r'\.', x.N)[0]
             block_recv_msg = {"M": "got new ATX", "atx_id": atx.timestamp}
+            # if we have a delta (we found 2 times to get the diff from, check if this delta is the greatest.)
             prop, max_message = message_propagation(deployment, block_recv_msg)
             if prop is not None and (max_propagation is None or prop > max_propagation):
                 max_propagation, msg_time = prop, max_message - datetime.strptime(atx.timestamp,
-                                                                                  "%Y-%m-%dT%H:%M:%S.%fZ")
+                                                                                  convenience.TIMESTAMP_FMT)
     return max_propagation, msg_time
