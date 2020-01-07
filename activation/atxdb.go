@@ -292,7 +292,9 @@ func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error 
 		prevEp := prevATX.PubLayerIdx.GetEpoch(db.LayersPerEpoch)
 		curEp := atx.PubLayerIdx.GetEpoch(db.LayersPerEpoch)
 		if prevEp >= curEp {
-			return fmt.Errorf("prevAtx epoch (%v) isn't older than current atx epoch (%v)", prevEp, curEp)
+			return fmt.Errorf(
+				"prevAtx epoch (%v, layer %v) isn't older than current atx epoch (%v, layer %v)",
+				prevEp, prevATX.PubLayerIdx, curEp, atx.PubLayerIdx)
 		}
 
 		if prevATX.Sequence+1 != atx.Sequence {
