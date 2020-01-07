@@ -706,7 +706,7 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	_, err = SignAtx(signer, atx)
 	assert.NoError(t, err)
 	err = atxdb.SyntacticallyValidateAtx(atx)
-	assert.EqualError(t, err, "prevAtx epoch (0) isn't older than current atx epoch (0)")
+	assert.EqualError(t, err, "prevAtx epoch (0, layer 100) isn't older than current atx epoch (0, layer 100)")
 
 	// NodeId and etracted pubkey dont match
 	atx = types.NewActivationTx(idx2, coinbase, 0, *types.EmptyAtxId, 1012, 0, posAtx.Id(), 3, []types.BlockID{}, &types.NIPST{})
