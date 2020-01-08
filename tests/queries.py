@@ -11,7 +11,7 @@ from tests.convenience import PRINT_SEP
 
 TS_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
 
-dt = datetime.now() - timedelta(days=1)
+dt = datetime.now()
 todaydate = dt.strftime("%Y.%m.%d")
 current_index = 'kubernetes_cluster-' + todaydate
 
