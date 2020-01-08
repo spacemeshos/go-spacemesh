@@ -234,7 +234,7 @@ def sort_by_nodeid(log_messages):
         id = re.split(r'\.', log.N)[0]
         m = re.findall(r'\w+\b', log.M)
         # layer field
-        layer = m[8]
+        layer = m[7]
         # blocks - list of all blocks, layers - map of blocks per layer
         if id in node2blocks:
             node2blocks[id]["blocks"].append(m)
@@ -243,7 +243,7 @@ def sort_by_nodeid(log_messages):
             else:
                 node2blocks[id]["layers"][layer] = [m]
         else:
-            node2blocks[id] = {"blocks": [m], "layers": {m[8]: [m]}}
+            node2blocks[id] = {"blocks": [m], "layers": {m[7]: [m]}}
     return node2blocks
 
 
