@@ -126,10 +126,8 @@ func (s *Syncer) Close() {
 	s.Info("Closing syncer")
 	close(s.exit)
 	close(s.forceSync)
+	s.syncRoutineWg.Wait() // must be called after we ensure no more sync routines can be created
 	s.Peers.Close()
-	// TODO: broadly implement a better mechanism for shutdown
-	time.Sleep(5 * time.Millisecond) // "ensures" no more sync routines can be created, ok for now
-	s.syncRoutineWg.Wait()           // must be called after we ensure no more sync routines can be created
 	s.blockQueue.Close()
 	s.atxQueue.Close()
 	s.txQueue.Close()
@@ -418,6 +416,7 @@ func (s *Syncer) syncLayer(layerID types.LayerID, blockIds []types.BlockID) ([]*
 		return nil
 	}
 
+	tmr := newMilliTimer(syncLayerTime)
 	if res, err := s.blockQueue.addDependencies(layerID, blockIds, foo); res == false {
 		return s.LayerBlocks(layerID)
 	} else if err != nil {
@@ -428,6 +427,7 @@ func (s *Syncer) syncLayer(layerID types.LayerID, blockIds []types.BlockID) ([]*
 	if result := <-ch; !result {
 		return nil, fmt.Errorf("could not get all blocks for layer  %v", layerID)
 	}
+	tmr.ObserveDuration()
 
 	return s.LayerBlocks(layerID)
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/post/shared"
@@ -92,7 +93,7 @@ type Builder struct {
 	prevATX         *types.ActivationTxHeader
 	timer           chan types.LayerID
 	stop            chan struct{}
-	finished        chan struct{}
+	finished        chan types.LayerID
 	working         bool
 	started         uint32
 	store           BytesStore
@@ -116,7 +117,7 @@ func NewBuilder(nodeId types.NodeId, coinbaseAccount types.Address, signer Signe
 		postProver:      postProver,
 		timer:           layerClock,
 		stop:            make(chan struct{}),
-		finished:        make(chan struct{}),
+		finished:        make(chan types.LayerID),
 		isSynced:        isSyncedFunc,
 		store:           store,
 		initStatus:      InitIdle,
@@ -135,7 +136,7 @@ func (b *Builder) Start() {
 
 // Stop stops the atx builder.
 func (b *Builder) Stop() {
-	b.finished <- struct{}{}
+	b.finished <- 0
 	close(b.stop)
 }
 
@@ -181,8 +182,10 @@ func (b *Builder) loop() {
 					} else {
 						b.log.Error("cannot create atx in epoch %v: %v", epoch, err)
 					}
+					events.Publish(events.AtxCreated{false, "", uint64(epoch)})
 				}
-				b.finished <- struct{}{}
+
+				b.finished <- layer
 			}()
 		case <-b.finished:
 			b.working = false
@@ -406,6 +409,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 			err := b.buildNipstChallenge(epoch)
 			if err != nil {
 				if _, alreadyPublished := err.(alreadyPublishedErr); alreadyPublished {
+					events.Publish(events.AtxCreated{false, "", uint64(epoch)})
 					return nil
 				}
 				return err
@@ -495,6 +499,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 		log.Error("cannot discard Nipst challenge %s", err)
 	}
 
+	events.Publish(events.AtxCreated{true, atx.ShortString(), uint64(epoch)})
 	b.log.Event().Info("atx published!", log.AtxId(atx.ShortString()), log.String("prev_atx_id", atx.PrevATXId.ShortString()),
 		log.String("post_atx_id", atx.PositioningAtx.ShortString()), log.LayerId(uint64(atx.PubLayerIdx)), log.EpochId(uint64(atx.PubLayerIdx.GetEpoch(b.layersPerEpoch))),
 		log.Uint32("active_set", atx.ActiveSetSize), log.String("miner", b.nodeId.Key[:5]), log.Int("view", len(atx.View)), log.Int("atx_size", len(buf)))

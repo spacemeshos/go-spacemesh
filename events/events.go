@@ -6,13 +6,15 @@ import (
 )
 
 const (
-	EventNewBlock channelId = 1 + iota
+	EventNewBlock ChannelId = 1 + iota
 	EventBlockValid
 	EventNewAtx
 	EventAtxValid
 	EventNewTx
 	EventTxValid
 	EventRewardReceived
+	EventCreatedBlock
+	EventCreatedAtx
 )
 
 // publisher is the event publisher singleton.
@@ -48,8 +50,8 @@ type EventPublisher struct {
 // Event defines the interface that each message sent by the EventPublisher needs to implemet for it to correctly
 // be routed by topic.
 type Event interface {
-	// getChannel returns the channel on which this message will be published.
-	getChannel() channelId
+	// GetChannel returns the channel on which this message will be published.
+	GetChannel() ChannelId
 }
 
 // NewEventPublisher is a constructor for the event publisher, it received a url string in format of tcp://localhost:56565 to start
@@ -68,7 +70,7 @@ func (p *EventPublisher) PublishEvent(event Event) error {
 	if err != nil {
 		return err
 	}
-	return p.publish(event.getChannel(), bytes)
+	return p.publish(event.GetChannel(), bytes)
 }
 
 func (p *EventPublisher) Close() error {
@@ -81,8 +83,18 @@ type NewBlock struct {
 	Atx   string
 }
 
-func (NewBlock) getChannel() channelId {
+func (NewBlock) GetChannel() ChannelId {
 	return EventNewBlock
+}
+
+type DoneCreatingBlock struct {
+	Eligible bool
+	Layer    uint64
+	Error    string
+}
+
+func (DoneCreatingBlock) GetChannel() ChannelId {
+	return EventCreatedBlock
 }
 
 type ValidBlock struct {
@@ -90,15 +102,16 @@ type ValidBlock struct {
 	Valid bool
 }
 
-func (ValidBlock) getChannel() channelId {
+func (ValidBlock) GetChannel() ChannelId {
 	return EventBlockValid
 }
 
 type NewAtx struct {
-	Id string
+	Id      string
+	LayerId uint64
 }
 
-func (NewAtx) getChannel() channelId {
+func (NewAtx) GetChannel() ChannelId {
 	return EventNewAtx
 }
 
@@ -107,7 +120,7 @@ type ValidAtx struct {
 	Valid bool
 }
 
-func (ValidAtx) getChannel() channelId {
+func (ValidAtx) GetChannel() ChannelId {
 	return EventAtxValid
 }
 
@@ -119,7 +132,7 @@ type NewTx struct {
 	Fee         uint64
 }
 
-func (NewTx) getChannel() channelId {
+func (NewTx) GetChannel() ChannelId {
 	return EventNewTx
 }
 
@@ -128,7 +141,7 @@ type ValidTx struct {
 	Valid bool
 }
 
-func (ValidTx) getChannel() channelId {
+func (ValidTx) GetChannel() ChannelId {
 	return EventTxValid
 }
 
@@ -137,6 +150,16 @@ type RewardReceived struct {
 	Amount   uint64
 }
 
-func (RewardReceived) getChannel() channelId {
+func (RewardReceived) GetChannel() ChannelId {
 	return EventRewardReceived
+}
+
+type AtxCreated struct {
+	Created bool
+	Id      string
+	Layer   uint64
+}
+
+func (AtxCreated) GetChannel() ChannelId {
+	return EventCreatedAtx
 }

@@ -121,6 +121,14 @@ func TestNinjaTortoise_evict(t *testing.T) {
 				t.Fail()
 			}
 		}
+
+		if _, ok := ni.TGood[types.LayerID(i)]; ok {
+			t.Fail()
+		}
+		if _, ok := ni.Patterns[types.LayerID(i)]; ok {
+			t.Fail()
+		}
+
 		ids, _ := ni.LayerBlockIds(49)
 		for _, j := range ids {
 			if _, ok := ni.TEffective[j]; ok {

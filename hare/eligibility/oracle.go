@@ -15,7 +15,8 @@ import (
 	"sync"
 )
 
-const cacheSize = 5 // we don't expect to handle more than three layers concurrently
+const vrfMsgCacheSize = 20 // numRounds per layer is <= 2. numConcurrentLayers<=10 (typically <=2) so numRounds*numConcurrentLayers <= 2*10 = 20 is a good upper bound
+const activesCacheSize = 5 // we don't expect to handle more than two layers concurrently
 
 var (
 	errGenesis            = errors.New("no data about active nodes for genesis")
@@ -29,11 +30,6 @@ type valueProvider interface {
 // a func to retrieve the active set size for the provided layer
 // this func is assumed to be cpu intensive and hence we cache its results
 type activeSetFunc func(epoch types.EpochId, blocks map[types.BlockID]struct{}) (map[string]struct{}, error)
-
-type casher interface {
-	Add(key, value interface{}) (evicted bool)
-	Get(key interface{}) (value interface{}, ok bool)
-}
 
 type signer interface {
 	Sign(msg []byte) ([]byte, error)
@@ -54,7 +50,8 @@ type Oracle struct {
 	vrfSigner            signer
 	vrfVerifier          verifierFunc
 	layersPerEpoch       uint16
-	cache                casher
+	vrfMsgCache          addGet
+	activesCache         addGet
 	genesisActiveSetSize int
 	blocksProvider       goodBlocksProvider
 	cfg                  eCfg.Config
@@ -98,7 +95,12 @@ func roundedSafeLayer(layer types.LayerID, safetyParam types.LayerID,
 func New(beacon valueProvider, activeSetFunc activeSetFunc, vrfVerifier verifierFunc, vrfSigner signer,
 	layersPerEpoch uint16, genesisActiveSet int, goodBlocksProvider goodBlocksProvider,
 	cfg eCfg.Config, log log.Log) *Oracle {
-	c, e := lru.New(cacheSize)
+	vmc, e := lru.New(vrfMsgCacheSize)
+	if e != nil {
+		log.Panic("Could not create lru cache err=%v", e)
+	}
+
+	ac, e := lru.New(activesCacheSize)
 	if e != nil {
 		log.Panic("Could not create lru cache err=%v", e)
 	}
@@ -109,7 +111,8 @@ func New(beacon valueProvider, activeSetFunc activeSetFunc, vrfVerifier verifier
 		vrfVerifier:          vrfVerifier,
 		vrfSigner:            vrfSigner,
 		layersPerEpoch:       layersPerEpoch,
-		cache:                c,
+		vrfMsgCache:          vmc,
+		activesCache:         ac,
 		genesisActiveSetSize: genesisActiveSet,
 		blocksProvider:       goodBlocksProvider,
 		cfg:                  cfg,
@@ -119,27 +122,49 @@ func New(beacon valueProvider, activeSetFunc activeSetFunc, vrfVerifier verifier
 
 type vrfMessage struct {
 	Beacon uint32
-	Layer  types.LayerID
 	Round  int32
+	Layer  types.LayerID
 }
 
-// buildVRFMessage builds the VRF message used as input for the BLS (msg=Beacon##Id##Layer##Round)
+func buildKey(l types.LayerID, r int32) [2]uint64 {
+	return [2]uint64{uint64(l), uint64(r)}
+}
+
+// buildVRFMessage builds the VRF message used as input for the BLS (msg=Beacon##Layer##Round)
 func (o *Oracle) buildVRFMessage(layer types.LayerID, round int32) ([]byte, error) {
+	key := buildKey(layer, round)
+
+	o.lock.Lock()
+
+	// check cache
+	if val, exist := o.vrfMsgCache.Get(key); exist {
+		o.lock.Unlock()
+		return val.([]byte), nil
+	}
+
+	// get value from beacon
 	v, err := o.beacon.Value(layer)
 	if err != nil {
-		o.Error("Could not get Beacon value: %v", err)
+		o.With().Error("Could not get hare beacon value", log.Err(err))
+		o.lock.Unlock()
 		return nil, err
 	}
 
+	// marshal message
 	var w bytes.Buffer
-	msg := vrfMessage{v, layer, round}
+	msg := vrfMessage{Beacon: v, Round: round, Layer: layer}
 	_, err = xdr.Marshal(&w, &msg)
 	if err != nil {
-		o.Error("Fatal: could not marshal xdr")
+		o.With().Error("Fatal: could not marshal xdr", log.Err(err))
+		o.lock.Unlock()
 		return nil, err
 	}
 
-	return w.Bytes(), nil
+	val := w.Bytes()
+	o.vrfMsgCache.Add(key, val) // update cache
+
+	o.lock.Unlock()
+	return val, nil
 }
 
 func (o *Oracle)  activeSetSize(layer types.LayerID) (uint32, error) {
@@ -236,7 +261,7 @@ func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
 	o.lock.Lock()
 
 	// check cache
-	if val, exist := o.cache.Get(safeEp); exist {
+	if val, exist := o.activesCache.Get(safeEp); exist {
 		o.lock.Unlock()
 		return val.(map[string]struct{}), nil
 	}
@@ -267,7 +292,7 @@ func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
 	}
 
 	// update
-	o.cache.Add(safeEp, activeMap)
+	o.activesCache.Add(safeEp, activeMap)
 
 	o.lock.Unlock()
 	return activeMap, nil
