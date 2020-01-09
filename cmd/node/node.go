@@ -476,7 +476,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId,
 	poetDb := activation.NewPoetDb(poetDbStore, app.addLogger(PoetDbLogger, lg))
 	//todo: this is initialized twice, need to refactor
 	validator := activation.NewValidator(&app.Config.POST, poetDb)
-	mdb, err := mesh.NewPersistentMeshDB(dbStorepath, app.addLogger(MeshDBLogger, lg))
+	mdb, err := mesh.NewPersistentMeshDB(dbStorepath, app.Config.BlockCacheSize, app.addLogger(MeshDBLogger, lg))
 	if err != nil {
 		return err
 	}

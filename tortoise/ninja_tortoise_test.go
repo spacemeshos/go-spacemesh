@@ -26,7 +26,7 @@ func init() {
 }
 
 func getPersistentMash() *mesh.MeshDB {
-	db, _ := mesh.NewPersistentMeshDB(fmt.Sprintf(Path+"ninje_tortoise/"), log.New("ninje_tortoise", "", "").WithOptions(log.Nop))
+	db, _ := mesh.NewPersistentMeshDB(fmt.Sprintf(Path+"ninje_tortoise/"), 10, log.New("ninje_tortoise", "", "").WithOptions(log.Nop))
 	return db
 }
 
@@ -751,7 +751,6 @@ func TestNinjaTortoise_Increasing_Memory(t *testing.T) {
 	defer persistenceTeardown()
 	msh := getPersistentMash()
 	layerSize := 100
-	patternSize := 100
 	lg := log.New(t.Name(), "", "")
 	alg := NewNinjaTortoise(layerSize, msh, 5, lg.WithOptions(log.Nop))
 	l1 := mesh.GenesisLayer()
@@ -772,7 +771,7 @@ func TestNinjaTortoise_Increasing_Memory(t *testing.T) {
 
 	for i := 2; i < layers-1; i++ {
 		lg.Info("handle layer %v of %v", i, layers)
-		lyr := createLayerWithCorruptedPattern(l.Index()+1, l, layerSize, patternSize, 0)
+		lyr := createLayerWithCorruptedPattern(l.Index()+1, l, layerSize, layerSize, 0)
 		AddLayer(msh, lyr)
 		start := time.Now()
 		alg.handleIncomingLayer(lyr)
@@ -792,7 +791,8 @@ func TestNinjaTortoise_Increasing_Memory(t *testing.T) {
 			statsMap[i] = stats{mem: allocMb, duration: duration}
 		}
 	}
-	lg.Info("-----------------------Stats Report: -----------------")
+
+	lg.Info("-----------------------Stats Report: --------------------")
 
 	for i := 100; i <= 1000; i += 100 {
 		stat := statsMap[i]

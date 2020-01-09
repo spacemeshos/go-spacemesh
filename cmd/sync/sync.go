@@ -131,7 +131,7 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 
 	poetDb := activation.NewPoetDb(poetDbStore, lg.WithName("poetDb").WithOptions(log.Nop))
 
-	mshdb, err := mesh.NewPersistentMeshDB(path, lg.WithOptions(log.Nop))
+	mshdb, err := mesh.NewPersistentMeshDB(path, 5, lg.WithOptions(log.Nop))
 	if err != nil {
 		lg.Error("error: ", err)
 		return
