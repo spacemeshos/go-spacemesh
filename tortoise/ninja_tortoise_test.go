@@ -769,7 +769,7 @@ func TestNinjaTortoise_Increasing_Memory(t *testing.T) {
 
 	statsMap := map[int]stats{}
 
-	for i := 2; i < layers-1; i++ {
+	for i := 2; i <= layers; i++ {
 		lg.Info("handle layer %v of %v", i, layers)
 		lyr := createLayerWithCorruptedPattern(l.Index()+1, l, layerSize, layerSize, 0)
 		AddLayer(msh, lyr)
@@ -782,7 +782,7 @@ func TestNinjaTortoise_Increasing_Memory(t *testing.T) {
 			var m runtime.MemStats
 			runtime.ReadMemStats(&m)
 			if duration > handleThreshold {
-				t.Error("memory performance degradation")
+				t.Error("process time performance degradation")
 			}
 			allocMb = bToMb(m.Alloc)
 			if allocMb > memThreshold {
@@ -792,7 +792,7 @@ func TestNinjaTortoise_Increasing_Memory(t *testing.T) {
 		}
 	}
 
-	lg.Info("-----------------------Stats Report: --------------------")
+	lg.Info("-----------------------Stats Report: -----------------------")
 
 	for i := 100; i <= 1000; i += 100 {
 		stat := statsMap[i]
