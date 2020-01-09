@@ -151,7 +151,7 @@ func (ni *NinjaTortoise) saveOpinion() error {
 		}
 
 		if !valid {
-			ni.With().Warning("block is contextually invalid", log.BlockId(b.String()))
+			ni.With().Warning("block is contextually invalid", log.BlockId(b.BlockID.String()))
 		}
 		events.Publish(events.ValidBlock{Id: b.String(), Valid: valid})
 	}
@@ -163,7 +163,6 @@ func (ni *NinjaTortoise) PersistTortoise() error {
 		return err
 	}
 	return ni.Persist(mesh.TORTOISE, ni.ninjaTortoise)
-	return nil
 }
 
 func (ni *NinjaTortoise) RecoverTortoise() (interface{}, error) {
@@ -189,7 +188,6 @@ func (ni *NinjaTortoise) evictOutOfPbase() {
 				delete(ni.TTally, p)
 				delete(ni.TPattern, p)
 				delete(ni.TPatSupport, p)
-				delete(ni.TSupport, p)
 				ni.Debug("evict pattern %v from maps ", p)
 			}
 			delete(ni.TGood, lyr)
