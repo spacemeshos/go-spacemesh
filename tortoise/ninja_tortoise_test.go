@@ -17,7 +17,7 @@ import (
 const Path = "../tmp/tortoise/"
 
 const inmem = 1
-const disK = 2
+const disc = 2
 
 const memType = inmem
 
@@ -26,7 +26,7 @@ func init() {
 }
 
 func getPersistentMash() *mesh.MeshDB {
-	db, _ := mesh.NewPersistentMeshDB(fmt.Sprintf(Path+"ninje_tortoise/"), log.New("ninje_tortoise", "", ""))
+	db, _ := mesh.NewPersistentMeshDB(fmt.Sprintf(Path+"ninje_tortoise/"), log.New("ninje_tortoise", "", "").WithOptions(log.Nop))
 	return db
 }
 
@@ -42,7 +42,7 @@ func getMeshForBench() *mesh.MeshDB {
 	switch memType {
 	case inmem:
 		return getInMemMesh()
-	case disK:
+	case disc:
 		return getPersistentMash()
 	}
 	return nil
@@ -238,7 +238,7 @@ func TestNinjaTortoise_Abstain(t *testing.T) {
 	AddLayer(mdb, l4)
 	alg.handleIncomingLayer(l4)
 	assert.True(t, alg.PBase.Layer() == 3)
-	assert.True(t, alg.TTally[alg.TGood[3]][mesh.GenesisBlock.Id()][0] == 9)
+	assert.True(t, alg.TTally[alg.TGood[3]][BlockIDLayerTuple{BlockID: mesh.GenesisBlock.Id(), LayerID: mesh.GenesisBlock.Layer()}][0] == 9)
 }
 
 func TestNinjaTortoise_BlockByBlock(t *testing.T) {
@@ -740,6 +740,68 @@ func TestNinjaTortoise_S200P199(t *testing.T) {
 	sanity(t, getMeshForBench(), 100, 200, 200, badblocks)
 }
 
+func TestNinjaTortoise_Increasing_Memory(t *testing.T) {
+
+	layers := 1000
+
+	//these where set during benchmarking
+	memThreshold := uint64(140)
+	handleThreshold := 150 * time.Millisecond
+
+	defer persistenceTeardown()
+	msh := getPersistentMash()
+	layerSize := 100
+	patternSize := 100
+	lg := log.New(t.Name(), "", "")
+	alg := NewNinjaTortoise(layerSize, msh, 5, lg.WithOptions(log.Nop))
+	l1 := mesh.GenesisLayer()
+
+	AddLayer(msh, l1)
+	alg.handleIncomingLayer(l1)
+
+	l := createLayerWithRandVoting(l1.Index()+1, []*types.Layer{l1}, layerSize, 1)
+	AddLayer(msh, l)
+	alg.handleIncomingLayer(l)
+	var allocMb uint64
+	type stats struct {
+		mem      uint64
+		duration time.Duration
+	}
+
+	statsMap := map[int]stats{}
+
+	for i := 2; i < layers-1; i++ {
+		lg.Info("handle layer %v of %v", i, layers)
+		lyr := createLayerWithCorruptedPattern(l.Index()+1, l, layerSize, patternSize, 0)
+		AddLayer(msh, lyr)
+		start := time.Now()
+		alg.handleIncomingLayer(lyr)
+		duration := time.Since(start)
+		l = lyr
+		if i >= 100 && i%100 == 0 {
+			runtime.GC()
+			var m runtime.MemStats
+			runtime.ReadMemStats(&m)
+			if duration > handleThreshold {
+				t.Error("memory performance degradation")
+			}
+			allocMb = bToMb(m.Alloc)
+			if allocMb > memThreshold {
+				t.Error("memory performance degradation")
+			}
+			statsMap[i] = stats{mem: allocMb, duration: duration}
+		}
+	}
+	lg.Info("-----------------------Stats Report: -----------------")
+
+	for i := 100; i <= 1000; i += 100 {
+		stat := statsMap[i]
+		lg.Info("Alloc in layer %v = %v MiB", i, stat.mem)
+		lg.Info("%v to process layer", stat.duration)
+	}
+
+}
+
 func TestNinjaTortoise_S200P140(t *testing.T) {
 	t.Skip()
 
@@ -777,13 +839,6 @@ func sanity(t *testing.T, mdb *mesh.MeshDB, layers int, layerSize int, patternSi
 	}
 
 	alg := NewNinjaTortoise(layerSize, mdb, 5, lg)
-
-	for _, lyr := range lyrs {
-		alg.handleIncomingLayer(lyr)
-		fmt.Println(fmt.Sprintf("lyr %v tally was %d", lyr.Index()-1, alg.TTally[alg.PBase][mesh.GenesisBlock.Id()]))
-		l = lyr
-	}
-
 	fmt.Println(fmt.Sprintf("number of layers: %d layer size: %d good pattern size %d bad blocks %v", layers, layerSize, patternSize, badBlks))
 	PrintMemUsage()
 	return alg
@@ -819,7 +874,7 @@ func TestNinjaTortoise_Sanity2(t *testing.T) {
 	for b, vec := range alg.TTally[alg.PBase] {
 		alg.Debug("------> tally for block %d according to complete pattern %d are %d", b, alg.PBase, vec)
 	}
-	assert.True(t, alg.TTally[alg.PBase][l.Blocks()[0].Id()] == vec{12, 0}, "lyr %d tally was %d insted of %d", 0, alg.TTally[alg.PBase][l.Blocks()[0].Id()], vec{12, 0})
+	assert.True(t, alg.TTally[alg.PBase][BlockIDLayerTuple{BlockID: l.Blocks()[0].Id(), LayerID: l.Blocks()[0].Layer()}] == vec{12, 0}, "lyr %d tally was %d insted of %d", 0, alg.TTally[alg.PBase][BlockIDLayerTuple{BlockID: l.Blocks()[0].Id(), LayerID: l.Blocks()[0].Layer()}], vec{12, 0})
 }
 
 func createLayerWithCorruptedPattern(index types.LayerID, prev *types.Layer, blocksInLayer int, patternSize int, badBlocks float64) *types.Layer {
@@ -834,11 +889,13 @@ func createLayerWithCorruptedPattern(index types.LayerID, prev *types.Layer, blo
 	layerBlocks := make([]types.BlockID, 0, blocksInLayer)
 	for i := 0; i < gbs; i++ {
 		bl := addPattern(types.NewExistingBlock(index, []byte(rand.RandString(8))), goodPattern, prev)
+		bl.CalcAndSetId()
 		layerBlocks = append(layerBlocks, bl.Id())
 		l.AddBlock(bl)
 	}
 	for i := 0; i < blocksInLayer-gbs; i++ {
 		bl := addPattern(types.NewExistingBlock(index, []byte(rand.RandString(8))), badPattern, prev)
+		bl.CalcAndSetId()
 		layerBlocks = append(layerBlocks, bl.Id())
 		l.AddBlock(bl)
 	}
@@ -879,6 +936,7 @@ func createLayerWithRandVoting(index types.LayerID, prev []*types.Layer, blocksI
 		for _, prevBloc := range prev[0].Blocks() {
 			bl.AddView(types.BlockID(prevBloc.Id()))
 		}
+		bl.CalcAndSetId()
 		l.AddBlock(bl)
 	}
 	log.Debug("Created mesh.LayerID %d with blocks %d", l.Index(), layerBlocks)
