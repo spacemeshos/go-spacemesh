@@ -201,7 +201,7 @@ func (b *Builder) buildNipstChallenge() error {
 	}
 	b.challenge = challenge
 	if err := b.storeChallenge(b.challenge); err != nil {
-		log.Error("failed to store nipst challenge: %v", err)
+		return fmt.Errorf("failed to store nipst challenge: %v", err)
 	}
 	return nil
 }
