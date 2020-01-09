@@ -1,3 +1,4 @@
+from datetime import datetime
 import random
 import re
 
@@ -30,12 +31,12 @@ class WalletAPI:
         self.fixed_node = fixed_node
 
     def submit_tx(self, to, src, gas_price, amount, tx_bytes):
-        print(f"\nsubmit transaction\nfrom {src}\nto {to}")
+        print(f"\n{datetime.now()}: submit transaction\nfrom {src}\nto {to}")
         pod_ip, pod_name = self.random_node()
         print(f"amount: {amount}, gas-price: {gas_price}, total: {amount+gas_price}")
         tx_field = '{"tx":' + str(list(tx_bytes)) + '}'
         out = api_call(pod_ip, tx_field, self.submit_api, self.namespace)
-        print(f"submit result: {out}")
+        print(f"{datetime.now()}: submit result: {out}")
 
         return self.a_ok in out
 

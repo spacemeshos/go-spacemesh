@@ -9,6 +9,7 @@ class Accountant:
     ACCOUNT = {"priv": "", "balance": 0, "nonce": 0, "recv": [], "send": []}
     RECV = {"from_acc": "", "amount": 0, "gasprice": 0}
     SEND = {"to": "", "amount": 0, "gasprice": 0}
+    ACC_LISTS = ["recv", "send"]
 
     def __init__(self, accounts=None, tx_cost=conf.tx_cost):
         self.accounts = accounts if accounts else {}
@@ -47,21 +48,52 @@ class Accountant:
         self.accounts[str_pub] = self.set_account(bytes.hex(priv), 0, 0, [], [])
         return str_pub
 
+    def set_accountant_from_queue(self, queue):
+        queue.put("DONE")
+        while True:
+            account_details = queue.get()
+            if account_details == "DONE":
+                break
+
+            lst_key = account_details[0]
+            acc_pub = account_details[1]
+            entry = account_details[2]
+
+            if lst_key == "send":
+                self.set_sending_acc_after_tx(acc_pub, entry)
+            elif lst_key == "recv":
+                self.set_receiving_acc_after_tx(acc_pub, entry)
+            else:
+                raise ValueError(f"no such list \'{lst_key}\' in Account")
+
     def random_account(self):
         pk = random.choice(list(self.accounts.keys()))
         return pk
 
-    # ============= properties =============
+# ============= properties =============
 
-    def set_acc_send(self, acc, send):
+    def set_sending_acc_after_tx(self, frm, send_entry):
+        self.set_nonce(frm)
+        self.append_to_acc_send(frm, send_entry)
+
+    def set_receiving_acc_after_tx(self, to, recv_entry):
+        self.append_to_acc_recv(to, recv_entry)
+
+    def append_to_acc_send(self, acc, send):
         self.accounts[acc]["send"].append(send)
         init_amount = conf.init_amount if acc == conf.acc_pub else 0
         self.calc_balance(acc, init_amount)
 
-    def set_acc_recv(self, acc, recv):
+    def append_to_acc_recv(self, acc, recv):
         self.accounts[acc]["recv"].append(recv)
         init_amount = conf.init_amount if acc == conf.acc_pub else 0
         self.calc_balance(acc, init_amount)
+
+    def get_acc_send_lst(self, acc_pub):
+        return self.accounts[acc_pub]["send"]
+
+    def get_acc_recv_lst(self, acc_pub):
+        return self.accounts[acc_pub]["recv"]
 
     def get_acc_priv(self, acc):
         return self.accounts[acc]["priv"]
@@ -78,6 +110,12 @@ class Accountant:
 
     def get_balance(self, acc_pub):
         return self.accounts[acc_pub]["balance"]
+
+    def set_account_lst(self, pub, list_key, new_lst):
+        if list_key not in self.ACC_LISTS:
+            raise ValueError(f"account does not have a list with key={list_key}")
+
+        self.accounts[pub][list_key] = new_lst
 
     # =============== utils ================
 
