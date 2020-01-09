@@ -343,7 +343,8 @@ func (b *Builder) PublishActivationTx() error {
 		return fmt.Errorf("getting challenge hash failed: %v", err)
 	}
 	// ⏳ the following method waits for a PoET proof, which should take ~1 epoch
-	nipst, err := b.nipstBuilder.BuildNIPST(hash, b.layerClock.AwaitLayer((pubEpoch + 2).FirstLayer(b.layersPerEpoch)), b.stop)
+	atxExpired := b.layerClock.AwaitLayer((pubEpoch + 2).FirstLayer(b.layersPerEpoch)) // this fires when the target epoch is over
+	nipst, err := b.nipstBuilder.BuildNIPST(hash, atxExpired, b.stop)
 	if err != nil {
 		if _, stopRequested := err.(StopRequestedError); stopRequested {
 			return err
@@ -429,7 +430,7 @@ func (b *Builder) PublishActivationTx() error {
 	case <-atxReceived:
 		b.log.Info("atx received in db")
 		events.Publish(events.AtxCreated{true, atx.ShortString(), uint64(b.currentEpoch())})
-	case <-b.layerClock.AwaitLayer((atx.TargetEpoch(b.layersPerEpoch) + 1).FirstLayer(b.layersPerEpoch)):
+	case <-atxExpired:
 		select {
 		case <-b.syncer.Await():
 		case <-b.stop:
