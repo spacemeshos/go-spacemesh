@@ -173,7 +173,7 @@ func (b *Builder) loop() {
 				return
 			}
 			b.log.With().Error("failed to publish ATX", log.Err(err))
-			events.Publish(events.AtxCreated{false, "", uint64(b.currentEpoch())})
+			events.Publish(events.AtxCreated{Created: false, Layer: uint64(b.currentEpoch())})
 			<-b.layerClock.AwaitLayer(b.layerClock.GetCurrentLayer() + 1)
 		}
 	}
@@ -326,7 +326,7 @@ func (b *Builder) loadChallenge() error {
 
 // PublishActivationTx attempts to publish an atx, it returns an error if an atx cannot be created.
 func (b *Builder) PublishActivationTx() error {
-	b.refreshChallenge()
+	b.discardChallengeIfStale()
 	if b.challenge != nil {
 		b.log.With().Info("using existing challenge", log.EpochId(uint64(b.currentEpoch())))
 	} else {
@@ -363,7 +363,7 @@ func (b *Builder) PublishActivationTx() error {
 		return &StopRequestedError{}
 	}
 	b.log.Info("publication epoch has arrived!")
-	if b.refreshChallenge() {
+	if discarded := b.discardChallengeIfStale(); discarded {
 		return fmt.Errorf("atx target epoch has passed during nipst construction")
 	}
 
@@ -429,17 +429,17 @@ func (b *Builder) PublishActivationTx() error {
 	select {
 	case <-atxReceived:
 		b.log.Info("atx received in db")
-		events.Publish(events.AtxCreated{true, atx.ShortString(), uint64(b.currentEpoch())})
+		events.Publish(events.AtxCreated{Created: true, Id: atx.ShortString(), Layer: uint64(b.currentEpoch())})
 	case <-atxExpired:
 		select {
-		case <-b.syncer.Await():
+		case <-b.syncer.Await(): // ensure we've seen all blocks before concluding that the ATX was lost
 		case <-b.stop:
 			return &StopRequestedError{}
 		}
 		select {
 		case <-atxReceived:
 			b.log.Info("atx received in db (in the last moment)")
-			events.Publish(events.AtxCreated{true, atx.ShortString(), uint64(b.currentEpoch())})
+			events.Publish(events.AtxCreated{Created: true, Id: atx.ShortString(), Layer: uint64(b.currentEpoch())})
 		default:
 			// TODO: Unsubscribe from ATX (add subscriber counter)
 			b.log.With().Error("target epoch has passed before atx was added to database",
@@ -497,7 +497,7 @@ func (b *Builder) GetPrevAtx(node types.NodeId) (*types.ActivationTxHeader, erro
 	}
 }
 
-func (b *Builder) refreshChallenge() bool {
+func (b *Builder) discardChallengeIfStale() bool {
 	if b.challenge != nil && b.challenge.PubLayerIdx.GetEpoch(b.layersPerEpoch)+1 < b.currentEpoch() {
 		b.log.With().Info("atx target epoch has already passed -- starting over",
 			log.Uint64("target_epoch", uint64(b.challenge.PubLayerIdx.GetEpoch(b.layersPerEpoch)+1)),
