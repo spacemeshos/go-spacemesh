@@ -16,9 +16,11 @@ func newGauge(name, help string, labels []string) metrics.Gauge {
 }
 
 var (
-	pbaseCount     = newGauge("pbase_counter", "pbase index", []string{})
-	processedCount = newGauge("processed_index", "number of layers processed", []string{})
-	blockVotes     = newGauge("block_votes", "block validity", []string{"validity"})
-	validBlocks    = blockVotes.With("validity", "valid")
-	invalidBlocks  = blockVotes.With("validity", "invalid")
+	pbaseCount       = newGauge("pbase_counter", "pbase index", []string{})
+	processedCount   = newGauge("processed_index", "number of layers processed", []string{})
+	blockVotes       = newGauge("block_votes", "block validity", []string{"validity"})
+	validBlocks      = blockVotes.With("validity", "valid")
+	invalidBlocks    = blockVotes.With("validity", "invalid")
+	validBlockscnt   = 0
+	invalidBlockscnt = 0
 )

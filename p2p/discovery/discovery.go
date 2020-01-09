@@ -94,7 +94,7 @@ func (d *Discovery) refresh(ctx context.Context, peersToGet int) error {
 func (d *Discovery) SelectPeers(qty int) []*node.NodeInfo {
 
 	if d.rt.NeedNewAddresses() {
-		d.refresh(context.Background(), qty) // TODO: use ctx with timeout, check errors
+		//d.refresh(context.Background(), qty) // TODO: use ctx with timeout, check errors
 	}
 
 	out := make([]*node.NodeInfo, 0, qty)

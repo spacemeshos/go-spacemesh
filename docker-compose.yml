@@ -1,0 +1,41 @@
+version: '3.7'
+services:
+  spacemesh:
+     build: .
+     container_name: go-spacemesh
+     command: [
+          "--tcp-port", "${SMESH_PORT:-7513}",
+          "--coinbase", "0x1234",
+          "--poet-server", "${SMESH_POET_SERVER:?SMESH_POET_SERVER Must be specified}",
+          "--post-space", "${SMESH_POST_SPACE:-8589934592}",
+          "--test-mode",
+          "--start-mining",
+          "--randcon",  "${SMESH_RANDCON:-8}",
+          "--layer-duration-sec", "${SMESH_LAYER_DURATION:-180}",
+          "--hare-wakeup-delta", "${SMESH_HARE_WAKEUP_DELTA:-30}",
+          "--hare-round-duration-sec", "${SMESH_HARE_ROUND_DURATION:-30}",
+          "--layers-per-epoch", "${SMESH_LAYERS_PER_EPOCH:-720}",
+          "--eligibility-confidence-param",  "${SMESH_CONFIDENCE_PARAM:-250}",
+          "--eligibility-epoch-offset", "0",
+          "--layer-average-size", "${SMESH_LAYER_SIZE:-50}",
+          "--genesis-active-size", "${SMESH_GENESIS_ACTIVE_SIZE:-200}",
+          "--hare-committee-size", "${SMESH_HARE_COMMITTEE_SIZE:-50}",
+          "--hare-max-adversaries", "${SMESH_HARE_MAX_ADVERSARIES:-24}", 
+          "--sync-request-timeout", "${SMESH_SYNC_REQ_TIMEOUT:-60000}", 
+          "--post-labels", "${SMESH_POST_LABELS:-100}", 
+          "--max-inbound", "${SMESH_MAX_INBOUND:-12}",
+          "--genesis-time", "${SMESH_GENESIS_TIME:?SMESH_GENESIS_TIME Must be specified}",
+          "--bootstrap", 
+          "--bootnodes", "${SMESH_BOOTNODES:?SMESH_BOOTNODES Must be specified}",
+          "--executable-path", "/bin/go-spacemesh",
+          "-d", "~/spacemeshdata/" ]
+     ports:
+        - "${SMESH_PORT:-7513}:${SMESH_PORT:-7513}"
+
+
+# Specify network interface name to make firewall rules easier.
+networks:
+  spacemesh:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: "docker-spacemesh"

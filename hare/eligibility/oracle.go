@@ -167,7 +167,7 @@ func (o *Oracle) buildVRFMessage(layer types.LayerID, round int32) ([]byte, erro
 	return val, nil
 }
 
-func (o *Oracle) activeSetSize(layer types.LayerID) (uint32, error) {
+func (o *Oracle)  activeSetSize(layer types.LayerID) (uint32, error) {
 	actives, err := o.actives(layer)
 	if err != nil {
 		if err == errGenesis { // we are in genesis

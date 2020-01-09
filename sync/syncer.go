@@ -126,10 +126,8 @@ func (s *Syncer) Close() {
 	s.Info("Closing syncer")
 	close(s.exit)
 	close(s.forceSync)
+	s.syncRoutineWg.Wait() // must be called after we ensure no more sync routines can be created
 	s.Peers.Close()
-	// TODO: broadly implement a better mechanism for shutdown
-	time.Sleep(5 * time.Millisecond) // "ensures" no more sync routines can be created, ok for now
-	s.syncRoutineWg.Wait()           // must be called after we ensure no more sync routines can be created
 	s.blockQueue.Close()
 	s.atxQueue.Close()
 	s.txQueue.Close()
@@ -208,6 +206,7 @@ func (s *Syncer) run() {
 		case layer := <-s.LayerCh:
 			s.currentLayerMutex.Lock()
 			s.currentLayer = layer
+			//s.Mesh.SetLatestLayer(layer)
 			s.currentLayerMutex.Unlock()
 			s.Debug("sync got tick for layer %v", layer)
 			go syncRoutine()

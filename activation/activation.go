@@ -11,11 +11,12 @@ import (
 	"github.com/spacemeshos/post/shared"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 const AtxProtocol = "AtxGossip"
 
-var activesetCache = NewActivesetCache(1000)
+var activesetCache = NewActivesetCache(5)
 var tooSoonErr = errors.New("received PoET proof too soon")
 
 type MeshProvider interface {
@@ -487,6 +488,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 	b.challenge = nil
 	b.posLayerID = 0
 
+	time.Sleep(10 * time.Second)
 	err = b.net.Broadcast(AtxProtocol, buf)
 	if err != nil {
 		return err
@@ -500,7 +502,7 @@ func (b *Builder) PublishActivationTx(epoch types.EpochId) error {
 	events.Publish(events.AtxCreated{true, atx.ShortString(), uint64(epoch)})
 	b.log.Event().Info("atx published!", log.AtxId(atx.ShortString()), log.String("prev_atx_id", atx.PrevATXId.ShortString()),
 		log.String("post_atx_id", atx.PositioningAtx.ShortString()), log.LayerId(uint64(atx.PubLayerIdx)), log.EpochId(uint64(atx.PubLayerIdx.GetEpoch(b.layersPerEpoch))),
-		log.Uint32("active_set", atx.ActiveSetSize), log.String("miner", b.nodeId.Key[:5]), log.Int("view", len(atx.View)))
+		log.Uint32("active_set", atx.ActiveSetSize), log.String("miner", b.nodeId.Key[:5]), log.Int("view", len(atx.View)), log.Int("atx_size", len(buf)))
 
 	return nil
 }

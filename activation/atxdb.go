@@ -12,6 +12,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"sync"
+	"time"
 )
 
 const topAtxKey = "topAtxKey"
@@ -48,7 +49,7 @@ type ActivationDb struct {
 
 func NewActivationDb(dbstore database.Database, idstore IdStore, meshDb *mesh.MeshDB, layersPerEpoch uint16, nipstValidator NipstValidator, log log.Log) *ActivationDb {
 	db := &ActivationDb{atxs: dbstore,
-		atxHeaderCache:   NewAtxCache(600),
+		atxHeaderCache:   NewAtxCache(5),
 		meshDb:           meshDb,
 		nipstValidator:   nipstValidator,
 		LayersPerEpoch:   layersPerEpoch,
@@ -180,10 +181,12 @@ func (db *ActivationDb) CalcActiveSetSize(epoch types.EpochId, blocks map[types.
 
 	traversalFunc := db.createTraversalActiveSetCounterFunc(countedAtxs, penalties, db.LayersPerEpoch, epoch)
 
+	startTime := time.Now()
 	err := db.meshDb.ForBlockInView(blocks, firstLayerOfPrevEpoch, traversalFunc)
 	if err != nil {
 		return nil, err
 	}
+	db.log.With().Info("done calculating active set size", log.String("duration", time.Now().Sub(startTime).String()))
 
 	result := make(map[string]struct{}, len(countedAtxs))
 	for k := range countedAtxs {
