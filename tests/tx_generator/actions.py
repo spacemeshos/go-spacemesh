@@ -6,18 +6,18 @@ from tests.tx_generator.models.tx_generator import TxGenerator
 def transfer(wallet_api, frm, to, amount, gas_price=1, gas_limit=None, curr_nonce=None, accountant=None,
              priv=None, queue=None):
     """
-    TODO add docstring here #@!
+    transfer some doe yo!
 
-    :param wallet_api:
-    :param frm:
-    :param to:
-    :param amount:
-    :param accountant:
-    :param gas_price:
-    :param gas_limit:
-    :param curr_nonce:
-    :param priv:
-    :param queue:
+    :param wallet_api: WalletAPI, manager for communicating with the miners
+    :param frm: string, a 64 characters hex representation of the sending account
+    :param to: string, a 64 characters hex representation of the receiving account
+    :param amount: int, amount to send
+    :param accountant: Accountant, a manager for current state
+    :param gas_price: int, gas-price
+    :param gas_limit: int, `gas-limit = gas-price + 1` if no value was supplied
+    :param curr_nonce: int, overwrite current sender nonce
+    :param priv: string, sending account's private key
+    :param queue: multiprocess.Queue, a queue for collecting the accountant result
 
     :return:
     """
@@ -51,15 +51,14 @@ def transfer(wallet_api, frm, to, amount, gas_price=1, gas_limit=None, curr_nonc
 
     if success:
         if accountant:
-            print("setting up accountant after transfer success")
             send_entry = Accountant.set_send(to, amount, gas_price)
             recv_entry = Accountant.set_recv(bytes.hex(tx_gen.publicK), amount, gas_price)
-
             if queue:
                 queue.put(("send", frm, send_entry))
                 queue.put(("recv", to, recv_entry))
             else:
                 # append transactions into accounts data structure
+                print("setting up accountant after transfer success")
                 accountant.set_sending_acc_after_tx(frm, send_entry)
                 accountant.set_receiving_acc_after_tx(to, recv_entry)
 
