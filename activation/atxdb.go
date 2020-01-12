@@ -7,6 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -265,6 +266,7 @@ func (db *ActivationDb) releaseRunningLock(viewHash types.Hash12) {
 // - ATX LayerID is NipstLayerTime or less after the PositioningATX LayerID.
 // - The ATX view of the previous epoch contains ActiveSetSize activations.
 func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
+	events.Publish(events.NewAtx{Id: atx.ShortString(), LayerId: uint64(atx.PubLayerIdx.GetEpoch(db.LayersPerEpoch))})
 	pub, err := ExtractPublicKey(atx)
 	if err != nil {
 		return fmt.Errorf("cannot validate atx sig atx id %v err %v", atx.ShortString(), err)
@@ -290,7 +292,9 @@ func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error 
 		prevEp := prevATX.PubLayerIdx.GetEpoch(db.LayersPerEpoch)
 		curEp := atx.PubLayerIdx.GetEpoch(db.LayersPerEpoch)
 		if prevEp >= curEp {
-			return fmt.Errorf("prevAtx epoch (%v) isn't older than current atx epoch (%v)", prevEp, curEp)
+			return fmt.Errorf(
+				"prevAtx epoch (%v, layer %v) isn't older than current atx epoch (%v, layer %v)",
+				prevEp, prevATX.PubLayerIdx, curEp, atx.PubLayerIdx)
 		}
 
 		if prevATX.Sequence+1 != atx.Sequence {

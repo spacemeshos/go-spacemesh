@@ -145,7 +145,7 @@ func TestKadDHT_BootstrapSingleBoot(t *testing.T) {
 }
 
 func TestKadDHT_Bootstrap(t *testing.T) {
-	numPeers := 100
+	numPeers := 1500
 	min := 8
 	bootnum := 5
 

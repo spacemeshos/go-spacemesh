@@ -8,7 +8,7 @@ import (
 )
 
 // simple cache for storing sessions
-const maxSessions = 1024
+const maxSessions = 5120
 
 type storedSession struct {
 	session NetworkSession
@@ -80,7 +80,7 @@ func (s *sessionCache) handleIncoming(ns NetworkSession) {
 	defer s.sMtx.Unlock()
 	_, ok := s.sessions[ns.ID()]
 	if ok {
-		// replace ? doesn't matter. should be the same right ?
+		// replace ? doesn't matter. should be the same
 		return
 	}
 	if len(s.sessions) == maxSessions {

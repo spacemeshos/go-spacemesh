@@ -32,7 +32,7 @@ func (n *LocalNode) PrivateKey() p2pcrypto.PrivateKey {
 // NewLocalNode creates a local node with a provided ip address.
 // Attempts to set node node from persisted data in local store.
 // Creates a new node if none was loaded.
-func NewLocalNode(config config.Config, address string, persist bool) (*LocalNode, error) {
+func NewLocalNode(config config.Config, address net.Addr, persist bool) (*LocalNode, error) {
 
 	if len(config.NodeID) > 0 {
 		// user provided node id/pubkey via the cli - attempt to start that node w persisted data
@@ -61,7 +61,7 @@ func NewLocalNode(config config.Config, address string, persist bool) (*LocalNod
 }
 
 // NewNodeIdentity creates a new local node without attempting to restore node from local store.
-func NewNodeIdentity(config config.Config, address string, persist bool) (*LocalNode, error) {
+func NewNodeIdentity(config config.Config, address net.Addr, persist bool) (*LocalNode, error) {
 	priv, pub, err := p2pcrypto.GenerateKeyPair()
 	if err != nil {
 		return nil, err
@@ -69,12 +69,12 @@ func NewNodeIdentity(config config.Config, address string, persist bool) (*Local
 	return newLocalNodeWithKeys(pub, priv, address, config.NetworkID, persist)
 }
 
-func newLocalNodeWithKeys(pubKey p2pcrypto.PublicKey, privKey p2pcrypto.PrivateKey, address string, networkID int8, persist bool) (*LocalNode, error) {
+func newLocalNodeWithKeys(pubKey p2pcrypto.PublicKey, privKey p2pcrypto.PrivateKey, address net.Addr, networkID int8, persist bool) (*LocalNode, error) {
 
-	host, port, err := net.SplitHostPort(address)
+	host, port, err := net.SplitHostPort(address.String())
 
 	if err != nil {
-		log.Warning("Failed to parse inital IP address err=%v", err)
+		log.Warning("Failed to parse initial IP address err=%v", err)
 		host = "0.0.0.0"
 		port = "0" // Get a random port
 	}
@@ -126,7 +126,7 @@ func newLocalNodeWithKeys(pubKey p2pcrypto.PublicKey, privKey p2pcrypto.PrivateK
 }
 
 // Creates a new node from persisted NodeData.
-func newLocalNodeFromFile(address string, d *nodeFileData, persist bool) (*LocalNode, error) {
+func newLocalNodeFromFile(address net.Addr, d *nodeFileData, persist bool) (*LocalNode, error) {
 
 	priv, err := p2pcrypto.NewPrivateKeyFromBase58(d.PrivKey)
 	if err != nil {
