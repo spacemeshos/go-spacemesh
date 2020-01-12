@@ -745,8 +745,8 @@ func TestNinjaTortoise_Increasing_Memory(t *testing.T) {
 	layers := 1000
 
 	//these where set during benchmarking
-	memThreshold := uint64(140)
-	handleThreshold := 350 * time.Millisecond //150ms on mac
+	memThreshold := uint64(200)
+	handleThreshold := 1000 * time.Millisecond //300ms on mac
 
 	defer persistenceTeardown()
 	msh := getPersistentMash()
@@ -769,6 +769,11 @@ func TestNinjaTortoise_Increasing_Memory(t *testing.T) {
 
 	statsMap := map[int]stats{}
 
+	var maxDuration = time.Duration(0)
+	var maxDurationLayer = types.LayerID(0)
+	var maxMem = uint64(0)
+	var maxMemLayer = types.LayerID(0)
+
 	for i := 2; i <= layers; i++ {
 		lg.Info("handle layer %v of %v", i, layers)
 		lyr := createLayerWithCorruptedPattern(l.Index()+1, l, layerSize, layerSize, 0)
@@ -777,17 +782,29 @@ func TestNinjaTortoise_Increasing_Memory(t *testing.T) {
 		alg.handleIncomingLayer(lyr)
 		duration := time.Since(start)
 		l = lyr
+
+		runtime.GC()
+		var m runtime.MemStats
+		runtime.ReadMemStats(&m)
+		if duration > handleThreshold {
+			t.Error("process time performance degradation")
+		}
+		allocMb = bToMb(m.Alloc)
+		if allocMb > memThreshold {
+			t.Error("memory performance degradation")
+		}
+
+		if duration > maxDuration {
+			maxDuration = duration
+			maxDurationLayer = lyr.Index()
+		}
+
+		if allocMb > maxMem {
+			maxMem = allocMb
+			maxMemLayer = lyr.Index()
+		}
+
 		if i >= 100 && i%100 == 0 {
-			runtime.GC()
-			var m runtime.MemStats
-			runtime.ReadMemStats(&m)
-			if duration > handleThreshold {
-				t.Error("process time performance degradation")
-			}
-			allocMb = bToMb(m.Alloc)
-			if allocMb > memThreshold {
-				t.Error("memory performance degradation")
-			}
 			statsMap[i] = stats{mem: allocMb, duration: duration}
 		}
 	}
@@ -799,6 +816,9 @@ func TestNinjaTortoise_Increasing_Memory(t *testing.T) {
 		lg.Info("Alloc in layer %v = %v MiB", i, stat.mem)
 		lg.Info("%v to process layer", stat.duration)
 	}
+
+	lg.Info("max Alloc in layer %v = %v MiB", maxMemLayer, maxMem)
+	lg.Info("max time to process %v to process layer %v", maxDuration, maxDurationLayer)
 
 }
 
