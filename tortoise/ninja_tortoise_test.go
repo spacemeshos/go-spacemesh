@@ -746,7 +746,7 @@ func TestNinjaTortoise_Increasing_Memory(t *testing.T) {
 
 	//these where set during benchmarking
 	memThreshold := uint64(140)
-	handleThreshold := 150 * time.Millisecond
+	handleThreshold := 350 * time.Millisecond //150ms on mac
 
 	defer persistenceTeardown()
 	msh := getPersistentMash()

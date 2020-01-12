@@ -153,7 +153,7 @@ func (ni *NinjaTortoise) saveOpinion() error {
 		if !valid {
 			ni.With().Warning("block is contextually invalid", log.BlockId(b.BlockID.String()))
 		}
-		events.Publish(events.ValidBlock{Id: b.String(), Valid: valid})
+		events.Publish(events.ValidBlock{Id: b.BlockID.String(), Valid: valid})
 	}
 	return nil
 }
@@ -541,7 +541,7 @@ func (ni *NinjaTortoise) handleIncomingLayer(newlyr *types.Layer) {
 			if Window > newlyr.Index() {
 				windowStart = 0
 			} else {
-				windowStart = Max(ni.PBase.Layer(), newlyr.Index()-Window+1)
+				windowStart = Max(ni.PBase.Layer()-ni.Hdist, newlyr.Index()-Window+1)
 			}
 
 			//init p's tally to pBase tally
