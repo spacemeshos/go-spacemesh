@@ -24,9 +24,20 @@ NEW_ACCOUNTS = 20
 TX_NUM = NEW_ACCOUNTS
 
 
+def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
+
+
 def set_parser():
-    parser = argparse.ArgumentParser(description='This is a transaction generator program',
-                                     usage='%(prog)s [-h] [-i INI]',
+    parser = argparse.ArgumentParser(description='This is a transactions generator program',
+                                     usage='%(prog)s [-h]',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('-ns', '--namespace', dest="namespace", metavar='',
                         help='namespace to interact with', required=True)
@@ -48,9 +59,9 @@ def set_parser():
                         help='gas limit', required=False)
     parser.add_argument('-n', '--nonce', dest='nonce', type=int, metavar='',
                         help='tap nonce to add to the first tx', required=False)
-    parser.add_argument('-sp', '--same_pod', dest='same_pod', default=False, type=bool, metavar='',
+    parser.add_argument('-sp', '--same_pod', dest='same_pod', default=False, type=str2bool, nargs='?', metavar='',
                         help='use the same pod for all api calls', required=False)
-    parser.add_argument('-c', '--concurrent', dest='is_concurrent', default=False, type=bool, metavar='',
+    parser.add_argument('-c', '--concurrent', dest='is_concurrent', type=str2bool, nargs='?', default=False, metavar='',
                         help='send transactions concurrently', required=False)
     parser.add_argument('-ld', '--layer_duration', dest='layer_duration', default=70, type=int, metavar='',
                         help='duration of each layer', required=False)
@@ -90,7 +101,7 @@ def untracked_transfer(wallet_api, args):
     return amount + parsed_args.gas_price, is_succeed
 
 
-def run_process_batch(processes, accountant, queue):
+def run_processes(processes, accountant, queue):
     # Run processes
     for p in processes:
         p.start()
@@ -146,7 +157,7 @@ def send_tx_from_each_account(wallet, accountant, tx_num, is_new_acc=False, is_c
             # if more transaction will be sent after this round without saving accountant
             # accountant will lose track because of the concurrence nature,
             # which mainly will mess up the nonce
-            run_process_batch(processes, accountant, queue)
+            run_processes(processes, accountant, queue)
             processes = []
 
         # we might send here tx from and to the same account
@@ -179,23 +190,24 @@ def send_tx_from_each_account(wallet, accountant, tx_num, is_new_acc=False, is_c
 
     if processes:
         # run all remaining processes
-        run_process_batch(processes, accountant, queue)
+        run_processes(processes, accountant, queue)
 
 
 if __name__ == "__main__":
     """
-    This script relays on the fact we have a tap in our cluster
+    This script relays on the fact that we have a tap in our cluster
     with the public and private keys that are mentioned in the conf.py
     file.
     
     initially #new_accounts number of transactions will be sent and create
     #new_accounts new accounts
     
-    Sleep for an epoch where the state is updated and new accounts created
+    Sleep for 4 layers, until the state is updated and new accounts created
     
-    send #tx_num transactions using different wallet for each
-    after iterating through all accounts activate all together using
-    multiprocessing, continue aggregating more tx to run concurrently
+    send #tx_num transactions using different account for each.
+    in case of concurrency, after every full iteration where all accounts were involved, 
+    run all processes at once using multiprocessing and continue accumulating 
+    more txs for the next run.
     
     """
 
@@ -219,8 +231,19 @@ if __name__ == "__main__":
 
     # Sleep for 4 layers to let new txs enter the state and new accounts to be valid
     tts = parsed_args.layer_duration * conf.num_layers_until_process
-    print(f"sleeping for {tts} seconds to accept new state")
-    time.sleep(tts)
+
+    # TODO move to convenience #@!
+    def sleep_print_backwards(time_to_sleep):
+        print(f"sleeping for {time_to_sleep} seconds\n")
+        while time_to_sleep != 0:
+            time_to_sleep -= 1
+            print(f" {time_to_sleep} seconds left     ", end="")
+            time.sleep(1)
+            print(end="\r")
+
+    sleep_print_backwards(tts)
+    # print(f"sleeping for {tts} seconds to accept new state")
+    # time.sleep(tts)
 
     # Use same pod for every wallet api call
     if parsed_args.same_pod:
@@ -233,28 +256,31 @@ if __name__ == "__main__":
     # TODO remove this hack #@!
     inp = 0
     while inp != 'q':
-        while inp != "go":
-            inp = input("\nsp/nsp - fixed node/not, c/nc - concurrent/not, nc - not, tx - tx number : ")
-            if inp == 'q':
-                break
+        inp = input("\nsp/nsp - fixed node/not, c/nc - concurrent/not, t - tx number, go to start: ")
+        if inp == 'q':
+            break
 
-            if inp == "sp":
-                my_wallet.fixed_node = -1
-            elif inp == "nsp":
-                my_wallet.fixed_node = None
-            elif inp == "c":
-                parsed_args.is_concurrent = True
-                q = mp.Queue()
-            elif inp == "nc":
-                parsed_args.is_concurrent = False
-                q = None
-            elif inp == "tx":
-                parsed_args.tx_num = int(input("how many txs: "))
-
-        send_tx_from_each_account(my_wallet, acc, parsed_args.tx_num, is_concurrent=parsed_args.is_concurrent, queue=q)
+        if inp == "sp":
+            print("using same pod for all GRPC api calls")
+            my_wallet.fixed_node = -1
+        elif inp == "nsp":
+            print("using random pods GRPC api calls")
+            my_wallet.fixed_node = None
+        elif inp == "c":
+            print("multiprocessing mode")
+            parsed_args.is_concurrent = True
+            q = mp.Queue()
+        elif inp == "nc":
+            print("canceled multiprocessing mode")
+            parsed_args.is_concurrent = False
+            q = None
+        elif inp == "t":
+            parsed_args.tx_num = int(input("how many txs: "))
+        elif inp == "go":
+            send_tx_from_each_account(my_wallet, acc, parsed_args.tx_num, is_concurrent=parsed_args.is_concurrent, queue=q)
 
         # set_accountant_from_queue(acc, q)
-        print(f"\n\n size:", sys.getsizeof(acc.accounts), "\n\n")
+        print(f"\n\n size accounts:", sys.getsizeof(acc.accounts[conf.acc_pub]["send"]), "\n\n")
         # print(f"\n\n", pprint.pformat(acc.accounts), "\n\n")
         inp = input("\nlets start (enter 'q' to quite)")
 

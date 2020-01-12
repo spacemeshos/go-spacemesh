@@ -6,7 +6,7 @@ from tests.tx_generator.models.tx_generator import TxGenerator
 def transfer(wallet_api, frm, to, amount, gas_price=1, gas_limit=None, curr_nonce=None, accountant=None,
              priv=None, queue=None):
     """
-    transfer some doe yo!
+    transfer some mo-ney!
 
     :param wallet_api: WalletAPI, manager for communicating with the miners
     :param frm: string, a 64 characters hex representation of the sending account

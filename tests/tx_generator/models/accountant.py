@@ -9,29 +9,23 @@ class Accountant:
     ACCOUNT = {"priv": "", "balance": 0, "nonce": 0, "recv": [], "send": []}
     RECV = {"from_acc": "", "amount": 0, "gasprice": 0}
     SEND = {"to": "", "amount": 0, "gasprice": 0}
-    ACC_LISTS = ["recv", "send"]
 
     def __init__(self, accounts=None, tx_cost=conf.tx_cost):
         self.accounts = accounts if accounts else {}
         self.tx_cost = tx_cost
 
-    def calc_balance(self, acc_pub, init_amount=0, debug=False):
+    def calc_balance(self, acc_pub, init_amount=0):
         """
         calculate the account's balance
 
         :param acc_pub: string, account's public key
         :param init_amount: int, initial amount
-        :param debug: bool, print balance or not
 
         :return: int, the balance after sending and receiving txs
         """
 
         balance = sum([int(tx["amount"]) for tx in self.accounts[acc_pub]["recv"]]) - \
                   sum(int(tx["amount"]) + (int(tx["gasprice"]) * self.tx_cost) for tx in self.accounts[acc_pub]["send"])
-
-        if debug:
-            print(f"balance calculated for {acc_pub}:\n{balance}\n"
-                  f"everything:\n{pprint.pformat(self.accounts[acc_pub])}")
 
         self.accounts[acc_pub]["balance"] = balance + init_amount
         return balance + init_amount
@@ -110,12 +104,6 @@ class Accountant:
 
     def get_balance(self, acc_pub):
         return self.accounts[acc_pub]["balance"]
-
-    def set_account_lst(self, pub, list_key, new_lst):
-        if list_key not in self.ACC_LISTS:
-            raise ValueError(f"account does not have a list with key={list_key}")
-
-        self.accounts[pub][list_key] = new_lst
 
     # =============== utils ================
 
