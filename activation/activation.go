@@ -430,7 +430,7 @@ func (b *Builder) PublishActivationTx() error {
 	case <-atxReceived:
 		b.log.Info("atx received in db")
 		events.Publish(events.AtxCreated{Created: true, Id: atx.ShortString(), Layer: uint64(b.currentEpoch())})
-	case <-atxExpired:
+	case <-b.layerClock.AwaitLayer((atx.TargetEpoch(b.layersPerEpoch) + 1).FirstLayer(b.layersPerEpoch)):
 		select {
 		case <-b.syncer.Await(): // ensure we've seen all blocks before concluding that the ATX was lost
 		case <-b.stop:
