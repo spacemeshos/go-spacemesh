@@ -689,6 +689,7 @@ func createLayer(index types.LayerID, prev []*types.Layer, blocksInLayer int) *t
 				bl.AddView(types.BlockID(prevBloc.Id()))
 			}
 		}
+		bl.CalcAndSetId()
 		l.AddBlock(bl)
 	}
 	log.Debug("Created mesh.LayerID %d with blocks %d", l.Index(), layerBlocks)
