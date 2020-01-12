@@ -447,7 +447,6 @@ def layer_block_max_propagation(deployment, layer):
         block_recv_msg = {"M": "got new block", "block_id": fields[9]}
         # prop is the propagation delay delta between oldest and youngest message of this sort
         prop, max_time = message_propagation(deployment, block_recv_msg)
-        get_all_msg_containing("")
         print(prop, max_time)
         # if we have a delta (we found 2 times to get the diff from, check if this delta is the greatest.)
         if prop is not None and (max_propagation is None or prop > max_propagation):
