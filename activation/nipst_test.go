@@ -368,7 +368,7 @@ func TestNIPSTBuilder_TimeoutUnsubscribe(t *testing.T) {
 	hash := types.BytesToHash([]byte("anton"))
 	poetDb.unsubscribed = false
 	npst, err := nb.BuildNIPST(&hash, closedChan, nil) // closedChan will timeout immediately
-	r.EqualError(err, "timeout waiting for poet proof, atx target epoch ended")
+	r.EqualError(err, "atx expired while waiting for poet proof, target epoch ended")
 	r.Nil(npst)
 	r.True(poetDb.unsubscribed)
 }
