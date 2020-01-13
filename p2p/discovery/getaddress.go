@@ -17,7 +17,6 @@ func (p *protocol) newGetAddressesRequestHandler() func(msg server.Message) []by
 		t := time.Now()
 		plogger := p.logger.WithFields(log.String("type", "getaddresses"), log.String("from", msg.Sender().String()))
 		plogger.Debug("got request")
-		pi := &node.NodeInfo{}
 
 		// This peer should've sent a PING before GETADDRESSES, so they should already be
 		// in our address book. However, we still need to PING them at their advertised
@@ -36,7 +35,7 @@ func (p *protocol) newGetAddressesRequestHandler() func(msg server.Message) []by
 			if err := p.Ping(msg.Sender()); err != nil {
 				plogger.Warning("Peer failed to respond to ping, dropping getaddresses request and removing from addrbook: %v", peer.String())
 				// Go ahead and drop the peer from the address book
-				p.table.RemoveAddress(pi.PublicKey())
+				p.table.RemoveAddress(peer)
 				return nil
 			}
 		}
