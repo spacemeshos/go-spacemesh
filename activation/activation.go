@@ -151,18 +151,28 @@ type StopRequestedError struct{}
 
 func (s StopRequestedError) Error() string { return "stop requested" }
 
+func (b *Builder) waitOrStop(ch chan struct{}) error {
+	select {
+	case <-ch:
+		return nil
+	case <-b.stop:
+		return &StopRequestedError{}
+	}
+}
+
 // loop is the main loop that tries to create an atx per tick received from the global clock
 func (b *Builder) loop() {
 	err := b.loadChallenge()
 	if err != nil {
 		log.Info("challenge not loaded: %s", err)
 	}
-	select {
-	case <-b.stop:
+	if err := b.waitOrStop(b.initDone); err != nil {
 		return
-	case <-b.initDone:
 	}
-	<-b.layerClock.AwaitLayer(1) // this doesn't block unless layer 1 hasn't arrived yet
+	// ensure layer 1 has arrived
+	if err := b.waitOrStop(b.layerClock.AwaitLayer(1)); err != nil {
+		return
+	}
 	for {
 		select {
 		case <-b.stop:
@@ -358,10 +368,8 @@ func (b *Builder) PublishActivationTx() error {
 		log.Uint64("pub_epoch_first_layer", uint64(pubEpoch.FirstLayer(b.layersPerEpoch))),
 		log.Uint64("current_layer", uint64(b.layerClock.GetCurrentLayer())),
 	)
-	select {
-	case <-b.layerClock.AwaitLayer(pubEpoch.FirstLayer(b.layersPerEpoch)):
-	case <-b.stop:
-		return &StopRequestedError{}
+	if err := b.waitOrStop(b.layerClock.AwaitLayer(pubEpoch.FirstLayer(b.layersPerEpoch))); err != nil {
+		return err
 	}
 	b.log.Info("publication epoch has arrived!")
 	if discarded := b.discardChallengeIfStale(); discarded {
@@ -372,10 +380,9 @@ func (b *Builder) PublishActivationTx() error {
 	// we've completed the sequential work, now before publishing the atx,
 	// we need to provide number of atx seen in the epoch of the positioning atx.
 
-	select {
-	case <-b.syncer.Await(): // ensure we are synced before generating the ATX's view
-	case <-b.stop:
-		return &StopRequestedError{}
+	// ensure we are synced before generating the ATX's view
+	if err := b.waitOrStop(b.syncer.Await()); err != nil {
+		return err
 	}
 	viewLayer := pubEpoch.FirstLayer(b.layersPerEpoch)
 	var view []types.BlockID
@@ -434,19 +441,16 @@ func (b *Builder) PublishActivationTx() error {
 		events.Publish(events.AtxCreated{Created: true, Id: atx.ShortString(), Layer: uint64(b.currentEpoch())})
 	case <-b.layerClock.AwaitLayer((atx.TargetEpoch(b.layersPerEpoch) + 1).FirstLayer(b.layersPerEpoch)):
 		select {
-		case <-b.syncer.Await(): // ensure we've seen all blocks before concluding that the ATX was lost
-		case <-b.stop:
-			return &StopRequestedError{}
-		}
-		select {
 		case <-atxReceived:
 			b.log.Info("atx received in db (in the last moment)")
 			events.Publish(events.AtxCreated{Created: true, Id: atx.ShortString(), Layer: uint64(b.currentEpoch())})
-		default:
+		case <-b.syncer.Await(): // ensure we've seen all blocks before concluding that the ATX was lost
 			b.log.With().Error("target epoch has passed before atx was added to database",
 				log.AtxId(atx.ShortString()))
 			b.discardChallenge()
 			return fmt.Errorf("target epoch has passed")
+		case <-b.stop:
+			return &StopRequestedError{}
 		}
 	case <-b.stop:
 		return &StopRequestedError{}
