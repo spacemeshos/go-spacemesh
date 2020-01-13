@@ -38,7 +38,7 @@ func (p *protocol) newPingRequestHandler() func(msg server.Message) []byte {
 			return nil
 		}
 
-		plogger.Debug("Sending pong message")
+		plogger.Debug("Sending pong message in response to")
 		return payload
 	}
 }
@@ -68,6 +68,7 @@ func (p *protocol) verifyPinger(from net.Addr, pi *node.NodeInfo) error {
 	}
 	if ka.NeedsPing() {
 		peer := ka.na.PublicKey()
+		p.logger.Debug("Peer found in address book but needs ping, sending: %v", peer.String())
 		// Send the new Ping in a coroutine so we first respond to the incoming Ping
 		go func() {
 			if err := p.Ping(peer); err != nil {
@@ -94,7 +95,7 @@ func (p *protocol) Ping(peer p2pcrypto.PublicKey) error {
 	ch := make(chan []byte)
 	foo := func(msg []byte) {
 		defer close(ch)
-		plogger.Debug("handle response")
+		plogger.Debug("handle response to")
 		sender := &node.NodeInfo{}
 		err := types.BytesToInterface(msg, sender)
 
