@@ -25,7 +25,7 @@ func TestTicker_StartClock(t *testing.T) {
 	str := "2018-11-12T11:45:26.371Z"
 	start, _ := time.Parse(layout, str)
 
-	ts := NewTicker(MockTimer{}, tick, start)
+	ts := NewClock(MockTimer{}, tick, start)
 	tk := ts.Subscribe()
 	then := time.Now()
 	ts.StartNotifying()
@@ -46,7 +46,7 @@ func TestTicker_StartClock_BeforeEpoch(t *testing.T) {
 	start, _ := time.Parse(layout, str)
 
 	waitTime := start.Sub(tmr.Now())
-	ts := NewTicker(tmr, tick, start)
+	ts := NewClock(tmr, tick, start)
 	tk := ts.Subscribe()
 	then := time.Now()
 	ts.StartNotifying()
@@ -67,7 +67,7 @@ func TestTicker_StartClock_LayerID(t *testing.T) {
 	str := "2018-11-12T11:45:20.371Z"
 	start, _ := time.Parse(layout, str)
 
-	ts := NewTicker(MockTimer{}, tick, start)
+	ts := NewClock(MockTimer{}, tick, start)
 	ts.updateLayerID()
 	assert.Equal(t, types.LayerID(8), ts.nextLayerToTick)
 	ts.Close()
@@ -77,7 +77,7 @@ func TestTicker_StartClock_2(t *testing.T) {
 	destTime := 2 * time.Second
 	tmr := &RealClock{}
 	then := tmr.Now()
-	ticker := NewTicker(tmr, 5*time.Second, then.Add(destTime))
+	ticker := NewClock(tmr, 5*time.Second, then.Add(destTime))
 	ticker.StartNotifying()
 	sub := ticker.Subscribe()
 	<-sub
@@ -86,17 +86,17 @@ func TestTicker_StartClock_2(t *testing.T) {
 
 func TestTicker_Tick(t *testing.T) {
 	tmr := &RealClock{}
-	ticker := NewTicker(tmr, 5*time.Second, tmr.Now())
+	ticker := NewClock(tmr, 5*time.Second, tmr.Now())
 	ticker.started = true
-	ticker.notifyOnTick()
+	ticker.onTick()
 	l := ticker.nextLayerToTick
-	ticker.notifyOnTick()
+	ticker.onTick()
 	assert.Equal(t, ticker.nextLayerToTick, l+1)
 }
 
 func TestTicker_TickFutureGenesis(t *testing.T) {
 	tmr := &RealClock{}
-	ticker := NewTicker(tmr, 1*time.Second, tmr.Now().Add(2*time.Second))
+	ticker := NewClock(tmr, 1*time.Second, tmr.Now().Add(2*time.Second))
 	assert.Equal(t, types.LayerID(1), ticker.nextLayerToTick) // check assumption that nextLayerToTick >= 1
 	sub := ticker.Subscribe()
 	ticker.StartNotifying()
@@ -108,7 +108,7 @@ func TestTicker_TickFutureGenesis(t *testing.T) {
 
 func TestTicker_TickPastGenesis(t *testing.T) {
 	tmr := &RealClock{}
-	ticker := NewTicker(tmr, 1*time.Second, tmr.Now().Add(-3900*time.Millisecond))
+	ticker := NewClock(tmr, 1*time.Second, tmr.Now().Add(-3900*time.Millisecond))
 	sub := ticker.Subscribe()
 	ticker.StartNotifying()
 	start := time.Now()
@@ -121,7 +121,7 @@ func TestTicker_TickPastGenesis(t *testing.T) {
 func TestTicker_NewTicker(t *testing.T) {
 	r := require.New(t)
 	tmr := &RealClock{}
-	ticker := NewTicker(tmr, 100*time.Millisecond, tmr.Now().Add(-190*time.Millisecond))
+	ticker := NewClock(tmr, 100*time.Millisecond, tmr.Now().Add(-190*time.Millisecond))
 	r.False(ticker.started) // not started until call to StartNotifying
 	r.Equal(types.LayerID(3), ticker.nextLayerToTick)
 }
@@ -129,7 +129,7 @@ func TestTicker_NewTicker(t *testing.T) {
 func TestTicker_SubscribeUnsubscribe(t *testing.T) {
 	r := require.New(t)
 	tmr := &RealClock{}
-	ticker := NewTicker(tmr, 1*time.Millisecond, tmr.Now())
+	ticker := NewClock(tmr, 1*time.Millisecond, tmr.Now())
 	r.Equal(0, len(ticker.subscribers))
 	c1 := ticker.Subscribe()
 	r.Equal(1, len(ticker.subscribers))
@@ -148,7 +148,7 @@ func TestTicker_SubscribeUnsubscribe(t *testing.T) {
 
 func TestTicker_CloseTwice(t *testing.T) {
 	ld := time.Duration(20) * time.Second
-	clock := NewTicker(RealClock{}, ld, time.Now())
+	clock := NewClock(RealClock{}, ld, time.Now())
 	clock.StartNotifying()
 	clock.Close()
 	clock.Close()
