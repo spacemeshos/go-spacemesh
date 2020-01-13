@@ -8,12 +8,12 @@ type ManualClock struct {
 }
 
 func (t *ManualClock) Tick() {
-	t.onTick()
+	t.Notify()
 }
 
 func NewManualClock(genesisTime time.Time) *ManualClock {
 	t := &ManualClock{
-		Ticker:      NewTicker(RealClock{}),
+		Ticker:      NewTicker(RealClock{}, LayerConv{genesis: genesisTime}),
 		genesisTime: genesisTime,
 	}
 	t.StartNotifying()

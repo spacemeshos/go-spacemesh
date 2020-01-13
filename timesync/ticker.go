@@ -16,7 +16,7 @@ type subs struct {
 
 func newSubs() *subs {
 	return &subs{
-		subscribers: nil,
+		subscribers: make(map[LayerTimer]struct{}),
 		m:           sync.Mutex{},
 	}
 }
@@ -55,20 +55,23 @@ type Ticker struct {
 	missedTicks     int            // counts the missed ticks since of the last tick
 	lastTickedLayer types.LayerID  // track last ticked layer
 	conv            LayerConverter // layer conversions provider
+	log             log.Log
 }
 
 func NewTicker(c Clock, lc LayerConverter) *Ticker {
 	return &Ticker{
+		subs:        newSubs(),
 		clock:       c,
 		stop:        make(chan struct{}),
 		started:     false,
 		once:        sync.Once{},
 		missedTicks: 0,
 		conv:        lc,
+		log:         log.NewDefault("ticker"),
 	}
 }
 
-func (t *Ticker) onTick() {
+func (t *Ticker) Notify() {
 	if !t.started {
 		return
 	}
@@ -76,12 +79,12 @@ func (t *Ticker) onTick() {
 	t.m.Lock()
 
 	layer := t.conv.TimeToLayer(t.clock.Now())
-	if layer == t.lastTickedLayer {
-		log.Warning("skipping tick to avoid double ticking the same layer (time was not monotonic)")
+	if layer <= t.lastTickedLayer {
+		t.log.Warning("skipping tick to avoid double ticking the same layer (time was not monotonic)")
 		return
 	}
 	t.missedTicks = 0
-	log.Event().Info("release tick", log.LayerId(uint64(layer)))
+	t.log.Event().Info("release tick", log.LayerId(uint64(layer)))
 	for ch := range t.subscribers { // notify all subscribers
 
 		// non-blocking notify
@@ -98,7 +101,7 @@ func (t *Ticker) onTick() {
 	t.lastTickedLayer = layer
 
 	if t.missedTicks > 0 {
-		log.With().Error("missed ticks for layer", log.LayerId(uint64(layer)))
+		t.log.With().Error("missed ticks for layer", log.LayerId(uint64(layer)))
 	}
 
 	t.m.Unlock()
@@ -113,7 +116,7 @@ func (t *Ticker) TimeSinceLastTick() time.Duration {
 }
 
 func (t *Ticker) StartNotifying() {
-	log.Info("started notifying")
+	t.log.Info("started notifying")
 	t.started = true
 }
 

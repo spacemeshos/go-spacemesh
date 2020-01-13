@@ -107,7 +107,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 		log.Error("cannot parse genesis time %v", err)
 	}
 	ld := time.Duration(20) * time.Second
-	clock := timesync.NewTicker(timesync.RealClock{}, ld, gTime)
+	clock := timesync.NewClock(timesync.RealClock{}, ld, gTime)
 	suite.initMultipleInstances(cfg, rolacle, rng, 5, path, genesisTime, poetClient, false, clock)
 	for _, a := range suite.apps {
 		a.startServices()
@@ -513,7 +513,7 @@ func TestShutdown(t *testing.T) {
 	r.NotNil(postClient)
 	gTime := genesisTime
 	ld := time.Duration(20) * time.Second
-	clock := timesync.NewTicker(timesync.RealClock{}, ld, gTime)
+	clock := timesync.NewClock(timesync.RealClock{}, ld, gTime)
 	err = smApp.initServices(nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(smApp.Config.LayerAvgSize), postClient, poetClient, vrfSigner, uint16(smApp.Config.LayersPerEpoch), clock)
 
 	r.NoError(err)
