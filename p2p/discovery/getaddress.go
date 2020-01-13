@@ -17,25 +17,28 @@ func (p *protocol) newGetAddressesRequestHandler() func(msg server.Message) []by
 		t := time.Now()
 		plogger := p.logger.WithFields(log.String("type", "getaddresses"), log.String("from", msg.Sender().String()))
 		plogger.Debug("got request")
+		pi := &node.NodeInfo{}
 
-		// If we don't know who is that peer (a.k.a first time we hear from this address)
-		// we must ensure that he's indeed listening on that address = check last pong
+		// This peer should've sent a PING before GETADDRESSES, so they should already be
+		// in our address book. However, we still need to PING them at their advertised
+		// address to prevent reflective DoS attacks. Iff this succeeds and we receive
+		// a pong in response, then we know it's safe to respond to the getaddresses
+		// request.
 		ka, err := p.table.LookupKnownAddress(msg.Sender())
 		if err != nil {
-			p.logger.Error("Error looking up message sender (GetAddress) Peer: %v", msg.Sender())
+			plogger.Warning("Failed to look up message sender (GetAddress) Peer: %v", msg.Sender())
 			return nil
 		}
 		// Check if we've pinged this peer recently enough
-		// Should we attempt to send a ping here? It shouldn't be necessary, since the node
-		// requesting addresses should have pinged us first, and we should have already sent
-		// a ping in response.
 		if ka.NeedsPing() {
-			p.logger.Warning("Failed ping check (GetAddress) Peer: %v", msg.Sender())
-			return nil
-			//if err := p.Ping(msg.Sender()); err != nil {
-			//	p.logger.Error("Error pinging peer (GetAddress): %v", msg.Sender())
-			//	return nil
-			//}
+			peer := ka.na.PublicKey()
+			plogger.Debug("Message sender (GetAddress) known but needs fresh ping, performing pingcheck: %v", msg.Sender())
+			if err := p.Ping(msg.Sender()); err != nil {
+				plogger.Warning("Peer failed to respond to ping, dropping getaddresses request and removing from addrbook: %v", peer.String())
+				// Go ahead and drop the peer from the address book
+				p.table.RemoveAddress(pi.PublicKey())
+				return nil
+			}
 		}
 		p.logger.Debug("Passed ping check, recently pinged (GetAddress) Peer: %v", msg.Sender())
 
