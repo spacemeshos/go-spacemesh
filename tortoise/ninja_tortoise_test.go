@@ -742,12 +742,10 @@ func TestNinjaTortoise_S200P199(t *testing.T) {
 }
 
 func TestNinjaTortoise_Increasing_Memory(t *testing.T) {
-	t.Skip()
-
 	layers := 1000
 
 	//these where set during benchmarking
-	memThreshold := uint64(200)
+	memThreshold := uint64(300)
 	handleThreshold := 1000 * time.Millisecond //300ms on mac
 
 	defer persistenceTeardown()
@@ -861,6 +859,13 @@ func sanity(t *testing.T, mdb *mesh.MeshDB, layers int, layerSize int, patternSi
 	}
 
 	alg := NewNinjaTortoise(layerSize, mdb, 5, lg)
+
+	for _, lyr := range lyrs {
+		alg.handleIncomingLayer(lyr)
+		fmt.Println(fmt.Sprintf("lyr %v tally was %d", lyr.Index()-1, alg.TTally[alg.PBase][BlockIDLayerTuple{BlockID: mesh.GenesisBlock.Id(), LayerID: mesh.GenesisBlock.Layer()}]))
+		l = lyr
+	}
+
 	fmt.Println(fmt.Sprintf("number of layers: %d layer size: %d good pattern size %d bad blocks %v", layers, layerSize, patternSize, badBlks))
 	PrintMemUsage()
 	return alg
@@ -922,7 +927,7 @@ func createLayerWithCorruptedPattern(index types.LayerID, prev *types.Layer, blo
 		l.AddBlock(bl)
 	}
 
-	log.Debug("Created layer Id %d with blocks %d", l.Index(), layerBlocks)
+	log.Debug("Created layer Id %d with blocks %s", l.Index(), layerBlocks)
 	return l
 }
 
