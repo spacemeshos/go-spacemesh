@@ -461,7 +461,7 @@ def all_atx_max_propagation(deployment):
     for n in nodes:
         for atx in nodes[n]:
             # id = re.split(r'\.', x.N)[0]
-            block_recv_msg = {"M": "got new ATX", "atx_id": atx.timestamp}
+            block_recv_msg = {"M": "got new ATX", "atx_id": atx.atx_id}
             # if we have a delta (we found 2 times to get the diff from, check if this delta is the greatest.)
             prop, max_message = message_propagation(deployment, block_recv_msg)
             if prop is not None and (max_propagation is None or prop > max_propagation):
