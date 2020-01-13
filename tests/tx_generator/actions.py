@@ -1,3 +1,7 @@
+from itertools import cycle, islice
+import multiprocessing as mp
+import random
+
 from tests.tx_generator import config as conf
 from tests.tx_generator.models.accountant import Accountant
 from tests.tx_generator.models.tx_generator import TxGenerator
@@ -67,11 +71,15 @@ def transfer(wallet_api, frm, to, amount, gas_price=1, gas_limit=None, curr_nonc
     return False
 
 
-def validate_nonce(wallet_api, acc, nonce):
-    print(f"\nchecking nonce for {acc}")
-    res = wallet_api.get_nonce_value(acc)
+def validate_nonce(wallet_api, accountant, acc_pub):
+    print(f"\nchecking nonce for {acc_pub}")
+    print("(TAP)") if acc_pub == conf.acc_pub else print()
+
+    nonce = accountant.get_nonce(acc_pub)
+    res = wallet_api.get_nonce_value(acc_pub)
     # res might be None, str(None) == 'None'
     if str(nonce) == str(res):
+        print(f"nonce ok (origin={nonce})")
         return True
 
     print(f"nonce did not match: returned balance={res}, expected={nonce}")
@@ -87,8 +95,100 @@ def validate_acc_amount(wallet_api, accountant, acc):
 
     # out might be None
     if str(balance) == str(res):
-        print(f"balance ok (origin={balance})")
+        print(f"balance ok (origin={balance})\n")
         return True
 
     print(f"balance did not match: returned balance={res}, expected={balance}")
     return False
+
+
+def run_processes(processes, accountant, queue):
+    # Run processes
+    for p in processes:
+        p.start()
+
+    # Exit the completed processes
+    for p in processes:
+        p.join()
+
+    # update accountant after finishing a round of txs (for each account by order)
+    # if more transaction will be sent after this round without saving accountant
+    # accountant will lose track because of the concurrency nature
+    if queue:
+        accountant.set_accountant_from_queue(queue)
+
+
+def send_coins_to_new_accounts(wallet_api, new_acc_num, amount, accountant, gas_price=1, src=conf.acc_pub):
+    # create #new_acc_num new accounts by sending them new txs
+    for tx in range(new_acc_num):
+        dst = accountant.new_account()
+
+        if transfer(wallet_api, src, dst, amount, accountant=accountant, gas_price=gas_price):
+            print("transaction succeeded!\n")
+            continue
+
+        print("transaction FAILED!\n")
+
+
+def send_tx_from_each_account(wallet, accountant, tx_num, gas_limit=None, is_new_acc=False, is_concurrent=False,
+                              queue=None):
+    """
+    send random transactions iterating over the accounts list
+
+    :param wallet: WalletAPI, a manager for GRPC communication
+    :param accountant: Accountant, a manager for current state
+    :param tx_num: int, number of transactions to send
+    :param gas_limit: int, max reward for processing a tx
+    :param is_new_acc: bool, create new accounts and send money to (if True) or use existing (False)
+    :param is_concurrent: bool, send transactions concurrently
+    :param queue: multiprocess.Queue, a queue for collecting the accountant result
+
+    :return:
+    """
+
+    # a list for all transfers to be made concurrently
+    processes = []
+    accounts_copy = accountant.accounts.copy()
+    tx_counter = 0
+    accs_len = len(accounts_copy)
+    # for sending_acc_pub, account_det in accounts_copy.items():
+    for sending_acc_pub, account_det in islice(cycle(accounts_copy.items()), 0, tx_num):
+        if is_concurrent and tx_counter > 0 and tx_counter % accs_len == 0:
+            # run all processes and update accountant after finishing a round of txs (for each account by order)
+            # if more transaction will be sent after this round without saving accountant
+            # accountant will lose track because of the concurrence nature,
+            # which mainly will mess up the nonce
+            run_processes(processes, accountant, queue)
+            processes = []
+
+        # we might send here tx from and to the same account
+        # if we're using the random choice
+        dst = accountant.new_account() if is_new_acc else random.choice(list(accountant.accounts.keys()))
+        balance = accountant.get_balance(sending_acc_pub)
+        if balance < 1:
+            print(f"account {sending_acc_pub} does not have sufficient funds to make a tx, balance: {balance}")
+            continue
+
+        # amount = random.randint(1, math.ceil(balance / 5))
+        # send the minimum amount so we can flood with valid txs
+        amount = 1
+        if is_concurrent:
+            processes.append(mp.Process(target=transfer, args=(wallet, sending_acc_pub, dst, amount, accountant.tx_cost,
+                                                               gas_limit, None, accountant, account_det["priv"], queue))
+                             )
+            # increment counter
+            tx_counter += 1
+            continue
+        elif transfer(wallet, sending_acc_pub, dst, amount, accountant=accountant, gas_price=accountant.tx_cost,
+                      priv=account_det["priv"]):
+            print("transaction succeeded!")
+            # increment counter
+            tx_counter += 1
+            continue
+
+        print("transaction failed!")
+        tx_counter += 1
+
+    if processes:
+        # run all remaining processes
+        run_processes(processes, accountant, queue)

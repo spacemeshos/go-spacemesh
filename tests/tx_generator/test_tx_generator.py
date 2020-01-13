@@ -13,26 +13,27 @@ from tests.tx_generator.models.wallet_api import WalletAPI
 def test_transactions(setup_network):
     debug = False
     wallet_api = WalletAPI(setup_network.bootstrap.deployment_id, setup_network.clients.pods)
-    acc = conf.acc_pub
-    accountant = Accountant({acc: Accountant.set_tap_acc()})
+    tap_pub = conf.acc_pub
+    accountant = Accountant({tap_pub: Accountant.set_tap_acc()})
 
     # send txs via miners
     test_txs = 10
     for i in range(test_txs):
-        balance = accountant.get_balance(acc)
+        balance = accountant.get_balance(tap_pub)
         amount = random.randint(1, int(balance / 10))
         new_acc_pub = accountant.new_account()
-        print(f"\ntap nonce before transferring {accountant.get_nonce(acc)}")
-        assert actions.transfer(wallet_api, acc, new_acc_pub, amount, accountant=accountant), "Transfer from tap failed"
-        print(f"tap nonce after transferring {accountant.get_nonce(acc)}\n")
+        print(f"\ntap nonce before transferring {accountant.get_nonce(tap_pub)}")
+        ass_err = "Transfer from tap failed"
+        assert actions.transfer(wallet_api, tap_pub, new_acc_pub, amount, accountant=accountant), ass_err
+        print(f"tap nonce after transferring {accountant.get_nonce(tap_pub)}\n")
 
-    print(f"TAP account {acc}:\n\n{pprint.pformat(accountant.get_acc(acc))}")
+    print(f"TAP account {tap_pub}:\n\n{pprint.pformat(accountant.get_acc(tap_pub))}")
 
     layers_per_epoch = int(testconfig["client"]["args"]["layers-per-epoch"])
     layer_duration = int(testconfig["client"]["args"]["layer-duration-sec"])
 
     print("checking tap nonce")
-    is_valid = actions.validate_nonce(wallet_api, acc, accountant.get_nonce(acc))
+    is_valid = actions.validate_nonce(wallet_api, accountant, tap_pub)
     assert is_valid, "tap account does not have the right nonce"
     print("nonce ok!")
 
@@ -57,6 +58,6 @@ def test_transactions(setup_network):
             break
 
     if debug:
-        print(f"tap account {acc}:\n\n{pprint.pformat(accountant.accounts)}\n")
+        print(f"tap account {tap_pub}:\n\n{pprint.pformat(accountant.accounts)}\n")
 
     assert ready_pods == len(accountant.accounts), "Expected state does not match the current state"

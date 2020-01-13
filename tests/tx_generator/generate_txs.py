@@ -1,11 +1,9 @@
 import argparse
-from itertools import cycle, islice
 import multiprocessing as mp
 import os
 import pprint
 import random
 import sys
-import time
 # this hack is for importing packages located above
 # this file and it's imports files location
 dir_path = os.getcwd()
@@ -13,6 +11,7 @@ dir_path = '/'.join(dir_path.split('/')[0:-2])
 print(f"adding {dir_path} to sys.path")
 sys.path.insert(0, dir_path)
 
+from tests.convenience import sleep_print_backwards
 from tests.tx_generator import actions
 from tests.tx_generator import config as conf
 from tests.tx_generator import k8s_handler
@@ -101,98 +100,6 @@ def untracked_transfer(wallet_api, args):
     return amount + parsed_args.gas_price, is_succeed
 
 
-def run_processes(processes, accountant, queue):
-    # Run processes
-    for p in processes:
-        p.start()
-
-    # Exit the completed processes
-    for p in processes:
-        p.join()
-
-    # update accountant after finishing a round of txs (for each account by order)
-    # if more transaction will be sent after this round without saving accountant
-    # accountant will lose track because of the concurrency nature
-    if queue:
-        accountant.set_accountant_from_queue(queue)
-
-
-def send_coins_to_new_accounts(args, accountant):
-    # create #new_accounts new accounts by sending them new txs
-    for tx in range(args.new_accounts):
-        # TODO set a random amount
-        dst = args.dst if args.dst else accountant.new_account()
-
-        if actions.transfer(my_wallet, args.src, dst, args.amount, accountant=accountant,
-                            gas_price=args.gas_price):
-            print("transaction succeeded!\n")
-            continue
-
-        print("transaction FAILED!\n")
-
-
-def send_tx_from_each_account(wallet, accountant, tx_num, is_new_acc=False, is_concurrent=False, queue=None):
-    """
-    send random transactions iterating over the accounts list
-
-    :param wallet: WalletAPI, a manager for GRPC communication
-    :param accountant: Accountant, a manager for current state
-    :param tx_num: int, number of transactions to send
-    :param is_new_acc: bool, create new accounts and send money to (if True) or use existing (False)
-    :param is_concurrent: bool, send transactions concurrently
-    :param queue: multiprocess.Queue, a queue for collecting the accountant result
-
-    :return:
-    """
-
-    # a list for all transfers to be made concurrently
-    processes = []
-    accounts_copy = accountant.accounts.copy()
-    tx_counter = 0
-    accs_len = len(accounts_copy)
-    # for sending_acc_pub, account_det in accounts_copy.items():
-    for sending_acc_pub, account_det in islice(cycle(accounts_copy.items()), 0, tx_num):
-        if is_concurrent and tx_counter > 0 and tx_counter % accs_len == 0:
-            # run all processes and update accountant after finishing a round of txs (for each account by order)
-            # if more transaction will be sent after this round without saving accountant
-            # accountant will lose track because of the concurrence nature,
-            # which mainly will mess up the nonce
-            run_processes(processes, accountant, queue)
-            processes = []
-
-        # we might send here tx from and to the same account
-        # if we're using the random choice
-        dst = accountant.new_account() if is_new_acc else random.choice(list(accountant.accounts.keys()))
-        balance = accountant.get_balance(sending_acc_pub)
-        if balance < 1:
-            print(f"account {sending_acc_pub} does not have sufficient funds to make a tx, balance: {balance}")
-            continue
-
-        # amount = random.randint(1, math.ceil(balance / 5))
-        # send the minimum amount so we can flood with valid txs
-        amount = 1
-        if is_concurrent:
-            processes.append(mp.Process(target=actions.transfer, args=(wallet, sending_acc_pub, dst, amount,
-                                        accountant.tx_cost, parsed_args.gas_limit, None, accountant,
-                                        account_det["priv"], queue)))
-            # increment counter
-            tx_counter += 1
-            continue
-        elif actions.transfer(wallet, sending_acc_pub, dst, amount, accountant=accountant, gas_price=accountant.tx_cost,
-                              priv=account_det["priv"]):
-            print("transaction succeeded!")
-            # increment counter
-            tx_counter += 1
-            continue
-
-        print("transaction failed!")
-        tx_counter += 1
-
-    if processes:
-        # run all remaining processes
-        run_processes(processes, accountant, queue)
-
-
 if __name__ == "__main__":
     """
     This script relays on the fact that we have a tap in our cluster
@@ -226,24 +133,14 @@ if __name__ == "__main__":
     acc = Accountant({conf.acc_pub: Accountant.set_tap_acc(balance=tap_balance, nonce=tap_nonce)})
     acc.tx_cost = parsed_args.gas_price
     # Create new accounts by sending them coins
-    send_coins_to_new_accounts(parsed_args, acc)
+    actions.send_coins_to_new_accounts(my_wallet, parsed_args.new_accounts, parsed_args.amount, acc,
+                                       parsed_args.gas_price)
+
     print(f"\n\n{pprint.pformat(acc.accounts)}\n\n")
 
     # Sleep for 4 layers to let new txs enter the state and new accounts to be valid
     tts = parsed_args.layer_duration * conf.num_layers_until_process
-
-    # TODO move to convenience #@!
-    def sleep_print_backwards(time_to_sleep):
-        print(f"sleeping for {time_to_sleep} seconds\n")
-        while time_to_sleep != 0:
-            time_to_sleep -= 1
-            print(f" {time_to_sleep} seconds left     ", end="")
-            time.sleep(1)
-            print(end="\r")
-
     sleep_print_backwards(tts)
-    # print(f"sleeping for {tts} seconds to accept new state")
-    # time.sleep(tts)
 
     # Use same pod for every wallet api call
     if parsed_args.same_pod:
@@ -256,7 +153,8 @@ if __name__ == "__main__":
     # TODO remove this hack #@!
     inp = 0
     while inp != 'q':
-        inp = input("\nsp/nsp - fixed node/not, c/nc - concurrent/not, t - tx number, go to start: ")
+        inp = input("\nsp - fixed node\nnsp - cancel fixed node\nc - concurrent\nnc - cancel concurrency\n"
+                    "t - tx number\ngo to start, q to quit: ")
         if inp == 'q':
             break
 
@@ -277,11 +175,7 @@ if __name__ == "__main__":
         elif inp == "t":
             parsed_args.tx_num = int(input("how many txs: "))
         elif inp == "go":
-            send_tx_from_each_account(my_wallet, acc, parsed_args.tx_num, is_concurrent=parsed_args.is_concurrent, queue=q)
-
-        # set_accountant_from_queue(acc, q)
-        print(f"\n\n size accounts:", sys.getsizeof(acc.accounts[conf.acc_pub]["send"]), "\n\n")
-        # print(f"\n\n", pprint.pformat(acc.accounts), "\n\n")
-        inp = input("\nlets start (enter 'q' to quite)")
-
+            actions.send_tx_from_each_account(my_wallet, acc, parsed_args.tx_num,
+                                              is_concurrent=parsed_args.is_concurrent, queue=q)
+            print(f"\n\n{pprint.pformat(acc.accounts)}\n\n")
 
