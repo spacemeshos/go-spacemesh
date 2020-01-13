@@ -137,9 +137,6 @@ func (tp *TransactionProcessor) ApplyTransactions(layer types.LayerID, txs []*ty
 		return remainingCount, fmt.Errorf("failed to commit global state: %v", err)
 	}
 
-	tp.Log.Info("new state root for layer %v is %x", layer, newHash)
-	tp.Log.With().Info("new state", log.Uint64("mesh.LayerID", uint64(layer)), log.String("root_hash", newHash.String()))
-
 	tp.addStateToHistory(layer, newHash)
 
 	return remainingCount, nil
@@ -153,7 +150,10 @@ func (tp *TransactionProcessor) addStateToHistory(layer types.LayerID, newHash t
 	}
 	tp.prevStates[layer] = newHash
 	tp.db.Reference(newHash, types.Hash32{})
-
+	tp.Event().Info("new state",
+		log.LayerId(layer.Uint64()),
+		log.String("root_hash", util.Bytes2Hex(newHash.Bytes())),
+	)
 }
 
 func (tp *TransactionProcessor) ApplyRewards(layer types.LayerID, miners []types.Address, reward *big.Int) {
