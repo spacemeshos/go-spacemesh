@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"net"
 	"testing"
+	"time"
 )
 
 /* methods below are kept to keep tests working without big changes */
@@ -62,6 +63,7 @@ func TestPing_Ping(t *testing.T) {
 	p1.d.LookupFunc = func(key p2pcrypto.PublicKey) (d *node.NodeInfo, e error) {
 		return p2.svc.NodeInfo, nil
 	}
+	p1.d.GetAddressRes = &KnownAddress{na: p2.svc.NodeInfo}
 
 	err := p1.dscv.Ping(p2.svc.PublicKey())
 	require.NoError(t, err)
@@ -69,6 +71,7 @@ func TestPing_Ping(t *testing.T) {
 	p2.d.LookupFunc = func(key p2pcrypto.PublicKey) (d *node.NodeInfo, e error) {
 		return p1.svc.NodeInfo, nil
 	}
+	p2.d.GetAddressRes = &KnownAddress{na: p1.svc.NodeInfo}
 	err = p2.dscv.Ping(p1.svc.PublicKey())
 	require.NoError(t, err)
 
@@ -91,18 +94,21 @@ func TestPing_Ping_Concurrency(t *testing.T) {
 	done := make(chan struct{})
 
 	go func() {
+		node1.d.GetAddressRes = &KnownAddress{na: node2.svc.NodeInfo}
 		err := node1.dscv.Ping(node2.svc.PublicKey())
 		require.NoError(t, err)
 		done <- struct{}{}
 	}()
 
 	go func() {
+		node1.d.GetAddressRes = &KnownAddress{na: node3.svc.NodeInfo}
 		err := node1.dscv.Ping(node3.svc.PublicKey())
 		require.NoError(t, err)
 		done <- struct{}{}
 	}()
 
 	go func() {
+		node1.d.GetAddressRes = &KnownAddress{na: node4.svc.NodeInfo}
 		err := node1.dscv.Ping(node4.svc.PublicKey())
 		require.NoError(t, err)
 		done <- struct{}{}
@@ -122,15 +128,8 @@ func TestPing_VerifyPinger(t *testing.T) {
 	p1 := newTestNode(sim)
 	p2 := newTestNode(sim)
 
-	// This lookup should fail
-	err := p1.dscv.verifyPinger(Addr(), p2.svc.NodeInfo)
-	require.Error(t, err)
-
-	// Initialize the address book
-	p1.d.GetAddressRes = &KnownAddress{na: p2.svc.NodeInfo}
-
 	// This lookup should succeed
-	err = p1.dscv.verifyPinger(Addr(), p2.svc.NodeInfo)
+	err := p1.dscv.verifyPinger(Addr(), p2.svc.NodeInfo)
 	require.NoError(t, err)
 
 	// todo: verify that the ping gets sent (and received?)
@@ -142,6 +141,8 @@ func TestFindNodeProtocol_FindNode(t *testing.T) {
 	n1 := newTestNode(sim)
 	n2 := newTestNode(sim)
 
+	// Node2 needs to be able to look up node1 when it receives the request
+	n2.d.GetAddressRes = &KnownAddress{na: n1.svc.NodeInfo}
 	idarr, err := n1.dscv.GetAddresses(n2.svc.NodeInfo.PublicKey())
 
 	require.NoError(t, err, "Should not return error")
@@ -164,6 +165,8 @@ func TestFindNodeProtocol_FindNode2(t *testing.T) {
 
 	n2.dscv.table = n2.d
 
+	// Node2 needs to be able to look up node1 when it receives the request
+	n2.d.GetAddressRes = &KnownAddress{na: n1.svc.NodeInfo}
 	idarr, err := n1.dscv.GetAddresses(n2.svc.NodeInfo.PublicKey())
 
 	require.NoError(t, err, "Should not return error")
@@ -189,6 +192,10 @@ func TestFindNodeProtocol_FindNode_Concurrency(t *testing.T) {
 	n1 := newTestNode(sim)
 	gen := generateDiscNodes(100)
 	n1.d.AddressCacheResult = gen
+	// The actual node address doesn't matter as it isn't used; just pretend we recently pinged it.
+	n1.d.GetAddressFunc = func() (d *KnownAddress) {
+		return &KnownAddress{lastping: time.Now()}
+	}
 	n1.dscv.table = n1.d
 
 	retchans := make(chan struct{})
@@ -199,6 +206,8 @@ func TestFindNodeProtocol_FindNode_Concurrency(t *testing.T) {
 			nx.d.LookupFunc = func(key p2pcrypto.PublicKey) (d *node.NodeInfo, e error) {
 				return n1.svc.NodeInfo, nil
 			}
+			// Node needs to be able to look up node1 when it receives the request
+			//nx.d.GetAddressRes = &KnownAddress{na: n1.svc.NodeInfo}
 			nx.dscv.table = nx.d
 			res, err := nx.dscv.GetAddresses(n1.svc.PublicKey())
 			if err != nil {
