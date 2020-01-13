@@ -30,6 +30,11 @@ func getAtxBodyKey(atxId types.AtxId) []byte {
 
 var errInvalidSig = fmt.Errorf("identity not found when validating signature, invalid atx")
 
+type atxChan struct {
+	ch        chan struct{}
+	listeners int
+}
+
 type ActivationDb struct {
 	sync.RWMutex
 	//todo: think about whether we need one db or several
@@ -44,7 +49,7 @@ type ActivationDb struct {
 	calcActiveSetFunc func(epoch types.EpochId, blocks map[types.BlockID]struct{}) (map[string]struct{}, error)
 	processAtxMutex   sync.Mutex
 	assLock           sync.Mutex
-	atxChannels       map[types.AtxId]chan struct{}
+	atxChannels       map[types.AtxId]*atxChan
 }
 
 func NewActivationDb(dbstore database.Database, idstore IdStore, meshDb *mesh.MeshDB, layersPerEpoch uint16, nipstValidator NipstValidator, log log.Log) *ActivationDb {
@@ -57,7 +62,7 @@ func NewActivationDb(dbstore database.Database, idstore IdStore, meshDb *mesh.Me
 		nipstValidator:   nipstValidator,
 		pendingActiveSet: make(map[types.Hash12]*sync.Mutex),
 		log:              log,
-		atxChannels:      make(map[types.AtxId]chan struct{}),
+		atxChannels:      make(map[types.AtxId]*atxChan),
 	}
 	db.calcActiveSetFunc = db.CalcActiveSetSize
 	return db
@@ -77,12 +82,30 @@ func (db *ActivationDb) AwaitAtx(id types.AtxId) chan struct{} {
 		return closedChan
 	}
 
-	ch := db.atxChannels[id]
-	if ch == nil {
-		ch = make(chan struct{})
+	ch, found := db.atxChannels[id]
+	if !found {
+		ch = &atxChan{
+			ch:        make(chan struct{}),
+			listeners: 0,
+		}
 		db.atxChannels[id] = ch
 	}
-	return ch
+	ch.listeners++
+	return ch.ch
+}
+
+func (db *ActivationDb) UnsubscribeAtx(id types.AtxId) {
+	db.Lock()
+	defer db.Unlock()
+
+	ch, found := db.atxChannels[id]
+	if !found {
+		return
+	}
+	ch.listeners--
+	if ch.listeners < 1 {
+		delete(db.atxChannels, id)
+	}
 }
 
 func (db *ActivationDb) ProcessAtxs(atxs []*types.ActivationTx) error {
@@ -475,7 +498,7 @@ func (db *ActivationDb) storeAtxUnlocked(atx *types.ActivationTx) error {
 
 	// notify subscribers
 	if ch, found := db.atxChannels[atx.Id()]; found {
-		close(ch)
+		close(ch.ch)
 		delete(db.atxChannels, atx.Id())
 	}
 

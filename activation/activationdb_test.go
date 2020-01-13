@@ -1060,6 +1060,7 @@ func TestActivationDb_AwaitAtx(t *testing.T) {
 		0, *types.EmptyAtxId, 3, []types.BlockID{}, &types.NIPST{})
 
 	ch := atxdb.AwaitAtx(atx.Id())
+	r.Len(atxdb.atxChannels, 1) // channel was created
 
 	select {
 	case <-ch:
@@ -1069,10 +1070,22 @@ func TestActivationDb_AwaitAtx(t *testing.T) {
 
 	err := atxdb.StoreAtx(atx.TargetEpoch(layersPerEpoch), atx)
 	r.NoError(err)
+	r.Len(atxdb.atxChannels, 0) // after notifying subscribers, channel is cleared
 
 	select {
 	case <-ch:
 	default:
 		r.Fail("not notified after ATX was stored")
 	}
+
+	otherId := types.AtxId{}
+	copy(otherId[:], "abcd")
+	atxdb.AwaitAtx(otherId)
+	r.Len(atxdb.atxChannels, 1) // after first subscription - channel is created
+	atxdb.AwaitAtx(otherId)
+	r.Len(atxdb.atxChannels, 1) // second subscription to same id - no additional channel
+	atxdb.UnsubscribeAtx(otherId)
+	r.Len(atxdb.atxChannels, 1) // first unsubscribe doesn't clear the channel
+	atxdb.UnsubscribeAtx(otherId)
+	r.Len(atxdb.atxChannels, 0) // last unsubscribe clears the channel
 }

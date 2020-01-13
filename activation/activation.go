@@ -56,6 +56,7 @@ type ATXDBProvider interface {
 	GetNodeLastAtxId(nodeId types.NodeId) (types.AtxId, error)
 	GetPosAtxId() (types.AtxId, error)
 	AwaitAtx(id types.AtxId) chan struct{}
+	UnsubscribeAtx(id types.AtxId)
 }
 
 type BytesStore interface {
@@ -411,6 +412,7 @@ func (b *Builder) PublishActivationTx() error {
 		log.Uint32("view_cnt", activeSetSize))
 
 	atxReceived := b.db.AwaitAtx(atx.Id())
+	defer b.db.UnsubscribeAtx(atx.Id())
 	if err := b.signAndBroadcast(atx); err != nil {
 		return err
 	}
@@ -441,7 +443,6 @@ func (b *Builder) PublishActivationTx() error {
 			b.log.Info("atx received in db (in the last moment)")
 			events.Publish(events.AtxCreated{Created: true, Id: atx.ShortString(), Layer: uint64(b.currentEpoch())})
 		default:
-			// TODO: Unsubscribe from ATX (add subscriber counter)
 			b.log.With().Error("target epoch has passed before atx was added to database",
 				log.AtxId(atx.ShortString()))
 			b.discardChallenge()
