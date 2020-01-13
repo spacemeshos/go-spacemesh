@@ -71,33 +71,47 @@ def set_parser():
     return parser.parse_args()
 
 
-# TODO #@! deal with this function
-def untracked_transfer(wallet_api, args):
-    # get the nonce of the sending account
-    curr_nonce = wallet_api.get_nonce_value(args.src)
+def run():
+    q = None
+    menu = "sp - fixed node\n" \
+           "nsp - random node\n" \
+           "c - concurrent\n" \
+           "nc - cancel concurrency\n" \
+           "t - tx number\n" \
+           "p - print state\n" \
+           "go to start, q to quit: "
+    print(menu)
+    inp = 0
+    while inp != 'q':
+        inp = input()
+        if inp == 'q':
+            break
 
-    if not curr_nonce:
-        print("could not retrieve nonce:", curr_nonce)
-        exit(1)
-
-    print(f"current nonce={curr_nonce}")
-    # get the balance of the src account
-    balance = wallet_api.get_balance_value(args.src)
-    # if an amount wasn't given rand one in the allowed range
-    amount = args.amount if args.amount else random.randint(1, int(int(balance) / args.new_accounts))
-    if amount + parsed_args.gas_price > int(balance):
-        print(f"amount is too high: balance={balance}, amount={amount}, gas-price={parsed_args.gas_price}")
-        exit(1)
-
-    # if destination wasn't supplied create a new account to send to
-    if not args.dst:
-        args.dst, new_account_priv = Accountant.new_untracked_account()
-
-    is_succeed = actions.transfer(wallet_api, args.src, args.dst, amount, curr_nonce=int(curr_nonce), priv=args.priv)
-    if is_succeed:
-        print("\ntransfer succeed")
-
-    return amount + parsed_args.gas_price, is_succeed
+        if inp == 'p':
+            print(f"\n\n{pprint.pformat(acc.accounts)}\n\n")
+            print(menu)
+        if inp == "sp":
+            print("using same pod for all GRPC api calls")
+            my_wallet.fixed_node = -1
+        elif inp == "nsp":
+            print("using random pods GRPC api calls")
+            my_wallet.fixed_node = None
+        elif inp == "c":
+            print("multiprocessing mode")
+            parsed_args.is_concurrent = True
+            q = mp.Queue()
+        elif inp == "nc":
+            print("canceled multiprocessing mode")
+            parsed_args.is_concurrent = False
+            q = None
+        elif inp == "t":
+            parsed_args.tx_num = int(input("how many txs: "))
+        elif inp == "go":
+            actions.send_tx_from_each_account(my_wallet, acc, parsed_args.tx_num,
+                                              is_concurrent=parsed_args.is_concurrent, queue=q)
+            print(menu, end="")
+        else:
+            print("unknown input")
 
 
 if __name__ == "__main__":
@@ -149,33 +163,7 @@ if __name__ == "__main__":
 
     # Set a queue for collecting all the transactions output,
     # this will help with updating the "accountant" when multiprocessing
-    q = mp.Queue() if parsed_args.is_concurrent else None
-    # TODO remove this hack #@!
-    inp = 0
-    while inp != 'q':
-        inp = input("\nsp - fixed node\nnsp - cancel fixed node\nc - concurrent\nnc - cancel concurrency\n"
-                    "t - tx number\ngo to start, q to quit: ")
-        if inp == 'q':
-            break
+    queue = mp.Queue() if parsed_args.is_concurrent else None
 
-        if inp == "sp":
-            print("using same pod for all GRPC api calls")
-            my_wallet.fixed_node = -1
-        elif inp == "nsp":
-            print("using random pods GRPC api calls")
-            my_wallet.fixed_node = None
-        elif inp == "c":
-            print("multiprocessing mode")
-            parsed_args.is_concurrent = True
-            q = mp.Queue()
-        elif inp == "nc":
-            print("canceled multiprocessing mode")
-            parsed_args.is_concurrent = False
-            q = None
-        elif inp == "t":
-            parsed_args.tx_num = int(input("how many txs: "))
-        elif inp == "go":
-            actions.send_tx_from_each_account(my_wallet, acc, parsed_args.tx_num,
-                                              is_concurrent=parsed_args.is_concurrent, queue=q)
-            print(f"\n\n{pprint.pformat(acc.accounts)}\n\n")
-
+    run()
+    print("bye bye!")
