@@ -12,6 +12,9 @@ type LayerConv struct {
 
 // TimeToLayer returns the layer of the provided time
 func (lc LayerConv) TimeToLayer(t time.Time) types.LayerID {
+	if t.Before(lc.genesis) { // the genesis is in the future
+		return 0
+	}
 	return types.LayerID((t.Sub(lc.genesis) / lc.duration) + 1)
 }
 
