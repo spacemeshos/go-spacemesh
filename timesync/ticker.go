@@ -88,14 +88,24 @@ func (t *Ticker) Notify() (int, error) {
 
 	t.m.Lock()
 
-	if t.timeSinceLastTick() > sendTickThreshold { // the tick was delayed by more than the threshold
+	layer := t.conv.TimeToLayer(t.clock.Now())
+	// close prev layers
+	for l := t.lastTickedLayer + 1; l <= layer; l++ {
+		if layerChan, found := t.layerChannels[l]; found {
+			close(layerChan)
+			delete(t.layerChannels, l)
+		}
+	}
+
+	// the tick was delayed by more than the threshold
+	if t.timeSinceLastTick() > sendTickThreshold {
 		t.log.With().Warning("skipping tick since we missed the time of the tick by more than the allowed threshold", log.String("threshold", sendTickThreshold.String()))
 		t.m.Unlock()
 		return 0, errMissedTickTime
 	}
 
-	layer := t.conv.TimeToLayer(t.clock.Now())
-	if layer <= t.lastTickedLayer { // already ticked
+	// already ticked
+	if layer <= t.lastTickedLayer {
 		t.log.With().Warning("skipping tick to avoid double ticking the same layer (time was not monotonic)",
 			log.Uint64("current", uint64(layer)), log.Uint64("last_ticked_layer", uint64(t.lastTickedLayer)))
 		t.m.Unlock()
@@ -112,12 +122,6 @@ func (t *Ticker) Notify() (int, error) {
 		default:
 			missedTicks++ // count subscriber that missed tick
 			continue
-		}
-	}
-	for l := t.lastTickedLayer + 1; l <= layer; l++ {
-		if layerChan, found := t.layerChannels[l]; found {
-			close(layerChan)
-			delete(t.layerChannels, l)
 		}
 	}
 
@@ -161,7 +165,7 @@ func (t *Ticker) AwaitLayer(layerId types.LayerID) chan struct{} {
 	t.m.Lock()
 	defer t.m.Unlock()
 
-	if layerId <= t.lastTickedLayer {
+	if t.clock.Now().After(t.conv.LayerToTime(layerId)) { // passed the time of layerId
 		return closedChan
 	}
 

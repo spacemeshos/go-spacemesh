@@ -103,7 +103,7 @@ func TestTicker_AwaitLayer(t *testing.T) {
 		genesis:  tmr.Now(),
 	})
 
-	l := ticker.lastTickedLayer + 1
+	l := ticker.GetCurrentLayer() + 1
 	ch := ticker.AwaitLayer(l)
 
 	select {
@@ -112,6 +112,7 @@ func TestTicker_AwaitLayer(t *testing.T) {
 	default:
 	}
 
+	time.Sleep(10 * time.Millisecond)
 	ticker.StartNotifying()
 	missedTicks, err := ticker.Notify()
 	r.NoError(err)
@@ -135,6 +136,4 @@ func TestTicker_AwaitLayer(t *testing.T) {
 	ch3 := ticker.AwaitLayer(l - 1)
 
 	r.Equal(ch2, ch3) // the same closedChannel should be returned for all past layers
-
-	// TODO: Test with skipped layers
 }
