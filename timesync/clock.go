@@ -50,6 +50,7 @@ func NewTicker(time Clock, tickInterval time.Duration, startEpoch time.Time) *Ti
 			nextLayerToTick: 1,
 			stop:            make(chan struct{}),
 			subscribers:     make(map[LayerTimer]struct{}),
+			layerChannels:   make(map[types.LayerID]chan struct{}),
 		},
 		tickInterval: tickInterval,
 		startEpoch:   startEpoch,
@@ -113,6 +114,7 @@ type Ticker struct {
 	subscribers     map[LayerTimer]struct{} // map subscribers by channel
 	started         bool
 	once            sync.Once
+	layerChannels   map[types.LayerID]chan struct{}
 }
 
 type Clock interface {
@@ -147,16 +149,19 @@ func (t *Ticker) notifyOnTick() {
 	wg := sync.WaitGroup{}
 	wg.Add(len(t.subscribers))
 	for ch := range t.subscribers {
-		c := ch
-		go func(count int) {
-			c <- t.nextLayerToTick
-			log.Debug("iv'e notified number : %v", count)
+		go func(ch chan types.LayerID, count int) {
+			ch <- t.nextLayerToTick
+			log.Debug("I've notified number: %v", count)
 			wg.Done()
-		}(count)
+		}(ch, count)
 		count++
 	}
+	if layerChan, found := t.layerChannels[t.nextLayerToTick]; found {
+		close(layerChan)
+		delete(t.layerChannels, t.nextLayerToTick)
+	}
 	wg.Wait()
-	log.Debug("Ive notified all")
+	log.Debug("I've notified all")
 	t.nextLayerToTick++
 	t.m.Unlock()
 }
@@ -181,4 +186,26 @@ func (t *Ticker) Unsubscribe(ch LayerTimer) {
 	t.m.Lock()
 	delete(t.subscribers, ch)
 	t.m.Unlock()
+}
+
+var closedChan = make(chan struct{})
+
+func init() {
+	close(closedChan)
+}
+
+func (t *Ticker) AwaitLayer(layerId types.LayerID) chan struct{} {
+	t.m.Lock()
+	defer t.m.Unlock()
+
+	if t.nextLayerToTick > layerId {
+		return closedChan
+	}
+
+	ch := t.layerChannels[layerId]
+	if ch == nil {
+		ch = make(chan struct{})
+		t.layerChannels[layerId] = ch
+	}
+	return ch
 }

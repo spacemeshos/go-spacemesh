@@ -105,16 +105,16 @@ func TestBlockListener_TestAtxQueue(t *testing.T) {
 	poetRef := sha256.Sum256(poetProofBytes)
 
 	atx1.Nipst.PostProof.Challenge = poetRef[:]
-	_, err = activation.SignAtx(signer, atx1)
+	err = activation.SignAtx(signer, atx1)
 	assert.NoError(t, err)
 	atx2.Nipst.PostProof.Challenge = poetRef[:]
-	_, err = activation.SignAtx(signer, atx2)
+	err = activation.SignAtx(signer, atx2)
 	assert.NoError(t, err)
 	atx3.Nipst.PostProof.Challenge = poetRef[:]
-	_, err = activation.SignAtx(signer, atx3)
+	err = activation.SignAtx(signer, atx3)
 	assert.NoError(t, err)
 	atx4.Nipst.PostProof.Challenge = poetRef[:]
-	_, err = activation.SignAtx(signer, atx4)
+	err = activation.SignAtx(signer, atx4)
 	assert.NoError(t, err)
 
 	err = bl1.ProcessAtxs([]*types.ActivationTx{atx1})
@@ -217,15 +217,15 @@ func TestBlockListener_TestAtxQueueHandle(t *testing.T) {
 	block1 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
 	atx1 := atx(signer.PublicKey().String())
 	atx1.Nipst.PostProof.Challenge = poetRef[:]
-	_, err = activation.SignAtx(signer, atx1)
+	err = activation.SignAtx(signer, atx1)
 	assert.NoError(t, err)
 	atx2 := atx(signer.PublicKey().String())
 	atx2.Nipst.PostProof.Challenge = poetRef[:]
-	_, err = activation.SignAtx(signer, atx2)
+	err = activation.SignAtx(signer, atx2)
 	assert.NoError(t, err)
 	atx3 := atx(signer.PublicKey().String())
 	atx3.Nipst.PostProof.Challenge = poetRef[:]
-	_, err = activation.SignAtx(signer, atx3)
+	err = activation.SignAtx(signer, atx3)
 	assert.NoError(t, err)
 
 	bl2.AddBlockWithTxs(block1, []*types.Transaction{}, []*types.ActivationTx{atx1, atx2, atx3})
