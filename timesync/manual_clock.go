@@ -23,3 +23,6 @@ func NewManualClock(genesisTime time.Time) *ManualClock {
 func (t ManualClock) GetGenesisTime() time.Time {
 	return t.genesisTime
 }
+
+func (t ManualClock) Close() {
+}

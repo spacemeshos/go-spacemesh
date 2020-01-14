@@ -2,6 +2,7 @@ package timesync
 
 import (
 	"github.com/spacemeshos/go-spacemesh/log"
+	"sync"
 	"time"
 )
 
@@ -19,6 +20,8 @@ type TimeClock struct {
 	*Ticker
 	tickInterval time.Duration
 	startEpoch   time.Time
+	stop         chan struct{}
+	once         sync.Once
 	log          log.Log
 }
 
@@ -27,6 +30,8 @@ func NewClock(c Clock, tickInterval time.Duration, startEpoch time.Time) *TimeCl
 		Ticker:       NewTicker(c, LayerConv{duration: tickInterval, genesis: startEpoch}),
 		tickInterval: tickInterval,
 		startEpoch:   startEpoch,
+		stop:         make(chan struct{}),
+		once:         sync.Once{},
 		log:          log.NewDefault("clock"),
 	}
 	go t.startClock()
@@ -41,10 +46,13 @@ func (t *TimeClock) startClock() {
 		nextTickTime := t.Ticker.conv.LayerToTime(currLayer + 1) // get next tick time for the next layer
 		diff := nextTickTime.Sub(t.clock.Now())
 		tmr := time.NewTimer(diff)
-		t.log.Info("global clock going to sleep for %v", diff)
+		t.log.With().Info("global clock going to sleep before next layer", log.String("diff", diff.String()), log.Uint64("next_layer", uint64(currLayer)))
 		select {
 		case <-tmr.C:
-			t.Notify() // notify subscribers
+			// notify subscribers
+			if missed, err := t.Notify(); err != nil {
+				t.log.With().Error("could not notify subscribers", log.Err(err), log.Int("missed", missed))
+			}
 			continue
 		case <-t.stop:
 			tmr.Stop()
@@ -53,6 +61,12 @@ func (t *TimeClock) startClock() {
 	}
 }
 
-func (t TimeClock) GetGenesisTime() time.Time {
+func (t *TimeClock) GetGenesisTime() time.Time {
 	return t.startEpoch
+}
+
+func (t *TimeClock) Close() {
+	t.once.Do(func() {
+		close(t.stop)
+	})
 }

@@ -1,6 +1,7 @@
 package timesync
 
 import (
+	"errors"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"sync"
@@ -49,10 +50,7 @@ type LayerConverter interface {
 type Ticker struct {
 	*subs                 // the sub-unsub provider
 	clock           Clock // provides the time
-	stop            chan struct{}
 	started         bool
-	once            sync.Once
-	missedTicks     int            // counts the missed ticks since of the last tick
 	lastTickedLayer types.LayerID  // track last ticked layer
 	conv            LayerConverter // layer conversions provider
 	layerChannels   map[types.LayerID]chan struct{}
@@ -61,31 +59,49 @@ type Ticker struct {
 
 func NewTicker(c Clock, lc LayerConverter) *Ticker {
 	return &Ticker{
-		subs:          newSubs(),
-		clock:         c,
-		stop:          make(chan struct{}),
-		started:       false,
-		once:          sync.Once{},
-		missedTicks:   0,
-		conv:          lc,
-		layerChannels: make(map[types.LayerID]chan struct{}),
-		log:           log.NewDefault("ticker"),
+		subs:            newSubs(),
+		lastTickedLayer: lc.TimeToLayer(c.Now()),
+		clock:           c,
+		conv:            lc,
+		layerChannels:   make(map[types.LayerID]chan struct{}),
+		log:             log.NewDefault("ticker"),
 	}
 }
 
-func (t *Ticker) Notify() {
+var (
+	errNotStarted     = errors.New("ticker is not started")
+	errNotMonotonic   = errors.New("tried to tick a previously ticked layer")
+	errMissedTicks    = errors.New("missed ticks for one or more subscribers")
+	errMissedTickTime = errors.New("missed tick time by more than the allowed threshold")
+)
+
+const sendTickThreshold = 500 * time.Millisecond // allow up to sendTickThreshold
+
+// Notify notifies all the subscribers with the current layer
+// if the tick time has passed notify is skipped and errMissedTickTime is returned
+// notify may be skipped also for non-monotonic tick
+// if some of the subscribers where not listening, they are skipped. In that case, errMissedTicks is returned along the number of subscribers not listening
+func (t *Ticker) Notify() (int, error) {
 	if !t.started {
-		return
+		return 0, errNotStarted
 	}
 
 	t.m.Lock()
 
-	layer := t.conv.TimeToLayer(t.clock.Now())
-	if layer <= t.lastTickedLayer {
-		t.log.Warning("skipping tick to avoid double ticking the same layer (time was not monotonic)")
-		return
+	if t.timeSinceLastTick() > sendTickThreshold { // the tick was delayed by more than the threshold
+		t.log.With().Warning("skipping tick since we missed the time of the tick by more than the allowed threshold", log.String("threshold", sendTickThreshold.String()))
+		t.m.Unlock()
+		return 0, errMissedTickTime
 	}
-	t.missedTicks = 0
+
+	layer := t.conv.TimeToLayer(t.clock.Now())
+	if layer <= t.lastTickedLayer { // already ticked
+		t.log.With().Warning("skipping tick to avoid double ticking the same layer (time was not monotonic)",
+			log.Uint64("current", uint64(layer)), log.Uint64("last_ticked_layer", uint64(t.lastTickedLayer)))
+		t.m.Unlock()
+		return 0, errNotMonotonic
+	}
+	missedTicks := 0
 	t.log.Event().Info("release tick", log.LayerId(uint64(layer)))
 	for ch := range t.subscribers { // notify all subscribers
 
@@ -94,7 +110,7 @@ func (t *Ticker) Notify() {
 		case ch <- layer:
 			continue
 		default:
-			t.missedTicks++ // count subscriber that missed tick
+			missedTicks++ // count subscriber that missed tick
 			continue
 		}
 	}
@@ -108,19 +124,22 @@ func (t *Ticker) Notify() {
 	// update last ticked layer
 	t.lastTickedLayer = layer
 
-	if t.missedTicks > 0 {
-		t.log.With().Error("missed ticks for layer", log.LayerId(uint64(layer)))
+	if missedTicks > 0 {
+		t.log.With().Error("missed ticks for layer",
+			log.LayerId(uint64(layer)), log.Int("missed_count", missedTicks))
+		t.m.Unlock()
+		return missedTicks, errMissedTicks
 	}
 
 	t.m.Unlock()
+	return 0, nil
 }
 
 // TimeSinceLastTick returns the duration passed since the last layer that we ticked
-func (t *Ticker) TimeSinceLastTick() time.Duration {
-	t.m.Lock()
-	d := t.clock.Now().Sub(t.conv.LayerToTime(t.lastTickedLayer))
-	t.m.Unlock()
-	return d
+// note: the call is not lock-protected
+func (t *Ticker) timeSinceLastTick() time.Duration {
+	timeOfLastTick := t.conv.LayerToTime(t.conv.TimeToLayer(t.clock.Now()))
+	return t.clock.Now().Sub(timeOfLastTick)
 }
 
 func (t *Ticker) StartNotifying() {
@@ -130,12 +149,6 @@ func (t *Ticker) StartNotifying() {
 
 func (t *Ticker) GetCurrentLayer() types.LayerID {
 	return t.conv.TimeToLayer(t.clock.Now())
-}
-
-func (t *Ticker) Close() {
-	t.once.Do(func() {
-		close(t.stop)
-	})
 }
 
 var closedChan = make(chan struct{})

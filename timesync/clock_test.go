@@ -2,6 +2,7 @@ package timesync
 
 import (
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"testing"
@@ -20,11 +21,8 @@ func (MockTimer) Now() time.Time {
 
 func TestTicker_StartClock(t *testing.T) {
 	tick := 1 * time.Second
-	layout := "2006-01-02T15:04:05.000Z"
-	str := "2018-11-12T11:45:26.371Z"
-	start, _ := time.Parse(layout, str)
-
-	ts := NewClock(MockTimer{}, tick, start)
+	c := RealClock{}
+	ts := NewClock(c, tick, c.Now())
 	tk := ts.Subscribe()
 	then := time.Now()
 	ts.StartNotifying()
@@ -39,13 +37,10 @@ func TestTicker_StartClock(t *testing.T) {
 
 func TestTicker_StartClock_BeforeEpoch(t *testing.T) {
 	tick := 1 * time.Second
-	layout := "2006-01-02T15:04:05.000Z"
-	str := "2018-11-12T11:45:28.371Z"
-	tmr := MockTimer{}
-	start, _ := time.Parse(layout, str)
+	tmr := RealClock{}
 
-	waitTime := start.Sub(tmr.Now())
-	ts := NewClock(tmr, tick, start)
+	waitTime := 2 * time.Second
+	ts := NewClock(tmr, tick, tmr.Now().Add(2*time.Second))
 	tk := ts.Subscribe()
 	then := time.Now()
 	ts.StartNotifying()
@@ -60,44 +55,10 @@ func TestTicker_StartClock_BeforeEpoch(t *testing.T) {
 	ts.Close()
 }
 
-/*
-func TestTicker_StartClock_LayerID(t *testing.T) {
-	tick := 1 * time.Second
-	layout := "2006-01-02T15:04:05.000Z"
-	str := "2018-11-12T11:45:20.371Z"
-	start, _ := time.Parse(layout, str)
-
-	ts := NewClock(MockTimer{}, tick, start)
-	ts.updateLayerID()
-	assert.Equal(t, types.LayerID(8), ts.nextLayerToTick)
-	ts.Close()
-}
-
-func TestTicker_StartClock_2(t *testing.T) {
-	destTime := 2 * time.Second
-	tmr := &RealClock{}
-	then := tmr.Now()
-	ticker := NewClock(tmr, 5*time.Second, then.Add(destTime))
-	ticker.StartNotifying()
-	sub := ticker.Subscribe()
-	<-sub
-	assert.True(t, tmr.Now().Sub(then).Seconds() <= float64(2.1))
-}
-
-func TestTicker_Tick(t *testing.T) {
-	tmr := &RealClock{}
-	ticker := NewClock(tmr, 5*time.Second, tmr.Now())
-	ticker.started = true
-	ticker.Notify()
-	l := ticker.nextLayerToTick
-	ticker.Notify()
-	assert.Equal(t, ticker.nextLayerToTick, l+1)
-}
-
 func TestTicker_TickFutureGenesis(t *testing.T) {
 	tmr := &RealClock{}
 	ticker := NewClock(tmr, 1*time.Second, tmr.Now().Add(2*time.Second))
-	assert.Equal(t, types.LayerID(1), ticker.nextLayerToTick) // check assumption that nextLayerToTick >= 1
+	assert.Equal(t, types.LayerID(1), ticker.lastTickedLayer+1) // check assumption that nextLayerToTick >= 1
 	sub := ticker.Subscribe()
 	ticker.StartNotifying()
 	x := <-sub
@@ -118,32 +79,11 @@ func TestTicker_TickPastGenesis(t *testing.T) {
 	assert.True(t, duration > 99*time.Millisecond && duration < 107*time.Millisecond, duration)
 }
 
-func TestTicker_NewTicker(t *testing.T) {
+func TestTicker_NewClock(t *testing.T) {
 	r := require.New(t)
 	tmr := &RealClock{}
 	ticker := NewClock(tmr, 100*time.Millisecond, tmr.Now().Add(-190*time.Millisecond))
-	r.False(ticker.started) // not started until call to StartNotifying
-	r.Equal(types.LayerID(3), ticker.nextLayerToTick)
-}
-
-func TestTicker_SubscribeUnsubscribe(t *testing.T) {
-	r := require.New(t)
-	tmr := &RealClock{}
-	ticker := NewClock(tmr, 1*time.Millisecond, tmr.Now())
-	r.Equal(0, len(ticker.subscribers))
-	c1 := ticker.Subscribe()
-	r.Equal(1, len(ticker.subscribers))
-
-	c2 := ticker.Subscribe()
-	r.Equal(2, len(ticker.subscribers))
-
-	ticker.Unsubscribe(c1)
-	r.Equal(1, len(ticker.subscribers))
-	_, ok := ticker.subscribers[c1]
-	r.False(ok)
-
-	ticker.Unsubscribe(c2)
-	r.Equal(0, len(ticker.subscribers))
+	r.Equal(types.LayerID(2), ticker.lastTickedLayer)
 }
 
 func TestTicker_CloseTwice(t *testing.T) {
@@ -153,14 +93,13 @@ func TestTicker_CloseTwice(t *testing.T) {
 	clock.Close()
 	clock.Close()
 }
-*/
 
 func TestTicker_AwaitLayer(t *testing.T) {
 	r := require.New(t)
 
 	tmr := &RealClock{}
 	ticker := NewTicker(tmr, LayerConv{
-		duration: 1 * time.Millisecond,
+		duration: 10 * time.Millisecond,
 		genesis:  tmr.Now(),
 	})
 
@@ -173,8 +112,10 @@ func TestTicker_AwaitLayer(t *testing.T) {
 	default:
 	}
 
-	ticker.started = true
-	ticker.Notify()
+	ticker.StartNotifying()
+	missedTicks, err := ticker.Notify()
+	r.NoError(err)
+	r.Zero(missedTicks)
 
 	select {
 	case <-ch:
