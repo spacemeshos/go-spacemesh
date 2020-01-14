@@ -206,8 +206,6 @@ func TestFindNodeProtocol_FindNode_Concurrency(t *testing.T) {
 			nx.d.LookupFunc = func(key p2pcrypto.PublicKey) (d *node.NodeInfo, e error) {
 				return n1.svc.NodeInfo, nil
 			}
-			// Node needs to be able to look up node1 when it receives the request
-			//nx.d.GetAddressRes = &KnownAddress{na: n1.svc.NodeInfo}
 			nx.dscv.table = nx.d
 			res, err := nx.dscv.GetAddresses(n1.svc.PublicKey())
 			if err != nil {
