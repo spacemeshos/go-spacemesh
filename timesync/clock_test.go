@@ -3,6 +3,7 @@ package timesync
 import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
 )
@@ -153,3 +154,46 @@ func TestTicker_CloseTwice(t *testing.T) {
 	clock.Close()
 }
 */
+
+func TestTicker_AwaitLayer(t *testing.T) {
+	r := require.New(t)
+
+	tmr := &RealClock{}
+	ticker := NewTicker(tmr, LayerConv{
+		duration: 1 * time.Millisecond,
+		genesis:  tmr.Now(),
+	})
+
+	l := ticker.lastTickedLayer + 1
+	ch := ticker.AwaitLayer(l)
+
+	select {
+	case <-ch:
+		r.Fail("got notified before layer ticked")
+	default:
+	}
+
+	ticker.started = true
+	ticker.Notify()
+
+	select {
+	case <-ch:
+	default:
+		r.Fail("did not get notified despite layer ticking")
+	}
+
+	ch2 := ticker.AwaitLayer(l)
+
+	r.NotEqual(ch, ch2) // original channel should be discarded and a constant closedChannel should be returned
+	select {
+	case <-ch2:
+	default:
+		r.Fail("returned channel was not closed, despite awaiting past layer")
+	}
+
+	ch3 := ticker.AwaitLayer(l - 1)
+
+	r.Equal(ch2, ch3) // the same closedChannel should be returned for all past layers
+
+	// TODO: Test with skipped layers
+}

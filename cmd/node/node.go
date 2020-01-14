@@ -123,6 +123,7 @@ type TickProvider interface {
 	StartNotifying()
 	GetGenesisTime() time.Time
 	Close()
+	AwaitLayer(layerId types.LayerID) chan struct{}
 }
 
 // SpacemeshApp is the cli app singleton
@@ -547,7 +548,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId,
 	if coinBase.Big().Uint64() == 0 && app.Config.StartMining {
 		app.log.Panic("invalid Coinbase account")
 	}
-	atxBuilder := activation.NewBuilder(nodeID, coinBase, sgn, atxdb, swarm, msh, layersPerEpoch, nipstBuilder, postClient, clock.Subscribe(), syncer.ListenToGossip, store, app.addLogger("atxBuilder", lg))
+	atxBuilder := activation.NewBuilder(nodeID, coinBase, sgn, atxdb, swarm, msh, layersPerEpoch, nipstBuilder, postClient, clock, syncer, store, app.addLogger("atxBuilder", lg))
 
 	app.blockProducer = blockProducer
 	app.blockListener = blockListener

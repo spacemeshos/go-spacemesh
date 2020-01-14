@@ -55,19 +55,21 @@ type Ticker struct {
 	missedTicks     int            // counts the missed ticks since of the last tick
 	lastTickedLayer types.LayerID  // track last ticked layer
 	conv            LayerConverter // layer conversions provider
+	layerChannels   map[types.LayerID]chan struct{}
 	log             log.Log
 }
 
 func NewTicker(c Clock, lc LayerConverter) *Ticker {
 	return &Ticker{
-		subs:        newSubs(),
-		clock:       c,
-		stop:        make(chan struct{}),
-		started:     false,
-		once:        sync.Once{},
-		missedTicks: 0,
-		conv:        lc,
-		log:         log.NewDefault("ticker"),
+		subs:          newSubs(),
+		clock:         c,
+		stop:          make(chan struct{}),
+		started:       false,
+		once:          sync.Once{},
+		missedTicks:   0,
+		conv:          lc,
+		layerChannels: make(map[types.LayerID]chan struct{}),
+		log:           log.NewDefault("ticker"),
 	}
 }
 
@@ -94,6 +96,12 @@ func (t *Ticker) Notify() {
 		default:
 			t.missedTicks++ // count subscriber that missed tick
 			continue
+		}
+	}
+	for l := t.lastTickedLayer + 1; l <= layer; l++ {
+		if layerChan, found := t.layerChannels[l]; found {
+			close(layerChan)
+			delete(t.layerChannels, l)
 		}
 	}
 
@@ -128,4 +136,26 @@ func (t *Ticker) Close() {
 	t.once.Do(func() {
 		close(t.stop)
 	})
+}
+
+var closedChan = make(chan struct{})
+
+func init() {
+	close(closedChan)
+}
+
+func (t *Ticker) AwaitLayer(layerId types.LayerID) chan struct{} {
+	t.m.Lock()
+	defer t.m.Unlock()
+
+	if layerId <= t.lastTickedLayer {
+		return closedChan
+	}
+
+	ch := t.layerChannels[layerId]
+	if ch == nil {
+		ch = make(chan struct{})
+		t.layerChannels[layerId] = ch
+	}
+	return ch
 }
