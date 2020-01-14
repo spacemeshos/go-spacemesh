@@ -69,9 +69,9 @@ func TestTicker_Notify(t *testing.T) {
 	_, e := tr.Notify() // should fail to send
 	r.Equal(errNotMonotonic, e)
 
+	tr.lastTickedLayer = 0
 	s1 := tr.Subscribe()
 	s2 := tr.Subscribe()
-	tr.lastTickedLayer = 0
 	wg := sync.WaitGroup{} // higher probability that s2 is listening state before notify
 	wg.Add(1)
 	go func() {
@@ -103,6 +103,28 @@ func TestTicker_Notify(t *testing.T) {
 	tr.m.Unlock()
 	r.Equal(0, missed)
 	r.NoError(e)
+}
+
+func TestTicker_NotifyErrThreshold(t *testing.T) {
+	r := require.New(t)
+	c := RealClock{}
+	ld := 10000 * time.Millisecond
+	tr := NewTicker(c, LayerConv{
+		duration: ld,
+		genesis:  c.Now().Add(-ld * 3).Add(sendTickThreshold),
+	})
+	tr.StartNotifying()
+	_, e := tr.Notify() // notify is called after more than the threshold
+	r.Equal(errMissedTickTime, e)
+}
+
+func TestTicker_timeSinceLastTick(t *testing.T) {
+	r := require.New(t)
+	tr := NewTicker(RealClock{}, LayerConv{
+		duration: 100 * time.Millisecond,
+		genesis:  time.Now().Add(-320 * time.Millisecond),
+	})
+	r.True(tr.timeSinceLastTick() >= 20)
 }
 
 func TestSubs_SubscribeUnsubscribe(t *testing.T) {
