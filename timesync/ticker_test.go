@@ -58,14 +58,14 @@ func TestTicker_StartNotifying(t *testing.T) {
 	r.True(tr.started)
 	_, e = tr.Notify()
 	r.NoError(e)
-	r.Equal(2, mc.countToLayer)
+	r.Equal(3, mc.countToLayer)
 }
 
 func TestTicker_Notify(t *testing.T) {
 	r := require.New(t)
 	tr := NewTicker(RealClock{}, newMockConv(1, time.Now()))
 	tr.StartNotifying()
-	tr.lastTickedLayer = 2
+	tr.lastTickedLayer = 3
 	_, e := tr.Notify() // should fail to send
 	r.Equal(errNotMonotonic, e)
 
