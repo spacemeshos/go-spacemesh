@@ -553,7 +553,7 @@ func TestActivationDB_ValidateAtx(t *testing.T) {
 	hash, err = atx.NIPSTChallenge.Hash()
 	assert.NoError(t, err)
 	atx.Nipst = NewNIPSTWithChallenge(hash, poetRef)
-	_, err = SignAtx(signer, atx)
+	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
 	err = atxdb.StoreNodeIdentity(idx1)
 	assert.NoError(t, err)
@@ -602,42 +602,42 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 
 	// Wrong sequence.
 	atx := types.NewActivationTx(idx1, coinbase, 0, prevAtx.Id(), 1012, 0, posAtx.Id(), 3, []types.BlockID{}, &types.NIPST{})
-	_, err = SignAtx(signer, atx)
+	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
 	err = atxdb.SyntacticallyValidateAtx(atx)
 	assert.EqualError(t, err, "sequence number is not one more than prev sequence number")
 
 	// Wrong active set.
 	atx = types.NewActivationTx(idx1, coinbase, 1, prevAtx.Id(), 1012, 0, posAtx.Id(), 10, []types.BlockID{}, &types.NIPST{})
-	_, err = SignAtx(signer, atx)
+	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
 	err = atxdb.SyntacticallyValidateAtx(atx)
 	assert.EqualError(t, err, "atx contains view with unequal active ids (10) than seen (0)")
 
 	// Wrong positioning atx.
 	atx = types.NewActivationTx(idx1, coinbase, 1, prevAtx.Id(), 1012, 0, atxs[0].Id(), 3, []types.BlockID{}, &types.NIPST{})
-	_, err = SignAtx(signer, atx)
+	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
 	err = atxdb.SyntacticallyValidateAtx(atx)
 	assert.EqualError(t, err, "expected distance of one epoch (1000 layers) from pos ATX but found 1011")
 
 	// Wrong prevATx.
 	atx = types.NewActivationTx(idx1, coinbase, 1, atxs[0].Id(), 1012, 0, posAtx.Id(), 3, []types.BlockID{}, &types.NIPST{})
-	_, err = SignAtx(signer, atx)
+	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
 	err = atxdb.SyntacticallyValidateAtx(atx)
 	assert.EqualError(t, err, fmt.Sprintf("previous ATX belongs to different miner. atx.Id: %v, atx.NodeId: %v, prevAtx.NodeId: %v", atx.ShortString(), atx.NodeId.Key, atxs[0].NodeId.Key))
 
 	// Wrong layerId.
 	posAtx2 := types.NewActivationTx(idx2, coinbase, 0, *types.EmptyAtxId, 1020, 0, *types.EmptyAtxId, 3, blocks, npst)
-	_, err = SignAtx(signer, atx)
+	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
 	err = atxdb.StoreAtx(1, posAtx2)
 	assert.NoError(t, err)
 	err = atxdb.StoreNodeIdentity(idx1)
 	assert.NoError(t, err)
 	atx = types.NewActivationTx(idx1, coinbase, 1, prevAtx.Id(), 1012, 0, posAtx2.Id(), 3, []types.BlockID{}, npst)
-	_, err = SignAtx(signer, atx)
+	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
 	err = atxdb.SyntacticallyValidateAtx(atx)
 	assert.EqualError(t, err, "atx layer (1012) must be after positioning atx layer (1020)")
@@ -655,14 +655,14 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	atx = types.NewActivationTx(idx1, coinbase, 1, prevAtx.Id(), 12, 0, posAtx.Id(), 3, []types.BlockID{}, &types.NIPST{})
 	err = atxdb.atxs.Delete(getNodeIdKey(atx.NodeId))
 	assert.NoError(t, err)
-	_, err = SignAtx(signer, atx)
+	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
 	err = atxdb.ContextuallyValidateAtx(atx.ActivationTxHeader)
 	assert.EqualError(t, err, "could not fetch node last ATX: leveldb: not found")
 
 	// Prev atx not declared but commitment not included.
 	atx = types.NewActivationTx(idx1, coinbase, 0, *types.EmptyAtxId, 1012, 0, posAtx.Id(), 3, []types.BlockID{}, &types.NIPST{})
-	_, err = SignAtx(signer, atx)
+	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
 	err = atxdb.SyntacticallyValidateAtx(atx)
 	assert.EqualError(t, err, "no prevATX declared, but commitment proof is not included")
@@ -670,7 +670,7 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	// Prev atx not declared but commitment merkle root not included.
 	atx = types.NewActivationTx(idx1, coinbase, 0, *types.EmptyAtxId, 1012, 0, posAtx.Id(), 3, []types.BlockID{}, &types.NIPST{})
 	atx.Commitment = commitment
-	_, err = SignAtx(signer, atx)
+	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
 	err = atxdb.SyntacticallyValidateAtx(atx)
 	assert.EqualError(t, err, "no prevATX declared, but commitment merkle root is not included in challenge")
@@ -680,7 +680,7 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	atx.Commitment = commitment
 	atx.CommitmentMerkleRoot = append([]byte{}, commitment.MerkleRoot...)
 	atx.CommitmentMerkleRoot[0] += 1
-	_, err = SignAtx(signer, atx)
+	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
 	err = atxdb.SyntacticallyValidateAtx(atx)
 	assert.EqualError(t, err, "commitment merkle root included in challenge is not equal to the merkle root included in the proof")
@@ -688,7 +688,7 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	// Prev atx declared but commitment is included.
 	atx = types.NewActivationTx(idx1, coinbase, 1, prevAtx.Id(), 1012, 0, posAtx.Id(), 3, []types.BlockID{}, &types.NIPST{})
 	atx.Commitment = commitment
-	_, err = SignAtx(signer, atx)
+	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
 	err = atxdb.SyntacticallyValidateAtx(atx)
 	assert.EqualError(t, err, "prevATX declared, but commitment proof is included")
@@ -696,14 +696,14 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	// Prev atx declared but commitment merkle root is included.
 	atx = types.NewActivationTx(idx1, coinbase, 1, prevAtx.Id(), 1012, 0, posAtx.Id(), 3, []types.BlockID{}, &types.NIPST{})
 	atx.CommitmentMerkleRoot = commitment.MerkleRoot
-	_, err = SignAtx(signer, atx)
+	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
 	err = atxdb.SyntacticallyValidateAtx(atx)
 	assert.EqualError(t, err, "prevATX declared, but commitment merkle root is included in challenge")
 
 	// Prev atx has publication layer in the same epoch as the atx.
 	atx = types.NewActivationTx(idx1, coinbase, 1, prevAtx.Id(), 100, 0, posAtx.Id(), 3, []types.BlockID{}, &types.NIPST{})
-	_, err = SignAtx(signer, atx)
+	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
 	err = atxdb.SyntacticallyValidateAtx(atx)
 	assert.EqualError(t, err, "prevAtx epoch (0, layer 100) isn't older than current atx epoch (0, layer 100)")
@@ -712,7 +712,7 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	atx = types.NewActivationTx(idx2, coinbase, 0, *types.EmptyAtxId, 1012, 0, posAtx.Id(), 3, []types.BlockID{}, &types.NIPST{})
 	atx.Commitment = commitment
 	atx.CommitmentMerkleRoot = append([]byte{}, commitment.MerkleRoot...)
-	_, err = SignAtx(signer, atx)
+	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
 	err = atxdb.SyntacticallyValidateAtx(atx)
 	assert.EqualError(t, err, "node ids don't match")
@@ -757,7 +757,7 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 
 	atx = types.NewActivationTx(idx1, coinbase, 2, atx.Id(), 1012, 0, atx.Id(), 0, []types.BlockID{}, &types.NIPST{})
 	assert.NoError(t, err)
-	_, err = SignAtx(signer, atx)
+	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
 	err = atxdb.StoreNodeIdentity(idx1)
 	assert.NoError(t, err)
@@ -767,7 +767,7 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 	atx2id := atx.Id()
 
 	atx = types.NewActivationTx(idx1, coinbase, 4, prevAtx.Id(), 1012, 0, prevAtx.Id(), 0, []types.BlockID{}, &types.NIPST{})
-	_, err = SignAtx(signer, atx)
+	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
 	err = atxdb.StoreNodeIdentity(idx1)
 	assert.NoError(t, err)
@@ -1046,4 +1046,46 @@ func createAndStoreAtx(atxdb *ActivationDb, layer types.LayerID) (*types.Activat
 		return nil, err
 	}
 	return atx, nil
+}
+
+func TestActivationDb_AwaitAtx(t *testing.T) {
+	r := require.New(t)
+
+	lg := log.NewDefault("sigValidation")
+	idStore := NewIdentityStore(database.NewMemDatabase())
+	memesh := mesh.NewMemMeshDB(lg.WithName("meshDB"))
+	atxdb := NewActivationDb(database.NewMemDatabase(), idStore, memesh, layersPerEpochBig, &ValidatorMock{}, lg.WithName("atxDB"))
+	id := types.NodeId{Key: uuid.New().String(), VRFPublicKey: []byte("vrf")}
+	atx := types.NewActivationTx(id, coinbase, 0, *types.EmptyAtxId, 1,
+		0, *types.EmptyAtxId, 3, []types.BlockID{}, &types.NIPST{})
+
+	ch := atxdb.AwaitAtx(atx.Id())
+	r.Len(atxdb.atxChannels, 1) // channel was created
+
+	select {
+	case <-ch:
+		r.Fail("notified before ATX was stored")
+	default:
+	}
+
+	err := atxdb.StoreAtx(atx.TargetEpoch(layersPerEpoch), atx)
+	r.NoError(err)
+	r.Len(atxdb.atxChannels, 0) // after notifying subscribers, channel is cleared
+
+	select {
+	case <-ch:
+	default:
+		r.Fail("not notified after ATX was stored")
+	}
+
+	otherId := types.AtxId{}
+	copy(otherId[:], "abcd")
+	atxdb.AwaitAtx(otherId)
+	r.Len(atxdb.atxChannels, 1) // after first subscription - channel is created
+	atxdb.AwaitAtx(otherId)
+	r.Len(atxdb.atxChannels, 1) // second subscription to same id - no additional channel
+	atxdb.UnsubscribeAtx(otherId)
+	r.Len(atxdb.atxChannels, 1) // first unsubscribe doesn't clear the channel
+	atxdb.UnsubscribeAtx(otherId)
+	r.Len(atxdb.atxChannels, 0) // last unsubscribe clears the channel
 }
