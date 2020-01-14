@@ -78,35 +78,35 @@ func nipstBuildStateKey() []byte {
 	return []byte("nipstate")
 }
 
-func (s *NIPSTBuilder) load(challenge types.Hash32) {
-	bts, err := s.store.Get(nipstBuildStateKey())
+func (nb *NIPSTBuilder) load(challenge types.Hash32) {
+	bts, err := nb.store.Get(nipstBuildStateKey())
 	if err != nil {
-		s.log.Warning("cannot load Nipst state %v", err)
+		nb.log.Warning("cannot load Nipst state %v", err)
 		return
 	}
 	if len(bts) > 0 {
 		var state builderState
 		err = types.BytesToInterface(bts, &state)
 		if err != nil {
-			s.log.Error("cannot load Nipst state %v", err)
+			nb.log.Error("cannot load Nipst state %v", err)
 		}
 		if state.Challenge == challenge {
-			s.state = &state
+			nb.state = &state
 		} else {
-			s.state = &builderState{Challenge: challenge, Nipst: &types.NIPST{}}
+			nb.state = &builderState{Challenge: challenge, Nipst: &types.NIPST{}}
 		}
 	}
 }
 
-func (s *NIPSTBuilder) persist() {
-	bts, err := types.InterfaceToBytes(&s.state)
+func (nb *NIPSTBuilder) persist() {
+	bts, err := types.InterfaceToBytes(&nb.state)
 	if err != nil {
-		s.log.Warning("cannot store Nipst state %v", err)
+		nb.log.Warning("cannot store Nipst state %v", err)
 		return
 	}
-	err = s.store.Put(nipstBuildStateKey(), bts)
+	err = nb.store.Put(nipstBuildStateKey(), bts)
 	if err != nil {
-		s.log.Warning("cannot store Nipst state %v", err)
+		nb.log.Warning("cannot store Nipst state %v", err)
 	}
 }
 
@@ -127,6 +127,7 @@ type NIPSTBuilder struct {
 type PoetDbApi interface {
 	SubscribeToProofRef(poetId []byte, roundId string) chan []byte
 	GetMembershipMap(proofRef []byte) (map[types.Hash32]bool, error)
+	UnsubscribeFromProofRef(poetId []byte, roundId string)
 }
 
 func NewNIPSTBuilder(id []byte, postProver PostProverClient, poetProver PoetProvingServiceClient, poetDb PoetDbApi, store BytesStore, log log.Log) *NIPSTBuilder {
@@ -163,7 +164,7 @@ func newNIPSTBuilder(
 	}
 }
 
-func (nb *NIPSTBuilder) BuildNIPST(challenge *types.Hash32) (*types.NIPST, error) {
+func (nb *NIPSTBuilder) BuildNIPST(challenge *types.Hash32, atxExpired chan struct{}, stop chan struct{}) (*types.NIPST, error) {
 	nb.load(*challenge)
 
 	if initialized, err := nb.postProver.IsInitialized(); !initialized || err != nil {
@@ -204,8 +205,15 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *types.Hash32) (*types.NIPST, error
 
 	// Phase 1: receive proofs from PoET service
 	if nb.state.PoetProofRef == nil {
-		proofRefChan := nb.poetDb.SubscribeToProofRef(nb.state.PoetServiceId, nb.state.PoetRound.Id)
-		poetProofRef := <-proofRefChan // TODO(noamnelke): handle timeout
+		var poetProofRef []byte
+		select {
+		case poetProofRef = <-nb.poetDb.SubscribeToProofRef(nb.state.PoetServiceId, nb.state.PoetRound.Id):
+		case <-atxExpired:
+			nb.poetDb.UnsubscribeFromProofRef(nb.state.PoetServiceId, nb.state.PoetRound.Id)
+			return nil, fmt.Errorf("atx expired while waiting for poet proof, target epoch ended")
+		case <-stop:
+			return nil, &StopRequestedError{}
+		}
 
 		membership, err := nb.poetDb.GetMembershipMap(poetProofRef)
 		if err != nil {
