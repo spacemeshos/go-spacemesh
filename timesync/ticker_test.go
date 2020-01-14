@@ -127,6 +127,50 @@ func TestTicker_timeSinceLastTick(t *testing.T) {
 	r.True(tr.timeSinceLastTick() >= 20)
 }
 
+func TestTicker_AwaitLayer(t *testing.T) {
+	r := require.New(t)
+
+	tmr := &RealClock{}
+	ticker := NewTicker(tmr, LayerConv{
+		duration: 10 * time.Millisecond,
+		genesis:  tmr.Now(),
+	})
+
+	l := ticker.GetCurrentLayer() + 1
+	ch := ticker.AwaitLayer(l)
+
+	select {
+	case <-ch:
+		r.Fail("got notified before layer ticked")
+	default:
+	}
+
+	time.Sleep(10 * time.Millisecond)
+	ticker.StartNotifying()
+	missedTicks, err := ticker.Notify()
+	r.NoError(err)
+	r.Zero(missedTicks)
+
+	select {
+	case <-ch:
+	default:
+		r.Fail("did not get notified despite layer ticking")
+	}
+
+	ch2 := ticker.AwaitLayer(l)
+
+	r.NotEqual(ch, ch2) // original channel should be discarded and a constant closedChannel should be returned
+	select {
+	case <-ch2:
+	default:
+		r.Fail("returned channel was not closed, despite awaiting past layer")
+	}
+
+	ch3 := ticker.AwaitLayer(l - 1)
+
+	r.Equal(ch2, ch3) // the same closedChannel should be returned for all past layers
+}
+
 func TestSubs_SubscribeUnsubscribe(t *testing.T) {
 	r := require.New(t)
 	subs := newSubs()

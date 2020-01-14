@@ -19,7 +19,7 @@ func (MockTimer) Now() time.Time {
 	return start
 }
 
-func TestTicker_StartClock(t *testing.T) {
+func TestClock_StartClock(t *testing.T) {
 	tick := 1 * time.Second
 	c := RealClock{}
 	ts := NewClock(c, tick, c.Now())
@@ -30,12 +30,12 @@ func TestTicker_StartClock(t *testing.T) {
 	select {
 	case <-tk:
 		dur := time.Now().Sub(then)
-		assert.True(t, tick < dur)
+		assert.True(t, tick <= dur)
 	}
 	ts.Close()
 }
 
-func TestTicker_StartClock_BeforeEpoch(t *testing.T) {
+func TestClock_StartClock_BeforeEpoch(t *testing.T) {
 	tick := 1 * time.Second
 	tmr := RealClock{}
 
@@ -55,7 +55,7 @@ func TestTicker_StartClock_BeforeEpoch(t *testing.T) {
 	ts.Close()
 }
 
-func TestTicker_TickFutureGenesis(t *testing.T) {
+func TestClock_TickFutureGenesis(t *testing.T) {
 	tmr := &RealClock{}
 	ticker := NewClock(tmr, 1*time.Second, tmr.Now().Add(2*time.Second))
 	assert.Equal(t, types.LayerID(1), ticker.lastTickedLayer+1) // check assumption that nextLayerToTick >= 1
@@ -67,7 +67,7 @@ func TestTicker_TickFutureGenesis(t *testing.T) {
 	assert.Equal(t, types.LayerID(2), x)
 }
 
-func TestTicker_TickPastGenesis(t *testing.T) {
+func TestClock_TickPastGenesis(t *testing.T) {
 	tmr := &RealClock{}
 	ticker := NewClock(tmr, 1*time.Second, tmr.Now().Add(-3900*time.Millisecond))
 	sub := ticker.Subscribe()
@@ -79,61 +79,17 @@ func TestTicker_TickPastGenesis(t *testing.T) {
 	assert.True(t, duration > 99*time.Millisecond && duration < 107*time.Millisecond, duration)
 }
 
-func TestTicker_NewClock(t *testing.T) {
+func TestClock_NewClock(t *testing.T) {
 	r := require.New(t)
 	tmr := &RealClock{}
 	ticker := NewClock(tmr, 100*time.Millisecond, tmr.Now().Add(-190*time.Millisecond))
 	r.Equal(types.LayerID(2), ticker.lastTickedLayer)
 }
 
-func TestTicker_CloseTwice(t *testing.T) {
+func TestClock_CloseTwice(t *testing.T) {
 	ld := time.Duration(20) * time.Second
 	clock := NewClock(RealClock{}, ld, time.Now())
 	clock.StartNotifying()
 	clock.Close()
 	clock.Close()
-}
-
-func TestTicker_AwaitLayer(t *testing.T) {
-	r := require.New(t)
-
-	tmr := &RealClock{}
-	ticker := NewTicker(tmr, LayerConv{
-		duration: 10 * time.Millisecond,
-		genesis:  tmr.Now(),
-	})
-
-	l := ticker.GetCurrentLayer() + 1
-	ch := ticker.AwaitLayer(l)
-
-	select {
-	case <-ch:
-		r.Fail("got notified before layer ticked")
-	default:
-	}
-
-	time.Sleep(10 * time.Millisecond)
-	ticker.StartNotifying()
-	missedTicks, err := ticker.Notify()
-	r.NoError(err)
-	r.Zero(missedTicks)
-
-	select {
-	case <-ch:
-	default:
-		r.Fail("did not get notified despite layer ticking")
-	}
-
-	ch2 := ticker.AwaitLayer(l)
-
-	r.NotEqual(ch, ch2) // original channel should be discarded and a constant closedChannel should be returned
-	select {
-	case <-ch2:
-	default:
-		r.Fail("returned channel was not closed, despite awaiting past layer")
-	}
-
-	ch3 := ticker.AwaitLayer(l - 1)
-
-	r.Equal(ch2, ch3) // the same closedChannel should be returned for all past layers
 }
