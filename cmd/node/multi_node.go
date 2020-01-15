@@ -22,6 +22,69 @@ import (
 	"time"
 )
 
+type ManualClock struct {
+	subs         map[timesync.LayerTimer]struct{}
+	m            sync.Mutex
+	currentLayer types.LayerID
+	genesisTime  time.Time
+}
+
+func NewManualClock(genesisTime time.Time) *ManualClock {
+	t := &ManualClock{
+		subs:         make(map[timesync.LayerTimer]struct{}),
+		currentLayer: 0, // genesis
+		genesisTime:  genesisTime,
+	}
+	return t
+}
+
+func (t *ManualClock) Unsubscribe(ch timesync.LayerTimer) {
+	t.m.Lock()
+	delete(t.subs, ch)
+	t.m.Unlock()
+}
+
+func (t *ManualClock) StartNotifying() {
+}
+
+func (t *ManualClock) AwaitLayer(layerId types.LayerID) chan struct{} {
+	return nil
+}
+
+func (t *ManualClock) Subscribe() timesync.LayerTimer {
+	ch := make(timesync.LayerTimer)
+	t.m.Lock()
+	t.subs[ch] = struct{}{}
+	t.m.Unlock()
+	return ch
+}
+
+func (t *ManualClock) Tick() {
+	t.m.Lock()
+	defer t.m.Unlock()
+
+	t.currentLayer++
+	for s := range t.subs {
+		s <- t.currentLayer
+	}
+}
+
+func (t ManualClock) GetCurrentLayer() types.LayerID {
+	t.m.Lock()
+	defer t.m.Unlock()
+
+	return t.currentLayer
+}
+
+func (t ManualClock) GetGenesisTime() time.Time {
+	t.m.Lock()
+	defer t.m.Unlock()
+	return t.genesisTime
+}
+
+func (t ManualClock) Close() {
+}
+
 func getTestDefaultConfig() *config.Config {
 	cfg, err := LoadConfigFromFile()
 	if err != nil {
@@ -160,7 +223,7 @@ func StartMultiNode(numOfinstances, layerAvgSize int, runTillLayer uint32, dbPat
 	}
 	pubsubAddr := "tcp://localhost:56565"
 	events.InitializeEventPubsub(pubsubAddr)
-	clock := timesync.NewManualClock(gTime)
+	clock := NewManualClock(gTime)
 
 	apps := make([]*SpacemeshApp, 0, numOfInstances)
 	name := 'a'
