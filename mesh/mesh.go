@@ -20,15 +20,14 @@ import (
 )
 
 const (
-	layerSize   = 200
-	Genesis     = types.LayerID(0)
-	GenesisId   = 420
-	TxCacheSize = 1000
+	layerSize = 200
+	Genesis   = types.LayerID(0)
 )
 
 var TRUE = []byte{1}
 var FALSE = []byte{0}
 var LATEST = []byte("latest")
+var LAYERHASH = []byte("layer hash")
 var VALIDATED = []byte("validated")
 var TORTOISE = []byte("tortoise")
 
@@ -77,6 +76,7 @@ type Mesh struct {
 	config         Config
 	validatedLayer types.LayerID
 	latestLayer    types.LayerID
+	layerHash      []byte
 	lMutex         sync.RWMutex
 	lkMutex        sync.RWMutex
 	lcMutex        sync.RWMutex
@@ -106,18 +106,24 @@ func NewRecoveredMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh MeshVal
 
 	latest, err := db.general.Get(LATEST)
 	if err != nil {
-		logger.Panic("could not recover latest layer")
+		logger.Panic("could not recover latest layer: %v", err)
 	}
-
 	ll.latestLayer = types.LayerID(util.BytesToUint64(latest))
 
 	validated, err := db.general.Get(VALIDATED)
 	if err != nil {
-		logger.Panic("could not recover  validated layer")
+		logger.Panic("could not recover validated layer: %v", err)
+	}
+	ll.validatedLayer = types.LayerID(util.BytesToUint64(validated))
+
+	if ll.layerHash, err = db.general.Get(LAYERHASH); err != nil {
+		logger.With().Error("could not recover latest layer hash", log.Err(err))
 	}
 
-	ll.validatedLayer = types.LayerID(util.BytesToUint64(validated))
-	ll.Info("recovered mesh from disc latest layer %d validated layer %d", ll.latestLayer, ll.validatedLayer)
+	ll.With().Info("recovered mesh from disk",
+		log.Uint64("latest_layer", ll.latestLayer.Uint64()),
+		log.Uint64("validated_layer", ll.validatedLayer.Uint64()),
+		log.String("layer_hash", util.Bytes2Hex(ll.layerHash)))
 
 	return ll
 }
@@ -181,8 +187,29 @@ func (m *Mesh) ValidateLayer(lyr *types.Layer) {
 			m.With().Error("failed to push transactions", log.Err(err))
 			break
 		}
+		m.setLayerHash(layerId)
 	}
 	m.Info("done validating layer %v", lyr.Index())
+}
+
+func (m *Mesh) setLayerHash(layerId types.LayerID) {
+	validBlockIds, err := m.ContextuallyValidBlock(layerId)
+	if err != nil {
+		m.With().Error("failed to get contextually valid blocks for layer hash - all future hashes will be inconsistent",
+			log.Err(err), log.LayerId(layerId.Uint64()))
+		return
+	}
+	layerHash := sha256.New()
+	layerHash.Write(m.layerHash)
+	for id := range validBlockIds {
+		layerHash.Write(id.ToBytes())
+	}
+	m.layerHash = layerHash.Sum(nil)
+	m.Event().Info("new layer hash", log.LayerId(layerId.Uint64()), log.String("layer_hash", util.Bytes2Hex(m.layerHash)))
+	if err := m.general.Put(LAYERHASH, m.layerHash); err != nil {
+		m.With().Error("failed to persist layer hash", log.Err(err), log.LayerId(layerId.Uint64()),
+			log.String("layer_hash", util.Bytes2Hex(m.layerHash)))
+	}
 }
 
 func (m *Mesh) ExtractUniqueOrderedTransactions(l *types.Layer) (validBlockTxs, invalidBlockTxs []*types.Transaction) {
