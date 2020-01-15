@@ -189,6 +189,7 @@ func (m *Mesh) ValidateLayer(lyr *types.Layer) {
 		}
 		m.setLayerHash(layerId)
 	}
+	m.persistLayerHash()
 	m.Info("done validating layer %v", lyr.Index())
 }
 
@@ -206,8 +207,11 @@ func (m *Mesh) setLayerHash(layerId types.LayerID) {
 	}
 	m.layerHash = layerHash.Sum(nil)
 	m.Event().Info("new layer hash", log.LayerId(layerId.Uint64()), log.String("layer_hash", util.Bytes2Hex(m.layerHash)))
+}
+
+func (m *Mesh) persistLayerHash() {
 	if err := m.general.Put(LAYERHASH, m.layerHash); err != nil {
-		m.With().Error("failed to persist layer hash", log.Err(err), log.LayerId(layerId.Uint64()),
+		m.With().Error("failed to persist layer hash", log.Err(err), log.LayerId(m.validatedLayer.Uint64()),
 			log.String("layer_hash", util.Bytes2Hex(m.layerHash)))
 	}
 }
