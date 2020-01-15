@@ -116,7 +116,7 @@ type Syncer struct {
 	syncRoutineWg        sync.WaitGroup
 	gossipLock           sync.RWMutex
 	gossipSynced         Status
-  awaitCh              chan struct{}
+	awaitCh              chan struct{}
 
 	//todo fetch server
 	blockQueue *blockQueue
