@@ -3,6 +3,7 @@ package timesync
 import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"testing"
@@ -22,7 +23,7 @@ func (MockTimer) Now() time.Time {
 func TestClock_StartClock(t *testing.T) {
 	tick := 1 * time.Second
 	c := RealClock{}
-	ts := NewClock(c, tick, c.Now())
+	ts := NewClock(c, tick, c.Now(), log.NewDefault(t.Name()))
 	tk := ts.Subscribe()
 	then := time.Now()
 	ts.StartNotifying()
@@ -40,7 +41,7 @@ func TestClock_StartClock_BeforeEpoch(t *testing.T) {
 	tmr := RealClock{}
 
 	waitTime := 2 * time.Second
-	ts := NewClock(tmr, tick, tmr.Now().Add(2*time.Second))
+	ts := NewClock(tmr, tick, tmr.Now().Add(2*time.Second), log.NewDefault(t.Name()))
 	tk := ts.Subscribe()
 	then := time.Now()
 	ts.StartNotifying()
@@ -57,8 +58,8 @@ func TestClock_StartClock_BeforeEpoch(t *testing.T) {
 
 func TestClock_TickFutureGenesis(t *testing.T) {
 	tmr := &RealClock{}
-	ticker := NewClock(tmr, 1*time.Second, tmr.Now().Add(2*time.Second))
-	assert.Equal(t, types.LayerID(1), ticker.lastTickedLayer+1) // check assumption that nextLayerToTick >= 1
+	ticker := NewClock(tmr, 1*time.Second, tmr.Now().Add(2*time.Second), log.NewDefault(t.Name()))
+	assert.Equal(t, types.LayerID(0), ticker.lastTickedLayer) // check assumption that we are on genesis = 0
 	sub := ticker.Subscribe()
 	ticker.StartNotifying()
 	x := <-sub
@@ -69,7 +70,7 @@ func TestClock_TickFutureGenesis(t *testing.T) {
 
 func TestClock_TickPastGenesis(t *testing.T) {
 	tmr := &RealClock{}
-	ticker := NewClock(tmr, 1*time.Second, tmr.Now().Add(-3900*time.Millisecond))
+	ticker := NewClock(tmr, 1*time.Second, tmr.Now().Add(-3900*time.Millisecond), log.NewDefault(t.Name()))
 	sub := ticker.Subscribe()
 	ticker.StartNotifying()
 	start := time.Now()
@@ -82,13 +83,13 @@ func TestClock_TickPastGenesis(t *testing.T) {
 func TestClock_NewClock(t *testing.T) {
 	r := require.New(t)
 	tmr := &RealClock{}
-	ticker := NewClock(tmr, 100*time.Millisecond, tmr.Now().Add(-190*time.Millisecond))
+	ticker := NewClock(tmr, 100*time.Millisecond, tmr.Now().Add(-190*time.Millisecond), log.NewDefault(t.Name()))
 	r.Equal(types.LayerID(2), ticker.lastTickedLayer)
 }
 
 func TestClock_CloseTwice(t *testing.T) {
 	ld := time.Duration(20) * time.Second
-	clock := NewClock(RealClock{}, ld, time.Now())
+	clock := NewClock(RealClock{}, ld, time.Now(), log.NewDefault(t.Name()))
 	clock.StartNotifying()
 	clock.Close()
 	clock.Close()

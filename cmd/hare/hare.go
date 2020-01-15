@@ -153,7 +153,7 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 		log.Panic("error parsing config err=%v", err)
 	}
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
-	app.clock = timesync.NewClock(timesync.RealClock{}, ld, gTime)
+	app.clock = timesync.NewClock(timesync.RealClock{}, ld, gTime, lg)
 
 	app.ha = hare.New(app.Config.HARE, app.p2p, app.sgn, types.NodeId{Key: app.sgn.PublicKey().String(), VRFPublicKey: []byte{}}, validateBlocks, IsSynced, &mockBlockProvider{}, hareOracle, uint16(app.Config.LayersPerEpoch), &mockIdProvider{}, &mockStateQuerier{}, app.clock.Subscribe(), lg)
 	log.Info("Starting hare service")

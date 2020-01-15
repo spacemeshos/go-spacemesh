@@ -25,14 +25,14 @@ type TimeClock struct {
 	log          log.Log
 }
 
-func NewClock(c Clock, tickInterval time.Duration, startEpoch time.Time) *TimeClock {
+func NewClock(c Clock, tickInterval time.Duration, genesisTime time.Time, logger log.Log) *TimeClock {
 	t := &TimeClock{
-		Ticker:       NewTicker(c, LayerConv{duration: tickInterval, genesis: startEpoch}),
+		Ticker:       NewTicker(c, LayerConv{duration: tickInterval, genesis: genesisTime}),
 		tickInterval: tickInterval,
-		startEpoch:   startEpoch,
+		startEpoch:   genesisTime,
 		stop:         make(chan struct{}),
 		once:         sync.Once{},
-		log:          log.NewDefault("clock"),
+		log:          logger,
 	}
 	go t.startClock()
 	return t
@@ -53,7 +53,6 @@ func (t *TimeClock) startClock() {
 			if missed, err := t.Notify(); err != nil {
 				t.log.With().Error("could not notify subscribers", log.Err(err), log.Int("missed", missed))
 			}
-			continue
 		case <-t.stop:
 			tmr.Stop()
 			return
