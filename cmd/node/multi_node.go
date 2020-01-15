@@ -2,13 +2,12 @@ package node
 
 import (
 	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/amcl"
-	"github.com/spacemeshos/go-spacemesh/amcl/BLS381"
 	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/collector"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/config"
+	"github.com/spacemeshos/go-spacemesh/crypto/bls"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -102,7 +101,7 @@ var net = service.NewSimulator()
 
 // InitSingleInstance initializes a node instance with given
 // configuration and parameters, it does not stop the instance.
-func InitSingleInstance(cfg config.Config, i int, genesisTime string, rng *amcl.RAND, storePath string, rolacle *eligibility.FixedRolacle, poetClient *activation.RPCPoetClient, fastHare bool, clock TickProvider) (*SpacemeshApp, error) {
+func InitSingleInstance(cfg config.Config, i int, genesisTime string, storePath string, rolacle *eligibility.FixedRolacle, poetClient *activation.RPCPoetClient, fastHare bool, clock TickProvider) (*SpacemeshApp, error) {
 
 	smApp := NewSpacemeshApp()
 	smApp.Config = &cfg
@@ -111,8 +110,11 @@ func InitSingleInstance(cfg config.Config, i int, genesisTime string, rng *amcl.
 	edSgn := signing.NewEdSigner()
 	pub := edSgn.PublicKey()
 
-	vrfPriv, vrfPub := BLS381.GenKeyPair(rng)
-	vrfSigner := BLS381.NewBlsSigner(vrfPriv)
+	vrfPriv, vrfPub := bls.GenKeyPair()
+	vrfSigner, err := bls.NewSigner(vrfPriv)
+	if err != nil {
+		return nil, err
+	}
 	nodeID := types.NodeId{Key: pub.String(), VRFPublicKey: vrfPub}
 
 	swarm := net.NewNode()
@@ -153,7 +155,6 @@ func StartMultiNode(numOfinstances, layerAvgSize int, runTillLayer uint32, dbPat
 	defer poetClient.Teardown(true)
 
 	rolacle := eligibility.New()
-	rng := BLS381.DefaultSeed()
 	gTime, err := time.Parse(time.RFC3339, genesisTime)
 	if err != nil {
 		log.Error("cannot parse genesis time %v", err)
@@ -166,7 +167,7 @@ func StartMultiNode(numOfinstances, layerAvgSize int, runTillLayer uint32, dbPat
 	name := 'a'
 	for i := 0; i < numOfInstances; i++ {
 		dbStorepath := path + string(name)
-		smApp, err := InitSingleInstance(*cfg, i, genesisTime, rng, dbStorepath, rolacle, poetClient, true, clock)
+		smApp, err := InitSingleInstance(*cfg, i, genesisTime, dbStorepath, rolacle, poetClient, true, clock)
 		if err != nil {
 			log.Error("cannot run multi node %v", err)
 			return

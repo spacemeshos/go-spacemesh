@@ -3,25 +3,31 @@ package oracle
 import (
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/amcl/BLS381"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/crypto/bls"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/require"
+	"strings"
 	"testing"
 )
 
 var atxID = types.AtxId([32]byte{1, 3, 3, 7})
 var nodeID, vrfSigner = generateNodeIDAndSigner()
-var validateVrf = BLS381.Verify2
-var vrfPrivkey, vrfPubkey = BLS381.GenKeyPair(BLS381.DefaultSeed())
+var validateVrf = bls.Verify
+var vrfPrivkey, vrfPubkey = bls.GenKeyPair()
 var edSigner = signing.NewEdSigner()
 
 func generateNodeIDAndSigner() (types.NodeId, Signer) {
+	signer, err := bls.NewSigner(vrfPrivkey)
+	if err != nil {
+		panic(err)
+	}
+
 	return types.NodeId{
 		Key:          edSigner.PublicKey().String(),
 		VRFPublicKey: vrfPubkey,
-	}, BLS381.NewBlsSigner(vrfPrivkey)
+	}, signer
 }
 
 type mockActivationDB struct {
@@ -176,7 +182,7 @@ func TestBlockOracleNoActivationsForNode(t *testing.T) {
 	activeSetSize := uint32(20)
 	committeeSize := uint32(200)
 	layersPerEpoch := uint16(10)
-	_, publicKey := BLS381.GenKeyPair(BLS381.DefaultSeed())
+	_, publicKey := bls.GenKeyPair()
 	nodeID := types.NodeId{
 		Key:          "other key",
 		VRFPublicKey: publicKey,
@@ -217,7 +223,7 @@ func TestBlockOracleValidatorInvalidProof(t *testing.T) {
 		validateVrf, lg.WithName("blkElgValidator"))
 	block := newBlockWithEligibility(layerID, nodeID, atxID, proof, activationDB)
 	eligible, err := validator.BlockSignedAndEligible(block)
-	r.EqualError(err, "eligibility VRF validation failed")
+	r.True(strings.HasPrefix(err.Error(), "eligibility VRF validation failed: failed to deserialize signature"))
 	r.False(eligible)
 }
 

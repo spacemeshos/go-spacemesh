@@ -5,12 +5,11 @@ import (
 	"context"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/amcl"
-	"github.com/spacemeshos/go-spacemesh/amcl/BLS381"
 	apiCfg "github.com/spacemeshos/go-spacemesh/api/config"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/crypto/bls"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/hare"
@@ -421,7 +420,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId,
 	layerSize uint32,
 	postClient activation.PostProverClient,
 	poetClient activation.PoetProvingServiceClient,
-	vrfSigner *BLS381.BlsSigner,
+	vrfSigner *bls.BlsSigner,
 	layersPerEpoch uint16, clock TickProvider) error {
 
 	app.nodeId = nodeID
@@ -495,7 +494,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId,
 
 	atxdb := activation.NewActivationDb(atxdbstore, idStore, mdb, layersPerEpoch, validator, app.addLogger(AtxDbLogger, lg))
 	beaconProvider := &oracle.EpochBeaconProvider{}
-	eValidator := oracle.NewBlockEligibilityValidator(layerSize, uint32(app.Config.GenesisActiveSet), layersPerEpoch, atxdb, beaconProvider, BLS381.Verify2, app.addLogger(BlkEligibilityLogger, lg))
+	eValidator := oracle.NewBlockEligibilityValidator(layerSize, uint32(app.Config.GenesisActiveSet), layersPerEpoch, atxdb, beaconProvider, bls.Verify, app.addLogger(BlkEligibilityLogger, lg))
 
 	var msh *mesh.Mesh
 	var trtl *tortoise.Algorithm
@@ -528,7 +527,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId,
 		hOracle = rolacle
 	} else { // regular oracle, build and use it
 		beacon := eligibility.NewBeacon(mdb, app.Config.HareEligibility.ConfidenceParam, app.addLogger(HareBeaconLogger, lg))
-		hOracle = eligibility.New(beacon, atxdb.CalcActiveSetSize, BLS381.Verify2, vrfSigner, uint16(app.Config.LayersPerEpoch), app.Config.GenesisActiveSet, mdb, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
+		hOracle = eligibility.New(beacon, atxdb.CalcActiveSetSize, bls.Verify, vrfSigner, uint16(app.Config.LayersPerEpoch), app.Config.GenesisActiveSet, mdb, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
 	}
 
 	ha := app.HareFactory(mdb, swarm, sgn, nodeID, syncer, msh, hOracle, idStore, clock, lg)
@@ -830,11 +829,12 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	rng := amcl.NewRAND()
-	pub := app.edSgn.PublicKey().Bytes()
-	rng.Seed(len(pub), app.edSgn.Sign(pub)) // assuming ed.private is random, the sig can be used as seed
-	vrfPriv, vrfPub := BLS381.GenKeyPair(rng)
-	vrfSigner := BLS381.NewBlsSigner(vrfPriv)
+	vrfPriv, vrfPub := bls.GenKeyPair()
+	vrfSigner, err := bls.NewSigner(vrfPriv)
+	if err != nil {
+		log.Error("failed to create BLS signer: %v", err)
+		return
+	}
 	nodeID := types.NodeId{Key: app.edSgn.PublicKey().String(), VRFPublicKey: vrfPub}
 
 	postClient, err := activation.NewPostClient(&app.Config.POST, util.Hex2Bytes(nodeID.Key))

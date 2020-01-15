@@ -3,13 +3,12 @@ package node
 import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/amcl"
-	"github.com/spacemeshos/go-spacemesh/amcl/BLS381"
 	apiCfg "github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/api/pb"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/config"
+	"github.com/spacemeshos/go-spacemesh/crypto/bls"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -70,11 +69,11 @@ func Test_PoETHarnessSanity(t *testing.T) {
 	require.NotNil(t, h)
 }
 
-func (suite *AppTestSuite) initMultipleInstances(cfg *config.Config, rolacle *eligibility.FixedRolacle, rng *amcl.RAND, numOfInstances int, storeFormat string, genesisTime string, poetClient *activation.RPCPoetClient, fastHare bool, clock TickProvider) {
+func (suite *AppTestSuite) initMultipleInstances(cfg *config.Config, rolacle *eligibility.FixedRolacle, numOfInstances int, storeFormat string, genesisTime string, poetClient *activation.RPCPoetClient, fastHare bool, clock TickProvider) {
 	name := 'a'
 	for i := 0; i < numOfInstances; i++ {
 		dbStorepath := storeFormat + string(name)
-		smApp, err := InitSingleInstance(*cfg, i, genesisTime, rng, dbStorepath, rolacle, poetClient, fastHare, clock)
+		smApp, err := InitSingleInstance(*cfg, i, genesisTime, dbStorepath, rolacle, poetClient, fastHare, clock)
 		assert.NoError(suite.T(), err)
 		suite.apps = append(suite.apps, smApp)
 		suite.dbs = append(suite.dbs, dbStorepath)
@@ -100,7 +99,6 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	suite.poetCleanup = poetClient.Teardown
 
 	rolacle := eligibility.New()
-	rng := BLS381.DefaultSeed()
 
 	gTime, err := time.Parse(time.RFC3339, genesisTime)
 	if err != nil {
@@ -108,7 +106,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	}
 	ld := time.Duration(20) * time.Second
 	clock := timesync.NewTicker(timesync.RealClock{}, ld, gTime)
-	suite.initMultipleInstances(cfg, rolacle, rng, 5, path, genesisTime, poetClient, false, clock)
+	suite.initMultipleInstances(cfg, rolacle, 5, path, genesisTime, poetClient, false, clock)
 	for _, a := range suite.apps {
 		a.startServices()
 	}
@@ -496,8 +494,10 @@ func TestShutdown(t *testing.T) {
 		log.Panic("failed creating poet client harness: %v", err)
 	}
 
-	vrfPriv, vrfPub := BLS381.GenKeyPair(BLS381.DefaultSeed())
-	vrfSigner := BLS381.NewBlsSigner(vrfPriv)
+	vrfPriv, vrfPub := bls.GenKeyPair()
+	vrfSigner, err := bls.NewSigner(vrfPriv)
+	r.NotNil(vrfSigner)
+	r.NoError(err)
 	nodeID := types.NodeId{Key: pub.String(), VRFPublicKey: vrfPub}
 
 	swarm := net.NewNode()

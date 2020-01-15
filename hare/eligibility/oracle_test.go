@@ -2,9 +2,9 @@ package eligibility
 
 import (
 	"errors"
-	"github.com/spacemeshos/go-spacemesh/amcl/BLS381"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
+	"github.com/spacemeshos/go-spacemesh/crypto/bls"
 	eCfg "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/stretchr/testify/assert"
@@ -276,9 +276,11 @@ func assertActiveSetSize(t *testing.T, o *Oracle, expected uint32, l types.Layer
 }
 
 func Test_BlsSignVerify(t *testing.T) {
-	pr, pu := BLS381.GenKeyPair(BLS381.DefaultSeed())
-	sr := BLS381.NewBlsSigner(pr)
-	o := New(&mockValueProvider{1, nil}, (&mockActiveSetProvider{10}).ActiveSet, BLS381.Verify2, sr, 10, genActive, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
+	pr, pu := bls.GenKeyPair()
+	sr, err := bls.NewSigner(pr)
+	assert.NotNil(t, sr)
+	assert.NoError(t, err)
+	o := New(&mockValueProvider{1, nil}, (&mockActiveSetProvider{10}).ActiveSet, bls.Verify, sr, 10, genActive, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
 	id := types.NodeId{Key: "abc", VRFPublicKey: pu}
 	proof, err := o.Proof(1, 1)
 	assert.Nil(t, err)
