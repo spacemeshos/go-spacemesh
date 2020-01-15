@@ -3,7 +3,6 @@ package api
 import (
 	"flag"
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
-	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -16,13 +15,14 @@ import (
 // JSONHTTPServer is a JSON http server providing the Spacemesh API.
 // It is implemented using a grpc-gateway. See https://github.com/grpc-ecosystem/grpc-gateway .
 type JSONHTTPServer struct {
-	Port   uint
-	server *http.Server
+	Port     uint
+	GrpcPort uint
+	server   *http.Server
 }
 
 // NewJSONHTTPServer creates a new json http server.
-func NewJSONHTTPServer() *JSONHTTPServer {
-	return &JSONHTTPServer{Port: uint(config.ConfigValues.JSONServerPort)}
+func NewJSONHTTPServer(port int, grpcPort int) *JSONHTTPServer {
+	return &JSONHTTPServer{Port: uint(port), GrpcPort: uint(grpcPort)}
 }
 
 // StopService stops the server.
@@ -39,22 +39,21 @@ func (s *JSONHTTPServer) StartService() {
 }
 
 func (s *JSONHTTPServer) startInternal() {
-
 	mux := runtime.NewServeMux()
 	opts := []grpc.DialOption{grpc.WithInsecure()}
 
 	// register the http server on the local grpc server
-	portStr := strconv.Itoa(int(config.ConfigValues.GrpcServerPort))
+	grpcPortStr := strconv.Itoa(int(s.GrpcPort))
 
 	const endpoint = "api_endpoint"
 	var echoEndpoint string
 
 	fl := flag.Lookup(endpoint)
 	if fl != nil {
-		flag.Set(endpoint, "localhost:"+portStr)
+		flag.Set(endpoint, "localhost:"+grpcPortStr)
 		echoEndpoint = fl.Value.String()
 	} else {
-		echoEndpoint = *flag.String(endpoint, "localhost:"+portStr, "endpoint of api grpc service")
+		echoEndpoint = *flag.String(endpoint, "localhost:"+grpcPortStr, "endpoint of api grpc service")
 	}
 	if err := gw.RegisterSpacemeshServiceHandlerFromEndpoint(context.Background(), mux, echoEndpoint, opts); err != nil {
 		log.Error("failed to register http endpoint with grpc", err)
@@ -62,7 +61,7 @@ func (s *JSONHTTPServer) startInternal() {
 
 	addr := ":" + strconv.Itoa(int(s.Port))
 
-	log.Debug("json API listening on port %d", s.Port)
+	log.Info("json API listening on port %d", s.Port)
 
 	s.server = &http.Server{Addr: addr, Handler: mux}
 	err := s.server.ListenAndServe()

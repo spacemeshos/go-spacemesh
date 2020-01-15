@@ -13,7 +13,7 @@ type AtxMemPool struct {
 }
 
 func NewAtxMemPool() *AtxMemPool {
-	return &AtxMemPool{sync.RWMutex{}, make(map[types.AtxId]*types.ActivationTx)}
+	return &AtxMemPool{atxMap: make(map[types.AtxId]*types.ActivationTx)}
 }
 
 func (mem *AtxMemPool) Get(id types.AtxId) (*types.ActivationTx, error) {

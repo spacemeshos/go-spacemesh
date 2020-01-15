@@ -5,6 +5,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/stretchr/testify/assert"
+	"net"
 	"testing"
 )
 
@@ -21,11 +22,11 @@ func TestNodeLocalStore(t *testing.T) {
 	port1, err := GetUnboundedPort()
 	assert.NoError(t, err, "Should be able to establish a connection on a port")
 
-	address := fmt.Sprintf("0.0.0.0:%d", port1)
+	addr := net.TCPAddr{net.ParseIP("0.0.0.0"), port1, ""}
 
 	cfg := config.DefaultConfig()
 
-	node, err := NewNodeIdentity(cfg, address, false)
+	node, err := NewNodeIdentity(cfg, &addr, false)
 	assert.NoError(t, err, "failed to create new local node")
 
 	err = node.persistData()
@@ -55,7 +56,7 @@ func TestNodeLocalStore(t *testing.T) {
 	assert.Equal(t, data1.NetworkID, cfg.NetworkID, "Expected same network id")
 
 	// create a new local node from persisted node data
-	node1, err := NewLocalNode(cfg, address, true)
+	node1, err := NewLocalNode(cfg, &addr, true)
 	assert.NoError(t, err, "local node creation error")
 	assert.Equal(t, node.NodeInfo.ID.String(), node1.NodeInfo.ID.String(), "expected restored node")
 	assert.Equal(t, node.NetworkID(), cfg.NetworkID, "Expected same network id")

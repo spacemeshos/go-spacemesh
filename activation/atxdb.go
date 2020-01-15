@@ -7,6 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -29,6 +30,11 @@ func getAtxBodyKey(atxId types.AtxId) []byte {
 
 var errInvalidSig = fmt.Errorf("identity not found when validating signature, invalid atx")
 
+type atxChan struct {
+	ch        chan struct{}
+	listeners int
+}
+
 type ActivationDb struct {
 	sync.RWMutex
 	//todo: think about whether we need one db or several
@@ -43,19 +49,63 @@ type ActivationDb struct {
 	calcActiveSetFunc func(epoch types.EpochId, blocks map[types.BlockID]struct{}) (map[string]struct{}, error)
 	processAtxMutex   sync.Mutex
 	assLock           sync.Mutex
+	atxChannels       map[types.AtxId]*atxChan
 }
 
 func NewActivationDb(dbstore database.Database, idstore IdStore, meshDb *mesh.MeshDB, layersPerEpoch uint16, nipstValidator NipstValidator, log log.Log) *ActivationDb {
-	db := &ActivationDb{atxs: dbstore,
+	db := &ActivationDb{
+		IdStore:          idstore,
+		atxs:             dbstore,
 		atxHeaderCache:   NewAtxCache(600),
 		meshDb:           meshDb,
-		nipstValidator:   nipstValidator,
 		LayersPerEpoch:   layersPerEpoch,
-		IdStore:          idstore,
+		nipstValidator:   nipstValidator,
 		pendingActiveSet: make(map[types.Hash12]*sync.Mutex),
-		log:              log}
+		log:              log,
+		atxChannels:      make(map[types.AtxId]*atxChan),
+	}
 	db.calcActiveSetFunc = db.CalcActiveSetSize
 	return db
+}
+
+var closedChan = make(chan struct{})
+
+func init() {
+	close(closedChan)
+}
+
+func (db *ActivationDb) AwaitAtx(id types.AtxId) chan struct{} {
+	db.Lock()
+	defer db.Unlock()
+
+	if _, err := db.atxs.Get(getAtxHeaderKey(id)); err == nil {
+		return closedChan
+	}
+
+	ch, found := db.atxChannels[id]
+	if !found {
+		ch = &atxChan{
+			ch:        make(chan struct{}),
+			listeners: 0,
+		}
+		db.atxChannels[id] = ch
+	}
+	ch.listeners++
+	return ch.ch
+}
+
+func (db *ActivationDb) UnsubscribeAtx(id types.AtxId) {
+	db.Lock()
+	defer db.Unlock()
+
+	ch, found := db.atxChannels[id]
+	if !found {
+		return
+	}
+	ch.listeners--
+	if ch.listeners < 1 {
+		delete(db.atxChannels, id)
+	}
 }
 
 func (db *ActivationDb) ProcessAtxs(atxs []*types.ActivationTx) error {
@@ -265,6 +315,7 @@ func (db *ActivationDb) releaseRunningLock(viewHash types.Hash12) {
 // - ATX LayerID is NipstLayerTime or less after the PositioningATX LayerID.
 // - The ATX view of the previous epoch contains ActiveSetSize activations.
 func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
+	events.Publish(events.NewAtx{Id: atx.ShortString(), LayerId: uint64(atx.PubLayerIdx.GetEpoch(db.LayersPerEpoch))})
 	pub, err := ExtractPublicKey(atx)
 	if err != nil {
 		return fmt.Errorf("cannot validate atx sig atx id %v err %v", atx.ShortString(), err)
@@ -290,7 +341,9 @@ func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error 
 		prevEp := prevATX.PubLayerIdx.GetEpoch(db.LayersPerEpoch)
 		curEp := atx.PubLayerIdx.GetEpoch(db.LayersPerEpoch)
 		if prevEp >= curEp {
-			return fmt.Errorf("prevAtx epoch (%v) isn't older than current atx epoch (%v)", prevEp, curEp)
+			return fmt.Errorf(
+				"prevAtx epoch (%v, layer %v) isn't older than current atx epoch (%v, layer %v)",
+				prevEp, prevATX.PubLayerIdx, curEp, atx.PubLayerIdx)
 		}
 
 		if prevATX.Sequence+1 != atx.Sequence {
@@ -444,6 +497,13 @@ func (db *ActivationDb) storeAtxUnlocked(atx *types.ActivationTx) error {
 	if err != nil {
 		return err
 	}
+
+	// notify subscribers
+	if ch, found := db.atxChannels[atx.Id()]; found {
+		close(ch.ch)
+		delete(db.atxChannels, atx.Id())
+	}
+
 	return nil
 }
 
@@ -525,16 +585,12 @@ func (db *ActivationDb) GetNodeLastAtxId(nodeId types.NodeId) (types.AtxId, erro
 }
 
 // GetPosAtxId returns the best (highest layer id), currently known to this node, pos atx id
-func (db *ActivationDb) GetPosAtxId(epochId types.EpochId) (*types.AtxId, error) {
+func (db *ActivationDb) GetPosAtxId() (types.AtxId, error) {
 	idAndLayer, err := db.getTopAtx()
 	if err != nil {
-		return types.EmptyAtxId, err
+		return *types.EmptyAtxId, err
 	}
-	if idAndLayer.LayerId.GetEpoch(db.LayersPerEpoch) != epochId {
-		return types.EmptyAtxId, fmt.Errorf("current posAtx (epoch %v) does not belong to the requested epoch (%v)",
-			idAndLayer.LayerId.GetEpoch(db.LayersPerEpoch), epochId)
-	}
-	return &idAndLayer.AtxId, nil
+	return idAndLayer.AtxId, nil
 }
 
 // GetAtxHeader returns the ATX header by the given ID. This function is thread safe and will return an error if the ID

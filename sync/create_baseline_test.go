@@ -79,11 +79,11 @@ func atxs(num int) ([]*types.ActivationTx, []types.AtxId) {
 	signer := signing.NewEdSigner()
 	for i := 0; i < num; i++ {
 		atx := atxWithProof(signer.PublicKey().String(), proof)
-		signed, err := activation.SignAtx(signer, atx)
+		err := activation.SignAtx(signer, atx)
 		if err != nil {
 			panic(err)
 		}
-		atxs = append(atxs, signed)
+		atxs = append(atxs, atx)
 		ids = append(ids, atx.Id())
 	}
 	return atxs, ids

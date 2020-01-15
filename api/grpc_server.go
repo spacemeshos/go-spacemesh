@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/api/pb"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/miner"
+	"google.golang.org/grpc/keepalive"
 	"net"
 	"strconv"
 	"time"
@@ -227,9 +227,20 @@ type TxAPI interface {
 }
 
 // NewGrpcService create a new grpc service using config data.
-func NewGrpcService(net NetworkAPI, state StateAPI, tx TxAPI, txMempool *miner.TxMempool, mining MiningAPI, oracle OracleAPI, genTime GenesisTimeAPI, post PostAPI, layerDurationSec int, logging LoggingAPI) *SpacemeshGrpcService {
-	port := config.ConfigValues.GrpcServerPort
-	server := grpc.NewServer()
+func NewGrpcService(port int, net NetworkAPI, state StateAPI, tx TxAPI, txMempool *miner.TxMempool, mining MiningAPI, oracle OracleAPI, genTime GenesisTimeAPI, post PostAPI, layerDurationSec int, logging LoggingAPI) *SpacemeshGrpcService {
+	options := []grpc.ServerOption{
+		// XXX: this is done to prevent routers from cleaning up our connections (e.g aws load balances..)
+		// TODO: these parameters work for now but we might need to revisit or add them as configuration
+		// TODO: Configure maxconns, maxconcurrentcons ..
+		grpc.KeepaliveParams(keepalive.ServerParameters{
+			time.Minute * 120,
+			time.Minute * 180,
+			time.Minute * 10,
+			time.Minute,
+			time.Minute * 3,
+		}),
+	}
+	server := grpc.NewServer(options...)
 	return &SpacemeshGrpcService{
 		Server:        server,
 		Port:          uint(port),
@@ -253,8 +264,7 @@ func (s SpacemeshGrpcService) StartService() {
 
 // This is a blocking method designed to be called using a go routine
 func (s SpacemeshGrpcService) startServiceInternal() {
-	port := config.ConfigValues.GrpcServerPort
-	addr := ":" + strconv.Itoa(int(port))
+	addr := ":" + strconv.Itoa(int(s.Port))
 
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -267,7 +277,7 @@ func (s SpacemeshGrpcService) startServiceInternal() {
 	// SubscribeOnNewConnections reflection service on gRPC server
 	reflection.Register(s.Server)
 
-	log.Debug("grpc API listening on port %d", port)
+	log.Info("grpc API listening on port %d", s.Port)
 
 	// start serving - this blocks until err or server is stopped
 	if err := s.Server.Serve(lis); err != nil {
@@ -321,7 +331,7 @@ func (s SpacemeshGrpcService) GetUpcomingAwards(ctx context.Context, empty *empt
 
 func (s SpacemeshGrpcService) GetGenesisTime(ctx context.Context, empty *empty.Empty) (*pb.SimpleMessage, error) {
 	log.Info("GRPC GetGenesisTime msg")
-	return &pb.SimpleMessage{Value: s.GenTime.GetGenesisTime().String()}, nil
+	return &pb.SimpleMessage{Value: s.GenTime.GetGenesisTime().Format(time.RFC3339)}, nil
 }
 
 func (s SpacemeshGrpcService) ResetPost(ctx context.Context, empty *empty.Empty) (*pb.SimpleMessage, error) {

@@ -82,11 +82,11 @@ func TestBlockListener(t *testing.T) {
 	atx2.Nipst.PostProof.Challenge = poetRef[:]
 	atx3.Nipst.PostProof.Challenge = poetRef[:]
 
-	_, err = activation.SignAtx(signer, atx1)
+	err = activation.SignAtx(signer, atx1)
 	assert.NoError(t, err)
-	_, err = activation.SignAtx(signer, atx2)
+	err = activation.SignAtx(signer, atx2)
 	assert.NoError(t, err)
-	_, err = activation.SignAtx(signer, atx3)
+	err = activation.SignAtx(signer, atx3)
 	assert.NoError(t, err)
 
 	err = bl1.ProcessAtxs([]*types.ActivationTx{atx1, atx2, atx3})
@@ -158,7 +158,7 @@ func TestBlockListener_DataAvailability(t *testing.T) {
 	poetRef := sha256.Sum256(poetProofBytes)
 
 	atx1.Nipst.PostProof.Challenge = poetRef[:]
-	_, err = activation.SignAtx(signer, atx1)
+	err = activation.SignAtx(signer, atx1)
 	assert.NoError(t, err)
 	// Push a block with tx1 and and atx1 into bl1.
 
@@ -631,7 +631,7 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 
 	poetRef := sha256.Sum256(poetProofBytes)
 	atx.Nipst.PostProof.Challenge = poetRef[:]
-	_, err = activation.SignAtx(signer, atx)
+	err = activation.SignAtx(signer, atx)
 	assert.NoError(t, err)
 
 	blk := types.NewExistingBlock(1, []byte(rand.RandString(8)))

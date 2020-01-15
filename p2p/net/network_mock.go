@@ -87,7 +87,7 @@ func (n *NetworkMock) SetDialDelayMs(delay int8) {
 }
 
 // Dial dials
-func (n *NetworkMock) Dial(address string, remotePublicKey p2pcrypto.PublicKey) (Connection, error) {
+func (n *NetworkMock) Dial(address net.Addr, remotePublicKey p2pcrypto.PublicKey) (Connection, error) {
 	atomic.AddInt32(&n.dialCount, 1)
 	time.Sleep(time.Duration(n.dialDelayMs) * time.Millisecond)
 	sID := n.dialSessionID
