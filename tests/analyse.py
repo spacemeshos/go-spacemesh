@@ -1,4 +1,5 @@
 import datetime
+import random
 
 from tests import queries
 
@@ -68,7 +69,7 @@ def analyze_mining(deployment, last_layer, layers_per_epoch, layer_avg_size, tot
 
 def analyze_propagation(deployment, last_layer, max_block_propagation, max_atx_propagation):
     for i in range(last_layer):
-        propagation, msg_time = queries.layer_block_max_propagation(deployment, last_layer)
+        propagation, msg_time = queries.layer_block_max_propagation(deployment, random.randrange(3, last_layer))
         print(propagation, msg_time)
         assert msg_time < datetime.timedelta(seconds=max_block_propagation)
         propagation, msg_time = queries.all_atx_max_propagation(deployment)

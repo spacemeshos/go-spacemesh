@@ -1,7 +1,8 @@
 import collections
+import random
 import re
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from elasticsearch_dsl import Search, Q
 
@@ -454,12 +455,13 @@ def layer_block_max_propagation(deployment, layer):
     return max_propagation, msg_time
 
 
-def all_atx_max_propagation(deployment):
+def all_atx_max_propagation(deployment, samples_per_node=1):
     nodes = get_atx_per_node(deployment)
     max_propagation = None
     msg_time = None
     for n in nodes:
-        for atx in nodes[n]:
+        for i in range(samples_per_node):
+            atx = random.choice(nodes[n])
             # id = re.split(r'\.', x.N)[0]
             block_recv_msg = {"M": "got new ATX", "atx_id": atx.atx_id}
             # if we have a delta (we found 2 times to get the diff from, check if this delta is the greatest.)
