@@ -742,6 +742,7 @@ func TestNinjaTortoise_S200P199(t *testing.T) {
 }
 
 func TestNinjaTortoise_Increasing_Memory(t *testing.T) {
+	t.Skip()
 	layers := 1000
 
 	//these where set during benchmarking
