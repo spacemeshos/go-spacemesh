@@ -499,6 +499,8 @@ func (ni *NinjaTortoise) updatePatSupport(p votingPattern, bids []types.BlockID,
 	ni.TPatSupport[p][idx] = votingPattern{id: pid, LayerID: idx}
 }
 
+//todo not sure initTallyToBase is even needed
+//todo due to the fact that we treat layers under pbase as irreversible
 func (ni *NinjaTortoise) initTallyToBase(base votingPattern, p votingPattern, windowStart types.LayerID) {
 	mp := make(map[BlockIDLayerTuple]vec, len(ni.TTally[base]))
 	for b, v := range ni.TTally[base] {
