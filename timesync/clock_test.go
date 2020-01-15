@@ -10,16 +10,6 @@ import (
 	"time"
 )
 
-type MockTimer struct {
-}
-
-func (MockTimer) Now() time.Time {
-	layout := "2006-01-02T15:04:05.000Z"
-	str := "2018-11-12T11:45:26.371Z"
-	start, _ := time.Parse(layout, str)
-	return start
-}
-
 func TestClock_StartClock(t *testing.T) {
 	tick := 1 * time.Second
 	c := RealClock{}

@@ -40,17 +40,34 @@ func (m *mockConv) LayerToTime(types.LayerID) time.Time {
 	return m.t
 }
 
+type mockClock struct {
+	now time.Time
+}
+
+func newMockClock() *mockClock {
+	return &mockClock{now: getTime()}
+}
+
+func (m *mockClock) advance(toAdd time.Duration) {
+	m.now = m.now.Add(toAdd)
+}
+
+func (m *mockClock) Now() time.Time {
+	return m.now
+}
+
 func TestNewTicker(t *testing.T) {
 	r := require.New(t)
-	tr := NewTicker(RealClock{}, conv)
+	tr := NewTicker(newMockClock(), conv)
 	r.NotNil(tr.subs)
 	r.False(tr.started)
 }
 
 func TestTicker_StartNotifying(t *testing.T) {
 	r := require.New(t)
-	mc := newMockConv(1, time.Now())
-	tr := NewTicker(RealClock{}, mc)
+	cl := newMockClock()
+	mc := newMockConv(1, cl.Now())
+	tr := NewTicker(cl, mc)
 	_, e := tr.Notify()
 	r.Equal(1, mc.countToLayer)
 	r.Equal(errNotStarted, e)
@@ -63,7 +80,8 @@ func TestTicker_StartNotifying(t *testing.T) {
 
 func TestTicker_Notify(t *testing.T) {
 	r := require.New(t)
-	tr := NewTicker(RealClock{}, newMockConv(1, time.Now()))
+	cl := newMockClock()
+	tr := NewTicker(cl, newMockConv(1, cl.Now()))
 	tr.StartNotifying()
 	tr.lastTickedLayer = 3
 	_, e := tr.Notify() // should fail to send
@@ -107,7 +125,7 @@ func TestTicker_Notify(t *testing.T) {
 
 func TestTicker_NotifyErrThreshold(t *testing.T) {
 	r := require.New(t)
-	c := RealClock{}
+	c := newMockClock()
 	ld := 10000 * time.Millisecond
 	tr := NewTicker(c, LayerConv{
 		duration: ld,
@@ -120,9 +138,10 @@ func TestTicker_NotifyErrThreshold(t *testing.T) {
 
 func TestTicker_timeSinceLastTick(t *testing.T) {
 	r := require.New(t)
-	tr := NewTicker(RealClock{}, LayerConv{
+	c := newMockClock()
+	tr := NewTicker(c, LayerConv{
 		duration: 100 * time.Millisecond,
-		genesis:  time.Now().Add(-320 * time.Millisecond),
+		genesis:  c.Now().Add(-320 * time.Millisecond),
 	})
 	r.True(tr.timeSinceLastTick() >= 20)
 }
@@ -130,7 +149,7 @@ func TestTicker_timeSinceLastTick(t *testing.T) {
 func TestTicker_AwaitLayer(t *testing.T) {
 	r := require.New(t)
 
-	tmr := &RealClock{}
+	tmr := newMockClock()
 	ticker := NewTicker(tmr, LayerConv{
 		duration: 10 * time.Millisecond,
 		genesis:  tmr.Now(),
@@ -145,7 +164,7 @@ func TestTicker_AwaitLayer(t *testing.T) {
 	default:
 	}
 
-	time.Sleep(10 * time.Millisecond)
+	tmr.advance(10 * time.Millisecond)
 	ticker.StartNotifying()
 	missedTicks, err := ticker.Notify()
 	r.NoError(err)
@@ -169,18 +188,6 @@ func TestTicker_AwaitLayer(t *testing.T) {
 	ch3 := ticker.AwaitLayer(l - 1)
 
 	r.Equal(ch2, ch3) // the same closedChannel should be returned for all past layers
-}
-
-type mockClock struct {
-	now time.Time
-}
-
-func (m *mockClock) advance(toAdd time.Duration) {
-	m.now = m.now.Add(toAdd)
-}
-
-func (m *mockClock) Now() time.Time {
-	return m.now
 }
 
 func TestTicker_AwaitLayerOldSubs(t *testing.T) {

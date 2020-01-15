@@ -165,7 +165,9 @@ func (t *Ticker) AwaitLayer(layerId types.LayerID) chan struct{} {
 	t.m.Lock()
 	defer t.m.Unlock()
 
-	if t.clock.Now().After(t.conv.LayerToTime(layerId)) { // passed the time of layerId
+	layerTime := t.conv.LayerToTime(layerId)
+	now := t.clock.Now()
+	if now.After(layerTime) || now.Equal(layerTime) { // passed the time of layerId
 		return closedChan
 	}
 
