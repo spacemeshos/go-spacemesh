@@ -203,14 +203,17 @@ func TestTicker_AwaitLayerOldSubs(t *testing.T) {
 	ch := tr.AwaitLayer(5) // sub to layer 5
 	c.advance(lDur * 2)    // clock advanced only two layers
 	tr.Notify()            // notify called (before layer 5)
-	c.advance(lDur * 10)   // now we passed layer 5 by a few layers
-	tr.Notify()            // this should release ch since layer 5 is in the past
-
-	tm := time.NewTimer(1 * time.Second)
 	select {
 	case <-ch:
-		return
-	case <-tm.C:
+		r.FailNow(t.Name() + "released before layer 5")
+	default:
+	}
+	c.advance(lDur * 10) // now we passed layer 5 by a few layers
+	tr.Notify()          // this should release ch since layer 5 is in the past
+
+	select {
+	case <-ch:
+	default:
 		r.FailNow(t.Name() + "timed out")
 	}
 }
