@@ -7,12 +7,11 @@ import (
 	"github.com/seehuhn/mt19937"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/events"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/sha256-simd"
 	"math/rand"
-
-	"github.com/spacemeshos/go-spacemesh/events"
-	"github.com/spacemeshos/go-spacemesh/log"
 
 	"math/big"
 
@@ -202,7 +201,12 @@ func (m *Mesh) setLayerHash(layerId types.LayerID) {
 	}
 	layerHash := sha256.New()
 	layerHash.Write(m.layerHash)
+	sortedBlockIds := make([]types.BlockID, 0, len(validBlockIds))
 	for id := range validBlockIds {
+		sortedBlockIds = append(sortedBlockIds, id)
+	}
+	types.SortBlockIds(sortedBlockIds)
+	for _, id := range sortedBlockIds {
 		layerHash.Write(id.ToBytes())
 	}
 	m.layerHash = layerHash.Sum(nil)
