@@ -10,8 +10,10 @@ import (
 	"time"
 )
 
+const d50milli = 50 * time.Millisecond
+
 func TestClock_StartClock(t *testing.T) {
-	tick := 1 * time.Second
+	tick := d50milli
 	c := RealClock{}
 	ts := NewClock(c, tick, c.Now(), log.NewDefault(t.Name()))
 	tk := ts.Subscribe()
@@ -27,11 +29,11 @@ func TestClock_StartClock(t *testing.T) {
 }
 
 func TestClock_StartClock_BeforeEpoch(t *testing.T) {
-	tick := 1 * time.Second
+	tick := d50milli
 	tmr := RealClock{}
 
-	waitTime := 2 * time.Second
-	ts := NewClock(tmr, tick, tmr.Now().Add(2*time.Second), log.NewDefault(t.Name()))
+	waitTime := 2 * d50milli
+	ts := NewClock(tmr, tick, tmr.Now().Add(2*d50milli), log.NewDefault(t.Name()))
 	tk := ts.Subscribe()
 	then := time.Now()
 	ts.StartNotifying()
@@ -48,7 +50,7 @@ func TestClock_StartClock_BeforeEpoch(t *testing.T) {
 
 func TestClock_TickFutureGenesis(t *testing.T) {
 	tmr := &RealClock{}
-	ticker := NewClock(tmr, 1*time.Second, tmr.Now().Add(2*time.Second), log.NewDefault(t.Name()))
+	ticker := NewClock(tmr, d50milli, tmr.Now().Add(2*d50milli), log.NewDefault(t.Name()))
 	assert.Equal(t, types.LayerID(0), ticker.lastTickedLayer) // check assumption that we are on genesis = 0
 	sub := ticker.Subscribe()
 	ticker.StartNotifying()
@@ -60,14 +62,15 @@ func TestClock_TickFutureGenesis(t *testing.T) {
 
 func TestClock_TickPastGenesis(t *testing.T) {
 	tmr := &RealClock{}
-	ticker := NewClock(tmr, 1*time.Second, tmr.Now().Add(-3900*time.Millisecond), log.NewDefault(t.Name()))
+	ticker := NewClock(tmr, 2*d50milli, tmr.Now().Add(-7*d50milli), log.NewDefault(t.Name()))
 	sub := ticker.Subscribe()
 	ticker.StartNotifying()
 	start := time.Now()
 	x := <-sub
 	duration := time.Since(start)
 	assert.Equal(t, types.LayerID(5), x)
-	assert.True(t, duration > 99*time.Millisecond && duration < 107*time.Millisecond, duration)
+	// expected ~50
+	assert.True(t, duration > 40*time.Millisecond && duration < 60*time.Millisecond, duration)
 }
 
 func TestClock_NewClock(t *testing.T) {
@@ -78,7 +81,7 @@ func TestClock_NewClock(t *testing.T) {
 }
 
 func TestClock_CloseTwice(t *testing.T) {
-	ld := time.Duration(20) * time.Second
+	ld := d50milli
 	clock := NewClock(RealClock{}, ld, time.Now(), log.NewDefault(t.Name()))
 	clock.StartNotifying()
 	clock.Close()
