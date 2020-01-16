@@ -1,26 +1,26 @@
 import copy
-from datetime import datetime, timedelta
-from enum import Enum
 import json
-from kubernetes import client
-from kubernetes.client.rest import ApiException
-from kubernetes.stream import stream
 import pprint
-import pytest
-import pytz
 import random
 import subprocess
 import sys
 import time
+from datetime import datetime, timedelta
+from enum import Enum
 from typing import List
 
+import pytest
+import pytz
+from kubernetes import client
+from kubernetes.client.rest import ApiException
+from kubernetes.stream import stream
 from pytest_testconfig import config as testconfig
+
 from tests import analyse, pod, deployment, queries, statefulset, tx_generator
 from tests.conftest import DeploymentInfo, NetworkDeploymentInfo
 from tests.ed25519.eddsa import genkeypair
 from tests.hare.assert_hare import validate_hare
 from tests.misc import ContainerSpec, CoreV1ApiClient
-
 
 BOOT_DEPLOYMENT_FILE = './k8s/bootstrapoet-w-conf.yml'
 BOOT_STATEFULSET_FILE = './k8s/bootstrapoet-w-conf-ss.yml'
@@ -338,7 +338,7 @@ def start_poet(init_session, add_curl, setup_bootstrap):
         raise Exception("Failed to read container logs in {0}".format("poet"))
 
     print("Starting PoET")
-    out = api_call(bs_pod['pod_ip'], '{ "gatewayAddresses": ["127.0.0.1:9091"] }',  'v1/start', namespace, "80")
+    out = api_call(bs_pod['pod_ip'], '{ "gatewayAddresses": ["127.0.0.1:9091"] }', 'v1/start', namespace, "80")
     assert out == "{}", "PoET start returned error {0}".format(out)
     print("PoET started")
 
@@ -495,7 +495,7 @@ def test_transaction(setup_network):
     iterations_to_try = 7
     for x in range(iterations_to_try):
         layer_duration = testconfig['client']['args']['layer-duration-sec']
-        print("\nSleeping layer duration ({}s)... {}/{}".format(layer_duration, x+1, iterations_to_try))
+        print("\nSleeping layer duration ({}s)... {}/{}".format(layer_duration, x + 1, iterations_to_try))
         time.sleep(float(layer_duration))
 
         out = client_wrapper.call(Api.BALANCE, {'address': dst})
@@ -548,7 +548,8 @@ def test_transactions(setup_network):
         balance = (sum([tx.amount for tx in accounts_snapshot[acc].recv]) -
                    sum(tx.amount + tx.fee for tx in accounts_snapshot[acc].send))
         if debug:
-            print("account={}, balance={}, everything={}".format(acc[-40:][:5], balance, pprint.pformat(accounts_snapshot[acc])))
+            print("account={}, balance={}, everything={}".format(acc[-40:][:5], balance,
+                                                                 pprint.pformat(accounts_snapshot[acc])))
         return balance
 
     def random_account(accounts_snapshot: dict = None) -> str:
@@ -613,6 +614,7 @@ def test_transactions(setup_network):
         nonlocal tap_init_amount
         tap_init_amount = int(client_wrapper.call(Api.BALANCE, {'address': tap}).get('value'))
         accounts[tap].nonce = int(client_wrapper.call(Api.NONCE, {'address': tap}).get('value'))
+
     initialize_tap()
 
     def print_title(title: str):
@@ -629,7 +631,7 @@ def test_transactions(setup_network):
             balance = tap_init_amount + expected_balance(tap)
             if balance < 10:  # Stop sending if the tap is out of money
                 break
-            amount = random.randint(1, int(balance/2))
+            amount = random.randint(1, int(balance / 2))
             str_pub = new_account()
             assert transfer(client_wrapper, tap, str_pub, amount), "Transfer from tap failed"
 
@@ -638,7 +640,7 @@ def test_transactions(setup_network):
         ready_accounts = set()
         for x in range(iterations_to_try):
             layer_duration = testconfig['client']['args']['layer-duration-sec']
-            print("\nSleeping layer duration ({}s)... {}/{}".format(layer_duration, x+1, iterations_to_try))
+            print("\nSleeping layer duration ({}s)... {}/{}".format(layer_duration, x + 1, iterations_to_try))
             time.sleep(float(layer_duration))
             if tap not in ready_accounts and test_account(client_wrapper, tap, tap_init_amount):
                 ready_accounts.add(tap)
@@ -650,7 +652,8 @@ def test_transactions(setup_network):
             if accounts.keys() == ready_accounts:
                 break
         assert accounts.keys() == ready_accounts, \
-            "Not all accounts received sent txs. Accounts that aren't ready: %s" % (accounts.keys()-ready_accounts)
+            "Not all accounts received sent txs. Accounts that aren't ready: %s" % (accounts.keys() - ready_accounts)
+
     send_txs_from_tap()
 
     def is_there_a_valid_acc(min_balance, accounts_snapshot: dict = None):
@@ -692,7 +695,7 @@ def test_transactions(setup_network):
         iterations_to_try = int(testconfig['client']['args']['layers-per-epoch']) * 2
         for x in range(iterations_to_try):
             layer_duration = testconfig['client']['args']['layer-duration-sec']
-            print("\n[{}/{}] Sleeping layer duration ({}s)...".format(x+1, iterations_to_try, layer_duration))
+            print("\n[{}/{}] Sleeping layer duration ({}s)...".format(x + 1, iterations_to_try, layer_duration))
             time.sleep(float(layer_duration))
             ready = 0
             for pk in accounts:
@@ -703,7 +706,9 @@ def test_transactions(setup_network):
             if ready == len(accounts):
                 break
 
-        assert ready == len(accounts), "Not all accounts got the sent txs got: {}, want: {}".format(ready, len(accounts)-1)
+        assert ready == len(accounts), "Not all accounts got the sent txs got: {}, want: {}".format(ready,
+                                                                                                    len(accounts) - 1)
+
     send_txs_from_random_accounts()
     send_txs_from_random_accounts()
 
@@ -723,7 +728,7 @@ def test_mining(setup_network):
     out = client_wrapper.call(Api.BALANCE, {'address': addr})
     balance = int(out.get('value'))
 
-    tx_bytes = tx_gen.generate("0000000000000000000000000000000000002222", nonce, 246, 1, min(100, balance-1))
+    tx_bytes = tx_gen.generate("0000000000000000000000000000000000002222", nonce, 246, 1, min(100, balance - 1))
     print("submitting transaction")
     out = client_wrapper.call(Api.SUBMIT_TRANSACTION, {'tx': list(tx_bytes)})
     print(out)
@@ -736,7 +741,7 @@ def test_mining(setup_network):
     layers_per_epoch = int(testconfig['client']['args']['layers-per-epoch'])
     # check only third epoch
     epochs = 5
-    last_layer = epochs*layers_per_epoch
+    last_layer = epochs * layers_per_epoch
 
     layer_reached = queries.wait_for_latest_layer(testconfig["namespace"], last_layer, layers_per_epoch)
     print("test took {:.3f} seconds ".format(end - start))
@@ -747,6 +752,8 @@ def test_mining(setup_network):
 
     queries.assert_equal_layer_hashes(current_index, ns)
     validate_hare(current_index, ns)  # validate hare
+
+    analyse.analyze_propagation(testconfig['namespace'], layer_reached, 30, 30)
 
 
 ''' todo: when atx flow stabilized re enable this test
