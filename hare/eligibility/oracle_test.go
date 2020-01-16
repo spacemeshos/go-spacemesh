@@ -141,7 +141,7 @@ func TestOracle_buildVRFMessageConcurrency(t *testing.T) {
 	for i := 0; i < total; i++ {
 		wg.Add(1)
 		go func(x int) {
-			_, err := o.buildVRFMessage(1, int32(i%10))
+			_, err := o.buildVRFMessage(1, int32(x%10))
 			r.NoError(err)
 			wg.Done()
 		}(i)
