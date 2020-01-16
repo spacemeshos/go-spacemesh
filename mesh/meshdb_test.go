@@ -115,7 +115,7 @@ func createLayerWithRandVoting(index types.LayerID, prev []*types.Layer, blocksI
 }
 
 func TestForEachInView_Persistent(t *testing.T) {
-	mdb, err := NewPersistentMeshDB(Path+"/mesh_db/", log.New("TestForEachInView", "", ""))
+	mdb, err := NewPersistentMeshDB(Path+"/mesh_db/", 5, log.New("TestForEachInView", "", ""))
 	require.NoError(t, err)
 	defer mdb.Close()
 	defer teardown()
@@ -240,7 +240,7 @@ func BenchmarkNewPersistentMeshDB(b *testing.B) {
 
 	r := require.New(b)
 
-	mdb, err := NewPersistentMeshDB(path.Join(Path, "mesh_db"), log.NewDefault("meshDb"))
+	mdb, err := NewPersistentMeshDB(path.Join(Path, "mesh_db"), 5, log.NewDefault("meshDb"))
 	require.NoError(b, err)
 	defer mdb.Close()
 	defer teardown()
