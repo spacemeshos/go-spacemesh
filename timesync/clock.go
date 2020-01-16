@@ -26,6 +26,10 @@ type TimeClock struct {
 }
 
 func NewClock(c Clock, tickInterval time.Duration, genesisTime time.Time, logger log.Log) *TimeClock {
+	if tickInterval == 0 {
+		logger.Panic("could not create new clock: bad configuration: tick interval is zero")
+	}
+
 	t := &TimeClock{
 		Ticker:       NewTicker(c, LayerConv{duration: tickInterval, genesis: genesisTime}),
 		tickInterval: tickInterval,

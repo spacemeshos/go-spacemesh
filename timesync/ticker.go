@@ -75,7 +75,9 @@ var (
 	errMissedTickTime = errors.New("missed tick time by more than the allowed threshold")
 )
 
-const sendTickThreshold = 500 * time.Millisecond // allow up to sendTickThreshold
+// the limit on how late a notify can be
+// an attempt to notify later than sendTickThreshold from the expected tick time will resulted in a missed tick error
+const sendTickThreshold = 500 * time.Millisecond
 
 // Notify notifies all the subscribers with the current layer
 // if the tick time has passed notify is skipped and errMissedTickTime is returned
@@ -125,17 +127,15 @@ func (t *Ticker) Notify() (int, error) {
 		}
 	}
 
-	// update last ticked layer
-	t.lastTickedLayer = layer
+	t.lastTickedLayer = layer // update last ticked layer
+	t.m.Unlock()
 
 	if missedTicks > 0 {
 		t.log.With().Error("missed ticks for layer",
 			log.LayerId(uint64(layer)), log.Int("missed_count", missedTicks))
-		t.m.Unlock()
 		return missedTicks, errMissedTicks
 	}
 
-	t.m.Unlock()
 	return 0, nil
 }
 
