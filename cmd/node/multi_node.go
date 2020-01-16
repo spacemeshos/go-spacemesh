@@ -23,10 +23,11 @@ import (
 )
 
 type ManualClock struct {
-	subs         map[timesync.LayerTimer]struct{}
-	m            sync.Mutex
-	currentLayer types.LayerID
-	genesisTime  time.Time
+	subs          map[timesync.LayerTimer]struct{}
+	layerChannels map[types.LayerID]chan struct{}
+	m             sync.Mutex
+	currentLayer  types.LayerID
+	genesisTime   time.Time
 }
 
 func NewManualClock(genesisTime time.Time) *ManualClock {
@@ -47,8 +48,25 @@ func (t *ManualClock) Unsubscribe(ch timesync.LayerTimer) {
 func (t *ManualClock) StartNotifying() {
 }
 
+var closedChannel chan struct{}
+
+func init() {
+	closedChannel = make(chan struct{})
+	close(closedChannel)
+}
+
 func (t *ManualClock) AwaitLayer(layerId types.LayerID) chan struct{} {
-	return nil
+	t.m.Lock()
+	defer t.m.Unlock()
+	if layerId <= t.currentLayer {
+		return closedChannel
+	}
+	if ch, found := t.layerChannels[layerId]; found {
+		return ch
+	}
+	ch := make(chan struct{})
+	t.layerChannels[layerId] = ch
+	return ch
 }
 
 func (t *ManualClock) Subscribe() timesync.LayerTimer {
@@ -64,6 +82,10 @@ func (t *ManualClock) Tick() {
 	defer t.m.Unlock()
 
 	t.currentLayer++
+	if ch, found := t.layerChannels[t.currentLayer]; found {
+		close(ch)
+		delete(t.layerChannels, t.currentLayer)
+	}
 	for s := range t.subs {
 		s <- t.currentLayer
 	}
