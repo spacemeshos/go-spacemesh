@@ -57,6 +57,10 @@ func (m *MeshValidatorMock) HandleLateBlock(bl *types.Block) {}
 
 type MockState struct{}
 
+func (MockState) GetStateRoot() types.Hash32 {
+	return [32]byte{}
+}
+
 func (MockState) ValidateNonceAndBalance(transaction *types.Transaction) error {
 	panic("implement me")
 }

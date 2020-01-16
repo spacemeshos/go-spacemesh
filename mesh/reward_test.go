@@ -16,6 +16,10 @@ type MockMapState struct {
 	TotalReward int64
 }
 
+func (MockMapState) GetStateRoot() types.Hash32 {
+	return [32]byte{}
+}
+
 func (MockMapState) ValidateNonceAndBalance(transaction *types.Transaction) error {
 	panic("implement me")
 }

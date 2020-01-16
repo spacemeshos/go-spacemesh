@@ -92,6 +92,10 @@ func SyncMockFactory(number int, conf Configuration, name string, dbType string,
 
 type stateMock struct{}
 
+func (stateMock) GetStateRoot() types.Hash32 {
+	panic("implement me")
+}
+
 func (stateMock) ValidateNonceAndBalance(transaction *types.Transaction) error {
 	panic("implement me")
 }

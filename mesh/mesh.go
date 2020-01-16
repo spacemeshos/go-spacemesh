@@ -42,6 +42,7 @@ type TxProcessor interface {
 	AddressExists(addr types.Address) bool
 	ValidateNonceAndBalance(transaction *types.Transaction) error
 	GetLayerApplied(txId types.TransactionId) *types.LayerID
+	GetStateRoot() types.Hash32
 }
 
 type TxMemPoolInValidator interface {
@@ -186,10 +187,18 @@ func (m *Mesh) ValidateLayer(lyr *types.Layer) {
 			m.With().Error("failed to push transactions", log.Err(err))
 			break
 		}
+		m.logStateRoot(layerId)
 		m.setLayerHash(layerId)
 	}
 	m.persistLayerHash()
 	m.Info("done validating layer %v", lyr.Index())
+}
+
+func (m *Mesh) logStateRoot(layerId types.LayerID) {
+	m.Event().Info("end of layer state root",
+		log.LayerId(layerId.Uint64()),
+		log.String("state_root", util.Bytes2Hex(m.TxProcessor.GetStateRoot().Bytes())),
+	)
 }
 
 func (m *Mesh) setLayerHash(layerId types.LayerID) {
@@ -210,7 +219,9 @@ func (m *Mesh) setLayerHash(layerId types.LayerID) {
 		layerHash.Write(id.ToBytes())
 	}
 	m.layerHash = layerHash.Sum(nil)
-	m.Event().Info("new layer hash", log.LayerId(layerId.Uint64()), log.String("layer_hash", util.Bytes2Hex(m.layerHash)))
+	m.Event().Info("new layer hash",
+		log.LayerId(layerId.Uint64()),
+		log.String("layer_hash", util.Bytes2Hex(m.layerHash)))
 }
 
 func (m *Mesh) persistLayerHash() {

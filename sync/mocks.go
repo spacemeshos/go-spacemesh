@@ -90,6 +90,10 @@ func ConfigTst() mesh.Config {
 
 type MockState struct{}
 
+func (s MockState) GetStateRoot() types.Hash32 {
+	panic("implement me")
+}
+
 func (MockState) ValidateNonceAndBalance(transaction *types.Transaction) error {
 	panic("implement me")
 }
