@@ -849,7 +849,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 		log.Error("cannot parse genesis time %v", err)
 	}
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
-	clock := timesync.NewTicker(timesync.RealClock{}, ld, gTime)
+	clock := timesync.NewClock(timesync.RealClock{}, ld, gTime, log.NewDefault("clock"))
 	err = app.initServices(nodeID, swarm, dbStorepath, app.edSgn, false, nil, uint32(app.Config.LayerAvgSize), postClient, poetClient, vrfSigner, uint16(app.Config.LayersPerEpoch), clock)
 	if err != nil {
 		log.Error("cannot start services %v", err.Error())
