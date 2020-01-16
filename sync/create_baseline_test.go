@@ -33,7 +33,7 @@ func TestCreateBaseline(t *testing.T) {
 
 	id := Path
 	lg := log.New(id, "", "")
-	mshdb, _ := mesh.NewPersistentMeshDB(id, lg.WithOptions(log.Nop))
+	mshdb, _ := mesh.NewPersistentMeshDB(id, 5, lg.WithOptions(log.Nop))
 	nipstStore, _ := database.NewLDBDatabase(id+"nipst", 0, 0, lg.WithName("nipstDbStore").WithOptions(log.Nop))
 	defer nipstStore.Close()
 	atxdbStore, _ := database.NewLDBDatabase(id+"atx", 0, 0, lg.WithOptions(log.Nop))

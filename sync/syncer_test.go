@@ -74,7 +74,7 @@ func SyncMockFactory(number int, conf Configuration, name string, dbType string,
 	sim := service.NewSimulator()
 	tick := 200 * time.Millisecond
 	timer := timesync.RealClock{}
-	ts := timesync.NewTicker(timer, tick, timer.Now().Add(tick*-4))
+	ts := timesync.NewClock(timer, tick, timer.Now().Add(tick*-4), log.NewDefault("clock"))
 	for i := 0; i < number; i++ {
 		net := sim.NewNode()
 		name := fmt.Sprintf(name+"_%d", i)
@@ -134,7 +134,7 @@ var rewardConf = mesh.Config{
 
 func getMeshWithLevelDB(id string) *mesh.Mesh {
 	lg := log.New(id, "", "")
-	mshdb, _ := mesh.NewPersistentMeshDB(id, lg)
+	mshdb, _ := mesh.NewPersistentMeshDB(id, 5, lg)
 	atxdbStore, _ := database.NewLDBDatabase(id+"atx", 0, 0, lg.WithOptions(log.Nop))
 	atxdb := activation.NewActivationDb(atxdbStore, &MockIStore{}, mshdb, 10, &ValidatorMock{}, lg.WithOptions(log.Nop))
 	return mesh.NewMesh(mshdb, atxdb, rewardConf, &MeshValidatorMock{}, &MockTxMemPool{}, &MockAtxMemPool{}, &stateMock{}, lg.WithOptions(log.Nop))
@@ -659,7 +659,7 @@ func Test_TwoNodes_SyncIntegrationSuite(t *testing.T) {
 	layout := "2006-01-02T15:04:05.000Z"
 	str := "2016-11-12T11:45:26.371Z"
 	start, _ := time.Parse(layout, str)
-	ts := timesync.NewTicker(timesync.RealClock{}, tick, start)
+	ts := timesync.NewClock(timesync.RealClock{}, tick, start, log.NewDefault(t.Name()))
 	sis.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
 		l := log.New(fmt.Sprintf("%s_%d", sis.name, atomic.LoadUint32(&i)), "", "")
 		msh := getMesh(memoryDB, fmt.Sprintf("%s_%s", sis.name, time.Now()))
@@ -784,7 +784,7 @@ func Test_Multiple_SyncIntegrationSuite(t *testing.T) {
 	layout := "2006-01-02T15:04:05.000Z"
 	str := "2018-11-12T11:45:26.371Z"
 	start, _ := time.Parse(layout, str)
-	ts := timesync.NewTicker(timesync.RealClock{}, tick, start)
+	ts := timesync.NewClock(timesync.RealClock{}, tick, start, log.NewDefault(t.Name()))
 	sis.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
 		l := log.New(fmt.Sprintf("%s_%d", sis.name, atomic.LoadUint32(&i)), "", "")
 		msh := getMesh(memoryDB, fmt.Sprintf("%s_%d", sis.name, atomic.LoadUint32(&i)))

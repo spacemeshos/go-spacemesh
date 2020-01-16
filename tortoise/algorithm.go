@@ -15,8 +15,6 @@ type Algorithm struct {
 type Tortoise interface {
 	handleIncomingLayer(ll *types.Layer)
 	latestComplete() types.LayerID
-	getVote(id types.BlockID) vec
-	getVotes() map[types.BlockID]vec
 }
 
 func NewAlgorithm(layerSize int, mdb *mesh.MeshDB, hdist int, lg log.Log) *Algorithm {
@@ -62,20 +60,4 @@ func (alg *Algorithm) HandleIncomingLayer(ll *types.Layer) (types.LayerID, types
 func updateMetrics(alg *Algorithm, ll *types.Layer) {
 	pbaseCount.Set(float64(alg.latestComplete()))
 	processedCount.Set(float64(ll.Index()))
-	var valid float64
-	var invalid float64
-	for _, k := range alg.getVotes() {
-		if k == Support {
-			valid++
-		} else {
-			invalid++
-		}
-	}
-	validBlocks.Set(valid)
-	invalidBlocks.Set(invalid)
-}
-
-func (alg *Algorithm) ContextualValidity(id types.BlockID) bool {
-	//todo after each layer we should persist alg.getVote(id) in mesh
-	return alg.getVote(id) == Support
 }
