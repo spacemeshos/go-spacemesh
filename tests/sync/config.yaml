@@ -24,7 +24,7 @@ bootstrap:
     data-folder: '/bin/data/'
     expected-layers: '50'
     storage-path: 'spacemesh-sync-data'
-    version: 'short_ids_100_l'
+    version: 'short_ids_100_l/'
     remote-data: 'true'
     hdist: '1'
 client:
@@ -41,7 +41,7 @@ client:
     data-folder: '/bin/data/'
     expected-layers: '50'
     storage-path: 'spacemesh-sync-data'
-    version: 'short_ids_100_l'
+    version: 'short_ids_100_l/'
     remote-data: 'true'
     hdist: '1'
 clientv2:
@@ -59,7 +59,7 @@ clientv2:
     storage-path: 'spacemesh-sync-data'
     hdist: '1'
     data-folder: '/usr/share/spacemesh/'
-    version: 'short_ids_100_l'
+    version: 'short_ids_100_l/'
     remote-data: 'false'
   deployment_type: statefulset
 elastic:
