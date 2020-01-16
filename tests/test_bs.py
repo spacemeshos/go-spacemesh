@@ -745,6 +745,7 @@ def test_mining(setup_network):
     time.sleep(50)
     analyse.analyze_mining(testconfig['namespace'], layer_reached, layers_per_epoch, layer_avg_size, total_pods)
 
+    queries.assert_equal_layer_hashes(current_index, ns)
     validate_hare(current_index, ns)  # validate hare
 
 

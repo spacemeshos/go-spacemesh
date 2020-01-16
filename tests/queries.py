@@ -414,3 +414,24 @@ def query_mem_usage(indx, ns):
 
 def query_atx_published(indx, ns, layer):
     return query_message(indx, ns, ns, {'M': 'atx published', 'layer_id': str(layer)}, False)
+
+
+# =====================================================================================
+# Layer hashes
+# =====================================================================================
+
+
+def compare_layer_hashes(hits):
+    layer_hash = hits[0].layer_hash
+    for hit in hits:
+        assert hit.layer_hash == layer_hash
+    print(f"validated {len(hits)} equal layer hashes for layer {hits[0].layer_id}: {layer_hash}")
+
+
+def assert_equal_layer_hashes(indx, ns):
+    layer = 0
+    while True:
+        hits = query_message(indx, ns, ns, {'M': 'new layer hash', 'layer_id': layer})
+        if len(hits) == 0:
+            break
+        compare_layer_hashes(hits)
