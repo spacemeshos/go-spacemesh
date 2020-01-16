@@ -1,9 +1,9 @@
 import collections
 import random
 import re
-import time
 from datetime import datetime
 
+import time
 from elasticsearch_dsl import Search, Q
 
 from tests import convenience
@@ -491,3 +491,4 @@ def assert_equal_layer_hashes(indx, ns):
         if len(hits) == 0:
             break
         compare_layer_hashes(hits)
+        layer += 1
