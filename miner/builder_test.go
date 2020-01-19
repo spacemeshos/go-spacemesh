@@ -228,9 +228,9 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 
 	poetRef := []byte{0xba, 0x38}
 	atxs := []*types.ActivationTx{
-		types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")}, coinbase, 1, types.AtxId(types.Hash32{1}), 5, 1, types.AtxId{}, 5, []types.BlockID{block1.Id(), block2.Id(), block3.Id()}, activation.NewNIPSTWithChallenge(&types.Hash32{}, poetRef)),
-		types.NewActivationTx(types.NodeId{"bbbb", []byte("bbb")}, coinbase, 1, types.AtxId(types.Hash32{2}), 5, 1, types.AtxId{}, 5, []types.BlockID{block1.Id(), block2.Id(), block3.Id()}, activation.NewNIPSTWithChallenge(&types.Hash32{}, poetRef)),
-		types.NewActivationTx(types.NodeId{"cccc", []byte("bbb")}, coinbase, 1, types.AtxId(types.Hash32{3}), 5, 1, types.AtxId{}, 5, []types.BlockID{block1.Id(), block2.Id(), block3.Id()}, activation.NewNIPSTWithChallenge(&types.Hash32{}, poetRef)),
+		types.NewActivationTxForTests(types.NodeId{"aaaa", []byte("bbb")}, 1, types.AtxId(types.Hash32{1}), 5, 1, types.AtxId{}, coinbase, 5, []types.BlockID{block1.Id(), block2.Id(), block3.Id()}, activation.NewNIPSTWithChallenge(&types.Hash32{}, poetRef)),
+		types.NewActivationTxForTests(types.NodeId{"bbbb", []byte("bbb")}, 1, types.AtxId(types.Hash32{2}), 5, 1, types.AtxId{}, coinbase, 5, []types.BlockID{block1.Id(), block2.Id(), block3.Id()}, activation.NewNIPSTWithChallenge(&types.Hash32{}, poetRef)),
+		types.NewActivationTxForTests(types.NodeId{"cccc", []byte("bbb")}, 1, types.AtxId(types.Hash32{3}), 5, 1, types.AtxId{}, coinbase, 5, []types.BlockID{block1.Id(), block2.Id(), block3.Id()}, activation.NewNIPSTWithChallenge(&types.Hash32{}, poetRef)),
 	}
 
 	builder.AtxPool.Put(atxs[0])
@@ -364,16 +364,7 @@ func TestBlockBuilder_Gossip_NotSynced(t *testing.T) {
 	assert.Empty(t, ids)
 
 	poetRef := []byte{0xba, 0x38}
-	atx := types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")},
-		coinbase,
-		1,
-		types.AtxId(types.Hash32{1}),
-		5,
-		1,
-		types.AtxId{},
-		5,
-		[]types.BlockID{block1.Id(), block2.Id(), block3.Id()},
-		activation.NewNIPSTWithChallenge(&types.Hash32{}, poetRef))
+	atx := types.NewActivationTxForTests(types.NodeId{"aaaa", []byte("bbb")}, 1, types.AtxId(types.Hash32{1}), 5, 1, types.AtxId{}, coinbase, 5, []types.BlockID{block1.Id(), block2.Id(), block3.Id()}, activation.NewNIPSTWithChallenge(&types.Hash32{}, poetRef))
 
 	atxBytes, err := types.InterfaceToBytes(&atx)
 	assert.NoError(t, err)
