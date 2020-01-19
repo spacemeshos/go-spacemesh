@@ -72,7 +72,7 @@ def transfer(wallet_api, frm, to, amount, gas_price=1, gas_limit=None, curr_nonc
 
 
 def validate_nonce(wallet_api, accountant, acc_pub):
-    print(f"\nchecking nonce for {acc_pub}")
+    print(f"\nchecking nonce for {acc_pub} ", end="")
     print("(TAP)") if acc_pub == conf.acc_pub else print()
 
     nonce = accountant.get_nonce(acc_pub)
@@ -130,14 +130,15 @@ def send_coins_to_new_accounts(wallet_api, new_acc_num, amount, accountant, gas_
         print("transaction FAILED!\n")
 
 
-def send_tx_from_each_account(wallet, accountant, tx_num, gas_limit=None, is_new_acc=False, is_concurrent=False,
-                              queue=None):
+def send_tx_from_each_account(wallet, accountant, tx_num, amount=1, gas_limit=None, is_new_acc=False,
+                              is_concurrent=False, queue=None):
     """
     send random transactions iterating over the accounts list
 
     :param wallet: WalletAPI, a manager for GRPC communication
     :param accountant: Accountant, a manager for current state
     :param tx_num: int, number of transactions to send
+    :param amount: int, number of coins to send
     :param gas_limit: int, max reward for processing a tx
     :param is_new_acc: bool, create new accounts and send money to (if True) or use existing (False)
     :param is_concurrent: bool, send transactions concurrently
@@ -169,9 +170,6 @@ def send_tx_from_each_account(wallet, accountant, tx_num, gas_limit=None, is_new
             print(f"account {sending_acc_pub} does not have sufficient funds to make a tx, balance: {balance}")
             continue
 
-        # amount = random.randint(1, math.ceil(balance / 5))
-        # send the minimum amount so we can flood with valid txs
-        amount = 1
         if is_concurrent:
             processes.append(mp.Process(target=transfer, args=(wallet, sending_acc_pub, dst, amount, accountant.tx_cost,
                                                                gas_limit, None, accountant, account_det["priv"], queue))

@@ -1,5 +1,5 @@
 // Package log provides the both file and console (general) logging capabilities
-// to spacemesh models such as app and identity.
+// to spacemesh modules such as app and identity.
 package log
 
 import (

@@ -4,7 +4,7 @@ FROM golang:1.11.9-alpine3.8 AS build_base
 RUN apk add bash make git curl unzip rsync libc6-compat gcc musl-dev
 WORKDIR /go/src/github.com/spacemeshos/go-spacemesh
 
-# Force the go compiler to use models
+# Force the go compiler to use modules
 ENV GO111MODULE=on
 
 # We want to populate the module cache based on the go.{mod,sum} files.

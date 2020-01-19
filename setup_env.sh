@@ -7,7 +7,7 @@ protobuf_path=$(go list -m -f '{{.Dir}}' github.com/golang/protobuf)
 echo "installing protoc-gen-go..."
 go install $protobuf_path/protoc-gen-go
 
-# Current version of grpc_gateway does not support go models, so we install it to the gopath
+# Current version of grpc_gateway does not support go modules, so we install it to the gopath
 # TODO: Follow this issue: https://github.com/grpc-ecosystem/grpc-gateway/issues/755
 
 grpc_gateway_path=$(go list -m -f '{{.Dir}}' github.com/grpc-ecosystem/grpc-gateway)

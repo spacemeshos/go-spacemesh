@@ -1,32 +1,20 @@
-import copy
 from datetime import datetime, timedelta
-from enum import Enum
-import json
 from kubernetes import client
 from kubernetes.client.rest import ApiException
 from kubernetes.stream import stream
-import pprint
 import pytest
-import pytz
-import random
-import subprocess
-import sys
-import time
-from typing import List
-
 from pytest_testconfig import config as testconfig
+import pytz
+import subprocess
+import time
+
 from tests import analyse, pod, deployment, queries, statefulset
-#####
 from tests.convenience import sleep_print_backwards
 from tests.tx_generator import config as conf
 import tests.tx_generator.actions as actions
 from tests.tx_generator.models.accountant import Accountant
 from tests.tx_generator.models.wallet_api import WalletAPI
-from tests.tx_generator.models.tx_generator import TxGenerator
-from tests.tx_generator.actions import send_coins_to_new_accounts
-#####
 from tests.conftest import DeploymentInfo, NetworkDeploymentInfo
-from tests.ed25519.eddsa import genkeypair
 from tests.hare.assert_hare import validate_hare
 from tests.misc import ContainerSpec, CoreV1ApiClient
 
@@ -439,13 +427,13 @@ def test_transactions(init_session, setup_network):
     #       with calculation for the TAP balance
 
     # create #new_acc_num new accounts by sending them coins from tap
-    # check tap nonce
-    # check tap balance
+    # check tap balance/nonce
     # sleep until new state is processed
-    # send txs from new accounts (to the new accounts but can be configured)
+    # send txs from new accounts and create new accounts
     # sleep until new state is processes
-    # validate new accounts balance
-    # validate new accounts nonce
+    # validate all accounts balance/nonce
+    # send txs from all accounts between themselves
+    # validate all accounts balance/nonce
 
     namespace = init_session
     wallet_api = WalletAPI(namespace, setup_network.clients.pods)
@@ -454,10 +442,12 @@ def test_transactions(init_session, setup_network):
     tap_nonce = wallet_api.get_nonce_value(conf.acc_pub)
     acc = Accountant({conf.acc_pub: Accountant.set_tap_acc(balance=tap_balance, nonce=tap_nonce)})
 
-    new_acc_num = 2
+    print("\n\n----- create new accounts ------")
+    new_acc_num = 10
     amount = 50
-    send_coins_to_new_accounts(wallet_api, new_acc_num, amount, acc)
+    actions.send_coins_to_new_accounts(wallet_api, new_acc_num, amount, acc)
 
+    print("assert tap's nonce and balance")
     ass_err = "tap did not have the matching nonce"
     assert actions.validate_nonce(wallet_api, acc, conf.acc_pub), ass_err
     ass_err = "tap did not have the matching balance"
@@ -467,7 +457,26 @@ def test_transactions(init_session, setup_network):
     tts = layer_duration * conf.num_layers_until_process
     sleep_print_backwards(tts)
 
-    tx_num = 10
+    print("\n\n------ create new accounts using the accounts created by tap ------")
+    # add 1 because we have #new_acc_num new accounts and one tap
+    tx_num = new_acc_num + 1
+    amount = 5
+    actions.send_tx_from_each_account(wallet_api, acc, tx_num, is_new_acc=True, amount=amount)
+
+    tts = layer_duration * conf.num_layers_until_process
+    sleep_print_backwards(tts)
+
+    for acc_pub in acc.accounts:
+        ass_err = f"account {acc_pub} did not have the matching balance"
+        assert actions.validate_acc_amount(wallet_api, acc, acc_pub), ass_err
+
+    for acc_pub in acc.accounts:
+        ass_err = f"account {acc_pub} did not have the matching nonce"
+        assert actions.validate_nonce(wallet_api, acc, acc_pub), ass_err
+
+    print("\n\n------ send txs between all accounts ------")
+    # send coins from all accounts between themselves (add 1 for tap)
+    tx_num = new_acc_num * 2 + 1
     actions.send_tx_from_each_account(wallet_api, acc, tx_num)
 
     tts = layer_duration * conf.num_layers_until_process
