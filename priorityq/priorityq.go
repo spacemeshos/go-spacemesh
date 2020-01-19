@@ -57,8 +57,8 @@ func (pq *Queue) Write(prio Priority, m interface{}) error {
 func (pq *Queue) Read() (interface{}, error) {
 	<-pq.waitCh // wait for m
 
-	// pick by priority
 readLoop:
+	// pick by priority
 	for _, q := range pq.queues {
 		if q == nil { // if not set just continue
 			continue
