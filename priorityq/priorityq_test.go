@@ -109,5 +109,5 @@ func TestPriorityQ_Read(t *testing.T) {
 	time.Sleep(1500 * time.Millisecond)
 	pq.Close()
 	rg.Wait()
-	r.Equal(3*defLen, i-1)
+	r.Equal(3*defLen, i)
 }
