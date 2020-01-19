@@ -335,7 +335,7 @@ def start_poet(init_session, add_curl, setup_bootstrap):
         raise Exception("Failed to read container logs in {0}".format("poet"))
 
     print("Starting PoET")
-    out = api_call(bs_pod['pod_ip'], '{ "gatewayAddresses": ["127.0.0.1:9091"] }',  'v1/start', namespace, "80")
+    out = api_call(bs_pod['pod_ip'], '{ "gatewayAddresses": ["127.0.0.1:9091"] }', 'v1/start', namespace, "80")
     assert out == "{}", "PoET start returned error {0}".format(out)
     print("PoET started")
 
@@ -501,7 +501,7 @@ def test_mining(init_session, setup_network):
     layers_per_epoch = int(testconfig['client']['args']['layers-per-epoch'])
     # check only third epoch
     epochs = 5
-    last_layer = epochs*layers_per_epoch
+    last_layer = epochs * layers_per_epoch
 
     layer_reached = queries.wait_for_latest_layer(testconfig["namespace"], last_layer, layers_per_epoch)
 

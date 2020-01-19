@@ -35,7 +35,7 @@ type MeshDB struct {
 	lhMutex            sync.Mutex
 }
 
-func NewPersistentMeshDB(path string, log log.Log) (*MeshDB, error) {
+func NewPersistentMeshDB(path string, blockCacheSize int, log log.Log) (*MeshDB, error) {
 	bdb, err := database.NewLDBDatabase(path+"blocks", 0, 0, log)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize blocks db: %v", err)
@@ -63,7 +63,7 @@ func NewPersistentMeshDB(path string, log log.Log) (*MeshDB, error) {
 
 	ll := &MeshDB{
 		Log:                log,
-		blockCache:         NewBlockCache(100 * layerSize),
+		blockCache:         NewBlockCache(blockCacheSize * layerSize),
 		blocks:             bdb,
 		layers:             ldb,
 		transactions:       tdb,

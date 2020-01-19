@@ -107,7 +107,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 		log.Error("cannot parse genesis time %v", err)
 	}
 	ld := time.Duration(20) * time.Second
-	clock := timesync.NewTicker(timesync.RealClock{}, ld, gTime)
+	clock := timesync.NewClock(timesync.RealClock{}, ld, gTime, log.NewDefault("clock"))
 	suite.initMultipleInstances(cfg, rolacle, rng, 5, path, genesisTime, poetClient, false, clock)
 	for _, a := range suite.apps {
 		a.startServices()
@@ -438,15 +438,13 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 	}
 
 	// assert number of ATXs
-	exp = totalEpochs*allMiners - len(suite.apps) // minus last epoch #atxs
+	exp = totalEpochs * allMiners
 	act = int(totalAtxs)
 	assert.Equal(suite.T(), exp, act, fmt.Sprintf("not good num of atxs got: %v, want: %v", act, exp))
 }
 
 func (suite *AppTestSuite) validateLastATXActiveSetSize(app *SpacemeshApp) {
-	prevAtxId, err := app.atxBuilder.GetPrevAtxId(app.nodeId)
-	suite.NoError(err)
-	atx, err := app.mesh.GetAtxHeader(prevAtxId)
+	atx, err := app.atxBuilder.GetPrevAtx(app.nodeId)
 	suite.NoError(err)
 	suite.True(int(atx.ActiveSetSize) == len(suite.apps), "atx: %v node: %v", atx.ShortString(), app.nodeId.Key[:5])
 }
@@ -513,7 +511,7 @@ func TestShutdown(t *testing.T) {
 	r.NotNil(postClient)
 	gTime := genesisTime
 	ld := time.Duration(20) * time.Second
-	clock := timesync.NewTicker(timesync.RealClock{}, ld, gTime)
+	clock := timesync.NewClock(timesync.RealClock{}, ld, gTime, log.NewDefault("clock"))
 	err = smApp.initServices(nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(smApp.Config.LayerAvgSize), postClient, poetClient, vrfSigner, uint16(smApp.Config.LayersPerEpoch), clock)
 
 	r.NoError(err)

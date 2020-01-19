@@ -74,7 +74,7 @@ func SyncMockFactory(number int, conf Configuration, name string, dbType string,
 	sim := service.NewSimulator()
 	tick := 200 * time.Millisecond
 	timer := timesync.RealClock{}
-	ts := timesync.NewTicker(timer, tick, timer.Now().Add(tick*-4))
+	ts := timesync.NewClock(timer, tick, timer.Now().Add(tick*-4), log.NewDefault("clock"))
 	for i := 0; i < number; i++ {
 		net := sim.NewNode()
 		name := fmt.Sprintf(name+"_%d", i)
@@ -130,7 +130,7 @@ var rewardConf = mesh.Config{
 
 func getMeshWithLevelDB(id string) *mesh.Mesh {
 	lg := log.New(id, "", "")
-	mshdb, _ := mesh.NewPersistentMeshDB(id, lg)
+	mshdb, _ := mesh.NewPersistentMeshDB(id, 5, lg)
 	atxdbStore, _ := database.NewLDBDatabase(id+"atx", 0, 0, lg.WithOptions(log.Nop))
 	atxdb := activation.NewActivationDb(atxdbStore, &MockIStore{}, mshdb, 10, &ValidatorMock{}, lg.WithOptions(log.Nop))
 	return mesh.NewMesh(mshdb, atxdb, rewardConf, &MeshValidatorMock{}, &MockTxMemPool{}, &MockAtxMemPool{}, &stateMock{}, lg.WithOptions(log.Nop))
@@ -190,7 +190,7 @@ func TestSyncer_Close(t *testing.T) {
 func TestSyncProtocol_BlockRequest(t *testing.T) {
 	signer := signing.NewEdSigner()
 	atx1 := atx(signer.PublicKey().String())
-	_, err := activation.SignAtx(signer, atx1)
+	err := activation.SignAtx(signer, atx1)
 	assert.NoError(t, err)
 	syncs, nodes, _ := SyncMockFactory(2, conf, t.Name(), memoryDB, newMockPoetDb)
 	syncObj := syncs[0]
@@ -222,7 +222,7 @@ func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 	syncs, nodes, _ := SyncMockFactory(2, conf, t.Name(), memoryDB, newMockPoetDb)
 	signer := signing.NewEdSigner()
 	atx1 := atx(signer.PublicKey().String())
-	_, err := activation.SignAtx(signer, atx1)
+	err := activation.SignAtx(signer, atx1)
 	assert.NoError(t, err)
 	syncObj1 := syncs[0]
 	defer syncObj1.Close()
@@ -288,7 +288,7 @@ func TestSyncer_SyncAtxs_FetchPoetProof(t *testing.T) {
 
 	atx1 := atx(signer.PublicKey().String())
 	atx1.Nipst.PostProof.Challenge = poetRef[:]
-	_, err = activation.SignAtx(signer, atx1)
+	err = activation.SignAtx(signer, atx1)
 	r.NoError(err)
 	err = s0.AtxDB.ProcessAtxs([]*types.ActivationTx{atx1})
 	r.NoError(err)
@@ -655,7 +655,7 @@ func Test_TwoNodes_SyncIntegrationSuite(t *testing.T) {
 	layout := "2006-01-02T15:04:05.000Z"
 	str := "2016-11-12T11:45:26.371Z"
 	start, _ := time.Parse(layout, str)
-	ts := timesync.NewTicker(timesync.RealClock{}, tick, start)
+	ts := timesync.NewClock(timesync.RealClock{}, tick, start, log.NewDefault(t.Name()))
 	sis.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
 		l := log.New(fmt.Sprintf("%s_%d", sis.name, atomic.LoadUint32(&i)), "", "")
 		msh := getMesh(memoryDB, fmt.Sprintf("%s_%s", sis.name, time.Now()))
@@ -780,7 +780,7 @@ func Test_Multiple_SyncIntegrationSuite(t *testing.T) {
 	layout := "2006-01-02T15:04:05.000Z"
 	str := "2018-11-12T11:45:26.371Z"
 	start, _ := time.Parse(layout, str)
-	ts := timesync.NewTicker(timesync.RealClock{}, tick, start)
+	ts := timesync.NewClock(timesync.RealClock{}, tick, start, log.NewDefault(t.Name()))
 	sis.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
 		l := log.New(fmt.Sprintf("%s_%d", sis.name, atomic.LoadUint32(&i)), "", "")
 		msh := getMesh(memoryDB, fmt.Sprintf("%s_%d", sis.name, atomic.LoadUint32(&i)))
@@ -900,7 +900,7 @@ func atx(pubkey string) *types.ActivationTx {
 	poetRef := []byte{0xde, 0xad}
 	npst := activation.NewNIPSTWithChallenge(&chlng, poetRef)
 
-	atx := types.NewActivationTx(types.NodeId{Key: pubkey, VRFPublicKey: []byte(rand.RandString(8))}, coinbase, 0, *types.EmptyAtxId, 5, 1, *types.EmptyAtxId, 0, nil, npst)
+	atx := types.NewActivationTxForTests(types.NodeId{Key: pubkey, VRFPublicKey: []byte(rand.RandString(8))}, 0, *types.EmptyAtxId, 5, 1, *types.EmptyAtxId, coinbase, 0, nil, npst)
 	atx.Commitment = commitment
 	atx.CommitmentMerkleRoot = commitment.MerkleRoot
 	atx.CalcAndSetId()
@@ -1473,4 +1473,74 @@ func TestSyncer_AtxSetID(t *testing.T) {
 	assert.Equal(t, b.ActivationTxHeader.NIPSTChallenge, a.ActivationTxHeader.NIPSTChallenge)
 	b.CalcAndSetId()
 	assert.Equal(t, a.ShortString(), b.ShortString())
+}
+
+func TestSyncer_Await(t *testing.T) {
+	r := require.New(t)
+
+	syncs, _, _ := SyncMockFactory(1, conf, t.Name(), memoryDB, newMockPoetDb)
+	syncer := syncs[0]
+	err := syncer.AddBlockWithTxs(types.NewExistingBlock(1, []byte(rand.RandString(8))), nil, nil)
+	r.NoError(err)
+	lv := &mockLayerValidator{0, 0, 0, nil}
+	syncer.lValidator = lv
+	syncer.currentLayer = 1
+	syncer.SetLatestLayer(1)
+
+	ch := syncer.Await()
+	r.False(closed(ch))
+
+	//run sync
+	syncer.getSyncRoutine()()
+
+	r.True(closed(ch))
+}
+
+func TestSyncer_Await_LowLevel(t *testing.T) {
+	r := require.New(t)
+
+	syncer := &Syncer{
+		gossipSynced: Pending,
+		awaitCh:      make(chan struct{}),
+	}
+
+	ch := syncer.Await()
+	r.False(closed(ch))
+
+	// Pending -> InProgress keeps the channel open
+	syncer.setGossipBufferingStatus(InProgress)
+	r.False(closed(ch))
+
+	// InProgress -> InProgress has no effect
+	syncer.setGossipBufferingStatus(InProgress)
+	r.False(closed(ch))
+
+	// InProgress -> Done closes the channel
+	syncer.setGossipBufferingStatus(Done)
+	r.True(closed(ch))
+
+	// Done -> Done has no effect
+	syncer.setGossipBufferingStatus(Done)
+	r.True(closed(ch))
+
+	// Done -> Pending...
+	syncer.setGossipBufferingStatus(Pending)
+	// ...the channel from the previous call to `Await()` should still be closed...
+	r.True(closed(ch))
+	// ...but a new call to `Await()` should provide a new, open channel
+	newCh := syncer.Await()
+	r.False(closed(newCh))
+
+	// Pending -> Done should close the new channel
+	syncer.setGossipBufferingStatus(Done)
+	r.True(closed(newCh))
+}
+
+func closed(ch chan struct{}) bool {
+	select {
+	case <-ch:
+		return true
+	default:
+		return false
+	}
 }

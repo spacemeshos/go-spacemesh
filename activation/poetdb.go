@@ -42,8 +42,7 @@ func (db *PoetDb) ValidateAndStore(proofMessage *types.PoetProofMessage) error {
 	return err
 }
 
-func (db *PoetDb) Validate(proof types.PoetProof, poetId []byte, roundId string,
-	signature []byte) error {
+func (db *PoetDb) Validate(proof types.PoetProof, poetId []byte, roundId string, signature []byte) error {
 
 	root, err := calcRoot(proof.Members)
 	if err != nil {
@@ -95,8 +94,7 @@ func (db *PoetDb) SubscribeToProofRef(poetId []byte, roundId string) chan []byte
 
 	db.addSubscription(key, ch)
 
-	poetProofRef, err := db.getProofRef(key)
-	if err == nil {
+	if poetProofRef, err := db.getProofRef(key); err == nil {
 		db.publishProofRef(key, poetProofRef)
 	}
 
@@ -105,9 +103,14 @@ func (db *PoetDb) SubscribeToProofRef(poetId []byte, roundId string) chan []byte
 
 func (db *PoetDb) addSubscription(key poetProofKey, ch chan []byte) {
 	db.mu.Lock()
-	defer db.mu.Unlock()
-
 	db.poetProofRefSubscriptions[key] = append(db.poetProofRefSubscriptions[key], ch)
+	db.mu.Unlock()
+}
+
+func (db *PoetDb) UnsubscribeFromProofRef(poetId []byte, roundId string) {
+	db.mu.Lock()
+	delete(db.poetProofRefSubscriptions, makeKey(poetId, roundId))
+	db.mu.Unlock()
 }
 
 func (db *PoetDb) getProofRef(key poetProofKey) ([]byte, error) {
