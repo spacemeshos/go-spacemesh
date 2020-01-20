@@ -204,8 +204,8 @@ func TestServersConfig(t *testing.T) {
 	// need to pass some default conf here
 
 	nodeConf := nodeconf.DefaultConfig()
-
 	grpcService := NewGrpcService(&nodeConf, port1, &networkMock, ap, txApi, nil, &mining, &oracle, nil, PostMock{}, nil)
+
 	require.Equal(t, grpcService.Port, uint(port1), "Expected same port")
 
 	jsonService := NewJSONHTTPServer(port2, port1)
@@ -486,6 +486,7 @@ func launchServer(t *testing.T) func() {
 	networkMock.broadcasted = []byte{0x00}
 
 	nodeConf := nodeconf.DefaultConfig()
+	nodeConf.LayerDurationSec = layerDuration
 
 	grpcService := NewGrpcService(&nodeConf, apiCnfg.GrpcServerPort, &networkMock, ap, txApi, txMempool, &mining, &oracle, genTime, PostMock{}, nil)
 	jsonService := NewJSONHTTPServer(apiCnfg.JSONServerPort, apiCnfg.GrpcServerPort)
