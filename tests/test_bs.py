@@ -33,6 +33,10 @@ ELASTICSEARCH_URL = "http://{0}".format(testconfig['elastic']['host'])
 
 GENESIS_TIME = pytz.utc.localize(datetime.utcnow() + timedelta(seconds=testconfig['genesis_delta']))
 
+dt = datetime.now()
+today_date = dt.strftime("%Y.%m.%d")
+current_index = 'kubernetes_cluster-' + today_date
+
 
 def get_conf(bs_info, client_config, setup_oracle=None, setup_poet=None, args=None):
     """
@@ -492,10 +496,6 @@ def test_transactions(init_session, setup_network):
 
 
 def test_mining(init_session, setup_network):
-    dt = datetime.now()
-    today_date = dt.strftime("%Y.%m.%d")
-    current_index = 'kubernetes_cluster-' + today_date
-
     ns = init_session
     layer_avg_size = testconfig['client']['args']['layer-average-size']
     layers_per_epoch = int(testconfig['client']['args']['layers-per-epoch'])

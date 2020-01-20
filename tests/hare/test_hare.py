@@ -5,7 +5,7 @@ from pytest_testconfig import config as testconfig
 from tests import deployment
 from tests.conftest import DeploymentInfo
 from tests.hare.assert_hare import expect_hare, assert_all, get_max_mem_usage
-from tests.test_bs import current_index, setup_bootstrap_in_namespace, setup_clients_in_namespace, create_configmap, wait_genesis
+from tests.test_bs import current_index, setup_bootstrap_in_namespace, setup_clients_in_namespace, wait_genesis
 from tests.misc import CoreV1ApiClient
 
 ORACLE_DEPLOYMENT_FILE = './k8s/oracle.yml'
