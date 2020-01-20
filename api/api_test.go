@@ -201,6 +201,7 @@ var (
 func getDefNodeConfig() nodeconf.Config {
 	nodeConf := nodeconf.DefaultConfig()
 	nodeConf.LayerDurationSec = layerDuration
+	nodeConf.PoETServer = "spacemesh-testnet-poet-grpc-lb-949d0cde858743fb.elb.us-east-1.amazonaws.com:50002"
 	nodeConf.P2P.SwarmConfig.BootstrapNodes = []string{"spacemesh://9n4AnWsnVgUBCvRZA9Ai55sh6iN2HQmLE7u1vuS6pby4@15.165.9.50:63163", "spacemesh://9n4AnWsnVgUBCvRZA9Ai55sh6iN2HQmLE7u1vuS6pby4@15.165.9.50:63161"}
 	return nodeConf
 }
@@ -244,22 +245,8 @@ func TestGrpcApi(t *testing.T) {
 	shutDown()
 }
 
-func TestGrpcNodeParamsApi(t *testing.T) {
-	shutDown, nodeConf := launchServer(t)
-
-	// start a client
-	addr := "localhost:" + strconv.Itoa(apiCnfg.GrpcServerPort)
-
-	// Set up a connection to the server.
-	conn, err := grpc.Dial(addr, grpc.WithInsecure())
-	require.NoError(t, err)
-	defer conn.Close()
-	c := pb.NewSpacemeshServiceClient(conn)
-
-	// call GetNodeParams api methods and validate result
-	response, err := c.GetNodeParams(context.Background(), &empty.Empty{})
-	require.NoError(t, err)
-
+// validate a response against node config data
+func validateNodeConfResp(t *testing.T, nodeConf *nodeconf.Config, response *pb.NodeConfigParams) {
 	require.Equal(t, nodeConf.TestMode, response.TestMode)
 	require.Equal(t, uint32(nodeConf.LayerDurationSec), response.LayerDurationSec)
 	require.Equal(t, uint32(nodeConf.LayerAvgSize), response.LayerAvgSize)
@@ -283,6 +270,43 @@ func TestGrpcNodeParamsApi(t *testing.T) {
 	require.Equal(t, nodeConf.POST.LabelsLogRate, response.PostLabels)
 	require.Equal(t, nodeConf.GenesisTime, response.GenesisTime)
 	require.Equal(t, uint32(nodeConf.P2P.NetworkID), response.NetworkId)
+}
+
+func TestJsonNodeParamsApi(t *testing.T) {
+	shutDown, nodeConf := launchServer(t)
+
+	// generate request payload (api input params)
+	payload := marshalProto(t, &empty.Empty{})
+
+	respBody, respStatus := callEndpoint(t, "v1/nodeparams", payload)
+	require.Equal(t, http.StatusOK, respStatus)
+
+	var data pb.NodeConfigParams
+	require.NoError(t, jsonpb.UnmarshalString(respBody, &data))
+
+	validateNodeConfResp(t, &nodeConf, &data)
+
+	// stop the services
+	shutDown()
+}
+
+func TestGrpcNodeParamsApi(t *testing.T) {
+	shutDown, nodeConf := launchServer(t)
+
+	// start a client
+	addr := "localhost:" + strconv.Itoa(apiCnfg.GrpcServerPort)
+
+	// Set up a connection to the server.
+	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	require.NoError(t, err)
+	defer conn.Close()
+	c := pb.NewSpacemeshServiceClient(conn)
+
+	// call GetNodeParams api methods and validate result
+	response, err := c.GetNodeParams(context.Background(), &empty.Empty{})
+	require.NoError(t, err)
+
+	validateNodeConfResp(t, &nodeConf, response)
 
 	// stop the server
 	shutDown()
