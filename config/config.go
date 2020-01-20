@@ -95,6 +95,8 @@ type BaseConfig struct {
 	StartMining bool `mapstructure:"start-mining"`
 
 	AtxsPerBlock int `mapstructure:"atxs-per-block"`
+
+	BlockCacheSize int `mapstructure:"block-cache-size"`
 }
 
 type LoggerConfig struct {
@@ -156,6 +158,7 @@ func defaultBaseConfig() BaseConfig {
 		PoETServer:          "127.0.0.1",
 		Hdist:               5,
 		GenesisActiveSet:    5,
+		BlockCacheSize:      20,
 		SyncRequestTimeout:  2000,
 		AtxsPerBlock:        100,
 	}
