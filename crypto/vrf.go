@@ -3,7 +3,7 @@ package crypto
 import (
 	"crypto/rand"
 	"errors"
-	"github.com/spacemeshos/ed25519"
+	"golang.org/x/crypto/ed25519"
 )
 
 type VRFSigner struct {
