@@ -278,13 +278,16 @@ func TestJsonNodeParamsApi(t *testing.T) {
 	// generate request payload (api input params)
 	payload := marshalProto(t, &empty.Empty{})
 
+	// get the node params via the api endpoint
 	respBody, respStatus := callEndpoint(t, "v1/nodeparams", payload)
 	require.Equal(t, http.StatusOK, respStatus)
 
-	var data pb.NodeConfigParams
-	require.NoError(t, jsonpb.UnmarshalString(respBody, &data))
+	// parse json data to a NodeConfigParams data object
+	var response pb.NodeConfigParams
+	require.NoError(t, jsonpb.UnmarshalString(respBody, &response))
 
-	validateNodeConfResp(t, &nodeConf, &data)
+	// validate the response
+	validateNodeConfResp(t, &nodeConf, &response)
 
 	// stop the services
 	shutDown()
