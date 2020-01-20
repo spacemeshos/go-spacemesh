@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	crand "crypto/rand"
 	"errors"
 	"fmt"
@@ -22,7 +23,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/require"
-	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"io/ioutil"
 	"math/big"
