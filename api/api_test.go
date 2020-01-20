@@ -260,8 +260,6 @@ func TestGrpcNodeParamsApi(t *testing.T) {
 	response, err := c.GetNodeParams(context.Background(), &empty.Empty{})
 	require.NoError(t, err)
 
-	t.Log(response)
-
 	require.Equal(t, nodeConf.TestMode, response.TestMode)
 	require.Equal(t, uint32(nodeConf.LayerDurationSec), response.LayerDurationSec)
 	require.Equal(t, uint32(nodeConf.LayerAvgSize), response.LayerAvgSize)
