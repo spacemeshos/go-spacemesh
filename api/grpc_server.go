@@ -228,22 +228,9 @@ type TxAPI interface {
 	ValidatedLayer() types.LayerID
 }
 
-// NewGrpcService create a new grpc service using config data.
-func NewGrpcService(config *cfg.Config, port int, net NetworkAPI, state StateAPI, tx TxAPI, txMempool *miner.TxMempool, mining MiningAPI, oracle OracleAPI, genTime GenesisTimeAPI, post PostAPI, logging LoggingAPI) *SpacemeshGrpcService {
-	options := []grpc.ServerOption{
-		// XXX: this is done to prevent routers from cleaning up our connections (e.g aws load balances..)
-		// TODO: these parameters work for now but we might need to revisit or add them as configuration
-		// TODO: Configure maxconns, maxconcurrentcons ..
-		grpc.KeepaliveParams(keepalive.ServerParameters{
-			time.Minute * 120,
-			time.Minute * 180,
-			time.Minute * 10,
-			time.Minute,
-			time.Minute * 3,
-		}),
-	}
-
-	nodeConfigParams := &pb.NodeConfigParams{
+// create new NodeConfigParams object from Config params
+func newNodeConfigParams(config *cfg.Config) *pb.NodeConfigParams {
+	return &pb.NodeConfigParams{
 		TestMode:               config.TestMode,
 		LayerDurationSec:       uint32(config.LayerDurationSec),
 		LayerAvgSize:           uint32(config.LayerAvgSize),
@@ -268,6 +255,22 @@ func NewGrpcService(config *cfg.Config, port int, net NetworkAPI, state StateAPI
 		GenesisTime:            config.GenesisTime,
 		NetworkId:              uint32(config.P2P.NetworkID),
 	}
+}
+
+// NewGrpcService create a new grpc service using config data.
+func NewGrpcService(config *cfg.Config, port int, net NetworkAPI, state StateAPI, tx TxAPI, txMempool *miner.TxMempool, mining MiningAPI, oracle OracleAPI, genTime GenesisTimeAPI, post PostAPI, logging LoggingAPI) *SpacemeshGrpcService {
+	options := []grpc.ServerOption{
+		// XXX: this is done to prevent routers from cleaning up our connections (e.g aws load balances..)
+		// TODO: these parameters work for now but we might need to revisit or add them as configuration
+		// TODO: Configure maxconns, maxconcurrentcons ..
+		grpc.KeepaliveParams(keepalive.ServerParameters{
+			time.Minute * 120,
+			time.Minute * 180,
+			time.Minute * 10,
+			time.Minute,
+			time.Minute * 3,
+		}),
+	}
 
 	server := grpc.NewServer(options...)
 	return &SpacemeshGrpcService{
@@ -283,7 +286,7 @@ func NewGrpcService(config *cfg.Config, port int, net NetworkAPI, state StateAPI
 		Post:             post,
 		LayerDuration:    time.Duration(config.LayerDurationSec) * time.Second,
 		Logging:          logging,
-		NodeConfigParams: nodeConfigParams,
+		NodeConfigParams: newNodeConfigParams(config),
 	}
 }
 
