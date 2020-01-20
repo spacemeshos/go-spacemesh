@@ -256,7 +256,7 @@ func TestGrpcNodeParamsApi(t *testing.T) {
 	defer conn.Close()
 	c := pb.NewSpacemeshServiceClient(conn)
 
-	// call echo and validate result
+	// call GetNodeParams api methods and validate result
 	response, err := c.GetNodeParams(context.Background(), &empty.Empty{})
 	require.NoError(t, err)
 
