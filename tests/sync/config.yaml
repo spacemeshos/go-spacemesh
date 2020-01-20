@@ -24,8 +24,9 @@ bootstrap:
     data-folder: '/bin/data/'
     expected-layers: '50'
     storage-path: 'spacemesh-sync-data'
+    version: 'short_ids_100_l/'
     remote-data: 'true'
-    hdist: '1'
+    hdist: '5'
 client:
   image: 'spacemeshos/go-spacemesh:develop'
   command: '/bin/go-sync'
@@ -40,8 +41,9 @@ client:
     data-folder: '/bin/data/'
     expected-layers: '50'
     storage-path: 'spacemesh-sync-data'
+    version: 'short_ids_100_l/'
     remote-data: 'true'
-    hdist: '1'
+    hdist: '5'
 clientv2:
   image: 'spacemeshos/go-spacemesh:develop'
   command: '/bin/go-sync'
@@ -55,8 +57,9 @@ clientv2:
     layer-average-size: '20'
     expected-layers: '50'
     storage-path: 'spacemesh-sync-data'
-    hdist: '1'
+    hdist: '5'
     data-folder: '/usr/share/spacemesh/'
+    version: 'short_ids_100_l/'
     remote-data: 'false'
   deployment_type: statefulset
 elastic:
