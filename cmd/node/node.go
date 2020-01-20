@@ -123,6 +123,7 @@ type TickProvider interface {
 	StartNotifying()
 	GetGenesisTime() time.Time
 	Close()
+	AwaitLayer(layerId types.LayerID) chan struct{}
 }
 
 // SpacemeshApp is the cli app singleton
@@ -476,7 +477,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId,
 	poetDb := activation.NewPoetDb(poetDbStore, app.addLogger(PoetDbLogger, lg))
 	//todo: this is initialized twice, need to refactor
 	validator := activation.NewValidator(&app.Config.POST, poetDb)
-	mdb, err := mesh.NewPersistentMeshDB(dbStorepath, app.addLogger(MeshDBLogger, lg))
+	mdb, err := mesh.NewPersistentMeshDB(dbStorepath, app.Config.BlockCacheSize, app.addLogger(MeshDBLogger, lg))
 	if err != nil {
 		return err
 	}
@@ -547,7 +548,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId,
 	if coinBase.Big().Uint64() == 0 && app.Config.StartMining {
 		app.log.Panic("invalid Coinbase account")
 	}
-	atxBuilder := activation.NewBuilder(nodeID, coinBase, sgn, atxdb, swarm, msh, layersPerEpoch, nipstBuilder, postClient, clock.Subscribe(), syncer.ListenToGossip, store, app.addLogger("atxBuilder", lg))
+	atxBuilder := activation.NewBuilder(nodeID, coinBase, sgn, atxdb, swarm, msh, layersPerEpoch, nipstBuilder, postClient, clock, syncer, store, app.addLogger("atxBuilder", lg))
 
 	app.blockProducer = blockProducer
 	app.blockListener = blockListener
@@ -848,7 +849,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 		log.Error("cannot parse genesis time %v", err)
 	}
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
-	clock := timesync.NewTicker(timesync.RealClock{}, ld, gTime)
+	clock := timesync.NewClock(timesync.RealClock{}, ld, gTime, log.NewDefault("clock"))
 	err = app.initServices(nodeID, swarm, dbStorepath, app.edSgn, false, nil, uint32(app.Config.LayerAvgSize), postClient, poetClient, vrfSigner, uint16(app.Config.LayersPerEpoch), clock)
 	if err != nil {
 		log.Error("cannot start services %v", err.Error())
