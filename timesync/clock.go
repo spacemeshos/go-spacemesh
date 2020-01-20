@@ -1,119 +1,10 @@
 package timesync
 
 import (
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"sync"
 	"time"
 )
-
-//this package sends a tick each tickInterval to all consumers of the tick
-//This also send the current mesh.LayerID  which is calculated from the number of ticks passed since epoch
-type LayerTimer chan types.LayerID
-
-type ManualClock struct {
-	*Ticker
-	genesisTime time.Time
-}
-
-func (t *ManualClock) Tick() {
-	t.notifyOnTick()
-}
-
-func NewManualClock(genesisTime time.Time) *ManualClock {
-	t := &ManualClock{
-		Ticker: &Ticker{
-			nextLayerToTick: 1,
-			stop:            make(chan struct{}),
-			subscribers:     make(map[LayerTimer]struct{}),
-		},
-		genesisTime: genesisTime,
-	}
-	t.StartNotifying()
-	return t
-}
-
-func (t ManualClock) GetGenesisTime() time.Time {
-	return t.genesisTime
-}
-
-type TimeClock struct {
-	*Ticker
-	tickInterval time.Duration
-	startEpoch   time.Time
-	time         Clock
-}
-
-func NewTicker(time Clock, tickInterval time.Duration, startEpoch time.Time) *TimeClock {
-	t := &TimeClock{
-		Ticker: &Ticker{
-			nextLayerToTick: 1,
-			stop:            make(chan struct{}),
-			subscribers:     make(map[LayerTimer]struct{}),
-		},
-		tickInterval: tickInterval,
-		startEpoch:   startEpoch,
-		time:         time,
-	}
-	t.init()
-	return t
-}
-
-func (t *TimeClock) init() {
-	var diff time.Duration
-	log.Info("start clock interval is %v", t.tickInterval)
-	if t.time.Now().Before(t.startEpoch) {
-		t.nextLayerToTick = 1
-		diff = t.startEpoch.Sub(t.time.Now())
-	} else {
-		t.updateLayerID()
-		diff = t.tickInterval - (t.time.Now().Sub(t.startEpoch) % t.tickInterval)
-	}
-
-	go t.startClock(diff)
-}
-
-func (t *TimeClock) updateLayerID() {
-	t.nextLayerToTick = types.LayerID((t.time.Now().Sub(t.startEpoch) / t.tickInterval) + 2)
-}
-
-func (t *TimeClock) startClock(diff time.Duration) {
-	log.Info("starting global clock now=%v genesis=%v", t.time.Now(), t.startEpoch)
-	log.Info("global clock going to sleep for %v", diff)
-
-	tmr := time.NewTimer(diff)
-	select {
-	case <-tmr.C:
-		break
-	case <-t.stop:
-		return
-	}
-	t.notifyOnTick()
-	tick := time.NewTicker(t.tickInterval)
-	log.Info("clock waiting on event, tick interval is %v", t.tickInterval)
-	for {
-		select {
-		case <-tick.C:
-			t.notifyOnTick()
-		case <-t.stop:
-			t.started = false
-			return
-		}
-	}
-}
-
-func (t TimeClock) GetGenesisTime() time.Time {
-	return t.startEpoch
-}
-
-type Ticker struct {
-	nextLayerToTick types.LayerID
-	m               sync.RWMutex
-	stop            chan struct{}
-	subscribers     map[LayerTimer]struct{} // map subscribers by channel
-	started         bool
-	once            sync.Once
-}
 
 type Clock interface {
 	Now() time.Time
@@ -125,60 +16,60 @@ func (RealClock) Now() time.Time {
 	return time.Now()
 }
 
-func (t *Ticker) StartNotifying() {
-	log.Info("started notifying")
-	t.started = true
+type TimeClock struct {
+	*Ticker
+	tickInterval time.Duration
+	startEpoch   time.Time
+	stop         chan struct{}
+	once         sync.Once
+	log          log.Log
 }
 
-func (t *Ticker) Close() {
+func NewClock(c Clock, tickInterval time.Duration, genesisTime time.Time, logger log.Log) *TimeClock {
+	if tickInterval == 0 {
+		logger.Panic("could not create new clock: bad configuration: tick interval is zero")
+	}
+
+	t := &TimeClock{
+		Ticker:       NewTicker(c, LayerConv{duration: tickInterval, genesis: genesisTime}),
+		tickInterval: tickInterval,
+		startEpoch:   genesisTime,
+		stop:         make(chan struct{}),
+		once:         sync.Once{},
+		log:          logger,
+	}
+	go t.startClock()
+	return t
+}
+
+func (t *TimeClock) startClock() {
+	t.log.Info("starting global clock now=%v genesis=%v", t.clock.Now(), t.startEpoch)
+
+	for {
+		currLayer := t.Ticker.conv.TimeToLayer(t.clock.Now())    // get current layer
+		nextTickTime := t.Ticker.conv.LayerToTime(currLayer + 1) // get next tick time for the next layer
+		diff := nextTickTime.Sub(t.clock.Now())
+		tmr := time.NewTimer(diff)
+		t.log.With().Info("global clock going to sleep before next layer", log.String("diff", diff.String()), log.Uint64("next_layer", uint64(currLayer)))
+		select {
+		case <-tmr.C:
+			// notify subscribers
+			if missed, err := t.Notify(); err != nil {
+				t.log.With().Error("could not notify subscribers", log.Err(err), log.Int("missed", missed))
+			}
+		case <-t.stop:
+			tmr.Stop()
+			return
+		}
+	}
+}
+
+func (t *TimeClock) GetGenesisTime() time.Time {
+	return t.startEpoch
+}
+
+func (t *TimeClock) Close() {
 	t.once.Do(func() {
 		close(t.stop)
 	})
-}
-
-func (t *Ticker) notifyOnTick() {
-	if !t.started {
-		return
-	}
-
-	t.m.Lock()
-	log.Event().Info("release tick", log.LayerId(uint64(t.nextLayerToTick)))
-	count := 1
-	wg := sync.WaitGroup{}
-	wg.Add(len(t.subscribers))
-	for ch := range t.subscribers {
-		c := ch
-		go func(count int) {
-			c <- t.nextLayerToTick
-			log.Debug("iv'e notified number : %v", count)
-			wg.Done()
-		}(count)
-		count++
-	}
-	wg.Wait()
-	log.Debug("Ive notified all")
-	t.nextLayerToTick++
-	t.m.Unlock()
-}
-
-func (t *Ticker) GetCurrentLayer() types.LayerID {
-	t.m.RLock()
-	currentLayer := t.nextLayerToTick - 1 // nextLayerToTick is ensured to be >= 1
-	t.m.RUnlock()
-	return currentLayer
-}
-
-func (t *Ticker) Subscribe() LayerTimer {
-	ch := make(LayerTimer)
-	t.m.Lock()
-	t.subscribers[ch] = struct{}{}
-	t.m.Unlock()
-	log.Info("subscribed to channel")
-	return ch
-}
-
-func (t *Ticker) Unsubscribe(ch LayerTimer) {
-	t.m.Lock()
-	delete(t.subscribers, ch)
-	t.m.Unlock()
 }

@@ -84,6 +84,8 @@ const (
 	Pending    Status = 0
 	InProgress Status = 1
 	Done       Status = 2
+
+	ValidatingLayerNone types.LayerID = 0
 )
 
 type LayerProvider interface {
@@ -97,20 +99,24 @@ type Syncer struct {
 	EligibilityValidator
 	*workerInfra
 	TickProvider
-	poetDb            PoetDb
-	txpool            TxMemPool
-	atxpool           AtxMemPool
-	lValidator        LayerValidator
-	currentLayer      types.LayerID
-	SyncLock          uint32
-	startLock         uint32
-	forceSync         chan bool
-	LayerCh           timesync.LayerTimer
-	exit              chan struct{}
-	currentLayerMutex sync.RWMutex
-	syncRoutineWg     sync.WaitGroup
-	gossipLock        sync.RWMutex
-	gossipSynced      Status
+
+	poetDb               PoetDb
+	txpool               TxMemPool
+	atxpool              AtxMemPool
+	lValidator           LayerValidator
+	currentLayer         types.LayerID
+	currentLayerMutex    sync.RWMutex
+	validatingLayer      types.LayerID
+	validatingLayerMutex sync.Mutex
+	SyncLock             uint32
+	startLock            uint32
+	forceSync            chan bool
+	LayerCh              timesync.LayerTimer
+	exit                 chan struct{}
+	syncRoutineWg        sync.WaitGroup
+	gossipLock           sync.RWMutex
+	gossipSynced         Status
+	awaitCh              chan struct{}
 
 	//todo fetch server
 	blockQueue *blockQueue
@@ -164,10 +170,26 @@ func (s *Syncer) ListenToGossip() bool {
 	return s.getGossipBufferingStatus() != Pending
 }
 
-func (s *Syncer) setGossipBufferingStatus(b Status) {
+func (s *Syncer) setGossipBufferingStatus(status Status) {
 	s.gossipLock.Lock()
-	s.gossipSynced = b
+	s.notifySubscribers(s.gossipSynced, status)
+	s.gossipSynced = status
 	s.gossipLock.Unlock()
+}
+
+func (s *Syncer) notifySubscribers(prevStatus, status Status) {
+	if (status == Done) == (prevStatus == Done) {
+		return
+	}
+	if status == Done {
+		close(s.awaitCh)
+	} else {
+		s.awaitCh = make(chan struct{})
+	}
+}
+
+func (s *Syncer) Await() chan struct{} {
+	return s.awaitCh
 }
 
 func (s *Syncer) IsSynced() bool {
@@ -237,9 +259,11 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool A
 		startLock:            0,
 		forceSync:            make(chan bool),
 		currentLayer:         clock.GetCurrentLayer(),
+		validatingLayer:      ValidatingLayerNone,
 		LayerCh:              clock.Subscribe(),
 		exit:                 make(chan struct{}),
 		gossipSynced:         Pending,
+		awaitCh:              make(chan struct{}),
 	}
 
 	s.blockQueue = NewValidationQueue(srvr, s.Configuration, s, s.blockCheckLocal, logger.WithName("validQ"))
@@ -281,13 +305,9 @@ func (s *Syncer) Synchronise() {
 
 	if s.weaklySynced() { // we have all the data of the prev layers so we can simply validate
 		s.With().Info("Node is synced. Going to validate layer", log.LayerId(uint64(currentSyncLayer)))
-
-		lyr, err := s.GetLayer(currentSyncLayer)
-		if err != nil {
+		if err := s.GetAndValidateLayer(currentSyncLayer); err != nil {
 			s.Panic("failed getting layer even though we are weakly-synced currentLayer=%v lastTicked=%v err=%v ", currentSyncLayer, s.lastTickedLayer(), err)
-			return
 		}
-		s.lValidator.ValidateLayer(lyr) // wait for layer validation
 		return
 	}
 
@@ -364,19 +384,15 @@ func (s *Syncer) gossipSyncForOneFullLayer(currentSyncLayer types.LayerID) error
 	// just get the layers and validate
 
 	// get & validate first tick
-	lyr, err := s.GetLayer(currentSyncLayer)
-	if err != nil {
+	if err := s.GetAndValidateLayer(currentSyncLayer); err != nil {
 		return err
 	}
-	s.lValidator.ValidateLayer(lyr)
 
 	// get & validate second tick
-	currentSyncLayer++
-	lyr, err = s.GetLayer(currentSyncLayer)
-	if err != nil {
+	if err := s.GetAndValidateLayer(currentSyncLayer + 1); err != nil {
 		return err
 	}
-	s.lValidator.ValidateLayer(lyr)
+
 	s.Info("Done waiting for ticks and validation. setting gossip true")
 
 	// fully-synced - set gossip -synced to true
@@ -742,4 +758,25 @@ func (s *Syncer) blockCheckLocal(blockIds []types.Hash32) (map[types.Hash32]Item
 	}
 
 	return nil, dbItems, nil
+}
+
+func (s *Syncer) GetAndValidateLayer(id types.LayerID) error {
+	s.validatingLayerMutex.Lock()
+	s.validatingLayer = id
+	defer func() {
+		s.validatingLayer = ValidatingLayerNone
+		s.validatingLayerMutex.Unlock()
+	}()
+
+	lyr, err := s.GetLayer(id)
+	if err != nil {
+		return err
+	}
+	s.lValidator.ValidateLayer(lyr) // wait for layer validation
+
+	return nil
+}
+
+func (s *Syncer) ValidatingLayer() types.LayerID {
+	return s.validatingLayer
 }

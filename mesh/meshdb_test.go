@@ -53,7 +53,7 @@ func TestMeshDB_AddBlock(t *testing.T) {
 	addTransactionsWithFee(t, mdb, block1, 4, rand.Int63n(100))
 
 	poetRef := []byte{0xba, 0x05}
-	atx := types.NewActivationTx(types.NodeId{"aaaa", []byte("bbb")}, coinbase, 1, types.AtxId{}, 5, 1, types.AtxId{}, 5, []types.BlockID{}, &types.NIPST{
+	atx := types.NewActivationTxForTests(types.NodeId{"aaaa", []byte("bbb")}, 1, types.AtxId{}, 5, 1, types.AtxId{}, coinbase, 5, []types.BlockID{}, &types.NIPST{
 		Space:          0,
 		NipstChallenge: &types.Hash32{},
 		PostProof: &types.PostProof{
@@ -115,7 +115,7 @@ func createLayerWithRandVoting(index types.LayerID, prev []*types.Layer, blocksI
 }
 
 func TestForEachInView_Persistent(t *testing.T) {
-	mdb, err := NewPersistentMeshDB(Path+"/mesh_db/", log.New("TestForEachInView", "", ""))
+	mdb, err := NewPersistentMeshDB(Path+"/mesh_db/", 5, log.New("TestForEachInView", "", ""))
 	require.NoError(t, err)
 	defer mdb.Close()
 	defer teardown()
@@ -240,7 +240,7 @@ func BenchmarkNewPersistentMeshDB(b *testing.B) {
 
 	r := require.New(b)
 
-	mdb, err := NewPersistentMeshDB(path.Join(Path, "mesh_db"), log.NewDefault("meshDb"))
+	mdb, err := NewPersistentMeshDB(path.Join(Path, "mesh_db"), 5, log.NewDefault("meshDb"))
 	require.NoError(b, err)
 	defer mdb.Close()
 	defer teardown()

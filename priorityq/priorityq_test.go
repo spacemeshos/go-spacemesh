@@ -92,14 +92,16 @@ func TestPriorityQ_Read(t *testing.T) {
 	go func() {
 		m, e := pq.Read()
 		for e == nil {
-			//fmt.Println("reading  ", m, e, i, len(pq.queues[0]), len(pq.queues[1]))
-			i++
 			prio, ok := m.(int)
+			//fmt.Println("reading  ", m, e, i, len(pq.queues[0]), len(pq.queues[1]))
 			if !ok {
-				break
+				// should never happen
+				t.FailNow()
 			}
+
 			r.False(prio < maxPrio)
 			maxPrio = prio
+			i++
 
 			m, e = pq.Read()
 		}
@@ -109,5 +111,5 @@ func TestPriorityQ_Read(t *testing.T) {
 	time.Sleep(1500 * time.Millisecond)
 	pq.Close()
 	rg.Wait()
-	r.Equal(3*defLen, i-1)
+	r.Equal(3*defLen, i)
 }
