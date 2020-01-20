@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/api/pb"
@@ -196,14 +197,20 @@ var (
 	}
 )
 
+// get default node config for tests
+func getDefNodeConfig() nodeconf.Config {
+	nodeConf := nodeconf.DefaultConfig()
+	nodeConf.LayerDurationSec = layerDuration
+	nodeConf.P2P.SwarmConfig.BootstrapNodes = []string{"spacemesh://9n4AnWsnVgUBCvRZA9Ai55sh6iN2HQmLE7u1vuS6pby4@15.165.9.50:63163", "spacemesh://9n4AnWsnVgUBCvRZA9Ai55sh6iN2HQmLE7u1vuS6pby4@15.165.9.50:63161"}
+	return nodeConf
+}
+
 func TestServersConfig(t *testing.T) {
 	port1, err := node.GetUnboundedPort()
 	port2, err := node.GetUnboundedPort()
 	require.NoError(t, err, "Should be able to establish a connection on a port")
 
-	// need to pass some default conf here
-
-	nodeConf := nodeconf.DefaultConfig()
+	nodeConf := getDefNodeConfig()
 	grpcService := NewGrpcService(&nodeConf, port1, &networkMock, ap, txApi, nil, &mining, &oracle, nil, PostMock{}, nil)
 
 	require.Equal(t, grpcService.Port, uint(port1), "Expected same port")
@@ -214,7 +221,7 @@ func TestServersConfig(t *testing.T) {
 }
 
 func TestGrpcApi(t *testing.T) {
-	shutDown := launchServer(t)
+	shutDown, _ := launchServer(t)
 
 	const message = "Hello World"
 
@@ -237,8 +244,54 @@ func TestGrpcApi(t *testing.T) {
 	shutDown()
 }
 
+func TestGrpcNodeParamsApi(t *testing.T) {
+	shutDown, nodeConf := launchServer(t)
+
+	// start a client
+	addr := "localhost:" + strconv.Itoa(apiCnfg.GrpcServerPort)
+
+	// Set up a connection to the server.
+	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	require.NoError(t, err)
+	defer conn.Close()
+	c := pb.NewSpacemeshServiceClient(conn)
+
+	// call echo and validate result
+	response, err := c.GetNodeParams(context.Background(), &empty.Empty{})
+	require.NoError(t, err)
+
+	t.Log(response)
+
+	require.Equal(t, nodeConf.TestMode, response.TestMode)
+	require.Equal(t, uint32(nodeConf.LayerDurationSec), response.LayerDurationSec)
+	require.Equal(t, uint32(nodeConf.LayerAvgSize), response.LayerAvgSize)
+	require.Equal(t, uint32(nodeConf.LayersPerEpoch), response.LayersPerEpoch)
+	require.Equal(t, uint32(nodeConf.Hdist), response.Hdist)
+	require.Equal(t, nodeConf.PoETServer, response.PoETServer)
+	require.Equal(t, uint32(nodeConf.SyncRequestTimeout), response.SyncRequestTimeout)
+	require.Equal(t, uint32(nodeConf.AtxsPerBlock), response.AtxsPerBlock)
+	require.Equal(t, nodeConf.P2P.SwarmConfig.Bootstrap, response.Bootstrap)
+	require.Equal(t, nodeConf.P2P.SwarmConfig.BootstrapNodes, response.BootstrapNodes)
+	require.Equal(t, uint32(nodeConf.P2P.SwarmConfig.RandomConnections), response.Randcon)
+	require.Equal(t, uint32(nodeConf.P2P.MaxInboundPeers), response.MaxInbound)
+	require.Equal(t, uint32(nodeConf.HARE.WakeupDelta), response.HareWakeupDelta)
+	require.Equal(t, uint32(nodeConf.HARE.RoundDuration), response.HareRoundDuration)
+	require.Equal(t, uint32(nodeConf.HARE.N), response.HareCommitteeSize)
+	require.Equal(t, uint32(nodeConf.HARE.F), response.HareMaxAdversaries)
+	require.Equal(t, uint32(nodeConf.HareEligibility.ConfidenceParam), response.EligibilityConf)
+	require.Equal(t, uint32(nodeConf.HareEligibility.EpochOffset), response.EligibilityEpochOffset)
+	require.Equal(t, uint32(nodeConf.GenesisActiveSet), response.GenesisActiveSize)
+	require.Equal(t, nodeConf.POST.SpacePerUnit, response.PostSize)
+	require.Equal(t, nodeConf.POST.LabelsLogRate, response.PostLabels)
+	require.Equal(t, nodeConf.GenesisTime, response.GenesisTime)
+	require.Equal(t, uint32(nodeConf.P2P.NetworkID), response.NetworkId)
+
+	// stop the server
+	shutDown()
+}
+
 func TestJsonApi(t *testing.T) {
-	shutDown := launchServer(t)
+	shutDown, _ := launchServer(t)
 
 	const message = "hello world!"
 
@@ -255,7 +308,7 @@ func TestJsonApi(t *testing.T) {
 
 func TestBroadcastPoet(t *testing.T) {
 	r := require.New(t)
-	shutDown := launchServer(t)
+	shutDown, _ := launchServer(t)
 
 	payload := "{\"data\":[1,2,3]}"
 	respBody, respStatus := callEndpoint(t, "v1/broadcastpoet", payload)
@@ -269,7 +322,7 @@ func TestBroadcastPoet(t *testing.T) {
 
 func TestJsonWalletApi(t *testing.T) {
 	r := require.New(t)
-	shutDown := launchServer(t)
+	shutDown, _ := launchServer(t)
 
 	signer := signing.NewEdSigner()
 	addr := types.BytesToAddress(signer.PublicKey().Bytes())
@@ -406,7 +459,7 @@ func assertSimpleMessage(t *testing.T, respBody, expectedValue string) {
 }
 
 func TestSpacemeshGrpcService_GetTransaction(t *testing.T) {
-	shutDown := launchServer(t)
+	shutDown, _ := launchServer(t)
 
 	tx1 := genTx(t)
 	txApi.returnTx[tx1.Id()] = tx1
@@ -482,12 +535,10 @@ func marshalProto(t *testing.T, msg proto.Message) string {
 
 var apiCnfg = config.DefaultConfig()
 
-func launchServer(t *testing.T) func() {
+func launchServer(t *testing.T) (func(), nodeconf.Config) {
 	networkMock.broadcasted = []byte{0x00}
 
-	nodeConf := nodeconf.DefaultConfig()
-	nodeConf.LayerDurationSec = layerDuration
-
+	nodeConf := getDefNodeConfig()
 	grpcService := NewGrpcService(&nodeConf, apiCnfg.GrpcServerPort, &networkMock, ap, txApi, txMempool, &mining, &oracle, genTime, PostMock{}, nil)
 	jsonService := NewJSONHTTPServer(apiCnfg.JSONServerPort, apiCnfg.GrpcServerPort)
 	// start gRPC and json server
@@ -499,7 +550,7 @@ func launchServer(t *testing.T) func() {
 	return func() {
 		jsonService.StopService()
 		grpcService.StopService()
-	}
+	}, nodeConf
 }
 
 func callEndpoint(t *testing.T, endpoint, payload string) (string, int) {
@@ -526,7 +577,7 @@ func genTx(t *testing.T) *types.Transaction {
 }
 
 func TestJsonWalletApi_Errors(t *testing.T) {
-	shutDown := launchServer(t)
+	shutDown, _ := launchServer(t)
 
 	// generate request payload (api input params)
 	addrBytes := []byte{0x02} // address that does not exist
@@ -546,7 +597,7 @@ func TestJsonWalletApi_Errors(t *testing.T) {
 }
 
 func TestSpaceMeshGrpcService_Broadcast(t *testing.T) {
-	shutDown := launchServer(t)
+	shutDown, _ := launchServer(t)
 
 	// generate request payload (api input params)
 	Data := "l33t"
@@ -562,7 +613,7 @@ func TestSpaceMeshGrpcService_Broadcast(t *testing.T) {
 }
 
 func TestSpaceMeshGrpcService_BroadcastErrors(t *testing.T) {
-	shutDown := launchServer(t)
+	shutDown, _ := launchServer(t)
 	networkMock.broadCastErr = true
 	const expectedResponse = "{\"error\":\"error during broadcast\",\"message\":\"error during broadcast\",\"code\":2}"
 
