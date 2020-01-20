@@ -258,15 +258,15 @@ func NewGrpcService(config *cfg.Config, port int, net NetworkAPI, state StateAPI
 		MaxInbound:             uint32(config.P2P.MaxInboundPeers),
 		HareWakeupDelta:        uint32(config.HARE.WakeupDelta),
 		HareRoundDuration:      uint32(config.HARE.RoundDuration),
-		HareCommitteeSize:      0,
-		HareMaxAdversaries:     0,
+		HareCommitteeSize:      uint32(config.HARE.N),
+		HareMaxAdversaries:     uint32(config.HARE.F),
 		EligibilityConf:        uint32(config.HareEligibility.ConfidenceParam),
 		EligibilityEpochOffset: uint32(config.HareEligibility.EpochOffset),
 		GenesisActiveSize:      uint32(config.GenesisActiveSet),
 		PostSize:               config.POST.SpacePerUnit,
 		PostLabels:             config.POST.LabelsLogRate,
 		GenesisTime:            config.GenesisTime,
-		NetworkId: 				uint32(config.P2P.NetworkID),
+		NetworkId:              uint32(config.P2P.NetworkID),
 	}
 
 	server := grpc.NewServer(options...)
@@ -313,7 +313,6 @@ func (s SpacemeshGrpcService) startServiceInternal() {
 	if err := s.Server.Serve(lis); err != nil {
 		log.Error("grpc stopped serving", err)
 	}
-
 }
 
 func (s SpacemeshGrpcService) StartMining(ctx context.Context, message *pb.InitPost) (*pb.SimpleMessage, error) {
