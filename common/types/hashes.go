@@ -43,17 +43,22 @@ func CalcBlocksHash12(view []BlockID) (Hash12, error) {
 	return CalcHash12(viewBytes), err
 }
 
-func CalcBlocksHash32(view []BlockID) (Hash32, error) {
+func CalcBlocksHash32(view []BlockID, additionalBytes []byte) Hash32 {
 	sortedView := make([]BlockID, len(view))
 	copy(sortedView, view)
-	sort.Slice(sortedView, func(i, j int) bool {
-		return bytes.Compare(sortedView[i].ToBytes(), sortedView[j].ToBytes()) < 0
-	})
-	viewBytes, err := InterfaceToBytes(sortedView)
-	if err != nil {
-		return Hash32{}, err
+	SortBlockIds(sortedView)
+	return CalcBlockHash32Presorted(sortedView, additionalBytes)
+}
+
+func CalcBlockHash32Presorted(sortedView []BlockID, additionalBytes []byte) Hash32 {
+	hash := sha256.New()
+	hash.Write(additionalBytes)
+	for _, id := range sortedView {
+		hash.Write(id.ToBytes())
 	}
-	return CalcHash32(viewBytes), err
+	var res Hash32
+	hash.Sum(res[:0])
+	return res
 }
 
 func CalcAtxsHash12(ids []AtxId) (Hash12, error) {

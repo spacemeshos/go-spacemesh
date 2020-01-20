@@ -10,7 +10,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/sha256-simd"
 	"math/rand"
 
 	"math/big"
@@ -188,7 +187,7 @@ func (m *Mesh) ValidateLayer(lyr *types.Layer) {
 			break
 		}
 		m.logStateRoot(layerId)
-		m.setLayerHash(layerId)
+		m.setLayerHash(lyr)
 	}
 	m.persistLayerHash()
 	m.Info("done validating layer %v", lyr.Index())
@@ -201,26 +200,12 @@ func (m *Mesh) logStateRoot(layerId types.LayerID) {
 	)
 }
 
-func (m *Mesh) setLayerHash(layerId types.LayerID) {
-	validBlockIds, err := m.ContextuallyValidBlock(layerId)
-	if err != nil {
-		m.With().Error("failed to get contextually valid blocks for layer hash - all future hashes will be inconsistent",
-			log.Err(err), log.LayerId(layerId.Uint64()))
-		return
-	}
-	layerHash := sha256.New()
-	layerHash.Write(m.layerHash)
-	sortedBlockIds := make([]types.BlockID, 0, len(validBlockIds))
-	for id := range validBlockIds {
-		sortedBlockIds = append(sortedBlockIds, id)
-	}
-	types.SortBlockIds(sortedBlockIds)
-	for _, id := range sortedBlockIds {
-		layerHash.Write(id.ToBytes())
-	}
-	m.layerHash = layerHash.Sum(nil)
+func (m *Mesh) setLayerHash(layer *types.Layer) {
+	validBlocks, _ := m.BlocksByValidity(layer.Blocks())
+	m.layerHash = types.CalcBlocksHash32(types.BlockIds(validBlocks), m.layerHash).Bytes()
+
 	m.Event().Info("new layer hash",
-		log.LayerId(layerId.Uint64()),
+		log.LayerId(layer.Index().Uint64()),
 		log.String("layer_hash", util.Bytes2Hex(m.layerHash)))
 }
 
@@ -233,31 +218,15 @@ func (m *Mesh) persistLayerHash() {
 
 func (m *Mesh) ExtractUniqueOrderedTransactions(l *types.Layer) (validBlockTxs, invalidBlockTxs []*types.Transaction) {
 	// Separate blocks by validity
-	var validBlocks, invalidBlocks []*types.Block
-	for _, b := range l.Blocks() {
-		valid, err := m.ContextualValidity(b.Id())
-		if err != nil {
-			m.With().Error("could not get contextual validity", log.BlockId(b.Id().String()), log.Err(err))
-		}
-		if valid {
-			validBlocks = append(validBlocks, b)
-		} else {
-			invalidBlocks = append(invalidBlocks, b)
-		}
-	}
+	validBlocks, invalidBlocks := m.BlocksByValidity(l.Blocks())
 
 	// Deterministically sort valid blocks
-	validBlocks = types.SortBlocks(validBlocks)
-
-	// `layerHash` is the sha256 sum of sorted layer block IDs
-	layerHash := sha256.New()
-	for _, b := range validBlocks {
-		layerHash.Write(b.Id().AsHash32().Bytes())
-	}
+	types.SortBlocks(validBlocks)
 
 	// Initialize a Mersenne Twister seeded with layerHash
+	blockHash := types.CalcBlockHash32Presorted(types.BlockIds(validBlocks), nil)
 	mt := mt19937.New()
-	mt.SeedFromSlice(toUint64Slice(layerHash.Sum(nil)))
+	mt.SeedFromSlice(toUint64Slice(blockHash.Bytes()))
 	rng := rand.New(mt)
 
 	// Perform a Fisher-Yates shuffle on the blocks
