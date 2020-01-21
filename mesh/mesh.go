@@ -181,13 +181,16 @@ func (m *Mesh) ValidateLayer(lyr *types.Layer) {
 	m.lvMutex.Unlock()
 
 	for layerId := oldPbase; layerId < newPbase; layerId++ {
-		m.AccumulateRewards(layerId, m.config)
-		if err := m.PushTransactions(layerId); err != nil {
-			m.With().Error("failed to push transactions", log.Err(err))
-			break
+		l, err := m.GetLayer(layerId)
+		if err != nil || l == nil {
+			// TODO: propagate/handle error
+			m.With().Error("failed to get layer", log.LayerId(layerId.Uint64()), log.Err(err))
+			continue
 		}
+		m.AccumulateRewards(l, m.config)
+		m.PushTransactions(l)
 		m.logStateRoot(layerId)
-		m.setLayerHash(lyr)
+		m.setLayerHash(l)
 	}
 	m.persistLayerHash()
 	m.Info("done validating layer %v", lyr.Index())
@@ -270,23 +273,16 @@ func (m *Mesh) getTxs(txIds []types.TransactionId, l *types.Layer) []*types.Tran
 	return txs
 }
 
-func (m *Mesh) PushTransactions(layerId types.LayerID) error {
-	l, err := m.GetLayer(layerId)
-	if err != nil || l == nil {
-		// TODO: We want to panic here once we have a way to "remember" that we didn't apply these txs
-		//  e.g. persist the last layer transactions were applied from and use that instead of `oldBase`
-		return fmt.Errorf("failed to retrieve layer %v: %v", layerId, err)
-	}
-
+func (m *Mesh) PushTransactions(l *types.Layer) {
 	validBlockTxs, invalidBlockTxs := m.ExtractUniqueOrderedTransactions(l)
-	numFailedTxs, err := m.ApplyTransactions(layerId, validBlockTxs)
+	numFailedTxs, err := m.ApplyTransactions(l.Index(), validBlockTxs)
 	if err != nil {
 		m.With().Error("failed to apply transactions",
-			log.LayerId(uint64(layerId)), log.Int("num_failed_txs", numFailedTxs), log.Err(err))
+			log.LayerId(l.Index().Uint64()), log.Int("num_failed_txs", numFailedTxs), log.Err(err))
 		// TODO: We want to panic here once we have a way to "remember" that we didn't apply these txs
 		//  e.g. persist the last layer transactions were applied from and use that instead of `oldBase`
 	}
-	m.removeFromUnappliedTxs(validBlockTxs, invalidBlockTxs, layerId)
+	m.removeFromUnappliedTxs(validBlockTxs, invalidBlockTxs, l.Index())
 	for _, tx := range invalidBlockTxs {
 		err = m.blockBuilder.ValidateAndAddTxToPool(tx)
 		// We ignore errors here, since they mean that the tx is no longer valid and we shouldn't re-add it
@@ -298,10 +294,9 @@ func (m *Mesh) PushTransactions(layerId types.LayerID) error {
 	m.With().Info("applied transactions",
 		log.Int("valid_block_txs", len(validBlockTxs)),
 		log.Int("invalid_block_txs", len(invalidBlockTxs)),
-		log.LayerId(uint64(layerId)),
+		log.LayerId(l.Index().Uint64()),
 		log.Int("num_failed_txs", numFailedTxs),
 	)
-	return nil
 }
 
 //todo consider adding a boolean for layer validity instead error
@@ -467,13 +462,7 @@ func (m *Mesh) GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error) {
 	return idArr, nil
 }
 
-func (m *Mesh) AccumulateRewards(rewardLayer types.LayerID, params Config) {
-	l, err := m.GetLayer(rewardLayer)
-	if err != nil || l == nil {
-		m.Error("") //todo handle error
-		return
-	}
-
+func (m *Mesh) AccumulateRewards(l *types.Layer, params Config) {
 	ids := make([]types.Address, 0, len(l.Blocks()))
 	for _, bl := range l.Blocks() {
 		valid, err := m.ContextualValidity(bl.Id())
@@ -483,7 +472,7 @@ func (m *Mesh) AccumulateRewards(rewardLayer types.LayerID, params Config) {
 		if !valid {
 			m.With().Info("Withheld reward for contextually invalid block",
 				log.BlockId(bl.Id().String()),
-				log.LayerId(uint64(rewardLayer)),
+				log.LayerId(l.Index().Uint64()),
 			)
 			continue
 		}
@@ -508,16 +497,16 @@ func (m *Mesh) AccumulateRewards(rewardLayer types.LayerID, params Config) {
 		totalReward.Add(totalReward, new(big.Int).SetUint64(tx.Fee))
 	}
 
-	layerReward := CalculateLayerReward(rewardLayer, params)
+	layerReward := CalculateLayerReward(l.Index(), params)
 	totalReward.Add(totalReward, layerReward)
 
 	numBlocks := big.NewInt(int64(len(l.Blocks())))
 
 	blockTotalReward := calculateActualRewards(totalReward, numBlocks)
-	m.ApplyRewards(rewardLayer, ids, blockTotalReward)
+	m.ApplyRewards(l.Index(), ids, blockTotalReward)
 
 	blockLayerReward := calculateActualRewards(layerReward, numBlocks)
-	err = m.writeTransactionRewards(rewardLayer, ids, blockTotalReward, blockLayerReward)
+	err := m.writeTransactionRewards(l.Index(), ids, blockTotalReward, blockLayerReward)
 	if err != nil {
 		m.Error("cannot write reward to db")
 	}
