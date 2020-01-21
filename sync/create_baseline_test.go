@@ -156,7 +156,7 @@ func atxWithProof(pubkey string, poetref []byte) *types.ActivationTx {
 	chlng := types.HexToHash32("0x3333")
 	npst := activation.NewNIPSTWithChallenge(&chlng, poetref)
 
-	atx := types.NewActivationTx(types.NodeId{Key: pubkey, VRFPublicKey: []byte(rand.RandString(8))}, coinbase, 0, *types.EmptyAtxId, 5, 1, *types.EmptyAtxId, 0, []types.BlockID{}, npst)
+	atx := types.NewActivationTxForTests(types.NodeId{Key: pubkey, VRFPublicKey: []byte(rand.RandString(8))}, 0, *types.EmptyAtxId, 5, 1, *types.EmptyAtxId, coinbase, 0, []types.BlockID{}, npst)
 	atx.Commitment = commitment
 	atx.CommitmentMerkleRoot = commitment.MerkleRoot
 	atx.CalcAndSetId()

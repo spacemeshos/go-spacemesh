@@ -116,47 +116,34 @@ type ActivationTx struct {
 	Sig []byte
 }
 
-func NewActivationTx(NodeId NodeId, Coinbase Address, Sequence uint64, PrevATX AtxId, LayerIndex LayerID,
-	StartTick uint64, PositioningATX AtxId, ActiveSetSize uint32, View []BlockID, nipst *NIPST) *ActivationTx {
+func NewActivationTxForTests(nodeId NodeId, sequence uint64, prevATX AtxId, pubLayerId LayerID, startTick uint64,
+	positioningAtx AtxId, coinbase Address, activeSetSize uint32, view []BlockID, nipst *NIPST) *ActivationTx {
 
-	atx := &ActivationTx{
-		&InnerActivationTx{
-			ActivationTxHeader: &ActivationTxHeader{
-				NIPSTChallenge: NIPSTChallenge{
-					NodeId:         NodeId,
-					Sequence:       Sequence,
-					PrevATXId:      PrevATX,
-					PubLayerIdx:    LayerIndex,
-					StartTick:      StartTick,
-					PositioningAtx: PositioningATX,
-				},
-				Coinbase:      Coinbase,
-				ActiveSetSize: ActiveSetSize,
-			},
-			Nipst: nipst,
-			View:  View,
-		},
-		nil,
+	nipstChallenge := NIPSTChallenge{
+		NodeId:         nodeId,
+		Sequence:       sequence,
+		PrevATXId:      prevATX,
+		PubLayerIdx:    pubLayerId,
+		StartTick:      startTick,
+		PositioningAtx: positioningAtx,
 	}
-	atx.CalcAndSetId()
-	return atx
+	return NewActivationTx(nipstChallenge, coinbase, activeSetSize, view, nipst, nil)
 }
 
-func NewActivationTxWithChallenge(poetChallenge NIPSTChallenge, coinbase Address, ActiveSetSize uint32,
-	View []BlockID, nipst *NIPST, commitment *PostProof) *ActivationTx {
+func NewActivationTx(nipstChallenge NIPSTChallenge, coinbase Address, activeSetSize uint32, view []BlockID,
+	nipst *NIPST, commitment *PostProof) *ActivationTx {
 
 	atx := &ActivationTx{
-		&InnerActivationTx{
+		InnerActivationTx: &InnerActivationTx{
 			ActivationTxHeader: &ActivationTxHeader{
-				NIPSTChallenge: poetChallenge,
+				NIPSTChallenge: nipstChallenge,
 				Coinbase:       coinbase,
-				ActiveSetSize:  ActiveSetSize,
+				ActiveSetSize:  activeSetSize,
 			},
 			Nipst:      nipst,
-			View:       View,
+			View:       view,
 			Commitment: commitment,
 		},
-		nil,
 	}
 	atx.CalcAndSetId()
 	return atx

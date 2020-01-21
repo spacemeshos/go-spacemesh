@@ -1,26 +1,23 @@
-import copy
-import json
-import pprint
-import random
-import subprocess
-import sys
-import time
 from datetime import datetime, timedelta
-from enum import Enum
-from typing import List
-
-import pytest
-import pytz
 from kubernetes import client
 from kubernetes.client.rest import ApiException
 from kubernetes.stream import stream
+import pytest
 from pytest_testconfig import config as testconfig
+import pytz
+import subprocess
+import time
 
-from tests import analyse, pod, deployment, queries, statefulset, tx_generator
+from tests import analyse, pod, deployment, queries, statefulset
+from tests.convenience import sleep_print_backwards
+from tests.tx_generator import config as conf
+import tests.tx_generator.actions as actions
+from tests.tx_generator.models.accountant import Accountant
+from tests.tx_generator.models.wallet_api import WalletAPI
 from tests.conftest import DeploymentInfo, NetworkDeploymentInfo
-from tests.ed25519.eddsa import genkeypair
 from tests.hare.assert_hare import validate_hare
 from tests.misc import ContainerSpec, CoreV1ApiClient
+
 
 BOOT_DEPLOYMENT_FILE = './k8s/bootstrapoet-w-conf.yml'
 BOOT_STATEFULSET_FILE = './k8s/bootstrapoet-w-conf-ss.yml'
@@ -35,6 +32,10 @@ POET_SERVER_PORT = 50002
 ELASTICSEARCH_URL = "http://{0}".format(testconfig['elastic']['host'])
 
 GENESIS_TIME = pytz.utc.localize(datetime.utcnow() + timedelta(seconds=testconfig['genesis_delta']))
+
+dt = datetime.now()
+today_date = dt.strftime("%Y.%m.%d")
+current_index = 'kubernetes_cluster-' + today_date
 
 
 def get_conf(bs_info, client_config, setup_oracle=None, setup_poet=None, args=None):
@@ -309,7 +310,7 @@ def setup_bootstrap(init_session):
 @pytest.fixture(scope='module')
 def setup_clients(init_session, setup_bootstrap):
     """
-    setup clients adds new client nodes from k8s suite file
+    setup clients adds new client nodes using suite file specifications
 
     :param init_session: setup a new k8s env
     :param setup_bootstrap: adds a single bootstrap node
@@ -423,320 +424,79 @@ def add_curl(request, init_session, setup_bootstrap):
 #    TESTS
 # ==============================================================================
 
-dt = datetime.now()
-today_date = dt.strftime("%Y.%m.%d")
-current_index = 'kubernetes_cluster-' + today_date
+
+def test_transactions(init_session, setup_network):
+    # NOTE: because we're checking in this test for the TAP nonce this test
+    #       should be the first test in this suite, because of a bug in the accountant
+    #       with calculation for the TAP balance
+
+    # create #new_acc_num new accounts by sending them coins from tap
+    # check tap balance/nonce
+    # sleep until new state is processed
+    # send txs from new accounts and create new accounts
+    # sleep until new state is processes
+    # validate all accounts balance/nonce
+    # send txs from all accounts between themselves
+    # validate all accounts balance/nonce
+
+    namespace = init_session
+    wallet_api = WalletAPI(namespace, setup_network.clients.pods)
+
+    tap_balance = wallet_api.get_balance_value(conf.acc_pub)
+    tap_nonce = wallet_api.get_nonce_value(conf.acc_pub)
+    acc = Accountant({conf.acc_pub: Accountant.set_tap_acc(balance=tap_balance, nonce=tap_nonce)})
+
+    print("\n\n----- create new accounts ------")
+    new_acc_num = 10
+    amount = 50
+    actions.send_coins_to_new_accounts(wallet_api, new_acc_num, amount, acc)
+
+    print("assert tap's nonce and balance")
+    ass_err = "tap did not have the matching nonce"
+    assert actions.validate_nonce(wallet_api, acc, conf.acc_pub), ass_err
+    ass_err = "tap did not have the matching balance"
+    assert actions.validate_acc_amount(wallet_api, acc, conf.acc_pub), ass_err
+
+    layer_duration = int(testconfig['client']['args']['layer-duration-sec'])
+    tts = layer_duration * conf.num_layers_until_process
+    sleep_print_backwards(tts)
+
+    print("\n\n------ create new accounts using the accounts created by tap ------")
+    # add 1 because we have #new_acc_num new accounts and one tap
+    tx_num = new_acc_num + 1
+    amount = 5
+    actions.send_tx_from_each_account(wallet_api, acc, tx_num, is_new_acc=True, amount=amount)
+
+    tts = layer_duration * conf.num_layers_until_process
+    sleep_print_backwards(tts)
+
+    for acc_pub in acc.accounts:
+        ass_err = f"account {acc_pub} did not have the matching balance"
+        assert actions.validate_acc_amount(wallet_api, acc, acc_pub), ass_err
+
+    for acc_pub in acc.accounts:
+        ass_err = f"account {acc_pub} did not have the matching nonce"
+        assert actions.validate_nonce(wallet_api, acc, acc_pub), ass_err
+
+    print("\n\n------ send txs between all accounts ------")
+    # send coins from all accounts between themselves (add 1 for tap)
+    tx_num = new_acc_num * 2 + 1
+    actions.send_tx_from_each_account(wallet_api, acc, tx_num)
+
+    tts = layer_duration * conf.num_layers_until_process
+    sleep_print_backwards(tts)
+
+    for acc_pub in acc.accounts:
+        ass_err = f"account {acc_pub} did not have the matching balance"
+        assert actions.validate_acc_amount(wallet_api, acc, acc_pub), ass_err
+
+    for acc_pub in acc.accounts:
+        ass_err = f"account {acc_pub} did not have the matching nonce"
+        assert actions.validate_nonce(wallet_api, acc, acc_pub), ass_err
 
 
-class Api(Enum):
-    NONCE = 'v1/nonce'
-    SUBMIT_TRANSACTION = 'v1/submittransaction'
-    BALANCE = 'v1/balance'
-
-
-class Ansi:
-    RED = "\u001b[31m"
-    GREEN = "\u001b[32m"
-    YELLOW = "\u001b[33m"
-
-    BRIGHT_BLACK = "\u001b[30;1m"
-    BRIGHT_WHITE = "\u001b[37;1m"
-    BRIGHT_YELLOW = "\u001b[33;1m"
-
-    RESET = "\u001b[0m"
-
-
-if not hasattr(sys.stderr, "isatty") or not sys.stderr.isatty():
-    [setattr(Ansi, color, '') for color in dir(Ansi) if color[0] != '_']
-
-
-class ClientWrapper:
-    def __init__(self, pod_, namespace):
-        self.ip = pod_['pod_ip']
-        self.name = pod_['name']
-        self.namespace = namespace
-        print("\nUsing client:", Ansi.BRIGHT_WHITE + "{0.name} @ {0.ip}".format(self) + Ansi.RESET)
-
-    def call(self, api, data):
-        print(Ansi.YELLOW + "calling api: {} ({})...".format(api.name, api.value), end="")
-        out = api_call(self.ip, json.dumps(data), api.value, self.namespace)
-        print(" done.", Ansi.BRIGHT_BLACK, out.replace("'", '"'), Ansi.RESET)
-
-        try:
-            out_json = json.loads(out.replace("'", '"'))
-            return out_json
-        except json.JSONDecodeError as e:
-            print(f"could not load json from api output: {e}\noutput={out}")
-
-    def __str__(self):
-        return f"client wrapper:\n\tip={self.ip}\n\tname={self.name}\n\tnamespace={self.namespace}"
-
-
-def test_transaction(setup_network):
-    ns = testconfig['namespace']
-    print(f"{setup_network}")
-
-    # choose client to run on
-    client_wrapper = ClientWrapper(setup_network.clients.pods[0], ns)
-    print(f"{client_wrapper}")
-    out = client_wrapper.call(Api.NONCE, {'address': '1'})
-    assert out.get('value') == '0'
-    print("nonce ok")
-
-    tx_gen = tx_generator.TxGenerator()
-    dst = "0000000000000000000000000000000000002222"
-    tx_bytes = tx_gen.generate(dst, nonce=0, gasLimit=123, fee=321, amount=100)
-    out = client_wrapper.call(Api.SUBMIT_TRANSACTION, {'tx': list(tx_bytes)})
-    assert out.get('value') == 'ok'
-    print("submit transaction ok")
-    print("wait for confirmation ")
-    end = start = time.time()
-
-    iterations_to_try = 7
-    for x in range(iterations_to_try):
-        layer_duration = testconfig['client']['args']['layer-duration-sec']
-        print("\nSleeping layer duration ({}s)... {}/{}".format(layer_duration, x + 1, iterations_to_try))
-        time.sleep(float(layer_duration))
-
-        out = client_wrapper.call(Api.BALANCE, {'address': dst})
-        if out.get('value') == '100':
-            end = time.time()
-            break
-
-    print("test took {:.3f} seconds ".format(end - start))
-    assert out.get('value') == '100'
-    print("balance ok")
-
-    validate_hare(current_index, ns)  # validate hare
-
-
-def test_transactions(setup_network):
-    debug = False
-
-    tap_init_amount = 10000
-    tap = "7be017a967db77fd10ac7c891b3d6d946dea7e3e14756e2f0f9e09b9663f0d9c"
-
-    class Transaction:
-        def __init__(self, amount: int, fee: int, origin: str = None, dest: str = None):
-            self.amount = amount
-            self.fee = fee
-            self.origin = origin
-            self.dest = dest
-
-        def __repr__(self):
-            return "<TX: amount={0.amount}, fee={0.fee}, origin={0.origin}, dest={0.dest}>".format(self)
-
-    class Account:
-        def __init__(self, priv: str, nonce: int = 0, send: List[Transaction] = None, recv: List[Transaction] = None):
-            self.priv = priv
-            self.nonce = nonce
-            self.send = send or []
-            self.recv = recv or []
-
-        def __repr__(self):
-            return "<Account: priv={}, nonce={}, len(send)={}, len(recv)={}>".format(self.priv, self.nonce,
-                                                                                     len(self.send), len(self.recv))
-
-    accounts = {tap: Account(priv="81c90dd832e18d1cf9758254327cb3135961af6688ac9c2a8c5d71f73acc5ce5")}
-
-    def random_node() -> ClientWrapper:
-        # rnd = random.randint(0, len(setup_network.clients.pods)-1)
-        return ClientWrapper(setup_network.clients.pods[0], testconfig['namespace'])
-
-    def expected_balance(acc: str, accounts_snapshot: dict = None):
-        accounts_snapshot = accounts if accounts_snapshot is None else accounts_snapshot
-        balance = (sum([tx.amount for tx in accounts_snapshot[acc].recv]) -
-                   sum(tx.amount + tx.fee for tx in accounts_snapshot[acc].send))
-        if debug:
-            print("account={}, balance={}, everything={}".format(acc[-40:][:5], balance,
-                                                                 pprint.pformat(accounts_snapshot[acc])))
-        return balance
-
-    def random_account(accounts_snapshot: dict = None) -> str:
-        accounts_snapshot = accounts if accounts_snapshot is None else accounts_snapshot
-        return random.choice(list(accounts_snapshot.keys()))
-
-    def new_account() -> str:
-        priv, pub = genkeypair()
-        str_pub = bytes.hex(pub)
-        accounts[str_pub] = Account(priv=bytes.hex(priv))
-        return str_pub
-
-    def transfer(client_wrapper: ClientWrapper, frm: str, to: str, amount=None, fee=None, gas_limit=None,
-                 accounts_snapshot: dict = None):
-        tx_gen = tx_generator.TxGenerator(pub=frm, pri=accounts[frm].priv)
-        if amount is None:
-            amount = random.randint(1, expected_balance(frm, accounts_snapshot) - 1)
-        if fee is None:
-            fee = 1
-        if gas_limit is None:
-            gas_limit = fee + 1
-        tx_bytes = tx_gen.generate(to, accounts[frm].nonce, gas_limit, fee, amount)
-        accounts[frm].nonce += 1
-        data = {'tx': list(tx_bytes)}
-        if debug:
-            print(data)
-        print("submit transaction from {} to {} of {} with fee {}".format(frm[-40:][:5], to[-40:][:5], amount, fee))
-        out = client_wrapper.call(Api.SUBMIT_TRANSACTION, data)
-        if out.get('value') == 'ok':
-            accounts[to].recv.append(Transaction(amount, fee, origin=frm))
-            accounts[frm].send.append(Transaction(amount, fee, dest=to))
-            if accounts_snapshot:
-                accounts_snapshot[frm].send.append(Transaction(amount, fee, dest=to))
-            return True
-        return False
-
-    def test_account(client_wrapper: ClientWrapper, acc: str, init_amount: int = 0):
-        # check nonce
-        data = {'address': acc}
-        if debug:
-            print(data)
-        out = client_wrapper.call(Api.NONCE, data)
-        print("checking {} nonce...".format('tap' if acc == tap else acc[-40:][:5]), end="")
-        if out.get('value') == str(accounts[acc].nonce):
-            print(Ansi.GREEN + " ok ({})".format(out.get('value')) + Ansi.RESET)
-            # check balance
-            out = client_wrapper.call(Api.BALANCE, data)
-            balance = init_amount
-            balance = balance + expected_balance(acc)
-            print("checking {} balance...".format('tap' if acc == tap else acc[-40:][:5]), end="")
-            if out.get('value') == str(balance):
-                print(Ansi.GREEN + " ok ({})".format(out.get('value')) + Ansi.RESET)
-                return True
-            print(Ansi.RED + " expected {} but got {}".format(balance, out.get('value')) + Ansi.RESET)
-            return False
-        print(Ansi.RED + " expected {} but got {}".format(str(accounts[acc].nonce), out.get('value')) + Ansi.RESET)
-        return False
-
-    def initialize_tap():
-        client_wrapper = random_node()
-
-        nonlocal tap_init_amount
-        tap_init_amount = int(client_wrapper.call(Api.BALANCE, {'address': tap}).get('value'))
-        accounts[tap].nonce = int(client_wrapper.call(Api.NONCE, {'address': tap}).get('value'))
-
-    initialize_tap()
-
-    def print_title(title: str):
-        title = "≡≡ {} ≡≡".format(title)
-        print("\n  " + Ansi.BRIGHT_YELLOW + "≡" * len(title))
-        print("  " + title)
-        print("  " + "≡" * len(title) + Ansi.RESET)
-
-    def send_txs_from_tap():
-        print_title("Sending transactions from tap")
-        client_wrapper = random_node()
-        test_txs = 10
-        for i in range(test_txs):
-            balance = tap_init_amount + expected_balance(tap)
-            if balance < 10:  # Stop sending if the tap is out of money
-                break
-            amount = random.randint(1, int(balance / 2))
-            str_pub = new_account()
-            assert transfer(client_wrapper, tap, str_pub, amount), "Transfer from tap failed"
-
-        print_title("Ensuring that all transactions were received")
-        iterations_to_try = int(testconfig['client']['args']['layers-per-epoch']) * 2  # wait for two epochs (genesis)
-        ready_accounts = set()
-        for x in range(iterations_to_try):
-            layer_duration = testconfig['client']['args']['layer-duration-sec']
-            print("\nSleeping layer duration ({}s)... {}/{}".format(layer_duration, x + 1, iterations_to_try))
-            time.sleep(float(layer_duration))
-            if tap not in ready_accounts and test_account(client_wrapper, tap, tap_init_amount):
-                ready_accounts.add(tap)
-            for pk in accounts:
-                if pk == tap or pk in ready_accounts:
-                    continue
-                if test_account(client_wrapper, pk):
-                    ready_accounts.add(pk)
-            if accounts.keys() == ready_accounts:
-                break
-        assert accounts.keys() == ready_accounts, \
-            "Not all accounts received sent txs. Accounts that aren't ready: %s" % (accounts.keys() - ready_accounts)
-
-    send_txs_from_tap()
-
-    def is_there_a_valid_acc(min_balance, accounts_snapshot: dict = None):
-        accounts_snapshot = accounts if accounts_snapshot is None else accounts_snapshot
-        for acc in accounts_snapshot:
-            if expected_balance(acc, accounts_snapshot) - 1 > min_balance:
-                return True
-        return False
-
-    # IF LONGEVITY THE CODE BELOW SHOULD RUN FOREVER
-    def send_txs_from_random_accounts():
-        print_title("Sending transactions from random accounts")
-        client_wrapper = random_node()
-        accounts_snapshot = copy.deepcopy(accounts)
-        test_txs2 = 10
-        for i in range(test_txs2):
-            if not is_there_a_valid_acc(100, accounts_snapshot):
-                break
-            if i % 2 == 0:
-                # create new acc
-                acc = random_account(accounts_snapshot)
-                while expected_balance(acc, accounts_snapshot) < 100:
-                    acc = random_account(accounts_snapshot)
-
-                pub = new_account()
-                assert transfer(client_wrapper, acc, pub, accounts_snapshot=accounts_snapshot), \
-                    "Transfer from {} to {} (new account) failed".format(acc, pub)
-            else:
-                acc_from = random_account(accounts_snapshot)
-                acc_to = random_account(accounts_snapshot)
-                while acc_from == acc_to or expected_balance(acc_from, accounts_snapshot) < 100:
-                    acc_from = random_account(accounts_snapshot)
-                    acc_to = random_account()
-                assert transfer(client_wrapper, acc_from, acc_to, accounts_snapshot=accounts_snapshot), \
-                    "Transfer from {} to {} failed".format(acc_from, acc_to)
-
-        print_title("Ensuring that all transactions were received")
-        ready = 0
-        iterations_to_try = int(testconfig['client']['args']['layers-per-epoch']) * 2
-        for x in range(iterations_to_try):
-            layer_duration = testconfig['client']['args']['layer-duration-sec']
-            print("\n[{}/{}] Sleeping layer duration ({}s)...".format(x + 1, iterations_to_try, layer_duration))
-            time.sleep(float(layer_duration))
-            ready = 0
-            for pk in accounts:
-                if test_account(client_wrapper, pk, init_amount=tap_init_amount if pk is tap else 0):
-                    ready += 1
-
-            print(Ansi.BRIGHT_WHITE + "≡≡≡≡≡ ready accounts: {}/{} ≡≡≡≡≡".format(ready, len(accounts)) + Ansi.RESET)
-            if ready == len(accounts):
-                break
-
-        assert ready == len(accounts), "Not all accounts got the sent txs got: {}, want: {}".format(ready,
-                                                                                                    len(accounts) - 1)
-
-    send_txs_from_random_accounts()
-    send_txs_from_random_accounts()
-
-
-def test_mining(setup_network):
-    ns = testconfig['namespace']
-
-    client_wrapper = ClientWrapper(setup_network.clients.pods[0], ns)
-
-    tx_gen = tx_generator.TxGenerator()
-    addr = bytes.hex(tx_gen.publicK)
-
-    print("checking nonce")
-    out = client_wrapper.call(Api.NONCE, {'address': addr})
-    nonce = int(out.get('value'))
-    print("checking balance")
-    out = client_wrapper.call(Api.BALANCE, {'address': addr})
-    balance = int(out.get('value'))
-
-    tx_bytes = tx_gen.generate("0000000000000000000000000000000000002222", nonce, 246, 1, min(100, balance - 1))
-    print("submitting transaction")
-    out = client_wrapper.call(Api.SUBMIT_TRANSACTION, {'tx': list(tx_bytes)})
-    print(out)
-    assert out.get('value') == 'ok'
-    print("submit transaction ok")
-    print("wait for confirmation ")
-    end = start = time.time()
-
+def test_mining(init_session, setup_network):
+    ns = init_session
     layer_avg_size = testconfig['client']['args']['layer-average-size']
     layers_per_epoch = int(testconfig['client']['args']['layers-per-epoch'])
     # check only third epoch
@@ -744,96 +504,14 @@ def test_mining(setup_network):
     last_layer = epochs * layers_per_epoch
 
     layer_reached = queries.wait_for_latest_layer(testconfig["namespace"], last_layer, layers_per_epoch)
-    print("test took {:.3f} seconds ".format(end - start))
 
     total_pods = len(setup_network.clients.pods) + len(setup_network.bootstrap.pods)
-    time.sleep(50)
+
+    tts = 50
+    sleep_print_backwards(tts)
+
     analyse.analyze_mining(testconfig['namespace'], layer_reached, layers_per_epoch, layer_avg_size, total_pods)
 
     queries.assert_equal_layer_hashes(current_index, ns)
     queries.assert_equal_state_roots(current_index, ns)
     validate_hare(current_index, ns)  # validate hare
-
-    analyse.analyze_propagation(testconfig['namespace'], layer_reached, 30, 30)
-
-
-''' todo: when atx flow stabilized re enable this test
-def test_atxs_nodes_up(setup_bootstrap, setup_clients, add_curl, wait_genesis, setup_poet, setup_oracle):
-    # choose client to run on
-    client_ip = setup_clients.pods[0]['pod_ip']
-
-    api = 'v1/nonce'
-    data = '{"address":"1"}'
-    print("checking nonce")
-    out = api_call(client_ip, data, api, testconfig['namespace'])
-
-    api = 'v1/submittransaction'
-    txGen = xdr.TxGenerator()
-    txBytes = txGen.generate("2222", 0, 123, 321, 100)
-    data = '{"tx":'+ str(list(txBytes)) + '}'
-    print("submitting transaction")
-    out = api_call(client_ip, data, api, testconfig['namespace'])
-    print(out.decode("utf-8"))
-    assert '{"value":"ok"}' in out.decode("utf-8")
-    print("submit transaction ok")
-
-    end = start = time.time()
-    layer_avg_size = 20
-    last_layer = 8
-    layers_per_epoch = 3
-    deviation = 0.2
-    extra_nodes = 20
-    last_epoch = last_layer / layers_per_epoch
-
-    queries.wait_for_latest_layer(testconfig["namespace"], layers_per_epoch)
-
-    added_clients = []
-    for i in range(0, extra_nodes):
-        c = add_single_client(setup_bootstrap.deployment_id,
-                              get_conf(setup_bootstrap.pods[0], setup_poet, setup_oracle))
-        added_clients.append(c)
-
-    queries.wait_for_latest_layer(testconfig["namespace"], last_layer)
-
-    print("test took {:.3f} seconds ".format(end - start))
-
-    # need to filter out blocks that have come from last layer
-    blockmap = queries.get_blocks_per_node(testconfig["namespace"])
-    # count all blocks arrived in relevant layers
-    total_blocks = sum([len(blockmap[x]) for x in blockmap])
-    atxmap = queries.get_atx_per_node(testconfig["namespace"])
-    total_atxs = sum([len(atxmap[x]) for x in atxmap])
-
-    total_pods = len(setup_clients.pods) + len(setup_bootstrap.pods) + extra_nodes
-
-    print("atx created " + str(total_atxs))
-    print("blocks created " + str(total_blocks))
-
-    assert total_pods == len(blockmap)
-    # assert (1 - deviation) < (total_blocks / last_layer) / layer_avg_size < (1 + deviation)
-    # assert total_atxs == int((last_layer / layers_per_epoch) + 1) * total_pods
-
-    # assert that a node has created one atx per epoch
-    for node in atxmap:
-        mp = set()
-        for blk in atxmap[node]:
-            mp.add(blk[4])
-        if node not in added_clients:
-            assert len(atxmap[node]) / int((last_layer / layers_per_epoch) + 1) == 1
-        else:
-            assert len(atxmap[node]) / int((last_layer / layers_per_epoch)) == 1
-
-        print("mp " + ','.join(mp) + " node " + node + " atxmap " + str(atxmap[node]))
-        if node not in added_clients:
-            assert len(mp) == int((last_layer / layers_per_epoch) + 1)
-        else:
-            assert len(mp) == int((last_layer / layers_per_epoch))
-
-    # assert that each node has created layer_avg/number_of_nodes
-    mp = set()
-    for node in blockmap:
-        for blk in blockmap[node]:
-            mp.add(blk[0])
-        print("blocks:" + str(len(blockmap[node])) + "in layers" + str(len(mp)) + " " + str(layer_avg_size / total_pods))
-        assert (len(blockmap[node]) / last_layer) / int((layer_avg_size / total_pods) + 0.5) <= 1.5
-'''

@@ -14,6 +14,7 @@ import (
 const (
 	// HashLength is the expected length of the hash
 	Hash32Length = 32
+	Hash20Length = 20
 	Hash12Length = 12
 )
 
@@ -22,6 +23,70 @@ type Hash12 [Hash12Length]byte
 
 // Hash represents the 32 byte Keccak256 hash of arbitrary data.
 type Hash32 [Hash32Length]byte
+
+// Hash represents the 20 byte Keccak256 hash of arbitrary data.
+type Hash20 [Hash20Length]byte
+
+// HexToHash sets byte representation of s to hash.
+// If b is larger than len(h), b will be cropped from the left.
+//func HexToHash20(s string) Hash20 { return BytesToHash(util.FromHex(s)) }
+
+// Bytes gets the byte representation of the underlying hash.
+func (h Hash20) Bytes() []byte { return h[:] }
+
+// Big converts a hash to a big integer.
+func (h Hash20) Big() *big.Int { return new(big.Int).SetBytes(h[:]) }
+
+// Hex converts a hash to a hex string.
+func (h Hash20) Hex() string { return util.Encode(h[:]) }
+
+// String implements the stringer interface and is used also by the logger when
+// doing full logging into a file.
+func (h Hash20) String() string {
+	return h.Hex()
+}
+
+func (h Hash20) ShortString() string {
+	l := len(h.Hex())
+	return h.Hex()[util.Min(2, l):util.Min(7, l)]
+}
+
+// Format implements fmt.Formatter, forcing the byte slice to be formatted as is,
+// without going through the stringer interface used for logging.
+func (h Hash20) Format(s fmt.State, c rune) {
+	fmt.Fprintf(s, "%"+string(c), h[:])
+}
+
+// UnmarshalText parses a hash in hex syntax.
+func (h *Hash20) UnmarshalText(input []byte) error {
+	return util.UnmarshalFixedText("Hash", input, h[:])
+}
+
+// UnmarshalJSON parses a hash in hex syntax.
+func (h *Hash20) UnmarshalJSON(input []byte) error {
+	return util.UnmarshalFixedJSON(hashT, input, h[:])
+}
+
+// MarshalText returns the hex representation of h.
+func (h Hash20) MarshalText() ([]byte, error) {
+	return util.Bytes(h[:]).MarshalText()
+}
+
+// SetBytes sets the hash to the value of b.
+// If b is larger than len(h), b will be cropped from the left.
+func (h *Hash20) SetBytes(b []byte) {
+	if len(b) > len(h) {
+		b = b[len(b)-32:]
+	}
+
+	copy(h[32-len(b):], b)
+}
+
+func (h Hash20) ToHash32() Hash32 {
+	var h2 [Hash32Length]byte
+	copy(h2[:], h[0:Hash20Length])
+	return Hash32(h2)
+}
 
 func CalcHash12(data []byte) Hash12 {
 	msghash := sha256.Sum256(data)
@@ -180,6 +245,12 @@ func (h *Hash32) SetBytes(b []byte) {
 	}
 
 	copy(h[32-len(b):], b)
+}
+
+func (h Hash32) ToHash20() Hash20 {
+	var h2 [Hash20Length]byte
+	copy(h2[:], h[0:Hash20Length])
+	return Hash20(h2)
 }
 
 // Generate implements testing/quick.Generator.

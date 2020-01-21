@@ -747,7 +747,7 @@ func (s *Syncer) blockCheckLocal(blockIds []types.Hash32) (map[types.Hash32]Item
 	//look in pool
 	dbItems := make(map[types.Hash32]Item)
 	for _, id := range blockIds {
-		res, err := s.GetBlock(types.BlockID(id))
+		res, err := s.GetBlock(types.BlockID(id.ToHash20()))
 		if err != nil {
 			s.Debug("get block failed %v", id)
 			continue

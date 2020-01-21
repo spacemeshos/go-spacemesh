@@ -8,7 +8,7 @@ import (
 	"sort"
 )
 
-type BlockID Hash32
+type BlockID Hash20
 
 func (id BlockID) String() string {
 	return id.AsHash32().ShortString()
@@ -86,7 +86,7 @@ type MiniBlock struct {
 }
 
 func (id BlockID) AsHash32() Hash32 {
-	return Hash32(id)
+	return Hash20(id).ToHash32()
 }
 
 func (t *Block) Sig() []byte {
@@ -120,7 +120,7 @@ func (b *Block) CalcAndSetId() {
 	if err != nil {
 		panic("failed to marshal transaction: " + err.Error())
 	}
-	b.id = BlockID(CalcHash32(blockBytes))
+	b.id = BlockID(CalcHash32(blockBytes).ToHash20())
 }
 
 func (b Block) Hash32() Hash32 {
