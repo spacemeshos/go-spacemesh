@@ -185,7 +185,7 @@ func (m *Mesh) ValidateLayer(lyr *types.Layer) {
 		if err != nil || l == nil {
 			// TODO: propagate/handle error
 			m.With().Error("failed to get layer", log.LayerId(layerId.Uint64()), log.Err(err))
-			continue
+			break
 		}
 		m.AccumulateRewards(l, m.config)
 		m.PushTransactions(l)
