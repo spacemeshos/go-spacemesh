@@ -91,7 +91,7 @@ func ConfigTst() mesh.Config {
 type MockState struct{}
 
 func (s MockState) GetStateRoot() types.Hash32 {
-	panic("implement me")
+	return [32]byte{}
 }
 
 func (MockState) ValidateNonceAndBalance(transaction *types.Transaction) error {
