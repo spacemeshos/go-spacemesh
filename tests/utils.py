@@ -60,10 +60,19 @@ def print_hits_entry_count(hits, log_entry):
 def wait_for_next_layer(namespace, cl_num, timeout):
     tts = 5
     old_release_ticks = get_release_tick_msgs(namespace, namespace)
-    time.sleep(tts)
-    new_release_tics = get_release_tick_msgs(namespace, namespace)
-
-    while len(old_release_ticks) + cl_num != len(new_release_tics) and timeout > 0:
+    # if we started sampling while a new layer just started we will enter this while loop
+    while old_release_ticks % cl_num != 0 and timeout > 0:
         time.sleep(tts)
-        new_release_tics = get_release_tick_msgs(namespace, namespace)
+        old_release_ticks = get_release_tick_msgs(namespace, namespace)
+        if old_release_ticks % cl_num != 0:
+            return
+
+        timeout -= tts
+
+    time.sleep(tts)
+    new_release_ticks = get_release_tick_msgs(namespace, namespace)
+
+    while len(old_release_ticks) + cl_num > len(new_release_ticks) and timeout > 0:
+        time.sleep(tts)
+        new_release_ticks = get_release_tick_msgs(namespace, namespace)
         timeout -= tts
