@@ -507,5 +507,5 @@ def assert_equal_state_roots(indx, ns):
         hits = query_message(indx, ns, ns, {'M': 'end of layer state root', 'layer_id': layer})
         if len(hits) == 0:
             break
-        compare_layer_hashes(hits)
+        compare_state_roots(hits)
         layer += 1
