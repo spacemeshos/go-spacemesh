@@ -1,5 +1,8 @@
 import os
 import re
+import time
+
+from tests.queries import get_release_tick_msgs
 
 
 LOG_ENTRIES = {"message": "M"}
@@ -52,3 +55,15 @@ def print_hits_entry_count(hits, log_entry):
 
     for key in result:
         print(f"found {result[key]} appearances of '{key}' in hits")
+
+
+def wait_for_next_layer(namespace, cl_num, timeout):
+    tts = 5
+    old_release_ticks = get_release_tick_msgs(namespace, namespace)
+    time.sleep(tts)
+    new_release_tics = get_release_tick_msgs(namespace, namespace)
+
+    while len(old_release_ticks) + cl_num != len(new_release_tics) and timeout > 0:
+        time.sleep(tts)
+        new_release_tics = get_release_tick_msgs(namespace, namespace)
+        timeout -= tts
