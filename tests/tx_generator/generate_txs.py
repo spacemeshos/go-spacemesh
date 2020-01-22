@@ -99,16 +99,14 @@ def run():
         elif inp == "c":
             print("multiprocessing mode")
             parsed_args.is_concurrent = True
-            q = mp.Queue()
         elif inp == "nc":
             print("canceled multiprocessing mode")
             parsed_args.is_concurrent = False
-            q = None
         elif inp == "t":
             parsed_args.tx_num = int(input("how many txs: "))
         elif inp == "go":
             actions.send_tx_from_each_account(my_wallet, acc, parsed_args.tx_num,
-                                              is_concurrent=parsed_args.is_concurrent, queue=q)
+                                              is_concurrent=parsed_args.is_concurrent)
             print(menu, end="")
         else:
             print("unknown input")
