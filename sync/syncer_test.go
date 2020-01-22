@@ -177,7 +177,16 @@ func TestSyncer_Start(t *testing.T) {
 
 func TestSyncer_Close(t *testing.T) {
 	syncs, _, _ := SyncMockFactory(2, conf, t.Name(), memoryDB, newMockPoetDb)
+
 	sync := syncs[0]
+	sync1 := syncs[1]
+
+	block := types.NewExistingBlock(1, []byte(rand.RandString(8)))
+	block.TxIds = append(block.TxIds, txid1)
+	block.AtxIds = append(block.AtxIds, atx1)
+
+	sync1.AddBlockWithTxs(block, nil, nil)
+
 	sync.Start()
 	sync.Close()
 	s := sync

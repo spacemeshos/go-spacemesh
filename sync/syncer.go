@@ -132,11 +132,11 @@ func (s *Syncer) Close() {
 	s.Info("Closing syncer")
 	close(s.exit)
 	close(s.forceSync)
-	s.syncRoutineWg.Wait() // must be called after we ensure no more sync routines can be created
 	s.Peers.Close()
 	s.blockQueue.Close()
 	s.atxQueue.Close()
 	s.txQueue.Close()
+	s.syncRoutineWg.Wait()
 	s.MessageServer.Close()
 }
 
@@ -290,6 +290,7 @@ func (s *Syncer) lastTickedLayer() types.LayerID {
 func (s *Syncer) Synchronise() {
 	defer s.syncRoutineWg.Done()
 	s.Info("start synchronize")
+
 	if s.lastTickedLayer() <= 1 { // skip validation for first layer
 		s.With().Info("Not syncing in layer <= 1", log.LayerId(uint64(s.lastTickedLayer())))
 		s.setGossipBufferingStatus(Done) // fully-synced, make sure we listen to p2p
@@ -438,7 +439,7 @@ func (s *Syncer) syncLayer(layerID types.LayerID, blockIds []types.BlockID) ([]*
 		return nil, errors.New(fmt.Sprintf("failed adding layer %v blocks to queue %v", layerID, err))
 	}
 
-	s.Info("layer %v wait for blocks", layerID)
+	s.Info("layer %v wait for %d blocks", layerID, len(blockIds))
 	if result := <-ch; !result {
 		return nil, fmt.Errorf("could not get all blocks for layer  %v", layerID)
 	}
@@ -514,13 +515,13 @@ func (s *Syncer) validateBlockView(blk *types.Block) bool {
 
 func validateVotes(blk *types.Block, forBlockfunc ForBlockInView, depth int, lg log.Log) (bool, error) {
 	view := map[types.BlockID]struct{}{}
-	for _, blk := range blk.ViewEdges {
-		view[blk] = struct{}{}
+	for _, b := range blk.ViewEdges {
+		view[b] = struct{}{}
 	}
 
 	vote := map[types.BlockID]struct{}{}
-	for _, blk := range blk.BlockVotes {
-		vote[blk] = struct{}{}
+	for _, b := range blk.BlockVotes {
+		vote[b] = struct{}{}
 	}
 
 	traverse := func(b *types.Block) (stop bool, err error) {
@@ -662,10 +663,8 @@ func fetchWithFactory(wrk worker) chan interface{} {
 	// each worker goroutine tries to fetch a block iteratively from each peer
 	go wrk.Work()
 	for i := 0; int32(i) < *wrk.workCount-1; i++ {
-		cloneWrk := wrk.Clone()
-		go cloneWrk.Work()
+		go wrk.Clone().Work()
 	}
-
 	return wrk.output
 }
 
