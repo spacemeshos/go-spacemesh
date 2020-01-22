@@ -463,7 +463,18 @@ func TestConsensusProcess_onEarlyMessage(t *testing.T) {
 	proc.onEarlyMessage(m3)
 	r.Equal(3, len(proc.pending))
 	proc.onRoundBegin()
-	r.Equal(0, len(proc.pending))
+
+	// make sure we wait enough for the go routine to be executed
+	timeout := time.NewTimer(1 * time.Second)
+	tk := time.NewTicker(100 * time.Microsecond)
+	select {
+	case <-timeout.C:
+		r.Equal(0, len(proc.pending))
+	case <-tk.C:
+		if 0 == len(proc.pending) {
+			return
+		}
+	}
 }
 
 func TestProcOutput_Id(t *testing.T) {
