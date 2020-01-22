@@ -413,7 +413,7 @@ func (b *Builder) PublishActivationTx() error {
 		commitment = b.commitment
 	}
 
-	atx := types.NewActivationTxWithChallenge(*b.challenge, b.getCoinbaseAccount(), activeSetSize, view, nipst, commitment)
+	atx := types.NewActivationTx(*b.challenge, b.getCoinbaseAccount(), activeSetSize, view, nipst, commitment)
 
 	b.log.With().Info("active ids seen for epoch", log.Uint64("atx_pub_epoch", uint64(pubEpoch)),
 		log.Uint32("view_cnt", activeSetSize))

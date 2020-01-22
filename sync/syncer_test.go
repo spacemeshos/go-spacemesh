@@ -92,6 +92,10 @@ func SyncMockFactory(number int, conf Configuration, name string, dbType string,
 
 type stateMock struct{}
 
+func (stateMock) GetStateRoot() types.Hash32 {
+	panic("implement me")
+}
+
 func (stateMock) ValidateNonceAndBalance(transaction *types.Transaction) error {
 	panic("implement me")
 }
@@ -900,7 +904,7 @@ func atx(pubkey string) *types.ActivationTx {
 	poetRef := []byte{0xde, 0xad}
 	npst := activation.NewNIPSTWithChallenge(&chlng, poetRef)
 
-	atx := types.NewActivationTx(types.NodeId{Key: pubkey, VRFPublicKey: []byte(rand.RandString(8))}, coinbase, 0, *types.EmptyAtxId, 5, 1, *types.EmptyAtxId, 0, nil, npst)
+	atx := types.NewActivationTxForTests(types.NodeId{Key: pubkey, VRFPublicKey: []byte(rand.RandString(8))}, 0, *types.EmptyAtxId, 5, 1, *types.EmptyAtxId, coinbase, 0, nil, npst)
 	atx.Commitment = commitment
 	atx.CommitmentMerkleRoot = commitment.MerkleRoot
 	atx.CalcAndSetId()
@@ -958,9 +962,9 @@ func TestFetchLayerBlockIds(t *testing.T) {
 	syncObj2.AddBlock(block2)
 
 	mp := map[types.Hash32][]p2p.Peer{}
-	hash1, _ := types.CalcBlocksHash32([]types.BlockID{block1.Id()})
+	hash1 := types.CalcBlocksHash32([]types.BlockID{block1.Id()}, nil)
 	mp[hash1] = append(mp[hash1], nodes[0].PublicKey())
-	hash2, _ := types.CalcBlocksHash32([]types.BlockID{block2.Id()})
+	hash2 := types.CalcBlocksHash32([]types.BlockID{block2.Id()}, nil)
 	mp[hash2] = append(mp[hash2], nodes[1].PublicKey())
 	ids, _ := syncObj3.fetchLayerBlockIds(mp, 1)
 

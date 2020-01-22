@@ -171,7 +171,7 @@ func (tp *TransactionProcessor) addState(stateRoot types.Hash32, layer types.Lay
 	return tp.processorDb.Put(getStateRootLayerKey(layer), stateRoot.Bytes())
 }
 
-func (tp *TransactionProcessor) getLayerStateRoot(layer types.LayerID) (types.Hash32, error) {
+func (tp *TransactionProcessor) GetStateRoot(layer types.LayerID) (types.Hash32, error) {
 	bts, err := tp.processorDb.Get(getStateRootLayerKey(layer))
 	if err != nil {
 		return types.Hash32{}, err
