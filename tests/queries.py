@@ -1,9 +1,9 @@
 import collections
 import random
 import re
-import time
 from datetime import datetime
 
+import time
 from elasticsearch_dsl import Search, Q
 
 from tests import convenience
@@ -45,6 +45,12 @@ def find_error_log_msgs(namespace, pod_name):
 
 
 # ================================== MESSAGE CONTENT ==================================
+
+def get_release_tick_msgs(namespace, pod_name):
+    # this msg indicates a new layer started
+    release_tick = "release tick"
+    return get_all_msg_containing(namespace, pod_name, release_tick)
+
 
 def get_block_creation_msgs(namespace, pod_name, find_fails=False, from_ts=None, to_ts=None):
     # I've created a block in layer %v. id: %v, num of transactions: %v, votes: %d,
@@ -470,3 +476,42 @@ def all_atx_max_propagation(deployment, samples_per_node=1):
                 max_propagation, msg_time = prop, max_message - datetime.strptime(atx.timestamp,
                                                                                   convenience.TIMESTAMP_FMT)
     return max_propagation, msg_time
+
+
+# =====================================================================================
+# Layer hashes
+# =====================================================================================
+
+
+def compare_layer_hashes(hits):
+    layer_hash = hits[0].layer_hash
+    for hit in hits:
+        assert hit.layer_hash == layer_hash
+    print(f"validated {len(hits)} equal layer hashes for layer {hits[0].layer_id}: {layer_hash}")
+
+
+def assert_equal_layer_hashes(indx, ns):
+    layer = 0
+    while True:
+        hits = query_message(indx, ns, ns, {'M': 'new layer hash', 'layer_id': layer})
+        if len(hits) == 0:
+            break
+        compare_layer_hashes(hits)
+        layer += 1
+
+
+def compare_state_roots(hits):
+    state_root = hits[0].state_root
+    for hit in hits:
+        assert hit.state_root == state_root
+    print(f"validated {len(hits)} equal state roots for layer {hits[0].layer_id}: {state_root}")
+
+
+def assert_equal_state_roots(indx, ns):
+    layer = 0
+    while True:
+        hits = query_message(indx, ns, ns, {'M': 'end of layer state root', 'layer_id': layer})
+        if len(hits) == 0:
+            break
+        compare_state_roots(hits)
+        layer += 1
