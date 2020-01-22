@@ -46,6 +46,12 @@ def find_error_log_msgs(namespace, pod_name):
 
 # ================================== MESSAGE CONTENT ==================================
 
+def get_release_tick_msgs(namespace, pod_name):
+    # this msg indicates a new layer started
+    release_tick = "release tick"
+    return get_all_msg_containing(namespace, pod_name, release_tick)
+
+
 def get_block_creation_msgs(namespace, pod_name, find_fails=False, from_ts=None, to_ts=None):
     # I've created a block in layer %v. id: %v, num of transactions: %v, votes: %d,
     # viewEdges: %d, atx %v, atxs:%v

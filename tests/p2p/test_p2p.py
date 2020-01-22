@@ -56,21 +56,23 @@ def add_client(request, setup_bootstrap, setup_clients):
 @pytest.fixture()
 def add_clients(setup_bootstrap, setup_clients):
     """
-    add_clients returns a function for the user to run with necessary client specifications
+    add_clients returns a function for the user to run in order to add more clients
 
     :param setup_bootstrap: DeploymentInfo, bootstrap info
     :param setup_clients: DeploymentInfo, client info
+
     :return: function, _add_client
     """
 
     def _add_clients(num_of_clients, version=None, version_separator='_'):
         # TODO make a generic function that _add_clients can use
         """
-        adds a clients to the bootstrap namespace
+        adds a clients to namespace
 
         :param num_of_clients: int, number of replicas
         :param version: string, the wanted client version
         :param version_separator: string, separator to separate between client key and client version
+
         :return: list, all created client pods
         """
         if version and not isinstance(version, str):
