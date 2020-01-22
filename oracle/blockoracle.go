@@ -94,7 +94,7 @@ func (bo *MinerBlockOracle) calcEligibilityProofs(epochNumber types.EpochId) err
 		bo.log.Info("genesis epoch detected, using GenesisActiveSetSize (%v)", activeSetSize)
 	}
 
-	numberOfEligibleBlocks, err := getNumberOfEligibleBlocks(activeSetSize, bo.committeeSize, bo.layersPerEpoch, bo.log)
+	numberOfEligibleBlocks, err := getNumberOfEligibleBlocks(activeSetSize, bo.committeeSize, bo.layersPerEpoch)
 	if err != nil {
 		bo.log.Error("failed to get number of eligible blocks: %v", err)
 		return err
@@ -153,11 +153,11 @@ func calcEligibleLayer(epochNumber types.EpochId, layersPerEpoch uint16, vrfHash
 	return epochNumber.FirstLayer(layersPerEpoch).Add(uint16(eligibleLayerOffset))
 }
 
-func getNumberOfEligibleBlocks(activeSetSize uint32, committeeSize uint32, layersPerEpoch uint16, lg log.Log) (uint32, error) {
+func getNumberOfEligibleBlocks(activeSetSize, committeeSize uint32, layersPerEpoch uint16) (uint32, error) {
 	if activeSetSize == 0 {
 		return 0, errors.New("empty active set not allowed")
 	}
-	numberOfEligibleBlocks := uint32(committeeSize) * uint32(layersPerEpoch) / activeSetSize
+	numberOfEligibleBlocks := committeeSize * uint32(layersPerEpoch) / activeSetSize
 	if numberOfEligibleBlocks == 0 {
 		numberOfEligibleBlocks = 1
 	}

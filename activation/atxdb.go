@@ -16,8 +16,12 @@ import (
 
 const topAtxKey = "topAtxKey"
 
-func getNodeIdKey(id types.NodeId) []byte {
-	return []byte(fmt.Sprintf("n_%v", id.Key))
+func getNodeAtxKey(nodeId types.NodeId, targetEpoch types.EpochId) []byte {
+	return append(getNodeAtxPrefix(nodeId), targetEpoch.ToBytes()...)
+}
+
+func getNodeAtxPrefix(nodeId types.NodeId) []byte {
+	return []byte(fmt.Sprintf("n_%v_", nodeId.Key))
 }
 
 func getAtxHeaderKey(atxId types.AtxId) []byte {
@@ -566,7 +570,7 @@ func (db ActivationDb) getTopAtx() (atxIdAndLayer, error) {
 
 // addAtxToNodeId inserts activation atx id by node
 func (db *ActivationDb) addAtxToNodeId(nodeId types.NodeId, atx *types.ActivationTx) error {
-	err := db.atxs.Put(getNodeIdKey(nodeId), atx.Id().Bytes())
+	err := db.atxs.Put(getNodeAtxKey(nodeId, atx.TargetEpoch(db.LayersPerEpoch)), atx.Id().Bytes())
 	if err != nil {
 		return fmt.Errorf("failed to store ATX ID for node: %v", err)
 	}
@@ -577,11 +581,11 @@ func (db *ActivationDb) addAtxToNodeId(nodeId types.NodeId, atx *types.Activatio
 func (db *ActivationDb) GetNodeLastAtxId(nodeId types.NodeId) (types.AtxId, error) {
 	db.log.Debug("fetching atxIDs for node %v", nodeId.ShortString())
 
-	id, err := db.atxs.Get(getNodeIdKey(nodeId))
-	if err != nil {
-		return *types.EmptyAtxId, err
+	nodeAtxsIterator := db.atxs.Find(getNodeAtxPrefix(nodeId))
+	if exists := nodeAtxsIterator.Last(); !exists {
+		return *types.EmptyAtxId, fmt.Errorf("atx for node %v does not exist", nodeId.ShortString())
 	}
-	return types.AtxId(types.BytesToHash(id)), nil
+	return types.AtxId(types.BytesToHash(nodeAtxsIterator.Value())), nil
 }
 
 // GetPosAtxId returns the best (highest layer id), currently known to this node, pos atx id

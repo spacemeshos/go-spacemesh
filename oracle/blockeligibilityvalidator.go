@@ -64,7 +64,7 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 		activeSetSize = v.genesisActiveSetSize
 	}
 
-	numberOfEligibleBlocks, err := getNumberOfEligibleBlocks(activeSetSize, v.committeeSize, v.layersPerEpoch, v.log)
+	numberOfEligibleBlocks, err := getNumberOfEligibleBlocks(activeSetSize, v.committeeSize, v.layersPerEpoch)
 	if err != nil {
 		return false, fmt.Errorf("failed to get number of eligible blocks: %v", err)
 	}

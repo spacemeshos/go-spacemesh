@@ -651,12 +651,16 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	err = atxdb.StoreAtx(1, atx)
 	assert.NoError(t, err)
 	atx = types.NewActivationTxForTests(idx1, 1, prevAtx.Id(), 12, 0, posAtx.Id(), coinbase, 3, []types.BlockID{}, &types.NIPST{})
-	err = atxdb.atxs.Delete(getNodeIdKey(atx.NodeId))
-	assert.NoError(t, err)
+	iter := atxdb.atxs.Find(getNodeAtxPrefix(atx.NodeId))
+	for iter.Next() {
+		err = atxdb.atxs.Delete(iter.Key())
+		assert.NoError(t, err)
+	}
 	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
 	err = atxdb.ContextuallyValidateAtx(atx.ActivationTxHeader)
-	assert.EqualError(t, err, "could not fetch node last ATX: leveldb: not found")
+	assert.EqualError(t, err,
+		fmt.Sprintf("could not fetch node last ATX: atx for node %v does not exist", atx.NodeId.ShortString()))
 
 	// Prev atx not declared but commitment not included.
 	atx = types.NewActivationTxForTests(idx1, 0, *types.EmptyAtxId, 1012, 0, posAtx.Id(), coinbase, 3, []types.BlockID{}, &types.NIPST{})
