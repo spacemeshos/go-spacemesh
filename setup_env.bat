@@ -4,8 +4,6 @@ if %ERRORLEVEL% GTR 0 exit /B 1
 
 call ./scripts/win/install-protobuf.bat
 
-SET GO111MODULE=on
-
 FOR /F "tokens=* USEBACKQ" %%F IN (`go list -m -f {{.Dir}} github.com/golang/protobuf`) DO (
 SET protobuf_path=%%F
 )
