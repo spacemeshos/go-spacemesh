@@ -204,12 +204,12 @@ func TestATX_ActiveSetForLayerView(t *testing.T) {
 	coinbase3 := types.HexToAddress("cccc")
 	coinbase4 := types.HexToAddress("cccc")
 	atxs := []*types.ActivationTx{
-		types.NewActivationTx(id1, coinbase1, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 0, []types.BlockID{}, &types.NIPST{}),
-		types.NewActivationTx(id1, coinbase1, 0, *types.EmptyAtxId, 2, 0, *types.EmptyAtxId, 0, []types.BlockID{}, &types.NIPST{}),
-		types.NewActivationTx(id1, coinbase1, 0, *types.EmptyAtxId, 3, 0, *types.EmptyAtxId, 0, []types.BlockID{}, &types.NIPST{}),
-		types.NewActivationTx(id2, coinbase2, 0, *types.EmptyAtxId, 2, 0, *types.EmptyAtxId, 0, []types.BlockID{}, &types.NIPST{}),
-		types.NewActivationTx(id4, coinbase4, 0, *types.EmptyAtxId, 2, 0, *types.EmptyAtxId, 0, []types.BlockID{}, &types.NIPST{}),
-		types.NewActivationTx(id3, coinbase3, 0, *types.EmptyAtxId, 11, 0, *types.EmptyAtxId, 0, []types.BlockID{}, &types.NIPST{}),
+		types.NewActivationTxForTests(id1, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, coinbase1, 0, []types.BlockID{}, &types.NIPST{}),
+		types.NewActivationTxForTests(id1, 0, *types.EmptyAtxId, 2, 0, *types.EmptyAtxId, coinbase1, 0, []types.BlockID{}, &types.NIPST{}),
+		types.NewActivationTxForTests(id1, 0, *types.EmptyAtxId, 3, 0, *types.EmptyAtxId, coinbase1, 0, []types.BlockID{}, &types.NIPST{}),
+		types.NewActivationTxForTests(id2, 0, *types.EmptyAtxId, 2, 0, *types.EmptyAtxId, coinbase2, 0, []types.BlockID{}, &types.NIPST{}),
+		types.NewActivationTxForTests(id4, 0, *types.EmptyAtxId, 2, 0, *types.EmptyAtxId, coinbase4, 0, []types.BlockID{}, &types.NIPST{}),
+		types.NewActivationTxForTests(id3, 0, *types.EmptyAtxId, 11, 0, *types.EmptyAtxId, coinbase3, 0, []types.BlockID{}, &types.NIPST{}),
 	}
 
 	poetRef := []byte{0xba, 0xb0}
@@ -268,9 +268,9 @@ func TestActivationDb_CalcActiveSetFromViewWithCache(t *testing.T) {
 	coinbase2 := types.HexToAddress("bbbb")
 	coinbase3 := types.HexToAddress("cccc")
 	atxs := []*types.ActivationTx{
-		types.NewActivationTx(id1, coinbase1, 0, *types.EmptyAtxId, 12, 0, *types.EmptyAtxId, 0, []types.BlockID{}, &types.NIPST{}),
-		types.NewActivationTx(id2, coinbase2, 0, *types.EmptyAtxId, 300, 0, *types.EmptyAtxId, 0, []types.BlockID{}, &types.NIPST{}),
-		types.NewActivationTx(id3, coinbase3, 0, *types.EmptyAtxId, 435, 0, *types.EmptyAtxId, 0, []types.BlockID{}, &types.NIPST{}),
+		types.NewActivationTxForTests(id1, 0, *types.EmptyAtxId, 12, 0, *types.EmptyAtxId, coinbase1, 0, []types.BlockID{}, &types.NIPST{}),
+		types.NewActivationTxForTests(id2, 0, *types.EmptyAtxId, 300, 0, *types.EmptyAtxId, coinbase2, 0, []types.BlockID{}, &types.NIPST{}),
+		types.NewActivationTxForTests(id3, 0, *types.EmptyAtxId, 435, 0, *types.EmptyAtxId, coinbase3, 0, []types.BlockID{}, &types.NIPST{}),
 	}
 
 	poetRef := []byte{0xba, 0xb0}
@@ -285,7 +285,7 @@ func TestActivationDb_CalcActiveSetFromViewWithCache(t *testing.T) {
 	blocks = createLayerWithAtx(t, layers, 100, 10, []*types.ActivationTx{}, blocks, blocks)
 
 	mck := ATXDBMock{}
-	atx := types.NewActivationTx(id1, coinbase1, 1, atxs[0].Id(), 1000, 0, atxs[0].Id(), 3, blocks, &types.NIPST{})
+	atx := types.NewActivationTxForTests(id1, 1, atxs[0].Id(), 1000, 0, atxs[0].Id(), coinbase1, 3, blocks, &types.NIPST{})
 	atxdb.calcActiveSetFunc = mck.CalcActiveSetSize
 	wg := sync.WaitGroup{}
 	wg.Add(100)
@@ -316,9 +316,9 @@ func Test_CalcActiveSetFromView(t *testing.T) {
 	coinbase2 := types.HexToAddress("bbbb")
 	coinbase3 := types.HexToAddress("cccc")
 	atxs := []*types.ActivationTx{
-		types.NewActivationTx(id1, coinbase1, 0, *types.EmptyAtxId, 12, 0, *types.EmptyAtxId, 0, []types.BlockID{}, &types.NIPST{}),
-		types.NewActivationTx(id2, coinbase2, 0, *types.EmptyAtxId, 300, 0, *types.EmptyAtxId, 0, []types.BlockID{}, &types.NIPST{}),
-		types.NewActivationTx(id3, coinbase3, 0, *types.EmptyAtxId, 435, 0, *types.EmptyAtxId, 0, []types.BlockID{}, &types.NIPST{}),
+		types.NewActivationTxForTests(id1, 0, *types.EmptyAtxId, 12, 0, *types.EmptyAtxId, coinbase1, 0, []types.BlockID{}, &types.NIPST{}),
+		types.NewActivationTxForTests(id2, 0, *types.EmptyAtxId, 300, 0, *types.EmptyAtxId, coinbase2, 0, []types.BlockID{}, &types.NIPST{}),
+		types.NewActivationTxForTests(id3, 0, *types.EmptyAtxId, 435, 0, *types.EmptyAtxId, coinbase3, 0, []types.BlockID{}, &types.NIPST{}),
 	}
 
 	poetRef := []byte{0xba, 0xb0}
@@ -332,16 +332,16 @@ func Test_CalcActiveSetFromView(t *testing.T) {
 	blocks = createLayerWithAtx(t, layers, 10, 10, []*types.ActivationTx{}, blocks, blocks)
 	blocks = createLayerWithAtx(t, layers, 100, 10, []*types.ActivationTx{}, blocks, blocks)
 
-	atx := types.NewActivationTx(id1, coinbase1, 1, atxs[0].Id(), 1000, 0, atxs[0].Id(), 3, blocks, &types.NIPST{})
+	atx := types.NewActivationTxForTests(id1, 1, atxs[0].Id(), 1000, 0, atxs[0].Id(), coinbase1, 3, blocks, &types.NIPST{})
 	num, err := atxdb.CalcActiveSetFromView(atx.View, atx.PubLayerIdx.GetEpoch(layersPerEpochBig))
 	assert.NoError(t, err)
 	assert.Equal(t, 3, int(num))
 
 	// check that further atxs dont affect current epoch count
 	atxs2 := []*types.ActivationTx{
-		types.NewActivationTx(types.NodeId{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}, coinbase1, 0, *types.EmptyAtxId, 1012, 0, atxs[0].Id(), 0, []types.BlockID{}, &types.NIPST{}),
-		types.NewActivationTx(types.NodeId{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}, coinbase2, 0, *types.EmptyAtxId, 1300, 0, atxs[1].Id(), 0, []types.BlockID{}, &types.NIPST{}),
-		types.NewActivationTx(types.NodeId{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}, coinbase3, 0, *types.EmptyAtxId, 1435, 0, atxs[2].Id(), 0, []types.BlockID{}, &types.NIPST{}),
+		types.NewActivationTxForTests(types.NodeId{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}, 0, *types.EmptyAtxId, 1012, 0, atxs[0].Id(), coinbase1, 0, []types.BlockID{}, &types.NIPST{}),
+		types.NewActivationTxForTests(types.NodeId{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}, 0, *types.EmptyAtxId, 1300, 0, atxs[1].Id(), coinbase2, 0, []types.BlockID{}, &types.NIPST{}),
+		types.NewActivationTxForTests(types.NodeId{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}, 0, *types.EmptyAtxId, 1435, 0, atxs[2].Id(), coinbase3, 0, []types.BlockID{}, &types.NIPST{}),
 	}
 
 	for _, atx := range atxs2 {
@@ -369,7 +369,7 @@ func Test_CalcActiveSetFromView(t *testing.T) {
 	sort.Slice(view, func(i, j int) bool {
 		return bytes.Compare(view[i].ToBytes(), view[j].ToBytes()) > 0 // sort view in wrong order
 	})
-	atx2 := types.NewActivationTx(id3, coinbase3, 0, *types.EmptyAtxId, 1435, 0, *types.EmptyAtxId, 6, view, &types.NIPST{})
+	atx2 := types.NewActivationTxForTests(id3, 0, *types.EmptyAtxId, 1435, 0, *types.EmptyAtxId, coinbase3, 6, view, &types.NIPST{})
 	num, err = atxdb.CalcActiveSetFromView(atx2.View, atx2.PubLayerIdx.GetEpoch(layersPerEpochBig))
 	assert.NoError(t, err)
 	assert.Equal(t, 3, int(num))
@@ -408,9 +408,9 @@ func Test_DBSanity(t *testing.T) {
 	coinbase2 := types.HexToAddress("bbbb")
 	coinbase3 := types.HexToAddress("cccc")
 
-	atx1 := types.NewActivationTx(id1, coinbase1, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 3, []types.BlockID{}, &types.NIPST{})
-	atx2 := types.NewActivationTx(id1, coinbase2, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 3, []types.BlockID{}, &types.NIPST{})
-	atx3 := types.NewActivationTx(id1, coinbase3, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 3, []types.BlockID{}, &types.NIPST{})
+	atx1 := types.NewActivationTxForTests(id1, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, coinbase1, 3, []types.BlockID{}, &types.NIPST{})
+	atx2 := types.NewActivationTxForTests(id1, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, coinbase2, 3, []types.BlockID{}, &types.NIPST{})
+	atx3 := types.NewActivationTxForTests(id1, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, coinbase3, 3, []types.BlockID{}, &types.NIPST{})
 
 	err := atxdb.storeAtxUnlocked(atx1)
 	assert.NoError(t, err)
@@ -454,16 +454,16 @@ func Test_Wrong_CalcActiveSetFromView(t *testing.T) {
 	coinbase2 := types.HexToAddress("bbbb")
 	coinbase3 := types.HexToAddress("cccc")
 	atxs := []*types.ActivationTx{
-		types.NewActivationTx(id1, coinbase1, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 3, []types.BlockID{}, &types.NIPST{}),
-		types.NewActivationTx(id2, coinbase2, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 3, []types.BlockID{}, &types.NIPST{}),
-		types.NewActivationTx(id3, coinbase3, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 3, []types.BlockID{}, &types.NIPST{}),
+		types.NewActivationTxForTests(id1, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, coinbase1, 3, []types.BlockID{}, &types.NIPST{}),
+		types.NewActivationTxForTests(id2, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, coinbase2, 3, []types.BlockID{}, &types.NIPST{}),
+		types.NewActivationTxForTests(id3, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, coinbase3, 3, []types.BlockID{}, &types.NIPST{}),
 	}
 
 	blocks := createLayerWithAtx(t, layers, 1, 10, atxs, []types.BlockID{}, []types.BlockID{})
 	blocks = createLayerWithAtx(t, layers, 10, 10, []*types.ActivationTx{}, blocks, blocks)
 	blocks = createLayerWithAtx(t, layers, 100, 10, []*types.ActivationTx{}, blocks, blocks)
 
-	atx := types.NewActivationTx(id1, coinbase1, 1, atxs[0].Id(), 1000, 0, atxs[0].Id(), 20, blocks, &types.NIPST{})
+	atx := types.NewActivationTxForTests(id1, 1, atxs[0].Id(), 1000, 0, atxs[0].Id(), coinbase1, 20, blocks, &types.NIPST{})
 	num, err := atxdb.CalcActiveSetFromView(atx.View, atx.PubLayerIdx.GetEpoch(layersPerEpoch))
 	assert.NoError(t, err)
 	assert.NotEqual(t, 20, int(num))
@@ -483,13 +483,13 @@ func TestMesh_processBlockATXs(t *testing.T) {
 	chlng := types.HexToHash32("0x3333")
 	poetRef := []byte{0x76, 0x45}
 	npst := NewNIPSTWithChallenge(&chlng, poetRef)
-	posATX := types.NewActivationTx(types.NodeId{"aaaaaa", []byte("anton")}, coinbase1, 0, *types.EmptyAtxId, 1000, 0, *types.EmptyAtxId, 0, []types.BlockID{}, npst)
+	posATX := types.NewActivationTxForTests(types.NodeId{"aaaaaa", []byte("anton")}, 0, *types.EmptyAtxId, 1000, 0, *types.EmptyAtxId, coinbase1, 0, []types.BlockID{}, npst)
 	err := atxdb.StoreAtx(0, posATX)
 	assert.NoError(t, err)
 	atxs := []*types.ActivationTx{
-		types.NewActivationTx(id1, coinbase1, 0, *types.EmptyAtxId, 1012, 0, posATX.Id(), 0, []types.BlockID{}, &types.NIPST{}),
-		types.NewActivationTx(id2, coinbase2, 0, *types.EmptyAtxId, 1300, 0, posATX.Id(), 0, []types.BlockID{}, &types.NIPST{}),
-		types.NewActivationTx(id3, coinbase3, 0, *types.EmptyAtxId, 1435, 0, posATX.Id(), 0, []types.BlockID{}, &types.NIPST{}),
+		types.NewActivationTxForTests(id1, 0, *types.EmptyAtxId, 1012, 0, posATX.Id(), coinbase1, 0, []types.BlockID{}, &types.NIPST{}),
+		types.NewActivationTxForTests(id2, 0, *types.EmptyAtxId, 1300, 0, posATX.Id(), coinbase2, 0, []types.BlockID{}, &types.NIPST{}),
+		types.NewActivationTxForTests(id3, 0, *types.EmptyAtxId, 1435, 0, posATX.Id(), coinbase3, 0, []types.BlockID{}, &types.NIPST{}),
 	}
 	for _, atx := range atxs {
 		hash, err := atx.NIPSTChallenge.Hash()
@@ -502,9 +502,9 @@ func TestMesh_processBlockATXs(t *testing.T) {
 
 	// check that further atxs dont affect current epoch count
 	atxs2 := []*types.ActivationTx{
-		types.NewActivationTx(id1, coinbase1, 1, atxs[0].Id(), 2012, 0, atxs[0].Id(), 0, []types.BlockID{}, &types.NIPST{}),
-		types.NewActivationTx(id2, coinbase2, 1, atxs[1].Id(), 2300, 0, atxs[1].Id(), 0, []types.BlockID{}, &types.NIPST{}),
-		types.NewActivationTx(id3, coinbase3, 1, atxs[2].Id(), 2435, 0, atxs[2].Id(), 0, []types.BlockID{}, &types.NIPST{}),
+		types.NewActivationTxForTests(id1, 1, atxs[0].Id(), 2012, 0, atxs[0].Id(), coinbase1, 0, []types.BlockID{}, &types.NIPST{}),
+		types.NewActivationTxForTests(id2, 1, atxs[1].Id(), 2300, 0, atxs[1].Id(), coinbase2, 0, []types.BlockID{}, &types.NIPST{}),
+		types.NewActivationTxForTests(id3, 1, atxs[2].Id(), 2435, 0, atxs[2].Id(), coinbase3, 0, []types.BlockID{}, &types.NIPST{}),
 	}
 	for _, atx := range atxs2 {
 		hash, err := atx.NIPSTChallenge.Hash()
@@ -528,9 +528,9 @@ func TestActivationDB_ValidateAtx(t *testing.T) {
 	coinbase2 := types.HexToAddress("bbbb")
 	coinbase3 := types.HexToAddress("cccc")
 	atxs := []*types.ActivationTx{
-		types.NewActivationTx(id1, coinbase1, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 3, []types.BlockID{}, &types.NIPST{}),
-		types.NewActivationTx(id2, coinbase2, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 3, []types.BlockID{}, &types.NIPST{}),
-		types.NewActivationTx(id3, coinbase3, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 3, []types.BlockID{}, &types.NIPST{}),
+		types.NewActivationTxForTests(id1, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, coinbase1, 3, []types.BlockID{}, &types.NIPST{}),
+		types.NewActivationTxForTests(id2, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, coinbase2, 3, []types.BlockID{}, &types.NIPST{}),
+		types.NewActivationTxForTests(id3, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, coinbase3, 3, []types.BlockID{}, &types.NIPST{}),
 	}
 	poetRef := []byte{0x12, 0x21}
 	for _, atx := range atxs {
@@ -543,13 +543,12 @@ func TestActivationDB_ValidateAtx(t *testing.T) {
 	blocks = createLayerWithAtx(t, layers, 10, 10, []*types.ActivationTx{}, blocks, blocks)
 	blocks = createLayerWithAtx(t, layers, 100, 10, []*types.ActivationTx{}, blocks, blocks)
 
-	//atx := types.NewActivationTx(id1, 1, atxs[0].Id(), 1000, 0, atxs[0].Id(), 3, blocks, &Nipst.NIPST{})
-	prevAtx := types.NewActivationTx(idx1, coinbase1, 0, *types.EmptyAtxId, 100, 0, *types.EmptyAtxId, 3, blocks, &types.NIPST{})
+	prevAtx := types.NewActivationTxForTests(idx1, 0, *types.EmptyAtxId, 100, 0, *types.EmptyAtxId, coinbase1, 3, blocks, &types.NIPST{})
 	hash, err := prevAtx.NIPSTChallenge.Hash()
 	assert.NoError(t, err)
 	prevAtx.Nipst = NewNIPSTWithChallenge(hash, poetRef)
 
-	atx := types.NewActivationTx(idx1, coinbase1, 1, prevAtx.Id(), 1012, 0, prevAtx.Id(), 3, blocks, &types.NIPST{})
+	atx := types.NewActivationTxForTests(idx1, 1, prevAtx.Id(), 1012, 0, prevAtx.Id(), coinbase1, 3, blocks, &types.NIPST{})
 	hash, err = atx.NIPSTChallenge.Hash()
 	assert.NoError(t, err)
 	atx.Nipst = NewNIPSTWithChallenge(hash, poetRef)
@@ -578,21 +577,20 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	id2 := types.NodeId{Key: uuid.New().String()}
 	id3 := types.NodeId{Key: uuid.New().String()}
 	atxs := []*types.ActivationTx{
-		types.NewActivationTx(id1, coinbase, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 3, []types.BlockID{}, &types.NIPST{}),
-		types.NewActivationTx(id2, coinbase, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 3, []types.BlockID{}, &types.NIPST{}),
-		types.NewActivationTx(id3, coinbase, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 3, []types.BlockID{}, &types.NIPST{}),
+		types.NewActivationTxForTests(id1, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, coinbase, 3, []types.BlockID{}, &types.NIPST{}),
+		types.NewActivationTxForTests(id2, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, coinbase, 3, []types.BlockID{}, &types.NIPST{}),
+		types.NewActivationTxForTests(id3, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, coinbase, 3, []types.BlockID{}, &types.NIPST{}),
 	}
 
 	blocks := createLayerWithAtx(t, layers, 1, 10, atxs, []types.BlockID{}, []types.BlockID{})
 	blocks = createLayerWithAtx(t, layers, 10, 10, []*types.ActivationTx{}, blocks, blocks)
 	blocks = createLayerWithAtx(t, layers, 100, 10, []*types.ActivationTx{}, blocks, blocks)
 
-	//atx := types.NewActivationTx(id1, 1, atxs[0].Id(), 1000, 0, atxs[0].Id(), 3, blocks, &Nipst.NIPST{})
 	chlng := types.HexToHash32("0x3333")
 	poetRef := []byte{0xba, 0xbe}
 	npst := NewNIPSTWithChallenge(&chlng, poetRef)
-	prevAtx := types.NewActivationTx(idx1, coinbase, 0, *types.EmptyAtxId, 100, 0, *types.EmptyAtxId, 3, blocks, npst)
-	posAtx := types.NewActivationTx(idx2, coinbase, 0, *types.EmptyAtxId, 100, 0, *types.EmptyAtxId, 3, blocks, npst)
+	prevAtx := types.NewActivationTxForTests(idx1, 0, *types.EmptyAtxId, 100, 0, *types.EmptyAtxId, coinbase, 3, blocks, npst)
+	posAtx := types.NewActivationTxForTests(idx2, 0, *types.EmptyAtxId, 100, 0, *types.EmptyAtxId, coinbase, 3, blocks, npst)
 	err := atxdb.StoreNodeIdentity(idx1)
 	assert.NoError(t, err)
 	err = atxdb.StoreAtx(1, prevAtx)
@@ -601,42 +599,42 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Wrong sequence.
-	atx := types.NewActivationTx(idx1, coinbase, 0, prevAtx.Id(), 1012, 0, posAtx.Id(), 3, []types.BlockID{}, &types.NIPST{})
+	atx := types.NewActivationTxForTests(idx1, 0, prevAtx.Id(), 1012, 0, posAtx.Id(), coinbase, 3, []types.BlockID{}, &types.NIPST{})
 	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
 	err = atxdb.SyntacticallyValidateAtx(atx)
 	assert.EqualError(t, err, "sequence number is not one more than prev sequence number")
 
 	// Wrong active set.
-	atx = types.NewActivationTx(idx1, coinbase, 1, prevAtx.Id(), 1012, 0, posAtx.Id(), 10, []types.BlockID{}, &types.NIPST{})
+	atx = types.NewActivationTxForTests(idx1, 1, prevAtx.Id(), 1012, 0, posAtx.Id(), coinbase, 10, []types.BlockID{}, &types.NIPST{})
 	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
 	err = atxdb.SyntacticallyValidateAtx(atx)
 	assert.EqualError(t, err, "atx contains view with unequal active ids (10) than seen (0)")
 
 	// Wrong positioning atx.
-	atx = types.NewActivationTx(idx1, coinbase, 1, prevAtx.Id(), 1012, 0, atxs[0].Id(), 3, []types.BlockID{}, &types.NIPST{})
+	atx = types.NewActivationTxForTests(idx1, 1, prevAtx.Id(), 1012, 0, atxs[0].Id(), coinbase, 3, []types.BlockID{}, &types.NIPST{})
 	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
 	err = atxdb.SyntacticallyValidateAtx(atx)
 	assert.EqualError(t, err, "expected distance of one epoch (1000 layers) from pos ATX but found 1011")
 
 	// Wrong prevATx.
-	atx = types.NewActivationTx(idx1, coinbase, 1, atxs[0].Id(), 1012, 0, posAtx.Id(), 3, []types.BlockID{}, &types.NIPST{})
+	atx = types.NewActivationTxForTests(idx1, 1, atxs[0].Id(), 1012, 0, posAtx.Id(), coinbase, 3, []types.BlockID{}, &types.NIPST{})
 	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
 	err = atxdb.SyntacticallyValidateAtx(atx)
 	assert.EqualError(t, err, fmt.Sprintf("previous ATX belongs to different miner. atx.Id: %v, atx.NodeId: %v, prevAtx.NodeId: %v", atx.ShortString(), atx.NodeId.Key, atxs[0].NodeId.Key))
 
 	// Wrong layerId.
-	posAtx2 := types.NewActivationTx(idx2, coinbase, 0, *types.EmptyAtxId, 1020, 0, *types.EmptyAtxId, 3, blocks, npst)
+	posAtx2 := types.NewActivationTxForTests(idx2, 0, *types.EmptyAtxId, 1020, 0, *types.EmptyAtxId, coinbase, 3, blocks, npst)
 	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
 	err = atxdb.StoreAtx(1, posAtx2)
 	assert.NoError(t, err)
 	err = atxdb.StoreNodeIdentity(idx1)
 	assert.NoError(t, err)
-	atx = types.NewActivationTx(idx1, coinbase, 1, prevAtx.Id(), 1012, 0, posAtx2.Id(), 3, []types.BlockID{}, npst)
+	atx = types.NewActivationTxForTests(idx1, 1, prevAtx.Id(), 1012, 0, posAtx2.Id(), coinbase, 3, []types.BlockID{}, npst)
 	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
 	err = atxdb.SyntacticallyValidateAtx(atx)
@@ -645,14 +643,14 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	// Atx already exists.
 	err = atxdb.StoreAtx(1, atx)
 	assert.NoError(t, err)
-	atx = types.NewActivationTx(idx1, coinbase, 1, prevAtx.Id(), 12, 0, posAtx.Id(), 3, []types.BlockID{}, &types.NIPST{})
+	atx = types.NewActivationTxForTests(idx1, 1, prevAtx.Id(), 12, 0, posAtx.Id(), coinbase, 3, []types.BlockID{}, &types.NIPST{})
 	err = atxdb.ContextuallyValidateAtx(atx.ActivationTxHeader)
 	assert.EqualError(t, err, "last atx is not the one referenced")
 
 	// Prev atx declared but not found.
 	err = atxdb.StoreAtx(1, atx)
 	assert.NoError(t, err)
-	atx = types.NewActivationTx(idx1, coinbase, 1, prevAtx.Id(), 12, 0, posAtx.Id(), 3, []types.BlockID{}, &types.NIPST{})
+	atx = types.NewActivationTxForTests(idx1, 1, prevAtx.Id(), 12, 0, posAtx.Id(), coinbase, 3, []types.BlockID{}, &types.NIPST{})
 	err = atxdb.atxs.Delete(getNodeIdKey(atx.NodeId))
 	assert.NoError(t, err)
 	err = SignAtx(signer, atx)
@@ -661,14 +659,14 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	assert.EqualError(t, err, "could not fetch node last ATX: leveldb: not found")
 
 	// Prev atx not declared but commitment not included.
-	atx = types.NewActivationTx(idx1, coinbase, 0, *types.EmptyAtxId, 1012, 0, posAtx.Id(), 3, []types.BlockID{}, &types.NIPST{})
+	atx = types.NewActivationTxForTests(idx1, 0, *types.EmptyAtxId, 1012, 0, posAtx.Id(), coinbase, 3, []types.BlockID{}, &types.NIPST{})
 	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
 	err = atxdb.SyntacticallyValidateAtx(atx)
 	assert.EqualError(t, err, "no prevATX declared, but commitment proof is not included")
 
 	// Prev atx not declared but commitment merkle root not included.
-	atx = types.NewActivationTx(idx1, coinbase, 0, *types.EmptyAtxId, 1012, 0, posAtx.Id(), 3, []types.BlockID{}, &types.NIPST{})
+	atx = types.NewActivationTxForTests(idx1, 0, *types.EmptyAtxId, 1012, 0, posAtx.Id(), coinbase, 3, []types.BlockID{}, &types.NIPST{})
 	atx.Commitment = commitment
 	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
@@ -676,7 +674,7 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	assert.EqualError(t, err, "no prevATX declared, but commitment merkle root is not included in challenge")
 
 	// Challenge and commitment merkle root mismatch.
-	atx = types.NewActivationTx(idx1, coinbase, 0, *types.EmptyAtxId, 1012, 0, posAtx.Id(), 3, []types.BlockID{}, &types.NIPST{})
+	atx = types.NewActivationTxForTests(idx1, 0, *types.EmptyAtxId, 1012, 0, posAtx.Id(), coinbase, 3, []types.BlockID{}, &types.NIPST{})
 	atx.Commitment = commitment
 	atx.CommitmentMerkleRoot = append([]byte{}, commitment.MerkleRoot...)
 	atx.CommitmentMerkleRoot[0] += 1
@@ -686,7 +684,7 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	assert.EqualError(t, err, "commitment merkle root included in challenge is not equal to the merkle root included in the proof")
 
 	// Prev atx declared but commitment is included.
-	atx = types.NewActivationTx(idx1, coinbase, 1, prevAtx.Id(), 1012, 0, posAtx.Id(), 3, []types.BlockID{}, &types.NIPST{})
+	atx = types.NewActivationTxForTests(idx1, 1, prevAtx.Id(), 1012, 0, posAtx.Id(), coinbase, 3, []types.BlockID{}, &types.NIPST{})
 	atx.Commitment = commitment
 	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
@@ -694,7 +692,7 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	assert.EqualError(t, err, "prevATX declared, but commitment proof is included")
 
 	// Prev atx declared but commitment merkle root is included.
-	atx = types.NewActivationTx(idx1, coinbase, 1, prevAtx.Id(), 1012, 0, posAtx.Id(), 3, []types.BlockID{}, &types.NIPST{})
+	atx = types.NewActivationTxForTests(idx1, 1, prevAtx.Id(), 1012, 0, posAtx.Id(), coinbase, 3, []types.BlockID{}, &types.NIPST{})
 	atx.CommitmentMerkleRoot = commitment.MerkleRoot
 	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
@@ -702,14 +700,14 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	assert.EqualError(t, err, "prevATX declared, but commitment merkle root is included in challenge")
 
 	// Prev atx has publication layer in the same epoch as the atx.
-	atx = types.NewActivationTx(idx1, coinbase, 1, prevAtx.Id(), 100, 0, posAtx.Id(), 3, []types.BlockID{}, &types.NIPST{})
+	atx = types.NewActivationTxForTests(idx1, 1, prevAtx.Id(), 100, 0, posAtx.Id(), coinbase, 3, []types.BlockID{}, &types.NIPST{})
 	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
 	err = atxdb.SyntacticallyValidateAtx(atx)
 	assert.EqualError(t, err, "prevAtx epoch (0, layer 100) isn't older than current atx epoch (0, layer 100)")
 
 	// NodeId and etracted pubkey dont match
-	atx = types.NewActivationTx(idx2, coinbase, 0, *types.EmptyAtxId, 1012, 0, posAtx.Id(), 3, []types.BlockID{}, &types.NIPST{})
+	atx = types.NewActivationTxForTests(idx2, 0, *types.EmptyAtxId, 1012, 0, posAtx.Id(), coinbase, 3, []types.BlockID{}, &types.NIPST{})
 	atx.Commitment = commitment
 	atx.CommitmentMerkleRoot = append([]byte{}, commitment.MerkleRoot...)
 	err = SignAtx(signer, atx)
@@ -728,20 +726,19 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 	id2 := types.NodeId{Key: uuid.New().String()}
 	id3 := types.NodeId{Key: uuid.New().String()}
 	atxs := []*types.ActivationTx{
-		types.NewActivationTx(id1, coinbase, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 3, []types.BlockID{}, &types.NIPST{}),
-		types.NewActivationTx(id2, coinbase, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 3, []types.BlockID{}, &types.NIPST{}),
-		types.NewActivationTx(id3, coinbase, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, 3, []types.BlockID{}, &types.NIPST{}),
+		types.NewActivationTxForTests(id1, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, coinbase, 3, []types.BlockID{}, &types.NIPST{}),
+		types.NewActivationTxForTests(id2, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, coinbase, 3, []types.BlockID{}, &types.NIPST{}),
+		types.NewActivationTxForTests(id3, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, coinbase, 3, []types.BlockID{}, &types.NIPST{}),
 	}
 
 	blocks := createLayerWithAtx(t, layers, 1, 10, atxs, []types.BlockID{}, []types.BlockID{})
 	blocks = createLayerWithAtx(t, layers, 10, 10, []*types.ActivationTx{}, blocks, blocks)
 	blocks = createLayerWithAtx(t, layers, 100, 10, []*types.ActivationTx{}, blocks, blocks)
 
-	//atx := types.NewActivationTx(id1, 1, atxs[0].Id(), 1000, 0, atxs[0].Id(), 3, blocks, &Nipst.NIPST{})
 	chlng := types.HexToHash32("0x3333")
 	poetRef := []byte{0x56, 0xbe}
 	npst := NewNIPSTWithChallenge(&chlng, poetRef)
-	prevAtx := types.NewActivationTx(idx1, coinbase, 0, *types.EmptyAtxId, 100, 0, *types.EmptyAtxId, 3, blocks, npst)
+	prevAtx := types.NewActivationTxForTests(idx1, 0, *types.EmptyAtxId, 100, 0, *types.EmptyAtxId, coinbase, 3, blocks, npst)
 
 	var nodeAtxIds []types.AtxId
 
@@ -750,12 +747,12 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 	nodeAtxIds = append(nodeAtxIds, prevAtx.Id())
 
 	//wrong sequnce
-	atx := types.NewActivationTx(idx1, coinbase, 1, prevAtx.Id(), 1012, 0, prevAtx.Id(), 0, []types.BlockID{}, &types.NIPST{})
+	atx := types.NewActivationTxForTests(idx1, 1, prevAtx.Id(), 1012, 0, prevAtx.Id(), coinbase, 0, []types.BlockID{}, &types.NIPST{})
 	err = atxdb.StoreAtx(1, atx)
 	assert.NoError(t, err)
 	nodeAtxIds = append(nodeAtxIds, atx.Id())
 
-	atx = types.NewActivationTx(idx1, coinbase, 2, atx.Id(), 1012, 0, atx.Id(), 0, []types.BlockID{}, &types.NIPST{})
+	atx = types.NewActivationTxForTests(idx1, 2, atx.Id(), 1012, 0, atx.Id(), coinbase, 0, []types.BlockID{}, &types.NIPST{})
 	assert.NoError(t, err)
 	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
@@ -766,7 +763,7 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 	nodeAtxIds = append(nodeAtxIds, atx.Id())
 	atx2id := atx.Id()
 
-	atx = types.NewActivationTx(idx1, coinbase, 4, prevAtx.Id(), 1012, 0, prevAtx.Id(), 0, []types.BlockID{}, &types.NIPST{})
+	atx = types.NewActivationTxForTests(idx1, 4, prevAtx.Id(), 1012, 0, prevAtx.Id(), coinbase, 0, []types.BlockID{}, &types.NIPST{})
 	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
 	err = atxdb.StoreNodeIdentity(idx1)
@@ -779,7 +776,7 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 	assert.NoError(t, err)
 	id4 := atx.Id()
 
-	atx = types.NewActivationTx(idx1, coinbase, 3, atx2id, 1012, 0, prevAtx.Id(), 0, []types.BlockID{}, &types.NIPST{})
+	atx = types.NewActivationTxForTests(idx1, 3, atx2id, 1012, 0, prevAtx.Id(), coinbase, 0, []types.BlockID{}, &types.NIPST{})
 	err = atxdb.ContextuallyValidateAtx(atx.ActivationTxHeader)
 	assert.EqualError(t, err, "last atx is not the one referenced")
 
@@ -801,20 +798,20 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 	//test same sequence
 	idx2 := types.NodeId{Key: uuid.New().String(), VRFPublicKey: []byte("12345")}
 
-	prevAtx = types.NewActivationTx(idx2, coinbase, 0, *types.EmptyAtxId, 100, 0, *types.EmptyAtxId, 3, blocks, npst)
+	prevAtx = types.NewActivationTxForTests(idx2, 0, *types.EmptyAtxId, 100, 0, *types.EmptyAtxId, coinbase, 3, blocks, npst)
 	err = atxdb.StoreAtx(1, prevAtx)
 	assert.NoError(t, err)
 
-	atx = types.NewActivationTx(idx2, coinbase, 1, prevAtx.Id(), 1012, 0, prevAtx.Id(), 3, []types.BlockID{}, &types.NIPST{})
+	atx = types.NewActivationTxForTests(idx2, 1, prevAtx.Id(), 1012, 0, prevAtx.Id(), coinbase, 3, []types.BlockID{}, &types.NIPST{})
 	err = atxdb.StoreAtx(1, atx)
 	assert.NoError(t, err)
 	atxId := atx.Id()
 
-	atx = types.NewActivationTx(idx2, coinbase, 2, atxId, 1012, 0, atx.Id(), 3, []types.BlockID{}, &types.NIPST{})
+	atx = types.NewActivationTxForTests(idx2, 2, atxId, 1012, 0, atx.Id(), coinbase, 3, []types.BlockID{}, &types.NIPST{})
 	err = atxdb.StoreAtx(1, atx)
 	assert.NoError(t, err)
 
-	atx = types.NewActivationTx(idx2, coinbase, 2, atxId, 1013, 0, atx.Id(), 0, []types.BlockID{}, &types.NIPST{})
+	atx = types.NewActivationTxForTests(idx2, 2, atxId, 1013, 0, atx.Id(), coinbase, 0, []types.BlockID{}, &types.NIPST{})
 	err = atxdb.ContextuallyValidateAtx(atx.ActivationTxHeader)
 	assert.EqualError(t, err, "last atx is not the one referenced")
 
@@ -829,7 +826,7 @@ func TestActivationDb_ProcessAtx(t *testing.T) {
 	atxdb, _, _ := getAtxDb("t8")
 	idx1 := types.NodeId{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}
 	coinbase := types.HexToAddress("aaaa")
-	atx := types.NewActivationTx(idx1, coinbase, 0, *types.EmptyAtxId, 100, 0, *types.EmptyAtxId, 3, []types.BlockID{}, &types.NIPST{})
+	atx := types.NewActivationTxForTests(idx1, 0, *types.EmptyAtxId, 100, 0, *types.EmptyAtxId, coinbase, 3, []types.BlockID{}, &types.NIPST{})
 
 	err := atxdb.ProcessAtx(atx)
 	r.NoError(err)
@@ -857,8 +854,7 @@ func BenchmarkActivationDb_SyntacticallyValidateAtx(b *testing.B) {
 	var atxs []*types.ActivationTx
 	for i := 0; i < activesetSize; i++ {
 		id := types.NodeId{Key: uuid.New().String(), VRFPublicKey: []byte("vrf")}
-		atxs = append(atxs, types.NewActivationTx(id, coinbase, 0, *types.EmptyAtxId, 1,
-			0, *types.EmptyAtxId, 3, []types.BlockID{}, &types.NIPST{}))
+		atxs = append(atxs, types.NewActivationTxForTests(id, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, coinbase, 3, []types.BlockID{}, &types.NIPST{}))
 	}
 
 	poetRef := []byte{0x12, 0x21}
@@ -879,7 +875,7 @@ func BenchmarkActivationDb_SyntacticallyValidateAtx(b *testing.B) {
 	r.NoError(err)
 	prevAtx := newAtx(challenge, activesetSize, blocks, NewNIPSTWithChallenge(hash, poetRef))
 
-	atx := types.NewActivationTx(idx1, coinbase, 1, prevAtx.Id(), numberOfLayers+1+layersPerEpochBig, 0, prevAtx.Id(), activesetSize, blocks, &types.NIPST{})
+	atx := types.NewActivationTxForTests(idx1, 1, prevAtx.Id(), numberOfLayers+1+layersPerEpochBig, 0, prevAtx.Id(), coinbase, activesetSize, blocks, &types.NIPST{})
 	hash, err = atx.NIPSTChallenge.Hash()
 	r.NoError(err)
 	atx.Nipst = NewNIPSTWithChallenge(hash, poetRef)
@@ -1014,13 +1010,13 @@ func TestActivationDb_ValidateSignedAtx(t *testing.T) {
 
 	// test happy flow of first ATX
 	emptyAtx := types.EmptyAtxId
-	atx := types.NewActivationTx(nodeId, coinbase, 1, *emptyAtx, 15, 1, *emptyAtx, 5, []types.BlockID{block1.Id(), block2.Id(), block3.Id()}, npst)
+	atx := types.NewActivationTxForTests(nodeId, 1, *emptyAtx, 15, 1, *emptyAtx, coinbase, 5, []types.BlockID{block1.Id(), block2.Id(), block3.Id()}, npst)
 	_, err := createAndValidateSignedATX(r, atxdb, ed, atx)
 	r.NoError(err)
 
 	// test negative flow no atx found in idstore
 	prevAtx := types.AtxId(types.HexToHash32("0x111"))
-	atx = types.NewActivationTx(nodeId, coinbase, 1, prevAtx, 15, 1, prevAtx, 5, []types.BlockID{block1.Id(), block2.Id(), block3.Id()}, npst)
+	atx = types.NewActivationTxForTests(nodeId, 1, prevAtx, 15, 1, prevAtx, coinbase, 5, []types.BlockID{block1.Id(), block2.Id(), block3.Id()}, npst)
 	signedAtx, err := createAndValidateSignedATX(r, atxdb, ed, atx)
 	r.Equal(errInvalidSig, err)
 
@@ -1039,8 +1035,7 @@ func TestActivationDb_ValidateSignedAtx(t *testing.T) {
 
 func createAndStoreAtx(atxdb *ActivationDb, layer types.LayerID) (*types.ActivationTx, error) {
 	id := types.NodeId{Key: uuid.New().String(), VRFPublicKey: []byte("vrf")}
-	atx := types.NewActivationTx(id, coinbase, 0, *types.EmptyAtxId, layer,
-		0, *types.EmptyAtxId, 3, []types.BlockID{}, &types.NIPST{})
+	atx := types.NewActivationTxForTests(id, 0, *types.EmptyAtxId, layer, 0, *types.EmptyAtxId, coinbase, 3, []types.BlockID{}, &types.NIPST{})
 	err := atxdb.StoreAtx(atx.TargetEpoch(layersPerEpoch), atx)
 	if err != nil {
 		return nil, err
@@ -1056,8 +1051,7 @@ func TestActivationDb_AwaitAtx(t *testing.T) {
 	memesh := mesh.NewMemMeshDB(lg.WithName("meshDB"))
 	atxdb := NewActivationDb(database.NewMemDatabase(), idStore, memesh, layersPerEpochBig, &ValidatorMock{}, lg.WithName("atxDB"))
 	id := types.NodeId{Key: uuid.New().String(), VRFPublicKey: []byte("vrf")}
-	atx := types.NewActivationTx(id, coinbase, 0, *types.EmptyAtxId, 1,
-		0, *types.EmptyAtxId, 3, []types.BlockID{}, &types.NIPST{})
+	atx := types.NewActivationTxForTests(id, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, coinbase, 3, []types.BlockID{}, &types.NIPST{})
 
 	ch := atxdb.AwaitAtx(atx.Id())
 	r.Len(atxdb.atxChannels, 1) // channel was created
