@@ -119,7 +119,7 @@ func CalcBlockHash32Presorted(sortedView []BlockID, additionalBytes []byte) Hash
 	hash := sha256.New()
 	hash.Write(additionalBytes)
 	for _, id := range sortedView {
-		hash.Write(id.ToBytes())
+		hash.Write(id.ToBytes()) // this never returns an error: https://golang.org/pkg/hash/#Hash
 	}
 	var res Hash32
 	hash.Sum(res[:0])
