@@ -165,7 +165,7 @@ func (h *Hare) collectOutput(output TerminationOutput) error {
 
 	// check validity of the collected output
 	if !h.validate(blocks) {
-		h.Panic("Failed to validate the collected output set")
+		h.Error("Failed to validate the collected output set")
 	}
 
 	id := output.Id()

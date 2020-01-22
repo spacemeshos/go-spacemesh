@@ -608,11 +608,7 @@ func (s *Syncer) fetchLayerBlockIds(m map[types.Hash32][]p2p.Peer, lyr types.Lay
 				if v != nil {
 					s.Info("Peer: %v responded to layer ids request", peer)
 					//peer returned set with bad hash ask next peer
-					res, err := types.CalcBlocksHash32(v.([]types.BlockID))
-					if err != nil {
-						s.With().Error("Peer: got invalid layer ids", log.String("peer", peer.String()), log.Err(err))
-						break
-					}
+					res := types.CalcBlocksHash32(v.([]types.BlockID), nil)
 
 					if h != res {
 						s.Warning("Peer: %v layer ids hash does not match request", peer)
