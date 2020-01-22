@@ -131,7 +131,7 @@ def send_coins_to_new_accounts(wallet_api, new_acc_num, amount, accountant, gas_
 
 
 def send_tx_from_each_account(wallet, accountant, tx_num, amount=1, gas_limit=None, is_new_acc=False,
-                              is_concurrent=False, queue=None):
+                              is_concurrent=False):
     """
     send random transactions iterating over the accounts list
 
@@ -142,11 +142,11 @@ def send_tx_from_each_account(wallet, accountant, tx_num, amount=1, gas_limit=No
     :param gas_limit: int, max reward for processing a tx
     :param is_new_acc: bool, create new accounts and send money to (if True) or use existing (False)
     :param is_concurrent: bool, send transactions concurrently
-    :param queue: multiprocess.Queue, a queue for collecting the accountant result
 
     :return:
     """
 
+    queue = mp.Queue() if is_concurrent else None
     # a list for all transfers to be made concurrently
     processes = []
     accounts_copy = accountant.accounts.copy()
