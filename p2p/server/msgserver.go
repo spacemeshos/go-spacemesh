@@ -175,7 +175,7 @@ func (p *MessageServer) handleResponseMessage(headers *service.DataMsgWrapper) {
 	if okFoo {
 		foo(headers.Payload)
 	} else {
-		p.Error("Cant find handler %v", headers.ReqID)
+		p.Error("Can't find handler %v", headers.ReqID)
 	}
 	p.Debug("handleResponseMessage close")
 }

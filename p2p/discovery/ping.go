@@ -98,7 +98,7 @@ func (p *protocol) Ping(peer p2pcrypto.PublicKey) error {
 	select {
 	case id := <-ch:
 		if id == nil {
-			return errors.New("failed sending message")
+			return errors.New("failed sending ping message")
 		}
 		if !bytes.Equal(id, peer.Bytes()) {
 			return errors.New("got pong with different public key")
@@ -110,7 +110,7 @@ func (p *protocol) Ping(peer p2pcrypto.PublicKey) error {
 			ka.updatePing()
 		}
 	case <-timeout.C:
-		return errors.New("ping timeouted")
+		return errors.New("ping timed out")
 	}
 
 	return nil
