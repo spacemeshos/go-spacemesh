@@ -16,10 +16,9 @@ import (
 	"testing"
 )
 
-
 type ProcessorStateSuite struct {
 	suite.Suite
-	db        *database.MemDatabase
+	db *database.MemDatabase
 	//state     *StateDB
 	processor *TransactionProcessor
 	projector *ProjectorMock

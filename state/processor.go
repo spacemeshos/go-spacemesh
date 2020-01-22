@@ -56,7 +56,7 @@ func NewTransactionProcessor(allStates, appliedTxs database.Database, projector 
 		projector:    projector,
 		trie:         stateDb.TrieDB(),
 		mu:           sync.Mutex{}, //sync between reset and apply mesh.Transactions
-		rootMu:       sync.Mutex{},
+		rootMu:       sync.RWMutex{},
 	}
 }
 
@@ -171,7 +171,7 @@ func (tp *TransactionProcessor) addState(stateRoot types.Hash32, layer types.Lay
 	return tp.processorDb.Put(getStateRootLayerKey(layer), stateRoot.Bytes())
 }
 
-func (tp *TransactionProcessor) GetStateRoot(layer types.LayerID) (types.Hash32, error) {
+func (tp *TransactionProcessor) getLayerStateRoot(layer types.LayerID) (types.Hash32, error) {
 	bts, err := tp.processorDb.Get(getStateRootLayerKey(layer))
 	if err != nil {
 		return types.Hash32{}, err
@@ -286,7 +286,7 @@ func (tp *TransactionProcessor) ApplyTransaction(trans *types.Transaction, layer
 	return nil
 }
 
-func (tp *TransactionProcessor) CurrentRoot() types.Hash32{
+func (tp *TransactionProcessor) GetStateRoot() types.Hash32 {
 	tp.rootMu.RLock()
 	defer tp.rootMu.RUnlock()
 	return tp.rootHash
