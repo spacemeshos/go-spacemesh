@@ -447,15 +447,23 @@ func TestConsensusProcess_currentRound(t *testing.T) {
 }
 
 func TestConsensusProcess_onEarlyMessage(t *testing.T) {
+	r := require.New(t)
 	proc := generateConsensusProcess(t)
 	m := BuildPreRoundMsg(generateSigning(t), NewDefaultEmptySet())
 	proc.advanceToNextRound()
 	proc.onEarlyMessage(buildMessage(nil))
-	assert.Equal(t, 0, len(proc.pending))
+	r.Equal(0, len(proc.pending))
 	proc.onEarlyMessage(m)
-	assert.Equal(t, 1, len(proc.pending))
+	r.Equal(1, len(proc.pending))
 	proc.onEarlyMessage(m)
-	assert.Equal(t, 1, len(proc.pending))
+	r.Equal(1, len(proc.pending))
+	m2 := BuildPreRoundMsg(generateSigning(t), NewDefaultEmptySet())
+	proc.onEarlyMessage(m2)
+	m3 := BuildPreRoundMsg(generateSigning(t), NewDefaultEmptySet())
+	proc.onEarlyMessage(m3)
+	r.Equal(3, len(proc.pending))
+	proc.onRoundBegin()
+	r.Equal(0, len(proc.pending))
 }
 
 func TestProcOutput_Id(t *testing.T) {
