@@ -30,15 +30,6 @@ type mockActivationDB struct {
 	atxs                map[string]map[types.LayerID]types.AtxId
 }
 
-func (a *mockActivationDB) IsIdentityActive(edId string, layer types.LayerID) (*types.NodeId, bool, types.AtxId, error) {
-	if idmap, ok := a.atxs[edId]; ok {
-		if atxid, ok := idmap[layer]; ok {
-			return &types.NodeId{Key: edId, VRFPublicKey: vrfPubkey}, true, atxid, nil
-		}
-	}
-	return &types.NodeId{Key: edId, VRFPublicKey: vrfPubkey}, true, *types.EmptyAtxId, nil
-}
-
 func (a mockActivationDB) GetIdentity(edId string) (types.NodeId, error) {
 	return types.NodeId{Key: edId, VRFPublicKey: vrfPubkey}, nil
 }

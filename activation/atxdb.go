@@ -646,56 +646,6 @@ func (db *ActivationDb) GetFullAtx(id types.AtxId) (*types.ActivationTx, error) 
 	return atx, nil
 }
 
-// IsIdentityActive returns whether edId is active for the epoch of layer layer.
-// it returns error if no associated atx is found in db
-func (db *ActivationDb) IsIdentityActive(edId string, layer types.LayerID) (*types.NodeId, bool, types.AtxId, error) {
-	// TODO: genesis flow should decide what we want to do here
-	if layer.GetEpoch(db.LayersPerEpoch) == 0 {
-		return nil, true, *types.EmptyAtxId, nil
-	}
-
-	epoch := layer.GetEpoch(db.LayersPerEpoch)
-	nodeId, err := db.GetIdentity(edId)
-	if err != nil { // means there is no such identity
-		db.log.Error("IsIdentityActive erred while getting identity err=%v", err)
-		return nil, false, *types.EmptyAtxId, nil
-	}
-	atxId, err := db.GetNodeLastAtxId(nodeId)
-	if err != nil {
-		db.log.Error("IsIdentityActive erred while getting last node atx id err=%v", err)
-		return nil, false, *types.EmptyAtxId, err
-	}
-	atx, err := db.GetAtxHeader(atxId)
-	if err != nil {
-		db.log.With().Error("IsIdentityActive erred while getting atx", log.AtxId(atxId.ShortString()), log.Err(err))
-		return nil, false, *types.EmptyAtxId, nil
-	}
-
-	lastAtxTargetEpoch := atx.TargetEpoch(db.LayersPerEpoch)
-	if lastAtxTargetEpoch < epoch {
-		db.log.With().Info("IsIdentityActive latest atx is too old", log.Uint64("expected", uint64(epoch)),
-			log.Uint64("actual", uint64(lastAtxTargetEpoch)), log.AtxId(atx.ShortString()))
-		return nil, false, *types.EmptyAtxId, nil
-	}
-
-	if lastAtxTargetEpoch > epoch {
-		// This could happen if we already published the ATX for the next epoch, so we check the previous one as well
-		if atx.PrevATXId == *types.EmptyAtxId {
-			db.log.With().Info("IsIdentityActive latest atx is too new but no previous atx", log.AtxId(atxId.ShortString()))
-			return nil, false, *types.EmptyAtxId, nil
-		}
-		prevAtxId := atx.PrevATXId
-		atx, err = db.GetAtxHeader(prevAtxId)
-		if err != nil {
-			db.log.With().Error("IsIdentityActive erred while getting atx for second newest", log.AtxId(prevAtxId.ShortString()), log.Err(err))
-			return nil, false, *types.EmptyAtxId, nil
-		}
-	}
-
-	// lastAtxTargetEpoch = epoch
-	return &nodeId, atx.TargetEpoch(db.LayersPerEpoch) == epoch, atx.Id(), nil
-}
-
 // ValidateSignedAtx extracts public key from message and verifies public key exists in IdStore, this is how we validate
 // ATX signature. If this is the first ATX it is considered valid anyways and ATX syntactic validation will determine ATX validity
 func (db *ActivationDb) ValidateSignedAtx(pubKey signing.PublicKey, signedAtx *types.ActivationTx) error {

@@ -14,7 +14,6 @@ type ActivationDb interface {
 	GetNodeLastAtxId(node types.NodeId) (types.AtxId, error)
 	GetAtxHeader(id types.AtxId) (*types.ActivationTxHeader, error)
 	GetIdentity(edId string) (types.NodeId, error)
-	IsIdentityActive(edId string, layer types.LayerID) (*types.NodeId, bool, types.AtxId, error)
 }
 
 type Signer interface {
