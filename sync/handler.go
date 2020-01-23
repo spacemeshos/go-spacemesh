@@ -76,7 +76,7 @@ func newBlockRequestHandler(msh *mesh.Mesh, logger log.Log) func(msg []byte) []b
 			if err != nil {
 				if err == database.ErrNotFound {
 					logger.With().Warning("unfamiliar block was requested (id: %s)", log.BlockId(bid.ShortString()))
-					return nil
+					continue
 				}
 				logger.With().Error("Error handling block request message", log.BlockId(bid.String()), log.Err(err))
 				continue
