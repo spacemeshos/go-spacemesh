@@ -16,6 +16,10 @@ type MockMapState struct {
 	TotalReward int64
 }
 
+func (MockMapState) GetStateRoot() types.Hash32 {
+	return [32]byte{}
+}
+
 func (MockMapState) ValidateNonceAndBalance(transaction *types.Transaction) error {
 	panic("implement me")
 }
@@ -123,7 +127,9 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 
 	params := NewTestRewardParams()
 
-	layers.AccumulateRewards(1, params)
+	l, err := layers.GetLayer(1)
+	assert.NoError(t, err)
+	layers.AccumulateRewards(l, params)
 	totalRewardsCost := totalFee + params.BaseReward.Int64()
 	remainder := totalRewardsCost % 4
 
