@@ -579,13 +579,20 @@ func (db *ActivationDb) addAtxToNodeId(nodeId types.NodeId, atx *types.Activatio
 
 // GetNodeLastAtxId returns the last atx id that was received for node nodeId
 func (db *ActivationDb) GetNodeLastAtxId(nodeId types.NodeId) (types.AtxId, error) {
-	db.log.Debug("fetching atxIDs for node %v", nodeId.ShortString())
-
 	nodeAtxsIterator := db.atxs.Find(getNodeAtxPrefix(nodeId))
 	if exists := nodeAtxsIterator.Last(); !exists {
 		return *types.EmptyAtxId, fmt.Errorf("atx for node %v does not exist", nodeId.ShortString())
 	}
 	return types.AtxId(types.BytesToHash(nodeAtxsIterator.Value())), nil
+}
+
+func (db *ActivationDb) GetNodeAtxIdForEpoch(nodeId types.NodeId, targetEpoch types.EpochId) (types.AtxId, error) {
+	id, err := db.atxs.Get(getNodeAtxKey(nodeId, targetEpoch))
+	if err != nil {
+		return *types.EmptyAtxId, fmt.Errorf("atx for node %v targeting epoch %v: %v",
+			nodeId.ShortString(), targetEpoch, err)
+	}
+	return types.AtxId(types.BytesToHash(id)), nil
 }
 
 // GetPosAtxId returns the best (highest layer id), currently known to this node, pos atx id
