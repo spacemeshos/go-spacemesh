@@ -26,6 +26,7 @@ class WalletAPI:
         :param namespace: string, namespace
         :param clients_lst: [{"pod_ip": ..., "name": ...}, ...]
         """
+        # TODO make fixed node boolean and create a @property to choose index once
         self.clients_lst = clients_lst
         self.namespace = namespace
         self.fixed_node = fixed_node
@@ -85,7 +86,10 @@ class WalletAPI:
 
         rnd = random.randint(0, len(self.clients_lst)-1) if not self.fixed_node else self.fixed_node
         pod_ip, pod_name = self.clients_lst[rnd]['pod_ip'], self.clients_lst[rnd]['name']
-        print(f"random selected pod: ip = {pod_ip}, name = {pod_name}")
+        if not self.fixed_node:
+            print("randomly ", end="")
+
+        print(f"selected pod: ip = {pod_ip}, name = {pod_name}")
         return pod_ip, pod_name
 
     # ======================= utils =======================
