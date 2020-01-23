@@ -542,12 +542,12 @@ func TestBuilder_PublishActivationTx_Serialize(t *testing.T) {
 	activationDb := newActivationDb()
 	b := newBuilder(activationDb)
 
-	atx := types.NewActivationTx(nodeId, coinbase, 1, prevAtxId, 5, 1, prevAtxId, defaultActiveSetSize, []types.BlockID{block1.Id(), block2.Id(), block3.Id()}, npst)
+	atx := types.NewActivationTxForTests(nodeId, 1, prevAtxId, 5, 1, prevAtxId, coinbase, defaultActiveSetSize, []types.BlockID{block1.Id(), block2.Id(), block3.Id()}, npst)
 	storeAtx(r, activationDb, atx, log.NewDefault("storeAtx"))
 
 	view, err := b.mesh.GetOrphanBlocksBefore(meshProvider.LatestLayer())
 	assert.NoError(t, err)
-	act := types.NewActivationTx(b.nodeId, coinbase, 2, atx.Id(), atx.PubLayerIdx+10, 0, atx.Id(), defaultActiveSetSize, view, npst)
+	act := types.NewActivationTxForTests(b.nodeId, 2, atx.Id(), atx.PubLayerIdx+10, 0, atx.Id(), coinbase, defaultActiveSetSize, view, npst)
 
 	bt, err := types.InterfaceToBytes(act)
 	assert.NoError(t, err)
@@ -600,7 +600,7 @@ func TestBuilder_SignAtx(t *testing.T) {
 	b := NewBuilder(nodeId, coinbase, ed, activationDb, net, meshProvider, layersPerEpoch, nipstBuilder, postProver, layerClock, &mockSyncer{}, NewMockDB(), lg.WithName("atxBuilder"))
 
 	prevAtx := types.AtxId(types.HexToHash32("0x111"))
-	atx := types.NewActivationTx(nodeId, coinbase, 1, prevAtx, 15, 1, prevAtx, 5, []types.BlockID{block1.Id(), block2.Id(), block3.Id()}, npst)
+	atx := types.NewActivationTxForTests(nodeId, 1, prevAtx, 15, 1, prevAtx, coinbase, 5, []types.BlockID{block1.Id(), block2.Id(), block3.Id()}, npst)
 	atxBytes, err := types.InterfaceToBytes(atx.InnerActivationTx)
 	assert.NoError(t, err)
 	err = b.SignAtx(atx)
@@ -634,7 +634,7 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	nipstBuilder.poetRef = poetRef
 	npst := NewNIPSTWithChallenge(&chlng, poetRef)
 
-	atx := types.NewActivationTx(types.NodeId{"aaaaaa", []byte("bbbbb")}, coinbase, 1, prevAtx, 15, 1, prevAtx, 5, []types.BlockID{block1.Id(), block2.Id(), block3.Id()}, npst)
+	atx := types.NewActivationTxForTests(types.NodeId{"aaaaaa", []byte("bbbbb")}, 1, prevAtx, 15, 1, prevAtx, coinbase, 5, []types.BlockID{block1.Id(), block2.Id(), block3.Id()}, npst)
 
 	err := activationDb.StoreAtx(atx.PubLayerIdx.GetEpoch(layersPerEpoch), atx)
 	assert.NoError(t, err)
@@ -666,7 +666,7 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	layers.latestLayer = 22
 	err = b.PublishActivationTx()
 	assert.NoError(t, err)
-	act := types.NewActivationTx(b.nodeId, coinbase, 2, atx.Id(), atx.PubLayerIdx+10, 0, atx.Id(), defaultActiveSetSize, defaultView, npst2)
+	act := types.NewActivationTxForTests(b.nodeId, 2, atx.Id(), atx.PubLayerIdx+10, 0, atx.Id(), coinbase, defaultActiveSetSize, defaultView, npst2)
 	err = b.SignAtx(act)
 	assert.NoError(t, err)
 	bts, err := types.InterfaceToBytes(act)

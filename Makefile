@@ -5,7 +5,7 @@ SHA = $(shell git rev-parse --short HEAD)
 CURR_DIR = $(shell pwd)
 CURR_DIR_WIN = $(shell cd)
 BIN_DIR = $(CURR_DIR)/build
-BIN_DIR_WIN = $(CUR_DIR_WIN)/build
+BIN_DIR_WIN = $(CURR_DIR_WIN)/build
 export GO111MODULE = on
 
 BRANCH := $(shell bash -c 'if [ "$$TRAVIS_PULL_REQUEST" == "false" ]; then echo $$TRAVIS_BRANCH; else echo $$TRAVIS_PULL_REQUEST_BRANCH; fi')
