@@ -18,8 +18,7 @@ import (
 
 type ProcessorStateSuite struct {
 	suite.Suite
-	db *database.MemDatabase
-	//state     *StateDB
+	db        *database.MemDatabase
 	processor *TransactionProcessor
 	projector *ProjectorMock
 }
@@ -46,9 +45,7 @@ func (appliedTxsMock) Find(key []byte) database.Iterator  { panic("implement me"
 func (s *ProcessorStateSuite) SetupTest() {
 	lg := log.New("proc_logger", "", "")
 	s.db = database.NewMemDatabase()
-	//s.processor, _ = New(types.Hash32{}, NewDatabase(s.db))
 	s.projector = &ProjectorMock{}
-
 	s.processor = NewTransactionProcessor(s.db, appliedTxsMock{}, s.projector, lg)
 }
 

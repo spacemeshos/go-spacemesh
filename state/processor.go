@@ -13,7 +13,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/trie"
 	"math/big"
-	"strconv"
 	"sync"
 )
 
@@ -41,7 +40,7 @@ type TransactionProcessor struct {
 
 const NewRootKey = "root"
 
-func NewTransactionProcessor(allStates, appliedTxs database.Database, projector Projector, logger log.Log) *TransactionProcessor {
+func NewTransactionProcessor(allStates, processorDb database.Database, projector Projector, logger log.Log) *TransactionProcessor {
 	stateDb, err := New(types.Hash32{}, NewDatabase(allStates))
 	if err != nil {
 		log.Panic("cannot load state db, %v", err)
@@ -49,7 +48,7 @@ func NewTransactionProcessor(allStates, appliedTxs database.Database, projector 
 	return &TransactionProcessor{
 		Log:          logger,
 		StateDB:      stateDb,
-		processorDb:  appliedTxs,
+		processorDb:  processorDb,
 		currentLayer: 0,
 		rootHash:     types.Hash32{},
 		stateQueue:   list.List{},
@@ -142,9 +141,6 @@ func (tp *TransactionProcessor) ApplyTransactions(layer types.LayerID, txs []*ty
 		return remainingCount, fmt.Errorf("failed to commit global state: %v", err)
 	}
 
-	tp.Log.Info("new state root for layer %v is %x", layer, newHash)
-	tp.Log.With().Info("new state", log.Uint64("mesh.LayerID", uint64(layer)), log.String("root_hash", newHash.String()))
-
 	err = tp.addStateToHistory(layer, newHash)
 
 	return remainingCount, err
@@ -160,11 +156,12 @@ func (tp *TransactionProcessor) addStateToHistory(layer types.LayerID, newHash t
 	if err != nil {
 		return err
 	}
+	tp.Log.With().Info("new state root", log.LayerId(uint64(layer)), log.String("state_root", newHash.String()))
 	return nil
 }
 
 func getStateRootLayerKey(layer types.LayerID) []byte {
-	return []byte(NewRootKey + strconv.FormatUint(uint64(layer), 10))
+	return append([]byte(NewRootKey), layer.ToBytes()...)
 }
 
 func (tp *TransactionProcessor) addState(stateRoot types.Hash32, layer types.LayerID) error {
@@ -207,22 +204,23 @@ func (tp *TransactionProcessor) ApplyRewards(layer types.LayerID, miners []types
 func (tp *TransactionProcessor) LoadState(layer types.LayerID) error {
 	tp.mu.Lock()
 	defer tp.mu.Unlock()
-	if state, err := tp.getLayerStateRoot(layer); err == nil {
-		newState, err := New(state, tp.db)
-		if err != nil {
-			log.Panic("cannot revert- improper state %v", err)
-		}
-
-		tp.Log.Info("reverted, new root %x", newState.IntermediateRoot(false))
-		tp.Log.With().Info("reverted", log.String("root_hash", newState.IntermediateRoot(false).String()))
-
-		tp.StateDB = newState
-		tp.rootMu.Lock()
-		tp.rootHash = state
-		tp.rootMu.Unlock()
-	} else {
+	state, err := tp.getLayerStateRoot(layer)
+	if err != nil {
 		return err
 	}
+	newState, err := New(state, tp.db)
+	if err != nil {
+		log.Panic("cannot revert- improper state: %v", err)
+	}
+
+	tp.Log.Info("reverted, new root %x", newState.IntermediateRoot(false))
+	tp.Log.With().Info("reverted", log.String("root_hash", newState.IntermediateRoot(false).String()))
+
+	tp.StateDB = newState
+	tp.rootMu.Lock()
+	tp.rootHash = state
+	tp.rootMu.Unlock()
+
 	return nil
 }
 
