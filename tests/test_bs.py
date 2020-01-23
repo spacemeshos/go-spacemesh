@@ -512,4 +512,6 @@ def test_mining(init_session, setup_network):
 
     analyse.analyze_mining(testconfig['namespace'], layer_reached, layers_per_epoch, layer_avg_size, total_pods)
 
+    queries.assert_equal_layer_hashes(current_index, ns)
+    queries.assert_equal_state_roots(current_index, ns)
     validate_hare(current_index, ns)  # validate hare
