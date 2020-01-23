@@ -63,14 +63,22 @@ func TestClock_TickFutureGenesis(t *testing.T) {
 func TestClock_TickPastGenesis(t *testing.T) {
 	tmr := &RealClock{}
 	ticker := NewClock(tmr, 2*d50milli, tmr.Now().Add(-7*d50milli), log.NewDefault(t.Name()))
+	expectedTimeToTick := d50milli // tickInterval is 100ms and the genesis tick (layer 1) was 350ms ago
+	/*
+		T-350 -> layer 1
+		T-250 -> layer 2
+		T-150 -> layer 3
+		T-50  -> layer 4
+		T+50  -> layer 5
+	*/
 	sub := ticker.Subscribe()
 	ticker.StartNotifying()
 	start := time.Now()
 	x := <-sub
 	duration := time.Since(start)
 	assert.Equal(t, types.LayerID(5), x)
-	// expected ~50
-	assert.True(t, duration > 40*time.Millisecond && duration < 60*time.Millisecond, duration)
+	assert.True(t, duration >= expectedTimeToTick, "tick happened too soon (%v)", duration)
+	assert.True(t, duration < expectedTimeToTick+d50milli, "tick happened more than 50ms too late (%v)", duration)
 }
 
 func TestClock_NewClock(t *testing.T) {
