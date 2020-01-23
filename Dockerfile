@@ -43,7 +43,12 @@ COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/go-
 COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/go-sync /bin/go-sync
 COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/go-harness /bin/go-harness
 
+# cgo requires libstdc++.so.6 and libgcc_s.so.1 shared compiled libraries
+COPY --from=server_builder /usr/lib/libstdc++.so.6 /usr/lib/libstdc++.so.6
+COPY --from=server_builder /usr/lib/libgcc_s.so.1 /usr/lib/libgcc_s.so.1
+
 ENTRYPOINT ["/bin/go-harness"]
+
 EXPOSE 7513
 
 # profiling port
