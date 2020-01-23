@@ -112,7 +112,7 @@ func (db *LDBDatabase) Delete(key []byte) error {
 
 func (db *LDBDatabase) NewIterator() iterator.Iterator {
 	it := db.db.NewIterator(nil, nil)
-	runtime.SetFinalizer(it, func() {it.Release()})
+	runtime.SetFinalizer(it, func() { it.Release() })
 	return it
 }
 
