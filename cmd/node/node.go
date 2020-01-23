@@ -136,7 +136,7 @@ type SpacemeshApp struct {
 	jsonAPIService *api.JSONHTTPServer
 	syncer         *sync.Syncer
 	blockListener  *sync.BlockListener
-	state          *state.StateDB
+	state          *state.TransactionProcessor
 	blockProducer  *miner.BlockBuilder
 	oracle         *oracle.MinerBlockOracle
 	txProcessor    *state.TransactionProcessor
@@ -441,11 +441,6 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId,
 	}
 	app.closers = append(app.closers, db)
 
-	st, err := state.New(types.Hash32{}, state.NewDatabase(db)) //todo: we probably should load DB with latest hash
-	if err != nil {
-		return err
-	}
-
 	coinToss := weakCoinStub{}
 
 	atxdbstore, err := database.NewLDBDatabase(dbStorepath+"atx", 0, 0, app.addLogger(AtxDbStoreLogger, lg))
@@ -491,7 +486,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId,
 		return err
 	}
 	app.closers = append(app.closers, appliedTxs)
-	processor := state.NewTransactionProcessor(st, appliedTxs, meshAndPoolProjector, lg.WithName("state"))
+	processor := state.NewTransactionProcessor(db, appliedTxs, meshAndPoolProjector, lg.WithName("state"))
 
 	atxdb := activation.NewActivationDb(atxdbstore, idStore, mdb, layersPerEpoch, validator, app.addLogger(AtxDbLogger, lg))
 	beaconProvider := &oracle.EpochBeaconProvider{}
@@ -502,6 +497,10 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId,
 	if mdb.PersistentData() {
 		trtl = tortoise.NewRecoveredAlgorithm(mdb, app.addLogger(TrtlLogger, lg))
 		msh = mesh.NewRecoveredMesh(mdb, atxdb, app.Config.REWARD, trtl, app.txPool, atxpool, processor, app.addLogger(MeshLogger, lg))
+		err := processor.LoadState(msh.ValidatedLayer())
+		if err != nil {
+			app.log.Panic("cannot load state for layer %v, message: %v", msh.ValidatedLayer(), err)
+		}
 
 	} else {
 		trtl = tortoise.NewAlgorithm(int(layerSize), mdb, app.Config.Hdist, app.addLogger(TrtlLogger, lg))
@@ -533,7 +532,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId,
 
 	ha := app.HareFactory(mdb, swarm, sgn, nodeID, syncer, msh, hOracle, idStore, clock, lg)
 
-	stateAndMeshProjector := pending_txs.NewStateAndMeshProjector(st, msh)
+	stateAndMeshProjector := pending_txs.NewStateAndMeshProjector(processor, msh)
 	blockProducer := miner.NewBlockBuilder(nodeID, sgn, swarm, clock.Subscribe(), app.Config.Hdist, app.txPool, atxpool, coinToss, msh, ha, blockOracle, processor, atxdb, syncer, app.Config.AtxsPerBlock, stateAndMeshProjector, app.addLogger(BlockBuilderLogger, lg))
 	blockListener := sync.NewBlockListener(swarm, syncer, 4, app.addLogger(BlockListenerLogger, lg))
 
@@ -555,7 +554,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId,
 	app.mesh = msh
 	app.syncer = syncer
 	app.clock = clock
-	app.state = st
+	app.state = processor
 	app.hare = ha
 	app.P2P = swarm
 	app.poetListener = poetListener

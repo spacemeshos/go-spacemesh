@@ -173,12 +173,6 @@ func (m *Mesh) ValidateLayer(lyr *types.Layer) {
 	m.Info("Validate layer %d", lyr.Index())
 
 	oldPbase, newPbase := m.HandleIncomingLayer(lyr)
-	m.lvMutex.Lock()
-	m.validatedLayer = lyr.Index()
-	if err := m.general.Put(VALIDATED, lyr.Index().ToBytes()); err != nil {
-		m.Error("could not persist validated layer index %d", lyr.Index())
-	}
-	m.lvMutex.Unlock()
 
 	for layerId := oldPbase; layerId < newPbase; layerId++ {
 		l, err := m.GetLayer(layerId)
@@ -192,6 +186,14 @@ func (m *Mesh) ValidateLayer(lyr *types.Layer) {
 		m.logStateRoot(layerId)
 		m.setLayerHash(l)
 	}
+	// update validated layer only after applying transactions since loading of state depends on validatedLayer param.
+	m.lvMutex.Lock()
+	m.validatedLayer = lyr.Index()
+	if err := m.general.Put(VALIDATED, lyr.Index().ToBytes()); err != nil {
+		m.Error("could not persist validated layer index %d", lyr.Index())
+	}
+	m.lvMutex.Unlock()
+
 	m.persistLayerHash()
 	m.Info("done validating layer %v", lyr.Index())
 }
