@@ -376,8 +376,15 @@ func (s *Syncer) gossipSyncForOneFullLayer(currentSyncLayer types.LayerID) error
 	// subscribe and wait for two ticks
 	s.Info("waiting for two ticks while p2p is open")
 	ch := s.TickProvider.Subscribe()
-	<-ch
-	<-ch
+
+	if done := waitLayer(ch, s); done {
+		return fmt.Errorf("cloed while buffering layer 1")
+	}
+
+	if done := waitLayer(ch, s); done {
+		return fmt.Errorf("cloed while buffering layer 2")
+	}
+
 	s.TickProvider.Unsubscribe(ch) // unsub, we won't be listening on this ch anymore
 	s.Info("done waiting for two ticks while listening to p2p")
 
@@ -400,6 +407,17 @@ func (s *Syncer) gossipSyncForOneFullLayer(currentSyncLayer types.LayerID) error
 	s.setGossipBufferingStatus(Done)
 
 	return nil
+}
+
+func waitLayer(ch timesync.LayerTimer, s *Syncer) bool {
+	select {
+	case <-ch:
+		s.Debug("waited one layer")
+	case <-s.exit:
+		s.Debug("exit while buffering")
+		return true
+	}
+	return false
 }
 
 func (s *Syncer) getLayerFromNeighbors(currenSyncLayer types.LayerID) (*types.Layer, error) {
