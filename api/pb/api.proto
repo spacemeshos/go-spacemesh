@@ -208,5 +208,11 @@ service SpacemeshService {
           body: "*"
         };
     }
+    rpc GetStateRoot (google.protobuf.Empty) returns (SimpleMessage) {
+        option (google.api.http) = {
+          post: "/v1/stateroot"
+          body: "*"
+        };
+    }
 }
 
