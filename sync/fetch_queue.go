@@ -36,8 +36,8 @@ type fetchQueue struct {
 }
 
 func (fq *fetchQueue) Close() {
-	fq.Info("done")
 	close(fq.queue)
+	fq.Info("done")
 }
 
 func concatShortIds(items []types.Hash32) string {
@@ -48,8 +48,18 @@ func concatShortIds(items []types.Hash32) string {
 	return str
 }
 
+func (fq *fetchQueue) shutdownRecover() {
+	r := recover()
+	if r != nil {
+		fq.Info("%s shut down ", fq.name)
+	}
+}
+
 //todo batches
 func (fq *fetchQueue) work() error {
+
+	defer fq.shutdownRecover()
+
 	output := fetchWithFactory(NewFetchWorker(fq.workerInfra, 1, fq.BatchRequestFactory, fq.queue, fq.name))
 	for out := range output {
 		fq.Debug("new batch out of queue")
@@ -79,7 +89,7 @@ func (fq *fetchQueue) addToPendingGetCh(ids []types.Hash32) chan bool {
 }
 
 func (fq *fetchQueue) addToPending(ids []types.Hash32) []chan bool {
-
+	//defer fq.shutdownRecover()
 	fq.Lock()
 	deps := make([]chan bool, 0, len(ids))
 	var idsToAdd []types.Hash32

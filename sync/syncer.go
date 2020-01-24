@@ -133,13 +133,11 @@ func (s *Syncer) Close() {
 	close(s.exit)
 	close(s.forceSync)
 	s.Peers.Close()
-	// TODO: broadly implement a better mechanism for shutdown
-	time.Sleep(5 * time.Millisecond) // "ensures" no more sync routines can be created, ok for now
-	s.syncRoutineWg.Wait()           // must be called after we ensure no more sync routines can be created
 	s.blockQueue.Close()
 	s.atxQueue.Close()
 	s.txQueue.Close()
 	s.MessageServer.Close()
+	s.syncRoutineWg.Wait()
 }
 
 const (
@@ -292,6 +290,7 @@ func (s *Syncer) lastTickedLayer() types.LayerID {
 func (s *Syncer) Synchronise() {
 	defer s.syncRoutineWg.Done()
 	s.Info("start synchronize")
+
 	if s.lastTickedLayer() <= 1 { // skip validation for first layer
 		s.With().Info("Not syncing in layer <= 1", log.LayerId(uint64(s.lastTickedLayer())))
 		s.setGossipBufferingStatus(Done) // fully-synced, make sure we listen to p2p
@@ -377,8 +376,15 @@ func (s *Syncer) gossipSyncForOneFullLayer(currentSyncLayer types.LayerID) error
 	// subscribe and wait for two ticks
 	s.Info("waiting for two ticks while p2p is open")
 	ch := s.TickProvider.Subscribe()
-	<-ch
-	<-ch
+
+	if done := s.waitLayer(ch); done {
+		return fmt.Errorf("cloed while buffering first layer")
+	}
+
+	if done := s.waitLayer(ch); done {
+		return fmt.Errorf("cloed while buffering second layer ")
+	}
+
 	s.TickProvider.Unsubscribe(ch) // unsub, we won't be listening on this ch anymore
 	s.Info("done waiting for two ticks while listening to p2p")
 
@@ -401,6 +407,17 @@ func (s *Syncer) gossipSyncForOneFullLayer(currentSyncLayer types.LayerID) error
 	s.setGossipBufferingStatus(Done)
 
 	return nil
+}
+
+func (s *Syncer) waitLayer(ch timesync.LayerTimer) bool {
+	select {
+	case <-ch:
+		s.Debug("waited one layer")
+	case <-s.exit:
+		s.Debug("exit while buffering")
+		return true
+	}
+	return false
 }
 
 func (s *Syncer) getLayerFromNeighbors(currenSyncLayer types.LayerID) (*types.Layer, error) {
@@ -440,7 +457,7 @@ func (s *Syncer) syncLayer(layerID types.LayerID, blockIds []types.BlockID) ([]*
 		return nil, errors.New(fmt.Sprintf("failed adding layer %v blocks to queue %v", layerID, err))
 	}
 
-	s.Info("layer %v wait for blocks", layerID)
+	s.Info("layer %v wait for %d blocks", layerID, len(blockIds))
 	if result := <-ch; !result {
 		return nil, fmt.Errorf("could not get all blocks for layer  %v", layerID)
 	}
@@ -501,6 +518,7 @@ func (s *Syncer) validateBlockView(blk *types.Block) bool {
 	ch := make(chan bool, 1)
 	defer close(ch)
 	foo := func(res bool) error {
+		s.Info("validate view for %s done %s", blk.Id(), res)
 		ch <- res
 		return nil
 	}
@@ -516,13 +534,13 @@ func (s *Syncer) validateBlockView(blk *types.Block) bool {
 
 func validateVotes(blk *types.Block, forBlockfunc ForBlockInView, depth int, lg log.Log) (bool, error) {
 	view := map[types.BlockID]struct{}{}
-	for _, blk := range blk.ViewEdges {
-		view[blk] = struct{}{}
+	for _, b := range blk.ViewEdges {
+		view[b] = struct{}{}
 	}
 
 	vote := map[types.BlockID]struct{}{}
-	for _, blk := range blk.BlockVotes {
-		vote[blk] = struct{}{}
+	for _, b := range blk.BlockVotes {
+		vote[b] = struct{}{}
 	}
 
 	traverse := func(b *types.Block) (stop bool, err error) {
@@ -539,7 +557,7 @@ func validateVotes(blk *types.Block, forBlockfunc ForBlockInView, depth int, lg 
 	}
 	err := forBlockfunc(view, lowestLayer, traverse)
 	if err == nil && len(vote) > 0 {
-		return false, fmt.Errorf("voting on blocks out of view (or out of Hdist), %v", vote)
+		return false, fmt.Errorf("voting on blocks out of view (or out of Hdist), %v %s", vote, err)
 	}
 
 	if err != nil {
@@ -660,10 +678,8 @@ func fetchWithFactory(wrk worker) chan interface{} {
 	// each worker goroutine tries to fetch a block iteratively from each peer
 	go wrk.Work()
 	for i := 0; int32(i) < *wrk.workCount-1; i++ {
-		cloneWrk := wrk.Clone()
-		go cloneWrk.Work()
+		go wrk.Clone().Work()
 	}
-
 	return wrk.output
 }
 
