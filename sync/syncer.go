@@ -378,11 +378,11 @@ func (s *Syncer) gossipSyncForOneFullLayer(currentSyncLayer types.LayerID) error
 	ch := s.TickProvider.Subscribe()
 
 	if done := s.waitLayer(ch); done {
-		return fmt.Errorf("cloed while buffering layer 1")
+		return fmt.Errorf("cloed while buffering first layer")
 	}
 
 	if done := s.waitLayer(ch); done {
-		return fmt.Errorf("cloed while buffering layer 2")
+		return fmt.Errorf("cloed while buffering second layer ")
 	}
 
 	s.TickProvider.Unsubscribe(ch) // unsub, we won't be listening on this ch anymore
