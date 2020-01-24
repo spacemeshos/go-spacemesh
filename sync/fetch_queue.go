@@ -49,8 +49,10 @@ func concatShortIds(items []types.Hash32) string {
 }
 
 func (fq *fetchQueue) shutdownRecover() {
-	recover()
-	fq.Info("%s shut down ", fq.name)
+	r := recover()
+	if r != nil {
+		fq.Info("%s shut down ", fq.name)
+	}
 }
 
 //todo batches
