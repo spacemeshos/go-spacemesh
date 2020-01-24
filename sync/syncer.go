@@ -136,8 +136,8 @@ func (s *Syncer) Close() {
 	s.blockQueue.Close()
 	s.atxQueue.Close()
 	s.txQueue.Close()
-	s.syncRoutineWg.Wait()
 	s.MessageServer.Close()
+	s.syncRoutineWg.Wait()
 }
 
 const (
@@ -500,6 +500,7 @@ func (s *Syncer) validateBlockView(blk *types.Block) bool {
 	ch := make(chan bool, 1)
 	defer close(ch)
 	foo := func(res bool) error {
+		s.Info("validate view for %s done %s", blk.Id(), res)
 		ch <- res
 		return nil
 	}
@@ -538,7 +539,7 @@ func validateVotes(blk *types.Block, forBlockfunc ForBlockInView, depth int, lg 
 	}
 	err := forBlockfunc(view, lowestLayer, traverse)
 	if err == nil && len(vote) > 0 {
-		return false, fmt.Errorf("voting on blocks out of view (or out of Hdist), %v", vote)
+		return false, fmt.Errorf("voting on blocks out of view (or out of Hdist), %v %s", vote, err)
 	}
 
 	if err != nil {

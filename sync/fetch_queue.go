@@ -87,7 +87,7 @@ func (fq *fetchQueue) addToPendingGetCh(ids []types.Hash32) chan bool {
 }
 
 func (fq *fetchQueue) addToPending(ids []types.Hash32) []chan bool {
-	defer fq.shutdownRecover()
+	//defer fq.shutdownRecover()
 	fq.Lock()
 	deps := make([]chan bool, 0, len(ids))
 	var idsToAdd []types.Hash32
