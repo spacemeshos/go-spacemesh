@@ -377,11 +377,11 @@ func (s *Syncer) gossipSyncForOneFullLayer(currentSyncLayer types.LayerID) error
 	s.Info("waiting for two ticks while p2p is open")
 	ch := s.TickProvider.Subscribe()
 
-	if done := waitLayer(ch, s); done {
+	if done := s.waitLayer(ch); done {
 		return fmt.Errorf("cloed while buffering layer 1")
 	}
 
-	if done := waitLayer(ch, s); done {
+	if done := s.waitLayer(ch); done {
 		return fmt.Errorf("cloed while buffering layer 2")
 	}
 
@@ -409,7 +409,7 @@ func (s *Syncer) gossipSyncForOneFullLayer(currentSyncLayer types.LayerID) error
 	return nil
 }
 
-func waitLayer(ch timesync.LayerTimer, s *Syncer) bool {
+func (s *Syncer) waitLayer(ch timesync.LayerTimer) bool {
 	select {
 	case <-ch:
 		s.Debug("waited one layer")
