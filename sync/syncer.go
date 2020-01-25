@@ -662,10 +662,10 @@ type peerHashPair struct {
 
 func (s *Syncer) fetchLayerHashes(lyr types.LayerID) (map[types.Hash32][]p2p.Peer, error) {
 	// get layer hash from each peer
-	wrk, output := NewPeersWorker(s, s.GetPeers(), &sync.Once{}, HashReqFactory(lyr))
+	wrk := NewPeersWorker(s, s.GetPeers(), &sync.Once{}, HashReqFactory(lyr))
 	go wrk.Work()
 	m := make(map[types.Hash32][]p2p.Peer)
-	for out := range output {
+	for out := range wrk.output {
 		pair, ok := out.(*peerHashPair)
 		if pair != nil && ok { //do nothing on close channel
 			m[pair.hash] = append(m[pair.hash], pair.peer)

@@ -23,13 +23,13 @@ func TestNewPeerWorker(t *testing.T) {
 	err := syncObj1.AddBlock(bl1)
 	assert.NoError(t, err)
 
-	wrk, output := NewPeersWorker(syncObj2, []p2p.Peer{nodes[3].PublicKey(), nodes[2].PublicKey(), nodes[0].PublicKey()}, &sync.Once{}, LayerIdsReqFactory(1))
+	wrk := NewPeersWorker(syncObj2, []p2p.Peer{nodes[3].PublicKey(), nodes[2].PublicKey(), nodes[0].PublicKey()}, &sync.Once{}, LayerIdsReqFactory(1))
 
 	go wrk.Work()
 
 	timeout := time.NewTimer(1 * time.Second)
 	select {
-	case item := <-output:
+	case item := <-wrk.output:
 		assert.Equal(t, bl1.Id(), item.([]types.BlockID)[0], "wrong ids")
 	case <-timeout.C:
 		assert.Fail(t, "no message received on channel")
@@ -88,12 +88,12 @@ func TestNewPeerWorkerClose(t *testing.T) {
 	syncObj1 := syncs[0]
 	syncObj1.Close()
 	syncObj2 := syncs[1]
-	wrk, output := NewPeersWorker(syncObj2, []p2p.Peer{nodes[3].PublicKey(), nodes[2].PublicKey(), nodes[0].PublicKey()}, &sync.Once{}, LayerIdsReqFactory(1))
+	wrk := NewPeersWorker(syncObj2, []p2p.Peer{nodes[3].PublicKey(), nodes[2].PublicKey(), nodes[0].PublicKey()}, &sync.Once{}, LayerIdsReqFactory(1))
 	go wrk.Work()
 	go func() {
 		time.Sleep(time.Second)
 		syncObj2.Close()
 	}()
-	<-output
+	<-wrk.output
 	log.Info("closed")
 }

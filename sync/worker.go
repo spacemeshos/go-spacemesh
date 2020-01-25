@@ -65,7 +65,7 @@ func (w *worker) Clone() *worker {
 	return &worker{Logger: w.Logger, Once: w.Once, workCount: w.workCount, output: w.output, work: w.work}
 }
 
-func NewPeersWorker(s WorkerInfra, peers []p2p.Peer, mu *sync.Once, reqFactory RequestFactory) (worker, chan interface{}) {
+func NewPeersWorker(s WorkerInfra, peers []p2p.Peer, mu *sync.Once, reqFactory RequestFactory) worker {
 	count := int32(1)
 	numOfpeers := len(peers)
 	output := make(chan interface{}, numOfpeers)
@@ -110,9 +110,7 @@ func NewPeersWorker(s WorkerInfra, peers []p2p.Peer, mu *sync.Once, reqFactory R
 		wg.Wait()
 	}
 
-	worker := worker{Logger: lg, Once: mu, workCount: &count, output: output, work: wrkFunc}
-
-	return worker, output
+	return worker{Logger: lg, Once: mu, workCount: &count, output: output, work: wrkFunc}
 
 }
 
