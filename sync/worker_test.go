@@ -61,7 +61,7 @@ func TestNewNeighborhoodWorker(t *testing.T) {
 
 var longConf = Configuration{1000, 1, 300, 5 * time.Minute, 100, 5}
 
-func TestNewNeighborhoodWorkerClose(t *testing.T) {
+func TestNeighborhoodWorkerClose(t *testing.T) {
 	r := require.New(t)
 	syncs, nodes, _ := SyncMockFactory(2, longConf, "TestSyncer_FetchPoetProofAvailableAndValid_", memoryDB, newMemPoetDb)
 	syncs[0].Close()
@@ -83,7 +83,7 @@ func TestNewNeighborhoodWorkerClose(t *testing.T) {
 	log.Info("closed")
 }
 
-func TestNewPeerWorkerClose(t *testing.T) {
+func TestPeerWorkerClose(t *testing.T) {
 	syncs, nodes, _ := SyncMockFactory(4, longConf, "TestNewPeerWorker", memoryDB, newMockPoetDb)
 	syncObj1 := syncs[0]
 	syncObj1.Close()
