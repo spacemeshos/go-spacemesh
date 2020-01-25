@@ -238,10 +238,13 @@ func (s *Syncer) run() {
 //fires a sync every sm.syncInterval or on force space from outside
 func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool AtxMemPool, bv BlockValidator, poetdb PoetDb, conf Configuration, clock TickProvider, logger log.Log) *Syncer {
 
+	exit := make(chan struct{})
+
 	srvr := &workerInfra{
 		RequestTimeout: conf.RequestTimeout,
 		MessageServer:  server.NewMsgServer(srv.(server.Service), syncProtocol, conf.RequestTimeout, make(chan service.DirectMessage, p2pconf.ConfigValues.BufferSize), logger),
 		Peers:          p2p.NewPeers(srv, logger.WithName("peers")),
+		exit:           exit,
 	}
 
 	s := &Syncer{
@@ -261,7 +264,7 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool A
 		currentLayer:         clock.GetCurrentLayer(),
 		validatingLayer:      ValidatingLayerNone,
 		LayerCh:              clock.Subscribe(),
-		exit:                 make(chan struct{}),
+		exit:                 exit,
 		gossipSynced:         Pending,
 		awaitCh:              make(chan struct{}),
 	}
