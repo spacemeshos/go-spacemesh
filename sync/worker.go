@@ -44,7 +44,6 @@ func (ms *workerInfra) GetExit() chan struct{} {
 
 type worker struct {
 	*sync.Once
-	*sync.WaitGroup
 	work      func()
 	workCount *int32
 	output    chan interface{}
@@ -111,7 +110,7 @@ func NewPeersWorker(s WorkerInfra, peers []p2p.Peer, mu *sync.Once, reqFactory R
 		wg.Wait()
 	}
 
-	worker := worker{Logger: lg, Once: mu, WaitGroup: &sync.WaitGroup{}, workCount: &count, output: output, work: wrkFunc}
+	worker := worker{Logger: lg, Once: mu, workCount: &count, output: output, work: wrkFunc}
 
 	return worker, output
 
@@ -146,7 +145,7 @@ func NewNeighborhoodWorker(s WorkerInfra, count int, reqFactory RequestFactory) 
 		}
 	}
 
-	return worker{Logger: lg, Once: mu, WaitGroup: &sync.WaitGroup{}, workCount: &acount, output: output, work: workFunc}
+	return worker{Logger: lg, Once: mu, workCount: &acount, output: output, work: workFunc}
 
 }
 
@@ -199,7 +198,7 @@ func NewFetchWorker(s WorkerInfra, count int, reqFactory BatchRequestFactory, id
 			output <- fetchJob{ids: ids, items: fetched}
 		}
 	}
-	return worker{Logger: lg, Once: mu, WaitGroup: &sync.WaitGroup{}, workCount: &acount, output: output, work: workFunc}
+	return worker{Logger: lg, Once: mu, workCount: &acount, output: output, work: workFunc}
 }
 
 func toMap(ids []types.Hash32) map[types.Hash32]struct{} {
