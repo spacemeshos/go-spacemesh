@@ -578,7 +578,7 @@ func (app *SpacemeshApp) checkTimeDrifts() {
 			_, err := timesync.CheckSystemClockDrift()
 			if err != nil {
 				app.log.Error("System time couldn't synchronize %s", err)
-				app.stopServices()
+				cmdp.Cancel()
 				return
 			}
 		}
