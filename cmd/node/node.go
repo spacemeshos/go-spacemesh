@@ -55,6 +55,7 @@ const edKeyFileName = "key.bin"
 
 const (
 	AppLogger            = "app"
+	P2PLogger            = "p2p"
 	PostLogger           = "post"
 	StateDbLogger        = "stateDbStore"
 	StateLogger          = "state"
@@ -232,6 +233,12 @@ func (app *SpacemeshApp) Initialize(cmd *cobra.Command, args []string) (err erro
 	// override default config in timesync since timesync is using TimeCongigValues
 	timeCfg.TimeConfigValues = app.Config.TIME
 
+	// ensure all data folders exist
+	err = filesystem.ExistOrCreate(app.Config.DataDir)
+	if err != nil {
+		return err
+	}
+
 	app.setupLogging()
 
 	app.introduction()
@@ -244,10 +251,6 @@ func (app *SpacemeshApp) Initialize(cmd *cobra.Command, args []string) (err erro
 	}
 
 	log.Info("System clock synchronized with ntp. drift: %s", drift)
-
-	// ensure all data folders exist
-	filesystem.EnsureSpacemeshDataDirectories()
-
 	// todo: set coinbase account (and unlock it) based on flags
 
 	return nil
@@ -260,15 +263,8 @@ func (app *SpacemeshApp) setupLogging() {
 		log.JSONLog(true)
 	}
 
-	// setup logging early
-	dataDir, err := filesystem.GetSpacemeshDataDirectoryPath()
-	if err != nil {
-		fmt.Printf("Failed to setup spacemesh data dir")
-		log.Panic("Failed to setup spacemesh data dir", err)
-	}
-
 	// app-level logging
-	log.InitSpacemeshLoggingSystem(dataDir, "spacemesh.log")
+	log.InitSpacemeshLoggingSystem(app.Config.DataDir, "spacemesh.log")
 
 	log.Info("%s", app.getAppInfo())
 
@@ -349,6 +345,8 @@ func (app *SpacemeshApp) addLogger(name string, logger log.Log) log.Log {
 	switch name {
 	case AppLogger:
 		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.AppLoggerLevel))
+	case P2PLogger:
+		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.P2PLoggerLevel))
 	case PostLogger:
 		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.PostLoggerLevel))
 	case StateDbLogger:
@@ -770,7 +768,15 @@ func (app *SpacemeshApp) getIdentityFile() (string, error) {
 }
 
 func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
-	log.Event().Info("Starting Spacemesh")
+	log.With().Info("Initializing Spacemesh", log.String("data-dir", app.Config.DataDir), log.String("post-dir", app.Config.POST.DataDir))
+
+	err := filesystem.ExistOrCreate(app.Config.DataDir)
+	if err != nil {
+		log.Error("data-dir not found or could not be created err:%v", err)
+	}
+
+	/* Setup monitoring */
+
 	if app.Config.MemProfile != "" {
 		log.Info("Starting mem profiling")
 		f, err := os.Create(app.Config.MemProfile)
@@ -810,15 +816,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 
 	}
 
-	// start p2p services
-	log.Info("Initializing P2P services")
-	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P)
-	if err != nil {
-		log.Error("Error starting p2p services, err: %v", err)
-		log.Panic("Error starting p2p services")
-	}
-
-	// todo : register all protocols
+	/* Create or load miner identity */
 
 	app.edSgn, err = app.LoadOrCreateEdSigner()
 	if err != nil {
@@ -844,6 +842,9 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 		log.Error("failed to create post client: %v", err)
 	}
 
+	/* Initialize all protocol services */
+	lg := log.NewDefault(nodeID.ShortString())
+
 	apiConf := &app.Config.API
 	dbStorepath := app.Config.DataDir
 	gTime, err := time.Parse(time.RFC3339, app.Config.GenesisTime)
@@ -852,6 +853,14 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	}
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
 	clock := timesync.NewClock(timesync.RealClock{}, ld, gTime, log.NewDefault("clock"))
+
+	log.Info("Initializing P2P services")
+	app.addLogger(P2PLogger, lg)
+	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P, lg.WithName("p2p"), dbStorepath)
+	if err != nil {
+		log.Panic("Error starting p2p services. err: %v", err)
+	}
+
 	err = app.initServices(nodeID, swarm, dbStorepath, app.edSgn, false, nil, uint32(app.Config.LayerAvgSize), postClient, poetClient, vrfSigner, uint16(app.Config.LayersPerEpoch), clock)
 	if err != nil {
 		log.Error("cannot start services %v", err.Error())
@@ -865,14 +874,16 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	if app.Config.CollectMetrics {
 		metrics.StartCollectingMetrics(app.Config.MetricsPort)
 	}
+
 	app.startServices()
-
+	// P2P must start last to not block when sending messages to protocols
 	err = app.P2P.Start()
-
 	if err != nil {
 		log.Error("Error starting p2p services, err: %v", err)
 		log.Panic("Error starting p2p services")
 	}
+
+	/* Expose API */
 
 	// todo: if there's no loaded account - do the new account interactive flow here
 	// todo: if node has no loaded coin-base account then set the node coinbase to first account

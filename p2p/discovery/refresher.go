@@ -7,6 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
+	"net"
 	"time"
 )
 
@@ -39,11 +40,11 @@ type refresher struct {
 	quit chan struct{}
 }
 
-func newRefresher(local *node.NodeInfo, book addressBook, disc Protocol, bootnodes []*node.NodeInfo, logger log.Log) *refresher {
+func newRefresher(local p2pcrypto.PublicKey, book addressBook, disc Protocol, bootnodes []*node.NodeInfo, logger log.Log) *refresher {
 	//todo: trigger requestAddresses every X with random nodes
 	return &refresher{
 		logger:       logger,
-		localAddress: local,
+		localAddress: &node.NodeInfo{ID: local.Array(), IP: net.IPv4zero},
 		book:         book,
 		disc:         disc,
 		bootNodes:    bootnodes,

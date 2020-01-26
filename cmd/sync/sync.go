@@ -103,7 +103,7 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 
 	lg.Info("local db path: ", path)
 
-	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P)
+	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P, lg.WithName("p2p"), app.Config.DataDir)
 
 	if err != nil {
 		panic("something got fudged while creating p2p service ")

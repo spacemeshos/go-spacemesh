@@ -260,9 +260,9 @@ func TestConsensusProcess_nextRound(t *testing.T) {
 }
 
 func generateConsensusProcess(t *testing.T) *ConsensusProcess {
-	bn, _ := node.GenerateTestNode(t)
+	_, bninfo := node.GenerateTestNode(t)
 	sim := service.NewSimulator()
-	n1 := sim.NewNodeFrom(bn.NodeInfo)
+	n1 := sim.NewNodeFrom(bninfo)
 
 	s := NewSetFromValues(value1)
 	oracle := eligibility.New()

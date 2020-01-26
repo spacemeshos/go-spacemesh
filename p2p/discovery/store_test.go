@@ -58,7 +58,6 @@ func assertAddrs(t *testing.T, addrMgr *addrBook,
 // deserialize the manager's current address cache.
 func TestAddrManagerSerialization(t *testing.T) {
 
-	local := node.GenerateRandomNodeData()
 	lg := log.New("addrbook_serialize_test", "", "")
 	cfg := config.DefaultConfig()
 
@@ -72,7 +71,7 @@ func TestAddrManagerSerialization(t *testing.T) {
 
 	filePath := tempDir + "/" + defaultPeersFileName
 
-	addrMgr := NewAddrBook(local, cfg.SwarmConfig, lg)
+	addrMgr := NewAddrBook(cfg.SwarmConfig, "", lg)
 
 	// We'll be adding 5 random addresses to the manager.
 	const numAddrs = 5
@@ -91,7 +90,7 @@ func TestAddrManagerSerialization(t *testing.T) {
 	//// Then, we'll persist these addresses to disk and restart the address
 	//// manager.
 	addrMgr.savePeers(filePath)
-	addrMgr = NewAddrBook(local, cfg.SwarmConfig, lg)
+	addrMgr = NewAddrBook(cfg.SwarmConfig, "", lg)
 
 	// Finally, we'll read all of the addresses from disk and ensure they
 	// match as expected.

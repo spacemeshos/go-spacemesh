@@ -59,11 +59,12 @@ var (
 
 // Discovery is struct that holds the protocol components, the protocol definition, the addr book data structure and more.
 type Discovery struct {
+	logger log.Log
 	config config.SwarmConfig
 
 	disc Protocol
 
-	local        *node.LocalNode
+	local        node.LocalNode
 	rt           addressBook
 	bootstrapper bootstrapper
 }
@@ -84,7 +85,7 @@ func (d *Discovery) Attempt(key p2pcrypto.PublicKey) {
 func (d *Discovery) refresh(ctx context.Context, peersToGet int) error {
 	err := d.bootstrapper.Bootstrap(ctx, peersToGet)
 	if err != nil {
-		d.local.Log.With().Error("addrbook refresh error", log.Err(err))
+		d.logger.With().Error("addrbook refresh error", log.Err(err))
 		return err
 	}
 	return nil
@@ -128,28 +129,31 @@ func (d *Discovery) Update(addr, src *node.NodeInfo) {
 
 // TODO: Replace `node.LocalNode` with `NodeInfo` and `log.Log`.
 // New creates a new Discovery
-func New(ln *node.LocalNode, config config.SwarmConfig, service server.Service) *Discovery {
-	addrbook := NewAddrBook(ln.NodeInfo, config, ln.Log)
+func New(ln node.LocalNode, config config.SwarmConfig, service server.Service, path string, logger log.Log) *Discovery {
+
+	addrbook := NewAddrBook(config, path, logger)
 	d := &Discovery{
 		config: config,
+		logger: logger,
 		local:  ln,
 		rt:     addrbook,
 	}
 
-	d.disc = NewDiscoveryProtocol(ln.NodeInfo, d.rt, service, ln.Log)
+	d.disc = NewDiscoveryProtocol(ln.PublicKey(), d.rt, service, logger)
 
 	bn := make([]*node.NodeInfo, 0, len(config.BootstrapNodes))
 	for _, n := range config.BootstrapNodes {
 		nd, err := node.ParseNode(n)
 		if err != nil {
-			d.local.Log.Warning("Could'nt parse bootstrap node string skpping str=%v, err=%v", n, err)
+			d.logger.Warning("Could'nt parse bootstrap node string skipping str=%v, err=%v", n, err)
 			// TODO : handle errors
 			continue
 		}
 		bn = append(bn, nd)
 	}
+
 	//TODO: Return err if no bootstrap nodes were parsed.
-	d.bootstrapper = newRefresher(ln.NodeInfo, d.rt, d.disc, bn, ln.Log)
+	d.bootstrapper = newRefresher(ln.PublicKey(), d.rt, d.disc, bn, logger)
 
 	return d
 }
@@ -158,7 +162,7 @@ func (d *Discovery) Shutdown() {
 	d.rt.Stop()
 }
 
-// SetLocalAddresses sets the local addresses to be advertised.
+// SetLocalAddresses sets the localNode addresses to be advertised.
 func (d *Discovery) SetLocalAddresses(tcp, udp int) {
 	d.disc.SetLocalAddresses(tcp, udp)
 }
@@ -169,6 +173,6 @@ func (d *Discovery) Remove(key p2pcrypto.PublicKey) {
 }
 
 func (d *Discovery) Bootstrap(ctx context.Context) error {
-	d.local.Debug("Starting node bootstrap ", d.local.String())
+	d.logger.Debug("Starting node bootstrap")
 	return d.refresh(ctx, d.config.RandomConnections)
 }
