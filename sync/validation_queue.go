@@ -202,7 +202,7 @@ func (vq *blockQueue) addDependencies(jobId interface{}, blks []types.BlockID, f
 	vq.Lock()
 	if _, ok := vq.callbacks[jobId]; ok {
 		vq.Unlock()
-		return true, fmt.Errorf("job %s already exsits", jobId)
+		return false, fmt.Errorf("job %s already exsits", jobId)
 	}
 
 	dependencys := make(map[types.Hash32]struct{})
