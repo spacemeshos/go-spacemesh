@@ -237,8 +237,11 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *types.Hash32, atxExpired chan stru
 			return nil, fmt.Errorf("failed to execute PoST: %v", err)
 		}
 
+		//todo remove
+		//this is just for debugging
+		b, _ := types.InterfaceToBytes(proof)
 		nb.log.With().Info("finished PoST execution",
-			log.String("proof merkle root", fmt.Sprintf("%x", proof.MerkleRoot)))
+			log.String("proof merkle root", fmt.Sprintf("%x", proof.MerkleRoot)), log.Int("post_size", len(b)))
 
 		nipst.PostProof = proof
 		nb.persist()
