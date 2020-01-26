@@ -177,7 +177,7 @@ func (vq *blockQueue) removefromDepMaps(block types.Hash32, valid bool, doneBloc
 		delete(vq.depMap[dep], block)
 		if len(vq.depMap[dep]) == 0 {
 			delete(vq.depMap, dep)
-			vq.Info("run callback for %v, %v", dep, reflect.TypeOf(dep))
+			vq.Debug("run callback for %v, %v", dep, reflect.TypeOf(dep))
 			if callback, ok := vq.callbacks[dep]; ok {
 				delete(vq.callbacks, dep)
 				if err := callback(valid); err != nil {
@@ -205,7 +205,6 @@ func (vq *blockQueue) addDependencies(jobId interface{}, blks []types.BlockID, f
 		return true, fmt.Errorf("job %s already exsits", jobId)
 	}
 
-	vq.callbacks[jobId] = finishCallback
 	dependencys := make(map[types.Hash32]struct{})
 	idsToPush := make([]types.Hash32, 0, len(blks))
 	for _, id := range blks {
@@ -228,10 +227,13 @@ func (vq *blockQueue) addDependencies(jobId interface{}, blks []types.BlockID, f
 
 	//if no missing dependencies return
 	if len(dependencys) == 0 {
-		delete(vq.callbacks, jobId)
 		vq.Unlock()
 		return false, finishCallback(true)
 	}
+
+	//add callback to job
+	vq.callbacks[jobId] = finishCallback
+
 	//add dependencies to job
 	vq.depMap[jobId] = dependencys
 

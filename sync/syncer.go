@@ -454,10 +454,11 @@ func (s *Syncer) syncLayer(layerID types.LayerID, blockIds []types.BlockID) ([]*
 	}
 
 	tmr := newMilliTimer(syncLayerTime)
-	if res, err := s.blockQueue.addDependencies(layerID, blockIds, foo); res == false {
-		return s.LayerBlocks(layerID)
-	} else if err != nil {
+	if res, err := s.blockQueue.addDependencies(layerID, blockIds, foo); err != nil {
 		return nil, errors.New(fmt.Sprintf("failed adding layer %v blocks to queue %v", layerID, err))
+	} else if res == false {
+		s.With().Info("no missing blocks for layer", log.LayerId(layerID.Uint64()))
+		return s.LayerBlocks(layerID)
 	}
 
 	s.Info("layer %v wait for %d blocks", layerID, len(blockIds))
@@ -525,11 +526,12 @@ func (s *Syncer) validateBlockView(blk *types.Block) bool {
 		ch <- res
 		return nil
 	}
-	if res, err := s.blockQueue.addDependencies(blk.Id(), blk.ViewEdges, foo); res == false {
-		return true
-	} else if err != nil {
+	if res, err := s.blockQueue.addDependencies(blk.Id(), blk.ViewEdges, foo); err != nil {
 		s.Error(fmt.Sprintf("block %v not syntactically valid", blk.Id()), err)
 		return false
+	} else if res == false {
+		s.With().Info("block has no missing blocks in view", log.BlockId(blk.Id().String()))
+		return true
 	}
 
 	return <-ch
