@@ -413,8 +413,8 @@ func Test_DBSanity(t *testing.T) {
 	coinbase3 := types.HexToAddress("cccc")
 
 	atx1 := types.NewActivationTxForTests(id1, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, coinbase1, 3, []types.BlockID{}, &types.NIPST{})
-	atx2 := types.NewActivationTxForTests(id1, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, coinbase2, 3, []types.BlockID{}, &types.NIPST{})
-	atx3 := types.NewActivationTxForTests(id1, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, coinbase3, 3, []types.BlockID{}, &types.NIPST{})
+	atx2 := types.NewActivationTxForTests(id1, 0, *types.EmptyAtxId, 1001, 0, *types.EmptyAtxId, coinbase2, 3, []types.BlockID{}, &types.NIPST{})
+	atx3 := types.NewActivationTxForTests(id1, 0, *types.EmptyAtxId, 2001, 0, *types.EmptyAtxId, coinbase3, 3, []types.BlockID{}, &types.NIPST{})
 
 	err := atxdb.storeAtxUnlocked(atx1)
 	assert.NoError(t, err)
@@ -428,6 +428,10 @@ func Test_DBSanity(t *testing.T) {
 	id, err := atxdb.GetNodeLastAtxId(id1)
 	assert.NoError(t, err)
 	assert.Equal(t, atx1.Id(), id)
+	assert.Equal(t, types.EpochId(1), atx1.TargetEpoch(atxdb.LayersPerEpoch))
+	id, err = atxdb.GetNodeAtxIdForEpoch(id1, atx1.TargetEpoch(atxdb.LayersPerEpoch))
+	assert.NoError(t, err)
+	assert.Equal(t, atx1.Id(), id)
 
 	err = atxdb.addAtxToNodeId(id2, atx2)
 	assert.NoError(t, err)
@@ -438,13 +442,21 @@ func Test_DBSanity(t *testing.T) {
 	id, err = atxdb.GetNodeLastAtxId(id2)
 	assert.NoError(t, err)
 	assert.Equal(t, atx2.Id(), id)
+	assert.Equal(t, types.EpochId(2), atx2.TargetEpoch(atxdb.LayersPerEpoch))
+	id, err = atxdb.GetNodeAtxIdForEpoch(id2, atx2.TargetEpoch(atxdb.LayersPerEpoch))
+	assert.NoError(t, err)
+	assert.Equal(t, atx2.Id(), id)
 
 	id, err = atxdb.GetNodeLastAtxId(id1)
 	assert.NoError(t, err)
 	assert.Equal(t, atx3.Id(), id)
+	assert.Equal(t, types.EpochId(3), atx3.TargetEpoch(atxdb.LayersPerEpoch))
+	id, err = atxdb.GetNodeAtxIdForEpoch(id1, atx3.TargetEpoch(atxdb.LayersPerEpoch))
+	assert.NoError(t, err)
+	assert.Equal(t, atx3.Id(), id)
 
 	id, err = atxdb.GetNodeLastAtxId(id3)
-	assert.Error(t, err)
+	assert.EqualError(t, err, fmt.Sprintf("atx for node %v does not exist", id3.ShortString()))
 	assert.Equal(t, *types.EmptyAtxId, id)
 }
 
