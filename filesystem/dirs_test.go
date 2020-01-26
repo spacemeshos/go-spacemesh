@@ -2,18 +2,18 @@ package filesystem
 
 import (
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"os"
 	"os/user"
+	"path/filepath"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
 )
 
 var RootFolder = "/"
 
 func TestPathExists(t *testing.T) {
-	tempFile := os.TempDir() + "testdir" + uuid.New().String() + "_" + t.Name()
+	tempFile := filepath.Join(os.TempDir(), "testdir"+uuid.New().String()+"_"+t.Name())
 	_, err := os.Create(tempFile)
 	require.NoError(t, err, "couldn't create temp path")
 	assert.True(t, PathExists(tempFile), "expecting existence of path")
@@ -21,7 +21,7 @@ func TestPathExists(t *testing.T) {
 }
 
 func TestGetFullDirectoryPath(t *testing.T) {
-	tempFile := os.TempDir() + "testdir" + uuid.New().String() + "_" + t.Name()
+	tempFile := filepath.Join(os.TempDir(), "testdir"+uuid.New().String()+"_"+t.Name())
 	err := os.MkdirAll(tempFile, os.ModeDir)
 	assert.NoError(t, err, "creating temp dir failed")
 	aPath, err := GetFullDirectoryPath(tempFile)
