@@ -95,7 +95,7 @@ func (vq *blockQueue) handleBlock(bjb fetchJob) {
 // handles new block dependencies
 // if there are unknown blocks in the view they are added to the fetch queue
 func (vq *blockQueue) handleBlockDependencies(blk *types.Block) {
-	vq.Info("handle dependencies Block %v", blk.Id())
+	vq.Debug("handle dependencies Block %v", blk.Id())
 	res, err := vq.addDependencies(blk.Id(), blk.ViewEdges, vq.finishBlockCallback(blk))
 
 	if err != nil {
@@ -108,6 +108,7 @@ func (vq *blockQueue) handleBlockDependencies(blk *types.Block) {
 		vq.Info("pending done for %v", blk.Id())
 		vq.updateDependencies(blk.Hash32(), true)
 	}
+	vq.Debug("added %v dependencies to queue", blk.Id())
 }
 
 func (vq *blockQueue) finishBlockCallback(block *types.Block) func(res bool) error {
@@ -176,7 +177,7 @@ func (vq *blockQueue) removefromDepMaps(block types.Hash32, valid bool, doneBloc
 		delete(vq.depMap[dep], block)
 		if len(vq.depMap[dep]) == 0 {
 			delete(vq.depMap, dep)
-			vq.Debug("run callback for %v, %v", dep, reflect.TypeOf(dep))
+			vq.Info("run callback for %v, %v", dep, reflect.TypeOf(dep))
 			if callback, ok := vq.callbacks[dep]; ok {
 				delete(vq.callbacks, dep)
 				if err := callback(valid); err != nil {
@@ -201,7 +202,7 @@ func (vq *blockQueue) addDependencies(jobId interface{}, blks []types.BlockID, f
 	vq.Lock()
 	if _, ok := vq.callbacks[jobId]; ok {
 		vq.Unlock()
-		return false, fmt.Errorf("job %s already exsits", jobId)
+		return true, fmt.Errorf("job %s already exsits", jobId)
 	}
 
 	vq.callbacks[jobId] = finishCallback
@@ -225,6 +226,15 @@ func (vq *blockQueue) addDependencies(jobId interface{}, blks []types.BlockID, f
 		}
 	}
 
+	//if no missing dependencies return
+	if len(dependencys) == 0 {
+		delete(vq.callbacks, jobId)
+		vq.Unlock()
+		return false, finishCallback(true)
+	}
+	//add dependencies to job
+	vq.depMap[jobId] = dependencys
+
 	// addToPending needs the mutex so we must release before
 	vq.Unlock()
 	if len(idsToPush) > 0 {
@@ -232,15 +242,6 @@ func (vq *blockQueue) addDependencies(jobId interface{}, blks []types.BlockID, f
 		vq.addToPending(idsToPush)
 	}
 
-	//lock to protect depMap and callback map
-	vq.Lock()
-	defer vq.Unlock()
-	//todo better this is a little hacky
-	if len(dependencys) == 0 {
-		delete(vq.callbacks, jobId)
-		return false, finishCallback(true)
-	}
-
-	vq.depMap[jobId] = dependencys
+	vq.Debug("added %v dependencies to %s", len(dependencys), jobId)
 	return true, nil
 }
