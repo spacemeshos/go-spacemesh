@@ -175,16 +175,15 @@ func (l *Layer) Blocks() []*Block {
 }
 
 func (l *Layer) Hash() Hash32 {
-	bids := l.blocks
-	keys := make([]BlockID, 0, len(bids))
-	for _, tortoiseBlock := range bids {
-		keys = append(keys, tortoiseBlock.Id())
+	return CalcBlocksHash32(BlockIds(l.blocks), nil)
+}
+
+func BlockIds(blocks []*Block) []BlockID {
+	ids := make([]BlockID, 0, len(blocks))
+	for _, block := range blocks {
+		ids = append(ids, block.Id())
 	}
-	hash, err := CalcBlocksHash32(keys)
-	if err != nil {
-		log.Panic(fmt.Sprintf("failed to calculate layer's hash - layer Id %v", l.index))
-	}
-	return hash
+	return ids
 }
 
 func (l *Layer) AddBlock(block *Block) {

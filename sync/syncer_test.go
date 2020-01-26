@@ -92,6 +92,10 @@ func SyncMockFactory(number int, conf Configuration, name string, dbType string,
 
 type stateMock struct{}
 
+func (stateMock) GetStateRoot() types.Hash32 {
+	panic("implement me")
+}
+
 func (stateMock) ValidateNonceAndBalance(transaction *types.Transaction) error {
 	panic("implement me")
 }
@@ -177,7 +181,16 @@ func TestSyncer_Start(t *testing.T) {
 
 func TestSyncer_Close(t *testing.T) {
 	syncs, _, _ := SyncMockFactory(2, conf, t.Name(), memoryDB, newMockPoetDb)
+
 	sync := syncs[0]
+	sync1 := syncs[1]
+
+	block := types.NewExistingBlock(1, []byte(rand.RandString(8)))
+	block.TxIds = append(block.TxIds, txid1)
+	block.AtxIds = append(block.AtxIds, atx1)
+
+	sync1.AddBlockWithTxs(block, nil, nil)
+
 	sync.Start()
 	sync.Close()
 	s := sync
@@ -958,9 +971,9 @@ func TestFetchLayerBlockIds(t *testing.T) {
 	syncObj2.AddBlock(block2)
 
 	mp := map[types.Hash32][]p2p.Peer{}
-	hash1, _ := types.CalcBlocksHash32([]types.BlockID{block1.Id()})
+	hash1 := types.CalcBlocksHash32([]types.BlockID{block1.Id()}, nil)
 	mp[hash1] = append(mp[hash1], nodes[0].PublicKey())
-	hash2, _ := types.CalcBlocksHash32([]types.BlockID{block2.Id()})
+	hash2 := types.CalcBlocksHash32([]types.BlockID{block2.Id()}, nil)
 	mp[hash2] = append(mp[hash2], nodes[1].PublicKey())
 	ids, _ := syncObj3.fetchLayerBlockIds(mp, 1)
 

@@ -139,7 +139,7 @@ func NewNeighborhoodWorker(s WorkerInfra, count int, reqFactory RequestFactory) 
 }
 
 func NewFetchWorker(s WorkerInfra, count int, reqFactory BatchRequestFactory, idsChan chan []types.Hash32, name string) worker {
-	output := make(chan interface{}, count)
+	output := make(chan interface{}, 10)
 	acount := int32(count)
 	mu := &sync.Once{}
 	lg := s.WithName("FetchWrker")

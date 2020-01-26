@@ -51,6 +51,10 @@ func (m *MeshValidatorMock) GetGoodPatternBlocks(layer types.LayerID) (map[types
 
 type MockState struct{}
 
+func (MockState) GetStateRoot() types.Hash32 {
+	panic("implement me")
+}
+
 func (MockState) ValidateNonceAndBalance(transaction *types.Transaction) error {
 	panic("implement me")
 }

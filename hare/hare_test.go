@@ -184,17 +184,13 @@ func TestHare_collectOutputCheckValidation(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, output[0], value1)
 
-	// make sure we panic for false
-	defer func() {
-		err := recover()
-		require.Equal(t, err, "Failed to validate the collected output set")
-	}()
 	h.validate = func(blocks []types.BlockID) bool {
 		return false
 	}
-	h.collectOutput(mockReport{mockid, set, true})
+	err := h.collectOutput(mockReport{mockid, set, true})
+	require.NoError(t, err)
 	_, ok = h.outputs[types.LayerID(mockid)]
-	require.False(t, ok)
+	require.True(t, ok, "failure to validate should only log an error and succeed")
 }
 
 func TestHare_collectOutput(t *testing.T) {
