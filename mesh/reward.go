@@ -8,7 +8,7 @@ import (
 
 type Config struct {
 	// reward config
-	BaseReward *big.Int
+	BaseReward *big.Int `mapstructure:"base-reward"`
 }
 
 func DefaultMeshConfig() Config {
