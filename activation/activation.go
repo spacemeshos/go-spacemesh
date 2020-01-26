@@ -14,7 +14,7 @@ import (
 
 const AtxProtocol = "AtxGossip"
 
-var activesetCache = NewActivesetCache(1000)
+var activesetCache = NewActivesetCache(100)
 
 type MeshProvider interface {
 	GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error)
