@@ -34,6 +34,8 @@ bootstrap:
     eligibility-confidence-param: '5'
     eligibility-epoch-offset: '0'
     genesis-active-size: '50'
+    hare-limit-iterations: '10'
+    hdist: '10'
     executable-path: '/bin/go-spacemesh'
   deployment_type: deployment
 client:
@@ -61,6 +63,8 @@ client:
     eligibility-confidence-param: '5'
     eligibility-epoch-offset: '0'
     genesis-active-size: '50'
+    hare-limit-iterations: '10'
+    hdist: '10'
     executable-path: '/bin/go-spacemesh'
   deployment_type: deployment
 elastic:
