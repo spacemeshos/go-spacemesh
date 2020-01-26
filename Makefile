@@ -116,7 +116,7 @@ arm6: genproto
 
 
 test: genproto
-	ulimit -n 500; go test -timeout 0 -p 1 ./...
+	ulimit -n 500; go test -v -timeout 0 -p 1 ./...
 .PHONY: test
 
 
