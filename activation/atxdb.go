@@ -18,7 +18,7 @@ import (
 const topAtxKey = "topAtxKey"
 
 func getNodeAtxKey(nodeId types.NodeId, targetEpoch types.EpochId) []byte {
-	return append(getNodeAtxPrefix(nodeId), targetEpoch.ToBytes()...)
+	return append(getNodeAtxPrefix(nodeId), util.Uint64ToBytesBigEndian(uint64(targetEpoch))...)
 }
 
 func getNodeAtxPrefix(nodeId types.NodeId) []byte {
@@ -583,6 +583,13 @@ func (db *ActivationDb) addAtxToNodeId(nodeId types.NodeId, atx *types.Activatio
 // GetNodeLastAtxId returns the last atx id that was received for node nodeId
 func (db *ActivationDb) GetNodeLastAtxId(nodeId types.NodeId) (types.AtxId, error) {
 	nodeAtxsIterator := db.atxs.Find(getNodeAtxPrefix(nodeId))
+	// ATX syntactic validation ensures that each ATX is at least one epoch after a referenced previous ATX.
+	// Contextual validation ensures that the previous ATX referenced matches what this method returns, so the next ATX
+	// added will always be the next ATX returned by this method.
+	// leveldb_iterator.Last() returns the last entry in lexicographical order of the keys:
+	//   https://github.com/google/leveldb/blob/master/doc/index.md#comparators
+	// For the lexicographical order to match the epoch order we must encode the epoch id using big endian encoding when
+	// composing the key.
 	if exists := nodeAtxsIterator.Last(); !exists {
 		return *types.EmptyAtxId, fmt.Errorf("atx for node %v does not exist", nodeId.ShortString())
 	}

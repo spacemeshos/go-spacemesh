@@ -402,6 +402,27 @@ func Test_CalcActiveSetFromView(t *testing.T) {
 	assert.Equal(t, 3, int(num))
 }
 
+func TestActivationDb_GetNodeLastAtxId(t *testing.T) {
+	r := require.New(t)
+
+	atxdb, _, _ := getAtxDb("t6")
+	id1 := types.NodeId{Key: uuid.New().String()}
+	coinbase1 := types.HexToAddress("aaaa")
+	epoch1 := types.EpochId(2)
+	atx1 := types.NewActivationTx(newChallenge(id1, 0, *types.EmptyAtxId, *types.EmptyAtxId, epoch1.FirstLayer(atxdb.LayersPerEpoch)), coinbase1, 3, []types.BlockID{}, &types.NIPST{}, nil)
+	r.NoError(atxdb.StoreAtx(epoch1, atx1))
+
+	epoch2 := types.EpochId(1) + (1 << 8)
+	// This will fail if we convert the epoch id to bytes using LittleEndian, since LevelDB's lexicographic sorting will
+	// then sort by LSB instead of MSB, first.
+	atx2 := types.NewActivationTx(newChallenge(id1, 1, atx1.Id(), atx1.Id(), epoch2.FirstLayer(atxdb.LayersPerEpoch)), coinbase1, 3, []types.BlockID{}, &types.NIPST{}, nil)
+	r.NoError(atxdb.StoreAtx(epoch2, atx2))
+
+	id, err := atxdb.GetNodeLastAtxId(id1)
+	r.NoError(err)
+	r.Equal(atx2.ShortString(), id.ShortString(), "atx1.ShortString(): %v", atx1.ShortString())
+}
+
 func Test_DBSanity(t *testing.T) {
 	atxdb, _, _ := getAtxDb("t6")
 
