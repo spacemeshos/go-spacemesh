@@ -64,7 +64,7 @@ func newBlockRequestHandler(msh *mesh.Mesh, logger log.Log) func(msg []byte) []b
 	return func(msg []byte) []byte {
 		var blockids []types.Hash32
 		if err := types.BytesToInterface(msg, &blockids); err != nil {
-			logger.Error("Error handling block request message", err)
+			logger.Error("Error unmarshalling block request message", err)
 			return nil
 		}
 
@@ -75,10 +75,10 @@ func newBlockRequestHandler(msh *mesh.Mesh, logger log.Log) func(msg []byte) []b
 			blk, err := msh.GetBlock(types.BlockID(bid.ToHash20()))
 			if err != nil {
 				if err == database.ErrNotFound {
-					logger.With().Warning("unfamiliar block was requested (id: %s)", log.BlockId(bid.ShortString()))
+					logger.With().Warning("unfamiliar block was requested (id: %s)", log.BlockId(bid.ShortString()), log.Err(err))
 					continue
 				}
-				logger.With().Error("Error handling block request message", log.BlockId(bid.String()), log.Err(err))
+				logger.With().Error("Error handling block request message", log.BlockId(bid.ShortString()), log.Err(err))
 				continue
 			}
 
