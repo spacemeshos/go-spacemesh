@@ -522,7 +522,7 @@ func (s *Syncer) validateBlockView(blk *types.Block) bool {
 	ch := make(chan bool, 1)
 	defer close(ch)
 	foo := func(res bool) error {
-		s.Info("validate view for %s done %s", blk.Id(), res)
+		s.Info("validate view for %s done %v", blk.Id(), res)
 		ch <- res
 		return nil
 	}
