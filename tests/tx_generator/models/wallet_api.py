@@ -16,7 +16,7 @@ class WalletAPI:
 
     ADDRESS_SIZE_HEX = 40
     balance_api = 'v1/balance'
-    get_tx_api = '/v1/gettransaction'
+    get_tx_api = 'v1/gettransaction'
     nonce_api = 'v1/nonce'
     submit_api = 'v1/submittransaction'
     a_ok = "'value': 'ok'"
@@ -48,7 +48,6 @@ class WalletAPI:
         return False
 
     def get_tx_by_id(self, tx_id):
-        # TODO #@! does not work
         print(f"get transaction with id {tx_id}")
         tx_id_lst = self.convert_hex_str_to_bytes(tx_id)
         pod_ip, pod_name = self.random_node()
