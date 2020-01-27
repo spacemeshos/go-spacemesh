@@ -137,7 +137,6 @@ func (s *Syncer) Close() {
 	s.atxQueue.Close()
 	s.txQueue.Close()
 	s.MessageServer.Close()
-	s.syncRoutineWg.Wait()
 }
 
 const (
