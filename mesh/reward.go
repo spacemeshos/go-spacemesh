@@ -13,7 +13,7 @@ type Config struct {
 
 func DefaultMeshConfig() Config {
 	return Config{
-		BaseReward: big.NewInt(50 * 10 ^ 12),
+		BaseReward: big.NewInt(50*10 ^ 12),
 	}
 }
 
