@@ -41,7 +41,8 @@ def test_grpc_stress(init_session, setup_network):
         args = (acc_pub, )
         if func == actions.transfer:
             dst = random.choice(list(accountant.accounts.keys()))
-            amount = 1
+            balance = wallet_api.get_balance_value(acc_pub)
+            amount = random.randint(1, balance - accountant.tx_cost)
             gas_price = 1
             args = (wallet_api, acc_pub, dst, amount, gas_price, None, None, accountant, None, queue)
         elif func == wallet_api.get_tx_by_id:
