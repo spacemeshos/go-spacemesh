@@ -34,7 +34,7 @@ RUN make sync
 RUN make harness
 
 #In this last stage, we start from a fresh Alpine image, to reduce the image size and not ship the Go compiler in our production artifacts.
-FROM alpine AS spacemesh
+FROM alpine:3.8 AS spacemesh
 
 # Finally we copy the statically compiled Go binary.
 COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/go-spacemesh /bin/go-spacemesh
