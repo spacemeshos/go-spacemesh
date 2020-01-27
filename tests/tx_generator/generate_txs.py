@@ -72,7 +72,6 @@ def set_parser():
 
 
 def run():
-    q = None
     menu = "sp - fixed node\n" \
            "nsp - random node\n" \
            "c - concurrent\n" \
@@ -158,10 +157,6 @@ if __name__ == "__main__":
     if parsed_args.same_pod:
         print("Using the same pod for all txs (and nonce querying)")
         my_wallet.fixed_node = -1
-
-    # Set a queue for collecting all the transactions output,
-    # this will help with updating the "accountant" when multiprocessing
-    queue = mp.Queue() if parsed_args.is_concurrent else None
 
     run()
     print("bye bye!")

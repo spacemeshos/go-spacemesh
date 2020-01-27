@@ -16,6 +16,7 @@ def test_grpc_stress(init_session, setup_network):
     # use the same node to send all api calls (-1)
     wallet_api = WalletAPI(init_session, setup_network.clients.pods, -1)
     accountant = Accountant({conf.acc_pub: Accountant.set_tap_acc()})
+    # TODO add wallet_api.get_tx_by_id when done
     api_funcs_lst = [wallet_api.get_balance_value, wallet_api.get_nonce_value, actions.transfer]
 
     # create 100 accounts
@@ -41,17 +42,10 @@ def test_grpc_stress(init_session, setup_network):
             amount = 1
             gas_price = 1
             args = (wallet_api, acc_pub, dst, amount, gas_price, None, None, accountant, None, queue)
+
         processes.append(mp.Process(target=func, args=args))
 
-    # Run processes
-    for p in processes:
-        p.start()
-
-    # Exit the completed processes
-    for p in processes:
-        p.join()
-
-    accountant.set_accountant_from_queue(queue)
+    actions.run_processes(processes, accountant, queue)
 
     tts = layer_duration * conf.num_layers_until_process
     sleep_print_backwards(tts)

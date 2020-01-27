@@ -15,9 +15,10 @@ class WalletAPI:
     """
 
     ADDRESS_SIZE_HEX = 40
+    balance_api = 'v1/balance'
+    get_tx_api = '/v1/gettransaction'
     nonce_api = 'v1/nonce'
     submit_api = 'v1/submittransaction'
-    balance_api = 'v1/balance'
     a_ok = "'value': 'ok'"
 
     def __init__(self, namespace, clients_lst, fixed_node=None):
@@ -30,6 +31,7 @@ class WalletAPI:
         self.clients_lst = clients_lst
         self.namespace = namespace
         self.fixed_node = fixed_node
+        self.tx_ids = []
 
     def submit_tx(self, to, src, gas_price, amount, tx_bytes):
         print(f"\n{datetime.now()}: submit transaction\nfrom {src}\nto {to}")
@@ -39,7 +41,21 @@ class WalletAPI:
         out = api_call(pod_ip, tx_field, self.submit_api, self.namespace)
         print(f"{datetime.now()}: submit result: {out}")
 
-        return self.a_ok in out
+        if self.a_ok in out:
+            self.tx_ids.append(self.extract_tx_id(out))
+            return True
+
+        return False
+
+    def get_tx_by_id(self, tx_id):
+        # TODO #@! does not work
+        print(f"get transaction with id {tx_id}")
+        tx_id_lst = self.convert_hex_str_to_bytes(tx_id)
+        pod_ip, pod_name = self.random_node()
+        data = f'{{"id": {str(tx_id_lst)}}}'
+        out = api_call(pod_ip, data, self.get_tx_api, self.namespace)
+        print(f"get tx output={out}")
+        return self.extract_tx_id(out)
 
     def get_nonce_value(self, acc):
         res = self._get_nonce(acc)
@@ -50,29 +66,22 @@ class WalletAPI:
         return WalletAPI.extract_balance_from_resp(res)
 
     def _get_nonce(self, acc):
-        # check nonce
-        print(f"\ngetting the nonce of {acc}")
-        pod_ip, pod_name = self.random_node()
-        data = '{"address":"' + acc[-self.ADDRESS_SIZE_HEX:] + '"}'
-        if acc == conf.acc_pub:
-            data = '{"address":"' + acc + '"}'
-
-        print(f"querying for {data}")
-        out = api_call(pod_ip, data, self.nonce_api, self.namespace)
-        print(f"nonce output={out}")
-        return out
+        return self._make_address_api_call(acc, "nonce", self.nonce_api)
 
     def _get_balance(self, acc):
-        # check balance
-        print("\ngetting balance for", acc)
+        return self._make_address_api_call(acc, "balance", self.balance_api)
+
+    def _make_address_api_call(self, acc, resource, api_res):
+        # check balance/nonce
+        print(f"\ngetting {resource} for", acc)
         pod_ip, pod_name = self.random_node()
         data = '{"address":"' + acc[-self.ADDRESS_SIZE_HEX:] + '"}'
         if acc == conf.acc_pub:
             data = '{"address":"' + acc + '"}'
 
-        print(f"querying for the balance of {acc}")
-        out = api_call(pod_ip, data, self.balance_api, self.namespace)
-        print(f"balance output={out}")
+        print(f"querying for the {resource} of {acc}")
+        out = api_call(pod_ip, data, api_res, self.namespace)
+        print(f"{resource} output={out}")
         return out
 
     def random_node(self):
@@ -95,7 +104,7 @@ class WalletAPI:
     # ======================= utils =======================
 
     @staticmethod
-    def extract_from_resp(val):
+    def extract_value_from_resp(val):
         res_pat = "value\': \'([0-9]+)"
         group_num = 1
 
@@ -107,7 +116,7 @@ class WalletAPI:
 
     @staticmethod
     def extract_nonce_from_resp(nonce_res):
-        res = WalletAPI.extract_from_resp(nonce_res)
+        res = WalletAPI.extract_value_from_resp(nonce_res)
         if res:
             return int(res)
 
@@ -115,8 +124,27 @@ class WalletAPI:
 
     @staticmethod
     def extract_balance_from_resp(balance_res):
-        res = WalletAPI.extract_from_resp(balance_res)
+        res = WalletAPI.extract_value_from_resp(balance_res)
         if res:
             return int(res)
 
         return None
+
+    @staticmethod
+    def extract_tx_id(tx_output):
+        id_pat = r"'value': 'ok', 'id': '([0-9a-f]{64})'"
+        group_num = 1
+
+        match = re.search(id_pat, tx_output)
+        if match:
+            return match.group(group_num)
+
+        return None
+
+    @staticmethod
+    def convert_hex_str_to_bytes(hex_str):
+        """
+        :param hex_str: string, 64 bytes (32 byte hex rep)
+        :return: list, a list of 32 integers (32 bytes rep)
+        """
+        return list(bytearray.fromhex(hex_str))
