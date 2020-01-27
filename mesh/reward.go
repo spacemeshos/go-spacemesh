@@ -3,6 +3,7 @@ package mesh
 import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"math"
 	"math/big"
 )
 
@@ -13,7 +14,7 @@ type Config struct {
 
 func DefaultMeshConfig() Config {
 	return Config{
-		BaseReward: big.NewInt(50*10 ^ 12),
+		BaseReward: big.NewInt(50 * int64(math.Pow10(12))),
 	}
 }
 
