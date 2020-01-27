@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/oracle"
+	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/stretchr/testify/assert"
@@ -70,11 +71,11 @@ func Test_PoETHarnessSanity(t *testing.T) {
 	require.NotNil(t, h)
 }
 
-func (suite *AppTestSuite) initMultipleInstances(cfg *config.Config, rolacle *eligibility.FixedRolacle, rng *amcl.RAND, numOfInstances int, storeFormat string, genesisTime string, poetClient *activation.RPCPoetClient, fastHare bool, clock TickProvider) {
+func (suite *AppTestSuite) initMultipleInstances(cfg *config.Config, rolacle *eligibility.FixedRolacle, rng *amcl.RAND, numOfInstances int, storeFormat string, genesisTime string, poetClient *activation.RPCPoetClient, fastHare bool, clock TickProvider, network Network) {
 	name := 'a'
 	for i := 0; i < numOfInstances; i++ {
 		dbStorepath := storeFormat + string(name)
-		smApp, err := InitSingleInstance(*cfg, i, genesisTime, rng, dbStorepath, rolacle, poetClient, fastHare, clock)
+		smApp, err := InitSingleInstance(*cfg, i, genesisTime, rng, dbStorepath, rolacle, poetClient, fastHare, clock, network)
 		assert.NoError(suite.T(), err)
 		suite.apps = append(suite.apps, smApp)
 		suite.dbs = append(suite.dbs, dbStorepath)
@@ -86,6 +87,7 @@ var tests = []TestScenario{txWithRunningNonceGenerator([]int{}), sameRootTester(
 
 func (suite *AppTestSuite) TestMultipleNodes() {
 	//EntryPointCreated <- true
+	net := service.NewSimulator()
 	const numberOfEpochs = 5 // first 2 epochs are genesis
 	//addr := address.BytesToAddress([]byte{0x01})
 	cfg := getTestDefaultConfig()
@@ -108,7 +110,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	}
 	ld := time.Duration(20) * time.Second
 	clock := timesync.NewClock(timesync.RealClock{}, ld, gTime, log.NewDefault("clock"))
-	suite.initMultipleInstances(cfg, rolacle, rng, 5, path, genesisTime, poetClient, false, clock)
+	suite.initMultipleInstances(cfg, rolacle, rng, 5, path, genesisTime, poetClient, false, clock, net)
 	for _, a := range suite.apps {
 		a.startServices()
 	}
@@ -119,6 +121,8 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 		log.Panic("failed to start poet server: %v", err)
 	}
 
+	//defer GracefulShutdown(suite.apps)
+
 	timeout := time.After(6 * 60 * time.Second)
 	setupTests(suite)
 	finished := map[int]bool{}
@@ -127,6 +131,7 @@ loop:
 		select {
 		// Got a timeout! fail with a timeout error
 		case <-timeout:
+			GracefulShutdown(suite.apps)
 			suite.T().Fatal("timed out")
 		default:
 			if runTests(suite, finished) {
@@ -139,7 +144,7 @@ loop:
 	GracefulShutdown(suite.apps)
 
 	// this tests loading of pervious state, mabe it's not the best place to put this here...
-	smApp, err := InitSingleInstance(*cfg, 0, genesisTime, rng, path+"a", rolacle, poetClient, false, clock)
+	smApp, err := InitSingleInstance(*cfg, 0, genesisTime, rng, path+"a", rolacle, poetClient, false, clock, net)
 	assert.NoError(suite.T(), err)
 	// start and stop and test for no panics
 	smApp.startServices()
@@ -464,7 +469,7 @@ func TestShutdown(t *testing.T) {
 	// make sure previous goroutines has stopped
 	time.Sleep(3 * time.Second)
 	g_count := runtime.NumGoroutine()
-
+	net := service.NewSimulator()
 	//defer leaktest.Check(t)()
 	r := require.New(t)
 
