@@ -19,7 +19,6 @@ from tests.utils import print_hits_entry_count
 # sleep until layer 4
 # validate no errors occurred
 # validate new node didn't receive any new blocks before being synced
-@pytest.mark.xfail(strict=True)
 def test_unsync_while_genesis(init_session, setup_bootstrap, start_poet, add_curl):
     time_to_create_block_since_startup = 10
     time_before_first_block = testconfig["genesis_delta"] + time_to_create_block_since_startup
