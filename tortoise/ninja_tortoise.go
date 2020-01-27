@@ -539,12 +539,7 @@ func (ni *NinjaTortoise) handleIncomingLayer(newlyr *types.Layer) {
 		if gfound {
 
 			//find bottom of window
-			var windowStart types.LayerID
-			if Window > newlyr.Index() {
-				windowStart = 0
-			} else {
-				windowStart = Max(ni.PBase.Layer()-ni.Hdist, newlyr.Index()-Window+1)
-			}
+			windowStart := getBottomOfWindow(newlyr.Index(), ni.PBase.Layer(), ni.Hdist)
 
 			//init p's tally to pBase tally
 			ni.initTallyToBase(ni.PBase, p, windowStart)
@@ -621,4 +616,13 @@ func (ni *NinjaTortoise) handleIncomingLayer(newlyr *types.Layer) {
 	}
 	ni.With().Info(fmt.Sprintf("Tortoise finished layer in %v", time.Since(start)), log.LayerId(uint64(newlyr.Index())), log.Uint64("pbase", uint64(ni.PBase.Layer())))
 	return
+}
+
+func getBottomOfWindow(newlyr types.LayerID, pbase types.LayerID, hdist types.LayerID) types.LayerID {
+	if Window > newlyr {
+		return 0
+	} else if pbase < hdist {
+		return newlyr - Window + 1
+	}
+	return Max(pbase-hdist, newlyr-Window+1)
 }
