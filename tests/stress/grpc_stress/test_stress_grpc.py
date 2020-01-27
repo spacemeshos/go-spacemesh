@@ -1,3 +1,4 @@
+from itertools import cycle, islice
 from pytest_testconfig import config as testconfig
 import multiprocessing as mp
 import random
@@ -32,11 +33,11 @@ def test_grpc_stress(init_session, setup_network):
 
     processes = []
     queue = mp.Queue()
-    for x in range(new_accounts):
+    proc_counter = 0
+    for func in islice(cycle(api_funcs_lst), 0,  new_accounts):
         # get acc pub
-        acc_pub = list(accountant.accounts.keys())[x]
-        # select one of the api calls to run randomly
-        func = random.choice(api_funcs_lst)
+        acc_pub = list(accountant.accounts.keys())[proc_counter]
+        # this will be the args for wallet_api.get_balance_value and wallet_api.get_nonce_value
         args = (acc_pub, )
         if func == actions.transfer:
             dst = random.choice(list(accountant.accounts.keys()))
@@ -46,6 +47,7 @@ def test_grpc_stress(init_session, setup_network):
         elif func == wallet_api.get_tx_by_id:
             args = (random.choice(wallet_api.tx_ids), )
 
+        proc_counter += 1
         processes.append(mp.Process(target=func, args=args))
 
     actions.run_processes(processes, accountant, queue)

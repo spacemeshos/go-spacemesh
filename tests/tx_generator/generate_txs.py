@@ -1,8 +1,6 @@
 import argparse
-import multiprocessing as mp
 import os
 import pprint
-import random
 import sys
 # this hack is for importing packages located above
 # this file and it's imports files location
@@ -91,7 +89,7 @@ def run():
         if inp == 'p':
             print(f"\n\n{pprint.pformat(acc.accounts)}\n\n")
             print(menu)
-        if inp == "sp":
+        elif inp == "sp":
             print("using same pod for all GRPC api calls")
             my_wallet.fixed_node = -1
         elif inp == "nsp":
