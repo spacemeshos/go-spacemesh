@@ -119,8 +119,6 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 		log.Panic("failed to start poet server: %v", err)
 	}
 
-	defer GracefulShutdown(suite.apps)
-
 	timeout := time.After(6 * 60 * time.Second)
 	setupTests(suite)
 	finished := map[int]bool{}
@@ -137,8 +135,15 @@ loop:
 			time.Sleep(10 * time.Second)
 		}
 	}
-
 	suite.validateBlocksAndATXs(types.LayerID(numberOfEpochs*suite.apps[0].Config.LayersPerEpoch) - 1)
+	GracefulShutdown(suite.apps)
+
+	// this tests loading of pervious state, mabe it's not the best place to put this here...
+	smApp, err := InitSingleInstance(*cfg, 0, genesisTime, rng, path+"a", rolacle, poetClient, false, clock)
+	assert.NoError(suite.T(), err)
+	// start and stop and test for no panics
+	smApp.startServices()
+	smApp.stopServices()
 }
 
 type ScenarioSetup func(suit *AppTestSuite, t *testing.T)
@@ -347,7 +352,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 
 	// assert all nodes validated untilLayer-1
 	for _, ap := range suite.apps {
-		curNodeLastLayer := ap.blockListener.ValidatedLayer()
+		curNodeLastLayer := ap.blockListener.ProcessedLayer()
 		assert.True(suite.T(), int(untilLayer)-1 <= int(curNodeLastLayer))
 	}
 

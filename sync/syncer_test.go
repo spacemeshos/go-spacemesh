@@ -516,7 +516,7 @@ loop:
 			t.Error("timed out ")
 			return
 		default:
-			if syncObj3.ValidatedLayer() == 5 {
+			if syncObj3.ProcessedLayer() == 5 {
 
 				t.Log("done!")
 				break loop
@@ -620,8 +620,8 @@ func syncTest(dpType string, t *testing.T) {
 		case <-timeout:
 			t.Error("timed out ")
 		default:
-			if syncObj2.ValidatedLayer() >= 4 && syncObj3.ValidatedLayer() >= 4 {
-				log.Info("done!", syncObj2.ValidatedLayer(), syncObj3.ValidatedLayer())
+			if syncObj2.ProcessedLayer() >= 4 && syncObj3.ProcessedLayer() >= 4 {
+				log.Info("done!", syncObj2.ProcessedLayer(), syncObj3.ProcessedLayer())
 				// path for this UT calling sync.Close before we read from channel causes writing to closed channel
 				x := clock.Subscribe()
 				<-x
@@ -767,7 +767,7 @@ func (sis *syncIntegrationTwoNodes) TestSyncProtocol_TwoNodes() {
 			t.Error("timed out ")
 			return
 		default:
-			if syncObj1.ValidatedLayer() == 5 {
+			if syncObj1.ProcessedLayer() == 5 {
 				t.Log("done!")
 				return
 			}
@@ -881,7 +881,7 @@ func (sis *syncIntegrationMultipleNodes) TestSyncProtocol_MultipleNodes() {
 			goto end
 		default:
 
-			if syncObj1.ValidatedLayer() >= 3 || syncObj2.ValidatedLayer() >= 3 || syncObj3.ValidatedLayer() >= 3 || syncObj5.ValidatedLayer() >= 3 {
+			if syncObj1.ProcessedLayer() >= 3 || syncObj2.ProcessedLayer() >= 3 || syncObj3.ProcessedLayer() >= 3 || syncObj5.ProcessedLayer() >= 3 {
 				t.Log("done!")
 				goto end
 			}
@@ -889,11 +889,11 @@ func (sis *syncIntegrationMultipleNodes) TestSyncProtocol_MultipleNodes() {
 		}
 	}
 end:
-	log.Debug("sync 1 ", syncObj1.ValidatedLayer())
-	log.Debug("sync 2 ", syncObj2.ValidatedLayer())
-	log.Debug("sync 3 ", syncObj3.ValidatedLayer())
-	log.Debug("sync 4 ", syncObj4.ValidatedLayer())
-	log.Debug("sync 5 ", syncObj5.ValidatedLayer())
+	log.Debug("sync 1 ", syncObj1.ProcessedLayer())
+	log.Debug("sync 2 ", syncObj2.ProcessedLayer())
+	log.Debug("sync 3 ", syncObj3.ProcessedLayer())
+	log.Debug("sync 4 ", syncObj4.ProcessedLayer())
+	log.Debug("sync 5 ", syncObj5.ProcessedLayer())
 	return
 }
 
@@ -996,7 +996,7 @@ type mockLayerValidator struct {
 	validatedLayers map[types.LayerID]struct{}
 }
 
-func (m *mockLayerValidator) ValidatedLayer() types.LayerID {
+func (m *mockLayerValidator) ProcessedLayer() types.LayerID {
 	m.countValidated++
 	return m.vl
 }
@@ -1194,7 +1194,7 @@ type mockTimedValidator struct {
 	calls int
 }
 
-func (m *mockTimedValidator) ValidatedLayer() types.LayerID {
+func (m *mockTimedValidator) ProcessedLayer() types.LayerID {
 	return 1
 }
 

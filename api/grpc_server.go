@@ -223,7 +223,7 @@ type TxAPI interface {
 	GetLayerApplied(txId types.TransactionId) *types.LayerID
 	GetTransaction(id types.TransactionId) (*types.Transaction, error)
 	GetProjection(addr types.Address, prevNonce, prevBalance uint64) (nonce, balance uint64, err error)
-	ValidatedLayer() types.LayerID
+	LatestPbase() types.LayerID
 	GetStateRoot() types.Hash32
 }
 
@@ -360,7 +360,7 @@ func (s SpacemeshGrpcService) SetLoggerLevel(ctx context.Context, msg *pb.SetLog
 func (s SpacemeshGrpcService) GetAccountTxs(ctx context.Context, txsSinceLayer *pb.GetTxsSinceLayer) (*pb.AccountTxs, error) {
 	log.Info("GRPC GetAccountTxs msg")
 
-	currentPBase := s.Tx.ValidatedLayer()
+	currentPBase := s.Tx.LatestPbase()
 
 	addr := types.HexToAddress(txsSinceLayer.Account.Address)
 	minLayer := types.LayerID(txsSinceLayer.StartLayer)

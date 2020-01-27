@@ -64,7 +64,7 @@ type Configuration struct {
 }
 
 type LayerValidator interface {
-	ValidatedLayer() types.LayerID
+	ProcessedLayer() types.LayerID
 	ValidateLayer(lyr *types.Layer)
 }
 
@@ -297,7 +297,7 @@ func (s *Syncer) Synchronise() {
 		return
 	}
 
-	currentSyncLayer := s.lValidator.ValidatedLayer() + 1
+	currentSyncLayer := s.lValidator.ProcessedLayer() + 1
 	if currentSyncLayer == s.lastTickedLayer() { // only validate if current < lastTicked
 		s.With().Info("Already synced for layer", log.Uint64("current_sync_layer", uint64(currentSyncLayer)))
 		s.setGossipBufferingStatus(Done) // fully-synced, make sure we listen to p2p
