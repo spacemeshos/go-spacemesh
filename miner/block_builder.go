@@ -46,6 +46,7 @@ type AtxValidator interface {
 type Syncer interface {
 	FetchPoetProof(poetProofRef []byte) error
 	ListenToGossip() bool
+	IsSynced() bool
 }
 
 type TxPool interface {
@@ -399,6 +400,10 @@ func (t *BlockBuilder) acceptBlockData() {
 			return
 
 		case layerID := <-t.beginRoundEvent:
+			if !t.syncer.IsSynced() {
+				t.Debug("builder got layer %v not synced yet", layerID)
+			}
+
 			t.Debug("builder got layer %v", layerID)
 			atxID, proofs, err := t.blockOracle.BlockEligible(layerID)
 			if err != nil {
