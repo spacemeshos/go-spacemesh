@@ -1027,7 +1027,7 @@ func TestNinjaTortoise_Recovery(t *testing.T) {
 		l4 := createLayer(4, []*types.Layer{l3, l2}, 3)
 		AddLayer(mdb, l4)
 		alg.handleIncomingLayer(l4)
-		assert.True(t, alg.latestComplete() == 3)
+		assert.True(t, alg.LatestComplete() == 3)
 		return
 	}()
 

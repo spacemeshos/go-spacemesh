@@ -26,13 +26,14 @@ var TRUE = []byte{1}
 var FALSE = []byte{0}
 var LATEST = []byte("latest")
 var LAYERHASH = []byte("layer hash")
-var PROCESSED = []byte("validated")
+var PROCESSED = []byte("proccessed")
 var TORTOISE = []byte("tortoise")
 var PBASE = []byte("pbase")
 
 type MeshValidator interface {
 	HandleIncomingLayer(layer *types.Layer) (types.LayerID, types.LayerID)
 	HandleLateBlock(bl *types.Block)
+	LatestComplete() types.LayerID
 }
 
 type TxProcessor interface {
@@ -43,6 +44,7 @@ type TxProcessor interface {
 	ValidateNonceAndBalance(transaction *types.Transaction) error
 	GetLayerApplied(txId types.TransactionId) *types.LayerID
 	GetStateRoot() types.Hash32
+	LoadState(layer types.LayerID) error
 }
 
 type TxMemPoolInValidator interface {
@@ -70,21 +72,21 @@ type Mesh struct {
 	AtxDB
 	TxProcessor
 	MeshValidator
-	blockBuilder   BlockBuilder
-	txInvalidator  TxMemPoolInValidator
-	atxInvalidator AtxMemPoolInValidator
-	config         Config
-	processedLayer types.LayerID
-	latestLayer    types.LayerID
-	latestPbase    types.LayerID
-	layerHash      []byte
-	lMutex         sync.RWMutex
-	lkMutex        sync.RWMutex
-	lcMutex        sync.RWMutex
-	lvMutex        sync.RWMutex
-	orphMutex      sync.RWMutex
-	pMutex         sync.RWMutex
-	done           chan struct{}
+	blockBuilder       BlockBuilder
+	txInvalidator      TxMemPoolInValidator
+	atxInvalidator     AtxMemPoolInValidator
+	config             Config
+	processedLayer     types.LayerID
+	latestLayer        types.LayerID
+	latestLayerInState types.LayerID
+	layerHash          []byte
+	lMutex             sync.RWMutex
+	lkMutex            sync.RWMutex
+	lcMutex            sync.RWMutex
+	lvMutex            sync.RWMutex
+	orphMutex          sync.RWMutex
+	pMutex             sync.RWMutex
+	done               chan struct{}
 }
 
 func NewMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh MeshValidator, txInvalidator TxMemPoolInValidator, atxInvalidator AtxMemPoolInValidator, pr TxProcessor, logger log.Log) *Mesh {
@@ -104,21 +106,21 @@ func NewMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh MeshValidator, t
 }
 
 func NewRecoveredMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh MeshValidator, txInvalidator TxMemPoolInValidator, atxInvalidator AtxMemPoolInValidator, pr TxProcessor, logger log.Log) *Mesh {
-	ll := NewMesh(db, atxDb, rewardConfig, mesh, txInvalidator, atxInvalidator, pr, logger)
+	msh := NewMesh(db, atxDb, rewardConfig, mesh, txInvalidator, atxInvalidator, pr, logger)
 
 	latest, err := db.general.Get(LATEST)
 	if err != nil {
 		logger.Panic("could not recover latest layer: %v", err)
 	}
-	ll.latestLayer = types.LayerID(util.BytesToUint64(latest))
+	msh.latestLayer = types.LayerID(util.BytesToUint64(latest))
 
 	processed, err := db.general.Get(PROCESSED)
 	if err != nil {
 		logger.Panic("could not recover processed layer: %v", err)
 	}
-	ll.processedLayer = types.LayerID(util.BytesToUint64(processed))
+	msh.processedLayer = types.LayerID(util.BytesToUint64(processed))
 
-	if ll.layerHash, err = db.general.Get(LAYERHASH); err != nil {
+	if msh.layerHash, err = db.general.Get(LAYERHASH); err != nil {
 		logger.With().Error("could not recover latest layer hash", log.Err(err))
 	}
 
@@ -126,14 +128,24 @@ func NewRecoveredMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh MeshVal
 	if err != nil {
 		logger.Panic("could not recover latest verified layer: %v", err)
 	}
-	ll.latestPbase = types.LayerID(util.BytesToUint64(verified))
+	msh.latestLayerInState = types.LayerID(util.BytesToUint64(verified))
 
-	ll.With().Info("recovered mesh from disk",
-		log.Uint64("latest_layer", ll.latestLayer.Uint64()),
-		log.Uint64("validated_layer", ll.processedLayer.Uint64()),
-		log.String("layer_hash", util.Bytes2Hex(ll.layerHash)))
+	err = pr.LoadState(msh.LatestLayerInState())
+	if err != nil {
+		logger.Panic("cannot load state for layer %v, message: %v", msh.LatestLayerInState(), err)
+	}
+	// in case we load a state that was not fully played
+	if msh.LatestLayerInState()+1 < msh.MeshValidator.LatestComplete() {
+		// todo: add test for this case, or add random kill test on node
+		msh.pushLayersToState(msh.LatestLayerInState()+1, msh.MeshValidator.LatestComplete())
+	}
 
-	return ll
+	msh.With().Info("recovered mesh from disk",
+		log.Uint64("latest_layer", msh.latestLayer.Uint64()),
+		log.Uint64("validated_layer", msh.processedLayer.Uint64()),
+		log.String("layer_hash", util.Bytes2Hex(msh.layerHash)))
+
+	return msh
 }
 
 func (m *Mesh) SetBlockBuilder(blockBuilder BlockBuilder) {
@@ -146,10 +158,10 @@ func (m *Mesh) ProcessedLayer() types.LayerID {
 	return m.processedLayer
 }
 
-func (m *Mesh) LatestPbase() types.LayerID {
+func (m *Mesh) LatestLayerInState() types.LayerID {
 	defer m.pMutex.RUnlock()
 	m.pMutex.RLock()
-	return m.latestPbase
+	return m.latestLayerInState
 }
 
 // LatestLayer - returns the latest layer we saw from the network
@@ -196,6 +208,11 @@ func (m *Mesh) ValidateLayer(lyr *types.Layer) {
 	}
 	m.lvMutex.Unlock()
 
+	m.pushLayersToState(oldPbase, newPbase)
+	m.Info("done validating layer %v", lyr.Index())
+}
+
+func (m *Mesh) pushLayersToState(oldPbase types.LayerID, newPbase types.LayerID) {
 	for layerId := oldPbase; layerId < newPbase; layerId++ {
 		l, err := m.GetLayer(layerId)
 		if err != nil || l == nil {
@@ -207,19 +224,18 @@ func (m *Mesh) ValidateLayer(lyr *types.Layer) {
 		m.PushTransactions(l)
 		m.logStateRoot(layerId)
 		m.setLayerHash(l)
-		m.setLatestPbase(layerId)
+		m.setLatestLayerInState(layerId)
 	}
 	m.persistLayerHash()
-	m.Info("done validating layer %v", lyr.Index())
 }
 
-func (m *Mesh) setLatestPbase(lyr types.LayerID) {
+func (m *Mesh) setLatestLayerInState(lyr types.LayerID) {
 	// update validated layer only after applying transactions since loading of state depends on processedLayer param.
 	m.pMutex.Lock()
 	if err := m.general.Put(PBASE, lyr.ToBytes()); err != nil {
 		m.Panic("could not persist validated layer index %d", lyr)
 	}
-	m.latestPbase = lyr
+	m.latestLayerInState = lyr
 	m.pMutex.Unlock()
 }
 
