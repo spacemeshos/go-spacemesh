@@ -16,6 +16,10 @@ type MockMapState struct {
 	TotalReward int64
 }
 
+func (s MockMapState) LoadState(layer types.LayerID) error {
+	panic("implement me")
+}
+
 func (MockMapState) GetStateRoot() types.Hash32 {
 	return [32]byte{}
 }
@@ -189,6 +193,10 @@ func TestMesh_integration(t *testing.T) {
 
 type meshValidatorBatchMock struct {
 	batchSize types.LayerID
+}
+
+func (m *meshValidatorBatchMock) LatestComplete() types.LayerID {
+	panic("implement me")
 }
 
 func (m *meshValidatorBatchMock) HandleIncomingLayer(layer *types.Layer) (types.LayerID, types.LayerID) {

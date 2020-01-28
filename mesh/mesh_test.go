@@ -50,6 +50,10 @@ type MeshValidatorMock struct {
 	mdb *MeshDB
 }
 
+func (m *MeshValidatorMock) LatestComplete() types.LayerID {
+	panic("implement me")
+}
+
 func (m *MeshValidatorMock) HandleIncomingLayer(layer *types.Layer) (types.LayerID, types.LayerID) {
 	return layer.Index() - 1, layer.Index()
 }
@@ -58,6 +62,10 @@ func (m *MeshValidatorMock) HandleLateBlock(bl *types.Block) (types.LayerID, typ
 }
 
 type MockState struct{}
+
+func (MockState) LoadState(layer types.LayerID) error {
+	panic("implement me")
+}
 
 func (MockState) GetStateRoot() types.Hash32 {
 	return [32]byte{}

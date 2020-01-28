@@ -516,3 +516,17 @@ func TestValidateTxSignature(t *testing.T) {
 	assert.False(t, proc.AddressExists(tx.Origin()))
 	assert.Equal(t, PublicKeyToAccountAddress(pub), tx.Origin())
 }
+
+func TestTransactionProcessor_GetStateRoot(t *testing.T) {
+	r := require.New(t)
+
+	db := database.NewMemDatabase()
+	lg := log.New("proc_logger", "", "")
+	proc := NewTransactionProcessor(db, appliedTxsMock{}, &ProjectorMock{}, lg)
+
+	expectedRoot := types.Hash32{1, 2, 3}
+	r.NoError(proc.addState(expectedRoot, 1))
+
+	actualRoot := proc.GetStateRoot()
+	r.Equal(expectedRoot, actualRoot)
+}

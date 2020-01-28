@@ -39,6 +39,10 @@ func createLayerWithAtx2(t require.TestingT, msh *mesh.Mesh, id types.LayerID, n
 
 type MeshValidatorMock struct{}
 
+func (m *MeshValidatorMock) LatestComplete() types.LayerID {
+	panic("implement me")
+}
+
 func (m *MeshValidatorMock) HandleIncomingLayer(layer *types.Layer) (types.LayerID, types.LayerID) {
 	return layer.Index() - 1, layer.Index()
 }
@@ -52,6 +56,10 @@ func (m *MeshValidatorMock) GetGoodPatternBlocks(layer types.LayerID) (map[types
 }
 
 type MockState struct{}
+
+func (MockState) LoadState(layer types.LayerID) error {
+	panic("implement me")
+}
 
 func (MockState) GetStateRoot() types.Hash32 {
 	panic("implement me")
@@ -1125,4 +1133,17 @@ func TestActivationDb_AwaitAtx(t *testing.T) {
 	r.Len(atxdb.atxChannels, 1) // first unsubscribe doesn't clear the channel
 	atxdb.UnsubscribeAtx(otherId)
 	r.Len(atxdb.atxChannels, 0) // last unsubscribe clears the channel
+}
+
+func TestActivationDb_ContextuallyValidateAtx(t *testing.T) {
+	r := require.New(t)
+
+	lg := log.NewDefault("sigValidation")
+	idStore := NewIdentityStore(database.NewMemDatabase())
+	memesh := mesh.NewMemMeshDB(lg.WithName("meshDB"))
+	atxdb := NewActivationDb(database.NewMemDatabase(), idStore, memesh, layersPerEpochBig, &ValidatorMock{}, lg.WithName("atxDB"))
+
+	atx := types.NewActivationTx(newChallenge(nodeId, 0, *types.EmptyAtxId, *types.EmptyAtxId, 0), [20]byte{}, 5, nil, nil, nil)
+	err := atxdb.ContextuallyValidateAtx(atx.ActivationTxHeader)
+	r.NoError(err)
 }
