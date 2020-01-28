@@ -1,0 +1,69 @@
+namespace: ''
+
+config_map_name: conf
+
+script_on_exit: '' # Uncomment this to save logs './k8s/log-client-pods.sh'
+
+genesis_delta: 170
+single_pod_ready_time_out: 60
+deployment_ready_time_out: 120
+config_path: '../config.toml'
+
+bootstrap:
+  image: 'spacemeshos/go-spacemesh:develop'
+  command: '/bin/go-harness'
+  replicas: 1
+  resources:
+    requests:
+      memory: '1024M'
+      cpu: '1'
+    limits:
+      memory: '2048M'
+      cpu: '2'
+  args:
+    randcon: '8'
+    hare-committee-size: '50'
+    hare-max-adversaries: '24'
+    hare-round-duration-sec: '10'
+    hare-exp-leaders: '10'
+    layer-duration-sec: '60'
+    layer-average-size: '100'
+    hare-wakeup-delta: '10'
+    layers-per-epoch: '3'
+    coinbase: '0x4321'
+    eligibility-confidence-param: '5'
+    eligibility-epoch-offset: '0'
+    genesis-active-size: '100'
+    executable-path: '/bin/go-spacemesh'
+  deployment_type: deployment
+client:
+  image: 'spacemeshos/go-spacemesh:develop'
+  command: '/bin/go-harness'
+  replicas: 99
+  resources:
+    requests:
+      memory: '1024M'
+      cpu: '1'
+    limits:
+      memory: '2048M'
+      cpu: '2'
+  args:
+    randcon: '8'
+    hare-committee-size: '50'
+    hare-max-adversaries: '24'
+    hare-round-duration-sec: '10'
+    hare-exp-leaders: '10'
+    layer-duration-sec: '60'
+    layer-average-size: '100'
+    hare-wakeup-delta: '10'
+    layers-per-epoch: '3'
+    coinbase: '0x1234'
+    eligibility-confidence-param: '5'
+    eligibility-epoch-offset: '0'
+    genesis-active-size: '100'
+    executable-path: '/bin/go-spacemesh'
+  deployment_type: deployment
+elastic:
+  host: elastic.spacemesh.io
+  port: 9200
+  username: spacemesh
