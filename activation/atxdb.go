@@ -441,7 +441,7 @@ func (db *ActivationDb) ContextuallyValidateAtx(atx *types.ActivationTxHeader) e
 		}
 	} else {
 		lastAtx, err := db.GetNodeLastAtxId(atx.NodeId)
-		if err != nil && err != database.ErrNotFound {
+		if _, ok := err.(ErrAtxNotFound); err != nil && !ok {
 			db.log.Error("fetching ATX ids failed: %v", err)
 			return err
 		}
@@ -580,6 +580,8 @@ func (db *ActivationDb) addAtxToNodeId(nodeId types.NodeId, atx *types.Activatio
 	return nil
 }
 
+type ErrAtxNotFound error
+
 // GetNodeLastAtxId returns the last atx id that was received for node nodeId
 func (db *ActivationDb) GetNodeLastAtxId(nodeId types.NodeId) (types.AtxId, error) {
 	nodeAtxsIterator := db.atxs.Find(getNodeAtxPrefix(nodeId))
@@ -591,7 +593,7 @@ func (db *ActivationDb) GetNodeLastAtxId(nodeId types.NodeId) (types.AtxId, erro
 	// For the lexicographical order to match the epoch order we must encode the epoch id using big endian encoding when
 	// composing the key.
 	if exists := nodeAtxsIterator.Last(); !exists {
-		return *types.EmptyAtxId, fmt.Errorf("atx for node %v does not exist", nodeId.ShortString())
+		return *types.EmptyAtxId, ErrAtxNotFound(fmt.Errorf("atx for node %v does not exist", nodeId.ShortString()))
 	}
 	return types.AtxId(types.BytesToHash(nodeAtxsIterator.Value())), nil
 }
