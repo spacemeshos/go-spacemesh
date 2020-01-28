@@ -402,6 +402,27 @@ func Test_CalcActiveSetFromView(t *testing.T) {
 	assert.Equal(t, 3, int(num))
 }
 
+func TestActivationDb_GetNodeLastAtxId(t *testing.T) {
+	r := require.New(t)
+
+	atxdb, _, _ := getAtxDb("t6")
+	id1 := types.NodeId{Key: uuid.New().String()}
+	coinbase1 := types.HexToAddress("aaaa")
+	epoch1 := types.EpochId(2)
+	atx1 := types.NewActivationTx(newChallenge(id1, 0, *types.EmptyAtxId, *types.EmptyAtxId, epoch1.FirstLayer(atxdb.LayersPerEpoch)), coinbase1, 3, []types.BlockID{}, &types.NIPST{}, nil)
+	r.NoError(atxdb.StoreAtx(epoch1, atx1))
+
+	epoch2 := types.EpochId(1) + (1 << 8)
+	// This will fail if we convert the epoch id to bytes using LittleEndian, since LevelDB's lexicographic sorting will
+	// then sort by LSB instead of MSB, first.
+	atx2 := types.NewActivationTx(newChallenge(id1, 1, atx1.Id(), atx1.Id(), epoch2.FirstLayer(atxdb.LayersPerEpoch)), coinbase1, 3, []types.BlockID{}, &types.NIPST{}, nil)
+	r.NoError(atxdb.StoreAtx(epoch2, atx2))
+
+	id, err := atxdb.GetNodeLastAtxId(id1)
+	r.NoError(err)
+	r.Equal(atx2.ShortString(), id.ShortString(), "atx1.ShortString(): %v", atx1.ShortString())
+}
+
 func Test_DBSanity(t *testing.T) {
 	atxdb, _, _ := getAtxDb("t6")
 
@@ -413,8 +434,8 @@ func Test_DBSanity(t *testing.T) {
 	coinbase3 := types.HexToAddress("cccc")
 
 	atx1 := types.NewActivationTxForTests(id1, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, coinbase1, 3, []types.BlockID{}, &types.NIPST{})
-	atx2 := types.NewActivationTxForTests(id1, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, coinbase2, 3, []types.BlockID{}, &types.NIPST{})
-	atx3 := types.NewActivationTxForTests(id1, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, coinbase3, 3, []types.BlockID{}, &types.NIPST{})
+	atx2 := types.NewActivationTxForTests(id1, 0, *types.EmptyAtxId, 1001, 0, *types.EmptyAtxId, coinbase2, 3, []types.BlockID{}, &types.NIPST{})
+	atx3 := types.NewActivationTxForTests(id1, 0, *types.EmptyAtxId, 2001, 0, *types.EmptyAtxId, coinbase3, 3, []types.BlockID{}, &types.NIPST{})
 
 	err := atxdb.storeAtxUnlocked(atx1)
 	assert.NoError(t, err)
@@ -428,6 +449,10 @@ func Test_DBSanity(t *testing.T) {
 	id, err := atxdb.GetNodeLastAtxId(id1)
 	assert.NoError(t, err)
 	assert.Equal(t, atx1.Id(), id)
+	assert.Equal(t, types.EpochId(1), atx1.TargetEpoch(atxdb.LayersPerEpoch))
+	id, err = atxdb.GetNodeAtxIdForEpoch(id1, atx1.TargetEpoch(atxdb.LayersPerEpoch))
+	assert.NoError(t, err)
+	assert.Equal(t, atx1.Id(), id)
 
 	err = atxdb.addAtxToNodeId(id2, atx2)
 	assert.NoError(t, err)
@@ -438,13 +463,21 @@ func Test_DBSanity(t *testing.T) {
 	id, err = atxdb.GetNodeLastAtxId(id2)
 	assert.NoError(t, err)
 	assert.Equal(t, atx2.Id(), id)
+	assert.Equal(t, types.EpochId(2), atx2.TargetEpoch(atxdb.LayersPerEpoch))
+	id, err = atxdb.GetNodeAtxIdForEpoch(id2, atx2.TargetEpoch(atxdb.LayersPerEpoch))
+	assert.NoError(t, err)
+	assert.Equal(t, atx2.Id(), id)
 
 	id, err = atxdb.GetNodeLastAtxId(id1)
 	assert.NoError(t, err)
 	assert.Equal(t, atx3.Id(), id)
+	assert.Equal(t, types.EpochId(3), atx3.TargetEpoch(atxdb.LayersPerEpoch))
+	id, err = atxdb.GetNodeAtxIdForEpoch(id1, atx3.TargetEpoch(atxdb.LayersPerEpoch))
+	assert.NoError(t, err)
+	assert.Equal(t, atx3.Id(), id)
 
 	id, err = atxdb.GetNodeLastAtxId(id3)
-	assert.Error(t, err)
+	assert.EqualError(t, err, fmt.Sprintf("atx for node %v does not exist", id3.ShortString()))
 	assert.Equal(t, *types.EmptyAtxId, id)
 }
 
@@ -655,12 +688,16 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	err = atxdb.StoreAtx(1, atx)
 	assert.NoError(t, err)
 	atx = types.NewActivationTxForTests(idx1, 1, prevAtx.Id(), 12, 0, posAtx.Id(), coinbase, 3, []types.BlockID{}, &types.NIPST{})
-	err = atxdb.atxs.Delete(getNodeIdKey(atx.NodeId))
-	assert.NoError(t, err)
+	iter := atxdb.atxs.Find(getNodeAtxPrefix(atx.NodeId))
+	for iter.Next() {
+		err = atxdb.atxs.Delete(iter.Key())
+		assert.NoError(t, err)
+	}
 	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
 	err = atxdb.ContextuallyValidateAtx(atx.ActivationTxHeader)
-	assert.EqualError(t, err, "could not fetch node last ATX: leveldb: not found")
+	assert.EqualError(t, err,
+		fmt.Sprintf("could not fetch node last ATX: atx for node %v does not exist", atx.NodeId.ShortString()))
 
 	// Prev atx not declared but commitment not included.
 	atx = types.NewActivationTxForTests(idx1, 0, *types.EmptyAtxId, 1012, 0, posAtx.Id(), coinbase, 3, []types.BlockID{}, &types.NIPST{})
