@@ -710,7 +710,7 @@ func (proc *ConsensusProcess) statusValidator() func(m *Msg) bool {
 			if proc.preRoundTracker.CanProveSet(s) { // can prove s
 				return true
 			}
-		} else {                                                     // Ki>=0, we should have received a certificate for that set
+		} else { // Ki>=0, we should have received a certificate for that set
 			if proc.notifyTracker.HasCertificate(m.InnerMsg.Ki, s) { // can prove s
 				return true
 			}
