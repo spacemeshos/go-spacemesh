@@ -39,12 +39,13 @@ func NewRecoveredAlgorithm(mdb *mesh.MeshDB, lg log.Log) *Algorithm {
 	return alg
 }
 
-func (alg *Algorithm) HandleLateBlock(b *types.Block) {
+func (alg *Algorithm) HandleLateBlock(b *types.Block) (types.LayerID, types.LayerID) {
 	//todo feed all layers from b's layer to tortoise
 	l := types.NewLayer(b.Layer())
 	l.AddBlock(b)
-	alg.HandleIncomingLayer(l)
+	oldPbase, newPbase := alg.HandleIncomingLayer(l)
 	log.With().Info("late block ", log.LayerId(uint64(b.Layer())), log.BlockId(b.Id().String()))
+	return oldPbase, newPbase
 }
 
 func (alg *Algorithm) HandleIncomingLayer(ll *types.Layer) (types.LayerID, types.LayerID) {

@@ -31,7 +31,7 @@ var TORTOISE = []byte("tortoise")
 
 type MeshValidator interface {
 	HandleIncomingLayer(layer *types.Layer) (types.LayerID, types.LayerID)
-	HandleLateBlock(bl *types.Block)
+	HandleLateBlock(bl *types.Block) (types.LayerID, types.LayerID)
 }
 
 type TxProcessor interface {
@@ -169,9 +169,15 @@ func (m *Mesh) GetLayer(index types.LayerID) (*types.Layer, error) {
 	return l, nil
 }
 
+func (m *Mesh) HandleLateBlock(b *types.Block) {
+	m.Info("Validate late block %s", b.Id())
+	oldPbase, newPbase := m.MeshValidator.HandleLateBlock(b)
+	m.stateTransition(oldPbase, newPbase)
+
+}
+
 func (m *Mesh) ValidateLayer(lyr *types.Layer) {
 	m.Info("Validate layer %d", lyr.Index())
-
 	oldPbase, newPbase := m.HandleIncomingLayer(lyr)
 	m.lvMutex.Lock()
 	m.validatedLayer = lyr.Index()
@@ -179,7 +185,11 @@ func (m *Mesh) ValidateLayer(lyr *types.Layer) {
 		m.Error("could not persist validated layer index %d", lyr.Index())
 	}
 	m.lvMutex.Unlock()
+	m.stateTransition(oldPbase, newPbase)
+	m.Info("done validating layer %v", lyr.Index())
+}
 
+func (m *Mesh) stateTransition(oldPbase types.LayerID, newPbase types.LayerID) {
 	for layerId := oldPbase; layerId < newPbase; layerId++ {
 		l, err := m.GetLayer(layerId)
 		if err != nil || l == nil {
@@ -193,7 +203,6 @@ func (m *Mesh) ValidateLayer(lyr *types.Layer) {
 		m.setLayerHash(l)
 	}
 	m.persistLayerHash()
-	m.Info("done validating layer %v", lyr.Index())
 }
 
 func (m *Mesh) logStateRoot(layerId types.LayerID) {
@@ -489,6 +498,12 @@ func (m *Mesh) AccumulateRewards(l *types.Layer, params Config) {
 		ids = append(ids, atx.Coinbase)
 
 	}
+
+	if len(ids) == 0 {
+		m.With().Info("no valid blocks for layer ", log.LayerId(uint64(l.Index())))
+		return
+	}
+
 	// aggregate all blocks' rewards
 	txs, _ := m.ExtractUniqueOrderedTransactions(l)
 
@@ -500,7 +515,7 @@ func (m *Mesh) AccumulateRewards(l *types.Layer, params Config) {
 	layerReward := CalculateLayerReward(l.Index(), params)
 	totalReward.Add(totalReward, layerReward)
 
-	numBlocks := big.NewInt(int64(len(l.Blocks())))
+	numBlocks := big.NewInt(int64(len(ids)))
 
 	blockTotalReward := calculateActualRewards(totalReward, numBlocks)
 	m.ApplyRewards(l.Index(), ids, blockTotalReward)

@@ -93,15 +93,15 @@ func SyncMockFactory(number int, conf Configuration, name string, dbType string,
 type stateMock struct{}
 
 func (stateMock) GetStateRoot() types.Hash32 {
-	panic("implement me")
+	return types.Hash32{}
 }
 
 func (stateMock) ValidateNonceAndBalance(transaction *types.Transaction) error {
-	panic("implement me")
+	return nil
 }
 
 func (stateMock) GetLayerApplied(txId types.TransactionId) *types.LayerID {
-	panic("implement me")
+	return nil
 }
 
 func (stateMock) ValidateSignature(signed types.Signed) (types.Address, error) {
