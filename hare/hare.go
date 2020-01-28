@@ -4,9 +4,7 @@ import (
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
-	"github.com/spacemeshos/go-spacemesh/hare/metrics"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"strconv"
 	"sync"
 	"time"
 )
@@ -245,7 +243,8 @@ func (h *Hare) onTick(id types.LayerID) {
 		h.broker.Unregister(cp.Id())
 		return
 	}
-	metrics.TotalConsensusProcesses.With("layer", strconv.FormatUint(uint64(id), 10)).Add(1)
+	// TODO: fix metrics
+	//metrics.TotalConsensusProcesses.With("layer", strconv.FormatUint(uint64(id), 10)).Add(1)
 }
 
 var (
@@ -287,7 +286,8 @@ func (h *Hare) outputCollectionLoop() {
 
 			// anyway, unregister from broker
 			h.broker.Unregister(out.Id()) // unregister from broker after termination
-			metrics.TotalConsensusProcesses.With("layer", strconv.FormatUint(uint64(out.Id()), 10)).Add(-1)
+			// TODO: fix metrics
+			//metrics.TotalConsensusProcesses.With("layer", strconv.FormatUint(uint64(out.Id()), 10)).Add(-1)
 		case <-h.CloseChannel():
 			return
 		}

@@ -9,12 +9,10 @@ import (
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
-	"github.com/spacemeshos/go-spacemesh/hare/metrics"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"strconv"
 	"time"
 )
 
@@ -400,7 +398,8 @@ func (proc *ConsensusProcess) handleMessage(m *Msg) {
 // process the message by its type
 func (proc *ConsensusProcess) processMsg(m *Msg) {
 	proc.Debug("Processing message of type %v", m.InnerMsg.Type.String())
-	metrics.MessageTypeCounter.With("type_id", m.InnerMsg.Type.String(), "layer", strconv.FormatUint(uint64(m.InnerMsg.InstanceId), 10), "reporter", "processMsg").Add(1)
+	// TODO: fix metrics
+	//metrics.MessageTypeCounter.With("type_id", m.InnerMsg.Type.String(), "layer", strconv.FormatUint(uint64(m.InnerMsg.InstanceId), 10), "reporter", "processMsg").Add(1)
 
 	switch m.InnerMsg.Type {
 	case pre:
