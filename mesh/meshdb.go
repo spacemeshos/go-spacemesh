@@ -135,7 +135,7 @@ func (m *MeshDB) GetBlock(id types.BlockID) (*types.Block, error) {
 
 	b, err := m.getBlockBytes(id)
 	if err != nil {
-		return nil, fmt.Errorf(" %s %s", id, err)
+		return nil, err
 	}
 	mbk := &types.Block{}
 	err = types.BytesToInterface(b, mbk)

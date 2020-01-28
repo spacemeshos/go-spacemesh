@@ -247,11 +247,11 @@ func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 	//syncObj1.ValidateLayer(l) //this is to simulate the approval of the tortoise...
 	timeout := time.NewTimer(2 * time.Second)
 
-	wrk, output := NewPeersWorker(syncObj2, []p2p.Peer{nodes[0].PublicKey()}, &sync.Once{}, HashReqFactory(lid))
+	wrk := NewPeersWorker(syncObj2, []p2p.Peer{nodes[0].PublicKey()}, &sync.Once{}, HashReqFactory(lid))
 	go wrk.Work()
 
 	select {
-	case <-output:
+	case <-wrk.output:
 		return
 		//assert.Equal(t, string(orig.Hash()), string(hash.(*peerHashPair).hash), "wrong block")
 	case <-timeout.C:
@@ -368,11 +368,11 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 
 	timeout := time.NewTimer(2 * time.Second)
 
-	wrk, output := NewPeersWorker(syncObj, []p2p.Peer{nodes[1].PublicKey()}, &sync.Once{}, LayerIdsReqFactory(lid))
+	wrk := NewPeersWorker(syncObj, []p2p.Peer{nodes[1].PublicKey()}, &sync.Once{}, LayerIdsReqFactory(lid))
 	go wrk.Work()
 
 	select {
-	case intr := <-output:
+	case intr := <-wrk.output:
 		ids := intr.([]types.BlockID)
 		for _, a := range layer.Blocks() {
 			found := false
@@ -1237,11 +1237,11 @@ func TestSyncProtocol_NilResponse(t *testing.T) {
 
 	// Layer Hash
 
-	wrk, output := NewPeersWorker(syncs[0], []p2p.Peer{nodes[1].PublicKey()}, &sync.Once{}, HashReqFactory(nonExistingLayerId))
+	wrk := NewPeersWorker(syncs[0], []p2p.Peer{nodes[1].PublicKey()}, &sync.Once{}, HashReqFactory(nonExistingLayerId))
 	go wrk.Work()
 
 	select {
-	case out := <-output:
+	case out := <-wrk.output:
 		assert.Nil(t, out)
 	case <-time.After(timeout):
 		assert.Fail(t, timeoutErrMsg)
@@ -1249,11 +1249,11 @@ func TestSyncProtocol_NilResponse(t *testing.T) {
 
 	// Layer Block Ids
 
-	wrk, output = NewPeersWorker(syncs[0], []p2p.Peer{nodes[1].PublicKey()}, &sync.Once{}, LayerIdsReqFactory(nonExistingLayerId))
+	wrk = NewPeersWorker(syncs[0], []p2p.Peer{nodes[1].PublicKey()}, &sync.Once{}, LayerIdsReqFactory(nonExistingLayerId))
 	go wrk.Work()
 
 	select {
-	case out := <-output:
+	case out := <-wrk.output:
 		assert.Nil(t, out)
 	case <-time.After(timeout):
 		assert.Fail(t, timeoutErrMsg)
@@ -1263,7 +1263,7 @@ func TestSyncProtocol_NilResponse(t *testing.T) {
 	bch := make(chan []types.Hash32, 1)
 	bch <- []types.Hash32{nonExistingBlockId.AsHash32()}
 
-	output = fetchWithFactory(NewFetchWorker(syncs[0], 1, newFetchReqFactory(BLOCK, blocksAsItems), bch, ""))
+	output := fetchWithFactory(NewFetchWorker(syncs[0], 1, newFetchReqFactory(BLOCK, blocksAsItems), bch, ""))
 
 	select {
 	case out := <-output:

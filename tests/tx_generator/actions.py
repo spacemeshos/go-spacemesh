@@ -146,6 +146,8 @@ def send_tx_from_each_account(wallet, accountant, tx_num, amount=1, gas_limit=No
     :return:
     """
 
+    # Set a queue for collecting all the transactions output,
+    # this will help with updating the "accountant" when multiprocessing
     queue = mp.Queue() if is_concurrent else None
     # a list for all transfers to be made concurrently
     processes = []
