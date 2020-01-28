@@ -23,49 +23,49 @@ branches:
 
 jobs:
   include:
-    - stage: test
-      name: lint
-      install: true # this skips the installation step
-      script: make lint
-    - name: test
+  - stage: test
+    name: lint
+    install: true # this skips the installation step
+    script: make lint
+  - name: test
+    script:
+      - make genproto
+      - make test
+  - name: test-tidy-fmt
+    script:
+      - make genproto
+      - make test-tidy
+      - make test-fmt
+  - stage: docker-push
+    name: "Push to dockerHub"
+    script:
+      - make dockerpush
+    if: (branch = develop OR branch = staging OR branch = trying) AND type != pull_request
+  - name: "Run late nodes system test"
       script:
-        - make genproto
-        - make test
-    - name: test-tidy-fmt
-      script:
-        - make genproto
-        - make test-tidy
-        - make test-fmt
-    - stage: docker-push
-      name: "Push to dockerHub"
-      script:
-        - make dockerpush
-      if: (branch = develop OR branch = staging OR branch = trying) AND type != pull_request
-    - name: "Run late nodes system test"
-        script:
-          - make dockertest-late-nodes
-      if: (branch = develop OR branch = staging OR branch = trying) AND type != pull_request
-    - stage: system-test
-      name: "Run p2p system tests"
-      script:
-        - make dockertest-p2p
-      if: (branch = develop OR branch = staging OR branch = trying) AND type != pull_request
-    - name: "Run mining system tests"
-      script:
-        - make dockertest-mining
-      if: (branch = develop OR branch = staging OR branch = trying) AND type != pull_request
-    - name: "Run hare system tests"
-      script:
-        - make dockertest-hare
-      if: (branch = develop OR branch = staging OR branch = trying) AND type != pull_request
-    - name: "Run sync system tests"
-      script:
-        - make dockertest-sync
-      if: (branch = develop OR branch = staging OR branch = trying) AND type != pull_request
-    - name: "Run genesis votes test"
-      script:
-        - make dockertest-genesis-voting
-      if: (branch = develop OR branch = staging OR branch = trying) AND type != pull_request
+        - make dockertest-late-nodes
+    if: (branch = develop OR branch = staging OR branch = trying) AND type != pull_request
+  - stage: system-test
+    name: "Run p2p system tests"
+    script:
+      - make dockertest-p2p
+    if: (branch = develop OR branch = staging OR branch = trying) AND type != pull_request
+  - name: "Run mining system tests"
+    script:
+      - make dockertest-mining
+    if: (branch = develop OR branch = staging OR branch = trying) AND type != pull_request
+  - name: "Run hare system tests"
+    script:
+      - make dockertest-hare
+    if: (branch = develop OR branch = staging OR branch = trying) AND type != pull_request
+  - name: "Run sync system tests"
+    script:
+      - make dockertest-sync
+    if: (branch = develop OR branch = staging OR branch = trying) AND type != pull_request
+  - name: "Run genesis votes test"
+    script:
+      - make dockertest-genesis-voting
+    if: (branch = develop OR branch = staging OR branch = trying) AND type != pull_request
 
 cache:
   directories:
