@@ -130,14 +130,14 @@ func newMsg(hareMsg *Message, querier StateQuerier, layersPerEpoch uint16) (*Msg
 	pub := signing.NewPublicKey(pubKey)
 	res, err := querier.IsIdentityActiveOnConsensusView(pub.String(), types.LayerID(hareMsg.InnerMsg.InstanceId))
 	if err != nil {
-		log.With().Error("error while checking if identity is active", log.NodeId(pub.ShortString()),
+		log.With().Error("error while checking if identity is active", log.String("sender_id", pub.ShortString()),
 			log.Err(err), log.LayerId(uint64(hareMsg.InnerMsg.InstanceId)), log.String("msg_type", hareMsg.InnerMsg.Type.String()))
 		return nil, errors.New("is identity active query failed")
 	}
 
 	// check query result
 	if !res {
-		log.With().Error("identity is not active", log.NodeId(pub.ShortString()),
+		log.With().Error("identity is not active", log.String("sender_id", pub.ShortString()),
 			log.LayerId(uint64(hareMsg.InnerMsg.InstanceId)), log.String("msg_type", hareMsg.InnerMsg.Type.String()))
 		return nil, errors.New("inactive identity")
 	}
