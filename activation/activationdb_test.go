@@ -1124,3 +1124,16 @@ func TestActivationDb_AwaitAtx(t *testing.T) {
 	atxdb.UnsubscribeAtx(otherId)
 	r.Len(atxdb.atxChannels, 0) // last unsubscribe clears the channel
 }
+
+func TestActivationDb_ContextuallyValidateAtx(t *testing.T) {
+	r := require.New(t)
+
+	lg := log.NewDefault("sigValidation")
+	idStore := NewIdentityStore(database.NewMemDatabase())
+	memesh := mesh.NewMemMeshDB(lg.WithName("meshDB"))
+	atxdb := NewActivationDb(database.NewMemDatabase(), idStore, memesh, layersPerEpochBig, &ValidatorMock{}, lg.WithName("atxDB"))
+
+	atx := types.NewActivationTx(newChallenge(nodeId, 0, *types.EmptyAtxId, *types.EmptyAtxId, 0), [20]byte{}, 5, nil, nil, nil)
+	err := atxdb.ContextuallyValidateAtx(atx.ActivationTxHeader)
+	r.NoError(err)
+}
