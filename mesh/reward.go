@@ -3,17 +3,18 @@ package mesh
 import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"math"
 	"math/big"
 )
 
 type Config struct {
 	// reward config
-	BaseReward *big.Int
+	BaseReward *big.Int `mapstructure:"base-reward"`
 }
 
 func DefaultMeshConfig() Config {
 	return Config{
-		BaseReward: big.NewInt(5000),
+		BaseReward: big.NewInt(50 * int64(math.Pow10(12))),
 	}
 }
 

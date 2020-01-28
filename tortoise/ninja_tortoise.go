@@ -512,7 +512,7 @@ func (ni *NinjaTortoise) initTallyToBase(base votingPattern, p votingPattern, wi
 	ni.TTally[p] = mp
 }
 
-func (ni *NinjaTortoise) latestComplete() types.LayerID {
+func (ni *NinjaTortoise) LatestComplete() types.LayerID {
 	return ni.PBase.Layer()
 }
 
