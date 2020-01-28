@@ -524,5 +524,5 @@ def assert_equal_state_roots(indx, ns):
 
 
 def assert_no_contextually_invalid_atxs(indx, ns):
-    hits = query_message(indx, ns, ns, {'M': 'fetching ATX ids failed'})
+    hits = query_message(indx, ns, ns, {'M': 'ATX failed contextual validation'})
     assert len(hits) == 0
