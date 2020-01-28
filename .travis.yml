@@ -42,8 +42,8 @@ jobs:
       - make dockerpush
     if: (branch = develop OR branch = staging OR branch = trying) AND type != pull_request
   - name: "Run late nodes system test"
-      script:
-        - make dockertest-late-nodes
+    script:
+      - make dockertest-late-nodes
     if: (branch = develop OR branch = staging OR branch = trying) AND type != pull_request
   - stage: system-test
     name: "Run p2p system tests"
