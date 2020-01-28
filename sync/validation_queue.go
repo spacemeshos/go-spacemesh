@@ -18,6 +18,7 @@ type ValidationInfra interface {
 	fastValidation(block *types.Block) error
 	HandleLateBlock(bl *types.Block)
 	ValidatedLayer() types.LayerID
+	ValidatingLayer() types.LayerID
 }
 
 type blockQueue struct {
@@ -136,7 +137,7 @@ func (vq *blockQueue) finishBlockCallback(block *types.Block) func(res bool) err
 		}
 
 		//run late block through tortoise only if its new to us
-		if block.Layer() <= vq.ValidatedLayer() && err != mesh.ErrAlreadyExist {
+		if (block.Layer() <= vq.ValidatedLayer() || block.Layer() == vq.ValidatingLayer()) && err != mesh.ErrAlreadyExist {
 			vq.HandleLateBlock(block)
 		}
 
