@@ -79,6 +79,12 @@ type TxAPIMock struct {
 	err          error
 }
 
+func (t *TxAPIMock) GetStateRoot() types.Hash32 {
+	var hash types.Hash32
+	hash.SetBytes([]byte("00000"))
+	return hash
+}
+
 func (t *TxAPIMock) ValidateNonceAndBalance(transaction *types.Transaction) error {
 	return t.err
 }
@@ -384,6 +390,11 @@ func TestJsonWalletApi(t *testing.T) {
 	// test call reset post
 	respBody, respStatus = callEndpoint(t, "v1/resetpost", "")
 	r.Equal(http.StatusOK, respStatus)
+
+	// test get getStateRoot
+	respBody, respStatus = callEndpoint(t, "v1/stateroot", "")
+	r.Equal(http.StatusOK, respStatus)
+	assertSimpleMessage(t, respBody, "0x0000000000000000000000000000000000000000000000000000003030303030")
 
 	// stop the services
 	shutDown()
