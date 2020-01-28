@@ -2,9 +2,11 @@ package hare
 
 import (
 	"errors"
+	"github.com/spacemeshos/go-spacemesh/hare/metrics"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
+	"strconv"
 	"sync"
 )
 
@@ -163,6 +165,7 @@ func (b *Broker) eventLoop() {
 			}
 
 			msgInstId := hareMsg.InnerMsg.InstanceId
+			metrics.MessageTypeCounter.With("type_id", hareMsg.InnerMsg.Type.String(), "layer", strconv.FormatUint(uint64(msgInstId), 10), "reporter", "brokerHandler").Add(1)
 			isEarly := false
 			if err := b.validate(hareMsg); err != nil {
 				if err != errEarlyMsg {
