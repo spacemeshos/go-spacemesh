@@ -198,7 +198,7 @@ func (m *Mesh) GetLayer(index types.LayerID) (*types.Layer, error) {
 func (m *Mesh) HandleLateBlock(b *types.Block) {
 	m.Info("Validate late block %s", b.Id())
 	oldPbase, newPbase := m.MeshValidator.HandleLateBlock(b)
-	m.stateTransition(oldPbase, newPbase)
+	m.pushLayersToState(oldPbase, newPbase)
 
 }
 
@@ -211,11 +211,11 @@ func (m *Mesh) ValidateLayer(lyr *types.Layer) {
 		m.Error("could not persist validated layer index %d", lyr.Index())
 	}
 	m.lvMutex.Unlock()
-	m.stateTransition(oldPbase, newPbase)
+	m.pushLayersToState(oldPbase, newPbase)
 	m.Info("done validating layer %v", lyr.Index())
 }
 
-func (m *Mesh) stateTransition(oldPbase types.LayerID, newPbase types.LayerID) {
+func (m *Mesh) pushLayersToState(oldPbase types.LayerID, newPbase types.LayerID) {
 	for layerId := oldPbase; layerId < newPbase; layerId++ {
 		l, err := m.GetLayer(layerId)
 		if err != nil || l == nil {
