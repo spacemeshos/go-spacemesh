@@ -165,7 +165,13 @@ func getStateRootLayerKey(layer types.LayerID) []byte {
 }
 
 func (tp *TransactionProcessor) addState(stateRoot types.Hash32, layer types.LayerID) error {
-	return tp.processorDb.Put(getStateRootLayerKey(layer), stateRoot.Bytes())
+	if err := tp.processorDb.Put(getStateRootLayerKey(layer), stateRoot.Bytes()); err != nil {
+		return err
+	}
+	tp.rootMu.Lock()
+	tp.rootHash = stateRoot
+	tp.rootMu.Unlock()
+	return nil
 }
 
 func (tp *TransactionProcessor) getLayerStateRoot(layer types.LayerID) (types.Hash32, error) {
