@@ -93,7 +93,7 @@ func (t *TxAPIMock) GetProjection(addr types.Address, prevNonce, prevBalance uin
 	return prevNonce, prevBalance, nil
 }
 
-func (t *TxAPIMock) ValidatedLayer() types.LayerID {
+func (t *TxAPIMock) LatestLayerInState() types.LayerID {
 	return ValidatedLayerId
 }
 

@@ -514,4 +514,5 @@ def test_mining(init_session, setup_network):
 
     queries.assert_equal_layer_hashes(current_index, ns)
     queries.assert_equal_state_roots(current_index, ns)
+    queries.assert_no_contextually_invalid_atxs(current_index, ns)
     validate_hare(current_index, ns)  # validate hare
