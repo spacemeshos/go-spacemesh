@@ -72,6 +72,8 @@ type Hare struct {
 	validate outputValidationFunc
 
 	nid types.NodeId
+
+	isSynced syncStateFunc
 }
 
 // New returns a new Hare struct.
@@ -114,6 +116,8 @@ func New(conf config.Config, p2p NetworkService, sign Signer, nid types.NodeId, 
 	h.validate = validate
 
 	h.nid = nid
+
+	h.isSynced = syncState
 
 	return h
 }
@@ -198,6 +202,12 @@ func (h *Hare) onTick(id types.LayerID) {
 
 	h.layerLock.Unlock()
 	h.Debug("hare got tick, sleeping for %v", h.networkDelta)
+
+	if !h.isSynced() { // if not synced don't start consensus
+		h.With().Info("not starting hare since the node is not synced", log.LayerId(uint64(id)))
+		return
+	}
+
 	ti := time.NewTimer(h.networkDelta)
 	select {
 	case <-ti.C:
@@ -211,7 +221,7 @@ func (h *Hare) onTick(id types.LayerID) {
 	// retrieve set form orphan blocks
 	blocks, err := h.obp.GetUnverifiedLayerBlocks(h.lastLayer)
 	if err != nil {
-		h.Error("No blocks for consensus on layer %v %v", id, err)
+		h.With().Error("No blocks for consensus", log.LayerId(uint64(id)), log.Err(err))
 		return
 	}
 
