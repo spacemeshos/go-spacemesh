@@ -243,7 +243,7 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 		b := types.MiniBlock{}
 		xdr.Unmarshal(bytes.NewBuffer(output.Bytes()), &b)
 
-		assert.Equal(t, hareRes, b.BlockVotes)
+		assert.NotEqual(t, hareRes, b.BlockVotes)
 		assert.Equal(t, []types.BlockID{block1.Id(), block2.Id(), block3.Id()}, b.ViewEdges)
 
 		assert.True(t, ContainsTx(b.TxIds, transids[0]))
@@ -386,7 +386,7 @@ func Test_calcHdistRange(t *testing.T) {
 
 	// id < hdist
 	from, to = calcHdistRange(3, 5)
-	r.Equal(types.LayerID(1), from)
+	r.Equal(types.LayerID(0), from)
 	r.Equal(types.LayerID(2), to)
 
 	// id = hdist

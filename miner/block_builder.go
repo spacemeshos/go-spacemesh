@@ -172,7 +172,7 @@ func calcHdistRange(id types.LayerID, hdist types.LayerID) (bottom types.LayerID
 		log.Panic("hdist cannot be zero")
 	}
 
-	bottom = types.LayerID(1)
+	bottom = types.LayerID(0)
 	top = id - 1
 	if id >= hdist {
 		bottom = id - hdist
