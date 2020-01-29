@@ -140,6 +140,7 @@ lop:
 }
 
 func (its *IntegrationTestSuite) TearDownSuite() {
+	testLog("Shutting down all nodes" + its.T().Name())
 	_ = its.ForAll(func(idx int, s NodeTestInstance) error {
 		s.Shutdown()
 		return nil
