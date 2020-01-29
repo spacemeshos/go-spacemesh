@@ -591,11 +591,11 @@ func (app *SpacemeshApp) HareFactory(mdb *mesh.MeshDB, swarm service.Service, sg
 		for _, b := range ids {
 			res, err := mdb.GetBlock(b)
 			if err != nil {
-				app.log.With().Error("failed to validate block", log.BlockId(b.String()))
+				app.log.With().Error("output set block not in database", log.BlockId(b.String()), log.Err(err))
 				return false
 			}
 			if res == nil {
-				app.log.With().Error("failed to validate block (BUG BUG BUG - GetBlock return err nil and res nil)", log.BlockId(b.String()))
+				app.log.With().Error("output set block not in database (BUG BUG BUG - GetBlock return err nil and res nil)", log.BlockId(b.String()))
 				return false
 			}
 
