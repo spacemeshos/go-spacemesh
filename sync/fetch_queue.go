@@ -60,26 +60,29 @@ func (fq *fetchQueue) work() error {
 
 	defer fq.shutdownRecover()
 
-	output := fetchWithFactory(NewFetchWorker(fq.workerInfra, 1, fq.BatchRequestFactory, fq.queue, fq.name))
+	output := fetchWithFactory(NewFetchWorker(fq.workerInfra, 4, fq.BatchRequestFactory, fq.queue, fq.name))
 	for out := range output {
-		fq.Debug("new batch out of queue")
-		if out == nil {
-			fq.Info("close queue")
-			return nil
-		}
+		go func(out interface{}) {
+			fq.Debug("new batch out of queue")
+			if out == nil {
+				fq.Info("close queue")
+				return
+			}
 
-		bjb, ok := out.(fetchJob)
-		if !ok {
-			fq.Error(fmt.Sprintf("Type assertion err %v", out))
-			continue
-		}
+			bjb, ok := out.(fetchJob)
+			if !ok {
+				fq.Error(fmt.Sprintf("Type assertion err %v", out))
+				return
+			}
+			if len(bjb.ids) == 0 {
+				fq.Info("channel closed")
+			}
+			fq.Info("fetched %s's %s", fq.name, concatShortIds(bjb.ids))
+			fq.handleFetch(bjb)
+			fq.Debug("next batch")
 
-		if len(bjb.ids) == 0 {
-			return fmt.Errorf("channel closed")
-		}
-		fq.Info("fetched %s's %s", fq.name, concatShortIds(bjb.ids))
-		fq.handleFetch(bjb)
-		fq.Debug("next batch")
+		}(out)
+
 	}
 	return nil
 }
