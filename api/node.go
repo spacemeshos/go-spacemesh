@@ -27,7 +27,7 @@ type MiningAPI interface {
 	StartPost(address types.Address, datadir string, space uint64) error
 	SetCoinbaseAccount(rewardAddress types.Address)
 	// MiningStats returns state of post init, coinbase reward account and data directory path for post commitment
-	MiningStats() (int, string, string)
+	MiningStats() (postStatus int, remainingBytes uint64, coinbaseAccount string, postDatadir string)
 }
 
 type OracleAPI interface {

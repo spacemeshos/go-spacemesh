@@ -148,8 +148,8 @@ func (t *TxAPIMock) AddressExists(addr types.Address) bool {
 type MinigApiMock struct {
 }
 
-func (*MinigApiMock) MiningStats() (int, string, string) {
-	return 1, "123456", "/tmp"
+func (*MinigApiMock) MiningStats() (int, uint64, string, string) {
+	return 1, 0, "123456", "/tmp"
 }
 
 func (*MinigApiMock) StartPost(address types.Address, logicalDrive string, commitmentSize uint64) error {

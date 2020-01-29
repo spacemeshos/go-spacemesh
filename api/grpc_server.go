@@ -310,14 +310,13 @@ func (s SpacemeshGrpcService) SetAwardsAddress(ctx context.Context, id *pb.Accou
 func (s SpacemeshGrpcService) GetMiningStats(ctx context.Context, empty *empty.Empty) (*pb.MiningStats, error) {
 	//todo: we should review if this RPC is necessary
 	log.Info("GRPC GetInitProgress msg")
-	stat, coinbase, dataDir := s.Mining.MiningStats()
-	return &pb.MiningStats{Status: int32(stat), Coinbase: coinbase, DataDir: dataDir}, nil
-}
-
-func (s SpacemeshGrpcService) GetTotalAwards(ctx context.Context, empty *empty.Empty) (*pb.SimpleMessage, error) {
-	//todo: we should review if this RPC is necessary
-	log.Info("GRPC GetTotalAwards msg")
-	return &pb.SimpleMessage{Value: "1234"}, nil
+	stat, remainingBytes, coinbase, dataDir := s.Mining.MiningStats()
+	return &pb.MiningStats{
+		DataDir:        dataDir,
+		Status:         int32(stat),
+		Coinbase:       coinbase,
+		RemainingBytes: remainingBytes,
+	}, nil
 }
 
 func (s SpacemeshGrpcService) GetUpcomingAwards(ctx context.Context, empty *empty.Empty) (*pb.EligibleLayers, error) {
@@ -337,7 +336,7 @@ func (s SpacemeshGrpcService) GetGenesisTime(ctx context.Context, empty *empty.E
 
 func (s SpacemeshGrpcService) ResetPost(ctx context.Context, empty *empty.Empty) (*pb.SimpleMessage, error) {
 	log.Info("GRPC ResetPost msg")
-	stat, _, _ := s.Mining.MiningStats()
+	stat, _, _, _ := s.Mining.MiningStats()
 	if stat == activation.InitInProgress {
 		return nil, fmt.Errorf("cannot reset, init in progress")
 	}
