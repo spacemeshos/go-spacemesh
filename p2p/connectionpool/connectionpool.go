@@ -158,6 +158,7 @@ func (cp *ConnectionPool) handleNewConnection(rPub p2pcrypto.PublicKey, newConn 
 		cp.connMutex.Unlock()
 		if closeConn != nil {
 			closeConn.Close()
+			// todo: make sure we remove this from the neighborhood
 		}
 
 		// we don't need to update on the new connection since there were already a connection in the table and there shouldn't be any registered channel waiting for updates

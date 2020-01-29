@@ -497,10 +497,6 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId,
 	if mdb.PersistentData() {
 		trtl = tortoise.NewRecoveredAlgorithm(mdb, app.addLogger(TrtlLogger, lg))
 		msh = mesh.NewRecoveredMesh(mdb, atxdb, app.Config.REWARD, trtl, app.txPool, atxpool, processor, app.addLogger(MeshLogger, lg))
-		err := processor.LoadState(msh.ValidatedLayer())
-		if err != nil {
-			app.log.Panic("cannot load state for layer %v, message: %v", msh.ValidatedLayer(), err)
-		}
 
 	} else {
 		trtl = tortoise.NewAlgorithm(int(layerSize), mdb, app.Config.Hdist, app.addLogger(TrtlLogger, lg))
