@@ -1,9 +1,9 @@
 import collections
 import random
 import re
+import time
 from datetime import datetime
 
-import time
 from elasticsearch_dsl import Search, Q
 
 from tests import convenience
@@ -516,3 +516,13 @@ def assert_equal_state_roots(indx, ns):
             break
         compare_state_roots(hits)
         layer += 1
+
+
+# =====================================================================================
+# Assert No ATX Validation Errors
+# =====================================================================================
+
+
+def assert_no_contextually_invalid_atxs(indx, ns):
+    hits = query_message(indx, ns, ns, {'M': 'ATX failed contextual validation'})
+    assert len(hits) == 0
