@@ -67,7 +67,7 @@ func (its *P2PIntegrationSuite) Test_Gossiping() {
 	for i := 0; i < MSGS; i++ {
 		msg := []byte(RandString(108692))
 		rnd := rand.Int31n(int32(len(its.Instances)))
-		_ = its.Instances[rnd].Broadcast(exampleGossipProto, []byte(msg))
+		_ = its.Instances[rnd].Broadcast(exampleGossipProto, msg)
 		for _, mc := range its.gossipProtocols {
 			ctx := ctx
 			mc := mc
@@ -84,6 +84,8 @@ func (its *P2PIntegrationSuite) Test_Gossiping() {
 			})
 		}
 	}
+
+	testLog("Waiting for all messages to pass")
 
 	errs := errg.Wait()
 	its.T().Log(errs)
