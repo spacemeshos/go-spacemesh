@@ -31,6 +31,7 @@ const ConnectingTimeout = 20 * time.Second //todo: add to the config
 type cPool interface {
 	GetConnection(address inet.Addr, pk p2pcrypto.PublicKey) (net.Connection, error)
 	GetConnectionIfExists(pk p2pcrypto.PublicKey) (net.Connection, error)
+	CloseConnection(key p2pcrypto.PublicKey)
 	Shutdown()
 }
 
@@ -193,8 +194,9 @@ func (s *swarm) onNewConnection(nce net.NewConnectionEvent) {
 	if err != nil {
 		s.lNode.Warning("Error adding new connection %v, err: %v", nce.Node.PublicKey(), err)
 		// todo: send rejection reason
-		// todo: remove from connection pool
-		nce.Conn.Close()
+		// todo: remove from connection pool ANTONL
+		//nce.Conn.Close()
+		s.cPool.CloseConnection(nce.Node.PublicKey())
 	}
 }
 
