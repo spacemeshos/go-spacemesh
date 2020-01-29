@@ -63,9 +63,11 @@ func (its *P2PIntegrationSuite) Test_Gossiping() {
 	ctx, _ := context.WithTimeout(context.Background(), time.Minute*180)
 	errg, ctx := errgroup.WithContext(ctx)
 	MSGS := 100
+	MSGSIZE := 108692
+	testLog("%v Sending %v messages with size %v to %v miners", its.T().Name(), MSGS, MSGSIZE, (its.BootstrappedNodeCount + its.BootstrapNodesCount))
 	numgot := int32(0)
 	for i := 0; i < MSGS; i++ {
-		msg := []byte(RandString(108692))
+		msg := []byte(RandString(MSGSIZE))
 		rnd := rand.Int31n(int32(len(its.Instances)))
 		_ = its.Instances[rnd].Broadcast(exampleGossipProto, msg)
 		for _, mc := range its.gossipProtocols {
@@ -85,12 +87,14 @@ func (its *P2PIntegrationSuite) Test_Gossiping() {
 		}
 	}
 
-	testLog("Waiting for all messages to pass")
+	testLog("%v Waiting for all messages to pass", its.T().Name())
 
 	errs := errg.Wait()
 	its.T().Log(errs)
 	its.NoError(errs)
 	its.Equal(int(numgot), (its.BootstrappedNodeCount+its.BootstrapNodesCount)*MSGS)
+
+	testLog("%v All nodes got all messages", its.T().Name())
 }
 
 // TODO: Add more tests to the suite
