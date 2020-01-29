@@ -15,10 +15,10 @@ bootstrap:
   replicas: 1
   resources:
     requests:
-      memory: '1024M'
+      memory: '2048M'
       cpu: '1'
     limits:
-      memory: '2048M'
+      memory: '4096M'
       cpu: '2'
   args:
     randcon: '8'
@@ -42,10 +42,10 @@ client:
   replicas: 99
   resources:
     requests:
-      memory: '1024M'
+      memory: '2048M'
       cpu: '1'
     limits:
-      memory: '2048M'
+      memory: '4096M'
       cpu: '2'
   args:
     randcon: '8'
