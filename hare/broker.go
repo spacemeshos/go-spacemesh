@@ -163,6 +163,8 @@ func (b *Broker) eventLoop() {
 			}
 
 			msgInstId := hareMsg.InnerMsg.InstanceId
+			// TODO: fix metrics
+			//metrics.MessageTypeCounter.With("type_id", hareMsg.InnerMsg.Type.String(), "layer", strconv.FormatUint(uint64(msgInstId), 10), "reporter", "brokerHandler").Add(1)
 			isEarly := false
 			if err := b.validate(hareMsg); err != nil {
 				if err != errEarlyMsg {

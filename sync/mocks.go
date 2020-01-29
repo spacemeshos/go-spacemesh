@@ -56,6 +56,10 @@ type MeshValidatorMock struct {
 	validatedLayers map[types.LayerID]struct{}
 }
 
+func (m *MeshValidatorMock) LatestComplete() types.LayerID {
+	panic("implement me")
+}
+
 func (m *MeshValidatorMock) HandleIncomingLayer(lyr *types.Layer) (types.LayerID, types.LayerID) {
 	m.countValidate++
 	m.calls++
@@ -89,6 +93,10 @@ func ConfigTst() mesh.Config {
 }
 
 type MockState struct{}
+
+func (s MockState) LoadState(layer types.LayerID) error {
+	panic("implement me")
+}
 
 func (s MockState) GetStateRoot() types.Hash32 {
 	return [32]byte{}

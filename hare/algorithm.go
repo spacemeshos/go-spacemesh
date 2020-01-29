@@ -9,7 +9,6 @@ import (
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
-	"github.com/spacemeshos/go-spacemesh/hare/metrics"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
@@ -122,20 +121,22 @@ func newMsg(hareMsg *Message, querier StateQuerier, layersPerEpoch uint16) (*Msg
 	// extract pub key
 	pubKey, err := ed25519.ExtractPublicKey(hareMsg.InnerMsg.Bytes(), hareMsg.Sig)
 	if err != nil {
-		log.Error("newMsg construction failed: could not extract public key err=%v", err, len(hareMsg.Sig))
+		log.With().Error("newMsg construction failed: could not extract public key", log.Err(err), log.Int("sig len", len(hareMsg.Sig)))
 		return nil, err
 	}
 	// query if identity is active
 	pub := signing.NewPublicKey(pubKey)
 	res, err := querier.IsIdentityActiveOnConsensusView(pub.String(), types.LayerID(hareMsg.InnerMsg.InstanceId))
 	if err != nil {
-		log.Error("error while checking if identity is active for %v err=%v", pub.String(), err)
+		log.With().Error("error while checking if identity is active", log.String("sender_id", pub.ShortString()),
+			log.Err(err), log.LayerId(uint64(hareMsg.InnerMsg.InstanceId)), log.String("msg_type", hareMsg.InnerMsg.Type.String()))
 		return nil, errors.New("is identity active query failed")
 	}
 
 	// check query result
 	if !res {
-		log.Error("identity %v is not active", pub.ShortString())
+		log.With().Error("identity is not active", log.String("sender_id", pub.ShortString()),
+			log.LayerId(uint64(hareMsg.InnerMsg.InstanceId)), log.String("msg_type", hareMsg.InnerMsg.Type.String()))
 		return nil, errors.New("inactive identity")
 	}
 
@@ -387,7 +388,7 @@ func (proc *ConsensusProcess) handleMessage(m *Msg) {
 
 	// warn on late pre-round msgs
 	if m.InnerMsg.Type == pre && proc.k != -1 {
-		proc.Warning("Encountered late PreRound message")
+		proc.With().Warning("encountered late PreRound message", log.String("sender_id", m.PubKey.ShortString()), log.LayerId(uint64(proc.instanceId)))
 	}
 
 	// valid, continue process msg by type
@@ -397,7 +398,8 @@ func (proc *ConsensusProcess) handleMessage(m *Msg) {
 // process the message by its type
 func (proc *ConsensusProcess) processMsg(m *Msg) {
 	proc.Debug("Processing message of type %v", m.InnerMsg.Type.String())
-	metrics.MessageTypeCounter.With("type_id", m.InnerMsg.Type.String()).Add(1)
+	// TODO: fix metrics
+	//metrics.MessageTypeCounter.With("type_id", m.InnerMsg.Type.String(), "layer", strconv.FormatUint(uint64(m.InnerMsg.InstanceId), 10), "reporter", "processMsg").Add(1)
 
 	switch m.InnerMsg.Type {
 	case pre:
