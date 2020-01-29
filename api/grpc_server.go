@@ -223,7 +223,8 @@ type TxAPI interface {
 	GetLayerApplied(txId types.TransactionId) *types.LayerID
 	GetTransaction(id types.TransactionId) (*types.Transaction, error)
 	GetProjection(addr types.Address, prevNonce, prevBalance uint64) (nonce, balance uint64, err error)
-	ValidatedLayer() types.LayerID
+	LatestLayerInState() types.LayerID
+	GetStateRoot() types.Hash32
 }
 
 // NewGrpcService create a new grpc service using config data.
@@ -359,7 +360,7 @@ func (s SpacemeshGrpcService) SetLoggerLevel(ctx context.Context, msg *pb.SetLog
 func (s SpacemeshGrpcService) GetAccountTxs(ctx context.Context, txsSinceLayer *pb.GetTxsSinceLayer) (*pb.AccountTxs, error) {
 	log.Info("GRPC GetAccountTxs msg")
 
-	currentPBase := s.Tx.ValidatedLayer()
+	currentPBase := s.Tx.LatestLayerInState()
 
 	addr := types.HexToAddress(txsSinceLayer.Account.Address)
 	minLayer := types.LayerID(txsSinceLayer.StartLayer)
@@ -412,4 +413,9 @@ func (s SpacemeshGrpcService) GetAccountRewards(ctx context.Context, account *pb
 	}
 
 	return &rewardsOut, nil
+}
+
+func (s SpacemeshGrpcService) GetStateRoot(ctx context.Context, empty *empty.Empty) (*pb.SimpleMessage, error) {
+	log.Info("GRPC GetStateRoot msg")
+	return &pb.SimpleMessage{Value: s.Tx.GetStateRoot().String()}, nil
 }

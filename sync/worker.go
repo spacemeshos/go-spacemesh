@@ -18,6 +18,7 @@ type WorkerInfra interface {
 	GetPeers() []p2p.Peer
 	SendRequest(msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte)) error
 	GetTimeout() time.Duration
+	GetExit() chan struct{}
 	log.Logger
 }
 
@@ -25,6 +26,7 @@ type workerInfra struct {
 	RequestTimeout time.Duration
 	*server.MessageServer
 	p2p.Peers
+	exit chan struct{}
 }
 
 func (ms *workerInfra) Close() {
@@ -36,9 +38,12 @@ func (ms *workerInfra) GetTimeout() time.Duration {
 	return ms.RequestTimeout
 }
 
+func (ms *workerInfra) GetExit() chan struct{} {
+	return ms.exit
+}
+
 type worker struct {
 	*sync.Once
-	*sync.WaitGroup
 	work      func()
 	workCount *int32
 	output    chan interface{}
@@ -60,7 +65,7 @@ func (w *worker) Clone() *worker {
 	return &worker{Logger: w.Logger, Once: w.Once, workCount: w.workCount, output: w.output, work: w.work}
 }
 
-func NewPeersWorker(s WorkerInfra, peers []p2p.Peer, mu *sync.Once, reqFactory RequestFactory) (worker, chan interface{}) {
+func NewPeersWorker(s WorkerInfra, peers []p2p.Peer, mu *sync.Once, reqFactory RequestFactory) worker {
 	count := int32(1)
 	numOfpeers := len(peers)
 	output := make(chan interface{}, numOfpeers)
@@ -81,6 +86,9 @@ func NewPeersWorker(s WorkerInfra, peers []p2p.Peer, mu *sync.Once, reqFactory R
 
 			timeout := time.After(s.GetTimeout())
 			select {
+			case <-s.GetExit():
+				lg.Info("worker received interrupt")
+				return
 			case <-timeout:
 				lg.Error("request to %v timed out", peer)
 				return
@@ -102,9 +110,7 @@ func NewPeersWorker(s WorkerInfra, peers []p2p.Peer, mu *sync.Once, reqFactory R
 		wg.Wait()
 	}
 
-	worker := worker{Logger: lg, Once: mu, WaitGroup: &sync.WaitGroup{}, workCount: &count, output: output, work: wrkFunc}
-
-	return worker, output
+	return worker{Logger: lg, Once: mu, workCount: &count, output: output, work: wrkFunc}
 
 }
 
@@ -121,6 +127,9 @@ func NewNeighborhoodWorker(s WorkerInfra, count int, reqFactory RequestFactory) 
 			ch, _ := reqFactory(s, peer)
 			timeout := time.After(s.GetTimeout())
 			select {
+			case <-s.GetExit():
+				lg.Info("worker received interrupt")
+				return
 			case <-timeout:
 				lg.Error("request to %v timed out", peer)
 			case v := <-ch:
@@ -134,7 +143,7 @@ func NewNeighborhoodWorker(s WorkerInfra, count int, reqFactory RequestFactory) 
 		}
 	}
 
-	return worker{Logger: lg, Once: mu, WaitGroup: &sync.WaitGroup{}, workCount: &acount, output: output, work: workFunc}
+	return worker{Logger: lg, Once: mu, workCount: &acount, output: output, work: workFunc}
 
 }
 
@@ -160,6 +169,9 @@ func NewFetchWorker(s WorkerInfra, count int, reqFactory BatchRequestFactory, id
 				ch, _ := reqFactory(s, peer, remainingItems)
 				timeout := time.After(s.GetTimeout())
 				select {
+				case <-s.GetExit():
+					lg.Info("worker received interrupt")
+					return
 				case <-timeout:
 					lg.Error("fetch %s request to %v on %v timed out %s", name, peer.String(), idsStr)
 				case v := <-ch:
@@ -184,7 +196,7 @@ func NewFetchWorker(s WorkerInfra, count int, reqFactory BatchRequestFactory, id
 			output <- fetchJob{ids: ids, items: fetched}
 		}
 	}
-	return worker{Logger: lg, Once: mu, WaitGroup: &sync.WaitGroup{}, workCount: &acount, output: output, work: workFunc}
+	return worker{Logger: lg, Once: mu, workCount: &acount, output: output, work: workFunc}
 }
 
 func toMap(ids []types.Hash32) map[types.Hash32]struct{} {

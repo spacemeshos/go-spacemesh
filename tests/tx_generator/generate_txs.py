@@ -1,8 +1,6 @@
 import argparse
-import multiprocessing as mp
 import os
 import pprint
-import random
 import sys
 # this hack is for importing packages located above
 # this file and it's imports files location
@@ -72,12 +70,13 @@ def set_parser():
 
 
 def run():
-    q = None
     menu = "sp - fixed node\n" \
            "nsp - random node\n" \
            "c - concurrent\n" \
            "nc - cancel concurrency\n" \
            "t - tx number\n" \
+           "txs - print all txs ids\n" \
+           "tbi - tx by id\n" \
            "p - print state\n" \
            "go to start, q to quit: "
     print(menu)
@@ -90,7 +89,7 @@ def run():
         if inp == 'p':
             print(f"\n\n{pprint.pformat(acc.accounts)}\n\n")
             print(menu)
-        if inp == "sp":
+        elif inp == "sp":
             print("using same pod for all GRPC api calls")
             my_wallet.fixed_node = -1
         elif inp == "nsp":
@@ -104,6 +103,11 @@ def run():
             parsed_args.is_concurrent = False
         elif inp == "t":
             parsed_args.tx_num = int(input("how many txs: "))
+        elif inp == "txs":
+            print(my_wallet.tx_ids)
+        elif inp == "tbi":
+            inp = input("enter id: ")
+            print(my_wallet.get_tx_by_id(inp))
         elif inp == "go":
             actions.send_tx_from_each_account(my_wallet, acc, parsed_args.tx_num,
                                               is_concurrent=parsed_args.is_concurrent)
@@ -158,10 +162,6 @@ if __name__ == "__main__":
     if parsed_args.same_pod:
         print("Using the same pod for all txs (and nonce querying)")
         my_wallet.fixed_node = -1
-
-    # Set a queue for collecting all the transactions output,
-    # this will help with updating the "accountant" when multiprocessing
-    queue = mp.Queue() if parsed_args.is_concurrent else None
 
     run()
     print("bye bye!")

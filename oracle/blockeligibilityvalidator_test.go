@@ -15,15 +15,11 @@ type mockAtxDB struct {
 	err  error
 }
 
-func (m *mockAtxDB) IsIdentityActive(edId string, layer types.LayerID) (*types.NodeId, bool, types.AtxId, error) {
-	return &types.NodeId{}, false, types.AtxId{}, m.err
-}
-
 func (m mockAtxDB) GetIdentity(edId string) (types.NodeId, error) {
 	return types.NodeId{Key: edId, VRFPublicKey: vrfPubkey}, nil
 }
 
-func (m mockAtxDB) GetNodeLastAtxId(node types.NodeId) (types.AtxId, error) {
+func (m mockAtxDB) GetNodeAtxIdForEpoch(nodeId types.NodeId, targetEpoch types.EpochId) (types.AtxId, error) {
 	return types.AtxId{}, m.err
 }
 

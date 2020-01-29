@@ -92,6 +92,10 @@ func SyncMockFactory(number int, conf Configuration, name string, dbType string,
 
 type stateMock struct{}
 
+func (s stateMock) LoadState(layer types.LayerID) error {
+	panic("implement me")
+}
+
 func (stateMock) GetStateRoot() types.Hash32 {
 	panic("implement me")
 }
@@ -181,7 +185,16 @@ func TestSyncer_Start(t *testing.T) {
 
 func TestSyncer_Close(t *testing.T) {
 	syncs, _, _ := SyncMockFactory(2, conf, t.Name(), memoryDB, newMockPoetDb)
+
 	sync := syncs[0]
+	sync1 := syncs[1]
+
+	block := types.NewExistingBlock(1, []byte(rand.RandString(8)))
+	block.TxIds = append(block.TxIds, txid1)
+	block.AtxIds = append(block.AtxIds, atx1)
+
+	sync1.AddBlockWithTxs(block, nil, nil)
+
 	sync.Start()
 	sync.Close()
 	s := sync
@@ -238,11 +251,11 @@ func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 	//syncObj1.ValidateLayer(l) //this is to simulate the approval of the tortoise...
 	timeout := time.NewTimer(2 * time.Second)
 
-	wrk, output := NewPeersWorker(syncObj2, []p2p.Peer{nodes[0].PublicKey()}, &sync.Once{}, HashReqFactory(lid))
+	wrk := NewPeersWorker(syncObj2, []p2p.Peer{nodes[0].PublicKey()}, &sync.Once{}, HashReqFactory(lid))
 	go wrk.Work()
 
 	select {
-	case <-output:
+	case <-wrk.output:
 		return
 		//assert.Equal(t, string(orig.Hash()), string(hash.(*peerHashPair).hash), "wrong block")
 	case <-timeout.C:
@@ -359,11 +372,11 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 
 	timeout := time.NewTimer(2 * time.Second)
 
-	wrk, output := NewPeersWorker(syncObj, []p2p.Peer{nodes[1].PublicKey()}, &sync.Once{}, LayerIdsReqFactory(lid))
+	wrk := NewPeersWorker(syncObj, []p2p.Peer{nodes[1].PublicKey()}, &sync.Once{}, LayerIdsReqFactory(lid))
 	go wrk.Work()
 
 	select {
-	case intr := <-output:
+	case intr := <-wrk.output:
 		ids := intr.([]types.BlockID)
 		for _, a := range layer.Blocks() {
 			found := false
@@ -507,7 +520,7 @@ loop:
 			t.Error("timed out ")
 			return
 		default:
-			if syncObj3.ValidatedLayer() == 5 {
+			if syncObj3.ProcessedLayer() == 5 {
 
 				t.Log("done!")
 				break loop
@@ -611,8 +624,8 @@ func syncTest(dpType string, t *testing.T) {
 		case <-timeout:
 			t.Error("timed out ")
 		default:
-			if syncObj2.ValidatedLayer() >= 4 && syncObj3.ValidatedLayer() >= 4 {
-				log.Info("done!", syncObj2.ValidatedLayer(), syncObj3.ValidatedLayer())
+			if syncObj2.ProcessedLayer() >= 4 && syncObj3.ProcessedLayer() >= 4 {
+				log.Info("done!", syncObj2.ProcessedLayer(), syncObj3.ProcessedLayer())
 				// path for this UT calling sync.Close before we read from channel causes writing to closed channel
 				x := clock.Subscribe()
 				<-x
@@ -758,7 +771,7 @@ func (sis *syncIntegrationTwoNodes) TestSyncProtocol_TwoNodes() {
 			t.Error("timed out ")
 			return
 		default:
-			if syncObj1.ValidatedLayer() == 5 {
+			if syncObj1.ProcessedLayer() == 5 {
 				t.Log("done!")
 				return
 			}
@@ -872,7 +885,7 @@ func (sis *syncIntegrationMultipleNodes) TestSyncProtocol_MultipleNodes() {
 			goto end
 		default:
 
-			if syncObj1.ValidatedLayer() >= 3 || syncObj2.ValidatedLayer() >= 3 || syncObj3.ValidatedLayer() >= 3 || syncObj5.ValidatedLayer() >= 3 {
+			if syncObj1.ProcessedLayer() >= 3 || syncObj2.ProcessedLayer() >= 3 || syncObj3.ProcessedLayer() >= 3 || syncObj5.ProcessedLayer() >= 3 {
 				t.Log("done!")
 				goto end
 			}
@@ -880,11 +893,11 @@ func (sis *syncIntegrationMultipleNodes) TestSyncProtocol_MultipleNodes() {
 		}
 	}
 end:
-	log.Debug("sync 1 ", syncObj1.ValidatedLayer())
-	log.Debug("sync 2 ", syncObj2.ValidatedLayer())
-	log.Debug("sync 3 ", syncObj3.ValidatedLayer())
-	log.Debug("sync 4 ", syncObj4.ValidatedLayer())
-	log.Debug("sync 5 ", syncObj5.ValidatedLayer())
+	log.Debug("sync 1 ", syncObj1.ProcessedLayer())
+	log.Debug("sync 2 ", syncObj2.ProcessedLayer())
+	log.Debug("sync 3 ", syncObj3.ProcessedLayer())
+	log.Debug("sync 4 ", syncObj4.ProcessedLayer())
+	log.Debug("sync 5 ", syncObj5.ProcessedLayer())
 	return
 }
 
@@ -987,7 +1000,7 @@ type mockLayerValidator struct {
 	validatedLayers map[types.LayerID]struct{}
 }
 
-func (m *mockLayerValidator) ValidatedLayer() types.LayerID {
+func (m *mockLayerValidator) ProcessedLayer() types.LayerID {
 	m.countValidated++
 	return m.vl
 }
@@ -1185,7 +1198,7 @@ type mockTimedValidator struct {
 	calls int
 }
 
-func (m *mockTimedValidator) ValidatedLayer() types.LayerID {
+func (m *mockTimedValidator) ProcessedLayer() types.LayerID {
 	return 1
 }
 
@@ -1228,11 +1241,11 @@ func TestSyncProtocol_NilResponse(t *testing.T) {
 
 	// Layer Hash
 
-	wrk, output := NewPeersWorker(syncs[0], []p2p.Peer{nodes[1].PublicKey()}, &sync.Once{}, HashReqFactory(nonExistingLayerId))
+	wrk := NewPeersWorker(syncs[0], []p2p.Peer{nodes[1].PublicKey()}, &sync.Once{}, HashReqFactory(nonExistingLayerId))
 	go wrk.Work()
 
 	select {
-	case out := <-output:
+	case out := <-wrk.output:
 		assert.Nil(t, out)
 	case <-time.After(timeout):
 		assert.Fail(t, timeoutErrMsg)
@@ -1240,11 +1253,11 @@ func TestSyncProtocol_NilResponse(t *testing.T) {
 
 	// Layer Block Ids
 
-	wrk, output = NewPeersWorker(syncs[0], []p2p.Peer{nodes[1].PublicKey()}, &sync.Once{}, LayerIdsReqFactory(nonExistingLayerId))
+	wrk = NewPeersWorker(syncs[0], []p2p.Peer{nodes[1].PublicKey()}, &sync.Once{}, LayerIdsReqFactory(nonExistingLayerId))
 	go wrk.Work()
 
 	select {
-	case out := <-output:
+	case out := <-wrk.output:
 		assert.Nil(t, out)
 	case <-time.After(timeout):
 		assert.Fail(t, timeoutErrMsg)
@@ -1254,7 +1267,7 @@ func TestSyncProtocol_NilResponse(t *testing.T) {
 	bch := make(chan []types.Hash32, 1)
 	bch <- []types.Hash32{nonExistingBlockId.AsHash32()}
 
-	output = fetchWithFactory(NewFetchWorker(syncs[0], 1, newFetchReqFactory(BLOCK, blocksAsItems), bch, ""))
+	output := fetchWithFactory(NewFetchWorker(syncs[0], 1, newFetchReqFactory(BLOCK, blocksAsItems), bch, ""))
 
 	select {
 	case out := <-output:

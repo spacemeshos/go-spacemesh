@@ -472,10 +472,14 @@ func (b *Builder) discardChallenge() {
 func (b *Builder) signAndBroadcast(atx *types.ActivationTx) error {
 	if err := b.SignAtx(atx); err != nil {
 		return fmt.Errorf("failed to sign ATX: %v", err)
-	} else if buf, err := types.InterfaceToBytes(atx); err != nil {
-		return fmt.Errorf("failed to serialize ATX: %v", err)
-	} else if err := b.net.Broadcast(AtxProtocol, buf); err != nil {
-		return fmt.Errorf("failed to broadcast ATX: %v", err)
+	} else {
+		buf, err := types.InterfaceToBytes(atx)
+		if err != nil {
+			return fmt.Errorf("failed to serialize ATX: %v", err)
+		} else if err := b.net.Broadcast(AtxProtocol, buf); err != nil {
+			return fmt.Errorf("failed to broadcast ATX: %v", err)
+		}
+		b.log.Info("atx size %s", len(buf), log.AtxId(atx.ShortString()))
 	}
 	return nil
 }
