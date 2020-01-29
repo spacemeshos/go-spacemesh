@@ -645,7 +645,7 @@ func Test_Swarm_getMorePeers3(t *testing.T) {
 	mdht := new(discovery.MockPeerStore)
 	n.discover = mdht
 	testNode := node.GenerateRandomNodeData()
-	mdht.SelectPeersFunc = func(qty int) []*node.NodeInfo {
+	mdht.SelectPeersFunc = func(ctx context.Context, qty int) []*node.NodeInfo {
 		return []*node.NodeInfo{testNode}
 	}
 
@@ -677,7 +677,7 @@ func Test_Swarm_getMorePeers4(t *testing.T) {
 	n.discover = mdht
 
 	testNode := node.GenerateRandomNodeData()
-	mdht.SelectPeersFunc = func(qty int) []*node.NodeInfo {
+	mdht.SelectPeersFunc = func(ctx context.Context, qty int) []*node.NodeInfo {
 		return []*node.NodeInfo{testNode}
 	}
 
@@ -717,7 +717,7 @@ func Test_Swarm_getMorePeers5(t *testing.T) {
 
 	n.cPool = cpm
 
-	mdht.SelectPeersFunc = func(qty int) []*node.NodeInfo {
+	mdht.SelectPeersFunc = func(ctx context.Context, qty int) []*node.NodeInfo {
 		return node.GenerateRandomNodesData(qty)
 	}
 
@@ -750,7 +750,7 @@ func Test_Swarm_getMorePeers6(t *testing.T) {
 
 	n.cPool = cpm
 
-	mdht.SelectPeersFunc = func(qty int) []*node.NodeInfo {
+	mdht.SelectPeersFunc = func(ctx context.Context, qty int) []*node.NodeInfo {
 		return node.GenerateRandomNodesData(qty)
 	}
 
@@ -764,8 +764,8 @@ func Test_Swarm_getMorePeers6(t *testing.T) {
 
 	//test not replacing inc peer
 	//
-	mdht.SelectPeersFunc = func(count int) []*node.NodeInfo {
-		some := node.GenerateRandomNodesData(count - 1)
+	mdht.SelectPeersFunc = func(ctx context.Context, qty int) []*node.NodeInfo {
+		some := node.GenerateRandomNodesData(qty - 1)
 		some = append(some, nd)
 		return some
 	}
@@ -820,7 +820,7 @@ func TestNeighborhood_Initial(t *testing.T) {
 
 	p := p2pTestNoStart(t, cfg)
 	mdht := new(discovery.MockPeerStore)
-	mdht.SelectPeersFunc = func(qty int) []*node.NodeInfo {
+	mdht.SelectPeersFunc = func(ctx context.Context, qty int) []*node.NodeInfo {
 		return node.GenerateRandomNodesData(qty)
 	}
 
@@ -921,7 +921,7 @@ func TestSwarm_AskPeersSerial(t *testing.T) {
 	timescalled := uint32(0)
 	block := make(chan struct{})
 
-	dsc.SelectPeersFunc = func(qty int) []*node.NodeInfo {
+	dsc.SelectPeersFunc = func(ctx context.Context, qty int) []*node.NodeInfo {
 		atomic.AddUint32(&timescalled, 1)
 		<-block
 		return node.GenerateRandomNodesData(qty) // will trigger sending on morepeersreq
@@ -974,7 +974,7 @@ func TestNeighborhood_ReportConnectionResult(t *testing.T) {
 
 	rnds := node.GenerateRandomNodesData(PeerNum)
 
-	ps.SelectPeersFunc = func(qty int) []*node.NodeInfo {
+	ps.SelectPeersFunc = func(ctx context.Context, qty int) []*node.NodeInfo {
 		return rnds
 	}
 
@@ -1012,7 +1012,7 @@ func TestNeighborhood_ReportConnectionResult(t *testing.T) {
 
 	newrnds := node.GenerateRandomNodesData(PeerNum - 2)
 
-	ps.SelectPeersFunc = func(qty int) []*node.NodeInfo {
+	ps.SelectPeersFunc = func(ctx context.Context, qty int) []*node.NodeInfo {
 		return append([]*node.NodeInfo{realnodeinfo, realnode2info}, newrnds...)
 	}
 

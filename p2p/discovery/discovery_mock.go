@@ -10,7 +10,7 @@ import (
 type MockPeerStore struct {
 	UpdateFunc      func(n, src *node.NodeInfo)
 	updateCount     int
-	SelectPeersFunc func(qty int) []*node.NodeInfo
+	SelectPeersFunc func(ctx context.Context, qty int) []*node.NodeInfo
 	bsres           error
 	bsCount         int
 	LookupFunc      func(p2pcrypto.PublicKey) (*node.NodeInfo, error)
@@ -77,9 +77,9 @@ func (m *MockPeerStore) Bootstrap(ctx context.Context) error {
 }
 
 // SelectPeers mocks selecting peers.
-func (m *MockPeerStore) SelectPeers(qty int) []*node.NodeInfo {
+func (m *MockPeerStore) SelectPeers(ctx context.Context, qty int) []*node.NodeInfo {
 	if m.SelectPeersFunc != nil {
-		return m.SelectPeersFunc(qty)
+		return m.SelectPeersFunc(ctx, qty)
 	}
 	return []*node.NodeInfo{}
 }

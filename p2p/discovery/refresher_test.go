@@ -109,7 +109,7 @@ func TestRefresher_refresh(t *testing.T) {
 	disc.findnoderr = nil
 	disc.findnoderes = some
 
-	res := ref.requestAddresses([]*node.NodeInfo{boot})
+	res := ref.requestAddresses(context.TODO(), []*node.NodeInfo{boot})
 
 	require.Equal(t, some, res)
 
@@ -136,7 +136,7 @@ func TestRefresher_refresh2(t *testing.T) {
 	disc.findnoderr = nil
 	disc.findnoderes = some
 
-	res := ref.requestAddresses(boot)
+	res := ref.requestAddresses(context.TODO(), boot)
 
 	require.Equal(t, len(res), 0)
 
@@ -164,7 +164,7 @@ func TestRefresher_refresh3(t *testing.T) {
 	disc.findnoderr = nil
 	disc.findnoderes = some
 
-	res := ref.requestAddresses(boot)
+	res := ref.requestAddresses(context.TODO(), boot)
 
 	require.Equal(t, res, some)
 
@@ -193,7 +193,7 @@ func TestRefresher_Bootstrap(t *testing.T) {
 	disc.findnoderr = nil
 	disc.findnoderes = generateDiscNodes(10)
 
-	err := ref.Bootstrap(context.Background(), 10)
+	err := ref.Bootstrap(context.TODO(), 10)
 
 	require.NoError(t, err)
 }

@@ -16,7 +16,7 @@ type PeerStore interface {
 	Remove(pubkey p2pcrypto.PublicKey)
 	Lookup(pubkey p2pcrypto.PublicKey) (*node.NodeInfo, error)
 	Update(addr, src *node.NodeInfo)
-	SelectPeers(qty int) []*node.NodeInfo
+	SelectPeers(ctx context.Context, qty int) []*node.NodeInfo
 	Bootstrap(ctx context.Context) error
 	Size() int
 	Shutdown()
@@ -92,10 +92,13 @@ func (d *Discovery) refresh(ctx context.Context, peersToGet int) error {
 }
 
 // SelectPeers asks routing table to randomly select a slice of nodes in size `qty`
-func (d *Discovery) SelectPeers(qty int) []*node.NodeInfo {
+func (d *Discovery) SelectPeers(ctx context.Context, qty int) []*node.NodeInfo {
 
 	if d.rt.NeedNewAddresses() {
-		d.refresh(context.Background(), qty) // TODO: use ctx with timeout, check errors
+		err := d.refresh(ctx, qty) // TODO: use ctx with timeout, check errors
+		if err == ErrBootAbort {
+			return nil
+		}
 	}
 
 	out := make([]*node.NodeInfo, 0, qty)

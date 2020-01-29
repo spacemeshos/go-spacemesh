@@ -46,7 +46,8 @@ type swarm struct {
 	config config.Config
 	logger log.Log
 	// Context for cancel
-	ctx context.Context
+	ctx        context.Context
+	cancelFunc context.CancelFunc
 
 	// Shutdown the loop
 	shutdownOnce sync.Once
@@ -147,8 +148,12 @@ func newSwarm(ctx context.Context, config config.Config, logger log.Log, datadir
 		return nil, fmt.Errorf("can't create swarm without a network, err: %v", err)
 	}
 
+	localCtx, cancel := context.WithCancel(ctx)
+
 	s := &swarm{
-		ctx:    ctx,
+		ctx:        localCtx,
+		cancelFunc: cancel,
+
 		config: config,
 		logger: logger,
 
@@ -402,12 +407,13 @@ func (s *swarm) RegisterGossipProtocol(protocol string, prio priorityq.Priority)
 // Shutdown sends a shutdown signal to all running services of swarm and then runs an internal shutdown to cleanup.
 func (s *swarm) Shutdown() {
 	s.shutdownOnce.Do(func() {
+		s.cancelFunc()
 		close(s.shutdown)
 		s.gossip.Close()
+		s.discover.Shutdown()
 		s.cPool.Shutdown()
 		s.network.Shutdown()
 		s.udpServer.Shutdown()
-		s.discover.Shutdown()
 
 		s.protocolHandlerMutex.Lock()
 		for i, _ := range s.directProtocolHandlers {
@@ -701,8 +707,14 @@ func (s *swarm) askForMorePeers() {
 	}
 	// if we could'nt get any maybe were initializing
 	// wait a little bit before trying again
-	time.Sleep(NoResultsInterval)
-	s.morePeersReq <- struct{}{}
+	tmr := time.NewTimer(NoResultsInterval)
+	defer tmr.Stop()
+	select {
+	case <-s.shutdown:
+		return
+	case <-tmr.C:
+		s.morePeersReq <- struct{}{}
+	}
 }
 
 // getMorePeers tries to fill the `peers` slice with dialed outbound peers that we selected from the discovery.
@@ -713,7 +725,7 @@ func (s *swarm) getMorePeers(numpeers int) int {
 	}
 
 	// discovery should provide us with random peers to connect to
-	nds := s.discover.SelectPeers(numpeers)
+	nds := s.discover.SelectPeers(s.ctx, numpeers)
 	ndsLen := len(nds)
 	if ndsLen == 0 {
 		s.logger.Debug("Peer sampler returned nothing.")

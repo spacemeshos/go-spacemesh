@@ -269,7 +269,7 @@ func Test_Refresh(t *testing.T) {
 	disc.rt = rt
 	disc.bootstrapper = refresher
 
-	prz := disc.SelectPeers(10)
+	prz := disc.SelectPeers(context.TODO(), 10)
 	require.Len(t, prz, 0)
 	require.Equal(t, requsted, 10)
 
@@ -279,7 +279,7 @@ func Test_Refresh(t *testing.T) {
 		return false
 	}
 
-	prz = disc.SelectPeers(10)
+	prz = disc.SelectPeers(context.TODO(), 10)
 	require.Len(t, prz, 0)
 	require.Equal(t, requsted, 0)
 }
