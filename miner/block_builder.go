@@ -174,7 +174,7 @@ func calcHdistRange(id types.LayerID, hdist types.LayerID) (bottom types.LayerID
 
 	bottom = types.LayerID(0)
 	top = id - 1
-	if id >= hdist {
+	if id > hdist {
 		bottom = id - hdist
 	}
 
