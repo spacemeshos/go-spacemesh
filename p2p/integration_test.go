@@ -1,8 +1,10 @@
 package p2p
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/rand"
@@ -10,6 +12,7 @@ import (
 	"github.com/stretchr/testify/suite"
 	"golang.org/x/sync/errgroup"
 	_ "net/http/pprof"
+	"runtime/pprof"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -69,14 +72,6 @@ func (its *P2PIntegrationSuite) Test_Gossiping() {
 	ctx, _ := context.WithTimeout(context.Background(), time.Minute*5)
 	errg, ctx := errgroup.WithContext(ctx)
 
-	donefor := make(map[string]struct{})
-	_ = its.ForAll(func(idx int, s NodeTestInstance) error {
-		donefor[s.LocalNode().PublicKey().String()] = struct{}{}
-		return nil
-	}, nil)
-
-	var doneformtx sync.Mutex
-
 	MSGS := 100
 	MSGSIZE := 108692
 	tm := time.Now()
@@ -86,8 +81,7 @@ func (its *P2PIntegrationSuite) Test_Gossiping() {
 		msg := []byte(RandString(MSGSIZE))
 		rnd := rand.Int31n(int32(len(its.Instances)))
 		_ = its.Instances[rnd].Broadcast(exampleGossipProto, msg)
-		for i, mc := range its.gossipProtocols {
-			i := i
+		for _, mc := range its.gossipProtocols {
 			ctx := ctx
 			mc := mc
 			numgot := &numgot
@@ -96,13 +90,6 @@ func (its *P2PIntegrationSuite) Test_Gossiping() {
 				case got := <-mc:
 					atomic.AddInt32(numgot, 1)
 					got.ReportValidation(exampleGossipProto)
-					doneformtx.Lock()
-					if i < len(its.boot) {
-						delete(donefor, its.boot[i].LocalNode().PublicKey().String())
-					} else {
-						delete(donefor, its.Instances[i-(len(its.boot))].LocalNode().PublicKey().String())
-					}
-					doneformtx.Unlock()
 					return nil
 				case <-ctx.Done():
 					return errors.New("timed out")
@@ -117,15 +104,20 @@ func (its *P2PIntegrationSuite) Test_Gossiping() {
 	its.T().Log(errs)
 	its.NoError(errs)
 	its.Equal(int(numgot), (its.BootstrappedNodeCount+its.BootstrapNodesCount)*MSGS)
-	its.Equal(len(donefor), 0)
 
-	if len(donefor) > 0 {
-		for k, _ := range donefor {
-			testLog("%v didn't finish ", k)
-		}
-	} else {
-		testLog("All nodes removed donefor entry")
-	}
+	binstr := &bytes.Buffer{}
+	binstr.WriteString("####################################### Goroutines ###################################")
+	binstr.WriteString("\r\n")
+	binstr.WriteString("\r\n")
+	binstr.WriteString("\r\n")
+	binstr.WriteString("\r\n")
+	pprof.Lookup("goroutine").WriteTo(binstr, 1)
+	binstr.WriteString("\r\n")
+	binstr.WriteString("\r\n")
+	binstr.WriteString("\r\n")
+	binstr.WriteString("\r\n")
+	binstr.WriteString("####################################### Goroutines ###################################")
+	fmt.Print(binstr.String())
 
 	testLog("%v All nodes got all messages in %v", its.T().Name(), time.Since(tm))
 }

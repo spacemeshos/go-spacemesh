@@ -24,8 +24,6 @@ import (
 	"sync"
 )
 
-const debug = false
-
 type cpoolMock struct {
 	f           func(address inet.Addr, pk p2pcrypto.PublicKey) (net.Connection, error)
 	fExists     func(pk p2pcrypto.PublicKey) (net.Connection, error)
