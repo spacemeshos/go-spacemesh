@@ -78,7 +78,7 @@ func (its *P2PIntegrationSuite) Test_Gossiping() {
 	var doneformtx sync.Mutex
 
 	MSGS := 100
-	MSGSIZE := 10
+	MSGSIZE := 108692
 	tm := time.Now()
 	testLog("%v Sending %v messages with size %v to %v miners", its.T().Name(), MSGS, MSGSIZE, (its.BootstrappedNodeCount + its.BootstrapNodesCount))
 	numgot := int32(0)
