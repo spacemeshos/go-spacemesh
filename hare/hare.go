@@ -284,7 +284,7 @@ func (h *Hare) outputCollectionLoop() {
 			if out.Completed() { // CP completed, collect the output
 				err := h.collectOutput(out)
 				if err != nil {
-					h.Warning("Err collecting output from hare err: %v", err)
+					h.With().Warning("error collecting output from hare", log.Err(err))
 				}
 			}
 
