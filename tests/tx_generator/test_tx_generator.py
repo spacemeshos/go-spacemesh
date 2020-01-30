@@ -14,7 +14,8 @@ def test_transactions(setup_network):
     debug = False
     wallet_api = WalletAPI(setup_network.bootstrap.deployment_id, setup_network.clients.pods)
     tap_pub = conf.acc_pub
-    accountant = Accountant({tap_pub: Accountant.set_tap_acc()})
+    tap_balance = wallet_api.get_balance_value(tap_pub)
+    accountant = Accountant({tap_pub: Accountant.set_tap_acc(balance=tap_balance)}, tap_init_amount=tap_balance)
 
     # send txs via miners
     test_txs = 10
