@@ -19,7 +19,6 @@ type ValidationInfra interface {
 	HandleLateBlock(bl *types.Block)
 	ValidatingLayer() types.LayerID
 	ProcessedLayer() types.LayerID
-	ValidatingLayer() types.LayerID
 }
 
 type blockQueue struct {
