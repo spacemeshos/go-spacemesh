@@ -111,7 +111,6 @@ func (cp *ConnectionPool) closeConnections() {
 
 func (cp *ConnectionPool) CloseConnection(key p2pcrypto.PublicKey) {
 	cp.connMutex.Lock()
-	// there should be no new connections arriving at this point
 	if c, exist := cp.connections[key]; exist {
 		c.Close()
 		delete(cp.connections, key)
