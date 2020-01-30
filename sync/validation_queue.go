@@ -17,6 +17,7 @@ type ValidationInfra interface {
 	ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) (bool, error)) error
 	fastValidation(block *types.Block) error
 	HandleLateBlock(bl *types.Block)
+	ValidatingLayer() types.LayerID
 	ProcessedLayer() types.LayerID
 	ValidatingLayer() types.LayerID
 }
