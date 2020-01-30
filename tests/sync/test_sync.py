@@ -1,7 +1,7 @@
 import time
 from pytest_testconfig import config as testconfig
 from kubernetes import client
-
+from tests.deployment import create_deployment, delete_deployment
 from tests import queries
 from tests.conftest import DeploymentInfo
 from tests.test_bs import save_log_on_exit, setup_bootstrap
