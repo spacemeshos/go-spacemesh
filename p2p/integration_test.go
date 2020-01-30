@@ -119,8 +119,12 @@ func (its *P2PIntegrationSuite) Test_Gossiping() {
 	its.Equal(int(numgot), (its.BootstrappedNodeCount+its.BootstrapNodesCount)*MSGS)
 	its.Equal(len(donefor), 0)
 
-	for k, _ := range donefor {
-		testLog("%v didn't finish ", k)
+	if len(donefor) > 0 {
+		for k, _ := range donefor {
+			testLog("%v didn't finish ", k)
+		}
+	} else {
+		testLog("All nodes removed donefor entry")
 	}
 
 	testLog("%v All nodes got all messages in %v", its.T().Name(), time.Since(tm))
