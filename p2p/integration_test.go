@@ -68,8 +68,17 @@ func (its *P2PIntegrationSuite) Test_SendingMessage() {
 func (its *P2PIntegrationSuite) Test_Gossiping() {
 	ctx, _ := context.WithTimeout(context.Background(), time.Minute*5)
 	errg, ctx := errgroup.WithContext(ctx)
+
+	donefor := make(map[string]struct{})
+	_ = its.ForAll(func(idx int, s NodeTestInstance) error {
+		donefor[s.LocalNode().PublicKey().String()] = struct{}{}
+		return nil
+	}, nil)
+
+	var doneformtx sync.Mutex
+
 	MSGS := 100
-	MSGSIZE := 108692
+	MSGSIZE := 10
 	tm := time.Now()
 	testLog("%v Sending %v messages with size %v to %v miners", its.T().Name(), MSGS, MSGSIZE, (its.BootstrappedNodeCount + its.BootstrapNodesCount))
 	numgot := int32(0)
@@ -77,7 +86,8 @@ func (its *P2PIntegrationSuite) Test_Gossiping() {
 		msg := []byte(RandString(MSGSIZE))
 		rnd := rand.Int31n(int32(len(its.Instances)))
 		_ = its.Instances[rnd].Broadcast(exampleGossipProto, msg)
-		for _, mc := range its.gossipProtocols {
+		for i, mc := range its.gossipProtocols {
+			i := i
 			ctx := ctx
 			mc := mc
 			numgot := &numgot
@@ -86,6 +96,13 @@ func (its *P2PIntegrationSuite) Test_Gossiping() {
 				case got := <-mc:
 					got.ReportValidation(exampleGossipProto)
 					atomic.AddInt32(numgot, 1)
+					doneformtx.Lock()
+					if i < len(its.boot) {
+						delete(donefor, its.boot[i].LocalNode().PublicKey().String())
+					} else {
+						delete(donefor, its.Instances[i-(len(its.boot))].LocalNode().PublicKey().String())
+					}
+					doneformtx.Unlock()
 					return nil
 				case <-ctx.Done():
 					return errors.New("timed out")
@@ -100,6 +117,11 @@ func (its *P2PIntegrationSuite) Test_Gossiping() {
 	its.T().Log(errs)
 	its.NoError(errs)
 	its.Equal(int(numgot), (its.BootstrappedNodeCount+its.BootstrapNodesCount)*MSGS)
+	its.Equal(len(donefor), 0)
+
+	for k, _ := range donefor {
+		testLog("%v didn't finish ", k)
+	}
 
 	testLog("%v All nodes got all messages in %v", its.T().Name(), time.Since(tm))
 }
