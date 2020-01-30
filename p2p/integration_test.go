@@ -100,11 +100,17 @@ func (its *P2PIntegrationSuite) Test_Gossiping() {
 
 	testLog("%v Waiting for all messages to pass", its.T().Name())
 
+	<-time.After(time.Minute * 3)
+	printGoroutines()
+
 	errs := errg.Wait()
 	its.T().Log(errs)
 	its.NoError(errs)
 	its.Equal(int(numgot), (its.BootstrappedNodeCount+its.BootstrapNodesCount)*MSGS)
+	testLog("%v All nodes got all messages in %v", its.T().Name(), time.Since(tm))
+}
 
+func printGoroutines() {
 	binstr := &bytes.Buffer{}
 	binstr.WriteString("####################################### Goroutines ###################################")
 	binstr.WriteString("\r\n")
@@ -119,7 +125,6 @@ func (its *P2PIntegrationSuite) Test_Gossiping() {
 	binstr.WriteString("####################################### Goroutines ###################################")
 	fmt.Print(binstr.String())
 
-	testLog("%v All nodes got all messages in %v", its.T().Name(), time.Since(tm))
 }
 
 // TODO: Add more tests to the suite
