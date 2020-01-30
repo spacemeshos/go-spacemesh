@@ -32,8 +32,8 @@ var PBASE = []byte("pbase")
 
 type MeshValidator interface {
 	HandleIncomingLayer(layer *types.Layer) (types.LayerID, types.LayerID)
-	HandleLateBlock(bl *types.Block)
 	LatestComplete() types.LayerID
+	HandleLateBlock(bl *types.Block) (types.LayerID, types.LayerID)
 }
 
 type TxProcessor interface {
@@ -195,19 +195,22 @@ func (m *Mesh) GetLayer(index types.LayerID) (*types.Layer, error) {
 	return l, nil
 }
 
+func (m *Mesh) HandleLateBlock(b *types.Block) {
+	m.Info("Validate late block %s", b.Id())
+	oldPbase, newPbase := m.MeshValidator.HandleLateBlock(b)
+	m.pushLayersToState(oldPbase, newPbase)
+
+}
+
 func (m *Mesh) ValidateLayer(lyr *types.Layer) {
 	m.Info("Validate layer %d", lyr.Index())
-
 	oldPbase, newPbase := m.HandleIncomingLayer(lyr)
-
-	// update validated layer only after applying transactions since loading of state depends on processedLayer param.
 	m.lvMutex.Lock()
 	m.processedLayer = lyr.Index()
 	if err := m.general.Put(PROCESSED, lyr.Index().ToBytes()); err != nil {
 		m.Error("could not persist validated layer index %d", lyr.Index())
 	}
 	m.lvMutex.Unlock()
-
 	m.pushLayersToState(oldPbase, newPbase)
 	m.Info("done validating layer %v", lyr.Index())
 }
@@ -532,6 +535,12 @@ func (m *Mesh) AccumulateRewards(l *types.Layer, params Config) {
 		ids = append(ids, atx.Coinbase)
 
 	}
+
+	if len(ids) == 0 {
+		m.With().Info("no valid blocks for layer ", log.LayerId(uint64(l.Index())))
+		return
+	}
+
 	// aggregate all blocks' rewards
 	txs, _ := m.ExtractUniqueOrderedTransactions(l)
 
@@ -543,7 +552,7 @@ func (m *Mesh) AccumulateRewards(l *types.Layer, params Config) {
 	layerReward := CalculateLayerReward(l.Index(), params)
 	totalReward.Add(totalReward, layerReward)
 
-	numBlocks := big.NewInt(int64(len(l.Blocks())))
+	numBlocks := big.NewInt(int64(len(ids)))
 
 	blockTotalReward := calculateActualRewards(totalReward, numBlocks)
 	m.ApplyRewards(l.Index(), ids, blockTotalReward)
