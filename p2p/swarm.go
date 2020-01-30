@@ -748,6 +748,7 @@ func (s *swarm) getMorePeers(numpeers int) int {
 				reportChan <- cnErr{nd, errors.New("connection to self")}
 				return
 			}
+			s.discover.Attempt(nd.PublicKey())
 			addr := inet.TCPAddr{inet.ParseIP(nd.IP.String()), int(nd.ProtocolPort), ""}
 			_, err := s.cPool.GetConnection(&addr, nd.PublicKey())
 			reportChan <- cnErr{nd, err}
@@ -766,7 +767,6 @@ loop:
 			if cne.err != nil {
 				s.logger.Debug("can't establish connection with sampled peer %v, %v", cne.n.PublicKey(), cne.err)
 				bad++
-				s.discover.Attempt(cne.n.PublicKey())
 				break
 			}
 

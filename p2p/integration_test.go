@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/suite"
 	"golang.org/x/sync/errgroup"
 	_ "net/http/pprof"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -19,6 +20,7 @@ var exampleGossipProto = "exampleGossip"
 var exampleDirectProto = "exampleDirect"
 
 type P2PIntegrationSuite struct {
+	localMtx        sync.Mutex
 	gossipProtocols []chan service.GossipMessage
 	directProtocols []chan service.DirectMessage
 	*IntegrationTestSuite
@@ -28,9 +30,13 @@ func protocolsHelper(s *P2PIntegrationSuite) {
 	s.gossipProtocols = make([]chan service.GossipMessage, 0, 100)
 	s.directProtocols = make([]chan service.DirectMessage, 0, 100)
 	s.BeforeHook = func(idx int, nd NodeTestInstance) {
+		// these happen async so we need to lock
+		s.localMtx.Lock()
 		s.gossipProtocols = append(s.gossipProtocols, nd.RegisterGossipProtocol(exampleGossipProto, priorityq.High))
 		s.directProtocols = append(s.directProtocols, nd.RegisterDirectProtocol(exampleDirectProto))
+		s.localMtx.Unlock()
 	}
+	// from now on there are only reads so no locking needed
 }
 
 func (its *P2PIntegrationSuite) Test_SendingMessage() {
@@ -60,7 +66,7 @@ func (its *P2PIntegrationSuite) Test_SendingMessage() {
 }
 
 func (its *P2PIntegrationSuite) Test_Gossiping() {
-	ctx, _ := context.WithTimeout(context.Background(), time.Minute*3)
+	ctx, _ := context.WithTimeout(context.Background(), time.Minute*5)
 	errg, ctx := errgroup.WithContext(ctx)
 	MSGS := 100
 	MSGSIZE := 108692

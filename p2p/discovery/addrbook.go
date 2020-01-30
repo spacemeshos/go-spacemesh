@@ -272,6 +272,8 @@ func (a *addrBook) Attempt(key p2pcrypto.PublicKey) {
 	// set last tried time to now
 	ka.attempts++
 	ka.lastattempt = time.Now()
+
+	a.moveToTriedUnlocked(ka)
 }
 
 // Good marks the given address as good.  To be called after a successful
@@ -282,6 +284,7 @@ func (a *addrBook) Good(addr p2pcrypto.PublicKey) {
 	defer a.mtx.Unlock()
 
 	ka := a.find(addr)
+
 	if ka == nil {
 		return
 	}
@@ -292,13 +295,16 @@ func (a *addrBook) Good(addr p2pcrypto.PublicKey) {
 	ka.lastSeen = now
 	ka.attempts = 0
 
+	a.moveToTriedUnlocked(ka)
+}
+
+func (a *addrBook) moveToTriedUnlocked(ka *KnownAddress) {
 	// move to tried set, optionally evicting other addresses if neeed.
 	if ka.tried {
 		return
 	}
-
 	// ok, need to move it to tried.
-
+	addr := ka.na.PublicKey()
 	// remove from all new buckets.
 	// record one of the buckets in question and call it the `first'
 	addrKey := addr.Array()
