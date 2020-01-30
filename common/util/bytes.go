@@ -20,6 +20,12 @@ func Uint64ToBytes(i uint64) []byte {
 	return a
 }
 
+func Uint64ToBytesBigEndian(i uint64) []byte {
+	a := make([]byte, 8)
+	binary.BigEndian.PutUint64(a, i)
+	return a
+}
+
 // CopyBytes returns an exact copy of the provided bytes.
 func CopyBytes(b []byte) (copiedBytes []byte) {
 	if b == nil {

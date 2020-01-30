@@ -25,6 +25,7 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/iterator"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/util"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -110,7 +111,9 @@ func (db *LDBDatabase) Delete(key []byte) error {
 }
 
 func (db *LDBDatabase) NewIterator() iterator.Iterator {
-	return db.db.NewIterator(nil, nil)
+	it := db.db.NewIterator(nil, nil)
+	runtime.SetFinalizer(it, func() { it.Release() })
+	return it
 }
 
 func (db *LDBDatabase) Iterator() iterator.Iterator {

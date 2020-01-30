@@ -181,12 +181,16 @@ func GracefulShutdown(apps []*SpacemeshApp) {
 	log.Info("Graceful shutdown end")
 }
 
+type Network interface {
+	NewNode() *service.Node
+}
+
 //initialize a network mock object to simulate network between nodes.
-var net = service.NewSimulator()
+//var net = service.NewSimulator()
 
 // InitSingleInstance initializes a node instance with given
 // configuration and parameters, it does not stop the instance.
-func InitSingleInstance(cfg config.Config, i int, genesisTime string, rng *amcl.RAND, storePath string, rolacle *eligibility.FixedRolacle, poetClient *activation.RPCPoetClient, fastHare bool, clock TickProvider) (*SpacemeshApp, error) {
+func InitSingleInstance(cfg config.Config, i int, genesisTime string, rng *amcl.RAND, storePath string, rolacle *eligibility.FixedRolacle, poetClient *activation.RPCPoetClient, fastHare bool, clock TickProvider, net Network) (*SpacemeshApp, error) {
 
 	smApp := NewSpacemeshApp()
 	smApp.Config = &cfg
@@ -225,7 +229,7 @@ func StartMultiNode(numOfinstances, layerAvgSize int, runTillLayer uint32, dbPat
 	cfg := getTestDefaultConfig()
 	cfg.LayerAvgSize = layerAvgSize
 	numOfInstances := numOfinstances
-
+	net := service.NewSimulator()
 	path := dbPath + time.Now().Format(time.RFC3339)
 
 	genesisTime := time.Now().Add(20 * time.Second).Format(time.RFC3339)
@@ -250,7 +254,7 @@ func StartMultiNode(numOfinstances, layerAvgSize int, runTillLayer uint32, dbPat
 	name := 'a'
 	for i := 0; i < numOfInstances; i++ {
 		dbStorepath := path + string(name)
-		smApp, err := InitSingleInstance(*cfg, i, genesisTime, rng, dbStorepath, rolacle, poetClient, true, clock)
+		smApp, err := InitSingleInstance(*cfg, i, genesisTime, rng, dbStorepath, rolacle, poetClient, true, clock, net)
 		if err != nil {
 			log.Error("cannot run multi node %v", err)
 			return

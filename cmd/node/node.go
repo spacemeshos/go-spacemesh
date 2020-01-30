@@ -136,7 +136,7 @@ type SpacemeshApp struct {
 	jsonAPIService *api.JSONHTTPServer
 	syncer         *sync.Syncer
 	blockListener  *sync.BlockListener
-	state          *state.StateDB
+	state          *state.TransactionProcessor
 	blockProducer  *miner.BlockBuilder
 	oracle         *oracle.MinerBlockOracle
 	txProcessor    *state.TransactionProcessor
@@ -441,11 +441,6 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId,
 	}
 	app.closers = append(app.closers, db)
 
-	st, err := state.New(types.Hash32{}, state.NewDatabase(db)) //todo: we probably should load DB with latest hash
-	if err != nil {
-		return err
-	}
-
 	coinToss := weakCoinStub{}
 
 	atxdbstore, err := database.NewLDBDatabase(dbStorepath+"atx", 0, 0, app.addLogger(AtxDbStoreLogger, lg))
@@ -491,7 +486,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId,
 		return err
 	}
 	app.closers = append(app.closers, appliedTxs)
-	processor := state.NewTransactionProcessor(st, appliedTxs, meshAndPoolProjector, lg.WithName("state"))
+	processor := state.NewTransactionProcessor(db, appliedTxs, meshAndPoolProjector, lg.WithName("state"))
 
 	atxdb := activation.NewActivationDb(atxdbstore, idStore, mdb, layersPerEpoch, validator, app.addLogger(AtxDbLogger, lg))
 	beaconProvider := &oracle.EpochBeaconProvider{}
@@ -533,7 +528,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId,
 
 	ha := app.HareFactory(mdb, swarm, sgn, nodeID, syncer, msh, hOracle, idStore, clock, lg)
 
-	stateAndMeshProjector := pending_txs.NewStateAndMeshProjector(st, msh)
+	stateAndMeshProjector := pending_txs.NewStateAndMeshProjector(processor, msh)
 	blockProducer := miner.NewBlockBuilder(nodeID, sgn, swarm, clock.Subscribe(), app.Config.Hdist, app.txPool, atxpool, coinToss, msh, ha, blockOracle, processor, atxdb, syncer, app.Config.AtxsPerBlock, stateAndMeshProjector, app.addLogger(BlockBuilderLogger, lg))
 	blockListener := sync.NewBlockListener(swarm, syncer, 4, app.addLogger(BlockListenerLogger, lg))
 
@@ -555,7 +550,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId,
 	app.mesh = msh
 	app.syncer = syncer
 	app.clock = clock
-	app.state = st
+	app.state = processor
 	app.hare = ha
 	app.P2P = swarm
 	app.poetListener = poetListener
@@ -579,7 +574,7 @@ func (app *SpacemeshApp) checkTimeDrifts() {
 			_, err := timesync.CheckSystemClockDrift()
 			if err != nil {
 				app.log.Error("System time couldn't synchronize %s", err)
-				app.stopServices()
+				cmdp.Cancel()
 				return
 			}
 		}
@@ -596,11 +591,11 @@ func (app *SpacemeshApp) HareFactory(mdb *mesh.MeshDB, swarm service.Service, sg
 		for _, b := range ids {
 			res, err := mdb.GetBlock(b)
 			if err != nil {
-				app.log.With().Error("failed to validate block", log.BlockId(b.String()))
+				app.log.With().Error("output set block not in database", log.BlockId(b.String()), log.Err(err))
 				return false
 			}
 			if res == nil {
-				app.log.With().Error("failed to validate block (BUG BUG BUG - GetBlock return err nil and res nil)", log.BlockId(b.String()))
+				app.log.With().Error("output set block not in database (BUG BUG BUG - GetBlock return err nil and res nil)", log.BlockId(b.String()))
 				return false
 			}
 
