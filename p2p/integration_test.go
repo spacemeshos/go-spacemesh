@@ -94,8 +94,8 @@ func (its *P2PIntegrationSuite) Test_Gossiping() {
 			errg.Go(func() error {
 				select {
 				case got := <-mc:
-					got.ReportValidation(exampleGossipProto)
 					atomic.AddInt32(numgot, 1)
+					got.ReportValidation(exampleGossipProto)
 					doneformtx.Lock()
 					if i < len(its.boot) {
 						delete(donefor, its.boot[i].LocalNode().PublicKey().String())
