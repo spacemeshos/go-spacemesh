@@ -137,13 +137,15 @@ func NewRecoveredMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh MeshVal
 	// in case we load a state that was not fully played
 	if msh.LatestLayerInState()+1 < msh.MeshValidator.LatestComplete() {
 		// todo: add test for this case, or add random kill test on node
+		logger.Info("playing layers %v to %v to state", msh.LatestLayerInState()+1, msh.MeshValidator.LatestComplete())
 		msh.pushLayersToState(msh.LatestLayerInState()+1, msh.MeshValidator.LatestComplete())
 	}
 
 	msh.With().Info("recovered mesh from disk",
 		log.Uint64("latest_layer", msh.latestLayer.Uint64()),
 		log.Uint64("validated_layer", msh.processedLayer.Uint64()),
-		log.String("layer_hash", util.Bytes2Hex(msh.layerHash)))
+		log.String("layer_hash", util.Bytes2Hex(msh.layerHash)),
+		log.String("root_hash", pr.GetStateRoot().String()))
 
 	return msh
 }
