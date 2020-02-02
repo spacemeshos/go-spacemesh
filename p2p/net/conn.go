@@ -72,7 +72,7 @@ type FormattedConnection struct {
 	closed      bool
 	deadliner   deadliner
 	messages    chan []byte
-	stopSending chan bool
+	stopSending chan struct{}
 	close       io.Closer
 
 	msgSizeLimit int
@@ -123,7 +123,7 @@ func newConnection(conn readWriteCloseAddresser, netw networker,
 		networker:    netw,
 		session:      session,
 		messages:     make(chan []byte, MessageQueueSize),
-		stopSending:  make(chan bool),
+		stopSending:  make(chan struct{}),
 		msgSizeLimit: msgSizeLimit,
 	}
 	go connection.sendListener()
