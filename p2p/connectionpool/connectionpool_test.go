@@ -361,3 +361,24 @@ func TestConnectionPool_GetConnectionIfExists_Concurrency(t *testing.T) {
 	}
 
 }
+
+func TestConnectionPool_CloseConnection(t *testing.T) {
+	n := net.NewNetworkMock()
+	addr := "1.1.1.1"
+	cPool := NewConnectionPool(n, generatePublicKey())
+
+	pk, err := p2pcrypto.NewPublicKeyFromBase58("7gd5cD8ZanFaqnMHZrgUsUjDeVxMTxfpnu4gDPS69pBU")
+	assert.NoError(t, err)
+
+	conn := net.NewConnectionMock(pk)
+	conn.SetSession(net.NewSessionMock(p2pcrypto.NewRandomPubkey()))
+
+	nd := node.NewNode(pk, net2.ParseIP(addr), 1010, 1010)
+
+	err = cPool.OnNewConnection(net.NewConnectionEvent{conn, nd})
+	assert.NoError(t, err)
+
+	cPool.CloseConnection(nd.PublicKey())
+	_, found := cPool.connections[nd.PublicKey()]
+	assert.False(t, found)
+}

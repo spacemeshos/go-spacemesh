@@ -109,6 +109,15 @@ func (cp *ConnectionPool) closeConnections() {
 	cp.connMutex.Unlock()
 }
 
+func (cp *ConnectionPool) CloseConnection(key p2pcrypto.PublicKey) {
+	cp.connMutex.Lock()
+	if c, exist := cp.connections[key]; exist {
+		c.Close()
+		delete(cp.connections, key)
+	}
+	cp.connMutex.Unlock()
+}
+
 func (cp *ConnectionPool) handleDialResult(rPub p2pcrypto.PublicKey, result dialResult) {
 	cp.pendMutex.Lock()
 	for _, p := range cp.pending[rPub] {

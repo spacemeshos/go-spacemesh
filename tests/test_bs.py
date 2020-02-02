@@ -426,10 +426,6 @@ def add_curl(request, init_session, setup_bootstrap):
 
 
 def test_transactions(init_session, setup_network):
-    # NOTE: because we're checking in this test for the TAP nonce this test
-    #       should be the first test in this suite, because of a bug in the accountant
-    #       with calculation for the TAP balance
-
     # create #new_acc_num new accounts by sending them coins from tap
     # check tap balance/nonce
     # sleep until new state is processed
@@ -442,9 +438,10 @@ def test_transactions(init_session, setup_network):
     namespace = init_session
     wallet_api = WalletAPI(namespace, setup_network.clients.pods)
 
-    tap_balance = wallet_api.get_balance_value(conf.acc_pub)
+    tap_bal = wallet_api.get_balance_value(conf.acc_pub)
     tap_nonce = wallet_api.get_nonce_value(conf.acc_pub)
-    acc = Accountant({conf.acc_pub: Accountant.set_tap_acc(balance=tap_balance, nonce=tap_nonce)})
+    tap_pub = conf.acc_pub
+    acc = Accountant({tap_pub: Accountant.set_tap_acc(balance=tap_bal, nonce=tap_nonce)}, tap_init_amount=tap_bal)
 
     print("\n\n----- create new accounts ------")
     new_acc_num = 10
