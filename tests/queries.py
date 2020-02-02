@@ -502,7 +502,8 @@ def assert_equal_layer_hashes(indx, ns):
 
 def compare_state_roots(hits):
     state_root = hits[0].state_root
-    assert state_root != '0' * 64
+    if hits[0].layer_id >= 2:
+        assert state_root != '0' * 64
     for hit in hits:
         assert hit.state_root == state_root
     print(f"validated {len(hits)} equal state roots for layer {hits[0].layer_id}: {state_root}")
