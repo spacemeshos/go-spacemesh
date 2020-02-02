@@ -141,11 +141,14 @@ loop:
 		}
 	}
 	suite.validateBlocksAndATXs(types.LayerID(numberOfEpochs*suite.apps[0].Config.LayersPerEpoch) - 1)
+	oldRoot := suite.apps[0].state.GetStateRoot()
 	GracefulShutdown(suite.apps)
 
 	// this tests loading of pervious state, mabe it's not the best place to put this here...
 	smApp, err := InitSingleInstance(*cfg, 0, genesisTime, rng, path+"a", rolacle, poetClient, false, clock, net)
 	assert.NoError(suite.T(), err)
+	//test that loaded root equals
+	assert.Equal(suite.T(), oldRoot, smApp.state.GetStateRoot())
 	// start and stop and test for no panics
 	smApp.startServices()
 	smApp.stopServices()
@@ -525,7 +528,6 @@ func TestShutdown(t *testing.T) {
 	err = smApp.initServices(nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(smApp.Config.LayerAvgSize), postClient, poetClient, vrfSigner, uint16(smApp.Config.LayersPerEpoch), clock)
 
 	r.NoError(err)
-	smApp.setupGenesis()
 
 	smApp.startServices()
 	ActivateGrpcServer(smApp)

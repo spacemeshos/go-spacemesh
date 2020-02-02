@@ -5,6 +5,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"time"
 )
 
 type messageValidator interface {
@@ -56,11 +57,11 @@ func (ev *eligibilityValidator) validateRole(m *Msg) (bool, error) {
 	// validate role
 	res, err := ev.oracle.Eligible(layer, m.InnerMsg.K, expectedCommitteeSize(m.InnerMsg.K, ev.maxExpActives, ev.expLeaders), nId, m.InnerMsg.RoleProof)
 	if err != nil {
-		ev.With().Error("Eligibility validator: could not retrieve eligibility result", log.Err(err))
+		ev.With().Error("Eligibility validator: could not retrieve eligibility result", log.Err(err), log.String("sender_id", pub.ShortString()))
 		return false, err
 	}
 	if !res {
-		ev.With().Error("Eligibility validator: sender is not eligible to participate", log.String("sender_pub", pub.ShortString()))
+		ev.With().Error("Eligibility validator: sender is not eligible to participate", log.String("sender_id", pub.ShortString()))
 		return false, nil
 	}
 
@@ -71,12 +72,14 @@ func (ev *eligibilityValidator) validateRole(m *Msg) (bool, error) {
 func (ev *eligibilityValidator) Validate(m *Msg) bool {
 	res, err := ev.validateRole(m)
 	if err != nil {
-		ev.Error("Error occurred while validating role err=%v", err)
+		ev.With().Error("Error occurred while validating role", log.Err(err), log.String("sender_id", m.PubKey.ShortString()),
+			log.LayerId(uint64(m.InnerMsg.InstanceId)), log.String("msg_type", m.InnerMsg.Type.String()))
 		return false
 	}
 	// verify role
 	if !res {
-		ev.Warning("Validate message failed: role is invalid for pub %v", m.PubKey.ShortString())
+		ev.With().Warning("Validate message failed: role is invalid", log.String("sender_id", m.PubKey.ShortString()),
+			log.LayerId(uint64(m.InnerMsg.InstanceId)), log.String("msg_type", m.InnerMsg.Type.String()))
 		return false
 	}
 
@@ -219,12 +222,14 @@ func (v *syntaxContextValidator) SyntacticallyValidateMessage(m *Msg) bool {
 	}
 
 	if m.InnerMsg.Values == nil {
-		v.With().Warning("Syntax validation failed: set is nil", log.String("msg", m.String()))
+		v.With().Warning("Syntax validation failed: set is nil",
+			log.String("sender_id", m.PubKey.ShortString()), log.LayerId(uint64(m.InnerMsg.InstanceId)), log.String("msg_type", m.InnerMsg.Type.String()))
 		return false
 	}
 
 	if len(m.InnerMsg.Values) == 0 {
-		v.With().Warning("Syntax validation failed: set is empty", log.String("msg", m.String()))
+		v.With().Warning("Syntax validation failed: set is empty",
+			log.String("sender_id", m.PubKey.ShortString()), log.LayerId(uint64(m.InnerMsg.InstanceId)), log.String("msg_type", m.InnerMsg.Type.String()))
 		return false
 	}
 
@@ -329,12 +334,16 @@ func (v *syntaxContextValidator) validateAggregatedMessage(aggMsg *aggregatedMes
 }
 
 func (v *syntaxContextValidator) validateSVP(msg *Msg) bool {
+	defer func(startTime time.Time) {
+		v.With().Info("SVP validation duration", log.String("duration", time.Now().Sub(startTime).String()))
+	}(time.Now())
 	proposalIter := iterationFromCounter(msg.InnerMsg.K)
 	validateSameIteration := func(m *Msg) bool {
 		statusIter := iterationFromCounter(m.InnerMsg.K)
 		if proposalIter != statusIter { // not same iteration
-			v.Warning("Proposal validation failed: not same iteration. Expected: %v Actual: %v",
-				proposalIter, statusIter)
+			v.With().Warning("Proposal validation failed: not same iteration",
+				log.String("sender_id", m.PubKey.ShortString()), log.LayerId(uint64(m.InnerMsg.InstanceId)),
+				log.Int32("expected", proposalIter), log.Int32("actual", statusIter))
 			return false
 		}
 
@@ -342,7 +351,8 @@ func (v *syntaxContextValidator) validateSVP(msg *Msg) bool {
 	}
 	validators := []func(m *Msg) bool{validateStatusType, validateSameIteration, v.statusValidator}
 	if err := v.validateAggregatedMessage(msg.InnerMsg.Svp, validators); err != nil {
-		v.With().Warning("Proposal validation failed: failed to validate aggregated messages", log.Err(err))
+		v.With().Warning("Proposal validation failed: failed to validate aggregated messages", log.Err(err),
+			log.String("sender_id", msg.PubKey.ShortString()), log.LayerId(uint64(msg.InnerMsg.InstanceId)))
 		return false
 	}
 
@@ -358,12 +368,14 @@ func (v *syntaxContextValidator) validateSVP(msg *Msg) bool {
 
 	if maxKi == -1 { // type A
 		if !v.validateSVPTypeA(msg) {
-			v.Warning("Proposal validation failed: type A validation failed")
+			v.Warning("Proposal validation failed: type A validation failed",
+				log.String("sender_id", msg.PubKey.ShortString()), log.LayerId(uint64(msg.InnerMsg.InstanceId)))
 			return false
 		}
 	} else {
 		if !v.validateSVPTypeB(msg, NewSet(maxSet)) { // type B
-			v.Warning("Proposal validation failed: type B validation failed")
+			v.Warning("Proposal validation failed: type B validation failed",
+				log.String("sender_id", msg.PubKey.ShortString()), log.LayerId(uint64(msg.InnerMsg.InstanceId)))
 			return false
 		}
 	}
@@ -372,6 +384,10 @@ func (v *syntaxContextValidator) validateSVP(msg *Msg) bool {
 }
 
 func (v *syntaxContextValidator) validateCertificate(cert *certificate) bool {
+	defer func(startTime time.Time) {
+		v.With().Info("certificate validation duration", log.String("duration", time.Now().Sub(startTime).String()))
+	}(time.Now())
+
 	if cert == nil {
 		v.Warning("Certificate validation failed: certificate is nil")
 		return false

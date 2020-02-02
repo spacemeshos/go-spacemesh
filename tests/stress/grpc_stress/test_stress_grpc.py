@@ -16,7 +16,8 @@ from tests.utils import print_hits_entry_count
 def test_grpc_stress(init_session, setup_network):
     # use the same node to send all api calls (-1)
     wallet_api = WalletAPI(init_session, setup_network.clients.pods, -1)
-    accountant = Accountant({conf.acc_pub: Accountant.set_tap_acc()})
+    tap_balance = wallet_api.get_balance_value(conf.acc_pub)
+    accountant = Accountant({conf.acc_pub: Accountant.set_tap_acc(balance=tap_balance)}, tap_init_amount=tap_balance)
     api_funcs_lst = [wallet_api.get_balance_value, wallet_api.get_nonce_value, wallet_api.get_tx_by_id,
                      actions.transfer]
 

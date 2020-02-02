@@ -211,7 +211,9 @@ func (m *meshValidatorBatchMock) HandleIncomingLayer(layer *types.Layer) (types.
 	return prevPBase, prevPBase
 }
 
-func (m *meshValidatorBatchMock) HandleLateBlock(bl *types.Block) {}
+func (m *meshValidatorBatchMock) HandleLateBlock(bl *types.Block) (types.LayerID, types.LayerID) {
+	return bl.Layer() - 1, bl.Layer()
+}
 
 func TestMesh_AccumulateRewards(t *testing.T) {
 	numOfLayers := 10

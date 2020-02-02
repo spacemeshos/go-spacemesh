@@ -220,7 +220,6 @@ func InitSingleInstance(cfg config.Config, i int, genesisTime string, rng *amcl.
 	if err != nil {
 		return nil, err
 	}
-	smApp.setupGenesis()
 
 	return smApp, err
 }
