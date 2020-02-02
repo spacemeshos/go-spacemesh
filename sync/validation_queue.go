@@ -71,23 +71,23 @@ func (vq *blockQueue) handleBlock(bjb fetchJob) {
 	}
 
 	for _, id := range bjb.ids {
-
-		block, found := mp[id]
-		if !found {
+		b, ok := mp[id]
+		if !ok {
 			vq.updateDependencies(id, false)
 			vq.Error("could not retrieve a block in view %v", id.ShortString())
 			continue
 		}
 
-		vq.Info("fetched  %v", block.Id())
-		if err := vq.fastValidation(block); err != nil {
-			vq.Error("block validation failed", log.BlockId(block.Id().String()), log.Err(err))
-			vq.updateDependencies(id, false)
-			continue
-		}
+		go func(block *types.Block) {
+			vq.Info("fetched  %v", block.Id())
+			if err := vq.fastValidation(block); err != nil {
+				vq.Error("block validation failed", log.BlockId(block.Id().String()), log.Err(err))
+				vq.updateDependencies(id, false)
+				return
+			}
 
-		vq.handleBlockDependencies(block)
-		//todo better deadlock solution
+			vq.handleBlockDependencies(block)
+		}(b)
 	}
 
 }
