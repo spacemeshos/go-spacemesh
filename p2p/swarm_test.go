@@ -26,8 +26,21 @@ import (
 const debug = false
 
 type cpoolMock struct {
-	f       func(address inet.Addr, pk p2pcrypto.PublicKey) (net.Connection, error)
-	fExists func(pk p2pcrypto.PublicKey) (net.Connection, error)
+	f           func(address inet.Addr, pk p2pcrypto.PublicKey) (net.Connection, error)
+	fExists     func(pk p2pcrypto.PublicKey) (net.Connection, error)
+	calledClose int
+	keyRemoved  chan p2pcrypto.Key
+}
+
+func NewCpoolMock() *cpoolMock {
+	return &cpoolMock{
+		keyRemoved: make(chan p2pcrypto.Key, 10),
+	}
+}
+
+func (cp *cpoolMock) CloseConnection(key p2pcrypto.PublicKey) {
+	cp.keyRemoved <- key
+	cp.calledClose++
 }
 
 func (cp *cpoolMock) GetConnection(address inet.Addr, pk p2pcrypto.PublicKey) (net.Connection, error) {
@@ -747,6 +760,42 @@ func Test_Swarm_getMorePeers6(t *testing.T) {
 	assert.True(t, n.hasIncomingPeer(nd.PublicKey()))
 }
 
+func Test_Swarm_callCpoolCloseCon(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.MaxInboundPeers = 0
+	p1 := p2pTestNoStart(t, cfg)
+	p2 := p2pTestNoStart(t, cfg)
+	exchan1 := p1.RegisterDirectProtocol(exampleProtocol)
+	require.Equal(t, exchan1, p1.directProtocolHandlers[exampleProtocol])
+	exchan2 := p2.RegisterDirectProtocol(exampleProtocol)
+	require.Equal(t, exchan2, p2.directProtocolHandlers[exampleProtocol])
+
+	require.NoError(t, p1.Start())
+	require.NoError(t, p2.Start())
+
+	cpm := NewCpoolMock()
+	p1.cPool = cpm
+
+	wg := sync.WaitGroup{}
+	wg.Add(2)
+
+	_, err := p2.cPool.GetConnection(p1.network.LocalAddr(), p1.lNode.PublicKey())
+	require.NoError(t, err)
+
+	_, err = p1.cPool.GetConnection(p2.network.LocalAddr(), p2.lNode.PublicKey())
+	require.NoError(t, err)
+
+	select {
+	case key := <-cpm.keyRemoved:
+		assert.True(t, key == p1.lNode.PublicKey() || key == p2.lNode.PublicKey())
+	case <-time.After(5 * time.Second):
+		t.Error("peers were not removed from cpool")
+	}
+
+	p1.Shutdown()
+	p2.Shutdown()
+}
+
 func TestNeighborhood_Initial(t *testing.T) {
 	cfg := config.DefaultConfig()
 	cfg.SwarmConfig.RandomConnections = 3
@@ -775,7 +824,7 @@ func TestNeighborhood_Initial(t *testing.T) {
 
 	p = p2pTestNoStart(t, cfg)
 	p.discover = mdht
-	cpm := new(cpoolMock)
+	cpm := NewCpoolMock()
 	cpm.f = func(address inet.Addr, pk p2pcrypto.PublicKey) (net.Connection, error) {
 		return net.NewConnectionMock(pk), nil
 	}
