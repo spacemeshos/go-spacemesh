@@ -10,8 +10,9 @@ class Accountant:
     RECV = {"from_acc": "", "amount": 0, "gasprice": 0}
     SEND = {"to": "", "amount": 0, "gasprice": 0}
 
-    def __init__(self, accounts=None, tx_cost=conf.tx_cost):
+    def __init__(self, accounts=None, tx_cost=conf.tx_cost, tap_init_amount=conf.init_amount):
         self.accounts = accounts if accounts else {}
+        self.tap_init_amount = tap_init_amount
         self.tx_cost = tx_cost
 
     def calc_balance(self, acc_pub, init_amount=0):
@@ -75,12 +76,12 @@ class Accountant:
 
     def append_to_acc_send(self, acc, send):
         self.accounts[acc]["send"].append(send)
-        init_amount = conf.init_amount if acc == conf.acc_pub else 0
+        init_amount = self.tap_init_amount if acc == conf.acc_pub else 0
         self.calc_balance(acc, init_amount)
 
     def append_to_acc_recv(self, acc, recv):
         self.accounts[acc]["recv"].append(recv)
-        init_amount = conf.init_amount if acc == conf.acc_pub else 0
+        init_amount = self.tap_init_amount if acc == conf.acc_pub else 0
         self.calc_balance(acc, init_amount)
 
     def get_acc_send_lst(self, acc_pub):
