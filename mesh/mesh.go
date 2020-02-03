@@ -212,11 +212,11 @@ func (m *Mesh) ValidateLayer(lyr *types.Layer) {
 	oldPbase, newPbase := m.HandleIncomingLayer(lyr)
 	m.lvMutex.Lock()
 	m.processedLayer = lyr.Index()
-	if err := m.general.Put(PROCESSED, lyr.Index().ToBytes()); err != nil {
-		m.Error("could not persist validated layer index %d", lyr.Index())
-	}
 	if err := m.PersistTortoise(); err != nil {
 		m.Error("could not persist Tortoise layer index %d", lyr.Index())
+	}
+	if err := m.general.Put(PROCESSED, lyr.Index().ToBytes()); err != nil {
+		m.Error("could not persist validated layer index %d", lyr.Index())
 	}
 	m.lvMutex.Unlock()
 	m.pushLayersToState(oldPbase, newPbase)
