@@ -1119,7 +1119,7 @@ func TestSyncer_handleNotSyncedFlow(t *testing.T) {
 	sync.lValidator = lv
 	sync.SetLatestLayer(20)
 	go sync.handleNotSynced(10)
-	time.Sleep(1000 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond)
 	r.Equal(1, ts.countSub)
 }
 
