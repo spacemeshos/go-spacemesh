@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"runtime"
 	"sync"
 )
 
@@ -59,30 +60,25 @@ func (fq *fetchQueue) shutdownRecover() {
 func (fq *fetchQueue) work() error {
 
 	defer fq.shutdownRecover()
-
-	output := fetchWithFactory(NewFetchWorker(fq.workerInfra, 4, fq.BatchRequestFactory, fq.queue, fq.name))
+	output := fetchWithFactory(NewFetchWorker(fq.workerInfra, runtime.NumCPU(), fq.BatchRequestFactory, fq.queue, fq.name))
 	for out := range output {
-		go func(out interface{}) {
-			fq.Debug("new batch out of queue")
-			if out == nil {
-				fq.Info("close queue")
-				return
-			}
+		fq.Debug("new batch out of queue")
+		if out == nil {
+			fq.Info("close queue")
+			continue
+		}
 
-			bjb, ok := out.(fetchJob)
-			if !ok {
-				fq.Error(fmt.Sprintf("Type assertion err %v", out))
-				return
-			}
-			if len(bjb.ids) == 0 {
-				fq.Info("channel closed")
-			}
-			fq.Info("fetched %s's %s", fq.name, concatShortIds(bjb.ids))
-			fq.handleFetch(bjb)
-			fq.Debug("next batch")
-
-		}(out)
-
+		bjb, ok := out.(fetchJob)
+		if !ok {
+			fq.Error(fmt.Sprintf("Type assertion err %v", out))
+			continue
+		}
+		if len(bjb.ids) == 0 {
+			fq.Info("channel closed")
+		}
+		fq.Info("fetched %s's %s", fq.name, concatShortIds(bjb.ids))
+		fq.handleFetch(bjb)
+		fq.Debug("next batch")
 	}
 	return nil
 }
