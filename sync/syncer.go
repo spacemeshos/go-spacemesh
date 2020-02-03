@@ -59,6 +59,7 @@ type Configuration struct {
 	Concurrency    int //number of workers for sync method
 	LayerSize      int
 	RequestTimeout time.Duration
+	syncInterval   time.Duration
 	AtxsLimit      int
 	Hdist          int
 }
@@ -104,14 +105,12 @@ type Syncer struct {
 	txpool               TxMemPool
 	atxpool              AtxMemPool
 	lValidator           LayerValidator
-	currentLayer         types.LayerID
-	currentLayerMutex    sync.RWMutex
 	validatingLayer      types.LayerID
 	validatingLayerMutex sync.Mutex
 	SyncLock             uint32
 	startLock            uint32
 	forceSync            chan bool
-	LayerCh              timesync.LayerTimer
+	syncTimer            *time.Ticker
 	exit                 chan struct{}
 	syncRoutineWg        sync.WaitGroup
 	gossipLock           sync.RWMutex
@@ -154,7 +153,7 @@ const (
 func (s *Syncer) weaklySynced() bool {
 	// equivalent to s.LatestLayer() >= s.lastTickedLayer()-1
 	// means we have data from the previous layer
-	return s.LatestLayer()+1 >= s.lastTickedLayer()
+	return s.LatestLayer()+1 >= s.GetCurrentLayer()
 }
 
 func (s *Syncer) getGossipBufferingStatus() Status {
@@ -192,7 +191,7 @@ func (s *Syncer) Await() chan struct{} {
 }
 
 func (s *Syncer) IsSynced() bool {
-	s.Log.Info("latest: %v, maxSynced %v", s.LatestLayer(), s.lastTickedLayer())
+	s.Log.Info("latest: %v, maxSynced %v", s.LatestLayer(), s.GetCurrentLayer())
 	return s.weaklySynced() && s.getGossipBufferingStatus() == Done
 }
 
@@ -224,11 +223,7 @@ func (s *Syncer) run() {
 			return
 		case <-s.forceSync:
 			go syncRoutine()
-		case layer := <-s.LayerCh:
-			s.currentLayerMutex.Lock()
-			s.currentLayer = layer
-			s.currentLayerMutex.Unlock()
-			s.Debug("sync got tick for layer %v", layer)
+		case <-s.syncTimer.C:
 			go syncRoutine()
 		}
 	}
@@ -260,9 +255,8 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool A
 		atxpool:              atxpool,
 		startLock:            0,
 		forceSync:            make(chan bool),
-		currentLayer:         clock.GetCurrentLayer(),
 		validatingLayer:      ValidatingLayerNone,
-		LayerCh:              clock.Subscribe(),
+		syncTimer:            time.NewTicker(conf.syncInterval),
 		exit:                 exit,
 		gossipSynced:         Pending,
 		awaitCh:              make(chan struct{}),
@@ -282,25 +276,18 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool A
 	return s
 }
 
-func (s *Syncer) lastTickedLayer() types.LayerID {
-	s.currentLayerMutex.RLock()
-	curr := s.currentLayer
-	s.currentLayerMutex.RUnlock()
-	return curr
-}
-
 func (s *Syncer) Synchronise() {
 	defer s.syncRoutineWg.Done()
 	s.Info("start synchronize")
 
-	if s.lastTickedLayer() <= 1 { // skip validation for first layer
-		s.With().Info("Not syncing in layer <= 1", log.LayerId(uint64(s.lastTickedLayer())))
+	if s.GetCurrentLayer() <= 1 { // skip validation for first layer
+		s.With().Info("Not syncing in layer <= 1", log.LayerId(uint64(s.GetCurrentLayer())))
 		s.setGossipBufferingStatus(Done) // fully-synced, make sure we listen to p2p
 		return
 	}
 
 	currentSyncLayer := s.lValidator.ProcessedLayer() + 1
-	if currentSyncLayer == s.lastTickedLayer() { // only validate if current < lastTicked
+	if currentSyncLayer == s.GetCurrentLayer() { // only validate if current < lastTicked
 		s.With().Info("Already synced for layer", log.Uint64("current_sync_layer", uint64(currentSyncLayer)))
 		s.setGossipBufferingStatus(Done) // fully-synced, make sure we listen to p2p
 		return
@@ -309,7 +296,7 @@ func (s *Syncer) Synchronise() {
 	if s.weaklySynced() { // we have all the data of the prev layers so we can simply validate
 		s.With().Info("Node is synced. Going to validate layer", log.LayerId(uint64(currentSyncLayer)))
 		if err := s.GetAndValidateLayer(currentSyncLayer); err != nil {
-			s.Panic("failed getting layer even though we are weakly-synced currentLayer=%v lastTicked=%v err=%v ", currentSyncLayer, s.lastTickedLayer(), err)
+			s.Panic("failed getting layer even though we are weakly-synced currentLayer=%v lastTicked=%v err=%v ", currentSyncLayer, s.GetCurrentLayer(), err)
 		}
 		return
 	}
@@ -344,8 +331,8 @@ func (s *Syncer) handleNotSynced(currentSyncLayer types.LayerID) {
 
 	// first, bring all the data of the prev layers
 	// Note: lastTicked() is not constant but updates as ticks are received
-	for ; currentSyncLayer < s.lastTickedLayer(); currentSyncLayer++ {
-		s.With().Info("syncing layer", log.Uint64("current_sync_layer", uint64(currentSyncLayer)), log.Uint64("last_ticked_layer", uint64(s.lastTickedLayer())))
+	for ; currentSyncLayer < s.GetCurrentLayer(); currentSyncLayer++ {
+		s.With().Info("syncing layer", log.Uint64("current_sync_layer", uint64(currentSyncLayer)), log.Uint64("last_ticked_layer", uint64(s.GetCurrentLayer())))
 		lyr, err := s.getLayerFromNeighbors(currentSyncLayer)
 		if err != nil {
 			s.Info("could not get layer %v from neighbors %v", currentSyncLayer, err)
