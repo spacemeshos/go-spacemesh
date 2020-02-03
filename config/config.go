@@ -90,6 +90,8 @@ type BaseConfig struct {
 
 	SyncRequestTimeout int `mapstructure:"sync-request-timeout"` // the timeout for direct request in the sync
 
+	SyncInterval int `mapstructure:"sync-interval"`
+
 	PublishEventsUrl string `mapstructure:"events-url"`
 
 	StartMining bool `mapstructure:"start-mining"`
@@ -160,6 +162,7 @@ func defaultBaseConfig() BaseConfig {
 		GenesisActiveSet:    5,
 		BlockCacheSize:      20,
 		SyncRequestTimeout:  2000,
+		SyncInterval:        10,
 		AtxsPerBlock:        100,
 	}
 }

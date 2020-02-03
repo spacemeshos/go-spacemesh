@@ -59,7 +59,7 @@ type Configuration struct {
 	Concurrency    int //number of workers for sync method
 	LayerSize      int
 	RequestTimeout time.Duration
-	syncInterval   time.Duration
+	SyncInterval   time.Duration
 	AtxsLimit      int
 	Hdist          int
 }
@@ -213,7 +213,7 @@ func (s *Syncer) getSyncRoutine() func() {
 	}
 }
 
-//fires a sync every sm.syncInterval or on force space from outside
+//fires a sync every sm.SyncInterval or on force space from outside
 func (s *Syncer) run() {
 	syncRoutine := s.getSyncRoutine()
 	for {
@@ -229,7 +229,7 @@ func (s *Syncer) run() {
 	}
 }
 
-//fires a sync every sm.syncInterval or on force space from outside
+//fires a sync every sm.SyncInterval or on force space from outside
 func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool AtxMemPool, bv BlockValidator, poetdb PoetDb, conf Configuration, clock TickProvider, logger log.Log) *Syncer {
 
 	exit := make(chan struct{})
@@ -256,7 +256,7 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool A
 		startLock:            0,
 		forceSync:            make(chan bool),
 		validatingLayer:      ValidatingLayerNone,
-		syncTimer:            time.NewTicker(conf.syncInterval),
+		syncTimer:            time.NewTicker(conf.SyncInterval),
 		exit:                 exit,
 		gossipSynced:         Pending,
 		awaitCh:              make(chan struct{}),
