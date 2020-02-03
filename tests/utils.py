@@ -78,3 +78,25 @@ def wait_for_next_layer(namespace, cl_num, timeout):
         timeout -= tts
 
     return
+
+
+# TODO there might be a better place for a validation func than utils
+def validate_blocks_per_nodes(block_map, last_layer, layers_per_epoch, layer_avg_size, num_miners):
+    """
+
+    :param block_map: dictionary, map between nodes to
+    :param last_layer:
+    :param layers_per_epoch:
+    :param layer_avg_size:
+    :param num_miners:
+    :return:
+    """
+    for node in block_map:
+        node_lays = block_map[node]["layers"]
+        blocks_in_relevant_layers = sum([len(node_lays[str(x)]) for x in range(layers_per_epoch, last_layer)
+                                         if str(x) in node_lays])
+        # need to deduct blocks created in first genesis epoch since it does not follow general mining rules by design
+        blocks_created_per_layer = blocks_in_relevant_layers / (last_layer - layers_per_epoch)
+        wanted_avg_block_per_node = max(1, int(layer_avg_size / num_miners))
+        ass_err = f"node {node} failed creating the avg block size"
+        assert blocks_created_per_layer / wanted_avg_block_per_node == 1, ass_err
