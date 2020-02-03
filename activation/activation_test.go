@@ -3,17 +3,20 @@ package activation
 import (
 	"bytes"
 	"fmt"
+	"github.com/google/uuid"
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/post/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"sort"
+	"sync"
 	"testing"
 	"time"
 )
@@ -754,4 +757,75 @@ func TestStartPost(t *testing.T) {
 	// Verify both builders produced the same commitment proof - one from the initialization phase,
 	// the other from a zero-challenge execution phase.
 	assert.Equal(t, builder.commitment, execBuilder.commitment)
+}
+
+func TestSignAtx221(t *testing.T) {
+	var view []types.BlockID
+	view = append(view, block1.Id())
+	h, _ := types.CalcBlocksHash12(view)
+	activesetCache.Add(h, 5)
+
+	view = append(view, block1.Id())
+	h, _ = types.CalcBlocksHash12(view)
+	activesetCache.Add(h, 5)
+	v, b := activesetCache.Get(h)
+	fmt.Println(v, b, activesetCache.Len())
+}
+
+func gen_view() []types.BlockID {
+	l := rand.Int() % 100
+	var v []types.BlockID
+	for i := 0; i < l; i++ {
+		v = append(v, block2.Id())
+	}
+
+	return v
+}
+
+func TestActivationDb_CalcActiveSetFromViewWithCac432he(t *testing.T) {
+	activesetCache = NewActivesetCache(10) // small cache for collisions
+	atxdb, layers, _ := getAtxDb("t6")
+
+	id1 := types.NodeId{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}
+	id2 := types.NodeId{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}
+	id3 := types.NodeId{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}
+	coinbase1 := types.HexToAddress("aaaa")
+	coinbase2 := types.HexToAddress("bbbb")
+	coinbase3 := types.HexToAddress("cccc")
+	atxs := []*types.ActivationTx{
+		types.NewActivationTxForTests(id1, 0, *types.EmptyAtxId, 12, 0, *types.EmptyAtxId, coinbase1, 0, []types.BlockID{}, &types.NIPST{}),
+		types.NewActivationTxForTests(id2, 0, *types.EmptyAtxId, 300, 0, *types.EmptyAtxId, coinbase2, 0, []types.BlockID{}, &types.NIPST{}),
+		types.NewActivationTxForTests(id3, 0, *types.EmptyAtxId, 435, 0, *types.EmptyAtxId, coinbase3, 0, []types.BlockID{}, &types.NIPST{}),
+	}
+
+	poetRef := []byte{0xba, 0xb0}
+	for _, atx := range atxs {
+		hash, err := atx.NIPSTChallenge.Hash()
+		assert.NoError(t, err)
+		atx.Nipst = NewNIPSTWithChallenge(hash, poetRef)
+	}
+
+	blocks := createLayerWithAtx(t, layers, 1, 10, atxs, []types.BlockID{}, []types.BlockID{})
+	blocks = createLayerWithAtx(t, layers, 10, 10, []*types.ActivationTx{}, blocks, blocks)
+	blocks = createLayerWithAtx(t, layers, 100, 10, []*types.ActivationTx{}, blocks, blocks)
+
+	mck := &ATXDBMock{}
+	atx := types.NewActivationTxForTests(id1, 1, atxs[0].Id(), 1000, 0, atxs[0].Id(), coinbase1, 3, blocks, &types.NIPST{})
+
+	atxdb.calcActiveSetFunc = mck.CalcActiveSetSize
+	wg := sync.WaitGroup{}
+	ff := 5000
+	wg.Add(ff)
+	rand.Seed(time.Now().UnixNano())
+	for i := 0; i < ff; i++ {
+		go func() {
+			num, err := atxdb.CalcActiveSetFromView(gen_view(), atx.PubLayerIdx.GetEpoch(layersPerEpochBig))
+			assert.NoError(t, err)
+			assert.Equal(t, 3, int(num))
+			assert.NoError(t, err)
+			wg.Done()
+		}()
+	}
+
+	wg.Wait()
 }
