@@ -201,16 +201,6 @@ func (prot *Protocol) getPriority(protoName string) priorityq.Priority {
 	return v
 }
 
-func (prot *Protocol) drainPropagationQueue() {
-	for {
-		select {
-		case <-prot.propagateQ:
-		default:
-			return
-		}
-	}
-}
-
 func (prot *Protocol) propagationEventLoop() {
 	go prot.handlePQ()
 
@@ -224,7 +214,6 @@ func (prot *Protocol) propagationEventLoop() {
 
 		case <-prot.shutdown:
 			prot.pq.Close()
-			prot.drainPropagationQueue()
 			prot.Error("propagate event loop stopped: protocol shutdown")
 			return
 		}

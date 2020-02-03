@@ -58,9 +58,7 @@ func NewDiscoveryProtocol(local p2pcrypto.PublicKey, rt protocolRoutingTable, sv
 		logger:    log,
 	}
 
-	//tcp := &net.TCPAddr{localNode.IP, int(localNode.ProtocolPort), ""}
-	//udp := &net.UDPAddr{localNode.IP, int(localNode.DiscoveryPort), ""}
-	//d.SetLocalAddresses(tcp.String(), udp.String())
+	// XXX Reminder: for discovery protocol to work you must call SetLocalAddresses with updated ports from the socket.
 
 	d.msgServer.RegisterMsgHandler(PINGPONG, d.newPingRequestHandler())
 	d.msgServer.RegisterMsgHandler(GET_ADDRESSES, d.newGetAddressesRequestHandler())

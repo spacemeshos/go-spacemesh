@@ -1,18 +1,14 @@
 package p2p
 
 import (
-	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	"golang.org/x/sync/errgroup"
-	_ "net/http/pprof"
-	"runtime/pprof"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -101,32 +97,11 @@ func (its *P2PIntegrationSuite) Test_Gossiping() {
 	}
 
 	testLog("%v Waiting for all messages to pass", its.T().Name())
-
-	//<-time.After(time.Minute * 3)
-	//printGoroutines()
-
 	errs := errg.Wait()
 	its.T().Log(errs)
 	its.NoError(errs)
 	its.Equal(int(numgot), (its.BootstrappedNodeCount+its.BootstrapNodesCount)*MSGS)
 	testLog("%v All nodes got all messages in %v", its.T().Name(), time.Since(tm))
-}
-
-func printGoroutines() {
-	binstr := &bytes.Buffer{}
-	binstr.WriteString("####################################### Goroutines ###################################")
-	binstr.WriteString("\r\n")
-	binstr.WriteString("\r\n")
-	binstr.WriteString("\r\n")
-	binstr.WriteString("\r\n")
-	pprof.Lookup("goroutine").WriteTo(binstr, 1)
-	binstr.WriteString("\r\n")
-	binstr.WriteString("\r\n")
-	binstr.WriteString("\r\n")
-	binstr.WriteString("\r\n")
-	binstr.WriteString("####################################### Goroutines ###################################")
-	fmt.Print(binstr.String())
-
 }
 
 // TODO: Add more tests to the suite

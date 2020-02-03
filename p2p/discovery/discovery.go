@@ -130,7 +130,6 @@ func (d *Discovery) Update(addr, src *node.NodeInfo) {
 	d.rt.AddAddress(addr, src)
 }
 
-// TODO: Replace `node.LocalNode` with `NodeInfo` and `log.Log`.
 // New creates a new Discovery
 func New(ln node.LocalNode, config config.SwarmConfig, service server.Service, path string, logger log.Log) *Discovery {
 

@@ -116,7 +116,7 @@ arm6: genproto
 
 
 test: genproto
-	ulimit -n 9999; go test -timeout 0 -p 1 -v ./p2p -run Test_BigP2PIntegrationSuite
+	ulimit -n 9999; go test -timeout 0 -p 1 ./...
 .PHONY: test
 
 

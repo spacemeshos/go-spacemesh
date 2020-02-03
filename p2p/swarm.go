@@ -108,10 +108,6 @@ func (s *swarm) waitForGossip() error {
 // and not load from disk. it creates a new `net`, connection pool and discovery.
 func newSwarm(ctx context.Context, config config.Config, logger log.Log, datadir string) (*swarm, error) {
 
-	if logger == log.NilLogger {
-		logger = log.NewDefault("swarm")
-	}
-
 	port := config.TCPPort
 	tcpaddr := &inet.TCPAddr{inet.ParseIP("0.0.0.0"), port, ""}
 	udpaddr := &inet.UDPAddr{inet.ParseIP("0.0.0.0"), port, ""}
@@ -122,12 +118,9 @@ func newSwarm(ctx context.Context, config config.Config, logger log.Log, datadir
 	// Load an existing identity from file if exists.
 	if config.NodeID != "" {
 		l, err = node.LoadIdentity(datadir, config.NodeID)
-		if err != nil {
-			return nil, err
-		}
+	} else {
+		l, err = node.NewNodeIdentity()
 	}
-
-	l, err = node.NewNodeIdentity()
 
 	if err != nil {
 		return nil, err
