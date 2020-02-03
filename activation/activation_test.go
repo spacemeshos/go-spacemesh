@@ -759,19 +759,6 @@ func TestStartPost(t *testing.T) {
 	assert.Equal(t, builder.commitment, execBuilder.commitment)
 }
 
-func TestSignAtx221(t *testing.T) {
-	var view []types.BlockID
-	view = append(view, block1.Id())
-	h, _ := types.CalcBlocksHash12(view)
-	activesetCache.Add(h, 5)
-
-	view = append(view, block1.Id())
-	h, _ = types.CalcBlocksHash12(view)
-	activesetCache.Add(h, 5)
-	v, b := activesetCache.Get(h)
-	fmt.Println(v, b, activesetCache.Len())
-}
-
 func gen_view() []types.BlockID {
 	l := rand.Int() % 100
 	var v []types.BlockID
@@ -782,7 +769,7 @@ func gen_view() []types.BlockID {
 	return v
 }
 
-func TestActivationDb_CalcActiveSetFromViewWithCac432he(t *testing.T) {
+func TestActivationDb_CalcActiveSetFromViewHighConcurrency(t *testing.T) {
 	activesetCache = NewActivesetCache(10) // small cache for collisions
 	atxdb, layers, _ := getAtxDb("t6")
 
