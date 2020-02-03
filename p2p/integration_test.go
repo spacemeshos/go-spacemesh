@@ -70,6 +70,8 @@ func (its *P2PIntegrationSuite) Test_SendingMessage() {
 
 func (its *P2PIntegrationSuite) Test_Gossiping() {
 	ctx, _ := context.WithTimeout(context.Background(), time.Minute*5)
+	err := its.WaitForGossip(ctx)
+	require.NoError(its.T(), err, "Failed to connect all nodes to gossip")
 	errg, ctx := errgroup.WithContext(ctx)
 
 	MSGS := 100
@@ -100,8 +102,8 @@ func (its *P2PIntegrationSuite) Test_Gossiping() {
 
 	testLog("%v Waiting for all messages to pass", its.T().Name())
 
-	<-time.After(time.Minute * 3)
-	printGoroutines()
+	//<-time.After(time.Minute * 3)
+	//printGoroutines()
 
 	errs := errg.Wait()
 	its.T().Log(errs)

@@ -155,6 +155,21 @@ func createP2pInstance(t testing.TB, config config.Config) *swarm {
 	return p
 }
 
+func (its *IntegrationTestSuite) WaitForGossip(ctx context.Context) error {
+	g, _ := errgroup.WithContext(ctx)
+	for _, b := range its.boot {
+		g.Go(func() error {
+			return b.waitForGossip()
+		})
+	}
+	for _, i := range its.Instances {
+		g.Go(func() error {
+			return i.waitForGossip()
+		})
+	}
+	return g.Wait()
+}
+
 func (its *IntegrationTestSuite) ForAll(f func(idx int, s NodeTestInstance) error, filter []int) []error {
 	e := make([]error, 0)
 swarms:
