@@ -6,58 +6,41 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/poet/rpc/api"
+	"github.com/spacemeshos/poet/integration"
 	"io/ioutil"
 	"net/http"
 	"time"
 )
 
-// RPCPoetClient implements PoetProvingServiceClient interface.
-type RPCPoetClient struct {
-	client   api.PoetClient
+// HTTPPoetHarness utilizes a local self-contained poet server instance
+// targeted by an HTTP client, in order to exercise functionality.
+type HTTPPoetHarness struct {
+	*HTTPPoetClient
 	Teardown func(cleanup bool) error
+	h        *integration.Harness
 }
 
-// A compile time check to ensure that RPCPoetClient fully implements PoetProvingServiceClient.
-var _ PoetProvingServiceClient = (*RPCPoetClient)(nil)
+// A compile time check to ensure that HTTPPoetClient fully implements PoetProvingServiceClient.
+var _ PoetProvingServiceClient = (*HTTPPoetHarness)(nil)
 
-func (c *RPCPoetClient) Start(nodeAddress string) error {
-	req := api.StartRequest{NodeAddress: nodeAddress}
-	_, err := c.client.Start(context.Background(), &req)
+// NewHTTPPoetHarness returns a new instance of HTTPPoetHarness.
+func NewHTTPPoetHarness(disableBroadcast bool) (*HTTPPoetHarness, error) {
+	cfg, err := integration.DefaultConfig()
 	if err != nil {
-		return fmt.Errorf("rpc failure: %v", err)
+		return nil, err
 	}
+	cfg.DisableBroadcast = disableBroadcast
 
-	return nil
-}
-
-func (c *RPCPoetClient) submit(challenge types.Hash32) (*types.PoetRound, error) {
-	req := api.SubmitRequest{Challenge: challenge[:]}
-	res, err := c.client.Submit(context.Background(), &req)
+	h, err := integration.NewHarness(cfg)
 	if err != nil {
-		return nil, fmt.Errorf("rpc failure: %v", err)
+		return nil, err
 	}
 
-	return &types.PoetRound{Id: res.RoundId}, nil
-}
-
-func (c *RPCPoetClient) getPoetServiceId() ([]byte, error) {
-	req := api.GetInfoRequest{}
-	res, err := c.client.GetInfo(context.Background(), &req)
-	if err != nil {
-		return []byte{}, fmt.Errorf("rpc failure: %v", err)
-	}
-
-	return res.ServicePubKey, nil
-}
-
-// NewRPCPoetClient returns a new RPCPoetClient instance for the provided
-// and already-connected gRPC PoetClient instance.
-func NewRPCPoetClient(client api.PoetClient, cleanUp func(cleanup bool) error) *RPCPoetClient {
-	return &RPCPoetClient{
-		client:   client,
-		Teardown: cleanUp,
-	}
+	return &HTTPPoetHarness{
+		HTTPPoetClient: NewHTTPPoetClient(h.RESTListen(), context.Background()),
+		Teardown:       h.TearDown,
+		h:              h,
+	}, nil
 }
 
 // HTTPPoetClient implements PoetProvingServiceClient interface.
@@ -88,7 +71,7 @@ func (c *HTTPPoetClient) Start(gatewayAddresses []string) error {
 	return nil
 }
 
-func (c *HTTPPoetClient) submit(challenge types.Hash32) (*types.PoetRound, error) {
+func (c *HTTPPoetClient) Submit(challenge types.Hash32) (*types.PoetRound, error) {
 	reqBody := SubmitRequest{Challenge: challenge[:]}
 	resBody := &SubmitResponse{}
 	if err := c.req("POST", "/submit", reqBody, resBody); err != nil {
@@ -98,7 +81,7 @@ func (c *HTTPPoetClient) submit(challenge types.Hash32) (*types.PoetRound, error
 	return &types.PoetRound{Id: resBody.RoundId}, nil
 }
 
-func (c *HTTPPoetClient) getPoetServiceId() ([]byte, error) {
+func (c *HTTPPoetClient) PoetServiceId() ([]byte, error) {
 	resBody := &GetInfoResponse{}
 	if err := c.req("GET", "/info", nil, resBody); err != nil {
 		return nil, err
@@ -136,8 +119,10 @@ func (c *HTTPPoetClient) req(method string, endUrl string, reqBody interface{}, 
 		return fmt.Errorf("response status code: %d, body: %s", res.StatusCode, string(data))
 	}
 
-	if err := json.NewDecoder(res.Body).Decode(resBody); err != nil {
-		return fmt.Errorf("response json decode failure: %v", err)
+	if resBody != nil {
+		if err := json.NewDecoder(res.Body).Decode(resBody); err != nil {
+			return fmt.Errorf("response json decode failure: %v", err)
+		}
 	}
 
 	return nil

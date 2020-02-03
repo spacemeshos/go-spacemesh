@@ -16,7 +16,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
-	"github.com/spacemeshos/poet/integration"
 	"strconv"
 	"sync"
 	"time"
@@ -145,26 +144,6 @@ func ActivateGrpcServer(smApp *SpacemeshApp) {
 	smApp.grpcAPIService.StartService()
 }
 
-// NewRPCPoetHarnessClient returns a new instance of RPCPoetClient
-// which utilizes a local self-contained poet server instance
-// in order to exercise functionality.
-func NewRPCPoetHarnessClient() (*activation.RPCPoetClient, error) {
-	cfg, err := integration.DefaultConfig()
-	if err != nil {
-		return nil, err
-	}
-
-	cfg.N = 10
-	cfg.InitialRoundDuration = time.Duration(3 * time.Second).String()
-
-	h, err := integration.NewHarness(cfg)
-	if err != nil {
-		return nil, err
-	}
-
-	return activation.NewRPCPoetClient(h.PoetClient, h.TearDown), nil
-}
-
 // GracefulShutdown stops the current services running in apps
 func GracefulShutdown(apps []*SpacemeshApp) {
 	log.Info("Graceful shutdown begin")
@@ -187,7 +166,7 @@ var net = service.NewSimulator()
 
 // InitSingleInstance initializes a node instance with given
 // configuration and parameters, it does not stop the instance.
-func InitSingleInstance(cfg config.Config, i int, genesisTime string, rng *amcl.RAND, storePath string, rolacle *eligibility.FixedRolacle, poetClient *activation.RPCPoetClient, fastHare bool, clock TickProvider) (*SpacemeshApp, error) {
+func InitSingleInstance(cfg config.Config, i int, genesisTime string, rng *amcl.RAND, storePath string, rolacle *eligibility.FixedRolacle, poetClient *activation.HTTPPoetClient, fastHare bool, clock TickProvider) (*SpacemeshApp, error) {
 
 	smApp := NewSpacemeshApp()
 	smApp.Config = &cfg
@@ -231,11 +210,11 @@ func StartMultiNode(numOfinstances, layerAvgSize int, runTillLayer uint32, dbPat
 
 	genesisTime := time.Now().Add(20 * time.Second).Format(time.RFC3339)
 
-	poetClient, err := NewRPCPoetHarnessClient()
+	poetHarness, err := activation.NewHTTPPoetHarness(false)
 	if err != nil {
 		log.Panic("failed creating poet client harness: %v", err)
 	}
-	defer poetClient.Teardown(true)
+	defer poetHarness.Teardown(true)
 
 	rolacle := eligibility.New()
 	rng := BLS381.DefaultSeed()
@@ -251,7 +230,7 @@ func StartMultiNode(numOfinstances, layerAvgSize int, runTillLayer uint32, dbPat
 	name := 'a'
 	for i := 0; i < numOfInstances; i++ {
 		dbStorepath := path + string(name)
-		smApp, err := InitSingleInstance(*cfg, i, genesisTime, rng, dbStorepath, rolacle, poetClient, true, clock)
+		smApp, err := InitSingleInstance(*cfg, i, genesisTime, rng, dbStorepath, rolacle, poetHarness.HTTPPoetClient, true, clock)
 		if err != nil {
 			log.Error("cannot run multi node %v", err)
 			return
@@ -268,7 +247,7 @@ func StartMultiNode(numOfinstances, layerAvgSize int, runTillLayer uint32, dbPat
 	collect.Start(false)
 	ActivateGrpcServer(apps[0])
 
-	if err := poetClient.Start("127.0.0.1:9091"); err != nil {
+	if err := poetHarness.Start([]string{"127.0.0.1:9091"}); err != nil {
 		log.Panic("failed to start poet server: %v", err)
 	}
 

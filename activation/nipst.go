@@ -51,11 +51,10 @@ type PostProverClient interface {
 // reduce the cost-per-proof for PoET since each additional proof adds
 // only a small number of hash evaluations to the total cost.
 type PoetProvingServiceClient interface {
-	// submit registers a challenge in the proving service
-	// open round suited for the specified duration.
-	submit(challenge types.Hash32) (*types.PoetRound, error)
+	// Submit registers a challenge in the proving service current open round.
+	Submit(challenge types.Hash32) (*types.PoetRound, error)
 
-	getPoetServiceId() ([]byte, error)
+	PoetServiceId() ([]byte, error)
 }
 
 type builderState struct {
@@ -178,7 +177,7 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *types.Hash32, atxExpired chan stru
 
 	// Phase 0: Submit challenge to PoET service.
 	if nb.state.PoetRound == nil {
-		poetServiceId, err := nb.poetProver.getPoetServiceId()
+		poetServiceId, err := nb.poetProver.PoetServiceId()
 		if err != nil {
 			return nil, fmt.Errorf("failed to get PoET service ID: %v", err)
 		}
@@ -190,7 +189,7 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *types.Hash32, atxExpired chan stru
 		nb.log.Debug("submitting challenge to PoET proving service (PoET id: %x, challenge: %x)",
 			nb.state.PoetServiceId, poetChallenge)
 
-		round, err := nb.poetProver.submit(*poetChallenge)
+		round, err := nb.poetProver.Submit(*poetChallenge)
 		if err != nil {
 			return nil, fmt.Errorf("failed to submit challenge to poet service: %v", err)
 		}
