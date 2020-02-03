@@ -16,7 +16,7 @@ type vec [2]int
 type PatternId uint32 //this hash dose not include the layer id
 
 const ( //Threshold
-	Window          = 25
+	Window          = 10
 	LocalThreshold  = 0.8 //ThetaL
 	GlobalThreshold = 0.6 //ThetaG
 	Genesis         = 0

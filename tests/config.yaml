@@ -4,13 +4,13 @@ config_map_name: conf
 
 script_on_exit: '' # Uncomment this to save logs './k8s/log-client-pods.sh'
 
-genesis_delta: 90
+genesis_delta: 170
 single_pod_ready_time_out: 60
 deployment_ready_time_out: 120
 config_path: '../config.toml'
 
 bootstrap:
-  image: 'spacemeshos/go-spacemesh-dev:barak25a'
+  image: 'spacemeshos/go-spacemesh:develop'
   command: '/bin/go-harness'
   replicas: 1
   resources:
@@ -22,24 +22,22 @@ bootstrap:
       cpu: '2'
   args:
     randcon: '8'
-    hare-committee-size: '30'
-    hare-max-adversaries: '14'
+    hare-committee-size: '50'
+    hare-max-adversaries: '24'
     hare-round-duration-sec: '10'
-    hare-exp-leaders: '4'
+    hare-exp-leaders: '10'
     layer-duration-sec: '60'
-    layer-average-size: '30'
+    layer-average-size: '50'
     hare-wakeup-delta: '10'
-    layers-per-epoch: '7'
+    layers-per-epoch: '3'
     coinbase: '0x4321'
-    eligibility-confidence-param: '25'
+    eligibility-confidence-param: '5'
     eligibility-epoch-offset: '0'
     genesis-active-size: '50'
-    hare-limit-iterations: '10'
-    hdist: '5'
     executable-path: '/bin/go-spacemesh'
   deployment_type: deployment
 client:
-  image: 'spacemeshos/go-spacemesh-dev:barak25a'
+  image: 'spacemeshos/go-spacemesh:develop'
   command: '/bin/go-harness'
   replicas: 49
   resources:
@@ -51,20 +49,18 @@ client:
       cpu: '2'
   args:
     randcon: '8'
-    hare-committee-size: '30'
-    hare-max-adversaries: '14'
+    hare-committee-size: '50'
+    hare-max-adversaries: '24'
     hare-round-duration-sec: '10'
-    hare-exp-leaders: '4'
+    hare-exp-leaders: '10'
     layer-duration-sec: '60'
-    layer-average-size: '30'
+    layer-average-size: '50'
     hare-wakeup-delta: '10'
-    layers-per-epoch: '7'
+    layers-per-epoch: '3'
     coinbase: '0x1234'
-    eligibility-confidence-param: '25'
+    eligibility-confidence-param: '5'
     eligibility-epoch-offset: '0'
     genesis-active-size: '50'
-    hare-limit-iterations: '10'
-    hdist: '5'
     executable-path: '/bin/go-spacemesh'
   deployment_type: deployment
 elastic:
