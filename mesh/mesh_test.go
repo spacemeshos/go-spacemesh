@@ -50,12 +50,26 @@ type MeshValidatorMock struct {
 	mdb *MeshDB
 }
 
+func (m *MeshValidatorMock) LatestComplete() types.LayerID {
+	panic("implement me")
+}
+
 func (m *MeshValidatorMock) HandleIncomingLayer(layer *types.Layer) (types.LayerID, types.LayerID) {
 	return layer.Index() - 1, layer.Index()
 }
-func (m *MeshValidatorMock) HandleLateBlock(bl *types.Block) {}
+func (m *MeshValidatorMock) HandleLateBlock(bl *types.Block) (types.LayerID, types.LayerID) {
+	return bl.Layer() - 1, bl.Layer()
+}
 
 type MockState struct{}
+
+func (MockState) LoadState(layer types.LayerID) error {
+	panic("implement me")
+}
+
+func (MockState) GetStateRoot() types.Hash32 {
+	return [32]byte{}
+}
 
 func (MockState) ValidateNonceAndBalance(transaction *types.Transaction) error {
 	panic("implement me")
@@ -345,7 +359,9 @@ func TestMesh_AddBlockWithTxs_PushTransactions_UpdateUnappliedTxs(t *testing.T) 
 		r.Equal(111, int(txns[i].TotalAmount))
 	}
 
-	msh.PushTransactions(1)
+	l, err := msh.GetLayer(1)
+	r.NoError(err)
+	msh.PushTransactions(l)
 	r.ElementsMatch(GetTransactionIds(tx5), GetTransactionIds(blockBuilder.txs...))
 
 	txns = getTxns(r, msh.MeshDB, origin)

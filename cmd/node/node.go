@@ -136,7 +136,7 @@ type SpacemeshApp struct {
 	jsonAPIService *api.JSONHTTPServer
 	syncer         *sync.Syncer
 	blockListener  *sync.BlockListener
-	state          *state.StateDB
+	state          *state.TransactionProcessor
 	blockProducer  *miner.BlockBuilder
 	oracle         *oracle.MinerBlockOracle
 	txProcessor    *state.TransactionProcessor
@@ -293,7 +293,7 @@ func (app *SpacemeshApp) Cleanup(cmd *cobra.Command, args []string) (err error) 
 	return nil
 }
 
-func (app *SpacemeshApp) setupGenesis() {
+func (app *SpacemeshApp) setupGenesis(state *state.TransactionProcessor, msh *mesh.Mesh) {
 	var conf *apiCfg.GenesisConfig
 	if app.Config.GenesisConfPath != "" {
 		var err error
@@ -313,14 +313,20 @@ func (app *SpacemeshApp) setupGenesis() {
 		}
 
 		addr := types.BytesToAddress(bytes)
-		app.state.CreateAccount(addr)
-		app.state.AddBalance(addr, acc.Balance)
-		app.state.SetNonce(addr, acc.Nonce)
+		state.CreateAccount(addr)
+		state.AddBalance(addr, acc.Balance)
+		state.SetNonce(addr, acc.Nonce)
 		app.log.Info("Genesis account created: %s, Balance: %s", id, acc.Balance.Uint64())
 	}
 
-	app.state.Commit(false)
-	app.mesh.AddBlock(mesh.GenesisBlock)
+	_, err := state.Commit(false)
+	if err != nil {
+		log.Panic("cannot commit genesis state")
+	}
+	err = msh.AddBlock(mesh.GenesisBlock)
+	if err != nil {
+		log.Error("error adding genesis block %v", err)
+	}
 }
 
 func (app *SpacemeshApp) setupTestFeatures() {
@@ -441,11 +447,6 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId,
 	}
 	app.closers = append(app.closers, db)
 
-	st, err := state.New(types.Hash32{}, state.NewDatabase(db)) //todo: we probably should load DB with latest hash
-	if err != nil {
-		return err
-	}
-
 	coinToss := weakCoinStub{}
 
 	atxdbstore, err := database.NewLDBDatabase(dbStorepath+"atx", 0, 0, app.addLogger(AtxDbStoreLogger, lg))
@@ -491,7 +492,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId,
 		return err
 	}
 	app.closers = append(app.closers, appliedTxs)
-	processor := state.NewTransactionProcessor(st, appliedTxs, meshAndPoolProjector, lg.WithName("state"))
+	processor := state.NewTransactionProcessor(db, appliedTxs, meshAndPoolProjector, lg.WithName("state"))
 
 	atxdb := activation.NewActivationDb(atxdbstore, idStore, mdb, layersPerEpoch, validator, app.addLogger(AtxDbLogger, lg))
 	beaconProvider := &oracle.EpochBeaconProvider{}
@@ -506,6 +507,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId,
 	} else {
 		trtl = tortoise.NewAlgorithm(int(layerSize), mdb, app.Config.Hdist, app.addLogger(TrtlLogger, lg))
 		msh = mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, app.txPool, atxpool, processor, app.addLogger(MeshLogger, lg))
+		app.setupGenesis(processor, msh)
 	}
 
 	conf := sync.Configuration{Concurrency: 4, LayerSize: int(layerSize), LayersPerEpoch: layersPerEpoch, RequestTimeout: time.Duration(app.Config.SyncRequestTimeout) * time.Millisecond, Hdist: app.Config.Hdist, AtxsLimit: app.Config.AtxsPerBlock}
@@ -533,7 +535,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId,
 
 	ha := app.HareFactory(mdb, swarm, sgn, nodeID, syncer, msh, hOracle, idStore, clock, lg)
 
-	stateAndMeshProjector := pending_txs.NewStateAndMeshProjector(st, msh)
+	stateAndMeshProjector := pending_txs.NewStateAndMeshProjector(processor, msh)
 	blockProducer := miner.NewBlockBuilder(nodeID, sgn, swarm, clock.Subscribe(), app.Config.Hdist, app.txPool, atxpool, coinToss, msh, ha, blockOracle, processor, atxdb, syncer, app.Config.AtxsPerBlock, stateAndMeshProjector, app.addLogger(BlockBuilderLogger, lg))
 	blockListener := sync.NewBlockListener(swarm, syncer, 4, app.addLogger(BlockListenerLogger, lg))
 
@@ -555,7 +557,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId,
 	app.mesh = msh
 	app.syncer = syncer
 	app.clock = clock
-	app.state = st
+	app.state = processor
 	app.hare = ha
 	app.P2P = swarm
 	app.poetListener = poetListener
@@ -579,7 +581,7 @@ func (app *SpacemeshApp) checkTimeDrifts() {
 			_, err := timesync.CheckSystemClockDrift()
 			if err != nil {
 				app.log.Error("System time couldn't synchronize %s", err)
-				app.stopServices()
+				cmdp.Cancel()
 				return
 			}
 		}
@@ -596,11 +598,11 @@ func (app *SpacemeshApp) HareFactory(mdb *mesh.MeshDB, swarm service.Service, sg
 		for _, b := range ids {
 			res, err := mdb.GetBlock(b)
 			if err != nil {
-				app.log.With().Error("failed to validate block", log.BlockId(b.String()))
+				app.log.With().Error("output set block not in database", log.BlockId(b.String()), log.Err(err))
 				return false
 			}
 			if res == nil {
-				app.log.With().Error("failed to validate block (BUG BUG BUG - GetBlock return err nil and res nil)", log.BlockId(b.String()))
+				app.log.With().Error("output set block not in database (BUG BUG BUG - GetBlock return err nil and res nil)", log.BlockId(b.String()))
 				return false
 			}
 
@@ -855,8 +857,6 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 		log.Error("cannot start services %v", err.Error())
 		return
 	}
-
-	app.setupGenesis()
 
 	if app.Config.TestMode {
 		app.setupTestFeatures()

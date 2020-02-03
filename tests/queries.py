@@ -476,3 +476,54 @@ def all_atx_max_propagation(deployment, samples_per_node=1):
                 max_propagation, msg_time = prop, max_message - datetime.strptime(atx.timestamp,
                                                                                   convenience.TIMESTAMP_FMT)
     return max_propagation, msg_time
+
+
+# =====================================================================================
+# Layer hashes
+# =====================================================================================
+
+
+def compare_layer_hashes(hits):
+    layer_hash = hits[0].layer_hash
+    for hit in hits:
+        assert hit.layer_hash == layer_hash
+    print(f"validated {len(hits)} equal layer hashes for layer {hits[0].layer_id}: {layer_hash}")
+
+
+def assert_equal_layer_hashes(indx, ns):
+    layer = 0
+    while True:
+        hits = query_message(indx, ns, ns, {'M': 'new layer hash', 'layer_id': layer})
+        if len(hits) == 0:
+            break
+        compare_layer_hashes(hits)
+        layer += 1
+
+
+def compare_state_roots(hits):
+    state_root = hits[0].state_root
+    if hits[0].layer_id >= 2:
+        assert state_root != '0' * 64
+    for hit in hits:
+        assert hit.state_root == state_root
+    print(f"validated {len(hits)} equal state roots for layer {hits[0].layer_id}: {state_root}")
+
+
+def assert_equal_state_roots(indx, ns):
+    layer = 0
+    while True:
+        hits = query_message(indx, ns, ns, {'M': 'end of layer state root', 'layer_id': layer})
+        if len(hits) == 0:
+            break
+        compare_state_roots(hits)
+        layer += 1
+
+
+# =====================================================================================
+# Assert No ATX Validation Errors
+# =====================================================================================
+
+
+def assert_no_contextually_invalid_atxs(indx, ns):
+    hits = query_message(indx, ns, ns, {'M': 'ATX failed contextual validation'})
+    assert len(hits) == 0

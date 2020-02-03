@@ -150,10 +150,10 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	var msh *mesh.Mesh
 	if mshdb.PersistentData() {
 		lg.Info("persistent data found ")
-		msh = mesh.NewRecoveredMesh(mshdb, atxdb, sync.ConfigTst(), &sync.MeshValidatorMock{}, txpool, atxpool, &sync.MockState{}, lg.WithOptions(log.Nop))
+		msh = mesh.NewRecoveredMesh(mshdb, atxdb, sync.ConfigTst(), &sync.MeshValidatorMock{}, txpool, atxpool, &sync.MockState{}, lg)
 	} else {
 		lg.Info("no persistent data found ")
-		msh = mesh.NewMesh(mshdb, atxdb, sync.ConfigTst(), &sync.MeshValidatorMock{}, txpool, atxpool, &sync.MockState{}, lg.WithOptions(log.Nop))
+		msh = mesh.NewMesh(mshdb, atxdb, sync.ConfigTst(), &sync.MeshValidatorMock{}, txpool, atxpool, &sync.MockState{}, lg)
 	}
 
 	msh.SetBlockBuilder(&MockBlockBuilder{})
@@ -182,14 +182,14 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	sleep := time.Duration(10) * time.Second
 	lg.Info("wait %v sec", sleep)
 	app.sync.Start()
-	for app.sync.ValidatedLayer() < types.LayerID(expectedLayers) {
+	for app.sync.ProcessedLayer() < types.LayerID(expectedLayers) {
 		clock.Tick()
 		lg.Info("sleep for %v sec", 30)
 		time.Sleep(30 * time.Second)
 
 	}
 
-	lg.Info("%v verified layers %v", app.BaseApp.Config.P2P.NodeID, app.sync.ValidatedLayer())
+	lg.Info("%v verified layers %v", app.BaseApp.Config.P2P.NodeID, app.sync.ProcessedLayer())
 	lg.Event().Info("sync done")
 	for {
 		lg.Info("keep busy sleep for %v sec", 60)

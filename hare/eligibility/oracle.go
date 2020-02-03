@@ -145,7 +145,7 @@ func (o *Oracle) buildVRFMessage(layer types.LayerID, round int32) ([]byte, erro
 	// get value from beacon
 	v, err := o.beacon.Value(layer)
 	if err != nil {
-		o.With().Error("Could not get hare beacon value", log.Err(err))
+		o.With().Error("Could not get hare beacon value", log.Err(err), log.LayerId(uint64(layer)), log.Int32("round", round))
 		o.lock.Unlock()
 		return nil, err
 	}
@@ -174,7 +174,7 @@ func (o *Oracle) activeSetSize(layer types.LayerID) (uint32, error) {
 			return uint32(o.genesisActiveSetSize), nil
 		}
 
-		o.With().Error("activeSetSize erred while calling actives func", log.Err(err))
+		o.With().Error("activeSetSize erred while calling actives func", log.Err(err), log.LayerId(uint64(layer)))
 		return 0, err
 	}
 

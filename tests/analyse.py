@@ -44,7 +44,9 @@ def analyze_mining(deployment, last_layer, layers_per_epoch, layer_avg_size, tot
     assert total_pods == len(blockmap)
     # remove blocks created in first epoch since first epoch starts with layer 1
     print("total and first", total_blocks, first_epoch_blocks)
-    assert int((total_blocks - first_epoch_blocks) / (last_layer - layers_per_epoch)) / layer_avg_size == 1
+    ass_err = f"all blocks but first epoch={int(total_blocks - first_epoch_blocks)}\n" \
+              f"total num of layers={last_layer - layers_per_epoch} layers avg size={layer_avg_size}"
+    assert int((total_blocks - first_epoch_blocks) / (last_layer - layers_per_epoch)) / layer_avg_size == 1, ass_err
     # not all nodes produces atx in all epochs
     assert total_atxs == int((last_layer / layers_per_epoch)) * total_pods
 

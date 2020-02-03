@@ -12,8 +12,10 @@ from tests.utils import wait_for_next_layer
 
 # send 100 txs in one layer
 def test_tx_stress(init_session, setup_network):
-    wallet_api = WalletAPI(init_session, setup_network.clients.pods)
-    accountant = Accountant({conf.acc_pub: Accountant.set_tap_acc()})
+    wallet_api = WalletAPI(init_session, setup_network.clients.pods, fixed_node=-1)
+    tap_balance = wallet_api.get_balance_value(conf.acc_pub)
+    tap_acc = Accountant.set_tap_acc(balance=tap_balance)
+    accountant = Accountant({conf.acc_pub: tap_acc}, tap_init_amount=tap_balance)
 
     # create 100 accounts
     new_accounts = 100

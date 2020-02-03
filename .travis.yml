@@ -41,9 +41,12 @@ jobs:
     script:
       - make dockerpush
     if: (branch = develop OR branch = staging OR branch = trying) AND type != pull_request
-
   - stage: system-test
-    name: "Run p2p system tests"
+    name: "Run late nodes system test"
+    script:
+      - make dockertest-late-nodes
+    if: (branch = develop OR branch = staging OR branch = trying) AND type != pull_request
+  - name: "Run p2p system tests"
     script:
       - make dockertest-p2p
     if: (branch = develop OR branch = staging OR branch = trying) AND type != pull_request
@@ -59,15 +62,10 @@ jobs:
     script:
       - make dockertest-sync
     if: (branch = develop OR branch = staging OR branch = trying) AND type != pull_request
-  - name: "Run late nodes system test"
+  - name: "Run genesis votes test"
     script:
-      - make dockertest-late-nodes
+      - make dockertest-genesis-voting
     if: (branch = develop OR branch = staging OR branch = trying) AND type != pull_request
-#  Commented out due to sporadic failures:
-#  - name: "Run genesis votes test"
-#    script:
-#      - make dockertest-genesis-voting
-#    if: (branch = develop OR branch = staging OR branch = trying) AND type != pull_request
 
 cache:
   directories:

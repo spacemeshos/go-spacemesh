@@ -135,7 +135,7 @@ func (m *MeshDB) GetBlock(id types.BlockID) (*types.Block, error) {
 
 	b, err := m.getBlockBytes(id)
 	if err != nil {
-		return nil, fmt.Errorf(" %s %s", id, err)
+		return nil, err
 	}
 	mbk := &types.Block{}
 	err = types.BytesToInterface(b, mbk)
@@ -144,7 +144,7 @@ func (m *MeshDB) GetBlock(id types.BlockID) (*types.Block, error) {
 }
 
 func (m *MeshDB) LayerBlocks(index types.LayerID) ([]*types.Block, error) {
-	ids, err := m.layerBlockIds(index)
+	ids, err := m.LayerBlockIds(index)
 	if err != nil {
 		return nil, err
 	}
@@ -160,21 +160,6 @@ func (m *MeshDB) LayerBlocks(index types.LayerID) ([]*types.Block, error) {
 
 	return blocks, nil
 
-}
-
-func (m *MeshDB) LayerBlockIds(index types.LayerID) ([]types.BlockID, error) {
-
-	idSet, err := m.layerBlockIds(index)
-	if err != nil {
-		return nil, err
-	}
-
-	blockids := make([]types.BlockID, 0, len(idSet))
-	for _, k := range idSet {
-		blockids = append(blockids, k)
-	}
-
-	return blockids, nil
 }
 
 // The block handler func should return two values - a bool indicating whether or not we should stop traversing after the current block (happy flow)
@@ -223,23 +208,22 @@ func (m *MeshDB) ForBlockInView(view map[types.BlockID]struct{}, layer types.Lay
 	return nil
 }
 
-func (m *MeshDB) layerBlockIds(index types.LayerID) ([]types.BlockID, error) {
-
-	ids, err := m.layers.Get(index.ToBytes())
+func (m *MeshDB) LayerBlockIds(index types.LayerID) ([]types.BlockID, error) {
+	idsBytes, err := m.layers.Get(index.ToBytes())
 	if err != nil {
 		return nil, fmt.Errorf("error getting layer %v from database %v", index, err)
 	}
 
-	if len(ids) == 0 {
+	if len(idsBytes) == 0 {
 		return nil, fmt.Errorf("no ids for layer %v in database ", index)
 	}
 
-	idSet, err := types.BytesToBlockIds(ids)
+	blockIds, err := types.BytesToBlockIds(idsBytes)
 	if err != nil {
 		return nil, errors.New("could not get all blocks from database ")
 	}
 
-	return idSet, nil
+	return blockIds, nil
 }
 
 func (m *MeshDB) getBlockBytes(id types.BlockID) ([]byte, error) {
@@ -639,6 +623,21 @@ func (m *MeshDB) GetTransactionsByOrigin(l types.LayerID, account types.Address)
 		txs = append(txs, a)
 	}
 	return
+}
+
+func (m *MeshDB) BlocksByValidity(blocks []*types.Block) (validBlocks, invalidBlocks []*types.Block) {
+	for _, b := range blocks {
+		valid, err := m.ContextualValidity(b.Id())
+		if err != nil {
+			m.With().Error("could not get contextual validity", log.BlockId(b.Id().String()), log.Err(err))
+		}
+		if valid {
+			validBlocks = append(validBlocks, b)
+		} else {
+			invalidBlocks = append(invalidBlocks, b)
+		}
+	}
+	return validBlocks, invalidBlocks
 }
 
 // ContextuallyValidBlock - returns the contextually valid blocks for the provided layer

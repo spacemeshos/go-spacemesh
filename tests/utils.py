@@ -58,7 +58,7 @@ def print_hits_entry_count(hits, log_entry):
 
 
 def wait_for_next_layer(namespace, cl_num, timeout):
-    tts = 10
+    tts = 15
     old_release_ticks = get_release_tick_msgs(namespace, namespace)
     # if we started sampling while a new layer just started we will enter this while loop
     while len(old_release_ticks) % cl_num != 0 and timeout > 0:
