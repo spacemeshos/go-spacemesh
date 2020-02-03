@@ -1017,5 +1017,5 @@ func TestNeighborhood_ReportConnectionResult(t *testing.T) {
 	n.getMorePeers(PeerNum)
 
 	require.Equal(t, 2, goodcount)
-	require.True(t, attemptcount == PeerNum*2-2)
+	require.Equal(t, attemptcount, PeerNum*2)
 }
