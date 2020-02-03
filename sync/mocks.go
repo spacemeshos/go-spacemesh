@@ -76,7 +76,11 @@ func (m *MeshValidatorMock) GetGoodPatternBlocks(layer types.LayerID) (map[types
 	panic("implement me")
 }
 
-func (m *MeshValidatorMock) HandleLateBlock(bl *types.Block)              {}
+func (m *MeshValidatorMock) HandleLateBlock(bl *types.Block) (types.LayerID, types.LayerID) {
+	return bl.Layer(), bl.Layer() - 1
+
+}
+
 func (m *MeshValidatorMock) RegisterLayerCallback(func(id types.LayerID)) {}
 func (mlg *MeshValidatorMock) ContextualValidity(id types.BlockID) bool   { return true }
 

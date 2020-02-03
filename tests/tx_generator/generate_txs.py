@@ -146,7 +146,8 @@ if __name__ == "__main__":
     tap_nonce = my_wallet.get_nonce_value(conf.acc_pub)
     tap_balance = my_wallet.get_balance_value(conf.acc_pub)
     # Create an accountant to follow state
-    acc = Accountant({conf.acc_pub: Accountant.set_tap_acc(balance=tap_balance, nonce=tap_nonce)})
+    tap_acc = Accountant.set_tap_acc(balance=tap_balance, nonce=tap_nonce)
+    acc = Accountant({conf.acc_pub: tap_acc}, tap_init_amount=tap_balance)
     acc.tx_cost = parsed_args.gas_price
     # Create new accounts by sending them coins
     actions.send_coins_to_new_accounts(my_wallet, parsed_args.new_accounts, parsed_args.amount, acc,
