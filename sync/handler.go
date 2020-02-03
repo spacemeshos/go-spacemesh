@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 )
@@ -14,6 +15,10 @@ func newLayerHashRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg []by
 		logger.With().Info("handle layer hash request", log.LayerId(lyrid))
 		layer, err := layers.GetLayer(types.LayerID(lyrid))
 		if err != nil {
+			if err == database.ErrNotFound {
+				logger.With().Warning("hashes requested for unfamiliar layer (id: %s)", log.LayerId(lyrid))
+				return nil
+			}
 			logger.With().Error("Error handling layer request message", log.LayerId(lyrid), log.Err(err))
 			return nil
 		}
@@ -28,6 +33,10 @@ func newLayerBlockIdsRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg 
 		lyrid := util.BytesToUint64(msg)
 		layer, err := layers.GetLayer(types.LayerID(lyrid))
 		if err != nil {
+			if err == database.ErrNotFound {
+				logger.With().Warning("block ids requested for unfamiliar layer (id: %s)", log.LayerId(lyrid))
+				return nil
+			}
 			logger.Error("Error handling ids request message with LayerID: %d and error: %s", lyrid, err.Error())
 			return nil
 		}
@@ -55,7 +64,7 @@ func newBlockRequestHandler(msh *mesh.Mesh, logger log.Log) func(msg []byte) []b
 	return func(msg []byte) []byte {
 		var blockids []types.Hash32
 		if err := types.BytesToInterface(msg, &blockids); err != nil {
-			logger.Error("Error handling block request message", err)
+			logger.Error("Error unmarshalling block request message", err)
 			return nil
 		}
 
@@ -63,9 +72,13 @@ func newBlockRequestHandler(msh *mesh.Mesh, logger log.Log) func(msg []byte) []b
 		logger.Info("handle block request ids: %s", concatShortIds(blockids))
 		for _, bid := range blockids {
 			logger.Info("handle block %s request", bid.ShortString())
-			blk, err := msh.GetBlock(types.BlockID(bid))
+			blk, err := msh.GetBlock(types.BlockID(bid.ToHash20()))
 			if err != nil {
-				logger.With().Error("Error handling block request message", log.BlockId(bid.String()), log.Err(err))
+				if err == database.ErrNotFound {
+					logger.With().Warning("unfamiliar block was requested (id: %s)", log.BlockId(bid.ShortString()), log.Err(err))
+					continue
+				}
+				logger.With().Error("Error handling block request message", log.BlockId(bid.ShortString()), log.Err(err))
 				continue
 			}
 
@@ -97,7 +110,7 @@ func newTxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 			if tx, err := s.txpool.Get(t); err == nil {
 				txs = append(txs, tx)
 			} else {
-				logger.With().Error("error handling tx request message", log.TxId(t.ShortString()))
+				logger.With().Warning("unfamiliar tx was requested (id: %s)", log.TxId(t.ShortString()))
 			}
 		}
 
@@ -126,7 +139,7 @@ func newATxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 			if tx, err := s.atxpool.Get(t); err == nil {
 				atxs[t] = tx
 			} else {
-				logger.With().Error("error handling atx request message", log.AtxId(t.ShortString()))
+				logger.With().Warning("unfamiliar atx was requested (id: %s)", log.AtxId(t.ShortString()))
 			}
 		}
 

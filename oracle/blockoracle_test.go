@@ -30,21 +30,12 @@ type mockActivationDB struct {
 	atxs                map[string]map[types.LayerID]types.AtxId
 }
 
-func (a *mockActivationDB) IsIdentityActive(edId string, layer types.LayerID) (*types.NodeId, bool, types.AtxId, error) {
-	if idmap, ok := a.atxs[edId]; ok {
-		if atxid, ok := idmap[layer]; ok {
-			return &types.NodeId{Key: edId, VRFPublicKey: vrfPubkey}, true, atxid, nil
-		}
-	}
-	return &types.NodeId{Key: edId, VRFPublicKey: vrfPubkey}, true, *types.EmptyAtxId, nil
-}
-
 func (a mockActivationDB) GetIdentity(edId string) (types.NodeId, error) {
 	return types.NodeId{Key: edId, VRFPublicKey: vrfPubkey}, nil
 }
 
-func (a mockActivationDB) GetNodeLastAtxId(node types.NodeId) (types.AtxId, error) {
-	if node.Key != nodeID.Key {
+func (a mockActivationDB) GetNodeAtxIdForEpoch(nodeId types.NodeId, targetEpoch types.EpochId) (types.AtxId, error) {
+	if nodeId.Key != nodeID.Key || targetEpoch.IsGenesis() {
 		return *types.EmptyAtxId, errors.New("not found")
 	}
 	return atxID, nil
@@ -188,7 +179,7 @@ func TestBlockOracleNoActivationsForNode(t *testing.T) {
 	blockOracle := NewMinerBlockOracle(committeeSize, activeSetSize, layersPerEpoch, activationDB, beaconProvider, vrfSigner, nodeID, func() bool { return true }, lg.WithName("blockOracle"))
 
 	_, proofs, err := blockOracle.BlockEligible(types.LayerID(layersPerEpoch * 2))
-	r.EqualError(err, "failed to get latest ATX: not in genesis (epoch 2) yet failed to get atx: not found")
+	r.EqualError(err, "failed to get latest ATX: failed to get ATX ID for target epoch 2: not found")
 	r.Nil(proofs)
 }
 

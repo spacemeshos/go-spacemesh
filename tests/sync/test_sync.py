@@ -1,8 +1,8 @@
 import time
 from pytest_testconfig import config as testconfig
 from kubernetes import client
-
 from tests.deployment import create_deployment, delete_deployment
+from tests import queries
 from tests.conftest import DeploymentInfo
 from tests.test_bs import save_log_on_exit, setup_bootstrap
 from tests.test_bs import api_call, add_multi_clients, get_conf
@@ -60,7 +60,7 @@ def search_pod_logs(namespace, pod_name, term):
     return False
 
 
-def check_pod_logs(podName,str):
+def check_pod_logs(podName, str):
     res = query_message(current_index, testconfig['namespace'], podName, str, False)
     if res:
         return True
@@ -80,13 +80,13 @@ def test_sync_gradually_add_nodes(init_session, setup_bootstrap, save_log_on_exi
 
     num_clients = 4
     clients = [None] * num_clients
-    clients[0] = add_multi_clients(init_session, cspec2, 1,'clientv2')[0]
+    clients[0] = add_multi_clients(init_session, cspec2, 1, 'clientv2')[0]
     time.sleep(10)
-    clients[1] = add_multi_clients(init_session, cspec, 1,'client')[0]
+    clients[1] = add_multi_clients(init_session, cspec, 1, 'client')[0]
     time.sleep(20)
-    clients[2] = add_multi_clients(init_session, cspec, 1,'client')[0]
+    clients[2] = add_multi_clients(init_session, cspec, 1, 'client')[0]
     time.sleep(20)
-    clients[3] = add_multi_clients(init_session, cspec, 1,'client')[0]
+    clients[3] = add_multi_clients(init_session, cspec, 1, 'client')[0]
 
     print("take pod down ", clients[0])
 
@@ -104,7 +104,7 @@ def test_sync_gradually_add_nodes(init_session, setup_bootstrap, save_log_on_exi
         done = 0
         for j in range(0, num_clients):
             podName = clients[j]
-            if not check_pod_logs(podName,SYNC_DONE):  # not all done
+            if not check_pod_logs(podName, SYNC_DONE):  # not all done
                 print("pod " + podName + " still not done. Going to sleep")
                 break  # stop check and sleep
             else:
@@ -122,7 +122,8 @@ def test_sync_gradually_add_nodes(init_session, setup_bootstrap, save_log_on_exi
 
     end = time.time()
 
-    check_pod_logs(clients[0],PERSISTENT_DATA)
+    check_pod_logs(clients[0], PERSISTENT_DATA)
+    queries.assert_equal_layer_hashes(current_index, testconfig['namespace'])
 
     print("it took " + str(end - start) + " to sync all nodes with " + cspec.args['expected-layers'] + "layers")
     print("done!!")

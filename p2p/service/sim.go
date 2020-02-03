@@ -74,6 +74,7 @@ func (s *Simulator) SubscribeToPeerEvents(myid p2pcrypto.Key) (chan p2pcrypto.Pu
 func (s *Simulator) publishNewPeer(peer p2pcrypto.PublicKey) {
 	s.subLock.Lock()
 	for _, ch := range s.newPeersSubs {
+		log.Info("publish on chan with len %v, cap %v", len(ch), cap(ch))
 		ch <- peer
 	}
 	s.subLock.Unlock()

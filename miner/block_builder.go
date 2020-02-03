@@ -46,6 +46,7 @@ type AtxValidator interface {
 type Syncer interface {
 	FetchPoetProof(poetProofRef []byte) error
 	ListenToGossip() bool
+	IsSynced() bool
 }
 
 type TxPool interface {
@@ -171,7 +172,7 @@ func calcHdistRange(id types.LayerID, hdist types.LayerID) (bottom types.LayerID
 		log.Panic("hdist cannot be zero")
 	}
 
-	bottom = types.LayerID(1)
+	bottom = types.LayerID(0)
 	top = id - 1
 	if id > hdist {
 		bottom = id - hdist
@@ -399,6 +400,10 @@ func (t *BlockBuilder) acceptBlockData() {
 			return
 
 		case layerID := <-t.beginRoundEvent:
+			if !t.syncer.IsSynced() {
+				t.Debug("builder got layer %v not synced yet", layerID)
+			}
+
 			t.Debug("builder got layer %v", layerID)
 			atxID, proofs, err := t.blockOracle.BlockEligible(layerID)
 			if err != nil {

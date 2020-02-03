@@ -17,12 +17,4 @@ go install $grpc_gateway_path/protoc-gen-grpc-gateway
 echo "installing protoc-gen-swagger"
 go install $grpc_gateway_path/protoc-gen-swagger
 
-#echo "setting GO111MODULE=off to install some legacy deps"
-#GO111MODULE=off
-#echo "installing protoc-gen-grpc-gateway"
-#go get github.com/grpc-ecosystem/grpc-gateway/protoc-gen-grpc-gateway
-#echo "installing protoc-gen-swagger"
-#go get github.com/grpc-ecosystem/grpc-gateway/protoc-gen-swagger
-#GO111MODULE=on
-
 echo "setup complete 🎉"

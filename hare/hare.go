@@ -4,7 +4,6 @@ import (
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
-	"github.com/spacemeshos/go-spacemesh/hare/metrics"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"sync"
 	"time"
@@ -71,6 +70,8 @@ type Hare struct {
 	validate outputValidationFunc
 
 	nid types.NodeId
+
+	isSynced syncStateFunc
 }
 
 // New returns a new Hare struct.
@@ -113,6 +114,8 @@ func New(conf config.Config, p2p NetworkService, sign Signer, nid types.NodeId, 
 	h.validate = validate
 
 	h.nid = nid
+
+	h.isSynced = syncState
 
 	return h
 }
@@ -165,7 +168,7 @@ func (h *Hare) collectOutput(output TerminationOutput) error {
 
 	// check validity of the collected output
 	if !h.validate(blocks) {
-		h.Panic("Failed to validate the collected output set")
+		h.Error("Failed to validate the collected output set")
 	}
 
 	id := output.Id()
@@ -197,6 +200,12 @@ func (h *Hare) onTick(id types.LayerID) {
 
 	h.layerLock.Unlock()
 	h.Debug("hare got tick, sleeping for %v", h.networkDelta)
+
+	if !h.isSynced() { // if not synced don't start consensus
+		h.With().Info("not starting hare since the node is not synced", log.LayerId(uint64(id)))
+		return
+	}
+
 	ti := time.NewTimer(h.networkDelta)
 	select {
 	case <-ti.C:
@@ -210,7 +219,7 @@ func (h *Hare) onTick(id types.LayerID) {
 	// retrieve set form orphan blocks
 	blocks, err := h.obp.GetUnverifiedLayerBlocks(h.lastLayer)
 	if err != nil {
-		h.Error("No blocks for consensus on layer %v %v", id, err)
+		h.With().Error("No blocks for consensus", log.LayerId(uint64(id)), log.Err(err))
 		return
 	}
 
@@ -234,7 +243,8 @@ func (h *Hare) onTick(id types.LayerID) {
 		h.broker.Unregister(cp.Id())
 		return
 	}
-	metrics.TotalConsensusProcesses.Add(1)
+	// TODO: fix metrics
+	//metrics.TotalConsensusProcesses.With("layer", strconv.FormatUint(uint64(id), 10)).Add(1)
 }
 
 var (
@@ -276,7 +286,8 @@ func (h *Hare) outputCollectionLoop() {
 
 			// anyway, unregister from broker
 			h.broker.Unregister(out.Id()) // unregister from broker after termination
-			metrics.TotalConsensusProcesses.Add(-1)
+			// TODO: fix metrics
+			//metrics.TotalConsensusProcesses.With("layer", strconv.FormatUint(uint64(out.Id()), 10)).Add(-1)
 		case <-h.CloseChannel():
 			return
 		}
