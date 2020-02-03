@@ -65,7 +65,7 @@ func (fq *fetchQueue) work() error {
 		fq.Debug("new batch out of queue")
 		if out == nil {
 			fq.Info("close queue")
-			continue
+			return nil
 		}
 
 		bjb, ok := out.(fetchJob)
@@ -73,9 +73,11 @@ func (fq *fetchQueue) work() error {
 			fq.Error(fmt.Sprintf("Type assertion err %v", out))
 			continue
 		}
+
 		if len(bjb.ids) == 0 {
-			fq.Info("channel closed")
+			return fmt.Errorf("channel closed")
 		}
+
 		fq.Info("fetched %s's %s", fq.name, concatShortIds(bjb.ids))
 		fq.handleFetch(bjb)
 		fq.Debug("next batch")
