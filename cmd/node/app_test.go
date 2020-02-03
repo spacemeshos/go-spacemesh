@@ -145,7 +145,7 @@ loop:
 	GracefulShutdown(suite.apps)
 
 	// this tests loading of pervious state, mabe it's not the best place to put this here...
-	smApp, err := InitSingleInstance(*cfg, 0, genesisTime, rng, path+"a", rolacle, poetClient, false, clock, net)
+	smApp, err := InitSingleInstance(*cfg, 0, genesisTime, rng, path+"a", rolacle, poetHarness.HTTPPoetClient, false, clock, net)
 	assert.NoError(suite.T(), err)
 	//test that loaded root equals
 	assert.Equal(suite.T(), oldRoot, smApp.state.GetStateRoot())
