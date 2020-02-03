@@ -999,15 +999,20 @@ func TestNinjaTortoise_Recovery(t *testing.T) {
 	alg := NewNinjaTortoise(3, mdb, 5, lg)
 	l := mesh.GenesisLayer()
 	AddLayer(mdb, l)
+
 	alg.handleIncomingLayer(l)
+	alg.PersistTortoise()
 
 	l1 := createLayer(1, []*types.Layer{l}, 3)
 	AddLayer(mdb, l1)
+
 	alg.handleIncomingLayer(l1)
+	alg.PersistTortoise()
 
 	l2 := createLayer(2, []*types.Layer{l1, l}, 3)
 	AddLayer(mdb, l2)
 	alg.handleIncomingLayer(l2)
+	alg.PersistTortoise()
 
 	l31 := createLayer(3, []*types.Layer{l1, l}, 4)
 	l32 := createLayer(3, []*types.Layer{l31}, 5)
@@ -1023,10 +1028,13 @@ func TestNinjaTortoise_Recovery(t *testing.T) {
 		l3 := createLayer(3, []*types.Layer{l2, l}, 3)
 		AddLayer(mdb, l3)
 		alg.handleIncomingLayer(l3)
+		alg.PersistTortoise()
 
 		l4 := createLayer(4, []*types.Layer{l3, l2}, 3)
 		AddLayer(mdb, l4)
 		alg.handleIncomingLayer(l4)
+		alg.PersistTortoise()
+
 		assert.True(t, alg.LatestComplete() == 3)
 		return
 	}()
