@@ -23,12 +23,33 @@ func TestSendReceiveMessage(t *testing.T) {
 	conn := newConnection(rwcam, netw, rPub, &networkSessionImpl{}, msgSizeLimit, time.Second, netw.logger)
 	go conn.beginEventProcessing()
 	msg := "hello"
-	err := conn.Send([]byte(msg))
+	err := conn.SendSock([]byte(msg))
 	assert.NoError(t, err)
 	assert.Equal(t, len(msg)+1, len(rwcam.WriteOut())) // the +1 is because of the delimited wire format
 	rwcam.SetReadResult(rwcam.WriteOut(), nil)
 	data := <-netw.IncomingMessages()[0]
 	assert.Equal(t, []byte(msg), data.Message)
+	err = conn.Close()
+	assert.NoError(t, err)
+}
+
+func TestSendMessage(t *testing.T) {
+	netw := NewNetworkMock()
+	rwcam := NewReadWriteCloseAddresserMock()
+	rPub := p2pcrypto.NewRandomPubkey()
+	rwcam.writeWaitChan = make(chan []byte)
+	conn := newConnection(rwcam, netw, rPub, &networkSessionImpl{}, msgSizeLimit, time.Second, netw.logger)
+	go conn.beginEventProcessing()
+	msg := "hello"
+	err := conn.Send([]byte(msg))
+	assert.NoError(t, err)
+	select {
+	case <-rwcam.writeWaitChan:
+		rcvmsg := <-rwcam.writeWaitChan
+		assert.Equal(t, []byte(rcvmsg), []byte(msg))
+	case <-time.After(5 * time.Second):
+		assert.Fail(t, "timeout waiting for message to be sent")
+	}
 }
 
 func TestReceiveError(t *testing.T) {
@@ -61,7 +82,7 @@ func TestSendError(t *testing.T) {
 
 	rwcam.SetWriteResult(fmt.Errorf("fail"))
 	msg := "hello"
-	err := conn.Send([]byte(msg))
+	err := conn.SendSock([]byte(msg))
 	assert.Error(t, err)
 	assert.Equal(t, "fail", err.Error())
 }
