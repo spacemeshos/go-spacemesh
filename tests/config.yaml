@@ -10,7 +10,7 @@ deployment_ready_time_out: 120
 config_path: '../config.toml'
 
 bootstrap:
-  image: 'spacemeshos/go-spacemesh-dev:http_poet'
+  image: 'spacemeshos/go-spacemesh:develop'
   command: '/bin/go-harness'
   replicas: 1
   resources:
@@ -37,7 +37,7 @@ bootstrap:
     executable-path: '/bin/go-spacemesh'
   deployment_type: deployment
 client:
-  image: 'spacemeshos/go-spacemesh-dev:http_poet'
+  image: 'spacemeshos/go-spacemesh:develop'
   command: '/bin/go-harness'
   replicas: 49
   resources:
