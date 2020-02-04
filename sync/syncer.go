@@ -130,6 +130,10 @@ func (s *Syncer) ForceSync() {
 
 func (s *Syncer) Close() {
 	s.Info("Closing syncer")
+	run := atomic.LoadUint32(&s.SyncLock)
+	if run == RUNNING {
+		s.exit <- struct{}{}
+	}
 	close(s.exit)
 	close(s.forceSync)
 	s.Peers.Close()
@@ -223,13 +227,19 @@ func (s *Syncer) run() {
 			s.Debug("Work stopped")
 			return
 		case <-s.forceSync:
-			go syncRoutine()
+			syncRoutine()
 		case layer := <-s.LayerCh:
+			select {
+			case <-s.exit:
+				return
+			default:
+			}
+
 			s.currentLayerMutex.Lock()
 			s.currentLayer = layer
 			s.currentLayerMutex.Unlock()
 			s.Debug("sync got tick for layer %v", layer)
-			go syncRoutine()
+			syncRoutine()
 		}
 	}
 }
