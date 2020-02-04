@@ -32,6 +32,7 @@ func TestNewPeerCounter(t *testing.T) {
 	r.Equal(uint64(2), peerCounter.PeerCount())
 
 	close(conn)
+	time.Sleep(1 * time.Millisecond)
 	// the loop should terminate and the counter value should now remain constant
 	r.EqualError(sendOnChan(disc), "timeout")
 	r.EqualError(sendOnChan(disc), "timeout")
