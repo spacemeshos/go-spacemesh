@@ -198,9 +198,6 @@ func (h *Hare) onTick(id types.LayerID) {
 		h.lastLayer = id
 	}
 
-	// call to start the calculation of active set size beforehand
-	go h.rolacle.IsIdentityActiveOnConsensusView(h.nid.Key, id)
-
 	h.layerLock.Unlock()
 	h.Debug("hare got tick, sleeping for %v", h.networkDelta)
 
@@ -208,6 +205,9 @@ func (h *Hare) onTick(id types.LayerID) {
 		h.With().Info("not starting hare since the node is not synced", log.LayerId(uint64(id)))
 		return
 	}
+
+	// call to start the calculation of active set size beforehand
+	go h.rolacle.IsIdentityActiveOnConsensusView(h.nid.Key, id)
 
 	ti := time.NewTimer(h.networkDelta)
 	select {
