@@ -85,12 +85,13 @@ func (vq *blockQueue) handleBlocks(bjb fetchJob) {
 }
 
 func (vq *blockQueue) handleBlock(id types.Hash32, block *types.Block) {
-	vq.Info("fetched  %v", block.Id())
+	vq.Info("start handle block %v", block.Id())
 	if err := vq.fastValidation(block); err != nil {
 		vq.Error("block validation failed", log.BlockId(block.Id().String()), log.Err(err))
 		vq.updateDependencies(id, false)
 		return
 	}
+	vq.Info("finish fast validation block %v", block.Id())
 	vq.handleBlockDependencies(block)
 }
 
