@@ -74,7 +74,7 @@ def get_conf(bs_info, client_config, setup_oracle=None, setup_poet=None, args=No
     return cspec
 
 
-def add_multi_clients(deployment_id, container_specs, size=2, client_title='client', ret_pods=False):
+def add_multi_clients(deployment_id, container_specs, size=2, client_title='client', ret_dep=False):
     """
     adds pods to a given namespace according to specification params
 
@@ -82,7 +82,7 @@ def add_multi_clients(deployment_id, container_specs, size=2, client_title='clie
     :param container_specs:
     :param size: int, number of replicas
     :param client_title: string, client title in yml file (client, client_v2 etc)
-    :param ret_pods: boolean, if 'True' RETURN a pods list (V1PodList)
+    :param ret_dep: boolean, if 'True' RETURN deployment name in addition
     :return: list (strings), list of pods names
     """
     k8s_file, k8s_create_func = choose_k8s_object_create(testconfig[client_title],
@@ -99,17 +99,16 @@ def add_multi_clients(deployment_id, container_specs, size=2, client_title='clie
                                                         include_uninitialized=True,
                                                         label_selector=("name={0}".format(
                                                             resp.metadata._name.split('-')[1]))).items
+    pods = []
+    for c in client_pods:
+        pod_name = c.metadata.name
+        if pod_name.startswith(resp.metadata.name):
+            pods.append(pod_name)
+    ret_val = pods
+    print(f"added new clients: {pods}\n")
 
-    if ret_pods:
-        ret_val = client_pods
-    else:
-        pods = []
-        for c in client_pods:
-            pod_name = c.metadata.name
-            if pod_name.startswith(resp.metadata.name):
-                pods.append(pod_name)
-        ret_val = pods
-        print(f"added new clients: {pods}\n")
+    if ret_dep:
+        ret_val = client_pods, resp.metadata._name
 
     return ret_val
 

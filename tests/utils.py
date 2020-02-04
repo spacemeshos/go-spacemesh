@@ -84,7 +84,7 @@ def wait_for_next_layer(namespace, cl_num, timeout):
 def validate_blocks_per_nodes(block_map, last_layer, layers_per_epoch, layer_avg_size, num_miners):
     """
 
-    :param block_map: dictionary, map between nodes to
+    :param block_map: dictionary, map between nodes to blocks per layer
     :param last_layer:
     :param layers_per_epoch:
     :param layer_avg_size:
