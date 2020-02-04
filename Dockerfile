@@ -36,6 +36,7 @@ RUN make harness
 #In this last stage, we start from a fresh Alpine image, to reduce the image size and not ship the Go compiler in our production artifacts.
 FROM alpine AS spacemesh
 
+RUN apk add --update --no-cache bash curl
 # Finally we copy the statically compiled Go binary.
 COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/go-spacemesh /bin/go-spacemesh
 COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/go-hare /bin/go-hare
