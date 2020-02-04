@@ -336,8 +336,10 @@ func (sn *Node) Shutdown() {
 	for _, ch := range sn.sim.newPeersSubs {
 		close(ch)
 	}
+	sn.sim.newPeersSubs = nil
 	for _, ch := range sn.sim.delPeersSubs {
 		close(ch)
 	}
+	sn.sim.delPeersSubs = nil
 	sn.sim.subLock.Unlock()
 }
