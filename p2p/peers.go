@@ -50,15 +50,21 @@ func (pi PeersImpl) GetPeers() []Peer {
 
 func (pi *PeersImpl) listenToPeers(newPeerC chan p2pcrypto.PublicKey, expiredPeerC chan p2pcrypto.PublicKey) {
 	peerSet := make(map[Peer]bool) //set of uniq peers
+	defer pi.Debug("run stopped")
 	for {
 		select {
 		case <-pi.exit:
-			pi.Debug("run stopped")
 			return
-		case peer := <-newPeerC:
+		case peer, ok := <-newPeerC:
+			if !ok {
+				return
+			}
 			pi.With().Debug("new peer", log.String("peer", peer.String()))
 			peerSet[peer] = true
-		case peer := <-expiredPeerC:
+		case peer, ok := <-expiredPeerC:
+			if !ok {
+				return
+			}
 			pi.With().Debug("expired peer", log.String("peer", peer.String()))
 			delete(peerSet, peer)
 		}
