@@ -50,7 +50,7 @@ func NewTransactionProcessor(allStates, processorDb database.Database, projector
 		StateDB:      stateDb,
 		processorDb:  processorDb,
 		currentLayer: 0,
-		rootHash:     types.Hash32{},
+		rootHash:     stateDb.IntermediateRoot(false),
 		stateQueue:   list.List{},
 		projector:    projector,
 		trie:         stateDb.TrieDB(),
