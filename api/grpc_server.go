@@ -9,6 +9,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/api/pb"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"google.golang.org/grpc/keepalive"
@@ -34,6 +35,9 @@ type SpacemeshGrpcService struct {
 	GenTime       GenesisTimeAPI
 	Post          PostAPI
 	LayerDuration time.Duration
+	PeerCounter   *PeerCounter
+	Syncer        Syncer
+	Config        *config.Config
 	Logging       LoggingAPI
 }
 
@@ -213,6 +217,10 @@ func (s SpacemeshGrpcService) StopService() {
 
 }
 
+type Syncer interface {
+	IsSynced() bool
+}
+
 type TxAPI interface {
 	AddressExists(addr types.Address) bool
 	ValidateNonceAndBalance(transaction *types.Transaction) error
@@ -228,17 +236,17 @@ type TxAPI interface {
 }
 
 // NewGrpcService create a new grpc service using config data.
-func NewGrpcService(port int, net NetworkAPI, state StateAPI, tx TxAPI, txMempool *miner.TxMempool, mining MiningAPI, oracle OracleAPI, genTime GenesisTimeAPI, post PostAPI, layerDurationSec int, logging LoggingAPI) *SpacemeshGrpcService {
+func NewGrpcService(port int, net NetworkAPI, state StateAPI, tx TxAPI, txMempool *miner.TxMempool, mining MiningAPI, oracle OracleAPI, genTime GenesisTimeAPI, post PostAPI, layerDurationSec int, syncer Syncer, cfg *config.Config, logging LoggingAPI) *SpacemeshGrpcService {
 	options := []grpc.ServerOption{
 		// XXX: this is done to prevent routers from cleaning up our connections (e.g aws load balances..)
 		// TODO: these parameters work for now but we might need to revisit or add them as configuration
 		// TODO: Configure maxconns, maxconcurrentcons ..
 		grpc.KeepaliveParams(keepalive.ServerParameters{
-			time.Minute * 120,
-			time.Minute * 180,
-			time.Minute * 10,
-			time.Minute,
-			time.Minute * 3,
+			MaxConnectionIdle:     time.Minute * 120,
+			MaxConnectionAge:      time.Minute * 180,
+			MaxConnectionAgeGrace: time.Minute * 10,
+			Time:                  time.Minute,
+			Timeout:               time.Minute * 3,
 		}),
 	}
 	server := grpc.NewServer(options...)
@@ -254,6 +262,9 @@ func NewGrpcService(port int, net NetworkAPI, state StateAPI, tx TxAPI, txMempoo
 		GenTime:       genTime,
 		Post:          post,
 		LayerDuration: time.Duration(layerDurationSec) * time.Second,
+		PeerCounter:   NewPeerCounter(net.SubscribePeerEvents()),
+		Syncer:        syncer,
+		Config:        cfg,
 		Logging:       logging,
 	}
 }
@@ -316,6 +327,18 @@ func (s SpacemeshGrpcService) GetMiningStats(ctx context.Context, empty *empty.E
 		Status:         int32(stat),
 		Coinbase:       coinbase,
 		RemainingBytes: remainingBytes,
+	}, nil
+}
+
+func (s SpacemeshGrpcService) GetNodeStatus(context.Context, *empty.Empty) (*pb.NodeStatus, error) {
+	return &pb.NodeStatus{
+		Peers:         s.PeerCounter.PeerCount(),
+		MinPeers:      uint64(s.Config.P2P.OutboundPeersTarget),
+		MaxPeers:      uint64(s.Config.P2P.MaxInboundPeers + s.Config.P2P.OutboundPeersTarget),
+		Synced:        s.Syncer.IsSynced(),
+		SyncedLayer:   s.Tx.LatestLayer().Uint64(),
+		CurrentLayer:  s.GenTime.GetCurrentLayer().Uint64(),
+		VerifiedLayer: s.Tx.LatestLayerInState().Uint64(),
 	}, nil
 }
 

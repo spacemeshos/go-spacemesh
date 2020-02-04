@@ -395,6 +395,15 @@ func (s *swarm) Shutdown() {
 		//close(prt) //todo: signal protocols to shutdown with closing chan. (this makes us send on closed chan. )
 	}
 	s.protocolHandlerMutex.Unlock()
+
+	s.peerLock.Lock()
+	for _, ch := range s.newPeerSub {
+		close(ch)
+	}
+	for _, ch := range s.delPeerSub {
+		close(ch)
+	}
+	s.peerLock.Unlock()
 }
 
 // process an incoming message
