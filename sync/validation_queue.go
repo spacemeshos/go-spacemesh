@@ -84,17 +84,14 @@ func (vq *blockQueue) handleBlocks(bjb fetchJob) {
 
 }
 
-func (vq *blockQueue) handleBlock(id types.Hash32, b *types.Block) {
-	func(block *types.Block) {
-		vq.Info("fetched  %v", block.Id())
-		if err := vq.fastValidation(block); err != nil {
-			vq.Error("block validation failed", log.BlockId(block.Id().String()), log.Err(err))
-			vq.updateDependencies(id, false)
-			return
-		}
-
-		vq.handleBlockDependencies(block)
-	}(b)
+func (vq *blockQueue) handleBlock(id types.Hash32, block *types.Block) {
+	vq.Info("fetched  %v", block.Id())
+	if err := vq.fastValidation(block); err != nil {
+		vq.Error("block validation failed", log.BlockId(block.Id().String()), log.Err(err))
+		vq.updateDependencies(id, false)
+		return
+	}
+	vq.handleBlockDependencies(block)
 }
 
 // handles new block dependencies
