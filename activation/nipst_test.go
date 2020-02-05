@@ -49,9 +49,9 @@ func (p *postProverClientMock) Reset() error {
 	return nil
 }
 
-func (p *postProverClientMock) IsInitialized() (bool, error) {
+func (p *postProverClientMock) IsInitialized() (bool, uint64, error) {
 	//p.called++
-	return true, nil
+	return true, 0, nil
 }
 
 func (p *postProverClientMock) VerifyInitAllowed() error {

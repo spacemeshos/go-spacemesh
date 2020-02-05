@@ -29,7 +29,7 @@ type PostProverClient interface {
 	Reset() error
 
 	// IsInitialized indicates whether the initialization phase has been completed.
-	IsInitialized() (bool, error)
+	IsInitialized() (initComplete bool, remainingBytes uint64, err error)
 
 	// VerifyInitAllowed indicates whether the preconditions for starting
 	// the initialization phase are met.
@@ -166,7 +166,7 @@ func newNIPSTBuilder(
 func (nb *NIPSTBuilder) BuildNIPST(challenge *types.Hash32, atxExpired chan struct{}, stop chan struct{}) (*types.NIPST, error) {
 	nb.load(*challenge)
 
-	if initialized, err := nb.postProver.IsInitialized(); !initialized || err != nil {
+	if initialized, _, err := nb.postProver.IsInitialized(); !initialized || err != nil {
 		return nil, errors.New("PoST not initialized")
 	}
 
