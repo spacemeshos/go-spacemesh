@@ -112,6 +112,7 @@ func TestSwarm_Shutdown(t *testing.T) {
 	assert.NoError(t, err)
 	err = s.Start()
 	assert.NoError(t, err)
+	conn, disc := s.SubscribePeerEvents()
 	s.Shutdown()
 
 	select {
@@ -119,6 +120,19 @@ func TestSwarm_Shutdown(t *testing.T) {
 		assert.False(t, ok)
 	case <-time.After(1 * time.Second):
 		t.Error("Failed to shutdown")
+	}
+
+	select {
+	case _, ok := <-conn:
+		assert.False(t, ok)
+	default:
+		t.Error("conn was not closed")
+	}
+	select {
+	case _, ok := <-disc:
+		assert.False(t, ok)
+	default:
+		t.Error("disc was not closed")
 	}
 }
 

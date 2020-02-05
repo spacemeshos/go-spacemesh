@@ -12,10 +12,10 @@ import (
 	"time"
 )
 
-func getPeers(p Service) (Peers, chan p2pcrypto.PublicKey, chan p2pcrypto.PublicKey) {
+func getPeers(p Service) (*Peers, chan p2pcrypto.PublicKey, chan p2pcrypto.PublicKey) {
 	value := atomic.Value{}
 	value.Store(make([]Peer, 0, 20))
-	pi := &PeersImpl{snapshot: &value, exit: make(chan struct{}), Log: log.NewDefault("peers")}
+	pi := &Peers{snapshot: &value, exit: make(chan struct{}), Log: log.NewDefault("peers")}
 	n, expired := p.SubscribePeerEvents()
 	go pi.listenToPeers(n, expired)
 	return pi, n, expired
