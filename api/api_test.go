@@ -340,8 +340,8 @@ func TestJsonWalletApi(t *testing.T) {
 	r.NoError(jsonpb.UnmarshalString(respBody, &nodeStatus))
 
 	r.Zero(nodeStatus.Peers)
-	r.Equal(uint64(10), nodeStatus.MinPeers)
-	r.Equal(uint64(110), nodeStatus.MaxPeers)
+	r.Equal(uint64(5), nodeStatus.MinPeers)
+	r.Equal(uint64(105), nodeStatus.MaxPeers)
 	r.False(nodeStatus.Synced)
 	r.Equal(uint64(10), nodeStatus.SyncedLayer)
 	r.Equal(uint64(1), nodeStatus.CurrentLayer)

@@ -333,8 +333,8 @@ func (s SpacemeshGrpcService) GetMiningStats(ctx context.Context, empty *empty.E
 func (s SpacemeshGrpcService) GetNodeStatus(context.Context, *empty.Empty) (*pb.NodeStatus, error) {
 	return &pb.NodeStatus{
 		Peers:         s.PeerCounter.PeerCount(),
-		MinPeers:      uint64(s.Config.P2P.OutboundPeersTarget),
-		MaxPeers:      uint64(s.Config.P2P.MaxInboundPeers + s.Config.P2P.OutboundPeersTarget),
+		MinPeers:      uint64(s.Config.P2P.SwarmConfig.RandomConnections),
+		MaxPeers:      uint64(s.Config.P2P.MaxInboundPeers + s.Config.P2P.SwarmConfig.RandomConnections),
 		Synced:        s.Syncer.IsSynced(),
 		SyncedLayer:   s.Tx.LatestLayer().Uint64(),
 		CurrentLayer:  s.GenTime.GetCurrentLayer().Uint64(),
