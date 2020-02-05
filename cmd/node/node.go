@@ -510,14 +510,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId,
 		app.setupGenesis(processor, msh)
 	}
 
-	syncConf := sync.Configuration{Concurrency: 4,
-		LayerSize:      int(layerSize),
-		LayersPerEpoch: layersPerEpoch,
-		RequestTimeout: time.Duration(app.Config.SyncRequestTimeout) * time.Millisecond,
-		SyncInterval:   time.Duration(app.Config.SyncInterval) * time.Second,
-		Hdist:          app.Config.Hdist,
-		AtxsLimit:      app.Config.AtxsPerBlock}
-
+	conf := sync.Configuration{Concurrency: 4, LayerSize: int(layerSize), LayersPerEpoch: layersPerEpoch, RequestTimeout: time.Duration(app.Config.SyncRequestTimeout) * time.Millisecond, Hdist: app.Config.Hdist, AtxsLimit: app.Config.AtxsPerBlock}
 	if app.Config.AtxsPerBlock > miner.AtxsPerBlockLimit { // validate limit
 		app.log.Panic("Number of atxs per block required is bigger than the limit atxsPerBlock=%v limit=%v", app.Config.AtxsPerBlock, miner.AtxsPerBlockLimit)
 	}
@@ -528,7 +521,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId,
 			app.Config.HareEligibility.EpochOffset, app.Config.BaseConfig.LayersPerEpoch)
 	}
 
-	syncer := sync.NewSync(swarm, msh, app.txPool, atxpool, eValidator, poetDb, syncConf, clock, app.addLogger(SyncLogger, lg))
+	syncer := sync.NewSync(swarm, msh, app.txPool, atxpool, eValidator, poetDb, conf, clock, app.addLogger(SyncLogger, lg))
 	blockOracle := oracle.NewMinerBlockOracle(layerSize, uint32(app.Config.GenesisActiveSet), layersPerEpoch, atxdb, beaconProvider, vrfSigner, nodeID, syncer.ListenToGossip, app.addLogger(BlockOracle, lg))
 
 	// TODO: we should probably decouple the apptest and the node (and duplicate as necessary)
