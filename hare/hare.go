@@ -5,8 +5,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"go.uber.org/atomic"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -74,7 +74,7 @@ type Hare struct {
 
 	isSynced syncStateFunc
 
-	totalCPs atomic.Int32
+	totalCPs int32
 }
 
 // New returns a new Hare struct.
@@ -246,7 +246,7 @@ func (h *Hare) onTick(id types.LayerID) {
 		h.broker.Unregister(cp.Id())
 		return
 	}
-	h.With().Info("number of consensus processes", log.Int32("count", h.totalCPs.Add(1)))
+	h.With().Info("number of consensus processes", log.Int32("count", atomic.AddInt32(&h.totalCPs, 1)))
 	// TODO: fix metrics
 	//metrics.TotalConsensusProcesses.With("layer", strconv.FormatUint(uint64(id), 10)).Add(1)
 }
@@ -290,7 +290,7 @@ func (h *Hare) outputCollectionLoop() {
 
 			// anyway, unregister from broker
 			h.broker.Unregister(out.Id()) // unregister from broker after termination
-			h.With().Info("number of consensus processes", log.Int32("count", h.totalCPs.Sub(1)))
+			h.With().Info("number of consensus processes", log.Int32("count", atomic.AddInt32(&h.totalCPs, -1)))
 			// TODO: fix metrics
 			//metrics.TotalConsensusProcesses.With("layer", strconv.FormatUint(uint64(out.Id()), 10)).Add(-1)
 		case <-h.CloseChannel():
