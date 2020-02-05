@@ -276,8 +276,40 @@ dockertest-genesis-voting: dockerbuild-test dockerrun-genesis-voting
 .PHONY: dockertest-genesis-voting
 
 
+dockerrun-blocks-add-node:
+ifndef ES_PASSWD
+	$(error ES_PASSWD is not set)
+endif
+
+	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
+		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
+		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
+		-it go-spacemesh-python:$(BRANCH) pytest -s -v block_atx/add_node/test_blocks_add_node.py --tc-file=block_atx/add_node/config.yaml --tc-format=yaml
+
+.PHONY: dockerrun-blocks-add-node
+
+dockertest-blocks-add-node: dockerbuild-test dockerrun-blocks-add-node
+.PHONY: dockertest-blocks-add-node
+
+
+dockerrun-blocks-remove-node:
+ifndef ES_PASSWD
+	$(error ES_PASSWD is not set)
+endif
+
+	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
+		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
+		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
+		-it go-spacemesh-python:$(BRANCH) pytest -s -v block_atx/remove_node/test_blocks_remove_node.py --tc-file=block_atx/remove_node/config.yaml --tc-format=yaml
+
+.PHONY: dockerrun-blocks-remove-node
+
+dockertest-blocks-remove-node: dockerbuild-test dockerrun-blocks-remove-node
+.PHONY: dockertest-blocks-remove-node
+
+
 # The following is used to run tests one after the other locally
-dockerrun-test: dockerbuild-test dockerrun-p2p dockerrun-mining dockerrun-hare dockerrun-sync dockerrun-late-nodes # dockerrun-genesis-voting
+dockerrun-test: dockerbuild-test dockerrun-p2p dockerrun-mining dockerrun-hare dockerrun-sync dockerrun-late-nodes dockerrun-genesis-voting dockerrun-blocks-add-node dockerrun-blocks-add-node dockerrun-blocks-remove-node
 .PHONY: dockerrun-test
 
 dockerrun-all: dockerpush dockerrun-test

@@ -66,6 +66,14 @@ jobs:
     script:
       - make dockertest-genesis-voting
     if: (branch = develop OR branch = staging OR branch = trying) AND type != pull_request
+  - name: "Run blocks add node test"
+    script:
+      - make dockertest-blocks-add-node
+    if: (branch = develop OR branch = staging OR branch = trying) AND type != pull_request
+  - name: "Run blocks remove node test"
+    script:
+      - make dockertest-blocks-remove-node
+    if: (branch = develop OR branch = staging OR branch = trying) AND type != pull_request
 
 cache:
   directories:
