@@ -6,6 +6,7 @@ WORKDIR /go/src/github.com/spacemeshos/go-spacemesh
 
 # Force the go compiler to use modules
 ENV GO111MODULE=on
+ENV GOPROXY=https://proxy.golang.org
 
 # We want to populate the module cache based on the go.{mod,sum} files.
 COPY go.mod .
