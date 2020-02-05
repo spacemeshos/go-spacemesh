@@ -265,7 +265,6 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool A
 	s.blockQueue = NewValidationQueue(srvr, s.Configuration, s, s.blockCheckLocal, logger.WithName("validQ"))
 	s.txQueue = NewTxQueue(s)
 	s.atxQueue = NewAtxQueue(s, s.FetchPoetProof)
-
 	srvr.RegisterBytesMsgHandler(LAYER_HASH, newLayerHashRequestHandler(layers, logger))
 	srvr.RegisterBytesMsgHandler(BLOCK, newBlockRequestHandler(layers, logger))
 	srvr.RegisterBytesMsgHandler(LAYER_IDS, newLayerBlockIdsRequestHandler(layers, logger))
