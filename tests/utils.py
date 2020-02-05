@@ -81,52 +81,25 @@ def wait_for_next_layer(namespace, cl_num, timeout):
 
 
 # TODO there might be a better place for a validation func than utils
-def validate_blocks_per_nodes(block_map, last_layer, layers_per_epoch, layer_avg_size, num_miners):
-    """
-
-    :param block_map: dictionary, map between nodes to blocks per layer
-    :param last_layer:
-    :param layers_per_epoch:
-    :param layer_avg_size:
-    :param num_miners:
-    :return:
-    """
-    for node in block_map:
-        node_lays = block_map[node]["layers"]
-        blocks_in_relevant_layers = sum([len(node_lays[str(x)]) for x in range(layers_per_epoch, last_layer)
-                                         if str(x) in node_lays])
-        # need to deduct blocks created in first genesis epoch since it does not follow general mining rules by design
-        blocks_created_per_layer = blocks_in_relevant_layers / (last_layer - layers_per_epoch)
-        wanted_avg_block_per_node = max(1, int(layer_avg_size / num_miners))
-        ass_err = f"node {node} failed creating the avg block size"
-        assert blocks_created_per_layer / wanted_avg_block_per_node == 1, ass_err
-
-
-# TODO #@! rename this func
-def validate_blocks_per_nodes_2(block_map, from_layer, to_layer, layers_per_epoch, layer_avg_size, num_miners):
+def validate_blocks_per_nodes(block_map, from_layer, to_layer, layers_per_epoch, layer_avg_size, num_miners):
     # layers count start from 0
-    # epoch first layer and last % layers_per_epoch will be layers_per_epoch - 1
-    layer_mod = layers_per_epoch - 1
-
     if from_layer == 0:
-        print(f"refactoring starting layer from 0 to {layer_mod}, not validating first layer")
-        from_layer = layer_mod
+        print(f"refactoring starting layer from 0 to {layers_per_epoch}, not validating first layer")
+        from_layer = layers_per_epoch
 
-    if from_layer >= to_layer:
-        print(f"starting layer ({from_layer}) must be bigger than ending layer ({to_layer})")
-        return False
+    assert from_layer >= to_layer, f"starting layer ({from_layer}) must be bigger than ending layer ({to_layer})"
 
-    # layers start from 0
-    if from_layer % layers_per_epoch != layer_mod or to_layer % layers_per_epoch != layer_mod:
+    if from_layer % layers_per_epoch != 0 or to_layer % layers_per_epoch != 0:
         print(f"layer to start from and layer to end at must be at the beginning and ending of an epoch respectively")
         print(f"from layer={from_layer}, to layer={to_layer}")
-        return False
+        assert 0
 
     for node in block_map:
         node_lays = block_map[node]["layers"]
         blocks_sum = sum([len(node_lays[str(x)]) for x in range(from_layer, to_layer) if str(x) in node_lays])
-        # TODO #@! talk to Barak about these two steps
         blocks_per_layer = blocks_sum / (to_layer - from_layer)
         wanted_avg_block_per_node = max(1, int(layer_avg_size / num_miners))
         ass_err = f"node {node} failed creating the avg block size"
         assert blocks_per_layer / wanted_avg_block_per_node == 1, ass_err
+
+    print("validation succeeded!")

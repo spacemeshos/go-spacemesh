@@ -42,8 +42,8 @@ def test_add_node_validate_atx(init_session, setup_network):
     _ = add_multi_clients(init_session, cspec, 1)
 
     # wait for next epoch
-    print("wait until next epoch")
     last_layer = layers_per_epoch * (epochs_to_sleep + 1)
+    print(f"wait until next epoch to layer {last_layer}")
     _ = q.wait_for_latest_layer(init_session, last_layer, layers_per_epoch)
 
     # epoch i+3
@@ -52,10 +52,12 @@ def test_add_node_validate_atx(init_session, setup_network):
     block_map, _ = q.get_blocks_per_node_and_layer(init_session)
 
     # assert that each node has created layer_avg/number_of_nodes
-    validate_blocks_per_nodes(block_map, last_layer, layers_per_epoch, layer_avg_size, num_miners)
+    validate_blocks_per_nodes(block_map, 0, last_layer, layers_per_epoch, layer_avg_size, num_miners)
 
     # wait an epoch
+    prev_layer = last_layer
     last_layer = layers_per_epoch * (epochs_to_sleep + 2)
+    print(f"wait until next epoch to layer {last_layer}")
     _ = q.wait_for_latest_layer(init_session, last_layer, layers_per_epoch)
     # epoch i+4
     print("\n\n-------- current epoch", int(last_layer / layers_per_epoch), "--------")
@@ -63,4 +65,4 @@ def test_add_node_validate_atx(init_session, setup_network):
     print(f"-------- validating blocks per nodes up to layer {last_layer} --------")
     block_map, _ = q.get_blocks_per_node_and_layer(init_session)
     # assert that each node has created layer_avg/number_of_nodes
-    validate_blocks_per_nodes(block_map, last_layer, layers_per_epoch, layer_avg_size, num_miners)
+    validate_blocks_per_nodes(block_map, prev_layer, last_layer, layers_per_epoch, layer_avg_size, num_miners)
