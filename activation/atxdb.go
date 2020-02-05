@@ -417,7 +417,7 @@ func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error 
 	if err != nil {
 		return fmt.Errorf("cannot get NIPST Challenge hash: %v", err)
 	}
-	db.log.With().Info("Validated NIPST", log.String("challenge_hash", hash.ShortString()), log.AtxId(atx.ShortString()))
+	db.log.With().Info("Validated NIPST", log.String("challenge_hash", hash.String()), log.AtxId(atx.ShortString()))
 
 	pubKey := signing.NewPublicKey(util.Hex2Bytes(atx.NodeId.Key))
 	if err = db.nipstValidator.Validate(*pubKey, atx.Nipst, *hash); err != nil {

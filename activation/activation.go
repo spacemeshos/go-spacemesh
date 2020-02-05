@@ -428,10 +428,15 @@ func (b *Builder) PublishActivationTx() error {
 
 	atxReceived := b.db.AwaitAtx(atx.Id())
 	defer b.db.UnsubscribeAtx(atx.Id())
-	if err := b.signAndBroadcast(atx); err != nil {
+	size, err := b.signAndBroadcast(atx)
+	if err != nil {
 		return err
 	}
 
+	commitStr := "nil"
+	if commitment != nil {
+		commitStr = commitment.String()
+	}
 	b.log.Event().Info("atx published!",
 		log.AtxId(atx.ShortString()),
 		log.String("prev_atx_id", atx.PrevATXId.ShortString()),
@@ -441,6 +446,10 @@ func (b *Builder) PublishActivationTx() error {
 		log.Uint32("active_set", atx.ActiveSetSize),
 		log.String("miner", b.nodeId.Key[:5]),
 		log.Int("view", len(atx.View)),
+		log.Uint64("sequence_number", atx.Sequence),
+		log.String("NIPSTChallenge", hash.String()),
+		log.String("commitment", commitStr),
+		log.Int("atx_size", size),
 	)
 
 	select {
@@ -478,19 +487,18 @@ func (b *Builder) discardChallenge() {
 	}
 }
 
-func (b *Builder) signAndBroadcast(atx *types.ActivationTx) error {
+func (b *Builder) signAndBroadcast(atx *types.ActivationTx) (int, error) {
 	if err := b.SignAtx(atx); err != nil {
-		return fmt.Errorf("failed to sign ATX: %v", err)
-	} else {
-		buf, err := types.InterfaceToBytes(atx)
-		if err != nil {
-			return fmt.Errorf("failed to serialize ATX: %v", err)
-		} else if err := b.net.Broadcast(AtxProtocol, buf); err != nil {
-			return fmt.Errorf("failed to broadcast ATX: %v", err)
-		}
-		b.log.Info("atx size %s", len(buf), log.AtxId(atx.ShortString()))
+		return 0, fmt.Errorf("failed to sign ATX: %v", err)
 	}
-	return nil
+	buf, err := types.InterfaceToBytes(atx)
+	if err != nil {
+		return 0, fmt.Errorf("failed to serialize ATX: %v", err)
+	}
+	if err := b.net.Broadcast(AtxProtocol, buf); err != nil {
+		return 0, fmt.Errorf("failed to broadcast ATX: %v", err)
+	}
+	return len(buf), nil
 }
 
 // GetPositioningAtx return the latest atx to be used as a positioning atx

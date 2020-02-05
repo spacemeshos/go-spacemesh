@@ -365,7 +365,18 @@ func (t *BlockBuilder) handleGossipAtx(data service.GossipMessage) {
 	}
 	atx.CalcAndSetId()
 
-	t.With().Info("got new ATX", log.AtxId(atx.ShortString()), log.LayerId(uint64(atx.PubLayerIdx)))
+	t.With().Info("got new ATX",
+		log.String("sender_id", atx.NodeId.ShortString()),
+		log.AtxId(atx.ShortString()),
+		log.String("prev_atx_id", atx.PrevATXId.ShortString()),
+		log.String("post_atx_id", atx.PositioningAtx.ShortString()),
+		log.LayerId(uint64(atx.PubLayerIdx)),
+		log.Uint32("active_set", atx.ActiveSetSize),
+		log.Int("view", len(atx.View)),
+		log.Uint64("sequence_number", atx.Sequence),
+		log.String("commitment", atx.Commitment.String()),
+		log.Int("atx_size", len(data.Bytes())),
+	)
 
 	//todo fetch from neighbour
 	if atx.Nipst == nil {
