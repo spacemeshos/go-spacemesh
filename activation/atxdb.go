@@ -406,7 +406,7 @@ func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error 
 
 	activeSet, err := db.CalcActiveSetFromView(atx.View, atx.PubLayerIdx.GetEpoch(db.LayersPerEpoch))
 	if err != nil && !atx.PubLayerIdx.GetEpoch(db.LayersPerEpoch).IsGenesis() {
-		return fmt.Errorf("could not calculate active set for ATX %v", atx.ShortString())
+		return fmt.Errorf("could not calculate active set for ATX %v %s", atx.ShortString(), err)
 	}
 
 	if atx.ActiveSetSize != activeSet {

@@ -48,7 +48,7 @@ func NewValidationQueue(srvr WorkerInfra, conf Configuration, msh ValidationInfr
 		callbacks:       make(map[interface{}]func(res bool) error),
 		ValidationInfra: msh,
 	}
-	vq.handleFetch = vq.handleBlock
+	vq.handleFetch = vq.handleBlocks
 	go vq.work()
 
 	return vq
@@ -64,7 +64,7 @@ func (vq *blockQueue) inQueue(id types.Hash32) bool {
 
 // handles all fetched blocks
 // this handler is passed to fetchQueue which is responsible for triggering the call
-func (vq *blockQueue) handleBlock(bjb fetchJob) {
+func (vq *blockQueue) handleBlocks(bjb fetchJob) {
 	mp := map[types.Hash32]*types.Block{}
 	for _, item := range bjb.items {
 		tmp := item.(*types.Block)
@@ -72,25 +72,27 @@ func (vq *blockQueue) handleBlock(bjb fetchJob) {
 	}
 
 	for _, id := range bjb.ids {
-
-		block, found := mp[id]
-		if !found {
+		b, ok := mp[id]
+		if !ok {
 			vq.updateDependencies(id, false)
 			vq.Error("could not retrieve a block in view %v", id.ShortString())
 			continue
 		}
 
-		vq.Info("fetched  %v", block.Id())
-		if err := vq.fastValidation(block); err != nil {
-			vq.Error("block validation failed", log.BlockId(block.Id().String()), log.Err(err))
-			vq.updateDependencies(id, false)
-			continue
-		}
-
-		vq.handleBlockDependencies(block)
-		//todo better deadlock solution
+		go vq.handleBlock(id, b)
 	}
 
+}
+
+func (vq *blockQueue) handleBlock(id types.Hash32, block *types.Block) {
+	vq.Info("start handle block %v", block.Id())
+	if err := vq.fastValidation(block); err != nil {
+		vq.Error("block validation failed", log.BlockId(block.Id().String()), log.Err(err))
+		vq.updateDependencies(id, false)
+		return
+	}
+	vq.Info("finish fast validation block %v", block.Id())
+	vq.handleBlockDependencies(block)
 }
 
 // handles new block dependencies
