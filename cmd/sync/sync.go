@@ -114,6 +114,7 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 		AtxsLimit:      200,
 		LayerSize:      int(app.Config.LayerAvgSize),
 		RequestTimeout: time.Duration(app.Config.SyncRequestTimeout) * time.Millisecond,
+		SyncInterval:   10 * time.Millisecond,
 		Hdist:          app.Config.Hdist,
 	}
 
