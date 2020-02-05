@@ -114,7 +114,7 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 		AtxsLimit:      200,
 		LayerSize:      int(app.Config.LayerAvgSize),
 		RequestTimeout: time.Duration(app.Config.SyncRequestTimeout) * time.Millisecond,
-		SyncInterval:   10 * time.Millisecond,
+		SyncInterval:   2 * 60 * time.Millisecond,
 		Hdist:          app.Config.Hdist,
 	}
 
@@ -184,7 +184,7 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	lg.Info("wait %v sec", sleep)
 	app.sync.Start()
 	for app.sync.ProcessedLayer() < types.LayerID(expectedLayers) {
-		clock.Tick()
+		app.sync.ForceSync()
 		lg.Info("sleep for %v sec", 30)
 		time.Sleep(30 * time.Second)
 
