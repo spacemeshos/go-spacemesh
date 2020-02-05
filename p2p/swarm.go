@@ -603,7 +603,7 @@ func (s *swarm) publishDelPeer(peer p2pcrypto.PublicKey) {
 }
 
 // SubscribePeerEvents lets clients listen on events inside the swarm about peers. first chan is new peers, second is deleted peers.
-func (s *swarm) SubscribePeerEvents() (conn chan p2pcrypto.PublicKey, disc chan p2pcrypto.PublicKey) {
+func (s *swarm) SubscribePeerEvents() (conn, disc chan p2pcrypto.PublicKey) {
 	in := make(chan p2pcrypto.PublicKey, 30) // todo : the size should be determined after #269
 	del := make(chan p2pcrypto.PublicKey, 30)
 	s.peerLock.Lock()

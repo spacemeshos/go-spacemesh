@@ -12,6 +12,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/miner"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"google.golang.org/grpc/keepalive"
 	"net"
 	"strconv"
@@ -21,6 +22,10 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 )
+
+type PeerCounter interface {
+	PeerCount() uint64
+}
 
 // SpacemeshGrpcService is a grpc server providing the Spacemesh api
 type SpacemeshGrpcService struct {
@@ -35,7 +40,7 @@ type SpacemeshGrpcService struct {
 	GenTime       GenesisTimeAPI
 	Post          PostAPI
 	LayerDuration time.Duration
-	PeerCounter   *PeerCounter
+	PeerCounter   PeerCounter
 	Syncer        Syncer
 	Config        *config.Config
 	Logging       LoggingAPI
@@ -262,7 +267,7 @@ func NewGrpcService(port int, net NetworkAPI, state StateAPI, tx TxAPI, txMempoo
 		GenTime:       genTime,
 		Post:          post,
 		LayerDuration: time.Duration(layerDurationSec) * time.Second,
-		PeerCounter:   NewPeerCounter(net.SubscribePeerEvents()),
+		PeerCounter:   p2p.NewPeers(net, log.NewDefault("grpc")),
 		Syncer:        syncer,
 		Config:        cfg,
 		Logging:       logging,
