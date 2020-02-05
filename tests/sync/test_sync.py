@@ -76,7 +76,7 @@ def test_sync_gradually_add_nodes(init_session, setup_bootstrap, save_log_on_exi
     inf = add_multi_clients(init_session, cspec, 10)
 
     del cspec.args['remote-data']
-    cspec.args['data-folder'] = ""
+    del cspec.args['data-folder']
 
     num_clients = 4
     clients = [None] * num_clients

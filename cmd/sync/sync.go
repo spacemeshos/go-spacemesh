@@ -9,6 +9,7 @@ import (
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/filesystem"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/miner"
@@ -31,6 +32,7 @@ var Cmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("Starting sync")
 		syncApp := NewSyncApp()
+		log.Info("Right after NewSyncApp %v", syncApp.Config.DataDir)
 		defer syncApp.Cleanup()
 		syncApp.Initialize(cmd)
 		syncApp.Start(cmd, args)
@@ -201,7 +203,7 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 func GetData(path, prefix string, lg log.Log) error {
 	dirs := []string{"poet", "atx", "nipst", "blocks", "ids", "layers", "transactions", "validity", "unappliedTxs"}
 	for _, dir := range dirs {
-		if err := os.MkdirAll(path+prefix+"/"+dir, 0777); err != nil {
+		if err := filesystem.ExistOrCreate(path + prefix + "/" + dir); err != nil {
 			return err
 		}
 	}
