@@ -322,7 +322,14 @@ func (t *BlockBuilder) listenForTx() {
 				t.With().Error("nonce and balance validation failed", log.TxId(tx.Id().ShortString()), log.Err(err))
 				continue
 			}
-			t.Log.With().Info("got new tx", log.TxId(tx.Id().ShortString()))
+			t.Log.With().Info("got new tx",
+				log.TxId(tx.Id().ShortString()),
+				log.Uint64("nonce", tx.AccountNonce),
+				log.Uint64("amount", tx.Amount),
+				log.Uint64("fee", tx.Fee),
+				log.Uint64("gas", tx.GasLimit),
+				log.String("recipient", tx.Recipient.String()),
+				log.String("origin", tx.Origin().String()))
 			data.ReportValidation(IncomingTxProtocol)
 			t.TransactionPool.Put(tx.Id(), tx)
 		}
