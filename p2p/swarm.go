@@ -31,6 +31,7 @@ const ConnectingTimeout = 20 * time.Second //todo: add to the config
 type cPool interface {
 	GetConnection(address inet.Addr, pk p2pcrypto.PublicKey) (net.Connection, error)
 	GetConnectionIfExists(pk p2pcrypto.PublicKey) (net.Connection, error)
+	CloseConnection(key p2pcrypto.PublicKey)
 	Shutdown()
 }
 
@@ -193,8 +194,7 @@ func (s *swarm) onNewConnection(nce net.NewConnectionEvent) {
 	if err != nil {
 		s.lNode.Warning("Error adding new connection %v, err: %v", nce.Node.PublicKey(), err)
 		// todo: send rejection reason
-		// todo: remove from connection pool
-		nce.Conn.Close()
+		s.cPool.CloseConnection(nce.Node.PublicKey())
 	}
 }
 
@@ -395,6 +395,15 @@ func (s *swarm) Shutdown() {
 		//close(prt) //todo: signal protocols to shutdown with closing chan. (this makes us send on closed chan. )
 	}
 	s.protocolHandlerMutex.Unlock()
+
+	s.peerLock.Lock()
+	for _, ch := range s.newPeerSub {
+		close(ch)
+	}
+	for _, ch := range s.delPeerSub {
+		close(ch)
+	}
+	s.peerLock.Unlock()
 }
 
 // process an incoming message
@@ -594,7 +603,7 @@ func (s *swarm) publishDelPeer(peer p2pcrypto.PublicKey) {
 }
 
 // SubscribePeerEvents lets clients listen on events inside the swarm about peers. first chan is new peers, second is deleted peers.
-func (s *swarm) SubscribePeerEvents() (conn chan p2pcrypto.PublicKey, disc chan p2pcrypto.PublicKey) {
+func (s *swarm) SubscribePeerEvents() (conn, disc chan p2pcrypto.PublicKey) {
 	in := make(chan p2pcrypto.PublicKey, 30) // todo : the size should be determined after #269
 	del := make(chan p2pcrypto.PublicKey, 30)
 	s.peerLock.Lock()

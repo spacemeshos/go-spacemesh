@@ -243,7 +243,7 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 		b := types.MiniBlock{}
 		xdr.Unmarshal(bytes.NewBuffer(output.Bytes()), &b)
 
-		assert.Equal(t, hareRes, b.BlockVotes)
+		assert.NotEqual(t, hareRes, b.BlockVotes)
 		assert.Equal(t, []types.BlockID{block1.Id(), block2.Id(), block3.Id()}, b.ViewEdges)
 
 		assert.True(t, ContainsTx(b.TxIds, transids[0]))
@@ -386,12 +386,12 @@ func Test_calcHdistRange(t *testing.T) {
 
 	// id < hdist
 	from, to = calcHdistRange(3, 5)
-	r.Equal(types.LayerID(1), from)
+	r.Equal(types.LayerID(0), from)
 	r.Equal(types.LayerID(2), to)
 
 	// id = hdist
 	from, to = calcHdistRange(5, 5)
-	r.Equal(types.LayerID(1), from)
+	r.Equal(types.LayerID(0), from)
 	r.Equal(types.LayerID(4), to)
 
 	// hdist = 1
@@ -591,6 +591,20 @@ func TestBlockBuilder_getVotes(t *testing.T) {
 	bb.meshProvider = &mockMesh{b: nil, err: exampleErr}
 	b, err = bb.getVotes(id)
 	r.Equal(exampleErr, err)
+
+}
+
+func TestBlockBuilder_CalcHdistRange(t *testing.T) {
+	rand.Seed(0)
+	r := require.New(t)
+	beginRound := make(chan types.LayerID)
+	n1 := service.NewSimulator().NewNode()
+	bs := []*types.Block{b1, b2, b3}
+	bb := NewBlockBuilder(types.NodeId{Key: "a"}, &MockSigning{}, n1, beginRound, 5, NewTxMemPool(), NewAtxMemPool(), MockCoin{}, &mockMesh{b: bs}, &mockResult{}, mockBlockOracle{}, mockTxProcessor{true}, &mockAtxValidator{}, &mockSyncer{}, selectCount, projector, log.NewDefault(t.Name()))
+	bottom, _ := calcHdistRange(5, bb.hdist)
+	r.True(bottom == 0)
+
+	// has bottom
 
 }
 
