@@ -562,10 +562,10 @@ func (m *Mesh) AccumulateRewards(l *types.Layer, params Config) {
 
 	numBlocks := big.NewInt(int64(len(ids)))
 
-	blockTotalReward := calculateActualRewards(totalReward, numBlocks)
+	blockTotalReward := calculateActualRewards(l.Index(), totalReward, numBlocks)
 	m.ApplyRewards(l.Index(), ids, blockTotalReward)
 
-	blockLayerReward := calculateActualRewards(layerReward, numBlocks)
+	blockLayerReward := calculateActualRewards(l.Index(), layerReward, numBlocks)
 	err := m.writeTransactionRewards(l.Index(), ids, blockTotalReward, blockLayerReward)
 	if err != nil {
 		m.Error("cannot write reward to db")
