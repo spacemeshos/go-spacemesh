@@ -103,6 +103,7 @@ type BaseConfig struct {
 
 type LoggerConfig struct {
 	AppLoggerLevel            string `mapstructure:"app"`
+	P2PLoggerLevel            string `mapstructure:"p2p"`
 	PostLoggerLevel           string `mapstructure:"post"`
 	StateDbLoggerLevel        string `mapstructure:"stateDb"`
 	StateLoggerLevel          string `mapstructure:"state"`

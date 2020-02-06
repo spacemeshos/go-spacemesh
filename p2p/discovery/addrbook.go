@@ -3,10 +3,10 @@ package discovery
 import (
 	"encoding/binary"
 	"github.com/spacemeshos/go-spacemesh/crypto"
-	"github.com/spacemeshos/go-spacemesh/filesystem"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"math/rand"
 	"net"
+	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -90,7 +90,7 @@ type addrBook struct {
 	addrNew   [newBucketCount]map[node.ID]*KnownAddress
 	addrTried [triedBucketCount]map[node.ID]*KnownAddress
 
-	//todo: lock local for updates
+	//todo: lock localNode for updates
 	localAddress *node.NodeInfo
 
 	nTried int
@@ -108,7 +108,7 @@ type addrBook struct {
 func (a *addrBook) updateAddress(netAddr, srcAddr *node.NodeInfo) {
 
 	//Filter out non-routable addresses. Note that non-routable
-	//also includes invalid and local addresses.
+	//also includes invalid and localNode addresses.
 	if !IsRoutable(netAddr.IP) && IsRoutable(srcAddr.IP) {
 		// XXX: this makes tests work with unroutable addresses(loopback)
 		return
@@ -272,6 +272,8 @@ func (a *addrBook) Attempt(key p2pcrypto.PublicKey) {
 	// set last tried time to now
 	ka.attempts++
 	ka.lastattempt = time.Now()
+
+	a.moveToTriedUnlocked(ka)
 }
 
 // Good marks the given address as good.  To be called after a successful
@@ -282,6 +284,7 @@ func (a *addrBook) Good(addr p2pcrypto.PublicKey) {
 	defer a.mtx.Unlock()
 
 	ka := a.find(addr)
+
 	if ka == nil {
 		return
 	}
@@ -292,13 +295,16 @@ func (a *addrBook) Good(addr p2pcrypto.PublicKey) {
 	ka.lastSeen = now
 	ka.attempts = 0
 
+	a.moveToTriedUnlocked(ka)
+}
+
+func (a *addrBook) moveToTriedUnlocked(ka *KnownAddress) {
 	// move to tried set, optionally evicting other addresses if neeed.
 	if ka.tried {
 		return
 	}
-
 	// ok, need to move it to tried.
-
+	addr := ka.na.PublicKey()
 	// remove from all new buckets.
 	// record one of the buckets in question and call it the `first'
 	addrKey := addr.Array()
@@ -641,27 +647,27 @@ func (a *addrBook) reset() {
 
 // New returns a new bitcoin address manager.
 // Use Start to begin processing asynchronous address updates.
-func NewAddrBook(localAddress *node.NodeInfo, config config.SwarmConfig, logger log.Log) *addrBook {
+func NewAddrBook(cfg config.SwarmConfig, path string, logger log.Log) *addrBook {
 	//TODO use config for const params.
 	am := addrBook{
-		logger:       logger,
-		localAddress: localAddress,
-		rand:         rand.New(rand.NewSource(time.Now().UnixNano())),
-		quit:         make(chan struct{}),
+		logger: logger,
+		rand:   rand.New(rand.NewSource(time.Now().UnixNano())),
+		quit:   make(chan struct{}),
 	}
 	am.reset()
 
-	if config.PeersFile != "" {
+	if path != "" {
 
-		dataDir, err := filesystem.GetSpacemeshDataDirectoryPath()
-		if err == nil {
-			am.loadPeers(dataDir + "/" + config.PeersFile)
-		} else {
-			am.logger.Warning("Skipping loading peers to addrbook, data dir not found err=%v", err)
+		peersfile := defaultPeersFileName
+		if cfg.PeersFile != "" {
+			peersfile = cfg.PeersFile
 		}
 
+		finalFilePath := filepath.Join(path, config.P2PDirectoryPath, peersfile)
+		am.loadPeers(finalFilePath)
+
 		am.wg.Add(1)
-		go func() { am.saveRoutine(); am.wg.Done() }()
+		go func() { am.saveRoutine(finalFilePath); am.wg.Done() }()
 	}
 	return &am
 }

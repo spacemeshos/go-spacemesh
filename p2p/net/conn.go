@@ -85,6 +85,7 @@ type networker interface {
 	publishClosingConnection(c ConnectionWithErr)
 	NetworkID() int8
 }
+
 type readWriteCloseAddresser interface {
 	io.ReadWriteCloser
 	deadliner
@@ -226,8 +227,8 @@ func (c *FormattedConnection) Send(m []byte) error {
 
 func (c *FormattedConnection) SendSock(m []byte) error {
 	c.wmtx.Lock()
-	defer c.wmtx.Unlock()
 	if c.closed {
+		c.wmtx.Unlock()
 		return fmt.Errorf("connection was closed")
 	}
 
@@ -235,11 +236,13 @@ func (c *FormattedConnection) SendSock(m []byte) error {
 	_, err := c.w.WriteRecord(m)
 	if err != nil {
 		cerr := c.closeUnlocked()
+		c.wmtx.Unlock()
 		if cerr != ErrAlreadyClosed {
 			c.networker.publishClosingConnection(ConnectionWithErr{c, err}) // todo: reconsider
 		}
 		return err
 	}
+	c.wmtx.Unlock()
 	metrics.PeerRecv.With(metrics.PeerIdLabel, c.remotePub.String()).Add(float64(len(m)))
 	return nil
 }

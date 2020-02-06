@@ -8,11 +8,13 @@ import (
 )
 
 func testAddrBook(name string) *addrBook {
-	return NewAddrBook(generateDiscNode(), config.DefaultConfig().SwarmConfig, GetTestLogger(name))
+	book := NewAddrBook(config.DefaultConfig().SwarmConfig, "", GetTestLogger(name))
+	book.localAddress = generateDiscNode()
+	return book
 }
 
 func TestStartStop(t *testing.T) {
-	n := NewAddrBook(generateDiscNode(), config.DefaultConfig().SwarmConfig, GetTestLogger("starttest"))
+	n := NewAddrBook(config.DefaultConfig().SwarmConfig, "", GetTestLogger("starttest"))
 	n.Start()
 	n.Stop()
 }

@@ -84,8 +84,6 @@ func AddCommands(cmd *cobra.Command) {
 		config.P2P.SessionTimeout, "Timeout for waiting on session message")
 	cmd.PersistentFlags().StringVar(&config.P2P.NodeID, "node-id",
 		config.P2P.NodeID, "Load node data by id (pub key) from local store")
-	cmd.PersistentFlags().BoolVar(&config.P2P.NewNode, "new-node",
-		config.P2P.NewNode, "Load node data by id (pub key) from local store")
 	cmd.PersistentFlags().IntVar(&config.P2P.BufferSize, "buffer-size",
 		config.P2P.BufferSize, "Size of the messages handler's buffer")
 	cmd.PersistentFlags().IntVar(&config.P2P.MaxPendingConnections, "max-pending-connections",

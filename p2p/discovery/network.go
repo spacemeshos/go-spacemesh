@@ -30,7 +30,7 @@ var (
 	// defined by RFC3964 (2002::/16).
 	rfc3964Net = ipNet("2002::", 16, 128)
 
-	// rfc4193Net specifies the IPv6 unique local address block as defined
+	// rfc4193Net specifies the IPv6 unique localNode address block as defined
 	// by RFC4193 (FC00::/7).
 	rfc4193Net = ipNet("FC00::", 7, 128)
 
@@ -72,7 +72,7 @@ var (
 	// 0xfd, 0x87, 0xd8, 0x7e, 0xeb, 0x43.
 	//
 	// This is the same range used by OnionCat, which is part part of the
-	// RFC4193 unique local IPv6 range.
+	// RFC4193 unique localNode IPv6 range.
 	//
 	// In summary the format is:
 	// { magic 6 bytes, 10 bytes base32 decode of key hash }
@@ -98,14 +98,14 @@ func IsIPv4(na net.IP) bool {
 	return na.To4() != nil
 }
 
-// IsLocal returns whether or not the given address is a local address.
+// IsLocal returns whether or not the given address is a localNode address.
 func IsLocal(na net.IP) bool {
 	return na.IsLoopback() || zero4Net.Contains(na)
 }
 
 // IsOnionCatTor returns whether or not the passed address is in the IPv6 range
 // used by bitcoin to support Tor (fd87:d87e:eb43::/48).  Note that this range
-// is the same range used by OnionCat, which is part of the RFC4193 unique local
+// is the same range used by OnionCat, which is part of the RFC4193 unique localNode
 // IPv6 range.
 func IsOnionCatTor(na net.IP) bool {
 	return onionCatNet.Contains(na)
@@ -148,7 +148,7 @@ func IsRFC3964(na net.IP) bool {
 }
 
 // IsRFC4193 returns whether or not the passed address is part of the IPv6
-// unique local range as defined by RFC4193 (FC00::/7).
+// unique localNode range as defined by RFC4193 (FC00::/7).
 func IsRFC4193(na net.IP) bool {
 	return rfc4193Net.Contains(na)
 }
@@ -225,12 +225,12 @@ func IsRoutable(na net.IP) bool {
 
 // GroupKey returns a string representing the network group an address is part
 // of.  This is the /16 for IPv4, the /32 (/36 for he.net) for IPv6, the string
-// "local" for a local address, the string "tor:key" where key is the /4 of the
+// "localNode" for a localNode address, the string "tor:key" where key is the /4 of the
 // onion address for Tor address, and the string "unroutable" for an unroutable
 // address.
 func GroupKey(na net.IP) string {
 	if IsLocal(na) {
-		return "local"
+		return "localNode"
 	}
 	if !IsRoutable(na) {
 		return "unroutable"
