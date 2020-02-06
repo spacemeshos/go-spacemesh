@@ -3,6 +3,7 @@ package p2p
 import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/connectionpool"
 	"github.com/spacemeshos/go-spacemesh/p2p/discovery"
 	"github.com/stretchr/testify/require"
@@ -22,8 +23,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"sync"
 )
-
-const debug = false
 
 type cpoolMock struct {
 	f           func(address inet.Addr, pk p2pcrypto.PublicKey) (net.Connection, error)
@@ -72,7 +71,7 @@ func p2pTestInstance(t testing.TB, config config.Config) *swarm {
 
 func p2pTestNoStart(t testing.TB, config config.Config) *swarm {
 	config.TCPPort = 0
-	p, err := newSwarm(context.TODO(), config, true, debug)
+	p, err := newSwarm(context.TODO(), config, log.NewDefault(t.Name()), "")
 	if err != nil {
 		t.Fatal("err creating a swarm", err)
 	}
@@ -86,7 +85,7 @@ const exampleProtocol = "EX"
 const examplePayload = "Example"
 
 func TestNew(t *testing.T) {
-	s, err := New(context.TODO(), config.DefaultConfig())
+	s, err := New(context.TODO(), config.DefaultConfig(), log.NewDefault(t.Name()), "")
 	require.NoError(t, err)
 	err = s.Start()
 	require.NoError(t, err)
@@ -97,7 +96,7 @@ func TestNew(t *testing.T) {
 func Test_newSwarm(t *testing.T) {
 	cfg := config.DefaultConfig()
 	cfg.TCPPort = 0
-	s, err := newSwarm(context.TODO(), cfg, true, false)
+	s, err := newSwarm(context.TODO(), cfg, log.NewDefault(t.Name()), "")
 	assert.NoError(t, err)
 	err = s.Start()
 	assert.NoError(t, err)
@@ -108,7 +107,7 @@ func Test_newSwarm(t *testing.T) {
 func TestSwarm_Shutdown(t *testing.T) {
 	cfg := config.DefaultConfig()
 	cfg.TCPPort = 0
-	s, err := newSwarm(context.TODO(), cfg, true, false)
+	s, err := newSwarm(context.TODO(), cfg, log.NewDefault(t.Name()), "")
 	assert.NoError(t, err)
 	err = s.Start()
 	assert.NoError(t, err)
@@ -137,7 +136,7 @@ func TestSwarm_Shutdown(t *testing.T) {
 }
 
 func TestSwarm_RegisterProtocolNoStart(t *testing.T) {
-	s, err := newSwarm(context.TODO(), config.DefaultConfig(), true, false)
+	s, err := newSwarm(context.TODO(), config.DefaultConfig(), log.NewDefault(t.Name()), "")
 	msgs := s.RegisterDirectProtocol("Anton")
 	assert.NotNil(t, msgs)
 	assert.NoError(t, err)
@@ -146,6 +145,7 @@ func TestSwarm_RegisterProtocolNoStart(t *testing.T) {
 func TestSwarm_processMessage(t *testing.T) {
 	s := swarm{}
 	s.config = config.DefaultConfig()
+	s.logger = log.NewDefault(t.Name())
 	s.lNode, _ = node.GenerateTestNode(t)
 	r := node.GenerateRandomNodeData()
 	c := &net.ConnectionMock{}
@@ -230,7 +230,7 @@ func sendDirectMessage(t *testing.T, sender *swarm, recvPub p2pcrypto.PublicKey,
 		if checkpayload {
 			assert.Equal(t, msg.Bytes(), payload)
 		}
-		assert.Equal(t, msg.Sender().String(), sender.lNode.ID.String())
+		assert.Equal(t, msg.Sender().String(), sender.lNode.PublicKey().String())
 		break
 	case <-time.After(5 * time.Second):
 		t.Error("Took too much time to receive")
@@ -349,7 +349,7 @@ func TestSwarm_MultipleMessagesFromMultipleSenders(t *testing.T) {
 			p.cPool.GetConnection(p1.network.LocalAddr(), p1.lNode.PublicKey())
 			mychan := make(chan struct{})
 			mu.Lock()
-			pend[p.lNode.NodeInfo.PublicKey().String()] = mychan
+			pend[p.lNode.PublicKey().String()] = mychan
 			mu.Unlock()
 
 			payload := []byte(RandString(10))
@@ -413,7 +413,7 @@ func TestSwarm_MultipleMessagesFromMultipleSendersToMultipleProtocols(t *testing
 			sa.add(p)
 			mychan := make(chan struct{})
 			mu.Lock()
-			pend[p.lNode.NodeInfo.PublicKey().String()] = mychan
+			pend[p.lNode.PublicKey().String()] = mychan
 			mu.Unlock()
 
 			randProto := rand.Int31n(Protos)
@@ -454,9 +454,9 @@ func TestSwarm_RegisterProtocol(t *testing.T) {
 
 func TestSwarm_onRemoteClientMessage(t *testing.T) {
 	cfg := config.DefaultConfig()
-	addr := inet.TCPAddr{inet.ParseIP("0.0.0.0"), 0000, ""}
+	//addr := inet.TCPAddr{inet.ParseIP("0.0.0.0"), 0000, ""}
 
-	id, err := node.NewNodeIdentity(cfg, &addr, false)
+	id, err := node.NewNodeIdentity()
 	assert.NoError(t, err, "we cant make node ?")
 
 	p := p2pTestNoStart(t, cfg)
@@ -643,7 +643,7 @@ func Test_Swarm_getMorePeers3(t *testing.T) {
 	mdht := new(discovery.MockPeerStore)
 	n.discover = mdht
 	testNode := node.GenerateRandomNodeData()
-	mdht.SelectPeersFunc = func(qty int) []*node.NodeInfo {
+	mdht.SelectPeersFunc = func(ctx context.Context, qty int) []*node.NodeInfo {
 		return []*node.NodeInfo{testNode}
 	}
 
@@ -675,7 +675,7 @@ func Test_Swarm_getMorePeers4(t *testing.T) {
 	n.discover = mdht
 
 	testNode := node.GenerateRandomNodeData()
-	mdht.SelectPeersFunc = func(qty int) []*node.NodeInfo {
+	mdht.SelectPeersFunc = func(ctx context.Context, qty int) []*node.NodeInfo {
 		return []*node.NodeInfo{testNode}
 	}
 
@@ -715,7 +715,7 @@ func Test_Swarm_getMorePeers5(t *testing.T) {
 
 	n.cPool = cpm
 
-	mdht.SelectPeersFunc = func(qty int) []*node.NodeInfo {
+	mdht.SelectPeersFunc = func(ctx context.Context, qty int) []*node.NodeInfo {
 		return node.GenerateRandomNodesData(qty)
 	}
 
@@ -748,7 +748,7 @@ func Test_Swarm_getMorePeers6(t *testing.T) {
 
 	n.cPool = cpm
 
-	mdht.SelectPeersFunc = func(qty int) []*node.NodeInfo {
+	mdht.SelectPeersFunc = func(ctx context.Context, qty int) []*node.NodeInfo {
 		return node.GenerateRandomNodesData(qty)
 	}
 
@@ -762,8 +762,8 @@ func Test_Swarm_getMorePeers6(t *testing.T) {
 
 	//test not replacing inc peer
 	//
-	mdht.SelectPeersFunc = func(count int) []*node.NodeInfo {
-		some := node.GenerateRandomNodesData(count - 1)
+	mdht.SelectPeersFunc = func(ctx context.Context, qty int) []*node.NodeInfo {
+		some := node.GenerateRandomNodesData(qty - 1)
 		some = append(some, nd)
 		return some
 	}
@@ -818,7 +818,7 @@ func TestNeighborhood_Initial(t *testing.T) {
 
 	p := p2pTestNoStart(t, cfg)
 	mdht := new(discovery.MockPeerStore)
-	mdht.SelectPeersFunc = func(qty int) []*node.NodeInfo {
+	mdht.SelectPeersFunc = func(ctx context.Context, qty int) []*node.NodeInfo {
 		return node.GenerateRandomNodesData(qty)
 	}
 
@@ -919,7 +919,7 @@ func TestSwarm_AskPeersSerial(t *testing.T) {
 	timescalled := uint32(0)
 	block := make(chan struct{})
 
-	dsc.SelectPeersFunc = func(qty int) []*node.NodeInfo {
+	dsc.SelectPeersFunc = func(ctx context.Context, qty int) []*node.NodeInfo {
 		atomic.AddUint32(&timescalled, 1)
 		<-block
 		return node.GenerateRandomNodesData(qty) // will trigger sending on morepeersreq
@@ -972,30 +972,50 @@ func TestNeighborhood_ReportConnectionResult(t *testing.T) {
 
 	rnds := node.GenerateRandomNodesData(PeerNum)
 
-	ps.SelectPeersFunc = func(qty int) []*node.NodeInfo {
+	ps.SelectPeersFunc = func(ctx context.Context, qty int) []*node.NodeInfo {
 		return rnds
 	}
 
 	n.discover = ps
+
+	cm := &cpoolMock{}
+
+	cm.f = func(address inet.Addr, pk p2pcrypto.PublicKey) (connection net.Connection, e error) {
+		return nil, errors.New("coudln't create connection")
+	}
+
+	n.cPool = cm
 
 	//_, disc := n.SubscribePeerEvents()
 
 	n.getMorePeers(PeerNum)
 	require.Equal(t, attemptcount, PeerNum)
 
+	goodlist := make(map[p2pcrypto.PublicKey]struct{})
+
+	cm.f = func(address inet.Addr, pk p2pcrypto.PublicKey) (connection net.Connection, e error) {
+		if _, ok := goodlist[pk]; ok {
+			return net.NewConnectionMock(pk), nil
+		}
+		return nil, errors.New("not found")
+	}
+
 	realnode := p2pTestNoStart(t, config.DefaultConfig())
 	realnode2 := p2pTestNoStart(t, config.DefaultConfig())
-	realnode.Start()
-	realnode2.Start()
+	realnodeinfo := &node.NodeInfo{realnode.lNode.PublicKey().Array(), inet.IPv4zero, 0, 0}
+	realnode2info := &node.NodeInfo{realnode2.lNode.PublicKey().Array(), inet.IPv4zero, 0, 0}
+
+	goodlist[realnode.lNode.PublicKey()] = struct{}{}
+	goodlist[realnode2.lNode.PublicKey()] = struct{}{}
 
 	newrnds := node.GenerateRandomNodesData(PeerNum - 2)
 
-	ps.SelectPeersFunc = func(qty int) []*node.NodeInfo {
-		return append([]*node.NodeInfo{realnode.lNode.NodeInfo, realnode2.lNode.NodeInfo}, newrnds...)
+	ps.SelectPeersFunc = func(ctx context.Context, qty int) []*node.NodeInfo {
+		return append([]*node.NodeInfo{realnodeinfo, realnode2info}, newrnds...)
 	}
 
 	n.getMorePeers(PeerNum)
 
 	require.Equal(t, 2, goodcount)
-	require.True(t, attemptcount == PeerNum*2-2)
+	require.Equal(t, attemptcount, PeerNum*2)
 }

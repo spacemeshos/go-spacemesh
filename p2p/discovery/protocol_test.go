@@ -48,7 +48,7 @@ type testNode struct {
 func newTestNode(simulator *service.Simulator) *testNode {
 	nd := simulator.NewNode()
 	d := &mockAddrBook{}
-	disc := NewDiscoveryProtocol(nd.NodeInfo, d, nd, log.New(nd.String(), "", ""))
+	disc := NewDiscoveryProtocol(nd.NodeInfo.PublicKey(), d, nd, log.New(nd.String(), "", ""))
 	return &testNode{nd, d, disc}
 }
 

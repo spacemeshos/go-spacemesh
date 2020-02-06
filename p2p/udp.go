@@ -29,23 +29,29 @@ type udpNetwork interface {
 
 // UDPMux is a server for receiving and sending udp messages. through protocols.
 type UDPMux struct {
-	local    *node.LocalNode
+	logger log.Log
+
+	local     node.LocalNode
+	networkid int8
+
 	lookuper Lookuper
 	network  udpNetwork
+
 	messages map[string]chan service.DirectMessage
 	shutdown chan struct{}
-	logger   log.Log
 }
 
 // NewUDPMux creates a new udp protocol server
-func NewUDPMux(localNode *node.LocalNode, lookuper Lookuper, udpNet udpNetwork, logger log.Log) *UDPMux {
+func NewUDPMux(localNode node.LocalNode, lookuper Lookuper, udpNet udpNetwork, networkid int8, logger log.Log) *UDPMux {
 	return &UDPMux{
-		localNode,
-		lookuper,
-		udpNet,
-		make(map[string]chan service.DirectMessage),
-		make(chan struct{}, 1),
-		logger,
+		logger:    logger,
+		local:     localNode,
+		networkid: networkid,
+		lookuper:  lookuper,
+		network:   udpNet,
+
+		messages: make(map[string]chan service.DirectMessage),
+		shutdown: make(chan struct{}, 1),
 	}
 }
 
@@ -133,7 +139,7 @@ func (mux *UDPMux) sendMessageImpl(peerPubkey p2pcrypto.PublicKey, protocol stri
 		config.ClientVersion,
 		time.Now().UnixNano(),
 		mux.local.PublicKey().Bytes(),
-		int32(mux.local.NetworkID()),
+		int32(mux.networkid),
 	}
 
 	message := ProtocolMessage{
@@ -193,9 +199,9 @@ func (mux *UDPMux) processUDPMessage(sender p2pcrypto.PublicKey, fromaddr net.Ad
 		return errors.New("could'nt deserialize message")
 	}
 
-	if msg.Metadata.NetworkID != int32(mux.local.NetworkID()) {
+	if msg.Metadata.NetworkID != int32(mux.networkid) {
 		// todo: tell net to blacklist the ip or sender ?
-		return fmt.Errorf("wrong NetworkID, want: %v, got: %v", mux.local.NetworkID(), msg.Metadata.NetworkID)
+		return fmt.Errorf("wrong NetworkID, want: %v, got: %v", mux.networkid, msg.Metadata.NetworkID)
 	}
 
 	if t, err := version.CheckNodeVersion(msg.Metadata.ClientVersion, config.MinClientVersion); err != nil || !t {

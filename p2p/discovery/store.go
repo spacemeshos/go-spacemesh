@@ -3,7 +3,6 @@ package discovery
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/filesystem"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"os"
@@ -213,14 +212,7 @@ func (a *addrBook) deserializePeers(filePath string) error {
 
 // addressHandler is the main handler for the address manager.  It must be run
 // as a goroutine.
-func (a *addrBook) saveRoutine() {
-	path, err := filesystem.GetSpacemeshDataDirectoryPath()
-	if err != nil {
-		a.logger.Warning("IMPORTANT : Data directory path can't be reached. peer files are not being saved.")
-		return
-	}
-	finalPath := path + "/" + defaultPeersFileName
-
+func (a *addrBook) saveRoutine(filepath string) {
 	dumpAddressTicker := time.NewTicker(saveRoutineInterval)
 	defer dumpAddressTicker.Stop()
 
@@ -228,15 +220,15 @@ out:
 	for {
 		select {
 		case <-dumpAddressTicker.C:
-			a.savePeers(finalPath)
-			a.logger.Debug("Saved peers to file %v", finalPath)
+			a.savePeers(filepath)
+			a.logger.Debug("Saved peers to file %v", filepath)
 		case <-a.quit:
 			break out
 		}
 	}
 
-	a.logger.Debug("Saving peer before exit to file %v", finalPath)
-	a.savePeers(finalPath)
+	a.logger.Debug("Saving peer before exit to file %v", filepath)
+	a.savePeers(filepath)
 	log.Debug("Address handler done")
 
 }

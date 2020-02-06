@@ -9,6 +9,8 @@ import (
 	"time"
 )
 
+var NilLogger Log
+
 // Log is an exported type that embeds our logger.
 type Log struct {
 	logger *zap.Logger

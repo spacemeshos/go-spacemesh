@@ -21,7 +21,7 @@ type UDPMessageEvent struct {
 
 // UDPNet is used to listen on or send udp messages
 type UDPNet struct {
-	local      *node.LocalNode
+	local      node.LocalNode
 	logger     log.Log
 	udpAddress *net.UDPAddr
 	config     config.Config
@@ -32,11 +32,11 @@ type UDPNet struct {
 }
 
 // NewUDPNet creates a UDPNet. returns error if the listening can't be resolved
-func NewUDPNet(config config.Config, local *node.LocalNode, log log.Log) (*UDPNet, error) {
+func NewUDPNet(config config.Config, localEntity node.LocalNode, addr *net.UDPAddr, log log.Log) (*UDPNet, error) {
 	n := &UDPNet{
-		local:      local,
+		local:      localEntity,
 		logger:     log,
-		udpAddress: NodeAddr(local.NodeInfo),
+		udpAddress: addr,
 		config:     config,
 		msgChan:    make(chan UDPMessageEvent, config.BufferSize),
 		shutdown:   make(chan struct{}),

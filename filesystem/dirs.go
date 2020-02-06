@@ -5,11 +5,7 @@ import (
 	"os"
 	"os/user"
 	"path"
-	"path/filepath"
 	"strings"
-
-	"github.com/spacemeshos/go-spacemesh/app/config"
-	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 // Using a function pointer to get the current user so we can more easily mock in tests
@@ -30,87 +26,6 @@ func PathExists(path string) bool {
 		return false
 	}
 	return err == nil
-}
-
-// GetSpacemeshDataDirectoryPath gets the full os-specific path to the spacemesh top-level data directory.
-func GetSpacemeshDataDirectoryPath() (string, error) {
-	return GetFullDirectoryPath(config.ConfigValues.DataFilePath)
-}
-
-// GetSpacemeshTempDirectoryPath gets the spacemesh temp files dir so we don't have to work with convoluted os specific temp folders.
-func GetSpacemeshTempDirectoryPath() (string, error) {
-	return ensureDataSubDirectory("temp")
-}
-
-// DeleteAllTempFiles deletes all temp files from the temp dir and creates a new temp dir.
-func DeleteAllTempFiles() error {
-	tempDir, err := GetSpacemeshTempDirectoryPath()
-	if err != nil {
-		return err
-	}
-
-	err = os.RemoveAll(tempDir)
-	if err != nil {
-		return err
-	}
-
-	// create temp dir again
-	_, err = GetSpacemeshTempDirectoryPath()
-	return err
-}
-
-// EnsureSpacemeshDataDirectories return the os-specific path to the Spacemesh data directory.
-// It creates the directory and all predefined sub directories on demand.
-func EnsureSpacemeshDataDirectories() (string, error) {
-	dataPath, err := GetSpacemeshDataDirectoryPath()
-	if err != nil {
-		log.Error("Can't get or create spacemesh data folder")
-		return "", err
-	}
-
-	log.Debug("Data directory: %s", dataPath)
-
-	// ensure sub folders exist - create them on demand
-	_, err = GetAccountsDataDirectoryPath()
-	if err != nil {
-		return "", err
-	}
-
-	_, err = GetLogsDataDirectoryPath()
-	if err != nil {
-		return "", err
-	}
-
-	return dataPath, nil
-}
-
-// ensureDataSubDirectory ensure a sub-directory exists.
-func ensureDataSubDirectory(dirName string) (string, error) {
-	dataPath, err := GetSpacemeshDataDirectoryPath()
-	if err != nil {
-		log.Error("Failed to ensure data dir", err)
-		return "", err
-	}
-
-	pathName := filepath.Join(dataPath, dirName)
-	aPath, err := GetFullDirectoryPath(pathName)
-	if err != nil {
-		log.Error("Can't access spacemesh folder", pathName, "Erorr:", err)
-		return "", err
-	}
-	return aPath, nil
-}
-
-// GetAccountsDataDirectoryPath returns the path to the accounts data directory.
-// It will create the directory if it doesn't already exist.
-func GetAccountsDataDirectoryPath() (string, error) {
-	return ensureDataSubDirectory(config.AccountsDirectoryName)
-}
-
-// GetLogsDataDirectoryPath returns the path to the app logs data directory.
-// It will create the directory if it doesn't already exist.
-func GetLogsDataDirectoryPath() (string, error) {
-	return ensureDataSubDirectory(config.LogDirectoryName)
 }
 
 // GetUserHomeDirectory returns the current user's home directory if one is set by the system.
@@ -152,25 +67,12 @@ func GetFullDirectoryPath(name string) (string, error) {
 	return aPath, err
 }
 
-// EnsureNodesDataDirectory Gets the os-specific full path to the nodes master data directory.
-// Attempts to create the directory on-demand.
-func EnsureNodesDataDirectory(nodesDirectoryName string) (string, error) {
-	dataPath, err := GetSpacemeshDataDirectoryPath()
-	if err != nil {
-		return "", err
+func ExistOrCreate(path string) (err error) {
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		err := os.MkdirAll(path, OwnerReadWriteExec)
+		if err != nil {
+			return err
+		}
 	}
-
-	nodesDir := filepath.Join(dataPath, nodesDirectoryName)
-	return GetFullDirectoryPath(nodesDir)
-}
-
-// EnsureNodeDataDirectory Gets the path to the node's data directory, e.g. /nodes/[node-id]/
-// Directory will be created on demand if it doesn't exist.
-func EnsureNodeDataDirectory(nodesDataDir string, nodeID string) (string, error) {
-	return GetFullDirectoryPath(filepath.Join(nodesDataDir, nodeID))
-}
-
-// NodeDataFile Returns the os-specific full path to the node's data file.
-func NodeDataFile(nodesDataDir, NodeDataFileName, nodeID string) string {
-	return filepath.Join(nodesDataDir, nodeID, NodeDataFileName)
+	return nil
 }

@@ -3,6 +3,7 @@ package net
 import (
 	"encoding/hex"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/stretchr/testify/assert"
@@ -25,10 +26,10 @@ func Test_sumByteArray(t *testing.T) {
 func TestNet_EnqueueMessage(t *testing.T) {
 	testnodes := 100
 	cfg := config.DefaultConfig()
-	addr := net.TCPAddr{net.ParseIP("0.0.0.0"), 0000, ""}
-	ln, err := node.NewNodeIdentity(cfg, &addr, false)
+	addr := &net.TCPAddr{net.ParseIP("0.0.0.0"), 0000, ""}
+	ln, err := node.NewNodeIdentity()
 	assert.NoError(t, err)
-	n, err := NewNet(cfg, ln)
+	n, err := NewNet(cfg, ln, addr, log.NewDefault(t.Name()))
 	assert.NoError(t, err)
 
 	var rndmtx sync.Mutex
@@ -118,10 +119,10 @@ func Test_Net_LimitedConnections(t *testing.T) {
 	cfg := config.DefaultConfig()
 	cfg.SessionTimeout = 100 * time.Millisecond
 
-	addr := net.TCPAddr{net.ParseIP("0.0.0.0"), 0000, ""}
-	ln, err := node.NewNodeIdentity(cfg, &addr, false)
+	addr := &net.TCPAddr{net.ParseIP("0.0.0.0"), 0000, ""}
+	ln, err := node.NewNodeIdentity()
 	require.NoError(t, err)
-	n, err := NewNet(cfg, ln)
+	n, err := NewNet(cfg, ln, addr, log.NewDefault(t.Name()))
 	//n.SubscribeOnNewRemoteConnections(counter)
 	listener := newMockListener()
 	err = n.listen(listener.listenerFunc)
@@ -149,12 +150,14 @@ func TestHandlePreSessionIncomingMessage2(t *testing.T) {
 	r := require.New(t)
 	var wg sync.WaitGroup
 
-	aliceNode, _ := node.GenerateTestNode(t)
-	bobNode, _ := node.GenerateTestNode(t)
+	aliceNode, aliceNodeInfo := node.GenerateTestNode(t)
+	bobNode, bobNodeInfo := node.GenerateTestNode(t)
 
 	bobsAliceConn := NewConnectionMock(aliceNode.PublicKey())
-	bobsAliceConn.addr = fmt.Sprintf("%v:%v", aliceNode.IP.String(), aliceNode.ProtocolPort)
-	bobsNet, err := NewNet(config.DefaultConfig(), bobNode)
+	bobsAliceConn.addr = fmt.Sprintf("%v:%v", aliceNodeInfo.IP.String(), aliceNodeInfo.ProtocolPort)
+
+	bobsAddr := &net.TCPAddr{bobNodeInfo.IP, int(bobNodeInfo.DiscoveryPort), ""}
+	bobsNet, err := NewNet(config.DefaultConfig(), bobNode, bobsAddr, log.NewDefault(t.Name()))
 	r.NoError(err)
 	bobsNet.SubscribeOnNewRemoteConnections(func(event NewConnectionEvent) {
 		r.Equal(aliceNode.PublicKey().String(), event.Conn.Session().ID().String(), "wrong session received")
