@@ -426,6 +426,8 @@ func (s *swarm) Shutdown() {
 		for _, ch := range s.delPeerSub {
 			close(ch)
 		}
+		s.delPeerSub = nil
+		s.newPeerSub = nil
 		s.peerLock.Unlock()
 	})
 }
