@@ -440,7 +440,7 @@ func (b *Builder) PublishActivationTx() error {
 	b.log.Event().Info("atx published!",
 		log.AtxId(atx.ShortString()),
 		log.String("prev_atx_id", atx.PrevATXId.ShortString()),
-		log.String("post_atx_id", atx.PositioningAtx.ShortString()),
+		log.String("pos_atx_id", atx.PositioningAtx.ShortString()),
 		log.LayerId(uint64(atx.PubLayerIdx)),
 		log.EpochId(uint64(atx.PubLayerIdx.GetEpoch(b.layersPerEpoch))),
 		log.Uint32("active_set", atx.ActiveSetSize),
