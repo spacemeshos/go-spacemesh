@@ -371,7 +371,7 @@ func (b *Builder) PublishActivationTx() error {
 		return fmt.Errorf("failed to build nipst: %v", err)
 	}
 
-	b.log.With().Info("awaiting publication epoch of atx",
+	b.log.With().Info("awaiting atx publication epoch",
 		log.Uint64("pub_epoch", uint64(pubEpoch)),
 		log.Uint64("pub_epoch_first_layer", uint64(pubEpoch.FirstLayer(b.layersPerEpoch))),
 		log.Uint64("current_layer", uint64(b.layerClock.GetCurrentLayer())),
@@ -444,7 +444,7 @@ func (b *Builder) PublishActivationTx() error {
 		log.LayerId(uint64(atx.PubLayerIdx)),
 		log.EpochId(uint64(atx.PubLayerIdx.GetEpoch(b.layersPerEpoch))),
 		log.Uint32("active_set", atx.ActiveSetSize),
-		log.String("miner", b.nodeId.Key[:5]),
+		log.String("miner", b.nodeId.ShortString()),
 		log.Int("view", len(atx.View)),
 		log.Uint64("sequence_number", atx.Sequence),
 		log.String("NIPSTChallenge", hash.String()),

@@ -520,7 +520,7 @@ func (s *Syncer) validateBlockView(blk *types.Block) bool {
 	ch := make(chan bool, 1)
 	defer close(ch)
 	foo := func(res bool) error {
-		s.With().Info("validate view",
+		s.With().Info("view validated",
 			log.BlockId(blk.Id().String()),
 			log.Bool("result", res),
 			log.LayerId(uint64(blk.LayerIndex)))

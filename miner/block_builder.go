@@ -381,7 +381,7 @@ func (t *BlockBuilder) handleGossipAtx(data service.GossipMessage) {
 		log.String("sender_id", atx.NodeId.ShortString()),
 		log.AtxId(atx.ShortString()),
 		log.String("prev_atx_id", atx.PrevATXId.ShortString()),
-		log.String("post_atx_id", atx.PositioningAtx.ShortString()),
+		log.String("pos_atx_id", atx.PositioningAtx.ShortString()),
 		log.LayerId(uint64(atx.PubLayerIdx)),
 		log.Uint32("active_set", atx.ActiveSetSize),
 		log.Int("view", len(atx.View)),
