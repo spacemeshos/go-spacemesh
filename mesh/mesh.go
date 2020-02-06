@@ -430,7 +430,7 @@ func (m *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.Transaction, atxs 
 	m.invalidateFromPools(&blk.MiniBlock)
 
 	events.Publish(events.NewBlock{Id: blk.Id().String(), Atx: blk.ATXID.ShortString(), Layer: uint64(blk.LayerIndex)})
-	m.With().Info("added block to database ", log.BlockId(blk.Id().String()))
+	m.With().Info("added block to database ", log.BlockId(blk.Id().String()), log.LayerId(uint64(blk.LayerIndex)))
 	return nil
 }
 
@@ -562,10 +562,10 @@ func (m *Mesh) AccumulateRewards(l *types.Layer, params Config) {
 
 	numBlocks := big.NewInt(int64(len(ids)))
 
-	blockTotalReward := calculateActualRewards(totalReward, numBlocks)
+	blockTotalReward := calculateActualRewards(l.Index(), totalReward, numBlocks)
 	m.ApplyRewards(l.Index(), ids, blockTotalReward)
 
-	blockLayerReward := calculateActualRewards(layerReward, numBlocks)
+	blockLayerReward := calculateActualRewards(l.Index(), layerReward, numBlocks)
 	err := m.writeTransactionRewards(l.Index(), ids, blockTotalReward, blockLayerReward)
 	if err != nil {
 		m.Error("cannot write reward to db")

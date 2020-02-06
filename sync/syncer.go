@@ -520,7 +520,10 @@ func (s *Syncer) validateBlockView(blk *types.Block) bool {
 	ch := make(chan bool, 1)
 	defer close(ch)
 	foo := func(res bool) error {
-		s.Info("validate view for %s done %v", blk.Id(), res)
+		s.With().Info("view validated",
+			log.BlockId(blk.Id().String()),
+			log.Bool("result", res),
+			log.LayerId(uint64(blk.LayerIndex)))
 		ch <- res
 		return nil
 	}
@@ -528,7 +531,7 @@ func (s *Syncer) validateBlockView(blk *types.Block) bool {
 		s.Error(fmt.Sprintf("block %v not syntactically valid", blk.Id()), err)
 		return false
 	} else if res == false {
-		s.With().Info("block has no missing blocks in view", log.BlockId(blk.Id().String()))
+		s.With().Info("block has no missing blocks in view", log.BlockId(blk.Id().String()), log.LayerId(uint64(blk.LayerIndex)))
 		return true
 	}
 
@@ -603,7 +606,7 @@ func (s *Syncer) DataAvailability(blk *types.Block) ([]*types.Transaction, []*ty
 		return nil, nil, fmt.Errorf("failed fetching block %v activation transactions %v", blk.Id(), atxerr)
 	}
 
-	s.Info("fetched all block data %v", blk.Id())
+	s.With().Info("fetched all block data %v", log.BlockId(blk.Id().String()), log.LayerId(uint64(blk.LayerIndex)))
 	return txres, atxres, nil
 }
 
