@@ -8,7 +8,7 @@ import pytz
 import subprocess
 import time
 
-from tests import analyse, pod, deployment, queries, statefulset
+from tests import analyse, pod, deployment, queries, statefulset, misc
 from tests.convenience import sleep_print_backwards
 from tests.tx_generator import config as conf
 import tests.tx_generator.actions as actions
@@ -38,92 +38,7 @@ today_date = dt.strftime("%Y.%m.%d")
 current_index = 'kubernetes_cluster-' + today_date
 
 
-def get_conf(bs_info, client_config, setup_oracle=None, setup_poet=None, args=None):
-    """
-    get_conf gather specification information into one ContainerSpec object
 
-    :param bs_info: DeploymentInfo, bootstrap info
-    :param client_config: DeploymentInfo, client info
-    :param setup_oracle: string, oracle ip
-    :param setup_poet: string, poet ip
-    :param args: list of strings, arguments for appendage in specification
-    :return: ContainerSpec
-    """
-    client_args = {} if 'args' not in client_config else client_config['args']
-    # append client arguments
-    if args is not None:
-        for arg in args:
-            client_args[arg] = args[arg]
-
-    # create a new container spec with client configuration
-    cspec = ContainerSpec(cname='client', specs=client_config)
-
-    # append oracle configuration
-    if setup_oracle:
-        client_args['oracle_server'] = 'http://{0}:{1}'.format(setup_oracle, ORACLE_SERVER_PORT)
-
-    # append poet configuration
-    if setup_poet:
-        client_args['poet_server'] = '{0}:{1}'.format(setup_poet, POET_SERVER_PORT)
-
-    cspec.append_args(bootnodes=node_string(bs_info['key'], bs_info['pod_ip'], BOOTSTRAP_PORT, BOOTSTRAP_PORT),
-                      genesis_time=GENESIS_TIME.isoformat('T', 'seconds'))
-    # append client config to ContainerSpec
-    if len(client_args) > 0:
-        cspec.append_args(**client_args)
-    return cspec
-
-
-def add_multi_clients(deployment_id, container_specs, size=2, client_title='client', ret_pods=False):
-    """
-    adds pods to a given namespace according to specification params
-
-    :param deployment_id: string, namespace id
-    :param container_specs:
-    :param size: int, number of replicas
-    :param client_title: string, client title in yml file (client, client_v2 etc)
-    :param ret_pods: boolean, if 'True' RETURN a pods list (V1PodList)
-    :return: list (strings), list of pods names
-    """
-    k8s_file, k8s_create_func = choose_k8s_object_create(testconfig[client_title],
-                                                         CLIENT_DEPLOYMENT_FILE,
-                                                         CLIENT_STATEFULSET_FILE)
-    resp = k8s_create_func(k8s_file, testconfig['namespace'],
-                           deployment_id=deployment_id,
-                           replica_size=size,
-                           container_specs=container_specs,
-                           time_out=testconfig['deployment_ready_time_out'])
-
-    print("\nadding new clients")
-    client_pods = CoreV1ApiClient().list_namespaced_pod(testconfig['namespace'],
-                                                        include_uninitialized=True,
-                                                        label_selector=("name={0}".format(
-                                                            resp.metadata._name.split('-')[1]))).items
-
-    if ret_pods:
-        ret_val = client_pods
-    else:
-        pods = []
-        for c in client_pods:
-            pod_name = c.metadata.name
-            if pod_name.startswith(resp.metadata.name):
-                pods.append(pod_name)
-        ret_val = pods
-        print(f"added new clients: {pods}\n")
-
-    return ret_val
-
-
-def choose_k8s_object_create(config, deployment_file, statefulset_file):
-    dep_type = 'deployment' if 'deployment_type' not in config else config['deployment_type']
-    if dep_type == 'deployment':
-        return deployment_file, deployment.create_deployment
-    elif dep_type == 'statefulset':
-        # StatefulSets are intended to be used with stateful applications and distributed systems.
-        # Pods in a StatefulSet have a unique ordinal index and a stable network identity.
-        return statefulset_file, statefulset.create_statefulset
-    else:
-        raise Exception("Unknown deployment type in configuration. Please check your config.yaml")
 
 
 def _setup_dep_ss_file_path(file_path, dep_type, node_type):
@@ -156,84 +71,6 @@ def _setup_dep_ss_file_path(file_path, dep_type, node_type):
     return dep_file_path, ss_file_path
 
 
-def setup_bootstrap_in_namespace(namespace, bs_deployment_info, bootstrap_config, oracle=None, poet=None,
-                                 file_path=None, dep_time_out=120):
-    """
-    adds a bootstrap node to a specific namespace
-
-    :param namespace: string, session id
-    :param bs_deployment_info: DeploymentInfo, bootstrap info, metadata
-    :param bootstrap_config: dictionary, bootstrap specifications
-    :param oracle: string, oracle ip
-    :param poet: string, poet ip
-    :param file_path: string, optional, full path to deployment yaml
-    :param dep_time_out: int, deployment timeout
-
-    :return: DeploymentInfo, bootstrap info with a list of active pods
-    """
-    # setting stateful and deployment configuration files
-    dep_method = bootstrap_config["deployment_type"] if "deployment_type" in bootstrap_config.keys() else "deployment"
-    try:
-        dep_file_path, ss_file_path = _setup_dep_ss_file_path(file_path, dep_method, 'bootstrap')
-    except ValueError as e:
-        print(f"error setting up bootstrap specification file: {e}")
-        return None
-
-    def _extract_label():
-        name = bs_deployment_info.deployment_name.split('-')[1]
-        return name
-
-    bootstrap_args = {} if 'args' not in bootstrap_config else bootstrap_config['args']
-    cspec = ContainerSpec(cname='bootstrap', specs=bootstrap_config)
-
-    if oracle:
-        bootstrap_args['oracle_server'] = 'http://{0}:{1}'.format(oracle, ORACLE_SERVER_PORT)
-
-    if poet:
-        bootstrap_args['poet_server'] = '{0}:{1}'.format(poet, POET_SERVER_PORT)
-
-    cspec.append_args(genesis_time=GENESIS_TIME.isoformat('T', 'seconds'),
-                      **bootstrap_args)
-
-    # choose k8s creation function (deployment/stateful) and the matching k8s file
-    k8s_file, k8s_create_func = choose_k8s_object_create(bootstrap_config,
-                                                         dep_file_path,
-                                                         ss_file_path)
-    # run the chosen creation function
-    resp = k8s_create_func(k8s_file, namespace,
-                           deployment_id=bs_deployment_info.deployment_id,
-                           replica_size=bootstrap_config['replicas'],
-                           container_specs=cspec,
-                           time_out=dep_time_out)
-
-    bs_deployment_info.deployment_name = resp.metadata._name
-    # The tests assume we deploy only 1 bootstrap
-    bootstrap_pod_json = (
-        CoreV1ApiClient().list_namespaced_pod(namespace=namespace,
-                                              label_selector=(
-                                                  "name={0}".format(
-                                                      _extract_label()))).items[0])
-    bs_pod = {'name': bootstrap_pod_json.metadata.name}
-
-    while True:
-        resp = CoreV1ApiClient().read_namespaced_pod(name=bs_pod['name'], namespace=namespace)
-        if resp.status.phase != 'Pending':
-            break
-        time.sleep(1)
-
-    bs_pod['pod_ip'] = resp.status.pod_ip
-
-    match = pod.search_phrase_in_pod_log(bs_pod['name'], namespace, 'bootstrap',
-                                         r"Local node identity >> (?P<bootstrap_key>\w+)")
-
-    if not match:
-        raise Exception("Failed to read container logs in {0}".format('bootstrap'))
-
-    bs_pod['key'] = match.group('bootstrap_key')
-    bs_deployment_info.pods = [bs_pod]
-
-    return bs_deployment_info
-
 
 def setup_clients_in_namespace(namespace, bs_deployment_info, client_deployment_info, client_config, name="client",
                                file_path=None, oracle=None, poet=None, dep_time_out=120):
@@ -252,9 +89,9 @@ def setup_clients_in_namespace(namespace, bs_deployment_info, client_deployment_
     def _extract_label():
         return client_deployment_info.deployment_name.split('-')[1]
 
-    cspec = get_conf(bs_deployment_info, client_config, oracle, poet)
+    cspec = misc.get_conf(GENESIS_TIME.isoformat('T', 'seconds'), bs_deployment_info, client_config, oracle, poet)
 
-    k8s_file, k8s_create_func = choose_k8s_object_create(client_config,
+    k8s_file, k8s_create_func = misc.choose_k8s_object_create(client_config,
                                                          dep_file_path,
                                                          ss_file_path)
     resp = k8s_create_func(k8s_file, namespace,
@@ -288,23 +125,6 @@ def node_string(key, ip, port, discport):
 # ==============================================================================
 #    Fixtures
 # ==============================================================================
-
-
-@pytest.fixture(scope='module')
-def setup_bootstrap(init_session):
-    """
-    setup bootstrap initializes a session and adds a single bootstrap node
-    :param init_session: sets up a new k8s env
-    :return: DeploymentInfo type, containing the settings info of the new node
-    """
-    bootstrap_deployment_info = DeploymentInfo(dep_id=init_session)
-
-    bootstrap_deployment_info = setup_bootstrap_in_namespace(testconfig['namespace'],
-                                                             bootstrap_deployment_info,
-                                                             testconfig['bootstrap'],
-                                                             dep_time_out=testconfig['deployment_ready_time_out'])
-
-    return bootstrap_deployment_info
 
 
 @pytest.fixture(scope='module')

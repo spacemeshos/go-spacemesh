@@ -80,13 +80,13 @@ def test_sync_gradually_add_nodes(init_session, setup_bootstrap, save_log_on_exi
 
     num_clients = 4
     clients = [None] * num_clients
-    clients[0] = add_multi_clients(init_session, cspec2, 1, 'clientv2')[0]
+    clients[0] = add_multi_clients(testconfig, init_session, cspec2, 1, 'clientv2')[0]
     time.sleep(10)
-    clients[1] = add_multi_clients(init_session, cspec, 1, 'client')[0]
+    clients[1] = add_multi_clients(testconfig, init_session, cspec, 1, 'client')[0]
     time.sleep(20)
-    clients[2] = add_multi_clients(init_session, cspec, 1, 'client')[0]
+    clients[2] = add_multi_clients(testconfig, init_session, cspec, 1, 'client')[0]
     time.sleep(20)
-    clients[3] = add_multi_clients(init_session, cspec, 1, 'client')[0]
+    clients[3] = add_multi_clients(testconfig, init_session, cspec, 1, 'client')[0]
 
     print("take pod down ", clients[0])
 

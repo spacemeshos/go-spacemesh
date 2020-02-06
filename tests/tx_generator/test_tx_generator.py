@@ -5,7 +5,6 @@ import time
 
 from tests.tx_generator import actions
 from tests.tx_generator.models.accountant import Accountant
-from tests.test_bs import setup_network, add_curl, setup_bootstrap, start_poet, setup_clients, wait_genesis
 import tests.tx_generator.config as conf
 from tests.tx_generator.models.wallet_api import WalletAPI
 

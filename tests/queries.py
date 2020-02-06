@@ -44,6 +44,23 @@ def find_error_log_msgs(namespace, pod_name):
     return query_message(current_index, namespace, pod_name, fields)
 
 
+def assert_no_panics(ns, indx=current_index):
+    hits = query_message(indx, ns, ns, {'M': 'panic'})
+    if len(hits) > 0:
+        print(hits)
+    assert len(hits) == 0
+
+
+def assert_no_errors(ns, indx=current_index):
+    hits = query_message(indx, ns, ns, {'L': 'ERROR'})
+    if len(hits) > 0:
+        print(hits)
+    hits = query_message(indx, ns, ns, {'L': 'FATAL'})
+    if len(hits) > 0:
+        print(hits)
+    assert len(hits) == 0
+
+
 # ================================== MESSAGE CONTENT ==================================
 
 def get_release_tick_msgs(namespace, pod_name):
@@ -299,6 +316,16 @@ def wait_for_latest_layer(deployment, min_layer_id, layers_per_epoch):
         if lyr >= min_layer_id and lyr % layers_per_epoch == 0:
             return lyr
         time.sleep(10)
+
+
+def wait_for_layer(deployment, min_layer_id):
+    while True:
+        lyr = get_latest_layer(deployment)
+        print("current layer " + str(lyr))
+        if lyr >= min_layer_id:
+            return lyr
+        time.sleep(10)
+
 
 
 def get_atx_per_node(deployment):

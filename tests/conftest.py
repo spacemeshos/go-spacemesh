@@ -116,6 +116,85 @@ def set_namespace(request, session_id, load_config):
     return _setup_namespace()
 
 
+def setup_bootstrap_in_namespace(namespace, bs_deployment_info, bootstrap_config, oracle=None, poet=None,
+                                 file_path=None, dep_time_out=120):
+    """
+    adds a bootstrap node to a specific namespace
+
+    :param namespace: string, session id
+    :param bs_deployment_info: DeploymentInfo, bootstrap info, metadata
+    :param bootstrap_config: dictionary, bootstrap specifications
+    :param oracle: string, oracle ip
+    :param poet: string, poet ip
+    :param file_path: string, optional, full path to deployment yaml
+    :param dep_time_out: int, deployment timeout
+
+    :return: DeploymentInfo, bootstrap info with a list of active pods
+    """
+    # setting stateful and deployment configuration files
+    dep_method = bootstrap_config["deployment_type"] if "deployment_type" in bootstrap_config.keys() else "deployment"
+    try:
+        dep_file_path, ss_file_path = _setup_dep_ss_file_path(file_path, dep_method, 'bootstrap')
+    except ValueError as e:
+        print(f"error setting up bootstrap specification file: {e}")
+        return None
+
+    def _extract_label():
+        name = bs_deployment_info.deployment_name.split('-')[1]
+        return name
+
+    bootstrap_args = {} if 'args' not in bootstrap_config else bootstrap_config['args']
+    cspec = ContainerSpec(cname='bootstrap', specs=bootstrap_config)
+
+    if oracle:
+        bootstrap_args['oracle_server'] = 'http://{0}:{1}'.format(oracle, ORACLE_SERVER_PORT)
+
+    if poet:
+        bootstrap_args['poet_server'] = '{0}:{1}'.format(poet, POET_SERVER_PORT)
+
+    cspec.append_args(genesis_time=GENESIS_TIME.isoformat('T', 'seconds'),
+                      **bootstrap_args)
+
+    # choose k8s creation function (deployment/stateful) and the matching k8s file
+    k8s_file, k8s_create_func = misc.choose_k8s_object_create(bootstrap_config,
+                                                              dep_file_path,
+                                                              ss_file_path)
+    # run the chosen creation function
+    resp = k8s_create_func(k8s_file, namespace,
+                           deployment_id=bs_deployment_info.deployment_id,
+                           replica_size=bootstrap_config['replicas'],
+                           container_specs=cspec,
+                           time_out=dep_time_out)
+
+    bs_deployment_info.deployment_name = resp.metadata._name
+    # The tests assume we deploy only 1 bootstrap
+    bootstrap_pod_json = (
+        CoreV1ApiClient().list_namespaced_pod(namespace=namespace,
+                                              label_selector=(
+                                                  "name={0}".format(
+                                                      _extract_label()))).items[0])
+    bs_pod = {'name': bootstrap_pod_json.metadata.name}
+
+    while True:
+        resp = CoreV1ApiClient().read_namespaced_pod(name=bs_pod['name'], namespace=namespace)
+        if resp.status.phase != 'Pending':
+            break
+        time.sleep(1)
+
+    bs_pod['pod_ip'] = resp.status.pod_ip
+
+    match = pod.search_phrase_in_pod_log(bs_pod['name'], namespace, 'bootstrap',
+                                         r"Local node identity >> (?P<bootstrap_key>\w+)")
+
+    if not match:
+        raise Exception("Failed to read container logs in {0}".format('bootstrap'))
+
+    bs_pod['key'] = match.group('bootstrap_key')
+    bs_deployment_info.pods = [bs_pod]
+
+    return bs_deployment_info
+
+
 @pytest.fixture(scope='session')
 def init_session(load_config, set_namespace, set_docker_images, session_id):
     """
@@ -124,3 +203,20 @@ def init_session(load_config, set_namespace, set_docker_images, session_id):
     :return: namespace id
     """
     return session_id
+
+
+@pytest.fixture(scope='module')
+def setup_bootstrap(init_session):
+    """
+    setup bootstrap initializes a session and adds a single bootstrap node
+    :param init_session: sets up a new k8s env
+    :return: DeploymentInfo type, containing the settings info of the new node
+    """
+    bootstrap_deployment_info = DeploymentInfo(dep_id=init_session)
+
+    bootstrap_deployment_info = setup_bootstrap_in_namespace(testconfig['namespace'],
+                                                             bootstrap_deployment_info,
+                                                             testconfig['bootstrap'],
+                                                             dep_time_out=testconfig['deployment_ready_time_out'])
+
+    return bootstrap_deployment_info
