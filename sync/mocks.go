@@ -60,6 +60,10 @@ func (m *MeshValidatorMock) LatestComplete() types.LayerID {
 	panic("implement me")
 }
 
+func (m *MeshValidatorMock) PersistTortoise() error {
+	return nil
+}
+
 func (m *MeshValidatorMock) HandleIncomingLayer(lyr *types.Layer) (types.LayerID, types.LayerID) {
 	m.countValidate++
 	m.calls++
