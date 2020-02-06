@@ -7,15 +7,15 @@ import (
 )
 
 const (
-	P2PDirectoryPath = "p2p"
-	NodeDataFileName = "id.json"
-	UnlimitedMsgSize = 0
+	P2PDirectoryPath   = "p2p"
+	NodeDataFileName   = "id.json"
+	NodesDirectoryName = "nodes"
+	UnlimitedMsgSize   = 0
 )
 
 // ConfigValues specifies  default values for node config params.
 var (
-	ConfigValues      = DefaultConfig()
-	SwarmConfigValues = ConfigValues.SwarmConfig
+	ConfigValues = DefaultConfig()
 )
 
 func init() {

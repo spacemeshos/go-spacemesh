@@ -439,7 +439,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId,
 
 	postClient.SetLogger(app.addLogger(PostLogger, lg))
 
-	db, err := database.NewLDBDatabase(dbStorepath, 0, 0, app.addLogger(StateDbLogger, lg))
+	db, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "state"), 0, 0, app.addLogger(StateDbLogger, lg))
 	if err != nil {
 		return err
 	}
@@ -447,26 +447,26 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId,
 
 	coinToss := weakCoinStub{}
 
-	atxdbstore, err := database.NewLDBDatabase(dbStorepath+"atx", 0, 0, app.addLogger(AtxDbStoreLogger, lg))
+	atxdbstore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "atx"), 0, 0, app.addLogger(AtxDbStoreLogger, lg))
 	if err != nil {
 		return err
 	}
 	app.closers = append(app.closers, atxdbstore)
 
-	poetDbStore, err := database.NewLDBDatabase(dbStorepath+"poet", 0, 0, app.addLogger(PoetDbStoreLogger, lg))
+	poetDbStore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "poet"), 0, 0, app.addLogger(PoetDbStoreLogger, lg))
 	if err != nil {
 		return err
 	}
 	app.closers = append(app.closers, poetDbStore)
 
 	//todo: put in config
-	iddbstore, err := database.NewLDBDatabase(dbStorepath+"ids", 0, 0, app.addLogger(StateDbLogger, lg))
+	iddbstore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "ids"), 0, 0, app.addLogger(StateDbLogger, lg))
 	if err != nil {
 		return err
 	}
 	app.closers = append(app.closers, iddbstore)
 
-	store, err := database.NewLDBDatabase(dbStorepath+StoreLogger, 0, 0, app.addLogger(StoreLogger, lg))
+	store, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "store"), 0, 0, app.addLogger(StoreLogger, lg))
 	if err != nil {
 		return err
 	}
@@ -476,7 +476,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId,
 	poetDb := activation.NewPoetDb(poetDbStore, app.addLogger(PoetDbLogger, lg))
 	//todo: this is initialized twice, need to refactor
 	validator := activation.NewValidator(&app.Config.POST, poetDb)
-	mdb, err := mesh.NewPersistentMeshDB(dbStorepath, app.Config.BlockCacheSize, app.addLogger(MeshDBLogger, lg))
+	mdb, err := mesh.NewPersistentMeshDB(filepath.Join(dbStorepath, "mesh"), app.Config.BlockCacheSize, app.addLogger(MeshDBLogger, lg))
 	if err != nil {
 		return err
 	}
@@ -485,7 +485,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId,
 	atxpool := miner.NewAtxMemPool()
 	meshAndPoolProjector := pending_txs.NewMeshAndPoolProjector(mdb, app.txPool)
 
-	appliedTxs, err := database.NewLDBDatabase(dbStorepath+"appliedTxs", 0, 0, lg.WithName("appliedTxs"))
+	appliedTxs, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "appliedTxs"), 0, 0, lg.WithName("appliedTxs"))
 	if err != nil {
 		return err
 	}

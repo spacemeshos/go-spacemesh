@@ -34,7 +34,7 @@ func (n *LocalNode) PersistData(path string) error {
 		return err
 	}
 
-	datadir := filepath.Join(path, config.P2PDirectoryPath, n.publicKey.String())
+	datadir := filepath.Join(path, config.P2PDirectoryPath, config.NodesDirectoryName, n.publicKey.String())
 
 	err = filesystem.ExistOrCreate(datadir)
 	if err != nil {
@@ -81,7 +81,7 @@ func LoadIdentity(path, nodeid string) (LocalNode, error) {
 // Read node persisted data based on node id.
 func readNodeData(path string, nodeID string) (*nodeFileData, error) {
 
-	nodefile := filepath.Join(path, config.P2PDirectoryPath, nodeID, config.NodeDataFileName)
+	nodefile := filepath.Join(path, config.P2PDirectoryPath, config.NodesDirectoryName, nodeID, config.NodeDataFileName)
 
 	if !filesystem.PathExists(nodefile) {
 		return nil, fmt.Errorf("tried to read node from non-existing path (%v)", nodefile)
@@ -116,11 +116,13 @@ func readNodeData(path string, nodeID string) (*nodeFileData, error) {
 }
 
 func getLocalNodes(path string) ([]string, error) {
-	if !filesystem.PathExists(path) {
+	nodesDir := filepath.Join(path, config.P2PDirectoryPath, config.NodesDirectoryName)
+
+	if !filesystem.PathExists(nodesDir) {
 		return nil, fmt.Errorf("directory not found %v", path)
 	}
 
-	fls, err := ioutil.ReadDir(path)
+	fls, err := ioutil.ReadDir(nodesDir)
 
 	if err != nil {
 		return nil, err
@@ -138,11 +140,16 @@ func getLocalNodes(path string) ([]string, error) {
 // Read node data from the data folder.
 // Reads a random node from the data folder if more than one node data file is persisted.
 // To load a specific node on startup - users need to pass the node id using a cli arg.
-func readFirstNodeData(path string) (*nodeFileData, error) {
+func ReadFirstNodeData(path string) (LocalNode, error) {
 	nds, err := getLocalNodes(path)
 	if err != nil {
-		return nil, err
+		return emptyNode, err
 	}
 
-	return readNodeData(path, nds[0])
+	f, err := readNodeData(path, nds[0])
+	if err != nil {
+		return emptyNode, err
+	}
+
+	return newLocalNodeFromFile(f)
 }

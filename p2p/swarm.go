@@ -119,7 +119,11 @@ func newSwarm(ctx context.Context, config config.Config, logger log.Log, datadir
 	if config.NodeID != "" {
 		l, err = node.LoadIdentity(datadir, config.NodeID)
 	} else {
-		l, err = node.NewNodeIdentity()
+		l, err = node.ReadFirstNodeData(datadir)
+		if err != nil {
+			logger.Warning("failed to load p2p identity from disk at %v. creating a new identity, err:%v", datadir, err)
+			l, err = node.NewNodeIdentity()
+		}
 	}
 
 	if err != nil {
