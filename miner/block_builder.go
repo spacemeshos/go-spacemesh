@@ -372,6 +372,11 @@ func (t *BlockBuilder) handleGossipAtx(data service.GossipMessage) {
 	}
 	atx.CalcAndSetId()
 
+	commitmentStr := "nil"
+	if atx.Commitment != nil {
+		commitmentStr = atx.Commitment.String()
+	}
+
 	t.With().Info("got new ATX",
 		log.String("sender_id", atx.NodeId.ShortString()),
 		log.AtxId(atx.ShortString()),
@@ -381,7 +386,7 @@ func (t *BlockBuilder) handleGossipAtx(data service.GossipMessage) {
 		log.Uint32("active_set", atx.ActiveSetSize),
 		log.Int("view", len(atx.View)),
 		log.Uint64("sequence_number", atx.Sequence),
-		log.String("commitment", atx.Commitment.String()),
+		log.String("commitment", commitmentStr),
 		log.Int("atx_size", len(data.Bytes())),
 	)
 

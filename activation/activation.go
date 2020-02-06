@@ -347,9 +347,9 @@ func (b *Builder) loadChallenge() error {
 func (b *Builder) PublishActivationTx() error {
 	b.discardChallengeIfStale()
 	if b.challenge != nil {
-		b.log.With().Info("using existing challenge", log.EpochId(uint64(b.currentEpoch())))
+		b.log.With().Info("using existing atx challenge", log.EpochId(uint64(b.currentEpoch())))
 	} else {
-		b.log.With().Info("building new challenge", log.EpochId(uint64(b.currentEpoch())))
+		b.log.With().Info("building new atx challenge", log.EpochId(uint64(b.currentEpoch())))
 		err := b.buildNipstChallenge()
 		if err != nil {
 			return err
@@ -371,7 +371,7 @@ func (b *Builder) PublishActivationTx() error {
 		return fmt.Errorf("failed to build nipst: %v", err)
 	}
 
-	b.log.With().Info("awaiting publication epoch",
+	b.log.With().Info("awaiting publication epoch of atx",
 		log.Uint64("pub_epoch", uint64(pubEpoch)),
 		log.Uint64("pub_epoch_first_layer", uint64(pubEpoch.FirstLayer(b.layersPerEpoch))),
 		log.Uint64("current_layer", uint64(b.layerClock.GetCurrentLayer())),
