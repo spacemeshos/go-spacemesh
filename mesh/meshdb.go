@@ -399,9 +399,14 @@ type dbReward struct {
 }
 
 func (m *MeshDB) writeTransactionRewards(l types.LayerID, accounts []types.Address, totalReward, layerReward *big.Int) error {
-	batch := m.transactions.NewBatch()
+	actBlockCnt := make(map[types.Address]uint64)
 	for _, account := range accounts {
-		reward := dbReward{TotalReward: totalReward.Uint64(), LayerRewardEstimate: layerReward.Uint64()}
+		actBlockCnt[account]++
+	}
+
+	batch := m.transactions.NewBatch()
+	for account, cnt := range actBlockCnt {
+		reward := dbReward{TotalReward: cnt * totalReward.Uint64(), LayerRewardEstimate: cnt * layerReward.Uint64()}
 		if b, err := types.InterfaceToBytes(&reward); err != nil {
 			return fmt.Errorf("could not marshal reward for %v: %v", account.Short(), err)
 		} else if err := batch.Put(getRewardKey(l, account), b); err != nil {
