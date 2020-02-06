@@ -825,12 +825,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 		log.Panic("Could not retrieve identity err=%v", err)
 	}
 
-	log.Info("connecting to POET on IP %v", app.Config.PoETServer)
-	poetClient, err := activation.NewRemoteRPCPoetClient(app.Config.PoETServer, cmdp.Ctx)
-	if err != nil {
-		log.Error("poet server not found on addr %v, err: %v", app.Config.PoETServer, err)
-		return
-	}
+	poetClient := activation.NewHTTPPoetClient(app.Config.PoETServer, cmdp.Ctx)
 
 	rng := amcl.NewRAND()
 	pub := app.edSgn.PublicKey().Bytes()
