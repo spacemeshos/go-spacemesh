@@ -16,12 +16,18 @@ from tests.utils import validate_blocks_per_nodes
 #
 # epoch i+3
 # validate total miner generated Tavg/x (floored) in i+2
-# validate new miner created an ATX
-# wait an epoch
 #
 # epoch i+4:
-# validate total miner generated Tavg/x+1 (floored) in i+3
+# validate total miner generated Tavg/x (floored) in i+3
+# validate number of ATXs = num_miner + 1 in i+3
+#
+# epoch i+5
+# validate total miner generated Tavg/x (floored) in i+4
+#
+# epoch i+6
+# validate total miner generated Tavg/x+1 (floored) in i+5
 def test_add_node_validate_atx(init_session, setup_network):
+    curr_epoch = 0
     epochs_to_sleep = 2
     layer_duration = int(testconfig['client']['args']['layer-duration-sec'])
     layers_per_epoch = int(testconfig['client']['args']['layers-per-epoch'])
@@ -34,35 +40,71 @@ def test_add_node_validate_atx(init_session, setup_network):
     print(f"sleeping for {epochs_to_sleep} epoch")
     sleep_print_backwards(tts)
 
-    # epoch i+2
-    print("\n\n-------- current epoch", epochs_to_sleep, "--------")
+    # ========================== epoch i+2 ==========================
+    curr_epoch += epochs_to_sleep
+    print("\n\n-------- current epoch", curr_epoch, "--------")
     print("adding a new miner")
     bs_info = setup_network.bootstrap.pods[0]
     cspec = get_conf(bs_info, testconfig['client'])
     _ = add_multi_clients(init_session, cspec, 1)
 
     # wait for next epoch
-    last_layer = layers_per_epoch * (epochs_to_sleep + 1)
+    last_layer = layers_per_epoch * (curr_epoch + 1)
     print(f"wait until next epoch to layer {last_layer}")
     _ = q.wait_for_latest_layer(init_session, last_layer, layers_per_epoch)
 
-    # epoch i+3
-    print("\n\n-------- current epoch", int(last_layer / layers_per_epoch), "--------")
+    # ========================== epoch i+3 ==========================
+    curr_epoch += 1
+    print("\n\n-------- current epoch", curr_epoch, "--------")
     print(f"-------- validating blocks per nodes up to layer {last_layer} --------")
     block_map, _ = q.get_blocks_per_node_and_layer(init_session)
-
     # assert that each node has created layer_avg/number_of_nodes
     validate_blocks_per_nodes(block_map, 0, last_layer, layers_per_epoch, layer_avg_size, num_miners)
 
     # wait an epoch
     prev_layer = last_layer
-    last_layer = layers_per_epoch * (epochs_to_sleep + 2)
+    last_layer = layers_per_epoch * (curr_epoch + 1)
     print(f"wait until next epoch to layer {last_layer}")
     _ = q.wait_for_latest_layer(init_session, last_layer, layers_per_epoch)
-    # epoch i+4
-    print("\n\n-------- current epoch", int(last_layer / layers_per_epoch), "--------")
-    num_miners += 1
+
+    # ========================== epoch i+4 ==========================
+    curr_epoch += 1
+    print("\n\n-------- current epoch", curr_epoch, "--------")
     print(f"-------- validating blocks per nodes up to layer {last_layer} --------")
+    block_map, _ = q.get_blocks_per_node_and_layer(init_session)
+    # assert that each node has created layer_avg/number_of_nodes
+    validate_blocks_per_nodes(block_map, prev_layer, last_layer, layers_per_epoch, layer_avg_size, num_miners)
+
+    print("validating all nodes ATX creation in last epoch")
+    atx_hits = q.query_atx_per_epoch(init_session, curr_epoch - 1)
+    # TODO
+    assert len(atx_hits) == num_miners + 1
+    print("validation succeed")
+
+    prev_layer = last_layer
+    last_layer = layers_per_epoch * (curr_epoch + 1)
+    print(f"wait until next epoch to layer {last_layer}")
+    _ = q.wait_for_latest_layer(init_session, last_layer, layers_per_epoch)
+
+    # ========================== epoch i+5 ==========================
+    curr_epoch += 1
+    print("\n\n-------- current epoch", curr_epoch, "--------")
+    print(f"-------- validating blocks per nodes up to layer {last_layer} --------")
+    block_map, _ = q.get_blocks_per_node_and_layer(init_session)
+    # assert that each node has created layer_avg/number_of_nodes
+    validate_blocks_per_nodes(block_map, prev_layer, last_layer, layers_per_epoch, layer_avg_size, num_miners)
+
+    prev_layer = last_layer
+    last_layer = layers_per_epoch * (curr_epoch + 1)
+    print(f"wait until next epoch to layer {last_layer}")
+    _ = q.wait_for_latest_layer(init_session, last_layer, layers_per_epoch)
+
+    # ========================== epoch i+6 ==========================
+    curr_epoch += 1
+    print("\n\n-------- current epoch", curr_epoch, "--------")
+    print(f"-------- validating blocks per nodes up to layer {last_layer} --------")
+    # previous epoch all nodes are supposed to know our new node ATX
+    num_miners += 1
     block_map, _ = q.get_blocks_per_node_and_layer(init_session)
     # assert that each node has created layer_avg/number_of_nodes
     validate_blocks_per_nodes(block_map, prev_layer, last_layer, layers_per_epoch, layer_avg_size, num_miners)

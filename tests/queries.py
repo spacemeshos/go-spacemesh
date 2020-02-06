@@ -429,6 +429,10 @@ def query_atx_published(indx, ns, layer):
     return query_message(indx, ns, ns, {'M': 'atx published', 'layer_id': str(layer)}, False)
 
 
+def query_atx_per_epoch(ns, epoch_id, index=current_index):
+    return query_message(index, ns, ns, {'M': 'atx published', 'epoch_id': str(epoch_id)}, False)
+
+
 def message_propagation(deployment, query_fields):
     logs = query_message(current_index, deployment, deployment, query_fields, False)
     srt = sorted(logs, key=lambda x: datetime.strptime(x.T, convenience.TIMESTAMP_FMT))
