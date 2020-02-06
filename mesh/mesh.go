@@ -142,7 +142,7 @@ func NewRecoveredMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh MeshVal
 		msh.pushLayersToState(msh.LatestLayerInState()+1, msh.MeshValidator.LatestComplete())
 	}
 
-	msh.With().Info("recovered mesh from disk",
+	msh.With().Info("recovered mesh from disc",
 		log.Uint64("latest_layer", msh.latestLayer.Uint64()),
 		log.Uint64("validated_layer", msh.processedLayer.Uint64()),
 		log.String("layer_hash", util.Bytes2Hex(msh.layerHash)),
