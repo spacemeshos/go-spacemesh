@@ -402,6 +402,7 @@ func (t *BlockBuilder) acceptBlockData() {
 		case layerID := <-t.beginRoundEvent:
 			if !t.syncer.IsSynced() {
 				t.Debug("builder got layer %v not synced yet", layerID)
+				continue
 			}
 
 			t.Debug("builder got layer %v", layerID)
