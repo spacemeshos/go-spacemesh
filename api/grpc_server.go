@@ -385,7 +385,7 @@ func (s SpacemeshGrpcService) SetLoggerLevel(ctx context.Context, msg *pb.SetLog
 }
 
 func (s SpacemeshGrpcService) GetAccountTxs(ctx context.Context, txsSinceLayer *pb.GetTxsSinceLayer) (*pb.AccountTxs, error) {
-	log.Info("GRPC GetAccountTxs msg")
+	log.Debug("GRPC GetAccountTxs msg")
 
 	currentPBase := s.Tx.LatestLayerInState()
 
@@ -422,7 +422,7 @@ func (s SpacemeshGrpcService) getTxIdsFromMesh(minLayer types.LayerID, addr type
 }
 
 func (s SpacemeshGrpcService) GetAccountRewards(ctx context.Context, account *pb.AccountId) (*pb.AccountRewards, error) {
-	log.Info("GRPC GetAccountRewards msg")
+	log.Debug("GRPC GetAccountRewards msg")
 	acc := types.HexToAddress(account.Address)
 
 	rewards, err := s.Tx.GetRewards(acc)
