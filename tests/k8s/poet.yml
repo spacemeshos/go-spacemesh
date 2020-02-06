@@ -22,6 +22,6 @@ spec:
         imagePullPolicy: Always
         args: ['--rpclisten', '0.0.0.0:50002', '--restlisten', '0.0.0.0:80']
         ports:
-        - containerPort: 50002
+        - containerPort: 80
       nodeSelector:
         role: poet

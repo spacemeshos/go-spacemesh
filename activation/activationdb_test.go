@@ -100,10 +100,10 @@ func (mock *ATXDBMock) CalcActiveSetFromView(view []types.BlockID, pubEpoch type
 }
 
 func (mock *ATXDBMock) CalcActiveSetSize(epoch types.EpochId, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
-	log.Info("waiting lock")
+	log.Debug("waiting lock")
 	mock.workSymLock.Lock()
 	defer mock.workSymLock.Unlock()
-	log.Info("done wait")
+	log.Debug("done wait")
 
 	mock.counter++
 	return map[string]struct{}{"aaaaac": {}, "aaabddb": {}, "aaaccc": {}}, nil

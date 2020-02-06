@@ -524,6 +524,8 @@ func TestTransactionProcessor_GetStateRoot(t *testing.T) {
 	lg := log.New("proc_logger", "", "")
 	proc := NewTransactionProcessor(db, appliedTxsMock{}, &ProjectorMock{}, lg)
 
+	r.NotEqual(types.Hash32{}, proc.rootHash)
+
 	expectedRoot := types.Hash32{1, 2, 3}
 	r.NoError(proc.addState(expectedRoot, 1))
 

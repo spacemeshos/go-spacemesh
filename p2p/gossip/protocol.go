@@ -1,7 +1,6 @@
 package gossip
 
 import (
-	"errors"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -225,22 +224,25 @@ func (prot *Protocol) Relay(sender p2pcrypto.PublicKey, protocol string, msg ser
 	return prot.processMessage(sender, protocol, msg)
 }
 
-func (prot *Protocol) eventLoop(peerConn chan p2pcrypto.PublicKey, peerDisc chan p2pcrypto.PublicKey) {
+func (prot *Protocol) eventLoop(peerConn, peerDisc chan p2pcrypto.PublicKey) {
 	// TODO: replace with p2p.Peers
-	var err error
-loop:
+	defer prot.Info("Gossip protocol shutdown")
 	for {
 		select {
-		case peer := <-peerConn:
+		case peer, ok := <-peerConn:
+			if !ok {
+				return
+			}
 			go prot.addPeer(peer)
-		case peer := <-peerDisc:
+		case peer, ok := <-peerDisc:
+			if !ok {
+				return
+			}
 			go prot.removePeer(peer)
 		case <-prot.shutdown:
-			err = errors.New("protocol shutdown")
-			break loop
+			return
 		}
 	}
-	prot.Error("Gossip protocol event loop stopped. err: %v", err)
 }
 
 // peersCount returns the number of peers known to the protocol, used for testing only

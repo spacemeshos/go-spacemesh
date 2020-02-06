@@ -233,7 +233,7 @@ func (b *Builder) StartPost(rewardAddress types.Address, dataDir string, space u
 	}
 	b.SetCoinbaseAccount(rewardAddress)
 
-	initialized, err := b.postProver.IsInitialized()
+	initialized, _, err := b.postProver.IsInitialized()
 	if err != nil {
 		atomic.StoreInt32(&b.initStatus, InitIdle)
 		return err
@@ -287,11 +287,19 @@ func (b *Builder) StartPost(rewardAddress types.Address, dataDir string, space u
 }
 
 // MiningStats returns state of post init, coinbase reward account and data directory path for post commitment
-func (b *Builder) MiningStats() (int, string, string) {
+func (b *Builder) MiningStats() (int, uint64, string, string) {
 	acc := b.getCoinbaseAccount()
 	initStatus := atomic.LoadInt32(&b.initStatus)
+	remainingBytes := uint64(0)
+	if initStatus == InitInProgress {
+		var err error
+		_, remainingBytes, err = b.postProver.IsInitialized()
+		if err != nil {
+			b.log.With().Error("failed to check remaining init bytes", log.Err(err))
+		}
+	}
 	datadir := b.postProver.Cfg().DataDir
-	return int(initStatus), acc.String(), datadir
+	return int(initStatus), remainingBytes, acc.String(), datadir
 }
 
 func (b *Builder) SetCoinbaseAccount(rewardAddress types.Address) {

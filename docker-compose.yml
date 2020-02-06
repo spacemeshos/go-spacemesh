@@ -20,7 +20,7 @@ services:
           "--layer-average-size", "${SMESH_LAYER_SIZE:-200}",
           "--genesis-active-size", "${SMESH_GENESIS_ACTIVE_SIZE:-200}",
           "--hare-committee-size", "${SMESH_HARE_COMMITTEE_SIZE:-80}",
-          "--hare-max-adversaries", "${SMESH_HARE_MAX_ADVERSARIES:-39}", 
+          "--hare-max-adversaries", "${SMESH_HARE_MAX_ADVERSARIES:-39}",
           "--sync-request-timeout", "${SMESH_SYNC_REQ_TIMEOUT:-60000}", 
           "--post-labels", "${SMESH_POST_LABELS:-100}", 
           "--max-inbound", "${SMESH_MAX_INBOUND:-12}",
