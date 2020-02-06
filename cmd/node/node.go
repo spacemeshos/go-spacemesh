@@ -832,12 +832,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 		log.Panic("Could not retrieve identity err=%v", err)
 	}
 
-	log.Info("connecting to POET on IP %v", app.Config.PoETServer)
-	poetClient, err := activation.NewRemoteRPCPoetClient(app.Config.PoETServer, cmdp.Ctx)
-	if err != nil {
-		log.Error("poet server not found on addr %v, err: %v", app.Config.PoETServer, err)
-		return
-	}
+	poetClient := activation.NewHTTPPoetClient(app.Config.PoETServer, cmdp.Ctx)
 
 	rng := amcl.NewRAND()
 	pub := app.edSgn.PublicKey().Bytes()
@@ -891,7 +886,8 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	if apiConf.StartGrpcServer || apiConf.StartJSONServer {
 		// start grpc if specified or if json rpc specified
 		layerDuration := app.Config.LayerDurationSec
-		app.grpcAPIService = api.NewGrpcService(apiConf.GrpcServerPort, app.P2P, app.state, app.mesh, app.txPool, app.atxBuilder, app.oracle, app.clock, postClient, layerDuration, app)
+		app.grpcAPIService = api.NewGrpcService(apiConf.GrpcServerPort, app.P2P, app.state, app.mesh, app.txPool,
+			app.atxBuilder, app.oracle, app.clock, postClient, layerDuration, app.syncer, app.Config, app)
 		app.grpcAPIService.StartService()
 	}
 
