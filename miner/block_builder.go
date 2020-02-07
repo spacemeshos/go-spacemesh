@@ -20,7 +20,7 @@ import (
 	"time"
 )
 
-const MaxTransactionsPerBlock = 200 //todo: move to config
+const MaxTransactionsPerBlock = 20 //todo: move to config
 const MaxAtxPerBlock = 200          //todo: move to config
 
 const DefaultGasLimit = 10
