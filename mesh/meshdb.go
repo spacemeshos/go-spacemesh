@@ -10,6 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/pending_txs"
 	"math/big"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -36,27 +37,27 @@ type MeshDB struct {
 }
 
 func NewPersistentMeshDB(path string, blockCacheSize int, log log.Log) (*MeshDB, error) {
-	bdb, err := database.NewLDBDatabase(path+"blocks", 0, 0, log)
+	bdb, err := database.NewLDBDatabase(filepath.Join(path, "blocks"), 0, 0, log)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize blocks db: %v", err)
 	}
-	ldb, err := database.NewLDBDatabase(path+"layers", 0, 0, log)
+	ldb, err := database.NewLDBDatabase(filepath.Join(path, "layers"), 0, 0, log)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize layers db: %v", err)
 	}
-	vdb, err := database.NewLDBDatabase(path+"validity", 0, 0, log)
+	vdb, err := database.NewLDBDatabase(filepath.Join(path, "validity"), 0, 0, log)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize validity db: %v", err)
 	}
-	tdb, err := database.NewLDBDatabase(path+"transactions", 0, 0, log)
+	tdb, err := database.NewLDBDatabase(filepath.Join(path, "transactions"), 0, 0, log)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize transactions db: %v", err)
 	}
-	gdb, err := database.NewLDBDatabase(path+"general", 0, 0, log)
+	gdb, err := database.NewLDBDatabase(filepath.Join(path, "general"), 0, 0, log)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize general db: %v", err)
 	}
-	utx, err := database.NewLDBDatabase(path+"unappliedTxs", 0, 0, log)
+	utx, err := database.NewLDBDatabase(filepath.Join(path, "unappliedTxs"), 0, 0, log)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize mesh unappliedTxs db: %v", err)
 	}
@@ -398,9 +399,14 @@ type dbReward struct {
 }
 
 func (m *MeshDB) writeTransactionRewards(l types.LayerID, accounts []types.Address, totalReward, layerReward *big.Int) error {
-	batch := m.transactions.NewBatch()
+	actBlockCnt := make(map[types.Address]uint64)
 	for _, account := range accounts {
-		reward := dbReward{TotalReward: totalReward.Uint64(), LayerRewardEstimate: layerReward.Uint64()}
+		actBlockCnt[account]++
+	}
+
+	batch := m.transactions.NewBatch()
+	for account, cnt := range actBlockCnt {
+		reward := dbReward{TotalReward: cnt * totalReward.Uint64(), LayerRewardEstimate: cnt * layerReward.Uint64()}
 		if b, err := types.InterfaceToBytes(&reward); err != nil {
 			return fmt.Errorf("could not marshal reward for %v: %v", account.Short(), err)
 		} else if err := batch.Put(getRewardKey(l, account), b); err != nil {

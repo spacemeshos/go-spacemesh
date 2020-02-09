@@ -21,6 +21,9 @@ func (ServiceMock) Start() error { panic("implement me") }
 func (s *ServiceMock) RegisterGossipProtocol(protocol string, priority priorityq.Priority) chan service.GossipMessage {
 	return s.ch
 }
+func (s *ServiceMock) RegisterDirectProtocol(protocol string) chan service.DirectMessage {
+	panic("not implemented")
+}
 
 func (ServiceMock) SubscribePeerEvents() (new chan p2pcrypto.PublicKey, del chan p2pcrypto.PublicKey) {
 	panic("implement me")

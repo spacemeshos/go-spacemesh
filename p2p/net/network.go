@@ -44,7 +44,7 @@ type ManagedConnection interface {
 // Net has no channel events processing loops - clients are responsible for polling these channels and popping events from them
 type Net struct {
 	networkID int8
-	localNode *node.LocalNode
+	localNode node.LocalNode
 	logger    log.Log
 
 	listener      net.Listener
@@ -70,20 +70,20 @@ type NewConnectionEvent struct {
 	Node *node.NodeInfo
 }
 
+// TODO Create a config for Net and only pass it in.
+
 // NewNet creates a new network.
 // It attempts to tcp listen on address. e.g. localhost:1234 .
-func NewNet(conf config.Config, localEntity *node.LocalNode) (*Net, error) {
+func NewNet(conf config.Config, localEntity node.LocalNode, addr *net.TCPAddr, logger log.Log) (*Net, error) {
 
 	qcount := DefaultQueueCount      // todo : get from cfg
 	qsize := DefaultMessageQueueSize // todo : get from cfg
 
-	tcpAddress := &net.TCPAddr{localEntity.IP, int(localEntity.ProtocolPort), ""}
-
 	n := &Net{
 		networkID:             conf.NetworkID,
 		localNode:             localEntity,
-		logger:                localEntity.Log,
-		listenAddress:         tcpAddress,
+		logger:                logger,
+		listenAddress:         addr,
 		regNewRemoteConn:      make([]func(NewConnectionEvent), 0, 3),
 		closingConnections:    make([]func(cwe ConnectionWithErr), 0, 3),
 		queuesCount:           qcount,
@@ -119,7 +119,7 @@ func (n *Net) NetworkID() int8 {
 }
 
 // LocalNode return's the local node descriptor
-func (n *Net) LocalNode() *node.LocalNode {
+func (n *Net) LocalNode() node.LocalNode {
 	return n.localNode
 }
 

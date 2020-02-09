@@ -50,6 +50,10 @@ type MeshValidatorMock struct {
 	mdb *MeshDB
 }
 
+func (m *MeshValidatorMock) PersistTortoise() error {
+	return nil
+}
+
 func (m *MeshValidatorMock) LatestComplete() types.LayerID {
 	panic("implement me")
 }

@@ -322,7 +322,14 @@ func (t *BlockBuilder) listenForTx() {
 				t.With().Error("nonce and balance validation failed", log.TxId(tx.Id().ShortString()), log.Err(err))
 				continue
 			}
-			t.Log.With().Info("got new tx", log.TxId(tx.Id().ShortString()))
+			t.Log.With().Info("got new tx",
+				log.TxId(tx.Id().ShortString()),
+				log.Uint64("nonce", tx.AccountNonce),
+				log.Uint64("amount", tx.Amount),
+				log.Uint64("fee", tx.Fee),
+				log.Uint64("gas", tx.GasLimit),
+				log.String("recipient", tx.Recipient.String()),
+				log.String("origin", tx.Origin().String()))
 			data.ReportValidation(IncomingTxProtocol)
 			t.TransactionPool.Put(tx.Id(), tx)
 		}
@@ -365,7 +372,23 @@ func (t *BlockBuilder) handleGossipAtx(data service.GossipMessage) {
 	}
 	atx.CalcAndSetId()
 
-	t.With().Info("got new ATX", log.AtxId(atx.ShortString()), log.LayerId(uint64(atx.PubLayerIdx)))
+	commitmentStr := "nil"
+	if atx.Commitment != nil {
+		commitmentStr = atx.Commitment.String()
+	}
+
+	t.With().Info("got new ATX",
+		log.String("sender_id", atx.NodeId.ShortString()),
+		log.AtxId(atx.ShortString()),
+		log.String("prev_atx_id", atx.PrevATXId.ShortString()),
+		log.String("pos_atx_id", atx.PositioningAtx.ShortString()),
+		log.LayerId(uint64(atx.PubLayerIdx)),
+		log.Uint32("active_set", atx.ActiveSetSize),
+		log.Int("view", len(atx.View)),
+		log.Uint64("sequence_number", atx.Sequence),
+		log.String("commitment", commitmentStr),
+		log.Int("atx_size", len(data.Bytes())),
+	)
 
 	//todo fetch from neighbour
 	if atx.Nipst == nil {
@@ -402,6 +425,7 @@ func (t *BlockBuilder) acceptBlockData() {
 		case layerID := <-t.beginRoundEvent:
 			if !t.syncer.IsSynced() {
 				t.Debug("builder got layer %v not synced yet", layerID)
+				continue
 			}
 
 			t.Debug("builder got layer %v", layerID)

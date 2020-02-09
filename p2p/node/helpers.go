@@ -2,7 +2,6 @@ package node
 
 import (
 	"errors"
-	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"net"
@@ -16,12 +15,12 @@ var localhost = net.IP{127, 0, 0, 1}
 var ErrFailedToCreate = errors.New("failed to create local test node")
 
 // GenerateTestNode generates a local test node without persisting data to local store and with default config value.
-func GenerateTestNode(t *testing.T) (*LocalNode, *NodeInfo) {
-	return GenerateTestNodeWithConfig(t, config.DefaultConfig())
+func GenerateTestNode(t *testing.T) (LocalNode, *NodeInfo) {
+	return GenerateTestNodeWithConfig(t)
 }
 
 // GenerateTestNodeWithConfig creates a local test node without persisting data to local store.
-func GenerateTestNodeWithConfig(t *testing.T, config config.Config) (*LocalNode, *NodeInfo) {
+func GenerateTestNodeWithConfig(t *testing.T) (LocalNode, *NodeInfo) {
 
 	port, err := GetUnboundedPort()
 	if err != nil {
@@ -30,22 +29,14 @@ func GenerateTestNodeWithConfig(t *testing.T, config config.Config) (*LocalNode,
 
 	addr := net.TCPAddr{net.ParseIP("0.0.0.0"), port, ""}
 
-	var localNode *LocalNode
+	var localNode LocalNode
 
-	if config.NodeID != "" {
-		localNode, err = NewLocalNode(config, &addr, false)
-		if err != nil {
-			t.Error(ErrFailedToCreate)
-		}
-		return localNode, localNode.NodeInfo
-	}
-
-	localNode, err = NewNodeIdentity(config, &addr, false)
+	localNode, err = NewNodeIdentity()
 	if err != nil {
-		t.Error(ErrFailedToCreate, err)
+		t.Error(ErrFailedToCreate)
+		return emptyNode, nil
 	}
-
-	return localNode, localNode.NodeInfo
+	return localNode, &NodeInfo{localNode.PublicKey().Array(), addr.IP, uint16(port), uint16(port)}
 }
 
 // GenerateRandomNodeData generates a remote random node data for testing.
