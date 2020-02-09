@@ -35,14 +35,20 @@ type Protocol interface {
 type addressBook interface {
 	Good(key p2pcrypto.PublicKey)
 	Attempt(key p2pcrypto.PublicKey)
+
 	RemoveAddress(key p2pcrypto.PublicKey)
-	NeedNewAddresses() bool
-	Lookup(key p2pcrypto.PublicKey) (*node.NodeInfo, error)
 	AddAddress(addr, srcAddr *node.NodeInfo)
 	AddAddresses(addrs []*node.NodeInfo, srcAddr *node.NodeInfo)
+
+	NeedNewAddresses() bool
+	Lookup(key p2pcrypto.PublicKey) (*node.NodeInfo, error)
 	AddressCache() []*node.NodeInfo
 	NumAddresses() int
 	GetAddress() *KnownAddress
+
+	AddLocalAddress(info *node.NodeInfo)
+	IsLocalAddress(info *node.NodeInfo) bool
+
 	Stop()
 }
 
@@ -141,6 +147,8 @@ func New(ln node.LocalNode, config config.SwarmConfig, service server.Service, p
 		rt:     addrbook,
 	}
 
+	addrbook.AddLocalAddress(&node.NodeInfo{ID: ln.PublicKey().Array()})
+
 	d.disc = NewDiscoveryProtocol(ln.PublicKey(), d.rt, service, logger)
 
 	bn := make([]*node.NodeInfo, 0, len(config.BootstrapNodes))
@@ -167,6 +175,7 @@ func (d *Discovery) Shutdown() {
 // SetLocalAddresses sets the localNode addresses to be advertised.
 func (d *Discovery) SetLocalAddresses(tcp, udp int) {
 	d.disc.SetLocalAddresses(tcp, udp)
+	//TODO: find a protocol or just pass here our IP to the routing table
 }
 
 // Remove removes a record from the routing table

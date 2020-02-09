@@ -1,6 +1,7 @@
 package discovery
 
 import (
+	"bytes"
 	"encoding/binary"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
@@ -90,8 +91,8 @@ type addrBook struct {
 	addrNew   [newBucketCount]map[node.ID]*KnownAddress
 	addrTried [triedBucketCount]map[node.ID]*KnownAddress
 
-	//todo: lock localNode for updates
-	localAddress *node.NodeInfo
+	//todo: lock local for updates
+	localAddresses []*node.NodeInfo
 
 	nTried int
 	nNew   int
@@ -103,10 +104,40 @@ type addrBook struct {
 	quit chan struct{}
 }
 
+// AddOurAddress one of our addresses.
+func (a *addrBook) AddLocalAddress(addr *node.NodeInfo) {
+	a.mtx.Lock()
+	defer a.mtx.Unlock()
+
+	a.localAddresses = append(a.localAddresses, addr)
+}
+
+// OurAddress returns true if it is our address.
+func (a *addrBook) IsLocalAddress(addr *node.NodeInfo) bool {
+	a.mtx.Lock()
+	defer a.mtx.Unlock()
+
+	for _, local := range a.localAddresses {
+
+		if bytes.Equal(local.ID.Bytes(), addr.ID.Bytes()) {
+			return true
+		}
+
+		if bytes.Equal(local.IP, addr.IP) && (local.ProtocolPort == addr.ProtocolPort || local.DiscoveryPort == addr.DiscoveryPort) {
+			return true
+		}
+	}
+
+	return false
+}
+
 // updateAddress is a helper function to either update an address already known
 // to the address manager, or to add the address if not already known.
 func (a *addrBook) updateAddress(netAddr, srcAddr *node.NodeInfo) {
 
+	if a.IsLocalAddress(netAddr) {
+		return
+	}
 	//Filter out non-routable addresses. Note that non-routable
 	//also includes invalid and localNode addresses.
 	if !IsRoutable(netAddr.IP) && IsRoutable(srcAddr.IP) {
@@ -634,7 +665,7 @@ func (a *addrBook) reset() {
 	// fill key with bytes from a good random source.
 	err := crypto.GetRandomBytesToBuffer(32, a.key[:])
 	if err != nil {
-		panic(err)
+		a.logger.Panic("Error generating random bytes %v", err)
 	}
 
 	for i := range a.addrNew {
