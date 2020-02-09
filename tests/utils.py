@@ -2,6 +2,8 @@ import os
 import re
 import time
 
+import tests.config as conf
+from tests.misc import ContainerSpec
 from tests.queries import get_release_tick_msgs
 
 
@@ -78,3 +80,44 @@ def wait_for_next_layer(namespace, cl_num, timeout):
         timeout -= tts
 
     return
+
+
+def node_string(key, ip, port, discport):
+    return "spacemesh://{0}@{1}:{2}?disc={3}".format(key, ip, port, discport)
+
+
+def get_conf(bs_info, client_config, genesis_time, setup_oracle=None, setup_poet=None, args=None):
+    """
+    get_conf gather specification information into one ContainerSpec object
+
+    :param bs_info: DeploymentInfo, bootstrap info
+    :param client_config: DeploymentInfo, client info
+    :param genesis_time:
+    :param setup_oracle: string, oracle ip
+    :param setup_poet: string, poet ip
+    :param args: list of strings, arguments for appendage in specification
+    :return: ContainerSpec
+    """
+    client_args = {} if 'args' not in client_config else client_config['args']
+    # append client arguments
+    if args is not None:
+        for arg in args:
+            client_args[arg] = args[arg]
+
+    # create a new container spec with client configuration
+    cspec = ContainerSpec(cname='client', specs=client_config)
+
+    # append oracle configuration
+    if setup_oracle:
+        client_args['oracle_server'] = 'http://{0}:{1}'.format(setup_oracle, conf.ORACLE_SERVER_PORT)
+
+    # append poet configuration
+    if setup_poet:
+        client_args['poet_server'] = '{0}:{1}'.format(setup_poet, conf.POET_SERVER_PORT)
+
+    bootnodes = node_string(bs_info['key'], bs_info['pod_ip'], conf.BOOTSTRAP_PORT, conf.BOOTSTRAP_PORT)
+    cspec.append_args(bootnodes=bootnodes, genesis_time=genesis_time.isoformat('T', 'seconds'))
+    # append client config to ContainerSpec
+    if len(client_args) > 0:
+        cspec.append_args(**client_args)
+    return cspec
