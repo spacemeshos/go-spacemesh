@@ -133,6 +133,7 @@ func getTestDefaultConfig() *config.Config {
 	cfg.HareEligibility.EpochOffset = 0
 	cfg.StartMining = true
 	cfg.SyncRequestTimeout = 2000
+	cfg.SyncInterval = 10
 	return cfg
 }
 
