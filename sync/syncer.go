@@ -227,6 +227,11 @@ func (s *Syncer) run() {
 			s.Debug("Work stopped")
 			return
 		case <-s.forceSync:
+			select {
+			case <-s.exit:
+				return
+			default:
+			}
 			syncRoutine()
 		case layer := <-s.LayerCh:
 			select {
