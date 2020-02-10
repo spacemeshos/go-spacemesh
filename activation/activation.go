@@ -233,7 +233,7 @@ func (b *Builder) StartPost(rewardAddress types.Address, dataDir string, space u
 	}
 	b.SetCoinbaseAccount(rewardAddress)
 
-	initialized, err := b.postProver.IsInitialized()
+	initialized, _, err := b.postProver.IsInitialized()
 	if err != nil {
 		atomic.StoreInt32(&b.initStatus, InitIdle)
 		return err
@@ -287,11 +287,19 @@ func (b *Builder) StartPost(rewardAddress types.Address, dataDir string, space u
 }
 
 // MiningStats returns state of post init, coinbase reward account and data directory path for post commitment
-func (b *Builder) MiningStats() (int, string, string) {
+func (b *Builder) MiningStats() (int, uint64, string, string) {
 	acc := b.getCoinbaseAccount()
 	initStatus := atomic.LoadInt32(&b.initStatus)
+	remainingBytes := uint64(0)
+	if initStatus == InitInProgress {
+		var err error
+		_, remainingBytes, err = b.postProver.IsInitialized()
+		if err != nil {
+			b.log.With().Error("failed to check remaining init bytes", log.Err(err))
+		}
+	}
 	datadir := b.postProver.Cfg().DataDir
-	return int(initStatus), acc.String(), datadir
+	return int(initStatus), remainingBytes, acc.String(), datadir
 }
 
 func (b *Builder) SetCoinbaseAccount(rewardAddress types.Address) {
@@ -339,9 +347,9 @@ func (b *Builder) loadChallenge() error {
 func (b *Builder) PublishActivationTx() error {
 	b.discardChallengeIfStale()
 	if b.challenge != nil {
-		b.log.With().Info("using existing challenge", log.EpochId(uint64(b.currentEpoch())))
+		b.log.With().Info("using existing atx challenge", log.EpochId(uint64(b.currentEpoch())))
 	} else {
-		b.log.With().Info("building new challenge", log.EpochId(uint64(b.currentEpoch())))
+		b.log.With().Info("building new atx challenge", log.EpochId(uint64(b.currentEpoch())))
 		err := b.buildNipstChallenge()
 		if err != nil {
 			return err
@@ -363,7 +371,7 @@ func (b *Builder) PublishActivationTx() error {
 		return fmt.Errorf("failed to build nipst: %v", err)
 	}
 
-	b.log.With().Info("awaiting publication epoch",
+	b.log.With().Info("awaiting atx publication epoch",
 		log.Uint64("pub_epoch", uint64(pubEpoch)),
 		log.Uint64("pub_epoch_first_layer", uint64(pubEpoch.FirstLayer(b.layersPerEpoch))),
 		log.Uint64("current_layer", uint64(b.layerClock.GetCurrentLayer())),
@@ -420,19 +428,28 @@ func (b *Builder) PublishActivationTx() error {
 
 	atxReceived := b.db.AwaitAtx(atx.Id())
 	defer b.db.UnsubscribeAtx(atx.Id())
-	if err := b.signAndBroadcast(atx); err != nil {
+	size, err := b.signAndBroadcast(atx)
+	if err != nil {
 		return err
 	}
 
+	commitStr := "nil"
+	if commitment != nil {
+		commitStr = commitment.String()
+	}
 	b.log.Event().Info("atx published!",
 		log.AtxId(atx.ShortString()),
 		log.String("prev_atx_id", atx.PrevATXId.ShortString()),
-		log.String("post_atx_id", atx.PositioningAtx.ShortString()),
+		log.String("pos_atx_id", atx.PositioningAtx.ShortString()),
 		log.LayerId(uint64(atx.PubLayerIdx)),
 		log.EpochId(uint64(atx.PubLayerIdx.GetEpoch(b.layersPerEpoch))),
 		log.Uint32("active_set", atx.ActiveSetSize),
-		log.String("miner", b.nodeId.Key[:5]),
+		log.String("miner", b.nodeId.ShortString()),
 		log.Int("view", len(atx.View)),
+		log.Uint64("sequence_number", atx.Sequence),
+		log.String("NIPSTChallenge", hash.String()),
+		log.String("commitment", commitStr),
+		log.Int("atx_size", size),
 	)
 	events.Publish(events.AtxCreated{Created: true, Id: atx.ShortString(), Layer: uint64(b.currentEpoch())})
 
@@ -469,19 +486,18 @@ func (b *Builder) discardChallenge() {
 	}
 }
 
-func (b *Builder) signAndBroadcast(atx *types.ActivationTx) error {
+func (b *Builder) signAndBroadcast(atx *types.ActivationTx) (int, error) {
 	if err := b.SignAtx(atx); err != nil {
-		return fmt.Errorf("failed to sign ATX: %v", err)
-	} else {
-		buf, err := types.InterfaceToBytes(atx)
-		if err != nil {
-			return fmt.Errorf("failed to serialize ATX: %v", err)
-		} else if err := b.net.Broadcast(AtxProtocol, buf); err != nil {
-			return fmt.Errorf("failed to broadcast ATX: %v", err)
-		}
-		b.log.Info("atx size %s", len(buf), log.AtxId(atx.ShortString()))
+		return 0, fmt.Errorf("failed to sign ATX: %v", err)
 	}
-	return nil
+	buf, err := types.InterfaceToBytes(atx)
+	if err != nil {
+		return 0, fmt.Errorf("failed to serialize ATX: %v", err)
+	}
+	if err := b.net.Broadcast(AtxProtocol, buf); err != nil {
+		return 0, fmt.Errorf("failed to broadcast ATX: %v", err)
+	}
+	return len(buf), nil
 }
 
 // GetPositioningAtx return the latest atx to be used as a positioning atx

@@ -7,6 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
+	"net"
 	"time"
 )
 
@@ -39,16 +40,15 @@ type refresher struct {
 	quit chan struct{}
 }
 
-func newRefresher(local *node.NodeInfo, book addressBook, disc Protocol, bootnodes []*node.NodeInfo, logger log.Log) *refresher {
+func newRefresher(local p2pcrypto.PublicKey, book addressBook, disc Protocol, bootnodes []*node.NodeInfo, logger log.Log) *refresher {
 	//todo: trigger requestAddresses every X with random nodes
 	return &refresher{
 		logger:       logger,
-		localAddress: local,
+		localAddress: &node.NodeInfo{ID: local.Array(), IP: net.IPv4zero},
 		book:         book,
 		disc:         disc,
 		bootNodes:    bootnodes,
 		lastQueries:  make(map[p2pcrypto.PublicKey]time.Time),
-		quit:         make(chan struct{}), // todo: context ?
 	}
 }
 
@@ -79,7 +79,7 @@ loop:
 	for {
 		srv := r.book.AddressCache() // get fresh members to query
 		servers = srv[:util.Min(numpeers, len(srv))]
-		res := r.requestAddresses(servers)
+		res := r.requestAddresses(ctx, servers)
 		tries++
 		r.logger.Info("Bootstrap : %d try gave %v results", tries, len(res))
 
@@ -149,7 +149,7 @@ func pingThenGetAddresses(p Protocol, addr *node.NodeInfo, qr chan queryResult) 
 }
 
 // requestAddresses will crawl the network looking for new peer addresses.
-func (r *refresher) requestAddresses(servers []*node.NodeInfo) []*node.NodeInfo {
+func (r *refresher) requestAddresses(ctx context.Context, servers []*node.NodeInfo) []*node.NodeInfo {
 
 	// todo: here we stop only after we've tried querying or queried all addrs
 	// 	maybe we should stop after we've reached a certain amount ? (needMoreAddresses..)
@@ -212,7 +212,7 @@ func (r *refresher) requestAddresses(servers []*node.NodeInfo) []*node.NodeInfo 
 					seen[a.PublicKey()] = struct{}{}
 				}
 			}
-		case <-r.quit:
+		case <-ctx.Done():
 			return nil
 		}
 

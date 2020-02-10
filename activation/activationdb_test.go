@@ -39,6 +39,10 @@ func createLayerWithAtx2(t require.TestingT, msh *mesh.Mesh, id types.LayerID, n
 
 type MeshValidatorMock struct{}
 
+func (m *MeshValidatorMock) PersistTortoise() error {
+	return nil
+}
+
 func (m *MeshValidatorMock) LatestComplete() types.LayerID {
 	panic("implement me")
 }
@@ -100,11 +104,12 @@ func (mock *ATXDBMock) CalcActiveSetFromView(view []types.BlockID, pubEpoch type
 }
 
 func (mock *ATXDBMock) CalcActiveSetSize(epoch types.EpochId, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
-	mock.counter++
-	defer mock.workSymLock.Unlock()
-	log.Info("working")
+	log.Debug("waiting lock")
 	mock.workSymLock.Lock()
-	log.Info("done working")
+	defer mock.workSymLock.Unlock()
+	log.Debug("done wait")
+
+	mock.counter++
 	return map[string]struct{}{"aaaaac": {}, "aaabddb": {}, "aaaccc": {}}, nil
 }
 

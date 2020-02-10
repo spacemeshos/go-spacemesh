@@ -1,29 +1,33 @@
 package filesystem
 
 import (
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"os"
 	"os/user"
+	"path/filepath"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
 )
 
 var RootFolder = "/"
 
 func TestPathExists(t *testing.T) {
-	tempDir, err := GetSpacemeshTempDirectoryPath()
-	assert.NoError(t, err, "creating temp dir failed")
-	assert.True(t, PathExists(tempDir), "expecting existence of path")
-	assert.NoError(t, DeleteAllTempFiles(), "removing dir failed")
+	tempFile := filepath.Join(os.TempDir(), "testdir"+uuid.New().String()+"_"+t.Name())
+	_, err := os.Create(tempFile)
+	require.NoError(t, err, "couldn't create temp path")
+	assert.True(t, PathExists(tempFile), "expecting existence of path")
+	os.RemoveAll(tempFile)
 }
 
 func TestGetFullDirectoryPath(t *testing.T) {
-	tempDir, err := GetSpacemeshTempDirectoryPath()
+	tempFile := filepath.Join(os.TempDir(), "testdir"+uuid.New().String()+"_"+t.Name())
+	err := os.MkdirAll(tempFile, os.ModeDir)
 	assert.NoError(t, err, "creating temp dir failed")
-	aPath, err := GetFullDirectoryPath(tempDir)
-	assert.Equal(t, tempDir, aPath, "Path is different")
-	assert.Nil(t, err)
-	assert.NoError(t, DeleteAllTempFiles(), "removing dir failed")
+	aPath, err := GetFullDirectoryPath(tempFile)
+	assert.Equal(t, tempFile, aPath, "Path is different")
+	assert.NoError(t, err)
+	os.RemoveAll(tempFile)
 }
 
 func TestGetUserHomeDirectory(t *testing.T) {
@@ -85,207 +89,4 @@ func TestGetCanonicalPath(t *testing.T) {
 		assert.Equal(t, testCase.expected, actual, "")
 	}
 	TearDownTestHooks()
-}
-
-func TestGetSpacemeshDataDirectoryPath(t *testing.T) {
-	users := TestUsers()
-	SetupTestHooks(users)
-	usr, err := currentUser()
-	assert.NoError(t, err, "getting current user failed")
-
-	testCases := []struct {
-		user     *user.User
-		expected string
-		error    bool
-	}{
-		{usr, "~" + RootFolder + "spacemesh", false},
-		{users["bob"], users["bob"].HomeDir + RootFolder + "spacemesh", true},
-		{users["alice"], users["alice"].HomeDir + RootFolder + "spacemesh", true},
-	}
-
-	for _, testCase := range testCases {
-		os.Setenv("HOME", testCase.user.HomeDir)
-		actual, err := GetSpacemeshDataDirectoryPath()
-		assert.Equal(t, testCase.expected, actual, "")
-		assert.Equal(t, err != nil, testCase.error, "")
-	}
-	TearDownTestHooks()
-}
-
-func TestGetSpacemeshTempDirectoryPath(t *testing.T) {
-	users := TestUsers()
-	SetupTestHooks(users)
-	usr, err := currentUser()
-	assert.NoError(t, err, "getting current user failed")
-
-	testCases := []struct {
-		user     *user.User
-		expected string
-		error    bool
-	}{
-		{usr, "~" + RootFolder + "spacemesh/temp", false},
-		{users["bob"], "", true},
-		{users["alice"], "", true},
-	}
-
-	for _, testCase := range testCases {
-		os.Setenv("HOME", testCase.user.HomeDir)
-		actual, err := GetSpacemeshTempDirectoryPath()
-		assert.Equal(t, testCase.expected, actual, "")
-		assert.Equal(t, err != nil, testCase.error, "")
-	}
-	TearDownTestHooks()
-}
-
-func TestEnsureDataSubDirectory(t *testing.T) {
-	users := TestUsers()
-	SetupTestHooks(users)
-	usr, err := currentUser()
-	assert.NoError(t, err, "getting current user failed")
-
-	testCases := []struct {
-		user     *user.User
-		expected string
-		error    bool
-	}{
-		{usr, "~" + RootFolder + "spacemesh/temp", false},
-		{users["bob"], "", true},
-		{users["alice"], "", true},
-	}
-
-	for _, testCase := range testCases {
-		os.Setenv("HOME", testCase.user.HomeDir)
-		actual, err := ensureDataSubDirectory("temp")
-		assert.Equal(t, testCase.expected, actual, "")
-		assert.Equal(t, err != nil, testCase.error, "")
-	}
-	TearDownTestHooks()
-}
-
-func TestDeleteAllTempFiles(t *testing.T) {
-	users := TestUsers()
-	SetupTestHooks(users)
-	usr, err := currentUser()
-	assert.NoError(t, err, "getting current user failed")
-
-	testCases := []struct {
-		user     *user.User
-		expected string
-		error    bool
-		exist    bool
-	}{
-		{usr, "~" + RootFolder + "spacemesh/temp", false, true},
-		{users["bob"], users["bob"].HomeDir + RootFolder + "spacemesh/temp", true, false},
-		{users["alice"], users["alice"].HomeDir + RootFolder + "spacemesh/temp", true, false},
-	}
-
-	for _, testCase := range testCases {
-		os.Setenv("HOME", testCase.user.HomeDir)
-		err := DeleteAllTempFiles()
-		assert.Equal(t, err != nil, testCase.error, "")
-		assert.Equal(t, testCase.exist, PathExists(testCase.expected), "")
-	}
-	TearDownTestHooks()
-}
-
-func TestGetLogsDataDirectoryPath(t *testing.T) {
-	users := TestUsers()
-	SetupTestHooks(users)
-	usr, err := currentUser()
-	assert.NoError(t, err, "getting current user failed")
-
-	testCases := []struct {
-		user  *user.User
-		home  string
-		error bool
-	}{
-		{users["alice"], "", false},
-		{users["bob"], "", false},
-		{usr, usr.HomeDir, false},
-	}
-
-	for _, testCase := range testCases {
-		os.Setenv("HOME", testCase.home)
-		actual, err := GetLogsDataDirectoryPath()
-		assert.Equal(t, testCase.error, err != nil, "")
-		dir, err := GetFullDirectoryPath(actual)
-		assert.NoError(t, err, "")
-		assert.Equal(t, actual, dir, "")
-	}
-
-	TearDownTestHooks()
-	usr, err = currentUser()
-	assert.NoError(t, err, "getting current user failed")
-	aPath, err := GetLogsDataDirectoryPath()
-	assert.NoError(t, err, "getting logs data directory failed")
-	dir, err := GetFullDirectoryPath(aPath)
-	assert.NoError(t, err, "Path is different")
-	assert.Equal(t, aPath, dir, "Logs directory is different")
-}
-
-func TestGetAccountsDataDirectoryPath(t *testing.T) {
-	users := TestUsers()
-	SetupTestHooks(users)
-	usr, err := currentUser()
-	assert.NoError(t, err, "getting current user failed")
-
-	testCases := []struct {
-		user  *user.User
-		home  string
-		error bool
-	}{
-		{users["alice"], "", false},
-		{users["bob"], "", false},
-		{usr, usr.HomeDir, false},
-	}
-
-	for _, testCase := range testCases {
-		os.Setenv("HOME", testCase.home)
-		actual, err := GetAccountsDataDirectoryPath()
-		assert.Equal(t, testCase.error, err != nil, "")
-		dir, err := GetFullDirectoryPath(actual)
-		assert.NoError(t, err, "")
-		assert.Equal(t, actual, dir, "")
-	}
-
-	TearDownTestHooks()
-	usr, err = currentUser()
-	assert.NoError(t, err, "getting current user failed")
-	aPath, err := GetAccountsDataDirectoryPath()
-	assert.NoError(t, err, "getting accounts data directory failed")
-	dir, err := GetFullDirectoryPath(aPath)
-	assert.NoError(t, err, "Path is different")
-	assert.Equal(t, aPath, dir, "Accounts directory is different")
-}
-
-func TestEnsureSpacemeshDataDirectories(t *testing.T) {
-	users := TestUsers()
-	SetupTestHooks(users)
-	usr, err := currentUser()
-	assert.NoError(t, err, "getting current user failed")
-
-	testCases := []struct {
-		user     *user.User
-		home     string
-		expected string
-		error    bool
-	}{
-		{users["alice"], "", "~" + RootFolder + "spacemesh", false},
-		{users["bob"], "", "~" + RootFolder + "spacemesh", false},
-		{usr, usr.HomeDir, "~" + RootFolder + "spacemesh", false},
-	}
-
-	for _, testCase := range testCases {
-		os.Setenv("HOME", testCase.home)
-		actual, err := EnsureSpacemeshDataDirectories()
-		assert.Equal(t, testCase.error, err != nil, "")
-		assert.Equal(t, actual, testCase.expected, "")
-	}
-
-	TearDownTestHooks()
-	usr, err = currentUser()
-	assert.NoError(t, err, "getting current user failed")
-	aPath, err := EnsureSpacemeshDataDirectories()
-	assert.NoError(t, err, "")
-	assert.Equal(t, aPath, usr.HomeDir+RootFolder+"spacemesh", "")
 }

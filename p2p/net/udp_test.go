@@ -65,16 +65,16 @@ func (mc *mockCon) SetWriteDeadline(t time.Time) error {
 const testMsg = "TEST"
 
 func TestUDPNet_Sanity(t *testing.T) {
-	local, _ := node.GenerateTestNode(t)
-	udpnet, err := NewUDPNet(config.DefaultConfig(), local, log.New("", "", ""))
+	local, localinfo := node.GenerateTestNode(t)
+	udpAddr := &net.UDPAddr{net.IPv4zero, int(localinfo.DiscoveryPort), ""}
+	udpnet, err := NewUDPNet(config.DefaultConfig(), local, udpAddr, log.NewDefault("TEST_"+t.Name()))
 	require.NoError(t, err)
 	require.NotNil(t, udpnet)
 
-	addr := &net.UDPAddr{local.IP, int(local.DiscoveryPort), ""}
-	mockconn := &mockCon{local: addr}
+	mockconn := &mockCon{local: udpAddr}
 
-	other, _ := node.GenerateTestNode(t)
-	addr2 := &net.UDPAddr{other.IP, int(other.DiscoveryPort), ""}
+	other, otherinfo := node.GenerateTestNode(t)
+	addr2 := &net.UDPAddr{otherinfo.IP, int(otherinfo.DiscoveryPort), ""}
 
 	session := createSession(other.PrivateKey(), local.PublicKey())
 

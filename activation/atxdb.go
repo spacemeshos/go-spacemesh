@@ -256,7 +256,6 @@ func (db *ActivationDb) CalcActiveSetFromView(view []types.BlockID, pubEpoch typ
 	if pubEpoch < 1 {
 		return 0, fmt.Errorf("publication epoch cannot be less than 1, found %v", pubEpoch)
 	}
-
 	viewHash, err := types.CalcBlocksHash12(view)
 	if err != nil {
 		return 0, fmt.Errorf("failed to calc sorted view hash: %v", err)
@@ -280,7 +279,8 @@ func (db *ActivationDb) CalcActiveSetFromView(view []types.BlockID, pubEpoch typ
 		// if not found, keep running mutex and calculate active set size
 	} else {
 		// if no running calc, insert new one
-		db.pendingActiveSet[viewHash] = &sync.Mutex{}
+		mu = &sync.Mutex{}
+		db.pendingActiveSet[viewHash] = mu
 		db.pendingActiveSet[viewHash].Lock()
 		db.assLock.Unlock()
 	}
@@ -292,21 +292,23 @@ func (db *ActivationDb) CalcActiveSetFromView(view []types.BlockID, pubEpoch typ
 
 	countedAtxs, err := db.calcActiveSetFunc(pubEpoch, mp)
 	if err != nil {
-		db.releaseRunningLock(viewHash)
+		mu.Unlock()
+		db.deleteLock(viewHash)
 		return 0, err
 	}
 	activesetCache.Add(viewHash, uint32(len(countedAtxs)))
-
-	db.releaseRunningLock(viewHash)
+	mu.Unlock()
+	db.deleteLock(viewHash)
 
 	return uint32(len(countedAtxs)), nil
 
 }
 
-func (db *ActivationDb) releaseRunningLock(viewHash types.Hash12) {
+func (db *ActivationDb) deleteLock(viewHash types.Hash12) {
 	db.assLock.Lock()
-	db.pendingActiveSet[viewHash].Unlock()
-	delete(db.pendingActiveSet, viewHash)
+	if _, exist := db.pendingActiveSet[viewHash]; exist {
+		delete(db.pendingActiveSet, viewHash)
+	}
 	db.assLock.Unlock()
 }
 
@@ -404,7 +406,7 @@ func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error 
 
 	activeSet, err := db.CalcActiveSetFromView(atx.View, atx.PubLayerIdx.GetEpoch(db.LayersPerEpoch))
 	if err != nil && !atx.PubLayerIdx.GetEpoch(db.LayersPerEpoch).IsGenesis() {
-		return fmt.Errorf("could not calculate active set for ATX %v", atx.ShortString())
+		return fmt.Errorf("could not calculate active set for ATX %v %s", atx.ShortString(), err)
 	}
 
 	if atx.ActiveSetSize != activeSet {
@@ -415,7 +417,7 @@ func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error 
 	if err != nil {
 		return fmt.Errorf("cannot get NIPST Challenge hash: %v", err)
 	}
-	db.log.With().Info("Validated NIPST", log.String("challenge_hash", hash.ShortString()), log.AtxId(atx.ShortString()))
+	db.log.With().Info("Validated NIPST", log.String("challenge_hash", hash.String()), log.AtxId(atx.ShortString()))
 
 	pubKey := signing.NewPublicKey(util.Hex2Bytes(atx.NodeId.Key))
 	if err = db.nipstValidator.Validate(*pubKey, atx.Nipst, *hash); err != nil {

@@ -332,4 +332,14 @@ func (sn *Node) Shutdown() {
 	delete(sn.sim.protocolGossipHandler, sn.NodeInfo.PublicKey())
 	sn.sim.mutex.Unlock()
 
+	sn.sim.subLock.Lock()
+	for _, ch := range sn.sim.newPeersSubs {
+		close(ch)
+	}
+	sn.sim.newPeersSubs = nil
+	for _, ch := range sn.sim.delPeersSubs {
+		close(ch)
+	}
+	sn.sim.delPeersSubs = nil
+	sn.sim.subLock.Unlock()
 }

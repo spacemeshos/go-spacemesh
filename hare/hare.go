@@ -6,6 +6,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -72,6 +73,8 @@ type Hare struct {
 	nid types.NodeId
 
 	isSynced syncStateFunc
+
+	totalCPs int32
 }
 
 // New returns a new Hare struct.
@@ -195,9 +198,6 @@ func (h *Hare) onTick(id types.LayerID) {
 		h.lastLayer = id
 	}
 
-	// call to start the calculation of active set size beforehand
-	go h.rolacle.IsIdentityActiveOnConsensusView(h.nid.Key, id)
-
 	h.layerLock.Unlock()
 	h.Debug("hare got tick, sleeping for %v", h.networkDelta)
 
@@ -205,6 +205,9 @@ func (h *Hare) onTick(id types.LayerID) {
 		h.With().Info("not starting hare since the node is not synced", log.LayerId(uint64(id)))
 		return
 	}
+
+	// call to start the calculation of active set size beforehand
+	go h.rolacle.IsIdentityActiveOnConsensusView(h.nid.Key, id)
 
 	ti := time.NewTimer(h.networkDelta)
 	select {
@@ -243,6 +246,7 @@ func (h *Hare) onTick(id types.LayerID) {
 		h.broker.Unregister(cp.Id())
 		return
 	}
+	h.With().Info("number of consensus processes", log.Int32("count", atomic.AddInt32(&h.totalCPs, 1)))
 	// TODO: fix metrics
 	//metrics.TotalConsensusProcesses.With("layer", strconv.FormatUint(uint64(id), 10)).Add(1)
 }
@@ -280,12 +284,13 @@ func (h *Hare) outputCollectionLoop() {
 			if out.Completed() { // CP completed, collect the output
 				err := h.collectOutput(out)
 				if err != nil {
-					h.Warning("Err collecting output from hare err: %v", err)
+					h.With().Warning("error collecting output from hare", log.Err(err))
 				}
 			}
 
 			// anyway, unregister from broker
 			h.broker.Unregister(out.Id()) // unregister from broker after termination
+			h.With().Info("number of consensus processes", log.Int32("count", atomic.AddInt32(&h.totalCPs, -1)))
 			// TODO: fix metrics
 			//metrics.TotalConsensusProcesses.With("layer", strconv.FormatUint(uint64(out.Id()), 10)).Add(-1)
 		case <-h.CloseChannel():

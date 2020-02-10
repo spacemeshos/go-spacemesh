@@ -14,6 +14,7 @@ type Algorithm struct {
 
 type Tortoise interface {
 	handleIncomingLayer(ll *types.Layer)
+	PersistTortoise() error
 	LatestComplete() types.LayerID
 }
 

@@ -9,8 +9,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/api/pb"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/miner"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"google.golang.org/grpc/keepalive"
 	"net"
 	"strconv"
@@ -20,6 +22,10 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 )
+
+type PeerCounter interface {
+	PeerCount() uint64
+}
 
 // SpacemeshGrpcService is a grpc server providing the Spacemesh api
 type SpacemeshGrpcService struct {
@@ -34,6 +40,9 @@ type SpacemeshGrpcService struct {
 	GenTime       GenesisTimeAPI
 	Post          PostAPI
 	LayerDuration time.Duration
+	PeerCounter   PeerCounter
+	Syncer        Syncer
+	Config        *config.Config
 	Logging       LoggingAPI
 }
 
@@ -114,9 +123,9 @@ func (s SpacemeshGrpcService) getProjection(addr types.Address) (nonce, balance 
 // and all known transactions in unapplied blocks and the mempool that originate from the given account. Unapplied
 // transactions coming INTO the given account (from mempool or unapplied blocks) are NOT counted.
 func (s SpacemeshGrpcService) GetBalance(ctx context.Context, in *pb.AccountId) (*pb.SimpleMessage, error) {
-	log.Info("GRPC GetBalance msg")
+	log.Debug("GRPC GetBalance msg")
 	addr := types.HexToAddress(in.Address)
-	log.Info("GRPC GetBalance for address %x (len %v)", addr, len(addr))
+	log.Debug("GRPC GetBalance for address %x (len %v)", addr, len(addr))
 	if s.StateApi.Exist(addr) != true {
 		log.Error("GRPC GetBalance returned error msg: account does not exist, address %x", addr)
 		return nil, fmt.Errorf("account does not exist")
@@ -127,7 +136,7 @@ func (s SpacemeshGrpcService) GetBalance(ctx context.Context, in *pb.AccountId) 
 		return nil, err
 	}
 	msg := &pb.SimpleMessage{Value: strconv.FormatUint(balance, 10)}
-	log.Info("GRPC GetBalance returned msg.Value %v", msg.Value)
+	log.Debug("GRPC GetBalance returned msg.Value %v", msg.Value)
 	return msg, nil
 }
 
@@ -213,6 +222,10 @@ func (s SpacemeshGrpcService) StopService() {
 
 }
 
+type Syncer interface {
+	IsSynced() bool
+}
+
 type TxAPI interface {
 	AddressExists(addr types.Address) bool
 	ValidateNonceAndBalance(transaction *types.Transaction) error
@@ -228,17 +241,17 @@ type TxAPI interface {
 }
 
 // NewGrpcService create a new grpc service using config data.
-func NewGrpcService(port int, net NetworkAPI, state StateAPI, tx TxAPI, txMempool *miner.TxMempool, mining MiningAPI, oracle OracleAPI, genTime GenesisTimeAPI, post PostAPI, layerDurationSec int, logging LoggingAPI) *SpacemeshGrpcService {
+func NewGrpcService(port int, net NetworkAPI, state StateAPI, tx TxAPI, txMempool *miner.TxMempool, mining MiningAPI, oracle OracleAPI, genTime GenesisTimeAPI, post PostAPI, layerDurationSec int, syncer Syncer, cfg *config.Config, logging LoggingAPI) *SpacemeshGrpcService {
 	options := []grpc.ServerOption{
 		// XXX: this is done to prevent routers from cleaning up our connections (e.g aws load balances..)
 		// TODO: these parameters work for now but we might need to revisit or add them as configuration
 		// TODO: Configure maxconns, maxconcurrentcons ..
 		grpc.KeepaliveParams(keepalive.ServerParameters{
-			time.Minute * 120,
-			time.Minute * 180,
-			time.Minute * 10,
-			time.Minute,
-			time.Minute * 3,
+			MaxConnectionIdle:     time.Minute * 120,
+			MaxConnectionAge:      time.Minute * 180,
+			MaxConnectionAgeGrace: time.Minute * 10,
+			Time:                  time.Minute,
+			Timeout:               time.Minute * 3,
 		}),
 	}
 	server := grpc.NewServer(options...)
@@ -254,6 +267,9 @@ func NewGrpcService(port int, net NetworkAPI, state StateAPI, tx TxAPI, txMempoo
 		GenTime:       genTime,
 		Post:          post,
 		LayerDuration: time.Duration(layerDurationSec) * time.Second,
+		PeerCounter:   p2p.NewPeers(net, log.NewDefault("grpc")),
+		Syncer:        syncer,
+		Config:        cfg,
 		Logging:       logging,
 	}
 }
@@ -310,14 +326,25 @@ func (s SpacemeshGrpcService) SetAwardsAddress(ctx context.Context, id *pb.Accou
 func (s SpacemeshGrpcService) GetMiningStats(ctx context.Context, empty *empty.Empty) (*pb.MiningStats, error) {
 	//todo: we should review if this RPC is necessary
 	log.Info("GRPC GetInitProgress msg")
-	stat, coinbase, dataDir := s.Mining.MiningStats()
-	return &pb.MiningStats{Status: int32(stat), Coinbase: coinbase, DataDir: dataDir}, nil
+	stat, remainingBytes, coinbase, dataDir := s.Mining.MiningStats()
+	return &pb.MiningStats{
+		DataDir:        dataDir,
+		Status:         int32(stat),
+		Coinbase:       coinbase,
+		RemainingBytes: remainingBytes,
+	}, nil
 }
 
-func (s SpacemeshGrpcService) GetTotalAwards(ctx context.Context, empty *empty.Empty) (*pb.SimpleMessage, error) {
-	//todo: we should review if this RPC is necessary
-	log.Info("GRPC GetTotalAwards msg")
-	return &pb.SimpleMessage{Value: "1234"}, nil
+func (s SpacemeshGrpcService) GetNodeStatus(context.Context, *empty.Empty) (*pb.NodeStatus, error) {
+	return &pb.NodeStatus{
+		Peers:         s.PeerCounter.PeerCount(),
+		MinPeers:      uint64(s.Config.P2P.SwarmConfig.RandomConnections),
+		MaxPeers:      uint64(s.Config.P2P.MaxInboundPeers + s.Config.P2P.SwarmConfig.RandomConnections),
+		Synced:        s.Syncer.IsSynced(),
+		SyncedLayer:   s.Tx.LatestLayer().Uint64(),
+		CurrentLayer:  s.GenTime.GetCurrentLayer().Uint64(),
+		VerifiedLayer: s.Tx.LatestLayerInState().Uint64(),
+	}, nil
 }
 
 func (s SpacemeshGrpcService) GetUpcomingAwards(ctx context.Context, empty *empty.Empty) (*pb.EligibleLayers, error) {
@@ -337,7 +364,7 @@ func (s SpacemeshGrpcService) GetGenesisTime(ctx context.Context, empty *empty.E
 
 func (s SpacemeshGrpcService) ResetPost(ctx context.Context, empty *empty.Empty) (*pb.SimpleMessage, error) {
 	log.Info("GRPC ResetPost msg")
-	stat, _, _ := s.Mining.MiningStats()
+	stat, _, _, _ := s.Mining.MiningStats()
 	if stat == activation.InitInProgress {
 		return nil, fmt.Errorf("cannot reset, init in progress")
 	}
@@ -358,7 +385,7 @@ func (s SpacemeshGrpcService) SetLoggerLevel(ctx context.Context, msg *pb.SetLog
 }
 
 func (s SpacemeshGrpcService) GetAccountTxs(ctx context.Context, txsSinceLayer *pb.GetTxsSinceLayer) (*pb.AccountTxs, error) {
-	log.Info("GRPC GetAccountTxs msg")
+	log.Debug("GRPC GetAccountTxs msg")
 
 	currentPBase := s.Tx.LatestLayerInState()
 
@@ -395,7 +422,7 @@ func (s SpacemeshGrpcService) getTxIdsFromMesh(minLayer types.LayerID, addr type
 }
 
 func (s SpacemeshGrpcService) GetAccountRewards(ctx context.Context, account *pb.AccountId) (*pb.AccountRewards, error) {
-	log.Info("GRPC GetAccountRewards msg")
+	log.Debug("GRPC GetAccountRewards msg")
 	acc := types.HexToAddress(account.Address)
 
 	rewards, err := s.Tx.GetRewards(acc)
