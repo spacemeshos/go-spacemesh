@@ -108,7 +108,7 @@ def add_multi_clients(deployment_id, container_specs, size=2, client_title='clie
     print(f"added new clients: {pods}\n")
 
     if ret_dep:
-        ret_val = client_pods, resp.metadata._name
+        ret_val = pods, resp.metadata._name
 
     return ret_val
 
