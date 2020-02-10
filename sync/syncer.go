@@ -293,9 +293,12 @@ func (s *Syncer) Synchronise() {
 	}
 
 	if s.weaklySynced() { // we have all the data of the prev layers so we can simply validate
-		s.With().Info("Node is synced. Going to validate layer", log.LayerId(uint64(currentSyncLayer)))
-		if err := s.GetAndValidateLayer(currentSyncLayer); err != nil {
-			s.Panic("failed getting layer even though we are weakly-synced currentLayer=%v lastTicked=%v err=%v ", currentSyncLayer, s.GetCurrentLayer(), err)
+		s.With().Info("Node is weakly synced. Going to validate layer")
+		for ; currentSyncLayer < s.GetCurrentLayer(); currentSyncLayer++ {
+			s.With().Info("Going to validate layer", log.LayerId(uint64(currentSyncLayer)))
+			if err := s.GetAndValidateLayer(currentSyncLayer); err != nil {
+				s.Panic("failed getting layer even though we are weakly-synced currentLayer=%v lastTicked=%v err=%v ", currentSyncLayer, s.GetCurrentLayer(), err)
+			}
 		}
 		return
 	}

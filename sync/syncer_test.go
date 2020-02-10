@@ -1042,7 +1042,7 @@ func TestSyncer_Synchronise(t *testing.T) {
 	sync.TickProvider = &MockClock{Layer: 4} // simulate not synced
 	sr()
 	time.Sleep(100 * time.Millisecond) // handle go routine race
-	r.Equal(1, lv.countValidate)       // not synced, expect one call
+	r.Equal(2, lv.countValidate)       // not synced, expect one call
 }
 
 func TestSyncer_Synchronise2(t *testing.T) {
