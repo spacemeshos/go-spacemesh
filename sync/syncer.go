@@ -300,6 +300,7 @@ func (s *Syncer) Synchronise() {
 				s.Panic("failed getting layer even though we are weakly-synced currentLayer=%v lastTicked=%v err=%v ", currentSyncLayer, s.GetCurrentLayer(), err)
 			}
 		}
+		s.With().Info("Node is synced")
 		return
 	}
 
