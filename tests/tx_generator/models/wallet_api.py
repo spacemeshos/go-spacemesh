@@ -59,18 +59,10 @@ class WalletAPI:
 
     def get_nonce_value(self, acc):
         res = self._get_nonce(acc)
-        if isinstance(res, Response):
-            print("#@!#@!#@! this is a response ")
-            res = res.text
-
         return WalletAPI.extract_nonce_from_resp(res)
 
     def get_balance_value(self, acc):
         res = self._get_balance(acc)
-        if isinstance(res, Response):
-            print("#@!#@!#@! this is a balance response ")
-            res = res.text
-            
         return WalletAPI.extract_balance_from_resp(res)
 
     def _get_nonce(self, acc):
@@ -115,6 +107,11 @@ class WalletAPI:
             out = api_call(pod_ip, data, api_resource, self.namespace)
         else:
             out = aws_api_call(pod_ip, data, api_resource)
+            if out.status_code == 200:
+                out = out.text
+                print("#@!#@! out=", out)
+            else:
+                out = None
 
         return out
 
