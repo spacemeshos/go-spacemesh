@@ -3,7 +3,7 @@ import random
 import re
 
 from tests.tx_generator import config as conf
-from tests.tx_generator.k8s_handler import api_call
+from tests.tx_generator.k8s_handler import api_call, aws_api_call
 
 
 class WalletAPI:
@@ -38,7 +38,7 @@ class WalletAPI:
         pod_ip, pod_name = self.random_node()
         print(f"amount: {amount}, gas-price: {gas_price}, total: {amount+gas_price}")
         tx_field = '{"tx":' + str(list(tx_bytes)) + '}'
-        out = api_call(pod_ip, tx_field, self.submit_api, self.namespace)
+        out = self.send_api_call(pod_ip, tx_field, self.submit_api)
         print(f"{datetime.now()}: submit result: {out}")
 
         if self.a_ok in out:
@@ -52,7 +52,7 @@ class WalletAPI:
         tx_id_lst = self.convert_hex_str_to_bytes(tx_id)
         pod_ip, pod_name = self.random_node()
         data = f'{{"id": {str(tx_id_lst)}}}'
-        out = api_call(pod_ip, data, self.get_tx_api, self.namespace)
+        out = self.send_api_call(pod_ip, data, self.get_tx_api)
         print(f"get tx output={out}")
         return self.extract_tx_id(out)
 
@@ -79,7 +79,8 @@ class WalletAPI:
             data = '{"address":"' + acc + '"}'
 
         print(f"querying for the {resource} of {acc}")
-        out = api_call(pod_ip, data, api_res, self.namespace)
+        out = self.send_api_call(pod_ip, data, api_res)
+
         print(f"{resource} output={out}")
         return out
 
@@ -99,6 +100,14 @@ class WalletAPI:
 
         print(f"selected pod: ip = {pod_ip}, name = {pod_name}")
         return pod_ip, pod_name
+
+    def send_api_call(self, pod_ip, data, api_resource):
+        if self.namespace:
+            out = api_call(pod_ip, data, api_resource, self.namespace)
+        else:
+            out = aws_api_call(pod_ip, data, api_resource)
+
+        return out
 
     # ======================= utils =======================
 
