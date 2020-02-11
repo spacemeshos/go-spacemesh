@@ -109,9 +109,12 @@ class WalletAPI:
             out = api_call(pod_ip, data, api_resource, self.namespace)
         else:
             out = aws_api_call(pod_ip, data, api_resource)
+            print("#@!#@! send_api_call out", out)
             if out.status_code == 200:
+                print("#@!#@! status is 200")
                 out = out.text
             else:
+                print("status code != 200, output =", out.text)
                 out = None
 
         return out

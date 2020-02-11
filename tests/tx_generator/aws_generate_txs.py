@@ -63,14 +63,7 @@ if __name__ == "__main__":
         print(f"could not resolve nonce/balance, nonce={tap_nonce}, balance={tap_balance}")
 
     # Create an accountant to follow state
-    print("#@!#@!#@#@!#!@")
-    print(f"nonce={tap_nonce}")
-    print(f"nonce type={type(tap_nonce)}")
-    print(f"balance={tap_balance}")
-    print(f"balance type={type(tap_balance)}")
     tap_acc = Accountant.set_tap_acc(balance=tap_balance, nonce=tap_nonce)
-    print(f"tap_acc={tap_acc}")
-    print("#@!#@!#@#@!#!@")
     acc = Accountant({conf.acc_pub: tap_acc}, tap_init_amount=tap_balance)
     acc.tx_cost = parsed_args.gas_price
     # Create new accounts by sending them coins
