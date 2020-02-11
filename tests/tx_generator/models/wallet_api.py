@@ -120,7 +120,7 @@ class WalletAPI:
 
     @staticmethod
     def extract_value_from_resp(val):
-        res_pat = "value[\'\"]: [\'\"]([0-9]+)"
+        res_pat = "value[\'\"]:\s?[\'\"]([0-9]+)"
         group_num = 1
 
         match = re.search(res_pat, val)
