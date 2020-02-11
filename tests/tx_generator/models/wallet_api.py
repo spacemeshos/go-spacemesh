@@ -1,6 +1,7 @@
 from datetime import datetime
 import random
 import re
+from requests.models import Response
 
 from tests.tx_generator import config as conf
 from tests.tx_generator.k8s_handler import api_call, aws_api_call
@@ -58,14 +59,18 @@ class WalletAPI:
 
     def get_nonce_value(self, acc):
         res = self._get_nonce(acc)
-        print("#@!#@!#@!")
-        print(type(res))
-        print("text", res.text)
-        print("content", res.content)
+        if isinstance(res, Response):
+            print("#@!#@!#@! this is a response ")
+            res = res.text
+
         return WalletAPI.extract_nonce_from_resp(res)
 
     def get_balance_value(self, acc):
         res = self._get_balance(acc)
+        if isinstance(res, Response):
+            print("#@!#@!#@! this is a balance response ")
+            res = res.text
+            
         return WalletAPI.extract_balance_from_resp(res)
 
     def _get_nonce(self, acc):
