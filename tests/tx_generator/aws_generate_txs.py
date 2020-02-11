@@ -1,11 +1,9 @@
 import argparse
 import os
-import pprint
 import sys
 # this hack is for importing packages located above
 # this file and it's imports files location
 dir_path = os.getcwd()
-dir_path = '/'.join(dir_path.split('/')[0:-2])
 print(f"adding {dir_path} to sys.path")
 sys.path.insert(0, dir_path)
 
