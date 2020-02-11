@@ -58,6 +58,10 @@ class WalletAPI:
 
     def get_nonce_value(self, acc):
         res = self._get_nonce(acc)
+        print("#@!#@!#@!")
+        print(type(res))
+        print("text", res.text)
+        print("content", res.content)
         return WalletAPI.extract_nonce_from_resp(res)
 
     def get_balance_value(self, acc):
