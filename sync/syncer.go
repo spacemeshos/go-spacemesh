@@ -36,16 +36,8 @@ type PoetDb interface {
 	GetProofMessage(proofRef []byte) ([]byte, error)
 }
 
-type BlockValidator interface {
+type BlockEligibilityValidator interface {
 	BlockSignedAndEligible(block *types.Block) (bool, error)
-}
-
-type EligibilityValidator interface {
-	BlockSignedAndEligible(block *types.Block) (bool, error)
-}
-
-type TxValidator interface {
-	AddressExists(addr types.Address) bool
 }
 
 type TickProvider interface {
@@ -69,10 +61,6 @@ type LayerValidator interface {
 	ValidateLayer(lyr *types.Layer)
 }
 
-const (
-	ValidationCacheSize = 1000
-)
-
 var (
 	errDupTx       = errors.New("duplicate TransactionId in block")
 	errDupAtx      = errors.New("duplicate AtxId in block")
@@ -89,15 +77,11 @@ const (
 	ValidatingLayerNone types.LayerID = 0
 )
 
-type LayerProvider interface {
-	GetLayer(index types.LayerID) (*types.Layer, error)
-}
-
 type Syncer struct {
 	Configuration
 	log.Log
 	*mesh.Mesh
-	EligibilityValidator
+	BlockEligibilityValidator
 	*workerInfra
 	TickProvider
 
@@ -203,34 +187,23 @@ func (s *Syncer) Start() {
 	}
 }
 
-func (s *Syncer) getSyncRoutine() func() {
-	return func() {
-		if atomic.CompareAndSwapUint32(&s.SyncLock, IDLE, RUNNING) {
-			s.syncRoutineWg.Add(1)
-			s.Synchronise()
-			atomic.StoreUint32(&s.SyncLock, IDLE)
-		}
-	}
-}
-
 //fires a sync every sm.SyncInterval or on force space from outside
 func (s *Syncer) run() {
-	syncRoutine := s.getSyncRoutine()
 	for {
 		select {
 		case <-s.exit:
 			s.Debug("Work stopped")
 			return
 		case <-s.forceSync:
-			go syncRoutine()
+			go s.synchronise()
 		case <-s.syncTimer.C:
-			go syncRoutine()
+			go s.synchronise()
 		}
 	}
 }
 
 //fires a sync every sm.SyncInterval or on force space from outside
-func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool AtxMemPool, bv BlockValidator, poetdb PoetDb, conf Configuration, clock TickProvider, logger log.Log) *Syncer {
+func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool AtxMemPool, bv BlockEligibilityValidator, poetdb PoetDb, conf Configuration, clock TickProvider, logger log.Log) *Syncer {
 
 	exit := make(chan struct{})
 
@@ -242,24 +215,24 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool A
 	}
 
 	s := &Syncer{
-		EligibilityValidator: bv,
-		Configuration:        conf,
-		Log:                  logger,
-		Mesh:                 layers,
-		workerInfra:          srvr,
-		TickProvider:         clock,
-		lValidator:           layers,
-		SyncLock:             0,
-		poetDb:               poetdb,
-		txpool:               txpool,
-		atxpool:              atxpool,
-		startLock:            0,
-		forceSync:            make(chan bool),
-		validatingLayer:      ValidatingLayerNone,
-		syncTimer:            time.NewTicker(conf.SyncInterval),
-		exit:                 exit,
-		gossipSynced:         Pending,
-		awaitCh:              make(chan struct{}),
+		BlockEligibilityValidator: bv,
+		Configuration:             conf,
+		Log:                       logger,
+		Mesh:                      layers,
+		workerInfra:               srvr,
+		TickProvider:              clock,
+		lValidator:                layers,
+		SyncLock:                  0,
+		poetDb:                    poetdb,
+		txpool:                    txpool,
+		atxpool:                   atxpool,
+		startLock:                 0,
+		forceSync:                 make(chan bool),
+		validatingLayer:           ValidatingLayerNone,
+		syncTimer:                 time.NewTicker(conf.SyncInterval),
+		exit:                      exit,
+		gossipSynced:              Pending,
+		awaitCh:                   make(chan struct{}),
 	}
 
 	s.blockQueue = NewValidationQueue(srvr, s.Configuration, s, s.blockCheckLocal, logger.WithName("validQ"))
@@ -275,37 +248,46 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool A
 	return s
 }
 
-func (s *Syncer) Synchronise() {
+func (s *Syncer) synchronise() {
+	s.syncRoutineWg.Add(1)
 	defer s.syncRoutineWg.Done()
-	s.Info("start synchronize")
 
-	if s.GetCurrentLayer() <= 1 { // skip validation for first layer
-		s.With().Info("Not syncing in layer <= 1", log.LayerId(uint64(s.GetCurrentLayer())))
-		s.setGossipBufferingStatus(Done) // fully-synced, make sure we listen to p2p
-		return
-	}
+	if atomic.CompareAndSwapUint32(&s.SyncLock, IDLE, RUNNING) { //only one concurrent synchronise
+		s.Info("start synchronize")
 
-	currentSyncLayer := s.lValidator.ProcessedLayer() + 1
-	if currentSyncLayer == s.GetCurrentLayer() { // only validate if current < lastTicked
-		s.With().Info("Already synced for layer", log.Uint64("current_sync_layer", uint64(currentSyncLayer)))
-		s.setGossipBufferingStatus(Done) // fully-synced, make sure we listen to p2p
-		return
-	}
+		defer func() { //release synchronise lock
+			s.Info("done synchronize")
+			atomic.StoreUint32(&s.SyncLock, IDLE)
+		}()
 
-	if s.weaklySynced() { // we have all the data of the prev layers so we can simply validate
-		s.With().Info("Node is weakly synced. Going to validate layer")
-		for ; currentSyncLayer < s.GetCurrentLayer(); currentSyncLayer++ {
-			s.With().Info("Going to validate layer", log.LayerId(uint64(currentSyncLayer)))
-			if err := s.GetAndValidateLayer(currentSyncLayer); err != nil {
-				s.Panic("failed getting layer even though we are weakly-synced currentLayer=%v lastTicked=%v err=%v ", currentSyncLayer, s.GetCurrentLayer(), err)
-			}
+		if s.GetCurrentLayer() <= 1 { // skip validation for first layer
+			s.With().Info("Not syncing in layer <= 1", log.LayerId(uint64(s.GetCurrentLayer())))
+			s.setGossipBufferingStatus(Done) // fully-synced, make sure we listen to p2p
+			return
 		}
-		s.With().Info("Node is synced")
-		return
-	}
 
-	// node is not synced
-	s.handleNotSynced(currentSyncLayer)
+		currentSyncLayer := s.lValidator.ProcessedLayer() + 1
+		if currentSyncLayer == s.GetCurrentLayer() { // only validate if current < lastTicked
+			s.With().Info("Already synced for layer", log.Uint64("current_sync_layer", uint64(currentSyncLayer)))
+			s.setGossipBufferingStatus(Done) // fully-synced, make sure we listen to p2p
+			return
+		}
+
+		if s.weaklySynced() { // we have all the data of the prev layers so we can simply validate
+			s.With().Info("Node is weakly synced. Going to validate layer")
+			for ; currentSyncLayer < s.GetCurrentLayer(); currentSyncLayer++ {
+				s.With().Info("Going to validate layer", log.LayerId(uint64(currentSyncLayer)))
+				if err := s.GetAndValidateLayer(currentSyncLayer); err != nil {
+					s.Panic("failed getting layer even though we are weakly-synced currentLayer=%v lastTicked=%v err=%v ", currentSyncLayer, s.GetCurrentLayer(), err)
+				}
+			}
+			s.With().Info("Node is synced")
+			return
+		}
+
+		// node is not synced
+		s.handleNotSynced(currentSyncLayer)
+	}
 }
 
 func (s *Syncer) fastValidation(block *types.Block) error {

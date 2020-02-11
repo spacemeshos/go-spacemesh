@@ -13,7 +13,7 @@ import (
 
 type BlockListener struct {
 	*Syncer
-	BlockValidator
+	BlockEligibilityValidator
 	log.Log
 	wg                   sync.WaitGroup
 	bufferSize           int
