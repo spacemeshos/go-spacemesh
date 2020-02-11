@@ -60,7 +60,7 @@ def get_block_creation_msgs(namespace, pod_name, find_fails=False, from_ts=None,
 
 
 def get_done_syncing_msgs(namespace, pod_name):
-    done_waiting_msg = "Done waiting for ticks and validation"
+    done_waiting_msg = "Node is synced"
     return get_all_msg_containing(namespace, pod_name, done_waiting_msg)
 
 
