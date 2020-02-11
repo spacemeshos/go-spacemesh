@@ -58,6 +58,10 @@ if __name__ == "__main__":
     # Get TAP initial values
     tap_nonce = my_wallet.get_nonce_value(conf.acc_pub)
     tap_balance = my_wallet.get_balance_value(conf.acc_pub)
+
+    if not tap_nonce or not tap_balance:
+        print(f"could not resolve nonce/balance, nonce={tap_nonce}, balance={tap_balance}")
+
     # Create an accountant to follow state
     print("#@!#@!#@#@!#!@")
     print(f"nonce={tap_nonce}")

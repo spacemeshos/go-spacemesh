@@ -59,6 +59,8 @@ class WalletAPI:
 
     def get_nonce_value(self, acc):
         res = self._get_nonce(acc)
+        print("#@!#@! get_nonce_value", res)
+        print("#@!#@! get_nonce_value type", type(res))
         return WalletAPI.extract_nonce_from_resp(res)
 
     def get_balance_value(self, acc):
@@ -118,7 +120,7 @@ class WalletAPI:
 
     @staticmethod
     def extract_value_from_resp(val):
-        res_pat = "value\': \'([0-9]+)"
+        res_pat = "value[\'\"]: [\'\"]([0-9]+)"
         group_num = 1
 
         match = re.search(res_pat, val)
