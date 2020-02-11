@@ -112,11 +112,7 @@ func (a *addrBook) AddLocalAddress(addr *node.NodeInfo) {
 	a.localAddresses = append(a.localAddresses, addr)
 }
 
-// OurAddress returns true if it is our address.
-func (a *addrBook) IsLocalAddress(addr *node.NodeInfo) bool {
-	a.mtx.Lock()
-	defer a.mtx.Unlock()
-
+func (a *addrBook) isLocalAddressUnlocked(addr *node.NodeInfo) bool {
 	for _, local := range a.localAddresses {
 
 		if bytes.Equal(local.ID.Bytes(), addr.ID.Bytes()) {
@@ -131,16 +127,26 @@ func (a *addrBook) IsLocalAddress(addr *node.NodeInfo) bool {
 	return false
 }
 
+// OurAddress returns true if it is our address.
+func (a *addrBook) IsLocalAddress(addr *node.NodeInfo) bool {
+	a.mtx.Lock()
+	defer a.mtx.Unlock()
+
+	return a.isLocalAddressUnlocked(addr)
+}
+
 // updateAddress is a helper function to either update an address already known
 // to the address manager, or to add the address if not already known.
 func (a *addrBook) updateAddress(netAddr, srcAddr *node.NodeInfo) {
 
-	if a.IsLocalAddress(netAddr) {
+	if a.isLocalAddressUnlocked(netAddr) {
+		a.logger.Debug("skipping adding a local address %v", netAddr.String())
 		return
 	}
 	//Filter out non-routable addresses. Note that non-routable
 	//also includes invalid and localNode addresses.
 	if !IsRoutable(netAddr.IP) && IsRoutable(srcAddr.IP) {
+		a.logger.Debug("skipping adding non routable address%v", netAddr.String())
 		// XXX: this makes tests work with unroutable addresses(loopback)
 		return
 	}

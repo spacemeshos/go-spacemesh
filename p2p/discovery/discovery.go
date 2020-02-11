@@ -16,10 +16,14 @@ type PeerStore interface {
 	Remove(pubkey p2pcrypto.PublicKey)
 	Lookup(pubkey p2pcrypto.PublicKey) (*node.NodeInfo, error)
 	Update(addr, src *node.NodeInfo)
+
 	SelectPeers(ctx context.Context, qty int) []*node.NodeInfo
 	Bootstrap(ctx context.Context) error
 	Size() int
+
 	Shutdown()
+
+	IsLocalAddress(info *node.NodeInfo) bool
 	SetLocalAddresses(tcp, udp int)
 
 	Good(key p2pcrypto.PublicKey)
@@ -30,6 +34,7 @@ type Protocol interface {
 	Ping(p p2pcrypto.PublicKey) error
 	GetAddresses(server p2pcrypto.PublicKey) ([]*node.NodeInfo, error)
 	SetLocalAddresses(tcp, udp int)
+	Close()
 }
 
 type addressBook interface {
@@ -170,6 +175,10 @@ func New(ln node.LocalNode, config config.SwarmConfig, service server.Service, p
 
 func (d *Discovery) Shutdown() {
 	d.rt.Stop()
+}
+
+func (d *Discovery) IsLocalAddress(info *node.NodeInfo) bool {
+	return d.rt.IsLocalAddress(info)
 }
 
 // SetLocalAddresses sets the localNode addresses to be advertised.

@@ -339,9 +339,7 @@ func (s *swarm) sendMessageImpl(peerPubKey p2pcrypto.PublicKey, protocol string,
 	var err error
 	var conn net.Connection
 
-	if peerPubKey == s.lNode.PublicKey() {
-		return errors.New("can't send message to self")
-	}
+	s.discover.IsLocalAddress(&node.NodeInfo{ID: peerPubKey.Array()})
 
 	conn, err = s.cPool.GetConnectionIfExists(peerPubKey)
 
