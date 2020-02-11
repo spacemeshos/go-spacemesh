@@ -1,7 +1,6 @@
 from datetime import datetime
 import random
 import re
-from requests.models import Response
 
 from tests.tx_generator import config as conf
 from tests.tx_generator.k8s_handler import api_call, aws_api_call
@@ -20,7 +19,6 @@ class WalletAPI:
     get_tx_api = 'v1/gettransaction'
     nonce_api = 'v1/nonce'
     submit_api = 'v1/submittransaction'
-    a_ok = "'value': 'ok'"
 
     def __init__(self, namespace, clients_lst, fixed_node=None):
         """
@@ -35,6 +33,7 @@ class WalletAPI:
         self.tx_ids = []
 
     def submit_tx(self, to, src, gas_price, amount, tx_bytes):
+        a_ok_pat = "[\'\"]value[\'\"]:\s?[\'\"]ok[\'\"]"
         print(f"\n{datetime.now()}: submit transaction\nfrom {src}\nto {to}")
         pod_ip, pod_name = self.random_node()
         print(f"amount: {amount}, gas-price: {gas_price}, total: {amount+gas_price}")
@@ -42,7 +41,7 @@ class WalletAPI:
         out = self.send_api_call(pod_ip, tx_field, self.submit_api)
         print(f"{datetime.now()}: submit result: {out}")
 
-        if self.a_ok in out:
+        if re.search(a_ok_pat, out):
             self.tx_ids.append(self.extract_tx_id(out))
             return True
 
@@ -59,8 +58,6 @@ class WalletAPI:
 
     def get_nonce_value(self, acc):
         res = self._get_nonce(acc)
-        print("#@!#@! get_nonce_value", res)
-        print("#@!#@! get_nonce_value type", type(res))
         return WalletAPI.extract_nonce_from_resp(res)
 
     def get_balance_value(self, acc):
@@ -111,7 +108,6 @@ class WalletAPI:
             out = aws_api_call(pod_ip, data, api_resource)
             print("#@!#@! send_api_call out", out)
             if out.status_code == 200:
-                print("#@!#@! status is 200")
                 out = out.text
             else:
                 print("status code != 200, output =", out.text)
