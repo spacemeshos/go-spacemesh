@@ -36,7 +36,9 @@ def transfer(wallet_api, frm, to, amount, gas_price=1, gas_limit=None, curr_nonc
 
     # set gas limit (this was copied from the old script)
     gas_limit = gas_price + 1 if not gas_limit else gas_limit
-
+    print("transfer curr_nonce", curr_nonce)
+    print("transfer accountant.get_nonce(frm)", accountant.get_nonce(frm))
+    print("transfer wallet_api.get_nonce_value(frm)", wallet_api.get_nonce_value(frm))
     # set nonce
     if curr_nonce:
         nonce = int(curr_nonce)
@@ -45,6 +47,7 @@ def transfer(wallet_api, frm, to, amount, gas_price=1, gas_limit=None, curr_nonc
     else:
         nonce = wallet_api.get_nonce_value(frm)
 
+    print("transfer nonce", nonce)
     if str(nonce) == "None":
         raise Exception("could not resolve nonce")
 
