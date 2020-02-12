@@ -136,9 +136,7 @@ func Test_SmallP2PIntegrationSuite(t *testing.T) {
 }
 
 func Test_BigP2PIntegrationSuite(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
+	t.Skip()
 	s := new(P2PIntegrationSuite)
 	s.IntegrationTestSuite = new(IntegrationTestSuite)
 
