@@ -159,7 +159,7 @@ func TestSwarm_processMessage(t *testing.T) {
 var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
 func Test_ConnectionBeforeMessage(t *testing.T) {
-
+	ctx, cancel := context.WithCancel(context.Background())
 	numNodes := 5
 	var wg sync.WaitGroup
 
@@ -170,9 +170,13 @@ func Test_ConnectionBeforeMessage(t *testing.T) {
 
 	go func() {
 		for {
-			msg := <-c2 // immediate response will probably trigger GetConnection fast
-			require.NoError(t, p2.SendMessage(msg.Sender(), exampleProtocol, []byte("RESP")))
-			wg.Done()
+			select {
+			case msg := <-c2: // immediate response will probably trigger GetConnection fast
+				require.NoError(t, p2.SendMessage(msg.Sender(), exampleProtocol, []byte("RESP")))
+				wg.Done()
+			case <-ctx.Done():
+				return
+			}
 		}
 	}()
 
@@ -180,10 +184,11 @@ func Test_ConnectionBeforeMessage(t *testing.T) {
 
 	//called := make(chan struct{}, numNodes)
 	cpm := new(cpoolMock)
-	cpm.f = func(address inet.Addr, pk p2pcrypto.PublicKey) (net.Connection, error) {
+
+	cpm.fExists = func(pk p2pcrypto.PublicKey) (net.Connection, error) {
 		c, err := oldCpool.GetConnectionIfExists(pk)
 		if err != nil {
-			t.Fatal("Didn't get connection yet while SendMessage called GetConnection")
+			t.Fatal("Didn't get connection yet while called GetConnection")
 		}
 		return c, nil
 	}
@@ -210,6 +215,7 @@ func Test_ConnectionBeforeMessage(t *testing.T) {
 	wg.Wait()
 	cpm.f = nil
 	sa.clean()
+	cancel()
 
 }
 
@@ -476,14 +482,18 @@ func TestSwarm_onRemoteClientMessage(t *testing.T) {
 
 	//Test bad session
 	session := &net.SessionMock{}
-	session.SetDecrypt(nil, errors.New("fail"))
+	session.OpenMessageFunc = func(boxedMessage []byte) (bytes []byte, err error) {
+		return nil, errors.New("fail")
+	}
 	imc.Conn.SetSession(session)
 
 	err = p.onRemoteClientMessage(imc)
 	assert.Equal(t, err, ErrFailDecrypt)
 
 	//// Test bad format again
-	session.SetDecrypt([]byte("wont_format_fo_protocol_message"), nil)
+	session.OpenMessageFunc = func(boxedMessage []byte) (bytes []byte, err error) {
+		return []byte("wont_format_fo_protocol_message"), nil
+	}
 
 	err = p.onRemoteClientMessage(imc)
 	assert.Equal(t, err, ErrBadFormat2)
@@ -497,11 +507,17 @@ func TestSwarm_onRemoteClientMessage(t *testing.T) {
 	goodbin, _ := types.InterfaceToBytes(goodmsg)
 
 	imc.Message = goodbin
-	session.SetDecrypt(goodbin, nil)
+	session.OpenMessageFunc = func(boxedMessage []byte) (bytes []byte, err error) {
+		return goodbin, nil
+	}
 
 	goodmsg.Metadata.Timestamp = time.Now().Add(-time.Hour).Unix()
 	nosynced, _ := types.InterfaceToBytes(goodmsg)
-	session.SetDecrypt(nosynced, nil)
+
+	session.OpenMessageFunc = func(boxedMessage []byte) (bytes []byte, err error) {
+		return nosynced, nil
+	}
+
 	// Test out of sync
 	imc.Message = nosynced
 
@@ -513,7 +529,9 @@ func TestSwarm_onRemoteClientMessage(t *testing.T) {
 
 	goodbin, _ = types.InterfaceToBytes(goodmsg)
 	imc.Message = goodbin
-	session.SetDecrypt(goodbin, nil)
+	session.OpenMessageFunc = func(boxedMessage []byte) (bytes []byte, err error) {
+		return goodbin, nil
+	}
 
 	err = p.onRemoteClientMessage(imc)
 	assert.Equal(t, err, ErrNoProtocol)
@@ -1018,4 +1036,75 @@ func TestNeighborhood_ReportConnectionResult(t *testing.T) {
 
 	require.Equal(t, 2, goodcount)
 	require.Equal(t, attemptcount, PeerNum*2)
+}
+
+func TestSwarm_SendMessage(t *testing.T) {
+	p := p2pTestNoStart(t, config.DefaultConfig())
+
+	cp := &cpoolMock{}
+	ps := &discovery.MockPeerStore{}
+
+	p.cPool = cp
+	p.discover = ps
+
+	ps.IsLocalAddressFunc = func(info *node.NodeInfo) bool {
+		return true
+	}
+
+	someky := p2pcrypto.NewRandomPubkey()
+	proto := exampleDirectProto
+	//payload := service.DataBytes{Payload:[]byte("LOL")}
+
+	err := p.SendMessage(someky, proto, []byte("LOL"))
+	require.Equal(t, err, errors.New("can't sent message to self"))
+
+	ps.IsLocalAddressFunc = func(info *node.NodeInfo) bool {
+		return false
+	}
+
+	cp.fExists = func(pk p2pcrypto.PublicKey) (connection net.Connection, err error) {
+		return nil, errors.New("no conn")
+	}
+
+	err = p.SendMessage(someky, proto, []byte("LOL"))
+	require.Equal(t, err, errors.New("this peers isn't a neighbor or lost connection"))
+
+	cp.fExists = func(pk p2pcrypto.PublicKey) (connection net.Connection, err error) {
+		return net.NewConnectionMock(pk), nil
+	}
+
+	err = p.SendMessage(someky, proto, []byte("LOL"))
+	require.Equal(t, err, ErrNoSession)
+
+	c := net.NewConnectionMock(someky)
+	session := net.NewSessionMock(someky)
+	c.SetSession(session)
+
+	cp.fExists = func(pk p2pcrypto.PublicKey) (connection net.Connection, err error) {
+		return c, nil
+	}
+
+	err = p.SendMessage(someky, proto, nil)
+	require.Equal(t, err, errors.New("cant send empty payload"))
+
+	session.SealMessageFunc = func(message []byte) []byte {
+		return nil
+	}
+
+	err = p.SendMessage(someky, proto, []byte("LOL"))
+	require.Equal(t, err, errors.New("encryption failed"))
+
+	session.SealMessageFunc = func(message []byte) []byte {
+		return message
+	}
+
+	c.SetSendResult(errors.New("fail"))
+
+	err = p.SendMessage(someky, proto, []byte("LOL"))
+	require.Equal(t, err, errors.New("fail"))
+
+	c.SetSendResult(nil)
+
+	err = p.SendMessage(someky, proto, []byte("LOL"))
+	require.Equal(t, err, nil)
 }
