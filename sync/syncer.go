@@ -313,7 +313,7 @@ func (s *Syncer) handleNotSynced(currentSyncLayer types.LayerID) {
 		s.With().Info("syncing layer", log.Uint64("current_sync_layer", uint64(currentSyncLayer)), log.Uint64("last_ticked_layer", uint64(s.GetCurrentLayer())))
 		lyr, err := s.getLayerFromNeighbors(currentSyncLayer)
 		if err != nil {
-			s.Info("could not get layer %v from neighbors :%v", currentSyncLayer, err)
+			s.Info("could not get layer %v from neighbors: %v", currentSyncLayer, err)
 			return
 		}
 
