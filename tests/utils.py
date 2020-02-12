@@ -94,16 +94,18 @@ def validate_blocks_per_nodes(block_map, from_layer, to_layer, layers_per_epoch,
         print(f"from layer={from_layer}, to layer={to_layer}")
         assert 0
 
+    print("validating node")
     for node in block_map:
+        print(f"{node}, ", end="")
         node_lays = block_map[node]["layers"]
         blocks_sum = sum([len(node_lays[str(x)]) for x in range(from_layer, to_layer) if str(x) in node_lays])
         blocks_per_layer = blocks_sum / (to_layer - from_layer)
-        wanted_res = layer_avg_size / num_miners
+        wanted_res = int((layer_avg_size * layers_per_epoch) / num_miners) / layers_per_epoch
         ass_err = f"node {node} failed creating the avg block size"
         ass_err += f"\nblocks created per layer {blocks_per_layer}, wanted average block per node {wanted_res}"
         assert blocks_per_layer == wanted_res, ass_err
 
-    print("validation succeeded!")
+    print("\nvalidation succeeded!")
 
 
 def get_pod_id(ns, pod_name):
