@@ -210,7 +210,7 @@ func buildSet() []types.BlockID {
 type mockBlockProvider struct {
 }
 
-func (mbp *mockBlockProvider) GetUnverifiedLayerBlocks(layerId types.LayerID) ([]types.BlockID, error) {
+func (mbp *mockBlockProvider) LayerBlockIds(layerId types.LayerID) ([]types.BlockID, error) {
 	return buildSet(), nil
 }
 
