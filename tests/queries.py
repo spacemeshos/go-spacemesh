@@ -230,11 +230,11 @@ def parseAtx(log_messages):
 class Node:
     def __init__(self):
         self.blocks = 0
-        self.layers = defaultdict(int)
+        self.layers = defaultdict(list)
 
-    def add_block_to_layer(self, layer: int):
+    def add_block_to_layer(self, block):
         self.blocks += 1
-        self.layers[layer] += 1
+        self.layers[block.layer_id].append(block)
 
 
 # sets log messages into a dictionary where keys=node_id and
@@ -243,16 +243,16 @@ class Node:
 def sort_by_node_id(log_messages):
     node2blocks = defaultdict(Node)
     for log in log_messages:
-        node2blocks[log.node_id].add_block_to_layer(log.layer_id)
+        node2blocks[log.node_id].add_block_to_layer(log)
     return node2blocks
 
 
 # sets log messages into a dictionary where keys are layer_ids and values are the number of blocks in that layer
 # TODO this can be a util function
 def sort_by_layer(log_messages):
-    blocks_per_layer = defaultdict(int)
+    blocks_per_layer = defaultdict(list)
     for log in log_messages:
-        blocks_per_layer[log.layer_id] += 1
+        blocks_per_layer[log.layer_id].append(log)
     return blocks_per_layer
 
 
@@ -261,13 +261,13 @@ def print_node_stats(nodes: defaultdict):
     for node_id, node in nodes.items():
         print(f"Total blocks created by node {node_id}: {node.blocks}")
         for layer_id, layer_blocks in node.layers.items():
-            print(f"  Layer {layer_id}: {layer_blocks}")
+            print(f"  Layer {layer_id}: {len(layer_blocks)}")
 
 
 # TODO this can be a util function
 def print_layer_stat(layers):
     for layer_id, blocks in layers.items():
-        print(f"Blocks created in layer {layer_id}: {blocks}")
+        print(f"Blocks created in layer {layer_id}: {len(blocks)}")
 
 
 # TODO this can be a util function

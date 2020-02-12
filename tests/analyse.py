@@ -16,13 +16,13 @@ def analyze_mining(deployment, last_layer, layers_per_epoch, layer_avg_size, tot
     queries.print_node_stats(blockmap)
     queries.print_layer_stat(layermap)
 
-    xl = [layermap[layer] for layer in range(layers_per_epoch)]
+    xl = [len(layermap[layer]) for layer in range(layers_per_epoch)]
     print(xl)
 
     first_epoch_blocks = sum(xl)
 
     # count all blocks arrived in relevant layers
-    total_blocks = sum([layermap[layer] for layer in range(last_layer)])
+    total_blocks = sum([len(layermap[layer]) for layer in range(last_layer)])
 
     atxmap = queries.get_atx_per_node(deployment)
     newmap = {}
@@ -62,7 +62,7 @@ def analyze_mining(deployment, last_layer, layers_per_epoch, layer_avg_size, tot
 
     # assert that each node has created layer_avg/number_of_nodes
     for node in blockmap.values():
-        blocks_in_relevant_layers = sum([node.layers[layer] for layer in range(layers_per_epoch, last_layer)])
+        blocks_in_relevant_layers = sum([len(node.layers[layer]) for layer in range(layers_per_epoch, last_layer)])
         # need to deduct blocks created in first genesis epoch since it does not follow general mining rules by design
         blocks_created_per_layer = blocks_in_relevant_layers / (last_layer - layers_per_epoch)
         wanted_avg_block_per_node = max(1, int(layer_avg_size / total_pods))
