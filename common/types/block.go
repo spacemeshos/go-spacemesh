@@ -14,6 +14,8 @@ func (id BlockID) String() string {
 	return id.AsHash32().ShortString()
 }
 
+func (id BlockID) Field() log.Field { return log.String("block_id", util.Bytes2Hex(id[:])) }
+
 func (id BlockID) Compare(i BlockID) bool {
 	return bytes.Compare(id.ToBytes(), i.ToBytes()) < 0
 }
@@ -31,6 +33,8 @@ func (l LayerID) Add(layers uint16) LayerID {
 func (l LayerID) Uint64() uint64 {
 	return uint64(l)
 }
+
+func (l LayerID) Field() log.Field { return log.Uint64("layer_id", uint64(l)) }
 
 //todo: choose which type is VRF
 type Vrf string
@@ -55,6 +59,8 @@ func (id NodeId) ShortString() string {
 	}
 	return name
 }
+
+func (id NodeId) Field() log.Field { return log.String("node_id", id.Key) }
 
 type BlockHeader struct {
 	LayerIndex       LayerID

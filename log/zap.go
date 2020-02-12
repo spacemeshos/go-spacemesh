@@ -50,6 +50,8 @@ func (l Log) Panic(format string, args ...interface{}) {
 // Field is a log field holding a name and value
 type Field zap.Field
 
+func (f Field) Field() Field { return f }
+
 // String returns a string Field
 func String(name, val string) Field {
 	return Field(zap.String(name, val))
@@ -128,10 +130,14 @@ func Err(v error) Field {
 	return Field(zap.Error(v))
 }
 
-func unpack(fields ...Field) []zap.Field {
+type LoggableField interface {
+	Field() Field
+}
+
+func unpack(fields []LoggableField) []zap.Field {
 	flds := make([]zap.Field, len(fields))
-	for f := range fields {
-		flds[f] = zap.Field(fields[f])
+	for i, f := range fields {
+		flds[i] = zap.Field(f.Field())
 	}
 	return flds
 }
@@ -189,8 +195,8 @@ func (c *coreWithLevel) Check(e zapcore.Entry, ce *zapcore.CheckedEntry) *zapcor
 	return ce.AddCore(e, c.Core)
 }
 
-func (l Log) WithFields(fields ...Field) Log {
-	lgr := l.logger.With(unpack(fields...)...).WithOptions(AddDynamicLevel(l.lvl))
+func (l Log) WithFields(fields ...LoggableField) Log {
+	lgr := l.logger.With(unpack(fields)...).WithOptions(AddDynamicLevel(l.lvl))
 	return Log{
 		logger: lgr,
 		sugar:  lgr.Sugar(),
@@ -201,7 +207,7 @@ func (l Log) WithFields(fields ...Field) Log {
 const event_key = "event"
 
 func (l Log) Event() fieldLogger {
-	return fieldLogger{l: l.logger.With(unpack(Bool(event_key, true))...)}
+	return fieldLogger{l: l.logger.With(zap.Field(Bool(event_key, true)))}
 }
 
 func EnableLevelOption(enabler zapcore.LevelEnabler) zap.Option {
@@ -225,21 +231,21 @@ func (l Log) WithOptions(opts ...zap.Option) Log {
 }
 
 // Info prints message with fields
-func (fl fieldLogger) Info(msg string, fields ...Field) {
-	fl.l.Info(msg, unpack(fields...)...)
+func (fl fieldLogger) Info(msg string, fields ...LoggableField) {
+	fl.l.Info(msg, unpack(fields)...)
 }
 
 // Debug prints message with fields
-func (fl fieldLogger) Debug(msg string, fields ...Field) {
-	fl.l.Debug(msg, unpack(fields...)...)
+func (fl fieldLogger) Debug(msg string, fields ...LoggableField) {
+	fl.l.Debug(msg, unpack(fields)...)
 }
 
 // Error prints message with fields
-func (fl fieldLogger) Error(msg string, fields ...Field) {
-	fl.l.Error(msg, unpack(fields...)...)
+func (fl fieldLogger) Error(msg string, fields ...LoggableField) {
+	fl.l.Error(msg, unpack(fields)...)
 }
 
 // Warning prints message with fields
-func (fl fieldLogger) Warning(msg string, fields ...Field) {
-	fl.l.Warn(msg, unpack(fields...)...)
+func (fl fieldLogger) Warning(msg string, fields ...LoggableField) {
+	fl.l.Warn(msg, unpack(fields)...)
 }
