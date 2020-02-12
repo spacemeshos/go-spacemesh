@@ -18,6 +18,10 @@ func (id BlockID) Compare(i BlockID) bool {
 	return bytes.Compare(id.ToBytes(), i.ToBytes()) < 0
 }
 
+func (id BlockID) AsHash32() Hash32 {
+	return Hash20(id).ToHash32()
+}
+
 type LayerID uint64
 
 func (l LayerID) GetEpoch(layersPerEpoch uint16) EpochId {
@@ -56,6 +60,17 @@ func (id NodeId) ShortString() string {
 	return name
 }
 
+type Signed interface {
+	Sig() []byte
+	Bytes() []byte
+	Data() interface{}
+}
+
+type BlockEligibilityProof struct {
+	J   uint32
+	Sig []byte
+}
+
 type BlockHeader struct {
 	LayerIndex       LayerID
 	ATXID            AtxId
@@ -67,16 +82,18 @@ type BlockHeader struct {
 	ViewEdges        []BlockID
 }
 
-type Signed interface {
-	Sig() []byte
-	Bytes() []byte
-	Data() interface{}
+func (b BlockHeader) Layer() LayerID {
+	return b.LayerIndex
 }
 
-type Block struct {
-	MiniBlock
-	id        BlockID //important keep this private
-	Signature []byte
+func (b *BlockHeader) AddVote(id BlockID) {
+	//todo: do this in a sorted manner
+	b.BlockVotes = append(b.BlockVotes, id)
+}
+
+func (b *BlockHeader) AddView(id BlockID) {
+	//todo: do this in a sorted manner
+	b.ViewEdges = append(b.ViewEdges, id)
 }
 
 type MiniBlock struct {
@@ -85,29 +102,26 @@ type MiniBlock struct {
 	AtxIds []AtxId
 }
 
-func (id BlockID) AsHash32() Hash32 {
-	return Hash20(id).ToHash32()
+type Block struct {
+	MiniBlock
+	id        BlockID //important keep this private
+	Signature []byte
 }
 
-func (t *Block) Sig() []byte {
-	return t.Signature
+func (b *Block) Sig() []byte {
+	return b.Signature
 }
 
-func (t *Block) Data() interface{} {
-	return &t.MiniBlock
+func (b *Block) Data() interface{} {
+	return &b.MiniBlock
 }
 
-func (t *Block) Bytes() []byte {
-	bytes, err := InterfaceToBytes(t.MiniBlock)
+func (b *Block) Bytes() []byte {
+	blkBytes, err := InterfaceToBytes(b.MiniBlock)
 	if err != nil {
 		log.Panic(fmt.Sprintf("could not extract block bytes, %v", err))
 	}
-	return bytes
-}
-
-type BlockEligibilityProof struct {
-	J   uint32
-	Sig []byte
+	return blkBytes
 }
 
 func (b *Block) Id() BlockID {
@@ -131,30 +145,24 @@ func (b Block) ShortString() string {
 	return b.id.AsHash32().ShortString()
 }
 
-func (b BlockHeader) Layer() LayerID {
-	return b.LayerIndex
-}
-
-func (b *BlockHeader) AddVote(id BlockID) {
-	//todo: do this in a sorted manner
-	b.BlockVotes = append(b.BlockVotes, id)
-}
-
-func (b *BlockHeader) AddView(id BlockID) {
-	//todo: do this in a sorted manner
-	b.ViewEdges = append(b.ViewEdges, id)
-}
-
 func (b *Block) Compare(bl *Block) (bool, error) {
-	bbytes, err := InterfaceToBytes(*b)
+	bBytes, err := InterfaceToBytes(*b)
 	if err != nil {
 		return false, err
 	}
-	blbytes, err := InterfaceToBytes(*bl)
+	blBytes, err := InterfaceToBytes(*bl)
 	if err != nil {
 		return false, err
 	}
-	return bytes.Equal(bbytes, blbytes), nil
+	return bytes.Equal(bBytes, blBytes), nil
+}
+
+func BlockIds(blocks []*Block) []BlockID {
+	ids := make([]BlockID, 0, len(blocks))
+	for _, block := range blocks {
+		ids = append(ids, block.Id())
+	}
+	return ids
 }
 
 type Layer struct {
@@ -176,14 +184,6 @@ func (l *Layer) Blocks() []*Block {
 
 func (l *Layer) Hash() Hash32 {
 	return CalcBlocksHash32(BlockIds(l.blocks), nil)
-}
-
-func BlockIds(blocks []*Block) []BlockID {
-	ids := make([]BlockID, 0, len(blocks))
-	for _, block := range blocks {
-		ids = append(ids, block.Id())
-	}
-	return ids
 }
 
 func (l *Layer) AddBlock(block *Block) {
@@ -211,7 +211,7 @@ func NewExistingBlock(layerIndex LayerID, data []byte) *Block {
 			BlockHeader: BlockHeader{
 				BlockVotes: make([]BlockID, 0, 10),
 				ViewEdges:  make([]BlockID, 0, 10),
-				LayerIndex: LayerID(layerIndex),
+				LayerIndex: layerIndex,
 				Data:       data},
 		}}
 
