@@ -28,11 +28,12 @@ var LATEST = []byte("latest")
 var LAYERHASH = []byte("layer hash")
 var PROCESSED = []byte("proccessed")
 var TORTOISE = []byte("tortoise")
-var PBASE = []byte("pbase")
+var VERIFIED = []byte("verified") //refers to layers we pushed into the state
 
 type MeshValidator interface {
 	HandleIncomingLayer(layer *types.Layer) (types.LayerID, types.LayerID)
 	LatestComplete() types.LayerID
+	PersistTortoise() error
 	HandleLateBlock(bl *types.Block) (types.LayerID, types.LayerID)
 }
 
@@ -124,7 +125,7 @@ func NewRecoveredMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh MeshVal
 		logger.With().Error("could not recover latest layer hash", log.Err(err))
 	}
 
-	verified, err := db.general.Get(PBASE)
+	verified, err := db.general.Get(VERIFIED)
 	if err != nil {
 		logger.Panic("could not recover latest verified layer: %v", err)
 	}
@@ -137,13 +138,15 @@ func NewRecoveredMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh MeshVal
 	// in case we load a state that was not fully played
 	if msh.LatestLayerInState()+1 < msh.MeshValidator.LatestComplete() {
 		// todo: add test for this case, or add random kill test on node
+		logger.Info("playing layers %v to %v to state", msh.LatestLayerInState()+1, msh.MeshValidator.LatestComplete())
 		msh.pushLayersToState(msh.LatestLayerInState()+1, msh.MeshValidator.LatestComplete())
 	}
 
-	msh.With().Info("recovered mesh from disk",
+	msh.With().Info("recovered mesh from disc",
 		log.Uint64("latest_layer", msh.latestLayer.Uint64()),
 		log.Uint64("validated_layer", msh.processedLayer.Uint64()),
-		log.String("layer_hash", util.Bytes2Hex(msh.layerHash)))
+		log.String("layer_hash", util.Bytes2Hex(msh.layerHash)),
+		log.String("root_hash", pr.GetStateRoot().String()))
 
 	return msh
 }
@@ -199,7 +202,9 @@ func (m *Mesh) HandleLateBlock(b *types.Block) {
 	m.Info("Validate late block %s", b.Id())
 	oldPbase, newPbase := m.MeshValidator.HandleLateBlock(b)
 	m.pushLayersToState(oldPbase, newPbase)
-
+	if err := m.PersistTortoise(); err != nil {
+		m.Error("could not persist Tortoise on late block %s from layer index %d", b.Id(), b.Layer())
+	}
 }
 
 func (m *Mesh) ValidateLayer(lyr *types.Layer) {
@@ -207,6 +212,9 @@ func (m *Mesh) ValidateLayer(lyr *types.Layer) {
 	oldPbase, newPbase := m.HandleIncomingLayer(lyr)
 	m.lvMutex.Lock()
 	m.processedLayer = lyr.Index()
+	if err := m.PersistTortoise(); err != nil {
+		m.Error("could not persist Tortoise layer index %d", lyr.Index())
+	}
 	if err := m.general.Put(PROCESSED, lyr.Index().ToBytes()); err != nil {
 		m.Error("could not persist validated layer index %d", lyr.Index())
 	}
@@ -235,7 +243,7 @@ func (m *Mesh) pushLayersToState(oldPbase types.LayerID, newPbase types.LayerID)
 func (m *Mesh) setLatestLayerInState(lyr types.LayerID) {
 	// update validated layer only after applying transactions since loading of state depends on processedLayer param.
 	m.pMutex.Lock()
-	if err := m.general.Put(PBASE, lyr.ToBytes()); err != nil {
+	if err := m.general.Put(VERIFIED, lyr.ToBytes()); err != nil {
 		m.Panic("could not persist validated layer index %d", lyr)
 	}
 	m.latestLayerInState = lyr
@@ -422,7 +430,7 @@ func (m *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.Transaction, atxs 
 	m.invalidateFromPools(&blk.MiniBlock)
 
 	events.Publish(events.NewBlock{Id: blk.Id().String(), Atx: blk.ATXID.ShortString(), Layer: uint64(blk.LayerIndex)})
-	m.With().Info("added block to database ", log.BlockId(blk.Id().String()))
+	m.With().Info("added block to database ", log.BlockId(blk.Id().String()), log.LayerId(uint64(blk.LayerIndex)))
 	return nil
 }
 
@@ -554,10 +562,10 @@ func (m *Mesh) AccumulateRewards(l *types.Layer, params Config) {
 
 	numBlocks := big.NewInt(int64(len(ids)))
 
-	blockTotalReward := calculateActualRewards(totalReward, numBlocks)
+	blockTotalReward := calculateActualRewards(l.Index(), totalReward, numBlocks)
 	m.ApplyRewards(l.Index(), ids, blockTotalReward)
 
-	blockLayerReward := calculateActualRewards(layerReward, numBlocks)
+	blockLayerReward := calculateActualRewards(l.Index(), layerReward, numBlocks)
 	err := m.writeTransactionRewards(l.Index(), ids, blockTotalReward, blockLayerReward)
 	if err != nil {
 		m.Error("cannot write reward to db")

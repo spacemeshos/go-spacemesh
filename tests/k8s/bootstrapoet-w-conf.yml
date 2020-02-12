@@ -32,7 +32,7 @@ spec:
       - name: poet
         image: spacemeshos/poet:develop
         imagePullPolicy: Always
-        args: ['--rpclisten', '0.0.0.0:50002', '--restlisten', '0.0.0.0:80', "--n", "19", "--core.n", "19"]
+        args: ['--rpclisten', '0.0.0.0:50002', '--restlisten', '0.0.0.0:80', "--n", "19"]
         resources:
           requests:
             memory: "512M"
@@ -41,6 +41,6 @@ spec:
             memory: "2048M"
             cpu: "2"
         ports:
-          - containerPort: 50002
+          - containerPort: 80
       nodeSelector:
         role: tests

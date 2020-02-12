@@ -66,12 +66,12 @@ func (suite *AppTestSuite) TearDownTest() {
 }
 
 func Test_PoETHarnessSanity(t *testing.T) {
-	h, err := NewRPCPoetHarnessClient()
+	h, err := activation.NewHTTPPoetHarness(true)
 	require.NoError(t, err)
 	require.NotNil(t, h)
 }
 
-func (suite *AppTestSuite) initMultipleInstances(cfg *config.Config, rolacle *eligibility.FixedRolacle, rng *amcl.RAND, numOfInstances int, storeFormat string, genesisTime string, poetClient *activation.RPCPoetClient, fastHare bool, clock TickProvider, network Network) {
+func (suite *AppTestSuite) initMultipleInstances(cfg *config.Config, rolacle *eligibility.FixedRolacle, rng *amcl.RAND, numOfInstances int, storeFormat string, genesisTime string, poetClient *activation.HTTPPoetClient, fastHare bool, clock TickProvider, network Network) {
 	name := 'a'
 	for i := 0; i < numOfInstances; i++ {
 		dbStorepath := storeFormat + string(name)
@@ -95,11 +95,11 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	path := "../tmp/test/state_" + time.Now().String()
 
 	genesisTime := time.Now().Add(20 * time.Second).Format(time.RFC3339)
-	poetClient, err := NewRPCPoetHarnessClient()
+	poetHarness, err := activation.NewHTTPPoetHarness(false)
 	if err != nil {
 		log.Panic("failed creating poet client harness: %v", err)
 	}
-	suite.poetCleanup = poetClient.Teardown
+	suite.poetCleanup = poetHarness.Teardown
 
 	rolacle := eligibility.New()
 	rng := BLS381.DefaultSeed()
@@ -110,14 +110,14 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	}
 	ld := time.Duration(20) * time.Second
 	clock := timesync.NewClock(timesync.RealClock{}, ld, gTime, log.NewDefault("clock"))
-	suite.initMultipleInstances(cfg, rolacle, rng, 5, path, genesisTime, poetClient, false, clock, net)
+	suite.initMultipleInstances(cfg, rolacle, rng, 5, path, genesisTime, poetHarness.HTTPPoetClient, false, clock, net)
 	for _, a := range suite.apps {
 		a.startServices()
 	}
 
 	ActivateGrpcServer(suite.apps[0])
 
-	if err := poetClient.Start("127.0.0.1:9091"); err != nil {
+	if err := poetHarness.Start([]string{"127.0.0.1:9091"}); err != nil {
 		log.Panic("failed to start poet server: %v", err)
 	}
 
@@ -141,11 +141,14 @@ loop:
 		}
 	}
 	suite.validateBlocksAndATXs(types.LayerID(numberOfEpochs*suite.apps[0].Config.LayersPerEpoch) - 1)
+	oldRoot := suite.apps[0].state.GetStateRoot()
 	GracefulShutdown(suite.apps)
 
 	// this tests loading of pervious state, mabe it's not the best place to put this here...
-	smApp, err := InitSingleInstance(*cfg, 0, genesisTime, rng, path+"a", rolacle, poetClient, false, clock, net)
+	smApp, err := InitSingleInstance(*cfg, 0, genesisTime, rng, path+"a", rolacle, poetHarness.HTTPPoetClient, false, clock, net)
 	assert.NoError(suite.T(), err)
+	//test that loaded root equals
+	assert.Equal(suite.T(), oldRoot, smApp.state.GetStateRoot())
 	// start and stop and test for no panics
 	smApp.startServices()
 	smApp.stopServices()
@@ -501,9 +504,9 @@ func TestShutdown(t *testing.T) {
 	edSgn := signing.NewEdSigner()
 	pub := edSgn.PublicKey()
 
-	poetClient, err := NewRPCPoetHarnessClient()
+	poetHarness, err := activation.NewHTTPPoetHarness(false)
 	if err != nil {
-		log.Panic("failed creating poet client harness: %v", err)
+		log.Panic("failed creating poet harness: %v", err)
 	}
 
 	vrfPriv, vrfPub := BLS381.GenKeyPair(BLS381.DefaultSeed())
@@ -522,15 +525,14 @@ func TestShutdown(t *testing.T) {
 	gTime := genesisTime
 	ld := time.Duration(20) * time.Second
 	clock := timesync.NewClock(timesync.RealClock{}, ld, gTime, log.NewDefault("clock"))
-	err = smApp.initServices(nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(smApp.Config.LayerAvgSize), postClient, poetClient, vrfSigner, uint16(smApp.Config.LayersPerEpoch), clock)
+	err = smApp.initServices(nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(smApp.Config.LayerAvgSize), postClient, poetHarness.HTTPPoetClient, vrfSigner, uint16(smApp.Config.LayersPerEpoch), clock)
 
 	r.NoError(err)
-	smApp.setupGenesis()
 
 	smApp.startServices()
 	ActivateGrpcServer(smApp)
 
-	poetClient.Teardown(true)
+	poetHarness.Teardown(true)
 	smApp.stopServices()
 
 	time.Sleep(5 * time.Second)

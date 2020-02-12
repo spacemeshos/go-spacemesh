@@ -45,12 +45,14 @@ func NewTransactionProcessor(allStates, processorDb database.Database, projector
 	if err != nil {
 		log.Panic("cannot load state db, %v", err)
 	}
+	root := stateDb.IntermediateRoot(false)
+	log.Info("started processor with state root %x", root)
 	return &TransactionProcessor{
 		Log:          logger,
 		StateDB:      stateDb,
 		processorDb:  processorDb,
 		currentLayer: 0,
-		rootHash:     types.Hash32{},
+		rootHash:     root,
 		stateQueue:   list.List{},
 		projector:    projector,
 		trie:         stateDb.TrieDB(),
@@ -120,7 +122,8 @@ func (tp *TransactionProcessor) ValidateNonceAndBalance(tx *types.Transaction) e
 // ApplyTransaction receives a batch of transaction to apply on state. Returns the number of transaction that failed to apply.
 func (tp *TransactionProcessor) ApplyTransactions(layer types.LayerID, txs []*types.Transaction) (int, error) {
 	if len(txs) == 0 {
-		return 0, nil
+		err := tp.addStateToHistory(layer, tp.GetStateRoot())
+		return 0, err
 	}
 
 	tp.mu.Lock()

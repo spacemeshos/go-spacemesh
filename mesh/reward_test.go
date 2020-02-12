@@ -215,6 +215,10 @@ func (m *meshValidatorBatchMock) HandleLateBlock(bl *types.Block) (types.LayerID
 	return bl.Layer() - 1, bl.Layer()
 }
 
+func (m *meshValidatorBatchMock) PersistTortoise() error {
+	return nil
+}
+
 func TestMesh_AccumulateRewards(t *testing.T) {
 	numOfLayers := 10
 	numOfBlocks := 10
@@ -262,6 +266,6 @@ func TestMesh_AccumulateRewards(t *testing.T) {
 }
 
 func TestMesh_calcRewards(t *testing.T) {
-	reward := calculateActualRewards(big.NewInt(10000), big.NewInt(10))
+	reward := calculateActualRewards(1, big.NewInt(10000), big.NewInt(10))
 	assert.Equal(t, int64(1000), reward.Int64())
 }

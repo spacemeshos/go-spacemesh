@@ -22,10 +22,15 @@ type WorkerInfra interface {
 	log.Logger
 }
 
+type Peers interface {
+	GetPeers() []p2p.Peer
+	Close()
+}
+
 type workerInfra struct {
 	RequestTimeout time.Duration
 	*server.MessageServer
-	p2p.Peers
+	Peers
 	exit chan struct{}
 }
 

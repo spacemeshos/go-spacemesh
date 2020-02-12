@@ -33,6 +33,8 @@ const (
 	Remote
 )
 
+const MessageQueueSize = 50
+
 // Connection is an interface stating the API of all secured connections in the system
 type Connection interface {
 	fmt.Stringer
@@ -55,21 +57,23 @@ type Connection interface {
 // A network connection supporting full-duplex messaging
 type FormattedConnection struct {
 	// metadata for logging / debugging
-	logger     log.Log
-	id         string // uuid for logging
-	created    time.Time
-	remotePub  p2pcrypto.PublicKey
-	remoteAddr net.Addr
-	networker  networker // network context
-	session    NetworkSession
-	deadline   time.Duration
-	timeout    time.Duration
-	r          formattedReader
-	wmtx       sync.Mutex
-	w          formattedWriter
-	closed     bool
-	deadliner  deadliner
-	close      io.Closer
+	logger      log.Log
+	id          string // uuid for logging
+	created     time.Time
+	remotePub   p2pcrypto.PublicKey
+	remoteAddr  net.Addr
+	networker   networker // network context
+	session     NetworkSession
+	deadline    time.Duration
+	timeout     time.Duration
+	r           formattedReader
+	wmtx        sync.Mutex
+	w           formattedWriter
+	closed      bool
+	deadliner   deadliner
+	messages    chan []byte
+	stopSending chan struct{}
+	close       io.Closer
 
 	msgSizeLimit int
 }
@@ -119,9 +123,11 @@ func newConnection(conn readWriteCloseAddresser, netw networker,
 		deadliner:    conn,
 		networker:    netw,
 		session:      session,
+		messages:     make(chan []byte, MessageQueueSize),
+		stopSending:  make(chan struct{}),
 		msgSizeLimit: msgSizeLimit,
 	}
-
+	go connection.sendListener()
 	return connection
 }
 
@@ -192,10 +198,37 @@ func (c *FormattedConnection) publish(message []byte) {
 //	return cancel
 //}
 
+func (c *FormattedConnection) sendListener() {
+	for {
+		select {
+		case buf := <-c.messages:
+			//todo: we are hiding the error here...
+			err := c.SendSock(buf)
+			if err != nil {
+				log.Error("cannot send message to peer %v", err)
+			}
+		case <-c.stopSending:
+			return
+
+		}
+	}
+}
+
 func (c *FormattedConnection) Send(m []byte) error {
 	c.wmtx.Lock()
-	defer c.wmtx.Unlock()
 	if c.closed {
+		c.wmtx.Unlock()
+		return fmt.Errorf("connection was closed")
+	}
+	c.wmtx.Unlock()
+	c.messages <- m
+	return nil
+}
+
+func (c *FormattedConnection) SendSock(m []byte) error {
+	c.wmtx.Lock()
+	if c.closed {
+		c.wmtx.Unlock()
 		return fmt.Errorf("connection was closed")
 	}
 
@@ -203,11 +236,13 @@ func (c *FormattedConnection) Send(m []byte) error {
 	_, err := c.w.WriteRecord(m)
 	if err != nil {
 		cerr := c.closeUnlocked()
+		c.wmtx.Unlock()
 		if cerr != ErrAlreadyClosed {
 			c.networker.publishClosingConnection(ConnectionWithErr{c, err}) // todo: reconsider
 		}
 		return err
 	}
+	c.wmtx.Unlock()
 	metrics.PeerRecv.With(metrics.PeerIdLabel, c.remotePub.String()).Add(float64(len(m)))
 	return nil
 }
@@ -229,9 +264,13 @@ func (c *FormattedConnection) closeUnlocked() error {
 // Close closes the connection (implements io.Closer). It is go safe.
 func (c *FormattedConnection) Close() error {
 	c.wmtx.Lock()
+	defer c.wmtx.Unlock()
 	err := c.closeUnlocked()
-	c.wmtx.Unlock()
-	return err
+	if err != nil {
+		return err
+	}
+	close(c.stopSending)
+	return nil
 }
 
 // Closed returns whether the connection is closed

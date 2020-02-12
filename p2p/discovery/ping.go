@@ -21,7 +21,6 @@ func (p *protocol) newPingRequestHandler() func(msg server.Message) []byte {
 		err := types.BytesToInterface(msg.Bytes(), pinged)
 		if err != nil {
 			plogger.Error("failed to deserialize ping message err=", err)
-			panic("WTF")
 			return nil
 		}
 
