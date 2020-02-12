@@ -86,7 +86,7 @@ func (bl *BlockListener) handleBlock(data service.GossipMessage) {
 	}
 
 	//set the block id when received
-	blk.CalcAndSetId()
+	blk.Initialize()
 
 	bl.Log.With().Info("block received",
 		log.BlockId(blk.Id().String()),

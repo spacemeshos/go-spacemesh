@@ -5,11 +5,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/amcl"
 	"github.com/spacemeshos/go-spacemesh/amcl/BLS381"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
+	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/require"
 	"testing"
@@ -201,10 +201,18 @@ func buildSet() []types.BlockID {
 	s := make([]types.BlockID, 200, 200)
 
 	for i := uint64(0); i < 200; i++ {
-		s = append(s, types.NewExistingBlock(1, util.Uint64ToBytes(i)).Id())
+		s = append(s, newRandBlockId())
 	}
 
 	return s
+}
+
+func newRandBlockId() (id types.BlockID) {
+	_, err := rand.Read(id[:])
+	if err != nil {
+		panic(err)
+	}
+	return id
 }
 
 type mockBlockProvider struct {

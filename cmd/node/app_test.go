@@ -463,11 +463,17 @@ func (suite *AppTestSuite) validateLastATXActiveSetSize(app *SpacemeshApp) {
 }
 
 func TestAppTestSuite(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
 	//defer leaktest.Check(t)()
 	suite.Run(t, new(AppTestSuite))
 }
 
 func TestShutdown(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
 
 	// make sure previous goroutines has stopped
 	time.Sleep(3 * time.Second)

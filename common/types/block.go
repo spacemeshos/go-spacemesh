@@ -3,8 +3,10 @@ package types
 import (
 	"bytes"
 	"fmt"
+	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"sort"
 )
 
@@ -104,7 +106,9 @@ type MiniBlock struct {
 
 type Block struct {
 	MiniBlock
-	id        BlockID //important keep this private
+	// keep id and minerId private to prevent them from being serialized
+	id        BlockID            // ⚠️ keep private
+	minerId   *signing.PublicKey // ⚠️ keep private
 	Signature []byte
 }
 
@@ -129,12 +133,18 @@ func (b *Block) Id() BlockID {
 }
 
 //should be used after all changed to a block are done
-func (b *Block) CalcAndSetId() {
+func (b *Block) Initialize() {
 	blockBytes, err := InterfaceToBytes(b.MiniBlock)
 	if err != nil {
-		panic("failed to marshal transaction: " + err.Error())
+		panic("failed to marshal block: " + err.Error())
 	}
 	b.id = BlockID(CalcHash32(blockBytes).ToHash20())
+
+	pubkey, err := ed25519.ExtractPublicKey(blockBytes, b.Sig())
+	if err != nil {
+		panic("failed to extract public key: " + err.Error())
+	}
+	b.minerId = signing.NewPublicKey(pubkey)
 }
 
 func (b Block) Hash32() Hash32 {
@@ -155,6 +165,10 @@ func (b *Block) Compare(bl *Block) (bool, error) {
 		return false, err
 	}
 	return bytes.Equal(bBytes, blBytes), nil
+}
+
+func (b *Block) MinerId() *signing.PublicKey {
+	return b.minerId
 }
 
 func BlockIds(blocks []*Block) []BlockID {
@@ -214,8 +228,8 @@ func NewExistingBlock(layerIndex LayerID, data []byte) *Block {
 				LayerIndex: layerIndex,
 				Data:       data},
 		}}
-
-	b.CalcAndSetId()
+	b.Signature = signing.NewEdSigner().Sign(b.Bytes())
+	b.Initialize()
 	return &b
 }
 
