@@ -81,7 +81,7 @@ const (
 // peers on the bitcoin network.
 type addrBook struct {
 	logger log.Log
-	mtx    sync.Mutex
+	mtx    sync.RWMutex
 
 	rand *rand.Rand
 	key  [32]byte
@@ -107,9 +107,8 @@ type addrBook struct {
 // AddOurAddress one of our addresses.
 func (a *addrBook) AddLocalAddress(addr *node.NodeInfo) {
 	a.mtx.Lock()
-	defer a.mtx.Unlock()
-
 	a.localAddresses = append(a.localAddresses, addr)
+	a.mtx.Unlock()
 }
 
 func (a *addrBook) isLocalAddressUnlocked(addr *node.NodeInfo) bool {
@@ -119,8 +118,10 @@ func (a *addrBook) isLocalAddressUnlocked(addr *node.NodeInfo) bool {
 			return true
 		}
 
-		if bytes.Equal(local.IP, addr.IP) && (local.ProtocolPort == addr.ProtocolPort || local.DiscoveryPort == addr.DiscoveryPort) {
-			return true
+		if local.ProtocolPort != 0 && local.DiscoveryPort != 0 {
+			if bytes.Equal(local.IP, addr.IP) && (local.ProtocolPort == addr.ProtocolPort && local.DiscoveryPort == addr.DiscoveryPort) {
+				return true
+			}
 		}
 	}
 
@@ -129,10 +130,10 @@ func (a *addrBook) isLocalAddressUnlocked(addr *node.NodeInfo) bool {
 
 // OurAddress returns true if it is our address.
 func (a *addrBook) IsLocalAddress(addr *node.NodeInfo) bool {
-	a.mtx.Lock()
-	defer a.mtx.Unlock()
-
-	return a.isLocalAddressUnlocked(addr)
+	a.mtx.RLock()
+	ok := a.isLocalAddressUnlocked(addr)
+	a.mtx.RUnlock()
+	return ok
 }
 
 // updateAddress is a helper function to either update an address already known

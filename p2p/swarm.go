@@ -339,7 +339,10 @@ func (s *swarm) sendMessageImpl(peerPubKey p2pcrypto.PublicKey, protocol string,
 	var err error
 	var conn net.Connection
 
-	s.discover.IsLocalAddress(&node.NodeInfo{ID: peerPubKey.Array()})
+	if s.discover.IsLocalAddress(&node.NodeInfo{ID: peerPubKey.Array()}) {
+		return errors.New("can't sent message to self")
+		//TODO: if this is our neighbor it should be removed right now.
+	}
 
 	conn, err = s.cPool.GetConnectionIfExists(peerPubKey)
 
@@ -349,8 +352,8 @@ func (s *swarm) sendMessageImpl(peerPubKey p2pcrypto.PublicKey, protocol string,
 
 	session := conn.Session()
 	if session == nil {
-		s.logger.Warning("failed to send message to %v, no valid session. err: %v", conn.RemotePublicKey().String(), err)
-		return err
+		s.logger.Warning("failed to send message to %v, no valid session.", conn.RemotePublicKey().String())
+		return ErrNoSession
 	}
 
 	protomessage := &ProtocolMessage{
@@ -372,6 +375,10 @@ func (s *swarm) sendMessageImpl(peerPubKey p2pcrypto.PublicKey, protocol string,
 	}
 
 	final := session.SealMessage(data)
+
+	if final == nil {
+		return errors.New("encryption failed")
+	}
 
 	err = conn.Send(final)
 
