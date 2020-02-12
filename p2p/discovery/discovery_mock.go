@@ -17,6 +17,8 @@ type MockPeerStore struct {
 	lookupRes       *node.NodeInfo
 	lookupErr       error
 
+	IsLocalAddressFunc func(info *node.NodeInfo) bool
+
 	RemoveFunc  func(key p2pcrypto.PublicKey)
 	GoodFunc    func(key p2pcrypto.PublicKey)
 	AttemptFunc func(key p2pcrypto.PublicKey)
@@ -26,6 +28,13 @@ func (m *MockPeerStore) Remove(key p2pcrypto.PublicKey) {
 	if m.RemoveFunc != nil {
 		m.RemoveFunc(key)
 	}
+}
+
+func (m *MockPeerStore) IsLocalAddress(info *node.NodeInfo) bool {
+	if m.IsLocalAddressFunc != nil {
+		return m.IsLocalAddressFunc(info)
+	}
+	return false
 }
 
 // SetUpdate sets the function to run on an issued update
@@ -128,10 +137,26 @@ type mockAddrBook struct {
 
 	GoodFunc    func(key p2pcrypto.PublicKey)
 	AttemptFunc func(key p2pcrypto.PublicKey)
+
+	IsLocalAddressFunc  func(info *node.NodeInfo) bool
+	AddLocalAddressFunc func(info *node.NodeInfo)
 }
 
 func (m *mockAddrBook) Stop() {
 
+}
+
+func (m *mockAddrBook) AddLocalAddress(info *node.NodeInfo) {
+	if m.AddLocalAddressFunc != nil {
+		m.AddLocalAddressFunc(info)
+	}
+}
+
+func (m *mockAddrBook) IsLocalAddress(info *node.NodeInfo) bool {
+	if m.IsLocalAddressFunc != nil {
+		return m.IsLocalAddressFunc(info)
+	}
+	return false
 }
 
 func (m *mockAddrBook) RemoveAddress(key p2pcrypto.PublicKey) {

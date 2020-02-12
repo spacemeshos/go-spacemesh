@@ -26,6 +26,11 @@ const (
 // ErrBootAbort is returned when when bootstrap is canceled by context cancel
 var ErrBootAbort = errors.New("bootstrap canceled by signal")
 
+type pingerGetAddresser interface {
+	Ping(p p2pcrypto.PublicKey) error
+	GetAddresses(server p2pcrypto.PublicKey) ([]*node.NodeInfo, error)
+}
+
 // refresher is used to bootstrap and requestAddresses peers in the addrbook
 type refresher struct {
 	logger       log.Log
@@ -34,13 +39,13 @@ type refresher struct {
 	book      addressBook
 	bootNodes []*node.NodeInfo
 
-	disc        Protocol
+	disc        pingerGetAddresser
 	lastQueries map[p2pcrypto.PublicKey]time.Time
 
 	quit chan struct{}
 }
 
-func newRefresher(local p2pcrypto.PublicKey, book addressBook, disc Protocol, bootnodes []*node.NodeInfo, logger log.Log) *refresher {
+func newRefresher(local p2pcrypto.PublicKey, book addressBook, disc pingerGetAddresser, bootnodes []*node.NodeInfo, logger log.Log) *refresher {
 	//todo: trigger requestAddresses every X with random nodes
 	return &refresher{
 		logger:       logger,
@@ -131,7 +136,7 @@ type queryResult struct {
 }
 
 // pingThenGetAddresses is sending a ping, then find node, then return results on given chan.
-func pingThenGetAddresses(p Protocol, addr *node.NodeInfo, qr chan queryResult) {
+func pingThenGetAddresses(p pingerGetAddresser, addr *node.NodeInfo, qr chan queryResult) {
 	// TODO: check whether we pinged recently and maybe skip pinging
 	err := p.Ping(addr.PublicKey())
 

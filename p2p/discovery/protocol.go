@@ -64,3 +64,7 @@ func NewDiscoveryProtocol(local p2pcrypto.PublicKey, rt protocolRoutingTable, sv
 	d.msgServer.RegisterMsgHandler(GET_ADDRESSES, d.newGetAddressesRequestHandler())
 	return d
 }
+
+func (p *protocol) Close() {
+	p.msgServer.Close()
+}
