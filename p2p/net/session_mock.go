@@ -1,16 +1,16 @@
 package net
 
 import (
+	"errors"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 )
 
 // SessionMock is a wonderful fluffy teddybear
 type SessionMock struct {
-	id        p2pcrypto.PublicKey
-	decResult []byte
-	decError  error
-	encResult []byte
-	encError  error
+	id p2pcrypto.PublicKey
+
+	SealMessageFunc func(message []byte) []byte
+	OpenMessageFunc func(boxedMessage []byte) ([]byte, error)
 
 	pubkey p2pcrypto.PublicKey
 	keyM   []byte
@@ -27,26 +27,18 @@ func (sm SessionMock) ID() p2pcrypto.PublicKey {
 
 // Encrypt is this
 func (sm SessionMock) SealMessage(message []byte) []byte {
-	out := message
-	if sm.encResult != nil {
-		out = sm.encResult
+	if sm.SealMessageFunc != nil {
+		return sm.SealMessageFunc(message)
 	}
-	return out
+	return nil
 }
 
 // Decrypt is this
 func (sm SessionMock) OpenMessage(boxedMessage []byte) ([]byte, error) {
-	out := boxedMessage
-	if sm.decResult != nil {
-		out = sm.decResult
+	if sm.OpenMessageFunc != nil {
+		return sm.OpenMessageFunc(boxedMessage)
 	}
-	return out, sm.decError
-}
-
-// SetDecrypt is this
-func (sm *SessionMock) SetDecrypt(res []byte, err error) {
-	sm.decResult = res
-	sm.decError = err
+	return nil, errors.New("not impl")
 }
 
 var _ NetworkSession = (*SessionMock)(nil)

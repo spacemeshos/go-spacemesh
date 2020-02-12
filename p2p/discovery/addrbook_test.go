@@ -9,7 +9,7 @@ import (
 
 func testAddrBook(name string) *addrBook {
 	book := NewAddrBook(config.DefaultConfig().SwarmConfig, "", GetTestLogger(name))
-	book.localAddress = generateDiscNode()
+	book.localAddresses = append(book.localAddresses, generateDiscNode())
 	return book
 }
 
@@ -46,7 +46,7 @@ func TestGood(t *testing.T) {
 
 	addrs := generateDiscNodes(addrsToAdd)
 
-	n.AddAddresses(addrs, n.localAddress)
+	n.AddAddresses(addrs, n.localAddresses[0])
 	for _, addr := range addrs {
 		n.Good(addr.PublicKey())
 	}
@@ -72,7 +72,7 @@ func TestGetAddress(t *testing.T) {
 	n2 := generateDiscNode()
 
 	// Add a new address and get it
-	n.AddAddress(n2, n.localAddress)
+	n.AddAddress(n2, n.localAddresses[0])
 
 	ka := n.GetAddress()
 	if ka == nil {
@@ -108,7 +108,7 @@ func Test_Lookup(t *testing.T) {
 	require.Nil(t, c)
 
 	// Add a new address and get it
-	n.AddAddress(n2, n.localAddress)
+	n.AddAddress(n2, n.localAddresses[0])
 
 	ka := n.GetAddress()
 	if ka == nil {
@@ -118,9 +118,35 @@ func Test_Lookup(t *testing.T) {
 		t.Errorf("Wrong IP: got %v, want %v", ka.na.IP.String(), n2.IP.String())
 	}
 
-	n.AddAddresses(generateDiscNodes(100), n.localAddress)
+	n.AddAddresses(generateDiscNodes(100), n.localAddresses[0])
 
 	got, err := n.Lookup(n2.PublicKey())
 	require.NoError(t, err)
 	require.Equal(t, got, n2)
+}
+
+func Test_LocalAddreses(t *testing.T) {
+	n := testAddrBook(t.Name())
+
+	addr := n.localAddresses[0]
+	addr2 := generateDiscNode()
+	n.AddLocalAddress(addr2)
+
+	require.True(t, n.IsLocalAddress(addr2))
+	require.True(t, n.IsLocalAddress(addr))
+
+	n.AddAddress(addr2, addr)
+	n.AddAddress(addr, addr2)
+
+	_, err := n.Lookup(addr.PublicKey())
+	require.Error(t, err)
+	_, err = n.Lookup(addr2.PublicKey())
+	require.Error(t, err)
+
+	addr3 := generateDiscNode()
+	n.AddAddress(addr3, addr)
+	nd, err := n.Lookup(addr3.PublicKey())
+	require.NoError(t, err)
+	require.NotNil(t, nd)
+	require.Equal(t, nd.ID, addr3.ID)
 }

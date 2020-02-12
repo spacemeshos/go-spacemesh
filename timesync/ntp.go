@@ -4,6 +4,7 @@ package timesync
 import (
 	"encoding/binary"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"net"
 	"sort"
@@ -154,6 +155,7 @@ func ntpTimeDrift() (time.Duration, error) {
 			}
 			// Calculate drift with latency
 			drift := rt.UTC().Sub(rsp.Time().UTC().Add(lat / 2))
+			log.Info("ntp check from server %v, drift: %v, start_check: %v, latency: %v, rsp: %v", DefaultServers[rndsrv], drift, rt.UTC(), lat, rsp.Time().UTC())
 			resultsChan <- drift
 		}()
 	}
