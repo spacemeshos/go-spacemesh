@@ -15,6 +15,7 @@ var NilLogger Log
 type Log struct {
 	logger *zap.Logger
 	sugar  *zap.SugaredLogger
+	lvl    *zap.AtomicLevel
 }
 
 // Exported from Log basic logging options.
@@ -144,12 +145,22 @@ func (l Log) With() fieldLogger {
 	return fieldLogger{l.logger}
 }
 
-// LogWith returns a logger the given fields
-func (l Log) WithName(prefix string) Log {
-	lgr := l.logger.Named(fmt.Sprintf("%-13s", prefix))
+func (l Log) SetLevel(level *zap.AtomicLevel) Log {
+	lgr := l.logger.WithOptions(AddDynamicLevel(level))
 	return Log{
 		lgr,
 		lgr.Sugar(),
+		level,
+	}
+}
+
+// LogWith returns a logger the given fields
+func (l Log) WithName(prefix string) Log {
+	lgr := l.logger.Named(fmt.Sprintf("%-13s", prefix)).WithOptions(AddDynamicLevel(l.lvl))
+	return Log{
+		lgr,
+		lgr.Sugar(),
+		l.lvl,
 	}
 }
 
@@ -179,10 +190,11 @@ func (c *coreWithLevel) Check(e zapcore.Entry, ce *zapcore.CheckedEntry) *zapcor
 }
 
 func (l Log) WithFields(fields ...Field) Log {
-	lgr := l.logger.With(unpack(fields...)...)
+	lgr := l.logger.With(unpack(fields...)...).WithOptions(AddDynamicLevel(l.lvl))
 	return Log{
 		logger: lgr,
 		sugar:  lgr.Sugar(),
+		lvl:    l.lvl,
 	}
 }
 
@@ -208,6 +220,7 @@ func (l Log) WithOptions(opts ...zap.Option) Log {
 	return Log{
 		logger: lgr,
 		sugar:  lgr.Sugar(),
+		lvl:    l.lvl,
 	}
 }
 
