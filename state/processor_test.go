@@ -532,3 +532,39 @@ func TestTransactionProcessor_GetStateRoot(t *testing.T) {
 	actualRoot := proc.GetStateRoot()
 	r.Equal(expectedRoot, actualRoot)
 }
+
+func TestTransactionProcessor_ApplyTransactions(t *testing.T) {
+	lg := log.New("proc_logger", "", "")
+	db := database.NewMemDatabase()
+	projector := &ProjectorMock{}
+	processor := NewTransactionProcessor(db, db, projector, lg)
+
+	signerBuf := []byte("22222222222222222222222222222222")
+	signerBuf = append(signerBuf, []byte{
+		94, 33, 44, 9, 128, 228, 179, 159, 192, 151, 33, 19, 74, 160, 33, 9,
+		55, 78, 223, 210, 96, 192, 211, 208, 60, 181, 1, 200, 214, 84, 87, 169,
+	}...)
+	signer, err := signing.NewEdSignerFromBuffer(signerBuf)
+	assert.NoError(t, err)
+	obj1 := createAccount(processor, SignerToAddr(signer), 21, 0)
+	obj2 := createAccount(processor, toAddr([]byte{0x01, 02}), 1, 10)
+	createAccount(processor, toAddr([]byte{0x02}), 44, 0)
+	processor.Commit(false)
+
+	transactions := []*types.Transaction{
+		createTransaction(t, obj1.Nonce(), obj2.address, 1, 5, signer),
+	}
+
+	_, err = processor.ApplyTransactions(1, transactions)
+	assert.NoError(t, err)
+
+	_, err = processor.ApplyTransactions(2, []*types.Transaction{})
+	assert.NoError(t, err)
+
+	_, err = processor.ApplyTransactions(3, []*types.Transaction{})
+	assert.NoError(t, err)
+
+	_, err = processor.getLayerStateRoot(3)
+	assert.NoError(t, err)
+
+}
