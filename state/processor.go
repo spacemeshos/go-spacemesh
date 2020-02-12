@@ -122,7 +122,8 @@ func (tp *TransactionProcessor) ValidateNonceAndBalance(tx *types.Transaction) e
 // ApplyTransaction receives a batch of transaction to apply on state. Returns the number of transaction that failed to apply.
 func (tp *TransactionProcessor) ApplyTransactions(layer types.LayerID, txs []*types.Transaction) (int, error) {
 	if len(txs) == 0 {
-		return 0, nil
+		err := tp.addStateToHistory(layer, tp.GetStateRoot())
+		return 0, err
 	}
 
 	tp.mu.Lock()
