@@ -313,7 +313,7 @@ func (s *Syncer) handleNotSynced(currentSyncLayer types.LayerID) {
 		s.With().Info("syncing layer", log.Uint64("current_sync_layer", uint64(currentSyncLayer)), log.Uint64("last_ticked_layer", uint64(s.GetCurrentLayer())))
 		lyr, err := s.getLayerFromNeighbors(currentSyncLayer)
 		if err != nil {
-			s.Info("could not get layer %v from neighbors %v", currentSyncLayer, err)
+			s.Info("could not get layer %v from neighbors :%v", currentSyncLayer, err)
 			return
 		}
 
@@ -388,6 +388,9 @@ func (s *Syncer) waitLayer(ch timesync.LayerTimer) bool {
 }
 
 func (s *Syncer) getLayerFromNeighbors(currenSyncLayer types.LayerID) (*types.Layer, error) {
+	if len(s.Peers.GetPeers()) == 0 {
+		return nil, fmt.Errorf("no peers ")
+	}
 
 	//fetch layer hash from each peer
 	m, err := s.fetchLayerHashes(currenSyncLayer)
