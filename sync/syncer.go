@@ -14,7 +14,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"sync"
-	"sync/atomic"
 	"time"
 )
 
@@ -91,12 +90,11 @@ type Syncer struct {
 	lValidator           LayerValidator
 	validatingLayer      types.LayerID
 	validatingLayerMutex sync.Mutex
-	SyncLock             uint32
-	startLock            uint32
+	syncLock             types.TryMutex
+	startLock            types.TryMutex
 	forceSync            chan bool
 	syncTimer            *time.Ticker
 	exit                 chan struct{}
-	syncRoutineWg        sync.WaitGroup
 	gossipLock           sync.RWMutex
 	gossipSynced         Status
 	awaitCh              chan struct{}
@@ -123,8 +121,6 @@ func (s *Syncer) Close() {
 }
 
 const (
-	IDLE         uint32             = 0
-	RUNNING      uint32             = 1
 	BLOCK        server.MessageType = 1
 	LAYER_HASH   server.MessageType = 2
 	LAYER_IDS    server.MessageType = 3
@@ -180,7 +176,7 @@ func (s *Syncer) IsSynced() bool {
 }
 
 func (s *Syncer) Start() {
-	if atomic.CompareAndSwapUint32(&s.startLock, 0, 1) {
+	if s.startLock.TryLock() {
 		go s.run()
 		s.forceSync <- true
 		return
@@ -222,11 +218,11 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool A
 		workerInfra:               srvr,
 		TickProvider:              clock,
 		lValidator:                layers,
-		SyncLock:                  0,
+		syncLock:                  types.TryMutex{},
 		poetDb:                    poetdb,
 		txpool:                    txpool,
 		atxpool:                   atxpool,
-		startLock:                 0,
+		startLock:                 types.TryMutex{},
 		forceSync:                 make(chan bool),
 		validatingLayer:           ValidatingLayerNone,
 		syncTimer:                 time.NewTicker(conf.SyncInterval),
@@ -249,15 +245,12 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool A
 }
 
 func (s *Syncer) synchronise() {
-	s.syncRoutineWg.Add(1)
-	defer s.syncRoutineWg.Done()
-
-	if atomic.CompareAndSwapUint32(&s.SyncLock, IDLE, RUNNING) { //only one concurrent synchronise
+	if s.syncLock.TryLock() { //only one concurrent synchronise
 		s.Info("start synchronize")
 
 		defer func() { //release synchronise lock
+			s.syncLock.Unlock()
 			s.Info("done synchronize")
-			atomic.StoreUint32(&s.SyncLock, IDLE)
 		}()
 
 		if s.GetCurrentLayer() <= 1 { // skip validation for first layer

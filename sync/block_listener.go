@@ -7,7 +7,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"sync"
-	"sync/atomic"
 	"time"
 )
 
@@ -19,7 +18,7 @@ type BlockListener struct {
 	bufferSize           int
 	semaphore            chan struct{}
 	receivedGossipBlocks chan service.GossipMessage
-	startLock            uint32
+	startLock            types.TryMutex
 	timeout              time.Duration
 	exit                 chan struct{}
 }
@@ -33,7 +32,7 @@ func (bl *BlockListener) Close() {
 }
 
 func (bl *BlockListener) Start() {
-	if atomic.CompareAndSwapUint32(&bl.startLock, 0, 1) {
+	if bl.startLock.TryLock() {
 		go bl.ListenToGossipBlocks()
 	}
 }

@@ -1,0 +1,19 @@
+package types
+
+import (
+	"sync"
+	"sync/atomic"
+	"unsafe"
+)
+
+const mutexLocked = 1 << iota
+
+// Mutex is simple sync.Mutex + ability to try to Lock.
+type TryMutex struct {
+	sync.Mutex
+}
+
+// TryLock tries to lock m. It returns true in case of success, false otherwise.
+func (m *TryMutex) TryLock() bool {
+	return atomic.CompareAndSwapInt32((*int32)(unsafe.Pointer(&m.Mutex)), 0, mutexLocked)
+}
