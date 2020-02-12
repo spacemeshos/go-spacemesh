@@ -9,6 +9,7 @@ import (
 type blockCache interface {
 	Get(id types.BlockID) *types.Block
 	put(b *types.Block)
+	Size() int
 	Close()
 }
 
@@ -23,6 +24,10 @@ func NewBlockCache(size int) BlockCache {
 		log.Fatal("could not initialize cache ", err)
 	}
 	return BlockCache{Cache: cache}
+}
+
+func (bc BlockCache) Size() int {
+	return bc.Cache.Len()
 }
 
 func (bc BlockCache) put(b *types.Block) {

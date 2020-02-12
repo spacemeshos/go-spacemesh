@@ -8,7 +8,7 @@ import (
 )
 
 type BlockProvider interface {
-	GetUnverifiedLayerBlocks(layerId types.LayerID) ([]types.BlockID, error)
+	LayerBlockIds(layerId types.LayerID) ([]types.BlockID, error)
 }
 
 type SuperHare struct {
@@ -28,7 +28,7 @@ func (h *SuperHare) Close() {
 }
 
 func (h *SuperHare) GetResult(id types.LayerID) ([]types.BlockID, error) {
-	blks, err := h.blocks.GetUnverifiedLayerBlocks(id)
+	blks, err := h.blocks.LayerBlockIds(id)
 	if err != nil {
 		log.Error("WTF SUPERHARE?? %v err: %v", id, err)
 		return nil, err
