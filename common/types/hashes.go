@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/sha256-simd"
 	"math/big"
 	"math/rand"
@@ -26,6 +27,8 @@ type Hash32 [Hash32Length]byte
 
 // Hash represents the 20 byte Keccak256 hash of arbitrary data.
 type Hash20 [Hash20Length]byte
+
+func (h Hash12) Field(name string) log.Field { return log.String(name, util.Bytes2Hex(h[:])) }
 
 // HexToHash sets byte representation of s to hash.
 // If b is larger than len(h), b will be cropped from the left.
@@ -87,6 +90,8 @@ func (h Hash20) ToHash32() Hash32 {
 	copy(h2[:], h[0:Hash20Length])
 	return Hash32(h2)
 }
+
+func (h Hash20) Field(name string) log.Field { return log.String(name, util.Bytes2Hex(h[:])) }
 
 func CalcHash12(data []byte) Hash12 {
 	msghash := sha256.Sum256(data)
@@ -274,3 +279,5 @@ func (h *Hash32) Scan(src interface{}) error {
 	copy(h[:], srcB)
 	return nil
 }
+
+func (h Hash32) Field(name string) log.Field { return log.String(name, util.Bytes2Hex(h[:])) }
