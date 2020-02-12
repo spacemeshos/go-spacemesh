@@ -89,13 +89,14 @@ func (bl *BlockListener) handleBlock(data service.GossipMessage) {
 	blk.Initialize()
 
 	bl.Log.With().Info("block received",
-		log.BlockId(blk.Id().String()),
-		log.LayerId(blk.LayerIndex.Uint64()),
+		blk.Id(),
+		blk.LayerIndex,
+		log.String("miner_id", blk.MinerId().String()),
 		log.Int("tx_count", len(blk.TxIds)),
 		log.Int("atx_count", len(blk.AtxIds)),
 		log.Int("view_edges", len(blk.ViewEdges)),
 		log.Int("vote_count", len(blk.BlockVotes)),
-		log.AtxId(blk.ATXID.Hash32().String()),
+		blk.ATXID,
 		log.Uint32("eligibility_counter", blk.EligibilityProof.J),
 	)
 	//check if known
