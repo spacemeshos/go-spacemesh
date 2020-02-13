@@ -692,3 +692,23 @@ func Test_filter(t *testing.T) {
 		}
 	}
 }
+
+func Test_getVotesFiltered(t *testing.T) {
+	// check scenario where some of the votes are filtered
+
+	r := require.New(t)
+	beginRound := make(chan types.LayerID)
+	n1 := service.NewSimulator().NewNode()
+	allblocks := []*types.Block{b5}
+	bb := NewBlockBuilder(types.NodeId{Key: "a"}, &MockSigning{}, n1, beginRound, 5, NewTxMemPool(), NewAtxMemPool(), MockCoin{}, &mockMesh{b: allblocks}, &mockResult{}, &mockBlockOracle{}, mockTxProcessor{true}, &mockAtxValidator{}, &mockSyncer{}, selectCount, projector, log.NewDefault(t.Name()))
+	// has bottom
+	mh := newMockResult()
+	mh.set(4)
+	mh.set(5)
+	bb.hareResult = mh
+	bb.hdist = 2
+	b, err := bb.getVotes(5)
+	r.Nil(err)
+	r.Equal(1, len(b))
+	r.Equal(b5.Id(), b[0])
+}
