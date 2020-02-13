@@ -91,6 +91,7 @@ func (bl *BlockListener) handleBlock(data service.GossipMessage) {
 	bl.Log.With().Info("block received",
 		log.BlockId(blk.Id().String()),
 		log.LayerId(blk.LayerIndex.Uint64()),
+		log.EpochId(uint64(blk.LayerIndex.GetEpoch(bl.LayersPerEpoch))),
 		log.Int("tx_count", len(blk.TxIds)),
 		log.Int("atx_count", len(blk.AtxIds)),
 		log.Int("view_edges", len(blk.ViewEdges)),
