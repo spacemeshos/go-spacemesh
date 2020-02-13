@@ -1,6 +1,7 @@
 package discovery
 
 import (
+	"bytes"
 	"encoding/binary"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
@@ -80,7 +81,7 @@ const (
 // peers on the bitcoin network.
 type addrBook struct {
 	logger log.Log
-	mtx    sync.Mutex
+	mtx    sync.RWMutex
 
 	rand *rand.Rand
 	key  [32]byte
@@ -90,8 +91,8 @@ type addrBook struct {
 	addrNew   [newBucketCount]map[node.ID]*KnownAddress
 	addrTried [triedBucketCount]map[node.ID]*KnownAddress
 
-	//todo: lock localNode for updates
-	localAddress *node.NodeInfo
+	//todo: lock local for updates
+	localAddresses []*node.NodeInfo
 
 	nTried int
 	nNew   int
@@ -103,13 +104,50 @@ type addrBook struct {
 	quit chan struct{}
 }
 
+// AddOurAddress one of our addresses.
+func (a *addrBook) AddLocalAddress(addr *node.NodeInfo) {
+	a.mtx.Lock()
+	a.localAddresses = append(a.localAddresses, addr)
+	a.mtx.Unlock()
+}
+
+func (a *addrBook) isLocalAddressUnlocked(addr *node.NodeInfo) bool {
+	for _, local := range a.localAddresses {
+
+		if bytes.Equal(local.ID.Bytes(), addr.ID.Bytes()) {
+			return true
+		}
+
+		if local.ProtocolPort != 0 && local.DiscoveryPort != 0 {
+			if bytes.Equal(local.IP, addr.IP) && (local.ProtocolPort == addr.ProtocolPort && local.DiscoveryPort == addr.DiscoveryPort) {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+// OurAddress returns true if it is our address.
+func (a *addrBook) IsLocalAddress(addr *node.NodeInfo) bool {
+	a.mtx.RLock()
+	ok := a.isLocalAddressUnlocked(addr)
+	a.mtx.RUnlock()
+	return ok
+}
+
 // updateAddress is a helper function to either update an address already known
 // to the address manager, or to add the address if not already known.
 func (a *addrBook) updateAddress(netAddr, srcAddr *node.NodeInfo) {
 
+	if a.isLocalAddressUnlocked(netAddr) {
+		a.logger.Debug("skipping adding a local address %v", netAddr.String())
+		return
+	}
 	//Filter out non-routable addresses. Note that non-routable
 	//also includes invalid and localNode addresses.
 	if !IsRoutable(netAddr.IP) && IsRoutable(srcAddr.IP) {
+		a.logger.Debug("skipping adding non routable address%v", netAddr.String())
 		// XXX: this makes tests work with unroutable addresses(loopback)
 		return
 	}
@@ -634,7 +672,7 @@ func (a *addrBook) reset() {
 	// fill key with bytes from a good random source.
 	err := crypto.GetRandomBytesToBuffer(32, a.key[:])
 	if err != nil {
-		panic(err)
+		a.logger.Panic("Error generating random bytes %v", err)
 	}
 
 	for i := range a.addrNew {
