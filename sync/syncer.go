@@ -227,15 +227,14 @@ func (s *Syncer) setGossipBufferingStatus(status Status) {
 }
 
 func (s *Syncer) IsSynced() bool {
-	s.Log.Info("latest: %v, maxSynced %v", s.LatestLayer(), s.GetCurrentLayer())
 	return s.weaklySynced() && s.getGossipBufferingStatus() == Done
 }
 
 func (s *Syncer) Status() string {
 	if s.IsSynced() {
-		return SyncedTxt
+		return fmt.Sprintf("%s latest: %v, maxSynced %v", SyncedTxt, s.LatestLayer(), s.GetCurrentLayer())
 	}
-	return OutOfSyncTxt
+	return fmt.Sprintf("%s latest: %v, maxSynced %v", OutOfSyncTxt, s.LatestLayer(), s.GetCurrentLayer())
 }
 
 func (s *Syncer) Start() {
