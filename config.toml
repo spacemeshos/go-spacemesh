@@ -65,6 +65,7 @@ hare-wakeup-delta = 5
 
 [logging]
 app = "info"
+p2p = "info"
 post = "info"
 stateDb= "info"
 state = "info"

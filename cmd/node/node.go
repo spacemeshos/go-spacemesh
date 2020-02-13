@@ -399,9 +399,8 @@ func (app *SpacemeshApp) addLogger(name string, logger log.Log) log.Log {
 		log.Error("cannot parse logging for %v error %v", name, err)
 		lvl.SetLevel(log.LogLvl())
 	}
-
 	app.loggers[name] = &lvl
-	return logger.WithName(name).WithOptions(log.AddDynamicLevel(&lvl))
+	return logger.SetLevel(&lvl).WithName(name)
 }
 
 func (app *SpacemeshApp) SetLogLevel(name, loglevel string) error {
@@ -857,8 +856,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	clock := timesync.NewClock(timesync.RealClock{}, ld, gTime, log.NewDefault("clock"))
 
 	log.Info("Initializing P2P services")
-	app.addLogger(P2PLogger, lg)
-	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P, lg.WithName("p2p"), dbStorepath)
+	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P, app.addLogger(P2PLogger, lg), dbStorepath)
 	if err != nil {
 		log.Panic("Error starting p2p services. err: %v", err)
 	}

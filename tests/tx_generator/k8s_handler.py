@@ -1,5 +1,6 @@
 from kubernetes import config as k8s_config
 import os
+import requests
 
 from kubernetes import client
 from kubernetes.stream import stream
@@ -72,6 +73,11 @@ def api_call(client_ip, data, api, namespace, port="9090"):
                  command=["curl", "-s", "--request", "POST", "--data", data, f"http://{client_ip}:{port}/{api}"],
                  stderr=True, stdin=False, stdout=True, tty=False, _request_timeout=90)
     return res
+
+
+def aws_api_call(client_ip, data, api, port="9090"):
+    url = f"http://{client_ip}:{port}/{api}"
+    return requests.post(url, data=data)
 
 
 def get_client_lst(_namespace, label="client"):

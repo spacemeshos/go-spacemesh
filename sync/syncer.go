@@ -4,17 +4,15 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	p2pconf "github.com/spacemeshos/go-spacemesh/p2p/config"
-
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"sync"
-	"sync/atomic"
 	"time"
 )
 
@@ -36,16 +34,8 @@ type PoetDb interface {
 	GetProofMessage(proofRef []byte) ([]byte, error)
 }
 
-type BlockValidator interface {
+type BlockEligibilityValidator interface {
 	BlockSignedAndEligible(block *types.Block) (bool, error)
-}
-
-type EligibilityValidator interface {
-	BlockSignedAndEligible(block *types.Block) (bool, error)
-}
-
-type TxValidator interface {
-	AddressExists(addr types.Address) bool
 }
 
 type TickProvider interface {
@@ -69,10 +59,6 @@ type LayerValidator interface {
 	ValidateLayer(lyr *types.Layer)
 }
 
-const (
-	ValidationCacheSize = 1000
-)
-
 var (
 	errDupTx       = errors.New("duplicate TransactionId in block")
 	errDupAtx      = errors.New("duplicate AtxId in block")
@@ -86,18 +72,24 @@ const (
 	InProgress Status = 1
 	Done       Status = 2
 
+	BLOCK        server.MessageType = 1
+	LAYER_HASH   server.MessageType = 2
+	LAYER_IDS    server.MessageType = 3
+	TX           server.MessageType = 4
+	ATX          server.MessageType = 5
+	POET         server.MessageType = 6
+	syncProtocol                    = "/sync/1.0/"
+	SyncedTxt                       = "Node is Synced"
+	OutOfSyncTxt                    = "Node is out of Sync"
+
 	ValidatingLayerNone types.LayerID = 0
 )
-
-type LayerProvider interface {
-	GetLayer(index types.LayerID) (*types.Layer, error)
-}
 
 type Syncer struct {
 	Configuration
 	log.Log
 	*mesh.Mesh
-	EligibilityValidator
+	BlockEligibilityValidator
 	*workerInfra
 	TickProvider
 
@@ -107,12 +99,11 @@ type Syncer struct {
 	lValidator           LayerValidator
 	validatingLayer      types.LayerID
 	validatingLayerMutex sync.Mutex
-	SyncLock             uint32
-	startLock            uint32
+	syncLock             types.TryMutex
+	startLock            types.TryMutex
 	forceSync            chan bool
 	syncTimer            *time.Ticker
 	exit                 chan struct{}
-	syncRoutineWg        sync.WaitGroup
 	gossipLock           sync.RWMutex
 	gossipSynced         Status
 	awaitCh              chan struct{}
@@ -121,6 +112,52 @@ type Syncer struct {
 	blockQueue *blockQueue
 	txQueue    *txQueue
 	atxQueue   *atxQueue
+}
+
+//fires a sync every sm.SyncInterval or on force space from outside
+func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool AtxMemPool, bv BlockEligibilityValidator, poetdb PoetDb, conf Configuration, clock TickProvider, logger log.Log) *Syncer {
+
+	exit := make(chan struct{})
+
+	srvr := &workerInfra{
+		RequestTimeout: conf.RequestTimeout,
+		MessageServer:  server.NewMsgServer(srv.(server.Service), syncProtocol, conf.RequestTimeout, make(chan service.DirectMessage, p2pconf.ConfigValues.BufferSize), logger),
+		Peers:          p2p.NewPeers(srv, logger.WithName("peers")),
+		exit:           exit,
+	}
+
+	s := &Syncer{
+		BlockEligibilityValidator: bv,
+		Configuration:             conf,
+		Log:                       logger,
+		Mesh:                      layers,
+		workerInfra:               srvr,
+		TickProvider:              clock,
+		lValidator:                layers,
+		syncLock:                  types.TryMutex{},
+		poetDb:                    poetdb,
+		txpool:                    txpool,
+		atxpool:                   atxpool,
+		startLock:                 types.TryMutex{},
+		forceSync:                 make(chan bool),
+		validatingLayer:           ValidatingLayerNone,
+		syncTimer:                 time.NewTicker(conf.SyncInterval),
+		exit:                      exit,
+		gossipSynced:              Pending,
+		awaitCh:                   make(chan struct{}),
+	}
+
+	s.blockQueue = NewValidationQueue(srvr, s.Configuration, s, s.blockCheckLocal, logger.WithName("validQ"))
+	s.txQueue = NewTxQueue(s)
+	s.atxQueue = NewAtxQueue(s, s.FetchPoetProof)
+	srvr.RegisterBytesMsgHandler(LAYER_HASH, newLayerHashRequestHandler(layers, logger))
+	srvr.RegisterBytesMsgHandler(BLOCK, newBlockRequestHandler(layers, logger))
+	srvr.RegisterBytesMsgHandler(LAYER_IDS, newLayerBlockIdsRequestHandler(layers, logger))
+	srvr.RegisterBytesMsgHandler(TX, newTxsRequestHandler(s, logger))
+	srvr.RegisterBytesMsgHandler(ATX, newATxsRequestHandler(s, logger))
+	srvr.RegisterBytesMsgHandler(POET, newPoetRequestHandler(s, logger))
+
+	return s
 }
 
 func (s *Syncer) ForceSync() {
@@ -142,17 +179,16 @@ func (s *Syncer) Close() {
 	s.MessageServer.Close()
 }
 
-const (
-	IDLE         uint32             = 0
-	RUNNING      uint32             = 1
-	BLOCK        server.MessageType = 1
-	LAYER_HASH   server.MessageType = 2
-	LAYER_IDS    server.MessageType = 3
-	TX           server.MessageType = 4
-	ATX          server.MessageType = 5
-	POET         server.MessageType = 6
-	syncProtocol                    = "/sync/1.0/"
-)
+//check if syncer was closed
+func (s *Syncer) shutdown() bool {
+	select {
+	case <-s.exit:
+		s.Info("receive interrupt")
+		return true
+	default:
+		return false
+	}
+}
 
 func (s *Syncer) weaklySynced() bool {
 	// equivalent to s.LatestLayer() >= s.lastTickedLayer()-1
@@ -167,16 +203,8 @@ func (s *Syncer) getGossipBufferingStatus() Status {
 	return b
 }
 
-//api for other modules to check if they should listen to gossip
-func (s *Syncer) ListenToGossip() bool {
-	return s.getGossipBufferingStatus() != Pending
-}
-
-func (s *Syncer) setGossipBufferingStatus(status Status) {
-	s.gossipLock.Lock()
-	s.notifySubscribers(s.gossipSynced, status)
-	s.gossipSynced = status
-	s.gossipLock.Unlock()
+func (s *Syncer) Await() chan struct{} {
+	return s.awaitCh
 }
 
 func (s *Syncer) notifySubscribers(prevStatus, status Status) {
@@ -190,36 +218,39 @@ func (s *Syncer) notifySubscribers(prevStatus, status Status) {
 	}
 }
 
-func (s *Syncer) Await() chan struct{} {
-	return s.awaitCh
+//api for other modules to check if they should listen to gossip
+func (s *Syncer) ListenToGossip() bool {
+	return s.getGossipBufferingStatus() != Pending
+}
+
+func (s *Syncer) setGossipBufferingStatus(status Status) {
+	s.gossipLock.Lock()
+	s.notifySubscribers(s.gossipSynced, status)
+	s.gossipSynced = status
+	s.gossipLock.Unlock()
 }
 
 func (s *Syncer) IsSynced() bool {
-	s.Log.Info("latest: %v, maxSynced %v", s.LatestLayer(), s.GetCurrentLayer())
 	return s.weaklySynced() && s.getGossipBufferingStatus() == Done
 }
 
+func (s *Syncer) Status() string {
+	if s.IsSynced() {
+		return fmt.Sprintf("%s latest: %v, maxSynced %v", SyncedTxt, s.LatestLayer(), s.GetCurrentLayer())
+	}
+	return fmt.Sprintf("%s latest: %v, maxSynced %v", OutOfSyncTxt, s.LatestLayer(), s.GetCurrentLayer())
+}
+
 func (s *Syncer) Start() {
-	if atomic.CompareAndSwapUint32(&s.startLock, 0, 1) {
+	if s.startLock.TryLock() {
 		go s.run()
 		s.forceSync <- true
 		return
 	}
 }
 
-func (s *Syncer) getSyncRoutine() func() {
-	return func() {
-		if atomic.CompareAndSwapUint32(&s.SyncLock, IDLE, RUNNING) {
-			s.syncRoutineWg.Add(1)
-			s.Synchronise()
-			atomic.StoreUint32(&s.SyncLock, IDLE)
-		}
-	}
-}
-
 //fires a sync every sm.SyncInterval or on force space from outside
 func (s *Syncer) run() {
-	syncRoutine := s.getSyncRoutine()
 	for {
 		select {
 		case <-s.exit:
@@ -231,95 +262,58 @@ func (s *Syncer) run() {
 				return
 			default:
 			}
-			syncRoutine()
+			s.synchronise()
 		case <-s.syncTimer.C:
 			select {
 			case <-s.exit:
 				return
 			default:
 			}
-			syncRoutine()
+			s.synchronise()
 		}
 	}
 }
 
-//fires a sync every sm.SyncInterval or on force space from outside
-func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool AtxMemPool, bv BlockValidator, poetdb PoetDb, conf Configuration, clock TickProvider, logger log.Log) *Syncer {
+func (s *Syncer) synchronise() {
+	if s.syncLock.TryLock() { //only one concurrent synchronise
+		s.Info("start synchronize")
 
-	exit := make(chan struct{})
+		defer func() { //release synchronise lock
+			s.syncLock.Unlock()
+			s.Info("close synchronize, %v", s.Status())
+		}()
 
-	srvr := &workerInfra{
-		RequestTimeout: conf.RequestTimeout,
-		MessageServer:  server.NewMsgServer(srv.(server.Service), syncProtocol, conf.RequestTimeout, make(chan service.DirectMessage, p2pconf.ConfigValues.BufferSize), logger),
-		Peers:          p2p.NewPeers(srv, logger.WithName("peers")),
-		exit:           exit,
-	}
+		if s.GetCurrentLayer() <= 1 { // skip validation for first layer
+			s.With().Info("Not syncing in layer <= 1", log.LayerId(uint64(s.GetCurrentLayer())))
+			s.setGossipBufferingStatus(Done) // fully-synced, make sure we listen to p2p
+			return
+		}
 
-	s := &Syncer{
-		EligibilityValidator: bv,
-		Configuration:        conf,
-		Log:                  logger,
-		Mesh:                 layers,
-		workerInfra:          srvr,
-		TickProvider:         clock,
-		lValidator:           layers,
-		SyncLock:             0,
-		poetDb:               poetdb,
-		txpool:               txpool,
-		atxpool:              atxpool,
-		startLock:            0,
-		forceSync:            make(chan bool),
-		validatingLayer:      ValidatingLayerNone,
-		syncTimer:            time.NewTicker(conf.SyncInterval),
-		exit:                 exit,
-		gossipSynced:         Pending,
-		awaitCh:              make(chan struct{}),
-	}
+		currentSyncLayer := s.lValidator.ProcessedLayer() + 1
+		if currentSyncLayer == s.GetCurrentLayer() { // only validate if current < lastTicked
+			s.With().Info("Already synced for layer", log.Uint64("current_sync_layer", uint64(currentSyncLayer)))
+			s.setGossipBufferingStatus(Done) // fully-synced, make sure we listen to p2p
+			return
+		}
 
-	s.blockQueue = NewValidationQueue(srvr, s.Configuration, s, s.blockCheckLocal, logger.WithName("validQ"))
-	s.txQueue = NewTxQueue(s)
-	s.atxQueue = NewAtxQueue(s, s.FetchPoetProof)
-	srvr.RegisterBytesMsgHandler(LAYER_HASH, newLayerHashRequestHandler(layers, logger))
-	srvr.RegisterBytesMsgHandler(BLOCK, newBlockRequestHandler(layers, logger))
-	srvr.RegisterBytesMsgHandler(LAYER_IDS, newLayerBlockIdsRequestHandler(layers, logger))
-	srvr.RegisterBytesMsgHandler(TX, newTxsRequestHandler(s, logger))
-	srvr.RegisterBytesMsgHandler(ATX, newATxsRequestHandler(s, logger))
-	srvr.RegisterBytesMsgHandler(POET, newPoetRequestHandler(s, logger))
-
-	return s
-}
-
-func (s *Syncer) Synchronise() {
-	defer s.syncRoutineWg.Done()
-	s.Info("start synchronize")
-
-	if s.GetCurrentLayer() <= 1 { // skip validation for first layer
-		s.With().Info("Not syncing in layer <= 1", log.LayerId(uint64(s.GetCurrentLayer())))
-		s.setGossipBufferingStatus(Done) // fully-synced, make sure we listen to p2p
-		return
-	}
-
-	currentSyncLayer := s.lValidator.ProcessedLayer() + 1
-	if currentSyncLayer == s.GetCurrentLayer() { // only validate if current < lastTicked
-		s.With().Info("Already synced for layer", log.Uint64("current_sync_layer", uint64(currentSyncLayer)))
-		s.setGossipBufferingStatus(Done) // fully-synced, make sure we listen to p2p
-		return
-	}
-
-	if s.weaklySynced() { // we have all the data of the prev layers so we can simply validate
-		s.With().Info("Node is weakly synced. Going to validate layer")
-		for ; currentSyncLayer < s.GetCurrentLayer(); currentSyncLayer++ {
-			s.With().Info("Going to validate layer", log.LayerId(uint64(currentSyncLayer)))
-			if err := s.GetAndValidateLayer(currentSyncLayer); err != nil {
-				s.Panic("failed getting layer even though we are weakly-synced currentLayer=%v lastTicked=%v err=%v ", currentSyncLayer, s.GetCurrentLayer(), err)
+		if s.weaklySynced() { // we have all the data of the prev layers so we can simply validate
+			s.With().Info("Node is weakly synced. Going to validate layer")
+			for ; currentSyncLayer < s.GetCurrentLayer(); currentSyncLayer++ {
+				if s.shutdown() {
+					return
+				}
+				s.With().Info("Going to validate layer", log.LayerId(uint64(currentSyncLayer)))
+				if err := s.GetAndValidateLayer(currentSyncLayer); err != nil {
+					s.Panic("failed getting layer even though we are weakly-synced currentLayer=%v lastTicked=%v err=%v ", currentSyncLayer, s.GetCurrentLayer(), err)
+				}
 			}
+			s.With().Info("Node is synced")
+			return
 		}
-		s.With().Info("Node is synced")
-		return
-	}
 
-	// node is not synced
-	s.handleNotSynced(currentSyncLayer)
+		// node is not synced
+		s.handleNotSynced(currentSyncLayer)
+	}
 }
 
 func (s *Syncer) fastValidation(block *types.Block) error {
@@ -350,9 +344,14 @@ func (s *Syncer) handleNotSynced(currentSyncLayer types.LayerID) {
 	// Note: lastTicked() is not constant but updates as ticks are received
 	for ; currentSyncLayer < s.GetCurrentLayer(); currentSyncLayer++ {
 		s.With().Info("syncing layer", log.Uint64("current_sync_layer", uint64(currentSyncLayer)), log.Uint64("last_ticked_layer", uint64(s.GetCurrentLayer())))
+
+		if s.shutdown() {
+			return
+		}
+
 		lyr, err := s.getLayerFromNeighbors(currentSyncLayer)
 		if err != nil {
-			s.Info("could not get layer %v from neighbors %v", currentSyncLayer, err)
+			s.Info("could not get layer %v from neighbors: %v", currentSyncLayer, err)
 			return
 		}
 
@@ -427,6 +426,9 @@ func (s *Syncer) waitLayer(ch timesync.LayerTimer) bool {
 }
 
 func (s *Syncer) getLayerFromNeighbors(currenSyncLayer types.LayerID) (*types.Layer, error) {
+	if len(s.Peers.GetPeers()) == 0 {
+		return nil, fmt.Errorf("no peers ")
+	}
 
 	//fetch layer hash from each peer
 	m, err := s.fetchLayerHashes(currenSyncLayer)
@@ -434,10 +436,18 @@ func (s *Syncer) getLayerFromNeighbors(currenSyncLayer types.LayerID) (*types.La
 		return nil, err
 	}
 
+	if s.shutdown() {
+		return nil, fmt.Errorf("interupt")
+	}
+
 	//fetch ids for each hash
 	blockIds, err := s.fetchLayerBlockIds(m, currenSyncLayer)
 	if err != nil {
 		return nil, err
+	}
+
+	if s.shutdown() {
+		return nil, fmt.Errorf("interupt")
 	}
 
 	blocksArr, err := s.syncLayer(currenSyncLayer, blockIds)
