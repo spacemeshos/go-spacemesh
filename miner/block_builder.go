@@ -21,7 +21,7 @@ import (
 )
 
 const MaxTransactionsPerBlock = 20 //todo: move to config
-const MaxAtxPerBlock = 200          //todo: move to config
+const MaxAtxPerBlock = 200         //todo: move to config
 
 const DefaultGasLimit = 10
 const DefaultFee = 1
@@ -263,7 +263,7 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 
 	bl.CalcAndSetId()
 
-	t.Log.Event().Info("block created",
+	t.Log.Event().Info("I've created a block",
 		log.BlockId(bl.Id().String()),
 		log.LayerId(bl.LayerIndex.Uint64()),
 		log.Int("tx_count", len(bl.TxIds)),

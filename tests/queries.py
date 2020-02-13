@@ -53,7 +53,7 @@ def get_release_tick_msgs(namespace, pod_name):
     return get_all_msg_containing(namespace, pod_name, release_tick)
 
 
-CREATED_BLOCK_MSG = "block created"
+CREATED_BLOCK_MSG = "I've created a block"
 
 
 def get_block_creation_msgs(namespace, pod_name, find_fails=False, from_ts=None, to_ts=None):
@@ -435,7 +435,7 @@ def layer_block_max_propagation(deployment, layer):
     msg_time = None
     for log in logs:
         print(list(log), log.block_id)
-        block_recv_msg = {"M": "block received", "block_id": log.block_id}
+        block_recv_msg = {"M": "got new block", "block_id": log.block_id}
         # prop is the propagation delay delta between oldest and youngest message of this sort
         prop, max_time = message_propagation(deployment, block_recv_msg)
         print(prop, max_time)
