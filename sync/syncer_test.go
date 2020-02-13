@@ -176,7 +176,7 @@ func TestSyncer_Start(t *testing.T) {
 			t.Error("timed out ")
 			return
 		default:
-			if atomic.LoadUint32(&syn.startLock) == 1 {
+			if !syn.startLock.TryLock() {
 				return
 			}
 		}
@@ -1020,7 +1020,7 @@ func TestSyncer_Synchronise(t *testing.T) {
 	lv := &mockLayerValidator{0, 0, 0, nil}
 	sync.lValidator = lv
 
-	sr := sync.getSyncRoutine()
+	sr := sync.synchronise
 	sr()
 	time.Sleep(100 * time.Millisecond) // handle go routine race
 	r.Equal(1, lv.countValidated)
@@ -1057,15 +1057,13 @@ func TestSyncer_Synchronise2(t *testing.T) {
 
 	// current layer = 0
 	sync.TickProvider = &MockClock{Layer: 0}
-	sync.syncRoutineWg.Add(1)
-	sync.Synchronise()
+	sync.synchronise()
 	r.Equal(0, lv.countValidate)
 	r.True(sync.gossipSynced == Done)
 
 	// current layer = 1
 	sync.TickProvider = &MockClock{Layer: 1}
-	sync.syncRoutineWg.Add(1)
-	sync.Synchronise()
+	sync.synchronise()
 	r.Equal(0, lv.countValidate)
 	r.True(sync.gossipSynced == Done)
 
@@ -1073,9 +1071,8 @@ func TestSyncer_Synchronise2(t *testing.T) {
 	lv = &mockLayerValidator{5, 0, 0, nil}
 	sync.lValidator = lv
 	sync.TickProvider = &MockClock{Layer: 6}
-	sync.syncRoutineWg.Add(1)
 	sync.SetLatestLayer(5)
-	sync.Synchronise()
+	sync.synchronise()
 	r.Equal(0, lv.countValidate)
 	r.True(sync.gossipSynced == Done)
 
@@ -1084,8 +1081,7 @@ func TestSyncer_Synchronise2(t *testing.T) {
 	sync.lValidator = lv
 	sync.TickProvider = &MockClock{Layer: 2}
 	sync.SetLatestLayer(2)
-	sync.syncRoutineWg.Add(1)
-	sync.Synchronise()
+	sync.synchronise()
 	r.Equal(1, lv.countValidate)
 	r.True(sync.gossipSynced == Done)
 }
@@ -1103,7 +1099,7 @@ func TestSyncer_ListenToGossip(t *testing.T) {
 	assert.False(t, sync.ListenToGossip())
 
 	//run sync
-	sync.getSyncRoutine()()
+	sync.synchronise()
 
 	//check gossip open
 	assert.True(t, sync.ListenToGossip())
@@ -1145,7 +1141,7 @@ func TestSyncer_p2pSyncForTwoLayers(t *testing.T) {
 
 	sync := NewSync(net, msh, txpool, atxpool, blockValidator, newMockPoetDb(), conf, timer, l)
 	lv := &mockLayerValidator{0, 0, 0, nil}
-	sync.SyncLock = RUNNING
+	sync.syncLock.Lock()
 	sync.lValidator = lv
 	sync.SetLatestLayer(5)
 
@@ -1214,10 +1210,9 @@ func TestSyncer_ConcurrentSynchronise(t *testing.T) {
 	sync.AddBlock(types.NewExistingBlock(1, []byte(rand.RandString(8))))
 	sync.AddBlock(types.NewExistingBlock(2, []byte(rand.RandString(8))))
 	sync.AddBlock(types.NewExistingBlock(3, []byte(rand.RandString(8))))
-	f := sync.getSyncRoutine()
-	go f()
+	go sync.synchronise()
 	time.Sleep(100 * time.Millisecond)
-	f()
+	sync.synchronise()
 	time.Sleep(100 * time.Millisecond) // handle go routine race
 	r.Equal(1, lv.calls)
 }
@@ -1505,7 +1500,7 @@ func TestSyncer_Await(t *testing.T) {
 	r.False(closed(ch))
 
 	//run sync
-	syncer.getSyncRoutine()()
+	syncer.synchronise()
 
 	r.True(closed(ch))
 }
