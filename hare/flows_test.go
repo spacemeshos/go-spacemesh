@@ -9,9 +9,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
-	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/require"
+	"math/rand"
 	"testing"
 	"time"
 )
@@ -198,17 +198,16 @@ func (m *mockIdentityP) GetIdentity(edId string) (types.NodeId, error) {
 }
 
 func buildSet() []types.BlockID {
+	rng := rand.New(rand.NewSource(0))
 	s := make([]types.BlockID, 200, 200)
-
 	for i := uint64(0); i < 200; i++ {
-		s = append(s, newRandBlockId())
+		s = append(s, newRandBlockId(rng))
 	}
-
 	return s
 }
 
-func newRandBlockId() (id types.BlockID) {
-	_, err := rand.Read(id[:])
+func newRandBlockId(rng *rand.Rand) (id types.BlockID) {
+	_, err := rng.Read(id[:])
 	if err != nil {
 		panic(err)
 	}
