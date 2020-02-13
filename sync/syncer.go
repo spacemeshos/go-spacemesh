@@ -4,12 +4,11 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	p2pconf "github.com/spacemeshos/go-spacemesh/p2p/config"
-
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/timesync"
@@ -73,6 +72,16 @@ const (
 	InProgress Status = 1
 	Done       Status = 2
 
+	BLOCK        server.MessageType = 1
+	LAYER_HASH   server.MessageType = 2
+	LAYER_IDS    server.MessageType = 3
+	TX           server.MessageType = 4
+	ATX          server.MessageType = 5
+	POET         server.MessageType = 6
+	syncProtocol                    = "/sync/1.0/"
+	SyncedTxt                       = "Node is Synced"
+	OutOfSyncTxt                    = "Node is out of Sync"
+
 	ValidatingLayerNone types.LayerID = 0
 )
 
@@ -103,99 +112,6 @@ type Syncer struct {
 	blockQueue *blockQueue
 	txQueue    *txQueue
 	atxQueue   *atxQueue
-}
-
-func (s *Syncer) ForceSync() {
-	s.forceSync <- true
-}
-
-func (s *Syncer) Close() {
-	s.Info("Closing syncer")
-	close(s.exit)
-	close(s.forceSync)
-	s.Peers.Close()
-	s.blockQueue.Close()
-	s.atxQueue.Close()
-	s.txQueue.Close()
-	s.MessageServer.Close()
-}
-
-const (
-	BLOCK        server.MessageType = 1
-	LAYER_HASH   server.MessageType = 2
-	LAYER_IDS    server.MessageType = 3
-	TX           server.MessageType = 4
-	ATX          server.MessageType = 5
-	POET         server.MessageType = 6
-	syncProtocol                    = "/sync/1.0/"
-)
-
-func (s *Syncer) weaklySynced() bool {
-	// equivalent to s.LatestLayer() >= s.lastTickedLayer()-1
-	// means we have data from the previous layer
-	return s.LatestLayer()+1 >= s.GetCurrentLayer()
-}
-
-func (s *Syncer) getGossipBufferingStatus() Status {
-	s.gossipLock.RLock()
-	b := s.gossipSynced
-	s.gossipLock.RUnlock()
-	return b
-}
-
-//api for other modules to check if they should listen to gossip
-func (s *Syncer) ListenToGossip() bool {
-	return s.getGossipBufferingStatus() != Pending
-}
-
-func (s *Syncer) setGossipBufferingStatus(status Status) {
-	s.gossipLock.Lock()
-	s.notifySubscribers(s.gossipSynced, status)
-	s.gossipSynced = status
-	s.gossipLock.Unlock()
-}
-
-func (s *Syncer) notifySubscribers(prevStatus, status Status) {
-	if (status == Done) == (prevStatus == Done) {
-		return
-	}
-	if status == Done {
-		close(s.awaitCh)
-	} else {
-		s.awaitCh = make(chan struct{})
-	}
-}
-
-func (s *Syncer) Await() chan struct{} {
-	return s.awaitCh
-}
-
-func (s *Syncer) IsSynced() bool {
-	s.Log.Info("latest: %v, maxSynced %v", s.LatestLayer(), s.GetCurrentLayer())
-	return s.weaklySynced() && s.getGossipBufferingStatus() == Done
-}
-
-func (s *Syncer) Start() {
-	if s.startLock.TryLock() {
-		go s.run()
-		s.forceSync <- true
-		return
-	}
-}
-
-//fires a sync every sm.SyncInterval or on force space from outside
-func (s *Syncer) run() {
-	for {
-		select {
-		case <-s.exit:
-			s.Debug("Work stopped")
-			return
-		case <-s.forceSync:
-			go s.synchronise()
-		case <-s.syncTimer.C:
-			go s.synchronise()
-		}
-	}
 }
 
 //fires a sync every sm.SyncInterval or on force space from outside
@@ -244,13 +160,114 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool TxMemPool, atxpool A
 	return s
 }
 
+func (s *Syncer) ForceSync() {
+	s.forceSync <- true
+}
+
+func (s *Syncer) Close() {
+	s.Info("Closing syncer")
+	close(s.exit)
+	close(s.forceSync)
+	s.Peers.Close()
+	s.blockQueue.Close()
+	s.atxQueue.Close()
+	s.txQueue.Close()
+	s.MessageServer.Close()
+}
+
+//check if syncer was closed
+func (s *Syncer) shutdown() bool {
+	select {
+	case <-s.exit:
+		s.Info("receive interrupt")
+		return true
+	default:
+		return false
+	}
+}
+
+func (s *Syncer) weaklySynced() bool {
+	// equivalent to s.LatestLayer() >= s.lastTickedLayer()-1
+	// means we have data from the previous layer
+	return s.LatestLayer()+1 >= s.GetCurrentLayer()
+}
+
+func (s *Syncer) getGossipBufferingStatus() Status {
+	s.gossipLock.RLock()
+	b := s.gossipSynced
+	s.gossipLock.RUnlock()
+	return b
+}
+
+func (s *Syncer) Await() chan struct{} {
+	return s.awaitCh
+}
+
+func (s *Syncer) notifySubscribers(prevStatus, status Status) {
+	if (status == Done) == (prevStatus == Done) {
+		return
+	}
+	if status == Done {
+		close(s.awaitCh)
+	} else {
+		s.awaitCh = make(chan struct{})
+	}
+}
+
+//api for other modules to check if they should listen to gossip
+func (s *Syncer) ListenToGossip() bool {
+	return s.getGossipBufferingStatus() != Pending
+}
+
+func (s *Syncer) setGossipBufferingStatus(status Status) {
+	s.gossipLock.Lock()
+	s.notifySubscribers(s.gossipSynced, status)
+	s.gossipSynced = status
+	s.gossipLock.Unlock()
+}
+
+func (s *Syncer) IsSynced() bool {
+	s.Log.Info("latest: %v, maxSynced %v", s.LatestLayer(), s.GetCurrentLayer())
+	return s.weaklySynced() && s.getGossipBufferingStatus() == Done
+}
+
+func (s *Syncer) Status() string {
+	if s.IsSynced() {
+		return SyncedTxt
+	}
+	return OutOfSyncTxt
+}
+
+func (s *Syncer) Start() {
+	if s.startLock.TryLock() {
+		go s.run()
+		s.forceSync <- true
+		return
+	}
+}
+
+//fires a sync every sm.SyncInterval or on force space from outside
+func (s *Syncer) run() {
+	for {
+		select {
+		case <-s.exit:
+			s.Debug("Work stopped")
+			return
+		case <-s.forceSync:
+			go s.synchronise()
+		case <-s.syncTimer.C:
+			go s.synchronise()
+		}
+	}
+}
+
 func (s *Syncer) synchronise() {
 	if s.syncLock.TryLock() { //only one concurrent synchronise
 		s.Info("start synchronize")
 
 		defer func() { //release synchronise lock
 			s.syncLock.Unlock()
-			s.Info("done synchronize")
+			s.Info("close synchronize, %v", s.Status())
 		}()
 
 		if s.GetCurrentLayer() <= 1 { // skip validation for first layer
@@ -269,6 +286,9 @@ func (s *Syncer) synchronise() {
 		if s.weaklySynced() { // we have all the data of the prev layers so we can simply validate
 			s.With().Info("Node is weakly synced. Going to validate layer")
 			for ; currentSyncLayer < s.GetCurrentLayer(); currentSyncLayer++ {
+				if s.shutdown() {
+					return
+				}
 				s.With().Info("Going to validate layer", log.LayerId(uint64(currentSyncLayer)))
 				if err := s.GetAndValidateLayer(currentSyncLayer); err != nil {
 					s.Panic("failed getting layer even though we are weakly-synced currentLayer=%v lastTicked=%v err=%v ", currentSyncLayer, s.GetCurrentLayer(), err)
@@ -311,6 +331,11 @@ func (s *Syncer) handleNotSynced(currentSyncLayer types.LayerID) {
 	// Note: lastTicked() is not constant but updates as ticks are received
 	for ; currentSyncLayer < s.GetCurrentLayer(); currentSyncLayer++ {
 		s.With().Info("syncing layer", log.Uint64("current_sync_layer", uint64(currentSyncLayer)), log.Uint64("last_ticked_layer", uint64(s.GetCurrentLayer())))
+
+		if s.shutdown() {
+			return
+		}
+
 		lyr, err := s.getLayerFromNeighbors(currentSyncLayer)
 		if err != nil {
 			s.Info("could not get layer %v from neighbors: %v", currentSyncLayer, err)
@@ -398,10 +423,18 @@ func (s *Syncer) getLayerFromNeighbors(currenSyncLayer types.LayerID) (*types.La
 		return nil, err
 	}
 
+	if s.shutdown() {
+		return nil, fmt.Errorf("interupt")
+	}
+
 	//fetch ids for each hash
 	blockIds, err := s.fetchLayerBlockIds(m, currenSyncLayer)
 	if err != nil {
 		return nil, err
+	}
+
+	if s.shutdown() {
+		return nil, fmt.Errorf("interupt")
 	}
 
 	blocksArr, err := s.syncLayer(currenSyncLayer, blockIds)
