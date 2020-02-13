@@ -21,7 +21,7 @@ import (
 )
 
 const MaxTransactionsPerBlock = 20 //todo: move to config
-const MaxAtxPerBlock = 200          //todo: move to config
+const MaxAtxPerBlock = 200         //todo: move to config
 
 const DefaultGasLimit = 10
 const DefaultFee = 1
@@ -263,9 +263,16 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 
 	bl.CalcAndSetId()
 
-	t.Log.Event().Info(fmt.Sprintf("I've created a block in layer %v. id: %v, num of transactions: %v, votes: %d, viewEdges: %d atx %v, atxs:%v",
-		b.LayerIndex, bl.Id(), len(b.TxIds), len(b.BlockVotes), len(b.ViewEdges), b.ATXID.ShortString(), len(b.AtxIds)))
-
+	t.Log.Event().Info("I've created a block",
+		log.BlockId(bl.Id().String()),
+		log.LayerId(bl.LayerIndex.Uint64()),
+		log.Int("tx_count", len(bl.TxIds)),
+		log.Int("atx_count", len(bl.AtxIds)),
+		log.Int("view_edges", len(bl.ViewEdges)),
+		log.Int("vote_count", len(bl.BlockVotes)),
+		log.AtxId(bl.ATXID.Hash32().String()),
+		log.Uint32("eligibility_counter", bl.EligibilityProof.J),
+	)
 	return bl, nil
 }
 
