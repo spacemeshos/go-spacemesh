@@ -16,6 +16,8 @@ type ConnectionMock struct {
 	session   NetworkSession
 	source    ConnectionSource
 
+	created time.Time
+
 	addr string
 
 	sendDelayMs int
@@ -30,11 +32,18 @@ func NewConnectionMock(key p2pcrypto.PublicKey) *ConnectionMock {
 		id:        crypto.UUIDString(),
 		remotePub: key,
 		closed:    false,
+		created:   time.Now(),
 	}
 }
 
 func (cm ConnectionMock) ID() string {
 	return cm.id
+}
+func (cm ConnectionMock) Created() time.Time {
+	return cm.created
+}
+func (cm ConnectionMock) SetCreated(time2 time.Time) {
+	cm.created = time2
 }
 
 func (cm ConnectionMock) RemotePublicKey() p2pcrypto.PublicKey {

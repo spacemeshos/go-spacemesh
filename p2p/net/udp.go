@@ -1,16 +1,22 @@
 package net
 
 import (
+	"errors"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"net"
+	"strconv"
+	"sync"
+	"time"
 )
 
 // TODO: we should remove this const. Should  not depend on the number of addresses.
 // TODO: the number of addresses should be derived from the limit provided in the config
 const maxMessageSize = 30000 // @see getAddrMax
+const maxUDPConn = 1024
+const maxUDPLife = time.Duration(time.Hour * 24)
 
 // UDPMessageEvent is an event about a udp message. passed through a channel
 type UDPMessageEvent struct {
@@ -25,26 +31,66 @@ type UDPNet struct {
 	logger     log.Log
 	udpAddress *net.UDPAddr
 	config     config.Config
-	msgChan    chan UDPMessageEvent
+	msgChan    chan IncomingMessageEvent
 	conn       *net.UDPConn
 	cache      *sessionCache
-	shutdown   chan struct{}
+
+	regMutex         sync.RWMutex
+	regNewRemoteConn []func(NewConnectionEvent)
+
+	clsMutex           sync.RWMutex
+	closingConnections []func(ConnectionWithErr)
+
+	incomingConn map[string]*udpConnWrapper
+
+	shutdown chan struct{}
 }
 
 // NewUDPNet creates a UDPNet. returns error if the listening can't be resolved
 func NewUDPNet(config config.Config, localEntity node.LocalNode, addr *net.UDPAddr, log log.Log) (*UDPNet, error) {
 	n := &UDPNet{
-		local:      localEntity,
-		logger:     log,
-		udpAddress: addr,
-		config:     config,
-		msgChan:    make(chan UDPMessageEvent, config.BufferSize),
-		shutdown:   make(chan struct{}),
+		local:        localEntity,
+		logger:       log,
+		udpAddress:   addr,
+		config:       config,
+		msgChan:      make(chan IncomingMessageEvent, config.BufferSize),
+		incomingConn: make(map[string]*udpConnWrapper, maxUDPConn),
+		shutdown:     make(chan struct{}),
 	}
 
 	n.cache = newSessionCache(n.initSession)
 
 	return n, nil
+}
+
+// SubscribeClosingConnections registers a callback for a new connection event. all registered callbacks are called before moving.
+func (n *UDPNet) SubscribeClosingConnections(f func(connection ConnectionWithErr)) {
+	n.clsMutex.Lock()
+	n.closingConnections = append(n.closingConnections, f)
+	n.clsMutex.Unlock()
+}
+
+func (n *UDPNet) publishClosingConnection(connection ConnectionWithErr) {
+	n.clsMutex.RLock()
+	for _, f := range n.closingConnections {
+		f(connection)
+	}
+	n.clsMutex.RUnlock()
+}
+
+// SubscribeOnNewRemoteConnections registers a callback for a new connection event. all registered callbacks are called before moving.
+func (n *UDPNet) SubscribeOnNewRemoteConnections(f func(event NewConnectionEvent)) {
+	n.regMutex.Lock()
+	n.regNewRemoteConn = append(n.regNewRemoteConn, f)
+	n.regMutex.Unlock()
+}
+
+func (n *UDPNet) publishNewRemoteConnectionEvent(conn Connection, node *node.NodeInfo) {
+	n.regMutex.RLock()
+	for _, f := range n.regNewRemoteConn {
+		f(NewConnectionEvent{conn, node})
+	}
+	n.regMutex.RUnlock()
 }
 
 // Start will trigger listening on the configured port
@@ -109,8 +155,42 @@ func (n *UDPNet) Send(to *node.NodeInfo, data []byte) error {
 }
 
 // IncomingMessages is a channel where incoming UDPMessagesEvents will stream
-func (n *UDPNet) IncomingMessages() chan UDPMessageEvent {
+func (n *UDPNet) IncomingMessages() chan IncomingMessageEvent {
 	return n.msgChan
+}
+
+//Dial(address inet.Addr, remotePublicKey p2pcrypto.PublicKey) (net.Connection, error) // Connect to a remote node. Can send when no error.
+//SubscribeOnNewRemoteConnections(func(event net.NewConnectionEvent))
+//SubscribeClosingConnections(func(net.ConnectionWithErr))
+
+func (n *UDPNet) Dial(address net.Addr, remotePublicKey p2pcrypto.PublicKey) (Connection, error) {
+	udpcon, err := net.DialUDP("udp", nil, address.(*net.UDPAddr))
+	if err != nil {
+		return nil, err
+	}
+
+	ns := n.cache.GetOrCreate(remotePublicKey)
+
+	conn := newMsgonnection(udpcon, n, remotePublicKey, ns, n.config.MsgSizeLimit, n.config.ResponseTimeout, n.logger)
+	go conn.beginEventProcessing()
+	return conn, nil
+}
+
+func (n *UDPNet) HandlePreSessionIncomingMessage(c Connection, msg []byte) error {
+	return errors.New("not implemented")
+}
+
+func (n *UDPNet) EnqueueMessage(ime IncomingMessageEvent) {
+	select {
+	case n.msgChan <- ime:
+		n.logger.With().Debug("recv udp message", log.String("from", ime.Conn.RemotePublicKey().String()), log.String("fromaddr", ime.Conn.RemoteAddr().String()), log.Int("len", len(ime.Message)))
+	case <-n.shutdown:
+		return
+	}
+}
+
+func (n *UDPNet) NetworkID() int8 {
+	return 0
 }
 
 // main listening loop
@@ -140,33 +220,113 @@ func (n *UDPNet) listenToUDPNetworkMessages(listener net.PacketConn) {
 		copybuf := make([]byte, size)
 		copy(copybuf, buf)
 
-		msg, pk, err := p2pcrypto.ExtractPubkey(copybuf)
+		conn, ok := n.incomingConn[addr.String()]
+		if !ok {
+			n.logger.Debug("Creating new connection ")
+			_, pk, err := p2pcrypto.ExtractPubkey(copybuf)
 
-		if err != nil {
-			n.logger.Warning("error can't extract public key from udp message. (addr=%v), err=%v", addr.String(), err)
-			continue
-		}
+			if err != nil {
+				n.logger.Warning("error can't extract public key from udp message. (addr=%v), err=%v", addr.String(), err)
+				continue
+			}
 
-		ns := n.cache.GetOrCreate(pk)
+			ns := n.cache.GetOrCreate(pk)
 
-		if ns == nil {
-			n.logger.Warning("coul'd not create session with %v:%v skipping message..", addr.String(), pk.String())
-			continue
-		}
+			if ns == nil {
+				n.logger.Warning("coul'd not create session with %v:%v skipping message..", addr.String(), pk.String())
+				continue
+			}
 
-		final, err := ns.OpenMessage(msg)
-		if err != nil {
-			n.logger.With().Warning("skipping udp with session message", log.Err(err), log.String("from", pk.String()), log.Int("msglen", len(msg)))
-			// todo: remove malfunctioning session, ban ip ?
-			continue
+			host, port, err := net.SplitHostPort(addr.String())
+			if err != nil {
+				n.logger.Warning("coudl'nt parse address skipping message from  %v %V", addr.String(), pk)
+				continue
+			}
+
+			iport, err := strconv.Atoi(port)
+			if err != nil {
+				n.logger.Warning("failed converting port to int %v", port)
+				continue
+			}
+
+			conn = &udpConnWrapper{
+				incChan:   make(chan []byte, 1000),
+				closeChan: make(chan struct{}, 1),
+				conn:      n.conn,
+				remote:    addr,
+			}
+
+			mconn := newMsgonnection(conn, n, pk, ns, n.config.MsgSizeLimit, n.config.DialTimeout, n.logger)
+			n.publishNewRemoteConnectionEvent(mconn, node.NewNode(pk, net.ParseIP(host), 0, uint16(iport)))
+			n.addConn(addr, conn)
+			go mconn.beginEventProcessing()
 		}
 
 		select {
-		case n.msgChan <- UDPMessageEvent{pk, addr, final}:
-			n.logger.With().Debug("recv udp message", log.String("from", pk.String()), log.String("fromaddr", addr.String()), log.Int("len", len(final)), log.Int("orig_size", size))
+		case conn.incChan <- copybuf:
+			continue
 		case <-n.shutdown:
 			return
 		}
 
 	}
+}
+
+func (n *UDPNet) addConn(addr net.Addr, ucw *udpConnWrapper) {
+	//if len(n.incomingConn) > maxUDPConn {
+	//	var expire string
+	//	//for k, c := range n.incomingConn {
+	//	//	expire = k
+	//	//	if time.Since(c.Created()) > maxUDPLife {
+	//	//		break
+	//	//	}
+	//	//}
+	//	//delete(n.incomingConn, expire)
+	//}
+	n.incomingConn[addr.String()] = ucw
+
+}
+
+type udpConnWrapper struct {
+	incChan   chan []byte
+	closeChan chan struct{}
+
+	rDeadline time.Time
+	wDeadline time.Time
+
+	conn   *net.UDPConn
+	remote net.Addr
+}
+
+func (ucw *udpConnWrapper) SetReadDeadline(t time.Time) error {
+	ucw.rDeadline = t
+	return nil
+}
+
+func (ucw *udpConnWrapper) SetWriteDeadline(t time.Time) error {
+	ucw.wDeadline = t
+	return nil
+}
+
+func (ucw *udpConnWrapper) RemoteAddr() net.Addr {
+	return ucw.remote
+}
+
+func (ucw *udpConnWrapper) Read(b []byte) (int, error) {
+	select {
+	case msg := <-ucw.incChan:
+		copy(b, msg)
+		log.Debug("passing message to conn ")
+		return len(msg), nil
+	case <-ucw.closeChan:
+		return 0, errors.New("closed")
+	}
+}
+func (ucw *udpConnWrapper) Write(b []byte) (int, error) {
+	return ucw.conn.WriteTo(b, ucw.remote)
+}
+
+func (ucw *udpConnWrapper) Close() error {
+	close(ucw.closeChan)
+	return nil
 }

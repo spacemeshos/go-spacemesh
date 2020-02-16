@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
+	"github.com/spacemeshos/go-spacemesh/p2p/connectionpool"
 	"github.com/spacemeshos/go-spacemesh/p2p/version"
 	"net"
 	"time"
@@ -22,9 +23,9 @@ type Lookuper func(key p2pcrypto.PublicKey) (*node.NodeInfo, error)
 type udpNetwork interface {
 	Start() error
 	Shutdown()
-
-	IncomingMessages() chan inet.UDPMessageEvent
-	Send(to *node.NodeInfo, data []byte) error
+	Dial(address net.Addr, remotePublicKey p2pcrypto.PublicKey) (inet.Connection, error)
+	IncomingMessages() chan inet.IncomingMessageEvent
+	//Send(to *node.NodeInfo, data []byte) error
 }
 
 // UDPMux is a server for receiving and sending udp messages. through protocols.
@@ -34,6 +35,7 @@ type UDPMux struct {
 	local     node.LocalNode
 	networkid int8
 
+	cpool    cPool
 	lookuper Lookuper
 	network  udpNetwork
 
@@ -49,9 +51,9 @@ func NewUDPMux(localNode node.LocalNode, lookuper Lookuper, udpNet udpNetwork, n
 		networkid: networkid,
 		lookuper:  lookuper,
 		network:   udpNet,
-
-		messages: make(map[string]chan service.DirectMessage),
-		shutdown: make(chan struct{}, 1),
+		cpool:     connectionpool.NewConnectionPool(udpNet.Dial, localNode.PublicKey(), logger.WithName("udp_cpool")),
+		messages:  make(map[string]chan service.DirectMessage),
+		shutdown:  make(chan struct{}, 1),
 	}
 }
 
@@ -76,8 +78,8 @@ func (mux *UDPMux) listenToNetworkMessage() {
 				// closed
 				return
 			}
-			go func(event inet.UDPMessageEvent) {
-				err := mux.processUDPMessage(event.From, event.FromAddr, event.Message)
+			go func(event inet.IncomingMessageEvent) {
+				err := mux.processUDPMessage(event)
 				if err != nil {
 					mux.logger.Error("Error handing network message err=%v", err)
 					// todo: blacklist ?
@@ -133,7 +135,19 @@ func (mux *UDPMux) sendMessageImpl(peerPubkey p2pcrypto.PublicKey, protocol stri
 		return err
 	}
 
-	//todo: Session (maybe use cpool ?)
+	addr := net.UDPAddr{net.ParseIP(peer.IP.String()), int(peer.DiscoveryPort), ""}
+
+	conn, err := mux.cpool.GetConnection(&addr, peer.PublicKey())
+
+	if err != nil {
+		return err
+	}
+
+	session := conn.Session()
+
+	if session == nil {
+		return err
+	}
 
 	mt := ProtocolMessageMetadata{protocol,
 		config.ClientVersion,
@@ -159,12 +173,16 @@ func (mux *UDPMux) sendMessageImpl(peerPubkey p2pcrypto.PublicKey, protocol stri
 	// TODO: node.address should have IP address, UDP and TCP PORT.
 	// 		 for now assuming it's the same port for both.
 
-	err = mux.network.Send(peer, data)
+	final := session.SealMessage(data)
+
+	realfinal := p2pcrypto.PrependPubkey(final, mux.local.PublicKey())
+
+	err = conn.Send(realfinal)
 	if err != nil {
 		return err
 	}
 
-	mux.logger.With().Debug("Sent UDP message", log.String("protocol", protocol), log.String("to", peer.String()))
+	mux.logger.With().Debug("Sent UDP message", log.String("protocol", protocol), log.String("to", peer.String()), log.Int("len", len(realfinal)))
 	return nil
 }
 
@@ -191,33 +209,74 @@ func (upm *udpProtocolMessage) Data() service.Data {
 }
 
 // processUDPMessage processes a udp message received and passes it to the protocol, it adds related p2p metadata.
-func (mux *UDPMux) processUDPMessage(sender p2pcrypto.PublicKey, fromaddr net.Addr, buf []byte) error {
-	mux.logger.Debug("Processing message from %v, %v, len:%v", sender.String(), fromaddr.String(), len(buf))
-	msg := &ProtocolMessage{}
-	err := types.BytesToInterface(buf, msg)
+func (mux *UDPMux) processUDPMessage(msg inet.IncomingMessageEvent) error {
+
+	//msg, pk, err := p2pcrypto.ExtractPubkey(buf)
+	//
+	//if err != nil {
+	//	mux.logger.Warning("error can't extract public key from udp message. (addr=%v), err=%v", addr.String(), err)
+	//	continue
+	//}
+	//
+	//ns := n.cache.GetOrCreate(pk)
+	//
+	//if ns == nil {
+	//	n.logger.Warning("coul'd not create session with %v:%v skipping message..", addr.String(), pk.String())
+	//	continue
+	//}
+	//
+	//final, err := ns.OpenMessage(msg)
+	//if err != nil {
+	//	n.logger.With().Warning("skipping udp with session message", log.Err(err), log.String("from", pk.String()), log.Int("msglen", len(msg)))
+	//	// todo: remove malfunctioning session, ban ip ?
+	//	continue
+	//}
+
+	if msg.Message == nil || msg.Conn == nil {
+		return ErrBadFormat1
+	}
+
+	// protocol messages are encrypted in payload
+	// Locate the session
+	session := msg.Conn.Session()
+
+	if session == nil {
+		return ErrNoSession
+	}
+
+	rawmsg, _, err := p2pcrypto.ExtractPubkey(msg.Message)
+
+	decPayload, err := session.OpenMessage(rawmsg)
 	if err != nil {
-		return errors.New("could'nt deserialize message")
+		return ErrFailDecrypt
 	}
 
-	if msg.Metadata.NetworkID != int32(mux.networkid) {
+	pm := &ProtocolMessage{}
+	err = types.BytesToInterface(decPayload, pm)
+	if err != nil {
+		mux.logger.Error("proto marshaling err=", err)
+		return ErrBadFormat2
+	}
+
+	if pm.Metadata.NetworkID != int32(mux.networkid) {
 		// todo: tell net to blacklist the ip or sender ?
-		return fmt.Errorf("wrong NetworkID, want: %v, got: %v", mux.networkid, msg.Metadata.NetworkID)
+		return fmt.Errorf("wrong NetworkID, want: %v, got: %v", mux.networkid, pm.Metadata.NetworkID)
 	}
 
-	if t, err := version.CheckNodeVersion(msg.Metadata.ClientVersion, config.MinClientVersion); err != nil || !t {
-		return fmt.Errorf("wrong client version want atleast: %v, got: %v, err=%v", config.MinClientVersion, msg.Metadata.ClientVersion, err)
+	if t, err := version.CheckNodeVersion(pm.Metadata.ClientVersion, config.MinClientVersion); err != nil || !t {
+		return fmt.Errorf("wrong client version want atleast: %v, got: %v, err=%v", config.MinClientVersion, pm.Metadata.ClientVersion, err)
 	}
 
 	var data service.Data
 
-	data, err = ExtractData(msg.Payload)
+	data, err = ExtractData(pm.Payload)
 
 	if err != nil {
 		return fmt.Errorf("failed extracting data from message err:%v", err)
 	}
 
-	p2pmeta := service.P2PMetadata{fromaddr}
+	p2pmeta := service.P2PMetadata{msg.Conn.RemoteAddr()}
 
-	return mux.ProcessDirectProtocolMessage(sender, msg.Metadata.NextProtocol, data, p2pmeta)
+	return mux.ProcessDirectProtocolMessage(msg.Conn.RemotePublicKey(), pm.Metadata.NextProtocol, data, p2pmeta)
 
 }

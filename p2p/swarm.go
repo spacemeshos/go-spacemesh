@@ -187,7 +187,7 @@ func newSwarm(ctx context.Context, config config.Config, logger log.Log, datadir
 	// todo : if discovery on
 	s.discover = discovery.New(l, config.SwarmConfig, s.udpServer, datadir, s.logger) // create table and discovery protocol
 
-	cpool := connectionpool.NewConnectionPool(s.network, l.PublicKey())
+	cpool := connectionpool.NewConnectionPool(s.network.Dial, l.PublicKey(), logger)
 
 	s.network.SubscribeOnNewRemoteConnections(func(nce net.NewConnectionEvent) {
 		err := cpool.OnNewConnection(nce)

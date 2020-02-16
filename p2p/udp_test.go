@@ -26,7 +26,9 @@ type mockUDPNetwork struct {
 	sendCalled bool
 	sendResult error
 
-	inc chan net.UDPMessageEvent
+	DialFunc func(address net2.Addr, remotepk p2pcrypto.PublicKey) (net.Connection, error)
+
+	inc chan net.IncomingMessageEvent
 }
 
 func (mun *mockUDPNetwork) Start() error {
@@ -38,13 +40,20 @@ func (mun *mockUDPNetwork) Shutdown() {
 	mun.shutdownCalled = true
 }
 
-func (mun *mockUDPNetwork) IncomingMessages() chan net.UDPMessageEvent {
+func (mun *mockUDPNetwork) IncomingMessages() chan net.IncomingMessageEvent {
 	return mun.inc
 }
 
 func (mun *mockUDPNetwork) Send(to *node.NodeInfo, data []byte) error {
 	mun.sendCalled = true
 	return mun.sendResult
+}
+
+func (mun *mockUDPNetwork) Dial(address net2.Addr, remotepk p2pcrypto.PublicKey) (net.Connection, error) {
+	if mun.DialFunc != nil {
+		return mun.DialFunc(address, remotepk)
+	}
+	return nil, errors.New("not impl")
 }
 
 func TestNewUDPMux(t *testing.T) {
@@ -167,13 +176,14 @@ func TestUDPMux_ProcessUDP(t *testing.T) {
 
 	addr := &net2.UDPAddr{gotfrom.IP, int(gotfrom.DiscoveryPort), ""}
 
-	err = m.processUDPMessage(gotfrom.PublicKey(), addr, msgbuf)
+	connmock := net.NewConnectionMock(gotfrom.PublicKey())
+	err = m.processUDPMessage(net.IncomingMessageEvent{connmock, msgbuf})
 
 	require.Error(t, err) // no protocol
 
 	c := make(chan service.DirectMessage, 1)
 	m.RegisterDirectProtocolWithChannel(test_str, c)
-	err = m.processUDPMessage(gotfrom.PublicKey(), addr, msgbuf)
+	err = m.processUDPMessage(net.IncomingMessageEvent{connmock, msgbuf})
 	require.NoError(t, err) // no protocol
 
 	select {
