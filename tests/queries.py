@@ -2,6 +2,7 @@ import collections
 import random
 import re
 import time
+from collections import defaultdict
 from datetime import datetime
 
 from elasticsearch_dsl import Search, Q
@@ -52,11 +53,11 @@ def get_release_tick_msgs(namespace, pod_name):
     return get_all_msg_containing(namespace, pod_name, release_tick)
 
 
+CREATED_BLOCK_MSG = "block created"
+
+
 def get_block_creation_msgs(namespace, pod_name, find_fails=False, from_ts=None, to_ts=None):
-    # I've created a block in layer %v. id: %v, num of transactions: %v, votes: %d,
-    # viewEdges: %d, atx %v, atxs:%v
-    created_block_msg = "I've created a block in layer"
-    return get_all_msg_containing(namespace, pod_name, created_block_msg, find_fails, from_ts, to_ts)
+    return get_all_msg_containing(namespace, pod_name, CREATED_BLOCK_MSG, find_fails, from_ts, to_ts)
 
 
 def get_done_syncing_msgs(namespace, pod_name):
@@ -95,17 +96,13 @@ def get_all_msg_containing(namespace, pod_name, msg_data, find_fails=False, from
     return hit_lst
 
 
-def get_blocks_msgs_of_pod(namespace, pod_name):
-    return get_blocks_and_layers(namespace, pod_name)
-
-
 def get_blocks_per_node_and_layer(deployment):
     return get_blocks_and_layers(deployment, deployment)
 
 
 def get_blocks_and_layers(namespace, pod_name, find_fails=False):
     blocks = get_block_creation_msgs(namespace, pod_name, find_fails)
-    nodes = sort_by_nodeid(blocks)
+    nodes = sort_by_node_id(blocks)
     layers = sort_by_layer(blocks)
 
     return nodes, layers
@@ -230,57 +227,47 @@ def parseAtx(log_messages):
     return node2blocks
 
 
+class Node:
+    def __init__(self):
+        self.blocks = 0
+        self.layers = defaultdict(list)
+
+    def add_block_to_layer(self, block):
+        self.blocks += 1
+        self.layers[block.layer_id].append(block)
+
+
 # sets log messages into a dictionary where keys=node_id and
 # value is a dictionary of blocks and layers
 # TODO this can be a util function
-def sort_by_nodeid(log_messages):
-    node2blocks = {}
+def sort_by_node_id(log_messages):
+    node2blocks = defaultdict(Node)
     for log in log_messages:
-        # I've created a block in layer %v. id: %v, num of transactions: %v, votes: %d,
-        # viewEdges: %d, atx %v, atxs:%v
-        id = re.split(r'\.', log.N)[0]
-        m = re.findall(r'\w+\b', log.M)
-        # layer field
-        layer = m[7]
-        # blocks - list of all blocks, layers - map of blocks per layer
-        if id in node2blocks:
-            node2blocks[id]["blocks"].append(m)
-            if layer in node2blocks[id]["layers"]:
-                node2blocks[id]["layers"][layer].append(m)
-            else:
-                node2blocks[id]["layers"][layer] = [m]
-        else:
-            node2blocks[id] = {"blocks": [m], "layers": {m[7]: [m]}}
+        node2blocks[log.node_id].add_block_to_layer(log)
     return node2blocks
 
 
-# sets log messages into a dictionary where keys=layer_id and
-# value is a dictionary of blocks and layers
+# sets log messages into a dictionary where keys are layer_ids and values are the number of blocks in that layer
 # TODO this can be a util function
 def sort_by_layer(log_messages):
-    blocks_per_layer = {}
+    blocks_per_layer = defaultdict(list)
     for log in log_messages:
-        fields = re.findall(r'\d+', log.M)
-        layer = fields[0]
-        if layer in blocks_per_layer:
-            blocks_per_layer[layer].append(fields)
-        else:
-            blocks_per_layer[layer] = [fields]
+        blocks_per_layer[log.layer_id].append(log)
     return blocks_per_layer
 
 
 # TODO this can be a util function
-def print_node_stats(nodes):
-    for node in nodes:
-        print("node " + node + " blocks created: " + str(len(nodes[node]["blocks"])))
-        for layer in nodes[node]["layers"]:
-            print("blocks created in layer " + str(layer) + " : " + str(len(nodes[node]["layers"][layer])))
+def print_node_stats(nodes: defaultdict):
+    for node_id, node in nodes.items():
+        print(f"Total blocks created by node {node_id}: {node.blocks}")
+        for layer_id, layer_blocks in node.layers.items():
+            print(f"  Layer {layer_id}: {len(layer_blocks)}")
 
 
 # TODO this can be a util function
 def print_layer_stat(layers):
-    for l in layers:
-        print("blocks created in layer " + str(l) + " : " + str(len(layers[l])))
+    for layer_id, blocks in layers.items():
+        print(f"Blocks created in layer {layer_id}: {len(blocks)}")
 
 
 # TODO this can be a util function
@@ -434,7 +421,7 @@ def message_propagation(deployment, query_fields):
     srt = sorted(logs, key=lambda x: datetime.strptime(x.T, convenience.TIMESTAMP_FMT))
     if len(srt) > 0:
         t1 = datetime.strptime(srt[0].T, convenience.TIMESTAMP_FMT)
-        t2 = datetime.strptime(srt[len(srt) - 1].T, convenience.TIMESTAMP_FMT)
+        t2 = datetime.strptime(srt[-1].T, convenience.TIMESTAMP_FMT)
         diff = t2 - t1
         # print(diff)
         return diff, t2
@@ -442,22 +429,19 @@ def message_propagation(deployment, query_fields):
 
 
 def layer_block_max_propagation(deployment, layer):
-    block_fields = {"M": "I've created a block in layer %d" % layer}
+    block_fields = {"M": CREATED_BLOCK_MSG, "layer_id": layer}
     logs = query_message(current_index, deployment, deployment, block_fields, False)
     max_propagation = None
     msg_time = None
-    for x in logs:
-        # id = re.split(r'\.', x.N)[0]
-        fields = re.findall(r'\w+\b', x.M)
-        # block_id field
-        print(list(x), fields[9])
-        block_recv_msg = {"M": "got new block", "block_id": fields[9]}
+    for log in logs:
+        print(list(log), log.block_id)
+        block_recv_msg = {"M": "block received", "block_id": log.block_id}
         # prop is the propagation delay delta between oldest and youngest message of this sort
         prop, max_time = message_propagation(deployment, block_recv_msg)
         print(prop, max_time)
         # if we have a delta (we found 2 times to get the diff from, check if this delta is the greatest.)
         if prop is not None and (max_propagation is None or prop > max_propagation):
-            max_propagation, msg_time = prop, max_time - datetime.strptime(x.T, convenience.TIMESTAMP_FMT)
+            max_propagation, msg_time = prop, max_time - datetime.strptime(log.T, convenience.TIMESTAMP_FMT)
     return max_propagation, msg_time
 
 

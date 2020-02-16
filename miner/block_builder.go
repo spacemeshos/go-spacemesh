@@ -274,11 +274,19 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 
 	bl := &types.Block{MiniBlock: b, Signature: t.Signer.Sign(blockBytes)}
 
-	bl.CalcAndSetId()
+	bl.Initialize()
 
-	t.Log.Event().Info(fmt.Sprintf("I've created a block in layer %v. id: %v, num of transactions: %v, votes: %d, viewEdges: %d atx %v, atxs:%v",
-		b.LayerIndex, bl.Id(), len(b.TxIds), len(b.BlockVotes), len(b.ViewEdges), b.ATXID.ShortString(), len(b.AtxIds)))
-
+	t.Log.Event().Info("block created",
+		bl.Id(),
+		bl.LayerIndex,
+		log.String("miner_id", bl.MinerId().String()),
+		log.Int("tx_count", len(bl.TxIds)),
+		log.Int("atx_count", len(bl.AtxIds)),
+		log.Int("view_edges", len(bl.ViewEdges)),
+		log.Int("vote_count", len(bl.BlockVotes)),
+		bl.ATXID,
+		log.Uint32("eligibility_counter", bl.EligibilityProof.J),
+	)
 	return bl, nil
 }
 
