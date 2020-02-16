@@ -72,8 +72,6 @@ type Hare struct {
 
 	nid types.NodeId
 
-	isSynced syncStateFunc
-
 	totalCPs int32
 }
 
@@ -117,8 +115,6 @@ func New(conf config.Config, p2p NetworkService, sign Signer, nid types.NodeId, 
 	h.validate = validate
 
 	h.nid = nid
-
-	h.isSynced = syncState
 
 	return h
 }
