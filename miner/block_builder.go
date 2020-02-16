@@ -156,6 +156,7 @@ type WeakCoinProvider interface {
 type meshProvider interface {
 	LayerBlockIds(index types.LayerID) ([]types.BlockID, error)
 	GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error)
+	GetBlock(id types.BlockID) (*types.Block, error)
 }
 
 //used from external API call?
@@ -179,6 +180,17 @@ func calcHdistRange(id types.LayerID, hdist types.LayerID) (bottom types.LayerID
 	}
 
 	return bottom, top
+}
+
+func filterUnknownBlocks(blocks []types.BlockID, validate func(id types.BlockID) (*types.Block, error)) []types.BlockID {
+	var filtered []types.BlockID
+	for _, b := range blocks {
+		if _, e := validate(b); e == nil {
+			filtered = append(filtered, b)
+		}
+	}
+
+	return filtered
 }
 
 func (t *BlockBuilder) getVotes(id types.LayerID) ([]types.BlockID, error) {
@@ -223,6 +235,7 @@ func (t *BlockBuilder) getVotes(id types.LayerID) ([]types.BlockID, error) {
 		votes = append(votes, res...)
 	}
 
+	votes = filterUnknownBlocks(votes, t.meshProvider.GetBlock)
 	return votes, nil
 }
 
