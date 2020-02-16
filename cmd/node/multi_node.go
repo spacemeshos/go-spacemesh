@@ -31,9 +31,10 @@ type ManualClock struct {
 
 func NewManualClock(genesisTime time.Time) *ManualClock {
 	t := &ManualClock{
-		subs:         make(map[timesync.LayerTimer]struct{}),
-		currentLayer: 0, // genesis
-		genesisTime:  genesisTime,
+		subs:          make(map[timesync.LayerTimer]struct{}),
+		layerChannels: make(map[types.LayerID]chan struct{}),
+		currentLayer:  0, // genesis
+		genesisTime:   genesisTime,
 	}
 	return t
 }
@@ -269,11 +270,11 @@ loop:
 		select {
 		// Got a timeout! fail with a timeout error
 		case <-timeout:
-			log.Error("run timed out", err)
+			log.Panic("run timed out", err)
 			return
 		default:
 			if errors > 100 {
-				log.Error("too many errors and retries")
+				log.Panic("too many errors and retries")
 				break loop
 			}
 			layer := clock.GetCurrentLayer()
