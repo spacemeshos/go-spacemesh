@@ -166,10 +166,6 @@ func (s *Syncer) ForceSync() {
 
 func (s *Syncer) Close() {
 	s.Info("Closing syncer")
-	run := atomic.LoadUint32(&s.SyncLock)
-	if run == RUNNING {
-		s.exit <- struct{}{}
-	}
 	close(s.exit)
 	close(s.forceSync)
 	s.Peers.Close()
@@ -177,6 +173,9 @@ func (s *Syncer) Close() {
 	s.atxQueue.Close()
 	s.txQueue.Close()
 	s.MessageServer.Close()
+	// make sure we are done with all routines.
+	s.syncLock.Lock()
+	s.syncLock.Unlock()
 }
 
 //check if syncer was closed
@@ -257,63 +256,55 @@ func (s *Syncer) run() {
 			s.Debug("Work stopped")
 			return
 		case <-s.forceSync:
-			select {
-			case <-s.exit:
-				return
-			default:
-			}
-			s.synchronise()
+			go s.synchronise()
 		case <-s.syncTimer.C:
-			select {
-			case <-s.exit:
-				return
-			default:
-			}
-			s.synchronise()
+			go s.synchronise()
 		}
 	}
 }
 
 func (s *Syncer) synchronise() {
-	if s.syncLock.TryLock() { //only one concurrent synchronise
-		s.Info("start synchronize")
-
-		defer func() { //release synchronise lock
-			s.syncLock.Unlock()
-			s.Info("close synchronize, %v", s.Status())
-		}()
-
-		if s.GetCurrentLayer() <= 1 { // skip validation for first layer
-			s.With().Info("Not syncing in layer <= 1", log.LayerId(uint64(s.GetCurrentLayer())))
-			s.setGossipBufferingStatus(Done) // fully-synced, make sure we listen to p2p
-			return
-		}
-
-		currentSyncLayer := s.lValidator.ProcessedLayer() + 1
-		if currentSyncLayer == s.GetCurrentLayer() { // only validate if current < lastTicked
-			s.With().Info("Already synced for layer", log.Uint64("current_sync_layer", uint64(currentSyncLayer)))
-			s.setGossipBufferingStatus(Done) // fully-synced, make sure we listen to p2p
-			return
-		}
-
-		if s.weaklySynced() { // we have all the data of the prev layers so we can simply validate
-			s.With().Info("Node is weakly synced. Going to validate layer")
-			for ; currentSyncLayer < s.GetCurrentLayer(); currentSyncLayer++ {
-				if s.shutdown() {
-					return
-				}
-				s.With().Info("Going to validate layer", log.LayerId(uint64(currentSyncLayer)))
-				if err := s.GetAndValidateLayer(currentSyncLayer); err != nil {
-					s.Panic("failed getting layer even though we are weakly-synced currentLayer=%v lastTicked=%v err=%v ", currentSyncLayer, s.GetCurrentLayer(), err)
-				}
-			}
-			s.With().Info("Node is synced")
-			return
-		}
-
-		// node is not synced
-		s.handleNotSynced(currentSyncLayer)
+	if s.syncLock.TryLock() == false { //only one concurrent synchronise
+		return
 	}
+
+	s.Info("start synchronize")
+
+	defer func() { //release synchronise lock
+		s.syncLock.Unlock()
+		s.Info("close synchronize, %v", s.Status())
+	}()
+
+	if s.GetCurrentLayer() <= 1 { // skip validation for first layer
+		s.With().Info("Not syncing in layer <= 1", log.LayerId(uint64(s.GetCurrentLayer())))
+		s.setGossipBufferingStatus(Done) // fully-synced, make sure we listen to p2p
+		return
+	}
+
+	currentSyncLayer := s.lValidator.ProcessedLayer() + 1
+	if currentSyncLayer == s.GetCurrentLayer() { // only validate if current < lastTicked
+		s.With().Info("Already synced for layer", log.Uint64("current_sync_layer", uint64(currentSyncLayer)))
+		s.setGossipBufferingStatus(Done) // fully-synced, make sure we listen to p2p
+		return
+	}
+
+	if s.weaklySynced() { // we have all the data of the prev layers so we can simply validate
+		s.With().Info("Node is weakly synced. Going to validate layer")
+		for ; currentSyncLayer < s.GetCurrentLayer(); currentSyncLayer++ {
+			if s.shutdown() {
+				return
+			}
+			s.With().Info("Going to validate layer", log.LayerId(uint64(currentSyncLayer)))
+			if err := s.GetAndValidateLayer(currentSyncLayer); err != nil {
+				s.Panic("failed getting layer even though we are weakly-synced currentLayer=%v lastTicked=%v err=%v ", currentSyncLayer, s.GetCurrentLayer(), err)
+			}
+		}
+		s.With().Info("Node is synced")
+		return
+	}
+
+	// node is not synced
+	s.handleNotSynced(currentSyncLayer)
 }
 
 func (s *Syncer) fastValidation(block *types.Block) error {
