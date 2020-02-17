@@ -110,7 +110,7 @@ def validate_blocks_per_nodes(block_map, from_layer, to_layer, layers_per_epoch,
         ass_err += f"\nblocks created per layer {blocks_per_layer}, wanted average block per node {wanted_res}"
         assert blocks_per_layer == wanted_res, ass_err
 
-    print("\nvalidation succeeded!")
+    print("\nvalidation succeeded!\n")
 
 
 def get_pod_id(ns, pod_name):

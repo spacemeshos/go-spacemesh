@@ -15,8 +15,8 @@ from tests.utils import validate_blocks_per_nodes, get_pod_id
 # wait 3 epochs
 #
 # epoch i+3:
-# validate total miners generated Tavg/x+1 (floored) in i+2
-# check if miners created an ATX
+# validate total miners generated Tavg/x+1 (floored) in i+1 and i+2
+# validate all miners created an ATX
 # remove the last added miner
 #
 # epoch i+4:
@@ -29,6 +29,11 @@ from tests.utils import validate_blocks_per_nodes, get_pod_id
 # validate total miner generated Tavg/x+1 (floored) in i+5 except for the removed miner
 #
 # epoch i+7
+# node was killed after it created an ATX on the 3rd epoch (may be changed)
+# other nodes notice no blocks created by the fallen node only
+# 3 epochs after the epoch it was killed in (6th epoch)
+#
+# hence:
 # validate total miner generated Tavg/x (floored) in i+6
 def test_remove_node_validate_atx(init_session, setup_network):
     curr_epoch = 0
@@ -134,9 +139,6 @@ def test_remove_node_validate_atx(init_session, setup_network):
     block_map, _ = q.get_blocks_per_node_and_layer(init_session)
 
     # remove the removed node from nodes count
-    # node was killed after it created an ATX on the 4th epoch (may be changed)
-    # other nodes notice no blocks created by the fallen node only
-    # 2 epochs after the epoch it was killed in (6th epoch)
     num_miners -= 1
     # assert that each node has created layer_avg/number_of_nodes
     validate_blocks_per_nodes(block_map, prev_layer, last_layer, layers_per_epoch, layer_avg_size, num_miners,
