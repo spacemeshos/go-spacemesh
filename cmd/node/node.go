@@ -723,7 +723,7 @@ func (app *SpacemeshApp) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 		log.Warning("Failed to find identity file: %v", err)
 
 		edSgn := signing.NewEdSigner()
-		f = filepath.Join(shared.GetInitDir(app.Config.POST.DataDir, edSgn.PublicKey().Bytes()), edKeyFileName)
+		f = filepath.Join(shared.GetInitDir(app.Config.DataDir, edSgn.PublicKey().Bytes()), edKeyFileName)
 		err := os.MkdirAll(filepath.Dir(f), filesystem.OwnerReadWriteExec)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create directory for identity file: %v", err)
@@ -759,7 +759,7 @@ func (identityFileFound) Error() string {
 
 func (app *SpacemeshApp) getIdentityFile() (string, error) {
 	var f string
-	err := filepath.Walk(app.Config.POST.DataDir, func(path string, info os.FileInfo, err error) error {
+	err := filepath.Walk(app.Config.DataDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil
 		}
