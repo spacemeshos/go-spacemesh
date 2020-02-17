@@ -360,7 +360,7 @@ func createLayer2(index types.LayerID, view *types.Layer, votes []*types.Layer, 
 			}
 		}
 
-		bl.CalcAndSetId()
+		bl.Initialize()
 		l.AddBlock(bl)
 	}
 	log.Debug("Created mesh.LayerID %d with blocks %d", l.Index(), layerBlocks)
@@ -689,7 +689,7 @@ func createLayer(index types.LayerID, prev []*types.Layer, blocksInLayer int) *t
 				bl.AddView(types.BlockID(prevBloc.Id()))
 			}
 		}
-		bl.CalcAndSetId()
+		bl.Initialize()
 		l.AddBlock(bl)
 	}
 	log.Debug("Created mesh.LayerID %d with blocks %d", l.Index(), layerBlocks)
@@ -917,13 +917,13 @@ func createLayerWithCorruptedPattern(index types.LayerID, prev *types.Layer, blo
 	layerBlocks := make([]types.BlockID, 0, blocksInLayer)
 	for i := 0; i < gbs; i++ {
 		bl := addPattern(types.NewExistingBlock(index, []byte(rand.RandString(8))), goodPattern, prev)
-		bl.CalcAndSetId()
+		bl.Initialize()
 		layerBlocks = append(layerBlocks, bl.Id())
 		l.AddBlock(bl)
 	}
 	for i := 0; i < blocksInLayer-gbs; i++ {
 		bl := addPattern(types.NewExistingBlock(index, []byte(rand.RandString(8))), badPattern, prev)
-		bl.CalcAndSetId()
+		bl.Initialize()
 		layerBlocks = append(layerBlocks, bl.Id())
 		l.AddBlock(bl)
 	}
@@ -964,7 +964,7 @@ func createLayerWithRandVoting(index types.LayerID, prev []*types.Layer, blocksI
 		for _, prevBloc := range prev[0].Blocks() {
 			bl.AddView(types.BlockID(prevBloc.Id()))
 		}
-		bl.CalcAndSetId()
+		bl.Initialize()
 		l.AddBlock(bl)
 	}
 	log.Debug("Created mesh.LayerID %d with blocks %d", l.Index(), layerBlocks)

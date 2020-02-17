@@ -2,10 +2,8 @@ package oracle
 
 import (
 	"fmt"
-	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/sha256-simd"
 )
 
@@ -111,9 +109,7 @@ func (v BlockEligibilityValidator) getValidAtx(block *types.Block) (*types.Activ
 		return nil, fmt.Errorf("ATX target epoch (%d) doesn't match block publication epoch (%d)",
 			atxTargetEpoch, blockEpoch)
 	}
-	if pubkey, err := ed25519.ExtractPublicKey(block.Bytes(), block.Sig()); err != nil {
-		return nil, fmt.Errorf("failed to extract block public key: %v", err)
-	} else if pubString := signing.NewPublicKey(pubkey).String(); atx.NodeId.Key != pubString {
+	if pubString := block.MinerId().String(); atx.NodeId.Key != pubString {
 		return nil, fmt.Errorf("block signer (%s) mismatch with ATX node (%s)", pubString, atx.NodeId.Key)
 	}
 	return atx, nil
