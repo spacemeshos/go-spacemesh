@@ -61,7 +61,8 @@ func TestSpacemeshApp_getEdIdentity(t *testing.T) {
 
 	// setup spacemesh app
 	app := NewSpacemeshApp()
-	app.Config.POST.DataDir = "tmp"
+	app.Config.DataDirParent = "tmp"
+	identityDir := filepath.Join("tmp", fmt.Sprint(app.Config.P2P.NetworkID))
 	app.log = log.NewDefault("logger")
 
 	// get new identity
@@ -69,7 +70,7 @@ func TestSpacemeshApp_getEdIdentity(t *testing.T) {
 	r.NoError(err)
 
 	// ensure we have a single subdirectory under tmp
-	infos, err := ioutil.ReadDir("tmp")
+	infos, err := ioutil.ReadDir(identityDir)
 	r.NoError(err)
 	r.Len(infos, 1)
 
@@ -78,7 +79,7 @@ func TestSpacemeshApp_getEdIdentity(t *testing.T) {
 	r.NoError(err)
 
 	// ensure that we didn't create another identity
-	infos, err = ioutil.ReadDir("tmp")
+	infos, err = ioutil.ReadDir(identityDir)
 	r.NoError(err)
 	r.Len(infos, 1)
 
@@ -86,12 +87,12 @@ func TestSpacemeshApp_getEdIdentity(t *testing.T) {
 	r.Equal(sgn.PublicKey(), sgn2.PublicKey())
 
 	// mess with the directory name
-	err = os.Rename(filepath.Join("tmp", infos[0].Name()), filepath.Join("tmp", "wrong name"))
+	err = os.Rename(filepath.Join(identityDir, infos[0].Name()), filepath.Join(identityDir, "wrong name"))
 	r.NoError(err)
 
 	// run the method again
 	_, err = app.LoadOrCreateEdSigner()
-	r.EqualError(err, fmt.Sprintf("identity file path ('tmp/wrong name') does not match public key (%v)", sgn.PublicKey().String()))
+	r.EqualError(err, fmt.Sprintf("identity file path ('tmp/%d/wrong name') does not match public key (%v)", app.Config.P2P.NetworkID, sgn.PublicKey().String()))
 }
 
 func newLogger(buf *bytes.Buffer) log.Log {
