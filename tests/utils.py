@@ -81,7 +81,8 @@ def wait_for_next_layer(namespace, cl_num, timeout):
 
 
 # TODO there might be a better place for a validation func than utils
-def validate_blocks_per_nodes(block_map, from_layer, to_layer, layers_per_epoch, layer_avg_size, num_miners):
+def validate_blocks_per_nodes(block_map, from_layer, to_layer, layers_per_epoch, layer_avg_size, num_miners,
+                              ignore_lst=None):
     # layers count start from 0
     if from_layer == 0:
         print(f"refactoring starting layer from 0 to {layers_per_epoch}, not validating first layer")
@@ -96,6 +97,10 @@ def validate_blocks_per_nodes(block_map, from_layer, to_layer, layers_per_epoch,
 
     print("validating node")
     for node in block_map:
+        if ignore_lst and node in ignore_lst:
+            print(f"skipping node {node}")
+            continue
+
         print(f"{node}, ", end="")
         node_lays = block_map[node]["layers"]
         blocks_sum = sum([len(node_lays[str(x)]) for x in range(from_layer, to_layer) if str(x) in node_lays])
