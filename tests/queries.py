@@ -53,11 +53,9 @@ def get_release_tick_msgs(namespace, pod_name):
     return get_all_msg_containing(namespace, pod_name, release_tick)
 
 
-CREATED_BLOCK_MSG = "block created"
-
-
 def get_block_creation_msgs(namespace, pod_name, find_fails=False, from_ts=None, to_ts=None):
-    return get_all_msg_containing(namespace, pod_name, CREATED_BLOCK_MSG, find_fails, from_ts, to_ts)
+    created_block = "block created"
+    return get_all_msg_containing(namespace, pod_name, created_block, find_fails, from_ts, to_ts)
 
 
 def get_done_syncing_msgs(namespace, pod_name):

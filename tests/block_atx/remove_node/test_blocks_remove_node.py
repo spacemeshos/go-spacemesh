@@ -65,7 +65,6 @@ def test_remove_node_validate_atx(init_session, setup_network):
 
     print(f"-------- validating blocks per nodes up to layer {last_layer} --------")
     block_map, _ = q.get_blocks_per_node_and_layer(init_session)
-    # prev_layer = last_layer - layers_per_epoch
     validate_blocks_per_nodes(block_map, 0, last_layer, layers_per_epoch, layer_avg_size, num_miners)
 
     print("-------- validating all nodes ATX creation in last epoch --------")

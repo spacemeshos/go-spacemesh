@@ -102,8 +102,8 @@ def validate_blocks_per_nodes(block_map, from_layer, to_layer, layers_per_epoch,
             continue
 
         print(f"{node}, ", end="")
-        node_lays = block_map[node]["layers"]
-        blocks_sum = sum([len(node_lays[str(x)]) for x in range(from_layer, to_layer) if str(x) in node_lays])
+        node_lays = block_map[node].layers
+        blocks_sum = sum([len(node_lays[x]) for x in range(from_layer, to_layer)])
         blocks_per_layer = blocks_sum / (to_layer - from_layer)
         wanted_res = int((layer_avg_size * layers_per_epoch) / num_miners) / layers_per_epoch
         ass_err = f"node {node} failed creating the avg block size"
