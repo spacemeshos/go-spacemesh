@@ -283,6 +283,7 @@ func newBlockWithEligibility(layerID types.LayerID, nodeID types.NodeId, atxID t
 	if _, ok := db.atxs[edSigner.PublicKey().String()]; !ok {
 		db.atxs[edSigner.PublicKey().String()] = map[types.LayerID]types.AtxId{}
 	}
+	block.Initialize()
 	db.atxs[edSigner.PublicKey().String()][layerID] = atxID
 	return block
 }

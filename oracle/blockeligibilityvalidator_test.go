@@ -36,6 +36,7 @@ func TestBlockEligibilityValidator_getValidAtx(t *testing.T) {
 
 	block := &types.Block{MiniBlock: types.MiniBlock{BlockHeader: types.BlockHeader{LayerIndex: 20}}} // non-genesis
 	block.Signature = edSigner.Sign(block.Bytes())
+	block.Initialize()
 	_, err := v.getValidAtx(block)
 	r.EqualError(err, "getting ATX failed: some err 00000 ep(4)")
 
