@@ -80,7 +80,7 @@ func TestCheckMessageDrift(t *testing.T) {
 	assert.False(t, on)
 }
 
-func MockntpRequest(server string, rq *NtpPacket) (time.Time, time.Duration, *NtpPacket, error){
+func MockntpRequest(server string, rq *NtpPacket) (time.Time, time.Duration, *NtpPacket, error) {
 	return time.Now(), 0, &NtpPacket{}, nil
 }
 
@@ -95,10 +95,10 @@ func Test_queryNtpServerZeroTime(t *testing.T) {
 	go queryNtpServer("mock", resChan, errChan)
 
 	select {
-		case err := <- errChan:
-			assert.NotNil(t, err)
-		case <-time.After(1 * time.Second):
-			assert.Fail(t, "error not received")
+	case err := <-errChan:
+		assert.NotNil(t, err)
+	case <-time.After(1 * time.Second):
+		assert.Fail(t, "error not received")
 	}
 
 }

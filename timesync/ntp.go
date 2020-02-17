@@ -127,7 +127,7 @@ func ntpRequest(server string, rq *NtpPacket) (time.Time, time.Duration, *NtpPac
 	return before, latency, rsp, nil
 }
 
-func queryNtpServer(server string, resultsChan chan time.Duration, errorChan chan error){
+func queryNtpServer(server string, resultsChan chan time.Duration, errorChan chan error) {
 	req := &NtpPacket{Settings: 0x1B}
 	rt, lat, rsp, err := ntpFunc(server, req)
 	if err != nil {
@@ -154,7 +154,6 @@ func ntpTimeDrift() (time.Duration, error) {
 	// Version = 3
 	resultsChan := make(chan time.Duration)
 	errorChan := make(chan error)
-
 
 	// Make NtpQueries concurrent calls to different ntp servers
 	// if more servers fail than succeed in DefaultTimeoutLatency timeout the node.
