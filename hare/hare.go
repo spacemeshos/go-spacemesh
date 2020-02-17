@@ -72,8 +72,6 @@ type Hare struct {
 
 	nid types.NodeId
 
-	isSynced syncStateFunc
-
 	totalCPs int32
 }
 
@@ -117,8 +115,6 @@ func New(conf config.Config, p2p NetworkService, sign Signer, nid types.NodeId, 
 	h.validate = validate
 
 	h.nid = nid
-
-	h.isSynced = syncState
 
 	return h
 }
@@ -201,7 +197,7 @@ func (h *Hare) onTick(id types.LayerID) {
 	h.layerLock.Unlock()
 	h.Debug("hare got tick, sleeping for %v", h.networkDelta)
 
-	if !h.isSynced() { // if not synced don't start consensus
+	if !h.broker.Synced(instanceId(id)) { // if not synced don't start consensus
 		h.With().Info("not starting hare since the node is not synced", log.LayerId(uint64(id)))
 		return
 	}

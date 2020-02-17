@@ -10,6 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"sync"
 	"testing"
 	"time"
 )
@@ -529,4 +530,20 @@ func TestBroker_Flow(t *testing.T) {
 
 	b.Unregister(1)
 	r.Equal(instanceId2, b.minDeleted)
+}
+
+func TestBroker_Synced(t *testing.T) {
+	r := require.New(t)
+	b := buildBroker(service.NewSimulator().NewNode(), t.Name())
+	b.Start()
+	wg := sync.WaitGroup{}
+	for i := 0; i < 1000; i++ {
+		wg.Add(1)
+		go func(j int) {
+			r.True(b.Synced(instanceId(j)))
+			wg.Done()
+		}(i)
+	}
+
+	wg.Wait()
 }
