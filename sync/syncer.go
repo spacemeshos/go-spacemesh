@@ -192,7 +192,6 @@ func (s *Syncer) Await() chan struct{} {
 }
 
 func (s *Syncer) IsSynced() bool {
-	s.Log.Info("latest: %v, maxSynced %v", s.LatestLayer(), s.lastTickedLayer())
 	return s.weaklySynced() && s.getGossipBufferingStatus() == Done
 }
 
@@ -793,7 +792,7 @@ func (s *Syncer) GetAndValidateLayer(id types.LayerID) error {
 		return err
 	}
 	s.lValidator.ValidateLayer(lyr) // wait for layer validation
-
+	s.Log.Info("latest: %v, maxSynced %v", s.LatestLayer(), s.lastTickedLayer())
 	return nil
 }
 
