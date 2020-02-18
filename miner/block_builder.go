@@ -398,6 +398,11 @@ func (t *BlockBuilder) handleGossipAtx(data service.GossipMessage) {
 		commitmentStr = atx.Commitment.String()
 	}
 
+	h, err := atx.NIPSTChallenge.Hash()
+	if err != nil {
+		t.Error("getting challenge hash failed: %v", err)
+	}
+
 	t.With().Info("got new ATX",
 		log.String("sender_id", atx.NodeId.ShortString()),
 		log.AtxId(atx.ShortString()),
@@ -409,6 +414,7 @@ func (t *BlockBuilder) handleGossipAtx(data service.GossipMessage) {
 		log.Uint64("sequence_number", atx.Sequence),
 		log.String("commitment", commitmentStr),
 		log.Int("atx_size", len(data.Bytes())),
+		log.String("NIPSTChallenge", h.String()),
 	)
 
 	//todo fetch from neighbour
