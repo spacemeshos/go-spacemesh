@@ -33,7 +33,7 @@ type TerminationOutput interface {
 }
 
 type orphanBlockProvider interface {
-	GetUnverifiedLayerBlocks(layerId types.LayerID) ([]types.BlockID, error)
+	LayerBlockIds(layerId types.LayerID) ([]types.BlockID, error)
 }
 
 // checks if the collected output is valid
@@ -216,7 +216,7 @@ func (h *Hare) onTick(id types.LayerID) {
 
 	h.Debug("get hare results")
 	// retrieve set form orphan blocks
-	blocks, err := h.obp.GetUnverifiedLayerBlocks(h.lastLayer)
+	blocks, err := h.obp.LayerBlockIds(h.lastLayer)
 	if err != nil {
 		h.With().Error("No blocks for consensus", log.LayerId(uint64(id)), log.Err(err))
 		return
