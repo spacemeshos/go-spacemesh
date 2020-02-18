@@ -11,6 +11,7 @@ from tests import convenience
 from tests.context import ES
 from tests.convenience import PRINT_SEP
 
+CREATED_BLOCK_MSG = "block created"
 TS_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
 
 dt = datetime.now()
@@ -54,8 +55,7 @@ def get_release_tick_msgs(namespace, pod_name):
 
 
 def get_block_creation_msgs(namespace, pod_name, find_fails=False, from_ts=None, to_ts=None):
-    created_block = "block created"
-    return get_all_msg_containing(namespace, pod_name, created_block, find_fails, from_ts, to_ts)
+    return get_all_msg_containing(namespace, pod_name, CREATED_BLOCK_MSG, find_fails, from_ts, to_ts)
 
 
 def get_done_syncing_msgs(namespace, pod_name):

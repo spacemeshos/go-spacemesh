@@ -1,4 +1,3 @@
-import time
 from pytest_testconfig import config as testconfig
 
 from tests import queries as q
@@ -58,8 +57,9 @@ def test_add_node_validate_atx(init_session, setup_network):
     print("\n\n-------- current epoch", curr_epoch, "--------")
     block_map, _ = q.get_blocks_per_node_and_layer(init_session)
     print(f"-------- validating blocks per nodes up to layer {last_layer} --------")
-    # sometimes block_map contains the newly created node with value of 0
-    # this is an unwanted behavior, until fixed exclude new created node
+    # we're querying for block creation without epoch constrain, this will result
+    # with epochs where new or deleted nodes will return 0 blocks in certain epochs
+    # we should ignore those
     new_pod_id = get_pod_id(init_session, new_pod_name)
     ignore_lst = [new_pod_id]
     validate_blocks_per_nodes(block_map, 0, last_layer, layers_per_epoch, layer_avg_size, num_miners,

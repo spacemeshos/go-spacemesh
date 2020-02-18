@@ -85,7 +85,7 @@ def validate_blocks_per_nodes(block_map, from_layer, to_layer, layers_per_epoch,
                               ignore_lst=None):
     # layers count start from 0
     if from_layer == 0:
-        print(f"refactoring starting layer from 0 to {layers_per_epoch}, not validating first layer")
+        print(f"refactoring starting layer from 0 to {layers_per_epoch}, not validating first epoch")
         from_layer = layers_per_epoch
 
     assert from_layer <= to_layer, f"starting layer ({from_layer}) must be bigger than ending layer ({to_layer})"
@@ -98,7 +98,7 @@ def validate_blocks_per_nodes(block_map, from_layer, to_layer, layers_per_epoch,
     print("validating node")
     for node in block_map:
         if ignore_lst and node in ignore_lst:
-            print(f"skipping node {node}")
+            print(f"SKIPPING NODE {node}, ", end="")
             continue
 
         print(f"{node}, ", end="")
