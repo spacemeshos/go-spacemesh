@@ -40,6 +40,9 @@ var (
 	}
 	zeroDuration = time.Duration(0)
 	zeroTime     = time.Time{}
+	zeroNtp      = NtpPacket{}
+
+	ntpFunc = ntpRequest
 )
 
 type sortableDurations []time.Duration
@@ -83,7 +86,6 @@ type NtpPacket struct {
 	RxTimeFrac     uint32 // receive time frac3
 	TxTimeSec      uint32 // transmit time secs
 	TxTimeFrac     uint32 // transmit time frac
-
 }
 
 //TODO: implement ntp packet response validation. ( will require more verbose response obj)
@@ -125,6 +127,24 @@ func ntpRequest(server string, rq *NtpPacket) (time.Time, time.Duration, *NtpPac
 	return before, latency, rsp, nil
 }
 
+func queryNtpServer(server string, resultsChan chan time.Duration, errorChan chan error) {
+	req := &NtpPacket{Settings: 0x1B}
+	rt, lat, rsp, err := ntpFunc(server, req)
+	if err != nil {
+		errorChan <- err
+		return
+	}
+	if *rsp == zeroNtp {
+		errorChan <- fmt.Errorf("empty ntp response responded")
+		return
+	}
+
+	// Calculate drift with latency
+	drift := rt.UTC().Sub(rsp.Time().UTC().Add(lat / 2))
+	log.Info("ntp check from server %v, drift: %v, start_check: %v, latency: %v, rsp: %v", server, drift, rt.UTC(), lat, rsp.Time().UTC())
+	resultsChan <- drift
+}
+
 // ntpTimeDrift queries random servers from our list to calculate a drift average.
 func ntpTimeDrift() (time.Duration, error) {
 
@@ -134,7 +154,6 @@ func ntpTimeDrift() (time.Duration, error) {
 	// Version = 3
 	resultsChan := make(chan time.Duration)
 	errorChan := make(chan error)
-	req := &NtpPacket{Settings: 0x1B}
 
 	// Make NtpQueries concurrent calls to different ntp servers
 	// if more servers fail than succeed in DefaultTimeoutLatency timeout the node.
@@ -147,17 +166,7 @@ func ntpTimeDrift() (time.Duration, error) {
 			rndsrv = rand.Intn(sl)
 		}
 		queriedServers[rndsrv] = true
-		go func() {
-			rt, lat, rsp, err := ntpRequest(DefaultServers[rndsrv], req)
-			if err != nil {
-				errorChan <- err
-				return
-			}
-			// Calculate drift with latency
-			drift := rt.UTC().Sub(rsp.Time().UTC().Add(lat / 2))
-			log.Info("ntp check from server %v, drift: %v, start_check: %v, latency: %v, rsp: %v", DefaultServers[rndsrv], drift, rt.UTC(), lat, rsp.Time().UTC())
-			resultsChan <- drift
-		}()
+		go queryNtpServer(DefaultServers[rndsrv], resultsChan, errorChan)
 	}
 
 	res := sortableDurations{}
