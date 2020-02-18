@@ -131,6 +131,15 @@ func NewRecoveredMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh MeshVal
 	}
 	msh.latestLayerInState = types.LayerID(util.BytesToUint64(verified))
 
+	start := types.LayerID(0)
+	if msh.processedLayer > types.LayerID(db.blockCache.Cap()) {
+		start = msh.processedLayer - types.LayerID(db.blockCache.Cap())
+	}
+
+	if err := msh.CacheWarmUp(start, msh.processedLayer); err != nil {
+		logger.Error("cache warm up failed during recovery", err)
+	}
+
 	err = pr.LoadState(msh.LatestLayerInState())
 	if err != nil {
 		logger.Panic("cannot load state for layer %v, message: %v", msh.LatestLayerInState(), err)
@@ -467,22 +476,6 @@ func (m *Mesh) handleOrphanBlocks(blk *types.Block) {
 	}
 }
 
-func (m *Mesh) GetUnverifiedLayerBlocks(l types.LayerID) ([]types.BlockID, error) {
-	x, err := m.layers.Get(l.ToBytes())
-	if err != nil {
-		return nil, errors.New(fmt.Sprintf("could not retrive layer = %d blocks ", l))
-	}
-	blockIds, err := types.BytesToBlockIds(x)
-	if err != nil {
-		return nil, errors.New(fmt.Sprintf("could not desirialize layer to id array for layer %d ", l))
-	}
-	arr := make([]types.BlockID, 0, len(blockIds))
-	for _, bid := range blockIds {
-		arr = append(arr, bid)
-	}
-	return arr, nil
-}
-
 func (m *Mesh) GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error) {
 	m.orphMutex.RLock()
 	defer m.orphMutex.RUnlock()
@@ -495,7 +488,7 @@ func (m *Mesh) GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error) {
 		}
 	}
 
-	blocks, err := m.GetUnverifiedLayerBlocks(l - 1)
+	blocks, err := m.LayerBlockIds(l - 1)
 	if err != nil {
 		return nil, errors.New(fmt.Sprint("failed getting latest layer ", err))
 	}
