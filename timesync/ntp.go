@@ -4,6 +4,7 @@ package timesync
 import (
 	"encoding/binary"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"net"
 	"sort"
