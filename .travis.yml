@@ -34,20 +34,23 @@ jobs:
     name: lint
     install: true # this skips the installation step
     script: make lint
+    if: branch = staging OR branch = trying OR type = pull_request
   - name: test
     script:
       - make genproto
       - make test
+    if: branch = staging OR branch = trying OR type = pull_request
   - name: test-tidy-fmt
     script:
       - make genproto
       - make test-tidy
       - make test-fmt
+    if: branch = staging OR branch = trying OR type = pull_request
   - stage: docker-push
     name: "Push to dockerHub"
     script:
       - make dockerpush
-    if: (branch = develop OR branch = staging OR branch = trying) AND type != pull_request
+    if: (branch = staging OR branch = trying) AND type != pull_request
   - stage: system-test
     name: "Run late nodes system test"
     script:
