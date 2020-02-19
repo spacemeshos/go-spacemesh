@@ -308,6 +308,70 @@ dockertest-blocks-remove-node: dockerbuild-test dockerrun-blocks-remove-node
 .PHONY: dockertest-blocks-remove-node
 
 
+dockerrun-blocks-stress:
+ifndef ES_PASSWD
+	$(error ES_PASSWD is not set)
+endif
+
+	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
+		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
+		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
+		-it go-spacemesh-python:$(BRANCH) pytest -s -v stress/blocks_stress/test_stress_blocks.py --tc-file=stress/blocks_stress/config.yaml --tc-format=yaml
+
+.PHONY: dockerrun-blocks-stress
+
+dockertest-blocks-stress: dockerbuild-test dockerrun-blocks-stress
+.PHONY: dockertest-blocks-stress
+
+
+dockerrun-grpc-stress:
+ifndef ES_PASSWD
+	$(error ES_PASSWD is not set)
+endif
+
+	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
+		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
+		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
+		-it go-spacemesh-python:$(BRANCH) pytest -s -v stress/grpc_stress/test_stress_grpc.py --tc-file=stress/grpc_stress/config.yaml --tc-format=yaml
+
+.PHONY: dockerrun-grpc-stress
+
+dockertest-grpc-stress: dockerbuild-test dockerrun-grpc-stress
+.PHONY: dockertest-grpc-stress
+
+
+dockerrun-sync-stress:
+ifndef ES_PASSWD
+	$(error ES_PASSWD is not set)
+endif
+
+	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
+		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
+		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
+		-it go-spacemesh-python:$(BRANCH) pytest -s -v stress/sync_stress/test_sync.py --tc-file=stress/sync_stress/config.yaml --tc-format=yaml
+
+.PHONY: dockerrun-sync-stress
+
+dockertest-sync-stress: dockerbuild-test dockerrun-sync-stress
+.PHONY: dockertest-sync-stress
+
+
+dockerrun-tx-stress:
+ifndef ES_PASSWD
+	$(error ES_PASSWD is not set)
+endif
+
+	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
+		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
+		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
+		-it go-spacemesh-python:$(BRANCH) pytest -s -v stress/tx_stress/test_stress_txs.py --tc-file=stress/tx_stress/config.yaml --tc-format=yaml
+
+.PHONY: dockerrun-tx-stress
+
+dockertest-tx-stress: dockerbuild-test dockerrun-tx-stress
+.PHONY: dockertest-tx-stress
+
+
 # The following is used to run tests one after the other locally
 dockerrun-test: dockerbuild-test dockerrun-p2p dockerrun-mining dockerrun-hare dockerrun-sync dockerrun-late-nodes dockerrun-genesis-voting dockerrun-blocks-add-node dockerrun-blocks-add-node dockerrun-blocks-remove-node
 .PHONY: dockerrun-test
@@ -315,3 +379,8 @@ dockerrun-test: dockerbuild-test dockerrun-p2p dockerrun-mining dockerrun-hare d
 dockerrun-all: dockerpush dockerrun-test
 .PHONY: dockerrun-all
 
+dockerrun-stress: dockerbuild-test dockerrun-blocks-stress dockerrun-grpc-stress dockerrun-sync-stress dockerrun-tx-stress
+.PHONY: dockerrun-stress
+
+dockertest-stress: dockerpush dockerrun-stress
+.PHONY: dockertest-stress
