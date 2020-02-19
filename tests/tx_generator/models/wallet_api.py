@@ -40,8 +40,11 @@ class WalletAPI:
         tx_field = '{"tx":' + str(list(tx_bytes)) + '}'
         out = self.send_api_call(pod_ip, tx_field, self.submit_api)
         print(f"{datetime.now()}: submit result: {out}")
+        if not out:
+            print("cannot parse submission result, result is none")
+            return False
 
-        if out and re.search(a_ok_pat, out):
+        if re.search(a_ok_pat, out):
             self.tx_ids.append(self.extract_tx_id(out))
             return True
 
