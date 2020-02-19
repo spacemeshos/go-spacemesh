@@ -41,7 +41,7 @@ class WalletAPI:
         out = self.send_api_call(pod_ip, tx_field, self.submit_api)
         print(f"{datetime.now()}: submit result: {out}")
 
-        if re.search(a_ok_pat, out):
+        if out and re.search(a_ok_pat, out):
             self.tx_ids.append(self.extract_tx_id(out))
             return True
 
@@ -118,6 +118,10 @@ class WalletAPI:
 
     @staticmethod
     def extract_value_from_resp(val):
+        if not val:
+            print("cannot extract value, input is None")
+            return None
+
         res_pat = "value[\'\"]:\s?[\'\"]([0-9]+)"
         group_num = 1
 
@@ -145,6 +149,10 @@ class WalletAPI:
 
     @staticmethod
     def extract_tx_id(tx_output):
+        if not tx_output:
+            print("cannot extract id from output, input is None")
+            return None
+
         id_pat = r"'value': 'ok', 'id': '([0-9a-f]{64})'"
         group_num = 1
 
