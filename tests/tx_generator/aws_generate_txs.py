@@ -85,8 +85,8 @@ if __name__ == "__main__":
     # Create new accounts by sending them coins
     actions.send_coins_to_new_accounts(my_wallet, new_acc_num, amount, acc, parsed_args.gas_price)
 
-    tts = layer_wait * layer_duration
-    print(f"sleeping for {tts} to enable new state to be processed")
-    time.sleep(tts)
     if tx_count:
+        tts = layer_wait * layer_duration
+        print(f"sleeping for {tts} to enable new state to be processed")
+        time.sleep(tts)
         actions.send_tx_from_each_account(my_wallet, acc, tx_count, is_concurrent=is_concurrent)
