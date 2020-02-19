@@ -26,7 +26,7 @@ def set_parser():
     parser.add_argument('-t', '--tx_count', dest="tx_count", default=0, type=int, metavar='',
                         help='number of txs sent between newly created accounts', required=False)
     parser.add_argument('-gp', '--gas_price', dest='gas_price', default=1, type=int, metavar='',
-                        help=f'the sending account\'s private key', required=False)
+                        help='the sending account\'s private key', required=False)
     parser.add_argument('-ld', '--layer_duration', dest='layer_duration', default=300, type=int, metavar='',
                         help='duration of each layer', required=False)
     parser.add_argument('-w', '--wait_layers', dest='layer_wait', default=6, type=int, metavar='',
@@ -64,7 +64,7 @@ if __name__ == "__main__":
     layer_duration = parsed_args.layer_duration
     layer_wait = parsed_args.layer_wait
     is_concurrent = parsed_args.is_concurrent
-    amount = 1
+    amount = 100
 
     pod_ip = parsed_args.pod_ip
     pod_lst = [{"pod_ip": pod_ip, "name": "AWS_GATEWAY"}]
