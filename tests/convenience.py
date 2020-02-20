@@ -19,7 +19,7 @@ def convert_ts_to_datetime(ts):
 
 
 def sleep_print_backwards(tts):
-    print(f"\n\nsleeping for {tts} seconds\n")
+    print(f"\nsleeping for {tts} seconds\n")
     while tts != 0:
         tts -= 1
         print(f" {tts} seconds left     ", end="\r")
