@@ -25,6 +25,8 @@ type udpNetwork interface {
 	Shutdown()
 	Dial(address net.Addr, remotePublicKey p2pcrypto.PublicKey) (inet.Connection, error)
 	IncomingMessages() chan inet.IncomingMessageEvent
+	SubscribeOnNewRemoteConnections(f func(event inet.NewConnectionEvent))
+	SubscribeClosingConnections(f func(connection inet.ConnectionWithErr))
 	//Send(to *node.NodeInfo, data []byte) error
 }
 
@@ -45,16 +47,29 @@ type UDPMux struct {
 
 // NewUDPMux creates a new udp protocol server
 func NewUDPMux(localNode node.LocalNode, lookuper Lookuper, udpNet udpNetwork, networkid int8, logger log.Log) *UDPMux {
-	return &UDPMux{
+
+	cpool := connectionpool.NewConnectionPool(udpNet.Dial, localNode.PublicKey(), logger.WithName("udp_cpool"))
+
+	um := &UDPMux{
 		logger:    logger,
 		local:     localNode,
 		networkid: networkid,
 		lookuper:  lookuper,
 		network:   udpNet,
-		cpool:     connectionpool.NewConnectionPool(udpNet.Dial, localNode.PublicKey(), logger.WithName("udp_cpool")),
+		cpool:     cpool,
 		messages:  make(map[string]chan service.DirectMessage),
 		shutdown:  make(chan struct{}, 1),
 	}
+
+	udpNet.SubscribeOnNewRemoteConnections(func(event inet.NewConnectionEvent) {
+		cpool.OnNewConnection(event)
+	})
+
+	udpNet.SubscribeClosingConnections(func(connection inet.ConnectionWithErr) {
+		cpool.OnClosedConnection(connection)
+	})
+
+	return um
 }
 
 // Start starts the UDPMux
