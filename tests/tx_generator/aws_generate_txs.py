@@ -93,9 +93,9 @@ if __name__ == "__main__":
     print(f"sleeping for {tts} to enable new state to be processed")
     sleep_interval = 60
     while tts >= 0:
-        print(f"{tts} seconds remain")
         time.sleep(sleep_interval)
         tts -= sleep_interval
+        print(f"{tts} seconds remain")
 
     print("\n")
     actions.send_tx_from_each_account(my_wallet, acc, tx_count, is_concurrent=is_concurrent, is_use_tap=False)
