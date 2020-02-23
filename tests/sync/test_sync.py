@@ -5,13 +5,13 @@ from tests.deployment import create_deployment, delete_deployment
 from tests import queries
 from tests.conftest import DeploymentInfo
 from tests.test_bs import save_log_on_exit, setup_bootstrap
-from tests.test_bs import api_call, add_multi_clients, get_conf
-from tests.test_bs import current_index, CLIENT_DEPLOYMENT_FILE, get_conf
+from tests.test_bs import api_call, add_multi_clients, current_index, CLIENT_DEPLOYMENT_FILE
 from tests.misc import CoreV1ApiClient
 from tests.context import ES
 from tests.queries import query_message
 from elasticsearch_dsl import Search, Q
 from tests.pod import delete_pod
+from tests.utils import get_conf
 
 # ==============================================================================
 #    TESTS
@@ -20,6 +20,7 @@ from tests.pod import delete_pod
 
 PERSISTENT_DATA={"M": "persistent data found"}
 SYNC_DONE={"M": "sync done"}
+
 
 def new_client_in_namespace(name_space, setup_bootstrap, cspec, num):
     resp = create_deployment(CLIENT_DEPLOYMENT_FILE, name_space,
@@ -70,8 +71,9 @@ def check_pod_logs(podName, str):
 def test_sync_gradually_add_nodes(init_session, setup_bootstrap, save_log_on_exit):
     bs_info = setup_bootstrap.pods[0]
 
-    cspec = get_conf(bs_info, testconfig['client'])
-    cspec2 = get_conf(bs_info, testconfig['clientv2'])
+    gen_delt = testconfig['genesis_delta']
+    cspec = get_conf(bs_info, testconfig['client'], gen_delt)
+    cspec2 = get_conf(bs_info, testconfig['clientv2'], gen_delt)
 
     inf = add_multi_clients(init_session, cspec, 10)
 

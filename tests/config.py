@@ -7,4 +7,3 @@ CURL_POD_FILE = './k8s/curl.yml'
 BOOTSTRAP_PORT = 7513
 ORACLE_SERVER_PORT = 3030
 POET_SERVER_PORT = 80
-# GENESIS_TIME = pytz.utc.localize(datetime.utcnow() + timedelta(seconds=testconfig['genesis_delta']))

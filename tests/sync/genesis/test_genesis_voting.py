@@ -4,8 +4,8 @@ from pytest_testconfig import config as testconfig
 
 import tests.queries as q
 from tests.sync.test_sync import new_client_in_namespace
-from tests.test_bs import get_conf, setup_bootstrap, start_poet, add_curl
-from tests.utils import print_hits_entry_count
+from tests.test_bs import setup_bootstrap, start_poet, add_curl
+from tests.utils import print_hits_entry_count, get_conf
 
 # ==============================================================================
 #    TESTS
@@ -26,7 +26,8 @@ def test_unsync_while_genesis(init_session, setup_bootstrap, start_poet, add_cur
 
     layer_duration = int(testconfig['client']['args']['layer-duration-sec'])
     bs_info = setup_bootstrap.pods[0]
-    cspec = get_conf(bs_info, testconfig['client'], None, setup_bootstrap.pods[0]['pod_ip'])
+    cspec = get_conf(bs_info, testconfig['client'], testconfig['genesis_delta'], setup_oracle=None,
+                     setup_poet=setup_bootstrap.pods[0]['pod_ip'])
 
     # Create a cluster of nodes
     _ = new_client_in_namespace(testconfig['namespace'], setup_bootstrap, cspec, 9)

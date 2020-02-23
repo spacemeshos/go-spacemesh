@@ -1,4 +1,6 @@
+from datetime import datetime, timedelta
 import os
+import pytz
 import re
 import time
 
@@ -128,18 +130,23 @@ def node_string(key, ip, port, discport):
     return "spacemesh://{0}@{1}:{2}?disc={3}".format(key, ip, port, discport)
 
 
+def get_genesis_time_delta(genesis_time):
+    return pytz.utc.localize(datetime.utcnow() + timedelta(seconds=genesis_time))
+
+
 def get_conf(bs_info, client_config, genesis_time, setup_oracle=None, setup_poet=None, args=None):
     """
     get_conf gather specification information into one ContainerSpec object
 
     :param bs_info: DeploymentInfo, bootstrap info
     :param client_config: DeploymentInfo, client info
-    :param genesis_time:
+    :param genesis_time: string, genesis time as set in suite specification file
     :param setup_oracle: string, oracle ip
     :param setup_poet: string, poet ip
     :param args: list of strings, arguments for appendage in specification
     :return: ContainerSpec
     """
+    genesis_time_delta = get_genesis_time_delta(genesis_time)
     client_args = {} if 'args' not in client_config else client_config['args']
     # append client arguments
     if args is not None:
@@ -158,7 +165,7 @@ def get_conf(bs_info, client_config, genesis_time, setup_oracle=None, setup_poet
         client_args['poet_server'] = '{0}:{1}'.format(setup_poet, conf.POET_SERVER_PORT)
 
     bootnodes = node_string(bs_info['key'], bs_info['pod_ip'], conf.BOOTSTRAP_PORT, conf.BOOTSTRAP_PORT)
-    cspec.append_args(bootnodes=bootnodes, genesis_time=genesis_time.isoformat('T', 'seconds'))
+    cspec.append_args(bootnodes=bootnodes, genesis_time=genesis_time_delta.isoformat('T', 'seconds'))
     # append client config to ContainerSpec
     if len(client_args) > 0:
         cspec.append_args(**client_args)

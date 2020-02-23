@@ -9,7 +9,8 @@ from tests.hare.assert_hare import expect_hare
 from tests.misc import CoreV1ApiClient
 from tests.queries import query_atx_published
 from tests.test_bs import save_log_on_exit, setup_bootstrap, add_curl, start_poet
-from tests.test_bs import current_index, CLIENT_DEPLOYMENT_FILE, get_conf
+from tests.test_bs import current_index, CLIENT_DEPLOYMENT_FILE
+from tests.utils import get_conf
 
 
 def new_client_in_namespace(name_space, setup_bootstrap, cspec, num):
@@ -62,7 +63,8 @@ def sleep_and_print(total_seconds):
 
 def test_add_delayed_nodes(init_session, add_curl, setup_bootstrap, start_poet, save_log_on_exit):
     bs_info = setup_bootstrap.pods[0]
-    cspec = get_conf(bs_info, test_config['client'], None, setup_bootstrap.pods[0]['pod_ip'])
+    cspec = get_conf(bs_info, test_config['client'], test_config['genesis_delta'], setup_oracle=None,
+                     setup_poet=setup_bootstrap.pods[0]['pod_ip'])
     ns = test_config['namespace']
 
     layer_duration = int(test_config['client']['args']['layer-duration-sec'])

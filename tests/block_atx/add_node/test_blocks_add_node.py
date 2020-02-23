@@ -1,9 +1,9 @@
 from pytest_testconfig import config as testconfig
 
 from tests import queries as q
-from tests.test_bs import setup_network, add_curl, setup_bootstrap, start_poet, setup_clients, wait_genesis, get_conf
+from tests.test_bs import setup_network, add_curl, setup_bootstrap, start_poet, setup_clients, wait_genesis
 from tests.test_bs import add_multi_clients
-from tests.utils import validate_blocks_per_nodes, get_pod_id
+from tests.utils import validate_blocks_per_nodes, get_pod_id, get_conf
 
 
 # epoch i:
@@ -44,7 +44,7 @@ def test_add_node_validate_atx(init_session, setup_network):
     print("\n\n-------- current epoch", curr_epoch, "--------")
     print("adding a new miner")
     bs_info = setup_network.bootstrap.pods[0]
-    cspec = get_conf(bs_info, testconfig['client'])
+    cspec = get_conf(bs_info, testconfig['client'], testconfig['genesis_delta'])
     new_pod_name = add_multi_clients(init_session, cspec, 1)[0]
 
     # wait for next epoch

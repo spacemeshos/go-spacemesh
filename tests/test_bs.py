@@ -17,6 +17,7 @@ from tests.tx_generator.models.wallet_api import WalletAPI
 from tests.conftest import DeploymentInfo, NetworkDeploymentInfo, NetworkInfo
 from tests.hare.assert_hare import validate_hare
 from tests.misc import ContainerSpec, CoreV1ApiClient
+from tests.utils import get_conf
 
 
 BOOT_DEPLOYMENT_FILE = './k8s/bootstrapoet-w-conf.yml'
@@ -37,41 +38,41 @@ dt = datetime.now()
 today_date = dt.strftime("%Y.%m.%d")
 current_index = 'kubernetes_cluster-' + today_date
 
-
-def get_conf(bs_info, client_config, setup_oracle=None, setup_poet=None, args=None):
-    """
-    get_conf gather specification information into one ContainerSpec object
-
-    :param bs_info: DeploymentInfo, bootstrap info
-    :param client_config: DeploymentInfo, client info
-    :param setup_oracle: string, oracle ip
-    :param setup_poet: string, poet ip
-    :param args: list of strings, arguments for appendage in specification
-    :return: ContainerSpec
-    """
-    client_args = {} if 'args' not in client_config else client_config['args']
-    # append client arguments
-    if args is not None:
-        for arg in args:
-            client_args[arg] = args[arg]
-
-    # create a new container spec with client configuration
-    cspec = ContainerSpec(cname='client', specs=client_config)
-
-    # append oracle configuration
-    if setup_oracle:
-        client_args['oracle_server'] = 'http://{0}:{1}'.format(setup_oracle, ORACLE_SERVER_PORT)
-
-    # append poet configuration
-    if setup_poet:
-        client_args['poet_server'] = '{0}:{1}'.format(setup_poet, POET_SERVER_PORT)
-
-    cspec.append_args(bootnodes=node_string(bs_info['key'], bs_info['pod_ip'], BOOTSTRAP_PORT, BOOTSTRAP_PORT),
-                      genesis_time=GENESIS_TIME.isoformat('T', 'seconds'))
-    # append client config to ContainerSpec
-    if len(client_args) > 0:
-        cspec.append_args(**client_args)
-    return cspec
+#
+# def get_conf(bs_info, client_config, setup_oracle=None, setup_poet=None, args=None):
+#     """
+#     get_conf gather specification information into one ContainerSpec object
+#
+#     :param bs_info: DeploymentInfo, bootstrap info
+#     :param client_config: DeploymentInfo, client info
+#     :param setup_oracle: string, oracle ip
+#     :param setup_poet: string, poet ip
+#     :param args: list of strings, arguments for appendage in specification
+#     :return: ContainerSpec
+#     """
+#     client_args = {} if 'args' not in client_config else client_config['args']
+#     # append client arguments
+#     if args is not None:
+#         for arg in args:
+#             client_args[arg] = args[arg]
+#
+#     # create a new container spec with client configuration
+#     cspec = ContainerSpec(cname='client', specs=client_config)
+#
+#     # append oracle configuration
+#     if setup_oracle:
+#         client_args['oracle_server'] = 'http://{0}:{1}'.format(setup_oracle, ORACLE_SERVER_PORT)
+#
+#     # append poet configuration
+#     if setup_poet:
+#         client_args['poet_server'] = '{0}:{1}'.format(setup_poet, POET_SERVER_PORT)
+#
+#     cspec.append_args(bootnodes=node_string(bs_info['key'], bs_info['pod_ip'], BOOTSTRAP_PORT, BOOTSTRAP_PORT),
+#                       genesis_time=GENESIS_TIME.isoformat('T', 'seconds'))
+#     # append client config to ContainerSpec
+#     if len(client_args) > 0:
+#         cspec.append_args(**client_args)
+#     return cspec
 
 
 def add_multi_clients(deployment_id, container_specs, size=2, client_title='client', ret_dep=False):
@@ -251,7 +252,8 @@ def setup_clients_in_namespace(namespace, bs_deployment_info, client_deployment_
     def _extract_label():
         return client_deployment_info.deployment_name.split('-')[1]
 
-    cspec = get_conf(bs_deployment_info, client_config, oracle, poet)
+    cspec = get_conf(bs_deployment_info, client_config, testconfig['genesis_delta'], setup_oracle=oracle,
+                     setup_poet=poet)
 
     k8s_file, k8s_create_func = choose_k8s_object_create(client_config, dep_file_path, ss_file_path)
     resp = k8s_create_func(k8s_file, namespace,
