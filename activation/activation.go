@@ -347,9 +347,9 @@ func (b *Builder) loadChallenge() error {
 func (b *Builder) PublishActivationTx() error {
 	b.discardChallengeIfStale()
 	if b.challenge != nil {
-		b.log.With().Info("using existing challenge", log.EpochId(uint64(b.currentEpoch())))
+		b.log.With().Info("using existing atx challenge", log.EpochId(uint64(b.currentEpoch())))
 	} else {
-		b.log.With().Info("building new challenge", log.EpochId(uint64(b.currentEpoch())))
+		b.log.With().Info("building new atx challenge", log.EpochId(uint64(b.currentEpoch())))
 		err := b.buildNipstChallenge()
 		if err != nil {
 			return err
@@ -371,7 +371,7 @@ func (b *Builder) PublishActivationTx() error {
 		return fmt.Errorf("failed to build nipst: %v", err)
 	}
 
-	b.log.With().Info("awaiting publication epoch",
+	b.log.With().Info("awaiting atx publication epoch",
 		log.Uint64("pub_epoch", uint64(pubEpoch)),
 		log.Uint64("pub_epoch_first_layer", uint64(pubEpoch.FirstLayer(b.layersPerEpoch))),
 		log.Uint64("current_layer", uint64(b.layerClock.GetCurrentLayer())),
@@ -428,30 +428,38 @@ func (b *Builder) PublishActivationTx() error {
 
 	atxReceived := b.db.AwaitAtx(atx.Id())
 	defer b.db.UnsubscribeAtx(atx.Id())
-	if err := b.signAndBroadcast(atx); err != nil {
+	size, err := b.signAndBroadcast(atx)
+	if err != nil {
 		return err
 	}
 
+	commitStr := "nil"
+	if commitment != nil {
+		commitStr = commitment.String()
+	}
 	b.log.Event().Info("atx published!",
 		log.AtxId(atx.ShortString()),
 		log.String("prev_atx_id", atx.PrevATXId.ShortString()),
-		log.String("post_atx_id", atx.PositioningAtx.ShortString()),
+		log.String("pos_atx_id", atx.PositioningAtx.ShortString()),
 		log.LayerId(uint64(atx.PubLayerIdx)),
 		log.EpochId(uint64(atx.PubLayerIdx.GetEpoch(b.layersPerEpoch))),
 		log.Uint32("active_set", atx.ActiveSetSize),
-		log.String("miner", b.nodeId.Key[:5]),
+		log.String("miner", b.nodeId.ShortString()),
 		log.Int("view", len(atx.View)),
+		log.Uint64("sequence_number", atx.Sequence),
+		log.String("NIPSTChallenge", hash.String()),
+		log.String("commitment", commitStr),
+		log.Int("atx_size", size),
 	)
+	events.Publish(events.AtxCreated{Created: true, Id: atx.ShortString(), Layer: uint64(b.currentEpoch())})
 
 	select {
 	case <-atxReceived:
 		b.log.Info("atx received in db")
-		events.Publish(events.AtxCreated{Created: true, Id: atx.ShortString(), Layer: uint64(b.currentEpoch())})
 	case <-b.layerClock.AwaitLayer((atx.TargetEpoch(b.layersPerEpoch) + 1).FirstLayer(b.layersPerEpoch)):
 		select {
 		case <-atxReceived:
 			b.log.Info("atx received in db (in the last moment)")
-			events.Publish(events.AtxCreated{Created: true, Id: atx.ShortString(), Layer: uint64(b.currentEpoch())})
 		case <-b.syncer.Await(): // ensure we've seen all blocks before concluding that the ATX was lost
 			b.log.With().Error("target epoch has passed before atx was added to database",
 				log.AtxId(atx.ShortString()))
@@ -478,19 +486,18 @@ func (b *Builder) discardChallenge() {
 	}
 }
 
-func (b *Builder) signAndBroadcast(atx *types.ActivationTx) error {
+func (b *Builder) signAndBroadcast(atx *types.ActivationTx) (int, error) {
 	if err := b.SignAtx(atx); err != nil {
-		return fmt.Errorf("failed to sign ATX: %v", err)
-	} else {
-		buf, err := types.InterfaceToBytes(atx)
-		if err != nil {
-			return fmt.Errorf("failed to serialize ATX: %v", err)
-		} else if err := b.net.Broadcast(AtxProtocol, buf); err != nil {
-			return fmt.Errorf("failed to broadcast ATX: %v", err)
-		}
-		b.log.Info("atx size %s", len(buf), log.AtxId(atx.ShortString()))
+		return 0, fmt.Errorf("failed to sign ATX: %v", err)
 	}
-	return nil
+	buf, err := types.InterfaceToBytes(atx)
+	if err != nil {
+		return 0, fmt.Errorf("failed to serialize ATX: %v", err)
+	}
+	if err := b.net.Broadcast(AtxProtocol, buf); err != nil {
+		return 0, fmt.Errorf("failed to broadcast ATX: %v", err)
+	}
+	return len(buf), nil
 }
 
 // GetPositioningAtx return the latest atx to be used as a positioning atx

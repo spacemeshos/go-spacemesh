@@ -123,9 +123,9 @@ func (s SpacemeshGrpcService) getProjection(addr types.Address) (nonce, balance 
 // and all known transactions in unapplied blocks and the mempool that originate from the given account. Unapplied
 // transactions coming INTO the given account (from mempool or unapplied blocks) are NOT counted.
 func (s SpacemeshGrpcService) GetBalance(ctx context.Context, in *pb.AccountId) (*pb.SimpleMessage, error) {
-	log.Info("GRPC GetBalance msg")
+	log.Debug("GRPC GetBalance msg")
 	addr := types.HexToAddress(in.Address)
-	log.Info("GRPC GetBalance for address %x (len %v)", addr, len(addr))
+	log.Debug("GRPC GetBalance for address %x (len %v)", addr, len(addr))
 	if s.StateApi.Exist(addr) != true {
 		log.Error("GRPC GetBalance returned error msg: account does not exist, address %x", addr)
 		return nil, fmt.Errorf("account does not exist")
@@ -136,7 +136,7 @@ func (s SpacemeshGrpcService) GetBalance(ctx context.Context, in *pb.AccountId) 
 		return nil, err
 	}
 	msg := &pb.SimpleMessage{Value: strconv.FormatUint(balance, 10)}
-	log.Info("GRPC GetBalance returned msg.Value %v", msg.Value)
+	log.Debug("GRPC GetBalance returned msg.Value %v", msg.Value)
 	return msg, nil
 }
 
@@ -177,13 +177,13 @@ func (s SpacemeshGrpcService) SubmitTransaction(ctx context.Context, in *pb.Sign
 	if !s.Tx.AddressExists(tx.Origin()) {
 		log.With().Error("tx failed to validate signature",
 			log.TxId(tx.Id().ShortString()), log.String("origin", tx.Origin().Short()))
-		return nil, fmt.Errorf("transaction origin (%v) not found in global state", tx.Origin())
+		return nil, fmt.Errorf("transaction origin (%v) not found in global state", tx.Origin().Short())
 	}
 	if err := s.Tx.ValidateNonceAndBalance(tx); err != nil {
 		log.With().Error("tx failed nonce and balance check", log.Err(err))
 		return nil, err
 	}
-	log.Info("GRPC SubmitTransaction BROADCAST tx. address %x (len %v), gaslimit %v, fee %v id %v nonce %v",
+	log.Info("GRPC SubmitTransaction BROADCAST tx. address %x (len %v), gas limit %v, fee %v id %v nonce %v",
 		tx.Recipient, len(tx.Recipient), tx.GasLimit, tx.Fee, tx.Id().ShortString(), tx.AccountNonce)
 	go s.Network.Broadcast(miner.IncomingTxProtocol, in.Tx)
 	log.Info("GRPC SubmitTransaction returned msg ok")
@@ -385,7 +385,7 @@ func (s SpacemeshGrpcService) SetLoggerLevel(ctx context.Context, msg *pb.SetLog
 }
 
 func (s SpacemeshGrpcService) GetAccountTxs(ctx context.Context, txsSinceLayer *pb.GetTxsSinceLayer) (*pb.AccountTxs, error) {
-	log.Info("GRPC GetAccountTxs msg")
+	log.Debug("GRPC GetAccountTxs msg")
 
 	currentPBase := s.Tx.LatestLayerInState()
 
@@ -422,7 +422,7 @@ func (s SpacemeshGrpcService) getTxIdsFromMesh(minLayer types.LayerID, addr type
 }
 
 func (s SpacemeshGrpcService) GetAccountRewards(ctx context.Context, account *pb.AccountId) (*pb.AccountRewards, error) {
-	log.Info("GRPC GetAccountRewards msg")
+	log.Debug("GRPC GetAccountRewards msg")
 	acc := types.HexToAddress(account.Address)
 
 	rewards, err := s.Tx.GetRewards(acc)

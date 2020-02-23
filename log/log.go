@@ -100,7 +100,8 @@ func New(module string, dataFolderPath string, logFileName string) Log {
 
 	log := zap.New(core)
 	log = log.Named(module)
-	return Log{log, log.Sugar()}
+	lvl := zap.NewAtomicLevelAt(LogLvl())
+	return Log{log, log.Sugar(), &lvl}
 }
 
 // New creates a logger for a module. e.g. p2p instance logger.
@@ -122,7 +123,8 @@ func NewWithErrorLevel(module string, dataFolderPath string, logFileName string)
 
 	log := zap.New(core)
 	log = log.Named(module)
-	return Log{log, log.Sugar()}
+	lvl := zap.NewAtomicLevelAt(zap.ErrorLevel)
+	return Log{log, log.Sugar(), &lvl}
 }
 
 func NewDefault(module string) Log {

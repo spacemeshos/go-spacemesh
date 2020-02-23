@@ -16,10 +16,14 @@ type PeerStore interface {
 	Remove(pubkey p2pcrypto.PublicKey)
 	Lookup(pubkey p2pcrypto.PublicKey) (*node.NodeInfo, error)
 	Update(addr, src *node.NodeInfo)
+
 	SelectPeers(ctx context.Context, qty int) []*node.NodeInfo
 	Bootstrap(ctx context.Context) error
 	Size() int
+
 	Shutdown()
+
+	IsLocalAddress(info *node.NodeInfo) bool
 	SetLocalAddresses(tcp, udp int)
 
 	Good(key p2pcrypto.PublicKey)
@@ -30,19 +34,26 @@ type Protocol interface {
 	Ping(p p2pcrypto.PublicKey) error
 	GetAddresses(server p2pcrypto.PublicKey) ([]*node.NodeInfo, error)
 	SetLocalAddresses(tcp, udp int)
+	Close()
 }
 
 type addressBook interface {
 	Good(key p2pcrypto.PublicKey)
 	Attempt(key p2pcrypto.PublicKey)
+
 	RemoveAddress(key p2pcrypto.PublicKey)
-	NeedNewAddresses() bool
-	Lookup(key p2pcrypto.PublicKey) (*node.NodeInfo, error)
 	AddAddress(addr, srcAddr *node.NodeInfo)
 	AddAddresses(addrs []*node.NodeInfo, srcAddr *node.NodeInfo)
+
+	NeedNewAddresses() bool
+	Lookup(key p2pcrypto.PublicKey) (*node.NodeInfo, error)
 	AddressCache() []*node.NodeInfo
 	NumAddresses() int
 	GetAddress() *KnownAddress
+
+	AddLocalAddress(info *node.NodeInfo)
+	IsLocalAddress(info *node.NodeInfo) bool
+
 	Stop()
 }
 
@@ -141,6 +152,8 @@ func New(ln node.LocalNode, config config.SwarmConfig, service server.Service, p
 		rt:     addrbook,
 	}
 
+	addrbook.AddLocalAddress(&node.NodeInfo{ID: ln.PublicKey().Array()})
+
 	d.disc = NewDiscoveryProtocol(ln.PublicKey(), d.rt, service, logger)
 
 	bn := make([]*node.NodeInfo, 0, len(config.BootstrapNodes))
@@ -164,9 +177,14 @@ func (d *Discovery) Shutdown() {
 	d.rt.Stop()
 }
 
+func (d *Discovery) IsLocalAddress(info *node.NodeInfo) bool {
+	return d.rt.IsLocalAddress(info)
+}
+
 // SetLocalAddresses sets the localNode addresses to be advertised.
 func (d *Discovery) SetLocalAddresses(tcp, udp int) {
 	d.disc.SetLocalAddresses(tcp, udp)
+	//TODO: find a protocol or just pass here our IP to the routing table
 }
 
 // Remove removes a record from the routing table

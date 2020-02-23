@@ -33,7 +33,7 @@ const (
 	Remote
 )
 
-const MessageQueueSize = 50
+const MessageQueueSize = 250
 
 // Connection is an interface stating the API of all secured connections in the system
 type Connection interface {

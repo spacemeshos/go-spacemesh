@@ -157,7 +157,7 @@ func createLayer(t testing.TB, mesh *Mesh, id types.LayerID, numOfBlocks, maxTra
 		block1.ATXID = atx.Id()
 
 		totalRewards += addTransactionsWithFee(t, mesh.MeshDB, block1, rand.Intn(maxTransactions), rand.Int63n(100))
-		block1.CalcAndSetId()
+		block1.Initialize()
 		err := mesh.AddBlock(block1)
 		assert.NoError(t, err)
 	}
@@ -266,6 +266,6 @@ func TestMesh_AccumulateRewards(t *testing.T) {
 }
 
 func TestMesh_calcRewards(t *testing.T) {
-	reward := calculateActualRewards(big.NewInt(10000), big.NewInt(10))
+	reward := calculateActualRewards(1, big.NewInt(10000), big.NewInt(10))
 	assert.Equal(t, int64(1000), reward.Int64())
 }

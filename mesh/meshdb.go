@@ -140,7 +140,7 @@ func (m *MeshDB) GetBlock(id types.BlockID) (*types.Block, error) {
 	}
 	mbk := &types.Block{}
 	err = types.BytesToInterface(b, mbk)
-	mbk.CalcAndSetId()
+	mbk.Initialize()
 	return mbk, err
 }
 
@@ -399,9 +399,14 @@ type dbReward struct {
 }
 
 func (m *MeshDB) writeTransactionRewards(l types.LayerID, accounts []types.Address, totalReward, layerReward *big.Int) error {
-	batch := m.transactions.NewBatch()
+	actBlockCnt := make(map[types.Address]uint64)
 	for _, account := range accounts {
-		reward := dbReward{TotalReward: totalReward.Uint64(), LayerRewardEstimate: layerReward.Uint64()}
+		actBlockCnt[account]++
+	}
+
+	batch := m.transactions.NewBatch()
+	for account, cnt := range actBlockCnt {
+		reward := dbReward{TotalReward: cnt * totalReward.Uint64(), LayerRewardEstimate: cnt * layerReward.Uint64()}
 		if b, err := types.InterfaceToBytes(&reward); err != nil {
 			return fmt.Errorf("could not marshal reward for %v: %v", account.Short(), err)
 		} else if err := batch.Put(getRewardKey(l, account), b); err != nil {
@@ -707,4 +712,26 @@ func (m *MeshDB) Retrieve(key []byte, v interface{}) (interface{}, error) {
 	}
 
 	return v, nil
+}
+
+func (m *MeshDB) CacheWarmUp(from types.LayerID, to types.LayerID) error {
+	m.Info("warming up cache with layers %v to %v", from, to)
+	for i := from; i < to; i++ {
+
+		layer, err := m.LayerBlockIds(i)
+		if err != nil {
+			return fmt.Errorf("could not get layer %v from database %v", layer, err)
+		}
+
+		for _, b := range layer {
+			block, blockErr := m.GetBlock(b)
+			if blockErr != nil {
+				return fmt.Errorf("could not get bl %v from database %v", b, blockErr)
+			}
+			m.blockCache.put(block)
+		}
+
+	}
+
+	return nil
 }

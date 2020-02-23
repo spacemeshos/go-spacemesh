@@ -14,7 +14,7 @@ from tests.tx_generator import config as conf
 import tests.tx_generator.actions as actions
 from tests.tx_generator.models.accountant import Accountant
 from tests.tx_generator.models.wallet_api import WalletAPI
-from tests.conftest import DeploymentInfo, NetworkDeploymentInfo
+from tests.conftest import DeploymentInfo, NetworkDeploymentInfo, NetworkInfo
 from tests.hare.assert_hare import validate_hare
 from tests.misc import ContainerSpec, CoreV1ApiClient
 
@@ -74,7 +74,7 @@ def get_conf(bs_info, client_config, setup_oracle=None, setup_poet=None, args=No
     return cspec
 
 
-def add_multi_clients(deployment_id, container_specs, size=2, client_title='client', ret_pods=False):
+def add_multi_clients(deployment_id, container_specs, size=2, client_title='client', ret_dep=False):
     """
     adds pods to a given namespace according to specification params
 
@@ -82,7 +82,7 @@ def add_multi_clients(deployment_id, container_specs, size=2, client_title='clie
     :param container_specs:
     :param size: int, number of replicas
     :param client_title: string, client title in yml file (client, client_v2 etc)
-    :param ret_pods: boolean, if 'True' RETURN a pods list (V1PodList)
+    :param ret_dep: boolean, if 'True' RETURN deployment name in addition
     :return: list (strings), list of pods names
     """
     k8s_file, k8s_create_func = choose_k8s_object_create(testconfig[client_title],
@@ -99,17 +99,16 @@ def add_multi_clients(deployment_id, container_specs, size=2, client_title='clie
                                                         include_uninitialized=True,
                                                         label_selector=("name={0}".format(
                                                             resp.metadata._name.split('-')[1]))).items
+    pods = []
+    for c in client_pods:
+        pod_name = c.metadata.name
+        if pod_name.startswith(resp.metadata.name):
+            pods.append(pod_name)
+    ret_val = pods
+    print(f"added new clients: {pods}\n")
 
-    if ret_pods:
-        ret_val = client_pods
-    else:
-        pods = []
-        for c in client_pods:
-            pod_name = c.metadata.name
-            if pod_name.startswith(resp.metadata.name):
-                pods.append(pod_name)
-        ret_val = pods
-        print(f"added new clients: {pods}\n")
+    if ret_dep:
+        ret_val = pods, resp.metadata._name
 
     return ret_val
 
@@ -254,22 +253,23 @@ def setup_clients_in_namespace(namespace, bs_deployment_info, client_deployment_
 
     cspec = get_conf(bs_deployment_info, client_config, oracle, poet)
 
-    k8s_file, k8s_create_func = choose_k8s_object_create(client_config,
-                                                         dep_file_path,
-                                                         ss_file_path)
+    k8s_file, k8s_create_func = choose_k8s_object_create(client_config, dep_file_path, ss_file_path)
     resp = k8s_create_func(k8s_file, namespace,
                            deployment_id=client_deployment_info.deployment_id,
                            replica_size=client_config['replicas'],
                            container_specs=cspec,
                            time_out=dep_time_out)
 
-    client_deployment_info.deployment_name = resp.metadata._name
+    dep_name = resp.metadata._name
+    client_deployment_info.deployment_name = dep_name
+
     client_pods = (
         CoreV1ApiClient().list_namespaced_pod(namespace,
                                               include_uninitialized=True,
                                               label_selector=("name={0}".format(name))).items)
 
-    client_deployment_info.pods = [{'name': c.metadata.name, 'pod_ip': c.status.pod_ip} for c in client_pods]
+    client_deployment_info.pods = [{'name': c.metadata.name, 'pod_ip': c.status.pod_ip} for c in client_pods
+                                   if c.metadata.name.startswith(dep_name)]
     return client_deployment_info
 
 
@@ -329,6 +329,33 @@ def setup_clients(init_session, setup_bootstrap):
 
 
 @pytest.fixture(scope='module')
+def setup_mul_clients(init_session, setup_bootstrap):
+    """
+    setup_mul_clients adds all client nodes (those who have "client" in title)
+    using suite file specifications
+
+    :param init_session: setup a new k8s env
+    :param setup_bootstrap: adds a single bootstrap node
+    :return: list, client_infos a list of DeploymentInfo
+             contains the settings info of the new clients nodes
+    """
+    clients_infos = []
+
+    for key in testconfig:
+        if "client" in key:
+            client_info = DeploymentInfo(dep_id=setup_bootstrap.deployment_id)
+            client_info = setup_clients_in_namespace(testconfig['namespace'],
+                                                     setup_bootstrap.pods[0],
+                                                     client_info,
+                                                     testconfig[key],
+                                                     poet=setup_bootstrap.pods[0]['pod_ip'],
+                                                     dep_time_out=testconfig['deployment_ready_time_out'])
+            clients_infos.append(client_info)
+
+    return clients_infos
+
+
+@pytest.fixture(scope='module')
 def start_poet(init_session, add_curl, setup_bootstrap):
     bs_pod = setup_bootstrap.pods[0]
     namespace = testconfig['namespace']
@@ -351,6 +378,16 @@ def setup_network(init_session, add_curl, setup_bootstrap, start_poet, setup_cli
     network_deployment = NetworkDeploymentInfo(dep_id=_session_id,
                                                bs_deployment_info=setup_bootstrap,
                                                cl_deployment_info=setup_clients)
+    return network_deployment
+
+
+@pytest.fixture(scope='module')
+def setup_mul_network(init_session, add_curl, setup_bootstrap, start_poet, setup_mul_clients, wait_genesis):
+    # This fixture deploy a complete Spacemesh network and returns only after genesis time is over
+    _session_id = init_session
+    network_deployment = NetworkInfo(namespace=init_session,
+                                     bs_deployment_info=setup_bootstrap,
+                                     cl_deployment_info=setup_mul_clients)
     return network_deployment
 
 

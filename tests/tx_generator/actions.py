@@ -2,6 +2,7 @@ from itertools import cycle, islice
 import multiprocessing as mp
 import random
 
+from tests.convenience import sleep_print_backwards
 from tests.tx_generator import config as conf
 from tests.tx_generator.models.accountant import Accountant
 from tests.tx_generator.models.tx_generator import TxGenerator
@@ -154,8 +155,12 @@ def send_tx_from_each_account(wallet, accountant, tx_num, amount=1, gas_limit=No
     accounts_copy = accountant.accounts.copy()
     tx_counter = 0
     accs_len = len(accounts_copy)
-    # for sending_acc_pub, account_det in accounts_copy.items():
-    for sending_acc_pub, account_det in islice(cycle(accounts_copy.items()), 0, tx_num):
+    pub_keys = list(accounts_copy.keys())
+    # randomize senders list
+    random.shuffle(pub_keys)
+    # for sending_acc_pub, account_det in islice(cycle(accounts_copy.items()), 0, tx_num):
+    for sending_acc_pub in islice(cycle(pub_keys), 0, tx_num):
+        account_det = accounts_copy[sending_acc_pub]
         if is_concurrent and tx_counter > 0 and tx_counter % accs_len == 0:
             # run all processes and update accountant after finishing a round of txs (for each account by order)
             # if more transaction will be sent after this round without saving accountant
@@ -192,3 +197,21 @@ def send_tx_from_each_account(wallet, accountant, tx_num, amount=1, gas_limit=No
     if processes:
         # run all remaining processes
         run_processes(processes, accountant, queue)
+
+
+def send_random_txs(wallet, accountant, amount=1):
+    max_tts = 10
+    max_rnd_txs = 50
+
+    while True:
+        # use same pod for all GRPCs
+        wallet.fixed_node = None
+        if bool(random.getrandbits(1)):
+            wallet.fixed_node = -1
+
+        is_concurrent = bool(random.getrandbits(1))
+        tx_num = random.randint(1, max_rnd_txs)
+        send_tx_from_each_account(wallet, accountant, tx_num, amount=amount, gas_limit=None, is_new_acc=False,
+                                  is_concurrent=is_concurrent)
+        tts = random.randint(3, max_tts)
+        sleep_print_backwards(tts)

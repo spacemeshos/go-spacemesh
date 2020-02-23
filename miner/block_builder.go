@@ -156,6 +156,7 @@ type WeakCoinProvider interface {
 type meshProvider interface {
 	LayerBlockIds(index types.LayerID) ([]types.BlockID, error)
 	GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error)
+	GetBlock(id types.BlockID) (*types.Block, error)
 }
 
 //used from external API call?
@@ -179,6 +180,17 @@ func calcHdistRange(id types.LayerID, hdist types.LayerID) (bottom types.LayerID
 	}
 
 	return bottom, top
+}
+
+func filterUnknownBlocks(blocks []types.BlockID, validate func(id types.BlockID) (*types.Block, error)) []types.BlockID {
+	var filtered []types.BlockID
+	for _, b := range blocks {
+		if _, e := validate(b); e == nil {
+			filtered = append(filtered, b)
+		}
+	}
+
+	return filtered
 }
 
 func (t *BlockBuilder) getVotes(id types.LayerID) ([]types.BlockID, error) {
@@ -223,6 +235,7 @@ func (t *BlockBuilder) getVotes(id types.LayerID) ([]types.BlockID, error) {
 		votes = append(votes, res...)
 	}
 
+	votes = filterUnknownBlocks(votes, t.meshProvider.GetBlock)
 	return votes, nil
 }
 
@@ -261,11 +274,19 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 
 	bl := &types.Block{MiniBlock: b, Signature: t.Signer.Sign(blockBytes)}
 
-	bl.CalcAndSetId()
+	bl.Initialize()
 
-	t.Log.Event().Info(fmt.Sprintf("I've created a block in layer %v. id: %v, num of transactions: %v, votes: %d, viewEdges: %d atx %v, atxs:%v",
-		b.LayerIndex, bl.Id(), len(b.TxIds), len(b.BlockVotes), len(b.ViewEdges), b.ATXID.ShortString(), len(b.AtxIds)))
-
+	t.Log.Event().Info("block created",
+		bl.Id(),
+		bl.LayerIndex,
+		log.String("miner_id", bl.MinerId().String()),
+		log.Int("tx_count", len(bl.TxIds)),
+		log.Int("atx_count", len(bl.AtxIds)),
+		log.Int("view_edges", len(bl.ViewEdges)),
+		log.Int("vote_count", len(bl.BlockVotes)),
+		bl.ATXID,
+		log.Uint32("eligibility_counter", bl.EligibilityProof.J),
+	)
 	return bl, nil
 }
 
@@ -322,7 +343,14 @@ func (t *BlockBuilder) listenForTx() {
 				t.With().Error("nonce and balance validation failed", log.TxId(tx.Id().ShortString()), log.Err(err))
 				continue
 			}
-			t.Log.With().Info("got new tx", log.TxId(tx.Id().ShortString()))
+			t.Log.With().Info("got new tx",
+				log.TxId(tx.Id().ShortString()),
+				log.Uint64("nonce", tx.AccountNonce),
+				log.Uint64("amount", tx.Amount),
+				log.Uint64("fee", tx.Fee),
+				log.Uint64("gas", tx.GasLimit),
+				log.String("recipient", tx.Recipient.String()),
+				log.String("origin", tx.Origin().String()))
 			data.ReportValidation(IncomingTxProtocol)
 			t.TransactionPool.Put(tx.Id(), tx)
 		}
@@ -365,7 +393,31 @@ func (t *BlockBuilder) handleGossipAtx(data service.GossipMessage) {
 	}
 	atx.CalcAndSetId()
 
-	t.With().Info("got new ATX", log.AtxId(atx.ShortString()), log.LayerId(uint64(atx.PubLayerIdx)))
+	commitmentStr := "nil"
+	if atx.Commitment != nil {
+		commitmentStr = atx.Commitment.String()
+	}
+
+	challenge := ""
+	h, err := atx.NIPSTChallenge.Hash()
+	if err == nil && h != nil {
+		challenge = h.String()
+
+	}
+
+	t.With().Info("got new ATX",
+		log.String("sender_id", atx.NodeId.ShortString()),
+		log.AtxId(atx.ShortString()),
+		log.String("prev_atx_id", atx.PrevATXId.ShortString()),
+		log.String("pos_atx_id", atx.PositioningAtx.ShortString()),
+		log.LayerId(uint64(atx.PubLayerIdx)),
+		log.Uint32("active_set", atx.ActiveSetSize),
+		log.Int("view", len(atx.View)),
+		log.Uint64("sequence_number", atx.Sequence),
+		log.String("commitment", commitmentStr),
+		log.Int("atx_size", len(data.Bytes())),
+		log.String("NIPSTChallenge", challenge),
+	)
 
 	//todo fetch from neighbour
 	if atx.Nipst == nil {

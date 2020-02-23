@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/poet/shared"
 	"github.com/spacemeshos/post/proving"
 	"github.com/spacemeshos/sha256-simd"
@@ -21,6 +22,8 @@ func (l EpochId) FirstLayer(layersPerEpoch uint16) LayerID {
 	return LayerID(uint64(l) * uint64(layersPerEpoch))
 }
 
+func (l EpochId) Field() log.Field { return log.Uint64("epoch_id", uint64(l)) }
+
 type AtxId Hash32
 
 func (t *AtxId) ShortString() string {
@@ -34,6 +37,8 @@ func (t *AtxId) Hash32() Hash32 {
 func (t AtxId) Bytes() []byte {
 	return Hash32(t).Bytes()
 }
+
+func (t AtxId) Field() log.Field { return t.Hash32().Field("atx_id") }
 
 var EmptyAtxId = &AtxId{}
 
