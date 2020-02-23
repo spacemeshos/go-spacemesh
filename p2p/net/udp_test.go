@@ -67,7 +67,7 @@ const testMsg = "TEST"
 func TestUDPNet_Sanity(t *testing.T) {
 	local, localinfo := node.GenerateTestNode(t)
 	udpAddr := &net.UDPAddr{net.IPv4zero, int(localinfo.DiscoveryPort), ""}
-	udpnet, err := NewUDPNet(config.DefaultConfig(), local, udpAddr, log.NewDefault("TEST_"+t.Name()))
+	udpnet, err := NewUDPNet(config.DefaultConfig(), local, log.NewDefault("TEST_"+t.Name()))
 	require.NoError(t, err)
 	require.NotNil(t, udpnet)
 

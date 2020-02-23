@@ -21,25 +21,23 @@ type UDPMessageEvent struct {
 
 // UDPNet is used to listen on or send udp messages
 type UDPNet struct {
-	local      node.LocalNode
-	logger     log.Log
-	udpAddress *net.UDPAddr
-	config     config.Config
-	msgChan    chan UDPMessageEvent
-	conn       *net.UDPConn
-	cache      *sessionCache
-	shutdown   chan struct{}
+	local    node.LocalNode
+	logger   log.Log
+	config   config.Config
+	msgChan  chan UDPMessageEvent
+	conn     *net.UDPConn
+	cache    *sessionCache
+	shutdown chan struct{}
 }
 
 // NewUDPNet creates a UDPNet. returns error if the listening can't be resolved
-func NewUDPNet(config config.Config, localEntity node.LocalNode, addr *net.UDPAddr, log log.Log) (*UDPNet, error) {
+func NewUDPNet(config config.Config, localEntity node.LocalNode, log log.Log) (*UDPNet, error) {
 	n := &UDPNet{
-		local:      localEntity,
-		logger:     log,
-		udpAddress: addr,
-		config:     config,
-		msgChan:    make(chan UDPMessageEvent, config.BufferSize),
-		shutdown:   make(chan struct{}),
+		local:    localEntity,
+		logger:   log,
+		config:   config,
+		msgChan:  make(chan UDPMessageEvent, config.BufferSize),
+		shutdown: make(chan struct{}),
 	}
 
 	n.cache = newSessionCache(n.initSession)
@@ -48,16 +46,10 @@ func NewUDPNet(config config.Config, localEntity node.LocalNode, addr *net.UDPAd
 }
 
 // Start will trigger listening on the configured port
-func (n *UDPNet) Start() error {
-	listener, err := newUDPListener(n.udpAddress)
-	if err != nil {
-		return err
-	}
+func (n *UDPNet) Start(listener *net.UDPConn) {
 	n.conn = listener
 	n.logger.Info("Started UDP server listening for messages on udp:%v", listener.LocalAddr().String())
 	go n.listenToUDPNetworkMessages(listener)
-
-	return nil
 }
 
 // LocalAddr returns the local listening addr, will panic before running Start. or if start errored
@@ -71,15 +63,6 @@ func (n *UDPNet) Shutdown() {
 	if n.conn != nil {
 		n.conn.Close()
 	}
-}
-
-func newUDPListener(listenAddress *net.UDPAddr) (*net.UDPConn, error) {
-	//todo: grab different udp port from config
-	listen, err := net.ListenUDP("udp", listenAddress)
-	if err != nil {
-		return nil, err
-	}
-	return listen, nil
 }
 
 var IPv4LoopbackAddress = net.IP{127, 0, 0, 1}

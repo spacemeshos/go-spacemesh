@@ -107,11 +107,6 @@ func (s *swarm) waitForGossip() error {
 // newSwarm creates a new P2P instance, configured by config, if newNode is true it will create a new node identity
 // and not load from disk. it creates a new `net`, connection pool and discovery.
 func newSwarm(ctx context.Context, config config.Config, logger log.Log, datadir string) (*swarm, error) {
-
-	port := config.TCPPort
-	tcpaddr := &inet.TCPAddr{inet.ParseIP("0.0.0.0"), port, ""}
-	udpaddr := &inet.UDPAddr{inet.ParseIP("0.0.0.0"), port, ""}
-
 	var l node.LocalNode
 	var err error
 
@@ -140,7 +135,7 @@ func newSwarm(ctx context.Context, config config.Config, logger log.Log, datadir
 		}
 	}
 
-	n, err := net.NewNet(config, l, tcpaddr, logger.WithName("tcpnet"))
+	n, err := net.NewNet(config, l, logger.WithName("tcpnet"))
 	if err != nil {
 		return nil, fmt.Errorf("can't create swarm without a network, err: %v", err)
 	}
@@ -174,7 +169,7 @@ func newSwarm(ctx context.Context, config config.Config, logger log.Log, datadir
 		network: n,
 	}
 
-	udpnet, err := net.NewUDPNet(s.config, l, udpaddr, s.logger.WithName("udpnet"))
+	udpnet, err := net.NewUDPNet(s.config, l, s.logger.WithName("udpnet"))
 	if err != nil {
 		return nil, err
 	}
@@ -242,15 +237,13 @@ func (s *swarm) Start() error {
 	atomic.StoreUint32(&s.started, 1)
 	s.logger.Debug("Starting the p2p layer")
 
-	err = s.network.Start()
+	tcpListener, udpListener, err := s.getListeners(getTcpListener, getUdpListener)
 	if err != nil {
-		s.logger.Error("Error starting network services err=", err)
-		return err
+		return fmt.Errorf("error getting port: %v", err)
 	}
 
-	if err := s.udpnetwork.Start(); err != nil {
-		return err
-	}
+	s.network.Start(tcpListener)
+	s.udpnetwork.Start(udpListener)
 
 	tcpAddress := s.network.LocalAddr().(*inet.TCPAddr)
 	udpAddress := s.udpnetwork.LocalAddr().(*inet.UDPAddr)
@@ -876,4 +869,49 @@ func (s *swarm) hasOutgoingPeer(peer p2pcrypto.PublicKey) bool {
 	_, ok := s.outpeers[peer]
 	s.outpeersMutex.RUnlock()
 	return ok
+}
+
+var listeningIp = inet.ParseIP("0.0.0.0")
+
+// TODO: test
+func (s *swarm) getListeners(
+	getTcpListener func(tcpAddr *inet.TCPAddr) (inet.Listener, error),
+	getUdpListener func(udpAddr *inet.UDPAddr) (*inet.UDPConn, error),
+) (inet.Listener, *inet.UDPConn, error) {
+
+	port := s.config.TCPPort
+	randomPort := port == 0
+
+	for {
+		tcpAddr := &inet.TCPAddr{IP: listeningIp, Port: port}
+		tcpListener, err := getTcpListener(tcpAddr)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to acquire requested tcp port: %v", err)
+		}
+
+		addr := tcpListener.Addr()
+		port = addr.(*inet.TCPAddr).Port
+		udpAddr := &inet.UDPAddr{IP: listeningIp, Port: port}
+		udpListener, err := getUdpListener(udpAddr)
+		if err != nil {
+			if err := tcpListener.Close(); err != nil {
+				s.logger.With().Error("error closing tcp listener", log.Err(err))
+			}
+			if randomPort {
+				port = 0
+				continue
+			}
+			return nil, nil, fmt.Errorf("failed to acquire requested udp port: %v", err)
+		}
+
+		return tcpListener, udpListener, nil
+	}
+}
+
+func getUdpListener(udpAddr *inet.UDPAddr) (*inet.UDPConn, error) {
+	return inet.ListenUDP("udp", udpAddr)
+}
+
+func getTcpListener(tcpAddr *inet.TCPAddr) (inet.Listener, error) {
+	return inet.Listen("tcp", tcpAddr.String())
 }

@@ -70,7 +70,7 @@ func p2pTestInstance(t testing.TB, config config.Config) *swarm {
 }
 
 func p2pTestNoStart(t testing.TB, config config.Config) *swarm {
-	config.TCPPort = 0
+	//config.TCPPort = 0
 	p, err := newSwarm(context.TODO(), config, log.NewDefault(t.Name()), "")
 	if err != nil {
 		t.Fatal("err creating a swarm", err)
@@ -158,12 +158,18 @@ func TestSwarm_processMessage(t *testing.T) {
 
 var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
+func configWithPort(port int) config.Config {
+	cfg := config.DefaultConfig()
+	cfg.TCPPort = port
+	return cfg
+}
+
 func Test_ConnectionBeforeMessage(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	numNodes := 5
 	var wg sync.WaitGroup
 
-	p2 := p2pTestNoStart(t, config.DefaultConfig())
+	p2 := p2pTestNoStart(t, configWithPort(0))
 	c2 := p2.RegisterDirectProtocol(exampleProtocol)
 	require.NoError(t, p2.Start())
 	defer p2.Shutdown()
@@ -202,7 +208,7 @@ func Test_ConnectionBeforeMessage(t *testing.T) {
 	for i := 0; i < numNodes; i++ {
 		wg.Add(1)
 		go func() {
-			p1 := p2pTestNoStart(t, config.DefaultConfig())
+			p1 := p2pTestNoStart(t, configWithPort(0))
 			_ = p1.RegisterDirectProtocol(exampleProtocol)
 			require.NoError(t, p1.Start())
 			sa.add(p1)
@@ -244,8 +250,8 @@ func sendDirectMessage(t *testing.T, sender *swarm, recvPub p2pcrypto.PublicKey,
 }
 
 func TestSwarm_RoundTrip(t *testing.T) {
-	p1 := p2pTestNoStart(t, config.DefaultConfig())
-	p2 := p2pTestNoStart(t, config.DefaultConfig())
+	p1 := p2pTestNoStart(t, configWithPort(0))
+	p2 := p2pTestNoStart(t, configWithPort(0))
 
 	exchan1 := p1.RegisterDirectProtocol(exampleProtocol)
 	require.Equal(t, exchan1, p1.directProtocolHandlers[exampleProtocol])
@@ -266,8 +272,8 @@ func TestSwarm_RoundTrip(t *testing.T) {
 }
 
 func TestSwarm_MultipleMessages(t *testing.T) {
-	p1 := p2pTestNoStart(t, config.DefaultConfig())
-	p2 := p2pTestNoStart(t, config.DefaultConfig())
+	p1 := p2pTestNoStart(t, configWithPort(0))
+	p2 := p2pTestNoStart(t, configWithPort(0))
 
 	exchan1 := p1.RegisterDirectProtocol(exampleProtocol)
 	require.Equal(t, exchan1, p1.directProtocolHandlers[exampleProtocol])
@@ -316,7 +322,7 @@ func (sa *swarmArray) clean() {
 func TestSwarm_MultipleMessagesFromMultipleSenders(t *testing.T) {
 	const Senders = 100
 
-	cfg := config.DefaultConfig()
+	cfg := configWithPort(0)
 	cfg.SwarmConfig.Gossip = false
 	cfg.SwarmConfig.Bootstrap = false
 
@@ -373,7 +379,7 @@ func TestSwarm_MultipleMessagesFromMultipleSendersToMultipleProtocols(t *testing
 	const Senders = 100
 	const Protos = 50
 
-	cfg := config.DefaultConfig()
+	cfg := configWithPort(0)
 	cfg.SwarmConfig.Gossip = false
 	cfg.SwarmConfig.Bootstrap = false
 
@@ -793,7 +799,7 @@ func Test_Swarm_getMorePeers6(t *testing.T) {
 }
 
 func Test_Swarm_callCpoolCloseCon(t *testing.T) {
-	cfg := config.DefaultConfig()
+	cfg := configWithPort(0)
 	cfg.MaxInboundPeers = 0
 	p1 := p2pTestNoStart(t, cfg)
 	p2 := p2pTestNoStart(t, cfg)
@@ -829,7 +835,7 @@ func Test_Swarm_callCpoolCloseCon(t *testing.T) {
 }
 
 func TestNeighborhood_Initial(t *testing.T) {
-	cfg := config.DefaultConfig()
+	cfg := configWithPort(0)
 	cfg.SwarmConfig.RandomConnections = 3
 	cfg.SwarmConfig.Gossip = true
 	cfg.SwarmConfig.Bootstrap = false
@@ -908,7 +914,8 @@ func TestNeighborhood_Disconnect(t *testing.T) {
 }
 
 func TestSwarm_AddIncomingPeer(t *testing.T) {
-	p := p2pTestInstance(t, config.DefaultConfig())
+	cfg := configWithPort(0)
+	p := p2pTestInstance(t, cfg)
 	rnd := node.GenerateRandomNodeData()
 	p.addIncomingPeer(rnd.PublicKey())
 
@@ -918,12 +925,12 @@ func TestSwarm_AddIncomingPeer(t *testing.T) {
 
 	assert.True(t, ok)
 
-	nds := node.GenerateRandomNodesData(config.DefaultConfig().MaxInboundPeers)
+	nds := node.GenerateRandomNodesData(cfg.MaxInboundPeers)
 	for i := 0; i < len(nds); i++ {
 		p.addIncomingPeer(nds[i].PublicKey())
 	}
 
-	require.Equal(t, len(p.inpeers), config.DefaultConfig().MaxInboundPeers)
+	require.Equal(t, len(p.inpeers), cfg.MaxInboundPeers)
 	p.inpeersMutex.RLock()
 	_, ok = p.inpeers[nds[len(nds)-1].PublicKey()]
 	p.inpeersMutex.RUnlock()
@@ -1107,4 +1114,110 @@ func TestSwarm_SendMessage(t *testing.T) {
 
 	err = p.SendMessage(someky, proto, []byte("LOL"))
 	require.Equal(t, err, nil)
+}
+
+type tcpListenerMock struct {
+	port int
+}
+
+func (t tcpListenerMock) Accept() (inet.Conn, error) { panic("not mocked") }
+func (t tcpListenerMock) Close() error               { return nil } // TODO: assert closed
+func (t tcpListenerMock) Addr() inet.Addr            { return &inet.TCPAddr{Port: t.port} }
+
+type tcpResponse struct {
+	listener inet.Listener
+	err      error
+}
+
+type udpResponse struct {
+	err error
+}
+
+var ErrPortUnavailable = fmt.Errorf("failed to acquire port")
+
+func TestSwarm_getListeners_randomPort(t *testing.T) {
+	r := require.New(t)
+
+	port := 0
+	tcpResponses := map[int][]tcpResponse{
+		0: {
+			tcpResponse{listener: tcpListenerMock{port: 1234}},
+			tcpResponse{listener: tcpListenerMock{port: 1337}},
+		},
+	}
+	udpResponses := map[int][]udpResponse{
+		1234: {udpResponse{err: ErrPortUnavailable}},
+		1337: {udpResponse{}},
+	}
+
+	r.NoError(testGetListenersScenario(t, port, tcpResponses, udpResponses))
+}
+
+func TestSwarm_getListeners_specificPort(t *testing.T) {
+	r := require.New(t)
+
+	port := 1337
+	tcpResponses := map[int][]tcpResponse{
+		1337: {tcpResponse{listener: tcpListenerMock{port: 1337}}},
+	}
+	udpResponses := map[int][]udpResponse{
+		1337: {udpResponse{}},
+	}
+
+	r.NoError(testGetListenersScenario(t, port, tcpResponses, udpResponses))
+}
+
+func TestSwarm_getListeners_specificPortUnavailable(t *testing.T) {
+	r := require.New(t)
+
+	port := 1337
+	tcpResponses := map[int][]tcpResponse{
+		1337: {tcpResponse{err: ErrPortUnavailable}},
+	}
+	udpResponses := map[int][]udpResponse{}
+
+	r.EqualError(testGetListenersScenario(t, port, tcpResponses, udpResponses),
+		"failed to acquire requested tcp port: failed to acquire port")
+
+	tcpResponses = map[int][]tcpResponse{
+		1337: {tcpResponse{listener: tcpListenerMock{port: 1337}}},
+	}
+	udpResponses = map[int][]udpResponse{
+		1337: {udpResponse{err: ErrPortUnavailable}},
+	}
+
+	r.EqualError(testGetListenersScenario(t, port, tcpResponses, udpResponses),
+		"failed to acquire requested udp port: failed to acquire port")
+}
+
+func testGetListenersScenario(t *testing.T, port int, tcpResponses map[int][]tcpResponse, udpResponses map[int][]udpResponse) error {
+	r := require.New(t)
+
+	cfg := configWithPort(port)
+	swarm := p2pTestNoStart(t, cfg)
+
+	getTcp := func(addr *inet.TCPAddr) (listener inet.Listener, err error) {
+		port := addr.Port
+		r.NotEmpty(tcpResponses[port], "no response for port %v", port)
+		res := tcpResponses[port][0]
+		tcpResponses[port] = tcpResponses[port][1:]
+		return res.listener, res.err
+	}
+	getUdp := func(addr *inet.UDPAddr) (conn *inet.UDPConn, err error) {
+		port := addr.Port
+		r.NotEmpty(udpResponses[port], "no response for port %v", port)
+		res := udpResponses[port][0]
+		udpResponses[port] = udpResponses[port][1:]
+		return nil, res.err
+	}
+	_, _, err := swarm.getListeners(getTcp, getUdp)
+
+	for port, responses := range tcpResponses {
+		r.Empty(responses, "not all responses for tcp port %v were consumed", port)
+	}
+	for port, responses := range udpResponses {
+		r.Empty(responses, "not all responses for udp port %v were consumed", port)
+	}
+
+	return err
 }

@@ -189,16 +189,14 @@ func TestUDPMux_ProcessUDP(t *testing.T) {
 
 func Test_RoundTrip(t *testing.T) {
 	nd, ndinfo := node.GenerateTestNode(t)
-	udpaddr := &net2.UDPAddr{ndinfo.IP, int(ndinfo.DiscoveryPort), ""}
-	udpnet, err := net.NewUDPNet(config.DefaultConfig(), nd, udpaddr, log.New("", "", ""))
+	udpnet, err := net.NewUDPNet(config.DefaultConfig(), nd, log.New("", "", ""))
 	require.NoError(t, err)
 
 	m := NewUDPMux(nd, nil, udpnet, 0, log.New(test_str, "", ""))
 	require.NotNil(t, m)
 
 	nd2, ndinfo2 := node.GenerateTestNode(t)
-	udpaddr2 := &net2.UDPAddr{ndinfo2.IP, int(ndinfo2.DiscoveryPort), ""}
-	udpnet2, err := net.NewUDPNet(config.DefaultConfig(), nd2, udpaddr2, log.New("", "", ""))
+	udpnet2, err := net.NewUDPNet(config.DefaultConfig(), nd2, log.New("", "", ""))
 	require.NoError(t, err)
 
 	m2 := NewUDPMux(nd2, nil, udpnet2, 0, log.New(test_str+"2", "", ""))
@@ -213,11 +211,18 @@ func Test_RoundTrip(t *testing.T) {
 	m.lookuper = func(key p2pcrypto.PublicKey) (*node.NodeInfo, error) {
 		return nil, errors.New("nonode")
 	}
-	require.NoError(t, udpnet.Start())
+
+	udpAddr := &net2.UDPAddr{ndinfo.IP, int(ndinfo.DiscoveryPort), ""}
+	udpListener, err := net2.ListenUDP("udp", udpAddr)
+	require.NoError(t, err)
+	udpnet.Start(udpListener)
 	err = m.Start()
 	require.NoError(t, err)
 	defer m.Shutdown()
-	require.NoError(t, udpnet2.Start())
+	udpAddr2 := &net2.UDPAddr{ndinfo2.IP, int(ndinfo2.DiscoveryPort), ""}
+	udpListener2, err := net2.ListenUDP("udp", udpAddr2)
+	require.NoError(t, err)
+	udpnet2.Start(udpListener2)
 	err = m2.Start()
 	require.NoError(t, err)
 	defer m2.Shutdown()

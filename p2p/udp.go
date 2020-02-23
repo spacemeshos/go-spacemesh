@@ -20,7 +20,6 @@ import (
 type Lookuper func(key p2pcrypto.PublicKey) (*node.NodeInfo, error)
 
 type udpNetwork interface {
-	Start() error
 	Shutdown()
 
 	IncomingMessages() chan inet.UDPMessageEvent

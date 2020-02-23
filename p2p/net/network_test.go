@@ -26,10 +26,9 @@ func Test_sumByteArray(t *testing.T) {
 func TestNet_EnqueueMessage(t *testing.T) {
 	testnodes := 100
 	cfg := config.DefaultConfig()
-	addr := &net.TCPAddr{net.ParseIP("0.0.0.0"), 0000, ""}
 	ln, err := node.NewNodeIdentity()
 	assert.NoError(t, err)
-	n, err := NewNet(cfg, ln, addr, log.NewDefault(t.Name()))
+	n, err := NewNet(cfg, ln, log.NewDefault(t.Name()))
 	assert.NoError(t, err)
 
 	var rndmtx sync.Mutex
@@ -78,10 +77,6 @@ func newMockListener() *mockListener {
 	return &mockListener{connReleaser: make(chan struct{})}
 }
 
-func (ml *mockListener) listenerFunc() (net.Listener, error) {
-	return ml, nil
-}
-
 func (ml *mockListener) Accept() (net.Conn, error) {
 	<-ml.connReleaser
 	atomic.AddInt32(&ml.calledCount, 1)
@@ -102,7 +97,7 @@ func (ml *mockListener) Close() error {
 	return nil
 }
 func (ml *mockListener) Addr() net.Addr {
-	return &net.IPAddr{IP: net.ParseIP("0.0.0.0"), Zone: ""}
+	return &net.TCPAddr{IP: net.ParseIP("0.0.0.0"), Zone: ""}
 }
 
 type tempErr string
@@ -119,14 +114,13 @@ func Test_Net_LimitedConnections(t *testing.T) {
 	cfg := config.DefaultConfig()
 	cfg.SessionTimeout = 100 * time.Millisecond
 
-	addr := &net.TCPAddr{net.ParseIP("0.0.0.0"), 0000, ""}
 	ln, err := node.NewNodeIdentity()
 	require.NoError(t, err)
-	n, err := NewNet(cfg, ln, addr, log.NewDefault(t.Name()))
+	n, err := NewNet(cfg, ln, log.NewDefault(t.Name()))
 	//n.SubscribeOnNewRemoteConnections(counter)
-	listener := newMockListener()
-	err = n.listen(listener.listenerFunc)
 	require.NoError(t, err)
+	listener := newMockListener()
+	n.Start(listener)
 	listener.accpetResErr = tempErr("demo connection will close and allow more")
 	for i := 0; i < cfg.MaxPendingConnections; i++ {
 		listener.releaseConn()
@@ -151,13 +145,12 @@ func TestHandlePreSessionIncomingMessage2(t *testing.T) {
 	var wg sync.WaitGroup
 
 	aliceNode, aliceNodeInfo := node.GenerateTestNode(t)
-	bobNode, bobNodeInfo := node.GenerateTestNode(t)
+	bobNode, _ := node.GenerateTestNode(t)
 
 	bobsAliceConn := NewConnectionMock(aliceNode.PublicKey())
 	bobsAliceConn.addr = fmt.Sprintf("%v:%v", aliceNodeInfo.IP.String(), aliceNodeInfo.ProtocolPort)
 
-	bobsAddr := &net.TCPAddr{bobNodeInfo.IP, int(bobNodeInfo.DiscoveryPort), ""}
-	bobsNet, err := NewNet(config.DefaultConfig(), bobNode, bobsAddr, log.NewDefault(t.Name()))
+	bobsNet, err := NewNet(config.DefaultConfig(), bobNode, log.NewDefault(t.Name()))
 	r.NoError(err)
 	bobsNet.SubscribeOnNewRemoteConnections(func(event NewConnectionEvent) {
 		r.Equal(aliceNode.PublicKey().String(), event.Conn.Session().ID().String(), "wrong session received")
