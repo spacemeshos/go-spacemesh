@@ -8,7 +8,7 @@ dir_path = os.getcwd()
 print(f"adding {dir_path} to sys.path")
 sys.path.insert(0, dir_path)
 
-from tests.convenience import str2bool, sleep_print_backwards
+from tests.convenience import str2bool
 from tests.tx_generator import actions
 from tests.tx_generator import config as conf
 from tests.tx_generator.models.wallet_api import WalletAPI
@@ -90,6 +90,12 @@ if __name__ == "__main__":
         exit(0)
 
     tts = layer_wait * layer_duration
-    print(f"sleeping to enable new state to be processed")
-    sleep_print_backwards(tts)
+    print(f"sleeping for {tts} to enable new state to be processed")
+    sleep_interval = 60
+    while tts >= 0:
+        print(f"{tts} seconds remain")
+        time.sleep(sleep_interval)
+        tts -= sleep_interval
+
+    print("\n")
     actions.send_tx_from_each_account(my_wallet, acc, tx_count, is_concurrent=is_concurrent, is_use_tap=False)
