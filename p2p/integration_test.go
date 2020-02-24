@@ -120,6 +120,9 @@ func Test_ReallySmallP2PIntegrationSuite(t *testing.T) {
 }
 
 func Test_SmallP2PIntegrationSuite(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
 	s := new(P2PIntegrationSuite)
 	s.IntegrationTestSuite = new(IntegrationTestSuite)
 

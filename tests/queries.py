@@ -11,6 +11,7 @@ from tests import convenience
 from tests.context import ES
 from tests.convenience import PRINT_SEP
 
+CREATED_BLOCK_MSG = "block created"
 TS_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
 
 dt = datetime.now()
@@ -53,15 +54,12 @@ def get_release_tick_msgs(namespace, pod_name):
     return get_all_msg_containing(namespace, pod_name, release_tick)
 
 
-CREATED_BLOCK_MSG = "I've created a block"
-
-
 def get_block_creation_msgs(namespace, pod_name, find_fails=False, from_ts=None, to_ts=None):
     return get_all_msg_containing(namespace, pod_name, CREATED_BLOCK_MSG, find_fails, from_ts, to_ts)
 
 
 def get_done_syncing_msgs(namespace, pod_name):
-    done_waiting_msg = "Done waiting for ticks and validation"
+    done_waiting_msg = "Node is synced"
     return get_all_msg_containing(namespace, pod_name, done_waiting_msg)
 
 
@@ -416,6 +414,10 @@ def query_atx_published(indx, ns, layer):
     return query_message(indx, ns, ns, {'M': 'atx published', 'layer_id': str(layer)}, False)
 
 
+def query_atx_per_epoch(ns, epoch_id, index=current_index):
+    return query_message(index, ns, ns, {'M': 'atx published', 'epoch_id': str(epoch_id)}, False)
+
+
 def message_propagation(deployment, query_fields):
     logs = query_message(current_index, deployment, deployment, query_fields, False)
     srt = sorted(logs, key=lambda x: datetime.strptime(x.T, convenience.TIMESTAMP_FMT))
@@ -435,7 +437,7 @@ def layer_block_max_propagation(deployment, layer):
     msg_time = None
     for log in logs:
         print(list(log), log.block_id)
-        block_recv_msg = {"M": "got new block", "block_id": log.block_id}
+        block_recv_msg = {"M": "block received", "block_id": log.block_id}
         # prop is the propagation delay delta between oldest and youngest message of this sort
         prop, max_time = message_propagation(deployment, block_recv_msg)
         print(prop, max_time)

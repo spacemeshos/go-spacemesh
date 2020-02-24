@@ -28,6 +28,13 @@ class DeploymentInfo:
         return ret_str
 
 
+class NetworkInfo:
+    def __init__(self, namespace, bs_deployment_info, cl_deployment_info):
+        self.namespace = namespace
+        self.bootstrap = bs_deployment_info
+        self.clients = cl_deployment_info
+
+
 class NetworkDeploymentInfo:
     def __init__(self, dep_id, bs_deployment_info, cl_deployment_info):
         self.deployment_name = ''

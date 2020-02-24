@@ -177,13 +177,13 @@ func (s SpacemeshGrpcService) SubmitTransaction(ctx context.Context, in *pb.Sign
 	if !s.Tx.AddressExists(tx.Origin()) {
 		log.With().Error("tx failed to validate signature",
 			log.TxId(tx.Id().ShortString()), log.String("origin", tx.Origin().Short()))
-		return nil, fmt.Errorf("transaction origin (%v) not found in global state", tx.Origin())
+		return nil, fmt.Errorf("transaction origin (%v) not found in global state", tx.Origin().Short())
 	}
 	if err := s.Tx.ValidateNonceAndBalance(tx); err != nil {
 		log.With().Error("tx failed nonce and balance check", log.Err(err))
 		return nil, err
 	}
-	log.Info("GRPC SubmitTransaction BROADCAST tx. address %x (len %v), gaslimit %v, fee %v id %v nonce %v",
+	log.Info("GRPC SubmitTransaction BROADCAST tx. address %x (len %v), gas limit %v, fee %v id %v nonce %v",
 		tx.Recipient, len(tx.Recipient), tx.GasLimit, tx.Fee, tx.Id().ShortString(), tx.AccountNonce)
 	go s.Network.Broadcast(miner.IncomingTxProtocol, in.Tx)
 	log.Info("GRPC SubmitTransaction returned msg ok")

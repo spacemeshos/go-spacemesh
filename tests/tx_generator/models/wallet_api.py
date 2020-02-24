@@ -3,7 +3,7 @@ import random
 import re
 
 from tests.tx_generator import config as conf
-from tests.tx_generator.k8s_handler import api_call
+from tests.tx_generator.k8s_handler import api_call, aws_api_call
 
 
 class WalletAPI:
@@ -19,7 +19,6 @@ class WalletAPI:
     get_tx_api = 'v1/gettransaction'
     nonce_api = 'v1/nonce'
     submit_api = 'v1/submittransaction'
-    a_ok = "'value': 'ok'"
 
     def __init__(self, namespace, clients_lst, fixed_node=None):
         """
@@ -34,14 +33,18 @@ class WalletAPI:
         self.tx_ids = []
 
     def submit_tx(self, to, src, gas_price, amount, tx_bytes):
+        a_ok_pat = "[\'\"]value[\'\"]:\s?[\'\"]ok[\'\"]"
         print(f"\n{datetime.now()}: submit transaction\nfrom {src}\nto {to}")
         pod_ip, pod_name = self.random_node()
         print(f"amount: {amount}, gas-price: {gas_price}, total: {amount+gas_price}")
         tx_field = '{"tx":' + str(list(tx_bytes)) + '}'
-        out = api_call(pod_ip, tx_field, self.submit_api, self.namespace)
+        out = self.send_api_call(pod_ip, tx_field, self.submit_api)
         print(f"{datetime.now()}: submit result: {out}")
+        if not out:
+            print("cannot parse submission result, result is none")
+            return False
 
-        if self.a_ok in out:
+        if re.search(a_ok_pat, out):
             self.tx_ids.append(self.extract_tx_id(out))
             return True
 
@@ -52,7 +55,7 @@ class WalletAPI:
         tx_id_lst = self.convert_hex_str_to_bytes(tx_id)
         pod_ip, pod_name = self.random_node()
         data = f'{{"id": {str(tx_id_lst)}}}'
-        out = api_call(pod_ip, data, self.get_tx_api, self.namespace)
+        out = self.send_api_call(pod_ip, data, self.get_tx_api)
         print(f"get tx output={out}")
         return self.extract_tx_id(out)
 
@@ -79,7 +82,8 @@ class WalletAPI:
             data = '{"address":"' + acc + '"}'
 
         print(f"querying for the {resource} of {acc}")
-        out = api_call(pod_ip, data, api_res, self.namespace)
+        out = self.send_api_call(pod_ip, data, api_res)
+
         print(f"{resource} output={out}")
         return out
 
@@ -100,11 +104,28 @@ class WalletAPI:
         print(f"selected pod: ip = {pod_ip}, name = {pod_name}")
         return pod_ip, pod_name
 
+    def send_api_call(self, pod_ip, data, api_resource):
+        if self.namespace:
+            out = api_call(pod_ip, data, api_resource, self.namespace)
+        else:
+            out = aws_api_call(pod_ip, data, api_resource)
+            if out.status_code == 200:
+                out = out.text
+            else:
+                print("status code != 200, output =", out.text)
+                out = None
+
+        return out
+
     # ======================= utils =======================
 
     @staticmethod
     def extract_value_from_resp(val):
-        res_pat = "value\': \'([0-9]+)"
+        if not val:
+            print("cannot extract value, input is None")
+            return None
+
+        res_pat = "value[\'\"]:\s?[\'\"]([0-9]+)"
         group_num = 1
 
         match = re.search(res_pat, val)
@@ -131,6 +152,10 @@ class WalletAPI:
 
     @staticmethod
     def extract_tx_id(tx_output):
+        if not tx_output:
+            print("cannot extract id from output, input is None")
+            return None
+
         id_pat = r"'value': 'ok', 'id': '([0-9a-f]{64})'"
         group_num = 1
 

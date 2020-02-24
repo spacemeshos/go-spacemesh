@@ -20,8 +20,8 @@ import (
 	"time"
 )
 
-const MaxTransactionsPerBlock = 20 //todo: move to config
-const MaxAtxPerBlock = 200         //todo: move to config
+const MaxTransactionsPerBlock = 200 //todo: move to config
+const MaxAtxPerBlock = 200          //todo: move to config
 
 const DefaultGasLimit = 10
 const DefaultFee = 1
@@ -156,6 +156,7 @@ type WeakCoinProvider interface {
 type meshProvider interface {
 	LayerBlockIds(index types.LayerID) ([]types.BlockID, error)
 	GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error)
+	GetBlock(id types.BlockID) (*types.Block, error)
 }
 
 //used from external API call?
@@ -179,6 +180,17 @@ func calcHdistRange(id types.LayerID, hdist types.LayerID) (bottom types.LayerID
 	}
 
 	return bottom, top
+}
+
+func filterUnknownBlocks(blocks []types.BlockID, validate func(id types.BlockID) (*types.Block, error)) []types.BlockID {
+	var filtered []types.BlockID
+	for _, b := range blocks {
+		if _, e := validate(b); e == nil {
+			filtered = append(filtered, b)
+		}
+	}
+
+	return filtered
 }
 
 func (t *BlockBuilder) getVotes(id types.LayerID) ([]types.BlockID, error) {
@@ -223,6 +235,7 @@ func (t *BlockBuilder) getVotes(id types.LayerID) ([]types.BlockID, error) {
 		votes = append(votes, res...)
 	}
 
+	votes = filterUnknownBlocks(votes, t.meshProvider.GetBlock)
 	return votes, nil
 }
 
@@ -261,16 +274,17 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 
 	bl := &types.Block{MiniBlock: b, Signature: t.Signer.Sign(blockBytes)}
 
-	bl.CalcAndSetId()
+	bl.Initialize()
 
-	t.Log.Event().Info("I've created a block",
-		log.BlockId(bl.Id().String()),
-		log.LayerId(bl.LayerIndex.Uint64()),
+	t.Log.Event().Info("block created",
+		bl.Id(),
+		bl.LayerIndex,
+		log.String("miner_id", bl.MinerId().String()),
 		log.Int("tx_count", len(bl.TxIds)),
 		log.Int("atx_count", len(bl.AtxIds)),
 		log.Int("view_edges", len(bl.ViewEdges)),
 		log.Int("vote_count", len(bl.BlockVotes)),
-		log.AtxId(bl.ATXID.Hash32().String()),
+		bl.ATXID,
 		log.Uint32("eligibility_counter", bl.EligibilityProof.J),
 	)
 	return bl, nil
@@ -388,6 +402,7 @@ func (t *BlockBuilder) handleGossipAtx(data service.GossipMessage) {
 	h, err := atx.NIPSTChallenge.Hash()
 	if err == nil && h != nil {
 		challenge = h.String()
+
 	}
 
 	t.With().Info("got new ATX",

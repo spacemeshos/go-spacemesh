@@ -30,7 +30,7 @@ import (
 	"time"
 )
 
-var conf = Configuration{1000, 1, 300, 500 * time.Millisecond, 100, 5}
+var conf = Configuration{1000, 1, 300, 500 * time.Millisecond, 1 * time.Second, 100, 5}
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
@@ -176,7 +176,7 @@ func TestSyncer_Start(t *testing.T) {
 			t.Error("timed out ")
 			return
 		default:
-			if atomic.LoadUint32(&syn.startLock) == 1 {
+			if !syn.startLock.TryLock() {
 				return
 			}
 		}
@@ -418,9 +418,9 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	block2.ATXID = atx3.Id()
 	block3 := types.NewExistingBlock(2, []byte(rand.RandString(8)))
 	block3.ATXID = atx3.Id()
-	block1.CalcAndSetId()
-	block2.CalcAndSetId()
-	block3.CalcAndSetId()
+	block1.Initialize()
+	block2.Initialize()
+	block3.Initialize()
 
 	syncObj1.AddBlockWithTxs(block1, []*types.Transaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8}, []*types.ActivationTx{atx1})
 	syncObj1.AddBlockWithTxs(block2, []*types.Transaction{tx1, tx2, tx3, tx4, tx5, tx6, tx7, tx8}, []*types.ActivationTx{atx2})
@@ -503,8 +503,6 @@ func TestSyncProtocol_SyncNodes(t *testing.T) {
 	syncObj2.AddBlockWithTxs(block9, []*types.Transaction{tx7, tx8}, []*types.ActivationTx{})
 	syncObj2.AddBlockWithTxs(block10, []*types.Transaction{tx7, tx8}, []*types.ActivationTx{})
 
-	syncObj1.Unsubscribe(syncObj1.LayerCh)
-	syncObj2.Unsubscribe(syncObj2.LayerCh)
 	//syncObj1.Start()
 	//syncObj2.Start()
 
@@ -734,16 +732,16 @@ func (sis *syncIntegrationTwoNodes) TestSyncProtocol_TwoNodes() {
 	block7.TxIds = []types.TransactionId{id7, id8}
 	block8.TxIds = []types.TransactionId{id7, id8}
 
-	block1.CalcAndSetId()
-	block2.CalcAndSetId()
-	block3.CalcAndSetId()
-	block4.CalcAndSetId()
-	block5.CalcAndSetId()
-	block6.CalcAndSetId()
-	block7.CalcAndSetId()
-	block8.CalcAndSetId()
-	block9.CalcAndSetId()
-	block10.CalcAndSetId()
+	block1.Initialize()
+	block2.Initialize()
+	block3.Initialize()
+	block4.Initialize()
+	block5.Initialize()
+	block6.Initialize()
+	block7.Initialize()
+	block8.Initialize()
+	block9.Initialize()
+	block10.Initialize()
 
 	syncObj2.AddBlock(block1)
 	syncObj2.AddBlock(block2)
@@ -1022,7 +1020,7 @@ func TestSyncer_Synchronise(t *testing.T) {
 	lv := &mockLayerValidator{0, 0, 0, nil}
 	sync.lValidator = lv
 
-	sr := sync.getSyncRoutine()
+	sr := sync.synchronise
 	sr()
 	time.Sleep(100 * time.Millisecond) // handle go routine race
 	r.Equal(1, lv.countValidated)
@@ -1033,7 +1031,7 @@ func TestSyncer_Synchronise(t *testing.T) {
 	sync.AddBlock(types.NewExistingBlock(3, []byte(rand.RandString(8))))
 	lv = &mockLayerValidator{1, 0, 0, nil}
 	sync.lValidator = lv
-	sync.currentLayer = 3
+	sync.TickProvider = &MockClock{Layer: 3}
 	sr()
 	time.Sleep(100 * time.Millisecond) // handle go routine race
 	r.Equal(1, lv.countValidated)
@@ -1041,10 +1039,10 @@ func TestSyncer_Synchronise(t *testing.T) {
 
 	lv = &mockLayerValidator{1, 0, 0, nil}
 	sync.lValidator = lv
-	sync.currentLayer = 4 // simulate not synced
+	sync.TickProvider = &MockClock{Layer: 4} // simulate not synced
 	sr()
 	time.Sleep(100 * time.Millisecond) // handle go routine race
-	r.Equal(1, lv.countValidate)       // not synced, expect one call
+	r.Equal(2, lv.countValidate)       // not synced, expect one call
 }
 
 func TestSyncer_Synchronise2(t *testing.T) {
@@ -1054,40 +1052,36 @@ func TestSyncer_Synchronise2(t *testing.T) {
 	sync.AddBlockWithTxs(types.NewExistingBlock(1, []byte(rand.RandString(8))), nil, nil)
 	lv := &mockLayerValidator{0, 0, 0, nil}
 	sync.lValidator = lv
-	sync.currentLayer = 1
+	sync.TickProvider = &MockClock{Layer: 1}
 	r.False(sync.gossipSynced == Done)
 
 	// current layer = 0
-	sync.currentLayer = 0
-	sync.syncRoutineWg.Add(1)
-	sync.Synchronise()
+	sync.TickProvider = &MockClock{Layer: 0}
+	sync.synchronise()
 	r.Equal(0, lv.countValidate)
 	r.True(sync.gossipSynced == Done)
 
 	// current layer = 1
-	sync.currentLayer = 1
-	sync.syncRoutineWg.Add(1)
-	sync.Synchronise()
+	sync.TickProvider = &MockClock{Layer: 1}
+	sync.synchronise()
 	r.Equal(0, lv.countValidate)
 	r.True(sync.gossipSynced == Done)
 
 	// validated layer = 5 && current layer = 6 -> don't call validate
 	lv = &mockLayerValidator{5, 0, 0, nil}
 	sync.lValidator = lv
-	sync.currentLayer = 6
-	sync.syncRoutineWg.Add(1)
+	sync.TickProvider = &MockClock{Layer: 6}
 	sync.SetLatestLayer(5)
-	sync.Synchronise()
+	sync.synchronise()
 	r.Equal(0, lv.countValidate)
 	r.True(sync.gossipSynced == Done)
 
 	// current layer != 1 && weakly-synced
 	lv = &mockLayerValidator{0, 0, 0, nil}
 	sync.lValidator = lv
-	sync.currentLayer = 2
+	sync.TickProvider = &MockClock{Layer: 2}
 	sync.SetLatestLayer(2)
-	sync.syncRoutineWg.Add(1)
-	sync.Synchronise()
+	sync.synchronise()
 	r.Equal(1, lv.countValidate)
 	r.True(sync.gossipSynced == Done)
 }
@@ -1099,13 +1093,13 @@ func TestSyncer_ListenToGossip(t *testing.T) {
 	sync.AddBlockWithTxs(types.NewExistingBlock(1, []byte(rand.RandString(8))), nil, nil)
 	lv := &mockLayerValidator{0, 0, 0, nil}
 	sync.lValidator = lv
-	sync.currentLayer = 1
+	sync.TickProvider = &MockClock{Layer: 1}
 	sync.SetLatestLayer(1)
 	r.False(sync.gossipSynced == Done)
 	assert.False(t, sync.ListenToGossip())
 
 	//run sync
-	sync.getSyncRoutine()()
+	sync.synchronise()
 
 	//check gossip open
 	assert.True(t, sync.ListenToGossip())
@@ -1115,15 +1109,14 @@ func TestSyncer_handleNotSyncedFlow(t *testing.T) {
 	r := require.New(t)
 	txpool := miner.NewTxMemPool()
 	atxpool := miner.NewAtxMemPool()
-	ts := &MockClock{}
+	ts := &MockClock{Layer: 10}
 	sync := NewSync(service.NewSimulator().NewNode(), getMesh(memoryDB, Path+t.Name()+"_"+time.Now().String()), txpool, atxpool, BlockEligibilityValidatorMock{}, newMockPoetDb(), conf, ts, log.NewDefault(t.Name()))
 	lv := &mockLayerValidator{0, 0, 0, nil}
 	sync.lValidator = lv
-	sync.currentLayer = 10
 	sync.SetLatestLayer(20)
 	go sync.handleNotSynced(10)
 	time.Sleep(100 * time.Millisecond)
-	r.Equal(2, ts.countSub)
+	r.Equal(1, ts.countSub)
 }
 
 func TestSyncer_p2pSyncForTwoLayers(t *testing.T) {
@@ -1148,13 +1141,13 @@ func TestSyncer_p2pSyncForTwoLayers(t *testing.T) {
 
 	sync := NewSync(net, msh, txpool, atxpool, blockValidator, newMockPoetDb(), conf, timer, l)
 	lv := &mockLayerValidator{0, 0, 0, nil}
-	sync.SyncLock = RUNNING
+	sync.syncLock.Lock()
 	sync.lValidator = lv
 	sync.SetLatestLayer(5)
 
 	sync.Start()
 	time.Sleep(250 * time.Millisecond)
-	current := sync.currentLayer
+	current := sync.GetCurrentLayer()
 
 	// make sure not validated before the call
 	_, ok := lv.validatedLayers[current]
@@ -1163,7 +1156,7 @@ func TestSyncer_p2pSyncForTwoLayers(t *testing.T) {
 	_, ok = lv.validatedLayers[current+1]
 	r.False(ok)
 
-	before := sync.currentLayer
+	before := sync.GetCurrentLayer()
 	go func() {
 		if err := sync.gossipSyncForOneFullLayer(current); err != nil {
 			t.Error(err)
@@ -1181,7 +1174,7 @@ func TestSyncer_p2pSyncForTwoLayers(t *testing.T) {
 
 	time.Sleep(1 * time.Second)
 
-	after := sync.currentLayer
+	after := sync.GetCurrentLayer()
 	_, _ = before, after // TODO: commented out due to flakyness
 	//r.Equal(before+2, after)
 	r.Equal(2, lv.countValidate)
@@ -1211,16 +1204,15 @@ func TestSyncer_ConcurrentSynchronise(t *testing.T) {
 	r := require.New(t)
 	syncs, _, _ := SyncMockFactory(1, conf, t.Name(), memoryDB, newMockPoetDb)
 	sync := syncs[0]
-	sync.currentLayer = 3
+	sync.TickProvider = &MockClock{Layer: 3}
 	lv := &mockTimedValidator{1 * time.Second, 0}
 	sync.lValidator = lv
 	sync.AddBlock(types.NewExistingBlock(1, []byte(rand.RandString(8))))
 	sync.AddBlock(types.NewExistingBlock(2, []byte(rand.RandString(8))))
 	sync.AddBlock(types.NewExistingBlock(3, []byte(rand.RandString(8))))
-	f := sync.getSyncRoutine()
-	go f()
+	go sync.synchronise()
 	time.Sleep(100 * time.Millisecond)
-	f()
+	sync.synchronise()
 	time.Sleep(100 * time.Millisecond) // handle go routine race
 	r.Equal(1, lv.calls)
 }
@@ -1501,14 +1493,14 @@ func TestSyncer_Await(t *testing.T) {
 	r.NoError(err)
 	lv := &mockLayerValidator{0, 0, 0, nil}
 	syncer.lValidator = lv
-	syncer.currentLayer = 1
+	syncer.TickProvider = &MockClock{Layer: 1}
 	syncer.SetLatestLayer(1)
 
 	ch := syncer.Await()
 	r.False(closed(ch))
 
 	//run sync
-	syncer.getSyncRoutine()()
+	syncer.synchronise()
 
 	r.True(closed(ch))
 }

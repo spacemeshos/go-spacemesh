@@ -451,16 +451,15 @@ func (b *Builder) PublishActivationTx() error {
 		log.String("commitment", commitStr),
 		log.Int("atx_size", size),
 	)
+	events.Publish(events.AtxCreated{Created: true, Id: atx.ShortString(), Layer: uint64(b.currentEpoch())})
 
 	select {
 	case <-atxReceived:
 		b.log.Info("atx received in db")
-		events.Publish(events.AtxCreated{Created: true, Id: atx.ShortString(), Layer: uint64(b.currentEpoch())})
 	case <-b.layerClock.AwaitLayer((atx.TargetEpoch(b.layersPerEpoch) + 1).FirstLayer(b.layersPerEpoch)):
 		select {
 		case <-atxReceived:
 			b.log.Info("atx received in db (in the last moment)")
-			events.Publish(events.AtxCreated{Created: true, Id: atx.ShortString(), Layer: uint64(b.currentEpoch())})
 		case <-b.syncer.Await(): // ensure we've seen all blocks before concluding that the ATX was lost
 			b.log.With().Error("target epoch has passed before atx was added to database",
 				log.AtxId(atx.ShortString()))

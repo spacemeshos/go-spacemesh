@@ -88,7 +88,9 @@ type BaseConfig struct {
 
 	GenesisActiveSet int `mapstructure:"genesis-active-size"` // the active set size for genesis
 
-	SyncRequestTimeout int `mapstructure:"sync-request-timeout"` // the timeout for direct request in the sync
+	SyncRequestTimeout int `mapstructure:"sync-request-timeout"` // ms the timeout for direct request in the sync
+
+	SyncInterval int `mapstructure:"sync-interval"` // sync interval in seconds
 
 	PublishEventsUrl string `mapstructure:"events-url"`
 
@@ -161,6 +163,7 @@ func defaultBaseConfig() BaseConfig {
 		GenesisActiveSet:    5,
 		BlockCacheSize:      20,
 		SyncRequestTimeout:  2000,
+		SyncInterval:        10,
 		AtxsPerBlock:        100,
 	}
 }
