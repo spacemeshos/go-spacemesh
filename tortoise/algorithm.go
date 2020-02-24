@@ -40,6 +40,12 @@ func NewRecoveredAlgorithm(mdb *mesh.MeshDB, lg log.Log) *Algorithm {
 	return alg
 }
 
+func (alg *Algorithm) PersistTortoise() error {
+	alg.Lock()
+	defer alg.Unlock()
+	return alg.Tortoise.PersistTortoise()
+}
+
 func (alg *Algorithm) HandleLateBlock(b *types.Block) (types.LayerID, types.LayerID) {
 	//todo feed all layers from b's layer to tortoise
 	l := types.NewLayer(b.Layer())
