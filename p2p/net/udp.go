@@ -41,7 +41,7 @@ type UDPNet struct {
 	clsMutex           sync.RWMutex
 	closingConnections []func(ConnectionWithErr)
 
-	incomingConn map[string]*udpConnWrapper
+	incomingConn map[string]udpConn
 
 	shutdown chan struct{}
 }
@@ -54,7 +54,7 @@ func NewUDPNet(config config.Config, localEntity node.LocalNode, addr *net.UDPAd
 		udpAddress:   addr,
 		config:       config,
 		msgChan:      make(chan IncomingMessageEvent, config.BufferSize),
-		incomingConn: make(map[string]*udpConnWrapper, maxUDPConn),
+		incomingConn: make(map[string]udpConn, maxUDPConn),
 		shutdown:     make(chan struct{}),
 	}
 
@@ -106,7 +106,7 @@ func (n *UDPNet) Start() error {
 	return nil
 }
 
-// LocalAddr returns the local listening addr, will panic before running Start. or if start errored
+// LocalAddr returns the local listening Addr, will panic before running Start. or if start errored
 func (n *UDPNet) LocalAddr() net.Addr {
 	return n.conn.LocalAddr()
 }
@@ -226,7 +226,7 @@ func (n *UDPNet) listenToUDPNetworkMessages(listener net.PacketConn) {
 			_, pk, err := p2pcrypto.ExtractPubkey(copybuf)
 
 			if err != nil {
-				n.logger.Warning("error can't extract public key from udp message. (addr=%v), err=%v", addr.String(), err)
+				n.logger.Warning("error can't extract public key from udp message. (Addr=%v), err=%v", addr.String(), err)
 				continue
 			}
 
@@ -250,6 +250,7 @@ func (n *UDPNet) listenToUDPNetworkMessages(listener net.PacketConn) {
 			}
 
 			conn = &udpConnWrapper{
+				created:   time.Now(),
 				incChan:   make(chan []byte, 1000),
 				closeChan: make(chan struct{}, 1),
 				conn:      n.conn,
@@ -262,32 +263,57 @@ func (n *UDPNet) listenToUDPNetworkMessages(listener net.PacketConn) {
 			go mconn.beginEventProcessing()
 		}
 
-		select {
-		case conn.incChan <- copybuf:
-			continue
-		case <-n.shutdown:
-			return
+		err = conn.PushIncoming(copybuf)
+		if err != nil {
+			n.logger.Warning("error pushing incoming message to conn with %v", conn.RemoteAddr())
 		}
 
 	}
 }
 
-func (n *UDPNet) addConn(addr net.Addr, ucw *udpConnWrapper) {
-	//if len(n.incomingConn) > maxUDPConn {
-	//	var expire string
-	//	//for k, c := range n.incomingConn {
-	//	//	expire = k
-	//	//	if time.Since(c.Created()) > maxUDPLife {
-	//	//		break
-	//	//	}
-	//	//}
-	//	//delete(n.incomingConn, expire)
-	//}
-	n.incomingConn[addr.String()] = ucw
+func (n *UDPNet) addConn(addr net.Addr, ucw udpConn) {
+	evicted := false
+	lastk := ""
+	if len(n.incomingConn) >= maxUDPConn {
+		for k, c := range n.incomingConn {
+			lastk = k
+			if time.Since(c.Created()) > maxUDPLife {
+				delete(n.incomingConn, k)
+				evicted = true
+				n.incomingConn[k].Close()
+				break
+			}
 
+		}
+
+		if !evicted {
+			n.incomingConn[lastk].Close()
+			delete(n.incomingConn, lastk)
+		}
+	}
+	n.incomingConn[addr.String()] = ucw
+}
+
+func (n *UDPNet) getConn(addr net.Addr) (udpConn, error) {
+	if c, ok := n.incomingConn[addr.String()]; ok {
+		if time.Since(c.Created()) > maxUDPLife {
+			c.Close()
+			delete(n.incomingConn, addr.String())
+			return nil, errors.New("expired")
+		}
+		return c, nil
+	}
+	return nil, errors.New("does not exist")
+}
+
+type udpConn interface {
+	net.Conn
+	Created() time.Time
+	PushIncoming(b []byte) error
 }
 
 type udpConnWrapper struct {
+	created   time.Time
 	incChan   chan []byte
 	closeChan chan struct{}
 
@@ -298,6 +324,22 @@ type udpConnWrapper struct {
 	remote net.Addr
 }
 
+func (ucw *udpConnWrapper) PushIncoming(b []byte) error {
+	select {
+	case ucw.incChan <- b:
+		break
+	case <-ucw.closeChan:
+		return errors.New("closed")
+	}
+	return nil
+}
+
+func (ucw *udpConnWrapper) SetDeadline(t time.Time) error {
+	ucw.rDeadline = t
+	ucw.wDeadline = t
+	return nil
+}
+
 func (ucw *udpConnWrapper) SetReadDeadline(t time.Time) error {
 	ucw.rDeadline = t
 	return nil
@@ -306,6 +348,14 @@ func (ucw *udpConnWrapper) SetReadDeadline(t time.Time) error {
 func (ucw *udpConnWrapper) SetWriteDeadline(t time.Time) error {
 	ucw.wDeadline = t
 	return nil
+}
+
+func (ucw *udpConnWrapper) Created() time.Time {
+	return ucw.created
+}
+
+func (ucw *udpConnWrapper) LocalAddr() net.Addr {
+	return ucw.conn.LocalAddr()
 }
 
 func (ucw *udpConnWrapper) RemoteAddr() net.Addr {
