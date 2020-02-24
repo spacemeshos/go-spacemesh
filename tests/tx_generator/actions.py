@@ -132,7 +132,7 @@ def send_coins_to_new_accounts(wallet_api, new_acc_num, amount, accountant, gas_
 
 
 def send_tx_from_each_account(wallet, accountant, tx_num, amount=1, gas_limit=None, is_new_acc=False,
-                              is_concurrent=False):
+                              is_concurrent=False, is_use_tap=True):
     """
     send random transactions iterating over the accounts list
 
@@ -143,22 +143,26 @@ def send_tx_from_each_account(wallet, accountant, tx_num, amount=1, gas_limit=No
     :param gas_limit: int, max reward for processing a tx
     :param is_new_acc: bool, create new accounts and send money to (if True) or use existing (False)
     :param is_concurrent: bool, send transactions concurrently
+    :param is_use_tap: bool, send txs from tap account as well if True
 
     :return:
     """
 
+    # a list for all transfers to be made concurrently
+    processes = []
     # Set a queue for collecting all the transactions output,
     # this will help with updating the "accountant" when multiprocessing
     queue = mp.Queue() if is_concurrent else None
-    # a list for all transfers to be made concurrently
-    processes = []
+
     accounts_copy = accountant.accounts.copy()
+    if not is_use_tap:
+        del accounts_copy[conf.acc_pub]
+
     tx_counter = 0
     accs_len = len(accounts_copy)
     pub_keys = list(accounts_copy.keys())
     # randomize senders list
     random.shuffle(pub_keys)
-    # for sending_acc_pub, account_det in islice(cycle(accounts_copy.items()), 0, tx_num):
     for sending_acc_pub in islice(cycle(pub_keys), 0, tx_num):
         account_det = accounts_copy[sending_acc_pub]
         if is_concurrent and tx_counter > 0 and tx_counter % accs_len == 0:
