@@ -82,6 +82,7 @@ func (mux *UDPMux) Start() error {
 func (mux *UDPMux) Shutdown() {
 	close(mux.shutdown)
 	mux.network.Shutdown()
+	mux.cpool.Shutdown()
 }
 
 func (mux *UDPMux) listenToNetworkMessage() {
@@ -150,9 +151,9 @@ func (mux *UDPMux) sendMessageImpl(peerPubkey p2pcrypto.PublicKey, protocol stri
 		return err
 	}
 
-	addr := net.UDPAddr{net.ParseIP(peer.IP.String()), int(peer.DiscoveryPort), ""}
+	addr := &net.UDPAddr{net.ParseIP(peer.IP.String()), int(peer.DiscoveryPort), ""}
 
-	conn, err := mux.cpool.GetConnection(&addr, peer.PublicKey())
+	conn, err := mux.cpool.GetConnection(addr, peer.PublicKey())
 
 	if err != nil {
 		return err
@@ -161,7 +162,7 @@ func (mux *UDPMux) sendMessageImpl(peerPubkey p2pcrypto.PublicKey, protocol stri
 	session := conn.Session()
 
 	if session == nil {
-		return err
+		return ErrNoSession
 	}
 
 	mt := ProtocolMessageMetadata{protocol,
@@ -225,28 +226,6 @@ func (upm *udpProtocolMessage) Data() service.Data {
 
 // processUDPMessage processes a udp message received and passes it to the protocol, it adds related p2p metadata.
 func (mux *UDPMux) processUDPMessage(msg inet.IncomingMessageEvent) error {
-
-	//msg, pk, err := p2pcrypto.ExtractPubkey(buf)
-	//
-	//if err != nil {
-	//	mux.logger.Warning("error can't extract public key from udp message. (addr=%v), err=%v", addr.String(), err)
-	//	continue
-	//}
-	//
-	//ns := n.cache.GetOrCreate(pk)
-	//
-	//if ns == nil {
-	//	n.logger.Warning("coul'd not create session with %v:%v skipping message..", addr.String(), pk.String())
-	//	continue
-	//}
-	//
-	//final, err := ns.OpenMessage(msg)
-	//if err != nil {
-	//	n.logger.With().Warning("skipping udp with session message", log.Err(err), log.String("from", pk.String()), log.Int("msglen", len(msg)))
-	//	// todo: remove malfunctioning session, ban ip ?
-	//	continue
-	//}
-
 	if msg.Message == nil || msg.Conn == nil {
 		return ErrBadFormat1
 	}

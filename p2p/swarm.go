@@ -145,6 +145,11 @@ func newSwarm(ctx context.Context, config config.Config, logger log.Log, datadir
 		return nil, fmt.Errorf("can't create swarm without a network, err: %v", err)
 	}
 
+	udpnet, err := net.NewUDPNet(config, l, udpaddr, logger.WithName("udpnet"))
+	if err != nil {
+		return nil, err
+	}
+
 	localCtx, cancel := context.WithCancel(ctx)
 
 	s := &swarm{
@@ -171,15 +176,9 @@ func newSwarm(ctx context.Context, config config.Config, logger log.Log, datadir
 		directProtocolHandlers: make(map[string]chan service.DirectMessage),
 		gossipProtocolHandlers: make(map[string]chan service.GossipMessage),
 
-		network: n,
+		network:    n,
+		udpnetwork: udpnet,
 	}
-
-	udpnet, err := net.NewUDPNet(s.config, l, udpaddr, s.logger.WithName("udpnet"))
-	if err != nil {
-		return nil, err
-	}
-
-	s.udpnetwork = udpnet
 
 	mux := NewUDPMux(s.lNode, s.lookupFunc, udpnet, s.config.NetworkID, s.logger)
 	s.udpServer = mux

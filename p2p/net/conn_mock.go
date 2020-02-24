@@ -5,10 +5,15 @@ import (
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"net"
-	"strconv"
 	"sync/atomic"
 	"time"
 )
+
+var defaultAddr net.Addr = &net.TCPAddr{
+	IP:   IPv4LoopbackAddress,
+	Port: 7513,
+	Zone: "",
+}
 
 type ConnectionMock struct {
 	id        string
@@ -18,7 +23,7 @@ type ConnectionMock struct {
 
 	created time.Time
 
-	addr string
+	Addr net.Addr
 
 	sendDelayMs int
 	sendRes     error
@@ -55,15 +60,7 @@ func (cm *ConnectionMock) SetRemotePublicKey(key p2pcrypto.PublicKey) {
 }
 
 func (cm *ConnectionMock) RemoteAddr() net.Addr {
-
-	if cm.addr == "" {
-		return nil
-	}
-
-	addr, port, _ := net.SplitHostPort(cm.addr)
-	portstr, _ := strconv.Atoi(port)
-
-	return &net.TCPAddr{net.ParseIP(addr), portstr, ""}
+	return cm.Addr
 }
 
 func (cm *ConnectionMock) SetSession(session NetworkSession) {

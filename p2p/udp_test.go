@@ -23,9 +23,6 @@ type mockUDPNetwork struct {
 
 	shutdownCalled bool
 
-	sendCalled bool
-	sendResult error
-
 	DialFunc func(address net2.Addr, remotepk p2pcrypto.PublicKey) (net.Connection, error)
 
 	inc chan net.IncomingMessageEvent
@@ -44,16 +41,19 @@ func (mun *mockUDPNetwork) IncomingMessages() chan net.IncomingMessageEvent {
 	return mun.inc
 }
 
-func (mun *mockUDPNetwork) Send(to *node.NodeInfo, data []byte) error {
-	mun.sendCalled = true
-	return mun.sendResult
-}
-
 func (mun *mockUDPNetwork) Dial(address net2.Addr, remotepk p2pcrypto.PublicKey) (net.Connection, error) {
 	if mun.DialFunc != nil {
 		return mun.DialFunc(address, remotepk)
 	}
 	return nil, errors.New("not impl")
+}
+
+func (mun *mockUDPNetwork) SubscribeClosingConnections(func(err net.ConnectionWithErr)) {
+
+}
+
+func (mun *mockUDPNetwork) SubscribeOnNewRemoteConnections(func(event net.NewConnectionEvent)) {
+
 }
 
 func TestNewUDPMux(t *testing.T) {
@@ -127,7 +127,6 @@ func TestUDPMux_sendMessageImpl(t *testing.T) {
 
 	require.Error(t, err)
 	require.True(t, lookupcalled)
-	require.False(t, udpMock.sendCalled)
 
 	lookupcalled = false
 	f = func(key p2pcrypto.PublicKey) (*node.NodeInfo, error) {
@@ -136,24 +135,48 @@ func TestUDPMux_sendMessageImpl(t *testing.T) {
 	}
 	m.lookuper = f
 
-	udpMock.sendResult = errors.New("err send")
+	udpMock.DialFunc = func(address net2.Addr, remotepk p2pcrypto.PublicKey) (connection net.Connection, err error) {
+		c := net.NewConnectionMock(remotepk)
+		c.Addr = address
+		return c, nil
+	}
 
 	err = m.sendMessageImpl(sendto.PublicKey(), test_str, data)
 
-	require.Error(t, err)
+	require.Equal(t, ErrNoSession, err)
 	require.True(t, lookupcalled)
-	require.True(t, udpMock.sendCalled)
 
 	lookupcalled = false
-	udpMock.sendResult = nil
-	udpMock.startCalled = false
+	senderr := errors.New("err send")
+	m.cpool.CloseConnection(sendto.PublicKey())
+
+	udpMock.DialFunc = func(address net2.Addr, remotepk p2pcrypto.PublicKey) (connection net.Connection, err error) {
+		c := net.NewConnectionMock(remotepk)
+		c.Addr = address
+		c.SetSession(net.NewSessionMock(remotepk))
+		c.SetSendResult(senderr)
+		return c, nil
+	}
+
+	err = m.sendMessageImpl(sendto.PublicKey(), test_str, data)
+
+	require.Equal(t, senderr, err)
+	require.True(t, lookupcalled)
+
+	m.cpool.CloseConnection(sendto.PublicKey())
+
+	udpMock.DialFunc = func(address net2.Addr, remotepk p2pcrypto.PublicKey) (connection net.Connection, err error) {
+		c := net.NewConnectionMock(remotepk)
+		c.Addr = address
+		c.SetSession(net.NewSessionMock(remotepk))
+		c.SetSendResult(nil)
+		return c, nil
+	}
 
 	err = m.sendMessageImpl(sendto.PublicKey(), test_str, data)
 
 	require.NoError(t, err)
 	require.True(t, lookupcalled)
-	require.True(t, udpMock.sendCalled)
-
 }
 
 func TestUDPMux_ProcessUDP(t *testing.T) {
@@ -171,12 +194,15 @@ func TestUDPMux_ProcessUDP(t *testing.T) {
 	//pb.NewUDPProtocolMessageMetadata(gotfrom.PublicKey(), int8(nd.NetworkID()), test_str)
 	msg.Payload = &Payload{Payload: data.Bytes()}
 
-	msgbuf, err := types.InterfaceToBytes(msg)
+	themsgbuf, err := types.InterfaceToBytes(msg)
 	require.NoError(t, err)
+
+	msgbuf := p2pcrypto.PrependPubkey(themsgbuf, gotfrom.PublicKey())
 
 	addr := &net2.UDPAddr{gotfrom.IP, int(gotfrom.DiscoveryPort), ""}
 
 	connmock := net.NewConnectionMock(gotfrom.PublicKey())
+	connmock.Addr = addr
 	err = m.processUDPMessage(net.IncomingMessageEvent{connmock, msgbuf})
 
 	require.Error(t, err) // no protocol
@@ -184,13 +210,19 @@ func TestUDPMux_ProcessUDP(t *testing.T) {
 	c := make(chan service.DirectMessage, 1)
 	m.RegisterDirectProtocolWithChannel(test_str, c)
 	err = m.processUDPMessage(net.IncomingMessageEvent{connmock, msgbuf})
+
+	require.Equal(t, err, ErrNoSession)
+
+	connmock.SetSession(net.NewSessionMock(gotfrom.PublicKey()))
+	err = m.processUDPMessage(net.IncomingMessageEvent{connmock, msgbuf})
+
 	require.NoError(t, err) // no protocol
 
 	select {
 	case msg := <-c:
-		require.Equal(t, msg.Metadata().FromAddress, addr)
-		require.Equal(t, msg.Sender(), gotfrom.PublicKey())
-		require.Equal(t, msg.Bytes(), data.Bytes())
+		require.Equal(t, addr, msg.Metadata().FromAddress)
+		require.Equal(t, gotfrom.PublicKey(), msg.Sender())
+		require.Equal(t, data.Bytes(), msg.Bytes())
 	default:
 		t.Fatal("didn't get msg")
 	}
