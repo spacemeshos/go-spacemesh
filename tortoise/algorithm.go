@@ -43,6 +43,7 @@ func NewRecoveredAlgorithm(mdb *mesh.MeshDB, lg log.Log) *Algorithm {
 func (alg *Algorithm) PersistTortoise() error {
 	alg.Lock()
 	defer alg.Unlock()
+	log.Info("persist tortoise ")
 	return alg.Tortoise.PersistTortoise()
 }
 
