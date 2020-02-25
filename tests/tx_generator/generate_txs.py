@@ -9,7 +9,7 @@ dir_path = '/'.join(dir_path.split('/')[0:-2])
 print(f"adding {dir_path} to sys.path")
 sys.path.insert(0, dir_path)
 
-from tests.convenience import sleep_print_backwards
+from tests.convenience import sleep_print_backwards, str2bool
 from tests.tx_generator import actions
 from tests.tx_generator import config as conf
 from tests.tx_generator import k8s_handler
@@ -19,17 +19,6 @@ from tests.tx_generator.models.accountant import Accountant
 GAS_PRICE = 1
 NEW_ACCOUNTS = 20
 TX_NUM = NEW_ACCOUNTS
-
-
-def str2bool(v):
-    if isinstance(v, bool):
-        return v
-    if v.lower() in ('yes', 'true', 't', 'y', '1'):
-        return True
-    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
-        return False
-    else:
-        raise argparse.ArgumentTypeError('Boolean value expected.')
 
 
 def set_parser():

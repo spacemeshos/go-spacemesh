@@ -49,6 +49,13 @@ func (alg *Algorithm) HandleLateBlock(b *types.Block) (types.LayerID, types.Laye
 	return oldPbase, newPbase
 }
 
+func (alg *Algorithm) PersistTortoise() error {
+	alg.Lock()
+	defer alg.Unlock()
+	log.Info("persist tortoise ")
+	return alg.Tortoise.PersistTortoise()
+}
+
 func (alg *Algorithm) HandleIncomingLayer(ll *types.Layer) (types.LayerID, types.LayerID) {
 	alg.Lock()
 	defer alg.Unlock()
