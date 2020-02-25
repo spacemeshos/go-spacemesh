@@ -31,7 +31,7 @@ type ManualClock struct {
 
 // LayerToTime returns the time of the provided layer
 func (lc ManualClock) LayerToTime(id types.LayerID) time.Time {
-	panic("implement me")
+	return time.Now().Add(1000 * time.Hour) //hack so this wont take affect in the mock
 }
 
 func NewManualClock(genesisTime time.Time) *ManualClock {

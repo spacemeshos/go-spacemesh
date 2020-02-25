@@ -201,7 +201,7 @@ type MockClock struct {
 }
 
 func (m *MockClock) LayerToTime(types.LayerID) time.Time {
-	panic("implement me")
+	return time.Now().Add(1000 * time.Hour) //hack so this wont take affect in the mock
 }
 
 func (c *MockClock) Tick() {
