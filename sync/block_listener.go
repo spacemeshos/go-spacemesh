@@ -96,7 +96,7 @@ func (bl *BlockListener) handleBlock(data service.GossipMessage) {
 		log.Int("atx_count", len(blk.AtxIds)),
 		log.Int("view_edges", len(blk.ViewEdges)),
 		log.Int("vote_count", len(blk.BlockVotes)),
-		blk.ATXID,
+		log.AtxId(blk.ATXID.Hash32().String()),
 		log.Uint32("eligibility_counter", blk.EligibilityProof.J),
 	)
 	//check if known

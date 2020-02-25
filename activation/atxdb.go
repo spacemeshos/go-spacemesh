@@ -61,7 +61,7 @@ func NewActivationDb(dbstore database.Database, idstore IdStore, meshDb *mesh.Me
 	db := &ActivationDb{
 		IdStore:          idstore,
 		atxs:             dbstore,
-		atxHeaderCache:   NewAtxCache(600),
+		atxHeaderCache:   NewAtxCache(1000),
 		meshDb:           meshDb,
 		LayersPerEpoch:   layersPerEpoch,
 		nipstValidator:   nipstValidator,

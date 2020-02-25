@@ -283,7 +283,7 @@ func (s *Syncer) synchronise() {
 
 	currentSyncLayer := s.lValidator.ProcessedLayer() + 1
 	if currentSyncLayer == s.GetCurrentLayer() { // only validate if current < lastTicked
-		s.With().Info("Already synced for layer", log.Uint64("current_sync_layer", uint64(currentSyncLayer)))
+		s.With().Debug("Already synced for layer", log.Uint64("current_sync_layer", uint64(currentSyncLayer)))
 		s.setGossipBufferingStatus(Done) // fully-synced, make sure we listen to p2p
 		return
 	}
