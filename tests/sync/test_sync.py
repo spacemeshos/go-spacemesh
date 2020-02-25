@@ -8,7 +8,6 @@ from tests.deployment import create_deployment
 from tests import config as conf
 from tests.conftest import DeploymentInfo
 from tests.test_bs import save_log_on_exit, setup_bootstrap
-from tests.test_bs import api_call
 from tests.misc import CoreV1ApiClient
 from tests.context import ES
 from tests.queries import query_message

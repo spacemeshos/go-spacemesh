@@ -6,8 +6,8 @@ from tests import deployment
 from tests.conftest import DeploymentInfo
 from tests.hare.assert_hare import expect_hare, assert_all, get_max_mem_usage
 from tests.misc import CoreV1ApiClient
-from tests.test_bs import setup_clients_in_namespace, wait_genesis
-from tests.setup_utils import setup_bootstrap_in_namespace
+from tests.test_bs import wait_genesis
+from tests.setup_utils import setup_bootstrap_in_namespace, setup_clients_in_namespace
 from tests.utils import get_curr_ind
 
 ORACLE_DEPLOYMENT_FILE = './k8s/oracle.yml'
@@ -70,6 +70,7 @@ def setup_clients_for_hare(request, init_session, setup_oracle, setup_bootstrap_
                                       setup_bootstrap_for_hare.pods[0],
                                       client_info,
                                       testconfig['client'],
+                                      testconfig['genesis_delta'],
                                       oracle=setup_oracle,
                                       dep_time_out=testconfig['deployment_ready_time_out'])
 

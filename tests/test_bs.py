@@ -1,14 +1,13 @@
 from datetime import datetime, timedelta
 from kubernetes import client
 from kubernetes.client.rest import ApiException
-from kubernetes.stream import stream
 import pytest
 from pytest_testconfig import config as testconfig
 import pytz
 import subprocess
 import time
 
-from tests import analyse, pod, deployment, queries, statefulset
+from tests import analyse, pod, queries
 from tests import config as tests_conf
 from tests.convenience import sleep_print_backwards
 from tests.tx_generator import config as tx_gen_conf
@@ -17,9 +16,9 @@ from tests.tx_generator.models.accountant import Accountant
 from tests.tx_generator.models.wallet_api import WalletAPI
 from tests.conftest import DeploymentInfo, NetworkDeploymentInfo, NetworkInfo
 from tests.hare.assert_hare import validate_hare
-from tests.misc import ContainerSpec, CoreV1ApiClient
+from tests.misc import CoreV1ApiClient
 from tests.setup_utils import setup_bootstrap_in_namespace, setup_clients_in_namespace
-from tests.utils import get_conf, get_curr_ind, api_call
+from tests.utils import get_curr_ind, api_call, get_genesis_time_delta
 
 
 GENESIS_TIME = pytz.utc.localize(datetime.utcnow() + timedelta(seconds=testconfig['genesis_delta']))
