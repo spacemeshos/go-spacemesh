@@ -216,7 +216,7 @@ func TestUDPMux_ProcessUDP(t *testing.T) {
 	connmock.SetSession(net.NewSessionMock(gotfrom.PublicKey()))
 	err = m.processUDPMessage(net.IncomingMessageEvent{connmock, msgbuf})
 
-	require.NoError(t, err) // no protocol
+	require.NoError(t, err)
 
 	select {
 	case msg := <-c:

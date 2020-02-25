@@ -240,8 +240,13 @@ func (mux *UDPMux) processUDPMessage(msg inet.IncomingMessageEvent) error {
 
 	rawmsg, _, err := p2pcrypto.ExtractPubkey(msg.Message)
 
+	if err != nil {
+		return err
+	}
+
 	decPayload, err := session.OpenMessage(rawmsg)
 	if err != nil {
+		mux.logger.Warning("failed decrypting message err=%v", err)
 		return ErrFailDecrypt
 	}
 
