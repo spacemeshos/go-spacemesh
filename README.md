@@ -126,7 +126,7 @@ To run go-spacemesh you need to specify the parameters shared between all instan
 
 You specify these parameters by providing go-spacemesh with a toml config file. Other CLI flags control local node behavior and override default values.
 
-#### Joining a Testnet
+#### Joining a Testnet (without mining)
 1. Build go-spacemesh from source code.
 2. Obtain the testnet's toml config file.
 3. Start go-spacemesh with the following arguments:
@@ -146,9 +146,27 @@ Assuming tn1.toml is a testnet config file saved in the same directory as go-spa
 
 5. Use the CLI Wallet commands to setup accounts, start smeshing and execute transactions.
 
+
 ```bash
 ./cli_wallet
 ```
+
+### Joining the Testnet (with mining)
+1. Use the CLI Wallet to create a coinbase account.
+2. Follow the steps for joining the testnet without mining but use these parameters when starting go-spacemesh:
+
+```bash
+./go-spacemesh --grpc-server --json-server --tcp-port [a_port] --config [tomlFileLocation] -d [nodeDataFilesPath] --coinbase [an_account] --start-mining --post-size [post_size_bytes] --post-datadir [dir_for_post_data]
+```
+
+##### Example
+```bash
+./go-spacemesh --grpc-server --json-server --tcp-port [a_port] --config tn1.toml -d sm_data --coinbase 0x36168c60e06abbb4f5df6d1dd6a1b15655d71e75 --start-mining --post-size 4294967296 --post-datadir post_data
+```
+
+Tip: set the post-size to the value of the post-space param in the testnet's toml file.
+
+3. Use the CLI wallet to check your coinbase account balance and to transact
 
 ---
 
