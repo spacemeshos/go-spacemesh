@@ -17,13 +17,7 @@ type dialResult struct {
 	err  error
 }
 
-type networker interface {
-	Dial(address inet.Addr, remotePublicKey p2pcrypto.PublicKey) (net.Connection, error) // Connect to a remote node. Can send when no error.
-	SubscribeOnNewRemoteConnections(func(event net.NewConnectionEvent))
-	NetworkID() int8
-	SubscribeClosingConnections(func(net.ConnectionWithErr))
-	Logger() log.Log
-}
+type DialFunc func(address inet.Addr, remotePublicKey p2pcrypto.PublicKey) (net.Connection, error)
 
 // ConnectionPool stores all net.Connections and make them available to all users of net.Connection.
 // There are two sources of connections -
@@ -31,25 +25,27 @@ type networker interface {
 // - Remote connections that were provided by a networker impl. in a pub-sub manner
 type ConnectionPool struct {
 	localPub    p2pcrypto.PublicKey
-	net         networker
+	dialFunc    DialFunc
 	connections map[p2pcrypto.PublicKey]net.Connection
 	connMutex   sync.RWMutex
 	pending     map[p2pcrypto.PublicKey][]chan dialResult
 	pendMutex   sync.Mutex
 	dialWait    sync.WaitGroup
+	logger      log.Log
 	shutdown    bool
 }
 
 // NewConnectionPool creates new ConnectionPool
-func NewConnectionPool(network networker, lPub p2pcrypto.PublicKey) *ConnectionPool {
+func NewConnectionPool(dialFunc DialFunc, lPub p2pcrypto.PublicKey, logger log.Log) *ConnectionPool {
 	cPool := &ConnectionPool{
 		localPub:    lPub,
-		net:         network,
+		dialFunc:    dialFunc,
 		connections: make(map[p2pcrypto.PublicKey]net.Connection),
 		connMutex:   sync.RWMutex{},
 		pending:     make(map[p2pcrypto.PublicKey][]chan dialResult),
 		pendMutex:   sync.Mutex{},
 		dialWait:    sync.WaitGroup{},
+		logger:      logger,
 		shutdown:    false,
 	}
 
@@ -68,7 +64,7 @@ func (cp *ConnectionPool) OnClosedConnection(cwe net.ConnectionWithErr) {
 		return
 	}
 	conn := cwe.Conn
-	cp.net.Logger().With().Info("connection_closed", log.String("id", conn.String()), log.String("remote", conn.RemotePublicKey().String()), log.Err(cwe.Err))
+	cp.logger.With().Info("connection_closed", log.String("id", conn.String()), log.String("remote", conn.RemotePublicKey().String()), log.Err(cwe.Err))
 	cp.handleClosedConnection(conn)
 }
 
@@ -87,7 +83,7 @@ func (cp *ConnectionPool) Shutdown() {
 	cp.connMutex.Lock()
 	if cp.shutdown {
 		cp.connMutex.Unlock()
-		cp.net.Logger().Error("shutdown was already called")
+		cp.logger.Error("shutdown was already called")
 		return
 	}
 	cp.shutdown = true
@@ -141,7 +137,7 @@ func (cp *ConnectionPool) handleNewConnection(rPub p2pcrypto.PublicKey, newConn 
 		srcPub = rPub.String()
 		dstPub = cp.localPub.String()
 	}
-	cp.net.Logger().With().Info("new_connection", log.String("src", srcPub), log.String("dst", dstPub))
+	cp.logger.With().Info("new_connection", log.String("src", srcPub), log.String("dst", dstPub))
 	// check if there isn't already same connection (possible if the second connection is a Remote connection)
 	curConn, ok := cp.connections[rPub]
 	if ok {
@@ -154,9 +150,9 @@ func (cp *ConnectionPool) handleNewConnection(rPub p2pcrypto.PublicKey, newConn 
 		if res <= 0 { // newConn >= curConn
 			if res == 0 { // newConn == curConn
 				// TODO Is it a potential threat (session hijacking)? Should we keep the existing connection?
-				cp.net.Logger().Warning("new connection was created with same session ID as an existing connection, keeping the new connection (assuming existing connection is stale). existing session ID=%v, new session ID=%v, remote=%s", curConn.Session().ID(), newConn.Session().ID(), rPub)
+				cp.logger.Warning("new connection was created with same session ID as an existing connection, keeping the new connection (assuming existing connection is stale). existing session ID=%v, new session ID=%v, remote=%s", curConn.Session().ID(), newConn.Session().ID(), rPub)
 			} else {
-				cp.net.Logger().Warning("connection created while connection already exists between peers, closing existing connection. existing session ID=%v, new session ID=%v, remote=%s", curConn.Session().ID(), newConn.Session().ID(), rPub)
+				cp.logger.Warning("connection created while connection already exists between peers, closing existing connection. existing session ID=%v, new session ID=%v, remote=%s", curConn.Session().ID(), newConn.Session().ID(), rPub)
 			}
 			closeConn = curConn
 			cp.connections[rPub] = newConn
@@ -183,7 +179,7 @@ func (cp *ConnectionPool) handleNewConnection(rPub p2pcrypto.PublicKey, newConn 
 }
 
 func (cp *ConnectionPool) handleClosedConnection(conn net.Connection) {
-	cp.net.Logger().With().Info("connection_closed", log.String("id", conn.String()), log.String("remote", conn.RemotePublicKey().String()))
+	cp.logger.With().Info("connection_closed", log.String("id", conn.String()), log.String("remote", conn.RemotePublicKey().String()))
 	cp.connMutex.Lock()
 	rPub := conn.RemotePublicKey()
 	cur, ok := cp.connections[rPub]
@@ -218,7 +214,7 @@ func (cp *ConnectionPool) GetConnection(address inet.Addr, remotePub p2pcrypto.P
 		// No one is waiting for a connection with the remote peer, need to call Dial
 		cp.dialWait.Add(1)
 		go func() {
-			conn, err := cp.net.Dial(address, remotePub)
+			conn, err := cp.dialFunc(address, remotePub)
 			if err != nil {
 				cp.handleDialResult(remotePub, dialResult{nil, err})
 			} else {
