@@ -55,35 +55,35 @@ jobs:
     name: "Run late nodes system test"
     script:
       - make dockertest-late-nodes
-    if: (branch = develop OR branch = staging OR branch = trying) AND type != pull_request
+    if: (branch = staging OR branch = trying) AND type != pull_request
   - name: "Run mining system tests"
     script:
       - make dockertest-mining
-    if: (branch = develop OR branch = staging OR branch = trying) AND type != pull_request
+    if: (branch = staging OR branch = trying) AND type != pull_request
   - name: "Run blocks add node test"
     script:
       - make dockertest-blocks-add-node
-    if: (branch = develop OR branch = staging OR branch = trying) AND type != pull_request
+    if: (branch = staging OR branch = trying) AND type != pull_request
   - name: "Run blocks remove node test"
     script:
       - make dockertest-blocks-remove-node
-    if: (branch = develop OR branch = staging OR branch = trying) AND type != pull_request
+    if: (branch = staging OR branch = trying) AND type != pull_request
   - name: "Run p2p system tests"
     script:
       - make dockertest-p2p
-    if: (branch = develop OR branch = staging OR branch = trying) AND type != pull_request
+    if: (branch = staging OR branch = trying) AND type != pull_request
   - name: "Run genesis votes test"
     script:
       - make dockertest-genesis-voting
-    if: (branch = develop OR branch = staging OR branch = trying) AND type != pull_request
+    if: (branch = staging OR branch = trying) AND type != pull_request
   - name: "Run sync system tests"
     script:
       - make dockertest-sync
-    if: (branch = develop OR branch = staging OR branch = trying) AND type != pull_request
+    if: (branch = staging OR branch = trying) AND type != pull_request
   - name: "Run hare system tests"
     script:
       - make dockertest-hare
-    if: (branch = develop OR branch = staging OR branch = trying) AND type != pull_request
+    if: (branch = staging OR branch = trying) AND type != pull_request
 
 cache:
   directories:
