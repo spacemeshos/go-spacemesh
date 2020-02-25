@@ -221,6 +221,13 @@ func (m *Mesh) ValidateLayer(lyr *types.Layer) {
 	oldPbase, newPbase := m.HandleIncomingLayer(lyr)
 	m.lvMutex.Lock()
 	m.processedLayer = lyr.Index()
+
+	if len(lyr.Blocks()) == 0 {
+		m.Info("skip validation of layer %d with no blocks", lyr.Index())
+		m.lvMutex.Unlock()
+		return
+	}
+
 	if err := m.PersistTortoise(); err != nil {
 		m.Error("could not persist Tortoise layer index %d", lyr.Index())
 	}
@@ -399,6 +406,22 @@ func (m *Mesh) AddBlock(blk *types.Block) error {
 
 	//invalidate txs and atxs from pool
 	m.invalidateFromPools(&blk.MiniBlock)
+	return nil
+}
+
+func (m *Mesh) SetZeroBlockLayer(lyr types.LayerID) error {
+	m.SetLatestLayer(lyr)
+	lm := m.getLayerMutex(lyr)
+	defer m.endLayerWorker(lyr)
+	lm.m.Lock()
+	defer lm.m.Unlock()
+	//layer doesnt exist, need to insert new layer
+	blockIds := make([]types.BlockID, 0, 1)
+	w, err := types.BlockIdsAsBytes(blockIds)
+	if err != nil {
+		return errors.New("could not encode layer blk ids")
+	}
+	m.layers.Put(lyr.ToBytes(), w)
 	return nil
 }
 

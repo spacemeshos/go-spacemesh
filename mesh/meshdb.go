@@ -212,7 +212,7 @@ func (m *MeshDB) ForBlockInView(view map[types.BlockID]struct{}, layer types.Lay
 func (m *MeshDB) LayerBlockIds(index types.LayerID) ([]types.BlockID, error) {
 	idsBytes, err := m.layers.Get(index.ToBytes())
 	if err != nil {
-		return nil, fmt.Errorf("error getting layer %v from database %v", index, err)
+		return nil, err
 	}
 
 	if len(idsBytes) == 0 {
