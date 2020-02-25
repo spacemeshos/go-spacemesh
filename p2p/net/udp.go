@@ -15,7 +15,7 @@ import (
 // TODO: we should remove this const. Should  not depend on the number of addresses.
 // TODO: the number of addresses should be derived from the limit provided in the config
 const maxMessageSize = 30000 // @see getAddrMax
-const maxUDPConn = 1024
+const maxUDPConn = 2048
 const maxUDPLife = time.Duration(time.Hour * 24)
 
 // UDPMessageEvent is an event about a udp message. passed through a channel
@@ -106,7 +106,7 @@ func (n *UDPNet) Start() error {
 	return nil
 }
 
-// LocalAddr returns the local listening Addr, will panic before running Start. or if start errored
+// LocalAddr returns the local listening addr, will panic before running Start. or if start errored
 func (n *UDPNet) LocalAddr() net.Addr {
 	return n.conn.LocalAddr()
 }
@@ -159,10 +159,6 @@ func (n *UDPNet) IncomingMessages() chan IncomingMessageEvent {
 	return n.msgChan
 }
 
-//Dial(address inet.Addr, remotePublicKey p2pcrypto.PublicKey) (net.Connection, error) // Connect to a remote node. Can send when no error.
-//SubscribeOnNewRemoteConnections(func(event net.NewConnectionEvent))
-//SubscribeClosingConnections(func(net.ConnectionWithErr))
-
 func (n *UDPNet) Dial(address net.Addr, remotePublicKey p2pcrypto.PublicKey) (Connection, error) {
 	udpcon, err := net.DialUDP("udp", nil, address.(*net.UDPAddr))
 	if err != nil {
@@ -171,7 +167,7 @@ func (n *UDPNet) Dial(address net.Addr, remotePublicKey p2pcrypto.PublicKey) (Co
 
 	ns := n.cache.GetOrCreate(remotePublicKey)
 
-	conn := newMsgonnection(udpcon, n, remotePublicKey, ns, n.config.MsgSizeLimit, n.config.ResponseTimeout, n.logger)
+	conn := newMsgConnection(udpcon, n, remotePublicKey, ns, n.config.MsgSizeLimit, n.config.ResponseTimeout, n.logger)
 	go conn.beginEventProcessing()
 	return conn, nil
 }
@@ -233,13 +229,13 @@ func (n *UDPNet) listenToUDPNetworkMessages(listener net.PacketConn) {
 			ns := n.cache.GetOrCreate(pk)
 
 			if ns == nil {
-				n.logger.Warning("coul'd not create session with %v:%v skipping message..", addr.String(), pk.String())
+				n.logger.Warning("could not create session with %v:%v skipping message..", addr.String(), pk.String())
 				continue
 			}
 
 			host, port, err := net.SplitHostPort(addr.String())
 			if err != nil {
-				n.logger.Warning("coudl'nt parse address skipping message from  %v %V", addr.String(), pk)
+				n.logger.Warning("could not parse address skipping message from  %v %s", addr.String(), pk)
 				continue
 			}
 
@@ -257,7 +253,7 @@ func (n *UDPNet) listenToUDPNetworkMessages(listener net.PacketConn) {
 				remote:    addr,
 			}
 
-			mconn := newMsgonnection(conn, n, pk, ns, n.config.MsgSizeLimit, n.config.DialTimeout, n.logger)
+			mconn := newMsgConnection(conn, n, pk, ns, n.config.MsgSizeLimit, n.config.DialTimeout, n.logger)
 			n.publishNewRemoteConnectionEvent(mconn, node.NewNode(pk, net.ParseIP(host), 0, uint16(iport)))
 			n.addConn(addr, conn)
 			go mconn.beginEventProcessing()

@@ -28,7 +28,7 @@ func (m ReadWriteCloserMock) Close() error {
 	return nil
 }
 
-//RemoteAddr mocks remote Addr return
+//RemoteAddr mocks remote addr return
 func (m ReadWriteCloserMock) RemoteAddr() net.Addr {
 	r, err := net.ResolveTCPAddr("tcp", "127.0.0.0")
 	if err != nil {

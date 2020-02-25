@@ -27,7 +27,6 @@ type udpNetwork interface {
 	IncomingMessages() chan inet.IncomingMessageEvent
 	SubscribeOnNewRemoteConnections(f func(event inet.NewConnectionEvent))
 	SubscribeClosingConnections(f func(connection inet.ConnectionWithErr))
-	//Send(to *node.NodeInfo, data []byte) error
 }
 
 // UDPMux is a server for receiving and sending udp messages. through protocols.
@@ -253,7 +252,7 @@ func (mux *UDPMux) processUDPMessage(msg inet.IncomingMessageEvent) error {
 	pm := &ProtocolMessage{}
 	err = types.BytesToInterface(decPayload, pm)
 	if err != nil {
-		mux.logger.Error("proto marshaling err=", err)
+		mux.logger.Error("deserialization err=", err)
 		return ErrBadFormat2
 	}
 

@@ -38,7 +38,7 @@ type MsgConnection struct {
 }
 
 // Create a new connection wrapping a net.Conn with a provided connection manager
-func newMsgonnection(conn readWriteCloseAddresser, netw networker,
+func newMsgConnection(conn readWriteCloseAddresser, netw networker,
 	remotePub p2pcrypto.PublicKey, session NetworkSession, msgSizeLimit int, deadline time.Duration, log log.Log) *MsgConnection {
 
 	// todo parametrize channel size - hard-coded for now
@@ -213,52 +213,6 @@ func (c *MsgConnection) Closed() bool {
 	defer c.wmtx.Unlock()
 	return c.closed
 }
-
-//func (c *MsgConnection) setupIncoming(timeout time.Duration) error {
-//	be := make(chan struct {
-//		b []byte
-//		e error
-//	})
-//
-//	go func() {
-//		// TODO: some other way to make sure this groutine closes
-//		c.deadliner.SetReadDeadline(time.Now().Add(timeout))
-//		msg, err := c.r.Next()
-//		c.deadliner.SetReadDeadline(time.Time{}) // disable read deadline
-//		be <- struct {
-//			b []byte
-//			e error
-//		}{b: msg, e: err}
-//	}()
-//
-//	msgbe := <-be
-//	msg := msgbe.b
-//	err := msgbe.e
-//
-//	if err != nil {
-//		c.Close()
-//		return err
-//	}
-//
-//	if c.msgSizeLimit != config.UnlimitedMsgSize && len(msg) > c.msgSizeLimit {
-//		c.logger.With().Error("setupIncoming: message is too big",
-//			log.Int("limit", c.msgSizeLimit), log.Int("actual", len(msg)))
-//		return ErrMsgExceededLimit
-//	}
-//
-//	if c.session != nil {
-//		c.Close()
-//		return errors.New("setup connection twice")
-//	}
-//
-//	err = c.networker.HandlePreSessionIncomingMessage(c, msg)
-//	if err != nil {
-//		c.Close()
-//		return err
-//	}
-//
-//	return nil
-//}
 
 // Push outgoing message to the connections
 // Read from the incoming new messages and send down the connection
