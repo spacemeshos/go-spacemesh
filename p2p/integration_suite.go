@@ -235,8 +235,8 @@ func StringIdentifiers(boot ...*swarm) []string {
 	s := make([]string, len(boot))
 	for i := 0; i < len(s); i++ {
 		pk := boot[i].LocalNode().PublicKey()
-		udp := boot[i].udpnetwork.LocalAddr().(*net.UDPAddr)
 		tcp := boot[i].network.LocalAddr().(*net.TCPAddr)
+		udp := boot[i].udpnetwork.LocalAddr().(*net.UDPAddr)
 		nodeinfo := node.NewNode(pk, net.IPv6loopback, uint16(tcp.Port), uint16(udp.Port))
 		s[i] = nodeinfo.String() //node.StringFromNode(node.New(boot[i].LocalNode().Node.PublicKey(), boot[i].udpnetwork.LocalAddr().String())) )
 	}
