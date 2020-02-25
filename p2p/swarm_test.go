@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/nat_traversal"
 	"github.com/spacemeshos/go-spacemesh/p2p/connectionpool"
 	"github.com/spacemeshos/go-spacemesh/p2p/discovery"
 	"github.com/stretchr/testify/require"
@@ -160,6 +161,7 @@ var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
 func configWithPort(port int) config.Config {
 	cfg := config.DefaultConfig()
+	cfg.AcquirePort = false
 	cfg.TCPPort = port
 	return cfg
 }
@@ -1150,7 +1152,24 @@ func TestSwarm_getListeners_randomPort(t *testing.T) {
 		1337: {udpResponse{}},
 	}
 
-	r.NoError(testGetListenersScenario(t, port, tcpResponses, udpResponses))
+	r.NoError(testGetListenersScenario(t, port, tcpResponses, udpResponses, createDiscoverUpnpFunc(nil, 1337, nil), true))
+
+	// UPnP first attempt failure and second attempt success
+	tcpResponses = map[int][]tcpResponse{
+		0: {
+			tcpResponse{listener: tcpListenerMock{port: 1234}},
+			tcpResponse{listener: tcpListenerMock{port: 1337}},
+		},
+	}
+	udpResponses = map[int][]udpResponse{
+		1234: {udpResponse{}},
+		1337: {udpResponse{}},
+	}
+	f := func() (igd nat_traversal.UpnpGateway, err error) {
+		return &UpnpGatewayMock{errs: map[uint16][]error{1234: {ErrPortUnavailable}, 1337: {nil}}}, nil
+	}
+
+	r.NoError(testGetListenersScenario(t, port, tcpResponses, udpResponses, f, true))
 }
 
 func TestSwarm_getListeners_specificPort(t *testing.T) {
@@ -1164,21 +1183,23 @@ func TestSwarm_getListeners_specificPort(t *testing.T) {
 		1337: {udpResponse{}},
 	}
 
-	r.NoError(testGetListenersScenario(t, port, tcpResponses, udpResponses))
+	r.NoError(testGetListenersScenario(t, port, tcpResponses, udpResponses, createDiscoverUpnpFunc(nil, 1337, nil), true))
 }
 
 func TestSwarm_getListeners_specificPortUnavailable(t *testing.T) {
 	r := require.New(t)
-
 	port := 1337
+
+	// Specific TCP port unavailable
 	tcpResponses := map[int][]tcpResponse{
 		1337: {tcpResponse{err: ErrPortUnavailable}},
 	}
 	udpResponses := map[int][]udpResponse{}
 
-	r.EqualError(testGetListenersScenario(t, port, tcpResponses, udpResponses),
+	r.EqualError(testGetListenersScenario(t, port, tcpResponses, udpResponses, createDiscoverUpnpFunc(nil, 1337, nil), true),
 		"failed to acquire requested tcp port: failed to acquire port")
 
+	// Specific UDP port unavailable
 	tcpResponses = map[int][]tcpResponse{
 		1337: {tcpResponse{listener: tcpListenerMock{port: 1337}}},
 	}
@@ -1186,14 +1207,70 @@ func TestSwarm_getListeners_specificPortUnavailable(t *testing.T) {
 		1337: {udpResponse{err: ErrPortUnavailable}},
 	}
 
-	r.EqualError(testGetListenersScenario(t, port, tcpResponses, udpResponses),
+	r.EqualError(testGetListenersScenario(t, port, tcpResponses, udpResponses, createDiscoverUpnpFunc(nil, 1337, nil), true),
 		"failed to acquire requested udp port: failed to acquire port")
+
+	// Specific port unavailable on UPnP
+	tcpResponses = map[int][]tcpResponse{
+		1337: {tcpResponse{listener: tcpListenerMock{port: 1337}}},
+	}
+	udpResponses = map[int][]udpResponse{
+		1337: {udpResponse{}},
+	}
+
+	r.EqualError(testGetListenersScenario(t, port, tcpResponses, udpResponses, createDiscoverUpnpFunc(nil, 1337, ErrPortUnavailable), true),
+		"failed to acquire requested port using UPnP: failed to forward port 1337: failed to acquire port")
 }
 
-func testGetListenersScenario(t *testing.T, port int, tcpResponses map[int][]tcpResponse, udpResponses map[int][]udpResponse) error {
+func TestSwarm_getListeners_upnpMoreCases(t *testing.T) {
+	r := require.New(t)
+	port := 1337
+
+	// Specific port unavailable on UPnP, but acquirePort is false
+	tcpResponses := map[int][]tcpResponse{
+		1337: {tcpResponse{listener: tcpListenerMock{port: 1337}}},
+	}
+	udpResponses := map[int][]udpResponse{
+		1337: {udpResponse{}},
+	}
+
+	r.NoError(testGetListenersScenario(t, port, tcpResponses, udpResponses, createDiscoverUpnpFunc(nil, 1337, ErrPortUnavailable), false))
+
+	// Specific port, UPnP connection error
+	tcpResponses = map[int][]tcpResponse{
+		1337: {tcpResponse{listener: tcpListenerMock{port: 1337}}},
+	}
+	udpResponses = map[int][]udpResponse{
+		1337: {udpResponse{}},
+	}
+
+	r.NoError(testGetListenersScenario(t, port, tcpResponses, udpResponses, createDiscoverUpnpFunc(ErrPortUnavailable, 1337, ErrPortUnavailable), true))
+}
+
+type UDPConnMock struct{}
+
+func (UDPConnMock) LocalAddr() inet.Addr                               { panic("implement me") }
+func (UDPConnMock) Close() error                                       { return nil }
+func (UDPConnMock) WriteToUDP([]byte, *inet.UDPAddr) (int, error)      { panic("implement me") }
+func (UDPConnMock) ReadFrom([]byte) (n int, addr inet.Addr, err error) { panic("implement me") }
+func (UDPConnMock) WriteTo([]byte, inet.Addr) (n int, err error)       { panic("implement me") }
+func (UDPConnMock) SetDeadline(time.Time) error                        { panic("implement me") }
+func (UDPConnMock) SetReadDeadline(time.Time) error                    { panic("implement me") }
+func (UDPConnMock) SetWriteDeadline(time.Time) error                   { panic("implement me") }
+
+func testGetListenersScenario(
+	t *testing.T,
+	port int,
+	tcpResponses map[int][]tcpResponse,
+	udpResponses map[int][]udpResponse,
+	discoverUpnp func() (igd nat_traversal.UpnpGateway, err error),
+	acquirePort bool,
+) error {
+
 	r := require.New(t)
 
 	cfg := configWithPort(port)
+	cfg.AcquirePort = acquirePort
 	swarm := p2pTestNoStart(t, cfg)
 
 	getTcp := func(addr *inet.TCPAddr) (listener inet.Listener, err error) {
@@ -1203,14 +1280,15 @@ func testGetListenersScenario(t *testing.T, port int, tcpResponses map[int][]tcp
 		tcpResponses[port] = tcpResponses[port][1:]
 		return res.listener, res.err
 	}
-	getUdp := func(addr *inet.UDPAddr) (conn *inet.UDPConn, err error) {
+	getUdp := func(addr *inet.UDPAddr) (conn net.UDPListener, err error) {
 		port := addr.Port
 		r.NotEmpty(udpResponses[port], "no response for port %v", port)
 		res := udpResponses[port][0]
 		udpResponses[port] = udpResponses[port][1:]
-		return nil, res.err
+
+		return &UDPConnMock{}, res.err
 	}
-	_, _, err := swarm.getListeners(getTcp, getUdp)
+	_, _, err := swarm.getListeners(getTcp, getUdp, discoverUpnp)
 
 	for port, responses := range tcpResponses {
 		r.Empty(responses, "not all responses for tcp port %v were consumed", port)
@@ -1220,4 +1298,26 @@ func testGetListenersScenario(t *testing.T, port int, tcpResponses map[int][]tcp
 	}
 
 	return err
+}
+
+type UpnpGatewayMock struct {
+	errs map[uint16][]error
+}
+
+func (u *UpnpGatewayMock) Forward(port uint16, desc string) error {
+	if len(u.errs[port]) == 0 {
+		panic(fmt.Sprintf("not enough values to return from UpnpGatewayMock for port %d", port))
+	}
+	err := u.errs[port][0]
+	u.errs[port] = u.errs[port][1:]
+	return err
+}
+
+func createDiscoverUpnpFunc(funcErr error, port uint16, gatewayForwardErr error) func() (igd nat_traversal.UpnpGateway, err error) {
+	return func() (igd nat_traversal.UpnpGateway, err error) {
+		if funcErr != nil {
+			return nil, funcErr
+		}
+		return &UpnpGatewayMock{errs: map[uint16][]error{port: {gatewayForwardErr}}}, nil
+	}
 }

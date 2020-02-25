@@ -6,6 +6,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"net"
+	"time"
 )
 
 // TODO: we should remove this const. Should  not depend on the number of addresses.
@@ -19,13 +20,24 @@ type UDPMessageEvent struct {
 	Message  []byte
 }
 
+type UDPListener interface {
+	LocalAddr() net.Addr
+	Close() error
+	WriteToUDP(final []byte, addr *net.UDPAddr) (int, error)
+	ReadFrom(p []byte) (n int, addr net.Addr, err error)
+	WriteTo(p []byte, addr net.Addr) (n int, err error)
+	SetDeadline(t time.Time) error
+	SetReadDeadline(t time.Time) error
+	SetWriteDeadline(t time.Time) error
+}
+
 // UDPNet is used to listen on or send udp messages
 type UDPNet struct {
 	local    node.LocalNode
 	logger   log.Log
 	config   config.Config
 	msgChan  chan UDPMessageEvent
-	conn     *net.UDPConn
+	conn     UDPListener
 	cache    *sessionCache
 	shutdown chan struct{}
 }
@@ -46,7 +58,7 @@ func NewUDPNet(config config.Config, localEntity node.LocalNode, log log.Log) (*
 }
 
 // Start will trigger listening on the configured port
-func (n *UDPNet) Start(listener *net.UDPConn) {
+func (n *UDPNet) Start(listener UDPListener) {
 	n.conn = listener
 	n.logger.Info("Started UDP server listening for messages on udp:%v", listener.LocalAddr().String())
 	go n.listenToUDPNetworkMessages(listener)

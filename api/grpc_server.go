@@ -451,11 +451,11 @@ func (s SpacemeshGrpcService) GetStateRoot(ctx context.Context, empty *empty.Emp
 }
 
 func (s SpacemeshGrpcService) AcquirePort(ctx context.Context, in *pb.AcquirePortRequest) (*pb.SimpleMessage, error) {
-	port, err := nat_traversal.AcquirePort(uint16(in.Port))
+	err := nat_traversal.AcquirePort(uint16(in.Port))
 	if err != nil {
 		return nil, err
 	}
-	return &pb.SimpleMessage{Value: fmt.Sprintf("%d", port)}, nil
+	return &pb.SimpleMessage{Value: fmt.Sprintf("%d", in.Port)}, nil
 }
 
 func (s SpacemeshGrpcService) ReleasePort(ctx context.Context, in *pb.ReleaseRequest) (*pb.SimpleMessage, error) {

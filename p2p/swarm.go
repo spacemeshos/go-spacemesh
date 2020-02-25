@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/nat_traversal"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/connectionpool"
 	"github.com/spacemeshos/go-spacemesh/p2p/discovery"
@@ -237,7 +238,7 @@ func (s *swarm) Start() error {
 	atomic.StoreUint32(&s.started, 1)
 	s.logger.Debug("Starting the p2p layer")
 
-	tcpListener, udpListener, err := s.getListeners(getTcpListener, getUdpListener)
+	tcpListener, udpListener, err := s.getListeners(getTcpListener, getUdpListener, discoverUpnpGateway)
 	if err != nil {
 		return fmt.Errorf("error getting port: %v", err)
 	}
@@ -873,14 +874,22 @@ func (s *swarm) hasOutgoingPeer(peer p2pcrypto.PublicKey) bool {
 
 var listeningIp = inet.ParseIP("0.0.0.0")
 
-// TODO: test
 func (s *swarm) getListeners(
 	getTcpListener func(tcpAddr *inet.TCPAddr) (inet.Listener, error),
-	getUdpListener func(udpAddr *inet.UDPAddr) (*inet.UDPConn, error),
-) (inet.Listener, *inet.UDPConn, error) {
+	getUdpListener func(udpAddr *inet.UDPAddr) (net.UDPListener, error),
+	discoverUpnpGateway func() (nat_traversal.UpnpGateway, error),
+) (inet.Listener, net.UDPListener, error) {
 
 	port := s.config.TCPPort
 	randomPort := port == 0
+	var gateway nat_traversal.UpnpGateway
+	if s.config.AcquirePort {
+		var err error
+		gateway, err = discoverUpnpGateway()
+		if err != nil {
+			s.logger.With().Warning("could not discover UPnP gateway", log.Err(err))
+		}
+	}
 
 	for {
 		tcpAddr := &inet.TCPAddr{IP: listeningIp, Port: port}
@@ -904,14 +913,35 @@ func (s *swarm) getListeners(
 			return nil, nil, fmt.Errorf("failed to acquire requested udp port: %v", err)
 		}
 
+		if gateway != nil {
+			err := nat_traversal.AcquirePortFromGateway(gateway, uint16(port))
+			if err != nil {
+				if err := tcpListener.Close(); err != nil {
+					s.logger.With().Error("error closing tcp listener", log.Err(err))
+				}
+				if err := udpListener.Close(); err != nil {
+					s.logger.With().Error("error closing udp listener", log.Err(err))
+				}
+				if randomPort {
+					port = 0
+					continue
+				}
+				return nil, nil, fmt.Errorf("failed to acquire requested port using UPnP: %v", err)
+			}
+		}
+
 		return tcpListener, udpListener, nil
 	}
 }
 
-func getUdpListener(udpAddr *inet.UDPAddr) (*inet.UDPConn, error) {
+func getUdpListener(udpAddr *inet.UDPAddr) (net.UDPListener, error) {
 	return inet.ListenUDP("udp", udpAddr)
 }
 
 func getTcpListener(tcpAddr *inet.TCPAddr) (inet.Listener, error) {
 	return inet.Listen("tcp", tcpAddr.String())
+}
+
+func discoverUpnpGateway() (igd nat_traversal.UpnpGateway, err error) {
+	return nat_traversal.DiscoverUpnpGateway()
 }
