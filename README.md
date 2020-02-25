@@ -156,12 +156,12 @@ Assuming tn1.toml is a testnet config file saved in the same directory as go-spa
 2. Follow the steps for joining the testnet without mining but use these parameters when starting go-spacemesh:
 
 ```bash
-./go-spacemesh --grpc-server --json-server --tcp-port [a_port] --config [tomlFileLocation] -d [nodeDataFilesPath] --coinbase [an_account] --start-mining --post-size [post_size_bytes] --post-datadir [dir_for_post_data]
+./go-spacemesh --grpc-server --json-server --tcp-port [a_port] --config [tomlFileLocation] -d [nodeDataFilesPath] --coinbase [an_account] --start-mining --post-datadir [dir_for_post_data]
 ```
 
 ##### Example
 ```bash
-./go-spacemesh --grpc-server --json-server --tcp-port 7152 --config tn1.toml -d sm_data --coinbase 0x36168c60e06abbb4f5df6d1dd6a1b15655d71e75 --start-mining --post-size 4294967296 --post-datadir post_data
+./go-spacemesh --grpc-server --json-server --tcp-port 7152 --config tn1.toml -d sm_data --coinbase 0x36168c60e06abbb4f5df6d1dd6a1b15655d71e75 --start-mining --post-datadir post_data
 ```
 
 Tip: set the post-size to the value of the post-space param in the testnet's toml file.
