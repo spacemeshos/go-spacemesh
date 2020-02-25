@@ -213,7 +213,16 @@ func TestUDPMux_ProcessUDP(t *testing.T) {
 
 	require.Equal(t, err, ErrNoSession)
 
-	connmock.SetSession(net.NewSessionMock(gotfrom.PublicKey()))
+	session := net.NewSessionMock(gotfrom.PublicKey())
+	connmock.SetSession(session)
+	err = m.processUDPMessage(net.IncomingMessageEvent{connmock, msgbuf})
+
+	require.Equal(t, err, ErrFailDecrypt)
+
+	session.OpenMessageFunc = func(boxedMessage []byte) (bytes []byte, err error) {
+		return boxedMessage, nil
+	}
+
 	err = m.processUDPMessage(net.IncomingMessageEvent{connmock, msgbuf})
 
 	require.NoError(t, err)
