@@ -1042,7 +1042,7 @@ func TestSyncer_Synchronise(t *testing.T) {
 	sync.TickProvider = &MockClock{Layer: 4} // simulate not synced
 	sr()
 	time.Sleep(100 * time.Millisecond) // handle go routine race
-	r.Equal(2, lv.countValidate)       // not synced, expect one call
+	r.Equal(1, lv.countValidate)       // not synced, expect one call
 }
 
 func TestSyncer_Synchronise2(t *testing.T) {
@@ -1050,6 +1050,8 @@ func TestSyncer_Synchronise2(t *testing.T) {
 	syncs, _, _ := SyncMockFactory(1, conf, t.Name(), memoryDB, newMockPoetDb)
 	sync := syncs[0]
 	sync.AddBlockWithTxs(types.NewExistingBlock(1, []byte(rand.RandString(8))), nil, nil)
+	sync.AddBlockWithTxs(types.NewExistingBlock(2, []byte(rand.RandString(8))), nil, nil)
+
 	lv := &mockLayerValidator{0, 0, 0, nil}
 	sync.lValidator = lv
 	sync.TickProvider = &MockClock{Layer: 1}
@@ -1067,15 +1069,6 @@ func TestSyncer_Synchronise2(t *testing.T) {
 	r.Equal(0, lv.countValidate)
 	r.True(sync.gossipSynced == Done)
 
-	// validated layer = 5 && current layer = 6 -> don't call validate
-	lv = &mockLayerValidator{5, 0, 0, nil}
-	sync.lValidator = lv
-	sync.TickProvider = &MockClock{Layer: 6}
-	sync.SetLatestLayer(5)
-	sync.synchronise()
-	r.Equal(0, lv.countValidate)
-	r.True(sync.gossipSynced == Done)
-
 	// current layer != 1 && weakly-synced
 	lv = &mockLayerValidator{0, 0, 0, nil}
 	sync.lValidator = lv
@@ -1083,6 +1076,15 @@ func TestSyncer_Synchronise2(t *testing.T) {
 	sync.SetLatestLayer(2)
 	sync.synchronise()
 	r.Equal(1, lv.countValidate)
+	r.True(sync.gossipSynced == Done)
+
+	// validated layer = 5 && current layer = 6 -> don't call validate
+	lv = &mockLayerValidator{5, 0, 0, nil}
+	sync.lValidator = lv
+	sync.TickProvider = &MockClock{Layer: 6}
+	sync.SetLatestLayer(5)
+	sync.synchronise()
+	r.Equal(0, lv.countValidate)
 	r.True(sync.gossipSynced == Done)
 }
 

@@ -49,10 +49,10 @@ type LayerConverter interface {
 
 type Ticker struct {
 	*subs                 // the sub-unsub provider
+	LayerConverter        // layer conversions provider
 	clock           Clock // provides the time
 	started         bool
-	lastTickedLayer types.LayerID  // track last ticked layer
-	conv            LayerConverter // layer conversions provider
+	lastTickedLayer types.LayerID // track last ticked layer
 	layerChannels   map[types.LayerID]chan struct{}
 	log             log.Log
 }
@@ -62,7 +62,7 @@ func NewTicker(c Clock, lc LayerConverter) *Ticker {
 		subs:            newSubs(),
 		lastTickedLayer: lc.TimeToLayer(c.Now()),
 		clock:           c,
-		conv:            lc,
+		LayerConverter:  lc,
 		layerChannels:   make(map[types.LayerID]chan struct{}),
 		log:             log.NewDefault("ticker"),
 	}
@@ -90,7 +90,7 @@ func (t *Ticker) Notify() (int, error) {
 
 	t.m.Lock()
 
-	layer := t.conv.TimeToLayer(t.clock.Now())
+	layer := t.TimeToLayer(t.clock.Now())
 	// close prev layers
 	for l := t.lastTickedLayer + 1; l <= layer; l++ {
 		if layerChan, found := t.layerChannels[l]; found {
@@ -142,7 +142,7 @@ func (t *Ticker) Notify() (int, error) {
 // TimeSinceLastTick returns the duration passed since the last layer that we ticked
 // note: the call is not lock-protected
 func (t *Ticker) timeSinceLastTick() time.Duration {
-	timeOfLastTick := t.conv.LayerToTime(t.conv.TimeToLayer(t.clock.Now()))
+	timeOfLastTick := t.LayerToTime(t.TimeToLayer(t.clock.Now()))
 	return t.clock.Now().Sub(timeOfLastTick)
 }
 
@@ -152,7 +152,7 @@ func (t *Ticker) StartNotifying() {
 }
 
 func (t *Ticker) GetCurrentLayer() types.LayerID {
-	return t.conv.TimeToLayer(t.clock.Now())
+	return t.TimeToLayer(t.clock.Now())
 }
 
 var closedChan = make(chan struct{})
@@ -165,7 +165,7 @@ func (t *Ticker) AwaitLayer(layerId types.LayerID) chan struct{} {
 	t.m.Lock()
 	defer t.m.Unlock()
 
-	layerTime := t.conv.LayerToTime(layerId)
+	layerTime := t.LayerToTime(layerId)
 	now := t.clock.Now()
 	if now.After(layerTime) || now.Equal(layerTime) { // passed the time of layerId
 		return closedChan

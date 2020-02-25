@@ -29,6 +29,11 @@ type ManualClock struct {
 	genesisTime   time.Time
 }
 
+// LayerToTime returns the time of the provided layer
+func (lc ManualClock) LayerToTime(id types.LayerID) time.Time {
+	panic("implement me")
+}
+
 func NewManualClock(genesisTime time.Time) *ManualClock {
 	t := &ManualClock{
 		subs:          make(map[timesync.LayerTimer]struct{}),

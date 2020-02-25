@@ -42,6 +42,7 @@ type TickProvider interface {
 	Subscribe() timesync.LayerTimer
 	Unsubscribe(timer timesync.LayerTimer)
 	GetCurrentLayer() types.LayerID
+	LayerToTime(types.LayerID) time.Time
 }
 
 type Configuration struct {
@@ -83,6 +84,7 @@ const (
 	OutOfSyncTxt                    = "Node is out of Sync"
 
 	ValidatingLayerNone types.LayerID = 0
+	ValidationDelta                   = 30 * time.Second
 )
 
 type Syncer struct {
@@ -281,30 +283,29 @@ func (s *Syncer) synchronise() {
 		return
 	}
 
-	currentSyncLayer := s.lValidator.ProcessedLayer() + 1
-	if currentSyncLayer == s.GetCurrentLayer() { // only validate if current < lastTicked
-		s.With().Info("Already synced for layer", log.Uint64("current_sync_layer", uint64(currentSyncLayer)))
-		s.setGossipBufferingStatus(Done) // fully-synced, make sure we listen to p2p
-		return
-	}
-
 	if s.weaklySynced() { // we have all the data of the prev layers so we can simply validate
-		s.With().Info("Node is weakly synced. Going to validate layer")
-		for ; currentSyncLayer < s.GetCurrentLayer(); currentSyncLayer++ {
+		s.With().Info("Node is weakly synced", s.LatestLayer())
+		for currentSyncLayer := s.lValidator.ProcessedLayer() + 1; currentSyncLayer < s.LatestLayer(); currentSyncLayer++ {
 			if s.shutdown() {
 				return
 			}
-			s.With().Info("Going to validate layer", log.LayerId(uint64(currentSyncLayer)))
 			if err := s.GetAndValidateLayer(currentSyncLayer); err != nil {
 				s.Panic("failed getting layer even though we are weakly-synced currentLayer=%v lastTicked=%v err=%v ", currentSyncLayer, s.GetCurrentLayer(), err)
 			}
 		}
+
+		if s.LatestLayer() == s.GetCurrentLayer() && time.Now().Sub(s.LayerToTime(s.LatestLayer())) > ValidationDelta { // only validate if current < lastTicked
+			if err := s.GetAndValidateLayer(s.LatestLayer()); err != nil {
+				s.Panic("failed getting layer even though we are weakly-synced currentLayer=%v lastTicked=%v err=%v ", s.LatestLayer(), s.GetCurrentLayer(), err)
+			}
+		}
+
 		s.With().Info("Node is synced")
 		return
 	}
 
 	// node is not synced
-	s.handleNotSynced(currentSyncLayer)
+	s.handleNotSynced(s.lValidator.ProcessedLayer() + 1)
 }
 
 func (s *Syncer) fastValidation(block *types.Block) error {
@@ -787,6 +788,7 @@ func (s *Syncer) blockCheckLocal(blockIds []types.Hash32) (map[types.Hash32]Item
 }
 
 func (s *Syncer) GetAndValidateLayer(id types.LayerID) error {
+	s.With().Info("Going to validate layer", log.LayerId(uint64(id)))
 	s.validatingLayerMutex.Lock()
 	s.validatingLayer = id
 	defer func() {
