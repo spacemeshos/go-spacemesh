@@ -164,8 +164,6 @@ Assuming tn1.toml is a testnet config file saved in the same directory as go-spa
 ./go-spacemesh --grpc-server --json-server --tcp-port 7152 --config tn1.toml -d sm_data --coinbase 0x36168c60e06abbb4f5df6d1dd6a1b15655d71e75 --start-mining --post-datadir post_data
 ```
 
-Tip: set the post-size to the value of the post-space param in the testnet's toml file.
-
 3. Use the CLI wallet to check your coinbase account balance and to transact
 
 ---
