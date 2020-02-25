@@ -100,7 +100,11 @@ func NewNet(conf config.Config, localEntity node.LocalNode, addr *net.TCPAddr, l
 
 func (n *Net) Start() error { // todo: maybe add context
 	err := n.listen(n.newTcpListener)
-	return err
+	if err != nil {
+		return err
+	}
+	n.logger.Info("Started TCP server listener for connections on tcp:%v", n.listener.Addr().String())
+	return nil
 }
 
 // LocalAddr returns the local listening address. panics before calling Start or if Start errored
@@ -272,7 +276,6 @@ func (n *Net) listen(lis func() (listener net.Listener, err error)) error {
 	if err != nil {
 		return err
 	}
-	n.logger.Info("Started TCP server listening for connections on tcp:%v", listener.Addr().String())
 	go n.accept(listener)
 	return nil
 }

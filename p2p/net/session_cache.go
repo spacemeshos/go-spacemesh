@@ -8,7 +8,7 @@ import (
 )
 
 // simple cache for storing sessions
-const maxSessions = 5120
+const maxSessions = 2048
 
 type storedSession struct {
 	session NetworkSession
