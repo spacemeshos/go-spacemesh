@@ -1,15 +1,29 @@
 from datetime import datetime, timedelta
+from kubernetes.stream import stream
 import os
 import pytz
 import re
 import time
 
 import tests.config as conf
-from tests.misc import ContainerSpec
+from tests.deployment import create_deployment
+from tests.misc import ContainerSpec, CoreV1ApiClient
+from tests.statefulset import create_statefulset
 import tests.queries as q
 
 
-LOG_ENTRIES = {"message": "M"}
+def api_call(client_ip, data, api, namespace, port="9090"):
+    # todo: this won't work with long payloads - ( `Argument list too long` ). try port-forward ?
+    res = stream(CoreV1ApiClient().connect_post_namespaced_pod_exec, name="curl", namespace=namespace,
+                 command=["curl", "-s", "--request", "POST", "--data", data, f"http://{client_ip}:{port}/{api}"],
+                 stderr=True, stdin=False, stdout=True, tty=False, _request_timeout=90)
+    return res
+
+
+def get_curr_ind():
+    dt = datetime.now()
+    today_date = dt.strftime("%Y.%m.%d")
+    return 'kubernetes_cluster-' + today_date
 
 
 def get_spec_file_path(file_name):
@@ -33,32 +47,6 @@ def get_spec_file_path(file_name):
     full_path = os.path.join(curr_dir, k8s_dir, file_name)
     print(f"get_spec_file_path return val: {full_path}")
     return full_path
-
-
-def print_hits_entry_count(hits, log_entry):
-    """
-    prints number of seen values
-
-    :param hits: list, all query results
-    :param log_entry: string, what part of the log do we want to sum
-    """
-
-    if log_entry not in LOG_ENTRIES.keys():
-        raise ValueError(f"unknown log entry {log_entry}")
-
-    result = {}
-    entry = LOG_ENTRIES[log_entry]
-
-    for hit in hits:
-        entry_val = getattr(hit, entry)
-        if entry_val not in result:
-            result[entry_val] = 1
-            continue
-
-        result[entry_val] += 1
-
-    for key in result:
-        print(f"found {result[key]} appearances of '{key}' in hits")
 
 
 def wait_for_next_layer(namespace, cl_num, timeout):
@@ -126,6 +114,8 @@ def get_pod_id(ns, pod_name):
     return res["node_id"]
 
 
+# ====================== tests_bs RIP ======================
+
 def node_string(key, ip, port, discport):
     return "spacemesh://{0}@{1}:{2}?disc={3}".format(key, ip, port, discport)
 
@@ -170,3 +160,15 @@ def get_conf(bs_info, client_config, genesis_time, setup_oracle=None, setup_poet
     if len(client_args) > 0:
         cspec.append_args(**client_args)
     return cspec
+
+
+def choose_k8s_object_create(config, deployment_file, statefulset_file):
+    dep_type = 'deployment' if 'deployment_type' not in config else config['deployment_type']
+    if dep_type == 'deployment':
+        return deployment_file, create_deployment
+    elif dep_type == 'statefulset':
+        # StatefulSets are intended to be used with stateful applications and distributed systems.
+        # Pods in a StatefulSet have a unique ordinal index and a stable network identity.
+        return statefulset_file, create_statefulset
+    else:
+        raise Exception("Unknown deployment type in configuration. Please check your config.yaml")

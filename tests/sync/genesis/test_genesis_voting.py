@@ -2,10 +2,11 @@ import time
 import pytest
 from pytest_testconfig import config as testconfig
 
+from tests.convenience import print_hits_entry_count
 import tests.queries as q
 from tests.sync.test_sync import new_client_in_namespace
 from tests.test_bs import setup_bootstrap, start_poet, add_curl
-from tests.utils import print_hits_entry_count, get_conf
+from tests.utils import get_conf
 
 # ==============================================================================
 #    TESTS

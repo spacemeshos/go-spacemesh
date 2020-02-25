@@ -5,8 +5,10 @@ from pytest_testconfig import config as testconfig
 from tests import deployment
 from tests.conftest import DeploymentInfo
 from tests.hare.assert_hare import expect_hare, assert_all, get_max_mem_usage
-from tests.test_bs import current_index, setup_bootstrap_in_namespace, setup_clients_in_namespace, wait_genesis
 from tests.misc import CoreV1ApiClient
+from tests.test_bs import setup_clients_in_namespace, wait_genesis
+from tests.setup_utils import setup_bootstrap_in_namespace
+from tests.utils import get_curr_ind
 
 ORACLE_DEPLOYMENT_FILE = './k8s/oracle.yml'
 
@@ -56,6 +58,7 @@ def setup_bootstrap_for_hare(request, init_session, setup_oracle):
     return setup_bootstrap_in_namespace(testconfig['namespace'],
                                         bootstrap_deployment_info,
                                         testconfig['bootstrap'],
+                                        testconfig['genesis_delta'],
                                         oracle=setup_oracle,
                                         dep_time_out=testconfig['deployment_ready_time_out'])
 
@@ -81,6 +84,7 @@ EFK_LOG_PROPAGATION_DELAY = 20
 
 # simple sanity test run for one layer
 def test_hare_sanity(init_session, setup_bootstrap_for_hare, setup_clients_for_hare, wait_genesis):
+    current_index = get_curr_ind()
     # Need to wait for 1 full iteration + the time it takes the logs to propagate to ES
     round_duration = int(testconfig['client']['args']['hare-round-duration-sec'])
     wakeup_delta = int(testconfig['client']['args']['hare-wakeup-delta'])
@@ -99,6 +103,7 @@ EXPECTED_MAX_MEM = 300*1024*1024  # MB
 
 # scale test run for 3 layers
 def test_hare_scale(init_session, setup_bootstrap_for_hare, setup_clients_for_hare, wait_genesis):
+    current_index = get_curr_ind()
     total = int(testconfig['client']['replicas']) + int(testconfig['bootstrap']['replicas'])
 
     # Need to wait for 1 full iteration + the time it takes the logs to propagate to ES
