@@ -18,7 +18,7 @@ from tests.conftest import DeploymentInfo, NetworkDeploymentInfo, NetworkInfo
 from tests.hare.assert_hare import validate_hare
 from tests.misc import CoreV1ApiClient
 from tests.setup_utils import setup_bootstrap_in_namespace, setup_clients_in_namespace
-from tests.utils import get_curr_ind, api_call, get_genesis_time_delta
+from tests.utils import get_curr_ind, api_call
 
 
 GENESIS_TIME = pytz.utc.localize(datetime.utcnow() + timedelta(seconds=testconfig['genesis_delta']))

@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 from kubernetes.stream import stream
+import functools
 import os
 import pytz
 import re
@@ -120,6 +121,7 @@ def node_string(key, ip, port, discport):
     return "spacemesh://{0}@{1}:{2}?disc={3}".format(key, ip, port, discport)
 
 
+@functools.lru_cache(maxsize=1)
 def get_genesis_time_delta(genesis_time):
     return pytz.utc.localize(datetime.utcnow() + timedelta(seconds=genesis_time))
 
