@@ -46,13 +46,14 @@ type TickProvider interface {
 }
 
 type Configuration struct {
-	LayersPerEpoch uint16
-	Concurrency    int //number of workers for sync method
-	LayerSize      int
-	RequestTimeout time.Duration
-	SyncInterval   time.Duration
-	AtxsLimit      int
-	Hdist          int
+	LayersPerEpoch  uint16
+	Concurrency     int //number of workers for sync method
+	LayerSize       int
+	RequestTimeout  time.Duration
+	SyncInterval    time.Duration
+	ValidationDelta time.Duration
+	AtxsLimit       int
+	Hdist           int
 }
 
 type LayerValidator interface {
@@ -84,7 +85,6 @@ const (
 	OutOfSyncTxt                    = "Node is out of Sync"
 
 	ValidatingLayerNone types.LayerID = 0
-	ValidationDelta                   = 30 * time.Second
 )
 
 type Syncer struct {
@@ -285,20 +285,14 @@ func (s *Syncer) synchronise() {
 
 	if s.weaklySynced() { // we have all the data of the prev layers so we can simply validate
 		s.With().Info("Node is weakly synced", s.LatestLayer())
-		for currentSyncLayer := s.lValidator.ProcessedLayer() + 1; currentSyncLayer < s.LatestLayer(); currentSyncLayer++ {
-			if s.shutdown() {
-				return
-			}
-			if err := s.GetAndValidateLayer(currentSyncLayer); err != nil {
-				s.Panic("failed getting layer even though we are weakly-synced currentLayer=%v lastTicked=%v err=%v ", currentSyncLayer, s.GetCurrentLayer(), err)
-			}
+
+		s.handleLayersTillCurrent()
+
+		if s.shutdown() {
+			return
 		}
 
-		if s.LatestLayer() == s.GetCurrentLayer() && time.Now().Sub(s.LayerToTime(s.LatestLayer())) > ValidationDelta { // only validate if current < lastTicked
-			if err := s.GetAndValidateLayer(s.LatestLayer()); err != nil {
-				s.Panic("failed getting layer even though we are weakly-synced currentLayer=%v lastTicked=%v err=%v ", s.LatestLayer(), s.GetCurrentLayer(), err)
-			}
-		}
+		s.handleCurrentLayer()
 
 		s.With().Info("Node is synced")
 		return
@@ -306,6 +300,29 @@ func (s *Syncer) synchronise() {
 
 	// node is not synced
 	s.handleNotSynced(s.lValidator.ProcessedLayer() + 1)
+}
+
+//validate all layers except current one
+func (s *Syncer) handleLayersTillCurrent() {
+	s.With().Info("handle layers %s to %s", s.lValidator.ProcessedLayer()+1, s.GetCurrentLayer())
+	for currentSyncLayer := s.lValidator.ProcessedLayer() + 1; currentSyncLayer < s.GetCurrentLayer(); currentSyncLayer++ {
+		if s.shutdown() {
+			return
+		}
+		if err := s.GetAndValidateLayer(currentSyncLayer); err != nil {
+			s.Panic("failed getting layer even though we are weakly-synced currentLayer=%v lastTicked=%v err=%v ", currentSyncLayer, s.GetCurrentLayer(), err)
+		}
+	}
+	return
+}
+
+//validate current layer if more than s.ValidationDelta has passed
+func (s *Syncer) handleCurrentLayer() {
+	if s.LatestLayer() == s.GetCurrentLayer() && time.Now().Sub(s.LayerToTime(s.LatestLayer())) > s.ValidationDelta { // only validate if current < lastTicked
+		if err := s.GetAndValidateLayer(s.LatestLayer()); err != nil {
+			s.Panic("failed getting layer even though we are weakly-synced currentLayer=%v lastTicked=%v err=%v ", s.LatestLayer(), s.GetCurrentLayer(), err)
+		}
+	}
 }
 
 func (s *Syncer) fastValidation(block *types.Block) error {

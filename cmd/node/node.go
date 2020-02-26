@@ -509,12 +509,13 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId,
 	}
 
 	syncConf := sync.Configuration{Concurrency: 4,
-		LayerSize:      int(layerSize),
-		LayersPerEpoch: layersPerEpoch,
-		RequestTimeout: time.Duration(app.Config.SyncRequestTimeout) * time.Millisecond,
-		SyncInterval:   time.Duration(app.Config.SyncInterval) * time.Second,
-		Hdist:          app.Config.Hdist,
-		AtxsLimit:      app.Config.AtxsPerBlock}
+		LayerSize:       int(layerSize),
+		LayersPerEpoch:  layersPerEpoch,
+		RequestTimeout:  time.Duration(app.Config.SyncRequestTimeout) * time.Millisecond,
+		SyncInterval:    time.Duration(app.Config.SyncInterval) * time.Second,
+		ValidationDelta: 30 * time.Second,
+		Hdist:           app.Config.Hdist,
+		AtxsLimit:       app.Config.AtxsPerBlock}
 
 	if app.Config.AtxsPerBlock > miner.AtxsPerBlockLimit { // validate limit
 		app.log.Panic("Number of atxs per block required is bigger than the limit atxsPerBlock=%v limit=%v", app.Config.AtxsPerBlock, miner.AtxsPerBlockLimit)
