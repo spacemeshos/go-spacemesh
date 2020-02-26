@@ -266,30 +266,39 @@ func (s *Syncer) run() {
 }
 
 func (s *Syncer) synchronise() {
-	if s.syncLock.TryLock() == false { //only one concurrent synchronise
+	//only one concurrent synchronise
+	if s.syncLock.TryLock() == false {
 		return
 	}
 
-	defer s.syncLock.Unlock() //release synchronise lock
+	//release synchronise lock
+	defer s.syncLock.Unlock()
 
+	//node is synced and blocks from current layer hav already been validated
 	if s.GetCurrentLayer() == s.lValidator.ProcessedLayer() {
 		s.Debug("node is synced ")
-		s.setGossipBufferingStatus(Done) // fully-synced, make sure we listen to p2p
+
+		// fully-synced, make sure we listen to p2p
+		s.setGossipBufferingStatus(Done)
 		return
 	}
 
-	if s.weaklySynced() { // we have all the data of the prev layers so we can simply validate
+	// we have all the data of the prev layers so we can simply validate
+	if s.weaklySynced() {
 		s.With().Info("Node is weakly synced", s.LatestLayer())
 
+		// handle all layers from processed+1 to current -1
 		s.handleLayersTillCurrent()
 
 		if s.shutdown() {
 			return
 		}
 
+		//validate current layer if more than s.ValidationDelta has passed
 		s.handleCurrentLayer()
 
-		s.setGossipBufferingStatus(Done) // fully-synced, make sure we listen to p2p
+		// fully-synced, make sure we listen to p2p
+		s.setGossipBufferingStatus(Done)
 		s.With().Info("Node is synced")
 		return
 	}
@@ -312,7 +321,6 @@ func (s *Syncer) handleLayersTillCurrent() {
 	return
 }
 
-//validate current layer if more than s.ValidationDelta has passed
 func (s *Syncer) handleCurrentLayer() {
 	if s.LatestLayer() == s.GetCurrentLayer() && time.Now().Sub(s.LayerToTime(s.LatestLayer())) > s.ValidationDelta {
 		if err := s.GetAndValidateLayer(s.LatestLayer()); err != nil {
