@@ -304,7 +304,7 @@ func (s *Syncer) synchronise() {
 
 //validate all layers except current one
 func (s *Syncer) handleLayersTillCurrent() {
-	s.With().Info("handle layers %s to %s", s.lValidator.ProcessedLayer()+1, s.GetCurrentLayer())
+	s.Info("handle layers %d to %d", s.lValidator.ProcessedLayer()+1, s.GetCurrentLayer())
 	for currentSyncLayer := s.lValidator.ProcessedLayer() + 1; currentSyncLayer < s.GetCurrentLayer(); currentSyncLayer++ {
 		if s.shutdown() {
 			return
