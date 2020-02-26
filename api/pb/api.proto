@@ -122,14 +122,6 @@ message NodeStatus {
     uint64 verifiedLayer = 7;
 }
 
-message AcquirePortRequest {
-    uint32 port = 1;
-}
-
-message ReleaseRequest {
-    uint32 port = 1;
-}
-
 service SpacemeshService {
     rpc Echo (SimpleMessage) returns (SimpleMessage) {
         option (google.api.http) = {
@@ -236,18 +228,6 @@ service SpacemeshService {
     rpc GetStateRoot (google.protobuf.Empty) returns (SimpleMessage) {
         option (google.api.http) = {
           post: "/v1/stateroot"
-          body: "*"
-        };
-    }
-    rpc AcquirePort (AcquirePortRequest) returns (SimpleMessage) {
-        option (google.api.http) = {
-          post: "/v1/acquireport"
-          body: "*"
-        };
-    }
-    rpc ReleasePort (ReleaseRequest) returns (SimpleMessage) {
-        option (google.api.http) = {
-          post: "/v1/releaseport"
           body: "*"
         };
     }

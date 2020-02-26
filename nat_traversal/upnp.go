@@ -7,7 +7,7 @@ import (
 	"os/user"
 )
 
-func GetExternalIp() (string, error) {
+func GetExternalIP() (string, error) {
 	// connect to router
 	d, err := upnp.Discover()
 	if err != nil {
@@ -21,22 +21,6 @@ func GetExternalIp() (string, error) {
 	}
 
 	return ip, nil
-}
-
-func AcquirePort(port uint16) error {
-	// connect to router
-	d, err := upnp.Discover()
-	if err != nil {
-		return fmt.Errorf("failed to connect to router: %v", err)
-	}
-
-	// forward a port
-	err = d.Forward(port, getPortDesc())
-	if err != nil {
-		return fmt.Errorf("failed to forward port %d: %v", port, err)
-	}
-
-	return nil
 }
 
 func getPortDesc() string {
@@ -53,28 +37,12 @@ func getPortDesc() string {
 	return portDesc
 }
 
-func ReleasePort(port uint16) error {
-	// connect to router
-	d, err := upnp.Discover()
-	if err != nil {
-		return fmt.Errorf("failed to connect to router: %v", err)
-	}
-
-	// un-forward a port
-	err = d.Clear(port)
-	if err != nil {
-		return fmt.Errorf("failed to un-forward a port %d: %v", port, err)
-	}
-
-	return nil
-}
-
 type UpnpGateway interface {
 	Forward(port uint16, desc string) error
 	Clear(port uint16) error
 }
 
-func DiscoverUpnpGateway() (UpnpGateway, error) {
+func DiscoverUPnPGateway() (UpnpGateway, error) {
 	return upnp.Discover()
 }
 

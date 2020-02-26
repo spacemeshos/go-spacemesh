@@ -663,20 +663,3 @@ func TestApproveAPIGossipMessages(t *testing.T) {
 	require.Equal(t, res.Protocol(), APIGossipProtocol)
 	cancel()
 }
-
-func TestSpacemeshGrpcService_AcquirePort(t *testing.T) {
-	t.Skip("This will only pass on a UPnP-enabled network")
-
-	shutDown := launchServer(t)
-	const port = uint32(9001)
-
-	respBody, respStatus := callEndpoint(t, "v1/acquireport", marshalProto(t, &pb.AcquirePortRequest{Port: port}))
-	require.Equal(t, http.StatusOK, respStatus)
-	require.Equal(t, marshalProto(t, &pb.SimpleMessage{Value: fmt.Sprintf("%d", port)}), respBody)
-
-	respBody, respStatus = callEndpoint(t, "v1/releaseport", marshalProto(t, &pb.ReleaseRequest{Port: port}))
-	require.Equal(t, http.StatusOK, respStatus)
-	require.Equal(t, marshalProto(t, &pb.SimpleMessage{Value: "ok"}), respBody)
-
-	shutDown()
-}

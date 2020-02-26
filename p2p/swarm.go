@@ -240,7 +240,7 @@ func (s *swarm) Start() error {
 	atomic.StoreUint32(&s.started, 1)
 	s.logger.Debug("Starting the p2p layer")
 
-	tcpListener, udpListener, err := s.getListeners(getTcpListener, getUdpListener, discoverUpnpGateway)
+	tcpListener, udpListener, err := s.getListeners(getTCPListener, getUDPListener, discoverUPnPGateway)
 	if err != nil {
 		return fmt.Errorf("error getting port: %v", err)
 	}
@@ -946,14 +946,14 @@ func (s *swarm) getListeners(
 	}
 }
 
-func getUdpListener(udpAddr *inet.UDPAddr) (net.UDPListener, error) {
+func getUDPListener(udpAddr *inet.UDPAddr) (net.UDPListener, error) {
 	return inet.ListenUDP("udp", udpAddr)
 }
 
-func getTcpListener(tcpAddr *inet.TCPAddr) (inet.Listener, error) {
+func getTCPListener(tcpAddr *inet.TCPAddr) (inet.Listener, error) {
 	return inet.Listen("tcp", tcpAddr.String())
 }
 
-func discoverUpnpGateway() (igd nat_traversal.UpnpGateway, err error) {
-	return nat_traversal.DiscoverUpnpGateway()
+func discoverUPnPGateway() (igd nat_traversal.UpnpGateway, err error) {
+	return nat_traversal.DiscoverUPnPGateway()
 }

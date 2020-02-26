@@ -12,7 +12,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/miner"
-	"github.com/spacemeshos/go-spacemesh/nat_traversal"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"google.golang.org/grpc/keepalive"
 	"net"
@@ -47,7 +46,7 @@ type SpacemeshGrpcService struct {
 	Logging       LoggingAPI
 }
 
-var _ pb.SpacemeshServiceServer = &SpacemeshGrpcService{}
+var _ pb.SpacemeshServiceServer = (*SpacemeshGrpcService)(nil)
 
 func (s SpacemeshGrpcService) getTransactionAndStatus(txId types.TransactionId) (*types.Transaction, *types.LayerID, pb.TxStatus, error) {
 	tx, err := s.Tx.GetTransaction(txId) // have we seen this transaction in a block?
@@ -448,20 +447,4 @@ func (s SpacemeshGrpcService) GetAccountRewards(ctx context.Context, account *pb
 func (s SpacemeshGrpcService) GetStateRoot(ctx context.Context, empty *empty.Empty) (*pb.SimpleMessage, error) {
 	log.Info("GRPC GetStateRoot msg")
 	return &pb.SimpleMessage{Value: s.Tx.GetStateRoot().String()}, nil
-}
-
-func (s SpacemeshGrpcService) AcquirePort(ctx context.Context, in *pb.AcquirePortRequest) (*pb.SimpleMessage, error) {
-	err := nat_traversal.AcquirePort(uint16(in.Port))
-	if err != nil {
-		return nil, err
-	}
-	return &pb.SimpleMessage{Value: fmt.Sprintf("%d", in.Port)}, nil
-}
-
-func (s SpacemeshGrpcService) ReleasePort(ctx context.Context, in *pb.ReleaseRequest) (*pb.SimpleMessage, error) {
-	err := nat_traversal.ReleasePort(uint16(in.Port))
-	if err != nil {
-		return nil, err
-	}
-	return &pb.SimpleMessage{Value: "ok"}, nil
 }
