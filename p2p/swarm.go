@@ -87,6 +87,8 @@ type swarm struct {
 	peerLock   sync.RWMutex
 	newPeerSub []chan p2pcrypto.PublicKey
 	delPeerSub []chan p2pcrypto.PublicKey
+
+	releaseUpnp func()
 }
 
 func (s *swarm) waitForBoot() error {
@@ -412,11 +414,11 @@ func (s *swarm) Shutdown() {
 		s.udpServer.Shutdown()
 
 		s.protocolHandlerMutex.Lock()
-		for i, _ := range s.directProtocolHandlers {
+		for i := range s.directProtocolHandlers {
 			delete(s.directProtocolHandlers, i)
 			//close(prt) //todo: signal protocols to shutdown with closing chan. (this makes us send on closed chan. )
 		}
-		for i, _ := range s.gossipProtocolHandlers {
+		for i := range s.gossipProtocolHandlers {
 			delete(s.gossipProtocolHandlers, i)
 			//close(prt) //todo: signal protocols to shutdown with closing chan. (this makes us send on closed chan. )
 		}
@@ -432,6 +434,9 @@ func (s *swarm) Shutdown() {
 		s.delPeerSub = nil
 		s.newPeerSub = nil
 		s.peerLock.Unlock()
+		if s.releaseUpnp != nil {
+			s.releaseUpnp()
+		}
 	})
 }
 
@@ -490,7 +495,7 @@ var (
 	ErrBadFormat1 = errors.New("bad msg format, could'nt deserialize 1")
 	// ErrBadFormat2 could'nt deserialize the protocol message payload
 	ErrBadFormat2 = errors.New("bad msg format, could'nt deserialize 2")
-	// ErrOutOfSync is returned when messsage timestamp was out of sync
+	// ErrOutOfSync is returned when message timestamp was out of sync
 	ErrOutOfSync = errors.New("received out of sync msg")
 	// ErrFailDecrypt session cant decrypt
 	ErrFailDecrypt = errors.New("can't decrypt message payload with session key")
@@ -887,6 +892,7 @@ func (s *swarm) getListeners(
 		var err error
 		gateway, err = discoverUpnpGateway()
 		if err != nil {
+			gateway = nil
 			s.logger.With().Warning("could not discover UPnP gateway", log.Err(err))
 		}
 	}
@@ -927,6 +933,12 @@ func (s *swarm) getListeners(
 					continue
 				}
 				return nil, nil, fmt.Errorf("failed to acquire requested port using UPnP: %v", err)
+			}
+			s.releaseUpnp = func() {
+				err := gateway.Clear(uint16(port))
+				if err != nil {
+					s.logger.Warning("failed to release acquired UPnP port %v: %v", port, err)
+				}
 			}
 		}
 

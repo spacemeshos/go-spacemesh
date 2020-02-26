@@ -71,7 +71,6 @@ func p2pTestInstance(t testing.TB, config config.Config) *swarm {
 }
 
 func p2pTestNoStart(t testing.TB, config config.Config) *swarm {
-	//config.TCPPort = 0
 	p, err := newSwarm(context.TODO(), config, log.NewDefault(t.Name()), "")
 	if err != nil {
 		t.Fatal("err creating a swarm", err)
@@ -95,9 +94,7 @@ func TestNew(t *testing.T) {
 }
 
 func Test_newSwarm(t *testing.T) {
-	cfg := config.DefaultConfig()
-	cfg.TCPPort = 0
-	s, err := newSwarm(context.TODO(), cfg, log.NewDefault(t.Name()), "")
+	s, err := newSwarm(context.TODO(), configWithPort(0), log.NewDefault(t.Name()), "")
 	assert.NoError(t, err)
 	err = s.Start()
 	assert.NoError(t, err)
@@ -106,9 +103,7 @@ func Test_newSwarm(t *testing.T) {
 }
 
 func TestSwarm_Shutdown(t *testing.T) {
-	cfg := config.DefaultConfig()
-	cfg.TCPPort = 0
-	s, err := newSwarm(context.TODO(), cfg, log.NewDefault(t.Name()), "")
+	s, err := newSwarm(context.TODO(), configWithPort(0), log.NewDefault(t.Name()), "")
 	assert.NoError(t, err)
 	err = s.Start()
 	assert.NoError(t, err)
@@ -137,10 +132,10 @@ func TestSwarm_Shutdown(t *testing.T) {
 }
 
 func TestSwarm_RegisterProtocolNoStart(t *testing.T) {
-	s, err := newSwarm(context.TODO(), config.DefaultConfig(), log.NewDefault(t.Name()), "")
+	s, err := newSwarm(context.TODO(), configWithPort(7513), log.NewDefault(t.Name()), "")
+	assert.NoError(t, err)
 	msgs := s.RegisterDirectProtocol("Anton")
 	assert.NotNil(t, msgs)
-	assert.NoError(t, err)
 }
 
 func TestSwarm_processMessage(t *testing.T) {
@@ -450,7 +445,7 @@ func TestSwarm_MultipleMessagesFromMultipleSendersToMultipleProtocols(t *testing
 func TestSwarm_RegisterProtocol(t *testing.T) {
 	const numPeers = 100
 	nods := make([]*swarm, 0, numPeers)
-	cfg := config.DefaultConfig()
+	cfg := configWithPort(0)
 	for i := 0; i < numPeers; i++ {
 		nod := p2pTestNoStart(t, cfg)
 		nod.RegisterDirectProtocol(exampleProtocol) // this is example
@@ -467,13 +462,10 @@ func TestSwarm_RegisterProtocol(t *testing.T) {
 }
 
 func TestSwarm_onRemoteClientMessage(t *testing.T) {
-	cfg := config.DefaultConfig()
-	//addr := inet.TCPAddr{inet.ParseIP("0.0.0.0"), 0000, ""}
-
 	id, err := node.NewNodeIdentity()
 	assert.NoError(t, err, "we cant make node ?")
 
-	p := p2pTestNoStart(t, cfg)
+	p := p2pTestNoStart(t, configWithPort(0))
 	nmock := new(net.ConnectionMock)
 	nmock.SetRemotePublicKey(id.PublicKey())
 
@@ -622,7 +614,7 @@ loop:
 func Test_Swarm_getMorePeers(t *testing.T) {
 	// test normal flow
 	numpeers := 3
-	cfg := config.DefaultConfig()
+	cfg := configWithPort(0)
 	cfg.SwarmConfig.Bootstrap = false
 	cfg.SwarmConfig.Gossip = false
 	cfg.SwarmConfig.RandomConnections = numpeers
@@ -638,7 +630,7 @@ func Test_Swarm_getMorePeers(t *testing.T) {
 func Test_Swarm_getMorePeers2(t *testing.T) {
 	// test normal flow
 	numpeers := 3
-	cfg := config.DefaultConfig()
+	cfg := configWithPort(0)
 	cfg.SwarmConfig.Bootstrap = false
 	cfg.SwarmConfig.Gossip = false
 	cfg.SwarmConfig.RandomConnections = numpeers
@@ -658,7 +650,7 @@ func Test_Swarm_getMorePeers2(t *testing.T) {
 func Test_Swarm_getMorePeers3(t *testing.T) {
 	// test normal flow
 	numpeers := 3
-	cfg := config.DefaultConfig()
+	cfg := configWithPort(0)
 	cfg.SwarmConfig.Bootstrap = false
 	cfg.SwarmConfig.Gossip = false
 	cfg.SwarmConfig.RandomConnections = numpeers
@@ -689,7 +681,7 @@ func Test_Swarm_getMorePeers3(t *testing.T) {
 func Test_Swarm_getMorePeers4(t *testing.T) {
 	// test normal flow
 	numpeers := 3
-	cfg := config.DefaultConfig()
+	cfg := configWithPort(0)
 	cfg.SwarmConfig.Bootstrap = false
 	cfg.SwarmConfig.Gossip = false
 	cfg.SwarmConfig.RandomConnections = numpeers
@@ -722,7 +714,7 @@ func Test_Swarm_getMorePeers4(t *testing.T) {
 func Test_Swarm_getMorePeers5(t *testing.T) {
 	// test normal flow
 	numpeers := 3
-	cfg := config.DefaultConfig()
+	cfg := configWithPort(0)
 	cfg.SwarmConfig.Bootstrap = false
 	cfg.SwarmConfig.Gossip = false
 	cfg.SwarmConfig.RandomConnections = numpeers
@@ -755,7 +747,7 @@ func Test_Swarm_getMorePeers5(t *testing.T) {
 func Test_Swarm_getMorePeers6(t *testing.T) {
 	// test normal flow
 	numpeers := 3
-	cfg := config.DefaultConfig()
+	cfg := configWithPort(0)
 	cfg.SwarmConfig.Bootstrap = false
 	cfg.SwarmConfig.Gossip = false
 	cfg.SwarmConfig.RandomConnections = numpeers
@@ -884,7 +876,7 @@ func TestNeighborhood_Initial(t *testing.T) {
 }
 
 func TestNeighborhood_Disconnect(t *testing.T) {
-	n := p2pTestNoStart(t, config.DefaultConfig())
+	n := p2pTestNoStart(t, configWithPort(0))
 	_, disc := n.SubscribePeerEvents()
 	rnd := node.GenerateRandomNodeData()
 	n.addIncomingPeer(rnd.PublicKey())
@@ -940,7 +932,7 @@ func TestSwarm_AddIncomingPeer(t *testing.T) {
 }
 
 func TestSwarm_AskPeersSerial(t *testing.T) {
-	p := p2pTestNoStart(t, config.DefaultConfig())
+	p := p2pTestNoStart(t, configWithPort(0))
 	dsc := &discovery.MockPeerStore{}
 
 	timescalled := uint32(0)
@@ -983,7 +975,7 @@ func Test_NodeInfo(t *testing.T) {
 
 func TestNeighborhood_ReportConnectionResult(t *testing.T) {
 	const PeerNum = 10
-	n := p2pTestNoStart(t, config.DefaultConfig())
+	n := p2pTestNoStart(t, configWithPort(0))
 	goodcount := 0
 	attemptcount := 0
 
@@ -1027,8 +1019,8 @@ func TestNeighborhood_ReportConnectionResult(t *testing.T) {
 		return nil, errors.New("not found")
 	}
 
-	realnode := p2pTestNoStart(t, config.DefaultConfig())
-	realnode2 := p2pTestNoStart(t, config.DefaultConfig())
+	realnode := p2pTestNoStart(t, configWithPort(0))
+	realnode2 := p2pTestNoStart(t, configWithPort(0))
 	realnodeinfo := &node.NodeInfo{realnode.lNode.PublicKey().Array(), inet.IPv4zero, 0, 0}
 	realnode2info := &node.NodeInfo{realnode2.lNode.PublicKey().Array(), inet.IPv4zero, 0, 0}
 
@@ -1048,7 +1040,7 @@ func TestNeighborhood_ReportConnectionResult(t *testing.T) {
 }
 
 func TestSwarm_SendMessage(t *testing.T) {
-	p := p2pTestNoStart(t, config.DefaultConfig())
+	p := p2pTestNoStart(t, configWithPort(0))
 
 	cp := &cpoolMock{}
 	ps := &discovery.MockPeerStore{}
@@ -1297,6 +1289,10 @@ func testGetListenersScenario(
 		r.Empty(responses, "not all responses for udp port %v were consumed", port)
 	}
 
+	if swarm.releaseUpnp != nil {
+		swarm.releaseUpnp()
+	}
+
 	return err
 }
 
@@ -1311,6 +1307,16 @@ func (u *UpnpGatewayMock) Forward(port uint16, desc string) error {
 	err := u.errs[port][0]
 	u.errs[port] = u.errs[port][1:]
 	return err
+}
+
+func (u *UpnpGatewayMock) Clear(port uint16) error {
+	if responses, ok := u.errs[port]; !ok {
+		panic("closing unexpected port")
+	} else if len(responses) != 0 {
+		panic("unused responses")
+	}
+	delete(u.errs, port)
+	return nil
 }
 
 func createDiscoverUpnpFunc(funcErr error, port uint16, gatewayForwardErr error) func() (igd nat_traversal.UpnpGateway, err error) {

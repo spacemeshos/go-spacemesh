@@ -71,6 +71,7 @@ func ReleasePort(port uint16) error {
 
 type UpnpGateway interface {
 	Forward(port uint16, desc string) error
+	Clear(port uint16) error
 }
 
 func DiscoverUpnpGateway() (UpnpGateway, error) {

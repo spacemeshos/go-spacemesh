@@ -74,6 +74,7 @@ func (its *IntegrationTestSuite) SetupSuite() {
 	}
 
 	cfg := config.DefaultConfig()
+	cfg.AcquirePort = false
 	cfg.SwarmConfig.Bootstrap = true
 	cfg.SwarmConfig.Gossip = true
 	cfg.SwarmConfig.RandomConnections = its.NeighborsCount
