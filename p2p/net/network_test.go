@@ -148,7 +148,7 @@ func TestHandlePreSessionIncomingMessage2(t *testing.T) {
 	bobNode, _ := node.GenerateTestNode(t)
 
 	bobsAliceConn := NewConnectionMock(aliceNode.PublicKey())
-	bobsAliceConn.addr = fmt.Sprintf("%v:%v", aliceNodeInfo.IP.String(), aliceNodeInfo.ProtocolPort)
+	bobsAliceConn.Addr = &net.TCPAddr{IP: aliceNodeInfo.IP, Port: int(aliceNodeInfo.ProtocolPort)}
 
 	bobsNet, err := NewNet(config.DefaultConfig(), bobNode, log.NewDefault(t.Name()))
 	r.NoError(err)

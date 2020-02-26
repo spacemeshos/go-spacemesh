@@ -340,3 +340,13 @@ func (b *Broker) Unregister(id instanceId) {
 
 	wg.Wait()
 }
+
+// Synced returns true if the given layer is synced, false otherwise
+func (b *Broker) Synced(id instanceId) bool {
+	res := make(chan bool)
+	b.tasks <- func() {
+		res <- b.isSynced(id)
+	}
+
+	return <-res
+}

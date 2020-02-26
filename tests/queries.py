@@ -11,6 +11,7 @@ from tests import convenience
 from tests.context import ES
 from tests.convenience import PRINT_SEP
 
+CREATED_BLOCK_MSG = "block created"
 TS_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
 
 dt = datetime.now()
@@ -51,9 +52,6 @@ def get_release_tick_msgs(namespace, pod_name):
     # this msg indicates a new layer started
     release_tick = "release tick"
     return get_all_msg_containing(namespace, pod_name, release_tick)
-
-
-CREATED_BLOCK_MSG = "block created"
 
 
 def get_block_creation_msgs(namespace, pod_name, find_fails=False, from_ts=None, to_ts=None):
@@ -414,6 +412,10 @@ def query_mem_usage(indx, ns):
 
 def query_atx_published(indx, ns, layer):
     return query_message(indx, ns, ns, {'M': 'atx published', 'layer_id': str(layer)}, False)
+
+
+def query_atx_per_epoch(ns, epoch_id, index=current_index):
+    return query_message(index, ns, ns, {'M': 'atx published', 'epoch_id': str(epoch_id)}, False)
 
 
 def message_propagation(deployment, query_fields):

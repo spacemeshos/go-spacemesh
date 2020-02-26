@@ -268,11 +268,11 @@ func (s *Syncer) synchronise() {
 		return
 	}
 
-	s.Info("start synchronize")
+	s.Debug("start synchronize")
 
 	defer func() { //release synchronise lock
 		s.syncLock.Unlock()
-		s.Info("close synchronize, %v", s.Status())
+		s.Debug("close synchronize, %v", s.Status())
 	}()
 
 	if s.GetCurrentLayer() <= 1 { // skip validation for first layer
