@@ -3,7 +3,6 @@ import time
 
 from tests.conftest import DeploymentInfo
 from tests import pod
-from tests.test_bs import add_curl, setup_bootstrap
 from tests.misc import CoreV1ApiClient
 from tests.setup_utils import setup_bootstrap_in_namespace
 from tests.utils import get_spec_file_path

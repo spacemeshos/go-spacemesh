@@ -13,7 +13,6 @@ from tests.context import ES
 from tests.queries import query_message, poll_query_message
 # noinspection PyUnresolvedReferences
 from tests.setup_utils import add_multi_clients
-from tests.test_bs import setup_bootstrap, setup_clients, save_log_on_exit, add_curl
 from tests.utils import get_conf, api_call
 
 

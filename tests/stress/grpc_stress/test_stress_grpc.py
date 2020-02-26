@@ -5,7 +5,7 @@ import random
 
 from tests.convenience import sleep_print_backwards, print_hits_entry_count
 from tests.queries import find_error_log_msgs
-from tests.test_bs import setup_network, add_curl, setup_bootstrap, start_poet, setup_clients, wait_genesis
+from tests.test_bs import setup_network, wait_genesis
 from tests.tx_generator import actions
 from tests.tx_generator import config as conf
 from tests.tx_generator.models.wallet_api import WalletAPI

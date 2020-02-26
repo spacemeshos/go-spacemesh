@@ -1,7 +1,7 @@
 from pytest_testconfig import config as testconfig
 
 import tests.analyse as analyse
-from tests.test_bs import setup_network, add_curl, setup_bootstrap, start_poet, setup_clients, wait_genesis
+from tests.test_bs import setup_network, wait_genesis
 from tests.queries import wait_for_latest_layer
 
 

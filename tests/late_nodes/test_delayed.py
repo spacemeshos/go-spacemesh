@@ -9,7 +9,6 @@ from tests.deployment import create_deployment
 from tests.hare.assert_hare import expect_hare
 from tests.misc import CoreV1ApiClient
 from tests.queries import query_atx_published
-from tests.test_bs import save_log_on_exit, setup_bootstrap, add_curl, start_poet
 from tests.utils import get_conf, get_curr_ind
 
 

@@ -5,7 +5,6 @@ from pytest_testconfig import config as testconfig
 from tests.convenience import convert_ts_to_datetime
 import tests.queries as q
 from tests.setup_utils import add_multi_clients
-from tests.test_bs import setup_bootstrap, save_log_on_exit
 from tests.utils import get_conf
 
 # ==============================================================================

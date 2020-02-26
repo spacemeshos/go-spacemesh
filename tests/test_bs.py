@@ -1,24 +1,18 @@
 from datetime import datetime, timedelta
-from kubernetes import client
-from kubernetes.client.rest import ApiException
 import pytest
 from pytest_testconfig import config as testconfig
 import pytz
-import subprocess
 import time
 
-from tests import analyse, pod, queries
-from tests import config as tests_conf
+from tests import analyse, queries
 from tests.convenience import sleep_print_backwards
 from tests.tx_generator import config as tx_gen_conf
 import tests.tx_generator.actions as actions
 from tests.tx_generator.models.accountant import Accountant
 from tests.tx_generator.models.wallet_api import WalletAPI
-from tests.conftest import DeploymentInfo, NetworkDeploymentInfo, NetworkInfo
+from tests.conftest import NetworkDeploymentInfo, NetworkInfo
 from tests.hare.assert_hare import validate_hare
-from tests.misc import CoreV1ApiClient
-from tests.setup_utils import setup_bootstrap_in_namespace, setup_clients_in_namespace
-from tests.utils import get_curr_ind, api_call
+from tests.utils import get_curr_ind
 
 
 GENESIS_TIME = pytz.utc.localize(datetime.utcnow() + timedelta(seconds=testconfig['genesis_delta']))
@@ -26,90 +20,6 @@ GENESIS_TIME = pytz.utc.localize(datetime.utcnow() + timedelta(seconds=testconfi
 # ==============================================================================
 #    Fixtures
 # ==============================================================================
-
-
-@pytest.fixture(scope='module')
-def setup_bootstrap(init_session):
-    """
-    setup bootstrap initializes a session and adds a single bootstrap node
-    :param init_session: sets up a new k8s env
-    :return: DeploymentInfo type, containing the settings info of the new node
-    """
-    bootstrap_deployment_info = DeploymentInfo(dep_id=init_session)
-
-    bootstrap_deployment_info = setup_bootstrap_in_namespace(testconfig['namespace'],
-                                                             bootstrap_deployment_info,
-                                                             testconfig['bootstrap'],
-                                                             testconfig['genesis_delta'],
-                                                             dep_time_out=testconfig['deployment_ready_time_out'])
-
-    return bootstrap_deployment_info
-
-
-@pytest.fixture(scope='module')
-def setup_clients(init_session, setup_bootstrap):
-    """
-    setup clients adds new client nodes using suite file specifications
-
-    :param init_session: setup a new k8s env
-    :param setup_bootstrap: adds a single bootstrap node
-    :return: client_info of type DeploymentInfo
-             contains the settings info of the new client node
-    """
-    client_info = DeploymentInfo(dep_id=setup_bootstrap.deployment_id)
-    client_info = setup_clients_in_namespace(testconfig['namespace'],
-                                             setup_bootstrap.pods[0],
-                                             client_info,
-                                             testconfig['client'],
-                                             testconfig['genesis_delta'],
-                                             poet=setup_bootstrap.pods[0]['pod_ip'],
-                                             dep_time_out=testconfig['deployment_ready_time_out'])
-
-    return client_info
-
-
-@pytest.fixture(scope='module')
-def setup_mul_clients(init_session, setup_bootstrap):
-    """
-    setup_mul_clients adds all client nodes (those who have "client" in title)
-    using suite file specifications
-
-    :param init_session: setup a new k8s env
-    :param setup_bootstrap: adds a single bootstrap node
-    :return: list, client_infos a list of DeploymentInfo
-             contains the settings info of the new clients nodes
-    """
-    clients_infos = []
-
-    for key in testconfig:
-        if "client" in key:
-            client_info = DeploymentInfo(dep_id=setup_bootstrap.deployment_id)
-            client_info = setup_clients_in_namespace(testconfig['namespace'],
-                                                     setup_bootstrap.pods[0],
-                                                     client_info,
-                                                     testconfig[key],
-                                                     testconfig['genesis_delta'],
-                                                     poet=setup_bootstrap.pods[0]['pod_ip'],
-                                                     dep_time_out=testconfig['deployment_ready_time_out'])
-            clients_infos.append(client_info)
-
-    return clients_infos
-
-
-@pytest.fixture(scope='module')
-def start_poet(init_session, add_curl, setup_bootstrap):
-    bs_pod = setup_bootstrap.pods[0]
-    namespace = testconfig['namespace']
-
-    match = pod.search_phrase_in_pod_log(bs_pod['name'], namespace, 'poet',
-                                         "REST proxy start listening on 0.0.0.0:80")
-    if not match:
-        raise Exception("Failed to read container logs in {0}".format("poet"))
-
-    print("Starting PoET")
-    out = api_call(bs_pod['pod_ip'], '{ "gatewayAddresses": ["127.0.0.1:9091"] }', 'v1/start', namespace, "80")
-    assert out == "{}", "PoET start returned error {0}".format(out)
-    print("PoET started")
 
 
 @pytest.fixture(scope='module')
@@ -143,59 +53,6 @@ def wait_genesis():
     else:
         print('sleep for {0} sec until genesis time'.format(delta_from_genesis))
         time.sleep(delta_from_genesis)
-
-
-# The following fixture is currently not in used and mark for deprecation
-@pytest.fixture(scope='module')
-def create_configmap(request):
-    def _create_configmap_in_namespace(nspace):
-        # Configure ConfigMap metadata
-        # This function assume that there is only 1 configMap in the each namespace
-        configmap_name = testconfig['config_map_name']
-        metadata = client.V1ObjectMeta(annotations=None,
-                                       deletion_grace_period_seconds=30,
-                                       labels=None,
-                                       name=configmap_name,
-                                       namespace=nspace)
-        # Get File Content
-        with open(testconfig['config_path'], 'r') as f:
-            file_content = f.read()
-        # Instantiate the configmap object
-        d = {'config.toml': file_content}
-        configmap = client.V1ConfigMap(api_version="v1",
-                                       kind="ConfigMap",
-                                       data=d,
-                                       metadata=metadata)
-        try:
-            CoreV1ApiClient().create_namespaced_config_map(namespace=nspace, body=configmap, pretty='pretty_example')
-        except ApiException as e:
-            if eval(e.body)['reason'] == 'AlreadyExists':
-                print('configmap: {0} already exist.'.format(configmap_name))
-            raise e
-        return configmap_name
-
-    return _create_configmap_in_namespace(testconfig['namespace'])
-
-
-@pytest.fixture(scope='module')
-def save_log_on_exit(request):
-    yield
-    if testconfig['script_on_exit'] != '' and request.session.testsfailed == 1:
-        p = subprocess.Popen([testconfig['script_on_exit'], testconfig['namespace']],
-                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        p.communicate()
-
-
-@pytest.fixture(scope='module')
-def add_curl(request, init_session, setup_bootstrap):
-    def _run_curl_pod():
-        if not setup_bootstrap.pods:
-            raise Exception("Could not find bootstrap node")
-
-        pod.create_pod(tests_conf.CURL_POD_FILE, testconfig['namespace'])
-        return True
-
-    return _run_curl_pod()
 
 
 # ==============================================================================

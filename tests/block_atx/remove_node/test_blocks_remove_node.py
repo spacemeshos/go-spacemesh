@@ -4,7 +4,7 @@ from pytest_testconfig import config as testconfig
 
 from tests import queries as q
 from tests.deployment import delete_deployment
-from tests.test_bs import setup_mul_network, add_curl, setup_bootstrap, start_poet, setup_mul_clients, wait_genesis
+from tests.test_bs import setup_mul_network, wait_genesis
 from tests.utils import validate_blocks_per_nodes, get_pod_id
 
 
