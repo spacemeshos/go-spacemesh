@@ -119,7 +119,7 @@ peerLoop:
 			// TODO: replace peer ?
 			err := prot.net.SendMessage(pubkey, nextProt, payload)
 			if err != nil {
-				prot.Warning("Failed sending %v msg %v to %v, reason=%v", nextProt, h, p, err)
+				prot.Warning("Failed sending %v msg %v to %v, reason=%v", nextProt, h, pubkey, err)
 			}
 			wg.Done()
 		}(p)
