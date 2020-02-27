@@ -1,8 +1,8 @@
 from pytest_testconfig import config as testconfig
 
 import tests.analyse as analyse
-from tests.test_bs import setup_network, wait_genesis
 from tests.queries import wait_for_latest_layer
+from tests.setup_network import setup_network
 
 
 def test_blocks_stress(init_session, setup_network):

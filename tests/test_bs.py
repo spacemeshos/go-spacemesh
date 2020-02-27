@@ -1,63 +1,14 @@
-from datetime import datetime, timedelta
-import pytest
 from pytest_testconfig import config as testconfig
-import pytz
-import time
 
 from tests import analyse, queries
 from tests.convenience import sleep_print_backwards
+from tests.hare.assert_hare import validate_hare
+from tests.setup_network import setup_network
 from tests.tx_generator import config as tx_gen_conf
 import tests.tx_generator.actions as actions
 from tests.tx_generator.models.accountant import Accountant
 from tests.tx_generator.models.wallet_api import WalletAPI
-from tests.conftest import NetworkDeploymentInfo, NetworkInfo
-from tests.hare.assert_hare import validate_hare
 from tests.utils import get_curr_ind
-
-
-GENESIS_TIME = pytz.utc.localize(datetime.utcnow() + timedelta(seconds=testconfig['genesis_delta']))
-
-# ==============================================================================
-#    Fixtures
-# ==============================================================================
-
-
-@pytest.fixture(scope='module')
-def setup_network(init_session, add_curl, setup_bootstrap, start_poet, setup_clients, wait_genesis):
-    # This fixture deploy a complete Spacemesh network and returns only after genesis time is over
-    _session_id = init_session
-    network_deployment = NetworkDeploymentInfo(dep_id=_session_id,
-                                               bs_deployment_info=setup_bootstrap,
-                                               cl_deployment_info=setup_clients)
-    return network_deployment
-
-
-@pytest.fixture(scope='module')
-def setup_mul_network(init_session, add_curl, setup_bootstrap, start_poet, setup_mul_clients, wait_genesis):
-    # This fixture deploy a complete Spacemesh network and returns only after genesis time is over
-    _session_id = init_session
-    network_deployment = NetworkInfo(namespace=init_session,
-                                     bs_deployment_info=setup_bootstrap,
-                                     cl_deployment_info=setup_mul_clients)
-    return network_deployment
-
-
-@pytest.fixture(scope='module')
-def wait_genesis():
-    # Make sure genesis time has not passed yet and sleep for the rest
-    time_now = pytz.utc.localize(datetime.utcnow())
-    delta_from_genesis = (GENESIS_TIME - time_now).total_seconds()
-    if delta_from_genesis < 0:
-        raise Exception("genesis_delta time={0}sec, is too short for this deployment. "
-                        "delta_from_genesis={1}".format(testconfig['genesis_delta'], delta_from_genesis))
-    else:
-        print('sleep for {0} sec until genesis time'.format(delta_from_genesis))
-        time.sleep(delta_from_genesis)
-
-
-# ==============================================================================
-#    TESTS
-# ==============================================================================
 
 
 def test_transactions(init_session, setup_network):

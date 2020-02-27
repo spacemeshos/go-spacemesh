@@ -1,5 +1,5 @@
 import pytest
-from tests.test_bs import setup_network, wait_genesis
+from tests.setup_network import setup_network
 from tests.conftest import init_session, load_config, set_namespace, session_id, set_docker_images
 
 
