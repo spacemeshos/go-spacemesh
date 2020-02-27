@@ -72,6 +72,7 @@ def check_pod_logs(pod_name, data):
 
 
 def test_sync_gradually_add_nodes(init_session, setup_bootstrap, save_log_on_exit):
+    current_index = get_curr_ind()
     bs_info = setup_bootstrap.pods[0]
 
     gen_delt = testconfig['genesis_delta']
