@@ -2,7 +2,7 @@ package nat_traversal
 
 import (
 	"fmt"
-	"gitlab.com/NebulousLabs/go-upnp"
+	"github.com/spacemeshos/go-spacemesh/nat_traversal/upnp"
 	"os"
 	"os/user"
 )
