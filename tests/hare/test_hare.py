@@ -68,7 +68,6 @@ def setup_bootstrap_for_hare(request, init_session, setup_oracle):
 @pytest.fixture(scope='module')
 def setup_clients_for_hare(request, init_session, setup_oracle, setup_bootstrap_for_hare):
     client_info = DeploymentInfo(dep_id=setup_bootstrap_for_hare.deployment_id)
-    wait_genesis(GENESIS_TIME, testconfig['genesis_delta'])
     return setup_clients_in_namespace(testconfig['namespace'],
                                       setup_bootstrap_for_hare.pods[0],
                                       client_info,
@@ -88,6 +87,8 @@ EFK_LOG_PROPAGATION_DELAY = 20
 
 # simple sanity test run for one layer
 def test_hare_sanity(init_session, setup_bootstrap_for_hare, setup_clients_for_hare):
+    # NOTICE the following line should be present in the first test of the suite
+    wait_genesis(GENESIS_TIME, testconfig['genesis_delta'])
     current_index = get_curr_ind()
     # Need to wait for 1 full iteration + the time it takes the logs to propagate to ES
     round_duration = int(testconfig['client']['args']['hare-round-duration-sec'])
