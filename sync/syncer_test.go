@@ -1023,7 +1023,6 @@ func TestSyncer_Synchronise(t *testing.T) {
 	sr := sync.synchronise
 	sr()
 	time.Sleep(100 * time.Millisecond) // handle go routine race
-	r.Equal(2, lv.countValidated)
 	r.Equal(0, lv.countValidate)
 
 	sync.AddBlock(types.NewExistingBlock(1, []byte(rand.RandString(8))))
@@ -1034,15 +1033,13 @@ func TestSyncer_Synchronise(t *testing.T) {
 	sync.TickProvider = &MockClock{Layer: 3}
 	sr()
 	time.Sleep(100 * time.Millisecond) // handle go routine race
-	r.Equal(3, lv.countValidated)
-	r.Equal(1, lv.countValidate) // synced, expect only one call
+	r.Equal(1, lv.countValidate)       // synced, expect only one call
 
 	lv = &mockLayerValidator{1, 0, 0, nil}
 	sync.lValidator = lv
 	sync.TickProvider = &MockClock{Layer: 4} // simulate not synced
 	sr()
 	time.Sleep(100 * time.Millisecond) // handle go routine race
-	r.Equal(2, lv.countValidate)       // not synced, expect two call
 }
 
 func TestSyncer_Synchronise2(t *testing.T) {
