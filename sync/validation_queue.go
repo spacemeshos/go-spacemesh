@@ -108,7 +108,7 @@ func (vq *blockQueue) handleBlockDependencies(blk *types.Block) {
 	}
 
 	if res == false {
-		vq.Info("pending done for %v", blk.Id())
+		vq.Debug("pending done for %v", blk.Id())
 		vq.updateDependencies(blk.Hash32(), true)
 	}
 	vq.Debug("added %v dependencies to queue", blk.Id())

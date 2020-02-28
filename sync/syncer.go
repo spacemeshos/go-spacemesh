@@ -442,6 +442,7 @@ func (s *Syncer) getLayerFromNeighbors(currenSyncLayer types.LayerID) (*types.La
 	}
 
 	//fetch layer hash from each peer
+	s.With().Info("fetch layer hash", log.LayerId(currenSyncLayer.Uint64()))
 	m, err := s.fetchLayerHashes(currenSyncLayer)
 	if err != nil {
 		return nil, err
@@ -452,6 +453,7 @@ func (s *Syncer) getLayerFromNeighbors(currenSyncLayer types.LayerID) (*types.La
 	}
 
 	//fetch ids for each hash
+	s.With().Info("fetch layer ids", log.LayerId(currenSyncLayer.Uint64()))
 	blockIds, err := s.fetchLayerBlockIds(m, currenSyncLayer)
 	if err != nil {
 		return nil, err
@@ -643,7 +645,7 @@ func (s *Syncer) fetchLayerBlockIds(m map[types.Hash32][]p2p.Peer, lyr types.Lay
 	for h, peers := range m {
 	NextHash:
 		for _, peer := range peers {
-			s.Info("send request Peer: %v", peer)
+			s.Debug("send request Peer: %v", peer)
 			ch, err := LayerIdsReqFactory(lyr)(s, peer)
 			if err != nil {
 				return nil, err
@@ -656,7 +658,7 @@ func (s *Syncer) fetchLayerBlockIds(m map[types.Hash32][]p2p.Peer, lyr types.Lay
 				continue
 			case v := <-ch:
 				if v != nil {
-					s.Info("Peer: %v responded to layer ids request", peer)
+					s.Debug("Peer: %v responded to layer ids request", peer)
 					//peer returned set with bad hash ask next peer
 					res := types.CalcBlocksHash32(v.([]types.BlockID), nil)
 
