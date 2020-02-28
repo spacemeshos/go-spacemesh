@@ -116,10 +116,57 @@ make darwin | linux | windows
 
 Platform-specific binaries are saved to the `/build` directory.
 
+---
+
 ### Running
+
+go-spacemesh is p2p software which is designed to form a decentralized network by connecting to other instances of go-spacemesh running on remote computers.
+
+To run go-spacemesh you need to specify the parameters shared between all instances on a specific network.
+
+You specify these parameters by providing go-spacemesh with a toml config file. Other CLI flags control local node behavior and override default values.
+
+#### Joining a Testnet (without mining)
+1. Build go-spacemesh from source code.
+2. Obtain the testnet's toml config file.
+3. Start go-spacemesh with the following arguments:
+
+```bash
+./go-spacemesh --grpc-server --json-server --tcp-port [a_port] --config [tomlFileLocation] -d [nodeDataFilesPath]
 ```
-./build/go-spacemesh
+
+##### Example
+Assuming tn1.toml is a testnet config file saved in the same directory as go-spacemesh, use the following command to join the testnet. The data folder will be created in the same directory as go-spacemesh. The node will use TCP port 7152 and UDP port 7152 for p2p connections:
+
+```bash
+./go-spacemesh --grpc-server --json-server --tcp-port 7152 --config tn1.toml -d sm_data
 ```
+
+4. Build the [CLI Wallet](https://github.com/spacemeshos/CLIWallet) from source code and run it:
+
+5. Use the CLI Wallet commands to setup accounts, start smeshing and execute transactions.
+
+
+```bash
+./cli_wallet
+```
+
+### Joining the Testnet (with mining)
+1. Use the CLI Wallet to create a coinbase account.
+2. Follow the steps for joining the testnet without mining but use these parameters when starting go-spacemesh:
+
+```bash
+./go-spacemesh --grpc-server --json-server --tcp-port [a_port] --config [tomlFileLocation] -d [nodeDataFilesPath] --coinbase [an_account] --start-mining --post-datadir [dir_for_post_data]
+```
+
+##### Example
+```bash
+./go-spacemesh --grpc-server --json-server --tcp-port 7152 --config tn1.toml -d sm_data --coinbase 0x36168c60e06abbb4f5df6d1dd6a1b15655d71e75 --start-mining --post-datadir post_data
+```
+
+3. Use the CLI wallet to check your coinbase account balance and to transact
+
+---
 
 ### Testing
 
@@ -149,7 +196,7 @@ On windows you will need the following prerequisites:
 You can then run the command `make install` followed by `make build` as on unix based systems.
 
 ### Running a Local Testnet
-- You can run a local Spacemesh Testent with 6 full nodes, 6 user accounts, and 1 POET support service on your computer using docker. 
+- You can run a local Spacemesh Testent with 6 full nodes, 6 user accounts, and 1 POET support service on your computer using docker.
 - The local testnet full nodes are built from this repo.
 - This is a great way to get a feel for the protocol and the platform and to start hacking on Spacemesh.
 - Follow the steps in our [Local Testnet Guide](https://testnet.spacemesh.io/#/README)
