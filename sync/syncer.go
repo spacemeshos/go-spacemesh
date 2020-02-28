@@ -175,9 +175,6 @@ func (s *Syncer) Close() {
 	s.atxQueue.Close()
 	s.txQueue.Close()
 	s.MessageServer.Close()
-	// make sure we are done with all routines.
-	s.syncLock.Lock()
-	s.syncLock.Unlock()
 }
 
 //check if syncer was closed
@@ -323,6 +320,7 @@ func (s *Syncer) handleLayersTillCurrent() {
 
 func (s *Syncer) handleCurrentLayer() {
 	if s.LatestLayer() == s.GetCurrentLayer() && time.Now().Sub(s.LayerToTime(s.LatestLayer())) > s.ValidationDelta {
+		s.Info("------------------------  mother fucker -------------------------")
 		if err := s.GetAndValidateLayer(s.LatestLayer()); err != nil {
 			s.Panic("failed getting layer even though we are weakly-synced currentLayer=%v lastTicked=%v err=%v ", s.LatestLayer(), s.GetCurrentLayer(), err)
 		}
