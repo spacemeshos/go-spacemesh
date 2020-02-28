@@ -306,13 +306,15 @@ func (s *Syncer) synchronise() {
 
 //validate all layers except current one
 func (s *Syncer) handleLayersTillCurrent() {
-	s.Info("handle layers %d to %d", s.lValidator.ProcessedLayer()+1, s.GetCurrentLayer()-1)
-	for currentSyncLayer := s.lValidator.ProcessedLayer() + 1; currentSyncLayer < s.GetCurrentLayer(); currentSyncLayer++ {
-		if s.shutdown() {
-			return
-		}
-		if err := s.GetAndValidateLayer(currentSyncLayer); err != nil {
-			s.Panic("failed getting layer even though we are weakly-synced currentLayer=%v lastTicked=%v err=%v ", currentSyncLayer, s.GetCurrentLayer(), err)
+	if s.lValidator.ProcessedLayer()+1 > s.GetCurrentLayer()-1 {
+		s.Info("handle layers %d to %d", s.lValidator.ProcessedLayer()+1, s.GetCurrentLayer()-1)
+		for currentSyncLayer := s.lValidator.ProcessedLayer() + 1; currentSyncLayer < s.GetCurrentLayer(); currentSyncLayer++ {
+			if s.shutdown() {
+				return
+			}
+			if err := s.GetAndValidateLayer(currentSyncLayer); err != nil {
+				s.Panic("failed getting layer even though we are weakly-synced currentLayer=%v lastTicked=%v err=%v ", currentSyncLayer, s.GetCurrentLayer(), err)
+			}
 		}
 	}
 	return
