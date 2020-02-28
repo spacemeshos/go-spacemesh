@@ -46,7 +46,7 @@ func NewHarnessDefaultServerConfig(args []string) (*Harness, error) {
 	execPath := args[execPathInd+1]
 	// remove executable path label and value
 	args = append(args[:execPathInd], args[execPathInd+2:]...)
-	args = append(args, "acquire-port", "false")
+	args = append(args, "--acquire-port", "false")
 	// set servers' configuration
 	cfg, errCfg := DefaultConfig(execPath)
 	if errCfg != nil {
