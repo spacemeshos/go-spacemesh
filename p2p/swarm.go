@@ -450,9 +450,12 @@ func (s *swarm) processMessage(ime net.IncomingMessageEvent) {
 
 	err := s.onRemoteClientMessage(ime)
 	if err != nil {
-		s.logger.Error("Err reading message from %v, closing connection err=%v", ime.Conn.RemotePublicKey(), err)
-		ime.Conn.Close()
 		// TODO: differentiate action on errors
+		s.logger.Error("Err reading message from %v, closing connection err=%v", ime.Conn.RemotePublicKey(), err)
+		if err := ime.Conn.Close(); err == nil {
+			s.cPool.CloseConnection(ime.Conn.RemotePublicKey())
+			s.Disconnect(ime.Conn.RemotePublicKey())
+		}
 	}
 }
 
