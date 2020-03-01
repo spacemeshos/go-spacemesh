@@ -513,7 +513,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId,
 		LayersPerEpoch:  layersPerEpoch,
 		RequestTimeout:  time.Duration(app.Config.SyncRequestTimeout) * time.Millisecond,
 		SyncInterval:    time.Duration(app.Config.SyncInterval) * time.Second,
-		ValidationDelta: 30 * time.Second,
+		ValidationDelta: time.Duration(app.Config.SyncValidationDelta) * time.Second,
 		Hdist:           app.Config.Hdist,
 		AtxsLimit:       app.Config.AtxsPerBlock}
 

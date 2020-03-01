@@ -175,6 +175,7 @@ func (s *Syncer) Close() {
 	s.atxQueue.Close()
 	s.txQueue.Close()
 	s.MessageServer.Close()
+	s.syncLock.Lock()
 }
 
 //check if syncer was closed
@@ -294,6 +295,10 @@ func (s *Syncer) synchronise() {
 		//validate current layer if more than s.ValidationDelta has passed
 		s.handleCurrentLayer()
 
+		if s.shutdown() {
+			return
+		}
+
 		// fully-synced, make sure we listen to p2p
 		s.setGossipBufferingStatus(Done)
 		s.With().Info("Node is synced")
@@ -313,6 +318,9 @@ func (s *Syncer) handleLayersTillCurrent() {
 
 	s.Info("handle layers %d to %d", s.lValidator.ProcessedLayer()+1, s.GetCurrentLayer()-1)
 	for currentSyncLayer := s.lValidator.ProcessedLayer() + 1; currentSyncLayer < s.GetCurrentLayer(); currentSyncLayer++ {
+		if s.shutdown() {
+			return
+		}
 		if err := s.GetAndValidateLayer(currentSyncLayer); err != nil {
 			s.Panic("failed getting layer even though we are weakly-synced currentLayer=%v lastTicked=%v err=%v ", currentSyncLayer, s.GetCurrentLayer(), err)
 		}
