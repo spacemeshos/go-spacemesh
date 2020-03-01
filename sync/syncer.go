@@ -176,6 +176,8 @@ func (s *Syncer) Close() {
 	s.txQueue.Close()
 	s.MessageServer.Close()
 	s.syncLock.Lock()
+	s.syncLock.Unlock()
+	s.Info("sync Closed")
 }
 
 //check if syncer was closed
@@ -497,9 +499,15 @@ func (s *Syncer) syncLayer(layerID types.LayerID, blockIds []types.BlockID) ([]*
 	}
 
 	s.Info("layer %v wait for %d blocks", layerID, len(blockIds))
-	if result := <-ch; !result {
-		return nil, fmt.Errorf("could not get all blocks for layer  %v", layerID)
+	select {
+	case <-s.exit:
+		return nil, fmt.Errorf("recived interupt")
+	case result := <-ch:
+		if !result {
+			return nil, fmt.Errorf("could not get all blocks for layer  %v", layerID)
+		}
 	}
+
 	tmr.ObserveDuration()
 
 	return s.LayerBlocks(layerID)
@@ -662,6 +670,9 @@ func (s *Syncer) fetchLayerBlockIds(m map[types.Hash32][]p2p.Peer, lyr types.Lay
 
 			timeout := time.After(s.Configuration.RequestTimeout)
 			select {
+			case <-s.GetExit():
+				s.Debug("worker received interrupt")
+				return nil, fmt.Errorf("interupt")
 			case <-timeout:
 				s.Error("layer ids request to %v timed out", peer)
 				continue

@@ -133,7 +133,7 @@ func NewNeighborhoodWorker(s WorkerInfra, count int, reqFactory RequestFactory) 
 			timeout := time.After(s.GetTimeout())
 			select {
 			case <-s.GetExit():
-				lg.Info("worker received interrupt")
+				lg.Debug("worker received interrupt")
 				return
 			case <-timeout:
 				lg.Error("request to %v timed out", peer)
@@ -175,7 +175,7 @@ func NewFetchWorker(s WorkerInfra, count int, reqFactory BatchRequestFactory, id
 				timeout := time.After(s.GetTimeout())
 				select {
 				case <-s.GetExit():
-					lg.Info("worker received interrupt")
+					lg.Debug("worker received interrupt")
 					return
 				case <-timeout:
 					lg.Error("fetch %s request to %v on %v timed out %s", name, peer.String(), idsStr)
