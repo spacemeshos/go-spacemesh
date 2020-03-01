@@ -46,6 +46,8 @@ type SpacemeshGrpcService struct {
 	Logging       LoggingAPI
 }
 
+var _ pb.SpacemeshServiceServer = (*SpacemeshGrpcService)(nil)
+
 func (s SpacemeshGrpcService) getTransactionAndStatus(txId types.TransactionId) (*types.Transaction, *types.LayerID, pb.TxStatus, error) {
 	tx, err := s.Tx.GetTransaction(txId) // have we seen this transaction in a block?
 	if err != nil {

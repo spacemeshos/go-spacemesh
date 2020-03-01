@@ -74,7 +74,7 @@ const testMsg = "TEST"
 func TestUDPNet_Sanity(t *testing.T) {
 	local, localinfo := node.GenerateTestNode(t)
 	udpAddr := &net.UDPAddr{net.IPv4zero, int(localinfo.DiscoveryPort), ""}
-	udpnet, err := NewUDPNet(config.DefaultConfig(), local, udpAddr, log.NewDefault("TEST_"+t.Name()))
+	udpnet, err := NewUDPNet(config.DefaultConfig(), local, log.NewDefault("TEST_"+t.Name()))
 	require.NoError(t, err)
 	require.NotNil(t, udpnet)
 
@@ -213,8 +213,7 @@ func (ucw *udpConnMock) Close() error {
 
 func TestUDPNet_Cache(t *testing.T) {
 	localnode, _ := node.NewNodeIdentity()
-	addr := testUDPAddr()
-	n, err := NewUDPNet(config.DefaultConfig(), localnode, addr, log.NewDefault(t.Name()))
+	n, err := NewUDPNet(config.DefaultConfig(), localnode, log.NewDefault(t.Name()))
 	require.NoError(t, err)
 	require.NotNil(t, n)
 	addr2 := testUDPAddr()
