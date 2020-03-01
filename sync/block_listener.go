@@ -87,7 +87,7 @@ func (bl *BlockListener) handleBlock(data service.GossipMessage) {
 	//set the block id when received
 	blk.Initialize()
 
-	bl.Log.With().Info("block received",
+	bl.Log.With().Info("got new block",
 		blk.Id(),
 		blk.LayerIndex,
 		blk.LayerIndex.GetEpoch(bl.LayersPerEpoch),

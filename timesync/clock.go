@@ -46,8 +46,8 @@ func (t *TimeClock) startClock() {
 	t.log.Info("starting global clock now=%v genesis=%v", t.clock.Now(), t.startEpoch)
 
 	for {
-		currLayer := t.Ticker.conv.TimeToLayer(t.clock.Now())    // get current layer
-		nextTickTime := t.Ticker.conv.LayerToTime(currLayer + 1) // get next tick time for the next layer
+		currLayer := t.Ticker.TimeToLayer(t.clock.Now())    // get current layer
+		nextTickTime := t.Ticker.LayerToTime(currLayer + 1) // get next tick time for the next layer
 		diff := nextTickTime.Sub(t.clock.Now())
 		tmr := time.NewTimer(diff)
 		t.log.With().Info("global clock going to sleep before next layer", log.String("diff", diff.String()), log.Uint64("next_layer", uint64(currLayer)))
@@ -66,6 +66,10 @@ func (t *TimeClock) startClock() {
 
 func (t *TimeClock) GetGenesisTime() time.Time {
 	return t.startEpoch
+}
+
+func (t *TimeClock) GetInterval() time.Duration {
+	return t.tickInterval
 }
 
 func (t *TimeClock) Close() {

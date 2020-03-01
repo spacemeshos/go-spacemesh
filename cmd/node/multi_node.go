@@ -29,6 +29,11 @@ type ManualClock struct {
 	genesisTime   time.Time
 }
 
+// LayerToTime returns the time of the provided layer
+func (lc ManualClock) LayerToTime(id types.LayerID) time.Time {
+	return time.Now().Add(1000 * time.Hour) //hack so this wont take affect in the mock
+}
+
 func NewManualClock(genesisTime time.Time) *ManualClock {
 	t := &ManualClock{
 		subs:          make(map[timesync.LayerTimer]struct{}),
@@ -134,7 +139,8 @@ func getTestDefaultConfig() *config.Config {
 	cfg.HareEligibility.EpochOffset = 0
 	cfg.StartMining = true
 	cfg.SyncRequestTimeout = 2000
-	cfg.SyncInterval = 10
+	cfg.SyncInterval = 2
+	cfg.SyncValidationDelta = 5
 	return cfg
 }
 

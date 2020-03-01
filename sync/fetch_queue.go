@@ -118,7 +118,7 @@ func (fq *fetchQueue) invalidate(id types.Hash32, valid bool) {
 	for _, dep := range deps {
 		dep <- valid
 	}
-	fq.Info("invalidated %v %v", id.ShortString(), valid)
+	fq.Debug("invalidated %v %v", id.ShortString(), valid)
 }
 
 //returns items out of itemIds that are not in the local database
