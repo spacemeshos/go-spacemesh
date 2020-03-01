@@ -4,8 +4,7 @@ from pytest_testconfig import config as testconfig
 
 from tests import queries as q
 from tests.deployment import delete_deployment
-from tests.test_bs import setup_mul_network, add_curl, setup_bootstrap, start_poet, setup_mul_clients, wait_genesis, get_conf
-from tests.test_bs import add_multi_clients
+from tests.setup_network import setup_mul_network
 from tests.utils import validate_blocks_per_nodes, get_pod_id
 
 
@@ -56,7 +55,7 @@ def test_remove_node_validate_atx(init_session, setup_mul_network):
     curr_epoch += epochs_to_sleep
     print(f"\n\n-------- current epoch {curr_epoch} --------")
 
-    tts = 10
+    tts = 15
     print(f"sleeping for {tts} in order to let all nodes enough time to publish ATXs")
     time.sleep(tts)
 
