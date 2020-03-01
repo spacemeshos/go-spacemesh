@@ -224,38 +224,6 @@ def start_poet(init_session, add_curl, setup_bootstrap):
     print("PoET started")
 
 
-# The following fixture is currently not in used and mark for deprecation
-@pytest.fixture(scope='module')
-def create_configmap(request):
-    def _create_configmap_in_namespace(nspace):
-        # Configure ConfigMap metadata
-        # This function assume that there is only 1 configMap in the each namespace
-        configmap_name = testconfig['config_map_name']
-        metadata = client.V1ObjectMeta(annotations=None,
-                                       deletion_grace_period_seconds=30,
-                                       labels=None,
-                                       name=configmap_name,
-                                       namespace=nspace)
-        # Get File Content
-        with open(testconfig['config_path'], 'r') as f:
-            file_content = f.read()
-        # Instantiate the configmap object
-        d = {'config.toml': file_content}
-        configmap = client.V1ConfigMap(api_version="v1",
-                                       kind="ConfigMap",
-                                       data=d,
-                                       metadata=metadata)
-        try:
-            CoreV1ApiClient().create_namespaced_config_map(namespace=nspace, body=configmap, pretty='pretty_example')
-        except ApiException as e:
-            if eval(e.body)['reason'] == 'AlreadyExists':
-                print('configmap: {0} already exist.'.format(configmap_name))
-            raise e
-        return configmap_name
-
-    return _create_configmap_in_namespace(testconfig['namespace'])
-
-
 @pytest.fixture(scope='module')
 def save_log_on_exit(request):
     yield
