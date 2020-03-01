@@ -143,17 +143,63 @@ func TestSwarm_RegisterProtocolNoStart(t *testing.T) {
 }
 
 func TestSwarm_processMessage(t *testing.T) {
-	s := swarm{}
+	s := swarm{
+		inpeers:      make(map[p2pcrypto.PublicKey]struct{}),
+		outpeers:     make(map[p2pcrypto.PublicKey]struct{}),
+		delPeerSub:   make([]chan p2pcrypto.PublicKey, 0),
+		morePeersReq: make(chan struct{}, 1),
+	}
+	cpmock := NewCpoolMock()
+	s.cPool = cpmock
 	s.config = config.DefaultConfig()
 	s.logger = log.NewDefault(t.Name())
 	s.lNode, _ = node.GenerateTestNode(t)
 	r := node.GenerateRandomNodeData()
+
+	s.inpeers[r.PublicKey()] = struct{}{}
+
 	c := &net.ConnectionMock{}
 	c.SetRemotePublicKey(r.PublicKey())
 	ime := net.IncomingMessageEvent{Message: []byte("0"), Conn: c}
 	s.processMessage(ime) // should error
 
+	select {
+	case k := <-cpmock.keyRemoved:
+		require.Equal(t, k.Bytes(), r.Bytes())
+	case <-time.After(2 * time.Second):
+		t.Error("didn't get key removed event")
+	}
+
+	_, ok := s.inpeers[r.PublicKey()]
+	require.False(t, ok)
 	assert.True(t, c.Closed())
+
+	r2 := node.GenerateRandomNodeData()
+
+	s.outpeers[r2.PublicKey()] = struct{}{}
+
+	c2 := &net.ConnectionMock{}
+	c2.SetRemotePublicKey(r2.PublicKey())
+	ime2 := net.IncomingMessageEvent{Message: []byte("0"), Conn: c2}
+	s.processMessage(ime2) // should error
+
+	select {
+	case k := <-cpmock.keyRemoved:
+		require.Equal(t, k.Bytes(), r2.Bytes())
+	case <-time.After(2 * time.Second):
+		t.Error("didn't get key removed event")
+	}
+
+	_, ok2 := s.inpeers[r2.PublicKey()]
+	require.False(t, ok2)
+	assert.True(t, c2.Closed())
+
+	select {
+	case <-s.morePeersReq:
+		break
+	case <-time.After(2 * time.Second):
+		t.Error("didn't get morePeersReq")
+	}
 }
 
 var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
