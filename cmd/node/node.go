@@ -879,8 +879,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	// P2P must start last to not block when sending messages to protocols
 	err = app.P2P.Start()
 	if err != nil {
-		log.Error("Error starting p2p services, err: %v", err)
-		log.Panic("Error starting p2p services")
+		log.Panic("Error starting p2p services: %v", err)
 	}
 
 	/* Expose API */
