@@ -42,16 +42,18 @@ type TickProvider interface {
 	Subscribe() timesync.LayerTimer
 	Unsubscribe(timer timesync.LayerTimer)
 	GetCurrentLayer() types.LayerID
+	LayerToTime(types.LayerID) time.Time
 }
 
 type Configuration struct {
-	LayersPerEpoch uint16
-	Concurrency    int //number of workers for sync method
-	LayerSize      int
-	RequestTimeout time.Duration
-	SyncInterval   time.Duration
-	AtxsLimit      int
-	Hdist          int
+	LayersPerEpoch  uint16
+	Concurrency     int //number of workers for sync method
+	LayerSize       int
+	RequestTimeout  time.Duration
+	SyncInterval    time.Duration
+	ValidationDelta time.Duration
+	AtxsLimit       int
+	Hdist           int
 }
 
 type LayerValidator interface {
@@ -173,9 +175,9 @@ func (s *Syncer) Close() {
 	s.atxQueue.Close()
 	s.txQueue.Close()
 	s.MessageServer.Close()
-	// make sure we are done with all routines.
 	s.syncLock.Lock()
 	s.syncLock.Unlock()
+	s.Info("sync Closed")
 }
 
 //check if syncer was closed
@@ -264,47 +266,76 @@ func (s *Syncer) run() {
 }
 
 func (s *Syncer) synchronise() {
-	if s.syncLock.TryLock() == false { //only one concurrent synchronise
+	//only one concurrent synchronise
+	if s.syncLock.TryLock() == false {
 		return
 	}
 
-	s.Debug("start synchronize")
+	//release synchronise lock
+	defer s.syncLock.Unlock()
 
-	defer func() { //release synchronise lock
-		s.syncLock.Unlock()
-		s.Debug("close synchronize, %v", s.Status())
-	}()
+	//node is synced and blocks from current layer hav already been validated
+	if s.GetCurrentLayer() == s.lValidator.ProcessedLayer() {
+		s.Debug("node is synced ")
 
-	if s.GetCurrentLayer() <= 1 { // skip validation for first layer
-		s.With().Info("Not syncing in layer <= 1", log.LayerId(uint64(s.GetCurrentLayer())))
-		s.setGossipBufferingStatus(Done) // fully-synced, make sure we listen to p2p
+		// fully-synced, make sure we listen to p2p
+		s.setGossipBufferingStatus(Done)
 		return
 	}
 
-	currentSyncLayer := s.lValidator.ProcessedLayer() + 1
-	if currentSyncLayer == s.GetCurrentLayer() { // only validate if current < lastTicked
-		s.With().Info("Already synced for layer", log.Uint64("current_sync_layer", uint64(currentSyncLayer)))
-		s.setGossipBufferingStatus(Done) // fully-synced, make sure we listen to p2p
-		return
-	}
+	// we have all the data of the prev layers so we can simply validate
+	if s.weaklySynced() {
+		s.With().Info("Node is weakly synced", s.LatestLayer())
 
-	if s.weaklySynced() { // we have all the data of the prev layers so we can simply validate
-		s.With().Info("Node is weakly synced. Going to validate layer")
-		for ; currentSyncLayer < s.GetCurrentLayer(); currentSyncLayer++ {
-			if s.shutdown() {
-				return
-			}
-			s.With().Info("Going to validate layer", log.LayerId(uint64(currentSyncLayer)))
-			if err := s.GetAndValidateLayer(currentSyncLayer); err != nil {
-				s.Panic("failed getting layer even though we are weakly-synced currentLayer=%v lastTicked=%v err=%v ", currentSyncLayer, s.GetCurrentLayer(), err)
-			}
+		// handle all layers from processed+1 to current -1
+		s.handleLayersTillCurrent()
+
+		if s.shutdown() {
+			return
 		}
+
+		//validate current layer if more than s.ValidationDelta has passed
+		s.handleCurrentLayer()
+
+		if s.shutdown() {
+			return
+		}
+
+		// fully-synced, make sure we listen to p2p
+		s.setGossipBufferingStatus(Done)
 		s.With().Info("Node is synced")
 		return
 	}
 
 	// node is not synced
-	s.handleNotSynced(currentSyncLayer)
+	s.handleNotSynced(s.lValidator.ProcessedLayer() + 1)
+}
+
+//validate all layers except current one
+func (s *Syncer) handleLayersTillCurrent() {
+	//dont handle current
+	if s.lValidator.ProcessedLayer()+1 >= s.GetCurrentLayer() {
+		return
+	}
+
+	s.Info("handle layers %d to %d", s.lValidator.ProcessedLayer()+1, s.GetCurrentLayer()-1)
+	for currentSyncLayer := s.lValidator.ProcessedLayer() + 1; currentSyncLayer < s.GetCurrentLayer(); currentSyncLayer++ {
+		if s.shutdown() {
+			return
+		}
+		if err := s.GetAndValidateLayer(currentSyncLayer); err != nil {
+			s.Panic("failed getting layer even though we are weakly-synced currentLayer=%v lastTicked=%v err=%v ", currentSyncLayer, s.GetCurrentLayer(), err)
+		}
+	}
+	return
+}
+
+func (s *Syncer) handleCurrentLayer() {
+	if s.LatestLayer() == s.GetCurrentLayer() && time.Now().Sub(s.LayerToTime(s.LatestLayer())) > s.ValidationDelta {
+		if err := s.GetAndValidateLayer(s.LatestLayer()); err != nil {
+			s.Panic("failed getting layer even though we are weakly-synced currentLayer=%v lastTicked=%v err=%v ", s.LatestLayer(), s.GetCurrentLayer(), err)
+		}
+	}
 }
 
 func (s *Syncer) fastValidation(block *types.Block) error {
@@ -422,6 +453,7 @@ func (s *Syncer) getLayerFromNeighbors(currenSyncLayer types.LayerID) (*types.La
 	}
 
 	//fetch layer hash from each peer
+	s.With().Info("fetch layer hash", log.LayerId(currenSyncLayer.Uint64()))
 	m, err := s.fetchLayerHashes(currenSyncLayer)
 	if err != nil {
 		return nil, err
@@ -432,6 +464,7 @@ func (s *Syncer) getLayerFromNeighbors(currenSyncLayer types.LayerID) (*types.La
 	}
 
 	//fetch ids for each hash
+	s.With().Info("fetch layer ids", log.LayerId(currenSyncLayer.Uint64()))
 	blockIds, err := s.fetchLayerBlockIds(m, currenSyncLayer)
 	if err != nil {
 		return nil, err
@@ -466,9 +499,15 @@ func (s *Syncer) syncLayer(layerID types.LayerID, blockIds []types.BlockID) ([]*
 	}
 
 	s.Info("layer %v wait for %d blocks", layerID, len(blockIds))
-	if result := <-ch; !result {
-		return nil, fmt.Errorf("could not get all blocks for layer  %v", layerID)
+	select {
+	case <-s.exit:
+		return nil, fmt.Errorf("recived interupt")
+	case result := <-ch:
+		if !result {
+			return nil, fmt.Errorf("could not get all blocks for layer  %v", layerID)
+		}
 	}
+
 	tmr.ObserveDuration()
 
 	return s.LayerBlocks(layerID)
@@ -623,7 +662,7 @@ func (s *Syncer) fetchLayerBlockIds(m map[types.Hash32][]p2p.Peer, lyr types.Lay
 	for h, peers := range m {
 	NextHash:
 		for _, peer := range peers {
-			s.Info("send request Peer: %v", peer)
+			s.Debug("send request Peer: %v", peer)
 			ch, err := LayerIdsReqFactory(lyr)(s, peer)
 			if err != nil {
 				return nil, err
@@ -631,12 +670,15 @@ func (s *Syncer) fetchLayerBlockIds(m map[types.Hash32][]p2p.Peer, lyr types.Lay
 
 			timeout := time.After(s.Configuration.RequestTimeout)
 			select {
+			case <-s.GetExit():
+				s.Debug("worker received interrupt")
+				return nil, fmt.Errorf("interupt")
 			case <-timeout:
 				s.Error("layer ids request to %v timed out", peer)
 				continue
 			case v := <-ch:
 				if v != nil {
-					s.Info("Peer: %v responded to layer ids request", peer)
+					s.Debug("Peer: %v responded to layer ids request", peer)
 					//peer returned set with bad hash ask next peer
 					res := types.CalcBlocksHash32(v.([]types.BlockID), nil)
 
@@ -787,6 +829,7 @@ func (s *Syncer) blockCheckLocal(blockIds []types.Hash32) (map[types.Hash32]Item
 }
 
 func (s *Syncer) GetAndValidateLayer(id types.LayerID) error {
+	s.With().Info("Going to validate layer", log.LayerId(uint64(id)))
 	s.validatingLayerMutex.Lock()
 	s.validatingLayer = id
 	defer func() {

@@ -50,7 +50,7 @@ jobs:
     name: "Push to dockerHub"
     script:
       - make dockerpush
-    if: (branch = staging OR branch = trying) AND type != pull_request
+    if: (branch = develop OR branch = staging OR branch = trying) AND type != pull_request
   - stage: system-test
     name: "Run late nodes system test"
     script:

@@ -112,12 +112,13 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	}
 
 	conf := sync.Configuration{
-		Concurrency:    4,
-		AtxsLimit:      200,
-		LayerSize:      int(app.Config.LayerAvgSize),
-		RequestTimeout: time.Duration(app.Config.SyncRequestTimeout) * time.Millisecond,
-		SyncInterval:   2 * 60 * time.Millisecond,
-		Hdist:          app.Config.Hdist,
+		Concurrency:     4,
+		AtxsLimit:       200,
+		LayerSize:       int(app.Config.LayerAvgSize),
+		RequestTimeout:  time.Duration(app.Config.SyncRequestTimeout) * time.Millisecond,
+		SyncInterval:    2 * 60 * time.Millisecond,
+		Hdist:           app.Config.Hdist,
+		ValidationDelta: 30 * time.Second,
 	}
 
 	if remote {
