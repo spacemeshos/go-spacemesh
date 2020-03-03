@@ -181,11 +181,11 @@ func TestMesh_integration(t *testing.T) {
 			l3Rewards = reward
 			log.Info("reward %v", l3Rewards)
 		}
-	}
 
-	l4, err := layers.GetLayer(4)
-	assert.NoError(t, err)
-	layers.ValidateLayer(l4)
+		l, err := layers.GetLayer(types.LayerID(i))
+		assert.NoError(t, err)
+		layers.ValidateLayer(l)
+	}
 	//since there can be a difference of up to x lerners where x is the number of blocks due to round up of penalties when distributed among all blocks
 	totalPayout := l3Rewards + ConfigTst().BaseReward.Int64()
 	assert.True(t, totalPayout-s.TotalReward < int64(numofBlocks), " rewards : %v, total %v blocks %v", totalPayout, s.TotalReward, int64(numofBlocks))

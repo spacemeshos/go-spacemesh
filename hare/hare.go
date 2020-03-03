@@ -32,8 +32,9 @@ type TerminationOutput interface {
 	Completed() bool
 }
 
-type orphanBlockProvider interface {
+type layers interface {
 	LayerBlockIds(layerId types.LayerID) ([]types.BlockID, error)
+	HandleValidatedLayer(validatedLayer types.LayerID, layer []types.BlockID)
 }
 
 // checks if the collected output is valid
@@ -52,7 +53,7 @@ type Hare struct {
 
 	sign Signer
 
-	obp     orphanBlockProvider
+	msh     layers
 	rolacle Rolacle
 
 	networkDelta time.Duration
@@ -77,7 +78,7 @@ type Hare struct {
 
 // New returns a new Hare struct.
 func New(conf config.Config, p2p NetworkService, sign Signer, nid types.NodeId, validate outputValidationFunc,
-	syncState syncStateFunc, obp orphanBlockProvider, rolacle Rolacle,
+	syncState syncStateFunc, obp layers, rolacle Rolacle,
 	layersPerEpoch uint16, idProvider identityProvider, stateQ StateQuerier,
 	beginLayer chan types.LayerID, logger log.Log) *Hare {
 	h := new(Hare)
@@ -96,7 +97,7 @@ func New(conf config.Config, p2p NetworkService, sign Signer, nid types.NodeId, 
 
 	h.sign = sign
 
-	h.obp = obp
+	h.msh = obp
 	h.rolacle = rolacle
 
 	h.networkDelta = time.Duration(conf.WakeupDelta) * time.Second
@@ -172,6 +173,8 @@ func (h *Hare) collectOutput(output TerminationOutput) error {
 
 	id := output.Id()
 
+	h.msh.HandleValidatedLayer(types.LayerID(id), blocks)
+
 	if h.outOfBufferRange(id) {
 		return ErrTooLate
 	}
@@ -181,6 +184,7 @@ func (h *Hare) collectOutput(output TerminationOutput) error {
 		delete(h.outputs, h.oldestResultInBuffer())
 	}
 	h.outputs[types.LayerID(id)] = blocks
+
 	h.mu.Unlock()
 
 	return nil
@@ -216,7 +220,7 @@ func (h *Hare) onTick(id types.LayerID) {
 
 	h.Debug("get hare results")
 	// retrieve set form orphan blocks
-	blocks, err := h.obp.LayerBlockIds(h.lastLayer)
+	blocks, err := h.msh.LayerBlockIds(h.lastLayer)
 	if err != nil {
 		h.With().Error("No blocks for consensus", log.LayerId(uint64(id)), log.Err(err))
 		return

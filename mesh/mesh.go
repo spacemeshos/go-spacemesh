@@ -88,19 +88,23 @@ type Mesh struct {
 	orphMutex          sync.RWMutex
 	pMutex             sync.RWMutex
 	done               chan struct{}
+	nextValidLayers    map[types.LayerID]*types.Layer
+	maxValidatedLayer  types.LayerID
+	txMutex            sync.Mutex
 }
 
 func NewMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh MeshValidator, txInvalidator TxMemPoolInValidator, atxInvalidator AtxMemPoolInValidator, pr TxProcessor, logger log.Log) *Mesh {
 	ll := &Mesh{
-		Log:            logger,
-		MeshValidator:  mesh,
-		txInvalidator:  txInvalidator,
-		atxInvalidator: atxInvalidator,
-		TxProcessor:    pr,
-		done:           make(chan struct{}),
-		MeshDB:         db,
-		config:         rewardConfig,
-		AtxDB:          atxDb,
+		Log:             logger,
+		MeshValidator:   mesh,
+		txInvalidator:   txInvalidator,
+		atxInvalidator:  atxInvalidator,
+		TxProcessor:     pr,
+		done:            make(chan struct{}),
+		MeshDB:          db,
+		config:          rewardConfig,
+		AtxDB:           atxDb,
+		nextValidLayers: make(map[types.LayerID]*types.Layer),
 	}
 
 	return ll
@@ -236,17 +240,62 @@ func (m *Mesh) pushLayersToState(oldPbase types.LayerID, newPbase types.LayerID)
 	for layerId := oldPbase; layerId < newPbase; layerId++ {
 		l, err := m.GetLayer(layerId)
 		if err != nil || l == nil {
-			// TODO: propagate/handle error
 			m.With().Error("failed to get layer", log.LayerId(layerId.Uint64()), log.Err(err))
-			break
+			return
 		}
-		m.AccumulateRewards(l, m.config)
-		m.PushTransactions(l)
-		m.logStateRoot(layerId)
-		m.setLayerHash(l)
-		m.setLatestLayerInState(layerId)
+		m.updateStateWithLayer(layerId, l)
 	}
 	m.persistLayerHash()
+}
+
+func (m *Mesh) applyState(layerId types.LayerID, l *types.Layer) {
+	m.AccumulateRewards(l, m.config)
+	m.PushTransactions(l)
+	m.logStateRoot(layerId)
+	m.setLayerHash(l)
+	m.setLatestLayerInState(layerId)
+}
+
+func (m *Mesh) HandleValidatedLayer(validatedLayer types.LayerID, layer []types.BlockID) {
+	blocks := []*types.Block{}
+
+	for _, blockId := range layer {
+		block, err := m.GetBlock(blockId)
+		if err != nil {
+			//todo: can this happen?
+			log.Panic("hare terminated with block that is not present in mesh")
+		}
+		blocks = append(blocks, block)
+	}
+	lyr := types.NewExistingLayer(validatedLayer, blocks)
+	m.updateStateWithLayer(validatedLayer, lyr)
+}
+
+func (m *Mesh) updateStateWithLayer(validatedLayer types.LayerID, layer *types.Layer) {
+	m.txMutex.Lock()
+	defer m.txMutex.Unlock()
+	latest := m.LatestLayerInState()
+	if validatedLayer <= latest {
+		log.Info("result received after state has been advanced for layer %v", validatedLayer)
+		return
+	}
+	if m.maxValidatedLayer > validatedLayer {
+		m.maxValidatedLayer = validatedLayer
+	}
+	if validatedLayer > latest+1 {
+		log.Info("early layer result was received for layer %v, max validated so far %v", validatedLayer, m.maxValidatedLayer)
+		m.nextValidLayers[validatedLayer] = layer
+		return
+	}
+	m.applyState(validatedLayer, layer)
+	for i := latest + 1; i < m.maxValidatedLayer; i++ {
+		nxtLayer, has := m.nextValidLayers[i]
+		if !has {
+			break
+		}
+		m.applyState(i, nxtLayer)
+		delete(m.nextValidLayers, i)
+	}
 }
 
 func (m *Mesh) setLatestLayerInState(lyr types.LayerID) {
