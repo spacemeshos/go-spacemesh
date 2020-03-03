@@ -291,7 +291,7 @@ func (s *Syncer) synchronise() {
 
 	if !weaklySyncedStatus && s.getGossipBufferingStatus() == Done {
 		s.SetZeroBlockLayer(s.GetCurrentLayer() - 1)
-		s.With().Info("did not receive any blocks while in gossip", log.Uint64("layer_id", uint64(s.instanceId)))
+		s.With().Info("did not receive any blocks while in gossip", log.Uint64("layer_id", uint64(curr)))
 		return
 	}
 
