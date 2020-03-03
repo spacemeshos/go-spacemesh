@@ -194,10 +194,10 @@ func (s *Syncer) shutdown() bool {
 	}
 }
 
-func (s *Syncer) weaklySynced() bool {
+func (s *Syncer) weaklySynced(layer types.LayerID) bool {
 	// equivalent to s.LatestLayer() >= s.lastTickedLayer()-1
 	// means we have data from the previous layer
-	return s.LatestLayer()+1 >= s.GetCurrentLayer()
+	return s.LatestLayer()+1 >= layer
 }
 
 func (s *Syncer) getGossipBufferingStatus() Status {
@@ -280,19 +280,22 @@ func (s *Syncer) synchronise() {
 		s.Debug("close synchronize, %v", s.Status())
 	}()
 
-	if s.GetCurrentLayer() <= 1 { // skip validation for first layer
+	curr := s.GetCurrentLayer()
+	weaklySyncedStatus := s.weaklySynced(curr)
+
+	if curr <= 1 { // skip validation for first layer
 		s.With().Info("Not syncing in layer <= 1", log.LayerId(uint64(s.GetCurrentLayer())))
 		s.setGossipBufferingStatus(Done) // fully-synced, make sure we listen to p2p
 		return
 	}
 
-	if !s.weaklySynced() && s.getGossipBufferingStatus() == Done {
-		s.SetZeroBlockLayer(s.GetCurrentLayer())
-		s.With().Info("did not receive any blocks while in gossip")
+	if !weaklySyncedStatus && s.getGossipBufferingStatus() == Done {
+		s.SetZeroBlockLayer(s.GetCurrentLayer() - 1)
+		s.With().Info("did not receive any blocks while in gossip", log.Uint64("layer_id", uint64(s.instanceId)))
 		return
 	}
 
-	if s.weaklySynced() { // we have all the data of the prev layers so we can simply validate
+	if weaklySyncedStatus { // we have all the data of the prev layers so we can simply validate
 		s.With().Info("Node is weakly synced", s.LatestLayer())
 		for currentSyncLayer := s.lValidator.ProcessedLayer() + 1; currentSyncLayer < s.LatestLayer(); currentSyncLayer++ {
 			if s.shutdown() {
