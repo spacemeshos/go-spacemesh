@@ -151,7 +151,7 @@ Assuming tn1.toml is a testnet config file saved in the same directory as go-spa
 ./cli_wallet
 ```
 
-### Joining a Testnet (with mining)
+#### Joining a Testnet (with mining)
 1. Use the CLI Wallet to create a coinbase account.
 2. Follow the steps for joining the testnet without mining but use these parameters when starting go-spacemesh:
 
@@ -166,7 +166,7 @@ Assuming tn1.toml is a testnet config file saved in the same directory as go-spa
 
 3. Use the CLI wallet to check your coinbase account balance and to transact
 
-### Joining Spacemesh 0.1 (TweedleDee) Testnet
+#### Joining Spacemesh 0.1 ([TweedleDee](https://testnet.spacemesh.io/#/?id=what-is-spacemesh-01-tweedledee)) Testnet
 - Build go-spacemesh source code from this github release: [go-spacemesh 0.1.3](https://github.com/spacemeshos/go-spacemesh/releases/tag/v0.1.3).
 - Use [Testnet 0.1 (TweedleDee) Config File](https://storage.googleapis.com/smapp/0.0.3/tn01.toml).
 
