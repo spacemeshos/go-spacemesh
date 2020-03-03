@@ -235,7 +235,7 @@ func (s *Syncer) setGossipBufferingStatus(status Status) {
 }
 
 func (s *Syncer) IsSynced() bool {
-	return s.weaklySynced() && s.getGossipBufferingStatus() == Done
+	return s.weaklySynced(s.GetCurrentLayer()) && s.getGossipBufferingStatus() == Done
 }
 
 func (s *Syncer) Status() string {
