@@ -278,7 +278,7 @@ func copyLayer(t *testing.T, srcMesh, dstMesh *Mesh, dstAtxDb *AtxDbMock, id typ
 	return blockIds
 }
 
-func Test_HandleValidatedLayer_panic(t *testing.T){
+func Test_HandleValidatedLayer_panic(t *testing.T) {
 	s := &MockMapState{Rewards: make(map[types.Address]*big.Int)}
 	mesh, _ := getMeshWithMapState("t1", s)
 	defer mesh.Close()
@@ -291,7 +291,8 @@ func Test_HandleValidatedLayer_panic(t *testing.T){
 		}
 	}()
 
-	mesh.HandleValidatedLayer(1, []types.BlockID{block1.Id()})}
+	mesh.HandleValidatedLayer(1, []types.BlockID{block1.Id()})
+}
 
 type meshValidatorBatchMock struct {
 	batchSize types.LayerID
