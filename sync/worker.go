@@ -82,7 +82,7 @@ func NewPeersWorker(s WorkerInfra, peers []p2p.Peer, mu *sync.Once, reqFactory R
 		peer := p
 		peerFunc := func() {
 			defer wg.Done()
-			lg.Info("send request Peer: %v", peer)
+			lg.Debug("send request Peer: %v", peer)
 			ch, err := reqFactory(s, peer)
 			if err != nil {
 				s.Error("request failed, ", err)
@@ -92,14 +92,14 @@ func NewPeersWorker(s WorkerInfra, peers []p2p.Peer, mu *sync.Once, reqFactory R
 			timeout := time.After(s.GetTimeout())
 			select {
 			case <-s.GetExit():
-				lg.Info("worker received interrupt")
+				lg.Debug("worker received interrupt")
 				return
 			case <-timeout:
 				lg.Error("request to %v timed out", peer)
 				return
 			case v := <-ch:
 				if v != nil {
-					lg.Info("Peer: %v responded", peer)
+					lg.Debug("Peer: %v responded", peer)
 					output <- v
 				}
 			}
@@ -133,7 +133,7 @@ func NewNeighborhoodWorker(s WorkerInfra, count int, reqFactory RequestFactory) 
 			timeout := time.After(s.GetTimeout())
 			select {
 			case <-s.GetExit():
-				lg.Info("worker received interrupt")
+				lg.Debug("worker received interrupt")
 				return
 			case <-timeout:
 				lg.Error("request to %v timed out", peer)
@@ -175,7 +175,7 @@ func NewFetchWorker(s WorkerInfra, count int, reqFactory BatchRequestFactory, id
 				timeout := time.After(s.GetTimeout())
 				select {
 				case <-s.GetExit():
-					lg.Info("worker received interrupt")
+					lg.Debug("worker received interrupt")
 					return
 				case <-timeout:
 					lg.Error("fetch %s request to %v on %v timed out %s", name, peer.String(), idsStr)

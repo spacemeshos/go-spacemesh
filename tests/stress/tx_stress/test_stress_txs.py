@@ -2,7 +2,7 @@ from pytest_testconfig import config as testconfig
 import multiprocessing as mp
 
 from tests.convenience import sleep_print_backwards
-from tests.test_bs import setup_network, add_curl, setup_bootstrap, start_poet, setup_clients, wait_genesis
+from tests.setup_network import setup_network
 from tests.tx_generator import actions
 from tests.tx_generator import config as conf
 from tests.tx_generator.models.wallet_api import WalletAPI

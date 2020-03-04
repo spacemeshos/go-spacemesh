@@ -200,6 +200,10 @@ type MockClock struct {
 	Layer      types.LayerID
 }
 
+func (m *MockClock) LayerToTime(types.LayerID) time.Time {
+	return time.Now().Add(1000 * time.Hour) //hack so this wont take affect in the mock
+}
+
 func (c *MockClock) Tick() {
 	l := c.GetCurrentLayer()
 	log.Info("tick %v", l)

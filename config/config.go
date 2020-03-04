@@ -92,6 +92,8 @@ type BaseConfig struct {
 
 	SyncInterval int `mapstructure:"sync-interval"` // sync interval in seconds
 
+	SyncValidationDelta int `mapstructure:"sync-validation-delta"` // sync interval in seconds
+
 	PublishEventsUrl string `mapstructure:"events-url"`
 
 	StartMining bool `mapstructure:"start-mining"`
@@ -164,6 +166,7 @@ func defaultBaseConfig() BaseConfig {
 		BlockCacheSize:      20,
 		SyncRequestTimeout:  2000,
 		SyncInterval:        10,
+		SyncValidationDelta: 30,
 		AtxsPerBlock:        100,
 	}
 }
