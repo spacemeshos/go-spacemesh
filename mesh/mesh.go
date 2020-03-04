@@ -276,10 +276,10 @@ func (m *Mesh) updateStateWithLayer(validatedLayer types.LayerID, layer *types.L
 	defer m.txMutex.Unlock()
 	latest := m.LatestLayerInState()
 	if validatedLayer <= latest {
-		log.Info("result received after state has been advanced for layer %v", validatedLayer)
+		log.Info("result received after state has been advanced for layer %v, latest: %v", validatedLayer, latest)
 		return
 	}
-	if m.maxValidatedLayer > validatedLayer {
+	if m.maxValidatedLayer < validatedLayer {
 		m.maxValidatedLayer = validatedLayer
 	}
 	if validatedLayer > latest+1 {
@@ -288,7 +288,7 @@ func (m *Mesh) updateStateWithLayer(validatedLayer types.LayerID, layer *types.L
 		return
 	}
 	m.applyState(validatedLayer, layer)
-	for i := latest + 1; i < m.maxValidatedLayer; i++ {
+	for i := validatedLayer + 1; i <= m.maxValidatedLayer; i++ {
 		nxtLayer, has := m.nextValidLayers[i]
 		if !has {
 			break

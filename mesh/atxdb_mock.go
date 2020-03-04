@@ -30,7 +30,7 @@ func (t *AtxDbMock) GetAtxHeader(id types.AtxId) (*types.ActivationTxHeader, err
 }
 
 func (t *AtxDbMock) GetFullAtx(id types.AtxId) (*types.ActivationTx, error) {
-	panic("implement me")
+	return t.db[id], nil
 }
 
 func (t *AtxDbMock) AddAtx(id types.AtxId, atx *types.ActivationTx) {
