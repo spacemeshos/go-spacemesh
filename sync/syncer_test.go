@@ -72,7 +72,7 @@ func SyncMockFactory(number int, conf Configuration, name string, dbType string,
 	nodes := make([]*Syncer, 0, number)
 	p2ps = make([]*service.Node, 0, number)
 	sim := service.NewSimulator()
-	tick := 10000 * time.Millisecond
+	tick := 200 * time.Millisecond
 	timer := timesync.RealClock{}
 	ts := timesync.NewClock(timer, tick, timer.Now().Add(tick*-4), log.NewDefault("clock"))
 	for i := 0; i < number; i++ {
@@ -518,10 +518,10 @@ func TestSyncProtocol_SyncNodes(t *testing.T) {
 	syncObj2.GetAndValidateLayer(4)
 	syncObj2.GetAndValidateLayer(5)
 
-	syncObj3.SyncInterval = time.Millisecond * 200
+	syncObj3.SyncInterval = time.Millisecond * 20
 	syncObj3.Start()
 
-	timeout := time.After(2 * time.Second)
+	timeout := time.After(5 * time.Second)
 
 	//Keep trying until we're timed out or got a result or got an error
 loop:
@@ -532,8 +532,8 @@ loop:
 			t.Error("timed out ")
 			return
 		default:
-			log.Info("---------------- %d ----------------", syncObj3.ProcessedLayer())
-			if syncObj3.ProcessedLayer() == 5 {
+			log.Info("---------------- %d ---------------- %d", syncObj3.ProcessedLayer(), syncObj3.GetCurrentLayer())
+			if syncObj3.ProcessedLayer() >= 5 {
 
 				t.Log("done!")
 				break loop

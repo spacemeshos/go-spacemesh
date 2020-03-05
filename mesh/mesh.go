@@ -110,7 +110,7 @@ func NewMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh Tortoise, txInva
 		AtxDB:          atxDb,
 	}
 
-	ll.Validator = validator{ll, 0}
+	ll.Validator = &validator{ll, 0}
 
 	return ll
 }
@@ -216,19 +216,20 @@ type validator struct {
 	processedLayer types.LayerID
 }
 
-func (m validator) ProcessedLayer() types.LayerID {
+func (m *validator) ProcessedLayer() types.LayerID {
 	defer m.lvMutex.RUnlock()
 	m.lvMutex.RLock()
 	return m.processedLayer
 }
 
-func (m validator) SetProcessedLayer(lyr types.LayerID) {
+func (m *validator) SetProcessedLayer(lyr types.LayerID) {
+	m.Info("processed layer %d set processed layer %d", m.processedLayer, lyr)
 	defer m.lvMutex.Unlock()
 	m.lvMutex.Lock()
 	m.processedLayer = lyr
 }
 
-func (v validator) HandleLateBlock(b *types.Block) {
+func (v *validator) HandleLateBlock(b *types.Block) {
 	v.Info("Validate late block %s", b.Id())
 	oldPbase, newPbase := v.trtl.HandleLateBlock(b)
 	v.pushLayersToState(oldPbase, newPbase)
@@ -237,7 +238,7 @@ func (v validator) HandleLateBlock(b *types.Block) {
 	}
 }
 
-func (v validator) ValidateLayer(lyr *types.Layer) {
+func (v *validator) ValidateLayer(lyr *types.Layer) {
 	v.Info("Validate layer %d", lyr.Index())
 	oldPbase, newPbase := v.trtl.HandleIncomingLayer(lyr)
 

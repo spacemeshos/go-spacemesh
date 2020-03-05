@@ -458,7 +458,7 @@ func (s *Syncer) getLayerFromNeighbors(currenSyncLayer types.LayerID) (*types.La
 	m, err := s.fetchLayerHashes(currenSyncLayer)
 	if err != nil {
 		if err == NoBlocksInLayer {
-			return &types.Layer{}, nil
+			return types.NewEmptyLayer(currenSyncLayer), nil
 		}
 		return nil, err
 	}

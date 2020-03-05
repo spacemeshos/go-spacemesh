@@ -190,6 +190,10 @@ type Layer struct {
 	index  LayerID
 }
 
+func NewEmptyLayer(idx LayerID) *Layer {
+	return &Layer{nil, idx}
+}
+
 func (l *Layer) Index() LayerID {
 	return l.index
 }
