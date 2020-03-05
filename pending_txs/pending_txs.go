@@ -43,22 +43,10 @@ func (apt *AccountPendingTxs) Add(layer types.LayerID, txs ...*types.Transaction
 	apt.mu.Unlock()
 }
 
-func (apt *AccountPendingTxs) Remove(accepted, rejected []*types.Transaction, layer types.LayerID) {
+func (apt *AccountPendingTxs) Remove(accepted []*types.Transaction, layer types.LayerID) {
 	apt.mu.Lock()
 	for _, tx := range accepted {
 		delete(apt.PendingTxs, tx.AccountNonce)
-	}
-	for _, tx := range rejected {
-		existing, found := apt.PendingTxs[tx.AccountNonce]
-		if found {
-			if existing[tx.Id()].HighestLayerIncludedIn > layer {
-				continue
-			}
-			delete(existing, tx.Id())
-			if len(existing) == 0 {
-				delete(apt.PendingTxs, tx.AccountNonce)
-			}
-		}
 	}
 	apt.mu.Unlock()
 }

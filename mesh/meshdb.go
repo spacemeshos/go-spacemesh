@@ -469,23 +469,18 @@ func (m *MeshDB) addToAccountTxs(addr types.Address, accountTxs []*types.Transac
 	return nil
 }
 
-func (m *MeshDB) removeFromUnappliedTxs(accepted, rejected []*types.Transaction, layer types.LayerID) {
+func (m *MeshDB) removeFromUnappliedTxs(accepted []*types.Transaction, layer types.LayerID) {
 	gAccepted := groupByOrigin(accepted)
-	gRejected := groupByOrigin(rejected)
 	accounts := make(map[types.Address]struct{})
 	for account := range gAccepted {
 		accounts[account] = struct{}{}
 	}
-	for account := range gRejected {
-		accounts[account] = struct{}{}
-	}
-
 	for account := range accounts {
-		m.removeFromAccountTxs(account, gAccepted, gRejected, layer)
+		m.removeFromAccountTxs(account, gAccepted, layer)
 	}
 }
 
-func (m *MeshDB) removeFromAccountTxs(account types.Address, gAccepted, gRejected map[types.Address][]*types.Transaction, layer types.LayerID) {
+func (m *MeshDB) removeFromAccountTxs(account types.Address, gAccepted map[types.Address][]*types.Transaction, layer types.LayerID) {
 	m.unappliedTxsMutex.Lock()
 	defer m.unappliedTxsMutex.Unlock()
 
@@ -496,7 +491,7 @@ func (m *MeshDB) removeFromAccountTxs(account types.Address, gAccepted, gRejecte
 			log.LayerId(uint64(layer)), log.String("address", account.Short()), log.Err(err))
 		return
 	}
-	pending.Remove(gAccepted[account], gRejected[account], layer)
+	pending.Remove(gAccepted[account], layer)
 	if err := m.storeAccountPendingTxs(account, pending); err != nil {
 		m.With().Error("failed to store account pending txs",
 			log.LayerId(uint64(layer)), log.String("address", account.Short()), log.Err(err))

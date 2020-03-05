@@ -341,8 +341,9 @@ func TestMesh_AddBlockWithTxs_PushTransactions_UpdateUnappliedTxs(t *testing.T) 
 	r := require.New(t)
 
 	msh := getMesh("mesh")
-	blockBuilder := &MockBlockBuilder{}
-	msh.SetBlockBuilder(blockBuilder)
+
+	state := &MockMapState{}
+	msh.TxProcessor = state
 
 	layerID := types.LayerID(1)
 	signer, origin := newSignerAndAddress(r, "origin")
@@ -363,13 +364,8 @@ func TestMesh_AddBlockWithTxs_PushTransactions_UpdateUnappliedTxs(t *testing.T) 
 		r.Equal(111, int(txns[i].TotalAmount))
 	}
 
-	l, err := msh.GetLayer(1)
-	r.NoError(err)
-	msh.PushTransactions(l)
-	r.ElementsMatch(GetTransactionIds(tx5), GetTransactionIds(blockBuilder.txs...))
-
-	txns = getTxns(r, msh.MeshDB, origin)
-	r.Empty(txns)
+	msh.pushLayersToState(1, 2)
+	r.Equal(4, len(state.Txs))
 }
 
 func TestMesh_ExtractUniqueOrderedTransactions(t *testing.T) {
@@ -383,18 +379,15 @@ func TestMesh_ExtractUniqueOrderedTransactions(t *testing.T) {
 	tx2 := addTxToMesh(r, msh, signer, 2469)
 	tx3 := addTxToMesh(r, msh, signer, 2470)
 	tx4 := addTxToMesh(r, msh, signer, 2471)
-	tx5 := addTxToMesh(r, msh, signer, 2472)
 	addBlockWithTxs(r, msh, layerID, true, tx1, tx2)
 	addBlockWithTxs(r, msh, layerID, true, tx2, tx3, tx4)
-	addBlockWithTxs(r, msh, layerID, false, tx4, tx5)
-	addBlockWithTxs(r, msh, layerID, false, tx5)
+	addBlockWithTxs(r, msh, layerID, false, tx4)
 	l, err := msh.GetLayer(layerID)
 	r.NoError(err)
 
-	validBlocks, invalidBlocks := msh.ExtractUniqueOrderedTransactions(l)
+	validBlocks := msh.ExtractUniqueOrderedTransactions(l)
 
 	r.ElementsMatch(GetTransactionIds(tx1, tx2, tx3, tx4), GetTransactionIds(validBlocks...))
-	r.ElementsMatch(GetTransactionIds(tx5), GetTransactionIds(invalidBlocks...))
 }
 
 func GetTransactionIds(txs ...*types.Transaction) []types.TransactionId {
