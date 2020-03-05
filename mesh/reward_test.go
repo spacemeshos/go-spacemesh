@@ -229,7 +229,7 @@ func TestMesh_AccumulateRewards(t *testing.T) {
 	mesh, atxDb := getMeshWithMapState("t1", s)
 	defer mesh.Close()
 
-	mesh.MeshValidator = &meshValidatorBatchMock{batchSize: types.LayerID(batchSize)}
+	mesh.Tortoise = &meshValidatorBatchMock{batchSize: types.LayerID(batchSize)}
 
 	var firstLayerRewards int64
 	for i := 0; i < numOfLayers; i++ {

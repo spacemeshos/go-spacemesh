@@ -509,12 +509,13 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId,
 	}
 
 	syncConf := sync.Configuration{Concurrency: 4,
-		LayerSize:      int(layerSize),
-		LayersPerEpoch: layersPerEpoch,
-		RequestTimeout: time.Duration(app.Config.SyncRequestTimeout) * time.Millisecond,
-		SyncInterval:   time.Duration(app.Config.SyncInterval) * time.Second,
-		Hdist:          app.Config.Hdist,
-		AtxsLimit:      app.Config.AtxsPerBlock}
+		LayerSize:       int(layerSize),
+		LayersPerEpoch:  layersPerEpoch,
+		RequestTimeout:  time.Duration(app.Config.SyncRequestTimeout) * time.Millisecond,
+		SyncInterval:    time.Duration(app.Config.SyncInterval) * time.Second,
+		ValidationDelta: time.Duration(app.Config.SyncValidationDelta) * time.Second,
+		Hdist:           app.Config.Hdist,
+		AtxsLimit:       app.Config.AtxsPerBlock}
 
 	if app.Config.AtxsPerBlock > miner.AtxsPerBlockLimit { // validate limit
 		app.log.Panic("Number of atxs per block required is bigger than the limit atxsPerBlock=%v limit=%v", app.Config.AtxsPerBlock, miner.AtxsPerBlockLimit)
@@ -880,8 +881,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	// P2P must start last to not block when sending messages to protocols
 	err = app.P2P.Start()
 	if err != nil {
-		log.Error("Error starting p2p services, err: %v", err)
-		log.Panic("Error starting p2p services")
+		log.Panic("Error starting p2p services: %v", err)
 	}
 
 	/* Expose API */

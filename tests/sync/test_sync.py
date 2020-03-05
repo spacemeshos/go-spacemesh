@@ -1,17 +1,18 @@
-import time
-from pytest_testconfig import config as testconfig
+from elasticsearch_dsl import Search, Q
 from kubernetes import client
-from tests.deployment import create_deployment, delete_deployment
+from pytest_testconfig import config as testconfig
+import time
+
 from tests import queries
+from tests.deployment import create_deployment
+from tests import config as conf
 from tests.conftest import DeploymentInfo
-from tests.test_bs import save_log_on_exit, setup_bootstrap
-from tests.test_bs import api_call, add_multi_clients, get_conf
-from tests.test_bs import current_index, CLIENT_DEPLOYMENT_FILE, get_conf
 from tests.misc import CoreV1ApiClient
 from tests.context import ES
 from tests.queries import query_message
-from elasticsearch_dsl import Search, Q
 from tests.pod import delete_pod
+from tests.setup_utils import add_multi_clients
+from tests.utils import get_conf, get_curr_ind
 
 # ==============================================================================
 #    TESTS
@@ -21,8 +22,9 @@ from tests.pod import delete_pod
 PERSISTENT_DATA={"M": "persistent data found"}
 SYNC_DONE={"M": "sync done"}
 
+
 def new_client_in_namespace(name_space, setup_bootstrap, cspec, num):
-    resp = create_deployment(CLIENT_DEPLOYMENT_FILE, name_space,
+    resp = create_deployment(conf.CLIENT_DEPLOYMENT_FILE, name_space,
                              deployment_id=setup_bootstrap.deployment_id,
                              replica_size=num,
                              container_specs=cspec,
@@ -45,6 +47,7 @@ def new_client_in_namespace(name_space, setup_bootstrap, cspec, num):
 
 
 def search_pod_logs(namespace, pod_name, term):
+    current_index = get_curr_ind()
     api = ES().get_search_api()
     fltr = Q("match_phrase", kubernetes__pod_name=pod_name) & Q("match_phrase", kubernetes__namespace_name=namespace)
     s = Search(index=current_index, using=api).query('bool').filter(fltr).sort("time")
@@ -60,33 +63,36 @@ def search_pod_logs(namespace, pod_name, term):
     return False
 
 
-def check_pod_logs(podName, str):
-    res = query_message(current_index, testconfig['namespace'], podName, str, False)
+def check_pod_logs(pod_name, data):
+    current_index = get_curr_ind()
+    res = query_message(current_index, testconfig['namespace'], pod_name, data, False)
     if res:
         return True
     return False
 
 
 def test_sync_gradually_add_nodes(init_session, setup_bootstrap, save_log_on_exit):
+    current_index = get_curr_ind()
     bs_info = setup_bootstrap.pods[0]
 
-    cspec = get_conf(bs_info, testconfig['client'])
-    cspec2 = get_conf(bs_info, testconfig['clientv2'])
+    gen_delt = testconfig['genesis_delta']
+    cspec = get_conf(bs_info, testconfig['client'], gen_delt)
+    cspec2 = get_conf(bs_info, testconfig['clientv2'], gen_delt)
 
-    inf = add_multi_clients(init_session, cspec, 10)
+    inf = add_multi_clients(testconfig, init_session, cspec, 10)
 
     del cspec.args['remote-data']
     del cspec.args['data-folder']
 
     num_clients = 4
     clients = [None] * num_clients
-    clients[0] = add_multi_clients(init_session, cspec2, 1, 'clientv2')[0]
+    clients[0] = add_multi_clients(testconfig, init_session, cspec2, 1, 'clientv2')[0]
     time.sleep(10)
-    clients[1] = add_multi_clients(init_session, cspec, 1, 'client')[0]
+    clients[1] = add_multi_clients(testconfig, init_session, cspec, 1, 'client')[0]
     time.sleep(20)
-    clients[2] = add_multi_clients(init_session, cspec, 1, 'client')[0]
+    clients[2] = add_multi_clients(testconfig, init_session, cspec, 1, 'client')[0]
     time.sleep(20)
-    clients[3] = add_multi_clients(init_session, cspec, 1, 'client')[0]
+    clients[3] = add_multi_clients(testconfig, init_session, cspec, 1, 'client')[0]
 
     print("take pod down ", clients[0])
 
@@ -103,12 +109,12 @@ def test_sync_gradually_add_nodes(init_session, setup_bootstrap, save_log_on_exi
     for i in range(num_iter):
         done = 0
         for j in range(0, num_clients):
-            podName = clients[j]
-            if not check_pod_logs(podName, SYNC_DONE):  # not all done
-                print("pod " + podName + " still not done. Going to sleep")
+            pod_name = clients[j]
+            if not check_pod_logs(pod_name, SYNC_DONE):  # not all done
+                print("pod " + pod_name + " still not done. Going to sleep")
                 break  # stop check and sleep
             else:
-                print("pod " + podName + " done")
+                print("pod " + pod_name + " done")
                 done = done + 1
 
         if done == num_clients:

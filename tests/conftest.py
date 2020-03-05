@@ -1,13 +1,20 @@
-import os
-import pytest
-import string
-import random
-from tests import pod
+from datetime import datetime, timedelta
 from kubernetes import config as k8s_config
 from kubernetes import client
+from kubernetes.client.rest import ApiException
+import os
+import pytest
 from pytest_testconfig import config as testconfig
-from tests.misc import CoreV1ApiClient
+import random
+import string
+import subprocess
+
+from tests import pod
+from tests import config as tests_conf
 from tests.context import Context
+from tests.misc import CoreV1ApiClient
+from tests.setup_utils import setup_bootstrap_in_namespace, setup_clients_in_namespace
+from tests.utils import api_call
 
 
 def random_id(length):
@@ -131,3 +138,108 @@ def init_session(load_config, set_namespace, set_docker_images, session_id):
     :return: namespace id
     """
     return session_id
+
+
+@pytest.fixture(scope='module')
+def setup_bootstrap(init_session):
+    """
+    setup bootstrap initializes a session and adds a single bootstrap node
+    :param init_session: sets up a new k8s env
+    :return: DeploymentInfo type, containing the settings info of the new node
+    """
+    bootstrap_deployment_info = DeploymentInfo(dep_id=init_session)
+
+    bootstrap_deployment_info = setup_bootstrap_in_namespace(testconfig['namespace'],
+                                                             bootstrap_deployment_info,
+                                                             testconfig['bootstrap'],
+                                                             testconfig['genesis_delta'],
+                                                             dep_time_out=testconfig['deployment_ready_time_out'])
+
+    return bootstrap_deployment_info
+
+
+@pytest.fixture(scope='module')
+def setup_clients(init_session, setup_bootstrap):
+    """
+    setup clients adds new client nodes using suite file specifications
+
+    :param init_session: setup a new k8s env
+    :param setup_bootstrap: adds a single bootstrap node
+    :return: client_info of type DeploymentInfo
+             contains the settings info of the new client node
+    """
+    client_info = DeploymentInfo(dep_id=setup_bootstrap.deployment_id)
+    client_info = setup_clients_in_namespace(testconfig['namespace'],
+                                             setup_bootstrap.pods[0],
+                                             client_info,
+                                             testconfig['client'],
+                                             testconfig['genesis_delta'],
+                                             poet=setup_bootstrap.pods[0]['pod_ip'],
+                                             dep_time_out=testconfig['deployment_ready_time_out'])
+
+    return client_info
+
+
+@pytest.fixture(scope='module')
+def setup_mul_clients(init_session, setup_bootstrap):
+    """
+    setup_mul_clients adds all client nodes (those who have "client" in title)
+    using suite file specifications
+
+    :param init_session: setup a new k8s env
+    :param setup_bootstrap: adds a single bootstrap node
+    :return: list, client_infos a list of DeploymentInfo
+             contains the settings info of the new clients nodes
+    """
+    clients_infos = []
+
+    for key in testconfig:
+        if "client" in key:
+            client_info = DeploymentInfo(dep_id=setup_bootstrap.deployment_id)
+            client_info = setup_clients_in_namespace(testconfig['namespace'],
+                                                     setup_bootstrap.pods[0],
+                                                     client_info,
+                                                     testconfig[key],
+                                                     testconfig['genesis_delta'],
+                                                     poet=setup_bootstrap.pods[0]['pod_ip'],
+                                                     dep_time_out=testconfig['deployment_ready_time_out'])
+            clients_infos.append(client_info)
+
+    return clients_infos
+
+
+@pytest.fixture(scope='module')
+def start_poet(init_session, add_curl, setup_bootstrap):
+    bs_pod = setup_bootstrap.pods[0]
+    namespace = testconfig['namespace']
+
+    match = pod.search_phrase_in_pod_log(bs_pod['name'], namespace, 'poet',
+                                         "REST proxy start listening on 0.0.0.0:80")
+    if not match:
+        raise Exception("Failed to read container logs in {0}".format("poet"))
+
+    print("Starting PoET")
+    out = api_call(bs_pod['pod_ip'], '{ "gatewayAddresses": ["127.0.0.1:9091"] }', 'v1/start', namespace, "80")
+    assert out == "{}", "PoET start returned error {0}".format(out)
+    print("PoET started")
+
+
+@pytest.fixture(scope='module')
+def save_log_on_exit(request):
+    yield
+    if testconfig['script_on_exit'] != '' and request.session.testsfailed == 1:
+        p = subprocess.Popen([testconfig['script_on_exit'], testconfig['namespace']],
+                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        p.communicate()
+
+
+@pytest.fixture(scope='module')
+def add_curl(request, init_session, setup_bootstrap):
+    def _run_curl_pod():
+        if not setup_bootstrap.pods:
+            raise Exception("Could not find bootstrap node")
+
+        pod.create_pod(tests_conf.CURL_POD_FILE, testconfig['namespace'])
+        return True
+
+    return _run_curl_pod()

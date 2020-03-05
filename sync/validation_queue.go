@@ -30,7 +30,7 @@ type blockQueue struct {
 	reverseDepMap map[types.Hash32][]interface{}
 }
 
-func NewValidationQueue(srvr WorkerInfra, conf Configuration, msh ValidationInfra, checkLocal CheckLocalFunc, lg log.Log) *blockQueue {
+func NewValidationQueue(srvr Communication, conf Configuration, msh ValidationInfra, checkLocal CheckLocalFunc, lg log.Log) *blockQueue {
 	vq := &blockQueue{
 		fetchQueue: fetchQueue{
 			Log:                 srvr.WithName("blockFetchQueue"),
@@ -108,7 +108,7 @@ func (vq *blockQueue) handleBlockDependencies(blk *types.Block) {
 	}
 
 	if res == false {
-		vq.Info("pending done for %v", blk.Id())
+		vq.Debug("pending done for %v", blk.Id())
 		vq.updateDependencies(blk.Hash32(), true)
 	}
 	vq.Debug("added %v dependencies to queue", blk.Id())

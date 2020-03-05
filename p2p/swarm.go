@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/nat_traversal"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/connectionpool"
 	"github.com/spacemeshos/go-spacemesh/p2p/discovery"
@@ -86,6 +87,8 @@ type swarm struct {
 	peerLock   sync.RWMutex
 	newPeerSub []chan p2pcrypto.PublicKey
 	delPeerSub []chan p2pcrypto.PublicKey
+
+	releaseUpnp func()
 }
 
 func (s *swarm) waitForBoot() error {
@@ -107,11 +110,6 @@ func (s *swarm) waitForGossip() error {
 // newSwarm creates a new P2P instance, configured by config, if newNode is true it will create a new node identity
 // and not load from disk. it creates a new `net`, connection pool and discovery.
 func newSwarm(ctx context.Context, config config.Config, logger log.Log, datadir string) (*swarm, error) {
-
-	port := config.TCPPort
-	tcpaddr := &inet.TCPAddr{inet.ParseIP("0.0.0.0"), port, ""}
-	udpaddr := &inet.UDPAddr{inet.ParseIP("0.0.0.0"), port, ""}
-
 	var l node.LocalNode
 	var err error
 
@@ -140,12 +138,12 @@ func newSwarm(ctx context.Context, config config.Config, logger log.Log, datadir
 		}
 	}
 
-	n, err := net.NewNet(config, l, tcpaddr, logger.WithName("tcpnet"))
+	n, err := net.NewNet(config, l, logger.WithName("tcpnet"))
 	if err != nil {
 		return nil, fmt.Errorf("can't create swarm without a network, err: %v", err)
 	}
 
-	udpnet, err := net.NewUDPNet(config, l, udpaddr, logger.WithName("udpnet"))
+	udpnet, err := net.NewUDPNet(config, l, logger.WithName("udpnet"))
 	if err != nil {
 		return nil, err
 	}
@@ -241,15 +239,13 @@ func (s *swarm) Start() error {
 	atomic.StoreUint32(&s.started, 1)
 	s.logger.Debug("Starting the p2p layer")
 
-	err = s.network.Start()
+	tcpListener, udpListener, err := s.getListeners(getTCPListener, getUDPListener, discoverUPnPGateway)
 	if err != nil {
-		s.logger.Error("Error starting network services err=", err)
-		return err
+		return fmt.Errorf("error getting port: %v", err)
 	}
 
-	if err := s.udpnetwork.Start(); err != nil {
-		return err
-	}
+	s.network.Start(tcpListener)
+	s.udpnetwork.Start(udpListener)
 
 	tcpAddress := s.network.LocalAddr().(*inet.TCPAddr)
 	udpAddress := s.udpnetwork.LocalAddr().(*inet.UDPAddr)
@@ -417,11 +413,11 @@ func (s *swarm) Shutdown() {
 		s.udpServer.Shutdown()
 
 		s.protocolHandlerMutex.Lock()
-		for i, _ := range s.directProtocolHandlers {
+		for i := range s.directProtocolHandlers {
 			delete(s.directProtocolHandlers, i)
 			//close(prt) //todo: signal protocols to shutdown with closing chan. (this makes us send on closed chan. )
 		}
-		for i, _ := range s.gossipProtocolHandlers {
+		for i := range s.gossipProtocolHandlers {
 			delete(s.gossipProtocolHandlers, i)
 			//close(prt) //todo: signal protocols to shutdown with closing chan. (this makes us send on closed chan. )
 		}
@@ -437,6 +433,9 @@ func (s *swarm) Shutdown() {
 		s.delPeerSub = nil
 		s.newPeerSub = nil
 		s.peerLock.Unlock()
+		if s.releaseUpnp != nil {
+			s.releaseUpnp()
+		}
 	})
 }
 
@@ -450,9 +449,12 @@ func (s *swarm) processMessage(ime net.IncomingMessageEvent) {
 
 	err := s.onRemoteClientMessage(ime)
 	if err != nil {
-		s.logger.Error("Err reading message from %v, closing connection err=%v", ime.Conn.RemotePublicKey(), err)
-		ime.Conn.Close()
 		// TODO: differentiate action on errors
+		s.logger.Error("Err reading message from %v, closing connection err=%v", ime.Conn.RemotePublicKey(), err)
+		if err := ime.Conn.Close(); err == nil {
+			s.cPool.CloseConnection(ime.Conn.RemotePublicKey())
+			s.Disconnect(ime.Conn.RemotePublicKey())
+		}
 	}
 }
 
@@ -495,7 +497,7 @@ var (
 	ErrBadFormat1 = errors.New("bad msg format, could'nt deserialize 1")
 	// ErrBadFormat2 could'nt deserialize the protocol message payload
 	ErrBadFormat2 = errors.New("bad msg format, could'nt deserialize 2")
-	// ErrOutOfSync is returned when messsage timestamp was out of sync
+	// ErrOutOfSync is returned when message timestamp was out of sync
 	ErrOutOfSync = errors.New("received out of sync msg")
 	// ErrFailDecrypt session cant decrypt
 	ErrFailDecrypt = errors.New("can't decrypt message payload with session key")
@@ -875,4 +877,85 @@ func (s *swarm) hasOutgoingPeer(peer p2pcrypto.PublicKey) bool {
 	_, ok := s.outpeers[peer]
 	s.outpeersMutex.RUnlock()
 	return ok
+}
+
+var listeningIp = inet.ParseIP("0.0.0.0")
+
+func (s *swarm) getListeners(
+	getTcpListener func(tcpAddr *inet.TCPAddr) (inet.Listener, error),
+	getUdpListener func(udpAddr *inet.UDPAddr) (net.UDPListener, error),
+	discoverUpnpGateway func() (nat_traversal.UpnpGateway, error),
+) (inet.Listener, net.UDPListener, error) {
+
+	port := s.config.TCPPort
+	randomPort := port == 0
+	var gateway nat_traversal.UpnpGateway
+	if s.config.AcquirePort {
+		var err error
+		gateway, err = discoverUpnpGateway()
+		if err != nil {
+			gateway = nil
+			s.logger.With().Warning("could not discover UPnP gateway", log.Err(err))
+		}
+	}
+
+	for {
+		tcpAddr := &inet.TCPAddr{IP: listeningIp, Port: port}
+		tcpListener, err := getTcpListener(tcpAddr)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to acquire requested tcp port: %v", err)
+		}
+
+		addr := tcpListener.Addr()
+		port = addr.(*inet.TCPAddr).Port
+		udpAddr := &inet.UDPAddr{IP: listeningIp, Port: port}
+		udpListener, err := getUdpListener(udpAddr)
+		if err != nil {
+			if err := tcpListener.Close(); err != nil {
+				s.logger.With().Error("error closing tcp listener", log.Err(err))
+			}
+			if randomPort {
+				port = 0
+				continue
+			}
+			return nil, nil, fmt.Errorf("failed to acquire requested udp port: %v", err)
+		}
+
+		if gateway != nil {
+			err := nat_traversal.AcquirePortFromGateway(gateway, uint16(port))
+			if err != nil {
+				if err := tcpListener.Close(); err != nil {
+					s.logger.With().Error("error closing tcp listener", log.Err(err))
+				}
+				if err := udpListener.Close(); err != nil {
+					s.logger.With().Error("error closing udp listener", log.Err(err))
+				}
+				if randomPort {
+					port = 0
+					continue
+				}
+				return nil, nil, fmt.Errorf("failed to acquire requested port using UPnP: %v", err)
+			}
+			s.releaseUpnp = func() {
+				err := gateway.Clear(uint16(port))
+				if err != nil {
+					s.logger.Warning("failed to release acquired UPnP port %v: %v", port, err)
+				}
+			}
+		}
+
+		return tcpListener, udpListener, nil
+	}
+}
+
+func getUDPListener(udpAddr *inet.UDPAddr) (net.UDPListener, error) {
+	return inet.ListenUDP("udp", udpAddr)
+}
+
+func getTCPListener(tcpAddr *inet.TCPAddr) (inet.Listener, error) {
+	return inet.Listen("tcp", tcpAddr.String())
+}
+
+func discoverUPnPGateway() (igd nat_traversal.UpnpGateway, err error) {
+	return nat_traversal.DiscoverUPnPGateway()
 }

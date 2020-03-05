@@ -28,7 +28,7 @@ type fetchQueue struct {
 	log.Log
 	BatchRequestFactory
 	*sync.Mutex
-	workerInfra WorkerInfra
+	workerInfra Communication
 	pending     map[types.Hash32][]chan bool
 	handleFetch func(fj fetchJob)
 	checkLocal  CheckLocalFunc
@@ -118,7 +118,7 @@ func (fq *fetchQueue) invalidate(id types.Hash32, valid bool) {
 	for _, dep := range deps {
 		dep <- valid
 	}
-	fq.Info("invalidated %v %v", id.ShortString(), valid)
+	fq.Debug("invalidated %v %v", id.ShortString(), valid)
 }
 
 //returns items out of itemIds that are not in the local database
@@ -156,7 +156,7 @@ func NewTxQueue(s *Syncer) *txQueue {
 	q := &txQueue{
 		fetchQueue: fetchQueue{
 			Log:                 s.Log.WithName("txFetchQueue"),
-			workerInfra:         s.workerInfra,
+			workerInfra:         s.communication,
 			Mutex:               &sync.Mutex{},
 			BatchRequestFactory: TxFetchReqFactory,
 			checkLocal:          s.txCheckLocal,
@@ -220,7 +220,7 @@ func NewAtxQueue(s *Syncer, fetchPoetProof FetchPoetProofFunc) *atxQueue {
 	q := &atxQueue{
 		fetchQueue: fetchQueue{
 			Log:                 s.Log.WithName("atxFetchQueue"),
-			workerInfra:         s.workerInfra,
+			workerInfra:         s.communication,
 			BatchRequestFactory: AtxFetchReqFactory,
 			Mutex:               &sync.Mutex{},
 			checkLocal:          s.atxCheckLocal,

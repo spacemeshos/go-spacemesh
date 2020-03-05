@@ -74,7 +74,7 @@ type NewConnectionEvent struct {
 
 // NewNet creates a new network.
 // It attempts to tcp listen on address. e.g. localhost:1234 .
-func NewNet(conf config.Config, localEntity node.LocalNode, addr *net.TCPAddr, logger log.Log) (*Net, error) {
+func NewNet(conf config.Config, localEntity node.LocalNode, logger log.Log) (*Net, error) {
 
 	qcount := DefaultQueueCount      // todo : get from cfg
 	qsize := DefaultMessageQueueSize // todo : get from cfg
@@ -83,7 +83,6 @@ func NewNet(conf config.Config, localEntity node.LocalNode, addr *net.TCPAddr, l
 		networkID:             conf.NetworkID,
 		localNode:             localEntity,
 		logger:                logger,
-		listenAddress:         addr,
 		regNewRemoteConn:      make([]func(NewConnectionEvent), 0, 3),
 		closingConnections:    make([]func(cwe ConnectionWithErr), 0, 3),
 		queuesCount:           qcount,
@@ -98,13 +97,11 @@ func NewNet(conf config.Config, localEntity node.LocalNode, addr *net.TCPAddr, l
 	return n, nil
 }
 
-func (n *Net) Start() error { // todo: maybe add context
-	err := n.listen(n.newTcpListener)
-	if err != nil {
-		return err
-	}
-	n.logger.Info("Started TCP server listener for connections on tcp:%v", n.listener.Addr().String())
-	return nil
+func (n *Net) Start(listener net.Listener) { // todo: maybe add context
+	n.listener = listener
+	n.listenAddress = listener.Addr().(*net.TCPAddr)
+	n.logger.Info("Started TCP server listening for connections on tcp:%v", listener.Addr().String())
+	go n.accept(listener)
 }
 
 // LocalAddr returns the local listening address. panics before calling Start or if Start errored
@@ -259,25 +256,6 @@ func (n *Net) Shutdown() {
 			n.logger.Error("Error closing listener err=%v", err)
 		}
 	}
-}
-
-func (n *Net) newTcpListener() (net.Listener, error) {
-	tcpListener, err := net.Listen("tcp", n.listenAddress.String())
-	if err != nil {
-		return nil, err
-	}
-	return tcpListener, nil
-}
-
-// Start network server
-func (n *Net) listen(lis func() (listener net.Listener, err error)) error {
-	listener, err := lis()
-	n.listener = listener
-	if err != nil {
-		return err
-	}
-	go n.accept(listener)
-	return nil
 }
 
 func (n *Net) accept(listen net.Listener) {
