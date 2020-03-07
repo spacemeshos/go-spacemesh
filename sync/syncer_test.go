@@ -249,7 +249,6 @@ func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 	lid := types.LayerID(1)
 	block := types.NewExistingBlock(1, []byte(rand.RandString(8)))
 	syncObj1.AddBlockWithTxs(block, []*types.Transaction{tx1}, []*types.ActivationTx{atx1})
-	//syncObj1.ValidateLayer(l) //this is to simulate the approval of the Validator...
 	timeout := time.NewTimer(2 * time.Second)
 
 	wrk := NewPeersWorker(syncObj2, []p2p.Peer{nodes[0].PublicKey()}, &sync.Once{}, HashReqFactory(lid))
@@ -258,7 +257,6 @@ func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 	select {
 	case <-wrk.output:
 		return
-		//assert.Equal(t, string(orig.Hash()), string(hash.(*peerHashPair).hash), "wrong block")
 	case <-timeout.C:
 		assert.Fail(t, "no message received on channel")
 	}
