@@ -67,6 +67,17 @@ var (
 
 type Status int
 
+func (s *Status) String() string {
+	if *s == 0 {
+		return "Pending"
+	}
+	if *s == 1 {
+		return "InProgress"
+	}
+
+	return "Done"
+}
+
 const (
 	Pending    Status = 0
 	InProgress Status = 1
@@ -222,6 +233,7 @@ func (s *Syncer) ListenToGossip() bool {
 }
 
 func (s *Syncer) setGossipBufferingStatus(status Status) {
+	s.Info("set gossip to '%s' ", status.String())
 	s.gossipLock.Lock()
 	s.notifySubscribers(s.gossipSynced, status)
 	s.gossipSynced = status
@@ -293,7 +305,7 @@ func (s *Syncer) synchronise() {
 
 	// we have all the data of the prev layers so we can simply validate
 	if weaklySyncedStatus {
-		s.With().Info("Node is weakly synced", s.LatestLayer())
+		s.With().Info("Node is weakly synced ", s.LatestLayer(), s.GetCurrentLayer())
 
 		// handle all layers from processed+1 to current -1
 		s.handleLayersTillCurrent()
