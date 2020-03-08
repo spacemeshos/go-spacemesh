@@ -192,20 +192,35 @@ func TestMesh_integration(t *testing.T) {
 }
 
 type meshValidatorBatchMock struct {
-	*Mesh
-	batchSize types.LayerID
+	mesh           *Mesh
+	batchSize      types.LayerID
+	processedLayer types.LayerID
 }
 
-func (m *meshValidatorBatchMock) HandleIncomingLayer(layer *types.Layer) (types.LayerID, types.LayerID) {
-	layerId := layer.Index()
+func (m *meshValidatorBatchMock) ValidateLayer(lyr *types.Layer) {
+	m.SetProcessedLayer(lyr.Index())
+	layerId := lyr.Index()
 	if layerId == 0 {
-		return 0, 0
+		return
 	}
 	if layerId%m.batchSize == 0 {
-		return layerId - m.batchSize, layerId
+		m.mesh.pushLayersToState(layerId-m.batchSize, layerId)
+		return
 	}
 	prevPBase := layerId - layerId%m.batchSize
-	return prevPBase, prevPBase
+	m.mesh.pushLayersToState(prevPBase, prevPBase)
+}
+
+func (m *meshValidatorBatchMock) ProcessedLayer() types.LayerID {
+	panic("implement me")
+}
+
+func (m *meshValidatorBatchMock) SetProcessedLayer(lyr types.LayerID) {
+	m.processedLayer = lyr
+}
+
+func (m *meshValidatorBatchMock) HandleLateBlock(blk *types.Block) {
+	panic("implement me")
 }
 
 func TestMesh_AccumulateRewards(t *testing.T) {
@@ -218,7 +233,7 @@ func TestMesh_AccumulateRewards(t *testing.T) {
 	mesh, atxDb := getMeshWithMapState("t1", s)
 	defer mesh.Close()
 
-	mesh.Validator = &meshValidatorBatchMock{Mesh: mesh, batchSize: types.LayerID(batchSize)}
+	mesh.Validator = &meshValidatorBatchMock{mesh: mesh, batchSize: types.LayerID(batchSize)}
 
 	var firstLayerRewards int64
 	for i := 0; i < numOfLayers; i++ {
