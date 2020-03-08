@@ -192,11 +192,8 @@ func TestMesh_integration(t *testing.T) {
 }
 
 type meshValidatorBatchMock struct {
+	*Mesh
 	batchSize types.LayerID
-}
-
-func (m *meshValidatorBatchMock) LatestComplete() types.LayerID {
-	panic("implement me")
 }
 
 func (m *meshValidatorBatchMock) HandleIncomingLayer(layer *types.Layer) (types.LayerID, types.LayerID) {
@@ -211,14 +208,6 @@ func (m *meshValidatorBatchMock) HandleIncomingLayer(layer *types.Layer) (types.
 	return prevPBase, prevPBase
 }
 
-func (m *meshValidatorBatchMock) HandleLateBlock(bl *types.Block) (types.LayerID, types.LayerID) {
-	return bl.Layer() - 1, bl.Layer()
-}
-
-func (m *meshValidatorBatchMock) PersistTortoise() error {
-	return nil
-}
-
 func TestMesh_AccumulateRewards(t *testing.T) {
 	numOfLayers := 10
 	numOfBlocks := 10
@@ -229,7 +218,7 @@ func TestMesh_AccumulateRewards(t *testing.T) {
 	mesh, atxDb := getMeshWithMapState("t1", s)
 	defer mesh.Close()
 
-	mesh.Tortoise = &meshValidatorBatchMock{batchSize: types.LayerID(batchSize)}
+	mesh.Validator = &meshValidatorBatchMock{Mesh: mesh, batchSize: types.LayerID(batchSize)}
 
 	var firstLayerRewards int64
 	for i := 0; i < numOfLayers; i++ {
