@@ -291,7 +291,6 @@ func (s *Syncer) synchronise() {
 	//node is synced and blocks from current layer hav already been validated
 	if curr == s.ProcessedLayer() {
 		s.Debug("node is synced ")
-
 		// fully-synced, make sure we listen to p2p
 		s.setGossipBufferingStatus(Done)
 		return
@@ -348,6 +347,7 @@ func (s *Syncer) handleLayersTillCurrent() {
 	return
 }
 
+//handle the current consensus layer if its is older than s.Validation Delta
 func (s *Syncer) handleCurrentLayer() {
 	curr := s.GetCurrentLayer()
 	if s.LatestLayer() == curr && time.Now().Sub(s.LayerToTime(s.LatestLayer())) > s.ValidationDelta {
@@ -358,26 +358,6 @@ func (s *Syncer) handleCurrentLayer() {
 			s.SetZeroBlockLayer(curr)
 		}
 	}
-}
-
-func (s *Syncer) fastValidation(block *types.Block) error {
-
-	if len(block.AtxIds) > s.AtxsLimit {
-		s.Error("Too many atxs in block expected<=%v actual=%v", s.AtxsLimit, len(block.AtxIds))
-		return errTooManyAtxs
-	}
-
-	// block eligibility
-	if eligible, err := s.BlockSignedAndEligible(block); err != nil || !eligible {
-		return fmt.Errorf("block eligibiliy check failed - err %v", err)
-	}
-
-	// validate unique tx atx
-	if err := validateUniqueTxAtx(block); err != nil {
-		return err
-	}
-	return nil
-
 }
 
 func (s *Syncer) handleNotSynced(currentSyncLayer types.LayerID) {
@@ -533,6 +513,26 @@ func (s *Syncer) syncLayer(layerID types.LayerID, blockIds []types.BlockID) ([]*
 	tmr.ObserveDuration()
 
 	return s.LayerBlocks(layerID)
+}
+
+func (s *Syncer) fastValidation(block *types.Block) error {
+
+	if len(block.AtxIds) > s.AtxsLimit {
+		s.Error("Too many atxs in block expected<=%v actual=%v", s.AtxsLimit, len(block.AtxIds))
+		return errTooManyAtxs
+	}
+
+	// block eligibility
+	if eligible, err := s.BlockSignedAndEligible(block); err != nil || !eligible {
+		return fmt.Errorf("block eligibiliy check failed - err %v", err)
+	}
+
+	// validate unique tx atx
+	if err := validateUniqueTxAtx(block); err != nil {
+		return err
+	}
+	return nil
+
 }
 
 func validateUniqueTxAtx(b *types.Block) error {
