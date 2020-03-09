@@ -83,6 +83,7 @@ message MiningStats {
     string dataDir = 1;
     int32 status = 2;
     string coinbase = 3;
+    uint64 remainingBytes = 4;
 }
 
 message SetLogLevel {
@@ -109,6 +110,16 @@ message Reward {
 
 message AccountRewards {
     repeated Reward rewards = 1;
+}
+
+message NodeStatus {
+    uint64 peers = 1;
+    uint64 minPeers = 2;
+    uint64 maxPeers = 3;
+    bool synced = 4;
+    uint64 syncedLayer = 5;
+    uint64 currentLayer = 6;
+    uint64 verifiedLayer = 7;
 }
 
 service SpacemeshService {
@@ -172,6 +183,12 @@ service SpacemeshService {
           body: "*"
         };
     }
+    rpc GetNodeStatus (google.protobuf.Empty) returns (NodeStatus) {
+        option (google.api.http) = {
+          post: "/v1/nodestatus"
+          body: "*"
+        };
+    }
     rpc GetGenesisTime (google.protobuf.Empty) returns (SimpleMessage) {
         option (google.api.http) = {
           post: "/v1/genesis"
@@ -205,6 +222,12 @@ service SpacemeshService {
     rpc ResetPost (google.protobuf.Empty) returns (SimpleMessage) {
         option (google.api.http) = {
           post: "/v1/resetpost"
+          body: "*"
+        };
+    }
+    rpc GetStateRoot (google.protobuf.Empty) returns (SimpleMessage) {
+        option (google.api.http) = {
+          post: "/v1/stateroot"
           body: "*"
         };
     }

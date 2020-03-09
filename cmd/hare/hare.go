@@ -50,7 +50,7 @@ func init() {
 type mockBlockProvider struct {
 }
 
-func (mbp *mockBlockProvider) GetUnverifiedLayerBlocks(layerId types.LayerID) ([]types.BlockID, error) {
+func (mbp *mockBlockProvider) LayerBlockIds(layerId types.LayerID) ([]types.BlockID, error) {
 	return buildSet(), nil
 }
 
@@ -133,7 +133,7 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	}
 
 	log.Info("Initializing P2P services")
-	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P)
+	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P, log.NewDefault("p2p_haretest"), app.Config.DataDir)
 	app.p2p = swarm
 	if err != nil {
 		log.Panic("Error starting p2p services err=%v", err)

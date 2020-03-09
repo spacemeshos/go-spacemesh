@@ -3,6 +3,7 @@ package p2p
 import (
 	"context"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/stretchr/testify/require"
@@ -14,11 +15,9 @@ import (
 	"time"
 )
 
-const saveResults = false
-
 type NodeTestInstance interface {
 	Service
-	LocalNode() *node.LocalNode // this holds the keys
+	LocalNode() node.LocalNode // this holds the keys
 }
 
 // IntegrationTestSuite is a suite which bootstraps a network according to the given params
@@ -58,7 +57,7 @@ func (its *IntegrationTestSuite) SetupSuite() {
 		if its.AfterHook != nil {
 			its.AfterHook(i, boot[i])
 		}
-		testLog("BOOTNODE : %v", boot[i].LocalNode().String())
+		testLog("BOOTNODE : %v", boot[i].LocalNode().PublicKey().String())
 	}
 
 	for i := 0; i < len(boot); i++ {
@@ -75,6 +74,7 @@ func (its *IntegrationTestSuite) SetupSuite() {
 	}
 
 	cfg := config.DefaultConfig()
+	cfg.AcquirePort = false
 	cfg.SwarmConfig.Bootstrap = true
 	cfg.SwarmConfig.Gossip = true
 	cfg.SwarmConfig.RandomConnections = its.NeighborsCount
@@ -141,18 +141,34 @@ lop:
 }
 
 func (its *IntegrationTestSuite) TearDownSuite() {
-	_, _ = its.ForAllAsync(context.Background(), func(idx int, s NodeTestInstance) error {
+	testLog("Shutting down all nodes" + its.T().Name())
+	_ = its.ForAll(func(idx int, s NodeTestInstance) error {
 		s.Shutdown()
 		return nil
-	})
+	}, nil)
 }
 
 func createP2pInstance(t testing.TB, config config.Config) *swarm {
 	config.TCPPort = 0
-	p, err := newSwarm(context.TODO(), config, true, saveResults)
+	p, err := newSwarm(context.TODO(), config, log.NewDefault("test instance"), "")
 	require.NoError(t, err)
 	require.NotNil(t, p)
 	return p
+}
+
+func (its *IntegrationTestSuite) WaitForGossip(ctx context.Context) error {
+	g, _ := errgroup.WithContext(ctx)
+	for _, b := range its.boot {
+		g.Go(func() error {
+			return b.waitForGossip()
+		})
+	}
+	for _, i := range its.Instances {
+		g.Go(func() error {
+			return i.waitForGossip()
+		})
+	}
+	return g.Wait()
 }
 
 func (its *IntegrationTestSuite) ForAll(f func(idx int, s NodeTestInstance) error, filter []int) []error {
@@ -220,8 +236,8 @@ func StringIdentifiers(boot ...*swarm) []string {
 	s := make([]string, len(boot))
 	for i := 0; i < len(s); i++ {
 		pk := boot[i].LocalNode().PublicKey()
-		udp := boot[i].udpnetwork.LocalAddr().(*net.UDPAddr)
 		tcp := boot[i].network.LocalAddr().(*net.TCPAddr)
+		udp := boot[i].udpnetwork.LocalAddr().(*net.UDPAddr)
 		nodeinfo := node.NewNode(pk, net.IPv6loopback, uint16(tcp.Port), uint16(udp.Port))
 		s[i] = nodeinfo.String() //node.StringFromNode(node.New(boot[i].LocalNode().Node.PublicKey(), boot[i].udpnetwork.LocalAddr().String())) )
 	}

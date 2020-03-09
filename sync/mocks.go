@@ -56,6 +56,14 @@ type MeshValidatorMock struct {
 	validatedLayers map[types.LayerID]struct{}
 }
 
+func (m *MeshValidatorMock) LatestComplete() types.LayerID {
+	panic("implement me")
+}
+
+func (m *MeshValidatorMock) PersistTortoise() error {
+	return nil
+}
+
 func (m *MeshValidatorMock) HandleIncomingLayer(lyr *types.Layer) (types.LayerID, types.LayerID) {
 	m.countValidate++
 	m.calls++
@@ -72,7 +80,11 @@ func (m *MeshValidatorMock) GetGoodPatternBlocks(layer types.LayerID) (map[types
 	panic("implement me")
 }
 
-func (m *MeshValidatorMock) HandleLateBlock(bl *types.Block)              {}
+func (m *MeshValidatorMock) HandleLateBlock(bl *types.Block) (types.LayerID, types.LayerID) {
+	return bl.Layer(), bl.Layer() - 1
+
+}
+
 func (m *MeshValidatorMock) RegisterLayerCallback(func(id types.LayerID)) {}
 func (mlg *MeshValidatorMock) ContextualValidity(id types.BlockID) bool   { return true }
 
@@ -89,6 +101,10 @@ func ConfigTst() mesh.Config {
 }
 
 type MockState struct{}
+
+func (s MockState) LoadState(layer types.LayerID) error {
+	panic("implement me")
+}
 
 func (s MockState) GetStateRoot() types.Hash32 {
 	return [32]byte{}
@@ -182,6 +198,10 @@ type MockClock struct {
 	countUnsub int
 	Interval   duration.Duration
 	Layer      types.LayerID
+}
+
+func (m *MockClock) LayerToTime(types.LayerID) time.Time {
+	return time.Now().Add(1000 * time.Hour) //hack so this wont take affect in the mock
 }
 
 func (c *MockClock) Tick() {

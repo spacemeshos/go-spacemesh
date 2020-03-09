@@ -12,12 +12,17 @@ import (
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"sync"
+	"time"
 )
 
 const topAtxKey = "topAtxKey"
 
-func getNodeIdKey(id types.NodeId) []byte {
-	return []byte(fmt.Sprintf("n_%v", id.Key))
+func getNodeAtxKey(nodeId types.NodeId, targetEpoch types.EpochId) []byte {
+	return append(getNodeAtxPrefix(nodeId), util.Uint64ToBytesBigEndian(uint64(targetEpoch))...)
+}
+
+func getNodeAtxPrefix(nodeId types.NodeId) []byte {
+	return []byte(fmt.Sprintf("n_%v_", nodeId.Key))
 }
 
 func getAtxHeaderKey(atxId types.AtxId) []byte {
@@ -229,10 +234,12 @@ func (db *ActivationDb) CalcActiveSetSize(epoch types.EpochId, blocks map[types.
 
 	traversalFunc := db.createTraversalActiveSetCounterFunc(countedAtxs, penalties, db.LayersPerEpoch, epoch)
 
+	startTime := time.Now()
 	err := db.meshDb.ForBlockInView(blocks, firstLayerOfPrevEpoch, traversalFunc)
 	if err != nil {
 		return nil, err
 	}
+	db.log.With().Info("done calculating active set size", log.String("duration", time.Now().Sub(startTime).String()))
 
 	result := make(map[string]struct{}, len(countedAtxs))
 	for k := range countedAtxs {
@@ -249,7 +256,6 @@ func (db *ActivationDb) CalcActiveSetFromView(view []types.BlockID, pubEpoch typ
 	if pubEpoch < 1 {
 		return 0, fmt.Errorf("publication epoch cannot be less than 1, found %v", pubEpoch)
 	}
-
 	viewHash, err := types.CalcBlocksHash12(view)
 	if err != nil {
 		return 0, fmt.Errorf("failed to calc sorted view hash: %v", err)
@@ -273,7 +279,8 @@ func (db *ActivationDb) CalcActiveSetFromView(view []types.BlockID, pubEpoch typ
 		// if not found, keep running mutex and calculate active set size
 	} else {
 		// if no running calc, insert new one
-		db.pendingActiveSet[viewHash] = &sync.Mutex{}
+		mu = &sync.Mutex{}
+		db.pendingActiveSet[viewHash] = mu
 		db.pendingActiveSet[viewHash].Lock()
 		db.assLock.Unlock()
 	}
@@ -285,21 +292,23 @@ func (db *ActivationDb) CalcActiveSetFromView(view []types.BlockID, pubEpoch typ
 
 	countedAtxs, err := db.calcActiveSetFunc(pubEpoch, mp)
 	if err != nil {
-		db.releaseRunningLock(viewHash)
+		mu.Unlock()
+		db.deleteLock(viewHash)
 		return 0, err
 	}
 	activesetCache.Add(viewHash, uint32(len(countedAtxs)))
-
-	db.releaseRunningLock(viewHash)
+	mu.Unlock()
+	db.deleteLock(viewHash)
 
 	return uint32(len(countedAtxs)), nil
 
 }
 
-func (db *ActivationDb) releaseRunningLock(viewHash types.Hash12) {
+func (db *ActivationDb) deleteLock(viewHash types.Hash12) {
 	db.assLock.Lock()
-	db.pendingActiveSet[viewHash].Unlock()
-	delete(db.pendingActiveSet, viewHash)
+	if _, exist := db.pendingActiveSet[viewHash]; exist {
+		delete(db.pendingActiveSet, viewHash)
+	}
 	db.assLock.Unlock()
 }
 
@@ -397,7 +406,7 @@ func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error 
 
 	activeSet, err := db.CalcActiveSetFromView(atx.View, atx.PubLayerIdx.GetEpoch(db.LayersPerEpoch))
 	if err != nil && !atx.PubLayerIdx.GetEpoch(db.LayersPerEpoch).IsGenesis() {
-		return fmt.Errorf("could not calculate active set for ATX %v", atx.ShortString())
+		return fmt.Errorf("could not calculate active set for ATX %v %s", atx.ShortString(), err)
 	}
 
 	if atx.ActiveSetSize != activeSet {
@@ -408,7 +417,7 @@ func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error 
 	if err != nil {
 		return fmt.Errorf("cannot get NIPST Challenge hash: %v", err)
 	}
-	db.log.With().Info("Validated NIPST", log.String("challenge_hash", hash.ShortString()), log.AtxId(atx.ShortString()))
+	db.log.With().Info("Validated NIPST", log.String("challenge_hash", hash.String()), log.AtxId(atx.ShortString()))
 
 	pubKey := signing.NewPublicKey(util.Hex2Bytes(atx.NodeId.Key))
 	if err = db.nipstValidator.Validate(*pubKey, atx.Nipst, *hash); err != nil {
@@ -434,7 +443,7 @@ func (db *ActivationDb) ContextuallyValidateAtx(atx *types.ActivationTxHeader) e
 		}
 	} else {
 		lastAtx, err := db.GetNodeLastAtxId(atx.NodeId)
-		if err != nil && err != database.ErrNotFound {
+		if _, ok := err.(ErrAtxNotFound); err != nil && !ok {
 			db.log.Error("fetching ATX ids failed: %v", err)
 			return err
 		}
@@ -566,20 +575,36 @@ func (db ActivationDb) getTopAtx() (atxIdAndLayer, error) {
 
 // addAtxToNodeId inserts activation atx id by node
 func (db *ActivationDb) addAtxToNodeId(nodeId types.NodeId, atx *types.ActivationTx) error {
-	err := db.atxs.Put(getNodeIdKey(nodeId), atx.Id().Bytes())
+	err := db.atxs.Put(getNodeAtxKey(nodeId, atx.TargetEpoch(db.LayersPerEpoch)), atx.Id().Bytes())
 	if err != nil {
 		return fmt.Errorf("failed to store ATX ID for node: %v", err)
 	}
 	return nil
 }
 
+type ErrAtxNotFound error
+
 // GetNodeLastAtxId returns the last atx id that was received for node nodeId
 func (db *ActivationDb) GetNodeLastAtxId(nodeId types.NodeId) (types.AtxId, error) {
-	db.log.Debug("fetching atxIDs for node %v", nodeId.ShortString())
+	nodeAtxsIterator := db.atxs.Find(getNodeAtxPrefix(nodeId))
+	// ATX syntactic validation ensures that each ATX is at least one epoch after a referenced previous ATX.
+	// Contextual validation ensures that the previous ATX referenced matches what this method returns, so the next ATX
+	// added will always be the next ATX returned by this method.
+	// leveldb_iterator.Last() returns the last entry in lexicographical order of the keys:
+	//   https://github.com/google/leveldb/blob/master/doc/index.md#comparators
+	// For the lexicographical order to match the epoch order we must encode the epoch id using big endian encoding when
+	// composing the key.
+	if exists := nodeAtxsIterator.Last(); !exists {
+		return *types.EmptyAtxId, ErrAtxNotFound(fmt.Errorf("atx for node %v does not exist", nodeId.ShortString()))
+	}
+	return types.AtxId(types.BytesToHash(nodeAtxsIterator.Value())), nil
+}
 
-	id, err := db.atxs.Get(getNodeIdKey(nodeId))
+func (db *ActivationDb) GetNodeAtxIdForEpoch(nodeId types.NodeId, targetEpoch types.EpochId) (types.AtxId, error) {
+	id, err := db.atxs.Get(getNodeAtxKey(nodeId, targetEpoch))
 	if err != nil {
-		return *types.EmptyAtxId, err
+		return *types.EmptyAtxId, fmt.Errorf("atx for node %v targeting epoch %v: %v",
+			nodeId.ShortString(), targetEpoch, err)
 	}
 	return types.AtxId(types.BytesToHash(id)), nil
 }
@@ -640,56 +665,6 @@ func (db *ActivationDb) GetFullAtx(id types.AtxId) (*types.ActivationTx, error) 
 	}
 	atx.ActivationTxHeader = header
 	return atx, nil
-}
-
-// IsIdentityActive returns whether edId is active for the epoch of layer layer.
-// it returns error if no associated atx is found in db
-func (db *ActivationDb) IsIdentityActive(edId string, layer types.LayerID) (*types.NodeId, bool, types.AtxId, error) {
-	// TODO: genesis flow should decide what we want to do here
-	if layer.GetEpoch(db.LayersPerEpoch) == 0 {
-		return nil, true, *types.EmptyAtxId, nil
-	}
-
-	epoch := layer.GetEpoch(db.LayersPerEpoch)
-	nodeId, err := db.GetIdentity(edId)
-	if err != nil { // means there is no such identity
-		db.log.Error("IsIdentityActive erred while getting identity err=%v", err)
-		return nil, false, *types.EmptyAtxId, nil
-	}
-	atxId, err := db.GetNodeLastAtxId(nodeId)
-	if err != nil {
-		db.log.Error("IsIdentityActive erred while getting last node atx id err=%v", err)
-		return nil, false, *types.EmptyAtxId, err
-	}
-	atx, err := db.GetAtxHeader(atxId)
-	if err != nil {
-		db.log.With().Error("IsIdentityActive erred while getting atx", log.AtxId(atxId.ShortString()), log.Err(err))
-		return nil, false, *types.EmptyAtxId, nil
-	}
-
-	lastAtxTargetEpoch := atx.TargetEpoch(db.LayersPerEpoch)
-	if lastAtxTargetEpoch < epoch {
-		db.log.With().Info("IsIdentityActive latest atx is too old", log.Uint64("expected", uint64(epoch)),
-			log.Uint64("actual", uint64(lastAtxTargetEpoch)), log.AtxId(atx.ShortString()))
-		return nil, false, *types.EmptyAtxId, nil
-	}
-
-	if lastAtxTargetEpoch > epoch {
-		// This could happen if we already published the ATX for the next epoch, so we check the previous one as well
-		if atx.PrevATXId == *types.EmptyAtxId {
-			db.log.With().Info("IsIdentityActive latest atx is too new but no previous atx", log.AtxId(atxId.ShortString()))
-			return nil, false, *types.EmptyAtxId, nil
-		}
-		prevAtxId := atx.PrevATXId
-		atx, err = db.GetAtxHeader(prevAtxId)
-		if err != nil {
-			db.log.With().Error("IsIdentityActive erred while getting atx for second newest", log.AtxId(prevAtxId.ShortString()), log.Err(err))
-			return nil, false, *types.EmptyAtxId, nil
-		}
-	}
-
-	// lastAtxTargetEpoch = epoch
-	return &nodeId, atx.TargetEpoch(db.LayersPerEpoch) == epoch, atx.Id(), nil
 }
 
 // ValidateSignedAtx extracts public key from message and verifies public key exists in IdStore, this is how we validate

@@ -9,6 +9,7 @@ import (
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/filesystem"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/miner"
@@ -31,6 +32,7 @@ var Cmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("Starting sync")
 		syncApp := NewSyncApp()
+		log.Info("Right after NewSyncApp %v", syncApp.Config.DataDir)
 		defer syncApp.Cleanup()
 		syncApp.Initialize(cmd)
 		syncApp.Start(cmd, args)
@@ -103,18 +105,20 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 
 	lg.Info("local db path: ", path)
 
-	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P)
+	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P, lg.WithName("p2p"), app.Config.DataDir)
 
 	if err != nil {
 		panic("something got fudged while creating p2p service ")
 	}
 
 	conf := sync.Configuration{
-		Concurrency:    4,
-		AtxsLimit:      200,
-		LayerSize:      int(app.Config.LayerAvgSize),
-		RequestTimeout: time.Duration(app.Config.SyncRequestTimeout) * time.Millisecond,
-		Hdist:          app.Config.Hdist,
+		Concurrency:     4,
+		AtxsLimit:       200,
+		LayerSize:       int(app.Config.LayerAvgSize),
+		RequestTimeout:  time.Duration(app.Config.SyncRequestTimeout) * time.Millisecond,
+		SyncInterval:    2 * 60 * time.Millisecond,
+		Hdist:           app.Config.Hdist,
+		ValidationDelta: 30 * time.Second,
 	}
 
 	if remote {
@@ -150,10 +154,10 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	var msh *mesh.Mesh
 	if mshdb.PersistentData() {
 		lg.Info("persistent data found ")
-		msh = mesh.NewRecoveredMesh(mshdb, atxdb, sync.ConfigTst(), &sync.MeshValidatorMock{}, txpool, atxpool, &sync.MockState{}, lg.WithOptions(log.Nop))
+		msh = mesh.NewRecoveredMesh(mshdb, atxdb, sync.ConfigTst(), &sync.MeshValidatorMock{}, txpool, atxpool, &sync.MockState{}, lg)
 	} else {
 		lg.Info("no persistent data found ")
-		msh = mesh.NewMesh(mshdb, atxdb, sync.ConfigTst(), &sync.MeshValidatorMock{}, txpool, atxpool, &sync.MockState{}, lg.WithOptions(log.Nop))
+		msh = mesh.NewMesh(mshdb, atxdb, sync.ConfigTst(), &sync.MeshValidatorMock{}, txpool, atxpool, &sync.MockState{}, lg)
 	}
 
 	msh.SetBlockBuilder(&MockBlockBuilder{})
@@ -182,14 +186,14 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	sleep := time.Duration(10) * time.Second
 	lg.Info("wait %v sec", sleep)
 	app.sync.Start()
-	for app.sync.ValidatedLayer() < types.LayerID(expectedLayers) {
-		clock.Tick()
+	for app.sync.ProcessedLayer() < types.LayerID(expectedLayers) {
+		app.sync.ForceSync()
 		lg.Info("sleep for %v sec", 30)
 		time.Sleep(30 * time.Second)
 
 	}
 
-	lg.Info("%v verified layers %v", app.BaseApp.Config.P2P.NodeID, app.sync.ValidatedLayer())
+	lg.Info("%v verified layers %v", app.BaseApp.Config.P2P.NodeID, app.sync.ProcessedLayer())
 	lg.Event().Info("sync done")
 	for {
 		lg.Info("keep busy sleep for %v sec", 60)
@@ -201,7 +205,7 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 func GetData(path, prefix string, lg log.Log) error {
 	dirs := []string{"poet", "atx", "nipst", "blocks", "ids", "layers", "transactions", "validity", "unappliedTxs"}
 	for _, dir := range dirs {
-		if err := os.MkdirAll(path+prefix+"/"+dir, 0777); err != nil {
+		if err := filesystem.ExistOrCreate(path + prefix + "/" + dir); err != nil {
 			return err
 		}
 	}

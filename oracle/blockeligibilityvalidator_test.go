@@ -15,15 +15,11 @@ type mockAtxDB struct {
 	err  error
 }
 
-func (m *mockAtxDB) IsIdentityActive(edId string, layer types.LayerID) (*types.NodeId, bool, types.AtxId, error) {
-	return &types.NodeId{}, false, types.AtxId{}, m.err
-}
-
 func (m mockAtxDB) GetIdentity(edId string) (types.NodeId, error) {
 	return types.NodeId{Key: edId, VRFPublicKey: vrfPubkey}, nil
 }
 
-func (m mockAtxDB) GetNodeLastAtxId(node types.NodeId) (types.AtxId, error) {
+func (m mockAtxDB) GetNodeAtxIdForEpoch(nodeId types.NodeId, targetEpoch types.EpochId) (types.AtxId, error) {
 	return types.AtxId{}, m.err
 }
 
@@ -40,6 +36,7 @@ func TestBlockEligibilityValidator_getValidAtx(t *testing.T) {
 
 	block := &types.Block{MiniBlock: types.MiniBlock{BlockHeader: types.BlockHeader{LayerIndex: 20}}} // non-genesis
 	block.Signature = edSigner.Sign(block.Bytes())
+	block.Initialize()
 	_, err := v.getValidAtx(block)
 	r.EqualError(err, "getting ATX failed: some err 00000 ep(4)")
 

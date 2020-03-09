@@ -7,19 +7,18 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"sync"
-	"sync/atomic"
 	"time"
 )
 
 type BlockListener struct {
 	*Syncer
-	BlockValidator
+	BlockEligibilityValidator
 	log.Log
 	wg                   sync.WaitGroup
 	bufferSize           int
 	semaphore            chan struct{}
 	receivedGossipBlocks chan service.GossipMessage
-	startLock            uint32
+	startLock            types.TryMutex
 	timeout              time.Duration
 	exit                 chan struct{}
 }
@@ -33,7 +32,7 @@ func (bl *BlockListener) Close() {
 }
 
 func (bl *BlockListener) Start() {
-	if atomic.CompareAndSwapUint32(&bl.startLock, 0, 1) {
+	if bl.startLock.TryLock() {
 		go bl.ListenToGossipBlocks()
 	}
 }
@@ -86,9 +85,20 @@ func (bl *BlockListener) handleBlock(data service.GossipMessage) {
 	}
 
 	//set the block id when received
-	blk.CalcAndSetId()
+	blk.Initialize()
 
-	bl.Log.With().Info("got new block", log.BlockId(blk.Id().String()), log.LayerId(uint64(blk.Layer())), log.Int("txs", len(blk.TxIds)), log.Int("atxs", len(blk.AtxIds)))
+	bl.Log.With().Info("got new block",
+		blk.Id(),
+		blk.LayerIndex,
+		blk.LayerIndex.GetEpoch(bl.LayersPerEpoch),
+		log.String("miner_id", blk.MinerId().String()),
+		log.Int("tx_count", len(blk.TxIds)),
+		log.Int("atx_count", len(blk.AtxIds)),
+		log.Int("view_edges", len(blk.ViewEdges)),
+		log.Int("vote_count", len(blk.BlockVotes)),
+		blk.ATXID,
+		log.Uint32("eligibility_counter", blk.EligibilityProof.J),
+	)
 	//check if known
 	if _, err := bl.GetBlock(blk.Id()); err == nil {
 		bl.With().Info("we already know this block", log.BlockId(blk.Id().String()))
@@ -105,7 +115,7 @@ func (bl *BlockListener) handleBlock(data service.GossipMessage) {
 		return
 	}
 
-	if blk.Layer() <= bl.ValidatedLayer() || blk.Layer() == bl.ValidatingLayer() {
+	if blk.Layer() <= bl.ProcessedLayer() || blk.Layer() == bl.ValidatingLayer() {
 		bl.Syncer.HandleLateBlock(&blk)
 	}
 	return

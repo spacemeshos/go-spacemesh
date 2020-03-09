@@ -113,3 +113,44 @@ func TestPriorityQ_Read(t *testing.T) {
 	rg.Wait()
 	r.Equal(3*defLen, i)
 }
+
+func TestPriorityQ_Close(t *testing.T) {
+	r := require.New(t)
+	pq := New(defLen)
+	prios := []Priority{Low, Mid, High}
+	for i := 0; i < 1000; i++ {
+		r.NoError(pq.Write(Priority(i%len(prios)), []byte("LOLOLOLLZ")))
+	}
+
+	r.Equal(_getQueueSize(pq), defLen)
+
+	c := make(chan struct{})
+
+	go func() {
+		defer func() { c <- struct{}{} }()
+		time.Sleep(10 * time.Millisecond)
+		i := 0
+		for {
+			_, err := pq.Read()
+			i++
+			if err != nil {
+				return
+			}
+			if i == defLen {
+				t.Error("Finished all queue while close was called midway")
+			}
+		}
+	}()
+
+	//close it right away
+	pq.Close()
+	<-c
+}
+
+func _getQueueSize(pq *Queue) int {
+	i := 0
+	for _, q := range pq.queues {
+		i += len(q)
+	}
+	return i
+}

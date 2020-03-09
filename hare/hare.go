@@ -4,9 +4,9 @@ import (
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
-	"github.com/spacemeshos/go-spacemesh/hare/metrics"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -33,7 +33,7 @@ type TerminationOutput interface {
 }
 
 type orphanBlockProvider interface {
-	GetUnverifiedLayerBlocks(layerId types.LayerID) ([]types.BlockID, error)
+	LayerBlockIds(layerId types.LayerID) ([]types.BlockID, error)
 }
 
 // checks if the collected output is valid
@@ -71,6 +71,8 @@ type Hare struct {
 	validate outputValidationFunc
 
 	nid types.NodeId
+
+	totalCPs int32
 }
 
 // New returns a new Hare struct.
@@ -192,11 +194,17 @@ func (h *Hare) onTick(id types.LayerID) {
 		h.lastLayer = id
 	}
 
+	h.layerLock.Unlock()
+	h.Debug("hare got tick, sleeping for %v", h.networkDelta)
+
+	if !h.broker.Synced(instanceId(id)) { // if not synced don't start consensus
+		h.With().Info("not starting hare since the node is not synced", log.LayerId(uint64(id)))
+		return
+	}
+
 	// call to start the calculation of active set size beforehand
 	go h.rolacle.IsIdentityActiveOnConsensusView(h.nid.Key, id)
 
-	h.layerLock.Unlock()
-	h.Debug("hare got tick, sleeping for %v", h.networkDelta)
 	ti := time.NewTimer(h.networkDelta)
 	select {
 	case <-ti.C:
@@ -208,9 +216,9 @@ func (h *Hare) onTick(id types.LayerID) {
 
 	h.Debug("get hare results")
 	// retrieve set form orphan blocks
-	blocks, err := h.obp.GetUnverifiedLayerBlocks(h.lastLayer)
+	blocks, err := h.obp.LayerBlockIds(h.lastLayer)
 	if err != nil {
-		h.Error("No blocks for consensus on layer %v %v", id, err)
+		h.With().Error("No blocks for consensus", log.LayerId(uint64(id)), log.Err(err))
 		return
 	}
 
@@ -234,7 +242,9 @@ func (h *Hare) onTick(id types.LayerID) {
 		h.broker.Unregister(cp.Id())
 		return
 	}
-	metrics.TotalConsensusProcesses.Add(1)
+	h.With().Info("number of consensus processes", log.Int32("count", atomic.AddInt32(&h.totalCPs, 1)))
+	// TODO: fix metrics
+	//metrics.TotalConsensusProcesses.With("layer", strconv.FormatUint(uint64(id), 10)).Add(1)
 }
 
 var (
@@ -270,13 +280,15 @@ func (h *Hare) outputCollectionLoop() {
 			if out.Completed() { // CP completed, collect the output
 				err := h.collectOutput(out)
 				if err != nil {
-					h.Warning("Err collecting output from hare err: %v", err)
+					h.With().Warning("error collecting output from hare", log.Err(err))
 				}
 			}
 
 			// anyway, unregister from broker
 			h.broker.Unregister(out.Id()) // unregister from broker after termination
-			metrics.TotalConsensusProcesses.Add(-1)
+			h.With().Info("number of consensus processes", log.Int32("count", atomic.AddInt32(&h.totalCPs, -1)))
+			// TODO: fix metrics
+			//metrics.TotalConsensusProcesses.With("layer", strconv.FormatUint(uint64(out.Id()), 10)).Add(-1)
 		case <-h.CloseChannel():
 			return
 		}

@@ -90,7 +90,7 @@ func atxs(num int) ([]*types.ActivationTx, []types.AtxId) {
 }
 
 func createBaseline(msh *mesh.Mesh, layers int, layerSize int, patternSize int, txPerBlock int, atxPerBlock int) {
-	lg := log.New("tortoise_test", "", "")
+	lg := log.New("create_baseline", "", "")
 	l1 := mesh.GenesisLayer()
 	msh.AddBlockWithTxs(l1.Blocks()[0], nil, nil)
 	var lyrs []*types.Layer
@@ -140,7 +140,7 @@ func createLayerWithRandVoting(msh *mesh.Mesh, index types.LayerID, prev []*type
 
 		bl.TxIds = txids
 		bl.AtxIds = atxids
-		bl.CalcAndSetId()
+		bl.Initialize()
 		start := time.Now()
 		msh.AddBlockWithTxs(bl, txs, atxs)
 		log.Debug("added block %v", time.Since(start))

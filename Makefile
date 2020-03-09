@@ -5,7 +5,7 @@ SHA = $(shell git rev-parse --short HEAD)
 CURR_DIR = $(shell pwd)
 CURR_DIR_WIN = $(shell cd)
 BIN_DIR = $(CURR_DIR)/build
-BIN_DIR_WIN = $(CUR_DIR_WIN)/build
+BIN_DIR_WIN = $(CURR_DIR_WIN)/build
 export GO111MODULE = on
 
 BRANCH := $(shell bash -c 'if [ "$$TRAVIS_PULL_REQUEST" == "false" ]; then echo $$TRAVIS_BRANCH; else echo $$TRAVIS_PULL_REQUEST_BRANCH; fi')
@@ -116,7 +116,7 @@ arm6: genproto
 
 
 test: genproto
-	ulimit -n 500; go test -timeout 0 -p 1 ./...
+	ulimit -n 9999; go test -timeout 0 -p 1 ./...
 .PHONY: test
 
 
@@ -276,10 +276,111 @@ dockertest-genesis-voting: dockerbuild-test dockerrun-genesis-voting
 .PHONY: dockertest-genesis-voting
 
 
+dockerrun-blocks-add-node:
+ifndef ES_PASSWD
+	$(error ES_PASSWD is not set)
+endif
+
+	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
+		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
+		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
+		-it go-spacemesh-python:$(BRANCH) pytest -s -v block_atx/add_node/test_blocks_add_node.py --tc-file=block_atx/add_node/config.yaml --tc-format=yaml
+
+.PHONY: dockerrun-blocks-add-node
+
+dockertest-blocks-add-node: dockerbuild-test dockerrun-blocks-add-node
+.PHONY: dockertest-blocks-add-node
+
+
+dockerrun-blocks-remove-node:
+ifndef ES_PASSWD
+	$(error ES_PASSWD is not set)
+endif
+
+	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
+		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
+		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
+		-it go-spacemesh-python:$(BRANCH) pytest -s -v block_atx/remove_node/test_blocks_remove_node.py --tc-file=block_atx/remove_node/config.yaml --tc-format=yaml
+
+.PHONY: dockerrun-blocks-remove-node
+
+dockertest-blocks-remove-node: dockerbuild-test dockerrun-blocks-remove-node
+.PHONY: dockertest-blocks-remove-node
+
+
+dockerrun-blocks-stress:
+ifndef ES_PASSWD
+	$(error ES_PASSWD is not set)
+endif
+
+	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
+		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
+		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
+		-it go-spacemesh-python:$(BRANCH) pytest -s -v stress/blocks_stress/test_stress_blocks.py --tc-file=stress/blocks_stress/config.yaml --tc-format=yaml
+
+.PHONY: dockerrun-blocks-stress
+
+dockertest-blocks-stress: dockerbuild-test dockerrun-blocks-stress
+.PHONY: dockertest-blocks-stress
+
+
+dockerrun-grpc-stress:
+ifndef ES_PASSWD
+	$(error ES_PASSWD is not set)
+endif
+
+	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
+		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
+		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
+		-it go-spacemesh-python:$(BRANCH) pytest -s -v stress/grpc_stress/test_stress_grpc.py --tc-file=stress/grpc_stress/config.yaml --tc-format=yaml
+
+.PHONY: dockerrun-grpc-stress
+
+dockertest-grpc-stress: dockerbuild-test dockerrun-grpc-stress
+.PHONY: dockertest-grpc-stress
+
+
+dockerrun-sync-stress:
+ifndef ES_PASSWD
+	$(error ES_PASSWD is not set)
+endif
+
+	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
+		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
+		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
+		-it go-spacemesh-python:$(BRANCH) pytest -s -v stress/sync_stress/test_sync.py --tc-file=stress/sync_stress/config.yaml --tc-format=yaml
+
+.PHONY: dockerrun-sync-stress
+
+dockertest-sync-stress: dockerbuild-test dockerrun-sync-stress
+.PHONY: dockertest-sync-stress
+
+
+dockerrun-tx-stress:
+ifndef ES_PASSWD
+	$(error ES_PASSWD is not set)
+endif
+
+	docker run --rm -e ES_PASSWD="$(ES_PASSWD)" \
+		-e GOOGLE_APPLICATION_CREDENTIALS=./spacemesh.json \
+		-e CLIENT_DOCKER_IMAGE="spacemeshos/$(DOCKER_IMAGE_REPO):$(BRANCH)" \
+		-it go-spacemesh-python:$(BRANCH) pytest -s -v stress/tx_stress/test_stress_txs.py --tc-file=stress/tx_stress/config.yaml --tc-format=yaml
+
+.PHONY: dockerrun-tx-stress
+
+dockertest-tx-stress: dockerbuild-test dockerrun-tx-stress
+.PHONY: dockertest-tx-stress
+
+
 # The following is used to run tests one after the other locally
-dockerrun-test: dockerbuild-test dockerrun-p2p dockerrun-mining dockerrun-hare dockerrun-sync dockerrun-late-nodes # dockerrun-genesis-voting
+dockerrun-test: dockerbuild-test dockerrun-p2p dockerrun-mining dockerrun-hare dockerrun-sync dockerrun-late-nodes dockerrun-genesis-voting dockerrun-blocks-add-node dockerrun-blocks-add-node dockerrun-blocks-remove-node
 .PHONY: dockerrun-test
 
 dockerrun-all: dockerpush dockerrun-test
 .PHONY: dockerrun-all
 
+dockerrun-stress: dockerbuild-test dockerrun-blocks-stress dockerrun-grpc-stress dockerrun-sync-stress dockerrun-tx-stress
+.PHONY: dockerrun-stress
+
+dockertest-stress: dockerpush dockerrun-stress
+.PHONY: dockertest-stress

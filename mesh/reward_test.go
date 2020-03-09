@@ -16,6 +16,10 @@ type MockMapState struct {
 	TotalReward int64
 }
 
+func (s MockMapState) LoadState(layer types.LayerID) error {
+	panic("implement me")
+}
+
 func (MockMapState) GetStateRoot() types.Hash32 {
 	return [32]byte{}
 }
@@ -153,7 +157,7 @@ func createLayer(t testing.TB, mesh *Mesh, id types.LayerID, numOfBlocks, maxTra
 		block1.ATXID = atx.Id()
 
 		totalRewards += addTransactionsWithFee(t, mesh.MeshDB, block1, rand.Intn(maxTransactions), rand.Int63n(100))
-		block1.CalcAndSetId()
+		block1.Initialize()
 		err := mesh.AddBlock(block1)
 		assert.NoError(t, err)
 	}
@@ -191,6 +195,10 @@ type meshValidatorBatchMock struct {
 	batchSize types.LayerID
 }
 
+func (m *meshValidatorBatchMock) LatestComplete() types.LayerID {
+	panic("implement me")
+}
+
 func (m *meshValidatorBatchMock) HandleIncomingLayer(layer *types.Layer) (types.LayerID, types.LayerID) {
 	layerId := layer.Index()
 	if layerId == 0 {
@@ -203,7 +211,13 @@ func (m *meshValidatorBatchMock) HandleIncomingLayer(layer *types.Layer) (types.
 	return prevPBase, prevPBase
 }
 
-func (m *meshValidatorBatchMock) HandleLateBlock(bl *types.Block) {}
+func (m *meshValidatorBatchMock) HandleLateBlock(bl *types.Block) (types.LayerID, types.LayerID) {
+	return bl.Layer() - 1, bl.Layer()
+}
+
+func (m *meshValidatorBatchMock) PersistTortoise() error {
+	return nil
+}
 
 func TestMesh_AccumulateRewards(t *testing.T) {
 	numOfLayers := 10
@@ -252,6 +266,6 @@ func TestMesh_AccumulateRewards(t *testing.T) {
 }
 
 func TestMesh_calcRewards(t *testing.T) {
-	reward := calculateActualRewards(big.NewInt(10000), big.NewInt(10))
+	reward := calculateActualRewards(1, big.NewInt(10000), big.NewInt(10))
 	assert.Equal(t, int64(1000), reward.Int64())
 }

@@ -3,17 +3,18 @@ package mesh
 import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"math"
 	"math/big"
 )
 
 type Config struct {
 	// reward config
-	BaseReward *big.Int
+	BaseReward *big.Int `mapstructure:"base-reward"`
 }
 
 func DefaultMeshConfig() Config {
 	return Config{
-		BaseReward: big.NewInt(5000),
+		BaseReward: big.NewInt(50 * int64(math.Pow10(12))),
 	}
 }
 
@@ -22,9 +23,10 @@ func CalculateLayerReward(id types.LayerID, params Config) *big.Int {
 	return params.BaseReward
 }
 
-func calculateActualRewards(rewards *big.Int, numBlocks *big.Int) *big.Int {
+func calculateActualRewards(layer types.LayerID, rewards *big.Int, numBlocks *big.Int) *big.Int {
 	div, mod := new(big.Int).DivMod(rewards, numBlocks, new(big.Int))
 	log.With().Info("Reward calculated",
+		log.LayerId(uint64(layer)),
 		log.Uint64("total_reward", rewards.Uint64()),
 		log.Uint64("num_blocks", numBlocks.Uint64()),
 		log.Uint64("block_reward", div.Uint64()),

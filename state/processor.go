@@ -27,31 +27,37 @@ type Projector interface {
 
 type TransactionProcessor struct {
 	log.Log
-	globalState  *StateDB
-	appliedTxs   database.Database
-	prevStates   map[types.LayerID]types.Hash32
+	*StateDB
+	processorDb  database.Database
 	currentLayer types.LayerID
 	rootHash     types.Hash32
 	stateQueue   list.List
 	projector    Projector
-	db           *trie.Database
+	trie         *trie.Database
 	mu           sync.Mutex
+	rootMu       sync.RWMutex
 }
 
-const maxPastStates = 20
+const NewRootKey = "root"
 
-func NewTransactionProcessor(db *StateDB, appliedTxs database.Database, projector Projector, logger log.Log) *TransactionProcessor {
+func NewTransactionProcessor(allStates, processorDb database.Database, projector Projector, logger log.Log) *TransactionProcessor {
+	stateDb, err := New(types.Hash32{}, NewDatabase(allStates))
+	if err != nil {
+		log.Panic("cannot load state db, %v", err)
+	}
+	root := stateDb.IntermediateRoot(false)
+	log.Info("started processor with state root %x", root)
 	return &TransactionProcessor{
 		Log:          logger,
-		globalState:  db,
-		appliedTxs:   appliedTxs,
-		prevStates:   make(map[types.LayerID]types.Hash32),
+		StateDB:      stateDb,
+		processorDb:  processorDb,
 		currentLayer: 0,
-		rootHash:     types.Hash32{},
+		rootHash:     root,
 		stateQueue:   list.List{},
 		projector:    projector,
-		db:           db.TrieDB(),
+		trie:         stateDb.TrieDB(),
 		mu:           sync.Mutex{}, //sync between reset and apply mesh.Transactions
+		rootMu:       sync.RWMutex{},
 	}
 }
 
@@ -76,7 +82,7 @@ func (tp *TransactionProcessor) ValidateSignature(s types.Signed) (types.Address
 	}
 
 	addr := PublicKeyToAccountAddress(pubKey)
-	if !tp.globalState.Exist(addr) {
+	if !tp.Exist(addr) {
 		return types.Address{}, fmt.Errorf("failed to validate tx signature, unknown src account %v", addr)
 	}
 
@@ -85,11 +91,11 @@ func (tp *TransactionProcessor) ValidateSignature(s types.Signed) (types.Address
 
 // AddressExists checks if an account address exists in this node's global state
 func (tp *TransactionProcessor) AddressExists(addr types.Address) bool {
-	return tp.globalState.Exist(addr)
+	return tp.Exist(addr)
 }
 
 func (tp *TransactionProcessor) GetLayerApplied(txId types.TransactionId) *types.LayerID {
-	layerIdBytes, err := tp.appliedTxs.Get(txId.Bytes())
+	layerIdBytes, err := tp.processorDb.Get(txId.Bytes())
 	if err != nil {
 		return nil
 	}
@@ -99,7 +105,7 @@ func (tp *TransactionProcessor) GetLayerApplied(txId types.TransactionId) *types
 
 func (tp *TransactionProcessor) ValidateNonceAndBalance(tx *types.Transaction) error {
 	origin := tx.Origin()
-	nonce, balance, err := tp.projector.GetProjection(origin, tp.globalState.GetNonce(origin), tp.globalState.GetBalance(origin))
+	nonce, balance, err := tp.projector.GetProjection(origin, tp.GetNonce(origin), tp.GetBalance(origin))
 	if err != nil {
 		return fmt.Errorf("failed to project state for account %v: %v", origin.Short(), err)
 	}
@@ -116,7 +122,8 @@ func (tp *TransactionProcessor) ValidateNonceAndBalance(tx *types.Transaction) e
 // ApplyTransaction receives a batch of transaction to apply on state. Returns the number of transaction that failed to apply.
 func (tp *TransactionProcessor) ApplyTransactions(layer types.LayerID, txs []*types.Transaction) (int, error) {
 	if len(txs) == 0 {
-		return 0, nil
+		err := tp.addStateToHistory(layer, tp.GetStateRoot())
+		return 0, err
 	}
 
 	tp.mu.Lock()
@@ -131,33 +138,53 @@ func (tp *TransactionProcessor) ApplyTransactions(layer types.LayerID, txs []*ty
 		remainingCount = len(remaining)
 	}
 
-	newHash, err := tp.globalState.Commit(false)
+	newHash, err := tp.Commit(false)
 
 	if err != nil {
 		return remainingCount, fmt.Errorf("failed to commit global state: %v", err)
 	}
 
-	tp.addStateToHistory(layer, newHash)
+	err = tp.addStateToHistory(layer, newHash)
 
-	return remainingCount, nil
+	return remainingCount, err
 }
 
-func (tp *TransactionProcessor) addStateToHistory(layer types.LayerID, newHash types.Hash32) {
-	tp.stateQueue.PushBack(newHash)
-	if tp.stateQueue.Len() > maxPastStates {
-		hash := tp.stateQueue.Remove(tp.stateQueue.Front())
-		tp.db.Commit(hash.(types.Hash32), false)
+func (tp *TransactionProcessor) addStateToHistory(layer types.LayerID, newHash types.Hash32) error {
+	tp.trie.Reference(newHash, types.Hash32{})
+	err := tp.trie.Commit(newHash, false)
+	if err != nil {
+		return err
 	}
-	tp.prevStates[layer] = newHash
-	tp.db.Reference(newHash, types.Hash32{})
-	tp.With().Info("new state root added to history",
-		log.LayerId(layer.Uint64()),
-		log.String("state_root", util.Bytes2Hex(newHash.Bytes())),
-	)
+	err = tp.addState(newHash, layer)
+	if err != nil {
+		return err
+	}
+	tp.Log.With().Info("new state root", log.LayerId(uint64(layer)), log.String("state_root", newHash.String()))
+	return nil
 }
 
-func (tp *TransactionProcessor) GetStateRoot() types.Hash32 {
-	return tp.stateQueue.Back().Value.(types.Hash32)
+func getStateRootLayerKey(layer types.LayerID) []byte {
+	return append([]byte(NewRootKey), layer.ToBytes()...)
+}
+
+func (tp *TransactionProcessor) addState(stateRoot types.Hash32, layer types.LayerID) error {
+	if err := tp.processorDb.Put(getStateRootLayerKey(layer), stateRoot.Bytes()); err != nil {
+		return err
+	}
+	tp.rootMu.Lock()
+	tp.rootHash = stateRoot
+	tp.rootMu.Unlock()
+	return nil
+}
+
+func (tp *TransactionProcessor) getLayerStateRoot(layer types.LayerID) (types.Hash32, error) {
+	bts, err := tp.processorDb.Get(getStateRootLayerKey(layer))
+	if err != nil {
+		return types.Hash32{}, err
+	}
+	var x types.Hash32
+	x.SetBytes(bts)
+	return x, nil
 }
 
 func (tp *TransactionProcessor) ApplyRewards(layer types.LayerID, miners []types.Address, reward *big.Int) {
@@ -167,34 +194,43 @@ func (tp *TransactionProcessor) ApplyRewards(layer types.LayerID, miners []types
 			log.Uint64("reward", reward.Uint64()),
 			log.LayerId(uint64(layer)),
 		)
-		tp.globalState.AddBalance(account, reward)
+		tp.AddBalance(account, reward)
 		events.Publish(events.RewardReceived{Coinbase: account.String(), Amount: reward.Uint64()})
 	}
-	newHash, err := tp.globalState.Commit(false)
+	newHash, err := tp.Commit(false)
 
 	if err != nil {
-		tp.Log.Error("db write error %v", err)
+		tp.Log.Error("trie write error %v", err)
 		return
 	}
 
-	tp.addStateToHistory(layer, newHash)
+	err = tp.addStateToHistory(layer, newHash)
+	if err != nil {
+		tp.Log.Error("failed to add state to history: %v", err)
+	}
 }
 
-func (tp *TransactionProcessor) Reset(layer types.LayerID) {
+func (tp *TransactionProcessor) LoadState(layer types.LayerID) error {
 	tp.mu.Lock()
 	defer tp.mu.Unlock()
-	if state, ok := tp.prevStates[layer]; ok {
-		newState, err := New(state, tp.globalState.db)
-
-		if err != nil {
-			log.Panic("cannot revert- improper state")
-		}
-		tp.Log.Info("reverted, new root %x", newState.IntermediateRoot(false))
-		tp.Log.With().Info("reverted", log.String("root_hash", newState.IntermediateRoot(false).String()))
-
-		tp.globalState = newState
-		tp.pruneAfterRevert(layer)
+	state, err := tp.getLayerStateRoot(layer)
+	if err != nil {
+		return err
 	}
+	newState, err := New(state, tp.db)
+	if err != nil {
+		log.Panic("cannot revert- improper state: %v", err)
+	}
+
+	tp.Log.Info("reverted, new root %x", newState.IntermediateRoot(false))
+	tp.Log.With().Info("reverted", log.String("root_hash", newState.IntermediateRoot(false).String()))
+
+	tp.StateDB = newState
+	tp.rootMu.Lock()
+	tp.rootHash = state
+	tp.rootMu.Unlock()
+
+	return nil
 }
 
 func (tp *TransactionProcessor) Process(txs []*types.Transaction, layerId types.LayerID) (remaining []*types.Transaction) {
@@ -215,22 +251,8 @@ func (tp *TransactionProcessor) Process(txs []*types.Transaction, layerId types.
 	return
 }
 
-func (tp *TransactionProcessor) pruneAfterRevert(targetLayerID types.LayerID) {
-	//needs to be called under mutex lock
-	for i := tp.currentLayer; i >= targetLayerID; i-- {
-		if hash, ok := tp.prevStates[i]; ok {
-			if tp.stateQueue.Front().Value != hash {
-				panic("old state wasn't found")
-			}
-			tp.stateQueue.Remove(tp.stateQueue.Front())
-			tp.db.Dereference(hash)
-			delete(tp.prevStates, i)
-		}
-	}
-}
-
 func (tp *TransactionProcessor) checkNonce(trns *types.Transaction) bool {
-	return tp.globalState.GetNonce(trns.Origin()) == trns.AccountNonce
+	return tp.GetNonce(trns.Origin()) == trns.AccountNonce
 }
 
 var (
@@ -240,11 +262,11 @@ var (
 )
 
 func (tp *TransactionProcessor) ApplyTransaction(trans *types.Transaction, layerId types.LayerID) error {
-	if !tp.globalState.Exist(trans.Origin()) {
+	if !tp.Exist(trans.Origin()) {
 		return fmt.Errorf(ErrOrigin)
 	}
 
-	origin := tp.globalState.GetOrNewStateObj(trans.Origin())
+	origin := tp.GetOrNewStateObj(trans.Origin())
 
 	amountWithFee := trans.Fee + trans.Amount
 
@@ -255,20 +277,26 @@ func (tp *TransactionProcessor) ApplyTransaction(trans *types.Transaction, layer
 	}
 
 	if !tp.checkNonce(trans) {
-		tp.Log.Error(ErrNonce+" should be %v actual %v", tp.globalState.GetNonce(trans.Origin()), trans.AccountNonce)
+		tp.Log.Error(ErrNonce+" should be %v actual %v", tp.GetNonce(trans.Origin()), trans.AccountNonce)
 		return fmt.Errorf(ErrNonce)
 	}
 
-	tp.globalState.SetNonce(trans.Origin(), tp.globalState.GetNonce(trans.Origin())+1) // TODO: Not thread-safe
-	transfer(tp.globalState, trans.Origin(), trans.Recipient, new(big.Int).SetUint64(trans.Amount))
+	tp.SetNonce(trans.Origin(), tp.GetNonce(trans.Origin())+1) // TODO: Not thread-safe
+	transfer(tp, trans.Origin(), trans.Recipient, new(big.Int).SetUint64(trans.Amount))
 
 	//subtract fee from account, fee will be sent to miners in layers after
-	tp.globalState.SubBalance(trans.Origin(), new(big.Int).SetUint64(trans.Fee))
-	if err := tp.appliedTxs.Put(trans.Id().Bytes(), layerId.ToBytes()); err != nil {
+	tp.SubBalance(trans.Origin(), new(big.Int).SetUint64(trans.Fee))
+	if err := tp.processorDb.Put(trans.Id().Bytes(), layerId.ToBytes()); err != nil {
 		return fmt.Errorf("failed to add to applied txs: %v", err)
 	}
 	tp.With().Info("transaction processed", log.String("transaction", trans.String()))
 	return nil
+}
+
+func (tp *TransactionProcessor) GetStateRoot() types.Hash32 {
+	tp.rootMu.RLock()
+	defer tp.rootMu.RUnlock()
+	return tp.rootHash
 }
 
 func transfer(db GlobalStateDB, sender, recipient types.Address, amount *big.Int) {

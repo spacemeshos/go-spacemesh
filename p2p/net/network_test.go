@@ -3,6 +3,7 @@ package net
 import (
 	"encoding/hex"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/stretchr/testify/assert"
@@ -25,10 +26,9 @@ func Test_sumByteArray(t *testing.T) {
 func TestNet_EnqueueMessage(t *testing.T) {
 	testnodes := 100
 	cfg := config.DefaultConfig()
-	addr := net.TCPAddr{net.ParseIP("0.0.0.0"), 0000, ""}
-	ln, err := node.NewNodeIdentity(cfg, &addr, false)
+	ln, err := node.NewNodeIdentity()
 	assert.NoError(t, err)
-	n, err := NewNet(cfg, ln)
+	n, err := NewNet(cfg, ln, log.NewDefault(t.Name()))
 	assert.NoError(t, err)
 
 	var rndmtx sync.Mutex
@@ -77,10 +77,6 @@ func newMockListener() *mockListener {
 	return &mockListener{connReleaser: make(chan struct{})}
 }
 
-func (ml *mockListener) listenerFunc() (net.Listener, error) {
-	return ml, nil
-}
-
 func (ml *mockListener) Accept() (net.Conn, error) {
 	<-ml.connReleaser
 	atomic.AddInt32(&ml.calledCount, 1)
@@ -101,7 +97,7 @@ func (ml *mockListener) Close() error {
 	return nil
 }
 func (ml *mockListener) Addr() net.Addr {
-	return &net.IPAddr{IP: net.ParseIP("0.0.0.0"), Zone: ""}
+	return &net.TCPAddr{IP: net.ParseIP("0.0.0.0"), Zone: ""}
 }
 
 type tempErr string
@@ -118,14 +114,13 @@ func Test_Net_LimitedConnections(t *testing.T) {
 	cfg := config.DefaultConfig()
 	cfg.SessionTimeout = 100 * time.Millisecond
 
-	addr := net.TCPAddr{net.ParseIP("0.0.0.0"), 0000, ""}
-	ln, err := node.NewNodeIdentity(cfg, &addr, false)
+	ln, err := node.NewNodeIdentity()
 	require.NoError(t, err)
-	n, err := NewNet(cfg, ln)
+	n, err := NewNet(cfg, ln, log.NewDefault(t.Name()))
 	//n.SubscribeOnNewRemoteConnections(counter)
-	listener := newMockListener()
-	err = n.listen(listener.listenerFunc)
 	require.NoError(t, err)
+	listener := newMockListener()
+	n.Start(listener)
 	listener.accpetResErr = tempErr("demo connection will close and allow more")
 	for i := 0; i < cfg.MaxPendingConnections; i++ {
 		listener.releaseConn()
@@ -149,12 +144,13 @@ func TestHandlePreSessionIncomingMessage2(t *testing.T) {
 	r := require.New(t)
 	var wg sync.WaitGroup
 
-	aliceNode, _ := node.GenerateTestNode(t)
+	aliceNode, aliceNodeInfo := node.GenerateTestNode(t)
 	bobNode, _ := node.GenerateTestNode(t)
 
 	bobsAliceConn := NewConnectionMock(aliceNode.PublicKey())
-	bobsAliceConn.addr = fmt.Sprintf("%v:%v", aliceNode.IP.String(), aliceNode.ProtocolPort)
-	bobsNet, err := NewNet(config.DefaultConfig(), bobNode)
+	bobsAliceConn.Addr = &net.TCPAddr{IP: aliceNodeInfo.IP, Port: int(aliceNodeInfo.ProtocolPort)}
+
+	bobsNet, err := NewNet(config.DefaultConfig(), bobNode, log.NewDefault(t.Name()))
 	r.NoError(err)
 	bobsNet.SubscribeOnNewRemoteConnections(func(event NewConnectionEvent) {
 		r.Equal(aliceNode.PublicKey().String(), event.Conn.Session().ID().String(), "wrong session received")

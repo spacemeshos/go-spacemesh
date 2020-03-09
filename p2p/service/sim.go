@@ -74,6 +74,7 @@ func (s *Simulator) SubscribeToPeerEvents(myid p2pcrypto.Key) (chan p2pcrypto.Pu
 func (s *Simulator) publishNewPeer(peer p2pcrypto.PublicKey) {
 	s.subLock.Lock()
 	for _, ch := range s.newPeersSubs {
+		log.Info("publish on chan with len %v, cap %v", len(ch), cap(ch))
 		ch <- peer
 	}
 	s.subLock.Unlock()
@@ -331,4 +332,14 @@ func (sn *Node) Shutdown() {
 	delete(sn.sim.protocolGossipHandler, sn.NodeInfo.PublicKey())
 	sn.sim.mutex.Unlock()
 
+	sn.sim.subLock.Lock()
+	for _, ch := range sn.sim.newPeersSubs {
+		close(ch)
+	}
+	sn.sim.newPeersSubs = nil
+	for _, ch := range sn.sim.delPeersSubs {
+		close(ch)
+	}
+	sn.sim.delPeersSubs = nil
+	sn.sim.subLock.Unlock()
 }

@@ -1,8 +1,6 @@
 import argparse
-import multiprocessing as mp
 import os
 import pprint
-import random
 import sys
 # this hack is for importing packages located above
 # this file and it's imports files location
@@ -11,7 +9,7 @@ dir_path = '/'.join(dir_path.split('/')[0:-2])
 print(f"adding {dir_path} to sys.path")
 sys.path.insert(0, dir_path)
 
-from tests.convenience import sleep_print_backwards
+from tests.convenience import sleep_print_backwards, str2bool
 from tests.tx_generator import actions
 from tests.tx_generator import config as conf
 from tests.tx_generator import k8s_handler
@@ -21,17 +19,6 @@ from tests.tx_generator.models.accountant import Accountant
 GAS_PRICE = 1
 NEW_ACCOUNTS = 20
 TX_NUM = NEW_ACCOUNTS
-
-
-def str2bool(v):
-    if isinstance(v, bool):
-        return v
-    if v.lower() in ('yes', 'true', 't', 'y', '1'):
-        return True
-    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
-        return False
-    else:
-        raise argparse.ArgumentTypeError('Boolean value expected.')
 
 
 def set_parser():
@@ -72,12 +59,13 @@ def set_parser():
 
 
 def run():
-    q = None
     menu = "sp - fixed node\n" \
            "nsp - random node\n" \
            "c - concurrent\n" \
            "nc - cancel concurrency\n" \
            "t - tx number\n" \
+           "txs - print all txs ids\n" \
+           "tbi - tx by id\n" \
            "p - print state\n" \
            "go to start, q to quit: "
     print(menu)
@@ -90,7 +78,7 @@ def run():
         if inp == 'p':
             print(f"\n\n{pprint.pformat(acc.accounts)}\n\n")
             print(menu)
-        if inp == "sp":
+        elif inp == "sp":
             print("using same pod for all GRPC api calls")
             my_wallet.fixed_node = -1
         elif inp == "nsp":
@@ -104,6 +92,11 @@ def run():
             parsed_args.is_concurrent = False
         elif inp == "t":
             parsed_args.tx_num = int(input("how many txs: "))
+        elif inp == "txs":
+            print(my_wallet.tx_ids)
+        elif inp == "tbi":
+            inp = input("enter id: ")
+            print(my_wallet.get_tx_by_id(inp))
         elif inp == "go":
             actions.send_tx_from_each_account(my_wallet, acc, parsed_args.tx_num,
                                               is_concurrent=parsed_args.is_concurrent)
@@ -142,7 +135,8 @@ if __name__ == "__main__":
     tap_nonce = my_wallet.get_nonce_value(conf.acc_pub)
     tap_balance = my_wallet.get_balance_value(conf.acc_pub)
     # Create an accountant to follow state
-    acc = Accountant({conf.acc_pub: Accountant.set_tap_acc(balance=tap_balance, nonce=tap_nonce)})
+    tap_acc = Accountant.set_tap_acc(balance=tap_balance, nonce=tap_nonce)
+    acc = Accountant({conf.acc_pub: tap_acc}, tap_init_amount=tap_balance)
     acc.tx_cost = parsed_args.gas_price
     # Create new accounts by sending them coins
     actions.send_coins_to_new_accounts(my_wallet, parsed_args.new_accounts, parsed_args.amount, acc,
@@ -158,10 +152,6 @@ if __name__ == "__main__":
     if parsed_args.same_pod:
         print("Using the same pod for all txs (and nonce querying)")
         my_wallet.fixed_node = -1
-
-    # Set a queue for collecting all the transactions output,
-    # this will help with updating the "accountant" when multiprocessing
-    queue = mp.Queue() if parsed_args.is_concurrent else None
 
     run()
     print("bye bye!")

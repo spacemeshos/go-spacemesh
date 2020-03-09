@@ -2,7 +2,7 @@ from pytest_testconfig import config as testconfig
 import multiprocessing as mp
 
 from tests.convenience import sleep_print_backwards
-from tests.test_bs import setup_network, add_curl, setup_bootstrap, start_poet, setup_clients, wait_genesis
+from tests.setup_network import setup_network
 from tests.tx_generator import actions
 from tests.tx_generator import config as conf
 from tests.tx_generator.models.wallet_api import WalletAPI
@@ -12,8 +12,10 @@ from tests.utils import wait_for_next_layer
 
 # send 100 txs in one layer
 def test_tx_stress(init_session, setup_network):
-    wallet_api = WalletAPI(init_session, setup_network.clients.pods)
-    accountant = Accountant({conf.acc_pub: Accountant.set_tap_acc()})
+    wallet_api = WalletAPI(init_session, setup_network.clients.pods, fixed_node=-1)
+    tap_balance = wallet_api.get_balance_value(conf.acc_pub)
+    tap_acc = Accountant.set_tap_acc(balance=tap_balance)
+    accountant = Accountant({conf.acc_pub: tap_acc}, tap_init_amount=tap_balance)
 
     # create 100 accounts
     new_accounts = 100

@@ -360,7 +360,7 @@ func createLayer2(index types.LayerID, view *types.Layer, votes []*types.Layer, 
 			}
 		}
 
-		bl.CalcAndSetId()
+		bl.Initialize()
 		l.AddBlock(bl)
 	}
 	log.Debug("Created mesh.LayerID %d with blocks %d", l.Index(), layerBlocks)
@@ -689,7 +689,7 @@ func createLayer(index types.LayerID, prev []*types.Layer, blocksInLayer int) *t
 				bl.AddView(types.BlockID(prevBloc.Id()))
 			}
 		}
-		bl.CalcAndSetId()
+		bl.Initialize()
 		l.AddBlock(bl)
 	}
 	log.Debug("Created mesh.LayerID %d with blocks %d", l.Index(), layerBlocks)
@@ -917,13 +917,13 @@ func createLayerWithCorruptedPattern(index types.LayerID, prev *types.Layer, blo
 	layerBlocks := make([]types.BlockID, 0, blocksInLayer)
 	for i := 0; i < gbs; i++ {
 		bl := addPattern(types.NewExistingBlock(index, []byte(rand.RandString(8))), goodPattern, prev)
-		bl.CalcAndSetId()
+		bl.Initialize()
 		layerBlocks = append(layerBlocks, bl.Id())
 		l.AddBlock(bl)
 	}
 	for i := 0; i < blocksInLayer-gbs; i++ {
 		bl := addPattern(types.NewExistingBlock(index, []byte(rand.RandString(8))), badPattern, prev)
-		bl.CalcAndSetId()
+		bl.Initialize()
 		layerBlocks = append(layerBlocks, bl.Id())
 		l.AddBlock(bl)
 	}
@@ -964,7 +964,7 @@ func createLayerWithRandVoting(index types.LayerID, prev []*types.Layer, blocksI
 		for _, prevBloc := range prev[0].Blocks() {
 			bl.AddView(types.BlockID(prevBloc.Id()))
 		}
-		bl.CalcAndSetId()
+		bl.Initialize()
 		l.AddBlock(bl)
 	}
 	log.Debug("Created mesh.LayerID %d with blocks %d", l.Index(), layerBlocks)
@@ -999,15 +999,20 @@ func TestNinjaTortoise_Recovery(t *testing.T) {
 	alg := NewNinjaTortoise(3, mdb, 5, lg)
 	l := mesh.GenesisLayer()
 	AddLayer(mdb, l)
+
 	alg.handleIncomingLayer(l)
+	alg.PersistTortoise()
 
 	l1 := createLayer(1, []*types.Layer{l}, 3)
 	AddLayer(mdb, l1)
+
 	alg.handleIncomingLayer(l1)
+	alg.PersistTortoise()
 
 	l2 := createLayer(2, []*types.Layer{l1, l}, 3)
 	AddLayer(mdb, l2)
 	alg.handleIncomingLayer(l2)
+	alg.PersistTortoise()
 
 	l31 := createLayer(3, []*types.Layer{l1, l}, 4)
 	l32 := createLayer(3, []*types.Layer{l31}, 5)
@@ -1023,11 +1028,14 @@ func TestNinjaTortoise_Recovery(t *testing.T) {
 		l3 := createLayer(3, []*types.Layer{l2, l}, 3)
 		AddLayer(mdb, l3)
 		alg.handleIncomingLayer(l3)
+		alg.PersistTortoise()
 
 		l4 := createLayer(4, []*types.Layer{l3, l2}, 3)
 		AddLayer(mdb, l4)
 		alg.handleIncomingLayer(l4)
-		assert.True(t, alg.latestComplete() == 3)
+		alg.PersistTortoise()
+
+		assert.True(t, alg.LatestComplete() == 3)
 		return
 	}()
 

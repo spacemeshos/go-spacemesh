@@ -3,8 +3,8 @@ import time
 
 from tests.conftest import DeploymentInfo
 from tests import pod
-from tests.test_bs import setup_bootstrap_in_namespace, add_curl, setup_bootstrap
 from tests.misc import CoreV1ApiClient
+from tests.setup_utils import setup_bootstrap_in_namespace
 from tests.utils import get_spec_file_path
 
 
@@ -31,6 +31,7 @@ def test_reboot_bootstrap(init_session):
     bootstrap_deployment_info = setup_bootstrap_in_namespace(testconfig['namespace'],
                                                              bootstrap_deployment_info,
                                                              testconfig['bootstrap'],
+                                                             testconfig['genesis_delta'],
                                                              dep_time_out=testconfig['deployment_ready_time_out'],
                                                              file_path=ss_file_path)
 

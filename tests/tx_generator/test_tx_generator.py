@@ -3,9 +3,9 @@ import pprint
 import random
 import time
 
+from tests.setup_network import setup_network
 from tests.tx_generator import actions
 from tests.tx_generator.models.accountant import Accountant
-from tests.test_bs import setup_network, add_curl, setup_bootstrap, start_poet, setup_clients, wait_genesis
 import tests.tx_generator.config as conf
 from tests.tx_generator.models.wallet_api import WalletAPI
 
@@ -14,7 +14,8 @@ def test_transactions(setup_network):
     debug = False
     wallet_api = WalletAPI(setup_network.bootstrap.deployment_id, setup_network.clients.pods)
     tap_pub = conf.acc_pub
-    accountant = Accountant({tap_pub: Accountant.set_tap_acc()})
+    tap_balance = wallet_api.get_balance_value(tap_pub)
+    accountant = Accountant({tap_pub: Accountant.set_tap_acc(balance=tap_balance)}, tap_init_amount=tap_balance)
 
     # send txs via miners
     test_txs = 10

@@ -6,10 +6,16 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
+const (
+	P2PDirectoryPath   = "p2p"
+	NodeDataFileName   = "id.json"
+	NodesDirectoryName = "nodes"
+	UnlimitedMsgSize   = 0
+)
+
 // ConfigValues specifies  default values for node config params.
 var (
-	ConfigValues      = DefaultConfig()
-	SwarmConfigValues = ConfigValues.SwarmConfig
+	ConfigValues = DefaultConfig()
 )
 
 func init() {
@@ -24,13 +30,11 @@ func duration(duration string) (dur time.Duration) {
 	return dur
 }
 
-const UnlimitedMsgSize = 0
-
 // Config defines the configuration options for the Spacemesh peer-to-peer networking layer
 type Config struct {
 	TCPPort               int           `mapstructure:"tcp-port"`
+	AcquirePort           bool          `mapstructure:"acquire-port"`
 	NodeID                string        `mapstructure:"node-id"`
-	NewNode               bool          `mapstructure:"new-node"`
 	DialTimeout           time.Duration `mapstructure:"dial-timeout"`
 	ConnKeepAlive         time.Duration `mapstructure:"conn-keepalive"`
 	NetworkID             int8          `mapstructure:"network-id"`
@@ -65,15 +69,14 @@ func DefaultConfig() Config {
 		RoutingTableBucketSize: 20,
 		RoutingTableAlpha:      3,
 		RandomConnections:      5,
-		BootstrapNodes:         []string{ // these should be the spacemesh foundation bootstrap nodes
-		},
-		PeersFile: "peers.json", //  located under data-dir/<publickey>/<peer-file> not loaded or save if empty string is given.
+		BootstrapNodes:         []string{},   // these should be the spacemesh foundation bootstrap nodes
+		PeersFile:              "peers.json", // located under data-dir/<publickey>/<peer-file> not loaded or save if empty string is given.
 	}
 
 	return Config{
 		TCPPort:               7513,
+		AcquirePort:           true,
 		NodeID:                "",
-		NewNode:               false,
 		DialTimeout:           duration("1m"),
 		ConnKeepAlive:         duration("48h"),
 		NetworkID:             TestNet,

@@ -163,6 +163,8 @@ func (b *Broker) eventLoop() {
 			}
 
 			msgInstId := hareMsg.InnerMsg.InstanceId
+			// TODO: fix metrics
+			//metrics.MessageTypeCounter.With("type_id", hareMsg.InnerMsg.Type.String(), "layer", strconv.FormatUint(uint64(msgInstId), 10), "reporter", "brokerHandler").Add(1)
 			isEarly := false
 			if err := b.validate(hareMsg); err != nil {
 				if err != errEarlyMsg {
@@ -337,4 +339,14 @@ func (b *Broker) Unregister(id instanceId) {
 	}
 
 	wg.Wait()
+}
+
+// Synced returns true if the given layer is synced, false otherwise
+func (b *Broker) Synced(id instanceId) bool {
+	res := make(chan bool)
+	b.tasks <- func() {
+		res <- b.isSynced(id)
+	}
+
+	return <-res
 }

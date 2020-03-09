@@ -14,7 +14,8 @@ type Algorithm struct {
 
 type Tortoise interface {
 	handleIncomingLayer(ll *types.Layer)
-	latestComplete() types.LayerID
+	PersistTortoise() error
+	LatestComplete() types.LayerID
 }
 
 func NewAlgorithm(layerSize int, mdb *mesh.MeshDB, hdist int, lg log.Log) *Algorithm {
@@ -39,25 +40,33 @@ func NewRecoveredAlgorithm(mdb *mesh.MeshDB, lg log.Log) *Algorithm {
 	return alg
 }
 
-func (alg *Algorithm) HandleLateBlock(b *types.Block) {
+func (alg *Algorithm) HandleLateBlock(b *types.Block) (types.LayerID, types.LayerID) {
 	//todo feed all layers from b's layer to tortoise
 	l := types.NewLayer(b.Layer())
 	l.AddBlock(b)
-	alg.HandleIncomingLayer(l)
+	oldPbase, newPbase := alg.HandleIncomingLayer(l)
 	log.With().Info("late block ", log.LayerId(uint64(b.Layer())), log.BlockId(b.Id().String()))
+	return oldPbase, newPbase
+}
+
+func (alg *Algorithm) PersistTortoise() error {
+	alg.Lock()
+	defer alg.Unlock()
+	log.Info("persist tortoise ")
+	return alg.Tortoise.PersistTortoise()
 }
 
 func (alg *Algorithm) HandleIncomingLayer(ll *types.Layer) (types.LayerID, types.LayerID) {
 	alg.Lock()
 	defer alg.Unlock()
-	oldPbase := alg.latestComplete()
+	oldPbase := alg.LatestComplete()
 	alg.Tortoise.handleIncomingLayer(ll)
-	newPbase := alg.latestComplete()
+	newPbase := alg.LatestComplete()
 	updateMetrics(alg, ll)
 	return oldPbase, newPbase
 }
 
 func updateMetrics(alg *Algorithm, ll *types.Layer) {
-	pbaseCount.Set(float64(alg.latestComplete()))
+	pbaseCount.Set(float64(alg.LatestComplete()))
 	processedCount.Set(float64(ll.Index()))
 }

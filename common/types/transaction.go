@@ -3,6 +3,7 @@ package types
 import (
 	"fmt"
 	"github.com/spacemeshos/ed25519"
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 type TransactionId Hash32
@@ -22,6 +23,8 @@ func (id TransactionId) String() string {
 func (id TransactionId) Bytes() []byte {
 	return id[:]
 }
+
+func (id TransactionId) Field() log.Field { return id.Hash32().Field("tx_id") }
 
 var EmptyTransactionId = TransactionId{}
 

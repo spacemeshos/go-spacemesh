@@ -11,7 +11,7 @@
 <a href="https://gitter.im/spacemesh-os/Lobby"><img src="https://img.shields.io/badge/gitter-%23spacemesh--os-blue.svg"/></a>
 <a href="https://spacemesh.io"><img src="https://img.shields.io/badge/madeby-spacemeshos-blue.svg"/></a>
 [![Go Report Card](https://goreportcard.com/badge/github.com/spacemeshos/go-spacemesh)](https://goreportcard.com/report/github.com/spacemeshos/go-spacemesh)
-<a href="https://travis-ci.org/spacemeshos/go-spacemesh"><img src="https://api.travis-ci.org/spacemeshos/go-spacemesh.svg?branch=develop" /></a>
+[![Bors enabled](https://bors.tech/images/badge_small.svg)](https://app.bors.tech/repositories/22421)
 <a href="https://godoc.org/github.com/spacemeshos/go-spacemesh"><img src="https://img.shields.io/badge/godoc-LGTM-blue.svg"/></a>
 </p>
 <p align="center">
@@ -116,10 +116,61 @@ make darwin | linux | windows
 
 Platform-specific binaries are saved to the `/build` directory.
 
+---
+
 ### Running
+
+go-spacemesh is p2p software which is designed to form a decentralized network by connecting to other instances of go-spacemesh running on remote computers.
+
+To run go-spacemesh you need to specify the parameters shared between all instances on a specific network.
+
+You specify these parameters by providing go-spacemesh with a toml config file. Other CLI flags control local node behavior and override default values.
+
+#### Joining a Testnet (without mining)
+1. Build go-spacemesh from source code.
+2. Obtain the testnet's toml config file.
+3. Start go-spacemesh with the following arguments:
+
+```bash
+./go-spacemesh --grpc-server --json-server --tcp-port [a_port] --config [tomlFileLocation] -d [nodeDataFilesPath]
 ```
-./build/go-spacemesh
+
+##### Example
+Assuming tn1.toml is a testnet config file saved in the same directory as go-spacemesh, use the following command to join the testnet. The data folder will be created in the same directory as go-spacemesh. The node will use TCP port 7152 and UDP port 7152 for p2p connections:
+
+```bash
+./go-spacemesh --grpc-server --json-server --tcp-port 7152 --config tn1.toml -d sm_data
 ```
+
+4. Build the [CLI Wallet](https://github.com/spacemeshos/CLIWallet) from source code and run it:
+
+5. Use the CLI Wallet commands to setup accounts, start smeshing and execute transactions.
+
+
+```bash
+./cli_wallet
+```
+
+#### Joining a Testnet (with mining)
+1. Use the CLI Wallet to create a coinbase account.
+2. Follow the steps for joining the testnet without mining but use these parameters when starting go-spacemesh:
+
+```bash
+./go-spacemesh --grpc-server --json-server --tcp-port [a_port] --config [tomlFileLocation] -d [nodeDataFilesPath] --coinbase [an_account] --start-mining --post-datadir [dir_for_post_data]
+```
+
+##### Example
+```bash
+./go-spacemesh --grpc-server --json-server --tcp-port 7152 --config ./tn1.toml -d ./sm_data --coinbase 0x36168c60e06abbb4f5df6d1dd6a1b15655d71e75 --start-mining --post-datadir ./post_data
+```
+
+3. Use the CLI wallet to check your coinbase account balance and to transact
+
+#### Joining Spacemesh 0.1 ([TweedleDee](https://testnet.spacemesh.io/#/?id=what-is-spacemesh-01-tweedledee)) Testnet
+- Build go-spacemesh source code from this github release: [go-spacemesh 0.1.3](https://github.com/spacemeshos/go-spacemesh/releases/tag/v0.1.3).
+- Use [Testnet 0.1 (TweedleDee) Config File](https://storage.googleapis.com/smapp/0.0.3/tn01.toml).
+
+---
 
 ### Testing
 
@@ -149,7 +200,7 @@ On windows you will need the following prerequisites:
 You can then run the command `make install` followed by `make build` as on unix based systems.
 
 ### Running a Local Testnet
-- You can run a local Spacemesh Testent with 6 full nodes, 6 user accounts, and 1 POET support service on your computer using docker. 
+- You can run a local Spacemesh Testent with 6 full nodes, 6 user accounts, and 1 POET support service on your computer using docker.
 - The local testnet full nodes are built from this repo.
 - This is a great way to get a feel for the protocol and the platform and to start hacking on Spacemesh.
 - Follow the steps in our [Local Testnet Guide](https://testnet.spacemesh.io/#/README)
@@ -158,18 +209,6 @@ You can then run the command `make install` followed by `make build` as on unix 
 - Please visit our [wiki](https://github.com/spacemeshos/go-spacemesh/wiki)
 - Browse project [go docs](https://godoc.org/github.com/spacemeshos/go-spacemesh)
 - Spacemesh Protocol [video overview](https://www.youtube.com/watch?v=jvtHFOlA1GI)
-
-### Status
-
-Please install the Zenhub browser extension to view the go-spacemesh workspaces below.
-
-[P2P](https://github.com/spacemeshos/go-spacemesh#workspaces/go-spacemesh-59f1e073ac463071b57d474f/boards?labels=p2p&repos=108372143)
-
-[Sync Protocol](https://github.com/spacemeshos/go-spacemesh#workspaces/go-spacemesh-59f1e073ac463071b57d474f/boards?labels=sync&repos=108372143)
-
-[Hare Protocol](https://github.com/spacemeshos/go-spacemesh#workspaces/go-spacemesh-59f1e073ac463071b57d474f/boards?labels=hare%20protocol&repos=108372143)
-
-[Global State](https://github.com/spacemeshos/go-spacemesh#workspaces/go-spacemesh-59f1e073ac463071b57d474f/boards?labels=global%20state&repos=108372143)
 
 ### Got Questions?
 - Introduce yourself and ask anything on the [spacemesh gitter channel](https://gitter.im/spacemesh-os/Lobby).

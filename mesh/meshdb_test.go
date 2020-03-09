@@ -493,7 +493,7 @@ func TestMeshDB_testGetRewards(t *testing.T) {
 	err = mdb.writeTransactionRewards(2, []types.Address{addr1, addr2}, big.NewInt(20000), big.NewInt(19000))
 	r.NoError(err)
 
-	err = mdb.writeTransactionRewards(3, []types.Address{addr2}, big.NewInt(30000), big.NewInt(29000))
+	err = mdb.writeTransactionRewards(3, []types.Address{addr2, addr2}, big.NewInt(15000), big.NewInt(14500))
 	r.NoError(err)
 
 	rewards, err := mdb.GetRewards(addr2)

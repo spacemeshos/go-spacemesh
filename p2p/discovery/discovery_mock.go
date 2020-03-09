@@ -10,12 +10,14 @@ import (
 type MockPeerStore struct {
 	UpdateFunc      func(n, src *node.NodeInfo)
 	updateCount     int
-	SelectPeersFunc func(qty int) []*node.NodeInfo
+	SelectPeersFunc func(ctx context.Context, qty int) []*node.NodeInfo
 	bsres           error
 	bsCount         int
 	LookupFunc      func(p2pcrypto.PublicKey) (*node.NodeInfo, error)
 	lookupRes       *node.NodeInfo
 	lookupErr       error
+
+	IsLocalAddressFunc func(info *node.NodeInfo) bool
 
 	RemoveFunc  func(key p2pcrypto.PublicKey)
 	GoodFunc    func(key p2pcrypto.PublicKey)
@@ -26,6 +28,13 @@ func (m *MockPeerStore) Remove(key p2pcrypto.PublicKey) {
 	if m.RemoveFunc != nil {
 		m.RemoveFunc(key)
 	}
+}
+
+func (m *MockPeerStore) IsLocalAddress(info *node.NodeInfo) bool {
+	if m.IsLocalAddressFunc != nil {
+		return m.IsLocalAddressFunc(info)
+	}
+	return false
 }
 
 // SetUpdate sets the function to run on an issued update
@@ -77,9 +86,9 @@ func (m *MockPeerStore) Bootstrap(ctx context.Context) error {
 }
 
 // SelectPeers mocks selecting peers.
-func (m *MockPeerStore) SelectPeers(qty int) []*node.NodeInfo {
+func (m *MockPeerStore) SelectPeers(ctx context.Context, qty int) []*node.NodeInfo {
 	if m.SelectPeersFunc != nil {
-		return m.SelectPeersFunc(qty)
+		return m.SelectPeersFunc(ctx, qty)
 	}
 	return []*node.NodeInfo{}
 }
@@ -128,10 +137,26 @@ type mockAddrBook struct {
 
 	GoodFunc    func(key p2pcrypto.PublicKey)
 	AttemptFunc func(key p2pcrypto.PublicKey)
+
+	IsLocalAddressFunc  func(info *node.NodeInfo) bool
+	AddLocalAddressFunc func(info *node.NodeInfo)
 }
 
 func (m *mockAddrBook) Stop() {
 
+}
+
+func (m *mockAddrBook) AddLocalAddress(info *node.NodeInfo) {
+	if m.AddLocalAddressFunc != nil {
+		m.AddLocalAddressFunc(info)
+	}
+}
+
+func (m *mockAddrBook) IsLocalAddress(info *node.NodeInfo) bool {
+	if m.IsLocalAddressFunc != nil {
+		return m.IsLocalAddressFunc(info)
+	}
+	return false
 }
 
 func (m *mockAddrBook) RemoveAddress(key p2pcrypto.PublicKey) {

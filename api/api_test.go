@@ -8,6 +8,7 @@ import (
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	config2 "github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
@@ -42,6 +43,10 @@ type NodeAPIMock struct {
 type NetworkMock struct {
 	broadCastErr bool
 	broadcasted  []byte
+}
+
+func (s *NetworkMock) SubscribePeerEvents() (conn, disc chan p2pcrypto.PublicKey) {
+	return make(chan p2pcrypto.PublicKey), make(chan p2pcrypto.PublicKey)
 }
 
 func (s *NetworkMock) Broadcast(chanel string, payload []byte) error {
@@ -79,6 +84,12 @@ type TxAPIMock struct {
 	err          error
 }
 
+func (t *TxAPIMock) GetStateRoot() types.Hash32 {
+	var hash types.Hash32
+	hash.SetBytes([]byte("00000"))
+	return hash
+}
+
 func (t *TxAPIMock) ValidateNonceAndBalance(transaction *types.Transaction) error {
 	return t.err
 }
@@ -87,7 +98,7 @@ func (t *TxAPIMock) GetProjection(addr types.Address, prevNonce, prevBalance uin
 	return prevNonce, prevBalance, nil
 }
 
-func (t *TxAPIMock) ValidatedLayer() types.LayerID {
+func (t *TxAPIMock) LatestLayerInState() types.LayerID {
 	return ValidatedLayerId
 }
 
@@ -142,8 +153,13 @@ func (t *TxAPIMock) AddressExists(addr types.Address) bool {
 type MinigApiMock struct {
 }
 
-func (*MinigApiMock) MiningStats() (int, string, string) {
-	return 1, "123456", "/tmp"
+const (
+	miningStatus   = 123
+	remainingBytes = 321
+)
+
+func (*MinigApiMock) MiningStats() (int, uint64, string, string) {
+	return miningStatus, remainingBytes, "123456", "/tmp"
 }
 
 func (*MinigApiMock) StartPost(address types.Address, logicalDrive string, commitmentSize uint64) error {
@@ -163,6 +179,10 @@ func (*OracleMock) GetEligibleLayers() []types.LayerID {
 
 type GenesisTimeMock struct {
 	t time.Time
+}
+
+func (t GenesisTimeMock) GetCurrentLayer() types.LayerID {
+	return 1
 }
 
 func (t GenesisTimeMock) GetGenesisTime() time.Time {
@@ -201,7 +221,7 @@ func TestServersConfig(t *testing.T) {
 	port2, err := node.GetUnboundedPort()
 	require.NoError(t, err, "Should be able to establish a connection on a port")
 
-	grpcService := NewGrpcService(port1, &networkMock, ap, txApi, nil, &mining, &oracle, nil, PostMock{}, 0, nil)
+	grpcService := NewGrpcService(port1, &networkMock, ap, txApi, nil, &mining, &oracle, nil, PostMock{}, 0, nil, nil, nil)
 	require.Equal(t, grpcService.Port, uint(port1), "Expected same port")
 
 	jsonService := NewJSONHTTPServer(port2, port1)
@@ -307,9 +327,25 @@ func TestJsonWalletApi(t *testing.T) {
 	var stats pb.MiningStats
 	r.NoError(jsonpb.UnmarshalString(respBody, &stats))
 
-	r.Equal(int32(1), stats.Status)
+	r.Equal(int32(miningStatus), stats.Status)
 	r.Equal("/tmp", stats.DataDir)
 	r.Equal("123456", stats.Coinbase)
+	r.Equal(uint64(remainingBytes), stats.RemainingBytes)
+
+	// test get node status
+	respBody, respStatus = callEndpoint(t, "v1/nodestatus", "")
+	r.Equal(http.StatusOK, respStatus)
+
+	var nodeStatus pb.NodeStatus
+	r.NoError(jsonpb.UnmarshalString(respBody, &nodeStatus))
+
+	r.Zero(nodeStatus.Peers)
+	r.Equal(uint64(5), nodeStatus.MinPeers)
+	r.Equal(uint64(105), nodeStatus.MaxPeers)
+	r.False(nodeStatus.Synced)
+	r.Equal(uint64(10), nodeStatus.SyncedLayer)
+	r.Equal(uint64(1), nodeStatus.CurrentLayer)
+	r.Equal(uint64(8), nodeStatus.VerifiedLayer)
 
 	// test get genesisTime
 	respBody, respStatus = callEndpoint(t, "v1/genesis", "")
@@ -384,6 +420,11 @@ func TestJsonWalletApi(t *testing.T) {
 	// test call reset post
 	respBody, respStatus = callEndpoint(t, "v1/resetpost", "")
 	r.Equal(http.StatusOK, respStatus)
+
+	// test get getStateRoot
+	respBody, respStatus = callEndpoint(t, "v1/stateroot", "")
+	r.Equal(http.StatusOK, respStatus)
+	assertSimpleMessage(t, respBody, "0x0000000000000000000000000000000000000000000000000000003030303030")
 
 	// stop the services
 	shutDown()
@@ -478,9 +519,14 @@ func marshalProto(t *testing.T, msg proto.Message) string {
 
 var cfg = config.DefaultConfig()
 
+type SyncerMock struct{}
+
+func (SyncerMock) IsSynced() bool { return false }
+
 func launchServer(t *testing.T) func() {
 	networkMock.broadcasted = []byte{0x00}
-	grpcService := NewGrpcService(cfg.GrpcServerPort, &networkMock, ap, txApi, txMempool, &mining, &oracle, &genTime, PostMock{}, layerDuration, nil)
+	defaultConfig := config2.DefaultConfig()
+	grpcService := NewGrpcService(cfg.GrpcServerPort, &networkMock, ap, txApi, txMempool, &mining, &oracle, &genTime, PostMock{}, layerDuration, &SyncerMock{}, &defaultConfig, nil)
 	jsonService := NewJSONHTTPServer(cfg.JSONServerPort, cfg.GrpcServerPort)
 	// start gRPC and json server
 	grpcService.StartService()

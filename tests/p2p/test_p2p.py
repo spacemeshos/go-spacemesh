@@ -11,9 +11,9 @@ from pytest_testconfig import config as testconfig
 from tests.context import ES
 
 from tests.queries import query_message, poll_query_message
-from tests.test_bs import api_call, add_multi_clients, get_conf
 # noinspection PyUnresolvedReferences
-from tests.test_bs import setup_bootstrap, setup_clients, save_log_on_exit, add_curl
+from tests.setup_utils import add_multi_clients
+from tests.utils import get_conf, api_call
 
 
 dt = datetime.now()
@@ -46,8 +46,8 @@ def add_client(request, setup_bootstrap, setup_clients):
             raise Exception("Could not find bootstrap node")
 
         bs_info = setup_bootstrap.pods[0]
-        cspec = get_conf(bs_info, testconfig['client'])
-        client_name = add_multi_clients(setup_bootstrap.deployment_id, cspec, 1)[0]
+        cspec = get_conf(bs_info, testconfig['client'], testconfig['genesis_delta'])
+        client_name = add_multi_clients(testconfig, setup_bootstrap.deployment_id, cspec, 1)[0]
         return client_name
 
     return _add_single_client()
@@ -87,8 +87,8 @@ def add_clients(setup_bootstrap, setup_clients):
         if version:
             client_key += f'{version_separator}{version}'
 
-        cspec = get_conf(bs_info, testconfig[client_key])
-        pods_names = add_multi_clients(setup_bootstrap.deployment_id, cspec, size=num_of_clients)
+        cspec = get_conf(bs_info, testconfig[client_key], testconfig['genesis_delta'])
+        pods_names = add_multi_clients(testconfig, setup_bootstrap.deployment_id, cspec, size=num_of_clients)
         return pods_names
 
     return _add_clients
@@ -138,9 +138,9 @@ def test_add_client(add_client):
 
 def test_add_many_clients(init_session, setup_bootstrap, setup_clients):
     bs_info = setup_bootstrap.pods[0]
-    cspec = get_conf(bs_info, testconfig['client'])
+    cspec = get_conf(bs_info, testconfig['client'], testconfig['genesis_delta'])
 
-    pods = add_multi_clients(setup_bootstrap.deployment_id, cspec, size=4)
+    pods = add_multi_clients(testconfig, setup_bootstrap.deployment_id, cspec, size=4)
     time.sleep(40 * timeout_factor)  # wait for the new clients to finish bootstrap and for logs to get to elasticsearch
     fields = {'M': 'discovery_bootstrap'}
     for p in pods:
@@ -343,8 +343,8 @@ def test_late_bootstraps(init_session, setup_bootstrap, setup_clients):
     testnames = []
 
     for i in range(TEST_NUM):
-        client = add_multi_clients(setup_bootstrap.deployment_id,
-                                   get_conf(setup_bootstrap.pods[0], testconfig['client']),
+        client = add_multi_clients(testconfig, setup_bootstrap.deployment_id,
+                                   get_conf(setup_bootstrap.pods[0], testconfig['client'], testconfig['genesis_delta']),
                                    1)
         testnames.append((client[0], datetime.now()))
 

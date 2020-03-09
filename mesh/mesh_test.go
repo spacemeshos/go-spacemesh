@@ -50,12 +50,26 @@ type MeshValidatorMock struct {
 	mdb *MeshDB
 }
 
+func (m *MeshValidatorMock) PersistTortoise() error {
+	return nil
+}
+
+func (m *MeshValidatorMock) LatestComplete() types.LayerID {
+	panic("implement me")
+}
+
 func (m *MeshValidatorMock) HandleIncomingLayer(layer *types.Layer) (types.LayerID, types.LayerID) {
 	return layer.Index() - 1, layer.Index()
 }
-func (m *MeshValidatorMock) HandleLateBlock(bl *types.Block) {}
+func (m *MeshValidatorMock) HandleLateBlock(bl *types.Block) (types.LayerID, types.LayerID) {
+	return bl.Layer() - 1, bl.Layer()
+}
 
 type MockState struct{}
+
+func (MockState) LoadState(layer types.LayerID) error {
+	panic("implement me")
+}
 
 func (MockState) GetStateRoot() types.Hash32 {
 	return [32]byte{}
@@ -403,7 +417,7 @@ func addBlockWithTxs(r *require.Assertions, msh *Mesh, id types.LayerID, valid b
 	for _, tx := range txs {
 		blk.TxIds = append(blk.TxIds, tx.Id())
 	}
-	blk.CalcAndSetId()
+	blk.Initialize()
 	msh.SaveContextualValidity(blk.Id(), valid)
 	err := msh.AddBlockWithTxs(blk, txs, nil)
 	r.NoError(err)

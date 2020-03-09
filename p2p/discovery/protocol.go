@@ -3,8 +3,10 @@ package discovery
 import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"net"
 	"time"
 )
 
@@ -16,6 +18,7 @@ type protocolRoutingTable interface {
 }
 
 type protocol struct {
+	localNode node.LocalNode
 	local     *node.NodeInfo
 	table     protocolRoutingTable
 	logger    log.Log
@@ -46,20 +49,22 @@ const PINGPONG = 0
 const GET_ADDRESSES = 1
 
 // NewDiscoveryProtocol is a constructor for a protocol protocol provider.
-func NewDiscoveryProtocol(local *node.NodeInfo, rt protocolRoutingTable, svc server.Service, log log.Log) *protocol {
+func NewDiscoveryProtocol(local p2pcrypto.PublicKey, rt protocolRoutingTable, svc server.Service, log log.Log) *protocol {
 	s := server.NewMsgServer(svc, Name, MessageTimeout, make(chan service.DirectMessage, MessageBufSize), log)
 	d := &protocol{
-		local:     local,
+		local:     &node.NodeInfo{ID: local.Array(), IP: net.IPv4zero, ProtocolPort: 7513, DiscoveryPort: 7513},
 		table:     rt,
 		msgServer: s,
 		logger:    log,
 	}
 
-	//tcp := &net.TCPAddr{local.IP, int(local.ProtocolPort), ""}
-	//udp := &net.UDPAddr{local.IP, int(local.DiscoveryPort), ""}
-	//d.SetLocalAddresses(tcp.String(), udp.String())
+	// XXX Reminder: for discovery protocol to work you must call SetLocalAddresses with updated ports from the socket.
 
 	d.msgServer.RegisterMsgHandler(PINGPONG, d.newPingRequestHandler())
 	d.msgServer.RegisterMsgHandler(GET_ADDRESSES, d.newGetAddressesRequestHandler())
 	return d
+}
+
+func (p *protocol) Close() {
+	p.msgServer.Close()
 }

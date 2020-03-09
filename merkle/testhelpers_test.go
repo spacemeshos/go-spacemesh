@@ -2,8 +2,10 @@ package merkle
 
 import (
 	"bytes"
-	"github.com/spacemeshos/go-spacemesh/filesystem"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -26,8 +28,9 @@ func tryPut(t *testing.T, tree Tree, k, v []byte) {
 
 func getDbPaths(t *testing.T) (string, string) {
 	t.Helper()
-	tempDir, err := filesystem.GetSpacemeshTempDirectoryPath()
-	assert.NoError(t, err, "failed to get temp dir")
+	tempDir := os.TempDir() + uuid.New().String() + "/" + t.Name()
+	err := os.MkdirAll(tempDir, os.ModeDir)
+	require.NoError(t, err)
 	userDb := filepath.Join(tempDir, "userdata.db")
 	treeDb := filepath.Join(tempDir, "tree.db")
 	return userDb, treeDb
