@@ -263,11 +263,11 @@ func (s *Syncer) Start() {
 
 //fires a sync every sm.SyncInterval or on force space from outside
 func (s *Syncer) run() {
-	s.Info("Start running")
+	s.Debug("Start running")
 	for {
 		select {
 		case <-s.exit:
-			s.Info("Work stopped")
+			s.Debug("Work stopped")
 			return
 		case <-s.forceSync:
 			go s.synchronise()
@@ -286,7 +286,6 @@ func (s *Syncer) synchronise() {
 	//release synchronise lock
 	defer s.syncLock.Unlock()
 	curr := s.GetCurrentLayer()
-	weaklySyncedStatus := s.weaklySynced(curr)
 
 	//node is synced and blocks from current layer hav already been validated
 	if curr == s.ProcessedLayer() {
@@ -297,14 +296,13 @@ func (s *Syncer) synchronise() {
 		return
 	}
 
-	if !weaklySyncedStatus && s.getGossipBufferingStatus() == Done {
+	if !s.weaklySynced(curr) && s.getGossipBufferingStatus() == Done {
 		s.SetZeroBlockLayer(s.GetCurrentLayer() - 1)
 		s.With().Info("did not receive any blocks while in gossip", log.Uint64("layer_id", uint64(curr)))
-		return
 	}
 
 	// we have all the data of the prev layers so we can simply validate
-	if weaklySyncedStatus {
+	if s.weaklySynced(curr) {
 		s.With().Info("Node is weakly synced ", s.LatestLayer(), s.GetCurrentLayer())
 
 		// handle all layers from processed+1 to current -1
