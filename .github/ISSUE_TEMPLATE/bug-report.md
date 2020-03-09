@@ -26,4 +26,5 @@ Please complete the following information:
  - App Version (if applicable): [e.g. 1.2.3]
 
 ## Log files
-<!-- If possible, attach log files to this bug report by dragging and dropping them onto this text box. -->
+<!-- If possible, attach log files to this bug report by dragging and dropping them onto this text box.
+The log file is called `spacemeshlog.txt` and it is located in your documents folder. -->
