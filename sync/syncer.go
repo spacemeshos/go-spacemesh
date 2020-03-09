@@ -299,30 +299,34 @@ func (s *Syncer) synchronise() {
 
 	// we have all the data of the prev layers so we can simply validate
 	if s.weaklySynced(curr) {
-		s.With().Info("Node is weakly synced ", s.LatestLayer(), s.GetCurrentLayer())
+		s.handleWeaklySynced()
+	} else {
+		s.handleNotSynced(s.ProcessedLayer() + 1)
+	}
 
-		// handle all layers from processed+1 to current -1
-		s.handleLayersTillCurrent()
+}
 
-		if s.shutdown() {
-			return
-		}
+func (s *Syncer) handleWeaklySynced() {
+	s.With().Info("Node is weakly synced ", s.LatestLayer(), s.GetCurrentLayer())
 
-		//validate current layer if more than s.ValidationDelta has passed
-		s.handleCurrentLayer()
+	// handle all layers from processed+1 to current -1
+	s.handleLayersTillCurrent()
 
-		if s.shutdown() {
-			return
-		}
-
-		// fully-synced, make sure we listen to p2p
-		s.setGossipBufferingStatus(Done)
-		s.With().Info("Node is synced")
+	if s.shutdown() {
 		return
 	}
 
-	// node is not synced
-	s.handleNotSynced(s.ProcessedLayer() + 1)
+	//validate current layer if more than s.ValidationDelta has passed
+	s.handleCurrentLayer()
+
+	if s.shutdown() {
+		return
+	}
+
+	// fully-synced, make sure we listen to p2p
+	s.setGossipBufferingStatus(Done)
+	s.With().Info("Node is synced")
+	return
 }
 
 //validate all layers except current one
