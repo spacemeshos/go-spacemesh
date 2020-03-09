@@ -223,7 +223,7 @@ func (m *validator) ProcessedLayer() types.LayerID {
 }
 
 func (m *validator) SetProcessedLayer(lyr types.LayerID) {
-	m.Info("processed layer %d set processed layer %d", m.processedLayer, lyr)
+	m.Info("set processed layer to %d", lyr)
 	defer m.lvMutex.Unlock()
 	m.lvMutex.Lock()
 	m.processedLayer = lyr
@@ -240,14 +240,14 @@ func (v *validator) HandleLateBlock(b *types.Block) {
 
 func (v *validator) ValidateLayer(lyr *types.Layer) {
 	v.Info("Validate layer %d", lyr.Index())
-	oldPbase, newPbase := v.trtl.HandleIncomingLayer(lyr)
-
-	v.SetProcessedLayer(lyr.Index())
-
 	if len(lyr.Blocks()) == 0 {
 		v.Info("skip validation of layer %d with no blocks", lyr.Index())
+		v.SetProcessedLayer(lyr.Index())
 		return
 	}
+
+	oldPbase, newPbase := v.trtl.HandleIncomingLayer(lyr)
+	v.SetProcessedLayer(lyr.Index())
 
 	if err := v.trtl.PersistTortoise(); err != nil {
 		v.Error("could not persist Tortoise layer index %d", lyr.Index())

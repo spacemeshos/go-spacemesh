@@ -233,7 +233,7 @@ func (s *Syncer) ListenToGossip() bool {
 }
 
 func (s *Syncer) setGossipBufferingStatus(status Status) {
-	s.Info("set gossip to '%s' ", status.String())
+	s.Info("setting gossip to '%s' ", status.String())
 	s.gossipLock.Lock()
 	s.notifySubscribers(s.gossipSynced, status)
 	s.gossipSynced = status
