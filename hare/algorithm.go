@@ -9,9 +9,9 @@ import (
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
-	"github.com/spacemeshos/go-spacemesh/hare/metrics"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"time"
 )
@@ -35,7 +35,7 @@ type Rolacle interface {
 
 // NetworkService provides the registration and broadcast abilities in the network.
 type NetworkService interface {
-	RegisterGossipProtocol(protocol string) chan service.GossipMessage
+	RegisterGossipProtocol(protocol string, prio priorityq.Priority) chan service.GossipMessage
 	Broadcast(protocol string, payload []byte) error
 }
 
@@ -45,21 +45,36 @@ type Signer interface {
 	PublicKey() *signing.PublicKey
 }
 
-// procOutput is the tuple (id, set) which is the output of the consensus process.
-type procOutput struct {
-	id  instanceId
-	set *Set
+const (
+	completed    = true
+	notCompleted = false
+)
+
+// procReport is the termination report of the CP.
+// It consistes of the layer id, the set we agreed on (if available) and a flag to indicate if the CP completed.
+type procReport struct {
+	id        instanceId
+	set       *Set
+	completed bool
 }
 
-func (cpo procOutput) Id() instanceId {
+func (cpo procReport) Id() instanceId {
 	return cpo.id
 }
 
-func (cpo procOutput) Set() *Set {
+func (cpo procReport) Set() *Set {
 	return cpo.set
 }
 
-var _ TerminationOutput = (*procOutput)(nil)
+func (cpo procReport) Completed() bool {
+	return cpo.completed
+}
+
+func (proc *ConsensusProcess) report(completed bool) {
+	proc.terminationReport <- procReport{proc.instanceId, proc.s, completed}
+}
+
+var _ TerminationOutput = (*procReport)(nil)
 
 // State holds the current state of the consensus process (aka the participant).
 type State struct {
@@ -106,20 +121,22 @@ func newMsg(hareMsg *Message, querier StateQuerier, layersPerEpoch uint16) (*Msg
 	// extract pub key
 	pubKey, err := ed25519.ExtractPublicKey(hareMsg.InnerMsg.Bytes(), hareMsg.Sig)
 	if err != nil {
-		log.Error("newMsg construction failed: could not extract public key err=%v", err, len(hareMsg.Sig))
+		log.With().Error("newMsg construction failed: could not extract public key", log.Err(err), log.Int("sig len", len(hareMsg.Sig)))
 		return nil, err
 	}
 	// query if identity is active
 	pub := signing.NewPublicKey(pubKey)
 	res, err := querier.IsIdentityActiveOnConsensusView(pub.String(), types.LayerID(hareMsg.InnerMsg.InstanceId))
 	if err != nil {
-		log.Error("error while checking if identity is active for %v err=%v", pub.String(), err)
+		log.With().Error("error while checking if identity is active", log.String("sender_id", pub.ShortString()),
+			log.Err(err), log.LayerId(uint64(hareMsg.InnerMsg.InstanceId)), log.String("msg_type", hareMsg.InnerMsg.Type.String()))
 		return nil, errors.New("is identity active query failed")
 	}
 
 	// check query result
 	if !res {
-		log.Error("identity %v is not active", pub.ShortString())
+		log.With().Error("identity is not active", log.String("sender_id", pub.ShortString()),
+			log.LayerId(uint64(hareMsg.InnerMsg.InstanceId)), log.String("msg_type", hareMsg.InnerMsg.Type.String()))
 		return nil, errors.New("inactive identity")
 	}
 
@@ -148,11 +165,11 @@ type ConsensusProcess struct {
 	proposalTracker   proposalTrackerProvider
 	commitTracker     commitTrackerProvider
 	notifyTracker     *notifyTracker
-	terminating       bool
 	cfg               config.Config
 	pending           map[string]*Msg // buffer for early messages that are pending process
 	notifySent        bool            // flag to set in case a notification had already been sent by this instance
 	mTracker          *msgsTracker    // tracks valid messages
+	terminating       bool
 }
 
 // NewConsensusProcess creates a new consensus process instance.
@@ -234,23 +251,28 @@ func (proc *ConsensusProcess) eventLoop() {
 		log.Int("Hare-N", proc.cfg.N), log.Int("f", proc.cfg.F), log.String("duration", (time.Duration(proc.cfg.RoundDuration)*time.Second).String()),
 		log.LayerId(uint64(proc.instanceId)), log.Int("exp_leaders", proc.cfg.ExpectedLeaders), log.String("current_set", proc.s.String()), log.Int("set_size", proc.s.Size()))
 
-	// check participation
-	if proc.shouldParticipate() {
-		// set pre-round InnerMsg and send
-		builder, err := proc.initDefaultBuilder(proc.s)
-		if err != nil {
-			proc.Error("init default builder failed: %v", err)
-			return
-		}
-		m := builder.SetType(pre).Sign(proc.signing).Build()
-		proc.sendMessage(m)
-	}
-
-	// listen to pre-round Messages
+	// start the timer
 	timer := time.NewTimer(time.Duration(proc.cfg.RoundDuration) * time.Second)
+
+	// check participation and send message
+	go func() {
+		// check participation
+		if proc.shouldParticipate() {
+			// set pre-round InnerMsg and send
+			builder, err := proc.initDefaultBuilder(proc.s)
+			if err != nil {
+				proc.Error("init default builder failed: %v", err)
+				return
+			}
+			m := builder.SetType(pre).Sign(proc.signing).Build()
+			proc.sendMessage(m)
+		}
+	}()
+
 PreRound:
 	for {
 		select {
+		// listen to pre-round Messages
 		case msg := <-proc.inbox:
 			proc.handleMessage(msg)
 		case <-timer.C:
@@ -270,20 +292,30 @@ PreRound:
 	// start first iteration
 	proc.onRoundBegin()
 	ticker := time.NewTicker(time.Duration(proc.cfg.RoundDuration) * time.Second)
+	defer ticker.Stop()
+
 	for {
 		select {
 		case msg := <-proc.inbox: // msg event
 			proc.handleMessage(msg)
 			if proc.terminating {
-				proc.Info("Detected terminating on. Exiting.")
 				return
 			}
 		case <-ticker.C: // next round event
 			proc.onRoundEnd()
 			proc.advanceToNextRound()
+
+			// exit if we reached the limit on number of iterations
+			if proc.k/4 >= int32(proc.cfg.LimitIterations) {
+				proc.Warning("terminating: reached iterations limit")
+				proc.report(notCompleted)
+				return
+			}
+
 			proc.onRoundBegin()
 		case <-proc.CloseChannel(): // close event
-			proc.Debug("Stop event loop, terminating")
+			proc.Info("terminating: received termination signal")
+			proc.report(notCompleted)
 			return
 		}
 	}
@@ -356,7 +388,7 @@ func (proc *ConsensusProcess) handleMessage(m *Msg) {
 
 	// warn on late pre-round msgs
 	if m.InnerMsg.Type == pre && proc.k != -1 {
-		proc.Warning("Encountered late PreRound message")
+		proc.With().Warning("encountered late PreRound message", log.String("sender_id", m.PubKey.ShortString()), log.LayerId(uint64(proc.instanceId)))
 	}
 
 	// valid, continue process msg by type
@@ -366,7 +398,8 @@ func (proc *ConsensusProcess) handleMessage(m *Msg) {
 // process the message by its type
 func (proc *ConsensusProcess) processMsg(m *Msg) {
 	proc.Debug("Processing message of type %v", m.InnerMsg.Type.String())
-	metrics.MessageTypeCounter.With("type_id", m.InnerMsg.Type.String()).Add(1)
+	// TODO: fix metrics
+	//metrics.MessageTypeCounter.With("type_id", m.InnerMsg.Type.String(), "layer", strconv.FormatUint(uint64(m.InnerMsg.InstanceId), 10), "reporter", "processMsg").Add(1)
 
 	switch m.InnerMsg.Type {
 	case pre:
@@ -659,9 +692,9 @@ func (proc *ConsensusProcess) processNotifyMsg(msg *Msg) {
 	proc.s = s // update to the agreed set
 	proc.Event().Info("Consensus process terminated", log.String("current_set", proc.s.String()),
 		log.LayerId(uint64(proc.instanceId)), log.Int("set_size", proc.s.Size()))
-	proc.terminationReport <- procOutput{proc.instanceId, proc.s}
-	proc.Close()
-	proc.terminating = true // ensures immediate termination
+	proc.report(completed)
+	close(proc.CloseChannel())
+	proc.terminating = true
 }
 
 func (proc *ConsensusProcess) currentRound() int {

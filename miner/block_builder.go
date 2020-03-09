@@ -10,9 +10,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/oracle"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"math/rand"
 	"sync"
 	"time"
@@ -43,7 +45,8 @@ type AtxValidator interface {
 
 type Syncer interface {
 	FetchPoetProof(poetProofRef []byte) error
-	WeaklySynced() bool
+	ListenToGossip() bool
+	IsSynced() bool
 }
 
 type TxPool interface {
@@ -72,7 +75,7 @@ type BlockBuilder struct {
 	mu               sync.Mutex
 	network          p2p.Service
 	weakCoinToss     WeakCoinProvider
-	orphans          OrphanBlockProvider
+	meshProvider     meshProvider
 	blockOracle      oracle.BlockOracle
 	txValidator      TxValidator
 	atxValidator     AtxValidator
@@ -83,7 +86,7 @@ type BlockBuilder struct {
 }
 
 func NewBlockBuilder(minerID types.NodeId, sgn Signer, net p2p.Service, beginRoundEvent chan types.LayerID, hdist int,
-	txPool TxPool, atxPool *AtxMemPool, weakCoin WeakCoinProvider, orph OrphanBlockProvider, hare HareResultProvider,
+	txPool TxPool, atxPool *AtxMemPool, weakCoin WeakCoinProvider, orph meshProvider, hare HareResultProvider,
 	blockOracle oracle.BlockOracle, txValidator TxValidator, atxValidator AtxValidator, syncer Syncer, atxsPerBlock int,
 	projector Projector, lg log.Log) *BlockBuilder {
 
@@ -99,13 +102,13 @@ func NewBlockBuilder(minerID types.NodeId, sgn Signer, net p2p.Service, beginRou
 		stopChan:         make(chan struct{}),
 		AtxPool:          atxPool,
 		TransactionPool:  txPool,
-		txGossipChannel:  net.RegisterGossipProtocol(IncomingTxProtocol),
-		atxGossipChannel: net.RegisterGossipProtocol(activation.AtxProtocol),
+		txGossipChannel:  net.RegisterGossipProtocol(IncomingTxProtocol, priorityq.Low),
+		atxGossipChannel: net.RegisterGossipProtocol(activation.AtxProtocol, priorityq.Low),
 		hareResult:       hare,
 		mu:               sync.Mutex{},
 		network:          net,
 		weakCoinToss:     weakCoin,
-		orphans:          orph,
+		meshProvider:     orph,
 		blockOracle:      blockOracle,
 		txValidator:      txValidator,
 		atxValidator:     atxValidator,
@@ -143,15 +146,17 @@ func (t *BlockBuilder) Close() error {
 }
 
 type HareResultProvider interface {
-	GetResult(lower types.LayerID, upper types.LayerID) ([]types.BlockID, error)
+	GetResult(lid types.LayerID) ([]types.BlockID, error)
 }
 
 type WeakCoinProvider interface {
 	GetResult() bool
 }
 
-type OrphanBlockProvider interface {
+type meshProvider interface {
+	LayerBlockIds(index types.LayerID) ([]types.BlockID, error)
 	GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error)
+	GetBlock(id types.BlockID) (*types.Block, error)
 }
 
 //used from external API call?
@@ -168,7 +173,7 @@ func calcHdistRange(id types.LayerID, hdist types.LayerID) (bottom types.LayerID
 		log.Panic("hdist cannot be zero")
 	}
 
-	bottom = types.LayerID(1)
+	bottom = types.LayerID(0)
 	top = id - 1
 	if id > hdist {
 		bottom = id - hdist
@@ -177,37 +182,78 @@ func calcHdistRange(id types.LayerID, hdist types.LayerID) (bottom types.LayerID
 	return bottom, top
 }
 
-func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibilityProof types.BlockEligibilityProof,
-	txids []types.TransactionId, atxids []types.AtxId) (*types.Block, error) {
-
-	var votes []types.BlockID = nil
-	var err error
-	if id == config.Genesis {
-		return nil, errors.New("cannot create blockBytes in genesis layer")
-	} else if id == config.Genesis+1 {
-		votes = append(votes, config.GenesisId)
-	} else { // get from hare
-		bottom, top := calcHdistRange(id, t.hdist)
-		votes, err = t.hareResult.GetResult(bottom, top)
-		if err != nil {
-			t.With().Warning("Could not get hare result during block creation",
-				log.Uint64("bottom", uint64(bottom)), log.Uint64("top", uint64(top)),
-				log.Uint64("hdist", uint64(t.hdist)), log.Err(err))
-		}
-		if votes == nil { // if no votes set to empty
-			t.Info("Votes is nil. Setting votes to an empty array")
-			votes = []types.BlockID{}
+func filterUnknownBlocks(blocks []types.BlockID, validate func(id types.BlockID) (*types.Block, error)) []types.BlockID {
+	var filtered []types.BlockID
+	for _, b := range blocks {
+		if _, e := validate(b); e == nil {
+			filtered = append(filtered, b)
 		}
 	}
 
-	viewEdges, err := t.orphans.GetOrphanBlocksBefore(id)
+	return filtered
+}
+
+func (t *BlockBuilder) getVotes(id types.LayerID) ([]types.BlockID, error) {
+	var votes []types.BlockID = nil
+
+	// if genesis
+	if id == config.Genesis {
+		return nil, errors.New("cannot create blockBytes in genesis layer")
+	}
+
+	// if genesis+1
+	if id == config.Genesis+1 {
+		return append(votes, mesh.GenesisBlock.Id()), nil
+	}
+
+	// not genesis, get from hare
+	bottom, top := calcHdistRange(id, t.hdist)
+
+	if res, err := t.hareResult.GetResult(bottom); err != nil { // no result for bottom, take the whole layer
+		t.With().Warning("could not get result for bottom layer. adding the whole layer instead", log.Err(err),
+			log.Uint64("bottom", uint64(bottom)), log.Uint64("top", uint64(top)), log.Uint64("hdist", uint64(t.hdist)))
+		ids, e := t.meshProvider.LayerBlockIds(bottom)
+		if e != nil {
+			t.With().Error("Could not set votes to whole layer", log.Err(e))
+			return nil, e
+		}
+
+		// set votes to whole layer
+		votes = ids
+	} else { // got result, just set
+		votes = res
+	}
+
+	// add rest of hdist range
+	for i := bottom + 1; i <= top; i++ {
+		res, err := t.hareResult.GetResult(i)
+		if err != nil {
+			t.With().Warning("could not get result for layer in range", log.LayerId(uint64(i)), log.Err(err),
+				log.Uint64("bottom", uint64(bottom)), log.Uint64("top", uint64(top)), log.Uint64("hdist", uint64(t.hdist)))
+			continue
+		}
+		votes = append(votes, res...)
+	}
+
+	votes = filterUnknownBlocks(votes, t.meshProvider.GetBlock)
+	return votes, nil
+}
+
+func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibilityProof types.BlockEligibilityProof,
+	txids []types.TransactionId, atxids []types.AtxId) (*types.Block, error) {
+
+	votes, err := t.getVotes(id)
+	if err != nil {
+		return nil, err
+	}
+
+	viewEdges, err := t.meshProvider.GetOrphanBlocksBefore(id)
 	if err != nil {
 		return nil, err
 	}
 
 	b := types.MiniBlock{
 		BlockHeader: types.BlockHeader{
-			Id:               types.BlockID(t.rnd.Int63()),
 			LayerIndex:       id,
 			ATXID:            atxID,
 			EligibilityProof: eligibilityProof,
@@ -221,15 +267,27 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 		TxIds:  txids,
 	}
 
-	t.Log.Event().Info(fmt.Sprintf("I've created a block in layer %v. id: %v, num of transactions: %v, votes: %d, viewEdges: %d atx %v, atxs:%v",
-		b.LayerIndex, b.ID(), len(b.TxIds), len(b.BlockVotes), len(b.ViewEdges), b.ATXID.ShortString(), len(b.AtxIds)))
-
 	blockBytes, err := types.InterfaceToBytes(b)
 	if err != nil {
 		return nil, err
 	}
 
-	return &types.Block{MiniBlock: b, Signature: t.Signer.Sign(blockBytes)}, nil
+	bl := &types.Block{MiniBlock: b, Signature: t.Signer.Sign(blockBytes)}
+
+	bl.Initialize()
+
+	t.Log.Event().Info("block created",
+		bl.Id(),
+		bl.LayerIndex,
+		log.String("miner_id", bl.MinerId().String()),
+		log.Int("tx_count", len(bl.TxIds)),
+		log.Int("atx_count", len(bl.AtxIds)),
+		log.Int("view_edges", len(bl.ViewEdges)),
+		log.Int("vote_count", len(bl.BlockVotes)),
+		bl.ATXID,
+		log.Uint32("eligibility_counter", bl.EligibilityProof.J),
+	)
+	return bl, nil
 }
 
 func selectAtxs(atxs []types.AtxId, atxsPerBlock int) []types.AtxId {
@@ -259,7 +317,7 @@ func (t *BlockBuilder) listenForTx() {
 		case <-t.stopChan:
 			return
 		case data := <-t.txGossipChannel:
-			if !t.syncer.WeaklySynced() {
+			if !t.syncer.ListenToGossip() {
 				// not accepting txs when not synced
 				continue
 			}
@@ -285,7 +343,14 @@ func (t *BlockBuilder) listenForTx() {
 				t.With().Error("nonce and balance validation failed", log.TxId(tx.Id().ShortString()), log.Err(err))
 				continue
 			}
-			t.Log.With().Info("got new tx", log.TxId(tx.Id().ShortString()))
+			t.Log.With().Info("got new tx",
+				log.TxId(tx.Id().ShortString()),
+				log.Uint64("nonce", tx.AccountNonce),
+				log.Uint64("amount", tx.Amount),
+				log.Uint64("fee", tx.Fee),
+				log.Uint64("gas", tx.GasLimit),
+				log.String("recipient", tx.Recipient.String()),
+				log.String("origin", tx.Origin().String()))
 			data.ReportValidation(IncomingTxProtocol)
 			t.TransactionPool.Put(tx.Id(), tx)
 		}
@@ -308,7 +373,7 @@ func (t *BlockBuilder) listenForAtx() {
 		case <-t.stopChan:
 			return
 		case data := <-t.atxGossipChannel:
-			if !t.syncer.WeaklySynced() {
+			if !t.syncer.ListenToGossip() {
 				// not accepting atxs when not synced
 				continue
 			}
@@ -321,13 +386,38 @@ func (t *BlockBuilder) handleGossipAtx(data service.GossipMessage) {
 	if data == nil {
 		return
 	}
-	atx, err := types.BytesAsAtx(data.Bytes(), *types.EmptyAtxId)
+	atx, err := types.BytesAsAtx(data.Bytes())
 	if err != nil {
 		t.Error("cannot parse incoming ATX")
 		return
 	}
+	atx.CalcAndSetId()
 
-	t.With().Info("got new ATX", log.AtxId(atx.ShortString()))
+	commitmentStr := "nil"
+	if atx.Commitment != nil {
+		commitmentStr = atx.Commitment.String()
+	}
+
+	challenge := ""
+	h, err := atx.NIPSTChallenge.Hash()
+	if err == nil && h != nil {
+		challenge = h.String()
+
+	}
+
+	t.With().Info("got new ATX",
+		log.String("sender_id", atx.NodeId.ShortString()),
+		log.AtxId(atx.ShortString()),
+		log.String("prev_atx_id", atx.PrevATXId.ShortString()),
+		log.String("pos_atx_id", atx.PositioningAtx.ShortString()),
+		log.LayerId(uint64(atx.PubLayerIdx)),
+		log.Uint32("active_set", atx.ActiveSetSize),
+		log.Int("view", len(atx.View)),
+		log.Uint64("sequence_number", atx.Sequence),
+		log.String("commitment", commitmentStr),
+		log.Int("atx_size", len(data.Bytes())),
+		log.String("NIPSTChallenge", challenge),
+	)
 
 	//todo fetch from neighbour
 	if atx.Nipst == nil {
@@ -340,9 +430,6 @@ func (t *BlockBuilder) handleGossipAtx(data service.GossipMessage) {
 			atx.ShortString(), atx.GetShortPoetProofRef(), err)
 		return
 	}
-
-	id := atx.Id()
-	events.Publish(events.NewAtx{Id: id.Hash32().String()})
 
 	err = t.atxValidator.SyntacticallyValidateAtx(atx)
 	events.Publish(events.ValidAtx{Id: atx.ShortString(), Valid: err == nil})
@@ -365,12 +452,20 @@ func (t *BlockBuilder) acceptBlockData() {
 			return
 
 		case layerID := <-t.beginRoundEvent:
+			if !t.syncer.IsSynced() {
+				t.Debug("builder got layer %v not synced yet", layerID)
+				continue
+			}
+
+			t.Debug("builder got layer %v", layerID)
 			atxID, proofs, err := t.blockOracle.BlockEligible(layerID)
 			if err != nil {
+				events.Publish(events.DoneCreatingBlock{Eligible: true, Layer: uint64(layerID), Error: "failed to check for block eligibility"})
 				t.With().Error("failed to check for block eligibility", log.LayerId(uint64(layerID)), log.Err(err))
 				continue
 			}
 			if len(proofs) == 0 {
+				events.Publish(events.DoneCreatingBlock{Eligible: false, Layer: uint64(layerID), Error: ""})
 				t.With().Info("Notice: not eligible for blocks in layer", log.LayerId(uint64(layerID)))
 				continue
 			}
@@ -384,11 +479,13 @@ func (t *BlockBuilder) acceptBlockData() {
 			for _, eligibilityProof := range proofs {
 				txList, err := t.TransactionPool.GetTxsForBlock(MaxTransactionsPerBlock, t.projector.GetProjection)
 				if err != nil {
+					events.Publish(events.DoneCreatingBlock{Eligible: true, Layer: uint64(layerID), Error: "failed to get txs for block"})
 					t.With().Error("failed to get txs for block", log.LayerId(uint64(layerID)), log.Err(err))
 					continue
 				}
 				blk, err := t.createBlock(layerID, atxID, eligibilityProof, txList, atxList)
 				if err != nil {
+					events.Publish(events.DoneCreatingBlock{Eligible: true, Layer: uint64(layerID), Error: "cannot create new block"})
 					t.Error("cannot create new block, %v ", err)
 					continue
 				}
@@ -396,12 +493,14 @@ func (t *BlockBuilder) acceptBlockData() {
 					bytes, err := types.InterfaceToBytes(blk)
 					if err != nil {
 						t.Log.Error("cannot serialize block %v", err)
+						events.Publish(events.DoneCreatingBlock{Eligible: true, Layer: uint64(layerID), Error: "cannot serialize block"})
 						return
 					}
 					err = t.network.Broadcast(config.NewBlockProtocol, bytes)
 					if err != nil {
 						t.Log.Error("cannot send block %v", err)
 					}
+					events.Publish(events.DoneCreatingBlock{Eligible: true, Layer: uint64(layerID), Error: ""})
 				}()
 			}
 		}

@@ -89,22 +89,27 @@ func (c *PostClient) Execute(challenge []byte) (*types.PostProof, error) {
 }
 
 func (c *PostClient) Reset() error {
+	ok, _, err := c.IsInitialized()
+	if !ok || err != nil {
+		return fmt.Errorf("post not initialized, cannot reset it")
+	}
+
 	c.Lock()
 	defer c.Unlock()
 
 	return c.initializer.Reset()
 }
 
-func (c *PostClient) IsInitialized() (bool, error) {
+func (c *PostClient) IsInitialized() (bool, uint64, error) {
 	c.RLock()
 	defer c.RUnlock()
 
-	state, _, err := c.initializer.State()
+	state, remainingBytes, err := c.initializer.State()
 	if err != nil {
-		return false, err
+		return false, remainingBytes, err
 	}
 
-	return state == initialization.StateCompleted, nil
+	return state == initialization.StateCompleted, 0, nil
 }
 
 func (c *PostClient) VerifyInitAllowed() error {

@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	cfg "github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -54,6 +55,10 @@ func AddCommands(cmd *cobra.Command) {
 
 	cmd.PersistentFlags().IntVar(&config.GenesisActiveSet, "genesis-active-size",
 		config.GenesisActiveSet, "The active set size for the genesis flow")
+
+	cmd.PersistentFlags().IntVar(&config.BlockCacheSize, "block-cache-size",
+		config.BlockCacheSize, "size in layers of meshdb block cache")
+
 	cmd.PersistentFlags().StringVar(&config.PublishEventsUrl, "events-url",
 		config.PublishEventsUrl, "publish events on this url, if no url specified event will no be published")
 
@@ -67,6 +72,8 @@ func AddCommands(cmd *cobra.Command) {
 
 	cmd.PersistentFlags().IntVar(&config.P2P.TCPPort, "tcp-port",
 		config.P2P.TCPPort, "TCP Port to listen on")
+	cmd.PersistentFlags().BoolVar(&config.P2P.AcquirePort, "acquire-port",
+		config.P2P.AcquirePort, "Should the node attempt to forward the port to this machine on a NAT?")
 	cmd.PersistentFlags().DurationVar(&config.P2P.DialTimeout, "dial-timeout",
 		config.P2P.DialTimeout, "Network dial timeout duration")
 	cmd.PersistentFlags().DurationVar(&config.P2P.ConnKeepAlive, "conn-keepalive",
@@ -79,8 +86,6 @@ func AddCommands(cmd *cobra.Command) {
 		config.P2P.SessionTimeout, "Timeout for waiting on session message")
 	cmd.PersistentFlags().StringVar(&config.P2P.NodeID, "node-id",
 		config.P2P.NodeID, "Load node data by id (pub key) from local store")
-	cmd.PersistentFlags().BoolVar(&config.P2P.NewNode, "new-node",
-		config.P2P.NewNode, "Load node data by id (pub key) from local store")
 	cmd.PersistentFlags().IntVar(&config.P2P.BufferSize, "buffer-size",
 		config.P2P.BufferSize, "Size of the messages handler's buffer")
 	cmd.PersistentFlags().IntVar(&config.P2P.MaxPendingConnections, "max-pending-connections",
@@ -146,6 +151,10 @@ func AddCommands(cmd *cobra.Command) {
 		config.HARE.WakeupDelta, "Wakeup delta after tick for hare protocol")
 	cmd.PersistentFlags().IntVar(&config.HARE.ExpectedLeaders, "hare-exp-leaders",
 		config.HARE.ExpectedLeaders, "The expected number of leaders in the hare protocol")
+	cmd.PersistentFlags().IntVar(&config.HARE.LimitIterations, "hare-limit-iterations",
+		config.HARE.LimitIterations, "The limit of the number of iteration per consensus process")
+	cmd.PersistentFlags().IntVar(&config.HARE.LimitConcurrent, "hare-limit-concurrent",
+		config.HARE.LimitConcurrent, "The number of consensus processes running concurrently")
 
 	/**======================== Hare Eligibility Oracle Flags ========================== **/
 
@@ -183,6 +192,9 @@ func AddCommands(cmd *cobra.Command) {
 		config.LayersPerEpoch, "number of layers in epoch")
 
 	// Bind Flags to config
-	viper.BindPFlags(cmd.PersistentFlags())
+	err := viper.BindPFlags(cmd.PersistentFlags())
+	if err != nil {
+		fmt.Println("an error has occurred while binding flags:", err)
+	}
 
 }

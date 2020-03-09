@@ -23,10 +23,9 @@ type mockUDPNetwork struct {
 
 	shutdownCalled bool
 
-	sendCalled bool
-	sendResult error
+	DialFunc func(address net2.Addr, remotepk p2pcrypto.PublicKey) (net.Connection, error)
 
-	inc chan net.UDPMessageEvent
+	inc chan net.IncomingMessageEvent
 }
 
 func (mun *mockUDPNetwork) Start() error {
@@ -38,26 +37,36 @@ func (mun *mockUDPNetwork) Shutdown() {
 	mun.shutdownCalled = true
 }
 
-func (mun *mockUDPNetwork) IncomingMessages() chan net.UDPMessageEvent {
+func (mun *mockUDPNetwork) IncomingMessages() chan net.IncomingMessageEvent {
 	return mun.inc
 }
 
-func (mun *mockUDPNetwork) Send(to *node.NodeInfo, data []byte) error {
-	mun.sendCalled = true
-	return mun.sendResult
+func (mun *mockUDPNetwork) Dial(address net2.Addr, remotepk p2pcrypto.PublicKey) (net.Connection, error) {
+	if mun.DialFunc != nil {
+		return mun.DialFunc(address, remotepk)
+	}
+	return nil, errors.New("not impl")
+}
+
+func (mun *mockUDPNetwork) SubscribeClosingConnections(func(err net.ConnectionWithErr)) {
+
+}
+
+func (mun *mockUDPNetwork) SubscribeOnNewRemoteConnections(func(event net.NewConnectionEvent)) {
+
 }
 
 func TestNewUDPMux(t *testing.T) {
-	nd := &node.LocalNode{NodeInfo: node.GenerateRandomNodeData()}
+	nd, _ := node.NewNodeIdentity()
 	udpMock := &mockUDPNetwork{}
-	m := NewUDPMux(nd, nil, udpMock, log.New("test", "", ""))
+	m := NewUDPMux(nd, nil, udpMock, 1, log.New("test", "", ""))
 	require.NotNil(t, m)
 }
 
 func TestUDPMux_RegisterDirectProtocolWithChannel(t *testing.T) {
-	nd := &node.LocalNode{NodeInfo: node.GenerateRandomNodeData()}
+	nd, _ := node.NewNodeIdentity()
 	udpMock := &mockUDPNetwork{}
-	m := NewUDPMux(nd, nil, udpMock, log.New(test_str, "", ""))
+	m := NewUDPMux(nd, nil, udpMock, 1, log.New(test_str, "", ""))
 	require.NotNil(t, m)
 	c := make(chan service.DirectMessage, 1)
 	m.RegisterDirectProtocolWithChannel(test_str, c)
@@ -68,18 +77,18 @@ func TestUDPMux_RegisterDirectProtocolWithChannel(t *testing.T) {
 }
 
 func TestUDPMux_Start(t *testing.T) {
-	nd := &node.LocalNode{NodeInfo: node.GenerateRandomNodeData()}
+	nd, _ := node.NewNodeIdentity()
 	udpMock := &mockUDPNetwork{}
-	m := NewUDPMux(nd, nil, udpMock, log.New(test_str, "", ""))
+	m := NewUDPMux(nd, nil, udpMock, 1, log.New(test_str, "", ""))
 	require.NotNil(t, m)
 	err := m.Start()
 	require.NoError(t, err)
 }
 
 func TestUDPMux_ProcessDirectProtocolMessage(t *testing.T) {
-	nd := &node.LocalNode{NodeInfo: node.GenerateRandomNodeData()}
+	nd, _ := node.NewNodeIdentity()
 	udpMock := &mockUDPNetwork{}
-	m := NewUDPMux(nd, nil, udpMock, log.New(test_str, "", ""))
+	m := NewUDPMux(nd, nil, udpMock, 1, log.New(test_str, "", ""))
 	require.NotNil(t, m)
 
 	data := service.DataBytes{[]byte(test_str)}
@@ -100,7 +109,7 @@ func TestUDPMux_ProcessDirectProtocolMessage(t *testing.T) {
 }
 
 func TestUDPMux_sendMessageImpl(t *testing.T) {
-	nd := &node.LocalNode{NodeInfo: node.GenerateRandomNodeData()}
+	nd, _ := node.NewNodeIdentity()
 	udpMock := &mockUDPNetwork{}
 	sendto := node.GenerateRandomNodeData()
 
@@ -110,7 +119,7 @@ func TestUDPMux_sendMessageImpl(t *testing.T) {
 		return nil, errors.New("nonode")
 	}
 
-	m := NewUDPMux(nd, f, udpMock, log.New(test_str, "", ""))
+	m := NewUDPMux(nd, f, udpMock, 1, log.New(test_str, "", ""))
 	require.NotNil(t, m)
 	data := service.DataBytes{[]byte(test_str)}
 
@@ -118,7 +127,6 @@ func TestUDPMux_sendMessageImpl(t *testing.T) {
 
 	require.Error(t, err)
 	require.True(t, lookupcalled)
-	require.False(t, udpMock.sendCalled)
 
 	lookupcalled = false
 	f = func(key p2pcrypto.PublicKey) (*node.NodeInfo, error) {
@@ -127,30 +135,54 @@ func TestUDPMux_sendMessageImpl(t *testing.T) {
 	}
 	m.lookuper = f
 
-	udpMock.sendResult = errors.New("err send")
+	udpMock.DialFunc = func(address net2.Addr, remotepk p2pcrypto.PublicKey) (connection net.Connection, err error) {
+		c := net.NewConnectionMock(remotepk)
+		c.Addr = address
+		return c, nil
+	}
 
 	err = m.sendMessageImpl(sendto.PublicKey(), test_str, data)
 
-	require.Error(t, err)
+	require.Equal(t, ErrNoSession, err)
 	require.True(t, lookupcalled)
-	require.True(t, udpMock.sendCalled)
 
 	lookupcalled = false
-	udpMock.sendResult = nil
-	udpMock.startCalled = false
+	senderr := errors.New("err send")
+	m.cpool.CloseConnection(sendto.PublicKey())
+
+	udpMock.DialFunc = func(address net2.Addr, remotepk p2pcrypto.PublicKey) (connection net.Connection, err error) {
+		c := net.NewConnectionMock(remotepk)
+		c.Addr = address
+		c.SetSession(net.NewSessionMock(remotepk))
+		c.SetSendResult(senderr)
+		return c, nil
+	}
+
+	err = m.sendMessageImpl(sendto.PublicKey(), test_str, data)
+
+	require.Equal(t, senderr, err)
+	require.True(t, lookupcalled)
+
+	m.cpool.CloseConnection(sendto.PublicKey())
+
+	udpMock.DialFunc = func(address net2.Addr, remotepk p2pcrypto.PublicKey) (connection net.Connection, err error) {
+		c := net.NewConnectionMock(remotepk)
+		c.Addr = address
+		c.SetSession(net.NewSessionMock(remotepk))
+		c.SetSendResult(nil)
+		return c, nil
+	}
 
 	err = m.sendMessageImpl(sendto.PublicKey(), test_str, data)
 
 	require.NoError(t, err)
 	require.True(t, lookupcalled)
-	require.True(t, udpMock.sendCalled)
-
 }
 
 func TestUDPMux_ProcessUDP(t *testing.T) {
-	nd := &node.LocalNode{NodeInfo: node.GenerateRandomNodeData()}
+	nd, _ := node.NewNodeIdentity()
 	udpMock := &mockUDPNetwork{}
-	m := NewUDPMux(nd, nil, udpMock, log.New(test_str, "", ""))
+	m := NewUDPMux(nd, nil, udpMock, 1, log.New(test_str, "", ""))
 	require.NotNil(t, m)
 	data := service.DataBytes{[]byte(test_str)}
 	msg := &ProtocolMessage{}
@@ -158,29 +190,48 @@ func TestUDPMux_ProcessUDP(t *testing.T) {
 	gotfrom := node.GenerateRandomNodeData()
 
 	msg.Metadata = &ProtocolMessageMetadata{NextProtocol: test_str, ClientVersion: config.ClientVersion, Timestamp: time.Now().Unix(),
-		NetworkID: int32(nd.NetworkID())}
+		NetworkID: int32(1)}
 	//pb.NewUDPProtocolMessageMetadata(gotfrom.PublicKey(), int8(nd.NetworkID()), test_str)
 	msg.Payload = &Payload{Payload: data.Bytes()}
 
-	msgbuf, err := types.InterfaceToBytes(msg)
+	themsgbuf, err := types.InterfaceToBytes(msg)
 	require.NoError(t, err)
+
+	msgbuf := p2pcrypto.PrependPubkey(themsgbuf, gotfrom.PublicKey())
 
 	addr := &net2.UDPAddr{gotfrom.IP, int(gotfrom.DiscoveryPort), ""}
 
-	err = m.processUDPMessage(gotfrom.PublicKey(), addr, msgbuf)
+	connmock := net.NewConnectionMock(gotfrom.PublicKey())
+	connmock.Addr = addr
+	err = m.processUDPMessage(net.IncomingMessageEvent{connmock, msgbuf})
 
 	require.Error(t, err) // no protocol
 
 	c := make(chan service.DirectMessage, 1)
 	m.RegisterDirectProtocolWithChannel(test_str, c)
-	err = m.processUDPMessage(gotfrom.PublicKey(), addr, msgbuf)
-	require.NoError(t, err) // no protocol
+	err = m.processUDPMessage(net.IncomingMessageEvent{connmock, msgbuf})
+
+	require.Equal(t, err, ErrNoSession)
+
+	session := net.NewSessionMock(gotfrom.PublicKey())
+	connmock.SetSession(session)
+	err = m.processUDPMessage(net.IncomingMessageEvent{connmock, msgbuf})
+
+	require.Equal(t, err, ErrFailDecrypt)
+
+	session.OpenMessageFunc = func(boxedMessage []byte) (bytes []byte, err error) {
+		return boxedMessage, nil
+	}
+
+	err = m.processUDPMessage(net.IncomingMessageEvent{connmock, msgbuf})
+
+	require.NoError(t, err)
 
 	select {
 	case msg := <-c:
-		require.Equal(t, msg.Metadata().FromAddress, addr)
-		require.Equal(t, msg.Sender(), gotfrom.PublicKey())
-		require.Equal(t, msg.Bytes(), data.Bytes())
+		require.Equal(t, addr, msg.Metadata().FromAddress)
+		require.Equal(t, gotfrom.PublicKey(), msg.Sender())
+		require.Equal(t, data.Bytes(), msg.Bytes())
 	default:
 		t.Fatal("didn't get msg")
 	}
@@ -188,47 +239,50 @@ func TestUDPMux_ProcessUDP(t *testing.T) {
 }
 
 func Test_RoundTrip(t *testing.T) {
-	nd, _ := node.GenerateTestNode(t)
+	nd, ndinfo := node.GenerateTestNode(t)
 	udpnet, err := net.NewUDPNet(config.DefaultConfig(), nd, log.New("", "", ""))
-
 	require.NoError(t, err)
-	m := NewUDPMux(nd, nil, udpnet, log.New(test_str, "", ""))
+
+	m := NewUDPMux(nd, nil, udpnet, 0, log.New(test_str, "", ""))
 	require.NotNil(t, m)
 
-	nd2, _ := node.GenerateTestNode(t)
+	nd2, ndinfo2 := node.GenerateTestNode(t)
 	udpnet2, err := net.NewUDPNet(config.DefaultConfig(), nd2, log.New("", "", ""))
 	require.NoError(t, err)
-	m2 := NewUDPMux(nd2, nil, udpnet2, log.New(test_str+"2", "", ""))
 
+	m2 := NewUDPMux(nd2, nil, udpnet2, 0, log.New(test_str+"2", "", ""))
 	require.NotNil(t, m2)
 
 	c := make(chan service.DirectMessage, 1)
 	m.RegisterDirectProtocolWithChannel(test_str, c)
+
 	c2 := make(chan service.DirectMessage, 1)
 	m2.RegisterDirectProtocolWithChannel(test_str, c2)
 
 	m.lookuper = func(key p2pcrypto.PublicKey) (*node.NodeInfo, error) {
 		return nil, errors.New("nonode")
 	}
-	require.NoError(t, udpnet.Start())
+
+	udpAddr := &net2.UDPAddr{ndinfo.IP, int(ndinfo.DiscoveryPort), ""}
+	udpListener, err := net2.ListenUDP("udp", udpAddr)
+	require.NoError(t, err)
+	udpnet.Start(udpListener)
 	err = m.Start()
 	require.NoError(t, err)
 	defer m.Shutdown()
-	require.NoError(t, udpnet2.Start())
+	udpAddr2 := &net2.UDPAddr{ndinfo2.IP, int(ndinfo2.DiscoveryPort), ""}
+	udpListener2, err := net2.ListenUDP("udp", udpAddr2)
+	require.NoError(t, err)
+	udpnet2.Start(udpListener2)
 	err = m2.Start()
 	require.NoError(t, err)
 	defer m2.Shutdown()
 
-	if nd2.NodeInfo.IP.IsUnspecified() {
-		if ip4 := nd2.IP.To4(); ip4 != nil {
-			nd2.NodeInfo.IP = net2.IP{127, 0, 0, 1}
-		} else if ip6 := nd2.IP.To16(); ip6 != nil {
-			nd2.NodeInfo.IP = net2.IPv6loopback
-		}
-	}
+	// use loopback IP for node 2
+	ndinfo2.IP = net2.IP{127, 0, 0, 1}
 
 	m.lookuper = func(key p2pcrypto.PublicKey) (*node.NodeInfo, error) {
-		return nd2.NodeInfo, nil
+		return ndinfo2, nil
 	}
 
 	err = m.SendMessage(nd2.PublicKey(), test_str, []byte(test_str))

@@ -2,11 +2,14 @@ package discovery
 
 import (
 	"context"
+	"github.com/google/uuid"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -14,21 +17,21 @@ import (
 const tstBootstrapTimeout = 5 * time.Minute
 
 func TestNew(t *testing.T) {
-	ln, _ := node.GenerateTestNode(t)
+	ln, nodeinfo := node.GenerateTestNode(t)
 
 	cfg := config.DefaultConfig()
 	sim := service.NewSimulator()
 
-	n1 := sim.NewNodeFrom(ln.NodeInfo)
+	n1 := sim.NewNodeFrom(nodeinfo)
 
-	d := New(ln, cfg.SwarmConfig, n1)
+	d := New(ln, cfg.SwarmConfig, n1, "", log.NewDefault(t.Name()))
 	assert.NotNil(t, d, "D is not nil")
 }
 
 func simNodeWithDHT(t *testing.T, sc config.SwarmConfig, sim *service.Simulator) (*service.Node, *Discovery) {
-	ln, _ := node.GenerateTestNode(t)
-	n := sim.NewNodeFrom(ln.NodeInfo)
-	dht := New(ln, sc, n)
+	ln, ninfo := node.GenerateTestNode(t)
+	n := sim.NewNodeFrom(ninfo)
+	dht := New(ln, sc, n, "", log.NewDefault("dhttest"+uuid.New().String()))
 	//n.AttachDHT(discovery)
 
 	return n, dht
@@ -58,27 +61,30 @@ func TestKadDHT_VerySmallBootstrap(t *testing.T) {
 	bncfg := config.DefaultConfig()
 	sim := service.NewSimulator()
 
-	bn, _ := node.GenerateTestNode(t)
-	b1 := sim.NewNodeFrom(bn.NodeInfo)
-	bdht := New(bn, bncfg.SwarmConfig, b1)
+	bn, bninfo := node.GenerateTestNode(t)
+	b1 := sim.NewNodeFrom(bninfo)
+	bdht := New(bn, bncfg.SwarmConfig, b1, "", log.NewDefault(t.Name()+"_"+bninfo.PublicKey().String()))
+	bdht.SetLocalAddresses(int(bninfo.ProtocolPort), int(bninfo.DiscoveryPort))
 
-	extra, _ := node.GenerateTestNode(t)
-	extrasvc := sim.NewNodeFrom(extra.NodeInfo)
-	edht := New(extra, bncfg.SwarmConfig, extrasvc)
-	edht.rt.AddAddress(generateDiscNode(), extra.NodeInfo)
+	extra, extrainfo := node.GenerateTestNode(t)
+	extrasvc := sim.NewNodeFrom(extrainfo)
+	edht := New(extra, bncfg.SwarmConfig, extrasvc, "", log.NewDefault(t.Name()+"_"+extra.PublicKey().String()))
+	edht.SetLocalAddresses(int(bninfo.ProtocolPort), int(bninfo.DiscoveryPort))
+	edht.rt.AddAddress(generateDiscNode(), extrainfo)
 
-	bdht.rt.AddAddress(extra.NodeInfo, bn.NodeInfo)
+	bdht.rt.AddAddress(extrainfo, bninfo)
 
 	cfg := config.DefaultConfig().SwarmConfig
 	cfg.Gossip = false
 	cfg.Bootstrap = true
 	cfg.RandomConnections = connections
 	//cfg.RoutingTableBucketSize = 2
-	cfg.BootstrapNodes = append(cfg.BootstrapNodes, bn.NodeInfo.String())
+	cfg.BootstrapNodes = append(cfg.BootstrapNodes, bninfo.String())
 
-	ln, _ := node.GenerateTestNode(t)
-	n := sim.NewNodeFrom(ln.NodeInfo)
-	dht := New(ln, cfg, n)
+	ln, lninfo := node.GenerateTestNode(t)
+	n := sim.NewNodeFrom(lninfo)
+	dht := New(ln, cfg, n, "", log.NewDefault(t.Name()+lninfo.PublicKey().String()))
+	dht.SetLocalAddresses(int(lninfo.ProtocolPort), int(lninfo.DiscoveryPort))
 	err := dht.Bootstrap(context.TODO())
 
 	require.NoError(t, err)
@@ -86,9 +92,9 @@ func TestKadDHT_VerySmallBootstrap(t *testing.T) {
 	res, err := bdht.rt.Lookup(ln.PublicKey())
 	require.NoError(t, err)
 
-	require.Equal(t, res.ID, ln.ID)
-	require.Equal(t, res.DiscoveryPort, ln.DiscoveryPort)
-	require.Equal(t, res.ProtocolPort, ln.ProtocolPort)
+	require.Equal(t, res.ID, lninfo.ID)
+	require.Equal(t, res.DiscoveryPort, lninfo.DiscoveryPort)
+	require.Equal(t, res.ProtocolPort, lninfo.ProtocolPort)
 
 	res2, _ := dht.rt.Lookup(bn.PublicKey())
 	//require.Error(t, err2)
@@ -103,14 +109,14 @@ func TestKadDHT_BootstrapSingleBoot(t *testing.T) {
 	bncfg := config.DefaultConfig()
 	sim := service.NewSimulator()
 
-	bn, _ := node.GenerateTestNode(t)
-	b1 := sim.NewNodeFrom(bn.NodeInfo)
-	_ = New(bn, bncfg.SwarmConfig, b1)
+	bn, bninfo := node.GenerateTestNode(t)
+	b1 := sim.NewNodeFrom(bninfo)
+	_ = New(bn, bncfg.SwarmConfig, b1, "", log.NewDefault(t.Name()+"_"+bninfo.String()))
 
 	cfg := config.DefaultConfig().SwarmConfig
 	cfg.Gossip = false
 	cfg.Bootstrap = true
-	cfg.BootstrapNodes = append(cfg.BootstrapNodes, bn.NodeInfo.String())
+	cfg.BootstrapNodes = append(cfg.BootstrapNodes, bninfo.String())
 	cfg.RandomConnections = 8
 
 	donech := make(chan struct{}, numPeers)
@@ -118,10 +124,11 @@ func TestKadDHT_BootstrapSingleBoot(t *testing.T) {
 	nods, dhts := make([]*node.NodeInfo, numPeers), make([]*Discovery, numPeers)
 
 	for i := 0; i < numPeers; i++ {
-		ln, _ := node.GenerateTestNode(t)
-		n := sim.NewNodeFrom(ln.NodeInfo)
-		dht := New(ln, cfg, n)
-		nods[i] = ln.NodeInfo
+		ln, lninfo := node.GenerateTestNode(t)
+		n := sim.NewNodeFrom(lninfo)
+		dht := New(ln, cfg, n, "", log.NewDefault("dht"+strconv.Itoa(i)))
+		dht.SetLocalAddresses(int(lninfo.ProtocolPort), int(lninfo.DiscoveryPort))
+		nods[i] = lninfo
 		dhts[i] = dht
 		go func() {
 			err := dht.Bootstrap(context.TODO())
@@ -145,7 +152,7 @@ func TestKadDHT_BootstrapSingleBoot(t *testing.T) {
 }
 
 func TestKadDHT_Bootstrap(t *testing.T) {
-	numPeers := 100
+	numPeers := 1500
 	min := 8
 	bootnum := 5
 
@@ -158,10 +165,11 @@ func TestKadDHT_Bootstrap(t *testing.T) {
 	cfg.Bootstrap = true
 
 	for b := 0; b < bootnum; b++ {
-		bn, _ := node.GenerateTestNode(t)
-		b1 := sim.NewNodeFrom(bn.NodeInfo)
-		_ = New(bn, bncfg.SwarmConfig, b1)
-		cfg.BootstrapNodes = append(cfg.BootstrapNodes, bn.NodeInfo.String())
+		bn, bninfo := node.GenerateTestNode(t)
+		b1 := sim.NewNodeFrom(bninfo)
+		disc := New(bn, bncfg.SwarmConfig, b1, "", log.NewDefault("bn"+strconv.Itoa(b)))
+		disc.SetLocalAddresses(int(bninfo.ProtocolPort), int(bninfo.DiscoveryPort))
+		cfg.BootstrapNodes = append(cfg.BootstrapNodes, bninfo.String())
 	}
 
 	cfg.RandomConnections = min
@@ -171,10 +179,10 @@ func TestKadDHT_Bootstrap(t *testing.T) {
 	nods, dhts := make([]*node.NodeInfo, numPeers), make([]*Discovery, numPeers)
 
 	for i := 0; i < numPeers; i++ {
-		ln, _ := node.GenerateTestNode(t)
-		n := sim.NewNodeFrom(ln.NodeInfo)
-		dht := New(ln, cfg, n)
-		nods[i] = ln.NodeInfo
+		ln, lninfo := node.GenerateTestNode(t)
+		n := sim.NewNodeFrom(lninfo)
+		dht := New(ln, cfg, n, "", log.NewDefault("dht"+strconv.Itoa(i)))
+		nods[i] = lninfo
 		dhts[i] = dht
 		go func() {
 			err := dht.Bootstrap(context.TODO())
@@ -203,7 +211,7 @@ func testTables(t *testing.T, dhts []*Discovery, min, avg int) {
 		size := dht.rt.NumAddresses()
 		all += size
 		if min > 0 && size < min {
-			t.Fatalf("discovery %d (%v) has %d peers min is %d", i, dht.local.String(), size, min)
+			t.Fatalf("discovery %d (%v) has %d peers min is %d", i, dht.local.PublicKey().String(), size, min)
 		}
 	}
 	avgSize := all / len(dhts)
@@ -226,10 +234,10 @@ func Test_findNodeFailure(t *testing.T) {
 	go func() {
 		<-time.After(time.Second)
 		realnode := sim.NewNodeFrom(bsinfo)
-		d := New(bsnode, config.DefaultConfig().SwarmConfig, realnode)
+		d := New(bsnode, config.DefaultConfig().SwarmConfig, realnode, "", log.NewDefault(t.Name()))
 		<-time.After(time.Second)
 		nd, _ := simNodeWithDHT(t, config.DefaultConfig().SwarmConfig, sim)
-		d.rt.AddAddress(nd.NodeInfo, d.local.NodeInfo)
+		d.rt.AddAddress(nd.NodeInfo, bsinfo)
 	}()
 
 	err := dht2.Bootstrap(context.TODO())
@@ -243,7 +251,7 @@ func Test_Refresh(t *testing.T) {
 	bsnode, bsinfo := node.GenerateTestNode(t)
 	serv := sim.NewNodeFrom(bsinfo)
 
-	disc := New(bsnode, config.DefaultConfig().SwarmConfig, serv)
+	disc := New(bsnode, config.DefaultConfig().SwarmConfig, serv, "", log.NewDefault(""))
 	rt := &mockAddrBook{}
 	rt.NeedNewAddressesFunc = func() bool {
 		return true
@@ -261,7 +269,7 @@ func Test_Refresh(t *testing.T) {
 	disc.rt = rt
 	disc.bootstrapper = refresher
 
-	prz := disc.SelectPeers(10)
+	prz := disc.SelectPeers(context.TODO(), 10)
 	require.Len(t, prz, 0)
 	require.Equal(t, requsted, 10)
 
@@ -271,7 +279,7 @@ func Test_Refresh(t *testing.T) {
 		return false
 	}
 
-	prz = disc.SelectPeers(10)
+	prz = disc.SelectPeers(context.TODO(), 10)
 	require.Len(t, prz, 0)
 	require.Equal(t, requsted, 0)
 }

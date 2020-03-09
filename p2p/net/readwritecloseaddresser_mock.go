@@ -13,6 +13,8 @@ type ReadWriteCloseAddresserMock struct {
 	readCnt  int
 	readChan chan struct{}
 
+	writeWaitChan chan []byte
+
 	writeErr error
 	writeOut []byte
 	writeCnt int
@@ -88,6 +90,9 @@ func (rwcam *ReadWriteCloseAddresserMock) Write(p []byte) (n int, err error) {
 	err = rwcam.writeErr
 	if rwcam.writeErr == nil {
 		rwcam.writeOut = append(rwcam.writeOut, p...)
+	}
+	if rwcam.writeWaitChan != nil {
+		rwcam.writeWaitChan <- p
 	}
 	return
 }

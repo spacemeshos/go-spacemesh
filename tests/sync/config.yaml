@@ -5,7 +5,7 @@ config_map_name: conf
 script_on_exit: '' #'./k8s/log-client-pods.sh'
 
 genesis_delta: -1000
-deployment_ready_time_out: 120
+deployment_ready_time_out: 500
 single_pod_ready_time_out: 60
 config_path: '../config.toml'
 
@@ -25,7 +25,7 @@ bootstrap:
     expected-layers: '50'
     storage-path: 'spacemesh-sync-data'
     remote-data: 'true'
-    hdist: '1'
+    hdist: '5'
 client:
   image: 'spacemeshos/go-spacemesh:develop'
   command: '/bin/go-sync'
@@ -41,7 +41,23 @@ client:
     expected-layers: '50'
     storage-path: 'spacemesh-sync-data'
     remote-data: 'true'
-    hdist: '1'
+    hdist: '5'
+clientv2:
+  image: 'spacemeshos/go-spacemesh:develop'
+  command: '/bin/go-sync'
+  replicas: 9
+  args:
+    randcon: '8'
+    hare-committee-size: '20'
+    hare-max-adversaries: '9'
+    hare-round-duration-sec: '10'
+    layer-duration-sec: '10'
+    layer-average-size: '20'
+    expected-layers: '50'
+    storage-path: 'spacemesh-sync-data'
+    hdist: '5'
+    data-folder: '/usr/share/spacemesh/'
+  deployment_type: statefulset
 elastic:
   host: elastic.spacemesh.io
   port: 9200

@@ -3,6 +3,8 @@ package eligibility
 import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"testing"
@@ -22,19 +24,23 @@ func (mpp *mockPatternProvider) ContextuallyValidBlock(layer types.LayerID) (map
 }
 
 func TestBeacon_Value(t *testing.T) {
+	block1 := types.NewExistingBlock(0, []byte("asghsfgdhn"))
+	block2 := types.NewExistingBlock(0, []byte("asghdhn"))
+	block3 := types.NewExistingBlock(0, []byte("asghsfg"))
+
 	r := require.New(t)
 
-	b := beacon{}
+	b := NewBeacon(nil, 0, log.NewDefault(t.Name()))
 	c := newMockCasher()
 	b.cache = c
 
 	genesisGoodPtrn := map[types.BlockID]struct{}{}
-	genesisGoodPtrn[420] = struct{}{}
+	genesisGoodPtrn[mesh.GenesisBlock.Id()] = struct{}{}
 
 	valGoodPtrn := map[types.BlockID]struct{}{}
-	valGoodPtrn[1] = struct{}{}
-	valGoodPtrn[4] = struct{}{}
-	valGoodPtrn[6] = struct{}{}
+	valGoodPtrn[block1.Id()] = struct{}{}
+	valGoodPtrn[block2.Id()] = struct{}{}
+	valGoodPtrn[block3.Id()] = struct{}{}
 
 	b.patternProvider = &mockPatternProvider{valGoodPtrn, genesisGoodPtrn, someErr}
 	b.confidenceParam = cfg.ConfidenceParam
@@ -62,7 +68,7 @@ func TestBeacon_Value(t *testing.T) {
 func TestNewBeacon(t *testing.T) {
 	r := require.New(t)
 	p := &mockPatternProvider{}
-	b := NewBeacon(p, 10)
+	b := NewBeacon(p, 10, log.NewDefault(t.Name()))
 	r.Equal(p, b.patternProvider)
 	r.Equal(uint64(10), b.confidenceParam)
 	r.NotNil(p, b.cache)

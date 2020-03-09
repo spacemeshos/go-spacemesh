@@ -1,7 +1,6 @@
 package gossip
 
 import (
-	"errors"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -9,11 +8,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"sync"
 )
 
 const oldMessageCacheSize = 10000
-const propagateHandleBufferSize = 1000 // number of MessageValidation that we allow buffering, above this number protocols will get stuck
+const propagateHandleBufferSize = 5000 // number of MessageValidation that we allow buffering, above this number protocols will get stuck
 
 const ProtocolName = "/p2p/1.0/gossip"
 const protocolVer = "0"
@@ -23,6 +23,12 @@ type baseNetwork interface {
 	SendMessage(peerPubkey p2pcrypto.PublicKey, protocol string, payload []byte) error
 	SubscribePeerEvents() (conn chan p2pcrypto.PublicKey, disc chan p2pcrypto.PublicKey)
 	ProcessGossipProtocolMessage(sender p2pcrypto.PublicKey, protocol string, data service.Data, validationCompletedChan chan service.MessageValidation) error
+}
+
+type prioQ interface {
+	Write(prio priorityq.Priority, m interface{}) error
+	Read() (interface{}, error)
+	Close()
 }
 
 // Protocol is the gossip protocol
@@ -41,6 +47,8 @@ type Protocol struct {
 	oldMessageQ *types.DoubleCache
 
 	propagateQ chan service.MessageValidation
+	pq         prioQ
+	priorities map[string]priorityq.Priority
 }
 
 // NewProtocol creates a new gossip protocol instance. Call Start to start reading peers
@@ -55,6 +63,8 @@ func NewProtocol(config config.SwarmConfig, base baseNetwork, localNodePubkey p2
 		shutdown:        make(chan struct{}),
 		oldMessageQ:     types.NewDoubleCache(oldMessageCacheSize), // todo : remember to drain this
 		propagateQ:      make(chan service.MessageValidation, propagateHandleBufferSize),
+		pq:              priorityq.New(propagateHandleBufferSize),
+		priorities:      make(map[string]priorityq.Priority),
 	}
 }
 
@@ -109,7 +119,7 @@ peerLoop:
 			// TODO: replace peer ?
 			err := prot.net.SendMessage(pubkey, nextProt, payload)
 			if err != nil {
-				prot.Warning("Failed sending %v msg %v to %v, reason=%v", nextProt, h, p, err)
+				prot.With().Warning("Failed sending", log.String("protocol", nextProt), h.Field("hash"), log.String("to", pubkey.String()), log.Err(err))
 			}
 			wg.Done()
 		}(p)
@@ -163,43 +173,76 @@ func (prot *Protocol) processMessage(sender p2pcrypto.PublicKey, protocol string
 	return prot.net.ProcessGossipProtocolMessage(sender, protocol, msg, prot.propagateQ)
 }
 
+func (prot *Protocol) handlePQ() {
+	for {
+		mi, err := prot.pq.Read()
+		if err != nil {
+			prot.With().Info("priority queue was closed, existing", log.Err(err))
+			return
+		}
+		m, ok := mi.(service.MessageValidation)
+		if !ok {
+			prot.Error("could not convert to message validation, ignoring message")
+			continue
+		}
+		h := types.CalcMessageHash12(m.Message(), m.Protocol())
+		prot.Log.With().Debug("new_gossip_message_relay", log.String("protocol", m.Protocol()), log.String("hash", util.Bytes2Hex(h[:])))
+		prot.propagateMessage(m.Message(), h, m.Protocol(), m.Sender())
+	}
+}
+
+func (prot *Protocol) getPriority(protoName string) priorityq.Priority {
+	v, exist := prot.priorities[protoName]
+	if !exist {
+		prot.With().Warning("note: no priority found for protocol", log.String("protoName", protoName))
+		return priorityq.Low
+	}
+
+	return v
+}
+
 func (prot *Protocol) propagationEventLoop() {
-	var err error
-loop:
+	go prot.handlePQ()
+
 	for {
 		select {
 		case msgV := <-prot.propagateQ:
-			h := types.CalcMessageHash12(msgV.Message(), msgV.Protocol())
-			prot.Log.With().Debug("new_gossip_message_relay", log.String("protocol", msgV.Protocol()), log.String("hash", util.Bytes2Hex(h[:])))
-			prot.propagateMessage(msgV.Message(), h, msgV.Protocol(), msgV.Sender())
+			if err := prot.pq.Write(prot.getPriority(msgV.Protocol()), msgV); err != nil {
+				prot.With().Error("fatal: could not write to priority queue", log.Err(err), log.String("protocol", msgV.Protocol()))
+			}
+			metrics.PropagationQueueLen.Set(float64(len(prot.propagateQ)))
+
 		case <-prot.shutdown:
-			err = errors.New("protocol shutdown")
-			break loop
+			prot.pq.Close()
+			prot.Error("propagate event loop stopped: protocol shutdown")
+			return
 		}
 	}
-	prot.Error("propagate event loop stopped. err: %v", err)
 }
 
 func (prot *Protocol) Relay(sender p2pcrypto.PublicKey, protocol string, msg service.Data) error {
 	return prot.processMessage(sender, protocol, msg)
 }
 
-func (prot *Protocol) eventLoop(peerConn chan p2pcrypto.PublicKey, peerDisc chan p2pcrypto.PublicKey) {
+func (prot *Protocol) eventLoop(peerConn, peerDisc chan p2pcrypto.PublicKey) {
 	// TODO: replace with p2p.Peers
-	var err error
-loop:
+	defer prot.Info("Gossip protocol shutdown")
 	for {
 		select {
-		case peer := <-peerConn:
+		case peer, ok := <-peerConn:
+			if !ok {
+				return
+			}
 			go prot.addPeer(peer)
-		case peer := <-peerDisc:
+		case peer, ok := <-peerDisc:
+			if !ok {
+				return
+			}
 			go prot.removePeer(peer)
 		case <-prot.shutdown:
-			err = errors.New("protocol shutdown")
-			break loop
+			return
 		}
 	}
-	prot.Error("Gossip protocol event loop stopped. err: %v", err)
 }
 
 // peersCount returns the number of peers known to the protocol, used for testing only
@@ -216,4 +259,8 @@ func (prot *Protocol) hasPeer(key p2pcrypto.PublicKey) bool {
 	_, ok := prot.peers[key]
 	prot.peersMutex.RUnlock()
 	return ok
+}
+
+func (prot *Protocol) SetPriority(protoName string, priority priorityq.Priority) {
+	prot.priorities[protoName] = priority
 }

@@ -5,20 +5,20 @@ import (
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"sync"
-	"sync/atomic"
 	"time"
 )
 
 type BlockListener struct {
 	*Syncer
-	BlockValidator
+	BlockEligibilityValidator
 	log.Log
 	wg                   sync.WaitGroup
 	bufferSize           int
 	semaphore            chan struct{}
 	receivedGossipBlocks chan service.GossipMessage
-	startLock            uint32
+	startLock            types.TryMutex
 	timeout              time.Duration
 	exit                 chan struct{}
 }
@@ -32,7 +32,7 @@ func (bl *BlockListener) Close() {
 }
 
 func (bl *BlockListener) Start() {
-	if atomic.CompareAndSwapUint32(&bl.startLock, 0, 1) {
+	if bl.startLock.TryLock() {
 		go bl.ListenToGossipBlocks()
 	}
 }
@@ -43,7 +43,7 @@ func NewBlockListener(net service.Service, sync *Syncer, concurrency int, logger
 		Log:                  logger,
 		semaphore:            make(chan struct{}, concurrency),
 		exit:                 make(chan struct{}),
-		receivedGossipBlocks: net.RegisterGossipProtocol(config.NewBlockProtocol),
+		receivedGossipBlocks: net.RegisterGossipProtocol(config.NewBlockProtocol, priorityq.High),
 	}
 	return &bl
 }
@@ -55,7 +55,7 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 			bl.Log.Info("listening  stopped")
 			return
 		case data := <-bl.receivedGossipBlocks:
-			if !bl.WeaklySynced() {
+			if !bl.ListenToGossip() {
 				bl.With().Info("ignoring gossip blocks - not synced yet")
 				break
 			}
@@ -67,9 +67,9 @@ func (bl *BlockListener) ListenToGossipBlocks() {
 					bl.Error("got empty message while listening to gossip blocks")
 					return
 				}
-
+				tmr := newMilliTimer(gossipBlockTime)
 				bl.handleBlock(data)
-
+				tmr.ObserveDuration()
 			}()
 
 		}
@@ -83,27 +83,40 @@ func (bl *BlockListener) handleBlock(data service.GossipMessage) {
 		bl.Error("received invalid block %v", data.Bytes(), err)
 		return
 	}
-	bl.Log.With().Info("got new block", log.BlockId(uint64(blk.ID())), log.LayerId(uint64(blk.Layer())), log.Int("txs", len(blk.TxIds)), log.Int("atxs", len(blk.AtxIds)))
+
+	//set the block id when received
+	blk.Initialize()
+
+	bl.Log.With().Info("got new block",
+		blk.Id(),
+		blk.LayerIndex,
+		blk.LayerIndex.GetEpoch(bl.LayersPerEpoch),
+		log.String("miner_id", blk.MinerId().String()),
+		log.Int("tx_count", len(blk.TxIds)),
+		log.Int("atx_count", len(blk.AtxIds)),
+		log.Int("view_edges", len(blk.ViewEdges)),
+		log.Int("vote_count", len(blk.BlockVotes)),
+		blk.ATXID,
+		log.Uint32("eligibility_counter", blk.EligibilityProof.J),
+	)
 	//check if known
-	if _, err := bl.GetBlock(blk.ID()); err == nil {
-		bl.With().Info("we already know this block", log.BlockId(uint64(blk.ID())))
+	if _, err := bl.GetBlock(blk.Id()); err == nil {
+		bl.With().Info("we already know this block", log.BlockId(blk.Id().String()))
 		return
 	}
 	txs, atxs, err := bl.blockSyntacticValidation(&blk)
 	if err != nil {
-		bl.With().Error("failed to validate block", log.BlockId(uint64(blk.ID())), log.Err(err))
+		bl.With().Error("failed to validate block", log.BlockId(blk.Id().String()), log.Err(err))
 		return
 	}
 	data.ReportValidation(config.NewBlockProtocol)
 	if err := bl.AddBlockWithTxs(&blk, txs, atxs); err != nil {
-		bl.With().Error("failed to add block to database", log.BlockId(uint64(blk.ID())), log.Err(err))
+		bl.With().Error("failed to add block to database", log.BlockId(blk.Id().String()), log.Err(err))
 		return
 	}
 
-	if blk.Layer() <= bl.ValidatedLayer() {
+	if blk.Layer() <= bl.ProcessedLayer() || blk.Layer() == bl.ValidatingLayer() {
 		bl.Syncer.HandleLateBlock(&blk)
 	}
-
-	bl.With().Info("added block to database", log.BlockId(uint64(blk.ID())))
 	return
 }

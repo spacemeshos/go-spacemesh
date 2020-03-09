@@ -64,7 +64,7 @@ def _report_failures():
         for i, failure in enumerate(_failed_expectations, start=1):
             report.append('%d: %s' % (i, failure))
         _failed_expectations = []
-    return ('\n'.join(report))
+    return '\n'.join(report)
 
 # ---------------------------------------------------
 # _log_failure() notes

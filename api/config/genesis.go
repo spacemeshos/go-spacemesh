@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"math"
 	"math/big"
 	"os"
 )
@@ -33,7 +34,7 @@ func SaveGenesisConfig(path string, config GenesisConfig) error {
 func LoadGenesisConfig(path string) (*GenesisConfig, error) {
 	_, err := os.Stat(path)
 	if os.IsNotExist(err) {
-		log.Warning("genesis config not lodad since file does not exist. file=%v", path)
+		log.Warning("genesis config not loaded since file does not exist. file=%v", path)
 		return nil, err
 	}
 	r, err := os.Open(path)
@@ -55,12 +56,17 @@ func LoadGenesisConfig(path string) (*GenesisConfig, error) {
 const Account1Pub = "0x7be017a967db77fd10ac7c891b3d6d946dea7e3e14756e2f0f9e09b9663f0d9c"
 const Account1Private = "0x81c90dd832e18d1cf9758254327cb3135961af6688ac9c2a8c5d71f73acc5ce57be017a967db77fd10ac7c891b3d6d946dea7e3e14756e2f0f9e09b9663f0d9c"
 
+const Account2Pub = "0x22a31a84ab876f82fcafba86e77910b4419a4ee0f1d5483d7dd3b5b6b6922ee9"
+const Account2Private = "0x9d411020d46d3f4e1214f7b51052219737669f461ac9c9ac6ac49753926d0af222a31a84ab876f82fcafba86e77910b4419a4ee0f1d5483d7dd3b5b6b6922ee9"
+
 func DefaultGenesisConfig() *GenesisConfig {
 	g := GenesisConfig{}
 
+	// we default to 10^5 SMH per account which is 10^17 smidge
 	g.InitialAccounts = map[string]GenesisAccount{
-		"0x1": {Balance: big.NewInt(10000), Nonce: 0},
-		"0x7be017a967db77fd10ac7c891b3d6d946dea7e3e14756e2f0f9e09b9663f0d9c": {Balance: big.NewInt(10000), Nonce: 0},
+		"0x1":       {Balance: big.NewInt(int64(math.Pow10(17))), Nonce: 0},
+		Account1Pub: {Balance: big.NewInt(int64(math.Pow10(17))), Nonce: 0},
+		Account2Pub: {Balance: big.NewInt(int64(math.Pow10(17))), Nonce: 0},
 	}
 	return &g
 	//todo: implement reading from file

@@ -9,6 +9,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -16,7 +17,7 @@ import (
 	"time"
 )
 
-var cfg = config.Config{N: 10, F: 5, RoundDuration: 2, ExpectedLeaders: 5}
+var cfg = config.Config{N: 10, F: 5, RoundDuration: 2, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 1000}
 
 type mockMessageValidator struct {
 	syntaxValid  bool
@@ -60,7 +61,7 @@ type mockP2p struct {
 	err   error
 }
 
-func (m *mockP2p) RegisterGossipProtocol(protocol string) chan service.GossipMessage {
+func (m *mockP2p) RegisterGossipProtocol(protocol string, prio priorityq.Priority) chan service.GossipMessage {
 	return make(chan service.GossipMessage)
 }
 
@@ -140,7 +141,7 @@ func buildMessage(msg *Message) *Msg {
 
 func buildBroker(net NetworkService, testName string) *Broker {
 	return newBroker(net, &mockEligibilityValidator{true}, MockStateQuerier{true, nil},
-		(&mockSyncer{true}).IsSynced, 10, Closer{make(chan struct{})}, log.NewDefault(testName))
+		(&mockSyncer{true}).IsSynced, 10, cfg.LimitIterations, Closer{make(chan struct{})}, log.NewDefault(testName))
 }
 
 type mockEligibilityValidator struct {
@@ -179,6 +180,16 @@ func TestConsensusProcess_Start(t *testing.T) {
 	assert.Equal(t, nil, err)
 	err = proc.Start()
 	assert.Equal(t, "instance already started", err.Error())
+}
+
+func TestConsensusProcess_TerminationLimit(t *testing.T) {
+	p := generateConsensusProcess(t)
+	p.SetInbox(make(chan *Msg, 10))
+	p.cfg.LimitIterations = 1
+	p.cfg.RoundDuration = 1
+	p.Start()
+	time.Sleep(time.Duration(6*p.cfg.RoundDuration) * time.Second)
+	assert.Equal(t, int32(1), p.k/4)
 }
 
 func TestConsensusProcess_eventLoop(t *testing.T) {
@@ -249,9 +260,9 @@ func TestConsensusProcess_nextRound(t *testing.T) {
 }
 
 func generateConsensusProcess(t *testing.T) *ConsensusProcess {
-	bn, _ := node.GenerateTestNode(t)
+	_, bninfo := node.GenerateTestNode(t)
 	sim := service.NewSimulator()
-	n1 := sim.NewNodeFrom(bn.NodeInfo)
+	n1 := sim.NewNodeFrom(bninfo)
 
 	s := NewSetFromValues(value1)
 	oracle := eligibility.New()
@@ -436,25 +447,44 @@ func TestConsensusProcess_currentRound(t *testing.T) {
 }
 
 func TestConsensusProcess_onEarlyMessage(t *testing.T) {
+	r := require.New(t)
 	proc := generateConsensusProcess(t)
 	m := BuildPreRoundMsg(generateSigning(t), NewDefaultEmptySet())
 	proc.advanceToNextRound()
 	proc.onEarlyMessage(buildMessage(nil))
-	assert.Equal(t, 0, len(proc.pending))
+	r.Equal(0, len(proc.pending))
 	proc.onEarlyMessage(m)
-	assert.Equal(t, 1, len(proc.pending))
+	r.Equal(1, len(proc.pending))
 	proc.onEarlyMessage(m)
-	assert.Equal(t, 1, len(proc.pending))
+	r.Equal(1, len(proc.pending))
+	m2 := BuildPreRoundMsg(generateSigning(t), NewDefaultEmptySet())
+	proc.onEarlyMessage(m2)
+	m3 := BuildPreRoundMsg(generateSigning(t), NewDefaultEmptySet())
+	proc.onEarlyMessage(m3)
+	r.Equal(3, len(proc.pending))
+	proc.onRoundBegin()
+
+	// make sure we wait enough for the go routine to be executed
+	timeout := time.NewTimer(1 * time.Second)
+	tk := time.NewTicker(100 * time.Microsecond)
+	select {
+	case <-timeout.C:
+		r.Equal(0, len(proc.pending))
+	case <-tk.C:
+		if 0 == len(proc.pending) {
+			return
+		}
+	}
 }
 
 func TestProcOutput_Id(t *testing.T) {
-	po := procOutput{instanceId1, nil}
+	po := procReport{instanceId1, nil, false}
 	assert.Equal(t, po.Id(), instanceId1)
 }
 
 func TestProcOutput_Set(t *testing.T) {
 	es := NewDefaultEmptySet()
-	po := procOutput{instanceId1, es}
+	po := procReport{instanceId1, es, false}
 	assert.True(t, es.Equals(po.Set()))
 }
 
@@ -539,7 +569,7 @@ func (m *mockNet) Broadcast(protocol string, payload []byte) error {
 	return m.err
 }
 
-func (m *mockNet) RegisterGossipProtocol(protocol string) chan service.GossipMessage {
+func (m *mockNet) RegisterGossipProtocol(protocol string, prio priorityq.Priority) chan service.GossipMessage {
 	m.callRegister++
 	return nil
 }

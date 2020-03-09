@@ -9,10 +9,10 @@ import (
 
 type IdentityStore struct {
 	//todo: think about whether we need one db or several
-	ids database.DB
+	ids database.Database
 }
 
-func NewIdentityStore(db database.DB) *IdentityStore {
+func NewIdentityStore(db database.Database) *IdentityStore {
 	return &IdentityStore{db}
 }
 
@@ -29,5 +29,5 @@ func (s *IdentityStore) StoreNodeIdentity(id types.NodeId) error {
 func (s *IdentityStore) GetIdentity(id string) (types.NodeId, error) {
 	key := getKey(id)
 	bytes, err := s.ids.Get(key[:])
-	return types.NodeId{id, bytes}, err
+	return types.NodeId{Key: id, VRFPublicKey: bytes}, err
 }

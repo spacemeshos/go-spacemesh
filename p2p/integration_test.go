@@ -4,33 +4,57 @@ import (
 	"context"
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	"golang.org/x/sync/errgroup"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 )
 
-func (its *IntegrationTestSuite) Test_SendingMessage() {
-	exProto := RandString(10)
+var exampleGossipProto = "exampleGossip"
+var exampleDirectProto = "exampleDirect"
+
+type P2PIntegrationSuite struct {
+	localMtx        sync.Mutex
+	gossipProtocols []chan service.GossipMessage
+	directProtocols []chan service.DirectMessage
+	*IntegrationTestSuite
+}
+
+func protocolsHelper(s *P2PIntegrationSuite) {
+	s.gossipProtocols = make([]chan service.GossipMessage, 0, 100)
+	s.directProtocols = make([]chan service.DirectMessage, 0, 100)
+	s.BeforeHook = func(idx int, nd NodeTestInstance) {
+		// these happen async so we need to lock
+		s.localMtx.Lock()
+		s.gossipProtocols = append(s.gossipProtocols, nd.RegisterGossipProtocol(exampleGossipProto, priorityq.High))
+		s.directProtocols = append(s.directProtocols, nd.RegisterDirectProtocol(exampleDirectProto))
+		s.localMtx.Unlock()
+	}
+	// from now on there are only reads so no locking needed
+}
+
+func (its *P2PIntegrationSuite) Test_SendingMessage() {
 	exMsg := RandString(10)
 
 	node1 := its.Instances[0]
 	node2 := its.Instances[1]
+	recvChan := node2.directProtocolHandlers[exampleDirectProto]
+	require.NotNil(its.T(), recvChan)
 
-	_ = node1.RegisterDirectProtocol(exProto)
-	ch2 := node2.RegisterDirectProtocol(exProto)
-	conn, err := node1.cPool.GetConnection(node2.network.LocalAddr().String(), node2.lNode.PublicKey())
+	conn, err := node1.cPool.GetConnection(node2.network.LocalAddr(), node2.lNode.PublicKey())
 	require.NoError(its.T(), err)
-	err = node1.SendMessage(node2.LocalNode().NodeInfo.PublicKey(), exProto, []byte(exMsg))
+	err = node1.SendMessage(node2.LocalNode().PublicKey(), exampleDirectProto, []byte(exMsg))
 	require.NoError(its.T(), err)
 
-	tm := time.After(1 * time.Second)
+	tm := time.After(10 * time.Second)
 
 	select {
-	case gotmessage := <-ch2:
+	case gotmessage := <-recvChan:
 		if string(gotmessage.Bytes()) != exMsg {
 			its.T().Fatal("got wrong message")
 		}
@@ -40,33 +64,30 @@ func (its *IntegrationTestSuite) Test_SendingMessage() {
 	conn.Close()
 }
 
-func (its *IntegrationTestSuite) Test_Gossiping() {
-
-	msgChans := make([]chan service.GossipMessage, 0)
-	exProto := RandString(10)
-
-	its.ForAll(func(idx int, s NodeTestInstance) error {
-		msgChans = append(msgChans, s.RegisterGossipProtocol(exProto))
-		return nil
-	}, nil)
-
-	ctx, _ := context.WithTimeout(context.Background(), time.Minute*180)
+func (its *P2PIntegrationSuite) Test_Gossiping() {
+	ctx, _ := context.WithTimeout(context.Background(), time.Minute*5)
+	err := its.WaitForGossip(ctx)
+	require.NoError(its.T(), err, "Failed to connect all nodes to gossip")
 	errg, ctx := errgroup.WithContext(ctx)
+
 	MSGS := 100
+	MSGSIZE := 108692
+	tm := time.Now()
+	testLog("%v Sending %v messages with size %v to %v miners", its.T().Name(), MSGS, MSGSIZE, (its.BootstrappedNodeCount + its.BootstrapNodesCount))
 	numgot := int32(0)
 	for i := 0; i < MSGS; i++ {
-		msg := []byte(RandString(108692))
+		msg := []byte(RandString(MSGSIZE))
 		rnd := rand.Int31n(int32(len(its.Instances)))
-		_ = its.Instances[rnd].Broadcast(exProto, []byte(msg))
-		for _, mc := range msgChans {
+		_ = its.Instances[rnd].Broadcast(exampleGossipProto, msg)
+		for _, mc := range its.gossipProtocols {
 			ctx := ctx
 			mc := mc
 			numgot := &numgot
 			errg.Go(func() error {
 				select {
 				case got := <-mc:
-					got.ReportValidation(exProto)
 					atomic.AddInt32(numgot, 1)
+					got.ReportValidation(exampleGossipProto)
 					return nil
 				case <-ctx.Done():
 					return errors.New("timed out")
@@ -75,18 +96,21 @@ func (its *IntegrationTestSuite) Test_Gossiping() {
 		}
 	}
 
+	testLog("%v Waiting for all messages to pass", its.T().Name())
 	errs := errg.Wait()
 	its.T().Log(errs)
 	its.NoError(errs)
 	its.Equal(int(numgot), (its.BootstrappedNodeCount+its.BootstrapNodesCount)*MSGS)
+	testLog("%v All nodes got all messages in %v", its.T().Name(), time.Since(tm))
 }
 
-func Test_ReallySmallP2PIntegrationSuite(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
+// TODO: Add more tests to the suite
 
-	s := new(IntegrationTestSuite)
+func Test_ReallySmallP2PIntegrationSuite(t *testing.T) {
+	s := new(P2PIntegrationSuite)
+	s.IntegrationTestSuite = new(IntegrationTestSuite)
+
+	protocolsHelper(s)
 
 	s.BootstrappedNodeCount = 2
 	s.BootstrapNodesCount = 1
@@ -99,8 +123,10 @@ func Test_SmallP2PIntegrationSuite(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
+	s := new(P2PIntegrationSuite)
+	s.IntegrationTestSuite = new(IntegrationTestSuite)
 
-	s := new(IntegrationTestSuite)
+	protocolsHelper(s)
 
 	s.BootstrappedNodeCount = 70
 	s.BootstrapNodesCount = 1
@@ -110,11 +136,11 @@ func Test_SmallP2PIntegrationSuite(t *testing.T) {
 }
 
 func Test_BigP2PIntegrationSuite(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
+	t.Skip()
+	s := new(P2PIntegrationSuite)
+	s.IntegrationTestSuite = new(IntegrationTestSuite)
 
-	s := new(IntegrationTestSuite)
+	protocolsHelper(s)
 
 	s.BootstrappedNodeCount = 100
 	s.BootstrapNodesCount = 3

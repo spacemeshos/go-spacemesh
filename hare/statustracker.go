@@ -78,7 +78,7 @@ func (st *statusTracker) ProposalSet(expectedSize int) *Set {
 func (st *statusTracker) buildUnionSet(expectedSize int) *Set {
 	unionSet := NewEmptySet(expectedSize)
 	for _, m := range st.statuses {
-		for _, bid := range NewSet(m.InnerMsg.Values).values {
+		for bid := range NewSet(m.InnerMsg.Values).values {
 			unionSet.Add(bid) // assuming add is unique
 		}
 	}

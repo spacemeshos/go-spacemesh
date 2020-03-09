@@ -78,6 +78,9 @@ type ProtocolMessage struct {
 func CreatePayload(data service.Data) (*Payload, error) {
 	switch x := data.(type) {
 	case service.DataBytes:
+		if x.Payload == nil {
+			return nil, fmt.Errorf("cant send empty payload")
+		}
 		return &Payload{Payload: x.Bytes()}, nil
 	case *service.DataMsgWrapper:
 		return &Payload{Wrapped: x}, nil

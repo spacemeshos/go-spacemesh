@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"math/rand"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 )
@@ -31,7 +32,8 @@ type mockBlocksProvider struct {
 func (mbp mockBlocksProvider) ContextuallyValidBlock(layer types.LayerID) (map[types.BlockID]struct{}, error) {
 	if mbp.mp == nil {
 		mbp.mp = make(map[types.BlockID]struct{})
-		mbp.mp[types.BlockID(10)] = struct{}{}
+		block1 := types.NewExistingBlock(0, []byte("some data"))
+		mbp.mp[block1.Id()] = struct{}{}
 	}
 	return mbp.mp, nil
 }
@@ -72,13 +74,17 @@ type mockCacher struct {
 	data   map[interface{}]interface{}
 	numAdd int
 	numGet int
+	mutex  sync.Mutex
 }
 
 func newMockCasher() *mockCacher {
-	return &mockCacher{make(map[interface{}]interface{}), 0, 0}
+	return &mockCacher{make(map[interface{}]interface{}), 0, 0, sync.Mutex{}}
 }
 
 func (mc *mockCacher) Add(key, value interface{}) (evicted bool) {
+	mc.mutex.Lock()
+	defer mc.mutex.Unlock()
+
 	_, evicted = mc.data[key]
 	mc.data[key] = value
 	mc.numAdd++
@@ -86,16 +92,63 @@ func (mc *mockCacher) Add(key, value interface{}) (evicted bool) {
 }
 
 func (mc *mockCacher) Get(key interface{}) (value interface{}, ok bool) {
+	mc.mutex.Lock()
+	defer mc.mutex.Unlock()
+
 	v, ok := mc.data[key]
 	mc.numGet++
 	return v, ok
 }
 
 func TestOracle_BuildVRFMessage(t *testing.T) {
-	o := Oracle{Log: log.NewDefault(t.Name())}
+	r := require.New(t)
+	o := Oracle{vrfMsgCache: newMockCasher(), Log: log.NewDefault(t.Name())}
 	o.beacon = &mockValueProvider{1, someErr}
 	_, err := o.buildVRFMessage(types.LayerID(1), 1)
-	assert.NotNil(t, err)
+	r.Equal(someErr, err)
+
+	o.beacon = &mockValueProvider{1, nil}
+	m, err := o.buildVRFMessage(1, 2)
+	r.NoError(err)
+	m2, ok := o.vrfMsgCache.Get(buildKey(1, 2))
+	r.True(ok)
+	r.Equal(m, m2) // check same as in cache
+
+	// check not same for different round
+	m4, err := o.buildVRFMessage(1, 3)
+	r.NoError(err)
+	r.NotEqual(m, m4)
+
+	// check not same for different layer
+	m5, err := o.buildVRFMessage(2, 2)
+	r.NoError(err)
+	r.NotEqual(m, m5)
+
+	o.beacon = &mockValueProvider{5, nil} // set different value
+	m3, err := o.buildVRFMessage(1, 2)
+	r.NoError(err)
+	r.Equal(m, m3) // check same result (from cache)
+}
+
+func TestOracle_buildVRFMessageConcurrency(t *testing.T) {
+	r := require.New(t)
+	o := New(&mockValueProvider{1, nil}, (&mockActiveSetProvider{10}).ActiveSet, buildVerifier(true, nil), &mockSigner{[]byte{1, 2, 3}, nil}, 5, 5, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
+	mCache := newMockCasher()
+	o.vrfMsgCache = mCache
+
+	total := 1000
+	wg := sync.WaitGroup{}
+	for i := 0; i < total; i++ {
+		wg.Add(1)
+		go func(x int) {
+			_, err := o.buildVRFMessage(1, int32(x%10))
+			r.NoError(err)
+			wg.Done()
+		}(i)
+	}
+
+	wg.Wait()
+	r.Equal(10, mCache.numAdd)
 }
 
 func TestOracle_IsEligible(t *testing.T) {
@@ -322,7 +375,7 @@ func TestOracle_actives(t *testing.T) {
 	o.getActiveSet = func(epoch types.EpochId, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
 		return mp, nil
 	}
-	o.cache = newMockCasher()
+	o.activesCache = newMockCasher()
 	v, err := o.actives(100)
 	r.NoError(err)
 	v2, err := o.actives(100)
@@ -345,7 +398,7 @@ func TestOracle_concurrentActives(t *testing.T) {
 	o := New(&mockValueProvider{1, nil}, nil, nil, nil, 5, genActive, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
 
 	mc := newMockCasher()
-	o.cache = mc
+	o.activesCache = mc
 	mp := createMapWithSize(9)
 	o.getActiveSet = func(epoch types.EpochId, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
 		return mp, nil
@@ -379,7 +432,7 @@ func TestOracle_activesSafeLayer(t *testing.T) {
 	r := require.New(t)
 	o := New(&mockValueProvider{1, nil}, nil, nil, nil, 2, genActive, mockBlocksProvider{}, eCfg.Config{ConfidenceParam: 2, EpochOffset: 0}, log.NewDefault(t.Name()))
 	mp := createMapWithSize(9)
-	o.cache = newMockCasher()
+	o.activesCache = newMockCasher()
 	lyr := types.LayerID(10)
 	rsl := roundedSafeLayer(lyr, types.LayerID(o.cfg.ConfidenceParam), o.layersPerEpoch, types.LayerID(o.cfg.EpochOffset))
 	o.getActiveSet = func(epoch types.EpochId, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
@@ -390,7 +443,8 @@ func TestOracle_activesSafeLayer(t *testing.T) {
 
 	bmp := make(map[types.LayerID]map[types.BlockID]struct{})
 	mp2 := make(map[types.BlockID]struct{})
-	mp2[10] = struct{}{}
+	block1 := types.NewExistingBlock(0, []byte("some data"))
+	mp2[block1.Id()] = struct{}{}
 	bmp[rsl] = mp2
 	o.blocksProvider = &bProvider{bmp}
 	mpRes, err := o.actives(lyr)

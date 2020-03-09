@@ -1,4 +1,4 @@
-apiVersion: apps/v1beta1
+apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: sm-bootstrapoet
@@ -23,7 +23,7 @@ spec:
       - name: bootstrap
         image: spacemeshos/go-spacemesh:develop
         imagePullPolicy: Always
-        args: ['--config', '/etc/config/config.toml', '--grpc-server', '--test-mode', '--coinbase', '0x1234', '--metrics', '--metrics-port', '2020', '--pprof-server', '--poet-server', '127.0.0.1:50002']
+        args: ['--config', '/etc/config/config.toml', '--grpc-server', '--test-mode', '--coinbase', '0x1234', '--metrics', '--metrics-port', '2020', '--pprof-server', '--poet-server', '127.0.0.1:80']
         resources:
           requests:
             memory: "512M"
@@ -35,14 +35,12 @@ spec:
         - containerPort: 9091
         - containerPort: 9999
         volumeMounts:
-        - name: config-volume
-          mountPath: /etc/config
         - name: bootstrap-vol
           mountPath: /usr/share/spacemesh
       - name: poet
         image: spacemeshos/poet:develop
         imagePullPolicy: Always
-        args: ['--rpclisten', '0.0.0.0:50002', '--restlisten', '0.0.0.0:80', "--n", "19", "--core.n", "19"]
+        args: ['--rpclisten', '0.0.0.0:50002', '--restlisten', '0.0.0.0:80', "--n", "19"]
         resources:
           requests:
             memory: "512M"
@@ -51,11 +49,7 @@ spec:
             memory: "2048M"
             cpu: "2"
         ports:
-          - containerPort: 50002
-      volumes:
-        - name: config-volume
-          configMap:
-            name: conf
+          - containerPort: 80
       nodeSelector:
         role: tests
   volumeClaimTemplates:

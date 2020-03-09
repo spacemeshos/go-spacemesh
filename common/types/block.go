@@ -2,13 +2,30 @@ package types
 
 import (
 	"bytes"
-	"encoding/binary"
-	"github.com/google/uuid"
+	"fmt"
+	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/signing"
+	"sort"
 )
 
-type BlockID uint64
+type BlockID Hash20
+
+func (id BlockID) String() string {
+	return id.AsHash32().ShortString()
+}
+
+func (id BlockID) Field() log.Field { return log.String("block_id", util.Bytes2Hex(id[:])) }
+
+func (id BlockID) Compare(i BlockID) bool {
+	return bytes.Compare(id.ToBytes(), i.ToBytes()) < 0
+}
+
+func (id BlockID) AsHash32() Hash32 {
+	return Hash20(id).ToHash32()
+}
+
 type LayerID uint64
 
 func (l LayerID) GetEpoch(layersPerEpoch uint16) EpochId {
@@ -18,6 +35,12 @@ func (l LayerID) GetEpoch(layersPerEpoch uint16) EpochId {
 func (l LayerID) Add(layers uint16) LayerID {
 	return LayerID(uint64(l) + uint64(layers))
 }
+
+func (l LayerID) Uint64() uint64 {
+	return uint64(l)
+}
+
+func (l LayerID) Field() log.Field { return log.Uint64("layer_id", uint64(l)) }
 
 //todo: choose which type is VRF
 type Vrf string
@@ -43,8 +66,20 @@ func (id NodeId) ShortString() string {
 	return name
 }
 
+func (id NodeId) Field() log.Field { return log.String("node_id", id.Key) }
+
+type Signed interface {
+	Sig() []byte
+	Bytes() []byte
+	Data() interface{}
+}
+
+type BlockEligibilityProof struct {
+	J   uint32
+	Sig []byte
+}
+
 type BlockHeader struct {
-	Id               BlockID
 	LayerIndex       LayerID
 	ATXID            AtxId
 	EligibilityProof BlockEligibilityProof
@@ -53,75 +88,6 @@ type BlockHeader struct {
 	Timestamp        int64
 	BlockVotes       []BlockID
 	ViewEdges        []BlockID
-}
-
-type Signed interface {
-	Sig() []byte
-	Bytes() []byte
-	Data() interface{}
-}
-
-type Block struct {
-	MiniBlock
-	Signature []byte
-}
-
-type MiniBlock struct {
-	BlockHeader
-	TxIds  []TransactionId
-	AtxIds []AtxId
-}
-
-func (t BlockID) AsHash32() Hash32 {
-	b := make([]byte, 32)
-	binary.LittleEndian.PutUint64(b, uint64(t))
-	return BytesToHash(b)
-}
-
-func (t *Block) Sig() []byte {
-	return t.Signature
-}
-
-func (t *Block) Data() interface{} {
-	return &t.MiniBlock
-}
-
-func (t *Block) Bytes() []byte {
-	bytes, err := InterfaceToBytes(t.MiniBlock)
-	if err != nil {
-		log.Panic("could not extract block bytes, %v", err)
-	}
-	return bytes
-}
-
-type BlockEligibilityProof struct {
-	J   uint32
-	Sig []byte
-}
-
-func newBlockHeader(id BlockID, layerID LayerID, coin bool, data []byte, ts int64, viewEdges []BlockID, blockVotes []BlockID) *BlockHeader {
-	b := &BlockHeader{
-		Id:         id,
-		LayerIndex: layerID,
-		BlockVotes: blockVotes,
-		ViewEdges:  viewEdges,
-		Timestamp:  ts,
-		Data:       data,
-		Coin:       coin,
-	}
-	return b
-}
-
-func (b BlockHeader) ID() BlockID {
-	return b.Id
-}
-
-func (b BlockHeader) Hash32() Hash32 {
-	return b.Id.AsHash32()
-}
-
-func (b BlockHeader) ShortString() string {
-	return b.Id.AsHash32().ShortString()
 }
 
 func (b BlockHeader) Layer() LayerID {
@@ -138,18 +104,85 @@ func (b *BlockHeader) AddView(id BlockID) {
 	b.ViewEdges = append(b.ViewEdges, id)
 }
 
-func (b *Block) Compare(bl *Block) bool {
-	bbytes, err := InterfaceToBytes(*b)
+type MiniBlock struct {
+	BlockHeader
+	TxIds  []TransactionId
+	AtxIds []AtxId
+}
+
+type Block struct {
+	MiniBlock
+	// keep id and minerId private to prevent them from being serialized
+	id        BlockID            // ⚠️ keep private
+	minerId   *signing.PublicKey // ⚠️ keep private
+	Signature []byte
+}
+
+func (b *Block) Sig() []byte {
+	return b.Signature
+}
+
+func (b *Block) Data() interface{} {
+	return &b.MiniBlock
+}
+
+func (b *Block) Bytes() []byte {
+	blkBytes, err := InterfaceToBytes(b.MiniBlock)
 	if err != nil {
-		log.Error("could not compare blocks %v", err)
-		return false
+		log.Panic(fmt.Sprintf("could not extract block bytes, %v", err))
 	}
-	blbytes, err := InterfaceToBytes(*bl)
+	return blkBytes
+}
+
+func (b *Block) Id() BlockID {
+	return b.id
+}
+
+//should be used after all changed to a block are done
+func (b *Block) Initialize() {
+	blockBytes, err := InterfaceToBytes(b.MiniBlock)
 	if err != nil {
-		log.Error("could not compare blocks %v", err)
-		return false
+		panic("failed to marshal block: " + err.Error())
 	}
-	return bytes.Equal(bbytes, blbytes)
+	b.id = BlockID(CalcHash32(blockBytes).ToHash20())
+
+	pubkey, err := ed25519.ExtractPublicKey(blockBytes, b.Sig())
+	if err != nil {
+		panic("failed to extract public key: " + err.Error())
+	}
+	b.minerId = signing.NewPublicKey(pubkey)
+}
+
+func (b Block) Hash32() Hash32 {
+	return b.id.AsHash32()
+}
+
+func (b Block) ShortString() string {
+	return b.id.AsHash32().ShortString()
+}
+
+func (b *Block) Compare(bl *Block) (bool, error) {
+	bBytes, err := InterfaceToBytes(*b)
+	if err != nil {
+		return false, err
+	}
+	blBytes, err := InterfaceToBytes(*bl)
+	if err != nil {
+		return false, err
+	}
+	return bytes.Equal(bBytes, blBytes), nil
+}
+
+func (b *Block) MinerId() *signing.PublicKey {
+	return b.minerId
+}
+
+func BlockIds(blocks []*Block) []BlockID {
+	ids := make([]BlockID, 0, len(blocks))
+	for _, block := range blocks {
+		ids = append(ids, block.Id())
+	}
+	return ids
 }
 
 type Layer struct {
@@ -161,25 +194,22 @@ func (l *Layer) Index() LayerID {
 	return l.index
 }
 
+func (l *Layer) SetIndex() LayerID {
+	return l.index
+}
+
 func (l *Layer) Blocks() []*Block {
 	return l.blocks
 }
 
 func (l *Layer) Hash() Hash32 {
-	bids := l.blocks
-	keys := make([]BlockID, 0, len(bids))
-	for _, tortoiseBlock := range bids {
-		keys = append(keys, tortoiseBlock.ID())
-	}
-	hash, err := CalcBlocksHash32(keys)
-	if err != nil {
-		log.Panic("failed to calculate layer's hash - layer Id %v", l.index)
-	}
-	return hash
+	return CalcBlocksHash32(BlockIds(l.blocks), nil)
 }
 
 func (l *Layer) AddBlock(block *Block) {
-	block.LayerIndex = l.index
+	if block.LayerIndex != l.index {
+		log.Panic("add block with wrong layer number")
+	}
 	l.blocks = append(l.blocks, block)
 }
 
@@ -195,22 +225,18 @@ func NewExistingLayer(idx LayerID, blocks []*Block) *Layer {
 	return &l
 }
 
-func NewExistingBlock(id BlockID, layerIndex LayerID, data []byte) *Block {
+func NewExistingBlock(layerIndex LayerID, data []byte) *Block {
 	b := Block{
 		MiniBlock: MiniBlock{
 			BlockHeader: BlockHeader{
-				Id:         BlockID(id),
 				BlockVotes: make([]BlockID, 0, 10),
 				ViewEdges:  make([]BlockID, 0, 10),
-				LayerIndex: LayerID(layerIndex),
+				LayerIndex: layerIndex,
 				Data:       data},
 		}}
+	b.Signature = signing.NewEdSigner().Sign(b.Bytes())
+	b.Initialize()
 	return &b
-}
-
-func RandBlockId() BlockID {
-	id := uuid.New()
-	return BlockID(binary.BigEndian.Uint64(id[:8]))
 }
 
 func NewLayer(layerIndex LayerID) *Layer {
@@ -218,4 +244,14 @@ func NewLayer(layerIndex LayerID) *Layer {
 		index:  layerIndex,
 		blocks: make([]*Block, 0, 10),
 	}
+}
+
+func SortBlockIds(ids []BlockID) []BlockID {
+	sort.Slice(ids, func(i, j int) bool { return ids[i].Compare(ids[j]) })
+	return ids
+}
+
+func SortBlocks(ids []*Block) []*Block {
+	sort.Slice(ids, func(i, j int) bool { return ids[i].Id().Compare(ids[j].Id()) })
+	return ids
 }

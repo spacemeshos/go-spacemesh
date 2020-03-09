@@ -5,6 +5,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
+	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"io"
 	"net"
@@ -73,6 +74,7 @@ func (s *Simulator) SubscribeToPeerEvents(myid p2pcrypto.Key) (chan p2pcrypto.Pu
 func (s *Simulator) publishNewPeer(peer p2pcrypto.PublicKey) {
 	s.subLock.Lock()
 	for _, ch := range s.newPeersSubs {
+		log.Info("publish on chan with len %v, cap %v", len(ch), cap(ch))
 		ch <- peer
 	}
 	s.subLock.Unlock()
@@ -260,7 +262,7 @@ func (sn *Node) sleep(delay uint32) {
 func (sn *Node) Broadcast(protocol string, payload []byte) error {
 	go func() {
 		sn.sleep(sn.sndDelay)
-		sn.sim.mutex.RLock()
+		sn.sim.mutex.Lock()
 		var mychan chan GossipMessage
 
 		if me, ok := sn.sim.protocolGossipHandler[sn.PublicKey()][protocol]; ok {
@@ -277,7 +279,7 @@ func (sn *Node) Broadcast(protocol string, payload []byte) error {
 				sendees = append(sendees, c) // <- simGossipMessage{sn.NodeInfo.PublicKey(), DataBytes{Payload: payload}, nil}
 			}
 		}
-		sn.sim.mutex.RUnlock()
+		sn.sim.mutex.Unlock()
 
 		if mychan != nil {
 			mychan <- simGossipMessage{sn.NodeInfo.PublicKey(), DataBytes{Payload: payload}, nil}
@@ -306,7 +308,7 @@ func (sn *Node) RegisterDirectProtocol(protocol string) chan DirectMessage {
 }
 
 // RegisterGossipProtocol creates and returns a channel for a given gossip based protocol.
-func (sn *Node) RegisterGossipProtocol(protocol string) chan GossipMessage {
+func (sn *Node) RegisterGossipProtocol(protocol string, prio priorityq.Priority) chan GossipMessage {
 	c := make(chan GossipMessage, 1000)
 	sn.sim.mutex.Lock()
 	sn.sim.protocolGossipHandler[sn.NodeInfo.PublicKey()][protocol] = c
@@ -330,4 +332,14 @@ func (sn *Node) Shutdown() {
 	delete(sn.sim.protocolGossipHandler, sn.NodeInfo.PublicKey())
 	sn.sim.mutex.Unlock()
 
+	sn.sim.subLock.Lock()
+	for _, ch := range sn.sim.newPeersSubs {
+		close(ch)
+	}
+	sn.sim.newPeersSubs = nil
+	for _, ch := range sn.sim.delPeersSubs {
+		close(ch)
+	}
+	sn.sim.delPeersSubs = nil
+	sn.sim.subLock.Unlock()
 }

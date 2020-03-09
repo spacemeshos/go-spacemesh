@@ -1,12 +1,13 @@
 package discovery
 
 import (
+	"bytes"
 	"encoding/binary"
 	"github.com/spacemeshos/go-spacemesh/crypto"
-	"github.com/spacemeshos/go-spacemesh/filesystem"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"math/rand"
 	"net"
+	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -80,7 +81,7 @@ const (
 // peers on the bitcoin network.
 type addrBook struct {
 	logger log.Log
-	mtx    sync.Mutex
+	mtx    sync.RWMutex
 
 	rand *rand.Rand
 	key  [32]byte
@@ -91,7 +92,7 @@ type addrBook struct {
 	addrTried [triedBucketCount]map[node.ID]*KnownAddress
 
 	//todo: lock local for updates
-	localAddress *node.NodeInfo
+	localAddresses []*node.NodeInfo
 
 	nTried int
 	nNew   int
@@ -103,13 +104,50 @@ type addrBook struct {
 	quit chan struct{}
 }
 
+// AddOurAddress one of our addresses.
+func (a *addrBook) AddLocalAddress(addr *node.NodeInfo) {
+	a.mtx.Lock()
+	a.localAddresses = append(a.localAddresses, addr)
+	a.mtx.Unlock()
+}
+
+func (a *addrBook) isLocalAddressUnlocked(addr *node.NodeInfo) bool {
+	for _, local := range a.localAddresses {
+
+		if bytes.Equal(local.ID.Bytes(), addr.ID.Bytes()) {
+			return true
+		}
+
+		if local.ProtocolPort != 0 && local.DiscoveryPort != 0 {
+			if bytes.Equal(local.IP, addr.IP) && (local.ProtocolPort == addr.ProtocolPort && local.DiscoveryPort == addr.DiscoveryPort) {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+// OurAddress returns true if it is our address.
+func (a *addrBook) IsLocalAddress(addr *node.NodeInfo) bool {
+	a.mtx.RLock()
+	ok := a.isLocalAddressUnlocked(addr)
+	a.mtx.RUnlock()
+	return ok
+}
+
 // updateAddress is a helper function to either update an address already known
 // to the address manager, or to add the address if not already known.
 func (a *addrBook) updateAddress(netAddr, srcAddr *node.NodeInfo) {
 
+	if a.isLocalAddressUnlocked(netAddr) {
+		a.logger.Debug("skipping adding a local address %v", netAddr.String())
+		return
+	}
 	//Filter out non-routable addresses. Note that non-routable
-	//also includes invalid and local addresses.
+	//also includes invalid and localNode addresses.
 	if !IsRoutable(netAddr.IP) && IsRoutable(srcAddr.IP) {
+		a.logger.Debug("skipping adding non routable address%v", netAddr.String())
 		// XXX: this makes tests work with unroutable addresses(loopback)
 		return
 	}
@@ -272,6 +310,8 @@ func (a *addrBook) Attempt(key p2pcrypto.PublicKey) {
 	// set last tried time to now
 	ka.attempts++
 	ka.lastattempt = time.Now()
+
+	a.moveToTriedUnlocked(ka)
 }
 
 // Good marks the given address as good.  To be called after a successful
@@ -282,6 +322,7 @@ func (a *addrBook) Good(addr p2pcrypto.PublicKey) {
 	defer a.mtx.Unlock()
 
 	ka := a.find(addr)
+
 	if ka == nil {
 		return
 	}
@@ -292,13 +333,16 @@ func (a *addrBook) Good(addr p2pcrypto.PublicKey) {
 	ka.lastSeen = now
 	ka.attempts = 0
 
+	a.moveToTriedUnlocked(ka)
+}
+
+func (a *addrBook) moveToTriedUnlocked(ka *KnownAddress) {
 	// move to tried set, optionally evicting other addresses if neeed.
 	if ka.tried {
 		return
 	}
-
 	// ok, need to move it to tried.
-
+	addr := ka.na.PublicKey()
 	// remove from all new buckets.
 	// record one of the buckets in question and call it the `first'
 	addrKey := addr.Array()
@@ -628,7 +672,7 @@ func (a *addrBook) reset() {
 	// fill key with bytes from a good random source.
 	err := crypto.GetRandomBytesToBuffer(32, a.key[:])
 	if err != nil {
-		panic(err)
+		a.logger.Panic("Error generating random bytes %v", err)
 	}
 
 	for i := range a.addrNew {
@@ -641,27 +685,27 @@ func (a *addrBook) reset() {
 
 // New returns a new bitcoin address manager.
 // Use Start to begin processing asynchronous address updates.
-func NewAddrBook(localAddress *node.NodeInfo, config config.SwarmConfig, logger log.Log) *addrBook {
+func NewAddrBook(cfg config.SwarmConfig, path string, logger log.Log) *addrBook {
 	//TODO use config for const params.
 	am := addrBook{
-		logger:       logger,
-		localAddress: localAddress,
-		rand:         rand.New(rand.NewSource(time.Now().UnixNano())),
-		quit:         make(chan struct{}),
+		logger: logger,
+		rand:   rand.New(rand.NewSource(time.Now().UnixNano())),
+		quit:   make(chan struct{}),
 	}
 	am.reset()
 
-	if config.PeersFile != "" {
+	if path != "" {
 
-		dataDir, err := filesystem.GetSpacemeshDataDirectoryPath()
-		if err == nil {
-			am.loadPeers(dataDir + "/" + localAddress.ID.String() + "/" + config.PeersFile)
-		} else {
-			am.logger.Warning("Skipping loading peers to addrbook, data dir not found err=%v", err)
+		peersfile := defaultPeersFileName
+		if cfg.PeersFile != "" {
+			peersfile = cfg.PeersFile
 		}
 
+		finalFilePath := filepath.Join(path, config.P2PDirectoryPath, peersfile)
+		am.loadPeers(finalFilePath)
+
 		am.wg.Add(1)
-		go func() { am.saveRoutine(); am.wg.Done() }()
+		go func() { am.saveRoutine(finalFilePath); am.wg.Done() }()
 	}
 	return &am
 }

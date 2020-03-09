@@ -18,7 +18,7 @@ func NewActivesetCache(size int) ActivesetCache {
 	return ActivesetCache{Cache: cache}
 }
 
-func (bc *ActivesetCache) put(view types.Hash12, setSize uint32) {
+func (bc *ActivesetCache) Add(view types.Hash12, setSize uint32) {
 	bc.Cache.Add(view, setSize)
 }
 
@@ -43,15 +43,15 @@ func NewAtxCache(size int) AtxCache {
 	return AtxCache{Cache: cache}
 }
 
-func (bc *AtxCache) put(id types.AtxId, tx *types.ActivationTx) {
-	bc.Cache.Add(id, tx)
+func (bc *AtxCache) Add(id types.AtxId, atxHeader *types.ActivationTxHeader) {
+	bc.Cache.Add(id, atxHeader)
 }
 
-func (bc AtxCache) Get(id types.AtxId) (*types.ActivationTx, bool) {
+func (bc AtxCache) Get(id types.AtxId) (*types.ActivationTxHeader, bool) {
 	item, found := bc.Cache.Get(id)
 	if !found {
 		return nil, false
 	}
-	atx := item.(*types.ActivationTx)
-	return atx, true
+	atxHeader := item.(*types.ActivationTxHeader)
+	return atxHeader, true
 }

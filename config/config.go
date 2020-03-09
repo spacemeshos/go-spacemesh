@@ -23,13 +23,12 @@ const (
 	defaultAccountFileName = "accounts"
 	defaultDataDirName     = "spacemesh"
 	Genesis                = mesh.Genesis
-	GenesisId              = mesh.GenesisId
 	NewBlockProtocol       = "newBlock"
 )
 
 var (
 	defaultHomeDir    = filesystem.GetUserHomeDirectory()
-	defaultDataDir    = filepath.Join(defaultHomeDir, defaultDataDirName)
+	defaultDataDir    = filepath.Join(defaultHomeDir, defaultDataDirName, "/")
 	defaultConfigFile = filepath.Join(defaultHomeDir, defaultConfigFileName)
 	defaultLogDir     = filepath.Join(defaultHomeDir, defaultLogFileName)
 	defaultAccountDir = filepath.Join(defaultHomeDir, defaultAccountFileName)
@@ -89,17 +88,24 @@ type BaseConfig struct {
 
 	GenesisActiveSet int `mapstructure:"genesis-active-size"` // the active set size for genesis
 
-	SyncRequestTimeout int `mapstructure:"sync-request-timeout"` // the timeout for direct request in the sync
+	SyncRequestTimeout int `mapstructure:"sync-request-timeout"` // ms the timeout for direct request in the sync
+
+	SyncInterval int `mapstructure:"sync-interval"` // sync interval in seconds
+
+	SyncValidationDelta int `mapstructure:"sync-validation-delta"` // sync interval in seconds
 
 	PublishEventsUrl string `mapstructure:"events-url"`
 
 	StartMining bool `mapstructure:"start-mining"`
 
 	AtxsPerBlock int `mapstructure:"atxs-per-block"`
+
+	BlockCacheSize int `mapstructure:"block-cache-size"`
 }
 
 type LoggerConfig struct {
 	AppLoggerLevel            string `mapstructure:"app"`
+	P2PLoggerLevel            string `mapstructure:"p2p"`
 	PostLoggerLevel           string `mapstructure:"post"`
 	StateDbLoggerLevel        string `mapstructure:"stateDb"`
 	StateLoggerLevel          string `mapstructure:"state"`
@@ -121,6 +127,7 @@ type LoggerConfig struct {
 	PoetListenerLoggerLevel   string `mapstructure:"poet"`
 	NipstBuilderLoggerLevel   string `mapstructure:"nipst"`
 	AtxBuilderLoggerLevel     string `mapstructure:"atx-builder"`
+	HareBeaconLoggerLevel     string `mapstructure:"hare-beacon"`
 }
 
 // DefaultConfig returns the default configuration for a spacemesh node
@@ -156,7 +163,10 @@ func defaultBaseConfig() BaseConfig {
 		PoETServer:          "127.0.0.1",
 		Hdist:               5,
 		GenesisActiveSet:    5,
+		BlockCacheSize:      20,
 		SyncRequestTimeout:  2000,
+		SyncInterval:        10,
+		SyncValidationDelta: 30,
 		AtxsPerBlock:        100,
 	}
 }

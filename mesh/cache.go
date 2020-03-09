@@ -9,24 +9,30 @@ import (
 type blockCache interface {
 	Get(id types.BlockID) *types.Block
 	put(b *types.Block)
+	Cap() int
 	Close()
 }
 
 type BlockCache struct {
+	cap int
 	blockCache
 	*lru.Cache
 }
 
-func NewBlockCache(size int) BlockCache {
-	cache, err := lru.New(size)
+func NewBlockCache(cap int) BlockCache {
+	cache, err := lru.New(cap)
 	if err != nil {
 		log.Fatal("could not initialize cache ", err)
 	}
-	return BlockCache{Cache: cache}
+	return BlockCache{Cache: cache, cap: cap}
+}
+
+func (bc BlockCache) Cap() int {
+	return bc.cap
 }
 
 func (bc BlockCache) put(b *types.Block) {
-	bc.Cache.Add(b.ID(), *b)
+	bc.Cache.Add(b.Id(), *b)
 }
 
 func (bc BlockCache) Get(id types.BlockID) *types.Block {

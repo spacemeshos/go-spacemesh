@@ -1,0 +1,52 @@
+namespace: ''
+
+config_map_name: conf
+
+script_on_exit: '' #'./k8s/log-client-pods.sh'
+
+genesis_delta: -1000
+deployment_ready_time_out: 500
+single_pod_ready_time_out: 60
+config_path: '../config.toml'
+
+
+bootstrap:
+  image: 'spacemeshos/go-spacemesh:develop'
+  command: '/bin/go-sync'
+  replicas: 1
+  args:
+    randcon: '8'
+    hare-committee-size: '20'
+    hare-max-adversaries: '9'
+    hare-round-duration-sec: '10'
+    layer-duration-sec: '10'
+    layer-average-size: '20'
+    layers-per-epoch: '3'
+    data-folder: '/bin/data/'
+    expected-layers: '700'
+    remote-data: 'true'
+    storage-path: 'spacemesh-sync-data'
+    version: 'TwoAndHalfDaysSim/'
+    hdist: '5'
+client:
+  image: 'spacemeshos/go-spacemesh:develop'
+  command: '/bin/go-sync'
+  replicas: 9
+  args:
+    randcon: '8'
+    hare-committee-size: '20'
+    hare-max-adversaries: '9'
+    hare-round-duration-sec: '10'
+    layer-duration-sec: '10'
+    layer-average-size: '20'
+    layers-per-epoch: '3'
+    data-folder: '/bin/data/'
+    expected-layers: '700'
+    remote-data: 'true'
+    storage-path: 'spacemesh-sync-data'
+    version: 'TwoAndHalfDaysSim/'
+    hdist: '5'
+elastic:
+  host: elastic.spacemesh.io
+  port: 9200
+  username: spacemesh

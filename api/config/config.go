@@ -15,9 +15,6 @@ type Config struct {
 	JSONServerPort  int  `mapstructure:"json-port"`
 }
 
-// ConfigValues set default values
-var ConfigValues = DefaultConfig()
-
 func init() {
 	// todo: update default config params based on runtime env here
 }

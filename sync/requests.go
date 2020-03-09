@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"reflect"
@@ -91,10 +92,11 @@ func newFetchReqFactory(msgtype server.MessageType, asItems func(msg []byte) ([]
 			ch <- items
 		}
 
+		tmr := newFetchRequestTimer(msgtype)
 		if err := encodeAndSendRequest(msgtype, ids, infra, peer, foo); err != nil {
 			return nil, err
 		}
-
+		tmr.ObserveDuration()
 		return ch, nil
 	}
 }
@@ -139,6 +141,7 @@ func blocksAsItems(msg []byte) ([]Item, error) {
 	}
 	items := make([]Item, len(blocks))
 	for i := range blocks {
+		blocks[i].Initialize()
 		items[i] = &blocks[i]
 	}
 	return items, nil
@@ -210,7 +213,15 @@ func validateItemIds(ids []types.Hash32, items []Item) (bool, error) {
 		if _, ok := mp[txid]; !ok {
 			return false, errors.New(fmt.Sprintf("received item that was not requested %v type %v", tx.ShortString(), reflect.TypeOf(tx)))
 		}
+		delete(mp, txid)
 	}
+
+	if len(mp) > 0 {
+		for id, _ := range mp {
+			log.Warning("item %s was not in response ", id.ShortString())
+		}
+	}
+
 	return true, nil
 }
 

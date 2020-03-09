@@ -6,6 +6,7 @@ WORKDIR /go/src/github.com/spacemeshos/go-spacemesh
 
 # Force the go compiler to use modules
 ENV GO111MODULE=on
+ENV GOPROXY=https://proxy.golang.org
 
 # We want to populate the module cache based on the go.{mod,sum} files.
 COPY go.mod .
@@ -31,6 +32,7 @@ RUN make build
 RUN make hare
 RUN make p2p
 RUN make sync
+RUN make harness
 
 #In this last stage, we start from a fresh Alpine image, to reduce the image size and not ship the Go compiler in our production artifacts.
 FROM alpine AS spacemesh
@@ -40,8 +42,9 @@ COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/go-
 COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/go-hare /bin/go-hare
 COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/go-p2p /bin/go-p2p
 COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/go-sync /bin/go-sync
+COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/go-harness /bin/go-harness
 
-ENTRYPOINT ["/bin/go-spacemesh"]
+ENTRYPOINT ["/bin/go-harness"]
 EXPOSE 7513
 
 # profiling port

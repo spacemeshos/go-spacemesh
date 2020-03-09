@@ -13,37 +13,13 @@ const (
 )
 
 var (
-	// CommitCounter is the number of valid commits for a set.
-	CommitCounter = prometheus.NewCounterFrom(stdprometheus.CounterOpts{
-		Namespace: Namespace,
-		Subsystem: Subsystem,
-		Name:      "commit_counter",
-		Help:      "Number of valid commit messages for a set",
-	}, []string{"set_id"})
-
-	// NotifyCounter is the number of valid notifications for a set.
-	NotifyCounter = prometheus.NewCounterFrom(stdprometheus.CounterOpts{
-		Namespace: Namespace,
-		Subsystem: Subsystem,
-		Name:      "notify_counter",
-		Help:      "Number of valid notifications for a set",
-	}, []string{"set_id"})
-
 	// MessageTypeCounter is the number of valid messages per type.
 	MessageTypeCounter = prometheus.NewCounterFrom(stdprometheus.CounterOpts{
 		Namespace: Namespace,
 		Subsystem: Subsystem,
 		Name:      "message_type_counter",
 		Help:      "Number of valid messages sent to processing for each type",
-	}, []string{"type_id"})
-
-	// PreRoundCounter is the number of pre-round msgs for each value.
-	PreRoundCounter = prometheus.NewCounterFrom(stdprometheus.CounterOpts{
-		Namespace: Namespace,
-		Subsystem: Subsystem,
-		Name:      "pre_round_counter",
-		Help:      "Number of pre-round msgs for each value",
-	}, []string{"value"})
+	}, []string{"type_id", "layer", "reporter"})
 
 	// TotalConsensusProcesses is the total number of current consensus processes.
 	TotalConsensusProcesses = prometheus.NewGaugeFrom(stdprometheus.GaugeOpts{
@@ -51,5 +27,5 @@ var (
 		Subsystem: Subsystem,
 		Name:      "total_consensus_processes",
 		Help:      "The total number of current consensus processes running",
-	}, []string{})
+	}, []string{"layer"})
 )

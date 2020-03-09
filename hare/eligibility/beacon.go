@@ -4,10 +4,8 @@ import (
 	"errors"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"hash/fnv"
-	"sort"
 )
 
 const nilVal = 0
@@ -28,24 +26,27 @@ type beacon struct {
 	patternProvider patternProvider
 	confidenceParam uint64
 	cache           addGet
+	log.Log
 }
 
 // NewBeacon returns a new beacon.
 // patternProvider provides the contextually valid blocks.
 // confidenceParam is the number of layers that the beacon assumes for consensus view.
-func NewBeacon(patternProvider patternProvider, confidenceParam uint64) *beacon {
-	c, e := lru.New(cacheSize)
+func NewBeacon(patternProvider patternProvider, confidenceParam uint64, lg log.Log) *beacon {
+	c, e := lru.New(activesCacheSize)
 	if e != nil {
-		log.Panic("Could not create lru cache err=%v", e)
+		lg.Panic("Could not create lru cache err=%v", e)
 	}
 	return &beacon{
 		patternProvider: patternProvider,
 		confidenceParam: confidenceParam,
 		cache:           c,
+		Log:             lg,
 	}
 }
 
 // Value returns the unpredictable and agreed value for the given Layer
+// Note: Value is concurrency-safe but not concurrency-optimized
 func (b *beacon) Value(layer types.LayerID) (uint32, error) {
 	sl := safeLayer(layer, types.LayerID(b.confidenceParam))
 
@@ -54,11 +55,19 @@ func (b *beacon) Value(layer types.LayerID) (uint32, error) {
 		return val.(uint32), nil
 	}
 
+	// note: multiple concurrent calls to ContextuallyValidBlock and calcValue can be made
+	// consider adding a lock if concurrency-optimized is important
 	v, err := b.patternProvider.ContextuallyValidBlock(sl)
 	if err != nil {
-		log.With().Error("Could not get pattern Id",
+		b.Log.With().Error("Could not get pattern Id",
 			log.Err(err), log.LayerId(uint64(layer)), log.Uint64("sl_id", uint64(sl)))
 		return nilVal, errors.New("could not calc beacon value")
+	}
+
+	// notify if there are no contextually valid blocks
+	if len(v) == 0 {
+		b.Log.With().Warning("hare beacon: zero contextually valid blocks (ignore if genesis first layers)",
+			log.LayerId(uint64(layer)), log.Uint64("sl_id", uint64(sl)))
 	}
 
 	// calculate
@@ -77,11 +86,12 @@ func calcValue(bids map[types.BlockID]struct{}) uint32 {
 		keys = append(keys, k)
 	}
 
-	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
+	keys = types.SortBlockIds(keys)
+
 	// calc
 	h := fnv.New32()
 	for i := 0; i < len(keys); i++ {
-		_, err := h.Write(util.Uint32ToBytes(uint32(keys[i])))
+		_, err := h.Write(keys[i].ToBytes())
 		if err != nil {
 			log.Panic("Could not calculate beacon value. Hash write error=%v", err)
 		}

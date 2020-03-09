@@ -4,6 +4,7 @@ import (
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"sync"
 )
 
@@ -56,9 +57,10 @@ type Broker struct {
 	latestLayer    instanceId            // the latest layer to attempt register (successfully or unsuccessfully)
 	isStarted      bool
 	minDeleted     instanceId
+	limit          int // max number of consensus processes simultaneously
 }
 
-func newBroker(networkService NetworkService, eValidator validator, stateQuerier StateQuerier, syncState syncStateFunc, layersPerEpoch uint16, closer Closer, log log.Log) *Broker {
+func newBroker(networkService NetworkService, eValidator validator, stateQuerier StateQuerier, syncState syncStateFunc, layersPerEpoch uint16, limit int, closer Closer, log log.Log) *Broker {
 	return &Broker{
 		Closer:         closer,
 		Log:            log,
@@ -73,6 +75,7 @@ func newBroker(networkService NetworkService, eValidator validator, stateQuerier
 		tasks:          make(chan func()),
 		latestLayer:    0,
 		minDeleted:     0,
+		limit:          limit,
 	}
 }
 
@@ -85,17 +88,19 @@ func (b *Broker) Start() error {
 
 	b.isStarted = true
 
-	b.inbox = b.network.RegisterGossipProtocol(protoName)
+	b.inbox = b.network.RegisterGossipProtocol(protoName, priorityq.Mid)
 	go b.eventLoop()
 
 	return nil
 }
 
 var (
-	errUnregistered = errors.New("layer is unregistered")
-	errNotSynced    = errors.New("layer is not synced")
-	errFutureMsg    = errors.New("future message")
-	errRegistration = errors.New("failed during registration")
+	errUnregistered      = errors.New("layer is unregistered")
+	errNotSynced         = errors.New("layer is not synced")
+	errFutureMsg         = errors.New("future message")
+	errRegistration      = errors.New("failed during registration")
+	errTooMany           = errors.New("too many consensus process")
+	errInstanceNotSynced = errors.New("instance not synchronized")
 )
 
 // validate the message is contextually valid and that the target layer is synced.
@@ -158,6 +163,8 @@ func (b *Broker) eventLoop() {
 			}
 
 			msgInstId := hareMsg.InnerMsg.InstanceId
+			// TODO: fix metrics
+			//metrics.MessageTypeCounter.With("type_id", hareMsg.InnerMsg.Type.String(), "layer", strconv.FormatUint(uint64(msgInstId), 10), "reporter", "brokerHandler").Add(1)
 			isEarly := false
 			if err := b.validate(hareMsg); err != nil {
 				if err != errEarlyMsg {
@@ -276,9 +283,16 @@ func (b *Broker) isSynced(id instanceId) bool {
 // Register a layer to receive messages
 // Note: the registering instance is assumed to be started and accepting messages
 func (b *Broker) Register(id instanceId) (chan *Msg, error) {
-	res := make(chan chan *Msg, 1)
+	resErr := make(chan error, 1)
+	resCh := make(chan chan *Msg, 1)
 	regRequest := func() {
 		b.updateLatestLayer(id)
+
+		if len(b.outbox) >= b.limit {
+			resErr <- errTooMany
+			resCh <- nil
+			return
+		}
 
 		if b.isSynced(id) {
 			b.outbox[id] = make(chan *Msg, inboxCapacity)
@@ -291,17 +305,22 @@ func (b *Broker) Register(id instanceId) (chan *Msg, error) {
 				delete(b.pending, id)
 			}
 
-			res <- b.outbox[id]
+			resErr <- nil
+			resCh <- b.outbox[id]
 			return
 		}
 
-		res <- nil
+		resErr <- errInstanceNotSynced
+		resCh <- nil
 	}
 
 	b.tasks <- regRequest // send synced task
-	result := <-res       // wait for result
-	if result == nil {    // reg failed
-		return nil, errors.New("instance not synchronized")
+
+	// wait for result
+	err := <-resErr
+	result := <-resCh
+	if err != nil { // reg failed
+		return nil, err
 	}
 
 	return result, nil // reg ok
@@ -320,4 +339,14 @@ func (b *Broker) Unregister(id instanceId) {
 	}
 
 	wg.Wait()
+}
+
+// Synced returns true if the given layer is synced, false otherwise
+func (b *Broker) Synced(id instanceId) bool {
+	res := make(chan bool)
+	b.tasks <- func() {
+		res <- b.isSynced(id)
+	}
+
+	return <-res
 }

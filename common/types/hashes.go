@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/sha256-simd"
 	"math/big"
 	"math/rand"
@@ -14,6 +15,7 @@ import (
 const (
 	// HashLength is the expected length of the hash
 	Hash32Length = 32
+	Hash20Length = 20
 	Hash12Length = 12
 )
 
@@ -22,6 +24,74 @@ type Hash12 [Hash12Length]byte
 
 // Hash represents the 32 byte Keccak256 hash of arbitrary data.
 type Hash32 [Hash32Length]byte
+
+// Hash represents the 20 byte Keccak256 hash of arbitrary data.
+type Hash20 [Hash20Length]byte
+
+func (h Hash12) Field(name string) log.Field { return log.String(name, util.Bytes2Hex(h[:])) }
+
+// HexToHash sets byte representation of s to hash.
+// If b is larger than len(h), b will be cropped from the left.
+//func HexToHash20(s string) Hash20 { return BytesToHash(util.FromHex(s)) }
+
+// Bytes gets the byte representation of the underlying hash.
+func (h Hash20) Bytes() []byte { return h[:] }
+
+// Big converts a hash to a big integer.
+func (h Hash20) Big() *big.Int { return new(big.Int).SetBytes(h[:]) }
+
+// Hex converts a hash to a hex string.
+func (h Hash20) Hex() string { return util.Encode(h[:]) }
+
+// String implements the stringer interface and is used also by the logger when
+// doing full logging into a file.
+func (h Hash20) String() string {
+	return h.Hex()
+}
+
+func (h Hash20) ShortString() string {
+	l := len(h.Hex())
+	return h.Hex()[util.Min(2, l):util.Min(7, l)]
+}
+
+// Format implements fmt.Formatter, forcing the byte slice to be formatted as is,
+// without going through the stringer interface used for logging.
+func (h Hash20) Format(s fmt.State, c rune) {
+	fmt.Fprintf(s, "%"+string(c), h[:])
+}
+
+// UnmarshalText parses a hash in hex syntax.
+func (h *Hash20) UnmarshalText(input []byte) error {
+	return util.UnmarshalFixedText("Hash", input, h[:])
+}
+
+// UnmarshalJSON parses a hash in hex syntax.
+func (h *Hash20) UnmarshalJSON(input []byte) error {
+	return util.UnmarshalFixedJSON(hashT, input, h[:])
+}
+
+// MarshalText returns the hex representation of h.
+func (h Hash20) MarshalText() ([]byte, error) {
+	return util.Bytes(h[:]).MarshalText()
+}
+
+// SetBytes sets the hash to the value of b.
+// If b is larger than len(h), b will be cropped from the left.
+func (h *Hash20) SetBytes(b []byte) {
+	if len(b) > len(h) {
+		b = b[len(b)-32:]
+	}
+
+	copy(h[32-len(b):], b)
+}
+
+func (h Hash20) ToHash32() Hash32 {
+	var h2 [Hash32Length]byte
+	copy(h2[:], h[0:Hash20Length])
+	return Hash32(h2)
+}
+
+func (h Hash20) Field(name string) log.Field { return log.String(name, util.Bytes2Hex(h[:])) }
 
 func CalcHash12(data []byte) Hash12 {
 	msghash := sha256.Sum256(data)
@@ -34,7 +104,7 @@ func CalcBlocksHash12(view []BlockID) (Hash12, error) {
 	sortedView := make([]BlockID, len(view))
 	copy(sortedView, view)
 	sort.Slice(sortedView, func(i, j int) bool {
-		return sortedView[i] < sortedView[j]
+		return bytes.Compare(sortedView[i].ToBytes(), sortedView[j].ToBytes()) < 0
 	})
 	viewBytes, err := InterfaceToBytes(sortedView)
 	if err != nil {
@@ -43,17 +113,22 @@ func CalcBlocksHash12(view []BlockID) (Hash12, error) {
 	return CalcHash12(viewBytes), err
 }
 
-func CalcBlocksHash32(view []BlockID) (Hash32, error) {
+func CalcBlocksHash32(view []BlockID, additionalBytes []byte) Hash32 {
 	sortedView := make([]BlockID, len(view))
 	copy(sortedView, view)
-	sort.Slice(sortedView, func(i, j int) bool {
-		return sortedView[i] < sortedView[j]
-	})
-	viewBytes, err := InterfaceToBytes(sortedView)
-	if err != nil {
-		return Hash32{}, err
+	SortBlockIds(sortedView)
+	return CalcBlockHash32Presorted(sortedView, additionalBytes)
+}
+
+func CalcBlockHash32Presorted(sortedView []BlockID, additionalBytes []byte) Hash32 {
+	hash := sha256.New()
+	hash.Write(additionalBytes)
+	for _, id := range sortedView {
+		hash.Write(id.ToBytes()) // this never returns an error: https://golang.org/pkg/hash/#Hash
 	}
-	return CalcHash32(viewBytes), err
+	var res Hash32
+	hash.Sum(res[:0])
+	return res
 }
 
 func CalcAtxsHash12(ids []AtxId) (Hash12, error) {
@@ -177,6 +252,12 @@ func (h *Hash32) SetBytes(b []byte) {
 	copy(h[32-len(b):], b)
 }
 
+func (h Hash32) ToHash20() Hash20 {
+	var h2 [Hash20Length]byte
+	copy(h2[:], h[0:Hash20Length])
+	return Hash20(h2)
+}
+
 // Generate implements testing/quick.Generator.
 func (h Hash32) Generate(rand *rand.Rand, size int) reflect.Value {
 	m := rand.Intn(len(h))
@@ -198,3 +279,5 @@ func (h *Hash32) Scan(src interface{}) error {
 	copy(h[:], srcB)
 	return nil
 }
+
+func (h Hash32) Field(name string) log.Field { return log.String(name, util.Bytes2Hex(h[:])) }

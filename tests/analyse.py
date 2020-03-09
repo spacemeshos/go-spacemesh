@@ -1,3 +1,6 @@
+import datetime
+import random
+
 from tests import queries
 
 
@@ -13,13 +16,13 @@ def analyze_mining(deployment, last_layer, layers_per_epoch, layer_avg_size, tot
     queries.print_node_stats(blockmap)
     queries.print_layer_stat(layermap)
 
-    xl = [len(layermap[str(x)]) for x in range(layers_per_epoch) if str(x) in layermap]
-    print(str(xl))
+    xl = [len(layermap[layer]) for layer in range(layers_per_epoch)]
+    print(xl)
 
     first_epoch_blocks = sum(xl)
 
     # count all blocks arrived in relevant layers
-    total_blocks = sum([len(layermap[str(x)]) for x in range(last_layer) if str(x) in layermap])
+    total_blocks = sum([len(layermap[layer]) for layer in range(last_layer)])
 
     atxmap = queries.get_atx_per_node(deployment)
     newmap = {}
@@ -41,7 +44,9 @@ def analyze_mining(deployment, last_layer, layers_per_epoch, layer_avg_size, tot
     assert total_pods == len(blockmap)
     # remove blocks created in first epoch since first epoch starts with layer 1
     print("total and first", total_blocks, first_epoch_blocks)
-    assert int((total_blocks - first_epoch_blocks) / (last_layer - layers_per_epoch)) / layer_avg_size == 1
+    ass_err = f"all blocks but first epoch={int(total_blocks - first_epoch_blocks)}\n" \
+              f"total num of layers={last_layer - layers_per_epoch} layers avg size={layer_avg_size}"
+    assert int((total_blocks - first_epoch_blocks) / (last_layer - layers_per_epoch)) / layer_avg_size == 1, ass_err
     # not all nodes produces atx in all epochs
     assert total_atxs == int((last_layer / layers_per_epoch)) * total_pods
 
@@ -56,9 +61,19 @@ def analyze_mining(deployment, last_layer, layers_per_epoch, layer_avg_size, tot
         assert len(mp) == int((last_layer / layers_per_epoch))
 
     # assert that each node has created layer_avg/number_of_nodes
-    for node in blockmap:
-        blocks_in_relevant_layers = sum([len(blockmap[node]["layers"][str(x)]) for x in range(layers_per_epoch, last_layer) if str(x) in blockmap[node]["layers"]])
+    for node in blockmap.values():
+        blocks_in_relevant_layers = sum([len(node.layers[layer]) for layer in range(layers_per_epoch, last_layer)])
         # need to deduct blocks created in first genesis epoch since it does not follow general mining rules by design
         blocks_created_per_layer = blocks_in_relevant_layers / (last_layer - layers_per_epoch)
         wanted_avg_block_per_node = max(1, int(layer_avg_size / total_pods))
         assert blocks_created_per_layer / wanted_avg_block_per_node == 1
+
+
+def analyze_propagation(deployment, last_layer, max_block_propagation, max_atx_propagation):
+    for i in range(last_layer):
+        propagation, msg_time = queries.layer_block_max_propagation(deployment, random.randrange(3, last_layer))
+        print(propagation, msg_time)
+        assert msg_time < datetime.timedelta(seconds=max_block_propagation)
+        propagation, msg_time = queries.all_atx_max_propagation(deployment)
+        print(propagation, msg_time)
+        assert msg_time < datetime.timedelta(seconds=max_atx_propagation)

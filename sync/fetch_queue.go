@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"runtime"
 	"sync"
 )
 
@@ -32,11 +33,12 @@ type fetchQueue struct {
 	handleFetch func(fj fetchJob)
 	checkLocal  CheckLocalFunc
 	queue       chan []types.Hash32 //types.TransactionId //todo make buffered
+	name        string
 }
 
 func (fq *fetchQueue) Close() {
-	fq.Info("done")
 	close(fq.queue)
+	fq.Info("done")
 }
 
 func concatShortIds(items []types.Hash32) string {
@@ -47,9 +49,18 @@ func concatShortIds(items []types.Hash32) string {
 	return str
 }
 
+func (fq *fetchQueue) shutdownRecover() {
+	r := recover()
+	if r != nil {
+		fq.Info("%s shut down ", fq.name)
+	}
+}
+
 //todo batches
 func (fq *fetchQueue) work() error {
-	output := fetchWithFactory(NewFetchWorker(fq.workerInfra, 1, fq.BatchRequestFactory, fq.queue))
+
+	defer fq.shutdownRecover()
+	output := fetchWithFactory(NewFetchWorker(fq.workerInfra, runtime.NumCPU(), fq.BatchRequestFactory, fq.queue, fq.name))
 	for out := range output {
 		fq.Debug("new batch out of queue")
 		if out == nil {
@@ -67,7 +78,7 @@ func (fq *fetchQueue) work() error {
 			return fmt.Errorf("channel closed")
 		}
 
-		fq.Debug("fetched items %s", concatShortIds(bjb.ids))
+		fq.Info("fetched %s's %s", fq.name, concatShortIds(bjb.ids))
 		fq.handleFetch(bjb)
 		fq.Debug("next batch")
 	}
@@ -79,7 +90,7 @@ func (fq *fetchQueue) addToPendingGetCh(ids []types.Hash32) chan bool {
 }
 
 func (fq *fetchQueue) addToPending(ids []types.Hash32) []chan bool {
-
+	//defer fq.shutdownRecover()
 	fq.Lock()
 	deps := make([]chan bool, 0, len(ids))
 	var idsToAdd []types.Hash32
@@ -99,7 +110,6 @@ func (fq *fetchQueue) addToPending(ids []types.Hash32) []chan bool {
 }
 
 func (fq *fetchQueue) invalidate(id types.Hash32, valid bool) {
-	fq.Debug("done with %v !!!!!!!!!!!!!!!! %v", id.ShortString(), valid)
 	fq.Lock()
 	deps := fq.pending[id]
 	delete(fq.pending, id)
@@ -108,6 +118,7 @@ func (fq *fetchQueue) invalidate(id types.Hash32, valid bool) {
 	for _, dep := range deps {
 		dep <- valid
 	}
+	fq.Debug("invalidated %v %v", id.ShortString(), valid)
 }
 
 //returns items out of itemIds that are not in the local database
@@ -150,7 +161,9 @@ func NewTxQueue(s *Syncer) *txQueue {
 			BatchRequestFactory: TxFetchReqFactory,
 			checkLocal:          s.txCheckLocal,
 			pending:             make(map[types.Hash32][]chan bool),
-			queue:               make(chan []types.Hash32, 10000)},
+			queue:               make(chan []types.Hash32, 10000),
+			name:                "Tx",
+		},
 	}
 
 	q.handleFetch = updateTxDependencies(q.invalidate, s.txpool)
@@ -213,6 +226,7 @@ func NewAtxQueue(s *Syncer, fetchPoetProof FetchPoetProofFunc) *atxQueue {
 			checkLocal:          s.atxCheckLocal,
 			pending:             make(map[types.Hash32][]chan bool),
 			queue:               make(chan []types.Hash32, 10000),
+			name:                "Atx",
 		},
 	}
 
@@ -258,6 +272,8 @@ func updateAtxDependencies(invalidate func(id types.Hash32, valid bool), sValida
 					atxpool.Put(atx)
 					invalidate(id, true)
 					continue
+				} else {
+					log.Info("failed to validate %s %s", id.ShortString(), err)
 				}
 			}
 			invalidate(id, false)

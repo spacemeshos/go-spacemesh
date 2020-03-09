@@ -14,14 +14,14 @@ import (
 var atxID = types.AtxId([32]byte{1, 3, 3, 7})
 var nodeID, vrfSigner = generateNodeIDAndSigner()
 var validateVrf = BLS381.Verify2
-var privateKey, publicKey = BLS381.GenKeyPair(BLS381.DefaultSeed())
-var ed = signing.NewEdSigner()
+var vrfPrivkey, vrfPubkey = BLS381.GenKeyPair(BLS381.DefaultSeed())
+var edSigner = signing.NewEdSigner()
 
 func generateNodeIDAndSigner() (types.NodeId, Signer) {
 	return types.NodeId{
-		Key:          ed.PublicKey().String(),
-		VRFPublicKey: publicKey,
-	}, BLS381.NewBlsSigner(privateKey)
+		Key:          edSigner.PublicKey().String(),
+		VRFPublicKey: vrfPubkey,
+	}, BLS381.NewBlsSigner(vrfPrivkey)
 }
 
 type mockActivationDB struct {
@@ -30,30 +30,28 @@ type mockActivationDB struct {
 	atxs                map[string]map[types.LayerID]types.AtxId
 }
 
-func (a *mockActivationDB) IsIdentityActive(edId string, layer types.LayerID) (*types.NodeId, bool, types.AtxId, error) {
-	if idmap, ok := a.atxs[edId]; ok {
-		if atxid, ok := idmap[layer]; ok {
-			return &types.NodeId{edId, publicKey}, true, atxid, nil
-		}
-	}
-	return &types.NodeId{edId, publicKey}, true, *types.EmptyAtxId, nil
-}
-
 func (a mockActivationDB) GetIdentity(edId string) (types.NodeId, error) {
-	return types.NodeId{Key: edId, VRFPublicKey: publicKey}, nil
+	return types.NodeId{Key: edId, VRFPublicKey: vrfPubkey}, nil
 }
 
-func (a mockActivationDB) GetNodeLastAtxId(node types.NodeId) (types.AtxId, error) {
-	if node.Key != nodeID.Key {
+func (a mockActivationDB) GetNodeAtxIdForEpoch(nodeId types.NodeId, targetEpoch types.EpochId) (types.AtxId, error) {
+	if nodeId.Key != nodeID.Key || targetEpoch.IsGenesis() {
 		return *types.EmptyAtxId, errors.New("not found")
 	}
 	return atxID, nil
 }
 
-func (a mockActivationDB) GetAtx(id types.AtxId) (*types.ActivationTxHeader, error) {
+func (a mockActivationDB) GetAtxHeader(id types.AtxId) (*types.ActivationTxHeader, error) {
 	if id == atxID {
 		atxHeader := &types.ActivationTxHeader{
-			NIPSTChallenge: types.NIPSTChallenge{PubLayerIdx: a.atxPublicationLayer}, ActiveSetSize: a.activeSetSize,
+			NIPSTChallenge: types.NIPSTChallenge{
+				NodeId: types.NodeId{
+					Key:          edSigner.PublicKey().String(),
+					VRFPublicKey: vrfPubkey,
+				},
+				PubLayerIdx: a.atxPublicationLayer,
+			},
+			ActiveSetSize: a.activeSetSize,
 		}
 		atxHeader.SetId(&id)
 		return atxHeader, nil
@@ -159,7 +157,7 @@ func TestBlockOracleEmptyActiveSetValidation(t *testing.T) {
 		validateVrf, lg.WithName("blkElgValidator"))
 	block := newBlockWithEligibility(types.LayerID(layersPerEpoch*2), nodeID, atxID, types.BlockEligibilityProof{}, activationDB)
 	eligible, err := validator.BlockSignedAndEligible(block)
-	r.EqualError(err, "empty active set not allowed")
+	r.EqualError(err, "failed to get number of eligible blocks: empty active set not allowed")
 	r.False(eligible)
 }
 
@@ -181,7 +179,7 @@ func TestBlockOracleNoActivationsForNode(t *testing.T) {
 	blockOracle := NewMinerBlockOracle(committeeSize, activeSetSize, layersPerEpoch, activationDB, beaconProvider, vrfSigner, nodeID, func() bool { return true }, lg.WithName("blockOracle"))
 
 	_, proofs, err := blockOracle.BlockEligible(types.LayerID(layersPerEpoch * 2))
-	r.EqualError(err, "failed to get latest ATX: not in genesis (epoch 2) yet failed to get atx: not found")
+	r.EqualError(err, "failed to get latest ATX: failed to get ATX ID for target epoch 2: not found")
 	r.Nil(proofs)
 }
 
@@ -210,8 +208,8 @@ func TestBlockOracleValidatorInvalidProof(t *testing.T) {
 		validateVrf, lg.WithName("blkElgValidator"))
 	block := newBlockWithEligibility(layerID, nodeID, atxID, proof, activationDB)
 	eligible, err := validator.BlockSignedAndEligible(block)
+	r.EqualError(err, "eligibility VRF validation failed")
 	r.False(eligible)
-	r.Nil(err)
 }
 
 func TestBlockOracleValidatorInvalidProof2(t *testing.T) {
@@ -281,19 +279,20 @@ func TestBlockOracleValidatorInvalidProof3(t *testing.T) {
 func newBlockWithEligibility(layerID types.LayerID, nodeID types.NodeId, atxID types.AtxId,
 	proof types.BlockEligibilityProof, db *mockActivationDB) *types.Block {
 	block := &types.Block{MiniBlock: types.MiniBlock{BlockHeader: types.BlockHeader{LayerIndex: layerID, ATXID: atxID, EligibilityProof: proof}}}
-	block.Signature = ed.Sign(block.Bytes())
-	if _, ok := db.atxs[ed.PublicKey().String()]; !ok {
-		db.atxs[ed.PublicKey().String()] = map[types.LayerID]types.AtxId{}
+	block.Signature = edSigner.Sign(block.Bytes())
+	if _, ok := db.atxs[edSigner.PublicKey().String()]; !ok {
+		db.atxs[edSigner.PublicKey().String()] = map[types.LayerID]types.AtxId{}
 	}
-	db.atxs[ed.PublicKey().String()][layerID] = atxID
+	block.Initialize()
+	db.atxs[edSigner.PublicKey().String()][layerID] = atxID
 	return block
 }
 
 func TestBlockEligibility_calc(t *testing.T) {
 	r := require.New(t)
-	atxH := types.NewActivationTxWithChallenge(types.NIPSTChallenge{PubLayerIdx: 0}, types.Address{}, 1, nil, nil, nil)
+	atxH := types.NewActivationTx(types.NIPSTChallenge{PubLayerIdx: 0}, types.Address{}, 1, nil, nil, nil)
 	atxH.ActiveSetSize = 10
-	atxDb := &mockAtxDB{atxH: &atxH.ActivationTxHeader}
+	atxDb := &mockAtxDB{atxH: atxH.ActivationTxHeader}
 	genSetSize := uint32(0)
 	o := NewMinerBlockOracle(10, genSetSize, 1, atxDb, &EpochBeaconProvider{}, vrfSigner, nodeID, func() bool { return true }, log.NewDefault(t.Name()))
 	err := o.calcEligibilityProofs(1)

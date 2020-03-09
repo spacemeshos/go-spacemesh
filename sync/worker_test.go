@@ -3,7 +3,9 @@ package sync
 import (
 	"crypto/sha256"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"sync"
@@ -17,19 +19,18 @@ func TestNewPeerWorker(t *testing.T) {
 	defer syncObj1.Close()
 	syncObj2 := syncs[1]
 	defer syncObj2.Close()
-	lid := types.LayerID(1)
-	err := syncObj1.AddBlock(types.NewExistingBlock(types.BlockID(123), lid, nil))
+	bl1 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
+	err := syncObj1.AddBlock(bl1)
 	assert.NoError(t, err)
 
-	wrk, output := NewPeersWorker(syncObj2, []p2p.Peer{nodes[3].PublicKey(), nodes[2].PublicKey(), nodes[0].PublicKey()}, &sync.Once{}, LayerIdsReqFactory(1))
+	wrk := NewPeersWorker(syncObj2, []p2p.Peer{nodes[3].PublicKey(), nodes[2].PublicKey(), nodes[0].PublicKey()}, &sync.Once{}, LayerIdsReqFactory(1))
 
 	go wrk.Work()
-	wrk.Wait()
 
 	timeout := time.NewTimer(1 * time.Second)
 	select {
-	case item := <-output:
-		assert.Equal(t, types.BlockID(123), item.([]types.BlockID)[0], "wrong ids")
+	case item := <-wrk.output:
+		assert.Equal(t, bl1.Id(), item.([]types.BlockID)[0], "wrong ids")
 	case <-timeout.C:
 		assert.Fail(t, "no message received on channel")
 	}
@@ -53,8 +54,46 @@ func TestNewNeighborhoodWorker(t *testing.T) {
 	ref := sha256.Sum256(poetProofBytes)
 
 	w := NewNeighborhoodWorker(s1, 1, PoetReqFactory(ref[:]))
-	go w.work()
+	go w.Work()
 	assert.NotNil(t, <-w.output)
 	r.NoError(err)
-	w.Wait()
+}
+
+var longConf = Configuration{1000, 1, 300, 5 * time.Minute, 1 * time.Second, 10 * time.Hour, 100, 5}
+
+func TestNeighborhoodWorkerClose(t *testing.T) {
+	r := require.New(t)
+	syncs, nodes, _ := SyncMockFactory(2, longConf, "TestSyncer_FetchPoetProofAvailableAndValid_", memoryDB, newMemPoetDb)
+	syncs[0].Close()
+	s1 := syncs[1]
+	s1.Peers = getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
+
+	proofMessage := makePoetProofMessage(t)
+	poetProofBytes, err := types.InterfaceToBytes(&proofMessage.PoetProof)
+	r.NoError(err)
+	ref := sha256.Sum256(poetProofBytes)
+
+	w := NewNeighborhoodWorker(s1, 1, PoetReqFactory(ref[:]))
+	go w.Work()
+	go func() {
+		time.Sleep(time.Second)
+		s1.Close()
+	}()
+	<-w.output
+	log.Info("closed")
+}
+
+func TestPeerWorkerClose(t *testing.T) {
+	syncs, nodes, _ := SyncMockFactory(4, longConf, "TestNewPeerWorker", memoryDB, newMockPoetDb)
+	syncObj1 := syncs[0]
+	syncObj1.Close()
+	syncObj2 := syncs[1]
+	wrk := NewPeersWorker(syncObj2, []p2p.Peer{nodes[3].PublicKey(), nodes[2].PublicKey(), nodes[0].PublicKey()}, &sync.Once{}, LayerIdsReqFactory(1))
+	go wrk.Work()
+	go func() {
+		time.Sleep(time.Second)
+		syncObj2.Close()
+	}()
+	<-wrk.output
+	log.Info("closed")
 }

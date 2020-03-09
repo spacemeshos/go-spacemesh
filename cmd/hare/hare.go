@@ -4,6 +4,7 @@ import (
 	"fmt"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/monitoring"
@@ -49,7 +50,7 @@ func init() {
 type mockBlockProvider struct {
 }
 
-func (mbp *mockBlockProvider) GetUnverifiedLayerBlocks(layerId types.LayerID) ([]types.BlockID, error) {
+func (mbp *mockBlockProvider) LayerBlockIds(layerId types.LayerID) ([]types.BlockID, error) {
 	return buildSet(), nil
 }
 
@@ -59,7 +60,7 @@ type HareApp struct {
 	oracle  *oracle.OracleClient
 	sgn     hare.Signer
 	ha      *hare.Hare
-	clock   *timesync.Ticker
+	clock   *timesync.TimeClock
 	updater *monitoring.MemoryUpdater
 	monitor *monitoring.Monitor
 }
@@ -81,7 +82,7 @@ func buildSet() []types.BlockID {
 	s := make([]types.BlockID, 200, 200)
 
 	for i := uint64(0); i < 200; i++ {
-		s = append(s, types.BlockID(i))
+		s = append(s, types.NewExistingBlock(1, util.Uint64ToBytes(i)).Id())
 	}
 
 	return s
@@ -132,7 +133,7 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	}
 
 	log.Info("Initializing P2P services")
-	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P)
+	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P, log.NewDefault("p2p_haretest"), app.Config.DataDir)
 	app.p2p = swarm
 	if err != nil {
 		log.Panic("Error starting p2p services err=%v", err)
@@ -152,7 +153,7 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 		log.Panic("error parsing config err=%v", err)
 	}
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
-	app.clock = timesync.NewTicker(timesync.RealClock{}, ld, gTime)
+	app.clock = timesync.NewClock(timesync.RealClock{}, ld, gTime, lg)
 
 	app.ha = hare.New(app.Config.HARE, app.p2p, app.sgn, types.NodeId{Key: app.sgn.PublicKey().String(), VRFPublicKey: []byte{}}, validateBlocks, IsSynced, &mockBlockProvider{}, hareOracle, uint16(app.Config.LayersPerEpoch), &mockIdProvider{}, &mockStateQuerier{}, app.clock.Subscribe(), lg)
 	log.Info("Starting hare service")
