@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -296,11 +297,6 @@ func (s *Syncer) synchronise() {
 		return
 	}
 
-	if !s.weaklySynced(curr) && s.getGossipBufferingStatus() == Done {
-		s.SetZeroBlockLayer(s.GetCurrentLayer() - 1)
-		s.With().Info("did not receive any blocks while in gossip", log.Uint64("layer_id", uint64(curr)))
-	}
-
 	// we have all the data of the prev layers so we can simply validate
 	if s.weaklySynced(curr) {
 		s.With().Info("Node is weakly synced ", s.LatestLayer(), s.GetCurrentLayer())
@@ -349,9 +345,13 @@ func (s *Syncer) handleLayersTillCurrent() {
 }
 
 func (s *Syncer) handleCurrentLayer() {
-	if s.LatestLayer() == s.GetCurrentLayer() && time.Now().Sub(s.LayerToTime(s.LatestLayer())) > s.ValidationDelta {
+	curr := s.GetCurrentLayer()
+	if s.LatestLayer() == curr && time.Now().Sub(s.LayerToTime(s.LatestLayer())) > s.ValidationDelta {
 		if err := s.GetAndValidateLayer(s.LatestLayer()); err != nil {
-			s.Panic("failed getting layer even though we are weakly-synced currentLayer=%v lastTicked=%v err=%v ", s.LatestLayer(), s.GetCurrentLayer(), err)
+			if err != database.ErrNotFound {
+				s.Panic("failed handling current layer  currentLayer=%v lastTicked=%v err=%v ", s.LatestLayer(), s.GetCurrentLayer(), err)
+			}
+			s.SetZeroBlockLayer(curr)
 		}
 	}
 }
