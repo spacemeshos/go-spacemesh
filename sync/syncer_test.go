@@ -985,6 +985,8 @@ func TestFetchLayerBlockIds(t *testing.T) {
 
 	syncObj1.AddBlock(block1)
 	syncObj2.AddBlock(block2)
+	syncObj1.SetZeroBlockLayer(2)
+	syncObj2.SetZeroBlockLayer(2)
 
 	mp := map[types.Hash32][]p2p.Peer{}
 	hash1 := types.CalcBlocksHash32([]types.BlockID{block1.Id()}, nil)
@@ -1002,6 +1004,12 @@ func TestFetchLayerBlockIds(t *testing.T) {
 	if ids[0] != block2.Id() && ids[1] != block2.Id() {
 		panic("did not get ids from all peers")
 	}
+
+	syncObj3.handleNotSynced(2)
+	assert.NoError(t, syncObj3.GetAndValidateLayer(2))
+	l, err := syncObj3.GetLayer(2)
+	assert.NoError(t, err)
+	assert.True(t, len(l.Blocks()) == 0)
 
 }
 

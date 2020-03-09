@@ -206,7 +206,7 @@ func (l *Layer) Blocks() []*Block {
 	return l.blocks
 }
 
-func (l *Layer) Hash() Hash32 {
+func (l Layer) Hash() Hash32 {
 	return CalcBlocksHash32(BlockIds(l.blocks), nil)
 }
 

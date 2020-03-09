@@ -62,7 +62,7 @@ var (
 	errTooManyAtxs  = errors.New("too many atxs in blocks")
 	NoBlocksInLayer = errors.New("layer has no blocks")
 
-	EmptyLayer = types.Hash32{}
+	EmptyLayer = types.Layer{}.Hash()
 )
 
 type Status int
@@ -395,6 +395,10 @@ func (s *Syncer) handleNotSynced(currentSyncLayer types.LayerID) {
 			return
 		}
 
+		if len(lyr.Blocks()) == 0 {
+			s.SetZeroBlockLayer(currentSyncLayer)
+		}
+
 		s.Validator.ValidateLayer(lyr) // wait for layer validation
 	}
 
@@ -714,7 +718,7 @@ func (s *Syncer) fetchLayerBlockIds(m map[types.Hash32][]p2p.Peer, lyr types.Lay
 	}
 
 	if len(ids) == 0 {
-		return nil, errors.New("could not get layer ids from any peer")
+		s.Info("could not get layer ids from any peer")
 	}
 
 	return ids, nil
@@ -750,6 +754,7 @@ func (s *Syncer) fetchLayerHashes(lyr types.LayerID) (map[types.Hash32][]p2p.Pee
 	if len(m) == 0 {
 		return nil, errors.New("could not get layer hashes from any peer")
 	}
+	s.Info("layer %d has blocks", lyr)
 	return m, nil
 }
 
