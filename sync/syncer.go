@@ -200,9 +200,9 @@ func (s *Syncer) shutdown() bool {
 	}
 }
 
+// equivalent to s.LatestLayer() >= s.lastTickedLayer()-1
+// means we have data from the previous layer
 func (s *Syncer) weaklySynced(layer types.LayerID) bool {
-	// equivalent to s.LatestLayer() >= s.lastTickedLayer()-1
-	// means we have data from the previous layer
 	return s.LatestLayer()+1 >= layer
 }
 
@@ -262,7 +262,7 @@ func (s *Syncer) Start() {
 	s.Info("syncer already started")
 }
 
-//fires a sync every sm.SyncInterval or on force space from outside
+//fires a sync every sm.SyncInterval or on force sync from outside
 func (s *Syncer) run() {
 	s.Debug("Start running")
 	for {
