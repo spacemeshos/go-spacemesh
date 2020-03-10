@@ -34,6 +34,7 @@ type MeshDB struct {
 	orphanBlocks       map[types.LayerID]map[types.BlockID]struct{}
 	layerMutex         map[types.LayerID]*layerMutex
 	lhMutex            sync.Mutex
+	exit               bool
 }
 
 func NewPersistentMeshDB(path string, blockCacheSize int, log log.Log) (*MeshDB, error) {
@@ -103,6 +104,7 @@ func NewMemMeshDB(log log.Log) *MeshDB {
 }
 
 func (m *MeshDB) Close() {
+	m.exit = true
 	m.blocks.Close()
 	m.layers.Close()
 	m.transactions.Close()
@@ -716,8 +718,10 @@ func (m *MeshDB) Retrieve(key []byte, v interface{}) (interface{}, error) {
 
 func (m *MeshDB) CacheWarmUp(from types.LayerID, to types.LayerID) error {
 	m.Info("warming up cache with layers %v to %v", from, to)
-	for i := to; i > from; i-- {
-
+	for i := from; i < to; i++ {
+		if m.exit {
+			m.Info("shutdown during cache warm up")
+		}
 		layer, err := m.LayerBlockIds(i)
 		if err != nil {
 			return fmt.Errorf("could not get layer %v from database %v", layer, err)
@@ -732,6 +736,7 @@ func (m *MeshDB) CacheWarmUp(from types.LayerID, to types.LayerID) error {
 		}
 
 	}
-	m.Info("done warming up cache ")
+	m.Info("done warming up cache")
+
 	return nil
 }
