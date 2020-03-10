@@ -891,6 +891,7 @@ func (s *swarm) getListeners(
 	randomPort := port == 0
 	var gateway nat_traversal.UpnpGateway
 	if s.config.AcquirePort {
+		s.logger.Info("Trying to acquire ports using UPnP, this might take a while..")
 		var err error
 		gateway, err = discoverUpnpGateway()
 		if err != nil {
