@@ -96,9 +96,7 @@ Loop:
 				break Loop
 			}
 		case <-time.After(120 * time.Millisecond):
-			fmt.Println("timeout!")
-			assert.True(t, false)
-			break Loop
+			t.Fatal("timeout")
 		}
 	}
 	assert.Equal(t, int32(1), n.DialCount())
@@ -182,8 +180,7 @@ func TestShutdown(t *testing.T) {
 	time.Sleep(20 * time.Millisecond)
 	cPool.Shutdown()
 	conn := <-newConns
-	cMock := conn.(*net.ConnectionMock)
-	assert.True(t, cMock.Closed())
+	require.Nil(t, conn)
 }
 
 func TestGetConnectionAfterShutdown(t *testing.T) {

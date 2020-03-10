@@ -1,6 +1,7 @@
 package p2p
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -22,7 +23,7 @@ type Lookuper func(key p2pcrypto.PublicKey) (*node.NodeInfo, error)
 
 type udpNetwork interface {
 	Shutdown()
-	Dial(address net.Addr, remotePublicKey p2pcrypto.PublicKey) (inet.Connection, error)
+	Dial(ctx context.Context, address net.Addr, remotePublicKey p2pcrypto.PublicKey) (inet.Connection, error)
 	IncomingMessages() chan inet.IncomingMessageEvent
 	SubscribeOnNewRemoteConnections(f func(event inet.NewConnectionEvent))
 	SubscribeClosingConnections(f func(connection inet.ConnectionWithErr))

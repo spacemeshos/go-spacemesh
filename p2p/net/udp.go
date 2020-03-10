@@ -1,6 +1,7 @@
 package net
 
 import (
+	"context"
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
@@ -153,7 +154,7 @@ func (n *UDPNet) IncomingMessages() chan IncomingMessageEvent {
 	return n.msgChan
 }
 
-func (n *UDPNet) Dial(address net.Addr, remotePublicKey p2pcrypto.PublicKey) (Connection, error) {
+func (n *UDPNet) Dial(ctx context.Context, address net.Addr, remotePublicKey p2pcrypto.PublicKey) (Connection, error) {
 	udpcon, err := net.DialUDP("udp", nil, address.(*net.UDPAddr))
 	if err != nil {
 		return nil, err
