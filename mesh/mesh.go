@@ -141,15 +141,6 @@ func NewRecoveredMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh Tortois
 	}
 	msh.latestLayerInState = types.LayerID(util.BytesToUint64(verified))
 
-	start := types.LayerID(0)
-	if msh.ProcessedLayer() > types.LayerID(db.blockCache.Cap()) {
-		start = msh.ProcessedLayer() - types.LayerID(db.blockCache.Cap())
-	}
-
-	if err := msh.CacheWarmUp(start, msh.ProcessedLayer()); err != nil {
-		logger.Error("cache warm up failed during recovery", err)
-	}
-
 	err = pr.LoadState(msh.LatestLayerInState())
 	if err != nil {
 		logger.Panic("cannot load state for layer %v, message: %v", msh.LatestLayerInState(), err)
@@ -168,6 +159,18 @@ func NewRecoveredMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh Tortois
 		log.String("root_hash", pr.GetStateRoot().String()))
 
 	return msh
+}
+
+func (msh *Mesh) CacheWarmUp() {
+	start := types.LayerID(0)
+	if msh.processedLayer > types.LayerID(msh.blockCache.Cap()) {
+		start = msh.processedLayer - types.LayerID(msh.blockCache.Cap())
+	}
+
+	if err := msh.cacheWarmUpFromTo(start, msh.processedLayer); err != nil {
+		msh.Error("cache warm up failed during recovery", err)
+	}
+
 }
 
 func (m *Mesh) SetBlockBuilder(blockBuilder BlockBuilder) {
