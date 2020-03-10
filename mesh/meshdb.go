@@ -721,10 +721,15 @@ func (m *MeshDB) Retrieve(key []byte, v interface{}) (interface{}, error) {
 func (m *MeshDB) cacheWarmUpFromTo(from types.LayerID, to types.LayerID) error {
 	m.Info("warming up cache with layers %v to %v", from, to)
 	for i := from; i < to; i++ {
-		if _, ok := <-m.exit; !ok {
+
+		select {
+		case <-m.exit:
 			m.Info("shutdown during cache warm up")
 			return nil
+		default:
+			continue
 		}
+
 		layer, err := m.LayerBlockIds(i)
 		if err != nil {
 			return fmt.Errorf("could not get layer %v from database %v", layer, err)
