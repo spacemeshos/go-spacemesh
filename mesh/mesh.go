@@ -136,9 +136,11 @@ func NewRecoveredMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh MeshVal
 		start = msh.processedLayer - types.LayerID(db.blockCache.Cap())
 	}
 
-	if err := msh.CacheWarmUp(start, msh.processedLayer); err != nil {
-		logger.Error("cache warm up failed during recovery", err)
-	}
+	go func() {
+		if err := msh.CacheWarmUp(start, msh.processedLayer); err != nil {
+			logger.Error("cache warm up failed during recovery", err)
+		}
+	}()
 
 	err = pr.LoadState(msh.LatestLayerInState())
 	if err != nil {
