@@ -267,7 +267,7 @@ func copyLayer(t *testing.T, srcMesh, dstMesh *Mesh, dstAtxDb *AtxDbMock, id typ
 	assert.NoError(t, err)
 	var blockIds []types.BlockID
 	for _, b := range l.Blocks() {
-		txs := srcMesh.getTxs(b.TxIds, l)
+		txs := srcMesh.getTxs(b.TxIds, l.Index())
 		atx, err := srcMesh.GetFullAtx(b.ATXID)
 		assert.NoError(t, err)
 		dstAtxDb.AddAtx(atx.Id(), atx)
@@ -276,22 +276,6 @@ func copyLayer(t *testing.T, srcMesh, dstMesh *Mesh, dstAtxDb *AtxDbMock, id typ
 		blockIds = append(blockIds, b.Id())
 	}
 	return blockIds
-}
-
-func Test_HandleValidatedLayer_panic(t *testing.T) {
-	s := &MockMapState{Rewards: make(map[types.Address]*big.Int)}
-	mesh, _ := getMeshWithMapState("t1", s)
-	defer mesh.Close()
-	block1 := types.NewExistingBlock(2, []byte(rand.RandString(8)))
-	block1.Initialize()
-
-	defer func() {
-		if r := recover(); r == nil {
-			t.Errorf("The code did not panic")
-		}
-	}()
-
-	mesh.HandleValidatedLayer(1, []types.BlockID{block1.Id()})
 }
 
 type meshValidatorBatchMock struct {

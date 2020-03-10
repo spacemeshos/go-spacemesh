@@ -51,6 +51,23 @@ func (apt *AccountPendingTxs) Remove(accepted []*types.Transaction, layer types.
 	apt.mu.Unlock()
 }
 
+func (apt *AccountPendingTxs) RemoveRejected(rejected []*types.Transaction, layer types.LayerID) {
+	apt.mu.Lock()
+	for _, tx := range rejected {
+		existing, found := apt.PendingTxs[tx.AccountNonce]
+		if found {
+			if existing[tx.Id()].HighestLayerIncludedIn > layer {
+				continue
+			}
+			delete(existing, tx.Id())
+			if len(existing) == 0 {
+				delete(apt.PendingTxs, tx.AccountNonce)
+			}
+		}
+	}
+	apt.mu.Unlock()
+}
+
 func (apt *AccountPendingTxs) RemoveNonce(nonce uint64, deleteTx func(id types.TransactionId)) {
 	apt.mu.Lock()
 	for id := range apt.PendingTxs[nonce] {

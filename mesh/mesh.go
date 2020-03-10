@@ -243,18 +243,37 @@ func (m *Mesh) pushLayersToState(oldPbase types.LayerID, newPbase types.LayerID)
 			m.With().Error("failed to get layer", log.LayerId(layerId.Uint64()), log.Err(err))
 			return
 		}
-		validBlocks, _ := m.BlocksByValidity(l.Blocks())
+		validBlocks, invalidBlocks := m.BlocksByValidity(l.Blocks())
+		m.reInsertTxsToPool(validBlocks, invalidBlocks, l.Index())
 		m.updateStateWithLayer(layerId, types.NewExistingLayer(layerId, validBlocks))
 	}
 	m.persistLayerHash()
 }
 
-func (m *Mesh) applyState(layerId types.LayerID, l *types.Layer) {
+func (m *Mesh) reInsertTxsToPool(validBlocks, invalidBlocks []*types.Block, l types.LayerID) {
+	seenTxIds := make(map[types.TransactionId]struct{})
+	uniqueTxIds(validBlocks, seenTxIds)
+	returnedTxs := m.getTxs(uniqueTxIds(invalidBlocks, seenTxIds), l)
+	grouped, accounts := m.removeFromUnappliedTxs(returnedTxs, l)
+	for account := range accounts {
+		m.removeRejectedFromAccountTxs(account, grouped, l)
+	}
+	for _, tx := range returnedTxs {
+		err := m.blockBuilder.ValidateAndAddTxToPool(tx)
+		// We ignore errors here, since they mean that the tx is no longer valid and we shouldn't re-add it
+		if err == nil {
+			m.With().Info("transaction from contextually invalid block re-added to mempool",
+				log.TxId(tx.Id().ShortString()))
+		}
+	}
+}
+
+func (m *Mesh) applyState(l *types.Layer) {
 	m.AccumulateRewards(l, m.config)
 	m.PushTransactions(l)
-	m.logStateRoot(layerId)
+	m.logStateRoot(l.Index())
 	m.setLayerHash(l)
-	m.setLatestLayerInState(layerId)
+	m.setLatestLayerInState(l.Index())
 }
 
 func (m *Mesh) HandleValidatedLayer(validatedLayer types.LayerID, layer []types.BlockID) {
@@ -263,13 +282,35 @@ func (m *Mesh) HandleValidatedLayer(validatedLayer types.LayerID, layer []types.
 	for _, blockId := range layer {
 		block, err := m.GetBlock(blockId)
 		if err != nil {
-			//todo: can this happen?
-			log.Panic("hare terminated with block that is not present in mesh")
+			//stop processing this hare result, wait until tortoise pushes this layer into state
+			log.Error("hare terminated with block that is not present in mesh")
+			return
 		}
 		blocks = append(blocks, block)
 	}
 	lyr := types.NewExistingLayer(validatedLayer, blocks)
+	invalidBlocks := m.getInvalidBlocksByHare(lyr)
+	m.reInsertTxsToPool(blocks, invalidBlocks, lyr.Index())
 	m.updateStateWithLayer(validatedLayer, lyr)
+}
+
+func (m *Mesh) getInvalidBlocksByHare(hareLayer *types.Layer) (invalid []*types.Block) {
+	dbLayer, err := m.GetLayer(hareLayer.Index())
+	if err != nil {
+		log.Panic("wtf")
+		return
+	}
+	exists := make(map[types.BlockID]struct{})
+	for _, block := range hareLayer.Blocks() {
+		exists[block.Id()] = struct{}{}
+	}
+
+	for _, block := range dbLayer.Blocks() {
+		if _, has := exists[block.Id()]; !has {
+			invalid = append(invalid, block)
+		}
+	}
+	return
 }
 
 func (m *Mesh) updateStateWithLayer(validatedLayer types.LayerID, layer *types.Layer) {
@@ -288,13 +329,13 @@ func (m *Mesh) updateStateWithLayer(validatedLayer types.LayerID, layer *types.L
 		m.nextValidLayers[validatedLayer] = layer
 		return
 	}
-	m.applyState(validatedLayer, layer)
+	m.applyState(layer)
 	for i := validatedLayer + 1; i <= m.maxValidatedLayer; i++ {
 		nxtLayer, has := m.nextValidLayers[i]
 		if !has {
 			break
 		}
-		m.applyState(i, nxtLayer)
+		m.applyState(nxtLayer)
 		delete(m.nextValidLayers, i)
 	}
 }
@@ -351,8 +392,8 @@ func (m *Mesh) ExtractUniqueOrderedTransactions(l *types.Layer) (validBlockTxs [
 	})
 
 	// Get and return unique transactions
-	seenTxIds := map[types.TransactionId]struct{}{}
-	return m.getTxs(uniqueTxIds(validBlocks, seenTxIds), l)
+	seenTxIds := make(map[types.TransactionId]struct{})
+	return m.getTxs(uniqueTxIds(validBlocks, seenTxIds), l.Index())
 }
 
 func toUint64Slice(b []byte) []uint64 {
@@ -378,10 +419,10 @@ func uniqueTxIds(blocks []*types.Block, seenTxIds map[types.TransactionId]struct
 	return txIds
 }
 
-func (m *Mesh) getTxs(txIds []types.TransactionId, l *types.Layer) []*types.Transaction {
+func (m *Mesh) getTxs(txIds []types.TransactionId, l types.LayerID) []*types.Transaction {
 	txs, missing := m.GetTransactions(txIds)
 	if len(missing) != 0 {
-		m.Panic("could not find transactions %v from layer %v", missing, l.Index())
+		m.Panic("could not find transactions %v from layer %v", missing, l)
 	}
 	return txs
 }

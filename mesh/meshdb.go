@@ -469,15 +469,16 @@ func (m *MeshDB) addToAccountTxs(addr types.Address, accountTxs []*types.Transac
 	return nil
 }
 
-func (m *MeshDB) removeFromUnappliedTxs(accepted []*types.Transaction, layer types.LayerID) {
-	gAccepted := groupByOrigin(accepted)
-	accounts := make(map[types.Address]struct{})
-	for account := range gAccepted {
+func (m *MeshDB) removeFromUnappliedTxs(accepted []*types.Transaction, layer types.LayerID) (grouped map[types.Address][]*types.Transaction, accounts map[types.Address]struct{}) {
+	grouped = groupByOrigin(accepted)
+	accounts = make(map[types.Address]struct{})
+	for account := range grouped {
 		accounts[account] = struct{}{}
 	}
 	for account := range accounts {
-		m.removeFromAccountTxs(account, gAccepted, layer)
+		m.removeFromAccountTxs(account, grouped, layer)
 	}
+	return
 }
 
 func (m *MeshDB) removeFromAccountTxs(account types.Address, gAccepted map[types.Address][]*types.Transaction, layer types.LayerID) {
@@ -492,6 +493,24 @@ func (m *MeshDB) removeFromAccountTxs(account types.Address, gAccepted map[types
 		return
 	}
 	pending.Remove(gAccepted[account], layer)
+	if err := m.storeAccountPendingTxs(account, pending); err != nil {
+		m.With().Error("failed to store account pending txs",
+			log.LayerId(uint64(layer)), log.String("address", account.Short()), log.Err(err))
+	}
+}
+
+func (m *MeshDB) removeRejectedFromAccountTxs(account types.Address, rejected map[types.Address][]*types.Transaction, layer types.LayerID) {
+	m.unappliedTxsMutex.Lock()
+	defer m.unappliedTxsMutex.Unlock()
+
+	// TODO: instead of storing a list, use LevelDB's prefixed keys and then iterate all relevant keys
+	pending, err := m.getAccountPendingTxs(account)
+	if err != nil {
+		m.With().Error("failed to get account pending txs",
+			log.LayerId(uint64(layer)), log.String("address", account.Short()), log.Err(err))
+		return
+	}
+	pending.RemoveRejected(rejected[account], layer)
 	if err := m.storeAccountPendingTxs(account, pending); err != nil {
 		m.With().Error("failed to store account pending txs",
 			log.LayerId(uint64(layer)), log.String("address", account.Short()), log.Err(err))

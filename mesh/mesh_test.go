@@ -344,6 +344,8 @@ func TestMesh_AddBlockWithTxs_PushTransactions_UpdateUnappliedTxs(t *testing.T) 
 
 	state := &MockMapState{}
 	msh.TxProcessor = state
+	blockBuilder := &MockBlockBuilder{}
+	msh.SetBlockBuilder(blockBuilder)
 
 	layerID := types.LayerID(1)
 	signer, origin := newSignerAndAddress(r, "origin")
@@ -366,6 +368,11 @@ func TestMesh_AddBlockWithTxs_PushTransactions_UpdateUnappliedTxs(t *testing.T) 
 
 	msh.pushLayersToState(1, 2)
 	r.Equal(4, len(state.Txs))
+
+	r.ElementsMatch(GetTransactionIds(tx5), GetTransactionIds(blockBuilder.txs...))
+
+	txns = getTxns(r, msh.MeshDB, origin)
+	r.Empty(txns)
 }
 
 func TestMesh_ExtractUniqueOrderedTransactions(t *testing.T) {

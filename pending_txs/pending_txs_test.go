@@ -90,31 +90,31 @@ func TestNewAccountPendingTxs(t *testing.T) {
 	nonce, balance = pendingTxs.GetProjection(prevNonce, prevBalance)
 	r.Equal(prevNonce+1, nonce)
 	r.Equal(prevBalance-100, balance)
-	/*
-		// Rejecting a transaction with same-nonce does NOT remove a different transactions
-		pendingTxs.Remove(nil, []*types.Transaction{
-			newTx(t, 5, 50, 1),
-		}, 2)
-		nonce, balance = pendingTxs.GetProjection(prevNonce, prevBalance)
-		r.Equal(prevNonce+1, nonce)
-		r.Equal(prevBalance-100, balance)
 
-		// Rejecting a transaction in a lower layer than the highest seen for it, does not remove it, either
-		pendingTxs.Remove(nil, []*types.Transaction{
-			newTx(t, 5, 100, 1),
-		}, 1)
-		nonce, balance = pendingTxs.GetProjection(prevNonce, prevBalance)
-		r.Equal(prevNonce+1, nonce)
-		r.Equal(prevBalance-100, balance)
+	// Rejecting a transaction with same-nonce does NOT remove a different transactions
+	pendingTxs.RemoveRejected([]*types.Transaction{
+		newTx(t, 5, 50, 1),
+	}, 2)
+	nonce, balance = pendingTxs.GetProjection(prevNonce, prevBalance)
+	r.Equal(prevNonce+1, nonce)
+	r.Equal(prevBalance-100, balance)
 
-		// However, rejecting a transaction in the highest layer it was seen in DOES remove it
-		pendingTxs.Remove(nil, []*types.Transaction{
-			newTx(t, 5, 100, 1),
-		}, 2)
-		nonce, balance = pendingTxs.GetProjection(prevNonce, prevBalance)
-		r.Equal(prevNonce, nonce)
-		r.Equal(prevBalance, balance)
-	*/
+	// Rejecting a transaction in a lower layer than the highest seen for it, does not remove it, either
+	pendingTxs.RemoveRejected([]*types.Transaction{
+		newTx(t, 5, 100, 1),
+	}, 1)
+	nonce, balance = pendingTxs.GetProjection(prevNonce, prevBalance)
+	r.Equal(prevNonce+1, nonce)
+	r.Equal(prevBalance-100, balance)
+
+	// However, rejecting a transaction in the highest layer it was seen in DOES remove it
+	pendingTxs.RemoveRejected([]*types.Transaction{
+		newTx(t, 5, 100, 1),
+	}, 2)
+	nonce, balance = pendingTxs.GetProjection(prevNonce, prevBalance)
+	r.Equal(prevNonce, nonce)
+	r.Equal(prevBalance, balance)
+
 	// When several transactions exist with same nonce, projection is pessimistic (reduces balance by higher amount)
 	pendingTxs.Add(1,
 		newTx(t, 5, 100, 2),
@@ -145,13 +145,12 @@ func TestNewAccountPendingTxs(t *testing.T) {
 	r.Equal(prevNonce+4, nonce)
 	r.Equal(prevBalance-100-50-100-50, balance)
 
-	/*
-		// Rejecting a transaction only removes that version, if several exist
-		// This can also cause a transaction that would previously over-draft the account to become valid
-		pendingTxs.Remove(nil, []*types.Transaction{
-			newTx(t, 5, 100, 2),
-		}, 2)
-		nonce, balance = pendingTxs.GetProjection(prevNonce, prevBalance)
-		r.Equal(int(prevNonce)+2, int(nonce))
-		r.Equal(prevBalance-50-950, balance)*/
+	// Rejecting a transaction only removes that version, if several exist
+	// This can also cause a transaction that would previously over-draft the account to become valid
+	pendingTxs.RemoveRejected([]*types.Transaction{
+		newTx(t, 5, 100, 2),
+	}, 2)
+	nonce, balance = pendingTxs.GetProjection(prevNonce, prevBalance)
+	r.Equal(int(prevNonce)+2, int(nonce))
+	r.Equal(prevBalance-50-950, balance)
 }
