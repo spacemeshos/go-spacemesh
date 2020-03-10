@@ -3,6 +3,3 @@ contact_links:
   - name: Get Help Using Spacemesh
     url: https://discord.gg/4GDhbNa
     about: Please ask for support here.
-  - name: Spacemesh Improvement Proposals
-    url: https://github.com/spacemeshos/smips
-    about: Please make protocol improvement proposals here.
