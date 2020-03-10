@@ -716,7 +716,7 @@ func (m *MeshDB) Retrieve(key []byte, v interface{}) (interface{}, error) {
 	return v, nil
 }
 
-func (m *MeshDB) CacheWarmUp(from types.LayerID, to types.LayerID) error {
+func (m *MeshDB) cacheWarmUpFromTo(from types.LayerID, to types.LayerID) error {
 	m.Info("warming up cache with layers %v to %v", from, to)
 	for i := from; i < to; i++ {
 		if m.exit {
