@@ -163,11 +163,11 @@ func NewRecoveredMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh Tortois
 
 func (msh *Mesh) CacheWarmUp() {
 	start := types.LayerID(0)
-	if msh.processedLayer > types.LayerID(msh.blockCache.Cap()) {
-		start = msh.processedLayer - types.LayerID(msh.blockCache.Cap())
+	if msh.ProcessedLayer() > types.LayerID(msh.blockCache.Cap()) {
+		start = msh.ProcessedLayer() - types.LayerID(msh.blockCache.Cap())
 	}
 
-	if err := msh.cacheWarmUpFromTo(start, msh.processedLayer); err != nil {
+	if err := msh.cacheWarmUpFromTo(start, msh.ProcessedLayer()); err != nil {
 		msh.Error("cache warm up failed during recovery", err)
 	}
 
