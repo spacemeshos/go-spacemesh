@@ -91,7 +91,7 @@ func (bl *BlockListener) handleBlock(data service.GossipMessage) {
 		blk.Id(),
 		blk.LayerIndex,
 		blk.LayerIndex.GetEpoch(bl.LayersPerEpoch),
-		log.String("miner_id", blk.MinerId().String()),
+		log.String("sender_id", blk.MinerId().ShortString()),
 		log.Int("tx_count", len(blk.TxIds)),
 		log.Int("atx_count", len(blk.AtxIds)),
 		log.Int("view_edges", len(blk.ViewEdges)),
