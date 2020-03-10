@@ -727,7 +727,14 @@ func TestStartPost(t *testing.T) {
 	assert.Nil(t, builder.commitment)
 	assert.Equal(t, postProver.Cfg().SpacePerUnit, uint64(1000))
 
-	// Initialize.
+	// Attempt to initialize again
+	assert.Nil(t, builder.commitment)
+	err = builder.StartPost(coinbase2, drive, 1024)
+	assert.EqualError(t, err, "already started")
+	assert.Nil(t, builder.commitment)
+
+	// Reinitialize.
+	builder = NewBuilder(id, coinbase, &MockSigning{}, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, postProver, layerClock, &mockSyncer{}, db, lg.WithName("atxBuilder2"))
 	assert.Nil(t, builder.commitment)
 	err = builder.StartPost(coinbase2, drive, 1024)
 	assert.NoError(t, err)
