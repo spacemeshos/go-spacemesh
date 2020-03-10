@@ -223,7 +223,6 @@ func (b *Builder) StartPost(rewardAddress types.Address, dataDir string, space u
 		case InitDone:
 			return fmt.Errorf("already initialized")
 		case InitInProgress:
-		default:
 			return fmt.Errorf("already started")
 		}
 	}
