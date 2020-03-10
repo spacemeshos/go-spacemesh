@@ -19,7 +19,7 @@ var (
 )
 
 func LayerIdsReqFactory(lyr types.LayerID) RequestFactory {
-	return func(s WorkerInfra, peer p2p.Peer) (chan interface{}, error) {
+	return func(s Communication, peer p2p.Peer) (chan interface{}, error) {
 		ch := make(chan interface{}, 1)
 		foo := func(msg []byte) {
 			defer close(ch)
@@ -42,7 +42,7 @@ func LayerIdsReqFactory(lyr types.LayerID) RequestFactory {
 }
 
 func HashReqFactory(lyr types.LayerID) RequestFactory {
-	return func(s WorkerInfra, peer p2p.Peer) (chan interface{}, error) {
+	return func(s Communication, peer p2p.Peer) (chan interface{}, error) {
 		ch := make(chan interface{}, 1)
 		foo := func(msg []byte) {
 			defer close(ch)
@@ -69,7 +69,7 @@ func HashReqFactory(lyr types.LayerID) RequestFactory {
 
 func newFetchReqFactory(msgtype server.MessageType, asItems func(msg []byte) ([]Item, error)) BatchRequestFactory {
 	//convert to chan
-	return func(infra WorkerInfra, peer p2p.Peer, ids []types.Hash32) (chan []Item, error) {
+	return func(infra Communication, peer p2p.Peer, ids []types.Hash32) (chan []Item, error) {
 		ch := make(chan []Item, 1)
 		foo := func(msg []byte) {
 			defer close(ch)
@@ -157,7 +157,7 @@ func calcAndSetIds(atxs []types.ActivationTx) []types.ActivationTx {
 }
 
 func PoetReqFactory(poetProofRef []byte) RequestFactory {
-	return func(s WorkerInfra, peer p2p.Peer) (chan interface{}, error) {
+	return func(s Communication, peer p2p.Peer) (chan interface{}, error) {
 		ch := make(chan interface{}, 1)
 		resHandler := func(msg []byte) {
 			s.Info("handle PoET proof response")
@@ -225,7 +225,7 @@ func validateItemIds(ids []types.Hash32, items []Item) (bool, error) {
 	return true, nil
 }
 
-func encodeAndSendRequest(req server.MessageType, ids []types.Hash32, s WorkerInfra, peer p2p.Peer, foo func(msg []byte)) error {
+func encodeAndSendRequest(req server.MessageType, ids []types.Hash32, s Communication, peer p2p.Peer, foo func(msg []byte)) error {
 	bts, err := types.InterfaceToBytes(ids)
 	if err != nil {
 		return err

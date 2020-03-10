@@ -190,6 +190,10 @@ type Layer struct {
 	index  LayerID
 }
 
+func NewEmptyLayer(idx LayerID) *Layer {
+	return &Layer{nil, idx}
+}
+
 func (l *Layer) Index() LayerID {
 	return l.index
 }
@@ -202,7 +206,7 @@ func (l *Layer) Blocks() []*Block {
 	return l.blocks
 }
 
-func (l *Layer) Hash() Hash32 {
+func (l Layer) Hash() Hash32 {
 	return CalcBlocksHash32(BlockIds(l.blocks), nil)
 }
 
