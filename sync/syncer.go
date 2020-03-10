@@ -419,12 +419,18 @@ func (s *Syncer) gossipSyncForOneFullLayer(currentSyncLayer types.LayerID) error
 
 	// get & validate first tick
 	if err := s.GetAndValidateLayer(currentSyncLayer); err != nil {
-		return err
+		if err != database.ErrNotFound {
+			return err
+		}
+		s.SetZeroBlockLayer(currentSyncLayer)
 	}
 
 	// get & validate second tick
 	if err := s.GetAndValidateLayer(currentSyncLayer + 1); err != nil {
-		return err
+		if err != database.ErrNotFound {
+			return err
+		}
+		s.SetZeroBlockLayer(currentSyncLayer)
 	}
 
 	s.Info("Done waiting for ticks and validation. setting gossip true")
