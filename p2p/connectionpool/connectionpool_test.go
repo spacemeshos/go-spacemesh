@@ -203,24 +203,21 @@ func TestShutdownWithMultipleDials(t *testing.T) {
 	n.SetDialResult(nil)
 
 	cPool := NewConnectionPool(n.Dial, generatePublicKey(), log.NewDefault(t.Name()))
-	newConns := make(chan net.Connection)
+	newConns := make(chan net.Connection, 20)
 	iterCnt := 20
 	for i := 0; i < iterCnt; i++ {
 		go func() {
 			addr := net2.TCPAddr{net2.ParseIP(generateIpAddress()), 0000, ""}
 			key := generatePublicKey()
-			conn, err := cPool.GetConnection(&addr, key)
-			if err == nil {
-				newConns <- conn
-			}
+			conn, _ := cPool.GetConnection(&addr, key)
+			newConns <- conn
 		}()
 	}
 	time.Sleep(20 * time.Millisecond)
 	cPool.Shutdown()
 	var cnt int
 	for conn := range newConns {
-		cMock := conn.(*net.ConnectionMock)
-		assert.True(t, cMock.Closed(), "connection %s is still open", cMock.ID())
+		require.Nil(t, conn)
 		cnt++
 		if cnt == iterCnt {
 			break
