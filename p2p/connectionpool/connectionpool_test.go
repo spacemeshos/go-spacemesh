@@ -1,6 +1,7 @@
 package connectionpool
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -279,7 +280,12 @@ func TestRandom(t *testing.T) {
 				peer := peers[rand.Int31n(int32(peerCnt))]
 				addr := net2.TCPAddr{net2.ParseIP(peer.addr), 0000, ""}
 				conn, err := cPool.GetConnection(&addr, peer.key)
-				assert.Nil(t, err)
+				select {
+				case <-cPool.shutdownCtx.Done():
+					require.Equal(t, context.Canceled, err)
+				default:
+					require.NoError(t, err)
+				}
 				nMock.PublishClosingConnection(net.ConnectionWithErr{conn, errors.New("testerr")})
 			}()
 		} else {
@@ -287,7 +293,12 @@ func TestRandom(t *testing.T) {
 				peer := peers[rand.Int31n(int32(peerCnt))]
 				addr := net2.TCPAddr{net2.ParseIP(peer.addr), 0000, ""}
 				_, err := cPool.GetConnection(&addr, peer.key)
-				assert.Nil(t, err)
+				select {
+				case <-cPool.shutdownCtx.Done():
+					require.Equal(t, context.Canceled, err)
+				default:
+					require.NoError(t, err)
+				}
 			}()
 		}
 		time.Sleep(10 * time.Millisecond)
