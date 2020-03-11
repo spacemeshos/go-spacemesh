@@ -11,10 +11,10 @@ import (
 	"time"
 )
 
-type RequestFactory func(s WorkerInfra, peer p2p.Peer) (chan interface{}, error)
-type BatchRequestFactory func(s WorkerInfra, peer p2p.Peer, id []types.Hash32) (chan []Item, error)
+type RequestFactory func(s Communication, peer p2p.Peer) (chan interface{}, error)
+type BatchRequestFactory func(s Communication, peer p2p.Peer, id []types.Hash32) (chan []Item, error)
 
-type WorkerInfra interface {
+type Communication interface {
 	GetPeers() []p2p.Peer
 	SendRequest(msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte)) error
 	GetTimeout() time.Duration
@@ -27,23 +27,23 @@ type Peers interface {
 	Close()
 }
 
-type workerInfra struct {
+type communication struct {
+	Peers
 	RequestTimeout time.Duration
 	*server.MessageServer
-	Peers
 	exit chan struct{}
 }
 
-func (ms *workerInfra) Close() {
+func (ms communication) Close() {
 	ms.MessageServer.Close()
 	ms.Peers.Close()
 }
 
-func (ms *workerInfra) GetTimeout() time.Duration {
+func (ms communication) GetTimeout() time.Duration {
 	return ms.RequestTimeout
 }
 
-func (ms *workerInfra) GetExit() chan struct{} {
+func (ms communication) GetExit() chan struct{} {
 	return ms.exit
 }
 
@@ -70,7 +70,7 @@ func (w *worker) Clone() *worker {
 	return &worker{Logger: w.Logger, Once: w.Once, workCount: w.workCount, output: w.output, work: w.work}
 }
 
-func NewPeersWorker(s WorkerInfra, peers []p2p.Peer, mu *sync.Once, reqFactory RequestFactory) worker {
+func NewPeersWorker(s Communication, peers []p2p.Peer, mu *sync.Once, reqFactory RequestFactory) worker {
 	count := int32(1)
 	numOfpeers := len(peers)
 	output := make(chan interface{}, numOfpeers)
@@ -119,7 +119,7 @@ func NewPeersWorker(s WorkerInfra, peers []p2p.Peer, mu *sync.Once, reqFactory R
 
 }
 
-func NewNeighborhoodWorker(s WorkerInfra, count int, reqFactory RequestFactory) worker {
+func NewNeighborhoodWorker(s Communication, count int, reqFactory RequestFactory) worker {
 	output := make(chan interface{}, count)
 	acount := int32(count)
 	mu := &sync.Once{}
@@ -152,7 +152,7 @@ func NewNeighborhoodWorker(s WorkerInfra, count int, reqFactory RequestFactory) 
 
 }
 
-func NewFetchWorker(s WorkerInfra, count int, reqFactory BatchRequestFactory, idsChan chan []types.Hash32, name string) worker {
+func NewFetchWorker(s Communication, count int, reqFactory BatchRequestFactory, idsChan chan []types.Hash32, name string) worker {
 	output := make(chan interface{}, 10)
 	acount := int32(count)
 	mu := &sync.Once{}

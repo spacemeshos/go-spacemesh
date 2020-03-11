@@ -279,31 +279,35 @@ func copyLayer(t *testing.T, srcMesh, dstMesh *Mesh, dstAtxDb *AtxDbMock, id typ
 }
 
 type meshValidatorBatchMock struct {
-	batchSize types.LayerID
+	mesh           *Mesh
+	batchSize      types.LayerID
+	processedLayer types.LayerID
 }
 
-func (m *meshValidatorBatchMock) LatestComplete() types.LayerID {
+func (m *meshValidatorBatchMock) ValidateLayer(lyr *types.Layer) {
+	m.SetProcessedLayer(lyr.Index())
+	layerId := lyr.Index()
+	if layerId == 0 {
+		return
+	}
+	if layerId%m.batchSize == 0 {
+		m.mesh.pushLayersToState(layerId-m.batchSize, layerId)
+		return
+	}
+	prevPBase := layerId - layerId%m.batchSize
+	m.mesh.pushLayersToState(prevPBase, prevPBase)
+}
+
+func (m *meshValidatorBatchMock) ProcessedLayer() types.LayerID {
 	panic("implement me")
 }
 
-func (m *meshValidatorBatchMock) HandleIncomingLayer(layer *types.Layer) (types.LayerID, types.LayerID) {
-	layerId := layer.Index()
-	if layerId == 0 {
-		return 0, 0
-	}
-	if layerId%m.batchSize == 0 {
-		return layerId - m.batchSize, layerId
-	}
-	prevPBase := layerId - layerId%m.batchSize
-	return prevPBase, prevPBase
+func (m *meshValidatorBatchMock) SetProcessedLayer(lyr types.LayerID) {
+	m.processedLayer = lyr
 }
 
-func (m *meshValidatorBatchMock) HandleLateBlock(bl *types.Block) (types.LayerID, types.LayerID) {
-	return bl.Layer() - 1, bl.Layer()
-}
-
-func (m *meshValidatorBatchMock) PersistTortoise() error {
-	return nil
+func (m *meshValidatorBatchMock) HandleLateBlock(blk *types.Block) {
+	panic("implement me")
 }
 
 func TestMesh_AccumulateRewards(t *testing.T) {
@@ -316,7 +320,7 @@ func TestMesh_AccumulateRewards(t *testing.T) {
 	mesh, atxDb := getMeshWithMapState("t1", s)
 	defer mesh.Close()
 
-	mesh.MeshValidator = &meshValidatorBatchMock{batchSize: types.LayerID(batchSize)}
+	mesh.Validator = &meshValidatorBatchMock{mesh: mesh, batchSize: types.LayerID(batchSize)}
 
 	var firstLayerRewards int64
 	for i := 0; i < numOfLayers; i++ {

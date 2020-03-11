@@ -22,8 +22,8 @@ func newLayerHashRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg []by
 			logger.With().Error("Error handling layer request message", log.LayerId(lyrid), log.Err(err))
 			return nil
 		}
-		hash := layer.Hash()
-		return hash[:]
+
+		return layer.Hash().Bytes()
 	}
 }
 
