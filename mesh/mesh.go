@@ -103,7 +103,7 @@ type Mesh struct {
 func NewMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh Tortoise, txInvalidator TxMemPoolInValidator, atxInvalidator AtxMemPoolInValidator, pr TxProcessor, logger log.Log) *Mesh {
 	ll := &Mesh{
 		Log:             logger,
-		trtl:   mesh,
+		trtl:            mesh,
 		txInvalidator:   txInvalidator,
 		atxInvalidator:  atxInvalidator,
 		TxProcessor:     pr,
