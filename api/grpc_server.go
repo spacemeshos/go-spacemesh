@@ -216,12 +216,12 @@ func (s SpacemeshGrpcService) BroadcastPoet(ctx context.Context, in *pb.BinaryMe
 	return &pb.SimpleMessage{Value: "ok"}, nil
 }
 
-// StopService stops the grpc service.
-func (s SpacemeshGrpcService) StopService() {
+// Close stops the grpc service.
+func (s SpacemeshGrpcService) Close() error {
 	log.Debug("Stopping grpc service...")
 	s.Server.Stop()
 	log.Debug("grpc service stopped...")
-
+	return nil
 }
 
 type Syncer interface {

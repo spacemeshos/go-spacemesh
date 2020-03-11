@@ -1,6 +1,7 @@
 package connectionpool
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -96,9 +97,7 @@ Loop:
 				break Loop
 			}
 		case <-time.After(120 * time.Millisecond):
-			fmt.Println("timeout!")
-			assert.True(t, false)
-			break Loop
+			t.Fatal("timeout")
 		}
 	}
 	assert.Equal(t, int32(1), n.DialCount())
@@ -182,8 +181,7 @@ func TestShutdown(t *testing.T) {
 	time.Sleep(20 * time.Millisecond)
 	cPool.Shutdown()
 	conn := <-newConns
-	cMock := conn.(*net.ConnectionMock)
-	assert.True(t, cMock.Closed())
+	require.Nil(t, conn)
 }
 
 func TestGetConnectionAfterShutdown(t *testing.T) {
@@ -206,24 +204,21 @@ func TestShutdownWithMultipleDials(t *testing.T) {
 	n.SetDialResult(nil)
 
 	cPool := NewConnectionPool(n.Dial, generatePublicKey(), log.NewDefault(t.Name()))
-	newConns := make(chan net.Connection)
+	newConns := make(chan net.Connection, 20)
 	iterCnt := 20
 	for i := 0; i < iterCnt; i++ {
 		go func() {
 			addr := net2.TCPAddr{net2.ParseIP(generateIpAddress()), 0000, ""}
 			key := generatePublicKey()
-			conn, err := cPool.GetConnection(&addr, key)
-			if err == nil {
-				newConns <- conn
-			}
+			conn, _ := cPool.GetConnection(&addr, key)
+			newConns <- conn
 		}()
 	}
 	time.Sleep(20 * time.Millisecond)
 	cPool.Shutdown()
 	var cnt int
 	for conn := range newConns {
-		cMock := conn.(*net.ConnectionMock)
-		assert.True(t, cMock.Closed(), "connection %s is still open", cMock.ID())
+		require.Nil(t, conn)
 		cnt++
 		if cnt == iterCnt {
 			break
@@ -285,7 +280,12 @@ func TestRandom(t *testing.T) {
 				peer := peers[rand.Int31n(int32(peerCnt))]
 				addr := net2.TCPAddr{net2.ParseIP(peer.addr), 0000, ""}
 				conn, err := cPool.GetConnection(&addr, peer.key)
-				assert.Nil(t, err)
+				select {
+				case <-cPool.shutdownCtx.Done():
+					require.Equal(t, context.Canceled, err)
+				default:
+					require.NoError(t, err)
+				}
 				nMock.PublishClosingConnection(net.ConnectionWithErr{conn, errors.New("testerr")})
 			}()
 		} else {
@@ -293,7 +293,12 @@ func TestRandom(t *testing.T) {
 				peer := peers[rand.Int31n(int32(peerCnt))]
 				addr := net2.TCPAddr{net2.ParseIP(peer.addr), 0000, ""}
 				_, err := cPool.GetConnection(&addr, peer.key)
-				assert.Nil(t, err)
+				select {
+				case <-cPool.shutdownCtx.Done():
+					require.Equal(t, context.Canceled, err)
+				default:
+					require.NoError(t, err)
+				}
 			}()
 		}
 		time.Sleep(10 * time.Millisecond)

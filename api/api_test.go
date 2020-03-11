@@ -535,8 +535,8 @@ func launchServer(t *testing.T) func() {
 	time.Sleep(3 * time.Second) // wait for server to be ready (critical on Travis)
 
 	return func() {
-		jsonService.StopService()
-		grpcService.StopService()
+		jsonService.Close()
+		grpcService.Close()
 	}
 }
 

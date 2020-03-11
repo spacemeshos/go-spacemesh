@@ -1,6 +1,7 @@
 package p2p
 
 import (
+	"context"
 	"errors"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -23,7 +24,7 @@ type mockUDPNetwork struct {
 
 	shutdownCalled bool
 
-	DialFunc func(address net2.Addr, remotepk p2pcrypto.PublicKey) (net.Connection, error)
+	DialFunc func(ctx context.Context, address net2.Addr, remotepk p2pcrypto.PublicKey) (net.Connection, error)
 
 	inc chan net.IncomingMessageEvent
 }
@@ -41,9 +42,9 @@ func (mun *mockUDPNetwork) IncomingMessages() chan net.IncomingMessageEvent {
 	return mun.inc
 }
 
-func (mun *mockUDPNetwork) Dial(address net2.Addr, remotepk p2pcrypto.PublicKey) (net.Connection, error) {
+func (mun *mockUDPNetwork) Dial(ctx context.Context, address net2.Addr, remotepk p2pcrypto.PublicKey) (net.Connection, error) {
 	if mun.DialFunc != nil {
-		return mun.DialFunc(address, remotepk)
+		return mun.DialFunc(ctx, address, remotepk)
 	}
 	return nil, errors.New("not impl")
 }
@@ -135,7 +136,7 @@ func TestUDPMux_sendMessageImpl(t *testing.T) {
 	}
 	m.lookuper = f
 
-	udpMock.DialFunc = func(address net2.Addr, remotepk p2pcrypto.PublicKey) (connection net.Connection, err error) {
+	udpMock.DialFunc = func(ctx context.Context, address net2.Addr, remotepk p2pcrypto.PublicKey) (connection net.Connection, err error) {
 		c := net.NewConnectionMock(remotepk)
 		c.Addr = address
 		return c, nil
@@ -150,7 +151,7 @@ func TestUDPMux_sendMessageImpl(t *testing.T) {
 	senderr := errors.New("err send")
 	m.cpool.CloseConnection(sendto.PublicKey())
 
-	udpMock.DialFunc = func(address net2.Addr, remotepk p2pcrypto.PublicKey) (connection net.Connection, err error) {
+	udpMock.DialFunc = func(ctx context.Context, address net2.Addr, remotepk p2pcrypto.PublicKey) (connection net.Connection, err error) {
 		c := net.NewConnectionMock(remotepk)
 		c.Addr = address
 		c.SetSession(net.NewSessionMock(remotepk))
@@ -165,7 +166,7 @@ func TestUDPMux_sendMessageImpl(t *testing.T) {
 
 	m.cpool.CloseConnection(sendto.PublicKey())
 
-	udpMock.DialFunc = func(address net2.Addr, remotepk p2pcrypto.PublicKey) (connection net.Connection, err error) {
+	udpMock.DialFunc = func(ctx context.Context, address net2.Addr, remotepk p2pcrypto.PublicKey) (connection net.Connection, err error) {
 		c := net.NewConnectionMock(remotepk)
 		c.Addr = address
 		c.SetSession(net.NewSessionMock(remotepk))
