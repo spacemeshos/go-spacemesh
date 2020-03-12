@@ -269,13 +269,14 @@ func (v *validator) ValidateLayer(lyr *types.Layer) {
 func (m *Mesh) pushLayersToState(oldPbase types.LayerID, newPbase types.LayerID) {
 	for layerId := oldPbase; layerId < newPbase; layerId++ {
 		l, err := m.GetLayer(layerId)
+		// TODO: propagate/handle error
 		if err != nil || l == nil {
 			m.With().Error("failed to get layer", log.LayerId(layerId.Uint64()), log.Err(err))
 			return
 		}
 		validBlocks, invalidBlocks := m.BlocksByValidity(l.Blocks())
-		m.reInsertTxsToPool(validBlocks, invalidBlocks, l.Index())
 		m.updateStateWithLayer(layerId, types.NewExistingLayer(layerId, validBlocks))
+		m.reInsertTxsToPool(validBlocks, invalidBlocks, l.Index())
 	}
 	m.persistLayerHash()
 }
@@ -320,8 +321,8 @@ func (m *Mesh) HandleValidatedLayer(validatedLayer types.LayerID, layer []types.
 	}
 	lyr := types.NewExistingLayer(validatedLayer, blocks)
 	invalidBlocks := m.getInvalidBlocksByHare(lyr)
-	m.reInsertTxsToPool(blocks, invalidBlocks, lyr.Index())
 	m.updateStateWithLayer(validatedLayer, lyr)
+	m.reInsertTxsToPool(blocks, invalidBlocks, lyr.Index())
 }
 
 func (m *Mesh) getInvalidBlocksByHare(hareLayer *types.Layer) (invalid []*types.Block) {
@@ -404,7 +405,6 @@ func (m *Mesh) persistLayerHash() {
 }
 
 func (m *Mesh) ExtractUniqueOrderedTransactions(l *types.Layer) (validBlockTxs []*types.Transaction) {
-	// this flow is deactivated since we assume all blocks that get here either passed hare or tortoise
 	validBlocks := l.Blocks()
 
 	// Deterministically sort valid blocks

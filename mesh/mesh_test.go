@@ -375,6 +375,37 @@ func TestMesh_AddBlockWithTxs_PushTransactions_UpdateUnappliedTxs(t *testing.T) 
 	r.Empty(txns)
 }
 
+func TestMesh_AddBlockWithTxs_PushTransactions_getInvalidBlocksByHare(t *testing.T) {
+	r := require.New(t)
+
+	msh := getMesh("mesh")
+
+	state := &MockMapState{}
+	msh.TxProcessor = state
+	blockBuilder := &MockBlockBuilder{}
+	msh.SetBlockBuilder(blockBuilder)
+
+	layerID := types.LayerID(1)
+	signer, _ := newSignerAndAddress(r, "origin")
+	tx1 := addTxToMesh(r, msh, signer, 2468)
+	tx2 := addTxToMesh(r, msh, signer, 2469)
+	tx3 := addTxToMesh(r, msh, signer, 2470)
+	tx4 := addTxToMesh(r, msh, signer, 2471)
+	tx5 := addTxToMesh(r, msh, signer, 2472)
+	var blocks []*types.Block
+	blocks = append(blocks, addBlockWithTxs(r, msh, layerID, true, tx1, tx2))
+	blocks = append(blocks, addBlockWithTxs(r, msh, layerID, true, tx2, tx3, tx4))
+	blocks = append(blocks, addBlockWithTxs(r, msh, layerID, true, tx4, tx5))
+	blocks = append(blocks, addBlockWithTxs(r, msh, layerID, true, tx5))
+	hareBlocks := blocks[:3]
+
+	invalid := msh.getInvalidBlocksByHare(types.NewExistingLayer(layerID, hareBlocks))
+	r.ElementsMatch(blocks[3:], invalid)
+
+	msh.reInsertTxsToPool(blocks[3:], invalid, layerID)
+
+}
+
 func TestMesh_ExtractUniqueOrderedTransactions(t *testing.T) {
 	r := require.New(t)
 
