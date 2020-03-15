@@ -31,10 +31,10 @@ var TORTOISE = []byte("tortoise")
 var VERIFIED = []byte("verified") //refers to layers we pushed into the state
 
 type Tortoise interface {
+	HandleLateBlock(bl *types.Block) (types.LayerID, types.LayerID)
 	HandleIncomingLayer(layer *types.Layer) (types.LayerID, types.LayerID)
 	LatestComplete() types.LayerID
-	PersistTortoise() error
-	HandleLateBlock(bl *types.Block) (types.LayerID, types.LayerID)
+	Persist() error
 }
 
 type Validator interface {
@@ -193,13 +193,13 @@ func (m *Mesh) LatestLayer() types.LayerID {
 func (m *Mesh) SetLatestLayer(idx types.LayerID) {
 	defer m.lkMutex.Unlock()
 	m.lkMutex.Lock()
-	if idx > m.latestLayer {
-		m.Info("set latest known layer to %v", idx)
-		m.latestLayer = idx
-		if err := m.general.Put(LATEST, idx.ToBytes()); err != nil {
-			m.Error("could not persist Latest layer index")
-		}
+	//if idx > m.latestLayer {
+	m.Info("set latest known layer to %v", idx)
+	m.latestLayer = idx
+	if err := m.general.Put(LATEST, idx.ToBytes()); err != nil {
+		m.Error("could not persist Latest layer index")
 	}
+	//}
 }
 
 func (m *Mesh) GetLayer(index types.LayerID) (*types.Layer, error) {
@@ -236,8 +236,8 @@ func (v *validator) HandleLateBlock(b *types.Block) {
 	v.Info("Validate late block %s", b.Id())
 	oldPbase, newPbase := v.trtl.HandleLateBlock(b)
 	v.pushLayersToState(oldPbase, newPbase)
-	if err := v.trtl.PersistTortoise(); err != nil {
-		v.Error("could not persist Tortoise on late block %s from layer index %d", b.Id(), b.Layer())
+	if err := v.trtl.Persist(); err != nil {
+		v.Error("could not persist tortoise on late block %s from layer index %d", b.Id(), b.Layer())
 	}
 }
 
@@ -252,8 +252,8 @@ func (v *validator) ValidateLayer(lyr *types.Layer) {
 	oldPbase, newPbase := v.trtl.HandleIncomingLayer(lyr)
 	v.SetProcessedLayer(lyr.Index())
 
-	if err := v.trtl.PersistTortoise(); err != nil {
-		v.Error("could not persist Tortoise layer index %d", lyr.Index())
+	if err := v.trtl.Persist(); err != nil {
+		v.Error("could not persist tortoise layer index %d", lyr.Index())
 	}
 	if err := v.general.Put(PROCESSED, lyr.Index().ToBytes()); err != nil {
 		v.Error("could not persist validated layer index %d", lyr.Index())
@@ -433,6 +433,10 @@ func (m *Mesh) AddBlock(blk *types.Block) error {
 }
 
 func (m *Mesh) SetZeroBlockLayer(lyr types.LayerID) error {
+	if _, err := m.GetLayer(lyr); err == nil {
+		m.Info("layer has blocks, dont set layer to 0 ")
+		return fmt.Errorf("layer exists")
+	}
 	m.SetLatestLayer(lyr)
 	lm := m.getLayerMutex(lyr)
 	defer m.endLayerWorker(lyr)

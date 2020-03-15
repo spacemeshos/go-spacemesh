@@ -60,7 +60,7 @@ func (m *MeshValidatorMock) LatestComplete() types.LayerID {
 	panic("implement me")
 }
 
-func (m *MeshValidatorMock) PersistTortoise() error {
+func (m *MeshValidatorMock) Persist() error {
 	return nil
 }
 

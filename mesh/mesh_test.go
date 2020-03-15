@@ -50,7 +50,7 @@ type MeshValidatorMock struct {
 	mdb *MeshDB
 }
 
-func (m *MeshValidatorMock) PersistTortoise() error {
+func (m *MeshValidatorMock) Persist() error {
 	return nil
 }
 

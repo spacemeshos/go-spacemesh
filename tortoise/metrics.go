@@ -7,12 +7,12 @@ import (
 )
 
 const (
-	Namespace = "spacemesh"
-	Subsystem = "consensus"
+	namespace = "spacemesh"
+	subsystem = "consensus"
 )
 
 func newGauge(name, help string, labels []string) metrics.Gauge {
-	return prmkit.NewGaugeFrom(prometheus.GaugeOpts{Namespace: Namespace, Subsystem: Subsystem, Name: name, Help: help}, labels)
+	return prmkit.NewGaugeFrom(prometheus.GaugeOpts{Namespace: namespace, Subsystem: subsystem, Name: name, Help: help}, labels)
 }
 
 var (

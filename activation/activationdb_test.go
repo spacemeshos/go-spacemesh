@@ -39,7 +39,7 @@ func createLayerWithAtx2(t require.TestingT, msh *mesh.Mesh, id types.LayerID, n
 
 type MeshValidatorMock struct{}
 
-func (m *MeshValidatorMock) PersistTortoise() error {
+func (m *MeshValidatorMock) Persist() error {
 	return nil
 }
 

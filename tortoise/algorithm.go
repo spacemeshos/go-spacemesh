@@ -4,43 +4,47 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
-	"sync"
 )
 
-type Algorithm struct {
-	Tortoise
-	sync.Mutex
-}
-
+//Tortoise represents an instance of the vote counting algorithm
+//this was done to allow more than one vote counting implementation
 type Tortoise interface {
-	handleIncomingLayer(ll *types.Layer)
-	PersistTortoise() error
+	HandleLateBlock(b *types.Block) (types.LayerID, types.LayerID)
+	HandleIncomingLayer(ll *types.Layer) (types.LayerID, types.LayerID)
 	LatestComplete() types.LayerID
+	Persist() error
 }
 
-func NewAlgorithm(layerSize int, mdb *mesh.MeshDB, hdist int, lg log.Log) *Algorithm {
-	alg := &Algorithm{Tortoise: NewNinjaTortoise(layerSize, mdb, hdist, lg)}
+type tortoise struct {
+	*ninjaTortoise
+}
+
+//NewTortoise returns a new Tortoise instance
+func NewTortoise(layerSize int, mdb *mesh.MeshDB, hdist int, lg log.Log) Tortoise {
+	alg := &tortoise{ninjaTortoise: NewNinjaTortoise(layerSize, mdb, hdist, lg)}
 	alg.HandleIncomingLayer(mesh.GenesisLayer())
 	return alg
 }
 
-func NewRecoveredAlgorithm(mdb *mesh.MeshDB, lg log.Log) *Algorithm {
-	trtl := &NinjaTortoise{Log: lg, Mesh: mdb}
-
-	ni, err := trtl.RecoverTortoise()
+//NewRecoveredTortoise recovers a previously persisted tortoise copy from mesh.MeshDB
+func NewRecoveredTortoise(mdb *mesh.MeshDB, lg log.Log) Tortoise {
+	tmp, err := RecoverTortoise(mdb)
 	if err != nil {
 		lg.Panic("could not recover tortoise state from disc ", err)
 	}
 
+	trtl := tmp.(*ninjaTortoise)
+
 	lg.Info("recovered tortoise from disc")
-	trtl.ninjaTortoise = ni.(*ninjaTortoise)
+	trtl.database = mdb
+	trtl.logger = lg
 
-	alg := &Algorithm{Tortoise: trtl}
-
-	return alg
+	return &tortoise{ninjaTortoise: trtl}
 }
 
-func (alg *Algorithm) HandleLateBlock(b *types.Block) (types.LayerID, types.LayerID) {
+//HandleLateBlock processes a late blocks votes (for late block definition see white paper)
+//returns the old pbase and new pbase after taking into account the blocks votes
+func (alg *tortoise) HandleLateBlock(b *types.Block) (types.LayerID, types.LayerID) {
 	//todo feed all layers from b's layer to tortoise
 	l := types.NewLayer(b.Layer())
 	l.AddBlock(b)
@@ -49,24 +53,33 @@ func (alg *Algorithm) HandleLateBlock(b *types.Block) (types.LayerID, types.Laye
 	return oldPbase, newPbase
 }
 
-func (alg *Algorithm) PersistTortoise() error {
-	alg.Lock()
-	defer alg.Unlock()
+//Persist saves a copy of the current tortoise state to the database
+func (alg *tortoise) Persist() error {
+	alg.mutex.Lock()
+	defer alg.mutex.Unlock()
 	log.Info("persist tortoise ")
-	return alg.Tortoise.PersistTortoise()
+	return alg.ninjaTortoise.persist()
 }
 
-func (alg *Algorithm) HandleIncomingLayer(ll *types.Layer) (types.LayerID, types.LayerID) {
-	alg.Lock()
-	defer alg.Unlock()
-	oldPbase := alg.LatestComplete()
-	alg.Tortoise.handleIncomingLayer(ll)
-	newPbase := alg.LatestComplete()
+//HandleIncomingLayer processes all layer block votes
+//returns the old pbase and new pbase after taking into account the blocks votes
+func (alg *tortoise) HandleIncomingLayer(ll *types.Layer) (types.LayerID, types.LayerID) {
+	alg.mutex.Lock()
+	defer alg.mutex.Unlock()
+	oldPbase := alg.latestComplete()
+	alg.ninjaTortoise.handleIncomingLayer(ll)
+	newPbase := alg.latestComplete()
 	updateMetrics(alg, ll)
 	return oldPbase, newPbase
 }
 
-func updateMetrics(alg *Algorithm, ll *types.Layer) {
-	pbaseCount.Set(float64(alg.LatestComplete()))
+//HandleLateBlock processes a late blocks votes (for late block definition see white paper)
+//returns the old pbase and new pbase after taking into account the blocks votes
+func (alg *tortoise) LatestComplete() types.LayerID {
+	return alg.latestComplete()
+}
+
+func updateMetrics(alg *tortoise, ll *types.Layer) {
+	pbaseCount.Set(float64(alg.latestComplete()))
 	processedCount.Set(float64(ll.Index()))
 }
