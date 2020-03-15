@@ -15,7 +15,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/sync/fetch"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/sha256-simd"
 	"github.com/stretchr/testify/assert"
@@ -91,40 +90,6 @@ func SyncMockFactory(number int, conf Configuration, name string, dbType string,
 	return nodes, p2ps, ts
 }
 
-type stateMock struct{}
-
-func (s stateMock) LoadState(layer types.LayerID) error {
-	panic("implement me")
-}
-
-func (stateMock) GetStateRoot() types.Hash32 {
-	return types.Hash32{}
-}
-
-func (stateMock) ValidateNonceAndBalance(transaction *types.Transaction) error {
-	return nil
-}
-
-func (stateMock) GetLayerApplied(txID types.TransactionId) *types.LayerID {
-	return nil
-}
-
-func (stateMock) ValidateSignature(signed types.Signed) (types.Address, error) {
-	return types.Address{}, nil
-}
-
-func (s *stateMock) ApplyRewards(layer types.LayerID, miners []types.Address, reward *big.Int) {
-
-}
-
-func (s *stateMock) ApplyTransactions(layer types.LayerID, txs []*types.Transaction) (int, error) {
-	return 0, nil
-}
-
-func (s *stateMock) AddressExists(addr types.Address) bool {
-	return true
-}
-
 type mockBlocksProvider struct {
 	mp map[types.BlockID]struct{}
 }
@@ -142,7 +107,7 @@ func getMeshWithLevelDB(id string) *mesh.Mesh {
 	mshdb, _ := mesh.NewPersistentMeshDB(id, 5, lg)
 	atxdbStore, _ := database.NewLDBDatabase(id+"atx", 0, 0, lg.WithOptions(log.Nop))
 	atxdb := activation.NewActivationDb(atxdbStore, &MockIStore{}, mshdb, 10, &ValidatorMock{}, lg.WithOptions(log.Nop))
-	return mesh.NewMesh(mshdb, atxdb, rewardConf, &MeshValidatorMock{}, &mockTxMemPool{}, &mockAtxMemPool{}, &stateMock{}, lg.WithOptions(log.Nop))
+	return mesh.NewMesh(mshdb, atxdb, rewardConf, &MeshValidatorMock{}, &mockTxMemPool{}, &mockAtxMemPool{}, &MockState{}, lg.WithOptions(log.Nop))
 }
 
 func persistenceTeardown() {
@@ -153,7 +118,7 @@ func getMeshWithMemoryDB(id string) *mesh.Mesh {
 	lg := log.New(id, "", "")
 	mshdb := mesh.NewMemMeshDB(lg)
 	atxdb := activation.NewActivationDb(database.NewMemDatabase(), &MockIStore{}, mshdb, 10, &ValidatorMock{}, lg.WithName("atxDB"))
-	return mesh.NewMesh(mshdb, atxdb, rewardConf, &MeshValidatorMock{}, &mockTxMemPool{}, &mockAtxMemPool{}, &stateMock{}, lg)
+	return mesh.NewMesh(mshdb, atxdb, rewardConf, &MeshValidatorMock{}, &mockTxMemPool{}, &mockAtxMemPool{}, &MockState{}, lg)
 }
 
 func getMesh(dbType, id string) *mesh.Mesh {
@@ -223,7 +188,7 @@ func TestSyncProtocol_BlockRequest(t *testing.T) {
 	ch := make(chan []types.Hash32, 1)
 	ch <- []types.Hash32{block.Hash32()}
 
-	output := fetchWithFactory(newFetchWorker(syncObj2, 1, newFetchReqFactory(block, blocksAsItems), ch, ""))
+	output := fetchWithFactory(newFetchWorker(syncObj2, 1, newFetchReqFactory(blockMsg, blocksAsItems), ch, ""))
 
 	timeout := time.NewTimer(2 * time.Second)
 	emptyID := types.BlockID{}
@@ -431,7 +396,7 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	ch <- []types.Hash32{block2.Hash32()}
 	ch <- []types.Hash32{block3.Hash32()}
 	close(ch)
-	output := fetchWithFactory(newFetchWorker(syncObj2, 1, fetch.newFetchReqFactory(blockMsg, fetch.blocksAsItems), ch, ""))
+	output := fetchWithFactory(newFetchWorker(syncObj2, 1, newFetchReqFactory(blockMsg, blocksAsItems), ch, ""))
 
 	for out := range output {
 		block := out.(fetchJob).items[0].(*types.Block)

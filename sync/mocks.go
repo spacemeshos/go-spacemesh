@@ -88,12 +88,6 @@ func (m *MeshValidatorMock) HandleLateBlock(bl *types.Block) (types.LayerID, typ
 func (m *MeshValidatorMock) RegisterLayerCallback(func(id types.LayerID)) {}
 func (m *MeshValidatorMock) ContextualValidity(id types.BlockID) bool     { return true }
 
-type stateMock struct{}
-
-func (s *stateMock) ApplyTransactions(id types.LayerID, tx []*types.Transaction) (uint32, error) {
-	return 0, nil
-}
-
 type MockState struct{}
 
 func (s MockState) LoadState(layer types.LayerID) error {
@@ -125,10 +119,6 @@ func (MockState) ApplyRewards(layer types.LayerID, miners []types.Address, rewar
 
 func (MockState) AddressExists(addr types.Address) bool {
 	return true
-}
-
-func (s *stateMock) ApplyRewards(layer types.LayerID, miners []string, underQuota map[string]int, bonusReward, diminishedReward *big.Int) {
-
 }
 
 type MockIStore struct {
