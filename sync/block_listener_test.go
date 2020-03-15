@@ -34,9 +34,9 @@ func (pm PeersMock) Close() {
 	return
 }
 
-func ListenerFactory(serv service.Service, peers Peers, name string, layer types.LayerID) *BlockListener {
+func ListenerFactory(serv service.Service, peers peers, name string, layer types.LayerID) *BlockListener {
 	sync := SyncFactory(name, serv)
-	sync.Peers = peers
+	sync.peers = peers
 	nbl := NewBlockListener(serv, sync, 2, log.New(name, "", ""))
 	return nbl
 }

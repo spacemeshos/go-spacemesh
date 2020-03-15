@@ -1,7 +1,6 @@
 package sync
 
 import (
-	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -10,7 +9,7 @@ import (
 	"sync"
 )
 
-type ValidationInfra interface {
+type validationInfra interface {
 	DataAvailability(blk *types.Block) ([]*types.Transaction, []*types.ActivationTx, error)
 	AddBlockWithTxs(blk *types.Block, txs []*types.Transaction, atxs []*types.ActivationTx) error
 	GetBlock(id types.BlockID) (*types.Block, error)
@@ -23,20 +22,20 @@ type ValidationInfra interface {
 
 type blockQueue struct {
 	Configuration
-	ValidationInfra
+	validationInfra
 	fetchQueue
 	callbacks     map[interface{}]func(res bool) error
 	depMap        map[interface{}]map[types.Hash32]struct{}
 	reverseDepMap map[types.Hash32][]interface{}
 }
 
-func NewValidationQueue(srvr Communication, conf Configuration, msh ValidationInfra, checkLocal CheckLocalFunc, lg log.Log) *blockQueue {
+func newValidationQueue(srvr Communication, conf Configuration, msh validationInfra, checkLocal checkLocalFunc, lg log.Log) *blockQueue {
 	vq := &blockQueue{
 		fetchQueue: fetchQueue{
 			Log:                 srvr.WithName("blockFetchQueue"),
 			workerInfra:         srvr,
 			checkLocal:          checkLocal,
-			BatchRequestFactory: BlockFetchReqFactory,
+			batchRequestFactory: blockFetchReqFactory,
 			Mutex:               &sync.Mutex{},
 			pending:             make(map[types.Hash32][]chan bool),
 			queue:               make(chan []types.Hash32, 1000),
@@ -46,7 +45,7 @@ func NewValidationQueue(srvr Communication, conf Configuration, msh ValidationIn
 		depMap:          make(map[interface{}]map[types.Hash32]struct{}),
 		reverseDepMap:   make(map[types.Hash32][]interface{}),
 		callbacks:       make(map[interface{}]func(res bool) error),
-		ValidationInfra: msh,
+		validationInfra: msh,
 	}
 	vq.handleFetch = vq.handleBlocks
 	go vq.work()
@@ -129,7 +128,7 @@ func (vq *blockQueue) finishBlockCallback(block *types.Block) func(res bool) err
 
 		//validate block's votes
 		if valid, err := validateVotes(block, vq.ForBlockInView, vq.Hdist, vq.Log); valid == false || err != nil {
-			return errors.New(fmt.Sprintf("validate votes failed for block %s %s", block.Id(), err))
+			return fmt.Errorf("validate votes failed for block %s %s", block.Id(), err)
 		}
 
 		err = vq.AddBlockWithTxs(block, txs, atxs)
@@ -198,14 +197,14 @@ func (vq *blockQueue) removefromDepMaps(block types.Hash32, valid bool, doneBloc
 	return doneBlocks
 }
 
-func (vq *blockQueue) addDependencies(jobId interface{}, blks []types.BlockID, finishCallback func(res bool) error) (bool, error) {
+func (vq *blockQueue) addDependencies(jobID interface{}, blks []types.BlockID, finishCallback func(res bool) error) (bool, error) {
 
 	defer vq.shutdownRecover()
 
 	vq.Lock()
-	if _, ok := vq.callbacks[jobId]; ok {
+	if _, ok := vq.callbacks[jobID]; ok {
 		vq.Unlock()
-		return false, fmt.Errorf("job %s already exsits", jobId)
+		return false, fmt.Errorf("job %s already exsits", jobID)
 	}
 
 	dependencys := make(map[types.Hash32]struct{})
@@ -213,15 +212,15 @@ func (vq *blockQueue) addDependencies(jobId interface{}, blks []types.BlockID, f
 	for _, id := range blks {
 		bid := id.AsHash32()
 		if vq.inQueue(bid) {
-			vq.reverseDepMap[bid] = append(vq.reverseDepMap[bid], jobId)
-			vq.Debug("add block %v to %v pending map", id, jobId)
+			vq.reverseDepMap[bid] = append(vq.reverseDepMap[bid], jobID)
+			vq.Debug("add block %v to %v pending map", id, jobID)
 			dependencys[bid] = struct{}{}
 		} else {
 			//	check database
 			if _, err := vq.GetBlock(id); err != nil {
 				//unknown block add to queue
-				vq.reverseDepMap[bid] = append(vq.reverseDepMap[bid], jobId)
-				vq.Debug("add block %v to %v pending map", id, jobId)
+				vq.reverseDepMap[bid] = append(vq.reverseDepMap[bid], jobID)
+				vq.Debug("add block %v to %v pending map", id, jobID)
 				dependencys[bid] = struct{}{}
 				idsToPush = append(idsToPush, id.AsHash32())
 			}
@@ -235,18 +234,18 @@ func (vq *blockQueue) addDependencies(jobId interface{}, blks []types.BlockID, f
 	}
 
 	//add callback to job
-	vq.callbacks[jobId] = finishCallback
+	vq.callbacks[jobID] = finishCallback
 
 	//add dependencies to job
-	vq.depMap[jobId] = dependencys
+	vq.depMap[jobID] = dependencys
 
 	// addToPending needs the mutex so we must release before
 	vq.Unlock()
 	if len(idsToPush) > 0 {
-		vq.Debug("add %v to queue %v", len(idsToPush), jobId)
+		vq.Debug("add %v to queue %v", len(idsToPush), jobID)
 		vq.addToPending(idsToPush)
 	}
 
-	vq.Debug("added %v dependencies to %s", len(dependencys), jobId)
+	vq.Debug("added %v dependencies to %s", len(dependencys), jobID)
 	return true, nil
 }

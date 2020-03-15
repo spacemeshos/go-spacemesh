@@ -24,13 +24,13 @@ func newMilliTimer(sum prometheus.Summary) *prometheus.Timer {
 }
 
 func newFetchRequestTimer(msgtype server.MessageType) *prometheus.Timer {
-	if msgtype == BLOCK {
+	if msgtype == blockMsg {
 		return newMilliTimer(blockTime)
 	}
-	if msgtype == TX {
+	if msgtype == txMsg {
 		return newMilliTimer(txTime)
 	}
-	if msgtype == ATX {
+	if msgtype == atxMsg {
 		return newMilliTimer(atxTime)
 	}
 

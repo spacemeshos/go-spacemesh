@@ -15,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sync/fetch"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/sha256-simd"
 	"github.com/stretchr/testify/assert"
@@ -60,15 +61,15 @@ var commitment = &types.PostProof{
 	ProvenLeaves: [][]byte(nil),
 }
 
-func newMemPoetDb() PoetDb {
+func newMemPoetDb() poetDb {
 	return activation.NewPoetDb(database.NewMemDatabase(), log.NewDefault("poetDb"))
 }
 
-func newMockPoetDb() PoetDb {
-	return &PoetDbMock{}
+func newMockPoetDb() poetDb {
+	return &poetDbMock{}
 }
 
-func SyncMockFactory(number int, conf Configuration, name string, dbType string, poetDb func() PoetDb) (syncs []*Syncer, p2ps []*service.Node, ticker *timesync.TimeClock) {
+func SyncMockFactory(number int, conf Configuration, name string, dbType string, poetDb func() poetDb) (syncs []*Syncer, p2ps []*service.Node, ticker *timesync.TimeClock) {
 	nodes := make([]*Syncer, 0, number)
 	p2ps = make([]*service.Node, 0, number)
 	sim := service.NewSimulator()
@@ -104,7 +105,7 @@ func (stateMock) ValidateNonceAndBalance(transaction *types.Transaction) error {
 	return nil
 }
 
-func (stateMock) GetLayerApplied(txId types.TransactionId) *types.LayerID {
+func (stateMock) GetLayerApplied(txID types.TransactionId) *types.LayerID {
 	return nil
 }
 
@@ -141,7 +142,7 @@ func getMeshWithLevelDB(id string) *mesh.Mesh {
 	mshdb, _ := mesh.NewPersistentMeshDB(id, 5, lg)
 	atxdbStore, _ := database.NewLDBDatabase(id+"atx", 0, 0, lg.WithOptions(log.Nop))
 	atxdb := activation.NewActivationDb(atxdbStore, &MockIStore{}, mshdb, 10, &ValidatorMock{}, lg.WithOptions(log.Nop))
-	return mesh.NewMesh(mshdb, atxdb, rewardConf, &MeshValidatorMock{}, &MockTxMemPool{}, &MockAtxMemPool{}, &stateMock{}, lg.WithOptions(log.Nop))
+	return mesh.NewMesh(mshdb, atxdb, rewardConf, &MeshValidatorMock{}, &mockTxMemPool{}, &mockAtxMemPool{}, &stateMock{}, lg.WithOptions(log.Nop))
 }
 
 func persistenceTeardown() {
@@ -152,7 +153,7 @@ func getMeshWithMemoryDB(id string) *mesh.Mesh {
 	lg := log.New(id, "", "")
 	mshdb := mesh.NewMemMeshDB(lg)
 	atxdb := activation.NewActivationDb(database.NewMemDatabase(), &MockIStore{}, mshdb, 10, &ValidatorMock{}, lg.WithName("atxDB"))
-	return mesh.NewMesh(mshdb, atxdb, rewardConf, &MeshValidatorMock{}, &MockTxMemPool{}, &MockAtxMemPool{}, &stateMock{}, lg)
+	return mesh.NewMesh(mshdb, atxdb, rewardConf, &MeshValidatorMock{}, &mockTxMemPool{}, &mockAtxMemPool{}, &stateMock{}, lg)
 }
 
 func getMesh(dbType, id string) *mesh.Mesh {
@@ -217,18 +218,18 @@ func TestSyncProtocol_BlockRequest(t *testing.T) {
 	block := types.NewExistingBlock(1, []byte(rand.RandString(8)))
 
 	syncObj.AddBlockWithTxs(block, []*types.Transaction{tx1}, []*types.ActivationTx{atx1})
-	syncObj2.Peers = getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
+	syncObj2.peers = getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
 
 	ch := make(chan []types.Hash32, 1)
 	ch <- []types.Hash32{block.Hash32()}
 
-	output := fetchWithFactory(NewFetchWorker(syncObj2, 1, newFetchReqFactory(BLOCK, blocksAsItems), ch, ""))
+	output := fetchWithFactory(newFetchWorker(syncObj2, 1, newFetchReqFactory(block, blocksAsItems), ch, ""))
 
 	timeout := time.NewTimer(2 * time.Second)
-	emptyId := types.BlockID{}
+	emptyID := types.BlockID{}
 	select {
 	case a := <-output:
-		assert.NotEqual(t, a.(fetchJob).items[0].(*types.Block).Id(), emptyId, "id not set")
+		assert.NotEqual(t, a.(fetchJob).items[0].(*types.Block).Id(), emptyID, "id not set")
 		assert.Equal(t, a.(fetchJob).ids[0], block.Hash32(), "wrong block")
 	case <-timeout.C:
 		assert.Fail(t, "no message received on channel")
@@ -251,7 +252,7 @@ func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 	syncObj1.AddBlockWithTxs(block, []*types.Transaction{tx1}, []*types.ActivationTx{atx1})
 	timeout := time.NewTimer(2 * time.Second)
 
-	wrk := NewPeersWorker(syncObj2, []p2p.Peer{nodes[0].PublicKey()}, &sync.Once{}, HashReqFactory(lid))
+	wrk := newPeersWorker(syncObj2, []p2p.Peer{nodes[0].PublicKey()}, &sync.Once{}, hashReqFactory(lid))
 	go wrk.Work()
 
 	select {
@@ -268,7 +269,7 @@ func TestSyncer_FetchPoetProofAvailableAndValid(t *testing.T) {
 	syncs, nodes, _ := SyncMockFactory(2, conf, t.Name(), memoryDB, newMemPoetDb)
 	s0 := syncs[0]
 	s1 := syncs[1]
-	s1.Peers = getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
+	s1.peers = getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
 
 	proofMessage := makePoetProofMessage(t)
 
@@ -289,7 +290,7 @@ func TestSyncer_SyncAtxs_FetchPoetProof(t *testing.T) {
 	syncs, nodes, _ := SyncMockFactory(2, conf, t.Name(), memoryDB, newMemPoetDb)
 	s0 := syncs[0]
 	s1 := syncs[1]
-	s1.Peers = getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
+	s1.peers = getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
 
 	// Store a poet proof and a respective atx in s0.
 
@@ -332,13 +333,13 @@ func makePoetProofMessage(t *testing.T) types.PoetProofMessage {
 	_, err = xdr.Unmarshal(file, &poetProof)
 	r.NoError(err)
 	r.EqualValues([][]byte{[]byte("1"), []byte("2"), []byte("3")}, poetProof.Members)
-	poetId := []byte("poet_id_12345")
-	roundId := "1337"
+	poetID := []byte("poet_id_12345")
+	roundID := "1337"
 
 	return types.PoetProofMessage{
 		PoetProof:     poetProof,
-		PoetServiceId: poetId,
-		RoundId:       roundId,
+		PoetServiceId: poetID,
+		RoundId:       roundID,
 		Signature:     nil,
 	}
 }
@@ -371,7 +372,7 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 
 	timeout := time.NewTimer(2 * time.Second)
 
-	wrk := NewPeersWorker(syncObj, []p2p.Peer{nodes[1].PublicKey()}, &sync.Once{}, LayerIdsReqFactory(lid))
+	wrk := newPeersWorker(syncObj, []p2p.Peer{nodes[1].PublicKey()}, &sync.Once{}, layerIdsReqFactory(lid))
 	go wrk.Work()
 
 	select {
@@ -407,7 +408,7 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	defer syncObj2.Close()
 	pm1 := getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
 	syncObj1.Log.Info("started fetch_blocks")
-	syncObj2.Peers = pm1 //override peers with
+	syncObj2.peers = pm1 //override peers with
 
 	err := syncObj1.ProcessAtxs([]*types.ActivationTx{atx3})
 	assert.NoError(t, err)
@@ -430,7 +431,7 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	ch <- []types.Hash32{block2.Hash32()}
 	ch <- []types.Hash32{block3.Hash32()}
 	close(ch)
-	output := fetchWithFactory(NewFetchWorker(syncObj2, 1, newFetchReqFactory(BLOCK, blocksAsItems), ch, ""))
+	output := fetchWithFactory(newFetchWorker(syncObj2, 1, fetch.newFetchReqFactory(blockMsg, fetch.blocksAsItems), ch, ""))
 
 	for out := range output {
 		block := out.(fetchJob).items[0].(*types.Block)
@@ -455,15 +456,15 @@ func TestSyncProtocol_SyncNodes(t *testing.T) {
 	pm2 := getPeersMock([]p2p.Peer{nodes[2].PublicKey()})
 	pm3 := getPeersMock([]p2p.Peer{nodes[0].PublicKey(), nodes[1].PublicKey()})
 	syncObj1 := syncs[0]
-	syncObj1.Peers = pm1 //override peers with mock
+	syncObj1.peers = pm1 //override peers with mock
 	defer syncObj1.Close()
 
 	syncObj2 := syncs[1]
-	syncObj2.Peers = pm2 //override peers with mock
+	syncObj2.peers = pm2 //override peers with mock
 	defer syncObj2.Close()
 
 	syncObj3 := syncs[2]
-	syncObj3.Peers = pm3 //override peers with mock
+	syncObj3.peers = pm3 //override peers with mock
 	defer syncObj3.Close()
 	defer ts.Close()
 
@@ -504,17 +505,17 @@ func TestSyncProtocol_SyncNodes(t *testing.T) {
 	syncObj2.AddBlockWithTxs(block9, []*types.Transaction{tx7, tx8}, []*types.ActivationTx{})
 	syncObj2.AddBlockWithTxs(block10, []*types.Transaction{tx7, tx8}, []*types.ActivationTx{})
 
-	syncObj1.GetAndValidateLayer(1)
-	syncObj1.GetAndValidateLayer(2)
-	syncObj1.GetAndValidateLayer(3)
-	syncObj1.GetAndValidateLayer(4)
-	syncObj1.GetAndValidateLayer(5)
+	syncObj1.getAndValidateLayer(1)
+	syncObj1.getAndValidateLayer(2)
+	syncObj1.getAndValidateLayer(3)
+	syncObj1.getAndValidateLayer(4)
+	syncObj1.getAndValidateLayer(5)
 
-	syncObj2.GetAndValidateLayer(1)
-	syncObj2.GetAndValidateLayer(2)
-	syncObj2.GetAndValidateLayer(3)
-	syncObj2.GetAndValidateLayer(4)
-	syncObj2.GetAndValidateLayer(5)
+	syncObj2.getAndValidateLayer(1)
+	syncObj2.getAndValidateLayer(2)
+	syncObj2.getAndValidateLayer(3)
+	syncObj2.getAndValidateLayer(4)
+	syncObj2.getAndValidateLayer(5)
 
 	syncObj3.SyncInterval = time.Millisecond * 20
 	syncObj3.Start()
@@ -564,10 +565,10 @@ func syncTest(dpType string, t *testing.T) {
 	n2 := nodes[1]
 	//n4 := nodes[3]
 
-	syncObj1.Peers = getPeersMock([]p2p.Peer{n2.PublicKey()})
-	syncObj2.Peers = getPeersMock([]p2p.Peer{n1.PublicKey()})
-	syncObj3.Peers = getPeersMock([]p2p.Peer{n1.PublicKey()})
-	syncObj4.Peers = getPeersMock([]p2p.Peer{n1.PublicKey()})
+	syncObj1.peers = getPeersMock([]p2p.Peer{n2.PublicKey()})
+	syncObj2.peers = getPeersMock([]p2p.Peer{n1.PublicKey()})
+	syncObj3.peers = getPeersMock([]p2p.Peer{n1.PublicKey()})
+	syncObj4.peers = getPeersMock([]p2p.Peer{n1.PublicKey()})
 
 	signer := signing.NewEdSigner()
 
@@ -943,13 +944,13 @@ func TestSyncer_Txs(t *testing.T) {
 	pm2 := getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
 	pm3 := getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
 	syncObj1 := syncs[0]
-	syncObj1.Peers = pm1 //override peers with mock
+	syncObj1.peers = pm1 //override peers with mock
 	defer syncObj1.Close()
 	syncObj2 := syncs[1]
-	syncObj2.Peers = pm2 //override peers with mock
+	syncObj2.peers = pm2 //override peers with mock
 	defer syncObj2.Close()
 	syncObj3 := syncs[2]
-	syncObj3.Peers = pm3 //override peers with mock
+	syncObj3.peers = pm3 //override peers with mock
 	defer syncObj3.Close()
 
 	block3 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
@@ -974,13 +975,13 @@ func TestFetchLayerBlockIds(t *testing.T) {
 	block2 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
 
 	syncObj1 := syncs[0]
-	syncObj1.Peers = pm1 //override peers with mock
+	syncObj1.peers = pm1 //override peers with mock
 	defer syncObj1.Close()
 	syncObj2 := syncs[1]
-	syncObj2.Peers = pm2 //override peers with mock
+	syncObj2.peers = pm2 //override peers with mock
 	defer syncObj2.Close()
 	syncObj3 := syncs[2]
-	syncObj3.Peers = pm3 //override peers with mock
+	syncObj3.peers = pm3 //override peers with mock
 	defer syncObj3.Close()
 
 	syncObj1.AddBlock(block1)
@@ -1006,7 +1007,7 @@ func TestFetchLayerBlockIds(t *testing.T) {
 	}
 
 	syncObj3.handleNotSynced(2)
-	assert.NoError(t, syncObj3.GetAndValidateLayer(2))
+	assert.NoError(t, syncObj3.getAndValidateLayer(2))
 	l, err := syncObj3.GetLayer(2)
 	assert.NoError(t, err)
 	assert.True(t, len(l.Blocks()) == 0)
@@ -1062,14 +1063,14 @@ func TestSyncer_Synchronise(t *testing.T) {
 	sync.AddBlock(types.NewExistingBlock(3, []byte(rand.RandString(8))))
 	lv = &mockLayerValidator{1, 0, 0, nil}
 	sync.Mesh.Validator = lv
-	sync.TickProvider = &MockClock{Layer: 3}
+	sync.ticker = &MockClock{Layer: 3}
 	sr()
 	time.Sleep(100 * time.Millisecond) // handle go routine race
 	r.Equal(1, lv.countValidate)       // synced, expect only one call
 
 	lv = &mockLayerValidator{1, 0, 0, nil}
 	sync.Mesh.Validator = lv
-	sync.TickProvider = &MockClock{Layer: 4} // simulate not synced
+	sync.ticker = &MockClock{Layer: 4} // simulate not synced
 	sr()
 	time.Sleep(100 * time.Millisecond) // handle go routine race
 }
@@ -1086,40 +1087,40 @@ func TestSyncer_Synchronise2(t *testing.T) {
 
 	lv := &mockLayerValidator{0, 0, 0, nil}
 	sync.Mesh.Validator = lv
-	sync.TickProvider = &MockClock{Layer: 1}
-	r.False(sync.gossipSynced == Done)
+	sync.ticker = &MockClock{Layer: 1}
+	r.False(sync.gossipSynced == done)
 
 	// current layer = 0
-	sync.TickProvider = &MockClock{Layer: 0}
+	sync.ticker = &MockClock{Layer: 0}
 	sync.synchronise()
 	r.Equal(0, lv.countValidate)
-	r.True(sync.gossipSynced == Done)
+	r.True(sync.gossipSynced == done)
 
 	// current layer = 1
-	sync.TickProvider = &MockClock{Layer: 1}
+	sync.ticker = &MockClock{Layer: 1}
 	sync.synchronise()
 	r.Equal(0, lv.countValidate)
-	r.True(sync.gossipSynced == Done)
+	r.True(sync.gossipSynced == done)
 
 	// current layer != 1 && weakly-synced
 	lv = &mockLayerValidator{0, 0, 0, nil}
 	sync.Mesh.Validator = lv
-	sync.TickProvider = &MockClock{Layer: 2}
+	sync.ticker = &MockClock{Layer: 2}
 	sync.SetLatestLayer(2)
 	sync.synchronise()
 	r.Equal(1, lv.countValidate)
-	r.True(sync.gossipSynced == Done)
+	r.True(sync.gossipSynced == done)
 
 	// validated layer = 5 && current layer = 6 -> don't call validate
 	lv = &mockLayerValidator{5, 0, 0, nil}
 	sync.Mesh.Validator = lv
-	sync.TickProvider = &MockClock{Layer: 6}
+	sync.ticker = &MockClock{Layer: 6}
 	sync.SetLatestLayer(5)
 	log.Info("damn ", sync.ProcessedLayer())
 	sync.synchronise()
 	log.Info("damn ", sync.ProcessedLayer())
 	r.Equal(0, lv.countValidate)
-	r.True(sync.gossipSynced == Done)
+	r.True(sync.gossipSynced == done)
 }
 
 func TestSyncer_ListenToGossip(t *testing.T) {
@@ -1129,9 +1130,9 @@ func TestSyncer_ListenToGossip(t *testing.T) {
 	sync.AddBlockWithTxs(types.NewExistingBlock(1, []byte(rand.RandString(8))), nil, nil)
 	lv := &mockLayerValidator{0, 0, 0, nil}
 	sync.Mesh.Validator = lv
-	sync.TickProvider = &MockClock{Layer: 1}
+	sync.ticker = &MockClock{Layer: 1}
 	sync.SetLatestLayer(1)
-	r.False(sync.gossipSynced == Done)
+	r.False(sync.gossipSynced == done)
 	assert.False(t, sync.ListenToGossip())
 
 	//run sync
@@ -1249,7 +1250,7 @@ func TestSyncer_ConcurrentSynchronise(t *testing.T) {
 	r := require.New(t)
 	syncs, _, _ := SyncMockFactory(1, conf, t.Name(), memoryDB, newMockPoetDb)
 	sync := syncs[0]
-	sync.TickProvider = &MockClock{Layer: 3}
+	sync.ticker = &MockClock{Layer: 3}
 	lv := &mockTimedValidator{1 * time.Second, 0}
 	sync.Validator = lv
 	sync.AddBlock(types.NewExistingBlock(1, []byte(rand.RandString(8))))
@@ -1267,10 +1268,10 @@ func TestSyncProtocol_NilResponse(t *testing.T) {
 	defer syncs[0].Close()
 	defer syncs[1].Close()
 
-	var nonExistingLayerId = types.LayerID(0)
-	var nonExistingBlockId = types.BlockID{}
-	var nonExistingTxId types.TransactionId
-	var nonExistingAtxId types.AtxId
+	var nonExistingLayerID = types.LayerID(0)
+	var nonExistingBlockID = types.BlockID{}
+	var nonExistingTxID types.TransactionId
+	var nonExistingAtxID types.AtxId
 	var nonExistingPoetRef []byte
 
 	timeout := 1 * time.Second
@@ -1278,7 +1279,7 @@ func TestSyncProtocol_NilResponse(t *testing.T) {
 
 	// Layer Hash
 
-	wrk := NewPeersWorker(syncs[0], []p2p.Peer{nodes[1].PublicKey()}, &sync.Once{}, HashReqFactory(nonExistingLayerId))
+	wrk := newPeersWorker(syncs[0], []p2p.Peer{nodes[1].PublicKey()}, &sync.Once{}, hashReqFactory(nonExistingLayerID))
 	go wrk.Work()
 
 	select {
@@ -1290,7 +1291,7 @@ func TestSyncProtocol_NilResponse(t *testing.T) {
 
 	// Layer Block Ids
 
-	wrk = NewPeersWorker(syncs[0], []p2p.Peer{nodes[1].PublicKey()}, &sync.Once{}, LayerIdsReqFactory(nonExistingLayerId))
+	wrk = newPeersWorker(syncs[0], []p2p.Peer{nodes[1].PublicKey()}, &sync.Once{}, layerIdsReqFactory(nonExistingLayerID))
 	go wrk.Work()
 
 	select {
@@ -1302,9 +1303,9 @@ func TestSyncProtocol_NilResponse(t *testing.T) {
 
 	// Block
 	bch := make(chan []types.Hash32, 1)
-	bch <- []types.Hash32{nonExistingBlockId.AsHash32()}
+	bch <- []types.Hash32{nonExistingBlockID.AsHash32()}
 
-	output := fetchWithFactory(NewFetchWorker(syncs[0], 1, newFetchReqFactory(BLOCK, blocksAsItems), bch, ""))
+	output := fetchWithFactory(newFetchWorker(syncs[0], 1, newFetchReqFactory(blockMsg, blocksAsItems), bch, ""))
 
 	select {
 	case out := <-output:
@@ -1315,7 +1316,7 @@ func TestSyncProtocol_NilResponse(t *testing.T) {
 
 	// Tx
 
-	ch := syncs[0].txQueue.addToPendingGetCh([]types.Hash32{nonExistingTxId.Hash32()})
+	ch := syncs[0].txQueue.addToPendingGetCh([]types.Hash32{nonExistingTxID.Hash32()})
 	select {
 	case out := <-ch:
 		assert.False(t, out)
@@ -1324,7 +1325,7 @@ func TestSyncProtocol_NilResponse(t *testing.T) {
 	}
 
 	// Atx
-	ch = syncs[0].atxQueue.addToPendingGetCh([]types.Hash32{nonExistingAtxId.Hash32()})
+	ch = syncs[0].atxQueue.addToPendingGetCh([]types.Hash32{nonExistingAtxID.Hash32()})
 	// PoET
 	select {
 	case out := <-ch:
@@ -1333,7 +1334,7 @@ func TestSyncProtocol_NilResponse(t *testing.T) {
 
 	}
 
-	output = fetchWithFactory(NewNeighborhoodWorker(syncs[0], 1, PoetReqFactory(nonExistingPoetRef)))
+	output = fetchWithFactory(newNeighborhoodWorker(syncs[0], 1, poetReqFactory(nonExistingPoetRef)))
 
 	select {
 	case out := <-output:
@@ -1386,10 +1387,10 @@ func TestSyncProtocol_BadResponse(t *testing.T) {
 	}
 
 	//register mocks
-	syncs[1].RegisterBytesMsgHandler(LAYER_HASH, layerHashesMock)
-	syncs[1].RegisterBytesMsgHandler(BLOCK, blockHandlerMock)
-	syncs[1].RegisterBytesMsgHandler(TX, txHandlerMock)
-	syncs[1].RegisterBytesMsgHandler(ATX, atxHandlerMock)
+	syncs[1].RegisterBytesMsgHandler(layerHashMsg, layerHashesMock)
+	syncs[1].RegisterBytesMsgHandler(blockMsg, blockHandlerMock)
+	syncs[1].RegisterBytesMsgHandler(txMsg, txHandlerMock)
+	syncs[1].RegisterBytesMsgHandler(atxMsg, atxHandlerMock)
 
 	// layer hash
 	_, err1 := syncs[0].getLayerFromNeighbors(types.LayerID(1))
@@ -1399,7 +1400,7 @@ func TestSyncProtocol_BadResponse(t *testing.T) {
 	// Block
 	ch := make(chan []types.Hash32, 1)
 	ch <- []types.Hash32{bl1.Id().AsHash32()}
-	output := fetchWithFactory(NewFetchWorker(syncs[0], 1, newFetchReqFactory(BLOCK, blocksAsItems), ch, ""))
+	output := fetchWithFactory(newFetchWorker(syncs[0], 1, newFetchReqFactory(blockMsg, blocksAsItems), ch, ""))
 
 	select {
 	case out := <-output:
@@ -1411,7 +1412,7 @@ func TestSyncProtocol_BadResponse(t *testing.T) {
 	// Tx
 	ch = make(chan []types.Hash32, 1)
 	ch <- []types.Hash32{[32]byte{1}}
-	output = fetchWithFactory(NewFetchWorker(syncs[0], 1, newFetchReqFactory(TX, txsAsItems), ch, ""))
+	output = fetchWithFactory(newFetchWorker(syncs[0], 1, newFetchReqFactory(txMsg, txsAsItems), ch, ""))
 
 	select {
 	case out := <-output:
@@ -1423,7 +1424,7 @@ func TestSyncProtocol_BadResponse(t *testing.T) {
 	// Atx
 	ch = make(chan []types.Hash32, 1)
 	ch <- []types.Hash32{[32]byte{1}}
-	output = fetchWithFactory(NewFetchWorker(syncs[0], 1, newFetchReqFactory(ATX, atxsAsItems), ch, ""))
+	output = fetchWithFactory(newFetchWorker(syncs[0], 1, newFetchReqFactory(atxMsg, atxsAsItems), ch, ""))
 
 	select {
 	case out := <-output:
@@ -1434,7 +1435,7 @@ func TestSyncProtocol_BadResponse(t *testing.T) {
 
 	// PoET
 
-	output = fetchWithFactory(NewNeighborhoodWorker(syncs[0], 1, PoetReqFactory([]byte{1})))
+	output = fetchWithFactory(newNeighborhoodWorker(syncs[0], 1, poetReqFactory([]byte{1})))
 
 	select {
 	case out := <-output:
@@ -1538,7 +1539,7 @@ func TestSyncer_Await(t *testing.T) {
 	r.NoError(err)
 	lv := &mockLayerValidator{0, 0, 0, nil}
 	syncer.Mesh.Validator = lv
-	syncer.TickProvider = &MockClock{Layer: 1}
+	syncer.ticker = &MockClock{Layer: 1}
 	syncer.SetLatestLayer(1)
 
 	ch := syncer.Await()
@@ -1554,7 +1555,7 @@ func TestSyncer_Await_LowLevel(t *testing.T) {
 	r := require.New(t)
 
 	syncer := &Syncer{
-		gossipSynced: Pending,
+		gossipSynced: pending,
 		awaitCh:      make(chan struct{}),
 		Log:          log.New("", "", ""),
 	}
@@ -1562,32 +1563,32 @@ func TestSyncer_Await_LowLevel(t *testing.T) {
 	ch := syncer.Await()
 	r.False(closed(ch))
 
-	// Pending -> InProgress keeps the channel open
-	syncer.setGossipBufferingStatus(InProgress)
+	// pending -> inProgress keeps the channel open
+	syncer.setGossipBufferingStatus(inProgress)
 	r.False(closed(ch))
 
-	// InProgress -> InProgress has no effect
-	syncer.setGossipBufferingStatus(InProgress)
+	// inProgress -> inProgress has no effect
+	syncer.setGossipBufferingStatus(inProgress)
 	r.False(closed(ch))
 
-	// InProgress -> Done closes the channel
-	syncer.setGossipBufferingStatus(Done)
+	// inProgress -> done closes the channel
+	syncer.setGossipBufferingStatus(done)
 	r.True(closed(ch))
 
-	// Done -> Done has no effect
-	syncer.setGossipBufferingStatus(Done)
+	// done -> done has no effect
+	syncer.setGossipBufferingStatus(done)
 	r.True(closed(ch))
 
-	// Done -> Pending...
-	syncer.setGossipBufferingStatus(Pending)
+	// done -> pending...
+	syncer.setGossipBufferingStatus(pending)
 	// ...the channel from the previous call to `Await()` should still be closed...
 	r.True(closed(ch))
 	// ...but a new call to `Await()` should provide a new, open channel
 	newCh := syncer.Await()
 	r.False(closed(newCh))
 
-	// Pending -> Done should close the new channel
-	syncer.setGossipBufferingStatus(Done)
+	// pending -> done should close the new channel
+	syncer.setGossipBufferingStatus(done)
 	r.True(closed(newCh))
 }
 
