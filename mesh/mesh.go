@@ -193,13 +193,13 @@ func (m *Mesh) LatestLayer() types.LayerID {
 func (m *Mesh) SetLatestLayer(idx types.LayerID) {
 	defer m.lkMutex.Unlock()
 	m.lkMutex.Lock()
-	//if idx > m.latestLayer {
-	m.Info("set latest known layer to %v", idx)
-	m.latestLayer = idx
-	if err := m.general.Put(LATEST, idx.ToBytes()); err != nil {
-		m.Error("could not persist Latest layer index")
+	if idx > m.latestLayer {
+		m.Info("set latest known layer to %v", idx)
+		m.latestLayer = idx
+		if err := m.general.Put(LATEST, idx.ToBytes()); err != nil {
+			m.Error("could not persist Latest layer index")
+		}
 	}
-	//}
 }
 
 func (m *Mesh) GetLayer(index types.LayerID) (*types.Layer, error) {
