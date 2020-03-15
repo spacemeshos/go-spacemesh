@@ -36,7 +36,7 @@ func NewRecoveredTortoise(mdb *mesh.MeshDB, lg log.Log) Tortoise {
 	trtl := tmp.(*ninjaTortoise)
 
 	lg.Info("recovered tortoise from disc")
-	trtl.database = mdb
+	trtl.db = mdb
 	trtl.logger = lg
 
 	return &tortoise{ninjaTortoise: trtl}

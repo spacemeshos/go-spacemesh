@@ -50,8 +50,7 @@ func getMeshForBench() *mesh.MeshDB {
 
 func TestAlgorithm_HandleLateBlock(t *testing.T) {
 	mdb := getMeshForBench()
-	alg := NewNinjaTortoise(8, mdb, 5, log.New("", "", ""))
-	a := tortoise{NinjaTortoise: alg}
+	a := tortoise{ninjaTortoise: NewNinjaTortoise(8, mdb, 5, log.New("", "", ""))}
 	blk := types.NewExistingBlock(5, []byte("asdfasdfdgadsgdgr"))
 	a.HandleLateBlock(blk)
 	assert.True(t, blk.Layer() == types.LayerID(5))
@@ -129,7 +128,7 @@ func TestNinjaTortoise_evict(t *testing.T) {
 			t.Fail()
 		}
 
-		ids, _ := ni.LayerBlockIds(49)
+		ids, _ := ni.db.LayerBlockIds(49)
 		for _, j := range ids {
 			if _, ok := ni.TEffective[j]; ok {
 				t.Fail()
@@ -208,7 +207,7 @@ func TestNinjaTortoise_VariableLayerSize(t *testing.T) {
 	AddLayer(mdb, l9)
 	ni.handleIncomingLayer(l9)
 
-	assert.True(t, ni.(ninjaTortoise).PBase.Layer() == 8)
+	assert.True(t, ni.PBase.Layer() == 8)
 
 }
 
@@ -841,7 +840,7 @@ func TestNinjaTortoise_Sanity1(t *testing.T) {
 	assert.True(t, alg.PBase.Layer() == types.LayerID(layers-1))
 }
 
-func sanity(t *testing.T, mdb *database.MeshDB, layers int, layerSize int, patternSize int, badBlks float64) *ninjaTortoise {
+func sanity(t *testing.T, mdb *mesh.MeshDB, layers int, layerSize int, patternSize int, badBlks float64) *ninjaTortoise {
 	lg := log.New(t.Name(), "", "")
 	l1 := mesh.GenesisLayer()
 	var lyrs []*types.Layer
@@ -900,7 +899,7 @@ func TestNinjaTortoise_Sanity2(t *testing.T) {
 	alg.handleIncomingLayer(l4)
 	alg.handleIncomingLayer(l5)
 	for b, vec := range alg.TTally[alg.PBase] {
-		alg.Debug("------> tally for block %d according to complete pattern %d are %d", b, alg.PBase, vec)
+		alg.logger.Debug("------> tally for block %d according to complete pattern %d are %d", b, alg.PBase, vec)
 	}
 	assert.True(t, alg.TTally[alg.PBase][blockIDLayerTuple{BlockID: l.Blocks()[0].Id(), LayerID: l.Blocks()[0].Layer()}] == vec{12, 0}, "lyr %d tally was %d insted of %d", 0, alg.TTally[alg.PBase][blockIDLayerTuple{BlockID: l.Blocks()[0].Id(), LayerID: l.Blocks()[0].Layer()}], vec{12, 0})
 }
@@ -981,7 +980,7 @@ func chooseRandomPattern(blocksInLayer int, patternSize int) []int {
 	return indexes
 }
 
-func AddLayer(m *database.MeshDB, layer *types.Layer) error {
+func AddLayer(m *mesh.MeshDB, layer *types.Layer) error {
 	//add blocks to mDB
 	for _, bl := range layer.Blocks() {
 		if err := m.AddBlock(bl); err != nil {
@@ -996,22 +995,22 @@ func TestNinjaTortoise_Recovery(t *testing.T) {
 	lg := log.New(t.Name(), "", "")
 
 	mdb := getPersistentMash()
-	alg := NewNinjaTortoise(3, mdb, 5, lg)
+	alg := NewTortoise(3, mdb, 5, lg)
 	l := mesh.GenesisLayer()
 	AddLayer(mdb, l)
 
-	alg.handleIncomingLayer(l)
+	alg.HandleIncomingLayer(l)
 	alg.Persist()
 
 	l1 := createLayer(1, []*types.Layer{l}, 3)
 	AddLayer(mdb, l1)
 
-	alg.handleIncomingLayer(l1)
+	alg.HandleIncomingLayer(l1)
 	alg.Persist()
 
 	l2 := createLayer(2, []*types.Layer{l1, l}, 3)
 	AddLayer(mdb, l2)
-	alg.handleIncomingLayer(l2)
+	alg.HandleIncomingLayer(l2)
 	alg.Persist()
 
 	l31 := createLayer(3, []*types.Layer{l1, l}, 4)
@@ -1023,21 +1022,21 @@ func TestNinjaTortoise_Recovery(t *testing.T) {
 		}
 		alg := NewRecoveredTortoise(mdb, lg)
 
-		alg.handleIncomingLayer(l2)
+		alg.HandleIncomingLayer(l2)
 
 		l3 := createLayer(3, []*types.Layer{l2, l}, 3)
 		AddLayer(mdb, l3)
-		alg.handleIncomingLayer(l3)
+		alg.HandleIncomingLayer(l3)
 		alg.Persist()
 
 		l4 := createLayer(4, []*types.Layer{l3, l2}, 3)
 		AddLayer(mdb, l4)
-		alg.handleIncomingLayer(l4)
+		alg.HandleIncomingLayer(l4)
 		alg.Persist()
 
 		assert.True(t, alg.LatestComplete() == 3)
 		return
 	}()
 
-	alg.handleIncomingLayer(l32) //crash
+	alg.HandleIncomingLayer(l32) //crash
 }

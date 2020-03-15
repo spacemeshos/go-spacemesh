@@ -84,7 +84,7 @@ type database interface {
 }
 
 type ninjaTortoise struct {
-	database     //block cache
+	db           database //block cache
 	logger       log.Log
 	mutex        sync.Mutex
 	Last         types.LayerID
@@ -112,9 +112,9 @@ type ninjaTortoise struct {
 }
 
 //NewNinjaTortoise create a new ninja tortoise instance
-func NewNinjaTortoise(layerSize int, blocks database, hdist int, log log.Log) NinjaTortoise {
+func NewNinjaTortoise(layerSize int, blocks database, hdist int, log log.Log) *ninjaTortoise {
 
-	trtl := &ninjaTortoise{logger: log, database: blocks,
+	trtl := &ninjaTortoise{logger: log, db: blocks,
 		Hdist:        types.LayerID(hdist),
 		AvgLayerSize: layerSize,
 		PBase:        zeroPattern,
@@ -140,7 +140,7 @@ func NewNinjaTortoise(layerSize int, blocks database, hdist int, log log.Log) Ni
 func (ni *ninjaTortoise) saveOpinion() error {
 	for b, vec := range ni.TVote[ni.PBase] {
 		valid := vec == support
-		if err := ni.SaveContextualValidity(b.id(), valid); err != nil {
+		if err := ni.db.SaveContextualValidity(b.id(), valid); err != nil {
 			return err
 		}
 
@@ -157,7 +157,7 @@ func (ni *ninjaTortoise) persist() error {
 	if err := ni.saveOpinion(); err != nil {
 		return err
 	}
-	return ni.Persist(mesh.TORTOISE, ni)
+	return ni.db.Persist(mesh.TORTOISE, ni)
 }
 
 //RecoverTortoise retrieve latest saved tortoise from the database
@@ -192,7 +192,7 @@ func (ni *ninjaTortoise) evictOutOfPbase() {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			ids, err := ni.LayerBlockIds(lyr)
+			ids, err := ni.db.LayerBlockIds(lyr)
 			if err != nil {
 				ni.logger.Error("could not get layer ids for layer %v %v", lyr, err)
 			}
@@ -218,7 +218,7 @@ func (ni *ninjaTortoise) processBlock(b *types.Block) {
 	patternMap := make(map[types.LayerID]map[types.BlockID]struct{})
 	for _, bid := range b.BlockVotes {
 		ni.logger.Debug("block votes %s", bid)
-		bl, err := ni.GetBlock(bid)
+		bl, err := ni.db.GetBlock(bid)
 		if err != nil || bl == nil {
 			ni.logger.Panic(fmt.Sprintf("error block not found ID %s , %v!!!!!", bid, err))
 		}
@@ -324,7 +324,7 @@ func (ni *ninjaTortoise) updateCorrectionVectors(p votingPattern, bottomOfWindow
 	}
 
 	tp := ni.TPattern[p]
-	ni.ForBlockInView(tp, bottomOfWindow, foo)
+	ni.db.ForBlockInView(tp, bottomOfWindow, foo)
 }
 
 func (ni *ninjaTortoise) updatePatternTally(newMinGood votingPattern, correctionMap map[types.BlockID]vec, effCountMap map[types.LayerID]int) {
@@ -427,7 +427,7 @@ func (ni *ninjaTortoise) addPatternVote(p votingPattern, view map[types.BlockID]
 	addPatternVote := func(b types.BlockID) {
 		var vp map[types.LayerID]votingPattern
 		var found bool
-		blk, err := ni.GetBlock(b)
+		blk, err := ni.db.GetBlock(b)
 		if err != nil {
 			ni.logger.Panic(fmt.Sprintf("error block not found ID %s %v", b, err))
 		}
@@ -441,7 +441,7 @@ func (ni *ninjaTortoise) addPatternVote(p votingPattern, view map[types.BlockID]
 		}
 
 		for _, ex := range vp {
-			blocks, err := ni.LayerBlockIds(ex.Layer())
+			blocks, err := ni.db.LayerBlockIds(ex.Layer())
 			if err != nil {
 				ni.logger.Panic("could not retrieve layer block ids")
 			}
@@ -552,7 +552,7 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) {
 			}
 
 			tp := ni.TPattern[p]
-			ni.ForBlockInView(tp, windowStart, foo)
+			ni.db.ForBlockInView(tp, windowStart, foo)
 
 			//add corrected implicit votes
 			ni.updatePatternTally(p, correctionMap, effCountMap)
@@ -565,7 +565,7 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) {
 
 			complete := true
 			for idx := ni.PBase.Layer(); idx < j; idx++ {
-				layer, _ := ni.LayerBlockIds(idx) //todo handle error
+				layer, _ := ni.db.LayerBlockIds(idx) //todo handle error
 				bids := make([]types.BlockID, 0, ni.AvgLayerSize)
 				for _, bid := range layer {
 					blt := blockIDLayerTuple{BlockID: bid, LayerID: idx}
