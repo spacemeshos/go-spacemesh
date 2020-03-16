@@ -152,7 +152,7 @@ func (ni *ninjaTortoise) saveOpinion() error {
 	return nil
 }
 
-//Persist saves the current tortoise state to the db
+//Persist saves the current tortoise state to the database
 func (ni *ninjaTortoise) persist() error {
 	if err := ni.saveOpinion(); err != nil {
 		return err

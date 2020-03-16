@@ -6,8 +6,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/mesh"
 )
 
-//Tortoise represents an instance of the vote counting algorithm
-//this was done to allow more than one vote counting implementation
+//Tortoise represents an instance of a vote counting algorithm
 type Tortoise interface {
 	HandleLateBlock(b *types.Block) (types.LayerID, types.LayerID)
 	HandleIncomingLayer(ll *types.Layer) (types.LayerID, types.LayerID)
@@ -73,8 +72,7 @@ func (alg *tortoise) HandleIncomingLayer(ll *types.Layer) (types.LayerID, types.
 	return oldPbase, newPbase
 }
 
-//HandleLateBlock processes a late blocks votes (for late block definition see white paper)
-//returns the old pbase and new pbase after taking into account the blocks votes
+//LatestComplete returns the latest complete (a.k.a irreversible) layer
 func (alg *tortoise) LatestComplete() types.LayerID {
 	return alg.latestComplete()
 }
