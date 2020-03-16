@@ -16,7 +16,7 @@ type syncer interface {
 	HandleLateBlock(bl *types.Block)
 	ProcessedLayer() types.LayerID
 	dataAvailability(blk *types.Block) ([]*types.Transaction, []*types.ActivationTx, error)
-	validatingLayer() types.LayerID
+	getValidatingLayer() types.LayerID
 	fastValidation(block *types.Block) error
 	blockCheckLocal(blockIds []types.Hash32) (map[types.Hash32]item, map[types.Hash32]item, []types.Hash32)
 }
@@ -139,7 +139,7 @@ func (vq *blockQueue) finishBlockCallback(block *types.Block) func(res bool) err
 		}
 
 		//run late block through tortoise only if its new to us
-		if (block.Layer() <= vq.ProcessedLayer() || block.Layer() == vq.validatingLayer()) && err != mesh.ErrAlreadyExist {
+		if (block.Layer() <= vq.ProcessedLayer() || block.Layer() == vq.getValidatingLayer()) && err != mesh.ErrAlreadyExist {
 			vq.HandleLateBlock(block)
 		}
 
