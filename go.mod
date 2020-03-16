@@ -12,6 +12,7 @@ require (
 	github.com/google/uuid v1.1.0
 	github.com/grpc-ecosystem/grpc-gateway v1.9.0
 	github.com/hashicorp/golang-lru v0.5.1
+	github.com/huin/goupnp v1.0.0
 	github.com/nullstyle/go-xdr v0.0.0-20180726165426-f4c839f75077
 	github.com/prometheus/client_golang v0.9.3
 	github.com/prometheus/common v0.4.0
