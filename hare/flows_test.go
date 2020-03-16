@@ -152,7 +152,7 @@ func (trueOracle) Proof(layer types.LayerID, round int32) ([]byte, error) {
 	return x, nil
 }
 
-func (trueOracle) IsIdentityActiveOnConsensusView(edId string, layer types.LayerID) (bool, error) {
+func (trueOracle) IsIdentityActiveOnConsensusView(edID string, layer types.LayerID) (bool, error) {
 	return true, nil
 }
 
@@ -193,7 +193,7 @@ type mockIdentityP struct {
 	nid types.NodeId
 }
 
-func (m *mockIdentityP) GetIdentity(edId string) (types.NodeId, error) {
+func (m *mockIdentityP) GetIdentity(edID string) (types.NodeId, error) {
 	return m.nid, nil
 }
 
@@ -201,12 +201,12 @@ func buildSet() []types.BlockID {
 	rng := rand.New(rand.NewSource(0))
 	s := make([]types.BlockID, 200, 200)
 	for i := uint64(0); i < 200; i++ {
-		s = append(s, newRandBlockId(rng))
+		s = append(s, newRandBlockID(rng))
 	}
 	return s
 }
 
-func newRandBlockId(rng *rand.Rand) (id types.BlockID) {
+func newRandBlockID(rng *rand.Rand) (id types.BlockID) {
 	_, err := rng.Read(id[:])
 	if err != nil {
 		panic(err)
