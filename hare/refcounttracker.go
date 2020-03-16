@@ -1,7 +1,5 @@
 package hare
 
-type ObjectId uint64
-
 // RefCountTracker tracks the number of references of any object id.
 type RefCountTracker struct {
 	table map[interface{}]uint32

@@ -60,7 +60,7 @@ func (id instanceID) Bytes() []byte {
 // Set represents a unique set of values.
 type Set struct {
 	values    map[types.BlockID]struct{}
-	id        ObjectId
+	id        uint32
 	isIDValid bool
 }
 
@@ -195,12 +195,12 @@ func (s *Set) updateID() {
 	}
 
 	// update
-	s.id = ObjectId(h.Sum32())
+	s.id = h.Sum32()
 	s.isIDValid = true
 }
 
-// ID returns the ObjectId of the set.
-func (s *Set) ID() ObjectId {
+// ID returns the ObjectID of the set.
+func (s *Set) ID() uint32 {
 	if !s.isIDValid {
 		s.updateID()
 	}

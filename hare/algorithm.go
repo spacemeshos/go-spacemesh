@@ -176,7 +176,7 @@ type ConsensusProcess struct {
 func NewConsensusProcess(cfg config.Config, instanceID instanceID, s *Set, oracle Rolacle, stateQuerier StateQuerier,
 	layersPerEpoch uint16, signing Signer, nid types.NodeId, p2p NetworkService,
 	terminationReport chan TerminationOutput, ev roleValidator, logger log.Log) *ConsensusProcess {
-	msgsTracker := NewMsgsTracker()
+	msgsTracker := newMsgsTracker()
 	proc := &ConsensusProcess{
 		State:             State{-1, -1, s.Clone(), nil},
 		Closer:            NewCloser(),

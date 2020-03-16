@@ -14,20 +14,20 @@ const (
 	lowDefaultSize = 100
 )
 
-func genBlockId(i int) types.BlockID {
+func genBlockID(i int) types.BlockID {
 	return types.NewExistingBlock(types.LayerID(1), util.Uint32ToBytes(uint32(i))).Id()
 }
 
-var value1 = genBlockId(1)
-var value2 = genBlockId(2)
-var value3 = genBlockId(3)
-var value4 = genBlockId(4)
-var value5 = genBlockId(5)
-var value6 = genBlockId(6)
-var value7 = genBlockId(7)
-var value8 = genBlockId(8)
-var value9 = genBlockId(9)
-var value10 = genBlockId(10)
+var value1 = genBlockID(1)
+var value2 = genBlockID(2)
+var value3 = genBlockID(3)
+var value4 = genBlockID(4)
+var value5 = genBlockID(5)
+var value6 = genBlockID(6)
+var value7 = genBlockID(7)
+var value8 = genBlockID(8)
+var value9 = genBlockID(9)
+var value10 = genBlockID(10)
 
 func BuildPreRoundMsg(signing Signer, s *Set) *Msg {
 	builder := newMessageBuilder()
