@@ -13,11 +13,11 @@ import (
 // LayerBuffer is the number of layer results we keep at a given time.
 const LayerBuffer = 20
 
-type consensusFactory func(cfg config.Config, instanceId instanceId, s *Set, oracle Rolacle, signing Signer, p2p NetworkService, terminationReport chan TerminationOutput) Consensus
+type consensusFactory func(cfg config.Config, instanceId instanceID, s *Set, oracle Rolacle, signing Signer, p2p NetworkService, terminationReport chan TerminationOutput) Consensus
 
 // Consensus represents an item that acts like a consensus process.
 type Consensus interface {
-	Id() instanceId
+	ID() instanceID
 	Close()
 	CloseChannel() chan struct{}
 
@@ -27,7 +27,7 @@ type Consensus interface {
 
 // TerminationOutput represents an output of a consensus process.
 type TerminationOutput interface {
-	Id() instanceId
+	ID() instanceID
 	Set() *Set
 	Completed() bool
 }
@@ -108,7 +108,7 @@ func New(conf config.Config, p2p NetworkService, sign Signer, nid types.NodeId, 
 	h.outputChan = make(chan TerminationOutput, h.bufferSize)
 	h.outputs = make(map[types.LayerID][]types.BlockID, h.bufferSize) //  we keep results about LayerBuffer past layers
 
-	h.factory = func(conf config.Config, instanceId instanceId, s *Set, oracle Rolacle, signing Signer, p2p NetworkService, terminationReport chan TerminationOutput) Consensus {
+	h.factory = func(conf config.Config, instanceId instanceID, s *Set, oracle Rolacle, signing Signer, p2p NetworkService, terminationReport chan TerminationOutput) Consensus {
 		return NewConsensusProcess(conf, instanceId, s, oracle, stateQ, layersPerEpoch, signing, nid, p2p, terminationReport, ev, logger)
 	}
 
@@ -127,14 +127,14 @@ func (h *Hare) getLastLayer() types.LayerID {
 }
 
 // checks if the provided id is too late/old to be requested.
-func (h *Hare) outOfBufferRange(id instanceId) bool {
+func (h *Hare) outOfBufferRange(id instanceID) bool {
 	lyr := h.getLastLayer()
 
 	if lyr <= types.LayerID(h.bufferSize) {
 		return false
 	}
 
-	if id < instanceId(lyr-types.LayerID(h.bufferSize)) { // bufferSize>=0
+	if id < instanceID(lyr-types.LayerID(h.bufferSize)) { // bufferSize>=0
 		return true
 	}
 	return false
@@ -170,7 +170,7 @@ func (h *Hare) collectOutput(output TerminationOutput) error {
 		h.Error("Failed to validate the collected output set")
 	}
 
-	id := output.Id()
+	id := output.ID()
 
 	if h.outOfBufferRange(id) {
 		return ErrTooLate
@@ -197,7 +197,7 @@ func (h *Hare) onTick(id types.LayerID) {
 	h.layerLock.Unlock()
 	h.Debug("hare got tick, sleeping for %v", h.networkDelta)
 
-	if !h.broker.Synced(instanceId(id)) { // if not synced don't start consensus
+	if !h.broker.Synced(instanceID(id)) { // if not synced don't start consensus
 		h.With().Info("not starting hare since the node is not synced", log.LayerId(uint64(id)))
 		return
 	}
@@ -228,7 +228,7 @@ func (h *Hare) onTick(id types.LayerID) {
 		set.Add(b)
 	}
 
-	instId := instanceId(id)
+	instId := instanceID(id)
 	c, err := h.broker.Register(instId)
 	if err != nil {
 		h.Warning("Could not register CP for layer %v on broker err=%v", id, err)
@@ -239,7 +239,7 @@ func (h *Hare) onTick(id types.LayerID) {
 	e := cp.Start()
 	if e != nil {
 		h.Error("Could not start consensus process %v", e.Error())
-		h.broker.Unregister(cp.Id())
+		h.broker.Unregister(cp.ID())
 		return
 	}
 	h.With().Info("number of consensus processes", log.Int32("count", atomic.AddInt32(&h.totalCPs, 1)))
@@ -257,7 +257,7 @@ var (
 // Returns error iff the request for the upper is too old.
 func (h *Hare) GetResult(lid types.LayerID) ([]types.BlockID, error) {
 
-	if h.outOfBufferRange(instanceId(lid)) {
+	if h.outOfBufferRange(instanceID(lid)) {
 		return nil, ErrTooOld
 	}
 
@@ -285,10 +285,10 @@ func (h *Hare) outputCollectionLoop() {
 			}
 
 			// anyway, unregister from broker
-			h.broker.Unregister(out.Id()) // unregister from broker after termination
+			h.broker.Unregister(out.ID()) // unregister from broker after termination
 			h.With().Info("number of consensus processes", log.Int32("count", atomic.AddInt32(&h.totalCPs, -1)))
 			// TODO: fix metrics
-			//metrics.TotalConsensusProcesses.With("layer", strconv.FormatUint(uint64(out.Id()), 10)).Add(-1)
+			//metrics.TotalConsensusProcesses.With("layer", strconv.FormatUint(uint64(out.ID()), 10)).Add(-1)
 		case <-h.CloseChannel():
 			return
 		}

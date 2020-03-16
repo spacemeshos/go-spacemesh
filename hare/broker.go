@@ -50,13 +50,13 @@ type Broker struct {
 	isNodeSynced   syncStateFunc // provider function to check if the node is currently synced
 	layersPerEpoch uint16
 	inbox          chan service.GossipMessage
-	syncState      map[instanceId]bool
-	outbox         map[instanceId]chan *Msg
-	pending        map[instanceId][]*Msg // the buffer of pending messages for the next layer
+	syncState      map[instanceID]bool
+	outbox         map[instanceID]chan *Msg
+	pending        map[instanceID][]*Msg // the buffer of pending messages for the next layer
 	tasks          chan func()           // a channel to synchronize tasks (register/unregister) with incoming messages handling
-	latestLayer    instanceId            // the latest layer to attempt register (successfully or unsuccessfully)
+	latestLayer    instanceID            // the latest layer to attempt register (successfully or unsuccessfully)
 	isStarted      bool
-	minDeleted     instanceId
+	minDeleted     instanceID
 	limit          int // max number of consensus processes simultaneously
 }
 
@@ -69,9 +69,9 @@ func newBroker(networkService NetworkService, eValidator validator, stateQuerier
 		stateQuerier:   stateQuerier,
 		isNodeSynced:   syncState,
 		layersPerEpoch: layersPerEpoch,
-		syncState:      make(map[instanceId]bool),
-		outbox:         make(map[instanceId]chan *Msg),
-		pending:        make(map[instanceId][]*Msg),
+		syncState:      make(map[instanceID]bool),
+		outbox:         make(map[instanceID]chan *Msg),
+		pending:        make(map[instanceID][]*Msg),
 		tasks:          make(chan func()),
 		latestLayer:    0,
 		minDeleted:     0,
@@ -233,7 +233,7 @@ func (b *Broker) eventLoop() {
 	}
 }
 
-func (b *Broker) updateLatestLayer(id instanceId) {
+func (b *Broker) updateLatestLayer(id instanceID) {
 	if id <= b.latestLayer { // should expect to update only newer layers
 		b.Panic("Tried to update a previous layer expected %v > %v", id, b.latestLayer)
 		return
@@ -253,7 +253,7 @@ func (b *Broker) cleanOldLayers() {
 	}
 }
 
-func (b *Broker) updateSynchronicity(id instanceId) {
+func (b *Broker) updateSynchronicity(id instanceID) {
 	if _, ok := b.syncState[id]; ok { // already has result
 		return
 	}
@@ -269,7 +269,7 @@ func (b *Broker) updateSynchronicity(id instanceId) {
 	b.syncState[id] = true // mark valid
 }
 
-func (b *Broker) isSynced(id instanceId) bool {
+func (b *Broker) isSynced(id instanceID) bool {
 	b.updateSynchronicity(id)
 
 	synced, ok := b.syncState[id]
@@ -282,7 +282,7 @@ func (b *Broker) isSynced(id instanceId) bool {
 
 // Register a layer to receive messages
 // Note: the registering instance is assumed to be started and accepting messages
-func (b *Broker) Register(id instanceId) (chan *Msg, error) {
+func (b *Broker) Register(id instanceID) (chan *Msg, error) {
 	resErr := make(chan error, 1)
 	resCh := make(chan chan *Msg, 1)
 	regRequest := func() {
@@ -327,7 +327,7 @@ func (b *Broker) Register(id instanceId) (chan *Msg, error) {
 }
 
 // Unregister a layer from receiving messages
-func (b *Broker) Unregister(id instanceId) {
+func (b *Broker) Unregister(id instanceID) {
 	wg := sync.WaitGroup{}
 
 	wg.Add(1)
@@ -342,7 +342,7 @@ func (b *Broker) Unregister(id instanceId) {
 }
 
 // Synced returns true if the given layer is synced, false otherwise
-func (b *Broker) Synced(id instanceId) bool {
+func (b *Broker) Synced(id instanceID) bool {
 	res := make(chan bool)
 	b.tasks <- func() {
 		res <- b.isSynced(id)

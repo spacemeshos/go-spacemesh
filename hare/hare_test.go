@@ -22,12 +22,12 @@ func validateBlocks(blocks []types.BlockID) bool {
 }
 
 type mockReport struct {
-	id  instanceId
+	id  instanceID
 	set *Set
 	c   bool
 }
 
-func (m mockReport) Id() instanceId {
+func (m mockReport) ID() instanceID {
 	return m.id
 }
 func (m mockReport) Set() *Set {
@@ -41,7 +41,7 @@ func (m mockReport) Completed() bool {
 type mockConsensusProcess struct {
 	Closer
 	t    chan TerminationOutput
-	id   instanceId
+	id   instanceID
 	term chan struct{}
 	set  *Set
 }
@@ -55,7 +55,7 @@ func (mcp *mockConsensusProcess) Start() error {
 	return nil
 }
 
-func (mcp *mockConsensusProcess) Id() instanceId {
+func (mcp *mockConsensusProcess) ID() instanceID {
 	return mcp.id
 }
 
@@ -70,7 +70,7 @@ func (mip *mockIdProvider) GetIdentity(edId string) (types.NodeId, error) {
 	return types.NodeId{Key: edId, VRFPublicKey: []byte{}}, mip.err
 }
 
-func NewMockConsensusProcess(cfg config.Config, instanceId instanceId, s *Set, oracle Rolacle, signing Signer, p2p NetworkService, outputChan chan TerminationOutput) *mockConsensusProcess {
+func NewMockConsensusProcess(cfg config.Config, instanceId instanceID, s *Set, oracle Rolacle, signing Signer, p2p NetworkService, outputChan chan TerminationOutput) *mockConsensusProcess {
 	mcp := new(mockConsensusProcess)
 	mcp.Closer = NewCloser()
 	mcp.id = instanceId
@@ -122,7 +122,7 @@ func TestHare_GetResult(t *testing.T) {
 	r.Equal(errNoResult, err)
 	r.Nil(res)
 
-	mockid := instanceId(0)
+	mockid := instanceID(0)
 	set := NewSetFromValues(value1)
 
 	h.collectOutput(mockReport{mockid, set, true})
@@ -146,7 +146,7 @@ func TestHare_GetResult2(t *testing.T) {
 
 	h.networkDelta = 0
 
-	h.factory = func(cfg config.Config, instanceId instanceId, s *Set, oracle Rolacle, signing Signer, p2p NetworkService, outputChan chan TerminationOutput) Consensus {
+	h.factory = func(cfg config.Config, instanceId instanceID, s *Set, oracle Rolacle, signing Signer, p2p NetworkService, outputChan chan TerminationOutput) Consensus {
 		return NewMockConsensusProcess(cfg, instanceId, s, oracle, signing, p2p, outputChan)
 	}
 
@@ -251,11 +251,11 @@ func TestHare_OutputCollectionLoop(t *testing.T) {
 	h := createHare(n1)
 	h.Start()
 	mo := mockReport{1, NewEmptySet(0), true}
-	h.broker.Register(mo.Id())
+	h.broker.Register(mo.ID())
 	time.Sleep(1 * time.Second)
 	h.outputChan <- mo
 	time.Sleep(1 * time.Second)
-	assert.Nil(t, h.broker.outbox[mo.Id()])
+	assert.Nil(t, h.broker.outbox[mo.ID()])
 }
 
 func TestHare_onTick(t *testing.T) {
@@ -286,7 +286,7 @@ func TestHare_onTick(t *testing.T) {
 	createdChan := make(chan struct{})
 
 	var nmcp *mockConsensusProcess
-	h.factory = func(cfg config.Config, instanceId instanceId, s *Set, oracle Rolacle, signing Signer, p2p NetworkService, outputChan chan TerminationOutput) Consensus {
+	h.factory = func(cfg config.Config, instanceId instanceID, s *Set, oracle Rolacle, signing Signer, p2p NetworkService, outputChan chan TerminationOutput) Consensus {
 		nmcp = NewMockConsensusProcess(cfg, instanceId, s, oracle, signing, p2p, outputChan)
 		createdChan <- struct{}{}
 		return nmcp
@@ -353,7 +353,7 @@ func TestHare_outputBuffer(t *testing.T) {
 
 	for i := types.LayerID(0); i < types.LayerID(h.bufferSize); i++ {
 		h.lastLayer = i
-		mockid := instanceId(i)
+		mockid := instanceID(i)
 		set := NewSetFromValues(value1)
 		h.collectOutput(mockReport{mockid, set, true})
 		_, ok := h.outputs[types.LayerID(mockid)]
@@ -365,7 +365,7 @@ func TestHare_outputBuffer(t *testing.T) {
 	require.Equal(t, h.bufferSize, len(h.outputs))
 
 	// add another output
-	mockid := instanceId(lasti + 1)
+	mockid := instanceID(lasti + 1)
 	set := NewSetFromValues(value1)
 	h.collectOutput(mockReport{mockid, set, true})
 	_, ok := h.outputs[types.LayerID(mockid)]
@@ -381,7 +381,7 @@ func TestHare_IsTooLate(t *testing.T) {
 	h := createHare(n1)
 
 	for i := types.LayerID(0); i < types.LayerID(h.bufferSize*2); i++ {
-		mockid := instanceId(i)
+		mockid := instanceID(i)
 		set := NewSetFromValues(value1)
 		h.lastLayer = i
 		h.collectOutput(mockReport{mockid, set, true})
@@ -395,7 +395,7 @@ func TestHare_IsTooLate(t *testing.T) {
 		require.Equal(t, exp, len(h.outputs))
 	}
 
-	require.True(t, h.outOfBufferRange(instanceId(1)))
+	require.True(t, h.outOfBufferRange(instanceID(1)))
 }
 
 func TestHare_oldestInBuffer(t *testing.T) {
@@ -406,7 +406,7 @@ func TestHare_oldestInBuffer(t *testing.T) {
 	lasti := types.LayerID(0)
 
 	for i := types.LayerID(0); i < types.LayerID(h.bufferSize); i++ {
-		mockid := instanceId(i)
+		mockid := instanceID(i)
 		set := NewSetFromValues(value1)
 		h.lastLayer = i
 		h.collectOutput(mockReport{mockid, set, true})
@@ -424,7 +424,7 @@ func TestHare_oldestInBuffer(t *testing.T) {
 	lyr := h.oldestResultInBuffer()
 	require.True(t, lyr == 0)
 
-	mockid := instanceId(lasti + 1)
+	mockid := instanceID(lasti + 1)
 	set := NewSetFromValues(value1)
 	h.lastLayer = lasti + 1
 	h.collectOutput(mockReport{mockid, set, true})
@@ -435,7 +435,7 @@ func TestHare_oldestInBuffer(t *testing.T) {
 	lyr = h.oldestResultInBuffer()
 	require.True(t, lyr == 1)
 
-	mockid = instanceId(lasti + 2)
+	mockid = instanceID(lasti + 2)
 	set = NewSetFromValues(value1)
 	h.lastLayer = lasti + 2
 	h.collectOutput(mockReport{mockid, set, true})

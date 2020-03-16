@@ -15,14 +15,14 @@ import (
 	"time"
 )
 
-var instanceId0 = instanceId(0)
-var instanceId1 = instanceId(1)
-var instanceId2 = instanceId(2)
-var instanceId3 = instanceId(3)
-var instanceId4 = instanceId(4)
-var instanceId5 = instanceId(5)
-var instanceId6 = instanceId(6)
-var instanceId7 = instanceId(7)
+var instanceId0 = instanceID(0)
+var instanceId1 = instanceID(1)
+var instanceId2 = instanceID(2)
+var instanceId3 = instanceID(3)
+var instanceId4 = instanceID(4)
+var instanceId5 = instanceID(5)
+var instanceId6 = instanceID(6)
+var instanceId7 = instanceID(7)
 
 func trueFunc() bool {
 	return true
@@ -33,7 +33,7 @@ func falseFunc() bool {
 }
 
 type mockClient struct {
-	id instanceId
+	id instanceID
 }
 
 type MockStateQuerier struct {
@@ -49,7 +49,7 @@ func (msq MockStateQuerier) IsIdentityActiveOnConsensusView(edId string, layer t
 	return msq.res, msq.err
 }
 
-func createMessage(t *testing.T, instanceId instanceId) []byte {
+func createMessage(t *testing.T, instanceId instanceID) []byte {
 	sr := signing.NewEdSigner()
 	b := NewMessageBuilder()
 	msg := b.SetPubKey(sr.PublicKey()).SetInstanceId(instanceId).Sign(sr).Build()
@@ -77,7 +77,7 @@ func TestBroker_Start(t *testing.T) {
 	assert.Equal(t, "instance already started", err.Error())
 }
 
-// test that a InnerMsg to a specific set Id is delivered by the broker
+// test that a InnerMsg to a specific set ID is delivered by the broker
 func TestBroker_Received(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
@@ -114,13 +114,13 @@ func TestBroker_Abort(t *testing.T) {
 	}
 }
 
-func sendMessages(t *testing.T, instanceId instanceId, n *service.Node, count int) {
+func sendMessages(t *testing.T, instanceId instanceID, n *service.Node, count int) {
 	for i := 0; i < count; i++ {
 		n.Broadcast(protoName, createMessage(t, instanceId))
 	}
 }
 
-func waitForMessages(t *testing.T, inbox chan *Msg, instanceId instanceId, msgCount int) {
+func waitForMessages(t *testing.T, inbox chan *Msg, instanceId instanceID, msgCount int) {
 	i := 0
 	for {
 		tm := time.NewTimer(3 * time.Second)
@@ -339,11 +339,11 @@ func Test_newMsg(t *testing.T) {
 func TestBroker_updateInstance(t *testing.T) {
 	r := require.New(t)
 	b := buildBroker(service.NewSimulator().NewNode(), t.Name())
-	r.Equal(instanceId(0), b.latestLayer)
+	r.Equal(instanceID(0), b.latestLayer)
 	b.updateLatestLayer(1)
-	r.Equal(instanceId(1), b.latestLayer)
+	r.Equal(instanceID(1), b.latestLayer)
 	b.updateLatestLayer(2)
-	r.Equal(instanceId(2), b.latestLayer)
+	r.Equal(instanceID(2), b.latestLayer)
 }
 
 func TestBroker_updateSynchronicity(t *testing.T) {
@@ -480,14 +480,14 @@ func TestBroker_clean(t *testing.T) {
 	r := require.New(t)
 	b := buildBroker(service.NewSimulator().NewNode(), t.Name())
 
-	for i := instanceId(1); i < 10; i++ {
+	for i := instanceID(1); i < 10; i++ {
 		b.syncState[i] = true
 	}
 
 	b.latestLayer = 9
 	b.outbox[5] = make(chan *Msg)
 	b.cleanOldLayers()
-	r.Equal(instanceId(4), b.minDeleted)
+	r.Equal(instanceID(4), b.minDeleted)
 	r.Equal(5, len(b.syncState))
 
 	delete(b.outbox, 5)
@@ -540,7 +540,7 @@ func TestBroker_Synced(t *testing.T) {
 	for i := 0; i < 1000; i++ {
 		wg.Add(1)
 		go func(j int) {
-			r.True(b.Synced(instanceId(j)))
+			r.True(b.Synced(instanceID(j)))
 			wg.Done()
 		}(i)
 	}

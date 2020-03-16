@@ -9,7 +9,7 @@ import (
 	"sort"
 )
 
-type instanceId types.LayerID
+type instanceID types.LayerID
 
 type messageType byte
 
@@ -50,7 +50,7 @@ func (mType messageType) String() string {
 	}
 }
 
-func (id instanceId) Bytes() []byte {
+func (id instanceID) Bytes() []byte {
 	idInBytes := make([]byte, 4)
 	binary.LittleEndian.PutUint32(idInBytes, uint32(id))
 
@@ -199,7 +199,7 @@ func (s *Set) updateId() {
 	s.isIdValid = true
 }
 
-// Id returns the objectId of the set.
+// ID returns the objectId of the set.
 func (s *Set) Id() objectId {
 	if !s.isIdValid {
 		s.updateId()

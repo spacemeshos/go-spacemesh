@@ -155,7 +155,7 @@ func (mev *mockEligibilityValidator) Validate(m *Msg) bool {
 type mockOracle struct {
 }
 
-func (mo *mockOracle) Eligible(instanceId instanceId, k int32, pubKey string, proof []byte) bool {
+func (mo *mockOracle) Eligible(instanceID instanceID, k int32, pubKey string, proof []byte) bool {
 	return true
 }
 
@@ -171,7 +171,7 @@ func TestConsensusProcess_Start(t *testing.T) {
 	broker.Start()
 	proc := generateConsensusProcess(t)
 	proc.s = NewDefaultEmptySet()
-	inbox, _ := broker.Register(proc.Id())
+	inbox, _ := broker.Register(proc.ID())
 	proc.SetInbox(inbox)
 	err := proc.Start()
 	assert.Equal(t, "instance started with an empty set", err.Error())
@@ -201,7 +201,7 @@ func TestConsensusProcess_eventLoop(t *testing.T) {
 	oracle := &mockRolacle{MockStateQuerier: MockStateQuerier{true, nil}}
 	oracle.isEligible = true
 	proc.oracle = oracle
-	proc.inbox, _ = broker.Register(proc.Id())
+	proc.inbox, _ = broker.Register(proc.ID())
 	proc.s = NewSetFromValues(value1, value2)
 	proc.cfg.F = 2
 	go proc.eventLoop()
@@ -220,7 +220,7 @@ func TestConsensusProcess_handleMessage(t *testing.T) {
 	proc.oracle = oracle
 	mValidator := &mockMessageValidator{}
 	proc.validator = mValidator
-	proc.inbox, _ = broker.Register(proc.Id())
+	proc.inbox, _ = broker.Register(proc.ID())
 	msg := BuildPreRoundMsg(generateSigning(t), NewSetFromValues(value1))
 	oracle.isEligible = true
 	mValidator.syntaxValid = false
@@ -251,7 +251,7 @@ func TestConsensusProcess_nextRound(t *testing.T) {
 	broker := buildBroker(n1, t.Name())
 	broker.Start()
 	proc := generateConsensusProcess(t)
-	proc.inbox, _ = broker.Register(proc.Id())
+	proc.inbox, _ = broker.Register(proc.ID())
 	proc.advanceToNextRound()
 	proc.advanceToNextRound()
 	assert.Equal(t, int32(1), proc.k)
@@ -276,8 +276,8 @@ func generateConsensusProcess(t *testing.T) *ConsensusProcess {
 
 func TestConsensusProcess_Id(t *testing.T) {
 	proc := generateConsensusProcess(t)
-	proc.instanceId = instanceId1
-	assert.Equal(t, instanceId1, proc.Id())
+	proc.instanceID = instanceId1
+	assert.Equal(t, instanceId1, proc.ID())
 }
 
 func TestNewConsensusProcess_AdvanceToNextRound(t *testing.T) {
@@ -306,7 +306,7 @@ func TestConsensusProcess_InitDefaultBuilder(t *testing.T) {
 	assert.Nil(t, verifier)
 	assert.Equal(t, builder.inner.K, proc.k)
 	assert.Equal(t, builder.inner.Ki, proc.ki)
-	assert.Equal(t, instanceId(builder.inner.InstanceId), proc.instanceId)
+	assert.Equal(t, instanceID(builder.inner.InstanceId), proc.instanceID)
 }
 
 func TestConsensusProcess_isEligible(t *testing.T) {
@@ -479,7 +479,7 @@ func TestConsensusProcess_onEarlyMessage(t *testing.T) {
 
 func TestProcOutput_Id(t *testing.T) {
 	po := procReport{instanceId1, nil, false}
-	assert.Equal(t, po.Id(), instanceId1)
+	assert.Equal(t, po.ID(), instanceId1)
 }
 
 func TestProcOutput_Set(t *testing.T) {
