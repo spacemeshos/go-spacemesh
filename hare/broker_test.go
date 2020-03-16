@@ -142,7 +142,7 @@ func waitForMessages(t *testing.T, inbox chan *Msg, instanceID instanceID, msgCo
 	}
 }
 
-// test flow for multiple set objectId
+// test flow for multiple set ObjectId
 func TestBroker_MultipleInstanceIds(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()

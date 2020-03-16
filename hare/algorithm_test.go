@@ -163,7 +163,7 @@ func buildOracle(oracle Rolacle) Rolacle {
 	return oracle
 }
 
-// test that a InnerMsg to a specific set objectId is delivered by the broker
+// test that a InnerMsg to a specific set ObjectId is delivered by the broker
 func TestConsensusProcess_Start(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()

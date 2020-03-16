@@ -1,6 +1,6 @@
 package hare
 
-type objectId uint64
+type ObjectId uint64
 
 // RefCountTracker tracks the number of references of any object id.
 type RefCountTracker struct {
