@@ -14,7 +14,7 @@ type messageValidator interface {
 }
 
 type identityProvider interface {
-	GetIdentity(edId string) (types.NodeId, error)
+	GetIdentity(edID string) (types.NodeId, error)
 }
 
 type eligibilityValidator struct {
@@ -48,14 +48,14 @@ func (ev *eligibilityValidator) validateRole(m *Msg) (bool, error) {
 		return true, nil // TODO: remove this lie after inception problem is addressed
 	}
 
-	nId, err := ev.identityProvider.GetIdentity(pub.String())
+	nID, err := ev.identityProvider.GetIdentity(pub.String())
 	if err != nil {
 		ev.With().Error("Eligibility validator: GetIdentity failed (ignore if the safe layer is in genesis)", log.Err(err), log.String("sender_id", pub.ShortString()))
 		return false, err
 	}
 
 	// validate role
-	res, err := ev.oracle.Eligible(layer, m.InnerMsg.K, expectedCommitteeSize(m.InnerMsg.K, ev.maxExpActives, ev.expLeaders), nId, m.InnerMsg.RoleProof)
+	res, err := ev.oracle.Eligible(layer, m.InnerMsg.K, expectedCommitteeSize(m.InnerMsg.K, ev.maxExpActives, ev.expLeaders), nID, m.InnerMsg.RoleProof)
 	if err != nil {
 		ev.With().Error("Eligibility validator: could not retrieve eligibility result", log.Err(err), log.String("sender_id", pub.ShortString()))
 		return false, err
@@ -357,7 +357,7 @@ func (v *syntaxContextValidator) validateSVP(msg *Msg) bool {
 	}
 
 	maxKi := int32(-1) // Ki>=-1
-	var maxSet []types.BlockID = nil
+	var maxSet []types.BlockID
 	for _, status := range msg.InnerMsg.Svp.Messages {
 		// track max
 		if status.InnerMsg.Ki > maxKi {

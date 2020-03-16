@@ -345,7 +345,7 @@ func validateMatrix(t *testing.T, mType messageType, msgK int32, exp []error) {
 	v := defaultValidator()
 	sgn := generateSigning(t)
 	set := NewEmptySet(1)
-	var m *Msg = nil
+	var m *Msg
 	switch mType {
 	case status:
 		m = BuildStatusMsg(sgn, set)
