@@ -55,7 +55,7 @@ func TestMessageValidator_ValidateCertificate(t *testing.T) {
 
 func TestEligibilityValidator_validateRole(t *testing.T) {
 	oracle := &mockRolacle{}
-	ev := newEligibilityValidator(oracle, 10, &mockIdProvider{}, 1, 5, log.NewDefault(""))
+	ev := newEligibilityValidator(oracle, 10, &mockIDProvider{}, 1, 5, log.NewDefault(""))
 	ev.oracle = oracle
 	res, err := ev.validateRole(nil)
 	assert.NotNil(t, err)
@@ -74,7 +74,7 @@ func TestEligibilityValidator_validateRole(t *testing.T) {
 
 	m.InnerMsg.InstanceID = 111
 	myErr := errors.New("my error")
-	ev.identityProvider = &mockIdProvider{myErr}
+	ev.identityProvider = &mockIDProvider{myErr}
 	res, err = ev.validateRole(m)
 	assert.NotNil(t, err)
 	assert.Equal(t, myErr, err)
@@ -86,7 +86,7 @@ func TestEligibilityValidator_validateRole(t *testing.T) {
 	assert.Equal(t, myErr, err)
 	assert.False(t, res)
 
-	ev.identityProvider = &mockIdProvider{nil}
+	ev.identityProvider = &mockIDProvider{nil}
 	oracle.err = nil
 	res, err = ev.validateRole(m)
 	assert.Nil(t, err)

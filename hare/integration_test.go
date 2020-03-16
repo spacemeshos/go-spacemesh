@@ -54,7 +54,7 @@ func Test_16Nodes_HareIntegrationSuite(t *testing.T) {
 	his.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
 		signing := signing2.NewEdSigner()
 		lg := log.NewDefault(signing.PublicKey().String())
-		broker := newBroker(s, newEligibilityValidator(eligibility.New(), 10, &mockIdProvider{}, cfg.N, cfg.ExpectedLeaders, lg), NewMockStateQuerier(), (&mockSyncer{true}).IsSynced, 10, cfg.LimitIterations, Closer{}, lg)
+		broker := newBroker(s, newEligibilityValidator(eligibility.New(), 10, &mockIDProvider{}, cfg.N, cfg.ExpectedLeaders, lg), NewMockStateQuerier(), (&mockSyncer{true}).IsSynced, 10, cfg.LimitIterations, Closer{}, lg)
 		output := make(chan TerminationOutput, 1)
 		oracle.Register(true, signing.PublicKey().String())
 		proc := NewConsensusProcess(cfg, instanceID1, his.initialSets[idx], oracle, NewMockStateQuerier(), 10, signing, types.NodeId{}, s, output, truer{}, lg)
@@ -107,7 +107,7 @@ func Test_20Nodes_HareIntegrationSuite(t *testing.T) {
 	his.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
 		signing := signing2.NewEdSigner()
 		lg := log.NewDefault(signing.PublicKey().String())
-		broker := newBroker(s, newEligibilityValidator(eligibility.New(), 10, &mockIdProvider{}, cfg.N, cfg.ExpectedLeaders, lg), NewMockStateQuerier(), (&mockSyncer{true}).IsSynced, 10, cfg.LimitIterations, Closer{}, lg)
+		broker := newBroker(s, newEligibilityValidator(eligibility.New(), 10, &mockIDProvider{}, cfg.N, cfg.ExpectedLeaders, lg), NewMockStateQuerier(), (&mockSyncer{true}).IsSynced, 10, cfg.LimitIterations, Closer{}, lg)
 		output := make(chan TerminationOutput, 1)
 		oracle.Register(true, signing.PublicKey().String())
 		proc := NewConsensusProcess(cfg, instanceID1, his.initialSets[idx], oracle, NewMockStateQuerier(), 10, signing, types.NodeId{}, s, output, truer{}, log.NewDefault(signing.PublicKey().String()))
