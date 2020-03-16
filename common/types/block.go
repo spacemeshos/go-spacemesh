@@ -16,7 +16,7 @@ func (id BlockID) String() string {
 	return id.AsHash32().ShortString()
 }
 
-func (id BlockID) Field() log.Field { return log.String("block_id", util.Bytes2Hex(id[:])) }
+func (id BlockID) Field() log.Field { return log.String("block_id", id.AsHash32().ShortString()) }
 
 func (id BlockID) Compare(i BlockID) bool {
 	return bytes.Compare(id.ToBytes(), i.ToBytes()) < 0
