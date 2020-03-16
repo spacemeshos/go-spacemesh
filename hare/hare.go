@@ -33,7 +33,7 @@ type TerminationOutput interface {
 }
 
 type orphanBlockProvider interface {
-	LayerBlockIds(layerId types.LayerID) ([]types.BlockID, error)
+	LayerBlockIds(layerID types.LayerID) ([]types.BlockID, error)
 }
 
 // checks if the collected output is valid
@@ -228,13 +228,13 @@ func (h *Hare) onTick(id types.LayerID) {
 		set.Add(b)
 	}
 
-	instId := instanceID(id)
-	c, err := h.broker.Register(instId)
+	instID := instanceID(id)
+	c, err := h.broker.Register(instID)
 	if err != nil {
 		h.Warning("Could not register CP for layer %v on broker err=%v", id, err)
 		return
 	}
-	cp := h.factory(h.config, instId, set, h.rolacle, h.sign, h.network, h.outputChan)
+	cp := h.factory(h.config, instID, set, h.rolacle, h.sign, h.network, h.outputChan)
 	cp.SetInbox(c)
 	e := cp.Start()
 	if e != nil {
