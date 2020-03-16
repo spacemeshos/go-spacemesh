@@ -72,7 +72,7 @@ func TestEligibilityValidator_validateRole(t *testing.T) {
 	// TODO: remove comment after inceptions problem is addressed
 	//assert.False(t, res)
 
-	m.InnerMsg.InstanceId = 111
+	m.InnerMsg.InstanceID = 111
 	myErr := errors.New("my error")
 	ev.identityProvider = &mockIdProvider{myErr}
 	res, err = ev.validateRole(m)
@@ -93,7 +93,7 @@ func TestEligibilityValidator_validateRole(t *testing.T) {
 	assert.False(t, res)
 
 	oracle.isEligible = true
-	m.InnerMsg.InstanceId = 111
+	m.InnerMsg.InstanceID = 111
 	res, err = ev.validateRole(m)
 	assert.Nil(t, err)
 	assert.True(t, res)

@@ -271,13 +271,13 @@ func generateConsensusProcess(t *testing.T) *ConsensusProcess {
 	oracle.Register(true, signing.PublicKey().String())
 	output := make(chan TerminationOutput, 1)
 
-	return NewConsensusProcess(cfg, instanceId1, s, oracle, NewMockStateQuerier(), 10, signing, types.NodeId{Key: signing.PublicKey().String(), VRFPublicKey: vrfPub}, n1, output, truer{}, log.NewDefault(signing.PublicKey().String()))
+	return NewConsensusProcess(cfg, instanceID1, s, oracle, NewMockStateQuerier(), 10, signing, types.NodeId{Key: signing.PublicKey().String(), VRFPublicKey: vrfPub}, n1, output, truer{}, log.NewDefault(signing.PublicKey().String()))
 }
 
 func TestConsensusProcess_Id(t *testing.T) {
 	proc := generateConsensusProcess(t)
-	proc.instanceID = instanceId1
-	assert.Equal(t, instanceId1, proc.ID())
+	proc.instanceID = instanceID1
+	assert.Equal(t, instanceID1, proc.ID())
 }
 
 func TestNewConsensusProcess_AdvanceToNextRound(t *testing.T) {
@@ -306,7 +306,7 @@ func TestConsensusProcess_InitDefaultBuilder(t *testing.T) {
 	assert.Nil(t, verifier)
 	assert.Equal(t, builder.inner.K, proc.k)
 	assert.Equal(t, builder.inner.Ki, proc.ki)
-	assert.Equal(t, instanceID(builder.inner.InstanceId), proc.instanceID)
+	assert.Equal(t, instanceID(builder.inner.InstanceID), proc.instanceID)
 }
 
 func TestConsensusProcess_isEligible(t *testing.T) {
@@ -478,13 +478,13 @@ func TestConsensusProcess_onEarlyMessage(t *testing.T) {
 }
 
 func TestProcOutput_Id(t *testing.T) {
-	po := procReport{instanceId1, nil, false}
-	assert.Equal(t, po.ID(), instanceId1)
+	po := procReport{instanceID1, nil, false}
+	assert.Equal(t, po.ID(), instanceID1)
 }
 
 func TestProcOutput_Set(t *testing.T) {
 	es := NewDefaultEmptySet()
-	po := procReport{instanceId1, es, false}
+	po := procReport{instanceID1, es, false}
 	assert.True(t, es.Equals(po.Set()))
 }
 

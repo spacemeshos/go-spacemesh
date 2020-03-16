@@ -28,7 +28,7 @@ func marshallUnmarshall(t *testing.T, msg *Message) *Message {
 func TestBuilder_TestBuild(t *testing.T) {
 	b := NewMessageBuilder()
 	sgn := signing.NewEdSigner()
-	msg := b.SetPubKey(sgn.PublicKey()).SetInstanceId(instanceId1).Sign(sgn).Build()
+	msg := b.SetPubKey(sgn.PublicKey()).SetInstanceId(instanceID1).Sign(sgn).Build()
 
 	m := marshallUnmarshall(t, msg.Message)
 	assert.Equal(t, m, msg.Message)

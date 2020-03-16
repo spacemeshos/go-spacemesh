@@ -125,7 +125,7 @@ func (m *p2pManipulator) RegisterGossipProtocol(protocol string, prio priorityq.
 
 func (m *p2pManipulator) Broadcast(protocol string, payload []byte) error {
 	msg, e := MessageFromBuffer(payload)
-	if msg.InnerMsg.InstanceId == m.stalledLayer && msg.InnerMsg.K < 8 && msg.InnerMsg.K != -1 {
+	if msg.InnerMsg.InstanceID == m.stalledLayer && msg.InnerMsg.K < 8 && msg.InnerMsg.K != -1 {
 		log.Warning("Not broadcasting in manipulator")
 		return m.err
 	}

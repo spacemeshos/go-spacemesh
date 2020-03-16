@@ -106,23 +106,23 @@ var (
 // validate the message is contextually valid and that the target layer is synced.
 // note: it is important to check synchronicity after contextual to avoid memory leak in syncState.
 func (b *Broker) validate(m *Message) error {
-	msgInstId := m.InnerMsg.InstanceId
+	msgInstID := m.InnerMsg.InstanceID
 
-	_, exist := b.outbox[msgInstId]
+	_, exist := b.outbox[msgInstID]
 
 	if !exist {
 		// prev layer, must be unregistered
-		if msgInstId < b.latestLayer {
+		if msgInstID < b.latestLayer {
 			return errUnregistered
 		}
 
 		// current layer
-		if msgInstId == b.latestLayer {
+		if msgInstID == b.latestLayer {
 			return errRegistration
 		}
 
 		// early msg
-		if msgInstId == b.latestLayer+1 {
+		if msgInstID == b.latestLayer+1 {
 			return errEarlyMsg
 		}
 
@@ -131,7 +131,7 @@ func (b *Broker) validate(m *Message) error {
 	}
 
 	// exist, check synchronicity
-	if !b.isSynced(msgInstId) {
+	if !b.isSynced(msgInstID) {
 		return errNotSynced
 	}
 
@@ -162,23 +162,23 @@ func (b *Broker) eventLoop() {
 				continue
 			}
 
-			msgInstId := hareMsg.InnerMsg.InstanceId
+			msgInstID := hareMsg.InnerMsg.InstanceID
 			// TODO: fix metrics
-			//metrics.MessageTypeCounter.With("type_id", hareMsg.InnerMsg.Type.String(), "layer", strconv.FormatUint(uint64(msgInstId), 10), "reporter", "brokerHandler").Add(1)
+			//metrics.MessageTypeCounter.With("type_id", hareMsg.InnerMsg.Type.String(), "layer", strconv.FormatUint(uint64(msgInstID), 10), "reporter", "brokerHandler").Add(1)
 			isEarly := false
 			if err := b.validate(hareMsg); err != nil {
 				if err != errEarlyMsg {
 					// not early, validation failed
 					b.With().Debug("Broker received a message to a CP that is not registered",
 						log.Err(err),
-						log.Uint64("msg_layer_id", uint64(msgInstId)),
+						log.Uint64("msg_layer_id", uint64(msgInstID)),
 						log.Uint64("latest_layer", uint64(b.latestLayer)))
 					continue
 				}
 
 				b.With().Debug("early message detected",
 					log.Err(err),
-					log.Uint64("msg_layer_id", uint64(msgInstId)),
+					log.Uint64("msg_layer_id", uint64(msgInstID)),
 					log.Uint64("latest_layer", uint64(b.latestLayer)))
 
 				isEarly = true
@@ -203,24 +203,24 @@ func (b *Broker) eventLoop() {
 			msg.ReportValidation(protoName)
 
 			if isEarly {
-				if _, exist := b.pending[msgInstId]; !exist { // create buffer if first msg
-					b.pending[msgInstId] = make([]*Msg, 0)
+				if _, exist := b.pending[msgInstID]; !exist { // create buffer if first msg
+					b.pending[msgInstID] = make([]*Msg, 0)
 				}
 				// we want to write all buffered messages to a chan with InboxCapacity len
 				// hence, we limit the buffer for pending messages
-				if len(b.pending[msgInstId]) == inboxCapacity {
+				if len(b.pending[msgInstID]) == inboxCapacity {
 					b.Error("Reached %v pending messages. Ignoring message for layer %v sent from %v",
-						inboxCapacity, msgInstId, iMsg.PubKey.ShortString())
+						inboxCapacity, msgInstID, iMsg.PubKey.ShortString())
 					continue
 				}
-				b.pending[msgInstId] = append(b.pending[msgInstId], iMsg)
+				b.pending[msgInstID] = append(b.pending[msgInstID], iMsg)
 				continue
 			}
 
 			// has instance, just send
-			out, exist := b.outbox[msgInstId]
+			out, exist := b.outbox[msgInstID]
 			if !exist {
-				b.Panic("broker should have had an instance for layer %v", msgInstId)
+				b.Panic("broker should have had an instance for layer %v", msgInstID)
 			}
 			out <- iMsg
 

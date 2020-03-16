@@ -126,17 +126,17 @@ func newMsg(hareMsg *Message, querier StateQuerier, layersPerEpoch uint16) (*Msg
 	}
 	// query if identity is active
 	pub := signing.NewPublicKey(pubKey)
-	res, err := querier.IsIdentityActiveOnConsensusView(pub.String(), types.LayerID(hareMsg.InnerMsg.InstanceId))
+	res, err := querier.IsIdentityActiveOnConsensusView(pub.String(), types.LayerID(hareMsg.InnerMsg.InstanceID))
 	if err != nil {
 		log.With().Error("error while checking if identity is active", log.String("sender_id", pub.ShortString()),
-			log.Err(err), log.LayerId(uint64(hareMsg.InnerMsg.InstanceId)), log.String("msg_type", hareMsg.InnerMsg.Type.String()))
+			log.Err(err), log.LayerId(uint64(hareMsg.InnerMsg.InstanceID)), log.String("msg_type", hareMsg.InnerMsg.Type.String()))
 		return nil, errors.New("is identity active query failed")
 	}
 
 	// check query result
 	if !res {
 		log.With().Error("identity is not active", log.String("sender_id", pub.ShortString()),
-			log.LayerId(uint64(hareMsg.InnerMsg.InstanceId)), log.String("msg_type", hareMsg.InnerMsg.Type.String()))
+			log.LayerId(uint64(hareMsg.InnerMsg.InstanceID)), log.String("msg_type", hareMsg.InnerMsg.Type.String()))
 		return nil, errors.New("inactive identity")
 	}
 
@@ -399,7 +399,7 @@ func (proc *ConsensusProcess) handleMessage(m *Msg) {
 func (proc *ConsensusProcess) processMsg(m *Msg) {
 	proc.Debug("Processing message of type %v", m.InnerMsg.Type.String())
 	// TODO: fix metrics
-	//metrics.MessageTypeCounter.With("type_id", m.InnerMsg.Type.String(), "layer", strconv.FormatUint(uint64(m.InnerMsg.InstanceId), 10), "reporter", "processMsg").Add(1)
+	//metrics.MessageTypeCounter.With("type_id", m.InnerMsg.Type.String(), "layer", strconv.FormatUint(uint64(m.InnerMsg.InstanceID), 10), "reporter", "processMsg").Add(1)
 
 	switch m.InnerMsg.Type {
 	case pre:
