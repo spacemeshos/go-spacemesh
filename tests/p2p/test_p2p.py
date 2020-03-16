@@ -1,28 +1,24 @@
 from datetime import datetime
 import pytest
+from pytest_testconfig import config as testconfig
+import re
 import random
 from random import choice
-import re
 from string import ascii_lowercase
 import time
 
-from pytest_testconfig import config as testconfig
 # noinspection PyUnresolvedReferences
 from tests.context import ES
-
 from tests.queries import query_message, poll_query_message
-# noinspection PyUnresolvedReferences
 from tests.setup_utils import add_multi_clients
-from tests.utils import get_conf, api_call
+from tests.utils import get_conf, api_call, get_curr_ind
 
 
-dt = datetime.now()
-todaydate = dt.strftime("%Y.%m.%d")
-current_index = 'kubernetes_cluster-' + todaydate
+current_index = get_curr_ind()
 timeout_factor = 1
 
 
-def query_bootstrap_es(indx, namespace, bootstrap_po_name):
+def query_bootstrap_es(namespace, bootstrap_po_name):
     hits = poll_query_message(current_index, namespace, bootstrap_po_name, {"M": "Local node identity"}, expected=1)
     for h in hits:
         match = re.search(r"Local node identity >> (?P<bootstrap_key>\w+)", h.M)
@@ -101,8 +97,7 @@ def add_clients(setup_bootstrap, setup_clients):
 def test_bootstrap(init_session, setup_bootstrap):
     # wait for the bootstrap logs to be available in ElasticSearch
     time.sleep(10 * timeout_factor)
-    assert setup_bootstrap.pods[0]['key'] == query_bootstrap_es(current_index,
-                                                                testconfig['namespace'],
+    assert setup_bootstrap.pods[0]['key'] == query_bootstrap_es(testconfig['namespace'],
                                                                 setup_bootstrap.pods[0]['name'])
 
 

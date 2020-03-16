@@ -10,30 +10,29 @@ from tests.utils import validate_blocks_per_nodes, get_pod_id
 
 # epoch i:
 # start with x miners
-# add another single miner
-# wait 3 epochs
+# wait 2 epochs
+#
+# epoch i+2:
+# validate total miners generated Tavg/x (floored) up to i+2
+# validate all miners created an ATX
+# remove a miner
 #
 # epoch i+3:
-# validate total miners generated Tavg/x+1 (floored) in i+1 and i+2
-# validate all miners created an ATX
-# remove the last added miner
-#
-# epoch i+4:
 # validate total miner generated Tavg/x+1 (floored) in i+3 except for the removed miner
 #
-# epoch i+5:
+# epoch i+4:
 # validate total miner generated Tavg/x+1 (floored) in i+4 except for the removed miner
 #
-# epoch i+6
+# epoch i+5
 # validate total miner generated Tavg/x+1 (floored) in i+5 except for the removed miner
 #
-# epoch i+7
-# node was killed after it created an ATX on the 3rd epoch (may be changed)
+# epoch i+6
+# node was killed after it created an ATX on the 2nd epoch
 # other nodes notice no blocks created by the fallen node only
-# 3 epochs after the epoch it was killed in (6th epoch)
+# 3 epochs after the epoch it was killed in (5th epoch)
 #
 # hence:
-# validate total miner generated Tavg/x (floored) in i+6
+# validate total miner generated Tavg/x (floored) in i+5
 def test_remove_node_validate_atx(init_session, setup_mul_network):
     curr_epoch = 0
     epochs_to_sleep = 2
@@ -41,6 +40,8 @@ def test_remove_node_validate_atx(init_session, setup_mul_network):
     layers_per_epoch = int(testconfig['client']['args']['layers-per-epoch'])
     layer_avg_size = int(testconfig['client']['args']['layer-average-size'])
 
+    # in conf yml file second client deployment (client_1) will show after the
+    # first (client) in setup_mul_network.clients hence 1
     new_deployment_info = setup_mul_network.clients[1]
     print(f"\nlayer duration={layer_duration}, layers per epoch={layers_per_epoch}, layer avg size={layer_avg_size}")
 
@@ -60,8 +61,6 @@ def test_remove_node_validate_atx(init_session, setup_mul_network):
     time.sleep(tts)
 
     print("remove deployment with single miner")
-    # in conf yml file second client deployment (client_1) will show after the
-    # first (client) in setup_mul_network.clients hence 1
     single_pod_dep_id = new_deployment_info.deployment_name
     _ = delete_deployment(single_pod_dep_id, init_session)
 
@@ -71,7 +70,7 @@ def test_remove_node_validate_atx(init_session, setup_mul_network):
 
     print("-------- validating all nodes ATX creation in last epoch --------")
     atx_hits = q.query_atx_per_epoch(init_session, curr_epoch)
-    assert len(atx_hits) == num_miners
+    assert len(atx_hits) == num_miners, f"atx hits = {len(atx_hits)}, number of miners = {num_miners}"
     print("-------- validation succeed --------")
 
     # wait for next epoch
