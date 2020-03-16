@@ -46,26 +46,27 @@ type ticker interface {
 	LayerToTime(types.LayerID) time.Time
 }
 
-type communication struct {
+type net struct {
 	peers
 	RequestTimeout time.Duration
 	*server.MessageServer
 	exit chan struct{}
 }
 
-func (ms communication) Close() {
+func (ms net) Close() {
 	ms.MessageServer.Close()
 	ms.peers.Close()
 }
 
-func (ms communication) GetTimeout() time.Duration {
+func (ms net) GetTimeout() time.Duration {
 	return ms.RequestTimeout
 }
 
-func (ms communication) GetExit() chan struct{} {
+func (ms net) GetExit() chan struct{} {
 	return ms.exit
 }
 
+//Configuration represents all config params needed by syncer
 type Configuration struct {
 	LayersPerEpoch  uint16
 	Concurrency     int //number of workers for sync method
@@ -111,17 +112,18 @@ const (
 	atxMsg              server.MessageType = 5
 	poetMsg             server.MessageType = 6
 	syncProtocol                           = "/sync/1.0/"
-	syncedTxt                              = "Node is Synced"
-	outOfSyncTxt                           = "Node is out of Sync"
 	validatingLayerNone types.LayerID      = 0
 )
 
+//Syncer is used to sync the node with the network
+//periodically the Syncer will check if the node is synced with the rest of the network
+//and will follow the sync protocol in order to fetch all missing data and become synced again
 type Syncer struct {
 	log.Log
 	Configuration
 	*mesh.Mesh
 	blockEligibilityValidator
-	*communication
+	*net
 	ticker
 
 	poetDb  poetDb
@@ -149,7 +151,7 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool txMemPool, atxpool a
 
 	exit := make(chan struct{})
 
-	srvr := &communication{
+	srvr := &net{
 		RequestTimeout: conf.RequestTimeout,
 		MessageServer:  server.NewMsgServer(srv.(server.Service), syncProtocol, conf.RequestTimeout, make(chan service.DirectMessage, p2pconf.ConfigValues.BufferSize), logger),
 		peers:          p2p.NewPeers(srv, logger.WithName("peers")),
@@ -161,7 +163,7 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool txMemPool, atxpool a
 		Configuration:             conf,
 		Log:                       logger,
 		Mesh:                      layers,
-		communication:             srvr,
+		net:                       srvr,
 		ticker:                    clock,
 		syncLock:                  types.TryMutex{},
 		poetDb:                    poetdb,
@@ -176,7 +178,7 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool txMemPool, atxpool a
 		awaitCh:                   make(chan struct{}),
 	}
 
-	s.blockQueue = newValidationQueue(srvr, s.Configuration, s, s.blockCheckLocal, logger.WithName("validQ"))
+	s.blockQueue = newValidationQueue(srvr, conf, s)
 	s.txQueue = newTxQueue(s)
 	s.atxQueue = newAtxQueue(s, s.FetchPoetProof)
 	srvr.RegisterBytesMsgHandler(layerHashMsg, newLayerHashRequestHandler(layers, logger))
@@ -189,10 +191,12 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool txMemPool, atxpool a
 	return s
 }
 
+//ForceSync signals syncer to run the synchronise flow
 func (s *Syncer) ForceSync() {
 	s.forceSync <- true
 }
 
+// Close closes all running goroutines
 func (s *Syncer) Close() {
 	s.Info("Closing syncer")
 	close(s.exit)
@@ -231,6 +235,7 @@ func (s *Syncer) getGossipBufferingStatus() status {
 	return b
 }
 
+//Await returns a channel that blocks until the node is synced
 func (s *Syncer) Await() chan struct{} {
 	return s.awaitCh
 }
@@ -259,17 +264,13 @@ func (s *Syncer) setGossipBufferingStatus(status status) {
 	s.gossipLock.Unlock()
 }
 
+//IsSynced returns true if the node is synced false otherwise
 func (s *Syncer) IsSynced() bool {
 	return s.weaklySynced(s.GetCurrentLayer()) && s.getGossipBufferingStatus() == done
 }
 
-func (s *Syncer) Status() string {
-	if s.IsSynced() {
-		return fmt.Sprintf("%s latest: %v, maxSynced %v", syncedTxt, s.LatestLayer(), s.GetCurrentLayer())
-	}
-	return fmt.Sprintf("%s latest: %v, maxSynced %v", outOfSyncTxt, s.LatestLayer(), s.GetCurrentLayer())
-}
-
+//Start starts the main pooling routine that checks the sync status every set interval
+//and calls synchronise if the node is out of sync
 func (s *Syncer) Start() {
 	if s.startLock.TryLock() {
 		s.Info("start syncer")
@@ -588,7 +589,7 @@ func (s *Syncer) blockSyntacticValidation(block *types.Block) ([]*types.Transact
 	}
 
 	//data availability
-	txs, atxs, err := s.DataAvailability(block)
+	txs, atxs, err := s.dataAvailability(block)
 	if err != nil {
 		return nil, nil, fmt.Errorf("DataAvailabilty failed for block %v err: %v", block.Id(), err)
 	}
@@ -664,7 +665,7 @@ func validateVotes(blk *types.Block, forBlockfunc forBlockInView, depth int, lg 
 	return true, nil
 }
 
-func (s *Syncer) DataAvailability(blk *types.Block) ([]*types.Transaction, []*types.ActivationTx, error) {
+func (s *Syncer) dataAvailability(blk *types.Block) ([]*types.Transaction, []*types.ActivationTx, error) {
 
 	wg := sync.WaitGroup{}
 	wg.Add(2)
@@ -795,6 +796,7 @@ func fetchWithFactory(wrk worker) chan interface{} {
 	return wrk.output
 }
 
+//FetchPoetProof fetches a poet proof from network peers
 func (s *Syncer) FetchPoetProof(poetProofRef []byte) error {
 	if !s.poetDb.HasProof(poetProofRef) {
 		out := <-fetchWithFactory(newNeighborhoodWorker(s, 1, poetReqFactory(poetProofRef)))
@@ -902,6 +904,6 @@ func (s *Syncer) getAndValidateLayer(id types.LayerID) error {
 	return nil
 }
 
-func (s *Syncer) ValidatingLayer() types.LayerID {
+func (s *Syncer) getValidatingLayer() types.LayerID {
 	return s.validatingLayer
 }

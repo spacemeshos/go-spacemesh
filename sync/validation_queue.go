@@ -9,43 +9,44 @@ import (
 	"sync"
 )
 
-type validationInfra interface {
-	DataAvailability(blk *types.Block) ([]*types.Transaction, []*types.ActivationTx, error)
+type syncer interface {
 	AddBlockWithTxs(blk *types.Block, txs []*types.Transaction, atxs []*types.ActivationTx) error
 	GetBlock(id types.BlockID) (*types.Block, error)
 	ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) (bool, error)) error
-	fastValidation(block *types.Block) error
 	HandleLateBlock(bl *types.Block)
-	ValidatingLayer() types.LayerID
 	ProcessedLayer() types.LayerID
+	dataAvailability(blk *types.Block) ([]*types.Transaction, []*types.ActivationTx, error)
+	validatingLayer() types.LayerID
+	fastValidation(block *types.Block) error
+	blockCheckLocal(blockIds []types.Hash32) (map[types.Hash32]item, map[types.Hash32]item, []types.Hash32)
 }
 
 type blockQueue struct {
-	Configuration
-	validationInfra
+	syncer
 	fetchQueue
+	Configuration
 	callbacks     map[interface{}]func(res bool) error
 	depMap        map[interface{}]map[types.Hash32]struct{}
 	reverseDepMap map[types.Hash32][]interface{}
 }
 
-func newValidationQueue(srvr Communication, conf Configuration, msh validationInfra, checkLocal checkLocalFunc, lg log.Log) *blockQueue {
+func newValidationQueue(srvr networker, conf Configuration, sy syncer) *blockQueue {
 	vq := &blockQueue{
 		fetchQueue: fetchQueue{
 			Log:                 srvr.WithName("blockFetchQueue"),
 			workerInfra:         srvr,
-			checkLocal:          checkLocal,
+			checkLocal:          sy.blockCheckLocal,
 			batchRequestFactory: blockFetchReqFactory,
 			Mutex:               &sync.Mutex{},
 			pending:             make(map[types.Hash32][]chan bool),
 			queue:               make(chan []types.Hash32, 1000),
 			name:                "Block",
 		},
-		Configuration:   conf,
-		depMap:          make(map[interface{}]map[types.Hash32]struct{}),
-		reverseDepMap:   make(map[types.Hash32][]interface{}),
-		callbacks:       make(map[interface{}]func(res bool) error),
-		validationInfra: msh,
+		Configuration: conf,
+		depMap:        make(map[interface{}]map[types.Hash32]struct{}),
+		reverseDepMap: make(map[types.Hash32][]interface{}),
+		callbacks:     make(map[interface{}]func(res bool) error),
+		syncer:        sy,
 	}
 	vq.handleFetch = vq.handleBlocks
 	go vq.work()
@@ -121,7 +122,7 @@ func (vq *blockQueue) finishBlockCallback(block *types.Block) func(res bool) err
 		}
 
 		//data availability
-		txs, atxs, err := vq.DataAvailability(block)
+		txs, atxs, err := vq.dataAvailability(block)
 		if err != nil {
 			return fmt.Errorf("DataAvailabilty failed for block %v err: %v", block.Id(), err)
 		}
@@ -138,7 +139,7 @@ func (vq *blockQueue) finishBlockCallback(block *types.Block) func(res bool) err
 		}
 
 		//run late block through tortoise only if its new to us
-		if (block.Layer() <= vq.ProcessedLayer() || block.Layer() == vq.ValidatingLayer()) && err != mesh.ErrAlreadyExist {
+		if (block.Layer() <= vq.ProcessedLayer() || block.Layer() == vq.validatingLayer()) && err != mesh.ErrAlreadyExist {
 			vq.HandleLateBlock(block)
 		}
 

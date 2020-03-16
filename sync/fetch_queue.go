@@ -28,7 +28,7 @@ type fetchQueue struct {
 	log.Log
 	batchRequestFactory
 	*sync.Mutex
-	workerInfra Communication
+	workerInfra networker
 	pending     map[types.Hash32][]chan bool
 	handleFetch func(fj fetchJob)
 	checkLocal  checkLocalFunc
@@ -156,7 +156,7 @@ func newTxQueue(s *Syncer) *txQueue {
 	q := &txQueue{
 		fetchQueue: fetchQueue{
 			Log:                 s.Log.WithName("txFetchQueue"),
-			workerInfra:         s.communication,
+			workerInfra:         s.net,
 			Mutex:               &sync.Mutex{},
 			batchRequestFactory: txFetchReqFactory,
 			checkLocal:          s.txCheckLocal,
@@ -220,7 +220,7 @@ func newAtxQueue(s *Syncer, fetchPoetProof fetchPoetProofFunc) *atxQueue {
 	q := &atxQueue{
 		fetchQueue: fetchQueue{
 			Log:                 s.Log.WithName("atxFetchQueue"),
-			workerInfra:         s.communication,
+			workerInfra:         s.net,
 			batchRequestFactory: atxFetchReqFactory,
 			Mutex:               &sync.Mutex{},
 			checkLocal:          s.atxCheckLocal,

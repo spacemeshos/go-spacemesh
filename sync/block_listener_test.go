@@ -181,7 +181,7 @@ func TestBlockListener_DataAvailability(t *testing.T) {
 
 	// Sync bl2.
 
-	txs, atxs, err := bl2.DataAvailability(block)
+	txs, atxs, err := bl2.dataAvailability(block)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(txs))
 	require.Equal(t, tx1.Id(), txs[0].Id())
@@ -234,7 +234,7 @@ func TestBlockListener_DataAvailabilityBadFlow(t *testing.T) {
 	_, err = bl1.GetBlock(block.Id())
 	require.NoError(t, err)
 
-	_, _, err = bl2.DataAvailability(block)
+	_, _, err = bl2.dataAvailability(block)
 	require.Error(t, err)
 
 	// create a new ATX
@@ -258,7 +258,7 @@ func TestBlockListener_DataAvailabilityBadFlow(t *testing.T) {
 	_, err = bl1.GetBlock(tBlock.Id())
 	require.NoError(t, err)
 
-	_, _, err = bl2.DataAvailability(tBlock)
+	_, _, err = bl2.dataAvailability(tBlock)
 	require.Error(t, err)
 }
 

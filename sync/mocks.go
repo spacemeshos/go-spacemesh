@@ -102,7 +102,7 @@ func (MockState) ValidateNonceAndBalance(transaction *types.Transaction) error {
 	panic("implement me")
 }
 
-func (MockState) GetLayerApplied(txId types.TransactionId) *types.LayerID {
+func (MockState) GetLayerApplied(txID types.TransactionId) *types.LayerID {
 	panic("implement me")
 }
 
