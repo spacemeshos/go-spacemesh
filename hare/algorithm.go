@@ -627,7 +627,7 @@ func (proc *ConsensusProcess) onRoundBegin() {
 
 // init a new message builder with the current state (s, k, ki) for this instance
 func (proc *ConsensusProcess) initDefaultBuilder(s *Set) (*messageBuilder, error) {
-	builder := NewMessageBuilder().SetInstanceId(proc.instanceID)
+	builder := newMessageBuilder().SetInstanceID(proc.instanceID)
 	builder = builder.SetRoundCounter(proc.k).SetKi(proc.ki).SetValues(s)
 	proof, err := proc.oracle.Proof(types.LayerID(proc.instanceID), proc.k)
 	if err != nil {

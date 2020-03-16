@@ -85,9 +85,9 @@ type messageBuilder struct {
 	inner *innerMessage
 }
 
-// NewMessageBuilder returns a new, empty message builder.
+// newMessageBuilder returns a new, empty message builder.
 // One should not assume any values are pre-set.
-func NewMessageBuilder() *messageBuilder {
+func newMessageBuilder() *messageBuilder {
 	m := &messageBuilder{&Msg{&Message{}, nil}, &innerMessage{}}
 	m.msg.InnerMsg = m.inner
 
@@ -123,7 +123,7 @@ func (builder *messageBuilder) SetType(msgType messageType) *messageBuilder {
 	return builder
 }
 
-func (builder *messageBuilder) SetInstanceId(id instanceID) *messageBuilder {
+func (builder *messageBuilder) SetInstanceID(id instanceID) *messageBuilder {
 	builder.inner.InstanceID = id
 	return builder
 }

@@ -51,8 +51,8 @@ func (msq MockStateQuerier) IsIdentityActiveOnConsensusView(edID string, layer t
 
 func createMessage(t *testing.T, instanceID instanceID) []byte {
 	sr := signing.NewEdSigner()
-	b := NewMessageBuilder()
-	msg := b.SetPubKey(sr.PublicKey()).SetInstanceId(instanceID).Sign(sr).Build()
+	b := newMessageBuilder()
+	msg := b.SetPubKey(sr.PublicKey()).SetInstanceID(instanceID).Sign(sr).Build()
 
 	var w bytes.Buffer
 	_, err := xdr.Marshal(&w, msg.Message)

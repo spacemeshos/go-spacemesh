@@ -30,8 +30,8 @@ var value9 = genBlockId(9)
 var value10 = genBlockId(10)
 
 func BuildPreRoundMsg(signing Signer, s *Set) *Msg {
-	builder := NewMessageBuilder()
-	builder.SetType(pre).SetInstanceId(instanceID1).SetRoundCounter(k).SetKi(ki).SetValues(s)
+	builder := newMessageBuilder()
+	builder.SetType(pre).SetInstanceID(instanceID1).SetRoundCounter(k).SetKi(ki).SetValues(s)
 	builder = builder.SetPubKey(signing.PublicKey()).Sign(signing)
 
 	return builder.Build()
