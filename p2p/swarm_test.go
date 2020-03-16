@@ -85,7 +85,7 @@ const exampleProtocol = "EX"
 const examplePayload = "Example"
 
 func TestNew(t *testing.T) {
-	s, err := New(context.TODO(), config.DefaultConfig(), log.NewDefault(t.Name()), "")
+	s, err := New(context.TODO(), configWithPort(0), log.NewDefault(t.Name()), "")
 	require.NoError(t, err)
 	err = s.Start()
 	require.NoError(t, err)

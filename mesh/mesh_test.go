@@ -176,7 +176,7 @@ func TestLayers_AddLayer(t *testing.T) {
 	id := types.LayerID(1)
 
 	_, err := msh.GetLayer(id)
-	r.EqualError(err, "error getting layer 1 from database leveldb: not found")
+	r.EqualError(err, database.ErrNotFound.Error())
 
 	err = msh.AddBlock(types.NewExistingBlock(id, []byte("data1")))
 	r.NoError(err)

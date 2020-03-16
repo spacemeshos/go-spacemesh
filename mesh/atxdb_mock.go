@@ -29,6 +29,10 @@ func (t *AtxDbMock) GetAtxHeader(id types.AtxId) (*types.ActivationTxHeader, err
 	return nil, fmt.Errorf("cannot find atx")
 }
 
+func (t *AtxDbMock) GetATXs(atxIds []types.AtxId) (map[types.AtxId]*types.ActivationTx, []types.AtxId) {
+	return nil, nil
+}
+
 func (t *AtxDbMock) GetFullAtx(id types.AtxId) (*types.ActivationTx, error) {
 	panic("implement me")
 }

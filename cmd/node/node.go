@@ -656,12 +656,12 @@ func (app *SpacemeshApp) stopServices() {
 
 	if app.jsonAPIService != nil {
 		log.Info("Stopping JSON service api...")
-		app.jsonAPIService.StopService()
+		app.jsonAPIService.Close()
 	}
 
 	if app.grpcAPIService != nil {
 		log.Info("Stopping GRPC service ...")
-		app.grpcAPIService.StopService()
+		app.grpcAPIService.Close()
 	}
 
 	if app.blockProducer != nil {

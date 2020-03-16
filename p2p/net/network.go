@@ -1,6 +1,7 @@
 package net
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -164,12 +165,10 @@ func (n *Net) publishClosingConnection(connection ConnectionWithErr) {
 	n.clsMutex.RUnlock()
 }
 
-func dial(keepAlive, timeOut time.Duration, address net.Addr) (net.Conn, error) {
+func dial(ctx context.Context, address net.Addr) (net.Conn, error) {
 	// connect via dialer so we can set tcp network params
 	dialer := &net.Dialer{}
-	dialer.Timeout = timeOut // max time bef
-
-	netConn, err := dialer.Dial("tcp", address.String())
+	netConn, err := dialer.DialContext(ctx, "tcp", address.String())
 	if err == nil {
 		tcpconn := netConn.(*net.TCPConn)
 		tcpSocketConfig(tcpconn)
@@ -190,14 +189,14 @@ func tcpSocketConfig(tcpconn *net.TCPConn) {
 }
 
 func (n *Net) createConnection(address net.Addr, remotePub p2pcrypto.PublicKey, session NetworkSession,
-	timeOut, keepAlive time.Duration) (ManagedConnection, error) {
+	ctx context.Context) (ManagedConnection, error) {
 
 	if n.isShuttingDown {
 		return nil, fmt.Errorf("can't dial because the connection is shutting down")
 	}
 
 	n.logger.Debug("Dialing %v @ %v...", remotePub.String(), address.String())
-	netConn, err := dial(keepAlive, timeOut, address)
+	netConn, err := dial(ctx, address)
 	if err != nil {
 		return nil, err
 	}
@@ -206,11 +205,10 @@ func (n *Net) createConnection(address net.Addr, remotePub p2pcrypto.PublicKey, 
 	return newConnection(netConn, n, remotePub, session, n.config.MsgSizeLimit, n.config.ResponseTimeout, n.logger), nil
 }
 
-func (n *Net) createSecuredConnection(address net.Addr, remotePubkey p2pcrypto.PublicKey, timeOut time.Duration,
-	keepAlive time.Duration) (ManagedConnection, error) {
+func (n *Net) createSecuredConnection(address net.Addr, remotePubkey p2pcrypto.PublicKey, ctx context.Context) (ManagedConnection, error) {
 
 	session := createSession(n.localNode.PrivateKey(), remotePubkey)
-	conn, err := n.createConnection(address, remotePubkey, session, timeOut, keepAlive)
+	conn, err := n.createConnection(address, remotePubkey, session, ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -238,8 +236,8 @@ func createSession(privkey p2pcrypto.PrivateKey, remotePubkey p2pcrypto.PublicKe
 // address:: net.Addr
 // Returns established connection that local clients can send messages to or error if failed
 // to establish a connection, currently only secured connections are supported
-func (n *Net) Dial(address net.Addr, remotePubkey p2pcrypto.PublicKey) (Connection, error) {
-	conn, err := n.createSecuredConnection(address, remotePubkey, n.config.DialTimeout, n.config.ConnKeepAlive)
+func (n *Net) Dial(ctx context.Context, address net.Addr, remotePubkey p2pcrypto.PublicKey) (Connection, error) {
+	conn, err := n.createSecuredConnection(address, remotePubkey, ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to Dial. err: %v", err)
 	}

@@ -150,6 +150,7 @@ func (its *IntegrationTestSuite) TearDownSuite() {
 
 func createP2pInstance(t testing.TB, config config.Config) *swarm {
 	config.TCPPort = 0
+	config.AcquirePort = false
 	p, err := newSwarm(context.TODO(), config, log.NewDefault("test instance"), "")
 	require.NoError(t, err)
 	require.NotNil(t, p)
