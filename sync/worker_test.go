@@ -23,7 +23,7 @@ func TestNewPeerWorker(t *testing.T) {
 	err := syncObj1.AddBlock(bl1)
 	assert.NoError(t, err)
 
-	wrk := NewPeersWorker(syncObj2, []p2p.Peer{nodes[3].PublicKey(), nodes[2].PublicKey(), nodes[0].PublicKey()}, &sync.Once{}, LayerIdsReqFactory(1))
+	wrk := newPeersWorker(syncObj2, []p2p.Peer{nodes[3].PublicKey(), nodes[2].PublicKey(), nodes[0].PublicKey()}, &sync.Once{}, layerIdsReqFactory(1))
 
 	go wrk.Work()
 
@@ -42,7 +42,7 @@ func TestNewNeighborhoodWorker(t *testing.T) {
 	syncs, nodes, _ := SyncMockFactory(2, conf, "TestSyncer_FetchPoetProofAvailableAndValid_", memoryDB, newMemPoetDb)
 	s0 := syncs[0]
 	s1 := syncs[1]
-	s1.Peers = getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
+	s1.peers = getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
 
 	proofMessage := makePoetProofMessage(t)
 
@@ -53,7 +53,7 @@ func TestNewNeighborhoodWorker(t *testing.T) {
 	r.NoError(err)
 	ref := sha256.Sum256(poetProofBytes)
 
-	w := NewNeighborhoodWorker(s1, 1, PoetReqFactory(ref[:]))
+	w := newNeighborhoodWorker(s1, 1, poetReqFactory(ref[:]))
 	go w.Work()
 	assert.NotNil(t, <-w.output)
 	r.NoError(err)
@@ -66,14 +66,14 @@ func TestNeighborhoodWorkerClose(t *testing.T) {
 	syncs, nodes, _ := SyncMockFactory(2, longConf, "TestSyncer_FetchPoetProofAvailableAndValid_", memoryDB, newMemPoetDb)
 	syncs[0].Close()
 	s1 := syncs[1]
-	s1.Peers = getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
+	s1.peers = getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
 
 	proofMessage := makePoetProofMessage(t)
 	poetProofBytes, err := types.InterfaceToBytes(&proofMessage.PoetProof)
 	r.NoError(err)
 	ref := sha256.Sum256(poetProofBytes)
 
-	w := NewNeighborhoodWorker(s1, 1, PoetReqFactory(ref[:]))
+	w := newNeighborhoodWorker(s1, 1, poetReqFactory(ref[:]))
 	go w.Work()
 	go func() {
 		time.Sleep(time.Second)
@@ -88,7 +88,7 @@ func TestPeerWorkerClose(t *testing.T) {
 	syncObj1 := syncs[0]
 	syncObj1.Close()
 	syncObj2 := syncs[1]
-	wrk := NewPeersWorker(syncObj2, []p2p.Peer{nodes[3].PublicKey(), nodes[2].PublicKey(), nodes[0].PublicKey()}, &sync.Once{}, LayerIdsReqFactory(1))
+	wrk := newPeersWorker(syncObj2, []p2p.Peer{nodes[3].PublicKey(), nodes[2].PublicKey(), nodes[0].PublicKey()}, &sync.Once{}, layerIdsReqFactory(1))
 	go wrk.Work()
 	go func() {
 		time.Sleep(time.Second)

@@ -235,10 +235,10 @@ func (m *validator) SetProcessedLayer(lyr types.LayerID) {
 func (v *validator) HandleLateBlock(b *types.Block) {
 	v.Info("Validate late block %s", b.Id())
 	oldPbase, newPbase := v.trtl.HandleLateBlock(b)
-	v.pushLayersToState(oldPbase, newPbase)
 	if err := v.trtl.PersistTortoise(); err != nil {
 		v.Error("could not persist Tortoise on late block %s from layer index %d", b.Id(), b.Layer())
 	}
+	v.pushLayersToState(oldPbase, newPbase)
 }
 
 func (v *validator) ValidateLayer(lyr *types.Layer) {
@@ -433,6 +433,10 @@ func (m *Mesh) AddBlock(blk *types.Block) error {
 }
 
 func (m *Mesh) SetZeroBlockLayer(lyr types.LayerID) error {
+	if _, err := m.GetLayer(lyr); err == nil {
+		m.Info("layer has blocks, dont set layer to 0 ")
+		return fmt.Errorf("layer exists")
+	}
 	m.SetLatestLayer(lyr)
 	lm := m.getLayerMutex(lyr)
 	defer m.endLayerWorker(lyr)
