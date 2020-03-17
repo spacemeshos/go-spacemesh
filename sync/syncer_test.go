@@ -1369,6 +1369,19 @@ func TestSyncProtocol_BadResponse(t *testing.T) {
 	syncs[1].RegisterBytesMsgHandler(txMsg, txHandlerMock)
 	syncs[1].RegisterBytesMsgHandler(atxMsg, atxHandlerMock)
 
+	for i := 0; i < 10; i++ {
+		if len(syncs[0].GetPeers()) > 0 {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	if len(syncs[0].GetPeers()) == 0 {
+		t.Error("no peers for syncer")
+		t.Fail()
+		return
+	}
+
 	// layer hash
 	_, err1 := syncs[0].getLayerFromNeighbors(types.LayerID(1))
 
