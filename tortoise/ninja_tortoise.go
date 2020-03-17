@@ -334,10 +334,11 @@ func (ni *ninjaTortoise) updatePatternTally(newMinGood votingPattern, correction
 		for b, v := range ni.TVote[g] {
 			tally := ni.TTally[newMinGood][b]
 			tally = tally.Add(v.Multiply(effc))
-			ni.TTally[newMinGood][b] = tally //in g's view -> in p's view
+			ni.TTally[newMinGood][b] = tally //in g's opinion -> p's tally
 		}
 	}
 
+	//add corrections for each block
 	for b, tally := range ni.TTally[newMinGood] {
 		if count, found := correctionMap[b.id()]; found {
 			ni.TTally[newMinGood][b] = tally.Add(count)
