@@ -1242,6 +1242,18 @@ func TestSyncProtocol_NilResponse(t *testing.T) {
 	timeout := 1 * time.Second
 	timeoutErrMsg := "no message received on channel"
 
+	for i := 0; i < 10; i++ {
+		if len(syncs[0].GetPeers()) > 0 {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	if len(syncs[0].GetPeers()) == 0 {
+		t.Error("syncer has no peers ")
+		t.Fail()
+	}
+
 	// Layer Hash
 
 	wrk := newPeersWorker(syncs[0], []p2p.Peer{nodes[1].PublicKey()}, &sync.Once{}, hashReqFactory(nonExistingLayerID))
