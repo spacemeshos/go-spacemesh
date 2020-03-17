@@ -26,7 +26,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sync"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 	"github.com/spacemeshos/go-spacemesh/turbohare"
-	"github.com/spacemeshos/go-spacemesh/version"
 	"github.com/spacemeshos/post/shared"
 	"go.uber.org/zap"
 	"io/ioutil"
@@ -97,7 +96,11 @@ var VersionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Show version info",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println(version.Version)
+		fmt.Print(cmdp.Version)
+		if cmdp.Commit != "" {
+			fmt.Printf("+%s", cmdp.Commit)
+		}
+		fmt.Println()
 	},
 }
 
