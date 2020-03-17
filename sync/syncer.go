@@ -257,11 +257,15 @@ func (s *Syncer) ListenToGossip() bool {
 }
 
 func (s *Syncer) setGossipBufferingStatus(status status) {
-	s.Info("setting gossip to '%s' ", status.String())
 	s.gossipLock.Lock()
+	defer s.gossipLock.Unlock()
+	if status == s.gossipSynced {
+		return
+	}
+	s.Info("setting gossip to '%s' ", status.String())
 	s.notifySubscribers(s.gossipSynced, status)
 	s.gossipSynced = status
-	s.gossipLock.Unlock()
+
 }
 
 //IsSynced returns true if the node is synced false otherwise
