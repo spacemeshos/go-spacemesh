@@ -168,6 +168,22 @@ def poll_query_message(indx, namespace, client_po_name, fields, findFails=False,
 
 def query_message(indx, namespace, client_po_name, fields, find_fails=False, start_time=None, queries=None,
                   is_print=True):
+    """
+    Send a query and return its' hits, this function is used by most of the query functions.
+    Queries are sent using "match_phrase" so strings may match partially, case insensitive
+
+    :param indx: string, current index
+    :param namespace: string, namespace to query
+    :param client_po_name: string, pod name
+    :param fields: dictionary, for example {'M': 'ATX published'}
+    :param find_fails: bool, if true print unmatching results
+    :param start_time: NOT IN USE, should be deleted
+    :param queries: elasticsearch_dsl.Q, queries to append to the new query
+    :param is_print: bool, print query data
+
+    :return: list, a list of all hits
+
+    """
     # TODO : break this to smaller functions ?
     es = ES().get_search_api()
     fltr = get_pod_name_and_namespace_queries(client_po_name, namespace)
