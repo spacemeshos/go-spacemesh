@@ -9,29 +9,29 @@ import (
 	"sync"
 )
 
-type FetchPoetProofFunc func(poetProofRef []byte) error
-type SValidateAtxFunc func(atx *types.ActivationTx) error
-type CheckLocalFunc func(ids []types.Hash32) (map[types.Hash32]Item, map[types.Hash32]Item, []types.Hash32)
+type fetchPoetProofFunc func(poetProofRef []byte) error
+type sValidateAtxFunc func(atx *types.ActivationTx) error
+type checkLocalFunc func(ids []types.Hash32) (map[types.Hash32]item, map[types.Hash32]item, []types.Hash32)
 
-type Item interface {
+type item interface {
 	Hash32() types.Hash32
 	ShortString() string
 }
 
 type fetchJob struct {
-	items []Item
+	items []item
 	ids   []types.Hash32
 }
 
 //todo make the queue generic
 type fetchQueue struct {
 	log.Log
-	BatchRequestFactory
+	batchRequestFactory
 	*sync.Mutex
-	workerInfra Communication
+	workerInfra networker
 	pending     map[types.Hash32][]chan bool
 	handleFetch func(fj fetchJob)
-	checkLocal  CheckLocalFunc
+	checkLocal  checkLocalFunc
 	queue       chan []types.Hash32 //types.TransactionId //todo make buffered
 	name        string
 }
@@ -60,7 +60,7 @@ func (fq *fetchQueue) shutdownRecover() {
 func (fq *fetchQueue) work() error {
 
 	defer fq.shutdownRecover()
-	output := fetchWithFactory(NewFetchWorker(fq.workerInfra, runtime.NumCPU(), fq.BatchRequestFactory, fq.queue, fq.name))
+	output := fetchWithFactory(newFetchWorker(fq.workerInfra, runtime.NumCPU(), fq.batchRequestFactory, fq.queue, fq.name))
 	for out := range output {
 		fq.Debug("new batch out of queue")
 		if out == nil {
@@ -122,7 +122,7 @@ func (fq *fetchQueue) invalidate(id types.Hash32, valid bool) {
 }
 
 //returns items out of itemIds that are not in the local database
-func (fq *fetchQueue) handle(itemIds []types.Hash32) (map[types.Hash32]Item, error) {
+func (fq *fetchQueue) handle(itemIds []types.Hash32) (map[types.Hash32]item, error) {
 	if len(itemIds) == 0 {
 		fq.Debug("handle empty item ids slice")
 		return nil, nil
@@ -134,7 +134,7 @@ func (fq *fetchQueue) handle(itemIds []types.Hash32) (map[types.Hash32]Item, err
 		output := fq.addToPendingGetCh(missing)
 
 		if success := <-output; !success {
-			return nil, errors.New(fmt.Sprintf("could not fetch all items"))
+			return nil, fmt.Errorf("could not fetch all items")
 		}
 
 		unprocessedItems, _, missing = fq.checkLocal(itemIds)
@@ -151,14 +151,14 @@ type txQueue struct {
 	fetchQueue
 }
 
-func NewTxQueue(s *Syncer) *txQueue {
+func newTxQueue(s *Syncer) *txQueue {
 	//todo buffersize
 	q := &txQueue{
 		fetchQueue: fetchQueue{
 			Log:                 s.Log.WithName("txFetchQueue"),
-			workerInfra:         s.communication,
+			workerInfra:         s.net,
 			Mutex:               &sync.Mutex{},
-			BatchRequestFactory: TxFetchReqFactory,
+			batchRequestFactory: txFetchReqFactory,
 			checkLocal:          s.txCheckLocal,
 			pending:             make(map[types.Hash32][]chan bool),
 			queue:               make(chan []types.Hash32, 10000),
@@ -191,7 +191,7 @@ func (tx txQueue) HandleTxs(txids []types.TransactionId) ([]*types.Transaction, 
 	return txs, nil
 }
 
-func updateTxDependencies(invalidate func(id types.Hash32, valid bool), txpool TxMemPool) func(fj fetchJob) {
+func updateTxDependencies(invalidate func(id types.Hash32, valid bool), txpool txMemPool) func(fj fetchJob) {
 	return func(fj fetchJob) {
 
 		mp := map[types.Hash32]*types.Transaction{}
@@ -215,13 +215,13 @@ type atxQueue struct {
 	fetchQueue
 }
 
-func NewAtxQueue(s *Syncer, fetchPoetProof FetchPoetProofFunc) *atxQueue {
+func newAtxQueue(s *Syncer, fetchPoetProof fetchPoetProofFunc) *atxQueue {
 	//todo buffersize
 	q := &atxQueue{
 		fetchQueue: fetchQueue{
 			Log:                 s.Log.WithName("atxFetchQueue"),
-			workerInfra:         s.communication,
-			BatchRequestFactory: AtxFetchReqFactory,
+			workerInfra:         s.net,
+			batchRequestFactory: atxFetchReqFactory,
 			Mutex:               &sync.Mutex{},
 			checkLocal:          s.atxCheckLocal,
 			pending:             make(map[types.Hash32][]chan bool),
@@ -255,9 +255,9 @@ func (atx atxQueue) HandleAtxs(atxids []types.AtxId) ([]*types.ActivationTx, err
 	return atxs, nil
 }
 
-func updateAtxDependencies(invalidate func(id types.Hash32, valid bool), sValidateAtx SValidateAtxFunc, atxpool AtxMemPool, fetchProof FetchPoetProofFunc) func(fj fetchJob) {
+func updateAtxDependencies(invalidate func(id types.Hash32, valid bool), sValidateAtx sValidateAtxFunc, atxpool atxMemPool, fetchProof fetchPoetProofFunc) func(fj fetchJob) {
 	return func(fj fetchJob) {
-		fetchProofCalcId(fetchProof, fj)
+		fetchProofCalcID(fetchProof, fj)
 
 		mp := map[types.Hash32]*types.ActivationTx{}
 		for _, item := range fj.items {
@@ -299,9 +299,8 @@ func getDoneChan(deps []chan bool) chan bool {
 	return doneChan
 }
 
-//todo get rid of this, send proofs with atxs
-func fetchProofCalcId(fetchPoetProof FetchPoetProofFunc, fj fetchJob) {
-	itemsWithProofs := make([]Item, 0, len(fj.items))
+func fetchProofCalcID(fetchPoetProof fetchPoetProofFunc, fj fetchJob) {
+	itemsWithProofs := make([]item, 0, len(fj.items))
 	for _, item := range fj.items {
 		atx := item.(*types.ActivationTx)
 		atx.CalcAndSetId() //todo put it somewhere that will cause less confusion

@@ -433,6 +433,10 @@ func (m *Mesh) AddBlock(blk *types.Block) error {
 }
 
 func (m *Mesh) SetZeroBlockLayer(lyr types.LayerID) error {
+	if _, err := m.GetLayer(lyr); err == nil {
+		m.Info("layer has blocks, dont set layer to 0 ")
+		return fmt.Errorf("layer exists")
+	}
 	m.SetLatestLayer(lyr)
 	lm := m.getLayerMutex(lyr)
 	defer m.endLayerWorker(lyr)
