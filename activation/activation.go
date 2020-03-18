@@ -17,7 +17,7 @@ const AtxProtocol = "AtxGossip"
 
 var activesetCache = NewActivesetCache(1000)
 
-// meshProvider
+// meshProviderMock
 type meshProvider interface {
 	GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error)
 	LatestLayer() types.LayerID
