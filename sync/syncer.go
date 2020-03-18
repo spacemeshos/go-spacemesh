@@ -341,6 +341,7 @@ func (s *Syncer) handleWeaklySynced() {
 	//validate current layer if more than s.ValidationDelta has passed
 	if err := s.handleCurrentLayer(); err != nil {
 		s.With().Error("Node is out of synce", log.Err(err))
+		s.setGossipBufferingStatus(pending)
 		return
 	}
 
