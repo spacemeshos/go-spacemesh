@@ -133,14 +133,14 @@ func (test *ConsensusTest) Start() {
 	go startProcs(test.dishonest)
 }
 
-func createConsensusProcess(isHonest bool, cfg config.Config, oracle fullRolacle, network NetworkService, initialSet *Set, layer instanceId, name string) *ConsensusProcess {
+func createConsensusProcess(isHonest bool, cfg config.Config, oracle fullRolacle, network NetworkService, initialSet *Set, layer instanceID, name string) *ConsensusProcess {
 	broker := buildBroker(network, name)
 	broker.Start()
 	output := make(chan TerminationOutput, 1)
 	signing := signing2.NewEdSigner()
 	oracle.Register(isHonest, signing.PublicKey().String())
 	proc := NewConsensusProcess(cfg, layer, initialSet, oracle, NewMockStateQuerier(), 10, signing, types.NodeId{Key: signing.PublicKey().String(), VRFPublicKey: []byte{}}, network, output, truer{}, log.NewDefault(signing.PublicKey().ShortString()))
-	c, _ := broker.Register(proc.Id())
+	c, _ := broker.Register(proc.ID())
 	proc.SetInbox(c)
 
 	return proc

@@ -42,7 +42,7 @@ func TestBeacon_Value(t *testing.T) {
 	valGoodPtrn[block2.Id()] = struct{}{}
 	valGoodPtrn[block3.Id()] = struct{}{}
 
-	b.patternProvider = &mockPatternProvider{valGoodPtrn, genesisGoodPtrn, someErr}
+	b.patternProvider = &mockPatternProvider{valGoodPtrn, genesisGoodPtrn, errFoo}
 	b.confidenceParam = cfg.ConfidenceParam
 	_, err := b.Value(100)
 	r.NotNil(err)
