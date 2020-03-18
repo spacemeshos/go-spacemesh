@@ -20,6 +20,7 @@ import (
 	"sync"
 	"time"
 )
+
 // ManualClock is a clock that releases ticks on demand and not according to a real world clock
 type ManualClock struct {
 	subs          map[timesync.LayerTimer]struct{}
