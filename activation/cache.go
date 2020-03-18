@@ -6,7 +6,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
-// ActivesetCache holds and lru cache of the active set size for a view hash.
+// ActivesetCache holds an lru cache of the active set size for a view hash.
 type ActivesetCache struct {
 	*lru.Cache
 }
@@ -35,8 +35,8 @@ func (bc ActivesetCache) Get(view types.Hash12) (uint32, bool) {
 	return blk, true
 }
 
-// AtxCache  holds an lru cache of ActivationTxHeader structs of recent atx used to calculate active set size
-// ideally this cache will hold the atxs created in latest epoch, on which mose of active set size calculation will be
+// AtxCache holds an lru cache of ActivationTxHeader structs of recent atx used to calculate active set size
+// ideally this cache will hold the atxs created in latest epoch, on which most of active set size calculation will be
 // performed
 type AtxCache struct {
 	*lru.Cache
@@ -56,7 +56,7 @@ func (bc *AtxCache) Add(id types.AtxId, atxHeader *types.ActivationTxHeader) {
 	bc.Cache.Add(id, atxHeader)
 }
 
-// Get gets the corresponding Atx header to the given id id, it also returns a boolean to indicate whether the item
+// Get gets the corresponding Atx header to the given id, it also returns a boolean to indicate whether the item
 // was found in cache
 func (bc AtxCache) Get(id types.AtxId) (*types.ActivationTxHeader, bool) {
 	item, found := bc.Cache.Get(id)

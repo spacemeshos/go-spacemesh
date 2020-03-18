@@ -27,8 +27,8 @@ type GlobalStateDB interface {
 	TrieDB() *trie.Database
 }
 
-// StateDB is the struct that performs logging of all account states. it consists of a state trie that contains all
-// account data in its leaves. it also stores a dirty object list to dump when state is committed into db
+// StateDB is the struct that performs logging of all account states. It consists of a state trie that contains all
+// account data in its leaves. It also stores a dirty object list to dump when state is committed into db
 type StateDB struct {
 	globalTrie Trie
 	db         Database //todo: maybe remove

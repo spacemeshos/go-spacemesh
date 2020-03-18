@@ -22,7 +22,7 @@ type StatePreImages struct {
 	preImages []*types.Transaction
 }
 
-// Projector interface defince the interface for a struct that can project the state aof an account by applying txs from
+// Projector interface defines the interface for a struct that can project the state of an account by applying txs from
 // mem pool
 type Projector interface {
 	GetProjection(addr types.Address, prevNonce, prevBalance uint64) (nonce, balance uint64, err error)

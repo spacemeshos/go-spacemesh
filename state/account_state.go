@@ -8,7 +8,7 @@ import (
 	"math/big"
 )
 
-// AccountState is the interface defined to auery a single account state
+// AccountState is the interface defined to query a single account state
 type AccountState interface {
 	GetBalance() *big.Int
 	GetNonce() uint64
@@ -19,7 +19,7 @@ type AccountState interface {
 	GetAddress() types.Address
 }
 
-// StateObj is the struct in which account information is stored. it contains account info such as nonce and balane
+// StateObj is the struct in which account information is stored. It contains account info such as nonce and balance
 // and also the accounts address, address hash and a reference to this structs containing database
 type StateObj struct {
 	address  types.Address

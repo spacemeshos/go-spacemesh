@@ -127,7 +127,7 @@ func NewBlockBuilder(minerID types.NodeId, sgn signer, net p2p.Service, beginRou
 }
 
 // Start starts the process of creating a block, it listens for txs and atxs received by gossip, and starts querying
-// blopck oracly chen it should create a block. this function returns an error if Start was already called once
+// block oracle when it should create a block. This function returns an error if Start was already called once
 func (t *BlockBuilder) Start() error {
 	t.mu.Lock()
 	defer t.mu.Unlock()

@@ -24,13 +24,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/trie"
 )
 
-// DumpAccount is an helper struct that helps dumping account balance and nonce in json form
+// DumpAccount is a helper struct that helps dumping account balance and nonce in json form
 type DumpAccount struct {
 	Balance string `json:"balance"`
 	Nonce   uint64 `json:"nonce"`
 }
 
-// Dump is a sstruct used to dump an entire state root into json form
+// Dump is a struct used to dump an entire state root into json form
 type Dump struct {
 	Root     string                 `json:"root"`
 	Accounts map[string]DumpAccount `json:"accounts"`

@@ -26,7 +26,7 @@ func NewTxMemPool() *TxMempool {
 	}
 }
 
-// Get returns transaction by provided id id, it returns an error it transaction is not found
+// Get returns transaction by provided id, it returns an error if transaction is not found
 func (t *TxMempool) Get(id types.TransactionId) (*types.Transaction, error) {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
@@ -37,7 +37,7 @@ func (t *TxMempool) Get(id types.TransactionId) (*types.Transaction, error) {
 	return nil, errors.New("transaction not found in mempool")
 }
 
-// GetTxIdsByAddress returns all transactions from a specific source address
+// GetTxIdsByAddress returns all transactions from/to a specific address
 func (t *TxMempool) GetTxIdsByAddress(addr types.Address) []types.TransactionId {
 	var ids []types.TransactionId
 	for id := range t.txByAddr[addr] {
@@ -46,7 +46,7 @@ func (t *TxMempool) GetTxIdsByAddress(addr types.Address) []types.TransactionId 
 	return ids
 }
 
-// GetTxsForBlock gets a specific number of random txs for a block. this function also receives a state calculation function
+// GetTxsForBlock gets a specific number of random txs for a block. This function also receives a state calculation function
 // to allow returning only transactions that will probably be valid
 func (t *TxMempool) GetTxsForBlock(numOfTxs int, getState func(addr types.Address) (nonce, balance uint64, err error)) ([]types.TransactionId, error) {
 	var txIds []types.TransactionId
@@ -84,7 +84,7 @@ func getRandIdxs(numOfTxs, spaceSize int) map[uint64]struct{} {
 	return idxs
 }
 
-// Put inserts a transaction into the mem pool. it indexes it by source and dest addresses as well
+// Put inserts a transaction into the mem pool. It indexes it by source and dest addresses as well
 func (t *TxMempool) Put(id types.TransactionId, tx *types.Transaction) {
 	t.mu.Lock()
 	t.txs[id] = tx
