@@ -50,9 +50,9 @@ func TestSet_Id(t *testing.T) {
 
 	s2 := NewEmptySet(lowDefaultSize)
 	s2.Add(value1)
-	assert.NotEqual(t, s1.Id(), s2.Id())
+	assert.NotEqual(t, s1.ID(), s2.ID())
 	s2.Add(value2)
-	assert.Equal(t, s1.Id(), s2.Id())
+	assert.Equal(t, s1.ID(), s2.ID())
 
 	s3 := NewEmptySet(lowDefaultSize)
 	s3.Add(value2)
@@ -60,7 +60,7 @@ func TestSet_Id(t *testing.T) {
 	s3.Add(value3)
 
 	s1.Add(value3)
-	assert.Equal(t, s1.Id(), s3.Id())
+	assert.Equal(t, s1.ID(), s3.ID())
 }
 
 func TestSet_Complement(t *testing.T) {

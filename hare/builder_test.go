@@ -26,9 +26,9 @@ func marshallUnmarshall(t *testing.T, msg *Message) *Message {
 }
 
 func TestBuilder_TestBuild(t *testing.T) {
-	b := NewMessageBuilder()
+	b := newMessageBuilder()
 	sgn := signing.NewEdSigner()
-	msg := b.SetPubKey(sgn.PublicKey()).SetInstanceId(instanceId1).Sign(sgn).Build()
+	msg := b.SetPubKey(sgn.PublicKey()).SetInstanceID(instanceID1).Sign(sgn).Build()
 
 	m := marshallUnmarshall(t, msg.Message)
 	assert.Equal(t, m, msg.Message)
@@ -36,7 +36,7 @@ func TestBuilder_TestBuild(t *testing.T) {
 
 func TestMessageBuilder_SetValues(t *testing.T) {
 	s := NewSetFromValues(value5)
-	msg := NewMessageBuilder().SetValues(s).Build().Message
+	msg := newMessageBuilder().SetValues(s).Build().Message
 
 	m := marshallUnmarshall(t, msg)
 	s1 := NewSet(m.InnerMsg.Values)
@@ -50,7 +50,7 @@ func TestMessageBuilder_SetCertificate(t *testing.T) {
 	tr.OnCommit(BuildCommitMsg(signing.NewEdSigner(), s))
 	cert := tr.BuildCertificate()
 	assert.NotNil(t, cert)
-	c := NewMessageBuilder().SetCertificate(cert).Build().Message
+	c := newMessageBuilder().SetCertificate(cert).Build().Message
 	cert2 := marshallUnmarshall(t, c).InnerMsg.Cert
 	assert.Equal(t, cert.Values, cert2.Values)
 }
