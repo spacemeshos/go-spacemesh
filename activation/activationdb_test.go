@@ -73,7 +73,7 @@ func (MockState) ValidateNonceAndBalance(transaction *types.Transaction) error {
 	panic("implement me")
 }
 
-func (MockState) GetLayerApplied(txId types.TransactionId) *types.LayerID {
+func (MockState) GetLayerApplied(txID types.TransactionId) *types.LayerID {
 	panic("implement me")
 }
 
@@ -213,7 +213,7 @@ func TestATX_ActiveSetForLayerView(t *testing.T) {
 	rand.Seed(1234573298579)
 	atxdb, layers, _ := getAtxDb(t.Name())
 	blocksMap := make(map[types.BlockID]struct{})
-	//layers.AtxDB = &AtxDbMock{make(map[types.AtxId]*types.ActivationTx), make(map[types.AtxId]*types.NIPST)}
+	//layers.AtxDB = &AtxDbMock{make(map[types.AtxID]*types.ActivationTx), make(map[types.AtxID]*types.NIPST)}
 	id1 := types.NodeId{Key: rndStr(), VRFPublicKey: []byte("anton")}
 	id2 := types.NodeId{Key: rndStr(), VRFPublicKey: []byte("anton")}
 	id3 := types.NodeId{Key: rndStr(), VRFPublicKey: []byte("anton")}
@@ -433,7 +433,7 @@ func TestActivationDb_GetNodeLastAtxId(t *testing.T) {
 	atx2 := types.NewActivationTx(newChallenge(id1, 1, atx1.Id(), atx1.Id(), epoch2.FirstLayer(atxdb.LayersPerEpoch)), coinbase1, 3, []types.BlockID{}, &types.NIPST{}, nil)
 	r.NoError(atxdb.StoreAtx(epoch2, atx2))
 
-	id, err := atxdb.GetNodeLastAtxId(id1)
+	id, err := atxdb.GetNodeLastAtxID(id1)
 	r.NoError(err)
 	r.Equal(atx2.ShortString(), id.ShortString(), "atx1.ShortString(): %v", atx1.ShortString())
 }
@@ -459,39 +459,39 @@ func Test_DBSanity(t *testing.T) {
 	err = atxdb.storeAtxUnlocked(atx3)
 	assert.NoError(t, err)
 
-	err = atxdb.addAtxToNodeId(id1, atx1)
+	err = atxdb.addAtxToNodeID(id1, atx1)
 	assert.NoError(t, err)
-	id, err := atxdb.GetNodeLastAtxId(id1)
+	id, err := atxdb.GetNodeLastAtxID(id1)
 	assert.NoError(t, err)
 	assert.Equal(t, atx1.Id(), id)
 	assert.Equal(t, types.EpochId(1), atx1.TargetEpoch(atxdb.LayersPerEpoch))
-	id, err = atxdb.GetNodeAtxIdForEpoch(id1, atx1.TargetEpoch(atxdb.LayersPerEpoch))
+	id, err = atxdb.GetNodeAtxIDForEpoch(id1, atx1.TargetEpoch(atxdb.LayersPerEpoch))
 	assert.NoError(t, err)
 	assert.Equal(t, atx1.Id(), id)
 
-	err = atxdb.addAtxToNodeId(id2, atx2)
+	err = atxdb.addAtxToNodeID(id2, atx2)
 	assert.NoError(t, err)
 
-	err = atxdb.addAtxToNodeId(id1, atx3)
+	err = atxdb.addAtxToNodeID(id1, atx3)
 	assert.NoError(t, err)
 
-	id, err = atxdb.GetNodeLastAtxId(id2)
+	id, err = atxdb.GetNodeLastAtxID(id2)
 	assert.NoError(t, err)
 	assert.Equal(t, atx2.Id(), id)
 	assert.Equal(t, types.EpochId(2), atx2.TargetEpoch(atxdb.LayersPerEpoch))
-	id, err = atxdb.GetNodeAtxIdForEpoch(id2, atx2.TargetEpoch(atxdb.LayersPerEpoch))
+	id, err = atxdb.GetNodeAtxIDForEpoch(id2, atx2.TargetEpoch(atxdb.LayersPerEpoch))
 	assert.NoError(t, err)
 	assert.Equal(t, atx2.Id(), id)
 
-	id, err = atxdb.GetNodeLastAtxId(id1)
+	id, err = atxdb.GetNodeLastAtxID(id1)
 	assert.NoError(t, err)
 	assert.Equal(t, atx3.Id(), id)
 	assert.Equal(t, types.EpochId(3), atx3.TargetEpoch(atxdb.LayersPerEpoch))
-	id, err = atxdb.GetNodeAtxIdForEpoch(id1, atx3.TargetEpoch(atxdb.LayersPerEpoch))
+	id, err = atxdb.GetNodeAtxIDForEpoch(id1, atx3.TargetEpoch(atxdb.LayersPerEpoch))
 	assert.NoError(t, err)
 	assert.Equal(t, atx3.Id(), id)
 
-	id, err = atxdb.GetNodeLastAtxId(id3)
+	id, err = atxdb.GetNodeLastAtxID(id3)
 	assert.EqualError(t, err, fmt.Sprintf("atx for node %v does not exist", id3.ShortString()))
 	assert.Equal(t, *types.EmptyAtxId, id)
 }
@@ -841,7 +841,7 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 	nodeAtxIds = append(nodeAtxIds, atx.Id())
 	nodeAtxIds = append(nodeAtxIds, id4)
 
-	id, err := atxdb.GetNodeLastAtxId(idx1)
+	id, err := atxdb.GetNodeLastAtxID(idx1)
 	assert.NoError(t, err)
 	assert.Equal(t, atx.Id(), id)
 
@@ -972,7 +972,7 @@ func BenchmarkNewActivationDb(b *testing.B) {
 	)
 	prevAtxs := make([]types.AtxId, numOfMiners)
 	pPrevAtxs := make([]types.AtxId, numOfMiners)
-	posAtx := prevAtxId
+	posAtx := prevAtxID
 	var atx *types.ActivationTx
 	layer := types.LayerID(postGenesisEpochLayer)
 
@@ -980,7 +980,7 @@ func BenchmarkNewActivationDb(b *testing.B) {
 	eStart := time.Now()
 	for epoch := postGenesisEpoch; epoch < postGenesisEpoch+numOfEpochs; epoch++ {
 		for miner := 0; miner < numOfMiners; miner++ {
-			challenge := newChallenge(nodeId, 1, prevAtxs[miner], posAtx, layer)
+			challenge := newChallenge(nodeID, 1, prevAtxs[miner], posAtx, layer)
 			h, err := challenge.Hash()
 			r.NoError(err)
 			atx = newAtx(challenge, numOfMiners, defaultView, NewNIPSTWithChallenge(h, poetRef))
@@ -1026,7 +1026,7 @@ func TestActivationDb_TopAtx(t *testing.T) {
 
 	topAtx, err := atxdb.getTopAtx()
 	r.NoError(err)
-	r.Equal(atx.Id(), topAtx.AtxId)
+	r.Equal(atx.Id(), topAtx.AtxID)
 
 	// higher-layer ATX stored should become new top ATX
 	atx, err = createAndStoreAtx(atxdb, 3)
@@ -1034,7 +1034,7 @@ func TestActivationDb_TopAtx(t *testing.T) {
 
 	topAtx, err = atxdb.getTopAtx()
 	r.NoError(err)
-	r.Equal(atx.Id(), topAtx.AtxId)
+	r.Equal(atx.Id(), topAtx.AtxID)
 
 	// lower-layer ATX stored should NOT become new top ATX
 	atx, err = createAndStoreAtx(atxdb, 1)
@@ -1042,7 +1042,7 @@ func TestActivationDb_TopAtx(t *testing.T) {
 
 	topAtx, err = atxdb.getTopAtx()
 	r.NoError(err)
-	r.NotEqual(atx.Id(), topAtx.AtxId)
+	r.NotEqual(atx.Id(), topAtx.AtxID)
 }
 
 func createAndValidateSignedATX(r *require.Assertions, atxdb *ActivationDb, ed *signing.EdSigner, atx *types.ActivationTx) (*types.ActivationTx, error) {
@@ -1148,7 +1148,7 @@ func TestActivationDb_ContextuallyValidateAtx(t *testing.T) {
 	memesh := mesh.NewMemMeshDB(lg.WithName("meshDB"))
 	atxdb := NewActivationDb(database.NewMemDatabase(), idStore, memesh, layersPerEpochBig, &ValidatorMock{}, lg.WithName("atxDB"))
 
-	atx := types.NewActivationTx(newChallenge(nodeId, 0, *types.EmptyAtxId, *types.EmptyAtxId, 0), [20]byte{}, 5, nil, nil, nil)
+	atx := types.NewActivationTx(newChallenge(nodeID, 0, *types.EmptyAtxId, *types.EmptyAtxId, 0), [20]byte{}, 5, nil, nil, nil)
 	err := atxdb.ContextuallyValidateAtx(atx.ActivationTxHeader)
 	r.NoError(err)
 }

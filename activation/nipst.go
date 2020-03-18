@@ -119,7 +119,7 @@ type NIPSTBuilder struct {
 	stopM   sync.Mutex
 	errChan chan error
 	state   *builderState
-	store   BytesStore
+	store   bytesStore
 	log     log.Log
 }
 
@@ -129,7 +129,7 @@ type PoetDbApi interface {
 	UnsubscribeFromProofRef(poetId []byte, roundId string)
 }
 
-func NewNIPSTBuilder(id []byte, postProver PostProverClient, poetProver PoetProvingServiceClient, poetDb PoetDbApi, store BytesStore, log log.Log) *NIPSTBuilder {
+func NewNIPSTBuilder(id []byte, postProver PostProverClient, poetProver PoetProvingServiceClient, poetDb PoetDbApi, store bytesStore, log log.Log) *NIPSTBuilder {
 	return newNIPSTBuilder(
 		id,
 		postProver,
@@ -145,7 +145,7 @@ func newNIPSTBuilder(
 	postProver PostProverClient,
 	poetProver PoetProvingServiceClient,
 	poetDb PoetDbApi,
-	store BytesStore,
+	store bytesStore,
 	log log.Log,
 ) *NIPSTBuilder {
 	return &NIPSTBuilder{
