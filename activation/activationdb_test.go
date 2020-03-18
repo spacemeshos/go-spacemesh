@@ -721,7 +721,7 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	atx = types.NewActivationTxForTests(idx1, 0, *types.EmptyAtxId, 1012, 0, posAtx.Id(), coinbase, 3, []types.BlockID{}, &types.NIPST{})
 	atx.Commitment = commitment
 	atx.CommitmentMerkleRoot = append([]byte{}, commitment.MerkleRoot...)
-	atx.CommitmentMerkleRoot[0] ++
+	atx.CommitmentMerkleRoot[0]++
 	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
 	err = atxdb.SyntacticallyValidateAtx(atx)

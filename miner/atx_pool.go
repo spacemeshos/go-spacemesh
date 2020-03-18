@@ -7,15 +7,18 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
+// AtxMemPool is a memory store that holds all received ATXs from gossip network by their ids
 type AtxMemPool struct {
 	mu     sync.RWMutex
 	atxMap map[types.AtxId]*types.ActivationTx
 }
 
+// NewAtxMemPool creates a struct holding atxs by id
 func NewAtxMemPool() *AtxMemPool {
 	return &AtxMemPool{atxMap: make(map[types.AtxId]*types.ActivationTx)}
 }
 
+// Get retrieves the atx by the provided id id, it returns a reference to the found atx struct or an error if not
 func (mem *AtxMemPool) Get(id types.AtxId) (*types.ActivationTx, error) {
 	mem.mu.RLock()
 	defer mem.mu.RUnlock()
@@ -26,6 +29,7 @@ func (mem *AtxMemPool) Get(id types.AtxId) (*types.ActivationTx, error) {
 	return atx, nil
 }
 
+// GetAllItems creates and returns a list of all items found in cache
 func (mem *AtxMemPool) GetAllItems() []*types.ActivationTx {
 	mem.mu.RLock()
 	defer mem.mu.RUnlock()
@@ -36,12 +40,14 @@ func (mem *AtxMemPool) GetAllItems() []*types.ActivationTx {
 	return atxList
 }
 
+// Put insets an atx into the mempool
 func (mem *AtxMemPool) Put(atx *types.ActivationTx) {
 	mem.mu.Lock()
 	mem.atxMap[atx.Id()] = atx
 	mem.mu.Unlock()
 }
 
+// Invalidate removes the provided atx by its id. it does not return error if id is not found
 func (mem *AtxMemPool) Invalidate(id types.AtxId) {
 	mem.mu.Lock()
 	defer mem.mu.Unlock()

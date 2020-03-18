@@ -6,6 +6,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/sha256-simd"
 )
+
 // IdentityStore stores couples of identities and used to retrieve bls identity by provided ed25519 identity
 type IdentityStore struct {
 	//todo: think about whether we need one db or several
