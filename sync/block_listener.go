@@ -10,9 +10,10 @@ import (
 	"time"
 )
 
+//BlockListener Listens to blocks propagated in gossip
 type BlockListener struct {
 	*Syncer
-	BlockEligibilityValidator
+	blockEligibilityValidator
 	log.Log
 	wg                   sync.WaitGroup
 	bufferSize           int
@@ -23,6 +24,7 @@ type BlockListener struct {
 	exit                 chan struct{}
 }
 
+//Close closes all running goroutines
 func (bl *BlockListener) Close() {
 	close(bl.exit)
 	bl.Info("block listener closing, waiting for gorutines")
@@ -31,12 +33,14 @@ func (bl *BlockListener) Close() {
 	bl.Info("block listener closed")
 }
 
+//Start starts the main listening goroutine
 func (bl *BlockListener) Start() {
 	if bl.startLock.TryLock() {
-		go bl.ListenToGossipBlocks()
+		go bl.listenToGossipBlocks()
 	}
 }
 
+//NewBlockListener creates a new instance of BlockListener
 func NewBlockListener(net service.Service, sync *Syncer, concurrency int, logger log.Log) *BlockListener {
 	bl := BlockListener{
 		Syncer:               sync,
@@ -48,7 +52,7 @@ func NewBlockListener(net service.Service, sync *Syncer, concurrency int, logger
 	return &bl
 }
 
-func (bl *BlockListener) ListenToGossipBlocks() {
+func (bl *BlockListener) listenToGossipBlocks() {
 	for {
 		select {
 		case <-bl.exit:
@@ -115,7 +119,7 @@ func (bl *BlockListener) handleBlock(data service.GossipMessage) {
 		return
 	}
 
-	if blk.Layer() <= bl.ProcessedLayer() || blk.Layer() == bl.ValidatingLayer() {
+	if blk.Layer() <= bl.ProcessedLayer() || blk.Layer() == bl.getValidatingLayer() {
 		bl.Syncer.HandleLateBlock(&blk)
 	}
 	return
