@@ -49,10 +49,12 @@ import (
 	"github.com/spf13/viper"
 )
 
+// import for memory and network profiling
 import _ "net/http/pprof"
 
 const edKeyFileName = "key.bin"
 
+// Logger names
 const (
 	AppLogger            = "app"
 	P2PLogger            = "p2p"
@@ -80,6 +82,7 @@ const (
 	AtxBuilderLogger     = "atxBuilder"
 )
 
+// Cmd is the cobra wrapper for the node, that allows adding parameters to it
 var Cmd = &cobra.Command{
 	Use:   "node",
 	Short: "start node",
@@ -107,16 +110,19 @@ func init() {
 	Cmd.AddCommand(VersionCmd)
 }
 
+// Service is a general service interface that specifies the basic start/stop functionality
 type Service interface {
 	Start() error
 	Close()
 }
 
+// HareService is basic definition of hare algorithm service, providing consensus results for a layer
 type HareService interface {
 	Service
 	GetResult(id types.LayerID) ([]types.BlockID, error)
 }
 
+// TickProvider is an interface to a glopbal system clock that releases ticks on each layer
 type TickProvider interface {
 	Subscribe() timesync.LayerTimer
 	Unsubscribe(timer timesync.LayerTimer)
@@ -125,13 +131,13 @@ type TickProvider interface {
 	GetGenesisTime() time.Time
 	LayerToTime(id types.LayerID) time.Time
 	Close()
-	AwaitLayer(layerId types.LayerID) chan struct{}
+	AwaitLayer(layerID types.LayerID) chan struct{}
 }
 
 // SpacemeshApp is the cli app singleton
 type SpacemeshApp struct {
 	*cobra.Command
-	nodeId         types.NodeId
+	nodeID         types.NodeId
 	P2P            p2p.Service
 	Config         *cfg.Config
 	grpcAPIService *api.SpacemeshGrpcService
@@ -155,6 +161,7 @@ type SpacemeshApp struct {
 	term           chan struct{} // this channel is closed when closing services, goroutines should wait on this channel in order to terminate
 }
 
+// LoadConfigFromFile tries to load configuration file if the config parameter was specified
 func LoadConfigFromFile() (*cfg.Config, error) {
 
 	fileLocation := viper.GetString("config")
@@ -203,7 +210,7 @@ func (app *SpacemeshApp) introduction() {
 	log.Info("Welcome to Spacemesh. Spacemesh full node is starting...")
 }
 
-// this is what he wants to execute Initialize app starts
+// Initialize is what he wants to execute Initialize app starts
 // this is my persistent pre run that involves parsing the
 // toml config file
 func (app *SpacemeshApp) Initialize(cmd *cobra.Command, args []string) (err error) {
@@ -280,7 +287,7 @@ func (app *SpacemeshApp) getAppInfo() string {
 		cmdp.Version, cmdp.Branch, cmdp.Commit, runtime.Version(), runtime.GOOS, runtime.GOARCH)
 }
 
-// Post Execute tasks
+// Cleanup stops all app services
 func (app *SpacemeshApp) Cleanup(cmd *cobra.Command, args []string) (err error) {
 	log.Info("App Cleanup starting...")
 	app.stopServices()
@@ -334,6 +341,7 @@ func (app *SpacemeshApp) setupTestFeatures() {
 type weakCoinStub struct {
 }
 
+// GetResult returns the weak coin toss result
 func (weakCoinStub) GetResult() bool {
 	return true
 }
@@ -404,6 +412,7 @@ func (app *SpacemeshApp) addLogger(name string, logger log.Log) log.Log {
 	return logger.SetLevel(&lvl).WithName(name)
 }
 
+// SetLogLevel sets the specific log level for the specified logger name, Log level can be WARN, INFO, DEBUG
 func (app *SpacemeshApp) SetLogLevel(name, loglevel string) error {
 	if lvl, ok := app.loggers[name]; ok {
 		err := lvl.UnmarshalText([]byte(loglevel))
@@ -428,7 +437,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId,
 	vrfSigner *BLS381.BlsSigner,
 	layersPerEpoch uint16, clock TickProvider) error {
 
-	app.nodeId = nodeID
+	app.nodeID = nodeID
 	//todo: should we add all components to a single struct?
 
 	name := nodeID.ShortString()
@@ -594,6 +603,7 @@ func (app *SpacemeshApp) checkTimeDrifts() {
 	}
 }
 
+// HareFactory returns a hare consensus algorithm according to the parameters is app.Config.Hare.SuperHare
 func (app *SpacemeshApp) HareFactory(mdb *mesh.MeshDB, swarm service.Service, sgn hare.Signer, nodeID types.NodeId, syncer *sync.Syncer, msh *mesh.Mesh, hOracle hare.Rolacle, idStore *activation.IdentityStore, clock TickProvider, lg log.Log) HareService {
 	if app.Config.HARE.SuperHare {
 		return turbohare.New(msh)
@@ -665,14 +675,14 @@ func (app *SpacemeshApp) stopServices() {
 	}
 
 	if app.blockProducer != nil {
-		app.log.Info("%v closing block producer", app.nodeId.Key)
+		app.log.Info("%v closing block producer", app.nodeID.Key)
 		if err := app.blockProducer.Close(); err != nil {
 			log.Error("cannot stop block producer %v", err)
 		}
 	}
 
 	if app.clock != nil {
-		app.log.Info("%v closing clock", app.nodeId.Key)
+		app.log.Info("%v closing clock", app.nodeID.Key)
 		app.clock.Close()
 	}
 
@@ -687,22 +697,22 @@ func (app *SpacemeshApp) stopServices() {
 	}
 
 	if app.blockListener != nil {
-		app.log.Info("%v closing blockListener", app.nodeId.Key)
+		app.log.Info("%v closing blockListener", app.nodeID.Key)
 		app.blockListener.Close()
 	}
 
 	if app.hare != nil {
-		app.log.Info("%v closing Hare", app.nodeId.Key)
+		app.log.Info("%v closing Hare", app.nodeID.Key)
 		app.hare.Close() //todo: need to add this
 	}
 
 	if app.P2P != nil {
-		app.log.Info("%v closing p2p", app.nodeId.Key)
+		app.log.Info("%v closing p2p", app.nodeID.Key)
 		app.P2P.Shutdown()
 	}
 
 	if app.mesh != nil {
-		app.log.Info("%v closing mesh", app.nodeId.Key)
+		app.log.Info("%v closing mesh", app.nodeID.Key)
 		app.mesh.Close()
 	}
 
@@ -714,6 +724,7 @@ func (app *SpacemeshApp) stopServices() {
 	}
 }
 
+// LoadOrCreateEdSigner either loads a previously created ed identity for the node or creates a new one if not exists
 func (app *SpacemeshApp) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 	f, err := app.getIdentityFile()
 	if err != nil {
@@ -775,6 +786,7 @@ func (app *SpacemeshApp) getIdentityFile() (string, error) {
 	return "", fmt.Errorf("not found")
 }
 
+// Start starts the Spacemesh node and initializes all relevant services according to command line arguments provided.
 func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	log.With().Info("Starting Spacemesh", log.String("data-dir", app.Config.DataDir), log.String("post-dir", app.Config.POST.DataDir))
 

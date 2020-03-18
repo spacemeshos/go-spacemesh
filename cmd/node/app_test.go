@@ -71,7 +71,7 @@ func Test_PoETHarnessSanity(t *testing.T) {
 	require.NotNil(t, h)
 }
 
-func (suite *AppTestSuite) initMultipleInstances(cfg *config.Config, rolacle *eligibility.FixedRolacle, rng *amcl.RAND, numOfInstances int, storeFormat string, genesisTime string, poetClient *activation.HTTPPoetClient, fastHare bool, clock TickProvider, network Network) {
+func (suite *AppTestSuite) initMultipleInstances(cfg *config.Config, rolacle *eligibility.FixedRolacle, rng *amcl.RAND, numOfInstances int, storeFormat string, genesisTime string, poetClient *activation.HTTPPoetClient, fastHare bool, clock TickProvider, network network) {
 	name := 'a'
 	for i := 0; i < numOfInstances; i++ {
 		dbStorepath := storeFormat + string(name)
@@ -365,10 +365,10 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 	}
 
 	for _, ap := range suite.apps {
-		if _, ok := datamap[ap.nodeId.Key]; !ok {
-			datamap[ap.nodeId.Key] = new(nodeData)
-			datamap[ap.nodeId.Key].atxPerEpoch = make(map[types.EpochId]uint32)
-			datamap[ap.nodeId.Key].layertoblocks = make(map[types.LayerID][]types.BlockID)
+		if _, ok := datamap[ap.nodeID.Key]; !ok {
+			datamap[ap.nodeID.Key] = new(nodeData)
+			datamap[ap.nodeID.Key].atxPerEpoch = make(map[types.EpochId]uint32)
+			datamap[ap.nodeID.Key].layertoblocks = make(map[types.LayerID][]types.BlockID)
 		}
 
 		for i := types.LayerID(0); i <= untilLayer; i++ {
@@ -377,12 +377,12 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 				log.Error("ERROR: couldn't get a validated layer from db layer %v, %v", i, err)
 			}
 			for _, b := range lyr.Blocks() {
-				datamap[ap.nodeId.Key].layertoblocks[lyr.Index()] = append(datamap[ap.nodeId.Key].layertoblocks[lyr.Index()], b.Id())
+				datamap[ap.nodeID.Key].layertoblocks[lyr.Index()] = append(datamap[ap.nodeID.Key].layertoblocks[lyr.Index()], b.Id())
 			}
 		}
 	}
 
-	lateNodeKey := suite.apps[len(suite.apps)-1].nodeId.Key
+	lateNodeKey := suite.apps[len(suite.apps)-1].nodeID.Key
 	for i, d := range datamap {
 		log.Info("Node %v in len(layerstoblocks) %v", i, len(d.layertoblocks))
 		if i == lateNodeKey { // skip late node
@@ -412,7 +412,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 
 	// assuming all nodes have the same results
 	layerAvgSize := suite.apps[0].Config.LayerAvgSize
-	patient := datamap[suite.apps[0].nodeId.Key]
+	patient := datamap[suite.apps[0].nodeID.Key]
 
 	lastLayer := len(patient.layertoblocks)
 
@@ -439,9 +439,9 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 
 	firstAp := suite.apps[0]
 	atxDb := firstAp.blockListener.AtxDB.(*activation.ActivationDb)
-	atxId, err := atxDb.GetNodeLastAtxId(firstAp.nodeId)
+	atxID, err := atxDb.GetNodeLastAtxID(firstAp.nodeID)
 	assert.NoError(suite.T(), err)
-	atx, err := atxDb.GetAtxHeader(atxId)
+	atx, err := atxDb.GetAtxHeader(atxID)
 	assert.NoError(suite.T(), err)
 
 	totalAtxs := uint32(0)
@@ -457,9 +457,9 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 }
 
 func (suite *AppTestSuite) validateLastATXActiveSetSize(app *SpacemeshApp) {
-	atx, err := app.atxBuilder.GetPrevAtx(app.nodeId)
+	atx, err := app.atxBuilder.GetPrevAtx(app.nodeID)
 	suite.NoError(err)
-	suite.True(int(atx.ActiveSetSize) == len(suite.apps), "atx: %v node: %v", atx.ShortString(), app.nodeId.Key[:5])
+	suite.True(int(atx.ActiveSetSize) == len(suite.apps), "atx: %v node: %v", atx.ShortString(), app.nodeID.Key[:5])
 }
 
 func TestAppTestSuite(t *testing.T) {
@@ -477,7 +477,7 @@ func TestShutdown(t *testing.T) {
 
 	// make sure previous goroutines has stopped
 	time.Sleep(3 * time.Second)
-	g_count := runtime.NumGoroutine()
+	gCount := runtime.NumGoroutine()
 	net := service.NewSimulator()
 	//defer leaktest.Check(t)()
 	r := require.New(t)
@@ -542,12 +542,12 @@ func TestShutdown(t *testing.T) {
 	smApp.stopServices()
 
 	time.Sleep(5 * time.Second)
-	g_count2 := runtime.NumGoroutine()
+	gCount2 := runtime.NumGoroutine()
 
-	if g_count != g_count2 {
+	if gCount != gCount2 {
 		buf := make([]byte, 4096)
 		runtime.Stack(buf, true)
 		log.Error(string(buf))
 	}
-	require.Equal(t, g_count, g_count2)
+	require.Equal(t, gCount, gCount2)
 }
