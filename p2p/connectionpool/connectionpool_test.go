@@ -30,7 +30,7 @@ func TestGetConnectionWithNoConnection(t *testing.T) {
 	n.SetDialResult(nil)
 	cPool := NewConnectionPool(n.Dial, generatePublicKey(), log.NewDefault(t.Name()))
 	remotePub := generatePublicKey()
-	addr := net2.TCPAddr{net2.ParseIP("1.1.1.1"), 0000, ""}
+	addr := net2.TCPAddr{IP: net2.ParseIP("1.1.1.1")}
 	conn, err := cPool.GetConnection(&addr, remotePub)
 	assert.Nil(t, err)
 	assert.Equal(t, remotePub.String(), conn.RemotePublicKey().String())
@@ -43,7 +43,7 @@ func TestGetConnectionWithConnection(t *testing.T) {
 	n.SetDialResult(nil)
 	cPool := NewConnectionPool(n.Dial, generatePublicKey(), log.NewDefault(t.Name()))
 	remotePub := generatePublicKey()
-	addr := net2.TCPAddr{net2.ParseIP("1.1.1.1"), 0000, ""}
+	addr := net2.TCPAddr{IP: net2.ParseIP("1.1.1.1")}
 	conn, err := cPool.GetConnection(&addr, remotePub)
 	assert.Nil(t, err)
 	assert.Equal(t, remotePub.String(), conn.RemotePublicKey().String())
@@ -57,7 +57,7 @@ func TestGetConnectionWithError(t *testing.T) {
 	n.SetDialResult(eErr)
 	cPool := NewConnectionPool(n.Dial, generatePublicKey(), log.NewDefault(t.Name()))
 	remotePub := generatePublicKey()
-	addr := net2.TCPAddr{net2.ParseIP("1.1.1.1"), 0000, ""}
+	addr := net2.TCPAddr{IP: net2.ParseIP("1.1.1.1")}
 	conn, aErr := cPool.GetConnection(&addr, remotePub)
 	assert.Equal(t, eErr, aErr)
 	assert.Nil(t, conn)
@@ -67,7 +67,7 @@ func TestGetConnectionWithError(t *testing.T) {
 func TestGetConnectionDuringDial(t *testing.T) {
 	n := net.NewNetworkMock()
 	remotePub := generatePublicKey()
-	addr := net2.TCPAddr{net2.ParseIP("1.1.1.1"), 0000, ""}
+	addr := net2.TCPAddr{IP: net2.ParseIP("1.1.1.1")}
 	n.SetDialDelayMs(100)
 	n.SetDialResult(nil)
 
@@ -106,25 +106,27 @@ Loop:
 func TestRemoteConnectionWithNoConnection(t *testing.T) {
 	n := net.NewNetworkMock()
 	remotePub := generatePublicKey()
-	addr := net2.TCPAddr{net2.ParseIP("1.1.1.1"), 0000, ""}
+	addr := net2.TCPAddr{IP: net2.ParseIP("1.1.1.1")}
 	n.SetDialDelayMs(50)
 	n.SetDialResult(nil)
 
 	cPool := NewConnectionPool(n.Dial, generatePublicKey(), log.NewDefault(t.Name()))
 	rConn := net.NewConnectionMock(remotePub)
 	rConn.SetSession(net.NewSessionMock(remotePub))
-	cPool.OnNewConnection(net.NewConnectionEvent{rConn, nil})
+	err2 := cPool.OnNewConnection(net.NewConnectionEvent{Conn: rConn})
+	require.NoError(t, err2)
 	time.Sleep(50 * time.Millisecond)
 	conn, err := cPool.GetConnection(&addr, remotePub)
+	assert.Nil(t, err)
+	assert.NotNil(t, conn)
 	assert.Equal(t, remotePub.String(), conn.RemotePublicKey().String())
 	assert.Equal(t, rConn.ID(), conn.ID())
-	assert.Nil(t, err)
 	assert.Equal(t, int32(0), n.DialCount())
 }
 
 func TestRemoteConnectionWithExistingConnection(t *testing.T) {
 	n := net.NewNetworkMock()
-	addr := net2.TCPAddr{net2.ParseIP("1.1.1.1"), 0000, ""}
+	addr := net2.TCPAddr{IP: net2.ParseIP("1.1.1.1")}
 	cPool := NewConnectionPool(n.Dial, generatePublicKey(), log.NewDefault(t.Name()))
 
 	lowPubkey, err := p2pcrypto.NewPublicKeyFromBase58("7gd5cD8ZanFaqnMHZrgUsUjDeVxMTxfpnu4gDPS69pBU")
@@ -141,7 +143,8 @@ func TestRemoteConnectionWithExistingConnection(t *testing.T) {
 	lConn, _ := cPool.GetConnection(&addr, remotePub)
 	rConn := net.NewConnectionMock(remotePub)
 	rConn.SetSession(net.NewSessionMock(remotePub))
-	cPool.OnNewConnection(net.NewConnectionEvent{rConn, nil})
+	err = cPool.OnNewConnection(net.NewConnectionEvent{Conn: rConn})
+	require.NoError(t, err)
 	time.Sleep(20 * time.Millisecond)
 	assert.Equal(t, remotePub.String(), lConn.RemotePublicKey().String())
 	assert.Equal(t, int32(1), n.DialCount())
@@ -157,7 +160,8 @@ func TestRemoteConnectionWithExistingConnection(t *testing.T) {
 	lConn, _ = cPool.GetConnection(&addr, remotePub)
 	rConn = net.NewConnectionMock(remotePub)
 	rConn.SetSession(net.NewSessionMock(remotePub))
-	cPool.OnNewConnection(net.NewConnectionEvent{rConn, nil})
+	err = cPool.OnNewConnection(net.NewConnectionEvent{Conn: rConn})
+	require.Error(t, err)
 	time.Sleep(20 * time.Millisecond)
 	assert.Equal(t, remotePub.String(), lConn.RemotePublicKey().String())
 	assert.Equal(t, int32(2), n.DialCount())
@@ -170,7 +174,7 @@ func TestShutdown(t *testing.T) {
 	n.SetDialDelayMs(100)
 	n.SetDialResult(nil)
 	remotePub := generatePublicKey()
-	addr := net2.TCPAddr{net2.ParseIP("1.1.1.1"), 0000, ""}
+	addr := net2.TCPAddr{IP: net2.ParseIP("1.1.1.1")}
 
 	cPool := NewConnectionPool(n.Dial, generatePublicKey(), log.NewDefault(t.Name()))
 	newConns := make(chan net.Connection)
@@ -189,7 +193,7 @@ func TestGetConnectionAfterShutdown(t *testing.T) {
 	n.SetDialDelayMs(100)
 	n.SetDialResult(nil)
 	remotePub := generatePublicKey()
-	addr := net2.TCPAddr{net2.ParseIP("1.1.1.1"), 0000, ""}
+	addr := net2.TCPAddr{IP: net2.ParseIP("1.1.1.1")}
 
 	cPool := NewConnectionPool(n.Dial, generatePublicKey(), log.NewDefault(t.Name()))
 	cPool.Shutdown()
@@ -208,7 +212,7 @@ func TestShutdownWithMultipleDials(t *testing.T) {
 	iterCnt := 20
 	for i := 0; i < iterCnt; i++ {
 		go func() {
-			addr := net2.TCPAddr{net2.ParseIP(generateIpAddress()), 0000, ""}
+			addr := net2.TCPAddr{IP: net2.ParseIP(generateIpAddress())}
 			key := generatePublicKey()
 			conn, _ := cPool.GetConnection(&addr, key)
 			newConns <- conn
@@ -232,14 +236,14 @@ func TestClosedConnection(t *testing.T) {
 	nMock.SetDialResult(nil)
 	cPool := NewConnectionPool(nMock.Dial, generatePublicKey(), log.NewDefault(t.Name()))
 	remotePub := generatePublicKey()
-	addr := net2.TCPAddr{net2.ParseIP("1.1.1.1"), 0000, ""}
+	addr := net2.TCPAddr{IP: net2.ParseIP("1.1.1.1")}
 
 	nMock.SubscribeClosingConnections(cPool.OnClosedConnection)
 	// create connection
 	conn, _ := cPool.GetConnection(&addr, remotePub)
 
 	// report that the connection was closed
-	nMock.PublishClosingConnection(net.ConnectionWithErr{conn, errors.New("testerr")})
+	nMock.PublishClosingConnection(net.ConnectionWithErr{Conn: conn, Err: errors.New("testerr")})
 
 	// query same connection and assert that it's a new instance
 	conn2, _ := cPool.GetConnection(&addr, remotePub)
@@ -273,12 +277,12 @@ func TestRandom(t *testing.T) {
 				rConn := net.NewConnectionMock(peer.key)
 				sID := p2pcrypto.NewRandomPubkey()
 				rConn.SetSession(net.NewSessionMock(sID))
-				cPool.OnNewConnection(net.NewConnectionEvent{rConn, nil})
+				_ = cPool.OnNewConnection(net.NewConnectionEvent{Conn: rConn})
 			}()
 		} else if r == 1 {
 			go func() {
 				peer := peers[rand.Int31n(int32(peerCnt))]
-				addr := net2.TCPAddr{net2.ParseIP(peer.addr), 0000, ""}
+				addr := net2.TCPAddr{IP: net2.ParseIP(peer.addr)}
 				conn, err := cPool.GetConnection(&addr, peer.key)
 				select {
 				case <-cPool.shutdownCtx.Done():
@@ -286,12 +290,12 @@ func TestRandom(t *testing.T) {
 				default:
 					require.NoError(t, err)
 				}
-				nMock.PublishClosingConnection(net.ConnectionWithErr{conn, errors.New("testerr")})
+				nMock.PublishClosingConnection(net.ConnectionWithErr{Conn: conn, Err: errors.New("testerr")})
 			}()
 		} else {
 			go func() {
 				peer := peers[rand.Int31n(int32(peerCnt))]
-				addr := net2.TCPAddr{net2.ParseIP(peer.addr), 0000, ""}
+				addr := net2.TCPAddr{IP: net2.ParseIP(peer.addr)}
 				_, err := cPool.GetConnection(&addr, peer.key)
 				select {
 				case <-cPool.shutdownCtx.Done():
@@ -323,7 +327,8 @@ func TestConnectionPool_GetConnectionIfExists(t *testing.T) {
 
 	nd := node.NewNode(pk, net2.ParseIP(addr), 1010, 1010)
 
-	cPool.OnNewConnection(net.NewConnectionEvent{conn, nd})
+	err = cPool.OnNewConnection(net.NewConnectionEvent{Conn: conn, Node: nd})
+	require.NoError(t, err)
 
 	getcon, err := cPool.GetConnectionIfExists(pk)
 
@@ -345,7 +350,8 @@ func TestConnectionPool_GetConnectionIfExists_Concurrency(t *testing.T) {
 
 	nd := node.NewNode(pk, net2.ParseIP(addr), 1010, 1010)
 
-	cPool.OnNewConnection(net.NewConnectionEvent{conn, nd})
+	err = cPool.OnNewConnection(net.NewConnectionEvent{Conn: conn, Node: nd})
+	require.NoError(t, err)
 
 	i := 10
 	done := make(chan struct{}, i)
@@ -381,7 +387,7 @@ func TestConnectionPool_CloseConnection(t *testing.T) {
 
 	nd := node.NewNode(pk, net2.ParseIP(addr), 1010, 1010)
 
-	err = cPool.OnNewConnection(net.NewConnectionEvent{conn, nd})
+	err = cPool.OnNewConnection(net.NewConnectionEvent{Conn: conn, Node: nd})
 	assert.NoError(t, err)
 
 	cPool.CloseConnection(nd.PublicKey())

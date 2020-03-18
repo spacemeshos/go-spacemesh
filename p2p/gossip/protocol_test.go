@@ -145,10 +145,6 @@ func (tm TestMessage) Sender() p2pcrypto.PublicKey {
 	return tm.sender
 }
 
-func (tm TestMessage) setData(msg service.Data) {
-	tm.data = msg
-}
-
 func (tm TestMessage) Data() service.Data {
 	return tm.data
 }
@@ -309,7 +305,7 @@ func TestNeighborhood_Relay2(t *testing.T) {
 		pk = rnd
 	}
 	net.pcountwg.Add(1)
-	require.NoError(t, n.Relay(pk, "protocol", service.DataBytes{[]byte("LOLZ")}))
+	require.NoError(t, n.Relay(pk, "protocol", service.DataBytes{Payload: []byte("LOLZ")}))
 	passOrDeadlock(t, net.pcountwg)
 	assert.Equal(t, 1, net.processProtocolCount)
 	assert.Equal(t, 0, net.totalMessageSent())
@@ -319,7 +315,7 @@ func TestNeighborhood_Relay2(t *testing.T) {
 
 	addPeersAndTest(t, 20, n, net, true)
 
-	require.NoError(t, n.Relay(pk, "protocol", service.DataBytes{[]byte("LOL2")}))
+	require.NoError(t, n.Relay(pk, "protocol", service.DataBytes{Payload: []byte("LOL2")}))
 	passOrDeadlock(t, net.msgwg)
 	passOrDeadlock(t, net.pcountwg)
 	assert.Equal(t, 2, net.processProtocolCount)
@@ -424,14 +420,14 @@ func TestNeighborhood_Relay3(t *testing.T) {
 
 	pk := p2pcrypto.NewRandomPubkey()
 	net.pcountwg.Add(1)
-	require.NoError(t, n.Relay(pk, "protocol", service.DataBytes{[]byte("LOL")}))
+	require.NoError(t, n.Relay(pk, "protocol", service.DataBytes{Payload: []byte("LOL")}))
 	passOrDeadlock(t, net.pcountwg)
 	assert.Equal(t, 1, net.processProtocolCount)
 	assert.Equal(t, 0, net.totalMessageSent())
 
 	addPeersAndTest(t, 20, n, net, true)
 
-	require.NoError(t, n.Relay(pk, "protocol", service.DataBytes{[]byte("LOL")}))
+	require.NoError(t, n.Relay(pk, "protocol", service.DataBytes{Payload: []byte("LOL")}))
 
 	assert.Equal(t, 1, net.processProtocolCount)
 	assert.Equal(t, 0, net.totalMessageSent())
@@ -479,7 +475,7 @@ func TestNeighborhood_Disconnect(t *testing.T) {
 
 	net.pcountwg.Add(1)
 	net.msgwg.Add(2)
-	require.NoError(t, n.Relay(pk, "protocol", service.DataBytes{[]byte("LOL")}))
+	require.NoError(t, n.Relay(pk, "protocol", service.DataBytes{Payload: []byte("LOL")}))
 	passOrDeadlock(t, net.pcountwg)
 	passOrDeadlock(t, net.msgwg)
 	assert.Equal(t, 1, net.processProtocolCount)
@@ -490,7 +486,7 @@ func TestNeighborhood_Disconnect(t *testing.T) {
 	n.removePeer(pub1)
 	net.pcountwg.Add(1)
 	net.msgwg.Add(1)
-	require.NoError(t, n.Relay(pk2, "protocol", service.DataBytes{[]byte("LOL2")}))
+	require.NoError(t, n.Relay(pk2, "protocol", service.DataBytes{Payload: []byte("LOL2")}))
 
 	passOrDeadlock(t, net.pcountwg)
 	passOrDeadlock(t, net.msgwg)
@@ -499,7 +495,7 @@ func TestNeighborhood_Disconnect(t *testing.T) {
 
 	n.addPeer(pub1)
 	net.msgwg.Add(1)
-	require.NoError(t, n.Relay(pk2, "protocol", service.DataBytes{[]byte("LOL2")}))
+	require.NoError(t, n.Relay(pk2, "protocol", service.DataBytes{Payload: []byte("LOL2")}))
 	assert.Equal(t, 2, net.processProtocolCount)
 	assert.Equal(t, 3, net.totalMessageSent())
 }

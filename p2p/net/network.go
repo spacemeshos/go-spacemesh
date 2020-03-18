@@ -87,7 +87,7 @@ func NewNet(conf config.Config, localEntity node.LocalNode, logger log.Log) (*Ne
 		regNewRemoteConn:      make([]func(NewConnectionEvent), 0, 3),
 		closingConnections:    make([]func(cwe ConnectionWithErr), 0, 3),
 		queuesCount:           qcount,
-		incomingMessagesQueue: make([]chan IncomingMessageEvent, qcount, qcount),
+		incomingMessagesQueue: make([]chan IncomingMessageEvent, qcount),
 		config:                conf,
 	}
 
@@ -165,27 +165,38 @@ func (n *Net) publishClosingConnection(connection ConnectionWithErr) {
 	n.clsMutex.RUnlock()
 }
 
-func dial(ctx context.Context, address net.Addr) (net.Conn, error) {
+func (n *Net) dial(ctx context.Context, address net.Addr) (net.Conn, error) {
 	// connect via dialer so we can set tcp network params
 	dialer := &net.Dialer{}
 	netConn, err := dialer.DialContext(ctx, "tcp", address.String())
 	if err == nil {
 		tcpconn := netConn.(*net.TCPConn)
-		tcpSocketConfig(tcpconn)
+		errs := tcpSocketConfig(tcpconn)
+		for err := range errs {
+			n.logger.Warning("Error trying to set up tcp connection configuration err:%v", err)
+		}
 		return tcpconn, nil
-		//netConn = tcpconn
 	}
 	return netConn, err
 }
 
-func tcpSocketConfig(tcpconn *net.TCPConn) {
-	// TODO: Error handling, what if only certain flags are supported
+func tcpSocketConfig(tcpconn *net.TCPConn) []error {
 	// TODO: Parameters, try to find right buffers based on something or os/net-interface input?
-	tcpconn.SetReadBuffer(5 * 1024 * 1024)
-	tcpconn.SetWriteBuffer(5 * 1024 * 1024)
+	var errs []error
+	if err := tcpconn.SetReadBuffer(5 * 1024 * 1024); err != nil {
+		errs = append(errs, err)
+	}
+	if err := tcpconn.SetWriteBuffer(5 * 1024 * 1024); err != nil {
+		errs = append(errs, err)
+	}
 
-	tcpconn.SetKeepAlive(true)
-	tcpconn.SetKeepAlivePeriod(time.Second * 10)
+	if err := tcpconn.SetKeepAlive(true); err != nil {
+		errs = append(errs, err)
+	}
+	if err := tcpconn.SetKeepAlivePeriod(time.Second * 10); err != nil {
+		errs = append(errs, err)
+	}
+	return errs
 }
 
 func (n *Net) createConnection(address net.Addr, remotePub p2pcrypto.PublicKey, session NetworkSession,
@@ -196,7 +207,7 @@ func (n *Net) createConnection(address net.Addr, remotePub p2pcrypto.PublicKey, 
 	}
 
 	n.logger.Debug("Dialing %v @ %v...", remotePub.String(), address.String())
-	netConn, err := dial(ctx, address)
+	netConn, err := n.dial(ctx, address)
 	if err != nil {
 		return nil, err
 	}

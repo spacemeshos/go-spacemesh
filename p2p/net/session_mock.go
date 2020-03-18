@@ -11,9 +11,6 @@ type SessionMock struct {
 
 	SealMessageFunc func(message []byte) []byte
 	OpenMessageFunc func(boxedMessage []byte) ([]byte, error)
-
-	pubkey p2pcrypto.PublicKey
-	keyM   []byte
 }
 
 func NewSessionMock(pubkey p2pcrypto.PublicKey) *SessionMock {

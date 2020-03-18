@@ -24,7 +24,6 @@ type MsgConnection struct {
 	networker   networker // network context
 	session     NetworkSession
 	deadline    time.Duration
-	timeout     time.Duration
 	r           io.Reader
 	wmtx        sync.Mutex
 	w           io.Writer
@@ -168,8 +167,11 @@ func (c *MsgConnection) SendSock(m []byte) error {
 		return fmt.Errorf("connection was closed")
 	}
 
-	c.deadliner.SetWriteDeadline(time.Now().Add(c.deadline))
-	_, err := c.w.Write(m)
+	err := c.deadliner.SetWriteDeadline(time.Now().Add(c.deadline))
+	if err != nil {
+		return err
+	}
+	_, err = c.w.Write(m)
 	if err != nil {
 		cerr := c.closeUnlocked()
 		c.wmtx.Unlock()
