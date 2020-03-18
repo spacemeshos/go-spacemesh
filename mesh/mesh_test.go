@@ -395,14 +395,15 @@ func TestMesh_AddBlockWithTxs_PushTransactions_getInvalidBlocksByHare(t *testing
 	var blocks []*types.Block
 	blocks = append(blocks, addBlockWithTxs(r, msh, layerID, true, tx1, tx2))
 	blocks = append(blocks, addBlockWithTxs(r, msh, layerID, true, tx2, tx3, tx4))
-	blocks = append(blocks, addBlockWithTxs(r, msh, layerID, true, tx4, tx5))
+	blocks = append(blocks, addBlockWithTxs(r, msh, layerID, true, tx4))
 	blocks = append(blocks, addBlockWithTxs(r, msh, layerID, true, tx5))
 	hareBlocks := blocks[:3]
 
 	invalid := msh.getInvalidBlocksByHare(types.NewExistingLayer(layerID, hareBlocks))
 	r.ElementsMatch(blocks[3:], invalid)
 
-	msh.reInsertTxsToPool(blocks[3:], invalid, layerID)
+	msh.reInsertTxsToPool(hareBlocks, invalid, layerID)
+	r.ElementsMatch(GetTransactionIds(tx5), GetTransactionIds(blockBuilder.txs...))
 
 }
 
