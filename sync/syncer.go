@@ -410,7 +410,7 @@ func (s *Syncer) handleNotSynced(currentSyncLayer types.LayerID) {
 
 		if len(lyr.Blocks()) == 0 {
 			if err := s.SetZeroBlockLayer(currentSyncLayer); err != nil {
-				s.With().Info("could not get layer from neighbors ", log.LayerId(currentSyncLayer.Uint64()), log.Err(err))
+				s.With().Error("handleNotSynced failed ", log.LayerId(currentSyncLayer.Uint64()), log.Err(err))
 				return
 			}
 		}
