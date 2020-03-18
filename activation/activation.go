@@ -146,7 +146,7 @@ func (b *Builder) Stop() {
 	close(b.stop)
 }
 
-// SignAtx signs the atx atx and assigns the signature into atx.Sig
+// SignAtx signs the atx and assigns the signature into atx.Sig
 // this function returns an error if atx could not be converted to bytes
 func (b Builder) SignAtx(atx *types.ActivationTx) error {
 	return SignAtx(b, atx)
@@ -223,7 +223,7 @@ func (b *Builder) buildNipstChallenge() error {
 	return nil
 }
 
-// StartPost initiates post commitment generation process. it returns an error if a process is already on progress or
+// StartPost initiates post commitment generation process. It returns an error if a process is already in progress or
 // if a post has been already initialized
 func (b *Builder) StartPost(rewardAddress types.Address, dataDir string, space uint64) error {
 	if !atomic.CompareAndSwapInt32(&b.initStatus, InitIdle, InitInProgress) {
