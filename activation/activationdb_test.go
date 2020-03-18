@@ -117,18 +117,6 @@ func (mock *ATXDBMock) GetAtxHeader(id types.AtxId) (*types.ActivationTxHeader, 
 	panic("not implemented")
 }
 
-func (mock *ATXDBMock) GetPosAtxId(types.EpochId) (*types.AtxId, error) {
-	panic("not implemented")
-}
-
-func (mock *ATXDBMock) GetNodeLastAtxId(nodeId types.NodeId) (types.AtxId, error) {
-	panic("not implemented")
-}
-
-func (mock *ATXDBMock) GetPrevAtxId(node types.NodeId) (*types.AtxId, error) {
-	panic("not implemented")
-}
-
 type MockTxMemPool struct{}
 
 func (MockTxMemPool) Get(id types.TransactionId) (*types.Transaction, error) {
@@ -733,7 +721,7 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	atx = types.NewActivationTxForTests(idx1, 0, *types.EmptyAtxId, 1012, 0, posAtx.Id(), coinbase, 3, []types.BlockID{}, &types.NIPST{})
 	atx.Commitment = commitment
 	atx.CommitmentMerkleRoot = append([]byte{}, commitment.MerkleRoot...)
-	atx.CommitmentMerkleRoot[0] += 1
+	atx.CommitmentMerkleRoot[0] ++
 	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
 	err = atxdb.SyntacticallyValidateAtx(atx)
@@ -861,13 +849,13 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 	atx = types.NewActivationTxForTests(idx2, 1, prevAtx.Id(), 1012, 0, prevAtx.Id(), coinbase, 3, []types.BlockID{}, &types.NIPST{})
 	err = atxdb.StoreAtx(1, atx)
 	assert.NoError(t, err)
-	atxId := atx.Id()
+	atxID := atx.Id()
 
-	atx = types.NewActivationTxForTests(idx2, 2, atxId, 1012, 0, atx.Id(), coinbase, 3, []types.BlockID{}, &types.NIPST{})
+	atx = types.NewActivationTxForTests(idx2, 2, atxID, 1012, 0, atx.Id(), coinbase, 3, []types.BlockID{}, &types.NIPST{})
 	err = atxdb.StoreAtx(1, atx)
 	assert.NoError(t, err)
 
-	atx = types.NewActivationTxForTests(idx2, 2, atxId, 1013, 0, atx.Id(), coinbase, 0, []types.BlockID{}, &types.NIPST{})
+	atx = types.NewActivationTxForTests(idx2, 2, atxID, 1013, 0, atx.Id(), coinbase, 0, []types.BlockID{}, &types.NIPST{})
 	err = atxdb.ContextuallyValidateAtx(atx.ActivationTxHeader)
 	assert.EqualError(t, err, "last atx is not the one referenced")
 
@@ -1062,22 +1050,22 @@ func TestActivationDb_ValidateSignedAtx(t *testing.T) {
 	atxdb := NewActivationDb(database.NewMemDatabase(), idStore, memesh, layersPerEpochBig, &ValidatorMock{}, lg.WithName("atxDB"))
 
 	ed := signing.NewEdSigner()
-	nodeId := types.NodeId{ed.PublicKey().String(), []byte("bbbbb")}
+	nodeID := types.NodeId{ed.PublicKey().String(), []byte("bbbbb")}
 
 	// test happy flow of first ATX
 	emptyAtx := types.EmptyAtxId
-	atx := types.NewActivationTxForTests(nodeId, 1, *emptyAtx, 15, 1, *emptyAtx, coinbase, 5, []types.BlockID{block1.Id(), block2.Id(), block3.Id()}, npst)
+	atx := types.NewActivationTxForTests(nodeID, 1, *emptyAtx, 15, 1, *emptyAtx, coinbase, 5, []types.BlockID{block1.Id(), block2.Id(), block3.Id()}, npst)
 	_, err := createAndValidateSignedATX(r, atxdb, ed, atx)
 	r.NoError(err)
 
 	// test negative flow no atx found in idstore
 	prevAtx := types.AtxId(types.HexToHash32("0x111"))
-	atx = types.NewActivationTxForTests(nodeId, 1, prevAtx, 15, 1, prevAtx, coinbase, 5, []types.BlockID{block1.Id(), block2.Id(), block3.Id()}, npst)
+	atx = types.NewActivationTxForTests(nodeID, 1, prevAtx, 15, 1, prevAtx, coinbase, 5, []types.BlockID{block1.Id(), block2.Id(), block3.Id()}, npst)
 	signedAtx, err := createAndValidateSignedATX(r, atxdb, ed, atx)
 	r.Equal(errInvalidSig, err)
 
 	// test happy flow not first ATX
-	err = idStore.StoreNodeIdentity(nodeId)
+	err = idStore.StoreNodeIdentity(nodeID)
 	r.NoError(err)
 	_, err = createAndValidateSignedATX(r, atxdb, ed, atx)
 	r.NoError(err)
@@ -1128,15 +1116,15 @@ func TestActivationDb_AwaitAtx(t *testing.T) {
 		r.Fail("not notified after ATX was stored")
 	}
 
-	otherId := types.AtxId{}
-	copy(otherId[:], "abcd")
-	atxdb.AwaitAtx(otherId)
+	otherID := types.AtxId{}
+	copy(otherID[:], "abcd")
+	atxdb.AwaitAtx(otherID)
 	r.Len(atxdb.atxChannels, 1) // after first subscription - channel is created
-	atxdb.AwaitAtx(otherId)
+	atxdb.AwaitAtx(otherID)
 	r.Len(atxdb.atxChannels, 1) // second subscription to same id - no additional channel
-	atxdb.UnsubscribeAtx(otherId)
+	atxdb.UnsubscribeAtx(otherID)
 	r.Len(atxdb.atxChannels, 1) // first unsubscribe doesn't clear the channel
-	atxdb.UnsubscribeAtx(otherId)
+	atxdb.UnsubscribeAtx(otherID)
 	r.Len(atxdb.atxChannels, 0) // last unsubscribe clears the channel
 }
 
