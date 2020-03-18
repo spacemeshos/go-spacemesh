@@ -10,6 +10,7 @@ import (
 	"sync"
 )
 
+// GlobalStateDB is the interface describing the main functionality of the nodes state
 type GlobalStateDB interface {
 	Exist(addr types.Address) bool
 	Empty(addr types.Address) bool
@@ -26,6 +27,8 @@ type GlobalStateDB interface {
 	TrieDB() *trie.Database
 }
 
+// StateDB is the struct that performs logging of all account states. it consists of a state trie that contains all
+// account data in its leaves. it also stores a dirty object list to dump when state is committed into db
 type StateDB struct {
 	globalTrie Trie
 	db         Database //todo: maybe remove
@@ -44,7 +47,7 @@ type StateDB struct {
 	dbErr error //todo: do we need this?
 }
 
-// Create a new state from a given trie.
+// New create a new state from a given trie.
 func New(root types.Hash32, db Database) (*StateDB, error) {
 	tr, err := db.OpenTrie(root)
 	if err != nil {
@@ -59,42 +62,44 @@ func New(root types.Hash32, db Database) (*StateDB, error) {
 }
 
 // setError remembers the first non-nil error it is called with.
-func (self *StateDB) setError(err error) {
-	if self.dbErr == nil {
-		self.dbErr = err
+func (state *StateDB) setError(err error) {
+	if state.dbErr == nil {
+		state.dbErr = err
 	}
 }
 
-func (self *StateDB) Error() error {
-	return self.dbErr
+// Error returns db error if it occurred
+func (state *StateDB) Error() error {
+	return state.dbErr
 }
 
 // Exist reports whether the given account address exists in the state.
 // Notably this also returns true for suicided accounts.
-func (self *StateDB) Exist(addr types.Address) bool {
-	return self.getStateObj(addr) != nil
+func (state *StateDB) Exist(addr types.Address) bool {
+	return state.getStateObj(addr) != nil
 }
 
 // Empty returns whether the state object is either non-existent
 // or empty according to the EIP161 specification (balance = nonce = code = 0)
-func (self *StateDB) Empty(addr types.Address) bool {
-	self.lock.Lock()
-	defer self.lock.Unlock()
-	so := self.getStateObj(addr)
+func (state *StateDB) Empty(addr types.Address) bool {
+	state.lock.Lock()
+	defer state.lock.Unlock()
+	so := state.getStateObj(addr)
 	return so == nil || so.empty()
 }
 
-// Retrieve the balance from the given address or 0 if object not found
-func (self *StateDB) GetBalance(addr types.Address) uint64 {
-	StateObj := self.getStateObj(addr)
+// GetBalance Retrieve the balance from the given address or 0 if object not found
+func (state *StateDB) GetBalance(addr types.Address) uint64 {
+	StateObj := state.getStateObj(addr)
 	if StateObj != nil {
 		return StateObj.Balance().Uint64()
 	}
 	return 0
 }
 
-func (self *StateDB) GetNonce(addr types.Address) uint64 {
-	StateObj := self.getStateObj(addr)
+// GetNonce gets the current nonce of the given addr, if the address is not found it returns 0
+func (state *StateDB) GetNonce(addr types.Address) uint64 {
+	StateObj := state.getStateObj(addr)
 	if StateObj != nil {
 		return StateObj.Nonce()
 	}
@@ -107,30 +112,32 @@ func (self *StateDB) GetNonce(addr types.Address) uint64 {
  */
 
 // AddBalance adds amount to the account associated with addr.
-func (self *StateDB) AddBalance(addr types.Address, amount *big.Int) {
-	stateObj := self.GetOrNewStateObj(addr)
+func (state *StateDB) AddBalance(addr types.Address, amount *big.Int) {
+	stateObj := state.GetOrNewStateObj(addr)
 	if stateObj != nil {
 		stateObj.AddBalance(amount)
 	}
 }
 
 // SubBalance subtracts amount from the account associated with addr.
-func (self *StateDB) SubBalance(addr types.Address, amount *big.Int) {
-	StateObj := self.GetOrNewStateObj(addr)
+func (state *StateDB) SubBalance(addr types.Address, amount *big.Int) {
+	StateObj := state.GetOrNewStateObj(addr)
 	if StateObj != nil {
 		StateObj.SubBalance(amount)
 	}
 }
 
-func (self *StateDB) SetBalance(addr types.Address, amount *big.Int) {
-	stateObj := self.GetOrNewStateObj(addr)
+// SetBalance sets balance to the specific address, it does not return error if address was not found
+func (state *StateDB) SetBalance(addr types.Address, amount *big.Int) {
+	stateObj := state.GetOrNewStateObj(addr)
 	if stateObj != nil {
 		stateObj.SetBalance(amount)
 	}
 }
 
-func (self *StateDB) SetNonce(addr types.Address, nonce uint64) {
-	stateObj := self.GetOrNewStateObj(addr)
+// SetNonce sets nonce to the specific address, it does not return error if address was not found
+func (state *StateDB) SetNonce(addr types.Address, nonce uint64) {
+	stateObj := state.GetOrNewStateObj(addr)
 	if stateObj != nil {
 		stateObj.SetNonce(nonce)
 	}
@@ -141,21 +148,21 @@ func (self *StateDB) SetNonce(addr types.Address, nonce uint64) {
 //
 
 // updateStateObj writes the given object to the trie.
-func (self *StateDB) updateStateObj(StateObj *StateObj) {
+func (state *StateDB) updateStateObj(StateObj *StateObj) {
 	addr := StateObj.Address()
 	data, err := rlp.EncodeToBytes(StateObj)
 	if err != nil {
 		panic(fmt.Errorf("can't encode object at %x: %v", addr[:], err))
 	}
-	self.setError(self.globalTrie.TryUpdate(addr[:], data))
+	state.setError(state.globalTrie.TryUpdate(addr[:], data))
 }
 
 // Retrieve a state object given by the types. Returns nil if not found.
-func (self *StateDB) getStateObj(addr types.Address) (StateObj *StateObj) {
-	self.lock.Lock()
-	defer self.lock.Unlock()
+func (state *StateDB) getStateObj(addr types.Address) (StateObj *StateObj) {
+	state.lock.Lock()
+	defer state.lock.Unlock()
 	// Prefer 'live' objects.
-	if obj := self.stateObjects[addr]; obj != nil {
+	if obj := state.stateObjects[addr]; obj != nil {
 		/*if obj.deleted {
 			return nil
 		}*/
@@ -163,9 +170,9 @@ func (self *StateDB) getStateObj(addr types.Address) (StateObj *StateObj) {
 	}
 
 	// Load the object from the database.
-	enc, err := self.globalTrie.TryGet(addr[:])
+	enc, err := state.globalTrie.TryGet(addr[:])
 	if len(enc) == 0 {
-		self.setError(err)
+		state.setError(err)
 		return nil
 	}
 	var data Account
@@ -174,43 +181,43 @@ func (self *StateDB) getStateObj(addr types.Address) (StateObj *StateObj) {
 		return nil
 	}
 	// Insert into the live set.
-	obj := newObject(self, addr, data)
-	self.setStateObj(obj)
+	obj := newObject(state, addr, data)
+	state.setStateObj(obj)
 	return obj
 }
 
-func (self *StateDB) makeDirtyObj(obj *StateObj) {
-	self.stateObjectsDirty[obj.address] = struct{}{}
+func (state *StateDB) makeDirtyObj(obj *StateObj) {
+	state.stateObjectsDirty[obj.address] = struct{}{}
 }
 
-func (self *StateDB) setStateObj(object *StateObj) {
-	self.stateObjects[object.Address()] = object
+func (state *StateDB) setStateObj(object *StateObj) {
+	state.stateObjects[object.Address()] = object
 }
 
-// Retrieve a state object or create a new state object if nil.
-func (self *StateDB) GetOrNewStateObj(addr types.Address) *StateObj {
-	stateObj := self.getStateObj(addr)
+// GetOrNewStateObj retrieve a state object or create a new state object if nil.
+func (state *StateDB) GetOrNewStateObj(addr types.Address) *StateObj {
+	stateObj := state.getStateObj(addr)
 	if stateObj == nil { //|| StateObj.deleted {
-		stateObj, _ = self.createObject(addr)
+		stateObj, _ = state.createObject(addr)
 	}
 	return stateObj
 }
 
 // createObject creates a new state object. If there is an existing account with
 // the given address, it is overwritten and returned as the second return value.
-func (self *StateDB) createObject(addr types.Address) (newobj, prev *StateObj) {
-	prev = self.getStateObj(addr)
-	newobj = newObject(self, addr, Account{})
+func (state *StateDB) createObject(addr types.Address) (newobj, prev *StateObj) {
+	prev = state.getStateObj(addr)
+	newobj = newObject(state, addr, Account{})
 	newobj.setNonce(0)
 	/*if prev == nil {
-		self.journal.append(createObjectChange{account: &addr})
+		state.journal.append(createObjectChange{account: &addr})
 	} else {
-		self.journal.append(resetObjectChange{prev: prev})
+		state.journal.append(resetObjectChange{prev: prev})
 	}*/
-	self.lock.Lock()
-	defer self.lock.Unlock()
-	self.setStateObj(newobj)
-	self.makeDirtyObj(newobj)
+	state.lock.Lock()
+	defer state.lock.Unlock()
+	state.setStateObj(newobj)
+	state.makeDirtyObj(newobj)
 	return newobj, prev
 }
 
@@ -224,8 +231,8 @@ func (self *StateDB) createObject(addr types.Address) (newobj, prev *StateObj) {
 //   2. tx_create(sha(account ++ nonce)) (note that this gets the address of 1)
 //
 // Carrying over the balance ensures that Ether doesn't disappear.
-func (self *StateDB) CreateAccount(addr types.Address) {
-	new, prev := self.createObject(addr)
+func (state *StateDB) CreateAccount(addr types.Address) {
+	new, prev := state.createObject(addr)
 	if prev != nil {
 		new.setBalance(prev.account.Balance)
 	}
@@ -233,59 +240,59 @@ func (self *StateDB) CreateAccount(addr types.Address) {
 
 // Copy creates a deep, independent copy of the state.
 // Snapshots of the copied state cannot be applied to the copy.
-func (self *StateDB) Copy() *StateDB {
-	self.lock.Lock()
-	defer self.lock.Unlock()
+func (state *StateDB) Copy() *StateDB {
+	state.lock.Lock()
+	defer state.lock.Unlock()
 
 	// Copy all the basic fields, initialize the memory ones
-	state := &StateDB{
-		db:                self.db,
-		globalTrie:        self.db.CopyTrie(self.globalTrie),
+	st := &StateDB{
+		db:                state.db,
+		globalTrie:        state.db.CopyTrie(state.globalTrie),
 		stateObjects:      make(map[types.Address]*StateObj),
 		stateObjectsDirty: make(map[types.Address]struct{}),
 	}
 
-	for addr := range self.stateObjectsDirty {
-		if _, exist := state.stateObjects[addr]; !exist {
-			state.stateObjects[addr] = self.stateObjects[addr].deepCopy(state)
-			state.stateObjectsDirty[addr] = struct{}{}
+	for addr := range state.stateObjectsDirty {
+		if _, exist := st.stateObjects[addr]; !exist {
+			st.stateObjects[addr] = state.stateObjects[addr].deepCopy(state)
+			st.stateObjectsDirty[addr] = struct{}{}
 		}
 	}
 
-	return state
+	return st
 }
 
 // Commit writes the state to the underlying in-memory trie database.
-func (s *StateDB) Commit(deleteEmptyObjects bool) (root types.Hash32, err error) {
-	s.lock.Lock()
-	defer s.lock.Unlock()
+func (state *StateDB) Commit(deleteEmptyObjects bool) (root types.Hash32, err error) {
+	state.lock.Lock()
+	defer state.lock.Unlock()
 	// Commit objects to the trie.
-	for addr, stateObject := range s.stateObjects {
-		_, isDirty := s.stateObjectsDirty[addr]
+	for addr, stateObject := range state.stateObjects {
+		_, isDirty := state.stateObjectsDirty[addr]
 
 		if isDirty {
-			s.updateStateObj(stateObject)
+			state.updateStateObj(stateObject)
 		}
 	}
 	// Write trie changes.
-	root, err = s.globalTrie.Commit(nil)
+	root, err = state.globalTrie.Commit(nil)
 	return root, err
 }
 
 // Finalise finalises the state by removing the self destructed objects
 // and clears the journal as well as the refunds.
-func (s *StateDB) Finalise(deleteEmptyObjects bool) {
+func (state *StateDB) Finalise(deleteEmptyObjects bool) {
 	//todo: do we need this?
 }
 
 // IntermediateRoot computes the current root hash of the state trie.
 // It is called in between transactions to get the root hash that
 // goes into transaction receipts.
-func (s *StateDB) IntermediateRoot(deleteEmptyObjects bool) types.Hash32 {
-	return s.globalTrie.Hash()
+func (state *StateDB) IntermediateRoot(deleteEmptyObjects bool) types.Hash32 {
+	return state.globalTrie.Hash()
 }
 
 // TrieDB retrieves the low level trie database used for data storage.
-func (s *StateDB) TrieDB() *trie.Database {
-	return s.db.TrieDB()
+func (state *StateDB) TrieDB() *trie.Database {
+	return state.db.TrieDB()
 }
