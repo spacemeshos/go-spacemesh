@@ -20,7 +20,7 @@ import (
 	"time"
 )
 
-// MaxTransactionsPerBlock indicates the maximum transactions a block can refrence
+// MaxTransactionsPerBlock indicates the maximum transactions a block can reference
 const MaxTransactionsPerBlock = 200 //todo: move to config
 
 const defaultGasLimit = 10
@@ -29,7 +29,7 @@ const defaultFee = 1
 // IncomingTxProtocol is the protocol identifier for tx received by gossip that is used by the p2p
 const IncomingTxProtocol = "TxGossip"
 
-// AtxsPerBlockLimit indicates the maximum number of atxs a block can refrence
+// AtxsPerBlockLimit indicates the maximum number of atxs a block can reference
 const AtxsPerBlockLimit = 100
 
 type signer interface {
@@ -62,7 +62,7 @@ type projector interface {
 }
 
 // BlockBuilder is the struct that orchestrates the building of blocks, it is responsible for receiving hare results.
-// referencing txs and atxs from mem pool and refrencing them in the created block
+// referencing txs and atxs from mem pool and referencing them in the created block
 // it is also responsible for listening to the clock and querying when a block should be created according to the block oracle
 type BlockBuilder struct {
 	log.Log
@@ -168,7 +168,7 @@ type meshProvider interface {
 	GetBlock(id types.BlockID) (*types.Block, error)
 }
 
-//used from external API call to dd transcrtion
+//used from external API call to dd transaction
 func (t *BlockBuilder) addTransaction(tx *types.Transaction) error {
 	if !t.started {
 		return fmt.Errorf("BlockBuilderStopped")
