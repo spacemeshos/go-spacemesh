@@ -69,12 +69,18 @@ func newMockPoetDb() poetDb {
 }
 
 func SyncMockFactory(number int, conf Configuration, name string, dbType string, poetDb func() poetDb) (syncs []*Syncer, p2ps []*service.Node, ticker *timesync.TimeClock) {
-	nodes := make([]*Syncer, 0, number)
-	p2ps = make([]*service.Node, 0, number)
-	sim := service.NewSimulator()
 	tick := 200 * time.Millisecond
 	timer := timesync.RealClock{}
-	ts := timesync.NewClock(timer, tick, timer.Now().Add(tick*-4), log.NewDefault("clock"))
+	ticker = timesync.NewClock(timer, tick, timer.Now().Add(tick*-4), log.NewDefault("clock"))
+	syncs, p2ps = SyncMockFactoryManClock(number, conf, name, dbType, poetDb, ticker)
+	ticker.StartNotifying()
+	return syncs, p2ps, ticker
+}
+
+func SyncMockFactoryManClock(number int, conf Configuration, name string, dbType string, poetDb func() poetDb, ticker ticker) ([]*Syncer, []*service.Node) {
+	nodes := make([]*Syncer, 0, number)
+	p2ps := make([]*service.Node, 0, number)
+	sim := service.NewSimulator()
 	for i := 0; i < number; i++ {
 		net := sim.NewNode()
 		name := fmt.Sprintf(name+"_%d", i)
@@ -82,12 +88,11 @@ func SyncMockFactory(number int, conf Configuration, name string, dbType string,
 		blockValidator := BlockEligibilityValidatorMock{}
 		txpool := miner.NewTxMemPool()
 		atxpool := miner.NewAtxMemPool()
-		sync := NewSync(net, getMesh(dbType, Path+name+"_"+time.Now().String()), txpool, atxpool, blockValidator, poetDb(), conf, ts, l)
+		sync := NewSync(net, getMesh(dbType, Path+name+"_"+time.Now().String()), txpool, atxpool, blockValidator, poetDb(), conf, ticker, l)
 		nodes = append(nodes, sync)
 		p2ps = append(p2ps, net)
 	}
-	ts.StartNotifying()
-	return nodes, p2ps, ts
+	return nodes, p2ps
 }
 
 type mockBlocksProvider struct {
@@ -976,6 +981,100 @@ func TestFetchLayerBlockIds(t *testing.T) {
 	l, err := syncObj3.GetLayer(2)
 	assert.NoError(t, err)
 	assert.True(t, len(l.Blocks()) == 0)
+
+}
+
+func TestFetchLayerBlockIdsNoResponse(t *testing.T) {
+	// check tx validation
+	clk := &MockClock{Layer: 6}
+	syncs, nodes := SyncMockFactoryManClock(5, conf, t.Name(), memoryDB, newMockPoetDb, clk)
+	pm1 := getPeersMock([]p2p.Peer{nodes[2].PublicKey()})
+	pm2 := getPeersMock([]p2p.Peer{nodes[2].PublicKey()})
+	pm3 := getPeersMock([]p2p.Peer{nodes[2].PublicKey()})
+	pm4 := getPeersMock([]p2p.Peer{nodes[2].PublicKey()})
+	pm5 := getPeersMock([]p2p.Peer{nodes[0].PublicKey(), nodes[1].PublicKey()})
+
+	block1 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
+	block2 := types.NewExistingBlock(2, []byte(rand.RandString(8)))
+	block31 := types.NewExistingBlock(3, []byte(rand.RandString(8)))
+	block32 := types.NewExistingBlock(3, []byte(rand.RandString(8)))
+	block4 := types.NewExistingBlock(4, []byte(rand.RandString(8)))
+	block5 := types.NewExistingBlock(5, []byte(rand.RandString(8)))
+
+	syncObj1 := syncs[0]
+	syncObj1.peers = pm1 //override peers with mock
+	defer syncObj1.Close()
+	syncObj2 := syncs[1]
+	syncObj2.peers = pm2 //override peers with mock
+	defer syncObj2.Close()
+	syncObj3 := syncs[2]
+	syncObj3.peers = pm3 //override peers with mock
+	defer syncObj3.Close()
+	syncObj4 := syncs[3]
+	syncObj4.peers = pm4 //override peers with mock
+	defer syncObj4.Close()
+
+	syncObj5 := syncs[4]
+	syncObj5.peers = pm5 //override peers with mock
+	defer syncObj5.Close()
+
+	syncObj1.AddBlock(block1)
+	syncObj2.AddBlock(block1)
+	syncObj3.AddBlock(block1)
+	syncObj4.AddBlock(block1)
+	syncObj5.AddBlock(block1)
+
+	syncObj1.AddBlock(block2)
+	syncObj2.AddBlock(block2)
+	syncObj3.AddBlock(block2)
+	syncObj4.AddBlock(block2)
+	syncObj5.AddBlock(block2)
+
+	syncObj1.SetZeroBlockLayer(3)
+	syncObj2.SetZeroBlockLayer(3)
+
+	syncObj3.AddBlock(block31)
+	syncObj4.AddBlock(block31)
+	syncObj5.AddBlock(block31)
+
+	syncObj3.AddBlock(block32)
+	syncObj4.AddBlock(block32)
+
+	syncObj3.AddBlock(block4)
+	syncObj4.AddBlock(block4)
+	syncObj3.AddBlock(block5)
+	syncObj4.AddBlock(block5)
+	if err := syncObj5.getAndValidateLayer(2); err != nil {
+		t.Fail()
+	}
+
+	//sync5 only knows sync1 and sync2 so the response for 3 should be an empty layer
+	syncObj5.synchronise()
+	lyr, err := syncObj5.GetLayer(3)
+	assert.NoError(t, err)
+
+	//check that we did not override layer with empty layer
+	assert.True(t, len(lyr.Blocks()) == 1)
+	//switch sync5 peers to sync3 and sync4 that know layer 3 and lets see it recovers
+	syncObj5.peers = getPeersMock([]p2p.Peer{nodes[2].PublicKey(), nodes[3].PublicKey()})
+	go func() { time.Sleep(1 * time.Second); clk.Tick(); time.Sleep(1 * time.Second); clk.Tick() }()
+	syncObj5.synchronise()
+
+	//now we should have 2 blocks in layer 3
+	lyr, err = syncObj5.GetLayer(3)
+	assert.NoError(t, err)
+	assert.True(t, len(lyr.Blocks()) == 2)
+
+	err = syncObj5.getAndValidateLayer(3)
+	assert.NoError(t, err)
+
+	//check that we got layer 4
+	err = syncObj5.getAndValidateLayer(4)
+	assert.NoError(t, err)
+
+	//check that we got layer 5
+	err = syncObj5.getAndValidateLayer(5)
+	assert.NoError(t, err)
 
 }
 
