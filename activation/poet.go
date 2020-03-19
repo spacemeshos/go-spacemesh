@@ -64,6 +64,8 @@ func NewHTTPPoetClient(target string, ctx context.Context) *HTTPPoetClient {
 	}
 }
 
+// Start is an administrative endpoint of the proving service that tells it to start. This is mostly done in tests,
+// since it requires administrative permissions to the proving service.
 func (c *HTTPPoetClient) Start(gatewayAddresses []string) error {
 	reqBody := StartRequest{GatewayAddresses: gatewayAddresses}
 	if err := c.req("POST", "/start", reqBody, nil); err != nil {
@@ -73,6 +75,7 @@ func (c *HTTPPoetClient) Start(gatewayAddresses []string) error {
 	return nil
 }
 
+// Submit registers a challenge in the proving service current open round.
 func (c *HTTPPoetClient) Submit(challenge types.Hash32) (*types.PoetRound, error) {
 	reqBody := SubmitRequest{Challenge: challenge[:]}
 	resBody := &SubmitResponse{}
@@ -83,7 +86,8 @@ func (c *HTTPPoetClient) Submit(challenge types.Hash32) (*types.PoetRound, error
 	return &types.PoetRound{Id: resBody.RoundId}, nil
 }
 
-func (c *HTTPPoetClient) PoetServiceId() ([]byte, error) {
+// PoetServiceId returns the public key of the PoET proving service.
+func (c *HTTPPoetClient) PoetServiceID() ([]byte, error) {
 	resBody := &GetInfoResponse{}
 	if err := c.req("GET", "/info", nil, resBody); err != nil {
 		return nil, err
@@ -130,10 +134,12 @@ func (c *HTTPPoetClient) req(method string, endUrl string, reqBody interface{}, 
 	return nil
 }
 
+// SubmitRequest is the request object for the submit endpoint
 type SubmitRequest struct {
 	Challenge []byte `json:"challenge,omitempty"`
 }
 
+// StartRequest is the request object for the start endpoint
 type StartRequest struct {
 	GatewayAddresses       []string `json:"gatewayAddresses,omitempty"`
 	DisableBroadcast       bool     `json:"disableBroadcast,omitempty"`
@@ -141,10 +147,12 @@ type StartRequest struct {
 	BroadcastAcksThreshold int      `json:"broadcastAcksThreshold,omitempty"`
 }
 
+// SubmitResponse is the response object for the submit endpoint
 type SubmitResponse struct {
 	RoundId string
 }
 
+// GetInfoResponse is the response object for the get-info endpoint
 type GetInfoResponse struct {
 	OpenRoundId        string
 	ExecutingRoundsIds []string

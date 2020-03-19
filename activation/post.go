@@ -23,8 +23,8 @@ func verifyPost(key signing.PublicKey, proof *types.PostProof, space uint64, num
 
 	cfg := config.Config{
 		SpacePerUnit:    space,
-		NumProvenLabels: uint(numProvenLabels),
-		Difficulty:      uint(difficulty),
+		NumProvenLabels: numProvenLabels,
+		Difficulty:      difficulty,
 		NumFiles:        1,
 	}
 
@@ -39,8 +39,9 @@ func verifyPost(key signing.PublicKey, proof *types.PostProof, space uint64, num
 	return nil
 }
 
+// PostClient consolidates Proof of Space-Time functionality like initializing space and executing proofs.
 type PostClient struct {
-	id          []byte
+	minerID     []byte
 	cfg         *config.Config
 	initializer *initialization.Initializer
 	prover      *proving.Prover
@@ -52,19 +53,20 @@ type PostClient struct {
 // A compile time check to ensure that PostClient fully implements PostProverClient.
 var _ PostProverClient = (*PostClient)(nil)
 
-func NewPostClient(cfg *config.Config, id []byte) (*PostClient, error) {
-	init, err := initialization.NewInitializer(cfg, id)
+// NewPostClient returns a new PostClient based on a configuration and minerID
+func NewPostClient(cfg *config.Config, minerID []byte) (*PostClient, error) {
+	init, err := initialization.NewInitializer(cfg, minerID)
 	if err != nil {
 		return nil, err
 	}
 
-	p, err := proving.NewProver(cfg, id)
+	p, err := proving.NewProver(cfg, minerID)
 	if err != nil {
 		return nil, err
 	}
 
 	return &PostClient{
-		id:          id,
+		minerID:     minerID,
 		cfg:         cfg,
 		initializer: init,
 		prover:      p,
@@ -72,6 +74,8 @@ func NewPostClient(cfg *config.Config, id []byte) (*PostClient, error) {
 	}, nil
 }
 
+// Initialize is the process in which the prover commits to store some data, by having its storage filled with
+// pseudo-random data with respect to a specific id. This data is the result of a computationally-expensive operation.
 func (c *PostClient) Initialize() (commitment *types.PostProof, err error) {
 	c.RLock()
 	defer c.RUnlock()
@@ -80,6 +84,10 @@ func (c *PostClient) Initialize() (commitment *types.PostProof, err error) {
 	return (*types.PostProof)(proof), err
 }
 
+// Execute is the phase in which the prover received a challenge, and proves that his data is still stored (or was
+// recomputed). This phase can be repeated arbitrarily many times without repeating initialization; thus despite the
+// initialization essentially serving as a proof-of-work, the amortized computational complexity can be made arbitrarily
+// small.
 func (c *PostClient) Execute(challenge []byte) (*types.PostProof, error) {
 	c.RLock()
 	defer c.RUnlock()
@@ -88,6 +96,7 @@ func (c *PostClient) Execute(challenge []byte) (*types.PostProof, error) {
 	return (*types.PostProof)(proof), err
 }
 
+// Reset removes the initialization phase files.
 func (c *PostClient) Reset() error {
 	ok, _, err := c.IsInitialized()
 	if !ok || err != nil {
@@ -100,6 +109,7 @@ func (c *PostClient) Reset() error {
 	return c.initializer.Reset()
 }
 
+// IsInitialized indicates whether the initialization phase has been completed.
 func (c *PostClient) IsInitialized() (bool, uint64, error) {
 	c.RLock()
 	defer c.RUnlock()
@@ -112,6 +122,7 @@ func (c *PostClient) IsInitialized() (bool, uint64, error) {
 	return state == initialization.StateCompleted, 0, nil
 }
 
+// VerifyInitAllowed indicates whether the preconditions for starting the initialization phase are met.
 func (c *PostClient) VerifyInitAllowed() error {
 	c.RLock()
 	defer c.RUnlock()
@@ -119,6 +130,8 @@ func (c *PostClient) VerifyInitAllowed() error {
 	return c.initializer.VerifyInitAllowed()
 }
 
+// SetParams updates the datadir and space params in the client config, to be used in the initialization and the
+// execution phases. It overrides the config which the client was instantiated with.
 func (c *PostClient) SetParams(dataDir string, space uint64) error {
 	c.Lock()
 	defer c.Unlock()
@@ -128,12 +141,12 @@ func (c *PostClient) SetParams(dataDir string, space uint64) error {
 	cfg.SpacePerUnit = space
 	c.cfg = &cfg
 
-	init, err := initialization.NewInitializer(c.cfg, c.id)
+	init, err := initialization.NewInitializer(c.cfg, c.minerID)
 	if err != nil {
 		return err
 	}
 
-	p, err := proving.NewProver(c.cfg, c.id)
+	p, err := proving.NewProver(c.cfg, c.minerID)
 	if err != nil {
 		return err
 	}
@@ -147,6 +160,7 @@ func (c *PostClient) SetParams(dataDir string, space uint64) error {
 	return nil
 }
 
+// SetLogger sets a logger for the client.
 func (c *PostClient) SetLogger(logger shared.Logger) {
 	c.RLock()
 	defer c.RUnlock()
@@ -157,6 +171,7 @@ func (c *PostClient) SetLogger(logger shared.Logger) {
 	c.prover.SetLogger(c.logger)
 }
 
+// Cfg returns the the client latest config.
 func (c *PostClient) Cfg() *config.Config {
 	c.RLock()
 	defer c.RUnlock()
