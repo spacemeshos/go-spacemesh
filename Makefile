@@ -1,5 +1,5 @@
 BINARY := go-spacemesh
-VERSION := 0.1.6
+VERSION := 0.1.8-c
 COMMIT = $(shell git rev-parse HEAD)
 SHA = $(shell git rev-parse --short HEAD)
 CURR_DIR = $(shell pwd)
