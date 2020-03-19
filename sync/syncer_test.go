@@ -1345,6 +1345,8 @@ func TestSyncProtocol_BadResponse(t *testing.T) {
 	syncs[1].RegisterBytesMsgHandler(TX, txHandlerMock)
 	syncs[1].RegisterBytesMsgHandler(ATX, atxHandlerMock)
 
+	// ugly hack, just to see if this fixed travis fail
+	time.Sleep(3 * time.Second)
 	// layer hash
 	_, err1 := syncs[0].getLayerFromNeighbors(types.LayerID(1))
 

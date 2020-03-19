@@ -213,10 +213,10 @@ func (m *Mesh) GetLayer(index types.LayerID) (*types.Layer, error) {
 func (m *Mesh) HandleLateBlock(b *types.Block) {
 	m.Info("Validate late block %s", b.Id())
 	oldPbase, newPbase := m.MeshValidator.HandleLateBlock(b)
-	m.pushLayersToState(oldPbase, newPbase)
 	if err := m.PersistTortoise(); err != nil {
 		m.Error("could not persist Tortoise on late block %s from layer index %d", b.Id(), b.Layer())
 	}
+	m.pushLayersToState(oldPbase, newPbase)
 }
 
 func (m *Mesh) ValidateLayer(lyr *types.Layer) {
