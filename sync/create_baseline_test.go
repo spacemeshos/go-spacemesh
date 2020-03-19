@@ -40,7 +40,7 @@ func TestCreateBaseline(t *testing.T) {
 	defer atxdbStore.Close()
 	atxdb := activation.NewActivationDb(atxdbStore, &MockIStore{}, mshdb, uint16(1000), &ValidatorMock{}, lg.WithName("atxDB").WithOptions(log.Nop))
 	trtl := tortoise.NewAlgorithm(blocksPerLayer, mshdb, 1, lg.WithName("trtl"))
-	msh := mesh.NewMesh(mshdb, atxdb, rewardConf, trtl, &MockTxMemPool{}, &MockAtxMemPool{}, &stateMock{}, lg.WithOptions(log.Nop))
+	msh := mesh.NewMesh(mshdb, atxdb, rewardConf, trtl, &mockTxMemPool{}, &mockAtxMemPool{}, &MockState{}, lg.WithOptions(log.Nop))
 	defer msh.Close()
 	msh.SetBlockBuilder(&blockBuilderMock{})
 	poetDbStore, err := database.NewLDBDatabase(id+"poet", 0, 0, lg.WithName("poetDbStore").WithOptions(log.Nop))

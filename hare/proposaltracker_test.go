@@ -7,8 +7,8 @@ import (
 )
 
 func buildProposalMsg(signing Signer, s *Set, signature []byte) *Msg {
-	builder := NewMessageBuilder().SetRoleProof(signature)
-	builder.SetType(proposal).SetInstanceId(instanceId1).SetRoundCounter(proposalRound).SetKi(ki).SetValues(s).SetSVP(buildSVP(ki, NewSetFromValues(value1)))
+	builder := newMessageBuilder().SetRoleProof(signature)
+	builder.SetType(proposal).SetInstanceID(instanceID1).SetRoundCounter(proposalRound).SetKi(ki).SetValues(s).SetSVP(buildSVP(ki, NewSetFromValues(value1)))
 	builder = builder.SetPubKey(signing.PublicKey()).Sign(signing)
 
 	return builder.Build()

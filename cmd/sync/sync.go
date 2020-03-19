@@ -20,6 +20,7 @@ import (
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 	"io/ioutil"
+	"math/big"
 	"net/http"
 	"os"
 	"time"
@@ -88,6 +89,12 @@ func (m *MockBlockBuilder) ValidateAndAddTxToPool(tx *types.Transaction) error {
 	return nil
 }
 
+func ConfigTst() mesh.Config {
+	return mesh.Config{
+		BaseReward: big.NewInt(5000),
+	}
+}
+
 func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	// start p2p services
 	lg := log.New("sync_test", "", "")
@@ -154,10 +161,10 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	var msh *mesh.Mesh
 	if mshdb.PersistentData() {
 		lg.Info("persistent data found ")
-		msh = mesh.NewRecoveredMesh(mshdb, atxdb, sync.ConfigTst(), &sync.MeshValidatorMock{}, txpool, atxpool, &sync.MockState{}, lg)
+		msh = mesh.NewRecoveredMesh(mshdb, atxdb, ConfigTst(), &sync.MeshValidatorMock{}, txpool, atxpool, &sync.MockState{}, lg)
 	} else {
 		lg.Info("no persistent data found ")
-		msh = mesh.NewMesh(mshdb, atxdb, sync.ConfigTst(), &sync.MeshValidatorMock{}, txpool, atxpool, &sync.MockState{}, lg)
+		msh = mesh.NewMesh(mshdb, atxdb, ConfigTst(), &sync.MeshValidatorMock{}, txpool, atxpool, &sync.MockState{}, lg)
 	}
 
 	msh.SetBlockBuilder(&MockBlockBuilder{})
@@ -267,7 +274,7 @@ func GetData(path, prefix string, lg log.Log) error {
 		count++
 	}
 
-	lg.Info("Done downloading: %v files", count)
+	lg.Info("done downloading: %v files", count)
 	return nil
 }
 

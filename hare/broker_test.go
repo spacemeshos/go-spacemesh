@@ -15,14 +15,14 @@ import (
 	"time"
 )
 
-var instanceId0 = instanceId(0)
-var instanceId1 = instanceId(1)
-var instanceId2 = instanceId(2)
-var instanceId3 = instanceId(3)
-var instanceId4 = instanceId(4)
-var instanceId5 = instanceId(5)
-var instanceId6 = instanceId(6)
-var instanceId7 = instanceId(7)
+var instanceID0 = instanceID(0)
+var instanceID1 = instanceID(1)
+var instanceID2 = instanceID(2)
+var instanceID3 = instanceID(3)
+var instanceID4 = instanceID(4)
+var instanceID5 = instanceID(5)
+var instanceID6 = instanceID(6)
+var instanceID7 = instanceID(7)
 
 func trueFunc() bool {
 	return true
@@ -33,7 +33,7 @@ func falseFunc() bool {
 }
 
 type mockClient struct {
-	id instanceId
+	id instanceID
 }
 
 type MockStateQuerier struct {
@@ -45,14 +45,14 @@ func NewMockStateQuerier() MockStateQuerier {
 	return MockStateQuerier{true, nil}
 }
 
-func (msq MockStateQuerier) IsIdentityActiveOnConsensusView(edId string, layer types.LayerID) (bool, error) {
+func (msq MockStateQuerier) IsIdentityActiveOnConsensusView(edID string, layer types.LayerID) (bool, error) {
 	return msq.res, msq.err
 }
 
-func createMessage(t *testing.T, instanceId instanceId) []byte {
+func createMessage(t *testing.T, instanceID instanceID) []byte {
 	sr := signing.NewEdSigner()
-	b := NewMessageBuilder()
-	msg := b.SetPubKey(sr.PublicKey()).SetInstanceId(instanceId).Sign(sr).Build()
+	b := newMessageBuilder()
+	msg := b.SetPubKey(sr.PublicKey()).SetInstanceID(instanceID).Sign(sr).Build()
 
 	var w bytes.Buffer
 	_, err := xdr.Marshal(&w, msg.Message)
@@ -77,7 +77,7 @@ func TestBroker_Start(t *testing.T) {
 	assert.Equal(t, "instance already started", err.Error())
 }
 
-// test that a InnerMsg to a specific set Id is delivered by the broker
+// test that a InnerMsg to a specific set ID is delivered by the broker
 func TestBroker_Received(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
@@ -86,12 +86,12 @@ func TestBroker_Received(t *testing.T) {
 	broker := buildBroker(n1, t.Name())
 	broker.Start()
 
-	inbox, err := broker.Register(instanceId1)
+	inbox, err := broker.Register(instanceID1)
 	assert.Nil(t, err)
 
-	serMsg := createMessage(t, instanceId1)
+	serMsg := createMessage(t, instanceID1)
 	n2.Broadcast(protoName, serMsg)
-	waitForMessages(t, inbox, instanceId1, 1)
+	waitForMessages(t, inbox, instanceID1, 1)
 }
 
 // test that aborting the broker aborts
@@ -114,20 +114,20 @@ func TestBroker_Abort(t *testing.T) {
 	}
 }
 
-func sendMessages(t *testing.T, instanceId instanceId, n *service.Node, count int) {
+func sendMessages(t *testing.T, instanceID instanceID, n *service.Node, count int) {
 	for i := 0; i < count; i++ {
-		n.Broadcast(protoName, createMessage(t, instanceId))
+		n.Broadcast(protoName, createMessage(t, instanceID))
 	}
 }
 
-func waitForMessages(t *testing.T, inbox chan *Msg, instanceId instanceId, msgCount int) {
+func waitForMessages(t *testing.T, inbox chan *Msg, instanceID instanceID, msgCount int) {
 	i := 0
 	for {
 		tm := time.NewTimer(3 * time.Second)
 		for {
 			select {
 			case x := <-inbox:
-				assert.True(t, x.InnerMsg.InstanceId == instanceId)
+				assert.True(t, x.InnerMsg.InstanceID == instanceID)
 				i++
 				if i >= msgCount {
 					return
@@ -142,7 +142,7 @@ func waitForMessages(t *testing.T, inbox chan *Msg, instanceId instanceId, msgCo
 	}
 }
 
-// test flow for multiple set objectId
+// test flow for multiple set ObjectID
 func TestBroker_MultipleInstanceIds(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
@@ -152,17 +152,17 @@ func TestBroker_MultipleInstanceIds(t *testing.T) {
 	broker := buildBroker(n1, t.Name())
 	broker.Start()
 
-	inbox1, _ := broker.Register(instanceId1)
-	inbox2, _ := broker.Register(instanceId2)
-	inbox3, _ := broker.Register(instanceId3)
+	inbox1, _ := broker.Register(instanceID1)
+	inbox2, _ := broker.Register(instanceID2)
+	inbox3, _ := broker.Register(instanceID3)
 
-	go sendMessages(t, instanceId1, n2, msgCount)
-	go sendMessages(t, instanceId2, n2, msgCount)
-	go sendMessages(t, instanceId3, n2, msgCount)
+	go sendMessages(t, instanceID1, n2, msgCount)
+	go sendMessages(t, instanceID2, n2, msgCount)
+	go sendMessages(t, instanceID3, n2, msgCount)
 
-	go waitForMessages(t, inbox1, instanceId1, msgCount)
-	go waitForMessages(t, inbox2, instanceId2, msgCount)
-	waitForMessages(t, inbox3, instanceId3, msgCount)
+	go waitForMessages(t, inbox1, instanceID1, msgCount)
+	go waitForMessages(t, inbox2, instanceID2, msgCount)
+	waitForMessages(t, inbox3, instanceID3, msgCount)
 
 	assert.True(t, true)
 }
@@ -172,10 +172,10 @@ func TestBroker_RegisterUnregister(t *testing.T) {
 	n1 := sim.NewNode()
 	broker := buildBroker(n1, t.Name())
 	broker.Start()
-	broker.Register(instanceId1)
+	broker.Register(instanceID1)
 	assert.Equal(t, 1, len(broker.outbox))
-	broker.Unregister(instanceId1)
-	assert.Nil(t, broker.outbox[instanceId1])
+	broker.Unregister(instanceID1)
+	assert.Nil(t, broker.outbox[instanceID1])
 }
 
 type mockGossipMessage struct {
@@ -223,11 +223,11 @@ func TestBroker_Send(t *testing.T) {
 	broker.inbox <- m
 
 	msg := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1)).Message
-	msg.InnerMsg.InstanceId = 2
+	msg.InnerMsg.InstanceID = 2
 	m = newMockGossipMsg(msg)
 	broker.inbox <- m
 
-	msg.InnerMsg.InstanceId = 1
+	msg.InnerMsg.InstanceID = 1
 	m = newMockGossipMsg(msg)
 	broker.inbox <- m
 	// nothing happens since this is an  invalid InnerMsg
@@ -243,10 +243,10 @@ func TestBroker_Register(t *testing.T) {
 	broker := buildBroker(n1, t.Name())
 	broker.Start()
 	msg := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1))
-	broker.pending[instanceId1] = []*Msg{msg, msg}
-	broker.Register(instanceId1)
-	assert.Equal(t, 2, len(broker.outbox[instanceId1]))
-	assert.Equal(t, 0, len(broker.pending[instanceId1]))
+	broker.pending[instanceID1] = []*Msg{msg, msg}
+	broker.Register(instanceID1)
+	assert.Equal(t, 2, len(broker.outbox[instanceID1]))
+	assert.Equal(t, 0, len(broker.pending[instanceID1]))
 }
 
 func assertMsg(t *testing.T, msg *mockGossipMessage) {
@@ -265,13 +265,13 @@ func TestBroker_Register2(t *testing.T) {
 	n1 := sim.NewNode()
 	broker := buildBroker(n1, t.Name())
 	broker.Start()
-	broker.Register(instanceId1)
+	broker.Register(instanceID1)
 	m := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1)).Message
-	m.InnerMsg.InstanceId = instanceId1
+	m.InnerMsg.InstanceID = instanceID1
 	msg := newMockGossipMsg(m)
 	broker.inbox <- msg
 	assertMsg(t, msg)
-	m.InnerMsg.InstanceId = instanceId2
+	m.InnerMsg.InstanceID = instanceID2
 	msg = newMockGossipMsg(m)
 	broker.inbox <- msg
 	assertMsg(t, msg)
@@ -284,11 +284,11 @@ func TestBroker_Register3(t *testing.T) {
 	broker.Start()
 
 	m := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1)).Message
-	m.InnerMsg.InstanceId = instanceId1
+	m.InnerMsg.InstanceID = instanceID1
 	msg := newMockGossipMsg(m)
 	broker.inbox <- msg
 	time.Sleep(1)
-	client := mockClient{instanceId1}
+	client := mockClient{instanceID1}
 	ch, _ := broker.Register(client.id)
 	timer := time.NewTimer(2 * time.Second)
 	for {
@@ -307,10 +307,10 @@ func TestBroker_PubkeyExtraction(t *testing.T) {
 	n1 := sim.NewNode()
 	broker := buildBroker(n1, t.Name())
 	broker.Start()
-	inbox, _ := broker.Register(instanceId1)
+	inbox, _ := broker.Register(instanceID1)
 	sgn := signing.NewEdSigner()
 	m := BuildPreRoundMsg(sgn, NewSetFromValues(value1)).Message
-	m.InnerMsg.InstanceId = instanceId1
+	m.InnerMsg.InstanceID = instanceID1
 	msg := newMockGossipMsg(m)
 	broker.inbox <- msg
 	tm := time.NewTimer(2 * time.Second)
@@ -339,11 +339,11 @@ func Test_newMsg(t *testing.T) {
 func TestBroker_updateInstance(t *testing.T) {
 	r := require.New(t)
 	b := buildBroker(service.NewSimulator().NewNode(), t.Name())
-	r.Equal(instanceId(0), b.latestLayer)
+	r.Equal(instanceID(0), b.latestLayer)
 	b.updateLatestLayer(1)
-	r.Equal(instanceId(1), b.latestLayer)
+	r.Equal(instanceID(1), b.latestLayer)
 	b.updateLatestLayer(2)
-	r.Equal(instanceId(2), b.latestLayer)
+	r.Equal(instanceID(2), b.latestLayer)
 }
 
 func TestBroker_updateSynchronicity(t *testing.T) {
@@ -393,31 +393,31 @@ func TestBroker_eventLoop(t *testing.T) {
 	// unknown-->invalid, ignore
 	b.isNodeSynced = falseFunc
 	m := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1)).Message
-	m.InnerMsg.InstanceId = instanceId1
+	m.InnerMsg.InstanceID = instanceID1
 	msg := newMockGossipMsg(m)
 	b.inbox <- msg
-	_, ok := b.outbox[instanceId1]
+	_, ok := b.outbox[instanceID1]
 	r.False(ok)
 
 	// register to invalid should error
-	_, e := b.Register(instanceId1)
+	_, e := b.Register(instanceID1)
 	r.NotNil(e)
 
 	// register to unknown->valid
 	b.isNodeSynced = trueFunc
-	c, e := b.Register(instanceId2)
+	c, e := b.Register(instanceID2)
 	r.Nil(e)
-	m.InnerMsg.InstanceId = instanceId2
+	m.InnerMsg.InstanceID = instanceID2
 	msg = newMockGossipMsg(m)
 	b.inbox <- msg
 	recM := <-c
 	r.Equal(msg.Bytes(), recM.Bytes())
 
 	// unknown->valid early
-	m.InnerMsg.InstanceId = instanceId3
+	m.InnerMsg.InstanceID = instanceID3
 	msg = newMockGossipMsg(m)
 	b.inbox <- msg
-	c, e = b.Register(instanceId3)
+	c, e = b.Register(instanceID3)
 	r.Nil(e)
 	<-c
 }
@@ -429,21 +429,21 @@ func TestBroker_eventLoop2(t *testing.T) {
 
 	// invalid instance
 	b.isNodeSynced = falseFunc
-	_, e := b.Register(instanceId4)
+	_, e := b.Register(instanceID4)
 	r.NotNil(e)
 	m := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1)).Message
-	m.InnerMsg.InstanceId = instanceId4
+	m.InnerMsg.InstanceID = instanceID4
 	msg := newMockGossipMsg(m)
 	b.inbox <- msg
-	v, ok := b.syncState[instanceId4]
+	v, ok := b.syncState[instanceID4]
 	r.True(ok)
 	r.NotEqual(true, v)
 
 	// valid but not early
-	m.InnerMsg.InstanceId = instanceId6
+	m.InnerMsg.InstanceID = instanceID6
 	msg = newMockGossipMsg(m)
 	b.inbox <- msg
-	_, ok = b.outbox[instanceId6]
+	_, ok = b.outbox[instanceID6]
 	r.False(ok)
 }
 
@@ -452,20 +452,20 @@ func Test_validate(t *testing.T) {
 	b := buildBroker(service.NewSimulator().NewNode(), t.Name())
 
 	m := BuildStatusMsg(signing.NewEdSigner(), NewDefaultEmptySet())
-	m.InnerMsg.InstanceId = 1
+	m.InnerMsg.InstanceID = 1
 	b.latestLayer = 2
 	e := b.validate(m.Message)
 	r.EqualError(e, errUnregistered.Error())
 
-	m.InnerMsg.InstanceId = 2
+	m.InnerMsg.InstanceID = 2
 	e = b.validate(m.Message)
 	r.EqualError(e, errRegistration.Error())
 
-	m.InnerMsg.InstanceId = 3
+	m.InnerMsg.InstanceID = 3
 	e = b.validate(m.Message)
 	r.EqualError(e, errEarlyMsg.Error())
 
-	m.InnerMsg.InstanceId = 2
+	m.InnerMsg.InstanceID = 2
 	b.outbox[2] = make(chan *Msg)
 	b.syncState[2] = false
 	e = b.validate(m.Message)
@@ -480,14 +480,14 @@ func TestBroker_clean(t *testing.T) {
 	r := require.New(t)
 	b := buildBroker(service.NewSimulator().NewNode(), t.Name())
 
-	for i := instanceId(1); i < 10; i++ {
+	for i := instanceID(1); i < 10; i++ {
 		b.syncState[i] = true
 	}
 
 	b.latestLayer = 9
 	b.outbox[5] = make(chan *Msg)
 	b.cleanOldLayers()
-	r.Equal(instanceId(4), b.minDeleted)
+	r.Equal(instanceID(4), b.minDeleted)
 	r.Equal(5, len(b.syncState))
 
 	delete(b.outbox, 5)
@@ -502,14 +502,14 @@ func TestBroker_Flow(t *testing.T) {
 	b.Start()
 
 	m := BuildStatusMsg(signing.NewEdSigner(), NewDefaultEmptySet())
-	m.InnerMsg.InstanceId = 1
+	m.InnerMsg.InstanceID = 1
 	b.inbox <- newMockGossipMsg(m.Message)
 	ch1, e := b.Register(1)
 	r.Nil(e)
 	<-ch1
 
 	m2 := BuildStatusMsg(signing.NewEdSigner(), NewDefaultEmptySet())
-	m2.InnerMsg.InstanceId = 2
+	m2.InnerMsg.InstanceID = 2
 	ch2, e := b.Register(2)
 	r.Nil(e)
 
@@ -522,14 +522,14 @@ func TestBroker_Flow(t *testing.T) {
 	b.Register(3)
 	b.Register(4)
 	b.Unregister(2)
-	r.Equal(instanceId0, b.minDeleted)
+	r.Equal(instanceID0, b.minDeleted)
 
 	// check still receiving msgs on ch1
 	b.inbox <- newMockGossipMsg(m.Message)
 	<-ch1
 
 	b.Unregister(1)
-	r.Equal(instanceId2, b.minDeleted)
+	r.Equal(instanceID2, b.minDeleted)
 }
 
 func TestBroker_Synced(t *testing.T) {
@@ -540,7 +540,7 @@ func TestBroker_Synced(t *testing.T) {
 	for i := 0; i < 1000; i++ {
 		wg.Add(1)
 		go func(j int) {
-			r.True(b.Synced(instanceId(j)))
+			r.True(b.Synced(instanceID(j)))
 			wg.Done()
 		}(i)
 	}

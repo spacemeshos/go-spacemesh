@@ -14,6 +14,6 @@ func (mt *msgsTracker) PublicKey(m *Message) *signing.PublicKey {
 	return mt.sigToPub[string(m.Sig)]
 }
 
-func NewMsgsTracker() *msgsTracker {
+func newMsgsTracker() *msgsTracker {
 	return &msgsTracker{sigToPub: make(map[string]*signing.PublicKey)}
 }
