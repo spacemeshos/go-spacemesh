@@ -23,6 +23,13 @@ const DefaultQueueCount uint = 6
 // DefaultMessageQueueSize is the buffer size of each queue mentioned above. (queues are buffered channels)
 const DefaultMessageQueueSize uint = 5120
 
+const (
+	ReadBufferSize     = 5 * 1024 * 1024
+	WriteBufferSize    = 5 * 1024 * 1024
+	TCPKeepAlive       = true
+	TCPKeepAlivePeriod = 10 * time.Second
+)
+
 // IncomingMessageEvent is the event reported on new incoming message, it contains the message and the Connection carrying the message
 type IncomingMessageEvent struct {
 	Conn    Connection
@@ -171,32 +178,27 @@ func (n *Net) dial(ctx context.Context, address net.Addr) (net.Conn, error) {
 	netConn, err := dialer.DialContext(ctx, "tcp", address.String())
 	if err == nil {
 		tcpconn := netConn.(*net.TCPConn)
-		errs := tcpSocketConfig(tcpconn)
-		for err := range errs {
-			n.logger.Warning("Error trying to set up tcp connection configuration err:%v", err)
-		}
+		n.tcpSocketConfig(tcpconn)
 		return tcpconn, nil
 	}
 	return netConn, err
 }
 
-func tcpSocketConfig(tcpconn *net.TCPConn) []error {
+func (n *Net) tcpSocketConfig(tcpconn *net.TCPConn) {
 	// TODO: Parameters, try to find right buffers based on something or os/net-interface input?
-	var errs []error
-	if err := tcpconn.SetReadBuffer(5 * 1024 * 1024); err != nil {
-		errs = append(errs, err)
+	if err := tcpconn.SetReadBuffer(ReadBufferSize); err != nil {
+		n.logger.Warning("Error trying to set ReadBuffer on TCPConn %v", err)
 	}
-	if err := tcpconn.SetWriteBuffer(5 * 1024 * 1024); err != nil {
-		errs = append(errs, err)
+	if err := tcpconn.SetWriteBuffer(WriteBufferSize); err != nil {
+		n.logger.Warning("Error trying to set WriteBuffer on TCPConn %v", err)
 	}
 
-	if err := tcpconn.SetKeepAlive(true); err != nil {
-		errs = append(errs, err)
+	if err := tcpconn.SetKeepAlive(TCPKeepAlive); err != nil {
+		n.logger.Warning("Error trying to set KeepAlive on TCPConn %v", err)
 	}
-	if err := tcpconn.SetKeepAlivePeriod(time.Second * 10); err != nil {
-		errs = append(errs, err)
+	if err := tcpconn.SetKeepAlivePeriod(TCPKeepAlivePeriod); err != nil {
+		n.logger.Warning("Error trying to set KeepAlivePeriod on TCPConn %v", err)
 	}
-	return errs
 }
 
 func (n *Net) createConnection(address net.Addr, remotePub p2pcrypto.PublicKey, session NetworkSession,
