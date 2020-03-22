@@ -66,7 +66,7 @@ func TestNewAccountPendingTxs(t *testing.T) {
 	// Accepting a transaction removes all same-nonce transactions
 	pendingTxs.Remove([]*types.Transaction{
 		newTx(t, 5, 50, 1),
-	}, nil, 1)
+	}, 1)
 	empty = pendingTxs.IsEmpty()
 	r.True(empty)
 	nonce, balance = pendingTxs.GetProjection(prevNonce, prevBalance)
@@ -92,7 +92,7 @@ func TestNewAccountPendingTxs(t *testing.T) {
 	r.Equal(prevBalance-100, balance)
 
 	// Rejecting a transaction with same-nonce does NOT remove a different transactions
-	pendingTxs.Remove(nil, []*types.Transaction{
+	pendingTxs.RemoveRejected([]*types.Transaction{
 		newTx(t, 5, 50, 1),
 	}, 2)
 	nonce, balance = pendingTxs.GetProjection(prevNonce, prevBalance)
@@ -100,7 +100,7 @@ func TestNewAccountPendingTxs(t *testing.T) {
 	r.Equal(prevBalance-100, balance)
 
 	// Rejecting a transaction in a lower layer than the highest seen for it, does not remove it, either
-	pendingTxs.Remove(nil, []*types.Transaction{
+	pendingTxs.RemoveRejected([]*types.Transaction{
 		newTx(t, 5, 100, 1),
 	}, 1)
 	nonce, balance = pendingTxs.GetProjection(prevNonce, prevBalance)
@@ -108,7 +108,7 @@ func TestNewAccountPendingTxs(t *testing.T) {
 	r.Equal(prevBalance-100, balance)
 
 	// However, rejecting a transaction in the highest layer it was seen in DOES remove it
-	pendingTxs.Remove(nil, []*types.Transaction{
+	pendingTxs.RemoveRejected([]*types.Transaction{
 		newTx(t, 5, 100, 1),
 	}, 2)
 	nonce, balance = pendingTxs.GetProjection(prevNonce, prevBalance)
@@ -147,7 +147,7 @@ func TestNewAccountPendingTxs(t *testing.T) {
 
 	// Rejecting a transaction only removes that version, if several exist
 	// This can also cause a transaction that would previously over-draft the account to become valid
-	pendingTxs.Remove(nil, []*types.Transaction{
+	pendingTxs.RemoveRejected([]*types.Transaction{
 		newTx(t, 5, 100, 2),
 	}, 2)
 	nonce, balance = pendingTxs.GetProjection(prevNonce, prevBalance)

@@ -34,7 +34,7 @@ func (t *AtxDbMock) GetATXs(atxIds []types.AtxId) (map[types.AtxId]*types.Activa
 }
 
 func (t *AtxDbMock) GetFullAtx(id types.AtxId) (*types.ActivationTx, error) {
-	panic("implement me")
+	return t.db[id], nil
 }
 
 func (t *AtxDbMock) AddAtx(id types.AtxId, atx *types.ActivationTx) {

@@ -142,7 +142,7 @@ func TestHare_GetResult2(t *testing.T) {
 	}
 
 	h := createHare(n1, log.NewDefault(t.Name()))
-	h.obp = om
+	h.msh = om
 
 	h.networkDelta = 0
 
