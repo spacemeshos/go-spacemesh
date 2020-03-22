@@ -25,12 +25,13 @@ func NewJSONHTTPServer(port int, grpcPort int) *JSONHTTPServer {
 	return &JSONHTTPServer{Port: uint(port), GrpcPort: uint(grpcPort)}
 }
 
-// StopService stops the server.
-func (s *JSONHTTPServer) StopService() {
+// Close stops the server.
+func (s *JSONHTTPServer) Close() error {
 	log.Debug("Stopping json-http service...")
 	if err := s.server.Shutdown(context.TODO()); err != nil {
-		log.Error("Error during shutdown json API server : %v", err)
+		return err
 	}
+	return nil
 }
 
 // StartService starts the json api server and listens for status (started, stopped).

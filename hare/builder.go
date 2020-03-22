@@ -54,7 +54,7 @@ type aggregatedMessages struct {
 // innerMessage is the actual set of fields that describe a message in the Hare protocol.
 type innerMessage struct {
 	Type       messageType
-	InstanceId instanceId
+	InstanceID instanceID
 	K          int32 // the round counter
 	Ki         int32
 	Values     []types.BlockID     // the set S. optional for commit InnerMsg in a certificate
@@ -75,7 +75,7 @@ func (im *innerMessage) Bytes() []byte {
 }
 
 func (im *innerMessage) String() string {
-	return fmt.Sprintf("Type: %v InstanceId: %v K: %v Ki: %v", im.Type, im.InstanceId, im.K, im.Ki)
+	return fmt.Sprintf("Type: %v InstanceID: %v K: %v Ki: %v", im.Type, im.InstanceID, im.K, im.Ki)
 }
 
 // messageBuilder is the impl of the builder DP.
@@ -85,9 +85,9 @@ type messageBuilder struct {
 	inner *innerMessage
 }
 
-// NewMessageBuilder returns a new, empty message builder.
+// newMessageBuilder returns a new, empty message builder.
 // One should not assume any values are pre-set.
-func NewMessageBuilder() *messageBuilder {
+func newMessageBuilder() *messageBuilder {
 	m := &messageBuilder{&Msg{&Message{}, nil}, &innerMessage{}}
 	m.msg.InnerMsg = m.inner
 
@@ -123,8 +123,8 @@ func (builder *messageBuilder) SetType(msgType messageType) *messageBuilder {
 	return builder
 }
 
-func (builder *messageBuilder) SetInstanceId(id instanceId) *messageBuilder {
-	builder.inner.InstanceId = id
+func (builder *messageBuilder) SetInstanceID(id instanceID) *messageBuilder {
+	builder.inner.InstanceID = id
 	return builder
 }
 

@@ -1,6 +1,7 @@
 package connectionpool
 
 import (
+	"context"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
@@ -17,7 +18,7 @@ type dialResult struct {
 	err  error
 }
 
-type DialFunc func(address inet.Addr, remotePublicKey p2pcrypto.PublicKey) (net.Connection, error)
+type DialFunc func(ctx context.Context, address inet.Addr, remotePublicKey p2pcrypto.PublicKey) (net.Connection, error)
 
 // ConnectionPool stores all net.Connections and make them available to all users of net.Connection.
 // There are two sources of connections -
@@ -32,21 +33,27 @@ type ConnectionPool struct {
 	pendMutex   sync.Mutex
 	dialWait    sync.WaitGroup
 	logger      log.Log
-	shutdown    bool
+
+	shutdownCtx    context.Context
+	shutdownCancel context.CancelFunc
+	shutdown       bool
 }
 
 // NewConnectionPool creates new ConnectionPool
 func NewConnectionPool(dialFunc DialFunc, lPub p2pcrypto.PublicKey, logger log.Log) *ConnectionPool {
+	shutdownCtx, cancel := context.WithCancel(context.Background())
 	cPool := &ConnectionPool{
-		localPub:    lPub,
-		dialFunc:    dialFunc,
-		connections: make(map[p2pcrypto.PublicKey]net.Connection),
-		connMutex:   sync.RWMutex{},
-		pending:     make(map[p2pcrypto.PublicKey][]chan dialResult),
-		pendMutex:   sync.Mutex{},
-		dialWait:    sync.WaitGroup{},
-		logger:      logger,
-		shutdown:    false,
+		localPub:       lPub,
+		dialFunc:       dialFunc,
+		connections:    make(map[p2pcrypto.PublicKey]net.Connection),
+		connMutex:      sync.RWMutex{},
+		pending:        make(map[p2pcrypto.PublicKey][]chan dialResult),
+		pendMutex:      sync.Mutex{},
+		dialWait:       sync.WaitGroup{},
+		logger:         logger,
+		shutdown:       false,
+		shutdownCtx:    shutdownCtx,
+		shutdownCancel: cancel,
 	}
 
 	return cPool
@@ -80,6 +87,7 @@ func (cp *ConnectionPool) isShuttingDown() bool {
 // - Closes all open connections
 // - Waits for all Dial routines to complete and unblock any routines waiting for GetConnection
 func (cp *ConnectionPool) Shutdown() {
+	cp.shutdownCancel()
 	cp.connMutex.Lock()
 	if cp.shutdown {
 		cp.connMutex.Unlock()
@@ -214,7 +222,7 @@ func (cp *ConnectionPool) GetConnection(address inet.Addr, remotePub p2pcrypto.P
 		// No one is waiting for a connection with the remote peer, need to call Dial
 		cp.dialWait.Add(1)
 		go func() {
-			conn, err := cp.dialFunc(address, remotePub)
+			conn, err := cp.dialFunc(cp.shutdownCtx, address, remotePub)
 			if err != nil {
 				cp.handleDialResult(remotePub, dialResult{nil, err})
 			} else {

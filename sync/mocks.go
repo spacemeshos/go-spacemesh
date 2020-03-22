@@ -11,15 +11,15 @@ import (
 	"time"
 )
 
-type PoetDbMock struct{}
+type poetDbMock struct{}
 
-func (PoetDbMock) GetProofMessage(proofRef []byte) ([]byte, error) { return proofRef, nil }
+func (poetDbMock) GetProofMessage(proofRef []byte) ([]byte, error) { return proofRef, nil }
 
-func (PoetDbMock) HasProof(proofRef []byte) bool { return true }
+func (poetDbMock) HasProof(proofRef []byte) bool { return true }
 
-func (PoetDbMock) ValidateAndStore(proofMessage *types.PoetProofMessage) error { return nil }
+func (poetDbMock) ValidateAndStore(proofMessage *types.PoetProofMessage) error { return nil }
 
-func (*PoetDbMock) SubscribeToProofRef(poetId []byte, roundId string) chan []byte {
+func (*poetDbMock) SubscribeToProofRef(poetID []byte, roundID string) chan []byte {
 	ch := make(chan []byte)
 	go func() {
 		ch <- []byte("hello there")
@@ -27,7 +27,7 @@ func (*PoetDbMock) SubscribeToProofRef(poetId []byte, roundId string) chan []byt
 	return ch
 }
 
-func (*PoetDbMock) GetMembershipMap(poetRoot []byte) (map[types.Hash32]bool, error) {
+func (*poetDbMock) GetMembershipMap(poetRoot []byte) (map[types.Hash32]bool, error) {
 	hash := types.BytesToHash([]byte("anton"))
 	return map[types.Hash32]bool{hash: true}, nil
 }
@@ -39,10 +39,10 @@ func (BlockEligibilityValidatorMock) BlockSignedAndEligible(block *types.Block) 
 	return true, nil
 }
 
-type SyntacticValidatorMock struct {
+type syntacticValidatorMock struct {
 }
 
-func (SyntacticValidatorMock) SyntacticallyValid(block *types.BlockHeader) (bool, error) {
+func (syntacticValidatorMock) SyntacticallyValid(block *types.BlockHeader) (bool, error) {
 	return true, nil
 }
 
@@ -86,19 +86,7 @@ func (m *MeshValidatorMock) HandleLateBlock(bl *types.Block) (types.LayerID, typ
 }
 
 func (m *MeshValidatorMock) RegisterLayerCallback(func(id types.LayerID)) {}
-func (mlg *MeshValidatorMock) ContextualValidity(id types.BlockID) bool   { return true }
-
-type StateMock struct{}
-
-func (s *StateMock) ApplyTransactions(id types.LayerID, tx []*types.Transaction) (uint32, error) {
-	return 0, nil
-}
-
-func ConfigTst() mesh.Config {
-	return mesh.Config{
-		BaseReward: big.NewInt(5000),
-	}
-}
+func (m *MeshValidatorMock) ContextualValidity(id types.BlockID) bool     { return true }
 
 type MockState struct{}
 
@@ -114,7 +102,7 @@ func (MockState) ValidateNonceAndBalance(transaction *types.Transaction) error {
 	panic("implement me")
 }
 
-func (MockState) GetLayerApplied(txId types.TransactionId) *types.LayerID {
+func (MockState) GetLayerApplied(txID types.TransactionId) *types.LayerID {
 	panic("implement me")
 }
 
@@ -131,10 +119,6 @@ func (MockState) ApplyRewards(layer types.LayerID, miners []types.Address, rewar
 
 func (MockState) AddressExists(addr types.Address) bool {
 	return true
-}
-
-func (s *StateMock) ApplyRewards(layer types.LayerID, miners []string, underQuota map[string]int, bonusReward, diminishedReward *big.Int) {
-
 }
 
 type MockIStore struct {
@@ -158,36 +142,36 @@ func (*ValidatorMock) VerifyPost(id signing.PublicKey, proof *types.PostProof, s
 	return nil
 }
 
-type MockTxMemPool struct{}
+type mockTxMemPool struct{}
 
-func (MockTxMemPool) Get(id types.TransactionId) (*types.Transaction, error) {
+func (mockTxMemPool) Get(id types.TransactionId) (*types.Transaction, error) {
 	return &types.Transaction{}, nil
 }
-func (MockTxMemPool) GetAllItems() []*types.Transaction {
+func (mockTxMemPool) GetAllItems() []*types.Transaction {
 	return nil
 }
-func (MockTxMemPool) Put(id types.TransactionId, item *types.Transaction) {
+func (mockTxMemPool) Put(id types.TransactionId, item *types.Transaction) {
 
 }
-func (MockTxMemPool) Invalidate(id types.TransactionId) {
+func (mockTxMemPool) Invalidate(id types.TransactionId) {
 
 }
 
-type MockAtxMemPool struct{}
+type mockAtxMemPool struct{}
 
-func (MockAtxMemPool) Get(id types.AtxId) (*types.ActivationTx, error) {
+func (mockAtxMemPool) Get(id types.AtxId) (*types.ActivationTx, error) {
 	return &types.ActivationTx{}, nil
 }
 
-func (MockAtxMemPool) GetAllItems() []types.ActivationTx {
+func (mockAtxMemPool) GetAllItems() []types.ActivationTx {
 	return nil
 }
 
-func (MockAtxMemPool) Put(atx *types.ActivationTx) {
+func (mockAtxMemPool) Put(atx *types.ActivationTx) {
 
 }
 
-func (MockAtxMemPool) Invalidate(id types.AtxId) {
+func (mockAtxMemPool) Invalidate(id types.AtxId) {
 
 }
 
@@ -204,34 +188,34 @@ func (m *MockClock) LayerToTime(types.LayerID) time.Time {
 	return time.Now().Add(1000 * time.Hour) //hack so this wont take affect in the mock
 }
 
-func (c *MockClock) Tick() {
-	l := c.GetCurrentLayer()
+func (m *MockClock) Tick() {
+	l := m.GetCurrentLayer()
 	log.Info("tick %v", l)
-	for _, c := range c.ids {
+	for _, c := range m.ids {
 		c <- l
 	}
 }
 
-func (c *MockClock) GetCurrentLayer() types.LayerID {
-	return c.Layer
+func (m *MockClock) GetCurrentLayer() types.LayerID {
+	return m.Layer
 }
 
-func (c *MockClock) Subscribe() timesync.LayerTimer {
-	c.countSub++
+func (m *MockClock) Subscribe() timesync.LayerTimer {
+	m.countSub++
 
-	if c.ch == nil {
-		c.ch = make(map[timesync.LayerTimer]int)
-		c.ids = make(map[int]timesync.LayerTimer)
+	if m.ch == nil {
+		m.ch = make(map[timesync.LayerTimer]int)
+		m.ids = make(map[int]timesync.LayerTimer)
 	}
 	newCh := make(chan types.LayerID, 1)
-	c.ch[newCh] = len(c.ch)
-	c.ids[len(c.ch)] = newCh
+	m.ch[newCh] = len(m.ch)
+	m.ids[len(m.ch)] = newCh
 
 	return newCh
 }
 
-func (c *MockClock) Unsubscribe(timer timesync.LayerTimer) {
-	c.countUnsub++
-	delete(c.ids, c.ch[timer])
-	delete(c.ch, timer)
+func (m *MockClock) Unsubscribe(timer timesync.LayerTimer) {
+	m.countUnsub++
+	delete(m.ids, m.ch[timer])
+	delete(m.ch, timer)
 }

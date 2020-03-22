@@ -1,6 +1,7 @@
 package net
 
 import (
+	"context"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/rand"
@@ -87,9 +88,14 @@ func (n *NetworkMock) SetDialDelayMs(delay int8) {
 }
 
 // Dial dials
-func (n *NetworkMock) Dial(address net.Addr, remotePublicKey p2pcrypto.PublicKey) (Connection, error) {
+func (n *NetworkMock) Dial(ctx context.Context, address net.Addr, remotePublicKey p2pcrypto.PublicKey) (Connection, error) {
 	atomic.AddInt32(&n.dialCount, 1)
-	time.Sleep(time.Duration(n.dialDelayMs) * time.Millisecond)
+	select {
+	case <-time.After(time.Duration(n.dialDelayMs) * time.Millisecond):
+		break
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 	sID := n.dialSessionID
 	if sID == nil {
 		sID = make([]byte, 4)

@@ -20,8 +20,8 @@ const defSafety = types.LayerID(25)
 const defLayersPerEpoch = 10
 const defNonGenesisLayer = defLayersPerEpoch*2 + 1
 
-var someErr = errors.New("some error")
-var myErr = errors.New("my error")
+var errFoo = errors.New("some error")
+var errMy = errors.New("my error")
 var cfg = eCfg.Config{25, 30}
 var genActive = 5
 
@@ -103,9 +103,9 @@ func (mc *mockCacher) Get(key interface{}) (value interface{}, ok bool) {
 func TestOracle_BuildVRFMessage(t *testing.T) {
 	r := require.New(t)
 	o := Oracle{vrfMsgCache: newMockCasher(), Log: log.NewDefault(t.Name())}
-	o.beacon = &mockValueProvider{1, someErr}
+	o.beacon = &mockValueProvider{1, errFoo}
 	_, err := o.buildVRFMessage(types.LayerID(1), 1)
-	r.Equal(someErr, err)
+	r.Equal(errFoo, err)
 
 	o.beacon = &mockValueProvider{1, nil}
 	m, err := o.buildVRFMessage(1, 2)
@@ -154,7 +154,7 @@ func TestOracle_buildVRFMessageConcurrency(t *testing.T) {
 func TestOracle_IsEligible(t *testing.T) {
 	o := New(&mockValueProvider{1, nil}, nil, nil, nil, 0, genActive, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
 	o.layersPerEpoch = 10
-	o.vrfVerifier = buildVerifier(false, someErr)
+	o.vrfVerifier = buildVerifier(false, errFoo)
 	res, err := o.Eligible(types.LayerID(1), 0, 1, types.NodeId{}, []byte{})
 	assert.NotNil(t, err)
 	assert.False(t, res)
@@ -288,17 +288,17 @@ func Test_BlsSignVerify(t *testing.T) {
 }
 
 func TestOracle_Proof(t *testing.T) {
-	o := New(&mockValueProvider{0, myErr}, (&mockActiveSetProvider{10}).ActiveSet, buildVerifier(true, nil), &mockSigner{}, 10, genActive, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{0, errMy}, (&mockActiveSetProvider{10}).ActiveSet, buildVerifier(true, nil), &mockSigner{}, 10, genActive, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
 	sig, err := o.Proof(2, 3)
 	assert.Nil(t, sig)
 	assert.NotNil(t, err)
-	assert.Equal(t, myErr, err)
+	assert.Equal(t, errMy, err)
 	o.beacon = &mockValueProvider{0, nil}
-	o.vrfSigner = &mockSigner{nil, myErr}
+	o.vrfSigner = &mockSigner{nil, errMy}
 	sig, err = o.Proof(2, 3)
 	assert.Nil(t, sig)
 	assert.NotNil(t, err)
-	assert.Equal(t, myErr, err)
+	assert.Equal(t, errMy, err)
 	mySig := []byte{1, 2}
 	o.vrfSigner = &mockSigner{mySig, nil}
 	sig, err = o.Proof(2, 3)
@@ -307,11 +307,11 @@ func TestOracle_Proof(t *testing.T) {
 }
 
 func TestOracle_Eligible(t *testing.T) {
-	o := New(&mockValueProvider{0, myErr}, (&mockActiveSetProvider{10}).ActiveSet, buildVerifier(true, nil), &mockSigner{}, 10, genActive, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{0, errMy}, (&mockActiveSetProvider{10}).ActiveSet, buildVerifier(true, nil), &mockSigner{}, 10, genActive, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
 	res, err := o.Eligible(1, 2, 3, types.NodeId{}, []byte{})
 	assert.False(t, res)
 	assert.NotNil(t, err)
-	assert.Equal(t, myErr, err)
+	assert.Equal(t, errMy, err)
 
 	o.beacon = &mockValueProvider{0, nil}
 	o.vrfVerifier = buildVerifier(false, nil)
@@ -387,10 +387,10 @@ func TestOracle_actives(t *testing.T) {
 	}
 
 	o.getActiveSet = func(epoch types.EpochId, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
-		return createMapWithSize(9), someErr
+		return createMapWithSize(9), errFoo
 	}
 	_, err = o.actives(200)
-	r.Equal(someErr, err)
+	r.Equal(errFoo, err)
 }
 
 func TestOracle_concurrentActives(t *testing.T) {
@@ -466,10 +466,10 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 	r.True(v)
 
 	o.getActiveSet = func(epoch types.EpochId, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
-		return mp, someErr
+		return mp, errFoo
 	}
 	_, err = o.IsIdentityActiveOnConsensusView("22222", 100)
-	r.Equal(someErr, err)
+	r.Equal(errFoo, err)
 
 	o.getActiveSet = func(epoch types.EpochId, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
 		return mp, nil
@@ -487,11 +487,11 @@ func TestOracle_IsIdentityActive(t *testing.T) {
 func TestOracle_Eligible2(t *testing.T) {
 	o := New(&mockValueProvider{1, nil}, nil, nil, nil, 5, genActive, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
 	o.getActiveSet = func(epoch types.EpochId, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
-		return createMapWithSize(9), someErr
+		return createMapWithSize(9), errFoo
 	}
 	o.vrfVerifier = func(msg, sig, pub []byte) (bool, error) {
 		return true, nil
 	}
 	_, err := o.Eligible(100, 1, 1, types.NodeId{}, []byte{})
-	assert.Equal(t, someErr, err)
+	assert.Equal(t, errFoo, err)
 }
