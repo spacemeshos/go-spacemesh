@@ -25,7 +25,8 @@ type PostProverClient interface {
 	// Reset removes the initialization phase files.
 	Reset() error
 
-	// IsInitialized indicates whether the initialization phase has been completed.
+	// IsInitialized indicates whether the initialization phase has been completed. If it's not complete the remaining
+	// bytes are also returned.
 	IsInitialized() (initComplete bool, remainingBytes uint64, err error)
 
 	// VerifyInitAllowed indicates whether the preconditions for starting

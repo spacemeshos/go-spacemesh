@@ -110,8 +110,9 @@ func (c *PostClient) Reset() error {
 	return c.initializer.Reset()
 }
 
-// IsInitialized indicates whether the initialization phase has been completed.
-func (c *PostClient) IsInitialized() (bool, uint64, error) {
+// IsInitialized indicates whether the initialization phase has been completed. If it's not complete the remaining bytes
+// are also returned.
+func (c *PostClient) IsInitialized() (initComplete bool, remainingBytes uint64, err error) {
 	c.RLock()
 	defer c.RUnlock()
 

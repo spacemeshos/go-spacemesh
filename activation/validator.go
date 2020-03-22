@@ -45,7 +45,8 @@ func (v *Validator) Validate(minerID signing.PublicKey, nipst *types.NIPST, expe
 	return nil
 }
 
-// VerifyPost validates a Proof of Space-Time (PoST).
+// VerifyPost validates a Proof of Space-Time (PoST). It returns nil if validation passed or an error indicating why
+// validation failed.
 func (v *Validator) VerifyPost(minerID signing.PublicKey, proof *types.PostProof, space uint64) error {
 	return verifyPost(minerID, proof, space, v.postCfg.NumProvenLabels, v.postCfg.Difficulty)
 }
