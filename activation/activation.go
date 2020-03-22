@@ -17,7 +17,6 @@ const AtxProtocol = "AtxGossip"
 
 var activesetCache = NewActivesetCache(1000)
 
-// meshProviderMock
 type meshProvider interface {
 	GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error)
 	LatestLayer() types.LayerID
@@ -27,10 +26,10 @@ type broadcaster interface {
 	Broadcast(channel string, data []byte) error
 }
 
-type poETNumberOfTickProvider struct {
+type poetNumberOfTickProvider struct {
 }
 
-func (provider *poETNumberOfTickProvider) NumOfTicks() uint64 {
+func (provider *poetNumberOfTickProvider) NumOfTicks() uint64 {
 	return 0
 }
 
@@ -76,7 +75,8 @@ const (
 )
 
 // Builder struct is the struct that orchestrates the creation of activation transactions
-// it is responsible for
+// it is responsible for initializing post, receiving poet proof and orchestrating nipst. after which it will
+// calculate active set size and providing relevant view as proof
 type Builder struct {
 	signer
 	nodeID          types.NodeId
@@ -85,7 +85,7 @@ type Builder struct {
 	net             broadcaster
 	mesh            meshProvider
 	layersPerEpoch  uint16
-	tickProvider    poETNumberOfTickProvider
+	tickProvider    poetNumberOfTickProvider
 	nipstBuilder    nipstBuilder
 	postProver      PostProverClient
 	challenge       *types.NIPSTChallenge
