@@ -171,7 +171,7 @@ func (msh *Mesh) CacheWarmUp(layer_size int) {
 		msh.Error("cache warm up failed during recovery", err)
 	}
 
-	msh.Info("cache warm done")
+	msh.Info("cache warm up done")
 }
 
 func (m *Mesh) SetBlockBuilder(blockBuilder BlockBuilder) {
