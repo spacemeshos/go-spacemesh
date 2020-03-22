@@ -19,6 +19,7 @@ func NewCollector(db Db, url string) *eventsCollector {
 	return &eventsCollector{url, make(chan struct{}), db}
 }
 
+// Db defines which events should be stores by any db that the collector uses
 type Db interface {
 	StoreBlock(event *events.NewBlock) error
 	StoreBlockValid(event *events.ValidBlock) error

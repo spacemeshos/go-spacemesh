@@ -324,7 +324,7 @@ func (db *ActivationDb) deleteLock(viewHash types.Hash12) {
 // - ATX LayerID is NipstLayerTime or less after the PositioningATX LayerID.
 // - The ATX view of the previous epoch contains ActiveSetSize activations.
 func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
-	events.Publish(events.NewAtx{Id: atx.ShortString(), LayerId: uint64(atx.PubLayerIdx.GetEpoch(db.LayersPerEpoch))})
+	events.Publish(events.NewAtx{ID: atx.ShortString(), LayerID: uint64(atx.PubLayerIdx.GetEpoch(db.LayersPerEpoch))})
 	pub, err := ExtractPublicKey(atx)
 	if err != nil {
 		return fmt.Errorf("cannot validate atx sig atx id %v err %v", atx.ShortString(), err)
@@ -343,7 +343,7 @@ func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error 
 		}
 
 		if prevATX.NodeId.Key != atx.NodeId.Key {
-			return fmt.Errorf("previous ATX belongs to different miner. atx.Id: %v, atx.NodeId: %v, prevAtx.NodeId: %v",
+			return fmt.Errorf("previous ATX belongs to different miner. atx.ID: %v, atx.NodeId: %v, prevAtx.NodeId: %v",
 				atx.ShortString(), atx.NodeId.Key, prevATX.NodeId.Key)
 		}
 

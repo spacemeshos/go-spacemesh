@@ -11,8 +11,8 @@ import (
 const nilVal = 0
 
 type patternProvider interface {
-	// GetPatternId returns the pattern Id of the given Layer
-	// the pattern Id is defined to be the hash of blocks in a Layer
+	// GetPatternId returns the pattern ID of the given Layer
+	// the pattern ID is defined to be the hash of blocks in a Layer
 	ContextuallyValidBlock(layer types.LayerID) (map[types.BlockID]struct{}, error)
 }
 
@@ -60,7 +60,7 @@ func (b *Beacon) Value(layer types.LayerID) (uint32, error) {
 	// consider adding a lock if concurrency-optimized is important
 	v, err := b.patternProvider.ContextuallyValidBlock(sl)
 	if err != nil {
-		b.Log.With().Error("Could not get pattern Id",
+		b.Log.With().Error("Could not get pattern ID",
 			log.Err(err), log.LayerId(uint64(layer)), log.Uint64("sl_id", uint64(sl)))
 		return nilVal, errors.New("could not calc Beacon value")
 	}

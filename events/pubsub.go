@@ -15,13 +15,13 @@ import (
 // channelBuffer defines the listening channel buffer size.
 const channelBuffer = 100
 
-// ChannelId is the Id on which subscribers must register in order to listen to messages on the channel.
-type ChannelId byte
+// ChannelID is the ID on which subscribers must register in order to listen to messages on the channel.
+type ChannelID byte
 
 // Subscriber defines the struct of the receiving end of the pubsub messages.
 type Subscriber struct {
 	sock      mangos.Socket
-	output    map[ChannelId]chan []byte
+	output    map[ChannelID]chan []byte
 	allOutput chan []byte
 	chanLock  sync.RWMutex
 }
@@ -44,7 +44,7 @@ func NewSubscriber(url string) (*Subscriber, error) {
 
 	return &Subscriber{
 		socket,
-		make(map[ChannelId]chan []byte, 100),
+		make(map[ChannelID]chan []byte, 100),
 		nil,
 		sync.RWMutex{},
 	}, nil
@@ -73,7 +73,7 @@ func (sub *Subscriber) StartListening() {
 			if sub.allOutput != nil {
 				sub.allOutput <- data
 			}
-			if c, ok := sub.output[ChannelId(data[0])]; ok {
+			if c, ok := sub.output[ChannelID(data[0])]; ok {
 				c <- data
 			}
 			sub.chanLock.RUnlock()
@@ -87,7 +87,7 @@ func (sub *Subscriber) Close() error {
 }
 
 // Subscribe subscribes to the given topic, returns a channel on which data from the topic is received.
-func (sub *Subscriber) Subscribe(topic ChannelId) (chan []byte, error) {
+func (sub *Subscriber) Subscribe(topic ChannelID) (chan []byte, error) {
 	sub.chanLock.Lock()
 	defer sub.chanLock.Unlock()
 	if _, ok := sub.output[topic]; !ok {
@@ -100,7 +100,7 @@ func (sub *Subscriber) Subscribe(topic ChannelId) (chan []byte, error) {
 	return sub.output[topic], err
 }
 
-// SubscribeAll subscribes to all available topics.
+// SubscribeToAll subscribes to all available topics.
 func (sub *Subscriber) SubscribeToAll() (chan []byte, error) {
 	err := sub.sock.SetOption(mangos.OptionSubscribe, []byte(""))
 	if err != nil {
@@ -112,6 +112,7 @@ func (sub *Subscriber) SubscribeToAll() (chan []byte, error) {
 	return sub.allOutput, err
 }
 
+// Publisher is a wrapper for mangos pubsub publisher socket
 type Publisher struct {
 	sock mangos.Socket
 }
@@ -134,7 +135,7 @@ func newPublisher(url string) (*Publisher, error) {
 	return p, nil
 }
 
-func (p *Publisher) publish(topic ChannelId, payload []byte) error {
+func (p *Publisher) publish(topic ChannelID, payload []byte) error {
 	msg := append([]byte{byte(topic)}, payload...)
 	log.Debug("sending message %v", string(msg))
 	err := p.sock.Send(msg)

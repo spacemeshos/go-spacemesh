@@ -928,7 +928,7 @@ func createLayerWithCorruptedPattern(index types.LayerID, prev *types.Layer, blo
 		l.AddBlock(bl)
 	}
 
-	log.Debug("Created layer Id %d with blocks %s", l.Index(), layerBlocks)
+	log.Debug("Created layer ID %d with blocks %s", l.Index(), layerBlocks)
 	return l
 }
 

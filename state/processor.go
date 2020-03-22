@@ -240,9 +240,9 @@ func (tp *TransactionProcessor) Process(txs []*types.Transaction, layerId types.
 			tp.With().Warning("failed to apply transaction", log.TxId(tx.Id().ShortString()), log.Err(err))
 			remaining = append(remaining, tx)
 		}
-		events.Publish(events.ValidTx{Id: tx.Id().String(), Valid: err == nil})
+		events.Publish(events.ValidTx{ID: tx.Id().String(), Valid: err == nil})
 		events.Publish(events.NewTx{
-			Id:          tx.Id().String(),
+			ID:          tx.Id().String(),
 			Origin:      tx.Origin().String(),
 			Destination: tx.Recipient.String(),
 			Amount:      tx.Amount,
