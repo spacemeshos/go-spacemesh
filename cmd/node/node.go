@@ -210,9 +210,7 @@ func (app *SpacemeshApp) introduction() {
 	log.Info("Welcome to Spacemesh. Spacemesh full node is starting...")
 }
 
-// Initialize is what he wants to execute Initialize app starts
-// this is my persistent pre run that involves parsing the
-// toml config file
+// Initialize does pre processing of flags and configuration files, it also initializes data dirs if they dont exist
 func (app *SpacemeshApp) Initialize(cmd *cobra.Command, args []string) (err error) {
 
 	// exit gracefully - e.g. with app Cleanup on sig abort (ctrl-c)

@@ -53,7 +53,7 @@ func (clk *ManualClock) Unsubscribe(ch timesync.LayerTimer) {
 	clk.m.Unlock()
 }
 
-// StartNotifying is empty because this clokc is manual
+// StartNotifying is empty because this clock is manual
 func (clk *ManualClock) StartNotifying() {
 }
 
