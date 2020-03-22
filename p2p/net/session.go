@@ -18,7 +18,6 @@ type NetworkSession interface {
 }
 
 var _ NetworkSession = (*networkSessionImpl)(nil)
-var _ NetworkSession = (*SessionMock)(nil)
 
 // TODO: add support for idle session expiration
 

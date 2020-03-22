@@ -296,7 +296,7 @@ func (n *Net) accept(listen net.Listener) {
 
 		n.logger.Debug("Got new connection... Remote Address: %s", netConn.RemoteAddr())
 		conn := netConn.(*net.TCPConn)
-		tcpSocketConfig(conn) // TODO maybe only set this after session handshake to prevent denial of service with big messages
+		n.tcpSocketConfig(conn) // TODO maybe only set this after session handshake to prevent denial of service with big messages
 		c := newConnection(netConn, n, nil, nil, n.config.MsgSizeLimit, n.config.ResponseTimeout, n.logger)
 		go func(con Connection) {
 			defer func() { pending <- struct{}{} }()
