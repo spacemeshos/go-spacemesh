@@ -15,6 +15,7 @@ import (
 
 type poetProofKey [sha256.Size]byte
 
+// PoetDb is a database for PoET proofs.
 type PoetDb struct {
 	store                     database.Database
 	poetProofRefSubscriptions map[poetProofKey][]chan []byte
@@ -22,15 +23,18 @@ type PoetDb struct {
 	mu                        sync.Mutex
 }
 
+// NewPoetDb returns a new PoET DB.
 func NewPoetDb(store database.Database, log log.Log) *PoetDb {
 	return &PoetDb{store: store, poetProofRefSubscriptions: make(map[poetProofKey][]chan []byte), log: log}
 }
 
+// HasProof returns true if the database contains a proof with the given reference, or false otherwise.
 func (db *PoetDb) HasProof(proofRef []byte) bool {
 	_, err := db.GetProofMessage(proofRef)
 	return err == nil
 }
 
+// ValidateAndStore validates and stores a new PoET proof.
 func (db *PoetDb) ValidateAndStore(proofMessage *types.PoetProofMessage) error {
 	if err := db.Validate(proofMessage.PoetProof, proofMessage.PoetServiceId,
 		proofMessage.RoundId, proofMessage.Signature); err != nil {
@@ -42,16 +46,17 @@ func (db *PoetDb) ValidateAndStore(proofMessage *types.PoetProofMessage) error {
 	return err
 }
 
-func (db *PoetDb) Validate(proof types.PoetProof, poetId []byte, roundId string, signature []byte) error {
+// Validate validates a new PoET proof.
+func (db *PoetDb) Validate(proof types.PoetProof, poetID []byte, roundID string, signature []byte) error {
 
 	root, err := calcRoot(proof.Members)
 	if err != nil {
-		return types.ProcessingError(fmt.Sprintf("failed to calculate membership root for poetId %x round %s: %v",
-			poetId[:5], roundId, err))
+		return types.ProcessingError(fmt.Sprintf("failed to calculate membership root for poetID %x round %s: %v",
+			poetID[:5], roundID, err))
 	}
 	if err := validatePoet(root, proof.MerkleProof, proof.LeafCount); err != nil {
-		return fmt.Errorf("failed to validate poet proof for poetId %x round %s: %v",
-			poetId[:5], roundId, err)
+		return fmt.Errorf("failed to validate poet proof for poetID %x round %s: %v",
+			poetID[:5], roundID, err)
 	}
 	// TODO(noamnelke): validate signature (or extract public key and use for salting merkle hashes)
 
@@ -88,8 +93,10 @@ func (db *PoetDb) storeProof(proofMessage *types.PoetProofMessage) error {
 	return nil
 }
 
-func (db *PoetDb) SubscribeToProofRef(poetId []byte, roundId string) chan []byte {
-	key := makeKey(poetId, roundId)
+// SubscribeToProofRef returns a channel that PoET proof ref for the requested PoET ID and round ID will be sent. If the
+// proof is already available it will be sent immediately, otherwise it will be sent when available.
+func (db *PoetDb) SubscribeToProofRef(poetID []byte, roundID string) chan []byte {
+	key := makeKey(poetID, roundID)
 	ch := make(chan []byte)
 
 	db.addSubscription(key, ch)
@@ -107,9 +114,11 @@ func (db *PoetDb) addSubscription(key poetProofKey, ch chan []byte) {
 	db.mu.Unlock()
 }
 
-func (db *PoetDb) UnsubscribeFromProofRef(poetId []byte, roundId string) {
+// UnsubscribeFromProofRef removes all subscriptions from a given poetID and roundID. This method should be used with
+// caution since any subscribers still waiting will now hang forever. TODO: only cancel specific subscription.
+func (db *PoetDb) UnsubscribeFromProofRef(poetID []byte, roundID string) {
 	db.mu.Lock()
-	delete(db.poetProofRefSubscriptions, makeKey(poetId, roundId))
+	delete(db.poetProofRefSubscriptions, makeKey(poetID, roundID))
 	db.mu.Unlock()
 }
 
@@ -134,10 +143,12 @@ func (db *PoetDb) publishProofRef(key poetProofKey, poetProofRef []byte) {
 	delete(db.poetProofRefSubscriptions, key)
 }
 
+// GetProofMessage returns the originally received PoET proof message.
 func (db *PoetDb) GetProofMessage(proofRef []byte) ([]byte, error) {
 	return db.store.Get(proofRef)
 }
 
+// GetMembershipMap returns the map of memberships in the requested PoET proof.
 func (db *PoetDb) GetMembershipMap(proofRef []byte) (map[types.Hash32]bool, error) {
 	proofMessageBytes, err := db.GetProofMessage(proofRef)
 	if err != nil {
@@ -150,8 +161,8 @@ func (db *PoetDb) GetMembershipMap(proofRef []byte) (map[types.Hash32]bool, erro
 	return membershipSliceToMap(proofMessage.Members), nil
 }
 
-func makeKey(poetId []byte, roundId string) poetProofKey {
-	sum := sha256.Sum256(append(poetId[:], []byte(roundId)...))
+func makeKey(poetID []byte, roundID string) poetProofKey {
+	sum := sha256.Sum256(append(poetID[:], []byte(roundID)...))
 	return sum
 }
 

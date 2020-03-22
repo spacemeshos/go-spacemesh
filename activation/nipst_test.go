@@ -85,7 +85,7 @@ func (p *poetProvingServiceClientMock) Submit(challenge types.Hash32) (*types.Po
 	return &types.PoetRound{}, nil
 }
 
-func (p *poetProvingServiceClientMock) PoetServiceId() ([]byte, error) {
+func (p *poetProvingServiceClientMock) PoetServiceID() ([]byte, error) {
 	p.called++
 	return []byte{}, nil
 }
@@ -95,10 +95,10 @@ type poetDbMock struct {
 	unsubscribed bool
 }
 
-// A compile time check to ensure that poetDbMock fully implements PoetDbApi.
-var _ PoetDbApi = (*poetDbMock)(nil)
+// A compile time check to ensure that poetDbMock fully implements poetDbAPI.
+var _ poetDbAPI = (*poetDbMock)(nil)
 
-func (*poetDbMock) SubscribeToProofRef(poetId []byte, roundId string) chan []byte {
+func (*poetDbMock) SubscribeToProofRef(poetID []byte, roundID string) chan []byte {
 	ch := make(chan []byte)
 	go func() {
 		ch <- []byte("hello there")
@@ -106,7 +106,7 @@ func (*poetDbMock) SubscribeToProofRef(poetId []byte, roundId string) chan []byt
 	return ch
 }
 
-func (p *poetDbMock) UnsubscribeFromProofRef(poetId []byte, roundId string) { p.unsubscribed = true }
+func (p *poetDbMock) UnsubscribeFromProofRef(poetID []byte, roundID string) { p.unsubscribed = true }
 
 func (p *poetDbMock) GetMembershipMap(poetRoot []byte) (map[types.Hash32]bool, error) {
 	if p.errOn {
@@ -125,7 +125,7 @@ func TestNIPSTBuilderWithMocks(t *testing.T) {
 
 	poetDb := &poetDbMock{}
 
-	nb := newNIPSTBuilder(minerID, postProver, poetProver,
+	nb := NewNIPSTBuilder(minerID, postProver, poetProver,
 		poetDb, database.NewMemDatabase(), log.NewDefault(string(minerID)))
 	hash := types.BytesToHash([]byte("anton"))
 	npst, err := nb.BuildNIPST(&hash, nil, nil)
@@ -143,7 +143,7 @@ func TestInitializePost(t *testing.T) {
 	poetProver := &poetProvingServiceClientMock{}
 	poetDb := &poetDbMock{}
 
-	nb := newNIPSTBuilder(minerID, postProver, poetProver,
+	nb := NewNIPSTBuilder(minerID, postProver, poetProver,
 		poetDb, database.NewMemDatabase(), log.NewDefault(string(minerID)))
 	datadir := "/tmp/anton"
 	space := uint64(2048)
@@ -179,7 +179,7 @@ func TestNIPSTBuilderWithClients(t *testing.T) {
 	r.NoError(err)
 }
 
-func buildNIPST(r *require.Assertions, postCfg config.Config, nipstChallenge types.Hash32, poetDb PoetDbApi) *types.NIPST {
+func buildNIPST(r *require.Assertions, postCfg config.Config, nipstChallenge types.Hash32, poetDb poetDbAPI) *types.NIPST {
 	poetProver, err := NewHTTPPoetHarness(true)
 	r.NoError(err)
 	r.NotNil(poetProver)
@@ -200,7 +200,7 @@ func buildNIPST(r *require.Assertions, postCfg config.Config, nipstChallenge typ
 	r.NoError(err)
 	r.NotNil(commitment)
 
-	nb := newNIPSTBuilder(minerID, postProver, poetProver,
+	nb := NewNIPSTBuilder(minerID, postProver, poetProver,
 		poetDb, database.NewMemDatabase(), log.NewDefault(string(minerID)))
 
 	npst, err := nb.BuildNIPST(&nipstChallenge, nil, nil)
@@ -230,7 +230,7 @@ func TestNewNIPSTBuilderNotInitialized(t *testing.T) {
 		r.NoError(err)
 	}()
 	poetDb := &poetDbMock{}
-	nb := newNIPSTBuilder(minerIDNotInitialized, postProver, poetProver,
+	nb := NewNIPSTBuilder(minerIDNotInitialized, postProver, poetProver,
 		poetDb, database.NewMemDatabase(), log.NewDefault(string(minerID)))
 
 	npst, err := nb.BuildNIPST(&nipstChallenge, nil, nil)
@@ -261,7 +261,7 @@ func TestNIPSTBuilder_BuildNIPST(t *testing.T) {
 
 	poetDb := &poetDbMock{errOn: false}
 
-	nb := newNIPSTBuilder(minerID, postProver, poetProver,
+	nb := NewNIPSTBuilder(minerID, postProver, poetProver,
 		poetDb, database.NewMemDatabase(), log.NewDefault(string(minerID)))
 	hash := types.BytesToHash([]byte("anton"))
 	npst, err := nb.BuildNIPST(&hash, nil, nil)
@@ -271,21 +271,21 @@ func TestNIPSTBuilder_BuildNIPST(t *testing.T) {
 	assert.Equal(builderState{Nipst: &types.NIPST{}}, *nb.state)
 
 	//fail after getting proof ref
-	nb = newNIPSTBuilder(minerID, postProver, poetProver, poetDb, db, log.NewDefault(string(minerID)))
+	nb = NewNIPSTBuilder(minerID, postProver, poetProver, poetDb, db, log.NewDefault(string(minerID)))
 	poetDb.errOn = true
 	npst, err = nb.BuildNIPST(&hash, nil, nil)
 	assert.Nil(npst)
 	assert.Error(err)
 
 	//check that proof ref is not called again
-	nb = newNIPSTBuilder(minerID, postProver, poetProver, poetDb, db, log.NewDefault(string(minerID)))
+	nb = NewNIPSTBuilder(minerID, postProver, poetProver, poetDb, db, log.NewDefault(string(minerID)))
 	npst, err = nb.BuildNIPST(&hash, nil, nil)
 	assert.Equal(4, poetProver.called)
 	assert.Nil(npst)
 	assert.Error(err)
 
 	//fail post exec
-	nb = newNIPSTBuilder(minerID, postProver, poetProver, poetDb, db, log.NewDefault(string(minerID)))
+	nb = NewNIPSTBuilder(minerID, postProver, poetProver, poetDb, db, log.NewDefault(string(minerID)))
 	poetDb.errOn = false
 	postProver.setError = true
 	//check that proof ref is not called again
@@ -295,7 +295,7 @@ func TestNIPSTBuilder_BuildNIPST(t *testing.T) {
 	assert.Error(err)
 
 	//fail post exec
-	nb = newNIPSTBuilder(minerID, postProver, poetProver, poetDb, db, log.NewDefault(string(minerID)))
+	nb = NewNIPSTBuilder(minerID, postProver, poetProver, poetDb, db, log.NewDefault(string(minerID)))
 	poetDb.errOn = false
 	postProver.setError = false
 	//check that proof ref is not called again
@@ -332,12 +332,12 @@ func TestValidator_Validate(t *testing.T) {
 	r.NoError(err)
 
 	newPostCfg := postCfg
-	newPostCfg.SpacePerUnit += 1
+	newPostCfg.SpacePerUnit++
 	err = validateNIPST(npst, newPostCfg, nipstChallenge, poetDb, minerID)
 	r.EqualError(err, "PoST space (1024) is less than a single space unit (1025)")
 
 	newPostCfg = postCfg
-	newPostCfg.Difficulty += 1
+	newPostCfg.Difficulty++
 	err = validateNIPST(npst, newPostCfg, nipstChallenge, poetDb, minerID)
 	r.EqualError(err, "PoST proof invalid: validation failed: number of derived leaf indices (8) doesn't match number of included proven leaves (9)")
 
@@ -350,9 +350,9 @@ func TestValidator_Validate(t *testing.T) {
 	r.EqualError(err, "NIPST challenge is not equal to expected challenge")
 }
 
-func validateNIPST(npst *types.NIPST, postCfg config.Config, nipstChallenge types.Hash32, poetDb PoetDbApi, minerId []byte) error {
+func validateNIPST(npst *types.NIPST, postCfg config.Config, nipstChallenge types.Hash32, poetDb poetDbAPI, minerID []byte) error {
 	v := &Validator{&postCfg, poetDb}
-	return v.Validate(*signing.NewPublicKey(minerId), npst, nipstChallenge)
+	return v.Validate(*signing.NewPublicKey(minerID), npst, nipstChallenge)
 }
 
 func TestNIPSTBuilder_TimeoutUnsubscribe(t *testing.T) {
@@ -363,7 +363,7 @@ func TestNIPSTBuilder_TimeoutUnsubscribe(t *testing.T) {
 
 	poetDb := &poetDbMock{}
 
-	nb := newNIPSTBuilder(minerID, postProver, poetProver,
+	nb := NewNIPSTBuilder(minerID, postProver, poetProver,
 		poetDb, database.NewMemDatabase(), log.NewDefault(string(minerID)))
 	hash := types.BytesToHash([]byte("anton"))
 	poetDb.unsubscribed = false
@@ -381,7 +381,7 @@ func TestNIPSTBuilder_Close(t *testing.T) {
 
 	poetDb := &poetDbMock{}
 
-	nb := newNIPSTBuilder(minerID, postProver, poetProver,
+	nb := NewNIPSTBuilder(minerID, postProver, poetProver,
 		poetDb, database.NewMemDatabase(), log.NewDefault(string(minerID)))
 	hash := types.BytesToHash([]byte("anton"))
 	npst, err := nb.BuildNIPST(&hash, nil, closedChan) // closedChan will timeout immediately
