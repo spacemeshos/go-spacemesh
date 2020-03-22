@@ -10,7 +10,7 @@ import (
 const PoetProofProtocol = "PoetProof"
 
 type PoetValidatorPersistor interface {
-	Validate(proof types.PoetProof, poetId []byte, roundId string, signature []byte) error
+	Validate(proof types.PoetProof, poetID []byte, roundID string, signature []byte) error
 	storeProof(proofMessage *types.PoetProofMessage) error
 }
 

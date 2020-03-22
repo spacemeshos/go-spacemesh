@@ -50,7 +50,7 @@ type PoetProvingServiceClient interface {
 	// Submit registers a challenge in the proving service current open round.
 	Submit(challenge types.Hash32) (*types.PoetRound, error)
 
-	// PoetServiceId returns the public key of the PoET proving service.
+	// PoetServiceID returns the public key of the PoET proving service.
 	PoetServiceID() ([]byte, error)
 }
 
@@ -62,8 +62,8 @@ type builderState struct {
 	// PoetRound is the round of the PoET proving service in which the PoET challenge was included in.
 	PoetRound *types.PoetRound
 
-	// PoetServiceId returns the public key of the PoET proving service.
-	PoetServiceId []byte
+	// PoetServiceID returns the public key of the PoET proving service.
+	PoetServiceID []byte
 
 	// PoetProofRef is the root of the proof received from the PoET service.
 	PoetProofRef []byte
@@ -110,21 +110,21 @@ type NIPSTBuilder struct {
 	minerID    []byte
 	postProver PostProverClient
 	poetProver PoetProvingServiceClient
-	poetDB     poetDbApi
+	poetDB     poetDbAPI
 	errChan    chan error
 	state      *builderState
 	store      BytesStore
 	log        log.Log
 }
 
-type poetDbApi interface {
-	SubscribeToProofRef(poetID []byte, roundId string) chan []byte
+type poetDbAPI interface {
+	SubscribeToProofRef(poetID []byte, roundID string) chan []byte
 	GetMembershipMap(proofRef []byte) (map[types.Hash32]bool, error)
 	UnsubscribeFromProofRef(poetID []byte, roundID string)
 }
 
 // NewNIPSTBuilder returns a NIPSTBuilder.
-func NewNIPSTBuilder(minerID []byte, postProver PostProverClient, poetProver PoetProvingServiceClient, poetDB poetDbApi,
+func NewNIPSTBuilder(minerID []byte, postProver PostProverClient, poetProver PoetProvingServiceClient, poetDB poetDbAPI,
 	store BytesStore, log log.Log) *NIPSTBuilder {
 
 	return &NIPSTBuilder{
@@ -156,17 +156,17 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *types.Hash32, atxExpired, stop cha
 
 	// Phase 0: Submit challenge to PoET service.
 	if nb.state.PoetRound == nil {
-		poetServiceId, err := nb.poetProver.PoetServiceID()
+		poetServiceID, err := nb.poetProver.PoetServiceID()
 		if err != nil {
 			return nil, fmt.Errorf("failed to get PoET service ID: %v", err)
 		}
-		nb.state.PoetServiceId = poetServiceId
+		nb.state.PoetServiceID = poetServiceID
 
 		poetChallenge := challenge
 		nb.state.Challenge = *challenge
 
 		nb.log.Debug("submitting challenge to PoET proving service (PoET id: %x, challenge: %x)",
-			nb.state.PoetServiceId, poetChallenge)
+			nb.state.PoetServiceID, poetChallenge)
 
 		round, err := nb.poetProver.Submit(*poetChallenge)
 		if err != nil {
@@ -174,7 +174,7 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *types.Hash32, atxExpired, stop cha
 		}
 
 		nb.log.Info("challenge submitted to PoET proving service (PoET id: %x, round id: %v, challenge: %x)",
-			nb.state.PoetServiceId, round.Id, poetChallenge)
+			nb.state.PoetServiceID, round.Id, poetChallenge)
 
 		nipst.NipstChallenge = poetChallenge
 		nb.state.PoetRound = round
@@ -185,9 +185,9 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *types.Hash32, atxExpired, stop cha
 	if nb.state.PoetProofRef == nil {
 		var poetProofRef []byte
 		select {
-		case poetProofRef = <-nb.poetDB.SubscribeToProofRef(nb.state.PoetServiceId, nb.state.PoetRound.Id):
+		case poetProofRef = <-nb.poetDB.SubscribeToProofRef(nb.state.PoetServiceID, nb.state.PoetRound.Id):
 		case <-atxExpired:
-			nb.poetDB.UnsubscribeFromProofRef(nb.state.PoetServiceId, nb.state.PoetRound.Id)
+			nb.poetDB.UnsubscribeFromProofRef(nb.state.PoetServiceID, nb.state.PoetRound.Id)
 			return nil, fmt.Errorf("atx expired while waiting for poet proof, target epoch ended")
 		case <-stop:
 			return nil, &StopRequestedError{}
@@ -200,7 +200,7 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *types.Hash32, atxExpired, stop cha
 		}
 		if !membership[*nipst.NipstChallenge] {
 			return nil, fmt.Errorf("not a member of this round (poetId: %x, roundId: %s, challenge: %x, num of members: %d)",
-				nb.state.PoetServiceId, nb.state.PoetRound.Id, *nipst.NipstChallenge, len(membership)) // TODO(noamnelke): handle this case!
+				nb.state.PoetServiceID, nb.state.PoetRound.Id, *nipst.NipstChallenge, len(membership)) // TODO(noamnelke): handle this case!
 		}
 		nb.state.PoetProofRef = poetProofRef
 		nb.persist()

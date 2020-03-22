@@ -834,7 +834,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 		log.Panic("Could not retrieve identity err=%v", err)
 	}
 
-	poetClient := activation.NewHTTPPoetClient(app.Config.PoETServer, cmdp.Ctx)
+	poetClient := activation.NewHTTPPoetClient(cmdp.Ctx, app.Config.PoETServer)
 
 	rng := amcl.NewRAND()
 	pub := app.edSgn.PublicKey().Bytes()

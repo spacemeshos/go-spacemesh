@@ -42,16 +42,16 @@ func (db *PoetDb) ValidateAndStore(proofMessage *types.PoetProofMessage) error {
 	return err
 }
 
-func (db *PoetDb) Validate(proof types.PoetProof, poetId []byte, roundId string, signature []byte) error {
+func (db *PoetDb) Validate(proof types.PoetProof, poetID []byte, roundID string, signature []byte) error {
 
 	root, err := calcRoot(proof.Members)
 	if err != nil {
-		return types.ProcessingError(fmt.Sprintf("failed to calculate membership root for poetId %x round %s: %v",
-			poetId[:5], roundId, err))
+		return types.ProcessingError(fmt.Sprintf("failed to calculate membership root for poetID %x round %s: %v",
+			poetID[:5], roundID, err))
 	}
 	if err := validatePoet(root, proof.MerkleProof, proof.LeafCount); err != nil {
-		return fmt.Errorf("failed to validate poet proof for poetId %x round %s: %v",
-			poetId[:5], roundId, err)
+		return fmt.Errorf("failed to validate poet proof for poetID %x round %s: %v",
+			poetID[:5], roundID, err)
 	}
 	// TODO(noamnelke): validate signature (or extract public key and use for salting merkle hashes)
 
@@ -88,8 +88,8 @@ func (db *PoetDb) storeProof(proofMessage *types.PoetProofMessage) error {
 	return nil
 }
 
-func (db *PoetDb) SubscribeToProofRef(poetId []byte, roundId string) chan []byte {
-	key := makeKey(poetId, roundId)
+func (db *PoetDb) SubscribeToProofRef(poetID []byte, roundID string) chan []byte {
+	key := makeKey(poetID, roundID)
 	ch := make(chan []byte)
 
 	db.addSubscription(key, ch)
@@ -107,9 +107,9 @@ func (db *PoetDb) addSubscription(key poetProofKey, ch chan []byte) {
 	db.mu.Unlock()
 }
 
-func (db *PoetDb) UnsubscribeFromProofRef(poetId []byte, roundId string) {
+func (db *PoetDb) UnsubscribeFromProofRef(poetID []byte, roundID string) {
 	db.mu.Lock()
-	delete(db.poetProofRefSubscriptions, makeKey(poetId, roundId))
+	delete(db.poetProofRefSubscriptions, makeKey(poetID, roundID))
 	db.mu.Unlock()
 }
 
@@ -150,8 +150,8 @@ func (db *PoetDb) GetMembershipMap(proofRef []byte) (map[types.Hash32]bool, erro
 	return membershipSliceToMap(proofMessage.Members), nil
 }
 
-func makeKey(poetId []byte, roundId string) poetProofKey {
-	sum := sha256.Sum256(append(poetId[:], []byte(roundId)...))
+func makeKey(poetID []byte, roundID string) poetProofKey {
+	sum := sha256.Sum256(append(poetID[:], []byte(roundID)...))
 	return sum
 }
 

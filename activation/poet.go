@@ -39,7 +39,7 @@ func NewHTTPPoetHarness(disableBroadcast bool) (*HTTPPoetHarness, error) {
 	}
 
 	return &HTTPPoetHarness{
-		HTTPPoetClient: NewHTTPPoetClient(h.RESTListen(), context.Background()),
+		HTTPPoetClient: NewHTTPPoetClient(context.Background(), h.RESTListen()),
 		Teardown:       h.TearDown,
 		h:              h,
 	}, nil
@@ -47,7 +47,7 @@ func NewHTTPPoetHarness(disableBroadcast bool) (*HTTPPoetHarness, error) {
 
 // HTTPPoetClient implements PoetProvingServiceClient interface.
 type HTTPPoetClient struct {
-	baseUrl    string
+	baseURL    string
 	ctxFactory func() (context.Context, context.CancelFunc)
 }
 
@@ -55,9 +55,9 @@ type HTTPPoetClient struct {
 var _ PoetProvingServiceClient = (*HTTPPoetClient)(nil)
 
 // NewHTTPPoetClient returns new instance of HTTPPoetClient for the specified target.
-func NewHTTPPoetClient(target string, ctx context.Context) *HTTPPoetClient {
+func NewHTTPPoetClient(ctx context.Context, target string) *HTTPPoetClient {
 	return &HTTPPoetClient{
-		baseUrl: fmt.Sprintf("http://%s/v1", target),
+		baseURL: fmt.Sprintf("http://%s/v1", target),
 		ctxFactory: func() (context.Context, context.CancelFunc) {
 			return context.WithTimeout(ctx, 10*time.Second)
 		},
@@ -83,10 +83,10 @@ func (c *HTTPPoetClient) Submit(challenge types.Hash32) (*types.PoetRound, error
 		return nil, err
 	}
 
-	return &types.PoetRound{Id: resBody.RoundId}, nil
+	return &types.PoetRound{Id: resBody.RoundID}, nil
 }
 
-// PoetServiceId returns the public key of the PoET proving service.
+// PoetServiceID returns the public key of the PoET proving service.
 func (c *HTTPPoetClient) PoetServiceID() ([]byte, error) {
 	resBody := &GetInfoResponse{}
 	if err := c.req("GET", "/info", nil, resBody); err != nil {
@@ -96,13 +96,13 @@ func (c *HTTPPoetClient) PoetServiceID() ([]byte, error) {
 	return resBody.ServicePubKey, nil
 }
 
-func (c *HTTPPoetClient) req(method string, endUrl string, reqBody interface{}, resBody interface{}) error {
+func (c *HTTPPoetClient) req(method string, endURL string, reqBody interface{}, resBody interface{}) error {
 	jsonReqBody, err := json.Marshal(reqBody)
 	if err != nil {
 		return fmt.Errorf("request json marshal failure: %v", err)
 	}
 
-	url := fmt.Sprintf("%s%s", c.baseUrl, endUrl)
+	url := fmt.Sprintf("%s%s", c.baseURL, endURL)
 	req, err := http.NewRequest(method, url, bytes.NewBuffer(jsonReqBody))
 	if err != nil {
 		return err
@@ -149,12 +149,12 @@ type StartRequest struct {
 
 // SubmitResponse is the response object for the submit endpoint
 type SubmitResponse struct {
-	RoundId string
+	RoundID string
 }
 
 // GetInfoResponse is the response object for the get-info endpoint
 type GetInfoResponse struct {
-	OpenRoundId        string
-	ExecutingRoundsIds []string
+	OpenRoundID        string
+	ExecutingRoundsIDs []string
 	ServicePubKey      []byte
 }

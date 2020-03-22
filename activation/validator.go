@@ -12,11 +12,11 @@ import (
 // Validator contains the dependencies required to validate NIPSTs
 type Validator struct {
 	postCfg *config.Config
-	poetDb  poetDbApi
+	poetDb  poetDbAPI
 }
 
 // NewValidator returns a new NIPST validator
-func NewValidator(postCfg *config.Config, poetDb poetDbApi) *Validator {
+func NewValidator(postCfg *config.Config, poetDb poetDbAPI) *Validator {
 	return &Validator{
 		postCfg: postCfg,
 		poetDb:  poetDb,
