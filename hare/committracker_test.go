@@ -6,8 +6,8 @@ import (
 )
 
 func BuildCommitMsg(signing Signer, s *Set) *Msg {
-	builder := NewMessageBuilder()
-	builder.SetType(commit).SetInstanceId(instanceId1).SetRoundCounter(commitRound).SetKi(ki).SetValues(s)
+	builder := newMessageBuilder()
+	builder.SetType(commit).SetInstanceID(instanceID1).SetRoundCounter(commitRound).SetKi(ki).SetValues(s)
 	builder = builder.SetPubKey(signing.PublicKey()).Sign(signing)
 
 	return builder.Build()

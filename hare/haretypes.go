@@ -9,7 +9,7 @@ import (
 	"sort"
 )
 
-type instanceId types.LayerID
+type instanceID types.LayerID
 
 type messageType byte
 
@@ -50,7 +50,7 @@ func (mType messageType) String() string {
 	}
 }
 
-func (id instanceId) Bytes() []byte {
+func (id instanceID) Bytes() []byte {
 	idInBytes := make([]byte, 4)
 	binary.LittleEndian.PutUint32(idInBytes, uint32(id))
 
@@ -60,8 +60,8 @@ func (id instanceId) Bytes() []byte {
 // Set represents a unique set of values.
 type Set struct {
 	values    map[types.BlockID]struct{}
-	id        objectId
-	isIdValid bool
+	id        uint32
+	isIDValid bool
 }
 
 // NewDefaultEmptySet creates an empty set with the default size.
@@ -74,7 +74,7 @@ func NewEmptySet(size int) *Set {
 	s := &Set{}
 	s.values = make(map[types.BlockID]struct{}, size)
 	s.id = 0
-	s.isIdValid = false
+	s.isIDValid = false
 
 	return s
 }
@@ -88,7 +88,7 @@ func NewSetFromValues(values ...types.BlockID) *Set {
 		s.Add(v)
 	}
 	s.id = 0
-	s.isIdValid = false
+	s.isIDValid = false
 
 	return s
 }
@@ -97,7 +97,7 @@ func NewSetFromValues(values ...types.BlockID) *Set {
 // Note: duplicated values are ignored.
 func NewSet(data []types.BlockID) *Set {
 	s := &Set{}
-	s.isIdValid = false
+	s.isIDValid = false
 
 	s.values = make(map[types.BlockID]struct{}, len(data))
 	for _, bid := range data {
@@ -130,7 +130,7 @@ func (s *Set) Add(id types.BlockID) {
 		return
 	}
 
-	s.isIdValid = false
+	s.isIDValid = false
 	s.values[id] = struct{}{}
 }
 
@@ -141,7 +141,7 @@ func (s *Set) Remove(id types.BlockID) {
 		return
 	}
 
-	s.isIdValid = false
+	s.isIDValid = false
 	delete(s.values, id)
 }
 
@@ -178,7 +178,7 @@ func (s *Set) ToSlice() []types.BlockID {
 	return l
 }
 
-func (s *Set) updateId() {
+func (s *Set) updateID() {
 	// order keys
 	keys := make([]types.BlockID, len(s.values))
 	i := 0
@@ -195,14 +195,14 @@ func (s *Set) updateId() {
 	}
 
 	// update
-	s.id = objectId(h.Sum32())
-	s.isIdValid = true
+	s.id = h.Sum32()
+	s.isIDValid = true
 }
 
-// Id returns the objectId of the set.
-func (s *Set) Id() objectId {
-	if !s.isIdValid {
-		s.updateId()
+// ID returns the ObjectID of the set.
+func (s *Set) ID() uint32 {
+	if !s.isIDValid {
+		s.updateID()
 	}
 
 	return s.id

@@ -21,7 +21,8 @@ type addGet interface {
 	Get(key interface{}) (value interface{}, ok bool)
 }
 
-type beacon struct {
+// Beacon provides the value that is under consensus as defined by the hare.
+type Beacon struct {
 	// provides a value that is unpredictable and agreed (w.h.p.) by all honest
 	patternProvider patternProvider
 	confidenceParam uint64
@@ -29,15 +30,15 @@ type beacon struct {
 	log.Log
 }
 
-// NewBeacon returns a new beacon.
+// NewBeacon returns a new Beacon.
 // patternProvider provides the contextually valid blocks.
-// confidenceParam is the number of layers that the beacon assumes for consensus view.
-func NewBeacon(patternProvider patternProvider, confidenceParam uint64, lg log.Log) *beacon {
+// confidenceParam is the number of layers that the Beacon assumes for consensus view.
+func NewBeacon(patternProvider patternProvider, confidenceParam uint64, lg log.Log) *Beacon {
 	c, e := lru.New(activesCacheSize)
 	if e != nil {
 		lg.Panic("Could not create lru cache err=%v", e)
 	}
-	return &beacon{
+	return &Beacon{
 		patternProvider: patternProvider,
 		confidenceParam: confidenceParam,
 		cache:           c,
@@ -47,7 +48,7 @@ func NewBeacon(patternProvider patternProvider, confidenceParam uint64, lg log.L
 
 // Value returns the unpredictable and agreed value for the given Layer
 // Note: Value is concurrency-safe but not concurrency-optimized
-func (b *beacon) Value(layer types.LayerID) (uint32, error) {
+func (b *Beacon) Value(layer types.LayerID) (uint32, error) {
 	sl := safeLayer(layer, types.LayerID(b.confidenceParam))
 
 	// check cache
@@ -61,12 +62,12 @@ func (b *beacon) Value(layer types.LayerID) (uint32, error) {
 	if err != nil {
 		b.Log.With().Error("Could not get pattern Id",
 			log.Err(err), log.LayerId(uint64(layer)), log.Uint64("sl_id", uint64(sl)))
-		return nilVal, errors.New("could not calc beacon value")
+		return nilVal, errors.New("could not calc Beacon value")
 	}
 
 	// notify if there are no contextually valid blocks
 	if len(v) == 0 {
-		b.Log.With().Warning("hare beacon: zero contextually valid blocks (ignore if genesis first layers)",
+		b.Log.With().Warning("hare Beacon: zero contextually valid blocks (ignore if genesis first layers)",
 			log.LayerId(uint64(layer)), log.Uint64("sl_id", uint64(sl)))
 	}
 
@@ -79,7 +80,7 @@ func (b *beacon) Value(layer types.LayerID) (uint32, error) {
 	return value, nil
 }
 
-// calculates the beacon value from the set of ids
+// calculates the Beacon value from the set of ids
 func calcValue(bids map[types.BlockID]struct{}) uint32 {
 	keys := make([]types.BlockID, 0, len(bids))
 	for k := range bids {
@@ -93,7 +94,7 @@ func calcValue(bids map[types.BlockID]struct{}) uint32 {
 	for i := 0; i < len(keys); i++ {
 		_, err := h.Write(keys[i].ToBytes())
 		if err != nil {
-			log.Panic("Could not calculate beacon value. Hash write error=%v", err)
+			log.Panic("Could not calculate Beacon value. Hash write error=%v", err)
 		}
 	}
 	// update

@@ -114,7 +114,7 @@ type NIPSTBuilder struct {
 	poetDB     poetDbAPI
 	errChan    chan error
 	state      *builderState
-	store      BytesStore
+	store      bytesStore
 	log        log.Log
 }
 
@@ -125,9 +125,14 @@ type poetDbAPI interface {
 }
 
 // NewNIPSTBuilder returns a NIPSTBuilder.
-func NewNIPSTBuilder(minerID []byte, postProver PostProverClient, poetProver PoetProvingServiceClient, poetDB poetDbAPI,
-	store BytesStore, log log.Log) *NIPSTBuilder {
-
+func NewNIPSTBuilder(
+	minerID []byte,
+	postProver PostProverClient,
+	poetProver PoetProvingServiceClient,
+	poetDB poetDbAPI,
+	store bytesStore,
+	log log.Log,
+) *NIPSTBuilder {
 	return &NIPSTBuilder{
 		minerID:    minerID,
 		postProver: postProver,
