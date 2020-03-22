@@ -7,22 +7,25 @@ import (
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 )
 
+// PoetProofProtocol is the name of the PoetProof gossip protocol.
 const PoetProofProtocol = "PoetProof"
 
-type PoetValidatorPersistor interface {
+type poetValidatorPersistor interface {
 	Validate(proof types.PoetProof, poetID []byte, roundID string, signature []byte) error
 	storeProof(proofMessage *types.PoetProofMessage) error
 }
 
+// PoetListener handles PoET gossip messages.
 type PoetListener struct {
 	Log               log.Log
 	net               service.Service
-	poetDb            PoetValidatorPersistor
+	poetDb            poetValidatorPersistor
 	poetProofMessages chan service.GossipMessage
 	started           bool
 	exit              chan struct{}
 }
 
+// Start starts listening to PoET gossip messages.
 func (l *PoetListener) Start() {
 	if l.started {
 		return
@@ -31,6 +34,7 @@ func (l *PoetListener) Start() {
 	l.started = true
 }
 
+// Close performs graceful shutdown of the PoET listener.
 func (l *PoetListener) Close() {
 	close(l.exit)
 	l.started = false
@@ -77,7 +81,8 @@ func (l *PoetListener) handlePoetProofMessage(gossipMessage service.GossipMessag
 	}
 }
 
-func NewPoetListener(net service.Service, poetDb PoetValidatorPersistor, logger log.Log) *PoetListener {
+// NewPoetListener returns a new PoetListener.
+func NewPoetListener(net service.Service, poetDb poetValidatorPersistor, logger log.Log) *PoetListener {
 	return &PoetListener{
 		Log:               logger,
 		net:               net,

@@ -12,6 +12,7 @@ import (
 	"sync"
 )
 
+// DefaultConfig defines the default configuration options for PoST
 func DefaultConfig() config.Config {
 	return *config.DefaultConfig()
 }

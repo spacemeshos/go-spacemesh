@@ -15,6 +15,7 @@ import (
 
 type poetProofKey [sha256.Size]byte
 
+// PoetDb is a database for PoET proofs.
 type PoetDb struct {
 	store                     database.Database
 	poetProofRefSubscriptions map[poetProofKey][]chan []byte
@@ -22,15 +23,18 @@ type PoetDb struct {
 	mu                        sync.Mutex
 }
 
+// NewPoetDb returns a new PoET DB.
 func NewPoetDb(store database.Database, log log.Log) *PoetDb {
 	return &PoetDb{store: store, poetProofRefSubscriptions: make(map[poetProofKey][]chan []byte), log: log}
 }
 
+// HasProof returns true if the database contains a proof with the given reference, or false otherwise.
 func (db *PoetDb) HasProof(proofRef []byte) bool {
 	_, err := db.GetProofMessage(proofRef)
 	return err == nil
 }
 
+// ValidateAndStore validates and stores a new PoET proof.
 func (db *PoetDb) ValidateAndStore(proofMessage *types.PoetProofMessage) error {
 	if err := db.Validate(proofMessage.PoetProof, proofMessage.PoetServiceId,
 		proofMessage.RoundId, proofMessage.Signature); err != nil {
@@ -42,6 +46,7 @@ func (db *PoetDb) ValidateAndStore(proofMessage *types.PoetProofMessage) error {
 	return err
 }
 
+// Validate validates a new PoET proof.
 func (db *PoetDb) Validate(proof types.PoetProof, poetID []byte, roundID string, signature []byte) error {
 
 	root, err := calcRoot(proof.Members)
@@ -88,6 +93,8 @@ func (db *PoetDb) storeProof(proofMessage *types.PoetProofMessage) error {
 	return nil
 }
 
+// SubscribeToProofRef returns a channel that PoET proof ref for the requested PoET ID and round ID will be sent. If the
+// proof is already available it will be sent immediately, otherwise it will be sent when available.
 func (db *PoetDb) SubscribeToProofRef(poetID []byte, roundID string) chan []byte {
 	key := makeKey(poetID, roundID)
 	ch := make(chan []byte)
@@ -107,6 +114,8 @@ func (db *PoetDb) addSubscription(key poetProofKey, ch chan []byte) {
 	db.mu.Unlock()
 }
 
+// UnsubscribeFromProofRef removes all subscriptions from a given poetID and roundID. This method should be used with
+// caution since any subscribers still waiting will now hang forever. TODO: only cancel specific subscription.
 func (db *PoetDb) UnsubscribeFromProofRef(poetID []byte, roundID string) {
 	db.mu.Lock()
 	delete(db.poetProofRefSubscriptions, makeKey(poetID, roundID))
@@ -134,10 +143,12 @@ func (db *PoetDb) publishProofRef(key poetProofKey, poetProofRef []byte) {
 	delete(db.poetProofRefSubscriptions, key)
 }
 
+// GetProofMessage returns the originally received PoET proof message.
 func (db *PoetDb) GetProofMessage(proofRef []byte) ([]byte, error) {
 	return db.store.Get(proofRef)
 }
 
+// GetMembershipMap returns the map of memberships in the requested PoET proof.
 func (db *PoetDb) GetMembershipMap(proofRef []byte) (map[types.Hash32]bool, error) {
 	proofMessageBytes, err := db.GetProofMessage(proofRef)
 	if err != nil {
