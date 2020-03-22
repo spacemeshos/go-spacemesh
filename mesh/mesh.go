@@ -7,6 +7,7 @@ import (
 	"github.com/seehuhn/mt19937"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -433,10 +434,21 @@ func (m *Mesh) AddBlock(blk *types.Block) error {
 }
 
 func (m *Mesh) SetZeroBlockLayer(lyr types.LayerID) error {
-	if _, err := m.GetLayer(lyr); err == nil {
+
+	//check database for layer
+	_, err := m.GetLayer(lyr)
+
+	if err == nil {
+		//layer exists
 		m.Info("layer has blocks, dont set layer to 0 ")
 		return fmt.Errorf("layer exists")
 	}
+
+	if err != nil && err != database.ErrNotFound {
+		//database error
+		return fmt.Errorf("could not fetch layer from database %s", err)
+	}
+
 	m.SetLatestLayer(lyr)
 	lm := m.getLayerMutex(lyr)
 	defer m.endLayerWorker(lyr)

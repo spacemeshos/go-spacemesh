@@ -41,7 +41,7 @@ type mockHashOracle struct {
 	hasher  *hasherU32
 }
 
-func (mho *mockHashOracle) IsIdentityActiveOnConsensusView(edId string, layer types.LayerID) (bool, error) {
+func (mho *mockHashOracle) IsIdentityActiveOnConsensusView(edID string, layer types.LayerID) (bool, error) {
 	return true, nil
 }
 
