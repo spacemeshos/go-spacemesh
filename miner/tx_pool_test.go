@@ -137,10 +137,10 @@ func BenchmarkTxPoolWithAccounts(b *testing.B) {
 
 	const numBatches = 10
 	txBatches := make([][]*types.Transaction, numBatches)
-	txIdBatches := make([][]types.TransactionId, numBatches)
+	txIDBatches := make([][]types.TransactionId, numBatches)
 	for i := 0; i < numBatches; i++ {
 		signer := signing.NewEdSigner()
-		txBatches[i], txIdBatches[i] = createBatch(b, signer)
+		txBatches[i], txIDBatches[i] = createBatch(b, signer)
 	}
 
 	wg := &sync.WaitGroup{}
@@ -148,38 +148,38 @@ func BenchmarkTxPoolWithAccounts(b *testing.B) {
 	start := time.Now()
 	wg.Add(numBatches)
 	for i, batch := range txBatches {
-		go addBatch(pool, batch, txIdBatches[i], wg)
+		go addBatch(pool, batch, txIDBatches[i], wg)
 	}
 	wg.Wait()
 	wg.Add(numBatches)
-	for _, batch := range txIdBatches {
+	for _, batch := range txIDBatches {
 		go invalidateBatch(pool, batch, wg)
 	}
 	wg.Wait()
 	b.Log(time.Since(start))
 }
 
-func addBatch(pool *TxMempool, txBatch []*types.Transaction, txIdBatch []types.TransactionId, wg *sync.WaitGroup) {
+func addBatch(pool *TxMempool, txBatch []*types.Transaction, txIDBatch []types.TransactionId, wg *sync.WaitGroup) {
 	for i, tx := range txBatch {
-		pool.Put(txIdBatch[i], tx)
+		pool.Put(txIDBatch[i], tx)
 	}
 	wg.Done()
 }
 
-func invalidateBatch(pool *TxMempool, txIdBatch []types.TransactionId, wg *sync.WaitGroup) {
-	for _, txId := range txIdBatch {
-		pool.Invalidate(txId)
+func invalidateBatch(pool *TxMempool, txIDBatch []types.TransactionId, wg *sync.WaitGroup) {
+	for _, txID := range txIDBatch {
+		pool.Invalidate(txID)
 	}
 	wg.Done()
 }
 
 func createBatch(t testing.TB, signer *signing.EdSigner) ([]*types.Transaction, []types.TransactionId) {
 	var txBatch []*types.Transaction
-	var txIdBatch []types.TransactionId
+	var txIDBatch []types.TransactionId
 	for i := uint64(0); i < 10000; i++ {
-		txId, tx := newTx(t, 5+i, 50, signer)
+		txID, tx := newTx(t, 5+i, 50, signer)
 		txBatch = append(txBatch, tx)
-		txIdBatch = append(txIdBatch, txId)
+		txIDBatch = append(txIDBatch, txID)
 	}
-	return txBatch, txIdBatch
+	return txBatch, txIDBatch
 }
