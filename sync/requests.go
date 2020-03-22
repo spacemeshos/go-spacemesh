@@ -3,7 +3,6 @@ package sync
 import (
 	"bytes"
 	"crypto/sha256"
-	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -13,13 +12,13 @@ import (
 )
 
 var (
-	BlockFetchReqFactory = newFetchReqFactory(BLOCK, blocksAsItems)
-	TxFetchReqFactory    = newFetchReqFactory(TX, txsAsItems)
-	AtxFetchReqFactory   = newFetchReqFactory(ATX, atxsAsItems)
+	blockFetchReqFactory = newFetchReqFactory(blockMsg, blocksAsItems)
+	txFetchReqFactory    = newFetchReqFactory(txMsg, txsAsItems)
+	atxFetchReqFactory   = newFetchReqFactory(atxMsg, atxsAsItems)
 )
 
-func LayerIdsReqFactory(lyr types.LayerID) RequestFactory {
-	return func(s Communication, peer p2p.Peer) (chan interface{}, error) {
+func layerIdsReqFactory(lyr types.LayerID) requestFactory {
+	return func(s networker, peer p2p.Peer) (chan interface{}, error) {
 		ch := make(chan interface{}, 1)
 		foo := func(msg []byte) {
 			defer close(ch)
@@ -34,15 +33,15 @@ func LayerIdsReqFactory(lyr types.LayerID) RequestFactory {
 			}
 			ch <- ids
 		}
-		if err := s.SendRequest(LAYER_IDS, lyr.ToBytes(), peer, foo); err != nil {
+		if err := s.SendRequest(layerIdsMsg, lyr.ToBytes(), peer, foo); err != nil {
 			return nil, err
 		}
 		return ch, nil
 	}
 }
 
-func HashReqFactory(lyr types.LayerID) RequestFactory {
-	return func(s Communication, peer p2p.Peer) (chan interface{}, error) {
+func hashReqFactory(lyr types.LayerID) requestFactory {
+	return func(s networker, peer p2p.Peer) (chan interface{}, error) {
 		ch := make(chan interface{}, 1)
 		foo := func(msg []byte) {
 			defer close(ch)
@@ -58,7 +57,7 @@ func HashReqFactory(lyr types.LayerID) RequestFactory {
 			h.SetBytes(msg)
 			ch <- &peerHashPair{peer: peer, hash: h}
 		}
-		if err := s.SendRequest(LAYER_HASH, lyr.ToBytes(), peer, foo); err != nil {
+		if err := s.SendRequest(layerHashMsg, lyr.ToBytes(), peer, foo); err != nil {
 			return nil, err
 		}
 
@@ -67,10 +66,10 @@ func HashReqFactory(lyr types.LayerID) RequestFactory {
 
 }
 
-func newFetchReqFactory(msgtype server.MessageType, asItems func(msg []byte) ([]Item, error)) BatchRequestFactory {
+func newFetchReqFactory(msgtype server.MessageType, asItems func(msg []byte) ([]item, error)) batchRequestFactory {
 	//convert to chan
-	return func(infra Communication, peer p2p.Peer, ids []types.Hash32) (chan []Item, error) {
-		ch := make(chan []Item, 1)
+	return func(infra networker, peer p2p.Peer, ids []types.Hash32) (chan []item, error) {
+		ch := make(chan []item, 1)
 		foo := func(msg []byte) {
 			defer close(ch)
 			if len(msg) == 0 || msg == nil {
@@ -101,27 +100,27 @@ func newFetchReqFactory(msgtype server.MessageType, asItems func(msg []byte) ([]
 	}
 }
 
-func atxsAsItems(msg []byte) ([]Item, error) {
+func atxsAsItems(msg []byte) ([]item, error) {
 	var atxs []types.ActivationTx
 	err := types.BytesToInterface(msg, &atxs)
 	if err != nil || atxs == nil {
 		return nil, err
 	}
 	atxs = calcAndSetIds(atxs)
-	items := make([]Item, len(atxs))
+	items := make([]item, len(atxs))
 	for i := range atxs {
 		items[i] = &atxs[i]
 	}
 	return items, nil
 }
 
-func txsAsItems(msg []byte) ([]Item, error) {
+func txsAsItems(msg []byte) ([]item, error) {
 	var txs []*types.Transaction
 	err := types.BytesToInterface(msg, &txs)
 	if err != nil || txs == nil {
 		return nil, err
 	}
-	items := make([]Item, len(txs))
+	items := make([]item, len(txs))
 	for i := range txs {
 		err := txs[i].CalcAndSetOrigin()
 		if err != nil {
@@ -133,13 +132,13 @@ func txsAsItems(msg []byte) ([]Item, error) {
 	return items, nil
 }
 
-func blocksAsItems(msg []byte) ([]Item, error) {
+func blocksAsItems(msg []byte) ([]item, error) {
 	var blocks []types.Block
 	err := types.BytesToInterface(msg, &blocks)
 	if err != nil {
 		return nil, err
 	}
-	items := make([]Item, len(blocks))
+	items := make([]item, len(blocks))
 	for i := range blocks {
 		blocks[i].Initialize()
 		items[i] = &blocks[i]
@@ -156,8 +155,8 @@ func calcAndSetIds(atxs []types.ActivationTx) []types.ActivationTx {
 	return atxsWithIds
 }
 
-func PoetReqFactory(poetProofRef []byte) RequestFactory {
-	return func(s Communication, peer p2p.Peer) (chan interface{}, error) {
+func poetReqFactory(poetProofRef []byte) requestFactory {
+	return func(s networker, peer p2p.Peer) (chan interface{}, error) {
 		ch := make(chan interface{}, 1)
 		resHandler := func(msg []byte) {
 			s.Info("handle PoET proof response")
@@ -182,7 +181,7 @@ func PoetReqFactory(poetProofRef []byte) RequestFactory {
 			ch <- proofMessage
 		}
 
-		if err := s.SendRequest(POET, poetProofRef, peer, resHandler); err != nil {
+		if err := s.SendRequest(poetMsg, poetProofRef, peer, resHandler); err != nil {
 			return nil, err
 		}
 
@@ -193,17 +192,17 @@ func PoetReqFactory(poetProofRef []byte) RequestFactory {
 func validatePoetRef(proofMessage types.PoetProofMessage, poetProofRef []byte) (bool, error) {
 	poetProofBytes, err := types.InterfaceToBytes(&proofMessage.PoetProof)
 	if err != nil {
-		return false, errors.New(fmt.Sprintf("could marshal PoET response for validation %v", err))
+		return false, fmt.Errorf("could marshal PoET response for validation %v", err)
 	}
 	b := sha256.Sum256(poetProofBytes)
 	if bytes.Compare(b[:], poetProofRef) != 0 {
-		return false, errors.New(fmt.Sprintf("poet recived was diffrent then requested"))
+		return false, fmt.Errorf("poet recived was diffrent then requested")
 	}
 
 	return true, nil
 }
 
-func validateItemIds(ids []types.Hash32, items []Item) (bool, error) {
+func validateItemIds(ids []types.Hash32, items []item) (bool, error) {
 	mp := make(map[types.Hash32]struct{})
 	for _, id := range ids {
 		mp[id] = struct{}{}
@@ -211,13 +210,13 @@ func validateItemIds(ids []types.Hash32, items []Item) (bool, error) {
 	for _, tx := range items {
 		txid := tx.Hash32()
 		if _, ok := mp[txid]; !ok {
-			return false, errors.New(fmt.Sprintf("received item that was not requested %v type %v", tx.ShortString(), reflect.TypeOf(tx)))
+			return false, fmt.Errorf("received item that was not requested %v type %v", tx.ShortString(), reflect.TypeOf(tx))
 		}
 		delete(mp, txid)
 	}
 
 	if len(mp) > 0 {
-		for id, _ := range mp {
+		for id := range mp {
 			log.Warning("item %s was not in response ", id.ShortString())
 		}
 	}
@@ -225,7 +224,7 @@ func validateItemIds(ids []types.Hash32, items []Item) (bool, error) {
 	return true, nil
 }
 
-func encodeAndSendRequest(req server.MessageType, ids []types.Hash32, s Communication, peer p2p.Peer, foo func(msg []byte)) error {
+func encodeAndSendRequest(req server.MessageType, ids []types.Hash32, s networker, peer p2p.Peer, foo func(msg []byte)) error {
 	bts, err := types.InterfaceToBytes(ids)
 	if err != nil {
 		return err

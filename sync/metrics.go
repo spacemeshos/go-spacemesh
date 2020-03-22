@@ -8,12 +8,12 @@ import (
 )
 
 const (
-	Namespace = "spacemesh"
-	Subsystem = "consensus"
+	namespace = "spacemesh"
+	subsystem = "consensus"
 )
 
 func newCounter(name, help string, labels []string) metrics.Counter {
-	return prmkit.NewCounterFrom(prometheus.CounterOpts{Namespace: Namespace, Subsystem: Subsystem, Name: name, Help: help}, labels)
+	return prmkit.NewCounterFrom(prometheus.CounterOpts{Namespace: namespace, Subsystem: subsystem, Name: name, Help: help}, labels)
 }
 
 func newMilliTimer(sum prometheus.Summary) *prometheus.Timer {
@@ -24,13 +24,13 @@ func newMilliTimer(sum prometheus.Summary) *prometheus.Timer {
 }
 
 func newFetchRequestTimer(msgtype server.MessageType) *prometheus.Timer {
-	if msgtype == BLOCK {
+	if msgtype == blockMsg {
 		return newMilliTimer(blockTime)
 	}
-	if msgtype == TX {
+	if msgtype == txMsg {
 		return newMilliTimer(txTime)
 	}
-	if msgtype == ATX {
+	if msgtype == atxMsg {
 		return newMilliTimer(atxTime)
 	}
 

@@ -55,7 +55,7 @@ func TestMessageValidator_ValidateCertificate(t *testing.T) {
 
 func TestEligibilityValidator_validateRole(t *testing.T) {
 	oracle := &mockRolacle{}
-	ev := newEligibilityValidator(oracle, 10, &mockIdProvider{}, 1, 5, log.NewDefault(""))
+	ev := newEligibilityValidator(oracle, 10, &mockIDProvider{}, 1, 5, log.NewDefault(""))
 	ev.oracle = oracle
 	res, err := ev.validateRole(nil)
 	assert.NotNil(t, err)
@@ -72,9 +72,9 @@ func TestEligibilityValidator_validateRole(t *testing.T) {
 	// TODO: remove comment after inceptions problem is addressed
 	//assert.False(t, res)
 
-	m.InnerMsg.InstanceId = 111
+	m.InnerMsg.InstanceID = 111
 	myErr := errors.New("my error")
-	ev.identityProvider = &mockIdProvider{myErr}
+	ev.identityProvider = &mockIDProvider{myErr}
 	res, err = ev.validateRole(m)
 	assert.NotNil(t, err)
 	assert.Equal(t, myErr, err)
@@ -86,14 +86,14 @@ func TestEligibilityValidator_validateRole(t *testing.T) {
 	assert.Equal(t, myErr, err)
 	assert.False(t, res)
 
-	ev.identityProvider = &mockIdProvider{nil}
+	ev.identityProvider = &mockIDProvider{nil}
 	oracle.err = nil
 	res, err = ev.validateRole(m)
 	assert.Nil(t, err)
 	assert.False(t, res)
 
 	oracle.isEligible = true
-	m.InnerMsg.InstanceId = 111
+	m.InnerMsg.InstanceID = 111
 	res, err = ev.validateRole(m)
 	assert.Nil(t, err)
 	assert.True(t, res)
@@ -345,7 +345,7 @@ func validateMatrix(t *testing.T, mType messageType, msgK int32, exp []error) {
 	v := defaultValidator()
 	sgn := generateSigning(t)
 	set := NewEmptySet(1)
-	var m *Msg = nil
+	var m *Msg
 	switch mType {
 	case status:
 		m = BuildStatusMsg(sgn, set)
