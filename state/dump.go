@@ -24,25 +24,28 @@ import (
 	"github.com/spacemeshos/go-spacemesh/trie"
 )
 
+// DumpAccount is a helper struct that helps dumping account balance and nonce in json form
 type DumpAccount struct {
 	Balance string `json:"balance"`
 	Nonce   uint64 `json:"nonce"`
 }
 
+// Dump is a struct used to dump an entire state root into json form
 type Dump struct {
 	Root     string                 `json:"root"`
 	Accounts map[string]DumpAccount `json:"accounts"`
 }
 
-func (self *StateDB) RawDump() Dump {
+// RawDump returns a Dump struct for the receivers state
+func (state *StateDB) RawDump() Dump {
 	dump := Dump{
-		Root:     fmt.Sprintf("%x", self.globalTrie.Hash()),
+		Root:     fmt.Sprintf("%x", state.globalTrie.Hash()),
 		Accounts: make(map[string]DumpAccount),
 	}
 
-	it := trie.NewIterator(self.globalTrie.NodeIterator(nil))
+	it := trie.NewIterator(state.globalTrie.NodeIterator(nil))
 	for it.Next() {
-		addr := self.globalTrie.GetKey(it.Key)
+		addr := state.globalTrie.GetKey(it.Key)
 		var data Account
 		if err := rlp.DecodeBytes(it.Value, &data); err != nil {
 			panic(err)
@@ -59,8 +62,9 @@ func (self *StateDB) RawDump() Dump {
 	return dump
 }
 
-func (self *StateDB) Dump() []byte {
-	json, err := json.MarshalIndent(self.RawDump(), "", "	")
+// Dump dumps the current state into json form, encoded into bytes.
+func (state *StateDB) Dump() []byte {
+	json, err := json.MarshalIndent(state.RawDump(), "", "	")
 	if err != nil {
 		fmt.Println("dump err", err)
 	}

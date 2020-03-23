@@ -73,7 +73,7 @@ const testMsg = "TEST"
 
 func TestUDPNet_Sanity(t *testing.T) {
 	local, localinfo := node.GenerateTestNode(t)
-	udpAddr := &net.UDPAddr{net.IPv4zero, int(localinfo.DiscoveryPort), ""}
+	udpAddr := &net.UDPAddr{IP: net.IPv4zero, Port: int(localinfo.DiscoveryPort)}
 	udpnet, err := NewUDPNet(config.DefaultConfig(), local, log.NewDefault("TEST_"+t.Name()))
 	require.NoError(t, err)
 	require.NotNil(t, udpnet)
@@ -81,7 +81,7 @@ func TestUDPNet_Sanity(t *testing.T) {
 	mockconn := &mockCon{local: udpAddr}
 
 	other, otherinfo := node.GenerateTestNode(t)
-	addr2 := &net.UDPAddr{otherinfo.IP, int(otherinfo.DiscoveryPort), ""}
+	addr2 := &net.UDPAddr{IP: otherinfo.IP, Port: int(otherinfo.DiscoveryPort)}
 
 	session := createSession(other.PrivateKey(), local.PublicKey())
 
@@ -248,7 +248,7 @@ func TestUDPNet_Cache(t *testing.T) {
 	require.Len(t, n.incomingConn, maxUDPConn)
 
 	i := 0
-	for k, _ := range n.incomingConn {
+	for k := range n.incomingConn {
 		delete(n.incomingConn, k)
 		i++
 		if i == 2 {

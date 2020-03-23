@@ -18,14 +18,10 @@ type protocolRoutingTable interface {
 }
 
 type protocol struct {
-	localNode node.LocalNode
 	local     *node.NodeInfo
 	table     protocolRoutingTable
 	logger    log.Log
 	msgServer *server.MessageServer
-
-	localTcpAddress string
-	localUdpAddress string
 }
 
 func (d *protocol) SetLocalAddresses(tcp, udp int) {

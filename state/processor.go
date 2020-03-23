@@ -16,15 +16,19 @@ import (
 	"sync"
 )
 
+// StatePreImages is a struct that contains a root hash and the transactions that are in store of this root hash
 type StatePreImages struct {
 	rootHash  types.Hash32
 	preImages []*types.Transaction
 }
 
+// Projector interface defines the interface for a struct that can project the state of an account by applying txs from
+// mem pool
 type Projector interface {
 	GetProjection(addr types.Address, prevNonce, prevBalance uint64) (nonce, balance uint64, err error)
 }
 
+// TransactionProcessor is the struct containing state db and is responsible for applying transactions into it
 type TransactionProcessor struct {
 	log.Log
 	*StateDB
@@ -38,8 +42,9 @@ type TransactionProcessor struct {
 	rootMu       sync.RWMutex
 }
 
-const NewRootKey = "root"
+const newRootKey = "root"
 
+// NewTransactionProcessor returns a new state processor
 func NewTransactionProcessor(allStates, processorDb database.Database, projector Projector, logger log.Log) *TransactionProcessor {
 	stateDb, err := New(types.Hash32{}, NewDatabase(allStates))
 	if err != nil {
@@ -164,7 +169,7 @@ func (tp *TransactionProcessor) addStateToHistory(layer types.LayerID, newHash t
 }
 
 func getStateRootLayerKey(layer types.LayerID) []byte {
-	return append([]byte(NewRootKey), layer.ToBytes()...)
+	return append([]byte(newRootKey), layer.ToBytes()...)
 }
 
 func (tp *TransactionProcessor) addState(stateRoot types.Hash32, layer types.LayerID) error {

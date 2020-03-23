@@ -65,7 +65,7 @@ func (its *P2PIntegrationSuite) Test_SendingMessage() {
 }
 
 func (its *P2PIntegrationSuite) Test_Gossiping() {
-	ctx, _ := context.WithTimeout(context.Background(), time.Minute*5)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*5)
 	err := its.WaitForGossip(ctx)
 	require.NoError(its.T(), err, "Failed to connect all nodes to gossip")
 	errg, ctx := errgroup.WithContext(ctx)
@@ -73,7 +73,7 @@ func (its *P2PIntegrationSuite) Test_Gossiping() {
 	MSGS := 100
 	MSGSIZE := 108692
 	tm := time.Now()
-	testLog("%v Sending %v messages with size %v to %v miners", its.T().Name(), MSGS, MSGSIZE, (its.BootstrappedNodeCount + its.BootstrapNodesCount))
+	testLog("%v Sending %v messages with size %v to %v miners", its.T().Name(), MSGS, MSGSIZE, its.BootstrappedNodeCount+its.BootstrapNodesCount)
 	numgot := int32(0)
 	for i := 0; i < MSGS; i++ {
 		msg := []byte(RandString(MSGSIZE))
@@ -102,6 +102,7 @@ func (its *P2PIntegrationSuite) Test_Gossiping() {
 	its.NoError(errs)
 	its.Equal(int(numgot), (its.BootstrappedNodeCount+its.BootstrapNodesCount)*MSGS)
 	testLog("%v All nodes got all messages in %v", its.T().Name(), time.Since(tm))
+	cancel()
 }
 
 // TODO: Add more tests to the suite

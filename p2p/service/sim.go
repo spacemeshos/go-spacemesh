@@ -80,6 +80,7 @@ func (s *Simulator) publishNewPeer(peer p2pcrypto.PublicKey) {
 	s.subLock.Unlock()
 }
 
+// nolint
 func (s *Simulator) publishDelPeer(peer p2pcrypto.PublicKey) {
 	s.subLock.Lock()
 	for _, ch := range s.delPeersSubs {
