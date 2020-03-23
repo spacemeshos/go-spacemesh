@@ -43,38 +43,38 @@ func NewRecoveredTortoise(mdb *mesh.MeshDB, lg log.Log) Tortoise {
 
 //HandleLateBlock processes a late blocks votes (for late block definition see white paper)
 //returns the old pbase and new pbase after taking into account the blocks votes
-func (alg *tortoise) HandleLateBlock(b *types.Block) (types.LayerID, types.LayerID) {
+func (trtl *tortoise) HandleLateBlock(b *types.Block) (types.LayerID, types.LayerID) {
 	//todo feed all layers from b's layer to tortoise
 	l := types.NewLayer(b.Layer())
 	l.AddBlock(b)
-	oldPbase, newPbase := alg.HandleIncomingLayer(l)
+	oldPbase, newPbase := trtl.HandleIncomingLayer(l)
 	log.With().Info("late block ", log.LayerId(uint64(b.Layer())), log.BlockId(b.Id().String()))
 	return oldPbase, newPbase
 }
 
 //Persist saves a copy of the current tortoise state to the database
-func (alg *tortoise) Persist() error {
-	alg.mutex.Lock()
-	defer alg.mutex.Unlock()
+func (trtl *tortoise) Persist() error {
+	trtl.mutex.Lock()
+	defer trtl.mutex.Unlock()
 	log.Info("persist tortoise ")
-	return alg.ninjaTortoise.persist()
+	return trtl.ninjaTortoise.persist()
 }
 
 //HandleIncomingLayer processes all layer block votes
 //returns the old pbase and new pbase after taking into account the blocks votes
-func (alg *tortoise) HandleIncomingLayer(ll *types.Layer) (types.LayerID, types.LayerID) {
-	alg.mutex.Lock()
-	defer alg.mutex.Unlock()
-	oldPbase := alg.latestComplete()
-	alg.ninjaTortoise.handleIncomingLayer(ll)
-	newPbase := alg.latestComplete()
-	updateMetrics(alg, ll)
+func (trtl *tortoise) HandleIncomingLayer(ll *types.Layer) (types.LayerID, types.LayerID) {
+	trtl.mutex.Lock()
+	defer trtl.mutex.Unlock()
+	oldPbase := trtl.latestComplete()
+	trtl.ninjaTortoise.handleIncomingLayer(ll)
+	newPbase := trtl.latestComplete()
+	updateMetrics(trtl, ll)
 	return oldPbase, newPbase
 }
 
 //LatestComplete returns the latest complete (a.k.a irreversible) layer
-func (alg *tortoise) LatestComplete() types.LayerID {
-	return alg.latestComplete()
+func (trtl *tortoise) LatestComplete() types.LayerID {
+	return trtl.latestComplete()
 }
 
 func updateMetrics(alg *tortoise, ll *types.Layer) {

@@ -194,7 +194,7 @@ func (ni *ninjaTortoise) evictOutOfPbase() {
 			defer wg.Done()
 			ids, err := ni.db.LayerBlockIds(lyr)
 			if err != nil {
-				ni.logger.Error("could not get layer ids for layer %v %v", lyr, err)
+				ni.logger.With().Error("could not get layer ids for layer ", log.LayerId(lyr.Uint64()), log.Err(err))
 			}
 			for _, id := range ids {
 				delete(ni.TEffective, id)
