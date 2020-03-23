@@ -7,36 +7,34 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/shared"
-	"sync"
 )
 
 // PostProverClient provides proving functionality for PoST.
 type PostProverClient interface {
-	// initialize is the process in which the prover commits
-	// to store some data, by having its storage being filled with
-	// pseudo-random data with respect to a specific id.
-	// This data is the result of a computationally-expensive operation.
+	// Initialize is the process in which the prover commits to store some data, by having its storage filled with
+	// pseudo-random data with respect to a specific id. This data is the result of a computationally-expensive
+	// operation.
 	Initialize() (commitment *types.PostProof, err error)
 
-	// Execute is the phase in which the prover received a challenge,
-	// and proves that his data is still stored (or was recomputed).
-	// This phase can be repeated arbitrarily many times without repeating initialization;
-	// thus despite the initialization essentially serving as a proof-of-work,
-	// the amortized computational complexity can be made arbitrarily small.
+	// Execute is the phase in which the prover received a challenge, and proves that his data is still stored (or was
+	// recomputed). This phase can be repeated arbitrarily many times without repeating initialization; thus despite the
+	// initialization essentially serving as a proof-of-work, the amortized computational complexity can be made
+	// arbitrarily small.
 	Execute(challenge []byte) (proof *types.PostProof, err error)
 
 	// Reset removes the initialization phase files.
 	Reset() error
 
-	// IsInitialized indicates whether the initialization phase has been completed.
+	// IsInitialized indicates whether the initialization phase has been completed. If it's not complete the remaining
+	// bytes are also returned.
 	IsInitialized() (initComplete bool, remainingBytes uint64, err error)
 
 	// VerifyInitAllowed indicates whether the preconditions for starting
 	// the initialization phase are met.
 	VerifyInitAllowed() error
 
-	// SetParams updates the datadir and space params in the client config, to be used in the initialization
-	// and the execution phases. It overrides the config which the client was instantiated with.
+	// SetParams updates the datadir and space params in the client config, to be used in the initialization and the
+	// execution phases. It overrides the config which the client was instantiated with.
 	SetParams(datadir string, space uint64) error
 
 	// SetLogger sets a logger for the client.
@@ -46,15 +44,15 @@ type PostProverClient interface {
 	Cfg() *config.Config
 }
 
-// PoetProvingServiceClient provides a gateway to a trust-less public proving
-// service, which may serve many PoET proving clients, and thus enormously
-// reduce the cost-per-proof for PoET since each additional proof adds
-// only a small number of hash evaluations to the total cost.
+// PoetProvingServiceClient provides a gateway to a trust-less public proving service, which may serve many PoET
+// proving clients, and thus enormously reduce the cost-per-proof for PoET since each additional proof adds only
+// a small number of hash evaluations to the total cost.
 type PoetProvingServiceClient interface {
 	// Submit registers a challenge in the proving service current open round.
 	Submit(challenge types.Hash32) (*types.PoetRound, error)
 
-	PoetServiceId() ([]byte, error)
+	// PoetServiceID returns the public key of the PoET proving service.
+	PoetServiceID() ([]byte, error)
 }
 
 type builderState struct {
@@ -62,12 +60,11 @@ type builderState struct {
 
 	Nipst *types.NIPST
 
-	// PoetRound is the round of the PoET proving service
-	// in which the PoET challenge was included in.
+	// PoetRound is the round of the PoET proving service in which the PoET challenge was included in.
 	PoetRound *types.PoetRound
 
-	// PoetServiceId is the public key of the PoET proving service.
-	PoetServiceId []byte
+	// PoetServiceID returns the public key of the PoET proving service.
+	PoetServiceID []byte
 
 	// PoetProofRef is the root of the proof received from the PoET service.
 	PoetProofRef []byte
@@ -109,61 +106,49 @@ func (nb *NIPSTBuilder) persist() {
 	}
 }
 
+// NIPSTBuilder holds the required state and dependencies to create Non-Interactive Proofs of Space-Time (NIPST).
 type NIPSTBuilder struct {
-	id         []byte
+	minerID    []byte
 	postProver PostProverClient
 	poetProver PoetProvingServiceClient
-	poetDb     PoetDbApi
-
-	stop    bool
-	stopM   sync.Mutex
-	errChan chan error
-	state   *builderState
-	store   BytesStore
-	log     log.Log
+	poetDB     poetDbAPI
+	errChan    chan error
+	state      *builderState
+	store      bytesStore
+	log        log.Log
 }
 
-type PoetDbApi interface {
-	SubscribeToProofRef(poetId []byte, roundId string) chan []byte
+type poetDbAPI interface {
+	SubscribeToProofRef(poetID []byte, roundID string) chan []byte
 	GetMembershipMap(proofRef []byte) (map[types.Hash32]bool, error)
-	UnsubscribeFromProofRef(poetId []byte, roundId string)
+	UnsubscribeFromProofRef(poetID []byte, roundID string)
 }
 
-func NewNIPSTBuilder(id []byte, postProver PostProverClient, poetProver PoetProvingServiceClient, poetDb PoetDbApi, store BytesStore, log log.Log) *NIPSTBuilder {
-	return newNIPSTBuilder(
-		id,
-		postProver,
-		poetProver,
-		poetDb,
-		store,
-		log,
-	)
-}
-
-func newNIPSTBuilder(
-	id []byte,
+// NewNIPSTBuilder returns a NIPSTBuilder.
+func NewNIPSTBuilder(
+	minerID []byte,
 	postProver PostProverClient,
 	poetProver PoetProvingServiceClient,
-	poetDb PoetDbApi,
-	store BytesStore,
+	poetDB poetDbAPI,
+	store bytesStore,
 	log log.Log,
 ) *NIPSTBuilder {
 	return &NIPSTBuilder{
-		id:         id,
+		minerID:    minerID,
 		postProver: postProver,
 		poetProver: poetProver,
-		poetDb:     poetDb,
-		stop:       false,
+		poetDB:     poetDB,
 		errChan:    make(chan error),
+		state:      &builderState{Nipst: &types.NIPST{}},
 		store:      store,
 		log:        log,
-		state: &builderState{
-			Nipst: &types.NIPST{},
-		},
 	}
 }
 
-func (nb *NIPSTBuilder) BuildNIPST(challenge *types.Hash32, atxExpired chan struct{}, stop chan struct{}) (*types.NIPST, error) {
+// BuildNIPST uses the given challenge to build a NIPST. "atxExpired" and "stop" are channels for early termination of
+// the building process. The process can take considerable time, because it includes waiting for the poet service to
+// publish a proof - a process that takes about an epoch.
+func (nb *NIPSTBuilder) BuildNIPST(challenge *types.Hash32, atxExpired, stop chan struct{}) (*types.NIPST, error) {
 	nb.load(*challenge)
 
 	if initialized, _, err := nb.postProver.IsInitialized(); !initialized || err != nil {
@@ -177,17 +162,17 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *types.Hash32, atxExpired chan stru
 
 	// Phase 0: Submit challenge to PoET service.
 	if nb.state.PoetRound == nil {
-		poetServiceId, err := nb.poetProver.PoetServiceId()
+		poetServiceID, err := nb.poetProver.PoetServiceID()
 		if err != nil {
 			return nil, fmt.Errorf("failed to get PoET service ID: %v", err)
 		}
-		nb.state.PoetServiceId = poetServiceId
+		nb.state.PoetServiceID = poetServiceID
 
 		poetChallenge := challenge
 		nb.state.Challenge = *challenge
 
 		nb.log.Debug("submitting challenge to PoET proving service (PoET id: %x, challenge: %x)",
-			nb.state.PoetServiceId, poetChallenge)
+			nb.state.PoetServiceID, poetChallenge)
 
 		round, err := nb.poetProver.Submit(*poetChallenge)
 		if err != nil {
@@ -195,7 +180,7 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *types.Hash32, atxExpired chan stru
 		}
 
 		nb.log.Info("challenge submitted to PoET proving service (PoET id: %x, round id: %v, challenge: %x)",
-			nb.state.PoetServiceId, round.Id, poetChallenge)
+			nb.state.PoetServiceID, round.Id, poetChallenge)
 
 		nipst.NipstChallenge = poetChallenge
 		nb.state.PoetRound = round
@@ -206,22 +191,22 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *types.Hash32, atxExpired chan stru
 	if nb.state.PoetProofRef == nil {
 		var poetProofRef []byte
 		select {
-		case poetProofRef = <-nb.poetDb.SubscribeToProofRef(nb.state.PoetServiceId, nb.state.PoetRound.Id):
+		case poetProofRef = <-nb.poetDB.SubscribeToProofRef(nb.state.PoetServiceID, nb.state.PoetRound.Id):
 		case <-atxExpired:
-			nb.poetDb.UnsubscribeFromProofRef(nb.state.PoetServiceId, nb.state.PoetRound.Id)
+			nb.poetDB.UnsubscribeFromProofRef(nb.state.PoetServiceID, nb.state.PoetRound.Id)
 			return nil, fmt.Errorf("atx expired while waiting for poet proof, target epoch ended")
 		case <-stop:
 			return nil, &StopRequestedError{}
 		}
 
-		membership, err := nb.poetDb.GetMembershipMap(poetProofRef)
+		membership, err := nb.poetDB.GetMembershipMap(poetProofRef)
 		if err != nil {
 			log.Panic("failed to fetch membership for PoET proof")              // TODO: handle inconsistent state
 			return nil, fmt.Errorf("failed to fetch membership for PoET proof") // inconsistent state
 		}
 		if !membership[*nipst.NipstChallenge] {
 			return nil, fmt.Errorf("not a member of this round (poetId: %x, roundId: %s, challenge: %x, num of members: %d)",
-				nb.state.PoetServiceId, nb.state.PoetRound.Id, *nipst.NipstChallenge, len(membership)) // TODO(noamnelke): handle this case!
+				nb.state.PoetServiceID, nb.state.PoetRound.Id, *nipst.NipstChallenge, len(membership)) // TODO(noamnelke): handle this case!
 		}
 		nb.state.PoetProofRef = poetProofRef
 		nb.persist()
@@ -255,6 +240,7 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *types.Hash32, atxExpired chan stru
 	return nipst, nil
 }
 
+// NewNIPSTWithChallenge is a convenience method FOR TESTS ONLY. TODO: move this out of production code.
 func NewNIPSTWithChallenge(challenge *types.Hash32, poetRef []byte) *types.NIPST {
 	return &types.NIPST{
 		Space:          0,

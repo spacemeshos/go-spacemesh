@@ -27,8 +27,8 @@ func TestPostClient(t *testing.T) {
 		assert.NoError(err)
 	}()
 
-	key_id := signing.NewPublicKey(id)
-	err = verifyPost(*key_id, commitment, postCfg.SpacePerUnit, postCfg.NumProvenLabels, postCfg.Difficulty)
+	keyID := signing.NewPublicKey(id)
+	err = verifyPost(*keyID, commitment, postCfg.SpacePerUnit, postCfg.NumProvenLabels, postCfg.Difficulty)
 	assert.NoError(err)
 
 	challenge := []byte("this is a challenge")
@@ -38,6 +38,6 @@ func TestPostClient(t *testing.T) {
 	assert.Equal([]byte(proof.Challenge), challenge[:])
 
 	log.Info("space %v", postCfg.SpacePerUnit)
-	err = verifyPost(*key_id, proof, postCfg.SpacePerUnit, postCfg.NumProvenLabels, postCfg.Difficulty)
+	err = verifyPost(*keyID, proof, postCfg.SpacePerUnit, postCfg.NumProvenLabels, postCfg.Difficulty)
 	assert.NoError(err)
 }

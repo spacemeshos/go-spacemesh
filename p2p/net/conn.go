@@ -66,7 +66,6 @@ type FormattedConnection struct {
 	networker   networker // network context
 	session     NetworkSession
 	deadline    time.Duration
-	timeout     time.Duration
 	r           formattedReader
 	wmtx        sync.Mutex
 	w           formattedWriter
@@ -237,8 +236,11 @@ func (c *FormattedConnection) SendSock(m []byte) error {
 		return fmt.Errorf("connection was closed")
 	}
 
-	c.deadliner.SetWriteDeadline(time.Now().Add(c.deadline))
-	_, err := c.w.WriteRecord(m)
+	err := c.deadliner.SetWriteDeadline(time.Now().Add(c.deadline))
+	if err != nil {
+		return err
+	}
+	_, err = c.w.WriteRecord(m)
 	if err != nil {
 		cerr := c.closeUnlocked()
 		c.wmtx.Unlock()
@@ -297,13 +299,23 @@ func (c *FormattedConnection) setupIncoming(timeout time.Duration) error {
 
 	go func() {
 		// TODO: some other way to make sure this groutine closes
-		c.deadliner.SetReadDeadline(time.Now().Add(timeout))
+		err := c.deadliner.SetReadDeadline(time.Now().Add(timeout))
+		if err != nil {
+			be <- struct {
+				b []byte
+				e error
+			}{b: nil, e: err}
+			return
+		}
 		msg, err := c.r.Next()
-		c.deadliner.SetReadDeadline(time.Time{}) // disable read deadline
 		be <- struct {
 			b []byte
 			e error
 		}{b: msg, e: err}
+		err = c.deadliner.SetReadDeadline(time.Time{}) // disable read deadline
+		if err != nil {
+			c.logger.Warning("could not set a read deadline err:", err)
+		}
 	}()
 
 	msgbe := <-be

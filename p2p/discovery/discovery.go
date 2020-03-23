@@ -62,9 +62,9 @@ type bootstrapper interface {
 }
 
 var (
-	// ErrLookupFailed determines that we could'nt find this node in the routing table or network
-	ErrLookupFailed = errors.New("failed to find node in the network")
-	// ErrEmptyRoutingTable means that our routing table is empty thus we can't find any node (so we can't query any)
+	// ErrLookupFailed determines that we could'nt lookup this node in the routing table or network
+	ErrLookupFailed = errors.New("failed to lookup node in the network")
+	// ErrEmptyRoutingTable means that our routing table is empty thus we can't lookup any node (so we can't query any)
 	ErrEmptyRoutingTable = errors.New("no nodes to query - routing table is empty")
 )
 
@@ -184,7 +184,7 @@ func (d *Discovery) IsLocalAddress(info *node.NodeInfo) bool {
 // SetLocalAddresses sets the localNode addresses to be advertised.
 func (d *Discovery) SetLocalAddresses(tcp, udp int) {
 	d.disc.SetLocalAddresses(tcp, udp)
-	//TODO: find a protocol or just pass here our IP to the routing table
+	//TODO: lookup a protocol or just pass here our IP to the routing table
 }
 
 // Remove removes a record from the routing table

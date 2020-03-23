@@ -55,7 +55,7 @@ type PoetDbIMock struct {
 	validationErr error
 }
 
-func (p *PoetDbIMock) Validate(proof types.PoetProof, poetId []byte, roundId string, signature []byte) error {
+func (p *PoetDbIMock) Validate(proof types.PoetProof, poetID []byte, roundID string, signature []byte) error {
 	return p.validationErr
 }
 

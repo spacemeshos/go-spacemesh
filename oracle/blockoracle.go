@@ -11,7 +11,7 @@ import (
 )
 
 type ActivationDb interface {
-	GetNodeAtxIdForEpoch(nodeId types.NodeId, targetEpoch types.EpochId) (types.AtxId, error)
+	GetNodeAtxIDForEpoch(nodeId types.NodeId, targetEpoch types.EpochId) (types.AtxId, error)
 	GetAtxHeader(id types.AtxId) (*types.ActivationTxHeader, error)
 	GetIdentity(edId string) (types.NodeId, error)
 }
@@ -157,7 +157,7 @@ func getNumberOfEligibleBlocks(activeSetSize, committeeSize uint32, layersPerEpo
 }
 
 func (bo *MinerBlockOracle) getAtxIdForEpoch(targetEpoch types.EpochId) (types.AtxId, error) {
-	latestATXID, err := bo.activationDb.GetNodeAtxIdForEpoch(bo.nodeID, targetEpoch)
+	latestATXID, err := bo.activationDb.GetNodeAtxIDForEpoch(bo.nodeID, targetEpoch)
 	if err != nil {
 		bo.log.With().Info("did not find ATX IDs for node", log.String("atx_node_id", bo.nodeID.ShortString()), log.Err(err))
 		return types.AtxId{}, err

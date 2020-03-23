@@ -41,8 +41,6 @@ type refresher struct {
 
 	disc        pingerGetAddresser
 	lastQueries map[p2pcrypto.PublicKey]time.Time
-
-	quit chan struct{}
 }
 
 func newRefresher(local p2pcrypto.PublicKey, book addressBook, disc pingerGetAddresser, bootnodes []*node.NodeInfo, logger log.Log) *refresher {
@@ -57,10 +55,12 @@ func newRefresher(local p2pcrypto.PublicKey, book addressBook, disc pingerGetAdd
 	}
 }
 
+// Bootstrap tries to collect `numpeers` new peers into the routing table. it stops if ctx is cancelled,
+// otherwise it will keep trying. if the routing table is empty, bootnodes are loaded from provided config.
 func (r *refresher) Bootstrap(ctx context.Context, numpeers int) error {
 	var err error
-	tries := 0
-	servers := make([]*node.NodeInfo, 0, len(r.bootNodes))
+	var servers []*node.NodeInfo
+	var tries int
 
 	// The following loop will add the pre-set bootstrap nodes and query them for results
 	// if there were any results but we didn't reach numpeers it will try the same procedure
@@ -135,7 +135,7 @@ type queryResult struct {
 	err error
 }
 
-// pingThenGetAddresses is sending a ping, then find node, then return results on given chan.
+// pingThenGetAddresses is sending a ping, then lookup node, then return results on given chan.
 func pingThenGetAddresses(p pingerGetAddresser, addr *node.NodeInfo, qr chan queryResult) {
 	// TODO: check whether we pinged recently and maybe skip pinging
 	err := p.Ping(addr.PublicKey())

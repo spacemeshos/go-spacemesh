@@ -2,7 +2,6 @@ package net
 
 import (
 	"net"
-	"sync"
 	"time"
 )
 
@@ -18,7 +17,6 @@ type ReadWriteCloseAddresserMock struct {
 	writeErr error
 	writeOut []byte
 	writeCnt int
-	lock     sync.Mutex
 
 	closeRes error
 	closeCnt int
@@ -97,11 +95,6 @@ func (rwcam *ReadWriteCloseAddresserMock) Write(p []byte) (n int, err error) {
 	return
 }
 
-// setCloseResult is a whatever
-func (rwcam *ReadWriteCloseAddresserMock) setCloseResult(err error) {
-	rwcam.closeRes = err
-}
-
 // CloseCount oh yeah
 func (rwcam *ReadWriteCloseAddresserMock) CloseCount() int {
 	return rwcam.closeCnt
@@ -116,10 +109,6 @@ func (rwcam *ReadWriteCloseAddresserMock) Close() error {
 
 func (rwcam *ReadWriteCloseAddresserMock) setRemoteAddrResult(addr net.Addr) {
 	rwcam.remoteAddrRes = addr
-}
-
-func (rwcam *ReadWriteCloseAddresserMock) remoteAddrCount() int {
-	return rwcam.remoteAddrCnt
 }
 
 // RemoteAddr is a RemoteAddr mock
