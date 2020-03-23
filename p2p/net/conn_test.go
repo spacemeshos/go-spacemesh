@@ -46,7 +46,7 @@ func TestSendMessage(t *testing.T) {
 	select {
 	case <-rwcam.writeWaitChan:
 		rcvmsg := <-rwcam.writeWaitChan
-		assert.Equal(t, []byte(rcvmsg), []byte(msg))
+		assert.Equal(t, rcvmsg, []byte(msg))
 	case <-time.After(5 * time.Second):
 		assert.Fail(t, "timeout waiting for message to be sent")
 	}
@@ -191,7 +191,7 @@ func TestDoubleClose(t *testing.T) {
 func TestGettersToBoostCoverage(t *testing.T) {
 	netw := NewNetworkMock()
 	rwcam := NewReadWriteCloseAddresserMock()
-	addr := net.TCPAddr{net.ParseIP("1.1.1.1"), 555, ""}
+	addr := net.TCPAddr{IP: net.ParseIP("1.1.1.1"), Port: 555}
 	rwcam.setRemoteAddrResult(&addr)
 	rPub := p2pcrypto.NewRandomPubkey()
 	conn := newConnection(rwcam, netw, rPub, &networkSessionImpl{}, msgSizeLimit, time.Second, netw.logger)

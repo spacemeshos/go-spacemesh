@@ -15,9 +15,6 @@ import (
 const oldMessageCacheSize = 10000
 const propagateHandleBufferSize = 5000 // number of MessageValidation that we allow buffering, above this number protocols will get stuck
 
-const ProtocolName = "/p2p/1.0/gossip"
-const protocolVer = "0"
-
 // Interface for the underlying p2p layer
 type baseNetwork interface {
 	SendMessage(peerPubkey p2pcrypto.PublicKey, protocol string, payload []byte) error

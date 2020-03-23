@@ -38,7 +38,8 @@ func TestNewNodeFromString(t *testing.T) {
 	pubkey = "r9gJRWVB9JVPap2HKn"
 	data = fmt.Sprintf("%v/%v", address, pubkey)
 	node, err = ParseNode(data)
-	assert.Error(t, err)
+	require.Nil(t, node)
+	require.Error(t, err)
 }
 
 func TestStringFromNode(t *testing.T) {

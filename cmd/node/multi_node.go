@@ -21,6 +21,7 @@ import (
 	"time"
 )
 
+// ManualClock is a clock that releases ticks on demand and not according to a real world clock
 type ManualClock struct {
 	subs          map[timesync.LayerTimer]struct{}
 	layerChannels map[types.LayerID]chan struct{}
@@ -30,10 +31,11 @@ type ManualClock struct {
 }
 
 // LayerToTime returns the time of the provided layer
-func (lc ManualClock) LayerToTime(id types.LayerID) time.Time {
+func (clk ManualClock) LayerToTime(id types.LayerID) time.Time {
 	return time.Now().Add(1000 * time.Hour) //hack so this wont take affect in the mock
 }
 
+// NewManualClock creates a new manual clock struct
 func NewManualClock(genesisTime time.Time) *ManualClock {
 	t := &ManualClock{
 		subs:          make(map[timesync.LayerTimer]struct{}),
@@ -44,13 +46,15 @@ func NewManualClock(genesisTime time.Time) *ManualClock {
 	return t
 }
 
-func (t *ManualClock) Unsubscribe(ch timesync.LayerTimer) {
-	t.m.Lock()
-	delete(t.subs, ch)
-	t.m.Unlock()
+// Unsubscribe removes this channel ch from channels notified on tick
+func (clk *ManualClock) Unsubscribe(ch timesync.LayerTimer) {
+	clk.m.Lock()
+	delete(clk.subs, ch)
+	clk.m.Unlock()
 }
 
-func (t *ManualClock) StartNotifying() {
+// StartNotifying is empty because this clock is manual
+func (clk *ManualClock) StartNotifying() {
 }
 
 var closedChannel chan struct{}
@@ -60,56 +64,62 @@ func init() {
 	close(closedChannel)
 }
 
-func (t *ManualClock) AwaitLayer(layerId types.LayerID) chan struct{} {
-	t.m.Lock()
-	defer t.m.Unlock()
-	if layerId <= t.currentLayer {
+// AwaitLayer implement the ability to notify a subscriber when a layer has ticked
+func (clk *ManualClock) AwaitLayer(layerID types.LayerID) chan struct{} {
+	clk.m.Lock()
+	defer clk.m.Unlock()
+	if layerID <= clk.currentLayer {
 		return closedChannel
 	}
-	if ch, found := t.layerChannels[layerId]; found {
+	if ch, found := clk.layerChannels[layerID]; found {
 		return ch
 	}
 	ch := make(chan struct{})
-	t.layerChannels[layerId] = ch
+	clk.layerChannels[layerID] = ch
 	return ch
 }
 
-func (t *ManualClock) Subscribe() timesync.LayerTimer {
+// Subscribe allow subscribes to be notified when a layer ticks
+func (clk *ManualClock) Subscribe() timesync.LayerTimer {
 	ch := make(timesync.LayerTimer)
-	t.m.Lock()
-	t.subs[ch] = struct{}{}
-	t.m.Unlock()
+	clk.m.Lock()
+	clk.subs[ch] = struct{}{}
+	clk.m.Unlock()
 	return ch
 }
 
-func (t *ManualClock) Tick() {
-	t.m.Lock()
-	defer t.m.Unlock()
+// Tick notifies all subscribers to this clock
+func (clk *ManualClock) Tick() {
+	clk.m.Lock()
+	defer clk.m.Unlock()
 
-	t.currentLayer++
-	if ch, found := t.layerChannels[t.currentLayer]; found {
+	clk.currentLayer++
+	if ch, found := clk.layerChannels[clk.currentLayer]; found {
 		close(ch)
-		delete(t.layerChannels, t.currentLayer)
+		delete(clk.layerChannels, clk.currentLayer)
 	}
-	for s := range t.subs {
-		s <- t.currentLayer
+	for s := range clk.subs {
+		s <- clk.currentLayer
 	}
 }
 
-func (t ManualClock) GetCurrentLayer() types.LayerID {
-	t.m.Lock()
-	defer t.m.Unlock()
+// GetCurrentLayer gets the last ticked layer
+func (clk ManualClock) GetCurrentLayer() types.LayerID {
+	clk.m.Lock()
+	defer clk.m.Unlock()
 
-	return t.currentLayer
+	return clk.currentLayer
 }
 
-func (t ManualClock) GetGenesisTime() time.Time {
-	t.m.Lock()
-	defer t.m.Unlock()
-	return t.genesisTime
+// GetGenesisTime returns the set genesis time for this clock
+func (clk ManualClock) GetGenesisTime() time.Time {
+	clk.m.Lock()
+	defer clk.m.Unlock()
+	return clk.genesisTime
 }
 
-func (t ManualClock) Close() {
+// Close does nothing because this clock is manual
+func (clk ManualClock) Close() {
 }
 
 func getTestDefaultConfig() *config.Config {
@@ -169,7 +179,7 @@ func GracefulShutdown(apps []*SpacemeshApp) {
 	log.Info("Graceful shutdown end")
 }
 
-type Network interface {
+type network interface {
 	NewNode() *service.Node
 }
 
@@ -178,7 +188,7 @@ type Network interface {
 
 // InitSingleInstance initializes a node instance with given
 // configuration and parameters, it does not stop the instance.
-func InitSingleInstance(cfg config.Config, i int, genesisTime string, rng *amcl.RAND, storePath string, rolacle *eligibility.FixedRolacle, poetClient *activation.HTTPPoetClient, fastHare bool, clock TickProvider, net Network) (*SpacemeshApp, error) {
+func InitSingleInstance(cfg config.Config, i int, genesisTime string, rng *amcl.RAND, storePath string, rolacle *eligibility.FixedRolacle, poetClient *activation.HTTPPoetClient, fastHare bool, clock TickProvider, net network) (*SpacemeshApp, error) {
 
 	smApp := NewSpacemeshApp()
 	smApp.Config = &cfg
@@ -210,7 +220,7 @@ func InitSingleInstance(cfg config.Config, i int, genesisTime string, rng *amcl.
 	return smApp, err
 }
 
-// Starts the run of a number of nodes, running in process consensus between them.
+// StartMultiNode Starts the run of a number of nodes, running in process consensus between them.
 // this also runs a single transaction between the nodes.
 func StartMultiNode(numOfinstances, layerAvgSize int, runTillLayer uint32, dbPath string) {
 	cfg := getTestDefaultConfig()
@@ -306,9 +316,9 @@ loop:
 				continue
 			}
 			log.Info("all miners finished reading %v atxs, layer %v done in %v", eventDb.GetAtxCreationDone(epoch), layer, time.Since(startLayer))
-			for _, atxId := range eventDb.GetCreatedAtx(epoch) {
-				if _, found := eventDb.Atxs[atxId]; !found {
-					log.Info("atx %v not propagated", atxId)
+			for _, atxID := range eventDb.GetCreatedAtx(epoch) {
+				if _, found := eventDb.Atxs[atxID]; !found {
+					log.Info("atx %v not propagated", atxID)
 					errors++
 					continue
 				}

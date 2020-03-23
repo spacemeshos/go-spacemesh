@@ -384,3 +384,12 @@ dockerrun-stress: dockerbuild-test dockerrun-blocks-stress dockerrun-grpc-stress
 
 dockertest-stress: dockerpush dockerrun-stress
 .PHONY: dockertest-stress
+
+dockertest-hare-mining: dockertest-hare dockertest-mining
+.PHONY: dockertest-hare-mining
+
+dockertest-sync-blocks-remove-node: dockertest-sync dockertest-blocks-remove-node
+.PHONY: dockertest-sync-blocks-remove-node
+
+dockertest-genesis-voting-p2p: dockertest-genesis-voting dockertest-p2p
+.PHONY: dockertest-genesis-voting-p2p

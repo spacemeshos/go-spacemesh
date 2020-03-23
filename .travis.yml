@@ -56,33 +56,21 @@ jobs:
     script:
       - make dockertest-late-nodes
     if: (branch = staging OR branch = trying) AND type != pull_request
-  - name: "Run mining system tests"
-    script:
-      - make dockertest-mining
-    if: (branch = staging OR branch = trying) AND type != pull_request
   - name: "Run blocks add node test"
     script:
       - make dockertest-blocks-add-node
     if: (branch = staging OR branch = trying) AND type != pull_request
-  - name: "Run blocks remove node test"
+  - name: "Run hare+mining system tests"
     script:
-      - make dockertest-blocks-remove-node
+      - make dockertest-hare-mining
     if: (branch = staging OR branch = trying) AND type != pull_request
-  - name: "Run p2p system tests"
+  - name: "Run sync+blocks remove node test"
     script:
-      - make dockertest-p2p
+      - make dockertest-sync-blocks-remove-node
     if: (branch = staging OR branch = trying) AND type != pull_request
-  - name: "Run genesis votes test"
+  - name: "Run genesis+p2p system tests"
     script:
-      - make dockertest-genesis-voting
-    if: (branch = staging OR branch = trying) AND type != pull_request
-  - name: "Run sync system tests"
-    script:
-      - make dockertest-sync
-    if: (branch = staging OR branch = trying) AND type != pull_request
-  - name: "Run hare system tests"
-    script:
-      - make dockertest-hare
+      - make dockertest-genesis-voting-p2p
     if: (branch = staging OR branch = trying) AND type != pull_request
 
 cache:

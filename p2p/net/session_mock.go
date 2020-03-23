@@ -5,15 +5,14 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 )
 
+var _ NetworkSession = (*SessionMock)(nil)
+
 // SessionMock is a wonderful fluffy teddybear
 type SessionMock struct {
 	id p2pcrypto.PublicKey
 
 	SealMessageFunc func(message []byte) []byte
 	OpenMessageFunc func(boxedMessage []byte) ([]byte, error)
-
-	pubkey p2pcrypto.PublicKey
-	keyM   []byte
 }
 
 func NewSessionMock(pubkey p2pcrypto.PublicKey) *SessionMock {

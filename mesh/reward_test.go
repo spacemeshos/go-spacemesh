@@ -13,6 +13,7 @@ import (
 
 type MockMapState struct {
 	Rewards     map[types.Address]*big.Int
+	Txs         []*types.Transaction
 	TotalReward int64
 }
 
@@ -36,7 +37,8 @@ func (MockMapState) ValidateSignature(signed types.Signed) (types.Address, error
 	return types.Address{}, nil
 }
 
-func (MockMapState) ApplyTransactions(layer types.LayerID, txs []*types.Transaction) (int, error) {
+func (s *MockMapState) ApplyTransactions(layer types.LayerID, txs []*types.Transaction) (int, error) {
+	s.Txs = append(s.Txs, txs...)
 	return 0, nil
 }
 
@@ -147,7 +149,7 @@ func NewTestRewardParams() Config {
 	}
 }
 
-func createLayer(t testing.TB, mesh *Mesh, id types.LayerID, numOfBlocks, maxTransactions int, atxdb *AtxDbMock) (totalRewards int64) {
+func createLayer(t testing.TB, mesh *Mesh, id types.LayerID, numOfBlocks, maxTransactions int, atxdb *AtxDbMock) (totalRewards int64, blocks []*types.Block) {
 	for i := 0; i < numOfBlocks; i++ {
 		block1 := types.NewExistingBlock(id, []byte(rand.RandString(8)))
 		nodeid := types.NodeId{strconv.Itoa(i), []byte("bbbbb")}
@@ -160,8 +162,9 @@ func createLayer(t testing.TB, mesh *Mesh, id types.LayerID, numOfBlocks, maxTra
 		block1.Initialize()
 		err := mesh.AddBlock(block1)
 		assert.NoError(t, err)
+		blocks = append(blocks, block1)
 	}
-	return totalRewards
+	return totalRewards, blocks
 }
 
 func TestMesh_integration(t *testing.T) {
@@ -175,20 +178,104 @@ func TestMesh_integration(t *testing.T) {
 
 	var l3Rewards int64
 	for i := 0; i < numofLayers; i++ {
-		reward := createLayer(t, layers, types.LayerID(i), numofBlocks, maxTxs, atxdb)
+		reward, _ := createLayer(t, layers, types.LayerID(i), numofBlocks, maxTxs, atxdb)
 		// rewards are applied to layers in the past according to the reward maturity param
 		if i == 3 {
 			l3Rewards = reward
 			log.Info("reward %v", l3Rewards)
 		}
-	}
 
-	l4, err := layers.GetLayer(4)
-	assert.NoError(t, err)
-	layers.ValidateLayer(l4)
+		l, err := layers.GetLayer(types.LayerID(i))
+		assert.NoError(t, err)
+		layers.ValidateLayer(l)
+	}
 	//since there can be a difference of up to x lerners where x is the number of blocks due to round up of penalties when distributed among all blocks
 	totalPayout := l3Rewards + ConfigTst().BaseReward.Int64()
 	assert.True(t, totalPayout-s.TotalReward < int64(numofBlocks), " rewards : %v, total %v blocks %v", totalPayout, s.TotalReward, int64(numofBlocks))
+}
+
+func TestMesh_updateStateWithLayer(t *testing.T) {
+	// test states are the same when one input is from tortoise and the other from hare
+	// test state is the same if receiving result from tortoise after same result from hare received
+	// test state is the same after late block
+	// test panic after block from hare was not found in mesh
+	// test that state does not advance when layer x +2 is received before layer x+1, and then test that all layers are pushed
+
+	numofLayers := 10
+	numofBlocks := 10
+	maxTxs := 20
+
+	s := &MockMapState{Rewards: make(map[types.Address]*big.Int)}
+	mesh, atxdb := getMeshWithMapState("t1", s)
+	defer mesh.Close()
+
+	for i := 0; i < numofLayers; i++ {
+		createLayer(t, mesh, types.LayerID(i), numofBlocks, maxTxs, atxdb)
+		l, err := mesh.GetLayer(types.LayerID(i))
+		assert.NoError(t, err)
+		mesh.ValidateLayer(l)
+	}
+
+	s2 := &MockMapState{Rewards: make(map[types.Address]*big.Int)}
+	meshB, atxdbB := getMeshWithMapState("t2", s2)
+
+	// this sohuld be played until numofLayers -1 if we want to compare states
+	for i := 0; i < numofLayers-1; i++ {
+		blockIds := copyLayer(t, mesh, meshB, atxdbB, types.LayerID(i))
+		meshB.HandleValidatedLayer(types.LayerID(i), blockIds)
+	}
+	// test states are the same when one input is from tortoise and the other from hare
+	assert.Equal(t, s.Txs, s2.Txs)
+
+	for i := 0; i < numofLayers; i++ {
+		l, err := mesh.GetLayer(types.LayerID(i))
+		assert.NoError(t, err)
+		meshB.ValidateLayer(l)
+	}
+	// test state is the same if receiving result from tortoise after same result from hare received
+	assert.ObjectsAreEqualValues(s.Txs, s2.Txs)
+
+	// test state is the same after late block
+	layer4, err := mesh.GetLayer(4)
+	assert.NoError(t, err)
+
+	blk := layer4.Blocks()[0]
+	meshB.HandleLateBlock(blk)
+	assert.Equal(t, s.Txs, s2.Txs)
+
+	// test that state does not advance when layer x +2 is received before layer x+1, and then test that all layers are pushed
+	s3 := &MockMapState{Rewards: make(map[types.Address]*big.Int)}
+	meshC, atxdbC := getMeshWithMapState("t3", s3)
+
+	// this should be played until numofLayers -1 if we want to compare states
+	for i := 0; i < numofLayers-3; i++ {
+		blockIds := copyLayer(t, mesh, meshC, atxdbC, types.LayerID(i))
+		meshC.HandleValidatedLayer(types.LayerID(i), blockIds)
+	}
+	s3Len := len(s3.Txs)
+	blockIds := copyLayer(t, mesh, meshC, atxdbC, types.LayerID(numofLayers-2))
+	meshC.HandleValidatedLayer(types.LayerID(numofLayers-2), blockIds)
+	assert.Equal(t, s3Len, len(s3.Txs))
+
+	blockIds = copyLayer(t, mesh, meshC, atxdbC, types.LayerID(numofLayers-3))
+	meshC.HandleValidatedLayer(types.LayerID(numofLayers-3), blockIds)
+	assert.Equal(t, s.Txs, s3.Txs)
+}
+
+func copyLayer(t *testing.T, srcMesh, dstMesh *Mesh, dstAtxDb *AtxDbMock, id types.LayerID) []types.BlockID {
+	l, err := srcMesh.GetLayer(types.LayerID(id))
+	assert.NoError(t, err)
+	var blockIds []types.BlockID
+	for _, b := range l.Blocks() {
+		txs := srcMesh.getTxs(b.TxIds, l.Index())
+		atx, err := srcMesh.GetFullAtx(b.ATXID)
+		assert.NoError(t, err)
+		dstAtxDb.AddAtx(atx.Id(), atx)
+		err = dstMesh.AddBlockWithTxs(b, txs, []*types.ActivationTx{})
+		assert.NoError(t, err)
+		blockIds = append(blockIds, b.Id())
+	}
+	return blockIds
 }
 
 type meshValidatorBatchMock struct {
@@ -237,7 +324,7 @@ func TestMesh_AccumulateRewards(t *testing.T) {
 
 	var firstLayerRewards int64
 	for i := 0; i < numOfLayers; i++ {
-		reward := createLayer(t, mesh, types.LayerID(i), numOfBlocks, maxTxs, atxDb)
+		reward, _ := createLayer(t, mesh, types.LayerID(i), numOfBlocks, maxTxs, atxDb)
 		if i == 0 {
 			firstLayerRewards = reward
 			log.Info("reward %v", firstLayerRewards)
