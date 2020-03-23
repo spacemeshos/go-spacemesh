@@ -460,7 +460,7 @@ func (b *Builder) PublishActivationTx() error {
 		log.String("commitment", commitStr),
 		log.Int("atx_size", size),
 	)
-	events.Publish(events.AtxCreated{Created: true, Id: atx.ShortString(), Layer: uint64(b.currentEpoch())})
+	events.Publish(events.AtxCreated{Created: true, ID: atx.ShortString(), Layer: uint64(b.currentEpoch())})
 
 	select {
 	case <-atxReceived:

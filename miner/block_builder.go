@@ -443,7 +443,7 @@ func (t *BlockBuilder) handleGossipAtx(data service.GossipMessage) {
 	}
 
 	err = t.atxValidator.SyntacticallyValidateAtx(atx)
-	events.Publish(events.ValidAtx{Id: atx.ShortString(), Valid: err == nil})
+	events.Publish(events.ValidAtx{ID: atx.ShortString(), Valid: err == nil})
 	if err != nil {
 		t.Warning("received syntactically invalid ATX %v: %v", atx.ShortString(), err)
 		// TODO: blacklist peer

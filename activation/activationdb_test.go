@@ -224,7 +224,7 @@ func TestATX_ActiveSetForLayerView(t *testing.T) {
 		hash, err := atx.NIPSTChallenge.Hash()
 		assert.NoError(t, err)
 		atx.Nipst = NewNIPSTWithChallenge(hash, poetRef)
-		//layers.AtxDB.(*AtxDbMock).AddAtx(atx.Id(), atx)
+		//layers.AtxDB.(*AtxDbMock).AddAtx(atx.ID(), atx)
 	}
 	id := atxs[4].Id()
 	fmt.Println("ID4 ", id.ShortString())
@@ -664,7 +664,7 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
 	err = atxdb.SyntacticallyValidateAtx(atx)
-	assert.EqualError(t, err, fmt.Sprintf("previous ATX belongs to different miner. atx.Id: %v, atx.NodeId: %v, prevAtx.NodeId: %v", atx.ShortString(), atx.NodeId.Key, atxs[0].NodeId.Key))
+	assert.EqualError(t, err, fmt.Sprintf("previous ATX belongs to different miner. atx.ID: %v, atx.NodeId: %v, prevAtx.NodeId: %v", atx.ShortString(), atx.NodeId.Key, atxs[0].NodeId.Key))
 
 	// Wrong layerId.
 	posAtx2 := types.NewActivationTxForTests(idx2, 0, *types.EmptyAtxId, 1020, 0, *types.EmptyAtxId, coinbase, 3, blocks, npst)
