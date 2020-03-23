@@ -7,7 +7,6 @@ require (
 	github.com/btcsuite/btcd v0.0.0-20190629003639-c26ffa870fd8
 	github.com/btcsuite/btcutil v0.0.0-20190425235716-9e5f4b9a998d
 	github.com/go-kit/kit v0.9.0
-	github.com/gogo/protobuf v1.3.0
 	github.com/golang/protobuf v1.3.2
 	github.com/google/uuid v1.1.0
 	github.com/grpc-ecosystem/grpc-gateway v1.9.0
