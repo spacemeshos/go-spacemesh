@@ -28,6 +28,8 @@ type Item struct {
 	timestamp time.Time
 }
 
+// MessageServer is a request-response multiplexer on top of the p2p layer. it provides a way to register
+// message types on top of a protocol and declare request and response handlers. it matches incoming responses to requests.
 type MessageServer struct {
 	log.Log
 	ReqId              uint64 //request id
@@ -44,11 +46,13 @@ type MessageServer struct {
 	exit               chan struct{}
 }
 
+// Service is the subset of method used by MessageServer for p2p communications.
 type Service interface {
 	RegisterDirectProtocolWithChannel(protocol string, ingressChannel chan service.DirectMessage) chan service.DirectMessage
 	SendWrappedMessage(nodeID p2pcrypto.PublicKey, protocol string, payload *service.DataMsgWrapper) error
 }
 
+// NewMessageServer registers a protocol and returns a new server to declare request and response handlers on.
 func NewMsgServer(network Service, name string, requestLifetime time.Duration, c chan service.DirectMessage, logger log.Log) *MessageServer {
 	p := &MessageServer{
 		Log:                logger,
@@ -67,12 +71,14 @@ func NewMsgServer(network Service, name string, requestLifetime time.Duration, c
 	return p
 }
 
+// Close stops the MessageServer
 func (p *MessageServer) Close() {
 	p.exit <- struct{}{}
 	<-p.exit
 	p.workerCount.Wait()
 }
 
+// readLoop readds incoming messages and matches them to requests or responses.
 func (p *MessageServer) readLoop() {
 	timer := time.NewTicker(p.requestLifetime + time.Millisecond*100)
 	defer timer.Stop()
@@ -102,6 +108,7 @@ func (p *MessageServer) readLoop() {
 	}
 }
 
+// clean stale messages after requests life time expire.
 func (p *MessageServer) cleanStaleMessages() {
 	for {
 		p.pendMutex.RLock()
@@ -180,6 +187,7 @@ func (p *MessageServer) handleResponseMessage(headers *service.DataMsgWrapper) {
 	p.Debug("handleResponseMessage close")
 }
 
+// RegisterMsgHandler sets the handler to act on a specific message request.
 func (p *MessageServer) RegisterMsgHandler(msgType MessageType, reqHandler func(message Message) []byte) {
 	p.msgRequestHandlers[msgType] = reqHandler
 }
@@ -191,10 +199,12 @@ func handlerFromBytesHandler(in func(msg []byte) []byte) func(message Message) [
 	}
 }
 
+// RegisterBytesMsgHandler sets the handler to act on a specific message request.
 func (p *MessageServer) RegisterBytesMsgHandler(msgType MessageType, reqHandler func([]byte) []byte) {
 	p.RegisterMsgHandler(msgType, handlerFromBytesHandler(reqHandler))
 }
 
+// SendRequest sends a request of a specific message.
 func (p *MessageServer) SendRequest(msgType MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte)) error {
 	reqID := p.newRequestId()
 	p.pendMutex.Lock()

@@ -57,6 +57,7 @@ func (pm gossipProtocolMessage) ReportValidation(protocol string) {
 	}
 }
 
+// ProtocolMessageMetadata is a general p2p message wrapper
 type ProtocolMessageMetadata struct {
 	NextProtocol  string
 	ClientVersion string
@@ -65,16 +66,19 @@ type ProtocolMessageMetadata struct {
 	NetworkID     int32
 }
 
+// Payload holds either a byte array or a wrapped req-res message.
 type Payload struct {
 	Payload []byte
 	Wrapped *service.DataMsgWrapper
 }
 
+// ProtocolMessage is a pair of metadata and a a payload.
 type ProtocolMessage struct {
 	Metadata *ProtocolMessageMetadata
 	Payload  *Payload
 }
 
+// CreatePayload is an helper function to format a payload for sending.
 func CreatePayload(data service.Data) (*Payload, error) {
 	switch x := data.(type) {
 	case service.DataBytes:
@@ -91,6 +95,7 @@ func CreatePayload(data service.Data) (*Payload, error) {
 	return nil, fmt.Errorf("cant determine paylaod type")
 }
 
+// ExtractData is an helper function to extract the payload data from a message payload.
 func ExtractData(pm *Payload) (service.Data, error) {
 	var data service.Data
 	if payload := pm.Payload; payload != nil {

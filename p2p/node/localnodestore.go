@@ -69,6 +69,7 @@ func (n *LocalNode) PersistData(path string) error {
 	return nil
 }
 
+// LoadIdentity loads a specific nodeid from the disk at the given path
 func LoadIdentity(path, nodeid string) (LocalNode, error) {
 	nfd, err := readNodeData(path, nodeid)
 	if err != nil {

@@ -45,7 +45,7 @@ func (p *protocol) newGetAddressesRequestHandler() func(msg server.Message) []by
 	}
 }
 
-// GetAddresses Send a single lookup node request to a remote node
+// GetAddresses Send a get address request to a remote node, it will block and return the results returned from the node.
 func (p *protocol) GetAddresses(server p2pcrypto.PublicKey) ([]*node.NodeInfo, error) {
 	start := time.Now()
 	var err error
