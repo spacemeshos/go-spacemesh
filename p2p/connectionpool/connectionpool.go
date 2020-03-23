@@ -226,7 +226,10 @@ func (cp *ConnectionPool) GetConnection(address inet.Addr, remotePub p2pcrypto.P
 			if err != nil {
 				cp.handleDialResult(remotePub, dialResult{nil, err})
 			} else {
-				cp.handleNewConnection(remotePub, conn, net.Local)
+				err := cp.handleNewConnection(remotePub, conn, net.Local)
+				if err != nil {
+					cp.logger.Warning("Error handing new outgoing conn - err: %v", err)
+				}
 			}
 			cp.dialWait.Done()
 		}()

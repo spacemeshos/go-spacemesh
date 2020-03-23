@@ -61,7 +61,10 @@ func NewUDPMux(localNode node.LocalNode, lookuper Lookuper, udpNet udpNetwork, n
 	}
 
 	udpNet.SubscribeOnNewRemoteConnections(func(event inet.NewConnectionEvent) {
-		cpool.OnNewConnection(event)
+		err := cpool.OnNewConnection(event)
+		if err != nil {
+			um.logger.Warning("error adding udp connection to cpool err=%c", err)
+		}
 	})
 
 	udpNet.SubscribeClosingConnections(func(connection inet.ConnectionWithErr) {
@@ -150,7 +153,7 @@ func (mux *UDPMux) sendMessageImpl(peerPubkey p2pcrypto.PublicKey, protocol stri
 		return err
 	}
 
-	addr := &net.UDPAddr{net.ParseIP(peer.IP.String()), int(peer.DiscoveryPort), ""}
+	addr := &net.UDPAddr{IP: net.ParseIP(peer.IP.String()), Port: int(peer.DiscoveryPort)}
 
 	conn, err := mux.cpool.GetConnection(addr, peer.PublicKey())
 
@@ -273,7 +276,7 @@ func (mux *UDPMux) processUDPMessage(msg inet.IncomingMessageEvent) error {
 		return fmt.Errorf("failed extracting data from message err:%v", err)
 	}
 
-	p2pmeta := service.P2PMetadata{msg.Conn.RemoteAddr()}
+	p2pmeta := service.P2PMetadata{FromAddress: msg.Conn.RemoteAddr()}
 
 	return mux.ProcessDirectProtocolMessage(msg.Conn.RemotePublicKey(), pm.Metadata.NextProtocol, data, p2pmeta)
 

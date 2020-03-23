@@ -311,10 +311,6 @@ func (s *swarm) LocalNode() node.LocalNode {
 	return s.lNode
 }
 
-func (s *swarm) connectionPool() cPool {
-	return s.cPool
-}
-
 func (s *swarm) SendWrappedMessage(nodeID p2pcrypto.PublicKey, protocol string, payload *service.DataMsgWrapper) error {
 	return s.sendMessageImpl(nodeID, protocol, payload)
 }
@@ -552,7 +548,7 @@ func (s *swarm) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 	}
 
 	// Add metadata collected from p2p message (todo: maybe pass sender and protocol inside metadata)
-	p2pmeta := service.P2PMetadata{msg.Conn.RemoteAddr()}
+	p2pmeta := service.P2PMetadata{FromAddress: msg.Conn.RemoteAddr()}
 
 	// TODO: get rid of mutexes. (Blocker: registering protocols after `Start`. currently only known place is Test_Gossiping
 	s.protocolHandlerMutex.RLock()
@@ -754,7 +750,7 @@ func (s *swarm) getMorePeers(numpeers int) int {
 				return
 			}
 			s.discover.Attempt(nd.PublicKey())
-			addr := inet.TCPAddr{inet.ParseIP(nd.IP.String()), int(nd.ProtocolPort), ""}
+			addr := inet.TCPAddr{IP: inet.ParseIP(nd.IP.String()), Port: int(nd.ProtocolPort)}
 			_, err := s.cPool.GetConnection(&addr, nd.PublicKey())
 			reportChan <- cnErr{nd, err}
 		}(nds[i], res)

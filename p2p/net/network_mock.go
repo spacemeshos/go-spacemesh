@@ -67,12 +67,6 @@ func NewNetworkMock() *NetworkMock {
 	}
 }
 
-func (n *NetworkMock) reset() {
-	n.dialCount = 0
-	n.dialDelayMs = 0
-	n.dialErr = nil
-}
-
 func (n *NetworkMock) SetNextDialSessionID(sID []byte) {
 	n.dialSessionID = sID
 }
@@ -99,7 +93,10 @@ func (n *NetworkMock) Dial(ctx context.Context, address net.Addr, remotePublicKe
 	sID := n.dialSessionID
 	if sID == nil {
 		sID = make([]byte, 4)
-		rand.Read(sID)
+		_, err := rand.Read(sID)
+		if err != nil {
+			panic("no randomness for networkmock")
+		}
 	}
 	conn := NewConnectionMock(remotePublicKey)
 	publicKey, _ := p2pcrypto.NewPubkeyFromBytes(sID)
@@ -139,10 +136,6 @@ func (n NetworkMock) publishClosingConnection(con ConnectionWithErr) {
 // PublishClosingConnection is a hack to expose the above method in the mock but still impl the same interface
 func (n NetworkMock) PublishClosingConnection(con ConnectionWithErr) {
 	n.publishClosingConnection(con)
-}
-
-func (n *NetworkMock) setNetworkId(id int8) {
-	n.networkId = id
 }
 
 // NetworkID is netid

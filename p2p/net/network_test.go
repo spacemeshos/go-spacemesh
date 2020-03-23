@@ -29,7 +29,7 @@ func TestNet_EnqueueMessage(t *testing.T) {
 	ln, err := node.NewNodeIdentity()
 	assert.NoError(t, err)
 	n, err := NewNet(cfg, ln, log.NewDefault(t.Name()))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	var rndmtx sync.Mutex
 	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -40,31 +40,38 @@ func TestNet_EnqueueMessage(t *testing.T) {
 		rndmtx.Unlock()
 	}
 
+	var timedout int32
+
 	var wg sync.WaitGroup
 	for i := 0; i < testnodes; i++ {
 		wg.Add(1)
 		go func() {
 			rnode := node.GenerateRandomNodeData()
 			sum := sumByteArray(rnode.PublicKey().Bytes())
-			msg := make([]byte, 10, 10)
+			msg := make([]byte, 10)
 			randmsg(msg)
 			fmt.Printf("pushing %v to %v \r\n", hex.EncodeToString(msg), sum%n.queuesCount)
 			n.EnqueueMessage(IncomingMessageEvent{NewConnectionMock(rnode.PublicKey()), msg})
 			fmt.Printf("pushed %v to %v \r\n", hex.EncodeToString(msg), sum%n.queuesCount)
 			tx := time.NewTimer(time.Second * 2)
+			defer wg.Done()
 			select {
-			case _ = <-n.IncomingMessages()[sum%n.queuesCount]:
+			case <-n.IncomingMessages()[sum%n.queuesCount]:
 				fmt.Printf("got %v \r\n", hex.EncodeToString(msg))
 				//assert.Equal(t, s.Message, msg)
 				//assert.Equal(t, s.Conn.RemotePublicKey(), rnode.PublicKey())
-				wg.Done()
 			case <-tx.C:
 				fmt.Println("didn't get ", hex.EncodeToString(msg))
-				t.FailNow()
+				atomic.AddInt32(&timedout, 1)
+				return
+
 			}
 		}()
 	}
 	wg.Wait()
+	if timedout > 0 {
+		t.Fatal("timedout")
+	}
 }
 
 type mockListener struct {
