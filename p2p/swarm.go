@@ -324,7 +324,7 @@ func (s *swarm) LocalNode() node.LocalNode {
 	return s.lNode
 }
 
-// SendWrappedMessage sends a which is wrapped in order to differentiate between request response and sub protocol messages.
+// SendWrappedMessage sends a wrapped message in order to differentiate between request response and sub protocol messages.
 // It is used by `MessageServer`.
 func (s *swarm) SendWrappedMessage(nodeID p2pcrypto.PublicKey, protocol string, payload *service.DataMsgWrapper) error {
 	return s.sendMessageImpl(nodeID, protocol, payload)
@@ -676,7 +676,7 @@ func (s *swarm) startNeighborhood() error {
 	return nil
 }
 
-// peersLoop executes routine to connect new peers one at a time.
+// peersLoop executes one routine at a time to connect new peers.
 func (s *swarm) peersLoop() {
 loop:
 	for {
