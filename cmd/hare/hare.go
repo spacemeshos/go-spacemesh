@@ -50,6 +50,10 @@ func init() {
 type mockBlockProvider struct {
 }
 
+func (mbp *mockBlockProvider) HandleValidatedLayer(validatedLayer types.LayerID, layer []types.BlockID) {
+	panic("implement me")
+}
+
 func (mbp *mockBlockProvider) LayerBlockIds(layerId types.LayerID) ([]types.BlockID, error) {
 	return buildSet(), nil
 }

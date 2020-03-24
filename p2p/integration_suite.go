@@ -133,7 +133,7 @@ lop:
 			its.T().Fatal("timeout")
 		}
 	}
-	testLog("Took %s for all swarms to boot up", time.Now().Sub(tm))
+	testLog("Took %s for all swarms to boot up", time.Since(tm))
 
 	// go interfaces suck with slices
 	its.Instances = swarm
@@ -200,7 +200,7 @@ func (its *IntegrationTestSuite) ForAllAsync(ctx context.Context, f func(idx int
 	var mtx sync.Mutex
 	errs := make([]error, len(its.Instances))
 
-	group, ctx := errgroup.WithContext(ctx)
+	group, _ := errgroup.WithContext(ctx)
 	for i, s := range its.Instances {
 		i, s := i, s
 		group.Go(func() error {

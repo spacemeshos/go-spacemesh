@@ -11,15 +11,16 @@ import (
 type eventsCollector struct {
 	url  string
 	stop chan struct{}
-	db   Db
+	db   DB
 }
 
-// NewCollector created a new instance of the collector listening on url for events and writing them to the provided Db
-func NewCollector(db Db, url string) *eventsCollector {
+// NewCollector created a new instance of the collector listening on url for events and writing them to the provided DB
+func NewCollector(db DB, url string) *eventsCollector {
 	return &eventsCollector{url, make(chan struct{}), db}
 }
 
-type Db interface {
+// DB defines which events should be stores by any db that the collector uses
+type DB interface {
 	StoreBlock(event *events.NewBlock) error
 	StoreBlockValid(event *events.ValidBlock) error
 	StoreTx(event *events.NewTx) error

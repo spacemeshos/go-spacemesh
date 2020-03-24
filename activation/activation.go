@@ -12,106 +12,109 @@ import (
 	"sync/atomic"
 )
 
+// AtxProtocol is the protocol id for broadcasting atxs over gossip
 const AtxProtocol = "AtxGossip"
 
 var activesetCache = NewActivesetCache(1000)
 
-type MeshProvider interface {
+type meshProvider interface {
 	GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error)
 	LatestLayer() types.LayerID
 }
 
-type EpochProvider interface {
-	Epoch(l types.LayerID) types.EpochId
-}
-
-type Broadcaster interface {
+type broadcaster interface {
 	Broadcast(channel string, data []byte) error
 }
 
-type PoETNumberOfTickProvider struct {
+type poetNumberOfTickProvider struct {
 }
 
-func (provider *PoETNumberOfTickProvider) NumOfTicks() uint64 {
+func (provider *poetNumberOfTickProvider) NumOfTicks() uint64 {
 	return 0
 }
 
-type NipstBuilder interface {
+type nipstBuilder interface {
 	BuildNIPST(challenge *types.Hash32, timeout chan struct{}, stop chan struct{}) (*types.NIPST, error)
 }
 
-type IdStore interface {
+type idStore interface {
 	StoreNodeIdentity(id types.NodeId) error
 	GetIdentity(id string) (types.NodeId, error)
 }
 
-type NipstValidator interface {
+type nipstValidator interface {
 	Validate(id signing.PublicKey, nipst *types.NIPST, expectedChallenge types.Hash32) error
 	VerifyPost(id signing.PublicKey, proof *types.PostProof, space uint64) error
 }
 
-type ATXDBProvider interface {
+type atxDBProvider interface {
 	GetAtxHeader(id types.AtxId) (*types.ActivationTxHeader, error)
 	CalcActiveSetFromView(view []types.BlockID, pubEpoch types.EpochId) (uint32, error)
-	GetNodeLastAtxId(nodeId types.NodeId) (types.AtxId, error)
-	GetPosAtxId() (types.AtxId, error)
+	GetNodeLastAtxID(nodeID types.NodeId) (types.AtxId, error)
+	GetPosAtxID() (types.AtxId, error)
 	AwaitAtx(id types.AtxId) chan struct{}
 	UnsubscribeAtx(id types.AtxId)
 }
 
-type BytesStore interface {
+type bytesStore interface {
 	Put(key []byte, buf []byte) error
 	Get(key []byte) ([]byte, error)
 }
 
-type Signer interface {
+type signer interface {
 	Sign(m []byte) []byte
 }
 
 const (
+	// InitIdle status means that an init file does not exist and is not prepared
 	InitIdle = 1 + iota
+	// InitInProgress status means that an init file preparation is now in progress
 	InitInProgress
+	// InitDone status indicates there is a prepared init file
 	InitDone
 )
 
+// Builder struct is the struct that orchestrates the creation of activation transactions
+// it is responsible for initializing post, receiving poet proof and orchestrating nipst. after which it will
+// calculate active set size and providing relevant view as proof
 type Builder struct {
-	Signer
-	nodeId          types.NodeId
+	signer
+	nodeID          types.NodeId
 	coinbaseAccount types.Address
-	db              ATXDBProvider
-	net             Broadcaster
-	mesh            MeshProvider
+	db              atxDBProvider
+	net             broadcaster
+	mesh            meshProvider
 	layersPerEpoch  uint16
-	tickProvider    PoETNumberOfTickProvider
-	nipstBuilder    NipstBuilder
+	tickProvider    poetNumberOfTickProvider
+	nipstBuilder    nipstBuilder
 	postProver      PostProverClient
 	challenge       *types.NIPSTChallenge
 	commitment      *types.PostProof
-	layerClock      LayerClock
+	layerClock      layerClock
 	stop            chan struct{}
 	started         uint32
-	store           BytesStore
-	syncer          Syncer
+	store           bytesStore
+	syncer          syncer
 	accountLock     sync.RWMutex
 	initStatus      int32
 	initDone        chan struct{}
 	log             log.Log
 }
 
-type LayerClock interface {
-	AwaitLayer(layerId types.LayerID) chan struct{}
+type layerClock interface {
+	AwaitLayer(layerID types.LayerID) chan struct{}
 	GetCurrentLayer() types.LayerID
 }
 
-type Syncer interface {
+type syncer interface {
 	Await() chan struct{}
 }
 
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
-func NewBuilder(nodeId types.NodeId, coinbaseAccount types.Address, signer Signer, db ATXDBProvider, net Broadcaster, mesh MeshProvider, layersPerEpoch uint16, nipstBuilder NipstBuilder, postProver PostProverClient, layerClock LayerClock, syncer Syncer, store BytesStore, log log.Log) *Builder {
+func NewBuilder(nodeID types.NodeId, coinbaseAccount types.Address, signer signer, db atxDBProvider, net broadcaster, mesh meshProvider, layersPerEpoch uint16, nipstBuilder nipstBuilder, postProver PostProverClient, layerClock layerClock, syncer syncer, store bytesStore, log log.Log) *Builder {
 	return &Builder{
-		Signer:          signer,
-		nodeId:          nodeId,
+		signer:          signer,
+		nodeID:          nodeID,
 		coinbaseAccount: coinbaseAccount,
 		db:              db,
 		net:             net,
@@ -143,10 +146,13 @@ func (b *Builder) Stop() {
 	close(b.stop)
 }
 
+// SignAtx signs the atx and assigns the signature into atx.Sig
+// this function returns an error if atx could not be converted to bytes
 func (b Builder) SignAtx(atx *types.ActivationTx) error {
 	return SignAtx(b, atx)
 }
 
+// StopRequestedError is a specific type of error the indicated a user has stopped mining
 type StopRequestedError struct{}
 
 func (s StopRequestedError) Error() string { return "stop requested" }
@@ -192,7 +198,7 @@ func (b *Builder) loop() {
 
 func (b *Builder) buildNipstChallenge() error {
 	<-b.syncer.Await()
-	challenge := &types.NIPSTChallenge{NodeId: b.nodeId}
+	challenge := &types.NIPSTChallenge{NodeId: b.nodeID}
 	if posAtx, err := b.GetPositioningAtx(); err != nil {
 		if !b.currentEpoch().IsGenesis() {
 			return fmt.Errorf("failed to get positioning ATX: %v", err)
@@ -204,7 +210,7 @@ func (b *Builder) buildNipstChallenge() error {
 		challenge.StartTick = posAtx.EndTick
 		challenge.EndTick = posAtx.EndTick + b.tickProvider.NumOfTicks()
 	}
-	if prevAtx, err := b.GetPrevAtx(b.nodeId); err != nil {
+	if prevAtx, err := b.GetPrevAtx(b.nodeID); err != nil {
 		challenge.CommitmentMerkleRoot = b.commitment.MerkleRoot
 	} else {
 		challenge.PrevATXId = prevAtx.Id()
@@ -217,6 +223,8 @@ func (b *Builder) buildNipstChallenge() error {
 	return nil
 }
 
+// StartPost initiates post commitment generation process. It returns an error if a process is already in progress or
+// if a post has been already initialized
 func (b *Builder) StartPost(rewardAddress types.Address, dataDir string, space uint64) error {
 	if !atomic.CompareAndSwapInt32(&b.initStatus, InitIdle, InitInProgress) {
 		switch atomic.LoadInt32(&b.initStatus) {
@@ -301,6 +309,8 @@ func (b *Builder) MiningStats() (int, uint64, string, string) {
 	return int(initStatus), remainingBytes, acc.String(), datadir
 }
 
+// SetCoinbaseAccount sets the address rewardAddress to be the coinbase account written into the activation transaction
+// the rewards for blocks made by this miner will go to this address
 func (b *Builder) SetCoinbaseAccount(rewardAddress types.Address) {
 	b.accountLock.Lock()
 	b.coinbaseAccount = rewardAddress
@@ -443,14 +453,14 @@ func (b *Builder) PublishActivationTx() error {
 		log.LayerId(uint64(atx.PubLayerIdx)),
 		log.EpochId(uint64(atx.PubLayerIdx.GetEpoch(b.layersPerEpoch))),
 		log.Uint32("active_set", atx.ActiveSetSize),
-		log.String("miner", b.nodeId.ShortString()),
+		log.String("miner", b.nodeID.ShortString()),
 		log.Int("view", len(atx.View)),
 		log.Uint64("sequence_number", atx.Sequence),
 		log.String("NIPSTChallenge", hash.String()),
 		log.String("commitment", commitStr),
 		log.Int("atx_size", size),
 	)
-	events.Publish(events.AtxCreated{Created: true, Id: atx.ShortString(), Layer: uint64(b.currentEpoch())})
+	events.Publish(events.AtxCreated{Created: true, ID: atx.ShortString(), Layer: uint64(b.currentEpoch())})
 
 	select {
 	case <-atxReceived:
@@ -501,7 +511,7 @@ func (b *Builder) signAndBroadcast(atx *types.ActivationTx) (int, error) {
 
 // GetPositioningAtx return the latest atx to be used as a positioning atx
 func (b *Builder) GetPositioningAtx() (*types.ActivationTxHeader, error) {
-	if id, err := b.db.GetPosAtxId(); err != nil {
+	if id, err := b.db.GetPosAtxID(); err != nil {
 		return nil, fmt.Errorf("cannot find pos atx: %v", err)
 	} else if atx, err := b.db.GetAtxHeader(id); err != nil {
 		return nil, fmt.Errorf("inconsistent state: failed to get atx header: %v", err)
@@ -510,8 +520,10 @@ func (b *Builder) GetPositioningAtx() (*types.ActivationTxHeader, error) {
 	}
 }
 
+// GetPrevAtx gets the last atx header of specified node Id, it returns error if no previous atx found or if no
+// AtxHeader struct in db
 func (b *Builder) GetPrevAtx(node types.NodeId) (*types.ActivationTxHeader, error) {
-	if id, err := b.db.GetNodeLastAtxId(node); err != nil {
+	if id, err := b.db.GetNodeLastAtxID(node); err != nil {
 		return nil, fmt.Errorf("no prev atx found: %v", err)
 	} else if atx, err := b.db.GetAtxHeader(id); err != nil {
 		return nil, fmt.Errorf("inconsistent state: failed to get atx header: %v", err)
@@ -532,7 +544,7 @@ func (b *Builder) discardChallengeIfStale() bool {
 	return false
 }
 
-// ExtractPublicKey extracts public key from message and verifies public key exists in IdStore, this is how we validate
+// ExtractPublicKey extracts public key from message and verifies public key exists in idStore, this is how we validate
 // ATX signature. If this is the first ATX it is considered valid anyways and ATX syntactic validation will determine ATX validity
 func ExtractPublicKey(signedAtx *types.ActivationTx) (*signing.PublicKey, error) {
 	bts, err := signedAtx.AtxBytes()
@@ -549,7 +561,9 @@ func ExtractPublicKey(signedAtx *types.ActivationTx) (*signing.PublicKey, error)
 	return pub, nil
 }
 
-func SignAtx(signer Signer, atx *types.ActivationTx) error {
+// SignAtx signs the atx atx with specified signer and assigns the signature into atx.Sig
+// this function returns an error if atx could not be converted to bytes
+func SignAtx(signer signer, atx *types.ActivationTx) error {
 	bts, err := atx.AtxBytes()
 	if err != nil {
 		return err

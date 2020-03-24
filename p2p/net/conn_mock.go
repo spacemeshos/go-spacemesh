@@ -9,17 +9,10 @@ import (
 	"time"
 )
 
-var defaultAddr net.Addr = &net.TCPAddr{
-	IP:   IPv4LoopbackAddress,
-	Port: 7513,
-	Zone: "",
-}
-
 type ConnectionMock struct {
 	id        string
 	remotePub p2pcrypto.PublicKey
 	session   NetworkSession
-	source    ConnectionSource
 
 	created time.Time
 
@@ -98,7 +91,7 @@ func (cm ConnectionMock) Closed() bool {
 }
 
 func (cm *ConnectionMock) Close() error {
-	if cm.closed == true {
+	if cm.closed {
 		return errors.New("already closed")
 	}
 	cm.closed = true

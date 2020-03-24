@@ -1,13 +1,11 @@
 package discovery
 
 import (
-	"fmt"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/stretchr/testify/require"
-	"net"
 	"testing"
 )
 
@@ -19,20 +17,6 @@ func generateDiscNode() *node.NodeInfo {
 
 func generateDiscNodes(n int) []*node.NodeInfo {
 	return node.GenerateRandomNodesData(n)
-}
-
-func generateDiscNodesFakeIPs(n int) []*node.NodeInfo {
-	discs := make([]*node.NodeInfo, n)
-	//notdiscs := node.GenerateRandomNodesData(n)
-	for i := 0; i < n; i++ {
-		s := fmt.Sprintf("%d.%d.173.147:7513", i/128+60, i%128+60)
-		ip, _, _ := net.SplitHostPort(s)
-		pip := net.ParseIP(ip)
-		port := uint16(7513)
-		nd := node.NewNode(p2pcrypto.NewRandomPubkey(), pip, port, port)
-		discs[i] = nd
-	}
-	return discs
 }
 
 func GetTestLogger(name string) log.Log {
@@ -170,7 +154,7 @@ func TestFindNodeProtocol_FindNode_Concurrency(t *testing.T) {
 	n1.d.AddressCacheResult = gen
 	n1.dscv.table = n1.d
 
-	retchans := make(chan struct{})
+	retchans := make(chan []*node.NodeInfo)
 
 	for i := 0; i < concurrency; i++ {
 		go func() {
@@ -181,15 +165,16 @@ func TestFindNodeProtocol_FindNode_Concurrency(t *testing.T) {
 			nx.dscv.table = nx.d
 			res, err := nx.dscv.GetAddresses(n1.svc.PublicKey())
 			if err != nil {
-				t.Fatal("failed")
+				t.Log(err)
+				retchans <- nil
 			}
-			require.Equal(t, res, gen)
-			retchans <- struct{}{}
+			retchans <- res
 		}()
 	}
 
 	for i := 0; i < concurrency; i++ {
-		<-retchans // todo: this might deadlock if not working
+		res := <-retchans // todo: this might deadlock if not working
+		require.Equal(t, gen, res)
 	}
 }
 

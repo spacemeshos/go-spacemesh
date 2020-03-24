@@ -23,6 +23,13 @@ const DefaultQueueCount uint = 6
 // DefaultMessageQueueSize is the buffer size of each queue mentioned above. (queues are buffered channels)
 const DefaultMessageQueueSize uint = 5120
 
+const (
+	ReadBufferSize     = 5 * 1024 * 1024
+	WriteBufferSize    = 5 * 1024 * 1024
+	TCPKeepAlive       = true
+	TCPKeepAlivePeriod = 10 * time.Second
+)
+
 // IncomingMessageEvent is the event reported on new incoming message, it contains the message and the Connection carrying the message
 type IncomingMessageEvent struct {
 	Conn    Connection
@@ -87,7 +94,7 @@ func NewNet(conf config.Config, localEntity node.LocalNode, logger log.Log) (*Ne
 		regNewRemoteConn:      make([]func(NewConnectionEvent), 0, 3),
 		closingConnections:    make([]func(cwe ConnectionWithErr), 0, 3),
 		queuesCount:           qcount,
-		incomingMessagesQueue: make([]chan IncomingMessageEvent, qcount, qcount),
+		incomingMessagesQueue: make([]chan IncomingMessageEvent, qcount),
 		config:                conf,
 	}
 
@@ -165,27 +172,33 @@ func (n *Net) publishClosingConnection(connection ConnectionWithErr) {
 	n.clsMutex.RUnlock()
 }
 
-func dial(ctx context.Context, address net.Addr) (net.Conn, error) {
+func (n *Net) dial(ctx context.Context, address net.Addr) (net.Conn, error) {
 	// connect via dialer so we can set tcp network params
 	dialer := &net.Dialer{}
 	netConn, err := dialer.DialContext(ctx, "tcp", address.String())
 	if err == nil {
 		tcpconn := netConn.(*net.TCPConn)
-		tcpSocketConfig(tcpconn)
+		n.tcpSocketConfig(tcpconn)
 		return tcpconn, nil
-		//netConn = tcpconn
 	}
 	return netConn, err
 }
 
-func tcpSocketConfig(tcpconn *net.TCPConn) {
-	// TODO: Error handling, what if only certain flags are supported
+func (n *Net) tcpSocketConfig(tcpconn *net.TCPConn) {
 	// TODO: Parameters, try to find right buffers based on something or os/net-interface input?
-	tcpconn.SetReadBuffer(5 * 1024 * 1024)
-	tcpconn.SetWriteBuffer(5 * 1024 * 1024)
+	if err := tcpconn.SetReadBuffer(ReadBufferSize); err != nil {
+		n.logger.Warning("Error trying to set ReadBuffer on TCPConn %v", err)
+	}
+	if err := tcpconn.SetWriteBuffer(WriteBufferSize); err != nil {
+		n.logger.Warning("Error trying to set WriteBuffer on TCPConn %v", err)
+	}
 
-	tcpconn.SetKeepAlive(true)
-	tcpconn.SetKeepAlivePeriod(time.Second * 10)
+	if err := tcpconn.SetKeepAlive(TCPKeepAlive); err != nil {
+		n.logger.Warning("Error trying to set KeepAlive on TCPConn %v", err)
+	}
+	if err := tcpconn.SetKeepAlivePeriod(TCPKeepAlivePeriod); err != nil {
+		n.logger.Warning("Error trying to set KeepAlivePeriod on TCPConn %v", err)
+	}
 }
 
 func (n *Net) createConnection(address net.Addr, remotePub p2pcrypto.PublicKey, session NetworkSession,
@@ -196,7 +209,7 @@ func (n *Net) createConnection(address net.Addr, remotePub p2pcrypto.PublicKey, 
 	}
 
 	n.logger.Debug("Dialing %v @ %v...", remotePub.String(), address.String())
-	netConn, err := dial(ctx, address)
+	netConn, err := n.dial(ctx, address)
 	if err != nil {
 		return nil, err
 	}
@@ -283,7 +296,7 @@ func (n *Net) accept(listen net.Listener) {
 
 		n.logger.Debug("Got new connection... Remote Address: %s", netConn.RemoteAddr())
 		conn := netConn.(*net.TCPConn)
-		tcpSocketConfig(conn) // TODO maybe only set this after session handshake to prevent denial of service with big messages
+		n.tcpSocketConfig(conn) // TODO maybe only set this after session handshake to prevent denial of service with big messages
 		c := newConnection(netConn, n, nil, nil, n.config.MsgSizeLimit, n.config.ResponseTimeout, n.logger)
 		go func(con Connection) {
 			defer func() { pending <- struct{}{} }()

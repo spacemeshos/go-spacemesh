@@ -22,7 +22,7 @@ type HareWrapper struct {
 	lCh         []chan types.LayerID
 	hare        []*Hare
 	initialSets []*Set // all initial sets
-	outputs     map[instanceId][]*Set
+	outputs     map[instanceID][]*Set
 	name        string
 }
 
@@ -31,7 +31,7 @@ func newHareWrapper(totalCp int) *HareWrapper {
 	hs.lCh = make([]chan types.LayerID, 0)
 	hs.totalCP = totalCp
 	hs.termination = NewCloser()
-	hs.outputs = make(map[instanceId][]*Set, 0)
+	hs.outputs = make(map[instanceID][]*Set, 0)
 
 	return hs
 }
@@ -71,7 +71,7 @@ func (his *HareWrapper) waitForTermination() {
 			for _, b := range blks {
 				s.Add(b)
 			}
-			his.outputs[instanceId(i)] = append(his.outputs[instanceId(i)], s)
+			his.outputs[instanceID(i)] = append(his.outputs[instanceID(i)], s)
 		}
 	}
 
@@ -87,13 +87,13 @@ func (his *HareWrapper) WaitForTimedTermination(t *testing.T, timeout time.Durat
 		return
 	case <-his.termination.CloseChannel():
 		for i := 1; i <= his.totalCP; i++ {
-			his.checkResult(t, instanceId(i))
+			his.checkResult(t, instanceID(i))
 		}
 		return
 	}
 }
 
-func (his *HareWrapper) checkResult(t *testing.T, id instanceId) {
+func (his *HareWrapper) checkResult(t *testing.T, id instanceID) {
 	// check consistency
 	out := his.outputs[id]
 	for i := 0; i < len(out)-1; i++ {
@@ -105,7 +105,7 @@ func (his *HareWrapper) checkResult(t *testing.T, id instanceId) {
 
 type p2pManipulator struct {
 	nd           *service.Node
-	stalledLayer instanceId
+	stalledLayer instanceID
 	err          error
 }
 
@@ -125,7 +125,7 @@ func (m *p2pManipulator) RegisterGossipProtocol(protocol string, prio priorityq.
 
 func (m *p2pManipulator) Broadcast(protocol string, payload []byte) error {
 	msg, e := MessageFromBuffer(payload)
-	if msg.InnerMsg.InstanceId == m.stalledLayer && msg.InnerMsg.K < 8 && msg.InnerMsg.K != -1 {
+	if msg.InnerMsg.InstanceID == m.stalledLayer && msg.InnerMsg.K < 8 && msg.InnerMsg.K != -1 {
 		log.Warning("Not broadcasting in manipulator")
 		return m.err
 	}
@@ -152,7 +152,7 @@ func (trueOracle) Proof(layer types.LayerID, round int32) ([]byte, error) {
 	return x, nil
 }
 
-func (trueOracle) IsIdentityActiveOnConsensusView(edId string, layer types.LayerID) (bool, error) {
+func (trueOracle) IsIdentityActiveOnConsensusView(edID string, layer types.LayerID) (bool, error) {
 	return true, nil
 }
 
@@ -193,7 +193,7 @@ type mockIdentityP struct {
 	nid types.NodeId
 }
 
-func (m *mockIdentityP) GetIdentity(edId string) (types.NodeId, error) {
+func (m *mockIdentityP) GetIdentity(edID string) (types.NodeId, error) {
 	return m.nid, nil
 }
 
@@ -201,12 +201,12 @@ func buildSet() []types.BlockID {
 	rng := rand.New(rand.NewSource(0))
 	s := make([]types.BlockID, 200, 200)
 	for i := uint64(0); i < 200; i++ {
-		s = append(s, newRandBlockId(rng))
+		s = append(s, newRandBlockID(rng))
 	}
 	return s
 }
 
-func newRandBlockId(rng *rand.Rand) (id types.BlockID) {
+func newRandBlockID(rng *rand.Rand) (id types.BlockID) {
 	_, err := rng.Read(id[:])
 	if err != nil {
 		panic(err)
@@ -215,6 +215,9 @@ func newRandBlockId(rng *rand.Rand) (id types.BlockID) {
 }
 
 type mockBlockProvider struct {
+}
+
+func (mbp *mockBlockProvider) HandleValidatedLayer(validatedLayer types.LayerID, layer []types.BlockID) {
 }
 
 func (mbp *mockBlockProvider) LayerBlockIds(layerId types.LayerID) ([]types.BlockID, error) {

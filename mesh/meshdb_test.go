@@ -407,7 +407,7 @@ func TestMeshDB_UnappliedTxs(t *testing.T) {
 
 	mdb.removeFromUnappliedTxs([]*types.Transaction{
 		newTx(r, signer2, 0, 100),
-	}, nil, 1)
+	}, 1)
 
 	txns1 = getTxns(r, mdb, origin1)
 	r.Len(txns1, 2)

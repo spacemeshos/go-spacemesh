@@ -374,9 +374,8 @@ func TestSwarm_MultipleMessagesFromMultipleSenders(t *testing.T) {
 	exchan1 := p1.RegisterDirectProtocol(exampleProtocol)
 	assert.Equal(t, exchan1, p1.directProtocolHandlers[exampleProtocol])
 
-	pend := make(map[string]chan struct{})
+	pend := make(map[string]chan error)
 	var mu sync.Mutex
-	var wg sync.WaitGroup
 
 	go func() {
 		for {
@@ -385,34 +384,35 @@ func TestSwarm_MultipleMessagesFromMultipleSenders(t *testing.T) {
 			mu.Lock()
 			c, ok := pend[sender]
 			if !ok {
-				t.FailNow()
+				c <- errors.New("not found")
+				delete(pend, sender)
+				mu.Unlock()
+				return
 			}
 			close(c)
 			delete(pend, sender)
 			mu.Unlock()
-			wg.Done()
 		}
 	}()
 
 	sa := &swarmArray{}
 	for i := 0; i < Senders; i++ {
-		wg.Add(1)
-		go func() {
-			p := p2pTestNoStart(t, cfg)
-			require.NoError(t, p.Start())
-			sa.add(p)
-			p.cPool.GetConnection(p1.network.LocalAddr(), p1.lNode.PublicKey())
-			mychan := make(chan struct{})
-			mu.Lock()
-			pend[p.lNode.PublicKey().String()] = mychan
-			mu.Unlock()
-
-			payload := []byte(RandString(10))
-			err := p.SendMessage(p1.lNode.PublicKey(), exampleProtocol, payload)
-			require.NoError(t, err)
-		}()
+		p := p2pTestNoStart(t, cfg)
+		require.NoError(t, p.Start())
+		sa.add(p)
+		_, err := p.cPool.GetConnection(p1.network.LocalAddr(), p1.lNode.PublicKey())
+		require.NoError(t, err)
+		mychan := make(chan error)
+		pend[p.lNode.PublicKey().String()] = mychan
+		payload := []byte(RandString(10))
+		err = p.SendMessage(p1.lNode.PublicKey(), exampleProtocol, payload)
+		require.NoError(t, err)
 	}
-	wg.Wait()
+
+	for _, c := range pend {
+		res := <-c
+		require.NoError(t, res)
+	}
 	p1.Shutdown()
 	sa.clean()
 }
@@ -426,9 +426,8 @@ func TestSwarm_MultipleMessagesFromMultipleSendersToMultipleProtocols(t *testing
 	cfg.SwarmConfig.Gossip = false
 	cfg.SwarmConfig.Bootstrap = false
 
-	pend := make(map[string]chan struct{})
+	pend := make(map[string]chan error)
 	var mu sync.Mutex
-	var wg sync.WaitGroup
 
 	p1 := p2pTestNoStart(t, cfg)
 
@@ -446,12 +445,14 @@ func TestSwarm_MultipleMessagesFromMultipleSendersToMultipleProtocols(t *testing
 				mu.Lock()
 				c, ok := pend[sender]
 				if !ok {
-					t.FailNow()
+					c <- errors.New("not foudn")
+					close(c)
+					delete(pend, sender)
+					mu.Unlock()
 				}
 				close(c)
 				delete(pend, sender)
 				mu.Unlock()
-				wg.Done()
 			}
 		}()
 
@@ -461,29 +462,30 @@ func TestSwarm_MultipleMessagesFromMultipleSendersToMultipleProtocols(t *testing
 
 	sa := &swarmArray{}
 	for i := 0; i < Senders; i++ {
-		wg.Add(1)
-		go func() {
-			p := p2pTestNoStart(t, cfg)
-			require.NoError(t, p.Start())
-			sa.add(p)
-			mychan := make(chan struct{})
-			mu.Lock()
-			pend[p.lNode.PublicKey().String()] = mychan
-			mu.Unlock()
+		p := p2pTestNoStart(t, cfg)
+		require.NoError(t, p.Start())
+		sa.add(p)
+		mychan := make(chan error)
+		mu.Lock()
+		pend[p.lNode.PublicKey().String()] = mychan
+		mu.Unlock()
 
-			randProto := rand.Int31n(Protos)
-			if randProto == Protos {
-				randProto--
-			}
+		randProto := rand.Int31n(Protos)
+		if randProto == Protos {
+			randProto--
+		}
 
-			payload := []byte(RandString(10))
-			_, err := p.cPool.GetConnection(p1.network.LocalAddr(), p1.lNode.PublicKey())
-			require.NoError(t, err)
-			err = p.SendMessage(p1.lNode.PublicKey(), protos[randProto], payload)
-			require.NoError(t, err)
-		}()
+		payload := []byte(RandString(10))
+		_, err := p.cPool.GetConnection(p1.network.LocalAddr(), p1.lNode.PublicKey())
+		require.NoError(t, err)
+		err = p.SendMessage(p1.lNode.PublicKey(), protos[randProto], payload)
+		require.NoError(t, err)
 	}
-	wg.Wait()
+
+	for _, c := range pend {
+		res := <-c
+		require.NoError(t, res)
+	}
 	p1.Shutdown()
 	sa.clean()
 }
@@ -516,7 +518,7 @@ func TestSwarm_onRemoteClientMessage(t *testing.T) {
 	nmock.SetRemotePublicKey(id.PublicKey())
 
 	// Test bad format
-	imc := net.IncomingMessageEvent{nmock, nil}
+	imc := net.IncomingMessageEvent{Conn: nmock}
 	err = p.onRemoteClientMessage(imc)
 	assert.Equal(t, err, ErrBadFormat1)
 
@@ -818,7 +820,7 @@ func Test_Swarm_getMorePeers6(t *testing.T) {
 
 	//test inc peer
 	nd := node.GenerateRandomNodeData()
-	n.addIncomingPeer(nd.PublicKey())
+	require.NoError(t, n.addIncomingPeer(nd.PublicKey()))
 
 	assert.True(t, n.hasIncomingPeer(nd.PublicKey()))
 	assertNewPeerEvents(t, 1, conn)
@@ -925,7 +927,7 @@ func TestNeighborhood_Disconnect(t *testing.T) {
 	n := p2pTestNoStart(t, configWithPort(0))
 	_, disc := n.SubscribePeerEvents()
 	rnd := node.GenerateRandomNodeData()
-	n.addIncomingPeer(rnd.PublicKey())
+	require.NoError(t, n.addIncomingPeer(rnd.PublicKey()))
 
 	assert.True(t, n.hasIncomingPeer(rnd.PublicKey()))
 	n.Disconnect(rnd.PublicKey())
@@ -957,7 +959,7 @@ func TestSwarm_AddIncomingPeer(t *testing.T) {
 	cfg := configWithPort(0)
 	p := p2pTestInstance(t, cfg)
 	rnd := node.GenerateRandomNodeData()
-	p.addIncomingPeer(rnd.PublicKey())
+	require.NoError(t, p.addIncomingPeer(rnd.PublicKey()))
 
 	p.inpeersMutex.RLock()
 	_, ok := p.inpeers[rnd.PublicKey()]
@@ -966,9 +968,13 @@ func TestSwarm_AddIncomingPeer(t *testing.T) {
 	assert.True(t, ok)
 
 	nds := node.GenerateRandomNodesData(cfg.MaxInboundPeers)
-	for i := 0; i < len(nds); i++ {
-		p.addIncomingPeer(nds[i].PublicKey())
+	for i := 0; i < len(nds)-1; i++ {
+		err := p.addIncomingPeer(nds[i].PublicKey())
+		require.NoError(t, err)
 	}
+
+	err := p.addIncomingPeer(node.GenerateRandomNodeData().PublicKey())
+	require.Error(t, err)
 
 	require.Equal(t, len(p.inpeers), cfg.MaxInboundPeers)
 	p.inpeersMutex.RLock()
@@ -992,7 +998,7 @@ func TestSwarm_AskPeersSerial(t *testing.T) {
 
 	p.discover = dsc
 
-	p.startNeighborhood()
+	require.NoError(t, p.startNeighborhood())
 
 	p.morePeersReq <- struct{}{}
 	p.morePeersReq <- struct{}{}
@@ -1067,8 +1073,8 @@ func TestNeighborhood_ReportConnectionResult(t *testing.T) {
 
 	realnode := p2pTestNoStart(t, configWithPort(0))
 	realnode2 := p2pTestNoStart(t, configWithPort(0))
-	realnodeinfo := &node.NodeInfo{realnode.lNode.PublicKey().Array(), inet.IPv4zero, 0, 0}
-	realnode2info := &node.NodeInfo{realnode2.lNode.PublicKey().Array(), inet.IPv4zero, 0, 0}
+	realnodeinfo := &node.NodeInfo{ID: realnode.lNode.PublicKey().Array(), IP: inet.IPv4zero}
+	realnode2info := &node.NodeInfo{ID: realnode2.lNode.PublicKey().Array(), IP: inet.IPv4zero}
 
 	goodlist[realnode.lNode.PublicKey()] = struct{}{}
 	goodlist[realnode2.lNode.PublicKey()] = struct{}{}

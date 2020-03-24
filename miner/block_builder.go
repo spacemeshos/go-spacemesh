@@ -20,48 +20,53 @@ import (
 	"time"
 )
 
+// MaxTransactionsPerBlock indicates the maximum transactions a block can reference
 const MaxTransactionsPerBlock = 200 //todo: move to config
-const MaxAtxPerBlock = 200          //todo: move to config
 
-const DefaultGasLimit = 10
-const DefaultFee = 1
+const defaultGasLimit = 10
+const defaultFee = 1
 
+// IncomingTxProtocol is the protocol identifier for tx received by gossip that is used by the p2p
 const IncomingTxProtocol = "TxGossip"
 
+// AtxsPerBlockLimit indicates the maximum number of atxs a block can reference
 const AtxsPerBlockLimit = 100
 
-type Signer interface {
+type signer interface {
 	Sign(m []byte) []byte
 }
 
-type TxValidator interface {
+type txValidator interface {
 	AddressExists(addr types.Address) bool
 	ValidateNonceAndBalance(transaction *types.Transaction) error
 }
 
-type AtxValidator interface {
+type atxValidator interface {
 	SyntacticallyValidateAtx(atx *types.ActivationTx) error
 }
 
-type Syncer interface {
+type syncer interface {
 	FetchPoetProof(poetProofRef []byte) error
 	ListenToGossip() bool
 	IsSynced() bool
 }
 
-type TxPool interface {
+type txPool interface {
 	GetTxsForBlock(numOfTxs int, getState func(addr types.Address) (nonce, balance uint64, err error)) ([]types.TransactionId, error)
 	Put(id types.TransactionId, item *types.Transaction)
 	Invalidate(id types.TransactionId)
 }
 
-type Projector interface {
+type projector interface {
 	GetProjection(addr types.Address) (nonce, balance uint64, err error)
 }
 
+// BlockBuilder is the struct that orchestrates the building of blocks, it is responsible for receiving hare results.
+// referencing txs and atxs from mem pool and referencing them in the created block
+// it is also responsible for listening to the clock and querying when a block should be created according to the block oracle
 type BlockBuilder struct {
 	log.Log
-	Signer
+	signer
 	minerID          types.NodeId
 	rnd              *rand.Rand
 	hdist            types.LayerID
@@ -69,32 +74,33 @@ type BlockBuilder struct {
 	stopChan         chan struct{}
 	txGossipChannel  chan service.GossipMessage
 	atxGossipChannel chan service.GossipMessage
-	hareResult       HareResultProvider
+	hareResult       hareResultProvider
 	AtxPool          *AtxMemPool
-	TransactionPool  TxPool
+	TransactionPool  txPool
 	mu               sync.Mutex
 	network          p2p.Service
-	weakCoinToss     WeakCoinProvider
+	weakCoinToss     weakCoinProvider
 	meshProvider     meshProvider
 	blockOracle      oracle.BlockOracle
-	txValidator      TxValidator
-	atxValidator     AtxValidator
-	syncer           Syncer
+	txValidator      txValidator
+	atxValidator     atxValidator
+	syncer           syncer
 	started          bool
 	atxsPerBlock     int // number of atxs to select per block
-	projector        Projector
+	projector        projector
 }
 
-func NewBlockBuilder(minerID types.NodeId, sgn Signer, net p2p.Service, beginRoundEvent chan types.LayerID, hdist int,
-	txPool TxPool, atxPool *AtxMemPool, weakCoin WeakCoinProvider, orph meshProvider, hare HareResultProvider,
-	blockOracle oracle.BlockOracle, txValidator TxValidator, atxValidator AtxValidator, syncer Syncer, atxsPerBlock int,
-	projector Projector, lg log.Log) *BlockBuilder {
+// NewBlockBuilder creates a struct of block builder type.
+func NewBlockBuilder(minerID types.NodeId, sgn signer, net p2p.Service, beginRoundEvent chan types.LayerID, hdist int,
+	txPool txPool, atxPool *AtxMemPool, weakCoin weakCoinProvider, orph meshProvider, hare hareResultProvider,
+	blockOracle oracle.BlockOracle, txValidator txValidator, atxValidator atxValidator, syncer syncer, atxsPerBlock int,
+	projector projector, lg log.Log) *BlockBuilder {
 
 	seed := binary.BigEndian.Uint64(md5.New().Sum([]byte(minerID.Key)))
 
 	return &BlockBuilder{
 		minerID:          minerID,
-		Signer:           sgn,
+		signer:           sgn,
 		hdist:            types.LayerID(hdist),
 		Log:              lg,
 		rnd:              rand.New(rand.NewSource(int64(seed))),
@@ -120,6 +126,8 @@ func NewBlockBuilder(minerID types.NodeId, sgn Signer, net p2p.Service, beginRou
 
 }
 
+// Start starts the process of creating a block, it listens for txs and atxs received by gossip, and starts querying
+// block oracle when it should create a block. This function returns an error if Start was already called once
 func (t *BlockBuilder) Start() error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -134,6 +142,7 @@ func (t *BlockBuilder) Start() error {
 	return nil
 }
 
+// Close stops listeners and stops trying to create block in layers
 func (t *BlockBuilder) Close() error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -145,11 +154,11 @@ func (t *BlockBuilder) Close() error {
 	return nil
 }
 
-type HareResultProvider interface {
+type hareResultProvider interface {
 	GetResult(lid types.LayerID) ([]types.BlockID, error)
 }
 
-type WeakCoinProvider interface {
+type weakCoinProvider interface {
 	GetResult() bool
 }
 
@@ -159,8 +168,8 @@ type meshProvider interface {
 	GetBlock(id types.BlockID) (*types.Block, error)
 }
 
-//used from external API call?
-func (t *BlockBuilder) AddTransaction(tx *types.Transaction) error {
+//used from external API call to dd transaction
+func (t *BlockBuilder) addTransaction(tx *types.Transaction) error {
 	if !t.started {
 		return fmt.Errorf("BlockBuilderStopped")
 	}
@@ -272,7 +281,7 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.AtxId, eligibil
 		return nil, err
 	}
 
-	bl := &types.Block{MiniBlock: b, Signature: t.Signer.Sign(blockBytes)}
+	bl := &types.Block{MiniBlock: b, Signature: t.signer.Sign(blockBytes)}
 
 	bl.Initialize()
 
@@ -357,6 +366,8 @@ func (t *BlockBuilder) listenForTx() {
 	}
 }
 
+// ValidateAndAddTxToPool validates the provided tx nonce and balance with projector and puts it in the transaction pool
+// it returns an error if the provided tx is not valid
 func (t *BlockBuilder) ValidateAndAddTxToPool(tx *types.Transaction) error {
 	err := t.txValidator.ValidateNonceAndBalance(tx)
 	if err != nil {
@@ -432,7 +443,7 @@ func (t *BlockBuilder) handleGossipAtx(data service.GossipMessage) {
 	}
 
 	err = t.atxValidator.SyntacticallyValidateAtx(atx)
-	events.Publish(events.ValidAtx{Id: atx.ShortString(), Valid: err == nil})
+	events.Publish(events.ValidAtx{ID: atx.ShortString(), Valid: err == nil})
 	if err != nil {
 		t.Warning("received syntactically invalid ATX %v: %v", atx.ShortString(), err)
 		// TODO: blacklist peer

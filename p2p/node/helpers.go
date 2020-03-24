@@ -27,7 +27,7 @@ func GenerateTestNodeWithConfig(t *testing.T) (LocalNode, *NodeInfo) {
 		t.Error("failed to get a port to bind", err)
 	}
 
-	addr := net.TCPAddr{net.ParseIP("0.0.0.0"), port, ""}
+	addr := net.TCPAddr{IP: net.ParseIP("0.0.0.0"), Port: port}
 
 	var localNode LocalNode
 

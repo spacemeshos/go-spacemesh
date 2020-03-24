@@ -45,7 +45,7 @@ func (p *protocol) newGetAddressesRequestHandler() func(msg server.Message) []by
 	}
 }
 
-// GetAddresses Send a single find node request to a remote node
+// GetAddresses Send a single lookup node request to a remote node
 func (p *protocol) GetAddresses(server p2pcrypto.PublicKey) ([]*node.NodeInfo, error) {
 	start := time.Now()
 	var err error
@@ -86,7 +86,7 @@ func (p *protocol) GetAddresses(server p2pcrypto.PublicKey) ([]*node.NodeInfo, e
 		if nodes == nil {
 			return nil, errors.New("empty result set")
 		}
-		plogger.With().Debug("getaddress_time_to_recv", log.Int("len", len(nodes)), log.Duration("time_elapsed", time.Now().Sub(start)))
+		plogger.With().Debug("getaddress_time_to_recv", log.Int("len", len(nodes)), log.Duration("time_elapsed", time.Since(start)))
 		return nodes, nil
 	case <-timeout.C:
 		return nil, errors.New("request timed out")

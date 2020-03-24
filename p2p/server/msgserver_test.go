@@ -38,7 +38,7 @@ func TestProtocol_SendRequest(t *testing.T) {
 	err := fnd2.SendRequest(1, nil, n1.PublicKey(), callback)
 	msg := <-strCh
 
-	assert.EqualValues(t, "some value to return", string(msg), "value received did not match correct value")
+	assert.EqualValues(t, "some value to return", msg, "value received did not match correct value")
 	assert.NoError(t, err, "Should not return error")
 }
 

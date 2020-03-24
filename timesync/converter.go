@@ -5,6 +5,7 @@ import (
 	"time"
 )
 
+// LayerConv is a converter between time to layer ID struct
 type LayerConv struct {
 	duration time.Duration // the layer duration, assumed to be > 0
 	genesis  time.Time     // the genesis time

@@ -16,7 +16,7 @@ func newLayerHashRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg []by
 		layer, err := layers.GetLayer(types.LayerID(lyrid))
 		if err != nil {
 			if err == database.ErrNotFound {
-				logger.With().Warning("hashes requested for unfamiliar layer (id: %s)", log.LayerId(lyrid))
+				logger.With().Warning("hashes requested for unfamiliar layer ", log.LayerId(lyrid))
 				return nil
 			}
 			logger.With().Error("Error handling layer request message", log.LayerId(lyrid), log.Err(err))

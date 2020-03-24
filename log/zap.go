@@ -95,7 +95,7 @@ func Duration(name string, val time.Duration) Field {
 	return Field(zap.Duration(name, val))
 }
 
-// LayerId return a Uint64 field (key - "layer_id")
+// LayerID return a Uint64 field (key - "layer_id")
 func LayerId(val uint64) Field {
 	return Uint64("layer_id", val)
 }

@@ -26,7 +26,7 @@ func TestNewBlockEvent(t *testing.T) {
 	s.StartListening()
 	time.Sleep(5 * time.Second)
 
-	orig := NewBlock{Layer: 1, Id: "234"}
+	orig := NewBlock{Layer: 1, ID: "234"}
 	err = eventPublisher.PublishEvent(orig)
 	assert.NoError(t, err)
 

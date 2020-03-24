@@ -9,6 +9,7 @@ import (
 	"sync"
 )
 
+// TxMempool is a struct that holds txs received via gossip network
 type TxMempool struct {
 	txs      map[types.TransactionId]*types.Transaction
 	accounts map[types.Address]*pending_txs.AccountPendingTxs
@@ -16,6 +17,7 @@ type TxMempool struct {
 	mu       sync.RWMutex
 }
 
+// NewTxMemPool returns a new TxMempool struct
 func NewTxMemPool() *TxMempool {
 	return &TxMempool{
 		txs:      make(map[types.TransactionId]*types.Transaction),
@@ -24,6 +26,7 @@ func NewTxMemPool() *TxMempool {
 	}
 }
 
+// Get returns transaction by provided id, it returns an error if transaction is not found
 func (t *TxMempool) Get(id types.TransactionId) (*types.Transaction, error) {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
@@ -34,6 +37,7 @@ func (t *TxMempool) Get(id types.TransactionId) (*types.Transaction, error) {
 	return nil, errors.New("transaction not found in mempool")
 }
 
+// GetTxIdsByAddress returns all transactions from/to a specific address
 func (t *TxMempool) GetTxIdsByAddress(addr types.Address) []types.TransactionId {
 	var ids []types.TransactionId
 	for id := range t.txByAddr[addr] {
@@ -42,6 +46,8 @@ func (t *TxMempool) GetTxIdsByAddress(addr types.Address) []types.TransactionId 
 	return ids
 }
 
+// GetTxsForBlock gets a specific number of random txs for a block. This function also receives a state calculation function
+// to allow returning only transactions that will probably be valid
 func (t *TxMempool) GetTxsForBlock(numOfTxs int, getState func(addr types.Address) (nonce, balance uint64, err error)) ([]types.TransactionId, error) {
 	var txIds []types.TransactionId
 	t.mu.RLock()
@@ -78,6 +84,7 @@ func getRandIdxs(numOfTxs, spaceSize int) map[uint64]struct{} {
 	return idxs
 }
 
+// Put inserts a transaction into the mem pool. It indexes it by source and dest addresses as well
 func (t *TxMempool) Put(id types.TransactionId, tx *types.Transaction) {
 	t.mu.Lock()
 	t.txs[id] = tx
@@ -87,6 +94,7 @@ func (t *TxMempool) Put(id types.TransactionId, tx *types.Transaction) {
 	t.mu.Unlock()
 }
 
+// Invalidate removes transaction from pool
 func (t *TxMempool) Invalidate(id types.TransactionId) {
 	t.mu.Lock()
 	if tx, found := t.txs[id]; found {
@@ -106,6 +114,8 @@ func (t *TxMempool) Invalidate(id types.TransactionId) {
 	t.mu.Unlock()
 }
 
+// GetProjection returns the estimated nonce and balance for the provided address addr and previous nonce and balance
+// projecting state is done by applying transactions from the pool
 func (t *TxMempool) GetProjection(addr types.Address, prevNonce, prevBalance uint64) (nonce, balance uint64) {
 	t.mu.RLock()
 	account, found := t.accounts[addr]
@@ -127,19 +137,19 @@ func (t *TxMempool) getOrCreate(addr types.Address) *pending_txs.AccountPendingT
 }
 
 // ⚠️ must be called under write-lock
-func (t *TxMempool) addToAddr(addr types.Address, txId types.TransactionId) {
+func (t *TxMempool) addToAddr(addr types.Address, txID types.TransactionId) {
 	addrMap, found := t.txByAddr[addr]
 	if !found {
 		addrMap = make(map[types.TransactionId]struct{})
 		t.txByAddr[addr] = addrMap
 	}
-	addrMap[txId] = struct{}{}
+	addrMap[txID] = struct{}{}
 }
 
 // ⚠️ must be called under write-lock
-func (t *TxMempool) removeFromAddr(addr types.Address, txId types.TransactionId) {
+func (t *TxMempool) removeFromAddr(addr types.Address, txID types.TransactionId) {
 	addrMap := t.txByAddr[addr]
-	delete(addrMap, txId)
+	delete(addrMap, txID)
 	if len(addrMap) == 0 {
 		delete(t.txByAddr, addr)
 	}

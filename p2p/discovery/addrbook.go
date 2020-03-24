@@ -77,8 +77,7 @@ const (
 	getAddrPercent = 23
 )
 
-// addrBook provides a concurrency safe address manager for caching potential
-// peers on the bitcoin network.
+// addrBook provides a concurrency safe address manager for caching potential peers.
 type addrBook struct {
 	logger log.Log
 	mtx    sync.RWMutex
@@ -104,11 +103,19 @@ type addrBook struct {
 	quit chan struct{}
 }
 
-// AddOurAddress one of our addresses.
+// AddOurAddress adds one of our addresses.
 func (a *addrBook) AddLocalAddress(addr *node.NodeInfo) {
 	a.mtx.Lock()
 	a.localAddresses = append(a.localAddresses, addr)
 	a.mtx.Unlock()
+}
+
+// IsLocalAddress returns true if this address was added as a local address before.
+func (a *addrBook) IsLocalAddress(addr *node.NodeInfo) bool {
+	a.mtx.RLock()
+	ok := a.isLocalAddressUnlocked(addr)
+	a.mtx.RUnlock()
+	return ok
 }
 
 func (a *addrBook) isLocalAddressUnlocked(addr *node.NodeInfo) bool {
@@ -119,21 +126,12 @@ func (a *addrBook) isLocalAddressUnlocked(addr *node.NodeInfo) bool {
 		}
 
 		if local.ProtocolPort != 0 && local.DiscoveryPort != 0 {
-			if bytes.Equal(local.IP, addr.IP) && (local.ProtocolPort == addr.ProtocolPort && local.DiscoveryPort == addr.DiscoveryPort) {
+			if local.IP.Equal(addr.IP) && (local.ProtocolPort == addr.ProtocolPort && local.DiscoveryPort == addr.DiscoveryPort) {
 				return true
 			}
 		}
 	}
-
 	return false
-}
-
-// OurAddress returns true if it is our address.
-func (a *addrBook) IsLocalAddress(addr *node.NodeInfo) bool {
-	a.mtx.RLock()
-	ok := a.isLocalAddressUnlocked(addr)
-	a.mtx.RUnlock()
-	return ok
 }
 
 // updateAddress is a helper function to either update an address already known
@@ -152,7 +150,7 @@ func (a *addrBook) updateAddress(netAddr, srcAddr *node.NodeInfo) {
 		return
 	}
 
-	ka := a.find(netAddr.PublicKey())
+	ka := a.lookup(netAddr.PublicKey())
 	if ka != nil {
 		// TODO: only update addresses periodically.
 		// Update the last seen time and services.
@@ -280,18 +278,19 @@ func (a *addrBook) GetAddress() *KnownAddress {
 	}
 }
 
+// Lookup searches for an address using a public key. returns *NodeInfo
 func (a *addrBook) Lookup(addr p2pcrypto.PublicKey) (*node.NodeInfo, error) {
 	a.mtx.Lock()
-	d, ok := a.addrIndex[addr.Array()]
+	d := a.lookup(addr)
 	a.mtx.Unlock()
-	if !ok {
+	if d == nil {
 		// Todo: just return empty without error ?
 		return nil, ErrLookupFailed
 	}
 	return d.na, nil
 }
 
-func (a *addrBook) find(addr p2pcrypto.PublicKey) *KnownAddress {
+func (a *addrBook) lookup(addr p2pcrypto.PublicKey) *KnownAddress {
 	return a.addrIndex[addr.Array()]
 }
 
@@ -301,9 +300,9 @@ func (a *addrBook) Attempt(key p2pcrypto.PublicKey) {
 	a.mtx.Lock()
 	defer a.mtx.Unlock()
 
-	// find address.
+	// lookup address.
 	// Surely address will be in tried by now?
-	ka := a.find(key)
+	ka := a.lookup(key)
 	if ka == nil {
 		return
 	}
@@ -321,7 +320,7 @@ func (a *addrBook) Good(addr p2pcrypto.PublicKey) {
 	a.mtx.Lock()
 	defer a.mtx.Unlock()
 
-	ka := a.find(addr)
+	ka := a.lookup(addr)
 
 	if ka == nil {
 		return
@@ -336,6 +335,7 @@ func (a *addrBook) Good(addr p2pcrypto.PublicKey) {
 	a.moveToTriedUnlocked(ka)
 }
 
+// moves a knownaddress to a tried bucket
 func (a *addrBook) moveToTriedUnlocked(ka *KnownAddress) {
 	// move to tried set, optionally evicting other addresses if neeed.
 	if ka.tried {
@@ -516,7 +516,6 @@ func (a *addrBook) Stop() {
 	a.logger.Info("Address manager shutting down")
 	close(a.quit)
 	a.wg.Wait()
-	return
 }
 
 // expireNew makes space in the new buckets by expiring the really bad entries.
@@ -557,24 +556,11 @@ func (a *addrBook) expireNew(bucket int) {
 	}
 }
 
-// pickTried selects an address from the tried bucket to be evicted.
-// We just choose the eldest. Bitcoind selects 4 random entries and throws away
-// the older of them.
-func (a *addrBook) oldestTried(bucket int) *KnownAddress {
-	var oldest *KnownAddress
-	for _, v := range a.addrTried[bucket] {
-		if oldest == nil || oldest.lastSeen.After(v.lastSeen) {
-			oldest = v
-		}
-	}
-	return oldest
-}
-
 func (a *addrBook) getNewBucket(netAddr, srcAddr net.IP) int {
 	// bitcoind:
 	// doublesha256(key + sourcegroup + int64(doublesha256(key + group + sourcegroup))%bucket_per_source_group) % num_new_buckets
 
-	data1 := []byte{}
+	var data1 []byte
 	data1 = append(data1, a.key[:]...)
 	data1 = append(data1, []byte(GroupKey(netAddr))...)
 	data1 = append(data1, []byte(GroupKey(srcAddr))...)
@@ -583,7 +569,7 @@ func (a *addrBook) getNewBucket(netAddr, srcAddr net.IP) int {
 	hash64 %= newBucketsPerGroup
 	var hashbuf [8]byte
 	binary.LittleEndian.PutUint64(hashbuf[:], hash64)
-	data2 := []byte{}
+	var data2 []byte
 	data2 = append(data2, a.key[:]...)
 	data2 = append(data2, GroupKey(srcAddr)...)
 	data2 = append(data2, hashbuf[:]...)
@@ -595,7 +581,7 @@ func (a *addrBook) getNewBucket(netAddr, srcAddr net.IP) int {
 func (a *addrBook) getTriedBucket(netAddr net.IP) int {
 	// bitcoind hashes this as:
 	// doublesha256(key + group + truncate_to_64bits(doublesha256(key)) % buckets_per_group) % num_buckets
-	data1 := []byte{}
+	var data1 []byte
 	data1 = append(data1, a.key[:]...)
 	data1 = append(data1, []byte(netAddr)...)
 	hash1 := chainhash.DoubleHashB(data1)
@@ -603,7 +589,7 @@ func (a *addrBook) getTriedBucket(netAddr net.IP) int {
 	hash64 %= triedBucketsPerGroup
 	var hashbuf [8]byte
 	binary.LittleEndian.PutUint64(hashbuf[:], hash64)
-	data2 := []byte{}
+	var data2 []byte
 	data2 = append(data2, a.key[:]...)
 	data2 = append(data2, GroupKey(netAddr)...)
 	data2 = append(data2, hashbuf[:]...)

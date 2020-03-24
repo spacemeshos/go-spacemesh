@@ -39,7 +39,7 @@ func NewHTTPPoetHarness(disableBroadcast bool) (*HTTPPoetHarness, error) {
 	}
 
 	return &HTTPPoetHarness{
-		HTTPPoetClient: NewHTTPPoetClient(h.RESTListen(), context.Background()),
+		HTTPPoetClient: NewHTTPPoetClient(context.Background(), h.RESTListen()),
 		Teardown:       h.TearDown,
 		h:              h,
 	}, nil
@@ -47,7 +47,7 @@ func NewHTTPPoetHarness(disableBroadcast bool) (*HTTPPoetHarness, error) {
 
 // HTTPPoetClient implements PoetProvingServiceClient interface.
 type HTTPPoetClient struct {
-	baseUrl    string
+	baseURL    string
 	ctxFactory func() (context.Context, context.CancelFunc)
 }
 
@@ -55,15 +55,17 @@ type HTTPPoetClient struct {
 var _ PoetProvingServiceClient = (*HTTPPoetClient)(nil)
 
 // NewHTTPPoetClient returns new instance of HTTPPoetClient for the specified target.
-func NewHTTPPoetClient(target string, ctx context.Context) *HTTPPoetClient {
+func NewHTTPPoetClient(ctx context.Context, target string) *HTTPPoetClient {
 	return &HTTPPoetClient{
-		baseUrl: fmt.Sprintf("http://%s/v1", target),
+		baseURL: fmt.Sprintf("http://%s/v1", target),
 		ctxFactory: func() (context.Context, context.CancelFunc) {
 			return context.WithTimeout(ctx, 10*time.Second)
 		},
 	}
 }
 
+// Start is an administrative endpoint of the proving service that tells it to start. This is mostly done in tests,
+// since it requires administrative permissions to the proving service.
 func (c *HTTPPoetClient) Start(gatewayAddresses []string) error {
 	reqBody := StartRequest{GatewayAddresses: gatewayAddresses}
 	if err := c.req("POST", "/start", reqBody, nil); err != nil {
@@ -73,6 +75,7 @@ func (c *HTTPPoetClient) Start(gatewayAddresses []string) error {
 	return nil
 }
 
+// Submit registers a challenge in the proving service current open round.
 func (c *HTTPPoetClient) Submit(challenge types.Hash32) (*types.PoetRound, error) {
 	reqBody := SubmitRequest{Challenge: challenge[:]}
 	resBody := &SubmitResponse{}
@@ -80,10 +83,11 @@ func (c *HTTPPoetClient) Submit(challenge types.Hash32) (*types.PoetRound, error
 		return nil, err
 	}
 
-	return &types.PoetRound{Id: resBody.RoundId}, nil
+	return &types.PoetRound{Id: resBody.RoundID}, nil
 }
 
-func (c *HTTPPoetClient) PoetServiceId() ([]byte, error) {
+// PoetServiceID returns the public key of the PoET proving service.
+func (c *HTTPPoetClient) PoetServiceID() ([]byte, error) {
 	resBody := &GetInfoResponse{}
 	if err := c.req("GET", "/info", nil, resBody); err != nil {
 		return nil, err
@@ -92,13 +96,13 @@ func (c *HTTPPoetClient) PoetServiceId() ([]byte, error) {
 	return resBody.ServicePubKey, nil
 }
 
-func (c *HTTPPoetClient) req(method string, endUrl string, reqBody interface{}, resBody interface{}) error {
+func (c *HTTPPoetClient) req(method string, endURL string, reqBody interface{}, resBody interface{}) error {
 	jsonReqBody, err := json.Marshal(reqBody)
 	if err != nil {
 		return fmt.Errorf("request json marshal failure: %v", err)
 	}
 
-	url := fmt.Sprintf("%s%s", c.baseUrl, endUrl)
+	url := fmt.Sprintf("%s%s", c.baseURL, endURL)
 	req, err := http.NewRequest(method, url, bytes.NewBuffer(jsonReqBody))
 	if err != nil {
 		return err
@@ -130,10 +134,12 @@ func (c *HTTPPoetClient) req(method string, endUrl string, reqBody interface{}, 
 	return nil
 }
 
+// SubmitRequest is the request object for the submit endpoint
 type SubmitRequest struct {
 	Challenge []byte `json:"challenge,omitempty"`
 }
 
+// StartRequest is the request object for the start endpoint
 type StartRequest struct {
 	GatewayAddresses       []string `json:"gatewayAddresses,omitempty"`
 	DisableBroadcast       bool     `json:"disableBroadcast,omitempty"`
@@ -141,12 +147,14 @@ type StartRequest struct {
 	BroadcastAcksThreshold int      `json:"broadcastAcksThreshold,omitempty"`
 }
 
+// SubmitResponse is the response object for the submit endpoint
 type SubmitResponse struct {
-	RoundId string
+	RoundID string
 }
 
+// GetInfoResponse is the response object for the get-info endpoint
 type GetInfoResponse struct {
-	OpenRoundId        string
-	ExecutingRoundsIds []string
+	OpenRoundID        string
+	ExecutingRoundsIDs []string
 	ServicePubKey      []byte
 }

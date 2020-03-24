@@ -39,7 +39,7 @@ func assertAddrs(t *testing.T, addrMgr *addrBook,
 	addrs := addrMgr.getAddresses()
 
 	if len(addrs) != len(expectedAddrs) {
-		t.Fatalf("expected to find %d addresses, found %d",
+		t.Fatalf("expected to lookup %d addresses, found %d",
 			len(expectedAddrs), len(addrs))
 	}
 
@@ -47,7 +47,7 @@ func assertAddrs(t *testing.T, addrMgr *addrBook,
 		addrStr := addr.ID
 		expectedAddr, ok := expectedAddrs[addr.PublicKey()]
 		if !ok {
-			t.Fatalf("expected to find address %v", addrStr)
+			t.Fatalf("expected to lookup address %v", addrStr)
 		}
 
 		assertAddr(t, addr, expectedAddr)

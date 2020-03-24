@@ -339,7 +339,11 @@ func (s *Syncer) handleWeaklySynced() {
 	}
 
 	//validate current layer if more than s.ValidationDelta has passed
-	s.handleCurrentLayer()
+	if err := s.handleCurrentLayer(); err != nil {
+		s.With().Error("Node is out of synce", log.Err(err))
+		s.setGossipBufferingStatus(pending)
+		return
+	}
 
 	if s.shutdown() {
 		return
@@ -371,16 +375,19 @@ func (s *Syncer) handleLayersTillCurrent() {
 }
 
 //handle the current consensus layer if its is older than s.Validation Delta
-func (s *Syncer) handleCurrentLayer() {
+func (s *Syncer) handleCurrentLayer() error {
 	curr := s.GetCurrentLayer()
 	if s.LatestLayer() == curr && time.Now().Sub(s.LayerToTime(s.LatestLayer())) > s.ValidationDelta {
 		if err := s.getAndValidateLayer(s.LatestLayer()); err != nil {
 			if err != database.ErrNotFound {
 				s.Panic("failed handling current layer  currentLayer=%v lastTicked=%v err=%v ", s.LatestLayer(), s.GetCurrentLayer(), err)
 			}
-			s.SetZeroBlockLayer(curr)
+			if err := s.SetZeroBlockLayer(curr); err != nil {
+				return err
+			}
 		}
 	}
+	return nil
 }
 
 func (s *Syncer) handleNotSynced(currentSyncLayer types.LayerID) {
@@ -398,12 +405,15 @@ func (s *Syncer) handleNotSynced(currentSyncLayer types.LayerID) {
 
 		lyr, err := s.getLayerFromNeighbors(currentSyncLayer)
 		if err != nil {
-			s.Info("could not get layer %v from neighbors: %v", currentSyncLayer, err)
+			s.With().Info("could not get layer from neighbors", log.LayerId(currentSyncLayer.Uint64()), log.Err(err))
 			return
 		}
 
 		if len(lyr.Blocks()) == 0 {
-			s.SetZeroBlockLayer(currentSyncLayer)
+			if err := s.SetZeroBlockLayer(currentSyncLayer); err != nil {
+				s.With().Error("handleNotSynced failed ", log.LayerId(currentSyncLayer.Uint64()), log.Err(err))
+				return
+			}
 		}
 
 		s.Validator.ValidateLayer(lyr) // wait for layer validation
@@ -445,7 +455,9 @@ func (s *Syncer) gossipSyncForOneFullLayer(currentSyncLayer types.LayerID) error
 		if err != database.ErrNotFound {
 			return err
 		}
-		s.SetZeroBlockLayer(currentSyncLayer)
+		if err := s.SetZeroBlockLayer(currentSyncLayer); err != nil {
+			return err
+		}
 	}
 
 	// get & validate second tick
@@ -453,7 +465,9 @@ func (s *Syncer) gossipSyncForOneFullLayer(currentSyncLayer types.LayerID) error
 		if err != database.ErrNotFound {
 			return err
 		}
-		s.SetZeroBlockLayer(currentSyncLayer)
+		if err := s.SetZeroBlockLayer(currentSyncLayer + 1); err != nil {
+			return err
+		}
 	}
 
 	s.Info("done waiting for ticks and validation. setting gossip true")

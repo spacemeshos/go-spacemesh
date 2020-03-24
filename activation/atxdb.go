@@ -17,20 +17,20 @@ import (
 
 const topAtxKey = "topAtxKey"
 
-func getNodeAtxKey(nodeId types.NodeId, targetEpoch types.EpochId) []byte {
-	return append(getNodeAtxPrefix(nodeId), util.Uint64ToBytesBigEndian(uint64(targetEpoch))...)
+func getNodeAtxKey(nodeID types.NodeId, targetEpoch types.EpochId) []byte {
+	return append(getNodeAtxPrefix(nodeID), util.Uint64ToBytesBigEndian(uint64(targetEpoch))...)
 }
 
-func getNodeAtxPrefix(nodeId types.NodeId) []byte {
-	return []byte(fmt.Sprintf("n_%v_", nodeId.Key))
+func getNodeAtxPrefix(nodeID types.NodeId) []byte {
+	return []byte(fmt.Sprintf("n_%v_", nodeID.Key))
 }
 
-func getAtxHeaderKey(atxId types.AtxId) []byte {
-	return []byte(fmt.Sprintf("h_%v", atxId.Bytes()))
+func getAtxHeaderKey(atxID types.AtxId) []byte {
+	return []byte(fmt.Sprintf("h_%v", atxID.Bytes()))
 }
 
-func getAtxBodyKey(atxId types.AtxId) []byte {
-	return []byte(fmt.Sprintf("b_%v", atxId.Bytes()))
+func getAtxBodyKey(atxID types.AtxId) []byte {
+	return []byte(fmt.Sprintf("b_%v", atxID.Bytes()))
 }
 
 var errInvalidSig = fmt.Errorf("identity not found when validating signature, invalid atx")
@@ -40,15 +40,17 @@ type atxChan struct {
 	listeners int
 }
 
+// ActivationDb hold the atxs received from all nodes and their validity status
+// it also stores identifications for all nodes e.g the coupling between ed id and bls id
 type ActivationDb struct {
 	sync.RWMutex
 	//todo: think about whether we need one db or several
-	IdStore
+	idStore
 	atxs              database.Database
 	atxHeaderCache    AtxCache
 	meshDb            *mesh.MeshDB
 	LayersPerEpoch    uint16
-	nipstValidator    NipstValidator
+	nipstValidator    nipstValidator
 	pendingActiveSet  map[types.Hash12]*sync.Mutex
 	log               log.Log
 	calcActiveSetFunc func(epoch types.EpochId, blocks map[types.BlockID]struct{}) (map[string]struct{}, error)
@@ -57,9 +59,11 @@ type ActivationDb struct {
 	atxChannels       map[types.AtxId]*atxChan
 }
 
-func NewActivationDb(dbstore database.Database, idstore IdStore, meshDb *mesh.MeshDB, layersPerEpoch uint16, nipstValidator NipstValidator, log log.Log) *ActivationDb {
+// NewActivationDb creates a new struct of type ActivationDb, this struct will hold the atxs received from all nodes and
+// their validity
+func NewActivationDb(dbstore database.Database, idstore idStore, meshDb *mesh.MeshDB, layersPerEpoch uint16, nipstValidator nipstValidator, log log.Log) *ActivationDb {
 	db := &ActivationDb{
-		IdStore:          idstore,
+		idStore:          idstore,
 		atxs:             dbstore,
 		atxHeaderCache:   NewAtxCache(600),
 		meshDb:           meshDb,
@@ -79,6 +83,7 @@ func init() {
 	close(closedChan)
 }
 
+// AwaitAtx returns a channel that will receive notification when the specified atx with id id is received via gossip
 func (db *ActivationDb) AwaitAtx(id types.AtxId) chan struct{} {
 	db.Lock()
 	defer db.Unlock()
@@ -99,6 +104,7 @@ func (db *ActivationDb) AwaitAtx(id types.AtxId) chan struct{} {
 	return ch.ch
 }
 
+// UnsubscribeAtx un subscribes the waiting for a specific atx with atx id id to arrive via gossip.
 func (db *ActivationDb) UnsubscribeAtx(id types.AtxId) {
 	db.Lock()
 	defer db.Unlock()
@@ -113,11 +119,12 @@ func (db *ActivationDb) UnsubscribeAtx(id types.AtxId) {
 	}
 }
 
+// ProcessAtxs processes the list of given atxs using ProcessAtx method
 func (db *ActivationDb) ProcessAtxs(atxs []*types.ActivationTx) error {
 	seenMinerIds := map[string]struct{}{}
 	for _, atx := range atxs {
-		minerId := atx.NodeId.Key
-		if _, found := seenMinerIds[minerId]; found {
+		minerID := atx.NodeId.Key
+		if _, found := seenMinerIds[minerID]; found {
 			// TODO: Blacklist this miner
 			// TODO: Ensure that these are two different, syntactically valid ATXs for the same epoch, otherwise the
 			//  miner did nothing wrong
@@ -199,11 +206,11 @@ func (db *ActivationDb) createTraversalActiveSetCounterFunc(countedAtxs map[stri
 				continue
 			}
 
-			if prevId, exist := countedAtxs[atx.NodeId.Key]; exist { // same miner
+			if prevID, exist := countedAtxs[atx.NodeId.Key]; exist { // same miner
 
-				if prevId != id { // different atx for same epoch
+				if prevID != id { // different atx for same epoch
 					db.log.With().Error("Encountered second atx for the same miner on the same epoch",
-						log.String("first_atx", prevId.ShortString()), log.String("second_atx", id.ShortString()))
+						log.String("first_atx", prevID.ShortString()), log.String("second_atx", id.ShortString()))
 
 					penalties[atx.NodeId.Key] = struct{}{} // mark node in penalty
 					delete(countedAtxs, atx.NodeId.Key)    // remove the penalized node from counted
@@ -324,7 +331,7 @@ func (db *ActivationDb) deleteLock(viewHash types.Hash12) {
 // - ATX LayerID is NipstLayerTime or less after the PositioningATX LayerID.
 // - The ATX view of the previous epoch contains ActiveSetSize activations.
 func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
-	events.Publish(events.NewAtx{Id: atx.ShortString(), LayerId: uint64(atx.PubLayerIdx.GetEpoch(db.LayersPerEpoch))})
+	events.Publish(events.NewAtx{ID: atx.ShortString(), LayerID: uint64(atx.PubLayerIdx.GetEpoch(db.LayersPerEpoch))})
 	pub, err := ExtractPublicKey(atx)
 	if err != nil {
 		return fmt.Errorf("cannot validate atx sig atx id %v err %v", atx.ShortString(), err)
@@ -343,7 +350,7 @@ func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error 
 		}
 
 		if prevATX.NodeId.Key != atx.NodeId.Key {
-			return fmt.Errorf("previous ATX belongs to different miner. atx.Id: %v, atx.NodeId: %v, prevAtx.NodeId: %v",
+			return fmt.Errorf("previous ATX belongs to different miner. atx.ID: %v, atx.NodeId: %v, prevAtx.NodeId: %v",
 				atx.ShortString(), atx.NodeId.Key, prevATX.NodeId.Key)
 		}
 
@@ -431,7 +438,7 @@ func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error 
 // If a previous ATX is not referenced, it validates that indeed there's no previous known ATX for that miner ID.
 func (db *ActivationDb) ContextuallyValidateAtx(atx *types.ActivationTxHeader) error {
 	if atx.PrevATXId != *types.EmptyAtxId {
-		lastAtx, err := db.GetNodeLastAtxId(atx.NodeId)
+		lastAtx, err := db.GetNodeLastAtxID(atx.NodeId)
 		if err != nil {
 			db.log.With().Error("could not fetch node last ATX",
 				log.AtxId(atx.ShortString()), log.String("atx_node_id", atx.NodeId.ShortString()), log.Err(err))
@@ -442,7 +449,7 @@ func (db *ActivationDb) ContextuallyValidateAtx(atx *types.ActivationTxHeader) e
 			return fmt.Errorf("last atx is not the one referenced")
 		}
 	} else {
-		lastAtx, err := db.GetNodeLastAtxId(atx.NodeId)
+		lastAtx, err := db.GetNodeLastAtxID(atx.NodeId)
 		if _, ok := err.(ErrAtxNotFound); err != nil && !ok {
 			db.log.Error("fetching ATX ids failed: %v", err)
 			return err
@@ -479,7 +486,7 @@ func (db *ActivationDb) StoreAtx(ech types.EpochId, atx *types.ActivationTx) err
 		return err
 	}
 
-	err = db.addAtxToNodeId(atx.NodeId, atx)
+	err = db.addAtxToNodeID(atx.NodeId, atx)
 	if err != nil {
 		return err
 	}
@@ -528,9 +535,9 @@ func getAtxBody(atx *types.ActivationTx) *types.ActivationTx {
 	}
 }
 
-type atxIdAndLayer struct {
-	AtxId   types.AtxId
-	LayerId types.LayerID
+type atxIDAndLayer struct {
+	AtxID   types.AtxId
+	LayerID types.LayerID
 }
 
 // updateTopAtxIfNeeded replaces the top ATX (positioning ATX candidate) if the latest ATX has a higher layer ID.
@@ -540,13 +547,13 @@ func (db *ActivationDb) updateTopAtxIfNeeded(atx *types.ActivationTx) error {
 	if err != nil && err != database.ErrNotFound {
 		return fmt.Errorf("failed to get current ATX: %v", err)
 	}
-	if err == nil && currentTopAtx.LayerId >= atx.PubLayerIdx {
+	if err == nil && currentTopAtx.LayerID >= atx.PubLayerIdx {
 		return nil
 	}
 
-	newTopAtx := atxIdAndLayer{
-		AtxId:   atx.Id(),
-		LayerId: atx.PubLayerIdx,
+	newTopAtx := atxIDAndLayer{
+		AtxID:   atx.Id(),
+		LayerID: atx.PubLayerIdx,
 	}
 	topAtxBytes, err := types.InterfaceToBytes(&newTopAtx)
 	if err != nil {
@@ -560,33 +567,34 @@ func (db *ActivationDb) updateTopAtxIfNeeded(atx *types.ActivationTx) error {
 	return nil
 }
 
-func (db ActivationDb) getTopAtx() (atxIdAndLayer, error) {
+func (db ActivationDb) getTopAtx() (atxIDAndLayer, error) {
 	topAtxBytes, err := db.atxs.Get([]byte(topAtxKey))
 	if err != nil {
-		return atxIdAndLayer{}, err
+		return atxIDAndLayer{}, err
 	}
-	var topAtx atxIdAndLayer
+	var topAtx atxIDAndLayer
 	err = types.BytesToInterface(topAtxBytes, &topAtx)
 	if err != nil {
-		return atxIdAndLayer{}, fmt.Errorf("failed to unmarshal top ATX: %v", err)
+		return atxIDAndLayer{}, fmt.Errorf("failed to unmarshal top ATX: %v", err)
 	}
 	return topAtx, nil
 }
 
-// addAtxToNodeId inserts activation atx id by node
-func (db *ActivationDb) addAtxToNodeId(nodeId types.NodeId, atx *types.ActivationTx) error {
-	err := db.atxs.Put(getNodeAtxKey(nodeId, atx.TargetEpoch(db.LayersPerEpoch)), atx.Id().Bytes())
+// addAtxToNodeID inserts activation atx id by node
+func (db *ActivationDb) addAtxToNodeID(nodeID types.NodeId, atx *types.ActivationTx) error {
+	err := db.atxs.Put(getNodeAtxKey(nodeID, atx.TargetEpoch(db.LayersPerEpoch)), atx.Id().Bytes())
 	if err != nil {
 		return fmt.Errorf("failed to store ATX ID for node: %v", err)
 	}
 	return nil
 }
 
+// ErrAtxNotFound is a specific error returned when no atx was found in DB
 type ErrAtxNotFound error
 
-// GetNodeLastAtxId returns the last atx id that was received for node nodeId
-func (db *ActivationDb) GetNodeLastAtxId(nodeId types.NodeId) (types.AtxId, error) {
-	nodeAtxsIterator := db.atxs.Find(getNodeAtxPrefix(nodeId))
+// GetNodeLastAtxID returns the last atx id that was received for node nodeID
+func (db *ActivationDb) GetNodeLastAtxID(nodeID types.NodeId) (types.AtxId, error) {
+	nodeAtxsIterator := db.atxs.Find(getNodeAtxPrefix(nodeID))
 	// ATX syntactic validation ensures that each ATX is at least one epoch after a referenced previous ATX.
 	// Contextual validation ensures that the previous ATX referenced matches what this method returns, so the next ATX
 	// added will always be the next ATX returned by this method.
@@ -595,27 +603,29 @@ func (db *ActivationDb) GetNodeLastAtxId(nodeId types.NodeId) (types.AtxId, erro
 	// For the lexicographical order to match the epoch order we must encode the epoch id using big endian encoding when
 	// composing the key.
 	if exists := nodeAtxsIterator.Last(); !exists {
-		return *types.EmptyAtxId, ErrAtxNotFound(fmt.Errorf("atx for node %v does not exist", nodeId.ShortString()))
+		return *types.EmptyAtxId, ErrAtxNotFound(fmt.Errorf("atx for node %v does not exist", nodeID.ShortString()))
 	}
 	return types.AtxId(types.BytesToHash(nodeAtxsIterator.Value())), nil
 }
 
-func (db *ActivationDb) GetNodeAtxIdForEpoch(nodeId types.NodeId, targetEpoch types.EpochId) (types.AtxId, error) {
-	id, err := db.atxs.Get(getNodeAtxKey(nodeId, targetEpoch))
+// GetNodeAtxIDForEpoch returns an atx published by the provided nodeID for the specified targetEpoch. meaning the atx
+// that the requested nodeID has published. it returns an error if no atx was found for provided nodeID
+func (db *ActivationDb) GetNodeAtxIDForEpoch(nodeID types.NodeId, targetEpoch types.EpochId) (types.AtxId, error) {
+	id, err := db.atxs.Get(getNodeAtxKey(nodeID, targetEpoch))
 	if err != nil {
 		return *types.EmptyAtxId, fmt.Errorf("atx for node %v targeting epoch %v: %v",
-			nodeId.ShortString(), targetEpoch, err)
+			nodeID.ShortString(), targetEpoch, err)
 	}
 	return types.AtxId(types.BytesToHash(id)), nil
 }
 
-// GetPosAtxId returns the best (highest layer id), currently known to this node, pos atx id
-func (db *ActivationDb) GetPosAtxId() (types.AtxId, error) {
+// GetPosAtxID returns the best (highest layer id), currently known to this node, pos atx id
+func (db *ActivationDb) GetPosAtxID() (types.AtxId, error) {
 	idAndLayer, err := db.getTopAtx()
 	if err != nil {
 		return *types.EmptyAtxId, err
 	}
-	return idAndLayer.AtxId, nil
+	return idAndLayer.AtxID, nil
 }
 
 // GetAtxHeader returns the ATX header by the given ID. This function is thread safe and will return an error if the ID
@@ -644,6 +654,8 @@ func (db *ActivationDb) GetAtxHeader(id types.AtxId) (*types.ActivationTxHeader,
 	return &atxHeader, nil
 }
 
+// GetFullAtx returns the full atx struct of the given atxId id, it returns an error if the full atx cannot be found
+// in all databases
 func (db *ActivationDb) GetFullAtx(id types.AtxId) (*types.ActivationTx, error) {
 	if id == *types.EmptyAtxId {
 		return nil, errors.New("trying to fetch empty atx id")
@@ -667,7 +679,7 @@ func (db *ActivationDb) GetFullAtx(id types.AtxId) (*types.ActivationTx, error) 
 	return atx, nil
 }
 
-// ValidateSignedAtx extracts public key from message and verifies public key exists in IdStore, this is how we validate
+// ValidateSignedAtx extracts public key from message and verifies public key exists in idStore, this is how we validate
 // ATX signature. If this is the first ATX it is considered valid anyways and ATX syntactic validation will determine ATX validity
 func (db *ActivationDb) ValidateSignedAtx(pubKey signing.PublicKey, signedAtx *types.ActivationTx) error {
 	// this is the first occurrence of this identity, we cannot validate simply by extracting public key

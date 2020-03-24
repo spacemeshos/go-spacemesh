@@ -24,7 +24,7 @@ import (
 	"sync"
 )
 
-// Trie cache generation limit after which to evict trie nodes from memory.
+// MaxTrieCacheGen is Trie cache generation limit after which to evict trie nodes from memory.
 var MaxTrieCacheGen = uint16(120)
 
 const (

@@ -142,10 +142,10 @@ func (o *Oracle) buildVRFMessage(layer types.LayerID, round int32) ([]byte, erro
 		return val.([]byte), nil
 	}
 
-	// get value from beacon
+	// get value from Beacon
 	v, err := o.beacon.Value(layer)
 	if err != nil {
-		o.With().Error("Could not get hare beacon value", log.Err(err), log.LayerId(uint64(layer)), log.Int32("round", round))
+		o.With().Error("Could not get hare Beacon value", log.Err(err), log.LayerId(uint64(layer)), log.Int32("round", round))
 		o.lock.Unlock()
 		return nil, err
 	}
@@ -181,7 +181,7 @@ func (o *Oracle) activeSetSize(layer types.LayerID) (uint32, error) {
 	return uint32(len(actives)), nil
 }
 
-// Eligible checks if Id is eligible on the given Layer where msg is the VRF message, sig is the role proof and assuming commSize as the expected committee size
+// Eligible checks if ID is eligible on the given Layer where msg is the VRF message, sig is the role proof and assuming commSize as the expected committee size
 func (o *Oracle) Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeId, sig []byte) (bool, error) {
 	msg, err := o.buildVRFMessage(layer, round)
 	if err != nil {
@@ -300,7 +300,7 @@ func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
 
 // IsIdentityActiveOnConsensusView returns true if the provided identity is active on the consensus view derived
 // from the specified layer, false otherwise.
-func (o *Oracle) IsIdentityActiveOnConsensusView(edId string, layer types.LayerID) (bool, error) {
+func (o *Oracle) IsIdentityActiveOnConsensusView(edID string, layer types.LayerID) (bool, error) {
 	actives, err := o.actives(layer)
 	if err != nil {
 		if err == errGenesis { // we are in genesis
@@ -311,7 +311,7 @@ func (o *Oracle) IsIdentityActiveOnConsensusView(edId string, layer types.LayerI
 			log.LayerId(uint64(layer)), log.Err(err))
 		return false, err
 	}
-	_, exist := actives[edId]
+	_, exist := actives[edID]
 
 	return exist, nil
 }
