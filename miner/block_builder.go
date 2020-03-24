@@ -21,7 +21,7 @@ import (
 )
 
 // MaxTransactionsPerBlock indicates the maximum transactions a block can reference
-const MaxTransactionsPerBlock = 200 //todo: move to config
+const MaxTransactionsPerBlock = 200 //todo: move to config (#1924)
 
 const defaultGasLimit = 10
 const defaultFee = 1
@@ -430,7 +430,7 @@ func (t *BlockBuilder) handleGossipAtx(data service.GossipMessage) {
 		log.String("NIPSTChallenge", challenge),
 	)
 
-	//todo fetch from neighbour
+	//todo fetch from neighbour (#1925)
 	if atx.Nipst == nil {
 		t.Panic("nil nipst in gossip")
 		return
