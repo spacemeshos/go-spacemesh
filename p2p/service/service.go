@@ -64,7 +64,7 @@ type Service interface {
 	Shutdown()
 }
 
-// Data is a wrapper aroudn a message that can hold either raw bytes message or a req-res wrapper.
+// Data is a wrapper around a message that can hold either raw bytes message or a req-res wrapper.
 type Data interface {
 	Bytes() []byte
 }
