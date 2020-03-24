@@ -78,7 +78,7 @@ type ProtocolMessage struct {
 	Payload  *Payload
 }
 
-// CreatePayload is an helper function to format a payload for sending.
+// CreatePayload is a helper function to format a payload for sending.
 func CreatePayload(data service.Data) (*Payload, error) {
 	switch x := data.(type) {
 	case service.DataBytes:
