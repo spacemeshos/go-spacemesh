@@ -95,7 +95,7 @@ func CreatePayload(data service.Data) (*Payload, error) {
 	return nil, fmt.Errorf("cant determine paylaod type")
 }
 
-// ExtractData is an helper function to extract the payload data from a message payload.
+// ExtractData is a helper function to extract the payload data from a message payload.
 func ExtractData(pm *Payload) (service.Data, error) {
 	var data service.Data
 	if payload := pm.Payload; payload != nil {
