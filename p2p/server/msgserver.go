@@ -78,7 +78,7 @@ func (p *MessageServer) Close() {
 	p.workerCount.Wait()
 }
 
-// readLoop readds incoming messages and matches them to requests or responses.
+// readLoop reads incoming messages and matches them to requests or responses.
 func (p *MessageServer) readLoop() {
 	timer := time.NewTicker(p.requestLifetime + time.Millisecond*100)
 	defer timer.Stop()
