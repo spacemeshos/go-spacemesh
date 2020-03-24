@@ -416,7 +416,7 @@ func (s *Syncer) handleNotSynced(currentSyncLayer types.LayerID) {
 			}
 		}
 
-		s.Validator.ValidateLayer(lyr) // wait for layer validation
+		s.ValidateLayer(lyr) // wait for layer validation
 	}
 
 	// wait for two ticks to ensure we are fully synced before we open gossip or validate the current layer
@@ -918,7 +918,7 @@ func (s *Syncer) getAndValidateLayer(id types.LayerID) error {
 	if err != nil {
 		return err
 	}
-	s.Validator.ValidateLayer(lyr) // wait for layer validation
+	s.ValidateLayer(lyr) // wait for layer validation
 	return nil
 }
 

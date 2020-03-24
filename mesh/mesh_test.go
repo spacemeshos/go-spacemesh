@@ -35,7 +35,7 @@ func (m *ContextualValidityMock) Put(key, value []byte) error {
 }
 
 func (m *ContextualValidityMock) Get(key []byte) (value []byte, err error) {
-	return TRUE, nil
+	return constTrue, nil
 }
 
 func (m *ContextualValidityMock) Delete(key []byte) error {
@@ -202,11 +202,11 @@ func TestLayers_AddWrongLayer(t *testing.T) {
 	layers.AddBlock(block2)
 	layers.ValidateLayer(l2)
 	layers.AddBlock(block3)
-	_, err := layers.GetVerifiedLayer(1)
+	_, err := layers.GetProcessedLayer(1)
 	assert.True(t, err == nil, "error: ", err)
-	_, err1 := layers.GetVerifiedLayer(2)
+	_, err1 := layers.GetProcessedLayer(2)
 	assert.True(t, err1 == nil, "error: ", err1)
-	_, err2 := layers.GetVerifiedLayer(4)
+	_, err2 := layers.GetProcessedLayer(4)
 	assert.True(t, err2 != nil, "added wrong layer ", err2)
 }
 
@@ -219,10 +219,10 @@ func TestLayers_GetLayer(t *testing.T) {
 	l1 := types.NewExistingLayer(1, []*types.Block{block1})
 	layers.AddBlock(block1)
 	layers.ValidateLayer(l1)
-	l, err := layers.GetVerifiedLayer(0)
+	l, err := layers.GetProcessedLayer(0)
 	layers.AddBlock(block2)
 	layers.AddBlock(block3)
-	l, err = layers.GetVerifiedLayer(1)
+	l, err = layers.GetProcessedLayer(1)
 	assert.True(t, err == nil, "error: ", err)
 	assert.True(t, l.Index() == 1, "wrong layer")
 }
@@ -343,7 +343,7 @@ func TestMesh_AddBlockWithTxs_PushTransactions_UpdateUnappliedTxs(t *testing.T) 
 	msh := getMesh("mesh")
 
 	state := &MockMapState{}
-	msh.TxProcessor = state
+	msh.txProcessor = state
 	blockBuilder := &MockBlockBuilder{}
 	msh.SetBlockBuilder(blockBuilder)
 
@@ -381,7 +381,7 @@ func TestMesh_AddBlockWithTxs_PushTransactions_getInvalidBlocksByHare(t *testing
 	msh := getMesh("mesh")
 
 	state := &MockMapState{}
-	msh.TxProcessor = state
+	msh.txProcessor = state
 	blockBuilder := &MockBlockBuilder{}
 	msh.SetBlockBuilder(blockBuilder)
 
@@ -422,7 +422,7 @@ func TestMesh_ExtractUniqueOrderedTransactions(t *testing.T) {
 	l, err := msh.GetLayer(layerID)
 	r.NoError(err)
 
-	validBlocks := msh.ExtractUniqueOrderedTransactions(l)
+	validBlocks := msh.extractUniqueOrderedTransactions(l)
 
 	r.ElementsMatch(GetTransactionIds(tx1, tx2, tx3, tx4), GetTransactionIds(validBlocks...))
 }
