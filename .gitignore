@@ -2,7 +2,6 @@
 
 cmd/tmp
 /tmp
-/app/tmp
 */**/*un~
 */**/*.test
 */**/temp.js
@@ -31,5 +30,4 @@ spacemesh.json
 **/pb/*.pb.gw.go
 **/pb/*.swagger.json
 database/data
-app/state
 *.pyc
