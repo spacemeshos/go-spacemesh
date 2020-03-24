@@ -5,8 +5,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
+// These consts are used as prefixes for different messages in pubsub
 const (
-	EventNewBlock ChannelId = 1 + iota
+	EventNewBlock ChannelID = 1 + iota
 	EventBlockValid
 	EventNewAtx
 	EventAtxValid
@@ -51,13 +52,13 @@ type EventPublisher struct {
 // be routed by topic.
 type Event interface {
 	// GetChannel returns the channel on which this message will be published.
-	GetChannel() ChannelId
+	GetChannel() ChannelID
 }
 
 // NewEventPublisher is a constructor for the event publisher, it received a url string in format of tcp://localhost:56565 to start
 // listening for connections.
-func NewEventPublisher(eventUrl string) (*EventPublisher, error) {
-	p, err := newPublisher(eventUrl)
+func NewEventPublisher(eventURL string) (*EventPublisher, error) {
+	p, err := newPublisher(eventURL)
 	if err != nil {
 		return nil, err
 	}
@@ -73,93 +74,112 @@ func (p *EventPublisher) PublishEvent(event Event) error {
 	return p.publish(event.GetChannel(), bytes)
 }
 
+// Close closes the published internal socket
 func (p *EventPublisher) Close() error {
 	return p.sock.Close()
 }
 
+// NewBlock is sent when a new block is created by this miner
 type NewBlock struct {
-	Id    string
+	ID    string
 	Layer uint64
 	Atx   string
 }
 
-func (NewBlock) GetChannel() ChannelId {
+// GetChannel gets the message type which means on which this message should be sent
+func (NewBlock) GetChannel() ChannelID {
 	return EventNewBlock
 }
 
+// DoneCreatingBlock signals that this miner has created a block
 type DoneCreatingBlock struct {
 	Eligible bool
 	Layer    uint64
 	Error    string
 }
 
-func (DoneCreatingBlock) GetChannel() ChannelId {
+// GetChannel gets the message type which means on which this message should be sent
+func (DoneCreatingBlock) GetChannel() ChannelID {
 	return EventCreatedBlock
 }
 
+// ValidBlock signals that block with id ID has been validated
 type ValidBlock struct {
-	Id    string
+	ID    string
 	Valid bool
 }
 
-func (ValidBlock) GetChannel() ChannelId {
+// GetChannel gets the message type which means on which this message should be sent
+func (ValidBlock) GetChannel() ChannelID {
 	return EventBlockValid
 }
 
+// NewAtx signals that a new ATX has been received
 type NewAtx struct {
-	Id      string
-	LayerId uint64
+	ID      string
+	LayerID uint64
 }
 
-func (NewAtx) GetChannel() ChannelId {
+// GetChannel gets the message type which means on which this message should be sent
+func (NewAtx) GetChannel() ChannelID {
 	return EventNewAtx
 }
 
+// ValidAtx signals that an activation transaction with id ID has been validated
 type ValidAtx struct {
-	Id    string
+	ID    string
 	Valid bool
 }
 
-func (ValidAtx) GetChannel() ChannelId {
+// GetChannel gets the message type which means on which this message should be sent
+func (ValidAtx) GetChannel() ChannelID {
 	return EventAtxValid
 }
 
+// NewTx signals that a new transaction has been received and not yet validated
 type NewTx struct {
-	Id          string
+	ID          string
 	Origin      string
 	Destination string
 	Amount      uint64
 	Fee         uint64
 }
 
-func (NewTx) GetChannel() ChannelId {
+// GetChannel gets the message type which means on which this message should be sent
+func (NewTx) GetChannel() ChannelID {
 	return EventNewTx
 }
 
+// ValidTx signals that the transaction with id ID has been validated
 type ValidTx struct {
-	Id    string
+	ID    string
 	Valid bool
 }
 
-func (ValidTx) GetChannel() ChannelId {
+// GetChannel gets the message type which means on which this message should be sent
+func (ValidTx) GetChannel() ChannelID {
 	return EventTxValid
 }
 
+// RewardReceived signals reward has been received
 type RewardReceived struct {
 	Coinbase string
 	Amount   uint64
 }
 
-func (RewardReceived) GetChannel() ChannelId {
+// GetChannel gets the message type which means on which this message should be sent
+func (RewardReceived) GetChannel() ChannelID {
 	return EventRewardReceived
 }
 
+// AtxCreated signals this miner has created an activation transaction
 type AtxCreated struct {
 	Created bool
-	Id      string
+	ID      string
 	Layer   uint64
 }
 
-func (AtxCreated) GetChannel() ChannelId {
+// GetChannel gets the message type which means on which this message should be sent
+func (AtxCreated) GetChannel() ChannelID {
 	return EventCreatedAtx
 }

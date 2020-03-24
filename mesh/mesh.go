@@ -34,7 +34,7 @@ var VERIFIED = []byte("verified") //refers to layers we pushed into the state
 type Tortoise interface {
 	HandleIncomingLayer(layer *types.Layer) (types.LayerID, types.LayerID)
 	LatestComplete() types.LayerID
-	PersistTortoise() error
+	Persist() error
 	HandleLateBlock(bl *types.Block) (types.LayerID, types.LayerID)
 }
 
@@ -240,7 +240,7 @@ func (m *validator) SetProcessedLayer(lyr types.LayerID) {
 func (v *validator) HandleLateBlock(b *types.Block) {
 	v.Info("Validate late block %s", b.Id())
 	oldPbase, newPbase := v.trtl.HandleLateBlock(b)
-	if err := v.trtl.PersistTortoise(); err != nil {
+	if err := v.trtl.Persist(); err != nil {
 		v.Error("could not persist Tortoise on late block %s from layer index %d", b.Id(), b.Layer())
 	}
 	v.pushLayersToState(oldPbase, newPbase)
@@ -257,8 +257,8 @@ func (v *validator) ValidateLayer(lyr *types.Layer) {
 	oldPbase, newPbase := v.trtl.HandleIncomingLayer(lyr)
 	v.SetProcessedLayer(lyr.Index())
 
-	if err := v.trtl.PersistTortoise(); err != nil {
-		v.Error("could not persist Tortoise layer index %d", lyr.Index())
+	if err := v.trtl.Persist(); err != nil {
+		v.Error("could not persist tortoise layer index %d", lyr.Index())
 	}
 	if err := v.general.Put(PROCESSED, lyr.Index().ToBytes()); err != nil {
 		v.Error("could not persist validated layer index %d", lyr.Index())
@@ -582,7 +582,7 @@ func (m *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.Transaction, atxs 
 	//invalidate txs and atxs from pool
 	m.invalidateFromPools(&blk.MiniBlock)
 
-	events.Publish(events.NewBlock{Id: blk.Id().String(), Atx: blk.ATXID.ShortString(), Layer: uint64(blk.LayerIndex)})
+	events.Publish(events.NewBlock{ID: blk.Id().String(), Atx: blk.ATXID.ShortString(), Layer: uint64(blk.LayerIndex)})
 	m.With().Info("added block to database ", log.BlockId(blk.Id().String()), log.LayerId(uint64(blk.LayerIndex)))
 	return nil
 }

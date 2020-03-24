@@ -22,6 +22,7 @@ func newSubs() *subs {
 	}
 }
 
+// Subscribe returns a channel on which the subscriber will be notified when a new layer starts
 func (s *subs) Subscribe() LayerTimer {
 	ch := make(LayerTimer)
 	s.m.Lock()
@@ -31,6 +32,7 @@ func (s *subs) Subscribe() LayerTimer {
 	return ch
 }
 
+// Unsubscribe removed subscriber channel ch from notification list
 func (s *subs) Unsubscribe(ch LayerTimer) {
 	s.m.Lock()
 	delete(s.subscribers, ch)
@@ -47,6 +49,7 @@ type LayerConverter interface {
 	LayerToTime(types.LayerID) time.Time
 }
 
+// Ticker is the struct responsible for notifying that a layer has been ticked to subscribers
 type Ticker struct {
 	*subs                 // the sub-unsub provider
 	LayerConverter        // layer conversions provider
@@ -57,6 +60,7 @@ type Ticker struct {
 	log             log.Log
 }
 
+// NewTicker returns a new instance of ticker
 func NewTicker(c Clock, lc LayerConverter) *Ticker {
 	return &Ticker{
 		subs:            newSubs(),
@@ -146,11 +150,13 @@ func (t *Ticker) timeSinceLastTick() time.Duration {
 	return t.clock.Now().Sub(timeOfLastTick)
 }
 
+// StartNotifying starts the clock notifying
 func (t *Ticker) StartNotifying() {
 	t.log.Info("started notifying")
 	t.started = true
 }
 
+// GetCurrentLayer gets the current layer
 func (t *Ticker) GetCurrentLayer() types.LayerID {
 	return t.TimeToLayer(t.clock.Now())
 }
@@ -161,20 +167,22 @@ func init() {
 	close(closedChan)
 }
 
-func (t *Ticker) AwaitLayer(layerId types.LayerID) chan struct{} {
+// AwaitLayer returns a channel that will be signald when layer id layerID was ticked by the clock, or if this layer has passed
+// while sleeping. it does so by closing the returned channel
+func (t *Ticker) AwaitLayer(layerID types.LayerID) chan struct{} {
 	t.m.Lock()
 	defer t.m.Unlock()
 
-	layerTime := t.LayerToTime(layerId)
+	layerTime := t.LayerToTime(layerID)
 	now := t.clock.Now()
-	if now.After(layerTime) || now.Equal(layerTime) { // passed the time of layerId
+	if now.After(layerTime) || now.Equal(layerTime) { // passed the time of layerID
 		return closedChan
 	}
 
-	ch := t.layerChannels[layerId]
+	ch := t.layerChannels[layerID]
 	if ch == nil {
 		ch = make(chan struct{})
-		t.layerChannels[layerId] = ch
+		t.layerChannels[layerID] = ch
 	}
 	return ch
 }
