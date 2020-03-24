@@ -95,7 +95,7 @@ func (k key) Open(encryptedMessage []byte) (out []byte, err error) {
 	return message, nil
 }
 
-// GenerateKeyPair generate private key and a public key derived from it.
+// GenerateKeyPair generates ed25519 private key and a public key derived from it.
 func GenerateKeyPair() (PrivateKey, PublicKey, error) {
 	public, private, err := box.GenerateKey(rand.Reader)
 	if err != nil {
@@ -144,6 +144,7 @@ func newKeyFromBytes(bytes []byte) (key, error) {
 	return k, nil
 }
 
+// NewPubkeyFromBytes creates a public key from a byte array.
 func NewPubkeyFromBytes(bytes []byte) (PublicKey, error) {
 	return newKeyFromBytes(bytes)
 }
@@ -156,15 +157,17 @@ func newKeyFromBase58(s string) (key, error) {
 	return newKeyFromBytes(bytes)
 }
 
-// NewPrivateKeyFromBase58
+// NewPrivateKeyFromBase58 creates a private key from a base58 string.
 func NewPrivateKeyFromBase58(s string) (PrivateKey, error) {
 	return newKeyFromBase58(s)
 }
 
+// NewPublicKeyFromBase58 creates a public key from a base58 string.
 func NewPublicKeyFromBase58(s string) (PublicKey, error) {
 	return newKeyFromBase58(s)
 }
 
+// NewRandomPubkey reads random bytes and creates a public key from them. used for testing
 func NewRandomPubkey() PublicKey {
 	k := newKey()
 	if _, err := io.ReadFull(rand.Reader, k.bytes[:]); err != nil {
@@ -173,6 +176,7 @@ func NewRandomPubkey() PublicKey {
 	return k
 }
 
+// PublicKeyFromArray creates a public key using a fixed sized byte array.
 func PublicKeyFromArray(ke [32]byte) PublicKey {
 	return key{ke}
 }
