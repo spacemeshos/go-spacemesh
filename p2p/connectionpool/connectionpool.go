@@ -1,3 +1,5 @@
+// Package connectionpool functions as a connection cache that takes care of connecting and reusing connected
+// sockets. it also makes sure we don't have duplicate connections.
 package connectionpool
 
 import (

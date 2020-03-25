@@ -1,3 +1,4 @@
+// Package service defines basic interfaces to for protocols to consume p2p functionality.
 package service
 
 import (

@@ -1,3 +1,4 @@
+// Package server is used to wrap the p2p services to define multiple req-res messages under one protocol.
 package server
 
 import (

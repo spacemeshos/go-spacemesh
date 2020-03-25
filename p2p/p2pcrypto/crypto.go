@@ -1,3 +1,5 @@
+// Package p2pcrypto defines the cryptographic primitives used to communicate and identify in the p2p network,
+// it uses go stdlib's NaCL box implementation.
 package p2pcrypto
 
 import (

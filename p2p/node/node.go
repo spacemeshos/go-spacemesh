@@ -1,3 +1,4 @@
+// Package node defines simple data structures to represent p2p node identities.
 package node
 
 import (

@@ -1,3 +1,4 @@
+// Package config defines configuration used in the p2p package
 package config
 
 import (

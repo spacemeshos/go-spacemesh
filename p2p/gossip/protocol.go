@@ -1,3 +1,4 @@
+// Package gossip implements simple protocol to send new validated messages to all peers and ignore old or not valid messages.
 package gossip
 
 import (

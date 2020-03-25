@@ -1,4 +1,5 @@
-// Package discovery implements a Distributed Hash Table based on Kademlia protocol.
+// Package discovery implements uses bitcoin-based addrbook to store network addresses and collects
+// them by crawling the network using a simple protocol.
 package discovery
 
 import (

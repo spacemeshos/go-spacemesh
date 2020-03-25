@@ -1,3 +1,4 @@
+// Package net manages the accepting network connections/messages and routing the data upward for the protocols to consume.
 package net
 
 import (

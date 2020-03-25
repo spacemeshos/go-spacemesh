@@ -1,3 +1,4 @@
+// Package metrics defines metric reporting for the p2p component.
 package metrics
 
 import (
