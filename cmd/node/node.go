@@ -272,9 +272,9 @@ func (app *SpacemeshApp) setupLogging() {
 
 	log.Info("%s", app.getAppInfo())
 
-	if app.Config.PublishEventsUrl != "" {
-		log.Info("pubsubing on %v", app.Config.PublishEventsUrl)
-		events.InitializeEventPubsub(app.Config.PublishEventsUrl)
+	if app.Config.PublishEventsURL != "" {
+		log.Info("pubsubing on %v", app.Config.PublishEventsURL)
+		events.InitializeEventPubsub(app.Config.PublishEventsURL)
 	}
 }
 
@@ -819,9 +819,9 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 		}
 	}
 
-	if app.Config.CpuProfile != "" {
+	if app.Config.CPUProfile != "" {
 		log.Info("Starting cpu profile")
-		f, err := os.Create(app.Config.CpuProfile)
+		f, err := os.Create(app.Config.CPUProfile)
 		if err != nil {
 			log.Error("could not create CPU profile: ", err)
 		}
@@ -832,7 +832,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 		defer pprof.StopCPUProfile()
 	}
 
-	if app.Config.PprofHttpServer {
+	if app.Config.PprofHTTPServer {
 		log.Info("Starting pprof server")
 		srv := &http.Server{Addr: ":6060"}
 		defer srv.Shutdown(context.TODO())
