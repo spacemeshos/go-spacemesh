@@ -8,10 +8,12 @@ import (
 	"time"
 )
 
+// Service is an interface for receiving messages via gossip
 type Service interface {
 	RegisterGossipProtocol(string, priorityq.Priority) chan service.GossipMessage
 }
 
+// StateAPI is an API to global state
 type StateAPI interface {
 	GetBalance(address types.Address) uint64
 
@@ -20,11 +22,13 @@ type StateAPI interface {
 	Exist(address types.Address) bool
 }
 
+// NetworkAPI is an API to nods gossip network
 type NetworkAPI interface {
 	Broadcast(channel string, data []byte) error
 	SubscribePeerEvents() (conn, disc chan p2pcrypto.PublicKey)
 }
 
+// MiningAPI is an API for controlling Post, setting coinbase account and getting mining stats
 type MiningAPI interface {
 	StartPost(address types.Address, datadir string, space uint64) error
 	SetCoinbaseAccount(rewardAddress types.Address)
@@ -32,19 +36,23 @@ type MiningAPI interface {
 	MiningStats() (postStatus int, remainingBytes uint64, coinbaseAccount string, postDatadir string)
 }
 
+// OracleAPI gets eligible layers from oracle
 type OracleAPI interface {
 	GetEligibleLayers() []types.LayerID
 }
 
+// GenesisTimeAPI is an API to get genesis time and current layer of the system
 type GenesisTimeAPI interface {
 	GetGenesisTime() time.Time
 	GetCurrentLayer() types.LayerID
 }
 
+// LoggingAPI is an API to system loggers
 type LoggingAPI interface {
 	SetLogLevel(loggerName, severity string) error
 }
 
+// PostAPI is an API for post init module
 type PostAPI interface {
 	Reset() error
 }

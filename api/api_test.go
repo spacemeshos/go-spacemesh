@@ -99,11 +99,11 @@ func (t *TxAPIMock) GetProjection(addr types.Address, prevNonce, prevBalance uin
 }
 
 func (t *TxAPIMock) LatestLayerInState() types.LayerID {
-	return ValidatedLayerId
+	return ValidatedLayerID
 }
 
-func (t *TxAPIMock) GetLayerApplied(txId types.TransactionId) *types.LayerID {
-	return t.layerApplied[txId]
+func (t *TxAPIMock) GetLayerApplied(txID types.TransactionId) *types.LayerID {
+	return t.layerApplied[txID]
 }
 
 func (t *TxAPIMock) GetTransaction(id types.TransactionId) (*types.Transaction, error) {
@@ -150,6 +150,7 @@ func (t *TxAPIMock) AddressExists(addr types.Address) bool {
 	return true
 }
 
+// MinigApiMock is a mock for mining API
 type MinigApiMock struct {
 }
 
@@ -199,7 +200,7 @@ func (PostMock) Reset() error {
 const (
 	genTimeUnix      = 1000000
 	layerDuration    = 10
-	ValidatedLayerId = 8
+	ValidatedLayerID = 8
 	TxReturnLayer    = 1
 )
 
@@ -210,7 +211,7 @@ var (
 	oracle      = OracleMock{}
 	genTime     = GenesisTimeMock{time.Unix(genTimeUnix, 0)}
 	txMempool   = miner.NewTxMemPool()
-	txApi       = &TxAPIMock{
+	txAPI       = &TxAPIMock{
 		returnTx:     make(map[types.TransactionId]*types.Transaction),
 		layerApplied: make(map[types.TransactionId]*types.LayerID),
 	}
@@ -221,7 +222,7 @@ func TestServersConfig(t *testing.T) {
 	port2, err := node.GetUnboundedPort()
 	require.NoError(t, err, "Should be able to establish a connection on a port")
 
-	grpcService := NewGrpcService(port1, &networkMock, ap, txApi, nil, &mining, &oracle, nil, PostMock{}, 0, nil, nil, nil)
+	grpcService := NewGrpcService(port1, &networkMock, ap, txAPI, nil, &mining, &oracle, nil, PostMock{}, 0, nil, nil, nil)
 	require.Equal(t, grpcService.Port, uint(port1), "Expected same port")
 
 	jsonService := NewJSONHTTPServer(port2, port1)
@@ -308,9 +309,9 @@ func TestJsonWalletApi(t *testing.T) {
 
 	txToSend := pb.SignedTransaction{Tx: asBytes(t, genTx(t))}
 	msg := "nonce or balance validation failed"
-	txApi.err = fmt.Errorf(msg)
+	txAPI.err = fmt.Errorf(msg)
 	respBody, respStatus = callEndpoint(t, "v1/submittransaction", marshalProto(t, &txToSend))
-	txApi.err = nil
+	txAPI.err = nil
 	r.Equal(http.StatusInternalServerError, respStatus, http.StatusText(respStatus))
 	r.Equal("{\"error\":\""+msg+"\",\"message\":\""+msg+"\",\"code\":2}", respBody)
 
@@ -376,12 +377,12 @@ func TestJsonWalletApi(t *testing.T) {
 	// add incoming tx to mesh
 	meshTxIn, err := mesh.NewSignedTx(1337, addr, 420, 3, 42, signing.NewEdSigner())
 	r.NoError(err)
-	txApi.returnTx[meshTxIn.Id()] = meshTxIn
+	txAPI.returnTx[meshTxIn.Id()] = meshTxIn
 
 	// add outgoing tx to mesh
 	meshTxOut, err := mesh.NewSignedTx(1337, types.BytesToAddress([]byte{1}), 420, 3, 42, signer)
 	r.NoError(err)
-	txApi.returnTx[meshTxOut.Id()] = meshTxOut
+	txAPI.returnTx[meshTxOut.Id()] = meshTxOut
 
 	// test with start layer that gets the mesh txs
 	payload = marshalProto(t, &pb.GetTxsSinceLayer{Account: &pb.AccountId{Address: util.Bytes2Hex(addr.Bytes())}, StartLayer: TxReturnLayer})
@@ -390,7 +391,7 @@ func TestJsonWalletApi(t *testing.T) {
 
 	var accounts pb.AccountTxs
 	r.NoError(jsonpb.UnmarshalString(respBody, &accounts))
-	r.Equal(uint64(ValidatedLayerId), accounts.ValidatedLayer)
+	r.Equal(uint64(ValidatedLayerID), accounts.ValidatedLayer)
 	r.ElementsMatch([]string{
 		mempoolTxIn.Id().String(),
 		mempoolTxOut.Id().String(),
@@ -404,7 +405,7 @@ func TestJsonWalletApi(t *testing.T) {
 	r.Equal(http.StatusOK, respStatus)
 
 	r.NoError(jsonpb.UnmarshalString(respBody, &accounts))
-	r.Equal(uint64(ValidatedLayerId), accounts.ValidatedLayer)
+	r.Equal(uint64(ValidatedLayerID), accounts.ValidatedLayer)
 	r.ElementsMatch([]string{
 		mempoolTxIn.Id().String(),
 		mempoolTxOut.Id().String(),
@@ -446,15 +447,15 @@ func TestSpacemeshGrpcService_GetTransaction(t *testing.T) {
 	shutDown := launchServer(t)
 
 	tx1 := genTx(t)
-	txApi.returnTx[tx1.Id()] = tx1
+	txAPI.returnTx[tx1.Id()] = tx1
 
 	tx2 := genTx(t)
-	txApi.returnTx[tx2.Id()] = tx2
+	txAPI.returnTx[tx2.Id()] = tx2
 	layerApplied := types.LayerID(1)
-	txApi.layerApplied[tx2.Id()] = &layerApplied
+	txAPI.layerApplied[tx2.Id()] = &layerApplied
 
 	tx3 := genTx(t)
-	txApi.returnTx[tx3.Id()] = tx3
+	txAPI.returnTx[tx3.Id()] = tx3
 	ap.nonces[tx3.Origin()] = 2222
 
 	submitTx(t, tx1)
@@ -483,14 +484,14 @@ func getTx(t *testing.T, tx *types.Transaction) pb.Transaction {
 	return respTx
 }
 
-func assertTx(t *testing.T, respTx pb.Transaction, tx *types.Transaction, status string, layerId, timestamp uint64) {
+func assertTx(t *testing.T, respTx pb.Transaction, tx *types.Transaction, status string, layerID, timestamp uint64) {
 	r := require.New(t)
 	r.Equal(tx.Id().Bytes(), respTx.TxId.Id)
 	r.Equal(tx.Fee, respTx.Fee)
 	r.Equal(tx.Amount, respTx.Amount)
 	r.Equal(util.Bytes2Hex(tx.Recipient.Bytes()), respTx.Receiver.Address)
 	r.Equal(util.Bytes2Hex(tx.Origin().Bytes()), respTx.Sender.Address)
-	r.Equal(layerId, respTx.LayerId)
+	r.Equal(layerID, respTx.LayerId)
 	r.Equal(status, respTx.Status.String())
 	r.Equal(timestamp, respTx.Timestamp)
 }
@@ -526,7 +527,7 @@ func (SyncerMock) IsSynced() bool { return false }
 func launchServer(t *testing.T) func() {
 	networkMock.broadcasted = []byte{0x00}
 	defaultConfig := config2.DefaultConfig()
-	grpcService := NewGrpcService(cfg.GrpcServerPort, &networkMock, ap, txApi, txMempool, &mining, &oracle, &genTime, PostMock{}, layerDuration, &SyncerMock{}, &defaultConfig, nil)
+	grpcService := NewGrpcService(cfg.GrpcServerPort, &networkMock, ap, txAPI, txMempool, &mining, &oracle, &genTime, PostMock{}, layerDuration, &SyncerMock{}, &defaultConfig, nil)
 	jsonService := NewJSONHTTPServer(cfg.JSONServerPort, cfg.GrpcServerPort)
 	// start gRPC and json server
 	grpcService.StartService()

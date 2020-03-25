@@ -7,26 +7,31 @@ import (
 	"sort"
 )
 
-type BlockProvider interface {
-	LayerBlockIds(layerId types.LayerID) ([]types.BlockID, error)
+type blockProvider interface {
+	LayerBlockIds(layerID types.LayerID) ([]types.BlockID, error)
 }
 
+// SuperHare is a method to provide fast hare results without consensus based on received blocks from gossip
 type SuperHare struct {
-	blocks BlockProvider
+	blocks blockProvider
 }
 
-func New(blocks BlockProvider) *SuperHare {
+// New creates a new instance of SuperHare
+func New(blocks blockProvider) *SuperHare {
 	return &SuperHare{blocks}
 }
 
+// Start is a stub to support service API
 func (h *SuperHare) Start() error {
 	return nil
 }
 
+// Close is a stup to support service API
 func (h *SuperHare) Close() {
 
 }
 
+// GetResult is the implementation for receiving consensus process result
 func (h *SuperHare) GetResult(id types.LayerID) ([]types.BlockID, error) {
 	blks, err := h.blocks.LayerBlockIds(id)
 	if err != nil {

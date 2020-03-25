@@ -36,10 +36,10 @@ const (
 	writePauseWarningThrottler = 1 * time.Minute
 )
 
+// ErrNotFound is special type error for not found in DB
 var ErrNotFound = errors.ErrNotFound
 
-var OpenFileLimit = 64
-
+// LDBDatabase  is a wrapper for leveldb database with concurrent access
 type LDBDatabase struct {
 	fn string      // filename for reporting
 	db *leveldb.DB // LevelDB instance
@@ -92,6 +92,7 @@ func (db *LDBDatabase) Put(key []byte, value []byte) error {
 	return db.db.Put(key, value, nil)
 }
 
+// Has returns whether the db contains the key
 func (db *LDBDatabase) Has(key []byte) (bool, error) {
 	return db.db.Has(key, nil)
 }
@@ -110,12 +111,14 @@ func (db *LDBDatabase) Delete(key []byte) error {
 	return db.db.Delete(key, nil)
 }
 
+// NewIterator creates a new leveldb iterator struct compliant with Iterator interface
 func (db *LDBDatabase) NewIterator() iterator.Iterator {
 	it := db.db.NewIterator(nil, nil)
 	runtime.SetFinalizer(it, func() { it.Release() })
 	return it
 }
 
+// Iterator returns iterator iterating over all database keys
 func (db *LDBDatabase) Iterator() iterator.Iterator {
 	return db.db.NewIterator(nil, nil)
 }
@@ -125,10 +128,12 @@ func (db *LDBDatabase) NewIteratorWithPrefix(prefix []byte) iterator.Iterator {
 	return db.db.NewIterator(util.BytesPrefix(prefix), nil)
 }
 
+// Find returns iterator to iterate over values with given prefix key
 func (db LDBDatabase) Find(key []byte) Iterator {
 	return db.db.NewIterator(util.BytesPrefix(key), nil)
 }
 
+// Close closes database, flushing writes and denying all new write requests
 func (db *LDBDatabase) Close() {
 	// Stop the metrics collection to avoid internal database races
 	db.quitLock.Lock()
@@ -150,6 +155,7 @@ func (db *LDBDatabase) Close() {
 	}
 }
 
+// LDB returns the actual inner leveldb struct refrence
 func (db *LDBDatabase) LDB() *leveldb.DB {
 	return db.db
 }
@@ -333,6 +339,7 @@ func (db *LDBDatabase) meter(refresh time.Duration) {
 	errc <- merr
 }
 
+//NewBatch creates a new batch write struct, able to add multiple values in a single operation
 func (db *LDBDatabase) NewBatch() Batch {
 	return &ldbBatch{db: db.db, b: new(leveldb.Batch)}
 }
@@ -351,7 +358,7 @@ func (b *ldbBatch) Put(key, value []byte) error {
 
 func (b *ldbBatch) Delete(key []byte) error {
 	b.b.Delete(key)
-	b.size += 1
+	b.size++
 	return nil
 }
 

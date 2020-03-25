@@ -6,6 +6,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 )
 
+// const for test api gossip proto
 const APIGossipProtocol = "api_test_gossip"
 
 // ApproveAPIGossipMessages registers the gossip api test protocol and approves every message as valid
