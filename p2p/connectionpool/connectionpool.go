@@ -59,6 +59,7 @@ func NewConnectionPool(dialFunc DialFunc, lPub p2pcrypto.PublicKey, logger log.L
 	return cPool
 }
 
+// OnNewConnection is an exported method used to handle new connection events
 func (cp *ConnectionPool) OnNewConnection(nce net.NewConnectionEvent) error {
 	if cp.isShuttingDown() {
 		return errors.New("shutting down")
@@ -66,6 +67,7 @@ func (cp *ConnectionPool) OnNewConnection(nce net.NewConnectionEvent) error {
 	return cp.handleNewConnection(nce.Conn.RemotePublicKey(), nce.Conn, net.Remote)
 }
 
+// OnClosedConnection is an exported method used to handle new closing connections events
 func (cp *ConnectionPool) OnClosedConnection(cwe net.ConnectionWithErr) {
 	if cp.isShuttingDown() {
 		return
@@ -113,6 +115,7 @@ func (cp *ConnectionPool) closeConnections() {
 	cp.connMutex.Unlock()
 }
 
+// CloseConnection closes a connection and removes it from the pool.
 func (cp *ConnectionPool) CloseConnection(key p2pcrypto.PublicKey) {
 	cp.connMutex.Lock()
 	if c, exist := cp.connections[key]; exist {

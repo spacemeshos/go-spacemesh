@@ -7,8 +7,10 @@ import (
 	"sync/atomic"
 )
 
+// Peer is represented by a p2p identity public key
 type Peer p2pcrypto.PublicKey
 
+// Peers is used by protocols to manage available peers.
 type Peers struct {
 	log.Log
 	snapshot *atomic.Value
@@ -20,10 +22,12 @@ func NewPeersImpl(snapshot *atomic.Value, exit chan struct{}, lg log.Log) *Peers
 	return &Peers{snapshot: snapshot, Log: lg, exit: exit}
 }
 
+// PeerSubscriptionProvider is the interface that provides us with peer events channels.
 type PeerSubscriptionProvider interface {
 	SubscribePeerEvents() (conn, disc chan p2pcrypto.PublicKey)
 }
 
+// NewPeers creates a Peers instance that is registered to `s`'s events and updates with them.
 func NewPeers(s PeerSubscriptionProvider, lg log.Log) *Peers {
 	value := atomic.Value{}
 	value.Store(make([]Peer, 0, 20))
@@ -33,10 +37,12 @@ func NewPeers(s PeerSubscriptionProvider, lg log.Log) *Peers {
 	return pi
 }
 
+// Close stops listening for events.
 func (pi Peers) Close() {
 	close(pi.exit)
 }
 
+// GetPeers returns a snapshot of the connected peers shuffled.
 func (pi Peers) GetPeers() []Peer {
 	peers := pi.snapshot.Load().([]Peer)
 	cpy := make([]Peer, len(peers))
@@ -46,6 +52,7 @@ func (pi Peers) GetPeers() []Peer {
 	return cpy
 }
 
+// PeerCont returns the number of connected peers
 func (pi Peers) PeerCount() uint64 {
 	peers := pi.snapshot.Load().([]Peer)
 	return uint64(len(peers))

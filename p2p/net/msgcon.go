@@ -12,8 +12,9 @@ import (
 	"time"
 )
 
-// FormattedConnection is an io.Writer and an io.Closer
+// MsgConnection is an io.Writer and an io.Closer
 // A network connection supporting full-duplex messaging
+// It resembles the Connection interface but suits a packet oriented socket.
 type MsgConnection struct {
 	// metadata for logging / debugging
 	logger      log.Log

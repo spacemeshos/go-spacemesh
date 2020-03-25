@@ -61,6 +61,7 @@ func NewDiscoveryProtocol(local p2pcrypto.PublicKey, rt protocolRoutingTable, sv
 	return d
 }
 
+// Close stops the message server protocol from serving requests.
 func (p *protocol) Close() {
 	p.msgServer.Close()
 }
