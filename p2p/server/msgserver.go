@@ -11,8 +11,10 @@ import (
 	"time"
 )
 
+// MessageType is an int32 used to distinguish between server messages inside a single protocol.
 type MessageType uint32
 
+// Message is helper type for `MessegeServer` messages.
 type Message interface {
 	service.DirectMessage
 	Data() service.Data
@@ -23,6 +25,7 @@ func extractPayload(m Message) []byte {
 	return data.Payload
 }
 
+// Item is queue entry used to match responds to sent requests.
 type Item struct {
 	id        uint64
 	timestamp time.Time
@@ -32,12 +35,12 @@ type Item struct {
 // message types on top of a protocol and declare request and response handlers. it matches incoming responses to requests.
 type MessageServer struct {
 	log.Log
-	ReqId              uint64 //request id
+	ReqID              uint64 //request id
 	name               string //server name
 	network            Service
 	pendMutex          sync.RWMutex
 	pendingQueue       *list.List                                   //queue of pending messages
-	resHandlers        map[uint64]func(msg []byte)                  //response handlers by request ReqId
+	resHandlers        map[uint64]func(msg []byte)                  //response handlers by request ReqID
 	msgRequestHandlers map[MessageType]func(message Message) []byte //request handlers by request type
 	ingressChannel     chan service.DirectMessage                   //chan to relay messages into the server
 	requestLifetime    time.Duration                                //time a request can stay in the pending queue until evicted
@@ -52,7 +55,7 @@ type Service interface {
 	SendWrappedMessage(nodeID p2pcrypto.PublicKey, protocol string, payload *service.DataMsgWrapper) error
 }
 
-// NewMessageServer registers a protocol and returns a new server to declare request and response handlers on.
+// NewMsgServer registers a protocol and returns a new server to declare request and response handlers on.
 func NewMsgServer(network Service, name string, requestLifetime time.Duration, c chan service.DirectMessage, logger log.Log) *MessageServer {
 	p := &MessageServer{
 		Log:                logger,
@@ -206,7 +209,7 @@ func (p *MessageServer) RegisterBytesMsgHandler(msgType MessageType, reqHandler 
 
 // SendRequest sends a request of a specific message.
 func (p *MessageServer) SendRequest(msgType MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte)) error {
-	reqID := p.newRequestId()
+	reqID := p.newReqID()
 	p.pendMutex.Lock()
 	p.resHandlers[reqID] = resHandler
 	p.pendingQueue.PushBack(Item{id: reqID, timestamp: time.Now()})
@@ -221,6 +224,6 @@ func (p *MessageServer) SendRequest(msgType MessageType, payload []byte, address
 	return nil
 }
 
-func (p *MessageServer) newRequestId() uint64 {
-	return atomic.AddUint64(&p.ReqId, 1)
+func (p *MessageServer) newReqID() uint64 {
+	return atomic.AddUint64(&p.ReqID, 1)
 }

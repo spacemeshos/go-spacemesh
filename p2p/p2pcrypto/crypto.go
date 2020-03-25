@@ -28,12 +28,12 @@ type PrivateKey interface {
 	Key
 }
 
-// PrivateKey is a public key of 32 byte.
+// PublicKey is a public key of 32 byte.
 type PublicKey interface {
 	Key
 }
 
-// PrivateKey is a private key of 32 byte.
+// SharedSecret is created using two participants key to enable Sealing and Opening of messages (NaCL).
 type SharedSecret interface {
 	Key
 	Seal(message []byte) (out []byte)

@@ -24,9 +24,13 @@ const DefaultQueueCount uint = 6
 const DefaultMessageQueueSize uint = 5120
 
 const (
-	ReadBufferSize     = 5 * 1024 * 1024
-	WriteBufferSize    = 5 * 1024 * 1024
-	TCPKeepAlive       = true
+	// ReadBufferSize const is the default value used to set the socket option SO_RCVBUF
+	ReadBufferSize = 5 * 1024 * 1024
+	// WriteBufferSize const is the default value used to set the socket option SO_SNDBUF
+	WriteBufferSize = 5 * 1024 * 1024
+	// TCPKeepAlive sets whether KeepAlive is active or not on the socket
+	TCPKeepAlive = true
+	// TCPKeepAlivePeriod sets the interval of KeepAlive
 	TCPKeepAlivePeriod = 10 * time.Second
 )
 
@@ -72,7 +76,7 @@ type Net struct {
 // NewConnectionEvent is a struct holding a new created connection and a node info.
 type NewConnectionEvent struct {
 	Conn Connection
-	Node *node.NodeInfo
+	Node *node.Info
 }
 
 // TODO Create a config for Net and only pass it in.
@@ -102,6 +106,7 @@ func NewNet(conf config.Config, localEntity node.LocalNode, logger log.Log) (*Ne
 	return n, nil
 }
 
+// Start begins accepting connections from the listener socket
 func (n *Net) Start(listener net.Listener) { // todo: maybe add context
 	n.listener = listener
 	n.listenAddress = listener.Addr().(*net.TCPAddr)
@@ -198,8 +203,7 @@ func (n *Net) tcpSocketConfig(tcpconn *net.TCPConn) {
 	}
 }
 
-func (n *Net) createConnection(address net.Addr, remotePub p2pcrypto.PublicKey, session NetworkSession,
-	ctx context.Context) (ManagedConnection, error) {
+func (n *Net) createConnection(ctx context.Context, address net.Addr, remotePub p2pcrypto.PublicKey, session NetworkSession) (ManagedConnection, error) {
 
 	if n.isShuttingDown {
 		return nil, fmt.Errorf("can't dial because the connection is shutting down")
@@ -215,10 +219,10 @@ func (n *Net) createConnection(address net.Addr, remotePub p2pcrypto.PublicKey, 
 	return newConnection(netConn, n, remotePub, session, n.config.MsgSizeLimit, n.config.ResponseTimeout, n.logger), nil
 }
 
-func (n *Net) createSecuredConnection(address net.Addr, remotePubkey p2pcrypto.PublicKey, ctx context.Context) (ManagedConnection, error) {
+func (n *Net) createSecuredConnection(ctx context.Context, address net.Addr, remotePubkey p2pcrypto.PublicKey) (ManagedConnection, error) {
 
 	session := createSession(n.localNode.PrivateKey(), remotePubkey)
-	conn, err := n.createConnection(address, remotePubkey, session, ctx)
+	conn, err := n.createConnection(ctx, address, remotePubkey, session)
 	if err != nil {
 		return nil, err
 	}
@@ -247,7 +251,7 @@ func createSession(privkey p2pcrypto.PrivateKey, remotePubkey p2pcrypto.PublicKe
 // Returns established connection that local clients can send messages to or error if failed
 // to establish a connection, currently only secured connections are supported
 func (n *Net) Dial(ctx context.Context, address net.Addr, remotePubkey p2pcrypto.PublicKey) (Connection, error) {
-	conn, err := n.createSecuredConnection(address, remotePubkey, ctx)
+	conn, err := n.createSecuredConnection(ctx, address, remotePubkey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to Dial. err: %v", err)
 	}
@@ -316,7 +320,7 @@ func (n *Net) SubscribeOnNewRemoteConnections(f func(event NewConnectionEvent)) 
 	n.regMutex.Unlock()
 }
 
-func (n *Net) publishNewRemoteConnectionEvent(conn Connection, node *node.NodeInfo) {
+func (n *Net) publishNewRemoteConnectionEvent(conn Connection, node *node.Info) {
 	n.regMutex.RLock()
 	for _, f := range n.regNewRemoteConn {
 		f(NewConnectionEvent{conn, node})

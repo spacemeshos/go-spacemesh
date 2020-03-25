@@ -20,8 +20,8 @@ const (
 	// ProtocolLabel holds the name we use to add a protocol label value
 	ProtocolLabel = "protocol"
 
-	// PeerIdLabel holds the name we use to add a protocol label value
-	PeerIdLabel = "peer_id"
+	// PeerIDLabel holds the name we use to add a protocol label value
+	PeerIDLabel = "peer_id"
 )
 
 var (
@@ -54,7 +54,7 @@ var (
 		Subsystem: MetricsSubsystem,
 		Name:      "peer_receive_bytes_total",
 		Help:      "Number of bytes received from a given peer.",
-	}, []string{PeerIdLabel})
+	}, []string{PeerIDLabel})
 
 	// PeerSend is the num of bytes sent to peer
 	PeerSend metrics.Counter = prometheus.NewCounterFrom(stdprometheus.CounterOpts{
@@ -62,7 +62,7 @@ var (
 		Subsystem: MetricsSubsystem,
 		Name:      "peer_send_bytes_total",
 		Help:      "Number of bytes sent to a given peer.",
-	}, []string{PeerIdLabel})
+	}, []string{PeerIDLabel})
 
 	totalGossipMessages = prometheus.NewCounterFrom(stdprometheus.CounterOpts{
 		Namespace: Namespace,

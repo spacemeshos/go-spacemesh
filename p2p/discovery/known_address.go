@@ -9,8 +9,8 @@ import (
 // KnownAddress tracks information about a known network address that is used
 // to determine how viable an address is.
 type KnownAddress struct {
-	na          *node.NodeInfo
-	srcAddr     *node.NodeInfo
+	na          *node.Info
+	srcAddr     *node.Info
 	attempts    int
 	lastSeen    time.Time
 	lastattempt time.Time
@@ -19,7 +19,8 @@ type KnownAddress struct {
 	refs        int // reference count of new buckets
 }
 
-func (ka *KnownAddress) NodeInfo() *node.NodeInfo {
+// NodeInfo returns the internal Info struct of this address.
+func (ka *KnownAddress) NodeInfo() *node.Info {
 	return ka.na
 }
 

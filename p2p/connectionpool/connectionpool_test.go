@@ -20,7 +20,7 @@ func generatePublicKey() p2pcrypto.PublicKey {
 	return p2pcrypto.NewRandomPubkey()
 }
 
-func generateIpAddress() string {
+func generateIPAddress() string {
 	return fmt.Sprintf("%d.%d.%d.%d", rand.Int31n(255), rand.Int31n(255), rand.Int31n(255), rand.Int31n(255))
 }
 
@@ -82,15 +82,15 @@ func TestGetConnectionDuringDial(t *testing.T) {
 	go dispatchF(waitCh)
 	go dispatchF(waitCh)
 	cnt := 0
-	var prevId string
+	var prevID string
 Loop:
 	for {
 		select {
 		case c := <-waitCh:
-			if prevId == "" {
-				prevId = c.ID()
+			if prevID == "" {
+				prevID = c.ID()
 			} else {
-				assert.Equal(t, prevId, c.ID())
+				assert.Equal(t, prevID, c.ID())
 			}
 			cnt++
 			if cnt == 2 {
@@ -212,7 +212,7 @@ func TestShutdownWithMultipleDials(t *testing.T) {
 	iterCnt := 20
 	for i := 0; i < iterCnt; i++ {
 		go func() {
-			addr := net2.TCPAddr{IP: net2.ParseIP(generateIpAddress())}
+			addr := net2.TCPAddr{IP: net2.ParseIP(generateIPAddress())}
 			key := generatePublicKey()
 			conn, _ := cPool.GetConnection(&addr, key)
 			newConns <- conn
@@ -261,7 +261,7 @@ func TestRandom(t *testing.T) {
 	peerCnt := 30
 	peers := make([]Peer, 0)
 	for i := 0; i < peerCnt; i++ {
-		peers = append(peers, Peer{generatePublicKey(), generateIpAddress()})
+		peers = append(peers, Peer{generatePublicKey(), generateIPAddress()})
 	}
 
 	nMock := net.NewNetworkMock()

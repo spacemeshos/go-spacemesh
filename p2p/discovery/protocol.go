@@ -12,21 +12,21 @@ import (
 
 type protocolRoutingTable interface {
 	GetAddress() *KnownAddress
-	AddAddresses(n []*node.NodeInfo, src *node.NodeInfo)
-	AddAddress(n *node.NodeInfo, src *node.NodeInfo)
-	AddressCache() []*node.NodeInfo
+	AddAddresses(n []*node.Info, src *node.Info)
+	AddAddress(n *node.Info, src *node.Info)
+	AddressCache() []*node.Info
 }
 
 type protocol struct {
-	local     *node.NodeInfo
+	local     *node.Info
 	table     protocolRoutingTable
 	logger    log.Log
 	msgServer *server.MessageServer
 }
 
-func (d *protocol) SetLocalAddresses(tcp, udp int) {
-	d.local.ProtocolPort = uint16(tcp)
-	d.local.DiscoveryPort = uint16(udp)
+func (p *protocol) SetLocalAddresses(tcp, udp int) {
+	p.local.ProtocolPort = uint16(tcp)
+	p.local.DiscoveryPort = uint16(udp)
 }
 
 // Name is the name if the protocol.
@@ -38,17 +38,17 @@ const MessageBufSize = 1000
 // MessageTimeout is the timeout we tolerate when waiting for a message reply
 const MessageTimeout = time.Second * 5 // TODO: Parametrize
 
-// PINGPONG is the ping protocol ID
-const PINGPONG = 0
+// PingPong is the ping protocol ID
+const PingPong = 0
 
-// GET_ADDRESSES is the findnode protocol ID
-const GET_ADDRESSES = 1
+// GetAddresses is the findnode protocol ID
+const GetAddresses = 1
 
-// NewDiscoveryProtocol is a constructor for a protocol protocol provider.
-func NewDiscoveryProtocol(local p2pcrypto.PublicKey, rt protocolRoutingTable, svc server.Service, log log.Log) *protocol {
+// newProtocol is a constructor for a protocol protocol provider.
+func newProtocol(local p2pcrypto.PublicKey, rt protocolRoutingTable, svc server.Service, log log.Log) *protocol {
 	s := server.NewMsgServer(svc, Name, MessageTimeout, make(chan service.DirectMessage, MessageBufSize), log)
 	d := &protocol{
-		local:     &node.NodeInfo{ID: local.Array(), IP: net.IPv4zero, ProtocolPort: 7513, DiscoveryPort: 7513},
+		local:     &node.Info{ID: local.Array(), IP: net.IPv4zero, ProtocolPort: 7513, DiscoveryPort: 7513},
 		table:     rt,
 		msgServer: s,
 		logger:    log,
@@ -56,8 +56,8 @@ func NewDiscoveryProtocol(local p2pcrypto.PublicKey, rt protocolRoutingTable, sv
 
 	// XXX Reminder: for discovery protocol to work you must call SetLocalAddresses with updated ports from the socket.
 
-	d.msgServer.RegisterMsgHandler(PINGPONG, d.newPingRequestHandler())
-	d.msgServer.RegisterMsgHandler(GET_ADDRESSES, d.newGetAddressesRequestHandler())
+	d.msgServer.RegisterMsgHandler(PingPong, d.newPingRequestHandler())
+	d.msgServer.RegisterMsgHandler(GetAddresses, d.newGetAddressesRequestHandler())
 	return d
 }
 

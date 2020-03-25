@@ -46,7 +46,7 @@ func (p *protocol) newGetAddressesRequestHandler() func(msg server.Message) []by
 }
 
 // GetAddresses Send a get address request to a remote node, it will block and return the results returned from the node.
-func (p *protocol) GetAddresses(server p2pcrypto.PublicKey) ([]*node.NodeInfo, error) {
+func (p *protocol) GetAddresses(server p2pcrypto.PublicKey) ([]*node.Info, error) {
 	start := time.Now()
 	var err error
 
@@ -55,14 +55,14 @@ func (p *protocol) GetAddresses(server p2pcrypto.PublicKey) ([]*node.NodeInfo, e
 	plogger.Debug("sending request")
 
 	// response handler
-	ch := make(chan []*node.NodeInfo)
+	ch := make(chan []*node.Info)
 	resHandler := func(msg []byte) {
 		defer close(ch)
-		nodes := make([]*node.NodeInfo, 0, getAddrMax)
+		nodes := make([]*node.Info, 0, getAddrMax)
 		err := types.BytesToInterface(msg, &nodes)
 		//todo: check that we're not pass max results ?
 		if err != nil {
-			plogger.Warning("could not deserialize bytes to NodeInfo, skipping packet err=", err)
+			plogger.Warning("could not deserialize bytes to Info, skipping packet err=", err)
 			return
 		}
 
@@ -74,7 +74,7 @@ func (p *protocol) GetAddresses(server p2pcrypto.PublicKey) ([]*node.NodeInfo, e
 		ch <- nodes
 	}
 
-	err = p.msgServer.SendRequest(GET_ADDRESSES, []byte(""), server, resHandler)
+	err = p.msgServer.SendRequest(GetAddresses, []byte(""), server, resHandler)
 
 	if err != nil {
 		return nil, err

@@ -11,37 +11,44 @@ import (
 	"strconv"
 )
 
-const SCHEME = "spacemesh"
+// Scheme sets the URI scheme for the node string format.
+const Scheme = "spacemesh"
+
+// DiscoveryPortParam is the param used to define the port used for discovery.
 const DiscoveryPortParam = "disc"
 
+// ID is the public key represented as a fixed size 32 byte array.
 type ID [32]byte
 
+// PublicKey returns the public key as the PublicKey interface.
 func (d ID) PublicKey() p2pcrypto.PublicKey {
 	return p2pcrypto.PublicKeyFromArray(d)
 }
 
+// Bytes returns the ID as byte slice.
 func (d ID) Bytes() []byte {
 	return d[:]
 }
 
+// String returns a base58 string representation of the ID.
 func (d ID) String() string {
 	return base58.Encode(d[:])
 }
 
-// NodeInfo represents a p2p node that we know about.
-type NodeInfo struct {
+// Info represents a p2p node that we know about.
+type Info struct {
 	ID
 	IP            net.IP
 	ProtocolPort  uint16 // TCP
 	DiscoveryPort uint16 // UDP
 }
 
-// NewNode creates a new NodeInfo from public key, ip and ports.
-func NewNode(id p2pcrypto.PublicKey, ip net.IP, proto, disc uint16) *NodeInfo {
+// NewNode creates a new Info from public key, ip and ports.
+func NewNode(id p2pcrypto.PublicKey, ip net.IP, proto, disc uint16) *Info {
 	if ipv4 := ip.To4(); ipv4 != nil {
 		ip = ipv4
 	}
-	return &NodeInfo{
+	return &Info{
 		IP:            ip,
 		ID:            id.Array(),
 		ProtocolPort:  proto,
@@ -51,8 +58,8 @@ func NewNode(id p2pcrypto.PublicKey, ip net.IP, proto, disc uint16) *NodeInfo {
 
 /* NOTE: code below is from go-ethereum. modified for spacemesh needs*/
 
-// checks whether n is a valid complete node.
-func (n NodeInfo) Valid() error {
+// Valid checks whether n is a valid complete node.
+func (n Info) Valid() error {
 	if n.IP == nil {
 		return errors.New("no ip set to node")
 	}
@@ -76,8 +83,8 @@ func (n NodeInfo) Valid() error {
 
 // The string representation of a Node is a URL.
 // Please see ParseNode for a description of the format.
-func (n NodeInfo) String() string {
-	u := url.URL{Scheme: SCHEME}
+func (n Info) String() string {
+	u := url.URL{Scheme: Scheme}
 
 	if n.IP == nil {
 		u.Host = n.ID.String()
@@ -92,7 +99,7 @@ func (n NodeInfo) String() string {
 	return u.String()
 }
 
-var incompleteNodeURL = regexp.MustCompile(fmt.Sprintf("(?i)^(?:%v://)?([0-9a-f]+)$", SCHEME))
+var incompleteNodeURL = regexp.MustCompile(fmt.Sprintf("(?i)^(?:%v://)?([0-9a-f]+)$", Scheme))
 
 // ParseNode parses a node designator.
 //
@@ -117,7 +124,7 @@ var incompleteNodeURL = regexp.MustCompile(fmt.Sprintf("(?i)^(?:%v://)?([0-9a-f]
 // and UDP discovery port 7513.
 //
 //    spacemesh://<base58 node id>@10.3.58.6:7513?disc=7513
-func ParseNode(rawurl string) (*NodeInfo, error) {
+func ParseNode(rawurl string) (*Info, error) {
 	if m := incompleteNodeURL.FindStringSubmatch(rawurl); m != nil {
 		id, err := p2pcrypto.NewPrivateKeyFromBase58(m[1])
 		if err != nil {
@@ -128,7 +135,7 @@ func ParseNode(rawurl string) (*NodeInfo, error) {
 	return parseComplete(rawurl)
 }
 
-func parseComplete(rawurl string) (*NodeInfo, error) {
+func parseComplete(rawurl string) (*Info, error) {
 	var (
 		id               p2pcrypto.PublicKey
 		ip               net.IP
@@ -138,8 +145,8 @@ func parseComplete(rawurl string) (*NodeInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	if u.Scheme != SCHEME {
-		return nil, fmt.Errorf("invalid URL scheme, want '%v'", SCHEME)
+	if u.Scheme != Scheme {
+		return nil, fmt.Errorf("invalid URL scheme, want '%v'", Scheme)
 	}
 	// Parse the Node ID from the user portion.
 	if u.User == nil {

@@ -33,6 +33,7 @@ const (
 	Remote
 )
 
+// MessageQueueSize is the size for queue of messages before pushing them on the socket
 const MessageQueueSize = 250
 
 // Connection is an interface stating the API of all secured connections in the system
@@ -253,10 +254,11 @@ func (c *FormattedConnection) SendSock(m []byte) error {
 		return err
 	}
 	c.wmtx.Unlock()
-	metrics.PeerRecv.With(metrics.PeerIdLabel, c.remotePub.String()).Add(float64(len(m)))
+	metrics.PeerRecv.With(metrics.PeerIDLabel, c.remotePub.String()).Add(float64(len(m)))
 	return nil
 }
 
+// ErrAlreadyClosed is an error for when `Close` is called on a closed connection.
 var ErrAlreadyClosed = errors.New("connection is already closed")
 
 func (c *FormattedConnection) closeUnlocked() error {
@@ -290,9 +292,12 @@ func (c *FormattedConnection) Closed() bool {
 	return c.closed
 }
 
-var ErrTriedToSetupExistingConn = errors.New("tried to setup existing connection")
-var ErrIncomingSessionTimeout = errors.New("timeout waiting for handshake message")
-var ErrMsgExceededLimit = errors.New("message size exceeded limit")
+var (
+	// ErrTriedToSetupExistingConn occurs when handshake packet is sent twice on a connection
+	ErrTriedToSetupExistingConn = errors.New("tried to setup existing connection")
+	// ErrMsgExceededLimit occurs when a received message size exceeds the defined message size
+	ErrMsgExceededLimit = errors.New("message size exceeded limit")
+)
 
 func (c *FormattedConnection) setupIncoming(timeout time.Duration) error {
 	be := make(chan struct {

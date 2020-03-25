@@ -7,7 +7,7 @@ import (
 
 var _ NetworkSession = (*SessionMock)(nil)
 
-// SessionMock is a wonderful fluffy teddybear
+// SessionMock mocks NetworkSession.
 type SessionMock struct {
 	id p2pcrypto.PublicKey
 
@@ -15,16 +15,17 @@ type SessionMock struct {
 	OpenMessageFunc func(boxedMessage []byte) ([]byte, error)
 }
 
+// NewSessionMock creates a new mock for given public key.
 func NewSessionMock(pubkey p2pcrypto.PublicKey) *SessionMock {
 	return &SessionMock{id: pubkey}
 }
 
-// ID is this
+// ID is a mock.
 func (sm SessionMock) ID() p2pcrypto.PublicKey {
 	return sm.id
 }
 
-// Encrypt is this
+// SealMessage is a mock.
 func (sm SessionMock) SealMessage(message []byte) []byte {
 	if sm.SealMessageFunc != nil {
 		return sm.SealMessageFunc(message)
@@ -32,7 +33,7 @@ func (sm SessionMock) SealMessage(message []byte) []byte {
 	return nil
 }
 
-// Decrypt is this
+// OpenMessage is a mock.
 func (sm SessionMock) OpenMessage(boxedMessage []byte) ([]byte, error) {
 	if sm.OpenMessageFunc != nil {
 		return sm.OpenMessageFunc(boxedMessage)

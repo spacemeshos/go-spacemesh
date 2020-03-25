@@ -262,6 +262,7 @@ func (prot *Protocol) hasPeer(key p2pcrypto.PublicKey) bool {
 	return ok
 }
 
+// SetPriority sets the priority for protoName in the queue.
 func (prot *Protocol) SetPriority(protoName string, priority priorityq.Priority) {
 	prot.priorities[protoName] = priority
 }

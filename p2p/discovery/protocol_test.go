@@ -11,11 +11,11 @@ import (
 
 /* methods below are kept to keep tests working without big changes */
 
-func generateDiscNode() *node.NodeInfo {
+func generateDiscNode() *node.Info {
 	return node.GenerateRandomNodeData()
 }
 
-func generateDiscNodes(n int) []*node.NodeInfo {
+func generateDiscNodes(n int) []*node.Info {
 	return node.GenerateRandomNodesData(n)
 }
 
@@ -32,7 +32,7 @@ type testNode struct {
 func newTestNode(simulator *service.Simulator) *testNode {
 	nd := simulator.NewNode()
 	d := &mockAddrBook{}
-	disc := NewDiscoveryProtocol(nd.NodeInfo.PublicKey(), d, nd, log.New(nd.String(), "", ""))
+	disc := newProtocol(nd.Info.PublicKey(), d, nd, log.New(nd.String(), "", ""))
 	return &testNode{nd, d, disc}
 }
 
@@ -43,21 +43,21 @@ func TestPing_Ping(t *testing.T) {
 	p2 := newTestNode(sim)
 	p3 := sim.NewNode()
 
-	p1.d.LookupFunc = func(key p2pcrypto.PublicKey) (d *node.NodeInfo, e error) {
-		return p2.svc.NodeInfo, nil
+	p1.d.LookupFunc = func(key p2pcrypto.PublicKey) (d *node.Info, e error) {
+		return p2.svc.Info, nil
 	}
 
 	err := p1.dscv.Ping(p2.svc.PublicKey())
 	require.NoError(t, err)
 
-	p2.d.LookupFunc = func(key p2pcrypto.PublicKey) (d *node.NodeInfo, e error) {
-		return p1.svc.NodeInfo, nil
+	p2.d.LookupFunc = func(key p2pcrypto.PublicKey) (d *node.Info, e error) {
+		return p1.svc.Info, nil
 	}
 	err = p2.dscv.Ping(p1.svc.PublicKey())
 	require.NoError(t, err)
 
-	p1.d.LookupFunc = func(key p2pcrypto.PublicKey) (d *node.NodeInfo, e error) {
-		return p3.NodeInfo, nil
+	p1.d.LookupFunc = func(key p2pcrypto.PublicKey) (d *node.Info, e error) {
+		return p3.Info, nil
 	}
 
 	err = p1.dscv.Ping(p3.PublicKey())
@@ -105,12 +105,12 @@ func TestFindNodeProtocol_FindNode(t *testing.T) {
 	n1 := newTestNode(sim)
 	n2 := newTestNode(sim)
 
-	idarr, err := n1.dscv.GetAddresses(n2.svc.NodeInfo.PublicKey())
+	idarr, err := n1.dscv.GetAddresses(n2.svc.Info.PublicKey())
 
 	require.NoError(t, err, "Should not return error")
 	// when routing table is empty we get an empty result
 	// todo: maybe this should error ?
-	require.Equal(t, []*node.NodeInfo{}, idarr, "Should be an empty array")
+	require.Equal(t, []*node.Info{}, idarr, "Should be an empty array")
 }
 
 //
@@ -127,7 +127,7 @@ func TestFindNodeProtocol_FindNode2(t *testing.T) {
 
 	n2.dscv.table = n2.d
 
-	idarr, err := n1.dscv.GetAddresses(n2.svc.NodeInfo.PublicKey())
+	idarr, err := n1.dscv.GetAddresses(n2.svc.Info.PublicKey())
 
 	require.NoError(t, err, "Should not return error")
 	require.Equal(t, gen, idarr, "Should be array that contains the node")
@@ -138,7 +138,7 @@ func TestFindNodeProtocol_FindNode2(t *testing.T) {
 
 	n2.dscv.table = n2.d
 
-	idarr, err = n1.dscv.GetAddresses(n2.svc.NodeInfo.PublicKey())
+	idarr, err = n1.dscv.GetAddresses(n2.svc.Info.PublicKey())
 
 	require.NoError(t, err, "Should not return error")
 	require.Equal(t, gen, idarr, "Should be same array")
@@ -154,13 +154,13 @@ func TestFindNodeProtocol_FindNode_Concurrency(t *testing.T) {
 	n1.d.AddressCacheResult = gen
 	n1.dscv.table = n1.d
 
-	retchans := make(chan []*node.NodeInfo)
+	retchans := make(chan []*node.Info)
 
 	for i := 0; i < concurrency; i++ {
 		go func() {
 			nx := newTestNode(sim)
-			nx.d.LookupFunc = func(key p2pcrypto.PublicKey) (d *node.NodeInfo, e error) {
-				return n1.svc.NodeInfo, nil
+			nx.d.LookupFunc = func(key p2pcrypto.PublicKey) (d *node.Info, e error) {
+				return n1.svc.Info, nil
 			}
 			nx.dscv.table = nx.d
 			res, err := nx.dscv.GetAddresses(n1.svc.PublicKey())
