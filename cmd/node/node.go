@@ -348,7 +348,7 @@ func (weakCoinStub) GetResult() bool {
 }
 
 func (app *SpacemeshApp) addLogger(name string, logger log.Log) log.Log {
-	log.LogLvl()
+	log.Level()
 	lvl := zap.NewAtomicLevel()
 	var err error
 
@@ -402,12 +402,12 @@ func (app *SpacemeshApp) addLogger(name string, logger log.Log) log.Log {
 	case AtxBuilderLogger:
 		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.AtxBuilderLoggerLevel))
 	default:
-		lvl.SetLevel(log.LogLvl())
+		lvl.SetLevel(log.Level())
 	}
 
 	if err != nil {
 		log.Error("cannot parse logging for %v error %v", name, err)
-		lvl.SetLevel(log.LogLvl())
+		lvl.SetLevel(log.Level())
 	}
 	app.loggers[name] = &lvl
 	return logger.SetLevel(&lvl).WithName(name)
@@ -443,7 +443,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId,
 
 	name := nodeID.ShortString()
 
-	lg := log.NewDefault(name).WithFields(log.NodeId(name))
+	lg := log.NewDefault(name).WithFields(log.NodeID(name))
 
 	app.log = app.addLogger(AppLogger, lg)
 
@@ -615,11 +615,11 @@ func (app *SpacemeshApp) HareFactory(mdb *mesh.MeshDB, swarm service.Service, sg
 		for _, b := range ids {
 			res, err := mdb.GetBlock(b)
 			if err != nil {
-				app.log.With().Error("output set block not in database", log.BlockId(b.String()), log.Err(err))
+				app.log.With().Error("output set block not in database", log.BlockID(b.String()), log.Err(err))
 				return false
 			}
 			if res == nil {
-				app.log.With().Error("output set block not in database (BUG BUG BUG - GetBlock return err nil and res nil)", log.BlockId(b.String()))
+				app.log.With().Error("output set block not in database (BUG BUG BUG - GetBlock return err nil and res nil)", log.BlockID(b.String()))
 				return false
 			}
 

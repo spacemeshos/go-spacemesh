@@ -145,7 +145,7 @@ func (ni *ninjaTortoise) saveOpinion() error {
 		}
 
 		if !valid {
-			ni.logger.With().Warning("block is contextually invalid", log.BlockId(b.id().String()))
+			ni.logger.With().Warning("block is contextually invalid", log.BlockID(b.id().String()))
 		}
 		events.Publish(events.ValidBlock{ID: b.id().String(), Valid: valid})
 	}
@@ -194,7 +194,7 @@ func (ni *ninjaTortoise) evictOutOfPbase() {
 			defer wg.Done()
 			ids, err := ni.db.LayerBlockIds(lyr)
 			if err != nil {
-				ni.logger.With().Error("could not get layer ids for layer ", log.LayerId(lyr.Uint64()), log.Err(err))
+				ni.logger.With().Error("could not get layer ids for layer ", log.LayerID(lyr.Uint64()), log.Err(err))
 			}
 			for _, id := range ids {
 				delete(ni.TEffective, id)
@@ -515,7 +515,7 @@ func (ni *ninjaTortoise) latestComplete() types.LayerID {
 }
 
 func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) {
-	ni.logger.With().Info("tortoise update tables", log.LayerId(uint64(newlyr.Index())), log.Int("n_blocks", len(newlyr.Blocks())))
+	ni.logger.With().Info("tortoise update tables", log.LayerID(uint64(newlyr.Index())), log.Int("n_blocks", len(newlyr.Blocks())))
 	start := time.Now()
 	if newlyr.Index() > ni.Last {
 		ni.Last = newlyr.Index()
@@ -609,7 +609,7 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) {
 			}
 		}
 	}
-	ni.logger.With().Info(fmt.Sprintf("tortoise finished layer in %v", time.Since(start)), log.LayerId(uint64(newlyr.Index())), log.Uint64("pbase", uint64(ni.PBase.Layer())))
+	ni.logger.With().Info(fmt.Sprintf("tortoise finished layer in %v", time.Since(start)), log.LayerID(uint64(newlyr.Index())), log.Uint64("pbase", uint64(ni.PBase.Layer())))
 	return
 }
 

@@ -118,7 +118,7 @@ func (t *Ticker) Notify() (int, error) {
 		return 0, errNotMonotonic
 	}
 	missedTicks := 0
-	t.log.Event().Info("release tick", log.LayerId(uint64(layer)))
+	t.log.Event().Info("release tick", log.LayerID(uint64(layer)))
 	for ch := range t.subscribers { // notify all subscribers
 
 		// non-blocking notify
@@ -136,7 +136,7 @@ func (t *Ticker) Notify() (int, error) {
 
 	if missedTicks > 0 {
 		t.log.With().Error("missed ticks for layer",
-			log.LayerId(uint64(layer)), log.Int("missed_count", missedTicks))
+			log.LayerID(uint64(layer)), log.Int("missed_count", missedTicks))
 		return missedTicks, errMissedTicks
 	}
 

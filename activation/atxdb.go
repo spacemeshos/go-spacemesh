@@ -129,7 +129,7 @@ func (db *ActivationDb) ProcessAtxs(atxs []*types.ActivationTx) error {
 			// TODO: Ensure that these are two different, syntactically valid ATXs for the same epoch, otherwise the
 			//  miner did nothing wrong
 			db.log.With().Error("found miner with multiple ATXs published in same block",
-				log.String("atx_node_id", atx.NodeId.ShortString()), log.AtxId(atx.ShortString()))
+				log.String("atx_node_id", atx.NodeId.ShortString()), log.AtxID(atx.ShortString()))
 		}
 		err := db.ProcessAtx(atx)
 		if err != nil {
@@ -152,14 +152,14 @@ func (db *ActivationDb) ProcessAtx(atx *types.ActivationTx) error {
 		return nil
 	}
 	epoch := atx.PubLayerIdx.GetEpoch(db.LayersPerEpoch)
-	db.log.With().Info("processing atx", log.AtxId(atx.ShortString()), log.EpochId(uint64(epoch)),
-		log.String("atx_node_id", atx.NodeId.Key[:5]), log.LayerId(uint64(atx.PubLayerIdx)))
+	db.log.With().Info("processing atx", log.AtxID(atx.ShortString()), log.EpochID(uint64(epoch)),
+		log.String("atx_node_id", atx.NodeId.Key[:5]), log.LayerID(uint64(atx.PubLayerIdx)))
 	err := db.ContextuallyValidateAtx(atx.ActivationTxHeader)
 	if err != nil {
-		db.log.With().Error("ATX failed contextual validation", log.AtxId(atx.ShortString()), log.Err(err))
+		db.log.With().Error("ATX failed contextual validation", log.AtxID(atx.ShortString()), log.Err(err))
 		// TODO: Blacklist this miner
 	} else {
-		db.log.With().Info("ATX is valid", log.AtxId(atx.ShortString()))
+		db.log.With().Info("ATX is valid", log.AtxID(atx.ShortString()))
 	}
 	err = db.StoreAtx(epoch, atx)
 	if err != nil {
@@ -168,7 +168,7 @@ func (db *ActivationDb) ProcessAtx(atx *types.ActivationTx) error {
 
 	err = db.StoreNodeIdentity(atx.NodeId)
 	if err != nil {
-		db.log.With().Error("cannot store node identity", log.String("atx_node_id", atx.NodeId.ShortString()), log.AtxId(atx.ShortString()), log.Err(err))
+		db.log.With().Error("cannot store node identity", log.String("atx_node_id", atx.NodeId.ShortString()), log.AtxID(atx.ShortString()), log.Err(err))
 	}
 	return nil
 }
@@ -350,7 +350,7 @@ func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error 
 		}
 
 		if prevATX.NodeId.Key != atx.NodeId.Key {
-			return fmt.Errorf("previous ATX belongs to different miner. atx.ID: %v, atx.NodeId: %v, prevAtx.NodeId: %v",
+			return fmt.Errorf("previous ATX belongs to different miner. atx.ID: %v, atx.NodeID: %v, prevAtx.NodeID: %v",
 				atx.ShortString(), atx.NodeId.Key, prevATX.NodeId.Key)
 		}
 
@@ -424,7 +424,7 @@ func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error 
 	if err != nil {
 		return fmt.Errorf("cannot get NIPST Challenge hash: %v", err)
 	}
-	db.log.With().Info("Validated NIPST", log.String("challenge_hash", hash.String()), log.AtxId(atx.ShortString()))
+	db.log.With().Info("Validated NIPST", log.String("challenge_hash", hash.String()), log.AtxID(atx.ShortString()))
 
 	pubKey := signing.NewPublicKey(util.Hex2Bytes(atx.NodeId.Key))
 	if err = db.nipstValidator.Validate(*pubKey, atx.Nipst, *hash); err != nil {
@@ -441,7 +441,7 @@ func (db *ActivationDb) ContextuallyValidateAtx(atx *types.ActivationTxHeader) e
 		lastAtx, err := db.GetNodeLastAtxID(atx.NodeId)
 		if err != nil {
 			db.log.With().Error("could not fetch node last ATX",
-				log.AtxId(atx.ShortString()), log.String("atx_node_id", atx.NodeId.ShortString()), log.Err(err))
+				log.AtxID(atx.ShortString()), log.String("atx_node_id", atx.NodeId.ShortString()), log.Err(err))
 			return fmt.Errorf("could not fetch node last ATX: %v", err)
 		}
 		// last atx is not the one referenced
