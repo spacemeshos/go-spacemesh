@@ -40,7 +40,7 @@ func (m *Monitor) monitor() {
 			m.recorder.Update()
 		case <-m.printTicker.C:
 			//log.Info("%v", m.recorder.Status())
-			m.recorder.LogJson()
+			m.recorder.LogJSON()
 		}
 	}
 }

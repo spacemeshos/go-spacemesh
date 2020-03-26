@@ -106,7 +106,7 @@ func (mip *mockIDProvider) GetIdentity(edID string) (types.NodeId, error) {
 type mockStateQuerier struct {
 }
 
-func (msq mockStateQuerier) IsIdentityActiveOnConsensusView(string, layer types.LayerID) (bool, error) {
+func (msq mockStateQuerier) IsIdentityActiveOnConsensusView(edID string, layer types.LayerID) (bool, error) {
 	return true, nil
 }
 
