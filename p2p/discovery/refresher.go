@@ -135,7 +135,7 @@ type queryResult struct {
 	err error
 }
 
-// pingThenGetAddresses is sending a ping, then lookup node, then return results on given chan.
+// pingThenGetAddresses is sending a ping, then getaddress, then return results on given chan.
 func pingThenGetAddresses(p pingerGetAddresser, addr *node.NodeInfo, qr chan queryResult) {
 	// TODO: check whether we pinged recently and maybe skip pinging
 	err := p.Ping(addr.PublicKey())

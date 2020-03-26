@@ -124,8 +124,8 @@ func (d *Discovery) SelectPeers(ctx context.Context, qty int) []*node.NodeInfo {
 		if _, ok := set[add.na.PublicKey()]; ok {
 			continue
 		}
-		out = append(out, add.DiscNode())
-		set[add.DiscNode().PublicKey()] = struct{}{}
+		out = append(out, add.NodeInfo())
+		set[add.NodeInfo().PublicKey()] = struct{}{}
 	}
 	return out
 }

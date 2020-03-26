@@ -26,6 +26,7 @@ type UDPMessageEvent struct {
 	Message  []byte
 }
 
+// UDPListener is the api required for listening on udp messages.
 type UDPListener interface {
 	LocalAddr() net.Addr
 	Close() error
@@ -57,7 +58,7 @@ type UDPNet struct {
 	shutdown chan struct{}
 }
 
-// NewUDPNet creates a UDPNet. returns error if the listening can't be resolved
+// NewUDPNet creates a UDPNet
 func NewUDPNet(config config.Config, localEntity node.LocalNode, log log.Log) (*UDPNet, error) {
 	n := &UDPNet{
 		local:        localEntity,
@@ -103,7 +104,7 @@ func (n *UDPNet) publishNewRemoteConnectionEvent(conn Connection, node *node.Nod
 	n.regMutex.RUnlock()
 }
 
-// Start will trigger listening on the configured port
+// Start will start reading messages from the udp socket and pass them up the channels
 func (n *UDPNet) Start(listener UDPListener) {
 	n.conn = listener
 	n.logger.Info("Started UDP server listening for messages on udp:%v", listener.LocalAddr().String())
@@ -115,7 +116,7 @@ func (n *UDPNet) LocalAddr() net.Addr {
 	return n.conn.LocalAddr()
 }
 
-// Shutdown stops listening and closes the connection
+// Shutdown stops listening and closes the connection.
 func (n *UDPNet) Shutdown() {
 	close(n.shutdown)
 	if n.conn != nil {
@@ -123,6 +124,7 @@ func (n *UDPNet) Shutdown() {
 	}
 }
 
+// IPv4LoopbackAddress is a local IPv4 loopback
 var IPv4LoopbackAddress = net.IP{127, 0, 0, 1}
 
 func (n *UDPNet) initSession(remote p2pcrypto.PublicKey) NetworkSession {
@@ -130,6 +132,7 @@ func (n *UDPNet) initSession(remote p2pcrypto.PublicKey) NetworkSession {
 	return session
 }
 
+// NodeAddr makes a UDPAddr from a NodeInfo struct
 func NodeAddr(info *node.NodeInfo) *net.UDPAddr {
 	return &net.UDPAddr{IP: info.IP, Port: int(info.DiscoveryPort)}
 }
@@ -154,6 +157,8 @@ func (n *UDPNet) IncomingMessages() chan IncomingMessageEvent {
 	return n.msgChan
 }
 
+// Dial creates a Connection interface which is wrapped around a udp socket with a session and start listening on messages form it.
+// it uses the `connect` syscall
 func (n *UDPNet) Dial(ctx context.Context, address net.Addr, remotePublicKey p2pcrypto.PublicKey) (Connection, error) {
 	udpcon, err := net.DialUDP("udp", nil, address.(*net.UDPAddr))
 	if err != nil {
@@ -167,10 +172,12 @@ func (n *UDPNet) Dial(ctx context.Context, address net.Addr, remotePublicKey p2p
 	return conn, nil
 }
 
+// HandlePreSessionIncomingMessage is used to satisfy an api similar to the tcpnet. not used here.
 func (n *UDPNet) HandlePreSessionIncomingMessage(c Connection, msg []byte) error {
 	return errors.New("not implemented")
 }
 
+// EnqueueMessage pushes an incoming message event into the queue
 func (n *UDPNet) EnqueueMessage(ime IncomingMessageEvent) {
 	select {
 	case n.msgChan <- ime:
@@ -180,6 +187,7 @@ func (n *UDPNet) EnqueueMessage(ime IncomingMessageEvent) {
 	}
 }
 
+// NetworkID returns the network id given and used for creating a session.
 func (n *UDPNet) NetworkID() int8 {
 	return 0
 }

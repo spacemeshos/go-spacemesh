@@ -19,7 +19,7 @@ type KnownAddress struct {
 	refs        int // reference count of new buckets
 }
 
-func (ka *KnownAddress) DiscNode() *node.NodeInfo {
+func (ka *KnownAddress) NodeInfo() *node.NodeInfo {
 	return ka.na
 }
 
