@@ -1,3 +1,4 @@
+// package miner is responsible for creating valid blocks that contain valid activation transactions and transactions
 package miner
 
 import (

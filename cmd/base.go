@@ -1,3 +1,4 @@
+// package cmd is the base package for various sets of builds and executables created from go-spacemesh
 package cmd
 
 import (

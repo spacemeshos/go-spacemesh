@@ -1,3 +1,5 @@
+// package multi_node_sim is an implementation of a framework running multiple nodes in same executable with fast hare
+// implementation. allowing to create network samples in high rates
 package main
 
 import (
