@@ -56,7 +56,7 @@ func (iter *MemDatabaseIterator) Last() bool {
 	return true
 }
 
-// Prev moves the iterator one item bacj
+// Prev moves the iterator one item back
 func (iter *MemDatabaseIterator) Prev() bool {
 	iter.index--
 	if iter.index < 0 {
