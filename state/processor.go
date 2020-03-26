@@ -109,6 +109,7 @@ func (tp *TransactionProcessor) GetLayerApplied(txID types.TransactionId) *types
 	layerID := types.LayerID(util.BytesToUint64(layerIDBytes))
 	return &layerID
 }
+
 // ValidateNonceAndBalance validates that the tx origin account has enough balance to apply the tx,
 // also, it checks that nonce in tx is correct, returns error otherwise
 func (tp *TransactionProcessor) ValidateNonceAndBalance(tx *types.Transaction) error {
@@ -306,6 +307,7 @@ func (tp *TransactionProcessor) ApplyTransaction(trans *types.Transaction, layer
 	tp.With().Info("transaction processed", log.String("transaction", trans.String()))
 	return nil
 }
+
 //GetStateRoot gets the current state root hash
 func (tp *TransactionProcessor) GetStateRoot() types.Hash32 {
 	tp.rootMu.RLock()

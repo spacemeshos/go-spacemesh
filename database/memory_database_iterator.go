@@ -84,6 +84,7 @@ func (iter *MemDatabaseIterator) Seek(key []byte) bool {
 }
 
 // Release is a stub to comply with DB interface
-func (iter *MemDatabaseIterator) Release()     { return }
+func (iter *MemDatabaseIterator) Release() { return }
+
 // Error is a stub to comply with DB interface
 func (iter *MemDatabaseIterator) Error() error { return nil }

@@ -14,7 +14,6 @@ import (
 	"reflect"
 )
 
-
 var (
 	// Version is the app's semantic version. Designed to be overwritten by make.
 	Version string
