@@ -85,7 +85,7 @@ func SyncMockFactoryManClock(number int, conf Configuration, name string, dbType
 		net := sim.NewNode()
 		name := fmt.Sprintf(name+"_%d", i)
 		l := log.New(name, "", "")
-		blockValidator := BlockEligibilityValidatorMock{}
+		blockValidator := blockEligibilityValidatorMock{}
 		txpool := miner.NewTxMemPool()
 		atxpool := miner.NewAtxMemPool()
 		sync := NewSync(net, getMesh(dbType, Path+name+"_"+time.Now().String()), txpool, atxpool, blockValidator, poetDb(), conf, ticker, l)
@@ -111,8 +111,8 @@ func getMeshWithLevelDB(id string) *mesh.Mesh {
 	lg := log.New(id, "", "")
 	mshdb, _ := mesh.NewPersistentMeshDB(id, 5, lg)
 	atxdbStore, _ := database.NewLDBDatabase(id+"atx", 0, 0, lg.WithOptions(log.Nop))
-	atxdb := activation.NewActivationDb(atxdbStore, &MockIStore{}, mshdb, 10, &ValidatorMock{}, lg.WithOptions(log.Nop))
-	return mesh.NewMesh(mshdb, atxdb, rewardConf, &MeshValidatorMock{}, &mockTxMemPool{}, &mockAtxMemPool{}, &MockState{}, lg.WithOptions(log.Nop))
+	atxdb := activation.NewActivationDb(atxdbStore, &mockIStore{}, mshdb, 10, &validatorMock{}, lg.WithOptions(log.Nop))
+	return mesh.NewMesh(mshdb, atxdb, rewardConf, &meshValidatorMock{}, &mockTxMemPool{}, &mockAtxMemPool{}, &mockState{}, lg.WithOptions(log.Nop))
 }
 
 func persistenceTeardown() {
@@ -122,8 +122,8 @@ func persistenceTeardown() {
 func getMeshWithMemoryDB(id string) *mesh.Mesh {
 	lg := log.New(id, "", "")
 	mshdb := mesh.NewMemMeshDB(lg)
-	atxdb := activation.NewActivationDb(database.NewMemDatabase(), &MockIStore{}, mshdb, 10, &ValidatorMock{}, lg.WithName("atxDB"))
-	return mesh.NewMesh(mshdb, atxdb, rewardConf, &MeshValidatorMock{}, &mockTxMemPool{}, &mockAtxMemPool{}, &MockState{}, lg)
+	atxdb := activation.NewActivationDb(database.NewMemDatabase(), &mockIStore{}, mshdb, 10, &validatorMock{}, lg.WithName("atxDB"))
+	return mesh.NewMesh(mshdb, atxdb, rewardConf, &meshValidatorMock{}, &mockTxMemPool{}, &mockAtxMemPool{}, &mockState{}, lg)
 }
 
 func getMesh(dbType, id string) *mesh.Mesh {
@@ -659,7 +659,7 @@ func Test_TwoNodes_SyncIntegrationSuite(t *testing.T) {
 	sis.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
 		l := log.New(fmt.Sprintf("%s_%d", sis.name, atomic.LoadUint32(&i)), "", "")
 		msh := getMesh(memoryDB, fmt.Sprintf("%s_%s", sis.name, time.Now()))
-		blockValidator := BlockEligibilityValidatorMock{}
+		blockValidator := blockEligibilityValidatorMock{}
 		poetDb := activation.NewPoetDb(database.NewMemDatabase(), l.WithName("poetDb"))
 		sync := NewSync(s, msh, miner.NewTxMemPool(), miner.NewAtxMemPool(), blockValidator, poetDb, conf, ts, l)
 		sis.syncers = append(sis.syncers, sync)
@@ -784,7 +784,7 @@ func Test_Multiple_SyncIntegrationSuite(t *testing.T) {
 	sis.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
 		l := log.New(fmt.Sprintf("%s_%d", sis.name, atomic.LoadUint32(&i)), "", "")
 		msh := getMesh(memoryDB, fmt.Sprintf("%s_%d", sis.name, atomic.LoadUint32(&i)))
-		blockValidator := BlockEligibilityValidatorMock{}
+		blockValidator := blockEligibilityValidatorMock{}
 		poetDb := activation.NewPoetDb(database.NewMemDatabase(), l.WithName("poetDb"))
 		sync := NewSync(s, msh, miner.NewTxMemPool(), miner.NewAtxMemPool(), blockValidator, poetDb, conf, ts, l)
 		ts.StartNotifying()
@@ -986,7 +986,7 @@ func TestFetchLayerBlockIds(t *testing.T) {
 
 func TestFetchLayerBlockIdsNoResponse(t *testing.T) {
 	// check tx validation
-	clk := &MockClock{Layer: 6}
+	clk := &mockClock{Layer: 6}
 	syncs, nodes := SyncMockFactoryManClock(5, conf, t.Name(), memoryDB, newMockPoetDb, clk)
 	pm1 := getPeersMock([]p2p.Peer{nodes[2].PublicKey()})
 	pm2 := getPeersMock([]p2p.Peer{nodes[2].PublicKey()})
@@ -1127,14 +1127,14 @@ func TestSyncer_Synchronise(t *testing.T) {
 	sync.AddBlock(types.NewExistingBlock(3, []byte(rand.RandString(8))))
 	lv = &mockLayerValidator{1, 0, 0, nil}
 	sync.Mesh.Validator = lv
-	sync.ticker = &MockClock{Layer: 3}
+	sync.ticker = &mockClock{Layer: 3}
 	sr()
 	time.Sleep(100 * time.Millisecond) // handle go routine race
 	r.Equal(1, lv.countValidate)       // synced, expect only one call
 
 	lv = &mockLayerValidator{1, 0, 0, nil}
 	sync.Mesh.Validator = lv
-	sync.ticker = &MockClock{Layer: 4} // simulate not synced
+	sync.ticker = &mockClock{Layer: 4} // simulate not synced
 	sr()
 	time.Sleep(100 * time.Millisecond) // handle go routine race
 }
@@ -1151,17 +1151,17 @@ func TestSyncer_Synchronise2(t *testing.T) {
 
 	lv := &mockLayerValidator{0, 0, 0, nil}
 	sync.Mesh.Validator = lv
-	sync.ticker = &MockClock{Layer: 1}
+	sync.ticker = &mockClock{Layer: 1}
 	r.False(sync.gossipSynced == done)
 
 	// current layer = 0
-	sync.ticker = &MockClock{Layer: 0}
+	sync.ticker = &mockClock{Layer: 0}
 	sync.synchronise()
 	r.Equal(0, lv.countValidate)
 	r.True(sync.gossipSynced == done)
 
 	// current layer = 1
-	sync.ticker = &MockClock{Layer: 1}
+	sync.ticker = &mockClock{Layer: 1}
 	sync.synchronise()
 	r.Equal(0, lv.countValidate)
 	r.True(sync.gossipSynced == done)
@@ -1169,7 +1169,7 @@ func TestSyncer_Synchronise2(t *testing.T) {
 	// current layer != 1 && weakly-synced
 	lv = &mockLayerValidator{0, 0, 0, nil}
 	sync.Mesh.Validator = lv
-	sync.ticker = &MockClock{Layer: 2}
+	sync.ticker = &mockClock{Layer: 2}
 	sync.SetLatestLayer(2)
 	sync.synchronise()
 	r.Equal(1, lv.countValidate)
@@ -1178,7 +1178,7 @@ func TestSyncer_Synchronise2(t *testing.T) {
 	// validated layer = 5 && current layer = 6 -> don't call validate
 	lv = &mockLayerValidator{5, 0, 0, nil}
 	sync.Mesh.Validator = lv
-	sync.ticker = &MockClock{Layer: 6}
+	sync.ticker = &mockClock{Layer: 6}
 	sync.SetLatestLayer(5)
 	log.Info("damn ", sync.ProcessedLayer())
 	sync.synchronise()
@@ -1194,7 +1194,7 @@ func TestSyncer_ListenToGossip(t *testing.T) {
 	sync.AddBlockWithTxs(types.NewExistingBlock(1, []byte(rand.RandString(8))), nil, nil)
 	lv := &mockLayerValidator{0, 0, 0, nil}
 	sync.Mesh.Validator = lv
-	sync.ticker = &MockClock{Layer: 1}
+	sync.ticker = &mockClock{Layer: 1}
 	sync.SetLatestLayer(1)
 	r.False(sync.gossipSynced == done)
 	assert.False(t, sync.ListenToGossip())
@@ -1210,8 +1210,8 @@ func TestSyncer_handleNotSyncedFlow(t *testing.T) {
 	r := require.New(t)
 	txpool := miner.NewTxMemPool()
 	atxpool := miner.NewAtxMemPool()
-	ts := &MockClock{Layer: 10}
-	sync := NewSync(service.NewSimulator().NewNode(), getMesh(memoryDB, Path+t.Name()+"_"+time.Now().String()), txpool, atxpool, BlockEligibilityValidatorMock{}, newMockPoetDb(), conf, ts, log.NewDefault(t.Name()))
+	ts := &mockClock{Layer: 10}
+	sync := NewSync(service.NewSimulator().NewNode(), getMesh(memoryDB, Path+t.Name()+"_"+time.Now().String()), txpool, atxpool, blockEligibilityValidatorMock{}, newMockPoetDb(), conf, ts, log.NewDefault(t.Name()))
 	lv := &mockLayerValidator{0, 0, 0, nil}
 	sync.Mesh.Validator = lv
 	sync.SetLatestLayer(20)
@@ -1222,11 +1222,11 @@ func TestSyncer_handleNotSyncedFlow(t *testing.T) {
 
 func TestSyncer_p2pSyncForTwoLayers(t *testing.T) {
 	r := require.New(t)
-	timer := &MockClock{Layer: 5}
+	timer := &mockClock{Layer: 5}
 	sim := service.NewSimulator()
 	net := sim.NewNode()
 	l := log.New(t.Name(), "", "")
-	blockValidator := BlockEligibilityValidatorMock{}
+	blockValidator := blockEligibilityValidatorMock{}
 	txpool := miner.NewTxMemPool()
 	atxpool := miner.NewAtxMemPool()
 	//ch := ts.Subscribe()
@@ -1314,7 +1314,7 @@ func TestSyncer_ConcurrentSynchronise(t *testing.T) {
 	r := require.New(t)
 	syncs, _, _ := SyncMockFactory(1, conf, t.Name(), memoryDB, newMockPoetDb)
 	sync := syncs[0]
-	sync.ticker = &MockClock{Layer: 3}
+	sync.ticker = &mockClock{Layer: 3}
 	lv := &mockTimedValidator{1 * time.Second, 0}
 	sync.Validator = lv
 	sync.AddBlock(types.NewExistingBlock(1, []byte(rand.RandString(8))))
@@ -1630,7 +1630,7 @@ func TestSyncer_Await(t *testing.T) {
 	r.NoError(err)
 	lv := &mockLayerValidator{0, 0, 0, nil}
 	syncer.Mesh.Validator = lv
-	syncer.ticker = &MockClock{Layer: 1}
+	syncer.ticker = &mockClock{Layer: 1}
 	syncer.SetLatestLayer(1)
 
 	ch := syncer.Await()

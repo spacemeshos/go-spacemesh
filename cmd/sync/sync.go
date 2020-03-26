@@ -20,7 +20,6 @@ import (
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 	"io/ioutil"
-	"math/big"
 	"net/http"
 	"os"
 	"time"
@@ -77,21 +76,6 @@ func (app *SyncApp) Cleanup() {
 	err := os.RemoveAll(app.Config.DataDir)
 	if err != nil {
 		app.sync.Error("failed to cleanup sync: %v", err)
-	}
-}
-
-type MockBlockBuilder struct {
-	txs []*types.Transaction
-}
-
-func (m *MockBlockBuilder) ValidateAndAddTxToPool(tx *types.Transaction) error {
-	m.txs = append(m.txs, tx)
-	return nil
-}
-
-func ConfigTst() mesh.Config {
-	return mesh.Config{
-		BaseReward: big.NewInt(5000),
 	}
 }
 
@@ -153,40 +137,22 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	atxdb := activation.NewActivationDb(atxdbStore, &sync.MockIStore{}, mshdb, uint16(app.Config.LayersPerEpoch), &sync.ValidatorMock{}, lg.WithName("atxDB").WithOptions(log.Nop))
-
 	txpool := miner.NewTxMemPool()
 	atxpool := miner.NewAtxMemPool()
 
-	var msh *mesh.Mesh
-	if mshdb.PersistentData() {
-		lg.Info("persistent data found ")
-		msh = mesh.NewRecoveredMesh(mshdb, atxdb, ConfigTst(), &sync.MeshValidatorMock{}, txpool, atxpool, &sync.MockState{}, lg)
-	} else {
-		lg.Info("no persistent data found ")
-		msh = mesh.NewMesh(mshdb, atxdb, ConfigTst(), &sync.MeshValidatorMock{}, txpool, atxpool, &sync.MockState{}, lg)
-	}
-
-	msh.SetBlockBuilder(&MockBlockBuilder{})
-
-	defer msh.Close()
-	msh.AddBlock(mesh.GenesisBlock)
-	clock := sync.MockClock{}
-	clock.Layer = types.LayerID(expectedLayers + 1)
-	lg.Info("current layer %v", clock.GetCurrentLayer())
-	app.sync = sync.NewSync(swarm, msh, txpool, atxpool, sync.BlockEligibilityValidatorMock{}, poetDb, conf, &clock, lg.WithName("sync"))
+	sync := sync.NewSyncWithMocks(atxdbStore, mshdb, txpool, atxpool, swarm, poetDb, conf, types.LayerID(expectedLayers))
 	if err = swarm.Start(); err != nil {
 		log.Panic("error starting p2p err=%v", err)
 	}
 
 	i := 0
 	for ; ; i++ {
-		if lyr, err2 := msh.GetLayer(types.LayerID(i)); err2 != nil || lyr == nil {
+		if lyr, err2 := sync.GetLayer(types.LayerID(i)); err2 != nil || lyr == nil {
 			lg.Info("loaded %v layers from disk %v", i-1, err2)
 			break
 		} else {
 			lg.Info("loaded layer %v from disk ", i)
-			msh.ValidateLayer(lyr)
+			sync.ValidateLayer(lyr)
 		}
 	}
 
