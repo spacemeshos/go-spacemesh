@@ -28,7 +28,7 @@ func (d ID) String() string {
 	return base58.Encode(d[:])
 }
 
-// NodeInfo is a discovery parsed structure to store a node's address and key.
+// NodeInfo represents a p2p node that we know about.
 type NodeInfo struct {
 	ID
 	IP            net.IP
@@ -36,8 +36,7 @@ type NodeInfo struct {
 	DiscoveryPort uint16 // UDP
 }
 
-// NewNode creates a new node. It is mostly meant to be used for
-// testing purposes.
+// NewNode creates a new NodeInfo from public key, ip and ports.
 func NewNode(id p2pcrypto.PublicKey, ip net.IP, proto, disc uint16) *NodeInfo {
 	if ipv4 := ip.To4(); ipv4 != nil {
 		ip = ipv4
