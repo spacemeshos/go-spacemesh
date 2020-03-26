@@ -112,7 +112,7 @@ type ninjaTortoise struct {
 }
 
 //NewNinjaTortoise create a new ninja tortoise instance
-func NewNinjaTortoise(layerSize int, blocks database, hdist int, log log.Log) *ninjaTortoise {
+func newNinjaTortoise(layerSize int, blocks database, hdist int, log log.Log) *ninjaTortoise {
 
 	trtl := &ninjaTortoise{logger: log, db: blocks,
 		Hdist:        types.LayerID(hdist),

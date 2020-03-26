@@ -77,7 +77,7 @@ type BlockBuilder interface {
 
 type Mesh struct {
 	log.Log
-	*MeshDB
+	*DB
 	AtxDB
 	TxProcessor
 	Validator
@@ -101,7 +101,7 @@ type Mesh struct {
 	txMutex            sync.Mutex
 }
 
-func NewMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh Tortoise, txInvalidator TxMemPoolInValidator, atxInvalidator AtxMemPoolInValidator, pr TxProcessor, logger log.Log) *Mesh {
+func NewMesh(db *DB, atxDb AtxDB, rewardConfig Config, mesh Tortoise, txInvalidator TxMemPoolInValidator, atxInvalidator AtxMemPoolInValidator, pr TxProcessor, logger log.Log) *Mesh {
 	ll := &Mesh{
 		Log:             logger,
 		trtl:            mesh,
@@ -109,7 +109,7 @@ func NewMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh Tortoise, txInva
 		atxInvalidator:  atxInvalidator,
 		TxProcessor:     pr,
 		done:            make(chan struct{}),
-		MeshDB:          db,
+		DB:              db,
 		config:          rewardConfig,
 		AtxDB:           atxDb,
 		nextValidLayers: make(map[types.LayerID]*types.Layer),
@@ -120,7 +120,7 @@ func NewMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh Tortoise, txInva
 	return ll
 }
 
-func NewRecoveredMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh Tortoise, txInvalidator TxMemPoolInValidator, atxInvalidator AtxMemPoolInValidator, pr TxProcessor, logger log.Log) *Mesh {
+func NewRecoveredMesh(db *DB, atxDb AtxDB, rewardConfig Config, mesh Tortoise, txInvalidator TxMemPoolInValidator, atxInvalidator AtxMemPoolInValidator, pr TxProcessor, logger log.Log) *Mesh {
 	msh := NewMesh(db, atxDb, rewardConfig, mesh, txInvalidator, atxInvalidator, pr, logger)
 
 	latest, err := db.general.Get(LATEST)
@@ -502,7 +502,7 @@ func (m *Mesh) GetLatestView() []types.BlockID {
 
 func (m *Mesh) AddBlock(blk *types.Block) error {
 	m.Debug("add block %d", blk.Id())
-	if err := m.MeshDB.AddBlock(blk); err != nil {
+	if err := m.DB.AddBlock(blk); err != nil {
 		m.Warning("failed to add block %v  %v", blk.Id(), err)
 		return err
 	}
@@ -561,7 +561,7 @@ func (m *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.Transaction, atxs 
 	}
 
 	// Store block (delete if storing ATXs fails)
-	if err := m.MeshDB.AddBlock(blk); err != nil && err != ErrAlreadyExist {
+	if err := m.DB.AddBlock(blk); err != nil && err != ErrAlreadyExist {
 		m.With().Error("failed to add block", log.BlockId(blk.Id().String()), log.Err(err))
 		return err
 	}

@@ -71,7 +71,7 @@ func getMeshWithMapState(id string, s TxProcessor) (*Mesh, *AtxDbMock) {
 	return NewMesh(mshdb, atxDb, ConfigTst(), &MeshValidatorMock{}, &MockTxMemPool{}, &MockAtxMemPool{}, s, lg), atxDb
 }
 
-func addTransactionsWithFee(t testing.TB, mesh *MeshDB, bl *types.Block, numOfTxs int, fee int64) int64 {
+func addTransactionsWithFee(t testing.TB, mesh *DB, bl *types.Block, numOfTxs int, fee int64) int64 {
 	var totalFee int64
 	var txs []*types.Transaction
 	for i := 0; i < numOfTxs; i++ {
@@ -99,7 +99,7 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 	atx := types.NewActivationTxForTests(types.NodeId{"1", []byte("bbbbb")}, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, coinbase1, 10, []types.BlockID{}, &types.NIPST{})
 	atxdb.AddAtx(atx.Id(), atx)
 	block1.ATXID = atx.Id()
-	totalFee += addTransactionsWithFee(t, layers.MeshDB, block1, 15, 7)
+	totalFee += addTransactionsWithFee(t, layers.DB, block1, 15, 7)
 
 	block2 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
 
@@ -107,7 +107,7 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 	atx = types.NewActivationTxForTests(types.NodeId{"2", []byte("bbbbb")}, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, coinbase2, 10, []types.BlockID{}, &types.NIPST{})
 	atxdb.AddAtx(atx.Id(), atx)
 	block2.ATXID = atx.Id()
-	totalFee += addTransactionsWithFee(t, layers.MeshDB, block2, 13, rand.Int63n(100))
+	totalFee += addTransactionsWithFee(t, layers.DB, block2, 13, rand.Int63n(100))
 
 	block3 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
 
@@ -115,7 +115,7 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 	atx = types.NewActivationTxForTests(types.NodeId{"3", []byte("bbbbb")}, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, coinbase3, 10, []types.BlockID{}, &types.NIPST{})
 	atxdb.AddAtx(atx.Id(), atx)
 	block3.ATXID = atx.Id()
-	totalFee += addTransactionsWithFee(t, layers.MeshDB, block3, 17, rand.Int63n(100))
+	totalFee += addTransactionsWithFee(t, layers.DB, block3, 17, rand.Int63n(100))
 
 	block4 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
 
@@ -123,7 +123,7 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 	atx = types.NewActivationTxForTests(types.NodeId{"4", []byte("bbbbb")}, 0, *types.EmptyAtxId, 1, 0, *types.EmptyAtxId, coinbase4, 10, []types.BlockID{}, &types.NIPST{})
 	atxdb.AddAtx(atx.Id(), atx)
 	block4.ATXID = atx.Id()
-	totalFee += addTransactionsWithFee(t, layers.MeshDB, block4, 16, rand.Int63n(100))
+	totalFee += addTransactionsWithFee(t, layers.DB, block4, 16, rand.Int63n(100))
 
 	log.Info("total fees : %v", totalFee)
 	layers.AddBlock(block1)
@@ -158,7 +158,7 @@ func createLayer(t testing.TB, mesh *Mesh, id types.LayerID, numOfBlocks, maxTra
 		atxdb.AddAtx(atx.Id(), atx)
 		block1.ATXID = atx.Id()
 
-		totalRewards += addTransactionsWithFee(t, mesh.MeshDB, block1, rand.Intn(maxTransactions), rand.Int63n(100))
+		totalRewards += addTransactionsWithFee(t, mesh.DB, block1, rand.Intn(maxTransactions), rand.Int63n(100))
 		block1.Initialize()
 		err := mesh.AddBlock(block1)
 		assert.NoError(t, err)
