@@ -48,8 +48,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-// import for memory and network profiling
-import _ "net/http/pprof"
+import _ "net/http/pprof" // import for memory and network profiling
 
 const edKeyFileName = "key.bin"
 

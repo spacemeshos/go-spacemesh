@@ -1,4 +1,4 @@
-package oracle
+package main
 
 import (
 	"fmt"
@@ -20,7 +20,7 @@ func generateID() string {
 }
 
 type requestCounter struct {
-	client     Requester
+	client     requester
 	mtx        sync.Mutex
 	count      bool
 	reqCounter int
@@ -63,17 +63,17 @@ func (mcd *mockRequester) Get(api, data string) []byte {
 }
 
 func Test_MockOracleClientValidate(t *testing.T) {
-	oc := NewClient()
+	oc := newOracleClient()
 	mr := &mockRequester{results: make(map[string][]byte)}
 	id := generateID()
-	mr.SetResult(Register, id, []byte(`{ "message": "ok" }"`))
+	mr.SetResult(register, id, []byte(`{ "message": "ok" }"`))
 	counter := &requestCounter{client: mr}
 	counter.setCounting(true)
 	oc.client = counter
 	oc.Register(true, id)
 	require.Equal(t, counter.reqCounter, 1)
 
-	mr.SetResult(Validate, validateQuery(oc.world, hashInstanceAndK(0, 0), 2),
+	mr.SetResult(validate, validateQuery(oc.world, hashInstanceAndK(0, 0), 2),
 		[]byte(fmt.Sprintf(`{ "IDs": [ "%v" ] }`, id)))
 
 	valid, _ := oc.Eligible(0, 0, 2, types.NodeId{Key: id}, nil)
@@ -93,7 +93,7 @@ func Test_OracleClientValidate(t *testing.T) {
 	size := 100
 	committee := 30
 
-	oc := NewClient()
+	oc := newOracleClient()
 
 	pks := make([]string, size)
 
@@ -127,7 +127,7 @@ func Test_Concurrency(t *testing.T) {
 	size := 1000
 	committee := 80
 
-	oc := NewClient()
+	oc := newOracleClient()
 
 	pks := make([]string, size)
 
@@ -160,18 +160,18 @@ func Test_Concurrency(t *testing.T) {
 }
 
 func TestOracle_Eligible2(t *testing.T) {
-	o := NewClient()
+	o := newOracleClient()
 	mr := &mockRequester{results: make(map[string][]byte)}
 	//id := generateID()
-	mr.SetResult(Register, "myid", []byte(`{ "message": "ok" }"`))
+	mr.SetResult(register, "myid", []byte(`{ "message": "ok" }"`))
 	o.client = mr
 	o.Register(true, "myid")
-	mr.SetResult(Validate, validateQuery(o.world, hashInstanceAndK(1, 2), 0),
+	mr.SetResult(validate, validateQuery(o.world, hashInstanceAndK(1, 2), 0),
 		[]byte(fmt.Sprintf(`{ "IDs": [ "%v" ] }`, "sheker")))
 	res, err := o.Eligible(1, 2, 0, types.NodeId{}, []byte{})
 	assert.Nil(t, err)
 	assert.False(t, res)
-	mr.SetResult(Validate, validateQuery(o.world, hashInstanceAndK(1, 3), 1),
+	mr.SetResult(validate, validateQuery(o.world, hashInstanceAndK(1, 3), 1),
 		[]byte(fmt.Sprintf(`{ "IDs": [ "%v" ] }`, "sheker")))
 	res, err = o.Eligible(1, 3, 1, types.NodeId{}, []byte{})
 	assert.Nil(t, err)
