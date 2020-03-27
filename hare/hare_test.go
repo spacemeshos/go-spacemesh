@@ -166,7 +166,7 @@ func TestHare_GetResult2(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	_, err = h.GetResult(0)
-	require.Equal(t, err, ErrTooOld)
+	require.Equal(t, err, errTooOld)
 }
 
 func TestHare_collectOutputCheckValidation(t *testing.T) {

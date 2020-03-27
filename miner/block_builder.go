@@ -223,7 +223,7 @@ func (t *BlockBuilder) getVotes(id types.LayerID) ([]types.BlockID, error) {
 	bottom, top := calcHdistRange(id, t.hdist)
 
 	if res, err := t.hareResult.GetResult(bottom); err != nil { // no result for bottom, take the whole layer
-		t.With().Warning("could not get result for bottom layer. adding the whole layer instead", log.Err(err),
+		t.With().Warning("Could not get result for bottom layer. Adding the whole layer instead.", log.Err(err),
 			log.Uint64("bottom", uint64(bottom)), log.Uint64("top", uint64(top)), log.Uint64("hdist", uint64(t.hdist)))
 		ids, e := t.meshProvider.LayerBlockIds(bottom)
 		if e != nil {

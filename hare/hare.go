@@ -252,8 +252,7 @@ func (h *Hare) onTick(id types.LayerID) {
 }
 
 var (
-	// ErrTooOld means the requested result has already been evacuated from the buffer because the layer is too old
-	ErrTooOld   = errors.New("layer has already been evacuated from buffer")
+	errTooOld   = errors.New("layer has already been evacuated from buffer")
 	errNoResult = errors.New("no result for the requested layer")
 )
 
@@ -262,7 +261,7 @@ var (
 func (h *Hare) GetResult(lid types.LayerID) ([]types.BlockID, error) {
 
 	if h.outOfBufferRange(instanceID(lid)) {
-		return nil, ErrTooOld
+		return nil, errTooOld
 	}
 
 	h.mu.RLock()
