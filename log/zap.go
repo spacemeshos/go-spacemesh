@@ -127,7 +127,7 @@ func NodeId(val string) Field {
 
 // Err returns an error field
 func Err(v error) Field {
-	return Field(zap.Error(v))
+	return Field(zap.NamedError("message", v))
 }
 
 type LoggableField interface {
