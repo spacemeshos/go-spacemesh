@@ -61,7 +61,7 @@ func (mbp *mockBlockProvider) LayerBlockIds(layerId types.LayerID) ([]types.Bloc
 type HareApp struct {
 	*cmdp.BaseApp
 	p2p     p2p.Service
-	oracle  *oracle.OracleClient
+	oracle  *oracle.Client
 	sgn     hare.Signer
 	ha      *hare.Hare
 	clock   *timesync.TimeClock
@@ -148,7 +148,7 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	lg := log.NewDefault(pub.String())
 
 	oracle.SetServerAddress(app.Config.OracleServer)
-	app.oracle = oracle.NewOracleClientWithWorldID(uint64(app.Config.OracleServerWorldId))
+	app.oracle = oracle.NewClientWithWorldID(uint64(app.Config.OracleServerWorldId))
 	app.oracle.Register(true, pub.String()) // todo: configure no faulty nodes
 	hareOracle := oracle.NewHareOracleFromClient(app.oracle)
 

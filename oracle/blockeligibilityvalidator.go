@@ -13,13 +13,13 @@ type BlockEligibilityValidator struct {
 	committeeSize        uint32
 	genesisActiveSetSize uint32
 	layersPerEpoch       uint16
-	activationDb         ActivationDb
+	activationDb         ActivationDB
 	beaconProvider       *EpochBeaconProvider
 	validateVRF          VRFValidationFunction
 	log                  log.Log
 }
 
-func NewBlockEligibilityValidator(committeeSize, genesisActiveSetSize uint32, layersPerEpoch uint16, activationDb ActivationDb,
+func NewBlockEligibilityValidator(committeeSize, genesisActiveSetSize uint32, layersPerEpoch uint16, activationDb ActivationDB,
 	beaconProvider *EpochBeaconProvider, validateVRF VRFValidationFunction, log log.Log) *BlockEligibilityValidator {
 
 	return &BlockEligibilityValidator{

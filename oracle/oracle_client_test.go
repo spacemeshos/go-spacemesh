@@ -63,7 +63,7 @@ func (mcd *mockRequester) Get(api, data string) []byte {
 }
 
 func Test_MockOracleClientValidate(t *testing.T) {
-	oc := NewOracleClient()
+	oc := NewClient()
 	mr := &mockRequester{results: make(map[string][]byte)}
 	id := generateID()
 	mr.SetResult(Register, id, []byte(`{ "message": "ok" }"`))
@@ -93,7 +93,7 @@ func Test_OracleClientValidate(t *testing.T) {
 	size := 100
 	committee := 30
 
-	oc := NewOracleClient()
+	oc := NewClient()
 
 	pks := make([]string, size)
 
@@ -127,7 +127,7 @@ func Test_Concurrency(t *testing.T) {
 	size := 1000
 	committee := 80
 
-	oc := NewOracleClient()
+	oc := NewClient()
 
 	pks := make([]string, size)
 
@@ -160,7 +160,7 @@ func Test_Concurrency(t *testing.T) {
 }
 
 func TestOracle_Eligible2(t *testing.T) {
-	o := NewOracleClient()
+	o := NewClient()
 	mr := &mockRequester{results: make(map[string][]byte)}
 	//id := generateID()
 	mr.SetResult(Register, "myid", []byte(`{ "message": "ok" }"`))

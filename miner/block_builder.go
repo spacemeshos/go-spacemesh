@@ -11,7 +11,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
-	"github.com/spacemeshos/go-spacemesh/oracle"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
@@ -61,6 +60,10 @@ type projector interface {
 	GetProjection(addr types.Address) (nonce, balance uint64, err error)
 }
 
+type blockOracle interface {
+	BlockEligible(layerID types.LayerID) (types.AtxId, []types.BlockEligibilityProof, error)
+}
+
 // BlockBuilder is the struct that orchestrates the building of blocks, it is responsible for receiving hare results.
 // referencing txs and atxs from mem pool and referencing them in the created block
 // it is also responsible for listening to the clock and querying when a block should be created according to the block oracle
@@ -81,7 +84,7 @@ type BlockBuilder struct {
 	network          p2p.Service
 	weakCoinToss     weakCoinProvider
 	meshProvider     meshProvider
-	blockOracle      oracle.BlockOracle
+	blockOracle      blockOracle
 	txValidator      txValidator
 	atxValidator     atxValidator
 	syncer           syncer
@@ -93,7 +96,7 @@ type BlockBuilder struct {
 // NewBlockBuilder creates a struct of block builder type.
 func NewBlockBuilder(minerID types.NodeId, sgn signer, net p2p.Service, beginRoundEvent chan types.LayerID, hdist int,
 	txPool txPool, atxPool *AtxMemPool, weakCoin weakCoinProvider, orph meshProvider, hare hareResultProvider,
-	blockOracle oracle.BlockOracle, txValidator txValidator, atxValidator atxValidator, syncer syncer, atxsPerBlock int,
+	blockOracle blockOracle, txValidator txValidator, atxValidator atxValidator, syncer syncer, atxsPerBlock int,
 	projector projector, lg log.Log) *BlockBuilder {
 
 	seed := binary.BigEndian.Uint64(md5.New().Sum([]byte(minerID.Key)))

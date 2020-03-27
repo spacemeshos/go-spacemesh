@@ -10,10 +10,10 @@ import (
 	"sync"
 )
 
-type ActivationDb interface {
-	GetNodeAtxIDForEpoch(nodeId types.NodeId, targetEpoch types.EpochId) (types.AtxId, error)
+type ActivationDB interface {
+	GetNodeAtxIDForEpoch(nodeID types.NodeId, targetEpoch types.EpochId) (types.AtxId, error)
 	GetAtxHeader(id types.AtxId) (*types.ActivationTxHeader, error)
-	GetIdentity(edId string) (types.NodeId, error)
+	GetIdentity(edID string) (types.NodeId, error)
 }
 
 type Signer interface {
@@ -24,7 +24,7 @@ type MinerBlockOracle struct {
 	committeeSize        uint32
 	genesisActiveSetSize uint32
 	layersPerEpoch       uint16
-	activationDb         ActivationDb
+	activationDB         ActivationDB
 	beaconProvider       *EpochBeaconProvider
 	vrfSigner            Signer
 	nodeID               types.NodeId
@@ -37,16 +37,16 @@ type MinerBlockOracle struct {
 	log               log.Log
 }
 
-func NewMinerBlockOracle(committeeSize uint32, genesisActiveSetSize uint32, layersPerEpoch uint16, activationDb ActivationDb, beaconProvider *EpochBeaconProvider, vrfSigner Signer, nodeId types.NodeId, isSynced func() bool, log log.Log) *MinerBlockOracle {
+func NewMinerBlockOracle(committeeSize uint32, genesisActiveSetSize uint32, layersPerEpoch uint16, activationDB ActivationDB, beaconProvider *EpochBeaconProvider, vrfSigner Signer, nodeID types.NodeId, isSynced func() bool, log log.Log) *MinerBlockOracle {
 
 	return &MinerBlockOracle{
 		committeeSize:        committeeSize,
 		genesisActiveSetSize: genesisActiveSetSize,
 		layersPerEpoch:       layersPerEpoch,
-		activationDb:         activationDb,
+		activationDB:         activationDB,
 		beaconProvider:       beaconProvider,
 		vrfSigner:            vrfSigner,
-		nodeID:               nodeId,
+		nodeID:               nodeID,
 		proofsEpoch:          ^types.EpochId(0),
 		isSynced:             isSynced,
 		log:                  log,
@@ -127,11 +127,11 @@ func (bo *MinerBlockOracle) calcEligibilityProofs(epochNumber types.EpochId) err
 }
 
 func (bo *MinerBlockOracle) getValidAtxForEpoch(validForEpoch types.EpochId) (*types.ActivationTxHeader, error) {
-	atxId, err := bo.getAtxIdForEpoch(validForEpoch)
+	atxID, err := bo.getATXIDForEpoch(validForEpoch)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get ATX ID for target epoch %v: %v", validForEpoch, err)
 	}
-	atx, err := bo.activationDb.GetAtxHeader(atxId)
+	atx, err := bo.activationDB.GetAtxHeader(atxID)
 	if err != nil {
 		bo.log.Error("getting ATX failed: %v", err)
 		return nil, err
@@ -156,8 +156,8 @@ func getNumberOfEligibleBlocks(activeSetSize, committeeSize uint32, layersPerEpo
 	return numberOfEligibleBlocks, nil
 }
 
-func (bo *MinerBlockOracle) getAtxIdForEpoch(targetEpoch types.EpochId) (types.AtxId, error) {
-	latestATXID, err := bo.activationDb.GetNodeAtxIDForEpoch(bo.nodeID, targetEpoch)
+func (bo *MinerBlockOracle) getATXIDForEpoch(targetEpoch types.EpochId) (types.AtxId, error) {
+	latestATXID, err := bo.activationDB.GetNodeAtxIDForEpoch(bo.nodeID, targetEpoch)
 	if err != nil {
 		bo.log.With().Info("did not find ATX IDs for node", log.String("atx_node_id", bo.nodeID.ShortString()), log.Err(err))
 		return types.AtxId{}, err
