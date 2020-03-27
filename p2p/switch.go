@@ -869,7 +869,7 @@ func (s *Switch) addIncomingPeer(n p2pcrypto.PublicKey) error {
 
 	if amnt >= s.config.MaxInboundPeers {
 		// todo: close connection with CPOOL
-		return errors.New("Reached max connectionsd")
+		return errors.New("reached max connections")
 	}
 
 	s.inpeersMutex.Lock()
