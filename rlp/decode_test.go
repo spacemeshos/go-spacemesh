@@ -105,9 +105,9 @@ func TestStreamErrors(t *testing.T) {
 		{"89000000000000000001", calls{"Uint"}, nil, errUintOverflow},
 		{"00", calls{"List"}, nil, errExpectedList},
 		{"80", calls{"List"}, nil, errExpectedList},
-		{"C0", calls{"List", "Uint"}, nil, EOL},
+		{"C0", calls{"List", "Uint"}, nil, errEol},
 		{"C8C9010101010101010101", calls{"List", "Kind"}, nil, errElemTooLarge},
-		{"C3C2010201", calls{"List", "List", "Uint", "Uint", "ListEnd", "Uint"}, nil, EOL},
+		{"C3C2010201", calls{"List", "List", "Uint", "Uint", "ListEnd", "Uint"}, nil, errEol},
 		{"00", calls{"ListEnd"}, nil, errNotInList},
 		{"C401020304", calls{"List", "Uint", "ListEnd"}, nil, errNotAtEOL},
 
@@ -190,7 +190,7 @@ func TestStreamErrors(t *testing.T) {
 
 			"Bytes", // past final element
 			"Bytes", // this one should fail
-		}, nil, EOL},
+		}, nil, errEol},
 	}
 
 testfor:
