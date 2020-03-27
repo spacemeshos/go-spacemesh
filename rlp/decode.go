@@ -126,7 +126,6 @@ type Decoder interface {
 //
 //     NewStream(r, limit).Decode(val)
 func Decode(r io.Reader, val interface{}) error {
-	// TODO: this could use a Stream from a pool.
 	return NewStream(r, 0).Decode(val)
 }
 
@@ -134,7 +133,6 @@ func Decode(r io.Reader, val interface{}) error {
 // Please see the documentation of Decode for the decoding rules.
 // The input must contain exactly one value and no trailing data.
 func DecodeBytes(b []byte, val interface{}) error {
-	// TODO: this could use a Stream from a pool.
 	r := bytes.NewReader(b)
 	if err := NewStream(r, uint64(len(b))).Decode(val); err != nil {
 		return err
