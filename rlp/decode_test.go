@@ -247,8 +247,8 @@ func TestStreamList(t *testing.T) {
 		}
 	}
 
-	if _, err := s.Uint(); err != EOL {
-		t.Errorf("Uint error mismatch, got %v, want %v", err, EOL)
+	if _, err := s.Uint(); err != errEol {
+		t.Errorf("Uint error mismatch, got %v, want %v", err, errEol)
 	}
 	if err = s.ListEnd(); err != nil {
 		t.Fatalf("ListEnd error: %v", err)
