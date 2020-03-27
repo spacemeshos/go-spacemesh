@@ -45,7 +45,7 @@ func (e *testEncoder) EncodeRLP(w io.Writer) error {
 type byteEncoder byte
 
 func (e byteEncoder) EncodeRLP(w io.Writer) error {
-	w.Write(EmptyList)
+	w.Write(emptyList)
 	return nil
 }
 
