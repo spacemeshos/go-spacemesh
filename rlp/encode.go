@@ -24,13 +24,6 @@ import (
 	"sync"
 )
 
-var (
-	// Common encoded values.
-	// These are useful when implementing EncodeRLP.
-	emptyString = []byte{0x80}
-	emptyList   = []byte{0xC0}
-)
-
 // Encoder is implemented by types that require custom
 // encoding rules or want to encode private fields.
 type Encoder interface {
@@ -444,9 +437,9 @@ func writeByteArray(val reflect.Value, w *encbuf) error {
 	if !val.CanAddr() {
 		// Slice requires the value to be addressable.
 		// Make it addressable by copying.
-		copy := reflect.New(val.Type()).Elem()
-		copy.Set(val)
-		val = copy
+		dupe := reflect.New(val.Type()).Elem()
+		dupe.Set(val)
+		val = dupe
 	}
 	size := val.Len()
 	slice := val.Slice(0, size).Bytes()
