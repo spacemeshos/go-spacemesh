@@ -9,8 +9,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-//TODO: check if caching strings worth it.
-
 // Key defines basic key caps.
 type Key interface {
 	String() string // this is a base58 encoded of Bytes()
