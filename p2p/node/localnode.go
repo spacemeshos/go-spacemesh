@@ -4,12 +4,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 )
 
-// LocalNode implementation.
+// LocalNode is a public-private key pair used locally.
 type LocalNode struct {
 	publicKey p2pcrypto.PublicKey
 	privKey   p2pcrypto.PrivateKey
 }
 
+// PublicKey returns the node's public key
 func (n LocalNode) PublicKey() p2pcrypto.PublicKey {
 	return n.publicKey
 }

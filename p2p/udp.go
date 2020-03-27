@@ -87,6 +87,7 @@ func (mux *UDPMux) Shutdown() {
 	mux.cpool.Shutdown()
 }
 
+// listens to messages from the network layer and handles them.
 func (mux *UDPMux) listenToNetworkMessage() {
 	msgChan := mux.network.IncomingMessages()
 	for {
@@ -143,6 +144,7 @@ func (mux *UDPMux) SendMessage(peerPubkey p2pcrypto.PublicKey, protocol string, 
 }
 
 // sendMessageImpl finds the peer address, wraps the message as a protocol message with p2p metadata and sends it.
+// it handles looking up the peer ip address and encrypting the message.
 func (mux *UDPMux) sendMessageImpl(peerPubkey p2pcrypto.PublicKey, protocol string, payload service.Data) error {
 	var err error
 	var peer *node.NodeInfo

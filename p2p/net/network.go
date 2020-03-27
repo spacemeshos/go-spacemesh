@@ -45,10 +45,7 @@ type ManagedConnection interface {
 // Net is a connection factory able to dial remote endpoints
 // Net clients should register all callbacks
 // Connections may be initiated by Dial() or by remote clients connecting to the listen address
-// ConnManager includes a TCP server, and a TCP client
 // It provides full duplex messaging functionality over the same tcp/ip connection
-// Network should not know about higher-level networking types such as remoteNode, swarm and networkSession
-// Network main client is the swarm
 // Net has no channel events processing loops - clients are responsible for polling these channels and popping events from them
 type Net struct {
 	networkID int8
