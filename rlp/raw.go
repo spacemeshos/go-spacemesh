@@ -52,7 +52,7 @@ func SplitString(b []byte) (content, rest []byte, err error) {
 		return nil, b, err
 	}
 	if k == List {
-		return nil, b, ErrExpectedString
+		return nil, b, errExpectedString
 	}
 	return content, rest, nil
 }
@@ -65,7 +65,7 @@ func SplitList(b []byte) (content, rest []byte, err error) {
 		return nil, b, err
 	}
 	if k != List {
-		return nil, b, ErrExpectedList
+		return nil, b, errExpectedList
 	}
 	return content, rest, nil
 }
@@ -99,7 +99,7 @@ func readKind(buf []byte) (k Kind, tagsize, contentsize uint64, err error) {
 		contentsize = uint64(b - 0x80)
 		// Reject strings that should've been single bytes.
 		if contentsize == 1 && len(buf) > 1 && buf[1] < 128 {
-			return 0, 0, 0, ErrCanonSize
+			return 0, 0, 0, errCanonSize
 		}
 	case b < 0xC0:
 		k = String
@@ -119,7 +119,7 @@ func readKind(buf []byte) (k Kind, tagsize, contentsize uint64, err error) {
 	}
 	// Reject values larger than the input slice.
 	if contentsize > uint64(len(buf))-tagsize {
-		return 0, 0, 0, ErrValueTooLarge
+		return 0, 0, 0, errValueTooLarge
 	}
 	return k, tagsize, contentsize, err
 }
@@ -150,7 +150,7 @@ func readSize(b []byte, slen byte) (uint64, error) {
 	// Reject sizes < 56 (shouldn't have separate size) and sizes with
 	// leading zero bytes.
 	if s < 56 || b[0] == 0 {
-		return 0, ErrCanonSize
+		return 0, errCanonSize
 	}
 	return s, nil
 }

@@ -39,9 +39,9 @@ func TestCountValues(t *testing.T) {
 		{"820101 820202 8403030303 04", 4, nil},
 
 		// size errors
-		{"8142", 0, ErrCanonSize},
-		{"01 01 8142", 0, ErrCanonSize},
-		{"02 84020202", 0, ErrValueTooLarge},
+		{"8142", 0, errCanonSize},
+		{"01 01 8142", 0, errCanonSize},
+		{"02 84020202", 0, errValueTooLarge},
 
 		{
 			input: "A12000BF49F440A1CD0527E4D06E2765654C0F56452257516D793A9B8D604DCFDF2AB853F851808D10000000000000000000000000A056E81F171BCC55A6FF8345E692C0F86E5B48E01B996CADC001622FB5E363B421A0C5D2460186F7233C927E7DB2DCC703C0E500B653CA82273B7BFAD8045D85A470",
@@ -60,14 +60,14 @@ func TestCountValues(t *testing.T) {
 }
 
 func TestSplitTypes(t *testing.T) {
-	if _, _, err := SplitString(unhex("C100")); err != ErrExpectedString {
-		t.Errorf("SplitString returned %q, want %q", err, ErrExpectedString)
+	if _, _, err := SplitString(unhex("C100")); err != errExpectedString {
+		t.Errorf("SplitString returned %q, want %q", err, errExpectedString)
 	}
-	if _, _, err := SplitList(unhex("01")); err != ErrExpectedList {
-		t.Errorf("SplitString returned %q, want %q", err, ErrExpectedList)
+	if _, _, err := SplitList(unhex("01")); err != errExpectedList {
+		t.Errorf("SplitString returned %q, want %q", err, errExpectedList)
 	}
-	if _, _, err := SplitList(unhex("81FF")); err != ErrExpectedList {
-		t.Errorf("SplitString returned %q, want %q", err, ErrExpectedList)
+	if _, _, err := SplitList(unhex("81FF")); err != errExpectedList {
+		t.Errorf("SplitString returned %q, want %q", err, errExpectedList)
 	}
 }
 
@@ -85,33 +85,33 @@ func TestSplit(t *testing.T) {
 		// errors
 		{input: "", err: io.ErrUnexpectedEOF},
 
-		{input: "8141", err: ErrCanonSize, rest: "8141"},
-		{input: "B800", err: ErrCanonSize, rest: "B800"},
-		{input: "B802FFFF", err: ErrCanonSize, rest: "B802FFFF"},
-		{input: "B90000", err: ErrCanonSize, rest: "B90000"},
-		{input: "B90055", err: ErrCanonSize, rest: "B90055"},
-		{input: "BA0002FFFF", err: ErrCanonSize, rest: "BA0002FFFF"},
-		{input: "F800", err: ErrCanonSize, rest: "F800"},
-		{input: "F90000", err: ErrCanonSize, rest: "F90000"},
-		{input: "F90055", err: ErrCanonSize, rest: "F90055"},
-		{input: "FA0002FFFF", err: ErrCanonSize, rest: "FA0002FFFF"},
+		{input: "8141", err: errCanonSize, rest: "8141"},
+		{input: "B800", err: errCanonSize, rest: "B800"},
+		{input: "B802FFFF", err: errCanonSize, rest: "B802FFFF"},
+		{input: "B90000", err: errCanonSize, rest: "B90000"},
+		{input: "B90055", err: errCanonSize, rest: "B90055"},
+		{input: "BA0002FFFF", err: errCanonSize, rest: "BA0002FFFF"},
+		{input: "F800", err: errCanonSize, rest: "F800"},
+		{input: "F90000", err: errCanonSize, rest: "F90000"},
+		{input: "F90055", err: errCanonSize, rest: "F90055"},
+		{input: "FA0002FFFF", err: errCanonSize, rest: "FA0002FFFF"},
 
-		{input: "81", err: ErrValueTooLarge, rest: "81"},
-		{input: "8501010101", err: ErrValueTooLarge, rest: "8501010101"},
-		{input: "C60607080902", err: ErrValueTooLarge, rest: "C60607080902"},
+		{input: "81", err: errValueTooLarge, rest: "81"},
+		{input: "8501010101", err: errValueTooLarge, rest: "8501010101"},
+		{input: "C60607080902", err: errValueTooLarge, rest: "C60607080902"},
 
 		// size check overflow
-		{input: "BFFFFFFFFFFFFFFFFF", err: ErrValueTooLarge, rest: "BFFFFFFFFFFFFFFFFF"},
-		{input: "FFFFFFFFFFFFFFFFFF", err: ErrValueTooLarge, rest: "FFFFFFFFFFFFFFFFFF"},
+		{input: "BFFFFFFFFFFFFFFFFF", err: errValueTooLarge, rest: "BFFFFFFFFFFFFFFFFF"},
+		{input: "FFFFFFFFFFFFFFFFFF", err: errValueTooLarge, rest: "FFFFFFFFFFFFFFFFFF"},
 
 		{
 			input: "B838FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
-			err:   ErrValueTooLarge,
+			err:   errValueTooLarge,
 			rest:  "B838FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
 		},
 		{
 			input: "F838FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
-			err:   ErrValueTooLarge,
+			err:   errValueTooLarge,
 			rest:  "F838FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
 		},
 
@@ -162,9 +162,9 @@ func TestReadSize(t *testing.T) {
 	}{
 		{input: "", slen: 1, err: io.ErrUnexpectedEOF},
 		{input: "FF", slen: 2, err: io.ErrUnexpectedEOF},
-		{input: "00", slen: 1, err: ErrCanonSize},
-		{input: "36", slen: 1, err: ErrCanonSize},
-		{input: "37", slen: 1, err: ErrCanonSize},
+		{input: "00", slen: 1, err: errCanonSize},
+		{input: "36", slen: 1, err: errCanonSize},
+		{input: "37", slen: 1, err: errCanonSize},
 		{input: "38", slen: 1, size: 0x38},
 		{input: "FF", slen: 1, size: 0xFF},
 		{input: "FFFF", slen: 2, size: 0xFFFF},
