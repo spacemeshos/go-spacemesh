@@ -702,10 +702,20 @@ func (msh *Mesh) accumulateRewards(l *types.Layer, params Config) {
 
 	numBlocks := big.NewInt(int64(len(ids)))
 
-	blockTotalReward := calculateActualRewards(l.Index(), totalReward, numBlocks)
+	blockTotalReward, blockTotalRewardMod := calculateActualRewards(l.Index(), totalReward, numBlocks)
 	msh.ApplyRewards(l.Index(), ids, blockTotalReward)
 
-	blockLayerReward := calculateActualRewards(l.Index(), layerReward, numBlocks)
+	blockLayerReward, blockLayerRewardMod := calculateActualRewards(l.Index(), layerReward, numBlocks)
+	log.With().Info("Reward calculated",
+		log.LayerID(uint64(l.Index())),
+		log.Uint64("num_blocks", numBlocks.Uint64()),
+		log.Uint64("total_reward", totalReward.Uint64()),
+		log.Uint64("layer_reward", layerReward.Uint64()),
+		log.Uint64("block_total_reward", blockTotalReward.Uint64()),
+		log.Uint64("block_layer_reward", blockLayerReward.Uint64()),
+		log.Uint64("total_reward_remainder", blockTotalRewardMod.Uint64()),
+		log.Uint64("layer_reward_remainder", blockLayerRewardMod.Uint64()),
+	)
 	err := msh.writeTransactionRewards(l.Index(), ids, blockTotalReward, blockLayerReward)
 	if err != nil {
 		msh.Error("cannot write reward to db")
