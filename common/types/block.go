@@ -16,7 +16,7 @@ type BlockID Hash20
 
 // String returns the 5-character prefix of the hex representation of the ID.
 func (id BlockID) String() string {
-	return id.AsHash32().ShortString()
+	return id.AsHash32().MediumString()
 }
 
 // Field returns a log field. Implements the LoggableField interface.
@@ -76,10 +76,7 @@ func (id NodeID) ToBytes() []byte {
 // ShortString returns a the first 5 characters of the ID, for logging purposes.
 func (id NodeID) ShortString() string {
 	name := id.Key
-	if len(name) > 5 {
-		name = name[:5]
-	}
-	return name
+	return Stringify(name, 5)
 }
 
 // Field returns a log field. Implements the LoggableField interface.

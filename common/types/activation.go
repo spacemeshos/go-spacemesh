@@ -32,9 +32,9 @@ func (l EpochID) Field() log.Field { return log.Uint64("epoch_id", uint64(l)) }
 // ATXID is a 32-bit hash used to identify an activation transaction.
 type ATXID Hash32
 
-// ShortString returns a the first 5 characters of the ID, for logging purposes.
+// ShortString returns the first 5 characters of the ID, for logging purposes.
 func (t ATXID) ShortString() string {
-	return t.Hash32().ShortString()
+	return t.Hash32().MediumString()
 }
 
 // Hash32 returns the ATXID as a Hash32.
@@ -62,7 +62,7 @@ type ActivationTxHeader struct {
 	ActiveSetSize uint32
 }
 
-// ShortString returns a the first 5 characters of the ID, for logging purposes.
+// ShortString returns the first 5 characters of the ID, for logging purposes.
 func (atxh *ActivationTxHeader) ShortString() string {
 	return atxh.ID().ShortString()
 }
