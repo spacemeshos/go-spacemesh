@@ -1,4 +1,4 @@
-package pending_txs
+package pendingtxs
 
 import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -64,9 +64,9 @@ func TestNewAccountPendingTxs(t *testing.T) {
 	r.Equal(int(prevBalance)-100, int(balance))
 
 	// Accepting a transaction removes all same-nonce transactions
-	pendingTxs.Remove([]*types.Transaction{
+	pendingTxs.RemoveAccepted([]*types.Transaction{
 		newTx(t, 5, 50, 1),
-	}, 1)
+	})
 	empty = pendingTxs.IsEmpty()
 	r.True(empty)
 	nonce, balance = pendingTxs.GetProjection(prevNonce, prevBalance)
