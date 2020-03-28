@@ -21,7 +21,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/oracle"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"github.com/spacemeshos/go-spacemesh/pending_txs"
+	"github.com/spacemeshos/go-spacemesh/pendingtxs"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/spacemeshos/go-spacemesh/sync"
@@ -494,7 +494,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId,
 
 	app.txPool = miner.NewTxMemPool()
 	atxpool := miner.NewAtxMemPool()
-	meshAndPoolProjector := pending_txs.NewMeshAndPoolProjector(mdb, app.txPool)
+	meshAndPoolProjector := pendingtxs.NewMeshAndPoolProjector(mdb, app.txPool)
 
 	appliedTxs, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "appliedTxs"), 0, 0, lg.WithName("appliedTxs"))
 	if err != nil {
@@ -552,7 +552,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId,
 
 	ha := app.HareFactory(mdb, swarm, sgn, nodeID, syncer, msh, hOracle, idStore, clock, lg)
 
-	stateAndMeshProjector := pending_txs.NewStateAndMeshProjector(processor, msh)
+	stateAndMeshProjector := pendingtxs.NewStateAndMeshProjector(processor, msh)
 	blockProducer := miner.NewBlockBuilder(nodeID, sgn, swarm, clock.Subscribe(), app.Config.Hdist, app.txPool, atxpool, coinToss, msh, ha, blockOracle, processor, atxdb, syncer, app.Config.AtxsPerBlock, stateAndMeshProjector, app.addLogger(BlockBuilderLogger, lg))
 	blockListener := sync.NewBlockListener(swarm, syncer, 4, app.addLogger(BlockListenerLogger, lg))
 

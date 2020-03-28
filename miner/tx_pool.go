@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/pending_txs"
+	"github.com/spacemeshos/go-spacemesh/pendingtxs"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"sync"
 )
@@ -12,7 +12,7 @@ import (
 // TxMempool is a struct that holds txs received via gossip network
 type TxMempool struct {
 	txs      map[types.TransactionId]*types.Transaction
-	accounts map[types.Address]*pending_txs.AccountPendingTxs
+	accounts map[types.Address]*pendingtxs.AccountPendingTxs
 	txByAddr map[types.Address]map[types.TransactionId]struct{}
 	mu       sync.RWMutex
 }
@@ -21,7 +21,7 @@ type TxMempool struct {
 func NewTxMemPool() *TxMempool {
 	return &TxMempool{
 		txs:      make(map[types.TransactionId]*types.Transaction),
-		accounts: make(map[types.Address]*pending_txs.AccountPendingTxs),
+		accounts: make(map[types.Address]*pendingtxs.AccountPendingTxs),
 		txByAddr: make(map[types.Address]map[types.TransactionId]struct{}),
 	}
 }
@@ -127,10 +127,10 @@ func (t *TxMempool) GetProjection(addr types.Address, prevNonce, prevBalance uin
 }
 
 // ⚠️ must be called under write-lock
-func (t *TxMempool) getOrCreate(addr types.Address) *pending_txs.AccountPendingTxs {
+func (t *TxMempool) getOrCreate(addr types.Address) *pendingtxs.AccountPendingTxs {
 	account, found := t.accounts[addr]
 	if !found {
-		account = pending_txs.NewAccountPendingTxs()
+		account = pendingtxs.NewAccountPendingTxs()
 		t.accounts[addr] = account
 	}
 	return account
