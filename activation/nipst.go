@@ -221,7 +221,7 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *types.Hash32, atxExpired, stop cha
 			return nil, fmt.Errorf("failed to execute PoST: %v", err)
 		}
 
-		//todo remove
+		//todo remove (#1923)
 		//this is just for debugging
 		b, _ := types.InterfaceToBytes(proof)
 		nb.log.With().Info("finished PoST execution",
