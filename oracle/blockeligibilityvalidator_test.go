@@ -8,18 +8,18 @@ import (
 	"testing"
 )
 
-var someErr = errors.New("some err")
+var errFoo = errors.New("some err")
 
 type mockAtxDB struct {
 	atxH *types.ActivationTxHeader
 	err  error
 }
 
-func (m mockAtxDB) GetIdentity(edId string) (types.NodeId, error) {
-	return types.NodeId{Key: edId, VRFPublicKey: vrfPubkey}, nil
+func (m mockAtxDB) GetIdentity(edID string) (types.NodeId, error) {
+	return types.NodeId{Key: edID, VRFPublicKey: vrfPubkey}, nil
 }
 
-func (m mockAtxDB) GetNodeAtxIDForEpoch(nodeId types.NodeId, targetEpoch types.EpochId) (types.AtxId, error) {
+func (m mockAtxDB) GetNodeAtxIDForEpoch(types.NodeId, types.EpochId) (types.AtxId, error) {
 	return types.AtxId{}, m.err
 }
 
@@ -29,10 +29,10 @@ func (m mockAtxDB) GetAtxHeader(id types.AtxId) (*types.ActivationTxHeader, erro
 
 func TestBlockEligibilityValidator_getValidAtx(t *testing.T) {
 	r := require.New(t)
-	atxdb := &mockAtxDB{err: someErr}
+	atxdb := &mockAtxDB{err: errFoo}
 	genActiveSetSize := uint32(5)
 	v := NewBlockEligibilityValidator(10, genActiveSetSize, 5, atxdb, &EpochBeaconProvider{},
-		validateVrf, log.NewDefault(t.Name()))
+		validateVRF, log.NewDefault(t.Name()))
 
 	block := &types.Block{MiniBlock: types.MiniBlock{BlockHeader: types.BlockHeader{LayerIndex: 20}}} // non-genesis
 	block.Signature = edSigner.Sign(block.Bytes())
