@@ -1,3 +1,6 @@
+// Package pendingtxs exposes the AccountPendingTxs type, which keeps track of transactions that haven't been applied to
+// global state yet. If also provides projectors that predict an account's nonce and balance after those transactions
+// would be applied.
 package pendingtxs
 
 import (
