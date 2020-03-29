@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/nat_traversal"
+	"github.com/spacemeshos/go-spacemesh/nattraversal"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/connectionpool"
 	"github.com/spacemeshos/go-spacemesh/p2p/discovery"
@@ -906,12 +906,12 @@ var listeningIP = inet.ParseIP("0.0.0.0")
 func (s *Switch) getListeners(
 	getTCPListener func(tcpAddr *inet.TCPAddr) (inet.Listener, error),
 	getUDPListener func(udpAddr *inet.UDPAddr) (net.UDPListener, error),
-	discoverUpnpGateway func() (nat_traversal.UpnpGateway, error),
+	discoverUpnpGateway func() (nattraversal.UPNPGateway, error),
 ) (inet.Listener, net.UDPListener, error) {
 
 	port := s.config.TCPPort
 	randomPort := port == 0
-	var gateway nat_traversal.UpnpGateway
+	var gateway nattraversal.UPNPGateway
 	if s.config.AcquirePort {
 		s.logger.Info("Trying to acquire ports using UPnP, this might take a while..")
 		var err error
@@ -946,7 +946,7 @@ func (s *Switch) getListeners(
 		}
 
 		if gateway != nil {
-			err := nat_traversal.AcquirePortFromGateway(gateway, uint16(port))
+			err := nattraversal.AcquirePortFromGateway(gateway, uint16(port))
 			if err != nil {
 				if upnpFails >= UPNPRetries {
 					return tcpListener, udpListener, nil
@@ -985,6 +985,6 @@ func getTCPListener(tcpAddr *inet.TCPAddr) (inet.Listener, error) {
 	return inet.Listen("tcp", tcpAddr.String())
 }
 
-func discoverUPnPGateway() (igd nat_traversal.UpnpGateway, err error) {
-	return nat_traversal.DiscoverUPnPGateway()
+func discoverUPnPGateway() (igd nattraversal.UPNPGateway, err error) {
+	return nattraversal.DiscoverUPNPGateway()
 }
