@@ -1,4 +1,4 @@
-// Package metrics define telemetry primitives to use across components. it uses the prometheus format.
+// Package metrics defines telemetry primitives to be used across components. it uses the prometheus format.
 package metrics
 
 import (
