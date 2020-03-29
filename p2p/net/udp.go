@@ -96,7 +96,7 @@ func (n *UDPNet) SubscribeOnNewRemoteConnections(f func(event NewConnectionEvent
 	n.regMutex.Unlock()
 }
 
-func (n *UDPNet) publishNewRemoteConnectionEvent(conn Connection, node *node.NodeInfo) {
+func (n *UDPNet) publishNewRemoteConnectionEvent(conn Connection, node *node.Info) {
 	n.regMutex.RLock()
 	for _, f := range n.regNewRemoteConn {
 		f(NewConnectionEvent{conn, node})
@@ -132,13 +132,13 @@ func (n *UDPNet) initSession(remote p2pcrypto.PublicKey) NetworkSession {
 	return session
 }
 
-// NodeAddr makes a UDPAddr from a NodeInfo struct
-func NodeAddr(info *node.NodeInfo) *net.UDPAddr {
+// NodeAddr makes a UDPAddr from a Info struct
+func NodeAddr(info *node.Info) *net.UDPAddr {
 	return &net.UDPAddr{IP: info.IP, Port: int(info.DiscoveryPort)}
 }
 
 // Send writes a udp packet to the target with the given data
-func (n *UDPNet) Send(to *node.NodeInfo, data []byte) error {
+func (n *UDPNet) Send(to *node.Info, data []byte) error {
 
 	ns := n.cache.GetOrCreate(to.PublicKey())
 

@@ -28,26 +28,26 @@ var ErrBootAbort = errors.New("bootstrap canceled by signal")
 
 type pingerGetAddresser interface {
 	Ping(p p2pcrypto.PublicKey) error
-	GetAddresses(server p2pcrypto.PublicKey) ([]*node.NodeInfo, error)
+	GetAddresses(server p2pcrypto.PublicKey) ([]*node.Info, error)
 }
 
 // refresher is used to bootstrap and requestAddresses peers in the addrbook
 type refresher struct {
 	logger       log.Log
-	localAddress *node.NodeInfo
+	localAddress *node.Info
 
 	book      addressBook
-	bootNodes []*node.NodeInfo
+	bootNodes []*node.Info
 
 	disc        pingerGetAddresser
 	lastQueries map[p2pcrypto.PublicKey]time.Time
 }
 
-func newRefresher(local p2pcrypto.PublicKey, book addressBook, disc pingerGetAddresser, bootnodes []*node.NodeInfo, logger log.Log) *refresher {
+func newRefresher(local p2pcrypto.PublicKey, book addressBook, disc pingerGetAddresser, bootnodes []*node.Info, logger log.Log) *refresher {
 	//todo: trigger requestAddresses every X with random nodes
 	return &refresher{
 		logger:       logger,
-		localAddress: &node.NodeInfo{ID: local.Array(), IP: net.IPv4zero},
+		localAddress: &node.Info{ID: local.Array(), IP: net.IPv4zero},
 		book:         book,
 		disc:         disc,
 		bootNodes:    bootnodes,
@@ -59,7 +59,7 @@ func newRefresher(local p2pcrypto.PublicKey, book addressBook, disc pingerGetAdd
 // otherwise it will keep trying. if the routing table is empty, bootnodes are loaded from provided config.
 func (r *refresher) Bootstrap(ctx context.Context, numpeers int) error {
 	var err error
-	var servers []*node.NodeInfo
+	var servers []*node.Info
 	var tries int
 
 	// The following loop will add the pre-set bootstrap nodes and query them for results
@@ -130,13 +130,13 @@ func expire(m map[p2pcrypto.PublicKey]time.Time) {
 }
 
 type queryResult struct {
-	src *node.NodeInfo
-	res []*node.NodeInfo
+	src *node.Info
+	res []*node.Info
 	err error
 }
 
 // pingThenGetAddresses is sending a ping, then getaddress, then return results on given chan.
-func pingThenGetAddresses(p pingerGetAddresser, addr *node.NodeInfo, qr chan queryResult) {
+func pingThenGetAddresses(p pingerGetAddresser, addr *node.Info, qr chan queryResult) {
 	// TODO: check whether we pinged recently and maybe skip pinging
 	err := p.Ping(addr.PublicKey())
 
@@ -154,14 +154,14 @@ func pingThenGetAddresses(p pingerGetAddresser, addr *node.NodeInfo, qr chan que
 }
 
 // requestAddresses will crawl the network looking for new peer addresses.
-func (r *refresher) requestAddresses(ctx context.Context, servers []*node.NodeInfo) []*node.NodeInfo {
+func (r *refresher) requestAddresses(ctx context.Context, servers []*node.Info) []*node.Info {
 
 	// todo: here we stop only after we've tried querying or queried all addrs
 	// 	maybe we should stop after we've reached a certain amount ? (needMoreAddresses..)
 	// todo: revisit this area to think about if lastQueries is even needed, since we're going
 	// 		to probably sleep for more than minTimeBetweenQueries between running requestAddresses
 	//		calls. maybe we can use only the seen cache instead.
-	var out []*node.NodeInfo
+	var out []*node.Info
 
 	seen := make(map[p2pcrypto.PublicKey]struct{})
 	seen[r.localAddress.PublicKey()] = struct{}{}

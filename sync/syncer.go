@@ -153,7 +153,7 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool txMemPool, atxpool a
 
 	srvr := &net{
 		RequestTimeout: conf.RequestTimeout,
-		MessageServer:  server.NewMsgServer(srv.(server.Service), syncProtocol, conf.RequestTimeout, make(chan service.DirectMessage, p2pconf.ConfigValues.BufferSize), logger),
+		MessageServer:  server.NewMsgServer(srv.(server.Service), syncProtocol, conf.RequestTimeout, make(chan service.DirectMessage, p2pconf.Values.BufferSize), logger),
 		peers:          p2p.NewPeers(srv, logger.WithName("peers")),
 		exit:           exit,
 	}

@@ -25,7 +25,7 @@ type serializedKnownAddress struct {
 type serializedAddrManager struct {
 	Key          [32]byte
 	Addresses    []*serializedKnownAddress
-	NewBuckets   [newBucketCount][]string // NodeInfo represented as string
+	NewBuckets   [newBucketCount][]string // Info represented as string
 	TriedBuckets [triedBucketCount][]string
 }
 

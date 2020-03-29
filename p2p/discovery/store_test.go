@@ -12,7 +12,7 @@ import (
 
 // assertAddr ensures that the two addresses match. The timestamp is not
 // checked as it does not affect uniquely identifying a specific address.
-func assertAddr(t *testing.T, got, expected *node.NodeInfo) {
+func assertAddr(t *testing.T, got, expected *node.Info) {
 	if got.ID != expected.ID {
 		t.Fatalf("expected ID %v, got %v", expected.ID.String(), got.ID.String())
 	}
@@ -32,7 +32,7 @@ func assertAddr(t *testing.T, got, expected *node.NodeInfo) {
 // assertAddrs ensures that the manager's address cache matches the given
 // expected addresses.
 func assertAddrs(t *testing.T, addrMgr *addrBook,
-	expectedAddrs map[p2pcrypto.PublicKey]*node.NodeInfo) {
+	expectedAddrs map[p2pcrypto.PublicKey]*node.Info) {
 
 	t.Helper()
 
@@ -71,12 +71,12 @@ func TestAddrManagerSerialization(t *testing.T) {
 
 	filePath := tempDir + "/" + defaultPeersFileName
 
-	addrMgr := NewAddrBook(cfg.SwarmConfig, "", lg)
+	addrMgr := newAddrBook(cfg.SwarmConfig, "", lg)
 
 	// We'll be adding 5 random addresses to the manager.
 	const numAddrs = 5
 
-	expectedAddrs := make(map[p2pcrypto.PublicKey]*node.NodeInfo, numAddrs)
+	expectedAddrs := make(map[p2pcrypto.PublicKey]*node.Info, numAddrs)
 	for i := 0; i < numAddrs; i++ {
 		addr := node.GenerateRandomNodeData()
 		expectedAddrs[addr.PublicKey()] = addr
@@ -90,7 +90,7 @@ func TestAddrManagerSerialization(t *testing.T) {
 	//// Then, we'll persist these addresses to disk and restart the address
 	//// manager.
 	addrMgr.savePeers(filePath)
-	addrMgr = NewAddrBook(cfg.SwarmConfig, "", lg)
+	addrMgr = newAddrBook(cfg.SwarmConfig, "", lg)
 
 	// Finally, we'll read all of the addresses from disk and ensure they
 	// match as expected.

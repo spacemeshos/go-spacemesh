@@ -1,4 +1,5 @@
-// Package discovery implements a Distributed Hash Table based on Kademlia protocol.
+// Package discovery implements uses bitcoin-based addrbook to store network addresses and collects
+// them by crawling the network using a simple protocol.
 package discovery
 
 import (
@@ -14,25 +15,26 @@ import (
 // PeerStore is an interface to the discovery protocol
 type PeerStore interface {
 	Remove(pubkey p2pcrypto.PublicKey)
-	Lookup(pubkey p2pcrypto.PublicKey) (*node.NodeInfo, error)
-	Update(addr, src *node.NodeInfo)
+	Lookup(pubkey p2pcrypto.PublicKey) (*node.Info, error)
+	Update(addr, src *node.Info)
 
-	SelectPeers(ctx context.Context, qty int) []*node.NodeInfo
+	SelectPeers(ctx context.Context, qty int) []*node.Info
 	Bootstrap(ctx context.Context) error
 	Size() int
 
 	Shutdown()
 
-	IsLocalAddress(info *node.NodeInfo) bool
+	IsLocalAddress(info *node.Info) bool
 	SetLocalAddresses(tcp, udp int)
 
 	Good(key p2pcrypto.PublicKey)
 	Attempt(key p2pcrypto.PublicKey)
 }
 
+// Protocol is the API of node messages used to discover new nodes.
 type Protocol interface {
 	Ping(p p2pcrypto.PublicKey) error
-	GetAddresses(server p2pcrypto.PublicKey) ([]*node.NodeInfo, error)
+	GetAddresses(server p2pcrypto.PublicKey) ([]*node.Info, error)
 	SetLocalAddresses(tcp, udp int)
 	Close()
 }
@@ -42,17 +44,17 @@ type addressBook interface {
 	Attempt(key p2pcrypto.PublicKey)
 
 	RemoveAddress(key p2pcrypto.PublicKey)
-	AddAddress(addr, srcAddr *node.NodeInfo)
-	AddAddresses(addrs []*node.NodeInfo, srcAddr *node.NodeInfo)
+	AddAddress(addr, srcAddr *node.Info)
+	AddAddresses(addrs []*node.Info, srcAddr *node.Info)
 
 	NeedNewAddresses() bool
-	Lookup(key p2pcrypto.PublicKey) (*node.NodeInfo, error)
-	AddressCache() []*node.NodeInfo
+	Lookup(key p2pcrypto.PublicKey) (*node.Info, error)
+	AddressCache() []*node.Info
 	NumAddresses() int
 	GetAddress() *KnownAddress
 
-	AddLocalAddress(info *node.NodeInfo)
-	IsLocalAddress(info *node.NodeInfo) bool
+	AddLocalAddress(info *node.Info)
+	IsLocalAddress(info *node.Info) bool
 
 	Stop()
 }
@@ -85,10 +87,12 @@ func (d *Discovery) Size() int {
 	return d.rt.NumAddresses()
 }
 
+// Good marks a node as good in the addrBook.
 func (d *Discovery) Good(key p2pcrypto.PublicKey) {
 	d.rt.Good(key)
 }
 
+// Attempt marks an attempt on the node in the addrBook
 func (d *Discovery) Attempt(key p2pcrypto.PublicKey) {
 	d.rt.Attempt(key)
 }
@@ -103,7 +107,7 @@ func (d *Discovery) refresh(ctx context.Context, peersToGet int) error {
 }
 
 // SelectPeers asks routing table to randomly select a slice of nodes in size `qty`
-func (d *Discovery) SelectPeers(ctx context.Context, qty int) []*node.NodeInfo {
+func (d *Discovery) SelectPeers(ctx context.Context, qty int) []*node.Info {
 
 	if d.rt.NeedNewAddresses() {
 		err := d.refresh(ctx, qty) // TODO: use ctx with timeout, check errors
@@ -112,7 +116,7 @@ func (d *Discovery) SelectPeers(ctx context.Context, qty int) []*node.NodeInfo {
 		}
 	}
 
-	out := make([]*node.NodeInfo, 0, qty)
+	out := make([]*node.Info, 0, qty)
 	set := make(map[p2pcrypto.PublicKey]struct{})
 	for i := 0; i < qty; i++ {
 		add := d.rt.GetAddress()
@@ -132,19 +136,19 @@ func (d *Discovery) SelectPeers(ctx context.Context, qty int) []*node.NodeInfo {
 
 // Lookup searched a node in the address book. *NOTE* this returns a `Node` with the udpAddress as `Address()`.
 // this is because Lookup is only used in the udp mux.
-func (d *Discovery) Lookup(key p2pcrypto.PublicKey) (*node.NodeInfo, error) {
+func (d *Discovery) Lookup(key p2pcrypto.PublicKey) (*node.Info, error) {
 	return d.rt.Lookup(key)
 }
 
 // Update adds an addr to the addrBook
-func (d *Discovery) Update(addr, src *node.NodeInfo) {
+func (d *Discovery) Update(addr, src *node.Info) {
 	d.rt.AddAddress(addr, src)
 }
 
 // New creates a new Discovery
 func New(ln node.LocalNode, config config.SwarmConfig, service server.Service, path string, logger log.Log) *Discovery {
 
-	addrbook := NewAddrBook(config, path, logger)
+	addrbook := newAddrBook(config, path, logger)
 	d := &Discovery{
 		config: config,
 		logger: logger,
@@ -152,11 +156,11 @@ func New(ln node.LocalNode, config config.SwarmConfig, service server.Service, p
 		rt:     addrbook,
 	}
 
-	addrbook.AddLocalAddress(&node.NodeInfo{ID: ln.PublicKey().Array()})
+	addrbook.AddLocalAddress(&node.Info{ID: ln.PublicKey().Array()})
 
-	d.disc = NewDiscoveryProtocol(ln.PublicKey(), d.rt, service, logger)
+	d.disc = newProtocol(ln.PublicKey(), d.rt, service, logger)
 
-	bn := make([]*node.NodeInfo, 0, len(config.BootstrapNodes))
+	bn := make([]*node.Info, 0, len(config.BootstrapNodes))
 	for _, n := range config.BootstrapNodes {
 		nd, err := node.ParseNode(n)
 		if err != nil {
@@ -173,11 +177,13 @@ func New(ln node.LocalNode, config config.SwarmConfig, service server.Service, p
 	return d
 }
 
+// Shutdown stops the discovery service
 func (d *Discovery) Shutdown() {
 	d.rt.Stop()
 }
 
-func (d *Discovery) IsLocalAddress(info *node.NodeInfo) bool {
+// IsLocalAddress checks info against the addrBook to see if it's a local address.
+func (d *Discovery) IsLocalAddress(info *node.Info) bool {
 	return d.rt.IsLocalAddress(info)
 }
 
@@ -192,6 +198,7 @@ func (d *Discovery) Remove(key p2pcrypto.PublicKey) {
 	d.rt.RemoveAddress(key) // we don't care about address when we remove
 }
 
+// Bootstrap runs a refresh and tries to get a minimum number of nodes in the addrBook.
 func (d *Discovery) Bootstrap(ctx context.Context) error {
 	d.logger.Debug("Starting node bootstrap")
 	return d.refresh(ctx, d.config.RandomConnections)

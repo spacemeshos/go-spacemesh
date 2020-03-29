@@ -50,7 +50,7 @@ type NetworkMock struct {
 	preSessionErr    error
 	preSessionCount  int32
 	regNewRemoteConn []func(NewConnectionEvent)
-	networkId        int8
+	networkID        int8
 	closingConn      []func(ConnectionWithErr)
 	incomingMessages []chan IncomingMessageEvent
 	dialSessionID    []byte
@@ -67,6 +67,7 @@ func NewNetworkMock() *NetworkMock {
 	}
 }
 
+// SetNextDialSessionID mutates the mock to change the next returned session id
 func (n *NetworkMock) SetNextDialSessionID(sID []byte) {
 	n.dialSessionID = sID
 }
@@ -140,7 +141,7 @@ func (n NetworkMock) PublishClosingConnection(con ConnectionWithErr) {
 
 // NetworkID is netid
 func (n *NetworkMock) NetworkID() int8 {
-	return n.networkId
+	return n.networkID
 }
 
 // IncomingMessages return channel of IncomingMessages
