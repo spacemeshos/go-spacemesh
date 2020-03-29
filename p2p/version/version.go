@@ -1,3 +1,4 @@
+// Package version includes methods to compare versions between nodes.
 package version
 
 import (

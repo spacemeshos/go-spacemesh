@@ -1,3 +1,4 @@
+// Package gossip implements simple protocol to send new validated messages to all peers and ignore old or not valid messages.
 package gossip
 
 import (
@@ -262,6 +263,7 @@ func (prot *Protocol) hasPeer(key p2pcrypto.PublicKey) bool {
 	return ok
 }
 
+// SetPriority sets the priority for protoName in the queue.
 func (prot *Protocol) SetPriority(protoName string, priority priorityq.Priority) {
 	prot.priorities[protoName] = priority
 }

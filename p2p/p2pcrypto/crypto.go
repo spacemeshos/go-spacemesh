@@ -1,3 +1,5 @@
+// Package p2pcrypto defines the cryptographic primitives used to communicate and identify in the p2p network,
+// it uses go stdlib's NaCL box implementation.
 package p2pcrypto
 
 import (
@@ -28,12 +30,12 @@ type PrivateKey interface {
 	Key
 }
 
-// PrivateKey is a public key of 32 byte.
+// PublicKey is a public key of 32 byte.
 type PublicKey interface {
 	Key
 }
 
-// PrivateKey is a private key of 32 byte.
+// SharedSecret is created using two participants key to enable Sealing and Opening of messages (NaCL).
 type SharedSecret interface {
 	Key
 	Seal(message []byte) (out []byte)

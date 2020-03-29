@@ -17,7 +17,7 @@ func (p *protocol) newPingRequestHandler() func(msg server.Message) []byte {
 	return func(msg server.Message) []byte {
 		plogger := p.logger.WithFields(log.String("type", "ping"), log.String("from", msg.Sender().String()))
 		plogger.Debug("handle request")
-		pinged := &node.NodeInfo{}
+		pinged := &node.Info{}
 		err := types.BytesToInterface(msg.Bytes(), pinged)
 		if err != nil {
 			plogger.Error("failed to deserialize ping message err=", err)
@@ -42,7 +42,7 @@ func (p *protocol) newPingRequestHandler() func(msg server.Message) []byte {
 	}
 }
 
-func (p *protocol) verifyPinger(from net.Addr, pi *node.NodeInfo) error {
+func (p *protocol) verifyPinger(from net.Addr, pi *node.Info) error {
 	// todo : Validate ToAddr or drop it.
 	// todo: check the address provided with an extra ping before updating. ( if we haven't checked it for a while )
 	// todo: decide on best way to know our ext address
@@ -74,7 +74,7 @@ func (p *protocol) Ping(peer p2pcrypto.PublicKey) error {
 	foo := func(msg []byte) {
 		defer close(ch)
 		plogger.Debug("handle response")
-		sender := &node.NodeInfo{}
+		sender := &node.Info{}
 		err := types.BytesToInterface(msg, sender)
 
 		if err != nil {
@@ -88,7 +88,7 @@ func (p *protocol) Ping(peer p2pcrypto.PublicKey) error {
 		ch <- sender.ID.Bytes()
 	}
 
-	err = p.msgServer.SendRequest(PINGPONG, data, peer, foo)
+	err = p.msgServer.SendRequest(PingPong, data, peer, foo)
 
 	if err != nil {
 		return err
