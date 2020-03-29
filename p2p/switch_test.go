@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/nat_traversal"
+	"github.com/spacemeshos/go-spacemesh/nattraversal"
 	"github.com/spacemeshos/go-spacemesh/p2p/connectionpool"
 	"github.com/spacemeshos/go-spacemesh/p2p/discovery"
 	"github.com/stretchr/testify/require"
@@ -32,7 +32,7 @@ type cpoolMock struct {
 	keyRemoved  chan p2pcrypto.Key
 }
 
-func NewCpoolMock() *cpoolMock {
+func newCpoolMock() *cpoolMock {
 	return &cpoolMock{
 		keyRemoved: make(chan p2pcrypto.Key, 10),
 	}
@@ -60,7 +60,7 @@ func (cp *cpoolMock) Shutdown() {
 
 }
 
-func p2pTestInstance(t testing.TB, config config.Config) *swarm {
+func p2pTestInstance(t testing.TB, config config.Config) *Switch {
 	p := p2pTestNoStart(t, config)
 	err := p.Start()
 	if err != nil {
@@ -70,13 +70,13 @@ func p2pTestInstance(t testing.TB, config config.Config) *swarm {
 	return p
 }
 
-func p2pTestNoStart(t testing.TB, config config.Config) *swarm {
+func p2pTestNoStart(t testing.TB, config config.Config) *Switch {
 	p, err := newSwarm(context.TODO(), config, log.NewDefault(t.Name()), "")
 	if err != nil {
-		t.Fatal("err creating a swarm", err)
+		t.Fatal("err creating a Switch", err)
 	}
 	if p == nil {
-		t.Fatal("swarm was nil")
+		t.Fatal("Switch was nil")
 	}
 	return p
 }
@@ -139,13 +139,13 @@ func TestSwarm_RegisterProtocolNoStart(t *testing.T) {
 }
 
 func TestSwarm_processMessage(t *testing.T) {
-	s := swarm{
+	s := Switch{
 		inpeers:      make(map[p2pcrypto.PublicKey]struct{}),
 		outpeers:     make(map[p2pcrypto.PublicKey]struct{}),
 		delPeerSub:   make([]chan p2pcrypto.PublicKey, 0),
 		morePeersReq: make(chan struct{}, 1),
 	}
-	cpmock := NewCpoolMock()
+	cpmock := newCpoolMock()
 	s.cPool = cpmock
 	s.config = config.DefaultConfig()
 	s.logger = log.NewDefault(t.Name())
@@ -276,7 +276,7 @@ func RandString(n int) string {
 	return string(b)
 }
 
-func sendDirectMessage(t *testing.T, sender *swarm, recvPub p2pcrypto.PublicKey, inChan chan service.DirectMessage, checkpayload bool) {
+func sendDirectMessage(t *testing.T, sender *Switch, recvPub p2pcrypto.PublicKey, inChan chan service.DirectMessage, checkpayload bool) {
 	payload := []byte(RandString(10))
 	err := sender.SendMessage(recvPub, exampleProtocol, payload)
 	require.NoError(t, err)
@@ -344,11 +344,11 @@ func TestSwarm_MultipleMessages(t *testing.T) {
 }
 
 type swarmArray struct {
-	s   []*swarm
+	s   []*Switch
 	mtx sync.Mutex
 }
 
-func (sa *swarmArray) add(s *swarm) {
+func (sa *swarmArray) add(s *Switch) {
 	sa.mtx.Lock()
 	sa.s = append(sa.s, s)
 	sa.mtx.Unlock()
@@ -492,7 +492,7 @@ func TestSwarm_MultipleMessagesFromMultipleSendersToMultipleProtocols(t *testing
 
 func TestSwarm_RegisterProtocol(t *testing.T) {
 	const numPeers = 100
-	nods := make([]*swarm, 0, numPeers)
+	nods := make([]*Switch, 0, numPeers)
 	cfg := configWithPort(0)
 	for i := 0; i < numPeers; i++ {
 		nod := p2pTestNoStart(t, cfg)
@@ -709,8 +709,8 @@ func Test_Swarm_getMorePeers3(t *testing.T) {
 	mdht := new(discovery.MockPeerStore)
 	n.discover = mdht
 	testNode := node.GenerateRandomNodeData()
-	mdht.SelectPeersFunc = func(ctx context.Context, qty int) []*node.NodeInfo {
-		return []*node.NodeInfo{testNode}
+	mdht.SelectPeersFunc = func(ctx context.Context, qty int) []*node.Info {
+		return []*node.Info{testNode}
 	}
 
 	cpm := new(cpoolMock)
@@ -741,8 +741,8 @@ func Test_Swarm_getMorePeers4(t *testing.T) {
 	n.discover = mdht
 
 	testNode := node.GenerateRandomNodeData()
-	mdht.SelectPeersFunc = func(ctx context.Context, qty int) []*node.NodeInfo {
-		return []*node.NodeInfo{testNode}
+	mdht.SelectPeersFunc = func(ctx context.Context, qty int) []*node.Info {
+		return []*node.Info{testNode}
 	}
 
 	cpm := new(cpoolMock)
@@ -781,7 +781,7 @@ func Test_Swarm_getMorePeers5(t *testing.T) {
 
 	n.cPool = cpm
 
-	mdht.SelectPeersFunc = func(ctx context.Context, qty int) []*node.NodeInfo {
+	mdht.SelectPeersFunc = func(ctx context.Context, qty int) []*node.Info {
 		return node.GenerateRandomNodesData(qty)
 	}
 
@@ -814,7 +814,7 @@ func Test_Swarm_getMorePeers6(t *testing.T) {
 
 	n.cPool = cpm
 
-	mdht.SelectPeersFunc = func(ctx context.Context, qty int) []*node.NodeInfo {
+	mdht.SelectPeersFunc = func(ctx context.Context, qty int) []*node.Info {
 		return node.GenerateRandomNodesData(qty)
 	}
 
@@ -828,7 +828,7 @@ func Test_Swarm_getMorePeers6(t *testing.T) {
 
 	//test not replacing inc peer
 	//
-	mdht.SelectPeersFunc = func(ctx context.Context, qty int) []*node.NodeInfo {
+	mdht.SelectPeersFunc = func(ctx context.Context, qty int) []*node.Info {
 		some := node.GenerateRandomNodesData(qty - 1)
 		some = append(some, nd)
 		return some
@@ -853,7 +853,7 @@ func Test_Swarm_callCpoolCloseCon(t *testing.T) {
 	require.NoError(t, p1.Start())
 	require.NoError(t, p2.Start())
 
-	cpm := NewCpoolMock()
+	cpm := newCpoolMock()
 	p1.cPool = cpm
 
 	wg := sync.WaitGroup{}
@@ -884,7 +884,7 @@ func TestNeighborhood_Initial(t *testing.T) {
 
 	p := p2pTestNoStart(t, cfg)
 	mdht := new(discovery.MockPeerStore)
-	mdht.SelectPeersFunc = func(ctx context.Context, qty int) []*node.NodeInfo {
+	mdht.SelectPeersFunc = func(ctx context.Context, qty int) []*node.Info {
 		return node.GenerateRandomNodesData(qty)
 	}
 
@@ -904,7 +904,7 @@ func TestNeighborhood_Initial(t *testing.T) {
 
 	p = p2pTestNoStart(t, cfg)
 	p.discover = mdht
-	cpm := NewCpoolMock()
+	cpm := newCpoolMock()
 	cpm.f = func(address inet.Addr, pk p2pcrypto.PublicKey) (net.Connection, error) {
 		return net.NewConnectionMock(pk), nil
 	}
@@ -990,7 +990,7 @@ func TestSwarm_AskPeersSerial(t *testing.T) {
 	timescalled := uint32(0)
 	block := make(chan struct{})
 
-	dsc.SelectPeersFunc = func(ctx context.Context, qty int) []*node.NodeInfo {
+	dsc.SelectPeersFunc = func(ctx context.Context, qty int) []*node.Info {
 		atomic.AddUint32(&timescalled, 1)
 		<-block
 		return node.GenerateRandomNodesData(qty) // will trigger sending on morepeersreq
@@ -1018,7 +1018,7 @@ func Test_NodeInfo(t *testing.T) {
 		panic("LOL")
 	}
 	fmt.Println("GOT MSG ", raw)
-	pinged2 := &node.NodeInfo{}
+	pinged2 := &node.Info{}
 	err = types.BytesToInterface(raw, pinged2)
 	if err != nil {
 		panic(err)
@@ -1043,7 +1043,7 @@ func TestNeighborhood_ReportConnectionResult(t *testing.T) {
 
 	rnds := node.GenerateRandomNodesData(PeerNum)
 
-	ps.SelectPeersFunc = func(ctx context.Context, qty int) []*node.NodeInfo {
+	ps.SelectPeersFunc = func(ctx context.Context, qty int) []*node.Info {
 		return rnds
 	}
 
@@ -1073,16 +1073,16 @@ func TestNeighborhood_ReportConnectionResult(t *testing.T) {
 
 	realnode := p2pTestNoStart(t, configWithPort(0))
 	realnode2 := p2pTestNoStart(t, configWithPort(0))
-	realnodeinfo := &node.NodeInfo{ID: realnode.lNode.PublicKey().Array(), IP: inet.IPv4zero}
-	realnode2info := &node.NodeInfo{ID: realnode2.lNode.PublicKey().Array(), IP: inet.IPv4zero}
+	realnodeinfo := &node.Info{ID: realnode.lNode.PublicKey().Array(), IP: inet.IPv4zero}
+	realnode2info := &node.Info{ID: realnode2.lNode.PublicKey().Array(), IP: inet.IPv4zero}
 
 	goodlist[realnode.lNode.PublicKey()] = struct{}{}
 	goodlist[realnode2.lNode.PublicKey()] = struct{}{}
 
 	newrnds := node.GenerateRandomNodesData(PeerNum - 2)
 
-	ps.SelectPeersFunc = func(ctx context.Context, qty int) []*node.NodeInfo {
-		return append([]*node.NodeInfo{realnodeinfo, realnode2info}, newrnds...)
+	ps.SelectPeersFunc = func(ctx context.Context, qty int) []*node.Info {
+		return append([]*node.Info{realnodeinfo, realnode2info}, newrnds...)
 	}
 
 	n.getMorePeers(PeerNum)
@@ -1100,7 +1100,7 @@ func TestSwarm_SendMessage(t *testing.T) {
 	p.cPool = cp
 	p.discover = ps
 
-	ps.IsLocalAddressFunc = func(info *node.NodeInfo) bool {
+	ps.IsLocalAddressFunc = func(info *node.Info) bool {
 		return true
 	}
 
@@ -1111,7 +1111,7 @@ func TestSwarm_SendMessage(t *testing.T) {
 	err := p.SendMessage(someky, proto, []byte("LOL"))
 	require.Equal(t, err, errors.New("can't sent message to self"))
 
-	ps.IsLocalAddressFunc = func(info *node.NodeInfo) bool {
+	ps.IsLocalAddressFunc = func(info *node.Info) bool {
 		return false
 	}
 
@@ -1209,7 +1209,7 @@ func TestSwarm_getListeners_randomPort(t *testing.T) {
 		1234: {udpResponse{}},
 		1337: {udpResponse{}},
 	}
-	f := func() (igd nat_traversal.UpnpGateway, err error) {
+	f := func() (igd nattraversal.UPNPGateway, err error) {
 		return &UpnpGatewayMock{errs: map[uint16][]error{1234: {ErrPortUnavailable}, 1337: {nil}}}, nil
 	}
 
@@ -1262,8 +1262,7 @@ func TestSwarm_getListeners_specificPortUnavailable(t *testing.T) {
 		1337: {udpResponse{}},
 	}
 
-	r.EqualError(testGetListenersScenario(t, port, tcpResponses, udpResponses, createDiscoverUpnpFunc(nil, 1337, ErrPortUnavailable), true),
-		"failed to acquire requested port using UPnP: failed to forward port 1337: failed to acquire port")
+	r.NoError(testGetListenersScenario(t, port, tcpResponses, udpResponses, createDiscoverUpnpFunc(nil, 1337, ErrPortUnavailable), true))
 }
 
 func TestSwarm_getListeners_upnpMoreCases(t *testing.T) {
@@ -1307,7 +1306,7 @@ func testGetListenersScenario(
 	port int,
 	tcpResponses map[int][]tcpResponse,
 	udpResponses map[int][]udpResponse,
-	discoverUpnp func() (igd nat_traversal.UpnpGateway, err error),
+	discoverUpnp func() (igd nattraversal.UPNPGateway, err error),
 	acquirePort bool,
 ) error {
 
@@ -1317,14 +1316,14 @@ func testGetListenersScenario(
 	cfg.AcquirePort = acquirePort
 	swarm := p2pTestNoStart(t, cfg)
 
-	getTcp := func(addr *inet.TCPAddr) (listener inet.Listener, err error) {
+	getTCP := func(addr *inet.TCPAddr) (listener inet.Listener, err error) {
 		port := addr.Port
 		r.NotEmpty(tcpResponses[port], "no response for port %v", port)
 		res := tcpResponses[port][0]
 		tcpResponses[port] = tcpResponses[port][1:]
 		return res.listener, res.err
 	}
-	getUdp := func(addr *inet.UDPAddr) (conn net.UDPListener, err error) {
+	getUDP := func(addr *inet.UDPAddr) (conn net.UDPListener, err error) {
 		port := addr.Port
 		r.NotEmpty(udpResponses[port], "no response for port %v", port)
 		res := udpResponses[port][0]
@@ -1332,7 +1331,7 @@ func testGetListenersScenario(
 
 		return &UDPConnMock{}, res.err
 	}
-	_, _, err := swarm.getListeners(getTcp, getUdp, discoverUpnp)
+	_, _, err := swarm.getListeners(getTCP, getUDP, discoverUpnp)
 
 	for port, responses := range tcpResponses {
 		r.Empty(responses, "not all responses for tcp port %v were consumed", port)
@@ -1371,8 +1370,8 @@ func (u *UpnpGatewayMock) Clear(port uint16) error {
 	return nil
 }
 
-func createDiscoverUpnpFunc(funcErr error, port uint16, gatewayForwardErr error) func() (igd nat_traversal.UpnpGateway, err error) {
-	return func() (igd nat_traversal.UpnpGateway, err error) {
+func createDiscoverUpnpFunc(funcErr error, port uint16, gatewayForwardErr error) func() (igd nattraversal.UPNPGateway, err error) {
+	return func() (igd nattraversal.UPNPGateway, err error) {
 		if funcErr != nil {
 			return nil, funcErr
 		}

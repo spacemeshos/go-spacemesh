@@ -2,13 +2,14 @@ package log
 
 import (
 	"fmt"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
-	"os"
 	"runtime/debug"
 	"time"
+
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
+// NilLogger is a not initialized logger it will panic if you'll call methods on it.
 var NilLogger Log
 
 // Log is an exported type that embeds our logger.
@@ -40,6 +41,7 @@ func (l Log) Warning(format string, args ...interface{}) {
 	l.sugar.Warnf(format, args...)
 }
 
+// Panic prints the log message and then panics.
 func (l Log) Panic(format string, args ...interface{}) {
 	l.sugar.Error("Fatal: goroutine panicked. Stacktrace: ", string(debug.Stack()))
 	l.sugar.Panicf(format, args...)
@@ -50,6 +52,7 @@ func (l Log) Panic(format string, args ...interface{}) {
 // Field is a log field holding a name and value
 type Field zap.Field
 
+// Field satisfy loggable field interface.
 func (f Field) Field() Field { return f }
 
 // String returns a string Field
@@ -62,15 +65,17 @@ func ByteString(name string, val []byte) Field {
 	return Field(zap.ByteString(name, val))
 }
 
-// Int returns an int Field
+// Int returns an int Field.
 func Int(name string, val int) Field {
 	return Field(zap.Int(name, val))
 }
 
+// Int32 returns an int32 Field.
 func Int32(name string, val int32) Field {
 	return Field(zap.Int32(name, val))
 }
 
+// Uint32 returns an uint32 Field.
 func Uint32(name string, val uint32) Field {
 	return Field(zap.Uint32(name, val))
 }
@@ -96,32 +101,32 @@ func Duration(name string, val time.Duration) Field {
 }
 
 // LayerID return a Uint64 field (key - "layer_id")
-func LayerId(val uint64) Field {
+func LayerID(val uint64) Field {
 	return Uint64("layer_id", val)
 }
 
-// TxId return a String field (key - "tx_id")
-func TxId(val string) Field {
+// TxID return a String field (key - "tx_id")
+func TxID(val string) Field {
 	return String("tx_id", val)
 }
 
-// AtxId return a String field (key - "atx_id")
-func AtxId(val string) Field {
+// AtxID return a String field (key - "atx_id")
+func AtxID(val string) Field {
 	return String("atx_id", val)
 }
 
-// BlockId return a Uint64 field (key - "block_id")
-func BlockId(val string) Field {
+// BlockID return a Uint64 field (key - "block_id")
+func BlockID(val string) Field {
 	return String("block_id", val)
 }
 
-// EpochId return a Uint64 field (key - "epoch_id")
-func EpochId(val uint64) Field {
+// EpochID return a Uint64 field (key - "epoch_id")
+func EpochID(val uint64) Field {
 	return Uint64("epoch_id", val)
 }
 
-// NodeId return a String field (key - "node_id")
-func NodeId(val string) Field {
+// NodeID return a String field (key - "node_id")
+func NodeID(val string) Field {
 	return String("node_id", val)
 }
 
@@ -130,6 +135,7 @@ func Err(v error) Field {
 	return Field(zap.Error(v))
 }
 
+// LoggableField as an interface to enable every type to be used as a log field.
 type LoggableField interface {
 	Field() Field
 }
@@ -142,17 +148,19 @@ func unpack(fields []LoggableField) []zap.Field {
 	return flds
 }
 
-type fieldLogger struct {
+// FieldLogger is a logger that only logs messages with fields. it does not support formatting.g
+type FieldLogger struct {
 	l *zap.Logger
 }
 
 // With returns a logger object that logs fields
-func (l Log) With() fieldLogger {
-	return fieldLogger{l.logger}
+func (l Log) With() FieldLogger {
+	return FieldLogger{l.logger}
 }
 
+// SetLevel returns a logger with level as the log level derived from l.
 func (l Log) SetLevel(level *zap.AtomicLevel) Log {
-	lgr := l.logger.WithOptions(AddDynamicLevel(level))
+	lgr := l.logger.WithOptions(addDynamicLevel(level))
 	return Log{
 		lgr,
 		lgr.Sugar(),
@@ -160,9 +168,9 @@ func (l Log) SetLevel(level *zap.AtomicLevel) Log {
 	}
 }
 
-// LogWith returns a logger the given fields
+// WithName returns a logger the given fields
 func (l Log) WithName(prefix string) Log {
-	lgr := l.logger.Named(fmt.Sprintf("%-13s", prefix)).WithOptions(AddDynamicLevel(l.lvl))
+	lgr := l.logger.Named(fmt.Sprintf("%-13s", prefix)).WithOptions(addDynamicLevel(l.lvl))
 	return Log{
 		lgr,
 		lgr.Sugar(),
@@ -170,7 +178,7 @@ func (l Log) WithName(prefix string) Log {
 	}
 }
 
-func AddDynamicLevel(level *zap.AtomicLevel) zap.Option {
+func addDynamicLevel(level *zap.AtomicLevel) zap.Option {
 	return zap.WrapCore(func(core zapcore.Core) zapcore.Core {
 		return &coreWithLevel{
 			Core: core,
@@ -195,8 +203,9 @@ func (c *coreWithLevel) Check(e zapcore.Entry, ce *zapcore.CheckedEntry) *zapcor
 	return ce.AddCore(e, c.Core)
 }
 
+// WithFields returns a logger with fields permanently appended to it.
 func (l Log) WithFields(fields ...LoggableField) Log {
-	lgr := l.logger.With(unpack(fields)...).WithOptions(AddDynamicLevel(l.lvl))
+	lgr := l.logger.With(unpack(fields)...).WithOptions(addDynamicLevel(l.lvl))
 	return Log{
 		logger: lgr,
 		sugar:  lgr.Sugar(),
@@ -204,23 +213,20 @@ func (l Log) WithFields(fields ...LoggableField) Log {
 	}
 }
 
-const event_key = "event"
+const eventKey = "event"
 
-func (l Log) Event() fieldLogger {
-	return fieldLogger{l: l.logger.With(zap.Field(Bool(event_key, true)))}
+// Event returns a logger with the Event field appended to it.
+func (l Log) Event() FieldLogger {
+	return FieldLogger{l: l.logger.With(zap.Field(Bool(eventKey, true)))}
 }
 
-func EnableLevelOption(enabler zapcore.LevelEnabler) zap.Option {
-	return zap.WrapCore(func(core zapcore.Core) zapcore.Core {
-		consoleSyncer := zapcore.AddSync(os.Stdout)
-		return zapcore.NewCore(encoder(), consoleSyncer, enabler)
-	})
-}
-
+// Nop is an option that disables this logger.
 var Nop = zap.WrapCore(func(zapcore.Core) zapcore.Core {
 	return zapcore.NewNopCore()
 })
 
+// WithOptions clones the current Logger, applies the supplied Options, and
+// returns the resulting Logger. It's safe to use concurrently.
 func (l Log) WithOptions(opts ...zap.Option) Log {
 	lgr := l.logger.WithOptions(opts...)
 	return Log{
@@ -231,21 +237,21 @@ func (l Log) WithOptions(opts ...zap.Option) Log {
 }
 
 // Info prints message with fields
-func (fl fieldLogger) Info(msg string, fields ...LoggableField) {
+func (fl FieldLogger) Info(msg string, fields ...LoggableField) {
 	fl.l.Info(msg, unpack(fields)...)
 }
 
 // Debug prints message with fields
-func (fl fieldLogger) Debug(msg string, fields ...LoggableField) {
+func (fl FieldLogger) Debug(msg string, fields ...LoggableField) {
 	fl.l.Debug(msg, unpack(fields)...)
 }
 
 // Error prints message with fields
-func (fl fieldLogger) Error(msg string, fields ...LoggableField) {
+func (fl FieldLogger) Error(msg string, fields ...LoggableField) {
 	fl.l.Error(msg, unpack(fields)...)
 }
 
 // Warning prints message with fields
-func (fl fieldLogger) Warning(msg string, fields ...LoggableField) {
+func (fl FieldLogger) Warning(msg string, fields ...LoggableField) {
 	fl.l.Warn(msg, unpack(fields)...)
 }

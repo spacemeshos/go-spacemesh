@@ -1,6 +1,13 @@
 from pure25519.eddsa import H, Hint
-from pure25519.basic import (bytes_to_clamped_scalar, bytes_to_element, bytes_to_scalar, scalar_to_bytes, Base, L)
+from pure25519.basic import bytes_to_clamped_scalar, bytes_to_element, bytes_to_scalar, scalar_to_bytes, Base, L
 from pure25519.eddsa import create_signing_key, create_verifying_key
+
+"""
+This file, using pure25519 package, provides high security,
+generating key pairs and signatures for the miners.
+(e.g. signing transactions)
+
+"""
 
 
 def genkeypair():

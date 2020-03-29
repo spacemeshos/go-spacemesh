@@ -1,4 +1,7 @@
-'''
+import inspect
+import os.path
+
+"""
 Implements one form of delayed assertions.
 
 Interface is 2 functions:
@@ -21,7 +24,7 @@ Usage Example:
         expect(1 == 2, 'one is two')
         expect(1 == 3, 'one is three')
         assert_expectations()
-'''
+"""
 
 
 # ---------------------------------------------------
@@ -39,9 +42,6 @@ def assert_expectations():
 
 
 # ---------------------------------------------------
-
-import inspect
-import os.path
 
 _failed_expectations = []
 

@@ -26,16 +26,16 @@ import (
 )
 
 // Sync cmd
-var Cmd = &cobra.Command{
+var cmd = &cobra.Command{
 	Use:   "sync",
 	Short: "start sync",
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("Starting sync")
-		syncApp := NewSyncApp()
+		syncApp := newSyncApp()
 		log.Info("Right after NewSyncApp %v", syncApp.Config.DataDir)
 		defer syncApp.Cleanup()
 		syncApp.Initialize(cmd)
-		syncApp.Start(cmd, args)
+		syncApp.start(cmd, args)
 	},
 }
 
@@ -48,38 +48,53 @@ var remote bool
 
 func init() {
 	//path to remote storage
-	Cmd.PersistentFlags().StringVarP(&bucket, "storage-path", "z", "spacemesh-sync-data", "Specify storage bucket name")
+	cmd.PersistentFlags().StringVarP(&bucket, "storage-path", "z", "spacemesh-sync-data", "Specify storage bucket name")
 
 	//expected layers
-	Cmd.PersistentFlags().IntVar(&expectedLayers, "expected-layers", 101, "expected number of layers")
+	cmd.PersistentFlags().IntVar(&expectedLayers, "expected-layers", 101, "expected number of layers")
 
 	//fetch from remote
-	Cmd.PersistentFlags().BoolVar(&remote, "remote-data", false, "fetch from remote")
+	cmd.PersistentFlags().BoolVar(&remote, "remote-data", false, "fetch from remote")
 
 	//request timeout
-	Cmd.PersistentFlags().StringVarP(&version, "version", "v", "FullBlocks/", "data version")
+	cmd.PersistentFlags().StringVarP(&version, "version", "v", "FullBlocks/", "data version")
 
-	cmdp.AddCommands(Cmd)
+	cmdp.AddCommands(cmd)
 }
 
-type SyncApp struct {
+type syncApp struct {
 	*cmdp.BaseApp
 	sync  *sync.Syncer
 	clock *timesync.Ticker
 }
 
-func NewSyncApp() *SyncApp {
-	return &SyncApp{BaseApp: cmdp.NewBaseApp()}
+func newSyncApp() *syncApp {
+	return &syncApp{BaseApp: cmdp.NewBaseApp()}
 }
 
-func (app *SyncApp) Cleanup() {
+func (app *syncApp) Cleanup() {
 	err := os.RemoveAll(app.Config.DataDir)
 	if err != nil {
 		app.sync.Error("failed to cleanup sync: %v", err)
 	}
 }
 
-func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
+type mockBlockBuilder struct {
+	txs []*types.Transaction
+}
+
+func (m *mockBlockBuilder) ValidateAndAddTxToPool(tx *types.Transaction) error {
+	m.txs = append(m.txs, tx)
+	return nil
+}
+
+func configTst() mesh.Config {
+	return mesh.Config{
+		BaseReward: big.NewInt(5000),
+	}
+}
+
+func (app *syncApp) start(cmd *cobra.Command, args []string) {
 	// start p2p services
 	lg := log.New("sync_test", "", "")
 	lg.Info("------------ Start sync test -----------")
@@ -113,7 +128,7 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	}
 
 	if remote {
-		if err := GetData(app.Config.DataDir, version, lg); err != nil {
+		if err := getData(app.Config.DataDir, version, lg); err != nil {
 			lg.Error("could not download data for test", err)
 			return
 		}
@@ -174,8 +189,8 @@ func (app *SyncApp) Start(cmd *cobra.Command, args []string) {
 	}
 }
 
-//download data from remote storage
-func GetData(path, prefix string, lg log.Log) error {
+//GetData downloads data from remote storage
+func getData(path, prefix string, lg log.Log) error {
 	dirs := []string{"poet", "atx", "nipst", "blocks", "ids", "layers", "transactions", "validity", "unappliedTxs"}
 	for _, dir := range dirs {
 		if err := filesystem.ExistOrCreate(path + prefix + "/" + dir); err != nil {
@@ -245,7 +260,7 @@ func GetData(path, prefix string, lg log.Log) error {
 }
 
 func main() {
-	if err := Cmd.Execute(); err != nil {
+	if err := cmd.Execute(); err != nil {
 		log.Info("error ", err)
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

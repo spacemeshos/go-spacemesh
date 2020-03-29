@@ -1,3 +1,4 @@
+// package events defines events published by go-spacemsh node using nodes pubsub
 package events
 
 import (

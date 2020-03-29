@@ -1,3 +1,4 @@
+// package types defines the types used by go-spacemsh consensus algorithms and structs
 package types
 
 import (

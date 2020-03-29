@@ -1,3 +1,5 @@
+// Package p2pcrypto defines the cryptographic primitives used to communicate and identify in the p2p network,
+// it uses go stdlib's NaCL box implementation.
 package p2pcrypto
 
 import (
@@ -15,6 +17,7 @@ const (
 	nonceSize = 24 // non-configurable, expected by NaCl
 )
 
+// Key represents a 32 bit cryptographic key, public or private.
 type Key interface {
 	Bytes() []byte
 	raw() *[keySize]byte
@@ -22,14 +25,17 @@ type Key interface {
 	String() string
 }
 
+// PrivateKey is a private key of 32 byte.
 type PrivateKey interface {
 	Key
 }
 
+// PublicKey is a public key of 32 byte.
 type PublicKey interface {
 	Key
 }
 
+// SharedSecret is created using two participants key to enable Sealing and Opening of messages (NaCL).
 type SharedSecret interface {
 	Key
 	Seal(message []byte) (out []byte)
@@ -48,14 +54,17 @@ func (k key) raw() *[keySize]byte {
 	return &k.bytes
 }
 
+// Array returns a fixed size array representation of the key.
 func (k key) Array() [32]byte {
 	return k.bytes
 }
 
+// Bytes returns the key represented in bytes.
 func (k key) Bytes() []byte {
 	return k.bytes[:]
 }
 
+// String returns a base58 encoded string from the key.
 func (k key) String() string {
 	return base58.Encode(k.Bytes())
 }
@@ -68,11 +77,13 @@ func getRandomNonce() [nonceSize]byte {
 	return nonce
 }
 
+// Seal encrypts and signs a message.
 func (k key) Seal(message []byte) (out []byte) {
 	nonce := getRandomNonce() // TODO: @noam replace with counter to prevent replays
 	return box.SealAfterPrecomputation(nonce[:], message, &nonce, k.raw())
 }
 
+// Open decrypts and authenticates a signed and encrypted message.
 func (k key) Open(encryptedMessage []byte) (out []byte, err error) {
 	if len(encryptedMessage) <= nonceSize {
 		return nil, errors.New("message was too small")
@@ -86,6 +97,7 @@ func (k key) Open(encryptedMessage []byte) (out []byte, err error) {
 	return message, nil
 }
 
+// GenerateKeyPair generates ed25519 private key and a public key derived from it.
 func GenerateKeyPair() (PrivateKey, PublicKey, error) {
 	public, private, err := box.GenerateKey(rand.Reader)
 	if err != nil {
@@ -95,16 +107,19 @@ func GenerateKeyPair() (PrivateKey, PublicKey, error) {
 	return key{*private}, key{*public}, nil
 }
 
+// GenerateSharedSecret creates a key derived from a private and a public key.
 func GenerateSharedSecret(privkey PrivateKey, peerPubkey PublicKey) SharedSecret {
 	sharedSecret := newKey()
 	box.Precompute(sharedSecret.raw(), peerPubkey.raw(), privkey.raw())
 	return sharedSecret
 }
 
+// PrependPubkey adds a public key at the beginning on a byte array.
 func PrependPubkey(message []byte, pubkey PublicKey) []byte {
 	return append(pubkey.Bytes(), message...)
 }
 
+// ExtractPubkey extracts a public key from the beginning of a byte array.
 func ExtractPubkey(message []byte) ([]byte, PublicKey, error) {
 	if mSize := len(message); mSize <= keySize {
 		return nil, nil, fmt.Errorf("cannot extract pubkey of size %d from message of size %d", keySize, mSize)
@@ -131,6 +146,7 @@ func newKeyFromBytes(bytes []byte) (key, error) {
 	return k, nil
 }
 
+// NewPubkeyFromBytes creates a public key from a byte array.
 func NewPubkeyFromBytes(bytes []byte) (PublicKey, error) {
 	return newKeyFromBytes(bytes)
 }
@@ -143,14 +159,17 @@ func newKeyFromBase58(s string) (key, error) {
 	return newKeyFromBytes(bytes)
 }
 
+// NewPrivateKeyFromBase58 creates a private key from a base58 string.
 func NewPrivateKeyFromBase58(s string) (PrivateKey, error) {
 	return newKeyFromBase58(s)
 }
 
+// NewPublicKeyFromBase58 creates a public key from a base58 string.
 func NewPublicKeyFromBase58(s string) (PublicKey, error) {
 	return newKeyFromBase58(s)
 }
 
+// NewRandomPubkey reads random bytes and creates a public key from them. used for testing
 func NewRandomPubkey() PublicKey {
 	k := newKey()
 	if _, err := io.ReadFull(rand.Reader, k.bytes[:]); err != nil {
@@ -159,6 +178,7 @@ func NewRandomPubkey() PublicKey {
 	return k
 }
 
+// PublicKeyFromArray creates a public key using a fixed sized byte array.
 func PublicKeyFromArray(ke [32]byte) PublicKey {
 	return key{ke}
 }

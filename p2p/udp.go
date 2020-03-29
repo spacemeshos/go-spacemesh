@@ -19,7 +19,7 @@ import (
 )
 
 // Lookuper is a service used to lookup for nodes we know already
-type Lookuper func(key p2pcrypto.PublicKey) (*node.NodeInfo, error)
+type Lookuper func(key p2pcrypto.PublicKey) (*node.Info, error)
 
 type udpNetwork interface {
 	Shutdown()
@@ -87,6 +87,7 @@ func (mux *UDPMux) Shutdown() {
 	mux.cpool.Shutdown()
 }
 
+// listens to messages from the network layer and handles them.
 func (mux *UDPMux) listenToNetworkMessage() {
 	msgChan := mux.network.IncomingMessages()
 	for {
@@ -143,9 +144,10 @@ func (mux *UDPMux) SendMessage(peerPubkey p2pcrypto.PublicKey, protocol string, 
 }
 
 // sendMessageImpl finds the peer address, wraps the message as a protocol message with p2p metadata and sends it.
+// it handles looking up the peer ip address and encrypting the message.
 func (mux *UDPMux) sendMessageImpl(peerPubkey p2pcrypto.PublicKey, protocol string, payload service.Data) error {
 	var err error
-	var peer *node.NodeInfo
+	var peer *node.Info
 
 	peer, err = mux.lookuper(peerPubkey)
 

@@ -80,7 +80,7 @@ type Configuration struct {
 
 var (
 	errDupTx           = errors.New("duplicate TransactionId in block")
-	errDupAtx          = errors.New("duplicate AtxId in block")
+	errDupAtx          = errors.New("duplicate AtxID in block")
 	errTooManyAtxs     = errors.New("too many atxs in blocks")
 	errNoBlocksInLayer = errors.New("layer has no blocks")
 
@@ -153,7 +153,7 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool txMemPool, atxpool a
 
 	srvr := &net{
 		RequestTimeout: conf.RequestTimeout,
-		MessageServer:  server.NewMsgServer(srv.(server.Service), syncProtocol, conf.RequestTimeout, make(chan service.DirectMessage, p2pconf.ConfigValues.BufferSize), logger),
+		MessageServer:  server.NewMsgServer(srv.(server.Service), syncProtocol, conf.RequestTimeout, make(chan service.DirectMessage, p2pconf.Values.BufferSize), logger),
 		peers:          p2p.NewPeers(srv, logger.WithName("peers")),
 		exit:           exit,
 	}
@@ -405,24 +405,24 @@ func (s *Syncer) handleNotSynced(currentSyncLayer types.LayerID) {
 
 		lyr, err := s.getLayerFromNeighbors(currentSyncLayer)
 		if err != nil {
-			s.With().Info("could not get layer from neighbors", log.LayerId(currentSyncLayer.Uint64()), log.Err(err))
+			s.With().Info("could not get layer from neighbors", log.LayerID(currentSyncLayer.Uint64()), log.Err(err))
 			return
 		}
 
 		if len(lyr.Blocks()) == 0 {
 			if err := s.SetZeroBlockLayer(currentSyncLayer); err != nil {
-				s.With().Error("handleNotSynced failed ", log.LayerId(currentSyncLayer.Uint64()), log.Err(err))
+				s.With().Error("handleNotSynced failed ", log.LayerID(currentSyncLayer.Uint64()), log.Err(err))
 				return
 			}
 		}
 
-		s.Validator.ValidateLayer(lyr) // wait for layer validation
+		s.ValidateLayer(lyr) // wait for layer validation
 	}
 
 	// wait for two ticks to ensure we are fully synced before we open gossip or validate the current layer
 	err := s.gossipSyncForOneFullLayer(currentSyncLayer)
 	if err != nil {
-		s.With().Error("Fatal: failed getting layer from db even though we listened to gossip", log.LayerId(uint64(currentSyncLayer)), log.Err(err))
+		s.With().Error("Fatal: failed getting layer from db even though we listened to gossip", log.LayerID(uint64(currentSyncLayer)), log.Err(err))
 	}
 }
 
@@ -495,7 +495,7 @@ func (s *Syncer) getLayerFromNeighbors(currenSyncLayer types.LayerID) (*types.La
 	}
 
 	//fetch layer hash from each peer
-	s.With().Info("fetch layer hash", log.LayerId(currenSyncLayer.Uint64()))
+	s.With().Info("fetch layer hash", log.LayerID(currenSyncLayer.Uint64()))
 	m, err := s.fetchLayerHashes(currenSyncLayer)
 	if err != nil {
 		if err == errNoBlocksInLayer {
@@ -509,7 +509,7 @@ func (s *Syncer) getLayerFromNeighbors(currenSyncLayer types.LayerID) (*types.La
 	}
 
 	//fetch ids for each hash
-	s.With().Info("fetch layer ids", log.LayerId(currenSyncLayer.Uint64()))
+	s.With().Info("fetch layer ids", log.LayerID(currenSyncLayer.Uint64()))
 	blockIds, err := s.fetchLayerBlockIds(m, currenSyncLayer)
 	if err != nil {
 		return nil, err
@@ -539,7 +539,7 @@ func (s *Syncer) syncLayer(layerID types.LayerID, blockIds []types.BlockID) ([]*
 	if res, err := s.blockQueue.addDependencies(layerID, blockIds, foo); err != nil {
 		return nil, fmt.Errorf("failed adding layer %v blocks to queue %v", layerID, err)
 	} else if res == false {
-		s.With().Info("no missing blocks for layer", log.LayerId(layerID.Uint64()))
+		s.With().Info("no missing blocks for layer", log.LayerID(layerID.Uint64()))
 		return s.LayerBlocks(layerID)
 	}
 
@@ -631,9 +631,9 @@ func (s *Syncer) validateBlockView(blk *types.Block) bool {
 	defer close(ch)
 	foo := func(res bool) error {
 		s.With().Info("view validated",
-			log.BlockId(blk.Id().String()),
+			log.BlockID(blk.Id().String()),
 			log.Bool("result", res),
-			log.LayerId(uint64(blk.LayerIndex)))
+			log.LayerID(uint64(blk.LayerIndex)))
 		ch <- res
 		return nil
 	}
@@ -641,7 +641,7 @@ func (s *Syncer) validateBlockView(blk *types.Block) bool {
 		s.Error(fmt.Sprintf("block %v not syntactically valid", blk.Id()), err)
 		return false
 	} else if res == false {
-		s.With().Info("block has no missing blocks in view", log.BlockId(blk.Id().String()), log.LayerId(uint64(blk.LayerIndex)))
+		s.With().Info("block has no missing blocks in view", log.BlockID(blk.Id().String()), log.LayerID(uint64(blk.LayerIndex)))
 		return true
 	}
 
@@ -716,7 +716,7 @@ func (s *Syncer) dataAvailability(blk *types.Block) ([]*types.Transaction, []*ty
 		return nil, nil, fmt.Errorf("failed fetching block %v activation transactions %v", blk.Id(), atxerr)
 	}
 
-	s.With().Info("fetched all block data ", log.BlockId(blk.Id().String()), log.LayerId(uint64(blk.LayerIndex)))
+	s.With().Info("fetched all block data ", log.BlockID(blk.Id().String()), log.LayerID(uint64(blk.LayerIndex)))
 	return txres, atxres, nil
 }
 
@@ -918,7 +918,7 @@ func (s *Syncer) getAndValidateLayer(id types.LayerID) error {
 	if err != nil {
 		return err
 	}
-	s.Validator.ValidateLayer(lyr) // wait for layer validation
+	s.ValidateLayer(lyr) // wait for layer validation
 	return nil
 }
 

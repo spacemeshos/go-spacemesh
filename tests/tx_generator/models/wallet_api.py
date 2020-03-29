@@ -8,7 +8,7 @@ from tests.tx_generator.k8s_handler import api_call, aws_api_call
 
 class WalletAPI:
     """
-    WalletAPI communicates with a random miner pod for
+    WalletAPI communicates with a [random] miner pod for
     information such as a wallet nonce, balance and
     submitting transactions
 

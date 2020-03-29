@@ -1,3 +1,4 @@
+// Package config defines configuration used in the p2p package
 package config
 
 import (
@@ -7,15 +8,19 @@ import (
 )
 
 const (
-	P2PDirectoryPath   = "p2p"
-	NodeDataFileName   = "id.json"
+	// P2PDirectoryPath is the name of the directory where we store p2p stuff
+	P2PDirectoryPath = "p2p"
+	// NodeDataFileName is the name of the file we store the the p2p identity keys
+	NodeDataFileName = "id.json"
+	// NodesDirectoryName is the name of the directory we store nodes identities under
 	NodesDirectoryName = "nodes"
-	UnlimitedMsgSize   = 0
+	// UnlimitedMsgSize is a constant used to check whether message size is set to unlimited size
+	UnlimitedMsgSize = 0
 )
 
-// ConfigValues specifies  default values for node config params.
+// Values specifies default values for node config params.
 var (
-	ConfigValues = DefaultConfig()
+	Values = DefaultConfig()
 )
 
 func init() {

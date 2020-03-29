@@ -21,7 +21,7 @@ type nodeFileData struct {
 
 // Node store - local node data persistence functionality
 
-// Persist node's data to local store.
+// PersistData save node's data to local disk in `path`.
 func (n *LocalNode) PersistData(path string) error {
 
 	data := nodeFileData{
@@ -69,6 +69,7 @@ func (n *LocalNode) PersistData(path string) error {
 	return nil
 }
 
+// LoadIdentity loads a specific nodeid from the disk at the given path
 func LoadIdentity(path, nodeid string) (LocalNode, error) {
 	nfd, err := readNodeData(path, nodeid)
 	if err != nil {
@@ -137,7 +138,7 @@ func getLocalNodes(path string) ([]string, error) {
 	return keys, nil
 }
 
-// Read node data from the data folder.
+// ReadFirstNodeData reads node data from the data folder.
 // Reads a random node from the data folder if more than one node data file is persisted.
 // To load a specific node on startup - users need to pass the node id using a cli arg.
 func ReadFirstNodeData(path string) (LocalNode, error) {

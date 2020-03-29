@@ -17,7 +17,11 @@ class CoreV1ApiClient(client.CoreV1Api):
 
 
 class ContainerSpec:
-
+    """
+    This class holds all specifications regarding the running suite.
+    Specifications may be gathered from k8s spec files (at ./k8s), suite file
+    and manual changes made on the go
+    """
     REPLACEABLE_ARGS = ['randcon', 'oracle_server', 'bootnodes', 'genesis_time', 'poet_server']
 
     def __init__(self, cname, specs):

@@ -1,3 +1,4 @@
+// package node contains the main executable for go-spacemesh node
 package node
 
 import "C"
@@ -20,7 +21,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/oracle"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"github.com/spacemeshos/go-spacemesh/pending_txs"
+	"github.com/spacemeshos/go-spacemesh/pendingtxs"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/spacemeshos/go-spacemesh/sync"
@@ -48,8 +49,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-// import for memory and network profiling
-import _ "net/http/pprof"
+import _ "net/http/pprof" // import for memory and network profiling
 
 const edKeyFileName = "key.bin"
 
@@ -252,16 +252,12 @@ func (app *SpacemeshApp) Initialize(cmd *cobra.Command, args []string) (err erro
 
 	app.introduction()
 
-	// todo: add misc app setup here (metrics, debug, etc....)
-
 	drift, err := timesync.CheckSystemClockDrift()
 	if err != nil {
 		return err
 	}
 
 	log.Info("System clock synchronized with ntp. drift: %s", drift)
-	// todo: set coinbase account (and unlock it) based on flags
-
 	return nil
 }
 
@@ -277,9 +273,9 @@ func (app *SpacemeshApp) setupLogging() {
 
 	log.Info("%s", app.getAppInfo())
 
-	if app.Config.PublishEventsUrl != "" {
-		log.Info("pubsubing on %v", app.Config.PublishEventsUrl)
-		events.InitializeEventPubsub(app.Config.PublishEventsUrl)
+	if app.Config.PublishEventsURL != "" {
+		log.Info("pubsubing on %v", app.Config.PublishEventsURL)
+		events.InitializeEventPubsub(app.Config.PublishEventsURL)
 	}
 }
 
@@ -348,7 +344,7 @@ func (weakCoinStub) GetResult() bool {
 }
 
 func (app *SpacemeshApp) addLogger(name string, logger log.Log) log.Log {
-	log.LogLvl()
+	log.Level()
 	lvl := zap.NewAtomicLevel()
 	var err error
 
@@ -402,12 +398,12 @@ func (app *SpacemeshApp) addLogger(name string, logger log.Log) log.Log {
 	case AtxBuilderLogger:
 		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.AtxBuilderLoggerLevel))
 	default:
-		lvl.SetLevel(log.LogLvl())
+		lvl.SetLevel(log.Level())
 	}
 
 	if err != nil {
 		log.Error("cannot parse logging for %v error %v", name, err)
-		lvl.SetLevel(log.LogLvl())
+		lvl.SetLevel(log.Level())
 	}
 	app.loggers[name] = &lvl
 	return logger.SetLevel(&lvl).WithName(name)
@@ -439,11 +435,10 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId,
 	layersPerEpoch uint16, clock TickProvider) error {
 
 	app.nodeID = nodeID
-	//todo: should we add all components to a single struct?
 
 	name := nodeID.ShortString()
 
-	lg := log.NewDefault(name).WithFields(log.NodeId(name))
+	lg := log.NewDefault(name).WithFields(log.NodeID(name))
 
 	app.log = app.addLogger(AppLogger, lg)
 
@@ -469,7 +464,6 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId,
 	}
 	app.closers = append(app.closers, poetDbStore)
 
-	//todo: put in config
 	iddbstore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "ids"), 0, 0, app.addLogger(StateDbLogger, lg))
 	if err != nil {
 		return err
@@ -484,7 +478,6 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId,
 
 	idStore := activation.NewIdentityStore(iddbstore)
 	poetDb := activation.NewPoetDb(poetDbStore, app.addLogger(PoetDbLogger, lg))
-	//todo: this is initialized twice, need to refactor
 	validator := activation.NewValidator(&app.Config.POST, poetDb)
 	mdb, err := mesh.NewPersistentMeshDB(filepath.Join(dbStorepath, "mesh"), app.Config.BlockCacheSize, app.addLogger(MeshDBLogger, lg))
 	if err != nil {
@@ -493,7 +486,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId,
 
 	app.txPool = miner.NewTxMemPool()
 	atxpool := miner.NewAtxMemPool()
-	meshAndPoolProjector := pending_txs.NewMeshAndPoolProjector(mdb, app.txPool)
+	meshAndPoolProjector := pendingtxs.NewMeshAndPoolProjector(mdb, app.txPool)
 
 	appliedTxs, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "appliedTxs"), 0, 0, lg.WithName("appliedTxs"))
 	if err != nil {
@@ -511,7 +504,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId,
 	if mdb.PersistentData() {
 		trtl = tortoise.NewRecoveredTortoise(mdb, app.addLogger(TrtlLogger, lg))
 		msh = mesh.NewRecoveredMesh(mdb, atxdb, app.Config.REWARD, trtl, app.txPool, atxpool, processor, app.addLogger(MeshLogger, lg))
-		go msh.CacheWarmUp()
+		go msh.CacheWarmUp(app.Config.LayerAvgSize)
 	} else {
 		trtl = tortoise.NewTortoise(int(layerSize), mdb, app.Config.Hdist, app.addLogger(TrtlLogger, lg))
 		msh = mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, app.txPool, atxpool, processor, app.addLogger(MeshLogger, lg))
@@ -540,7 +533,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId,
 	syncer := sync.NewSync(swarm, msh, app.txPool, atxpool, eValidator, poetDb, syncConf, clock, app.addLogger(SyncLogger, lg))
 	blockOracle := oracle.NewMinerBlockOracle(layerSize, uint32(app.Config.GenesisActiveSet), layersPerEpoch, atxdb, beaconProvider, vrfSigner, nodeID, syncer.ListenToGossip, app.addLogger(BlockOracle, lg))
 
-	// TODO: we should probably decouple the apptest and the node (and duplicate as necessary)
+	// TODO: we should probably decouple the apptest and the node (and duplicate as necessary) (#1926)
 	var hOracle hare.Rolacle
 	if isFixedOracle { // fixed rolacle, take the provided rolacle
 		hOracle = rolacle
@@ -551,7 +544,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId,
 
 	ha := app.HareFactory(mdb, swarm, sgn, nodeID, syncer, msh, hOracle, idStore, clock, lg)
 
-	stateAndMeshProjector := pending_txs.NewStateAndMeshProjector(processor, msh)
+	stateAndMeshProjector := pendingtxs.NewStateAndMeshProjector(processor, msh)
 	blockProducer := miner.NewBlockBuilder(nodeID, sgn, swarm, clock.Subscribe(), app.Config.Hdist, app.txPool, atxpool, coinToss, msh, ha, blockOracle, processor, atxdb, syncer, app.Config.AtxsPerBlock, stateAndMeshProjector, app.addLogger(BlockBuilderLogger, lg))
 	blockListener := sync.NewBlockListener(swarm, syncer, 4, app.addLogger(BlockListenerLogger, lg))
 
@@ -605,7 +598,7 @@ func (app *SpacemeshApp) checkTimeDrifts() {
 }
 
 // HareFactory returns a hare consensus algorithm according to the parameters is app.Config.Hare.SuperHare
-func (app *SpacemeshApp) HareFactory(mdb *mesh.MeshDB, swarm service.Service, sgn hare.Signer, nodeID types.NodeId, syncer *sync.Syncer, msh *mesh.Mesh, hOracle hare.Rolacle, idStore *activation.IdentityStore, clock TickProvider, lg log.Log) HareService {
+func (app *SpacemeshApp) HareFactory(mdb *mesh.DB, swarm service.Service, sgn hare.Signer, nodeID types.NodeId, syncer *sync.Syncer, msh *mesh.Mesh, hOracle hare.Rolacle, idStore *activation.IdentityStore, clock TickProvider, lg log.Log) HareService {
 	if app.Config.HARE.SuperHare {
 		return turbohare.New(msh)
 	}
@@ -615,11 +608,11 @@ func (app *SpacemeshApp) HareFactory(mdb *mesh.MeshDB, swarm service.Service, sg
 		for _, b := range ids {
 			res, err := mdb.GetBlock(b)
 			if err != nil {
-				app.log.With().Error("output set block not in database", log.BlockId(b.String()), log.Err(err))
+				app.log.With().Error("output set block not in database", log.BlockID(b.String()), log.Err(err))
 				return false
 			}
 			if res == nil {
-				app.log.With().Error("output set block not in database (BUG BUG BUG - GetBlock return err nil and res nil)", log.BlockId(b.String()))
+				app.log.With().Error("output set block not in database (BUG BUG BUG - GetBlock return err nil and res nil)", log.BlockID(b.String()))
 				return false
 			}
 
@@ -720,7 +713,7 @@ func (app *SpacemeshApp) stopServices() {
 
 	if app.hare != nil {
 		app.log.Info("%v closing Hare", app.nodeID.Key)
-		app.hare.Close() //todo: need to add this
+		app.hare.Close()
 	}
 
 	if app.P2P != nil {
@@ -733,7 +726,7 @@ func (app *SpacemeshApp) stopServices() {
 		app.mesh.Close()
 	}
 
-	// Close all databases. todo: consider moving all services to close this way
+	// Close all databases.
 	for _, closer := range app.closers {
 		if closer != nil {
 			closer.Close()
@@ -827,9 +820,9 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 		}
 	}
 
-	if app.Config.CpuProfile != "" {
+	if app.Config.CPUProfile != "" {
 		log.Info("Starting cpu profile")
-		f, err := os.Create(app.Config.CpuProfile)
+		f, err := os.Create(app.Config.CPUProfile)
 		if err != nil {
 			log.Error("could not create CPU profile: ", err)
 		}
@@ -840,7 +833,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 		defer pprof.StopCPUProfile()
 	}
 
-	if app.Config.PprofHttpServer {
+	if app.Config.PprofHTTPServer {
 		log.Info("Starting pprof server")
 		srv := &http.Server{Addr: ":6060"}
 		defer srv.Shutdown(context.TODO())
@@ -914,12 +907,6 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	}
 
 	/* Expose API */
-
-	// todo: if there's no loaded account - do the new account interactive flow here
-	// todo: if node has no loaded coin-base account then set the node coinbase to first account
-	// todo: if node has a locked coinbase account then prompt for account passphrase to unlock it
-	// todo: if node has no POS then start POS creation flow here unless user doesn't want to be a validator via cli
-	// todo: start node consensus protocol here only after we have an unlocked account
 
 	// start api servers
 	if apiConf.StartGrpcServer || apiConf.StartJSONServer {

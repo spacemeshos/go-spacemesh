@@ -12,8 +12,9 @@ import (
 	"time"
 )
 
-// FormattedConnection is an io.Writer and an io.Closer
+// MsgConnection is an io.Writer and an io.Closer
 // A network connection supporting full-duplex messaging
+// It resembles the Connection interface but suits a packet oriented socket.
 type MsgConnection struct {
 	// metadata for logging / debugging
 	logger      log.Log
@@ -97,6 +98,7 @@ func (c *MsgConnection) String() string {
 	return c.id
 }
 
+// Created saves the time when the connection was created
 func (c *MsgConnection) Created() time.Time {
 	return c.created
 }
@@ -149,6 +151,7 @@ func (c *MsgConnection) sendListener() {
 	}
 }
 
+// Send pushes a message to the messages queue
 func (c *MsgConnection) Send(m []byte) error {
 	c.wmtx.Lock()
 	if c.closed {
@@ -160,6 +163,7 @@ func (c *MsgConnection) Send(m []byte) error {
 	return nil
 }
 
+// SendSock sends a message directly on the socket
 func (c *MsgConnection) SendSock(m []byte) error {
 	c.wmtx.Lock()
 	if c.closed {
@@ -181,7 +185,7 @@ func (c *MsgConnection) SendSock(m []byte) error {
 		return err
 	}
 	c.wmtx.Unlock()
-	metrics.PeerRecv.With(metrics.PeerIdLabel, c.remotePub.String()).Add(float64(len(m)))
+	metrics.PeerRecv.With(metrics.PeerIDLabel, c.remotePub.String()).Add(float64(len(m)))
 	return nil
 }
 

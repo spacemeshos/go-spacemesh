@@ -1,3 +1,4 @@
+// Package gossip implements simple protocol to send new validated messages to all peers and ignore old or not valid messages.
 package gossip
 
 import (
@@ -28,7 +29,7 @@ type prioQ interface {
 	Close()
 }
 
-// Protocol is the gossip protocol
+// Protocol runs the gossip protocol using the given peers and service.
 type Protocol struct {
 	log.Log
 
@@ -48,7 +49,7 @@ type Protocol struct {
 	priorities map[string]priorityq.Priority
 }
 
-// NewProtocol creates a new gossip protocol instance. Call Start to start reading peers
+// NewProtocol creates a new gossip protocol instance.
 func NewProtocol(config config.SwarmConfig, base baseNetwork, localNodePubkey p2pcrypto.PublicKey, log2 log.Log) *Protocol {
 	// intentionally not subscribing to peers events so that the channels won't block in case executing Start delays
 	return &Protocol{
@@ -85,6 +86,7 @@ func newPeer(net sender, pubkey p2pcrypto.PublicKey, log log.Log) *peer {
 	}
 }
 
+// Close stops all protocol routines.
 func (prot *Protocol) Close() {
 	close(prot.shutdown)
 }
@@ -96,6 +98,7 @@ func (prot *Protocol) markMessageAsOld(h types.Hash12) bool {
 	return ok
 }
 
+// send a message to all the peers.
 func (prot *Protocol) propagateMessage(payload []byte, h types.Hash12, nextProt string, exclude p2pcrypto.PublicKey) {
 	//TODO soon : don't wait for mesaage to send and if we finished sending last message one of the peers send the next message to him.
 	// limit the number of simultaneous sends. *consider other messages (mainly sync)
@@ -198,6 +201,7 @@ func (prot *Protocol) getPriority(protoName string) priorityq.Priority {
 	return v
 }
 
+// pushes messages that passed validation into the priority queue
 func (prot *Protocol) propagationEventLoop() {
 	go prot.handlePQ()
 
@@ -217,6 +221,7 @@ func (prot *Protocol) propagationEventLoop() {
 	}
 }
 
+// Relay processes a message, if the message is new, it is passed for the protocol to validate and then propagated.
 func (prot *Protocol) Relay(sender p2pcrypto.PublicKey, protocol string, msg service.Data) error {
 	return prot.processMessage(sender, protocol, msg)
 }
@@ -258,6 +263,7 @@ func (prot *Protocol) hasPeer(key p2pcrypto.PublicKey) bool {
 	return ok
 }
 
+// SetPriority sets the priority for protoName in the queue.
 func (prot *Protocol) SetPriority(protoName string, priority priorityq.Priority) {
 	prot.priorities[protoName] = priority
 }

@@ -1,3 +1,5 @@
+// Package connectionpool functions as a connection cache that takes care of connecting and reusing connected
+// sockets. it also makes sure we don't have duplicate connections.
 package connectionpool
 
 import (
@@ -18,6 +20,7 @@ type dialResult struct {
 	err  error
 }
 
+// DialFunc is a function used to create an authenticated connection
 type DialFunc func(ctx context.Context, address inet.Addr, remotePublicKey p2pcrypto.PublicKey) (net.Connection, error)
 
 // ConnectionPool stores all net.Connections and make them available to all users of net.Connection.
@@ -59,6 +62,7 @@ func NewConnectionPool(dialFunc DialFunc, lPub p2pcrypto.PublicKey, logger log.L
 	return cPool
 }
 
+// OnNewConnection is an exported method used to handle new connection events
 func (cp *ConnectionPool) OnNewConnection(nce net.NewConnectionEvent) error {
 	if cp.isShuttingDown() {
 		return errors.New("shutting down")
@@ -66,6 +70,7 @@ func (cp *ConnectionPool) OnNewConnection(nce net.NewConnectionEvent) error {
 	return cp.handleNewConnection(nce.Conn.RemotePublicKey(), nce.Conn, net.Remote)
 }
 
+// OnClosedConnection is an exported method used to handle new closing connections events
 func (cp *ConnectionPool) OnClosedConnection(cwe net.ConnectionWithErr) {
 	if cp.isShuttingDown() {
 		return
@@ -113,6 +118,7 @@ func (cp *ConnectionPool) closeConnections() {
 	cp.connMutex.Unlock()
 }
 
+// CloseConnection closes a connection and removes it from the pool.
 func (cp *ConnectionPool) CloseConnection(key p2pcrypto.PublicKey) {
 	cp.connMutex.Lock()
 	if c, exist := cp.connections[key]; exist {

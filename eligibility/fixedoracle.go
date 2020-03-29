@@ -1,13 +1,16 @@
+// package eligibility defines fixed size oracle used for node testing
 package eligibility
 
 import (
 	"encoding/binary"
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"hash/fnv"
 	"sync"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
+// FixedRolacle is an eligibility simulator with pre-determined honest and faulty participants.
 type FixedRolacle struct {
 	honest map[string]struct{}
 	faulty map[string]struct{}
@@ -16,6 +19,7 @@ type FixedRolacle struct {
 	mapRW  sync.RWMutex
 }
 
+// New initializes the oracle with no participants.
 func New() *FixedRolacle {
 	rolacle := &FixedRolacle{}
 	rolacle.honest = make(map[string]struct{})
@@ -25,10 +29,12 @@ func New() *FixedRolacle {
 	return rolacle
 }
 
-func (fo *FixedRolacle) IsIdentityActiveOnConsensusView(edId string, layer types.LayerID) (bool, error) {
+// IsIdentityActiveOnConsensusView is use to satisfy the API, currently always returns true.
+func (fo *FixedRolacle) IsIdentityActiveOnConsensusView(edID string, layer types.LayerID) (bool, error) {
 	return true, nil
 }
 
+// Export creates a map with the eligible participants for id and committee size.
 func (fo *FixedRolacle) Export(id uint32, committeeSize int) map[string]struct{} {
 	fo.mapRW.RLock()
 	total := len(fo.honest) + len(fo.faulty)
@@ -65,6 +71,7 @@ func (fo *FixedRolacle) update(m map[string]struct{}, client string) {
 	fo.mutex.Unlock()
 }
 
+// Register adds a participant to the eligibility map. can be honest or faulty.
 func (fo *FixedRolacle) Register(isHonest bool, client string) {
 	if isHonest {
 		fo.update(fo.honest, client)
@@ -73,6 +80,8 @@ func (fo *FixedRolacle) Register(isHonest bool, client string) {
 	}
 }
 
+// Unregister removes a participant from the eligibility map. can be honest or faulty.
+// TODO: just remove from both instead of specifying.
 func (fo *FixedRolacle) Unregister(isHonest bool, client string) {
 	fo.mutex.Lock()
 	if isHonest {
@@ -148,12 +157,17 @@ func hashLayerAndRound(instanceID types.LayerID, round int32) uint32 {
 	kInBytes := make([]byte, 4)
 	binary.LittleEndian.PutUint32(kInBytes, uint32(round))
 	h := fnv.New32()
-	h.Write(instanceID.ToBytes())
-	h.Write(kInBytes)
+	_, err := h.Write(instanceID.ToBytes())
+	_, err2 := h.Write(kInBytes)
+
+	if err != nil || err2 != nil {
+		log.Error("Errors trying to create a hash %v, %v", err, err2)
+	}
 
 	return h.Sum32()
 }
 
+// Eligible returns whether the specific NodeID is eligible for layer in roudn and committee size.
 func (fo *FixedRolacle) Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeId, sig []byte) (bool, error) {
 	fo.mapRW.RLock()
 	total := len(fo.honest) + len(fo.faulty) // safe since len >= 0
@@ -166,25 +180,29 @@ func (fo *FixedRolacle) Eligible(layer types.LayerID, round int32, committeeSize
 		size = total
 	}
 
-	instId := hashLayerAndRound(layer, round)
+	instID := hashLayerAndRound(layer, round)
 
 	fo.mapRW.Lock()
 	// generate if not exist for the requested K
-	if _, exist := fo.emaps[instId]; !exist {
-		fo.emaps[instId] = fo.generateEligibility(size)
+	if _, exist := fo.emaps[instID]; !exist {
+		fo.emaps[instID] = fo.generateEligibility(size)
 	}
 	fo.mapRW.Unlock()
 	// get eligibility result
-	_, exist := fo.emaps[instId][id.Key]
+	_, exist := fo.emaps[instID][id.Key]
 
 	return exist, nil
 }
 
+// Proof generates a proof for the round. used to satisfy interface.
 func (fo *FixedRolacle) Proof(layer types.LayerID, round int32) ([]byte, error) {
 	kInBytes := make([]byte, 4)
 	binary.LittleEndian.PutUint32(kInBytes, uint32(round))
 	hash := fnv.New32()
-	hash.Write(kInBytes)
+	_, err := hash.Write(kInBytes)
+	if err != nil {
+		log.Error("Error writing hash err: %v", err)
+	}
 
 	hashBytes := make([]byte, 4)
 	binary.LittleEndian.PutUint32(hashBytes, uint32(hash.Sum32()))

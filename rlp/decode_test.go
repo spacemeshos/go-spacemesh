@@ -51,7 +51,7 @@ func TestStreamKind(t *testing.T) {
 	for i, test := range tests {
 		// using plainReader to inhibit input limit errors.
 		s := NewStream(newPlainReader(unhex(test.input)), 0)
-		kind, len, err := s.Kind()
+		kind, length, err := s.Kind()
 		if err != nil {
 			t.Errorf("test %d: Kind returned error: %v", i, err)
 			continue
@@ -59,8 +59,8 @@ func TestStreamKind(t *testing.T) {
 		if kind != test.wantKind {
 			t.Errorf("test %d: kind mismatch: got %d, want %d", i, kind, test.wantKind)
 		}
-		if len != test.wantLen {
-			t.Errorf("test %d: len mismatch: got %d, want %d", i, len, test.wantLen)
+		if length != test.wantLen {
+			t.Errorf("test %d: length mismatch: got %d, want %d", i, length, test.wantLen)
 		}
 	}
 }
@@ -100,22 +100,22 @@ func TestStreamErrors(t *testing.T) {
 		newStream func([]byte) *Stream // uses bytes.Reader if nil
 		error     error
 	}{
-		{"C0", calls{"Bytes"}, nil, ErrExpectedString},
-		{"C0", calls{"Uint"}, nil, ErrExpectedString},
+		{"C0", calls{"Bytes"}, nil, errExpectedString},
+		{"C0", calls{"Uint"}, nil, errExpectedString},
 		{"89000000000000000001", calls{"Uint"}, nil, errUintOverflow},
-		{"00", calls{"List"}, nil, ErrExpectedList},
-		{"80", calls{"List"}, nil, ErrExpectedList},
-		{"C0", calls{"List", "Uint"}, nil, EOL},
-		{"C8C9010101010101010101", calls{"List", "Kind"}, nil, ErrElemTooLarge},
-		{"C3C2010201", calls{"List", "List", "Uint", "Uint", "ListEnd", "Uint"}, nil, EOL},
+		{"00", calls{"List"}, nil, errExpectedList},
+		{"80", calls{"List"}, nil, errExpectedList},
+		{"C0", calls{"List", "Uint"}, nil, errEol},
+		{"C8C9010101010101010101", calls{"List", "Kind"}, nil, errElemTooLarge},
+		{"C3C2010201", calls{"List", "List", "Uint", "Uint", "ListEnd", "Uint"}, nil, errEol},
 		{"00", calls{"ListEnd"}, nil, errNotInList},
 		{"C401020304", calls{"List", "Uint", "ListEnd"}, nil, errNotAtEOL},
 
 		// Non-canonical integers (e.g. leading zero bytes).
-		{"00", calls{"Uint"}, nil, ErrCanonInt},
-		{"820002", calls{"Uint"}, nil, ErrCanonInt},
-		{"8133", calls{"Uint"}, nil, ErrCanonSize},
-		{"817F", calls{"Uint"}, nil, ErrCanonSize},
+		{"00", calls{"Uint"}, nil, errCanonInt},
+		{"820002", calls{"Uint"}, nil, errCanonInt},
+		{"8133", calls{"Uint"}, nil, errCanonSize},
+		{"817F", calls{"Uint"}, nil, errCanonSize},
 		{"8180", calls{"Uint"}, nil, nil},
 
 		// Non-valid boolean
@@ -123,19 +123,19 @@ func TestStreamErrors(t *testing.T) {
 
 		// Size tags must use the smallest possible encoding.
 		// Leading zero bytes in the size tag are also rejected.
-		{"8100", calls{"Uint"}, nil, ErrCanonSize},
-		{"8100", calls{"Bytes"}, nil, ErrCanonSize},
-		{"8101", calls{"Bytes"}, nil, ErrCanonSize},
-		{"817F", calls{"Bytes"}, nil, ErrCanonSize},
+		{"8100", calls{"Uint"}, nil, errCanonSize},
+		{"8100", calls{"Bytes"}, nil, errCanonSize},
+		{"8101", calls{"Bytes"}, nil, errCanonSize},
+		{"817F", calls{"Bytes"}, nil, errCanonSize},
 		{"8180", calls{"Bytes"}, nil, nil},
-		{"B800", calls{"Kind"}, withoutInputLimit, ErrCanonSize},
-		{"B90000", calls{"Kind"}, withoutInputLimit, ErrCanonSize},
-		{"B90055", calls{"Kind"}, withoutInputLimit, ErrCanonSize},
-		{"BA0002FFFF", calls{"Bytes"}, withoutInputLimit, ErrCanonSize},
-		{"F800", calls{"Kind"}, withoutInputLimit, ErrCanonSize},
-		{"F90000", calls{"Kind"}, withoutInputLimit, ErrCanonSize},
-		{"F90055", calls{"Kind"}, withoutInputLimit, ErrCanonSize},
-		{"FA0002FFFF", calls{"List"}, withoutInputLimit, ErrCanonSize},
+		{"B800", calls{"Kind"}, withoutInputLimit, errCanonSize},
+		{"B90000", calls{"Kind"}, withoutInputLimit, errCanonSize},
+		{"B90055", calls{"Kind"}, withoutInputLimit, errCanonSize},
+		{"BA0002FFFF", calls{"Bytes"}, withoutInputLimit, errCanonSize},
+		{"F800", calls{"Kind"}, withoutInputLimit, errCanonSize},
+		{"F90000", calls{"Kind"}, withoutInputLimit, errCanonSize},
+		{"F90055", calls{"Kind"}, withoutInputLimit, errCanonSize},
+		{"FA0002FFFF", calls{"List"}, withoutInputLimit, errCanonSize},
 
 		// Expected EOF
 		{"", calls{"Kind"}, nil, io.EOF},
@@ -149,20 +149,20 @@ func TestStreamErrors(t *testing.T) {
 		{"C0", calls{"List", "ListEnd", "List"}, withoutInputLimit, io.EOF},
 
 		// Input limit errors.
-		{"81", calls{"Bytes"}, nil, ErrValueTooLarge},
-		{"81", calls{"Uint"}, nil, ErrValueTooLarge},
-		{"81", calls{"Raw"}, nil, ErrValueTooLarge},
-		{"BFFFFFFFFFFFFFFFFFFF", calls{"Bytes"}, nil, ErrValueTooLarge},
-		{"C801", calls{"List"}, nil, ErrValueTooLarge},
+		{"81", calls{"Bytes"}, nil, errValueTooLarge},
+		{"81", calls{"Uint"}, nil, errValueTooLarge},
+		{"81", calls{"Raw"}, nil, errValueTooLarge},
+		{"BFFFFFFFFFFFFFFFFFFF", calls{"Bytes"}, nil, errValueTooLarge},
+		{"C801", calls{"List"}, nil, errValueTooLarge},
 
 		// Test for list element size check overflow.
-		{"CD04040404FFFFFFFFFFFFFFFFFF0303", calls{"List", "Uint", "Uint", "Uint", "Uint", "List"}, nil, ErrElemTooLarge},
+		{"CD04040404FFFFFFFFFFFFFFFFFF0303", calls{"List", "Uint", "Uint", "Uint", "Uint", "List"}, nil, errElemTooLarge},
 
 		// Test for input limit overflow. Since we are counting the limit
 		// down toward zero in Stream.remaining, reading too far can overflow
 		// remaining to a large value, effectively disabling the limit.
 		{"C40102030401", calls{"Raw", "Uint"}, withCustomInputLimit(5), io.EOF},
-		{"C4010203048180", calls{"Raw", "Uint"}, withCustomInputLimit(6), ErrValueTooLarge},
+		{"C4010203048180", calls{"Raw", "Uint"}, withCustomInputLimit(6), errValueTooLarge},
 
 		// Check that the same calls are fine without a limit.
 		{"C40102030401", calls{"Raw", "Uint"}, withoutInputLimit, nil},
@@ -190,7 +190,7 @@ func TestStreamErrors(t *testing.T) {
 
 			"Bytes", // past final element
 			"Bytes", // this one should fail
-		}, nil, EOL},
+		}, nil, errEol},
 	}
 
 testfor:
@@ -229,12 +229,12 @@ testfor:
 func TestStreamList(t *testing.T) {
 	s := NewStream(bytes.NewReader(unhex("C80102030405060708")), 0)
 
-	len, err := s.List()
+	length, err := s.List()
 	if err != nil {
 		t.Fatalf("List error: %v", err)
 	}
-	if len != 8 {
-		t.Fatalf("List returned invalid length, got %d, want 8", len)
+	if length != 8 {
+		t.Fatalf("List returned invalid length, got %d, want 8", length)
 	}
 
 	for i := uint64(1); i <= 8; i++ {
@@ -247,8 +247,8 @@ func TestStreamList(t *testing.T) {
 		}
 	}
 
-	if _, err := s.Uint(); err != EOL {
-		t.Errorf("Uint error mismatch, got %v, want %v", err, EOL)
+	if _, err := s.Uint(); err != errEol {
+		t.Errorf("Uint error mismatch, got %v, want %v", err, errEol)
 	}
 	if err = s.ListEnd(); err != nil {
 		t.Fatalf("ListEnd error: %v", err)

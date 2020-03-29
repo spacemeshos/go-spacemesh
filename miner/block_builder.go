@@ -1,3 +1,4 @@
+// package miner is responsible for creating valid blocks that contain valid activation transactions and transactions
 package miner
 
 import (
@@ -11,7 +12,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
-	"github.com/spacemeshos/go-spacemesh/oracle"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
@@ -21,7 +21,7 @@ import (
 )
 
 // MaxTransactionsPerBlock indicates the maximum transactions a block can reference
-const MaxTransactionsPerBlock = 200 //todo: move to config
+const MaxTransactionsPerBlock = 200 //todo: move to config (#1924)
 
 const defaultGasLimit = 10
 const defaultFee = 1
@@ -61,6 +61,10 @@ type projector interface {
 	GetProjection(addr types.Address) (nonce, balance uint64, err error)
 }
 
+type blockOracle interface {
+	BlockEligible(layerID types.LayerID) (types.AtxId, []types.BlockEligibilityProof, error)
+}
+
 // BlockBuilder is the struct that orchestrates the building of blocks, it is responsible for receiving hare results.
 // referencing txs and atxs from mem pool and referencing them in the created block
 // it is also responsible for listening to the clock and querying when a block should be created according to the block oracle
@@ -81,7 +85,7 @@ type BlockBuilder struct {
 	network          p2p.Service
 	weakCoinToss     weakCoinProvider
 	meshProvider     meshProvider
-	blockOracle      oracle.BlockOracle
+	blockOracle      blockOracle
 	txValidator      txValidator
 	atxValidator     atxValidator
 	syncer           syncer
@@ -93,7 +97,7 @@ type BlockBuilder struct {
 // NewBlockBuilder creates a struct of block builder type.
 func NewBlockBuilder(minerID types.NodeId, sgn signer, net p2p.Service, beginRoundEvent chan types.LayerID, hdist int,
 	txPool txPool, atxPool *AtxMemPool, weakCoin weakCoinProvider, orph meshProvider, hare hareResultProvider,
-	blockOracle oracle.BlockOracle, txValidator txValidator, atxValidator atxValidator, syncer syncer, atxsPerBlock int,
+	blockOracle blockOracle, txValidator txValidator, atxValidator atxValidator, syncer syncer, atxsPerBlock int,
 	projector projector, lg log.Log) *BlockBuilder {
 
 	seed := binary.BigEndian.Uint64(md5.New().Sum([]byte(minerID.Key)))
@@ -237,7 +241,7 @@ func (t *BlockBuilder) getVotes(id types.LayerID) ([]types.BlockID, error) {
 	for i := bottom + 1; i <= top; i++ {
 		res, err := t.hareResult.GetResult(i)
 		if err != nil {
-			t.With().Warning("could not get result for layer in range", log.LayerId(uint64(i)), log.Err(err),
+			t.With().Warning("could not get result for layer in range", log.LayerID(uint64(i)), log.Err(err),
 				log.Uint64("bottom", uint64(bottom)), log.Uint64("top", uint64(top)), log.Uint64("hdist", uint64(t.hdist)))
 			continue
 		}
@@ -340,20 +344,20 @@ func (t *BlockBuilder) listenForTx() {
 				continue
 			}
 			if err := tx.CalcAndSetOrigin(); err != nil {
-				t.With().Error("failed to calc transaction origin", log.TxId(tx.Id().ShortString()), log.Err(err))
+				t.With().Error("failed to calc transaction origin", log.TxID(tx.Id().ShortString()), log.Err(err))
 				continue
 			}
 			if !t.txValidator.AddressExists(tx.Origin()) {
 				t.With().Error("transaction origin does not exist", log.String("transaction", tx.String()),
-					log.TxId(tx.Id().ShortString()), log.String("origin", tx.Origin().Short()), log.Err(err))
+					log.TxID(tx.Id().ShortString()), log.String("origin", tx.Origin().Short()), log.Err(err))
 				continue
 			}
 			if err := t.txValidator.ValidateNonceAndBalance(tx); err != nil {
-				t.With().Error("nonce and balance validation failed", log.TxId(tx.Id().ShortString()), log.Err(err))
+				t.With().Error("nonce and balance validation failed", log.TxID(tx.Id().ShortString()), log.Err(err))
 				continue
 			}
 			t.Log.With().Info("got new tx",
-				log.TxId(tx.Id().ShortString()),
+				log.TxID(tx.Id().ShortString()),
 				log.Uint64("nonce", tx.AccountNonce),
 				log.Uint64("amount", tx.Amount),
 				log.Uint64("fee", tx.Fee),
@@ -418,10 +422,10 @@ func (t *BlockBuilder) handleGossipAtx(data service.GossipMessage) {
 
 	t.With().Info("got new ATX",
 		log.String("sender_id", atx.NodeId.ShortString()),
-		log.AtxId(atx.ShortString()),
+		log.AtxID(atx.ShortString()),
 		log.String("prev_atx_id", atx.PrevATXId.ShortString()),
 		log.String("pos_atx_id", atx.PositioningAtx.ShortString()),
-		log.LayerId(uint64(atx.PubLayerIdx)),
+		log.LayerID(uint64(atx.PubLayerIdx)),
 		log.Uint32("active_set", atx.ActiveSetSize),
 		log.Int("view", len(atx.View)),
 		log.Uint64("sequence_number", atx.Sequence),
@@ -430,7 +434,7 @@ func (t *BlockBuilder) handleGossipAtx(data service.GossipMessage) {
 		log.String("NIPSTChallenge", challenge),
 	)
 
-	//todo fetch from neighbour
+	//todo fetch from neighbour (#1925)
 	if atx.Nipst == nil {
 		t.Panic("nil nipst in gossip")
 		return
@@ -452,7 +456,7 @@ func (t *BlockBuilder) handleGossipAtx(data service.GossipMessage) {
 
 	t.AtxPool.Put(atx)
 	data.ReportValidation(activation.AtxProtocol)
-	t.With().Info("stored and propagated new syntactically valid ATX", log.AtxId(atx.ShortString()))
+	t.With().Info("stored and propagated new syntactically valid ATX", log.AtxID(atx.ShortString()))
 }
 
 func (t *BlockBuilder) acceptBlockData() {
@@ -472,12 +476,12 @@ func (t *BlockBuilder) acceptBlockData() {
 			atxID, proofs, err := t.blockOracle.BlockEligible(layerID)
 			if err != nil {
 				events.Publish(events.DoneCreatingBlock{Eligible: true, Layer: uint64(layerID), Error: "failed to check for block eligibility"})
-				t.With().Error("failed to check for block eligibility", log.LayerId(uint64(layerID)), log.Err(err))
+				t.With().Error("failed to check for block eligibility", log.LayerID(uint64(layerID)), log.Err(err))
 				continue
 			}
 			if len(proofs) == 0 {
 				events.Publish(events.DoneCreatingBlock{Eligible: false, Layer: uint64(layerID), Error: ""})
-				t.With().Info("Notice: not eligible for blocks in layer", log.LayerId(uint64(layerID)))
+				t.With().Info("Notice: not eligible for blocks in layer", log.LayerID(uint64(layerID)))
 				continue
 			}
 			// TODO: include multiple proofs in each block and weigh blocks where applicable
@@ -491,7 +495,7 @@ func (t *BlockBuilder) acceptBlockData() {
 				txList, err := t.TransactionPool.GetTxsForBlock(MaxTransactionsPerBlock, t.projector.GetProjection)
 				if err != nil {
 					events.Publish(events.DoneCreatingBlock{Eligible: true, Layer: uint64(layerID), Error: "failed to get txs for block"})
-					t.With().Error("failed to get txs for block", log.LayerId(uint64(layerID)), log.Err(err))
+					t.With().Error("failed to get txs for block", log.LayerID(uint64(layerID)), log.Err(err))
 					continue
 				}
 				blk, err := t.createBlock(layerID, atxID, eligibilityProof, txList, atxList)

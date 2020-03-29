@@ -7,7 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/pending_txs"
+	"github.com/spacemeshos/go-spacemesh/pendingtxs"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
@@ -29,7 +29,7 @@ func teardown() {
 	os.RemoveAll(Path)
 }
 
-func getMeshdb() *MeshDB {
+func getMeshdb() *DB {
 	return NewMemMeshDB(log.New("mdb", "", ""))
 }
 
@@ -127,7 +127,7 @@ func TestForEachInView_InMem(t *testing.T) {
 	testForeachInView(mdb, t)
 }
 
-func testForeachInView(mdb *MeshDB, t *testing.T) {
+func testForeachInView(mdb *DB, t *testing.T) {
 	blocks := make(map[types.BlockID]*types.Block)
 	l := GenesisLayer()
 	gen := l.Blocks()[0]
@@ -317,7 +317,7 @@ func newSignerAndAddress(r *require.Assertions, seedStr string) (*signing.EdSign
 func TestMeshDB_GetStateProjection(t *testing.T) {
 	r := require.New(t)
 
-	mdb := NewMemMeshDB(log.NewDefault("MeshDB.GetStateProjection"))
+	mdb := NewMemMeshDB(log.NewDefault("DB.GetStateProjection"))
 	signer, origin := newSignerAndAddress(r, "123")
 	err := mdb.addToUnappliedTxs([]*types.Transaction{
 		newTx(r, signer, 0, 10),
@@ -407,7 +407,7 @@ func TestMeshDB_UnappliedTxs(t *testing.T) {
 
 	mdb.removeFromUnappliedTxs([]*types.Transaction{
 		newTx(r, signer2, 0, 100),
-	}, 1)
+	})
 
 	txns1 = getTxns(r, mdb, origin1)
 	r.Len(txns1, 2)
@@ -458,13 +458,13 @@ type TinyTx struct {
 	TotalAmount uint64
 }
 
-func getTxns(r *require.Assertions, mdb *MeshDB, origin types.Address) []TinyTx {
+func getTxns(r *require.Assertions, mdb *DB, origin types.Address) []TinyTx {
 	txnsB, err := mdb.unappliedTxs.Get(origin.Bytes())
 	if err == database.ErrNotFound {
 		return []TinyTx{}
 	}
 	r.NoError(err)
-	var txns pending_txs.AccountPendingTxs
+	var txns pendingtxs.AccountPendingTxs
 	err = types.BytesToInterface(txnsB, &txns)
 	r.NoError(err)
 	var ret []TinyTx

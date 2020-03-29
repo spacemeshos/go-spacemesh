@@ -1,3 +1,5 @@
+// package activation is responsible for creating activation transactions and running the mining flow, coordinating
+// PoST building, sending proofs to PoET and building NIPoST structs.
 package activation
 
 import (
@@ -356,9 +358,9 @@ func (b *Builder) loadChallenge() error {
 func (b *Builder) PublishActivationTx() error {
 	b.discardChallengeIfStale()
 	if b.challenge != nil {
-		b.log.With().Info("using existing atx challenge", log.EpochId(uint64(b.currentEpoch())))
+		b.log.With().Info("using existing atx challenge", log.EpochID(uint64(b.currentEpoch())))
 	} else {
-		b.log.With().Info("building new atx challenge", log.EpochId(uint64(b.currentEpoch())))
+		b.log.With().Info("building new atx challenge", log.EpochID(uint64(b.currentEpoch())))
 		err := b.buildNipstChallenge()
 		if err != nil {
 			return err
@@ -447,11 +449,11 @@ func (b *Builder) PublishActivationTx() error {
 		commitStr = commitment.String()
 	}
 	b.log.Event().Info("atx published!",
-		log.AtxId(atx.ShortString()),
+		log.AtxID(atx.ShortString()),
 		log.String("prev_atx_id", atx.PrevATXId.ShortString()),
 		log.String("pos_atx_id", atx.PositioningAtx.ShortString()),
-		log.LayerId(uint64(atx.PubLayerIdx)),
-		log.EpochId(uint64(atx.PubLayerIdx.GetEpoch(b.layersPerEpoch))),
+		log.LayerID(uint64(atx.PubLayerIdx)),
+		log.EpochID(uint64(atx.PubLayerIdx.GetEpoch(b.layersPerEpoch))),
 		log.Uint32("active_set", atx.ActiveSetSize),
 		log.String("miner", b.nodeID.ShortString()),
 		log.Int("view", len(atx.View)),
@@ -471,7 +473,7 @@ func (b *Builder) PublishActivationTx() error {
 			b.log.Info("atx received in db (in the last moment)")
 		case <-b.syncer.Await(): // ensure we've seen all blocks before concluding that the ATX was lost
 			b.log.With().Error("target epoch has passed before atx was added to database",
-				log.AtxId(atx.ShortString()))
+				log.AtxID(atx.ShortString()))
 			b.discardChallenge()
 			return fmt.Errorf("target epoch has passed")
 		case <-b.stop:
