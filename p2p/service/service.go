@@ -6,20 +6,24 @@ import (
 	"net"
 )
 
+// MessageValidation is a gossip message validation event.
 type MessageValidation struct {
 	sender p2pcrypto.PublicKey
 	msg    []byte
 	prot   string
 }
 
+// Message returns the message as bytes
 func (mv MessageValidation) Message() []byte {
 	return mv.msg
 }
 
+// Sender returns the public key of the sender of this message. (might not be the author)
 func (mv MessageValidation) Sender() p2pcrypto.PublicKey {
 	return mv.sender
 }
 
+// Protocol is the protocol this message is targeted to.
 func (mv MessageValidation) Protocol() string {
 	return mv.prot
 }
@@ -30,6 +34,7 @@ type P2PMetadata struct {
 	// add here more fields that are needed by protocols
 }
 
+// NewMessageValidation creates a message validation struct to pass to the protocol.
 func NewMessageValidation(sender p2pcrypto.PublicKey, msg []byte, prot string) MessageValidation {
 	return MessageValidation{sender, msg, prot}
 }
@@ -59,15 +64,17 @@ type Service interface {
 	Shutdown()
 }
 
+// Data is a wrapper around a message that can hold either raw bytes message or a req-res wrapper.
 type Data interface {
-	messageData()
 	Bytes() []byte
 }
 
+// DataBytes is a byte array payload wrapper.
 type DataBytes struct {
 	Payload []byte
 }
 
+// DataMsgWrapper is a req-res payload wrapper
 type DataMsgWrapper struct {
 	Req     bool
 	MsgType uint32
@@ -75,14 +82,12 @@ type DataMsgWrapper struct {
 	Payload []byte
 }
 
-func (m DataBytes) messageData() {}
-
+// Bytes returns the message as bytes
 func (m DataBytes) Bytes() []byte {
 	return m.Payload
 }
 
-func (m DataMsgWrapper) messageData() {}
-
+// bytes returns the message as bytes
 func (m DataMsgWrapper) Bytes() []byte {
 	return m.Payload
 }

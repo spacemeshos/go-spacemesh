@@ -166,6 +166,7 @@ func (c *FormattedConnection) String() string {
 	return c.id
 }
 
+// Created is the time the connection was created
 func (c *FormattedConnection) Created() time.Time {
 	return c.created
 }
@@ -218,6 +219,7 @@ func (c *FormattedConnection) sendListener() {
 	}
 }
 
+// Send pushes a message into the queue if the connection is not closed.
 func (c *FormattedConnection) Send(m []byte) error {
 	c.wmtx.Lock()
 	if c.closed {
@@ -229,6 +231,7 @@ func (c *FormattedConnection) Send(m []byte) error {
 	return nil
 }
 
+// SendSock sends a message directly on the socket without waiting for the queue.
 func (c *FormattedConnection) SendSock(m []byte) error {
 	c.wmtx.Lock()
 	if c.closed {
@@ -347,7 +350,6 @@ func (c *FormattedConnection) setupIncoming(timeout time.Duration) error {
 	return nil
 }
 
-// Push outgoing message to the connections
 // Read from the incoming new messages and send down the connection
 func (c *FormattedConnection) beginEventProcessing() {
 	//TODO: use a buffer pool
