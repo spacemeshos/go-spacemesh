@@ -1,3 +1,4 @@
+// package hare is the tester executable running instances of hare consensus algorithm
 package main
 
 import (

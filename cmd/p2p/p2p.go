@@ -1,3 +1,4 @@
+// package p2p cmd is the main executable for running p2p tests and simulations
 package main
 
 import (

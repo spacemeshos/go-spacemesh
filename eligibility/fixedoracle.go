@@ -1,3 +1,4 @@
+// package eligibility defines fixed size oracle used for node testing
 package eligibility
 
 import (

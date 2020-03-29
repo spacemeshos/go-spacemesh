@@ -1,3 +1,4 @@
+// package collector implements event collecting from pubsub
 package collector
 
 import (
