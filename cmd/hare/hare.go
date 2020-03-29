@@ -8,7 +8,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/monitoring"
-	"github.com/spacemeshos/go-spacemesh/oracle"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
@@ -62,7 +61,7 @@ func (mbp *mockBlockProvider) LayerBlockIds(types.LayerID) ([]types.BlockID, err
 type HareApp struct {
 	*cmdp.BaseApp
 	p2p     p2p.Service
-	oracle  *oracle.OracleClient
+	oracle  *oracleClient
 	sgn     hare.Signer
 	ha      *hare.Hare
 	clock   *timesync.TimeClock
@@ -152,10 +151,10 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 
 	lg := log.NewDefault(pub.String())
 
-	oracle.SetServerAddress(app.Config.OracleServer)
-	app.oracle = oracle.NewOracleClientWithWorldID(uint64(app.Config.OracleServerWorldId))
+	setServerAddress(app.Config.OracleServer)
+	app.oracle = newClientWithWorldID(uint64(app.Config.OracleServerWorldId))
 	app.oracle.Register(true, pub.String()) // todo: configure no faulty nodes
-	hareOracle := oracle.NewHareOracleFromClient(app.oracle)
+	hareOracle := newHareOracleFromClient(app.oracle)
 
 	gTime, err := time.Parse(time.RFC3339, app.Config.GenesisTime)
 	if err != nil {
