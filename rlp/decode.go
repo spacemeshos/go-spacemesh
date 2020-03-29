@@ -29,18 +29,18 @@ import (
 )
 
 var (
-	// EOL is returned when the end of the current list
+	// errEol is returned when the end of the current list
 	// has been reached during streaming.
-	EOL = errors.New("rlp: end of list")
+	errEol = errors.New("rlp: end of list")
 
 	// Actual Errors
-	ErrExpectedString   = errors.New("rlp: expected String or Byte")
-	ErrExpectedList     = errors.New("rlp: expected List")
-	ErrCanonInt         = errors.New("rlp: non-canonical integer format")
-	ErrCanonSize        = errors.New("rlp: non-canonical size information")
-	ErrElemTooLarge     = errors.New("rlp: element is larger than containing list")
-	ErrValueTooLarge    = errors.New("rlp: value size exceeds available input length")
-	ErrMoreThanOneValue = errors.New("rlp: input contains more than one value")
+	errExpectedString   = errors.New("rlp: expected String or Byte")
+	errExpectedList     = errors.New("rlp: expected List")
+	errCanonInt         = errors.New("rlp: non-canonical integer format")
+	errCanonSize        = errors.New("rlp: non-canonical size information")
+	errElemTooLarge     = errors.New("rlp: element is larger than containing list")
+	errValueTooLarge    = errors.New("rlp: value size exceeds available input length")
+	errMoreThanOneValue = errors.New("rlp: input contains more than one value")
 
 	// internal errors
 	errNotInList     = errors.New("rlp: call of ListEnd outside of any list")
@@ -126,7 +126,6 @@ type Decoder interface {
 //
 //     NewStream(r, limit).Decode(val)
 func Decode(r io.Reader, val interface{}) error {
-	// TODO: this could use a Stream from a pool.
 	return NewStream(r, 0).Decode(val)
 }
 
@@ -134,13 +133,12 @@ func Decode(r io.Reader, val interface{}) error {
 // Please see the documentation of Decode for the decoding rules.
 // The input must contain exactly one value and no trailing data.
 func DecodeBytes(b []byte, val interface{}) error {
-	// TODO: this could use a Stream from a pool.
 	r := bytes.NewReader(b)
 	if err := NewStream(r, uint64(len(b))).Decode(val); err != nil {
 		return err
 	}
 	if r.Len() > 0 {
-		return ErrMoreThanOneValue
+		return errMoreThanOneValue
 	}
 	return nil
 }
@@ -164,13 +162,13 @@ func (err *decodeError) Error() string {
 
 func wrapStreamError(err error, typ reflect.Type) error {
 	switch err {
-	case ErrCanonInt:
+	case errCanonInt:
 		return &decodeError{msg: "non-canonical integer (leading zero bytes)", typ: typ}
-	case ErrCanonSize:
+	case errCanonSize:
 		return &decodeError{msg: "non-canonical size information", typ: typ}
-	case ErrExpectedList:
+	case errExpectedList:
 		return &decodeError{msg: "expected input list", typ: typ}
-	case ErrExpectedString:
+	case errExpectedString:
 		return &decodeError{msg: "expected input string or byte", typ: typ}
 	case errUintOverflow:
 		return &decodeError{msg: "input string too long", typ: typ}
@@ -280,7 +278,7 @@ func decodeBigInt(s *Stream, val reflect.Value) error {
 	}
 	// Reject leading zero bytes
 	if len(b) > 0 && b[0] == 0 {
-		return wrapStreamError(ErrCanonInt, val.Type())
+		return wrapStreamError(errCanonInt, val.Type())
 	}
 	i.SetBytes(b)
 	return nil
@@ -352,7 +350,7 @@ func decodeSliceElems(s *Stream, val reflect.Value, elemdec decoder) error {
 			val.SetLen(i + 1)
 		}
 		// decode into element
-		if err := elemdec(s, val.Index(i)); err == EOL {
+		if err := elemdec(s, val.Index(i)); err == errEol {
 			break
 		} else if err != nil {
 			return addErrorContext(err, fmt.Sprint("[", i, "]"))
@@ -371,7 +369,7 @@ func decodeListArray(s *Stream, val reflect.Value, elemdec decoder) error {
 	vlen := val.Len()
 	i := 0
 	for ; i < vlen; i++ {
-		if err := elemdec(s, val.Index(i)); err == EOL {
+		if err := elemdec(s, val.Index(i)); err == errEol {
 			break
 		} else if err != nil {
 			return addErrorContext(err, fmt.Sprint("[", i, "]"))
@@ -421,10 +419,10 @@ func decodeByteArray(s *Stream, val reflect.Value) error {
 		}
 		// Reject cases where single byte encoding should have been used.
 		if size == 1 && slice[0] < 128 {
-			return wrapStreamError(ErrCanonSize, val.Type())
+			return wrapStreamError(errCanonSize, val.Type())
 		}
 	case List:
-		return wrapStreamError(ErrExpectedString, val.Type())
+		return wrapStreamError(errExpectedString, val.Type())
 	}
 	return nil
 }
@@ -440,7 +438,7 @@ func makeStructDecoder(typ reflect.Type) (decoder, error) {
 		}
 		for _, f := range fields {
 			err := f.info.decoder(s, val.Field(f.index))
-			if err == EOL {
+			if err == errEol {
 				return &decodeError{msg: "too few elements", typ: typ}
 			} else if err != nil {
 				return addErrorContext(err, "."+typ.Field(f.index).Name)
@@ -553,8 +551,11 @@ func decodeDecoder(s *Stream, val reflect.Value) error {
 type Kind int
 
 const (
+	// Byte : a byte
 	Byte Kind = iota
+	// String : a string
 	String
+	// List : a list
 	List
 )
 
@@ -614,13 +615,13 @@ type listpos struct{ pos, size uint64 }
 // If r implements the ByteReader interface, Stream will
 // not introduce any buffering.
 //
-// For non-toplevel values, Stream returns ErrElemTooLarge
+// For non-toplevel values, Stream returns errElemTooLarge
 // for values that do not fit into the enclosing list.
 //
 // Stream supports an optional input limit. If a limit is set, the
 // size of any toplevel value will be checked against the remaining
 // input length. Stream operations that encounter a value exceeding
-// the remaining input length will return ErrValueTooLarge. The limit
+// the remaining input length will return errValueTooLarge. The limit
 // can be set by passing a non-zero value for inputLimit.
 //
 // If r is a bytes.Reader or strings.Reader, the input limit is set to
@@ -644,7 +645,7 @@ func NewListStream(r io.Reader, len uint64) *Stream {
 
 // Bytes reads an RLP string and returns its contents as a byte slice.
 // If the input does not contain an RLP string, the returned
-// error will be ErrExpectedString.
+// error will be errExpectedString.
 func (s *Stream) Bytes() ([]byte, error) {
 	kind, size, err := s.Kind()
 	if err != nil {
@@ -660,11 +661,11 @@ func (s *Stream) Bytes() ([]byte, error) {
 			return nil, err
 		}
 		if size == 1 && b[0] < 128 {
-			return nil, ErrCanonSize
+			return nil, errCanonSize
 		}
 		return b, nil
 	default:
-		return nil, ErrExpectedString
+		return nil, errExpectedString
 	}
 }
 
@@ -695,7 +696,7 @@ func (s *Stream) Raw() ([]byte, error) {
 
 // Uint reads an RLP string of up to 8 bytes and returns its contents
 // as an unsigned integer. If the input does not contain an RLP string, the
-// returned error will be ErrExpectedString.
+// returned error will be errExpectedString.
 func (s *Stream) Uint() (uint64, error) {
 	return s.uint(64)
 }
@@ -708,7 +709,7 @@ func (s *Stream) uint(maxbits int) (uint64, error) {
 	switch kind {
 	case Byte:
 		if s.byteval == 0 {
-			return 0, ErrCanonInt
+			return 0, errCanonInt
 		}
 		s.kind = -1 // rearm Kind
 		return uint64(s.byteval), nil
@@ -718,24 +719,24 @@ func (s *Stream) uint(maxbits int) (uint64, error) {
 		}
 		v, err := s.readUint(byte(size))
 		switch {
-		case err == ErrCanonSize:
+		case err == errCanonSize:
 			// Adjust error because we're not reading a size right now.
-			return 0, ErrCanonInt
+			return 0, errCanonInt
 		case err != nil:
 			return 0, err
 		case size > 0 && v < 128:
-			return 0, ErrCanonSize
+			return 0, errCanonSize
 		default:
 			return v, nil
 		}
 	default:
-		return 0, ErrExpectedString
+		return 0, errExpectedString
 	}
 }
 
 // Bool reads an RLP string of up to 1 byte and returns its contents
 // as a boolean. If the input does not contain an RLP string, the
-// returned error will be ErrExpectedString.
+// returned error will be errExpectedString.
 func (s *Stream) Bool() (bool, error) {
 	num, err := s.uint(8)
 	if err != nil {
@@ -752,7 +753,7 @@ func (s *Stream) Bool() (bool, error) {
 }
 
 // List starts decoding an RLP list. If the input does not contain a
-// list, the returned error will be ErrExpectedList. When the list's
+// list, the returned error will be errExpectedList. When the list's
 // end has been reached, any Stream operation will return EOL.
 func (s *Stream) List() (size uint64, err error) {
 	kind, size, err := s.Kind()
@@ -760,7 +761,7 @@ func (s *Stream) List() (size uint64, err error) {
 		return 0, err
 	}
 	if kind != List {
-		return 0, ErrExpectedList
+		return 0, errExpectedList
 	}
 	s.stack = append(s.stack, listpos{0, size})
 	s.kind = -1
@@ -876,7 +877,7 @@ func (s *Stream) Kind() (kind Kind, size uint64, err error) {
 		// Don't read further if we're at the end of the
 		// innermost list.
 		if tos != nil && tos.pos == tos.size {
-			return 0, 0, EOL
+			return 0, 0, errEol
 		}
 		s.kind, s.size, s.kinderr = s.readKind()
 		if s.kinderr == nil {
@@ -884,12 +885,12 @@ func (s *Stream) Kind() (kind Kind, size uint64, err error) {
 				// At toplevel, check that the value is smaller
 				// than the remaining input length.
 				if s.limited && s.size > s.remaining {
-					s.kinderr = ErrValueTooLarge
+					s.kinderr = errValueTooLarge
 				}
 			} else {
 				// Inside a list, check that the value doesn't overflow the list.
 				if s.size > tos.size-tos.pos {
-					s.kinderr = ErrElemTooLarge
+					s.kinderr = errElemTooLarge
 				}
 			}
 		}
@@ -908,7 +909,7 @@ func (s *Stream) readKind() (kind Kind, size uint64, err error) {
 			switch err {
 			case io.ErrUnexpectedEOF:
 				err = io.EOF
-			case ErrValueTooLarge:
+			case errValueTooLarge:
 				err = io.EOF
 			}
 		}
@@ -936,7 +937,7 @@ func (s *Stream) readKind() (kind Kind, size uint64, err error) {
 		// the first byte is thus [0xB8, 0xBF].
 		size, err = s.readUint(b - 0xB7)
 		if err == nil && size < 56 {
-			err = ErrCanonSize
+			err = errCanonSize
 		}
 		return String, size, err
 	case b < 0xF8:
@@ -955,7 +956,7 @@ func (s *Stream) readKind() (kind Kind, size uint64, err error) {
 		// range of the first byte is thus [0xF8, 0xFF].
 		size, err = s.readUint(b - 0xF7)
 		if err == nil && size < 56 {
-			err = ErrCanonSize
+			err = errCanonSize
 		}
 		return List, size, err
 	}
@@ -980,8 +981,8 @@ func (s *Stream) readUint(size byte) (uint64, error) {
 		if s.uintbuf[start] == 0 {
 			// Note: readUint is also used to decode integer
 			// values. The error needs to be adjusted to become
-			// ErrCanonInt in this case.
-			return 0, ErrCanonSize
+			// errCanonInt in this case.
+			return 0, errCanonSize
 		}
 		return binary.BigEndian.Uint64(s.uintbuf), nil
 	}
@@ -1020,13 +1021,13 @@ func (s *Stream) willRead(n uint64) error {
 		// check list overflow
 		tos := s.stack[len(s.stack)-1]
 		if n > tos.size-tos.pos {
-			return ErrElemTooLarge
+			return errElemTooLarge
 		}
 		s.stack[len(s.stack)-1].pos += n
 	}
 	if s.limited {
 		if n > s.remaining {
-			return ErrValueTooLarge
+			return errValueTooLarge
 		}
 		s.remaining -= n
 	}
