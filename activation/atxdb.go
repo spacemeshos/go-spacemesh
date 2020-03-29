@@ -44,7 +44,7 @@ type atxChan struct {
 // it also stores identifications for all nodes e.g the coupling between ed id and bls id
 type ActivationDb struct {
 	sync.RWMutex
-	//todo: think about whether we need one db or several
+	//todo: think about whether we need one db or several(#1922)
 	idStore
 	atxs              database.Database
 	atxHeaderCache    AtxCache
@@ -470,7 +470,7 @@ func (db *ActivationDb) StoreAtx(ech types.EpochId, atx *types.ActivationTx) err
 	db.Lock()
 	defer db.Unlock()
 
-	//todo: maybe cleanup DB if failed by using defer
+	//todo: maybe cleanup DB if failed by using defer (#1921)
 	if _, err := db.atxs.Get(getAtxHeaderKey(atx.Id())); err == nil {
 		// exists - how should we handle this?
 		return nil

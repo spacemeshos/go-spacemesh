@@ -7,9 +7,10 @@ import (
 type recorder interface {
 	Update()
 	Status() string
-	LogJson()
+	LogJSON()
 }
 
+// Monitor is a simple service to take samples
 type Monitor struct {
 	updateTicker *time.Ticker
 	printTicker  *time.Ticker
@@ -17,6 +18,7 @@ type Monitor struct {
 	term         chan struct{}
 }
 
+// NewMonitor constructs a new monitor instance
 func NewMonitor(updateRate time.Duration, printRate time.Duration, updater recorder, termChannel chan struct{}) *Monitor {
 	m := new(Monitor)
 	m.updateTicker = time.NewTicker(updateRate)
@@ -38,11 +40,12 @@ func (m *Monitor) monitor() {
 			m.recorder.Update()
 		case <-m.printTicker.C:
 			//log.Info("%v", m.recorder.Status())
-			m.recorder.LogJson()
+			m.recorder.LogJSON()
 		}
 	}
 }
 
+// Start monitoring
 func (m *Monitor) Start() {
 	go m.monitor()
 }

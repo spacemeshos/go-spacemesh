@@ -5,17 +5,27 @@ import (
 )
 
 var (
+	// ErrUnknownPriority indicates an incorrect attempt to make a write with an unknown priority
 	ErrUnknownPriority = errors.New("unknown priority")
-	ErrQueueClosed     = errors.New("the queue is closed")
+
+	// ErrQueueClosed indicates an attempt to read from a closed priority queue instance
+	ErrQueueClosed = errors.New("the queue is closed")
 )
 
+// Priority is the type that indicates the priority of different queues
 type Priority int
 
 const (
 	prioritiesCount = 3 // the number of priorities
-	High            = Priority(0)
-	Mid             = Priority(1)
-	Low             = Priority(2)
+
+	// High indicates the highest priority
+	High = Priority(0)
+
+	// Mid indicates the medium priority
+	Mid = Priority(1)
+
+	// Low indicates the lowest priority
+	Low = Priority(2)
 )
 
 // Queue is the priority queue

@@ -12,7 +12,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/oracle"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
@@ -204,7 +203,7 @@ func InitSingleInstance(cfg config.Config, i int, genesisTime string, rng *amcl.
 	swarm := net.NewNode()
 	dbStorepath := storePath
 
-	hareOracle := oracle.NewLocalOracle(rolacle, 5, nodeID)
+	hareOracle := newLocalOracle(rolacle, 5, nodeID)
 	hareOracle.Register(true, pub.String())
 
 	postClient, err := activation.NewPostClient(&smApp.Config.POST, util.Hex2Bytes(nodeID.Key))
