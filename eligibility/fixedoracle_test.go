@@ -115,7 +115,9 @@ func TestFixedRolacle_Eligible3(t *testing.T) {
 	}
 
 	exp := numOfClients / 2
-	oracle.Eligible(1, 1, exp, types.NodeId{Key: ""}, nil)
+	ok, err := oracle.Eligible(1, 1, exp, types.NodeId{Key: ""}, nil)
+	require.NoError(t, err)
+	require.False(t, ok)
 
 	hc := 0
 	for k := range oracle.honest {

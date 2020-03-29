@@ -19,14 +19,14 @@ type tortoise struct {
 }
 
 //NewTortoise returns a new Tortoise instance
-func NewTortoise(layerSize int, mdb *mesh.MeshDB, hdist int, lg log.Log) Tortoise {
-	alg := &tortoise{ninjaTortoise: NewNinjaTortoise(layerSize, mdb, hdist, lg)}
+func NewTortoise(layerSize int, mdb *mesh.DB, hdist int, lg log.Log) Tortoise {
+	alg := &tortoise{ninjaTortoise: newNinjaTortoise(layerSize, mdb, hdist, lg)}
 	alg.HandleIncomingLayer(mesh.GenesisLayer())
 	return alg
 }
 
-//NewRecoveredTortoise recovers a previously persisted tortoise copy from mesh.MeshDB
-func NewRecoveredTortoise(mdb *mesh.MeshDB, lg log.Log) Tortoise {
+//NewRecoveredTortoise recovers a previously persisted tortoise copy from mesh.DB
+func NewRecoveredTortoise(mdb *mesh.DB, lg log.Log) Tortoise {
 	tmp, err := RecoverTortoise(mdb)
 	if err != nil {
 		lg.Panic("could not recover tortoise state from disc ", err)
@@ -48,7 +48,7 @@ func (trtl *tortoise) HandleLateBlock(b *types.Block) (types.LayerID, types.Laye
 	l := types.NewLayer(b.Layer())
 	l.AddBlock(b)
 	oldPbase, newPbase := trtl.HandleIncomingLayer(l)
-	log.With().Info("late block ", log.LayerId(uint64(b.Layer())), log.BlockId(b.Id().String()))
+	log.With().Info("late block ", log.LayerID(uint64(b.Layer())), log.BlockID(b.Id().String()))
 	return oldPbase, newPbase
 }
 

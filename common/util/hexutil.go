@@ -14,10 +14,9 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-/*
-Package util implements hex encoding with 0x prefix.
-This encoding is used by the Ethereum RPC API to transport binary data in JSON payloads.
+package util
 
+/*
 Encoding Rules
 
 All hex data must have prefix "0x".
@@ -28,7 +27,6 @@ encodes as "0x".
 Integers are encoded using the least amount of digits (no leading zero digits). Their
 encoding may be of uneven length. The number zero encodes as "0x0".
 */
-package util
 
 import (
 	"encoding/hex"

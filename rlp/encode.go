@@ -24,13 +24,6 @@ import (
 	"sync"
 )
 
-var (
-	// Common encoded values.
-	// These are useful when implementing EncodeRLP.
-	EmptyString = []byte{0x80}
-	EmptyList   = []byte{0xC0}
-)
-
 // Encoder is implemented by types that require custom
 // encoding rules or want to encode private fields.
 type Encoder interface {
@@ -191,7 +184,6 @@ func (w *encbuf) encodeStringHeader(size int) {
 	if size < 56 {
 		w.str = append(w.str, 0x80+byte(size))
 	} else {
-		// TODO: encode to w.str directly
 		sizesize := putint(w.sizebuf[1:], uint64(size))
 		w.sizebuf[0] = 0xB7 + byte(sizesize)
 		w.str = append(w.str, w.sizebuf[:sizesize+1]...)
@@ -395,7 +387,6 @@ func writeUint(val reflect.Value, w *encbuf) error {
 		// fits single byte
 		w.str = append(w.str, byte(i))
 	} else {
-		// TODO: encode int to w.str directly
 		s := putint(w.sizebuf[1:], i)
 		w.sizebuf[0] = 0x80 + byte(s)
 		w.str = append(w.str, w.sizebuf[:s+1]...)
@@ -446,9 +437,9 @@ func writeByteArray(val reflect.Value, w *encbuf) error {
 	if !val.CanAddr() {
 		// Slice requires the value to be addressable.
 		// Make it addressable by copying.
-		copy := reflect.New(val.Type()).Elem()
-		copy.Set(val)
-		val = copy
+		dupe := reflect.New(val.Type()).Elem()
+		dupe.Set(val)
+		val = dupe
 	}
 	size := val.Len()
 	slice := val.Slice(0, size).Bytes()

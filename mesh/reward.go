@@ -26,7 +26,7 @@ func CalculateLayerReward(id types.LayerID, params Config) *big.Int {
 func calculateActualRewards(layer types.LayerID, rewards *big.Int, numBlocks *big.Int) *big.Int {
 	div, mod := new(big.Int).DivMod(rewards, numBlocks, new(big.Int))
 	log.With().Info("Reward calculated",
-		log.LayerId(uint64(layer)),
+		log.LayerID(uint64(layer)),
 		log.Uint64("total_reward", rewards.Uint64()),
 		log.Uint64("num_blocks", numBlocks.Uint64()),
 		log.Uint64("block_reward", div.Uint64()),

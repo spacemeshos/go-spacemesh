@@ -76,6 +76,21 @@ def wait_for_next_layer(namespace, cl_num, timeout):
 # TODO there might be a better place for a validation func than utils
 def validate_blocks_per_nodes(block_map, from_layer, to_layer, layers_per_epoch, layer_avg_size, num_miners,
                               ignore_lst=None):
+    """
+    validate average block creation per node epoch wise,
+    from_layer and to_layer must be a multiplication of layers_per_epoch.
+    First epoch will be ignored
+
+    :param block_map: dictionary, map between nodes to blocks each created
+    :param from_layer: int, starting layer to check from
+    :param to_layer: int, end layer to check up to
+    :param layers_per_epoch: int, number of layers per epoch
+    :param layer_avg_size: int, average number of blocks per layer
+    (layer_avg_size * layers_per_epoch will give us the number of blocks that should be created per epoch)
+    :param num_miners: int, number of miners
+    :param ignore_lst: list, a list of pod names to be ignored
+
+    """
     # layers count start from 0
     if from_layer == 0:
         print(f"refactoring starting layer from 0 to {layers_per_epoch}, not validating first epoch")

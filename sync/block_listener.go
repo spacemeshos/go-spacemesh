@@ -105,17 +105,17 @@ func (bl *BlockListener) handleBlock(data service.GossipMessage) {
 	)
 	//check if known
 	if _, err := bl.GetBlock(blk.Id()); err == nil {
-		bl.With().Info("we already know this block", log.BlockId(blk.Id().String()))
+		bl.With().Info("we already know this block", log.BlockID(blk.Id().String()))
 		return
 	}
 	txs, atxs, err := bl.blockSyntacticValidation(&blk)
 	if err != nil {
-		bl.With().Error("failed to validate block", log.BlockId(blk.Id().String()), log.Err(err))
+		bl.With().Error("failed to validate block", log.BlockID(blk.Id().String()), log.Err(err))
 		return
 	}
 	data.ReportValidation(config.NewBlockProtocol)
 	if err := bl.AddBlockWithTxs(&blk, txs, atxs); err != nil {
-		bl.With().Error("failed to add block to database", log.BlockId(blk.Id().String()), log.Err(err))
+		bl.With().Error("failed to add block to database", log.BlockID(blk.Id().String()), log.Err(err))
 		return
 	}
 

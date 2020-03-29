@@ -1,4 +1,3 @@
-import pprint
 import random
 
 from tests.ed25519.eddsa import genkeypair
@@ -6,6 +5,12 @@ import tests.tx_generator.config as conf
 
 
 class Accountant:
+    """
+    This object follows and records the current state since it has been created,
+    all new accounts and their info including nonce, balance etc.
+
+    """
+
     ACCOUNT = {"priv": "", "balance": 0, "nonce": 0, "recv": [], "send": []}
     RECV = {"from_acc": "", "amount": 0, "gasprice": 0}
     SEND = {"to": "", "amount": 0, "gasprice": 0}
@@ -65,7 +70,7 @@ class Accountant:
         pk = random.choice(list(self.accounts.keys()))
         return pk
 
-# ============= properties =============
+    # ============= properties =============
 
     def set_sending_acc_after_tx(self, frm, send_entry):
         self.set_nonce(frm)

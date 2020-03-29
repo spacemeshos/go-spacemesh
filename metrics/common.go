@@ -7,16 +7,25 @@ import (
 )
 
 const (
-	Namespace   = "spacemesh"
+	// Namespace is the basic namespace where all metrics are defined under.
+	Namespace = "spacemesh"
+	// ResultLabel makes a consistent name for results.
 	ResultLabel = "result"
 )
 
+// Enabled variable is used to turn on or of the metrics server. when set to false nop metrics are used.
 var Enabled = false
 
+// Gauge is a metric type used to represent a numeric value
 type Gauge metrics.Gauge
+
+// Counter is a metric type used to represent a monotonically increased/decreased numeric value.
 type Counter metrics.Counter
+
+// Histogram is a metric type used to sum up multiple observations over time.
 type Histogram metrics.Histogram
 
+// NewCounter creates a Counter metrics under the global namespace returns nop if metrics are disabled.
 func NewCounter(name, subsystem, help string, labels []string) Counter {
 	if !Enabled {
 		return nopCounter{}
@@ -24,6 +33,7 @@ func NewCounter(name, subsystem, help string, labels []string) Counter {
 	return prmkit.NewCounterFrom(prometheus.CounterOpts{Namespace: Namespace, Subsystem: subsystem, Name: name, Help: help}, labels)
 }
 
+// NewGauge creates a Gauge metrics under the global namespace returns nop if metrics are disabled.
 func NewGauge(name, subsystem, help string, labels []string) Gauge {
 	if !Enabled {
 		return nopGauge{}
@@ -31,6 +41,7 @@ func NewGauge(name, subsystem, help string, labels []string) Gauge {
 	return prmkit.NewGaugeFrom(prometheus.GaugeOpts{Namespace: Namespace, Subsystem: subsystem, Name: name, Help: help}, labels)
 }
 
+// NewHistogram creates a Histogram metrics under the global namespace returns nop if metrics are disabled.
 func NewHistogram(name, subsystem, help string, labels []string) Histogram {
 	if !Enabled {
 		return nopHistogram{}
@@ -38,11 +49,13 @@ func NewHistogram(name, subsystem, help string, labels []string) Histogram {
 	return prmkit.NewHistogramFrom(prometheus.HistogramOpts{Namespace: Namespace, Subsystem: subsystem, Name: name, Help: help}, labels)
 }
 
+// Cache is a basic cache interface that we can wrap to meter.
 type Cache interface {
 	Add(key, value interface{}) (evicted bool)
 	Get(key interface{}) (value interface{}, ok bool)
 }
 
+// MeteredCache is a wrapper around a cache that monitors size, hits and misses.
 type MeteredCache struct {
 	hits  Counter
 	miss  Counter
@@ -50,6 +63,7 @@ type MeteredCache struct {
 	cache Cache
 }
 
+// NewMeteredCache wraps cache with metrics are returns a monitored cache.
 func NewMeteredCache(cache Cache, subsystem, name, help string, labels []string) *MeteredCache {
 	total := NewCounter(name+"_queries", subsystem, help, labels)
 	hits := total.With(ResultLabel, "hit")
@@ -63,6 +77,7 @@ func NewMeteredCache(cache Cache, subsystem, name, help string, labels []string)
 	}
 }
 
+// Add adds a key-value to the cache and increases the counter if needed.
 func (m *MeteredCache) Add(key, value interface{}) bool {
 	evicted := m.cache.Add(key, value)
 	if !evicted {
@@ -71,8 +86,9 @@ func (m *MeteredCache) Add(key, value interface{}) bool {
 	return evicted
 }
 
+// Get returns a value from the cache and counts a hit or a miss.
 func (m *MeteredCache) Get(key interface{}) (value interface{}, ok bool) {
-	v, k := m.Get(key)
+	v, k := m.cache.Get(key)
 	if k {
 		m.hits.Add(1)
 	} else {

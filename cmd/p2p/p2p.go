@@ -1,3 +1,4 @@
+// package p2p cmd is the main executable for running p2p tests and simulations
 package main
 
 import (
@@ -83,7 +84,7 @@ func (app *P2PApp) Start(cmd *cobra.Command, args []string) {
 		log.Panic("Error starting p2p services, err: %v", err)
 	}
 
-	if app.Config.PprofHttpServer {
+	if app.Config.PprofHTTPServer {
 		pprof := &http.Server{}
 		pprof.Addr = ":6060"
 		pprof.Handler = nil

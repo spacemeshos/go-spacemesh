@@ -145,7 +145,7 @@ func (o *Oracle) buildVRFMessage(layer types.LayerID, round int32) ([]byte, erro
 	// get value from Beacon
 	v, err := o.beacon.Value(layer)
 	if err != nil {
-		o.With().Error("Could not get hare Beacon value", log.Err(err), log.LayerId(uint64(layer)), log.Int32("round", round))
+		o.With().Error("Could not get hare Beacon value", log.Err(err), log.LayerID(uint64(layer)), log.Int32("round", round))
 		o.lock.Unlock()
 		return nil, err
 	}
@@ -174,7 +174,7 @@ func (o *Oracle) activeSetSize(layer types.LayerID) (uint32, error) {
 			return uint32(o.genesisActiveSetSize), nil
 		}
 
-		o.With().Error("activeSetSize erred while calling actives func", log.Err(err), log.LayerId(uint64(layer)))
+		o.With().Error("activeSetSize erred while calling actives func", log.Err(err), log.LayerID(uint64(layer)))
 		return 0, err
 	}
 
@@ -308,7 +308,7 @@ func (o *Oracle) IsIdentityActiveOnConsensusView(edID string, layer types.LayerI
 		}
 
 		o.With().Error("IsIdentityActiveOnConsensusView erred while calling actives func",
-			log.LayerId(uint64(layer)), log.Err(err))
+			log.LayerID(uint64(layer)), log.Err(err))
 		return false, err
 	}
 	_, exist := actives[edID]

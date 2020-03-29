@@ -166,7 +166,7 @@ func (bo *MinerBlockOracle) getATXIDForEpoch(targetEpoch types.EpochId) (types.A
 		bo.log.With().Info("did not find ATX IDs for node", log.String("atx_node_id", bo.nodeID.ShortString()), log.Err(err))
 		return types.AtxId{}, err
 	}
-	bo.log.With().Info("latest atx id found", log.AtxId(latestATXID.ShortString()))
+	bo.log.With().Info("latest atx id found", log.AtxID(latestATXID.ShortString()))
 	return latestATXID, err
 }
 

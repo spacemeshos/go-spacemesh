@@ -1,3 +1,4 @@
+// package node contains the main executable for go-spacemesh node
 package node
 
 import "C"
@@ -272,9 +273,9 @@ func (app *SpacemeshApp) setupLogging() {
 
 	log.Info("%s", app.getAppInfo())
 
-	if app.Config.PublishEventsUrl != "" {
-		log.Info("pubsubing on %v", app.Config.PublishEventsUrl)
-		events.InitializeEventPubsub(app.Config.PublishEventsUrl)
+	if app.Config.PublishEventsURL != "" {
+		log.Info("pubsubing on %v", app.Config.PublishEventsURL)
+		events.InitializeEventPubsub(app.Config.PublishEventsURL)
 	}
 }
 
@@ -343,7 +344,7 @@ func (weakCoinStub) GetResult() bool {
 }
 
 func (app *SpacemeshApp) addLogger(name string, logger log.Log) log.Log {
-	log.LogLvl()
+	log.Level()
 	lvl := zap.NewAtomicLevel()
 	var err error
 
@@ -397,12 +398,12 @@ func (app *SpacemeshApp) addLogger(name string, logger log.Log) log.Log {
 	case AtxBuilderLogger:
 		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.AtxBuilderLoggerLevel))
 	default:
-		lvl.SetLevel(log.LogLvl())
+		lvl.SetLevel(log.Level())
 	}
 
 	if err != nil {
 		log.Error("cannot parse logging for %v error %v", name, err)
-		lvl.SetLevel(log.LogLvl())
+		lvl.SetLevel(log.Level())
 	}
 	app.loggers[name] = &lvl
 	return logger.SetLevel(&lvl).WithName(name)
@@ -437,7 +438,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId,
 
 	name := nodeID.ShortString()
 
-	lg := log.NewDefault(name).WithFields(log.NodeId(name))
+	lg := log.NewDefault(name).WithFields(log.NodeID(name))
 
 	app.log = app.addLogger(AppLogger, lg)
 
@@ -503,7 +504,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId,
 	if mdb.PersistentData() {
 		trtl = tortoise.NewRecoveredTortoise(mdb, app.addLogger(TrtlLogger, lg))
 		msh = mesh.NewRecoveredMesh(mdb, atxdb, app.Config.REWARD, trtl, app.txPool, atxpool, processor, app.addLogger(MeshLogger, lg))
-		go msh.CacheWarmUp()
+		go msh.CacheWarmUp(app.Config.LayerAvgSize)
 	} else {
 		trtl = tortoise.NewTortoise(int(layerSize), mdb, app.Config.Hdist, app.addLogger(TrtlLogger, lg))
 		msh = mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, app.txPool, atxpool, processor, app.addLogger(MeshLogger, lg))
@@ -597,7 +598,7 @@ func (app *SpacemeshApp) checkTimeDrifts() {
 }
 
 // HareFactory returns a hare consensus algorithm according to the parameters is app.Config.Hare.SuperHare
-func (app *SpacemeshApp) HareFactory(mdb *mesh.MeshDB, swarm service.Service, sgn hare.Signer, nodeID types.NodeId, syncer *sync.Syncer, msh *mesh.Mesh, hOracle hare.Rolacle, idStore *activation.IdentityStore, clock TickProvider, lg log.Log) HareService {
+func (app *SpacemeshApp) HareFactory(mdb *mesh.DB, swarm service.Service, sgn hare.Signer, nodeID types.NodeId, syncer *sync.Syncer, msh *mesh.Mesh, hOracle hare.Rolacle, idStore *activation.IdentityStore, clock TickProvider, lg log.Log) HareService {
 	if app.Config.HARE.SuperHare {
 		return turbohare.New(msh)
 	}
@@ -607,11 +608,11 @@ func (app *SpacemeshApp) HareFactory(mdb *mesh.MeshDB, swarm service.Service, sg
 		for _, b := range ids {
 			res, err := mdb.GetBlock(b)
 			if err != nil {
-				app.log.With().Error("output set block not in database", log.BlockId(b.String()), log.Err(err))
+				app.log.With().Error("output set block not in database", log.BlockID(b.String()), log.Err(err))
 				return false
 			}
 			if res == nil {
-				app.log.With().Error("output set block not in database (BUG BUG BUG - GetBlock return err nil and res nil)", log.BlockId(b.String()))
+				app.log.With().Error("output set block not in database (BUG BUG BUG - GetBlock return err nil and res nil)", log.BlockID(b.String()))
 				return false
 			}
 
@@ -819,9 +820,9 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 		}
 	}
 
-	if app.Config.CpuProfile != "" {
+	if app.Config.CPUProfile != "" {
 		log.Info("Starting cpu profile")
-		f, err := os.Create(app.Config.CpuProfile)
+		f, err := os.Create(app.Config.CPUProfile)
 		if err != nil {
 			log.Error("could not create CPU profile: ", err)
 		}
@@ -832,7 +833,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 		defer pprof.StopCPUProfile()
 	}
 
-	if app.Config.PprofHttpServer {
+	if app.Config.PprofHTTPServer {
 		log.Info("Starting pprof server")
 		srv := &http.Server{Addr: ":6060"}
 		defer srv.Shutdown(context.TODO())
