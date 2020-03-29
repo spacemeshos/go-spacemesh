@@ -129,14 +129,14 @@ func newMsg(hareMsg *Message, querier StateQuerier, layersPerEpoch uint16) (*Msg
 	res, err := querier.IsIdentityActiveOnConsensusView(pub.String(), types.LayerID(hareMsg.InnerMsg.InstanceID))
 	if err != nil {
 		log.With().Error("error while checking if identity is active", log.String("sender_id", pub.ShortString()),
-			log.Err(err), log.LayerId(uint64(hareMsg.InnerMsg.InstanceID)), log.String("msg_type", hareMsg.InnerMsg.Type.String()))
+			log.Err(err), log.LayerID(uint64(hareMsg.InnerMsg.InstanceID)), log.String("msg_type", hareMsg.InnerMsg.Type.String()))
 		return nil, errors.New("is identity active query failed")
 	}
 
 	// check query result
 	if !res {
 		log.With().Error("identity is not active", log.String("sender_id", pub.ShortString()),
-			log.LayerId(uint64(hareMsg.InnerMsg.InstanceID)), log.String("msg_type", hareMsg.InnerMsg.Type.String()))
+			log.LayerID(uint64(hareMsg.InnerMsg.InstanceID)), log.String("msg_type", hareMsg.InnerMsg.Type.String()))
 		return nil, errors.New("inactive identity")
 	}
 
@@ -249,7 +249,7 @@ func (proc *ConsensusProcess) SetInbox(inbox chan *Msg) {
 func (proc *ConsensusProcess) eventLoop() {
 	proc.With().Info("Consensus Process Started",
 		log.Int("Hare-N", proc.cfg.N), log.Int("f", proc.cfg.F), log.String("duration", (time.Duration(proc.cfg.RoundDuration)*time.Second).String()),
-		log.LayerId(uint64(proc.instanceID)), log.Int("exp_leaders", proc.cfg.ExpectedLeaders), log.String("current_set", proc.s.String()), log.Int("set_size", proc.s.Size()))
+		log.LayerID(uint64(proc.instanceID)), log.Int("exp_leaders", proc.cfg.ExpectedLeaders), log.String("current_set", proc.s.String()), log.Int("set_size", proc.s.Size()))
 
 	// start the timer
 	timer := time.NewTimer(time.Duration(proc.cfg.RoundDuration) * time.Second)
@@ -283,7 +283,7 @@ PreRound:
 	}
 	proc.preRoundTracker.FilterSet(proc.s)
 	if proc.s.Size() == 0 {
-		proc.Event().Error("Fatal: PreRound ended with empty set", log.LayerId(uint64(proc.instanceID)))
+		proc.Event().Error("Fatal: PreRound ended with empty set", log.LayerID(uint64(proc.instanceID)))
 	} else {
 		proc.Info("PreRound ended")
 	}
@@ -376,7 +376,7 @@ func (proc *ConsensusProcess) handleMessage(m *Msg) {
 		proc.With().Error("Error contextually validating message",
 			log.String("msg_type", mType), log.String("sender_id", m.PubKey.ShortString()),
 			log.Int32("current_k", proc.k), log.Int32("msg_k", m.InnerMsg.K),
-			log.LayerId(uint64(proc.instanceID)), log.Err(err))
+			log.LayerID(uint64(proc.instanceID)), log.Err(err))
 		return
 	}
 
@@ -388,7 +388,7 @@ func (proc *ConsensusProcess) handleMessage(m *Msg) {
 
 	// warn on late pre-round msgs
 	if m.InnerMsg.Type == pre && proc.k != -1 {
-		proc.With().Warning("encountered late PreRound message", log.String("sender_id", m.PubKey.ShortString()), log.LayerId(uint64(proc.instanceID)))
+		proc.With().Warning("encountered late PreRound message", log.String("sender_id", m.PubKey.ShortString()), log.LayerID(uint64(proc.instanceID)))
 	}
 
 	// valid, continue process msg by type
@@ -457,7 +457,7 @@ func (proc *ConsensusProcess) onRoundEnd() {
 			log.Bool("is_conflicting", proc.proposalTracker.IsConflicting()),
 			log.Uint64("layer_id", uint64(proc.instanceID)))
 	case commitRound:
-		proc.With().Info("commit round ended", log.LayerId(uint64(proc.instanceID)))
+		proc.With().Info("commit round ended", log.LayerID(uint64(proc.instanceID)))
 	}
 }
 
@@ -691,7 +691,7 @@ func (proc *ConsensusProcess) processNotifyMsg(msg *Msg) {
 	// enough notifications, should terminate
 	proc.s = s // update to the agreed set
 	proc.Event().Info("Consensus process terminated", log.String("current_set", proc.s.String()),
-		log.LayerId(uint64(proc.instanceID)), log.Int("set_size", proc.s.Size()))
+		log.LayerID(uint64(proc.instanceID)), log.Int("set_size", proc.s.Size()))
 	proc.report(completed)
 	close(proc.CloseChannel())
 	proc.terminating = true

@@ -664,7 +664,7 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
 	err = atxdb.SyntacticallyValidateAtx(atx)
-	assert.EqualError(t, err, fmt.Sprintf("previous ATX belongs to different miner. atx.ID: %v, atx.NodeId: %v, prevAtx.NodeId: %v", atx.ShortString(), atx.NodeId.Key, atxs[0].NodeId.Key))
+	assert.EqualError(t, err, fmt.Sprintf("previous ATX belongs to different miner. atx.ID: %v, atx.NodeID: %v, prevAtx.NodeID: %v", atx.ShortString(), atx.NodeId.Key, atxs[0].NodeId.Key))
 
 	// Wrong layerId.
 	posAtx2 := types.NewActivationTxForTests(idx2, 0, *types.EmptyAtxId, 1020, 0, *types.EmptyAtxId, coinbase, 3, blocks, npst)
@@ -750,7 +750,7 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	err = atxdb.SyntacticallyValidateAtx(atx)
 	assert.EqualError(t, err, "prevAtx epoch (0, layer 100) isn't older than current atx epoch (0, layer 100)")
 
-	// NodeId and etracted pubkey dont match
+	// NodeID and etracted pubkey dont match
 	atx = types.NewActivationTxForTests(idx2, 0, *types.EmptyAtxId, 1012, 0, posAtx.Id(), coinbase, 3, []types.BlockID{}, &types.NIPST{})
 	atx.Commitment = commitment
 	atx.CommitmentMerkleRoot = append([]byte{}, commitment.MerkleRoot...)

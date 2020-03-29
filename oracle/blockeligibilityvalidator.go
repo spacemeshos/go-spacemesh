@@ -46,7 +46,7 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 	epochNumber := block.LayerIndex.GetEpoch(v.layersPerEpoch)
 	if epochNumber == 0 {
 		v.log.With().Warning("skipping epoch 0 block validation.",
-			log.BlockId(block.Id().String()), log.LayerId(block.LayerIndex.Uint64()))
+			log.BlockID(block.Id().String()), log.LayerID(block.LayerIndex.Uint64()))
 		return true, nil
 	}
 	if block.ATXID == *types.EmptyAtxId {
@@ -63,7 +63,7 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 	}
 	if epochNumber.IsGenesis() {
 		v.log.With().Info("using genesisActiveSetSize",
-			log.BlockId(block.ShortString()), log.Uint32("genesisActiveSetSize", v.genesisActiveSetSize))
+			log.BlockID(block.ShortString()), log.Uint32("genesisActiveSetSize", v.genesisActiveSetSize))
 		activeSetSize = v.genesisActiveSetSize
 	}
 

@@ -3,11 +3,12 @@
 package log
 
 import (
-	"go.uber.org/zap/zapcore"
-	"gopkg.in/natefinch/lumberjack.v2"
 	"io"
 	"os"
 	"path/filepath"
+
+	"go.uber.org/zap/zapcore"
+	"gopkg.in/natefinch/lumberjack.v2"
 
 	"go.uber.org/zap"
 )
@@ -20,34 +21,31 @@ var debugMode = false
 // should we format out logs in json
 var jsonLog = false
 
-var DebugLevel = zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
+var debugLevel = zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
 	return lvl >= zapcore.DebugLevel
 })
 
-var InfoLevel = zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
+var infoLevel = zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
 	return lvl >= zapcore.InfoLevel
-})
-
-var ErrorLevel = zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
-	return lvl >= zapcore.ErrorLevel
 })
 
 func logLevel() zap.LevelEnablerFunc {
 	if debugMode {
-		return DebugLevel
-	} else {
-		return InfoLevel
+		return debugLevel
 	}
+	return infoLevel
+
 }
 
-func LogLvl() zapcore.Level {
+// Level returns the zapcore level of logging.
+func Level() zapcore.Level {
 	if debugMode {
 		return zapcore.DebugLevel
-	} else {
-		return zapcore.InfoLevel
 	}
+	return zapcore.InfoLevel
 }
 
+// Logger is an interface for our logging API.
 type Logger interface {
 	Info(format string, args ...interface{})
 	Debug(format string, args ...interface{})
@@ -77,6 +75,7 @@ func DebugMode(mode bool) {
 	debugMode = mode
 }
 
+// JSONLog sets logging to be in JSON format or not.
 func JSONLog(b bool) {
 	jsonLog = b
 }
@@ -93,40 +92,18 @@ func New(module string, dataFolderPath string, logFileName string) Log {
 	if dataFolderPath != "" && logFileName != "" {
 		wr := getFileWriter(dataFolderPath, logFileName)
 		fs := zapcore.AddSync(wr)
-		cores = append(cores, zapcore.NewCore(enc, fs, DebugLevel))
+		cores = append(cores, zapcore.NewCore(enc, fs, debugLevel))
 	}
 
 	core := zapcore.NewTee(cores...)
 
 	log := zap.New(core)
 	log = log.Named(module)
-	lvl := zap.NewAtomicLevelAt(LogLvl())
+	lvl := zap.NewAtomicLevelAt(Level())
 	return Log{log, log.Sugar(), &lvl}
 }
 
-// New creates a logger for a module. e.g. p2p instance logger.
-func NewWithErrorLevel(module string, dataFolderPath string, logFileName string) Log {
-	var cores []zapcore.Core
-
-	consoleSyncer := zapcore.AddSync(os.Stdout)
-	enc := encoder()
-
-	cores = append(cores, zapcore.NewCore(enc, consoleSyncer, ErrorLevel))
-
-	if dataFolderPath != "" && logFileName != "" {
-		wr := getFileWriter(dataFolderPath, logFileName)
-		fs := zapcore.AddSync(wr)
-		cores = append(cores, zapcore.NewCore(enc, fs, DebugLevel))
-	}
-
-	core := zapcore.NewTee(cores...)
-
-	log := zap.New(core)
-	log = log.Named(module)
-	lvl := zap.NewAtomicLevelAt(zap.ErrorLevel)
-	return Log{log, log.Sugar(), &lvl}
-}
-
+// NewDefault creates a Log with not file output.
 func NewDefault(module string) Log {
 	return New(module, "", "")
 }
@@ -173,14 +150,17 @@ func Warning(msg string, args ...interface{}) {
 	AppLog.Warning(msg, args...)
 }
 
-func With() fieldLogger {
-	return fieldLogger{AppLog.logger}
+// With returns a FieldLogger which you can append fields to.
+func With() FieldLogger {
+	return FieldLogger{AppLog.logger}
 }
 
-func Event() fieldLogger {
+// Event returns a field logger with the Event field set to true.
+func Event() FieldLogger {
 	return AppLog.Event()
 }
 
+// Panic writes the log message and then panics.
 func Panic(msg string, args ...interface{}) {
 	AppLog.Panic(msg, args...)
 }
