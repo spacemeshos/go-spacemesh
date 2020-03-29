@@ -8,7 +8,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/pending_txs"
+	"github.com/spacemeshos/go-spacemesh/pendingtxs"
 	"math/big"
 	"path/filepath"
 	"strconv"
@@ -487,19 +487,19 @@ func (m *DB) addToAccountTxs(addr types.Address, accountTxs []*types.Transaction
 	return nil
 }
 
-func (m *DB) removeFromUnappliedTxs(accepted []*types.Transaction, layer types.LayerID) (grouped map[types.Address][]*types.Transaction, accounts map[types.Address]struct{}) {
+func (m *DB) removeFromUnappliedTxs(accepted []*types.Transaction) (grouped map[types.Address][]*types.Transaction, accounts map[types.Address]struct{}) {
 	grouped = groupByOrigin(accepted)
 	accounts = make(map[types.Address]struct{})
 	for account := range grouped {
 		accounts[account] = struct{}{}
 	}
 	for account := range accounts {
-		m.removeFromAccountTxs(account, grouped, layer)
+		m.removeFromAccountTxs(account, grouped)
 	}
 	return
 }
 
-func (m *DB) removeFromAccountTxs(account types.Address, gAccepted map[types.Address][]*types.Transaction, layer types.LayerID) {
+func (m *DB) removeFromAccountTxs(account types.Address, gAccepted map[types.Address][]*types.Transaction) {
 	m.unappliedTxsMutex.Lock()
 	defer m.unappliedTxsMutex.Unlock()
 
@@ -507,13 +507,13 @@ func (m *DB) removeFromAccountTxs(account types.Address, gAccepted map[types.Add
 	pending, err := m.getAccountPendingTxs(account)
 	if err != nil {
 		m.With().Error("failed to get account pending txs",
-			log.LayerId(uint64(layer)), log.String("address", account.Short()), log.Err(err))
+			log.String("address", account.Short()), log.Err(err))
 		return
 	}
-	pending.Remove(gAccepted[account], layer)
+	pending.RemoveAccepted(gAccepted[account])
 	if err := m.storeAccountPendingTxs(account, pending); err != nil {
 		m.With().Error("failed to store account pending txs",
-			log.LayerId(uint64(layer)), log.String("address", account.Short()), log.Err(err))
+			log.String("address", account.Short()), log.Err(err))
 	}
 }
 
@@ -535,7 +535,7 @@ func (m *DB) removeRejectedFromAccountTxs(account types.Address, rejected map[ty
 	}
 }
 
-func (m *DB) storeAccountPendingTxs(account types.Address, pending *pending_txs.AccountPendingTxs) error {
+func (m *DB) storeAccountPendingTxs(account types.Address, pending *pendingtxs.AccountPendingTxs) error {
 	if pending.IsEmpty() {
 		if err := m.unappliedTxs.Delete(account.Bytes()); err != nil {
 			return fmt.Errorf("failed to delete empty pending txs for account %v: %v", account.Short(), err)
@@ -550,15 +550,15 @@ func (m *DB) storeAccountPendingTxs(account types.Address, pending *pending_txs.
 	return nil
 }
 
-func (m *DB) getAccountPendingTxs(addr types.Address) (*pending_txs.AccountPendingTxs, error) {
+func (m *DB) getAccountPendingTxs(addr types.Address) (*pendingtxs.AccountPendingTxs, error) {
 	accountTxsBytes, err := m.unappliedTxs.Get(addr.Bytes())
 	if err != nil && err != database.ErrNotFound {
 		return nil, fmt.Errorf("failed to get mesh txs for account %s", addr.Short())
 	}
 	if err == database.ErrNotFound {
-		return pending_txs.NewAccountPendingTxs(), nil
+		return pendingtxs.NewAccountPendingTxs(), nil
 	}
-	var pending pending_txs.AccountPendingTxs
+	var pending pendingtxs.AccountPendingTxs
 	if err := types.BytesToInterface(accountTxsBytes, &pending); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal account pending txs: %v", err)
 	}

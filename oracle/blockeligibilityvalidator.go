@@ -7,19 +7,22 @@ import (
 	"github.com/spacemeshos/sha256-simd"
 )
 
+// VRFValidationFunction is the VRF validation function.
 type VRFValidationFunction func(message, signature, publicKey []byte) (bool, error)
 
+// BlockEligibilityValidator holds all the dependencies for validating block eligibility.
 type BlockEligibilityValidator struct {
 	committeeSize        uint32
 	genesisActiveSetSize uint32
 	layersPerEpoch       uint16
-	activationDb         ActivationDb
+	activationDb         activationDB
 	beaconProvider       *EpochBeaconProvider
 	validateVRF          VRFValidationFunction
 	log                  log.Log
 }
 
-func NewBlockEligibilityValidator(committeeSize, genesisActiveSetSize uint32, layersPerEpoch uint16, activationDb ActivationDb,
+// NewBlockEligibilityValidator returns a new BlockEligibilityValidator.
+func NewBlockEligibilityValidator(committeeSize, genesisActiveSetSize uint32, layersPerEpoch uint16, activationDb activationDB,
 	beaconProvider *EpochBeaconProvider, validateVRF VRFValidationFunction, log log.Log) *BlockEligibilityValidator {
 
 	return &BlockEligibilityValidator{
@@ -33,6 +36,8 @@ func NewBlockEligibilityValidator(committeeSize, genesisActiveSetSize uint32, la
 	}
 }
 
+// BlockSignedAndEligible checks that a given block is signed and eligible. It returns true with no error or false and
+// an error that explains why validation failed.
 func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (bool, error) {
 	var activeSetSize uint32
 	var vrfPubkey []byte

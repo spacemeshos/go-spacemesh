@@ -7,7 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/pending_txs"
+	"github.com/spacemeshos/go-spacemesh/pendingtxs"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
@@ -407,7 +407,7 @@ func TestMeshDB_UnappliedTxs(t *testing.T) {
 
 	mdb.removeFromUnappliedTxs([]*types.Transaction{
 		newTx(r, signer2, 0, 100),
-	}, 1)
+	})
 
 	txns1 = getTxns(r, mdb, origin1)
 	r.Len(txns1, 2)
@@ -464,7 +464,7 @@ func getTxns(r *require.Assertions, mdb *DB, origin types.Address) []TinyTx {
 		return []TinyTx{}
 	}
 	r.NoError(err)
-	var txns pending_txs.AccountPendingTxs
+	var txns pendingtxs.AccountPendingTxs
 	err = types.BytesToInterface(txnsB, &txns)
 	r.NoError(err)
 	var ret []TinyTx
