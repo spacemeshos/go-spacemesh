@@ -15,7 +15,8 @@ import (
 
 // TODO : implement delays?
 
-// Simulator is a p2p node factory and message bridge
+// Simulator is a p2p node factory and message bridge that is used to simulate the p2p layer provided
+// to protocols without using real network or p2p code. it resembles the `Service` interface API.
 type Simulator struct {
 	io.Closer
 	mutex                 sync.RWMutex

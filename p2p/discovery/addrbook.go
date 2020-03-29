@@ -77,7 +77,8 @@ const (
 	getAddrPercent = 23
 )
 
-// addrBook provides a concurrency safe address manager for caching potential peers.
+// addrBook provides a concurrency safe address manager for caching potential
+// peers on the network. it is inspired by bitcoin's addrBook.
 type addrBook struct {
 	logger log.Log
 	mtx    sync.RWMutex
@@ -516,6 +517,7 @@ func (a *addrBook) Stop() {
 	a.logger.Info("Address manager shutting down")
 	close(a.quit)
 	a.wg.Wait()
+	return
 }
 
 // expireNew makes space in the new buckets by expiring the really bad entries.

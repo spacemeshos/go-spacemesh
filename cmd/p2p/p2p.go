@@ -31,16 +31,19 @@ func init() {
 	cmdp.AddCommands(Cmd)
 }
 
+// P2PApp is an app struct used to run only p2p functionality
 type P2PApp struct {
 	*cmdp.BaseApp
 	p2p     p2p.Service
 	closers []io.Closer
 }
 
+// NewP2PApp creates the base app
 func NewP2PApp() *P2PApp {
 	return &P2PApp{BaseApp: cmdp.NewBaseApp()}
 }
 
+// Cleanup closes all services
 func (app *P2PApp) Cleanup() {
 	for _, c := range app.closers {
 		err := c.Close()
@@ -51,6 +54,7 @@ func (app *P2PApp) Cleanup() {
 	// TODO: move to array of cleanup functions and execute all here
 }
 
+// Start creates a p2p instance and starts it with testing features enabled by the config.
 func (app *P2PApp) Start(cmd *cobra.Command, args []string) {
 	// init p2p services
 	log.JSONLog(true)
@@ -80,7 +84,7 @@ func (app *P2PApp) Start(cmd *cobra.Command, args []string) {
 	}
 
 	if app.Config.PprofHttpServer {
-		pprof := &http.Server{} //http.ListenAndServe(":6060", nil)
+		pprof := &http.Server{}
 		pprof.Addr = ":6060"
 		pprof.Handler = nil
 		go func() { err := pprof.ListenAndServe(); log.Error("error running pprof server err=%v", err) }()

@@ -9,7 +9,7 @@ import (
 
 // IdentityStore stores couples of identities and used to retrieve bls identity by provided ed25519 identity
 type IdentityStore struct {
-	//todo: think about whether we need one db or several
+	//todo: think about whether we need one db or several(#1922)
 	ids database.Database
 }
 

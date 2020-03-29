@@ -302,7 +302,7 @@ func (msh *Mesh) reInsertTxsToPool(validBlocks, invalidBlocks []*types.Block, l 
 	seenTxIds := make(map[types.TransactionId]struct{})
 	uniqueTxIds(validBlocks, seenTxIds)
 	returnedTxs := msh.getTxs(uniqueTxIds(invalidBlocks, seenTxIds), l)
-	grouped, accounts := msh.removeFromUnappliedTxs(returnedTxs, l)
+	grouped, accounts := msh.removeFromUnappliedTxs(returnedTxs)
 	for account := range accounts {
 		msh.removeRejectedFromAccountTxs(account, grouped, l)
 	}
@@ -484,7 +484,7 @@ func (msh *Mesh) pushTransactions(l *types.Layer) {
 		// TODO: We want to panic here once we have a way to "remember" that we didn't apply these txs
 		//  e.g. persist the last layer transactions were applied from and use that instead of `oldBase`
 	}
-	msh.removeFromUnappliedTxs(validBlockTxs, l.Index())
+	msh.removeFromUnappliedTxs(validBlockTxs)
 	msh.With().Info("applied transactions",
 		log.Int("valid_block_txs", len(validBlockTxs)),
 		log.LayerId(l.Index().Uint64()),
