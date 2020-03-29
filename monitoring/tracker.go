@@ -2,7 +2,7 @@ package monitoring
 
 import "math"
 
-// Tracker tracks uint64 values
+// Tracker tracks uint64 values and provides stats on the tracked values: min, max, avg
 type Tracker struct {
 	data []uint64
 	max  uint64

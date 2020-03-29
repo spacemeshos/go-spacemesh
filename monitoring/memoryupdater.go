@@ -17,7 +17,7 @@ func bytesToMBFormmater(x uint64) string {
 	return fmt.Sprintf("%vMB", x/1024/1024)
 }
 
-// MemoryUpdater tracks mem stats
+// MemoryUpdater tracks mem stats provided by runtime.ReadMemStats such as Alloc, NumGoroutine etc
 type MemoryUpdater struct {
 	memTracker   map[string]*Tracker
 	formatters   map[string]formatter
@@ -67,7 +67,7 @@ func (mu *MemoryUpdater) Update() {
 	mu.recordsCount++
 }
 
-// Status returns a string description of the current status
+// Status returns a string description of the stats collected for the memory trackers <min, max, avg>
 func (mu *MemoryUpdater) Status() string {
 	s := fmt.Sprintf("Records count=%v\n", mu.recordsCount)
 
