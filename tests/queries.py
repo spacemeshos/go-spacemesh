@@ -169,7 +169,7 @@ def poll_query_message(indx, namespace, client_po_name, fields, findFails=False,
 def query_message(indx, namespace, client_po_name, fields, find_fails=False, start_time=None, queries=None,
                   is_print=True):
     """
-    Send a query and return its' hits, this function is used by most of the query functions.
+    Send a query and return its hits, this function is used by most of the query functions.
     Queries are sent using "match_phrase" so strings may match partially, case insensitive
 
     :param indx: string, current index
