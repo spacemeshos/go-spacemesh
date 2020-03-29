@@ -29,6 +29,9 @@ import (
 // ConnectingTimeout is the timeout we wait when trying to connect a neighborhood
 const ConnectingTimeout = 20 * time.Second //todo: add to the config
 
+// UPNPRetries is the number of times to retry obtaining a port due to a UPnP failure
+const UPNPRetries = 20
+
 type cPool interface {
 	GetConnection(address inet.Addr, pk p2pcrypto.PublicKey) (net.Connection, error)
 	GetConnectionIfExists(pk p2pcrypto.PublicKey) (net.Connection, error)
@@ -919,6 +922,7 @@ func (s *Switch) getListeners(
 		}
 	}
 
+	upnpFails := 0
 	for {
 		tcpAddr := &inet.TCPAddr{IP: listeningIP, Port: port}
 		tcpListener, err := getTCPListener(tcpAddr)
@@ -944,22 +948,27 @@ func (s *Switch) getListeners(
 		if gateway != nil {
 			err := nat_traversal.AcquirePortFromGateway(gateway, uint16(port))
 			if err != nil {
-				if err := tcpListener.Close(); err != nil {
-					s.logger.With().Error("error closing tcp listener", log.Err(err))
-				}
-				if err := udpListener.Close(); err != nil {
-					s.logger.With().Error("error closing udp listener", log.Err(err))
+				if upnpFails >= UPNPRetries {
+					return tcpListener, udpListener, nil
 				}
 				if randomPort {
+					if err := tcpListener.Close(); err != nil {
+						s.logger.With().Error("error closing tcp listener", log.Err(err))
+					}
+					if err := udpListener.Close(); err != nil {
+						s.logger.With().Error("error closing udp listener", log.Err(err))
+					}
 					port = 0
+					upnpFails++
 					continue
 				}
-				return nil, nil, fmt.Errorf("failed to acquire requested port using UPnP: %v", err)
-			}
-			s.releaseUpnp = func() {
-				err := gateway.Clear(uint16(port))
-				if err != nil {
-					s.logger.Warning("failed to release acquired UPnP port %v: %v", port, err)
+				s.logger.Warning("failed to acquire requested port using UPnP: %v", err)
+			} else {
+				s.releaseUpnp = func() {
+					err := gateway.Clear(uint16(port))
+					if err != nil {
+						s.logger.Warning("failed to release acquired UPnP port %v: %v", port, err)
+					}
 				}
 			}
 		}

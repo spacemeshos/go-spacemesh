@@ -1262,8 +1262,7 @@ func TestSwarm_getListeners_specificPortUnavailable(t *testing.T) {
 		1337: {udpResponse{}},
 	}
 
-	r.EqualError(testGetListenersScenario(t, port, tcpResponses, udpResponses, createDiscoverUpnpFunc(nil, 1337, ErrPortUnavailable), true),
-		"failed to acquire requested port using UPnP: failed to forward port 1337: failed to acquire port")
+	r.NoError(testGetListenersScenario(t, port, tcpResponses, udpResponses, createDiscoverUpnpFunc(nil, 1337, ErrPortUnavailable), true))
 }
 
 func TestSwarm_getListeners_upnpMoreCases(t *testing.T) {

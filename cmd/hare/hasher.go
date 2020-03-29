@@ -1,4 +1,4 @@
-package oracle
+package main
 
 import (
 	"hash/fnv"
