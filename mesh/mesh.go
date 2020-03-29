@@ -86,7 +86,7 @@ type blockBuilder interface {
 //Mesh is the logic layer above our meshdb database
 type Mesh struct {
 	log.Log
-	*MeshDB
+	*DB
 	AtxDB
 	txProcessor
 	Validator
@@ -111,7 +111,7 @@ type Mesh struct {
 }
 
 //NewMesh creates a new instant of a mesh
-func NewMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh tortoise, txInvalidator txMemPoolInValidator, atxInvalidator atxMemPoolInValidator, pr txProcessor, logger log.Log) *Mesh {
+func NewMesh(db *DB, atxDb AtxDB, rewardConfig Config, mesh tortoise, txInvalidator txMemPoolInValidator, atxInvalidator atxMemPoolInValidator, pr txProcessor, logger log.Log) *Mesh {
 	ll := &Mesh{
 		Log:             logger,
 		trtl:            mesh,
@@ -119,7 +119,7 @@ func NewMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh tortoise, txInva
 		atxInvalidator:  atxInvalidator,
 		txProcessor:     pr,
 		done:            make(chan struct{}),
-		MeshDB:          db,
+		DB:              db,
 		config:          rewardConfig,
 		AtxDB:           atxDb,
 		nextValidLayers: make(map[types.LayerID]*types.Layer),
@@ -131,7 +131,7 @@ func NewMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh tortoise, txInva
 }
 
 //NewRecoveredMesh creates new instance of mesh with recovered mesh data fom database
-func NewRecoveredMesh(db *MeshDB, atxDb AtxDB, rewardConfig Config, mesh tortoise, txInvalidator txMemPoolInValidator, atxInvalidator atxMemPoolInValidator, pr txProcessor, logger log.Log) *Mesh {
+func NewRecoveredMesh(db *DB, atxDb AtxDB, rewardConfig Config, mesh tortoise, txInvalidator txMemPoolInValidator, atxInvalidator atxMemPoolInValidator, pr txProcessor, logger log.Log) *Mesh {
 	msh := NewMesh(db, atxDb, rewardConfig, mesh, txInvalidator, atxInvalidator, pr, logger)
 
 	latest, err := db.general.Get(constLATEST)
@@ -509,7 +509,7 @@ func (msh *Mesh) GetProcessedLayer(i types.LayerID) (*types.Layer, error) {
 // ***USED ONLY FOR TESTS***
 func (msh *Mesh) AddBlock(blk *types.Block) error {
 	msh.Debug("add block %d", blk.Id())
-	if err := msh.MeshDB.AddBlock(blk); err != nil {
+	if err := msh.DB.AddBlock(blk); err != nil {
 		msh.Warning("failed to add block %v  %v", blk.Id(), err)
 		return err
 	}
@@ -573,7 +573,7 @@ func (msh *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.Transaction, atx
 	}
 
 	// Store block (delete if storing ATXs fails)
-	if err := msh.MeshDB.AddBlock(blk); err != nil && err != ErrAlreadyExist {
+	if err := msh.DB.AddBlock(blk); err != nil && err != ErrAlreadyExist {
 		msh.With().Error("failed to add block", log.BlockID(blk.Id().String()), log.Err(err))
 		return err
 	}

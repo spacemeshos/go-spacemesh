@@ -47,7 +47,7 @@ func (m *ContextualValidityMock) Close() {
 }
 
 type MeshValidatorMock struct {
-	mdb *MeshDB
+	mdb *DB
 }
 
 func (m *MeshValidatorMock) Persist() error {
@@ -147,7 +147,7 @@ func TestLayers_AddBlock(t *testing.T) {
 	block2 := types.NewExistingBlock(2, []byte("data2"))
 	block3 := types.NewExistingBlock(3, []byte("data3"))
 
-	addTransactionsWithFee(t, layers.MeshDB, block1, 4, rand.Int63n(100))
+	addTransactionsWithFee(t, layers.DB, block1, 4, rand.Int63n(100))
 
 	err := layers.AddBlock(block1)
 	assert.NoError(t, err)
@@ -263,7 +263,7 @@ func TestLayers_WakeUp(t *testing.T) {
 	assert.True(t, bytes.Compare(rBlock2.MiniBlock.Data, []byte("data2")) == 0, "block content was wrong")
 	assert.True(t, len(rBlock1.AtxIds) == len(block1.AtxIds))
 
-	recoverdMesh := NewMesh(layers.MeshDB, &AtxDbMock{}, ConfigTst(), &MeshValidatorMock{mdb: layers.MeshDB}, MockTxMemPool{}, MockAtxMemPool{}, &MockState{}, log.New("", "", ""))
+	recoverdMesh := NewMesh(layers.DB, &AtxDbMock{}, ConfigTst(), &MeshValidatorMock{mdb: layers.DB}, MockTxMemPool{}, MockAtxMemPool{}, &MockState{}, log.New("", "", ""))
 
 	rBlock2, err = recoverdMesh.GetBlock(block2.Id())
 	assert.NoError(t, err)
@@ -359,7 +359,7 @@ func TestMesh_AddBlockWithTxs_PushTransactions_UpdateUnappliedTxs(t *testing.T) 
 	addBlockWithTxs(r, msh, layerID, false, tx4, tx5)
 	addBlockWithTxs(r, msh, layerID, false, tx5)
 
-	txns := getTxns(r, msh.MeshDB, origin)
+	txns := getTxns(r, msh.DB, origin)
 	r.Len(txns, 5)
 	for i := 0; i < 5; i++ {
 		r.Equal(2468+i, int(txns[i].Nonce))
@@ -371,7 +371,7 @@ func TestMesh_AddBlockWithTxs_PushTransactions_UpdateUnappliedTxs(t *testing.T) 
 
 	r.ElementsMatch(GetTransactionIds(tx5), GetTransactionIds(blockBuilder.txs...))
 
-	txns = getTxns(r, msh.MeshDB, origin)
+	txns = getTxns(r, msh.DB, origin)
 	r.Empty(txns)
 }
 

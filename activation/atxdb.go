@@ -48,7 +48,7 @@ type ActivationDb struct {
 	idStore
 	atxs              database.Database
 	atxHeaderCache    AtxCache
-	meshDb            *mesh.MeshDB
+	meshDb            *mesh.DB
 	LayersPerEpoch    uint16
 	nipstValidator    nipstValidator
 	pendingActiveSet  map[types.Hash12]*sync.Mutex
@@ -61,7 +61,7 @@ type ActivationDb struct {
 
 // NewActivationDb creates a new struct of type ActivationDb, this struct will hold the atxs received from all nodes and
 // their validity
-func NewActivationDb(dbstore database.Database, idstore idStore, meshDb *mesh.MeshDB, layersPerEpoch uint16, nipstValidator nipstValidator, log log.Log) *ActivationDb {
+func NewActivationDb(dbstore database.Database, idstore idStore, meshDb *mesh.DB, layersPerEpoch uint16, nipstValidator nipstValidator, log log.Log) *ActivationDb {
 	db := &ActivationDb{
 		idStore:          idstore,
 		atxs:             dbstore,
