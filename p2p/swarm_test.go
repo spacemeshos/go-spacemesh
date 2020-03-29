@@ -1209,7 +1209,7 @@ func TestSwarm_getListeners_randomPort(t *testing.T) {
 		1234: {udpResponse{}},
 		1337: {udpResponse{}},
 	}
-	f := func() (igd nattraversal.UpnpGateway, err error) {
+	f := func() (igd nattraversal.UPNPGateway, err error) {
 		return &UpnpGatewayMock{errs: map[uint16][]error{1234: {ErrPortUnavailable}, 1337: {nil}}}, nil
 	}
 
@@ -1306,7 +1306,7 @@ func testGetListenersScenario(
 	port int,
 	tcpResponses map[int][]tcpResponse,
 	udpResponses map[int][]udpResponse,
-	discoverUpnp func() (igd nattraversal.UpnpGateway, err error),
+	discoverUpnp func() (igd nattraversal.UPNPGateway, err error),
 	acquirePort bool,
 ) error {
 
@@ -1370,8 +1370,8 @@ func (u *UpnpGatewayMock) Clear(port uint16) error {
 	return nil
 }
 
-func createDiscoverUpnpFunc(funcErr error, port uint16, gatewayForwardErr error) func() (igd nattraversal.UpnpGateway, err error) {
-	return func() (igd nattraversal.UpnpGateway, err error) {
+func createDiscoverUpnpFunc(funcErr error, port uint16, gatewayForwardErr error) func() (igd nattraversal.UPNPGateway, err error) {
+	return func() (igd nattraversal.UPNPGateway, err error) {
 		if funcErr != nil {
 			return nil, funcErr
 		}

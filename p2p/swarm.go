@@ -906,12 +906,12 @@ var listeningIp = inet.ParseIP("0.0.0.0")
 func (s *swarm) getListeners(
 	getTcpListener func(tcpAddr *inet.TCPAddr) (inet.Listener, error),
 	getUdpListener func(udpAddr *inet.UDPAddr) (net.UDPListener, error),
-	discoverUpnpGateway func() (nattraversal.UpnpGateway, error),
+	discoverUpnpGateway func() (nattraversal.UPNPGateway, error),
 ) (inet.Listener, net.UDPListener, error) {
 
 	port := s.config.TCPPort
 	randomPort := port == 0
-	var gateway nattraversal.UpnpGateway
+	var gateway nattraversal.UPNPGateway
 	if s.config.AcquirePort {
 		s.logger.Info("Trying to acquire ports using UPnP, this might take a while..")
 		var err error
@@ -985,6 +985,6 @@ func getTCPListener(tcpAddr *inet.TCPAddr) (inet.Listener, error) {
 	return inet.Listen("tcp", tcpAddr.String())
 }
 
-func discoverUPnPGateway() (igd nattraversal.UpnpGateway, err error) {
-	return nattraversal.DiscoverUPnPGateway()
+func discoverUPnPGateway() (igd nattraversal.UPNPGateway, err error) {
+	return nattraversal.DiscoverUPNPGateway()
 }

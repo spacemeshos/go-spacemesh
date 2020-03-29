@@ -40,20 +40,20 @@ func getPortDesc() string {
 	return portDesc
 }
 
-// UpnpGateway is the interface of a UPnP gateway. It supports forwarding a port and clearing a forwarding rule.
-type UpnpGateway interface {
+// UPNPGateway is the interface of a UPnP gateway. It supports forwarding a port and clearing a forwarding rule.
+type UPNPGateway interface {
 	Forward(port uint16, desc string) error
 	Clear(port uint16) error
 }
 
-// DiscoverUPnPGateway returns a UpnpGateway if one is found on the network. This process is long - about 30 seconds and
+// DiscoverUPNPGateway returns a UPNPGateway if one is found on the network. This process is long - about 30 seconds and
 // is expected to fail in some network setups.
-func DiscoverUPnPGateway() (UpnpGateway, error) {
+func DiscoverUPNPGateway() (UPNPGateway, error) {
 	return upnp.Discover()
 }
 
 // AcquirePortFromGateway sets up UDP and TCP forwarding rules for the given port on the given gateway.
-func AcquirePortFromGateway(gateway UpnpGateway, port uint16) error {
+func AcquirePortFromGateway(gateway UPNPGateway, port uint16) error {
 	err := gateway.Forward(port, getPortDesc())
 	if err != nil {
 		return fmt.Errorf("failed to forward port %d: %v", port, err)
