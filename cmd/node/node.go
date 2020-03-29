@@ -503,7 +503,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeId,
 	if mdb.PersistentData() {
 		trtl = tortoise.NewRecoveredTortoise(mdb, app.addLogger(TrtlLogger, lg))
 		msh = mesh.NewRecoveredMesh(mdb, atxdb, app.Config.REWARD, trtl, app.txPool, atxpool, processor, app.addLogger(MeshLogger, lg))
-		go msh.CacheWarmUp()
+		go msh.CacheWarmUp(app.Config.LayerAvgSize)
 	} else {
 		trtl = tortoise.NewTortoise(int(layerSize), mdb, app.Config.Hdist, app.addLogger(TrtlLogger, lg))
 		msh = mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, app.txPool, atxpool, processor, app.addLogger(MeshLogger, lg))
