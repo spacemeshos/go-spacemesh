@@ -130,7 +130,7 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 		}
 	}
 
-	if app.Config.PprofHttpServer {
+	if app.Config.PprofHTTPServer {
 		log.Info("Starting pprof server")
 		go func() {
 			err := http.ListenAndServe(":6060", nil)
@@ -152,7 +152,7 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	lg := log.NewDefault(pub.String())
 
 	setServerAddress(app.Config.OracleServer)
-	app.oracle = newClientWithWorldID(uint64(app.Config.OracleServerWorldId))
+	app.oracle = newClientWithWorldID(uint64(app.Config.OracleServerWorldID))
 	app.oracle.Register(true, pub.String()) // todo: configure no faulty nodes
 	hareOracle := newHareOracleFromClient(app.oracle)
 

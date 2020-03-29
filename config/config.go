@@ -2,6 +2,9 @@ package config
 
 import (
 	"fmt"
+	"path/filepath"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/activation"
 	apiConfig "github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
@@ -13,8 +16,6 @@ import (
 	timeConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
 	postConfig "github.com/spacemeshos/post/config"
 	"github.com/spf13/viper"
-	"path/filepath"
-	"time"
 )
 
 const (
@@ -22,14 +23,15 @@ const (
 	defaultLogFileName     = "spacemesh.log"
 	defaultAccountFileName = "accounts"
 	defaultDataDirName     = "spacemesh"
-	Genesis                = mesh.Genesis
-	NewBlockProtocol       = "newBlock"
+	// Genesis indicates the genesis LayerID.
+	Genesis = mesh.Genesis
+	// NewBlockProtocol indicates the protocol name for new blocks arriving.
+	NewBlockProtocol = "newBlock"
 )
 
 var (
 	defaultHomeDir    = filesystem.GetUserHomeDirectory()
 	defaultDataDir    = filepath.Join(defaultHomeDir, defaultDataDirName, "/")
-	defaultConfigFile = filepath.Join(defaultHomeDir, defaultConfigFileName)
 	defaultLogDir     = filepath.Join(defaultHomeDir, defaultLogFileName)
 	defaultAccountDir = filepath.Join(defaultHomeDir, defaultAccountFileName)
 	defaultTestMode   = false
@@ -66,7 +68,7 @@ type BaseConfig struct {
 	MetricsPort    int  `mapstructure:"metrics-port"`
 
 	OracleServer        string `mapstructure:"oracle_server"`
-	OracleServerWorldId int    `mapstructure:"oracle_server_worldid"`
+	OracleServerWorldID int    `mapstructure:"oracle_server_worldid"`
 
 	GenesisTime      string `mapstructure:"genesis-time"`
 	LayerDurationSec int    `mapstructure:"layer-duration-sec"`
@@ -78,9 +80,9 @@ type BaseConfig struct {
 
 	MemProfile string `mapstructure:"mem-profile"`
 
-	CpuProfile string `mapstructure:"cpu-profile"`
+	CPUProfile string `mapstructure:"cpu-profile"`
 
-	PprofHttpServer bool `mapstructure:"pprof-server"`
+	PprofHTTPServer bool `mapstructure:"pprof-server"`
 
 	GenesisConfPath string `mapstructure:"genesis-conf"`
 
@@ -94,7 +96,7 @@ type BaseConfig struct {
 
 	SyncValidationDelta int `mapstructure:"sync-validation-delta"` // sync interval in seconds
 
-	PublishEventsUrl string `mapstructure:"events-url"`
+	PublishEventsURL string `mapstructure:"events-url"`
 
 	StartMining bool `mapstructure:"start-mining"`
 
@@ -103,6 +105,7 @@ type BaseConfig struct {
 	BlockCacheSize int `mapstructure:"block-cache-size"`
 }
 
+// LoggerConfig holds the logging level for each module.
 type LoggerConfig struct {
 	AppLoggerLevel            string `mapstructure:"app"`
 	P2PLoggerLevel            string `mapstructure:"p2p"`
@@ -156,7 +159,7 @@ func defaultBaseConfig() BaseConfig {
 		CollectMetrics:      false,
 		MetricsPort:         1010,
 		OracleServer:        "http://localhost:3030",
-		OracleServerWorldId: 0,
+		OracleServerWorldID: 0,
 		GenesisTime:         time.Now().Format(time.RFC3339),
 		LayerDurationSec:    30,
 		LayersPerEpoch:      3,
