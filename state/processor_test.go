@@ -185,16 +185,16 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_Errors()
 
 	err = s.processor.ApplyTransaction(createTransaction(s.T(), 0, obj2.address, 1, 5, signer1), 0)
 	assert.Error(s.T(), err)
-	assert.Equal(s.T(), err.Error(), ErrNonce)
+	assert.Equal(s.T(), err.Error(), errNonce)
 
 	err = s.processor.ApplyTransaction(createTransaction(s.T(), obj1.Nonce(), obj2.address, 21, 5, signer1), 0)
 	assert.Error(s.T(), err)
-	assert.Equal(s.T(), err.Error(), ErrFunds)
+	assert.Equal(s.T(), err.Error(), errFunds)
 
 	//Test origin
 	err = s.processor.ApplyTransaction(createTransaction(s.T(), obj1.Nonce(), obj2.address, 21, 5, signing.NewEdSigner()), 0)
 	assert.Error(s.T(), err)
-	assert.Equal(s.T(), err.Error(), ErrOrigin)
+	assert.Equal(s.T(), err.Error(), errOrigin)
 }
 
 func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyRewards() {

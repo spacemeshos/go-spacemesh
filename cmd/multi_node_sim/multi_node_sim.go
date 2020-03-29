@@ -11,6 +11,7 @@ var (
 	multiConfig = Config{}
 )
 
+// Config is the configuration struct for multi node sim
 type Config struct {
 	NumberOfNodes  int
 	BlocksPerLayer int
@@ -18,6 +19,7 @@ type Config struct {
 	DbLocation     string
 }
 
+// AddCommands adds commands for multi node sim
 func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringVarP(&multiConfig.DbLocation,
 		"dir", "d", "tmp/data", "directory to store output db")
@@ -29,7 +31,7 @@ func AddCommands(cmd *cobra.Command) {
 		10, "run until layer")
 }
 
-// node simulator cmd
+// Cmd is node simulator cmd
 var Cmd = &cobra.Command{
 	Use:   "run_sim",
 	Short: "start simulation",
