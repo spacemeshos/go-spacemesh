@@ -80,7 +80,7 @@ func NewPersistentMeshDB(path string, blockCacheSize int, log log.Log) (*MeshDB,
 }
 
 func (m *MeshDB) PersistentData() bool {
-	if _, err := m.general.Get(LATEST); err == nil {
+	if _, err := m.general.Get(constLATEST); err == nil {
 		m.Info("found data to recover on disc")
 		return true
 	}
@@ -246,9 +246,9 @@ func (m *MeshDB) ContextualValidity(id types.BlockID) (bool, error) {
 func (m *MeshDB) SaveContextualValidity(id types.BlockID, valid bool) error {
 	var v []byte
 	if valid {
-		v = TRUE
+		v = constTrue
 	} else {
-		v = FALSE
+		v = constFalse
 	}
 	m.Debug("save contextual validity %v %v", id, valid)
 	return m.contextualValidity.Put(id.ToBytes(), v)

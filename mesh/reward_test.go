@@ -59,7 +59,7 @@ func ConfigTst() Config {
 	}
 }
 
-func getMeshWithMapState(id string, s TxProcessor) (*Mesh, *AtxDbMock) {
+func getMeshWithMapState(id string, s txProcessor) (*Mesh, *AtxDbMock) {
 	atxDb := &AtxDbMock{
 		db:     make(map[types.AtxId]*types.ActivationTx),
 		nipsts: make(map[types.AtxId]*types.NIPST),
@@ -135,7 +135,7 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 
 	l, err := layers.GetLayer(1)
 	assert.NoError(t, err)
-	layers.AccumulateRewards(l, params)
+	layers.accumulateRewards(l, params)
 	totalRewardsCost := totalFee + params.BaseReward.Int64()
 	remainder := totalRewardsCost % 4
 
