@@ -17,39 +17,28 @@ type MockMapState struct {
 	TotalReward int64
 }
 
-func (s MockMapState) LoadState(layer types.LayerID) error {
-	panic("implement me")
-}
+func (s MockMapState) LoadState(types.LayerID) error                    { panic("implement me") }
+func (MockMapState) GetStateRoot() types.Hash32                         { return [32]byte{} }
+func (MockMapState) ValidateNonceAndBalance(*types.Transaction) error   { panic("implement me") }
+func (MockMapState) GetLayerApplied(types.TransactionID) *types.LayerID { panic("implement me") }
 
-func (MockMapState) GetStateRoot() types.Hash32 {
-	return [32]byte{}
-}
-
-func (MockMapState) ValidateNonceAndBalance(transaction *types.Transaction) error {
-	panic("implement me")
-}
-
-func (MockMapState) GetLayerApplied(txId types.TransactionID) *types.LayerID {
-	panic("implement me")
-}
-
-func (MockMapState) ValidateSignature(signed types.Signed) (types.Address, error) {
+func (MockMapState) ValidateSignature(types.Signed) (types.Address, error) {
 	return types.Address{}, nil
 }
 
-func (s *MockMapState) ApplyTransactions(layer types.LayerID, txs []*types.Transaction) (int, error) {
+func (s *MockMapState) ApplyTransactions(_ types.LayerID, txs []*types.Transaction) (int, error) {
 	s.Txs = append(s.Txs, txs...)
 	return 0, nil
 }
 
-func (s *MockMapState) ApplyRewards(layer types.LayerID, miners []types.Address, reward *big.Int) {
+func (s *MockMapState) ApplyRewards(_ types.LayerID, miners []types.Address, reward *big.Int) {
 	for _, minerId := range miners {
 		s.Rewards[minerId] = reward
 		s.TotalReward += reward.Int64()
 	}
 }
 
-func (s *MockMapState) AddressExists(addr types.Address) bool {
+func (s *MockMapState) AddressExists(types.Address) bool {
 	return true
 }
 
@@ -75,7 +64,7 @@ func addTransactionsWithFee(t testing.TB, mesh *DB, bl *types.Block, numOfTxs in
 	var totalFee int64
 	var txs []*types.Transaction
 	for i := 0; i < numOfTxs; i++ {
-		//log.Info("adding tx with fee %v nonce %v", fee, i)
+		// log.Info("adding tx with fee %v nonce %v", fee, i)
 		tx, err := NewSignedTx(1, types.HexToAddress("1"), 10, 100, uint64(fee), signing.NewEdSigner())
 		assert.NoError(t, err)
 		bl.TxIDs = append(bl.TxIDs, tx.ID())
@@ -96,7 +85,7 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 	block1 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
 
 	coinbase1 := types.HexToAddress("0xaaa")
-	atx := types.NewActivationTxForTests(types.NodeID{"1", []byte("bbbbb")}, 0, *types.EmptyATXID, 1, 0, *types.EmptyATXID, coinbase1, 10, []types.BlockID{}, &types.NIPST{})
+	atx := types.NewActivationTxForTests(types.NodeID{Key: "1", VRFPublicKey: []byte("bbbbb")}, 0, *types.EmptyATXID, 1, 0, *types.EmptyATXID, coinbase1, 10, []types.BlockID{}, &types.NIPST{})
 	atxdb.AddAtx(atx.ID(), atx)
 	block1.ATXID = atx.ID()
 	totalFee += addTransactionsWithFee(t, layers.DB, block1, 15, 7)
@@ -104,7 +93,7 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 	block2 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
 
 	coinbase2 := types.HexToAddress("0xbbb")
-	atx = types.NewActivationTxForTests(types.NodeID{"2", []byte("bbbbb")}, 0, *types.EmptyATXID, 1, 0, *types.EmptyATXID, coinbase2, 10, []types.BlockID{}, &types.NIPST{})
+	atx = types.NewActivationTxForTests(types.NodeID{Key: "2", VRFPublicKey: []byte("bbbbb")}, 0, *types.EmptyATXID, 1, 0, *types.EmptyATXID, coinbase2, 10, []types.BlockID{}, &types.NIPST{})
 	atxdb.AddAtx(atx.ID(), atx)
 	block2.ATXID = atx.ID()
 	totalFee += addTransactionsWithFee(t, layers.DB, block2, 13, rand.Int63n(100))
@@ -112,7 +101,7 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 	block3 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
 
 	coinbase3 := types.HexToAddress("0xccc")
-	atx = types.NewActivationTxForTests(types.NodeID{"3", []byte("bbbbb")}, 0, *types.EmptyATXID, 1, 0, *types.EmptyATXID, coinbase3, 10, []types.BlockID{}, &types.NIPST{})
+	atx = types.NewActivationTxForTests(types.NodeID{Key: "3", VRFPublicKey: []byte("bbbbb")}, 0, *types.EmptyATXID, 1, 0, *types.EmptyATXID, coinbase3, 10, []types.BlockID{}, &types.NIPST{})
 	atxdb.AddAtx(atx.ID(), atx)
 	block3.ATXID = atx.ID()
 	totalFee += addTransactionsWithFee(t, layers.DB, block3, 17, rand.Int63n(100))
@@ -120,16 +109,16 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 	block4 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
 
 	coinbase4 := types.HexToAddress("0xddd")
-	atx = types.NewActivationTxForTests(types.NodeID{"4", []byte("bbbbb")}, 0, *types.EmptyATXID, 1, 0, *types.EmptyATXID, coinbase4, 10, []types.BlockID{}, &types.NIPST{})
+	atx = types.NewActivationTxForTests(types.NodeID{Key: "4", VRFPublicKey: []byte("bbbbb")}, 0, *types.EmptyATXID, 1, 0, *types.EmptyATXID, coinbase4, 10, []types.BlockID{}, &types.NIPST{})
 	atxdb.AddAtx(atx.ID(), atx)
 	block4.ATXID = atx.ID()
 	totalFee += addTransactionsWithFee(t, layers.DB, block4, 16, rand.Int63n(100))
 
 	log.Info("total fees : %v", totalFee)
-	layers.AddBlock(block1)
-	layers.AddBlock(block2)
-	layers.AddBlock(block3)
-	layers.AddBlock(block4)
+	_ = layers.AddBlock(block1)
+	_ = layers.AddBlock(block2)
+	_ = layers.AddBlock(block3)
+	_ = layers.AddBlock(block4)
 
 	params := NewTestRewardParams()
 
@@ -152,7 +141,7 @@ func NewTestRewardParams() Config {
 func createLayer(t testing.TB, mesh *Mesh, id types.LayerID, numOfBlocks, maxTransactions int, atxdb *AtxDbMock) (totalRewards int64, blocks []*types.Block) {
 	for i := 0; i < numOfBlocks; i++ {
 		block1 := types.NewExistingBlock(id, []byte(rand.RandString(8)))
-		nodeid := types.NodeID{strconv.Itoa(i), []byte("bbbbb")}
+		nodeid := types.NodeID{Key: strconv.Itoa(i), VRFPublicKey: []byte("bbbbb")}
 		coinbase := types.HexToAddress(nodeid.Key)
 		atx := types.NewActivationTxForTests(nodeid, 0, *types.EmptyATXID, 1, 0, *types.EmptyATXID, coinbase, 10, []types.BlockID{}, &types.NIPST{})
 		atxdb.AddAtx(atx.ID(), atx)
@@ -189,7 +178,7 @@ func TestMesh_integration(t *testing.T) {
 		assert.NoError(t, err)
 		layers.ValidateLayer(l)
 	}
-	//since there can be a difference of up to x lerners where x is the number of blocks due to round up of penalties when distributed among all blocks
+	// since there can be a difference of up to x lerners where x is the number of blocks due to round up of penalties when distributed among all blocks
 	totalPayout := l3Rewards + ConfigTst().BaseReward.Int64()
 	assert.True(t, totalPayout-s.TotalReward < int64(numofBlocks), " rewards : %v, total %v blocks %v", totalPayout, s.TotalReward, int64(numofBlocks))
 }
@@ -298,17 +287,9 @@ func (m *meshValidatorBatchMock) ValidateLayer(lyr *types.Layer) {
 	m.mesh.pushLayersToState(prevPBase, prevPBase)
 }
 
-func (m *meshValidatorBatchMock) ProcessedLayer() types.LayerID {
-	panic("implement me")
-}
-
-func (m *meshValidatorBatchMock) SetProcessedLayer(lyr types.LayerID) {
-	m.processedLayer = lyr
-}
-
-func (m *meshValidatorBatchMock) HandleLateBlock(blk *types.Block) {
-	panic("implement me")
-}
+func (m *meshValidatorBatchMock) ProcessedLayer() types.LayerID       { panic("implement me") }
+func (m *meshValidatorBatchMock) SetProcessedLayer(lyr types.LayerID) { m.processedLayer = lyr }
+func (m *meshValidatorBatchMock) HandleLateBlock(*types.Block)        { panic("implement me") }
 
 func TestMesh_AccumulateRewards(t *testing.T) {
 	numOfLayers := 10

@@ -150,7 +150,7 @@ func (b *Builder) Stop() {
 
 // SignAtx signs the atx and assigns the signature into atx.Sig
 // this function returns an error if atx could not be converted to bytes
-func (b Builder) SignAtx(atx *types.ActivationTx) error {
+func (b *Builder) SignAtx(atx *types.ActivationTx) error {
 	return SignAtx(b, atx)
 }
 
@@ -326,7 +326,7 @@ func (b *Builder) getCoinbaseAccount() types.Address {
 	return acc
 }
 
-func (b Builder) getNipstKey() []byte {
+func (b *Builder) getNipstKey() []byte {
 	return []byte("Nipst")
 }
 

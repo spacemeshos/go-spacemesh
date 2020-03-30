@@ -2,7 +2,6 @@ package activation
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -53,15 +52,10 @@ func (m *MeshValidatorMock) HandleIncomingLayer(layer *types.Layer) (types.Layer
 func (m *MeshValidatorMock) HandleLateBlock(bl *types.Block) (types.LayerID, types.LayerID) {
 	return bl.Layer() - 1, bl.Layer()
 }
-func (m *MeshValidatorMock) RegisterLayerCallback(func(id types.LayerID)) {}
-func (m *MeshValidatorMock) ContextualValidity(id types.BlockID) bool     { return true }
-func (m *MeshValidatorMock) GetGoodPatternBlocks(layer types.LayerID) (map[types.BlockID]struct{}, error) {
-	return nil, errors.New("not implemented")
-}
 
 type MockState struct{}
 
-func (MockState) LoadState(layer types.LayerID) error {
+func (MockState) LoadState(types.LayerID) error {
 	panic("implement me")
 }
 
@@ -69,26 +63,26 @@ func (MockState) GetStateRoot() types.Hash32 {
 	panic("implement me")
 }
 
-func (MockState) ValidateNonceAndBalance(transaction *types.Transaction) error {
+func (MockState) ValidateNonceAndBalance(*types.Transaction) error {
 	panic("implement me")
 }
 
-func (MockState) GetLayerApplied(txID types.TransactionID) *types.LayerID {
+func (MockState) GetLayerApplied(types.TransactionID) *types.LayerID {
 	panic("implement me")
 }
 
-func (MockState) ApplyTransactions(layer types.LayerID, txs []*types.Transaction) (int, error) {
+func (MockState) ApplyTransactions(types.LayerID, []*types.Transaction) (int, error) {
 	return 0, nil
 }
 
-func (MockState) ApplyRewards(layer types.LayerID, miners []types.Address, reward *big.Int) {
+func (MockState) ApplyRewards(types.LayerID, []types.Address, *big.Int) {
 }
 
-func (MockState) AddressExists(addr types.Address) bool {
+func (MockState) AddressExists(types.Address) bool {
 	return true
 }
 
-func (MockState) ValidateSignature(signed types.Signed) (types.Address, error) {
+func (MockState) ValidateSignature(types.Signed) (types.Address, error) {
 	return types.Address{}, nil
 }
 
@@ -99,11 +93,7 @@ type ATXDBMock struct {
 	activeSet   uint32
 }
 
-func (mock *ATXDBMock) CalcActiveSetFromView(view []types.BlockID, pubEpoch types.EpochID) (uint32, error) {
-	return mock.activeSet, nil
-}
-
-func (mock *ATXDBMock) CalcActiveSetSize(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
+func (mock *ATXDBMock) CalcActiveSetSize(types.EpochID, map[types.BlockID]struct{}) (map[string]struct{}, error) {
 	log.Debug("waiting lock")
 	mock.workSymLock.Lock()
 	defer mock.workSymLock.Unlock()
@@ -113,42 +103,23 @@ func (mock *ATXDBMock) CalcActiveSetSize(epoch types.EpochID, blocks map[types.B
 	return map[string]struct{}{"aaaaac": {}, "aaabddb": {}, "aaaccc": {}}, nil
 }
 
-func (mock *ATXDBMock) GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error) {
-	panic("not implemented")
-}
-
 type MockTxMemPool struct{}
 
-func (MockTxMemPool) Get(id types.TransactionID) (*types.Transaction, error) {
+func (MockTxMemPool) Get(types.TransactionID) (*types.Transaction, error) {
 	return &types.Transaction{}, nil
 }
-func (MockTxMemPool) PopItems(size int) []types.Transaction {
-	return nil
-}
-func (MockTxMemPool) Put(id types.TransactionID, item *types.Transaction) {
 
-}
-func (MockTxMemPool) Invalidate(id types.TransactionID) {
-
-}
+func (MockTxMemPool) Put(types.TransactionID, *types.Transaction) {}
+func (MockTxMemPool) Invalidate(types.TransactionID)              {}
 
 type MockAtxMemPool struct{}
 
-func (MockAtxMemPool) Get(id types.ATXID) (*types.ActivationTx, error) {
+func (MockAtxMemPool) Get(types.ATXID) (*types.ActivationTx, error) {
 	return &types.ActivationTx{}, nil
 }
 
-func (MockAtxMemPool) PopItems(size int) []types.ActivationTx {
-	return nil
-}
-
-func (MockAtxMemPool) Put(atx *types.ActivationTx) {
-
-}
-
-func (MockAtxMemPool) Invalidate(id types.ATXID) {
-
-}
+func (MockAtxMemPool) Put(*types.ActivationTx) {}
+func (MockAtxMemPool) Invalidate(types.ATXID)  {}
 
 func ConfigTst() mesh.Config {
 	return mesh.Config{
@@ -169,7 +140,7 @@ func getAtxDb(id string) (*ActivationDb, *mesh.Mesh, database.Database) {
 
 func rndStr() string {
 	a := make([]byte, 8)
-	rand.Read(a)
+	_, _ = rand.Read(a)
 	return string(a)
 }
 
@@ -201,7 +172,7 @@ func TestATX_ActiveSetForLayerView(t *testing.T) {
 	rand.Seed(1234573298579)
 	atxdb, layers, _ := getAtxDb(t.Name())
 	blocksMap := make(map[types.BlockID]struct{})
-	//layers.AtxDB = &AtxDbMock{make(map[types.ATXID]*types.ActivationTx), make(map[types.ATXID]*types.NIPST)}
+	// layers.AtxDB = &AtxDbMock{make(map[types.ATXID]*types.ActivationTx), make(map[types.ATXID]*types.NIPST)}
 	id1 := types.NodeID{Key: rndStr(), VRFPublicKey: []byte("anton")}
 	id2 := types.NodeID{Key: rndStr(), VRFPublicKey: []byte("anton")}
 	id3 := types.NodeID{Key: rndStr(), VRFPublicKey: []byte("anton")}
@@ -224,7 +195,7 @@ func TestATX_ActiveSetForLayerView(t *testing.T) {
 		hash, err := atx.NIPSTChallenge.Hash()
 		assert.NoError(t, err)
 		atx.Nipst = NewNIPSTWithChallenge(hash, poetRef)
-		//layers.AtxDB.(*AtxDbMock).AddAtx(atx.ID(), atx)
+		// layers.AtxDB.(*AtxDbMock).AddAtx(atx.ID(), atx)
 	}
 	id := atxs[4].ID()
 	fmt.Println("ID4 ", id.ShortString())
@@ -251,7 +222,7 @@ func TestATX_ActiveSetForLayerView(t *testing.T) {
 	epoch := layer.GetEpoch(layersPerEpoch)
 	actives, err := atxdb.CalcActiveSetSize(epoch, blocksMap)
 	assert.NoError(t, err)
-	assert.Equal(t, 1, int(len(actives)))
+	assert.Equal(t, 1, len(actives))
 	_, ok := actives[id2.Key]
 	assert.True(t, ok)
 }
@@ -309,7 +280,7 @@ func TestActivationDb_CalcActiveSetFromViewWithCache(t *testing.T) {
 	mck.workSymLock.Unlock()
 	wg.Wait()
 	assert.Equal(t, 1, mck.counter)
-	//mck.AssertNumberOfCalls(t, "CalcActiveSetSize", 1)
+	// mck.AssertNumberOfCalls(t, "CalcActiveSetSize", 1)
 }
 
 func Test_CalcActiveSetFromView(t *testing.T) {
@@ -361,13 +332,15 @@ func Test_CalcActiveSetFromView(t *testing.T) {
 
 	block2.ViewEdges = blocks
 	block2.Initialize()
-	layers.AddBlockWithTxs(block2, nil, atxs2)
+	err = layers.AddBlockWithTxs(block2, nil, atxs2)
+	assert.NoError(t, err)
 
 	block3 := types.NewExistingBlock(2200, []byte(rand.RandString(8)))
 
 	block3.ViewEdges = blocks
 	block2.Initialize()
-	layers.AddBlockWithTxs(block3, nil, atxs2)
+	err = layers.AddBlockWithTxs(block3, nil, atxs2)
+	assert.NoError(t, err)
 
 	err = atxdb.ProcessAtxs(atxs2)
 	assert.NoError(t, err)
@@ -523,7 +496,7 @@ func TestMesh_processBlockATXs(t *testing.T) {
 	chlng := types.HexToHash32("0x3333")
 	poetRef := []byte{0x76, 0x45}
 	npst := NewNIPSTWithChallenge(&chlng, poetRef)
-	posATX := types.NewActivationTxForTests(types.NodeID{"aaaaaa", []byte("anton")}, 0, *types.EmptyATXID, 1000, 0, *types.EmptyATXID, coinbase1, 0, []types.BlockID{}, npst)
+	posATX := types.NewActivationTxForTests(types.NodeID{Key: "aaaaaa", VRFPublicKey: []byte("anton")}, 0, *types.EmptyATXID, 1000, 0, *types.EmptyATXID, coinbase1, 0, []types.BlockID{}, npst)
 	err := atxdb.StoreAtx(0, posATX)
 	assert.NoError(t, err)
 	atxs := []*types.ActivationTx{
@@ -790,7 +763,7 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 	assert.NoError(t, err)
 	nodeAtxIds = append(nodeAtxIds, prevAtx.ID())
 
-	//wrong sequnce
+	// wrong sequnce
 	atx := types.NewActivationTxForTests(idx1, 1, prevAtx.ID(), 1012, 0, prevAtx.ID(), coinbase, 0, []types.BlockID{}, &types.NIPST{})
 	err = atxdb.StoreAtx(1, atx)
 	assert.NoError(t, err)
@@ -839,7 +812,7 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 	_, err = atxdb.GetAtxHeader(atx2id)
 	assert.NoError(t, err)
 
-	//test same sequence
+	// test same sequence
 	idx2 := types.NodeID{Key: uuid.New().String(), VRFPublicKey: []byte("12345")}
 
 	prevAtx = types.NewActivationTxForTests(idx2, 0, *types.EmptyATXID, 100, 0, *types.EmptyATXID, coinbase, 3, blocks, npst)
@@ -1038,7 +1011,7 @@ func createAndValidateSignedATX(r *require.Assertions, atxdb *ActivationDb, ed *
 	r.NoError(err)
 	sig := ed.Sign(atxBytes)
 
-	signedAtx := &types.ActivationTx{atx.InnerActivationTx, sig}
+	signedAtx := &types.ActivationTx{InnerActivationTx: atx.InnerActivationTx, Sig: sig}
 	return signedAtx, atxdb.ValidateSignedAtx(*ed.PublicKey(), signedAtx)
 }
 
@@ -1050,7 +1023,7 @@ func TestActivationDb_ValidateSignedAtx(t *testing.T) {
 	atxdb := NewActivationDb(database.NewMemDatabase(), idStore, memesh, layersPerEpochBig, &ValidatorMock{}, lg.WithName("atxDB"))
 
 	ed := signing.NewEdSigner()
-	nodeID := types.NodeID{ed.PublicKey().String(), []byte("bbbbb")}
+	nodeID := types.NodeID{Key: ed.PublicKey().String(), VRFPublicKey: []byte("bbbbb")}
 
 	// test happy flow of first ATX
 	emptyAtx := types.EmptyATXID
