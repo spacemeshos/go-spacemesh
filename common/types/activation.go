@@ -173,6 +173,11 @@ func (atx *ActivationTx) InnerBytes() ([]byte, error) {
 	return InterfaceToBytes(atx.InnerActivationTx)
 }
 
+// Fields returns an array of LoggableFields for logging
+func (atx *ActivationTx) Fields() []log.LoggableField {
+	return []log.LoggableField{log.String("hello", "hello"), log.String("world", "world")}
+}
+
 // CalcAndSetID calculates and sets the cached ID field. This field must be set before calling the ID() method.
 func (atx *ActivationTx) CalcAndSetID() {
 	id := ATXID(CalcATXHash32(atx))

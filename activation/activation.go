@@ -456,7 +456,7 @@ func (b *Builder) PublishActivationTx() error {
 		log.EpochID(uint64(atx.PubLayerID.GetEpoch(b.layersPerEpoch))),
 		log.Uint32("active_set", atx.ActiveSetSize),
 		log.String("miner", b.nodeID.ShortString()),
-		log.Int("view", len(atx.View)),
+		log.Int("viewlen", len(atx.View)),
 		log.Uint64("sequence_number", atx.Sequence),
 		log.String("NIPSTChallenge", hash.String()),
 		log.String("commitment", commitStr),
