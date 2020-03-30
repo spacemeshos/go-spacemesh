@@ -108,7 +108,6 @@ func TestBlockBuilder_StartStop(t *testing.T) {
 	net := service.NewSimulator()
 	beginRound := make(chan types.LayerID)
 	n := net.NewNode()
-	// receiver := net.NewNode()
 
 	block1 := types.NewExistingBlock(0, []byte(rand.RandString(8)))
 	block2 := types.NewExistingBlock(0, []byte(rand.RandString(8)))
@@ -120,7 +119,6 @@ func TestBlockBuilder_StartStop(t *testing.T) {
 	hare.res[0] = hareRes
 
 	bs := []*types.Block{block1, block2, block3, block4}
-	// st := []types.BlockID{block2.ID(), block3.ID(), block4.ID()}
 	orphans := &mockMesh{b: bs}
 	builder := NewBlockBuilder(types.NodeID{}, signing.NewEdSigner(), n, beginRound, 5, NewTxMemPool(), NewAtxMemPool(), MockCoin{}, orphans, hare, &mockBlockOracle{}, mockTxProcessor{}, &mockAtxValidator{}, &mockSyncer{}, selectCount, mockProjector, log.New(n.String(), "", ""))
 
@@ -535,7 +533,6 @@ func TestBlockBuilder_getVotes(t *testing.T) {
 	beginRound := make(chan types.LayerID)
 	n1 := service.NewSimulator().NewNode()
 	allblocks := []*types.Block{b1, b2, b3, b4, b5, b6, b7}
-	// st := []types.BlockID{b1.ID(), b2.ID(), b3.ID()}
 	bb := NewBlockBuilder(types.NodeID{Key: "a"}, signing.NewEdSigner(), n1, beginRound, 5, NewTxMemPool(), NewAtxMemPool(), MockCoin{}, &mockMesh{b: allblocks}, &mockResult{}, &mockBlockOracle{}, mockTxProcessor{true}, &mockAtxValidator{}, &mockSyncer{}, selectCount, mockProjector, log.NewDefault(t.Name()))
 	b, err := bb.getVotes(config.Genesis)
 	r.EqualError(err, "cannot create blockBytes in genesis layer")

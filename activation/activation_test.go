@@ -51,7 +51,6 @@ var (
 	postProver       = &postProverClientMock{}
 	npst             = NewNIPSTWithChallenge(&chlng, poetRef)
 	commitment       = &types.PostProof{
-		// Identity:     []byte(nil),
 		Challenge:    []byte(nil),
 		MerkleRoot:   []byte("1"),
 		ProofNodes:   [][]byte(nil),

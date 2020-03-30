@@ -172,7 +172,6 @@ func TestATX_ActiveSetForLayerView(t *testing.T) {
 	rand.Seed(1234573298579)
 	atxdb, layers, _ := getAtxDb(t.Name())
 	blocksMap := make(map[types.BlockID]struct{})
-	// layers.AtxDB = &AtxDbMock{make(map[types.ATXID]*types.ActivationTx), make(map[types.ATXID]*types.NIPST)}
 	id1 := types.NodeID{Key: rndStr(), VRFPublicKey: []byte("anton")}
 	id2 := types.NodeID{Key: rndStr(), VRFPublicKey: []byte("anton")}
 	id3 := types.NodeID{Key: rndStr(), VRFPublicKey: []byte("anton")}
@@ -195,7 +194,6 @@ func TestATX_ActiveSetForLayerView(t *testing.T) {
 		hash, err := atx.NIPSTChallenge.Hash()
 		assert.NoError(t, err)
 		atx.Nipst = NewNIPSTWithChallenge(hash, poetRef)
-		// layers.AtxDB.(*AtxDbMock).AddAtx(atx.ID(), atx)
 	}
 	id := atxs[4].ID()
 	fmt.Println("ID4 ", id.ShortString())
@@ -280,7 +278,6 @@ func TestActivationDb_CalcActiveSetFromViewWithCache(t *testing.T) {
 	mck.workSymLock.Unlock()
 	wg.Wait()
 	assert.Equal(t, 1, mck.counter)
-	// mck.AssertNumberOfCalls(t, "CalcActiveSetSize", 1)
 }
 
 func Test_CalcActiveSetFromView(t *testing.T) {
