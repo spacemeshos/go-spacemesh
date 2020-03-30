@@ -83,7 +83,7 @@ func (c *HTTPPoetClient) Submit(challenge types.Hash32) (*types.PoetRound, error
 		return nil, err
 	}
 
-	return &types.PoetRound{Id: resBody.RoundID}, nil
+	return &types.PoetRound{ID: resBody.RoundID}, nil
 }
 
 // PoetServiceID returns the public key of the PoET proving service.

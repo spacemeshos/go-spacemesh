@@ -85,51 +85,51 @@ func (vq *blockQueue) handleBlocks(bjb fetchJob) {
 }
 
 func (vq *blockQueue) handleBlock(id types.Hash32, block *types.Block) {
-	vq.Info("start handle block %s miner id %s", block.Id(), block.MinerId().ShortString())
+	vq.Info("start handle block %s miner id %s", block.ID(), block.MinerID().ShortString())
 	if err := vq.fastValidation(block); err != nil {
-		vq.Error("block validation failed", log.BlockID(block.Id().String()), log.Err(err))
+		vq.Error("block validation failed", log.BlockID(block.ID().String()), log.Err(err))
 		vq.updateDependencies(id, false)
 		return
 	}
-	vq.Info("finish fast validation block %v", block.Id())
+	vq.Info("finish fast validation block %v", block.ID())
 	vq.handleBlockDependencies(block)
 }
 
 // handles new block dependencies
 // if there are unknown blocks in the view they are added to the fetch queue
 func (vq *blockQueue) handleBlockDependencies(blk *types.Block) {
-	vq.Debug("handle dependencies Block %v", blk.Id())
-	res, err := vq.addDependencies(blk.Id(), blk.ViewEdges, vq.finishBlockCallback(blk))
+	vq.Debug("handle dependencies Block %v", blk.ID())
+	res, err := vq.addDependencies(blk.ID(), blk.ViewEdges, vq.finishBlockCallback(blk))
 
 	if err != nil {
 		vq.updateDependencies(blk.Hash32(), false)
-		vq.Error(fmt.Sprintf("failed to add pending for Block %v %v", blk.Id(), err))
+		vq.Error(fmt.Sprintf("failed to add pending for Block %v %v", blk.ID(), err))
 		return
 	}
 
 	if res == false {
-		vq.Debug("pending done for %v", blk.Id())
+		vq.Debug("pending done for %v", blk.ID())
 		vq.updateDependencies(blk.Hash32(), true)
 	}
-	vq.Debug("added %v dependencies to queue", blk.Id())
+	vq.Debug("added %v dependencies to queue", blk.ID())
 }
 
 func (vq *blockQueue) finishBlockCallback(block *types.Block) func(res bool) error {
 	return func(res bool) error {
 		if !res {
-			vq.Info("finished block %v block, invalid", block.Id())
+			vq.Info("finished block %v block, invalid", block.ID())
 			return nil
 		}
 
 		//data availability
 		txs, atxs, err := vq.dataAvailability(block)
 		if err != nil {
-			return fmt.Errorf("DataAvailabilty failed for block %v err: %v", block.Id(), err)
+			return fmt.Errorf("DataAvailabilty failed for block %v err: %v", block.ID(), err)
 		}
 
 		//validate block's votes
 		if valid, err := validateVotes(block, vq.ForBlockInView, vq.Hdist, vq.Log); valid == false || err != nil {
-			return fmt.Errorf("validate votes failed for block %s %s", block.Id(), err)
+			return fmt.Errorf("validate votes failed for block %s %s", block.ID(), err)
 		}
 
 		err = vq.AddBlockWithTxs(block, txs, atxs)
@@ -143,7 +143,7 @@ func (vq *blockQueue) finishBlockCallback(block *types.Block) func(res bool) err
 			vq.HandleLateBlock(block)
 		}
 
-		vq.Info("finished block %v, valid", block.Id())
+		vq.Info("finished block %v, valid", block.ID())
 		return nil
 	}
 }

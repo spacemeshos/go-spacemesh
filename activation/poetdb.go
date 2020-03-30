@@ -36,8 +36,8 @@ func (db *PoetDb) HasProof(proofRef []byte) bool {
 
 // ValidateAndStore validates and stores a new PoET proof.
 func (db *PoetDb) ValidateAndStore(proofMessage *types.PoetProofMessage) error {
-	if err := db.Validate(proofMessage.PoetProof, proofMessage.PoetServiceId,
-		proofMessage.RoundId, proofMessage.Signature); err != nil {
+	if err := db.Validate(proofMessage.PoetProof, proofMessage.PoetServiceID,
+		proofMessage.RoundID, proofMessage.Signature); err != nil {
 
 		return err
 	}
@@ -77,18 +77,18 @@ func (db *PoetDb) storeProof(proofMessage *types.PoetProofMessage) error {
 	batch := db.store.NewBatch()
 	if err := batch.Put(ref, messageBytes); err != nil {
 		return fmt.Errorf("failed to store poet proof for poetId %x round %s: %v",
-			proofMessage.PoetServiceId[:5], proofMessage.RoundId, err)
+			proofMessage.PoetServiceID[:5], proofMessage.RoundID, err)
 	}
-	key := makeKey(proofMessage.PoetServiceId, proofMessage.RoundId)
+	key := makeKey(proofMessage.PoetServiceID, proofMessage.RoundID)
 	if err := batch.Put(key[:], ref); err != nil {
 		return fmt.Errorf("failed to store poet proof index entry for poetId %x round %s: %v",
-			proofMessage.PoetServiceId[:5], proofMessage.RoundId, err)
+			proofMessage.PoetServiceID[:5], proofMessage.RoundID, err)
 	}
 	if err := batch.Write(); err != nil {
 		return fmt.Errorf("failed to store poet proof and index for poetId %x round %s: %v",
-			proofMessage.PoetServiceId[:5], proofMessage.RoundId, err)
+			proofMessage.PoetServiceID[:5], proofMessage.RoundID, err)
 	}
-	db.log.Debug("stored proof (id: %x) for round %d PoET id %x", ref[:5], proofMessage.RoundId, proofMessage.PoetServiceId[:5])
+	db.log.Debug("stored proof (id: %x) for round %d PoET id %x", ref[:5], proofMessage.RoundID, proofMessage.PoetServiceID[:5])
 	db.publishProofRef(key, ref)
 	return nil
 }

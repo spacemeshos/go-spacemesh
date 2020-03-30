@@ -40,8 +40,8 @@ type nipstBuilder interface {
 }
 
 type idStore interface {
-	StoreNodeIdentity(id types.NodeId) error
-	GetIdentity(id string) (types.NodeId, error)
+	StoreNodeIdentity(id types.NodeID) error
+	GetIdentity(id string) (types.NodeID, error)
 }
 
 type nipstValidator interface {
@@ -50,12 +50,12 @@ type nipstValidator interface {
 }
 
 type atxDBProvider interface {
-	GetAtxHeader(id types.AtxId) (*types.ActivationTxHeader, error)
-	CalcActiveSetFromView(view []types.BlockID, pubEpoch types.EpochId) (uint32, error)
-	GetNodeLastAtxID(nodeID types.NodeId) (types.AtxId, error)
-	GetPosAtxID() (types.AtxId, error)
-	AwaitAtx(id types.AtxId) chan struct{}
-	UnsubscribeAtx(id types.AtxId)
+	GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error)
+	CalcActiveSetFromView(view []types.BlockID, pubEpoch types.EpochID) (uint32, error)
+	GetNodeLastAtxID(nodeID types.NodeID) (types.ATXID, error)
+	GetPosAtxID() (types.ATXID, error)
+	AwaitAtx(id types.ATXID) chan struct{}
+	UnsubscribeAtx(id types.ATXID)
 }
 
 type bytesStore interface {
@@ -81,7 +81,7 @@ const (
 // calculate active set size and providing relevant view as proof
 type Builder struct {
 	signer
-	nodeID          types.NodeId
+	nodeID          types.NodeID
 	coinbaseAccount types.Address
 	db              atxDBProvider
 	net             broadcaster
@@ -113,7 +113,7 @@ type syncer interface {
 }
 
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
-func NewBuilder(nodeID types.NodeId, coinbaseAccount types.Address, signer signer, db atxDBProvider, net broadcaster, mesh meshProvider, layersPerEpoch uint16, nipstBuilder nipstBuilder, postProver PostProverClient, layerClock layerClock, syncer syncer, store bytesStore, log log.Log) *Builder {
+func NewBuilder(nodeID types.NodeID, coinbaseAccount types.Address, signer signer, db atxDBProvider, net broadcaster, mesh meshProvider, layersPerEpoch uint16, nipstBuilder nipstBuilder, postProver PostProverClient, layerClock layerClock, syncer syncer, store bytesStore, log log.Log) *Builder {
 	return &Builder{
 		signer:          signer,
 		nodeID:          nodeID,
@@ -200,22 +200,22 @@ func (b *Builder) loop() {
 
 func (b *Builder) buildNipstChallenge() error {
 	<-b.syncer.Await()
-	challenge := &types.NIPSTChallenge{NodeId: b.nodeID}
+	challenge := &types.NIPSTChallenge{NodeID: b.nodeID}
 	if posAtx, err := b.GetPositioningAtx(); err != nil {
 		if !b.currentEpoch().IsGenesis() {
 			return fmt.Errorf("failed to get positioning ATX: %v", err)
 		}
 		challenge.EndTick = b.tickProvider.NumOfTicks()
 	} else {
-		challenge.PositioningAtx = posAtx.Id()
-		challenge.PubLayerIdx = posAtx.PubLayerIdx.Add(b.layersPerEpoch)
+		challenge.PositioningATX = posAtx.ID()
+		challenge.PubLayerID = posAtx.PubLayerID.Add(b.layersPerEpoch)
 		challenge.StartTick = posAtx.EndTick
 		challenge.EndTick = posAtx.EndTick + b.tickProvider.NumOfTicks()
 	}
 	if prevAtx, err := b.GetPrevAtx(b.nodeID); err != nil {
 		challenge.CommitmentMerkleRoot = b.commitment.MerkleRoot
 	} else {
-		challenge.PrevATXId = prevAtx.Id()
+		challenge.PrevATXID = prevAtx.ID()
 		challenge.Sequence = prevAtx.Sequence + 1
 	}
 	b.challenge = challenge
@@ -366,7 +366,7 @@ func (b *Builder) PublishActivationTx() error {
 			return err
 		}
 	}
-	pubEpoch := b.challenge.PubLayerIdx.GetEpoch(b.layersPerEpoch)
+	pubEpoch := b.challenge.PubLayerID.GetEpoch(b.layersPerEpoch)
 
 	hash, err := b.challenge.Hash()
 	if err != nil {
@@ -428,7 +428,7 @@ func (b *Builder) PublishActivationTx() error {
 	}
 
 	var commitment *types.PostProof
-	if b.challenge.PrevATXId == *types.EmptyAtxId {
+	if b.challenge.PrevATXID == *types.EmptyATXID {
 		commitment = b.commitment
 	}
 
@@ -437,8 +437,8 @@ func (b *Builder) PublishActivationTx() error {
 	b.log.With().Info("active ids seen for epoch", log.Uint64("atx_pub_epoch", uint64(pubEpoch)),
 		log.Uint32("view_cnt", activeSetSize))
 
-	atxReceived := b.db.AwaitAtx(atx.Id())
-	defer b.db.UnsubscribeAtx(atx.Id())
+	atxReceived := b.db.AwaitAtx(atx.ID())
+	defer b.db.UnsubscribeAtx(atx.ID())
 	size, err := b.signAndBroadcast(atx)
 	if err != nil {
 		return err
@@ -450,10 +450,10 @@ func (b *Builder) PublishActivationTx() error {
 	}
 	b.log.Event().Info("atx published!",
 		log.AtxID(atx.ShortString()),
-		log.String("prev_atx_id", atx.PrevATXId.ShortString()),
-		log.String("pos_atx_id", atx.PositioningAtx.ShortString()),
-		log.LayerID(uint64(atx.PubLayerIdx)),
-		log.EpochID(uint64(atx.PubLayerIdx.GetEpoch(b.layersPerEpoch))),
+		log.String("prev_atx_id", atx.PrevATXID.ShortString()),
+		log.String("pos_atx_id", atx.PositioningATX.ShortString()),
+		log.LayerID(uint64(atx.PubLayerID)),
+		log.EpochID(uint64(atx.PubLayerID.GetEpoch(b.layersPerEpoch))),
 		log.Uint32("active_set", atx.ActiveSetSize),
 		log.String("miner", b.nodeID.ShortString()),
 		log.Int("view", len(atx.View)),
@@ -486,7 +486,7 @@ func (b *Builder) PublishActivationTx() error {
 	return nil
 }
 
-func (b *Builder) currentEpoch() types.EpochId {
+func (b *Builder) currentEpoch() types.EpochID {
 	return b.layerClock.GetCurrentLayer().GetEpoch(b.layersPerEpoch)
 }
 
@@ -524,7 +524,7 @@ func (b *Builder) GetPositioningAtx() (*types.ActivationTxHeader, error) {
 
 // GetPrevAtx gets the last atx header of specified node Id, it returns error if no previous atx found or if no
 // AtxHeader struct in db
-func (b *Builder) GetPrevAtx(node types.NodeId) (*types.ActivationTxHeader, error) {
+func (b *Builder) GetPrevAtx(node types.NodeID) (*types.ActivationTxHeader, error) {
 	if id, err := b.db.GetNodeLastAtxID(node); err != nil {
 		return nil, fmt.Errorf("no prev atx found: %v", err)
 	} else if atx, err := b.db.GetAtxHeader(id); err != nil {
@@ -535,9 +535,9 @@ func (b *Builder) GetPrevAtx(node types.NodeId) (*types.ActivationTxHeader, erro
 }
 
 func (b *Builder) discardChallengeIfStale() bool {
-	if b.challenge != nil && b.challenge.PubLayerIdx.GetEpoch(b.layersPerEpoch)+1 < b.currentEpoch() {
+	if b.challenge != nil && b.challenge.PubLayerID.GetEpoch(b.layersPerEpoch)+1 < b.currentEpoch() {
 		b.log.With().Info("atx target epoch has already passed -- starting over",
-			log.Uint64("target_epoch", uint64(b.challenge.PubLayerIdx.GetEpoch(b.layersPerEpoch)+1)),
+			log.Uint64("target_epoch", uint64(b.challenge.PubLayerID.GetEpoch(b.layersPerEpoch)+1)),
 			log.Uint64("current_epoch", uint64(b.currentEpoch())),
 		)
 		b.discardChallenge()
@@ -549,7 +549,7 @@ func (b *Builder) discardChallengeIfStale() bool {
 // ExtractPublicKey extracts public key from message and verifies public key exists in idStore, this is how we validate
 // ATX signature. If this is the first ATX it is considered valid anyways and ATX syntactic validation will determine ATX validity
 func ExtractPublicKey(signedAtx *types.ActivationTx) (*signing.PublicKey, error) {
-	bts, err := signedAtx.AtxBytes()
+	bts, err := signedAtx.ATXBytes()
 	if err != nil {
 		return nil, err
 	}
@@ -566,7 +566,7 @@ func ExtractPublicKey(signedAtx *types.ActivationTx) (*signing.PublicKey, error)
 // SignAtx signs the atx atx with specified signer and assigns the signature into atx.Sig
 // this function returns an error if atx could not be converted to bytes
 func SignAtx(signer signer, atx *types.ActivationTx) error {
-	bts, err := atx.AtxBytes()
+	bts, err := atx.ATXBytes()
 	if err != nil {
 		return err
 	}

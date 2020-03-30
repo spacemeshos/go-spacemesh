@@ -29,8 +29,8 @@ func (id BlockID) AsHash32() Hash32 {
 
 type LayerID uint64
 
-func (l LayerID) GetEpoch(layersPerEpoch uint16) EpochId {
-	return EpochId(uint64(l) / uint64(layersPerEpoch))
+func (l LayerID) GetEpoch(layersPerEpoch uint16) EpochID {
+	return EpochID(uint64(l) / uint64(layersPerEpoch))
 }
 
 func (l LayerID) Add(layers uint16) LayerID {
@@ -44,22 +44,22 @@ func (l LayerID) Uint64() uint64 {
 func (l LayerID) Field() log.Field { return log.Uint64("layer_id", uint64(l)) }
 
 //todo: choose which type is VRF
-type Vrf string
+type VRF string
 
-type NodeId struct {
+type NodeID struct {
 	Key          string
 	VRFPublicKey []byte
 }
 
-func (id NodeId) String() string {
+func (id NodeID) String() string {
 	return id.Key + string(id.VRFPublicKey)
 }
 
-func (id NodeId) ToBytes() []byte {
+func (id NodeID) ToBytes() []byte {
 	return util.Hex2Bytes(id.String())
 }
 
-func (id NodeId) ShortString() string {
+func (id NodeID) ShortString() string {
 	name := id.Key
 	if len(name) > 5 {
 		name = name[:5]
@@ -67,7 +67,7 @@ func (id NodeId) ShortString() string {
 	return name
 }
 
-func (id NodeId) Field() log.Field { return log.String("node_id", id.Key) }
+func (id NodeID) Field() log.Field { return log.String("node_id", id.Key) }
 
 type Signed interface {
 	Sig() []byte
@@ -82,7 +82,7 @@ type BlockEligibilityProof struct {
 
 type BlockHeader struct {
 	LayerIndex       LayerID
-	ATXID            AtxId
+	ATXID            ATXID
 	EligibilityProof BlockEligibilityProof
 	Data             []byte
 	Coin             bool
@@ -107,15 +107,15 @@ func (b *BlockHeader) AddView(id BlockID) {
 
 type MiniBlock struct {
 	BlockHeader
-	TxIds  []TransactionId
-	AtxIds []AtxId
+	TxIDs  []TransactionID
+	ATXIDs []ATXID
 }
 
 type Block struct {
 	MiniBlock
-	// keep id and minerId private to prevent them from being serialized
+	// keep id and minerID private to prevent them from being serialized
 	id        BlockID            // ⚠️ keep private
-	minerId   *signing.PublicKey // ⚠️ keep private
+	minerID   *signing.PublicKey // ⚠️ keep private
 	Signature []byte
 }
 
@@ -135,7 +135,7 @@ func (b *Block) Bytes() []byte {
 	return blkBytes
 }
 
-func (b *Block) Id() BlockID {
+func (b *Block) ID() BlockID {
 	return b.id
 }
 
@@ -151,7 +151,7 @@ func (b *Block) Initialize() {
 	if err != nil {
 		panic("failed to extract public key: " + err.Error())
 	}
-	b.minerId = signing.NewPublicKey(pubkey)
+	b.minerID = signing.NewPublicKey(pubkey)
 }
 
 func (b Block) Hash32() Hash32 {
@@ -174,14 +174,14 @@ func (b *Block) Compare(bl *Block) (bool, error) {
 	return bytes.Equal(bBytes, blBytes), nil
 }
 
-func (b *Block) MinerId() *signing.PublicKey {
-	return b.minerId
+func (b *Block) MinerID() *signing.PublicKey {
+	return b.minerID
 }
 
-func BlockIds(blocks []*Block) []BlockID {
+func BlockIDs(blocks []*Block) []BlockID {
 	ids := make([]BlockID, 0, len(blocks))
 	for _, block := range blocks {
-		ids = append(ids, block.Id())
+		ids = append(ids, block.ID())
 	}
 	return ids
 }
@@ -208,7 +208,7 @@ func (l *Layer) Blocks() []*Block {
 }
 
 func (l Layer) Hash() Hash32 {
-	return CalcBlocksHash32(BlockIds(l.blocks), nil)
+	return CalcBlocksHash32(BlockIDs(l.blocks), nil)
 }
 
 func (l *Layer) AddBlock(block *Block) {
@@ -251,12 +251,12 @@ func NewLayer(layerIndex LayerID) *Layer {
 	}
 }
 
-func SortBlockIds(ids []BlockID) []BlockID {
+func SortBlockIDs(ids []BlockID) []BlockID {
 	sort.Slice(ids, func(i, j int) bool { return ids[i].Compare(ids[j]) })
 	return ids
 }
 
 func SortBlocks(ids []*Block) []*Block {
-	sort.Slice(ids, func(i, j int) bool { return ids[i].Id().Compare(ids[j].Id()) })
+	sort.Slice(ids, func(i, j int) bool { return ids[i].ID().Compare(ids[j].ID()) })
 	return ids
 }

@@ -101,7 +101,7 @@ func (tp *TransactionProcessor) AddressExists(addr types.Address) bool {
 }
 
 // GetLayerApplied gets the layer id at which this tx was applied
-func (tp *TransactionProcessor) GetLayerApplied(txID types.TransactionId) *types.LayerID {
+func (tp *TransactionProcessor) GetLayerApplied(txID types.TransactionID) *types.LayerID {
 	layerIDBytes, err := tp.processorDb.Get(txID.Bytes())
 	if err != nil {
 		return nil
@@ -249,12 +249,12 @@ func (tp *TransactionProcessor) Process(txs []*types.Transaction, layerID types.
 	for _, tx := range txs {
 		err := tp.ApplyTransaction(tx, layerID)
 		if err != nil {
-			tp.With().Warning("failed to apply transaction", log.TxID(tx.Id().ShortString()), log.Err(err))
+			tp.With().Warning("failed to apply transaction", log.TxID(tx.ID().ShortString()), log.Err(err))
 			remaining = append(remaining, tx)
 		}
-		events.Publish(events.ValidTx{ID: tx.Id().String(), Valid: err == nil})
+		events.Publish(events.ValidTx{ID: tx.ID().String(), Valid: err == nil})
 		events.Publish(events.NewTx{
-			ID:          tx.Id().String(),
+			ID:          tx.ID().String(),
 			Origin:      tx.Origin().String(),
 			Destination: tx.Recipient.String(),
 			Amount:      tx.Amount,
@@ -301,7 +301,7 @@ func (tp *TransactionProcessor) ApplyTransaction(trans *types.Transaction, layer
 
 	//subtract fee from account, fee will be sent to miners in layers after
 	tp.SubBalance(trans.Origin(), new(big.Int).SetUint64(trans.Fee))
-	if err := tp.processorDb.Put(trans.Id().Bytes(), layerID.ToBytes()); err != nil {
+	if err := tp.processorDb.Put(trans.ID().Bytes(), layerID.ToBytes()); err != nil {
 		return fmt.Errorf("failed to add to applied txs: %v", err)
 	}
 	tp.With().Info("transaction processed", log.String("transaction", trans.String()))

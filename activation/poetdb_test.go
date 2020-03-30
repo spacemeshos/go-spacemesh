@@ -35,8 +35,8 @@ func TestPoetDbHappyFlow(t *testing.T) {
 
 	err = poetDb.storeProof(&types.PoetProofMessage{
 		PoetProof:     poetProof,
-		PoetServiceId: poetID,
-		RoundId:       roundID,
+		PoetServiceID: poetID,
+		RoundID:       roundID,
 		Signature:     nil,
 	})
 	r.NoError(err)
@@ -121,8 +121,8 @@ func TestPoetDb_SubscribeToPoetProofRef(t *testing.T) {
 
 	err = poetDb.storeProof(&types.PoetProofMessage{
 		PoetProof:     poetProof,
-		PoetServiceId: poetID,
-		RoundId:       "0",
+		PoetServiceID: poetID,
+		RoundID:       "0",
 		Signature:     nil,
 	})
 	r.NoError(err)

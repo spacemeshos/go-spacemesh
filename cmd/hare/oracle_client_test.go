@@ -76,11 +76,11 @@ func Test_MockOracleClientValidate(t *testing.T) {
 	mr.SetResult(validate, validateQuery(oc.world, hashInstanceAndK(0, 0), 2),
 		[]byte(fmt.Sprintf(`{ "IDs": [ "%v" ] }`, id)))
 
-	valid, _ := oc.Eligible(0, 0, 2, types.NodeId{Key: id}, nil)
+	valid, _ := oc.Eligible(0, 0, 2, types.NodeID{Key: id}, nil)
 
 	require.True(t, valid)
 
-	valid, _ = oc.Eligible(0, 0, 2, types.NodeId{Key: generateID()}, nil)
+	valid, _ = oc.Eligible(0, 0, 2, types.NodeID{Key: generateID()}, nil)
 
 	require.Equal(t, counter.reqCounter, 2)
 	require.False(t, valid)
@@ -106,7 +106,7 @@ func Test_OracleClientValidate(t *testing.T) {
 	incommitte := 0
 
 	for i := 0; i < size; i++ {
-		res, _ := oc.Eligible(0, 0, committee, types.NodeId{Key: pks[i]}, nil)
+		res, _ := oc.Eligible(0, 0, committee, types.NodeID{Key: pks[i]}, nil)
 		if res {
 			incommitte++
 		}
@@ -144,7 +144,7 @@ func Test_Concurrency(t *testing.T) {
 	oc.client = mc
 	mc.setCounting(true)
 	for i := 0; i < size; i++ {
-		res, _ := oc.Eligible(0, 0, committee, types.NodeId{Key: pks[i]}, nil)
+		res, _ := oc.Eligible(0, 0, committee, types.NodeID{Key: pks[i]}, nil)
 		if res {
 			incommitte++
 		}
@@ -168,12 +168,12 @@ func TestOracle_Eligible2(t *testing.T) {
 	o.Register(true, "myid")
 	mr.SetResult(validate, validateQuery(o.world, hashInstanceAndK(1, 2), 0),
 		[]byte(fmt.Sprintf(`{ "IDs": [ "%v" ] }`, "sheker")))
-	res, err := o.Eligible(1, 2, 0, types.NodeId{}, []byte{})
+	res, err := o.Eligible(1, 2, 0, types.NodeID{}, []byte{})
 	assert.Nil(t, err)
 	assert.False(t, res)
 	mr.SetResult(validate, validateQuery(o.world, hashInstanceAndK(1, 3), 1),
 		[]byte(fmt.Sprintf(`{ "IDs": [ "%v" ] }`, "sheker")))
-	res, err = o.Eligible(1, 3, 1, types.NodeId{}, []byte{})
+	res, err = o.Eligible(1, 3, 1, types.NodeID{}, []byte{})
 	assert.Nil(t, err)
 	assert.False(t, res)
 }

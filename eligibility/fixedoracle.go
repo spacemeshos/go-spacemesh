@@ -168,7 +168,7 @@ func hashLayerAndRound(instanceID types.LayerID, round int32) uint32 {
 }
 
 // Eligible returns whether the specific NodeID is eligible for layer in roudn and committee size.
-func (fo *FixedRolacle) Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeId, sig []byte) (bool, error) {
+func (fo *FixedRolacle) Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (bool, error) {
 	fo.mapRW.RLock()
 	total := len(fo.honest) + len(fo.faulty) // safe since len >= 0
 	fo.mapRW.RUnlock()

@@ -79,8 +79,8 @@ func (n NodeAPIMock) Exist(address types.Address) bool {
 
 type TxAPIMock struct {
 	mockOrigin   types.Address
-	returnTx     map[types.TransactionId]*types.Transaction
-	layerApplied map[types.TransactionId]*types.LayerID
+	returnTx     map[types.TransactionID]*types.Transaction
+	layerApplied map[types.TransactionID]*types.LayerID
 	err          error
 }
 
@@ -102,11 +102,11 @@ func (t *TxAPIMock) LatestLayerInState() types.LayerID {
 	return ValidatedLayerID
 }
 
-func (t *TxAPIMock) GetLayerApplied(txID types.TransactionId) *types.LayerID {
+func (t *TxAPIMock) GetLayerApplied(txID types.TransactionID) *types.LayerID {
 	return t.layerApplied[txID]
 }
 
-func (t *TxAPIMock) GetTransaction(id types.TransactionId) (*types.Transaction, error) {
+func (t *TxAPIMock) GetTransaction(id types.TransactionID) (*types.Transaction, error) {
 	return t.returnTx[id], nil
 }
 
@@ -118,25 +118,25 @@ func (t *TxAPIMock) GetRewards(account types.Address) (rewards []types.Reward, e
 	return
 }
 
-func (t *TxAPIMock) GetTransactionsByDestination(l types.LayerID, account types.Address) (txs []types.TransactionId) {
+func (t *TxAPIMock) GetTransactionsByDestination(l types.LayerID, account types.Address) (txs []types.TransactionID) {
 	if l != TxReturnLayer {
 		return nil
 	}
 	for _, tx := range t.returnTx {
 		if tx.Recipient.String() == account.String() {
-			txs = append(txs, tx.Id())
+			txs = append(txs, tx.ID())
 		}
 	}
 	return
 }
 
-func (t *TxAPIMock) GetTransactionsByOrigin(l types.LayerID, account types.Address) (txs []types.TransactionId) {
+func (t *TxAPIMock) GetTransactionsByOrigin(l types.LayerID, account types.Address) (txs []types.TransactionID) {
 	if l != TxReturnLayer {
 		return nil
 	}
 	for _, tx := range t.returnTx {
 		if tx.Origin().String() == account.String() {
-			txs = append(txs, tx.Id())
+			txs = append(txs, tx.ID())
 		}
 	}
 	return
@@ -212,8 +212,8 @@ var (
 	genTime     = GenesisTimeMock{time.Unix(genTimeUnix, 0)}
 	txMempool   = miner.NewTxMemPool()
 	txAPI       = &TxAPIMock{
-		returnTx:     make(map[types.TransactionId]*types.Transaction),
-		layerApplied: make(map[types.TransactionId]*types.LayerID),
+		returnTx:     make(map[types.TransactionID]*types.Transaction),
+		layerApplied: make(map[types.TransactionID]*types.LayerID),
 	}
 )
 
@@ -367,22 +367,22 @@ func TestJsonWalletApi(t *testing.T) {
 	// add incoming tx to mempool
 	mempoolTxIn, err := mesh.NewSignedTx(1337, addr, 420, 3, 42, signing.NewEdSigner())
 	r.NoError(err)
-	txMempool.Put(mempoolTxIn.Id(), mempoolTxIn)
+	txMempool.Put(mempoolTxIn.ID(), mempoolTxIn)
 
 	// add outgoing tx to mempool
 	mempoolTxOut, err := mesh.NewSignedTx(1337, types.BytesToAddress([]byte{1}), 420, 3, 42, signer)
 	r.NoError(err)
-	txMempool.Put(mempoolTxOut.Id(), mempoolTxOut)
+	txMempool.Put(mempoolTxOut.ID(), mempoolTxOut)
 
 	// add incoming tx to mesh
 	meshTxIn, err := mesh.NewSignedTx(1337, addr, 420, 3, 42, signing.NewEdSigner())
 	r.NoError(err)
-	txAPI.returnTx[meshTxIn.Id()] = meshTxIn
+	txAPI.returnTx[meshTxIn.ID()] = meshTxIn
 
 	// add outgoing tx to mesh
 	meshTxOut, err := mesh.NewSignedTx(1337, types.BytesToAddress([]byte{1}), 420, 3, 42, signer)
 	r.NoError(err)
-	txAPI.returnTx[meshTxOut.Id()] = meshTxOut
+	txAPI.returnTx[meshTxOut.ID()] = meshTxOut
 
 	// test with start layer that gets the mesh txs
 	payload = marshalProto(t, &pb.GetTxsSinceLayer{Account: &pb.AccountId{Address: util.Bytes2Hex(addr.Bytes())}, StartLayer: TxReturnLayer})
@@ -393,10 +393,10 @@ func TestJsonWalletApi(t *testing.T) {
 	r.NoError(jsonpb.UnmarshalString(respBody, &accounts))
 	r.Equal(uint64(ValidatedLayerID), accounts.ValidatedLayer)
 	r.ElementsMatch([]string{
-		mempoolTxIn.Id().String(),
-		mempoolTxOut.Id().String(),
-		meshTxIn.Id().String(),
-		meshTxOut.Id().String(),
+		mempoolTxIn.ID().String(),
+		mempoolTxOut.ID().String(),
+		meshTxIn.ID().String(),
+		meshTxOut.ID().String(),
 	}, accounts.Txs)
 
 	// test with start layer that doesn't get the mesh txs (mempool txs return anyway)
@@ -407,8 +407,8 @@ func TestJsonWalletApi(t *testing.T) {
 	r.NoError(jsonpb.UnmarshalString(respBody, &accounts))
 	r.Equal(uint64(ValidatedLayerID), accounts.ValidatedLayer)
 	r.ElementsMatch([]string{
-		mempoolTxIn.Id().String(),
-		mempoolTxOut.Id().String(),
+		mempoolTxIn.ID().String(),
+		mempoolTxOut.ID().String(),
 	}, accounts.Txs)
 
 	// test get txs per account with wrong layer error
@@ -447,15 +447,15 @@ func TestSpacemeshGrpcService_GetTransaction(t *testing.T) {
 	shutDown := launchServer(t)
 
 	tx1 := genTx(t)
-	txAPI.returnTx[tx1.Id()] = tx1
+	txAPI.returnTx[tx1.ID()] = tx1
 
 	tx2 := genTx(t)
-	txAPI.returnTx[tx2.Id()] = tx2
+	txAPI.returnTx[tx2.ID()] = tx2
 	layerApplied := types.LayerID(1)
-	txAPI.layerApplied[tx2.Id()] = &layerApplied
+	txAPI.layerApplied[tx2.ID()] = &layerApplied
 
 	tx3 := genTx(t)
-	txAPI.returnTx[tx3.Id()] = tx3
+	txAPI.returnTx[tx3.ID()] = tx3
 	ap.nonces[tx3.Origin()] = 2222
 
 	submitTx(t, tx1)
@@ -475,7 +475,7 @@ func TestSpacemeshGrpcService_GetTransaction(t *testing.T) {
 
 func getTx(t *testing.T, tx *types.Transaction) pb.Transaction {
 	r := require.New(t)
-	idToSend := pb.TransactionId{Id: tx.Id().Bytes()}
+	idToSend := pb.TransactionId{Id: tx.ID().Bytes()}
 	respBody, respStatus := callEndpoint(t, "v1/gettransaction", marshalProto(t, &idToSend))
 	r.Equal(http.StatusOK, respStatus)
 	var respTx pb.Transaction
@@ -486,7 +486,7 @@ func getTx(t *testing.T, tx *types.Transaction) pb.Transaction {
 
 func assertTx(t *testing.T, respTx pb.Transaction, tx *types.Transaction, status string, layerID, timestamp uint64) {
 	r := require.New(t)
-	r.Equal(tx.Id().Bytes(), respTx.TxId.Id)
+	r.Equal(tx.ID().Bytes(), respTx.TxId.Id)
 	r.Equal(tx.Fee, respTx.Fee)
 	r.Equal(tx.Amount, respTx.Amount)
 	r.Equal(util.Bytes2Hex(tx.Recipient.Bytes()), respTx.Receiver.Address)
@@ -507,7 +507,7 @@ func submitTx(t *testing.T, tx *types.Transaction) {
 	r.NoError(jsonpb.UnmarshalString(respBody, &txConfirmation))
 
 	r.Equal("ok", txConfirmation.Value)
-	r.Equal(tx.Id().String()[2:], txConfirmation.Id)
+	r.Equal(tx.ID().String()[2:], txConfirmation.Id)
 	r.Equal(asBytes(t, tx), networkMock.broadcasted)
 }
 

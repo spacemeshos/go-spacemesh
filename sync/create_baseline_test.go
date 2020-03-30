@@ -62,20 +62,20 @@ func TestCreateBaseline(t *testing.T) {
 	createBaseline(msh, numOfLayers, blocksPerLayer, blocksPerLayer, txPerBlock, atxPerBlock)
 }
 
-func txs(num int) ([]*types.Transaction, []types.TransactionId) {
+func txs(num int) ([]*types.Transaction, []types.TransactionID) {
 	txs := make([]*types.Transaction, 0, num)
-	ids := make([]types.TransactionId, 0, num)
+	ids := make([]types.TransactionID, 0, num)
 	for i := 0; i < num; i++ {
 		tx := tx()
 		txs = append(txs, tx)
-		ids = append(ids, tx.Id())
+		ids = append(ids, tx.ID())
 	}
 	return txs, ids
 }
 
-func atxs(num int) ([]*types.ActivationTx, []types.AtxId) {
+func atxs(num int) ([]*types.ActivationTx, []types.ATXID) {
 	atxs := make([]*types.ActivationTx, 0, num)
-	ids := make([]types.AtxId, 0, num)
+	ids := make([]types.ATXID, 0, num)
 	signer := signing.NewEdSigner()
 	for i := 0; i < num; i++ {
 		atx := atxWithProof(signer.PublicKey().String(), proof)
@@ -84,7 +84,7 @@ func atxs(num int) ([]*types.ActivationTx, []types.AtxId) {
 			panic(err)
 		}
 		atxs = append(atxs, atx)
-		ids = append(ids, atx.Id())
+		ids = append(ids, atx.ID())
 	}
 	return atxs, ids
 }
@@ -122,15 +122,15 @@ func createLayerWithRandVoting(msh *mesh.Mesh, index types.LayerID, prev []*type
 		bl := types.NewExistingBlock(index, []byte(rand.RandString(8)))
 		signer := signing.NewEdSigner()
 		bl.Signature = signer.Sign(bl.Bytes())
-		layerBlocks = append(layerBlocks, bl.Id())
+		layerBlocks = append(layerBlocks, bl.ID())
 		for idx, pat := range patterns {
 			for _, id := range pat {
 				b := prev[idx].Blocks()[id]
-				bl.AddVote(b.Id())
+				bl.AddVote(b.ID())
 			}
 		}
 		for _, prevBloc := range prev[0].Blocks() {
-			bl.AddView(prevBloc.Id())
+			bl.AddView(prevBloc.ID())
 		}
 
 		//add txs
@@ -138,8 +138,8 @@ func createLayerWithRandVoting(msh *mesh.Mesh, index types.LayerID, prev []*type
 		//add atxs
 		atxs, atxids := atxs(atxPerBlock)
 
-		bl.TxIds = txids
-		bl.AtxIds = atxids
+		bl.TxIDs = txids
+		bl.ATXIDs = atxids
 		bl.Initialize()
 		start := time.Now()
 		msh.AddBlockWithTxs(bl, txs, atxs)
@@ -156,10 +156,10 @@ func atxWithProof(pubkey string, poetref []byte) *types.ActivationTx {
 	chlng := types.HexToHash32("0x3333")
 	npst := activation.NewNIPSTWithChallenge(&chlng, poetref)
 
-	atx := types.NewActivationTxForTests(types.NodeId{Key: pubkey, VRFPublicKey: []byte(rand.RandString(8))}, 0, *types.EmptyAtxId, 5, 1, *types.EmptyAtxId, coinbase, 0, []types.BlockID{}, npst)
+	atx := types.NewActivationTxForTests(types.NodeID{Key: pubkey, VRFPublicKey: []byte(rand.RandString(8))}, 0, *types.EmptyATXID, 5, 1, *types.EmptyATXID, coinbase, 0, []types.BlockID{}, npst)
 	atx.Commitment = commitment
 	atx.CommitmentMerkleRoot = commitment.MerkleRoot
-	atx.CalcAndSetId()
+	atx.CalcAndSetID()
 	return atx
 }
 

@@ -125,7 +125,7 @@ func txsAsItems(msg []byte) ([]item, error) {
 		err := txs[i].CalcAndSetOrigin()
 		if err != nil {
 			return nil, fmt.Errorf("failed to calc transaction origin (id: %s): %v",
-				txs[i].Id().ShortString(), err)
+				txs[i].ID().ShortString(), err)
 		}
 		items[i] = txs[i]
 	}
@@ -149,7 +149,7 @@ func blocksAsItems(msg []byte) ([]item, error) {
 func calcAndSetIds(atxs []types.ActivationTx) []types.ActivationTx {
 	atxsWithIds := make([]types.ActivationTx, 0, len(atxs))
 	for _, atx := range atxs {
-		atx.CalcAndSetId()
+		atx.CalcAndSetID()
 		atxsWithIds = append(atxsWithIds, atx)
 	}
 	return atxsWithIds

@@ -116,7 +116,7 @@ func CalcBlocksHash12(view []BlockID) (Hash12, error) {
 func CalcBlocksHash32(view []BlockID, additionalBytes []byte) Hash32 {
 	sortedView := make([]BlockID, len(view))
 	copy(sortedView, view)
-	SortBlockIds(sortedView)
+	SortBlockIDs(sortedView)
 	return CalcBlockHash32Presorted(sortedView, additionalBytes)
 }
 
@@ -131,8 +131,8 @@ func CalcBlockHash32Presorted(sortedView []BlockID, additionalBytes []byte) Hash
 	return res
 }
 
-func CalcAtxsHash12(ids []AtxId) (Hash12, error) {
-	sorted := make([]AtxId, len(ids))
+func CalcAtxsHash12(ids []ATXID) (Hash12, error) {
+	sorted := make([]ATXID, len(ids))
 	copy(sorted, ids)
 	sort.Slice(sorted, func(i, j int) bool {
 		a := sorted[i].Hash32()
@@ -146,8 +146,8 @@ func CalcAtxsHash12(ids []AtxId) (Hash12, error) {
 	return CalcHash12(bytes), err
 }
 
-func CalcTxsHash12(ids []TransactionId) (Hash12, error) {
-	sorted := make([]TransactionId, len(ids))
+func CalcTxsHash12(ids []TransactionID) (Hash12, error) {
+	sorted := make([]TransactionID, len(ids))
 	copy(sorted, ids)
 	sort.Slice(sorted, func(i, j int) bool {
 		return bytes.Compare(sorted[i][:], sorted[j][:]) < 0 //sorted[i] < sorted[j]
@@ -171,7 +171,7 @@ func CalcHash32(data []byte) Hash32 {
 	return sha256.Sum256(data)
 }
 
-func CalcAtxHash32(atx *ActivationTx) Hash32 {
+func CalcATXHash32(atx *ActivationTx) Hash32 {
 	bytes, err := InterfaceToBytes(&atx.ActivationTxHeader)
 	if err != nil {
 		panic("could not Serialize atx")

@@ -27,15 +27,15 @@ func TestBlockListener_TestTxQueue(t *testing.T) {
 	bl1.Start()
 	bl2.Start()
 	queue := bl1.txQueue
-	id1 := tx1.Id()
-	id2 := tx2.Id()
-	id3 := tx3.Id()
+	id1 := tx1.ID()
+	id2 := tx2.ID()
+	id3 := tx3.ID()
 
 	//missing
-	id4 := tx4.Id()
+	id4 := tx4.ID()
 
 	block1 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
-	block1.TxIds = []types.TransactionId{id1, id2, id3}
+	block1.TxIDs = []types.TransactionID{id1, id2, id3}
 	block1.Initialize()
 	bl2.AddBlockWithTxs(block1, []*types.Transaction{tx1, tx2, tx3}, []*types.ActivationTx{})
 
@@ -169,12 +169,12 @@ func TestBlockListener_TestTxQueueHandle(t *testing.T) {
 	bl1.Start()
 	bl2.Start()
 	queue := bl1.txQueue
-	id1 := tx1.Id()
-	id2 := tx2.Id()
-	id3 := tx3.Id()
+	id1 := tx1.ID()
+	id2 := tx2.ID()
+	id3 := tx3.ID()
 
 	block1 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
-	block1.TxIds = []types.TransactionId{id1, id2, id3}
+	block1.TxIDs = []types.TransactionID{id1, id2, id3}
 	bl2.AddBlockWithTxs(block1, []*types.Transaction{tx1, tx2, tx3}, []*types.ActivationTx{})
 
 	res, err := queue.handle([]types.Hash32{id1.Hash32(), id2.Hash32(), id3.Hash32()})

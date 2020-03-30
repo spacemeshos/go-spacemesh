@@ -6,20 +6,20 @@ import (
 )
 
 type AtxDbMock struct {
-	db      map[types.AtxId]*types.ActivationTx
-	nipsts  map[types.AtxId]*types.NIPST
+	db      map[types.ATXID]*types.ActivationTx
+	nipsts  map[types.ATXID]*types.NIPST
 	ProcCnt int
 }
 
 func NewAtxDbMock() *AtxDbMock {
 	return &AtxDbMock{
-		db:     make(map[types.AtxId]*types.ActivationTx),
-		nipsts: make(map[types.AtxId]*types.NIPST),
+		db:     make(map[types.ATXID]*types.ActivationTx),
+		nipsts: make(map[types.ATXID]*types.NIPST),
 	}
 }
 
-func (t *AtxDbMock) GetAtxHeader(id types.AtxId) (*types.ActivationTxHeader, error) {
-	if id == *types.EmptyAtxId {
+func (t *AtxDbMock) GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error) {
+	if id == *types.EmptyATXID {
 		return nil, fmt.Errorf("trying to fetch empty atx id")
 	}
 
@@ -29,15 +29,15 @@ func (t *AtxDbMock) GetAtxHeader(id types.AtxId) (*types.ActivationTxHeader, err
 	return nil, fmt.Errorf("cannot find atx")
 }
 
-func (t *AtxDbMock) GetATXs(atxIds []types.AtxId) (map[types.AtxId]*types.ActivationTx, []types.AtxId) {
+func (t *AtxDbMock) GetATXs(atxIds []types.ATXID) (map[types.ATXID]*types.ActivationTx, []types.ATXID) {
 	return nil, nil
 }
 
-func (t *AtxDbMock) GetFullAtx(id types.AtxId) (*types.ActivationTx, error) {
+func (t *AtxDbMock) GetFullAtx(id types.ATXID) (*types.ActivationTx, error) {
 	return t.db[id], nil
 }
 
-func (t *AtxDbMock) AddAtx(id types.AtxId, atx *types.ActivationTx) {
+func (t *AtxDbMock) AddAtx(id types.ATXID, atx *types.ActivationTx) {
 	t.db[id] = atx
 	t.nipsts[id] = atx.Nipst
 }

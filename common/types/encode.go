@@ -14,7 +14,7 @@ func (l LayerID) ToBytes() []byte { return util.Uint64ToBytes(uint64(l)) }
 
 func BlockIdsAsBytes(ids []BlockID) ([]byte, error) {
 	var w bytes.Buffer
-	SortBlockIds(ids)
+	SortBlockIDs(ids)
 	if _, err := xdr.Marshal(&w, &ids); err != nil {
 		return nil, errors.New("error marshalling block ids ")
 	}
@@ -39,7 +39,7 @@ func BytesAsAtx(b []byte) (*ActivationTx, error) {
 	return &atx, nil
 }
 
-func TxIdsAsBytes(ids []TransactionId) ([]byte, error) {
+func TxIdsAsBytes(ids []TransactionID) ([]byte, error) {
 	var w bytes.Buffer
 	if _, err := xdr.Marshal(&w, &ids); err != nil {
 		return nil, fmt.Errorf("error marshalling tx ids: %v", err)

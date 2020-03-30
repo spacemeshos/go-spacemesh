@@ -71,13 +71,13 @@ type Hare struct {
 
 	validate outputValidationFunc
 
-	nid types.NodeId
+	nid types.NodeID
 
 	totalCPs int32
 }
 
 // New returns a new Hare struct.
-func New(conf config.Config, p2p NetworkService, sign Signer, nid types.NodeId, validate outputValidationFunc,
+func New(conf config.Config, p2p NetworkService, sign Signer, nid types.NodeID, validate outputValidationFunc,
 	syncState syncStateFunc, obp layers, rolacle Rolacle,
 	layersPerEpoch uint16, idProvider identityProvider, stateQ StateQuerier,
 	beginLayer chan types.LayerID, logger log.Log) *Hare {

@@ -42,7 +42,7 @@ type mockRolacle struct {
 	MockStateQuerier
 }
 
-func (mr *mockRolacle) Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeId, sig []byte) (bool, error) {
+func (mr *mockRolacle) Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (bool, error) {
 	return mr.isEligible, mr.err
 }
 
@@ -271,7 +271,7 @@ func generateConsensusProcess(t *testing.T) *ConsensusProcess {
 	oracle.Register(true, signing.PublicKey().String())
 	output := make(chan TerminationOutput, 1)
 
-	return NewConsensusProcess(cfg, instanceID1, s, oracle, NewMockStateQuerier(), 10, signing, types.NodeId{Key: signing.PublicKey().String(), VRFPublicKey: vrfPub}, n1, output, truer{}, log.NewDefault(signing.PublicKey().String()))
+	return NewConsensusProcess(cfg, instanceID1, s, oracle, NewMockStateQuerier(), 10, signing, types.NodeID{Key: signing.PublicKey().String(), VRFPublicKey: vrfPub}, n1, output, truer{}, log.NewDefault(signing.PublicKey().String()))
 }
 
 func TestConsensusProcess_Id(t *testing.T) {
