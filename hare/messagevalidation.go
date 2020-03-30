@@ -14,7 +14,7 @@ type messageValidator interface {
 }
 
 type identityProvider interface {
-	GetIdentity(edID string) (types.NodeId, error)
+	GetIdentity(edID string) (types.NodeID, error)
 }
 
 type eligibilityValidator struct {

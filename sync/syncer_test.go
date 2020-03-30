@@ -162,8 +162,8 @@ func TestSyncer_Close(t *testing.T) {
 	sync1 := syncs[1]
 
 	block := types.NewExistingBlock(1, []byte(rand.RandString(8)))
-	block.TxIds = append(block.TxIds, txid1)
-	block.AtxIds = append(block.AtxIds, atx1)
+	block.TxIDs = append(block.TxIDs, txid1)
+	block.ATXIDs = append(block.ATXIDs, atx1)
 
 	sync1.AddBlockWithTxs(block, nil, nil)
 	sync1.Close()
@@ -199,7 +199,7 @@ func TestSyncProtocol_BlockRequest(t *testing.T) {
 	emptyID := types.BlockID{}
 	select {
 	case a := <-output:
-		assert.NotEqual(t, a.(fetchJob).items[0].(*types.Block).Id(), emptyID, "id not set")
+		assert.NotEqual(t, a.(fetchJob).items[0].(*types.Block).ID(), emptyID, "id not set")
 		assert.Equal(t, a.(fetchJob).ids[0], block.Hash32(), "wrong block")
 	case <-timeout.C:
 		assert.Fail(t, "no message received on channel")
@@ -308,8 +308,8 @@ func makePoetProofMessage(t *testing.T) types.PoetProofMessage {
 
 	return types.PoetProofMessage{
 		PoetProof:     poetProof,
-		PoetServiceId: poetID,
-		RoundId:       roundID,
+		PoetServiceID: poetID,
+		RoundID:       roundID,
 		Signature:     nil,
 	}
 }
@@ -351,7 +351,7 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 		for _, a := range layer.Blocks() {
 			found := false
 			for _, id := range ids {
-				if a.Id() == types.BlockID(id) {
+				if a.ID() == types.BlockID(id) {
 					found = true
 					break
 				}
@@ -383,11 +383,11 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	err := syncObj1.ProcessAtxs([]*types.ActivationTx{atx3})
 	assert.NoError(t, err)
 	block1 := types.NewExistingBlock(0, []byte(rand.RandString(8)))
-	block1.ATXID = atx3.Id()
+	block1.ATXID = atx3.ID()
 	block2 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
-	block2.ATXID = atx3.Id()
+	block2.ATXID = atx3.ID()
 	block3 := types.NewExistingBlock(2, []byte(rand.RandString(8)))
-	block3.ATXID = atx3.Id()
+	block3.ATXID = atx3.ID()
 	block1.Initialize()
 	block2.Initialize()
 	block3.Initialize()
@@ -405,11 +405,11 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 
 	for out := range output {
 		block := out.(fetchJob).items[0].(*types.Block)
-		txs, err := syncObj2.txQueue.HandleTxs(block.TxIds)
+		txs, err := syncObj2.txQueue.HandleTxs(block.TxIDs)
 		if err != nil {
 			t.Error("could not fetch all txs", err)
 		}
-		atxs, err := syncObj2.atxQueue.HandleAtxs(block.AtxIds)
+		atxs, err := syncObj2.atxQueue.HandleAtxs(block.ATXIDs)
 		if err != nil {
 			t.Error("could not fetch all atxs", err)
 		}
@@ -701,21 +701,21 @@ func (sis *syncIntegrationTwoNodes) TestSyncProtocol_TwoNodes() {
 	syncObj2 := sis.syncers[2]
 	defer syncObj2.Close()
 
-	id1 := tx1.Id()
-	id2 := tx2.Id()
-	id3 := tx3.Id()
-	id4 := tx4.Id()
-	id5 := tx5.Id()
-	id6 := tx6.Id()
-	id7 := tx7.Id()
-	id8 := tx8.Id()
+	id1 := tx1.ID()
+	id2 := tx2.ID()
+	id3 := tx3.ID()
+	id4 := tx4.ID()
+	id5 := tx5.ID()
+	id6 := tx6.ID()
+	id7 := tx7.ID()
+	id8 := tx8.ID()
 
-	block3.TxIds = []types.TransactionId{id1, id2, id3}
-	block4.TxIds = []types.TransactionId{id1, id2, id3}
-	block5.TxIds = []types.TransactionId{id4, id5, id6}
-	block6.TxIds = []types.TransactionId{id4, id5, id6}
-	block7.TxIds = []types.TransactionId{id7, id8}
-	block8.TxIds = []types.TransactionId{id7, id8}
+	block3.TxIDs = []types.TransactionID{id1, id2, id3}
+	block4.TxIDs = []types.TransactionID{id1, id2, id3}
+	block5.TxIDs = []types.TransactionID{id4, id5, id6}
+	block6.TxIDs = []types.TransactionID{id4, id5, id6}
+	block7.TxIDs = []types.TransactionID{id7, id8}
+	block8.TxIDs = []types.TransactionID{id7, id8}
 
 	block1.Initialize()
 	block2.Initialize()
@@ -900,10 +900,10 @@ func atx(pubkey string) *types.ActivationTx {
 	poetRef := []byte{0xde, 0xad}
 	npst := activation.NewNIPSTWithChallenge(&chlng, poetRef)
 
-	atx := types.NewActivationTxForTests(types.NodeId{Key: pubkey, VRFPublicKey: []byte(rand.RandString(8))}, 0, *types.EmptyAtxId, 5, 1, *types.EmptyAtxId, coinbase, 0, nil, npst)
+	atx := types.NewActivationTxForTests(types.NodeID{Key: pubkey, VRFPublicKey: []byte(rand.RandString(8))}, 0, *types.EmptyATXID, 5, 1, *types.EmptyATXID, coinbase, 0, nil, npst)
 	atx.Commitment = commitment
 	atx.CommitmentMerkleRoot = commitment.MerkleRoot
-	atx.CalcAndSetId()
+	atx.CalcAndSetID()
 	return atx
 }
 
@@ -924,10 +924,10 @@ func TestSyncer_Txs(t *testing.T) {
 	defer syncObj3.Close()
 
 	block3 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
-	id1 := tx1.Id()
-	id2 := tx2.Id()
-	id3 := tx3.Id()
-	block3.TxIds = []types.TransactionId{id1, id2, id3}
+	id1 := tx1.ID()
+	id2 := tx2.ID()
+	id3 := tx3.ID()
+	block3.TxIDs = []types.TransactionID{id1, id2, id3}
 	syncObj1.AddBlockWithTxs(block3, []*types.Transaction{tx1, tx2, tx3}, []*types.ActivationTx{})
 
 	_, err := syncObj2.txQueue.handle([]types.Hash32{id1.Hash32(), id2.Hash32(), id3.Hash32()})
@@ -960,19 +960,19 @@ func TestFetchLayerBlockIds(t *testing.T) {
 	syncObj2.SetZeroBlockLayer(2)
 
 	mp := map[types.Hash32][]p2p.Peer{}
-	hash1 := types.CalcBlocksHash32([]types.BlockID{block1.Id()}, nil)
+	hash1 := types.CalcBlocksHash32([]types.BlockID{block1.ID()}, nil)
 	mp[hash1] = append(mp[hash1], nodes[0].PublicKey())
-	hash2 := types.CalcBlocksHash32([]types.BlockID{block2.Id()}, nil)
+	hash2 := types.CalcBlocksHash32([]types.BlockID{block2.ID()}, nil)
 	mp[hash2] = append(mp[hash2], nodes[1].PublicKey())
 	ids, _ := syncObj3.fetchLayerBlockIds(mp, 1)
 
 	assert.True(t, len(ids) == 2)
 
-	if ids[0] != block1.Id() && ids[1] != block1.Id() {
+	if ids[0] != block1.ID() && ids[1] != block1.ID() {
 		t.Error("did not get ids from all peers")
 	}
 
-	if ids[0] != block2.Id() && ids[1] != block2.Id() {
+	if ids[0] != block2.ID() && ids[1] != block2.ID() {
 		panic("did not get ids from all peers")
 	}
 
@@ -1334,8 +1334,8 @@ func TestSyncProtocol_NilResponse(t *testing.T) {
 
 	var nonExistingLayerID = types.LayerID(0)
 	var nonExistingBlockID = types.BlockID{}
-	var nonExistingTxID types.TransactionId
-	var nonExistingAtxID types.AtxId
+	var nonExistingTxID types.TransactionID
+	var nonExistingAtxID types.ATXID
 	var nonExistingPoetRef []byte
 
 	timeout := 1 * time.Second
@@ -1490,7 +1490,7 @@ func TestSyncProtocol_BadResponse(t *testing.T) {
 
 	// Block
 	ch := make(chan []types.Hash32, 1)
-	ch <- []types.Hash32{bl1.Id().AsHash32()}
+	ch <- []types.Hash32{bl1.ID().AsHash32()}
 	output := fetchWithFactory(newFetchWorker(syncs[0], 1, newFetchReqFactory(blockMsg, blocksAsItems), ch, ""))
 
 	select {
@@ -1544,35 +1544,35 @@ func genByte32() [32]byte {
 	return x
 }
 
-var txid1 = types.TransactionId(genByte32())
-var txid2 = types.TransactionId(genByte32())
-var txid3 = types.TransactionId(genByte32())
+var txid1 = types.TransactionID(genByte32())
+var txid2 = types.TransactionID(genByte32())
+var txid3 = types.TransactionID(genByte32())
 
 var one = types.CalcHash32([]byte("1"))
 var two = types.CalcHash32([]byte("2"))
 var three = types.CalcHash32([]byte("3"))
 
-var atx1 = types.AtxId(one)
-var atx2 = types.AtxId(two)
-var atx3 = types.AtxId(three)
+var atx1 = types.ATXID(one)
+var atx2 = types.ATXID(two)
+var atx3 = types.ATXID(three)
 
 func Test_validateUniqueTxAtx(t *testing.T) {
 	r := require.New(t)
 	b := &types.Block{}
 
 	// unique
-	b.TxIds = []types.TransactionId{txid1, txid2, txid3}
-	b.AtxIds = []types.AtxId{atx1, atx2, atx3}
+	b.TxIDs = []types.TransactionID{txid1, txid2, txid3}
+	b.ATXIDs = []types.ATXID{atx1, atx2, atx3}
 	r.Nil(validateUniqueTxAtx(b))
 
 	// dup txs
-	b.TxIds = []types.TransactionId{txid1, txid2, txid1}
-	b.AtxIds = []types.AtxId{atx1, atx2, atx3}
+	b.TxIDs = []types.TransactionID{txid1, txid2, txid1}
+	b.ATXIDs = []types.ATXID{atx1, atx2, atx3}
 	r.EqualError(validateUniqueTxAtx(b), errDupTx.Error())
 
 	// dup atxs
-	b.TxIds = []types.TransactionId{txid1, txid2, txid3}
-	b.AtxIds = []types.AtxId{atx1, atx2, atx1}
+	b.TxIDs = []types.TransactionID{txid1, txid2, txid3}
+	b.ATXIDs = []types.ATXID{atx1, atx2, atx1}
 	r.EqualError(validateUniqueTxAtx(b), errDupAtx.Error())
 }
 
@@ -1581,19 +1581,19 @@ func TestSyncer_BlockSyntacticValidation(t *testing.T) {
 	syncs, _, _ := SyncMockFactory(2, conf, "TestSyncProtocol_NilResponse", memoryDB, newMemPoetDb)
 	s := syncs[0]
 	b := &types.Block{}
-	b.TxIds = []types.TransactionId{txid1, txid2, txid1}
-	b.AtxIds = []types.AtxId{atx1, atx2, atx3}
+	b.TxIDs = []types.TransactionID{txid1, txid2, txid1}
+	b.ATXIDs = []types.ATXID{atx1, atx2, atx3}
 	_, _, err := s.blockSyntacticValidation(b)
 	r.EqualError(err, errDupTx.Error())
 
 	for i := 0; i <= miner.AtxsPerBlockLimit; i++ {
-		b.AtxIds = append(b.AtxIds, atx1)
+		b.ATXIDs = append(b.ATXIDs, atx1)
 	}
 	_, _, err = s.blockSyntacticValidation(b)
 	r.EqualError(err, errTooManyAtxs.Error())
 
-	b.TxIds = []types.TransactionId{}
-	b.AtxIds = []types.AtxId{}
+	b.TxIDs = []types.TransactionID{}
+	b.ATXIDs = []types.ATXID{}
 	_, _, err = s.blockSyntacticValidation(b)
 	r.Nil(err)
 }
@@ -1611,13 +1611,13 @@ func TestSyncer_AtxSetID(t *testing.T) {
 	assert.Equal(t, b.View, a.View)
 	assert.Equal(t, b.Commitment, a.Commitment)
 
-	assert.Equal(t, b.ActivationTxHeader.NodeId, a.ActivationTxHeader.NodeId)
-	assert.Equal(t, b.ActivationTxHeader.PrevATXId, a.ActivationTxHeader.PrevATXId)
+	assert.Equal(t, b.ActivationTxHeader.NodeID, a.ActivationTxHeader.NodeID)
+	assert.Equal(t, b.ActivationTxHeader.PrevATXID, a.ActivationTxHeader.PrevATXID)
 	assert.Equal(t, b.ActivationTxHeader.ActiveSetSize, a.ActivationTxHeader.ActiveSetSize)
 	assert.Equal(t, b.ActivationTxHeader.Coinbase, a.ActivationTxHeader.Coinbase)
 	assert.Equal(t, b.ActivationTxHeader.CommitmentMerkleRoot, a.ActivationTxHeader.CommitmentMerkleRoot)
 	assert.Equal(t, b.ActivationTxHeader.NIPSTChallenge, a.ActivationTxHeader.NIPSTChallenge)
-	b.CalcAndSetId()
+	b.CalcAndSetID()
 	assert.Equal(t, a.ShortString(), b.ShortString())
 }
 

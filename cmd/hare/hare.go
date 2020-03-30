@@ -90,7 +90,7 @@ func buildSet() []types.BlockID {
 	s := make([]types.BlockID, 200, 200)
 
 	for i := uint64(0); i < 200; i++ {
-		s = append(s, types.NewExistingBlock(1, util.Uint64ToBytes(i)).Id())
+		s = append(s, types.NewExistingBlock(1, util.Uint64ToBytes(i)).ID())
 	}
 
 	return s
@@ -99,8 +99,8 @@ func buildSet() []types.BlockID {
 type mockIDProvider struct {
 }
 
-func (mip *mockIDProvider) GetIdentity(edID string) (types.NodeId, error) {
-	return types.NodeId{Key: edID, VRFPublicKey: []byte{}}, nil
+func (mip *mockIDProvider) GetIdentity(edID string) (types.NodeID, error) {
+	return types.NodeID{Key: edID, VRFPublicKey: []byte{}}, nil
 }
 
 type mockStateQuerier struct {
@@ -164,7 +164,7 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
 	app.clock = timesync.NewClock(timesync.RealClock{}, ld, gTime, lg)
 
-	app.ha = hare.New(app.Config.HARE, app.p2p, app.sgn, types.NodeId{Key: app.sgn.PublicKey().String(), VRFPublicKey: []byte{}}, validateBlocks, IsSynced, &mockBlockProvider{}, hareOracle, uint16(app.Config.LayersPerEpoch), &mockIDProvider{}, &mockStateQuerier{}, app.clock.Subscribe(), lg)
+	app.ha = hare.New(app.Config.HARE, app.p2p, app.sgn, types.NodeID{Key: app.sgn.PublicKey().String(), VRFPublicKey: []byte{}}, validateBlocks, IsSynced, &mockBlockProvider{}, hareOracle, uint16(app.Config.LayersPerEpoch), &mockIDProvider{}, &mockStateQuerier{}, app.clock.Subscribe(), lg)
 	log.Info("Starting hare service")
 	err = app.ha.Start()
 	if err != nil {

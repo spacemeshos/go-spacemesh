@@ -19,7 +19,7 @@ func TestConvert32_20Hash(t *testing.T) {
 	msg := []byte("abcdefghijk")
 	hash32 := CalcHash32(msg)
 	hash20 := hash32.ToHash20()
-	c_hash32 := hash20.ToHash32()
-	hash20_2 := c_hash32.ToHash20()
-	assert.Equal(t, hash20_2, hash20)
+	cHash32 := hash20.ToHash32()
+	hash20b := cHash32.ToHash20()
+	assert.Equal(t, hash20b, hash20)
 }

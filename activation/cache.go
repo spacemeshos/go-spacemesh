@@ -52,13 +52,13 @@ func NewAtxCache(size int) AtxCache {
 }
 
 // Add adds an activationTxHeader to cache
-func (bc *AtxCache) Add(id types.AtxId, atxHeader *types.ActivationTxHeader) {
+func (bc *AtxCache) Add(id types.ATXID, atxHeader *types.ActivationTxHeader) {
 	bc.Cache.Add(id, atxHeader)
 }
 
 // Get gets the corresponding Atx header to the given id, it also returns a boolean to indicate whether the item
 // was found in cache
-func (bc AtxCache) Get(id types.AtxId) (*types.ActivationTxHeader, bool) {
+func (bc AtxCache) Get(id types.ATXID) (*types.ActivationTxHeader, bool) {
 	item, found := bc.Cache.Get(id)
 	if !found {
 		return nil, false

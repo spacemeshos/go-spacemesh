@@ -37,9 +37,9 @@ func TestNewMeshDB(t *testing.T) {
 	mdb := getMeshdb()
 	bl := types.NewExistingBlock(1, []byte(rand.RandString(8)))
 	mdb.AddBlock(bl)
-	block, err := mdb.GetBlock(bl.Id())
+	block, err := mdb.GetBlock(bl.ID())
 	assert.NoError(t, err)
-	assert.True(t, bl.Id() == block.Id())
+	assert.True(t, bl.ID() == block.ID())
 }
 
 func TestMeshDB_AddBlock(t *testing.T) {
@@ -53,7 +53,7 @@ func TestMeshDB_AddBlock(t *testing.T) {
 	addTransactionsWithFee(t, mdb, block1, 4, rand.Int63n(100))
 
 	poetRef := []byte{0xba, 0x05}
-	atx := types.NewActivationTxForTests(types.NodeId{"aaaa", []byte("bbb")}, 1, types.AtxId{}, 5, 1, types.AtxId{}, coinbase, 5, []types.BlockID{}, &types.NIPST{
+	atx := types.NewActivationTxForTests(types.NodeID{"aaaa", []byte("bbb")}, 1, types.ATXID{}, 5, 1, types.ATXID{}, coinbase, 5, []types.BlockID{}, &types.NIPST{
 		Space:          0,
 		NipstChallenge: &types.Hash32{},
 		PostProof: &types.PostProof{
@@ -64,15 +64,15 @@ func TestMeshDB_AddBlock(t *testing.T) {
 		},
 	})
 
-	block1.AtxIds = append(block1.AtxIds, atx.Id())
+	block1.ATXIDs = append(block1.ATXIDs, atx.ID())
 	err := mdb.AddBlock(block1)
 	assert.NoError(t, err)
 
-	rBlock1, err := mdb.GetBlock(block1.Id())
+	rBlock1, err := mdb.GetBlock(block1.ID())
 	assert.NoError(t, err)
 
-	assert.True(t, len(rBlock1.TxIds) == len(block1.TxIds), "block content was wrong")
-	assert.True(t, len(rBlock1.AtxIds) == len(block1.AtxIds), "block content was wrong")
+	assert.True(t, len(rBlock1.TxIDs) == len(block1.TxIDs), "block content was wrong")
+	assert.True(t, len(rBlock1.ATXIDs) == len(block1.ATXIDs), "block content was wrong")
 	// assert.True(t, bytes.Compare(rBlock2.Data, []byte("data2")) == 0, "block content was wrong")
 }
 
@@ -97,15 +97,15 @@ func createLayerWithRandVoting(index types.LayerID, prev []*types.Layer, blocksI
 	layerBlocks := make([]types.BlockID, 0, blocksInLayer)
 	for i := 0; i < blocksInLayer; i++ {
 		bl := types.NewExistingBlock(0, []byte(rand.RandString(8)))
-		layerBlocks = append(layerBlocks, bl.Id())
+		layerBlocks = append(layerBlocks, bl.ID())
 		for idx, pat := range patterns {
 			for _, id := range pat {
 				b := prev[idx].Blocks()[id]
-				bl.AddVote(b.Id())
+				bl.AddVote(b.ID())
 			}
 		}
 		for _, prevBloc := range prev[0].Blocks() {
-			bl.AddView(types.BlockID(prevBloc.Id()))
+			bl.AddView(types.BlockID(prevBloc.ID()))
 		}
 		bl.LayerIndex = index
 		l.AddBlock(bl)
@@ -131,7 +131,7 @@ func testForeachInView(mdb *DB, t *testing.T) {
 	blocks := make(map[types.BlockID]*types.Block)
 	l := GenesisLayer()
 	gen := l.Blocks()[0]
-	blocks[gen.Id()] = gen
+	blocks[gen.ID()] = gen
 
 	if err := mdb.AddBlock(gen); err != nil {
 		t.Fail()
@@ -140,24 +140,24 @@ func testForeachInView(mdb *DB, t *testing.T) {
 	for i := 0; i < 4; i++ {
 		lyr := createLayerWithRandVoting(l.Index()+1, []*types.Layer{l}, 2, 2, log.NewDefault("msh"))
 		for _, b := range lyr.Blocks() {
-			blocks[b.Id()] = b
+			blocks[b.ID()] = b
 			mdb.AddBlock(b)
 		}
 		l = lyr
 	}
 	mp := map[types.BlockID]struct{}{}
 	foo := func(nb *types.Block) (bool, error) {
-		fmt.Println("process block", "layer", nb.Id(), nb.LayerIndex)
-		mp[nb.Id()] = struct{}{}
+		fmt.Println("process block", "layer", nb.ID(), nb.LayerIndex)
+		mp[nb.ID()] = struct{}{}
 		return false, nil
 	}
 	ids := map[types.BlockID]struct{}{}
 	for _, b := range l.Blocks() {
-		ids[b.Id()] = struct{}{}
+		ids[b.ID()] = struct{}{}
 	}
 	mdb.ForBlockInView(ids, 0, foo)
 	for _, bl := range blocks {
-		_, found := mp[bl.Id()]
+		_, found := mp[bl.ID()]
 		assert.True(t, found, "did not process block  ", bl)
 	}
 }
@@ -167,7 +167,7 @@ func TestForEachInView_InMem_WithStop(t *testing.T) {
 	blocks := make(map[types.BlockID]*types.Block)
 	l := GenesisLayer()
 	gen := l.Blocks()[0]
-	blocks[gen.Id()] = gen
+	blocks[gen.ID()] = gen
 
 	if err := mdb.AddBlock(gen); err != nil {
 		t.Fail()
@@ -176,7 +176,7 @@ func TestForEachInView_InMem_WithStop(t *testing.T) {
 	for i := 0; i < 4; i++ {
 		lyr := createLayerWithRandVoting(l.Index()+1, []*types.Layer{l}, 2, 2, log.NewDefault("msh"))
 		for _, b := range lyr.Blocks() {
-			blocks[b.Id()] = b
+			blocks[b.ID()] = b
 			mdb.AddBlock(b)
 		}
 		l = lyr
@@ -184,14 +184,14 @@ func TestForEachInView_InMem_WithStop(t *testing.T) {
 	mp := map[types.BlockID]struct{}{}
 	i := 0
 	foo := func(nb *types.Block) (bool, error) {
-		fmt.Println("process block", "layer", nb.Id(), nb.LayerIndex)
-		mp[nb.Id()] = struct{}{}
+		fmt.Println("process block", "layer", nb.ID(), nb.LayerIndex)
+		mp[nb.ID()] = struct{}{}
 		i++
 		return i == 5, nil
 	}
 	ids := map[types.BlockID]struct{}{}
 	for _, b := range l.Blocks() {
-		ids[b.Id()] = struct{}{}
+		ids[b.ID()] = struct{}{}
 	}
 	err := mdb.ForBlockInView(ids, 0, foo)
 	assert.NoError(t, err)
@@ -203,7 +203,7 @@ func TestForEachInView_InMem_WithLimitedLayer(t *testing.T) {
 	blocks := make(map[types.BlockID]*types.Block)
 	l := GenesisLayer()
 	gen := l.Blocks()[0]
-	blocks[gen.Id()] = gen
+	blocks[gen.ID()] = gen
 
 	if err := mdb.AddBlock(gen); err != nil {
 		t.Fail()
@@ -212,7 +212,7 @@ func TestForEachInView_InMem_WithLimitedLayer(t *testing.T) {
 	for i := 0; i < 4; i++ {
 		lyr := createLayerWithRandVoting(l.Index()+1, []*types.Layer{l}, 2, 2, log.NewDefault("msh"))
 		for _, b := range lyr.Blocks() {
-			blocks[b.Id()] = b
+			blocks[b.ID()] = b
 			mdb.AddBlock(b)
 		}
 		l = lyr
@@ -220,14 +220,14 @@ func TestForEachInView_InMem_WithLimitedLayer(t *testing.T) {
 	mp := map[types.BlockID]struct{}{}
 	i := 0
 	foo := func(nb *types.Block) (bool, error) {
-		fmt.Println("process block", "layer", nb.Id(), nb.LayerIndex)
-		mp[nb.Id()] = struct{}{}
+		fmt.Println("process block", "layer", nb.ID(), nb.LayerIndex)
+		mp[nb.ID()] = struct{}{}
 		i++
 		return false, nil
 	}
 	ids := map[types.BlockID]struct{}{}
 	for _, b := range l.Blocks() {
-		ids[b.Id()] = struct{}{}
+		ids[b.ID()] = struct{}{}
 	}
 	// traverse until (and including) layer 2
 	err := mdb.ForBlockInView(ids, 2, foo)
@@ -265,7 +265,7 @@ func BenchmarkNewPersistentMeshDB(b *testing.B) {
 			lStart = time.Now()
 			for i := 0; i < 100; i++ {
 				for _, b := range lyr.Blocks() {
-					block, err := mdb.GetBlock(b.Id())
+					block, err := mdb.GetBlock(b.ID())
 					r.NoError(err)
 					r.NotNil(block)
 				}
@@ -453,7 +453,7 @@ func TestMeshDB_testGetTransactions(t *testing.T) {
 }
 
 type TinyTx struct {
-	Id          types.TransactionId
+	Id          types.TransactionID
 	Nonce       uint64
 	TotalAmount uint64
 }

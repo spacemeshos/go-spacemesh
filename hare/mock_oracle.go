@@ -92,7 +92,7 @@ func (mho *mockHashOracle) calcThreshold(committeeSize int) uint32 {
 }
 
 // Eligible if a proof is valid for a given committee size
-func (mho *mockHashOracle) Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeId, sig []byte) (bool, error) {
+func (mho *mockHashOracle) Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (bool, error) {
 	if sig == nil {
 		log.Warning("Oracle query with proof=nil. Returning false")
 		return false, errors.New("sig is nil")

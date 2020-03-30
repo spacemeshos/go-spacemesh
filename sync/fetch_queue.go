@@ -32,7 +32,7 @@ type fetchQueue struct {
 	pending     map[types.Hash32][]chan bool
 	handleFetch func(fj fetchJob)
 	checkLocal  checkLocalFunc
-	queue       chan []types.Hash32 //types.TransactionId //todo make buffered
+	queue       chan []types.Hash32 //types.TransactionID //todo make buffered
 	name        string
 }
 
@@ -172,7 +172,7 @@ func newTxQueue(s *Syncer) *txQueue {
 }
 
 //we could get rid of this if we had a unified id type
-func (tx txQueue) HandleTxs(txids []types.TransactionId) ([]*types.Transaction, error) {
+func (tx txQueue) HandleTxs(txids []types.TransactionID) ([]*types.Transaction, error) {
 	txItems := make([]types.Hash32, 0, len(txids))
 	for _, i := range txids {
 		txItems = append(txItems, i.Hash32())
@@ -202,7 +202,7 @@ func updateTxDependencies(invalidate func(id types.Hash32, valid bool), txpool t
 
 		for _, id := range fj.ids {
 			if item, ok := mp[id]; ok {
-				txpool.Put(types.TransactionId(id), item)
+				txpool.Put(types.TransactionID(id), item)
 				invalidate(id, true)
 			} else {
 				invalidate(id, false)
@@ -236,7 +236,7 @@ func newAtxQueue(s *Syncer, fetchPoetProof fetchPoetProofFunc) *atxQueue {
 }
 
 //we could get rid of this if we had a unified id type
-func (atx atxQueue) HandleAtxs(atxids []types.AtxId) ([]*types.ActivationTx, error) {
+func (atx atxQueue) HandleAtxs(atxids []types.ATXID) ([]*types.ActivationTx, error) {
 	atxItems := make([]types.Hash32, 0, len(atxids))
 	for _, i := range atxids {
 		atxItems = append(atxItems, i.Hash32())
@@ -303,7 +303,7 @@ func fetchProofCalcID(fetchPoetProof fetchPoetProofFunc, fj fetchJob) {
 	itemsWithProofs := make([]item, 0, len(fj.items))
 	for _, item := range fj.items {
 		atx := item.(*types.ActivationTx)
-		atx.CalcAndSetId() //todo put it somewhere that will cause less confusion
+		atx.CalcAndSetID() //todo put it somewhere that will cause less confusion
 		if err := fetchPoetProof(atx.GetPoetProofRef()); err != nil {
 			log.Error("received atx (%v) with syntactically invalid or missing PoET proof (%x): %v",
 				atx.ShortString(), atx.GetShortPoetProofRef(), err)

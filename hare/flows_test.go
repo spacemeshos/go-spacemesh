@@ -143,7 +143,7 @@ func (trueOracle) Register(isHonest bool, id string) {
 func (trueOracle) Unregister(isHonest bool, id string) {
 }
 
-func (trueOracle) Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeId, sig []byte) (bool, error) {
+func (trueOracle) Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (bool, error) {
 	return true, nil
 }
 
@@ -190,10 +190,10 @@ func isSynced() bool {
 }
 
 type mockIdentityP struct {
-	nid types.NodeId
+	nid types.NodeID
 }
 
-func (m *mockIdentityP) GetIdentity(edID string) (types.NodeId, error) {
+func (m *mockIdentityP) GetIdentity(edID string) (types.NodeID, error) {
 	return m.nid, nil
 }
 
@@ -229,7 +229,7 @@ func createMaatuf(tcfg config.Config, rng *amcl.RAND, layersCh chan types.LayerI
 	pub := ed.PublicKey()
 	_, vrfPub := BLS381.GenKeyPair(rng)
 	//vrfSigner := BLS381.NewBlsSigner(vrfPriv)
-	nodeID := types.NodeId{Key: pub.String(), VRFPublicKey: vrfPub}
+	nodeID := types.NodeID{Key: pub.String(), VRFPublicKey: vrfPub}
 	hare := New(tcfg, p2p, ed, nodeID, validateBlock, isSynced, &mockBlockProvider{}, rolacle, 10, &mockIdentityP{nid: nodeID},
 		&MockStateQuerier{true, nil}, layersCh, log.NewDefault(name+"_"+ed.PublicKey().ShortString()))
 

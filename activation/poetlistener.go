@@ -63,8 +63,8 @@ func (l *PoetListener) handlePoetProofMessage(gossipMessage service.GossipMessag
 		l.Log.Error("failed to unmarshal PoET membership proof: %v", err)
 		return
 	}
-	if err := l.poetDb.Validate(proofMessage.PoetProof, proofMessage.PoetServiceId,
-		proofMessage.RoundId, proofMessage.Signature); err != nil {
+	if err := l.poetDb.Validate(proofMessage.PoetProof, proofMessage.PoetServiceID,
+		proofMessage.RoundID, proofMessage.Signature); err != nil {
 
 		if types.IsProcessingError(err) {
 			l.Log.Error("failed to validate PoET proof: %v", err)

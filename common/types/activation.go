@@ -10,41 +10,41 @@ import (
 	"github.com/spacemeshos/sha256-simd"
 )
 
-type EpochId uint64
+type EpochID uint64
 
-func (l EpochId) ToBytes() []byte { return util.Uint64ToBytes(uint64(l)) }
+func (l EpochID) ToBytes() []byte { return util.Uint64ToBytes(uint64(l)) }
 
-func (l EpochId) IsGenesis() bool {
+func (l EpochID) IsGenesis() bool {
 	return l < 2
 }
 
-func (l EpochId) FirstLayer(layersPerEpoch uint16) LayerID {
+func (l EpochID) FirstLayer(layersPerEpoch uint16) LayerID {
 	return LayerID(uint64(l) * uint64(layersPerEpoch))
 }
 
-func (l EpochId) Field() log.Field { return log.Uint64("epoch_id", uint64(l)) }
+func (l EpochID) Field() log.Field { return log.Uint64("epoch_id", uint64(l)) }
 
-type AtxId Hash32
+type ATXID Hash32
 
-func (t *AtxId) ShortString() string {
+func (t *ATXID) ShortString() string {
 	return t.Hash32().ShortString()
 }
 
-func (t *AtxId) Hash32() Hash32 {
+func (t *ATXID) Hash32() Hash32 {
 	return Hash32(*t)
 }
 
-func (t AtxId) Bytes() []byte {
+func (t ATXID) Bytes() []byte {
 	return Hash32(t).Bytes()
 }
 
-func (t AtxId) Field() log.Field { return t.Hash32().Field("atx_id") }
+func (t ATXID) Field() log.Field { return t.Hash32().Field("atx_id") }
 
-var EmptyAtxId = &AtxId{}
+var EmptyATXID = &ATXID{}
 
 type ActivationTxHeader struct {
 	NIPSTChallenge
-	id            *AtxId
+	id            *ATXID
 	Coinbase      Address
 	ActiveSetSize uint32
 }
@@ -61,29 +61,29 @@ func (atxh *ActivationTxHeader) Bytes() []byte {
 	return atxh.id.Bytes()
 }
 
-func (atxh *ActivationTxHeader) Id() AtxId {
+func (atxh *ActivationTxHeader) ID() ATXID {
 	if atxh.id == nil {
 		panic("id field must be set")
 	}
 	return *atxh.id
 }
 
-func (atxh *ActivationTxHeader) TargetEpoch(layersPerEpoch uint16) EpochId {
-	return atxh.PubLayerIdx.GetEpoch(layersPerEpoch) + 1
+func (atxh *ActivationTxHeader) TargetEpoch(layersPerEpoch uint16) EpochID {
+	return atxh.PubLayerID.GetEpoch(layersPerEpoch) + 1
 }
 
-func (atxh *ActivationTxHeader) SetId(id *AtxId) {
+func (atxh *ActivationTxHeader) SetID(id *ATXID) {
 	atxh.id = id
 }
 
 type NIPSTChallenge struct {
-	NodeId               NodeId
+	NodeID               NodeID
 	Sequence             uint64
-	PrevATXId            AtxId
-	PubLayerIdx          LayerID
+	PrevATXID            ATXID
+	PubLayerID           LayerID
 	StartTick            uint64
 	EndTick              uint64
-	PositioningAtx       AtxId
+	PositioningATX       ATXID
 	CommitmentMerkleRoot []byte
 }
 
@@ -97,16 +97,16 @@ func (challenge *NIPSTChallenge) Hash() (*Hash32, error) {
 }
 
 func (challenge *NIPSTChallenge) String() string {
-	return fmt.Sprintf("<id: [vrf: %v ed: %v], seq: %v, prevAtx: %v, PubLayer: %v, s tick: %v, e tick: %v, "+
-		"posAtx: %v>",
-		util.Bytes2Hex(challenge.NodeId.VRFPublicKey)[:5],
-		challenge.NodeId.Key[:5],
+	return fmt.Sprintf("<id: [vrf: %v ed: %v], seq: %v, prevATX: %v, PubLayer: %v, s tick: %v, e tick: %v, "+
+		"posATX: %v>",
+		util.Bytes2Hex(challenge.NodeID.VRFPublicKey)[:5],
+		challenge.NodeID.Key[:5],
 		challenge.Sequence,
-		challenge.PrevATXId.ShortString(),
-		challenge.PubLayerIdx,
+		challenge.PrevATXID.ShortString(),
+		challenge.PubLayerID,
 		challenge.StartTick,
 		challenge.EndTick,
-		challenge.PositioningAtx.ShortString())
+		challenge.PositioningATX.ShortString())
 }
 
 type InnerActivationTx struct {
@@ -121,16 +121,16 @@ type ActivationTx struct {
 	Sig []byte
 }
 
-func NewActivationTxForTests(nodeId NodeId, sequence uint64, prevATX AtxId, pubLayerId LayerID, startTick uint64,
-	positioningAtx AtxId, coinbase Address, activeSetSize uint32, view []BlockID, nipst *NIPST) *ActivationTx {
+func NewActivationTxForTests(nodeID NodeID, sequence uint64, prevATX ATXID, pubLayerID LayerID, startTick uint64,
+	positioningATX ATXID, coinbase Address, activeSetSize uint32, view []BlockID, nipst *NIPST) *ActivationTx {
 
 	nipstChallenge := NIPSTChallenge{
-		NodeId:         nodeId,
+		NodeID:         nodeID,
 		Sequence:       sequence,
-		PrevATXId:      prevATX,
-		PubLayerIdx:    pubLayerId,
+		PrevATXID:      prevATX,
+		PubLayerID:     pubLayerID,
 		StartTick:      startTick,
-		PositioningAtx: positioningAtx,
+		PositioningATX: positioningATX,
 	}
 	return NewActivationTx(nipstChallenge, coinbase, activeSetSize, view, nipst, nil)
 }
@@ -150,17 +150,17 @@ func NewActivationTx(nipstChallenge NIPSTChallenge, coinbase Address, activeSetS
 			Commitment: commitment,
 		},
 	}
-	atx.CalcAndSetId()
+	atx.CalcAndSetID()
 	return atx
 }
 
-func (atx *ActivationTx) AtxBytes() ([]byte, error) {
+func (atx *ActivationTx) ATXBytes() ([]byte, error) {
 	return InterfaceToBytes(atx.InnerActivationTx)
 }
 
-func (atx *ActivationTx) CalcAndSetId() {
-	id := AtxId(CalcAtxHash32(atx))
-	atx.SetId(&id)
+func (atx *ActivationTx) CalcAndSetID() {
+	id := ATXID(CalcATXHash32(atx))
+	atx.SetID(&id)
 }
 
 func (atx *ActivationTx) GetPoetProofRef() []byte {
@@ -179,8 +179,8 @@ type PoetProof struct {
 
 type PoetProofMessage struct {
 	PoetProof
-	PoetServiceId []byte
-	RoundId       string
+	PoetServiceID []byte
+	RoundID       string
 	Signature     []byte
 }
 
@@ -188,7 +188,7 @@ func (proofMessage PoetProofMessage) Ref() ([]byte, error) {
 	poetProofBytes, err := InterfaceToBytes(&proofMessage.PoetProof)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal poet proof for poetId %x round %v: %v",
-			proofMessage.PoetServiceId, proofMessage.RoundId, err)
+			proofMessage.PoetServiceID, proofMessage.RoundID, err)
 	}
 
 	ref := sha256.Sum256(poetProofBytes)
@@ -196,7 +196,7 @@ func (proofMessage PoetProofMessage) Ref() ([]byte, error) {
 }
 
 type PoetRound struct {
-	Id string
+	ID string
 }
 
 // NIPST is Non-Interactive Proof of Space-Time.
