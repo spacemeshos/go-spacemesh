@@ -45,7 +45,7 @@ func newLayerBlockIdsRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg 
 
 		ids := make([]types.BlockID, 0, len(blocks))
 		for _, b := range blocks {
-			ids = append(ids, b.Id())
+			ids = append(ids, b.ID())
 		}
 
 		idbytes, err := types.BlockIdsAsBytes(ids)
@@ -97,7 +97,7 @@ func newBlockRequestHandler(msh *mesh.Mesh, logger log.Log) func(msg []byte) []b
 
 func newTxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 	return func(msg []byte) []byte {
-		var txids []types.TransactionId
+		var txids []types.TransactionID
 		err := types.BytesToInterface(msg, &txids)
 		if err != nil {
 			logger.Error("Error marshalling request", err)
@@ -127,7 +127,7 @@ func newTxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 
 func newATxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 	return func(msg []byte) []byte {
-		var atxids []types.AtxId
+		var atxids []types.ATXID
 		err := types.BytesToInterface(msg, &atxids)
 		if err != nil {
 			logger.Error("Error marshalling request", err)

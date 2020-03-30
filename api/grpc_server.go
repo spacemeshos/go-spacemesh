@@ -49,7 +49,7 @@ type SpacemeshGrpcService struct {
 
 var _ pb.SpacemeshServiceServer = (*SpacemeshGrpcService)(nil)
 
-func (s SpacemeshGrpcService) getTransactionAndStatus(txID types.TransactionId) (*types.Transaction, *types.LayerID, pb.TxStatus, error) {
+func (s SpacemeshGrpcService) getTransactionAndStatus(txID types.TransactionID) (*types.Transaction, *types.LayerID, pb.TxStatus, error) {
 	tx, err := s.Tx.GetTransaction(txID) // have we seen this transaction in a block?
 	if err != nil {
 		tx, err = s.TxMempool.Get(txID) // do we have it in the mempool?
@@ -76,7 +76,7 @@ func (s SpacemeshGrpcService) getTransactionAndStatus(txID types.TransactionId) 
 
 // GetTransaction gets transaction details by id
 func (s SpacemeshGrpcService) GetTransaction(ctx context.Context, txID *pb.TransactionId) (*pb.Transaction, error) {
-	id := types.TransactionId{}
+	id := types.TransactionID{}
 	copy(id[:], txID.Id)
 
 	tx, layerApplied, status, err := s.getTransactionAndStatus(id)
@@ -181,7 +181,7 @@ func (s SpacemeshGrpcService) SubmitTransaction(ctx context.Context, in *pb.Sign
 	}
 	if !s.Tx.AddressExists(tx.Origin()) {
 		log.With().Error("tx failed to validate signature",
-			log.TxID(tx.Id().ShortString()), log.String("origin", tx.Origin().Short()))
+			log.TxID(tx.ID().ShortString()), log.String("origin", tx.Origin().Short()))
 		return nil, fmt.Errorf("transaction origin (%v) not found in global state", tx.Origin().Short())
 	}
 	if err := s.Tx.ValidateNonceAndBalance(tx); err != nil {
@@ -189,10 +189,10 @@ func (s SpacemeshGrpcService) SubmitTransaction(ctx context.Context, in *pb.Sign
 		return nil, err
 	}
 	log.Info("GRPC SubmitTransaction BROADCAST tx. address %x (len %v), gas limit %v, fee %v id %v nonce %v",
-		tx.Recipient, len(tx.Recipient), tx.GasLimit, tx.Fee, tx.Id().ShortString(), tx.AccountNonce)
+		tx.Recipient, len(tx.Recipient), tx.GasLimit, tx.Fee, tx.ID().ShortString(), tx.AccountNonce)
 	go s.Network.Broadcast(miner.IncomingTxProtocol, in.Tx)
 	log.Info("GRPC SubmitTransaction returned msg ok")
-	return &pb.TxConfirmation{Value: "ok", Id: hex.EncodeToString(tx.Id().Bytes())}, nil
+	return &pb.TxConfirmation{Value: "ok", Id: hex.EncodeToString(tx.ID().Bytes())}, nil
 }
 
 // P2P API
@@ -239,11 +239,11 @@ type TxAPI interface {
 	AddressExists(addr types.Address) bool
 	ValidateNonceAndBalance(transaction *types.Transaction) error
 	GetRewards(account types.Address) (rewards []types.Reward, err error)
-	GetTransactionsByDestination(l types.LayerID, account types.Address) (txs []types.TransactionId)
-	GetTransactionsByOrigin(l types.LayerID, account types.Address) (txs []types.TransactionId)
+	GetTransactionsByDestination(l types.LayerID, account types.Address) (txs []types.TransactionID)
+	GetTransactionsByOrigin(l types.LayerID, account types.Address) (txs []types.TransactionID)
 	LatestLayer() types.LayerID
-	GetLayerApplied(txID types.TransactionId) *types.LayerID
-	GetTransaction(id types.TransactionId) (*types.Transaction, error)
+	GetLayerApplied(txID types.TransactionID) *types.LayerID
+	GetTransaction(id types.TransactionID) (*types.Transaction, error)
 	GetProjection(addr types.Address, prevNonce, prevBalance uint64) (nonce, balance uint64, err error)
 	LatestLayerInState() types.LayerID
 	GetStateRoot() types.Hash32
@@ -429,8 +429,8 @@ func (s SpacemeshGrpcService) GetAccountTxs(ctx context.Context, txsSinceLayer *
 	return &txs, nil
 }
 
-func (s SpacemeshGrpcService) getTxIdsFromMesh(minLayer types.LayerID, addr types.Address) []types.TransactionId {
-	var txIDs []types.TransactionId
+func (s SpacemeshGrpcService) getTxIdsFromMesh(minLayer types.LayerID, addr types.Address) []types.TransactionID {
+	var txIDs []types.TransactionID
 	for layerID := minLayer; layerID < s.Tx.LatestLayer(); layerID++ {
 		destTxIDs := s.Tx.GetTransactionsByDestination(layerID, addr)
 		txIDs = append(txIDs, destTxIDs...)

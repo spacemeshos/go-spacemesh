@@ -351,7 +351,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 
 	type nodeData struct {
 		layertoblocks map[types.LayerID][]types.BlockID
-		atxPerEpoch   map[types.EpochId]uint32
+		atxPerEpoch   map[types.EpochID]uint32
 	}
 
 	layersPerEpoch := int(suite.apps[0].Config.LayersPerEpoch)
@@ -366,7 +366,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 	for _, ap := range suite.apps {
 		if _, ok := datamap[ap.nodeID.Key]; !ok {
 			datamap[ap.nodeID.Key] = new(nodeData)
-			datamap[ap.nodeID.Key].atxPerEpoch = make(map[types.EpochId]uint32)
+			datamap[ap.nodeID.Key].atxPerEpoch = make(map[types.EpochID]uint32)
 			datamap[ap.nodeID.Key].layertoblocks = make(map[types.LayerID][]types.BlockID)
 		}
 
@@ -376,7 +376,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 				log.Error("ERROR: couldn't get a validated layer from db layer %v, %v", i, err)
 			}
 			for _, b := range lyr.Blocks() {
-				datamap[ap.nodeID.Key].layertoblocks[lyr.Index()] = append(datamap[ap.nodeID.Key].layertoblocks[lyr.Index()], b.Id())
+				datamap[ap.nodeID.Key].layertoblocks[lyr.Index()] = append(datamap[ap.nodeID.Key].layertoblocks[lyr.Index()], b.ID())
 			}
 		}
 	}
@@ -446,7 +446,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 	totalAtxs := uint32(0)
 	for atx != nil {
 		totalAtxs += atx.ActiveSetSize
-		atx, err = atxDb.GetAtxHeader(atx.PrevATXId)
+		atx, err = atxDb.GetAtxHeader(atx.PrevATXID)
 	}
 
 	// assert number of ATXs
@@ -516,7 +516,7 @@ func TestShutdown(t *testing.T) {
 
 	vrfPriv, vrfPub := BLS381.GenKeyPair(BLS381.DefaultSeed())
 	vrfSigner := BLS381.NewBlsSigner(vrfPriv)
-	nodeID := types.NodeId{Key: pub.String(), VRFPublicKey: vrfPub}
+	nodeID := types.NodeID{Key: pub.String(), VRFPublicKey: vrfPub}
 
 	swarm := net.NewNode()
 	dbStorepath := "/tmp/" + pub.String()

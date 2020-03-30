@@ -198,7 +198,7 @@ func InitSingleInstance(cfg config.Config, i int, genesisTime string, rng *amcl.
 
 	vrfPriv, vrfPub := BLS381.GenKeyPair(rng)
 	vrfSigner := BLS381.NewBlsSigner(vrfPriv)
-	nodeID := types.NodeId{Key: pub.String(), VRFPublicKey: vrfPub}
+	nodeID := types.NodeID{Key: pub.String(), VRFPublicKey: vrfPub}
 
 	swarm := net.NewNode()
 	dbStorepath := storePath

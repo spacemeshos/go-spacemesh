@@ -118,14 +118,14 @@ func (c *MemoryCollector) StoreAtxCreated(event *events.AtxCreated) error {
 }
 
 // GetAtxCreationDone get number of atxs that were crated by this miner events for the provided epoch
-func (c *MemoryCollector) GetAtxCreationDone(epoch types.EpochId) int {
+func (c *MemoryCollector) GetAtxCreationDone(epoch types.EpochID) int {
 	c.lck.RLock()
 	defer c.lck.RUnlock()
 	return len(c.doneCreatingAtxEvent[uint64(epoch)])
 }
 
 // GetCreatedAtx returns the number of created atx events received for the epoch
-func (c *MemoryCollector) GetCreatedAtx(epoch types.EpochId) []string {
+func (c *MemoryCollector) GetCreatedAtx(epoch types.EpochID) []string {
 	c.lck.RLock()
 	defer c.lck.RUnlock()
 	return c.createdAtxs[uint64(epoch)]

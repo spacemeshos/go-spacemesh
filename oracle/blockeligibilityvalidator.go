@@ -46,10 +46,10 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 	epochNumber := block.LayerIndex.GetEpoch(v.layersPerEpoch)
 	if epochNumber == 0 {
 		v.log.With().Warning("skipping epoch 0 block validation.",
-			log.BlockID(block.Id().String()), log.LayerID(block.LayerIndex.Uint64()))
+			log.BlockID(block.ID().String()), log.LayerID(block.LayerIndex.Uint64()))
 		return true, nil
 	}
-	if block.ATXID == *types.EmptyAtxId {
+	if block.ATXID == *types.EmptyATXID {
 		if !epochNumber.IsGenesis() {
 			return false, fmt.Errorf("no associated ATX in epoch %v", epochNumber)
 		}
@@ -59,7 +59,7 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 		if err != nil {
 			return false, err
 		}
-		activeSetSize, vrfPubkey = atx.ActiveSetSize, atx.NodeId.VRFPublicKey
+		activeSetSize, vrfPubkey = atx.ActiveSetSize, atx.NodeID.VRFPublicKey
 	}
 	if epochNumber.IsGenesis() {
 		v.log.With().Info("using genesisActiveSetSize",
@@ -110,12 +110,12 @@ func (v BlockEligibilityValidator) getValidAtx(block *types.Block) (*types.Activ
 	if err != nil {
 		return nil, fmt.Errorf("getting ATX failed: %v %v ep(%v)", err, block.ATXID.ShortString(), blockEpoch)
 	}
-	if atxTargetEpoch := atx.PubLayerIdx.GetEpoch(v.layersPerEpoch) + 1; atxTargetEpoch != blockEpoch {
+	if atxTargetEpoch := atx.PubLayerID.GetEpoch(v.layersPerEpoch) + 1; atxTargetEpoch != blockEpoch {
 		return nil, fmt.Errorf("ATX target epoch (%d) doesn't match block publication epoch (%d)",
 			atxTargetEpoch, blockEpoch)
 	}
-	if pubString := block.MinerId().String(); atx.NodeId.Key != pubString {
-		return nil, fmt.Errorf("block signer (%s) mismatch with ATX node (%s)", pubString, atx.NodeId.Key)
+	if pubString := block.MinerID().String(); atx.NodeID.Key != pubString {
+		return nil, fmt.Errorf("block signer (%s) mismatch with ATX node (%s)", pubString, atx.NodeID.Key)
 	}
 	return atx, nil
 }

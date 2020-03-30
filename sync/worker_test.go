@@ -30,7 +30,7 @@ func TestNewPeerWorker(t *testing.T) {
 	timeout := time.NewTimer(1 * time.Second)
 	select {
 	case item := <-wrk.output:
-		assert.Equal(t, bl1.Id(), item.([]types.BlockID)[0], "wrong ids")
+		assert.Equal(t, bl1.ID(), item.([]types.BlockID)[0], "wrong ids")
 	case <-timeout.C:
 		assert.Fail(t, "no message received on channel")
 	}

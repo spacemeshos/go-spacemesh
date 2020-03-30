@@ -180,7 +180,7 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *types.Hash32, atxExpired, stop cha
 		}
 
 		nb.log.Info("challenge submitted to PoET proving service (PoET id: %x, round id: %v, challenge: %x)",
-			nb.state.PoetServiceID, round.Id, poetChallenge)
+			nb.state.PoetServiceID, round.ID, poetChallenge)
 
 		nipst.NipstChallenge = poetChallenge
 		nb.state.PoetRound = round
@@ -191,9 +191,9 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *types.Hash32, atxExpired, stop cha
 	if nb.state.PoetProofRef == nil {
 		var poetProofRef []byte
 		select {
-		case poetProofRef = <-nb.poetDB.SubscribeToProofRef(nb.state.PoetServiceID, nb.state.PoetRound.Id):
+		case poetProofRef = <-nb.poetDB.SubscribeToProofRef(nb.state.PoetServiceID, nb.state.PoetRound.ID):
 		case <-atxExpired:
-			nb.poetDB.UnsubscribeFromProofRef(nb.state.PoetServiceID, nb.state.PoetRound.Id)
+			nb.poetDB.UnsubscribeFromProofRef(nb.state.PoetServiceID, nb.state.PoetRound.ID)
 			return nil, fmt.Errorf("atx expired while waiting for poet proof, target epoch ended")
 		case <-stop:
 			return nil, &StopRequestedError{}
@@ -206,7 +206,7 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *types.Hash32, atxExpired, stop cha
 		}
 		if !membership[*nipst.NipstChallenge] {
 			return nil, fmt.Errorf("not a member of this round (poetId: %x, roundId: %s, challenge: %x, num of members: %d)",
-				nb.state.PoetServiceID, nb.state.PoetRound.Id, *nipst.NipstChallenge, len(membership)) // TODO(noamnelke): handle this case!
+				nb.state.PoetServiceID, nb.state.PoetRound.ID, *nipst.NipstChallenge, len(membership)) // TODO(noamnelke): handle this case!
 		}
 		nb.state.PoetProofRef = poetProofRef
 		nb.persist()

@@ -6,33 +6,33 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-type TransactionId Hash32
+type TransactionID Hash32
 
-func (id TransactionId) Hash32() Hash32 {
+func (id TransactionID) Hash32() Hash32 {
 	return Hash32(id)
 }
 
-func (id TransactionId) ShortString() string {
+func (id TransactionID) ShortString() string {
 	return id.Hash32().ShortString()
 }
 
-func (id TransactionId) String() string {
+func (id TransactionID) String() string {
 	return id.Hash32().String()
 }
 
-func (id TransactionId) Bytes() []byte {
+func (id TransactionID) Bytes() []byte {
 	return id[:]
 }
 
-func (id TransactionId) Field() log.Field { return id.Hash32().Field("tx_id") }
+func (id TransactionID) Field() log.Field { return id.Hash32().Field("tx_id") }
 
-var EmptyTransactionId = TransactionId{}
+var EmptyTransactionID = TransactionID{}
 
 type Transaction struct {
 	InnerTransaction
 	Signature [64]byte
 	origin    *Address
-	id        *TransactionId
+	id        *TransactionID
 }
 
 func (t *Transaction) Origin() Address {
@@ -61,7 +61,7 @@ func (t *Transaction) CalcAndSetOrigin() error {
 	return nil
 }
 
-func (t *Transaction) Id() TransactionId {
+func (t *Transaction) ID() TransactionID {
 	if t.id != nil {
 		return *t.id
 	}
@@ -70,22 +70,22 @@ func (t *Transaction) Id() TransactionId {
 	if err != nil {
 		panic("failed to marshal transaction: " + err.Error())
 	}
-	id := TransactionId(CalcHash32(txBytes))
+	id := TransactionID(CalcHash32(txBytes))
 	t.id = &id
 	return id
 }
 
 func (t *Transaction) Hash32() Hash32 {
-	return t.Id().Hash32()
+	return t.ID().Hash32()
 }
 
 func (t *Transaction) ShortString() string {
-	return t.Id().ShortString()
+	return t.ID().ShortString()
 }
 
 func (t *Transaction) String() string {
 	return fmt.Sprintf("<id: %s, origin: %s, recipient: %s, amount: %v, nonce: %v, gas_limit: %v, fee: %v>",
-		t.Id().ShortString(), t.Origin().Short(), t.Recipient.Short(), t.Amount, t.AccountNonce, t.GasLimit, t.Fee)
+		t.ID().ShortString(), t.Origin().Short(), t.Recipient.Short(), t.Amount, t.AccountNonce, t.GasLimit, t.Fee)
 }
 
 type InnerTransaction struct {

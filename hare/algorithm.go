@@ -28,7 +28,7 @@ const ( // constants of the different roles
 
 // Rolacle is the roles oracle provider.
 type Rolacle interface {
-	Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeId, sig []byte) (bool, error)
+	Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (bool, error)
 	Proof(layer types.LayerID, round int32) ([]byte, error)
 	IsIdentityActiveOnConsensusView(edID string, layer types.LayerID) (bool, error)
 }
@@ -154,7 +154,7 @@ type ConsensusProcess struct {
 	instanceID        instanceID // the layer id
 	oracle            Rolacle    // the roles oracle provider
 	signing           Signer
-	nid               types.NodeId
+	nid               types.NodeID
 	network           NetworkService
 	isStarted         bool
 	inbox             chan *Msg
@@ -174,7 +174,7 @@ type ConsensusProcess struct {
 
 // NewConsensusProcess creates a new consensus process instance.
 func NewConsensusProcess(cfg config.Config, instanceID instanceID, s *Set, oracle Rolacle, stateQuerier StateQuerier,
-	layersPerEpoch uint16, signing Signer, nid types.NodeId, p2p NetworkService,
+	layersPerEpoch uint16, signing Signer, nid types.NodeID, p2p NetworkService,
 	terminationReport chan TerminationOutput, ev roleValidator, logger log.Log) *ConsensusProcess {
 	msgsTracker := newMsgsTracker()
 	proc := &ConsensusProcess{

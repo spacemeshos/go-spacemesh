@@ -10,7 +10,7 @@ import (
 type localOracle struct {
 	committeeSize int
 	oc            *eligibility.FixedRolacle
-	nodeID        types.NodeId
+	nodeID        types.NodeID
 }
 
 func (bo *localOracle) IsIdentityActiveOnConsensusView(string, types.LayerID) (bool, error) {
@@ -21,7 +21,7 @@ func (bo *localOracle) Register(isHonest bool, pubkey string) {
 	bo.oc.Register(isHonest, pubkey)
 }
 
-func (bo *localOracle) Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeId, sig []byte) (bool, error) {
+func (bo *localOracle) Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (bool, error) {
 	return bo.oc.Eligible(layer, round, committeeSize, id, sig)
 }
 
@@ -29,7 +29,7 @@ func (bo *localOracle) Proof(layer types.LayerID, round int32) ([]byte, error) {
 	return bo.oc.Proof(layer, round)
 }
 
-func newLocalOracle(rolacle *eligibility.FixedRolacle, committeeSize int, nodeID types.NodeId) *localOracle {
+func newLocalOracle(rolacle *eligibility.FixedRolacle, committeeSize int, nodeID types.NodeID) *localOracle {
 	return &localOracle{
 		committeeSize: committeeSize,
 		oc:            rolacle,

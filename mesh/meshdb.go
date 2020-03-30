@@ -125,8 +125,8 @@ var ErrAlreadyExist = errors.New("block already exist in database")
 
 // AddBlock adds a block to the database
 func (m *DB) AddBlock(bl *types.Block) error {
-	if _, err := m.getBlockBytes(bl.Id()); err == nil {
-		m.With().Warning(ErrAlreadyExist.Error(), log.BlockID(bl.Id().String()))
+	if _, err := m.getBlockBytes(bl.ID()); err == nil {
+		m.With().Warning(ErrAlreadyExist.Error(), log.BlockID(bl.ID().String()))
 		return ErrAlreadyExist
 	}
 	if err := m.writeBlock(bl); err != nil {
@@ -137,7 +137,7 @@ func (m *DB) AddBlock(bl *types.Block) error {
 
 // GetBlock gets a block from the database by id
 func (m *DB) GetBlock(id types.BlockID) (*types.Block, error) {
-	if id == GenesisBlock.Id() {
+	if id == GenesisBlock.ID() {
 		//todo fit real genesis here
 		return GenesisBlock, nil
 	}
@@ -203,7 +203,7 @@ func (m *DB) ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID
 		}
 
 		if stop {
-			m.Log.With().Debug("ForBlockInView stopped", log.BlockID(block.Id().String()))
+			m.Log.With().Debug("ForBlockInView stopped", log.BlockID(block.ID().String()))
 			break
 		}
 
@@ -273,8 +273,8 @@ func (m *DB) writeBlock(bl *types.Block) error {
 		return fmt.Errorf("could not encode bl")
 	}
 
-	if err := m.blocks.Put(bl.Id().ToBytes(), bytes); err != nil {
-		return fmt.Errorf("could not add bl %v to database %v", bl.Id(), err)
+	if err := m.blocks.Put(bl.ID().ToBytes(), bytes); err != nil {
+		return fmt.Errorf("could not add bl %v to database %v", bl.ID(), err)
 	}
 
 	m.updateLayerWithBlock(bl)
@@ -300,8 +300,8 @@ func (m *DB) updateLayerWithBlock(blk *types.Block) error {
 			return errors.New("could not get all blocks from database ")
 		}
 	}
-	m.Debug("added block %v to layer %v", blk.Id(), blk.LayerIndex)
-	blockIds = append(blockIds, blk.Id())
+	m.Debug("added block %v to layer %v", blk.ID(), blk.LayerIndex)
+	blockIds = append(blockIds, blk.ID())
 	w, err := types.BlockIdsAsBytes(blockIds)
 	if err != nil {
 		return errors.New("could not encode layer blk ids")
@@ -350,12 +350,12 @@ func getRewardKeyPrefix(account types.Address) []byte {
 }
 
 func getTransactionOriginKey(l types.LayerID, t *types.Transaction) []byte {
-	str := string(getTransactionOriginKeyPrefix(l, t.Origin())) + "_" + t.Id().String()
+	str := string(getTransactionOriginKeyPrefix(l, t.Origin())) + "_" + t.ID().String()
 	return []byte(str)
 }
 
 func getTransactionDestKey(l types.LayerID, t *types.Transaction) []byte {
-	str := string(getTransactionDestKeyPrefix(l, t.Recipient)) + "_" + t.Id().String()
+	str := string(getTransactionDestKeyPrefix(l, t.Recipient)) + "_" + t.ID().String()
 	return []byte(str)
 }
 
@@ -388,19 +388,19 @@ func (m *DB) writeTransactions(l types.LayerID, txs []*types.Transaction) error 
 	for _, t := range txs {
 		bytes, err := types.InterfaceToBytes(newDbTransaction(t))
 		if err != nil {
-			return fmt.Errorf("could not marshall tx %v to bytes: %v", t.Id().ShortString(), err)
+			return fmt.Errorf("could not marshall tx %v to bytes: %v", t.ID().ShortString(), err)
 		}
-		if err := batch.Put(t.Id().Bytes(), bytes); err != nil {
-			return fmt.Errorf("could not write tx %v to database: %v", t.Id().ShortString(), err)
+		if err := batch.Put(t.ID().Bytes(), bytes); err != nil {
+			return fmt.Errorf("could not write tx %v to database: %v", t.ID().ShortString(), err)
 		}
 		// write extra index for querying txs by account
-		if err := batch.Put(getTransactionOriginKey(l, t), t.Id().Bytes()); err != nil {
-			return fmt.Errorf("could not write tx %v to database: %v", t.Id().ShortString(), err)
+		if err := batch.Put(getTransactionOriginKey(l, t), t.ID().Bytes()); err != nil {
+			return fmt.Errorf("could not write tx %v to database: %v", t.ID().ShortString(), err)
 		}
-		if err := batch.Put(getTransactionDestKey(l, t), t.Id().Bytes()); err != nil {
-			return fmt.Errorf("could not write tx %v to database: %v", t.Id().ShortString(), err)
+		if err := batch.Put(getTransactionDestKey(l, t), t.ID().Bytes()); err != nil {
+			return fmt.Errorf("could not write tx %v to database: %v", t.ID().ShortString(), err)
 		}
-		m.Debug("wrote tx %v to db", t.Id().ShortString())
+		m.Debug("wrote tx %v to db", t.ID().ShortString())
 	}
 	err := batch.Write()
 	if err != nil {
@@ -584,12 +584,12 @@ func (m *DB) GetProjection(addr types.Address, prevNonce, prevBalance uint64) (n
 }
 
 type txGetter struct {
-	missingIds map[types.TransactionId]struct{}
+	missingIds map[types.TransactionID]struct{}
 	txs        []*types.Transaction
 	mesh       *DB
 }
 
-func (g *txGetter) get(id types.TransactionId) {
+func (g *txGetter) get(id types.TransactionID) {
 	t, err := g.mesh.GetTransaction(id)
 	if err != nil {
 		g.mesh.With().Warning("could not fetch tx", log.TxID(id.ShortString()), log.Err(err))
@@ -600,11 +600,11 @@ func (g *txGetter) get(id types.TransactionId) {
 }
 
 func newGetter(m *DB) *txGetter {
-	return &txGetter{mesh: m, missingIds: make(map[types.TransactionId]struct{})}
+	return &txGetter{mesh: m, missingIds: make(map[types.TransactionID]struct{})}
 }
 
 // GetTransactions retrieves a list of txs by their id's
-func (m *DB) GetTransactions(transactions []types.TransactionId) ([]*types.Transaction, map[types.TransactionId]struct{}) {
+func (m *DB) GetTransactions(transactions []types.TransactionID) ([]*types.Transaction, map[types.TransactionID]struct{}) {
 	getter := newGetter(m)
 	for _, id := range transactions {
 		getter.get(id)
@@ -613,7 +613,7 @@ func (m *DB) GetTransactions(transactions []types.TransactionId) ([]*types.Trans
 }
 
 // GetTransaction retrieves a tx by its id
-func (m *DB) GetTransaction(id types.TransactionId) (*types.Transaction, error) {
+func (m *DB) GetTransaction(id types.TransactionID) (*types.Transaction, error) {
 	tBytes, err := m.transactions.Get(id[:])
 	if err != nil {
 		return nil, fmt.Errorf("could not find transaction in database %v err=%v", hex.EncodeToString(id[:]), err)
@@ -627,13 +627,13 @@ func (m *DB) GetTransaction(id types.TransactionId) (*types.Transaction, error) 
 }
 
 // GetTransactionsByDestination retrieves txs by destination and layer
-func (m *DB) GetTransactionsByDestination(l types.LayerID, account types.Address) (txs []types.TransactionId) {
+func (m *DB) GetTransactionsByDestination(l types.LayerID, account types.Address) (txs []types.TransactionID) {
 	it := m.transactions.Find(getTransactionDestKeyPrefix(l, account))
 	for it.Next() {
 		if it.Key() == nil {
 			break
 		}
-		var a types.TransactionId
+		var a types.TransactionID
 		err := types.BytesToInterface(it.Value(), &a)
 		if err != nil {
 			//log error
@@ -645,13 +645,13 @@ func (m *DB) GetTransactionsByDestination(l types.LayerID, account types.Address
 }
 
 // GetTransactionsByOrigin retrieves txs by origin and layer
-func (m *DB) GetTransactionsByOrigin(l types.LayerID, account types.Address) (txs []types.TransactionId) {
+func (m *DB) GetTransactionsByOrigin(l types.LayerID, account types.Address) (txs []types.TransactionID) {
 	it := m.transactions.Find(getTransactionOriginKeyPrefix(l, account))
 	for it.Next() {
 		if it.Key() == nil {
 			break
 		}
-		var a types.TransactionId
+		var a types.TransactionID
 		err := types.BytesToInterface(it.Value(), &a)
 		if err != nil {
 			//log error
@@ -665,9 +665,9 @@ func (m *DB) GetTransactionsByOrigin(l types.LayerID, account types.Address) (tx
 // BlocksByValidity classifies a slice of blocks by validity
 func (m *DB) BlocksByValidity(blocks []*types.Block) (validBlocks, invalidBlocks []*types.Block) {
 	for _, b := range blocks {
-		valid, err := m.ContextualValidity(b.Id())
+		valid, err := m.ContextualValidity(b.ID())
 		if err != nil {
-			m.With().Error("could not get contextual validity", log.BlockID(b.Id().String()), log.Err(err))
+			m.With().Error("could not get contextual validity", log.BlockID(b.ID().String()), log.Err(err))
 		}
 		if valid {
 			validBlocks = append(validBlocks, b)
@@ -704,17 +704,17 @@ func (m *DB) ContextuallyValidBlock(layer types.LayerID) (map[types.BlockID]stru
 	validBlks := make(map[types.BlockID]struct{})
 
 	for _, b := range blks {
-		valid, err := m.ContextualValidity(b.Id())
+		valid, err := m.ContextualValidity(b.ID())
 
 		if err != nil {
-			m.Error("could not get contextual validity for block %v in layer %v err=%v", b.Id(), layer, err)
+			m.Error("could not get contextual validity for block %v in layer %v err=%v", b.ID(), layer, err)
 		}
 
 		if !valid {
 			continue
 		}
 
-		validBlks[b.Id()] = struct{}{}
+		validBlks[b.ID()] = struct{}{}
 	}
 
 	return validBlks, nil

@@ -32,7 +32,7 @@ func (bc BlockCache) Cap() int {
 }
 
 func (bc BlockCache) put(b *types.Block) {
-	bc.Cache.Add(b.Id(), *b)
+	bc.Cache.Add(b.ID(), *b)
 }
 
 func (bc BlockCache) Get(id types.BlockID) *types.Block {

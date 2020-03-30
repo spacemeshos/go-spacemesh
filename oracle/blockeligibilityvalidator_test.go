@@ -15,15 +15,15 @@ type mockAtxDB struct {
 	err  error
 }
 
-func (m mockAtxDB) GetIdentity(edID string) (types.NodeId, error) {
-	return types.NodeId{Key: edID, VRFPublicKey: vrfPubkey}, nil
+func (m mockAtxDB) GetIdentity(edID string) (types.NodeID, error) {
+	return types.NodeID{Key: edID, VRFPublicKey: vrfPubkey}, nil
 }
 
-func (m mockAtxDB) GetNodeAtxIDForEpoch(types.NodeId, types.EpochId) (types.AtxId, error) {
-	return types.AtxId{}, m.err
+func (m mockAtxDB) GetNodeAtxIDForEpoch(types.NodeID, types.EpochID) (types.ATXID, error) {
+	return types.ATXID{}, m.err
 }
 
-func (m mockAtxDB) GetAtxHeader(id types.AtxId) (*types.ActivationTxHeader, error) {
+func (m mockAtxDB) GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error) {
 	return m.atxH, m.err
 }
 
@@ -45,8 +45,8 @@ func TestBlockEligibilityValidator_getValidAtx(t *testing.T) {
 	r.EqualError(err, "ATX target epoch (1) doesn't match block publication epoch (4)")
 
 	atxHeader := &types.ActivationTxHeader{ActiveSetSize: 7, NIPSTChallenge: types.NIPSTChallenge{
-		NodeId:      types.NodeId{Key: edSigner.PublicKey().String()},
-		PubLayerIdx: 18,
+		NodeID:     types.NodeID{Key: edSigner.PublicKey().String()},
+		PubLayerID: 18,
 	}}
 	v.activationDb = &mockAtxDB{atxH: atxHeader}
 	atx, err := v.getValidAtx(block)

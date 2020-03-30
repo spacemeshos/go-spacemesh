@@ -29,7 +29,7 @@ type valueProvider interface {
 
 // a func to retrieve the active set size for the provided layer
 // this func is assumed to be cpu intensive and hence we cache its results
-type activeSetFunc func(epoch types.EpochId, blocks map[types.BlockID]struct{}) (map[string]struct{}, error)
+type activeSetFunc func(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error)
 
 type signer interface {
 	Sign(msg []byte) ([]byte, error)
@@ -182,7 +182,7 @@ func (o *Oracle) activeSetSize(layer types.LayerID) (uint32, error) {
 }
 
 // Eligible checks if ID is eligible on the given Layer where msg is the VRF message, sig is the role proof and assuming commSize as the expected committee size
-func (o *Oracle) Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeId, sig []byte) (bool, error) {
+func (o *Oracle) Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (bool, error) {
 	msg, err := o.buildVRFMessage(layer, round)
 	if err != nil {
 		o.Error("Eligible: could not build VRF message")

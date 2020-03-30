@@ -66,8 +66,8 @@ type mockIDProvider struct {
 	err error
 }
 
-func (mip *mockIDProvider) GetIdentity(edID string) (types.NodeId, error) {
-	return types.NodeId{Key: edID, VRFPublicKey: []byte{}}, mip.err
+func (mip *mockIDProvider) GetIdentity(edID string) (types.NodeID, error) {
+	return types.NodeID{Key: edID, VRFPublicKey: []byte{}}, mip.err
 }
 
 func newMockConsensusProcess(cfg config.Config, instanceID instanceID, s *Set, oracle Rolacle, signing Signer, p2p NetworkService, outputChan chan TerminationOutput) *mockConsensusProcess {
@@ -80,7 +80,7 @@ func newMockConsensusProcess(cfg config.Config, instanceID instanceID, s *Set, o
 }
 
 func createHare(n1 p2p.Service, logger log.Log) *Hare {
-	return New(cfg, n1, signing2.NewEdSigner(), types.NodeId{}, validateBlocks, (&mockSyncer{true}).IsSynced, new(orphanMock), eligibility.New(), 10, &mockIDProvider{}, NewMockStateQuerier(), make(chan types.LayerID), logger)
+	return New(cfg, n1, signing2.NewEdSigner(), types.NodeID{}, validateBlocks, (&mockSyncer{true}).IsSynced, new(orphanMock), eligibility.New(), 10, &mockIDProvider{}, NewMockStateQuerier(), make(chan types.LayerID), logger)
 }
 
 var _ Consensus = (*mockConsensusProcess)(nil)
@@ -279,7 +279,7 @@ func TestHare_onTick(t *testing.T) {
 		return blockset
 	}
 
-	h := New(cfg, n1, signing, types.NodeId{}, validateBlocks, (&mockSyncer{true}).IsSynced, om, oracle, 10, &mockIDProvider{}, NewMockStateQuerier(), layerTicker, log.NewDefault("Hare"))
+	h := New(cfg, n1, signing, types.NodeID{}, validateBlocks, (&mockSyncer{true}).IsSynced, om, oracle, 10, &mockIDProvider{}, NewMockStateQuerier(), layerTicker, log.NewDefault("Hare"))
 	h.networkDelta = 0
 	h.bufferSize = 1
 

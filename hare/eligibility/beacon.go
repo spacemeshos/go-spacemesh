@@ -87,7 +87,7 @@ func calcValue(bids map[types.BlockID]struct{}) uint32 {
 		keys = append(keys, k)
 	}
 
-	keys = types.SortBlockIds(keys)
+	keys = types.SortBlockIDs(keys)
 
 	// calc
 	h := fnv.New32()

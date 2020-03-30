@@ -125,7 +125,7 @@ func hashInstanceAndK(instanceID types.LayerID, K int32) uint32 {
 }
 
 // Eligible checks whether a given ID is in the eligible list or not. it fetches the list once and gives answers locally after that.
-func (oc *oracleClient) Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeId, sig []byte) (bool, error) {
+func (oc *oracleClient) Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (bool, error) {
 	instID := hashInstanceAndK(layer, round)
 	// make special instance ID
 	oc.eMtx.Lock()

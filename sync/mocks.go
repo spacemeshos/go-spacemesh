@@ -106,7 +106,7 @@ func (mockState) ValidateNonceAndBalance(transaction *types.Transaction) error {
 	panic("implement me")
 }
 
-func (mockState) GetLayerApplied(txID types.TransactionId) *types.LayerID {
+func (mockState) GetLayerApplied(txID types.TransactionID) *types.LayerID {
 	panic("implement me")
 }
 
@@ -128,12 +128,12 @@ func (mockState) AddressExists(addr types.Address) bool {
 type mockIStore struct {
 }
 
-func (*mockIStore) StoreNodeIdentity(id types.NodeId) error {
+func (*mockIStore) StoreNodeIdentity(id types.NodeID) error {
 	return nil
 }
 
-func (*mockIStore) GetIdentity(id string) (types.NodeId, error) {
-	return types.NodeId{Key: "some string ", VRFPublicKey: []byte("bytes")}, nil
+func (*mockIStore) GetIdentity(id string) (types.NodeID, error) {
+	return types.NodeID{Key: "some string ", VRFPublicKey: []byte("bytes")}, nil
 }
 
 type validatorMock struct{}
@@ -148,22 +148,22 @@ func (*validatorMock) VerifyPost(id signing.PublicKey, proof *types.PostProof, s
 
 type mockTxMemPool struct{}
 
-func (mockTxMemPool) Get(id types.TransactionId) (*types.Transaction, error) {
+func (mockTxMemPool) Get(id types.TransactionID) (*types.Transaction, error) {
 	return &types.Transaction{}, nil
 }
 func (mockTxMemPool) GetAllItems() []*types.Transaction {
 	return nil
 }
-func (mockTxMemPool) Put(id types.TransactionId, item *types.Transaction) {
+func (mockTxMemPool) Put(id types.TransactionID, item *types.Transaction) {
 
 }
-func (mockTxMemPool) Invalidate(id types.TransactionId) {
+func (mockTxMemPool) Invalidate(id types.TransactionID) {
 
 }
 
 type mockAtxMemPool struct{}
 
-func (mockAtxMemPool) Get(id types.AtxId) (*types.ActivationTx, error) {
+func (mockAtxMemPool) Get(id types.ATXID) (*types.ActivationTx, error) {
 	return &types.ActivationTx{}, nil
 }
 
@@ -175,7 +175,7 @@ func (mockAtxMemPool) Put(atx *types.ActivationTx) {
 
 }
 
-func (mockAtxMemPool) Invalidate(id types.AtxId) {
+func (mockAtxMemPool) Invalidate(id types.ATXID) {
 
 }
 
