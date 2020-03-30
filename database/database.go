@@ -130,7 +130,7 @@ func (db *LDBDatabase) NewIteratorWithPrefix(prefix []byte) iterator.Iterator {
 }
 
 // Find returns iterator to iterate over values with given prefix key
-func (db LDBDatabase) Find(key []byte) Iterator {
+func (db *LDBDatabase) Find(key []byte) Iterator {
 	return db.db.NewIterator(util.BytesPrefix(key), nil)
 }
 

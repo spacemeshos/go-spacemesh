@@ -51,7 +51,6 @@ var (
 	postProver       = &postProverClientMock{}
 	npst             = NewNIPSTWithChallenge(&chlng, poetRef)
 	commitment       = &types.PostProof{
-		//Identity:     []byte(nil),
 		Challenge:    []byte(nil),
 		MerkleRoot:   []byte("1"),
 		ProofNodes:   [][]byte(nil),
@@ -85,7 +84,7 @@ type NetMock struct {
 	atxDb            atxDBProvider
 }
 
-func (n *NetMock) Broadcast(id string, d []byte) error {
+func (n *NetMock) Broadcast(_ string, d []byte) error {
 	n.lastTransmission = d
 	go n.hookToAtxPool(d)
 	return nil
@@ -123,7 +122,7 @@ type NipstBuilderMock struct {
 	SleepTime      int
 }
 
-func (np *NipstBuilderMock) BuildNIPST(challenge *types.Hash32, timeout chan struct{}, stop chan struct{}) (*types.NIPST, error) {
+func (np *NipstBuilderMock) BuildNIPST(challenge *types.Hash32, _ chan struct{}, _ chan struct{}) (*types.NIPST, error) {
 	if np.buildNipstFunc != nil {
 		return np.buildNipstFunc(challenge)
 	}
@@ -132,27 +131,27 @@ func (np *NipstBuilderMock) BuildNIPST(challenge *types.Hash32, timeout chan str
 
 type NipstErrBuilderMock struct{}
 
-func (np *NipstErrBuilderMock) BuildNIPST(challenge *types.Hash32, timeout chan struct{}, stop chan struct{}) (*types.NIPST, error) {
+func (np *NipstErrBuilderMock) BuildNIPST(*types.Hash32, chan struct{}, chan struct{}) (*types.NIPST, error) {
 	return nil, fmt.Errorf("nipst builder error")
 }
 
 type MockIDStore struct{}
 
-func (*MockIDStore) StoreNodeIdentity(id types.NodeID) error {
+func (*MockIDStore) StoreNodeIdentity(types.NodeID) error {
 	return nil
 }
 
-func (*MockIDStore) GetIdentity(id string) (types.NodeID, error) {
+func (*MockIDStore) GetIdentity(string) (types.NodeID, error) {
 	return types.NodeID{}, nil
 }
 
 type ValidatorMock struct{}
 
-func (*ValidatorMock) Validate(id signing.PublicKey, nipst *types.NIPST, expectedChallenge types.Hash32) error {
+func (*ValidatorMock) Validate(signing.PublicKey, *types.NIPST, types.Hash32) error {
 	return nil
 }
 
-func (*ValidatorMock) VerifyPost(id signing.PublicKey, proof *types.PostProof, space uint64) error {
+func (*ValidatorMock) VerifyPost(signing.PublicKey, *types.PostProof, uint64) error {
 	return nil
 }
 
@@ -185,7 +184,7 @@ type FaultyNetMock struct {
 	retErr bool
 }
 
-func (n *FaultyNetMock) Broadcast(id string, d []byte) error {
+func (n *FaultyNetMock) Broadcast(_ string, d []byte) error {
 	n.bt = d
 	if n.retErr {
 		return fmt.Errorf("faulty")
@@ -235,7 +234,7 @@ func (l *LayerClockMock) GetCurrentLayer() types.LayerID {
 	return l.currentLayer
 }
 
-func (l *LayerClockMock) AwaitLayer(layerID types.LayerID) chan struct{} {
+func (l *LayerClockMock) AwaitLayer(types.LayerID) chan struct{} {
 	ch := make(chan struct{})
 	go func() {
 		time.Sleep(1 * time.Millisecond)
@@ -598,7 +597,7 @@ func TestBuilder_PublishActivationTx_PosAtxOnSameLayerAsPrevAtx(t *testing.T) {
 
 func TestBuilder_SignAtx(t *testing.T) {
 	ed := signing.NewEdSigner()
-	nodeID := types.NodeID{ed.PublicKey().String(), []byte("bbbbb")}
+	nodeID := types.NodeID{Key: ed.PublicKey().String(), VRFPublicKey: []byte("bbbbb")}
 	activationDb := NewActivationDb(database.NewMemDatabase(), &MockIDStore{}, mesh.NewMemMeshDB(lg.WithName("meshDB")), layersPerEpoch, &ValidatorMock{}, lg.WithName("atxDB1"))
 	b := NewBuilder(nodeID, coinbase, ed, activationDb, net, meshProviderMock, layersPerEpoch, nipstBuilderMock, postProver, layerClockMock, &mockSyncer{}, NewMockDB(), lg.WithName("atxBuilder"))
 
@@ -619,7 +618,7 @@ func TestBuilder_SignAtx(t *testing.T) {
 }
 
 func TestBuilder_NipstPublishRecovery(t *testing.T) {
-	id := types.NodeID{"aaaaaa", []byte("bbbbb")}
+	id := types.NodeID{Key: "aaaaaa", VRFPublicKey: []byte("bbbbb")}
 	coinbase := types.HexToAddress("0xaaa")
 	net := &NetMock{}
 	layers := &MeshProviderMock{}
@@ -637,7 +636,7 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	nipstBuilder.poetRef = poetRef
 	npst := NewNIPSTWithChallenge(&chlng, poetRef)
 
-	atx := types.NewActivationTxForTests(types.NodeID{"aaaaaa", []byte("bbbbb")}, 1, prevAtx, 15, 1, prevAtx, coinbase, 5, []types.BlockID{block1.ID(), block2.ID(), block3.ID()}, npst)
+	atx := types.NewActivationTxForTests(types.NodeID{Key: "aaaaaa", VRFPublicKey: []byte("bbbbb")}, 1, prevAtx, 15, 1, prevAtx, coinbase, 5, []types.BlockID{block1.ID(), block2.ID(), block3.ID()}, npst)
 
 	err := activationDb.StoreAtx(atx.PubLayerID.GetEpoch(layersPerEpoch), atx)
 	assert.NoError(t, err)
@@ -648,7 +647,7 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 		PrevATXID:      atx.ID(),
 		PubLayerID:     atx.PubLayerID.Add(b.layersPerEpoch),
 		StartTick:      atx.EndTick,
-		EndTick:        b.tickProvider.NumOfTicks(), //todo: add tick provider (#827)
+		EndTick:        b.tickProvider.NumOfTicks(), // todo: add tick provider (#827)
 		PositioningATX: atx.ID(),
 	}
 
@@ -662,7 +661,7 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	err = b.PublishActivationTx()
 	assert.EqualError(t, err, "target epoch has passed")
 
-	//test load in correct epoch
+	// test load in correct epoch
 	b = NewBuilder(id, coinbase, &MockSigning{}, activationDb, net, layers, layersPerEpoch, nipstBuilder, postProver, layerClockMock, &mockSyncer{}, db, lg.WithName("atxBuilder"))
 	err = b.loadChallenge()
 	assert.NoError(t, err)
@@ -680,7 +679,7 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	err = b.buildNipstChallenge()
 	assert.NoError(t, err)
 	db.hadNone = false
-	//test load challenge in later epoch - Nipst should be truncated
+	// test load challenge in later epoch - Nipst should be truncated
 	b = NewBuilder(id, coinbase, &MockSigning{}, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, postProver, layerClockMock, &mockSyncer{}, db, lg.WithName("atxBuilder"))
 	err = b.loadChallenge()
 	assert.NoError(t, err)
@@ -692,7 +691,7 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 }
 
 func TestStartPost(t *testing.T) {
-	id := types.NodeID{"aaaaaa", []byte("bbbbb")}
+	id := types.NodeID{Key: "aaaaaa", VRFPublicKey: []byte("bbbbb")}
 	coinbase := types.HexToAddress("0xaaa")
 	layers := &MeshProviderMock{}
 	nipstBuilder := &NipstBuilderMock{}
