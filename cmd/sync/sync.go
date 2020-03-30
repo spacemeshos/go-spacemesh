@@ -79,21 +79,6 @@ func (app *syncApp) Cleanup() {
 	}
 }
 
-type mockBlockBuilder struct {
-	txs []*types.Transaction
-}
-
-func (m *mockBlockBuilder) ValidateAndAddTxToPool(tx *types.Transaction) error {
-	m.txs = append(m.txs, tx)
-	return nil
-}
-
-func configTst() mesh.Config {
-	return mesh.Config{
-		BaseReward: big.NewInt(5000),
-	}
-}
-
 func (app *syncApp) start(cmd *cobra.Command, args []string) {
 	// start p2p services
 	lg := log.New("sync_test", "", "")
