@@ -22,7 +22,7 @@ const defNonGenesisLayer = defLayersPerEpoch*2 + 1
 
 var errFoo = errors.New("some error")
 var errMy = errors.New("my error")
-var cfg = eCfg.Config{25, 30}
+var cfg = eCfg.Config{ConfidenceParam: 25, EpochOffset: 30}
 var genActive = 5
 
 type mockBlocksProvider struct {

@@ -757,7 +757,6 @@ func (m *DB) cacheWarmUpFromTo(from types.LayerID, to types.LayerID) error {
 			m.Info("shutdown during cache warm up")
 			return nil
 		default:
-			continue
 		}
 
 		layer, err := m.LayerBlockIds(i)

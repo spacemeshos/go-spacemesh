@@ -44,7 +44,7 @@ type atxChan struct {
 // it also stores identifications for all nodes e.g the coupling between ed id and bls id
 type ActivationDb struct {
 	sync.RWMutex
-	//todo: think about whether we need one db or several(#1922)
+	// todo: think about whether we need one db or several(#1922)
 	idStore
 	atxs              database.Database
 	atxHeaderCache    AtxCache
@@ -271,7 +271,7 @@ func (db *ActivationDb) CalcActiveSetFromView(view []types.BlockID, pubEpoch typ
 	if found {
 		return count, nil
 	}
-	//check if we have a running calculation for this hash
+	// check if we have a running calculation for this hash
 	db.assLock.Lock()
 	mu, alreadyRunning := db.pendingActiveSet[viewHash]
 	if alreadyRunning {
@@ -470,7 +470,7 @@ func (db *ActivationDb) StoreAtx(ech types.EpochID, atx *types.ActivationTx) err
 	db.Lock()
 	defer db.Unlock()
 
-	//todo: maybe cleanup DB if failed by using defer (#1921)
+	// todo: maybe cleanup DB if failed by using defer (#1921)
 	if _, err := db.atxs.Get(getAtxHeaderKey(atx.ID())); err == nil {
 		// exists - how should we handle this?
 		return nil
@@ -567,7 +567,7 @@ func (db *ActivationDb) updateTopAtxIfNeeded(atx *types.ActivationTx) error {
 	return nil
 }
 
-func (db ActivationDb) getTopAtx() (atxIDAndLayer, error) {
+func (db *ActivationDb) getTopAtx() (atxIDAndLayer, error) {
 	topAtxBytes, err := db.atxs.Get([]byte(topAtxKey))
 	if err != nil {
 		return atxIDAndLayer{}, err

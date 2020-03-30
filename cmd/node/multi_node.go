@@ -30,8 +30,8 @@ type ManualClock struct {
 }
 
 // LayerToTime returns the time of the provided layer
-func (clk ManualClock) LayerToTime(id types.LayerID) time.Time {
-	return time.Now().Add(1000 * time.Hour) //hack so this wont take affect in the mock
+func (clk *ManualClock) LayerToTime(types.LayerID) time.Time {
+	return time.Now().Add(1000 * time.Hour) // hack so this wont take affect in the mock
 }
 
 // NewManualClock creates a new manual clock struct
@@ -103,7 +103,7 @@ func (clk *ManualClock) Tick() {
 }
 
 // GetCurrentLayer gets the last ticked layer
-func (clk ManualClock) GetCurrentLayer() types.LayerID {
+func (clk *ManualClock) GetCurrentLayer() types.LayerID {
 	clk.m.Lock()
 	defer clk.m.Unlock()
 
@@ -111,20 +111,20 @@ func (clk ManualClock) GetCurrentLayer() types.LayerID {
 }
 
 // GetGenesisTime returns the set genesis time for this clock
-func (clk ManualClock) GetGenesisTime() time.Time {
+func (clk *ManualClock) GetGenesisTime() time.Time {
 	clk.m.Lock()
 	defer clk.m.Unlock()
 	return clk.genesisTime
 }
 
 // Close does nothing because this clock is manual
-func (clk ManualClock) Close() {
-}
+func (clk *ManualClock) Close() {}
 
 func getTestDefaultConfig() *config.Config {
 	cfg, err := LoadConfigFromFile()
 	if err != nil {
 		log.Error("cannot load config from file")
+		return nil
 	}
 
 	cfg.POST = activation.DefaultConfig()
@@ -182,12 +182,12 @@ type network interface {
 	NewNode() *service.Node
 }
 
-//initialize a network mock object to simulate network between nodes.
-//var net = service.NewSimulator()
+// initialize a network mock object to simulate network between nodes.
+// var net = service.NewSimulator()
 
 // InitSingleInstance initializes a node instance with given
 // configuration and parameters, it does not stop the instance.
-func InitSingleInstance(cfg config.Config, i int, genesisTime string, rng *amcl.RAND, storePath string, rolacle *eligibility.FixedRolacle, poetClient *activation.HTTPPoetClient, fastHare bool, clock TickProvider, net network) (*SpacemeshApp, error) {
+func InitSingleInstance(cfg config.Config, i int, genesisTime string, rng *amcl.RAND, storePath string, rolacle *eligibility.FixedRolacle, poetClient *activation.HTTPPoetClient, clock TickProvider, net network) (*SpacemeshApp, error) {
 
 	smApp := NewSpacemeshApp()
 	smApp.Config = &cfg
@@ -234,7 +234,12 @@ func StartMultiNode(numOfinstances, layerAvgSize int, runTillLayer uint32, dbPat
 	if err != nil {
 		log.Panic("failed creating poet client harness: %v", err)
 	}
-	defer poetHarness.Teardown(true)
+	defer func() {
+		err := poetHarness.Teardown(true)
+		if err != nil {
+			log.With().Error("failed to tear down poet harness", log.Err(err))
+		}
+	}()
 
 	rolacle := eligibility.New()
 	rng := BLS381.DefaultSeed()
@@ -250,7 +255,7 @@ func StartMultiNode(numOfinstances, layerAvgSize int, runTillLayer uint32, dbPat
 	name := 'a'
 	for i := 0; i < numOfInstances; i++ {
 		dbStorepath := path + string(name)
-		smApp, err := InitSingleInstance(*cfg, i, genesisTime, rng, dbStorepath, rolacle, poetHarness.HTTPPoetClient, true, clock, net)
+		smApp, err := InitSingleInstance(*cfg, i, genesisTime, rng, dbStorepath, rolacle, poetHarness.HTTPPoetClient, clock, net)
 		if err != nil {
 			log.Error("cannot run multi node %v", err)
 			return
@@ -271,12 +276,12 @@ func StartMultiNode(numOfinstances, layerAvgSize int, runTillLayer uint32, dbPat
 		log.Panic("failed to start poet server: %v", err)
 	}
 
-	//startInLayer := 5 // delayed pod will start in this layer
+	// startInLayer := 5 // delayed pod will start in this layer
 	defer GracefulShutdown(apps)
 
 	timeout := time.After(time.Duration(runTillLayer*60) * time.Second)
 
-	//stickyClientsDone := 0
+	// stickyClientsDone := 0
 	startLayer := time.Now()
 	clock.Tick()
 	errors := 0
