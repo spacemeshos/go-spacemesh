@@ -141,6 +141,7 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 	atxpool := miner.NewAtxMemPool()
 
 	sync := sync.NewSyncWithMocks(atxdbStore, mshdb, txpool, atxpool, swarm, poetDb, conf, types.LayerID(expectedLayers))
+	app.sync = sync
 	if err = swarm.Start(); err != nil {
 		log.Panic("error starting p2p err=%v", err)
 	}
