@@ -105,7 +105,7 @@ def test_sync_gradually_add_nodes(init_session, setup_bootstrap, save_log_on_exi
 
     start = time.time()
     sleep = 30  # seconds
-    num_iter = 25  # total of 5 minutes
+    num_iter = 60  # total of 5 minutes
     for i in range(num_iter):
         done = 0
         for j in range(0, num_clients):
