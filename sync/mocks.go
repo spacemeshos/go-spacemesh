@@ -254,8 +254,6 @@ func NewSyncWithMocks(atxdbStore *database.LDBDatabase, mshdb *mesh.DB, txpool *
 	}
 
 	msh.SetBlockBuilder(&mockBlockBuilder{})
-
-	defer msh.Close()
 	msh.AddBlock(mesh.GenesisBlock)
 	clock := mockClock{Layer: expectedLayers + 1}
 	lg.Info("current layer %v", clock.GetCurrentLayer())
