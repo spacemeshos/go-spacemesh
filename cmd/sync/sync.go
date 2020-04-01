@@ -110,6 +110,7 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 		SyncInterval:    2 * 60 * time.Millisecond,
 		Hdist:           app.Config.Hdist,
 		ValidationDelta: 30 * time.Second,
+		LayersPerEpoch:  uint16(app.Config.LayersPerEpoch),
 	}
 
 	if remote {
