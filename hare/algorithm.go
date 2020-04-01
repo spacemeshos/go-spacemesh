@@ -360,11 +360,15 @@ func (proc *consensusProcess) handleMessage(m *Msg) {
 
 		// early message, keep for later
 		if err == errEarlyMsg {
-			proc.Debug("Early message of type %v detected. Keeping message, pubkey %v", mType, m.PubKey.ShortString())
+			proc.With().Debug("Early message detected, keeping",
+				log.String("msg_type", mType), log.String("sender_id", m.PubKey.ShortString()),
+				log.Int32("current_k", proc.k), log.Int32("msg_k", m.InnerMsg.K),
+				log.LayerID(uint64(proc.instanceID)), log.Err(err))
 
 			// validate syntax for early messages
 			if !proc.validator.SyntacticallyValidateMessage(m) {
-				proc.Warning("Syntactically validation failed, pubkey %v", m.PubKey.ShortString())
+				proc.With().Warning("Early message failed syntactic validation",
+					log.String("msg_type", mType), log.String("sender_id", m.PubKey.ShortString()))
 				return
 			}
 
@@ -373,7 +377,7 @@ func (proc *consensusProcess) handleMessage(m *Msg) {
 		}
 
 		// not an early message but also contextually invalid
-		proc.With().Error("Error contextually validating message",
+		proc.With().Error("Late message failed contextual validation",
 			log.String("msg_type", mType), log.String("sender_id", m.PubKey.ShortString()),
 			log.Int32("current_k", proc.k), log.Int32("msg_k", m.InnerMsg.K),
 			log.LayerID(uint64(proc.instanceID)), log.Err(err))
