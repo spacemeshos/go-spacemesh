@@ -91,6 +91,7 @@ type BlockBuilder struct {
 	syncer           syncer
 	started          bool
 	atxsPerBlock     int // number of atxs to select per block
+	layersPerEpoch   uint16
 	projector        projector
 }
 
@@ -98,7 +99,7 @@ type BlockBuilder struct {
 func NewBlockBuilder(minerID types.NodeID, sgn signer, net p2p.Service, beginRoundEvent chan types.LayerID, hdist int,
 	txPool txPool, atxPool *AtxMemPool, weakCoin weakCoinProvider, orph meshProvider, hare hareResultProvider,
 	blockOracle blockOracle, txValidator txValidator, atxValidator atxValidator, syncer syncer, atxsPerBlock int,
-	projector projector, lg log.Log) *BlockBuilder {
+	layersPerEpoch uint16, projector projector, lg log.Log) *BlockBuilder {
 
 	seed := binary.BigEndian.Uint64(md5.New().Sum([]byte(minerID.Key)))
 
@@ -125,6 +126,7 @@ func NewBlockBuilder(minerID types.NodeID, sgn signer, net p2p.Service, beginRou
 		syncer:           syncer,
 		started:          false,
 		atxsPerBlock:     atxsPerBlock,
+		layersPerEpoch:   layersPerEpoch,
 		projector:        projector,
 	}
 
@@ -408,32 +410,7 @@ func (t *BlockBuilder) handleGossipAtx(data service.GossipMessage) {
 	}
 	atx.CalcAndSetID()
 
-	//commitmentStr := "nil"
-	//if atx.Commitment != nil {
-	//	commitmentStr = atx.Commitment.String()
-	//}
-	//
-	//challenge := ""
-	//h, err := atx.NIPSTChallenge.Hash()
-	//if err == nil && h != nil {
-	//	challenge = h.String()
-	//
-	//}
-
-	t.With().Info("got new ATX",
-		atx.Fields()...,
-	// log.String("sender_id", atx.NodeID.ShortString()),
-	// log.AtxID(atx.ShortString()),
-	// log.String("prev_atx_id", atx.PrevATXID.ShortString()),
-	// log.String("pos_atx_id", atx.PositioningATX.ShortString()),
-	// log.LayerID(uint64(atx.PubLayerID)),
-	// log.Uint32("active_set", atx.ActiveSetSize),
-	// log.Int("viewlen", len(atx.View)),
-	// log.Uint64("sequence_number", atx.Sequence),
-	// log.String("commitment", commitmentStr),
-	// log.Int("atx_size", len(data.Bytes())),
-	// log.String("NIPSTChallenge", challenge),
-	)
+	t.With().Info("got new ATX", atx.Fields(t.layersPerEpoch, len(data.Bytes()))...)
 
 	//todo fetch from neighbour (#1925)
 	if atx.Nipst == nil {

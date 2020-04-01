@@ -444,24 +444,7 @@ func (b *Builder) PublishActivationTx() error {
 		return err
 	}
 
-	commitStr := "nil"
-	if commitment != nil {
-		commitStr = commitment.String()
-	}
-	b.log.Event().Info("atx published!",
-		log.AtxID(atx.ShortString()),
-		log.String("prev_atx_id", atx.PrevATXID.ShortString()),
-		log.String("pos_atx_id", atx.PositioningATX.ShortString()),
-		log.LayerID(uint64(atx.PubLayerID)),
-		log.EpochID(uint64(atx.PubLayerID.GetEpoch(b.layersPerEpoch))),
-		log.Uint32("active_set", atx.ActiveSetSize),
-		log.String("miner", b.nodeID.ShortString()),
-		log.Int("viewlen", len(atx.View)),
-		log.Uint64("sequence_number", atx.Sequence),
-		log.String("NIPSTChallenge", hash.String()),
-		log.String("commitment", commitStr),
-		log.Int("atx_size", size),
-	)
+	b.log.Event().Info("atx published!", atx.Fields(b.layersPerEpoch, size)...)
 	events.Publish(events.AtxCreated{Created: true, ID: atx.ShortString(), Layer: uint64(b.currentEpoch())})
 
 	select {

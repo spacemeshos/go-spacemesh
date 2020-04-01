@@ -174,8 +174,33 @@ func (atx *ActivationTx) InnerBytes() ([]byte, error) {
 }
 
 // Fields returns an array of LoggableFields for logging
-func (atx *ActivationTx) Fields() []log.LoggableField {
-	return []log.LoggableField{log.String("hello", "hello"), log.String("world", "world")}
+func (atx *ActivationTx) Fields(layersPerEpoch uint16, size int) []log.LoggableField {
+	commitmentStr := "nil"
+	if atx.Commitment != nil {
+		commitmentStr = atx.Commitment.String()
+	}
+
+	challenge := ""
+	h, err := atx.NIPSTChallenge.Hash()
+	if err == nil && h != nil {
+		challenge = h.String()
+
+	}
+
+	return []log.LoggableField{
+		log.AtxID(atx.ShortString()),
+		log.String("sender_id", atx.NodeID.ShortString()),
+		log.String("prev_atx_id", atx.PrevATXID.ShortString()),
+		log.String("pos_atx_id", atx.PositioningATX.ShortString()),
+		log.LayerID(uint64(atx.PubLayerID)),
+		log.EpochID(uint64(atx.PubLayerID.GetEpoch(layersPerEpoch))),
+		log.Uint32("active_set", atx.ActiveSetSize),
+		log.Int("viewlen", len(atx.View)),
+		log.Uint64("sequence_number", atx.Sequence),
+		log.String("NIPSTChallenge", challenge),
+		log.String("commitment", commitmentStr),
+		log.Int("atx_size", size),
+	}
 }
 
 // CalcAndSetID calculates and sets the cached ID field. This field must be set before calling the ID() method.
