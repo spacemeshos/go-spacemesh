@@ -105,7 +105,7 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 	conf := sync.Configuration{
 		Concurrency:     4,
 		AtxsLimit:       200,
-		LayerSize:       int(app.Config.LayerAvgSize),
+		LayerSize:       app.Config.LayerAvgSize,
 		RequestTimeout:  time.Duration(app.Config.SyncRequestTimeout) * time.Millisecond,
 		SyncInterval:    2 * 60 * time.Millisecond,
 		Hdist:           app.Config.Hdist,

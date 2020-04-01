@@ -214,14 +214,14 @@ func (vq *blockQueue) addDependencies(jobID interface{}, blks []types.BlockID, f
 		bid := id.AsHash32()
 		if vq.inQueue(bid) {
 			vq.reverseDepMap[bid] = append(vq.reverseDepMap[bid], jobID)
-			vq.Debug("add block %v to %v pending map", id, jobID)
+			vq.Info("add block %v to %v pending map", id, jobID)
 			dependencys[bid] = struct{}{}
 		} else {
 			//	check database
 			if _, err := vq.GetBlock(id); err != nil {
 				//unknown block add to queue
 				vq.reverseDepMap[bid] = append(vq.reverseDepMap[bid], jobID)
-				vq.Debug("add block %v to %v pending map", id, jobID)
+				vq.Info("add block %v to %v pending map", id, jobID)
 				dependencys[bid] = struct{}{}
 				idsToPush = append(idsToPush, id.AsHash32())
 			}
@@ -247,6 +247,6 @@ func (vq *blockQueue) addDependencies(jobID interface{}, blks []types.BlockID, f
 		vq.addToPending(idsToPush)
 	}
 
-	vq.Debug("added %v dependencies to %s", len(dependencys), jobID)
+	vq.Info("added %v dependencies to %s", len(dependencys), jobID)
 	return true, nil
 }
