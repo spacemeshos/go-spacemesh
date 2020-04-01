@@ -156,7 +156,7 @@ func atxWithProof(pubkey string, poetref []byte) *types.ActivationTx {
 	chlng := types.HexToHash32("0x3333")
 	npst := activation.NewNIPSTWithChallenge(&chlng, poetref)
 
-	atx := types.NewActivationTxForTests(types.NodeID{Key: pubkey, VRFPublicKey: []byte(rand.RandString(8))}, 0, *types.EmptyATXID, 5, 1, *types.EmptyATXID, coinbase, 0, []types.BlockID{}, npst)
+	atx := newActivationTx(types.NodeID{Key: pubkey, VRFPublicKey: []byte(rand.RandString(8))}, 0, *types.EmptyATXID, 5, 1, *types.EmptyATXID, coinbase, 0, []types.BlockID{}, npst)
 	atx.Commitment = commitment
 	atx.CommitmentMerkleRoot = commitment.MerkleRoot
 	atx.CalcAndSetID()
@@ -171,4 +171,19 @@ func chooseRandomPattern(blocksInLayer int, patternSize int) []int {
 		indexes = append(indexes, r)
 	}
 	return indexes
+}
+
+func newActivationTx(nodeID types.NodeID, sequence uint64, prevATX types.ATXID, pubLayerID types.LayerID,
+	startTick uint64, positioningATX types.ATXID, coinbase types.Address, activeSetSize uint32, view []types.BlockID,
+	nipst *types.NIPST) *types.ActivationTx {
+
+	nipstChallenge := types.NIPSTChallenge{
+		NodeID:         nodeID,
+		Sequence:       sequence,
+		PrevATXID:      prevATX,
+		PubLayerID:     pubLayerID,
+		StartTick:      startTick,
+		PositioningATX: positioningATX,
+	}
+	return types.NewActivationTx(nipstChallenge, coinbase, activeSetSize, view, nipst, nil)
 }

@@ -549,7 +549,7 @@ func (b *Builder) discardChallengeIfStale() bool {
 // ExtractPublicKey extracts public key from message and verifies public key exists in idStore, this is how we validate
 // ATX signature. If this is the first ATX it is considered valid anyways and ATX syntactic validation will determine ATX validity
 func ExtractPublicKey(signedAtx *types.ActivationTx) (*signing.PublicKey, error) {
-	bts, err := signedAtx.ATXBytes()
+	bts, err := signedAtx.InnerBytes()
 	if err != nil {
 		return nil, err
 	}
@@ -566,7 +566,7 @@ func ExtractPublicKey(signedAtx *types.ActivationTx) (*signing.PublicKey, error)
 // SignAtx signs the atx atx with specified signer and assigns the signature into atx.Sig
 // this function returns an error if atx could not be converted to bytes
 func SignAtx(signer signer, atx *types.ActivationTx) error {
-	bts, err := atx.ATXBytes()
+	bts, err := atx.InnerBytes()
 	if err != nil {
 		return err
 	}

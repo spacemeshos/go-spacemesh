@@ -900,7 +900,7 @@ func atx(pubkey string) *types.ActivationTx {
 	poetRef := []byte{0xde, 0xad}
 	npst := activation.NewNIPSTWithChallenge(&chlng, poetRef)
 
-	atx := types.NewActivationTxForTests(types.NodeID{Key: pubkey, VRFPublicKey: []byte(rand.RandString(8))}, 0, *types.EmptyATXID, 5, 1, *types.EmptyATXID, coinbase, 0, nil, npst)
+	atx := newActivationTx(types.NodeID{Key: pubkey, VRFPublicKey: []byte(rand.RandString(8))}, 0, *types.EmptyATXID, 5, 1, *types.EmptyATXID, coinbase, 0, nil, npst)
 	atx.Commitment = commitment
 	atx.CommitmentMerkleRoot = commitment.MerkleRoot
 	atx.CalcAndSetID()

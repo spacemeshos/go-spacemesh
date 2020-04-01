@@ -9,7 +9,7 @@ import (
 const mutexUnLocked = 0
 const mutexLocked = 1
 
-// Mutex is simple sync.Mutex + ability to try to Lock.
+// TryMutex is a simple sync.Mutex with the ability to try to Lock.
 type TryMutex struct {
 	sync.Mutex
 }

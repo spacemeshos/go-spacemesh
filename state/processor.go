@@ -1,10 +1,8 @@
 package state
 
 import (
-	"bytes"
 	"container/list"
 	"fmt"
-	xdr "github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -71,28 +69,6 @@ func PublicKeyToAccountAddress(pub ed25519.PublicKey) types.Address {
 	var addr types.Address
 	addr.SetBytes(pub)
 	return addr
-}
-
-// ValidateSignature validates the signature by extracting the source account and validating its existence.
-// Return the src acount address and error in case of failure
-func (tp *TransactionProcessor) ValidateSignature(s types.Signed) (types.Address, error) { // TODO: never used
-	var w bytes.Buffer
-	_, err := xdr.Marshal(&w, s.Data())
-	if err != nil {
-		return types.Address{}, err
-	}
-
-	pubKey, err := ed25519.ExtractPublicKey(w.Bytes(), s.Sig())
-	if err != nil {
-		return types.Address{}, err
-	}
-
-	addr := PublicKeyToAccountAddress(pubKey)
-	if !tp.Exist(addr) {
-		return types.Address{}, fmt.Errorf("failed to validate tx signature, unknown src account %v", addr)
-	}
-
-	return addr, nil
 }
 
 // AddressExists checks if an account address exists in this node's global state

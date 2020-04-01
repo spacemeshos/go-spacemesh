@@ -22,10 +22,6 @@ func (MockMapState) GetStateRoot() types.Hash32                         { return
 func (MockMapState) ValidateNonceAndBalance(*types.Transaction) error   { panic("implement me") }
 func (MockMapState) GetLayerApplied(types.TransactionID) *types.LayerID { panic("implement me") }
 
-func (MockMapState) ValidateSignature(types.Signed) (types.Address, error) {
-	return types.Address{}, nil
-}
-
 func (s *MockMapState) ApplyTransactions(_ types.LayerID, txs []*types.Transaction) (int, error) {
 	s.Txs = append(s.Txs, txs...)
 	return 0, nil
@@ -85,7 +81,7 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 	block1 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
 
 	coinbase1 := types.HexToAddress("0xaaa")
-	atx := types.NewActivationTxForTests(types.NodeID{Key: "1", VRFPublicKey: []byte("bbbbb")}, 0, *types.EmptyATXID, 1, 0, *types.EmptyATXID, coinbase1, 10, []types.BlockID{}, &types.NIPST{})
+	atx := newActivationTx(types.NodeID{Key: "1", VRFPublicKey: []byte("bbbbb")}, 0, *types.EmptyATXID, 1, 0, *types.EmptyATXID, coinbase1, 10, []types.BlockID{}, &types.NIPST{})
 	atxdb.AddAtx(atx.ID(), atx)
 	block1.ATXID = atx.ID()
 	totalFee += addTransactionsWithFee(t, layers.DB, block1, 15, 7)
@@ -93,7 +89,7 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 	block2 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
 
 	coinbase2 := types.HexToAddress("0xbbb")
-	atx = types.NewActivationTxForTests(types.NodeID{Key: "2", VRFPublicKey: []byte("bbbbb")}, 0, *types.EmptyATXID, 1, 0, *types.EmptyATXID, coinbase2, 10, []types.BlockID{}, &types.NIPST{})
+	atx = newActivationTx(types.NodeID{Key: "2", VRFPublicKey: []byte("bbbbb")}, 0, *types.EmptyATXID, 1, 0, *types.EmptyATXID, coinbase2, 10, []types.BlockID{}, &types.NIPST{})
 	atxdb.AddAtx(atx.ID(), atx)
 	block2.ATXID = atx.ID()
 	totalFee += addTransactionsWithFee(t, layers.DB, block2, 13, rand.Int63n(100))
@@ -101,7 +97,7 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 	block3 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
 
 	coinbase3 := types.HexToAddress("0xccc")
-	atx = types.NewActivationTxForTests(types.NodeID{Key: "3", VRFPublicKey: []byte("bbbbb")}, 0, *types.EmptyATXID, 1, 0, *types.EmptyATXID, coinbase3, 10, []types.BlockID{}, &types.NIPST{})
+	atx = newActivationTx(types.NodeID{Key: "3", VRFPublicKey: []byte("bbbbb")}, 0, *types.EmptyATXID, 1, 0, *types.EmptyATXID, coinbase3, 10, []types.BlockID{}, &types.NIPST{})
 	atxdb.AddAtx(atx.ID(), atx)
 	block3.ATXID = atx.ID()
 	totalFee += addTransactionsWithFee(t, layers.DB, block3, 17, rand.Int63n(100))
@@ -109,7 +105,7 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 	block4 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
 
 	coinbase4 := types.HexToAddress("0xddd")
-	atx = types.NewActivationTxForTests(types.NodeID{Key: "4", VRFPublicKey: []byte("bbbbb")}, 0, *types.EmptyATXID, 1, 0, *types.EmptyATXID, coinbase4, 10, []types.BlockID{}, &types.NIPST{})
+	atx = newActivationTx(types.NodeID{Key: "4", VRFPublicKey: []byte("bbbbb")}, 0, *types.EmptyATXID, 1, 0, *types.EmptyATXID, coinbase4, 10, []types.BlockID{}, &types.NIPST{})
 	atxdb.AddAtx(atx.ID(), atx)
 	block4.ATXID = atx.ID()
 	totalFee += addTransactionsWithFee(t, layers.DB, block4, 16, rand.Int63n(100))
@@ -143,7 +139,7 @@ func createLayer(t testing.TB, mesh *Mesh, id types.LayerID, numOfBlocks, maxTra
 		block1 := types.NewExistingBlock(id, []byte(rand.RandString(8)))
 		nodeid := types.NodeID{Key: strconv.Itoa(i), VRFPublicKey: []byte("bbbbb")}
 		coinbase := types.HexToAddress(nodeid.Key)
-		atx := types.NewActivationTxForTests(nodeid, 0, *types.EmptyATXID, 1, 0, *types.EmptyATXID, coinbase, 10, []types.BlockID{}, &types.NIPST{})
+		atx := newActivationTx(nodeid, 0, *types.EmptyATXID, 1, 0, *types.EmptyATXID, coinbase, 10, []types.BlockID{}, &types.NIPST{})
 		atxdb.AddAtx(atx.ID(), atx)
 		block1.ATXID = atx.ID()
 
@@ -340,4 +336,19 @@ func TestMesh_AccumulateRewards(t *testing.T) {
 func TestMesh_calcRewards(t *testing.T) {
 	reward := calculateActualRewards(1, big.NewInt(10000), big.NewInt(10))
 	assert.Equal(t, int64(1000), reward.Int64())
+}
+
+func newActivationTx(nodeID types.NodeID, sequence uint64, prevATX types.ATXID, pubLayerID types.LayerID,
+	startTick uint64, positioningATX types.ATXID, coinbase types.Address, activeSetSize uint32, view []types.BlockID,
+	nipst *types.NIPST) *types.ActivationTx {
+
+	nipstChallenge := types.NIPSTChallenge{
+		NodeID:         nodeID,
+		Sequence:       sequence,
+		PrevATXID:      prevATX,
+		PubLayerID:     pubLayerID,
+		StartTick:      startTick,
+		PositioningATX: positioningATX,
+	}
+	return types.NewActivationTx(nipstChallenge, coinbase, activeSetSize, view, nipst, nil)
 }

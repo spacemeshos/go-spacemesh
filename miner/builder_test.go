@@ -202,9 +202,9 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 
 	poetRef := []byte{0xba, 0x38}
 	atxs := []*types.ActivationTx{
-		types.NewActivationTxForTests(types.NodeID{Key: "aaaa", VRFPublicKey: []byte("bbb")}, 1, types.ATXID(types.Hash32{1}), 5, 1, types.ATXID{}, coinbase, 5, []types.BlockID{block1.ID(), block2.ID(), block3.ID()}, activation.NewNIPSTWithChallenge(&types.Hash32{}, poetRef)),
-		types.NewActivationTxForTests(types.NodeID{Key: "bbbb", VRFPublicKey: []byte("bbb")}, 1, types.ATXID(types.Hash32{2}), 5, 1, types.ATXID{}, coinbase, 5, []types.BlockID{block1.ID(), block2.ID(), block3.ID()}, activation.NewNIPSTWithChallenge(&types.Hash32{}, poetRef)),
-		types.NewActivationTxForTests(types.NodeID{Key: "cccc", VRFPublicKey: []byte("bbb")}, 1, types.ATXID(types.Hash32{3}), 5, 1, types.ATXID{}, coinbase, 5, []types.BlockID{block1.ID(), block2.ID(), block3.ID()}, activation.NewNIPSTWithChallenge(&types.Hash32{}, poetRef)),
+		newActivationTx(types.NodeID{Key: "aaaa", VRFPublicKey: []byte("bbb")}, 1, types.ATXID(types.Hash32{1}), 5, 1, types.ATXID{}, coinbase, 5, []types.BlockID{block1.ID(), block2.ID(), block3.ID()}, activation.NewNIPSTWithChallenge(&types.Hash32{}, poetRef)),
+		newActivationTx(types.NodeID{Key: "bbbb", VRFPublicKey: []byte("bbb")}, 1, types.ATXID(types.Hash32{2}), 5, 1, types.ATXID{}, coinbase, 5, []types.BlockID{block1.ID(), block2.ID(), block3.ID()}, activation.NewNIPSTWithChallenge(&types.Hash32{}, poetRef)),
+		newActivationTx(types.NodeID{Key: "cccc", VRFPublicKey: []byte("bbb")}, 1, types.ATXID(types.Hash32{3}), 5, 1, types.ATXID{}, coinbase, 5, []types.BlockID{block1.ID(), block2.ID(), block3.ID()}, activation.NewNIPSTWithChallenge(&types.Hash32{}, poetRef)),
 	}
 
 	builder.AtxPool.Put(atxs[0])
@@ -338,7 +338,7 @@ func TestBlockBuilder_Gossip_NotSynced(t *testing.T) {
 	assert.Empty(t, ids)
 
 	poetRef := []byte{0xba, 0x38}
-	atx := types.NewActivationTxForTests(types.NodeID{Key: "aaaa", VRFPublicKey: []byte("bbb")}, 1, types.ATXID(types.Hash32{1}), 5, 1, types.ATXID{}, coinbase, 5, []types.BlockID{block1.ID(), block2.ID(), block3.ID()}, activation.NewNIPSTWithChallenge(&types.Hash32{}, poetRef))
+	atx := newActivationTx(types.NodeID{Key: "aaaa", VRFPublicKey: []byte("bbb")}, 1, types.ATXID(types.Hash32{1}), 5, 1, types.ATXID{}, coinbase, 5, []types.BlockID{block1.ID(), block2.ID(), block3.ID()}, activation.NewNIPSTWithChallenge(&types.Hash32{}, poetRef))
 
 	atxBytes, err := types.InterfaceToBytes(&atx)
 	assert.NoError(t, err)
@@ -680,4 +680,19 @@ func Test_getVotesFiltered(t *testing.T) {
 	r.Nil(err)
 	r.Equal(1, len(b))
 	r.Equal(b5.ID(), b[0])
+}
+
+func newActivationTx(nodeID types.NodeID, sequence uint64, prevATX types.ATXID, pubLayerID types.LayerID,
+	startTick uint64, positioningATX types.ATXID, coinbase types.Address, activeSetSize uint32, view []types.BlockID,
+	nipst *types.NIPST) *types.ActivationTx {
+
+	nipstChallenge := types.NIPSTChallenge{
+		NodeID:         nodeID,
+		Sequence:       sequence,
+		PrevATXID:      prevATX,
+		PubLayerID:     pubLayerID,
+		StartTick:      startTick,
+		PositioningATX: positioningATX,
+	}
+	return types.NewActivationTx(nipstChallenge, coinbase, activeSetSize, view, nipst, nil)
 }
