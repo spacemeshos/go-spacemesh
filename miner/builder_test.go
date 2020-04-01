@@ -306,13 +306,25 @@ func TestBlockBuilder_Validation(t *testing.T) {
 	ids, err = builder1.TransactionPool.GetTxsForBlock(10, getState)
 	assert.NoError(t, err)
 	assert.Len(t, ids, 1)
+
+	poetRef := []byte{0xba, 0x38}
+	coinbase := types.HexToAddress("aaaa")
+	atx := types.NewActivationTxForTests(types.NodeID{Key: "aaaa", VRFPublicKey: []byte("bbb")}, 1, types.ATXID(types.Hash32{1}), 5, 1, types.ATXID{}, coinbase, 5, []types.BlockID{block1.ID(), block2.ID(), block3.ID()}, activation.NewNIPSTWithChallenge(&types.Hash32{}, poetRef))
+
+	atxBytes, err := types.InterfaceToBytes(&atx)
+	assert.NoError(t, err)
+	err = n1.Broadcast(activation.AtxProtocol, atxBytes)
+	assert.NoError(t, err)
+	time.Sleep(300 * time.Millisecond)
+	ids, err = builder1.TransactionPool.GetTxsForBlock(10, getState)
+	assert.NoError(t, err)
+	assert.Len(t, ids, 1)
 }
 
 func TestBlockBuilder_Gossip_NotSynced(t *testing.T) {
 	net := service.NewSimulator()
 	beginRound := make(chan types.LayerID)
 	n1 := net.NewNode()
-	coinbase := types.HexToAddress("aaaa")
 
 	block1 := types.NewExistingBlock(0, []byte(rand.String(8)))
 	block2 := types.NewExistingBlock(0, []byte(rand.String(8)))
@@ -338,6 +350,7 @@ func TestBlockBuilder_Gossip_NotSynced(t *testing.T) {
 	assert.Empty(t, ids)
 
 	poetRef := []byte{0xba, 0x38}
+	coinbase := types.HexToAddress("aaaa")
 	atx := newActivationTx(types.NodeID{Key: "aaaa", VRFPublicKey: []byte("bbb")}, 1, types.ATXID(types.Hash32{1}), 5, 1, types.ATXID{}, coinbase, 5, []types.BlockID{block1.ID(), block2.ID(), block3.ID()}, activation.NewNIPSTWithChallenge(&types.Hash32{}, poetRef))
 
 	atxBytes, err := types.InterfaceToBytes(&atx)
