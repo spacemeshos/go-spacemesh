@@ -292,14 +292,15 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.ATXID, eligibil
 	bl.Initialize()
 
 	t.Log.Event().Info("block created",
-		bl.ID(),
-		bl.LayerIndex,
+		log.BlockID(bl.ShortString()),
+		log.LayerID(uint64(bl.LayerIndex)),
+		log.EpochID(uint64(bl.LayerIndex.GetEpoch(t.layersPerEpoch))),
 		log.String("miner_id", bl.MinerID().String()),
 		log.Int("tx_count", len(bl.TxIDs)),
 		log.Int("atx_count", len(bl.ATXIDs)),
 		log.Int("view_edges", len(bl.ViewEdges)),
 		log.Int("vote_count", len(bl.BlockVotes)),
-		bl.ATXID,
+		log.AtxID(bl.ATXID.ShortString()),
 		log.Uint32("eligibility_counter", bl.EligibilityProof.J),
 	)
 	return bl, nil
