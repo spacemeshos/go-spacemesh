@@ -132,7 +132,7 @@ func NodeID(val string) Field {
 
 // Err returns an error field
 func Err(v error) Field {
-	return Field(zap.NamedError("message", v))
+	return Field(zap.NamedError("errmsg", v))
 }
 
 // LoggableField as an interface to enable every type to be used as a log field.
