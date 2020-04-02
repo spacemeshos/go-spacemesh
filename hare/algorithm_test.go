@@ -2,7 +2,7 @@ package hare
 
 import (
 	"errors"
-	"github.com/spacemeshos/go-spacemesh/amcl/BLS381"
+	"github.com/spacemeshos/amcl/BLS381"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare/config"

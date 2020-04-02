@@ -1,9 +1,9 @@
 package node
 
 import (
+	"github.com/spacemeshos/amcl"
+	"github.com/spacemeshos/amcl/BLS381"
 	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/amcl"
-	"github.com/spacemeshos/go-spacemesh/amcl/BLS381"
 	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/collector"
 	"github.com/spacemeshos/go-spacemesh/common/types"
