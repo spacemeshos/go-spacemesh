@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-// MessageType is an int32 used to distinguish between server messages inside a single protocol.
+// MessageType is a uint32 used to distinguish between server messages inside a single protocol.
 type MessageType uint32
 
 // Message is helper type for `MessegeServer` messages.
@@ -217,7 +217,10 @@ func (p *MessageServer) SendRequest(msgType MessageType, payload []byte, address
 	p.pendMutex.Unlock()
 	msg := &service.DataMsgWrapper{Req: true, ReqID: reqID, MsgType: uint32(msgType), Payload: payload}
 	if sendErr := p.network.SendWrappedMessage(address, p.name, msg); sendErr != nil {
-		p.Error("sending message failed ", msg, " error: ", sendErr)
+		p.With().Error("sending message failed",
+			log.Uint32("msg_type", uint32(msgType)),
+			log.String("recipient", address.String()),
+			log.Int("msglen", len(payload)), log.Err(sendErr))
 		p.removeFromPending(reqID)
 		return sendErr
 	}

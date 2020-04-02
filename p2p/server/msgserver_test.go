@@ -43,7 +43,7 @@ func TestProtocol_SendRequest(t *testing.T) {
 	assert.NoError(t, err, "Should not return error")
 
 	// Now try sending to a bad address
-	_, randkey, _ := p2pcrypto.GenerateKeyPair()
+	randkey := p2pcrypto.NewRandomPubkey()
 	err = fnd2.SendRequest(1, nil, randkey, callback)
 	assert.Error(t, err, "Sending to bad address should return error")
 }
