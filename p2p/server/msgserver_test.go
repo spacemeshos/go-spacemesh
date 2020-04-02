@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/stretchr/testify/assert"
 	"testing"
@@ -40,6 +41,11 @@ func TestProtocol_SendRequest(t *testing.T) {
 
 	assert.EqualValues(t, "some value to return", msg, "value received did not match correct value")
 	assert.NoError(t, err, "Should not return error")
+
+	// Now try sending to a bad address
+	_, randkey, _ := p2pcrypto.GenerateKeyPair()
+	err = fnd2.SendRequest(1, nil, randkey, callback)
+	assert.Error(t, err, "Sending to bad address should return error")
 }
 
 func TestProtocol_CleanOldPendingMessages(t *testing.T) {
