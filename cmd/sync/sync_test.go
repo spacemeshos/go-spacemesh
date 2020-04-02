@@ -30,10 +30,11 @@ func TestSpacemeshApp_TestSyncCmd(t *testing.T) {
 			t.Error("timed out ")
 			return
 		default:
-			if _, err := syncApp.sync.GetLayer(50); err == nil {
+			if syncApp.sync.ProcessedLayer() > 20 {
 				t.Log("done!")
 				return
 			}
+			time.Sleep(100 * time.Millisecond)
 		}
 	}
 

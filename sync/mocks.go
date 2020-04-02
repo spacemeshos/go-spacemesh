@@ -2,9 +2,13 @@ package sync
 
 import (
 	"github.com/golang/protobuf/ptypes/duration"
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/miner"
+	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"math/big"
@@ -32,10 +36,10 @@ func (*poetDbMock) GetMembershipMap(poetRoot []byte) (map[types.Hash32]bool, err
 	return map[types.Hash32]bool{hash: true}, nil
 }
 
-type BlockEligibilityValidatorMock struct {
+type blockEligibilityValidatorMock struct {
 }
 
-func (BlockEligibilityValidatorMock) BlockSignedAndEligible(block *types.Block) (bool, error) {
+func (blockEligibilityValidatorMock) BlockSignedAndEligible(block *types.Block) (bool, error) {
 	return true, nil
 }
 
@@ -46,7 +50,7 @@ func (syntacticValidatorMock) SyntacticallyValid(block *types.BlockHeader) (bool
 	return true, nil
 }
 
-type MeshValidatorMock struct {
+type meshValidatorMock struct {
 	delay           time.Duration
 	calls           int
 	layers          *mesh.Mesh
@@ -56,15 +60,15 @@ type MeshValidatorMock struct {
 	validatedLayers map[types.LayerID]struct{}
 }
 
-func (m *MeshValidatorMock) LatestComplete() types.LayerID {
+func (m *meshValidatorMock) LatestComplete() types.LayerID {
 	panic("implement me")
 }
 
-func (m *MeshValidatorMock) Persist() error {
+func (m *meshValidatorMock) Persist() error {
 	return nil
 }
 
-func (m *MeshValidatorMock) HandleIncomingLayer(lyr *types.Layer) (types.LayerID, types.LayerID) {
+func (m *meshValidatorMock) HandleIncomingLayer(lyr *types.Layer) (types.LayerID, types.LayerID) {
 	m.countValidate++
 	m.calls++
 	m.vl = lyr.Index()
@@ -76,69 +80,69 @@ func (m *MeshValidatorMock) HandleIncomingLayer(lyr *types.Layer) (types.LayerID
 	return lyr.Index(), lyr.Index() - 1
 }
 
-func (m *MeshValidatorMock) GetGoodPatternBlocks(layer types.LayerID) (map[types.BlockID]struct{}, error) {
+func (m *meshValidatorMock) GetGoodPatternBlocks(layer types.LayerID) (map[types.BlockID]struct{}, error) {
 	panic("implement me")
 }
 
-func (m *MeshValidatorMock) HandleLateBlock(bl *types.Block) (types.LayerID, types.LayerID) {
+func (m *meshValidatorMock) HandleLateBlock(bl *types.Block) (types.LayerID, types.LayerID) {
 	return bl.Layer(), bl.Layer() - 1
 
 }
 
-func (m *MeshValidatorMock) RegisterLayerCallback(func(id types.LayerID)) {}
-func (m *MeshValidatorMock) ContextualValidity(id types.BlockID) bool     { return true }
+func (m *meshValidatorMock) RegisterLayerCallback(func(id types.LayerID)) {}
+func (m *meshValidatorMock) ContextualValidity(id types.BlockID) bool     { return true }
 
-type MockState struct{}
+type mockState struct{}
 
-func (s MockState) LoadState(layer types.LayerID) error {
+func (s mockState) LoadState(layer types.LayerID) error {
 	panic("implement me")
 }
 
-func (s MockState) GetStateRoot() types.Hash32 {
+func (s mockState) GetStateRoot() types.Hash32 {
 	return [32]byte{}
 }
 
-func (MockState) ValidateNonceAndBalance(transaction *types.Transaction) error {
+func (mockState) ValidateNonceAndBalance(transaction *types.Transaction) error {
 	panic("implement me")
 }
 
-func (MockState) GetLayerApplied(txID types.TransactionID) *types.LayerID {
+func (mockState) GetLayerApplied(txID types.TransactionID) *types.LayerID {
 	panic("implement me")
 }
 
-func (MockState) ApplyTransactions(layer types.LayerID, txs []*types.Transaction) (int, error) {
+func (mockState) ApplyTransactions(layer types.LayerID, txs []*types.Transaction) (int, error) {
 	return 0, nil
 }
 
-func (MockState) ValidateSignature(signed types.Signed) (types.Address, error) {
+func (mockState) ValidateSignature(signed types.Signed) (types.Address, error) {
 	return types.Address{}, nil
 }
 
-func (MockState) ApplyRewards(layer types.LayerID, miners []types.Address, reward *big.Int) {
+func (mockState) ApplyRewards(layer types.LayerID, miners []types.Address, reward *big.Int) {
 }
 
-func (MockState) AddressExists(addr types.Address) bool {
+func (mockState) AddressExists(addr types.Address) bool {
 	return true
 }
 
-type MockIStore struct {
+type mockIStore struct {
 }
 
-func (*MockIStore) StoreNodeIdentity(id types.NodeID) error {
+func (*mockIStore) StoreNodeIdentity(id types.NodeID) error {
 	return nil
 }
 
-func (*MockIStore) GetIdentity(id string) (types.NodeID, error) {
+func (*mockIStore) GetIdentity(id string) (types.NodeID, error) {
 	return types.NodeID{Key: "some string ", VRFPublicKey: []byte("bytes")}, nil
 }
 
-type ValidatorMock struct{}
+type validatorMock struct{}
 
-func (*ValidatorMock) Validate(id signing.PublicKey, nipst *types.NIPST, expectedChallenge types.Hash32) error {
+func (*validatorMock) Validate(id signing.PublicKey, nipst *types.NIPST, expectedChallenge types.Hash32) error {
 	return nil
 }
 
-func (*ValidatorMock) VerifyPost(id signing.PublicKey, proof *types.PostProof, space uint64) error {
+func (*validatorMock) VerifyPost(id signing.PublicKey, proof *types.PostProof, space uint64) error {
 	return nil
 }
 
@@ -175,7 +179,7 @@ func (mockAtxMemPool) Invalidate(id types.ATXID) {
 
 }
 
-type MockClock struct {
+type mockClock struct {
 	ch         map[timesync.LayerTimer]int
 	ids        map[int]timesync.LayerTimer
 	countSub   int
@@ -184,11 +188,11 @@ type MockClock struct {
 	Layer      types.LayerID
 }
 
-func (m *MockClock) LayerToTime(types.LayerID) time.Time {
+func (m *mockClock) LayerToTime(types.LayerID) time.Time {
 	return time.Now().Add(1000 * time.Hour) //hack so this wont take affect in the mock
 }
 
-func (m *MockClock) Tick() {
+func (m *mockClock) Tick() {
 	l := m.GetCurrentLayer()
 	log.Info("tick %v", l)
 	for _, c := range m.ids {
@@ -196,11 +200,11 @@ func (m *MockClock) Tick() {
 	}
 }
 
-func (m *MockClock) GetCurrentLayer() types.LayerID {
+func (m *mockClock) GetCurrentLayer() types.LayerID {
 	return m.Layer
 }
 
-func (m *MockClock) Subscribe() timesync.LayerTimer {
+func (m *mockClock) Subscribe() timesync.LayerTimer {
 	m.countSub++
 
 	if m.ch == nil {
@@ -214,8 +218,44 @@ func (m *MockClock) Subscribe() timesync.LayerTimer {
 	return newCh
 }
 
-func (m *MockClock) Unsubscribe(timer timesync.LayerTimer) {
+func (m *mockClock) Unsubscribe(timer timesync.LayerTimer) {
 	m.countUnsub++
 	delete(m.ids, m.ch[timer])
 	delete(m.ch, timer)
+}
+
+func configTst() mesh.Config {
+	return mesh.Config{
+		BaseReward: big.NewInt(5000),
+	}
+}
+
+type mockBlockBuilder struct {
+	txs []*types.Transaction
+}
+
+func (m *mockBlockBuilder) ValidateAndAddTxToPool(tx *types.Transaction) error {
+	m.txs = append(m.txs, tx)
+	return nil
+}
+
+// NewSyncWithMocks returns a syncer instance that is backed by mocks of other modules
+//for use in testing
+func NewSyncWithMocks(atxdbStore *database.LDBDatabase, mshdb *mesh.DB, txpool *miner.TxMempool, atxpool *miner.AtxMemPool, swarm service.Service, poetDb *activation.PoetDb, conf Configuration, expectedLayers types.LayerID) *Syncer {
+	lg := log.New("sync_test", "", "")
+	atxdb := activation.NewActivationDb(atxdbStore, &mockIStore{}, mshdb, uint16(conf.LayersPerEpoch), &validatorMock{}, lg.WithOptions(log.Nop))
+	var msh *mesh.Mesh
+	if mshdb.PersistentData() {
+		lg.Info("persistent data found ")
+		msh = mesh.NewRecoveredMesh(mshdb, atxdb, configTst(), &meshValidatorMock{}, txpool, atxpool, &mockState{}, lg)
+	} else {
+		lg.Info("no persistent data found ")
+		msh = mesh.NewMesh(mshdb, atxdb, configTst(), &meshValidatorMock{}, txpool, atxpool, &mockState{}, lg)
+	}
+
+	msh.SetBlockBuilder(&mockBlockBuilder{})
+	msh.AddBlock(mesh.GenesisBlock)
+	clock := mockClock{Layer: expectedLayers + 1}
+	lg.Info("current layer %v", clock.GetCurrentLayer())
+	return NewSync(swarm, msh, txpool, atxpool, blockEligibilityValidatorMock{}, poetDb, conf, &clock, lg)
 }

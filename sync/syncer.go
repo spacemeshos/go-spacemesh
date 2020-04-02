@@ -521,7 +521,7 @@ func (s *Syncer) getLayerFromNeighbors(currenSyncLayer types.LayerID) (*types.La
 
 	blocksArr, err := s.syncLayer(currenSyncLayer, blockIds)
 	if len(blocksArr) == 0 || err != nil {
-		return nil, fmt.Errorf("could get blocks for layer  %v", currenSyncLayer)
+		return nil, fmt.Errorf("could not get blocks for layer  %v %v", currenSyncLayer, err)
 	}
 
 	return types.NewExistingLayer(types.LayerID(currenSyncLayer), blocksArr), nil
