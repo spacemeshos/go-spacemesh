@@ -186,7 +186,7 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool txMemPool, atxpool a
 	srvr.RegisterBytesMsgHandler(blockMsg, newBlockRequestHandler(layers, logger))
 	srvr.RegisterBytesMsgHandler(layerIdsMsg, newLayerBlockIdsRequestHandler(layers, logger))
 	srvr.RegisterBytesMsgHandler(txMsg, newTxsRequestHandler(s, logger))
-	srvr.RegisterBytesMsgHandler(atxMsg, newATxsRequestHandler(s, logger))
+	srvr.RegisterBytesMsgHandler(atxMsg, newAtxsRequestHandler(s, logger))
 	srvr.RegisterBytesMsgHandler(poetMsg, newPoetRequestHandler(s, logger))
 
 	return s

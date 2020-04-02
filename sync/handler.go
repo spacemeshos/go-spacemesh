@@ -125,21 +125,25 @@ func newTxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 	}
 }
 
-func newATxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
+func newAtxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 	return func(msg []byte) []byte {
 		var atxids []types.ATXID
 		err := types.BytesToInterface(msg, &atxids)
 		if err != nil {
-			logger.Error("Error marshalling request", err)
+			logger.Error("Unable to marshal request", err)
 			return nil
 		}
-		logger.Info("handle atx request %s", log.String("atx_ids", fmt.Sprintf("%x", atxids)))
-		atxs, missinDB := s.GetATXs(atxids)
-		for _, t := range missinDB {
+		atxFields := make([]log.LoggableField, len(atxids))
+		for i, a := range atxids {
+			atxFields[i] = log.AtxID(a.ShortString())
+		}
+		logger.With().Info("handle atx request", atxFields...)
+		atxs, unknownAtx := s.GetATXs(atxids)
+		for _, t := range unknownAtx {
 			if tx, err := s.atxpool.Get(t); err == nil {
 				atxs[t] = tx
 			} else {
-				logger.With().Warning("unfamiliar atx was requested (id: %s)", log.AtxID(t.ShortString()))
+				logger.With().Warning("unfamiliar atx requested", log.AtxID(t.ShortString()))
 			}
 		}
 
@@ -151,7 +155,7 @@ func newATxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 
 		bbytes, err := types.InterfaceToBytes(transactions)
 		if err != nil {
-			logger.Error("Error marshaling atx response message , with ids %v and err:", atxs, err)
+			logger.Error("Unable to marshal atx response message", err)
 			return nil
 		}
 
