@@ -43,8 +43,11 @@ func (fq *fetchQueue) Close() {
 
 func concatShortIds(items []types.Hash32) string {
 	str := ""
-	for _, i := range items {
-		str += " " + i.MediumString()
+	for i, h := range items {
+		str += h.MediumString()
+		if i < len(items)-1 {
+			str += " "
+		}
 	}
 	return str
 }
@@ -78,7 +81,7 @@ func (fq *fetchQueue) work() error {
 			return fmt.Errorf("channel closed")
 		}
 
-		fq.Info("fetched %s's %s", fq.name, concatShortIds(bjb.ids))
+		fq.Info("fetched %ss %s", fq.name, concatShortIds(bjb.ids))
 		fq.handleFetch(bjb)
 		fq.Debug("next batch")
 	}

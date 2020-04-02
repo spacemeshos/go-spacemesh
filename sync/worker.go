@@ -151,7 +151,10 @@ func newFetchWorker(s networker, count int, reqFactory batchRequestFactory, idsC
 				peer := p
 				remainingItems := toSlice(leftToFetch)
 				idsStr := concatShortIds(remainingItems)
-				lg.Info("send %s fetch request to Peer: %v ids: %v", name, peer.String(), idsStr)
+				lg.With().Info("send fetch request",
+					log.String("type", name),
+					log.PeerID(peer.String()),
+					log.String("ids", idsStr))
 				ch, _ := reqFactory(s, peer, remainingItems)
 				timeout := time.After(s.GetTimeout())
 				select {
@@ -159,10 +162,16 @@ func newFetchWorker(s networker, count int, reqFactory batchRequestFactory, idsC
 					lg.Debug("worker received interrupt")
 					return
 				case <-timeout:
-					lg.Error("fetch %s request to %v on %v timed out %s", name, peer.String(), idsStr)
+					lg.With().Error("fetch request timed out",
+						log.String("type", name),
+						log.PeerID(peer.String()),
+						log.String("ids", idsStr))
 				case v := <-ch:
 					if v != nil && len(v) > 0 {
-						lg.Info("Peer: %v responded to fetch %s request %s", peer.String(), name, idsStr)
+						lg.With().Info("peer responded to fetch request",
+							log.String("type", name),
+							log.PeerID(peer.String()),
+							log.String("ids", idsStr))
 						// 	remove ids from leftToFetch add to fetched
 						for _, itm := range v {
 							fetched = append(fetched, itm)
