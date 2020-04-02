@@ -147,7 +147,7 @@ func (p *Protocol) handlePQ() {
 	for {
 		mi, err := p.pq.Read()
 		if err != nil {
-			p.With().Info("priority queue was closed, existing", log.Err(err))
+			p.With().Info("priority queue was closed, exiting", log.Err(err))
 			return
 		}
 		m, ok := mi.(service.MessageValidation)
