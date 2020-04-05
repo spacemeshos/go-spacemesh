@@ -1,4 +1,4 @@
-// package node contains the main executable for go-spacemesh node
+// Package node contains the main executable for go-spacemesh node
 package node
 
 import "C"

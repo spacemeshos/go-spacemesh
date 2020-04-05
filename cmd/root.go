@@ -11,6 +11,7 @@ var (
 	config = cfg.DefaultConfig()
 )
 
+// AddCommands adds cobra commands to the app.
 func AddCommands(cmd *cobra.Command) {
 
 	/** ======================== BaseConfig Flags ========================== **/
