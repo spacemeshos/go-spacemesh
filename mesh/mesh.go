@@ -31,7 +31,7 @@ var constTrue = []byte{1}
 var constFalse = []byte{0}
 var constLATEST = []byte("latest")
 var constLAYERHASH = []byte("layer hash")
-var constPROCESSED = []byte("proccessed")
+var constPROCESSED = []byte("processed")
 
 // TORTOISE key for tortoise persistence in database
 var TORTOISE = []byte("tortoise")
@@ -84,7 +84,7 @@ type blockBuilder interface {
 	ValidateAndAddTxToPool(tx *types.Transaction) error
 }
 
-// Mesh is the logic layer above our meshdb database
+// Mesh is the logic layer above our mesh.DB database
 type Mesh struct {
 	log.Log
 	*DB
@@ -179,10 +179,10 @@ func NewRecoveredMesh(db *DB, atxDb AtxDB, rewardConfig Config, mesh tortoise, t
 }
 
 // CacheWarmUp warms up cache with latest blocks
-func (msh *Mesh) CacheWarmUp(layer_size int) {
+func (msh *Mesh) CacheWarmUp(layerSize int) {
 	start := types.LayerID(0)
-	if msh.ProcessedLayer() > types.LayerID(msh.blockCache.Cap()/layer_size) {
-		start = msh.ProcessedLayer() - types.LayerID(msh.blockCache.Cap()/layer_size)
+	if msh.ProcessedLayer() > types.LayerID(msh.blockCache.Cap()/layerSize) {
+		start = msh.ProcessedLayer() - types.LayerID(msh.blockCache.Cap()/layerSize)
 	}
 
 	if err := msh.cacheWarmUpFromTo(start, msh.ProcessedLayer()); err != nil {
@@ -328,7 +328,7 @@ func (msh *Mesh) applyState(l *types.Layer) {
 
 // HandleValidatedLayer handles layer valid blocks as decided by hare
 func (msh *Mesh) HandleValidatedLayer(validatedLayer types.LayerID, layer []types.BlockID) {
-	blocks := []*types.Block{}
+	var blocks []*types.Block
 
 	for _, blockID := range layer {
 		block, err := msh.GetBlock(blockID)
@@ -697,7 +697,7 @@ func (msh *Mesh) accumulateRewards(l *types.Layer, params Config) {
 		totalReward.Add(totalReward, new(big.Int).SetUint64(tx.Fee))
 	}
 
-	layerReward := CalculateLayerReward(l.Index(), params)
+	layerReward := calculateLayerReward(l.Index(), params)
 	totalReward.Add(totalReward, layerReward)
 
 	numBlocks := big.NewInt(int64(len(ids)))

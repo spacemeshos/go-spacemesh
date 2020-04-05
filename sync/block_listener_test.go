@@ -328,7 +328,7 @@ func TestBlockListener_ValidateVotesBadFlow(t *testing.T) {
 
 	block1.AddView(block2.ID())
 	block1.AddView(block3.ID())
-	//block1.AddView(4)
+	// block1.AddView(4)
 	block2.AddView(block5.ID())
 	block2.AddView(block6.ID())
 	block3.AddView(block6.ID())
@@ -579,7 +579,7 @@ func TestBlockListener_TraverseViewBadFlow(t *testing.T) {
 	bl1.AddBlock(block5)
 
 	go bl2.syncLayer(5, []types.BlockID{block5.ID(), block6.ID()})
-	time.Sleep(1 * time.Second) //wait for fetch
+	time.Sleep(1 * time.Second) // wait for fetch
 
 	b, err := bl2.GetBlock(block1.ID())
 	assert.Error(t, err)
@@ -674,7 +674,7 @@ func TestBlockListener_AtxCache(t *testing.T) {
 	sim := service.NewSimulator()
 	signer := signing.NewEdSigner()
 	n1 := sim.NewNode()
-	//n2 := sim.NewNode()
+	// n2 := sim.NewNode()
 	bl1 := ListenerFactory(n1, PeersMock{func() []p2p.Peer { return []p2p.Peer{ /*n2.PublicKey()*/ } }}, "listener1", 3)
 
 	atxDb := mesh.NewAtxDbMock()
@@ -724,4 +724,4 @@ func TestBlockListener_AtxCache(t *testing.T) {
 	require.NoError(t, err)
 }
 
-//todo integration testing
+// todo integration testing

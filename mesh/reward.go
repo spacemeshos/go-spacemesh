@@ -7,19 +7,20 @@ import (
 	"math/big"
 )
 
+// Config defines the configuration options for Spacemesh rewards.
 type Config struct {
-	// reward config
 	BaseReward *big.Int `mapstructure:"base-reward"`
 }
 
+// DefaultMeshConfig returns the default Config.
 func DefaultMeshConfig() Config {
 	return Config{
 		BaseReward: big.NewInt(50 * int64(math.Pow10(12))),
 	}
 }
 
-func CalculateLayerReward(id types.LayerID, params Config) *big.Int {
-	//todo: add inflation rules here
+func calculateLayerReward(id types.LayerID, params Config) *big.Int {
+	// todo: add inflation rules here
 	return params.BaseReward
 }
 
