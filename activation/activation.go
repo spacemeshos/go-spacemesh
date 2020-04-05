@@ -1,4 +1,4 @@
-// package activation is responsible for creating activation transactions and running the mining flow, coordinating
+// Package activation is responsible for creating activation transactions and running the mining flow, coordinating
 // PoST building, sending proofs to PoET and building NIPoST structs.
 package activation
 
