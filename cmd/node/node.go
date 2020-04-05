@@ -5,9 +5,9 @@ import "C"
 import (
 	"context"
 	"fmt"
+	"github.com/spacemeshos/amcl"
+	"github.com/spacemeshos/amcl/BLS381"
 	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/amcl"
-	"github.com/spacemeshos/go-spacemesh/amcl/BLS381"
 	apiCfg "github.com/spacemeshos/go-spacemesh/api/config"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -173,7 +173,7 @@ func LoadConfigFromFile() (*cfg.Config, error) {
 	if err := cfg.LoadConfig(fileLocation, vip); err != nil {
 		log.Error(fmt.Sprintf("couldn't load config file at location: %s swithing to defaults \n error: %v.",
 			fileLocation, err))
-		//return err
+		// return err
 	}
 
 	conf := cfg.DefaultConfig()
@@ -308,7 +308,7 @@ func (app *SpacemeshApp) setupGenesis(state *state.TransactionProcessor, msh *me
 	for id, acc := range conf.InitialAccounts {
 		bytes := util.FromHex(id)
 		if len(bytes) == 0 {
-			//todo: should we panic here?
+			// todo: should we panic here?
 			log.Error("cannot read config entry for :%s", id)
 			continue
 		}
