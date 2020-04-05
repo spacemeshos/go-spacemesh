@@ -298,7 +298,7 @@ func (v *syntaxContextValidator) validateAggregatedMessage(aggMsg *aggregatedMes
 		}
 
 		// extract public key
-		iMsg, err := newMsg(innerMsg, v.stateQuerier, v.layersPerEpoch)
+		iMsg, err := newMsg(innerMsg, v.stateQuerier)
 		if err != nil {
 			return err
 		}

@@ -187,7 +187,7 @@ func (b *Broker) eventLoop() {
 			// the msg is either early or has instance
 
 			// create msg
-			iMsg, err := newMsg(hareMsg, b.stateQuerier, b.layersPerEpoch)
+			iMsg, err := newMsg(hareMsg, b.stateQuerier)
 			if err != nil {
 				b.Warning("Message validation failed: could not construct msg err=%v", err)
 				continue

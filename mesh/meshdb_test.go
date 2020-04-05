@@ -35,7 +35,7 @@ func getMeshdb() *DB {
 
 func TestNewMeshDB(t *testing.T) {
 	mdb := getMeshdb()
-	bl := types.NewExistingBlock(1, []byte(rand.RandString(8)))
+	bl := types.NewExistingBlock(1, []byte(rand.String(8)))
 	mdb.AddBlock(bl)
 	block, err := mdb.GetBlock(bl.ID())
 	assert.NoError(t, err)
@@ -96,7 +96,7 @@ func createLayerWithRandVoting(index types.LayerID, prev []*types.Layer, blocksI
 	}
 	layerBlocks := make([]types.BlockID, 0, blocksInLayer)
 	for i := 0; i < blocksInLayer; i++ {
-		bl := types.NewExistingBlock(0, []byte(rand.RandString(8)))
+		bl := types.NewExistingBlock(0, []byte(rand.String(8)))
 		layerBlocks = append(layerBlocks, bl.ID())
 		for idx, pat := range patterns {
 			for _, id := range pat {

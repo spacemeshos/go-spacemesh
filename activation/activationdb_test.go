@@ -23,7 +23,7 @@ import (
 
 func createLayerWithAtx2(t require.TestingT, msh *mesh.Mesh, id types.LayerID, numOfBlocks int, atxs []*types.ActivationTx, votes []types.BlockID, views []types.BlockID) (created []types.BlockID) {
 	for i := 0; i < numOfBlocks; i++ {
-		block1 := types.NewExistingBlock(id, []byte(rand.RandString(8)))
+		block1 := types.NewExistingBlock(id, []byte(rand.String(8)))
 		block1.BlockVotes = append(block1.BlockVotes, votes...)
 		for _, atx := range atxs {
 			block1.ATXIDs = append(block1.ATXIDs, atx.ID())
@@ -145,7 +145,7 @@ func createLayerWithAtx(t *testing.T, msh *mesh.Mesh, id types.LayerID, numOfBlo
 		panic("not supported")
 	}
 	for i := 0; i < numOfBlocks; i++ {
-		block1 := types.NewExistingBlock(id, []byte(rand.RandString(8)))
+		block1 := types.NewExistingBlock(id, []byte(rand.String(8)))
 		block1.BlockVotes = append(block1.BlockVotes, votes...)
 		if i < len(atxs) {
 			block1.ATXIDs = append(block1.ATXIDs, atxs[i].ID())
@@ -321,14 +321,14 @@ func Test_CalcActiveSetFromView(t *testing.T) {
 		atx.Nipst = NewNIPSTWithChallenge(hash, poetRef)
 	}
 
-	block2 := types.NewExistingBlock(2200, []byte(rand.RandString(8)))
+	block2 := types.NewExistingBlock(2200, []byte(rand.String(8)))
 
 	block2.ViewEdges = blocks
 	block2.Initialize()
 	err = layers.AddBlockWithTxs(block2, nil, atxs2)
 	assert.NoError(t, err)
 
-	block3 := types.NewExistingBlock(2200, []byte(rand.RandString(8)))
+	block3 := types.NewExistingBlock(2200, []byte(rand.String(8)))
 
 	block3.ViewEdges = blocks
 	block2.Initialize()

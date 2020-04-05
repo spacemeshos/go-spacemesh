@@ -55,7 +55,7 @@ func TestIntermediateLeaks(t *testing.T) {
 	transState, _ := New(types.Hash32{}, NewDatabase(transDb))
 	finalState, _ := New(types.Hash32{}, NewDatabase(finalDb))
 
-	modify := func(state *StateDB, addr types.Address, i, tweak byte) {
+	modify := func(state *DB, addr types.Address, i, tweak byte) {
 		state.SetBalance(addr, big.NewInt(int64(11*i)+int64(tweak)))
 		state.SetNonce(addr, uint64(42*i+tweak))
 	}
@@ -74,10 +74,10 @@ func TestIntermediateLeaks(t *testing.T) {
 	}
 
 	// Commit and cross check the databases.
-	if _, err := transState.Commit(false); err != nil {
+	if _, err := transState.Commit(); err != nil {
 		t.Fatalf("failed to commit transition state: %v", err)
 	}
-	if _, err := finalState.Commit(false); err != nil {
+	if _, err := finalState.Commit(); err != nil {
 		t.Fatalf("failed to commit final state: %v", err)
 	}
 	for _, key := range finalDb.Keys() {
@@ -106,7 +106,6 @@ func TestCopy(t *testing.T) {
 		obj.AddBalance(big.NewInt(int64(i)))
 		orig.updateStateObj(obj)
 	}
-	orig.Finalise(false)
 
 	// Copy the state, modify both in-memory
 	copy := orig.Copy()
@@ -124,10 +123,8 @@ func TestCopy(t *testing.T) {
 	// Finalise the changes on both concurrently
 	done := make(chan struct{})
 	go func() {
-		orig.Finalise(true)
 		close(done)
 	}()
-	copy.Finalise(true)
 	<-done
 
 	// Verify that the two states have been updated independently

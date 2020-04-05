@@ -320,7 +320,7 @@ func (app *SpacemeshApp) setupGenesis(state *state.TransactionProcessor, msh *me
 		app.log.Info("Genesis account created: %s, Balance: %s", id, acc.Balance.Uint64())
 	}
 
-	_, err := state.Commit(false)
+	_, err := state.Commit()
 	if err != nil {
 		log.Panic("cannot commit genesis state")
 	}

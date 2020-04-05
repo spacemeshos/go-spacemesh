@@ -37,7 +37,7 @@ type Dump struct {
 }
 
 // RawDump returns a Dump struct for the receivers state
-func (state *StateDB) RawDump() Dump {
+func (state *DB) RawDump() Dump {
 	dump := Dump{
 		Root:     fmt.Sprintf("%x", state.globalTrie.Hash()),
 		Accounts: make(map[string]DumpAccount),
@@ -63,7 +63,7 @@ func (state *StateDB) RawDump() Dump {
 }
 
 // Dump dumps the current state into json form, encoded into bytes.
-func (state *StateDB) Dump() []byte {
+func (state *DB) Dump() []byte {
 	json, err := json.MarshalIndent(state.RawDump(), "", "	")
 	if err != nil {
 		fmt.Println("dump err", err)

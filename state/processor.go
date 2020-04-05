@@ -29,7 +29,7 @@ type Projector interface {
 // TransactionProcessor is the struct containing state db and is responsible for applying transactions into it
 type TransactionProcessor struct {
 	log.Log
-	*StateDB
+	*DB
 	processorDb  database.Database
 	currentLayer types.LayerID
 	rootHash     types.Hash32
@@ -52,14 +52,14 @@ func NewTransactionProcessor(allStates, processorDb database.Database, projector
 	log.Info("started processor with state root %x", root)
 	return &TransactionProcessor{
 		Log:          logger,
-		StateDB:      stateDb,
+		DB:           stateDb,
 		processorDb:  processorDb,
 		currentLayer: 0,
 		rootHash:     root,
 		stateQueue:   list.List{},
 		projector:    projector,
 		trie:         stateDb.TrieDB(),
-		mu:           sync.Mutex{}, //sync between reset and apply mesh.Transactions
+		mu:           sync.Mutex{}, // sync between reset and apply mesh.Transactions
 		rootMu:       sync.RWMutex{},
 	}
 }
@@ -123,7 +123,7 @@ func (tp *TransactionProcessor) ApplyTransactions(layer types.LayerID, txs []*ty
 		remainingCount = len(remaining)
 	}
 
-	newHash, err := tp.Commit(false)
+	newHash, err := tp.Commit()
 
 	if err != nil {
 		return remainingCount, fmt.Errorf("failed to commit global state: %v", err)
@@ -183,7 +183,7 @@ func (tp *TransactionProcessor) ApplyRewards(layer types.LayerID, miners []types
 		tp.AddBalance(account, reward)
 		events.Publish(events.RewardReceived{Coinbase: account.String(), Amount: reward.Uint64()})
 	}
-	newHash, err := tp.Commit(false)
+	newHash, err := tp.Commit()
 
 	if err != nil {
 		tp.Log.Error("trie write error %v", err)
@@ -212,7 +212,7 @@ func (tp *TransactionProcessor) LoadState(layer types.LayerID) error {
 	tp.Log.Info("reverted, new root %x", newState.IntermediateRoot(false))
 	tp.Log.With().Info("reverted", log.String("root_hash", newState.IntermediateRoot(false).String()))
 
-	tp.StateDB = newState
+	tp.DB = newState
 	tp.rootMu.Lock()
 	tp.rootHash = state
 	tp.rootMu.Unlock()
@@ -261,7 +261,7 @@ func (tp *TransactionProcessor) ApplyTransaction(trans *types.Transaction, layer
 
 	amountWithFee := trans.Fee + trans.Amount
 
-	//todo: should we allow to spend all accounts balance?
+	// todo: should we allow to spend all accounts balance?
 	if origin.Balance().Uint64() <= amountWithFee {
 		tp.Log.Error(errFunds+" have: %v need: %v", origin.Balance(), amountWithFee)
 		return fmt.Errorf(errFunds)
@@ -275,7 +275,7 @@ func (tp *TransactionProcessor) ApplyTransaction(trans *types.Transaction, layer
 	tp.SetNonce(trans.Origin(), tp.GetNonce(trans.Origin())+1) // TODO: Not thread-safe
 	transfer(tp, trans.Origin(), trans.Recipient, new(big.Int).SetUint64(trans.Amount))
 
-	//subtract fee from account, fee will be sent to miners in layers after
+	// subtract fee from account, fee will be sent to miners in layers after
 	tp.SubBalance(trans.Origin(), new(big.Int).SetUint64(trans.Fee))
 	if err := tp.processorDb.Put(trans.ID().Bytes(), layerID.ToBytes()); err != nil {
 		return fmt.Errorf("failed to add to applied txs: %v", err)
@@ -284,14 +284,14 @@ func (tp *TransactionProcessor) ApplyTransaction(trans *types.Transaction, layer
 	return nil
 }
 
-//GetStateRoot gets the current state root hash
+// GetStateRoot gets the current state root hash
 func (tp *TransactionProcessor) GetStateRoot() types.Hash32 {
 	tp.rootMu.RLock()
 	defer tp.rootMu.RUnlock()
 	return tp.rootHash
 }
 
-func transfer(db GlobalStateDB, sender, recipient types.Address, amount *big.Int) {
+func transfer(db *TransactionProcessor, sender, recipient types.Address, amount *big.Int) {
 	db.SubBalance(sender, amount)
 	db.AddBalance(recipient, amount)
 }
