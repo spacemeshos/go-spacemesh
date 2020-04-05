@@ -489,17 +489,17 @@ func (s *Syncer) waitLayer(ch timesync.LayerTimer) bool {
 	return false
 }
 
-func (s *Syncer) getLayerFromNeighbors(currenSyncLayer types.LayerID) (*types.Layer, error) {
+func (s *Syncer) getLayerFromNeighbors(currentSyncLayer types.LayerID) (*types.Layer, error) {
 	if len(s.peers.GetPeers()) == 0 {
 		return nil, fmt.Errorf("no peers ")
 	}
 
 	//fetch layer hash from each peer
-	s.With().Info("fetch layer hash", log.LayerID(currenSyncLayer.Uint64()))
-	m, err := s.fetchLayerHashes(currenSyncLayer)
+	s.With().Info("fetch layer hash", log.LayerID(currentSyncLayer.Uint64()))
+	m, err := s.fetchLayerHashes(currentSyncLayer)
 	if err != nil {
 		if err == errNoBlocksInLayer {
-			return types.NewEmptyLayer(currenSyncLayer), nil
+			return types.NewLayer(currentSyncLayer), nil
 		}
 		return nil, err
 	}
@@ -509,8 +509,8 @@ func (s *Syncer) getLayerFromNeighbors(currenSyncLayer types.LayerID) (*types.La
 	}
 
 	//fetch ids for each hash
-	s.With().Info("fetch layer ids", log.LayerID(currenSyncLayer.Uint64()))
-	blockIds, err := s.fetchLayerBlockIds(m, currenSyncLayer)
+	s.With().Info("fetch layer ids", log.LayerID(currentSyncLayer.Uint64()))
+	blockIds, err := s.fetchLayerBlockIds(m, currentSyncLayer)
 	if err != nil {
 		return nil, err
 	}
@@ -519,12 +519,12 @@ func (s *Syncer) getLayerFromNeighbors(currenSyncLayer types.LayerID) (*types.La
 		return nil, fmt.Errorf("interupt")
 	}
 
-	blocksArr, err := s.syncLayer(currenSyncLayer, blockIds)
+	blocksArr, err := s.syncLayer(currentSyncLayer, blockIds)
 	if len(blocksArr) == 0 || err != nil {
-		return nil, fmt.Errorf("could not get blocks for layer  %v %v", currenSyncLayer, err)
+		return nil, fmt.Errorf("could not get blocks for layer  %v %v", currentSyncLayer, err)
 	}
 
-	return types.NewExistingLayer(types.LayerID(currenSyncLayer), blocksArr), nil
+	return types.NewExistingLayer(types.LayerID(currentSyncLayer), blocksArr), nil
 }
 
 func (s *Syncer) syncLayer(layerID types.LayerID, blockIds []types.BlockID) ([]*types.Block, error) {

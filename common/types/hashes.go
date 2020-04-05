@@ -1,7 +1,6 @@
 package types
 
 import (
-	"bytes"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -9,30 +8,26 @@ import (
 	"math/big"
 	"math/rand"
 	"reflect"
-	"sort"
 )
 
 const (
-	// HashLength is the expected length of the hash
+	// Hash32Length is 32, the expected length of the hash
 	Hash32Length = 32
-	Hash20Length = 20
-	Hash12Length = 12
+	hash20Length = 20
+	hash12Length = 12
 )
 
-// Hash represents the first 12 bytes of sha256, mostly used for internal caches
-type Hash12 [Hash12Length]byte
+// Hash12 represents the first 12 bytes of sha256, mostly used for internal caches
+type Hash12 [hash12Length]byte
 
-// Hash represents the 32 byte Keccak256 hash of arbitrary data.
+// Hash32 represents the 32-byte sha256 hash of arbitrary data.
 type Hash32 [Hash32Length]byte
 
-// Hash represents the 20 byte Keccak256 hash of arbitrary data.
-type Hash20 [Hash20Length]byte
+// Hash20 represents the 20-byte sha256 hash of arbitrary data.
+type Hash20 [hash20Length]byte
 
+// Field returns a log field. Implements the LoggableField interface.
 func (h Hash12) Field(name string) log.Field { return log.String(name, util.Bytes2Hex(h[:])) }
-
-// HexToHash sets byte representation of s to hash.
-// If b is larger than len(h), b will be cropped from the left.
-//func HexToHash20(s string) Hash20 { return BytesToHash(util.FromHex(s)) }
 
 // Bytes gets the byte representation of the underlying hash.
 func (h Hash20) Bytes() []byte { return h[:] }
@@ -49,6 +44,7 @@ func (h Hash20) String() string {
 	return h.Hex()
 }
 
+// ShortString returns a the first 5 characters of the hash, for logging purposes.
 func (h Hash20) ShortString() string {
 	l := len(h.Hex())
 	return h.Hex()[util.Min(2, l):util.Min(7, l)]
@@ -57,7 +53,7 @@ func (h Hash20) ShortString() string {
 // Format implements fmt.Formatter, forcing the byte slice to be formatted as is,
 // without going through the stringer interface used for logging.
 func (h Hash20) Format(s fmt.State, c rune) {
-	fmt.Fprintf(s, "%"+string(c), h[:])
+	_, _ = fmt.Fprintf(s, "%"+string(c), h[:])
 }
 
 // UnmarshalText parses a hash in hex syntax.
@@ -85,34 +81,31 @@ func (h *Hash20) SetBytes(b []byte) {
 	copy(h[32-len(b):], b)
 }
 
-func (h Hash20) ToHash32() Hash32 {
-	var h2 [Hash32Length]byte
-	copy(h2[:], h[0:Hash20Length])
-	return Hash32(h2)
+// ToHash32 returns a Hash32 whose first 20 bytes are the bytes of this Hash20, it is right-padded with zeros.
+func (h Hash20) ToHash32() (h32 Hash32) {
+	copy(h32[:], h[:])
+	return
 }
 
+// Field returns a log field. Implements the LoggableField interface.
 func (h Hash20) Field(name string) log.Field { return log.String(name, util.Bytes2Hex(h[:])) }
 
-func CalcHash12(data []byte) Hash12 {
-	msghash := sha256.Sum256(data)
-	var h [Hash12Length]byte
-	copy(h[:], msghash[0:Hash12Length])
-	return Hash12(h)
+// CalcHash12 returns the 12-byte prefix of the sha256 sum of the given byte slice.
+func CalcHash12(data []byte) (h Hash12) {
+	h32 := sha256.Sum256(data)
+	copy(h[:], h32[:])
+	return
 }
 
-func CalcBlocksHash12(view []BlockID) (Hash12, error) {
-	sortedView := make([]BlockID, len(view))
-	copy(sortedView, view)
-	sort.Slice(sortedView, func(i, j int) bool {
-		return bytes.Compare(sortedView[i].ToBytes(), sortedView[j].ToBytes()) < 0
-	})
-	viewBytes, err := InterfaceToBytes(sortedView)
-	if err != nil {
-		return Hash12{}, err
-	}
-	return CalcHash12(viewBytes), err
+// CalcBlocksHash12 returns the 12-byte sha256 sum of the block IDs, sorted in lexicographic order.
+func CalcBlocksHash12(view []BlockID) (h Hash12) {
+	h32 := CalcBlocksHash32(view, nil)
+	copy(h[:], h32[:])
+	return
 }
 
+// CalcBlocksHash32 returns the 32-byte sha256 sum of the block IDs, sorted in lexicographic order. The pre-image is
+// prefixed with additionalBytes.
 func CalcBlocksHash32(view []BlockID, additionalBytes []byte) Hash32 {
 	sortedView := make([]BlockID, len(view))
 	copy(sortedView, view)
@@ -120,6 +113,8 @@ func CalcBlocksHash32(view []BlockID, additionalBytes []byte) Hash32 {
 	return CalcBlockHash32Presorted(sortedView, additionalBytes)
 }
 
+// CalcBlockHash32Presorted returns the 32-byte sha256 sum of the block IDs, in the order given. The pre-image is
+// prefixed with additionalBytes.
 func CalcBlockHash32Presorted(sortedView []BlockID, additionalBytes []byte) Hash32 {
 	hash := sha256.New()
 	hash.Write(additionalBytes)
@@ -131,46 +126,19 @@ func CalcBlockHash32Presorted(sortedView []BlockID, additionalBytes []byte) Hash
 	return res
 }
 
-func CalcAtxsHash12(ids []ATXID) (Hash12, error) {
-	sorted := make([]ATXID, len(ids))
-	copy(sorted, ids)
-	sort.Slice(sorted, func(i, j int) bool {
-		a := sorted[i].Hash32()
-		b := sorted[j].Hash32()
-		return bytes.Compare(a[:], b[:]) < 0 //sorted[i] < sorted[j]
-	})
-	bytes, err := InterfaceToBytes(sorted)
-	if err != nil {
-		return Hash12{}, err
-	}
-	return CalcHash12(bytes), err
+// CalcMessageHash12 returns the 12-byte sha256 sum of the given msg suffixed with protocol.
+func CalcMessageHash12(msg []byte, protocol string) Hash12 {
+	return CalcHash12(append(msg, protocol...))
 }
 
-func CalcTxsHash12(ids []TransactionID) (Hash12, error) {
-	sorted := make([]TransactionID, len(ids))
-	copy(sorted, ids)
-	sort.Slice(sorted, func(i, j int) bool {
-		return bytes.Compare(sorted[i][:], sorted[j][:]) < 0 //sorted[i] < sorted[j]
-	})
-	bytes, err := TxIdsAsBytes(sorted)
-	if err != nil {
-		return Hash12{}, err
-	}
-	return CalcHash12(bytes), err
-}
+var hashT = reflect.TypeOf(Hash32{})
 
-func CalcMessageHash12(msg []byte, prot string) Hash12 {
-	return CalcHash12(append(msg, []byte(prot)...))
-}
-
-var (
-	hashT = reflect.TypeOf(Hash32{})
-)
-
+// CalcHash32 returns the 32-byte sha256 sum of the given data.
 func CalcHash32(data []byte) Hash32 {
 	return sha256.Sum256(data)
 }
 
+// CalcATXHash32 returns the 32-byte sha256 sum of serialization of the given ATX.
 func CalcATXHash32(atx *ActivationTx) Hash32 {
 	bytes, err := InterfaceToBytes(&atx.ActivationTxHeader)
 	if err != nil {
@@ -187,28 +155,15 @@ func BytesToHash(b []byte) Hash32 {
 	return h
 }
 
-// BigToHash sets byte representation of b to hash.
-// If b is larger than len(h), b will be cropped from the left.
-func BigToHash(b *big.Int) Hash32 { return BytesToHash(b.Bytes()) }
-
-// HexToHash sets byte representation of s to hash.
+// HexToHash32 sets byte representation of s to hash.
 // If b is larger than len(h), b will be cropped from the left.
 func HexToHash32(s string) Hash32 { return BytesToHash(util.FromHex(s)) }
 
 // Bytes gets the byte representation of the underlying hash.
 func (h Hash32) Bytes() []byte { return h[:] }
 
-// Big converts a hash to a big integer.
-func (h Hash32) Big() *big.Int { return new(big.Int).SetBytes(h[:]) }
-
 // Hex converts a hash to a hex string.
 func (h Hash32) Hex() string { return util.Encode(h[:]) }
-
-// TerminalString implements log.TerminalStringer, formatting a string for console
-// output during logging.
-func (h Hash32) TerminalString() string {
-	return fmt.Sprintf("%x…%x", h[:3], h[29:])
-}
 
 // String implements the stringer interface and is used also by the logger when
 // doing full logging into a file.
@@ -216,6 +171,7 @@ func (h Hash32) String() string {
 	return h.Hex()
 }
 
+// ShortString returns a the first 5 characters of the hash, for logging purposes.
 func (h Hash32) ShortString() string {
 	l := len(h.Hex())
 	return h.Hex()[util.Min(2, l):util.Min(7, l)]
@@ -224,7 +180,7 @@ func (h Hash32) ShortString() string {
 // Format implements fmt.Formatter, forcing the byte slice to be formatted as is,
 // without going through the stringer interface used for logging.
 func (h Hash32) Format(s fmt.State, c rune) {
-	fmt.Fprintf(s, "%"+string(c), h[:])
+	_, _ = fmt.Fprintf(s, "%"+string(c), h[:])
 }
 
 // UnmarshalText parses a hash in hex syntax.
@@ -252,14 +208,14 @@ func (h *Hash32) SetBytes(b []byte) {
 	copy(h[32-len(b):], b)
 }
 
-func (h Hash32) ToHash20() Hash20 {
-	var h2 [Hash20Length]byte
-	copy(h2[:], h[0:Hash20Length])
-	return Hash20(h2)
+// ToHash20 returns a Hash20, whose the 20-byte prefix of this Hash32.
+func (h Hash32) ToHash20() (h20 Hash20) {
+	copy(h20[:], h[:])
+	return
 }
 
 // Generate implements testing/quick.Generator.
-func (h Hash32) Generate(rand *rand.Rand, size int) reflect.Value {
+func (h Hash32) Generate(rand *rand.Rand, _ int) reflect.Value {
 	m := rand.Intn(len(h))
 	for i := len(h) - 1; i > m; i-- {
 		h[i] = byte(rand.Uint32())
@@ -280,4 +236,5 @@ func (h *Hash32) Scan(src interface{}) error {
 	return nil
 }
 
+// Field returns a log field. Implements the LoggableField interface.
 func (h Hash32) Field(name string) log.Field { return log.String(name, util.Bytes2Hex(h[:])) }

@@ -658,9 +658,11 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 			return
 		default:
 			if b, err := bl1.GetBlock(blk.ID()); err == nil {
-				res, err := blk.Compare(b)
+				bBytes, err := types.InterfaceToBytes(*b)
 				assert.NoError(t, err)
-				assert.True(t, res)
+				blBytes, err := types.InterfaceToBytes(*blk)
+				assert.NoError(t, err)
+				assert.Equal(t, bBytes, blBytes)
 				t.Log("done!")
 				return
 			}

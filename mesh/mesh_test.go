@@ -83,10 +83,6 @@ func (MockState) GetLayerApplied(txId types.TransactionID) *types.LayerID {
 	panic("implement me")
 }
 
-func (MockState) ValidateSignature(signed types.Signed) (types.Address, error) {
-	return types.Address{}, nil
-}
-
 func (MockState) ApplyTransactions(layer types.LayerID, txs []*types.Transaction) (int, error) {
 	return 0, nil
 }
@@ -103,12 +99,11 @@ type MockTxMemPool struct{}
 func (MockTxMemPool) Get(id types.TransactionID) (*types.Transaction, error) {
 	return &types.Transaction{}, nil
 }
-func (MockTxMemPool) GetAllItems() []*types.Transaction {
-	return nil
-}
+
 func (MockTxMemPool) Put(id types.TransactionID, item *types.Transaction) {
 
 }
+
 func (MockTxMemPool) Invalidate(id types.TransactionID) {
 
 }
@@ -117,10 +112,6 @@ type MockAtxMemPool struct{}
 
 func (MockAtxMemPool) Get(id types.ATXID) (*types.ActivationTx, error) {
 	return &types.ActivationTx{}, nil
-}
-
-func (MockAtxMemPool) GetAllItems() []types.ActivationTx {
-	return nil
 }
 
 func (MockAtxMemPool) Put(atx *types.ActivationTx) {

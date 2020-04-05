@@ -6,7 +6,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/crypto/sha3"
 	"math/big"
-	"reflect"
 )
 
 const (
@@ -16,8 +15,6 @@ const (
 
 // Address represents the 20 byte address of an spacemesh account.
 type Address [AddressLength]byte
-
-var addressT = reflect.TypeOf(Address{})
 
 // BytesToAddress returns Address with value b.
 // If b is larger than len(h), b will be cropped from the left.
@@ -35,6 +32,9 @@ func BigToAddress(b *big.Int) Address { return BytesToAddress(b.Bytes()) }
 // If s is larger than len(h), s will be cropped from the left.
 func HexToAddress(s string) Address { return BytesToAddress(util.FromHex(s)) }
 
+// StringToAddress returns Address with byte values of s.
+// If s is larger than len(h), s will be cropped from the left.
+// It is identical to HexToAddress, except decoding errors are returned instead of swallowed.
 func StringToAddress(s string) (Address, error) {
 	if len(s) > 1 {
 		if s[0:2] == "0x" || s[0:2] == "0X" {
@@ -87,7 +87,7 @@ func (a Address) String() string {
 	return a.Hex()
 }
 
-// String implements fmt.Stringer.
+// Short returns the first 7 characters of the address hex representation (incl. "0x"), for logging purposes.
 func (a Address) Short() string {
 	hx := a.Hex()
 	return hx[:util.Min(7, len(hx))]
@@ -96,7 +96,7 @@ func (a Address) Short() string {
 // Format implements fmt.Formatter, forcing the byte slice to be formatted as is,
 // without going through the stringer interface used for logging.
 func (a Address) Format(s fmt.State, c rune) {
-	fmt.Fprintf(s, "%"+string(c), a[:])
+	_, _ = fmt.Fprintf(s, "%"+string(c), a[:])
 }
 
 // SetBytes sets the address to the value of b.
@@ -107,33 +107,3 @@ func (a *Address) SetBytes(b []byte) {
 	}
 	copy(a[AddressLength-len(b):], b)
 }
-
-/*
-// MarshalText returns the hex representation of a.
-func (a Address) MarshalText() ([]byte, error) {
-	return util.Bytes(a[:]).MarshalText()
-}
-
-// UnmarshalText parses a hash in hex syntax.
-func (a *Address) UnmarshalText(input []byte) error {
-	return util.UnmarshalFixedText("Address", input, a[:])
-}
-
-// UnmarshalJSON parses a hash in hex syntax.
-func (a *Address) UnmarshalJSON(input []byte) error {
-	return util.UnmarshalFixedJSON(addressT, input, a[:])
-}
-
-// Scan implements Scanner for database/sql.
-func (a *Address) Scan(src interface{}) error {
-	srcB, ok := src.([]byte)
-	if !ok {
-		return fmt.Errorf("can't scan %T into Address", src)
-	}
-	if len(srcB) != AddressLength {
-		return fmt.Errorf("can't scan []byte of len %d into Address, want %d", len(srcB), AddressLength)
-	}
-	copy(a[:], srcB)
-	return nil
-}
-*/

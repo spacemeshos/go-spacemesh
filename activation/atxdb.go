@@ -263,10 +263,7 @@ func (db *ActivationDb) CalcActiveSetFromView(view []types.BlockID, pubEpoch typ
 	if pubEpoch < 1 {
 		return 0, fmt.Errorf("publication epoch cannot be less than 1, found %v", pubEpoch)
 	}
-	viewHash, err := types.CalcBlocksHash12(view)
-	if err != nil {
-		return 0, fmt.Errorf("failed to calc sorted view hash: %v", err)
-	}
+	viewHash := types.CalcBlocksHash12(view)
 	count, found := activesetCache.Get(viewHash)
 	if found {
 		return count, nil
