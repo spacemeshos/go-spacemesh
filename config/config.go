@@ -1,4 +1,4 @@
-// package config contains go-spacemesh node configuration definitions
+// Package config contains go-spacemesh node configuration definitions
 package config
 
 import (

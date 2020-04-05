@@ -1,4 +1,4 @@
-// package mesh defines the main store point for all the block-mesh objects
+// Package mesh defines the main store point for all the block-mesh objects
 // such as blocks, transactions and global state
 package mesh
 
