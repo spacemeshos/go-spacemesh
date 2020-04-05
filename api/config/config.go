@@ -1,4 +1,4 @@
-// package config provides configuration for GRPC and HTTP api servers
+// Package config provides configuration for GRPC and HTTP api servers
 package config
 
 const (
