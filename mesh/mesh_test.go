@@ -202,7 +202,7 @@ func TestLayers_AddWrongLayer(t *testing.T) {
 	_, err = layers.GetProcessedLayer(2)
 	assert.NoError(t, err)
 	_, err = layers.GetProcessedLayer(4)
-	assert.NoError(t, err)
+	assert.EqualError(t, err, "layer not verified yet")
 }
 
 func TestLayers_GetLayer(t *testing.T) {
