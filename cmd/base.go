@@ -26,15 +26,11 @@ var (
 	Commit string
 
 	// Ctx is the node's main context.
-	Ctx context.Context
+	Ctx, cancel = context.WithCancel(context.Background())
 
 	// Cancel is a function used to initiate graceful shutdown.
-	Cancel context.CancelFunc
+	Cancel = cancel
 )
-
-func init() {
-	Ctx, Cancel = context.WithCancel(context.Background())
-}
 
 // BaseApp is the base application command, provides basic init and flags for all executables and applications
 type BaseApp struct {

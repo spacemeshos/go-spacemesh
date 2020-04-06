@@ -220,7 +220,7 @@ func (app *SpacemeshApp) Initialize(cmd *cobra.Command, args []string) (err erro
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, os.Interrupt)
 
-	// Goroutine that listens for Crtl ^ C command
+	// Goroutine that listens for Ctrl ^ C command
 	// and triggers the quit app
 	go func() {
 		for range signalChan {
