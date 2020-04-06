@@ -33,7 +33,9 @@ jobs:
   - stage: test
     name: lint
     install: true # this skips the installation step
-    script: make lint
+    script:
+      - GO111MODULE=off go get golang.org/x/lint/golint
+      - make lint
     if: branch = staging OR branch = trying OR type = pull_request
   - name: test
     script:
