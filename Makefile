@@ -137,7 +137,8 @@ test-fmt:
 .PHONY: test-fmt
 
 lint:
-	./scripts/validate-lint.sh
+	golint --set_exit_status ./...
+	go vet ./...
 .PHONY: lint
 
 
