@@ -2,6 +2,7 @@ package timesync
 
 import (
 	"fmt"
+	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
 
@@ -30,7 +31,7 @@ func TestNtpPacket_Time(t *testing.T) {
 	}
 
 	// This will fail when our conversion doesn't function right because ntp count 70 years more than unix
-	assert.True(t, p.Time().Year() == sysTime.Year(), "Converted and system time should be the same year")
+	assert.Equal(t, p.Time().Year(), sysTime.Year(), "Converted and system time should be the same year")
 }
 
 func generateRandomDurations() (sortableDurations, error) {
@@ -90,15 +91,9 @@ func Test_queryNtpServerZeroTime(t *testing.T) {
 		ntpFunc = ntpRequest
 	}()
 
-	errChan := make(chan error)
-	resChan := make(chan time.Duration)
-	go queryNtpServer("mock", resChan, errChan)
+	d, err := queryNtpServer("mock")
 
-	select {
-	case err := <-errChan:
-		assert.NotNil(t, err)
-	case <-time.After(1 * time.Second):
-		assert.Fail(t, "error not received")
-	}
+	require.Error(t, err)
+	require.Equal(t, d, zeroDuration)
 
 }
