@@ -21,7 +21,7 @@ type layerMutex struct {
 	layerWorkers uint32
 }
 
-//DB represents a mesh database instance
+// DB represents a mesh database instance
 type DB struct {
 	log.Log
 	blockCache         blockCache
@@ -67,7 +67,7 @@ func NewPersistentMeshDB(path string, blockCacheSize int, log log.Log) (*DB, err
 
 	ll := &DB{
 		Log:                log,
-		blockCache:         NewBlockCache(blockCacheSize * layerSize),
+		blockCache:         newBlockCache(blockCacheSize * layerSize),
 		blocks:             bdb,
 		layers:             ldb,
 		transactions:       tdb,
@@ -95,7 +95,7 @@ func (m *DB) PersistentData() bool {
 func NewMemMeshDB(log log.Log) *DB {
 	ll := &DB{
 		Log:                log,
-		blockCache:         NewBlockCache(100 * layerSize),
+		blockCache:         newBlockCache(100 * layerSize),
 		blocks:             database.NewMemDatabase(),
 		layers:             database.NewMemDatabase(),
 		general:            database.NewMemDatabase(),
@@ -138,7 +138,7 @@ func (m *DB) AddBlock(bl *types.Block) error {
 // GetBlock gets a block from the database by id
 func (m *DB) GetBlock(id types.BlockID) (*types.Block, error) {
 	if id == GenesisBlock.ID() {
-		//todo fit real genesis here
+		// todo fit real genesis here
 		return GenesisBlock, nil
 	}
 
@@ -177,7 +177,7 @@ func (m *DB) LayerBlocks(index types.LayerID) ([]*types.Block, error) {
 }
 
 // ForBlockInView traverses all blocks in a view and uses blockHandler func on each block
-//The block handler func should return two values - a bool indicating whether or not we should stop traversing after the current block (happy flow)
+// The block handler func should return two values - a bool indicating whether or not we should stop traversing after the current block (happy flow)
 // and an error indicating that an error occurred while handling the block, the traversing will stop in that case as well (error flow)
 func (m *DB) ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) (bool, error)) error {
 	blocksToVisit := list.New()
@@ -191,12 +191,12 @@ func (m *DB) ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID
 			return err
 		}
 
-		//catch blocks that were referenced after more than one layer, and slipped through the stop condition
+		// catch blocks that were referenced after more than one layer, and slipped through the stop condition
 		if block.LayerIndex < layer {
 			continue
 		}
 
-		//execute handler
+		// execute handler
 		stop, err := blockHandler(block)
 		if err != nil {
 			return err
@@ -207,12 +207,12 @@ func (m *DB) ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID
 			break
 		}
 
-		//stop condition: referenced blocks must be in lower layers, so we don't traverse them
+		// stop condition: referenced blocks must be in lower layers, so we don't traverse them
 		if block.LayerIndex == layer {
 			continue
 		}
 
-		//push children to bfs queue
+		// push children to bfs queue
 		for _, id := range block.ViewEdges {
 			if _, found := seenBlocks[id]; !found {
 				seenBlocks[id] = struct{}{}
@@ -252,7 +252,7 @@ func (m *DB) ContextualValidity(id types.BlockID) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return b[0] == 1, nil //bytes to bool
+	return b[0] == 1, nil // bytes to bool
 }
 
 // SaveContextualValidity persists opinion on block to the database
@@ -292,7 +292,7 @@ func (m *DB) updateLayerWithBlock(blk *types.Block) error {
 	ids, err := m.layers.Get(blk.LayerIndex.ToBytes())
 	var blockIds []types.BlockID
 	if err != nil {
-		//layer doesnt exist, need to insert new layer
+		// layer doesnt exist, need to insert new layer
 		blockIds = make([]types.BlockID, 0, 1)
 	} else {
 		blockIds, err = types.BytesToBlockIds(ids)
@@ -310,7 +310,7 @@ func (m *DB) updateLayerWithBlock(blk *types.Block) error {
 	return nil
 }
 
-//try delete layer Handler (deletes if pending pendingCount is 0)
+// try delete layer Handler (deletes if pending pendingCount is 0)
 func (m *DB) endLayerWorker(index types.LayerID) {
 	m.lhMutex.Lock()
 	defer m.lhMutex.Unlock()
@@ -326,7 +326,7 @@ func (m *DB) endLayerWorker(index types.LayerID) {
 	}
 }
 
-//returns the existing layer Handler (crates one if doesn't exist)
+// returns the existing layer Handler (crates one if doesn't exist)
 func (m *DB) getLayerMutex(index types.LayerID) *layerMutex {
 	m.lhMutex.Lock()
 	defer m.lhMutex.Unlock()
@@ -636,7 +636,7 @@ func (m *DB) GetTransactionsByDestination(l types.LayerID, account types.Address
 		var a types.TransactionID
 		err := types.BytesToInterface(it.Value(), &a)
 		if err != nil {
-			//log error
+			// log error
 			break
 		}
 		txs = append(txs, a)
@@ -654,7 +654,7 @@ func (m *DB) GetTransactionsByOrigin(l types.LayerID, account types.Address) (tx
 		var a types.TransactionID
 		err := types.BytesToInterface(it.Value(), &a)
 		if err != nil {
-			//log error
+			// log error
 			break
 		}
 		txs = append(txs, a)

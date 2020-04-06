@@ -34,7 +34,7 @@ func TestBlockListener_TestTxQueue(t *testing.T) {
 	//missing
 	id4 := tx4.ID()
 
-	block1 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
+	block1 := types.NewExistingBlock(1, []byte(rand.String(8)))
 	block1.TxIDs = []types.TransactionID{id1, id2, id3}
 	block1.Initialize()
 	bl2.AddBlockWithTxs(block1, []*types.Transaction{tx1, tx2, tx3}, []*types.ActivationTx{})
@@ -88,7 +88,7 @@ func TestBlockListener_TestAtxQueue(t *testing.T) {
 	bl2.Start()
 	queue := bl1.atxQueue
 
-	block1 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
+	block1 := types.NewExistingBlock(1, []byte(rand.String(8)))
 	atx1 := atx(signer.PublicKey().String())
 	atx2 := atx(signer.PublicKey().String())
 	atx3 := atx(signer.PublicKey().String())
@@ -173,7 +173,7 @@ func TestBlockListener_TestTxQueueHandle(t *testing.T) {
 	id2 := tx2.ID()
 	id3 := tx3.ID()
 
-	block1 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
+	block1 := types.NewExistingBlock(1, []byte(rand.String(8)))
 	block1.TxIDs = []types.TransactionID{id1, id2, id3}
 	bl2.AddBlockWithTxs(block1, []*types.Transaction{tx1, tx2, tx3}, []*types.ActivationTx{})
 
@@ -214,7 +214,7 @@ func TestBlockListener_TestAtxQueueHandle(t *testing.T) {
 	poetProofBytes, err := types.InterfaceToBytes(&proofMessage.PoetProof)
 	poetRef := sha256.Sum256(poetProofBytes)
 
-	block1 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
+	block1 := types.NewExistingBlock(1, []byte(rand.String(8)))
 	atx1 := atx(signer.PublicKey().String())
 	atx1.Nipst.PostProof.Challenge = poetRef[:]
 	err = activation.SignAtx(signer, atx1)

@@ -1,4 +1,4 @@
-// package node contains the main executable for go-spacemesh node
+// Package node contains the main executable for go-spacemesh node
 package node
 
 import "C"
@@ -220,7 +220,7 @@ func (app *SpacemeshApp) Initialize(cmd *cobra.Command, args []string) (err erro
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, os.Interrupt)
 
-	// Goroutine that listens for Crtl ^ C command
+	// Goroutine that listens for Ctrl ^ C command
 	// and triggers the quit app
 	go func() {
 		for range signalChan {
@@ -320,7 +320,7 @@ func (app *SpacemeshApp) setupGenesis(state *state.TransactionProcessor, msh *me
 		app.log.Info("Genesis account created: %s, Balance: %s", id, acc.Balance.Uint64())
 	}
 
-	_, err := state.Commit(false)
+	_, err := state.Commit()
 	if err != nil {
 		log.Panic("cannot commit genesis state")
 	}
@@ -495,7 +495,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	app.closers = append(app.closers, appliedTxs)
 	processor := state.NewTransactionProcessor(db, appliedTxs, meshAndPoolProjector, lg.WithName("state"))
 
-	atxdb := activation.NewActivationDb(atxdbstore, idStore, mdb, layersPerEpoch, validator, app.addLogger(AtxDbLogger, lg))
+	atxdb := activation.NewDB(atxdbstore, idStore, mdb, layersPerEpoch, validator, app.addLogger(AtxDbLogger, lg))
 	beaconProvider := &oracle.EpochBeaconProvider{}
 	eValidator := oracle.NewBlockEligibilityValidator(layerSize, uint32(app.Config.GenesisActiveSet), layersPerEpoch, atxdb, beaconProvider, BLS381.Verify2, app.addLogger(BlkEligibilityLogger, lg))
 

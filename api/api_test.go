@@ -49,7 +49,7 @@ func (s *NetworkMock) SubscribePeerEvents() (conn, disc chan p2pcrypto.PublicKey
 	return make(chan p2pcrypto.PublicKey), make(chan p2pcrypto.PublicKey)
 }
 
-func (s *NetworkMock) Broadcast(chanel string, payload []byte) error {
+func (s *NetworkMock) Broadcast(_ string, payload []byte) error {
 	if s.broadCastErr {
 		return errors.New("error during broadcast")
 	}
@@ -90,11 +90,11 @@ func (t *TxAPIMock) GetStateRoot() types.Hash32 {
 	return hash
 }
 
-func (t *TxAPIMock) ValidateNonceAndBalance(transaction *types.Transaction) error {
+func (t *TxAPIMock) ValidateNonceAndBalance(*types.Transaction) error {
 	return t.err
 }
 
-func (t *TxAPIMock) GetProjection(addr types.Address, prevNonce, prevBalance uint64) (nonce, balance uint64, err error) {
+func (t *TxAPIMock) GetProjection(_ types.Address, prevNonce, prevBalance uint64) (nonce, balance uint64, err error) {
 	return prevNonce, prevBalance, nil
 }
 
@@ -114,7 +114,7 @@ func (t *TxAPIMock) LatestLayer() types.LayerID {
 	return 10
 }
 
-func (t *TxAPIMock) GetRewards(account types.Address) (rewards []types.Reward, err error) {
+func (t *TxAPIMock) GetRewards(types.Address) (rewards []types.Reward, err error) {
 	return
 }
 
@@ -146,33 +146,29 @@ func (t *TxAPIMock) setMockOrigin(orig types.Address) {
 	t.mockOrigin = orig
 }
 
-func (t *TxAPIMock) AddressExists(addr types.Address) bool {
+func (t *TxAPIMock) AddressExists(types.Address) bool {
 	return true
 }
 
-// MinigApiMock is a mock for mining API
-type MinigApiMock struct {
-}
+// MiningAPIMock is a mock for mining API
+type MiningAPIMock struct{}
 
 const (
 	miningStatus   = 123
 	remainingBytes = 321
 )
 
-func (*MinigApiMock) MiningStats() (int, uint64, string, string) {
+func (*MiningAPIMock) MiningStats() (int, uint64, string, string) {
 	return miningStatus, remainingBytes, "123456", "/tmp"
 }
 
-func (*MinigApiMock) StartPost(address types.Address, logicalDrive string, commitmentSize uint64) error {
+func (*MiningAPIMock) StartPost(types.Address, string, uint64) error {
 	return nil
 }
 
-func (*MinigApiMock) SetCoinbaseAccount(rewardAddress types.Address) {
+func (*MiningAPIMock) SetCoinbaseAccount(types.Address) {}
 
-}
-
-type OracleMock struct {
-}
+type OracleMock struct{}
 
 func (*OracleMock) GetEligibleLayers() []types.LayerID {
 	return []types.LayerID{1, 2, 3, 4}
@@ -207,7 +203,7 @@ const (
 var (
 	ap          = NewNodeAPIMock()
 	networkMock = NetworkMock{}
-	mining      = MinigApiMock{}
+	mining      = MiningAPIMock{}
 	oracle      = OracleMock{}
 	genTime     = GenesisTimeMock{time.Unix(genTimeUnix, 0)}
 	txMempool   = miner.NewTxMemPool()
@@ -241,7 +237,9 @@ func TestGrpcApi(t *testing.T) {
 	// Set up a connection to the server.
 	conn, err := grpc.Dial(addr, grpc.WithInsecure())
 	require.NoError(t, err)
-	defer conn.Close()
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
 	c := pb.NewSpacemeshServiceClient(conn)
 
 	// call echo and validate result
@@ -536,8 +534,8 @@ func launchServer(t *testing.T) func() {
 	time.Sleep(3 * time.Second) // wait for server to be ready (critical on Travis)
 
 	return func() {
-		jsonService.Close()
-		grpcService.Close()
+		require.NoError(t, jsonService.Close())
+		require.NoError(t, grpcService.Close())
 	}
 }
 
@@ -654,13 +652,13 @@ func TestApproveAPIGossipMessages(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	ApproveAPIGossipMessages(ctx, m)
 	require.True(t, m.called)
-	somekey := p2pcrypto.NewRandomPubkey()
-	msg := &mockMsg{somekey, []byte("TEST"), make(chan service.MessageValidation, 1)}
+	someKey := p2pcrypto.NewRandomPubkey()
+	msg := &mockMsg{someKey, []byte("TEST"), make(chan service.MessageValidation, 1)}
 	m.c <- msg
 	res := <-msg.ValidationCompletedChan()
 	require.NotNil(t, res)
-	require.Equal(t, res.Sender(), somekey)
+	require.Equal(t, res.Sender(), someKey)
 	require.Equal(t, res.Message(), []byte("TEST"))
-	require.Equal(t, res.Protocol(), APIGossipProtocol)
+	require.Equal(t, res.Protocol(), apiGossipProtocol)
 	cancel()
 }

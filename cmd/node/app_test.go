@@ -1,3 +1,5 @@
+// +build !exclude_app_test
+
 package node
 
 import (
@@ -437,7 +439,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 			act, exp, totalBlocks, firstEpochBlocks, lastLayer, layersPerEpoch, layerAvgSize, totalEpochs))
 
 	firstAp := suite.apps[0]
-	atxDb := firstAp.blockListener.AtxDB.(*activation.ActivationDb)
+	atxDb := firstAp.blockListener.AtxDB.(*activation.DB)
 	atxID, err := atxDb.GetNodeLastAtxID(firstAp.nodeID)
 	assert.NoError(suite.T(), err)
 	atx, err := atxDb.GetAtxHeader(atxID)

@@ -259,7 +259,7 @@ func TestConsensusProcess_nextRound(t *testing.T) {
 	assert.Equal(t, int32(2), proc.k)
 }
 
-func generateConsensusProcess(t *testing.T) *ConsensusProcess {
+func generateConsensusProcess(t *testing.T) *consensusProcess {
 	_, bninfo := node.GenerateTestNode(t)
 	sim := service.NewSimulator()
 	n1 := sim.NewNodeFrom(bninfo)
@@ -271,7 +271,7 @@ func generateConsensusProcess(t *testing.T) *ConsensusProcess {
 	oracle.Register(true, signing.PublicKey().String())
 	output := make(chan TerminationOutput, 1)
 
-	return NewConsensusProcess(cfg, instanceID1, s, oracle, NewMockStateQuerier(), 10, signing, types.NodeID{Key: signing.PublicKey().String(), VRFPublicKey: vrfPub}, n1, output, truer{}, log.NewDefault(signing.PublicKey().String()))
+	return newConsensusProcess(cfg, instanceID1, s, oracle, NewMockStateQuerier(), 10, signing, types.NodeID{Key: signing.PublicKey().String(), VRFPublicKey: vrfPub}, n1, output, truer{}, log.NewDefault(signing.PublicKey().String()))
 }
 
 func TestConsensusProcess_Id(t *testing.T) {

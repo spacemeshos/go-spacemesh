@@ -54,7 +54,7 @@ func (his *HareWrapper) waitForTermination() {
 			}
 		}
 
-		//log.Info("count is %v", count)
+		// log.Info("count is %v", count)
 		if count == his.totalCP*len(his.hare) {
 			break
 		}
@@ -124,35 +124,35 @@ func (m *p2pManipulator) RegisterGossipProtocol(protocol string, prio priorityq.
 }
 
 func (m *p2pManipulator) Broadcast(protocol string, payload []byte) error {
-	msg, e := MessageFromBuffer(payload)
+	msg, _ := MessageFromBuffer(payload)
 	if msg.InnerMsg.InstanceID == m.stalledLayer && msg.InnerMsg.K < 8 && msg.InnerMsg.K != -1 {
 		log.Warning("Not broadcasting in manipulator")
 		return m.err
 	}
 
-	e = m.nd.Broadcast(protocol, payload)
+	e := m.nd.Broadcast(protocol, payload)
 	return e
 }
 
 type trueOracle struct {
 }
 
-func (trueOracle) Register(isHonest bool, id string) {
+func (trueOracle) Register(bool, string) {
 }
 
-func (trueOracle) Unregister(isHonest bool, id string) {
+func (trueOracle) Unregister(bool, string) {
 }
 
-func (trueOracle) Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (bool, error) {
+func (trueOracle) Eligible(types.LayerID, int32, int, types.NodeID, []byte) (bool, error) {
 	return true, nil
 }
 
-func (trueOracle) Proof(layer types.LayerID, round int32) ([]byte, error) {
+func (trueOracle) Proof(types.LayerID, int32) ([]byte, error) {
 	x := make([]byte, 100)
 	return x, nil
 }
 
-func (trueOracle) IsIdentityActiveOnConsensusView(edID string, layer types.LayerID) (bool, error) {
+func (trueOracle) IsIdentityActiveOnConsensusView(string, types.LayerID) (bool, error) {
 	return true, nil
 }
 
@@ -193,7 +193,7 @@ type mockIdentityP struct {
 	nid types.NodeID
 }
 
-func (m *mockIdentityP) GetIdentity(edID string) (types.NodeID, error) {
+func (m *mockIdentityP) GetIdentity(string) (types.NodeID, error) {
 	return m.nid, nil
 }
 
@@ -217,10 +217,10 @@ func newRandBlockID(rng *rand.Rand) (id types.BlockID) {
 type mockBlockProvider struct {
 }
 
-func (mbp *mockBlockProvider) HandleValidatedLayer(validatedLayer types.LayerID, layer []types.BlockID) {
+func (mbp *mockBlockProvider) HandleValidatedLayer(types.LayerID, []types.BlockID) {
 }
 
-func (mbp *mockBlockProvider) LayerBlockIds(layerId types.LayerID) ([]types.BlockID, error) {
+func (mbp *mockBlockProvider) LayerBlockIds(types.LayerID) ([]types.BlockID, error) {
 	return buildSet(), nil
 }
 
@@ -228,7 +228,7 @@ func createMaatuf(tcfg config.Config, rng *amcl.RAND, layersCh chan types.LayerI
 	ed := signing.NewEdSigner()
 	pub := ed.PublicKey()
 	_, vrfPub := BLS381.GenKeyPair(rng)
-	//vrfSigner := BLS381.NewBlsSigner(vrfPriv)
+	// vrfSigner := BLS381.NewBlsSigner(vrfPriv)
 	nodeID := types.NodeID{Key: pub.String(), VRFPublicKey: vrfPub}
 	hare := New(tcfg, p2p, ed, nodeID, validateBlock, isSynced, &mockBlockProvider{}, rolacle, 10, &mockIdentityP{nid: nodeID},
 		&MockStateQuerier{true, nil}, layersCh, log.NewDefault(name+"_"+ed.PublicKey().ShortString()))
@@ -249,7 +249,7 @@ func Test_multipleCPs(t *testing.T) {
 	oracle := &trueOracle{}
 	for i := 0; i < totalNodes; i++ {
 		s := sim.NewNode()
-		//p2pm := &p2pManipulator{nd: s, err: errors.New("fake err")}
+		// p2pm := &p2pManipulator{nd: s, err: errors.New("fake err")}
 		test.lCh = append(test.lCh, make(chan types.LayerID, 1))
 		h := createMaatuf(cfg, rng, test.lCh[i], s, oracle, t.Name())
 		test.hare = append(test.hare, h)

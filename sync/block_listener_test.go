@@ -95,13 +95,13 @@ func TestBlockListener(t *testing.T) {
 	err = bl2.ProcessAtxs([]*types.ActivationTx{atx1})
 	assert.NoError(t, err)
 
-	block1 := types.NewExistingBlock(0, []byte(rand.RandString(8)))
+	block1 := types.NewExistingBlock(0, []byte(rand.String(8)))
 	block1.Signature = signer.Sign(block1.Bytes())
 	block1.ATXID = *types.EmptyATXID
-	block2 := types.NewExistingBlock(0, []byte(rand.RandString(8)))
+	block2 := types.NewExistingBlock(0, []byte(rand.String(8)))
 	block2.Signature = signer.Sign(block2.Bytes())
 	block2.ATXIDs = append(block2.ATXIDs, atx2.ID())
-	block3 := types.NewExistingBlock(0, []byte(rand.RandString(8)))
+	block3 := types.NewExistingBlock(0, []byte(rand.String(8)))
 	block3.Signature = signer.Sign(block3.Bytes())
 	block3.ATXIDs = append(block3.ATXIDs, atx3.ID())
 
@@ -162,7 +162,7 @@ func TestBlockListener_DataAvailability(t *testing.T) {
 	assert.NoError(t, err)
 	// Push a block with tx1 and and atx1 into bl1.
 
-	block := types.NewExistingBlock(1, []byte(rand.RandString(8)))
+	block := types.NewExistingBlock(1, []byte(rand.String(8)))
 	block.Signature = signer.Sign(block.Bytes())
 	block.TxIDs = append(block.TxIDs, tx1.ID())
 	block.ATXIDs = append(block.ATXIDs, atx1.ID())
@@ -222,7 +222,7 @@ func TestBlockListener_DataAvailabilityBadFlow(t *testing.T) {
 	atx1.Nipst.PostProof.Challenge = poetRef[:]
 
 	// Push a block with tx1 and and atx1 into bl1.
-	block := types.NewExistingBlock(1, []byte(rand.RandString(8)))
+	block := types.NewExistingBlock(1, []byte(rand.String(8)))
 	block.Signature = signer.Sign(block.Bytes())
 	block.TxIDs = append(block.TxIDs, tx1.ID())
 	block.ATXIDs = append(block.ATXIDs, atx1.ID())
@@ -246,7 +246,7 @@ func TestBlockListener_DataAvailabilityBadFlow(t *testing.T) {
 	// attach proof to ATX
 	atx2.Nipst.PostProof.Challenge = poetRef[:]
 	// create a block containing tx2 and atx2
-	tBlock := types.NewExistingBlock(1, []byte(rand.RandString(8)))
+	tBlock := types.NewExistingBlock(1, []byte(rand.String(8)))
 	tBlock.Signature = signer.Sign(tBlock.Bytes())
 	tBlock.TxIDs = append(tBlock.TxIDs, tx2.ID())
 	tBlock.ATXIDs = append(tBlock.ATXIDs, atx2.ID())
@@ -263,19 +263,19 @@ func TestBlockListener_DataAvailabilityBadFlow(t *testing.T) {
 }
 
 func TestBlockListener_ValidateVotesGoodFlow(t *testing.T) {
-	block1 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
+	block1 := types.NewExistingBlock(1, []byte(rand.String(8)))
 
-	block2 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
+	block2 := types.NewExistingBlock(1, []byte(rand.String(8)))
 
-	block3 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
+	block3 := types.NewExistingBlock(1, []byte(rand.String(8)))
 
-	block4 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
+	block4 := types.NewExistingBlock(1, []byte(rand.String(8)))
 
-	block5 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
+	block5 := types.NewExistingBlock(1, []byte(rand.String(8)))
 
-	block6 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
+	block6 := types.NewExistingBlock(1, []byte(rand.String(8)))
 
-	block7 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
+	block7 := types.NewExistingBlock(1, []byte(rand.String(8)))
 
 	block1.AddView(block2.ID())
 	block1.AddView(block3.ID())
@@ -312,23 +312,23 @@ func TestBlockListener_ValidateVotesGoodFlow(t *testing.T) {
 }
 
 func TestBlockListener_ValidateVotesBadFlow(t *testing.T) {
-	block1 := types.NewExistingBlock(7, []byte(rand.RandString(8)))
+	block1 := types.NewExistingBlock(7, []byte(rand.String(8)))
 
-	block2 := types.NewExistingBlock(8, []byte(rand.RandString(8)))
+	block2 := types.NewExistingBlock(8, []byte(rand.String(8)))
 
-	block3 := types.NewExistingBlock(8, []byte(rand.RandString(8)))
+	block3 := types.NewExistingBlock(8, []byte(rand.String(8)))
 
-	block4 := types.NewExistingBlock(9, []byte(rand.RandString(8)))
+	block4 := types.NewExistingBlock(9, []byte(rand.String(8)))
 
-	block5 := types.NewExistingBlock(9, []byte(rand.RandString(8)))
+	block5 := types.NewExistingBlock(9, []byte(rand.String(8)))
 
-	block6 := types.NewExistingBlock(9, []byte(rand.RandString(8)))
+	block6 := types.NewExistingBlock(9, []byte(rand.String(8)))
 
-	block7 := types.NewExistingBlock(10, []byte(rand.RandString(8)))
+	block7 := types.NewExistingBlock(10, []byte(rand.String(8)))
 
 	block1.AddView(block2.ID())
 	block1.AddView(block3.ID())
-	//block1.AddView(4)
+	// block1.AddView(4)
 	block2.AddView(block5.ID())
 	block2.AddView(block6.ID())
 	block3.AddView(block6.ID())
@@ -389,47 +389,47 @@ func TestBlockListenerViewTraversal(t *testing.T) {
 	err = bl2.ProcessAtxs([]*types.ActivationTx{&atx1})
 	assert.NoError(t, err)
 
-	block1 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
+	block1 := types.NewExistingBlock(1, []byte(rand.String(8)))
 	block1.ATXID = *types.EmptyATXID
 	block1.Signature = signer.Sign(block1.Bytes())
 
-	block2 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
+	block2 := types.NewExistingBlock(1, []byte(rand.String(8)))
 	block2.ATXID = *types.EmptyATXID
 	block2.Signature = signer.Sign(block2.Bytes())
 
-	block3 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
+	block3 := types.NewExistingBlock(1, []byte(rand.String(8)))
 	block3.ATXID = *types.EmptyATXID
 	block3.Signature = signer.Sign(block3.Bytes())
 
-	block4 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
+	block4 := types.NewExistingBlock(1, []byte(rand.String(8)))
 	block4.ATXID = *types.EmptyATXID
 	block4.Signature = signer.Sign(block4.Bytes())
 
-	block5 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
+	block5 := types.NewExistingBlock(1, []byte(rand.String(8)))
 	block5.ATXID = *types.EmptyATXID
 	block5.Signature = signer.Sign(block5.Bytes())
 
-	block6 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
+	block6 := types.NewExistingBlock(1, []byte(rand.String(8)))
 	block6.ATXID = *types.EmptyATXID
 	block6.Signature = signer.Sign(block6.Bytes())
 
-	block7 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
+	block7 := types.NewExistingBlock(1, []byte(rand.String(8)))
 	block7.ATXID = *types.EmptyATXID
 	block7.Signature = signer.Sign(block7.Bytes())
 
-	block8 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
+	block8 := types.NewExistingBlock(1, []byte(rand.String(8)))
 	block8.ATXID = *types.EmptyATXID
 	block8.Signature = signer.Sign(block8.Bytes())
 
-	block9 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
+	block9 := types.NewExistingBlock(1, []byte(rand.String(8)))
 	block9.ATXID = *types.EmptyATXID
 	block9.Signature = signer.Sign(block9.Bytes())
 
-	block10 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
+	block10 := types.NewExistingBlock(1, []byte(rand.String(8)))
 	block10.ATXID = *types.EmptyATXID
 	block10.Signature = signer.Sign(block10.Bytes())
 
-	block11 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
+	block11 := types.NewExistingBlock(1, []byte(rand.String(8)))
 	block11.ATXID = *types.EmptyATXID
 	block11.Signature = signer.Sign(block11.Bytes())
 
@@ -543,27 +543,27 @@ func TestBlockListener_TraverseViewBadFlow(t *testing.T) {
 	err = bl2.ProcessAtxs([]*types.ActivationTx{&atx1})
 	assert.NoError(t, err)
 
-	block1 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
+	block1 := types.NewExistingBlock(1, []byte(rand.String(8)))
 	block1.ATXID = *types.EmptyATXID
 	block1.Signature = signer.Sign(block1.Bytes())
 
-	block2 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
+	block2 := types.NewExistingBlock(1, []byte(rand.String(8)))
 	block2.ATXID = *types.EmptyATXID
 	block2.Signature = signer.Sign(block2.Bytes())
 
-	block3 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
+	block3 := types.NewExistingBlock(1, []byte(rand.String(8)))
 	block3.ATXID = *types.EmptyATXID
 	block3.Signature = signer.Sign(block3.Bytes())
 
-	block4 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
+	block4 := types.NewExistingBlock(1, []byte(rand.String(8)))
 	block4.ATXID = *types.EmptyATXID
 	block4.Signature = signer.Sign(block4.Bytes())
 
-	block5 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
+	block5 := types.NewExistingBlock(1, []byte(rand.String(8)))
 	block5.ATXID = *types.EmptyATXID
 	block5.Signature = signer.Sign(block5.Bytes())
 
-	block6 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
+	block6 := types.NewExistingBlock(1, []byte(rand.String(8)))
 	block6.ATXID = *types.EmptyATXID
 	block6.Signature = signer.Sign(block5.Bytes())
 
@@ -579,7 +579,7 @@ func TestBlockListener_TraverseViewBadFlow(t *testing.T) {
 	bl1.AddBlock(block5)
 
 	go bl2.syncLayer(5, []types.BlockID{block5.ID(), block6.ID()})
-	time.Sleep(1 * time.Second) //wait for fetch
+	time.Sleep(1 * time.Second) // wait for fetch
 
 	b, err := bl2.GetBlock(block1.ID())
 	assert.Error(t, err)
@@ -634,7 +634,7 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 	err = activation.SignAtx(signer, atx)
 	assert.NoError(t, err)
 
-	blk := types.NewExistingBlock(1, []byte(rand.RandString(8)))
+	blk := types.NewExistingBlock(1, []byte(rand.String(8)))
 	blk.TxIDs = append(blk.TxIDs, tx.ID())
 	blk.ATXIDs = append(blk.ATXIDs, atx.ID())
 	blk.Signature = signer.Sign(blk.Bytes())
@@ -674,7 +674,7 @@ func TestBlockListener_AtxCache(t *testing.T) {
 	sim := service.NewSimulator()
 	signer := signing.NewEdSigner()
 	n1 := sim.NewNode()
-	//n2 := sim.NewNode()
+	// n2 := sim.NewNode()
 	bl1 := ListenerFactory(n1, PeersMock{func() []p2p.Peer { return []p2p.Peer{ /*n2.PublicKey()*/ } }}, "listener1", 3)
 
 	atxDb := mesh.NewAtxDbMock()
@@ -686,7 +686,7 @@ func TestBlockListener_AtxCache(t *testing.T) {
 	atx2 := atx(signer.PublicKey().String())
 
 	// Push block with tx1 and and atx1 into bl1.
-	blk1 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
+	blk1 := types.NewExistingBlock(1, []byte(rand.String(8)))
 	blk1.Signature = signer.Sign(blk1.Bytes())
 	blk1.TxIDs = append(blk1.TxIDs, tx1.ID())
 	blk1.ATXIDs = append(blk1.ATXIDs, atx1.ID())
@@ -699,7 +699,7 @@ func TestBlockListener_AtxCache(t *testing.T) {
 	require.NoError(t, err)
 
 	// Push different block with same transactions - not expected to process atxs
-	blk2 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
+	blk2 := types.NewExistingBlock(1, []byte(rand.String(8)))
 	blk2.Signature = signer.Sign(blk2.Bytes())
 	blk2.TxIDs = append(blk2.TxIDs, tx1.ID())
 	blk2.ATXIDs = append(blk2.ATXIDs, atx1.ID())
@@ -712,7 +712,7 @@ func TestBlockListener_AtxCache(t *testing.T) {
 	require.NoError(t, err)
 
 	// Push different block with subset of transactions - expected to process atxs
-	blk3 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
+	blk3 := types.NewExistingBlock(1, []byte(rand.String(8)))
 	blk3.Signature = signer.Sign(blk3.Bytes())
 	blk3.TxIDs = append(blk3.TxIDs, tx1.ID())
 	blk3.ATXIDs = append(blk3.ATXIDs, atx1.ID())
@@ -724,4 +724,4 @@ func TestBlockListener_AtxCache(t *testing.T) {
 	require.NoError(t, err)
 }
 
-//todo integration testing
+// todo integration testing

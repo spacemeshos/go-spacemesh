@@ -27,7 +27,7 @@ import (
 
 type StateSuite struct {
 	db    *database.MemDatabase
-	state *StateDB
+	state *DB
 }
 
 var toAddr = types.BytesToAddress
@@ -47,7 +47,7 @@ func TestDump(t *testing.T) {
 	// write some of them to the trie
 	s.state.updateStateObj(obj1)
 	s.state.updateStateObj(obj2)
-	s.state.Commit(false)
+	s.state.Commit()
 
 	// check that dump contains the state objects that are in trie
 	got := string(s.state.Dump())
@@ -82,11 +82,11 @@ func TestLookupPastState(t *testing.T) {
 	obj1 := s.state.GetOrNewStateObj(toAddr([]byte{0x01}))
 	obj1.AddBalance(big.NewInt(22))
 
-	oldState, err := s.state.Commit(false)
+	oldState, err := s.state.Commit()
 	assert.NoError(t, err)
 
 	obj1.AddBalance(big.NewInt(10))
-	_, err = s.state.Commit(false)
+	_, err = s.state.Commit()
 	assert.NoError(t, err)
 
 	oldSt, err := New(oldState, sdb)
@@ -101,7 +101,7 @@ func (s *StateSuite) SetUpTest(t *testing.T) {
 	s.state, _ = New(types.Hash32{}, NewDatabase(s.db))
 }
 
-func compareStateObjects(so0, so1 *StateObj, t *testing.T) {
+func compareStateObjects(so0, so1 *Object, t *testing.T) {
 	if so0.Address() != so1.Address() {
 		t.Fatalf("Address mismatch: have %v, want %v", so0.address, so1.address)
 	}

@@ -38,7 +38,7 @@ func TestCreateBaseline(t *testing.T) {
 	defer nipstStore.Close()
 	atxdbStore, _ := database.NewLDBDatabase(id+"atx", 0, 0, lg.WithOptions(log.Nop))
 	defer atxdbStore.Close()
-	atxdb := activation.NewActivationDb(atxdbStore, &mockIStore{}, mshdb, uint16(1000), &validatorMock{}, lg.WithName("atxDB").WithOptions(log.Nop))
+	atxdb := activation.NewDB(atxdbStore, &mockIStore{}, mshdb, uint16(1000), &validatorMock{}, lg.WithName("atxDB").WithOptions(log.Nop))
 	trtl := tortoise.NewTortoise(blocksPerLayer, mshdb, 1, lg.WithName("trtl"))
 	msh := mesh.NewMesh(mshdb, atxdb, rewardConf, trtl, &mockTxMemPool{}, &mockAtxMemPool{}, &mockState{}, lg.WithOptions(log.Nop))
 	defer msh.Close()
@@ -119,7 +119,7 @@ func createLayerWithRandVoting(msh *mesh.Mesh, index types.LayerID, prev []*type
 	}
 	layerBlocks := make([]types.BlockID, 0, blocksInLayer)
 	for i := 0; i < blocksInLayer; i++ {
-		bl := types.NewExistingBlock(index, []byte(rand.RandString(8)))
+		bl := types.NewExistingBlock(index, []byte(rand.String(8)))
 		signer := signing.NewEdSigner()
 		bl.Signature = signer.Sign(bl.Bytes())
 		layerBlocks = append(layerBlocks, bl.ID())
@@ -156,7 +156,7 @@ func atxWithProof(pubkey string, poetref []byte) *types.ActivationTx {
 	chlng := types.HexToHash32("0x3333")
 	npst := activation.NewNIPSTWithChallenge(&chlng, poetref)
 
-	atx := newActivationTx(types.NodeID{Key: pubkey, VRFPublicKey: []byte(rand.RandString(8))}, 0, *types.EmptyATXID, 5, 1, *types.EmptyATXID, coinbase, 0, []types.BlockID{}, npst)
+	atx := newActivationTx(types.NodeID{Key: pubkey, VRFPublicKey: []byte(rand.String(8))}, 0, *types.EmptyATXID, 5, 1, *types.EmptyATXID, coinbase, 0, []types.BlockID{}, npst)
 	atx.Commitment = commitment
 	atx.CommitmentMerkleRoot = commitment.MerkleRoot
 	atx.CalcAndSetID()

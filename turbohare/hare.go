@@ -1,4 +1,4 @@
-// package turbohare is a component returning block ids for layer as seen by this miner, without running any consensus process
+// Package turbohare is a component returning block ids for layer as seen by this miner, without running any consensus process
 package turbohare
 
 import (

@@ -26,17 +26,18 @@ const (
 )
 
 func teardown() {
-	os.RemoveAll(Path)
+	_ = os.RemoveAll(Path)
 }
 
-func getMeshdb() *DB {
+func getMeshDB() *DB {
 	return NewMemMeshDB(log.New("mdb", "", ""))
 }
 
 func TestNewMeshDB(t *testing.T) {
-	mdb := getMeshdb()
-	bl := types.NewExistingBlock(1, []byte(rand.RandString(8)))
-	mdb.AddBlock(bl)
+	mdb := getMeshDB()
+	bl := types.NewExistingBlock(1, []byte(rand.String(8)))
+	err := mdb.AddBlock(bl)
+	assert.NoError(t, err)
 	block, err := mdb.GetBlock(bl.ID())
 	assert.NoError(t, err)
 	assert.True(t, bl.ID() == block.ID())
@@ -96,7 +97,7 @@ func createLayerWithRandVoting(index types.LayerID, prev []*types.Layer, blocksI
 	}
 	layerBlocks := make([]types.BlockID, 0, blocksInLayer)
 	for i := 0; i < blocksInLayer; i++ {
-		bl := types.NewExistingBlock(0, []byte(rand.RandString(8)))
+		bl := types.NewExistingBlock(0, []byte(rand.String(8)))
 		layerBlocks = append(layerBlocks, bl.ID())
 		for idx, pat := range patterns {
 			for _, id := range pat {
@@ -105,7 +106,7 @@ func createLayerWithRandVoting(index types.LayerID, prev []*types.Layer, blocksI
 			}
 		}
 		for _, prevBloc := range prev[0].Blocks() {
-			bl.AddView(types.BlockID(prevBloc.ID()))
+			bl.AddView(prevBloc.ID())
 		}
 		bl.LayerIndex = index
 		l.AddBlock(bl)
@@ -141,7 +142,8 @@ func testForeachInView(mdb *DB, t *testing.T) {
 		lyr := createLayerWithRandVoting(l.Index()+1, []*types.Layer{l}, 2, 2, log.NewDefault("msh"))
 		for _, b := range lyr.Blocks() {
 			blocks[b.ID()] = b
-			mdb.AddBlock(b)
+			err := mdb.AddBlock(b)
+			assert.NoError(t, err)
 		}
 		l = lyr
 	}
@@ -155,7 +157,8 @@ func testForeachInView(mdb *DB, t *testing.T) {
 	for _, b := range l.Blocks() {
 		ids[b.ID()] = struct{}{}
 	}
-	mdb.ForBlockInView(ids, 0, foo)
+	err := mdb.ForBlockInView(ids, 0, foo)
+	assert.NoError(t, err)
 	for _, bl := range blocks {
 		_, found := mp[bl.ID()]
 		assert.True(t, found, "did not process block  ", bl)
@@ -177,7 +180,8 @@ func TestForEachInView_InMem_WithStop(t *testing.T) {
 		lyr := createLayerWithRandVoting(l.Index()+1, []*types.Layer{l}, 2, 2, log.NewDefault("msh"))
 		for _, b := range lyr.Blocks() {
 			blocks[b.ID()] = b
-			mdb.AddBlock(b)
+			err := mdb.AddBlock(b)
+			assert.NoError(t, err)
 		}
 		l = lyr
 	}
@@ -205,15 +209,15 @@ func TestForEachInView_InMem_WithLimitedLayer(t *testing.T) {
 	gen := l.Blocks()[0]
 	blocks[gen.ID()] = gen
 
-	if err := mdb.AddBlock(gen); err != nil {
-		t.Fail()
-	}
+	err := mdb.AddBlock(gen)
+	require.NoError(t, err)
 
 	for i := 0; i < 4; i++ {
 		lyr := createLayerWithRandVoting(l.Index()+1, []*types.Layer{l}, 2, 2, log.NewDefault("msh"))
 		for _, b := range lyr.Blocks() {
 			blocks[b.ID()] = b
-			mdb.AddBlock(b)
+			err := mdb.AddBlock(b)
+			assert.NoError(t, err)
 		}
 		l = lyr
 	}
@@ -230,7 +234,7 @@ func TestForEachInView_InMem_WithLimitedLayer(t *testing.T) {
 		ids[b.ID()] = struct{}{}
 	}
 	// traverse until (and including) layer 2
-	err := mdb.ForBlockInView(ids, 2, foo)
+	err = mdb.ForBlockInView(ids, 2, foo)
 	assert.NoError(t, err)
 	assert.Equal(t, 6, i)
 }
@@ -453,7 +457,7 @@ func TestMeshDB_testGetTransactions(t *testing.T) {
 }
 
 type TinyTx struct {
-	Id          types.TransactionID
+	ID          types.TransactionID
 	Nonce       uint64
 	TotalAmount uint64
 }
@@ -470,7 +474,7 @@ func getTxns(r *require.Assertions, mdb *DB, origin types.Address) []TinyTx {
 	var ret []TinyTx
 	for nonce, nonceTxs := range txns.PendingTxs {
 		for id, tx := range nonceTxs {
-			ret = append(ret, TinyTx{Id: id, Nonce: nonce, TotalAmount: tx.Amount + tx.Fee})
+			ret = append(ret, TinyTx{ID: id, Nonce: nonce, TotalAmount: tx.Amount + tx.Fee})
 		}
 	}
 	sort.Slice(ret, func(i, j int) bool {

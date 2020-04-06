@@ -40,9 +40,9 @@ type atxChan struct {
 	listeners int
 }
 
-// ActivationDb hold the atxs received from all nodes and their validity status
+// DB hold the atxs received from all nodes and their validity status
 // it also stores identifications for all nodes e.g the coupling between ed id and bls id
-type ActivationDb struct {
+type DB struct {
 	sync.RWMutex
 	// todo: think about whether we need one db or several(#1922)
 	idStore
@@ -59,12 +59,12 @@ type ActivationDb struct {
 	atxChannels       map[types.ATXID]*atxChan
 }
 
-// NewActivationDb creates a new struct of type ActivationDb, this struct will hold the atxs received from all nodes and
+// NewDB creates a new struct of type DB, this struct will hold the atxs received from all nodes and
 // their validity
-func NewActivationDb(dbstore database.Database, idstore idStore, meshDb *mesh.DB, layersPerEpoch uint16, nipstValidator nipstValidator, log log.Log) *ActivationDb {
-	db := &ActivationDb{
-		idStore:          idstore,
-		atxs:             dbstore,
+func NewDB(dbStore database.Database, idStore idStore, meshDb *mesh.DB, layersPerEpoch uint16, nipstValidator nipstValidator, log log.Log) *DB {
+	db := &DB{
+		idStore:          idStore,
+		atxs:             dbStore,
 		atxHeaderCache:   NewAtxCache(600),
 		meshDb:           meshDb,
 		LayersPerEpoch:   layersPerEpoch,
@@ -84,7 +84,7 @@ func init() {
 }
 
 // AwaitAtx returns a channel that will receive notification when the specified atx with id id is received via gossip
-func (db *ActivationDb) AwaitAtx(id types.ATXID) chan struct{} {
+func (db *DB) AwaitAtx(id types.ATXID) chan struct{} {
 	db.Lock()
 	defer db.Unlock()
 
@@ -105,7 +105,7 @@ func (db *ActivationDb) AwaitAtx(id types.ATXID) chan struct{} {
 }
 
 // UnsubscribeAtx un subscribes the waiting for a specific atx with atx id id to arrive via gossip.
-func (db *ActivationDb) UnsubscribeAtx(id types.ATXID) {
+func (db *DB) UnsubscribeAtx(id types.ATXID) {
 	db.Lock()
 	defer db.Unlock()
 
@@ -120,7 +120,7 @@ func (db *ActivationDb) UnsubscribeAtx(id types.ATXID) {
 }
 
 // ProcessAtxs processes the list of given atxs using ProcessAtx method
-func (db *ActivationDb) ProcessAtxs(atxs []*types.ActivationTx) error {
+func (db *DB) ProcessAtxs(atxs []*types.ActivationTx) error {
 	seenMinerIds := map[string]struct{}{}
 	for _, atx := range atxs {
 		minerID := atx.NodeID.Key
@@ -143,12 +143,12 @@ func (db *ActivationDb) ProcessAtxs(atxs []*types.ActivationTx) error {
 // validation rules it then stores the atx with flag set to validity of the atx.
 //
 // ATXs received as input must be already syntactically valid. Only contextual validation is performed.
-func (db *ActivationDb) ProcessAtx(atx *types.ActivationTx) error {
+func (db *DB) ProcessAtx(atx *types.ActivationTx) error {
 	db.processAtxMutex.Lock()
 	defer db.processAtxMutex.Unlock()
 
-	eatx, _ := db.GetAtxHeader(atx.ID())
-	if eatx != nil { // Already processed
+	existingATX, _ := db.GetAtxHeader(atx.ID())
+	if existingATX != nil { // Already processed
 		return nil
 	}
 	epoch := atx.PubLayerID.GetEpoch(db.LayersPerEpoch)
@@ -173,7 +173,7 @@ func (db *ActivationDb) ProcessAtx(atx *types.ActivationTx) error {
 	return nil
 }
 
-func (db *ActivationDb) createTraversalActiveSetCounterFunc(countedAtxs map[string]types.ATXID, penalties map[string]struct{}, layersPerEpoch uint16, epoch types.EpochID) func(b *types.Block) (bool, error) {
+func (db *DB) createTraversalActiveSetCounterFunc(countedAtxs map[string]types.ATXID, penalties map[string]struct{}, layersPerEpoch uint16, epoch types.EpochID) func(b *types.Block) (bool, error) {
 
 	traversalFunc := func(b *types.Block) (stop bool, err error) {
 
@@ -228,7 +228,7 @@ func (db *ActivationDb) createTraversalActiveSetCounterFunc(countedAtxs map[stri
 }
 
 // CalcActiveSetSize - returns the active set size that matches the view of the contextually valid blocks in the provided layer
-func (db *ActivationDb) CalcActiveSetSize(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
+func (db *DB) CalcActiveSetSize(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
 
 	if epoch == 0 {
 		return nil, errors.New("tried to retrieve active set for epoch 0")
@@ -259,7 +259,7 @@ func (db *ActivationDb) CalcActiveSetSize(epoch types.EpochID, blocks map[types.
 // CalcActiveSetFromView traverses the view found in a - the activation tx and counts number of active ids published
 // in the epoch prior to the epoch that a was published at, this number is the number of active ids in the next epoch
 // the function returns error if the view is not found
-func (db *ActivationDb) CalcActiveSetFromView(view []types.BlockID, pubEpoch types.EpochID) (uint32, error) {
+func (db *DB) CalcActiveSetFromView(view []types.BlockID, pubEpoch types.EpochID) (uint32, error) {
 	if pubEpoch < 1 {
 		return 0, fmt.Errorf("publication epoch cannot be less than 1, found %v", pubEpoch)
 	}
@@ -308,7 +308,7 @@ func (db *ActivationDb) CalcActiveSetFromView(view []types.BlockID, pubEpoch typ
 
 }
 
-func (db *ActivationDb) deleteLock(viewHash types.Hash12) {
+func (db *DB) deleteLock(viewHash types.Hash12) {
 	db.assLock.Lock()
 	if _, exist := db.pendingActiveSet[viewHash]; exist {
 		delete(db.pendingActiveSet, viewHash)
@@ -327,7 +327,7 @@ func (db *ActivationDb) deleteLock(viewHash types.Hash12) {
 // - The NIPST is valid.
 // - ATX LayerID is NipstLayerTime or less after the PositioningATX LayerID.
 // - The ATX view of the previous epoch contains ActiveSetSize activations.
-func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
+func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 	events.Publish(events.NewAtx{ID: atx.ShortString(), LayerID: uint64(atx.PubLayerID.GetEpoch(db.LayersPerEpoch))})
 	pub, err := ExtractPublicKey(atx)
 	if err != nil {
@@ -433,7 +433,7 @@ func (db *ActivationDb) SyntacticallyValidateAtx(atx *types.ActivationTx) error 
 
 // ContextuallyValidateAtx ensures that the previous ATX referenced is the last known ATX for the referenced miner ID.
 // If a previous ATX is not referenced, it validates that indeed there's no previous known ATX for that miner ID.
-func (db *ActivationDb) ContextuallyValidateAtx(atx *types.ActivationTxHeader) error {
+func (db *DB) ContextuallyValidateAtx(atx *types.ActivationTxHeader) error {
 	if atx.PrevATXID != *types.EmptyATXID {
 		lastAtx, err := db.GetNodeLastAtxID(atx.NodeID)
 		if err != nil {
@@ -460,10 +460,10 @@ func (db *ActivationDb) ContextuallyValidateAtx(atx *types.ActivationTxHeader) e
 	return nil
 }
 
-// StoreAtx stores an atx for epoh ech, it stores atx for the current epoch and adds the atx for the nodeid
-// that created it in a sorted manner by the sequence id. this function does not validate the atx and assumes all data is correct
-// and that all associated atx exist in the db. will return error if writing to db failed
-func (db *ActivationDb) StoreAtx(ech types.EpochID, atx *types.ActivationTx) error {
+// StoreAtx stores an atx for epoch ech, it stores atx for the current epoch and adds the atx for the nodeID that
+// created it in a sorted manner by the sequence id. This function does not validate the atx and assumes all data is
+// correct and that all associated atx exist in the db. Will return error if writing to db failed.
+func (db *DB) StoreAtx(ech types.EpochID, atx *types.ActivationTx) error {
 	db.Lock()
 	defer db.Unlock()
 
@@ -492,7 +492,7 @@ func (db *ActivationDb) StoreAtx(ech types.EpochID, atx *types.ActivationTx) err
 	return nil
 }
 
-func (db *ActivationDb) storeAtxUnlocked(atx *types.ActivationTx) error {
+func (db *DB) storeAtxUnlocked(atx *types.ActivationTx) error {
 	atxHeaderBytes, err := types.InterfaceToBytes(atx.ActivationTxHeader)
 	if err != nil {
 		return err
@@ -539,7 +539,7 @@ type atxIDAndLayer struct {
 
 // updateTopAtxIfNeeded replaces the top ATX (positioning ATX candidate) if the latest ATX has a higher layer ID.
 // This function is not thread safe and needs to be called under a global lock.
-func (db *ActivationDb) updateTopAtxIfNeeded(atx *types.ActivationTx) error {
+func (db *DB) updateTopAtxIfNeeded(atx *types.ActivationTx) error {
 	currentTopAtx, err := db.getTopAtx()
 	if err != nil && err != database.ErrNotFound {
 		return fmt.Errorf("failed to get current ATX: %v", err)
@@ -564,7 +564,7 @@ func (db *ActivationDb) updateTopAtxIfNeeded(atx *types.ActivationTx) error {
 	return nil
 }
 
-func (db *ActivationDb) getTopAtx() (atxIDAndLayer, error) {
+func (db *DB) getTopAtx() (atxIDAndLayer, error) {
 	topAtxBytes, err := db.atxs.Get([]byte(topAtxKey))
 	if err != nil {
 		return atxIDAndLayer{}, err
@@ -578,7 +578,7 @@ func (db *ActivationDb) getTopAtx() (atxIDAndLayer, error) {
 }
 
 // addAtxToNodeID inserts activation atx id by node
-func (db *ActivationDb) addAtxToNodeID(nodeID types.NodeID, atx *types.ActivationTx) error {
+func (db *DB) addAtxToNodeID(nodeID types.NodeID, atx *types.ActivationTx) error {
 	err := db.atxs.Put(getNodeAtxKey(nodeID, atx.TargetEpoch(db.LayersPerEpoch)), atx.ID().Bytes())
 	if err != nil {
 		return fmt.Errorf("failed to store ATX ID for node: %v", err)
@@ -590,7 +590,7 @@ func (db *ActivationDb) addAtxToNodeID(nodeID types.NodeID, atx *types.Activatio
 type ErrAtxNotFound error
 
 // GetNodeLastAtxID returns the last atx id that was received for node nodeID
-func (db *ActivationDb) GetNodeLastAtxID(nodeID types.NodeID) (types.ATXID, error) {
+func (db *DB) GetNodeLastAtxID(nodeID types.NodeID) (types.ATXID, error) {
 	nodeAtxsIterator := db.atxs.Find(getNodeAtxPrefix(nodeID))
 	// ATX syntactic validation ensures that each ATX is at least one epoch after a referenced previous ATX.
 	// Contextual validation ensures that the previous ATX referenced matches what this method returns, so the next ATX
@@ -607,7 +607,7 @@ func (db *ActivationDb) GetNodeLastAtxID(nodeID types.NodeID) (types.ATXID, erro
 
 // GetNodeAtxIDForEpoch returns an atx published by the provided nodeID for the specified targetEpoch. meaning the atx
 // that the requested nodeID has published. it returns an error if no atx was found for provided nodeID
-func (db *ActivationDb) GetNodeAtxIDForEpoch(nodeID types.NodeID, targetEpoch types.EpochID) (types.ATXID, error) {
+func (db *DB) GetNodeAtxIDForEpoch(nodeID types.NodeID, targetEpoch types.EpochID) (types.ATXID, error) {
 	id, err := db.atxs.Get(getNodeAtxKey(nodeID, targetEpoch))
 	if err != nil {
 		return *types.EmptyATXID, fmt.Errorf("atx for node %v targeting epoch %v: %v",
@@ -617,7 +617,7 @@ func (db *ActivationDb) GetNodeAtxIDForEpoch(nodeID types.NodeID, targetEpoch ty
 }
 
 // GetPosAtxID returns the best (highest layer id), currently known to this node, pos atx id
-func (db *ActivationDb) GetPosAtxID() (types.ATXID, error) {
+func (db *DB) GetPosAtxID() (types.ATXID, error) {
 	idAndLayer, err := db.getTopAtx()
 	if err != nil {
 		return *types.EmptyATXID, err
@@ -627,7 +627,7 @@ func (db *ActivationDb) GetPosAtxID() (types.ATXID, error) {
 
 // GetAtxHeader returns the ATX header by the given ID. This function is thread safe and will return an error if the ID
 // is not found in the ATX DB.
-func (db *ActivationDb) GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error) {
+func (db *DB) GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error) {
 	if id == *types.EmptyATXID {
 		return nil, errors.New("trying to fetch empty atx id")
 	}
@@ -653,7 +653,7 @@ func (db *ActivationDb) GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader,
 
 // GetFullAtx returns the full atx struct of the given atxId id, it returns an error if the full atx cannot be found
 // in all databases
-func (db *ActivationDb) GetFullAtx(id types.ATXID) (*types.ActivationTx, error) {
+func (db *DB) GetFullAtx(id types.ATXID) (*types.ActivationTx, error) {
 	if id == *types.EmptyATXID {
 		return nil, errors.New("trying to fetch empty atx id")
 	}
@@ -678,7 +678,7 @@ func (db *ActivationDb) GetFullAtx(id types.ATXID) (*types.ActivationTx, error) 
 
 // ValidateSignedAtx extracts public key from message and verifies public key exists in idStore, this is how we validate
 // ATX signature. If this is the first ATX it is considered valid anyways and ATX syntactic validation will determine ATX validity
-func (db *ActivationDb) ValidateSignedAtx(pubKey signing.PublicKey, signedAtx *types.ActivationTx) error {
+func (db *DB) ValidateSignedAtx(pubKey signing.PublicKey, signedAtx *types.ActivationTx) error {
 	// this is the first occurrence of this identity, we cannot validate simply by extracting public key
 	// pass it down to Atx handling so that atx can be syntactically verified and identity could be registered.
 	if signedAtx.PrevATXID == *types.EmptyATXID {

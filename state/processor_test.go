@@ -49,7 +49,7 @@ func (s *ProcessorStateSuite) SetupTest() {
 	s.processor = NewTransactionProcessor(s.db, appliedTxsMock{}, s.projector, lg)
 }
 
-func createAccount(state *TransactionProcessor, addr types.Address, balance int64, nonce uint64) *StateObj {
+func createAccount(state *TransactionProcessor, addr types.Address, balance int64, nonce uint64) *Object {
 	obj1 := state.GetOrNewStateObj(addr)
 	obj1.AddBalance(big.NewInt(balance))
 	obj1.SetNonce(nonce)
@@ -79,7 +79,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction() {
 	obj1 := createAccount(s.processor, SignerToAddr(signer), 21, 0)
 	obj2 := createAccount(s.processor, toAddr([]byte{0x01, 02}), 1, 10)
 	createAccount(s.processor, toAddr([]byte{0x02}), 44, 0)
-	s.processor.Commit(false)
+	s.processor.Commit()
 
 	transactions := []*types.Transaction{
 		createTransaction(s.T(), obj1.Nonce(), obj2.address, 1, 5, signer),
@@ -173,7 +173,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_Errors()
 	obj1 := createAccount(s.processor, SignerToAddr(signer1), 21, 0)
 	obj2 := createAccount(s.processor, toAddr([]byte{0x01, 02}), 1, 10)
 	createAccount(s.processor, toAddr([]byte{0x02}), 44, 0)
-	s.processor.Commit(false)
+	s.processor.Commit()
 
 	transactions := []*types.Transaction{
 		createTransaction(s.T(), obj1.Nonce(), obj2.address, 1, 5, signer1),
@@ -224,7 +224,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_OrderByN
 	obj1 := createAccount(s.processor, SignerToAddr(signer), 25, 0)
 	obj2 := createAccount(s.processor, toAddr([]byte{0x01, 02}), 1, 10)
 	obj3 := createAccount(s.processor, toAddr([]byte{0x02}), 44, 0)
-	s.processor.Commit(false)
+	s.processor.Commit()
 
 	transactions := []*types.Transaction{
 		createTransaction(s.T(), obj1.Nonce()+3, obj3.address, 1, 5, signer),
@@ -287,7 +287,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Reset() {
 	obj1 := createAccount(processor, SignerToAddr(signer1), 21, 0)
 	obj2 := createAccount(processor, SignerToAddr(signer2), 41, 10)
 	createAccount(processor, toAddr([]byte{0x02}), 44, 0)
-	processor.Commit(false)
+	processor.Commit()
 
 	transactions := []*types.Transaction{
 		createTransaction(s.T(), obj1.Nonce(), obj2.address, 1, 5, signer1),
@@ -378,13 +378,13 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 		signing.NewEdSigner(),
 		signing.NewEdSigner(),
 	}
-	accounts := []*StateObj{
+	accounts := []*Object{
 		createAccount(processor, toAddr(signers[0].PublicKey().Bytes()), 5218762487624, 0),
 		createAccount(processor, toAddr(signers[1].PublicKey().Bytes()), 341578872634786, 10),
 		createAccount(processor, toAddr(signers[2].PublicKey().Bytes()), 1044987234, 0),
 	}
 
-	processor.Commit(false)
+	processor.Commit()
 
 	written := db.Len()
 
@@ -392,7 +392,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 	for i := 0; i < testCycles; i++ {
 		numOfTransactions := rand.Intn(maxTransactions-minTransactions) + minTransactions
 		trns := []*types.Transaction{}
-		nonceTrack := make(map[*StateObj]int)
+		nonceTrack := make(map[*Object]int)
 		for j := 0; j < numOfTransactions; j++ {
 
 			src := int(rand.Uint32() % (uint32(len(accounts) - 1)))
@@ -549,7 +549,7 @@ func TestTransactionProcessor_ApplyTransactions(t *testing.T) {
 	obj1 := createAccount(processor, SignerToAddr(signer), 21, 0)
 	obj2 := createAccount(processor, toAddr([]byte{0x01, 02}), 1, 10)
 	createAccount(processor, toAddr([]byte{0x02}), 44, 0)
-	processor.Commit(false)
+	processor.Commit()
 
 	transactions := []*types.Transaction{
 		createTransaction(t, obj1.Nonce(), obj2.address, 1, 5, signer),

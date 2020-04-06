@@ -51,7 +51,7 @@ const (
 )
 
 // procReport is the termination report of the CP.
-// It consistes of the layer id, the set we agreed on (if available) and a flag to indicate if the CP completed.
+// It consists of the layer id, the set we agreed on (if available) and a flag to indicate if the CP completed.
 type procReport struct {
 	id        instanceID
 	set       *Set
@@ -70,7 +70,7 @@ func (cpo procReport) Completed() bool {
 	return cpo.completed
 }
 
-func (proc *ConsensusProcess) report(completed bool) {
+func (proc *consensusProcess) report(completed bool) {
 	proc.terminationReport <- procReport{proc.instanceID, proc.s, completed}
 }
 
@@ -117,7 +117,7 @@ func (m *Msg) Bytes() []byte {
 // Upon receiving a protocol's message, we try to build the full message.
 // The full message consists of the original message and the extracted public key.
 // An extracted public key is considered valid if it represents an active identity for a consensus view.
-func newMsg(hareMsg *Message, querier StateQuerier, layersPerEpoch uint16) (*Msg, error) {
+func newMsg(hareMsg *Message, querier StateQuerier) (*Msg, error) {
 	// extract pub key
 	pubKey, err := ed25519.ExtractPublicKey(hareMsg.InnerMsg.Bytes(), hareMsg.Sig)
 	if err != nil {
@@ -143,11 +143,11 @@ func newMsg(hareMsg *Message, querier StateQuerier, layersPerEpoch uint16) (*Msg
 	return &Msg{hareMsg, pub}, nil
 }
 
-// ConsensusProcess is an entity (a single participant) in the Hare protocol.
+// consensusProcess is an entity (a single participant) in the Hare protocol.
 // Once started, the CP iterates through the rounds until consensus is reached or the instance is cancelled.
 // The output is then written to the provided TerminationReport channel.
 // If the consensus process is canceled one should not expect the output to be written to the output channel.
-type ConsensusProcess struct {
+type consensusProcess struct {
 	log.Log
 	State
 	Closer
@@ -172,12 +172,12 @@ type ConsensusProcess struct {
 	terminating       bool
 }
 
-// NewConsensusProcess creates a new consensus process instance.
-func NewConsensusProcess(cfg config.Config, instanceID instanceID, s *Set, oracle Rolacle, stateQuerier StateQuerier,
+// newConsensusProcess creates a new consensus process instance.
+func newConsensusProcess(cfg config.Config, instanceID instanceID, s *Set, oracle Rolacle, stateQuerier StateQuerier,
 	layersPerEpoch uint16, signing Signer, nid types.NodeID, p2p NetworkService,
-	terminationReport chan TerminationOutput, ev roleValidator, logger log.Log) *ConsensusProcess {
+	terminationReport chan TerminationOutput, ev roleValidator, logger log.Log) *consensusProcess {
 	msgsTracker := newMsgsTracker()
-	proc := &ConsensusProcess{
+	proc := &consensusProcess{
 		State:             State{-1, -1, s.Clone(), nil},
 		Closer:            NewCloser(),
 		instanceID:        instanceID,
@@ -207,19 +207,19 @@ func iterationFromCounter(roundCounter int32) int32 {
 // It starts the PreRound round and then iterates through the rounds until consensus is reached or the instance is cancelled.
 // It is assumed that the inbox is set before the call to Start.
 // It returns an error if Start has been called more than once, the set size is zero (no values) or the inbox is nil.
-func (proc *ConsensusProcess) Start() error {
+func (proc *consensusProcess) Start() error {
 	if proc.isStarted { // called twice on same instance
-		proc.Error("ConsensusProcess has already been started")
+		proc.Error("consensusProcess has already been started")
 		return startInstanceError(errors.New("instance already started"))
 	}
 
 	if proc.s.Size() == 0 { // empty set is not valid
-		proc.Error("ConsensusProcess cannot be started with an empty set")
+		proc.Error("consensusProcess cannot be started with an empty set")
 		return startInstanceError(errors.New("instance started with an empty set"))
 	}
 
 	if proc.inbox == nil { // no inbox
-		proc.Error("ConsensusProcess cannot be started with nil inbox")
+		proc.Error("consensusProcess cannot be started with nil inbox")
 		return startInstanceError(errors.New("instance started with nil inbox"))
 	}
 
@@ -231,14 +231,14 @@ func (proc *ConsensusProcess) Start() error {
 }
 
 // ID returns the instance id.
-func (proc *ConsensusProcess) ID() instanceID {
+func (proc *consensusProcess) ID() instanceID {
 	return proc.instanceID
 }
 
 // SetInbox sets the inbox channel for incoming messages.
-func (proc *ConsensusProcess) SetInbox(inbox chan *Msg) {
+func (proc *consensusProcess) SetInbox(inbox chan *Msg) {
 	if inbox == nil {
-		proc.Error("ConsensusProcess tried to SetInbox with nil")
+		proc.Error("consensusProcess tried to SetInbox with nil")
 		return
 	}
 
@@ -246,7 +246,7 @@ func (proc *ConsensusProcess) SetInbox(inbox chan *Msg) {
 }
 
 // runs the main loop of the protocol
-func (proc *ConsensusProcess) eventLoop() {
+func (proc *consensusProcess) eventLoop() {
 	proc.With().Info("Consensus Process Started",
 		log.Int("Hare-N", proc.cfg.N), log.Int("f", proc.cfg.F), log.String("duration", (time.Duration(proc.cfg.RoundDuration)*time.Second).String()),
 		log.LayerID(uint64(proc.instanceID)), log.Int("exp_leaders", proc.cfg.ExpectedLeaders), log.String("current_set", proc.s.String()), log.Int("set_size", proc.s.Size()))
@@ -322,7 +322,7 @@ PreRound:
 }
 
 // handles a message that has arrived early
-func (proc *ConsensusProcess) onEarlyMessage(m *Msg) {
+func (proc *consensusProcess) onEarlyMessage(m *Msg) {
 	if m == nil {
 		proc.Error("onEarlyMessage called with nil")
 		return
@@ -348,7 +348,7 @@ func (proc *ConsensusProcess) onEarlyMessage(m *Msg) {
 }
 
 // the very first step of handling a message
-func (proc *ConsensusProcess) handleMessage(m *Msg) {
+func (proc *consensusProcess) handleMessage(m *Msg) {
 	// Note: instanceID is already verified by the broker
 
 	proc.With().Debug("Received message", log.String("msg_type", m.InnerMsg.Type.String()))
@@ -356,7 +356,7 @@ func (proc *ConsensusProcess) handleMessage(m *Msg) {
 	// validate context
 	err := proc.validator.ContextuallyValidateMessage(m, proc.k)
 	if err != nil {
-		mType := messageType(m.InnerMsg.Type).String()
+		mType := m.InnerMsg.Type.String()
 
 		// early message, keep for later
 		if err == errEarlyMsg {
@@ -396,10 +396,10 @@ func (proc *ConsensusProcess) handleMessage(m *Msg) {
 }
 
 // process the message by its type
-func (proc *ConsensusProcess) processMsg(m *Msg) {
+func (proc *consensusProcess) processMsg(m *Msg) {
 	proc.Debug("Processing message of type %v", m.InnerMsg.Type.String())
 	// TODO: fix metrics
-	//metrics.MessageTypeCounter.With("type_id", m.InnerMsg.Type.String(), "layer", strconv.FormatUint(uint64(m.InnerMsg.InstanceID), 10), "reporter", "processMsg").Add(1)
+	// metrics.MessageTypeCounter.With("type_id", m.InnerMsg.Type.String(), "layer", strconv.FormatUint(uint64(m.InnerMsg.InstanceID), 10), "reporter", "processMsg").Add(1)
 
 	switch m.InnerMsg.Type {
 	case pre:
@@ -419,7 +419,7 @@ func (proc *ConsensusProcess) processMsg(m *Msg) {
 
 // sends a message to the network.
 // Returns true if the message is assumed to be sent, false otherwise.
-func (proc *ConsensusProcess) sendMessage(msg *Msg) bool {
+func (proc *consensusProcess) sendMessage(msg *Msg) bool {
 	// invalid msg
 	if msg == nil {
 		proc.Error("sendMessage was called with nil")
@@ -439,7 +439,7 @@ func (proc *ConsensusProcess) sendMessage(msg *Msg) bool {
 }
 
 // logic of the end of a round by the round type
-func (proc *ConsensusProcess) onRoundEnd() {
+func (proc *consensusProcess) onRoundEnd() {
 	proc.With().Debug("End of round", log.Int32("K", proc.k), log.Uint64("layer_id", uint64(proc.instanceID)))
 
 	// reset trackers
@@ -462,7 +462,7 @@ func (proc *ConsensusProcess) onRoundEnd() {
 }
 
 // advances the state to the next round
-func (proc *ConsensusProcess) advanceToNextRound() {
+func (proc *consensusProcess) advanceToNextRound() {
 	proc.k++
 	if proc.k >= 4 && proc.k%4 == 0 {
 		proc.Event().Warning("Starting new iteration", log.Int32("round_counter", proc.k),
@@ -470,7 +470,7 @@ func (proc *ConsensusProcess) advanceToNextRound() {
 	}
 }
 
-func (proc *ConsensusProcess) beginStatusRound() {
+func (proc *consensusProcess) beginStatusRound() {
 	proc.statusesTracker = newStatusTracker(proc.cfg.F+1, proc.cfg.N)
 	proc.statusesTracker.Log = proc.Log
 
@@ -488,7 +488,7 @@ func (proc *ConsensusProcess) beginStatusRound() {
 	proc.sendMessage(statusMsg)
 }
 
-func (proc *ConsensusProcess) beginProposalRound() {
+func (proc *consensusProcess) beginProposalRound() {
 	proc.proposalTracker = newProposalTracker(proc.Log)
 
 	// done with building proposal, reset statuses tracking
@@ -510,7 +510,7 @@ func (proc *ConsensusProcess) beginProposalRound() {
 	}
 }
 
-func (proc *ConsensusProcess) beginCommitRound() {
+func (proc *consensusProcess) beginCommitRound() {
 	proposedSet := proc.proposalTracker.ProposedSet()
 
 	// proposedSet may be nil, in such case the tracker will ignore Messages
@@ -534,7 +534,7 @@ func (proc *ConsensusProcess) beginCommitRound() {
 	}
 }
 
-func (proc *ConsensusProcess) beginNotifyRound() {
+func (proc *consensusProcess) beginNotifyRound() {
 	// release proposal & commit trackers
 	defer func() {
 		proc.commitTracker = nil
@@ -593,7 +593,7 @@ func (proc *ConsensusProcess) beginNotifyRound() {
 }
 
 // passes all pending messages to the inbox of the process so they will be handled
-func (proc *ConsensusProcess) handlePending(pending map[string]*Msg) {
+func (proc *consensusProcess) handlePending(pending map[string]*Msg) {
 	for _, m := range pending {
 		proc.inbox <- m
 	}
@@ -601,7 +601,7 @@ func (proc *ConsensusProcess) handlePending(pending map[string]*Msg) {
 
 // runs the logic of the beginning of a round by its type
 // pending messages are passed for handling
-func (proc *ConsensusProcess) onRoundBegin() {
+func (proc *consensusProcess) onRoundBegin() {
 	// reset trackers
 	switch proc.currentRound() {
 	case statusRound:
@@ -626,7 +626,7 @@ func (proc *ConsensusProcess) onRoundBegin() {
 }
 
 // init a new message builder with the current state (s, k, ki) for this instance
-func (proc *ConsensusProcess) initDefaultBuilder(s *Set) (*messageBuilder, error) {
+func (proc *consensusProcess) initDefaultBuilder(s *Set) (*messageBuilder, error) {
 	builder := newMessageBuilder().SetInstanceID(proc.instanceID)
 	builder = builder.SetRoundCounter(proc.k).SetKi(proc.ki).SetValues(s)
 	proof, err := proc.oracle.Proof(types.LayerID(proc.instanceID), proc.k)
@@ -639,16 +639,16 @@ func (proc *ConsensusProcess) initDefaultBuilder(s *Set) (*messageBuilder, error
 	return builder, nil
 }
 
-func (proc *ConsensusProcess) processPreRoundMsg(msg *Msg) {
+func (proc *consensusProcess) processPreRoundMsg(msg *Msg) {
 	proc.preRoundTracker.OnPreRound(msg)
 }
 
-func (proc *ConsensusProcess) processStatusMsg(msg *Msg) {
+func (proc *consensusProcess) processStatusMsg(msg *Msg) {
 	// record status
 	proc.statusesTracker.RecordStatus(msg)
 }
 
-func (proc *ConsensusProcess) processProposalMsg(msg *Msg) {
+func (proc *consensusProcess) processProposalMsg(msg *Msg) {
 	currRnd := proc.currentRound()
 
 	if currRnd == proposalRound { // regular proposal
@@ -660,12 +660,12 @@ func (proc *ConsensusProcess) processProposalMsg(msg *Msg) {
 	}
 }
 
-func (proc *ConsensusProcess) processCommitMsg(msg *Msg) {
+func (proc *consensusProcess) processCommitMsg(msg *Msg) {
 	proc.mTracker.Track(msg) // a commit msg passed for processing is assumed to be valid
 	proc.commitTracker.OnCommit(msg)
 }
 
-func (proc *ConsensusProcess) processNotifyMsg(msg *Msg) {
+func (proc *consensusProcess) processNotifyMsg(msg *Msg) {
 	s := NewSet(msg.InnerMsg.Values)
 
 	if ignored := proc.notifyTracker.OnNotify(msg); ignored {
@@ -675,7 +675,7 @@ func (proc *ConsensusProcess) processNotifyMsg(msg *Msg) {
 
 	if proc.currentRound() == notifyRound { // not necessary to update otherwise
 		// we assume that this expression was checked before
-		if int32(msg.InnerMsg.Cert.AggMsgs.Messages[0].InnerMsg.K) >= proc.ki { // update state iff K >= Ki
+		if msg.InnerMsg.Cert.AggMsgs.Messages[0].InnerMsg.K >= proc.ki { // update state iff K >= Ki
 			proc.s = s
 			proc.certificate = msg.InnerMsg.Cert
 			proc.ki = msg.InnerMsg.Ki
@@ -697,12 +697,12 @@ func (proc *ConsensusProcess) processNotifyMsg(msg *Msg) {
 	proc.terminating = true
 }
 
-func (proc *ConsensusProcess) currentRound() int {
+func (proc *consensusProcess) currentRound() int {
 	return int(proc.k % 4)
 }
 
 // returns a function to validate status messages
-func (proc *ConsensusProcess) statusValidator() func(m *Msg) bool {
+func (proc *consensusProcess) statusValidator() func(m *Msg) bool {
 	validate := func(m *Msg) bool {
 		s := NewSet(m.InnerMsg.Values)
 		if m.InnerMsg.Ki == -1 { // no certificates, validate by pre-round msgs
@@ -720,7 +720,7 @@ func (proc *ConsensusProcess) statusValidator() func(m *Msg) bool {
 	return validate
 }
 
-func (proc *ConsensusProcess) endOfStatusRound() {
+func (proc *consensusProcess) endOfStatusRound() {
 	// validate and track wrapper for validation func
 	valid := proc.statusValidator()
 	vtFunc := func(m *Msg) bool {
@@ -741,7 +741,7 @@ func (proc *ConsensusProcess) endOfStatusRound() {
 
 // checks if we should participate in the current round
 // returns true if we should participate, false otherwise
-func (proc *ConsensusProcess) shouldParticipate() bool {
+func (proc *consensusProcess) shouldParticipate() bool {
 	// query if identity is active
 	res, err := proc.oracle.IsIdentityActiveOnConsensusView(proc.signing.PublicKey().String(), types.LayerID(proc.instanceID))
 	if err != nil {
@@ -767,7 +767,7 @@ func (proc *ConsensusProcess) shouldParticipate() bool {
 }
 
 // Returns the role matching the current round if eligible for this round, false otherwise
-func (proc *ConsensusProcess) currentRole() role {
+func (proc *consensusProcess) currentRole() role {
 	proof, err := proc.oracle.Proof(types.LayerID(proc.instanceID), proc.k)
 	if err != nil {
 		proc.With().Error("Could not retrieve proof from oracle", log.Err(err))

@@ -22,8 +22,8 @@ type fullRolacle interface {
 
 type HareSuite struct {
 	termination Closer
-	procs       []*ConsensusProcess
-	dishonest   []*ConsensusProcess
+	procs       []*consensusProcess
+	dishonest   []*consensusProcess
 	initialSets []*Set // all initial sets
 	honestSets  []*Set // initial sets of honest
 	outputs     []*Set
@@ -122,7 +122,7 @@ func (test *ConsensusTest) Create(N int, create func()) {
 	}
 }
 
-func startProcs(procs []*ConsensusProcess) {
+func startProcs(procs []*consensusProcess) {
 	for _, proc := range procs {
 		proc.Start()
 	}
@@ -133,13 +133,13 @@ func (test *ConsensusTest) Start() {
 	go startProcs(test.dishonest)
 }
 
-func createConsensusProcess(isHonest bool, cfg config.Config, oracle fullRolacle, network NetworkService, initialSet *Set, layer instanceID, name string) *ConsensusProcess {
+func createConsensusProcess(isHonest bool, cfg config.Config, oracle fullRolacle, network NetworkService, initialSet *Set, layer instanceID, name string) *consensusProcess {
 	broker := buildBroker(network, name)
 	broker.Start()
 	output := make(chan TerminationOutput, 1)
 	signing := signing2.NewEdSigner()
 	oracle.Register(isHonest, signing.PublicKey().String())
-	proc := NewConsensusProcess(cfg, layer, initialSet, oracle, NewMockStateQuerier(), 10, signing, types.NodeID{Key: signing.PublicKey().String(), VRFPublicKey: []byte{}}, network, output, truer{}, log.NewDefault(signing.PublicKey().ShortString()))
+	proc := newConsensusProcess(cfg, layer, initialSet, oracle, NewMockStateQuerier(), 10, signing, types.NodeID{Key: signing.PublicKey().String(), VRFPublicKey: []byte{}}, network, output, truer{}, log.NewDefault(signing.PublicKey().ShortString()))
 	c, _ := broker.Register(proc.ID())
 	proc.SetInbox(c)
 

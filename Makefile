@@ -120,6 +120,16 @@ test: genproto
 .PHONY: test
 
 
+test-no-app-test: genproto
+	ulimit -n 9999; go test -timeout 0 -p 1 -tags exclude_app_test ./...
+.PHONY: test
+
+
+test-only-app-test: genproto
+	ulimit -n 9999; go test -timeout 0 -p 1 -v -tags !exclude_app_test ./cmd/node
+.PHONY: test
+
+
 test-tidy:
 	# Working directory must be clean, or this test would be destructive
 	git diff --quiet || (echo "\033[0;31mWorking directory not clean!\033[0m" && exit 1)
@@ -137,7 +147,8 @@ test-fmt:
 .PHONY: test-fmt
 
 lint:
-	./scripts/validate-lint.sh
+	golint --set_exit_status ./...
+	go vet ./...
 .PHONY: lint
 
 

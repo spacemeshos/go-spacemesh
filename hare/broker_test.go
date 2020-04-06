@@ -332,7 +332,7 @@ func Test_newMsg(t *testing.T) {
 	// TODO: remove this comment when ready
 	//_, e := newMsg(m, MockStateQuerier{false, errors.New("my err")})
 	//assert.NotNil(t, e)
-	_, e := newMsg(m, MockStateQuerier{true, nil}, 10)
+	_, e := newMsg(m, MockStateQuerier{true, nil})
 	assert.Nil(t, e)
 }
 

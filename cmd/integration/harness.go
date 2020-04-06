@@ -13,9 +13,9 @@ import (
 
 const execPathLabel = "executable-path"
 
-// TODO: this should be a util function
 // Contains tells whether a contains x.
 // if it does it returns it's index otherwise -1
+// TODO: this should be a util function
 func Contains(a []string, x string) int {
 	for ind, n := range a {
 		if strings.Contains(n, x) {
@@ -35,7 +35,7 @@ type Harness struct {
 	pb.SpacemeshServiceClient
 }
 
-func NewHarnessDefaultServerConfig(args []string) (*Harness, error) {
+func newHarnessDefaultServerConfig(args []string) (*Harness, error) {
 	// same as in suite's yaml file
 	// find executable path label in args
 	execPathInd := Contains(args, execPathLabel)
@@ -85,7 +85,7 @@ func main() {
 
 	dummyChan := make(chan string)
 	// os.Args[0] contains the current process path
-	h, err := NewHarnessDefaultServerConfig(os.Args[1:])
+	h, err := newHarnessDefaultServerConfig(os.Args[1:])
 	if err != nil {
 		log.With().Error("harness: an error has occurred while generating a new harness: ", log.Err(err))
 	}

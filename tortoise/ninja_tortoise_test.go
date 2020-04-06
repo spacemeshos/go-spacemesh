@@ -345,7 +345,7 @@ func createLayer2(index types.LayerID, view *types.Layer, votes []*types.Layer, 
 	}
 	layerBlocks := make([]types.BlockID, 0, blocksInLayer)
 	for i := 0; i < blocksInLayer; i++ {
-		bl := types.NewExistingBlock(index, []byte(rand.RandString(8)))
+		bl := types.NewExistingBlock(index, []byte(rand.String(8)))
 		layerBlocks = append(layerBlocks, bl.ID())
 		for idx, pat := range patterns {
 			for _, id := range pat {
@@ -613,10 +613,10 @@ func TestNinjaTortoise_LateBlocks(t *testing.T) {
 	alg := newNinjaTortoise(10, mdb, 1, lg)
 
 	l01 := types.NewLayer(0)
-	l01.AddBlock(types.NewExistingBlock(0, []byte(rand.RandString(8))))
+	l01.AddBlock(types.NewExistingBlock(0, []byte(rand.String(8))))
 
 	l02 := types.NewLayer(0)
-	l02.AddBlock(types.NewExistingBlock(0, []byte(rand.RandString(8))))
+	l02.AddBlock(types.NewExistingBlock(0, []byte(rand.String(8))))
 
 	AddLayer(mdb, l01)
 	AddLayer(mdb, l02)
@@ -675,7 +675,7 @@ func createLayer(index types.LayerID, prev []*types.Layer, blocksInLayer int) *t
 	}
 	layerBlocks := make([]types.BlockID, 0, blocksInLayer)
 	for i := 0; i < blocksInLayer; i++ {
-		bl := types.NewExistingBlock(index, []byte(rand.RandString(8)))
+		bl := types.NewExistingBlock(index, []byte(rand.String(8)))
 		layerBlocks = append(layerBlocks, bl.ID())
 		for idx, pat := range patterns {
 			for _, id := range pat {
@@ -915,13 +915,13 @@ func createLayerWithCorruptedPattern(index types.LayerID, prev *types.Layer, blo
 	gbs := int(float64(blocksInLayer) * (1 - badBlocks))
 	layerBlocks := make([]types.BlockID, 0, blocksInLayer)
 	for i := 0; i < gbs; i++ {
-		bl := addPattern(types.NewExistingBlock(index, []byte(rand.RandString(8))), goodPattern, prev)
+		bl := addPattern(types.NewExistingBlock(index, []byte(rand.String(8))), goodPattern, prev)
 		bl.Initialize()
 		layerBlocks = append(layerBlocks, bl.ID())
 		l.AddBlock(bl)
 	}
 	for i := 0; i < blocksInLayer-gbs; i++ {
-		bl := addPattern(types.NewExistingBlock(index, []byte(rand.RandString(8))), badPattern, prev)
+		bl := addPattern(types.NewExistingBlock(index, []byte(rand.String(8))), badPattern, prev)
 		bl.Initialize()
 		layerBlocks = append(layerBlocks, bl.ID())
 		l.AddBlock(bl)
@@ -952,7 +952,7 @@ func createLayerWithRandVoting(index types.LayerID, prev []*types.Layer, blocksI
 	}
 	layerBlocks := make([]types.BlockID, 0, blocksInLayer)
 	for i := 0; i < blocksInLayer; i++ {
-		bl := types.NewExistingBlock(index, []byte(rand.RandString(8)))
+		bl := types.NewExistingBlock(index, []byte(rand.String(8)))
 		layerBlocks = append(layerBlocks, bl.ID())
 		for idx, pat := range patterns {
 			for _, id := range pat {

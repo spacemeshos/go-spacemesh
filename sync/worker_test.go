@@ -19,7 +19,7 @@ func TestNewPeerWorker(t *testing.T) {
 	defer syncObj1.Close()
 	syncObj2 := syncs[1]
 	defer syncObj2.Close()
-	bl1 := types.NewExistingBlock(1, []byte(rand.RandString(8)))
+	bl1 := types.NewExistingBlock(1, []byte(rand.String(8)))
 	err := syncObj1.AddBlock(bl1)
 	assert.NoError(t, err)
 
