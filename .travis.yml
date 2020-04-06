@@ -31,22 +31,17 @@ branches:
 jobs:
   include:
   - stage: test
-    name: lint
-    install: true # this skips the installation step
-    script:
-      - GO111MODULE=off go get golang.org/x/lint/golint
-      - make lint
-    if: branch = staging OR branch = trying OR type = pull_request
-  - name: test
+    name: "unit tests"
     script:
       - make genproto
       - make test
     if: branch = staging OR branch = trying OR type = pull_request
-  - name: test-tidy-fmt
+  - name: "tidy, fmt, lint"
     script:
       - make genproto
       - make test-tidy
       - make test-fmt
+      - make lint
     if: branch = staging OR branch = trying OR type = pull_request
   - stage: docker-push
     name: "Push to dockerHub"
