@@ -31,10 +31,11 @@ branches:
 jobs:
   include:
   - stage: test
-    name: "unit tests"
-    script:
-      - make genproto
-      - make test
+    name: "Unit tests (except app test)"
+    script: make test-no-app-test
+    if: branch = staging OR branch = trying OR type = pull_request
+  - name: "App test"
+    script: make test-only-app-test
     if: branch = staging OR branch = trying OR type = pull_request
   - name: "tidy, fmt, lint"
     script:

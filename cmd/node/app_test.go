@@ -1,3 +1,5 @@
+// +build !exclude_app_test
+
 package node
 
 import (
