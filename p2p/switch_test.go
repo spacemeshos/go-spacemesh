@@ -385,12 +385,10 @@ func TestSwarm_MultipleMessagesFromMultipleSenders(t *testing.T) {
 			c, ok := pend[sender]
 			if !ok {
 				c <- errors.New("not found")
-				delete(pend, sender)
 				mu.Unlock()
 				return
 			}
 			close(c)
-			delete(pend, sender)
 			mu.Unlock()
 		}
 	}()
@@ -403,7 +401,9 @@ func TestSwarm_MultipleMessagesFromMultipleSenders(t *testing.T) {
 		_, err := p.cPool.GetConnection(p1.network.LocalAddr(), p1.lNode.PublicKey())
 		require.NoError(t, err)
 		mychan := make(chan error)
+		mu.Lock()
 		pend[p.lNode.PublicKey().String()] = mychan
+		mu.Unlock()
 		payload := []byte(RandString(10))
 		err = p.SendMessage(p1.lNode.PublicKey(), exampleProtocol, payload)
 		require.NoError(t, err)
@@ -445,13 +445,11 @@ func TestSwarm_MultipleMessagesFromMultipleSendersToMultipleProtocols(t *testing
 				mu.Lock()
 				c, ok := pend[sender]
 				if !ok {
-					c <- errors.New("not foudn")
+					c <- errors.New("not found")
 					close(c)
-					delete(pend, sender)
 					mu.Unlock()
 				}
 				close(c)
-				delete(pend, sender)
 				mu.Unlock()
 			}
 		}()
@@ -469,7 +467,6 @@ func TestSwarm_MultipleMessagesFromMultipleSendersToMultipleProtocols(t *testing
 		mu.Lock()
 		pend[p.lNode.PublicKey().String()] = mychan
 		mu.Unlock()
-
 		randProto := rand.Int31n(Protos)
 		if randProto == Protos {
 			randProto--
