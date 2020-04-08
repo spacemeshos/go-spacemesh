@@ -310,7 +310,7 @@ func TestBlockBuilder_Validation(t *testing.T) {
 
 	poetRef := []byte{0xba, 0x38}
 	coinbase := types.HexToAddress("aaaa")
-	atx := types.NewActivationTxForTests(types.NodeID{Key: "aaaa", VRFPublicKey: []byte("bbb")}, 1, types.ATXID(types.Hash32{1}), 5, 1, types.ATXID{}, coinbase, 5, []types.BlockID{block1.ID(), block2.ID(), block3.ID()}, activation.NewNIPSTWithChallenge(&types.Hash32{}, poetRef))
+	atx := newActivationTx(types.NodeID{Key: "aaaa", VRFPublicKey: []byte("bbb")}, 0, types.ATXID(types.Hash32{1}), 5, 1, types.ATXID{}, coinbase, 5, []types.BlockID{block1.ID(), block2.ID(), block3.ID()}, activation.NewNIPSTWithChallenge(&types.Hash32{}, poetRef))
 
 	atxBytes, err := types.InterfaceToBytes(&atx)
 	assert.NoError(t, err)
