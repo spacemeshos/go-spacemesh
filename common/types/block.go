@@ -149,6 +149,17 @@ func (b *Block) Bytes() []byte {
 	return blkBytes
 }
 
+// Fields returns an array of LoggableFields for logging
+func (b *Block) Fields() []log.LoggableField {
+	return []log.LoggableField{
+		log.BlockID(b.ID().String()),
+		log.LayerID(uint64(b.LayerIndex)),
+		log.Int("tx_count", len(b.TxIDs)),
+		log.Int("atx_count", len(b.ATXIDs)),
+		AtxIdsField(b.ATXIDs),
+	}
+}
+
 // ID returns the BlockID.
 func (b *Block) ID() BlockID {
 	return b.id

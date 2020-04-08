@@ -717,12 +717,7 @@ func (s *Syncer) dataAvailability(blk *types.Block) ([]*types.Transaction, []*ty
 		return nil, nil, fmt.Errorf("failed fetching block %v activation transactions %v", blk.ID(), atxerr)
 	}
 
-	s.With().Info("fetched all block data",
-		log.BlockID(blk.ID().String()),
-		log.LayerID(uint64(blk.LayerIndex)),
-		log.Int("tx_count", len(blk.TxIDs)),
-		log.Int("atx_count", len(blk.ATXIDs)),
-		types.AtxIdsField(blk.ATXIDs))
+	s.With().Info("fetched all block data", blk.Fields()...)
 	return txres, atxres, nil
 }
 

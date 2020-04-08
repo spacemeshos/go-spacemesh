@@ -560,7 +560,7 @@ func (msh *Mesh) SetZeroBlockLayer(lyr types.LayerID) error {
 // txs - block txs that we dont have in our tx database yet
 // atxs - block atxs that we dont have in our atx database yet
 func (msh *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.Transaction, atxs []*types.ActivationTx) error {
-	msh.With().Debug("adding block", log.BlockID(blk.ID().String()))
+	msh.With().Debug("adding block", blk.Fields()...)
 
 	// Store transactions (doesn't have to be rolled back if other writes fail)
 	if len(txs) > 0 {
@@ -596,7 +596,7 @@ func (msh *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.Transaction, atx
 	msh.invalidateFromPools(&blk.MiniBlock)
 
 	events.Publish(events.NewBlock{ID: blk.ID().String(), Atx: blk.ATXID.ShortString(), Layer: uint64(blk.LayerIndex)})
-	msh.With().Info("added block to database ", log.BlockID(blk.ID().String()), log.LayerID(uint64(blk.LayerIndex)))
+	msh.With().Info("added block to database", blk.Fields()...)
 	return nil
 }
 
