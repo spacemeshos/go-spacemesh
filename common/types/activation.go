@@ -203,6 +203,18 @@ func (atx *ActivationTx) Fields(layersPerEpoch uint16, size int) []log.LoggableF
 	}
 }
 
+// AtxIdsField returns a list of loggable fields for a given list of ATXIDs
+func AtxIdsField(ids []ATXID) log.Field {
+	str := ""
+	for i, a := range ids {
+		str += a.ShortString()
+		if i < len(ids)-1 {
+			str += ", "
+		}
+	}
+	return log.String("atx_ids", str)
+}
+
 // CalcAndSetID calculates and sets the cached ID field. This field must be set before calling the ID() method.
 func (atx *ActivationTx) CalcAndSetID() {
 	id := ATXID(CalcATXHash32(atx))

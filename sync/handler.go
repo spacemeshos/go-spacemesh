@@ -133,11 +133,7 @@ func newAtxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 			logger.Error("Unable to marshal request", err)
 			return nil
 		}
-		atxFields := make([]log.LoggableField, len(atxids))
-		for i, a := range atxids {
-			atxFields[i] = log.AtxID(a.ShortString())
-		}
-		logger.With().Info("handle atx request", atxFields...)
+		logger.With().Info("handle atx request", types.AtxIdsField(atxids))
 		atxs, unknownAtx := s.GetATXs(atxids)
 		for _, t := range unknownAtx {
 			if tx, err := s.atxpool.Get(t); err == nil {
