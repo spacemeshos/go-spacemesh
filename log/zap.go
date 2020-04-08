@@ -100,47 +100,47 @@ func Duration(name string, val time.Duration) Field {
 	return Field(zap.Duration(name, val))
 }
 
-// LayerID return a Uint64 field (key - "layer_id")
+// LayerID returns a Uint64 field (key - "layer_id")
 func LayerID(val uint64) Field {
 	return Uint64("layer_id", val)
 }
 
-// TxID return a String field (key - "tx_id")
+// TxID returns a String field (key - "tx_id")
 func TxID(val string) Field {
 	return String("tx_id", val)
 }
 
-// AtxID return a String field (key - "atx_id")
+// AtxID returns a String field (key - "atx_id")
 func AtxID(val string) Field {
 	return String("atx_id", val)
 }
 
-// BlockID return a Uint64 field (key - "block_id")
+// BlockID returns a Uint64 field (key - "block_id")
 func BlockID(val string) Field {
 	return String("block_id", val)
 }
 
-// EpochID return a Uint64 field (key - "epoch_id")
+// EpochID returns a Uint64 field (key - "epoch_id")
 func EpochID(val uint64) Field {
 	return Uint64("epoch_id", val)
 }
 
-// NodeID return a String field (key - "node_id")
+// NodeID returns a String field (key - "node_id")
 func NodeID(val string) Field {
 	return String("node_id", val)
 }
 
-// PeerID return a String field (key - "peer_id")
+// PeerID returns a String field (key - "peer_id")
 func PeerID(val string) Field {
 	return String("peer_id", val)
 }
 
-// MinerID return a String field (key - "miner_id")
+// MinerID returns a String field (key - "miner_id")
 func MinerID(val string) Field {
 	return String("miner_id", val)
 }
 
-// JobID return a String field (key - "job_id")
+// JobID returns a String field (key - "job_id")
 func JobID(val interface{}) Field {
 	return String("job_id", fmt.Sprintf("%v", val))
 }
