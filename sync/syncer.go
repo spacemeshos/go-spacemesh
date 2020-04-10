@@ -312,9 +312,9 @@ func (s *Syncer) synchronise() {
 	defer s.syncLock.Unlock()
 	curr := s.GetCurrentLayer()
 
-	//node is synced and blocks from current layer hav already been validated
+	//node is synced and blocks from current layer have already been validated
 	if curr == s.ProcessedLayer() {
-		s.Debug("node is synced ")
+		s.Debug("node is synced")
 		// fully-synced, make sure we listen to p2p
 		s.setGossipBufferingStatus(done)
 		return
@@ -330,7 +330,9 @@ func (s *Syncer) synchronise() {
 }
 
 func (s *Syncer) handleWeaklySynced() {
-	s.With().Info("Node is weakly synced ", s.LatestLayer(), s.GetCurrentLayer())
+	s.With().Info("Node is weakly synced",
+		s.LatestLayer().Field(),
+		s.GetCurrentLayer().Field())
 
 	// handle all layers from processed+1 to current -1
 	s.handleLayersTillCurrent()
@@ -522,7 +524,7 @@ func (s *Syncer) getLayerFromNeighbors(currentSyncLayer types.LayerID) (*types.L
 
 	blocksArr, err := s.syncLayer(currentSyncLayer, blockIds)
 	if len(blocksArr) == 0 || err != nil {
-		return nil, fmt.Errorf("could not get blocks for layer  %v %v", currentSyncLayer, err)
+		return nil, fmt.Errorf("could not get blocks for layer %v %v", currentSyncLayer, err)
 	}
 
 	return types.NewExistingLayer(types.LayerID(currentSyncLayer), blocksArr), nil
@@ -540,7 +542,7 @@ func (s *Syncer) syncLayer(layerID types.LayerID, blockIds []types.BlockID) ([]*
 	if res, err := s.blockQueue.addDependencies(layerID, blockIds, foo); err != nil {
 		return nil, fmt.Errorf("failed adding layer %v blocks to queue %v", layerID, err)
 	} else if res == false {
-		s.With().Info("no missing blocks for layer", log.LayerID(layerID.Uint64()))
+		s.With().Info("no missing blocks for layer", layerID.Field())
 		return s.LayerBlocks(layerID)
 	}
 
@@ -550,7 +552,7 @@ func (s *Syncer) syncLayer(layerID types.LayerID, blockIds []types.BlockID) ([]*
 		return nil, fmt.Errorf("recived interupt")
 	case result := <-ch:
 		if !result {
-			return nil, fmt.Errorf("could not get all blocks for layer  %v", layerID)
+			return nil, fmt.Errorf("could not get all blocks for layer %v", layerID)
 		}
 	}
 

@@ -36,7 +36,7 @@ type MockHare struct {
 func (m MockHare) GetResult(id types.LayerID) ([]types.BlockID, error) {
 	blks, ok := m.res[id]
 	if !ok {
-		return nil, fmt.Errorf("hare result for layer%v was not in map", id)
+		return nil, fmt.Errorf("hare result for layer %v was not in map", id)
 	}
 	return blks, nil
 }

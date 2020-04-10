@@ -93,7 +93,7 @@ loop:
 		servers = srv[:util.Min(numpeers, len(srv))]
 		res := r.requestAddresses(ctx, servers)
 		tries++
-		r.logger.Info("Bootstrap : %d try gave %v results", tries, len(res))
+		r.logger.Info("Bootstrap: try %d gave %v results", tries, len(res))
 
 		newsize := r.book.NumAddresses()
 		wanted := numpeers
