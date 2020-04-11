@@ -749,24 +749,26 @@ func (proc *consensusProcess) shouldParticipate() bool {
 	// query if identity is active
 	res, err := proc.oracle.IsIdentityActiveOnConsensusView(proc.signing.PublicKey().String(), types.LayerID(proc.instanceID))
 	if err != nil {
-		proc.With().Error("Should not participate: error checking our identity for activeness",
+		proc.With().Error("should not participate: error checking our identity for activeness",
 			log.Err(err), log.Uint64("layer_id", uint64(proc.instanceID)))
 		return false
 	}
 
 	if !res {
-		proc.With().Info("Should not participate: identity is not active",
+		proc.With().Info("should not participate: identity is not active",
 			log.Uint64("layer_id", uint64(proc.instanceID)))
 		return false
 	}
 
 	if role := proc.currentRole(); role == passive {
-		proc.With().Info("Should not participate: passive",
+		proc.With().Info("should not participate: passive",
 			log.Int32("round", proc.k), log.Uint64("layer_id", uint64(proc.instanceID)))
 		return false
 	}
 
 	// should participate
+	proc.With().Info("should participate",
+		log.Int32("round", proc.k), log.Uint64("layer_id", uint64(proc.instanceID)))
 	return true
 }
 
