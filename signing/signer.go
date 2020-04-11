@@ -22,7 +22,11 @@ func NewPublicKey(pub []byte) *PublicKey {
 
 // Bytes returns the public key as byte array
 func (p *PublicKey) Bytes() []byte {
-	return p.pub
+	// Prevent segfault if unset
+	if p != nil {
+		return p.pub
+	}
+	return []byte{}
 }
 
 // String returns the public key as an hex representation string
