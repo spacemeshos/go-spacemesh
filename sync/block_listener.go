@@ -91,18 +91,7 @@ func (bl *BlockListener) handleBlock(data service.GossipMessage) {
 	//set the block id when received
 	blk.Initialize()
 
-	bl.Log.With().Info("got new block",
-		blk.ID(),
-		blk.LayerIndex,
-		blk.LayerIndex.GetEpoch(bl.LayersPerEpoch),
-		log.String("sender_id", blk.MinerID().ShortString()),
-		log.Int("tx_count", len(blk.TxIDs)),
-		log.Int("atx_count", len(blk.ATXIDs)),
-		log.Int("view_edges", len(blk.ViewEdges)),
-		log.Int("vote_count", len(blk.BlockVotes)),
-		blk.ATXID,
-		log.Uint32("eligibility_counter", blk.EligibilityProof.J),
-	)
+	bl.Log.With().Info("got new block", blk.Fields()...)
 	//check if known
 	if _, err := bl.GetBlock(blk.ID()); err == nil {
 		bl.With().Info("we already know this block", log.BlockID(blk.ID().String()))

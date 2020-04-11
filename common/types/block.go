@@ -159,6 +159,10 @@ func (b *Block) Fields() []log.LoggableField {
 	return []log.LoggableField{
 		log.BlockID(b.ID().String()),
 		log.LayerID(uint64(b.LayerIndex)),
+		log.MinerID(b.MinerID().ShortString()),
+		log.Int("view_edges", len(b.ViewEdges)),
+		log.Int("vote_count", len(b.BlockVotes)),
+		log.Uint32("eligibility_counter", b.EligibilityProof.J),
 		log.Int("tx_count", len(b.TxIDs)),
 		log.Int("atx_count", len(b.ATXIDs)),
 		AtxIdsField(b.ATXIDs),
