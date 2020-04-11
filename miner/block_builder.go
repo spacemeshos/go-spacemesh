@@ -29,9 +29,6 @@ const defaultFee = 1
 // IncomingTxProtocol is the protocol identifier for tx received by gossip that is used by the p2p
 const IncomingTxProtocol = "TxGossip"
 
-// AtxsPerBlockLimit indicates the maximum number of atxs a block can reference
-const AtxsPerBlockLimit = 100
-
 type signer interface {
 	Sign(m []byte) []byte
 }
