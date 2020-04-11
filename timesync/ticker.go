@@ -113,7 +113,7 @@ func (t *Ticker) Notify() (int, error) {
 	// already ticked
 	if layer <= t.lastTickedLayer {
 		t.log.With().Warning("skipping tick to avoid double ticking the same layer (time was not monotonic)",
-			log.Uint64("current", uint64(layer)), log.Uint64("last_ticked_layer", uint64(t.lastTickedLayer)))
+			log.Uint64("current_layer", uint64(layer)), log.Uint64("last_ticked_layer", uint64(t.lastTickedLayer)))
 		t.m.Unlock()
 		return 0, errNotMonotonic
 	}
