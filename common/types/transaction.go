@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"strings"
 )
 
 // TransactionID is a 32-byte sha256 sum of the transaction, used as an identifier.
@@ -14,9 +15,9 @@ func (id TransactionID) Hash32() Hash32 {
 	return Hash32(id)
 }
 
-// ShortString returns a the first 5 characters of the ID, for logging purposes.
+// ShortString returns a the first 10 characters of the ID, for logging purposes.
 func (id TransactionID) ShortString() string {
-	return id.Hash32().ShortString()
+	return id.Hash32().MediumString()
 }
 
 // String returns a hexadecimal representation of the TransactionID with "0x" prepended, for logging purposes.
@@ -32,6 +33,15 @@ func (id TransactionID) Bytes() []byte {
 
 // Field returns a log field. Implements the LoggableField interface.
 func (id TransactionID) Field() log.Field { return id.Hash32().Field("tx_id") }
+
+// TxIdsField returns a list of loggable fields for a given list of IDs
+func TxIdsField(ids []TransactionID) log.Field {
+	strs := []string{}
+	for _, a := range ids {
+		strs = append(strs, a.ShortString())
+	}
+	return log.String("tx_ids", strings.Join(strs, ", "))
+}
 
 // EmptyTransactionID is a canonical empty TransactionID.
 var EmptyTransactionID = TransactionID{}
