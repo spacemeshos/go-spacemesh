@@ -644,7 +644,9 @@ func (s *Syncer) validateBlockView(blk *types.Block) bool {
 		s.Error(fmt.Sprintf("block %v not syntactically valid", blk.ID()), err)
 		return false
 	} else if res == false {
-		s.With().Info("block has no missing blocks in view", log.BlockID(blk.ID().String()), log.LayerID(uint64(blk.LayerIndex)))
+		s.With().Debug("no missing blocks in view",
+			log.BlockID(blk.ID().String()),
+			log.LayerID(uint64(blk.LayerIndex)))
 		return true
 	}
 
