@@ -343,7 +343,7 @@ func (s *Syncer) handleWeaklySynced() {
 
 	//validate current layer if more than s.ValidationDelta has passed
 	if err := s.handleCurrentLayer(); err != nil {
-		s.With().Error("Node is out of synce", log.Err(err))
+		s.With().Error("Node is out of sync", log.Err(err))
 		s.setGossipBufferingStatus(pending)
 		return
 	}
@@ -377,7 +377,7 @@ func (s *Syncer) handleLayersTillCurrent() {
 	return
 }
 
-//handle the current consensus layer if its is older than s.Validation Delta
+//handle the current consensus layer if its is older than s.ValidationDelta
 func (s *Syncer) handleCurrentLayer() error {
 	curr := s.GetCurrentLayer()
 	if s.LatestLayer() == curr && time.Now().Sub(s.LayerToTime(s.LatestLayer())) > s.ValidationDelta {
