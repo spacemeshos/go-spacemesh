@@ -8,6 +8,7 @@ import (
 	"github.com/spacemeshos/poet/shared"
 	"github.com/spacemeshos/post/proving"
 	"github.com/spacemeshos/sha256-simd"
+	"strings"
 )
 
 // EpochID is the running epoch number. It's zero-based, so the genesis epoch has EpochID == 0.
@@ -205,14 +206,11 @@ func (atx *ActivationTx) Fields(layersPerEpoch uint16, size int) []log.LoggableF
 
 // AtxIdsField returns a list of loggable fields for a given list of ATXIDs
 func AtxIdsField(ids []ATXID) log.Field {
-	str := ""
-	for i, a := range ids {
-		str += a.ShortString()
-		if i < len(ids)-1 {
-			str += ", "
-		}
+	strs := []string{}
+	for _, a := range ids {
+		strs = append(strs, a.ShortString())
 	}
-	return log.String("atx_ids", str)
+	return log.String("atx_ids", strings.Join(strs, ", "))
 }
 
 // CalcAndSetID calculates and sets the cached ID field. This field must be set before calling the ID() method.
