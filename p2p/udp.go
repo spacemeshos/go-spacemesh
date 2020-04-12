@@ -29,7 +29,7 @@ type udpNetwork interface {
 	SubscribeClosingConnections(f func(connection inet.ConnectionWithErr))
 }
 
-// UDPMux is a server for receiving and sending udp messages. through protocols.
+// UDPMux is a server for receiving and sending udp messages through protocols.
 type UDPMux struct {
 	logger log.Log
 
