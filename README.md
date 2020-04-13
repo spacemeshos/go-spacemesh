@@ -139,7 +139,7 @@ You specify these parameters by providing go-spacemesh with a toml config file. 
 Assuming tn1.toml is a testnet config file saved in the same directory as go-spacemesh, use the following command to join the testnet. The data folder will be created in the same directory as go-spacemesh. The node will use TCP port 7152 and UDP port 7152 for p2p connections:
 
 ```bash
-./go-spacemesh --grpc-server --json-server --tcp-port 7152 --config ./tn1.toml -d ./sm_data
+./go-spacemesh --grpc-server --json-server --tcp-port 7152 --config ./[tn1.toml](http://ae7809a90692211ea8d4d0ea80dce922-597797094.us-east-1.elb.amazonaws.com/) -d ./sm_data
 ```
 
 4. Build the [CLI Wallet](https://github.com/spacemeshos/CLIWallet) from source code and run it:
