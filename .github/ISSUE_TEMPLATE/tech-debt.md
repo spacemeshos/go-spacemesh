@@ -2,7 +2,7 @@
 name: Technical Debt
 about: Report technical debt to improve our code
 title: ''
-labels: 'technical debt'
+labels: technical debt
 assignees: ''
 
 ---
@@ -15,4 +15,4 @@ assignees: ''
 
 This issue appears in commit hash: 
 
-Related files (optionally with line numbers): 
+Related files (optionally with line numbers):
