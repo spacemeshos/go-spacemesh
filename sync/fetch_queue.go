@@ -23,7 +23,6 @@ type fetchJob struct {
 	ids   []types.Hash32
 }
 
-//todo make the queue generic
 type fetchQueue struct {
 	log.Log
 	batchRequestFactory
@@ -32,7 +31,7 @@ type fetchQueue struct {
 	pending     map[types.Hash32][]chan bool
 	handleFetch func(fj fetchJob)
 	checkLocal  checkLocalFunc
-	queue       chan []types.Hash32 //types.TransactionID //todo make buffered
+	queue       chan []types.Hash32 //types.TransactionID
 	name        string
 }
 
