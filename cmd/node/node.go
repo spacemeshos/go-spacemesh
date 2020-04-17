@@ -197,7 +197,7 @@ func (app *SpacemeshApp) ParseConfig() error {
 
 // NewSpacemeshApp creates an instance of the spacemesh app
 func NewSpacemeshApp() *SpacemeshApp {
-
+	panic("This version is not intended to be run. Please use v0.1.9 or a newer release.")
 	defaultConfig := cfg.DefaultConfig()
 	node := &SpacemeshApp{
 		Config:  &defaultConfig,
