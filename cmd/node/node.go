@@ -89,7 +89,11 @@ var Cmd = &cobra.Command{
 		app := NewSpacemeshApp()
 		defer app.Cleanup(cmd, args)
 
-		app.Initialize(cmd, args)
+		err := app.Initialize(cmd, args)
+		if err != nil {
+			log.With().Error("Failed to initialize node.", log.Err(err))
+			return
+		}
 		app.Start(cmd, args)
 	},
 }
