@@ -19,13 +19,18 @@ curl -L -o "protoc.zip" ${protoc_url}
 echo "extracting..."
 unzip -u protoc.zip -d protoc3
 
-# Move protoc to /usr/local/bin/
+
+# create local devtools dir.
+mkdir devtools
+mkdir devtools/bin
+mkdir devtools/include
+
 echo "moving bin/protoc to /usr/local/bin/protoc"
-mv protoc3/bin/* /usr/local/bin/
+mv protoc3/bin/* devtools/bin/
 
 # Move protoc3/include to /usr/local/include/
 echo "syncing include to /usr/local/include"
-rsync -r protoc3/include/ /usr/local/include/
+rsync -r protoc3/include/ devtools/include/
 
 # Cleanup
 echo "cleaning up..."
