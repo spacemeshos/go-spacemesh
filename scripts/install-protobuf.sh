@@ -25,11 +25,11 @@ mkdir devtools
 mkdir devtools/bin
 mkdir devtools/include
 
-echo "moving bin/protoc to /usr/local/bin/protoc"
+echo "moving bin/protoc to ./devtools/bin/protoc"
 mv protoc3/bin/* devtools/bin/
 
 # Move protoc3/include to /usr/local/include/
-echo "syncing include to /usr/local/include"
+echo "syncing include to ./devtools/include"
 rsync -r protoc3/include/ devtools/include/
 
 # Cleanup
