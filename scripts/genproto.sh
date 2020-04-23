@@ -18,10 +18,10 @@ errcho() {
 
 
 if [ ! -f $protoc ] ; then
-    errcho "Could not find protoc in $protoc. trying to use protoc in PATH"
+    errcho "Could not find protoc in $protoc. Trying to use protoc in PATH."
     protoc=protoc # try loading from PATH
     if !(hash protoc 2>/dev/null) ; then
-        errcho "Could not find protoc. try running 'make install' or setting PROTOCPATH to you protoc bin file"
+        errcho "Could not find protoc. Try running 'make install' or setting PROTOCPATH to your protoc bin file."
         exit 1;
     fi
 fi
