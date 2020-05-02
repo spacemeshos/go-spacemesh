@@ -3,8 +3,6 @@ package discovery
 import (
 	"bytes"
 	"encoding/binary"
-	"github.com/spacemeshos/go-spacemesh/crypto"
-	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"math/rand"
 	"net"
 	"path/filepath"
@@ -13,8 +11,11 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
+
+	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
+	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 )
 
@@ -91,7 +92,7 @@ type addrBook struct {
 	addrNew   [newBucketCount]map[node.ID]*KnownAddress
 	addrTried [triedBucketCount]map[node.ID]*KnownAddress
 
-	//todo: lock local for updates
+	localAddrMtx   sync.RWMutex
 	localAddresses []*node.Info
 
 	nTried int
@@ -106,16 +107,16 @@ type addrBook struct {
 
 // AddOurAddress adds one of our addresses.
 func (a *addrBook) AddLocalAddress(addr *node.Info) {
-	a.mtx.Lock()
+	a.localAddrMtx.Lock()
 	a.localAddresses = append(a.localAddresses, addr)
-	a.mtx.Unlock()
+	a.localAddrMtx.Unlock()
 }
 
 // IsLocalAddress returns true if this address was added as a local address before.
 func (a *addrBook) IsLocalAddress(addr *node.Info) bool {
-	a.mtx.RLock()
+	a.localAddrMtx.RLock()
 	ok := a.isLocalAddressUnlocked(addr)
-	a.mtx.RUnlock()
+	a.localAddrMtx.RUnlock()
 	return ok
 }
 
