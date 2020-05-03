@@ -15,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/sha256-simd"
 	"github.com/stretchr/testify/assert"
@@ -86,8 +87,8 @@ func SyncMockFactoryManClock(number int, conf Configuration, name string, dbType
 		name := fmt.Sprintf(name+"_%d", i)
 		l := log.New(name, "", "")
 		blockValidator := blockEligibilityValidatorMock{}
-		txpool := miner.NewTxMemPool()
-		atxpool := miner.NewAtxMemPool()
+		txpool := state.NewTxMemPool()
+		atxpool := activation.NewAtxMemPool()
 		sync := NewSync(net, getMesh(dbType, Path+name+"_"+time.Now().String()), txpool, atxpool, blockValidator, poetDb(), conf, ticker, l)
 		nodes = append(nodes, sync)
 		p2ps = append(p2ps, net)
@@ -661,7 +662,7 @@ func Test_TwoNodes_SyncIntegrationSuite(t *testing.T) {
 		msh := getMesh(memoryDB, fmt.Sprintf("%s_%s", sis.name, time.Now()))
 		blockValidator := blockEligibilityValidatorMock{}
 		poetDb := activation.NewPoetDb(database.NewMemDatabase(), l.WithName("poetDb"))
-		sync := NewSync(s, msh, miner.NewTxMemPool(), miner.NewAtxMemPool(), blockValidator, poetDb, conf, ts, l)
+		sync := NewSync(s, msh, state.NewTxMemPool(), activation.NewAtxMemPool(), blockValidator, poetDb, conf, ts, l)
 		sis.syncers = append(sis.syncers, sync)
 		atomic.AddUint32(&i, 1)
 	}
@@ -786,7 +787,7 @@ func Test_Multiple_SyncIntegrationSuite(t *testing.T) {
 		msh := getMesh(memoryDB, fmt.Sprintf("%s_%d", sis.name, atomic.LoadUint32(&i)))
 		blockValidator := blockEligibilityValidatorMock{}
 		poetDb := activation.NewPoetDb(database.NewMemDatabase(), l.WithName("poetDb"))
-		sync := NewSync(s, msh, miner.NewTxMemPool(), miner.NewAtxMemPool(), blockValidator, poetDb, conf, ts, l)
+		sync := NewSync(s, msh, state.NewTxMemPool(), activation.NewAtxMemPool(), blockValidator, poetDb, conf, ts, l)
 		ts.StartNotifying()
 		sis.syncers = append(sis.syncers, sync)
 		atomic.AddUint32(&i, 1)
@@ -1208,8 +1209,8 @@ func TestSyncer_ListenToGossip(t *testing.T) {
 
 func TestSyncer_handleNotSyncedFlow(t *testing.T) {
 	r := require.New(t)
-	txpool := miner.NewTxMemPool()
-	atxpool := miner.NewAtxMemPool()
+	txpool := state.NewTxMemPool()
+	atxpool := activation.NewAtxMemPool()
 	ts := &mockClock{Layer: 10}
 	sync := NewSync(service.NewSimulator().NewNode(), getMesh(memoryDB, Path+t.Name()+"_"+time.Now().String()), txpool, atxpool, blockEligibilityValidatorMock{}, newMockPoetDb(), conf, ts, log.NewDefault(t.Name()))
 	lv := &mockLayerValidator{0, 0, 0, nil}
@@ -1227,8 +1228,8 @@ func TestSyncer_p2pSyncForTwoLayers(t *testing.T) {
 	net := sim.NewNode()
 	l := log.New(t.Name(), "", "")
 	blockValidator := blockEligibilityValidatorMock{}
-	txpool := miner.NewTxMemPool()
-	atxpool := miner.NewAtxMemPool()
+	txpool := state.NewTxMemPool()
+	atxpool := activation.NewAtxMemPool()
 	//ch := ts.Subscribe()
 	msh := getMesh(memoryDB, Path+t.Name()+"_"+time.Now().String())
 

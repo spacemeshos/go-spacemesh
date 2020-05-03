@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"testing"
@@ -94,6 +95,15 @@ func (mockSyncerP) FetchPoetProof([]byte) error { return nil }
 
 func (m mockSyncerP) IsSynced() bool { return m.synced }
 
+type atxDbMock struct{
+
+}
+
+func (atxDbMock) GetAtxs(epochId types.EpochID) []types.ATXID{
+	return []types.ATXID{atx1, atx2, atx3, atx4, atx5}
+}
+
+
 type MockProjector struct {
 }
 
@@ -106,7 +116,6 @@ var mockProjector = &MockProjector{}
 func TestBlockBuilder_StartStop(t *testing.T) {
 	rand.Seed(0)
 	net := service.NewSimulator()
-	beginRound := make(chan types.LayerID)
 	n := net.NewNode()
 
 	block1 := types.NewExistingBlock(0, []byte(rand.String(8)))
@@ -115,12 +124,16 @@ func TestBlockBuilder_StartStop(t *testing.T) {
 	block4 := types.NewExistingBlock(0, []byte(rand.String(8)))
 	hareRes := []types.BlockID{block1.ID(), block2.ID(), block3.ID(), block4.ID()}
 
+	txMempool := state.NewTxMemPool()
+
 	hare := MockHare{res: map[types.LayerID][]types.BlockID{}}
 	hare.res[0] = hareRes
 
 	bs := []*types.Block{block1, block2, block3, block4}
-	orphans := &mockMesh{b: bs}
-	builder := NewBlockBuilder(types.NodeID{}, signing.NewEdSigner(), n, beginRound, 5, NewTxMemPool(), NewAtxMemPool(), MockCoin{}, orphans, hare, &mockBlockOracle{}, mockTxProcessor{}, &mockAtxValidator{}, &mockSyncer{}, selectCount, mockProjector, log.New(n.String(), "", ""))
+	builder := createBlockBuilder("a", n, bs)
+	builder.hareResult = hare
+	builder.TransactionPool = txMempool
+	//builder := NewBlockBuilder(types.NodeID{}, signing.NewEdSigner(), n, beginRound, 5, MockCoin{}, orphans, hare, &mockBlockOracle{}, mockTxProcessor{}, &mockAtxValidator{}, &mockSyncer{}, selectCount, mockProjector, log.New(n.String(), "", ""))
 
 	err := builder.Start()
 	assert.NoError(t, err)
@@ -134,14 +147,13 @@ func TestBlockBuilder_StartStop(t *testing.T) {
 	err = builder.Close()
 	assert.Error(t, err)
 
-	err = builder.addTransaction(NewTx(t, 1, types.BytesToAddress([]byte{0x01}), signing.NewEdSigner()))
-	assert.Error(t, err)
+	tx1 := NewTx(t, 1, types.BytesToAddress([]byte{0x01}), signing.NewEdSigner())
+	txMempool.Put(tx1.ID(), tx1)
 }
 
 func TestBlockBuilder_BlockIdGeneration(t *testing.T) {
 
 	net := service.NewSimulator()
-	beginRound := make(chan types.LayerID)
 	n1 := net.NewNode()
 	n2 := net.NewNode()
 
@@ -154,8 +166,15 @@ func TestBlockBuilder_BlockIdGeneration(t *testing.T) {
 	hare.res[0] = hareRes
 
 	st := []*types.Block{block2, block3, block4}
-	builder1 := NewBlockBuilder(types.NodeID{Key: "a"}, signing.NewEdSigner(), n1, beginRound, 5, NewTxMemPool(), NewAtxMemPool(), MockCoin{}, &mockMesh{b: st}, hare, &mockBlockOracle{}, mockTxProcessor{}, &mockAtxValidator{}, &mockSyncer{}, selectCount, mockProjector, log.New(n1.Info.ID.String(), "", ""))
-	builder2 := NewBlockBuilder(types.NodeID{Key: "b"}, signing.NewEdSigner(), n2, beginRound, 5, NewTxMemPool(), NewAtxMemPool(), MockCoin{}, &mockMesh{b: st}, hare, &mockBlockOracle{}, mockTxProcessor{}, &mockAtxValidator{}, &mockSyncer{}, selectCount, mockProjector, log.New(n2.Info.ID.String(), "", ""))
+	builder1 := createBlockBuilder("a", n1, st)
+	builder2 := createBlockBuilder("b", n2, st)
+	builder1.hareResult = hare
+	builder2.hareResult = hare
+	builder2.AtxDb = atxDbMock{}
+	builder1.AtxDb = atxDbMock{}
+
+	//builder1 := NewBlockBuilder(types.NodeID{Key: "a"}, signing.NewEdSigner(), n1, beginRound, 5, NewTxMemPool(), NewAtxMemPool(), MockCoin{}, &mockMesh{b: st}, hare, &mockBlockOracle{}, mockTxProcessor{}, &mockAtxValidator{}, &mockSyncer{}, selectCount, mockProjector, log.New(n1.Info.ID.String(), "", ""))
+	//builder2 := NewBlockBuilder(types.NodeID{Key: "b"}, signing.NewEdSigner(), n2, beginRound, 5, NewTxMemPool(), NewAtxMemPool(), MockCoin{}, &mockMesh{b: st}, hare, &mockBlockOracle{}, mockTxProcessor{}, &mockAtxValidator{}, &mockSyncer{}, selectCount, mockProjector, log.New(n2.Info.ID.String(), "", ""))
 
 	b1, _ := builder1.createBlock(1, types.ATXID{}, types.BlockEligibilityProof{}, nil, nil)
 
@@ -179,8 +198,16 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 	hare := MockHare{res: map[types.LayerID][]types.BlockID{}}
 	hare.res[1] = hareRes
 
+	txPool := state.NewTxMemPool()
+
+	atxPool := activation.NewAtxMemPool()
+
 	st := []*types.Block{block1, block2, block3}
-	builder := NewBlockBuilder(types.NodeID{Key: "anton", VRFPublicKey: []byte("anton")}, signing.NewEdSigner(), n, beginRound, 5, NewTxMemPool(), NewAtxMemPool(), MockCoin{}, &mockMesh{b: st}, hare, &mockBlockOracle{}, mockTxProcessor{}, &mockAtxValidator{}, &mockSyncer{}, selectCount, mockProjector, log.New(n.String(), "", ""))
+	builder := createBlockBuilder("a", n, st)
+	builder.TransactionPool = txPool
+	builder.AtxPool = atxPool
+	builder.beginRoundEvent = beginRound
+	//builder := NewBlockBuilder(types.NodeID{Key: "anton", VRFPublicKey: []byte("anton")}, signing.NewEdSigner(), n, beginRound, 5, NewTxMemPool(), NewAtxMemPool(), MockCoin{}, &mockMesh{b: st}, hare, &mockBlockOracle{}, mockTxProcessor{}, &mockAtxValidator{}, &mockSyncer{}, selectCount, mockProjector, log.New(n.String(), "", ""))
 
 	err := builder.Start()
 	assert.NoError(t, err)
@@ -196,9 +223,9 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 
 	transids := []types.TransactionID{trans[0].ID(), trans[1].ID(), trans[2].ID()}
 
-	_ = builder.addTransaction(trans[0])
-	_ = builder.addTransaction(trans[1])
-	_ = builder.addTransaction(trans[2])
+	txPool.Put(trans[0].ID(), trans[0])
+	txPool.Put(trans[1].ID(), trans[1])
+	txPool.Put(trans[2].ID(), trans[2])
 
 	poetRef := []byte{0xba, 0x38}
 	atxs := []*types.ActivationTx{
@@ -207,9 +234,9 @@ func TestBlockBuilder_CreateBlock(t *testing.T) {
 		newActivationTx(types.NodeID{Key: "cccc", VRFPublicKey: []byte("bbb")}, 1, types.ATXID(types.Hash32{3}), 5, 1, types.ATXID{}, coinbase, 5, []types.BlockID{block1.ID(), block2.ID(), block3.ID()}, activation.NewNIPSTWithChallenge(&types.Hash32{}, poetRef)),
 	}
 
-	builder.AtxPool.Put(atxs[0])
-	builder.AtxPool.Put(atxs[1])
-	builder.AtxPool.Put(atxs[2])
+	atxPool.Put(atxs[0])
+	atxPool.Put(atxs[1])
+	atxPool.Put(atxs[2])
 
 	go func() { beginRound <- 2 }()
 	select {
@@ -272,10 +299,7 @@ func ContainsAtx(a []types.ATXID, x types.ATXID) bool {
 	return false
 }
 
-func getState(types.Address) (uint64, uint64, error) {
-	return 5, 1000, nil
-}
-
+/*
 func TestBlockBuilder_Validation(t *testing.T) {
 	net := service.NewSimulator()
 	beginRound := make(chan types.LayerID)
@@ -290,7 +314,7 @@ func TestBlockBuilder_Validation(t *testing.T) {
 	hare.res[0] = hareRes
 
 	st := []*types.Block{block1, block2, block3}
-	builder1 := NewBlockBuilder(types.NodeID{Key: "a"}, signing.NewEdSigner(), n1, beginRound, 5, NewTxMemPool(), NewAtxMemPool(), MockCoin{}, &mockMesh{b: st}, hare, &mockBlockOracle{}, mockTxProcessor{true}, &mockAtxValidator{}, &mockSyncer{}, selectCount, mockProjector, log.New(n1.Info.ID.String(), "", ""))
+	builder1 := NewBlockBuilder(types.NodeID{Key: "a"}, signing.NewEdSigner(), n1, beginRound, 5, state.NewTxMemPool(), activation.NewAtxMemPool(), MockCoin{}, &mockMesh{b: st}, hare, &mockBlockOracle{}, mockTxProcessor{true}, &mockAtxValidator{}, &mockSyncer{}, selectCount, mockProjector, log.New(n1.Info.ID.String(), "", ""))
 	assert.NoError(t, builder1.Start())
 	tx := NewTx(t, 5, types.HexToAddress("0xFF"), signing.NewEdSigner())
 	b, e := types.InterfaceToBytes(tx)
@@ -306,8 +330,9 @@ func TestBlockBuilder_Validation(t *testing.T) {
 	ids, err = builder1.TransactionPool.GetTxsForBlock(10, getState)
 	assert.NoError(t, err)
 	assert.Len(t, ids, 1)
-}
+}*/
 
+/*
 func TestBlockBuilder_Gossip_NotSynced(t *testing.T) {
 	net := service.NewSimulator()
 	beginRound := make(chan types.LayerID)
@@ -323,7 +348,7 @@ func TestBlockBuilder_Gossip_NotSynced(t *testing.T) {
 	hare.res[0] = hareRes
 
 	st := []*types.Block{block2, block3, block4}
-	builder1 := NewBlockBuilder(types.NodeID{Key: "a"}, signing.NewEdSigner(), n1, beginRound, 5, NewTxMemPool(), NewAtxMemPool(), MockCoin{}, &mockMesh{b: st}, hare, &mockBlockOracle{}, mockTxProcessor{false}, &mockAtxValidator{}, &mockSyncerP{false}, selectCount, mockProjector, log.New(n1.Info.ID.String(),
+	builder1 := NewBlockBuilder(types.NodeID{Key: "a"}, signing.NewEdSigner(), n1, beginRound, 5, state.NewTxMemPool(), activation.NewAtxMemPool(), MockCoin{}, &mockMesh{b: st}, hare, &mockBlockOracle{}, mockTxProcessor{false}, &mockAtxValidator{}, &mockSyncerP{false}, selectCount, mockProjector, log.New(n1.Info.ID.String(),
 		"",
 		""))
 	assert.NoError(t, builder1.Start())
@@ -348,7 +373,7 @@ func TestBlockBuilder_Gossip_NotSynced(t *testing.T) {
 	ids, err = builder1.TransactionPool.GetTxsForBlock(10, getState)
 	assert.NoError(t, err)
 	assert.Empty(t, ids)
-}
+}*/
 
 func Test_calcHdistRange(t *testing.T) {
 	r := require.New(t)
@@ -493,6 +518,10 @@ type mockMesh struct {
 	err error
 }
 
+func (m *mockMesh) GetRefBlock(id types.EpochID) types.BlockID {
+	return types.BlockID{}
+}
+
 func (m *mockMesh) GetBlock(id types.BlockID) (*types.Block, error) {
 	for _, blk := range m.b {
 		if blk.ID() == id {
@@ -530,10 +559,10 @@ func TestBlockBuilder_getVotes(t *testing.T) {
 	rand.Seed(0)
 
 	r := require.New(t)
-	beginRound := make(chan types.LayerID)
 	n1 := service.NewSimulator().NewNode()
 	allblocks := []*types.Block{b1, b2, b3, b4, b5, b6, b7}
-	bb := NewBlockBuilder(types.NodeID{Key: "a"}, signing.NewEdSigner(), n1, beginRound, 5, NewTxMemPool(), NewAtxMemPool(), MockCoin{}, &mockMesh{b: allblocks}, &mockResult{}, &mockBlockOracle{}, mockTxProcessor{true}, &mockAtxValidator{}, &mockSyncer{}, selectCount, mockProjector, log.NewDefault(t.Name()))
+	bb := createBlockBuilder("a", n1, allblocks)
+	//bb := NewBlockBuilder(types.NodeID{Key: "a"}, signing.NewEdSigner(), n1, beginRound, 5, NewTxMemPool(), NewAtxMemPool(), MockCoin{}, &mockMesh{b: allblocks}, &mockResult{}, &mockBlockOracle{}, mockTxProcessor{true}, &mockAtxValidator{}, &mockSyncer{}, selectCount, mockProjector, log.NewDefault(t.Name()))
 	b, err := bb.getVotes(config.Genesis)
 	r.EqualError(err, "cannot create blockBytes in genesis layer")
 	r.Nil(b)
@@ -580,10 +609,11 @@ func TestBlockBuilder_getVotes(t *testing.T) {
 func TestBlockBuilder_CalcHdistRange(t *testing.T) {
 	rand.Seed(0)
 	r := require.New(t)
-	beginRound := make(chan types.LayerID)
 	n1 := service.NewSimulator().NewNode()
+
 	bs := []*types.Block{b1, b2, b3}
-	bb := NewBlockBuilder(types.NodeID{Key: "a"}, signing.NewEdSigner(), n1, beginRound, 5, NewTxMemPool(), NewAtxMemPool(), MockCoin{}, &mockMesh{b: bs}, &mockResult{}, &mockBlockOracle{}, mockTxProcessor{true}, &mockAtxValidator{}, &mockSyncer{}, selectCount, mockProjector, log.NewDefault(t.Name()))
+	bb := createBlockBuilder("a", n1, bs)
+	//bb := NewBlockBuilder(types.NodeID{Key: "a"}, signing.NewEdSigner(), n1, beginRound, 5, NewTxMemPool(), NewAtxMemPool(), MockCoin{}, &mockMesh{b: bs}, &mockResult{}, &mockBlockOracle{}, mockTxProcessor{true}, &mockAtxValidator{}, &mockSyncer{}, selectCount, mockProjector, log.NewDefault(t.Name()))
 	bottom, _ := calcHdistRange(5, bb.hdist)
 	r.True(bottom == 0)
 
@@ -593,17 +623,16 @@ func TestBlockBuilder_CalcHdistRange(t *testing.T) {
 
 func TestBlockBuilder_createBlock(t *testing.T) {
 	r := require.New(t)
-	beginRound := make(chan types.LayerID)
 	n1 := service.NewSimulator().NewNode()
-	hare := &mockResult{}
 	block1 := types.NewExistingBlock(0, []byte(rand.String(8)))
 	block2 := types.NewExistingBlock(0, []byte(rand.String(8)))
 	block3 := types.NewExistingBlock(0, []byte(rand.String(8)))
 	bs := []*types.Block{block1, block2, block3}
 	st := []types.BlockID{block1.ID(), block2.ID(), block3.ID()}
-	builder1 := NewBlockBuilder(types.NodeID{Key: "a"}, signing.NewEdSigner(), n1, beginRound, 5, NewTxMemPool(), NewAtxMemPool(), MockCoin{}, &mockMesh{b: bs}, hare, &mockBlockOracle{}, mockTxProcessor{true}, &mockAtxValidator{}, &mockSyncer{}, selectCount, mockProjector, log.NewDefault(t.Name()))
+	builder1 := createBlockBuilder("a", n1, bs)
 
 	builder1.hareResult = &mockResult{err: errExample, ids: nil}
+	builder1.AtxDb = atxDbMock{}
 	b, err := builder1.createBlock(5, types.ATXID{}, types.BlockEligibilityProof{}, nil, nil)
 	r.Nil(err)
 	r.Equal(st, b.BlockVotes)
@@ -621,13 +650,17 @@ func TestBlockBuilder_notSynced(t *testing.T) {
 	beginRound := make(chan types.LayerID)
 	n1 := service.NewSimulator().NewNode()
 	var bs []*types.Block
-	hare := &mockResult{}
 	ms := &mockSyncer{}
 	ms.notSynced = true
 	mbo := &mockBlockOracle{}
 	mbo.err = errors.New("err")
-	builder := NewBlockBuilder(types.NodeID{Key: "a"}, signing.NewEdSigner(), n1, beginRound, 5, NewTxMemPool(), NewAtxMemPool(), MockCoin{}, &mockMesh{b: bs}, hare, mbo, mockTxProcessor{true}, &mockAtxValidator{}, ms, selectCount, mockProjector, log.NewDefault(t.Name()))
-	go builder.acceptBlockData()
+
+	builder := createBlockBuilder("a", n1, bs)
+	builder.syncer = ms
+	builder.blockOracle = mbo
+	builder.beginRoundEvent = beginRound
+	//builder := NewBlockBuilder(types.NodeID{Key: "a"}, signing.NewEdSigner(), n1, beginRound, 5, NewTxMemPool(), NewAtxMemPool(), MockCoin{}, &mockMesh{b: bs}, hare, mbo, mockTxProcessor{true}, &mockAtxValidator{}, ms, selectCount, mockProjector, log.NewDefault(t.Name()))
+	go builder.createBlockLoop()
 	beginRound <- 1
 	beginRound <- 2
 	r.Equal(0, mbo.calls)
@@ -662,14 +695,25 @@ func Test_filter(t *testing.T) {
 	}
 }
 
+func createBlockBuilder(ID string, n *service.Node, meshBlocks []*types.Block) *BlockBuilder {
+	beginRound := make(chan types.LayerID)
+	cfg := Config{
+		Hdist:        5,
+		MinerID:      types.NodeID{Key: ID},
+		AtxsPerBlock: selectCount,
+	}
+	bb := NewBlockBuilder(cfg, signing.NewEdSigner(), n, beginRound, MockCoin{}, &mockMesh{b: meshBlocks}, &mockResult{}, &mockBlockOracle{}, &mockSyncer{}, mockProjector, nil, nil, atxDbMock{}, log.NewDefault("mock_builder_"+"a"))
+	return bb
+}
+
 func Test_getVotesFiltered(t *testing.T) {
 	// check scenario where some of the votes are filtered
 
 	r := require.New(t)
-	beginRound := make(chan types.LayerID)
+
 	n1 := service.NewSimulator().NewNode()
 	allblocks := []*types.Block{b5}
-	bb := NewBlockBuilder(types.NodeID{Key: "a"}, signing.NewEdSigner(), n1, beginRound, 5, NewTxMemPool(), NewAtxMemPool(), MockCoin{}, &mockMesh{b: allblocks}, &mockResult{}, &mockBlockOracle{}, mockTxProcessor{true}, &mockAtxValidator{}, &mockSyncer{}, selectCount, mockProjector, log.NewDefault(t.Name()))
+	bb := createBlockBuilder("a", n1, allblocks)
 	// has bottom
 	mh := newMockResult()
 	mh.set(4)

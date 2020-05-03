@@ -12,8 +12,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
-	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/spacemeshos/go-spacemesh/sync"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spf13/cobra"
@@ -138,8 +138,8 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	txpool := miner.NewTxMemPool()
-	atxpool := miner.NewAtxMemPool()
+	txpool := state.NewTxMemPool()
+	atxpool := activation.NewAtxMemPool()
 
 	sync := sync.NewSyncWithMocks(atxdbStore, mshdb, txpool, atxpool, swarm, poetDb, conf, types.LayerID(expectedLayers))
 	app.sync = sync

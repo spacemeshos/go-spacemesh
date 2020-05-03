@@ -62,6 +62,7 @@ type txProcessor interface {
 	GetLayerApplied(txID types.TransactionID) *types.LayerID
 	GetStateRoot() types.Hash32
 	LoadState(layer types.LayerID) error
+	ValidateAndAddTxToPool(tx *types.Transaction) error
 }
 
 type txMemPoolInValidator interface {
@@ -80,9 +81,9 @@ type AtxDB interface {
 	SyntacticallyValidateAtx(atx *types.ActivationTx) error
 }
 
-type blockBuilder interface {
+/*type blockBuilder interface {
 	ValidateAndAddTxToPool(tx *types.Transaction) error
-}
+}*/
 
 // Mesh is the logic layer above our mesh.DB database
 type Mesh struct {
@@ -92,7 +93,7 @@ type Mesh struct {
 	txProcessor
 	Validator
 	trtl               tortoise
-	blockBuilder       blockBuilder
+	//blockBuilder       blockBuilder
 	txInvalidator      txMemPoolInValidator
 	atxInvalidator     atxMemPoolInValidator
 	config             Config
@@ -109,6 +110,10 @@ type Mesh struct {
 	nextValidLayers    map[types.LayerID]*types.Layer
 	maxValidatedLayer  types.LayerID
 	txMutex            sync.Mutex
+}
+
+func (msh *Mesh) GetRefBlock(id types.EpochID) types.BlockID {
+	return types.BlockID{}
 }
 
 // NewMesh creates a new instant of a mesh
@@ -191,11 +196,11 @@ func (msh *Mesh) CacheWarmUp(layerSize int) {
 
 	msh.Info("cache warm up done")
 }
-
+/*
 // SetBlockBuilder sets the block builder in use by mesh
 func (msh *Mesh) SetBlockBuilder(blockBuilder blockBuilder) {
 	msh.blockBuilder = blockBuilder
-}
+}*/
 
 // LatestLayerInState returns the latest layer we applied to state
 func (msh *Mesh) LatestLayerInState() types.LayerID {
@@ -309,7 +314,7 @@ func (msh *Mesh) reInsertTxsToPool(validBlocks, invalidBlocks []*types.Block, l 
 		msh.removeRejectedFromAccountTxs(account, grouped, l)
 	}
 	for _, tx := range returnedTxs {
-		err := msh.blockBuilder.ValidateAndAddTxToPool(tx)
+		err := msh.ValidateAndAddTxToPool(tx)
 		// We ignore errors here, since they mean that the tx is no longer valid and we shouldn't re-add it
 		if err == nil {
 			msh.With().Info("transaction from contextually invalid block re-added to mempool",

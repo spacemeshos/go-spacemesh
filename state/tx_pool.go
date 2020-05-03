@@ -1,4 +1,4 @@
-package miner
+package state
 
 import (
 	"errors"

@@ -7,11 +7,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
-	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/sha256-simd"
 	"github.com/stretchr/testify/assert"
@@ -47,7 +47,7 @@ func SyncFactory(name string, serv service.Service) *Syncer {
 	l := log.New(name, "", "")
 	poetDb := activation.NewPoetDb(database.NewMemDatabase(), l.WithName("poetDb"))
 	blockValidator := blockEligibilityValidatorMock{}
-	sync := NewSync(serv, getMesh(memoryDB, name), miner.NewTxMemPool(), miner.NewAtxMemPool(), blockValidator, poetDb, conf, ts, l)
+	sync := NewSync(serv, getMesh(memoryDB, name), state.NewTxMemPool(), activation.NewAtxMemPool(), blockValidator, poetDb, conf, ts, l)
 	return sync
 }
 

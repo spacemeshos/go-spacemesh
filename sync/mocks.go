@@ -7,9 +7,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
-	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"math/big"
 	"time"
@@ -66,6 +66,10 @@ func (m *meshValidatorMock) HandleLateBlock(bl *types.Block) (types.LayerID, typ
 }
 
 type mockState struct{}
+
+func (s mockState) ValidateAndAddTxToPool(tx *types.Transaction) error {
+	panic("implement me")
+}
 
 func (s mockState) LoadState(types.LayerID) error {
 	panic("implement me")
@@ -201,7 +205,7 @@ func (m *mockBlockBuilder) ValidateAndAddTxToPool(tx *types.Transaction) error {
 
 // NewSyncWithMocks returns a syncer instance that is backed by mocks of other modules
 // for use in testing
-func NewSyncWithMocks(atxdbStore *database.LDBDatabase, mshdb *mesh.DB, txpool *miner.TxMempool, atxpool *miner.AtxMemPool, swarm service.Service, poetDb *activation.PoetDb, conf Configuration, expectedLayers types.LayerID) *Syncer {
+func NewSyncWithMocks(atxdbStore *database.LDBDatabase, mshdb *mesh.DB, txpool *state.TxMempool, atxpool *activation.AtxMemPool, swarm service.Service, poetDb *activation.PoetDb, conf Configuration, expectedLayers types.LayerID) *Syncer {
 	lg := log.New("sync_test", "", "")
 	atxdb := activation.NewDB(atxdbStore, &mockIStore{}, mshdb, conf.LayersPerEpoch, &validatorMock{}, lg.WithOptions(log.Nop))
 	var msh *mesh.Mesh
@@ -213,7 +217,6 @@ func NewSyncWithMocks(atxdbStore *database.LDBDatabase, mshdb *mesh.DB, txpool *
 		msh = mesh.NewMesh(mshdb, atxdb, configTst(), &meshValidatorMock{}, txpool, atxpool, &mockState{}, lg)
 	}
 
-	msh.SetBlockBuilder(&mockBlockBuilder{})
 	_ = msh.AddBlock(mesh.GenesisBlock)
 	clock := mockClock{Layer: expectedLayers + 1}
 	lg.Info("current layer %v", clock.GetCurrentLayer())

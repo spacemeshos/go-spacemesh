@@ -1,4 +1,4 @@
-package oracle
+package miner
 
 import (
 	"encoding/binary"
@@ -16,7 +16,7 @@ type activationDB interface {
 	GetIdentity(edID string) (types.NodeID, error)
 }
 
-type signer interface {
+type vrfSigner interface {
 	Sign(msg []byte) ([]byte, error)
 }
 
@@ -27,7 +27,7 @@ type MinerBlockOracle struct {
 	layersPerEpoch       uint16
 	atxDB                activationDB
 	beaconProvider       *EpochBeaconProvider
-	vrfSigner            signer
+	vrfSigner            vrfSigner
 	nodeID               types.NodeID
 
 	proofsEpoch       types.EpochID
@@ -39,7 +39,7 @@ type MinerBlockOracle struct {
 }
 
 // NewMinerBlockOracle returns a new MinerBlockOracle.
-func NewMinerBlockOracle(committeeSize uint32, genesisActiveSetSize uint32, layersPerEpoch uint16, atxDB activationDB, beaconProvider *EpochBeaconProvider, vrfSigner signer, nodeID types.NodeID, isSynced func() bool, log log.Log) *MinerBlockOracle {
+func NewMinerBlockOracle(committeeSize uint32, genesisActiveSetSize uint32, layersPerEpoch uint16, atxDB activationDB, beaconProvider *EpochBeaconProvider, vrfSigner vrfSigner, nodeID types.NodeID, isSynced func() bool, log log.Log) *MinerBlockOracle {
 
 	return &MinerBlockOracle{
 		committeeSize:        committeeSize,

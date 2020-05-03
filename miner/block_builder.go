@@ -6,15 +6,12 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"math/rand"
 	"sync"
 	"time"
@@ -26,23 +23,11 @@ const MaxTransactionsPerBlock = 200 //todo: move to config (#1924)
 const defaultGasLimit = 10
 const defaultFee = 1
 
-// IncomingTxProtocol is the protocol identifier for tx received by gossip that is used by the p2p
-const IncomingTxProtocol = "TxGossip"
-
 // AtxsPerBlockLimit indicates the maximum number of atxs a block can reference
 const AtxsPerBlockLimit = 100
 
 type signer interface {
 	Sign(m []byte) []byte
-}
-
-type txValidator interface {
-	AddressExists(addr types.Address) bool
-	ValidateNonceAndBalance(transaction *types.Transaction) error
-}
-
-type atxValidator interface {
-	SyntacticallyValidateAtx(atx *types.ActivationTx) error
 }
 
 type syncer interface {
@@ -53,8 +38,6 @@ type syncer interface {
 
 type txPool interface {
 	GetTxsForBlock(numOfTxs int, getState func(addr types.Address) (nonce, balance uint64, err error)) ([]types.TransactionID, error)
-	Put(id types.TransactionID, item *types.Transaction)
-	Invalidate(id types.TransactionID)
 }
 
 type projector interface {
@@ -65,67 +48,72 @@ type blockOracle interface {
 	BlockEligible(layerID types.LayerID) (types.ATXID, []types.BlockEligibilityProof, error)
 }
 
+type atxDb interface {
+	GetEpochAtxs(epochID types.EpochID) ([]types.ATXID)
+}
+
+type atxPool interface {
+	GetAllItems() []*types.ActivationTx
+}
+
 // BlockBuilder is the struct that orchestrates the building of blocks, it is responsible for receiving hare results.
 // referencing txs and atxs from mem pool and referencing them in the created block
 // it is also responsible for listening to the clock and querying when a block should be created according to the block oracle
 type BlockBuilder struct {
 	log.Log
 	signer
-	minerID          types.NodeID
-	rnd              *rand.Rand
-	hdist            types.LayerID
-	beginRoundEvent  chan types.LayerID
-	stopChan         chan struct{}
-	txGossipChannel  chan service.GossipMessage
-	atxGossipChannel chan service.GossipMessage
-	hareResult       hareResultProvider
-	AtxPool          *AtxMemPool
-	TransactionPool  txPool
-	mu               sync.Mutex
-	network          p2p.Service
-	weakCoinToss     weakCoinProvider
-	meshProvider     meshProvider
-	blockOracle      blockOracle
-	txValidator      txValidator
-	atxValidator     atxValidator
-	syncer           syncer
-	started          bool
-	atxsPerBlock     int // number of atxs to select per block
-	projector        projector
+	minerID         types.NodeID
+	rnd             *rand.Rand
+	hdist           types.LayerID
+	beginRoundEvent chan types.LayerID
+	stopChan        chan struct{}
+	hareResult      hareResultProvider
+	AtxPool         atxPool
+	AtxDb           atxDb
+	TransactionPool txPool
+	mu              sync.Mutex
+	network         p2p.Service
+	weakCoinToss    weakCoinProvider
+	meshProvider    meshProvider
+	blockOracle     blockOracle
+	syncer          syncer
+	started         bool
+	atxsPerBlock    int // number of atxs to select per block
+	projector       projector
+}
+
+type Config struct {
+	MinerID      types.NodeID
+	Hdist        int
+	AtxsPerBlock int
 }
 
 // NewBlockBuilder creates a struct of block builder type.
-func NewBlockBuilder(minerID types.NodeID, sgn signer, net p2p.Service, beginRoundEvent chan types.LayerID, hdist int,
-	txPool txPool, atxPool *AtxMemPool, weakCoin weakCoinProvider, orph meshProvider, hare hareResultProvider,
-	blockOracle blockOracle, txValidator txValidator, atxValidator atxValidator, syncer syncer, atxsPerBlock int,
-	projector projector, lg log.Log) *BlockBuilder {
+func NewBlockBuilder(config Config, sgn signer, net p2p.Service, beginRoundEvent chan types.LayerID, weakCoin weakCoinProvider, orph meshProvider, hare hareResultProvider, blockOracle blockOracle, syncer syncer, projector projector, txPool txPool, atxPool atxPool, atxDB atxDb, lg log.Log) *BlockBuilder {
 
-	seed := binary.BigEndian.Uint64(md5.New().Sum([]byte(minerID.Key)))
+	seed := binary.BigEndian.Uint64(md5.New().Sum([]byte(config.MinerID.Key)))
 
 	return &BlockBuilder{
-		minerID:          minerID,
-		signer:           sgn,
-		hdist:            types.LayerID(hdist),
-		Log:              lg,
-		rnd:              rand.New(rand.NewSource(int64(seed))),
-		beginRoundEvent:  beginRoundEvent,
-		stopChan:         make(chan struct{}),
-		AtxPool:          atxPool,
-		TransactionPool:  txPool,
-		txGossipChannel:  net.RegisterGossipProtocol(IncomingTxProtocol, priorityq.Low),
-		atxGossipChannel: net.RegisterGossipProtocol(activation.AtxProtocol, priorityq.Low),
-		hareResult:       hare,
-		mu:               sync.Mutex{},
-		network:          net,
-		weakCoinToss:     weakCoin,
-		meshProvider:     orph,
-		blockOracle:      blockOracle,
-		txValidator:      txValidator,
-		atxValidator:     atxValidator,
-		syncer:           syncer,
-		started:          false,
-		atxsPerBlock:     atxsPerBlock,
-		projector:        projector,
+		minerID:         config.MinerID,
+		signer:          sgn,
+		hdist:           types.LayerID(config.Hdist),
+		Log:             lg,
+		rnd:             rand.New(rand.NewSource(int64(seed))),
+		beginRoundEvent: beginRoundEvent,
+		stopChan:        make(chan struct{}),
+		hareResult:      hare,
+		mu:              sync.Mutex{},
+		network:         net,
+		weakCoinToss:    weakCoin,
+		meshProvider:    orph,
+		blockOracle:     blockOracle,
+		syncer:          syncer,
+		started:         false,
+		atxsPerBlock:    config.AtxsPerBlock,
+		projector:       projector,
+		AtxDb:           atxDB,
+		AtxPool:         atxPool,
+		TransactionPool: txPool,
 	}
 
 }
@@ -140,9 +128,7 @@ func (t *BlockBuilder) Start() error {
 	}
 
 	t.started = true
-	go t.acceptBlockData()
-	go t.listenForTx()
-	go t.listenForAtx()
+	go t.createBlockLoop()
 	return nil
 }
 
@@ -170,8 +156,10 @@ type meshProvider interface {
 	LayerBlockIds(index types.LayerID) ([]types.BlockID, error)
 	GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error)
 	GetBlock(id types.BlockID) (*types.Block, error)
+	GetRefBlock(id types.EpochID) types.BlockID
 }
 
+/*
 //used from external API call to dd transaction
 func (t *BlockBuilder) addTransaction(tx *types.Transaction) error {
 	if !t.started {
@@ -179,7 +167,7 @@ func (t *BlockBuilder) addTransaction(tx *types.Transaction) error {
 	}
 	t.TransactionPool.Put(tx.ID(), tx)
 	return nil
-}
+}*/
 
 func calcHdistRange(id types.LayerID, hdist types.LayerID) (bottom types.LayerID, top types.LayerID) {
 	if hdist == 0 {
@@ -252,8 +240,7 @@ func (t *BlockBuilder) getVotes(id types.LayerID) ([]types.BlockID, error) {
 	return votes, nil
 }
 
-func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.ATXID, eligibilityProof types.BlockEligibilityProof,
-	txids []types.TransactionID, atxids []types.ATXID) (*types.Block, error) {
+func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.ATXID, eligibilityProof types.BlockEligibilityProof, txids []types.TransactionID, atxids []types.ATXID) (*types.Block, error) {
 
 	votes, err := t.getVotes(id)
 	if err != nil {
@@ -286,6 +273,14 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.ATXID, eligibil
 	}
 
 	bl := &types.Block{MiniBlock: b, Signature: t.signer.Sign(blockBytes)}
+
+	if eligibilityProof.J == 0 {
+		atxs := t.AtxDb.GetEpochAtxs(id.GetEpoch(1))
+		bl.ActiveSet = &atxs
+	} else {
+		refBlock := t.meshProvider.GetRefBlock(id.GetEpoch(1))
+		bl.RefBlock = &refBlock
+	}
 
 	bl.Initialize()
 
@@ -323,6 +318,7 @@ func selectAtxs(atxs []types.ATXID, atxsPerBlock int) []types.ATXID {
 	return selected
 }
 
+/*
 func (t *BlockBuilder) listenForTx() {
 	t.Log.Info("start listening for txs")
 	for {
@@ -337,49 +333,10 @@ func (t *BlockBuilder) listenForTx() {
 			if data == nil {
 				continue
 			}
-
-			tx, err := types.BytesAsTransaction(data.Bytes())
-			if err != nil {
-				t.With().Error("cannot parse incoming TX", log.Err(err))
-				continue
-			}
-			if err := tx.CalcAndSetOrigin(); err != nil {
-				t.With().Error("failed to calc transaction origin", log.TxID(tx.ID().ShortString()), log.Err(err))
-				continue
-			}
-			if !t.txValidator.AddressExists(tx.Origin()) {
-				t.With().Error("transaction origin does not exist", log.String("transaction", tx.String()),
-					log.TxID(tx.ID().ShortString()), log.String("origin", tx.Origin().Short()), log.Err(err))
-				continue
-			}
-			if err := t.txValidator.ValidateNonceAndBalance(tx); err != nil {
-				t.With().Error("nonce and balance validation failed", log.TxID(tx.ID().ShortString()), log.Err(err))
-				continue
-			}
-			t.Log.With().Info("got new tx",
-				log.TxID(tx.ID().ShortString()),
-				log.Uint64("nonce", tx.AccountNonce),
-				log.Uint64("amount", tx.Amount),
-				log.Uint64("fee", tx.Fee),
-				log.Uint64("gas", tx.GasLimit),
-				log.String("recipient", tx.Recipient.String()),
-				log.String("origin", tx.Origin().String()))
-			data.ReportValidation(IncomingTxProtocol)
-			t.TransactionPool.Put(tx.ID(), tx)
 		}
 	}
 }
 
-// ValidateAndAddTxToPool validates the provided tx nonce and balance with projector and puts it in the transaction pool
-// it returns an error if the provided tx is not valid
-func (t *BlockBuilder) ValidateAndAddTxToPool(tx *types.Transaction) error {
-	err := t.txValidator.ValidateNonceAndBalance(tx)
-	if err != nil {
-		return err
-	}
-	t.TransactionPool.Put(tx.ID(), tx)
-	return nil
-}
 
 func (t *BlockBuilder) listenForAtx() {
 	t.Info("start listening for atxs")
@@ -396,70 +353,9 @@ func (t *BlockBuilder) listenForAtx() {
 		}
 	}
 }
+*/
 
-func (t *BlockBuilder) handleGossipAtx(data service.GossipMessage) {
-	if data == nil {
-		return
-	}
-	atx, err := types.BytesAsAtx(data.Bytes())
-	if err != nil {
-		t.Error("cannot parse incoming ATX")
-		return
-	}
-	atx.CalcAndSetID()
-
-	commitmentStr := "nil"
-	if atx.Commitment != nil {
-		commitmentStr = atx.Commitment.String()
-	}
-
-	challenge := ""
-	h, err := atx.NIPSTChallenge.Hash()
-	if err == nil && h != nil {
-		challenge = h.String()
-
-	}
-
-	t.With().Info("got new ATX",
-		log.String("sender_id", atx.NodeID.ShortString()),
-		log.AtxID(atx.ShortString()),
-		log.String("prev_atx_id", atx.PrevATXID.ShortString()),
-		log.String("pos_atx_id", atx.PositioningATX.ShortString()),
-		log.LayerID(uint64(atx.PubLayerID)),
-		log.Uint32("active_set", atx.ActiveSetSize),
-		log.Int("view", len(atx.View)),
-		log.Uint64("sequence_number", atx.Sequence),
-		log.String("commitment", commitmentStr),
-		log.Int("atx_size", len(data.Bytes())),
-		log.String("NIPSTChallenge", challenge),
-	)
-
-	//todo fetch from neighbour (#1925)
-	if atx.Nipst == nil {
-		t.Panic("nil nipst in gossip")
-		return
-	}
-
-	if err := t.syncer.FetchPoetProof(atx.GetPoetProofRef()); err != nil {
-		t.Warning("received ATX (%v) with syntactically invalid or missing PoET proof (%x): %v",
-			atx.ShortString(), atx.GetShortPoetProofRef(), err)
-		return
-	}
-
-	err = t.atxValidator.SyntacticallyValidateAtx(atx)
-	events.Publish(events.ValidAtx{ID: atx.ShortString(), Valid: err == nil})
-	if err != nil {
-		t.Warning("received syntactically invalid ATX %v: %v", atx.ShortString(), err)
-		// TODO: blacklist peer
-		return
-	}
-
-	t.AtxPool.Put(atx)
-	data.ReportValidation(activation.AtxProtocol)
-	t.With().Info("stored and propagated new syntactically valid ATX", log.AtxID(atx.ShortString()))
-}
-
-func (t *BlockBuilder) acceptBlockData() {
+func (t *BlockBuilder) createBlockLoop() {
 	for {
 		select {
 

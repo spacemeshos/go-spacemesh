@@ -14,7 +14,12 @@ import (
 type MockMapState struct {
 	Rewards     map[types.Address]*big.Int
 	Txs         []*types.Transaction
+	Pool		[]*types.Transaction
 	TotalReward int64
+}
+
+func (s *MockMapState) ValidateAndAddTxToPool(tx *types.Transaction) error {
+	s.Pool = append(s.Pool, tx)
 }
 
 func (s MockMapState) LoadState(types.LayerID) error                    { panic("implement me") }

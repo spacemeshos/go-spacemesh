@@ -42,7 +42,6 @@ func TestCreateBaseline(t *testing.T) {
 	trtl := tortoise.NewTortoise(blocksPerLayer, mshdb, 1, lg.WithName("trtl"))
 	msh := mesh.NewMesh(mshdb, atxdb, rewardConf, trtl, &mockTxMemPool{}, &mockAtxMemPool{}, &mockState{}, lg.WithOptions(log.Nop))
 	defer msh.Close()
-	msh.SetBlockBuilder(&blockBuilderMock{})
 	poetDbStore, err := database.NewLDBDatabase(id+"poet", 0, 0, lg.WithName("poetDbStore").WithOptions(log.Nop))
 	if err != nil {
 		lg.Error("error: ", err)

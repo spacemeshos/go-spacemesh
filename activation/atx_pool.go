@@ -1,4 +1,4 @@
-package miner
+package activation
 
 import (
 	"fmt"

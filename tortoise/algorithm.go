@@ -44,7 +44,6 @@ func NewRecoveredTortoise(mdb *mesh.DB, lg log.Log) Tortoise {
 //HandleLateBlock processes a late blocks votes (for late block definition see white paper)
 //returns the old pbase and new pbase after taking into account the blocks votes
 func (trtl *tortoise) HandleLateBlock(b *types.Block) (types.LayerID, types.LayerID) {
-	//todo feed all layers from b's layer to tortoise
 	l := types.NewLayer(b.Layer())
 	l.AddBlock(b)
 	oldPbase, newPbase := trtl.HandleIncomingLayer(l)

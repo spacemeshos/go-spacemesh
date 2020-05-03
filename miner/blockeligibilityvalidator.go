@@ -1,4 +1,4 @@
-package oracle
+package miner
 
 import (
 	"fmt"
@@ -10,12 +10,17 @@ import (
 // VRFValidationFunction is the VRF validation function.
 type VRFValidationFunction func(message, signature, publicKey []byte) (bool, error)
 
+type blockDB interface {
+	GetBlock(ID types.BlockID) (*types.Block, error)
+}
+
 // BlockEligibilityValidator holds all the dependencies for validating block eligibility.
 type BlockEligibilityValidator struct {
 	committeeSize        uint32
 	genesisActiveSetSize uint32
 	layersPerEpoch       uint16
 	activationDb         activationDB
+	blocks               blockDB
 	beaconProvider       *EpochBeaconProvider
 	validateVRF          VRFValidationFunction
 	log                  log.Log
@@ -72,6 +77,22 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 		return false, fmt.Errorf("failed to get number of eligible blocks: %v", err)
 	}
 
+	activeSetBlock := block
+	if block.RefBlock != nil {
+		activeSetBlock, err = v.blocks.GetBlock(*block.RefBlock)
+		if err != nil {
+			return false, fmt.Errorf("cannot get refrence block")
+		}
+
+	}
+	if activeSetBlock.ActiveSet != nil {
+		activeSetSize = uint32(len(*activeSetBlock.ActiveSet))
+	}
+	numberOfEligibleBlocks, err = getNumberOfEligibleBlocks(activeSetSize, v.committeeSize, v.layersPerEpoch)
+	if err != nil {
+		return false, fmt.Errorf("failed to get number of eligible blocks: %v", err)
+	}
+
 	counter := block.EligibilityProof.J
 	if counter >= numberOfEligibleBlocks {
 		return false, fmt.Errorf("proof counter (%d) must be less than number of eligible blocks (%d)", counter,
@@ -115,7 +136,7 @@ func (v BlockEligibilityValidator) getValidAtx(block *types.Block) (*types.Activ
 			atxTargetEpoch, blockEpoch)
 	}
 	if pubString := block.MinerID().String(); atx.NodeID.Key != pubString {
-		return nil, fmt.Errorf("block signer (%s) mismatch with ATX node (%s)", pubString, atx.NodeID.Key)
+		return nil, fmt.Errorf("block vrfsgn (%s) mismatch with ATX node (%s)", pubString, atx.NodeID.Key)
 	}
 	return atx, nil
 }
