@@ -2,8 +2,9 @@
 ./scripts/verify-protoc-gen-go.sh
 
 protoc=./devtools/bin/protoc
-if [[ -v PROTOCPATH ]]; then
+if [[ -n "$PROTOCPATH" ]]; then
 	protoc=${PROTOCPATH};
+	echo "using path from env variable - $protoc"
 fi
 
 compile() {
