@@ -4,7 +4,6 @@
 protoc=./devtools/bin/protoc
 if [[ -n "$PROTOCPATH" ]]; then
 	protoc=${PROTOCPATH};
-	echo "using path from env variable - $protoc"
 fi
 
 compile() {
