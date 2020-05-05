@@ -140,7 +140,7 @@ func (a *addrBook) isLocalAddressUnlocked(addr *node.Info) bool {
 // to the address manager, or to add the address if not already known.
 func (a *addrBook) updateAddress(netAddr, srcAddr *node.Info) {
 
-	if a.isLocalAddressUnlocked(netAddr) {
+	if a.IsLocalAddress(netAddr) {
 		a.logger.Debug("skipping adding a local address %v", netAddr.String())
 		return
 	}
