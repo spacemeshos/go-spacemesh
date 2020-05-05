@@ -53,7 +53,7 @@ type TransactionProcessor struct {
 const newRootKey = "root"
 
 // NewTransactionProcessor returns a new state processor
-func NewTransactionProcessor(allStates, processorDb database.Database, projector Projector, logger log.Log) *TransactionProcessor {
+func NewTransactionProcessor(allStates, processorDb database.Database, projector Projector, txPool *TxMempool, logger log.Log) *TransactionProcessor {
 	stateDb, err := New(types.Hash32{}, NewDatabase(allStates))
 	if err != nil {
 		log.Panic("cannot load state db, %v", err)
@@ -69,7 +69,7 @@ func NewTransactionProcessor(allStates, processorDb database.Database, projector
 		stateQueue:   list.List{},
 		projector:    projector,
 		trie:         stateDb.TrieDB(),
-		pool:         NewTxMemPool(),
+		pool:         txPool,
 		mu:           sync.Mutex{}, // sync between reset and apply mesh.Transactions
 		rootMu:       sync.RWMutex{},
 	}

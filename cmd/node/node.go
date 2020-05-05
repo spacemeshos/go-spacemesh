@@ -496,9 +496,9 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 		return err
 	}
 	app.closers = append(app.closers, appliedTxs)
-	processor := state.NewTransactionProcessor(db, appliedTxs, meshAndPoolProjector, lg.WithName("state"))
+	processor := state.NewTransactionProcessor(db, appliedTxs, meshAndPoolProjector, app.txPool, lg.WithName("state"))
 
-	atxdb := activation.NewDB(atxdbstore, idStore, mdb, layersPerEpoch, validator, app.addLogger(AtxDbLogger, lg))
+	atxdb := activation.NewDB(atxdbstore, idStore, atxpool, mdb, layersPerEpoch, validator, app.addLogger(AtxDbLogger, lg))
 	beaconProvider := &miner.EpochBeaconProvider{}
 	eValidator := miner.NewBlockEligibilityValidator(layerSize, uint32(app.Config.GenesisActiveSet), layersPerEpoch, atxdb, beaconProvider, BLS381.Verify2, app.addLogger(BlkEligibilityLogger, lg))
 
@@ -738,6 +738,8 @@ func (app *SpacemeshApp) stopServices() {
 		app.log.Info("%v closing mesh", app.nodeID.Key)
 		app.mesh.Close()
 	}
+
+	app.gossipListener.Stop()
 
 	// Close all databases.
 	for _, closer := range app.closers {

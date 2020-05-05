@@ -81,7 +81,7 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 	if block.RefBlock != nil {
 		activeSetBlock, err = v.blocks.GetBlock(*block.RefBlock)
 		if err != nil {
-			return false, fmt.Errorf("cannot get refrence block")
+			return false, fmt.Errorf("cannot get refrence block %v")
 		}
 
 	}

@@ -83,9 +83,10 @@ type BlockBuilder struct {
 }
 
 type Config struct {
-	MinerID      types.NodeID
-	Hdist        int
-	AtxsPerBlock int
+	MinerID        types.NodeID
+	Hdist          int
+	AtxsPerBlock   int
+	LayersPerEpoch int
 }
 
 // NewBlockBuilder creates a struct of block builder type.
@@ -158,16 +159,6 @@ type meshProvider interface {
 	GetBlock(id types.BlockID) (*types.Block, error)
 	GetRefBlock(id types.EpochID) types.BlockID
 }
-
-/*
-//used from external API call to dd transaction
-func (t *BlockBuilder) addTransaction(tx *types.Transaction) error {
-	if !t.started {
-		return fmt.Errorf("BlockBuilderStopped")
-	}
-	t.TransactionPool.Put(tx.ID(), tx)
-	return nil
-}*/
 
 func calcHdistRange(id types.LayerID, hdist types.LayerID) (bottom types.LayerID, top types.LayerID) {
 	if hdist == 0 {
@@ -266,6 +257,13 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.ATXID, eligibil
 		ATXIDs: selectAtxs(atxids, t.atxsPerBlock),
 		TxIDs:  txids,
 	}
+	if eligibilityProof.J == 0 {
+		atxs := t.AtxDb.GetEpochAtxs(id.GetEpoch(1))
+		b.ActiveSet = &atxs
+	} else {
+		refBlock := t.meshProvider.GetRefBlock(id.GetEpoch(1))
+		b.RefBlock = &refBlock
+	}
 
 	blockBytes, err := types.InterfaceToBytes(b)
 	if err != nil {
@@ -273,14 +271,6 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.ATXID, eligibil
 	}
 
 	bl := &types.Block{MiniBlock: b, Signature: t.signer.Sign(blockBytes)}
-
-	if eligibilityProof.J == 0 {
-		atxs := t.AtxDb.GetEpochAtxs(id.GetEpoch(1))
-		bl.ActiveSet = &atxs
-	} else {
-		refBlock := t.meshProvider.GetRefBlock(id.GetEpoch(1))
-		bl.RefBlock = &refBlock
-	}
 
 	bl.Initialize()
 
@@ -317,43 +307,6 @@ func selectAtxs(atxs []types.ATXID, atxsPerBlock int) []types.ATXID {
 
 	return selected
 }
-
-/*
-func (t *BlockBuilder) listenForTx() {
-	t.Log.Info("start listening for txs")
-	for {
-		select {
-		case <-t.stopChan:
-			return
-		case data := <-t.txGossipChannel:
-			if !t.syncer.ListenToGossip() {
-				// not accepting txs when not synced
-				continue
-			}
-			if data == nil {
-				continue
-			}
-		}
-	}
-}
-
-
-func (t *BlockBuilder) listenForAtx() {
-	t.Info("start listening for atxs")
-	for {
-		select {
-		case <-t.stopChan:
-			return
-		case data := <-t.atxGossipChannel:
-			if !t.syncer.ListenToGossip() {
-				// not accepting atxs when not synced
-				continue
-			}
-			t.handleGossipAtx(data)
-		}
-	}
-}
-*/
 
 func (t *BlockBuilder) createBlockLoop() {
 	for {

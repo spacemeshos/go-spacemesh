@@ -46,7 +46,7 @@ func (s *ProcessorStateSuite) SetupTest() {
 	lg := log.New("proc_logger", "", "")
 	s.db = database.NewMemDatabase()
 	s.projector = &ProjectorMock{}
-	s.processor = NewTransactionProcessor(s.db, appliedTxsMock{}, s.projector, lg)
+	s.processor = NewTransactionProcessor(s.db, appliedTxsMock{}, s.projector,, lg)
 }
 
 func createAccount(state *TransactionProcessor, addr types.Address, balance int64, nonce uint64) *Object {
@@ -267,7 +267,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Reset() {
 	lg := log.New("proc_logger", "", "")
 	txDb := database.NewMemDatabase()
 	db := database.NewMemDatabase()
-	processor := NewTransactionProcessor(db, txDb, s.projector, lg)
+	processor := NewTransactionProcessor(db, txDb, s.projector,, lg)
 
 	signer1Buf := []byte("22222222222222222222222222222222")
 	signer1Buf = append(signer1Buf, []byte{
@@ -367,7 +367,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 	lg := log.New("proc_logger", "", "")
 	txDb := database.NewMemDatabase()
 	db := database.NewMemDatabase()
-	processor := NewTransactionProcessor(db, txDb, s.projector, lg)
+	processor := NewTransactionProcessor(db, txDb, s.projector,, lg)
 
 	revertToLayer := rand.Intn(testCycles)
 	revertAfterLayer := rand.Intn(testCycles - revertToLayer) //rand.Intn(min(testCycles - revertToLayer,maxPas.processors))
@@ -499,7 +499,7 @@ func createXdrSignedTransaction(t *testing.T, key ed25519.PrivateKey) *types.Tra
 func TestValidateTxSignature(t *testing.T) {
 	db := database.NewMemDatabase()
 	lg := log.New("proc_logger", "", "")
-	proc := NewTransactionProcessor(db, appliedTxsMock{}, &ProjectorMock{}, lg)
+	proc := NewTransactionProcessor(db, appliedTxsMock{}, &ProjectorMock{},, lg)
 
 	// positive flow
 	pub, pri, _ := ed25519.GenerateKey(crand.Reader)
@@ -522,7 +522,7 @@ func TestTransactionProcessor_GetStateRoot(t *testing.T) {
 
 	db := database.NewMemDatabase()
 	lg := log.New("proc_logger", "", "")
-	proc := NewTransactionProcessor(db, appliedTxsMock{}, &ProjectorMock{}, lg)
+	proc := NewTransactionProcessor(db, appliedTxsMock{}, &ProjectorMock{},, lg)
 
 	r.NotEqual(types.Hash32{}, proc.rootHash)
 
@@ -537,7 +537,7 @@ func TestTransactionProcessor_ApplyTransactions(t *testing.T) {
 	lg := log.New("proc_logger", "", "")
 	db := database.NewMemDatabase()
 	projector := &ProjectorMock{}
-	processor := NewTransactionProcessor(db, db, projector, lg)
+	processor := NewTransactionProcessor(db, db, projector,, lg)
 
 	signerBuf := []byte("22222222222222222222222222222222")
 	signerBuf = append(signerBuf, []byte{

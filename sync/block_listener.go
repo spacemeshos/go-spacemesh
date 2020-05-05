@@ -91,6 +91,15 @@ func (bl *BlockListener) handleBlock(data service.GossipMessage) {
 	//set the block id when received
 	blk.Initialize()
 
+	activeSet := 0
+	if blk.ActiveSet != nil {
+		activeSet = len(*blk.ActiveSet)
+	}
+
+	refBlock := ""
+	if blk.RefBlock != nil {
+		refBlock = blk.RefBlock.String()
+	}
 	bl.Log.With().Info("got new block",
 		blk.ID(),
 		blk.LayerIndex,
@@ -102,6 +111,8 @@ func (bl *BlockListener) handleBlock(data service.GossipMessage) {
 		log.Int("vote_count", len(blk.BlockVotes)),
 		blk.ATXID,
 		log.Uint32("eligibility_counter", blk.EligibilityProof.J),
+		log.String("ref_block", refBlock),
+		log.Int("active_set",activeSet),
 	)
 	//check if known
 	if _, err := bl.GetBlock(blk.ID()); err == nil {
