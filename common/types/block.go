@@ -23,7 +23,7 @@ func (id BlockID) String() string {
 }
 
 // Field returns a log field. Implements the LoggableField interface.
-func (id BlockID) Field() log.LoggableField {
+func (id BlockID) Field() log.Field {
 	return log.String("block_id", id.AsHash32().ShortString())
 }
 
@@ -56,7 +56,7 @@ func (l LayerID) Uint64() uint64 {
 }
 
 // Field returns a log field. Implements the LoggableField interface.
-func (l LayerID) Field() log.LoggableField { return log.Uint64("layer_id", uint64(l)) }
+func (l LayerID) Field() log.Field { return log.Uint64("layer_id", uint64(l)) }
 
 // NodeID contains a miner's two public keys.
 type NodeID struct {
@@ -85,7 +85,7 @@ func (id NodeID) ShortString() string {
 }
 
 // Field returns a log field. Implements the LoggableField interface.
-func (id NodeID) Field() log.LoggableField { return log.String("node_id", id.Key) }
+func (id NodeID) Field() log.Field { return log.String("node_id", id.Key) }
 
 // BlockEligibilityProof includes the required values that, along with the miner's VRF public key, allow non-interactive
 // block eligibility validation.
