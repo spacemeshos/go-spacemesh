@@ -189,12 +189,12 @@ func (atx *ActivationTx) Fields(layersPerEpoch uint16, size int) []log.LoggableF
 	}
 
 	return []log.LoggableField{
-		log.AtxID(atx.ShortString()),
+		atx.ID(),
 		log.String("sender_id", atx.NodeID.ShortString()),
 		log.String("prev_atx_id", atx.PrevATXID.ShortString()),
 		log.String("pos_atx_id", atx.PositioningATX.ShortString()),
-		log.LayerID(uint64(atx.PubLayerID)),
-		log.EpochID(uint64(atx.PubLayerID.GetEpoch(layersPerEpoch))),
+		atx.PubLayerID,
+		atx.PubLayerID.GetEpoch(layersPerEpoch),
 		log.Uint32("active_set", atx.ActiveSetSize),
 		log.Int("viewlen", len(atx.View)),
 		log.Uint64("sequence_number", atx.Sequence),
