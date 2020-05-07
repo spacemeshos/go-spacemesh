@@ -17,7 +17,7 @@ const AtxsPerBlockLimit = 100
 // BlockID is a 20-byte sha256 sum of the serialized block, used to identify it.
 type BlockID Hash20
 
-// String returns the 5-character prefix of the hex representation of the ID.
+// String returns a short prefix of the hex representation of the ID.
 func (id BlockID) String() string {
 	return id.AsHash32().MediumString()
 }
