@@ -2,6 +2,7 @@ package discovery
 
 import (
 	"context"
+
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 )
@@ -149,6 +150,10 @@ type mockAddrBook struct {
 }
 
 func (m *mockAddrBook) Stop() {
+
+}
+
+func (m *mockAddrBook) Start() {
 
 }
 

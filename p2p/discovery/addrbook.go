@@ -84,6 +84,9 @@ type addrBook struct {
 	logger log.Log
 	mtx    sync.RWMutex
 
+	path          string
+	peersFileName string
+
 	rand *rand.Rand
 	key  [32]byte
 	// todo: consider different lock to index (rw?)
@@ -502,8 +505,19 @@ func (a *addrBook) Start() {
 	if atomic.AddInt32(&a.started, 1) != 1 {
 		return
 	}
-	// todo: load peers from hard drive
-	// todo: save peers to hard drive
+
+	if a.path != "" {
+		peersFileName := defaultPeersFileName
+		if a.peersFileName != "" {
+			peersFileName = a.peersFileName
+		}
+
+		finalFilePath := filepath.Join(a.path, config.P2PDirectoryPath, peersFileName)
+		a.loadPeers(finalFilePath)
+
+		a.wg.Add(1)
+		go func() { a.saveRoutine(finalFilePath); a.wg.Done() }()
+	}
 }
 
 // Stop gracefully shuts down the address manager by stopping the main handler.
@@ -676,24 +690,12 @@ func (a *addrBook) reset() {
 func newAddrBook(cfg config.SwarmConfig, path string, logger log.Log) *addrBook {
 	//TODO use config for const params.
 	am := addrBook{
-		logger: logger,
-		rand:   rand.New(rand.NewSource(time.Now().UnixNano())),
-		quit:   make(chan struct{}),
+		logger:        logger,
+		path:          path,
+		peersFileName: cfg.PeersFile,
+		rand:          rand.New(rand.NewSource(time.Now().UnixNano())),
+		quit:          make(chan struct{}),
 	}
 	am.reset()
-
-	if path != "" {
-
-		peersfile := defaultPeersFileName
-		if cfg.PeersFile != "" {
-			peersfile = cfg.PeersFile
-		}
-
-		finalFilePath := filepath.Join(path, config.P2PDirectoryPath, peersfile)
-		am.loadPeers(finalFilePath)
-
-		am.wg.Add(1)
-		go func() { am.saveRoutine(finalFilePath); am.wg.Done() }()
-	}
 	return &am
 }

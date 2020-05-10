@@ -5,6 +5,7 @@ package discovery
 import (
 	"context"
 	"errors"
+
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
@@ -56,6 +57,7 @@ type addressBook interface {
 	AddLocalAddress(info *node.Info)
 	IsLocalAddress(info *node.Info) bool
 
+	Start()
 	Stop()
 }
 
@@ -147,16 +149,15 @@ func (d *Discovery) Update(addr, src *node.Info) {
 
 // New creates a new Discovery
 func New(ln node.LocalNode, config config.SwarmConfig, service server.Service, path string, logger log.Log) *Discovery {
-
-	addrbook := newAddrBook(config, path, logger)
 	d := &Discovery{
 		config: config,
 		logger: logger,
 		local:  ln,
-		rt:     addrbook,
+		rt:     newAddrBook(config, path, logger),
 	}
 
-	addrbook.AddLocalAddress(&node.Info{ID: ln.PublicKey().Array()})
+	d.rt.Start()
+	d.rt.AddLocalAddress(&node.Info{ID: ln.PublicKey().Array()})
 
 	d.disc = newProtocol(ln.PublicKey(), d.rt, service, logger)
 
