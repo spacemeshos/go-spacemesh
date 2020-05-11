@@ -105,7 +105,7 @@ func (*mockIStore) GetIdentity(string) (types.NodeID, error) {
 
 type validatorMock struct{}
 
-func (*validatorMock) Validate(signing.PublicKey, *types.NIPST, types.Hash32) error {
+func (*validatorMock) Validate(signing.PublicKey, *types.NIPST, uint64, types.Hash32) error {
 	return nil
 }
 

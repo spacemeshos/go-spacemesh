@@ -59,6 +59,7 @@ var EmptyATXID = &ATXID{}
 type ActivationTxHeader struct {
 	NIPSTChallenge
 	id            *ATXID // non-exported cache of the ATXID
+	Space         uint64
 	Coinbase      Address
 	ActiveSetSize uint32
 }
@@ -151,12 +152,13 @@ type ActivationTx struct {
 
 // NewActivationTx returns a new activation transaction. The ATXID is calculated and cached.
 func NewActivationTx(nipstChallenge NIPSTChallenge, coinbase Address, activeSetSize uint32, view []BlockID,
-	nipst *NIPST, commitment *PostProof) *ActivationTx {
+	nipst *NIPST, space uint64, commitment *PostProof) *ActivationTx {
 
 	atx := &ActivationTx{
 		InnerActivationTx: &InnerActivationTx{
 			ActivationTxHeader: &ActivationTxHeader{
 				NIPSTChallenge: nipstChallenge,
+				Space:          space,
 				Coinbase:       coinbase,
 				ActiveSetSize:  activeSetSize,
 			},
@@ -267,10 +269,6 @@ type PoetRound struct {
 // after learning the challenge C. (2) the prover did not know the NIPST until D time
 // after the prover learned C.
 type NIPST struct {
-	// space is the amount of storage which the prover
-	// requires to dedicate for generating the NIPST.
-	Space uint64
-
 	// nipstChallenge is the challenge for PoET which is
 	// constructed from fields in the activation transaction.
 	NipstChallenge *Hash32

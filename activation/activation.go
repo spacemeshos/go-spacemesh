@@ -45,7 +45,7 @@ type idStore interface {
 }
 
 type nipstValidator interface {
-	Validate(id signing.PublicKey, nipst *types.NIPST, expectedChallenge types.Hash32) error
+	Validate(minerID signing.PublicKey, nipst *types.NIPST, space uint64, expectedChallenge types.Hash32) error
 	VerifyPost(id signing.PublicKey, proof *types.PostProof, space uint64) error
 }
 
@@ -100,6 +100,7 @@ type Builder struct {
 	accountLock     sync.RWMutex
 	initStatus      int32
 	initDone        chan struct{}
+	committedSpace  uint64
 	log             log.Log
 }
 
@@ -113,7 +114,7 @@ type syncer interface {
 }
 
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
-func NewBuilder(nodeID types.NodeID, coinbaseAccount types.Address, signer signer, db atxDBProvider, net broadcaster, mesh meshProvider, layersPerEpoch uint16, nipstBuilder nipstBuilder, postProver PostProverClient, layerClock layerClock, syncer syncer, store bytesStore, log log.Log) *Builder {
+func NewBuilder(nodeID types.NodeID, coinbaseAccount types.Address, spaceToCommit uint64, signer signer, db atxDBProvider, net broadcaster, mesh meshProvider, layersPerEpoch uint16, nipstBuilder nipstBuilder, postProver PostProverClient, layerClock layerClock, syncer syncer, store bytesStore, log log.Log) *Builder {
 	return &Builder{
 		signer:          signer,
 		nodeID:          nodeID,
@@ -126,10 +127,11 @@ func NewBuilder(nodeID types.NodeID, coinbaseAccount types.Address, signer signe
 		postProver:      postProver,
 		layerClock:      layerClock,
 		stop:            make(chan struct{}),
-		syncer:          syncer,
 		store:           store,
+		syncer:          syncer,
 		initStatus:      InitIdle,
 		initDone:        make(chan struct{}),
+		committedSpace:  spaceToCommit,
 		log:             log,
 	}
 }
@@ -431,7 +433,7 @@ func (b *Builder) PublishActivationTx() error {
 		commitment = b.commitment
 	}
 
-	atx := types.NewActivationTx(*b.challenge, b.getCoinbaseAccount(), activeSetSize, view, nipst, commitment)
+	atx := types.NewActivationTx(*b.challenge, b.getCoinbaseAccount(), activeSetSize, view, nipst, b.committedSpace, commitment)
 
 	b.log.With().Info("active ids seen for epoch", log.Uint64("atx_pub_epoch", uint64(pubEpoch)),
 		log.Uint32("view_cnt", activeSetSize))

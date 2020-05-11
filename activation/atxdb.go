@@ -385,7 +385,7 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 		if !bytes.Equal(atx.Commitment.MerkleRoot, atx.CommitmentMerkleRoot) {
 			return errors.New("commitment merkle root included in challenge is not equal to the merkle root included in the proof")
 		}
-		if err := db.nipstValidator.VerifyPost(*pub, atx.Commitment, atx.Nipst.Space); err != nil {
+		if err := db.nipstValidator.VerifyPost(*pub, atx.Commitment, atx.Space); err != nil {
 			return fmt.Errorf("invalid commitment proof: %v", err)
 		}
 	}
@@ -426,7 +426,7 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 	db.log.With().Info("Validated NIPST", log.String("challenge_hash", hash.String()), log.AtxID(atx.ShortString()))
 
 	pubKey := signing.NewPublicKey(util.Hex2Bytes(atx.NodeID.Key))
-	if err = db.nipstValidator.Validate(*pubKey, atx.Nipst, *hash); err != nil {
+	if err = db.nipstValidator.Validate(*pubKey, atx.Nipst, atx.Space, *hash); err != nil {
 		return fmt.Errorf("NIPST not valid: %v", err)
 	}
 
@@ -490,6 +490,8 @@ func (db *DB) StoreAtx(ech types.EpochID, atx *types.ActivationTx) error {
 		return err
 	}
 	db.log.Debug("finished storing atx %v, in epoch %v", atx.ShortString(), ech)
+
+	// atx.Space
 
 	return nil
 }

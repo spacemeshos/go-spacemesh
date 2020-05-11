@@ -563,7 +563,10 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	if coinBase.Big().Uint64() == 0 && app.Config.StartMining {
 		app.log.Panic("invalid Coinbase account")
 	}
-	atxBuilder := activation.NewBuilder(nodeID, coinBase, sgn, atxdb, swarm, msh, layersPerEpoch, nipstBuilder, postClient, clock, syncer, store, app.addLogger("atxBuilder", lg))
+	if app.Config.SpaceToCommit == 0 {
+		app.Config.SpaceToCommit = app.Config.POST.SpacePerUnit
+	}
+	atxBuilder := activation.NewBuilder(nodeID, coinBase, app.Config.SpaceToCommit, sgn, atxdb, swarm, msh, layersPerEpoch, nipstBuilder, postClient, clock, syncer, store, app.addLogger("atxBuilder", lg))
 
 	app.blockProducer = blockProducer
 	app.blockListener = blockListener
@@ -644,7 +647,7 @@ func (app *SpacemeshApp) startServices() {
 
 	if app.Config.StartMining {
 		coinBase := types.HexToAddress(app.Config.CoinbaseAccount)
-		err := app.atxBuilder.StartPost(coinBase, app.Config.POST.DataDir, app.Config.POST.SpacePerUnit)
+		err := app.atxBuilder.StartPost(coinBase, app.Config.POST.DataDir, app.Config.SpaceToCommit)
 		if err != nil {
 			log.Error("Error initializing post, err: %v", err)
 			log.Panic("Error initializing post")
