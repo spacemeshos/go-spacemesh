@@ -424,7 +424,6 @@ func (app *SpacemeshApp) SetLogLevel(name, loglevel string) error {
 	return nil
 }
 
-
 func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	swarm service.Service,
 	dbStorepath string,
@@ -500,7 +499,6 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 
 	atxdb := activation.NewDB(atxdbstore, idStore, atxpool, mdb, layersPerEpoch, validator, app.addLogger(AtxDbLogger, lg))
 	beaconProvider := &miner.EpochBeaconProvider{}
-	eValidator := miner.NewBlockEligibilityValidator(layerSize, uint32(app.Config.GenesisActiveSet), layersPerEpoch, atxdb, beaconProvider, BLS381.Verify2, app.addLogger(BlkEligibilityLogger, lg))
 
 	var msh *mesh.Mesh
 	var trtl tortoise.Tortoise
@@ -513,6 +511,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 		msh = mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, app.txPool, atxpool, processor, app.addLogger(MeshLogger, lg))
 		app.setupGenesis(processor, msh)
 	}
+	eValidator := miner.NewBlockEligibilityValidator(layerSize, uint32(app.Config.GenesisActiveSet), layersPerEpoch, atxdb, beaconProvider, BLS381.Verify2, msh, app.addLogger(BlkEligibilityLogger, lg))
 
 	syncConf := sync.Configuration{Concurrency: 4,
 		LayerSize:       int(layerSize),
@@ -550,12 +549,13 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 
 	stateAndMeshProjector := pendingtxs.NewStateAndMeshProjector(processor, msh)
 	cfg := miner.Config{
-		Hdist:        app.Config.Hdist,
-		MinerID:      nodeID,
-		AtxsPerBlock: app.Config.AtxsPerBlock,
+		Hdist:          app.Config.Hdist,
+		MinerID:        nodeID,
+		AtxsPerBlock:   app.Config.AtxsPerBlock,
+		LayersPerEpoch: layersPerEpoch,
 	}
 
-	blockProducer := miner.NewBlockBuilder(cfg, sgn, swarm, clock.Subscribe() , coinToss, msh, ha, blockOracle, syncer, stateAndMeshProjector, app.txPool, atxpool, atxdb, app.addLogger(BlockBuilderLogger, lg))
+	blockProducer := miner.NewBlockBuilder(cfg, sgn, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle, syncer, stateAndMeshProjector, app.txPool, atxpool, atxdb, app.addLogger(BlockBuilderLogger, lg))
 	blockListener := sync.NewBlockListener(swarm, syncer, 4, app.addLogger(BlockListenerLogger, lg))
 
 	poetListener := activation.NewPoetListener(swarm, poetDb, app.addLogger(PoetListenerLogger, lg))

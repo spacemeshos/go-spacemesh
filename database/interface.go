@@ -16,7 +16,11 @@
 
 package database
 
-import "github.com/syndtr/goleveldb/leveldb/iterator"
+import (
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/syndtr/goleveldb/leveldb/iterator"
+	"time"
+)
 
 // IdealBatchSize is the best batch size
 // Code using batches should try to add this much data to the batch.
@@ -61,3 +65,39 @@ type Iterator interface {
 	Key() []byte
 	Value() []byte
 }
+
+type ContextDBCreator struct {
+	Create  func(file string, cache int, handles int, logger log.Log) (Database, error)
+	Path    string
+	Context string
+}
+
+func (c ContextDBCreator) CreateRealDB(file string, cache int, handles int, logger log.Log) (Database, error) {
+	return NewLDBDatabase(c.Path+c.Context+file, cache, handles, logger)
+}
+
+func (c ContextDBCreator) CreateMemDB(file string, cache int, handles int, logger log.Log) (Database, error) {
+	return NewMemDatabase(), nil
+}
+
+var DBC = ContextDBCreator{
+	Path:    "../tmp/test/" + time.Now().String(),
+	Context: "",
+}
+
+var Create = DBC.CreateRealDB
+
+func SwitchCreationContext(path, context string) {
+	var c = ContextDBCreator{
+		Path:    path,
+		Context: context,
+	}
+	Create = c.CreateRealDB
+}
+
+func SwitchToMemCreationContext() {
+	var c = ContextDBCreator{
+	}
+	Create = c.CreateMemDB
+}
+

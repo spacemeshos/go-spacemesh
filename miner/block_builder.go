@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
+	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -80,19 +81,26 @@ type BlockBuilder struct {
 	started         bool
 	atxsPerBlock    int // number of atxs to select per block
 	projector       projector
+	db              database.Database
+	layerPerEpoch   uint16
 }
 
 type Config struct {
 	MinerID        types.NodeID
 	Hdist          int
 	AtxsPerBlock   int
-	LayersPerEpoch int
+	LayersPerEpoch uint16
 }
 
 // NewBlockBuilder creates a struct of block builder type.
 func NewBlockBuilder(config Config, sgn signer, net p2p.Service, beginRoundEvent chan types.LayerID, weakCoin weakCoinProvider, orph meshProvider, hare hareResultProvider, blockOracle blockOracle, syncer syncer, projector projector, txPool txPool, atxPool atxPool, atxDB atxDb, lg log.Log) *BlockBuilder {
 
 	seed := binary.BigEndian.Uint64(md5.New().Sum([]byte(config.MinerID.Key)))
+
+	db, err := database.Create("builder", 16, 16, lg)
+	if err != nil {
+		lg.Panic("cannot create block builder DB %v", err)
+	}
 
 	return &BlockBuilder{
 		minerID:         config.MinerID,
@@ -115,6 +123,8 @@ func NewBlockBuilder(config Config, sgn signer, net p2p.Service, beginRoundEvent
 		AtxDb:           atxDB,
 		AtxPool:         atxPool,
 		TransactionPool: txPool,
+		db:              db,
+		layerPerEpoch:   config.LayersPerEpoch,
 	}
 
 }
@@ -137,6 +147,7 @@ func (t *BlockBuilder) Start() error {
 func (t *BlockBuilder) Close() error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	t.db.Close()
 	if !t.started {
 		return fmt.Errorf("already stopped")
 	}
@@ -157,7 +168,6 @@ type meshProvider interface {
 	LayerBlockIds(index types.LayerID) ([]types.BlockID, error)
 	GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error)
 	GetBlock(id types.BlockID) (*types.Block, error)
-	GetRefBlock(id types.EpochID) types.BlockID
 }
 
 func calcHdistRange(id types.LayerID, hdist types.LayerID) (bottom types.LayerID, top types.LayerID) {
@@ -231,6 +241,23 @@ func (t *BlockBuilder) getVotes(id types.LayerID) ([]types.BlockID, error) {
 	return votes, nil
 }
 
+func getEpochKey(ID types.EpochID) []byte {
+	return []byte(fmt.Sprintf("e_%v", ID))
+}
+
+func (t *BlockBuilder) storeRefBlock(epoch types.EpochID, blockID types.BlockID) error {
+	return t.db.Put(getEpochKey(epoch), blockID.ToBytes())
+}
+
+func (t *BlockBuilder) getRefBlock(epoch types.EpochID) (blockID types.BlockID, err error) {
+	bts, err := t.db.Get(getEpochKey(epoch))
+	if err != nil {
+		return
+	}
+	err = types.BytesToInterface(bts, &blockID)
+	return
+}
+
 func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.ATXID, eligibilityProof types.BlockEligibilityProof, txids []types.TransactionID, atxids []types.ATXID) (*types.Block, error) {
 
 	votes, err := t.getVotes(id)
@@ -257,11 +284,15 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.ATXID, eligibil
 		ATXIDs: selectAtxs(atxids, t.atxsPerBlock),
 		TxIDs:  txids,
 	}
-	if eligibilityProof.J == 0 {
-		atxs := t.AtxDb.GetEpochAtxs(id.GetEpoch(1))
+	epoch := id.GetEpoch(t.layerPerEpoch)
+	refBlock, err := t.getRefBlock(epoch)
+	if err != nil {
+		if eligibilityProof.J != 0 {
+			t.Log.Error("cannot read ref block for epoch %v err %v", epoch, err)
+		}
+		atxs := t.AtxDb.GetEpochAtxs(id.GetEpoch(t.layerPerEpoch))
 		b.ActiveSet = &atxs
 	} else {
-		refBlock := t.meshProvider.GetRefBlock(id.GetEpoch(1))
 		b.RefBlock = &refBlock
 	}
 
@@ -273,6 +304,15 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.ATXID, eligibil
 	bl := &types.Block{MiniBlock: b, Signature: t.signer.Sign(blockBytes)}
 
 	bl.Initialize()
+
+	if b.ActiveSet != nil {
+		log.Info("storing ref block for epoch %v id %v", epoch, bl.ID())
+		err := t.storeRefBlock(epoch, bl.ID())
+		if err != nil {
+			t.Log.Error("cannot store ref block for epoch %v err %v", epoch, err)
+			//todo: panic?
+		}
+	}
 
 	t.Log.Event().Info("block created",
 		bl.ID(),

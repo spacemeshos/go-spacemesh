@@ -27,8 +27,7 @@ type BlockEligibilityValidator struct {
 }
 
 // NewBlockEligibilityValidator returns a new BlockEligibilityValidator.
-func NewBlockEligibilityValidator(committeeSize, genesisActiveSetSize uint32, layersPerEpoch uint16, activationDb activationDB,
-	beaconProvider *EpochBeaconProvider, validateVRF VRFValidationFunction, log log.Log) *BlockEligibilityValidator {
+func NewBlockEligibilityValidator(committeeSize, genesisActiveSetSize uint32, layersPerEpoch uint16, activationDb activationDB, beaconProvider *EpochBeaconProvider, validateVRF VRFValidationFunction, blockDB blockDB, log log.Log) *BlockEligibilityValidator {
 
 	return &BlockEligibilityValidator{
 		committeeSize:        committeeSize,
@@ -37,6 +36,7 @@ func NewBlockEligibilityValidator(committeeSize, genesisActiveSetSize uint32, la
 		activationDb:         activationDb,
 		beaconProvider:       beaconProvider,
 		validateVRF:          validateVRF,
+		blocks:               blockDB,
 		log:                  log,
 	}
 }
@@ -81,7 +81,7 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 	if block.RefBlock != nil {
 		activeSetBlock, err = v.blocks.GetBlock(*block.RefBlock)
 		if err != nil {
-			return false, fmt.Errorf("cannot get refrence block %v")
+			return false, fmt.Errorf("cannot get refrence block %v", *block.RefBlock)
 		}
 
 	}
