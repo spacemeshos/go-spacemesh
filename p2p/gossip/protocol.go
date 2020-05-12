@@ -15,8 +15,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 )
 
-//go:generate mockgen -package=gossip -destination=./protocol_mock_test.go -source=./protocol.go peersManager, baseNetwork, prioQ
-
 const oldMessageCacheSize = 10000
 const propagateHandleBufferSize = 5000 // number of MessageValidation that we allow buffering, above this number protocols will get stuck
 

@@ -16,6 +16,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 )
 
+//go:generate mockgen -package=gossip -destination=./protocol_mock_test.go -source=./protocol.go peersManager, baseNetwork, prioQ
+
 var logger = log.NewDefault("gossip-protocol-test")
 
 func TestProcessMessage(t *testing.T) {
