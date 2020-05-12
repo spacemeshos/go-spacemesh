@@ -285,10 +285,14 @@ func (app *SpacemeshApp) setupLogging() {
 }
 
 func (app *SpacemeshApp) setupTelemetry() {
-	log.Info("Activating telemetry")
+	log.With().Info("Activating telemetry",
+		log.String("endpoint", app.Config.TELEMETRY.Endpoint),
+		log.String("token", app.Config.TELEMETRY.Token),
+		log.String("organization", app.Config.TELEMETRY.Organization),
+		log.String("bucket", app.Config.TELEMETRY.Bucket))
 	// create new client with default option for server url authenticate by token
 	client := influxdb2.NewClient(app.Config.TELEMETRY.Endpoint, app.Config.TELEMETRY.Token)
-	// user blocking write client for writes to desired bucket
+	// uses non-blocking write client for writes to desired bucket
 	writeApi := client.WriteApi(app.Config.TELEMETRY.Organization, app.Config.TELEMETRY.Bucket)
 	// Get errors channel
 	//errorsCh := writeApi.Errors()
