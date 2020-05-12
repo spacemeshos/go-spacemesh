@@ -463,12 +463,30 @@ func (suite *AppTestSuite) validateLastATXActiveSetSize(app *SpacemeshApp) {
 	suite.True(int(atx.ActiveSetSize) == len(suite.apps), "atx: %v node: %v", atx.ShortString(), app.nodeID.Key[:5])
 }
 
+// travis has a 10 minutes timeout
+// this ensures we print something before the timeout
+func patchTravisTimeout(termchan chan struct{}) {
+	ticker := time.NewTimer(5 * time.Minute)
+	for {
+		select {
+		case <-ticker.C:
+			fmt.Printf("Travis Patch\n")
+			ticker = time.NewTimer(5 * time.Minute)
+		case <-termchan:
+			return
+		}
+	}
+}
+
 func TestAppTestSuite(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
 	//defer leaktest.Check(t)()
+	term := make(chan struct{})
+	go patchTravisTimeout(term)
 	suite.Run(t, new(AppTestSuite))
+	close(term)
 }
 
 func TestShutdown(t *testing.T) {

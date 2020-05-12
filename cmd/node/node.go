@@ -624,21 +624,6 @@ func (app *SpacemeshApp) HareFactory(mdb *mesh.DB, swarm service.Service, sgn ha
 	return ha
 }
 
-// travis has a 10 minutes timeout
-// this ensures we print something before the timeout
-func (app *SpacemeshApp) patchTravisTimeout() {
-	ticker := time.NewTimer(5 * time.Minute)
-	for {
-		select {
-		case <-ticker.C:
-			fmt.Printf("Travis Patch\n")
-			ticker = time.NewTimer(5 * time.Minute)
-		case <-app.term:
-			return
-		}
-	}
-}
-
 func (app *SpacemeshApp) startServices() {
 	app.blockListener.Start()
 	app.syncer.Start()
@@ -666,7 +651,6 @@ func (app *SpacemeshApp) startServices() {
 	app.atxBuilder.Start()
 	app.clock.StartNotifying()
 	go app.checkTimeDrifts()
-	go app.patchTravisTimeout()
 }
 
 func (app *SpacemeshApp) stopServices() {
