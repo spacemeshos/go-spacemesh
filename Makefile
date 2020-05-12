@@ -1,5 +1,5 @@
 BINARY := go-spacemesh
-VERSION := 0.1.6
+VERSION = $(shell cat version.txt)
 COMMIT = $(shell git rev-parse HEAD)
 SHA = $(shell git rev-parse --short HEAD)
 CURR_DIR = $(shell pwd)
@@ -159,6 +159,24 @@ cover:
 		tail -n +2 cover.out >> cover-all.out;)
 	go tool cover -html=cover-all.out
 .PHONY: cover
+
+
+tag-and-build:
+	@git diff --quiet || (echo "working directory must be clean"; exit 2)
+	echo ${VERSION} > version.txt
+	git commit -m "bump version to ${VERSION}" version.txt
+	git tag ${VERSION}
+	git push origin ${VERSION}
+	docker build -t go-spacemesh:${VERSION} .
+	docker tag go-spacemesh:${VERSION} spacemeshos/go-spacemesh:${VERSION}
+	docker push spacemeshos/go-spacemesh:${VERSION}
+.PHONY: tag-and-build
+
+
+list-versions:
+	@echo "Latest 5 tagged versions:\n"
+	@git for-each-ref --sort=-creatordate --count=5 --format '%(creatordate:short): %(refname:short)' refs/tags
+.PHONY: list-versions
 
 
 dockerbuild-go:
