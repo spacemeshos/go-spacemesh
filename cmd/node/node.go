@@ -175,7 +175,7 @@ func LoadConfigFromFile() (*cfg.Config, error) {
 	vip := viper.New()
 	// read in default config if passed as param using viper
 	if err := cfg.LoadConfig(fileLocation, vip); err != nil {
-		log.Error(fmt.Sprintf("couldn't load config file at location: %s swithing to defaults \n error: %v.",
+		log.Error(fmt.Sprintf("couldn't load config file at location: %s switching to defaults \n error: %v.",
 			fileLocation, err))
 		// return err
 	}
