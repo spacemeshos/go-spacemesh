@@ -105,3 +105,15 @@ func TestSpacemeshApp_AddLogger(t *testing.T) {
 	r.Equal("warn", app.loggers["hare"].String())
 	l.Info("not supposed to be printed")
 }
+
+func TestSpacemeshApp_AddTelemetry(t *testing.T) {
+	r := require.New(t)
+	app := NewSpacemeshApp()
+	app.setupTelemetry()
+	// ensure there were no errors
+	errorsCh := app.writeApi.Errors()
+	for err := range errorsCh {
+		r.NoError(err)
+	}
+	app.client.Close()
+}

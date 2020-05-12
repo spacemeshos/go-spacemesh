@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	p2pConfig "github.com/spacemeshos/go-spacemesh/p2p/config"
+	telemetryConfig "github.com/spacemeshos/go-spacemesh/telemetry/config"
 	timeConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
 	postConfig "github.com/spacemeshos/post/config"
 	"github.com/spf13/viper"
@@ -41,14 +42,15 @@ var (
 // Config defines the top level configuration for a spacemesh node
 type Config struct {
 	BaseConfig      `mapstructure:"main"`
-	P2P             p2pConfig.Config      `mapstructure:"p2p"`
-	API             apiConfig.Config      `mapstructure:"api"`
-	HARE            hareConfig.Config     `mapstructure:"hare"`
-	HareEligibility eligConfig.Config     `mapstructure:"hare-eligibility"`
-	TIME            timeConfig.TimeConfig `mapstructure:"time"`
-	REWARD          mesh.Config           `mapstructure:"reward"`
-	POST            postConfig.Config     `mapstructure:"post"`
-	LOGGING         LoggerConfig          `mapstructure:"logging"`
+	P2P             p2pConfig.Config       `mapstructure:"p2p"`
+	API             apiConfig.Config       `mapstructure:"api"`
+	HARE            hareConfig.Config      `mapstructure:"hare"`
+	HareEligibility eligConfig.Config      `mapstructure:"hare-eligibility"`
+	TIME            timeConfig.TimeConfig  `mapstructure:"time"`
+	REWARD          mesh.Config            `mapstructure:"reward"`
+	POST            postConfig.Config      `mapstructure:"post"`
+	LOGGING         LoggerConfig           `mapstructure:"logging"`
+	TELEMETRY       telemetryConfig.Config `mapstructure:"telemetry"`
 }
 
 // BaseConfig defines the default configuration options for spacemesh app
@@ -145,6 +147,7 @@ func DefaultConfig() Config {
 		TIME:            timeConfig.DefaultConfig(),
 		REWARD:          mesh.DefaultMeshConfig(),
 		POST:            activation.DefaultConfig(),
+		TELEMETRY:       telemetryConfig.DefaultConfig(),
 	}
 }
 

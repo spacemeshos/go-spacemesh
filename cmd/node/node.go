@@ -38,6 +38,7 @@ import (
 	"runtime/pprof"
 	"time"
 
+	"github.com/influxdata/influxdb-client-go"
 	"github.com/spacemeshos/go-spacemesh/api"
 	cfg "github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
@@ -159,6 +160,8 @@ type SpacemeshApp struct {
 	edSgn          *signing.EdSigner
 	closers        []interface{ Close() }
 	log            log.Log
+	client         influxdb2.InfluxDBClient
+	writeApi       influxdb2.WriteApi
 	txPool         *miner.TxMempool
 	loggers        map[string]*zap.AtomicLevel
 	term           chan struct{} // this channel is closed when closing services, goroutines should wait on this channel in order to terminate
@@ -250,6 +253,8 @@ func (app *SpacemeshApp) Initialize(cmd *cobra.Command, args []string) (err erro
 
 	app.setupLogging()
 
+	app.setupTelemetry()
+
 	app.introduction()
 
 	drift, err := timesync.CheckSystemClockDrift()
@@ -277,6 +282,32 @@ func (app *SpacemeshApp) setupLogging() {
 		log.Info("pubsubing on %v", app.Config.PublishEventsURL)
 		events.InitializeEventPubsub(app.Config.PublishEventsURL)
 	}
+}
+
+func (app *SpacemeshApp) setupTelemetry() {
+	log.Info("Activating telemetry")
+	// create new client with default option for server url authenticate by token
+	client := influxdb2.NewClient(app.Config.TELEMETRY.Endpoint, app.Config.TELEMETRY.Token)
+	// user blocking write client for writes to desired bucket
+	writeApi := client.WriteApi(app.Config.TELEMETRY.Organization, app.Config.TELEMETRY.Bucket)
+	// Get errors channel
+	//errorsCh := writeApi.Errors()
+	// Create go proc for reading and logging errors
+	//go func() {
+	//	for err := range errorsCh {
+	//		log.Error("telemetry write error: %s\n", err.Error())
+	//	}
+	//}()
+	// create point using fluent style
+	p := influxdb2.NewPointWithMeasurement("stat").
+		AddTag("unit", "temperature").
+		AddField("avg", 23.2).
+		AddField("max", 45).
+		SetTime(time.Now())
+	writeApi.WritePoint(p)
+	// Save so we can shut it down later
+	app.client = client
+	app.writeApi = writeApi
 }
 
 func (app *SpacemeshApp) getAppInfo() string {
@@ -724,6 +755,14 @@ func (app *SpacemeshApp) stopServices() {
 	if app.mesh != nil {
 		app.log.Info("%v closing mesh", app.nodeID.Key)
 		app.mesh.Close()
+	}
+	if app.writeApi != nil {
+		app.log.Info("%v flushing telemetry channel", app.nodeID.Key)
+		app.writeApi.Flush()
+	}
+	if app.client != nil {
+		app.log.Info("%v closing telemetry", app.nodeID.Key)
+		app.client.Close()
 	}
 
 	// Close all databases.
