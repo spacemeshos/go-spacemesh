@@ -115,5 +115,6 @@ func TestSpacemeshApp_AddTelemetry(t *testing.T) {
 	for err := range errorsCh {
 		r.NoError(err)
 	}
+	app.writeApi.Flush()
 	app.client.Close()
 }
