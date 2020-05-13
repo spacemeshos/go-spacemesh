@@ -103,7 +103,7 @@ func New(module string, dataFolderPath string, logFileName string) Log {
 	return Log{log, log.Sugar(), &lvl}
 }
 
-// NewDefault creates a Log with not file output.
+// NewDefault creates a Log without file output.
 func NewDefault(module string) Log {
 	return New(module, "", "")
 }

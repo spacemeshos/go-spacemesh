@@ -302,13 +302,6 @@ func (app *SpacemeshApp) setupTelemetry() {
 	//		log.Error("telemetry write error: %s\n", err.Error())
 	//	}
 	//}()
-	// create point using fluent style
-	p := influxdb2.NewPointWithMeasurement("stat").
-		AddTag("unit", "temperature").
-		AddField("avg", 23.2).
-		AddField("max", 45).
-		SetTime(time.Now())
-	writeApi.WritePoint(p)
 	// Save so we can shut it down later
 	app.client = client
 	app.writeApi = writeApi
