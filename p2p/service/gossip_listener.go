@@ -14,15 +14,15 @@ type Listener struct {
 	channels []chan GossipMessage
 	stoppers []chan struct{}
 	syncer   Syncer
-	wg sync.WaitGroup
+	wg       sync.WaitGroup
 }
 
 func NewListener(net Service, syncer Syncer, log log.Log) *Listener {
 	return &Listener{
-	Log: &log,
-	net: net,
-	syncer:syncer,
-	wg:sync.WaitGroup{},
+		Log:    &log,
+		net:    net,
+		syncer: syncer,
+		wg:     sync.WaitGroup{},
 	}
 }
 

@@ -630,7 +630,7 @@ func (db *DB) GetNodeLastAtxID(nodeID types.NodeID) (types.ATXID, error) {
 	return types.ATXID(types.BytesToHash(nodeAtxsIterator.Value())), nil
 }
 
-func (db *DB) GetEpochAtxs(epochID types.EpochID) (atxs []types.ATXID){
+func (db *DB) GetEpochAtxs(epochID types.EpochID) (atxs []types.ATXID) {
 	atxIterator := db.atxs.Find(getEpochPrefix(epochID))
 	for atxIterator.Next() {
 		if atxIterator.Key() == nil {

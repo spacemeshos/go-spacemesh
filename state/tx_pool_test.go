@@ -43,7 +43,7 @@ func TestNewTxPoolWithAccounts(t *testing.T) {
 	nonce, balance = pool.GetProjection(origin, prevNonce, prevBalance)
 	r.Equal(prevNonce+2, nonce)
 	r.Equal(prevBalance-50-150, balance)
-	r.ElementsMatch([]types.TransactionID{tx1.ID(),tx2.ID()}, pool.GetTxIdsByAddress(origin))
+	r.ElementsMatch([]types.TransactionID{tx1.ID(), tx2.ID()}, pool.GetTxIdsByAddress(origin))
 	r.ElementsMatch([]types.TransactionID{tx1.ID()}, pool.GetTxIdsByAddress(tx1.Recipient))
 	r.ElementsMatch([]types.TransactionID{tx2.ID()}, pool.GetTxIdsByAddress(tx2.Recipient))
 

@@ -275,8 +275,8 @@ func newBlockWithEligibility(layerID types.LayerID, atxID types.ATXID, proof typ
 
 	block := &types.Block{MiniBlock: types.MiniBlock{BlockHeader: types.BlockHeader{LayerIndex: layerID, ATXID: atxID, EligibilityProof: proof}}}
 	block.ActiveSet = &[]types.ATXID{}
-	for i :=0; i< int(activeSetSize); i++ {
-		atx  := types.ATXID([32]byte{1, 3, 3, byte(i)})
+	for i := 0; i < int(activeSetSize); i++ {
+		atx := types.ATXID([32]byte{1, 3, 3, byte(i)})
 		*block.ActiveSet = append(*block.ActiveSet, atx)
 	}
 	block.Signature = edSigner.Sign(block.Bytes())

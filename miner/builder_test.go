@@ -45,12 +45,12 @@ func (m MockHare) GetResult(id types.LayerID) ([]types.BlockID, error) {
 type mockBlockOracle struct {
 	calls int
 	err   error
-	J uint32
+	J     uint32
 }
 
 func (mbo *mockBlockOracle) BlockEligible(types.LayerID) (types.ATXID, []types.BlockEligibilityProof, error) {
 	mbo.calls++
-	return types.ATXID(types.Hash32{1,2,3}), []types.BlockEligibilityProof{{J: mbo.J, Sig: []byte{1}}}, mbo.err
+	return types.ATXID(types.Hash32{1, 2, 3}), []types.BlockEligibilityProof{{J: mbo.J, Sig: []byte{1}}}, mbo.err
 }
 
 type mockAtxValidator struct{}
@@ -100,7 +100,7 @@ func (m mockSyncerP) IsSynced() bool { return m.synced }
 type atxDbMock struct {
 }
 
-func (atxDbMock) GetEpochAtxs(epochID types.EpochID) ([]types.ATXID) {
+func (atxDbMock) GetEpochAtxs(epochID types.EpochID) []types.ATXID {
 	return []types.ATXID{atx1, atx2, atx3, atx4, atx5}
 }
 
@@ -115,7 +115,7 @@ func (p *MockProjector) GetProjection(types.Address) (nonce uint64, balance uint
 	return 1, 1000, nil
 }
 
-func init(){
+func init() {
 	database.SwitchToMemCreationContext()
 }
 
@@ -192,22 +192,22 @@ func TestBlockBuilder_BlockIdGeneration(t *testing.T) {
 }
 
 var (
-	block1 = types.NewExistingBlock(0, []byte(rand.String(8)))
-	block2 = types.NewExistingBlock(0, []byte(rand.String(8)))
-	block3 = types.NewExistingBlock(0, []byte(rand.String(8)))
-	block4 = types.NewExistingBlock(0, []byte(rand.String(8)))
+	block1  = types.NewExistingBlock(0, []byte(rand.String(8)))
+	block2  = types.NewExistingBlock(0, []byte(rand.String(8)))
+	block3  = types.NewExistingBlock(0, []byte(rand.String(8)))
+	block4  = types.NewExistingBlock(0, []byte(rand.String(8)))
 	hareRes = []types.BlockID{block1.ID(), block2.ID(), block3.ID(), block4.ID()}
 
 	coinbase = types.HexToAddress("aaaa")
 
 	poetRef = []byte{0xba, 0x38}
-	atxs = []*types.ActivationTx{
+	atxs    = []*types.ActivationTx{
 		newActivationTx(types.NodeID{Key: "aaaa", VRFPublicKey: []byte("bbb")}, 1, types.ATXID(types.Hash32{1}), 5, 1, types.ATXID{}, coinbase, 5, []types.BlockID{block1.ID(), block2.ID(), block3.ID()}, activation.NewNIPSTWithChallenge(&types.Hash32{}, poetRef)),
 		newActivationTx(types.NodeID{Key: "bbbb", VRFPublicKey: []byte("bbb")}, 1, types.ATXID(types.Hash32{2}), 5, 1, types.ATXID{}, coinbase, 5, []types.BlockID{block1.ID(), block2.ID(), block3.ID()}, activation.NewNIPSTWithChallenge(&types.Hash32{}, poetRef)),
 		newActivationTx(types.NodeID{Key: "cccc", VRFPublicKey: []byte("bbb")}, 1, types.ATXID(types.Hash32{3}), 5, 1, types.ATXID{}, coinbase, 5, []types.BlockID{block1.ID(), block2.ID(), block3.ID()}, activation.NewNIPSTWithChallenge(&types.Hash32{}, poetRef)),
 	}
 
-	atxIDs = []types.ATXID { atxs[0].ID(), atxs[1].ID(), atxs[2].ID()}
+	atxIDs = []types.ATXID{atxs[0].ID(), atxs[1].ID(), atxs[2].ID()}
 )
 
 func TestBlockBuilder_CreateBlockFlow(t *testing.T) {
@@ -215,7 +215,6 @@ func TestBlockBuilder_CreateBlockFlow(t *testing.T) {
 	beginRound := make(chan types.LayerID)
 	n := net.NewNode()
 	receiver := net.NewNode()
-
 
 	hare := MockHare{res: map[types.LayerID][]types.BlockID{}}
 	hare.res[1] = hareRes
@@ -277,7 +276,7 @@ func TestBlockBuilder_CreateBlockFlow(t *testing.T) {
 
 }
 
-func TestBlockBuilder_CreateBlockWithRef(t *testing.T){
+func TestBlockBuilder_CreateBlockWithRef(t *testing.T) {
 	net := service.NewSimulator()
 	n := net.NewNode()
 
@@ -299,8 +298,7 @@ func TestBlockBuilder_CreateBlockWithRef(t *testing.T){
 
 	transids := []types.TransactionID{trans[0].ID(), trans[1].ID(), trans[2].ID()}
 
-
-	b, err := builder.createBlock(3, types.ATXID(types.Hash32{1,2,3}), types.BlockEligibilityProof{J: 0, Sig: []byte{1}}, transids, atxIDs)
+	b, err := builder.createBlock(3, types.ATXID(types.Hash32{1, 2, 3}), types.BlockEligibilityProof{J: 0, Sig: []byte{1}}, transids, atxIDs)
 	assert.NoError(t, err)
 
 	assert.NotEqual(t, hareRes, b.BlockVotes)
@@ -317,7 +315,7 @@ func TestBlockBuilder_CreateBlockWithRef(t *testing.T){
 	assert.Equal(t, []types.ATXID{atx1, atx2, atx3, atx4, atx5}, *b.ActiveSet)
 
 	//test create second block
-	bl, err := builder.createBlock(3, types.ATXID(types.Hash32{1,2,3}), types.BlockEligibilityProof{J: 1, Sig: []byte{1}}, transids, atxIDs)
+	bl, err := builder.createBlock(3, types.ATXID(types.Hash32{1, 2, 3}), types.BlockEligibilityProof{J: 1, Sig: []byte{1}}, transids, atxIDs)
 	assert.NoError(t, err)
 
 	assert.NotEqual(t, hareRes, bl.BlockVotes)

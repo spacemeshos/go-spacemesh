@@ -130,10 +130,10 @@ func (b *BlockHeader) AddView(id BlockID) {
 // produce the block signature.
 type MiniBlock struct {
 	BlockHeader
-	TxIDs  []TransactionID
-	ATXIDs []ATXID
+	TxIDs     []TransactionID
+	ATXIDs    []ATXID
 	ActiveSet *[]ATXID
-	RefBlock *BlockID
+	RefBlock  *BlockID
 }
 
 // Block includes all of a block's fields, including signature and a cache of the BlockID and MinerID.

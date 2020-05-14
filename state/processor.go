@@ -32,7 +32,7 @@ type Projector interface {
 }
 
 type Gossip interface {
-	AddListener(channel string, priority priorityq.Priority, dataHandler func(data service.GossipMessage,  syncer service.Syncer))
+	AddListener(channel string, priority priorityq.Priority, dataHandler func(data service.GossipMessage, syncer service.Syncer))
 }
 
 // TransactionProcessor is the struct containing state db and is responsible for applying transactions into it

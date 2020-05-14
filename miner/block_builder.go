@@ -50,7 +50,7 @@ type blockOracle interface {
 }
 
 type atxDb interface {
-	GetEpochAtxs(epochID types.EpochID) ([]types.ATXID)
+	GetEpochAtxs(epochID types.EpochID) []types.ATXID
 }
 
 type atxPool interface {

@@ -112,7 +112,7 @@ func (bl *BlockListener) handleBlock(data service.GossipMessage) {
 		blk.ATXID,
 		log.Uint32("eligibility_counter", blk.EligibilityProof.J),
 		log.String("ref_block", refBlock),
-		log.Int("active_set",activeSet),
+		log.Int("active_set", activeSet),
 	)
 	//check if known
 	if _, err := bl.GetBlock(blk.ID()); err == nil {

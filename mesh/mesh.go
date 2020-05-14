@@ -92,7 +92,7 @@ type Mesh struct {
 	AtxDB
 	txProcessor
 	Validator
-	trtl               tortoise
+	trtl tortoise
 	//blockBuilder       blockBuilder
 	txInvalidator      txMemPoolInValidator
 	atxInvalidator     atxMemPoolInValidator
@@ -196,6 +196,7 @@ func (msh *Mesh) CacheWarmUp(layerSize int) {
 
 	msh.Info("cache warm up done")
 }
+
 /*
 // SetBlockBuilder sets the block builder in use by mesh
 func (msh *Mesh) SetBlockBuilder(blockBuilder blockBuilder) {

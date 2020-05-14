@@ -96,8 +96,6 @@ func SwitchCreationContext(path, context string) {
 }
 
 func SwitchToMemCreationContext() {
-	var c = ContextDBCreator{
-	}
+	var c = ContextDBCreator{}
 	Create = c.CreateMemDB
 }
-

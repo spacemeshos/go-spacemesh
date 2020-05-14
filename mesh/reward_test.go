@@ -14,7 +14,7 @@ import (
 type MockMapState struct {
 	Rewards     map[types.Address]*big.Int
 	Txs         []*types.Transaction
-	Pool		[]*types.Transaction
+	Pool        []*types.Transaction
 	TotalReward int64
 }
 

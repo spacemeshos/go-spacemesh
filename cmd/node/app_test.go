@@ -77,7 +77,7 @@ func (suite *AppTestSuite) initMultipleInstances(cfg *config.Config, rolacle *el
 	name := 'a'
 	for i := 0; i < numOfInstances; i++ {
 		dbStorepath := storeFormat + string(name)
-		database.SwitchCreationContext(dbStorepath,string(name))
+		database.SwitchCreationContext(dbStorepath, string(name))
 		smApp, err := InitSingleInstance(*cfg, i, genesisTime, rng, dbStorepath, rolacle, poetClient, clock, network)
 		assert.NoError(suite.T(), err)
 		suite.apps = append(suite.apps, smApp)
