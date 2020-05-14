@@ -1,5 +1,5 @@
 // Based on https://github.com/tchap/zapext/blob/master/zapsentry/core.go
-package telemetry
+package log
 
 import (
 	"github.com/influxdata/influxdb-client-go"
@@ -35,31 +35,31 @@ import (
 //}
 
 //
-// Core options
+// InfluxCore options
 //
 
-type Option func(*Core)
+type Option func(*InfluxCore)
 
 //
-// Core
+// InfluxCore
 //
 
-type Core struct {
+type InfluxCore struct {
 	zapcore.LevelEnabler
 
 	writeApi influxdb2.WriteApi
-	nodeId string
-	module string
+	nodeId   string
+	module   string
 
 	fields []zapcore.Field
 }
 
-func NewCore(enab zapcore.LevelEnabler, wa influxdb2.WriteApi, nodeId string, module string, options ...Option) *Core {
-	core := &Core{
-		LevelEnabler:   enab,
-		writeApi:		wa,
-		nodeId:			nodeId,
-		module:			module,
+func NewInfluxCore(enab zapcore.LevelEnabler, wa influxdb2.WriteApi, nodeId string, module string, options ...Option) *InfluxCore {
+	core := &InfluxCore{
+		LevelEnabler: enab,
+		writeApi:     wa,
+		nodeId:       nodeId,
+		module:       module,
 	}
 
 	for _, opt := range options {
@@ -69,7 +69,7 @@ func NewCore(enab zapcore.LevelEnabler, wa influxdb2.WriteApi, nodeId string, mo
 	return core
 }
 
-func (core *Core) With(fields []zapcore.Field) zapcore.Core {
+func (core *InfluxCore) With(fields []zapcore.Field) zapcore.Core {
 	// Clone core.
 	clone := *core
 
@@ -82,18 +82,18 @@ func (core *Core) With(fields []zapcore.Field) zapcore.Core {
 	return &clone
 }
 
-func (core *Core) Check(entry zapcore.Entry, checked *zapcore.CheckedEntry) *zapcore.CheckedEntry {
+func (core *InfluxCore) Check(entry zapcore.Entry, checked *zapcore.CheckedEntry) *zapcore.CheckedEntry {
 	if core.Enabled(entry.Level) {
 		return checked.AddCore(entry, core)
 	}
 	return checked
 }
 
-func (core *Core) Write(entry zapcore.Entry, fields []zapcore.Field) error {
+func (core *InfluxCore) Write(entry zapcore.Entry, fields []zapcore.Field) error {
 	// Create a new point
 	p := influxdb2.NewPointWithMeasurement("log").
 		SetTime(entry.Time).
-		AddTag("level", string(entry.Level)).
+		AddTag("level", entry.Level.String()).
 		AddTag("nodeId", core.nodeId).
 		AddTag("module", core.module).
 		AddTag("logger", entry.LoggerName).
@@ -230,8 +230,7 @@ func (core *Core) Write(entry zapcore.Entry, fields []zapcore.Field) error {
 	return nil
 }
 
-func (core *Core) Sync() error {
+func (core *InfluxCore) Sync() error {
 	core.writeApi.Flush()
 	return nil
 }
-

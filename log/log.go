@@ -11,6 +11,8 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 
 	"go.uber.org/zap"
+
+	"github.com/influxdata/influxdb-client-go"
 )
 
 const mainLoggerName = "00000.defaultLogger"
@@ -81,7 +83,7 @@ func JSONLog(b bool) {
 }
 
 // New creates a logger for a module. e.g. p2p instance logger.
-func New(module string, dataFolderPath string, logFileName string) Log {
+func New(module string, dataFolderPath string, logFileName string, api influxdb2.WriteApi) Log {
 	var cores []zapcore.Core
 
 	consoleSyncer := zapcore.AddSync(os.Stdout)
@@ -95,6 +97,12 @@ func New(module string, dataFolderPath string, logFileName string) Log {
 		cores = append(cores, zapcore.NewCore(enc, fs, debugLevel))
 	}
 
+	if api != nil {
+		// TODO: properly set nodeid here
+		ic := NewInfluxCore(debugLevel, api, "mynode", module)
+		cores = append(cores, ic)
+	}
+
 	core := zapcore.NewTee(cores...)
 
 	log := zap.New(core)
@@ -105,7 +113,11 @@ func New(module string, dataFolderPath string, logFileName string) Log {
 
 // NewDefault creates a Log without file output.
 func NewDefault(module string) Log {
-	return New(module, "", "")
+	return New(module, "", "", nil)
+}
+
+func NewWithWriteApi(module string, api influxdb2.WriteApi) Log {
+	return New(module, "", "", api)
 }
 
 // getBackendLevelWithFileBackend returns backends level including log file backend
@@ -124,8 +136,8 @@ func getFileWriter(dataFolderPath, logFileName string) io.Writer {
 }
 
 // InitSpacemeshLoggingSystem initializes app logging system.
-func InitSpacemeshLoggingSystem(dataFolderPath string, logFileName string) {
-	AppLog = NewDefault(mainLoggerName)
+func InitSpacemeshLoggingSystem(dataFolderPath string, logFileName string, api influxdb2.WriteApi) {
+	AppLog = NewWithWriteApi(mainLoggerName, api)
 }
 
 // public wrappers abstracting away logging lib impl

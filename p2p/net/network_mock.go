@@ -39,7 +39,7 @@ func (m ReadWriteCloserMock) RemoteAddr() net.Addr {
 }
 
 func getTestLogger(name string) log.Log {
-	return log.New(name, "", "")
+	return log.New(name, "", "", nil)
 }
 
 // NetworkMock is a mock struct

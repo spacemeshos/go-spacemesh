@@ -251,9 +251,9 @@ func (app *SpacemeshApp) Initialize(cmd *cobra.Command, args []string) (err erro
 		return err
 	}
 
-	app.setupLogging()
-
 	app.setupTelemetry()
+
+	app.setupLogging()
 
 	app.introduction()
 
@@ -274,7 +274,7 @@ func (app *SpacemeshApp) setupLogging() {
 	}
 
 	// app-level logging
-	log.InitSpacemeshLoggingSystem(app.Config.DataDir, "spacemesh.log")
+	log.InitSpacemeshLoggingSystem(app.Config.DataDir, "spacemesh.log", app.writeApi)
 
 	log.Info("%s", app.getAppInfo())
 
@@ -291,17 +291,21 @@ func (app *SpacemeshApp) setupTelemetry() {
 		log.String("organization", app.Config.TELEMETRY.Organization),
 		log.String("bucket", app.Config.TELEMETRY.Bucket))
 	// create new client with default option for server url authenticate by token
-	client := influxdb2.NewClient(app.Config.TELEMETRY.Endpoint, app.Config.TELEMETRY.Token)
+	client := influxdb2.NewClientWithOptions(
+			app.Config.TELEMETRY.Endpoint,
+			app.Config.TELEMETRY.Token,
+			influxdb2.DefaultOptions().SetLogLevel(3))
 	// uses non-blocking write client for writes to desired bucket
 	writeApi := client.WriteApi(app.Config.TELEMETRY.Organization, app.Config.TELEMETRY.Bucket)
 	// Get errors channel
-	//errorsCh := writeApi.Errors()
+	//writeApi.Errors()
+	errorsCh := writeApi.Errors()
 	// Create go proc for reading and logging errors
-	//go func() {
-	//	for err := range errorsCh {
-	//		log.Error("telemetry write error: %s\n", err.Error())
-	//	}
-	//}()
+	go func() {
+		for err := range errorsCh {
+			log.Error("telemetry write error: %s\n", err.Error())
+		}
+	}()
 	// Save so we can shut it down later
 	app.client = client
 	app.writeApi = writeApi
