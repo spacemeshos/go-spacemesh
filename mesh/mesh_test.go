@@ -356,7 +356,6 @@ func TestMesh_AddBlockWithTxs_PushTransactions_UpdateUnappliedTxs(t *testing.T) 
 
 	state := &MockMapState{}
 	msh.txProcessor = state
-	blockBuilder := &MockBlockBuilder{}
 
 	layerID := types.LayerID(1)
 	signer, origin := newSignerAndAddress(r, "origin")

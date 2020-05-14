@@ -34,12 +34,12 @@ func Test_AddListener(t *testing.T) {
 	wg := sync.WaitGroup{}
 
 	wg.Add(2)
-	fun := func(data GossipMessage) {
+	fun := func(data GossipMessage, syncer Syncer) {
 		atomic.AddInt32(&channelCount, 1)
 		wg.Done()
 	}
 
-	fun2 := func(data GossipMessage) {
+	fun2 := func(data GossipMessage, syncer Syncer) {
 		atomic.AddInt32(&secondChannel, 1)
 		wg.Done()
 	}

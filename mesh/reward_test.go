@@ -20,6 +20,7 @@ type MockMapState struct {
 
 func (s *MockMapState) ValidateAndAddTxToPool(tx *types.Transaction) error {
 	s.Pool = append(s.Pool, tx)
+	return nil
 }
 
 func (s MockMapState) LoadState(types.LayerID) error                    { panic("implement me") }

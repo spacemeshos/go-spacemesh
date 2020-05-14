@@ -81,7 +81,10 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 	if block.RefBlock != nil {
 		activeSetBlock, err = v.blocks.GetBlock(*block.RefBlock)
 		if err != nil {
-			return false, fmt.Errorf("cannot get refrence block %v", *block.RefBlock)
+			//todo: thi is where we should fetch the block
+			//return false, fmt.Errorf("cannot get refrence block %v", *block.RefBlock)
+			log.Warning("ref block %v not found - continuing old active set size calc", *block.RefBlock)
+			activeSetBlock = block
 		}
 
 	}
