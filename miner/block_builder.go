@@ -85,6 +85,7 @@ type BlockBuilder struct {
 	layerPerEpoch   uint16
 }
 
+// Config is the block builders configuration struct
 type Config struct {
 	MinerID        types.NodeID
 	Hdist          int

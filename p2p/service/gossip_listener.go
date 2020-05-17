@@ -6,8 +6,10 @@ import (
 	"sync"
 )
 
+// GossipDataHandler is the function type that will be called when data is
 type GossipDataHandler func(data GossipMessage, syncer Syncer)
 
+// Listener represents the main struct that reqisters delegates to gossip function
 type Listener struct {
 	*log.Log
 	net      Service
@@ -17,6 +19,7 @@ type Listener struct {
 	wg       sync.WaitGroup
 }
 
+// NewListener creates a new listener struct
 func NewListener(net Service, syncer Syncer, log log.Log) *Listener {
 	return &Listener{
 		Log:    &log,
@@ -26,12 +29,14 @@ func NewListener(net Service, syncer Syncer, log log.Log) *Listener {
 	}
 }
 
+// Syncer is interface for sync services
 type Syncer interface {
 	FetchPoetProof(poetProofRef []byte) error
 	ListenToGossip() bool
 	IsSynced() bool
 }
 
+// AddListener adds a listener to a specific gossip channel
 func (l *Listener) AddListener(channel string, priority priorityq.Priority, dataHandler GossipDataHandler) {
 	ch := l.net.RegisterGossipProtocol(channel, priority)
 	stop := make(chan struct{})
@@ -41,6 +46,7 @@ func (l *Listener) AddListener(channel string, priority priorityq.Priority, data
 	go l.listenToGossip(dataHandler, ch, stop)
 }
 
+// Stop stops listening to all gossip channels
 func (l *Listener) Stop() {
 	for _, ch := range l.stoppers {
 		close(ch)

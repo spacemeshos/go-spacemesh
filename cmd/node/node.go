@@ -150,7 +150,7 @@ type SpacemeshApp struct {
 	blockListener  *sync.BlockListener
 	state          *state.TransactionProcessor
 	blockProducer  *miner.BlockBuilder
-	oracle         *miner.MinerBlockOracle
+	oracle         *miner.BlockOracle
 	txProcessor    *state.TransactionProcessor
 	mesh           *mesh.Mesh
 	gossipListener *service.Listener

@@ -630,6 +630,7 @@ func (db *DB) GetNodeLastAtxID(nodeID types.NodeID) (types.ATXID, error) {
 	return types.ATXID(types.BytesToHash(nodeAtxsIterator.Value())), nil
 }
 
+// GetEpochAtxs returns all valid ATXs received in the epoch epochID
 func (db *DB) GetEpochAtxs(epochID types.EpochID) (atxs []types.ATXID) {
 	atxIterator := db.atxs.Find(getEpochPrefix(epochID))
 	for atxIterator.Next() {
@@ -735,6 +736,7 @@ func (db *DB) ValidateSignedAtx(pubKey signing.PublicKey, signedAtx *types.Activ
 	return nil
 }
 
+// HandleGossipAtx handles the atx gossip data channel
 func (db *DB) HandleGossipAtx(data service.GossipMessage, syncer service.Syncer) {
 	if data == nil {
 		return

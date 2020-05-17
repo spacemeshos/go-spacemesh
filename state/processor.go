@@ -31,6 +31,7 @@ type Projector interface {
 	GetProjection(addr types.Address, prevNonce, prevBalance uint64) (nonce, balance uint64, err error)
 }
 
+// Gossip is the interface to Gossip network provider
 type Gossip interface {
 	AddListener(channel string, priority priorityq.Priority, dataHandler func(data service.GossipMessage, syncer service.Syncer))
 }
@@ -307,6 +308,7 @@ func transfer(db *TransactionProcessor, sender, recipient types.Address, amount 
 	db.AddBalance(recipient, amount)
 }
 
+// HandleTxData handles data received on TX gossip channel
 func (tp *TransactionProcessor) HandleTxData(data service.GossipMessage, syncer service.Syncer) {
 	tx, err := types.BytesAsTransaction(data.Bytes())
 	if err != nil {

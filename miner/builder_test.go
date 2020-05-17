@@ -104,7 +104,7 @@ func (atxDbMock) GetEpochAtxs(epochID types.EpochID) []types.ATXID {
 	return []types.ATXID{atx1, atx2, atx3, atx4, atx5}
 }
 
-func (atxDbMock) GetAtxs(epochId types.EpochID) []types.ATXID {
+func (atxDbMock) GetAtxs(epochID types.EpochID) []types.ATXID {
 	return []types.ATXID{atx1, atx2, atx3, atx4, atx5}
 }
 

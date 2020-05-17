@@ -112,9 +112,6 @@ type Mesh struct {
 	txMutex            sync.Mutex
 }
 
-func (msh *Mesh) GetRefBlock(id types.EpochID) types.BlockID {
-	return types.BlockID{}
-}
 
 // NewMesh creates a new instant of a mesh
 func NewMesh(db *DB, atxDb AtxDB, rewardConfig Config, mesh tortoise, txInvalidator txMemPoolInValidator, atxInvalidator atxMemPoolInValidator, pr txProcessor, logger log.Log) *Mesh {
