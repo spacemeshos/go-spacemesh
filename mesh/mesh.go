@@ -112,7 +112,6 @@ type Mesh struct {
 	txMutex            sync.Mutex
 }
 
-
 // NewMesh creates a new instant of a mesh
 func NewMesh(db *DB, atxDb AtxDB, rewardConfig Config, mesh tortoise, txInvalidator txMemPoolInValidator, atxInvalidator atxMemPoolInValidator, pr txProcessor, logger log.Log) *Mesh {
 	ll := &Mesh{

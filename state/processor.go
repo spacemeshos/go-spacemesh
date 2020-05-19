@@ -350,13 +350,3 @@ func (tp *TransactionProcessor) ValidateAndAddTxToPool(tx *types.Transaction) er
 	tp.pool.Put(tx.ID(), tx)
 	return nil
 }
-
-/*
-func (tp *TransactionProcessor) GetTxsForBlock(numOfTxs int) ([]types.TransactionID, error) {
-	return tp.pool.GetTxsForBlock(numOfTxs, tp.GetProjection)
-}
-*/
-/*
-func (tp *TransactionProcessor) GetProjection(addr types.Address) (nonce, balance uint64, err error) {
-return tp.mesh.GetProjection(addr, tp.GetNonce(addr), tp.GetBalance(addr))
-}*/
