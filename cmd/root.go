@@ -18,8 +18,8 @@ func AddCommands(cmd *cobra.Command) {
 
 	cmd.PersistentFlags().StringVarP(&config.BaseConfig.ConfigFile,
 		"config", "c", config.BaseConfig.ConfigFile, "Set Load configuration from file")
-	cmd.PersistentFlags().StringVarP(&config.BaseConfig.DataDir, "data-folder", "d",
-		config.BaseConfig.DataDir, "Specify data directory for spacemesh")
+	cmd.PersistentFlags().StringVarP(&config.BaseConfig.DataDirParent, "data-folder", "d",
+		config.BaseConfig.DataDirParent, "Specify data directory for spacemesh")
 	cmd.PersistentFlags().BoolVar(&config.TestMode, "test-mode",
 		config.TestMode, "Initialize testing features")
 	cmd.PersistentFlags().BoolVar(&config.CollectMetrics, "metrics",

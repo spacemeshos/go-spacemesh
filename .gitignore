@@ -9,10 +9,6 @@ cmd/tmp
 */**/.DS_Store
 /build
 
-#*
-.#*
-*#
-*~
 .project
 .settings
 .idea
