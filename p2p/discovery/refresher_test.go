@@ -248,10 +248,11 @@ func TestRefresher_BootstrapTries(t *testing.T) {
 	ref.backOffFunc = func(tries int) time.Duration {
 		return 80 * time.Millisecond
 	}
-	ctx, _ := context.WithTimeout(context.Background(), time.Second*1)
+	ctx, c := context.WithTimeout(context.Background(), time.Second*1)
 	err := ref.Bootstrap(ctx, 10)
 	require.EqualError(t, err, ErrBootAbort.Error())
 	require.True(t, counter > maxTries) // we got more than maxtries because we have no preloaded peers
+	c()
 
 	// Test refresher keeps going when we loaded less then required
 
@@ -264,10 +265,11 @@ func TestRefresher_BootstrapTries(t *testing.T) {
 		return generateDiscNodes(1)
 	}
 
-	ctx, _ = context.WithTimeout(context.Background(), time.Second*1)
+	ctx, c1 := context.WithTimeout(context.Background(), time.Second*1)
 	err = ref.Bootstrap(ctx, 10)
 	require.EqualError(t, err, ErrBootAbort.Error())
 	require.True(t, counter > maxTries)
+	c1()
 
 	ref.backOffFunc = func(tries int) time.Duration {
 		return 0
@@ -282,9 +284,10 @@ func TestRefresher_BootstrapTries(t *testing.T) {
 		return generateDiscNodes(10)
 	}
 
-	ctx, _ = context.WithTimeout(context.Background(), time.Second*1)
+	ctx, c2 := context.WithTimeout(context.Background(), time.Second*1)
 	err = ref.Bootstrap(ctx, 10)
 	require.NoError(t, err)
 	require.True(t, counter == maxTries) // we got more than maxtries because we have no preloaded peers
+	c2()
 
 }
