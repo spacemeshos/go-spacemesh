@@ -227,3 +227,64 @@ func TestRefresher_BootstrapAbort(t *testing.T) {
 	cancel()
 	<-done
 }
+
+func TestRefresher_BootstrapTries(t *testing.T) {
+	//cfg := config.DefaultConfig()
+	local := generateDiscNode()
+	disc := &mockDisc{}
+
+	boot := generateDiscNodes(3)
+
+	// Test refresher keeps going when addressbook is empty
+
+	mckAddrbk := mockAddrBook{}
+	counter := 0
+	mckAddrbk.AddressCacheFunc = func() []*node.Info {
+		counter++
+		return nil
+	}
+
+	ref := newRefresher(local.PublicKey(), &mckAddrbk, disc, boot, GetTestLogger("test.newRefresher"))
+	ref.backOffFunc = func(tries int) time.Duration {
+		return 80 * time.Millisecond
+	}
+	ctx, _ := context.WithTimeout(context.Background(), time.Second*1)
+	err := ref.Bootstrap(ctx, 10)
+	require.EqualError(t, err, ErrBootAbort.Error())
+	require.True(t, counter > maxTries) // we got more than maxtries because we have no preloaded peers
+
+	// Test refresher keeps going when we loaded less then required
+
+	counter = 0
+	mckAddrbk.NumAddressesFunc = func() int {
+		return 1
+	}
+	mckAddrbk.AddressCacheFunc = func() []*node.Info {
+		counter++
+		return generateDiscNodes(1)
+	}
+
+	ctx, _ = context.WithTimeout(context.Background(), time.Second*1)
+	err = ref.Bootstrap(ctx, 10)
+	require.EqualError(t, err, ErrBootAbort.Error())
+	require.True(t, counter > maxTries)
+
+	ref.backOffFunc = func(tries int) time.Duration {
+		return 0
+	}
+	// Test refresher stops after maxTries tries when address book has exactly or more than required peers
+	counter = 0
+	mckAddrbk.NumAddressesFunc = func() int {
+		return 10
+	}
+	mckAddrbk.AddressCacheFunc = func() []*node.Info {
+		counter++
+		return generateDiscNodes(10)
+	}
+
+	ctx, _ = context.WithTimeout(context.Background(), time.Second*1)
+	err = ref.Bootstrap(ctx, 10)
+	require.NoError(t, err)
+	require.True(t, counter == maxTries) // we got more than maxtries because we have no preloaded peers
+
+}
