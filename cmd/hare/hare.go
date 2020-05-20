@@ -142,7 +142,7 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	}
 
 	log.Info("Initializing P2P services")
-	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P, log.NewDefault("p2p_haretest"), app.Config.DataDir)
+	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P, log.NewDefault("p2p_haretest"), app.Config.DataDir())
 	app.p2p = swarm
 	if err != nil {
 		log.Panic("Error starting p2p services err=%v", err)

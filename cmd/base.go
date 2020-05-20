@@ -77,14 +77,14 @@ func setupLogging(config *bc.Config) {
 	}
 
 	// setup logging early
-	err := filesystem.ExistOrCreate(config.DataDir)
+	err := filesystem.ExistOrCreate(config.DataDir())
 	if err != nil {
 		fmt.Printf("Failed to setup spacemesh data dir")
 		log.Panic("Failed to setup spacemesh data dir", err)
 	}
 
 	// app-level logging
-	log.InitSpacemeshLoggingSystem(config.DataDir, "spacemesh.log")
+	log.InitSpacemeshLoggingSystem(config.DataDir(), "spacemesh.log")
 }
 
 func parseConfig() (*bc.Config, error) {

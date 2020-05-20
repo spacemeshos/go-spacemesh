@@ -20,10 +20,8 @@ import (
 )
 
 const (
-	defaultConfigFileName  = "./config.toml"
-	defaultLogFileName     = "spacemesh.log"
-	defaultAccountFileName = "accounts"
-	defaultDataDirName     = "spacemesh"
+	defaultConfigFileName = "./config.toml"
+	defaultDataDirName    = "spacemesh"
 	// Genesis indicates the genesis LayerID.
 	Genesis = mesh.Genesis
 	// NewBlockProtocol indicates the protocol name for new blocks arriving.
@@ -31,11 +29,9 @@ const (
 )
 
 var (
-	defaultHomeDir    = filesystem.GetUserHomeDirectory()
-	defaultDataDir    = filepath.Join(defaultHomeDir, defaultDataDirName, "/")
-	defaultLogDir     = filepath.Join(defaultHomeDir, defaultLogFileName)
-	defaultAccountDir = filepath.Join(defaultHomeDir, defaultAccountFileName)
-	defaultTestMode   = false
+	defaultHomeDir  = filesystem.GetUserHomeDirectory()
+	defaultDataDir  = filepath.Join(defaultHomeDir, defaultDataDirName, "/")
+	defaultTestMode = false
 )
 
 // Config defines the top level configuration for a spacemesh node
@@ -51,17 +47,17 @@ type Config struct {
 	LOGGING         LoggerConfig          `mapstructure:"logging"`
 }
 
+// DataDir returns the absolute path to use for the node's data. This is the tilde-expanded path given in the config
+// with a subfolder named after the network ID.
+func (cfg *Config) DataDir() string {
+	return filepath.Join(filesystem.GetCanonicalPath(cfg.DataDirParent), fmt.Sprint(cfg.P2P.NetworkID))
+}
+
 // BaseConfig defines the default configuration options for spacemesh app
 type BaseConfig struct {
-	HomeDir string
-
-	DataDir string `mapstructure:"data-folder"`
+	DataDirParent string `mapstructure:"data-folder"`
 
 	ConfigFile string `mapstructure:"config"`
-
-	LogDir string `mapstructure:"log-dir"`
-
-	AccountDir string `mapstructure:"account-dir"`
 
 	TestMode bool `mapstructure:"test-mode"`
 
@@ -151,11 +147,8 @@ func DefaultConfig() Config {
 // DefaultBaseConfig returns a default configuration for spacemesh
 func defaultBaseConfig() BaseConfig {
 	return BaseConfig{
-		HomeDir:             defaultHomeDir,
-		DataDir:             defaultDataDir,
+		DataDirParent:       defaultDataDir,
 		ConfigFile:          defaultConfigFileName,
-		LogDir:              defaultLogDir,
-		AccountDir:          defaultAccountDir,
 		TestMode:            defaultTestMode,
 		CollectMetrics:      false,
 		MetricsPort:         1010,
