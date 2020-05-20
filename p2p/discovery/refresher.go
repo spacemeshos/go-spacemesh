@@ -57,7 +57,7 @@ func newRefresher(local p2pcrypto.PublicKey, book addressBook, disc pingerGetAdd
 		book:         book,
 		disc:         disc,
 		bootNodes:    bootnodes,
-		backoffFunc:  defaultbackOffFunc,
+		backoffFunc:  defaultBackoffFunc,
 		lastQueries:  make(map[p2pcrypto.PublicKey]time.Time),
 	}
 }
