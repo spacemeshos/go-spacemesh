@@ -25,7 +25,7 @@ const (
 	maxTries = 10
 )
 
-var defaultbackOffFunc = func(tries int) time.Duration { return time.Second * time.Duration(tries) }
+var defaultBackoffFunc = func(tries int) time.Duration { return time.Second * time.Duration(tries) }
 
 // ErrBootAbort is returned when when bootstrap is canceled by context cancel
 var ErrBootAbort = errors.New("bootstrap canceled by signal")
@@ -43,7 +43,7 @@ type refresher struct {
 	book      addressBook
 	bootNodes []*node.Info
 
-	backOffFunc func(tries int) time.Duration
+	backoffFunc func(tries int) time.Duration
 
 	disc        pingerGetAddresser
 	lastQueries map[p2pcrypto.PublicKey]time.Time
@@ -57,7 +57,7 @@ func newRefresher(local p2pcrypto.PublicKey, book addressBook, disc pingerGetAdd
 		book:         book,
 		disc:         disc,
 		bootNodes:    bootnodes,
-		backOffFunc:  defaultbackOffFunc,
+		backoffFunc:  defaultbackOffFunc,
 		lastQueries:  make(map[p2pcrypto.PublicKey]time.Time),
 	}
 }
@@ -109,7 +109,7 @@ loop:
 			break
 		}
 
-		timer := time.NewTimer(r.backOffFunc(tries)) // BACKOFF
+		timer := time.NewTimer(r.backoffFunc(tries)) // BACKOFF
 
 		//todo: stop refreshes with context
 		select {

@@ -245,7 +245,7 @@ func TestRefresher_BootstrapTries(t *testing.T) {
 	}
 
 	ref := newRefresher(local.PublicKey(), &mckAddrbk, disc, boot, GetTestLogger("test.newRefresher"))
-	ref.backOffFunc = func(tries int) time.Duration {
+	ref.backoffFunc = func(tries int) time.Duration {
 		return 80 * time.Millisecond
 	}
 	ctx, c := context.WithTimeout(context.Background(), time.Second*1)
@@ -271,7 +271,7 @@ func TestRefresher_BootstrapTries(t *testing.T) {
 	require.True(t, counter > maxTries)
 	c1()
 
-	ref.backOffFunc = func(tries int) time.Duration {
+	ref.backoffFunc = func(tries int) time.Duration {
 		return 0
 	}
 	// Test refresher stops after maxTries tries when address book has exactly or more than required peers
