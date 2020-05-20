@@ -47,6 +47,8 @@ type Config struct {
 	LOGGING         LoggerConfig          `mapstructure:"logging"`
 }
 
+// DataDir returns the absolute path to use for the node's data. This is the tilde-expanded path given in the config
+// with a subfolder named after the network ID.
 func (cfg *Config) DataDir() string {
 	return filepath.Join(filesystem.GetCanonicalPath(cfg.DataDirParent), fmt.Sprint(cfg.P2P.NetworkID))
 }
