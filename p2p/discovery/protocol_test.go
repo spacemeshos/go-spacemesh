@@ -123,7 +123,9 @@ func TestFindNodeProtocol_FindNode2(t *testing.T) {
 
 	gen := generateDiscNodes(100)
 
-	n2.d.AddressCacheResult = gen
+	n2.d.AddressCacheFunc = func() []*node.Info {
+		return gen
+	}
 
 	n2.dscv.table = n2.d
 
@@ -134,7 +136,9 @@ func TestFindNodeProtocol_FindNode2(t *testing.T) {
 	//
 	gen = append(gen, generateDiscNodes(100)...)
 
-	n2.d.AddressCacheResult = gen
+	n2.d.AddressCacheFunc = func() []*node.Info {
+		return gen
+	}
 
 	n2.dscv.table = n2.d
 
@@ -151,7 +155,9 @@ func TestFindNodeProtocol_FindNode_Concurrency(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := newTestNode(sim)
 	gen := generateDiscNodes(100)
-	n1.d.AddressCacheResult = gen
+	n1.d.AddressCacheFunc = func() []*node.Info {
+		return gen
+	}
 	n1.dscv.table = n1.d
 
 	retchans := make(chan []*node.Info)
