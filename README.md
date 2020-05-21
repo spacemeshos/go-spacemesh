@@ -194,11 +194,11 @@ docker run -d --name=spacemesh spacemesh
 ### Windows
 On windows you will need the following prerequisites:
 - Powershell - included by in Windows by default since Windows 7 and Windows Server 2008 R2
-- [Git for Windows](https://gitforwindows.org/) - after installation remove `C:\Program Files\Git\bin` from [System PATH](https://www.java.com/en/download/help/path.xml) and add `C:\Program Files\Git\cmd` to System PATH
+- [Git for Windows](https://gitforwindows.org/) - after installation remove `C:\Program Files\Git\bin` from [System PATH](https://www.java.com/en/download/help/path.xml) (if present) and add `C:\Program Files\Git\cmd` to System PATH (if not already present)
 - [Make](http://gnuwin32.sourceforge.net/packages/make.htm) - after installation add `C:\Program Files (x86)\GnuWin32\bin` to System PATH
 - [Golang](https://golang.org/dl/)
 
-You can then run the command `make install` followed by `make build` as on UNIX-based systems.
+Close and reopen powershell to load the new PATH. You can then run the command `make install` followed by `make build` as on UNIX-based systems.
 
 ### Running a Local Testnet
 - You can run a local Spacemesh Testent with 6 full nodes, 6 user accounts, and 1 POET support service on your computer using docker.
