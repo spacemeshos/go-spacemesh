@@ -268,9 +268,6 @@ endif
 dockertest-sync: dockerbuild-test dockerrun-sync
 .PHONY: dockertest-sync
 
-dockertest-harness: dockerbuild-test dockerrun-harness
-.PHONY: dockertest-harness
-
 # command for late nodes
 
 dockerrun-late-nodes:
