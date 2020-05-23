@@ -1,4 +1,4 @@
-package oracle
+package main
 
 import (
 	"fmt"
@@ -20,7 +20,7 @@ func generateID() string {
 }
 
 type requestCounter struct {
-	client     Requester
+	client     requester
 	mtx        sync.Mutex
 	count      bool
 	reqCounter int
@@ -63,24 +63,24 @@ func (mcd *mockRequester) Get(api, data string) []byte {
 }
 
 func Test_MockOracleClientValidate(t *testing.T) {
-	oc := NewOracleClient()
+	oc := newOracleClient()
 	mr := &mockRequester{results: make(map[string][]byte)}
 	id := generateID()
-	mr.SetResult(Register, id, []byte(`{ "message": "ok" }"`))
+	mr.SetResult(register, id, []byte(`{ "message": "ok" }"`))
 	counter := &requestCounter{client: mr}
 	counter.setCounting(true)
 	oc.client = counter
 	oc.Register(true, id)
 	require.Equal(t, counter.reqCounter, 1)
 
-	mr.SetResult(Validate, validateQuery(oc.world, hashInstanceAndK(0, 0), 2),
+	mr.SetResult(validate, validateQuery(oc.world, hashInstanceAndK(0, 0), 2),
 		[]byte(fmt.Sprintf(`{ "IDs": [ "%v" ] }`, id)))
 
-	valid, _ := oc.Eligible(0, 0, 2, types.NodeId{Key: id}, nil)
+	valid, _ := oc.Eligible(0, 0, 2, types.NodeID{Key: id}, nil)
 
 	require.True(t, valid)
 
-	valid, _ = oc.Eligible(0, 0, 2, types.NodeId{Key: generateID()}, nil)
+	valid, _ = oc.Eligible(0, 0, 2, types.NodeID{Key: generateID()}, nil)
 
 	require.Equal(t, counter.reqCounter, 2)
 	require.False(t, valid)
@@ -93,7 +93,7 @@ func Test_OracleClientValidate(t *testing.T) {
 	size := 100
 	committee := 30
 
-	oc := NewOracleClient()
+	oc := newOracleClient()
 
 	pks := make([]string, size)
 
@@ -106,7 +106,7 @@ func Test_OracleClientValidate(t *testing.T) {
 	incommitte := 0
 
 	for i := 0; i < size; i++ {
-		res, _ := oc.Eligible(0, 0, committee, types.NodeId{Key: pks[i]}, nil)
+		res, _ := oc.Eligible(0, 0, committee, types.NodeID{Key: pks[i]}, nil)
 		if res {
 			incommitte++
 		}
@@ -127,7 +127,7 @@ func Test_Concurrency(t *testing.T) {
 	size := 1000
 	committee := 80
 
-	oc := NewOracleClient()
+	oc := newOracleClient()
 
 	pks := make([]string, size)
 
@@ -144,7 +144,7 @@ func Test_Concurrency(t *testing.T) {
 	oc.client = mc
 	mc.setCounting(true)
 	for i := 0; i < size; i++ {
-		res, _ := oc.Eligible(0, 0, committee, types.NodeId{Key: pks[i]}, nil)
+		res, _ := oc.Eligible(0, 0, committee, types.NodeID{Key: pks[i]}, nil)
 		if res {
 			incommitte++
 		}
@@ -160,20 +160,20 @@ func Test_Concurrency(t *testing.T) {
 }
 
 func TestOracle_Eligible2(t *testing.T) {
-	o := NewOracleClient()
+	o := newOracleClient()
 	mr := &mockRequester{results: make(map[string][]byte)}
 	//id := generateID()
-	mr.SetResult(Register, "myid", []byte(`{ "message": "ok" }"`))
+	mr.SetResult(register, "myid", []byte(`{ "message": "ok" }"`))
 	o.client = mr
 	o.Register(true, "myid")
-	mr.SetResult(Validate, validateQuery(o.world, hashInstanceAndK(1, 2), 0),
+	mr.SetResult(validate, validateQuery(o.world, hashInstanceAndK(1, 2), 0),
 		[]byte(fmt.Sprintf(`{ "IDs": [ "%v" ] }`, "sheker")))
-	res, err := o.Eligible(1, 2, 0, types.NodeId{}, []byte{})
+	res, err := o.Eligible(1, 2, 0, types.NodeID{}, []byte{})
 	assert.Nil(t, err)
 	assert.False(t, res)
-	mr.SetResult(Validate, validateQuery(o.world, hashInstanceAndK(1, 3), 1),
+	mr.SetResult(validate, validateQuery(o.world, hashInstanceAndK(1, 3), 1),
 		[]byte(fmt.Sprintf(`{ "IDs": [ "%v" ] }`, "sheker")))
-	res, err = o.Eligible(1, 3, 1, types.NodeId{}, []byte{})
+	res, err = o.Eligible(1, 3, 1, types.NodeID{}, []byte{})
 	assert.Nil(t, err)
 	assert.False(t, res)
 }

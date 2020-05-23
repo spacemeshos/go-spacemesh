@@ -1,3 +1,4 @@
+// package hare is the tester executable running instances of hare consensus algorithm
 package main
 
 import (
@@ -8,7 +9,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/monitoring"
-	"github.com/spacemeshos/go-spacemesh/oracle"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
@@ -22,7 +22,7 @@ import (
 
 import _ "net/http/pprof"
 
-// Hare cmd
+// Cmd the command of the hare app
 var Cmd = &cobra.Command{
 	Use:   "hare",
 	Short: "start hare",
@@ -54,14 +54,15 @@ func (mbp *mockBlockProvider) HandleValidatedLayer(validatedLayer types.LayerID,
 	panic("implement me")
 }
 
-func (mbp *mockBlockProvider) LayerBlockIds(layerId types.LayerID) ([]types.BlockID, error) {
+func (mbp *mockBlockProvider) LayerBlockIds(types.LayerID) ([]types.BlockID, error) {
 	return buildSet(), nil
 }
 
+// HareApp represents an Hare application
 type HareApp struct {
 	*cmdp.BaseApp
 	p2p     p2p.Service
-	oracle  *oracle.OracleClient
+	oracle  *oracleClient
 	sgn     hare.Signer
 	ha      *hare.Hare
 	clock   *timesync.TimeClock
@@ -69,14 +70,17 @@ type HareApp struct {
 	monitor *monitoring.Monitor
 }
 
+// IsSynced returns true always as we assume the node is synced
 func IsSynced() bool {
 	return true
 }
 
+// NewHareApp returns a new instance
 func NewHareApp() *HareApp {
 	return &HareApp{BaseApp: cmdp.NewBaseApp(), sgn: signing.NewEdSigner()}
 }
 
+// Cleanup just unregisters the oracle
 func (app *HareApp) Cleanup() {
 	// TODO: move to array of cleanup functions and execute all here
 	app.oracle.Unregister(true, app.sgn.PublicKey().String())
@@ -86,23 +90,23 @@ func buildSet() []types.BlockID {
 	s := make([]types.BlockID, 200, 200)
 
 	for i := uint64(0); i < 200; i++ {
-		s = append(s, types.NewExistingBlock(1, util.Uint64ToBytes(i)).Id())
+		s = append(s, types.NewExistingBlock(1, util.Uint64ToBytes(i)).ID())
 	}
 
 	return s
 }
 
-type mockIdProvider struct {
+type mockIDProvider struct {
 }
 
-func (mip *mockIdProvider) GetIdentity(edId string) (types.NodeId, error) {
-	return types.NodeId{Key: edId, VRFPublicKey: []byte{}}, nil
+func (mip *mockIDProvider) GetIdentity(edID string) (types.NodeID, error) {
+	return types.NodeID{Key: edID, VRFPublicKey: []byte{}}, nil
 }
 
 type mockStateQuerier struct {
 }
 
-func (msq mockStateQuerier) IsIdentityActiveOnConsensusView(edId string, layer types.LayerID) (bool, error) {
+func (msq mockStateQuerier) IsIdentityActiveOnConsensusView(edID string, layer types.LayerID) (bool, error) {
 	return true, nil
 }
 
@@ -110,6 +114,7 @@ func validateBlocks(blocks []types.BlockID) bool {
 	return true
 }
 
+// Start the app
 func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	log.Info("Starting hare main")
 
@@ -126,7 +131,7 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 		}
 	}
 
-	if app.Config.PprofHttpServer {
+	if app.Config.PprofHTTPServer {
 		log.Info("Starting pprof server")
 		go func() {
 			err := http.ListenAndServe(":6060", nil)
@@ -137,7 +142,7 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	}
 
 	log.Info("Initializing P2P services")
-	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P, log.NewDefault("p2p_haretest"), app.Config.DataDir)
+	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P, log.NewDefault("p2p_haretest"), app.Config.DataDir())
 	app.p2p = swarm
 	if err != nil {
 		log.Panic("Error starting p2p services err=%v", err)
@@ -147,10 +152,10 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 
 	lg := log.NewDefault(pub.String())
 
-	oracle.SetServerAddress(app.Config.OracleServer)
-	app.oracle = oracle.NewOracleClientWithWorldID(uint64(app.Config.OracleServerWorldId))
+	setServerAddress(app.Config.OracleServer)
+	app.oracle = newClientWithWorldID(uint64(app.Config.OracleServerWorldID))
 	app.oracle.Register(true, pub.String()) // todo: configure no faulty nodes
-	hareOracle := oracle.NewHareOracleFromClient(app.oracle)
+	hareOracle := newHareOracleFromClient(app.oracle)
 
 	gTime, err := time.Parse(time.RFC3339, app.Config.GenesisTime)
 	if err != nil {
@@ -159,7 +164,7 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
 	app.clock = timesync.NewClock(timesync.RealClock{}, ld, gTime, lg)
 
-	app.ha = hare.New(app.Config.HARE, app.p2p, app.sgn, types.NodeId{Key: app.sgn.PublicKey().String(), VRFPublicKey: []byte{}}, validateBlocks, IsSynced, &mockBlockProvider{}, hareOracle, uint16(app.Config.LayersPerEpoch), &mockIdProvider{}, &mockStateQuerier{}, app.clock.Subscribe(), lg)
+	app.ha = hare.New(app.Config.HARE, app.p2p, app.sgn, types.NodeID{Key: app.sgn.PublicKey().String(), VRFPublicKey: []byte{}}, validateBlocks, IsSynced, &mockBlockProvider{}, hareOracle, uint16(app.Config.LayersPerEpoch), &mockIDProvider{}, &mockStateQuerier{}, app.clock.Subscribe(), lg)
 	log.Info("Starting hare service")
 	err = app.ha.Start()
 	if err != nil {

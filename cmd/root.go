@@ -11,14 +11,15 @@ var (
 	config = cfg.DefaultConfig()
 )
 
+// AddCommands adds cobra commands to the app.
 func AddCommands(cmd *cobra.Command) {
 
 	/** ======================== BaseConfig Flags ========================== **/
 
 	cmd.PersistentFlags().StringVarP(&config.BaseConfig.ConfigFile,
 		"config", "c", config.BaseConfig.ConfigFile, "Set Load configuration from file")
-	cmd.PersistentFlags().StringVarP(&config.BaseConfig.DataDir, "data-folder", "d",
-		config.BaseConfig.DataDir, "Specify data directory for spacemesh")
+	cmd.PersistentFlags().StringVarP(&config.BaseConfig.DataDirParent, "data-folder", "d",
+		config.BaseConfig.DataDirParent, "Specify data directory for spacemesh")
 	cmd.PersistentFlags().BoolVar(&config.TestMode, "test-mode",
 		config.TestMode, "Initialize testing features")
 	cmd.PersistentFlags().BoolVar(&config.CollectMetrics, "metrics",
@@ -27,8 +28,8 @@ func AddCommands(cmd *cobra.Command) {
 		config.MetricsPort, "metric server port")
 	cmd.PersistentFlags().StringVar(&config.OracleServer, "oracle_server",
 		config.OracleServer, "The oracle server url. (temporary) ")
-	cmd.PersistentFlags().IntVar(&config.OracleServerWorldId, "oracle_server_worldid",
-		config.OracleServerWorldId, "The worldid to use with the oracle server (temporary) ")
+	cmd.PersistentFlags().IntVar(&config.OracleServerWorldID, "oracle_server_worldid",
+		config.OracleServerWorldID, "The worldid to use with the oracle server (temporary) ")
 	cmd.PersistentFlags().StringVar(&config.PoETServer, "poet-server",
 		config.OracleServer, "The poet server url. (temporary) ")
 	cmd.PersistentFlags().StringVar(&config.GenesisTime, "genesis-time",
@@ -44,10 +45,10 @@ func AddCommands(cmd *cobra.Command) {
 
 	cmd.PersistentFlags().StringVar(&config.MemProfile, "mem-profile",
 		config.MemProfile, "output memory profiling stat to filename")
-	cmd.PersistentFlags().StringVar(&config.CpuProfile, "cpu-profile",
-		config.CpuProfile, "output cpu profiling stat to filename")
-	cmd.PersistentFlags().BoolVar(&config.PprofHttpServer, "pprof-server",
-		config.PprofHttpServer, "enable http pprof server")
+	cmd.PersistentFlags().StringVar(&config.CPUProfile, "cpu-profile",
+		config.CPUProfile, "output cpu profiling stat to filename")
+	cmd.PersistentFlags().BoolVar(&config.PprofHTTPServer, "pprof-server",
+		config.PprofHTTPServer, "enable http pprof server")
 	cmd.PersistentFlags().StringVar(&config.GenesisConfPath, "genesis-conf",
 		config.GenesisConfPath, "add genesis configuration")
 	cmd.PersistentFlags().StringVar(&config.CoinbaseAccount, "coinbase",
@@ -59,8 +60,8 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().IntVar(&config.BlockCacheSize, "block-cache-size",
 		config.BlockCacheSize, "size in layers of meshdb block cache")
 
-	cmd.PersistentFlags().StringVar(&config.PublishEventsUrl, "events-url",
-		config.PublishEventsUrl, "publish events on this url, if no url specified event will no be published")
+	cmd.PersistentFlags().StringVar(&config.PublishEventsURL, "events-url",
+		config.PublishEventsURL, "publish events on this url, if no url specified event will no be published")
 
 	cmd.PersistentFlags().IntVar(&config.SyncRequestTimeout, "sync-request-timeout",
 		2000, "the timeout in ms for direct requests in the sync")

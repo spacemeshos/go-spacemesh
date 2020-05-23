@@ -2,35 +2,38 @@ package discovery
 
 import (
 	"context"
+
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 )
 
 // MockPeerStore is a mocked discovery
 type MockPeerStore struct {
-	UpdateFunc      func(n, src *node.NodeInfo)
+	UpdateFunc      func(n, src *node.Info)
 	updateCount     int
-	SelectPeersFunc func(ctx context.Context, qty int) []*node.NodeInfo
+	SelectPeersFunc func(ctx context.Context, qty int) []*node.Info
 	bsres           error
 	bsCount         int
-	LookupFunc      func(p2pcrypto.PublicKey) (*node.NodeInfo, error)
-	lookupRes       *node.NodeInfo
+	LookupFunc      func(p2pcrypto.PublicKey) (*node.Info, error)
+	lookupRes       *node.Info
 	lookupErr       error
 
-	IsLocalAddressFunc func(info *node.NodeInfo) bool
+	IsLocalAddressFunc func(info *node.Info) bool
 
 	RemoveFunc  func(key p2pcrypto.PublicKey)
 	GoodFunc    func(key p2pcrypto.PublicKey)
 	AttemptFunc func(key p2pcrypto.PublicKey)
 }
 
+// Remove mock
 func (m *MockPeerStore) Remove(key p2pcrypto.PublicKey) {
 	if m.RemoveFunc != nil {
 		m.RemoveFunc(key)
 	}
 }
 
-func (m *MockPeerStore) IsLocalAddress(info *node.NodeInfo) bool {
+// IsLocalAddress mock
+func (m *MockPeerStore) IsLocalAddress(info *node.Info) bool {
 	if m.IsLocalAddressFunc != nil {
 		return m.IsLocalAddressFunc(info)
 	}
@@ -38,18 +41,18 @@ func (m *MockPeerStore) IsLocalAddress(info *node.NodeInfo) bool {
 }
 
 // SetUpdate sets the function to run on an issued update
-func (m *MockPeerStore) SetUpdate(f func(n, addr *node.NodeInfo)) {
+func (m *MockPeerStore) SetUpdate(f func(n, addr *node.Info)) {
 	m.UpdateFunc = f
 }
 
 // SetLookupResult sets the result ok a lookup operation
-func (m *MockPeerStore) SetLookupResult(node *node.NodeInfo, err error) {
+func (m *MockPeerStore) SetLookupResult(node *node.Info, err error) {
 	m.lookupRes = node
 	m.lookupErr = err
 }
 
 // Update is a discovery update operation it updates the updatecount
-func (m *MockPeerStore) Update(n, src *node.NodeInfo) {
+func (m *MockPeerStore) Update(n, src *node.Info) {
 	if m.UpdateFunc != nil {
 		m.UpdateFunc(n, src)
 	}
@@ -66,8 +69,8 @@ func (m *MockPeerStore) BootstrapCount() int {
 	return m.bsCount
 }
 
-// netLookup is a discovery lookup operation
-func (m *MockPeerStore) Lookup(pubkey p2pcrypto.PublicKey) (*node.NodeInfo, error) {
+// Lookup is a discovery lookup operation
+func (m *MockPeerStore) Lookup(pubkey p2pcrypto.PublicKey) (*node.Info, error) {
 	if m.LookupFunc != nil {
 		return m.LookupFunc(pubkey)
 	}
@@ -86,14 +89,14 @@ func (m *MockPeerStore) Bootstrap(ctx context.Context) error {
 }
 
 // SelectPeers mocks selecting peers.
-func (m *MockPeerStore) SelectPeers(ctx context.Context, qty int) []*node.NodeInfo {
+func (m *MockPeerStore) SelectPeers(ctx context.Context, qty int) []*node.Info {
 	if m.SelectPeersFunc != nil {
 		return m.SelectPeersFunc(ctx, qty)
 	}
-	return []*node.NodeInfo{}
+	return []*node.Info{}
 }
 
-// to satisfy the iface
+// SetLocalAddresses to satisfy the iface
 func (m *MockPeerStore) SetLocalAddresses(tcp, udp int) {
 
 }
@@ -104,15 +107,19 @@ func (m *MockPeerStore) Size() int {
 	return m.updateCount
 }
 
+// Shutdown is a mock.
 func (m *MockPeerStore) Shutdown() {
 
 }
 
+// Good is a mock.
 func (m *MockPeerStore) Good(key p2pcrypto.PublicKey) {
 	if m.GoodFunc != nil {
 		m.GoodFunc(key)
 	}
 }
+
+// Attempt is a mock.
 func (m *MockPeerStore) Attempt(key p2pcrypto.PublicKey) {
 	if m.AttemptFunc != nil {
 		m.AttemptFunc(key)
@@ -121,11 +128,10 @@ func (m *MockPeerStore) Attempt(key p2pcrypto.PublicKey) {
 
 // mockAddrBook
 type mockAddrBook struct {
-	addAddressFunc func(n, src *node.NodeInfo)
-	addressCount   int
+	addAddressFunc func(n, src *node.Info)
 
-	LookupFunc func(p2pcrypto.PublicKey) (*node.NodeInfo, error)
-	lookupRes  *node.NodeInfo
+	LookupFunc func(p2pcrypto.PublicKey) (*node.Info, error)
+	lookupRes  *node.Info
 	lookupErr  error
 
 	GetAddressFunc func() *KnownAddress
@@ -133,26 +139,32 @@ type mockAddrBook struct {
 
 	NeedNewAddressesFunc func() bool
 
-	AddressCacheResult []*node.NodeInfo
+	AddressCacheFunc func() []*node.Info
 
 	GoodFunc    func(key p2pcrypto.PublicKey)
 	AttemptFunc func(key p2pcrypto.PublicKey)
 
-	IsLocalAddressFunc  func(info *node.NodeInfo) bool
-	AddLocalAddressFunc func(info *node.NodeInfo)
+	IsLocalAddressFunc  func(info *node.Info) bool
+	AddLocalAddressFunc func(info *node.Info)
+
+	NumAddressesFunc func() int
 }
 
 func (m *mockAddrBook) Stop() {
 
 }
 
-func (m *mockAddrBook) AddLocalAddress(info *node.NodeInfo) {
+func (m *mockAddrBook) Start() {
+
+}
+
+func (m *mockAddrBook) AddLocalAddress(info *node.Info) {
 	if m.AddLocalAddressFunc != nil {
 		m.AddLocalAddressFunc(info)
 	}
 }
 
-func (m *mockAddrBook) IsLocalAddress(info *node.NodeInfo) bool {
+func (m *mockAddrBook) IsLocalAddress(info *node.Info) bool {
 	if m.IsLocalAddressFunc != nil {
 		return m.IsLocalAddressFunc(info)
 	}
@@ -182,46 +194,42 @@ func (m *mockAddrBook) NeedNewAddresses() bool {
 }
 
 // SetUpdate sets the function to run on an issued update
-func (m *mockAddrBook) SetUpdate(f func(n, addr *node.NodeInfo)) {
+func (m *mockAddrBook) SetUpdate(f func(n, addr *node.Info)) {
 	m.addAddressFunc = f
 }
 
 // SetLookupResult sets the result ok a lookup operation
-func (m *mockAddrBook) SetLookupResult(node *node.NodeInfo, err error) {
+func (m *mockAddrBook) SetLookupResult(node *node.Info, err error) {
 	m.lookupRes = node
 	m.lookupErr = err
 }
 
 // AddAddress mock
-func (m *mockAddrBook) AddAddress(n, src *node.NodeInfo) {
+func (m *mockAddrBook) AddAddress(n, src *node.Info) {
 	if m.addAddressFunc != nil {
 		m.addAddressFunc(n, src)
 	}
-	m.addressCount++
 }
 
 // AddAddresses mock
-func (m *mockAddrBook) AddAddresses(n []*node.NodeInfo, src *node.NodeInfo) {
+func (m *mockAddrBook) AddAddresses(n []*node.Info, src *node.Info) {
 	if m.addAddressFunc != nil {
 		for _, addr := range n {
 			m.addAddressFunc(addr, src)
-			m.addressCount++
 		}
 	}
 }
 
-// AddAddressCount counts AddAddress calls
-func (m *mockAddrBook) AddAddressCount() int {
-	return m.addressCount
-}
-
 // AddressCache mock
-func (m *mockAddrBook) AddressCache() []*node.NodeInfo {
-	return m.AddressCacheResult
+func (m *mockAddrBook) AddressCache() []*node.Info {
+	if m.AddressCacheFunc != nil {
+		return m.AddressCacheFunc()
+	}
+	return nil
 }
 
 // Lookup mock
-func (m *mockAddrBook) Lookup(pubkey p2pcrypto.PublicKey) (*node.NodeInfo, error) {
+func (m *mockAddrBook) Lookup(pubkey p2pcrypto.PublicKey) (*node.Info, error) {
 	if m.LookupFunc != nil {
 		return m.LookupFunc(pubkey)
 	}
@@ -238,8 +246,11 @@ func (m *mockAddrBook) GetAddress() *KnownAddress {
 
 // NumAddresses mock
 func (m *mockAddrBook) NumAddresses() int {
-	//todo: mockAddrBook size
-	return m.addressCount
+	//todo: mockAddrBook sizem
+	if m.NumAddressesFunc != nil {
+		return m.NumAddressesFunc()
+	}
+	return 0
 }
 
 type refresherMock struct {

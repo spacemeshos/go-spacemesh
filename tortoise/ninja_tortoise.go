@@ -112,7 +112,7 @@ type ninjaTortoise struct {
 }
 
 //NewNinjaTortoise create a new ninja tortoise instance
-func NewNinjaTortoise(layerSize int, blocks database, hdist int, log log.Log) *ninjaTortoise {
+func newNinjaTortoise(layerSize int, blocks database, hdist int, log log.Log) *ninjaTortoise {
 
 	trtl := &ninjaTortoise{logger: log, db: blocks,
 		Hdist:        types.LayerID(hdist),
@@ -145,7 +145,7 @@ func (ni *ninjaTortoise) saveOpinion() error {
 		}
 
 		if !valid {
-			ni.logger.With().Warning("block is contextually invalid", log.BlockId(b.id().String()))
+			ni.logger.With().Warning("block is contextually invalid", log.BlockID(b.id().String()))
 		}
 		events.Publish(events.ValidBlock{ID: b.id().String(), Valid: valid})
 	}
@@ -194,7 +194,7 @@ func (ni *ninjaTortoise) evictOutOfPbase() {
 			defer wg.Done()
 			ids, err := ni.db.LayerBlockIds(lyr)
 			if err != nil {
-				ni.logger.With().Error("could not get layer ids for layer ", log.LayerId(lyr.Uint64()), log.Err(err))
+				ni.logger.With().Error("could not get layer ids for layer ", log.LayerID(lyr.Uint64()), log.Err(err))
 			}
 			for _, id := range ids {
 				delete(ni.TEffective, id)
@@ -210,7 +210,7 @@ func (ni *ninjaTortoise) evictOutOfPbase() {
 
 func (ni *ninjaTortoise) processBlock(b *types.Block) {
 
-	ni.logger.Debug("process block: %s layer: %s  ", b.Id(), b.Layer())
+	ni.logger.Debug("process block: %s layer: %s  ", b.ID(), b.Layer())
 	if b.Layer() == genesis {
 		return
 	}
@@ -225,11 +225,11 @@ func (ni *ninjaTortoise) processBlock(b *types.Block) {
 		if _, found := patternMap[bl.Layer()]; !found {
 			patternMap[bl.Layer()] = map[types.BlockID]struct{}{}
 		}
-		patternMap[bl.Layer()][bl.Id()] = struct{}{}
+		patternMap[bl.Layer()][bl.ID()] = struct{}{}
 	}
 
 	var effective votingPattern
-	ni.TExplicit[b.Id()] = make(map[types.LayerID]votingPattern, ni.Hdist)
+	ni.TExplicit[b.ID()] = make(map[types.LayerID]votingPattern, ni.Hdist)
 
 	var layerID types.LayerID
 	if ni.Hdist > b.Layer() {
@@ -242,7 +242,7 @@ func (ni *ninjaTortoise) processBlock(b *types.Block) {
 		v, found := patternMap[layerID]
 
 		if !found {
-			ni.TExplicit[b.Id()][layerID] = zeroPattern
+			ni.TExplicit[b.ID()][layerID] = zeroPattern
 			continue
 		}
 
@@ -252,21 +252,21 @@ func (ni *ninjaTortoise) processBlock(b *types.Block) {
 			ni.Patterns[vp.Layer()] = map[votingPattern]struct{}{}
 		}
 		ni.Patterns[vp.Layer()][vp] = struct{}{}
-		ni.TExplicit[b.Id()][layerID] = vp
+		ni.TExplicit[b.ID()][layerID] = vp
 
 		if layerID >= effective.Layer() {
 			effective = vp
 		}
 	}
 
-	ni.TEffective[b.Id()] = effective
+	ni.TEffective[b.ID()] = effective
 
 	v, found := ni.TEffectiveToBlocks[effective]
 	if !found {
 		v = make([]blockIDLayerTuple, 0, ni.AvgLayerSize)
 	}
 	var pattern []blockIDLayerTuple
-	pattern = append(v, blockIDLayerTuple{b.Id(), b.Layer()})
+	pattern = append(v, blockIDLayerTuple{b.ID(), b.Layer()})
 	ni.TEffectiveToBlocks[effective] = pattern
 	ni.logger.Debug("effective pattern to blocks %s %s", effective, pattern)
 
@@ -274,7 +274,7 @@ func (ni *ninjaTortoise) processBlock(b *types.Block) {
 }
 
 func getID(bids []types.BlockID) patternID {
-	bids = types.SortBlockIds(bids)
+	bids = types.SortBlockIDs(bids)
 	// calc
 	h := fnv.New32()
 	for i := 0; i < len(bids); i++ {
@@ -312,10 +312,10 @@ func (ni *ninjaTortoise) updateCorrectionVectors(p votingPattern, bottomOfWindow
 				if _, found := ni.TCorrect[b.id()]; !found {
 					ni.TCorrect[b.id()] = make(map[types.BlockID]vec)
 				}
-				vo := ni.TVote[p][blockIDLayerTuple{BlockID: x.Id(), LayerID: x.Layer()}]
-				ni.logger.Debug("vote from pattern %s to block %s layer %s vote %s ", p, x.Id(), x.Layer(), vo)
-				ni.TCorrect[b.id()][x.Id()] = vo.Negate() //Tcorrect[b][x] = -Tvote[p][x]
-				ni.logger.Debug("update correction vector for block %s layer %s , pattern %s vote %s for block %s ", b.id(), b.layer(), p, ni.TCorrect[b.id()][x.Id()], x.Id())
+				vo := ni.TVote[p][blockIDLayerTuple{BlockID: x.ID(), LayerID: x.Layer()}]
+				ni.logger.Debug("vote from pattern %s to block %s layer %s vote %s ", p, x.ID(), x.Layer(), vo)
+				ni.TCorrect[b.id()][x.ID()] = vo.Negate() //Tcorrect[b][x] = -Tvote[p][x]
+				ni.logger.Debug("update correction vector for block %s layer %s , pattern %s vote %s for block %s ", b.id(), b.layer(), p, ni.TCorrect[b.id()][x.ID()], x.ID())
 			} else {
 				ni.logger.Debug("block %s from layer %s dose'nt explicitly vote for layer %s", b.id(), b.layer(), x.Layer())
 			}
@@ -351,11 +351,11 @@ func (ni *ninjaTortoise) getCorrEffCounter() (map[types.BlockID]vec, map[types.L
 	effCountMap := make(map[types.LayerID]int)
 	foo := func(b *types.Block) {
 		if b.Layer() > ni.PBase.Layer() {
-			if eff, found := ni.TEffective[b.Id()]; found {
+			if eff, found := ni.TEffective[b.ID()]; found {
 				p, found := ni.TGood[eff.Layer()]
 				if found && eff == p {
 					effCountMap[eff.Layer()] = effCountMap[eff.Layer()] + 1
-					for k, v := range ni.TCorrect[b.Id()] {
+					for k, v := range ni.TCorrect[b.ID()] {
 						correctionMap[k] = correctionMap[k].Add(v)
 					}
 				}
@@ -406,14 +406,14 @@ func (ni *ninjaTortoise) updateBlocksSupport(b []*types.Block, j types.LayerID) 
 	sUpdated := map[votingPattern]struct{}{}
 	for _, block := range b {
 		//check if block votes for layer j explicitly or implicitly
-		p, found := ni.TExplicit[block.Id()][j]
+		p, found := ni.TExplicit[block.ID()][j]
 		if found {
 			//explicit
 			ni.TSupport[p]++         //add to supporting Patterns
 			sUpdated[p] = struct{}{} //add to updated Patterns
 
 			//implicit
-		} else if eff, effFound := ni.TEffective[block.Id()]; effFound {
+		} else if eff, effFound := ni.TEffective[block.ID()]; effFound {
 			p, found = ni.TPatSupport[eff][j]
 			if found {
 				ni.TSupport[p]++         //add to supporting Patterns
@@ -482,7 +482,7 @@ func (ni *ninjaTortoise) processBlocks(layer *types.Layer) {
 
 func (ni *ninjaTortoise) handleGenesis(genesis *types.Layer) {
 	for _, blk := range genesis.Blocks() {
-		ni.TExplicit[blk.Id()] = make(map[types.LayerID]votingPattern, int(ni.Hdist)*ni.AvgLayerSize)
+		ni.TExplicit[blk.ID()] = make(map[types.LayerID]votingPattern, int(ni.Hdist)*ni.AvgLayerSize)
 	}
 }
 
@@ -515,7 +515,7 @@ func (ni *ninjaTortoise) latestComplete() types.LayerID {
 }
 
 func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) {
-	ni.logger.With().Info("tortoise update tables", log.LayerId(uint64(newlyr.Index())), log.Int("n_blocks", len(newlyr.Blocks())))
+	ni.logger.With().Info("tortoise update tables", log.LayerID(uint64(newlyr.Index())), log.Int("n_blocks", len(newlyr.Blocks())))
 	start := time.Now()
 	if newlyr.Index() > ni.Last {
 		ni.Last = newlyr.Index()
@@ -546,7 +546,7 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) {
 			lCntr := make(map[types.LayerID]int)
 			correctionMap, effCountMap, getCrrEffCnt := ni.getCorrEffCounter()
 			foo := func(block *types.Block) (bool, error) {
-				view[block.Id()] = struct{}{} //all blocks in view
+				view[block.ID()] = struct{}{} //all blocks in view
 				lCntr[block.Layer()]++        //amount of blocks for each layer in view
 				getCrrEffCnt(block)           //calc correction and eff count
 				return false, nil
@@ -609,7 +609,7 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) {
 			}
 		}
 	}
-	ni.logger.With().Info(fmt.Sprintf("tortoise finished layer in %v", time.Since(start)), log.LayerId(uint64(newlyr.Index())), log.Uint64("pbase", uint64(ni.PBase.Layer())))
+	ni.logger.With().Info(fmt.Sprintf("tortoise finished layer in %v", time.Since(start)), log.LayerID(uint64(newlyr.Index())), log.Uint64("pbase", uint64(ni.PBase.Layer())))
 	return
 }
 

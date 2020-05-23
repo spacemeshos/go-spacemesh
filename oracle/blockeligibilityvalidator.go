@@ -7,19 +7,22 @@ import (
 	"github.com/spacemeshos/sha256-simd"
 )
 
+// VRFValidationFunction is the VRF validation function.
 type VRFValidationFunction func(message, signature, publicKey []byte) (bool, error)
 
+// BlockEligibilityValidator holds all the dependencies for validating block eligibility.
 type BlockEligibilityValidator struct {
 	committeeSize        uint32
 	genesisActiveSetSize uint32
 	layersPerEpoch       uint16
-	activationDb         ActivationDb
+	activationDb         activationDB
 	beaconProvider       *EpochBeaconProvider
 	validateVRF          VRFValidationFunction
 	log                  log.Log
 }
 
-func NewBlockEligibilityValidator(committeeSize, genesisActiveSetSize uint32, layersPerEpoch uint16, activationDb ActivationDb,
+// NewBlockEligibilityValidator returns a new BlockEligibilityValidator.
+func NewBlockEligibilityValidator(committeeSize, genesisActiveSetSize uint32, layersPerEpoch uint16, activationDb activationDB,
 	beaconProvider *EpochBeaconProvider, validateVRF VRFValidationFunction, log log.Log) *BlockEligibilityValidator {
 
 	return &BlockEligibilityValidator{
@@ -33,6 +36,8 @@ func NewBlockEligibilityValidator(committeeSize, genesisActiveSetSize uint32, la
 	}
 }
 
+// BlockSignedAndEligible checks that a given block is signed and eligible. It returns true with no error or false and
+// an error that explains why validation failed.
 func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (bool, error) {
 	var activeSetSize uint32
 	var vrfPubkey []byte
@@ -41,10 +46,10 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 	epochNumber := block.LayerIndex.GetEpoch(v.layersPerEpoch)
 	if epochNumber == 0 {
 		v.log.With().Warning("skipping epoch 0 block validation.",
-			log.BlockId(block.Id().String()), log.LayerId(block.LayerIndex.Uint64()))
+			log.BlockID(block.ID().String()), log.LayerID(block.LayerIndex.Uint64()))
 		return true, nil
 	}
-	if block.ATXID == *types.EmptyAtxId {
+	if block.ATXID == *types.EmptyATXID {
 		if !epochNumber.IsGenesis() {
 			return false, fmt.Errorf("no associated ATX in epoch %v", epochNumber)
 		}
@@ -54,11 +59,11 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 		if err != nil {
 			return false, err
 		}
-		activeSetSize, vrfPubkey = atx.ActiveSetSize, atx.NodeId.VRFPublicKey
+		activeSetSize, vrfPubkey = atx.ActiveSetSize, atx.NodeID.VRFPublicKey
 	}
 	if epochNumber.IsGenesis() {
 		v.log.With().Info("using genesisActiveSetSize",
-			log.BlockId(block.ShortString()), log.Uint32("genesisActiveSetSize", v.genesisActiveSetSize))
+			log.BlockID(block.ShortString()), log.Uint32("genesisActiveSetSize", v.genesisActiveSetSize))
 		activeSetSize = v.genesisActiveSetSize
 	}
 
@@ -105,12 +110,12 @@ func (v BlockEligibilityValidator) getValidAtx(block *types.Block) (*types.Activ
 	if err != nil {
 		return nil, fmt.Errorf("getting ATX failed: %v %v ep(%v)", err, block.ATXID.ShortString(), blockEpoch)
 	}
-	if atxTargetEpoch := atx.PubLayerIdx.GetEpoch(v.layersPerEpoch) + 1; atxTargetEpoch != blockEpoch {
+	if atxTargetEpoch := atx.PubLayerID.GetEpoch(v.layersPerEpoch) + 1; atxTargetEpoch != blockEpoch {
 		return nil, fmt.Errorf("ATX target epoch (%d) doesn't match block publication epoch (%d)",
 			atxTargetEpoch, blockEpoch)
 	}
-	if pubString := block.MinerId().String(); atx.NodeId.Key != pubString {
-		return nil, fmt.Errorf("block signer (%s) mismatch with ATX node (%s)", pubString, atx.NodeId.Key)
+	if pubString := block.MinerID().String(); atx.NodeID.Key != pubString {
+		return nil, fmt.Errorf("block signer (%s) mismatch with ATX node (%s)", pubString, atx.NodeID.Key)
 	}
 	return atx, nil
 }

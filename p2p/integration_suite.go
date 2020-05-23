@@ -15,6 +15,7 @@ import (
 	"time"
 )
 
+// NodeTestInstance is an instance of a p2p node for testing
 type NodeTestInstance interface {
 	Service
 	LocalNode() node.LocalNode // this holds the keys
@@ -33,13 +34,14 @@ type IntegrationTestSuite struct {
 	BeforeHook func(idx int, s NodeTestInstance)
 	AfterHook  func(idx int, s NodeTestInstance)
 
-	boot      []*swarm
-	Instances []*swarm
+	boot      []*Switch
+	Instances []*Switch
 }
 
+// SetupSuite setups the configured nodes, bootstraps and connects them.
 func (its *IntegrationTestSuite) SetupSuite() {
-	boot := make([]*swarm, its.BootstrapNodesCount)
-	swarm := make([]*swarm, its.BootstrappedNodeCount)
+	boot := make([]*Switch, its.BootstrapNodesCount)
+	swarm := make([]*Switch, its.BootstrappedNodeCount)
 
 	bootcfg := config.DefaultConfig()
 	bootcfg.SwarmConfig.Bootstrap = false
@@ -140,6 +142,7 @@ lop:
 	its.boot = boot
 }
 
+// TearDownSuite shutdowns all nodes.
 func (its *IntegrationTestSuite) TearDownSuite() {
 	testLog("Shutting down all nodes" + its.T().Name())
 	_ = its.ForAll(func(idx int, s NodeTestInstance) error {
@@ -148,7 +151,7 @@ func (its *IntegrationTestSuite) TearDownSuite() {
 	}, nil)
 }
 
-func createP2pInstance(t testing.TB, config config.Config) *swarm {
+func createP2pInstance(t testing.TB, config config.Config) *Switch {
 	config.TCPPort = 0
 	config.AcquirePort = false
 	p, err := newSwarm(context.TODO(), config, log.NewDefault("test instance"), "")
@@ -157,6 +160,7 @@ func createP2pInstance(t testing.TB, config config.Config) *swarm {
 	return p
 }
 
+// WaitForGossip waits that all nodes initialized gossip connections
 func (its *IntegrationTestSuite) WaitForGossip(ctx context.Context) error {
 	g, _ := errgroup.WithContext(ctx)
 	for _, b := range its.boot {
@@ -172,6 +176,7 @@ func (its *IntegrationTestSuite) WaitForGossip(ctx context.Context) error {
 	return g.Wait()
 }
 
+// ForAll executes f on all the node and returns error if it failed
 func (its *IntegrationTestSuite) ForAll(f func(idx int, s NodeTestInstance) error, filter []int) []error {
 	e := make([]error, 0)
 swarms:
@@ -196,7 +201,8 @@ boots:
 	return e
 }
 
-func (its *IntegrationTestSuite) ForAllAsync(ctx context.Context, f func(idx int, s NodeTestInstance) error) (error, []error) {
+// ForAllAsync executes f on all the nodes concurrently, it stops if ctx is cancelled.
+func (its *IntegrationTestSuite) ForAllAsync(ctx context.Context, f func(idx int, s NodeTestInstance) error) ([]error, error) {
 	var mtx sync.Mutex
 	errs := make([]error, len(its.Instances))
 
@@ -212,7 +218,7 @@ func (its *IntegrationTestSuite) ForAllAsync(ctx context.Context, f func(idx int
 		})
 	}
 
-	return group.Wait(), errs
+	return errs, group.Wait()
 }
 
 func testLog(text string, args ...interface{}) {
@@ -223,17 +229,8 @@ func testLog(text string, args ...interface{}) {
 	fmt.Println("################################################################################################")
 }
 
-func Errors(arr []error) []int {
-	var idx []int
-	for i, err := range arr {
-		if err != nil {
-			idx = append(idx, i)
-		}
-	}
-	return idx
-}
-
-func StringIdentifiers(boot ...*swarm) []string {
+// StringIdentifiers turns Switch into string representation node for use as bootnodes.
+func StringIdentifiers(boot ...*Switch) []string {
 	s := make([]string, len(boot))
 	for i := 0; i < len(s); i++ {
 		pk := boot[i].LocalNode().PublicKey()

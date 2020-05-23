@@ -121,7 +121,7 @@ func TestKadDHT_BootstrapSingleBoot(t *testing.T) {
 
 	donech := make(chan struct{}, numPeers)
 
-	nods, dhts := make([]*node.NodeInfo, numPeers), make([]*Discovery, numPeers)
+	nods, dhts := make([]*node.Info, numPeers), make([]*Discovery, numPeers)
 
 	for i := 0; i < numPeers; i++ {
 		ln, lninfo := node.GenerateTestNode(t)
@@ -176,7 +176,7 @@ func TestKadDHT_Bootstrap(t *testing.T) {
 
 	donech := make(chan struct{}, numPeers)
 
-	nods, dhts := make([]*node.NodeInfo, numPeers), make([]*Discovery, numPeers)
+	nods, dhts := make([]*node.Info, numPeers), make([]*Discovery, numPeers)
 
 	for i := 0; i < numPeers; i++ {
 		ln, lninfo := node.GenerateTestNode(t)
@@ -237,7 +237,7 @@ func Test_findNodeFailure(t *testing.T) {
 		d := New(bsnode, config.DefaultConfig().SwarmConfig, realnode, "", log.NewDefault(t.Name()))
 		<-time.After(time.Second)
 		nd, _ := simNodeWithDHT(t, config.DefaultConfig().SwarmConfig, sim)
-		d.rt.AddAddress(nd.NodeInfo, bsinfo)
+		d.rt.AddAddress(nd.Info, bsinfo)
 	}()
 
 	err := dht2.Bootstrap(context.TODO())

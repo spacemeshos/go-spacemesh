@@ -8,31 +8,31 @@ import (
 	"testing"
 )
 
-var someErr = errors.New("some err")
+var errFoo = errors.New("some err")
 
 type mockAtxDB struct {
 	atxH *types.ActivationTxHeader
 	err  error
 }
 
-func (m mockAtxDB) GetIdentity(edId string) (types.NodeId, error) {
-	return types.NodeId{Key: edId, VRFPublicKey: vrfPubkey}, nil
+func (m mockAtxDB) GetIdentity(edID string) (types.NodeID, error) {
+	return types.NodeID{Key: edID, VRFPublicKey: vrfPubkey}, nil
 }
 
-func (m mockAtxDB) GetNodeAtxIDForEpoch(nodeId types.NodeId, targetEpoch types.EpochId) (types.AtxId, error) {
-	return types.AtxId{}, m.err
+func (m mockAtxDB) GetNodeAtxIDForEpoch(types.NodeID, types.EpochID) (types.ATXID, error) {
+	return types.ATXID{}, m.err
 }
 
-func (m mockAtxDB) GetAtxHeader(id types.AtxId) (*types.ActivationTxHeader, error) {
+func (m mockAtxDB) GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error) {
 	return m.atxH, m.err
 }
 
 func TestBlockEligibilityValidator_getValidAtx(t *testing.T) {
 	r := require.New(t)
-	atxdb := &mockAtxDB{err: someErr}
+	atxdb := &mockAtxDB{err: errFoo}
 	genActiveSetSize := uint32(5)
 	v := NewBlockEligibilityValidator(10, genActiveSetSize, 5, atxdb, &EpochBeaconProvider{},
-		validateVrf, log.NewDefault(t.Name()))
+		validateVRF, log.NewDefault(t.Name()))
 
 	block := &types.Block{MiniBlock: types.MiniBlock{BlockHeader: types.BlockHeader{LayerIndex: 20}}} // non-genesis
 	block.Signature = edSigner.Sign(block.Bytes())
@@ -45,8 +45,8 @@ func TestBlockEligibilityValidator_getValidAtx(t *testing.T) {
 	r.EqualError(err, "ATX target epoch (1) doesn't match block publication epoch (4)")
 
 	atxHeader := &types.ActivationTxHeader{ActiveSetSize: 7, NIPSTChallenge: types.NIPSTChallenge{
-		NodeId:      types.NodeId{Key: edSigner.PublicKey().String()},
-		PubLayerIdx: 18,
+		NodeID:     types.NodeID{Key: edSigner.PublicKey().String()},
+		PubLayerID: 18,
 	}}
 	v.activationDb = &mockAtxDB{atxH: atxHeader}
 	atx, err := v.getValidAtx(block)

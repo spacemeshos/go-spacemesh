@@ -1,3 +1,4 @@
+// Package cmd is the base package for various sets of builds and executables created from go-spacemesh
 package cmd
 
 import (
@@ -14,8 +15,6 @@ import (
 	"reflect"
 )
 
-var EntryPointCreated = make(chan bool, 1)
-
 var (
 	// Version is the app's semantic version. Designed to be overwritten by make.
 	Version string
@@ -25,25 +24,32 @@ var (
 
 	// Commit is the git commit used to build the app. Designed to be overwritten by make.
 	Commit string
-	// ctx    cancel used to signal the app to gracefully exit.
-	Ctx, Cancel = context.WithCancel(context.Background())
+
+	// Ctx is the node's main context.
+	Ctx, cancel = context.WithCancel(context.Background())
+
+	// Cancel is a function used to initiate graceful shutdown.
+	Cancel = cancel
 )
 
+// BaseApp is the base application command, provides basic init and flags for all executables and applications
 type BaseApp struct {
 	Config *bc.Config
 }
 
+// NewBaseApp returns new basic application
 func NewBaseApp() *BaseApp {
 	dc := bc.DefaultConfig()
 	return &BaseApp{Config: &dc}
 }
 
+// Initialize loads config, sets logger  and listens to Ctrl ^C
 func (app *BaseApp) Initialize(cmd *cobra.Command) {
 	// exit gracefully - e.g. with app Cleanup on sig abort (ctrl-c)
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, os.Interrupt)
 
-	// Goroutine that listens for Crtl ^ C command
+	// Goroutine that listens for Ctrl ^ C command
 	// and triggers the quit app
 	go func() {
 		for range signalChan {
@@ -71,14 +77,14 @@ func setupLogging(config *bc.Config) {
 	}
 
 	// setup logging early
-	err := filesystem.ExistOrCreate(config.DataDir)
+	err := filesystem.ExistOrCreate(config.DataDir())
 	if err != nil {
 		fmt.Printf("Failed to setup spacemesh data dir")
 		log.Panic("Failed to setup spacemesh data dir", err)
 	}
 
 	// app-level logging
-	log.InitSpacemeshLoggingSystem(config.DataDir, "spacemesh.log")
+	log.InitSpacemeshLoggingSystem(config.DataDir(), "spacemesh.log")
 }
 
 func parseConfig() (*bc.Config, error) {
@@ -88,7 +94,7 @@ func parseConfig() (*bc.Config, error) {
 	if err := bc.LoadConfig(fileLocation, vip); err != nil {
 		log.Error(fmt.Sprintf("couldn't load config file at location: %s swithing to defaults \n error: %v.",
 			fileLocation, err))
-		//return err
+		// return err
 	}
 
 	conf := bc.DefaultConfig()
@@ -102,7 +108,8 @@ func parseConfig() (*bc.Config, error) {
 	return &conf, nil
 }
 
-func EnsureCLIFlags(cmd *cobra.Command, appcfg *bc.Config) {
+// EnsureCLIFlags checks flag types and converts them
+func EnsureCLIFlags(cmd *cobra.Command, appCFG *bc.Config) {
 	assignFields := func(p reflect.Type, elem reflect.Value, name string) {
 		for i := 0; i < p.NumField(); i++ {
 			if p.Field(i).Tag.Get("mapstructure") == name {
@@ -141,44 +148,44 @@ func EnsureCLIFlags(cmd *cobra.Command, appcfg *bc.Config) {
 		if f.Changed {
 			name := f.Name
 
-			ff := reflect.TypeOf(appcfg.BaseConfig)
-			elem := reflect.ValueOf(&appcfg.BaseConfig).Elem()
+			ff := reflect.TypeOf(appCFG.BaseConfig)
+			elem := reflect.ValueOf(&appCFG.BaseConfig).Elem()
 			assignFields(ff, elem, name)
 
-			ff = reflect.TypeOf(*appcfg)
-			elem = reflect.ValueOf(&appcfg).Elem()
+			ff = reflect.TypeOf(*appCFG)
+			elem = reflect.ValueOf(&appCFG).Elem()
 			assignFields(ff, elem, name)
 
-			ff = reflect.TypeOf(appcfg.API)
-			elem = reflect.ValueOf(&appcfg.API).Elem()
+			ff = reflect.TypeOf(appCFG.API)
+			elem = reflect.ValueOf(&appCFG.API).Elem()
 			assignFields(ff, elem, name)
 
-			ff = reflect.TypeOf(appcfg.P2P)
-			elem = reflect.ValueOf(&appcfg.P2P).Elem()
+			ff = reflect.TypeOf(appCFG.P2P)
+			elem = reflect.ValueOf(&appCFG.P2P).Elem()
 			assignFields(ff, elem, name)
 
-			ff = reflect.TypeOf(appcfg.P2P.SwarmConfig)
-			elem = reflect.ValueOf(&appcfg.P2P.SwarmConfig).Elem()
+			ff = reflect.TypeOf(appCFG.P2P.SwarmConfig)
+			elem = reflect.ValueOf(&appCFG.P2P.SwarmConfig).Elem()
 			assignFields(ff, elem, name)
 
-			ff = reflect.TypeOf(appcfg.TIME)
-			elem = reflect.ValueOf(&appcfg.TIME).Elem()
+			ff = reflect.TypeOf(appCFG.TIME)
+			elem = reflect.ValueOf(&appCFG.TIME).Elem()
 			assignFields(ff, elem, name)
 
-			ff = reflect.TypeOf(appcfg.HARE)
-			elem = reflect.ValueOf(&appcfg.HARE).Elem()
+			ff = reflect.TypeOf(appCFG.HARE)
+			elem = reflect.ValueOf(&appCFG.HARE).Elem()
 			assignFields(ff, elem, name)
 
-			ff = reflect.TypeOf(appcfg.HareEligibility)
-			elem = reflect.ValueOf(&appcfg.HareEligibility).Elem()
+			ff = reflect.TypeOf(appCFG.HareEligibility)
+			elem = reflect.ValueOf(&appCFG.HareEligibility).Elem()
 			assignFields(ff, elem, name)
 
-			ff = reflect.TypeOf(appcfg.POST)
-			elem = reflect.ValueOf(&appcfg.POST).Elem()
+			ff = reflect.TypeOf(appCFG.POST)
+			elem = reflect.ValueOf(&appCFG.POST).Elem()
 			assignFields(ff, elem, name)
 
-			ff = reflect.TypeOf(appcfg.LOGGING)
-			elem = reflect.ValueOf(&appcfg.LOGGING).Elem()
+			ff = reflect.TypeOf(appCFG.LOGGING)
+			elem = reflect.ValueOf(&appCFG.LOGGING).Elem()
 			assignFields(ff, elem, name)
 		}
 	})

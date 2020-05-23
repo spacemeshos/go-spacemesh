@@ -1,3 +1,5 @@
+// Package connectionpool functions as a connection cache that takes care of connecting and reusing connected
+// sockets. it also makes sure we don't have duplicate connections.
 package connectionpool
 
 import (
@@ -18,6 +20,7 @@ type dialResult struct {
 	err  error
 }
 
+// DialFunc is a function used to create an authenticated connection
 type DialFunc func(ctx context.Context, address inet.Addr, remotePublicKey p2pcrypto.PublicKey) (net.Connection, error)
 
 // ConnectionPool stores all net.Connections and make them available to all users of net.Connection.

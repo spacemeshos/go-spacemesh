@@ -49,7 +49,7 @@ func (s *NetworkMock) SubscribePeerEvents() (conn, disc chan p2pcrypto.PublicKey
 	return make(chan p2pcrypto.PublicKey), make(chan p2pcrypto.PublicKey)
 }
 
-func (s *NetworkMock) Broadcast(chanel string, payload []byte) error {
+func (s *NetworkMock) Broadcast(_ string, payload []byte) error {
 	if s.broadCastErr {
 		return errors.New("error during broadcast")
 	}
@@ -79,8 +79,8 @@ func (n NodeAPIMock) Exist(address types.Address) bool {
 
 type TxAPIMock struct {
 	mockOrigin   types.Address
-	returnTx     map[types.TransactionId]*types.Transaction
-	layerApplied map[types.TransactionId]*types.LayerID
+	returnTx     map[types.TransactionID]*types.Transaction
+	layerApplied map[types.TransactionID]*types.LayerID
 	err          error
 }
 
@@ -90,23 +90,23 @@ func (t *TxAPIMock) GetStateRoot() types.Hash32 {
 	return hash
 }
 
-func (t *TxAPIMock) ValidateNonceAndBalance(transaction *types.Transaction) error {
+func (t *TxAPIMock) ValidateNonceAndBalance(*types.Transaction) error {
 	return t.err
 }
 
-func (t *TxAPIMock) GetProjection(addr types.Address, prevNonce, prevBalance uint64) (nonce, balance uint64, err error) {
+func (t *TxAPIMock) GetProjection(_ types.Address, prevNonce, prevBalance uint64) (nonce, balance uint64, err error) {
 	return prevNonce, prevBalance, nil
 }
 
 func (t *TxAPIMock) LatestLayerInState() types.LayerID {
-	return ValidatedLayerId
+	return ValidatedLayerID
 }
 
-func (t *TxAPIMock) GetLayerApplied(txId types.TransactionId) *types.LayerID {
-	return t.layerApplied[txId]
+func (t *TxAPIMock) GetLayerApplied(txID types.TransactionID) *types.LayerID {
+	return t.layerApplied[txID]
 }
 
-func (t *TxAPIMock) GetTransaction(id types.TransactionId) (*types.Transaction, error) {
+func (t *TxAPIMock) GetTransaction(id types.TransactionID) (*types.Transaction, error) {
 	return t.returnTx[id], nil
 }
 
@@ -114,29 +114,29 @@ func (t *TxAPIMock) LatestLayer() types.LayerID {
 	return 10
 }
 
-func (t *TxAPIMock) GetRewards(account types.Address) (rewards []types.Reward, err error) {
+func (t *TxAPIMock) GetRewards(types.Address) (rewards []types.Reward, err error) {
 	return
 }
 
-func (t *TxAPIMock) GetTransactionsByDestination(l types.LayerID, account types.Address) (txs []types.TransactionId) {
+func (t *TxAPIMock) GetTransactionsByDestination(l types.LayerID, account types.Address) (txs []types.TransactionID) {
 	if l != TxReturnLayer {
 		return nil
 	}
 	for _, tx := range t.returnTx {
 		if tx.Recipient.String() == account.String() {
-			txs = append(txs, tx.Id())
+			txs = append(txs, tx.ID())
 		}
 	}
 	return
 }
 
-func (t *TxAPIMock) GetTransactionsByOrigin(l types.LayerID, account types.Address) (txs []types.TransactionId) {
+func (t *TxAPIMock) GetTransactionsByOrigin(l types.LayerID, account types.Address) (txs []types.TransactionID) {
 	if l != TxReturnLayer {
 		return nil
 	}
 	for _, tx := range t.returnTx {
 		if tx.Origin().String() == account.String() {
-			txs = append(txs, tx.Id())
+			txs = append(txs, tx.ID())
 		}
 	}
 	return
@@ -146,32 +146,29 @@ func (t *TxAPIMock) setMockOrigin(orig types.Address) {
 	t.mockOrigin = orig
 }
 
-func (t *TxAPIMock) AddressExists(addr types.Address) bool {
+func (t *TxAPIMock) AddressExists(types.Address) bool {
 	return true
 }
 
-type MinigApiMock struct {
-}
+// MiningAPIMock is a mock for mining API
+type MiningAPIMock struct{}
 
 const (
 	miningStatus   = 123
 	remainingBytes = 321
 )
 
-func (*MinigApiMock) MiningStats() (int, uint64, string, string) {
+func (*MiningAPIMock) MiningStats() (int, uint64, string, string) {
 	return miningStatus, remainingBytes, "123456", "/tmp"
 }
 
-func (*MinigApiMock) StartPost(address types.Address, logicalDrive string, commitmentSize uint64) error {
+func (*MiningAPIMock) StartPost(types.Address, string, uint64) error {
 	return nil
 }
 
-func (*MinigApiMock) SetCoinbaseAccount(rewardAddress types.Address) {
+func (*MiningAPIMock) SetCoinbaseAccount(types.Address) {}
 
-}
-
-type OracleMock struct {
-}
+type OracleMock struct{}
 
 func (*OracleMock) GetEligibleLayers() []types.LayerID {
 	return []types.LayerID{1, 2, 3, 4}
@@ -199,20 +196,20 @@ func (PostMock) Reset() error {
 const (
 	genTimeUnix      = 1000000
 	layerDuration    = 10
-	ValidatedLayerId = 8
+	ValidatedLayerID = 8
 	TxReturnLayer    = 1
 )
 
 var (
 	ap          = NewNodeAPIMock()
 	networkMock = NetworkMock{}
-	mining      = MinigApiMock{}
+	mining      = MiningAPIMock{}
 	oracle      = OracleMock{}
 	genTime     = GenesisTimeMock{time.Unix(genTimeUnix, 0)}
 	txMempool   = miner.NewTxMemPool()
-	txApi       = &TxAPIMock{
-		returnTx:     make(map[types.TransactionId]*types.Transaction),
-		layerApplied: make(map[types.TransactionId]*types.LayerID),
+	txAPI       = &TxAPIMock{
+		returnTx:     make(map[types.TransactionID]*types.Transaction),
+		layerApplied: make(map[types.TransactionID]*types.LayerID),
 	}
 )
 
@@ -221,7 +218,7 @@ func TestServersConfig(t *testing.T) {
 	port2, err := node.GetUnboundedPort()
 	require.NoError(t, err, "Should be able to establish a connection on a port")
 
-	grpcService := NewGrpcService(port1, &networkMock, ap, txApi, nil, &mining, &oracle, nil, PostMock{}, 0, nil, nil, nil)
+	grpcService := NewGrpcService(port1, &networkMock, ap, txAPI, nil, &mining, &oracle, nil, PostMock{}, 0, nil, nil, nil)
 	require.Equal(t, grpcService.Port, uint(port1), "Expected same port")
 
 	jsonService := NewJSONHTTPServer(port2, port1)
@@ -240,7 +237,9 @@ func TestGrpcApi(t *testing.T) {
 	// Set up a connection to the server.
 	conn, err := grpc.Dial(addr, grpc.WithInsecure())
 	require.NoError(t, err)
-	defer conn.Close()
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
 	c := pb.NewSpacemeshServiceClient(conn)
 
 	// call echo and validate result
@@ -308,9 +307,9 @@ func TestJsonWalletApi(t *testing.T) {
 
 	txToSend := pb.SignedTransaction{Tx: asBytes(t, genTx(t))}
 	msg := "nonce or balance validation failed"
-	txApi.err = fmt.Errorf(msg)
+	txAPI.err = fmt.Errorf(msg)
 	respBody, respStatus = callEndpoint(t, "v1/submittransaction", marshalProto(t, &txToSend))
-	txApi.err = nil
+	txAPI.err = nil
 	r.Equal(http.StatusInternalServerError, respStatus, http.StatusText(respStatus))
 	r.Equal("{\"error\":\""+msg+"\",\"message\":\""+msg+"\",\"code\":2}", respBody)
 
@@ -366,22 +365,22 @@ func TestJsonWalletApi(t *testing.T) {
 	// add incoming tx to mempool
 	mempoolTxIn, err := mesh.NewSignedTx(1337, addr, 420, 3, 42, signing.NewEdSigner())
 	r.NoError(err)
-	txMempool.Put(mempoolTxIn.Id(), mempoolTxIn)
+	txMempool.Put(mempoolTxIn.ID(), mempoolTxIn)
 
 	// add outgoing tx to mempool
 	mempoolTxOut, err := mesh.NewSignedTx(1337, types.BytesToAddress([]byte{1}), 420, 3, 42, signer)
 	r.NoError(err)
-	txMempool.Put(mempoolTxOut.Id(), mempoolTxOut)
+	txMempool.Put(mempoolTxOut.ID(), mempoolTxOut)
 
 	// add incoming tx to mesh
 	meshTxIn, err := mesh.NewSignedTx(1337, addr, 420, 3, 42, signing.NewEdSigner())
 	r.NoError(err)
-	txApi.returnTx[meshTxIn.Id()] = meshTxIn
+	txAPI.returnTx[meshTxIn.ID()] = meshTxIn
 
 	// add outgoing tx to mesh
 	meshTxOut, err := mesh.NewSignedTx(1337, types.BytesToAddress([]byte{1}), 420, 3, 42, signer)
 	r.NoError(err)
-	txApi.returnTx[meshTxOut.Id()] = meshTxOut
+	txAPI.returnTx[meshTxOut.ID()] = meshTxOut
 
 	// test with start layer that gets the mesh txs
 	payload = marshalProto(t, &pb.GetTxsSinceLayer{Account: &pb.AccountId{Address: util.Bytes2Hex(addr.Bytes())}, StartLayer: TxReturnLayer})
@@ -390,12 +389,12 @@ func TestJsonWalletApi(t *testing.T) {
 
 	var accounts pb.AccountTxs
 	r.NoError(jsonpb.UnmarshalString(respBody, &accounts))
-	r.Equal(uint64(ValidatedLayerId), accounts.ValidatedLayer)
+	r.Equal(uint64(ValidatedLayerID), accounts.ValidatedLayer)
 	r.ElementsMatch([]string{
-		mempoolTxIn.Id().String(),
-		mempoolTxOut.Id().String(),
-		meshTxIn.Id().String(),
-		meshTxOut.Id().String(),
+		mempoolTxIn.ID().String(),
+		mempoolTxOut.ID().String(),
+		meshTxIn.ID().String(),
+		meshTxOut.ID().String(),
 	}, accounts.Txs)
 
 	// test with start layer that doesn't get the mesh txs (mempool txs return anyway)
@@ -404,10 +403,10 @@ func TestJsonWalletApi(t *testing.T) {
 	r.Equal(http.StatusOK, respStatus)
 
 	r.NoError(jsonpb.UnmarshalString(respBody, &accounts))
-	r.Equal(uint64(ValidatedLayerId), accounts.ValidatedLayer)
+	r.Equal(uint64(ValidatedLayerID), accounts.ValidatedLayer)
 	r.ElementsMatch([]string{
-		mempoolTxIn.Id().String(),
-		mempoolTxOut.Id().String(),
+		mempoolTxIn.ID().String(),
+		mempoolTxOut.ID().String(),
 	}, accounts.Txs)
 
 	// test get txs per account with wrong layer error
@@ -446,15 +445,15 @@ func TestSpacemeshGrpcService_GetTransaction(t *testing.T) {
 	shutDown := launchServer(t)
 
 	tx1 := genTx(t)
-	txApi.returnTx[tx1.Id()] = tx1
+	txAPI.returnTx[tx1.ID()] = tx1
 
 	tx2 := genTx(t)
-	txApi.returnTx[tx2.Id()] = tx2
+	txAPI.returnTx[tx2.ID()] = tx2
 	layerApplied := types.LayerID(1)
-	txApi.layerApplied[tx2.Id()] = &layerApplied
+	txAPI.layerApplied[tx2.ID()] = &layerApplied
 
 	tx3 := genTx(t)
-	txApi.returnTx[tx3.Id()] = tx3
+	txAPI.returnTx[tx3.ID()] = tx3
 	ap.nonces[tx3.Origin()] = 2222
 
 	submitTx(t, tx1)
@@ -474,7 +473,7 @@ func TestSpacemeshGrpcService_GetTransaction(t *testing.T) {
 
 func getTx(t *testing.T, tx *types.Transaction) pb.Transaction {
 	r := require.New(t)
-	idToSend := pb.TransactionId{Id: tx.Id().Bytes()}
+	idToSend := pb.TransactionId{Id: tx.ID().Bytes()}
 	respBody, respStatus := callEndpoint(t, "v1/gettransaction", marshalProto(t, &idToSend))
 	r.Equal(http.StatusOK, respStatus)
 	var respTx pb.Transaction
@@ -483,14 +482,14 @@ func getTx(t *testing.T, tx *types.Transaction) pb.Transaction {
 	return respTx
 }
 
-func assertTx(t *testing.T, respTx pb.Transaction, tx *types.Transaction, status string, layerId, timestamp uint64) {
+func assertTx(t *testing.T, respTx pb.Transaction, tx *types.Transaction, status string, layerID, timestamp uint64) {
 	r := require.New(t)
-	r.Equal(tx.Id().Bytes(), respTx.TxId.Id)
+	r.Equal(tx.ID().Bytes(), respTx.TxId.Id)
 	r.Equal(tx.Fee, respTx.Fee)
 	r.Equal(tx.Amount, respTx.Amount)
 	r.Equal(util.Bytes2Hex(tx.Recipient.Bytes()), respTx.Receiver.Address)
 	r.Equal(util.Bytes2Hex(tx.Origin().Bytes()), respTx.Sender.Address)
-	r.Equal(layerId, respTx.LayerId)
+	r.Equal(layerID, respTx.LayerId)
 	r.Equal(status, respTx.Status.String())
 	r.Equal(timestamp, respTx.Timestamp)
 }
@@ -506,7 +505,7 @@ func submitTx(t *testing.T, tx *types.Transaction) {
 	r.NoError(jsonpb.UnmarshalString(respBody, &txConfirmation))
 
 	r.Equal("ok", txConfirmation.Value)
-	r.Equal(tx.Id().String()[2:], txConfirmation.Id)
+	r.Equal(tx.ID().String()[2:], txConfirmation.Id)
 	r.Equal(asBytes(t, tx), networkMock.broadcasted)
 }
 
@@ -526,7 +525,7 @@ func (SyncerMock) IsSynced() bool { return false }
 func launchServer(t *testing.T) func() {
 	networkMock.broadcasted = []byte{0x00}
 	defaultConfig := config2.DefaultConfig()
-	grpcService := NewGrpcService(cfg.GrpcServerPort, &networkMock, ap, txApi, txMempool, &mining, &oracle, &genTime, PostMock{}, layerDuration, &SyncerMock{}, &defaultConfig, nil)
+	grpcService := NewGrpcService(cfg.GrpcServerPort, &networkMock, ap, txAPI, txMempool, &mining, &oracle, &genTime, PostMock{}, layerDuration, &SyncerMock{}, &defaultConfig, nil)
 	jsonService := NewJSONHTTPServer(cfg.JSONServerPort, cfg.GrpcServerPort)
 	// start gRPC and json server
 	grpcService.StartService()
@@ -535,8 +534,8 @@ func launchServer(t *testing.T) func() {
 	time.Sleep(3 * time.Second) // wait for server to be ready (critical on Travis)
 
 	return func() {
-		jsonService.Close()
-		grpcService.Close()
+		require.NoError(t, jsonService.Close())
+		require.NoError(t, grpcService.Close())
 	}
 }
 
@@ -653,13 +652,13 @@ func TestApproveAPIGossipMessages(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	ApproveAPIGossipMessages(ctx, m)
 	require.True(t, m.called)
-	somekey := p2pcrypto.NewRandomPubkey()
-	msg := &mockMsg{somekey, []byte("TEST"), make(chan service.MessageValidation, 1)}
+	someKey := p2pcrypto.NewRandomPubkey()
+	msg := &mockMsg{someKey, []byte("TEST"), make(chan service.MessageValidation, 1)}
 	m.c <- msg
 	res := <-msg.ValidationCompletedChan()
 	require.NotNil(t, res)
-	require.Equal(t, res.Sender(), somekey)
+	require.Equal(t, res.Sender(), someKey)
 	require.Equal(t, res.Message(), []byte("TEST"))
-	require.Equal(t, res.Protocol(), APIGossipProtocol)
+	require.Equal(t, res.Protocol(), apiGossipProtocol)
 	cancel()
 }

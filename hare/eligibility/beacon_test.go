@@ -35,12 +35,12 @@ func TestBeacon_Value(t *testing.T) {
 	b.cache = c
 
 	genesisGoodPtrn := map[types.BlockID]struct{}{}
-	genesisGoodPtrn[mesh.GenesisBlock.Id()] = struct{}{}
+	genesisGoodPtrn[mesh.GenesisBlock.ID()] = struct{}{}
 
 	valGoodPtrn := map[types.BlockID]struct{}{}
-	valGoodPtrn[block1.Id()] = struct{}{}
-	valGoodPtrn[block2.Id()] = struct{}{}
-	valGoodPtrn[block3.Id()] = struct{}{}
+	valGoodPtrn[block1.ID()] = struct{}{}
+	valGoodPtrn[block2.ID()] = struct{}{}
+	valGoodPtrn[block3.ID()] = struct{}{}
 
 	b.patternProvider = &mockPatternProvider{valGoodPtrn, genesisGoodPtrn, errFoo}
 	b.confidenceParam = cfg.ConfidenceParam

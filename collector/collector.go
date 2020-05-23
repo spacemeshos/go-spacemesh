@@ -1,3 +1,4 @@
+// Package collector implements event collecting from pubsub
 package collector
 
 import (
@@ -7,16 +8,16 @@ import (
 	"unsafe"
 )
 
-// eventsCollector collects events from node and writes them to DB
-type eventsCollector struct {
+// EventsCollector collects events from node and writes them to DB
+type EventsCollector struct {
 	url  string
 	stop chan struct{}
 	db   DB
 }
 
 // NewCollector created a new instance of the collector listening on url for events and writing them to the provided DB
-func NewCollector(db DB, url string) *eventsCollector {
-	return &eventsCollector{url, make(chan struct{}), db}
+func NewCollector(db DB, url string) *EventsCollector {
+	return &EventsCollector{url, make(chan struct{}), db}
 }
 
 // DB defines which events should be stores by any db that the collector uses
@@ -32,8 +33,8 @@ type DB interface {
 	StoreAtxCreated(event *events.AtxCreated) error
 }
 
-// Starts collecting events
-func (c *eventsCollector) Start(blocking bool) {
+// Start starts collecting events
+func (c *EventsCollector) Start(blocking bool) {
 	if blocking {
 		c.collectEvents(c.url)
 	} else {
@@ -42,11 +43,12 @@ func (c *eventsCollector) Start(blocking bool) {
 
 }
 
-func (c *eventsCollector) Stop() {
+// Stop stops collecting events.
+func (c *EventsCollector) Stop() {
 	c.stop <- struct{}{}
 }
 
-func (c *eventsCollector) collectEvents(url string) {
+func (c *EventsCollector) collectEvents(url string) {
 	sub, err := events.NewSubscriber(url)
 	if err != nil {
 		log.Debug("cannot start subscriber")

@@ -187,7 +187,7 @@ func (b *Broker) eventLoop() {
 			// the msg is either early or has instance
 
 			// create msg
-			iMsg, err := newMsg(hareMsg, b.stateQuerier, b.layersPerEpoch)
+			iMsg, err := newMsg(hareMsg, b.stateQuerier)
 			if err != nil {
 				b.Warning("Message validation failed: could not construct msg err=%v", err)
 				continue
@@ -261,7 +261,7 @@ func (b *Broker) updateSynchronicity(id instanceID) {
 	// not exist means unknown, check & set
 
 	if !b.isNodeSynced() {
-		b.With().Info("Note: node is not synced. Marking layer as not synced", log.LayerId(uint64(id)))
+		b.With().Info("Note: node is not synced. Marking layer as not synced", log.LayerID(uint64(id)))
 		b.syncState[id] = false // mark not synced
 		return
 	}

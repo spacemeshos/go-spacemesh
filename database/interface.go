@@ -18,6 +18,7 @@ package database
 
 import "github.com/syndtr/goleveldb/leveldb/iterator"
 
+// IdealBatchSize is the best batch size
 // Code using batches should try to add this much data to the batch.
 // The value was determined empirically.
 const IdealBatchSize = 100 * 1024
@@ -54,6 +55,7 @@ type Batch interface {
 	Reset()
 }
 
+// Iterator defined basic iterator interface
 type Iterator interface {
 	iterator.IteratorSeeker
 	Key() []byte

@@ -10,83 +10,103 @@ import (
 	"github.com/spacemeshos/sha256-simd"
 )
 
-type EpochId uint64
+// EpochID is the running epoch number. It's zero-based, so the genesis epoch has EpochID == 0.
+type EpochID uint64
 
-func (l EpochId) ToBytes() []byte { return util.Uint64ToBytes(uint64(l)) }
+// ToBytes returns a byte-slice representation of the EpochID, using little endian encoding.
+func (l EpochID) ToBytes() []byte { return util.Uint64ToBytes(uint64(l)) }
 
-func (l EpochId) IsGenesis() bool {
+// IsGenesis returns true if this epoch is in genesis. The first two epochs are considered genesis epochs.
+func (l EpochID) IsGenesis() bool {
 	return l < 2
 }
 
-func (l EpochId) FirstLayer(layersPerEpoch uint16) LayerID {
+// FirstLayer returns the layer ID of the first layer in the epoch.
+func (l EpochID) FirstLayer(layersPerEpoch uint16) LayerID {
 	return LayerID(uint64(l) * uint64(layersPerEpoch))
 }
 
-func (l EpochId) Field() log.Field { return log.Uint64("epoch_id", uint64(l)) }
+// Field returns a log field. Implements the LoggableField interface.
+func (l EpochID) Field() log.Field { return log.Uint64("epoch_id", uint64(l)) }
 
-type AtxId Hash32
+// ATXID is a 32-bit hash used to identify an activation transaction.
+type ATXID Hash32
 
-func (t *AtxId) ShortString() string {
+// ShortString returns a the first 5 characters of the ID, for logging purposes.
+func (t ATXID) ShortString() string {
 	return t.Hash32().ShortString()
 }
 
-func (t *AtxId) Hash32() Hash32 {
-	return Hash32(*t)
+// Hash32 returns the ATXID as a Hash32.
+func (t ATXID) Hash32() Hash32 {
+	return Hash32(t)
 }
 
-func (t AtxId) Bytes() []byte {
+// Bytes returns the ATXID as a byte slice.
+func (t ATXID) Bytes() []byte {
 	return Hash32(t).Bytes()
 }
 
-func (t AtxId) Field() log.Field { return t.Hash32().Field("atx_id") }
+// Field returns a log field. Implements the LoggableField interface.
+func (t ATXID) Field() log.Field { return t.Hash32().Field("atx_id") }
 
-var EmptyAtxId = &AtxId{}
+// EmptyATXID is a canonical empty ATXID.
+var EmptyATXID = &ATXID{}
 
+// ActivationTxHeader is the header of an activation transaction. It includes all fields from the NIPSTChallenge, as
+// well as the coinbase address and active set size.
 type ActivationTxHeader struct {
 	NIPSTChallenge
-	id            *AtxId
+	id            *ATXID // non-exported cache of the ATXID
 	Coinbase      Address
 	ActiveSetSize uint32
 }
 
+// ShortString returns a the first 5 characters of the ID, for logging purposes.
 func (atxh *ActivationTxHeader) ShortString() string {
-	return atxh.id.ShortString()
+	return atxh.ID().ShortString()
 }
 
+// Hash32 returns the ATX's ID as a Hash32.
 func (atxh *ActivationTxHeader) Hash32() Hash32 {
-	return Hash32(*atxh.id)
+	return atxh.ID().Hash32()
 }
 
-func (atxh *ActivationTxHeader) Bytes() []byte {
-	return atxh.id.Bytes()
-}
-
-func (atxh *ActivationTxHeader) Id() AtxId {
+// ID returns the ATX's ID.
+func (atxh *ActivationTxHeader) ID() ATXID {
 	if atxh.id == nil {
 		panic("id field must be set")
 	}
 	return *atxh.id
 }
 
-func (atxh *ActivationTxHeader) TargetEpoch(layersPerEpoch uint16) EpochId {
-	return atxh.PubLayerIdx.GetEpoch(layersPerEpoch) + 1
+// TargetEpoch returns the target epoch of the activation transaction. This is the epoch in which the miner is eligible
+// to participate thanks to the ATX.
+func (atxh *ActivationTxHeader) TargetEpoch(layersPerEpoch uint16) EpochID {
+	return atxh.PubLayerID.GetEpoch(layersPerEpoch) + 1
 }
 
-func (atxh *ActivationTxHeader) SetId(id *AtxId) {
+// SetID sets the ATXID in this ATX's cache.
+func (atxh *ActivationTxHeader) SetID(id *ATXID) {
 	atxh.id = id
 }
 
+// NIPSTChallenge is the set of fields that's serialized, hashed and submitted to the PoET service to be included in the
+// PoET membership proof. It includes the node ID, ATX sequence number, the previous ATX's ID (for all but the first in
+// the sequence), the intended publication layer ID, the PoET's start and end ticks, the positioning ATX's ID and for
+// the first ATX in the sequence also the commitment Merkle root.
 type NIPSTChallenge struct {
-	NodeId               NodeId
+	NodeID               NodeID
 	Sequence             uint64
-	PrevATXId            AtxId
-	PubLayerIdx          LayerID
+	PrevATXID            ATXID
+	PubLayerID           LayerID
 	StartTick            uint64
 	EndTick              uint64
-	PositioningAtx       AtxId
+	PositioningATX       ATXID
 	CommitmentMerkleRoot []byte
 }
 
+// Hash serializes the NIPSTChallenge and returns its hash.
 func (challenge *NIPSTChallenge) Hash() (*Hash32, error) {
 	ncBytes, err := NIPSTChallengeAsBytes(challenge)
 	if err != nil {
@@ -96,19 +116,24 @@ func (challenge *NIPSTChallenge) Hash() (*Hash32, error) {
 	return &hash, nil
 }
 
+// String returns a string representation of the NIPSTChallenge, for logging purposes.
+// It implements the Stringer interface.
 func (challenge *NIPSTChallenge) String() string {
-	return fmt.Sprintf("<id: [vrf: %v ed: %v], seq: %v, prevAtx: %v, PubLayer: %v, s tick: %v, e tick: %v, "+
-		"posAtx: %v>",
-		util.Bytes2Hex(challenge.NodeId.VRFPublicKey)[:5],
-		challenge.NodeId.Key[:5],
+	return fmt.Sprintf("<id: [vrf: %v ed: %v], seq: %v, prevATX: %v, PubLayer: %v, s tick: %v, e tick: %v, "+
+		"posATX: %v>",
+		util.Bytes2Hex(challenge.NodeID.VRFPublicKey)[:5],
+		challenge.NodeID.Key[:5],
 		challenge.Sequence,
-		challenge.PrevATXId.ShortString(),
-		challenge.PubLayerIdx,
+		challenge.PrevATXID.ShortString(),
+		challenge.PubLayerID,
 		challenge.StartTick,
 		challenge.EndTick,
-		challenge.PositioningAtx.ShortString())
+		challenge.PositioningATX.ShortString())
 }
 
+// InnerActivationTx is a set of all of an ATX's fields, except the signature. To generate the ATX signature, this
+// structure is serialized and signed. It includes the header fields, as well as the larger fields that are only used
+// for validation: the NIPST, view and PoST proof.
 type InnerActivationTx struct {
 	*ActivationTxHeader
 	Nipst      *NIPST
@@ -116,25 +141,14 @@ type InnerActivationTx struct {
 	Commitment *PostProof
 }
 
+// ActivationTx is a full, signed activation transaction. It includes (or references) everything a miner needs to prove
+// they are eligible to actively participate in the Spacemesh protocol in the next epoch.
 type ActivationTx struct {
 	*InnerActivationTx
 	Sig []byte
 }
 
-func NewActivationTxForTests(nodeId NodeId, sequence uint64, prevATX AtxId, pubLayerId LayerID, startTick uint64,
-	positioningAtx AtxId, coinbase Address, activeSetSize uint32, view []BlockID, nipst *NIPST) *ActivationTx {
-
-	nipstChallenge := NIPSTChallenge{
-		NodeId:         nodeId,
-		Sequence:       sequence,
-		PrevATXId:      prevATX,
-		PubLayerIdx:    pubLayerId,
-		StartTick:      startTick,
-		PositioningAtx: positioningAtx,
-	}
-	return NewActivationTx(nipstChallenge, coinbase, activeSetSize, view, nipst, nil)
-}
-
+// NewActivationTx returns a new activation transaction. The ATXID is calculated and cached.
 func NewActivationTx(nipstChallenge NIPSTChallenge, coinbase Address, activeSetSize uint32, view []BlockID,
 	nipst *NIPST, commitment *PostProof) *ActivationTx {
 
@@ -150,53 +164,62 @@ func NewActivationTx(nipstChallenge NIPSTChallenge, coinbase Address, activeSetS
 			Commitment: commitment,
 		},
 	}
-	atx.CalcAndSetId()
+	atx.CalcAndSetID()
 	return atx
 }
 
-func (atx *ActivationTx) AtxBytes() ([]byte, error) {
+// InnerBytes returns a byte slice of the serialization of the inner ATX (excluding the signature field).
+func (atx *ActivationTx) InnerBytes() ([]byte, error) {
 	return InterfaceToBytes(atx.InnerActivationTx)
 }
 
-func (atx *ActivationTx) CalcAndSetId() {
-	id := AtxId(CalcAtxHash32(atx))
-	atx.SetId(&id)
+// CalcAndSetID calculates and sets the cached ID field. This field must be set before calling the ID() method.
+func (atx *ActivationTx) CalcAndSetID() {
+	id := ATXID(CalcATXHash32(atx))
+	atx.SetID(&id)
 }
 
+// GetPoetProofRef returns the reference to the PoET proof.
 func (atx *ActivationTx) GetPoetProofRef() []byte {
 	return atx.Nipst.PostProof.Challenge
 }
 
+// GetShortPoetProofRef returns the first 5 characters of the PoET proof reference, for logging purposes.
 func (atx *ActivationTx) GetShortPoetProofRef() []byte {
 	return atx.Nipst.PostProof.Challenge[:util.Min(5, len(atx.Nipst.PostProof.Challenge))]
 }
 
+// PoetProof is the full PoET service proof of elapsed time. It includes the list of members, a leaf count declaration
+// and the actual PoET Merkle proof.
 type PoetProof struct {
 	shared.MerkleProof
 	Members   [][]byte
 	LeafCount uint64
 }
 
+// PoetProofMessage is the envelope which includes the PoetProof, service ID, round ID and signature.
 type PoetProofMessage struct {
 	PoetProof
-	PoetServiceId []byte
-	RoundId       string
+	PoetServiceID []byte
+	RoundID       string
 	Signature     []byte
 }
 
+// Ref returns the reference to the PoET proof message. It's the sha256 sum of the entire proof message.
 func (proofMessage PoetProofMessage) Ref() ([]byte, error) {
 	poetProofBytes, err := InterfaceToBytes(&proofMessage.PoetProof)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal poet proof for poetId %x round %v: %v",
-			proofMessage.PoetServiceId, proofMessage.RoundId, err)
+			proofMessage.PoetServiceID, proofMessage.RoundID, err)
 	}
 
 	ref := sha256.Sum256(poetProofBytes)
 	return ref[:], nil
 }
 
+// PoetRound includes the PoET's round ID.
 type PoetRound struct {
-	Id string
+	ID string
 }
 
 // NIPST is Non-Interactive Proof of Space-Time.
@@ -218,9 +241,12 @@ type NIPST struct {
 	PostProof *PostProof
 }
 
+// PostProof is an alias to the PoST proof.
 type PostProof proving.Proof
 
-func (p *PostProof) String() string {
+// String returns a string representation of the PostProof, for logging purposes.
+// It implements the Stringer interface.
+func (p PostProof) String() string {
 	return fmt.Sprintf("challenge: %v, root: %v",
 		bytesToShortString(p.Challenge), bytesToShortString(p.MerkleRoot))
 }
@@ -233,12 +259,16 @@ func bytesToShortString(b []byte) string {
 	return fmt.Sprintf("\"%s…\"", hex.EncodeToString(b)[:util.Min(l, 5)])
 }
 
+// ProcessingError is a type of error (implements the error interface) that is used to differentiate processing errors
+// from validation errors.
 type ProcessingError string
 
+// Error returns the processing error as a string. It implements the error interface.
 func (s ProcessingError) Error() string {
 	return string(s)
 }
 
+// IsProcessingError returns true if the given error is a processing error.
 func IsProcessingError(err error) bool {
 	_, ok := err.(ProcessingError)
 	return ok

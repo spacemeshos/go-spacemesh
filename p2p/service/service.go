@@ -1,3 +1,4 @@
+// Package service defines basic interfaces to for protocols to consume p2p functionality.
 package service
 
 import (
@@ -28,7 +29,7 @@ func (mv MessageValidation) Protocol() string {
 	return mv.prot
 }
 
-// Metadata is a generic metadata interface
+// P2PMetadata is a generic metadata interface
 type P2PMetadata struct {
 	FromAddress net.Addr
 	// add here more fields that are needed by protocols
@@ -87,7 +88,7 @@ func (m DataBytes) Bytes() []byte {
 	return m.Payload
 }
 
-// bytes returns the message as bytes
+// Bytes returns the message as bytes
 func (m DataMsgWrapper) Bytes() []byte {
 	return m.Payload
 }

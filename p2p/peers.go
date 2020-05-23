@@ -52,7 +52,7 @@ func (pi Peers) GetPeers() []Peer {
 	return cpy
 }
 
-// PeerCont returns the number of connected peers
+// PeerCount returns the number of connected peers
 func (pi Peers) PeerCount() uint64 {
 	peers := pi.snapshot.Load().([]Peer)
 	return uint64(len(peers))

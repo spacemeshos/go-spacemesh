@@ -61,14 +61,14 @@ func (b *Beacon) Value(layer types.LayerID) (uint32, error) {
 	v, err := b.patternProvider.ContextuallyValidBlock(sl)
 	if err != nil {
 		b.Log.With().Error("Could not get pattern ID",
-			log.Err(err), log.LayerId(uint64(layer)), log.Uint64("sl_id", uint64(sl)))
+			log.Err(err), log.LayerID(uint64(layer)), log.Uint64("sl_id", uint64(sl)))
 		return nilVal, errors.New("could not calc Beacon value")
 	}
 
 	// notify if there are no contextually valid blocks
 	if len(v) == 0 {
 		b.Log.With().Warning("hare Beacon: zero contextually valid blocks (ignore if genesis first layers)",
-			log.LayerId(uint64(layer)), log.Uint64("sl_id", uint64(sl)))
+			log.LayerID(uint64(layer)), log.Uint64("sl_id", uint64(sl)))
 	}
 
 	// calculate
@@ -87,7 +87,7 @@ func calcValue(bids map[types.BlockID]struct{}) uint32 {
 		keys = append(keys, k)
 	}
 
-	keys = types.SortBlockIds(keys)
+	keys = types.SortBlockIDs(keys)
 
 	// calc
 	h := fnv.New32()

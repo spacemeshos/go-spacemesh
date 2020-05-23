@@ -71,13 +71,13 @@ type Hare struct {
 
 	validate outputValidationFunc
 
-	nid types.NodeId
+	nid types.NodeID
 
 	totalCPs int32
 }
 
 // New returns a new Hare struct.
-func New(conf config.Config, p2p NetworkService, sign Signer, nid types.NodeId, validate outputValidationFunc,
+func New(conf config.Config, p2p NetworkService, sign Signer, nid types.NodeID, validate outputValidationFunc,
 	syncState syncStateFunc, obp layers, rolacle Rolacle,
 	layersPerEpoch uint16, idProvider identityProvider, stateQ StateQuerier,
 	beginLayer chan types.LayerID, logger log.Log) *Hare {
@@ -110,7 +110,7 @@ func New(conf config.Config, p2p NetworkService, sign Signer, nid types.NodeId, 
 	h.outputs = make(map[types.LayerID][]types.BlockID, h.bufferSize) //  we keep results about LayerBuffer past layers
 
 	h.factory = func(conf config.Config, instanceId instanceID, s *Set, oracle Rolacle, signing Signer, p2p NetworkService, terminationReport chan TerminationOutput) Consensus {
-		return NewConsensusProcess(conf, instanceId, s, oracle, stateQ, layersPerEpoch, signing, nid, p2p, terminationReport, ev, logger)
+		return newConsensusProcess(conf, instanceId, s, oracle, stateQ, layersPerEpoch, signing, nid, p2p, terminationReport, ev, logger)
 	}
 
 	h.validate = validate
@@ -202,7 +202,7 @@ func (h *Hare) onTick(id types.LayerID) {
 	h.Debug("hare got tick, sleeping for %v", h.networkDelta)
 
 	if !h.broker.Synced(instanceID(id)) { // if not synced don't start consensus
-		h.With().Info("not starting hare since the node is not synced", log.LayerId(uint64(id)))
+		h.With().Info("not starting hare since the node is not synced", log.LayerID(uint64(id)))
 		return
 	}
 
@@ -222,7 +222,7 @@ func (h *Hare) onTick(id types.LayerID) {
 	// retrieve set form orphan blocks
 	blocks, err := h.msh.LayerBlockIds(h.lastLayer)
 	if err != nil {
-		h.With().Error("No blocks for consensus", log.LayerId(uint64(id)), log.Err(err))
+		h.With().Error("No blocks for consensus", log.LayerID(uint64(id)), log.Err(err))
 		return
 	}
 

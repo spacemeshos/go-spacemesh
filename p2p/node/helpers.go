@@ -15,12 +15,12 @@ var localhost = net.IP{127, 0, 0, 1}
 var ErrFailedToCreate = errors.New("failed to create local test node")
 
 // GenerateTestNode generates a local test node without persisting data to local store and with default config value.
-func GenerateTestNode(t *testing.T) (LocalNode, *NodeInfo) {
+func GenerateTestNode(t *testing.T) (LocalNode, *Info) {
 	return GenerateTestNodeWithConfig(t)
 }
 
 // GenerateTestNodeWithConfig creates a local test node without persisting data to local store.
-func GenerateTestNodeWithConfig(t *testing.T) (LocalNode, *NodeInfo) {
+func GenerateTestNodeWithConfig(t *testing.T) (LocalNode, *Info) {
 
 	port, err := GetUnboundedPort()
 	if err != nil {
@@ -36,11 +36,11 @@ func GenerateTestNodeWithConfig(t *testing.T) (LocalNode, *NodeInfo) {
 		t.Error(ErrFailedToCreate)
 		return emptyNode, nil
 	}
-	return localNode, &NodeInfo{localNode.PublicKey().Array(), addr.IP, uint16(port), uint16(port)}
+	return localNode, &Info{localNode.PublicKey().Array(), addr.IP, uint16(port), uint16(port)}
 }
 
 // GenerateRandomNodeData generates a remote random node data for testing.
-func GenerateRandomNodeData() *NodeInfo {
+func GenerateRandomNodeData() *Info {
 	rand.Seed(time.Now().UnixNano())
 	port := uint16(rand.Int31n(48127) + 1024)
 	pub := p2pcrypto.NewRandomPubkey()
@@ -48,8 +48,8 @@ func GenerateRandomNodeData() *NodeInfo {
 }
 
 // GenerateRandomNodesData generates remote nodes data for testing.
-func GenerateRandomNodesData(n int) []*NodeInfo {
-	res := make([]*NodeInfo, n)
+func GenerateRandomNodesData(n int) []*Info {
+	res := make([]*Info, n)
 	for i := 0; i < n; i++ {
 		res[i] = GenerateRandomNodeData()
 	}

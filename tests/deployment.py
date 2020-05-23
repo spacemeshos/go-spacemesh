@@ -6,6 +6,9 @@ from kubernetes import client
 from kubernetes.client.rest import ApiException
 
 
+""" k8s deployment api file for stateless deployments (opposite to statefulset.py) """
+
+
 def wait_to_deployment_to_be_deleted(deployment_name, name_space, time_out=None):
     total_sleep_time = 0
     while True:

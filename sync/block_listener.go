@@ -92,30 +92,30 @@ func (bl *BlockListener) handleBlock(data service.GossipMessage) {
 	blk.Initialize()
 
 	bl.Log.With().Info("got new block",
-		blk.Id(),
+		blk.ID(),
 		blk.LayerIndex,
 		blk.LayerIndex.GetEpoch(bl.LayersPerEpoch),
-		log.String("sender_id", blk.MinerId().ShortString()),
-		log.Int("tx_count", len(blk.TxIds)),
-		log.Int("atx_count", len(blk.AtxIds)),
+		log.String("sender_id", blk.MinerID().ShortString()),
+		log.Int("tx_count", len(blk.TxIDs)),
+		log.Int("atx_count", len(blk.ATXIDs)),
 		log.Int("view_edges", len(blk.ViewEdges)),
 		log.Int("vote_count", len(blk.BlockVotes)),
 		blk.ATXID,
 		log.Uint32("eligibility_counter", blk.EligibilityProof.J),
 	)
 	//check if known
-	if _, err := bl.GetBlock(blk.Id()); err == nil {
-		bl.With().Info("we already know this block", log.BlockId(blk.Id().String()))
+	if _, err := bl.GetBlock(blk.ID()); err == nil {
+		bl.With().Info("we already know this block", log.BlockID(blk.ID().String()))
 		return
 	}
 	txs, atxs, err := bl.blockSyntacticValidation(&blk)
 	if err != nil {
-		bl.With().Error("failed to validate block", log.BlockId(blk.Id().String()), log.Err(err))
+		bl.With().Error("failed to validate block", log.BlockID(blk.ID().String()), log.Err(err))
 		return
 	}
 	data.ReportValidation(config.NewBlockProtocol)
 	if err := bl.AddBlockWithTxs(&blk, txs, atxs); err != nil {
-		bl.With().Error("failed to add block to database", log.BlockId(blk.Id().String()), log.Err(err))
+		bl.With().Error("failed to add block to database", log.BlockID(blk.ID().String()), log.Err(err))
 		return
 	}
 

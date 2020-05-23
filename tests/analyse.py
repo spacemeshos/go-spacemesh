@@ -5,6 +5,21 @@ from tests import queries
 
 
 def analyze_mining(deployment, last_layer, layers_per_epoch, layer_avg_size, total_pods):
+    """
+    Analyze mining assures some vital assertions such as:
+    none of the pods restarted (unintentionally) or wasn't deployed,
+    all nodes created blocks,
+    number of average blocks created match layer_avg_size,
+    number of total ATX match the number of pods * number of epochs until last layer,
+    average block creation per user
+
+    :param deployment: string, namespace id
+    :param last_layer: int, layer number to validate from
+    :param layers_per_epoch: int, number of layers per epoch
+    :param layer_avg_size: int, average number of blocks per layer
+    :param total_pods: int, total number of active pods
+
+    """
 
     last_layer = int(last_layer)
     layers_per_epoch = int(layers_per_epoch)

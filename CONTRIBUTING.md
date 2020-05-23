@@ -42,7 +42,7 @@ Please follow these guidelines for your PR to be reviewed and be considered for 
 1. Document all methods and functions using [go commentary](https://golang.org/doc/effective_go.html#commentary).  
 2. Provide at least one unit test for each function and method.
 3. Provide at least one integration test for each feature with a flow which involves more than one function call. Your tests should reflect the main ways that your code should be used.
-4. Run `./scripts/validate-gofmt.sh` and `./scripts/validate-lin.sh` to format and lint your code before submitting your PR.
+4. Run `go mod tidy`, `go fmt ./...` and `make lint` to format and lint your code before submitting your PR.
 5. Make sure that all CI tasks pass. CI is integrated with our github issues. If a test fails, commit a fix and wait for the CI system to build your PR and run all tests.
 
 # Adding new dependencies

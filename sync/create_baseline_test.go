@@ -38,9 +38,9 @@ func TestCreateBaseline(t *testing.T) {
 	defer nipstStore.Close()
 	atxdbStore, _ := database.NewLDBDatabase(id+"atx", 0, 0, lg.WithOptions(log.Nop))
 	defer atxdbStore.Close()
-	atxdb := activation.NewActivationDb(atxdbStore, &MockIStore{}, mshdb, uint16(1000), &ValidatorMock{}, lg.WithName("atxDB").WithOptions(log.Nop))
+	atxdb := activation.NewDB(atxdbStore, &mockIStore{}, mshdb, uint16(1000), &validatorMock{}, lg.WithName("atxDB").WithOptions(log.Nop))
 	trtl := tortoise.NewTortoise(blocksPerLayer, mshdb, 1, lg.WithName("trtl"))
-	msh := mesh.NewMesh(mshdb, atxdb, rewardConf, trtl, &mockTxMemPool{}, &mockAtxMemPool{}, &MockState{}, lg.WithOptions(log.Nop))
+	msh := mesh.NewMesh(mshdb, atxdb, rewardConf, trtl, &mockTxMemPool{}, &mockAtxMemPool{}, &mockState{}, lg.WithOptions(log.Nop))
 	defer msh.Close()
 	msh.SetBlockBuilder(&blockBuilderMock{})
 	poetDbStore, err := database.NewLDBDatabase(id+"poet", 0, 0, lg.WithName("poetDbStore").WithOptions(log.Nop))
@@ -62,20 +62,20 @@ func TestCreateBaseline(t *testing.T) {
 	createBaseline(msh, numOfLayers, blocksPerLayer, blocksPerLayer, txPerBlock, atxPerBlock)
 }
 
-func txs(num int) ([]*types.Transaction, []types.TransactionId) {
+func txs(num int) ([]*types.Transaction, []types.TransactionID) {
 	txs := make([]*types.Transaction, 0, num)
-	ids := make([]types.TransactionId, 0, num)
+	ids := make([]types.TransactionID, 0, num)
 	for i := 0; i < num; i++ {
 		tx := tx()
 		txs = append(txs, tx)
-		ids = append(ids, tx.Id())
+		ids = append(ids, tx.ID())
 	}
 	return txs, ids
 }
 
-func atxs(num int) ([]*types.ActivationTx, []types.AtxId) {
+func atxs(num int) ([]*types.ActivationTx, []types.ATXID) {
 	atxs := make([]*types.ActivationTx, 0, num)
-	ids := make([]types.AtxId, 0, num)
+	ids := make([]types.ATXID, 0, num)
 	signer := signing.NewEdSigner()
 	for i := 0; i < num; i++ {
 		atx := atxWithProof(signer.PublicKey().String(), proof)
@@ -84,7 +84,7 @@ func atxs(num int) ([]*types.ActivationTx, []types.AtxId) {
 			panic(err)
 		}
 		atxs = append(atxs, atx)
-		ids = append(ids, atx.Id())
+		ids = append(ids, atx.ID())
 	}
 	return atxs, ids
 }
@@ -119,18 +119,18 @@ func createLayerWithRandVoting(msh *mesh.Mesh, index types.LayerID, prev []*type
 	}
 	layerBlocks := make([]types.BlockID, 0, blocksInLayer)
 	for i := 0; i < blocksInLayer; i++ {
-		bl := types.NewExistingBlock(index, []byte(rand.RandString(8)))
+		bl := types.NewExistingBlock(index, []byte(rand.String(8)))
 		signer := signing.NewEdSigner()
 		bl.Signature = signer.Sign(bl.Bytes())
-		layerBlocks = append(layerBlocks, bl.Id())
+		layerBlocks = append(layerBlocks, bl.ID())
 		for idx, pat := range patterns {
 			for _, id := range pat {
 				b := prev[idx].Blocks()[id]
-				bl.AddVote(b.Id())
+				bl.AddVote(b.ID())
 			}
 		}
 		for _, prevBloc := range prev[0].Blocks() {
-			bl.AddView(prevBloc.Id())
+			bl.AddView(prevBloc.ID())
 		}
 
 		//add txs
@@ -138,8 +138,8 @@ func createLayerWithRandVoting(msh *mesh.Mesh, index types.LayerID, prev []*type
 		//add atxs
 		atxs, atxids := atxs(atxPerBlock)
 
-		bl.TxIds = txids
-		bl.AtxIds = atxids
+		bl.TxIDs = txids
+		bl.ATXIDs = atxids
 		bl.Initialize()
 		start := time.Now()
 		msh.AddBlockWithTxs(bl, txs, atxs)
@@ -156,10 +156,10 @@ func atxWithProof(pubkey string, poetref []byte) *types.ActivationTx {
 	chlng := types.HexToHash32("0x3333")
 	npst := activation.NewNIPSTWithChallenge(&chlng, poetref)
 
-	atx := types.NewActivationTxForTests(types.NodeId{Key: pubkey, VRFPublicKey: []byte(rand.RandString(8))}, 0, *types.EmptyAtxId, 5, 1, *types.EmptyAtxId, coinbase, 0, []types.BlockID{}, npst)
+	atx := newActivationTx(types.NodeID{Key: pubkey, VRFPublicKey: []byte(rand.String(8))}, 0, *types.EmptyATXID, 5, 1, *types.EmptyATXID, coinbase, 0, []types.BlockID{}, npst)
 	atx.Commitment = commitment
 	atx.CommitmentMerkleRoot = commitment.MerkleRoot
-	atx.CalcAndSetId()
+	atx.CalcAndSetID()
 	return atx
 }
 
@@ -171,4 +171,19 @@ func chooseRandomPattern(blocksInLayer int, patternSize int) []int {
 		indexes = append(indexes, r)
 	}
 	return indexes
+}
+
+func newActivationTx(nodeID types.NodeID, sequence uint64, prevATX types.ATXID, pubLayerID types.LayerID,
+	startTick uint64, positioningATX types.ATXID, coinbase types.Address, activeSetSize uint32, view []types.BlockID,
+	nipst *types.NIPST) *types.ActivationTx {
+
+	nipstChallenge := types.NIPSTChallenge{
+		NodeID:         nodeID,
+		Sequence:       sequence,
+		PrevATXID:      prevATX,
+		PubLayerID:     pubLayerID,
+		StartTick:      startTick,
+		PositioningATX: positioningATX,
+	}
+	return types.NewActivationTx(nipstChallenge, coinbase, activeSetSize, view, nipst, nil)
 }

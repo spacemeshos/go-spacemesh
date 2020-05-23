@@ -96,8 +96,8 @@ func NormFloat64() float64 { return globalRand.NormFloat64() }
 //
 func ExpFloat64() float64 { return globalRand.ExpFloat64() }
 
-// RandString returns an n sized random string
-func RandString(n int) string {
+// String returns an n sized random string
+func String(n int) string {
 	b := make([]rune, n)
 	for i := range b {
 		b[i] = letterRunes[rand.Intn(len(letterRunes))]

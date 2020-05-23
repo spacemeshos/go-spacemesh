@@ -67,6 +67,7 @@ func GetFullDirectoryPath(name string) (string, error) {
 	return aPath, err
 }
 
+// ExistOrCreate creates the given path if it does not exist.
 func ExistOrCreate(path string) (err error) {
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		err := os.MkdirAll(path, OwnerReadWriteExec)

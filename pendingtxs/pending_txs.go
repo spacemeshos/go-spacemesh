@@ -18,14 +18,14 @@ type nanoTx struct {
 // AccountPendingTxs indexes the pending transactions (those that are in the mesh, but haven't been applied yet) of a
 // specific account.
 type AccountPendingTxs struct {
-	PendingTxs map[uint64]map[types.TransactionId]nanoTx // nonce -> TxID -> nanoTx
+	PendingTxs map[uint64]map[types.TransactionID]nanoTx // nonce -> TxID -> nanoTx
 	mu         sync.RWMutex
 }
 
 // NewAccountPendingTxs returns a new, initialized AccountPendingTxs structure.
 func NewAccountPendingTxs() *AccountPendingTxs {
 	return &AccountPendingTxs{
-		PendingTxs: make(map[uint64]map[types.TransactionId]nanoTx),
+		PendingTxs: make(map[uint64]map[types.TransactionID]nanoTx),
 	}
 }
 
@@ -36,13 +36,13 @@ func (apt *AccountPendingTxs) Add(layer types.LayerID, txs ...*types.Transaction
 	for _, tx := range txs {
 		existing, found := apt.PendingTxs[tx.AccountNonce]
 		if !found {
-			existing = make(map[types.TransactionId]nanoTx)
+			existing = make(map[types.TransactionID]nanoTx)
 			apt.PendingTxs[tx.AccountNonce] = existing
 		}
-		if existing[tx.Id()].HighestLayerIncludedIn > layer {
-			layer = existing[tx.Id()].HighestLayerIncludedIn
+		if existing[tx.ID()].HighestLayerIncludedIn > layer {
+			layer = existing[tx.ID()].HighestLayerIncludedIn
 		}
-		existing[tx.Id()] = nanoTx{
+		existing[tx.ID()] = nanoTx{
 			Amount:                 tx.Amount,
 			Fee:                    tx.Fee,
 			HighestLayerIncludedIn: layer,
@@ -69,10 +69,10 @@ func (apt *AccountPendingTxs) RemoveRejected(rejected []*types.Transaction, laye
 	for _, tx := range rejected {
 		existing, found := apt.PendingTxs[tx.AccountNonce]
 		if found {
-			if existing[tx.Id()].HighestLayerIncludedIn > layer {
+			if existing[tx.ID()].HighestLayerIncludedIn > layer {
 				continue
 			}
-			delete(existing, tx.Id())
+			delete(existing, tx.ID())
 			if len(existing) == 0 {
 				delete(apt.PendingTxs, tx.AccountNonce)
 			}
@@ -83,7 +83,7 @@ func (apt *AccountPendingTxs) RemoveRejected(rejected []*types.Transaction, laye
 
 // RemoveNonce removes any transaction with the given nonce from AccountPendingTxs. For each transaction removed it also
 // calls the given deleteTx function with the corresponding transaction ID.
-func (apt *AccountPendingTxs) RemoveNonce(nonce uint64, deleteTx func(id types.TransactionId)) {
+func (apt *AccountPendingTxs) RemoveNonce(nonce uint64, deleteTx func(id types.TransactionID)) {
 	apt.mu.Lock()
 	for id := range apt.PendingTxs[nonce] {
 		deleteTx(id)
@@ -103,7 +103,7 @@ func (apt *AccountPendingTxs) GetProjection(prevNonce, prevBalance uint64) (nonc
 // ValidTxs provides a list of valid transaction IDs that can be applied from the AccountPendingTxs and a final nonce
 // and balance if they would be applied. The validity of transactions depends on the previous nonce and balance, so
 // those must be provided.
-func (apt *AccountPendingTxs) ValidTxs(prevNonce, prevBalance uint64) (txIds []types.TransactionId, nonce, balance uint64) {
+func (apt *AccountPendingTxs) ValidTxs(prevNonce, prevBalance uint64) (txIds []types.TransactionID, nonce, balance uint64) {
 	nonce, balance = prevNonce, prevBalance
 	apt.mu.RLock()
 	for {
@@ -112,7 +112,7 @@ func (apt *AccountPendingTxs) ValidTxs(prevNonce, prevBalance uint64) (txIds []t
 			break // no transactions found with required nonce
 		}
 		id := validTxWithHighestFee(txs, balance)
-		if id == types.EmptyTransactionId {
+		if id == types.EmptyTransactionID {
 			break // all transactions would overdraft the account
 		}
 		txIds = append(txIds, id)
@@ -131,8 +131,8 @@ func (apt *AccountPendingTxs) IsEmpty() bool {
 	return len(apt.PendingTxs) == 0
 }
 
-func validTxWithHighestFee(txs map[types.TransactionId]nanoTx, balance uint64) types.TransactionId {
-	bestID := types.EmptyTransactionId
+func validTxWithHighestFee(txs map[types.TransactionID]nanoTx, balance uint64) types.TransactionID {
+	bestID := types.EmptyTransactionID
 	var maxFee uint64
 	for id, tx := range txs {
 		if (tx.Fee > maxFee || (tx.Fee == maxFee && bytes.Compare(id[:], bestID[:]) < 0)) &&

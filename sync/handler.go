@@ -12,14 +12,14 @@ import (
 func newLayerHashRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg []byte) []byte {
 	return func(msg []byte) []byte {
 		lyrid := util.BytesToUint64(msg)
-		logger.With().Info("handle layer hash request", log.LayerId(lyrid))
+		logger.With().Info("handle layer hash request", log.LayerID(lyrid))
 		layer, err := layers.GetLayer(types.LayerID(lyrid))
 		if err != nil {
 			if err == database.ErrNotFound {
-				logger.With().Warning("hashes requested for unfamiliar layer ", log.LayerId(lyrid))
+				logger.With().Warning("hashes requested for unfamiliar layer ", log.LayerID(lyrid))
 				return nil
 			}
-			logger.With().Error("Error handling layer request message", log.LayerId(lyrid), log.Err(err))
+			logger.With().Error("Error handling layer request message", log.LayerID(lyrid), log.Err(err))
 			return nil
 		}
 
@@ -34,7 +34,7 @@ func newLayerBlockIdsRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg 
 		layer, err := layers.GetLayer(types.LayerID(lyrid))
 		if err != nil {
 			if err == database.ErrNotFound {
-				logger.With().Warning("block ids requested for unfamiliar layer (id: %s)", log.LayerId(lyrid))
+				logger.With().Warning("block ids requested for unfamiliar layer (id: %s)", log.LayerID(lyrid))
 				return nil
 			}
 			logger.Error("Error handling ids request message with LayerID: %d and error: %s", lyrid, err.Error())
@@ -45,7 +45,7 @@ func newLayerBlockIdsRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg 
 
 		ids := make([]types.BlockID, 0, len(blocks))
 		for _, b := range blocks {
-			ids = append(ids, b.Id())
+			ids = append(ids, b.ID())
 		}
 
 		idbytes, err := types.BlockIdsAsBytes(ids)
@@ -75,10 +75,10 @@ func newBlockRequestHandler(msh *mesh.Mesh, logger log.Log) func(msg []byte) []b
 			blk, err := msh.GetBlock(types.BlockID(bid.ToHash20()))
 			if err != nil {
 				if err == database.ErrNotFound {
-					logger.With().Warning("unfamiliar block was requested (id: %s)", log.BlockId(bid.ShortString()), log.Err(err))
+					logger.With().Warning("unfamiliar block was requested (id: %s)", log.BlockID(bid.ShortString()), log.Err(err))
 					continue
 				}
-				logger.With().Error("Error handling block request message", log.BlockId(bid.ShortString()), log.Err(err))
+				logger.With().Error("Error handling block request message", log.BlockID(bid.ShortString()), log.Err(err))
 				continue
 			}
 
@@ -97,7 +97,7 @@ func newBlockRequestHandler(msh *mesh.Mesh, logger log.Log) func(msg []byte) []b
 
 func newTxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 	return func(msg []byte) []byte {
-		var txids []types.TransactionId
+		var txids []types.TransactionID
 		err := types.BytesToInterface(msg, &txids)
 		if err != nil {
 			logger.Error("Error marshalling request", err)
@@ -110,7 +110,7 @@ func newTxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 			if tx, err := s.txpool.Get(t); err == nil {
 				txs = append(txs, tx)
 			} else {
-				logger.With().Warning("unfamiliar tx was requested (id: %s)", log.TxId(t.ShortString()))
+				logger.With().Warning("unfamiliar tx was requested (id: %s)", log.TxID(t.ShortString()))
 			}
 		}
 
@@ -127,7 +127,7 @@ func newTxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 
 func newATxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 	return func(msg []byte) []byte {
-		var atxids []types.AtxId
+		var atxids []types.ATXID
 		err := types.BytesToInterface(msg, &atxids)
 		if err != nil {
 			logger.Error("Error marshalling request", err)
@@ -139,7 +139,7 @@ func newATxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 			if tx, err := s.atxpool.Get(t); err == nil {
 				atxs[t] = tx
 			} else {
-				logger.With().Warning("unfamiliar atx was requested (id: %s)", log.AtxId(t.ShortString()))
+				logger.With().Warning("unfamiliar atx was requested (id: %s)", log.AtxID(t.ShortString()))
 			}
 		}
 

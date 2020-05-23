@@ -8,19 +8,23 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/util"
 )
 
+// ToBytes returns the BlockID as a byte slice.
 func (id BlockID) ToBytes() []byte { return id.AsHash32().Bytes() }
 
+// ToBytes returns the byte representation of the LayerID, using little endian encoding.
 func (l LayerID) ToBytes() []byte { return util.Uint64ToBytes(uint64(l)) }
 
+// BlockIdsAsBytes serializes a slice of BlockIDs.
 func BlockIdsAsBytes(ids []BlockID) ([]byte, error) {
 	var w bytes.Buffer
-	SortBlockIds(ids)
+	SortBlockIDs(ids)
 	if _, err := xdr.Marshal(&w, &ids); err != nil {
 		return nil, errors.New("error marshalling block ids ")
 	}
 	return w.Bytes(), nil
 }
 
+// BytesToBlockIds deserializes a slice of BlockIDs.
 func BytesToBlockIds(blockIds []byte) ([]BlockID, error) {
 	var ids []BlockID
 	if _, err := xdr.Unmarshal(bytes.NewReader(blockIds), &ids); err != nil {
@@ -29,6 +33,7 @@ func BytesToBlockIds(blockIds []byte) ([]BlockID, error) {
 	return ids, nil
 }
 
+// BytesAsAtx deserializes an ActivationTx.
 func BytesAsAtx(b []byte) (*ActivationTx, error) {
 	buf := bytes.NewReader(b)
 	var atx ActivationTx
@@ -39,14 +44,7 @@ func BytesAsAtx(b []byte) (*ActivationTx, error) {
 	return &atx, nil
 }
 
-func TxIdsAsBytes(ids []TransactionId) ([]byte, error) {
-	var w bytes.Buffer
-	if _, err := xdr.Marshal(&w, &ids); err != nil {
-		return nil, fmt.Errorf("error marshalling tx ids: %v", err)
-	}
-	return w.Bytes(), nil
-}
-
+// NIPSTChallengeAsBytes serializes a NIPSTChallenge.
 func NIPSTChallengeAsBytes(challenge *NIPSTChallenge) ([]byte, error) {
 	var w bytes.Buffer
 	if _, err := xdr.Marshal(&w, challenge); err != nil {
@@ -55,6 +53,7 @@ func NIPSTChallengeAsBytes(challenge *NIPSTChallenge) ([]byte, error) {
 	return w.Bytes(), nil
 }
 
+// BytesAsTransaction deserializes a Transaction.
 func BytesAsTransaction(buf []byte) (*Transaction, error) {
 	b := Transaction{}
 	_, err := xdr.Unmarshal(bytes.NewReader(buf), &b)
@@ -64,6 +63,7 @@ func BytesAsTransaction(buf []byte) (*Transaction, error) {
 	return &b, nil
 }
 
+// BytesToInterface deserializes any type.
 // ⚠️ Pass the interface by reference
 func BytesToInterface(buf []byte, i interface{}) error {
 	_, err := xdr.Unmarshal(bytes.NewReader(buf), i)
@@ -73,6 +73,7 @@ func BytesToInterface(buf []byte, i interface{}) error {
 	return nil
 }
 
+// InterfaceToBytes serializes any type.
 // ⚠️ Pass the interface by reference
 func InterfaceToBytes(i interface{}) ([]byte, error) {
 	var w bytes.Buffer

@@ -3,8 +3,6 @@ package discovery
 import (
 	"bytes"
 	"encoding/binary"
-	"github.com/spacemeshos/go-spacemesh/crypto"
-	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"math/rand"
 	"net"
 	"path/filepath"
@@ -13,8 +11,11 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
+
+	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
+	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 )
 
@@ -83,6 +84,9 @@ type addrBook struct {
 	logger log.Log
 	mtx    sync.RWMutex
 
+	path          string
+	peersFileName string
+
 	rand *rand.Rand
 	key  [32]byte
 	// todo: consider different lock to index (rw?)
@@ -91,8 +95,8 @@ type addrBook struct {
 	addrNew   [newBucketCount]map[node.ID]*KnownAddress
 	addrTried [triedBucketCount]map[node.ID]*KnownAddress
 
-	//todo: lock local for updates
-	localAddresses []*node.NodeInfo
+	localAddrMtx   sync.RWMutex
+	localAddresses []*node.Info
 
 	nTried int
 	nNew   int
@@ -105,21 +109,21 @@ type addrBook struct {
 }
 
 // AddOurAddress adds one of our addresses.
-func (a *addrBook) AddLocalAddress(addr *node.NodeInfo) {
-	a.mtx.Lock()
+func (a *addrBook) AddLocalAddress(addr *node.Info) {
+	a.localAddrMtx.Lock()
 	a.localAddresses = append(a.localAddresses, addr)
-	a.mtx.Unlock()
+	a.localAddrMtx.Unlock()
 }
 
 // IsLocalAddress returns true if this address was added as a local address before.
-func (a *addrBook) IsLocalAddress(addr *node.NodeInfo) bool {
-	a.mtx.RLock()
+func (a *addrBook) IsLocalAddress(addr *node.Info) bool {
+	a.localAddrMtx.RLock()
 	ok := a.isLocalAddressUnlocked(addr)
-	a.mtx.RUnlock()
+	a.localAddrMtx.RUnlock()
 	return ok
 }
 
-func (a *addrBook) isLocalAddressUnlocked(addr *node.NodeInfo) bool {
+func (a *addrBook) isLocalAddressUnlocked(addr *node.Info) bool {
 	for _, local := range a.localAddresses {
 
 		if bytes.Equal(local.ID.Bytes(), addr.ID.Bytes()) {
@@ -137,9 +141,9 @@ func (a *addrBook) isLocalAddressUnlocked(addr *node.NodeInfo) bool {
 
 // updateAddress is a helper function to either update an address already known
 // to the address manager, or to add the address if not already known.
-func (a *addrBook) updateAddress(netAddr, srcAddr *node.NodeInfo) {
+func (a *addrBook) updateAddress(netAddr, srcAddr *node.Info) {
 
-	if a.isLocalAddressUnlocked(netAddr) {
+	if a.IsLocalAddress(netAddr) {
 		a.logger.Debug("skipping adding a local address %v", netAddr.String())
 		return
 	}
@@ -177,15 +181,14 @@ func (a *addrBook) updateAddress(netAddr, srcAddr *node.NodeInfo) {
 		//if a.rand.Int31n(factor) != 0 {
 		return
 		//}
-	} else {
-		// Make a copy of the net address to avoid races since it is
-		// updated elsewhere in the addrmanager code and would otherwise
-		// change the actual netaddress on the peer.
-		ka = &KnownAddress{na: netAddr, srcAddr: srcAddr, lastSeen: time.Now()}
-		a.addrIndex[netAddr.ID] = ka
-		a.nNew++
-		// XXX time penalty?
 	}
+	// Make a copy of the net address to avoid races since it is
+	// updated elsewhere in the addrmanager code and would otherwise
+	// change the actual netaddress on the peer.
+	ka = &KnownAddress{na: netAddr, srcAddr: srcAddr, lastSeen: time.Now()}
+	a.addrIndex[netAddr.ID] = ka
+	a.nNew++
+	// XXX time penalty?
 
 	bucket := a.getNewBucket(netAddr.IP, srcAddr.IP)
 
@@ -279,8 +282,8 @@ func (a *addrBook) GetAddress() *KnownAddress {
 	}
 }
 
-// Lookup searches for an address using a public key. returns *NodeInfo
-func (a *addrBook) Lookup(addr p2pcrypto.PublicKey) (*node.NodeInfo, error) {
+// Lookup searches for an address using a public key. returns *Info
+func (a *addrBook) Lookup(addr p2pcrypto.PublicKey) (*node.Info, error) {
 	a.mtx.Lock()
 	d := a.lookup(addr)
 	a.mtx.Unlock()
@@ -451,7 +454,7 @@ func (a *addrBook) NeedNewAddresses() bool {
 
 // AddressCache returns the current address cache.  It must be treated as
 // read-only (but since it is a copy now, this is not as dangerous).
-func (a *addrBook) AddressCache() []*node.NodeInfo {
+func (a *addrBook) AddressCache() []*node.Info {
 
 	// TODO : take from buckets
 
@@ -478,7 +481,7 @@ func (a *addrBook) AddressCache() []*node.NodeInfo {
 
 // getAddresses returns all of the addresses currently found within the
 // manager's address cache.
-func (a *addrBook) getAddresses() []*node.NodeInfo {
+func (a *addrBook) getAddresses() []*node.Info {
 	a.mtx.Lock()
 	defer a.mtx.Unlock()
 
@@ -487,7 +490,7 @@ func (a *addrBook) getAddresses() []*node.NodeInfo {
 		return nil
 	}
 
-	addrs := make([]*node.NodeInfo, 0, addrIndexLen)
+	addrs := make([]*node.Info, 0, addrIndexLen)
 	for _, v := range a.addrIndex {
 		addrs = append(addrs, v.na)
 	}
@@ -502,8 +505,19 @@ func (a *addrBook) Start() {
 	if atomic.AddInt32(&a.started, 1) != 1 {
 		return
 	}
-	// todo: load peers from hard drive
-	// todo: save peers to hard drive
+
+	if a.path != "" {
+		peersFileName := defaultPeersFileName
+		if a.peersFileName != "" {
+			peersFileName = a.peersFileName
+		}
+
+		finalFilePath := filepath.Join(a.path, config.P2PDirectoryPath, peersFileName)
+		a.loadPeers(finalFilePath)
+
+		a.wg.Add(1)
+		go func() { a.saveRoutine(finalFilePath); a.wg.Done() }()
+	}
 }
 
 // Stop gracefully shuts down the address manager by stopping the main handler.
@@ -603,7 +617,7 @@ func (a *addrBook) getTriedBucket(netAddr net.IP) int {
 // AddAddresses adds new addresses to the address manager.  It enforces a max
 // number of addresses and silently ignores duplicate addresses.  It is
 // safe for concurrent access.
-func (a *addrBook) AddAddresses(addrs []*node.NodeInfo, srcAddr *node.NodeInfo) {
+func (a *addrBook) AddAddresses(addrs []*node.Info, srcAddr *node.Info) {
 	a.mtx.Lock()
 	defer a.mtx.Unlock()
 
@@ -615,7 +629,7 @@ func (a *addrBook) AddAddresses(addrs []*node.NodeInfo, srcAddr *node.NodeInfo) 
 // AddAddress adds a new address to the address manager.  It enforces a max
 // number of addresses and silently ignores duplicate addresses.  It is
 // safe for concurrent access.
-func (a *addrBook) AddAddress(addr, srcAddr *node.NodeInfo) {
+func (a *addrBook) AddAddress(addr, srcAddr *node.Info) {
 	a.mtx.Lock()
 	defer a.mtx.Unlock()
 
@@ -671,29 +685,17 @@ func (a *addrBook) reset() {
 	}
 }
 
-// New returns a new bitcoin address manager.
+// newAddrBook returns a new address manager.
 // Use Start to begin processing asynchronous address updates.
-func NewAddrBook(cfg config.SwarmConfig, path string, logger log.Log) *addrBook {
+func newAddrBook(cfg config.SwarmConfig, path string, logger log.Log) *addrBook {
 	//TODO use config for const params.
 	am := addrBook{
-		logger: logger,
-		rand:   rand.New(rand.NewSource(time.Now().UnixNano())),
-		quit:   make(chan struct{}),
+		logger:        logger,
+		path:          path,
+		peersFileName: cfg.PeersFile,
+		rand:          rand.New(rand.NewSource(time.Now().UnixNano())),
+		quit:          make(chan struct{}),
 	}
 	am.reset()
-
-	if path != "" {
-
-		peersfile := defaultPeersFileName
-		if cfg.PeersFile != "" {
-			peersfile = cfg.PeersFile
-		}
-
-		finalFilePath := filepath.Join(path, config.P2PDirectoryPath, peersfile)
-		am.loadPeers(finalFilePath)
-
-		am.wg.Add(1)
-		go func() { am.saveRoutine(finalFilePath); am.wg.Done() }()
-	}
 	return &am
 }

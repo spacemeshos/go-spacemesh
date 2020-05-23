@@ -1,4 +1,4 @@
-// This package provides a simple and opinionated interface to UPnP-enabled
+// Package upnp provides a simple and opinionated interface to UPnP-enabled
 // routers, allowing users to forward ports and discover their external IP
 // address. Specific quirks:
 //

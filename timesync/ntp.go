@@ -31,10 +31,13 @@ const (
 // DefaultServer is a list of relay on more than one server.
 var (
 	DefaultServers = []string{
-		"0.pool.ntp.org",
-		"1.pool.ntp.org",
+		"time-a-wwv.nist.gov",
+		"time-b-wwv.nist.gov",
+		"time-c-wwv.nist.gov",
 		"time.google.com",
 		"time1.google.com",
+		"time3.google.com",
+		"time4.google.com",
 		"time.asia.apple.com",
 		"time.americas.apple.com",
 	}
@@ -127,22 +130,20 @@ func ntpRequest(server string, rq *NtpPacket) (time.Time, time.Duration, *NtpPac
 	return before, latency, rsp, nil
 }
 
-func queryNtpServer(server string, resultsChan chan time.Duration, errorChan chan error) {
+func queryNtpServer(server string) (time.Duration, error) {
 	req := &NtpPacket{Settings: 0x1B}
 	rt, lat, rsp, err := ntpFunc(server, req)
 	if err != nil {
-		errorChan <- err
-		return
+		return 0, err
 	}
 	if *rsp == zeroNtp {
-		errorChan <- fmt.Errorf("empty ntp response responded")
-		return
+		return 0, fmt.Errorf("empty ntp response responded")
 	}
 
 	// Calculate drift with latency
 	drift := rt.UTC().Sub(rsp.Time().UTC().Add(lat / 2))
 	log.Info("ntp check from server %v, drift: %v, start_check: %v, latency: %v, rsp: %v", server, drift, rt.UTC(), lat, rsp.Time().UTC())
-	resultsChan <- drift
+	return drift, nil
 }
 
 // ntpTimeDrift queries random servers from our list to calculate a drift average.
@@ -152,13 +153,15 @@ func ntpTimeDrift() (time.Duration, error) {
 	// Leap = 0
 	// Client mode = 3
 	// Version = 3
-	resultsChan := make(chan time.Duration)
-	errorChan := make(chan error)
 
 	// Make NtpQueries concurrent calls to different ntp servers
 	// if more servers fail than succeed in DefaultTimeoutLatency timeout the node.
 	// TODO: possibly add retries when timeout
 	queriedServers := make(map[int]bool)
+
+	res := make(sortableDurations, 0, config.TimeConfigValues.NtpQueries)
+	errors := make([]error, 0, config.TimeConfigValues.NtpQueries)
+
 	sl := len(DefaultServers) - 1
 	for i := 0; i < config.TimeConfigValues.NtpQueries; i++ {
 		rndsrv := rand.Intn(sl)
@@ -166,18 +169,12 @@ func ntpTimeDrift() (time.Duration, error) {
 			rndsrv = rand.Intn(sl)
 		}
 		queriedServers[rndsrv] = true
-		go queryNtpServer(DefaultServers[rndsrv], resultsChan, errorChan)
-	}
-
-	res := sortableDurations{}
-	errors := []error{}
-	for i := 0; i < config.TimeConfigValues.NtpQueries; i++ {
-		select {
-		case err := <-errorChan:
+		dur, err := queryNtpServer(DefaultServers[rndsrv])
+		if err != nil {
 			errors = append(errors, err)
-		case result := <-resultsChan:
-			res = append(res, result)
+			continue
 		}
+		res = append(res, dur)
 	}
 
 	if config.TimeConfigValues.NtpQueries-len(errors) < MinResultsThreshold {

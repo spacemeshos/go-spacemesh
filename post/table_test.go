@@ -13,7 +13,7 @@ func TestNewTable(t *testing.T) {
 
 	config := config.DefaultConfig()
 
-	table, err := NewTable(1, "test_post", config.DataDir)
+	table, err := NewTable(1, "test_post", config.DataDir())
 	assert.NoError(t, err, "expected no error")
 
 	err = table.deleteAllData()

@@ -1,10 +1,12 @@
+// +build !exclude_app_test
+
 package node
 
 import (
 	"fmt"
+	"github.com/spacemeshos/amcl"
+	"github.com/spacemeshos/amcl/BLS381"
 	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/amcl"
-	"github.com/spacemeshos/go-spacemesh/amcl/BLS381"
 	apiCfg "github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/api/pb"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -13,7 +15,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
-	"github.com/spacemeshos/go-spacemesh/oracle"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
@@ -75,7 +76,7 @@ func (suite *AppTestSuite) initMultipleInstances(cfg *config.Config, rolacle *el
 	name := 'a'
 	for i := 0; i < numOfInstances; i++ {
 		dbStorepath := storeFormat + string(name)
-		smApp, err := InitSingleInstance(*cfg, i, genesisTime, rng, dbStorepath, rolacle, poetClient, fastHare, clock, network)
+		smApp, err := InitSingleInstance(*cfg, i, genesisTime, rng, dbStorepath, rolacle, poetClient, clock, network)
 		assert.NoError(suite.T(), err)
 		suite.apps = append(suite.apps, smApp)
 		suite.dbs = append(suite.dbs, dbStorepath)
@@ -145,7 +146,7 @@ loop:
 	GracefulShutdown(suite.apps)
 
 	// this tests loading of pervious state, mabe it's not the best place to put this here...
-	smApp, err := InitSingleInstance(*cfg, 0, genesisTime, rng, path+"a", rolacle, poetHarness.HTTPPoetClient, false, clock, net)
+	smApp, err := InitSingleInstance(*cfg, 0, genesisTime, rng, path+"a", rolacle, poetHarness.HTTPPoetClient, clock, net)
 	assert.NoError(suite.T(), err)
 	//test that loaded root equals
 	assert.Equal(suite.T(), oldRoot, smApp.state.GetStateRoot())
@@ -352,7 +353,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 
 	type nodeData struct {
 		layertoblocks map[types.LayerID][]types.BlockID
-		atxPerEpoch   map[types.EpochId]uint32
+		atxPerEpoch   map[types.EpochID]uint32
 	}
 
 	layersPerEpoch := int(suite.apps[0].Config.LayersPerEpoch)
@@ -367,7 +368,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 	for _, ap := range suite.apps {
 		if _, ok := datamap[ap.nodeID.Key]; !ok {
 			datamap[ap.nodeID.Key] = new(nodeData)
-			datamap[ap.nodeID.Key].atxPerEpoch = make(map[types.EpochId]uint32)
+			datamap[ap.nodeID.Key].atxPerEpoch = make(map[types.EpochID]uint32)
 			datamap[ap.nodeID.Key].layertoblocks = make(map[types.LayerID][]types.BlockID)
 		}
 
@@ -377,7 +378,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 				log.Error("ERROR: couldn't get a validated layer from db layer %v, %v", i, err)
 			}
 			for _, b := range lyr.Blocks() {
-				datamap[ap.nodeID.Key].layertoblocks[lyr.Index()] = append(datamap[ap.nodeID.Key].layertoblocks[lyr.Index()], b.Id())
+				datamap[ap.nodeID.Key].layertoblocks[lyr.Index()] = append(datamap[ap.nodeID.Key].layertoblocks[lyr.Index()], b.ID())
 			}
 		}
 	}
@@ -438,7 +439,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 			act, exp, totalBlocks, firstEpochBlocks, lastLayer, layersPerEpoch, layerAvgSize, totalEpochs))
 
 	firstAp := suite.apps[0]
-	atxDb := firstAp.blockListener.AtxDB.(*activation.ActivationDb)
+	atxDb := firstAp.blockListener.AtxDB.(*activation.DB)
 	atxID, err := atxDb.GetNodeLastAtxID(firstAp.nodeID)
 	assert.NoError(suite.T(), err)
 	atx, err := atxDb.GetAtxHeader(atxID)
@@ -447,7 +448,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 	totalAtxs := uint32(0)
 	for atx != nil {
 		totalAtxs += atx.ActiveSetSize
-		atx, err = atxDb.GetAtxHeader(atx.PrevATXId)
+		atx, err = atxDb.GetAtxHeader(atx.PrevATXID)
 	}
 
 	// assert number of ATXs
@@ -462,12 +463,30 @@ func (suite *AppTestSuite) validateLastATXActiveSetSize(app *SpacemeshApp) {
 	suite.True(int(atx.ActiveSetSize) == len(suite.apps), "atx: %v node: %v", atx.ShortString(), app.nodeID.Key[:5])
 }
 
+// travis has a 10 minutes timeout
+// this ensures we print something before the timeout
+func patchTravisTimeout(termchan chan struct{}) {
+	ticker := time.NewTimer(5 * time.Minute)
+	for {
+		select {
+		case <-ticker.C:
+			fmt.Printf("Travis Patch\n")
+			ticker = time.NewTimer(5 * time.Minute)
+		case <-termchan:
+			return
+		}
+	}
+}
+
 func TestAppTestSuite(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
 	//defer leaktest.Check(t)()
+	term := make(chan struct{})
+	go patchTravisTimeout(term)
 	suite.Run(t, new(AppTestSuite))
+	close(term)
 }
 
 func TestShutdown(t *testing.T) {
@@ -517,12 +536,12 @@ func TestShutdown(t *testing.T) {
 
 	vrfPriv, vrfPub := BLS381.GenKeyPair(BLS381.DefaultSeed())
 	vrfSigner := BLS381.NewBlsSigner(vrfPriv)
-	nodeID := types.NodeId{Key: pub.String(), VRFPublicKey: vrfPub}
+	nodeID := types.NodeID{Key: pub.String(), VRFPublicKey: vrfPub}
 
 	swarm := net.NewNode()
 	dbStorepath := "/tmp/" + pub.String()
 
-	hareOracle := oracle.NewLocalOracle(rolacle, 5, nodeID)
+	hareOracle := newLocalOracle(rolacle, 5, nodeID)
 	hareOracle.Register(true, pub.String())
 
 	postClient, err := activation.NewPostClient(&smApp.Config.POST, util.Hex2Bytes(nodeID.Key))

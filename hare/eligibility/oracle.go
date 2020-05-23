@@ -29,7 +29,7 @@ type valueProvider interface {
 
 // a func to retrieve the active set size for the provided layer
 // this func is assumed to be cpu intensive and hence we cache its results
-type activeSetFunc func(epoch types.EpochId, blocks map[types.BlockID]struct{}) (map[string]struct{}, error)
+type activeSetFunc func(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error)
 
 type signer interface {
 	Sign(msg []byte) ([]byte, error)
@@ -145,7 +145,7 @@ func (o *Oracle) buildVRFMessage(layer types.LayerID, round int32) ([]byte, erro
 	// get value from Beacon
 	v, err := o.beacon.Value(layer)
 	if err != nil {
-		o.With().Error("Could not get hare Beacon value", log.Err(err), log.LayerId(uint64(layer)), log.Int32("round", round))
+		o.With().Error("Could not get hare Beacon value", log.Err(err), log.LayerID(uint64(layer)), log.Int32("round", round))
 		o.lock.Unlock()
 		return nil, err
 	}
@@ -174,7 +174,7 @@ func (o *Oracle) activeSetSize(layer types.LayerID) (uint32, error) {
 			return uint32(o.genesisActiveSetSize), nil
 		}
 
-		o.With().Error("activeSetSize erred while calling actives func", log.Err(err), log.LayerId(uint64(layer)))
+		o.With().Error("activeSetSize erred while calling actives func", log.Err(err), log.LayerID(uint64(layer)))
 		return 0, err
 	}
 
@@ -182,7 +182,7 @@ func (o *Oracle) activeSetSize(layer types.LayerID) (uint32, error) {
 }
 
 // Eligible checks if ID is eligible on the given Layer where msg is the VRF message, sig is the role proof and assuming commSize as the expected committee size
-func (o *Oracle) Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeId, sig []byte) (bool, error) {
+func (o *Oracle) Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (bool, error) {
 	msg, err := o.buildVRFMessage(layer, round)
 	if err != nil {
 		o.Error("Eligible: could not build VRF message")
@@ -308,7 +308,7 @@ func (o *Oracle) IsIdentityActiveOnConsensusView(edID string, layer types.LayerI
 		}
 
 		o.With().Error("IsIdentityActiveOnConsensusView erred while calling actives func",
-			log.LayerId(uint64(layer)), log.Err(err))
+			log.LayerID(uint64(layer)), log.Err(err))
 		return false, err
 	}
 	_, exist := actives[edID]

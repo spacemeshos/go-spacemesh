@@ -23,26 +23,20 @@ import (
 	"sync"
 )
 
-/*
- * This is a test memory database. Do not use for any production it does not get persisted
- */
+// MemDatabase is a test memory database. Do not use for any production it does not get persisted
 type MemDatabase struct {
 	db   map[string][]byte
 	lock sync.RWMutex
 }
 
+// NewMemDatabase returns a memory database instance
 func NewMemDatabase() *MemDatabase {
 	return &MemDatabase{
 		db: make(map[string][]byte),
 	}
 }
 
-func NewMemDatabaseWithCap(size int) *MemDatabase {
-	return &MemDatabase{
-		db: make(map[string][]byte, size),
-	}
-}
-
+// Put inserts value value by provided key
 func (db *MemDatabase) Put(key []byte, value []byte) error {
 	db.lock.Lock()
 	defer db.lock.Unlock()
@@ -51,6 +45,7 @@ func (db *MemDatabase) Put(key []byte, value []byte) error {
 	return nil
 }
 
+// Has returns a boolean if key is in db or not
 func (db *MemDatabase) Has(key []byte) (bool, error) {
 	db.lock.RLock()
 	defer db.lock.RUnlock()
@@ -59,6 +54,7 @@ func (db *MemDatabase) Has(key []byte) (bool, error) {
 	return ok, nil
 }
 
+// Get gets the value for the given key, returns an error if key wasn't found
 func (db *MemDatabase) Get(key []byte) ([]byte, error) {
 	db.lock.RLock()
 	defer db.lock.RUnlock()
@@ -69,6 +65,7 @@ func (db *MemDatabase) Get(key []byte) ([]byte, error) {
 	return nil, ErrNotFound
 }
 
+// Keys returns all keys found in database
 func (db *MemDatabase) Keys() [][]byte {
 	db.lock.RLock()
 	defer db.lock.RUnlock()
@@ -80,6 +77,7 @@ func (db *MemDatabase) Keys() [][]byte {
 	return keys
 }
 
+// Delete removes the key from db
 func (db *MemDatabase) Delete(key []byte) error {
 	db.lock.Lock()
 	defer db.lock.Unlock()
@@ -88,14 +86,18 @@ func (db *MemDatabase) Delete(key []byte) error {
 	return nil
 }
 
+// Close closes the database
 func (db *MemDatabase) Close() {}
 
+// NewBatch returns batch object to aggregate writes to db
 func (db *MemDatabase) NewBatch() Batch {
 	return &memBatch{db: db}
 }
 
+// Len returns number of items in database
 func (db *MemDatabase) Len() int { return len(db.db) }
 
+// NewMemDatabaseIterator  iterator for memory database iterating all items in database
 func (db *MemDatabase) NewMemDatabaseIterator() *MemDatabaseIterator {
 	keys := make([][]byte, 0, len(db.db))
 	for k := range db.db {
@@ -111,10 +113,12 @@ func (db *MemDatabase) NewMemDatabaseIterator() *MemDatabaseIterator {
 	}
 }
 
+// Iterator returns iterator for memory database iterating all items in database
 func (db *MemDatabase) Iterator() Iterator {
 	return db.NewMemDatabaseIterator()
 }
 
+// Find returns iterator iterating items with given key as prefix
 func (db *MemDatabase) Find(key []byte) Iterator {
 	keys := make([][]byte, 0, len(db.db))
 	for k := range db.db {
@@ -151,7 +155,7 @@ func (b *memBatch) Put(key, value []byte) error {
 
 func (b *memBatch) Delete(key []byte) error {
 	b.writes = append(b.writes, kv{util.CopyBytes(key), nil, true})
-	b.size += 1
+	b.size++
 	return nil
 }
 
