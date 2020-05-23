@@ -9,7 +9,7 @@ SET protobuf_path=%%F
 )
 IF [%protobuf_path%]==[] (
   ECHO Failed to find path for github.com/golang/protobuf
-  exit /B 9
+  exit /B 1
 )
 
 ECHO installing protoc-gen-go...
