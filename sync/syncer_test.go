@@ -516,11 +516,10 @@ loop:
 
 }
 
-func getPeersMock(peers []p2ppeers.Peer) p2ppeers.Peers {
+func getPeersMock(peers []p2ppeers.Peer) *p2ppeers.Peers {
 	value := atomic.Value{}
 	value.Store(peers)
-	pm1 := p2ppeers.NewPeersImpl(&value, make(chan struct{}), log.NewDefault("peers"))
-	return *pm1
+	return p2ppeers.NewPeersImpl(&value, make(chan struct{}), log.NewDefault("peers"))
 }
 
 func syncTest(dpType string, t *testing.T) {
