@@ -1,11 +1,13 @@
 package peers
 
 import (
+	"math/rand"
+	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"github.com/spacemeshos/go-spacemesh/rand"
 )
 
 // Peer is represented by a p2p identity public key.
@@ -16,6 +18,9 @@ type Peers struct {
 	log.Log
 	snapshot *atomic.Value
 	exit     chan struct{}
+
+	rand   *rand.Rand
+	randMu sync.Mutex
 }
 
 // PeerSubscriptionProvider is the interface that provides us with peer events channels.
@@ -35,26 +40,35 @@ func NewPeers(s PeerSubscriptionProvider, lg log.Log) *Peers {
 
 // NewPeersImpl creates a Peers using specified parameters and returns it
 func NewPeersImpl(snapshot *atomic.Value, exit chan struct{}, lg log.Log) *Peers {
-	return &Peers{snapshot: snapshot, Log: lg, exit: exit}
+	return &Peers{
+		snapshot: snapshot,
+		Log:      lg,
+		exit:     exit,
+		rand:     rand.New(rand.NewSource(time.Now().UnixNano()).(rand.Source64)),
+	}
 }
 
 // Close stops listening for events.
-func (p Peers) Close() {
+func (p *Peers) Close() {
 	close(p.exit)
 }
 
 // GetPeers returns a snapshot of the connected peers shuffled.
-func (p Peers) GetPeers() []Peer {
+func (p *Peers) GetPeers() []Peer {
 	peers := p.snapshot.Load().([]Peer)
 	cpy := make([]Peer, len(peers))
 	copy(cpy, peers) // if we dont copy we will shuffle orig array
 	p.With().Info("now connected", log.Int("n_peers", len(cpy)))
-	rand.Shuffle(len(cpy), func(i, j int) { cpy[i], cpy[j] = cpy[j], cpy[i] }) // shuffle peers order
+
+	p.randMu.Lock()
+	p.rand.Shuffle(len(cpy), func(i, j int) { cpy[i], cpy[j] = cpy[j], cpy[i] }) // shuffle peers order
+	p.randMu.Unlock()
+
 	return cpy
 }
 
 // PeerCount returns the number of connected peers.
-func (p Peers) PeerCount() uint64 {
+func (p *Peers) PeerCount() uint64 {
 	peers := p.snapshot.Load().([]Peer)
 	return uint64(len(peers))
 }
