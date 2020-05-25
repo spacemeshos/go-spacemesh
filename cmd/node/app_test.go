@@ -4,10 +4,21 @@ package node
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strconv"
+	"testing"
+	"time"
+
 	"github.com/spacemeshos/amcl"
 	"github.com/spacemeshos/amcl/BLS381"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
+
 	"github.com/spacemeshos/go-spacemesh/activation"
-	apiCfg "github.com/spacemeshos/go-spacemesh/api/config"
+	apicfg "github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/api/pb"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -18,15 +29,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/suite"
-	"os"
-	"path/filepath"
-	"runtime"
-	"strconv"
-	"testing"
-	"time"
 )
 
 type AppTestSuite struct {
@@ -167,7 +169,7 @@ type TestScenario struct {
 
 func txWithUnorderedNonceGenerator(dependancies []int) TestScenario {
 
-	acc1Signer, err := signing.NewEdSignerFromBuffer(util.FromHex(apiCfg.Account2Private))
+	acc1Signer, err := signing.NewEdSignerFromBuffer(util.FromHex(apicfg.Account2Private))
 	addr := types.Address{}
 	addr.SetBytes(acc1Signer.PublicKey().Bytes())
 	dst := types.BytesToAddress([]byte{0x09})
@@ -206,7 +208,7 @@ func txWithUnorderedNonceGenerator(dependancies []int) TestScenario {
 
 func txWithRunningNonceGenerator(dependancies []int) TestScenario {
 
-	acc1Signer, err := signing.NewEdSignerFromBuffer(util.FromHex(apiCfg.Account1Private))
+	acc1Signer, err := signing.NewEdSignerFromBuffer(util.FromHex(apicfg.Account1Private))
 	addr := types.Address{}
 	addr.SetBytes(acc1Signer.PublicKey().Bytes())
 	dst := types.BytesToAddress([]byte{0x02})

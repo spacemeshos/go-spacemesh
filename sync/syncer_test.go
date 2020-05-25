@@ -3,23 +3,6 @@ package sync
 import (
 	"errors"
 	"fmt"
-	"github.com/nullstyle/go-xdr/xdr3"
-	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
-	"github.com/spacemeshos/go-spacemesh/database"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
-	"github.com/spacemeshos/go-spacemesh/miner"
-	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"github.com/spacemeshos/go-spacemesh/rand"
-	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/timesync"
-	"github.com/spacemeshos/sha256-simd"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/suite"
 	"math/big"
 	"os"
 	"path/filepath"
@@ -28,6 +11,26 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	xdr "github.com/nullstyle/go-xdr/xdr3"
+	"github.com/spacemeshos/sha256-simd"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
+
+	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/miner"
+	"github.com/spacemeshos/go-spacemesh/p2p"
+	p2ppeers "github.com/spacemeshos/go-spacemesh/p2p/peers"
+	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/rand"
+	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
 var conf = Configuration{1000, 1, 300, 500 * time.Millisecond, 200 * time.Millisecond, 10 * time.Hour, 100, 5}
@@ -188,7 +191,7 @@ func TestSyncProtocol_BlockRequest(t *testing.T) {
 	block := types.NewExistingBlock(1, []byte(rand.String(8)))
 
 	syncObj.AddBlockWithTxs(block, []*types.Transaction{tx1}, []*types.ActivationTx{atx1})
-	syncObj2.peers = getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
+	syncObj2.peers = getPeersMock([]p2ppeers.Peer{nodes[0].PublicKey()})
 
 	ch := make(chan []types.Hash32, 1)
 	ch <- []types.Hash32{block.Hash32()}
@@ -222,7 +225,7 @@ func TestSyncProtocol_LayerHashRequest(t *testing.T) {
 	syncObj1.AddBlockWithTxs(block, []*types.Transaction{tx1}, []*types.ActivationTx{atx1})
 	timeout := time.NewTimer(2 * time.Second)
 
-	wrk := newPeersWorker(syncObj2, []p2p.Peer{nodes[0].PublicKey()}, &sync.Once{}, hashReqFactory(lid))
+	wrk := newPeersWorker(syncObj2, []p2ppeers.Peer{nodes[0].PublicKey()}, &sync.Once{}, hashReqFactory(lid))
 	go wrk.Work()
 
 	select {
@@ -239,7 +242,7 @@ func TestSyncer_FetchPoetProofAvailableAndValid(t *testing.T) {
 	syncs, nodes, _ := SyncMockFactory(2, conf, t.Name(), memoryDB, newMemPoetDb)
 	s0 := syncs[0]
 	s1 := syncs[1]
-	s1.peers = getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
+	s1.peers = getPeersMock([]p2ppeers.Peer{nodes[0].PublicKey()})
 
 	proofMessage := makePoetProofMessage(t)
 
@@ -260,7 +263,7 @@ func TestSyncer_SyncAtxs_FetchPoetProof(t *testing.T) {
 	syncs, nodes, _ := SyncMockFactory(2, conf, t.Name(), memoryDB, newMemPoetDb)
 	s0 := syncs[0]
 	s1 := syncs[1]
-	s1.peers = getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
+	s1.peers = getPeersMock([]p2ppeers.Peer{nodes[0].PublicKey()})
 
 	// Store a poet proof and a respective atx in s0.
 
@@ -342,7 +345,7 @@ func TestSyncProtocol_LayerIdsRequest(t *testing.T) {
 
 	timeout := time.NewTimer(2 * time.Second)
 
-	wrk := newPeersWorker(syncObj, []p2p.Peer{nodes[1].PublicKey()}, &sync.Once{}, layerIdsReqFactory(lid))
+	wrk := newPeersWorker(syncObj, []p2ppeers.Peer{nodes[1].PublicKey()}, &sync.Once{}, layerIdsReqFactory(lid))
 	go wrk.Work()
 
 	select {
@@ -376,7 +379,7 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 	defer syncObj1.Close()
 	syncObj2 := syncs[1]
 	defer syncObj2.Close()
-	pm1 := getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
+	pm1 := getPeersMock([]p2ppeers.Peer{nodes[0].PublicKey()})
 	syncObj1.Log.Info("started fetch_blocks")
 	syncObj2.peers = pm1 //override peers with
 
@@ -422,9 +425,9 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 func TestSyncProtocol_SyncNodes(t *testing.T) {
 	syncs, nodes, ts := SyncMockFactory(3, conf, t.Name(), memoryDB, newMockPoetDb)
 	defer ts.Close()
-	pm1 := getPeersMock([]p2p.Peer{nodes[2].PublicKey()})
-	pm2 := getPeersMock([]p2p.Peer{nodes[2].PublicKey()})
-	pm3 := getPeersMock([]p2p.Peer{nodes[0].PublicKey(), nodes[1].PublicKey()})
+	pm1 := getPeersMock([]p2ppeers.Peer{nodes[2].PublicKey()})
+	pm2 := getPeersMock([]p2ppeers.Peer{nodes[2].PublicKey()})
+	pm3 := getPeersMock([]p2ppeers.Peer{nodes[0].PublicKey(), nodes[1].PublicKey()})
 	syncObj1 := syncs[0]
 	syncObj1.peers = pm1 //override peers with mock
 	defer syncObj1.Close()
@@ -513,11 +516,10 @@ loop:
 
 }
 
-func getPeersMock(peers []p2p.Peer) p2p.Peers {
+func getPeersMock(peers []p2ppeers.Peer) *p2ppeers.Peers {
 	value := atomic.Value{}
 	value.Store(peers)
-	pm1 := p2p.NewPeersImpl(&value, make(chan struct{}), log.NewDefault("peers"))
-	return *pm1
+	return p2ppeers.NewPeersImpl(&value, make(chan struct{}), log.NewDefault("peers"))
 }
 
 func syncTest(dpType string, t *testing.T) {
@@ -535,10 +537,10 @@ func syncTest(dpType string, t *testing.T) {
 	n2 := nodes[1]
 	//n4 := nodes[3]
 
-	syncObj1.peers = getPeersMock([]p2p.Peer{n2.PublicKey()})
-	syncObj2.peers = getPeersMock([]p2p.Peer{n1.PublicKey()})
-	syncObj3.peers = getPeersMock([]p2p.Peer{n1.PublicKey()})
-	syncObj4.peers = getPeersMock([]p2p.Peer{n1.PublicKey()})
+	syncObj1.peers = getPeersMock([]p2ppeers.Peer{n2.PublicKey()})
+	syncObj2.peers = getPeersMock([]p2ppeers.Peer{n1.PublicKey()})
+	syncObj3.peers = getPeersMock([]p2ppeers.Peer{n1.PublicKey()})
+	syncObj4.peers = getPeersMock([]p2ppeers.Peer{n1.PublicKey()})
 
 	signer := signing.NewEdSigner()
 
@@ -910,9 +912,9 @@ func atx(pubkey string) *types.ActivationTx {
 func TestSyncer_Txs(t *testing.T) {
 	// check tx validation
 	syncs, nodes, _ := SyncMockFactory(3, conf, t.Name(), memoryDB, newMockPoetDb)
-	pm1 := getPeersMock([]p2p.Peer{nodes[1].PublicKey()})
-	pm2 := getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
-	pm3 := getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
+	pm1 := getPeersMock([]p2ppeers.Peer{nodes[1].PublicKey()})
+	pm2 := getPeersMock([]p2ppeers.Peer{nodes[0].PublicKey()})
+	pm3 := getPeersMock([]p2ppeers.Peer{nodes[0].PublicKey()})
 	syncObj1 := syncs[0]
 	syncObj1.peers = pm1 //override peers with mock
 	defer syncObj1.Close()
@@ -937,9 +939,9 @@ func TestSyncer_Txs(t *testing.T) {
 func TestFetchLayerBlockIds(t *testing.T) {
 	// check tx validation
 	syncs, nodes, _ := SyncMockFactory(3, conf, t.Name(), memoryDB, newMockPoetDb)
-	pm1 := getPeersMock([]p2p.Peer{nodes[2].PublicKey()})
-	pm2 := getPeersMock([]p2p.Peer{nodes[2].PublicKey()})
-	pm3 := getPeersMock([]p2p.Peer{nodes[0].PublicKey(), nodes[1].PublicKey()})
+	pm1 := getPeersMock([]p2ppeers.Peer{nodes[2].PublicKey()})
+	pm2 := getPeersMock([]p2ppeers.Peer{nodes[2].PublicKey()})
+	pm3 := getPeersMock([]p2ppeers.Peer{nodes[0].PublicKey(), nodes[1].PublicKey()})
 
 	block1 := types.NewExistingBlock(1, []byte(rand.String(8)))
 	block2 := types.NewExistingBlock(1, []byte(rand.String(8)))
@@ -959,7 +961,7 @@ func TestFetchLayerBlockIds(t *testing.T) {
 	syncObj1.SetZeroBlockLayer(2)
 	syncObj2.SetZeroBlockLayer(2)
 
-	mp := map[types.Hash32][]p2p.Peer{}
+	mp := map[types.Hash32][]p2ppeers.Peer{}
 	hash1 := types.CalcBlocksHash32([]types.BlockID{block1.ID()}, nil)
 	mp[hash1] = append(mp[hash1], nodes[0].PublicKey())
 	hash2 := types.CalcBlocksHash32([]types.BlockID{block2.ID()}, nil)
@@ -988,11 +990,11 @@ func TestFetchLayerBlockIdsNoResponse(t *testing.T) {
 	// check tx validation
 	clk := &mockClock{Layer: 6}
 	syncs, nodes := SyncMockFactoryManClock(5, conf, t.Name(), memoryDB, newMockPoetDb, clk)
-	pm1 := getPeersMock([]p2p.Peer{nodes[2].PublicKey()})
-	pm2 := getPeersMock([]p2p.Peer{nodes[2].PublicKey()})
-	pm3 := getPeersMock([]p2p.Peer{nodes[2].PublicKey()})
-	pm4 := getPeersMock([]p2p.Peer{nodes[2].PublicKey()})
-	pm5 := getPeersMock([]p2p.Peer{nodes[0].PublicKey(), nodes[1].PublicKey()})
+	pm1 := getPeersMock([]p2ppeers.Peer{nodes[2].PublicKey()})
+	pm2 := getPeersMock([]p2ppeers.Peer{nodes[2].PublicKey()})
+	pm3 := getPeersMock([]p2ppeers.Peer{nodes[2].PublicKey()})
+	pm4 := getPeersMock([]p2ppeers.Peer{nodes[2].PublicKey()})
+	pm5 := getPeersMock([]p2ppeers.Peer{nodes[0].PublicKey(), nodes[1].PublicKey()})
 
 	block1 := types.NewExistingBlock(1, []byte(rand.String(8)))
 	block2 := types.NewExistingBlock(2, []byte(rand.String(8)))
@@ -1056,7 +1058,7 @@ func TestFetchLayerBlockIdsNoResponse(t *testing.T) {
 	//check that we did not override layer with empty layer
 	assert.True(t, len(lyr.Blocks()) == 1)
 	//switch sync5 peers to sync3 and sync4 that know layer 3 and lets see it recovers
-	syncObj5.peers = getPeersMock([]p2p.Peer{nodes[2].PublicKey(), nodes[3].PublicKey()})
+	syncObj5.peers = getPeersMock([]p2ppeers.Peer{nodes[2].PublicKey(), nodes[3].PublicKey()})
 	go func() { time.Sleep(1 * time.Second); clk.Tick(); time.Sleep(1 * time.Second); clk.Tick() }()
 	syncObj5.synchronise()
 
@@ -1355,7 +1357,7 @@ func TestSyncProtocol_NilResponse(t *testing.T) {
 
 	// Layer Hash
 
-	wrk := newPeersWorker(syncs[0], []p2p.Peer{nodes[1].PublicKey()}, &sync.Once{}, hashReqFactory(nonExistingLayerID))
+	wrk := newPeersWorker(syncs[0], []p2ppeers.Peer{nodes[1].PublicKey()}, &sync.Once{}, hashReqFactory(nonExistingLayerID))
 	go wrk.Work()
 
 	select {
@@ -1367,7 +1369,7 @@ func TestSyncProtocol_NilResponse(t *testing.T) {
 
 	// Layer Block Ids
 
-	wrk = newPeersWorker(syncs[0], []p2p.Peer{nodes[1].PublicKey()}, &sync.Once{}, layerIdsReqFactory(nonExistingLayerID))
+	wrk = newPeersWorker(syncs[0], []p2ppeers.Peer{nodes[1].PublicKey()}, &sync.Once{}, layerIdsReqFactory(nonExistingLayerID))
 	go wrk.Work()
 
 	select {

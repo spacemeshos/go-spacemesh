@@ -3,16 +3,18 @@ package p2p
 import (
 	"context"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/config"
-	"github.com/spacemeshos/go-spacemesh/p2p/node"
-	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/suite"
-	"golang.org/x/sync/errgroup"
 	"net"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
+	"golang.org/x/sync/errgroup"
+
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/config"
+	"github.com/spacemeshos/go-spacemesh/p2p/node"
 )
 
 // NodeTestInstance is an instance of a p2p node for testing
@@ -23,7 +25,7 @@ type NodeTestInstance interface {
 
 // IntegrationTestSuite is a suite which bootstraps a network according to the given params
 // and lets you run actions on this network.
-// you must set the params before running the suite.
+// You must set the params before running the suite.
 type IntegrationTestSuite struct {
 	suite.Suite
 

@@ -1,21 +1,22 @@
 package sync
 
 import (
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
+	p2ppeers "github.com/spacemeshos/go-spacemesh/p2p/peers"
+	"github.com/spacemeshos/go-spacemesh/p2p/server"
 )
 
-type requestFactory func(com networker, peer p2p.Peer) (chan interface{}, error)
-type batchRequestFactory func(com networker, peer p2p.Peer, id []types.Hash32) (chan []item, error)
+type requestFactory func(com networker, peer p2ppeers.Peer) (chan interface{}, error)
+type batchRequestFactory func(com networker, peer p2ppeers.Peer, id []types.Hash32) (chan []item, error)
 
 type networker interface {
-	GetPeers() []p2p.Peer
+	GetPeers() []p2ppeers.Peer
 	SendRequest(msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte)) error
 	GetTimeout() time.Duration
 	GetExit() chan struct{}
@@ -23,7 +24,7 @@ type networker interface {
 }
 
 type peers interface {
-	GetPeers() []p2p.Peer
+	GetPeers() []p2ppeers.Peer
 	Close()
 }
 
@@ -50,7 +51,7 @@ func (w *worker) Clone() *worker {
 	return &worker{Logger: w.Logger, Once: w.Once, workCount: w.workCount, output: w.output, work: w.work}
 }
 
-func newPeersWorker(s networker, peers []p2p.Peer, mu *sync.Once, reqFactory requestFactory) worker {
+func newPeersWorker(s networker, peers []p2ppeers.Peer, mu *sync.Once, reqFactory requestFactory) worker {
 	count := int32(1)
 	numOfpeers := len(peers)
 	output := make(chan interface{}, numOfpeers)

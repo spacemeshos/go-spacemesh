@@ -1,24 +1,26 @@
-package p2p
+package peers
 
 import (
 	"bytes"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"github.com/stretchr/testify/assert"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
+	"github.com/spacemeshos/go-spacemesh/p2p/service"
 )
 
-func getPeers(p Service) (*Peers, chan p2pcrypto.PublicKey, chan p2pcrypto.PublicKey) {
+func getPeers(p service.Service) (*Peers, chan p2pcrypto.PublicKey, chan p2pcrypto.PublicKey) {
 	value := atomic.Value{}
 	value.Store(make([]Peer, 0, 20))
-	pi := &Peers{snapshot: &value, exit: make(chan struct{}), Log: log.NewDefault("peers")}
+	peers := NewPeersImpl(&value, make(chan struct{}), log.NewDefault("peers"))
 	n, expired := p.SubscribePeerEvents()
-	go pi.listenToPeers(n, expired)
-	return pi, n, expired
+	go peers.listenToPeers(n, expired)
+	return peers, n, expired
 }
 
 func TestPeers_GetPeers(t *testing.T) {
@@ -116,7 +118,7 @@ func TestPeers_RandomPeers(t *testing.T) {
 
 	for p := range peers1 {
 		if !bytes.Equal(peers1[p].Bytes(), peers2[p].Bytes()) {
-			t.Log("test done ")
+			t.Log("test done")
 			return
 		}
 		t.Log(fmt.Sprintf("index %d same element %s %s", p, peers1[p].String(), peers2[p].String()))
