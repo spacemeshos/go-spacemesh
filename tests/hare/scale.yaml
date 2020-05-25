@@ -4,8 +4,8 @@ config_map_name: conf
 
 script_on_exit: '' #'./k8s/log-client-pods.sh'
 
-genesis_delta: 160
-deployment_ready_time_out: 150
+genesis_delta: 200
+deployment_ready_time_out: 210
 single_pod_ready_time_out: 80
 config_path: '../config.toml'
 
