@@ -56,7 +56,7 @@ def test_remove_node_validate_atx(init_session, setup_mul_network):
     curr_epoch += epochs_to_sleep
     print(f"\n\n-------- current epoch {curr_epoch} --------")
 
-    tts = 15
+    tts = 45
     print(f"sleeping for {tts} in order to let all nodes enough time to publish ATXs")
     time.sleep(tts)
 
