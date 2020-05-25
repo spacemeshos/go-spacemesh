@@ -230,6 +230,11 @@ func (atx *ActivationTx) GetShortPoetProofRef() []byte {
 	return atx.Nipst.PostProof.Challenge[:util.Min(5, len(atx.Nipst.PostProof.Challenge))]
 }
 
+func (atx *ActivationTx) GetWeight() uint64 {
+	// TODO: Limit the number of bits this can occupy
+	return atx.Space * (atx.EndTick - atx.StartTick)
+}
+
 // PoetProof is the full PoET service proof of elapsed time. It includes the list of members, a leaf count declaration
 // and the actual PoET Merkle proof.
 type PoetProof struct {
