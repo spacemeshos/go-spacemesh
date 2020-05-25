@@ -77,7 +77,7 @@ def _setup_dep_ss_file_path(file_path, dep_type, node_type):
 
 
 def setup_bootstrap_in_namespace(namespace, bs_deployment_info, bootstrap_config, gen_time_del, oracle=None, poet=None,
-                                 file_path=None, dep_time_out=120):
+                                 file_path=None, dep_time_out=180):
     """
     adds a bootstrap node to a specific namespace
 
