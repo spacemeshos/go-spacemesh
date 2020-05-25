@@ -2,7 +2,6 @@ package peers
 
 import (
 	"math/rand"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -19,8 +18,7 @@ type Peers struct {
 	snapshot *atomic.Value
 	exit     chan struct{}
 
-	rand   *rand.Rand
-	randMu sync.Mutex
+	rand *rand.Rand
 }
 
 // PeerSubscriptionProvider is the interface that provides us with peer events channels.
@@ -54,16 +52,13 @@ func (p *Peers) Close() {
 }
 
 // GetPeers returns a snapshot of the connected peers shuffled.
+// Method is not concurrent-safe.
 func (p *Peers) GetPeers() []Peer {
 	peers := p.snapshot.Load().([]Peer)
 	cpy := make([]Peer, len(peers))
 	copy(cpy, peers) // if we dont copy we will shuffle orig array
 	p.With().Info("now connected", log.Int("n_peers", len(cpy)))
-
-	p.randMu.Lock()
 	p.rand.Shuffle(len(cpy), func(i, j int) { cpy[i], cpy[j] = cpy[j], cpy[i] }) // shuffle peers order
-	p.randMu.Unlock()
-
 	return cpy
 }
 
