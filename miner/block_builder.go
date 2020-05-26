@@ -38,7 +38,7 @@ type syncer interface {
 }
 
 type txPool interface {
-	GetTxsForBlock(numOfTxs int, getState func(addr types.Address) (nonce, balance uint64, err error)) ([]types.TransactionID, error)
+	GetTxsForBlock(numOfTxs int, getState func(addr types.Address) (nonce, balance uint64, err error)) ([]types.TransactionID, []*types.Transaction, error)
 }
 
 type projector interface {
@@ -169,6 +169,7 @@ type meshProvider interface {
 	LayerBlockIds(index types.LayerID) ([]types.BlockID, error)
 	GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error)
 	GetBlock(id types.BlockID) (*types.Block, error)
+	AddBlockWithTxs(blk *types.Block, txs []*types.Transaction, atxs []*types.ActivationTx) error
 }
 
 func calcHdistRange(id types.LayerID, hdist types.LayerID) (bottom types.LayerID, top types.LayerID) {
@@ -282,7 +283,7 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.ATXID, eligibil
 			BlockVotes:       votes,
 			ViewEdges:        viewEdges,
 		},
-		ATXIDs: selectAtxs(atxids, t.atxsPerBlock),
+		ATXIDs: atxids,
 		TxIDs:  txids,
 	}
 	epoch := id.GetEpoch(t.layerPerEpoch)
@@ -307,7 +308,7 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.ATXID, eligibil
 	bl.Initialize()
 
 	if b.ActiveSet != nil {
-		log.Info("storing ref block for epoch %v id %v", epoch, bl.ID())
+		t.Log.Info("storing ref block for epoch %v id %v", epoch, bl.ID())
 		err := t.storeRefBlock(epoch, bl.ID())
 		if err != nil {
 			t.Log.Error("cannot store ref block for epoch %v err %v", epoch, err)
@@ -380,18 +381,32 @@ func (t *BlockBuilder) createBlockLoop() {
 			for _, atx := range t.AtxPool.GetAllItems() {
 				atxList = append(atxList, atx.ID())
 			}
-
+			reducedAtxList := selectAtxs(atxList, t.atxsPerBlock)
 			for _, eligibilityProof := range proofs {
-				txList, err := t.TransactionPool.GetTxsForBlock(MaxTransactionsPerBlock, t.projector.GetProjection)
+				txList, txs, err := t.TransactionPool.GetTxsForBlock(MaxTransactionsPerBlock, t.projector.GetProjection)
 				if err != nil {
 					events.Publish(events.DoneCreatingBlock{Eligible: true, Layer: uint64(layerID), Error: "failed to get txs for block"})
 					t.With().Error("failed to get txs for block", log.LayerID(uint64(layerID)), log.Err(err))
 					continue
 				}
-				blk, err := t.createBlock(layerID, atxID, eligibilityProof, txList, atxList)
+				blk, err := t.createBlock(layerID, atxID, eligibilityProof, txList, reducedAtxList)
 				if err != nil {
 					events.Publish(events.DoneCreatingBlock{Eligible: true, Layer: uint64(layerID), Error: "cannot create new block"})
 					t.Error("cannot create new block, %v ", err)
+					continue
+				}
+				var atxs []*types.ActivationTx
+				for _, atxID := range atxList {
+					for _, atx := range t.AtxPool.GetAllItems() {
+						if atxID == atx.ID() {
+							atxs = append(atxs, atx)
+						}
+					}
+				}
+				err = t.meshProvider.AddBlockWithTxs(blk, txs, atxs)
+				if err != nil {
+					events.Publish(events.DoneCreatingBlock{Eligible: true, Layer: uint64(layerID), Error: err.Error()})
+					t.With().Error("failed to store block", log.BlockID(blk.ID().String()), log.Err(err))
 					continue
 				}
 				go func() {

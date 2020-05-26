@@ -576,7 +576,12 @@ func (msh *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.Transaction, atx
 	}
 
 	// Store block (delete if storing ATXs fails)
-	if err := msh.DB.AddBlock(blk); err != nil && err != ErrAlreadyExist {
+	err := msh.DB.AddBlock(blk)
+	if err != nil && err == ErrAlreadyExist {
+		return nil
+	}
+
+	if err != nil {
 		msh.With().Error("failed to add block", log.BlockID(blk.ID().String()), log.Err(err))
 		return err
 	}

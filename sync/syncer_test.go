@@ -1599,6 +1599,45 @@ func TestSyncer_BlockSyntacticValidation(t *testing.T) {
 	r.Nil(err)
 }
 
+func TestSyncer_BlockSyntacticValidation_syncRefBlock(t *testing.T) {
+	r := require.New(t)
+	syncs, _, _ := SyncMockFactory(2, conf, "BlockSyntacticValidation_syncRefBlock", memoryDB, newMemPoetDb)
+	s := syncs[0]
+	b := &types.Block{}
+	b.TxIDs = []types.TransactionID{}
+	b.ATXIDs = []types.ATXID{}
+	block1 := types.NewExistingBlock(1, []byte(rand.String(8)))
+	block1.Initialize()
+	block1ID := block1.ID()
+	b.RefBlock = &block1ID
+	_, _, err := s.blockSyntacticValidation(b)
+	r.Equal(err, fmt.Errorf("failed to fetch ref block %v", *b.RefBlock))
+
+	err = syncs[1].AddBlock(block1)
+	r.NoError(err)
+	_, _, err = s.blockSyntacticValidation(b)
+	r.NoError(err)
+}
+
+func TestSyncer_fetchBlock(t *testing.T) {
+	r := require.New(t)
+	syncs, _, _ := SyncMockFactory(2, conf, "fetchBlock", memoryDB, newMemPoetDb)
+	s := syncs[0]
+	b := &types.Block{}
+	b.TxIDs = []types.TransactionID{}
+	b.ATXIDs = []types.ATXID{}
+	block1 := types.NewExistingBlock(1, []byte(rand.String(8)))
+	block1.Initialize()
+	block1ID := block1.ID()
+	res := s.fetchBlock(block1ID)
+	r.False(res)
+	err := syncs[1].AddBlock(block1)
+	r.NoError(err)
+	res = s.fetchBlock(block1ID)
+	r.True(res)
+
+}
+
 func TestSyncer_AtxSetID(t *testing.T) {
 	a := atx("")
 	bbytes, _ := types.InterfaceToBytes(*a)

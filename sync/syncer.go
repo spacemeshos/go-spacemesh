@@ -12,7 +12,9 @@ import (
 	p2pconf "github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/timesync"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -601,6 +603,17 @@ func validateUniqueTxAtx(b *types.Block) error {
 }
 
 func (s *Syncer) blockSyntacticValidation(block *types.Block) ([]*types.Transaction, []*types.ActivationTx, error) {
+	if block.RefBlock != nil {
+		_, err := s.GetBlock(*block.RefBlock)
+		if err != nil {
+			s.Log.Info("fetching block %v", *block.RefBlock)
+			fetched := s.fetchBlock(*block.RefBlock)
+			if !fetched {
+				return nil, nil, fmt.Errorf("failed to fetch ref block %v", *block.RefBlock)
+			}
+		}
+	}
+
 	// validate unique tx atx
 	if err := s.fastValidation(block); err != nil {
 		return nil, nil, err
@@ -642,6 +655,29 @@ func (s *Syncer) validateBlockView(blk *types.Block) bool {
 		return false
 	} else if res == false {
 		s.With().Info("block has no missing blocks in view", log.BlockID(blk.ID().String()), log.LayerID(uint64(blk.LayerIndex)))
+		return true
+	}
+
+	return <-ch
+}
+
+func (s *Syncer) fetchBlock(ID types.BlockID) bool {
+	ch := make(chan bool, 1)
+	defer close(ch)
+	foo := func(res bool) error {
+		s.With().Info("view validated",
+			log.BlockID(ID.String()),
+			log.Bool("result", res))
+		//log.LayerID(uint64(blk.LayerIndex)))
+		ch <- res
+		return nil
+	}
+	id := types.CalcHash32(append(ID.ToBytes(), []byte(strconv.Itoa(rand.Int()))...))
+	if res, err := s.blockQueue.addDependencies(id, []types.BlockID{ID}, foo); err != nil {
+		s.Error(fmt.Sprintf("block %v not syntactically valid", ID), err)
+		return false
+	} else if res == false {
+		// block already found
 		return true
 	}
 

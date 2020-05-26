@@ -588,6 +588,10 @@ type mockMesh struct {
 	err error
 }
 
+func (m *mockMesh) AddBlockWithTxs(blk *types.Block, txs []*types.Transaction, atxs []*types.ActivationTx) error {
+	return nil
+}
+
 func (m *mockMesh) GetRefBlock(id types.EpochID) types.BlockID {
 	return types.BlockID{}
 }
