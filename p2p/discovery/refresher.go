@@ -21,7 +21,11 @@ const (
 	lastQueriesCacheSize = 100
 
 	maxConcurrentRequests = 3
+
+	maxTries = 10
 )
+
+var defaultBackoffFunc = func(tries int) time.Duration { return time.Second * time.Duration(tries) }
 
 // ErrBootAbort is returned when when bootstrap is canceled by context cancel
 var ErrBootAbort = errors.New("bootstrap canceled by signal")
@@ -39,6 +43,8 @@ type refresher struct {
 	book      addressBook
 	bootNodes []*node.Info
 
+	backoffFunc func(tries int) time.Duration
+
 	disc        pingerGetAddresser
 	lastQueries map[p2pcrypto.PublicKey]time.Time
 }
@@ -51,6 +57,7 @@ func newRefresher(local p2pcrypto.PublicKey, book addressBook, disc pingerGetAdd
 		book:         book,
 		disc:         disc,
 		bootNodes:    bootnodes,
+		backoffFunc:  defaultBackoffFunc,
 		lastQueries:  make(map[p2pcrypto.PublicKey]time.Time),
 	}
 }
@@ -92,11 +99,17 @@ loop:
 		wanted := numpeers
 
 		if newsize-size >= wanted {
-			r.logger.Info("Stopping bootstrap, achieved %v need %v", newsize-size, wanted)
+			r.logger.Info("Achieved bootstrap objective, got %v needed %v", newsize-size, wanted)
 			break
 		}
 
-		timer := time.NewTimer(time.Duration(tries) * time.Second) // BACKOFF
+		if tries >= maxTries && newsize >= wanted {
+			// NOTE: maybe we need to set the error here ?
+			r.logger.Info("Stopping bootstrap after %v tries, address book already contains %v peers", tries, newsize)
+			break
+		}
+
+		timer := time.NewTimer(r.backoffFunc(tries)) // BACKOFF
 
 		//todo: stop refreshes with context
 		select {

@@ -4,10 +4,21 @@ package node
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strconv"
+	"testing"
+	"time"
+
 	"github.com/spacemeshos/amcl"
 	"github.com/spacemeshos/amcl/BLS381"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
+
 	"github.com/spacemeshos/go-spacemesh/activation"
-	apiCfg "github.com/spacemeshos/go-spacemesh/api/config"
+	apicfg "github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/api/pb"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -19,15 +30,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/suite"
-	"os"
-	"path/filepath"
-	"runtime"
-	"strconv"
-	"testing"
-	"time"
 )
 
 type AppTestSuite struct {
@@ -169,7 +171,7 @@ type TestScenario struct {
 
 func txWithUnorderedNonceGenerator(dependancies []int) TestScenario {
 
-	acc1Signer, err := signing.NewEdSignerFromBuffer(util.FromHex(apiCfg.Account2Private))
+	acc1Signer, err := signing.NewEdSignerFromBuffer(util.FromHex(apicfg.Account2Private))
 	addr := types.Address{}
 	addr.SetBytes(acc1Signer.PublicKey().Bytes())
 	dst := types.BytesToAddress([]byte{0x09})
@@ -208,7 +210,7 @@ func txWithUnorderedNonceGenerator(dependancies []int) TestScenario {
 
 func txWithRunningNonceGenerator(dependancies []int) TestScenario {
 
-	acc1Signer, err := signing.NewEdSignerFromBuffer(util.FromHex(apiCfg.Account1Private))
+	acc1Signer, err := signing.NewEdSignerFromBuffer(util.FromHex(apicfg.Account1Private))
 	addr := types.Address{}
 	addr.SetBytes(acc1Signer.PublicKey().Bytes())
 	dst := types.BytesToAddress([]byte{0x02})
@@ -465,12 +467,30 @@ func (suite *AppTestSuite) validateLastATXActiveSetSize(app *SpacemeshApp) {
 	suite.True(int(atx.ActiveSetSize) == len(suite.apps), "atx: %v node: %v", atx.ShortString(), app.nodeID.Key[:5])
 }
 
+// travis has a 10 minutes timeout
+// this ensures we print something before the timeout
+func patchTravisTimeout(termchan chan struct{}) {
+	ticker := time.NewTimer(5 * time.Minute)
+	for {
+		select {
+		case <-ticker.C:
+			fmt.Printf("Travis Patch\n")
+			ticker = time.NewTimer(5 * time.Minute)
+		case <-termchan:
+			return
+		}
+	}
+}
+
 func TestAppTestSuite(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
 	//defer leaktest.Check(t)()
+	term := make(chan struct{})
+	go patchTravisTimeout(term)
 	suite.Run(t, new(AppTestSuite))
+	close(term)
 }
 
 func TestShutdown(t *testing.T) {

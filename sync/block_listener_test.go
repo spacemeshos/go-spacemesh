@@ -1,32 +1,34 @@
 package sync
 
 import (
+	"testing"
+	"time"
+
+	"github.com/spacemeshos/sha256-simd"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
-	"github.com/spacemeshos/go-spacemesh/p2p"
+	p2ppeers "github.com/spacemeshos/go-spacemesh/p2p/peers"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/spacemeshos/go-spacemesh/timesync"
-	"github.com/spacemeshos/sha256-simd"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"testing"
-	"time"
 )
 
 const atxLimit = 100
 
 type PeersMock struct {
-	getPeers func() []p2p.Peer
+	getPeers func() []p2ppeers.Peer
 }
 
-func (pm PeersMock) GetPeers() []p2p.Peer {
+func (pm PeersMock) GetPeers() []p2ppeers.Peer {
 	return pm.getPeers()
 }
 
@@ -56,8 +58,8 @@ func TestBlockListener(t *testing.T) {
 	signer := signing.NewEdSigner()
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
-	bl1 := ListenerFactory(n1, PeersMock{func() []p2p.Peer { return []p2p.Peer{n2.PublicKey()} }}, "listener1", 3)
-	bl2 := ListenerFactory(n2, PeersMock{func() []p2p.Peer { return []p2p.Peer{n1.PublicKey()} }}, "listener2", 3)
+	bl1 := ListenerFactory(n1, PeersMock{func() []p2ppeers.Peer { return []p2ppeers.Peer{n2.PublicKey()} }}, "listener1", 3)
+	bl2 := ListenerFactory(n2, PeersMock{func() []p2ppeers.Peer { return []p2ppeers.Peer{n1.PublicKey()} }}, "listener2", 3)
 	defer bl2.Close()
 	defer bl1.Close()
 	bl2.Start()
@@ -139,8 +141,8 @@ func TestBlockListener_DataAvailability(t *testing.T) {
 	signer := signing.NewEdSigner()
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
-	bl1 := ListenerFactory(n1, PeersMock{func() []p2p.Peer { return []p2p.Peer{n2.PublicKey()} }}, "listener1", 3)
-	bl2 := ListenerFactory(n2, PeersMock{func() []p2p.Peer { return []p2p.Peer{n1.PublicKey()} }}, "listener2", 3)
+	bl1 := ListenerFactory(n1, PeersMock{func() []p2ppeers.Peer { return []p2ppeers.Peer{n2.PublicKey()} }}, "listener1", 3)
+	bl2 := ListenerFactory(n2, PeersMock{func() []p2ppeers.Peer { return []p2ppeers.Peer{n1.PublicKey()} }}, "listener2", 3)
 	defer bl2.Close()
 	defer bl1.Close()
 	bl2.Start()
@@ -201,8 +203,8 @@ func TestBlockListener_DataAvailabilityBadFlow(t *testing.T) {
 	signer := signing.NewEdSigner()
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
-	bl1 := ListenerFactory(n1, PeersMock{func() []p2p.Peer { return []p2p.Peer{n2.PublicKey()} }}, "listener1", 3)
-	bl2 := ListenerFactory(n2, PeersMock{func() []p2p.Peer { return []p2p.Peer{n1.PublicKey()} }}, "listener2", 3)
+	bl1 := ListenerFactory(n1, PeersMock{func() []p2ppeers.Peer { return []p2ppeers.Peer{n2.PublicKey()} }}, "listener1", 3)
+	bl2 := ListenerFactory(n2, PeersMock{func() []p2ppeers.Peer { return []p2ppeers.Peer{n1.PublicKey()} }}, "listener2", 3)
 	defer bl2.Close()
 	defer bl1.Close()
 	bl2.Start()
@@ -296,7 +298,7 @@ func TestBlockListener_ValidateVotesGoodFlow(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
-	bl1 := ListenerFactory(n1, PeersMock{func() []p2p.Peer { return []p2p.Peer{n2.PublicKey()} }}, "TestBlockListener_ValidateVotesGoodFlow", 2)
+	bl1 := ListenerFactory(n1, PeersMock{func() []p2ppeers.Peer { return []p2ppeers.Peer{n2.PublicKey()} }}, "TestBlockListener_ValidateVotesGoodFlow", 2)
 	defer bl1.Close()
 
 	bl1.AddBlock(block1)
@@ -346,7 +348,7 @@ func TestBlockListener_ValidateVotesBadFlow(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
-	bl1 := ListenerFactory(n1, PeersMock{func() []p2p.Peer { return []p2p.Peer{n2.PublicKey()} }}, "TestBlockListener_ValidateVotesBadFlow", 2)
+	bl1 := ListenerFactory(n1, PeersMock{func() []p2ppeers.Peer { return []p2ppeers.Peer{n2.PublicKey()} }}, "TestBlockListener_ValidateVotesBadFlow", 2)
 	defer bl1.Close()
 	bl1.AddBlock(block1)
 	bl1.AddBlock(block2)
@@ -370,9 +372,9 @@ func TestBlockListenerViewTraversal(t *testing.T) {
 	n2 := sim.NewNode()
 	n3 := sim.NewNode()
 
-	bl1 := ListenerFactory(n1, PeersMock{func() []p2p.Peer { return []p2p.Peer{n2.PublicKey()} }}, "TestBlockListener_1", 2)
-	bl2 := ListenerFactory(n2, PeersMock{func() []p2p.Peer { return []p2p.Peer{n1.PublicKey(), n3.PublicKey()} }}, "TestBlockListener_2", 2)
-	bl3 := ListenerFactory(n3, PeersMock{func() []p2p.Peer { return []p2p.Peer{n2.PublicKey()} }}, "TestBlockListener_2", 2)
+	bl1 := ListenerFactory(n1, PeersMock{func() []p2ppeers.Peer { return []p2ppeers.Peer{n2.PublicKey()} }}, "TestBlockListener_1", 2)
+	bl2 := ListenerFactory(n2, PeersMock{func() []p2ppeers.Peer { return []p2ppeers.Peer{n1.PublicKey(), n3.PublicKey()} }}, "TestBlockListener_2", 2)
+	bl3 := ListenerFactory(n3, PeersMock{func() []p2ppeers.Peer { return []p2ppeers.Peer{n2.PublicKey()} }}, "TestBlockListener_2", 2)
 	defer bl2.Close()
 	defer bl1.Close()
 	bl2.Start()
@@ -525,8 +527,8 @@ func TestBlockListener_TraverseViewBadFlow(t *testing.T) {
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
 
-	bl1 := ListenerFactory(n1, PeersMock{func() []p2p.Peer { return []p2p.Peer{n2.PublicKey()} }}, "TestBlockListener_1", 2)
-	bl2 := ListenerFactory(n2, PeersMock{func() []p2p.Peer { return []p2p.Peer{n1.PublicKey()} }}, "TestBlockListener_2", 2)
+	bl1 := ListenerFactory(n1, PeersMock{func() []p2ppeers.Peer { return []p2ppeers.Peer{n2.PublicKey()} }}, "TestBlockListener_1", 2)
+	bl2 := ListenerFactory(n2, PeersMock{func() []p2ppeers.Peer { return []p2ppeers.Peer{n1.PublicKey()} }}, "TestBlockListener_2", 2)
 	defer bl2.Close()
 	defer bl1.Close()
 	bl2.Start()
@@ -607,8 +609,8 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
 
-	bl1 := ListenerFactory(n1, PeersMock{func() []p2p.Peer { return []p2p.Peer{n2.PublicKey()} }}, "TestBlockListener_ListenToGossipBlocks1", 1)
-	bl2 := ListenerFactory(n2, PeersMock{func() []p2p.Peer { return []p2p.Peer{n1.PublicKey()} }}, "TestBlockListener_ListenToGossipBlocks2", 1)
+	bl1 := ListenerFactory(n1, PeersMock{func() []p2ppeers.Peer { return []p2ppeers.Peer{n2.PublicKey()} }}, "TestBlockListener_ListenToGossipBlocks1", 1)
+	bl2 := ListenerFactory(n2, PeersMock{func() []p2ppeers.Peer { return []p2ppeers.Peer{n1.PublicKey()} }}, "TestBlockListener_ListenToGossipBlocks2", 1)
 
 	bl1.Start()
 	bl1.Syncer.Start()
@@ -675,7 +677,7 @@ func TestBlockListener_AtxCache(t *testing.T) {
 	signer := signing.NewEdSigner()
 	n1 := sim.NewNode()
 	// n2 := sim.NewNode()
-	bl1 := ListenerFactory(n1, PeersMock{func() []p2p.Peer { return []p2p.Peer{ /*n2.PublicKey()*/ } }}, "listener1", 3)
+	bl1 := ListenerFactory(n1, PeersMock{func() []p2ppeers.Peer { return []p2ppeers.Peer{ /*n2.PublicKey()*/ } }}, "listener1", 3)
 
 	atxDb := mesh.NewAtxDbMock()
 	bl1.Mesh.AtxDB = atxDb

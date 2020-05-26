@@ -2,21 +2,22 @@ package service
 
 import (
 	"errors"
+	"io"
+	"net"
+	"sync"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/rand"
-	"io"
-	"net"
-	"sync"
-	"time"
 )
 
 // TODO : implement delays?
 
 // Simulator is a p2p node factory and message bridge that is used to simulate the p2p layer provided
-// to protocols without using real network or p2p code. it resembles the `Service` interface API.
+// to protocols without using real network or p2p code. It resembles the `Service` interface API.
 type Simulator struct {
 	io.Closer
 	mutex                 sync.RWMutex
@@ -212,7 +213,7 @@ func (sn *Node) ProcessDirectProtocolMessage(sender p2pcrypto.PublicKey, protoco
 	c, ok := sn.sim.protocolDirectHandler[sn.PublicKey()][protocol]
 	sn.sim.mutex.RUnlock()
 	if !ok {
-		return errors.New("Unknown protocol")
+		return errors.New("unknown protocol")
 	}
 	c <- simDirectMessage{simulatorMetadata(), payload, sender}
 	return nil
@@ -224,7 +225,7 @@ func (sn *Node) ProcessGossipProtocolMessage(sender p2pcrypto.PublicKey, protoco
 	c, ok := sn.sim.protocolGossipHandler[sn.PublicKey()][protocol]
 	sn.sim.mutex.RUnlock()
 	if !ok {
-		return errors.New("Unknown protocol")
+		return errors.New("unknown protocol")
 	}
 	c <- simGossipMessage{sender, data, validationCompletedChan}
 	return nil

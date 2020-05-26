@@ -5,11 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/poet/integration"
 	"io/ioutil"
 	"net/http"
 	"time"
+
+	"github.com/spacemeshos/poet/integration"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 // HTTPPoetHarness utilizes a local self-contained poet server instance

@@ -32,7 +32,7 @@ var cmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("Starting sync")
 		syncApp := newSyncApp()
-		log.Info("Right after NewSyncApp %v", syncApp.Config.DataDir)
+		log.Info("Right after NewSyncApp %v", syncApp.Config.DataDir())
 		defer syncApp.Cleanup()
 		syncApp.Initialize(cmd)
 		syncApp.start(cmd, args)
@@ -73,7 +73,7 @@ func newSyncApp() *syncApp {
 }
 
 func (app *syncApp) Cleanup() {
-	err := os.RemoveAll(app.Config.DataDir)
+	err := os.RemoveAll(app.Config.DataDir())
 	if err != nil {
 		app.sync.Error("failed to cleanup sync: %v", err)
 	}
@@ -83,7 +83,7 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 	// start p2p services
 	lg := log.New("sync_test", "", "")
 	lg.Info("------------ Start sync test -----------")
-	lg.Info("data folder: ", app.Config.DataDir)
+	lg.Info("data folder: ", app.Config.DataDir())
 	lg.Info("storage path: ", bucket)
 	lg.Info("download from remote storage: ", remote)
 	lg.Info("expected layers: ", expectedLayers)
@@ -92,11 +92,11 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 	lg.Info("layers per epoch: ", app.Config.LayersPerEpoch)
 	lg.Info("hdist: ", app.Config.Hdist)
 
-	path := app.Config.DataDir + version
+	path := app.Config.DataDir() + version
 
 	lg.Info("local db path: ", path)
 
-	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P, lg.WithName("p2p"), app.Config.DataDir)
+	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P, lg.WithName("p2p"), app.Config.DataDir())
 
 	if err != nil {
 		panic("something got fudged while creating p2p service ")
@@ -114,7 +114,7 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 	}
 
 	if remote {
-		if err := getData(app.Config.DataDir, version, lg); err != nil {
+		if err := getData(app.Config.DataDir(), version, lg); err != nil {
 			lg.Error("could not download data for test", err)
 			return
 		}

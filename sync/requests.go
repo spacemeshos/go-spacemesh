@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"fmt"
+	"reflect"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p"
+	p2ppeers "github.com/spacemeshos/go-spacemesh/p2p/peers"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
-	"reflect"
 )
 
 var (
@@ -18,7 +19,7 @@ var (
 )
 
 func layerIdsReqFactory(lyr types.LayerID) requestFactory {
-	return func(s networker, peer p2p.Peer) (chan interface{}, error) {
+	return func(s networker, peer p2ppeers.Peer) (chan interface{}, error) {
 		ch := make(chan interface{}, 1)
 		foo := func(msg []byte) {
 			defer close(ch)
@@ -41,7 +42,7 @@ func layerIdsReqFactory(lyr types.LayerID) requestFactory {
 }
 
 func hashReqFactory(lyr types.LayerID) requestFactory {
-	return func(s networker, peer p2p.Peer) (chan interface{}, error) {
+	return func(s networker, peer p2ppeers.Peer) (chan interface{}, error) {
 		ch := make(chan interface{}, 1)
 		foo := func(msg []byte) {
 			defer close(ch)
@@ -68,7 +69,7 @@ func hashReqFactory(lyr types.LayerID) requestFactory {
 
 func newFetchReqFactory(msgtype server.MessageType, asItems func(msg []byte) ([]item, error)) batchRequestFactory {
 	//convert to chan
-	return func(infra networker, peer p2p.Peer, ids []types.Hash32) (chan []item, error) {
+	return func(infra networker, peer p2ppeers.Peer, ids []types.Hash32) (chan []item, error) {
 		ch := make(chan []item, 1)
 		foo := func(msg []byte) {
 			defer close(ch)
@@ -156,7 +157,7 @@ func calcAndSetIds(atxs []types.ActivationTx) []types.ActivationTx {
 }
 
 func poetReqFactory(poetProofRef []byte) requestFactory {
-	return func(s networker, peer p2p.Peer) (chan interface{}, error) {
+	return func(s networker, peer p2ppeers.Peer) (chan interface{}, error) {
 		ch := make(chan interface{}, 1)
 		resHandler := func(msg []byte) {
 			s.Info("handle PoET proof response")
@@ -224,7 +225,7 @@ func validateItemIds(ids []types.Hash32, items []item) (bool, error) {
 	return true, nil
 }
 
-func encodeAndSendRequest(req server.MessageType, ids []types.Hash32, s networker, peer p2p.Peer, foo func(msg []byte)) error {
+func encodeAndSendRequest(req server.MessageType, ids []types.Hash32, s networker, peer p2ppeers.Peer, foo func(msg []byte)) error {
 	bts, err := types.InterfaceToBytes(ids)
 	if err != nil {
 		return err

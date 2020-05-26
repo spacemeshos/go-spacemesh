@@ -2,6 +2,7 @@ package discovery
 
 import (
 	"context"
+
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 )
@@ -128,7 +129,6 @@ func (m *MockPeerStore) Attempt(key p2pcrypto.PublicKey) {
 // mockAddrBook
 type mockAddrBook struct {
 	addAddressFunc func(n, src *node.Info)
-	addressCount   int
 
 	LookupFunc func(p2pcrypto.PublicKey) (*node.Info, error)
 	lookupRes  *node.Info
@@ -139,16 +139,22 @@ type mockAddrBook struct {
 
 	NeedNewAddressesFunc func() bool
 
-	AddressCacheResult []*node.Info
+	AddressCacheFunc func() []*node.Info
 
 	GoodFunc    func(key p2pcrypto.PublicKey)
 	AttemptFunc func(key p2pcrypto.PublicKey)
 
 	IsLocalAddressFunc  func(info *node.Info) bool
 	AddLocalAddressFunc func(info *node.Info)
+
+	NumAddressesFunc func() int
 }
 
 func (m *mockAddrBook) Stop() {
+
+}
+
+func (m *mockAddrBook) Start() {
 
 }
 
@@ -203,7 +209,6 @@ func (m *mockAddrBook) AddAddress(n, src *node.Info) {
 	if m.addAddressFunc != nil {
 		m.addAddressFunc(n, src)
 	}
-	m.addressCount++
 }
 
 // AddAddresses mock
@@ -211,19 +216,16 @@ func (m *mockAddrBook) AddAddresses(n []*node.Info, src *node.Info) {
 	if m.addAddressFunc != nil {
 		for _, addr := range n {
 			m.addAddressFunc(addr, src)
-			m.addressCount++
 		}
 	}
 }
 
-// AddAddressCount counts AddAddress calls
-func (m *mockAddrBook) AddAddressCount() int {
-	return m.addressCount
-}
-
 // AddressCache mock
 func (m *mockAddrBook) AddressCache() []*node.Info {
-	return m.AddressCacheResult
+	if m.AddressCacheFunc != nil {
+		return m.AddressCacheFunc()
+	}
+	return nil
 }
 
 // Lookup mock
@@ -244,8 +246,11 @@ func (m *mockAddrBook) GetAddress() *KnownAddress {
 
 // NumAddresses mock
 func (m *mockAddrBook) NumAddresses() int {
-	//todo: mockAddrBook size
-	return m.addressCount
+	//todo: mockAddrBook sizem
+	if m.NumAddressesFunc != nil {
+		return m.NumAddressesFunc()
+	}
+	return 0
 }
 
 type refresherMock struct {

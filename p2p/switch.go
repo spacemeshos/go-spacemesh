@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/nattraversal"
@@ -15,10 +17,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
+	"github.com/spacemeshos/go-spacemesh/p2p/peers"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/timesync"
-	"strings"
 
 	inet "net"
 	"sync"
@@ -39,7 +41,7 @@ type cPool interface {
 	Shutdown()
 }
 
-// Switch is the heart of the p2p package. it runs and orchestrates all services within it. it provides the external interface
+// Switch is the heart of the p2p package. it runs and orchestrates all services within it. It provides the external interface
 // for protocols to access peers or receive incoming messages.
 type Switch struct {
 	// configuration and maintenance fields
@@ -119,7 +121,7 @@ func (s *Switch) waitForGossip() error {
 }
 
 // newSwarm creates a new P2P instance, configured by config, if a NodeID is given it tries to load if from `datadir`,
-// otherwise it loads the first found node from `datadir` or creates a new one and store it there. it creates
+// otherwise it loads the first found node from `datadir` or creates a new one and store it there. It creates
 // all the needed services.
 func newSwarm(ctx context.Context, config config.Config, logger log.Log, datadir string) (*Switch, error) {
 	var l node.LocalNode
@@ -215,7 +217,7 @@ func newSwarm(ctx context.Context, config config.Config, logger log.Log, datadir
 
 	s.cPool = cpool
 
-	s.gossip = gossip.NewProtocol(config.SwarmConfig, s, s.LocalNode().PublicKey(), s.logger)
+	s.gossip = gossip.NewProtocol(config.SwarmConfig, s, peers.NewPeers(s, s.logger), s.LocalNode().PublicKey(), s.logger)
 
 	s.logger.Debug("Created newSwarm with key %s", l.PublicKey())
 	return s, nil

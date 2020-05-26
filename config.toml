@@ -1,6 +1,6 @@
 # sample spacemesh config file
 # use the config flag to start a node with a config file.
-# e.g $./go-spacemash --config ./config.toml
+# e.g $./go-spacemesh --config ./config.toml
 # cli flags will get a higher priority than configured in the file.
 
 # Main Config
@@ -67,10 +67,8 @@ hare-wakeup-delta = 5
 app = "info"
 p2p = "info"
 post = "info"
-stateDb= "info"
+stateDb = "info"
 state = "info"
-atxDb = "info"
-poetDb = "info"
 store = "info"
 poetDb = "info"
 meshDb = "info"

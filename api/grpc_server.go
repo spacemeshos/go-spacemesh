@@ -4,7 +4,16 @@ package api
 import (
 	"encoding/hex"
 	"fmt"
+	"net"
+	"strconv"
+	"time"
+
 	"github.com/golang/protobuf/ptypes/empty"
+	"golang.org/x/net/context"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/keepalive"
+	"google.golang.org/grpc/reflection"
+
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/pb"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -13,14 +22,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/state"
-	"google.golang.org/grpc/keepalive"
-	"net"
-	"strconv"
-	"time"
-
-	"golang.org/x/net/context"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/reflection"
 )
 
 // PeerCounter is an api to get amount of connected peers
@@ -276,7 +277,7 @@ func NewGrpcService(port int, net NetworkAPI, state StateAPI, tx TxAPI, txMempoo
 		GenTime:       genTime,
 		Post:          post,
 		LayerDuration: time.Duration(layerDurationSec) * time.Second,
-		PeerCounter:   p2p.NewPeers(net, log.NewDefault("grpc")),
+		PeerCounter:   peers.NewPeers(net, log.NewDefault("grpc")),
 		Syncer:        syncer,
 		Config:        cfg,
 		Logging:       logging,

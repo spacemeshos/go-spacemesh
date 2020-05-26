@@ -1,13 +1,15 @@
-package p2p
+package peers
 
 import (
+	"math/rand"
+	"sync/atomic"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"github.com/spacemeshos/go-spacemesh/rand"
-	"sync/atomic"
 )
 
-// Peer is represented by a p2p identity public key
+// Peer is represented by a p2p identity public key.
 type Peer p2pcrypto.PublicKey
 
 // Peers is used by protocols to manage available peers.
@@ -15,11 +17,8 @@ type Peers struct {
 	log.Log
 	snapshot *atomic.Value
 	exit     chan struct{}
-}
 
-// NewPeersImpl creates a Peers using specified parameters and returns it
-func NewPeersImpl(snapshot *atomic.Value, exit chan struct{}, lg log.Log) *Peers {
-	return &Peers{snapshot: snapshot, Log: lg, exit: exit}
+	rand *rand.Rand
 }
 
 // PeerSubscriptionProvider is the interface that provides us with peer events channels.
@@ -37,51 +36,62 @@ func NewPeers(s PeerSubscriptionProvider, lg log.Log) *Peers {
 	return pi
 }
 
+// NewPeersImpl creates a Peers using specified parameters and returns it
+func NewPeersImpl(snapshot *atomic.Value, exit chan struct{}, lg log.Log) *Peers {
+	return &Peers{
+		snapshot: snapshot,
+		Log:      lg,
+		exit:     exit,
+		rand:     rand.New(rand.NewSource(time.Now().UnixNano()).(rand.Source64)),
+	}
+}
+
 // Close stops listening for events.
-func (pi Peers) Close() {
-	close(pi.exit)
+func (p *Peers) Close() {
+	close(p.exit)
 }
 
 // GetPeers returns a snapshot of the connected peers shuffled.
-func (pi Peers) GetPeers() []Peer {
-	peers := pi.snapshot.Load().([]Peer)
+// Method is not concurrent-safe.
+func (p *Peers) GetPeers() []Peer {
+	peers := p.snapshot.Load().([]Peer)
 	cpy := make([]Peer, len(peers))
 	copy(cpy, peers) // if we dont copy we will shuffle orig array
-	pi.With().Info("now connected", log.Int("n_peers", len(cpy)))
-	rand.Shuffle(len(cpy), func(i, j int) { cpy[i], cpy[j] = cpy[j], cpy[i] }) // shuffle peers order
+	p.With().Info("now connected", log.Int("n_peers", len(cpy)))
+	p.rand.Shuffle(len(cpy), func(i, j int) { cpy[i], cpy[j] = cpy[j], cpy[i] }) // shuffle peers order
 	return cpy
 }
 
-// PeerCount returns the number of connected peers
-func (pi Peers) PeerCount() uint64 {
-	peers := pi.snapshot.Load().([]Peer)
+// PeerCount returns the number of connected peers.
+func (p *Peers) PeerCount() uint64 {
+	peers := p.snapshot.Load().([]Peer)
 	return uint64(len(peers))
 }
 
-func (pi *Peers) listenToPeers(newPeerC, expiredPeerC chan p2pcrypto.PublicKey) {
-	peerSet := make(map[Peer]bool) // set of unique peers
-	defer pi.Debug("run stopped")
+func (p *Peers) listenToPeers(newPeerC, expiredPeerC chan p2pcrypto.PublicKey) {
+	peerSet := make(map[Peer]struct{}) // set of unique peers
+	defer p.Debug("run stopped")
 	for {
 		select {
-		case <-pi.exit:
+		case <-p.exit:
 			return
 		case peer, ok := <-newPeerC:
 			if !ok {
 				return
 			}
-			pi.With().Debug("new peer", log.String("peer", peer.String()))
-			peerSet[peer] = true
+			p.With().Debug("new peer", log.String("peer", peer.String()))
+			peerSet[peer] = struct{}{}
 		case peer, ok := <-expiredPeerC:
 			if !ok {
 				return
 			}
-			pi.With().Debug("expired peer", log.String("peer", peer.String()))
+			p.With().Debug("expired peer", log.String("peer", peer.String()))
 			delete(peerSet, peer)
 		}
 		keys := make([]Peer, 0, len(peerSet))
 		for k := range peerSet {
 			keys = append(keys, k)
 		}
-		pi.snapshot.Store(keys) //swap snapshot
+		p.snapshot.Store(keys) //swap snapshot
 	}
 }

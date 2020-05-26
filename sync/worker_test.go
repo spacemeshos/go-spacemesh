@@ -2,15 +2,17 @@ package sync
 
 import (
 	"crypto/sha256"
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/rand"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log"
+	p2ppeers "github.com/spacemeshos/go-spacemesh/p2p/peers"
+	"github.com/spacemeshos/go-spacemesh/rand"
 )
 
 func TestNewPeerWorker(t *testing.T) {
@@ -23,7 +25,7 @@ func TestNewPeerWorker(t *testing.T) {
 	err := syncObj1.AddBlock(bl1)
 	assert.NoError(t, err)
 
-	wrk := newPeersWorker(syncObj2, []p2p.Peer{nodes[3].PublicKey(), nodes[2].PublicKey(), nodes[0].PublicKey()}, &sync.Once{}, layerIdsReqFactory(1))
+	wrk := newPeersWorker(syncObj2, []p2ppeers.Peer{nodes[3].PublicKey(), nodes[2].PublicKey(), nodes[0].PublicKey()}, &sync.Once{}, layerIdsReqFactory(1))
 
 	go wrk.Work()
 
@@ -42,7 +44,7 @@ func TestNewNeighborhoodWorker(t *testing.T) {
 	syncs, nodes, _ := SyncMockFactory(2, conf, "TestSyncer_FetchPoetProofAvailableAndValid_", memoryDB, newMemPoetDb)
 	s0 := syncs[0]
 	s1 := syncs[1]
-	s1.peers = getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
+	s1.peers = getPeersMock([]p2ppeers.Peer{nodes[0].PublicKey()})
 
 	proofMessage := makePoetProofMessage(t)
 
@@ -66,7 +68,7 @@ func TestNeighborhoodWorkerClose(t *testing.T) {
 	syncs, nodes, _ := SyncMockFactory(2, longConf, "TestSyncer_FetchPoetProofAvailableAndValid_", memoryDB, newMemPoetDb)
 	syncs[0].Close()
 	s1 := syncs[1]
-	s1.peers = getPeersMock([]p2p.Peer{nodes[0].PublicKey()})
+	s1.peers = getPeersMock([]p2ppeers.Peer{nodes[0].PublicKey()})
 
 	proofMessage := makePoetProofMessage(t)
 	poetProofBytes, err := types.InterfaceToBytes(&proofMessage.PoetProof)
@@ -88,7 +90,7 @@ func TestPeerWorkerClose(t *testing.T) {
 	syncObj1 := syncs[0]
 	syncObj1.Close()
 	syncObj2 := syncs[1]
-	wrk := newPeersWorker(syncObj2, []p2p.Peer{nodes[3].PublicKey(), nodes[2].PublicKey(), nodes[0].PublicKey()}, &sync.Once{}, layerIdsReqFactory(1))
+	wrk := newPeersWorker(syncObj2, []p2ppeers.Peer{nodes[3].PublicKey(), nodes[2].PublicKey(), nodes[0].PublicKey()}, &sync.Once{}, layerIdsReqFactory(1))
 	go wrk.Work()
 	go func() {
 		time.Sleep(time.Second)

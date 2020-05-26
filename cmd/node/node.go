@@ -90,7 +90,11 @@ var Cmd = &cobra.Command{
 		app := NewSpacemeshApp()
 		defer app.Cleanup(cmd, args)
 
-		app.Initialize(cmd, args)
+		err := app.Initialize(cmd, args)
+		if err != nil {
+			log.With().Error("Failed to initialize node.", log.Err(err))
+			return
+		}
 		app.Start(cmd, args)
 	},
 }
@@ -245,7 +249,7 @@ func (app *SpacemeshApp) Initialize(cmd *cobra.Command, args []string) (err erro
 	timeCfg.TimeConfigValues = app.Config.TIME
 
 	// ensure all data folders exist
-	err = filesystem.ExistOrCreate(app.Config.DataDir)
+	err = filesystem.ExistOrCreate(app.Config.DataDir())
 	if err != nil {
 		return err
 	}
@@ -271,7 +275,7 @@ func (app *SpacemeshApp) setupLogging() {
 	}
 
 	// app-level logging
-	log.InitSpacemeshLoggingSystem(app.Config.DataDir, "spacemesh.log")
+	log.InitSpacemeshLoggingSystem(app.Config.DataDir(), "spacemesh.log")
 
 	log.Info("%s", app.getAppInfo())
 
@@ -637,21 +641,6 @@ func (app *SpacemeshApp) HareFactory(mdb *mesh.DB, swarm service.Service, sgn ha
 	return ha
 }
 
-// travis has a 10 minutes timeout
-// this ensures we print something before the timeout
-func (app *SpacemeshApp) patchTravisTimeout() {
-	ticker := time.NewTimer(5 * time.Minute)
-	for {
-		select {
-		case <-ticker.C:
-			fmt.Printf("Travis Patch\n")
-			ticker = time.NewTimer(5 * time.Minute)
-		case <-app.term:
-			return
-		}
-	}
-}
-
 func (app *SpacemeshApp) startServices() {
 	app.blockListener.Start()
 	app.syncer.Start()
@@ -679,7 +668,6 @@ func (app *SpacemeshApp) startServices() {
 	app.atxBuilder.Start()
 	app.clock.StartNotifying()
 	go app.checkTimeDrifts()
-	go app.patchTravisTimeout()
 }
 
 func (app *SpacemeshApp) stopServices() {
@@ -813,9 +801,9 @@ func (app *SpacemeshApp) getIdentityFile() (string, error) {
 
 // Start starts the Spacemesh node and initializes all relevant services according to command line arguments provided.
 func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
-	log.With().Info("Starting Spacemesh", log.String("data-dir", app.Config.DataDir), log.String("post-dir", app.Config.POST.DataDir))
+	log.With().Info("Starting Spacemesh", log.String("data-dir", app.Config.DataDir()), log.String("post-dir", app.Config.POST.DataDir))
 
-	err := filesystem.ExistOrCreate(app.Config.DataDir)
+	err := filesystem.ExistOrCreate(app.Config.DataDir())
 	if err != nil {
 		log.Error("data-dir not found or could not be created err:%v", err)
 	}
@@ -886,7 +874,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	lg := log.NewDefault(nodeID.ShortString())
 
 	apiConf := &app.Config.API
-	dbStorepath := app.Config.DataDir
+	dbStorepath := app.Config.DataDir()
 	gTime, err := time.Parse(time.RFC3339, app.Config.GenesisTime)
 	if err != nil {
 		log.Error("cannot parse genesis time %v", err)

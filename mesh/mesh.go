@@ -297,6 +297,8 @@ func (msh *Mesh) pushLayersToState(oldPbase types.LayerID, newPbase types.LayerI
 		}
 		validBlocks, invalidBlocks := msh.BlocksByValidity(l.Blocks())
 		msh.updateStateWithLayer(layerID, types.NewExistingLayer(layerID, validBlocks))
+		msh.logStateRoot(l.Index())
+		msh.setLayerHash(l)
 		msh.reInsertTxsToPool(validBlocks, invalidBlocks, l.Index())
 	}
 	msh.persistLayerHash()
@@ -323,8 +325,6 @@ func (msh *Mesh) reInsertTxsToPool(validBlocks, invalidBlocks []*types.Block, l 
 func (msh *Mesh) applyState(l *types.Layer) {
 	msh.accumulateRewards(l, msh.config)
 	msh.pushTransactions(l)
-	msh.logStateRoot(l.Index())
-	msh.setLayerHash(l)
 	msh.setLatestLayerInState(l.Index())
 }
 
