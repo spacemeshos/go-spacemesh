@@ -89,14 +89,14 @@ type ATXDBMock struct {
 	activeSet   uint32
 }
 
-func (mock *ATXDBMock) CalcActiveSetSize(types.EpochID, map[types.BlockID]struct{}) (map[string]struct{}, error) {
+func (mock *ATXDBMock) CalcActiveSetSize(types.EpochID, map[types.BlockID]struct{}) (map[string]uint64, error) {
 	log.Debug("waiting lock")
 	mock.workSymLock.Lock()
 	defer mock.workSymLock.Unlock()
 	log.Debug("done wait")
 
 	mock.counter++
-	return map[string]struct{}{"aaaaac": {}, "aaabddb": {}, "aaaccc": {}}, nil
+	return map[string]uint64{"aaaaac": 0, "aaabddb": 0, "aaaccc": 0}, nil
 }
 
 type MockTxMemPool struct{}
@@ -178,11 +178,9 @@ func TestATX_ActiveSetForLayerView(t *testing.T) {
 	coinbase4 := types.HexToAddress("cccc")
 	atxs := []*types.ActivationTx{
 		newActivationTx(id1, 0, *types.EmptyATXID, *types.EmptyATXID, 1, 0, 100, 100, coinbase1, 0, []types.BlockID{}, &types.NIPST{}),
-		newActivationTx(id1, 0, *types.EmptyATXID, *types.EmptyATXID, 2, 0, 100, 100, coinbase1, 0, []types.BlockID{}, &types.NIPST{}),
-		newActivationTx(id1, 0, *types.EmptyATXID, *types.EmptyATXID, 3, 0, 100, 100, coinbase1, 0, []types.BlockID{}, &types.NIPST{}),
-		newActivationTx(id2, 0, *types.EmptyATXID, *types.EmptyATXID, 2, 0, 100, 100, coinbase2, 0, []types.BlockID{}, &types.NIPST{}),
-		newActivationTx(id4, 0, *types.EmptyATXID, *types.EmptyATXID, 2, 0, 100, 100, coinbase4, 0, []types.BlockID{}, &types.NIPST{}),
-		newActivationTx(id3, 0, *types.EmptyATXID, *types.EmptyATXID, 11, 0, 100, 100, coinbase3, 0, []types.BlockID{}, &types.NIPST{}),
+		newActivationTx(id2, 0, *types.EmptyATXID, *types.EmptyATXID, 2, 0, 100, 200, coinbase2, 0, []types.BlockID{}, &types.NIPST{}),
+		newActivationTx(id4, 0, *types.EmptyATXID, *types.EmptyATXID, 2, 0, 100, 400, coinbase4, 0, []types.BlockID{}, &types.NIPST{}),
+		newActivationTx(id3, 0, *types.EmptyATXID, *types.EmptyATXID, 11, 0, 100, 300, coinbase3, 0, []types.BlockID{}, &types.NIPST{}),
 	}
 
 	poetRef := []byte{0xba, 0xb0}
@@ -191,15 +189,13 @@ func TestATX_ActiveSetForLayerView(t *testing.T) {
 		assert.NoError(t, err)
 		atx.Nipst = NewNIPSTWithChallenge(hash, poetRef)
 	}
-	id := atxs[4].ID()
-	fmt.Println("ID4 ", id.ShortString())
-	blocks := createLayerWithAtx(t, layers, 1, 6, atxs, []types.BlockID{}, []types.BlockID{})
-	before := blocks[:4]
-	four := blocks[4:5]
-	after := blocks[5:]
+	blocks := createLayerWithAtx(t, layers, 1, 4, atxs, []types.BlockID{}, []types.BlockID{})
+	before := blocks[:2]
+	two := blocks[2:3]
+	after := blocks[3:]
 	for i := 2; i <= 10; i++ {
 		before = createLayerWithAtx(t, layers, types.LayerID(i), 1, []*types.ActivationTx{}, before, before)
-		four = createLayerWithAtx(t, layers, types.LayerID(i), 1, []*types.ActivationTx{}, four, four)
+		two = createLayerWithAtx(t, layers, types.LayerID(i), 1, []*types.ActivationTx{}, two, two)
 		after = createLayerWithAtx(t, layers, types.LayerID(i), 1, []*types.ActivationTx{}, after, after)
 	}
 	for _, x := range before {
@@ -216,9 +212,9 @@ func TestATX_ActiveSetForLayerView(t *testing.T) {
 	epoch := layer.GetEpoch(layersPerEpoch)
 	actives, err := atxdb.CalcActiveSetSize(epoch, blocksMap)
 	assert.NoError(t, err)
-	assert.Equal(t, 1, len(actives))
-	_, ok := actives[id2.Key]
-	assert.True(t, ok)
+	assert.Len(t, actives, 2)
+	assert.Equal(t, uint64(10000), actives[id1.Key], "actives[id1.Key] (%d) != %d", actives[id1.Key], 10000)
+	assert.Equal(t, uint64(20000), actives[id2.Key], "actives[id2.Key] (%d) != %d", actives[id2.Key], 20000)
 }
 
 func TestMesh_ActiveSetForLayerView2(t *testing.T) {

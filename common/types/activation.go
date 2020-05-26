@@ -62,6 +62,7 @@ type ActivationTxHeader struct {
 	Space         uint64
 	Coinbase      Address
 	ActiveSetSize uint32
+	TotalWeight   uint64
 }
 
 // ShortString returns the first 5 characters of the ID, for logging purposes.
@@ -91,6 +92,11 @@ func (atxh *ActivationTxHeader) TargetEpoch(layersPerEpoch uint16) EpochID {
 // SetID sets the ATXID in this ATX's cache.
 func (atxh *ActivationTxHeader) SetID(id *ATXID) {
 	atxh.id = id
+}
+
+func (atxh *ActivationTxHeader) GetWeight() uint64 {
+	// TODO: Limit the number of bits this can occupy
+	return atxh.Space * (atxh.EndTick - atxh.StartTick)
 }
 
 // NIPSTChallenge is the set of fields that's serialized, hashed and submitted to the PoET service to be included in the
@@ -228,11 +234,6 @@ func (atx *ActivationTx) GetPoetProofRef() []byte {
 // GetShortPoetProofRef returns the first 5 characters of the PoET proof reference, for logging purposes.
 func (atx *ActivationTx) GetShortPoetProofRef() []byte {
 	return atx.Nipst.PostProof.Challenge[:util.Min(5, len(atx.Nipst.PostProof.Challenge))]
-}
-
-func (atx *ActivationTx) GetWeight() uint64 {
-	// TODO: Limit the number of bits this can occupy
-	return atx.Space * (atx.EndTick - atx.StartTick)
 }
 
 // PoetProof is the full PoET service proof of elapsed time. It includes the list of members, a leaf count declaration

@@ -57,7 +57,7 @@ type DB struct {
 	nipstValidator    nipstValidator
 	pendingActiveSet  map[types.Hash12]*sync.Mutex
 	log               log.Log
-	calcActiveSetFunc func(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error)
+	calcActiveSetFunc func(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]uint64, error)
 	processAtxMutex   sync.Mutex
 	assLock           sync.Mutex
 	epochWeightMutex  sync.Mutex // used only for updating total epoch weight, reading can be done lock-free
@@ -178,9 +178,8 @@ func (db *DB) ProcessAtx(atx *types.ActivationTx) error {
 	return nil
 }
 
-func (db *DB) createTraversalActiveSetCounterFunc(countedAtxs map[string]types.ATXID, penalties map[string]struct{}, layersPerEpoch uint16, epoch types.EpochID) func(b *types.Block) (bool, error) {
-
-	traversalFunc := func(b *types.Block) (stop bool, err error) {
+func (db *DB) createTraversalActiveSetCounterFunc(minerWeight map[string]uint64, layersPerEpoch uint16, epoch types.EpochID) func(b *types.Block) (bool, error) {
+	return func(b *types.Block) (stop bool, err error) {
 
 		// don't count ATXs in blocks that are not destined to the prev epoch
 		if b.LayerIndex.GetEpoch(db.LayersPerEpoch) != epoch-1 {
@@ -204,36 +203,15 @@ func (db *DB) createTraversalActiveSetCounterFunc(countedAtxs map[string]types.A
 				continue
 			}
 
-			// ignore atx from nodes in penalty
-			if _, exist := penalties[atx.NodeID.Key]; exist {
-				db.log.With().Debug("ignoring atx from node in penalty",
-					log.String("node_id", atx.NodeID.Key), log.String("atx_id", atx.ShortString()))
-				continue
-			}
-
-			if prevID, exist := countedAtxs[atx.NodeID.Key]; exist { // same miner
-
-				if prevID != id { // different atx for same epoch
-					db.log.With().Error("Encountered second atx for the same miner on the same epoch",
-						log.String("first_atx", prevID.ShortString()), log.String("second_atx", id.ShortString()))
-
-					penalties[atx.NodeID.Key] = struct{}{} // mark node in penalty
-					delete(countedAtxs, atx.NodeID.Key)    // remove the penalized node from counted
-				}
-				continue
-			}
-
-			countedAtxs[atx.NodeID.Key] = id
+			minerWeight[atx.NodeID.Key] = atx.GetWeight()
 		}
 
 		return false, nil
 	}
-
-	return traversalFunc
 }
 
 // CalcActiveSetSize - returns the active set size that matches the view of the contextually valid blocks in the provided layer
-func (db *DB) CalcActiveSetSize(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
+func (db *DB) CalcActiveSetSize(epoch types.EpochID, view map[types.BlockID]struct{}) (map[string]uint64, error) {
 
 	if epoch == 0 {
 		return nil, errors.New("tried to retrieve active set for epoch 0")
@@ -241,13 +219,12 @@ func (db *DB) CalcActiveSetSize(epoch types.EpochID, blocks map[types.BlockID]st
 
 	firstLayerOfPrevEpoch := (epoch - 1).FirstLayer(db.LayersPerEpoch)
 
-	countedAtxs := make(map[string]types.ATXID)
-	penalties := make(map[string]struct{})
+	minerWeight := make(map[string]uint64)
 
-	traversalFunc := db.createTraversalActiveSetCounterFunc(countedAtxs, penalties, db.LayersPerEpoch, epoch)
+	traversalFunc := db.createTraversalActiveSetCounterFunc(minerWeight, db.LayersPerEpoch, epoch)
 
 	startTime := time.Now()
-	err := db.meshDb.ForBlockInView(blocks, firstLayerOfPrevEpoch, traversalFunc)
+	err := db.meshDb.ForBlockInView(view, firstLayerOfPrevEpoch, traversalFunc)
 	if err != nil {
 		return nil, err
 	}
@@ -255,12 +232,7 @@ func (db *DB) CalcActiveSetSize(epoch types.EpochID, blocks map[types.BlockID]st
 		log.Int("size", len(countedAtxs)),
 		log.String("duration", time.Now().Sub(startTime).String()))
 
-	result := make(map[string]struct{}, len(countedAtxs))
-	for k := range countedAtxs {
-		result[k] = struct{}{}
-	}
-
-	return result, nil
+	return minerWeight, nil
 }
 
 // CalcActiveSetFromView traverses the view found in a - the activation tx and counts number of active ids published

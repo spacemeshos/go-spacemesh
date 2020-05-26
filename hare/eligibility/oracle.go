@@ -29,7 +29,7 @@ type valueProvider interface {
 
 // a func to retrieve the active set size for the provided layer
 // this func is assumed to be cpu intensive and hence we cache its results
-type activeSetFunc func(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error)
+type activeSetFunc func(epoch types.EpochID, view map[types.BlockID]struct{}) (map[string]uint64, error)
 
 type signer interface {
 	Sign(msg []byte) ([]byte, error)
@@ -250,7 +250,7 @@ func (o *Oracle) Proof(layer types.LayerID, round int32) ([]byte, error) {
 }
 
 // Returns a map of all active nodes in the specified layer id
-func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
+func (o *Oracle) actives(layer types.LayerID) (map[string]uint64, error) {
 	sl := roundedSafeLayer(layer, types.LayerID(o.cfg.ConfidenceParam), o.layersPerEpoch, types.LayerID(o.cfg.EpochOffset))
 	safeEp := sl.GetEpoch(o.layersPerEpoch)
 
@@ -266,7 +266,7 @@ func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
 	// check cache
 	if val, exist := o.activesCache.Get(safeEp); exist {
 		o.lock.Unlock()
-		return val.(map[string]struct{}), nil
+		return val.(map[string]uint64), nil
 	}
 
 	// build a map of all blocks on the current layer
