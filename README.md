@@ -124,7 +124,7 @@ go-spacemesh is p2p software which is designed to form a decentralized network b
 
 To run go-spacemesh you need to specify the parameters shared between all instances on a specific network.
 
-You specify these parameters by providing go-spacemesh with a toml config file. Other CLI flags control local node behavior and override default values.
+You specify these parameters by providing go-spacemesh with a json config file. Other CLI flags control local node behavior and override default values.
 
 #### Joining a Testnet (without mining)
 1. Build go-spacemesh from source code.
@@ -136,7 +136,7 @@ You specify these parameters by providing go-spacemesh with a toml config file. 
 ```
 
 ##### Example
-Assuming tn1.toml is a testnet config file saved in the same directory as go-spacemesh, use the following command to join the testnet. The data folder will be created in the same directory as go-spacemesh. The node will use TCP port 7152 and UDP port 7152 for p2p connections:
+Assuming tn1.json is a testnet config file saved in the same directory as go-spacemesh, use the following command to join the testnet. The data folder will be created in the same directory as go-spacemesh. The node will use TCP port 7152 and UDP port 7152 for p2p connections:
 
 ```bash
 ./go-spacemesh --grpc-server --json-server --tcp-port 7152 --config ./tn1.json -d ./sm_data
