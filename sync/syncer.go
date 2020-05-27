@@ -666,7 +666,7 @@ func (s *Syncer) fetchBlock(ID types.BlockID) bool {
 	ch := make(chan bool, 1)
 	defer close(ch)
 	foo := func(res bool) error {
-		s.With().Info("view validated",
+		s.With().Info("single block fetched",
 			log.BlockID(ID.String()),
 			log.Bool("result", res))
 		//log.LayerID(uint64(blk.LayerIndex)))

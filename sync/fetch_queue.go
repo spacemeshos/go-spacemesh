@@ -6,6 +6,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"runtime"
+	"runtime/debug"
 	"sync"
 )
 
@@ -53,6 +54,7 @@ func (fq *fetchQueue) shutdownRecover() {
 	r := recover()
 	if r != nil {
 		fq.Info("%s shut down ", fq.name)
+		fq.Info("stacktrace from panic: \n" + string(debug.Stack()))
 	}
 }
 

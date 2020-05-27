@@ -32,6 +32,7 @@ type DB struct {
 	general            database.Database
 	unappliedTxs       database.Database
 	unappliedTxsMutex  sync.Mutex
+	blockMutex         sync.RWMutex
 	orphanBlocks       map[types.LayerID]map[types.BlockID]struct{}
 	layerMutex         map[types.LayerID]*layerMutex
 	lhMutex            sync.Mutex
@@ -125,6 +126,8 @@ var ErrAlreadyExist = errors.New("block already exist in database")
 
 // AddBlock adds a block to the database
 func (m *DB) AddBlock(bl *types.Block) error {
+	m.blockMutex.Lock()
+	defer m.blockMutex.Unlock()
 	if _, err := m.getBlockBytes(bl.ID()); err == nil {
 		m.With().Warning(ErrAlreadyExist.Error(), log.BlockID(bl.ID().String()))
 		return ErrAlreadyExist
