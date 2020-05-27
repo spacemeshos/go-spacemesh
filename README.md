@@ -128,18 +128,18 @@ You specify these parameters by providing go-spacemesh with a toml config file. 
 
 #### Joining a Testnet (without mining)
 1. Build go-spacemesh from source code.
-2. Obtain the testnet's toml config file.
+2. Obtain the testnet's json config file.
 3. Start go-spacemesh with the following arguments:
 
 ```bash
-./go-spacemesh --grpc-server --json-server --tcp-port [a_port] --config [tomlFileLocation] -d [nodeDataFilesPath]
+./go-spacemesh --grpc-server --json-server --tcp-port [a_port] --config [configFileLocation] -d [nodeDataFilesPath]
 ```
 
 ##### Example
 Assuming tn1.toml is a testnet config file saved in the same directory as go-spacemesh, use the following command to join the testnet. The data folder will be created in the same directory as go-spacemesh. The node will use TCP port 7152 and UDP port 7152 for p2p connections:
 
 ```bash
-./go-spacemesh --grpc-server --json-server --tcp-port 7152 --config ./tn1.toml -d ./sm_data
+./go-spacemesh --grpc-server --json-server --tcp-port 7152 --config ./tn1.json -d ./sm_data
 ```
 
 4. Build the [CLI Wallet](https://github.com/spacemeshos/CLIWallet) from source code and run it:
@@ -157,19 +157,19 @@ Assuming tn1.toml is a testnet config file saved in the same directory as go-spa
 3. Stop go-spacemesh and start it with the following params:
 
 ```bash
-./go-spacemesh --grpc-server --json-server --tcp-port [a_port] --config [tomlFileLocation] -d [nodeDataFilesPath] --coinbase [coinbase_account] --start-mining --post-datadir [dir_for_post_data]
+./go-spacemesh --grpc-server --json-server --tcp-port [a_port] --config [configFileLocation] -d [nodeDataFilesPath] --coinbase [coinbase_account] --start-mining --post-datadir [dir_for_post_data]
 ```
 
 ##### Example
 ```bash
-./go-spacemesh --grpc-server --json-server --tcp-port 7152 --config ./tn1.toml -d ./sm_data --coinbase 0x36168c60e06abbb4f5df6d1dd6a1b15655d71e75 --start-mining --post-datadir ./post_data
+./go-spacemesh --grpc-server --json-server --tcp-port 7152 --config ./tn1.json -d ./sm_data --coinbase 0x36168c60e06abbb4f5df6d1dd6a1b15655d71e75 --start-mining --post-datadir ./post_data
 ```
 
 4. Use the CLI wallet to check your coinbase account balance and to transact
 
-#### Joining Spacemesh 0.1 ([TweedleDee](https://testnet.spacemesh.io/#/?id=what-is-spacemesh-01-tweedledee)) Testnet
-1. Build go-spacemesh source code from this github release: [go-spacemesh 0.1.9](https://github.com/spacemeshos/go-spacemesh/releases/tag/v0.1.9).
-2. Follow the instructions on how to join a testnet with mining (above) and use [Testnet 0.1 (TweedleDee) Config File](http://ae7809a90692211ea8d4d0ea80dce922-597797094.us-east-1.elb.amazonaws.com/) as your node's config file.  
+#### Joining Spacemesh ([TweedleDee](https://testnet.spacemesh.io/#/?id=what-is-spacemesh-01-tweedledee)) Testnet (net id 115)
+1. Build go-spacemesh source code from this github release: [go-spacemesh 0.1.12](https://github.com/spacemeshos/go-spacemesh/releases/tag/v0.1.12).
+2. Follow the instructions on how to join a testnet with mining (above) and use [TweedleDe net id 115 config file](https://raw.githubusercontent.com/spacemeshos/smapp/0.0.12/desktop/config.json) as your node's config file.  
 
 ---
 
