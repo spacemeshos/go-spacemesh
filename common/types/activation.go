@@ -35,7 +35,7 @@ type ATXID Hash32
 
 // ShortString returns the first few characters of the ID, for logging purposes.
 func (t ATXID) ShortString() string {
-	return t.Hash32().MediumString()
+	return t.Hash32().ShortString()
 }
 
 // Hash32 returns the ATXID as a Hash32.

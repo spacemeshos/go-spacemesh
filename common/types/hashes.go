@@ -171,16 +171,10 @@ func (h Hash32) String() string {
 	return h.Hex()
 }
 
-// MediumString returns the first 10 characters of the hash, for logging purposes.
-func (h Hash32) MediumString() string {
-	l := len(h.Hex())
-	return Stringify(h.Hex()[util.Min(2, l):], 12)
-}
-
 // ShortString returns the first 5 characters of the hash, for logging purposes.
 func (h Hash32) ShortString() string {
 	l := len(h.Hex())
-	return Stringify(h.Hex()[util.Min(2, l):], 5)
+	return Stringify(h.Hex()[util.Min(2, l):], 10)
 }
 
 // Stringify shortens a string to a specified length

@@ -19,7 +19,7 @@ type BlockID Hash20
 
 // String returns a short prefix of the hex representation of the ID.
 func (id BlockID) String() string {
-	return id.AsHash32().MediumString()
+	return id.AsHash32().ShortString()
 }
 
 // Field returns a log field. Implements the LoggableField interface.

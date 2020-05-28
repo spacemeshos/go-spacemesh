@@ -17,7 +17,7 @@ func (id TransactionID) Hash32() Hash32 {
 
 // ShortString returns a the first 10 characters of the ID, for logging purposes.
 func (id TransactionID) ShortString() string {
-	return id.Hash32().MediumString()
+	return id.Hash32().ShortString()
 }
 
 // String returns a hexadecimal representation of the TransactionID with "0x" prepended, for logging purposes.

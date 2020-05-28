@@ -44,7 +44,7 @@ func (fq *fetchQueue) Close() {
 func concatShortIds(items []types.Hash32) string {
 	str := ""
 	for i, h := range items {
-		str += h.MediumString()
+		str += h.ShortString()
 		if i < len(items)-1 {
 			str += " "
 		}
