@@ -81,7 +81,7 @@ func (id NodeID) ToBytes() []byte {
 // ShortString returns a the first 5 characters of the ID, for logging purposes.
 func (id NodeID) ShortString() string {
 	name := id.Key
-	return Stringify(name, 5)
+	return Shorten(name, 5)
 }
 
 // Field returns a log field. Implements the LoggableField interface.

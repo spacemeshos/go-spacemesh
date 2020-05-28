@@ -174,11 +174,11 @@ func (h Hash32) String() string {
 // ShortString returns the first 5 characters of the hash, for logging purposes.
 func (h Hash32) ShortString() string {
 	l := len(h.Hex())
-	return Stringify(h.Hex()[util.Min(2, l):], 10)
+	return Shorten(h.Hex()[util.Min(2, l):], 10)
 }
 
-// Stringify shortens a string to a specified length
-func Stringify(s string, maxlen int) string {
+// Shorten shortens a string to a specified length
+func Shorten(s string, maxlen int) string {
 	l := len(s)
 	return s[:util.Min(maxlen, l)]
 }
