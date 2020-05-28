@@ -157,9 +157,9 @@ func (b *Block) Bytes() []byte {
 // Fields returns an array of LoggableFields for logging
 func (b *Block) Fields() []log.LoggableField {
 	return []log.LoggableField{
-		log.BlockID(b.ID().String()),
-		log.LayerID(uint64(b.LayerIndex)),
-		log.MinerID(b.MinerID().ShortString()),
+		b.ID(),
+		b.LayerIndex,
+		b.MinerID(),
 		log.Int("view_edges", len(b.ViewEdges)),
 		log.Int("vote_count", len(b.BlockVotes)),
 		log.Uint32("eligibility_counter", b.EligibilityProof.J),

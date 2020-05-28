@@ -197,8 +197,8 @@ func (o *Oracle) Eligible(layer types.LayerID, round int32, committeeSize int, i
 	}
 	if !res {
 		o.With().Info("eligibility: a node did not pass VRF signature verification",
-			log.String("id", id.ShortString()),
-			log.Uint64("layer_id", uint64(layer)))
+			id,
+			layer)
 		return false, nil
 	}
 
@@ -220,11 +220,11 @@ func (o *Oracle) Eligible(layer types.LayerID, round int32, committeeSize int, i
 	// avoid division (no floating point) & do operations on uint64 to avoid overflow
 	if uint64(activeSetSize)*uint64(shaUint32) > uint64(committeeSize)*uint64(math.MaxUint32) {
 		o.With().Info("eligibility: node did not pass VRF eligibility threshold",
-			log.String("id", id.ShortString()),
+			id,
 			log.Int("committee_size", committeeSize),
 			log.Uint32("active_set_size", activeSetSize),
 			log.Int32("round", round),
-			log.Uint64("layer_id", uint64(layer)))
+			layer)
 		return false, nil
 	}
 
@@ -279,8 +279,10 @@ func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
 	// no contextually valid blocks
 	if len(mp) == 0 {
 		o.With().Error("Could not calculate hare active set size: no contextually valid blocks",
-			log.Uint64("layer_id", uint64(layer)), log.Uint64("epoch_id", uint64(layer.GetEpoch(o.layersPerEpoch))),
-			log.Uint64("safe_layer_id", uint64(sl)), log.Uint64("safe_epoch_id", uint64(safeEp)))
+			layer,
+			log.Uint64("epoch_id", uint64(layer.GetEpoch(o.layersPerEpoch))),
+			log.Uint64("safe_layer_id", uint64(sl)),
+			log.Uint64("safe_epoch_id", uint64(safeEp)))
 		o.lock.Unlock()
 		return nil, errNoContextualBlocks
 	}

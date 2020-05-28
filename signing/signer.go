@@ -20,6 +20,11 @@ func NewPublicKey(pub []byte) *PublicKey {
 	return &PublicKey{pub}
 }
 
+// Field returns a log field. Implements the LoggableField interface.
+func (p *PublicKey) Field() log.Field {
+	return log.String("public_key", p.ShortString())
+}
+
 // Bytes returns the public key as byte array
 func (p *PublicKey) Bytes() []byte {
 	// Prevent segfault if unset
@@ -29,7 +34,7 @@ func (p *PublicKey) Bytes() []byte {
 	return []byte{}
 }
 
-// String returns the public key as an hex representation string
+// String returns the public key as a hex representation string
 func (p *PublicKey) String() string {
 	return util.Bytes2Hex(p.Bytes())
 }

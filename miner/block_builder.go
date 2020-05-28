@@ -289,15 +289,15 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.ATXID, eligibil
 	bl.Initialize()
 
 	t.Log.Event().Info("block created",
-		log.BlockID(bl.ShortString()),
-		log.LayerID(uint64(bl.LayerIndex)),
-		log.EpochID(uint64(bl.LayerIndex.GetEpoch(t.layersPerEpoch))),
-		log.String("miner_id", bl.MinerID().String()),
+		bl.ID(),
+		bl.LayerIndex,
+		bl.LayerIndex.GetEpoch(t.layersPerEpoch),
+		bl.MinerID(),
 		log.Int("tx_count", len(bl.TxIDs)),
 		log.Int("atx_count", len(bl.ATXIDs)),
 		log.Int("view_edges", len(bl.ViewEdges)),
 		log.Int("vote_count", len(bl.BlockVotes)),
-		log.AtxID(bl.ATXID.ShortString()),
+		bl.ATXID,
 		log.Uint32("eligibility_counter", bl.EligibilityProof.J),
 	)
 	return bl, nil
