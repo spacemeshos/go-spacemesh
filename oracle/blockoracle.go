@@ -76,8 +76,8 @@ func (bo *MinerBlockOracle) BlockEligible(layerID types.LayerID) (types.ATXID, [
 	proofs := bo.eligibilityProofs[layerID]
 	bo.eligibilityMutex.RUnlock()
 	bo.log.With().Info("eligible for blocks in layer",
-		log.NodeID(bo.nodeID.ShortString()),
-		layerID.Field(),
+		bo.nodeID,
+		layerID,
 		log.Int("num_blocks", len(proofs)))
 
 	return bo.atxID, proofs, nil
