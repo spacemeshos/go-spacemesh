@@ -331,8 +331,8 @@ func (s *Syncer) synchronise() {
 
 func (s *Syncer) handleWeaklySynced() {
 	s.With().Info("Node is weakly synced",
-		s.LatestLayer().Field(),
-		s.GetCurrentLayer().Field())
+		s.LatestLayer(),
+		s.GetCurrentLayer())
 
 	// handle all layers from processed+1 to current -1
 	s.handleLayersTillCurrent()
