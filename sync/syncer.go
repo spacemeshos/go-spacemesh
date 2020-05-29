@@ -542,7 +542,7 @@ func (s *Syncer) syncLayer(layerID types.LayerID, blockIds []types.BlockID) ([]*
 	if res, err := s.blockQueue.addDependencies(layerID, blockIds, foo); err != nil {
 		return nil, fmt.Errorf("failed adding layer %v blocks to queue %v", layerID, err)
 	} else if res == false {
-		s.With().Info("no missing blocks for layer", layerID.Field())
+		s.With().Info("no missing blocks for layer", layerID)
 		return s.LayerBlocks(layerID)
 	}
 
