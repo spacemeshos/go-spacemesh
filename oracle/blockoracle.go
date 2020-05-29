@@ -145,7 +145,7 @@ func (bo *MinerBlockOracle) calcEligibilityProofs(epochNumber types.EpochID) err
 	// Pretty-print the number of blocks per eligible layer
 	strs := []string{}
 	for k := range keys {
-		strs = append(strs, fmt.Sprintf("Layer %d: %d", uint64(k), keys[k]))
+		strs = append(strs, fmt.Sprintf("Layer %d: %d", keys[k], len(bo.eligibilityProofs[k])))
 	}
 
 	bo.log.With().Info("eligibility for blocks in epoch",
