@@ -634,9 +634,9 @@ func (s *Syncer) validateBlockView(blk *types.Block) bool {
 	defer close(ch)
 	foo := func(res bool) error {
 		s.With().Info("view validated",
-			log.BlockID(blk.ID().String()),
+			blk.ID(),
 			log.Bool("result", res),
-			log.LayerID(uint64(blk.LayerIndex)))
+			blk.LayerIndex)
 		ch <- res
 		return nil
 	}
@@ -645,8 +645,8 @@ func (s *Syncer) validateBlockView(blk *types.Block) bool {
 		return false
 	} else if res == false {
 		s.With().Debug("no missing blocks in view",
-			log.BlockID(blk.ID().String()),
-			log.LayerID(uint64(blk.LayerIndex)))
+			blk.ID(),
+			blk.LayerIndex)
 		return true
 	}
 

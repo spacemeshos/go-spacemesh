@@ -85,50 +85,49 @@ func (vq *blockQueue) handleBlocks(bjb fetchJob) {
 }
 
 func (vq *blockQueue) handleBlock(id types.Hash32, block *types.Block) {
-	vq.With().Info("start handling",
-		log.BlockID(block.ID().String()), log.MinerID(block.MinerID().ShortString()))
+	vq.With().Info("start handling", block.ID(), block.MinerID())
 	if err := vq.fastValidation(block); err != nil {
-		vq.Error("block validation failed", log.BlockID(block.ID().String()), log.Err(err))
+		vq.Error("block validation failed", block.ID(), log.Err(err))
 		vq.updateDependencies(id, false)
 		return
 	}
-	vq.With().Info("finish fast validation", log.BlockID(block.ID().String()))
+	vq.With().Info("finish fast validation", block.ID())
 	vq.handleBlockDependencies(block)
 }
 
 // handles new block dependencies
 // if there are unknown blocks in the view they are added to the fetch queue
 func (vq *blockQueue) handleBlockDependencies(blk *types.Block) {
-	vq.With().Debug("handle dependencies", log.BlockID(blk.ID().String()))
+	vq.With().Debug("handle dependencies", blk.ID())
 	res, err := vq.addDependencies(blk.ID(), blk.ViewEdges, vq.finishBlockCallback(blk))
 
 	if err != nil {
 		vq.updateDependencies(blk.Hash32(), false)
-		vq.With().Error("failed to add dependencies", log.BlockID(blk.ID().String()), log.Err(err))
+		vq.With().Error("failed to add dependencies", blk.ID(), log.Err(err))
 		return
 	}
 
 	if res == false {
-		vq.With().Debug("pending done", log.BlockID(blk.ID().String()))
+		vq.With().Debug("pending done", blk.ID())
 		vq.updateDependencies(blk.Hash32(), true)
 	}
-	vq.With().Debug("added dependencies to queue", log.BlockID(blk.ID().String()))
+	vq.With().Debug("added dependencies to queue", blk.ID())
 }
 
 func (vq *blockQueue) finishBlockCallback(block *types.Block) func(res bool) error {
 	return func(res bool) error {
 		if !res {
-			vq.With().Info("finished block, invalid", log.BlockID(block.ID().String()))
+			vq.With().Info("finished block, invalid", block.ID())
 			return nil
 		}
 
-		//data availability
+		// data availability
 		txs, atxs, err := vq.dataAvailability(block)
 		if err != nil {
 			return fmt.Errorf("DataAvailabilty failed for block: %v errmsg: %v", block.ID().String(), err)
 		}
 
-		//validate block's votes
+		// validate block's votes
 		if valid, err := validateVotes(block, vq.ForBlockInView, vq.Hdist, vq.Log); valid == false || err != nil {
 			return fmt.Errorf("validate votes failed for block: %s errmsg: %s", block.ID().String(), err)
 		}
@@ -139,7 +138,7 @@ func (vq *blockQueue) finishBlockCallback(block *types.Block) func(res bool) err
 			return err
 		}
 
-		//run late block through tortoise only if its new to us
+		// run late block through tortoise only if its new to us
 		if (block.Layer() <= vq.ProcessedLayer() || block.Layer() == vq.getValidatingLayer()) && err != mesh.ErrAlreadyExist {
 			vq.HandleLateBlock(block)
 		}
@@ -222,7 +221,7 @@ func (vq *blockQueue) addDependencies(jobID interface{}, blks []types.BlockID, f
 		} else {
 			//	check database
 			if _, err := vq.GetBlock(id); err != nil {
-				//add unknown block to queue
+				// add unknown block to queue
 				vq.reverseDepMap[bid] = append(vq.reverseDepMap[bid], jobID)
 				vq.With().Debug("adding unknown block to pending map",
 					log.BlockID(id.String()),
@@ -233,16 +232,16 @@ func (vq *blockQueue) addDependencies(jobID interface{}, blks []types.BlockID, f
 		}
 	}
 
-	//if no missing dependencies return
+	// if no missing dependencies return
 	if len(dependencies) == 0 {
 		vq.Unlock()
 		return false, finishCallback(true)
 	}
 
-	//add callback to job
+	// add callback to job
 	vq.callbacks[jobID] = finishCallback
 
-	//add dependencies to job
+	// add dependencies to job
 	vq.depMap[jobID] = dependencies
 
 	// addToPending needs the mutex so we must release before
