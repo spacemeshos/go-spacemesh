@@ -31,7 +31,7 @@ func (p *PublicKey) Bytes() []byte {
 	if p != nil {
 		return p.pub
 	}
-	return []byte{}
+	return nil
 }
 
 // String returns the public key as a hex representation string
