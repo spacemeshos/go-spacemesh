@@ -132,25 +132,25 @@ func (bo *MinerBlockOracle) calcEligibilityProofs(epochNumber types.EpochID) err
 	bo.eligibilityMutex.RLock()
 
 	// Sort the layer map so we can print the layer data in order
-	keys := []types.LayerID{}
+	keys := make([]types.LayerID, len(bo.eligibilityProofs))
+	i := 0
 	for k := range bo.eligibilityProofs {
-		if len(bo.eligibilityProofs[k]) > 0 {
-			keys = append(keys, k)
-		}
+		keys[i] = k
+		i++
 	}
 	sort.Slice(keys, func(i, j int) bool {
 		return uint64(keys[i]) < uint64(keys[j])
 	})
 
 	// Pretty-print the number of blocks per eligible layer
-	strs := []string{}
+	var strs []string
 	for k := range keys {
-		strs = append(strs, fmt.Sprintf("Layer %d: %d", keys[k], len(bo.eligibilityProofs[k])))
+		strs = append(strs, fmt.Sprintf("Layer %d: %d", keys[k], len(bo.eligibilityProofs[keys[k]])))
 	}
 
 	bo.log.With().Info("eligibility for blocks in epoch",
-		log.NodeID(bo.nodeID.ShortString()),
-		log.EpochID(uint64(epochNumber)),
+		bo.nodeID,
+		epochNumber,
 		log.Uint32("total_num_blocks", numberOfEligibleBlocks),
 		log.Int("num_layers_eligible", len(bo.eligibilityProofs)),
 		log.String("layers_and_num_blocks", strings.Join(strs, ", ")))
