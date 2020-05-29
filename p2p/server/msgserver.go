@@ -220,7 +220,8 @@ func (p *MessageServer) SendRequest(msgType MessageType, payload []byte, address
 		p.With().Error("sending message failed",
 			log.Uint32("msg_type", uint32(msgType)),
 			log.String("recipient", address.String()),
-			log.Int("msglen", len(payload)), log.Err(sendErr))
+			log.Int("msglen", len(payload)),
+			log.Err(sendErr))
 		p.removeFromPending(reqID)
 		return sendErr
 	}
