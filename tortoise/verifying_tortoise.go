@@ -2,12 +2,12 @@ package tortoise
 
 import (
 	"errors"
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
-const MaxExcpetionList = 100
+const MaxExceptionList = 100
 
-//
 //We keep a table that records, for each block, its votes about every previous block
 //We keep a vector containing our vote totals (positive and negative) for every previous block
 //When a new block arrives, we look up the block it points to in our table,
@@ -20,25 +20,60 @@ type opinion struct {
 }
 
 type blockDataProvider interface {
-	GetBlock(id types.BlockID) *types.Block
+	GetBlock(id types.BlockID) (*types.Block, error)
+	LayerBlockIds(l types.LayerID) (ids []types.BlockID, err error)
+}
+
+type hareResultsProvider interface {
+	GetResult(lid types.LayerID) ([]types.BlockID, error)
 }
 
 type turtle struct {
 	bdp          blockDataProvider
+	hrp          hareResultsProvider
 	Last         types.LayerID
 	avgLayerSize int
 
-	goodBlocks  map[types.BlockID]struct{}
+	goodBlocks      map[types.BlockID]struct{}
+	goodBlocksArr   []types.BlockID
+	goodBlocksIndex map[types.BlockID]int
+
 	inputVector map[types.BlockID]vec
 
 	blocksToBlocks      []opinion
 	blocksToBlocksIndex map[types.BlockID]int
+	indexToLayerID      map[int]types.LayerID
 
 	totalVotes map[types.BlockID]vec
 }
 
+func NewTurtle(bdp blockDataProvider, hrp hareResultsProvider, avgLayerSize int) *turtle {
+	t := &turtle{
+		bdp:                 bdp,
+		hrp:                 hrp,
+		Last:                0,
+		avgLayerSize:        avgLayerSize,
+		goodBlocks:          make(map[types.BlockID]struct{}),
+		goodBlocksArr:       make([]types.BlockID, 0, 10),
+		goodBlocksIndex:     make(map[types.BlockID]int),
+		inputVector:         make(map[types.BlockID]vec),
+		blocksToBlocks:      make([]opinion, 0, 1),
+		blocksToBlocksIndex: make(map[types.BlockID]int),
+		indexToLayerID:      make(map[int]types.LayerID),
+		totalVotes:          make(map[types.BlockID]vec),
+	}
+	return t
+}
+
 func (t *turtle) init(genesisBlock types.BlockID) {
-	t.goodBlocks[genesisBlock] = struct{}{}
+	t.blocksToBlocks = append(t.blocksToBlocks, opinion{
+		id:            genesisBlock,
+		blocksOpinion: make(map[types.BlockID]vec),
+	})
+	t.blocksToBlocksIndex[genesisBlock] = 0
+	t.totalVotes[genesisBlock] = support
+	t.goodBlocksArr[0] = genesisBlock
+	t.goodBlocksIndex[genesisBlock] = 0
 }
 
 func convertToArray(m map[types.BlockID]struct{}) []types.BlockID {
@@ -52,7 +87,7 @@ func convertToArray(m map[types.BlockID]struct{}) []types.BlockID {
 }
 
 func (t *turtle) BaseBlock() (types.BlockID, [][]types.BlockID, error) {
-	for i := len(t.blocksToBlocks); i < 0; i-- {
+	for i := len(t.blocksToBlocks) - 1; i >= 0; i-- {
 		afn, err := t.opinionMatches(t.blocksToBlocks[i])
 		if err != nil {
 			continue
@@ -75,6 +110,7 @@ func (t *turtle) opinionMatches(opinion2 opinion) ([]map[types.BlockID]struct{},
 			continue
 		}
 
+		// todo: it should be identical?
 		if totalOpinion[0] > totalOpinion[1] && !(o[0] > o[1]) {
 			f[b] = struct{}{}
 			continue
@@ -88,11 +124,11 @@ func (t *turtle) opinionMatches(opinion2 opinion) ([]map[types.BlockID]struct{},
 			n[b] = struct{}{}
 		}
 
-		//TODO - Add orphan blocks as neutral as well, or after hare results add them as for/against.
+		//TODO - Add orphan blocks 0as neutral as well, or after hare results add them as for/against.
 
 	}
 
-	if len(a)+len(f)+len(n) > MaxExcpetionList {
+	if len(a)+len(f)+len(n) > MaxExceptionList {
 		return nil, errors.New(" matches too much exceptions")
 	}
 
@@ -113,11 +149,11 @@ func (t *turtle) processBlock(block *types.Block) error {
 		panic("base block not in array")
 	}
 
-	baseBlock := t.blocksToBlocks[baseidx]
+	baseBlockOpinion := t.blocksToBlocks[baseidx]
 
 	blockid := block.ID()
 
-	for b, v := range baseBlock.blocksOpinion {
+	for b, v := range baseBlockOpinion.blocksOpinion {
 		t.totalVotes[b] = t.totalVotes[b].Add(v.Multiply(t.BlockWeight(blockid, b)))
 	}
 
@@ -128,7 +164,17 @@ func (t *turtle) processBlock(block *types.Block) error {
 		t.totalVotes[b] = t.totalVotes[b].Add(against.Multiply(t.BlockWeight(blockid, b)))
 	}
 
+	blocksOpinion := make(map[types.BlockID]vec)
+
+	for b, v := range t.totalVotes {
+		blocksOpinion[b] = v
+	}
+
 	//TODO: neutral ?
+
+	t.blocksToBlocks = append(t.blocksToBlocks, opinion{id: blockid, blocksOpinion: blocksOpinion})
+	t.blocksToBlocksIndex[blockid] = len(t.blocksToBlocks) - 1
+	t.totalVotes[blockid] = abstain
 
 	return nil
 }
@@ -137,11 +183,39 @@ func (t *turtle) processBlock(block *types.Block) error {
 //returns the old pbase and new pbase after taking into account the blocks votes
 func (t *turtle) HandleIncomingLayer(newlyr *types.Layer) (types.LayerID, types.LayerID) {
 
-	//start := time.Now()
+	//1 Mark the genesis block as “good”
+	//2 Go over all blocks, in order.
+	//	For block i , mark it “good” if (1) its base block is marked good and (2) its exception list consists only of blocks that appear after the base block and are consistent with the input vote vector.
+	//3 Count the votes for the input vote vector by summing the weight of the good blocks (of course, each good block’s weight only counts for the blocks preceding it).
+	//4 Declare the vote vector “verified” up to position k if the total weight exceeds the confidence threshold in all positions up to k .
 
-	if newlyr.Index() > t.Last {
-		t.Last = newlyr.Index()
+	// took from previous tortoise
+	//if newlyr.Index() > t.Last {
+	//	t.Last = newlyr.Index()
+	//}
+
+	// insert input vector from hare
+
+	if newlyr.Index() != genesis {
+		blocks := newlyr.Blocks()
+		hareBlks, err := t.hrp.GetResult(newlyr.Index())
+		if err != nil {
+			//TODO : put neutral
+		}
+	lyrblk:
+		for _, blk := range blocks {
+			blkid := blk.ID()
+			for _, hblk := range hareBlks {
+				if blkid == hblk {
+					t.inputVector[hblk] = support
+					continue lyrblk
+				}
+				t.inputVector[hblk] = against
+			}
+		}
 	}
+
+	// update tables with blocks
 
 	for _, b := range newlyr.Blocks() {
 		err := t.processBlock(b)
@@ -154,168 +228,75 @@ func (t *turtle) HandleIncomingLayer(newlyr *types.Layer) (types.LayerID, types.
 		// special case genesis ?
 	}
 
+	// Mark good blocks
+
 markingLoop:
 	for _, b := range newlyr.Blocks() {
-		if _, good := t.goodBlocks[b.BaseBlock]; !good {
+		if _, good := t.goodBlocksIndex[b.BaseBlock]; !good {
 			continue markingLoop
 		}
-		baseBlock := t.bdp.GetBlock(b.BaseBlock)
+		baseBlock, err := t.bdp.GetBlock(b.BaseBlock)
+		if err != nil {
+			panic(fmt.Sprint("block not found ", b.BaseBlock, "err", err))
+		}
+
 		for exfor := range b.ForDiff {
-			if t.bdp.GetBlock(b.ForDiff[exfor]).LayerIndex < baseBlock.LayerIndex {
+			exblk, err := t.bdp.GetBlock(b.ForDiff[exfor])
+			if err != nil {
+				panic(fmt.Sprint("err , ", err))
+			}
+			if exblk.LayerIndex < baseBlock.LayerIndex {
+				continue markingLoop
+			}
+			if t.inputVector[exblk.ID()] != support {
 				continue markingLoop
 			}
 		}
 
 		for exag := range b.AgainstDiff {
-			if t.bdp.GetBlock(b.AgainstDiff[exag]).LayerIndex < baseBlock.LayerIndex {
+			exblk, err := t.bdp.GetBlock(b.AgainstDiff[exag])
+			if err != nil {
+				panic(fmt.Sprint("err , ", err))
+			}
+			if exblk.LayerIndex < baseBlock.LayerIndex {
+				continue markingLoop
+			}
+			if t.inputVector[exblk.ID()] != against {
 				continue markingLoop
 			}
 		}
 
 		for exneu := range b.NeutralDiff {
-			if t.bdp.GetBlock(b.NeutralDiff[exneu]).LayerIndex < baseBlock.LayerIndex {
+			exblk, err := t.bdp.GetBlock(b.AgainstDiff[exneu])
+			if err != nil {
+				panic(fmt.Sprint("err , ", err))
+			}
+			if exblk.LayerIndex < baseBlock.LayerIndex {
+				continue markingLoop
+			}
+			if t.inputVector[exblk.ID()] != abstain {
 				continue markingLoop
 			}
 		}
 
-		// TODO : Check that it is consistent with the input vector (?)
-		vote := globalOpinion(t.totalVotes[b.ID()], t.avgLayerSize, float64(t.Last-b.LayerIndex))
-
-		t.goodBlocks[b.ID()] = struct{}{}
+		//vote := globalOpinion(t.totalVotes[b.ID()], t.avgLayerSize, float64(1))
+		if t.inputVector[b.ID()] == support {
+			t.goodBlocksArr = append(t.goodBlocksArr, b.ID())
+			t.goodBlocksIndex[b.ID()] = len(t.goodBlocksArr) - 1
+		}
 	}
 
-	//		complete := true
-	//		for idx := ni.PBase.Layer(); idx < j; idx++ {
-	//			layer, _ := ni.db.LayerBlockIds(idx) //todo handle error
-	//			bids := make([]types.BlockID, 0, ni.AvgLayerSize)
-	//			for _, bid := range layer {
-	//				blt := blockIDLayerTuple{BlockID: bid, LayerID: idx}
-	//				//if bid is not in p's view.
-	//				//add negative vote multiplied by the amount of blocks in the view
-	//				//explicit votes against (not in view )
-	//				if _, found := view[bid]; idx >= ni.PBase.Layer() && !found {
-	//					ni.TTally[p][blt] = sumNodesInView(lCntr, idx+1, p.Layer())
-	//				}
-	//
-	//				if val, found := ni.TVote[p]; !found || val == nil {
-	//					ni.TVote[p] = make(map[blockIDLayerTuple]vec)
-	//				}
-	//
-	//				if vote := globalOpinion(ni.TTally[p][blt], ni.AvgLayerSize, float64(p.LayerID-idx)); vote != abstain {
-	//					ni.TVote[p][blt] = vote
-	//					if vote == support {
-	//						bids = append(bids, bid)
-	//					}
-	//				} else {
-	//					ni.TVote[p][blt] = vote
-	//					ni.logger.Debug(" %s no opinion on %s %s %s", p, bid, idx, vote, ni.TTally[p][blt])
-	//					complete = false //not complete
-	//				}
-	//			}
+	//todo: Verify good blocks
+	//3 Count the votes for the input vote vector
+	// by summing the weight of the good blocks
+	// (of course, each good block’s weight only counts for the blocks preceding it).
 
-	//t.mutex.Lock()
-	//defer trtl.mutex.Unlock()
-	//oldPbase := trtl.latestComplete()
-	//trtl.ninjaTortoise.handleIncomingLayer(ll)
-	//newPbase := trtl.latestComplete()
-	//updateMetrics(trtl, ll)
-	//return oldPbase, newPbase
-	//
-	//ni.logger.With().Info("tortoise update tables", log.LayerID(uint64(newlyr.Index())), log.Int("n_blocks", len(newlyr.Blocks())))
-	//start := time.Now()
-	//if newlyr.Index() > ni.Last {
-	//	ni.Last = newlyr.Index()
-	//}
-	//
-	//defer ni.evictOutOfPbase()
-	//ni.processBlocks(newlyr)
-	//
-	//if newlyr.Index() == genesis {
-	//	ni.handleGenesis(newlyr)
-	//	return
-	//}
-	//
-	//l := ni.findMinimalNewlyGoodLayer(newlyr)
-	////from minimal newly good pattern to current layer
-	////update pattern tally for all good layers
-	//for j := l; j > 0 && j < newlyr.Index(); j++ {
-	//	p, gfound := ni.TGood[j]
-	//	if gfound {
-	//
-	//		//find bottom of window
-	//		windowStart := getBottomOfWindow(newlyr.Index(), ni.PBase.Layer(), ni.Hdist)
-	//
-	//		//init p's tally to pBase tally
-	//		ni.initTallyToBase(ni.PBase, p, windowStart)
-	//
-	//		view := make(map[types.BlockID]struct{})
-	//		lCntr := make(map[types.LayerID]int)
-	//		correctionMap, effCountMap, getCrrEffCnt := ni.getCorrEffCounter()
-	//		foo := func(block *types.Block) (bool, error) {
-	//			view[block.ID()] = struct{}{} //all blocks in view
-	//			lCntr[block.Layer()]++        //amount of blocks for each layer in view
-	//			getCrrEffCnt(block)           //calc correction and eff count
-	//			return false, nil
-	//		}
-	//
-	//		tp := ni.TPattern[p]
-	//		ni.db.ForBlockInView(tp, windowStart, foo)
-	//
-	//		//add corrected implicit votes
-	//		ni.updatePatternTally(p, correctionMap, effCountMap)
-	//
-	//		//add explicit votes
-	//		addPtrnVt := ni.addPatternVote(p, view)
-	//		for bl := range view {
-	//			addPtrnVt(bl)
-	//		}
-	//
-	//		complete := true
-	//		for idx := ni.PBase.Layer(); idx < j; idx++ {
-	//			layer, _ := ni.db.LayerBlockIds(idx) //todo handle error
-	//			bids := make([]types.BlockID, 0, ni.AvgLayerSize)
-	//			for _, bid := range layer {
-	//				blt := blockIDLayerTuple{BlockID: bid, LayerID: idx}
-	//				//if bid is not in p's view.
-	//				//add negative vote multiplied by the amount of blocks in the view
-	//				//explicit votes against (not in view )
-	//				if _, found := view[bid]; idx >= ni.PBase.Layer() && !found {
-	//					ni.TTally[p][blt] = sumNodesInView(lCntr, idx+1, p.Layer())
-	//				}
-	//
-	//				if val, found := ni.TVote[p]; !found || val == nil {
-	//					ni.TVote[p] = make(map[blockIDLayerTuple]vec)
-	//				}
-	//
-	//				if vote := globalOpinion(ni.TTally[p][blt], ni.AvgLayerSize, float64(p.LayerID-idx)); vote != abstain {
-	//					ni.TVote[p][blt] = vote
-	//					if vote == support {
-	//						bids = append(bids, bid)
-	//					}
-	//				} else {
-	//					ni.TVote[p][blt] = vote
-	//					ni.logger.Debug(" %s no opinion on %s %s %s", p, bid, idx, vote, ni.TTally[p][blt])
-	//					complete = false //not complete
-	//				}
-	//			}
-	//
-	//			if idx > ni.PBase.Layer() {
-	//				ni.updatePatSupport(p, bids, idx)
-	//			}
-	//		}
-	//
-	//		//update correction vectors after vote count
-	//		ni.updateCorrectionVectors(p, windowStart)
-	//
-	//		// update completeness of p
-	//		if _, found := ni.TComplete[p]; complete && !found {
-	//			ni.TComplete[p] = struct{}{}
-	//			ni.PBase = p
-	//			ni.logger.Info("found new complete and good pattern for layer %d pattern %d with %d support ", p.Layer().Uint64(), p.id, ni.TSupport[p])
-	//		}
-	//	}
-	//}
-	//ni.logger.With().Info(fmt.Sprintf("tortoise finished layer in %v", time.Since(start)), log.LayerID(uint64(newlyr.Index())), log.Uint64("pbase", uint64(ni.PBase.Layer())))
-	//return
+	for _, gb := range t.goodBlocksArr {
+		idx := t.blocksToBlocksIndex[gb]
+		opmap := t.blocksToBlocks[idx]
 
+		opmap.blocksOpinion
+	}
+
+	return 0, 0
 }
