@@ -287,7 +287,7 @@ def print_layer_stat(layers):
 # TODO this can be a util function
 def get_latest_layer(deployment):
     layers = get_layers(deployment)
-    layers.sort(reverse=True)
+    layers.sort()
     if len(layers) == 0:
         return 0
     return layers[0]
