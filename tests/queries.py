@@ -107,9 +107,11 @@ def get_blocks_and_layers(namespace, pod_name, find_fails=False):
 
 
 def get_layers(namespace, find_fails=True):
-    layers = get_all_msg_containing(namespace, namespace, "release tick", find_fails)
-    ids = [int(x.layer_id) for x in layers]
-    return ids
+    tick_msgs = get_all_msg_containing(namespace, namespace, "release tick", find_fails)
+    layers = defaultdict(int)
+    for msg in tick_msgs:
+        layers[msg.layer_id] += 1
+    return layers
 
 
 # ============================== END MESSAGE CONTENT ==================================
@@ -285,17 +287,16 @@ def print_layer_stat(layers):
 
 
 # TODO this can be a util function
-def get_latest_layer(deployment):
+def get_latest_layer(deployment, num_miners):
     layers = get_layers(deployment)
-    layers.sort()
-    if len(layers) == 0:
-        return 0
-    return layers[0]
+    for layer, node_cnt in sorted(layers.items(), key=lambda t: -t[0]):
+        if node_cnt >= num_miners:
+            return layer
 
 
-def wait_for_latest_layer(deployment, min_layer_id, layers_per_epoch):
+def wait_for_latest_layer(deployment, min_layer_id, layers_per_epoch, num_miners):
     while True:
-        lyr = get_latest_layer(deployment)
+        lyr = get_latest_layer(deployment, num_miners)
         print("current layer " + str(lyr))
         if lyr >= min_layer_id and lyr % layers_per_epoch == 0:
             return lyr

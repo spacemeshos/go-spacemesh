@@ -37,7 +37,7 @@ def test_add_node_validate_atx(init_session, setup_network):
     # wait for 2 epochs
     last_layer = epochs_to_sleep * layers_per_epoch
     print(f"wait until second epoch to layer {last_layer}")
-    _ = q.wait_for_latest_layer(init_session, last_layer, layers_per_epoch)
+    _ = q.wait_for_latest_layer(init_session, last_layer, layers_per_epoch, num_miners)
 
     # ========================== epoch i+2 ==========================
     curr_epoch += epochs_to_sleep
@@ -50,7 +50,7 @@ def test_add_node_validate_atx(init_session, setup_network):
     # wait for next epoch
     last_layer = layers_per_epoch * (curr_epoch + 1)
     print(f"wait until next epoch to layer {last_layer}")
-    _ = q.wait_for_latest_layer(init_session, last_layer, layers_per_epoch)
+    _ = q.wait_for_latest_layer(init_session, last_layer, layers_per_epoch, num_miners)
 
     # ========================== epoch i+3 ==========================
     curr_epoch += 1
@@ -69,7 +69,7 @@ def test_add_node_validate_atx(init_session, setup_network):
     prev_layer = last_layer
     last_layer = layers_per_epoch * (curr_epoch + 1)
     print(f"wait until next epoch to layer {last_layer}")
-    _ = q.wait_for_latest_layer(init_session, last_layer, layers_per_epoch)
+    _ = q.wait_for_latest_layer(init_session, last_layer, layers_per_epoch, num_miners)
 
     # ========================== epoch i+4 ==========================
     curr_epoch += 1
@@ -87,7 +87,7 @@ def test_add_node_validate_atx(init_session, setup_network):
 
     last_layer = layers_per_epoch * (curr_epoch + 2)
     print(f"wait 2 epochs for layer {last_layer}")
-    _ = q.wait_for_latest_layer(init_session, last_layer, layers_per_epoch)
+    _ = q.wait_for_latest_layer(init_session, last_layer, layers_per_epoch, num_miners)
 
     # ========================== epoch i+6 ==========================
     curr_epoch += 2
