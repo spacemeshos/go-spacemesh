@@ -87,9 +87,9 @@ def test_mining(init_session, setup_network):
     epochs = 5
     last_layer = epochs * layers_per_epoch
 
-    layer_reached = queries.wait_for_latest_layer(testconfig["namespace"], last_layer, layers_per_epoch)
-
     total_pods = len(setup_network.clients.pods) + len(setup_network.bootstrap.pods)
+
+    layer_reached = queries.wait_for_latest_layer(testconfig["namespace"], last_layer, layers_per_epoch, total_pods)
 
     tts = 50
     sleep_print_backwards(tts)
