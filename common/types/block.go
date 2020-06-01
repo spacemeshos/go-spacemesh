@@ -11,9 +11,6 @@ import (
 	"sort"
 )
 
-// AtxsPerBlockLimit indicates the maximum number of atxs a block can reference
-const AtxsPerBlockLimit = 100
-
 // BlockID is a 20-byte sha256 sum of the serialized block, used to identify it.
 type BlockID Hash20
 

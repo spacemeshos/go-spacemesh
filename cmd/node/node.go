@@ -524,8 +524,8 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 		Hdist:           app.Config.Hdist,
 		AtxsLimit:       app.Config.AtxsPerBlock}
 
-	if app.Config.AtxsPerBlock > types.AtxsPerBlockLimit { // validate limit
-		app.log.Panic("Number of atxs per block required is bigger than the limit atxsPerBlock=%v limit=%v", app.Config.AtxsPerBlock, types.AtxsPerBlockLimit)
+	if app.Config.AtxsPerBlock > miner.AtxsPerBlockLimit { // validate limit
+		app.log.Panic("Number of atxs per block required is bigger than the limit atxsPerBlock=%v limit=%v", app.Config.AtxsPerBlock, miner.AtxsPerBlockLimit)
 	}
 
 	// we can't have an epoch offset which is greater/equal than the number of layers in an epoch

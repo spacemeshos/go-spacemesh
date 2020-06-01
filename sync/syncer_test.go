@@ -1588,7 +1588,7 @@ func TestSyncer_BlockSyntacticValidation(t *testing.T) {
 	_, _, err := s.blockSyntacticValidation(b)
 	r.EqualError(err, errDupTx.Error())
 
-	for i := 0; i <= types.AtxsPerBlockLimit; i++ {
+	for i := 0; i <= miner.AtxsPerBlockLimit; i++ {
 		b.ATXIDs = append(b.ATXIDs, atx1)
 	}
 	_, _, err = s.blockSyntacticValidation(b)

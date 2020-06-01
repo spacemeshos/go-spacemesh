@@ -164,7 +164,7 @@ func (p *Protocol) handlePQ() {
 		p.Log.With().Debug("new_gossip_message_relay",
 			log.String("from", m.Sender().String()),
 			log.String("protocol", m.Protocol()),
-			h.Field("hash")
+			h.Field("hash"))
 		p.propagateMessage(m.Message(), h, m.Protocol(), m.Sender())
 	}
 }

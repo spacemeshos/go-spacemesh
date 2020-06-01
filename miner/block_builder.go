@@ -26,6 +26,9 @@ const MaxTransactionsPerBlock = 200 //todo: move to config (#1924)
 const defaultGasLimit = 10
 const defaultFee = 1
 
+// AtxsPerBlockLimit indicates the maximum number of atxs a block can reference
+const AtxsPerBlockLimit = 100
+
 // IncomingTxProtocol is the protocol identifier for tx received by gossip that is used by the p2p
 const IncomingTxProtocol = "TxGossip"
 
