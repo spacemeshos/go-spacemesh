@@ -1025,20 +1025,37 @@ func Test_NodeInfo(t *testing.T) {
 func TestNeighborhood_ReportConnectionResult(t *testing.T) {
 	const PeerNum = 10
 	n := p2pTestNoStart(t, configWithPort(0))
-	goodcount := 0
-	attemptcount := 0
+	var goodcount uint32 = 0
+	var attemptcount uint32 = 0
+	var getConnCount uint32 = 0
+
+	resetCounters := func() {
+		goodcount = 0
+		attemptcount = 0
+		getConnCount = 0
+	}
+
+	atomicIncOne := func(u32 *uint32) {
+		atomic.AddUint32(u32, 1)
+	}
 
 	ps := &discovery.MockPeerStore{}
 
 	ps.GoodFunc = func(key p2pcrypto.PublicKey) {
-		goodcount++
+		atomicIncOne(&goodcount)
 	}
 
 	ps.AttemptFunc = func(key p2pcrypto.PublicKey) {
-		attemptcount++
+		atomicIncOne(&attemptcount)
 	}
 
 	rnds := node.GenerateRandomNodesData(PeerNum)
+
+	for r := range rnds {
+		if rnds[r].PublicKey() == n.LocalNode().PublicKey() {
+			rnds[r] = node.GenerateRandomNodeData()
+		}
+	}
 
 	ps.SelectPeersFunc = func(ctx context.Context, qty int) []*node.Info {
 		return rnds
@@ -1049,20 +1066,23 @@ func TestNeighborhood_ReportConnectionResult(t *testing.T) {
 	cm := &cpoolMock{}
 
 	cm.f = func(address inet.Addr, pk p2pcrypto.PublicKey) (connection net.Connection, e error) {
+		atomicIncOne(&getConnCount)
 		return nil, errors.New("coudln't create connection")
 	}
 
 	n.cPool = cm
 
-	//_, disc := n.SubscribePeerEvents()
+	got := n.getMorePeers(PeerNum)
+	require.Equal(t, 0, got, "getMorePeers result mismatch")
+	require.Equal(t, uint32(PeerNum), attemptcount, "attempt count mismatch")
+	require.Equal(t, uint32(PeerNum), getConnCount, "GetConnection count mismatch")
 
-	n.getMorePeers(PeerNum)
-	require.Equal(t, attemptcount, PeerNum)
+	resetCounters()
 
-	goodlist := make(map[p2pcrypto.PublicKey]struct{})
+	goodlist := sync.Map{}
 
 	cm.f = func(address inet.Addr, pk p2pcrypto.PublicKey) (connection net.Connection, e error) {
-		if _, ok := goodlist[pk]; ok {
+		if _, ok := goodlist.Load(pk); ok {
 			return net.NewConnectionMock(pk), nil
 		}
 		return nil, errors.New("not found")
@@ -1073,8 +1093,8 @@ func TestNeighborhood_ReportConnectionResult(t *testing.T) {
 	realnodeinfo := &node.Info{ID: realnode.lNode.PublicKey().Array(), IP: inet.IPv4zero}
 	realnode2info := &node.Info{ID: realnode2.lNode.PublicKey().Array(), IP: inet.IPv4zero}
 
-	goodlist[realnode.lNode.PublicKey()] = struct{}{}
-	goodlist[realnode2.lNode.PublicKey()] = struct{}{}
+	goodlist.Store(realnode.lNode.PublicKey(), struct{}{})
+	goodlist.Store(realnode2.lNode.PublicKey(), struct{}{})
 
 	newrnds := node.GenerateRandomNodesData(PeerNum - 2)
 
@@ -1082,10 +1102,11 @@ func TestNeighborhood_ReportConnectionResult(t *testing.T) {
 		return append([]*node.Info{realnodeinfo, realnode2info}, newrnds...)
 	}
 
-	n.getMorePeers(PeerNum)
+	got = n.getMorePeers(PeerNum)
 
-	require.Equal(t, 2, goodcount)
-	require.Equal(t, attemptcount, PeerNum*2)
+	require.Equal(t, 2, got)
+	require.Equal(t, uint32(2), goodcount)
+	require.Equal(t, uint32(PeerNum), attemptcount)
 }
 
 func TestSwarm_SendMessage(t *testing.T) {
