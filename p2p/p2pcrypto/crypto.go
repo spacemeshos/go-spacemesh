@@ -23,6 +23,7 @@ type Key interface {
 	raw() *[keySize]byte
 	Array() [32]byte
 	String() string
+	Field(key string) log.Field
 }
 
 // PrivateKey is a private key of 32 byte.
@@ -67,6 +68,11 @@ func (k key) Bytes() []byte {
 // String returns a base58 encoded string from the key.
 func (k key) String() string {
 	return base58.Encode(k.Bytes())
+}
+
+// Field returns a log field. Implements the LoggableField interface.
+func (k key) Field(key string) log.Field {
+	return log.String(key, k.String())
 }
 
 func getRandomNonce() [nonceSize]byte {

@@ -130,21 +130,6 @@ func NodeID(val string) Field {
 	return String("node_id", val)
 }
 
-// PeerID returns a String field (key - "peer_id")
-func PeerID(val string) Field {
-	return String("peer_id", val)
-}
-
-// MinerID returns a String field (key - "miner_id")
-func MinerID(val string) Field {
-	return String("miner_id", val)
-}
-
-// JobID returns a String field (key - "job_id")
-func JobID(val interface{}) Field {
-	return String("job_id", fmt.Sprintf("%v", val))
-}
-
 // Err returns an error field
 func Err(v error) Field {
 	return Field(zap.NamedError("errmsg", v))
