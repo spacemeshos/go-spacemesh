@@ -298,7 +298,7 @@ def wait_for_latest_layer(deployment, min_layer_id, layers_per_epoch, num_miners
     while True:
         lyr = get_latest_layer(deployment, num_miners)
         print("current layer " + str(lyr))
-        if lyr >= min_layer_id and lyr % layers_per_epoch == 0:
+        if lyr is not None and lyr >= min_layer_id and lyr % layers_per_epoch == 0:
             return lyr
         time.sleep(10)
 
