@@ -185,7 +185,6 @@ func (atx *ActivationTx) Fields(layersPerEpoch uint16, size int) []log.LoggableF
 	h, err := atx.NIPSTChallenge.Hash()
 	if err == nil && h != nil {
 		challenge = h.String()
-
 	}
 
 	return []log.LoggableField{

@@ -361,14 +361,18 @@ func (proc *consensusProcess) handleMessage(m *Msg) {
 		// early message, keep for later
 		if err == errEarlyMsg {
 			proc.With().Debug("Early message detected, keeping",
-				log.String("msg_type", mType), log.String("sender_id", m.PubKey.ShortString()),
-				log.Int32("current_k", proc.k), log.Int32("msg_k", m.InnerMsg.K),
-				log.LayerID(uint64(proc.instanceID)), log.Err(err))
+				log.String("msg_type", mType),
+				log.String("sender_id", m.PubKey.ShortString()),
+				log.Int32("current_k", proc.k),
+				log.Int32("msg_k", m.InnerMsg.K),
+				log.LayerID(uint64(proc.instanceID)),
+				log.Err(err))
 
 			// validate syntax for early messages
 			if !proc.validator.SyntacticallyValidateMessage(m) {
 				proc.With().Warning("Early message failed syntactic validation",
-					log.String("msg_type", mType), log.String("sender_id", m.PubKey.ShortString()))
+					log.String("msg_type", mType),
+					log.String("sender_id", m.PubKey.ShortString()))
 				return
 			}
 
@@ -378,8 +382,10 @@ func (proc *consensusProcess) handleMessage(m *Msg) {
 
 		// not an early message but also contextually invalid
 		proc.With().Error("Late message failed contextual validation",
-			log.String("msg_type", mType), log.String("sender_id", m.PubKey.ShortString()),
-			log.Int32("current_k", proc.k), log.Int32("msg_k", m.InnerMsg.K),
+			log.String("msg_type", mType),
+			log.String("sender_id", m.PubKey.ShortString()),
+			log.Int32("current_k", proc.k),
+			log.Int32("msg_k", m.InnerMsg.K),
 			log.LayerID(uint64(proc.instanceID)), log.Err(err))
 		return
 	}
@@ -768,7 +774,8 @@ func (proc *consensusProcess) shouldParticipate() bool {
 
 	// should participate
 	proc.With().Info("should participate",
-		log.Int32("round", proc.k), log.Uint64("layer_id", uint64(proc.instanceID)))
+		log.Int32("round", proc.k),
+		log.Uint64("layer_id", uint64(proc.instanceID)))
 	return true
 }
 

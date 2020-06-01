@@ -294,7 +294,8 @@ func (s *Switch) Start() error {
 			size := s.discover.Size()
 			s.logger.Event().Info("discovery_bootstrap",
 				log.Bool("success", size >= s.config.SwarmConfig.RandomConnections && s.bootErr == nil),
-				log.Int("size", size), log.Duration("time_elapsed", time.Since(b)))
+				log.Int("size", size),
+				log.Duration("time_elapsed", time.Since(b)))
 		}()
 	}
 

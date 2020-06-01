@@ -707,7 +707,7 @@ func (msh *Mesh) accumulateRewards(l *types.Layer, params Config) {
 
 	blockLayerReward, blockLayerRewardMod := calculateActualRewards(l.Index(), layerReward, numBlocks)
 	log.With().Info("Reward calculated",
-		log.LayerID(uint64(l.Index())),
+		l.Index(),
 		log.Uint64("num_blocks", numBlocks.Uint64()),
 		log.Uint64("total_reward", totalReward.Uint64()),
 		log.Uint64("layer_reward", layerReward.Uint64()),

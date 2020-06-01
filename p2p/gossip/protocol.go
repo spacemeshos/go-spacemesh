@@ -139,7 +139,7 @@ peerLoop:
 				p.With().Warning("Failed sending",
 					log.String("protocol", nextProt),
 					h.Field("hash"),
-					log.String("to", pubkey.String()),
+					pubkey.Field("to"),
 					log.Err(err))
 			}
 			wg.Done()
@@ -162,7 +162,7 @@ func (p *Protocol) handlePQ() {
 		}
 		h := types.CalcMessageHash12(m.Message(), m.Protocol())
 		p.Log.With().Debug("new_gossip_message_relay",
-			log.String("from", m.Sender().String()),
+			m.Sender().Field("from"),
 			log.String("protocol", m.Protocol()),
 			h.Field("hash"))
 		p.propagateMessage(m.Message(), h, m.Protocol(), m.Sender())

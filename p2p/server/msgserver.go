@@ -219,7 +219,7 @@ func (p *MessageServer) SendRequest(msgType MessageType, payload []byte, address
 	if sendErr := p.network.SendWrappedMessage(address, p.name, msg); sendErr != nil {
 		p.With().Error("sending message failed",
 			log.Uint32("msg_type", uint32(msgType)),
-			log.String("recipient", address.String()),
+			address.Field("recipient"),
 			log.Int("msglen", len(payload)),
 			log.Err(sendErr))
 		p.removeFromPending(reqID)
