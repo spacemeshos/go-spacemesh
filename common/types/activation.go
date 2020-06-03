@@ -176,7 +176,7 @@ func (atx *ActivationTx) InnerBytes() ([]byte, error) {
 
 // Fields returns an array of LoggableFields for logging
 func (atx *ActivationTx) Fields(layersPerEpoch uint16, size int) []log.LoggableField {
-	commitmentStr := "nil"
+	commitmentStr := ""
 	if atx.Commitment != nil {
 		commitmentStr = atx.Commitment.String()
 	}
