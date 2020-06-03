@@ -191,7 +191,6 @@ func (b *Builder) loop() {
 			if _, stopRequested := err.(StopRequestedError); stopRequested {
 				return
 			}
-			b.log.With().Error("failed to publish ATX", log.Err(err))
 			events.Publish(events.AtxCreated{Created: false, Layer: uint64(b.currentEpoch())})
 			<-b.layerClock.AwaitLayer(b.layerClock.GetCurrentLayer() + 1)
 		}
@@ -441,27 +440,11 @@ func (b *Builder) PublishActivationTx() error {
 	defer b.db.UnsubscribeAtx(atx.ID())
 	size, err := b.signAndBroadcast(atx)
 	if err != nil {
+		b.log.With().Error("failed to publish atx", append(atx.Fields(b.layersPerEpoch, size), log.Err(err))...)
 		return err
 	}
 
-	commitStr := "nil"
-	if commitment != nil {
-		commitStr = commitment.String()
-	}
-	b.log.Event().Info("atx published!",
-		log.AtxID(atx.ShortString()),
-		log.String("prev_atx_id", atx.PrevATXID.ShortString()),
-		log.String("pos_atx_id", atx.PositioningATX.ShortString()),
-		log.LayerID(uint64(atx.PubLayerID)),
-		log.EpochID(uint64(atx.PubLayerID.GetEpoch(b.layersPerEpoch))),
-		log.Uint32("active_set", atx.ActiveSetSize),
-		log.String("miner", b.nodeID.ShortString()),
-		log.Int("view", len(atx.View)),
-		log.Uint64("sequence_number", atx.Sequence),
-		log.String("NIPSTChallenge", hash.String()),
-		log.String("commitment", commitStr),
-		log.Int("atx_size", size),
-	)
+	b.log.Event().Info("atx published!", atx.Fields(b.layersPerEpoch, size)...)
 	events.Publish(events.AtxCreated{Created: true, ID: atx.ShortString(), Layer: uint64(b.currentEpoch())})
 
 	select {

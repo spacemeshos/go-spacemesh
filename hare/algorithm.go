@@ -360,11 +360,19 @@ func (proc *consensusProcess) handleMessage(m *Msg) {
 
 		// early message, keep for later
 		if err == errEarlyMsg {
-			proc.Debug("Early message of type %v detected. Keeping message, pubkey %v", mType, m.PubKey.ShortString())
+			proc.With().Debug("Early message detected, keeping",
+				log.String("msg_type", mType),
+				log.String("sender_id", m.PubKey.ShortString()),
+				log.Int32("current_k", proc.k),
+				log.Int32("msg_k", m.InnerMsg.K),
+				log.LayerID(uint64(proc.instanceID)),
+				log.Err(err))
 
 			// validate syntax for early messages
 			if !proc.validator.SyntacticallyValidateMessage(m) {
-				proc.Warning("Syntactically validation failed, pubkey %v", m.PubKey.ShortString())
+				proc.With().Warning("Early message failed syntactic validation",
+					log.String("msg_type", mType),
+					log.String("sender_id", m.PubKey.ShortString()))
 				return
 			}
 
@@ -373,9 +381,11 @@ func (proc *consensusProcess) handleMessage(m *Msg) {
 		}
 
 		// not an early message but also contextually invalid
-		proc.With().Error("Error contextually validating message",
-			log.String("msg_type", mType), log.String("sender_id", m.PubKey.ShortString()),
-			log.Int32("current_k", proc.k), log.Int32("msg_k", m.InnerMsg.K),
+		proc.With().Error("Late message failed contextual validation",
+			log.String("msg_type", mType),
+			log.String("sender_id", m.PubKey.ShortString()),
+			log.Int32("current_k", proc.k),
+			log.Int32("msg_k", m.InnerMsg.K),
 			log.LayerID(uint64(proc.instanceID)), log.Err(err))
 		return
 	}
@@ -745,24 +755,27 @@ func (proc *consensusProcess) shouldParticipate() bool {
 	// query if identity is active
 	res, err := proc.oracle.IsIdentityActiveOnConsensusView(proc.signing.PublicKey().String(), types.LayerID(proc.instanceID))
 	if err != nil {
-		proc.With().Error("Should not participate: error checking our identity for activeness",
+		proc.With().Error("should not participate: error checking our identity for activeness",
 			log.Err(err), log.Uint64("layer_id", uint64(proc.instanceID)))
 		return false
 	}
 
 	if !res {
-		proc.With().Info("Should not participate: identity is not active",
+		proc.With().Info("should not participate: identity is not active",
 			log.Uint64("layer_id", uint64(proc.instanceID)))
 		return false
 	}
 
 	if role := proc.currentRole(); role == passive {
-		proc.With().Info("Should not participate: passive",
+		proc.With().Info("should not participate: passive",
 			log.Int32("round", proc.k), log.Uint64("layer_id", uint64(proc.instanceID)))
 		return false
 	}
 
 	// should participate
+	proc.With().Info("should participate",
+		log.Int32("round", proc.k),
+		log.Uint64("layer_id", uint64(proc.instanceID)))
 	return true
 }
 

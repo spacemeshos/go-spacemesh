@@ -186,7 +186,7 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool txMemPool, atxpool a
 	srvr.RegisterBytesMsgHandler(blockMsg, newBlockRequestHandler(layers, logger))
 	srvr.RegisterBytesMsgHandler(layerIdsMsg, newLayerBlockIdsRequestHandler(layers, logger))
 	srvr.RegisterBytesMsgHandler(txMsg, newTxsRequestHandler(s, logger))
-	srvr.RegisterBytesMsgHandler(atxMsg, newATxsRequestHandler(s, logger))
+	srvr.RegisterBytesMsgHandler(atxMsg, newAtxsRequestHandler(s, logger))
 	srvr.RegisterBytesMsgHandler(poetMsg, newPoetRequestHandler(s, logger))
 
 	return s
@@ -312,9 +312,9 @@ func (s *Syncer) synchronise() {
 	defer s.syncLock.Unlock()
 	curr := s.GetCurrentLayer()
 
-	//node is synced and blocks from current layer hav already been validated
+	//node is synced and blocks from current layer have already been validated
 	if curr == s.ProcessedLayer() {
-		s.Debug("node is synced ")
+		s.Debug("node is synced")
 		// fully-synced, make sure we listen to p2p
 		s.setGossipBufferingStatus(done)
 		return
@@ -330,7 +330,9 @@ func (s *Syncer) synchronise() {
 }
 
 func (s *Syncer) handleWeaklySynced() {
-	s.With().Info("Node is weakly synced ", s.LatestLayer(), s.GetCurrentLayer())
+	s.With().Info("Node is weakly synced",
+		s.LatestLayer(),
+		s.GetCurrentLayer())
 
 	// handle all layers from processed+1 to current -1
 	s.handleLayersTillCurrent()
@@ -341,7 +343,7 @@ func (s *Syncer) handleWeaklySynced() {
 
 	//validate current layer if more than s.ValidationDelta has passed
 	if err := s.handleCurrentLayer(); err != nil {
-		s.With().Error("Node is out of synce", log.Err(err))
+		s.With().Error("Node is out of sync", log.Err(err))
 		s.setGossipBufferingStatus(pending)
 		return
 	}
@@ -375,7 +377,7 @@ func (s *Syncer) handleLayersTillCurrent() {
 	return
 }
 
-//handle the current consensus layer if its is older than s.Validation Delta
+//handle the current consensus layer if its is older than s.ValidationDelta
 func (s *Syncer) handleCurrentLayer() error {
 	curr := s.GetCurrentLayer()
 	if s.LatestLayer() == curr && time.Now().Sub(s.LayerToTime(s.LatestLayer())) > s.ValidationDelta {
@@ -522,7 +524,7 @@ func (s *Syncer) getLayerFromNeighbors(currentSyncLayer types.LayerID) (*types.L
 
 	blocksArr, err := s.syncLayer(currentSyncLayer, blockIds)
 	if len(blocksArr) == 0 || err != nil {
-		return nil, fmt.Errorf("could not get blocks for layer  %v %v", currentSyncLayer, err)
+		return nil, fmt.Errorf("could not get blocks for layer %v %v", currentSyncLayer, err)
 	}
 
 	return types.NewExistingLayer(types.LayerID(currentSyncLayer), blocksArr), nil
@@ -540,7 +542,7 @@ func (s *Syncer) syncLayer(layerID types.LayerID, blockIds []types.BlockID) ([]*
 	if res, err := s.blockQueue.addDependencies(layerID, blockIds, foo); err != nil {
 		return nil, fmt.Errorf("failed adding layer %v blocks to queue %v", layerID, err)
 	} else if res == false {
-		s.With().Info("no missing blocks for layer", log.LayerID(layerID.Uint64()))
+		s.With().Info("no missing blocks for layer", layerID)
 		return s.LayerBlocks(layerID)
 	}
 
@@ -550,7 +552,7 @@ func (s *Syncer) syncLayer(layerID types.LayerID, blockIds []types.BlockID) ([]*
 		return nil, fmt.Errorf("recived interupt")
 	case result := <-ch:
 		if !result {
-			return nil, fmt.Errorf("could not get all blocks for layer  %v", layerID)
+			return nil, fmt.Errorf("could not get all blocks for layer %v", layerID)
 		}
 	}
 
@@ -632,9 +634,9 @@ func (s *Syncer) validateBlockView(blk *types.Block) bool {
 	defer close(ch)
 	foo := func(res bool) error {
 		s.With().Info("view validated",
-			log.BlockID(blk.ID().String()),
+			blk.ID(),
 			log.Bool("result", res),
-			log.LayerID(uint64(blk.LayerIndex)))
+			blk.LayerIndex)
 		ch <- res
 		return nil
 	}
@@ -642,7 +644,9 @@ func (s *Syncer) validateBlockView(blk *types.Block) bool {
 		s.Error(fmt.Sprintf("block %v not syntactically valid", blk.ID()), err)
 		return false
 	} else if res == false {
-		s.With().Info("block has no missing blocks in view", log.BlockID(blk.ID().String()), log.LayerID(uint64(blk.LayerIndex)))
+		s.With().Debug("no missing blocks in view",
+			blk.ID(),
+			blk.LayerIndex)
 		return true
 	}
 
@@ -717,7 +721,7 @@ func (s *Syncer) dataAvailability(blk *types.Block) ([]*types.Transaction, []*ty
 		return nil, nil, fmt.Errorf("failed fetching block %v activation transactions %v", blk.ID(), atxerr)
 	}
 
-	s.With().Info("fetched all block data ", log.BlockID(blk.ID().String()), log.LayerID(uint64(blk.LayerIndex)))
+	s.With().Info("fetched all block data", blk.Fields()...)
 	return txres, atxres, nil
 }
 

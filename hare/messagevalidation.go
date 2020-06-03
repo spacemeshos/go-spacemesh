@@ -335,7 +335,7 @@ func (v *syntaxContextValidator) validateAggregatedMessage(aggMsg *aggregatedMes
 
 func (v *syntaxContextValidator) validateSVP(msg *Msg) bool {
 	defer func(startTime time.Time) {
-		v.With().Info("SVP validation duration", log.String("duration", time.Now().Sub(startTime).String()))
+		v.With().Debug("SVP validation duration", log.String("duration", time.Now().Sub(startTime).String()))
 	}(time.Now())
 	proposalIter := iterationFromCounter(msg.InnerMsg.K)
 	validateSameIteration := func(m *Msg) bool {
@@ -385,7 +385,7 @@ func (v *syntaxContextValidator) validateSVP(msg *Msg) bool {
 
 func (v *syntaxContextValidator) validateCertificate(cert *certificate) bool {
 	defer func(startTime time.Time) {
-		v.With().Info("certificate validation duration", log.String("duration", time.Now().Sub(startTime).String()))
+		v.With().Debug("certificate validation duration", log.String("duration", time.Now().Sub(startTime).String()))
 	}(time.Now())
 
 	if cert == nil {

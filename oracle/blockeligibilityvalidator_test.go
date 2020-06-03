@@ -38,7 +38,7 @@ func TestBlockEligibilityValidator_getValidAtx(t *testing.T) {
 	block.Signature = edSigner.Sign(block.Bytes())
 	block.Initialize()
 	_, err := v.getValidAtx(block)
-	r.EqualError(err, "getting ATX failed: some err 00000 ep(4)")
+	r.EqualError(err, "getting ATX failed: some err 0000000000 ep(4)")
 
 	v.activationDb = &mockAtxDB{atxH: &types.ActivationTxHeader{}} // not same epoch
 	_, err = v.getValidAtx(block)

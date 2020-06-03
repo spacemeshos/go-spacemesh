@@ -8,6 +8,7 @@ import (
 	"github.com/spacemeshos/poet/shared"
 	"github.com/spacemeshos/post/proving"
 	"github.com/spacemeshos/sha256-simd"
+	"strings"
 )
 
 // EpochID is the running epoch number. It's zero-based, so the genesis epoch has EpochID == 0.
@@ -32,7 +33,7 @@ func (l EpochID) Field() log.Field { return log.Uint64("epoch_id", uint64(l)) }
 // ATXID is a 32-bit hash used to identify an activation transaction.
 type ATXID Hash32
 
-// ShortString returns a the first 5 characters of the ID, for logging purposes.
+// ShortString returns the first few characters of the ID, for logging purposes.
 func (t ATXID) ShortString() string {
 	return t.Hash32().ShortString()
 }
@@ -62,7 +63,7 @@ type ActivationTxHeader struct {
 	ActiveSetSize uint32
 }
 
-// ShortString returns a the first 5 characters of the ID, for logging purposes.
+// ShortString returns the first 5 characters of the ID, for logging purposes.
 func (atxh *ActivationTxHeader) ShortString() string {
 	return atxh.ID().ShortString()
 }
@@ -171,6 +172,44 @@ func NewActivationTx(nipstChallenge NIPSTChallenge, coinbase Address, activeSetS
 // InnerBytes returns a byte slice of the serialization of the inner ATX (excluding the signature field).
 func (atx *ActivationTx) InnerBytes() ([]byte, error) {
 	return InterfaceToBytes(atx.InnerActivationTx)
+}
+
+// Fields returns an array of LoggableFields for logging
+func (atx *ActivationTx) Fields(layersPerEpoch uint16, size int) []log.LoggableField {
+	commitmentStr := ""
+	if atx.Commitment != nil {
+		commitmentStr = atx.Commitment.String()
+	}
+
+	challenge := ""
+	h, err := atx.NIPSTChallenge.Hash()
+	if err == nil && h != nil {
+		challenge = h.String()
+	}
+
+	return []log.LoggableField{
+		atx.ID(),
+		log.String("sender_id", atx.NodeID.ShortString()),
+		log.String("prev_atx_id", atx.PrevATXID.ShortString()),
+		log.String("pos_atx_id", atx.PositioningATX.ShortString()),
+		atx.PubLayerID,
+		atx.PubLayerID.GetEpoch(layersPerEpoch),
+		log.Uint32("active_set", atx.ActiveSetSize),
+		log.Int("viewlen", len(atx.View)),
+		log.Uint64("sequence_number", atx.Sequence),
+		log.String("NIPSTChallenge", challenge),
+		log.String("commitment", commitmentStr),
+		log.Int("atx_size", size),
+	}
+}
+
+// AtxIdsField returns a list of loggable fields for a given list of ATXIDs
+func AtxIdsField(ids []ATXID) log.Field {
+	strs := []string{}
+	for _, a := range ids {
+		strs = append(strs, a.ShortString())
+	}
+	return log.String("atx_ids", strings.Join(strs, ", "))
 }
 
 // CalcAndSetID calculates and sets the cached ID field. This field must be set before calling the ID() method.

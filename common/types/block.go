@@ -14,13 +14,15 @@ import (
 // BlockID is a 20-byte sha256 sum of the serialized block, used to identify it.
 type BlockID Hash20
 
-// String returns the 5-character prefix of the hex representation of the ID.
+// String returns a short prefix of the hex representation of the ID.
 func (id BlockID) String() string {
 	return id.AsHash32().ShortString()
 }
 
 // Field returns a log field. Implements the LoggableField interface.
-func (id BlockID) Field() log.Field { return log.String("block_id", id.AsHash32().ShortString()) }
+func (id BlockID) Field() log.Field {
+	return log.String("block_id", id.AsHash32().ShortString())
+}
 
 // Compare returns true if other (the given BlockID) is less than this BlockID, by lexicographic comparison.
 func (id BlockID) Compare(other BlockID) bool {
@@ -76,10 +78,7 @@ func (id NodeID) ToBytes() []byte {
 // ShortString returns a the first 5 characters of the ID, for logging purposes.
 func (id NodeID) ShortString() string {
 	name := id.Key
-	if len(name) > 5 {
-		name = name[:5]
-	}
-	return name
+	return Shorten(name, 5)
 }
 
 // Field returns a log field. Implements the LoggableField interface.
@@ -150,6 +149,21 @@ func (b *Block) Bytes() []byte {
 		log.Panic(fmt.Sprintf("could not extract block bytes, %v", err))
 	}
 	return blkBytes
+}
+
+// Fields returns an array of LoggableFields for logging
+func (b *Block) Fields() []log.LoggableField {
+	return []log.LoggableField{
+		b.ID(),
+		b.LayerIndex,
+		b.MinerID(),
+		log.Int("view_edges", len(b.ViewEdges)),
+		log.Int("vote_count", len(b.BlockVotes)),
+		log.Uint32("eligibility_counter", b.EligibilityProof.J),
+		log.Int("tx_count", len(b.TxIDs)),
+		log.Int("atx_count", len(b.ATXIDs)),
+		AtxIdsField(b.ATXIDs),
+	}
 }
 
 // ID returns the BlockID.

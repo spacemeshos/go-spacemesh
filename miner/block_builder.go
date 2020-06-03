@@ -91,6 +91,7 @@ type BlockBuilder struct {
 	syncer           syncer
 	started          bool
 	atxsPerBlock     int // number of atxs to select per block
+	layersPerEpoch   uint16
 	projector        projector
 }
 
@@ -98,7 +99,7 @@ type BlockBuilder struct {
 func NewBlockBuilder(minerID types.NodeID, sgn signer, net p2p.Service, beginRoundEvent chan types.LayerID, hdist int,
 	txPool txPool, atxPool *AtxMemPool, weakCoin weakCoinProvider, orph meshProvider, hare hareResultProvider,
 	blockOracle blockOracle, txValidator txValidator, atxValidator atxValidator, syncer syncer, atxsPerBlock int,
-	projector projector, lg log.Log) *BlockBuilder {
+	layersPerEpoch uint16, projector projector, lg log.Log) *BlockBuilder {
 
 	seed := binary.BigEndian.Uint64(md5.New().Sum([]byte(minerID.Key)))
 
@@ -125,6 +126,7 @@ func NewBlockBuilder(minerID types.NodeID, sgn signer, net p2p.Service, beginRou
 		syncer:           syncer,
 		started:          false,
 		atxsPerBlock:     atxsPerBlock,
+		layersPerEpoch:   layersPerEpoch,
 		projector:        projector,
 	}
 
@@ -223,7 +225,7 @@ func (t *BlockBuilder) getVotes(id types.LayerID) ([]types.BlockID, error) {
 	bottom, top := calcHdistRange(id, t.hdist)
 
 	if res, err := t.hareResult.GetResult(bottom); err != nil { // no result for bottom, take the whole layer
-		t.With().Warning("could not get result for bottom layer. adding the whole layer instead", log.Err(err),
+		t.With().Warning("Could not get result for bottom layer. Adding the whole layer instead.", log.Err(err),
 			log.Uint64("bottom", uint64(bottom)), log.Uint64("top", uint64(top)), log.Uint64("hdist", uint64(t.hdist)))
 		ids, e := t.meshProvider.LayerBlockIds(bottom)
 		if e != nil {
@@ -292,7 +294,8 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.ATXID, eligibil
 	t.Log.Event().Info("block created",
 		bl.ID(),
 		bl.LayerIndex,
-		log.String("miner_id", bl.MinerID().String()),
+		bl.LayerIndex.GetEpoch(t.layersPerEpoch),
+		bl.MinerID(),
 		log.Int("tx_count", len(bl.TxIDs)),
 		log.Int("atx_count", len(bl.ATXIDs)),
 		log.Int("view_edges", len(bl.ViewEdges)),
@@ -408,31 +411,7 @@ func (t *BlockBuilder) handleGossipAtx(data service.GossipMessage) {
 	}
 	atx.CalcAndSetID()
 
-	commitmentStr := "nil"
-	if atx.Commitment != nil {
-		commitmentStr = atx.Commitment.String()
-	}
-
-	challenge := ""
-	h, err := atx.NIPSTChallenge.Hash()
-	if err == nil && h != nil {
-		challenge = h.String()
-
-	}
-
-	t.With().Info("got new ATX",
-		log.String("sender_id", atx.NodeID.ShortString()),
-		log.AtxID(atx.ShortString()),
-		log.String("prev_atx_id", atx.PrevATXID.ShortString()),
-		log.String("pos_atx_id", atx.PositioningATX.ShortString()),
-		log.LayerID(uint64(atx.PubLayerID)),
-		log.Uint32("active_set", atx.ActiveSetSize),
-		log.Int("view", len(atx.View)),
-		log.Uint64("sequence_number", atx.Sequence),
-		log.String("commitment", commitmentStr),
-		log.Int("atx_size", len(data.Bytes())),
-		log.String("NIPSTChallenge", challenge),
-	)
+	t.With().Info("got new ATX", atx.Fields(t.layersPerEpoch, len(data.Bytes()))...)
 
 	//todo fetch from neighbour (#1925)
 	if atx.Nipst == nil {

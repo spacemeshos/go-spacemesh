@@ -185,19 +185,20 @@ func (o *Oracle) activeSetSize(layer types.LayerID) (uint32, error) {
 func (o *Oracle) Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (bool, error) {
 	msg, err := o.buildVRFMessage(layer, round)
 	if err != nil {
-		o.Error("Eligible: could not build VRF message")
+		o.Error("eligibility: could not build VRF message")
 		return false, err
 	}
 
 	// validate message
 	res, err := o.vrfVerifier(msg, sig, id.VRFPublicKey)
 	if err != nil {
-		o.Error("Eligible: VRF verification failed: %v", err)
+		o.Error("eligibility: VRF verification failed: %v", err)
 		return false, err
 	}
 	if !res {
-		o.With().Info("Eligible: a node did not pass VRF signature verification",
-			log.String("id", id.ShortString()), log.Uint64("layer_id", uint64(layer)))
+		o.With().Info("eligibility: a node did not pass VRF signature verification",
+			id,
+			layer)
 		return false, nil
 	}
 
@@ -209,7 +210,7 @@ func (o *Oracle) Eligible(layer types.LayerID, round int32, committeeSize int, i
 
 	// require activeSetSize > 0
 	if activeSetSize == 0 {
-		o.Warning("Eligible: active set size is zero")
+		o.Warning("eligibility: active set size is zero")
 		return false, errors.New("active set size is zero")
 	}
 
@@ -218,10 +219,12 @@ func (o *Oracle) Eligible(layer types.LayerID, round int32, committeeSize int, i
 	shaUint32 := binary.LittleEndian.Uint32(sha[:4])
 	// avoid division (no floating point) & do operations on uint64 to avoid overflow
 	if uint64(activeSetSize)*uint64(shaUint32) > uint64(committeeSize)*uint64(math.MaxUint32) {
-		o.With().Info("Eligible: a node did not pass VRF eligibility",
-			log.String("id", id.ShortString()), log.Int("committee_size", committeeSize),
-			log.Uint32("active_set_size", activeSetSize), log.Int32("round", round),
-			log.Uint64("layer_id", uint64(layer)))
+		o.With().Info("eligibility: node did not pass VRF eligibility threshold",
+			id,
+			log.Int("committee_size", committeeSize),
+			log.Uint32("active_set_size", activeSetSize),
+			log.Int32("round", round),
+			layer)
 		return false, nil
 	}
 
@@ -276,8 +279,10 @@ func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
 	// no contextually valid blocks
 	if len(mp) == 0 {
 		o.With().Error("Could not calculate hare active set size: no contextually valid blocks",
-			log.Uint64("layer_id", uint64(layer)), log.Uint64("epoch_id", uint64(layer.GetEpoch(o.layersPerEpoch))),
-			log.Uint64("safe_layer_id", uint64(sl)), log.Uint64("safe_epoch_id", uint64(safeEp)))
+			layer,
+			log.Uint64("epoch_id", uint64(layer.GetEpoch(o.layersPerEpoch))),
+			log.Uint64("safe_layer_id", uint64(sl)),
+			log.Uint64("safe_epoch_id", uint64(safeEp)))
 		o.lock.Unlock()
 		return nil, errNoContextualBlocks
 	}

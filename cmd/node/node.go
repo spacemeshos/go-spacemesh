@@ -175,7 +175,7 @@ func LoadConfigFromFile() (*cfg.Config, error) {
 	vip := viper.New()
 	// read in default config if passed as param using viper
 	if err := cfg.LoadConfig(fileLocation, vip); err != nil {
-		log.Error(fmt.Sprintf("couldn't load config file at location: %s swithing to defaults \n error: %v.",
+		log.Error(fmt.Sprintf("couldn't load config file at location: %s switching to defaults \n error: %v.",
 			fileLocation, err))
 		// return err
 	}
@@ -549,7 +549,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	ha := app.HareFactory(mdb, swarm, sgn, nodeID, syncer, msh, hOracle, idStore, clock, lg)
 
 	stateAndMeshProjector := pendingtxs.NewStateAndMeshProjector(processor, msh)
-	blockProducer := miner.NewBlockBuilder(nodeID, sgn, swarm, clock.Subscribe(), app.Config.Hdist, app.txPool, atxpool, coinToss, msh, ha, blockOracle, processor, atxdb, syncer, app.Config.AtxsPerBlock, stateAndMeshProjector, app.addLogger(BlockBuilderLogger, lg))
+	blockProducer := miner.NewBlockBuilder(nodeID, sgn, swarm, clock.Subscribe(), app.Config.Hdist, app.txPool, atxpool, coinToss, msh, ha, blockOracle, processor, atxdb, syncer, app.Config.AtxsPerBlock, layersPerEpoch, stateAndMeshProjector, app.addLogger(BlockBuilderLogger, lg))
 	blockListener := sync.NewBlockListener(swarm, syncer, 4, app.addLogger(BlockListenerLogger, lg))
 
 	msh.SetBlockBuilder(blockProducer)

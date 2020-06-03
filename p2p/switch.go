@@ -292,8 +292,10 @@ func (s *Switch) Start() error {
 			}
 			close(s.bootChan)
 			size := s.discover.Size()
-			s.logger.Event().Info("discovery_bootstrap", log.Bool("success", size >= s.config.SwarmConfig.RandomConnections && s.bootErr == nil),
-				log.Int("size", size), log.Duration("time_elapsed", time.Since(b)))
+			s.logger.Event().Info("discovery_bootstrap",
+				log.Bool("success", size >= s.config.SwarmConfig.RandomConnections && s.bootErr == nil),
+				log.Int("size", size),
+				log.Duration("time_elapsed", time.Since(b)))
 		}()
 	}
 
@@ -507,9 +509,9 @@ func (s *Switch) listenToNetworkMessages() {
 
 var (
 	// ErrBadFormat1 could'nt deserialize the payload
-	ErrBadFormat1 = errors.New("bad msg format, could'nt deserialize 1")
+	ErrBadFormat1 = errors.New("bad msg format, couldn't deserialize 1")
 	// ErrBadFormat2 could'nt deserialize the protocol message payload
-	ErrBadFormat2 = errors.New("bad msg format, could'nt deserialize 2")
+	ErrBadFormat2 = errors.New("bad msg format, couldn't deserialize 2")
 	// ErrOutOfSync is returned when message timestamp was out of sync
 	ErrOutOfSync = errors.New("received out of sync msg")
 	// ErrFailDecrypt session cant decrypt
@@ -570,7 +572,7 @@ func (s *Switch) onRemoteClientMessage(msg net.IncomingMessageEvent) error {
 	_, ok := s.gossipProtocolHandlers[pm.Metadata.NextProtocol]
 	s.protocolHandlerMutex.RUnlock()
 
-	s.logger.Debug("Handle %v message from <<  %v", pm.Metadata.NextProtocol, msg.Conn.RemotePublicKey().String())
+	s.logger.Debug("Handle %v message from << %v", pm.Metadata.NextProtocol, msg.Conn.RemotePublicKey().String())
 
 	if ok {
 		// if this message is tagged with a gossip protocol, relay it.

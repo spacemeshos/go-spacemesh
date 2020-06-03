@@ -560,7 +560,7 @@ func (msh *Mesh) SetZeroBlockLayer(lyr types.LayerID) error {
 // txs - block txs that we dont have in our tx database yet
 // atxs - block atxs that we dont have in our atx database yet
 func (msh *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.Transaction, atxs []*types.ActivationTx) error {
-	msh.With().Debug("adding block", log.BlockID(blk.ID().String()))
+	msh.With().Debug("adding block", blk.Fields()...)
 
 	// Store transactions (doesn't have to be rolled back if other writes fail)
 	if len(txs) > 0 {
@@ -596,7 +596,7 @@ func (msh *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.Transaction, atx
 	msh.invalidateFromPools(&blk.MiniBlock)
 
 	events.Publish(events.NewBlock{ID: blk.ID().String(), Atx: blk.ATXID.ShortString(), Layer: uint64(blk.LayerIndex)})
-	msh.With().Info("added block to database ", log.BlockID(blk.ID().String()), log.LayerID(uint64(blk.LayerIndex)))
+	msh.With().Info("added block to database", blk.Fields()...)
 	return nil
 }
 
@@ -702,10 +702,20 @@ func (msh *Mesh) accumulateRewards(l *types.Layer, params Config) {
 
 	numBlocks := big.NewInt(int64(len(ids)))
 
-	blockTotalReward := calculateActualRewards(l.Index(), totalReward, numBlocks)
+	blockTotalReward, blockTotalRewardMod := calculateActualRewards(l.Index(), totalReward, numBlocks)
 	msh.ApplyRewards(l.Index(), ids, blockTotalReward)
 
-	blockLayerReward := calculateActualRewards(l.Index(), layerReward, numBlocks)
+	blockLayerReward, blockLayerRewardMod := calculateActualRewards(l.Index(), layerReward, numBlocks)
+	log.With().Info("Reward calculated",
+		l.Index(),
+		log.Uint64("num_blocks", numBlocks.Uint64()),
+		log.Uint64("total_reward", totalReward.Uint64()),
+		log.Uint64("layer_reward", layerReward.Uint64()),
+		log.Uint64("block_total_reward", blockTotalReward.Uint64()),
+		log.Uint64("block_layer_reward", blockLayerReward.Uint64()),
+		log.Uint64("total_reward_remainder", blockTotalRewardMod.Uint64()),
+		log.Uint64("layer_reward_remainder", blockLayerRewardMod.Uint64()),
+	)
 	err := msh.writeTransactionRewards(l.Index(), ids, blockTotalReward, blockLayerReward)
 	if err != nil {
 		msh.Error("cannot write reward to db")
