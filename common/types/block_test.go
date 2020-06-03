@@ -1,6 +1,7 @@
 package types
 
 import (
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"testing"
 	"time"
@@ -33,12 +34,5 @@ func TestFields(t *testing.T) {
 	b := &Block{}
 	b.TxIDs = []TransactionID{txid1, txid2, txid1}
 	b.ATXIDs = []ATXID{atx1, atx2, atx3}
-
-	for i := 0; i <= AtxsPerBlockLimit; i++ {
-		b.ATXIDs = append(b.ATXIDs, atx1)
-	}
-
-	b.TxIDs = []TransactionID{}
-	b.ATXIDs = []ATXID{}
-	t.Log(b.Fields())
+	log.With().Info("got new block", b.Fields()...)
 }
