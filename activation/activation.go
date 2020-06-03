@@ -17,7 +17,7 @@ import (
 // AtxProtocol is the protocol id for broadcasting atxs over gossip
 const AtxProtocol = "AtxGossip"
 
-var activesetCache = NewActivesetCache(1000)
+var totalWeightCache = NewTotalWeightCache(1000)
 
 type meshProvider interface {
 	GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error)
@@ -32,7 +32,7 @@ type poetNumberOfTickProvider struct {
 }
 
 func (provider *poetNumberOfTickProvider) NumOfTicks() uint64 {
-	return 0
+	return 1 << 7 // 128
 }
 
 type nipstBuilder interface {
@@ -51,7 +51,7 @@ type nipstValidator interface {
 
 type atxDBProvider interface {
 	GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error)
-	CalcActiveSetFromView(view []types.BlockID, pubEpoch types.EpochID) (uint32, error)
+	CalcTotalWeightFromView(view []types.BlockID, pubEpoch types.EpochID) (uint64, error)
 	GetNodeLastAtxID(nodeID types.NodeID) (types.ATXID, error)
 	GetPosAtxID() (types.ATXID, error)
 	AwaitAtx(id types.ATXID) chan struct{}
@@ -78,7 +78,7 @@ const (
 
 // Builder struct is the struct that orchestrates the creation of activation transactions
 // it is responsible for initializing post, receiving poet proof and orchestrating nipst. after which it will
-// calculate active set size and providing relevant view as proof
+// calculate total weight and providing relevant view as proof
 type Builder struct {
 	signer
 	nodeID          types.NodeID
@@ -414,17 +414,17 @@ func (b *Builder) PublishActivationTx() error {
 		}
 	}
 
-	var activeSetSize uint32
+	var epochWeight uint64
 	if pubEpoch > 0 {
 		var err error
-		b.log.With().Info("calculating active ids")
-		activeSetSize, err = b.db.CalcActiveSetFromView(view, pubEpoch)
+		b.log.With().Info("calculating total weight")
+		epochWeight, err = b.db.CalcTotalWeightFromView(view, pubEpoch)
 		if err != nil {
-			return fmt.Errorf("failed to calculate activeset: %v", err)
+			return fmt.Errorf("failed to calculate total weight: %v", err)
 		}
 	}
-	if activeSetSize == 0 && !(pubEpoch + 1).IsGenesis() {
-		return fmt.Errorf("empty active set size found! epochId: %v, len(view): %d, view: %v",
+	if epochWeight == 0 && !(pubEpoch + 1).IsGenesis() {
+		return fmt.Errorf("empty epoch weight found! epochId: %v, len(view): %d, view: %v",
 			pubEpoch, len(view), view)
 	}
 
@@ -433,10 +433,10 @@ func (b *Builder) PublishActivationTx() error {
 		commitment = b.commitment
 	}
 
-	atx := types.NewActivationTx(*b.challenge, b.getCoinbaseAccount(), activeSetSize, view, nipst, b.committedSpace, commitment)
+	atx := types.NewActivationTx(*b.challenge, b.getCoinbaseAccount(), epochWeight, view, nipst, b.committedSpace, commitment)
 
-	b.log.With().Info("active ids seen for epoch", log.Uint64("atx_pub_epoch", uint64(pubEpoch)),
-		log.Uint32("view_cnt", activeSetSize))
+	b.log.With().Info("total weight seen for epoch", log.Uint64("atx_pub_epoch", uint64(pubEpoch)),
+		log.Uint64("epoch_weight", epochWeight))
 
 	atxReceived := b.db.AwaitAtx(atx.ID())
 	defer b.db.UnsubscribeAtx(atx.ID())

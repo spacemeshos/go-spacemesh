@@ -55,14 +55,13 @@ func (t ATXID) Field() log.Field { return t.Hash32().Field("atx_id") }
 var EmptyATXID = &ATXID{}
 
 // ActivationTxHeader is the header of an activation transaction. It includes all fields from the NIPSTChallenge, as
-// well as the coinbase address and active set size.
+// well as the coinbase address and total weight.
 type ActivationTxHeader struct {
 	NIPSTChallenge
-	id            *ATXID // non-exported cache of the ATXID
-	Space         uint64
-	Coinbase      Address
-	ActiveSetSize uint32
-	TotalWeight   uint64
+	id          *ATXID // non-exported cache of the ATXID
+	Space       uint64
+	Coinbase    Address
+	TotalWeight uint64
 }
 
 // ShortString returns the first 5 characters of the ID, for logging purposes.
@@ -157,8 +156,8 @@ type ActivationTx struct {
 }
 
 // NewActivationTx returns a new activation transaction. The ATXID is calculated and cached.
-func NewActivationTx(nipstChallenge NIPSTChallenge, coinbase Address, activeSetSize uint32, view []BlockID,
-	nipst *NIPST, space uint64, commitment *PostProof) *ActivationTx {
+func NewActivationTx(nipstChallenge NIPSTChallenge, coinbase Address, epochWeight uint64, view []BlockID, nipst *NIPST,
+	space uint64, commitment *PostProof) *ActivationTx {
 
 	atx := &ActivationTx{
 		InnerActivationTx: &InnerActivationTx{
@@ -166,7 +165,7 @@ func NewActivationTx(nipstChallenge NIPSTChallenge, coinbase Address, activeSetS
 				NIPSTChallenge: nipstChallenge,
 				Space:          space,
 				Coinbase:       coinbase,
-				ActiveSetSize:  activeSetSize,
+				TotalWeight:    epochWeight,
 			},
 			Nipst:      nipst,
 			View:       view,
@@ -202,7 +201,11 @@ func (atx *ActivationTx) Fields(layersPerEpoch uint16, size int) []log.LoggableF
 		log.String("pos_atx_id", atx.PositioningATX.ShortString()),
 		atx.PubLayerID,
 		atx.PubLayerID.GetEpoch(layersPerEpoch),
-		log.Uint32("active_set", atx.ActiveSetSize),
+		log.Uint64("space", atx.Space),
+		log.Uint64("start_tick", atx.StartTick),
+		log.Uint64("end_tick", atx.EndTick),
+		log.Uint64("weight", atx.GetWeight()),
+		log.Uint64("total_weight", atx.TotalWeight),
 		log.Int("viewlen", len(atx.View)),
 		log.Uint64("sequence_number", atx.Sequence),
 		log.String("NIPSTChallenge", challenge),

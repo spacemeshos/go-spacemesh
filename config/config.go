@@ -81,8 +81,8 @@ type BaseConfig struct {
 
 	PprofHTTPServer bool `mapstructure:"pprof-server"`
 
-	GenesisConfPath  string `mapstructure:"genesis-conf"`
-	GenesisActiveSet int    `mapstructure:"genesis-active-size"` // the active set size for genesis
+	GenesisConfPath    string `mapstructure:"genesis-conf"`
+	GenesisTotalWeight uint64 `mapstructure:"genesis-total-weight"` // the total weight for genesis
 
 	StartMining     bool   `mapstructure:"start-mining"` // Should the node start mining
 	CoinbaseAccount string `mapstructure:"coinbase"`     // The account credited for mining rewards
@@ -156,7 +156,7 @@ func defaultBaseConfig() BaseConfig {
 		LayersPerEpoch:      3,
 		PoETServer:          "127.0.0.1",
 		Hdist:               5,
-		GenesisActiveSet:    5,
+		GenesisTotalWeight:  5 * 1024 * 128, // 5 miners * 1024 MB PoST * 128 PoET ticks
 		BlockCacheSize:      20,
 		SyncRequestTimeout:  2000,
 		SyncInterval:        10,

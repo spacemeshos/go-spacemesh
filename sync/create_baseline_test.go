@@ -185,5 +185,5 @@ func newActivationTx(nodeID types.NodeID, sequence uint64, prevATX types.ATXID, 
 		StartTick:      startTick,
 		PositioningATX: positioningATX,
 	}
-	return types.NewActivationTx(nipstChallenge, coinbase, activeSetSize, view, nipst, 0, nil)
+	return types.NewActivationTx(nipstChallenge, coinbase, uint64(activeSetSize), view, nipst, 0, nil)
 }

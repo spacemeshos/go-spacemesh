@@ -89,14 +89,14 @@ type ATXDBMock struct {
 	activeSet   uint32
 }
 
-func (mock *ATXDBMock) CalcActiveSetSize(types.EpochID, map[types.BlockID]struct{}) (map[string]uint64, error) {
+func (mock *ATXDBMock) CalcMinerWeights(types.EpochID, map[types.BlockID]struct{}) (map[string]uint64, error) {
 	log.Debug("waiting lock")
 	mock.workSymLock.Lock()
 	defer mock.workSymLock.Unlock()
 	log.Debug("done wait")
 
 	mock.counter++
-	return map[string]uint64{"aaaaac": 0, "aaabddb": 0, "aaaccc": 0}, nil
+	return map[string]uint64{"aaaaac": 1, "aaabddb": 2, "aaaccc": 3}, nil
 }
 
 type MockTxMemPool struct{}
@@ -210,7 +210,7 @@ func TestATX_ActiveSetForLayerView(t *testing.T) {
 	layersPerEpoch := uint16(6)
 	atxdb.LayersPerEpoch = layersPerEpoch
 	epoch := layer.GetEpoch(layersPerEpoch)
-	actives, err := atxdb.CalcActiveSetSize(epoch, blocksMap)
+	actives, err := atxdb.GetMinerWeightsInEpochFromView(epoch, blocksMap)
 	assert.NoError(t, err)
 	assert.Len(t, actives, 2)
 	assert.Equal(t, uint64(10000), actives[id1.Key], "actives[id1.Key] (%d) != %d", actives[id1.Key], 10000)
@@ -219,14 +219,14 @@ func TestATX_ActiveSetForLayerView(t *testing.T) {
 
 func TestMesh_ActiveSetForLayerView2(t *testing.T) {
 	atxdb, _, _ := getAtxDb(t.Name())
-	actives, err := atxdb.CalcActiveSetSize(0, nil)
+	actives, err := atxdb.GetMinerWeightsInEpochFromView(0, nil)
 	assert.Error(t, err)
-	assert.Equal(t, "tried to retrieve active set for epoch 0", err.Error())
+	assert.Equal(t, "tried to retrieve miner weights for targetEpoch 0", err.Error())
 	assert.Nil(t, actives)
 }
 
 func TestActivationDb_CalcActiveSetFromViewWithCache(t *testing.T) {
-	activesetCache.Purge()
+	totalWeightCache.Purge()
 	atxdb, layers, _ := getAtxDb("t6")
 
 	id1 := types.NodeID{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}
@@ -254,15 +254,15 @@ func TestActivationDb_CalcActiveSetFromViewWithCache(t *testing.T) {
 
 	mck := ATXDBMock{}
 	atx := newActivationTx(id1, 1, atxs[0].ID(), atxs[0].ID(), 1000, 0, 100, 100, coinbase1, 3, blocks, &types.NIPST{})
-	atxdb.calcActiveSetFunc = mck.CalcActiveSetSize
+	atxdb.calcTotalWeightFunc = mck.CalcMinerWeights
 	wg := sync.WaitGroup{}
 	wg.Add(100)
 	mck.workSymLock.Lock()
 	for i := 0; i < 100; i++ {
 		go func() {
-			num, err := atxdb.CalcActiveSetFromView(atx.View, atx.PubLayerID.GetEpoch(layersPerEpochBig))
+			totalWeight, err := atxdb.CalcTotalWeightFromView(atx.View, atx.PubLayerID.GetEpoch(layersPerEpochBig))
 			assert.NoError(t, err)
-			assert.Equal(t, 3, int(num))
+			assert.Equal(t, 6, int(totalWeight))
 			assert.NoError(t, err)
 			wg.Done()
 		}()
@@ -273,7 +273,7 @@ func TestActivationDb_CalcActiveSetFromViewWithCache(t *testing.T) {
 }
 
 func Test_CalcActiveSetFromView(t *testing.T) {
-	activesetCache.Purge()
+	totalWeightCache.Purge()
 	atxdb, layers, _ := getAtxDb("t6")
 
 	id1 := types.NodeID{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}
@@ -300,9 +300,9 @@ func Test_CalcActiveSetFromView(t *testing.T) {
 	blocks = createLayerWithAtx(t, layers, 100, 10, []*types.ActivationTx{}, blocks, blocks)
 
 	atx := newActivationTx(id1, 1, atxs[0].ID(), atxs[0].ID(), 1000, 0, 100, 100, coinbase1, 3, blocks, &types.NIPST{})
-	num, err := atxdb.CalcActiveSetFromView(atx.View, atx.PubLayerID.GetEpoch(layersPerEpochBig))
+	num, err := atxdb.CalcTotalWeightFromView(atx.View, atx.PubLayerID.GetEpoch(layersPerEpochBig))
 	assert.NoError(t, err)
-	assert.Equal(t, 3, int(num))
+	assert.Equal(t, 30000, int(num))
 
 	// check that further atxs dont affect current epoch count
 	atxs2 := []*types.ActivationTx{
@@ -339,16 +339,16 @@ func Test_CalcActiveSetFromView(t *testing.T) {
 		return bytes.Compare(view[i].Bytes(), view[j].Bytes()) > 0 // sort view in wrong order
 	})
 	atx2 := newActivationTx(id3, 0, *types.EmptyATXID, *types.EmptyATXID, 1435, 0, 100, 100, coinbase3, 6, view, &types.NIPST{})
-	num, err = atxdb.CalcActiveSetFromView(atx2.View, atx2.PubLayerID.GetEpoch(layersPerEpochBig))
+	num, err = atxdb.CalcTotalWeightFromView(atx2.View, atx2.PubLayerID.GetEpoch(layersPerEpochBig))
 	assert.NoError(t, err)
-	assert.Equal(t, 3, int(num))
+	assert.Equal(t, 30000, int(num))
 
 	// put a fake value in the cache and ensure that it's used
 	viewHash := types.CalcBlocksHash12(atx2.View)
-	activesetCache.Purge()
-	activesetCache.Add(viewHash, 8)
+	totalWeightCache.Purge()
+	totalWeightCache.Add(viewHash, 8)
 
-	num, err = atxdb.CalcActiveSetFromView(atx2.View, atx2.PubLayerID.GetEpoch(layersPerEpochBig))
+	num, err = atxdb.CalcTotalWeightFromView(atx2.View, atx2.PubLayerID.GetEpoch(layersPerEpochBig))
 	assert.NoError(t, err)
 	assert.Equal(t, 8, int(num))
 
@@ -358,12 +358,12 @@ func Test_CalcActiveSetFromView(t *testing.T) {
 	viewBytes, err := types.InterfaceToBytes(atx2.View)
 	assert.NoError(t, err)
 	viewHash = types.CalcHash12(viewBytes)
-	activesetCache.Purge()
-	activesetCache.Add(viewHash, 8)
+	totalWeightCache.Purge()
+	totalWeightCache.Add(viewHash, 8)
 
-	num, err = atxdb.CalcActiveSetFromView(atx2.View, atx2.PubLayerID.GetEpoch(layersPerEpochBig))
+	num, err = atxdb.CalcTotalWeightFromView(atx2.View, atx2.PubLayerID.GetEpoch(layersPerEpochBig))
 	assert.NoError(t, err)
-	assert.Equal(t, 3, int(num))
+	assert.Equal(t, 30000, int(num))
 }
 
 func TestActivationDb_GetNodeLastAtxId(t *testing.T) {
@@ -465,14 +465,14 @@ func Test_Wrong_CalcActiveSetFromView(t *testing.T) {
 	blocks = createLayerWithAtx(t, layers, 100, 10, []*types.ActivationTx{}, blocks, blocks)
 
 	atx := newActivationTx(id1, 1, atxs[0].ID(), atxs[0].ID(), 1000, 0, 100, 100, coinbase1, 20, blocks, &types.NIPST{})
-	num, err := atxdb.CalcActiveSetFromView(atx.View, atx.PubLayerID.GetEpoch(layersPerEpoch))
+	num, err := atxdb.CalcTotalWeightFromView(atx.View, atx.PubLayerID.GetEpoch(layersPerEpoch))
 	assert.NoError(t, err)
 	assert.NotEqual(t, 20, int(num))
 
 }
 
 func TestMesh_processBlockATXs(t *testing.T) {
-	activesetCache.Purge()
+	totalWeightCache.Purge()
 	atxdb, _, _ := getAtxDb("t6")
 
 	id1 := types.NodeID{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}
@@ -569,7 +569,7 @@ func TestActivationDB_ValidateAtx(t *testing.T) {
 	assert.NoError(t, err)
 	prevAtx.Nipst = NewNIPSTWithChallenge(hash, poetRef)
 
-	atx := newActivationTx(idx1, 1, prevAtx.ID(), prevAtx.ID(), 1012, 0, 100, 100, coinbase1, 3, blocks, &types.NIPST{})
+	atx := newActivationTx(idx1, 1, prevAtx.ID(), prevAtx.ID(), 1012, 0, 100, 100, coinbase1, 30000, blocks, &types.NIPST{})
 	hash, err = atx.NIPSTChallenge.Hash()
 	assert.NoError(t, err)
 	atx.Nipst = NewNIPSTWithChallenge(hash, poetRef)
@@ -631,7 +631,7 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
 	err = atxdb.SyntacticallyValidateAtx(atx)
-	assert.EqualError(t, err, "atx contains view with unequal active ids (10) than seen (0)")
+	assert.EqualError(t, err, "atx contains view with unequal weight (10) than seen (0)")
 
 	// Wrong positioning atx.
 	atx = newActivationTx(idx1, 1, prevAtx.ID(), atxs[0].ID(), 1012, 0, 100, 100, coinbase, 3, []types.BlockID{}, &types.NIPST{})
@@ -898,7 +898,7 @@ func BenchmarkActivationDb_SyntacticallyValidateAtx(b *testing.B) {
 	challenge := newChallenge(idx1, 0, *types.EmptyATXID, *types.EmptyATXID, numberOfLayers+1)
 	hash, err := challenge.Hash()
 	r.NoError(err)
-	prevAtx := newAtx(challenge, activesetSize, blocks, NewNIPSTWithChallenge(hash, poetRef))
+	prevAtx := newAtx(challenge, blocks, NewNIPSTWithChallenge(hash, poetRef))
 
 	atx := newActivationTx(idx1, 1, prevAtx.ID(), prevAtx.ID(), numberOfLayers+1+layersPerEpochBig, 0, 100, 100, coinbase, activesetSize, blocks, &types.NIPST{})
 	hash, err = atx.NIPSTChallenge.Hash()
@@ -952,7 +952,7 @@ func BenchmarkNewActivationDb(b *testing.B) {
 			challenge := newChallenge(nodeID, 1, prevAtxs[miner], posAtx, layer)
 			h, err := challenge.Hash()
 			r.NoError(err)
-			atx = newAtx(challenge, numOfMiners, defaultView, NewNIPSTWithChallenge(h, poetRef))
+			atx = newAtx(challenge, defaultView, NewNIPSTWithChallenge(h, poetRef))
 			prevAtxs[miner] = atx.ID()
 			storeAtx(r, atxdb, atx, log.NewDefault("storeAtx").WithOptions(log.Nop))
 		}
