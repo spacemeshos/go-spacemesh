@@ -4,7 +4,10 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/nullstyle/go-xdr/xdr3"
+	"testing"
+	"time"
+
+	xdr "github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
@@ -16,8 +19,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"testing"
-	"time"
 )
 
 const selectCount = 100
@@ -247,7 +248,7 @@ func TestBlockBuilder_SerializeTrans(t *testing.T) {
 	buf, err := types.InterfaceToBytes(tx)
 	assert.NoError(t, err)
 
-	ntx, err := types.BytesAsTransaction(buf)
+	ntx, err := types.BytesToTransaction(buf)
 	assert.NoError(t, err)
 	err = ntx.CalcAndSetOrigin()
 	assert.NoError(t, err)

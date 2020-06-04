@@ -120,7 +120,7 @@ func hashInstanceAndK(instanceID types.LayerID, K int32) uint32 {
 	kInBytes := make([]byte, 4)
 	binary.LittleEndian.PutUint32(kInBytes, uint32(K))
 	h := newHasherU32()
-	val := h.Hash(instanceID.ToBytes(), kInBytes)
+	val := h.Hash(instanceID.Bytes(), kInBytes)
 	return val
 }
 

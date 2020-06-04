@@ -278,7 +278,7 @@ func getID(bids []types.BlockID) patternID {
 	// calc
 	h := fnv.New32()
 	for i := 0; i < len(bids); i++ {
-		h.Write(bids[i].ToBytes())
+		h.Write(bids[i].Bytes())
 	}
 	// update
 	sum := h.Sum32()

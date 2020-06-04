@@ -341,7 +341,7 @@ func (t *BlockBuilder) listenForTx() {
 				continue
 			}
 
-			tx, err := types.BytesAsTransaction(data.Bytes())
+			tx, err := types.BytesToTransaction(data.Bytes())
 			if err != nil {
 				t.With().Error("cannot parse incoming TX", log.Err(err))
 				continue
@@ -404,7 +404,7 @@ func (t *BlockBuilder) handleGossipAtx(data service.GossipMessage) {
 	if data == nil {
 		return
 	}
-	atx, err := types.BytesAsAtx(data.Bytes())
+	atx, err := types.BytesToAtx(data.Bytes())
 	if err != nil {
 		t.Error("cannot parse incoming ATX")
 		return

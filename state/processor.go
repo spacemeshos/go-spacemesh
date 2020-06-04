@@ -149,7 +149,7 @@ func (tp *TransactionProcessor) addStateToHistory(layer types.LayerID, newHash t
 }
 
 func getStateRootLayerKey(layer types.LayerID) []byte {
-	return append([]byte(newRootKey), layer.ToBytes()...)
+	return append([]byte(newRootKey), layer.Bytes()...)
 }
 
 func (tp *TransactionProcessor) addState(stateRoot types.Hash32, layer types.LayerID) error {
@@ -277,7 +277,7 @@ func (tp *TransactionProcessor) ApplyTransaction(trans *types.Transaction, layer
 
 	// subtract fee from account, fee will be sent to miners in layers after
 	tp.SubBalance(trans.Origin(), new(big.Int).SetUint64(trans.Fee))
-	if err := tp.processorDb.Put(trans.ID().Bytes(), layerID.ToBytes()); err != nil {
+	if err := tp.processorDb.Put(trans.ID().Bytes(), layerID.Bytes()); err != nil {
 		return fmt.Errorf("failed to add to applied txs: %v", err)
 	}
 	tp.With().Info("transaction processed", log.String("transaction", trans.String()))
