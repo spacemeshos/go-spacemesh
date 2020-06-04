@@ -4,6 +4,7 @@ package main
 
 import (
 	"cloud.google.com/go/profiler"
+	_ "expvar"
 	"fmt"
 	"os"
 
