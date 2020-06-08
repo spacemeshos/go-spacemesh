@@ -169,7 +169,7 @@ func (s SpacemeshGrpcService) GetNonce(ctx context.Context, in *pb.AccountId) (*
 func (s SpacemeshGrpcService) SubmitTransaction(ctx context.Context, in *pb.SignedTransaction) (*pb.TxConfirmation, error) {
 	log.Info("GRPC SubmitTransaction msg")
 
-	tx, err := types.BytesAsTransaction(in.Tx)
+	tx, err := types.BytesToTransaction(in.Tx)
 	if err != nil {
 		log.Error("failed to deserialize tx, error %v", err)
 		return nil, err

@@ -34,7 +34,7 @@ func layerIdsReqFactory(lyr types.LayerID) requestFactory {
 			}
 			ch <- ids
 		}
-		if err := s.SendRequest(layerIdsMsg, lyr.ToBytes(), peer, foo); err != nil {
+		if err := s.SendRequest(layerIdsMsg, lyr.Bytes(), peer, foo); err != nil {
 			return nil, err
 		}
 		return ch, nil
@@ -58,7 +58,7 @@ func hashReqFactory(lyr types.LayerID) requestFactory {
 			h.SetBytes(msg)
 			ch <- &peerHashPair{peer: peer, hash: h}
 		}
-		if err := s.SendRequest(layerHashMsg, lyr.ToBytes(), peer, foo); err != nil {
+		if err := s.SendRequest(layerHashMsg, lyr.Bytes(), peer, foo); err != nil {
 			return nil, err
 		}
 

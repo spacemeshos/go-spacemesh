@@ -109,7 +109,7 @@ type NIPSTChallenge struct {
 
 // Hash serializes the NIPSTChallenge and returns its hash.
 func (challenge *NIPSTChallenge) Hash() (*Hash32, error) {
-	ncBytes, err := NIPSTChallengeAsBytes(challenge)
+	ncBytes, err := NIPSTChallengeToBytes(challenge)
 	if err != nil {
 		return nil, err
 	}

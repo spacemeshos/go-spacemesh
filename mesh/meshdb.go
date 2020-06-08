@@ -225,7 +225,7 @@ func (m *DB) ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID
 
 // LayerBlockIds retrieves all block ids from a layer by layer index
 func (m *DB) LayerBlockIds(index types.LayerID) ([]types.BlockID, error) {
-	idsBytes, err := m.layers.Get(index.ToBytes())
+	idsBytes, err := m.layers.Get(index.Bytes())
 	if err != nil {
 		return nil, err
 	}
@@ -243,12 +243,12 @@ func (m *DB) LayerBlockIds(index types.LayerID) ([]types.BlockID, error) {
 }
 
 func (m *DB) getBlockBytes(id types.BlockID) ([]byte, error) {
-	return m.blocks.Get(id.ToBytes())
+	return m.blocks.Get(id.Bytes())
 }
 
 // ContextualValidity retrieves opinion on block from the database
 func (m *DB) ContextualValidity(id types.BlockID) (bool, error) {
-	b, err := m.contextualValidity.Get(id.ToBytes())
+	b, err := m.contextualValidity.Get(id.Bytes())
 	if err != nil {
 		return false, err
 	}
@@ -264,7 +264,7 @@ func (m *DB) SaveContextualValidity(id types.BlockID, valid bool) error {
 		v = constFalse
 	}
 	m.Debug("save contextual validity %v %v", id, valid)
-	return m.contextualValidity.Put(id.ToBytes(), v)
+	return m.contextualValidity.Put(id.Bytes(), v)
 }
 
 func (m *DB) writeBlock(bl *types.Block) error {
@@ -273,7 +273,7 @@ func (m *DB) writeBlock(bl *types.Block) error {
 		return fmt.Errorf("could not encode bl")
 	}
 
-	if err := m.blocks.Put(bl.ID().ToBytes(), bytes); err != nil {
+	if err := m.blocks.Put(bl.ID().Bytes(), bytes); err != nil {
 		return fmt.Errorf("could not add bl %v to database %v", bl.ID(), err)
 	}
 
@@ -289,7 +289,7 @@ func (m *DB) updateLayerWithBlock(blk *types.Block) error {
 	defer m.endLayerWorker(blk.LayerIndex)
 	lm.m.Lock()
 	defer lm.m.Unlock()
-	ids, err := m.layers.Get(blk.LayerIndex.ToBytes())
+	ids, err := m.layers.Get(blk.LayerIndex.Bytes())
 	var blockIds []types.BlockID
 	if err != nil {
 		// layer doesnt exist, need to insert new layer
@@ -302,11 +302,11 @@ func (m *DB) updateLayerWithBlock(blk *types.Block) error {
 	}
 	m.Debug("added block %v to layer %v", blk.ID(), blk.LayerIndex)
 	blockIds = append(blockIds, blk.ID())
-	w, err := types.BlockIdsAsBytes(blockIds)
+	w, err := types.BlockIdsToBytes(blockIds)
 	if err != nil {
 		return errors.New("could not encode layer blk ids")
 	}
-	m.layers.Put(blk.LayerIndex.ToBytes(), w)
+	m.layers.Put(blk.LayerIndex.Bytes(), w)
 	return nil
 }
 

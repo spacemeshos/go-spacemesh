@@ -92,7 +92,7 @@ func calcValue(bids map[types.BlockID]struct{}) uint32 {
 	// calc
 	h := fnv.New32()
 	for i := 0; i < len(keys); i++ {
-		_, err := h.Write(keys[i].ToBytes())
+		_, err := h.Write(keys[i].Bytes())
 		if err != nil {
 			log.Panic("Could not calculate Beacon value. Hash write error=%v", err)
 		}
