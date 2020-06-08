@@ -4,18 +4,19 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"github.com/nullstyle/go-xdr/xdr3"
+
+	xdr "github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 )
 
-// ToBytes returns the BlockID as a byte slice.
-func (id BlockID) ToBytes() []byte { return id.AsHash32().Bytes() }
+// Bytes returns the BlockID as a byte slice.
+func (id BlockID) Bytes() []byte { return id.AsHash32().Bytes() }
 
-// ToBytes returns the byte representation of the LayerID, using little endian encoding.
-func (l LayerID) ToBytes() []byte { return util.Uint64ToBytes(uint64(l)) }
+// Bytes returns the byte representation of the LayerID, using little endian encoding.
+func (l LayerID) Bytes() []byte { return util.Uint64ToBytes(uint64(l)) }
 
-// BlockIdsAsBytes serializes a slice of BlockIDs.
-func BlockIdsAsBytes(ids []BlockID) ([]byte, error) {
+// BlockIdsToBytes serializes a slice of BlockIDs.
+func BlockIdsToBytes(ids []BlockID) ([]byte, error) {
 	var w bytes.Buffer
 	SortBlockIDs(ids)
 	if _, err := xdr.Marshal(&w, &ids); err != nil {
@@ -33,8 +34,8 @@ func BytesToBlockIds(blockIds []byte) ([]BlockID, error) {
 	return ids, nil
 }
 
-// BytesAsAtx deserializes an ActivationTx.
-func BytesAsAtx(b []byte) (*ActivationTx, error) {
+// BytesToAtx deserializes an ActivationTx.
+func BytesToAtx(b []byte) (*ActivationTx, error) {
 	buf := bytes.NewReader(b)
 	var atx ActivationTx
 	_, err := xdr.Unmarshal(buf, &atx)
@@ -44,8 +45,8 @@ func BytesAsAtx(b []byte) (*ActivationTx, error) {
 	return &atx, nil
 }
 
-// NIPSTChallengeAsBytes serializes a NIPSTChallenge.
-func NIPSTChallengeAsBytes(challenge *NIPSTChallenge) ([]byte, error) {
+// NIPSTChallengeToBytes serializes a NIPSTChallenge.
+func NIPSTChallengeToBytes(challenge *NIPSTChallenge) ([]byte, error) {
 	var w bytes.Buffer
 	if _, err := xdr.Marshal(&w, challenge); err != nil {
 		return nil, fmt.Errorf("error marshalling NIPST Challenge: %v", err)
@@ -53,8 +54,8 @@ func NIPSTChallengeAsBytes(challenge *NIPSTChallenge) ([]byte, error) {
 	return w.Bytes(), nil
 }
 
-// BytesAsTransaction deserializes a Transaction.
-func BytesAsTransaction(buf []byte) (*Transaction, error) {
+// BytesToTransaction deserializes a Transaction.
+func BytesToTransaction(buf []byte) (*Transaction, error) {
 	b := Transaction{}
 	_, err := xdr.Unmarshal(bytes.NewReader(buf), &b)
 	if err != nil {

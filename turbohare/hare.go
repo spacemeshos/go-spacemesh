@@ -39,6 +39,6 @@ func (h *SuperHare) GetResult(id types.LayerID) ([]types.BlockID, error) {
 		log.Error("WTF SUPERHARE?? %v err: %v", id, err)
 		return nil, err
 	}
-	sort.Slice(blks, func(i, j int) bool { return bytes.Compare(blks[i].ToBytes(), blks[j].ToBytes()) == -1 })
+	sort.Slice(blks, func(i, j int) bool { return bytes.Compare(blks[i].Bytes(), blks[j].Bytes()) == -1 })
 	return blks, nil
 }

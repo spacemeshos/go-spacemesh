@@ -105,6 +105,6 @@ func TestSet_ToSlice(t *testing.T) {
 	arr := []types.BlockID{value7, value1, value5, value6, value2, value3, value4}
 	s := NewSet(arr)
 	res := s.ToSlice()
-	sort.Slice(arr, func(i, j int) bool { return bytes.Compare(arr[i].ToBytes(), arr[j].ToBytes()) == -1 })
+	sort.Slice(arr, func(i, j int) bool { return bytes.Compare(arr[i].Bytes(), arr[j].Bytes()) == -1 })
 	assert.Equal(t, arr, res) // check result is sorted, required for order of set in commit msgs
 }

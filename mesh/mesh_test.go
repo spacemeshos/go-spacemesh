@@ -485,6 +485,6 @@ func TestMesh_AddBlockWithTxs(t *testing.T) {
 
 	err := mesh.AddBlockWithTxs(blk, nil, nil)
 	r.EqualError(err, "failed to process ATXs: 💥")
-	_, err = meshDB.blocks.Get(blk.ID().ToBytes())
+	_, err = meshDB.blocks.Get(blk.ID().Bytes())
 	r.EqualError(err, "leveldb: not found")
 }

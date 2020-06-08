@@ -47,7 +47,7 @@ func newLayerBlockIdsRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg 
 			ids = append(ids, b.ID())
 		}
 
-		idbytes, err := types.BlockIdsAsBytes(ids)
+		idbytes, err := types.BlockIdsToBytes(ids)
 		if err != nil {
 			logger.Error("Error marshaling response message, with blocks IDs: %v and error:", ids, err)
 			return nil

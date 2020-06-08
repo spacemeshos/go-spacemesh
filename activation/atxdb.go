@@ -666,7 +666,7 @@ func (db *DB) GetFullAtx(id types.ATXID) (*types.ActivationTx, error) {
 	if err != nil {
 		return nil, err
 	}
-	atx, err := types.BytesAsAtx(atxBytes)
+	atx, err := types.BytesToAtx(atxBytes)
 	if err != nil {
 		return nil, err
 	}

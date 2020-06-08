@@ -26,7 +26,7 @@ func (id BlockID) Field() log.Field {
 
 // Compare returns true if other (the given BlockID) is less than this BlockID, by lexicographic comparison.
 func (id BlockID) Compare(other BlockID) bool {
-	return bytes.Compare(id.ToBytes(), other.ToBytes()) < 0
+	return bytes.Compare(id.Bytes(), other.Bytes()) < 0
 }
 
 // AsHash32 returns a Hash32 whose first 20 bytes are the bytes of this BlockID, it is right-padded with zeros.
