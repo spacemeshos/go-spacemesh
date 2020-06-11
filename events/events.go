@@ -29,7 +29,6 @@ func Publish(event Event) {
 		if err != nil {
 			log.Error("pubsub error: %v", err)
 		}
-
 	}
 }
 
