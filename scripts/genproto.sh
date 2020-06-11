@@ -28,10 +28,8 @@ fi
 
 echo "using protoc from $protoc"
 
-grpc_gateway_path=$(go list -m -f '{{.Dir}}' github.com/grpc-ecosystem/grpc-gateway)
-googleapis_path="$grpc_gateway_path/third_party/googleapis"
-
-echo "Generating protobuf for api/pb"
-compile -I. -I$googleapis_path --go_out=plugins=grpc:. api/pb/api.proto
-compile -I. -I$googleapis_path --grpc-gateway_out=logtostderr=true:. api/pb/api.proto
-compile -I. -I$googleapis_path --swagger_out=logtostderr=true:. api/pb/api.proto
+echo "Generating protobuf for api"
+compile -I api/api/proto -I api/api/third_party --go_out=plugins=grpc:api api/api/proto/spacemesh/v1/*.proto
+compile -I api/api/proto -I api/api/third_party --grpc-gateway_out=logtostderr=true:api api/api/proto/spacemesh/v1/*.proto
+# is swagger actually used anywhere?
+#compile -I api/api/proto -I api/api/third_party --swagger_out=logtostderr=true:api api/api/proto/spacemesh/v1/*.proto
