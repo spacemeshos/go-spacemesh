@@ -128,7 +128,7 @@ You specify these parameters by providing go-spacemesh with a json config file. 
 
 #### Joining a Testnet (without mining)
 1. Build go-spacemesh from source code.
-2. Obtain the testnet's json config file.
+2. Download the testnet's json config file. Make sure your local config file suffix is .json.
 3. Start go-spacemesh with the following arguments:
 
 ```bash
@@ -169,7 +169,7 @@ Assuming tn1.json is a testnet config file saved in the same directory as go-spa
 
 #### Joining Spacemesh ([TweedleDee](https://testnet.spacemesh.io/#/?id=what-is-spacemesh-01-tweedledee)) Testnet (net id 115)
 1. Build go-spacemesh source code from this github release: [go-spacemesh 0.1.12](https://github.com/spacemeshos/go-spacemesh/releases/tag/v0.1.12).
-2. Follow the instructions on how to join a testnet with mining (above) and use [TweedleDee net id 115 config file](https://raw.githubusercontent.com/spacemeshos/smapp/0.0.12/desktop/config.json) as your node's config file.  
+2. Follow the instructions on how to join a testnet with mining (above) and use [TweedleDee net id 116 config file](https://storage.googleapis.com/smapp/0.0.13/config.json) as your node's config file.  
 
 ---
 
