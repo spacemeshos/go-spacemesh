@@ -30,5 +30,3 @@ echo "using protoc from $protoc"
 echo "Generating protobuf for api"
 compile -I api/api/proto -I api/api/third_party --go_out=plugins=grpc:api api/api/proto/spacemesh/v1/*.proto
 compile -I api/api/proto -I api/api/third_party --grpc-gateway_out=logtostderr=true:api api/api/proto/spacemesh/v1/*.proto
-# is swagger actually used anywhere?
-#compile -I api/api/proto -I api/api/third_party --swagger_out=logtostderr=true:api api/api/proto/spacemesh/v1/*.proto

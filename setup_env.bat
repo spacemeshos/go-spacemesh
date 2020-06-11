@@ -25,6 +25,4 @@ IF [%grpc_gateway_path%]==[] (
 
 ECHO installing protoc-gen-grpc-gateway...
 go install %grpc_gateway_path%/protoc-gen-grpc-gateway
-REM ECHO installing protoc-gen-swagger...
-REM go install %grpc_gateway_path%/protoc-gen-swagger
 

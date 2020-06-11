@@ -13,9 +13,6 @@ go install $protobuf_path/protoc-gen-go
 grpc_gateway_path=$(go list -m -f '{{.Dir}}' github.com/grpc-ecosystem/grpc-gateway)
 echo "installing protoc-gen-grpc-gateway"
 go install $grpc_gateway_path/protoc-gen-grpc-gateway
-#
-#echo "installing protoc-gen-swagger"
-#go install $grpc_gateway_path/protoc-gen-swagger
 
 GO111MODULE=off go get golang.org/x/lint/golint # TODO: also install on Windows
 

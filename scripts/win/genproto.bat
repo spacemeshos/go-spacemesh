@@ -9,4 +9,3 @@ FOR /F "tokens=* USEBACKQ" %%F IN (`go list -m -f {{.Dir}} github.com/grpc-ecosy
 ECHO Generating protobuf for api/pb
 %USERPROFILE%\protoc-3.6.1\bin\protoc -I api\api\proto -I api\api\third_party --go_out=plugins=grpc:api api\api\spacemesh\v1\*.proto
 %USERPROFILE%\protoc-3.6.1\bin\protoc -I api\api\proto -I api\api\third_party --grpc-gateway_out=logtostderr=true:api api\api\spacemesh\v1\*.proto
-REM %USERPROFILE%\protoc-3.6.1\bin\protoc -I%CD%\api\pb -I %grpc_gateway_path%\third_party\googleapis --swagger_out=logtostderr=true:%CD%\api\pb %CD%\api\pb\api.proto
