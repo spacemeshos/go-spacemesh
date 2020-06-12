@@ -14,8 +14,8 @@ import (
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/reflection"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/config"
@@ -29,8 +29,8 @@ type PeerCounter interface {
 	PeerCount() uint64
 }
 
-// SpacemeshGrpcService is a grpc server providing the Spacemesh api
-type SpacemeshGrpcService struct {
+// NodeGrpcService is a grpc server providing the Spacemesh api
+type NodeGrpcService struct {
 	Server        *grpc.Server
 	Port          uint
 	StateAPI      StateAPI         // State DB
@@ -48,9 +48,30 @@ type SpacemeshGrpcService struct {
 	Logging       LoggingAPI
 }
 
-var _ pb.SpacemeshServiceServer = (*SpacemeshGrpcService)(nil)
+var _ pb.NodeServiceServer = (*NodeGrpcService)(nil)
 
-func (s SpacemeshGrpcService) getTransactionAndStatus(txID types.TransactionID) (*types.Transaction, *types.LayerID, pb.TxStatus, error) {
+// Echo returns the response for an echo api request
+func (s NodeGrpcService) Echo(ctx context.Context, in *pb.EchoRequest) (*pb.EchoResponse, error) {
+	return &pb.EchoResponse{Msg: &pb.SimpleString{Value: in.Msg.Value}}, nil
+}
+
+// GetNodeStatus returns a status object providing information about the connected peers, sync status,
+// current and verified layer
+func (s NodeGrpcService) Status(context.Context, *empty.Empty) (*pb.StatusResponse, error) {
+	return &pb.StatusResponse{
+		Status: &pb.NodeStatus{
+			ConnectedPeers: s.PeerCounter.PeerCount(),
+			//MinPeers:      uint64(s.Config.P2P.SwarmConfig.RandomConnections),
+			//MaxPeers:      uint64(s.Config.P2P.MaxInboundPeers + s.Config.P2P.SwarmConfig.RandomConnections),
+			IsSynced:       s.Syncer.IsSynced(),
+			SyncedLayer:   	s.Tx.LatestLayer().Uint64(),
+			TopLayer:  		s.GenTime.GetCurrentLayer().Uint64(),
+			VerifiedLayer: 	s.Tx.LatestLayerInState().Uint64(),
+		},
+	}, nil
+}
+
+func (s NodeGrpcService) getTransactionAndStatus(txID types.TransactionID) (*types.Transaction, *types.LayerID, pb.TxStatus, error) {
 	tx, err := s.Tx.GetTransaction(txID) // have we seen this transaction in a block?
 	if err != nil {
 		tx, err = s.TxMempool.Get(txID) // do we have it in the mempool?
@@ -76,7 +97,7 @@ func (s SpacemeshGrpcService) getTransactionAndStatus(txID types.TransactionID) 
 }
 
 // GetTransaction gets transaction details by id
-func (s SpacemeshGrpcService) GetTransaction(ctx context.Context, txID *pb.TransactionId) (*pb.Transaction, error) {
+func (s NodeGrpcService) GetTransaction(ctx context.Context, txID *pb.TransactionId) (*pb.Transaction, error) {
 	id := types.TransactionID{}
 	copy(id[:], txID.Id)
 
@@ -108,12 +129,7 @@ func (s SpacemeshGrpcService) GetTransaction(ctx context.Context, txID *pb.Trans
 	}, nil
 }
 
-// Echo returns the response for an echo api request
-func (s SpacemeshGrpcService) Echo(ctx context.Context, in *pb.SimpleMessage) (*pb.SimpleMessage, error) {
-	return &pb.SimpleMessage{Value: in.Value}, nil
-}
-
-func (s SpacemeshGrpcService) getProjection(addr types.Address) (nonce, balance uint64, err error) {
+func (s NodeGrpcService) getProjection(addr types.Address) (nonce, balance uint64, err error) {
 	nonce = s.StateAPI.GetNonce(addr)
 	balance = s.StateAPI.GetBalance(addr)
 	nonce, balance, err = s.Tx.GetProjection(addr, nonce, balance)
@@ -127,7 +143,7 @@ func (s SpacemeshGrpcService) getProjection(addr types.Address) (nonce, balance 
 // GetBalance returns the current account balance for the provided account ID. The balance is based on the global state
 // and all known transactions in unapplied blocks and the mempool that originate from the given account. Unapplied
 // transactions coming INTO the given account (from mempool or unapplied blocks) are NOT counted.
-func (s SpacemeshGrpcService) GetBalance(ctx context.Context, in *pb.AccountId) (*pb.SimpleMessage, error) {
+func (s NodeGrpcService) GetBalance(ctx context.Context, in *pb.AccountId) (*pb.SimpleMessage, error) {
 	log.Debug("GRPC GetBalance msg")
 	addr := types.HexToAddress(in.Address)
 	log.Debug("GRPC GetBalance for address %x (len %v)", addr, len(addr))
@@ -147,7 +163,7 @@ func (s SpacemeshGrpcService) GetBalance(ctx context.Context, in *pb.AccountId) 
 
 // GetNonce returns the current account nonce for the provided account ID. The nonce is based on the global state and
 // all known transactions in unapplied blocks and the mempool.
-func (s SpacemeshGrpcService) GetNonce(ctx context.Context, in *pb.AccountId) (*pb.SimpleMessage, error) {
+func (s NodeGrpcService) GetNonce(ctx context.Context, in *pb.AccountId) (*pb.SimpleMessage, error) {
 	log.Info("GRPC GetNonce msg")
 	addr := types.HexToAddress(in.Address)
 
@@ -166,7 +182,7 @@ func (s SpacemeshGrpcService) GetNonce(ctx context.Context, in *pb.AccountId) (*
 }
 
 // SubmitTransaction transmits transaction via gossip metwork
-func (s SpacemeshGrpcService) SubmitTransaction(ctx context.Context, in *pb.SignedTransaction) (*pb.TxConfirmation, error) {
+func (s NodeGrpcService) SubmitTransaction(ctx context.Context, in *pb.SignedTransaction) (*pb.TxConfirmation, error) {
 	log.Info("GRPC SubmitTransaction msg")
 
 	tx, err := types.BytesToTransaction(in.Tx)
@@ -199,7 +215,7 @@ func (s SpacemeshGrpcService) SubmitTransaction(ctx context.Context, in *pb.Sign
 // P2P API
 
 // Broadcast broadcasts message to gossip network
-func (s SpacemeshGrpcService) Broadcast(ctx context.Context, in *pb.BroadcastMessage) (*pb.SimpleMessage, error) {
+func (s NodeGrpcService) Broadcast(ctx context.Context, in *pb.BroadcastMessage) (*pb.SimpleMessage, error) {
 	log.Info("GRPC Broadcast msg")
 	err := s.Network.Broadcast(apiGossipProtocol, []byte(in.Data))
 	if err != nil {
@@ -211,7 +227,7 @@ func (s SpacemeshGrpcService) Broadcast(ctx context.Context, in *pb.BroadcastMes
 }
 
 // BroadcastPoet is a specialized API to broadcast poet messages
-func (s SpacemeshGrpcService) BroadcastPoet(ctx context.Context, in *pb.BinaryMessage) (*pb.SimpleMessage, error) {
+func (s NodeGrpcService) BroadcastPoet(ctx context.Context, in *pb.BinaryMessage) (*pb.SimpleMessage, error) {
 	log.Debug("GRPC Broadcast PoET msg")
 	err := s.Network.Broadcast(activation.PoetProofProtocol, in.Data)
 	if err != nil {
@@ -223,7 +239,7 @@ func (s SpacemeshGrpcService) BroadcastPoet(ctx context.Context, in *pb.BinaryMe
 }
 
 // Close stops the grpc service.
-func (s SpacemeshGrpcService) Close() error {
+func (s NodeGrpcService) Close() error {
 	log.Debug("Stopping grpc service...")
 	s.Server.Stop()
 	log.Debug("grpc service stopped...")
@@ -251,7 +267,7 @@ type TxAPI interface {
 }
 
 // NewGrpcService create a new grpc service using config data.
-func NewGrpcService(port int, net NetworkAPI, state StateAPI, tx TxAPI, txMempool *miner.TxMempool, mining MiningAPI, oracle OracleAPI, genTime GenesisTimeAPI, post PostAPI, layerDurationSec int, syncer Syncer, cfg *config.Config, logging LoggingAPI) *SpacemeshGrpcService {
+func NewGrpcService(port int, net NetworkAPI, state StateAPI, tx TxAPI, txMempool *miner.TxMempool, mining MiningAPI, oracle OracleAPI, genTime GenesisTimeAPI, post PostAPI, layerDurationSec int, syncer Syncer, cfg *config.Config, logging LoggingAPI) *NodeGrpcService {
 	options := []grpc.ServerOption{
 		// XXX: this is done to prevent routers from cleaning up our connections (e.g aws load balances..)
 		// TODO: these parameters work for now but we might need to revisit or add them as configuration
@@ -265,7 +281,7 @@ func NewGrpcService(port int, net NetworkAPI, state StateAPI, tx TxAPI, txMempoo
 		}),
 	}
 	server := grpc.NewServer(options...)
-	return &SpacemeshGrpcService{
+	return &NodeGrpcService{
 		Server:        server,
 		Port:          uint(port),
 		StateAPI:      state,
@@ -285,12 +301,12 @@ func NewGrpcService(port int, net NetworkAPI, state StateAPI, tx TxAPI, txMempoo
 }
 
 // StartService starts the grpc service.
-func (s SpacemeshGrpcService) StartService() {
+func (s NodeGrpcService) StartService() {
 	go s.startServiceInternal()
 }
 
 // This is a blocking method designed to be called using a go routine
-func (s SpacemeshGrpcService) startServiceInternal() {
+func (s NodeGrpcService) startServiceInternal() {
 	addr := ":" + strconv.Itoa(int(s.Port))
 
 	lis, err := net.Listen("tcp", addr)
@@ -314,7 +330,7 @@ func (s SpacemeshGrpcService) startServiceInternal() {
 }
 
 // StartMining start post init followed by publication of atxs and blocks
-func (s SpacemeshGrpcService) StartMining(ctx context.Context, message *pb.InitPost) (*pb.SimpleMessage, error) {
+func (s NodeGrpcService) StartMining(ctx context.Context, message *pb.InitPost) (*pb.SimpleMessage, error) {
 	log.Info("GRPC StartMining msg")
 	addr, err := types.StringToAddress(message.Coinbase)
 	if err != nil {
@@ -328,7 +344,7 @@ func (s SpacemeshGrpcService) StartMining(ctx context.Context, message *pb.InitP
 }
 
 // SetAwardsAddress sets the award address for which this miner will receive awards
-func (s SpacemeshGrpcService) SetAwardsAddress(ctx context.Context, id *pb.AccountId) (*pb.SimpleMessage, error) {
+func (s NodeGrpcService) SetAwardsAddress(ctx context.Context, id *pb.AccountId) (*pb.SimpleMessage, error) {
 	log.Info("GRPC SetAwardsAddress msg")
 	addr := types.HexToAddress(id.Address)
 	s.Mining.SetCoinbaseAccount(addr)
@@ -336,7 +352,7 @@ func (s SpacemeshGrpcService) SetAwardsAddress(ctx context.Context, id *pb.Accou
 }
 
 // GetMiningStats returns post creation status, coinbase address and post data directory
-func (s SpacemeshGrpcService) GetMiningStats(ctx context.Context, empty *empty.Empty) (*pb.MiningStats, error) {
+func (s NodeGrpcService) GetMiningStats(ctx context.Context, empty *empty.Empty) (*pb.MiningStats, error) {
 	//todo: we should review if this RPC is necessary
 	log.Info("GRPC GetInitProgress msg")
 	stat, remainingBytes, coinbase, dataDir := s.Mining.MiningStats()
@@ -348,22 +364,8 @@ func (s SpacemeshGrpcService) GetMiningStats(ctx context.Context, empty *empty.E
 	}, nil
 }
 
-// GetNodeStatus returns a status object providing information about the connected peers, sync status,
-// current and verified layer
-func (s SpacemeshGrpcService) GetNodeStatus(context.Context, *empty.Empty) (*pb.NodeStatus, error) {
-	return &pb.NodeStatus{
-		Peers:         s.PeerCounter.PeerCount(),
-		MinPeers:      uint64(s.Config.P2P.SwarmConfig.RandomConnections),
-		MaxPeers:      uint64(s.Config.P2P.MaxInboundPeers + s.Config.P2P.SwarmConfig.RandomConnections),
-		Synced:        s.Syncer.IsSynced(),
-		SyncedLayer:   s.Tx.LatestLayer().Uint64(),
-		CurrentLayer:  s.GenTime.GetCurrentLayer().Uint64(),
-		VerifiedLayer: s.Tx.LatestLayerInState().Uint64(),
-	}, nil
-}
-
 // GetUpcomingAwards returns the id of layers at which this miner will receive rewards
-func (s SpacemeshGrpcService) GetUpcomingAwards(ctx context.Context, empty *empty.Empty) (*pb.EligibleLayers, error) {
+func (s NodeGrpcService) GetUpcomingAwards(ctx context.Context, empty *empty.Empty) (*pb.EligibleLayers, error) {
 	log.Info("GRPC GetUpcomingAwards msg")
 	layers := s.Oracle.GetEligibleLayers()
 	ly := make([]uint64, 0, len(layers))
@@ -374,13 +376,13 @@ func (s SpacemeshGrpcService) GetUpcomingAwards(ctx context.Context, empty *empt
 }
 
 // GetGenesisTime returns the time at which this blockmesh has started
-func (s SpacemeshGrpcService) GetGenesisTime(ctx context.Context, empty *empty.Empty) (*pb.SimpleMessage, error) {
+func (s NodeGrpcService) GetGenesisTime(ctx context.Context, empty *empty.Empty) (*pb.SimpleMessage, error) {
 	log.Info("GRPC GetGenesisTime msg")
 	return &pb.SimpleMessage{Value: s.GenTime.GetGenesisTime().Format(time.RFC3339)}, nil
 }
 
 // ResetPost removed post commitment for this miner
-func (s SpacemeshGrpcService) ResetPost(ctx context.Context, empty *empty.Empty) (*pb.SimpleMessage, error) {
+func (s NodeGrpcService) ResetPost(ctx context.Context, empty *empty.Empty) (*pb.SimpleMessage, error) {
 	log.Info("GRPC ResetPost msg")
 	stat, _, _, _ := s.Mining.MiningStats()
 	if stat == activation.InitInProgress {
@@ -394,7 +396,7 @@ func (s SpacemeshGrpcService) ResetPost(ctx context.Context, empty *empty.Empty)
 }
 
 // SetLoggerLevel sets logger level for specific logger
-func (s SpacemeshGrpcService) SetLoggerLevel(ctx context.Context, msg *pb.SetLogLevel) (*pb.SimpleMessage, error) {
+func (s NodeGrpcService) SetLoggerLevel(ctx context.Context, msg *pb.SetLogLevel) (*pb.SimpleMessage, error) {
 	log.Info("GRPC SetLogLevel msg")
 	err := s.Logging.SetLogLevel(msg.LoggerName, msg.Severity)
 	if err != nil {
@@ -404,7 +406,7 @@ func (s SpacemeshGrpcService) SetLoggerLevel(ctx context.Context, msg *pb.SetLog
 }
 
 // GetAccountTxs returns transactions that were applied and pending by this account
-func (s SpacemeshGrpcService) GetAccountTxs(ctx context.Context, txsSinceLayer *pb.GetTxsSinceLayer) (*pb.AccountTxs, error) {
+func (s NodeGrpcService) GetAccountTxs(ctx context.Context, txsSinceLayer *pb.GetTxsSinceLayer) (*pb.AccountTxs, error) {
 	log.Debug("GRPC GetAccountTxs msg")
 
 	currentPBase := s.Tx.LatestLayerInState()
@@ -430,7 +432,7 @@ func (s SpacemeshGrpcService) GetAccountTxs(ctx context.Context, txsSinceLayer *
 	return &txs, nil
 }
 
-func (s SpacemeshGrpcService) getTxIdsFromMesh(minLayer types.LayerID, addr types.Address) []types.TransactionID {
+func (s NodeGrpcService) getTxIdsFromMesh(minLayer types.LayerID, addr types.Address) []types.TransactionID {
 	var txIDs []types.TransactionID
 	for layerID := minLayer; layerID < s.Tx.LatestLayer(); layerID++ {
 		destTxIDs := s.Tx.GetTransactionsByDestination(layerID, addr)
@@ -442,7 +444,7 @@ func (s SpacemeshGrpcService) getTxIdsFromMesh(minLayer types.LayerID, addr type
 }
 
 // GetAccountRewards returns the rewards for the provided account
-func (s SpacemeshGrpcService) GetAccountRewards(ctx context.Context, account *pb.AccountId) (*pb.AccountRewards, error) {
+func (s NodeGrpcService) GetAccountRewards(ctx context.Context, account *pb.AccountId) (*pb.AccountRewards, error) {
 	log.Debug("GRPC GetAccountRewards msg")
 	acc := types.HexToAddress(account.Address)
 
@@ -464,7 +466,7 @@ func (s SpacemeshGrpcService) GetAccountRewards(ctx context.Context, account *pb
 }
 
 // GetStateRoot returns current state root
-func (s SpacemeshGrpcService) GetStateRoot(ctx context.Context, empty *empty.Empty) (*pb.SimpleMessage, error) {
+func (s NodeGrpcService) GetStateRoot(ctx context.Context, empty *empty.Empty) (*pb.SimpleMessage, error) {
 	log.Info("GRPC GetStateRoot msg")
 	return &pb.SimpleMessage{Value: s.Tx.GetStateRoot().String()}, nil
 }
