@@ -30,7 +30,7 @@ import (
 
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/spacemeshos/go-spacemesh/api/config"
-	"github.com/spacemeshos/go-spacemesh/api/pb"
+	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -264,13 +264,13 @@ func TestGrpcApi(t *testing.T) {
 	defer func() {
 		require.NoError(t, conn.Close())
 	}()
-	c := pb.NewSpacemeshServiceClient(conn)
+	c := pb.NewNodeServiceClient(conn)
 
 	// call echo and validate result
-	response, err := c.Echo(context.Background(), &pb.SimpleMessage{Value: message})
+	response, err := c.Echo(context.Background(), &pb.EchoRequest{Msg: &pb.SimpleString{Value: message}})
 	require.NoError(t, err)
 
-	require.Equal(t, message, response.Value)
+	require.Equal(t, message, response.Msg.Value)
 
 	// stop the server
 	shutDown()

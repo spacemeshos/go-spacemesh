@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"strconv"
 
-	gw "github.com/spacemeshos/go-spacemesh/api/pb"
+	gw "github.com/spacemeshos/api/release/go/spacemesh/v1"
 )
 
 // JSONHTTPServer is a JSON http server providing the Spacemesh API.

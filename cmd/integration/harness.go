@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/spacemeshos/go-spacemesh/api/pb"
+	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/go-spacemesh/log"
 
 	"google.golang.org/grpc"
