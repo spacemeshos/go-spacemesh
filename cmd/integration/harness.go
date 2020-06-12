@@ -32,7 +32,7 @@ func Contains(a []string, x string) int {
 type Harness struct {
 	server *server
 	conn   *grpc.ClientConn
-	pb.SpacemeshServiceClient
+	pb.NodeServiceClient
 }
 
 func newHarnessDefaultServerConfig(args []string) (*Harness, error) {
