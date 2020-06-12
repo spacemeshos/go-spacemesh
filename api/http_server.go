@@ -56,7 +56,7 @@ func (s *JSONHTTPServer) startInternal() {
 	} else {
 		echoEndpoint = *flag.String(endpoint, "localhost:"+grpcPortStr, "endpoint of api grpc service")
 	}
-	if err := gw.RegisterSpacemeshServiceHandlerFromEndpoint(context.Background(), mux, echoEndpoint, opts); err != nil {
+	if err := gw.RegisterNodeServiceHandlerFromEndpoint(context.Background(), mux, echoEndpoint, opts); err != nil {
 		log.Error("failed to register http endpoint with grpc", err)
 	}
 
