@@ -16,6 +16,7 @@ import (
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/config"
@@ -53,6 +54,20 @@ var _ pb.NodeServiceServer = (*NodeGrpcService)(nil)
 // Echo returns the response for an echo api request
 func (s NodeGrpcService) Echo(ctx context.Context, in *pb.EchoRequest) (*pb.EchoResponse, error) {
 	return &pb.EchoResponse{Msg: &pb.SimpleString{Value: in.Msg.Value}}, nil
+}
+
+// Version returns the version of the node software as a semver string
+func (s NodeGrpcService) Version(ctx context.Context, in *empty.Empty) (*pb.VersionResponse, error) {
+	return &pb.VersionResponse{
+		VersionString: &pb.SimpleString{Value: cmd.Version},
+	}, nil
+}
+
+// Build returns the build of the node software
+func (s NodeGrpcService) Build(ctx context.Context, in *empty.Empty) (*pb.BuildResponse, error) {
+	return &pb.BuildResponse{
+		BuildString: &pb.SimpleString{Value: cmd.Commit},
+	}, nil
 }
 
 // GetNodeStatus returns a status object providing information about the connected peers, sync status,
