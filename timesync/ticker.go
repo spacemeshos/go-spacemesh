@@ -2,10 +2,11 @@ package timesync
 
 import (
 	"errors"
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"sync"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 // subs implements a lock-protected Subscribe-Unsubscribe structure
@@ -88,11 +89,10 @@ const sendTickThreshold = 500 * time.Millisecond
 // notify may be skipped also for non-monotonic tick
 // if some of the subscribers where not listening, they are skipped. In that case, errMissedTicks is returned along the number of subscribers not listening
 func (t *Ticker) Notify() (int, error) {
+	t.m.Lock()
 	if !t.started {
 		return 0, errNotStarted
 	}
-
-	t.m.Lock()
 
 	layer := t.TimeToLayer(t.clock.Now())
 	// close prev layers
@@ -153,7 +153,9 @@ func (t *Ticker) timeSinceLastTick() time.Duration {
 // StartNotifying starts the clock notifying
 func (t *Ticker) StartNotifying() {
 	t.log.Info("started notifying")
+	t.m.Lock()
 	t.started = true
+	t.m.Unlock()
 }
 
 // GetCurrentLayer gets the current layer
