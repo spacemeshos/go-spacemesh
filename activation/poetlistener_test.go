@@ -2,14 +2,16 @@ package activation
 
 import (
 	"fmt"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/stretchr/testify/require"
-	"testing"
-	"time"
 )
 
 type ServiceMock struct {
@@ -52,11 +54,20 @@ func (m *mockMsg) ValidationCompletedChan() chan service.MessageValidation { pan
 func (m *mockMsg) ReportValidation(protocol string) { m.validationReported = true }
 
 type PoetDbIMock struct {
+	lock          sync.Mutex
 	validationErr error
 }
 
 func (p *PoetDbIMock) Validate(proof types.PoetProof, poetID []byte, roundID string, signature []byte) error {
+	p.lock.Lock()
+	defer p.lock.Unlock()
 	return p.validationErr
+}
+
+func (p *PoetDbIMock) SetErr(err error) {
+	p.lock.Lock()
+	defer p.lock.Unlock()
+	p.validationErr = err
 }
 
 func (p *PoetDbIMock) storeProof(proofMessage *types.PoetProofMessage) error { return nil }
@@ -81,7 +92,7 @@ func TestNewPoetListener(t *testing.T) {
 
 	// send invalid message
 	invalidMsg := mockMsg{}
-	poetDb.validationErr = fmt.Errorf("bad poet message")
+	poetDb.SetErr(fmt.Errorf("bad poet message"))
 	svc.ch <- &invalidMsg
 	time.Sleep(2 * time.Millisecond)
 	r.False(invalidMsg.validationReported) // message does not get propagated
