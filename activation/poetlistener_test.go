@@ -36,6 +36,7 @@ func (ServiceMock) Broadcast(protocol string, payload []byte) error { panic("imp
 func (ServiceMock) Shutdown() { panic("implement me") }
 
 type mockMsg struct {
+	lock               sync.Mutex
 	validationReported bool
 }
 
@@ -51,7 +52,17 @@ func (m *mockMsg) Bytes() []byte {
 
 func (m *mockMsg) ValidationCompletedChan() chan service.MessageValidation { panic("implement me") }
 
-func (m *mockMsg) ReportValidation(protocol string) { m.validationReported = true }
+func (m *mockMsg) ReportValidation(protocol string) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	m.validationReported = true
+}
+
+func (m *mockMsg) GetReportValidation() bool {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	return m.validationReported
+}
 
 type PoetDbIMock struct {
 	lock          sync.Mutex
@@ -88,14 +99,14 @@ func TestNewPoetListener(t *testing.T) {
 	validMsg := mockMsg{}
 	svc.ch <- &validMsg
 	time.Sleep(2 * time.Millisecond)
-	r.True(validMsg.validationReported) // message gets propagated
+	r.True(validMsg.GetReportValidation()) // message gets propagated
 
 	// send invalid message
 	invalidMsg := mockMsg{}
 	poetDb.SetErr(fmt.Errorf("bad poet message"))
 	svc.ch <- &invalidMsg
 	time.Sleep(2 * time.Millisecond)
-	r.False(invalidMsg.validationReported) // message does not get propagated
+	r.False(invalidMsg.GetReportValidation()) // message does not get propagated
 
 	listener.Close()
 }
