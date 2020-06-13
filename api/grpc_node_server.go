@@ -72,18 +72,24 @@ func (s NodeGrpcService) Build(ctx context.Context, in *empty.Empty) (*pb.BuildR
 
 // GetNodeStatus returns a status object providing information about the connected peers, sync status,
 // current and verified layer
-func (s NodeGrpcService) Status(context.Context, *empty.Empty) (*pb.StatusResponse, error) {
+func (s NodeGrpcService) Status(ctx context.Context, request *pb.StatusRequest) (*pb.StatusResponse, error) {
 	return &pb.StatusResponse{
 		Status: &pb.NodeStatus{
 			ConnectedPeers: s.PeerCounter.PeerCount(),
 			//MinPeers:      uint64(s.Config.P2P.SwarmConfig.RandomConnections),
 			//MaxPeers:      uint64(s.Config.P2P.MaxInboundPeers + s.Config.P2P.SwarmConfig.RandomConnections),
-			IsSynced:       s.Syncer.IsSynced(),
-			SyncedLayer:   	s.Tx.LatestLayer().Uint64(),
-			TopLayer:  		s.GenTime.GetCurrentLayer().Uint64(),
-			VerifiedLayer: 	s.Tx.LatestLayerInState().Uint64(),
+			IsSynced:      s.Syncer.IsSynced(),
+			SyncedLayer:   s.Tx.LatestLayer().Uint64(),
+			TopLayer:      s.GenTime.GetCurrentLayer().Uint64(),
+			VerifiedLayer: s.Tx.LatestLayerInState().Uint64(),
 		},
 	}, nil
+}
+
+// SyncStart requests that the node start syncing the mesh (if it isn't already syncing)
+func (s NodeGrpcService) SyncStart(ctx context.Context, request *pb.SyncStartRequest) (*empty.Empty, error) {
+	s.Syncer.Start()
+	return nil, nil
 }
 
 func (s NodeGrpcService) getTransactionAndStatus(txID types.TransactionID) (*types.Transaction, *types.LayerID, pb.TxStatus, error) {
@@ -264,6 +270,7 @@ func (s NodeGrpcService) Close() error {
 // Syncer is the API to get sync status
 type Syncer interface {
 	IsSynced() bool
+	Start()
 }
 
 // TxAPI is an api for getting transaction transaction status
