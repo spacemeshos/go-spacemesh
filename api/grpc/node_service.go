@@ -10,6 +10,8 @@ import (
 
 	"github.com/golang/protobuf/ptypes/empty"
 	"golang.org/x/net/context"
+	"google.golang.org/genproto/googleapis/rpc/code"
+	"google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/reflection"
@@ -88,9 +90,11 @@ func (s NodeService) Status(ctx context.Context, request *pb.StatusRequest) (*pb
 }
 
 // SyncStart requests that the node start syncing the mesh (if it isn't already syncing)
-func (s NodeService) SyncStart(ctx context.Context, request *pb.SyncStartRequest) (*empty.Empty, error) {
+func (s NodeService) SyncStart(ctx context.Context, request *pb.SyncStartRequest) (*pb.SyncStartResponse, error) {
 	s.Syncer.Start()
-	return nil, nil
+	return &pb.SyncStartResponse{
+		Status: &status.Status{Code: int32(code.Code_OK)},
+	}, nil
 }
 
 func (s NodeService) getTransactionAndStatus(txID types.TransactionID) (*types.Transaction, *types.LayerID, pb.TxStatus, error) {
