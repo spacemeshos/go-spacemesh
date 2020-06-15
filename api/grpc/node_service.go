@@ -97,6 +97,14 @@ func (s NodeService) SyncStart(ctx context.Context, request *pb.SyncStartRequest
 	}, nil
 }
 
+// Shutdown requests a graceful shutdown
+func (s NodeService) Shutdown(ctx context.Context, request *pb.ShutdownRequest) (*pb.ShutdownResponse, error) {
+	cmd.Cancel()
+	return &pb.ShutdownResponse{
+		Status: &status.Status{Code: int32(code.Code_OK)},
+	}, nil
+}
+
 func (s NodeService) getTransactionAndStatus(txID types.TransactionID) (*types.Transaction, *types.LayerID, pb.TxStatus, error) {
 	tx, err := s.Tx.GetTransaction(txID) // have we seen this transaction in a block?
 	if err != nil {
