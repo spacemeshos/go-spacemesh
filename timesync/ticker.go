@@ -91,6 +91,7 @@ const sendTickThreshold = 500 * time.Millisecond
 func (t *Ticker) Notify() (int, error) {
 	t.m.Lock()
 	if !t.started {
+		t.m.Unlock()
 		return 0, errNotStarted
 	}
 
