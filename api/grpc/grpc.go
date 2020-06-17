@@ -1,19 +1,13 @@
 package grpc
 
 import (
-	"github.com/spacemeshos/go-spacemesh/api"
+	//pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/miner"
-	"github.com/spacemeshos/go-spacemesh/p2p/peers"
-	"github.com/spacemeshos/poet/broadcaster/pb"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/reflection"
 	"net"
 	"strconv"
-	"time"
 )
 
 // PeerCounter is an api to get amount of connected peers
@@ -37,22 +31,25 @@ type TxAPI interface {
 }
 
 // NodeService is a grpc server providing the Spacemesh api
+type ServiceServer interface {
+	StartService()
+	startServiceInternal()
+	registerService()
+	Close() error
+}
+
 type Service struct {
+	ServiceServer
 	Server        *grpc.Server
 	Port          uint
-	StateAPI      api.StateAPI     // State DB
-	Network       api.NetworkAPI   // P2P Swarm
-	Tx            TxAPI            // Mesh
-	TxMempool     *miner.TxMempool // TX Mempool
-	Mining        api.MiningAPI    // ATX Builder
-	Oracle        api.OracleAPI
-	GenTime       api.GenesisTimeAPI
-	Post          api.PostAPI
-	LayerDuration time.Duration
-	PeerCounter   PeerCounter
-	Syncer        Syncer
-	Config        *config.Config
-	Logging       api.LoggingAPI
+	//StateAPI      api.StateAPI     // State DB
+	//TxMempool     *miner.TxMempool // TX Mempool
+	//Mining        api.MiningAPI    // ATX Builder
+	//Oracle        api.OracleAPI
+	//Post          api.PostAPI
+	//LayerDuration time.Duration
+	//Config        *config.Config
+	//Logging       api.LoggingAPI
 }
 
 // StartService starts the grpc service.
@@ -70,7 +67,7 @@ func (s Service) startServiceInternal() {
 		return
 	}
 
-	pb.RegisterSpacemeshServiceServer(s.Server, s)
+	s.registerService()
 
 	// SubscribeOnNewConnections reflection service on gRPC server
 	reflection.Register(s.Server)
@@ -84,6 +81,10 @@ func (s Service) startServiceInternal() {
 
 }
 
+//func (s Service) registerService() {
+//	panic("Not implemented")
+//}
+
 // Close stops the service.
 func (s Service) Close() error {
 	log.Debug("Stopping grpc service...")
@@ -91,4 +92,3 @@ func (s Service) Close() error {
 	log.Debug("grpc service stopped...")
 	return nil
 }
-

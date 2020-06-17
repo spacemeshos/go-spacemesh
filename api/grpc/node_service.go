@@ -1,4 +1,3 @@
-// Package api provides the local go-spacemesh API endpoints. e.g. json-http and grpc-http2
 package grpc
 
 import (
@@ -14,9 +13,7 @@ import (
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/cmd"
-	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/p2p/peers"
 )
 
@@ -28,29 +25,22 @@ type Syncer interface {
 
 // NodeService is a grpc server providing the Spacemesh api
 type NodeService struct {
-	Server        *grpc.Server
-	Port          uint
-	StateAPI      api.StateAPI     // State DB
+	Service
 	Network       api.NetworkAPI   // P2P Swarm
 	Tx            TxAPI            // Mesh
-	TxMempool     *miner.TxMempool // TX Mempool
-	Mining        api.MiningAPI    // ATX Builder
-	Oracle        api.OracleAPI
 	GenTime       api.GenesisTimeAPI
-	Post          api.PostAPI
-	LayerDuration time.Duration
 	PeerCounter   PeerCounter
 	Syncer        Syncer
-	Config        *config.Config
-	Logging       api.LoggingAPI
+}
+
+func (s NodeService) registerService() {
+	pb.RegisterNodeServiceServer(s.Server, s)
 }
 
 var _ pb.NodeServiceServer = (*NodeService)(nil)
 
-// NewService create a new grpc service using config data.
-func NewService(port int, net api.NetworkAPI, state api.StateAPI, tx TxAPI, txMempool *miner.TxMempool,
-	mining api.MiningAPI, oracle api.OracleAPI, genTime api.GenesisTimeAPI, post api.PostAPI, layerDurationSec int,
-	syncer Syncer, cfg *config.Config, logging api.LoggingAPI) *NodeService {
+// NewNodeService creates a new grpc service using config data.
+func NewNodeService(port int, net api.NetworkAPI, tx TxAPI, genTime api.GenesisTimeAPI, syncer Syncer) *NodeService {
 	options := []grpc.ServerOption{
 		// XXX: this is done to prevent routers from cleaning up our connections (e.g aws load balances..)
 		// TODO: these parameters work for now but we might need to revisit or add them as configuration
@@ -65,21 +55,15 @@ func NewService(port int, net api.NetworkAPI, state api.StateAPI, tx TxAPI, txMe
 	}
 	server := grpc.NewServer(options...)
 	return &NodeService{
-		Server:        server,
-		Port:          uint(port),
-		StateAPI:      state,
+		Service: Service{
+			Server:        server,
+			Port:          uint(port),
+		},
 		Network:       net,
 		Tx:            tx,
-		TxMempool:     txMempool,
-		Mining:        mining,
-		Oracle:        oracle,
 		GenTime:       genTime,
-		Post:          post,
-		LayerDuration: time.Duration(layerDurationSec) * time.Second,
 		PeerCounter:   peers.NewPeers(net, log.NewDefault("grpc")),
 		Syncer:        syncer,
-		Config:        cfg,
-		Logging:       logging,
 	}
 }
 

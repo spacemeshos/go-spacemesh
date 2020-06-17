@@ -4,6 +4,7 @@ package main
 import (
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/api"
+	"github.com/spacemeshos/go-spacemesh/api/grpc"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/metrics"
@@ -96,7 +97,7 @@ func (app *P2PApp) Start(cmd *cobra.Command, args []string) {
 	if app.Config.API.StartGrpcServer || app.Config.API.StartJSONServer {
 		// start grpc if specified or if json rpc specified
 		log.Info("Started the GRPC Service")
-		grpc := api.NewGrpcService(app.Config.API.GrpcServerPort, app.p2p, nil, nil, nil, nil, nil, nil, nil, 0, nil, nil, nil)
+		grpc := grpc.NewNodeService(app.Config.API.GrpcServerPort, app.p2p, nil, nil, nil)
 		grpc.StartService()
 		app.closers = append(app.closers, grpc)
 	}

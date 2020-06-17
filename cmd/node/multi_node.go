@@ -4,7 +4,7 @@ import (
 	"github.com/spacemeshos/amcl"
 	"github.com/spacemeshos/amcl/BLS381"
 	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/api"
+	"github.com/spacemeshos/go-spacemesh/api/grpc"
 	"github.com/spacemeshos/go-spacemesh/collector"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -156,8 +156,8 @@ func getTestDefaultConfig() *config.Config {
 // ActivateGrpcServer starts a grpc server on the provided node
 func ActivateGrpcServer(smApp *SpacemeshApp) {
 	smApp.Config.API.StartGrpcServer = true
-	layerDuration := smApp.Config.LayerDurationSec
-	smApp.grpcAPIService = api.NewGrpcService(smApp.Config.API.GrpcServerPort, smApp.P2P, smApp.state, smApp.mesh, smApp.txPool, smApp.atxBuilder, smApp.oracle, smApp.clock, nil, layerDuration, nil, nil, nil)
+	//layerDuration := smApp.Config.LayerDurationSec
+	smApp.grpcAPIService = grpc.NewNodeService(smApp.Config.API.GrpcServerPort, smApp.P2P, smApp.mesh, smApp.clock, nil)
 	smApp.grpcAPIService.StartService()
 }
 
