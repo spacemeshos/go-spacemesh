@@ -158,7 +158,7 @@ func ActivateGrpcServer(smApp *SpacemeshApp) {
 	smApp.Config.API.StartGrpcServer = true
 	//layerDuration := smApp.Config.LayerDurationSec
 	smApp.grpcAPIService = grpc_server.NewNodeService(smApp.Config.API.GrpcServerPort, smApp.P2P, smApp.mesh, smApp.clock, nil)
-	smApp.grpcAPIService.StartService()
+	grpc_server.StartService(smApp.grpcAPIService)
 }
 
 // GracefulShutdown stops the current services running in apps

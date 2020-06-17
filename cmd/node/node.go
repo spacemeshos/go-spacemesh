@@ -903,7 +903,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 		//layerDuration := app.Config.LayerDurationSec
 		app.grpcAPIService = grpc_server.NewNodeService(apiConf.GrpcServerPort, app.P2P, app.mesh,
 			app.clock, app.syncer)
-		app.grpcAPIService.StartService()
+		grpc_server.StartService(app.grpcAPIService)
 	}
 
 	if apiConf.StartJSONServer {

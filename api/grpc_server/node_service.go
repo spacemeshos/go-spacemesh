@@ -25,7 +25,6 @@ type Syncer interface {
 // NodeService is a grpc_server server providing the Spacemesh api
 type NodeService struct {
 	Service
-	//ServiceServer
 	Network     NetworkAPI // P2P Swarm
 	Tx          TxAPI      // Mesh
 	GenTime     GenesisTimeAPI
