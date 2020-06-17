@@ -1,7 +1,6 @@
 package grpc_server
 
 import (
-	//pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"google.golang.org/grpc"

@@ -11,7 +11,6 @@ import (
 	"google.golang.org/grpc/keepalive"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
-	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/peers"
@@ -26,9 +25,9 @@ type Syncer interface {
 // NodeService is a grpc_server server providing the Spacemesh api
 type NodeService struct {
 	Service
-	Network     api.NetworkAPI // P2P Swarm
-	Tx          TxAPI          // Mesh
-	GenTime     api.GenesisTimeAPI
+	Network     NetworkAPI // P2P Swarm
+	Tx          TxAPI      // Mesh
+	GenTime     GenesisTimeAPI
 	PeerCounter PeerCounter
 	Syncer      Syncer
 }
@@ -40,7 +39,7 @@ func (s NodeService) registerService() {
 var _ pb.NodeServiceServer = (*NodeService)(nil)
 
 // NewNodeService creates a new grpc_server service using config data.
-func NewNodeService(port int, net api.NetworkAPI, tx TxAPI, genTime api.GenesisTimeAPI, syncer Syncer) *NodeService {
+func NewNodeService(port int, net NetworkAPI, tx TxAPI, genTime GenesisTimeAPI, syncer Syncer) *NodeService {
 	options := []grpc.ServerOption{
 		// XXX: this is done to prevent routers from cleaning up our connections (e.g aws load balances..)
 		// TODO: these parameters work for now but we might need to revisit or add them as configuration

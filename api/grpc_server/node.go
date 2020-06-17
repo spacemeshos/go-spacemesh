@@ -1,4 +1,4 @@
-package api
+package grpc_server
 
 import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -8,8 +8,8 @@ import (
 	"time"
 )
 
-// Service is an interface for receiving messages via gossip
-type Service interface {
+// GossipService is an interface for receiving messages via gossip
+type GossipService interface {
 	RegisterGossipProtocol(string, priorityq.Priority) chan service.GossipMessage
 }
 
