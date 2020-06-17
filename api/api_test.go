@@ -4,6 +4,12 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/golang/protobuf/jsonpb"
+	"github.com/golang/protobuf/proto"
+	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	"github.com/spacemeshos/go-spacemesh/api/config"
+	"golang.org/x/net/context"
+	"google.golang.org/grpc"
 	"io/ioutil"
 	"math/big"
 	"net/http"
@@ -13,27 +19,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/protobuf/proto"
-	"github.com/spacemeshos/ed25519"
+	"github.com/spacemeshos/go-spacemesh/api/grpc_server"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
-	config2 "github.com/spacemeshos/go-spacemesh/config"
-	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"github.com/spacemeshos/go-spacemesh/priorityq"
-	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/require"
 
-	crand "crypto/rand"
-
-	"github.com/golang/protobuf/jsonpb"
-	"github.com/spacemeshos/go-spacemesh/api/config"
-	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
-	"golang.org/x/net/context"
-	"google.golang.org/grpc"
 )
 
 // Better a small code duplication than a small dependency
@@ -242,7 +234,8 @@ func TestServersConfig(t *testing.T) {
 	port2, err := node.GetUnboundedPort()
 	require.NoError(t, err, "Should be able to establish a connection on a port")
 
-	grpcService := NewGrpcService(port1, &networkMock, ap, txAPI, nil, &mining, &oracle, nil, PostMock{}, 0, nil, nil, nil)
+	grpcService := grpc_server.NewNodeService(
+		port1, &networkMock, txAPI, nil, nil)
 	require.Equal(t, grpcService.Port, uint(port1), "Expected same port")
 
 	jsonService := NewJSONHTTPServer(port2, port1)
@@ -282,257 +275,261 @@ func TestJsonApi(t *testing.T) {
 	const message = "hello world!"
 
 	// generate request payload (api input params)
-	payload := marshalProto(t, &pb.SimpleMessage{Value: message})
+	payload := marshalProto(t, &pb.EchoRequest{Msg: &pb.SimpleString{Value: message}})
 
-	respBody, respStatus := callEndpoint(t, "v1/example/echo", payload)
+	respBody, respStatus := callEndpoint(t, "v1/node/echo", payload)
 	require.Equal(t, http.StatusOK, respStatus)
-	assertSimpleMessage(t, respBody, message)
-
-	// stop the services
-	shutDown()
-}
-
-func TestBroadcastPoet(t *testing.T) {
-	r := require.New(t)
-	shutDown := launchServer(t)
-
-	payload := "{\"data\":[1,2,3]}"
-	respBody, respStatus := callEndpoint(t, "v1/broadcastpoet", payload)
-	r.Equal(http.StatusOK, respStatus, http.StatusText(respStatus))
-	assertSimpleMessage(t, respBody, "ok")
-
-	r.Equal([]byte{1, 2, 3}, networkMock.GetBroadcast())
-
-	shutDown()
-}
-
-func TestJsonWalletApi(t *testing.T) {
-	r := require.New(t)
-	shutDown := launchServer(t)
-
-	signer := signing.NewEdSigner()
-	addr := types.BytesToAddress(signer.PublicKey().Bytes())
-	ap.nonces[addr] = 10
-	ap.balances[addr] = big.NewInt(100)
-
-	// generate request payload (api input params)
-	payload := marshalProto(t, &pb.AccountId{Address: util.Bytes2Hex(addr.Bytes())})
-
-	respBody, respStatus := callEndpoint(t, "v1/nonce", payload)
-	r.Equal(http.StatusOK, respStatus)
-	assertSimpleMessage(t, respBody, "10")
-
-	respBody, respStatus = callEndpoint(t, "v1/balance", payload)
-	r.Equal(http.StatusOK, respStatus)
-	assertSimpleMessage(t, respBody, "100")
-
-	// Test submit transaction
-	submitTx(t, genTx(t))
-
-	txToSend := pb.SignedTransaction{Tx: asBytes(t, genTx(t))}
-	msg := "nonce or balance validation failed"
-	txAPI.err = fmt.Errorf(msg)
-	respBody, respStatus = callEndpoint(t, "v1/submittransaction", marshalProto(t, &txToSend))
-	txAPI.err = nil
-	r.Equal(http.StatusInternalServerError, respStatus, http.StatusText(respStatus))
-	r.Equal("{\"error\":\""+msg+"\",\"message\":\""+msg+"\",\"code\":2}", respBody)
-
-	// test start mining
-	initPostRequest := pb.InitPost{Coinbase: "0x1234", LogicalDrive: "/tmp/aaa", CommitmentSize: 2048}
-	respBody, respStatus = callEndpoint(t, "v1/startmining", marshalProto(t, &initPostRequest))
-	r.Equal(http.StatusOK, respStatus)
-	assertSimpleMessage(t, respBody, "ok")
-
-	// test get statistics about init progress
-	respBody, respStatus = callEndpoint(t, "v1/stats", "")
-	r.Equal(http.StatusOK, respStatus)
-
-	var stats pb.MiningStats
-	r.NoError(jsonpb.UnmarshalString(respBody, &stats))
-
-	r.Equal(int32(miningStatus), stats.Status)
-	r.Equal("/tmp", stats.DataDir)
-	r.Equal("123456", stats.Coinbase)
-	r.Equal(uint64(remainingBytes), stats.RemainingBytes)
-
-	// test get node status
-	respBody, respStatus = callEndpoint(t, "v1/nodestatus", "")
-	r.Equal(http.StatusOK, respStatus)
-
-	var nodeStatus pb.NodeStatus
-	r.NoError(jsonpb.UnmarshalString(respBody, &nodeStatus))
-
-	r.Zero(nodeStatus.Peers)
-	r.Equal(uint64(5), nodeStatus.MinPeers)
-	r.Equal(uint64(105), nodeStatus.MaxPeers)
-	r.False(nodeStatus.Synced)
-	r.Equal(uint64(10), nodeStatus.SyncedLayer)
-	r.Equal(uint64(1), nodeStatus.CurrentLayer)
-	r.Equal(uint64(8), nodeStatus.VerifiedLayer)
-
-	// test get genesisTime
-	respBody, respStatus = callEndpoint(t, "v1/genesis", "")
-	r.Equal(http.StatusOK, respStatus)
-	assertSimpleMessage(t, respBody, genTime.t.Format(time.RFC3339))
-
-	// test get rewards per account
-	payload = marshalProto(t, &pb.AccountId{Address: util.Bytes2Hex(addr.Bytes())})
-	respBody, respStatus = callEndpoint(t, "v1/accountrewards", payload)
-	r.Equal(http.StatusOK, respStatus)
-
-	var rewards pb.AccountRewards
-	r.NoError(jsonpb.UnmarshalString(respBody, &rewards))
-	r.Empty(rewards.Rewards) // TODO: Test with actual data returned
-
-	// test get txs per account:
-
-	// add incoming tx to mempool
-	mempoolTxIn, err := mesh.NewSignedTx(1337, addr, 420, 3, 42, signing.NewEdSigner())
-	r.NoError(err)
-	txMempool.Put(mempoolTxIn.ID(), mempoolTxIn)
-
-	// add outgoing tx to mempool
-	mempoolTxOut, err := mesh.NewSignedTx(1337, types.BytesToAddress([]byte{1}), 420, 3, 42, signer)
-	r.NoError(err)
-	txMempool.Put(mempoolTxOut.ID(), mempoolTxOut)
-
-	// add incoming tx to mesh
-	meshTxIn, err := mesh.NewSignedTx(1337, addr, 420, 3, 42, signing.NewEdSigner())
-	r.NoError(err)
-	txAPI.returnTx[meshTxIn.ID()] = meshTxIn
-
-	// add outgoing tx to mesh
-	meshTxOut, err := mesh.NewSignedTx(1337, types.BytesToAddress([]byte{1}), 420, 3, 42, signer)
-	r.NoError(err)
-	txAPI.returnTx[meshTxOut.ID()] = meshTxOut
-
-	// test with start layer that gets the mesh txs
-	payload = marshalProto(t, &pb.GetTxsSinceLayer{Account: &pb.AccountId{Address: util.Bytes2Hex(addr.Bytes())}, StartLayer: TxReturnLayer})
-	respBody, respStatus = callEndpoint(t, "v1/accounttxs", payload)
-	r.Equal(http.StatusOK, respStatus)
-
-	var accounts pb.AccountTxs
-	r.NoError(jsonpb.UnmarshalString(respBody, &accounts))
-	r.Equal(uint64(ValidatedLayerID), accounts.ValidatedLayer)
-	r.ElementsMatch([]string{
-		mempoolTxIn.ID().String(),
-		mempoolTxOut.ID().String(),
-		meshTxIn.ID().String(),
-		meshTxOut.ID().String(),
-	}, accounts.Txs)
-
-	// test with start layer that doesn't get the mesh txs (mempool txs return anyway)
-	payload = marshalProto(t, &pb.GetTxsSinceLayer{Account: &pb.AccountId{Address: util.Bytes2Hex(addr.Bytes())}, StartLayer: TxReturnLayer + 1})
-	respBody, respStatus = callEndpoint(t, "v1/accounttxs", payload)
-	r.Equal(http.StatusOK, respStatus)
-
-	r.NoError(jsonpb.UnmarshalString(respBody, &accounts))
-	r.Equal(uint64(ValidatedLayerID), accounts.ValidatedLayer)
-	r.ElementsMatch([]string{
-		mempoolTxIn.ID().String(),
-		mempoolTxOut.ID().String(),
-	}, accounts.Txs)
-
-	// test get txs per account with wrong layer error
-	payload = marshalProto(t, &pb.GetTxsSinceLayer{Account: &pb.AccountId{Address: util.Bytes2Hex(addr.Bytes())}, StartLayer: 11})
-	respBody, respStatus = callEndpoint(t, "v1/accounttxs", payload)
-	r.Equal(http.StatusInternalServerError, respStatus)
-	const ErrInvalidStartLayer = "{\"error\":\"invalid start layer\",\"message\":\"invalid start layer\",\"code\":2}"
-	r.Equal(ErrInvalidStartLayer, respBody)
-
-	// test call reset post
-	respBody, respStatus = callEndpoint(t, "v1/resetpost", "")
-	r.Equal(http.StatusOK, respStatus)
-
-	// test get getStateRoot
-	respBody, respStatus = callEndpoint(t, "v1/stateroot", "")
-	r.Equal(http.StatusOK, respStatus)
-	assertSimpleMessage(t, respBody, "0x0000000000000000000000000000000000000000000000000000003030303030")
-
-	// stop the services
-	shutDown()
-}
-
-func asBytes(t *testing.T, tx *types.Transaction) []byte {
-	val, err := types.InterfaceToBytes(tx)
-	require.NoError(t, err)
-	return val
-}
-
-func assertSimpleMessage(t *testing.T, respBody, expectedValue string) {
-	var msg pb.SimpleMessage
+	//assertSimpleString(t, respBody, message)
+	var msg pb.EchoResponse
+	//var msg2 pb.SimpleString
 	require.NoError(t, jsonpb.UnmarshalString(respBody, &msg))
-	require.Equal(t, expectedValue, msg.Value)
-}
+	require.Equal(t, message, msg.Msg.Value)
 
-func TestSpacemeshGrpcService_GetTransaction(t *testing.T) {
-	shutDown := launchServer(t)
-
-	tx1 := genTx(t)
-	txAPI.returnTx[tx1.ID()] = tx1
-
-	tx2 := genTx(t)
-	txAPI.returnTx[tx2.ID()] = tx2
-	layerApplied := types.LayerID(1)
-	txAPI.layerApplied[tx2.ID()] = &layerApplied
-
-	tx3 := genTx(t)
-	txAPI.returnTx[tx3.ID()] = tx3
-	ap.nonces[tx3.Origin()] = 2222
-
-	submitTx(t, tx1)
-	submitTx(t, tx2)
-	submitTx(t, tx3)
-
-	respTx1 := getTx(t, tx1)
-	respTx2 := getTx(t, tx2)
-	respTx3 := getTx(t, tx3)
-
-	assertTx(t, respTx1, tx1, "PENDING", 0, 0)
-	assertTx(t, respTx2, tx2, "CONFIRMED", 1, genTimeUnix+layerDuration*2)
-	assertTx(t, respTx3, tx3, "REJECTED", 0, 0)
-
+	// stop the services
 	shutDown()
 }
 
-func getTx(t *testing.T, tx *types.Transaction) pb.Transaction {
-	r := require.New(t)
-	idToSend := pb.TransactionId{Id: tx.ID().Bytes()}
-	respBody, respStatus := callEndpoint(t, "v1/gettransaction", marshalProto(t, &idToSend))
-	r.Equal(http.StatusOK, respStatus)
-	var respTx pb.Transaction
-	err := jsonpb.UnmarshalString(respBody, &respTx)
-	r.NoError(err)
-	return respTx
-}
+//func TestBroadcastPoet(t *testing.T) {
+//	r := require.New(t)
+//	shutDown := launchServer(t)
+//
+//	payload := "{\"data\":[1,2,3]}"
+//	respBody, respStatus := callEndpoint(t, "v1/broadcastpoet", payload)
+//	r.Equal(http.StatusOK, respStatus, http.StatusText(respStatus))
+//	assertSimpleMessage(t, respBody, "ok")
+//
+//	r.Equal([]byte{1, 2, 3}, networkMock.GetBroadcast())
+//
+//	shutDown()
+//}
+//
+//func TestJsonWalletApi(t *testing.T) {
+//	r := require.New(t)
+//	shutDown := launchServer(t)
+//
+//	signer := signing.NewEdSigner()
+//	addr := types.BytesToAddress(signer.PublicKey().Bytes())
+//	ap.nonces[addr] = 10
+//	ap.balances[addr] = big.NewInt(100)
+//
+//	// generate request payload (api input params)
+//	payload := marshalProto(t, &pb.AccountId{Address: util.Bytes2Hex(addr.Bytes())})
+//
+//	respBody, respStatus := callEndpoint(t, "v1/nonce", payload)
+//	r.Equal(http.StatusOK, respStatus)
+//	assertSimpleMessage(t, respBody, "10")
+//
+//	respBody, respStatus = callEndpoint(t, "v1/balance", payload)
+//	r.Equal(http.StatusOK, respStatus)
+//	assertSimpleMessage(t, respBody, "100")
+//
+//	// Test submit transaction
+//	submitTx(t, genTx(t))
+//
+//	txToSend := pb.SignedTransaction{Tx: asBytes(t, genTx(t))}
+//	msg := "nonce or balance validation failed"
+//	txAPI.err = fmt.Errorf(msg)
+//	respBody, respStatus = callEndpoint(t, "v1/submittransaction", marshalProto(t, &txToSend))
+//	txAPI.err = nil
+//	r.Equal(http.StatusInternalServerError, respStatus, http.StatusText(respStatus))
+//	r.Equal("{\"error\":\""+msg+"\",\"message\":\""+msg+"\",\"code\":2}", respBody)
+//
+//	// test start mining
+//	initPostRequest := pb.InitPost{Coinbase: "0x1234", LogicalDrive: "/tmp/aaa", CommitmentSize: 2048}
+//	respBody, respStatus = callEndpoint(t, "v1/startmining", marshalProto(t, &initPostRequest))
+//	r.Equal(http.StatusOK, respStatus)
+//	assertSimpleMessage(t, respBody, "ok")
+//
+//	// test get statistics about init progress
+//	respBody, respStatus = callEndpoint(t, "v1/stats", "")
+//	r.Equal(http.StatusOK, respStatus)
+//
+//	var stats pb.MiningStats
+//	r.NoError(jsonpb.UnmarshalString(respBody, &stats))
+//
+//	r.Equal(int32(miningStatus), stats.Status)
+//	r.Equal("/tmp", stats.DataDir)
+//	r.Equal("123456", stats.Coinbase)
+//	r.Equal(uint64(remainingBytes), stats.RemainingBytes)
+//
+//	// test get node status
+//	respBody, respStatus = callEndpoint(t, "v1/nodestatus", "")
+//	r.Equal(http.StatusOK, respStatus)
+//
+//	var nodeStatus pb.NodeStatus
+//	r.NoError(jsonpb.UnmarshalString(respBody, &nodeStatus))
+//
+//	r.Zero(nodeStatus.Peers)
+//	r.Equal(uint64(5), nodeStatus.MinPeers)
+//	r.Equal(uint64(105), nodeStatus.MaxPeers)
+//	r.False(nodeStatus.Synced)
+//	r.Equal(uint64(10), nodeStatus.SyncedLayer)
+//	r.Equal(uint64(1), nodeStatus.CurrentLayer)
+//	r.Equal(uint64(8), nodeStatus.VerifiedLayer)
+//
+//	// test get genesisTime
+//	respBody, respStatus = callEndpoint(t, "v1/genesis", "")
+//	r.Equal(http.StatusOK, respStatus)
+//	assertSimpleMessage(t, respBody, genTime.t.Format(time.RFC3339))
+//
+//	// test get rewards per account
+//	payload = marshalProto(t, &pb.AccountId{Address: util.Bytes2Hex(addr.Bytes())})
+//	respBody, respStatus = callEndpoint(t, "v1/accountrewards", payload)
+//	r.Equal(http.StatusOK, respStatus)
+//
+//	var rewards pb.AccountRewards
+//	r.NoError(jsonpb.UnmarshalString(respBody, &rewards))
+//	r.Empty(rewards.Rewards) // TODO: Test with actual data returned
+//
+//	// test get txs per account:
+//
+//	// add incoming tx to mempool
+//	mempoolTxIn, err := mesh.NewSignedTx(1337, addr, 420, 3, 42, signing.NewEdSigner())
+//	r.NoError(err)
+//	txMempool.Put(mempoolTxIn.ID(), mempoolTxIn)
+//
+//	// add outgoing tx to mempool
+//	mempoolTxOut, err := mesh.NewSignedTx(1337, types.BytesToAddress([]byte{1}), 420, 3, 42, signer)
+//	r.NoError(err)
+//	txMempool.Put(mempoolTxOut.ID(), mempoolTxOut)
+//
+//	// add incoming tx to mesh
+//	meshTxIn, err := mesh.NewSignedTx(1337, addr, 420, 3, 42, signing.NewEdSigner())
+//	r.NoError(err)
+//	txAPI.returnTx[meshTxIn.ID()] = meshTxIn
+//
+//	// add outgoing tx to mesh
+//	meshTxOut, err := mesh.NewSignedTx(1337, types.BytesToAddress([]byte{1}), 420, 3, 42, signer)
+//	r.NoError(err)
+//	txAPI.returnTx[meshTxOut.ID()] = meshTxOut
+//
+//	// test with start layer that gets the mesh txs
+//	payload = marshalProto(t, &pb.GetTxsSinceLayer{Account: &pb.AccountId{Address: util.Bytes2Hex(addr.Bytes())}, StartLayer: TxReturnLayer})
+//	respBody, respStatus = callEndpoint(t, "v1/accounttxs", payload)
+//	r.Equal(http.StatusOK, respStatus)
+//
+//	var accounts pb.AccountTxs
+//	r.NoError(jsonpb.UnmarshalString(respBody, &accounts))
+//	r.Equal(uint64(ValidatedLayerID), accounts.ValidatedLayer)
+//	r.ElementsMatch([]string{
+//		mempoolTxIn.ID().String(),
+//		mempoolTxOut.ID().String(),
+//		meshTxIn.ID().String(),
+//		meshTxOut.ID().String(),
+//	}, accounts.Txs)
+//
+//	// test with start layer that doesn't get the mesh txs (mempool txs return anyway)
+//	payload = marshalProto(t, &pb.GetTxsSinceLayer{Account: &pb.AccountId{Address: util.Bytes2Hex(addr.Bytes())}, StartLayer: TxReturnLayer + 1})
+//	respBody, respStatus = callEndpoint(t, "v1/accounttxs", payload)
+//	r.Equal(http.StatusOK, respStatus)
+//
+//	r.NoError(jsonpb.UnmarshalString(respBody, &accounts))
+//	r.Equal(uint64(ValidatedLayerID), accounts.ValidatedLayer)
+//	r.ElementsMatch([]string{
+//		mempoolTxIn.ID().String(),
+//		mempoolTxOut.ID().String(),
+//	}, accounts.Txs)
+//
+//	// test get txs per account with wrong layer error
+//	payload = marshalProto(t, &pb.GetTxsSinceLayer{Account: &pb.AccountId{Address: util.Bytes2Hex(addr.Bytes())}, StartLayer: 11})
+//	respBody, respStatus = callEndpoint(t, "v1/accounttxs", payload)
+//	r.Equal(http.StatusInternalServerError, respStatus)
+//	const ErrInvalidStartLayer = "{\"error\":\"invalid start layer\",\"message\":\"invalid start layer\",\"code\":2}"
+//	r.Equal(ErrInvalidStartLayer, respBody)
+//
+//	// test call reset post
+//	respBody, respStatus = callEndpoint(t, "v1/resetpost", "")
+//	r.Equal(http.StatusOK, respStatus)
+//
+//	// test get getStateRoot
+//	respBody, respStatus = callEndpoint(t, "v1/stateroot", "")
+//	r.Equal(http.StatusOK, respStatus)
+//	assertSimpleMessage(t, respBody, "0x0000000000000000000000000000000000000000000000000000003030303030")
+//
+//	// stop the services
+//	shutDown()
+//}
+//
+//func asBytes(t *testing.T, tx *types.Transaction) []byte {
+//	val, err := types.InterfaceToBytes(tx)
+//	require.NoError(t, err)
+//	return val
+//}
 
-func assertTx(t *testing.T, respTx pb.Transaction, tx *types.Transaction, status string, layerID, timestamp uint64) {
-	r := require.New(t)
-	r.Equal(tx.ID().Bytes(), respTx.TxId.Id)
-	r.Equal(tx.Fee, respTx.Fee)
-	r.Equal(tx.Amount, respTx.Amount)
-	r.Equal(util.Bytes2Hex(tx.Recipient.Bytes()), respTx.Receiver.Address)
-	r.Equal(util.Bytes2Hex(tx.Origin().Bytes()), respTx.Sender.Address)
-	r.Equal(layerID, respTx.LayerId)
-	r.Equal(status, respTx.Status.String())
-	r.Equal(timestamp, respTx.Timestamp)
-}
-
-func submitTx(t *testing.T, tx *types.Transaction) {
-	r := require.New(t)
-
-	txToSend := pb.SignedTransaction{Tx: asBytes(t, tx)}
-	respBody, respStatus := callEndpoint(t, "v1/submittransaction", marshalProto(t, &txToSend))
-	r.Equal(http.StatusOK, respStatus, http.StatusText(respStatus))
-
-	txConfirmation := pb.TxConfirmation{}
-	r.NoError(jsonpb.UnmarshalString(respBody, &txConfirmation))
-
-	r.Equal("ok", txConfirmation.Value)
-	r.Equal(tx.ID().String()[2:], txConfirmation.Id)
-	r.Equal(asBytes(t, tx), networkMock.GetBroadcast())
-}
-
+//func assertSimpleString(t *testing.T, respBody, expectedValue string) {
+//	var msg pb.SimpleString
+//	require.NoError(t, jsonpb.UnmarshalString(respBody, &msg))
+//	require.Equal(t, expectedValue, msg.Value)
+//}
+//
+//func TestSpacemeshGrpcService_GetTransaction(t *testing.T) {
+//	shutDown := launchServer(t)
+//
+//	tx1 := genTx(t)
+//	txAPI.returnTx[tx1.ID()] = tx1
+//
+//	tx2 := genTx(t)
+//	txAPI.returnTx[tx2.ID()] = tx2
+//	layerApplied := types.LayerID(1)
+//	txAPI.layerApplied[tx2.ID()] = &layerApplied
+//
+//	tx3 := genTx(t)
+//	txAPI.returnTx[tx3.ID()] = tx3
+//	ap.nonces[tx3.Origin()] = 2222
+//
+//	submitTx(t, tx1)
+//	submitTx(t, tx2)
+//	submitTx(t, tx3)
+//
+//	respTx1 := getTx(t, tx1)
+//	respTx2 := getTx(t, tx2)
+//	respTx3 := getTx(t, tx3)
+//
+//	assertTx(t, respTx1, tx1, "PENDING", 0, 0)
+//	assertTx(t, respTx2, tx2, "CONFIRMED", 1, genTimeUnix+layerDuration*2)
+//	assertTx(t, respTx3, tx3, "REJECTED", 0, 0)
+//
+//	shutDown()
+//}
+//
+//func getTx(t *testing.T, tx *types.Transaction) pb.Transaction {
+//	r := require.New(t)
+//	idToSend := pb.TransactionId{Id: tx.ID().Bytes()}
+//	respBody, respStatus := callEndpoint(t, "v1/gettransaction", marshalProto(t, &idToSend))
+//	r.Equal(http.StatusOK, respStatus)
+//	var respTx pb.Transaction
+//	err := jsonpb.UnmarshalString(respBody, &respTx)
+//	r.NoError(err)
+//	return respTx
+//}
+//
+//func assertTx(t *testing.T, respTx pb.Transaction, tx *types.Transaction, status string, layerID, timestamp uint64) {
+//	r := require.New(t)
+//	r.Equal(tx.ID().Bytes(), respTx.TxId.Id)
+//	r.Equal(tx.Fee, respTx.Fee)
+//	r.Equal(tx.Amount, respTx.Amount)
+//	r.Equal(util.Bytes2Hex(tx.Recipient.Bytes()), respTx.Receiver.Address)
+//	r.Equal(util.Bytes2Hex(tx.Origin().Bytes()), respTx.Sender.Address)
+//	r.Equal(layerID, respTx.LayerId)
+//	r.Equal(status, respTx.Status.String())
+//	r.Equal(timestamp, respTx.Timestamp)
+//}
+//
+//func submitTx(t *testing.T, tx *types.Transaction) {
+//	r := require.New(t)
+//
+//	txToSend := pb.SignedTransaction{Tx: asBytes(t, tx)}
+//	respBody, respStatus := callEndpoint(t, "v1/submittransaction", marshalProto(t, &txToSend))
+//	r.Equal(http.StatusOK, respStatus, http.StatusText(respStatus))
+//
+//	txConfirmation := pb.TxConfirmation{}
+//	r.NoError(jsonpb.UnmarshalString(respBody, &txConfirmation))
+//
+//	r.Equal("ok", txConfirmation.Value)
+//	r.Equal(tx.ID().String()[2:], txConfirmation.Id)
+//	r.Equal(asBytes(t, tx), networkMock.GetBroadcast())
+//}
+//
 func marshalProto(t *testing.T, msg proto.Message) string {
 	var buf bytes.Buffer
 	var m jsonpb.Marshaler
@@ -545,14 +542,15 @@ var cfg = config.DefaultConfig()
 type SyncerMock struct{}
 
 func (SyncerMock) IsSynced() bool { return false }
+func (SyncerMock) Start()         {}
 
 func launchServer(t *testing.T) func() {
 	networkMock.Broadcast("", []byte{0x00})
-	defaultConfig := config2.DefaultConfig()
-	grpcService := NewGrpcService(cfg.GrpcServerPort, &networkMock, ap, txAPI, txMempool, &mining, &oracle, &genTime, PostMock{}, layerDuration, &SyncerMock{}, &defaultConfig, nil)
+	grpcService := grpc_server.NewNodeService(
+		cfg.GrpcServerPort, &networkMock, txAPI, &genTime, &SyncerMock{})
 	jsonService := NewJSONHTTPServer(cfg.JSONServerPort, cfg.GrpcServerPort)
 	// start gRPC and json server
-	grpcService.StartService()
+	grpc_server.StartService(grpcService)
 	jsonService.StartService()
 
 	time.Sleep(3 * time.Second) // wait for server to be ready (critical on Travis)
@@ -575,114 +573,114 @@ func callEndpoint(t *testing.T, endpoint, payload string) (string, int) {
 	return string(buf), resp.StatusCode
 }
 
-func genTx(t *testing.T) *types.Transaction {
-	_, key, err := ed25519.GenerateKey(crand.Reader)
-	require.NoError(t, err)
-	signer, err := signing.NewEdSignerFromBuffer(key)
-	require.NoError(t, err)
-	tx, err := mesh.NewSignedTx(1111, [20]byte{}, 1234, 11, 321, signer)
-	require.NoError(t, err)
-
-	return tx
-}
-
-func TestJsonWalletApi_Errors(t *testing.T) {
-	shutDown := launchServer(t)
-
-	// generate request payload (api input params)
-	addrBytes := []byte{0x02} // address that does not exist
-	payload := marshalProto(t, &pb.AccountId{Address: util.Bytes2Hex(addrBytes)})
-	const expectedResponse = "{\"error\":\"account does not exist\",\"message\":\"account does not exist\",\"code\":2}"
-
-	respBody, respStatus := callEndpoint(t, "v1/nonce", payload)
-	require.Equal(t, http.StatusInternalServerError, respStatus) // TODO: Should we change it to err 400 somehow?
-	require.Equal(t, expectedResponse, respBody)
-
-	respBody, respStatus = callEndpoint(t, "v1/balance", payload)
-	require.Equal(t, http.StatusInternalServerError, respStatus) // TODO: Should we change it to err 400 somehow?
-	require.Equal(t, expectedResponse, respBody)
-
-	// stop the services
-	shutDown()
-}
-
-func TestSpaceMeshGrpcService_Broadcast(t *testing.T) {
-	shutDown := launchServer(t)
-
-	// generate request payload (api input params)
-	Data := "l33t"
-
-	respBody, respStatus := callEndpoint(t, "v1/broadcast", marshalProto(t, &pb.BroadcastMessage{Data: Data}))
-	require.Equal(t, http.StatusOK, respStatus)
-	assertSimpleMessage(t, respBody, "ok")
-
-	require.Equal(t, Data, string(networkMock.GetBroadcast()))
-
-	// stop the services
-	shutDown()
-}
-
-func TestSpaceMeshGrpcService_BroadcastErrors(t *testing.T) {
-	shutDown := launchServer(t)
-	networkMock.SetErr(true)
-	const expectedResponse = "{\"error\":\"error during broadcast\",\"message\":\"error during broadcast\",\"code\":2}"
-
-	Data := "l337"
-
-	respBody, respStatus := callEndpoint(t, "v1/broadcast", marshalProto(t, &pb.BroadcastMessage{Data: Data}))
-	require.Equal(t, http.StatusInternalServerError, respStatus) // TODO: Should we change it to err 400 somehow?
-	require.Equal(t, expectedResponse, respBody)
-
-	require.NotEqual(t, Data, string(networkMock.GetBroadcast()))
-
-	// stop the services
-	shutDown()
-}
-
-type mockSrv struct {
-	c      chan service.GossipMessage
-	called bool
-}
-
-func (m *mockSrv) RegisterGossipProtocol(string, priorityq.Priority) chan service.GossipMessage {
-	m.called = true
-	return m.c
-}
-
-type mockMsg struct {
-	sender p2pcrypto.PublicKey
-	msg    []byte
-	c      chan service.MessageValidation
-}
-
-func (m *mockMsg) Bytes() []byte {
-	return m.msg
-}
-
-func (m *mockMsg) ValidationCompletedChan() chan service.MessageValidation {
-	return m.c
-}
-
-func (m *mockMsg) Sender() p2pcrypto.PublicKey {
-	return m.sender
-}
-
-func (m *mockMsg) ReportValidation(protocol string) {
-	m.c <- service.NewMessageValidation(m.sender, m.msg, protocol)
-}
-
-func TestApproveAPIGossipMessages(t *testing.T) {
-	m := &mockSrv{c: make(chan service.GossipMessage, 1)}
-	ctx, cancel := context.WithCancel(context.Background())
-	ApproveAPIGossipMessages(ctx, m)
-	require.True(t, m.called)
-	someKey := p2pcrypto.NewRandomPubkey()
-	msg := &mockMsg{someKey, []byte("TEST"), make(chan service.MessageValidation, 1)}
-	m.c <- msg
-	res := <-msg.ValidationCompletedChan()
-	require.NotNil(t, res)
-	require.Equal(t, res.Sender(), someKey)
-	require.Equal(t, res.Message(), []byte("TEST"))
-	require.Equal(t, res.Protocol(), apiGossipProtocol)
-	cancel()
-}
+//func genTx(t *testing.T) *types.Transaction {
+//	_, key, err := ed25519.GenerateKey(crand.Reader)
+//	require.NoError(t, err)
+//	signer, err := signing.NewEdSignerFromBuffer(key)
+//	require.NoError(t, err)
+//	tx, err := mesh.NewSignedTx(1111, [20]byte{}, 1234, 11, 321, signer)
+//	require.NoError(t, err)
+//
+//	return tx
+//}
+//
+//func TestJsonWalletApi_Errors(t *testing.T) {
+//	shutDown := launchServer(t)
+//
+//	// generate request payload (api input params)
+//	addrBytes := []byte{0x02} // address that does not exist
+//	payload := marshalProto(t, &pb.AccountId{Address: util.Bytes2Hex(addrBytes)})
+//	const expectedResponse = "{\"error\":\"account does not exist\",\"message\":\"account does not exist\",\"code\":2}"
+//
+//	respBody, respStatus := callEndpoint(t, "v1/nonce", payload)
+//	require.Equal(t, http.StatusInternalServerError, respStatus) // TODO: Should we change it to err 400 somehow?
+//	require.Equal(t, expectedResponse, respBody)
+//
+//	respBody, respStatus = callEndpoint(t, "v1/balance", payload)
+//	require.Equal(t, http.StatusInternalServerError, respStatus) // TODO: Should we change it to err 400 somehow?
+//	require.Equal(t, expectedResponse, respBody)
+//
+//	// stop the services
+//	shutDown()
+//}
+//
+//func TestSpaceMeshGrpcService_Broadcast(t *testing.T) {
+//	shutDown := launchServer(t)
+//
+//	// generate request payload (api input params)
+//	Data := "l33t"
+//
+//	respBody, respStatus := callEndpoint(t, "v1/broadcast", marshalProto(t, &pb.BroadcastMessage{Data: Data}))
+//	require.Equal(t, http.StatusOK, respStatus)
+//	assertSimpleMessage(t, respBody, "ok")
+//
+//	require.Equal(t, Data, string(networkMock.GetBroadcast()))
+//
+//	// stop the services
+//	shutDown()
+//}
+//
+//func TestSpaceMeshGrpcService_BroadcastErrors(t *testing.T) {
+//	shutDown := launchServer(t)
+//	networkMock.SetErr(true)
+//	const expectedResponse = "{\"error\":\"error during broadcast\",\"message\":\"error during broadcast\",\"code\":2}"
+//
+//	Data := "l337"
+//
+//	respBody, respStatus := callEndpoint(t, "v1/broadcast", marshalProto(t, &pb.BroadcastMessage{Data: Data}))
+//	require.Equal(t, http.StatusInternalServerError, respStatus) // TODO: Should we change it to err 400 somehow?
+//	require.Equal(t, expectedResponse, respBody)
+//
+//	require.NotEqual(t, Data, string(networkMock.GetBroadcast()))
+//
+//	// stop the services
+//	shutDown()
+//}
+//
+//type mockSrv struct {
+//	c      chan service.GossipMessage
+//	called bool
+//}
+//
+//func (m *mockSrv) RegisterGossipProtocol(string, priorityq.Priority) chan service.GossipMessage {
+//	m.called = true
+//	return m.c
+//}
+//
+//type mockMsg struct {
+//	sender p2pcrypto.PublicKey
+//	msg    []byte
+//	c      chan service.MessageValidation
+//}
+//
+//func (m *mockMsg) Bytes() []byte {
+//	return m.msg
+//}
+//
+//func (m *mockMsg) ValidationCompletedChan() chan service.MessageValidation {
+//	return m.c
+//}
+//
+//func (m *mockMsg) Sender() p2pcrypto.PublicKey {
+//	return m.sender
+//}
+//
+//func (m *mockMsg) ReportValidation(protocol string) {
+//	m.c <- service.NewMessageValidation(m.sender, m.msg, protocol)
+//}
+//
+//func TestApproveAPIGossipMessages(t *testing.T) {
+//	m := &mockSrv{c: make(chan service.GossipMessage, 1)}
+//	ctx, cancel := context.WithCancel(context.Background())
+//	ApproveAPIGossipMessages(ctx, m)
+//	require.True(t, m.called)
+//	someKey := p2pcrypto.NewRandomPubkey()
+//	msg := &mockMsg{someKey, []byte("TEST"), make(chan service.MessageValidation, 1)}
+//	m.c <- msg
+//	res := <-msg.ValidationCompletedChan()
+//	require.NotNil(t, res)
+//	require.Equal(t, res.Sender(), someKey)
+//	require.Equal(t, res.Message(), []byte("TEST"))
+//	require.Equal(t, res.Protocol(), apiGossipProtocol)
+//	cancel()
+//}
