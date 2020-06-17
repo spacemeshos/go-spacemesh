@@ -25,6 +25,7 @@ type Syncer interface {
 // NodeService is a grpc_server server providing the Spacemesh api
 type NodeService struct {
 	Service
+	//ServiceServer
 	Network     NetworkAPI // P2P Swarm
 	Tx          TxAPI      // Mesh
 	GenTime     GenesisTimeAPI
@@ -32,8 +33,11 @@ type NodeService struct {
 	Syncer      Syncer
 }
 
+func (s NodeService) Server() *grpc.Server { return s.server }
+func (s NodeService) Port() uint           { return s.port }
+
 func (s NodeService) registerService() {
-	pb.RegisterNodeServiceServer(s.Server, s)
+	pb.RegisterNodeServiceServer(s.server, s)
 }
 
 var _ pb.NodeServiceServer = (*NodeService)(nil)
@@ -55,8 +59,8 @@ func NewNodeService(port int, net NetworkAPI, tx TxAPI, genTime GenesisTimeAPI, 
 	server := grpc.NewServer(options...)
 	return &NodeService{
 		Service: Service{
-			Server: server,
-			Port:   uint(port),
+			server: server,
+			port:   uint(port),
 		},
 		Network:     net,
 		Tx:          tx,

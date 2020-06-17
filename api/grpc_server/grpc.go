@@ -31,16 +31,18 @@ type TxAPI interface {
 
 // NodeService is a grpc_server server providing the Spacemesh api
 type ServiceServer interface {
-	StartService()
-	startServiceInternal()
+	Server() *grpc.Server
+	Port() uint
+	//StartService()
+	//startServiceInternal()
 	registerService()
 	Close() error
 }
 
 type Service struct {
-	ServiceServer
-	Server *grpc.Server
-	Port   uint
+	//ServiceServer
+	server *grpc.Server
+	port   uint
 	//StateAPI      api.StateAPI     // State DB
 	//TxMempool     *miner.TxMempool // TX Mempool
 	//Mining        api.MiningAPI    // ATX Builder
@@ -52,13 +54,13 @@ type Service struct {
 }
 
 // StartService starts the grpc_server service.
-func (s Service) StartService() {
-	go s.startServiceInternal()
+func StartService(s ServiceServer) {
+	go startServiceInternal(s)
 }
 
 // This is a blocking method designed to be called using a go routine
-func (s Service) startServiceInternal() {
-	addr := ":" + strconv.Itoa(int(s.Port))
+func startServiceInternal(s ServiceServer) {
+	addr := ":" + strconv.Itoa(int(s.Port()))
 
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -69,12 +71,12 @@ func (s Service) startServiceInternal() {
 	s.registerService()
 
 	// SubscribeOnNewConnections reflection service on gRPC server
-	reflection.Register(s.Server)
+	reflection.Register(s.Server())
 
-	log.Info("grpc_server API listening on port %d", s.Port)
+	log.Info("grpc_server API listening on port %d", s.Port())
 
 	// start serving - this blocks until err or server is stopped
-	if err := s.Server.Serve(lis); err != nil {
+	if err := s.Server().Serve(lis); err != nil {
 		log.Error("grpc_server stopped serving", err)
 	}
 
@@ -87,7 +89,7 @@ func (s Service) startServiceInternal() {
 // Close stops the service.
 func (s Service) Close() error {
 	log.Debug("Stopping grpc_server service...")
-	s.Server.Stop()
+	s.server.Stop()
 	log.Debug("grpc_server service stopped...")
 	return nil
 }
