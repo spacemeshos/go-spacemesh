@@ -94,7 +94,7 @@ Building is supported on OS X, Linux and Windows.
 
 Install [Go 1.11 or later](https://golang.org/dl/) for your platform, if you haven't already.
 
-On Windows you need to install `make` via [msys2](https://www.msys2.org/) or [MingGW-w64](http://mingw-w64.org/doku.php).
+On Windows you need to install `make` via [msys2](https://www.msys2.org/), [MingGW-w64](http://mingw-w64.org/doku.php) or [mingw] (https://chocolatey.org/packages/mingw)
 
 Ensure that `$GOPATH` is set correctly and that the `$GOPATH/bin` directory appears in `$PATH`.
 
