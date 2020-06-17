@@ -1,4 +1,4 @@
-package grpc
+package grpc_server
 
 import (
 	"time"
@@ -23,14 +23,14 @@ type Syncer interface {
 	Start()
 }
 
-// NodeService is a grpc server providing the Spacemesh api
+// NodeService is a grpc_server server providing the Spacemesh api
 type NodeService struct {
 	Service
-	Network       api.NetworkAPI   // P2P Swarm
-	Tx            TxAPI            // Mesh
-	GenTime       api.GenesisTimeAPI
-	PeerCounter   PeerCounter
-	Syncer        Syncer
+	Network     api.NetworkAPI // P2P Swarm
+	Tx          TxAPI          // Mesh
+	GenTime     api.GenesisTimeAPI
+	PeerCounter PeerCounter
+	Syncer      Syncer
 }
 
 func (s NodeService) registerService() {
@@ -39,7 +39,7 @@ func (s NodeService) registerService() {
 
 var _ pb.NodeServiceServer = (*NodeService)(nil)
 
-// NewNodeService creates a new grpc service using config data.
+// NewNodeService creates a new grpc_server service using config data.
 func NewNodeService(port int, net api.NetworkAPI, tx TxAPI, genTime api.GenesisTimeAPI, syncer Syncer) *NodeService {
 	options := []grpc.ServerOption{
 		// XXX: this is done to prevent routers from cleaning up our connections (e.g aws load balances..)
@@ -56,14 +56,14 @@ func NewNodeService(port int, net api.NetworkAPI, tx TxAPI, genTime api.GenesisT
 	server := grpc.NewServer(options...)
 	return &NodeService{
 		Service: Service{
-			Server:        server,
-			Port:          uint(port),
+			Server: server,
+			Port:   uint(port),
 		},
-		Network:       net,
-		Tx:            tx,
-		GenTime:       genTime,
-		PeerCounter:   peers.NewPeers(net, log.NewDefault("grpc")),
-		Syncer:        syncer,
+		Network:     net,
+		Tx:          tx,
+		GenTime:     genTime,
+		PeerCounter: peers.NewPeers(net, log.NewDefault("grpc_server")),
+		Syncer:      syncer,
 	}
 }
 

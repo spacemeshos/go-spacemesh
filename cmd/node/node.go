@@ -39,7 +39,7 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/api"
-	"github.com/spacemeshos/go-spacemesh/api/grpc"
+	"github.com/spacemeshos/go-spacemesh/api/grpc_server"
 	cfg "github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -148,7 +148,7 @@ type SpacemeshApp struct {
 	nodeID         types.NodeID
 	P2P            p2p.Service
 	Config         *cfg.Config
-	grpcAPIService *grpc.NodeService
+	grpcAPIService *grpc_server.NodeService
 	jsonAPIService *api.JSONHTTPServer
 	syncer         *sync.Syncer
 	blockListener  *sync.BlockListener
@@ -899,9 +899,9 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 
 	// start api servers
 	if apiConf.StartGrpcServer || apiConf.StartJSONServer {
-		// start grpc if specified or if json rpc specified
+		// start grpc server if specified or if json rpc specified
 		//layerDuration := app.Config.LayerDurationSec
-		app.grpcAPIService = grpc.NewNodeService(apiConf.GrpcServerPort, app.P2P, app.mesh,
+		app.grpcAPIService = grpc_server.NewNodeService(apiConf.GrpcServerPort, app.P2P, app.mesh,
 			app.clock, app.syncer)
 		app.grpcAPIService.StartService()
 	}

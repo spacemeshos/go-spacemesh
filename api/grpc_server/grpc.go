@@ -1,4 +1,4 @@
-package grpc
+package grpc_server
 
 import (
 	//pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
@@ -30,7 +30,7 @@ type TxAPI interface {
 	GetStateRoot() types.Hash32
 }
 
-// NodeService is a grpc server providing the Spacemesh api
+// NodeService is a grpc_server server providing the Spacemesh api
 type ServiceServer interface {
 	StartService()
 	startServiceInternal()
@@ -40,8 +40,8 @@ type ServiceServer interface {
 
 type Service struct {
 	ServiceServer
-	Server        *grpc.Server
-	Port          uint
+	Server *grpc.Server
+	Port   uint
 	//StateAPI      api.StateAPI     // State DB
 	//TxMempool     *miner.TxMempool // TX Mempool
 	//Mining        api.MiningAPI    // ATX Builder
@@ -52,7 +52,7 @@ type Service struct {
 	//Logging       api.LoggingAPI
 }
 
-// StartService starts the grpc service.
+// StartService starts the grpc_server service.
 func (s Service) StartService() {
 	go s.startServiceInternal()
 }
@@ -72,11 +72,11 @@ func (s Service) startServiceInternal() {
 	// SubscribeOnNewConnections reflection service on gRPC server
 	reflection.Register(s.Server)
 
-	log.Info("grpc API listening on port %d", s.Port)
+	log.Info("grpc_server API listening on port %d", s.Port)
 
 	// start serving - this blocks until err or server is stopped
 	if err := s.Server.Serve(lis); err != nil {
-		log.Error("grpc stopped serving", err)
+		log.Error("grpc_server stopped serving", err)
 	}
 
 }
@@ -87,8 +87,8 @@ func (s Service) startServiceInternal() {
 
 // Close stops the service.
 func (s Service) Close() error {
-	log.Debug("Stopping grpc service...")
+	log.Debug("Stopping grpc_server service...")
 	s.Server.Stop()
-	log.Debug("grpc service stopped...")
+	log.Debug("grpc_server service stopped...")
 	return nil
 }

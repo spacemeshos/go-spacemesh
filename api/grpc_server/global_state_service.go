@@ -1,8 +1,10 @@
-package grpc
+package grpc_server
 
 import (
 	"github.com/golang/protobuf/ptypes/empty"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/poet/broadcaster/pb"
+	"golang.org/x/net/context"
 )
 
 // GetStateRoot returns current state root
