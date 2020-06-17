@@ -56,3 +56,9 @@ type LoggingAPI interface {
 type PostAPI interface {
 	Reset() error
 }
+
+// Syncer is the API to get sync status
+type Syncer interface {
+	IsSynced() bool
+	Start()
+}

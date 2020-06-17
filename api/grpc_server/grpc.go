@@ -4,9 +4,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/reflection"
 	"net"
 	"strconv"
+	"time"
 )
 
 // PeerCounter is an api to get amount of connected peers
@@ -51,6 +53,22 @@ type Service struct {
 	//LayerDuration time.Duration
 	//Config        *config.Config
 	//Logging       api.LoggingAPI
+}
+
+func (s Service) Server() *grpc.Server { return s.server }
+func (s Service) Port() uint           { return s.port }
+
+var ServerOptions = []grpc.ServerOption{
+	// XXX: this is done to prevent routers from cleaning up our connections (e.g aws load balances..)
+	// TODO: these parameters work for now but we might need to revisit or add them as configuration
+	// TODO: Configure maxconns, maxconcurrentcons ..
+	grpc.KeepaliveParams(keepalive.ServerParameters{
+		MaxConnectionIdle:     time.Minute * 120,
+		MaxConnectionAge:      time.Minute * 180,
+		MaxConnectionAgeGrace: time.Minute * 10,
+		Time:                  time.Minute,
+		Timeout:               time.Minute * 3,
+	}),
 }
 
 // StartService starts the grpc_server service.

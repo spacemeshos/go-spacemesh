@@ -8,6 +8,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/go-spacemesh/api/config"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"io/ioutil"
@@ -287,6 +288,31 @@ func TestJsonApi(t *testing.T) {
 
 	// stop the services
 	shutDown()
+}
+
+func TestGlobalStateService(t *testing.T) {
+	grpcService := grpc_server.NewGlobalStateService(
+		cfg.GrpcServerPort, txAPI, &genTime)
+	// start gRPC server
+	grpc_server.StartService(grpcService)
+
+	// start a client
+	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
+
+	// Set up a connection to the server.
+	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	require.NoError(t, err)
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
+	c := pb.NewGlobalStateServiceClient(conn)
+
+	// call endpoint to test
+	response, err := c.GlobalStateHash(context.Background(), &pb.GlobalStateHashRequest{})
+	log.Info("GlobalStateHash response: %v", response)
+	require.Equal(t, uint64(1), response.Response.LayerNumber)
+	require.NoError(t, err)
+	require.NoError(t, grpcService.Close())
 }
 
 //func TestBroadcastPoet(t *testing.T) {
