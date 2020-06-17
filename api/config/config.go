@@ -2,7 +2,7 @@
 package config
 
 const (
-	defaultStartGRPCServer = false
+	//defaultStartGRPCServices = nil // not allowed as a const
 	defaultGRPCServerPort  = 9091
 	defaultStartJSONServer = false
 	defaultJSONServerPort  = 9090
@@ -10,10 +10,10 @@ const (
 
 // Config defines the api config params
 type Config struct {
-	StartGrpcServer bool `mapstructure:"grpc-server"`
-	GrpcServerPort  int  `mapstructure:"grpc-port"`
-	StartJSONServer bool `mapstructure:"json-server"`
-	JSONServerPort  int  `mapstructure:"json-port"`
+	StartGrpcServices []string `mapstructure:"grpc"`
+	GrpcServerPort    int      `mapstructure:"grpc-port"`
+	StartJSONServer   bool     `mapstructure:"json-server"`
+	JSONServerPort    int      `mapstructure:"json-port"`
 }
 
 func init() {
@@ -23,9 +23,9 @@ func init() {
 // DefaultConfig defines the default configuration options for api
 func DefaultConfig() Config {
 	return Config{
-		StartGrpcServer: defaultStartGRPCServer, // note: all bool flags default to false so don't set one of these to true here
-		GrpcServerPort:  defaultGRPCServerPort,
-		StartJSONServer: defaultStartJSONServer,
-		JSONServerPort:  defaultJSONServerPort,
+		StartGrpcServices: nil, // note: all bool flags default to false so don't set one of these to true here
+		GrpcServerPort:    defaultGRPCServerPort,
+		StartJSONServer:   defaultStartJSONServer,
+		JSONServerPort:    defaultJSONServerPort,
 	}
 }

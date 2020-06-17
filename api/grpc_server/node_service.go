@@ -26,8 +26,6 @@ func (s NodeService) registerService() {
 	pb.RegisterNodeServiceServer(s.server, s)
 }
 
-//var _ pb.NodeServiceServer = (*NodeService)(nil)
-
 // NewNodeService creates a new grpc_server service using config data.
 func NewNodeService(port int, net NetworkAPI, tx TxAPI, genTime GenesisTimeAPI, syncer Syncer) *NodeService {
 	server := grpc.NewServer(ServerOptions...)

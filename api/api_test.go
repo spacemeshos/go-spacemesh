@@ -309,7 +309,7 @@ func TestGlobalStateService(t *testing.T) {
 
 	// call endpoint to test
 	response, err := c.GlobalStateHash(context.Background(), &pb.GlobalStateHashRequest{})
-	log.Info("GlobalStateHash response: %v", response)
+	log.Info("GlobalStateService.GlobalStateHash response: %v", response)
 	require.Equal(t, uint64(1), response.Response.LayerNumber)
 	require.NoError(t, err)
 	require.NoError(t, grpcService.Close())

@@ -131,8 +131,8 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().IntVar(&config.API.JSONServerPort, "json-port",
 		config.API.JSONServerPort, "JSON api server port")
 	// StartGrpcAPIServerFlag determines if the grpc server should be started
-	cmd.PersistentFlags().BoolVar(&config.API.StartGrpcServer, "grpc-server",
-		config.API.StartGrpcServer, "StartService the grpc server")
+	cmd.PersistentFlags().StringArrayVar(&config.API.StartGrpcServices, "grpc",
+		config.API.StartGrpcServices, "Start one or more grpc services")
 	// GrpcServerPortFlag determines the grpc server local listening port
 	cmd.PersistentFlags().IntVar(&config.API.GrpcServerPort, "grpc-port",
 		config.API.GrpcServerPort, "GRPC api server port")
