@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/rand"
 	"io/ioutil"
 	"math/big"
 	"net/http"
@@ -540,15 +541,27 @@ func marshalProto(t *testing.T, msg proto.Message) string {
 	return buf.String()
 }
 
-var cfg = config.DefaultConfig()
+func getConfig() config.Config {
+	defaultConfig := config.DefaultConfig()
+	defaultConfig.GrpcServerPort = randPort()
+	defaultConfig.JSONServerPort = randPort()
+	return defaultConfig
+}
+
+var cfg = getConfig()
 
 type SyncerMock struct{}
 
 func (SyncerMock) IsSynced() bool { return false }
 
+func randPort() int {
+	return 50000 + rand.Intn(10000)
+}
+
 func launchServer(t *testing.T) func() {
 	networkMock.Broadcast("", []byte{0x00})
 	defaultConfig := config2.DefaultConfig()
+	defaultConfig.API = cfg
 	grpcService := NewGrpcService(cfg.GrpcServerPort, &networkMock, ap, txAPI, txMempool, &mining, &oracle, &genTime, PostMock{}, layerDuration, &SyncerMock{}, &defaultConfig, nil)
 	jsonService := NewJSONHTTPServer(cfg.JSONServerPort, cfg.GrpcServerPort)
 	// start gRPC and json server
