@@ -22,7 +22,5 @@ cmd/tmp
 */**/cover.out
 gcloud.json
 spacemesh.json
-api/spacemesh/**/*.pb.go
-api/spacemesh/**/*.pb.gw.go
 database/data
 *.pyc
