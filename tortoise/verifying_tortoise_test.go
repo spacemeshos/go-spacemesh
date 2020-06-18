@@ -3,11 +3,11 @@ package tortoise
 import (
 	"errors"
 	"fmt"
-	"github.com/davecgh/go-spew/spew"
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/stretchr/testify/require"
 	"strconv"
 	"testing"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/stretchr/testify/require"
 )
 
 type hareMock struct {
@@ -23,8 +23,9 @@ func (hm *hareMock) GetResult(l types.LayerID) ([]types.BlockID, error) {
 
 func TestTurtle_HandleIncomingLayer(t *testing.T) {
 
-	const layers types.LayerID = 10
-	const blocksPerLayer = 10
+	//log.DebugMode(true)
+	const layers types.LayerID = 40
+	const blocksPerLayer = 100
 
 	msh := getInMemMesh()
 
@@ -33,16 +34,15 @@ func TestTurtle_HandleIncomingLayer(t *testing.T) {
 	}}
 
 	trtl := NewTurtle(msh, hm, blocksPerLayer)
-
 	gen := types.NewExistingBlock(0, []byte("genesis"))
 	require.NoError(t, msh.AddBlock(gen))
 	trtl.init(gen.ID())
 
 	var l types.LayerID
 	for l = 1; l < layers; l++ {
-		fmt.Println("Processing layer ", l)
-		b, lists, err := trtl.BaseBlock()
-		fmt.Println("the base block in ", l, "is ", b)
+		fmt.Println("choosing base block layer ", l)
+		b, lists, err := trtl.BaseBlock(l)
+		fmt.Println("the base block for ", l, "is ", b)
 		if err != nil {
 			panic(fmt.Sprint("no base - ", err))
 		}
@@ -61,11 +61,19 @@ func TestTurtle_HandleIncomingLayer(t *testing.T) {
 				fmt.Println("Err inserting to db - ", err)
 			}
 		}
+		hres, err := hm.GetResult(lyr.Index())
+		require.NoError(t, err)
+		//require.Equal(t, types.SortBlockIDs(hres), types.SortBlockIDs(types.BlockIDs(lyr.Blocks())))
+		for _, blk := range hres {
+			fmt.Printf("BLOCK %v vote is %v\r\n", blk, trtl.inputVector(lyr.Index(), blk))
+		}
+
 		trtl.HandleIncomingLayer(lyr)
-		fmt.Println("Handled ", l)
+		fmt.Println("Handled ", l, "========================================================================")
 	}
 
-	spew.Dump(trtl.goodBlocks)
+	require.Equal(t, int(layers-2), int(trtl.verified))
+
 }
 
 func TestPlay(t *testing.T) {
