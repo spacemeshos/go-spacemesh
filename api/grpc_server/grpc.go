@@ -31,7 +31,8 @@ type TxAPI interface {
 	GetStateRoot() types.Hash32
 }
 
-// NodeService is a grpc_server server providing the Spacemesh api
+// ServiceStarter is an interface that knits together the various grpc service servers,
+// allowing the glue code in this file to manage them all.
 type ServiceServer interface {
 	Server() *grpc.Server
 	Port() uint
@@ -39,6 +40,8 @@ type ServiceServer interface {
 	Close() error
 }
 
+// Service is a barebones struct that all service servers embed. It stores properties
+// used by all service servers.
 type Service struct {
 	server *grpc.Server
 	port   uint
@@ -60,7 +63,7 @@ var ServerOptions = []grpc.ServerOption{
 	}),
 }
 
-// StartService starts the grpc_server service.
+// StartService starts the grpc service.
 func StartService(s ServiceServer) {
 	go startServiceInternal(s)
 }

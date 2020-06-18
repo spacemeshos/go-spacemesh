@@ -27,7 +27,7 @@ func (s NodeService) registerService() {
 	pb.RegisterNodeServiceServer(s.server, s)
 }
 
-// NewNodeService creates a new grpc_server service using config data.
+// NewNodeService creates a new grpc service using config data.
 func NewNodeService(
 	port int, net api.NetworkAPI, tx TxAPI, genTime api.GenesisTimeAPI,
 	syncer api.Syncer) *NodeService {
@@ -40,12 +40,12 @@ func NewNodeService(
 		Network:     net,
 		Tx:          tx,
 		GenTime:     genTime,
-		PeerCounter: peers.NewPeers(net, log.NewDefault("grpc_server")),
+		PeerCounter: peers.NewPeers(net, log.NewDefault("grpc_server.NodeService")),
 		Syncer:      syncer,
 	}
 }
 
-// Echo returns the response for an echo api request
+// Echo returns the response for an echo api request. It's used for E2E tests.
 func (s NodeService) Echo(ctx context.Context, in *pb.EchoRequest) (*pb.EchoResponse, error) {
 	log.Info("GRPC NodeService.Echo")
 	return &pb.EchoResponse{Msg: &pb.SimpleString{Value: in.Msg.Value}}, nil
@@ -67,7 +67,7 @@ func (s NodeService) Build(ctx context.Context, in *empty.Empty) (*pb.BuildRespo
 	}, nil
 }
 
-// GetNodeStatus returns a status object providing information about the connected peers, sync status,
+// Status returns a status object providing information about the connected peers, sync status,
 // current and verified layer
 func (s NodeService) Status(ctx context.Context, request *pb.StatusRequest) (*pb.StatusResponse, error) {
 	log.Info("GRPC NodeService.Status")
