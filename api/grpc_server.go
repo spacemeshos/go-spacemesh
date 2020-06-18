@@ -230,11 +230,6 @@ func (s SpacemeshGrpcService) Close() error {
 	return nil
 }
 
-// Syncer is the API to get sync status
-type Syncer interface {
-	IsSynced() bool
-}
-
 // TxAPI is an api for getting transaction transaction status
 type TxAPI interface {
 	AddressExists(addr types.Address) bool

@@ -16,9 +16,7 @@ type Service interface {
 // StateAPI is an API to global state
 type StateAPI interface {
 	GetBalance(address types.Address) uint64
-
 	GetNonce(address types.Address) uint64
-
 	Exist(address types.Address) bool
 }
 
@@ -55,4 +53,10 @@ type LoggingAPI interface {
 // PostAPI is an API for post init module
 type PostAPI interface {
 	Reset() error
+}
+
+// Syncer is the API to get sync status and to start sync
+type Syncer interface {
+	IsSynced() bool
+	Start()
 }
