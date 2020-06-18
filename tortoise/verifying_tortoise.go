@@ -62,8 +62,8 @@ type turtle struct {
 	totalVotes map[types.BlockID]vec
 }
 
-func (trtl *turtle) SetLogger(log2 log.Log) {
-	trtl.logger = log2
+func (t *turtle) SetLogger(log2 log.Log) {
+	t.logger = log2
 }
 
 func NewTurtle(bdp blockDataProvider, hrp hareResultsProvider, avgLayerSize int) *turtle {
@@ -80,7 +80,6 @@ func NewTurtle(bdp blockDataProvider, hrp hareResultsProvider, avgLayerSize int)
 		blocksToBlocks:      make([]opinion, 0, 1),
 		blocksToBlocksIndex: make(map[types.BlockID]int),
 		indexToLayerID:      make(map[int]types.LayerID),
-		totalVotes:          make(map[types.BlockID]vec),
 	}
 	return t
 }
