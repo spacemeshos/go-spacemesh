@@ -28,7 +28,9 @@ func (s NodeService) registerService() {
 }
 
 // NewNodeService creates a new grpc_server service using config data.
-func NewNodeService(port int, net api.NetworkAPI, tx TxAPI, genTime api.GenesisTimeAPI, syncer api.Syncer) *NodeService {
+func NewNodeService(
+	port int, net api.NetworkAPI, tx TxAPI, genTime api.GenesisTimeAPI,
+	syncer api.Syncer) *NodeService {
 	server := grpc.NewServer(ServerOptions...)
 	return &NodeService{
 		Service: Service{
