@@ -1,4 +1,0 @@
-[submodule "api/api"]
-	path = api/api
-	url = https://github.com/spacemeshos/api
-	branch = fix-build
