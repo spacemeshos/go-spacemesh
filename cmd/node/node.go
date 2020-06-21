@@ -331,12 +331,6 @@ func (app *SpacemeshApp) setupGenesis(state *state.TransactionProcessor, msh *me
 	if err != nil {
 		log.Panic("cannot commit genesis state")
 	}
-
-	//add first "genesis block to db"
-	/*err = msh.AddBlock(types.NewExistingBlock(types.GetEffectiveGenesis(), []byte("genesis")))
-	if err != nil {
-		log.Error("error adding genesis block %v", err)
-	}*/
 }
 
 func (app *SpacemeshApp) setupTestFeatures() {

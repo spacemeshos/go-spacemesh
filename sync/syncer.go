@@ -689,7 +689,7 @@ func (s *Syncer) fetchBlock(ID types.BlockID) bool {
 		ch <- res
 		return nil
 	}
-	id := types.CalcHash32(append(ID.ToBytes(), []byte(strconv.Itoa(rand.Int()))...))
+	id := types.CalcHash32(append(ID.Bytes(), []byte(strconv.Itoa(rand.Int()))...))
 	if res, err := s.blockQueue.addDependencies(id, []types.BlockID{ID}, foo); err != nil {
 		s.Error(fmt.Sprintf("block %v not syntactically valid", ID), err)
 		return false

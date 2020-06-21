@@ -421,15 +421,6 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 		}
 	}
 
-	/*activeSet, err := db.CalcActiveSetFromView(atx.View, atx.PubLayerID.GetEpoch(db.LayersPerEpoch))
-	if err != nil && !atx.PubLayerID.GetEpoch(db.LayersPerEpoch).IsGenesis() {
-		return fmt.Errorf("could not calculate active set for ATX %v %s", atx.ShortString(), err)
-	}
-
-	if atx.ActiveSetSize != activeSet {
-		return fmt.Errorf("atx contains view with unequal active ids (%v) than seen (%v)", atx.ActiveSetSize, activeSet)
-	}*/
-
 	hash, err := atx.NIPSTChallenge.Hash()
 	if err != nil {
 		return fmt.Errorf("cannot get NIPST Challenge hash: %v", err)
@@ -742,7 +733,7 @@ func (db *DB) HandleGossipAtx(data service.GossipMessage, syncer service.Syncer)
 	if data == nil {
 		return
 	}
-	atx, err := types.BytesAsAtx(data.Bytes())
+	atx, err := types.BytesToAtx(data.Bytes())
 	if err != nil {
 		db.log.Error("cannot parse incoming ATX")
 		return

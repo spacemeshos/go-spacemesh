@@ -250,11 +250,11 @@ func (m *DB) LayerBlockIds(index types.LayerID) ([]types.BlockID, error) {
 // AddZeroBlockLayer tags lyr as a layer without blocks
 func (m *DB) AddZeroBlockLayer(index types.LayerID) error {
 	blockIds := make([]types.BlockID, 0, 1)
-	w, err := types.BlockIdsAsBytes(blockIds)
+	w, err := types.BlockIdsToBytes(blockIds)
 	if err != nil {
 		return errors.New("could not encode layer blk ids")
 	}
-	return m.layers.Put(index.ToBytes(), w)
+	return m.layers.Put(index.Bytes(), w)
 }
 
 func (m *DB) getBlockBytes(id types.BlockID) ([]byte, error) {

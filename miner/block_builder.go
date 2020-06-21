@@ -80,7 +80,7 @@ type BlockBuilder struct {
 	syncer          syncer
 	started         bool
 	atxsPerBlock    int // number of atxs to select per block
-	layersPerEpoch   uint16
+	layersPerEpoch  uint16
 	projector       projector
 	db              database.Database
 	layerPerEpoch   uint16
@@ -253,7 +253,7 @@ func getEpochKey(ID types.EpochID) []byte {
 }
 
 func (t *BlockBuilder) storeRefBlock(epoch types.EpochID, blockID types.BlockID) error {
-	return t.db.Put(getEpochKey(epoch), blockID.ToBytes())
+	return t.db.Put(getEpochKey(epoch), blockID.Bytes())
 }
 
 func (t *BlockBuilder) getRefBlock(epoch types.EpochID) (blockID types.BlockID, err error) {
@@ -324,7 +324,7 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.ATXID, eligibil
 	t.Log.Event().Info("block created",
 		bl.ID(),
 		bl.LayerIndex,
-		bl.LayerIndex.GetEpoch(t.layersPerEpoch),
+		bl.LayerIndex.GetEpoch(),
 		bl.MinerID(),
 		log.Int("tx_count", len(bl.TxIDs)),
 		log.Int("atx_count", len(bl.ATXIDs)),

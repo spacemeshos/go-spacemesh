@@ -449,20 +449,6 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 	atxDb := firstAp.blockListener.AtxDB.(*activation.DB)
 	_, err := atxDb.GetNodeLastAtxID(firstAp.nodeID)
 	assert.NoError(suite.T(), err)
-	//atx, err := atxDb.GetAtxHeader(atxID)
-	//assert.NoError(suite.T(), err)
-
-	/*totalAtxs := uint32(0)
-	for atx != nil {
-		totalAtxs += atx.ActiveSetSize
-		atx, err = atxDb.GetAtxHeader(atx.PrevATXID)
-	}*/
-
-	// assert number of ATXs
-	/*exp = totalEpochs * allMiners
-	act = int(totalAtxs)
-	assert.Equal(suite.T(), exp, act, fmt.Sprintf("not good num of atxs got: %v, want: %v", act, exp))
-	*/
 }
 
 func (suite *AppTestSuite) validateLastATXActiveSetSize(app *SpacemeshApp, numberOfEpochs int) {
