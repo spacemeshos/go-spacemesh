@@ -273,6 +273,7 @@ func (s *Syncer) setGossipBufferingStatus(status status) {
 
 //IsSynced returns true if the node is synced false otherwise
 func (s *Syncer) IsSynced() bool {
+	s.Info("sync state w: %v, g:%v layer : %v latest: %v", s.weaklySynced(s.GetCurrentLayer()), s.getGossipBufferingStatus(), s.GetCurrentLayer(), s.LatestLayer())
 	return s.weaklySynced(s.GetCurrentLayer()) && s.getGossipBufferingStatus() == done
 }
 
@@ -371,7 +372,11 @@ func (s *Syncer) handleLayersTillCurrent() {
 			return
 		}
 		if err := s.getAndValidateLayer(currentSyncLayer); err != nil {
-			s.Panic("failed getting layer even though we are weakly-synced currentLayer=%v lastTicked=%v err=%v ", currentSyncLayer, s.GetCurrentLayer(), err)
+			if currentSyncLayer.GetEpoch().IsGenesis() {
+				log.Warning("failed getting layer even though we are weakly-synced currentLayer=%v lastTicked=%v err=%v ", currentSyncLayer, s.GetCurrentLayer(), err)
+			} else {
+				s.Panic("failed getting layer even though we are weakly-synced currentLayer=%v lastTicked=%v err=%v ", currentSyncLayer, s.GetCurrentLayer(), err)
+			}
 		}
 	}
 	return
@@ -380,11 +385,12 @@ func (s *Syncer) handleLayersTillCurrent() {
 //handle the current consensus layer if its is older than s.Validation Delta
 func (s *Syncer) handleCurrentLayer() error {
 	curr := s.GetCurrentLayer()
-	if s.LatestLayer() == curr && time.Now().Sub(s.LayerToTime(s.LatestLayer())) > s.ValidationDelta {
+	if s.LatestLayer() == curr && time.Now().Sub(s.LayerToTime(s.LatestLayer())) > s.ValidationDelta || curr.GetEpoch().IsGenesis() {
 		if err := s.getAndValidateLayer(s.LatestLayer()); err != nil {
 			if err != database.ErrNotFound {
 				s.Panic("failed handling current layer  currentLayer=%v lastTicked=%v err=%v ", s.LatestLayer(), s.GetCurrentLayer(), err)
 			}
+			s.Info("setting zero layer %v", curr)
 			if err := s.SetZeroBlockLayer(curr); err != nil {
 				return err
 			}
@@ -422,6 +428,12 @@ func (s *Syncer) handleNotSynced(currentSyncLayer types.LayerID) {
 		s.ValidateLayer(lyr) // wait for layer validation
 	}
 
+	// if we are in the first epoch, we need to listen to gossip still
+	if currentSyncLayer.GetEpoch() < 3 {
+		s.setGossipBufferingStatus(done)
+		return
+	}
+
 	// wait for two ticks to ensure we are fully synced before we open gossip or validate the current layer
 	err := s.gossipSyncForOneFullLayer(currentSyncLayer)
 	if err != nil {
@@ -436,7 +448,7 @@ func (s *Syncer) gossipSyncForOneFullLayer(currentSyncLayer types.LayerID) error
 	//listen to gossip
 	s.setGossipBufferingStatus(inProgress)
 	// subscribe and wait for two ticks
-	s.Info("waiting for two ticks while p2p is open")
+	s.Info("waiting for two ticks while p2p is open, epoch %v", currentSyncLayer.GetEpoch())
 	ch := s.ticker.Subscribe()
 
 	if done := s.waitLayer(ch); done {

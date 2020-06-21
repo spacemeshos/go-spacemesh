@@ -23,7 +23,7 @@ func (l EpochID) IsGenesis() bool {
 
 // FirstLayer returns the layer ID of the first layer in the epoch.
 func (l EpochID) FirstLayer(layersPerEpoch uint16) LayerID {
-	return LayerID(uint64(l) * uint64(layersPerEpoch))
+	return LayerID(uint64(l) * uint64(getLayersPerEpoch()))
 }
 
 // Field returns a log field. Implements the LoggableField interface.
@@ -82,8 +82,8 @@ func (atxh *ActivationTxHeader) ID() ATXID {
 
 // TargetEpoch returns the target epoch of the activation transaction. This is the epoch in which the miner is eligible
 // to participate thanks to the ATX.
-func (atxh *ActivationTxHeader) TargetEpoch(layersPerEpoch uint16) EpochID {
-	return atxh.PubLayerID.GetEpoch(layersPerEpoch) + 1
+func (atxh *ActivationTxHeader) TargetEpoch() EpochID {
+	return atxh.PubLayerID.GetEpoch() + 1
 }
 
 // SetID sets the ATXID in this ATX's cache.
@@ -137,7 +137,6 @@ func (challenge *NIPSTChallenge) String() string {
 type InnerActivationTx struct {
 	*ActivationTxHeader
 	Nipst      *NIPST
-	View       []BlockID
 	Commitment *PostProof
 }
 
@@ -149,8 +148,7 @@ type ActivationTx struct {
 }
 
 // NewActivationTx returns a new activation transaction. The ATXID is calculated and cached.
-func NewActivationTx(nipstChallenge NIPSTChallenge, coinbase Address, activeSetSize uint32, view []BlockID,
-	nipst *NIPST, commitment *PostProof) *ActivationTx {
+func NewActivationTx(nipstChallenge NIPSTChallenge, coinbase Address, activeSetSize uint32, nipst *NIPST, commitment *PostProof) *ActivationTx {
 
 	atx := &ActivationTx{
 		InnerActivationTx: &InnerActivationTx{
@@ -160,7 +158,6 @@ func NewActivationTx(nipstChallenge NIPSTChallenge, coinbase Address, activeSetS
 				ActiveSetSize:  activeSetSize,
 			},
 			Nipst:      nipst,
-			View:       view,
 			Commitment: commitment,
 		},
 	}

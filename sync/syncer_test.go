@@ -989,6 +989,7 @@ func TestFetchLayerBlockIds(t *testing.T) {
 
 func TestFetchLayerBlockIdsNoResponse(t *testing.T) {
 	// check tx validation
+	types.SetLayersPerEpoch(1)
 	clk := &mockClock{Layer: 6}
 	syncs, nodes := SyncMockFactoryManClock(5, conf, t.Name(), memoryDB, newMockPoetDb, clk)
 	pm1 := getPeersMock([]p2ppeers.Peer{nodes[2].PublicKey()})
@@ -1144,35 +1145,37 @@ func TestSyncer_Synchronise(t *testing.T) {
 
 func TestSyncer_Synchronise2(t *testing.T) {
 	r := require.New(t)
+	types.SetLayersPerEpoch(1)
 	syncs, _, _ := SyncMockFactory(1, conf, t.Name(), memoryDB, newMockPoetDb)
 	sync := syncs[0]
-	sync.AddBlockWithTxs(types.NewExistingBlock(1, []byte(rand.String(8))), nil, nil)
-	sync.AddBlockWithTxs(types.NewExistingBlock(2, []byte(rand.String(8))), nil, nil)
-	sync.AddBlockWithTxs(types.NewExistingBlock(3, []byte(rand.String(8))), nil, nil)
-	sync.AddBlockWithTxs(types.NewExistingBlock(4, []byte(rand.String(8))), nil, nil)
-	sync.AddBlockWithTxs(types.NewExistingBlock(5, []byte(rand.String(8))), nil, nil)
+	gen := types.GetEffectiveGenesis()
+	sync.AddBlockWithTxs(types.NewExistingBlock(1+gen, []byte(rand.String(8))), nil, nil)
+	sync.AddBlockWithTxs(types.NewExistingBlock(2+gen, []byte(rand.String(8))), nil, nil)
+	sync.AddBlockWithTxs(types.NewExistingBlock(3+gen, []byte(rand.String(8))), nil, nil)
+	sync.AddBlockWithTxs(types.NewExistingBlock(4+gen, []byte(rand.String(8))), nil, nil)
+	sync.AddBlockWithTxs(types.NewExistingBlock(5+gen, []byte(rand.String(8))), nil, nil)
 
-	lv := &mockLayerValidator{0, 0, 0, nil}
+	lv := &mockLayerValidator{types.GetEffectiveGenesis(), 0, 0, nil}
 	sync.Mesh.Validator = lv
-	sync.ticker = &mockClock{Layer: 1}
+	sync.ticker = &mockClock{Layer: 1 + gen}
 	r.False(sync.gossipSynced == done)
 
 	// current layer = 0
-	sync.ticker = &mockClock{Layer: 0}
+	sync.ticker = &mockClock{Layer: 0 + gen}
 	sync.synchronise()
 	r.Equal(0, lv.countValidate)
 	r.True(sync.gossipSynced == done)
 
 	// current layer = 1
-	sync.ticker = &mockClock{Layer: 1}
+	sync.ticker = &mockClock{Layer: 1 + gen}
 	sync.synchronise()
 	r.Equal(0, lv.countValidate)
 	r.True(sync.gossipSynced == done)
 
 	// current layer != 1 && weakly-synced
-	lv = &mockLayerValidator{0, 0, 0, nil}
+	lv = &mockLayerValidator{types.GetEffectiveGenesis(), 0, 0, nil}
 	sync.Mesh.Validator = lv
-	sync.ticker = &mockClock{Layer: 2}
+	sync.ticker = &mockClock{Layer: 2 + gen}
 	sync.SetLatestLayer(2)
 	sync.synchronise()
 	r.Equal(1, lv.countValidate)
@@ -1650,7 +1653,6 @@ func TestSyncer_AtxSetID(t *testing.T) {
 	t.Log(fmt.Sprintf("%+v\n", b))
 	t.Log("---------------------")
 	assert.Equal(t, b.Nipst, a.Nipst)
-	assert.Equal(t, b.View, a.View)
 	assert.Equal(t, b.Commitment, a.Commitment)
 
 	assert.Equal(t, b.ActivationTxHeader.NodeID, a.ActivationTxHeader.NodeID)

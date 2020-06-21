@@ -161,6 +161,7 @@ type SpacemeshApp struct {
 	clock          TickProvider
 	hare           HareService
 	atxBuilder     *activation.Builder
+	atxDb          *activation.DB
 	poetListener   *activation.PoetListener
 	edSgn          *signing.EdSigner
 	closers        []interface{ Close() }
@@ -330,10 +331,12 @@ func (app *SpacemeshApp) setupGenesis(state *state.TransactionProcessor, msh *me
 	if err != nil {
 		log.Panic("cannot commit genesis state")
 	}
-	err = msh.AddBlock(mesh.GenesisBlock)
+
+	//add first "genesis block to db"
+	/*err = msh.AddBlock(types.NewExistingBlock(types.GetEffectiveGenesis(), []byte("genesis")))
 	if err != nil {
 		log.Error("error adding genesis block %v", err)
-	}
+	}*/
 }
 
 func (app *SpacemeshApp) setupTestFeatures() {
@@ -445,6 +448,8 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	name := nodeID.ShortString()
 
 	lg := log.NewDefault(name).WithFields(log.NodeID(name))
+
+	types.SetLayersPerEpoch(int32(app.Config.LayersPerEpoch))
 
 	app.log = app.addLogger(AppLogger, lg)
 
@@ -589,6 +594,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	app.atxBuilder = atxBuilder
 	app.oracle = blockOracle
 	app.txProcessor = processor
+	app.atxDb = atxdb
 
 	return nil
 }

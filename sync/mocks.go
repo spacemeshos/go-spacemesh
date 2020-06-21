@@ -217,7 +217,7 @@ func NewSyncWithMocks(atxdbStore *database.LDBDatabase, mshdb *mesh.DB, txpool *
 		msh = mesh.NewMesh(mshdb, atxdb, configTst(), &meshValidatorMock{}, txpool, atxpool, &mockState{}, lg)
 	}
 
-	_ = msh.AddBlock(mesh.GenesisBlock)
+	_ = msh.AddBlock(mesh.GenesisBlock())
 	clock := mockClock{Layer: expectedLayers + 1}
 	lg.Info("current layer %v", clock.GetCurrentLayer())
 	return NewSync(swarm, msh, txpool, atxpool, blockEligibilityValidatorMock{}, poetDb, conf, &clock, lg)

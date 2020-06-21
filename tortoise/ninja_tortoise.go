@@ -18,7 +18,6 @@ type patternID uint32 //this hash dose not include the layer id
 const ( //Threshold
 	window          = 10
 	globalThreshold = 0.6
-	genesis         = 0
 )
 
 var ( //correction vectors type
@@ -211,7 +210,7 @@ func (ni *ninjaTortoise) evictOutOfPbase() {
 func (ni *ninjaTortoise) processBlock(b *types.Block) {
 
 	ni.logger.Debug("process block: %s layer: %s  ", b.ID(), b.Layer())
-	if b.Layer() == genesis {
+	if b.Layer() == types.GetEffectiveGenesis() {
 		return
 	}
 
@@ -232,8 +231,8 @@ func (ni *ninjaTortoise) processBlock(b *types.Block) {
 	ni.TExplicit[b.ID()] = make(map[types.LayerID]votingPattern, ni.Hdist)
 
 	var layerID types.LayerID
-	if ni.Hdist > b.Layer() {
-		layerID = 0
+	if ni.Hdist+types.GetEffectiveGenesis() > b.Layer() {
+		layerID = types.GetEffectiveGenesis()
 	} else {
 		layerID = b.Layer() - ni.Hdist
 	}
@@ -444,7 +443,7 @@ func (ni *ninjaTortoise) addPatternVote(p votingPattern, view map[types.BlockID]
 		for _, ex := range vp {
 			blocks, err := ni.db.LayerBlockIds(ex.Layer())
 			if err != nil {
-				ni.logger.Panic("could not retrieve layer block ids")
+				ni.logger.Panic("could not retrieve layer block ids %v", ex.Layer())
 			}
 
 			//explicitly abstain
@@ -523,7 +522,7 @@ func (ni *ninjaTortoise) handleIncomingLayer(newlyr *types.Layer) {
 	defer ni.evictOutOfPbase()
 	ni.processBlocks(newlyr)
 
-	if newlyr.Index() == genesis {
+	if newlyr.Index() == types.GetEffectiveGenesis() {
 		ni.handleGenesis(newlyr)
 		return
 	}

@@ -366,7 +366,7 @@ func (b *Builder) PublishActivationTx() error {
 			return err
 		}
 	}
-	pubEpoch := b.challenge.PubLayerID.GetEpoch(b.layersPerEpoch)
+	pubEpoch := b.challenge.PubLayerID.GetEpoch()
 
 	hash, err := b.challenge.Hash()
 	if err != nil {
@@ -403,7 +403,7 @@ func (b *Builder) PublishActivationTx() error {
 	if err := b.waitOrStop(b.syncer.Await()); err != nil {
 		return err
 	}
-	viewLayer := pubEpoch.FirstLayer(b.layersPerEpoch)
+	/*viewLayer := pubEpoch.FirstLayer(b.layersPerEpoch)
 	var view []types.BlockID
 	if viewLayer > 0 {
 		var err error
@@ -411,10 +411,10 @@ func (b *Builder) PublishActivationTx() error {
 		if err != nil {
 			return fmt.Errorf("failed to get current view for layer %v: %v", viewLayer, err)
 		}
-	}
+	}*/
 
 	var activeSetSize uint32
-	if pubEpoch > 0 {
+	/*if pubEpoch > 0 {
 		var err error
 		b.log.With().Info("calculating active ids")
 		activeSetSize, err = b.db.CalcActiveSetFromView(view, pubEpoch)
@@ -425,14 +425,14 @@ func (b *Builder) PublishActivationTx() error {
 	if activeSetSize == 0 && !(pubEpoch + 1).IsGenesis() {
 		return fmt.Errorf("empty active set size found! epochId: %v, len(view): %d, view: %v",
 			pubEpoch, len(view), view)
-	}
+	}*/
 
 	var commitment *types.PostProof
 	if b.challenge.PrevATXID == *types.EmptyATXID {
 		commitment = b.commitment
 	}
 
-	atx := types.NewActivationTx(*b.challenge, b.getCoinbaseAccount(), activeSetSize, view, nipst, commitment)
+	atx := types.NewActivationTx(*b.challenge, b.getCoinbaseAccount(), activeSetSize, nipst, commitment)
 
 	b.log.With().Info("active ids seen for epoch", log.Uint64("atx_pub_epoch", uint64(pubEpoch)),
 		log.Uint32("view_cnt", activeSetSize))
@@ -453,10 +453,8 @@ func (b *Builder) PublishActivationTx() error {
 		log.String("prev_atx_id", atx.PrevATXID.ShortString()),
 		log.String("pos_atx_id", atx.PositioningATX.ShortString()),
 		log.LayerID(uint64(atx.PubLayerID)),
-		log.EpochID(uint64(atx.PubLayerID.GetEpoch(b.layersPerEpoch))),
-		log.Uint32("active_set", atx.ActiveSetSize),
+		log.EpochID(uint64(atx.PubLayerID.GetEpoch())),
 		log.String("miner", b.nodeID.ShortString()),
-		log.Int("view", len(atx.View)),
 		log.Uint64("sequence_number", atx.Sequence),
 		log.String("NIPSTChallenge", hash.String()),
 		log.String("commitment", commitStr),
@@ -467,7 +465,7 @@ func (b *Builder) PublishActivationTx() error {
 	select {
 	case <-atxReceived:
 		b.log.Info("atx received in db")
-	case <-b.layerClock.AwaitLayer((atx.TargetEpoch(b.layersPerEpoch) + 1).FirstLayer(b.layersPerEpoch)):
+	case <-b.layerClock.AwaitLayer((atx.TargetEpoch() + 1).FirstLayer(b.layersPerEpoch)):
 		select {
 		case <-atxReceived:
 			b.log.Info("atx received in db (in the last moment)")
@@ -487,7 +485,7 @@ func (b *Builder) PublishActivationTx() error {
 }
 
 func (b *Builder) currentEpoch() types.EpochID {
-	return b.layerClock.GetCurrentLayer().GetEpoch(b.layersPerEpoch)
+	return b.layerClock.GetCurrentLayer().GetEpoch()
 }
 
 func (b *Builder) discardChallenge() {
@@ -535,9 +533,9 @@ func (b *Builder) GetPrevAtx(node types.NodeID) (*types.ActivationTxHeader, erro
 }
 
 func (b *Builder) discardChallengeIfStale() bool {
-	if b.challenge != nil && b.challenge.PubLayerID.GetEpoch(b.layersPerEpoch)+1 < b.currentEpoch() {
+	if b.challenge != nil && b.challenge.PubLayerID.GetEpoch()+1 < b.currentEpoch() {
 		b.log.With().Info("atx target epoch has already passed -- starting over",
-			log.Uint64("target_epoch", uint64(b.challenge.PubLayerID.GetEpoch(b.layersPerEpoch)+1)),
+			log.Uint64("target_epoch", uint64(b.challenge.PubLayerID.GetEpoch()+1)),
 			log.Uint64("current_epoch", uint64(b.currentEpoch())),
 		)
 		b.discardChallenge()

@@ -357,7 +357,7 @@ func TestMesh_AddBlockWithTxs_PushTransactions_UpdateUnappliedTxs(t *testing.T) 
 	state := &MockMapState{}
 	msh.txProcessor = state
 
-	layerID := types.LayerID(1)
+	layerID := types.LayerID(types.GetEffectiveGenesis() + 1)
 	signer, origin := newSignerAndAddress(r, "origin")
 	tx1 := addTxToMesh(r, msh, signer, 2468)
 	tx2 := addTxToMesh(r, msh, signer, 2469)
@@ -376,7 +376,7 @@ func TestMesh_AddBlockWithTxs_PushTransactions_UpdateUnappliedTxs(t *testing.T) 
 		r.Equal(111, int(txns[i].TotalAmount))
 	}
 
-	msh.pushLayersToState(1, 2)
+	msh.pushLayersToState(types.GetEffectiveGenesis()+1, types.GetEffectiveGenesis()+2)
 	r.Equal(4, len(state.Txs))
 
 	r.ElementsMatch(GetTransactionIds(tx5), GetTransactionIds(state.Pool...))

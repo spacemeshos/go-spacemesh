@@ -4,7 +4,6 @@ import (
 	"errors"
 	"github.com/spacemeshos/amcl/BLS381"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/config"
 	eCfg "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/stretchr/testify/assert"
@@ -152,6 +151,7 @@ func TestOracle_buildVRFMessageConcurrency(t *testing.T) {
 }
 
 func TestOracle_IsEligible(t *testing.T) {
+	types.SetLayersPerEpoch(defLayersPerEpoch)
 	o := New(&mockValueProvider{1, nil}, nil, nil, nil, 0, genActive, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
 	o.layersPerEpoch = 10
 	o.vrfVerifier = buildVerifier(false, errFoo)
@@ -179,7 +179,7 @@ func TestOracle_IsEligible(t *testing.T) {
 
 func Test_safeLayer(t *testing.T) {
 	const safety = 25
-	assert.Equal(t, config.Genesis, safeLayer(1, safety))
+	assert.Equal(t, types.GetEffectiveGenesis(), safeLayer(1, safety))
 	assert.Equal(t, types.LayerID(100-safety), safeLayer(100, safety))
 }
 
@@ -340,22 +340,28 @@ func TestOracle_activeSetSizeCache(t *testing.T) {
 func TestOracle_roundedSafeLayer(t *testing.T) {
 	const offset = 3
 	r := require.New(t)
+	types.SetLayersPerEpoch(1)
 	v := roundedSafeLayer(1, 1, 1, offset)
-	r.Equal(config.Genesis, v)
+	r.Equal(types.GetEffectiveGenesis(), v)
+	types.SetLayersPerEpoch(1)
 	v = roundedSafeLayer(1, 5, 1, offset)
-	r.Equal(config.Genesis, v)
+	r.Equal(types.GetEffectiveGenesis(), v)
+	types.SetLayersPerEpoch(10)
 	v = roundedSafeLayer(50, 5, 10, offset)
 	r.Equal(types.LayerID(43), v)
+	types.SetLayersPerEpoch(4)
 	v = roundedSafeLayer(2, 1, 4, 2)
-	r.Equal(config.Genesis, v)
+	r.Equal(types.GetEffectiveGenesis(), v)
 	v = roundedSafeLayer(10, 1, 4, offset)
 	r.Equal(types.LayerID(4+offset), v)
 
 	// examples
 	// sl is after rounded layer
+	types.SetLayersPerEpoch(5)
 	v = roundedSafeLayer(11, 5, 5, 1)
 	r.Equal(types.LayerID(6), v)
 	// sl is before rounded layer
+	types.SetLayersPerEpoch(5)
 	v = roundedSafeLayer(11, 5, 5, 3)
 	r.Equal(types.LayerID(3), v)
 }
@@ -430,13 +436,14 @@ func (p *bProvider) ContextuallyValidBlock(layer types.LayerID) (map[types.Block
 
 func TestOracle_activesSafeLayer(t *testing.T) {
 	r := require.New(t)
+	types.SetLayersPerEpoch(2)
 	o := New(&mockValueProvider{1, nil}, nil, nil, nil, 2, genActive, mockBlocksProvider{}, eCfg.Config{ConfidenceParam: 2, EpochOffset: 0}, log.NewDefault(t.Name()))
 	mp := createMapWithSize(9)
 	o.activesCache = newMockCasher()
 	lyr := types.LayerID(10)
 	rsl := roundedSafeLayer(lyr, types.LayerID(o.cfg.ConfidenceParam), o.layersPerEpoch, types.LayerID(o.cfg.EpochOffset))
 	o.getActiveSet = func(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
-		ep := rsl.GetEpoch(o.layersPerEpoch)
+		ep := rsl.GetEpoch()
 		r.Equal(ep, epoch)
 		return mp, nil
 	}

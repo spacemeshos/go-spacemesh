@@ -177,9 +177,13 @@ func calcHdistRange(id types.LayerID, hdist types.LayerID) (bottom types.LayerID
 		log.Panic("hdist cannot be zero")
 	}
 
-	bottom = types.LayerID(0)
+	if id < types.GetEffectiveGenesis() {
+		log.Panic("cannot get range from before effective genesis %v g: %v", id, types.GetEffectiveGenesis())
+	}
+
+	bottom = types.LayerID(types.GetEffectiveGenesis())
 	top = id - 1
-	if id > hdist {
+	if id > hdist+types.GetEffectiveGenesis() {
 		bottom = id - hdist
 	}
 
@@ -201,13 +205,13 @@ func (t *BlockBuilder) getVotes(id types.LayerID) ([]types.BlockID, error) {
 	var votes []types.BlockID = nil
 
 	// if genesis
-	if id == config.Genesis {
+	if id <= types.GetEffectiveGenesis() {
 		return nil, errors.New("cannot create blockBytes in genesis layer")
 	}
 
 	// if genesis+1
-	if id == config.Genesis+1 {
-		return append(votes, mesh.GenesisBlock.ID()), nil
+	if id == types.GetEffectiveGenesis()+1 {
+		return append(votes, mesh.GenesisBlock().ID()), nil
 	}
 
 	// not genesis, get from hare
@@ -218,7 +222,7 @@ func (t *BlockBuilder) getVotes(id types.LayerID) ([]types.BlockID, error) {
 			log.Uint64("bottom", uint64(bottom)), log.Uint64("top", uint64(top)), log.Uint64("hdist", uint64(t.hdist)))
 		ids, e := t.meshProvider.LayerBlockIds(bottom)
 		if e != nil {
-			t.With().Error("Could not set votes to whole layer", log.Err(e))
+			t.With().Error("could not set votes to whole layer", log.Err(e))
 			return nil, e
 		}
 
@@ -286,13 +290,13 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.ATXID, eligibil
 		ATXIDs: atxids,
 		TxIDs:  txids,
 	}
-	epoch := id.GetEpoch(t.layerPerEpoch)
+	epoch := id.GetEpoch()
 	refBlock, err := t.getRefBlock(epoch)
 	if err != nil {
 		if eligibilityProof.J != 0 {
 			t.Log.Error("cannot read ref block for epoch %v err %v", epoch, err)
 		}
-		atxs := t.AtxDb.GetEpochAtxs(id.GetEpoch(t.layerPerEpoch))
+		atxs := t.AtxDb.GetEpochAtxs(id.GetEpoch())
 		b.ActiveSet = &atxs
 	} else {
 		b.RefBlock = &refBlock
@@ -359,7 +363,7 @@ func (t *BlockBuilder) createBlockLoop() {
 
 		case layerID := <-t.beginRoundEvent:
 			if !t.syncer.IsSynced() {
-				t.Debug("builder got layer %v not synced yet", layerID)
+				t.Info("builder got layer %v not synced yet", layerID)
 				continue
 			}
 

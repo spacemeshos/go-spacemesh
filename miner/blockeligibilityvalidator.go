@@ -48,12 +48,29 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 	var vrfPubkey []byte
 	var genesisNoAtx bool
 
-	epochNumber := block.LayerIndex.GetEpoch(v.layersPerEpoch)
+	epochNumber := block.LayerIndex.GetEpoch()
 	if epochNumber == 0 {
 		v.log.With().Warning("skipping epoch 0 block validation.",
 			log.BlockID(block.ID().String()), log.LayerID(block.LayerIndex.Uint64()))
 		return true, nil
 	}
+	var err error
+	activeSetBlock := block
+	if block.RefBlock != nil {
+		activeSetBlock, err = v.blocks.GetBlock(*block.RefBlock)
+		if err != nil {
+			//block should be present because we've synced it in the calling function
+			return false, fmt.Errorf("cannot get refrence block %v", *block.RefBlock)
+			//log.Warning("ref block %v not found - continuing old active set size calc", *block.RefBlock)
+			//activeSetBlock = block
+		}
+
+	}
+	if activeSetBlock.ActiveSet == nil {
+		return false, fmt.Errorf("cannot get acgive set from block %v", activeSetBlock.ID())
+	}
+	//todo: optimise by using reference to active set size and cache active set size to not load all atxsIDs from db
+	activeSetSize = uint32(len(*activeSetBlock.ActiveSet))
 	if block.ATXID == *types.EmptyATXID {
 		if !epochNumber.IsGenesis() {
 			return false, fmt.Errorf("no associated ATX in epoch %v", epochNumber)
@@ -64,7 +81,8 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 		if err != nil {
 			return false, err
 		}
-		activeSetSize, vrfPubkey = atx.ActiveSetSize, atx.NodeID.VRFPublicKey
+		vrfPubkey = atx.NodeID.VRFPublicKey
+		//activeSetSize, vrfPubkey = atx.ActiveSetSize, atx.NodeID.VRFPublicKey
 	}
 	if epochNumber.IsGenesis() {
 		v.log.With().Info("using genesisActiveSetSize",
@@ -77,20 +95,6 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 		return false, fmt.Errorf("failed to get number of eligible blocks: %v", err)
 	}
 
-	activeSetBlock := block
-	if block.RefBlock != nil {
-		activeSetBlock, err = v.blocks.GetBlock(*block.RefBlock)
-		if err != nil {
-			//todo: thi is where we should fetch the block
-			//return false, fmt.Errorf("cannot get refrence block %v", *block.RefBlock)
-			log.Warning("ref block %v not found - continuing old active set size calc", *block.RefBlock)
-			activeSetBlock = block
-		}
-
-	}
-	if activeSetBlock.ActiveSet != nil {
-		activeSetSize = uint32(len(*activeSetBlock.ActiveSet))
-	}
 	numberOfEligibleBlocks, err = getNumberOfEligibleBlocks(activeSetSize, v.committeeSize, v.layersPerEpoch)
 	if err != nil {
 		return false, fmt.Errorf("failed to get number of eligible blocks: %v", err)
@@ -129,12 +133,12 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 }
 
 func (v BlockEligibilityValidator) getValidAtx(block *types.Block) (*types.ActivationTxHeader, error) {
-	blockEpoch := block.LayerIndex.GetEpoch(v.layersPerEpoch)
+	blockEpoch := block.LayerIndex.GetEpoch()
 	atx, err := v.activationDb.GetAtxHeader(block.ATXID)
 	if err != nil {
 		return nil, fmt.Errorf("getting ATX failed: %v %v ep(%v)", err, block.ATXID.ShortString(), blockEpoch)
 	}
-	if atxTargetEpoch := atx.PubLayerID.GetEpoch(v.layersPerEpoch) + 1; atxTargetEpoch != blockEpoch {
+	if atxTargetEpoch := atx.PubLayerID.GetEpoch() + 1; atxTargetEpoch != blockEpoch {
 		return nil, fmt.Errorf("ATX target epoch (%d) doesn't match block publication epoch (%d)",
 			atxTargetEpoch, blockEpoch)
 	}

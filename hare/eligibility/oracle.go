@@ -8,7 +8,6 @@ import (
 	"github.com/hashicorp/golang-lru"
 	"github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/config"
 	eCfg "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"math"
@@ -62,7 +61,7 @@ type Oracle struct {
 // safe layer is defined to be the confidence param layers prior to the provided Layer
 func safeLayer(layer types.LayerID, safetyParam types.LayerID) types.LayerID {
 	if layer <= safetyParam { // assuming genesis is zero
-		return config.Genesis
+		return types.GetEffectiveGenesis()
 	}
 
 	return layer - safetyParam
@@ -72,11 +71,11 @@ func roundedSafeLayer(layer types.LayerID, safetyParam types.LayerID,
 	layersPerEpoch uint16, epochOffset types.LayerID) types.LayerID {
 
 	sl := safeLayer(layer, safetyParam)
-	if sl == config.Genesis {
-		return config.Genesis
+	if sl == types.GetEffectiveGenesis() {
+		return types.GetEffectiveGenesis()
 	}
 
-	se := types.LayerID(sl.GetEpoch(layersPerEpoch)) // the safe epoch
+	se := types.LayerID(sl.GetEpoch()) // the safe epoch
 
 	roundedLayer := se*types.LayerID(layersPerEpoch) + epochOffset
 	if sl >= roundedLayer { // the safe layer is after the rounding threshold
@@ -84,7 +83,7 @@ func roundedSafeLayer(layer types.LayerID, safetyParam types.LayerID,
 	}
 
 	if roundedLayer <= types.LayerID(layersPerEpoch) { // we can't go before genesis
-		return config.Genesis // just return genesis
+		return types.GetEffectiveGenesis() // just return genesis
 	}
 
 	// round to the previous epoch threshold
@@ -249,7 +248,7 @@ func (o *Oracle) Proof(layer types.LayerID, round int32) ([]byte, error) {
 // Returns a map of all active nodes in the specified layer id
 func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
 	sl := roundedSafeLayer(layer, types.LayerID(o.cfg.ConfidenceParam), o.layersPerEpoch, types.LayerID(o.cfg.EpochOffset))
-	safeEp := sl.GetEpoch(o.layersPerEpoch)
+	safeEp := sl.GetEpoch()
 
 	// check genesis
 	if safeEp.IsGenesis() {
@@ -276,7 +275,7 @@ func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
 	// no contextually valid blocks
 	if len(mp) == 0 {
 		o.With().Error("Could not calculate hare active set size: no contextually valid blocks",
-			log.Uint64("layer_id", uint64(layer)), log.Uint64("epoch_id", uint64(layer.GetEpoch(o.layersPerEpoch))),
+			log.Uint64("layer_id", uint64(layer)), log.Uint64("epoch_id", uint64(layer.GetEpoch())),
 			log.Uint64("safe_layer_id", uint64(sl)), log.Uint64("safe_epoch_id", uint64(safeEp)))
 		o.lock.Unlock()
 		return nil, errNoContextualBlocks
@@ -285,7 +284,7 @@ func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
 	activeMap, err := o.getActiveSet(safeEp, mp)
 	if err != nil {
 		o.With().Error("Could not retrieve active set size", log.Err(err),
-			log.Uint64("layer_id", uint64(layer)), log.Uint64("epoch_id", uint64(layer.GetEpoch(o.layersPerEpoch))),
+			log.Uint64("layer_id", uint64(layer)), log.Uint64("epoch_id", uint64(layer.GetEpoch())),
 			log.Uint64("safe_layer_id", uint64(sl)), log.Uint64("safe_epoch_id", uint64(safeEp)))
 		o.lock.Unlock()
 		return nil, err

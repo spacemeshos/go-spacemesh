@@ -14,6 +14,7 @@ type activationDB interface {
 	GetNodeAtxIDForEpoch(nodeID types.NodeID, targetEpoch types.EpochID) (types.ATXID, error)
 	GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error)
 	GetIdentity(edID string) (types.NodeID, error)
+	GetEpochAtxs(epochID types.EpochID) (atxs []types.ATXID)
 }
 
 type vrfSigner interface {
@@ -61,8 +62,12 @@ func (bo *BlockOracle) BlockEligible(layerID types.LayerID) (types.ATXID, []type
 	if !bo.isSynced() {
 		return types.ATXID{}, nil, fmt.Errorf("cannot calc eligibility, not synced yet")
 	}
-	epochNumber := layerID.GetEpoch(bo.layersPerEpoch)
+	epochNumber := layerID.GetEpoch()
 	bo.log.Info("asked for eligibility for epoch %d (cached: %d)", epochNumber, bo.proofsEpoch)
+	if epochNumber == 0 {
+		bo.log.Warning("asked for eligibility for epoch 0, cannot crate blocks here")
+		return *types.EmptyATXID, nil, nil
+	}
 	if bo.proofsEpoch != epochNumber {
 		err := bo.calcEligibilityProofs(epochNumber)
 		if err != nil {
@@ -78,22 +83,22 @@ func (bo *BlockOracle) BlockEligible(layerID types.LayerID) (types.ATXID, []type
 }
 
 func (bo *BlockOracle) calcEligibilityProofs(epochNumber types.EpochID) error {
-	bo.log.Info("calculating eligibility")
 	epochBeacon := bo.beaconProvider.GetBeacon(epochNumber)
 
-	var activeSetSize uint32
+	// get the previous epochs total ATXs
+	activeSetSize := uint32(len(bo.atxDB.GetEpochAtxs(epochNumber - 1)))
 	atx, err := bo.getValidAtxForEpoch(epochNumber)
 	if err != nil {
 		if !epochNumber.IsGenesis() {
 			return fmt.Errorf("failed to get latest ATX: %v", err)
 		}
 	} else {
-		activeSetSize = atx.ActiveSetSize
 		bo.atxID = atx.ID()
 	}
+	bo.log.Info("calculating eligibility for epoch %v, active set size %v", epochBeacon, activeSetSize)
 
 	if epochNumber.IsGenesis() {
-		activeSetSize = bo.genesisActiveSetSize
+		//activeSetSize = bo.genesisActiveSetSize
 		bo.log.Info("genesis epoch detected, using GenesisActiveSetSize (%v)", activeSetSize)
 	}
 

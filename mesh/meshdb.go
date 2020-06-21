@@ -79,6 +79,7 @@ func NewPersistentMeshDB(path string, blockCacheSize int, log log.Log) (*DB, err
 		layerMutex:         make(map[types.LayerID]*layerMutex),
 		exit:               make(chan struct{}),
 	}
+	ll.AddBlock(GenesisBlock())
 	return ll, nil
 }
 
@@ -107,6 +108,7 @@ func NewMemMeshDB(log log.Log) *DB {
 		layerMutex:         make(map[types.LayerID]*layerMutex),
 		exit:               make(chan struct{}),
 	}
+	ll.AddBlock(GenesisBlock())
 	return ll
 }
 
@@ -140,10 +142,10 @@ func (m *DB) AddBlock(bl *types.Block) error {
 
 // GetBlock gets a block from the database by id
 func (m *DB) GetBlock(id types.BlockID) (*types.Block, error) {
-	if id == GenesisBlock.ID() {
+	/*if id == GenesisBlock.ID() {
 		// todo fit real genesis here
 		return GenesisBlock, nil
-	}
+	}*/
 
 	if blkh := m.blockCache.Get(id); blkh != nil {
 		return blkh, nil
@@ -243,6 +245,16 @@ func (m *DB) LayerBlockIds(index types.LayerID) ([]types.BlockID, error) {
 	}
 
 	return blockIds, nil
+}
+
+// AddZeroBlockLayer tags lyr as a layer without blocks
+func (m *DB) AddZeroBlockLayer(index types.LayerID) error {
+	blockIds := make([]types.BlockID, 0, 1)
+	w, err := types.BlockIdsAsBytes(blockIds)
+	if err != nil {
+		return errors.New("could not encode layer blk ids")
+	}
+	return m.layers.Put(index.ToBytes(), w)
 }
 
 func (m *DB) getBlockBytes(id types.BlockID) ([]byte, error) {

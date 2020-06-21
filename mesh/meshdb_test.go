@@ -131,12 +131,12 @@ func TestForEachInView_InMem(t *testing.T) {
 func testForeachInView(mdb *DB, t *testing.T) {
 	blocks := make(map[types.BlockID]*types.Block)
 	l := GenesisLayer()
-	gen := l.Blocks()[0]
+	/*gen := l.Blocks()[0]
 	blocks[gen.ID()] = gen
 
 	if err := mdb.AddBlock(gen); err != nil {
 		t.Fail()
-	}
+	}*/
 
 	for i := 0; i < 4; i++ {
 		lyr := createLayerWithRandVoting(l.Index()+1, []*types.Layer{l}, 2, 2, log.NewDefault("msh"))
@@ -172,10 +172,6 @@ func TestForEachInView_InMem_WithStop(t *testing.T) {
 	gen := l.Blocks()[0]
 	blocks[gen.ID()] = gen
 
-	if err := mdb.AddBlock(gen); err != nil {
-		t.Fail()
-	}
-
 	for i := 0; i < 4; i++ {
 		lyr := createLayerWithRandVoting(l.Index()+1, []*types.Layer{l}, 2, 2, log.NewDefault("msh"))
 		for _, b := range lyr.Blocks() {
@@ -206,11 +202,6 @@ func TestForEachInView_InMem_WithLimitedLayer(t *testing.T) {
 	mdb := NewMemMeshDB(log.New("TestForEachInView", "", ""))
 	blocks := make(map[types.BlockID]*types.Block)
 	l := GenesisLayer()
-	gen := l.Blocks()[0]
-	blocks[gen.ID()] = gen
-
-	err := mdb.AddBlock(gen)
-	require.NoError(t, err)
 
 	for i := 0; i < 4; i++ {
 		lyr := createLayerWithRandVoting(l.Index()+1, []*types.Layer{l}, 2, 2, log.NewDefault("msh"))
@@ -234,7 +225,7 @@ func TestForEachInView_InMem_WithLimitedLayer(t *testing.T) {
 		ids[b.ID()] = struct{}{}
 	}
 	// traverse until (and including) layer 2
-	err = mdb.ForBlockInView(ids, 2, foo)
+	err := mdb.ForBlockInView(ids, 2, foo)
 	assert.NoError(t, err)
 	assert.Equal(t, 6, i)
 }

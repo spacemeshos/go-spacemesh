@@ -238,6 +238,7 @@ func createMaatuf(tcfg config.Config, rng *amcl.RAND, layersCh chan types.LayerI
 
 // Test - run multiple CPs simultaneously
 func Test_multipleCPs(t *testing.T) {
+	types.SetLayersPerEpoch(4)
 	r := require.New(t)
 	totalCp := 3
 	test := newHareWrapper(totalCp)

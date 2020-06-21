@@ -36,6 +36,10 @@ func (pm PeersMock) Close() {
 	return
 }
 
+func init() {
+	types.SetLayersPerEpoch(4)
+}
+
 func ListenerFactory(serv service.Service, peers peers, name string, layer types.LayerID) *BlockListener {
 	sync := SyncFactory(name, serv)
 	sync.peers = peers

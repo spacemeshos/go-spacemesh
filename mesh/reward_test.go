@@ -254,6 +254,9 @@ func copyLayer(t *testing.T, srcMesh, dstMesh *Mesh, dstAtxDb *AtxDbMock, id typ
 	assert.NoError(t, err)
 	var blockIds []types.BlockID
 	for _, b := range l.Blocks() {
+		if b.ID() == GenesisBlock().ID() {
+			continue
+		}
 		txs := srcMesh.getTxs(b.TxIDs, l.Index())
 		atx, err := srcMesh.GetFullAtx(b.ATXID)
 		assert.NoError(t, err)
@@ -352,5 +355,5 @@ func newActivationTx(nodeID types.NodeID, sequence uint64, prevATX types.ATXID, 
 		StartTick:      startTick,
 		PositioningATX: positioningATX,
 	}
-	return types.NewActivationTx(nipstChallenge, coinbase, activeSetSize, view, nipst, nil)
+	return types.NewActivationTx(nipstChallenge, coinbase, activeSetSize, nipst, nil)
 }
