@@ -80,6 +80,7 @@ type BlockBuilder struct {
 	syncer          syncer
 	started         bool
 	atxsPerBlock    int // number of atxs to select per block
+	layersPerEpoch   uint16
 	projector       projector
 	db              database.Database
 	layerPerEpoch   uint16
@@ -218,7 +219,7 @@ func (t *BlockBuilder) getVotes(id types.LayerID) ([]types.BlockID, error) {
 	bottom, top := calcHdistRange(id, t.hdist)
 
 	if res, err := t.hareResult.GetResult(bottom); err != nil { // no result for bottom, take the whole layer
-		t.With().Warning("could not get result for bottom layer. adding the whole layer instead", log.Err(err),
+		t.With().Warning("Could not get result for bottom layer. Adding the whole layer instead.", log.Err(err),
 			log.Uint64("bottom", uint64(bottom)), log.Uint64("top", uint64(top)), log.Uint64("hdist", uint64(t.hdist)))
 		ids, e := t.meshProvider.LayerBlockIds(bottom)
 		if e != nil {
@@ -323,7 +324,8 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.ATXID, eligibil
 	t.Log.Event().Info("block created",
 		bl.ID(),
 		bl.LayerIndex,
-		log.String("miner_id", bl.MinerID().String()),
+		bl.LayerIndex.GetEpoch(t.layersPerEpoch),
+		bl.MinerID(),
 		log.Int("tx_count", len(bl.TxIDs)),
 		log.Int("atx_count", len(bl.ATXIDs)),
 		log.Int("view_edges", len(bl.ViewEdges)),

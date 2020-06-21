@@ -339,8 +339,9 @@ func TestMesh_AccumulateRewards(t *testing.T) {
 }
 
 func TestMesh_calcRewards(t *testing.T) {
-	reward := calculateActualRewards(1, big.NewInt(10000), big.NewInt(10))
+	reward, remainder := calculateActualRewards(1, big.NewInt(10000), big.NewInt(10))
 	assert.Equal(t, int64(1000), reward.Int64())
+	assert.Equal(t, int64(0), remainder.Int64())
 }
 
 func newActivationTx(nodeID types.NodeID, sequence uint64, prevATX types.ATXID, pubLayerID types.LayerID,

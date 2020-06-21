@@ -95,7 +95,7 @@ func (n *NetMock) Broadcast(_ string, d []byte) error {
 }
 
 func (n *NetMock) hookToAtxPool(transmission []byte) {
-	if atx, err := types.BytesAsAtx(transmission); err == nil {
+	if atx, err := types.BytesToAtx(transmission); err == nil {
 		atx.CalcAndSetID()
 
 		if n.atxDb != nil {
@@ -260,7 +260,7 @@ func setActivesetSizeInCache(t *testing.T, activesetSize uint32) {
 	view, err := meshProviderMock.GetOrphanBlocksBefore(meshProviderMock.LatestLayer())
 	assert.NoError(t, err)
 	sort.Slice(view, func(i, j int) bool {
-		return bytes.Compare(view[i].ToBytes(), view[j].ToBytes()) < 0
+		return bytes.Compare(view[i].Bytes(), view[j].Bytes()) < 0
 	})
 	h := types.CalcBlocksHash12(view)
 	activesetCache.Add(h, activesetSize)
@@ -274,7 +274,7 @@ func lastTransmittedAtx(t *testing.T) types.ActivationTx {
 }
 
 func assertLastAtx(r *require.Assertions, posAtx, prevAtx *types.ActivationTxHeader, layersPerEpoch uint16) {
-	sigAtx, err := types.BytesAsAtx(net.lastTransmission)
+	sigAtx, err := types.BytesToAtx(net.lastTransmission)
 	r.NoError(err)
 
 	atx := sigAtx
@@ -340,7 +340,7 @@ func TestBuilder_PublishActivationTx_HappyFlow(t *testing.T) {
 	assertLastAtx(r, prevAtx.ActivationTxHeader, prevAtx.ActivationTxHeader, layersPerEpoch)
 
 	// create and publish another ATX
-	publishedAtx, err := types.BytesAsAtx(net.lastTransmission)
+	publishedAtx, err := types.BytesToAtx(net.lastTransmission)
 	r.NoError(err)
 	publishedAtx.CalcAndSetID()
 	published, _, err = publishAtx(b, postGenesisEpochLayer+layersPerEpoch+1, postGenesisEpoch+1, layersPerEpoch)
@@ -509,7 +509,7 @@ func TestBuilder_PublishActivationTx_DoesNotPublish2AtxsInSameEpoch(t *testing.T
 	r.True(published)
 	assertLastAtx(r, prevAtx.ActivationTxHeader, prevAtx.ActivationTxHeader, layersPerEpoch)
 
-	publishedAtx, err := types.BytesAsAtx(net.lastTransmission)
+	publishedAtx, err := types.BytesToAtx(net.lastTransmission)
 	r.NoError(err)
 	publishedAtx.CalcAndSetID()
 
@@ -519,7 +519,7 @@ func TestBuilder_PublishActivationTx_DoesNotPublish2AtxsInSameEpoch(t *testing.T
 	r.True(published)
 	assertLastAtx(r, publishedAtx.ActivationTxHeader, publishedAtx.ActivationTxHeader, layersPerEpoch)
 
-	publishedAtx2, err := types.BytesAsAtx(net.lastTransmission)
+	publishedAtx2, err := types.BytesToAtx(net.lastTransmission)
 	r.NoError(err)
 
 	r.Equal(publishedAtx.PubLayerID+layersPerEpoch, publishedAtx2.PubLayerID)
@@ -557,7 +557,7 @@ func TestBuilder_PublishActivationTx_Serialize(t *testing.T) {
 
 	bt, err := types.InterfaceToBytes(act)
 	assert.NoError(t, err)
-	a, err := types.BytesAsAtx(bt)
+	a, err := types.BytesToAtx(bt)
 	assert.NoError(t, err)
 	bt2, err := types.InterfaceToBytes(a)
 	assert.Equal(t, bt, bt2)

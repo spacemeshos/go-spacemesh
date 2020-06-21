@@ -345,7 +345,7 @@ func Test_CalcActiveSetFromView(t *testing.T) {
 
 	view := []types.BlockID{block2.ID(), block3.ID()}
 	sort.Slice(view, func(i, j int) bool {
-		return bytes.Compare(view[i].ToBytes(), view[j].ToBytes()) > 0 // sort view in wrong order
+		return bytes.Compare(view[i].Bytes(), view[j].Bytes()) > 0 // sort view in wrong order
 	})
 	atx2 := newActivationTx(id3, 0, *types.EmptyATXID, 1435, 0, *types.EmptyATXID, coinbase3, 6, view, &types.NIPST{})
 	num, err = atxdb.CalcActiveSetFromView(atx2.View, atx2.PubLayerID.GetEpoch())
@@ -362,7 +362,7 @@ func Test_CalcActiveSetFromView(t *testing.T) {
 	assert.Equal(t, 8, int(num))
 
 	// if the cache has the view in wrong order it should not be used
-	sorted := sort.SliceIsSorted(atx2.View, func(i, j int) bool { return bytes.Compare(atx2.View[i].ToBytes(), atx2.View[j].ToBytes()) > 0 })
+	sorted := sort.SliceIsSorted(atx2.View, func(i, j int) bool { return bytes.Compare(atx2.View[i].Bytes(), atx2.View[j].Bytes()) > 0 })
 	assert.True(t, sorted) // assert that the view is wrongly ordered
 	viewBytes, err := types.InterfaceToBytes(atx2.View)
 	assert.NoError(t, err)

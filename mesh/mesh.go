@@ -222,7 +222,7 @@ func (msh *Mesh) SetLatestLayer(idx types.LayerID) {
 	if idx > msh.latestLayer {
 		msh.Info("set latest known layer to %v", idx)
 		msh.latestLayer = idx
-		if err := msh.general.Put(constLATEST, idx.ToBytes()); err != nil {
+		if err := msh.general.Put(constLATEST, idx.Bytes()); err != nil {
 			msh.Error("could not persist Latest layer index")
 		}
 	}
@@ -282,7 +282,7 @@ func (vl *validator) ValidateLayer(lyr *types.Layer) {
 	if err := vl.trtl.Persist(); err != nil {
 		vl.Error("could not persist tortoise layer index %d", lyr.Index())
 	}
-	if err := vl.general.Put(constPROCESSED, lyr.Index().ToBytes()); err != nil {
+	if err := vl.general.Put(constPROCESSED, lyr.Index().Bytes()); err != nil {
 		vl.Error("could not persist validated layer index %d", lyr.Index())
 	}
 	vl.pushLayersToState(oldPbase, newPbase)
@@ -398,7 +398,7 @@ func (msh *Mesh) updateStateWithLayer(validatedLayer types.LayerID, layer *types
 func (msh *Mesh) setLatestLayerInState(lyr types.LayerID) {
 	// update validated layer only after applying transactions since loading of state depends on processedLayer param.
 	msh.pMutex.Lock()
-	if err := msh.general.Put(VERIFIED, lyr.ToBytes()); err != nil {
+	if err := msh.general.Put(VERIFIED, lyr.Bytes()); err != nil {
 		msh.Panic("could not persist validated layer index %d", lyr)
 	}
 	msh.latestLayerInState = lyr
@@ -558,7 +558,7 @@ func (msh *Mesh) SetZeroBlockLayer(lyr types.LayerID) error {
 // txs - block txs that we dont have in our tx database yet
 // atxs - block atxs that we dont have in our atx database yet
 func (msh *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.Transaction, atxs []*types.ActivationTx) error {
-	msh.With().Debug("adding block", log.BlockID(blk.ID().String()))
+	msh.With().Debug("adding block", blk.Fields()...)
 
 	// Store transactions (doesn't have to be rolled back if other writes fail)
 	if len(txs) > 0 {
@@ -585,7 +585,7 @@ func (msh *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.Transaction, atx
 	// Store ATXs (atomically, delete the block on failure)
 	if err := msh.AtxDB.ProcessAtxs(atxs); err != nil {
 		// Roll back adding the block (delete it)
-		if err := msh.blocks.Delete(blk.ID().ToBytes()); err != nil {
+		if err := msh.blocks.Delete(blk.ID().Bytes()); err != nil {
 			msh.With().Warning("failed to roll back adding a block", log.Err(err), log.BlockID(blk.ID().String()))
 		}
 		return fmt.Errorf("failed to process ATXs: %v", err)
@@ -599,7 +599,7 @@ func (msh *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.Transaction, atx
 	msh.invalidateFromPools(&blk.MiniBlock)
 
 	events.Publish(events.NewBlock{ID: blk.ID().String(), Atx: blk.ATXID.ShortString(), Layer: uint64(blk.LayerIndex)})
-	msh.With().Info("added block to database ", log.BlockID(blk.ID().String()), log.LayerID(uint64(blk.LayerIndex)))
+	msh.With().Info("added block to database", blk.Fields()...)
 	return nil
 }
 
@@ -705,10 +705,20 @@ func (msh *Mesh) accumulateRewards(l *types.Layer, params Config) {
 
 	numBlocks := big.NewInt(int64(len(ids)))
 
-	blockTotalReward := calculateActualRewards(l.Index(), totalReward, numBlocks)
+	blockTotalReward, blockTotalRewardMod := calculateActualRewards(l.Index(), totalReward, numBlocks)
 	msh.ApplyRewards(l.Index(), ids, blockTotalReward)
 
-	blockLayerReward := calculateActualRewards(l.Index(), layerReward, numBlocks)
+	blockLayerReward, blockLayerRewardMod := calculateActualRewards(l.Index(), layerReward, numBlocks)
+	log.With().Info("Reward calculated",
+		l.Index(),
+		log.Uint64("num_blocks", numBlocks.Uint64()),
+		log.Uint64("total_reward", totalReward.Uint64()),
+		log.Uint64("layer_reward", layerReward.Uint64()),
+		log.Uint64("block_total_reward", blockTotalReward.Uint64()),
+		log.Uint64("block_layer_reward", blockLayerReward.Uint64()),
+		log.Uint64("total_reward_remainder", blockTotalRewardMod.Uint64()),
+		log.Uint64("layer_reward_remainder", blockLayerRewardMod.Uint64()),
+	)
 	err := msh.writeTransactionRewards(l.Index(), ids, blockTotalReward, blockLayerReward)
 	if err != nil {
 		msh.Error("cannot write reward to db")

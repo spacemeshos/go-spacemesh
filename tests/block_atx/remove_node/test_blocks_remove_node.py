@@ -50,7 +50,7 @@ def test_remove_node_validate_atx(init_session, setup_mul_network):
 
     last_layer = epochs_to_sleep * layers_per_epoch
     print(f"-------- wait until epoch number {epochs_to_sleep} to layer {last_layer} --------")
-    _ = q.wait_for_latest_layer(init_session, last_layer, layers_per_epoch)
+    _ = q.wait_for_latest_layer(init_session, last_layer, layers_per_epoch, num_miners)
 
     # ========================== epoch i+2 ==========================
     curr_epoch += epochs_to_sleep
@@ -77,7 +77,7 @@ def test_remove_node_validate_atx(init_session, setup_mul_network):
     prev_layer = last_layer
     last_layer = layers_per_epoch * (curr_epoch + 1)
     print(f"-------- wait until next epoch to layer {last_layer} --------")
-    _ = q.wait_for_latest_layer(init_session, last_layer, layers_per_epoch)
+    _ = q.wait_for_latest_layer(init_session, last_layer, layers_per_epoch, num_miners-1)
 
     # ========================== epoch i+3 ==========================
     curr_epoch += 1
@@ -95,7 +95,7 @@ def test_remove_node_validate_atx(init_session, setup_mul_network):
     prev_layer = last_layer
     last_layer = layers_per_epoch * (curr_epoch + 1)
     print(f"-------- wait until next epoch to layer {last_layer} --------")
-    _ = q.wait_for_latest_layer(init_session, last_layer, layers_per_epoch)
+    _ = q.wait_for_latest_layer(init_session, last_layer, layers_per_epoch, num_miners-1)
 
     # ========================== epoch i+4 ==========================
     curr_epoch += 1
@@ -111,7 +111,7 @@ def test_remove_node_validate_atx(init_session, setup_mul_network):
     prev_layer = last_layer
     last_layer = layers_per_epoch * (curr_epoch + 1)
     print(f"wait until next epoch to layer {last_layer}")
-    _ = q.wait_for_latest_layer(init_session, last_layer, layers_per_epoch)
+    _ = q.wait_for_latest_layer(init_session, last_layer, layers_per_epoch, num_miners-1)
 
     # ========================== epoch i+5 ==========================
     curr_epoch += 1
@@ -127,7 +127,7 @@ def test_remove_node_validate_atx(init_session, setup_mul_network):
     prev_layer = last_layer
     last_layer = layers_per_epoch * (curr_epoch + 1)
     print(f"wait until next epoch to layer {last_layer}")
-    _ = q.wait_for_latest_layer(init_session, last_layer, layers_per_epoch)
+    _ = q.wait_for_latest_layer(init_session, last_layer, layers_per_epoch, num_miners-1)
 
     # ========================== epoch i+6 ==========================
     curr_epoch += 1

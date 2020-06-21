@@ -2,6 +2,7 @@ package rand
 
 import (
 	"math/rand"
+	"sync"
 	"time"
 )
 
@@ -9,7 +10,8 @@ import (
  * Top-level convenience functions
  */
 
-var globalRand = rand.New(rand.NewSource(time.Now().UnixNano()).(rand.Source64))
+var globalSource = lockedSource{src: rand.NewSource(time.Now().UnixNano()).(rand.Source64)}
+var globalRand = rand.New(&globalSource)
 var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
 // Seed uses the provided seed value to initialize the default Source to a
@@ -103,4 +105,27 @@ func String(n int) string {
 		b[i] = letterRunes[rand.Intn(len(letterRunes))]
 	}
 	return string(b)
+}
+
+type lockedSource struct {
+	lock sync.Mutex
+	src  rand.Source64
+}
+
+func (ls *lockedSource) Int63() int64 {
+	ls.lock.Lock()
+	defer ls.lock.Unlock()
+	return ls.src.Int63()
+}
+
+func (ls *lockedSource) Uint64() uint64 {
+	ls.lock.Lock()
+	defer ls.lock.Unlock()
+	return ls.src.Uint64()
+}
+
+func (ls *lockedSource) Seed(seed int64) {
+	ls.lock.Lock()
+	defer ls.lock.Unlock()
+	ls.src.Seed(seed)
 }

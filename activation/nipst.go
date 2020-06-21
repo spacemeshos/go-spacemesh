@@ -7,6 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/shared"
+	"time"
 )
 
 // PostProverClient provides proving functionality for PoST.
@@ -214,18 +215,17 @@ func (nb *NIPSTBuilder) BuildNIPST(challenge *types.Hash32, atxExpired, stop cha
 
 	// Phase 2: PoST execution.
 	if nipst.PostProof == nil {
-		nb.log.Info("starting PoST execution (challenge: %x)", nb.state.PoetProofRef)
-
+		nb.log.With().Info("starting PoST execution",
+			log.String("challenge", fmt.Sprintf("%x", nb.state.PoetProofRef)))
+		startTime := time.Now()
 		proof, err := nb.postProver.Execute(nb.state.PoetProofRef)
 		if err != nil {
 			return nil, fmt.Errorf("failed to execute PoST: %v", err)
 		}
 
-		//todo remove (#1923)
-		//this is just for debugging
-		b, _ := types.InterfaceToBytes(proof)
 		nb.log.With().Info("finished PoST execution",
-			log.String("proof merkle root", fmt.Sprintf("%x", proof.MerkleRoot)), log.Int("post_size", len(b)))
+			log.String("proof_merkle_root", fmt.Sprintf("%x", proof.MerkleRoot)),
+			log.String("duration", time.Now().Sub(startTime).String()))
 
 		nipst.PostProof = proof
 		nb.persist()

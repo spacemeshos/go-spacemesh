@@ -4,6 +4,15 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io/ioutil"
+	"math/big"
+	"net/http"
+	"strconv"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -16,15 +25,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/stretchr/testify/require"
-	"io/ioutil"
-	"math/big"
-	"net/http"
-	"strconv"
-	"strings"
-	"testing"
-	"time"
 
 	crand "crypto/rand"
+
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/api/pb"
@@ -41,6 +44,7 @@ type NodeAPIMock struct {
 }
 
 type NetworkMock struct {
+	lock         sync.Mutex
 	broadCastErr bool
 	broadcasted  []byte
 }
@@ -50,11 +54,31 @@ func (s *NetworkMock) SubscribePeerEvents() (conn, disc chan p2pcrypto.PublicKey
 }
 
 func (s *NetworkMock) Broadcast(_ string, payload []byte) error {
+	s.lock.Lock()
+	defer s.lock.Unlock()
 	if s.broadCastErr {
 		return errors.New("error during broadcast")
 	}
 	s.broadcasted = payload
 	return nil
+}
+
+func (s *NetworkMock) GetBroadcast() []byte {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	return s.broadcasted
+}
+
+func (s *NetworkMock) SetErr(err bool) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	s.broadCastErr = err
+}
+
+func (s *NetworkMock) GetErr() bool {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	return s.broadCastErr
 }
 
 func NewNodeAPIMock() NodeAPIMock {
@@ -277,7 +301,7 @@ func TestBroadcastPoet(t *testing.T) {
 	r.Equal(http.StatusOK, respStatus, http.StatusText(respStatus))
 	assertSimpleMessage(t, respBody, "ok")
 
-	r.Equal([]byte{1, 2, 3}, networkMock.broadcasted)
+	r.Equal([]byte{1, 2, 3}, networkMock.GetBroadcast())
 
 	shutDown()
 }
@@ -506,7 +530,7 @@ func submitTx(t *testing.T, tx *types.Transaction) {
 
 	r.Equal("ok", txConfirmation.Value)
 	r.Equal(tx.ID().String()[2:], txConfirmation.Id)
-	r.Equal(asBytes(t, tx), networkMock.broadcasted)
+	r.Equal(asBytes(t, tx), networkMock.GetBroadcast())
 }
 
 func marshalProto(t *testing.T, msg proto.Message) string {
@@ -523,7 +547,7 @@ type SyncerMock struct{}
 func (SyncerMock) IsSynced() bool { return false }
 
 func launchServer(t *testing.T) func() {
-	networkMock.broadcasted = []byte{0x00}
+	networkMock.Broadcast("", []byte{0x00})
 	defaultConfig := config2.DefaultConfig()
 	grpcService := NewGrpcService(cfg.GrpcServerPort, &networkMock, ap, txAPI, txMempool, &mining, &oracle, &genTime, PostMock{}, layerDuration, &SyncerMock{}, &defaultConfig, nil)
 	jsonService := NewJSONHTTPServer(cfg.JSONServerPort, cfg.GrpcServerPort)
@@ -592,7 +616,7 @@ func TestSpaceMeshGrpcService_Broadcast(t *testing.T) {
 	require.Equal(t, http.StatusOK, respStatus)
 	assertSimpleMessage(t, respBody, "ok")
 
-	require.Equal(t, Data, string(networkMock.broadcasted))
+	require.Equal(t, Data, string(networkMock.GetBroadcast()))
 
 	// stop the services
 	shutDown()
@@ -600,7 +624,7 @@ func TestSpaceMeshGrpcService_Broadcast(t *testing.T) {
 
 func TestSpaceMeshGrpcService_BroadcastErrors(t *testing.T) {
 	shutDown := launchServer(t)
-	networkMock.broadCastErr = true
+	networkMock.SetErr(true)
 	const expectedResponse = "{\"error\":\"error during broadcast\",\"message\":\"error during broadcast\",\"code\":2}"
 
 	Data := "l337"
@@ -609,7 +633,7 @@ func TestSpaceMeshGrpcService_BroadcastErrors(t *testing.T) {
 	require.Equal(t, http.StatusInternalServerError, respStatus) // TODO: Should we change it to err 400 somehow?
 	require.Equal(t, expectedResponse, respBody)
 
-	require.NotEqual(t, Data, string(networkMock.broadcasted))
+	require.NotEqual(t, Data, string(networkMock.GetBroadcast()))
 
 	// stop the services
 	shutDown()

@@ -129,7 +129,7 @@ func TestHare_GetResult(t *testing.T) {
 
 	res, err = h.GetResult(types.LayerID(0))
 	r.NoError(err)
-	r.Equal(res[0].ToBytes(), value1.ToBytes())
+	r.Equal(res[0].Bytes(), value1.Bytes())
 }
 
 func TestHare_GetResult2(t *testing.T) {
@@ -166,7 +166,7 @@ func TestHare_GetResult2(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 
 	_, err = h.GetResult(0)
-	require.Equal(t, err, ErrTooOld)
+	require.Equal(t, err, errTooOld)
 }
 
 func TestHare_collectOutputCheckValidation(t *testing.T) {
@@ -334,7 +334,7 @@ func TestHare_onTick(t *testing.T) {
 type BlockIDSlice []types.BlockID
 
 func (p BlockIDSlice) Len() int           { return len(p) }
-func (p BlockIDSlice) Less(i, j int) bool { return bytes.Compare(p[i].ToBytes(), p[j].ToBytes()) == -1 }
+func (p BlockIDSlice) Less(i, j int) bool { return bytes.Compare(p[i].Bytes(), p[j].Bytes()) == -1 }
 func (p BlockIDSlice) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
 
 // Sort is a convenience method.

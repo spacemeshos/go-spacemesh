@@ -99,8 +99,8 @@ def test_add_delayed_nodes(init_session, add_curl, setup_bootstrap, start_poet, 
     f = int(test_config['client']['args']['hare-max-adversaries'])
 
     # validate
-    print("Waiting one layer for logs")
-    time.sleep(layer_duration)  # wait one layer for logs to propagate
+    print("Waiting 2 minutes for logs to propagate")
+    sleep_and_print(120)
 
     print("Running validation")
     expect_hare(current_index, ns, first_layer_of_last_epoch, total_layers - 1, total, f)  # validate hare

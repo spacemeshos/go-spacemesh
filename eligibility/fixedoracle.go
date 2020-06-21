@@ -157,7 +157,7 @@ func hashLayerAndRound(instanceID types.LayerID, round int32) uint32 {
 	kInBytes := make([]byte, 4)
 	binary.LittleEndian.PutUint32(kInBytes, uint32(round))
 	h := fnv.New32()
-	_, err := h.Write(instanceID.ToBytes())
+	_, err := h.Write(instanceID.Bytes())
 	_, err2 := h.Write(kInBytes)
 
 	if err != nil || err2 != nil {

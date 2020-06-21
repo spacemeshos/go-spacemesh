@@ -134,8 +134,13 @@ peerLoop:
 		wg.Add(1)
 		go func(pubkey p2pcrypto.PublicKey) {
 			// TODO: replace peer ?
-			if err := p.net.SendMessage(pubkey, nextProt, payload); err != nil {
-				p.With().Warning("Failed sending", log.String("protocol", nextProt), h.Field("hash"), log.String("to", pubkey.String()), log.Err(err))
+			err := p.net.SendMessage(pubkey, nextProt, payload)
+			if err != nil {
+				p.With().Warning("Failed sending",
+					log.String("protocol", nextProt),
+					h.Field("hash"),
+					pubkey.Field("to"),
+					log.Err(err))
 			}
 			wg.Done()
 		}(peer)
@@ -147,7 +152,7 @@ func (p *Protocol) handlePQ() {
 	for {
 		mi, err := p.pq.Read()
 		if err != nil {
-			p.With().Info("priority queue was closed, existing", log.Err(err))
+			p.With().Info("priority queue was closed, exiting", log.Err(err))
 			return
 		}
 		m, ok := mi.(service.MessageValidation)
@@ -156,7 +161,10 @@ func (p *Protocol) handlePQ() {
 			continue
 		}
 		h := types.CalcMessageHash12(m.Message(), m.Protocol())
-		p.Log.With().Debug("new_gossip_message_relay", log.String("protocol", m.Protocol()), log.String("hash", util.Bytes2Hex(h[:])))
+		p.Log.With().Debug("new_gossip_message_relay",
+			m.Sender().Field("from"),
+			log.String("protocol", m.Protocol()),
+			h.Field("hash"))
 		p.propagateMessage(m.Message(), h, m.Protocol(), m.Sender())
 	}
 }
@@ -164,7 +172,8 @@ func (p *Protocol) handlePQ() {
 func (p *Protocol) getPriority(protoName string) priorityq.Priority {
 	v, exist := p.priorities[protoName]
 	if !exist {
-		p.With().Warning("note: no priority found for protocol", log.String("protoName", protoName))
+		p.With().Warning("note: no priority found for protocol",
+			log.String("protoName", protoName))
 		return priorityq.Low
 	}
 	return v
@@ -178,7 +187,9 @@ func (p *Protocol) propagationEventLoop() {
 		select {
 		case msgV := <-p.propagateQ:
 			if err := p.pq.Write(p.getPriority(msgV.Protocol()), msgV); err != nil {
-				p.With().Error("fatal: could not write to priority queue", log.Err(err), log.String("protocol", msgV.Protocol()))
+				p.With().Error("fatal: could not write to priority queue",
+					log.Err(err),
+					log.String("protocol", msgV.Protocol()))
 			}
 			metrics.PropagationQueueLen.Set(float64(len(p.propagateQ)))
 

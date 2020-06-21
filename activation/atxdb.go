@@ -257,7 +257,9 @@ func (db *DB) CalcActiveSetSize(epoch types.EpochID, blocks map[types.BlockID]st
 	if err != nil {
 		return nil, err
 	}
-	db.log.With().Info("done calculating active set size", log.String("duration", time.Now().Sub(startTime).String()))
+	db.log.With().Info("done calculating active set size",
+		log.Int("size", len(countedAtxs)),
+		log.String("duration", time.Now().Sub(startTime).String()))
 
 	result := make(map[string]struct{}, len(countedAtxs))
 	for k := range countedAtxs {
@@ -706,7 +708,7 @@ func (db *DB) GetFullAtx(id types.ATXID) (*types.ActivationTx, error) {
 	if err != nil {
 		return nil, err
 	}
-	atx, err := types.BytesAsAtx(atxBytes)
+	atx, err := types.BytesToAtx(atxBytes)
 	if err != nil {
 		return nil, err
 	}

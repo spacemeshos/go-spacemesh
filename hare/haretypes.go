@@ -169,7 +169,7 @@ func (s *Set) ToSlice() []types.BlockID {
 		keys[i] = k
 		i++
 	}
-	sort.Slice(keys, func(i, j int) bool { return bytes.Compare(keys[i].ToBytes(), keys[j].ToBytes()) == -1 })
+	sort.Slice(keys, func(i, j int) bool { return bytes.Compare(keys[i].Bytes(), keys[j].Bytes()) == -1 })
 
 	l := make([]types.BlockID, 0, len(s.values))
 	for i := range keys {
@@ -186,12 +186,12 @@ func (s *Set) updateID() {
 		keys[i] = k
 		i++
 	}
-	sort.Slice(keys, func(i, j int) bool { return bytes.Compare(keys[i].ToBytes(), keys[j].ToBytes()) == -1 })
+	sort.Slice(keys, func(i, j int) bool { return bytes.Compare(keys[i].Bytes(), keys[j].Bytes()) == -1 })
 
 	// calc
 	h := fnv.New32()
 	for i := 0; i < len(keys); i++ {
-		h.Write(keys[i].ToBytes())
+		h.Write(keys[i].Bytes())
 	}
 
 	// update

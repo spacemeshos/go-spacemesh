@@ -7,6 +7,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/sha256-simd"
+	"sort"
+	"strings"
 	"sync"
 )
 
@@ -78,7 +80,11 @@ func (bo *BlockOracle) BlockEligible(layerID types.LayerID) (types.ATXID, []type
 	bo.eligibilityMutex.RLock()
 	proofs := bo.eligibilityProofs[layerID]
 	bo.eligibilityMutex.RUnlock()
-	bo.log.Info("miner %v found eligible for %d blocks in layer %d", bo.nodeID.Key[:5], len(proofs), layerID)
+	bo.log.With().Info("eligible for blocks in layer",
+		bo.nodeID,
+		layerID,
+		log.Int("num_blocks", len(proofs)))
+
 	return bo.atxID, proofs, nil
 }
 
@@ -129,8 +135,30 @@ func (bo *BlockOracle) calcEligibilityProofs(epochNumber types.EpochID) error {
 	}
 	bo.proofsEpoch = epochNumber
 	bo.eligibilityMutex.RLock()
-	bo.log.Info("miner %v is eligible for %d blocks on %d layers in epoch %d",
-		bo.nodeID.Key[:5], numberOfEligibleBlocks, len(bo.eligibilityProofs), epochNumber)
+
+	// Sort the layer map so we can print the layer data in order
+	keys := make([]types.LayerID, len(bo.eligibilityProofs))
+	i := 0
+	for k := range bo.eligibilityProofs {
+		keys[i] = k
+		i++
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		return uint64(keys[i]) < uint64(keys[j])
+	})
+
+	// Pretty-print the number of blocks per eligible layer
+	var strs []string
+	for k := range keys {
+		strs = append(strs, fmt.Sprintf("Layer %d: %d", keys[k], len(bo.eligibilityProofs[keys[k]])))
+	}
+
+	bo.log.With().Info("eligibility for blocks in epoch",
+		bo.nodeID,
+		epochNumber,
+		log.Uint32("total_num_blocks", numberOfEligibleBlocks),
+		log.Int("num_layers_eligible", len(bo.eligibilityProofs)),
+		log.String("layers_and_num_blocks", strings.Join(strs, ", ")))
 	bo.eligibilityMutex.RUnlock()
 	return nil
 }

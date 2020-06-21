@@ -13,7 +13,7 @@ import (
 )
 
 type vec [2]int
-type patternID uint32 //this hash dose not include the layer id
+type patternID uint32 //this hash does not include the layer id
 
 const ( //Threshold
 	window          = 10
@@ -277,7 +277,7 @@ func getID(bids []types.BlockID) patternID {
 	// calc
 	h := fnv.New32()
 	for i := 0; i < len(bids); i++ {
-		h.Write(bids[i].ToBytes())
+		h.Write(bids[i].Bytes())
 	}
 	// update
 	sum := h.Sum32()
@@ -316,7 +316,7 @@ func (ni *ninjaTortoise) updateCorrectionVectors(p votingPattern, bottomOfWindow
 				ni.TCorrect[b.id()][x.ID()] = vo.Negate() //Tcorrect[b][x] = -Tvote[p][x]
 				ni.logger.Debug("update correction vector for block %s layer %s , pattern %s vote %s for block %s ", b.id(), b.layer(), p, ni.TCorrect[b.id()][x.ID()], x.ID())
 			} else {
-				ni.logger.Debug("block %s from layer %s dose'nt explicitly vote for layer %s", b.id(), b.layer(), x.Layer())
+				ni.logger.Debug("block %s from layer %s doesn't explicitly vote for layer %s", b.id(), b.layer(), x.Layer())
 			}
 		}
 		return false, nil

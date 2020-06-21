@@ -1,7 +1,6 @@
 package sync
 
 import (
-	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
@@ -48,7 +47,7 @@ func newLayerBlockIdsRequestHandler(layers *mesh.Mesh, logger log.Log) func(msg 
 			ids = append(ids, b.ID())
 		}
 
-		idbytes, err := types.BlockIdsAsBytes(ids)
+		idbytes, err := types.BlockIdsToBytes(ids)
 		if err != nil {
 			logger.Error("Error marshaling response message, with blocks IDs: %v and error:", ids, err)
 			return nil
@@ -103,43 +102,43 @@ func newTxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 			logger.Error("Error marshalling request", err)
 			return nil
 		}
-		logger.Info("handle tx request %s", log.String("atx_ids", fmt.Sprintf("%x", txids)))
+		logger.With().Info("handle tx request", types.TxIdsField(txids))
 		txs, missingDB := s.GetTransactions(txids)
 
 		for t := range missingDB {
 			if tx, err := s.txpool.Get(t); err == nil {
 				txs = append(txs, tx)
 			} else {
-				logger.With().Warning("unfamiliar tx was requested (id: %s)", log.TxID(t.ShortString()))
+				logger.With().Warning("unfamiliar tx was requested", log.TxID(t.ShortString()))
 			}
 		}
 
 		bbytes, err := types.InterfaceToBytes(txs)
 		if err != nil {
-			logger.Error("Error marshaling transactions response message , with ids %v and err:", txs, err)
+			logger.Error("Error marshaling transactions response message, with ids %v and err:", txs, err)
 			return nil
 		}
 
-		logger.Info("send tx response ")
+		logger.Info("send tx response")
 		return bbytes
 	}
 }
 
-func newATxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
+func newAtxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 	return func(msg []byte) []byte {
 		var atxids []types.ATXID
 		err := types.BytesToInterface(msg, &atxids)
 		if err != nil {
-			logger.Error("Error marshalling request", err)
+			logger.Error("Unable to marshal request", err)
 			return nil
 		}
-		logger.Info("handle atx request %s", log.String("atx_ids", fmt.Sprintf("%x", atxids)))
-		atxs, missinDB := s.GetATXs(atxids)
-		for _, t := range missinDB {
+		logger.With().Info("handle atx request", types.AtxIdsField(atxids))
+		atxs, unknownAtx := s.GetATXs(atxids)
+		for _, t := range unknownAtx {
 			if tx, err := s.atxpool.Get(t); err == nil {
 				atxs[t] = tx
 			} else {
-				logger.With().Warning("unfamiliar atx was requested (id: %s)", log.AtxID(t.ShortString()))
+				logger.With().Warning("unfamiliar atx requested", log.AtxID(t.ShortString()))
 			}
 		}
 
@@ -151,7 +150,7 @@ func newATxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 
 		bbytes, err := types.InterfaceToBytes(transactions)
 		if err != nil {
-			logger.Error("Error marshaling atx response message , with ids %v and err:", atxs, err)
+			logger.Error("Unable to marshal atx response message", err)
 			return nil
 		}
 

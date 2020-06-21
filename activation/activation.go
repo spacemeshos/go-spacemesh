@@ -191,7 +191,6 @@ func (b *Builder) loop() {
 			if _, stopRequested := err.(StopRequestedError); stopRequested {
 				return
 			}
-			b.log.With().Error("failed to publish ATX", log.Err(err))
 			events.Publish(events.AtxCreated{Created: false, Layer: uint64(b.currentEpoch())})
 			<-b.layerClock.AwaitLayer(b.layerClock.GetCurrentLayer() + 1)
 		}
@@ -441,6 +440,7 @@ func (b *Builder) PublishActivationTx() error {
 	defer b.db.UnsubscribeAtx(atx.ID())
 	size, err := b.signAndBroadcast(atx)
 	if err != nil {
+		b.log.With().Error("failed to publish atx", append(atx.Fields(b.layersPerEpoch, size), log.Err(err))...)
 		return err
 	}
 
