@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -331,11 +332,21 @@ func TestJsonWalletApi(t *testing.T) {
 
 	txToSend := pb.SignedTransaction{Tx: asBytes(t, genTx(t))}
 	msg := "nonce or balance validation failed"
+	expectedResponse := "{\"error\":\"" + msg + "\",\"message\":\"" + msg + "\",\"code\":2}"
+	type res struct {
+		Error   string `json:"error"`
+		Message string `json:"msg"`
+		Code    int    `json:"code"`
+	}
+	expected := res{}
+	res1 := res{}
+	json.Unmarshal([]byte(expectedResponse), &expected)
 	txAPI.err = fmt.Errorf(msg)
 	respBody, respStatus = callEndpoint(t, "v1/submittransaction", marshalProto(t, &txToSend))
+	json.Unmarshal([]byte(respBody), &res1)
 	txAPI.err = nil
 	r.Equal(http.StatusInternalServerError, respStatus, http.StatusText(respStatus))
-	r.Equal("{\"error\":\""+msg+"\",\"message\":\""+msg+"\",\"code\":2}", respBody)
+	r.Equal(expected, res1)
 
 	// test start mining
 	initPostRequest := pb.InitPost{Coinbase: "0x1234", LogicalDrive: "/tmp/aaa", CommitmentSize: 2048}
@@ -438,7 +449,16 @@ func TestJsonWalletApi(t *testing.T) {
 	respBody, respStatus = callEndpoint(t, "v1/accounttxs", payload)
 	r.Equal(http.StatusInternalServerError, respStatus)
 	const ErrInvalidStartLayer = "{\"error\":\"invalid start layer\",\"message\":\"invalid start layer\",\"code\":2}"
-	r.Equal(ErrInvalidStartLayer, respBody)
+	type resB struct {
+		Error   string `json:"error"`
+		Message string `json:"message"`
+		Code    int    `json:"code"`
+	}
+	expected2 := resB{}
+	res2 := resB{}
+	json.Unmarshal([]byte(ErrInvalidStartLayer), &expected2)
+	json.Unmarshal([]byte(respBody), &res2)
+	r.Equal(expected2, res2)
 
 	// test call reset post
 	respBody, respStatus = callEndpoint(t, "v1/resetpost", "")
@@ -594,14 +614,25 @@ func TestJsonWalletApi_Errors(t *testing.T) {
 	addrBytes := []byte{0x02} // address that does not exist
 	payload := marshalProto(t, &pb.AccountId{Address: util.Bytes2Hex(addrBytes)})
 	const expectedResponse = "{\"error\":\"account does not exist\",\"message\":\"account does not exist\",\"code\":2}"
+	type res struct {
+		Error   string `json:"error"`
+		Message string `json:"message"`
+		Code    int    `json:"code"`
+	}
+	expected := res{}
+	res1 := res{}
+	res2 := res{}
+	json.Unmarshal([]byte(expectedResponse), &expected)
 
 	respBody, respStatus := callEndpoint(t, "v1/nonce", payload)
 	require.Equal(t, http.StatusInternalServerError, respStatus) // TODO: Should we change it to err 400 somehow?
-	require.Equal(t, expectedResponse, respBody)
+	json.Unmarshal([]byte(respBody), &res1)
+	require.Equal(t, expected, res1)
 
 	respBody, respStatus = callEndpoint(t, "v1/balance", payload)
 	require.Equal(t, http.StatusInternalServerError, respStatus) // TODO: Should we change it to err 400 somehow?
-	require.Equal(t, expectedResponse, respBody)
+	json.Unmarshal([]byte(respBody), &res2)
+	require.Equal(t, expected, res2)
 
 	// stop the services
 	shutDown()
