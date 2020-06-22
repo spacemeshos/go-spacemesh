@@ -51,7 +51,7 @@ type Service struct {
 func (s Service) Server() *grpc.Server { return s.server }
 
 // Port is a getter for port
-func (s Service) Port() uint           { return s.port }
+func (s Service) Port() uint { return s.port }
 
 // ServerOptions are shared by all grpc servers
 var ServerOptions = []grpc.ServerOption{
