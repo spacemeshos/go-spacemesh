@@ -53,7 +53,6 @@ type NetworkMock struct {
 type res struct {
 	Error   string `json:"error"`
 	Message string `json:"message"`
-	Msg     string `json:"msg"`
 	Code    int    `json:"code"`
 }
 
