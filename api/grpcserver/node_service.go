@@ -1,4 +1,4 @@
-package grpc_server
+package grpcserver
 
 import (
 	"github.com/golang/protobuf/ptypes/empty"

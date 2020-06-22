@@ -1,4 +1,4 @@
-package grpc_server
+package grpcserver
 
 import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -31,7 +31,7 @@ type TxAPI interface {
 	GetStateRoot() types.Hash32
 }
 
-// ServiceStarter is an interface that knits together the various grpc service servers,
+// ServiceServer is an interface that knits together the various grpc service servers,
 // allowing the glue code in this file to manage them all.
 type ServiceServer interface {
 	Server() *grpc.Server
@@ -47,9 +47,13 @@ type Service struct {
 	port   uint
 }
 
+// Server is a getter for server
 func (s Service) Server() *grpc.Server { return s.server }
+
+// Port is a getter for port
 func (s Service) Port() uint           { return s.port }
 
+// ServerOptions are shared by all grpc servers
 var ServerOptions = []grpc.ServerOption{
 	// XXX: this is done to prevent routers from cleaning up our connections (e.g aws load balances..)
 	// TODO: these parameters work for now but we might need to revisit or add them as configuration
