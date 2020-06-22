@@ -545,6 +545,7 @@ var cfg = config.DefaultConfig()
 type SyncerMock struct{}
 
 func (SyncerMock) IsSynced() bool { return false }
+func (SyncerMock) Start()         {}
 
 func launchServer(t *testing.T) func() {
 	networkMock.Broadcast("", []byte{0x00})
