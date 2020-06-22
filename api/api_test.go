@@ -511,7 +511,7 @@ func TestSpacemeshGrpcService_GetTransaction(t *testing.T) {
 	shutDown()
 }
 
-func getTx(t *testing.T, tx *types.Transaction) pb.Transaction {
+func getTx(t *testing.T, tx *types.Transaction) *pb.Transaction {
 	r := require.New(t)
 	idToSend := pb.TransactionId{Id: tx.ID().Bytes()}
 	respBody, respStatus := callEndpoint(t, "v1/gettransaction", marshalProto(t, &idToSend))
@@ -519,10 +519,10 @@ func getTx(t *testing.T, tx *types.Transaction) pb.Transaction {
 	var respTx pb.Transaction
 	err := jsonpb.UnmarshalString(respBody, &respTx)
 	r.NoError(err)
-	return respTx
+	return &respTx
 }
 
-func assertTx(t *testing.T, respTx pb.Transaction, tx *types.Transaction, status string, layerID, timestamp uint64) {
+func assertTx(t *testing.T, respTx *pb.Transaction, tx *types.Transaction, status string, layerID, timestamp uint64) {
 	r := require.New(t)
 	r.Equal(tx.ID().Bytes(), respTx.TxId.Id)
 	r.Equal(tx.Fee, respTx.Fee)
