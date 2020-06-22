@@ -133,6 +133,8 @@ func EnsureCLIFlags(cmd *cobra.Command, appCFG *bc.Config) {
 					val = viper.GetUint64(name)
 				case "float64":
 					val = viper.GetFloat64(name)
+				case "[]string":
+					val = viper.GetStringSlice(name)
 				default:
 					val = viper.Get(name)
 				}
