@@ -135,6 +135,9 @@ func AddCommands(cmd *cobra.Command) {
 	// GrpcServerPortFlag determines the grpc server local listening port
 	cmd.PersistentFlags().IntVar(&config.API.GrpcServerPort, "grpc-port",
 		config.API.GrpcServerPort, "GRPC api server port")
+	// NewGrpcServerFlag determines the grpc server local listening port (for new server)
+	cmd.PersistentFlags().IntVar(&config.API.NewGrpcServerPort, "grpc-port-new",
+		config.API.NewGrpcServerPort, "New GRPC api server port")
 
 	/**======================== Hare Flags ========================== **/
 

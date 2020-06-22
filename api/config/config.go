@@ -1,11 +1,17 @@
 // Package config provides configuration for GRPC and HTTP api servers
 package config
 
+import (
+	"errors"
+)
+
 const (
-	defaultStartGRPCServer = false
-	defaultGRPCServerPort  = 9091
-	defaultStartJSONServer = false
-	defaultJSONServerPort  = 9090
+	defaultStartGRPCServer   = false
+	defaultGRPCServerPort    = 9091
+	defaultNewGRPCServerPort = 9092
+	defaultStartJSONServer   = false
+	defaultJSONServerPort    = 9090
+	defaultStartNodeService  = false
 )
 
 // Config defines the api config params
@@ -13,8 +19,10 @@ type Config struct {
 	StartGrpcServer   bool     `mapstructure:"grpc-server"`
 	StartGrpcServices []string `mapstructure:"grpc"`
 	GrpcServerPort    int      `mapstructure:"grpc-port"`
+	NewGrpcServerPort int      `mapstructure:"grpc-port-new"`
 	StartJSONServer   bool     `mapstructure:"json-server"`
 	JSONServerPort    int      `mapstructure:"json-port"`
+	StartNodeService  bool     // no direct commandline flag
 }
 
 func init() {
@@ -27,7 +35,22 @@ func DefaultConfig() Config {
 		StartGrpcServer:   defaultStartGRPCServer, // note: all bool flags default to false so don't set one of these to true here
 		StartGrpcServices: nil,                    // note: cannot configure an array as a const
 		GrpcServerPort:    defaultGRPCServerPort,
+		NewGrpcServerPort: defaultNewGRPCServerPort,
 		StartJSONServer:   defaultStartJSONServer,
 		JSONServerPort:    defaultJSONServerPort,
+		StartNodeService:  defaultStartNodeService,
 	}
+}
+
+// ParseServicesList enables the requested services
+func (s *Config) ParseServicesList() error {
+	for _, svc := range s.StartGrpcServices {
+		switch svc {
+		case "node":
+			s.StartNodeService = true
+		default:
+			return errors.New("Unrecognized GRPC service requested: " + svc)
+		}
+	}
+	return nil
 }

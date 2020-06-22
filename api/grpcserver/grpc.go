@@ -78,7 +78,7 @@ func startServiceInternal(s ServiceServer) {
 
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
-		log.Error("failed to listen", err)
+		log.Error("failed to start grpc server of type %T: %v", s, err)
 		return
 	}
 
@@ -87,19 +87,18 @@ func startServiceInternal(s ServiceServer) {
 	// SubscribeOnNewConnections reflection service on gRPC server
 	reflection.Register(s.Server())
 
-	log.Info("grpc API listening on port %d", s.Port())
+	log.Info("grpc server of type %T listening on port %d", s, s.Port())
 
 	// start serving - this blocks until err or server is stopped
 	if err := s.Server().Serve(lis); err != nil {
-		log.Error("grpc server stopped", err)
+		log.Error("error stopping grpc server of type %T: %v", s, err)
 	}
-
 }
 
 // Close stops the service.
 func (s Service) Close() error {
-	log.Debug("Stopping grpc service...")
+	log.Info("Stopping grpc service of type %T...", s)
 	s.server.Stop()
-	log.Debug("grpc service stopped...")
+	log.Info("grpc service of type %T stopped", s)
 	return nil
 }
