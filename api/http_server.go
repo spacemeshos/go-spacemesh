@@ -28,8 +28,10 @@ func NewJSONHTTPServer(port int, grpcPort int) *JSONHTTPServer {
 // Close stops the server.
 func (s *JSONHTTPServer) Close() error {
 	log.Debug("Stopping json-http service...")
-	if err := s.server.Shutdown(context.TODO()); err != nil {
-		return err
+	if s.server != nil {
+		if err := s.server.Shutdown(context.TODO()); err != nil {
+			return err
+		}
 	}
 	return nil
 }
