@@ -81,10 +81,6 @@ type AtxDB interface {
 	SyntacticallyValidateAtx(atx *types.ActivationTx) error
 }
 
-/*type blockBuilder interface {
-	ValidateAndAddTxToPool(tx *types.Transaction) error
-}*/
-
 // Mesh is the logic layer above our mesh.DB database
 type Mesh struct {
 	log.Log
@@ -93,7 +89,6 @@ type Mesh struct {
 	txProcessor
 	Validator
 	trtl tortoise
-	//blockBuilder       blockBuilder
 	txInvalidator      txMemPoolInValidator
 	atxInvalidator     atxMemPoolInValidator
 	config             Config
@@ -195,11 +190,6 @@ func (msh *Mesh) CacheWarmUp(layerSize int) {
 	msh.Info("cache warm up done")
 }
 
-/*
-// SetBlockBuilder sets the block builder in use by mesh
-func (msh *Mesh) SetBlockBuilder(blockBuilder blockBuilder) {
-	msh.blockBuilder = blockBuilder
-}*/
 
 // LatestLayerInState returns the latest layer we applied to state
 func (msh *Mesh) LatestLayerInState() types.LayerID {
