@@ -130,8 +130,6 @@ func testArgs(t *testing.T, app *SpacemeshApp, args ...string) (output string, e
 func TestSpacemeshApp_Cmd(t *testing.T) {
 	r := require.New(t)
 	app := NewSpacemeshApp()
-	err := app.Initialize(Cmd, nil)
-	r.NoError(err)
 
 	// Test an illegal flag
 	got, err2 := testArgs(t, app, "illegal")
