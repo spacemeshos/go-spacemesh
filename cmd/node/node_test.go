@@ -108,21 +108,15 @@ func TestSpacemeshApp_AddLogger(t *testing.T) {
 	l.Info("not supposed to be printed")
 }
 
-func testArgs(app *SpacemeshApp, errInt func(error), errExt func(error),
-	strExt func(string), args ...string) {
+func testArgs(app *SpacemeshApp, run func(*cobra.Command, []string), args ...string) (string, error) {
 	root := Cmd
-
-	root.Run = func(*cobra.Command, []string) {
-		errInt(app.Initialize(root, nil))
-	}
-
+	root.Run = run
 	buf := new(bytes.Buffer)
 	root.SetOut(buf)
 	root.SetErr(buf)
 	root.SetArgs(args)
 	_, err := root.ExecuteC() // runs Run()
-	errExt(err)
-	strExt(buf.String())
+	return buf.String(), err
 }
 
 func TestSpacemeshApp_Cmd(t *testing.T) {
@@ -134,35 +128,22 @@ func TestSpacemeshApp_Cmd(t *testing.T) {
 	r.Equal(false, app.Config.TestMode)
 
 	// Test an illegal flag
-	testArgs(app,
-		// check internal error
-		func(err error) {
-			r.Fail("received unexpected error: ", err)
-		},
-		// check external error
-		func(err error) {
-			r.Error(err)
-			r.Equal(expected, err.Error())
-		},
-		// check err string
-		func(str string) {
-			r.Equal(expected2, str)
+	str, err := testArgs(app,
+		func(*cobra.Command, []string) {
+			// We don't expect this to be called at all
+			r.Fail("Command.Run not expected to run")
 		}, "illegal")
+	r.Error(err)
+	r.Equal(expected, err.Error())
+	r.Equal(expected2, str)
 
 	// Test a legal flag
-	testArgs(app,
-		// check internal error
-		func(err error) {
-			r.NoError(err)
-		},
-		// check external error
-		func(err error) {
-			r.NoError(err)
-		},
-		// check err string
-		func(str string) {
-			r.Empty(str)
+	str, err = testArgs(app,
+		func(cmd *cobra.Command, args []string) {
+			r.NoError(app.Initialize(cmd, args))
 		}, "--test-mode")
+	r.NoError(err)
+	r.Empty(str)
 	r.Equal(true, app.Config.TestMode)
 }
 
@@ -172,16 +153,16 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 	r.Equal(9092, app.Config.API.NewGrpcServerPort)
 	r.Equal(false, app.Config.API.StartNodeService)
 
-	//errChan, got, err := testArgs(t, app, "--grpc-port-new", "1234", "--grpc", "illegal")
-	//<-errChan
-	//r.Empty(got)
-	////r.Equal("Unrecognized GRPC service requested: illegal", got)
-	//r.Error(err)
-	//r.Equal("Unrecognized GRPC service requested: illegal", err.Error())
-	//
-	//
-	//
-	//
+	str, err := testArgs(app,
+		// check internal error
+		func(cmd *cobra.Command, args []string) {
+			err := app.Initialize(cmd, args)
+			r.Error(err)
+			r.Equal("Unrecognized GRPC service requested: illegal", err.Error())
+		}, "--grpc-port-new", "1234", "--grpc", "illegal")
+	r.NoError(err)
+	r.Empty(str)
+
 	//errChan, got, err = testArgs(t, app, "--grpc-port-new", "1234", "--grpc", "node")
 	//r.Empty(got)
 	//r.NoError(err)
