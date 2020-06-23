@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 )
 
 func TestSpacemeshApp_getEdIdentity(t *testing.T) {
@@ -109,78 +108,61 @@ func TestSpacemeshApp_AddLogger(t *testing.T) {
 	l.Info("not supposed to be printed")
 }
 
-func testArgs(t *testing.T, app *SpacemeshApp, args ...string) (<-chan error, <-chan error, <-chan string) {
+func testArgs(app *SpacemeshApp, errInt func(error), errExt func(error),
+	strExt func(string), args ...string) {
 	root := Cmd
 
-	// We need to run Initialize to read the args, but we don't
-	// want to run Start to actually boot up the node.
-	errChanExternal := make(chan error)
-	errChanInternal := make(chan error)
-	strChan := make(chan string)
-
 	root.Run = func(*cobra.Command, []string) {
-		defer close(errChanInternal)
-		errChanInternal <- app.Initialize(root, nil)
+		errInt(app.Initialize(root, nil))
 	}
 
-	// This needs to be a goroutine. Otherwise, Run() would get called
-	// before we can even return the channel that it writes to.
-	go func() {
-		defer close(errChanExternal)
-		defer close(strChan)
-		buf := new(bytes.Buffer)
-		root.SetOut(buf)
-		root.SetErr(buf)
-		root.SetArgs(args)
-		_, err := root.ExecuteC() // runs Run()
-		errChanExternal <- err
-		strChan <- buf.String()
-	}()
-	return errChanInternal, errChanExternal, strChan
+	buf := new(bytes.Buffer)
+	root.SetOut(buf)
+	root.SetErr(buf)
+	root.SetArgs(args)
+	_, err := root.ExecuteC() // runs Run()
+	errExt(err)
+	strExt(buf.String())
 }
 
 func TestSpacemeshApp_Cmd(t *testing.T) {
 	r := require.New(t)
 	app := NewSpacemeshApp()
 
-	// Test an illegal flag
-	errChanInt, errChanExt, strChan := testArgs(t, app, "illegal")
 	expected := `unknown command "illegal" for "node"`
 	expected2 := "Error: " + expected + "\nRun 'node --help' for usage.\n"
 	r.Equal(false, app.Config.TestMode)
 
-	// We expect exactly two messages from two of the channels
-	for i := 0; i < 2; i++ {
-		select {
-		case err := <-errChanExt:
+	// Test an illegal flag
+	testArgs(app,
+		// check internal error
+		func(err error) {
+			r.Fail("received unexpected error: ", err)
+		},
+		// check external error
+		func(err error) {
 			r.Error(err)
 			r.Equal(expected, err.Error())
-		case got := <-strChan:
-			r.Equal(expected2, got)
-		case err2 := <-errChanInt:
-			// Run should not even run, so this channel should receive nothing
-			r.Fail("received unexpected error: ", err2)
-		case <-time.After(5 * time.Second):
-			r.Fail("timed out waiting for command result")
-		}
-	}
+		},
+		// check err string
+		func(str string) {
+			r.Equal(expected2, str)
+		}, "illegal")
 
 	// Test a legal flag
-	errChanInt, errChanExt, strChan = testArgs(t, app, "--test-mode")
-
-	// We expect exactly three messages, one from each channel
-	for i := 0; i < 3; i++ {
-		select {
-		case err := <-errChanExt:
+	testArgs(app,
+		// check internal error
+		func(err error) {
 			r.NoError(err)
-		case got := <-strChan:
-			r.Empty(got)
-		case err2 := <-errChanInt:
-			r.NoError(err2)
-		case <-time.After(5 * time.Second):
-			r.Fail("timed out waiting for command result")
-		}
-	}
+		},
+		// check external error
+		func(err error) {
+			r.NoError(err)
+		},
+		// check err string
+		func(str string) {
+			r.Empty(str)
+		}, "--test-mode")
 	r.Equal(true, app.Config.TestMode)
 }
 
