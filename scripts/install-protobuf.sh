@@ -28,11 +28,12 @@ echo "fetching ${protoc_url}"
 curl -L -o "protoc.zip" ${protoc_url}
 
 # Unzip
+rm -rf protoc3
 echo "extracting..."
 unzip -u protoc.zip -d protoc3
 
-
 # create local devtools dir.
+rm -rf devtools
 mkdir -p devtools/bin
 mkdir -p devtools/include
 
