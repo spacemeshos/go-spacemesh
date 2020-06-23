@@ -132,17 +132,17 @@ func TestSpacemeshApp_Cmd(t *testing.T) {
 	app := NewSpacemeshApp()
 
 	// Test an illegal flag
-	got, err2 := testArgs(t, app, "illegal")
+	got, err := testArgs(t, app, "illegal")
 	expected := `unknown command "illegal" for "node"`
 	expected2 := "Error: " + expected + "\nRun 'node --help' for usage.\n"
-	r.Error(err2)
-	r.Equal(expected, err2.Error())
+	r.Error(err)
+	r.Equal(expected, err.Error())
 	r.Equal(expected2, got)
 	r.Equal(false, app.Config.TestMode)
 
 	// Test a legal flag
-	got2, err3 := testArgs(t, app, "--test-mode")
-	r.NoError(err3)
+	got2, err2 := testArgs(t, app, "--test-mode")
+	r.NoError(err2)
 	r.Empty(got2)
 	r.Equal(true, app.Config.TestMode)
 }
