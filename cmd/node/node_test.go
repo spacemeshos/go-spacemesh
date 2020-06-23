@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestSpacemeshApp_getEdIdentity(t *testing.T) {
@@ -108,23 +109,34 @@ func TestSpacemeshApp_AddLogger(t *testing.T) {
 	l.Info("not supposed to be printed")
 }
 
-func testArgs(t *testing.T, app *SpacemeshApp, args ...string) (output string, err error) {
+func testArgs(t *testing.T, app *SpacemeshApp, args ...string) (<-chan error, <-chan error, <-chan string) {
 	root := Cmd
 
 	// We need to run Initialize to read the args, but we don't
 	// want to run Start to actually boot up the node.
+	errChanExternal := make(chan error)
+	errChanInternal := make(chan error)
+	strChan := make(chan string)
+
 	root.Run = func(*cobra.Command, []string) {
-		if err := app.Initialize(root, nil); err != nil {
-			t.Error(err)
-		}
+		defer close(errChanInternal)
+		errChanInternal <- app.Initialize(root, nil)
 	}
 
-	buf := new(bytes.Buffer)
-	root.SetOut(buf)
-	root.SetErr(buf)
-	root.SetArgs(args)
-	_, err = root.ExecuteC()
-	return buf.String(), err
+	// This needs to be a goroutine. Otherwise, Run() would get called
+	// before we can even return the channel that it writes to.
+	go func() {
+		defer close(errChanExternal)
+		defer close(strChan)
+		buf := new(bytes.Buffer)
+		root.SetOut(buf)
+		root.SetErr(buf)
+		root.SetArgs(args)
+		_, err := root.ExecuteC() // runs Run()
+		errChanExternal <- err
+		strChan <- buf.String()
+	}()
+	return errChanInternal, errChanExternal, strChan
 }
 
 func TestSpacemeshApp_Cmd(t *testing.T) {
@@ -132,28 +144,64 @@ func TestSpacemeshApp_Cmd(t *testing.T) {
 	app := NewSpacemeshApp()
 
 	// Test an illegal flag
-	got, err := testArgs(t, app, "illegal")
+	errChanInt, errChanExt, strChan := testArgs(t, app, "illegal")
 	expected := `unknown command "illegal" for "node"`
 	expected2 := "Error: " + expected + "\nRun 'node --help' for usage.\n"
-	r.Error(err)
-	r.Equal(expected, err.Error())
-	r.Equal(expected2, got)
 	r.Equal(false, app.Config.TestMode)
 
+	// We expect exactly two messages from two of the channels
+	for i := 0; i < 2; i++ {
+		select {
+		case err := <-errChanExt:
+			r.Error(err)
+			r.Equal(expected, err.Error())
+		case got := <-strChan:
+			r.Equal(expected2, got)
+		case err2 := <-errChanInt:
+			// Run should not even run, so this channel should receive nothing
+			r.Fail("received unexpected error: ", err2)
+		case <-time.After(5 * time.Second):
+			r.Fail("timed out waiting for command result")
+		}
+	}
+
 	// Test a legal flag
-	got2, err2 := testArgs(t, app, "--test-mode")
-	r.NoError(err2)
-	r.Empty(got2)
+	errChanInt, errChanExt, strChan = testArgs(t, app, "--test-mode")
+
+	// We expect exactly three messages, one from each channel
+	for i := 0; i < 3; i++ {
+		select {
+		case err := <-errChanExt:
+			r.NoError(err)
+		case got := <-strChan:
+			r.Empty(got)
+		case err2 := <-errChanInt:
+			r.NoError(err2)
+		case <-time.After(5 * time.Second):
+			r.Fail("timed out waiting for command result")
+		}
+	}
 	r.Equal(true, app.Config.TestMode)
 }
 
-func TestSpacemeshApp_CmdGrpcPortNew(t *testing.T) {
+func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 	r := require.New(t)
 	app := NewSpacemeshApp()
 	r.Equal(9092, app.Config.API.NewGrpcServerPort)
+	r.Equal(false, app.Config.API.StartNodeService)
 
-	got, err := testArgs(t, app, "--grpc-port-new", "123")
-	r.Empty(got)
-	r.NoError(err)
-	r.Equal(123, app.Config.API.NewGrpcServerPort)
+	//errChan, got, err := testArgs(t, app, "--grpc-port-new", "1234", "--grpc", "illegal")
+	//<-errChan
+	//r.Empty(got)
+	////r.Equal("Unrecognized GRPC service requested: illegal", got)
+	//r.Error(err)
+	//r.Equal("Unrecognized GRPC service requested: illegal", err.Error())
+	//
+	//
+	//
+	//
+	//errChan, got, err = testArgs(t, app, "--grpc-port-new", "1234", "--grpc", "node")
+	//r.Empty(got)
+	//r.NoError(err)
+	//r.Equal(123, app.Config.API.NewGrpcServerPort)
 }
