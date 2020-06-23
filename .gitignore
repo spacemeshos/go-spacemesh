@@ -27,4 +27,4 @@ spacemesh.json
 **/pb/*.swagger.json
 database/data
 *.pyc
-/devtools
+/FIXMEdevtools
