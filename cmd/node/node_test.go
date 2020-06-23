@@ -3,6 +3,7 @@ package node
 import (
 	"bytes"
 	"fmt"
+	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
@@ -154,7 +155,6 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 	r.Equal(false, app.Config.API.StartNodeService)
 
 	str, err := testArgs(app,
-		// check internal error
 		func(cmd *cobra.Command, args []string) {
 			err := app.Initialize(cmd, args)
 			r.Error(err)
@@ -163,8 +163,15 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 	r.NoError(err)
 	r.Empty(str)
 
-	//errChan, got, err = testArgs(t, app, "--grpc-port-new", "1234", "--grpc", "node")
-	//r.Empty(got)
-	//r.NoError(err)
-	//r.Equal(123, app.Config.API.NewGrpcServerPort)
+	// Reset the flags
+	Cmd.ResetFlags()
+	cmdp.AddCommands(Cmd)
+	str, err = testArgs(app,
+		func(cmd *cobra.Command, args []string) {
+			err := app.Initialize(cmd, args)
+			r.NoError(err)
+		}, "--grpc-port-new", "1234", "--grpc", "node")
+	r.Empty(str)
+	r.NoError(err)
+	r.Equal(1234, app.Config.API.NewGrpcServerPort)
 }
