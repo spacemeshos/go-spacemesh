@@ -64,7 +64,9 @@ func (bo *MinerBlockOracle) BlockEligible(layerID types.LayerID) (types.ATXID, [
 		return types.ATXID{}, nil, fmt.Errorf("cannot calc eligibility, not synced yet")
 	}
 	epochNumber := layerID.GetEpoch(bo.layersPerEpoch)
-	bo.log.Info("asked for eligibility for epoch %d (cached: %d)", epochNumber, bo.proofsEpoch)
+	bo.log.With().Info("asked for eligibility for epoch",
+		log.EpochID(uint64(epochNumber)),
+		log.Uint64("cached_epoch", uint64(bo.proofsEpoch)))
 	if bo.proofsEpoch != epochNumber {
 		err := bo.calcEligibilityProofs(epochNumber)
 		if err != nil {
