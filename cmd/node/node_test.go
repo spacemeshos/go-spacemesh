@@ -146,3 +146,14 @@ func TestSpacemeshApp_Cmd(t *testing.T) {
 	r.Empty(got2)
 	r.Equal(true, app.Config.TestMode)
 }
+
+func TestSpacemeshApp_CmdGrpcPortNew(t *testing.T) {
+	r := require.New(t)
+	app := NewSpacemeshApp()
+	r.Equal(9092, app.Config.API.NewGrpcServerPort)
+
+	got, err := testArgs(t, app, "--grpc-port-new", "123")
+	r.Empty(got)
+	r.NoError(err)
+	r.Equal(123, app.Config.API.NewGrpcServerPort)
+}
