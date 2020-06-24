@@ -1,5 +1,6 @@
 // NOTE: the contents of this file will soon be deprecated. See
 // grpcserver/http_server.go for the new implementation.
+
 package api
 
 import (
