@@ -109,9 +109,8 @@ func TestSpacemeshApp_AddLogger(t *testing.T) {
 	l.Info("not supposed to be printed")
 }
 
-func testArgs(app *SpacemeshApp, run func(*cobra.Command, []string), args ...string) (string, error) {
+func testArgs(app *SpacemeshApp, args ...string) (string, error) {
 	root := Cmd
-	root.Run = run
 	buf := new(bytes.Buffer)
 	root.SetOut(buf)
 	root.SetErr(buf)
@@ -129,20 +128,20 @@ func TestSpacemeshApp_Cmd(t *testing.T) {
 	r.Equal(false, app.Config.TestMode)
 
 	// Test an illegal flag
-	str, err := testArgs(app,
-		func(*cobra.Command, []string) {
-			// We don't expect this to be called at all
-			r.Fail("Command.Run not expected to run")
-		}, "illegal")
+	Cmd.Run = func(*cobra.Command, []string) {
+		// We don't expect this to be called at all
+		r.Fail("Command.Run not expected to run")
+	}
+	str, err := testArgs(app, "illegal")
 	r.Error(err)
 	r.Equal(expected, err.Error())
 	r.Equal(expected2, str)
 
 	// Test a legal flag
-	str, err = testArgs(app,
-		func(cmd *cobra.Command, args []string) {
-			r.NoError(app.Initialize(cmd, args))
-		}, "--test-mode")
+	Cmd.Run = func(cmd *cobra.Command, args []string) {
+		r.NoError(app.Initialize(cmd, args))
+	}
+	str, err = testArgs(app, "--test-mode")
 	r.NoError(err)
 	r.Empty(str)
 	r.Equal(true, app.Config.TestMode)
@@ -154,23 +153,22 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 	r.Equal(9092, app.Config.API.NewGrpcServerPort)
 	r.Equal(false, app.Config.API.StartNodeService)
 
-	str, err := testArgs(app,
-		func(cmd *cobra.Command, args []string) {
-			err := app.Initialize(cmd, args)
-			r.Error(err)
-			r.Equal("Unrecognized GRPC service requested: illegal", err.Error())
-		}, "--grpc-port-new", "1234", "--grpc", "illegal")
+	Cmd.Run = func(cmd *cobra.Command, args []string) {
+		err := app.Initialize(cmd, args)
+		r.Error(err)
+		r.Equal("Unrecognized GRPC service requested: illegal", err.Error())
+	}
+	str, err := testArgs(app, "--grpc-port-new", "1234", "--grpc", "illegal")
 	r.NoError(err)
 	r.Empty(str)
 
 	// Reset the flags
 	Cmd.ResetFlags()
 	cmdp.AddCommands(Cmd)
-	str, err = testArgs(app,
-		func(cmd *cobra.Command, args []string) {
-			err := app.Initialize(cmd, args)
-			r.NoError(err)
-		}, "--grpc-port-new", "1234", "--grpc", "node")
+	Cmd.Run = func(cmd *cobra.Command, args []string) {
+		r.NoError(app.Initialize(cmd, args))
+	}
+	str, err = testArgs(app, "--grpc-port-new", "1234", "--grpc", "node")
 	r.Empty(str)
 	r.NoError(err)
 	r.Equal(1234, app.Config.API.NewGrpcServerPort)
