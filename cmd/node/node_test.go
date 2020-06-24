@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/golang/protobuf/jsonpb"
+	"github.com/golang/protobuf/proto"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -12,8 +14,10 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -229,6 +233,50 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 	r.Equal(true, app.Config.API.StartNodeService)
 }
 
+func TestSpacemeshApp_JsonFlags(t *testing.T) {
+	r := require.New(t)
+	app := NewSpacemeshApp()
+	r.Equal(9093, app.Config.API.NewJSONServerPort)
+	r.Equal(false, app.Config.API.StartNewJSONServer)
+	r.Equal(false, app.Config.API.StartNodeService)
+
+	// Try enabling just the JSON service (without the GRPC service)
+	Cmd.Run = func(cmd *cobra.Command, args []string) {
+		err := app.Initialize(cmd, args)
+		//r.NoError(err)
+		r.Error(err)
+		r.Equal("must enable at least one GRPC service along with JSON gateway service", err.Error())
+	}
+	str, err := testArgs(app, "--json-server-new")
+	r.NoError(err)
+	r.Empty(str)
+	r.Equal(true, app.Config.API.StartNewJSONServer)
+	r.Equal(false, app.Config.API.StartNodeService)
+
+	resetFlags()
+
+	// Try enabling both the JSON and the GRPC services
+	Cmd.Run = func(cmd *cobra.Command, args []string) {
+		r.NoError(app.Initialize(cmd, args))
+	}
+	str, err = testArgs(app, "--grpc", "node", "--json-server-new")
+	r.NoError(err)
+	r.Empty(str)
+	r.Equal(true, app.Config.API.StartNodeService)
+	r.Equal(true, app.Config.API.StartNewJSONServer)
+
+	resetFlags()
+
+	// Try changing the port
+	// Uses Cmd.Run as defined above
+	str, err = testArgs(app, "--json-port-new", "1234")
+	r.NoError(err)
+	r.Empty(str)
+	r.Equal(false, app.Config.API.StartNodeService)
+	r.Equal(false, app.Config.API.StartNewJSONServer)
+	r.Equal(1234, app.Config.API.NewJSONServerPort)
+}
+
 type PostMock struct {
 }
 
@@ -246,6 +294,25 @@ func (NetMock) Broadcast(string, []byte) error {
 	return nil
 }
 
+func marshalProto(t *testing.T, msg proto.Message) string {
+	var buf bytes.Buffer
+	var m jsonpb.Marshaler
+	require.NoError(t, m.Marshal(&buf, msg))
+	return buf.String()
+}
+
+func callEndpoint(t *testing.T, endpoint, payload string, port int) (string, int) {
+	url := fmt.Sprintf("http://127.0.0.1:%d/%s", port, endpoint)
+	resp, err := http.Post(url, "application/json", strings.NewReader(payload))
+	require.NoError(t, err)
+	require.Equal(t, "application/json", resp.Header.Get("Content-Type"))
+	buf, err := ioutil.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.NoError(t, resp.Body.Close())
+
+	return string(buf), resp.StatusCode
+}
+
 func TestSpacemeshApp_GrpcService(t *testing.T) {
 	r := require.New(t)
 	app := NewSpacemeshApp()
@@ -255,6 +322,7 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 		r.NoError(app.Initialize(cmd, args))
 		app.startAPIServices(PostMock{}, NetMock{})
 	}
+	defer app.stopServices()
 	str, err := testArgs(app, "--grpc-port-new", "1234", "--grpc", "node")
 	r.Empty(str)
 	r.NoError(err)
@@ -276,4 +344,31 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 		Msg: &pb.SimpleString{Value: message}})
 	r.NoError(err)
 	r.Equal(message, response.Msg.Value)
+}
+
+func TestSpacemeshApp_JsonService(t *testing.T) {
+	r := require.New(t)
+	app := NewSpacemeshApp()
+
+	// Test starting the JSON server from the commandline
+	Cmd.Run = func(cmd *cobra.Command, args []string) {
+		r.NoError(app.Initialize(cmd, args))
+		app.startAPIServices(PostMock{}, NetMock{})
+	}
+	defer app.stopServices()
+	str, err := testArgs(app, "--json-server-new", "--grpc", "node", "--json-port-new", "1234")
+	r.Empty(str)
+	r.NoError(err)
+	r.Equal(1234, app.Config.API.NewJSONServerPort)
+
+	// Try talking to the server
+	const message = "nihao shijie"
+
+	// generate request payload (api input params)
+	payload := marshalProto(t, &pb.EchoRequest{Msg: &pb.SimpleString{Value: message}})
+	respBody, respStatus := callEndpoint(t, "v1/node/echo", payload, app.Config.API.NewJSONServerPort)
+	require.Equal(t, http.StatusOK, respStatus)
+	var msg pb.EchoResponse
+	require.NoError(t, jsonpb.UnmarshalString(respBody, &msg))
+	require.Equal(t, message, msg.Msg.Value)
 }

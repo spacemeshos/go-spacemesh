@@ -50,13 +50,21 @@ func DefaultConfig() Config {
 
 // ParseServicesList enables the requested services
 func (s *Config) ParseServicesList() error {
+	// Make sure all enabled GRPC services are known
 	for _, svc := range s.StartGrpcServices {
 		switch svc {
 		case "node":
 			s.StartNodeService = true
 		default:
-			return errors.New("Unrecognized GRPC service requested: " + svc)
+			return errors.New("unrecognized GRPC service requested: " + svc)
 		}
 	}
+
+	// If JSON gateway server is enabled, make sure at least one
+	// GRPC service is also enabled
+	if s.StartNewJSONServer && !s.StartNodeService {
+		return errors.New("must enable at least one GRPC service along with JSON gateway service")
+	}
+
 	return nil
 }

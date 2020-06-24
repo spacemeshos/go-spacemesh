@@ -697,7 +697,8 @@ func (app *SpacemeshApp) startAPIServices(postClient api.PostAPI, net api.Networ
 			app.newjsonAPIService.StartService()
 		}
 	} else if apiConf.StartNewJSONServer {
-		log.Error("One or more new GRPC services must be enabled with new JSON gateway server.")
+		// This should not happen
+		log.Panic("One or more new GRPC services must be enabled with new JSON gateway server.")
 	}
 }
 
