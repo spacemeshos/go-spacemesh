@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spf13/cobra"
@@ -150,12 +151,19 @@ func TestSpacemeshApp_Cmd(t *testing.T) {
 	r.Equal(true, app.Config.TestMode)
 }
 
+// This must be called in between each test that changes flags
+func resetFlags() {
+	Cmd.ResetFlags()
+	cmdp.AddCommands(Cmd)
+}
+
 func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 	r := require.New(t)
 	app := NewSpacemeshApp()
 	r.Equal(9092, app.Config.API.NewGrpcServerPort)
 	r.Equal(false, app.Config.API.StartNodeService)
 
+	// Try enabling an illegal service
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		err := app.Initialize(cmd, args)
 		r.Error(err)
@@ -164,6 +172,61 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 	str, err := testArgs(app, "--grpc-port-new", "1234", "--grpc", "illegal")
 	r.NoError(err)
 	r.Empty(str)
+	// This should still be set
+	r.Equal(1234, app.Config.API.NewGrpcServerPort)
+	r.Equal(false, app.Config.API.StartNodeService)
+
+	resetFlags()
+
+	// Try enabling two services, one with a legal name and one with an illegal name
+	// In this case, the node service will be enabled because it comes first
+	// Uses Cmd.Run as defined above
+	str, err = testArgs(app, "--grpc-port-new", "1234", "--grpc", "node", "--grpc", "illegal")
+	r.NoError(err)
+	r.Empty(str)
+	r.Equal(true, app.Config.API.StartNodeService)
+
+	resetFlags()
+
+	// Try the same thing but change the order of the flags
+	// In this case, the node service will not be enabled because it comes second
+	// Uses Cmd.Run as defined above
+	str, err = testArgs(app, "--grpc", "illegal", "--grpc-port-new", "1234", "--grpc", "node")
+	r.NoError(err)
+	r.Empty(str)
+	r.Equal(false, app.Config.API.StartNodeService)
+
+	resetFlags()
+
+	// Use commas instead
+	// In this case, the node service will be enabled because it comes first
+	// Uses Cmd.Run as defined above
+	str, err = testArgs(app, "--grpc", "node,illegal", "--grpc-port-new", "1234")
+	r.NoError(err)
+	r.Empty(str)
+	r.Equal(true, app.Config.API.StartNodeService)
+
+	resetFlags()
+
+	// This should work
+	Cmd.Run = func(cmd *cobra.Command, args []string) {
+		r.NoError(app.Initialize(cmd, args))
+	}
+	str, err = testArgs(app, "--grpc", "node")
+	r.Empty(str)
+	r.NoError(err)
+	r.Equal(true, app.Config.API.StartNodeService)
+
+	resetFlags()
+
+	// This should work too
+	Cmd.Run = func(cmd *cobra.Command, args []string) {
+		r.NoError(app.Initialize(cmd, args))
+	}
+	str, err = testArgs(app, "--grpc", "node,node")
+	r.Empty(str)
+	r.NoError(err)
+	r.Equal(true, app.Config.API.StartNodeService)
 }
 
 type PostMock struct {
