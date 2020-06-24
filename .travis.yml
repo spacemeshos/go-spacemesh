@@ -1,6 +1,6 @@
 language: go
 sudo: required
-go: 1.11.x
+go: 1.13.x
 
 env: GO111MODULE=on
 
