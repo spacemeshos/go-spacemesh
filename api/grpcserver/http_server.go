@@ -1,6 +1,4 @@
-// NOTE: the contents of this file will soon be deprecated. See
-// grpcserver/http_server.go for the new implementation.
-package api
+package grpcserver
 
 import (
 	"flag"
@@ -11,7 +9,7 @@ import (
 	"net/http"
 	"strconv"
 
-	gw "github.com/spacemeshos/go-spacemesh/api/pb"
+	gw "github.com/spacemeshos/api/release/go/spacemesh/v1"
 )
 
 // JSONHTTPServer is a JSON http server providing the Spacemesh API.
@@ -29,7 +27,7 @@ func NewJSONHTTPServer(port int, grpcPort int) *JSONHTTPServer {
 
 // Close stops the server.
 func (s *JSONHTTPServer) Close() error {
-	log.Debug("Stopping json-http service...")
+	log.Debug("Stopping new json-http service...")
 	if s.server != nil {
 		if err := s.server.Shutdown(context.TODO()); err != nil {
 			return err
@@ -60,18 +58,18 @@ func (s *JSONHTTPServer) startInternal() {
 	} else {
 		echoEndpoint = *flag.String(endpoint, "localhost:"+grpcPortStr, "endpoint of api grpc service")
 	}
-	if err := gw.RegisterSpacemeshServiceHandlerFromEndpoint(context.Background(), mux, echoEndpoint, opts); err != nil {
+	if err := gw.RegisterNodeServiceHandlerFromEndpoint(context.Background(), mux, echoEndpoint, opts); err != nil {
 		log.Error("failed to register http endpoint with grpc", err)
 	}
 
 	addr := ":" + strconv.Itoa(int(s.Port))
 
-	log.Info("json API listening on port %d", s.Port)
+	log.Info("new json API listening on port %d", s.Port)
 
 	s.server = &http.Server{Addr: addr, Handler: mux}
 	err := s.server.ListenAndServe()
 
 	if err != nil {
-		log.Debug("listen and serve stopped with status. %v", err)
+		log.Debug("listen and serve stopped with status: %v", err)
 	}
 }

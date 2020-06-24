@@ -1,3 +1,6 @@
+// NOTE: the contents of this file will soon be deprecated. See
+// grpcserver/grpc.go for the new implementation.
+
 // Package api provides the local go-spacemesh API endpoints. e.g. json-http and grpc-http2
 package api
 
