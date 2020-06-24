@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestSpacemeshApp_getEdIdentity(t *testing.T) {
@@ -122,6 +123,10 @@ func testArgs(app *SpacemeshApp, args ...string) (string, error) {
 	buf := new(bytes.Buffer)
 	root.SetOut(buf)
 	root.SetErr(buf)
+	// Workaround: will fail if args is nil (defaults to os args)
+	if args == nil {
+		args = []string{""}
+	}
 	root.SetArgs(args)
 	_, err := root.ExecuteC() // runs Run()
 	return buf.String(), err
@@ -317,16 +322,16 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	r := require.New(t)
 	app := NewSpacemeshApp()
 
-	// Test starting the server from the commandline
+	// Make sure the service is not running by default
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		r.NoError(app.Initialize(cmd, args))
 		app.startAPIServices(PostMock{}, NetMock{})
 	}
 	defer app.stopServices()
-	str, err := testArgs(app, "--grpc-port-new", "1234", "--grpc", "node")
+	str, err := testArgs(app) // no args
 	r.Empty(str)
 	r.NoError(err)
-	r.Equal(1234, app.Config.API.NewGrpcServerPort)
+	r.Equal(false, app.Config.API.StartNodeService)
 
 	// Try talking to the server
 	const message = "Hello World"
@@ -334,13 +339,36 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	// Set up a connection to the server.
 	conn, err := grpc.Dial("localhost:1234", grpc.WithInsecure())
 	r.NoError(err)
+	c := pb.NewNodeServiceClient(conn)
+
+	// We expect this one to fail
+	response, err := c.Echo(context.Background(), &pb.EchoRequest{
+		Msg: &pb.SimpleString{Value: message}})
+	r.Error(err)
+	r.Equal("rpc error: code = Unavailable desc = connection error: desc = \"transport: Error while dialing dial tcp 127.0.0.1:1234: connect: connection refused\"", err.Error())
+	r.NoError(conn.Close())
+
+	resetFlags()
+
+	// Test starting the server from the commandline
+	// uses Cmd.Run from above
+	str, err = testArgs(app, "--grpc-port-new", "1234", "--grpc", "node")
+	r.Empty(str)
+	r.NoError(err)
+	r.Equal(1234, app.Config.API.NewGrpcServerPort)
+	r.Equal(true, app.Config.API.StartNodeService)
+
+	// Set up a new connection to the server
+	conn, err = grpc.Dial("localhost:1234", grpc.WithInsecure())
 	defer func() {
 		r.NoError(conn.Close())
 	}()
-	c := pb.NewNodeServiceClient(conn)
+	r.NoError(err)
+	c = pb.NewNodeServiceClient(conn)
 
 	// call echo and validate result
-	response, err := c.Echo(context.Background(), &pb.EchoRequest{
+	// We expect this one to succeed
+	response, err = c.Echo(context.Background(), &pb.EchoRequest{
 		Msg: &pb.SimpleString{Value: message}})
 	r.NoError(err)
 	r.Equal(message, response.Msg.Value)
@@ -350,25 +378,52 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	r := require.New(t)
 	app := NewSpacemeshApp()
 
-	// Test starting the JSON server from the commandline
+	// Make sure the service is not running by default
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		r.NoError(app.Initialize(cmd, args))
 		app.startAPIServices(PostMock{}, NetMock{})
 	}
 	defer app.stopServices()
-	str, err := testArgs(app, "--json-server-new", "--grpc", "node", "--json-port-new", "1234")
+	str, err := testArgs(app)
 	r.Empty(str)
 	r.NoError(err)
-	r.Equal(1234, app.Config.API.NewJSONServerPort)
+	r.Equal(false, app.Config.API.StartNewJSONServer)
+	r.Equal(false, app.Config.API.StartNodeService)
 
 	// Try talking to the server
 	const message = "nihao shijie"
 
 	// generate request payload (api input params)
 	payload := marshalProto(t, &pb.EchoRequest{Msg: &pb.SimpleString{Value: message}})
-	respBody, respStatus := callEndpoint(t, "v1/node/echo", payload, app.Config.API.NewJSONServerPort)
-	require.Equal(t, http.StatusOK, respStatus)
+
+	// We expect this one to fail
+	url := fmt.Sprintf("http://127.0.0.1:%d/%s", app.Config.API.NewJSONServerPort, "v1/node/echo")
+	_, err = http.Post(url, "application/json", strings.NewReader(payload))
+	r.Error(err)
+	r.Equal(fmt.Sprintf(
+		"Post \"%s\": dial tcp 127.0.0.1:%d: connect: connection refused",
+		url, app.Config.API.NewJSONServerPort), err.Error())
+
+	resetFlags()
+
+	// Test starting the JSON server from the commandline
+	// uses Cmd.Run from above
+	str, err = testArgs(app, "--json-server-new", "--grpc", "node", "--json-port-new", "1234")
+	r.Empty(str)
+	r.NoError(err)
+	r.Equal(1234, app.Config.API.NewJSONServerPort)
+	r.Equal(true, app.Config.API.StartNewJSONServer)
+	r.Equal(true, app.Config.API.StartNodeService)
+
+	// Give the server a chance to start up
+	time.Sleep(2 * time.Second)
+
+	// We expect this one to succeed
+	respBody, respStatus := callEndpoint(t, "v1/node/echo", payload, 1234)
 	var msg pb.EchoResponse
+	r.NoError(jsonpb.UnmarshalString(respBody, &msg))
+	r.Equal(message, msg.Msg.Value)
+	require.Equal(t, http.StatusOK, respStatus)
 	require.NoError(t, jsonpb.UnmarshalString(respBody, &msg))
 	require.Equal(t, message, msg.Msg.Value)
 }
