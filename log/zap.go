@@ -55,6 +55,7 @@ type Field zap.Field
 // Field satisfy loggable field interface.
 func (f Field) Field() Field { return f }
 
+// FieldNamed returns a field with the provided name instead of the default.
 func FieldNamed(name string, field LoggableField) Field {
 	f := field.Field()
 	f.Key = name
