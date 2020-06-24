@@ -664,6 +664,30 @@ func (app *SpacemeshApp) startServices() {
 	go app.checkTimeDrifts()
 }
 
+func (app *SpacemeshApp) startApiServices(postClient api.PostAPI, net api.NetworkAPI) {
+	apiConf := &app.Config.API
+
+	// start api servers
+	if apiConf.StartGrpcServer || apiConf.StartJSONServer {
+		// start grpc if specified or if json rpc specified
+		layerDuration := app.Config.LayerDurationSec
+		app.grpcAPIService = api.NewGrpcService(apiConf.GrpcServerPort, net, app.state, app.mesh, app.txPool,
+			app.atxBuilder, app.oracle, app.clock, postClient, layerDuration, app.syncer, app.Config, app)
+		app.grpcAPIService.StartService()
+	}
+
+	if apiConf.StartNodeService {
+		app.grpcNodeService = grpcserver.NewNodeService(apiConf.NewGrpcServerPort, net, app.mesh,
+			app.clock, app.syncer)
+		grpcserver.StartService(app.grpcNodeService)
+	}
+
+	if apiConf.StartJSONServer {
+		app.jsonAPIService = api.NewJSONHTTPServer(apiConf.JSONServerPort, apiConf.GrpcServerPort)
+		app.jsonAPIService.StartService()
+	}
+}
+
 func (app *SpacemeshApp) stopServices() {
 	// all go-routines that listen to app.term will close
 	// note: there is no guarantee that a listening go-routine will close before stopServices exits
@@ -870,7 +894,6 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	/* Initialize all protocol services */
 	lg := log.NewDefault(nodeID.ShortString())
 
-	apiConf := &app.Config.API
 	dbStorepath := app.Config.DataDir()
 	gTime, err := time.Parse(time.RFC3339, app.Config.GenesisTime)
 	if err != nil {
@@ -906,28 +929,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 		log.Panic("Error starting p2p services: %v", err)
 	}
 
-	/* Expose API */
-
-	// start api servers
-	if apiConf.StartGrpcServer || apiConf.StartJSONServer {
-		// start grpc if specified or if json rpc specified
-		layerDuration := app.Config.LayerDurationSec
-		app.grpcAPIService = api.NewGrpcService(apiConf.GrpcServerPort, app.P2P, app.state, app.mesh, app.txPool,
-			app.atxBuilder, app.oracle, app.clock, postClient, layerDuration, app.syncer, app.Config, app)
-		app.grpcAPIService.StartService()
-	}
-
-	if apiConf.StartNodeService {
-		app.grpcNodeService = grpcserver.NewNodeService(apiConf.NewGrpcServerPort, app.P2P, app.mesh,
-			app.clock, app.syncer)
-		grpcserver.StartService(app.grpcNodeService)
-	}
-
-	if apiConf.StartJSONServer {
-		app.jsonAPIService = api.NewJSONHTTPServer(apiConf.JSONServerPort, apiConf.GrpcServerPort)
-		app.jsonAPIService.StartService()
-	}
-
+	app.startApiServices(postClient, app.P2P)
 	log.Info("App started.")
 
 	// app blocks until it receives a signal to exit

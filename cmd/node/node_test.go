@@ -2,11 +2,14 @@ package node
 
 import (
 	"bytes"
+	"context"
 	"fmt"
-	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
+	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -161,15 +164,53 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 	str, err := testArgs(app, "--grpc-port-new", "1234", "--grpc", "illegal")
 	r.NoError(err)
 	r.Empty(str)
+}
 
-	// Reset the flags
-	Cmd.ResetFlags()
-	cmdp.AddCommands(Cmd)
+type PostMock struct {
+}
+
+func (PostMock) Reset() error {
+	return nil
+}
+
+type NetMock struct {
+}
+
+func (NetMock) SubscribePeerEvents() (conn, disc chan p2pcrypto.PublicKey) {
+	return nil, nil
+}
+func (NetMock) Broadcast(string, []byte) error {
+	return nil
+}
+
+func TestSpacemeshApp_GrpcService(t *testing.T) {
+	r := require.New(t)
+	app := NewSpacemeshApp()
+
+	// Test starting the server from the commandline
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		r.NoError(app.Initialize(cmd, args))
+		app.startApiServices(PostMock{}, NetMock{})
 	}
-	str, err = testArgs(app, "--grpc-port-new", "1234", "--grpc", "node")
+	str, err := testArgs(app, "--grpc-port-new", "1234", "--grpc", "node")
 	r.Empty(str)
 	r.NoError(err)
 	r.Equal(1234, app.Config.API.NewGrpcServerPort)
+
+	// Try talking to the server
+	const message = "Hello World"
+
+	// Set up a connection to the server.
+	conn, err := grpc.Dial("localhost:1234", grpc.WithInsecure())
+	r.NoError(err)
+	defer func() {
+		r.NoError(conn.Close())
+	}()
+	c := pb.NewNodeServiceClient(conn)
+
+	// call echo and validate result
+	response, err := c.Echo(context.Background(), &pb.EchoRequest{
+		Msg: &pb.SimpleString{Value: message}})
+	r.NoError(err)
+	r.Equal(message, response.Msg.Value)
 }
