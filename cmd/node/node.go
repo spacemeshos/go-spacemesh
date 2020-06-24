@@ -442,7 +442,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 
 	name := nodeID.ShortString()
 
-	lg := log.NewDefault(name).WithFields(log.NodeID(name))
+	lg := log.NewDefault(name).WithFields(nodeID)
 
 	app.log = app.addLogger(AppLogger, lg)
 
@@ -612,11 +612,11 @@ func (app *SpacemeshApp) HareFactory(mdb *mesh.DB, swarm service.Service, sgn ha
 		for _, b := range ids {
 			res, err := mdb.GetBlock(b)
 			if err != nil {
-				app.log.With().Error("output set block not in database", log.BlockID(b.String()), log.Err(err))
+				app.log.With().Error("output set block not in database", b, log.Err(err))
 				return false
 			}
 			if res == nil {
-				app.log.With().Error("output set block not in database (BUG BUG BUG - GetBlock return err nil and res nil)", log.BlockID(b.String()))
+				app.log.With().Error("output set block not in database (BUG BUG BUG - GetBlock return err nil and res nil)", b)
 				return false
 			}
 

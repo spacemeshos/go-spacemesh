@@ -114,12 +114,12 @@ func (t *Ticker) Notify() (int, error) {
 	// already ticked
 	if layer <= t.lastTickedLayer {
 		t.log.With().Warning("skipping tick to avoid double ticking the same layer (time was not monotonic)",
-			log.Uint64("current_layer", uint64(layer)), log.Uint64("last_ticked_layer", uint64(t.lastTickedLayer)))
+			log.FieldNamed("current_layer", layer), log.FieldNamed("last_ticked_layer", t.lastTickedLayer))
 		t.m.Unlock()
 		return 0, errNotMonotonic
 	}
 	missedTicks := 0
-	t.log.Event().Info("release tick", log.LayerID(uint64(layer)))
+	t.log.Event().Info("release tick", layer)
 	for ch := range t.subscribers { // notify all subscribers
 
 		// non-blocking notify
@@ -136,8 +136,7 @@ func (t *Ticker) Notify() (int, error) {
 	t.m.Unlock()
 
 	if missedTicks > 0 {
-		t.log.With().Error("missed ticks for layer",
-			log.LayerID(uint64(layer)), log.Int("missed_count", missedTicks))
+		t.log.With().Error("missed ticks for layer", layer, log.Int("missed_count", missedTicks))
 		return missedTicks, errMissedTicks
 	}
 

@@ -2,6 +2,7 @@ package hare
 
 import (
 	"errors"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
@@ -146,7 +147,7 @@ func (b *Broker) eventLoop() {
 		case msg := <-b.inbox:
 			if msg == nil {
 				b.With().Error("Broker message validation failed: called with nil",
-					log.Uint64("latest_layer", uint64(b.latestLayer)))
+					log.FieldNamed("latest_layer", types.LayerID(b.latestLayer)))
 				continue
 			}
 
@@ -158,28 +159,28 @@ func (b *Broker) eventLoop() {
 
 			if hareMsg.InnerMsg == nil {
 				b.With().Error("Broker message validation failed",
-					log.Err(errNilInner), log.Uint64("latest_layer", uint64(b.latestLayer)))
+					log.Err(errNilInner), log.FieldNamed("latest_layer", types.LayerID(b.latestLayer)))
 				continue
 			}
 
 			msgInstID := hareMsg.InnerMsg.InstanceID
 			// TODO: fix metrics
-			//metrics.MessageTypeCounter.With("type_id", hareMsg.InnerMsg.Type.String(), "layer", strconv.FormatUint(uint64(msgInstID), 10), "reporter", "brokerHandler").Add(1)
+			// metrics.MessageTypeCounter.With("type_id", hareMsg.InnerMsg.Type.String(), "layer", strconv.FormatUint(uint64(msgInstID), 10), "reporter", "brokerHandler").Add(1)
 			isEarly := false
 			if err := b.validate(hareMsg); err != nil {
 				if err != errEarlyMsg {
 					// not early, validation failed
 					b.With().Debug("Broker received a message to a CP that is not registered",
 						log.Err(err),
-						log.Uint64("msg_layer_id", uint64(msgInstID)),
-						log.Uint64("latest_layer", uint64(b.latestLayer)))
+						log.FieldNamed("msg_layer_id", types.LayerID(msgInstID)),
+						log.FieldNamed("latest_layer", types.LayerID(b.latestLayer)))
 					continue
 				}
 
 				b.With().Debug("early message detected",
 					log.Err(err),
-					log.Uint64("msg_layer_id", uint64(msgInstID)),
-					log.Uint64("latest_layer", uint64(b.latestLayer)))
+					log.FieldNamed("msg_layer_id", types.LayerID(msgInstID)),
+					log.FieldNamed("latest_layer", types.LayerID(b.latestLayer)))
 
 				isEarly = true
 			}
@@ -261,7 +262,7 @@ func (b *Broker) updateSynchronicity(id instanceID) {
 	// not exist means unknown, check & set
 
 	if !b.isNodeSynced() {
-		b.With().Info("Note: node is not synced. Marking layer as not synced", log.LayerID(uint64(id)))
+		b.With().Info("Note: node is not synced. Marking layer as not synced", types.LayerID(id))
 		b.syncState[id] = false // mark not synced
 		return
 	}
