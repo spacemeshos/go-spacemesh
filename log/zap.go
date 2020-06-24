@@ -55,14 +55,16 @@ type Field zap.Field
 // Field satisfy loggable field interface.
 func (f Field) Field() Field { return f }
 
+// FieldNamed returns a field with the provided name instead of the default.
+func FieldNamed(name string, field LoggableField) Field {
+	f := field.Field()
+	f.Key = name
+	return f
+}
+
 // String returns a string Field
 func String(name, val string) Field {
 	return Field(zap.String(name, val))
-}
-
-// ByteString returns a byte string ([]byte) Field
-func ByteString(name string, val []byte) Field {
-	return Field(zap.ByteString(name, val))
 }
 
 // Int returns an int Field.
@@ -98,36 +100,6 @@ func Bool(name string, val bool) Field {
 // Duration returns a duration field
 func Duration(name string, val time.Duration) Field {
 	return Field(zap.Duration(name, val))
-}
-
-// LayerID returns a Uint64 field (key - "layer_id")
-func LayerID(val uint64) Field {
-	return Uint64("layer_id", val)
-}
-
-// TxID returns a String field (key - "tx_id")
-func TxID(val string) Field {
-	return String("tx_id", val)
-}
-
-// AtxID returns a String field (key - "atx_id")
-func AtxID(val string) Field {
-	return String("atx_id", val)
-}
-
-// BlockID returns a Uint64 field (key - "block_id")
-func BlockID(val string) Field {
-	return String("block_id", val)
-}
-
-// EpochID returns a Uint64 field (key - "epoch_id")
-func EpochID(val uint64) Field {
-	return Uint64("epoch_id", val)
-}
-
-// NodeID returns a String field (key - "node_id")
-func NodeID(val string) Field {
-	return String("node_id", val)
 }
 
 // Err returns an error field

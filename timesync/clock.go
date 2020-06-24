@@ -55,7 +55,8 @@ func (t *TimeClock) startClock() {
 		nextTickTime := t.Ticker.LayerToTime(currLayer + 1) // get next tick time for the next layer
 		diff := nextTickTime.Sub(t.clock.Now())
 		tmr := time.NewTimer(diff)
-		t.log.With().Info("global clock going to sleep before next layer", log.String("diff", diff.String()), log.Uint64("next_layer", uint64(currLayer)))
+		t.log.With().Info("global clock going to sleep before next layer", log.String("diff", diff.String()),
+			log.FieldNamed("next_layer", currLayer))
 		select {
 		case <-tmr.C:
 			// notify subscribers

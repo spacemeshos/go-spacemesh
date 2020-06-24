@@ -202,7 +202,7 @@ func (h *Hare) onTick(id types.LayerID) {
 	h.Debug("hare got tick, sleeping for %v", h.networkDelta)
 
 	if !h.broker.Synced(instanceID(id)) { // if not synced don't start consensus
-		h.With().Info("not starting hare since the node is not synced", log.LayerID(uint64(id)))
+		h.With().Info("not starting hare since the node is not synced", id)
 		return
 	}
 
@@ -222,7 +222,7 @@ func (h *Hare) onTick(id types.LayerID) {
 	// retrieve set form orphan blocks
 	blocks, err := h.msh.LayerBlockIds(h.lastLayer)
 	if err != nil {
-		h.With().Error("No blocks for consensus", log.LayerID(uint64(id)), log.Err(err))
+		h.With().Error("No blocks for consensus", id, log.Err(err))
 		return
 	}
 

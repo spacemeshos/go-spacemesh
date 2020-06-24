@@ -191,10 +191,10 @@ func getNumberOfEligibleBlocks(activeSetSize, committeeSize uint32, layersPerEpo
 func (bo *MinerBlockOracle) getATXIDForEpoch(targetEpoch types.EpochID) (types.ATXID, error) {
 	latestATXID, err := bo.atxDB.GetNodeAtxIDForEpoch(bo.nodeID, targetEpoch)
 	if err != nil {
-		bo.log.With().Info("did not find ATX IDs for node", log.String("atx_node_id", bo.nodeID.ShortString()), log.Err(err))
+		bo.log.With().Info("did not find ATX IDs for node", log.FieldNamed("atx_node_id", bo.nodeID), log.Err(err))
 		return types.ATXID{}, err
 	}
-	bo.log.With().Info("latest atx id found", log.AtxID(latestATXID.ShortString()))
+	bo.log.With().Info("latest atx id found", latestATXID)
 	return latestATXID, err
 }
 
