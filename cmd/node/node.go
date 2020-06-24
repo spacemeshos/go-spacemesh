@@ -664,7 +664,7 @@ func (app *SpacemeshApp) startServices() {
 	go app.checkTimeDrifts()
 }
 
-func (app *SpacemeshApp) startApiServices(postClient api.PostAPI, net api.NetworkAPI) {
+func (app *SpacemeshApp) startAPIServices(postClient api.PostAPI, net api.NetworkAPI) {
 	apiConf := &app.Config.API
 
 	// start api servers
@@ -929,7 +929,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 		log.Panic("Error starting p2p services: %v", err)
 	}
 
-	app.startApiServices(postClient, app.P2P)
+	app.startAPIServices(postClient, app.P2P)
 	log.Info("App started.")
 
 	// app blocks until it receives a signal to exit

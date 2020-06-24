@@ -253,7 +253,7 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	// Test starting the server from the commandline
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		r.NoError(app.Initialize(cmd, args))
-		app.startApiServices(PostMock{}, NetMock{})
+		app.startAPIServices(PostMock{}, NetMock{})
 	}
 	str, err := testArgs(app, "--grpc-port-new", "1234", "--grpc", "node")
 	r.Empty(str)
