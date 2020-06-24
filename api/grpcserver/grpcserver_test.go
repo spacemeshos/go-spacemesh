@@ -1,10 +1,17 @@
 package grpcserver
 
 import (
+	"bytes"
 	"errors"
+	"fmt"
+	"github.com/golang/protobuf/jsonpb"
+	"github.com/golang/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/miner"
+	"io/ioutil"
 	"math/big"
+	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -221,6 +228,13 @@ var (
 	}
 )
 
+func marshalProto(t *testing.T, msg proto.Message) string {
+	var buf bytes.Buffer
+	var m jsonpb.Marshaler
+	require.NoError(t, m.Marshal(&buf, msg))
+	return buf.String()
+}
+
 var cfg = config.DefaultConfig()
 
 type SyncerMock struct{}
@@ -230,32 +244,54 @@ func (SyncerMock) Start()         {}
 
 func launchServer(t *testing.T) func() {
 	networkMock.Broadcast("", []byte{0x00})
-	grpcService := NewNodeService(cfg.GrpcServerPort, &networkMock, txAPI, &genTime, &SyncerMock{})
+	grpcService := NewNodeService(cfg.NewGrpcServerPort, &networkMock, txAPI, &genTime, &SyncerMock{})
+	jsonService := NewJSONHTTPServer(cfg.NewJSONServerPort, cfg.NewGrpcServerPort)
+	// start gRPC and json server
 	StartService(grpcService)
+	jsonService.StartService()
 
 	time.Sleep(3 * time.Second) // wait for server to be ready (critical on Travis)
 
 	return func() {
+		require.NoError(t, jsonService.Close())
 		require.NoError(t, grpcService.Close())
 	}
 }
 
+func callEndpoint(t *testing.T, endpoint, payload string) (string, int) {
+	url := fmt.Sprintf("http://127.0.0.1:%d/%s", cfg.NewJSONServerPort, endpoint)
+	resp, err := http.Post(url, "application/json", strings.NewReader(payload))
+	require.NoError(t, err)
+	require.Equal(t, "application/json", resp.Header.Get("Content-Type"))
+	buf, err := ioutil.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.NoError(t, resp.Body.Close())
+
+	return string(buf), resp.StatusCode
+}
+
 func TestNewServersConfig(t *testing.T) {
 	port1, err := node.GetUnboundedPort()
+	port2, err := node.GetUnboundedPort()
 	require.NoError(t, err, "Should be able to establish a connection on a port")
 
 	grpcService := NewNodeService(
 		port1, &networkMock, txAPI, nil, nil)
-	require.Equal(t, grpcService.Port(), uint(port1), "Expected same port")
+
+	jsonService := NewJSONHTTPServer(port2, port1)
+	require.Equal(t, uint(port2), jsonService.Port, "Expected same port")
+	require.Equal(t, uint(port1), jsonService.GrpcPort, "Expected same port")
+	require.Equal(t, uint(port1), grpcService.Port(), "Expected same port")
 }
 
 func TestNodeService(t *testing.T) {
 	shutDown := launchServer(t)
+	defer shutDown()
 
 	const message = "Hello World"
 
 	// start a client
-	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
+	addr := "localhost:" + strconv.Itoa(cfg.NewGrpcServerPort)
 
 	// Set up a connection to the server.
 	conn, err := grpc.Dial(addr, grpc.WithInsecure())
@@ -270,7 +306,20 @@ func TestNodeService(t *testing.T) {
 		Msg: &pb.SimpleString{Value: message}})
 	require.NoError(t, err)
 	require.Equal(t, message, response.Msg.Value)
+}
 
-	// stop the server
-	shutDown()
+func TestJsonApi(t *testing.T) {
+	shutDown := launchServer(t)
+	defer shutDown()
+
+	const message = "hello world!"
+
+	// generate request payload (api input params)
+	payload := marshalProto(t, &pb.EchoRequest{Msg: &pb.SimpleString{Value: message}})
+
+	respBody, respStatus := callEndpoint(t, "v1/node/echo", payload)
+	require.Equal(t, http.StatusOK, respStatus)
+	var msg pb.EchoResponse
+	require.NoError(t, jsonpb.UnmarshalString(respBody, &msg))
+	require.Equal(t, message, msg.Msg.Value)
 }
