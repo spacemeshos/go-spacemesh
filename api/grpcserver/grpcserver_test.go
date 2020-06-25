@@ -242,18 +242,26 @@ type SyncerMock struct{}
 func (SyncerMock) IsSynced() bool { return false }
 func (SyncerMock) Start()         {}
 
-func launchServer(t *testing.T, grpcService ServiceServer) func() {
+func launchServer(t *testing.T, services ...ServiceServer) func() {
 	networkMock.Broadcast("", []byte{0x00})
 	jsonService := NewJSONHTTPServer(cfg.NewJSONServerPort, cfg.NewGrpcServerPort)
-	// start gRPC and json server
-	require.NoError(t, StartService(grpcService))
+	// start gRPC and json servers
+	for _, s := range services {
+		require.NoError(t, StartService(s))
+	}
 	jsonService.StartService()
 
 	time.Sleep(3 * time.Second) // wait for server to be ready (critical on Travis)
 
 	return func() {
 		require.NoError(t, jsonService.Close())
-		require.NoError(t, grpcService.Close())
+
+		// We only actually need to close one of these, since closing one
+		// closes them all, but mimic in-app behavior here. It should not
+		// hurt to close them all.
+		for _, s := range services {
+			require.NoError(t, s.Close())
+		}
 	}
 }
 
@@ -311,6 +319,29 @@ func TestNodeService(t *testing.T) {
 func TestMeshService(t *testing.T) {
 	grpcService := NewMeshService(cfg.NewGrpcServerPort, &networkMock, txAPI, &genTime, &SyncerMock{})
 	shutDown := launchServer(t, grpcService)
+	defer shutDown()
+
+	// start a client
+	addr := "localhost:" + strconv.Itoa(cfg.NewGrpcServerPort)
+
+	// Set up a connection to the server.
+	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	require.NoError(t, err)
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
+	c := pb.NewMeshServiceClient(conn)
+
+	// call echo and validate result
+	response, err := c.GenesisTime(context.Background(), &pb.GenesisTimeRequest{})
+	require.NoError(t, err)
+	require.Equal(t, uint64(genTime.GetGenesisTime().Unix()), response.Unixtime.Value)
+}
+
+func TestMultiService(t *testing.T) {
+	svc1 := NewNodeService(cfg.NewGrpcServerPort, &networkMock, txAPI, &genTime, &SyncerMock{})
+	svc2 := NewMeshService(cfg.NewGrpcServerPort, &networkMock, txAPI, &genTime, &SyncerMock{})
+	shutDown := launchServer(t, svc1, svc2)
 	defer shutDown()
 
 	// start a client

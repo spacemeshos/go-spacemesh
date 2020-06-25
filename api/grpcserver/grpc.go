@@ -64,6 +64,8 @@ func StartService(s ServiceServer) error {
 	} else if s.Port() != server.port {
 		// Make sure the port matches
 		return errors.New(fmt.Sprintf("port %d does not match running server port %d", s.Port(), server.port))
+	} else {
+		log.Info("grpc server is already running, not starting another")
 	}
 
 	// Register the service to the server
@@ -96,9 +98,12 @@ func startServiceInternal(s *grpc.Server, port int) {
 // Close stops all GRPC services being served by this server.
 func (s Service) Close() error {
 	log.Info("Stopping new grpc server...")
-	// It should be harmless to stop an already-stopped server
-	server.s.Stop()
-	server.s = nil
-	log.Info("new grpc server stopped")
+	if server.s == nil {
+		log.Info("grpc server already stopped")
+	} else {
+		server.s.Stop()
+		server.s = nil
+		log.Info("new grpc server stopped")
+	}
 	return nil
 }
