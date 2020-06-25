@@ -122,7 +122,7 @@ func AddCommands(cmd *cobra.Command) {
 	// StartJSONApiServerFlag determines if json api server should be started
 	cmd.PersistentFlags().BoolVar(&config.API.StartJSONServer, "json-server",
 		config.API.StartJSONServer, "StartService the json http server. "+
-			"Note that starting the Json server also starts the grpc server.",
+			"Note that starting the Json server also starts the grpc server. ",
 	)
 	// StartJSONApiServerFlag determines if json api server should be started
 	cmd.PersistentFlags().BoolVar(&config.API.StartNewJSONServer, "json-server-new",
@@ -137,7 +137,8 @@ func AddCommands(cmd *cobra.Command) {
 		config.API.NewJSONServerPort, "New JSON api server port")
 	// StartGrpcAPIServerFlag determines if the grpc server should be started
 	cmd.PersistentFlags().BoolVar(&config.API.StartGrpcServer, "grpc-server",
-		config.API.StartGrpcServer, "StartService the grpc server")
+		config.API.StartGrpcServer, "StartService the grpc server. "+
+			"Note: This service will soon be deprecated. Use --grpc instead.")
 	cmd.PersistentFlags().StringSliceVar(&config.API.StartGrpcServices, "grpc",
 		config.API.StartGrpcServices, "Comma-separated list of individual grpc services to enable")
 	// GrpcServerPortFlag determines the grpc server local listening port

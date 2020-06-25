@@ -244,24 +244,22 @@ func (SyncerMock) Start()         {}
 
 func launchServer(t *testing.T, services ...ServiceServer) func() {
 	networkMock.Broadcast("", []byte{0x00})
+	grpcService := NewServer(cfg.NewGrpcServerPort)
 	jsonService := NewJSONHTTPServer(cfg.NewJSONServerPort, cfg.NewGrpcServerPort)
 	// start gRPC and json servers
-	for _, s := range services {
-		require.NoError(t, StartService(s))
-	}
+	grpcService.Start()
 	jsonService.StartService()
+
+	// attach services
+	for _, svc := range services {
+		grpcService.RegisterService(svc)
+	}
 
 	time.Sleep(3 * time.Second) // wait for server to be ready (critical on Travis)
 
 	return func() {
 		require.NoError(t, jsonService.Close())
-
-		// We only actually need to close one of these, since closing one
-		// closes them all, but mimic in-app behavior here. It should not
-		// hurt to close them all.
-		for _, s := range services {
-			require.NoError(t, s.Close())
-		}
+		grpcService.Close()
 	}
 }
 
@@ -282,17 +280,16 @@ func TestNewServersConfig(t *testing.T) {
 	port2, err := node.GetUnboundedPort()
 	require.NoError(t, err, "Should be able to establish a connection on a port")
 
-	grpcService := NewNodeService(
-		port1, &networkMock, txAPI, nil, nil)
-
+	grpcService := NewServer(port1)
 	jsonService := NewJSONHTTPServer(port2, port1)
+
 	require.Equal(t, port2, jsonService.Port, "Expected same port")
 	require.Equal(t, port1, jsonService.GrpcPort, "Expected same port")
-	require.Equal(t, port1, grpcService.Port(), "Expected same port")
+	require.Equal(t, port1, grpcService.Port, "Expected same port")
 }
 
 func TestNodeService(t *testing.T) {
-	grpcService := NewNodeService(cfg.NewGrpcServerPort, &networkMock, txAPI, &genTime, &SyncerMock{})
+	grpcService := NewNodeService(&networkMock, txAPI, &genTime, &SyncerMock{})
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
@@ -317,7 +314,7 @@ func TestNodeService(t *testing.T) {
 }
 
 func TestMeshService(t *testing.T) {
-	grpcService := NewMeshService(cfg.NewGrpcServerPort, &networkMock, txAPI, &genTime, &SyncerMock{})
+	grpcService := NewMeshService(&networkMock, txAPI, &genTime, &SyncerMock{})
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
@@ -339,8 +336,8 @@ func TestMeshService(t *testing.T) {
 }
 
 func TestMultiService(t *testing.T) {
-	svc1 := NewNodeService(cfg.NewGrpcServerPort, &networkMock, txAPI, &genTime, &SyncerMock{})
-	svc2 := NewMeshService(cfg.NewGrpcServerPort, &networkMock, txAPI, &genTime, &SyncerMock{})
+	svc1 := NewNodeService(&networkMock, txAPI, &genTime, &SyncerMock{})
+	svc2 := NewMeshService(&networkMock, txAPI, &genTime, &SyncerMock{})
 	shutDown := launchServer(t, svc1, svc2)
 	defer shutDown()
 
@@ -366,8 +363,8 @@ func TestMultiService(t *testing.T) {
 	require.NoError(t, err2)
 	require.Equal(t, uint64(genTime.GetGenesisTime().Unix()), res2.Unixtime.Value)
 
-	// Make sure that shutting down one service shuts them both down
-	svc1.Close()
+	// Make sure that shutting down the grpc service shuts them both down
+	shutDown()
 
 	// Make sure NodeService is off
 	res1, err1 = c1.Echo(context.Background(), &pb.EchoRequest{
@@ -382,7 +379,7 @@ func TestMultiService(t *testing.T) {
 }
 
 func TestJsonApi(t *testing.T) {
-	grpcService := NewNodeService(cfg.NewGrpcServerPort, &networkMock, txAPI, &genTime, &SyncerMock{})
+	grpcService := NewNodeService(&networkMock, txAPI, &genTime, &SyncerMock{})
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
