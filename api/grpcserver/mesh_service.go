@@ -44,7 +44,9 @@ func NewMeshService(
 // GenesisTime returns the network genesis time as UNIX time
 func (s MeshService) GenesisTime(ctx context.Context, in *pb.GenesisTimeRequest) (*pb.GenesisTimeResponse, error) {
 	log.Info("GRPC MeshService.GenesisTime")
-	return nil, nil
+	return &pb.GenesisTimeResponse{Unixtime: &pb.SimpleInt{
+		Value: uint64(s.GenTime.GetGenesisTime().Unix()),
+	}}, nil
 }
 
 // CurrentLayer returns the current layer number
