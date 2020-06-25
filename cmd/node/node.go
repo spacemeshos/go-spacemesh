@@ -150,7 +150,7 @@ type SpacemeshApp struct {
 	Config            *cfg.Config
 	grpcAPIService    *api.SpacemeshGrpcService
 	jsonAPIService    *api.JSONHTTPServer
-	grpcNodeService   *grpcserver.NodeService
+	newgrpcAPIService *grpcserver.Server
 	newjsonAPIService *grpcserver.JSONHTTPServer
 	syncer            *sync.Syncer
 	blockListener     *sync.BlockListener
@@ -687,18 +687,33 @@ func (app *SpacemeshApp) startAPIServices(postClient api.PostAPI, net api.Networ
 	// GRPC services, we cannot automatically enable them if the gateway server is
 	// enabled (since we don't know which ones to enable), so it's an error if the
 	// gateway server is enabled without enabling at least one GRPC service.
-	if apiConf.StartNodeService {
-		app.grpcNodeService = grpcserver.NewNodeService(apiConf.NewGrpcServerPort, net, app.mesh,
-			app.clock, app.syncer)
-		grpcserver.StartService(app.grpcNodeService)
 
-		if apiConf.StartNewJSONServer {
-			app.newjsonAPIService = grpcserver.NewJSONHTTPServer(apiConf.NewJSONServerPort, apiConf.NewGrpcServerPort)
-			app.newjsonAPIService.StartService()
+	// Make sure we only start the server once
+	startService := func(svc grpcserver.ServiceServer) {
+		if app.newgrpcAPIService == nil {
+			app.newgrpcAPIService = grpcserver.NewServer(apiConf.NewGrpcServerPort)
+			app.newgrpcAPIService.Start()
 		}
-	} else if apiConf.StartNewJSONServer {
-		// This should not happen
-		log.Panic("One or more new GRPC services must be enabled with new JSON gateway server.")
+		app.newgrpcAPIService.RegisterService(svc)
+	}
+
+	// Start the requested services one by one
+	if apiConf.StartNodeService {
+		startService(grpcserver.NewNodeService(net, app.mesh, app.clock, app.syncer))
+	}
+	if apiConf.StartMeshService {
+		startService(grpcserver.NewMeshService(net, app.mesh, app.clock, app.syncer))
+	}
+
+	if apiConf.StartNewJSONServer {
+		if app.newgrpcAPIService == nil {
+			// This panics because it should not happen.
+			// It should be caught inside apiConf.
+			log.Panic("One or more new GRPC services must be enabled with new JSON gateway server.")
+			return
+		}
+		app.newjsonAPIService = grpcserver.NewJSONHTTPServer(apiConf.NewJSONServerPort, apiConf.NewGrpcServerPort)
+		app.newjsonAPIService.StartService()
 	}
 }
 
@@ -722,9 +737,9 @@ func (app *SpacemeshApp) stopServices() {
 		app.newjsonAPIService.Close()
 	}
 
-	if app.grpcNodeService != nil {
-		log.Info("Stopping GRPC NodeService...")
-		app.grpcNodeService.Close()
+	if app.newgrpcAPIService != nil {
+		log.Info("Stopping new GRPC service...")
+		app.newgrpcAPIService.Close()
 	}
 
 	if app.blockProducer != nil {
