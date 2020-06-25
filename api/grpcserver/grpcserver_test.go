@@ -279,9 +279,9 @@ func TestNewServersConfig(t *testing.T) {
 		port1, &networkMock, txAPI, nil, nil)
 
 	jsonService := NewJSONHTTPServer(port2, port1)
-	require.Equal(t, uint(port2), jsonService.Port, "Expected same port")
-	require.Equal(t, uint(port1), jsonService.GrpcPort, "Expected same port")
-	require.Equal(t, uint(port1), grpcService.Port(), "Expected same port")
+	require.Equal(t, port2, jsonService.Port, "Expected same port")
+	require.Equal(t, port1, jsonService.GrpcPort, "Expected same port")
+	require.Equal(t, port1, grpcService.Port(), "Expected same port")
 }
 
 func TestNodeService(t *testing.T) {

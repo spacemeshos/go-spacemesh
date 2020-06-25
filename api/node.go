@@ -60,3 +60,23 @@ type Syncer interface {
 	IsSynced() bool
 	Start()
 }
+
+// TxAPI is an api for getting transaction status
+type TxAPI interface {
+	AddressExists(addr types.Address) bool
+	ValidateNonceAndBalance(transaction *types.Transaction) error
+	GetRewards(account types.Address) (rewards []types.Reward, err error)
+	GetTransactionsByDestination(l types.LayerID, account types.Address) (txs []types.TransactionID)
+	GetTransactionsByOrigin(l types.LayerID, account types.Address) (txs []types.TransactionID)
+	LatestLayer() types.LayerID
+	GetLayerApplied(txID types.TransactionID) *types.LayerID
+	GetTransaction(id types.TransactionID) (*types.Transaction, error)
+	GetProjection(addr types.Address, prevNonce, prevBalance uint64) (nonce, balance uint64, err error)
+	LatestLayerInState() types.LayerID
+	GetStateRoot() types.Hash32
+}
+
+// PeerCounter is an api to get amount of connected peers
+type PeerCounter interface {
+	PeerCount() uint64
+}

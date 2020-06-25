@@ -19,25 +19,23 @@ import (
 type NodeService struct {
 	Service
 	Network     api.NetworkAPI // P2P Swarm
-	Tx          TxAPI          // Mesh
+	Tx          api.TxAPI      // Mesh
 	GenTime     api.GenesisTimeAPI
-	PeerCounter PeerCounter
+	PeerCounter api.PeerCounter
 	Syncer      api.Syncer
 }
 
-func (s NodeService) registerService() {
-	pb.RegisterNodeServiceServer(s.server, s)
+func (s NodeService) registerService(server *grpc.Server) {
+	pb.RegisterNodeServiceServer(server, s)
 }
 
 // NewNodeService creates a new grpc service using config data.
 func NewNodeService(
-	port int, net api.NetworkAPI, tx TxAPI, genTime api.GenesisTimeAPI,
+	port int, net api.NetworkAPI, tx api.TxAPI, genTime api.GenesisTimeAPI,
 	syncer api.Syncer) *NodeService {
-	server := grpc.NewServer(ServerOptions...)
 	return &NodeService{
 		Service: Service{
-			server: server,
-			port:   uint(port),
+			port,
 		},
 		Network:     net,
 		Tx:          tx,
