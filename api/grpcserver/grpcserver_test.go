@@ -353,12 +353,18 @@ func TestMultiService(t *testing.T) {
 	defer func() {
 		require.NoError(t, conn.Close())
 	}()
-	c := pb.NewMeshServiceClient(conn)
+	c1 := pb.NewNodeServiceClient(conn)
+	c2 := pb.NewMeshServiceClient(conn)
 
-	// call echo and validate result
-	response, err := c.GenesisTime(context.Background(), &pb.GenesisTimeRequest{})
-	require.NoError(t, err)
-	require.Equal(t, uint64(genTime.GetGenesisTime().Unix()), response.Unixtime.Value)
+	// call endpoints and validate results
+	const message = "Hello World"
+	res1, err1 := c1.Echo(context.Background(), &pb.EchoRequest{
+		Msg: &pb.SimpleString{Value: message}})
+	require.NoError(t, err1)
+	require.Equal(t, message, res1.Msg.Value)
+	res2, err2 := c2.GenesisTime(context.Background(), &pb.GenesisTimeRequest{})
+	require.NoError(t, err2)
+	require.Equal(t, uint64(genTime.GetGenesisTime().Unix()), res2.Unixtime.Value)
 }
 
 func TestJsonApi(t *testing.T) {
