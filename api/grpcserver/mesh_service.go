@@ -9,7 +9,7 @@ import (
 	"google.golang.org/grpc"
 )
 
-// NodeService is a grpc server providing the NodeService
+// MeshService is a grpc server providing the MeshService
 type MeshService struct {
 	Network     api.NetworkAPI // P2P Swarm
 	Tx          api.TxAPI      // Mesh
@@ -22,7 +22,7 @@ func (s MeshService) registerService(server *grpc.Server) {
 	pb.RegisterMeshServiceServer(server, s)
 }
 
-// NewNodeService creates a new grpc service using config data.
+// NewMeshService creates a new grpc service using config data.
 func NewMeshService(
 	net api.NetworkAPI, tx api.TxAPI, genTime api.GenesisTimeAPI,
 	syncer api.Syncer) *MeshService {
@@ -55,8 +55,8 @@ func (s MeshService) CurrentEpoch(ctx context.Context, in *pb.CurrentEpochReques
 	return nil, nil
 }
 
-// NetId returns the network ID
-func (s MeshService) NetId(ctx context.Context, in *pb.NetIdRequest) (*pb.NetIdResponse, error) {
+// NetID returns the network ID
+func (s MeshService) NetID(ctx context.Context, in *pb.NetIDRequest) (*pb.NetIDResponse, error) {
 	log.Info("GRPC MeshService.NetId")
 	return nil, nil
 }

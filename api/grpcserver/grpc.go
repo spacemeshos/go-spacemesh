@@ -10,11 +10,13 @@ import (
 	"time"
 )
 
+// Server is a very basic grpc server
 type Server struct {
 	Port   int
 	server *grpc.Server
 }
 
+// NewServer creates and returns a new Server
 func NewServer(port int) *Server {
 	return &Server{
 		Port:   port,
@@ -22,6 +24,7 @@ func NewServer(port int) *Server {
 	}
 }
 
+// Start starts the server
 func (s *Server) Start() {
 	log.Info("starting new grpc server")
 	go s.startServiceInternal()
@@ -48,10 +51,12 @@ func (s *Server) startServiceInternal() {
 	}
 }
 
+// RegisterService attaches a new service to the server
 func (s *Server) RegisterService(svc ServiceServer) {
 	svc.registerService(s.server)
 }
 
+// Close stops the server
 func (s *Server) Close() {
 	log.Info("Stopping new grpc server...")
 	s.server.Stop()
