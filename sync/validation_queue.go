@@ -143,7 +143,7 @@ func (vq *blockQueue) finishBlockCallback(block *types.Block) func(res bool) err
 			vq.HandleLateBlock(block)
 		}
 
-		vq.With().Info("finished block, valid", log.BlockID(block.ID().String()))
+		vq.With().Info("finished block, valid", block.ID())
 		return nil
 	}
 }

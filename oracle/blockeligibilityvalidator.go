@@ -47,7 +47,7 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 	epochNumber := block.LayerIndex.GetEpoch(v.layersPerEpoch)
 	if epochNumber == 0 {
 		v.log.With().Warning("skipping epoch 0 block validation.",
-			log.BlockID(block.ID().String()), log.LayerID(block.LayerIndex.Uint64()))
+			block.ID(), block.LayerIndex)
 		return true, nil
 	}
 	if block.ATXID == *types.EmptyATXID {
@@ -64,7 +64,7 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 	}
 	if epochNumber.IsGenesis() {
 		v.log.With().Info("using genesisTotalWeight",
-			log.BlockID(block.ShortString()), log.Uint64("genesisTotalWeight", v.genesisTotalWeight))
+			block.ID(), log.Uint64("genesisTotalWeight", v.genesisTotalWeight))
 		weight, totalWeight = 131072, v.genesisTotalWeight // TODO: replace 131072 with configured weight
 	}
 

@@ -182,7 +182,7 @@ func (s SpacemeshGrpcService) SubmitTransaction(ctx context.Context, in *pb.Sign
 	}
 	if !s.Tx.AddressExists(tx.Origin()) {
 		log.With().Error("tx failed to validate signature",
-			log.TxID(tx.ID().ShortString()), log.String("origin", tx.Origin().Short()))
+			tx.ID(), log.String("origin", tx.Origin().Short()))
 		return nil, fmt.Errorf("transaction origin (%v) not found in global state", tx.Origin().Short())
 	}
 	if err := s.Tx.ValidateNonceAndBalance(tx); err != nil {

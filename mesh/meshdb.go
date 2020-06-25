@@ -126,7 +126,7 @@ var ErrAlreadyExist = errors.New("block already exist in database")
 // AddBlock adds a block to the database
 func (m *DB) AddBlock(bl *types.Block) error {
 	if _, err := m.getBlockBytes(bl.ID()); err == nil {
-		m.With().Warning(ErrAlreadyExist.Error(), log.BlockID(bl.ID().String()))
+		m.With().Warning(ErrAlreadyExist.Error(), bl.ID())
 		return ErrAlreadyExist
 	}
 	if err := m.writeBlock(bl); err != nil {
@@ -203,7 +203,7 @@ func (m *DB) ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID
 		}
 
 		if stop {
-			m.Log.With().Debug("ForBlockInView stopped", log.BlockID(block.ID().String()))
+			m.Log.With().Debug("ForBlockInView stopped", block.ID())
 			break
 		}
 
@@ -525,13 +525,13 @@ func (m *DB) removeRejectedFromAccountTxs(account types.Address, rejected map[ty
 	pending, err := m.getAccountPendingTxs(account)
 	if err != nil {
 		m.With().Error("failed to get account pending txs",
-			log.LayerID(uint64(layer)), log.String("address", account.Short()), log.Err(err))
+			layer, log.String("address", account.Short()), log.Err(err))
 		return
 	}
 	pending.RemoveRejected(rejected[account], layer)
 	if err := m.storeAccountPendingTxs(account, pending); err != nil {
 		m.With().Error("failed to store account pending txs",
-			log.LayerID(uint64(layer)), log.String("address", account.Short()), log.Err(err))
+			layer, log.String("address", account.Short()), log.Err(err))
 	}
 }
 
@@ -592,7 +592,7 @@ type txGetter struct {
 func (g *txGetter) get(id types.TransactionID) {
 	t, err := g.mesh.GetTransaction(id)
 	if err != nil {
-		g.mesh.With().Warning("could not fetch tx", log.TxID(id.ShortString()), log.Err(err))
+		g.mesh.With().Warning("could not fetch tx", id, log.Err(err))
 		g.missingIds[id] = struct{}{}
 	} else {
 		g.txs = append(g.txs, t)
@@ -667,7 +667,7 @@ func (m *DB) BlocksByValidity(blocks []*types.Block) (validBlocks, invalidBlocks
 	for _, b := range blocks {
 		valid, err := m.ContextualValidity(b.ID())
 		if err != nil {
-			m.With().Error("could not get contextual validity", log.BlockID(b.ID().String()), log.Err(err))
+			m.With().Error("could not get contextual validity", b.ID(), log.Err(err))
 		}
 		if valid {
 			validBlocks = append(validBlocks, b)

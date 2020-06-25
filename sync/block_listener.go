@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-//BlockListener Listens to blocks propagated in gossip
+// BlockListener Listens to blocks propagated in gossip
 type BlockListener struct {
 	*Syncer
 	blockEligibilityValidator
@@ -24,7 +24,7 @@ type BlockListener struct {
 	exit                 chan struct{}
 }
 
-//Close closes all running goroutines
+// Close closes all running goroutines
 func (bl *BlockListener) Close() {
 	close(bl.exit)
 	bl.Info("block listener closing, waiting for gorutines")
@@ -33,14 +33,14 @@ func (bl *BlockListener) Close() {
 	bl.Info("block listener closed")
 }
 
-//Start starts the main listening goroutine
+// Start starts the main listening goroutine
 func (bl *BlockListener) Start() {
 	if bl.startLock.TryLock() {
 		go bl.listenToGossipBlocks()
 	}
 }
 
-//NewBlockListener creates a new instance of BlockListener
+// NewBlockListener creates a new instance of BlockListener
 func NewBlockListener(net service.Service, sync *Syncer, concurrency int, logger log.Log) *BlockListener {
 	bl := BlockListener{
 		Syncer:               sync,
@@ -88,23 +88,23 @@ func (bl *BlockListener) handleBlock(data service.GossipMessage) {
 		return
 	}
 
-	//set the block id when received
+	// set the block id when received
 	blk.Initialize()
 
 	bl.Log.With().Info("got new block", blk.Fields()...)
-	//check if known
+	// check if known
 	if _, err := bl.GetBlock(blk.ID()); err == nil {
-		bl.With().Info("we already know this block", log.BlockID(blk.ID().String()))
+		bl.With().Info("we already know this block", blk.ID())
 		return
 	}
 	txs, atxs, err := bl.blockSyntacticValidation(&blk)
 	if err != nil {
-		bl.With().Error("failed to validate block", log.BlockID(blk.ID().String()), log.Err(err))
+		bl.With().Error("failed to validate block", blk.ID(), log.Err(err))
 		return
 	}
 	data.ReportValidation(config.NewBlockProtocol)
 	if err := bl.AddBlockWithTxs(&blk, txs, atxs); err != nil {
-		bl.With().Error("failed to add block to database", log.BlockID(blk.ID().String()), log.Err(err))
+		bl.With().Error("failed to add block to database", blk.ID(), log.Err(err))
 		return
 	}
 

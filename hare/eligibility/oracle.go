@@ -145,7 +145,7 @@ func (o *Oracle) buildVRFMessage(layer types.LayerID, round int32) ([]byte, erro
 	// get value from Beacon
 	v, err := o.beacon.Value(layer)
 	if err != nil {
-		o.With().Error("Could not get hare Beacon value", log.Err(err), log.LayerID(uint64(layer)), log.Int32("round", round))
+		o.With().Error("Could not get hare Beacon value", log.Err(err), layer, log.Int32("round", round))
 		o.lock.Unlock()
 		return nil, err
 	}
@@ -174,7 +174,7 @@ func (o *Oracle) totalWeight(layer types.LayerID) (uint64, error) {
 			return o.genesisTotalWeight, nil
 		}
 
-		o.With().Error("totalWeight erred while calling actives func", log.Err(err), log.LayerID(uint64(layer)))
+		o.With().Error("totalWeight erred while calling actives func", log.Err(err), layer)
 		return 0, err
 	}
 
@@ -283,19 +283,16 @@ func (o *Oracle) actives(layer types.LayerID) (map[string]uint64, error) {
 	// no contextually valid blocks
 	if len(mp) == 0 {
 		o.With().Error("Could not calculate hare active set size: no contextually valid blocks",
-			layer,
-			log.Uint64("epoch_id", uint64(layer.GetEpoch(o.layersPerEpoch))),
-			log.Uint64("safe_layer_id", uint64(sl)),
-			log.Uint64("safe_epoch_id", uint64(safeEp)))
+			layer, layer.GetEpoch(o.layersPerEpoch),
+			log.FieldNamed("safe_layer_id", sl), log.FieldNamed("safe_epoch_id", safeEp))
 		o.lock.Unlock()
 		return nil, errNoContextualBlocks
 	}
 
 	activeMap, err := o.getActiveSet(safeEp, mp)
 	if err != nil {
-		o.With().Error("Could not retrieve active set size", log.Err(err),
-			log.Uint64("layer_id", uint64(layer)), log.Uint64("epoch_id", uint64(layer.GetEpoch(o.layersPerEpoch))),
-			log.Uint64("safe_layer_id", uint64(sl)), log.Uint64("safe_epoch_id", uint64(safeEp)))
+		o.With().Error("Could not retrieve active set size", log.Err(err), layer, layer.GetEpoch(o.layersPerEpoch),
+			log.FieldNamed("safe_layer_id", sl), log.FieldNamed("safe_epoch_id", safeEp))
 		o.lock.Unlock()
 		return nil, err
 	}
@@ -316,8 +313,7 @@ func (o *Oracle) IsIdentityActiveOnConsensusView(edID string, layer types.LayerI
 			return true, nil // all ids are active in genesis
 		}
 
-		o.With().Error("IsIdentityActiveOnConsensusView erred while calling actives func",
-			log.LayerID(uint64(layer)), log.Err(err))
+		o.With().Error("IsIdentityActiveOnConsensusView erred while calling actives func", layer, log.Err(err))
 		return false, err
 	}
 	_, exist := actives[edID]

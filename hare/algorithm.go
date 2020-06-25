@@ -129,14 +129,14 @@ func newMsg(hareMsg *Message, querier StateQuerier) (*Msg, error) {
 	res, err := querier.IsIdentityActiveOnConsensusView(pub.String(), types.LayerID(hareMsg.InnerMsg.InstanceID))
 	if err != nil {
 		log.With().Error("error while checking if identity is active", log.String("sender_id", pub.ShortString()),
-			log.Err(err), log.LayerID(uint64(hareMsg.InnerMsg.InstanceID)), log.String("msg_type", hareMsg.InnerMsg.Type.String()))
+			log.Err(err), types.LayerID(hareMsg.InnerMsg.InstanceID), log.String("msg_type", hareMsg.InnerMsg.Type.String()))
 		return nil, errors.New("is identity active query failed")
 	}
 
 	// check query result
 	if !res {
 		log.With().Error("identity is not active", log.String("sender_id", pub.ShortString()),
-			log.LayerID(uint64(hareMsg.InnerMsg.InstanceID)), log.String("msg_type", hareMsg.InnerMsg.Type.String()))
+			types.LayerID(hareMsg.InnerMsg.InstanceID), log.String("msg_type", hareMsg.InnerMsg.Type.String()))
 		return nil, errors.New("inactive identity")
 	}
 
@@ -249,7 +249,7 @@ func (proc *consensusProcess) SetInbox(inbox chan *Msg) {
 func (proc *consensusProcess) eventLoop() {
 	proc.With().Info("Consensus Process Started",
 		log.Int("Hare-N", proc.cfg.N), log.Int("f", proc.cfg.F), log.String("duration", (time.Duration(proc.cfg.RoundDuration)*time.Second).String()),
-		log.LayerID(uint64(proc.instanceID)), log.Int("exp_leaders", proc.cfg.ExpectedLeaders), log.String("current_set", proc.s.String()), log.Int("set_size", proc.s.Size()))
+		types.LayerID(proc.instanceID), log.Int("exp_leaders", proc.cfg.ExpectedLeaders), log.String("current_set", proc.s.String()), log.Int("set_size", proc.s.Size()))
 
 	// start the timer
 	timer := time.NewTimer(time.Duration(proc.cfg.RoundDuration) * time.Second)
@@ -283,7 +283,7 @@ PreRound:
 	}
 	proc.preRoundTracker.FilterSet(proc.s)
 	if proc.s.Size() == 0 {
-		proc.Event().Error("Fatal: PreRound ended with empty set", log.LayerID(uint64(proc.instanceID)))
+		proc.Event().Error("Fatal: PreRound ended with empty set", types.LayerID(proc.instanceID))
 	} else {
 		proc.Info("PreRound ended")
 	}
@@ -365,7 +365,7 @@ func (proc *consensusProcess) handleMessage(m *Msg) {
 				log.String("sender_id", m.PubKey.ShortString()),
 				log.Int32("current_k", proc.k),
 				log.Int32("msg_k", m.InnerMsg.K),
-				log.LayerID(uint64(proc.instanceID)),
+				types.LayerID(proc.instanceID),
 				log.Err(err))
 
 			// validate syntax for early messages
@@ -386,7 +386,7 @@ func (proc *consensusProcess) handleMessage(m *Msg) {
 			log.String("sender_id", m.PubKey.ShortString()),
 			log.Int32("current_k", proc.k),
 			log.Int32("msg_k", m.InnerMsg.K),
-			log.LayerID(uint64(proc.instanceID)), log.Err(err))
+			types.LayerID(proc.instanceID), log.Err(err))
 		return
 	}
 
@@ -398,7 +398,7 @@ func (proc *consensusProcess) handleMessage(m *Msg) {
 
 	// warn on late pre-round msgs
 	if m.InnerMsg.Type == pre && proc.k != -1 {
-		proc.With().Warning("encountered late PreRound message", log.String("sender_id", m.PubKey.ShortString()), log.LayerID(uint64(proc.instanceID)))
+		proc.With().Warning("encountered late PreRound message", log.String("sender_id", m.PubKey.ShortString()), types.LayerID(proc.instanceID))
 	}
 
 	// valid, continue process msg by type
@@ -444,13 +444,13 @@ func (proc *consensusProcess) sendMessage(msg *Msg) bool {
 	proc.With().Info("message sent",
 		log.String("current_set", proc.s.String()),
 		log.String("msg_type", msg.InnerMsg.Type.String()),
-		log.Uint64("layer_id", uint64(proc.instanceID)))
+		types.LayerID(proc.instanceID))
 	return true
 }
 
 // logic of the end of a round by the round type
 func (proc *consensusProcess) onRoundEnd() {
-	proc.With().Debug("End of round", log.Int32("K", proc.k), log.Uint64("layer_id", uint64(proc.instanceID)))
+	proc.With().Debug("End of round", log.Int32("K", proc.k), types.LayerID(proc.instanceID))
 
 	// reset trackers
 	switch proc.currentRound() {
@@ -465,9 +465,9 @@ func (proc *consensusProcess) onRoundEnd() {
 		proc.Event().Info("proposal round ended",
 			log.String("proposed_set", sStr),
 			log.Bool("is_conflicting", proc.proposalTracker.IsConflicting()),
-			log.Uint64("layer_id", uint64(proc.instanceID)))
+			types.LayerID(proc.instanceID))
 	case commitRound:
-		proc.With().Info("commit round ended", log.LayerID(uint64(proc.instanceID)))
+		proc.With().Info("commit round ended", types.LayerID(proc.instanceID))
 	}
 }
 
@@ -476,7 +476,7 @@ func (proc *consensusProcess) advanceToNextRound() {
 	proc.k++
 	if proc.k >= 4 && proc.k%4 == 0 {
 		proc.Event().Warning("Starting new iteration", log.Int32("round_counter", proc.k),
-			log.Uint64("layer_id", uint64(proc.instanceID)))
+			types.LayerID(proc.instanceID))
 	}
 }
 
@@ -701,7 +701,7 @@ func (proc *consensusProcess) processNotifyMsg(msg *Msg) {
 	// enough notifications, should terminate
 	proc.s = s // update to the agreed set
 	proc.Event().Info("Consensus process terminated", log.String("current_set", proc.s.String()),
-		log.LayerID(uint64(proc.instanceID)), log.Int("set_size", proc.s.Size()))
+		types.LayerID(proc.instanceID), log.Int("set_size", proc.s.Size()))
 	proc.report(completed)
 	close(proc.CloseChannel())
 	proc.terminating = true
@@ -746,7 +746,7 @@ func (proc *consensusProcess) endOfStatusRound() {
 	before := time.Now()
 	proc.statusesTracker.AnalyzeStatuses(vtFunc)
 	proc.Event().Info("status round ended", log.Bool("is_svp_ready", proc.statusesTracker.IsSVPReady()),
-		log.Uint64("layer_id", uint64(proc.instanceID)), log.String("analyze_duration", time.Since(before).String()))
+		types.LayerID(proc.instanceID), log.String("analyze_duration", time.Since(before).String()))
 }
 
 // checks if we should participate in the current round
@@ -756,26 +756,26 @@ func (proc *consensusProcess) shouldParticipate() bool {
 	res, err := proc.oracle.IsIdentityActiveOnConsensusView(proc.signing.PublicKey().String(), types.LayerID(proc.instanceID))
 	if err != nil {
 		proc.With().Error("should not participate: error checking our identity for activeness",
-			log.Err(err), log.Uint64("layer_id", uint64(proc.instanceID)))
+			log.Err(err), types.LayerID(proc.instanceID))
 		return false
 	}
 
 	if !res {
 		proc.With().Info("should not participate: identity is not active",
-			log.Uint64("layer_id", uint64(proc.instanceID)))
+			types.LayerID(proc.instanceID))
 		return false
 	}
 
 	if role := proc.currentRole(); role == passive {
 		proc.With().Info("should not participate: passive",
-			log.Int32("round", proc.k), log.Uint64("layer_id", uint64(proc.instanceID)))
+			log.Int32("round", proc.k), types.LayerID(proc.instanceID))
 		return false
 	}
 
 	// should participate
 	proc.With().Info("should participate",
 		log.Int32("round", proc.k),
-		log.Uint64("layer_id", uint64(proc.instanceID)))
+		types.LayerID(proc.instanceID))
 	return true
 }
 
