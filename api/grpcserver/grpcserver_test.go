@@ -242,12 +242,11 @@ type SyncerMock struct{}
 func (SyncerMock) IsSynced() bool { return false }
 func (SyncerMock) Start()         {}
 
-func launchServer(t *testing.T) func() {
+func launchServer(t *testing.T, grpcService ServiceServer) func() {
 	networkMock.Broadcast("", []byte{0x00})
-	grpcService := NewNodeService(cfg.NewGrpcServerPort, &networkMock, txAPI, &genTime, &SyncerMock{})
 	jsonService := NewJSONHTTPServer(cfg.NewJSONServerPort, cfg.NewGrpcServerPort)
 	// start gRPC and json server
-	StartService(grpcService)
+	require.NoError(t, StartService(grpcService))
 	jsonService.StartService()
 
 	time.Sleep(3 * time.Second) // wait for server to be ready (critical on Travis)
@@ -285,7 +284,8 @@ func TestNewServersConfig(t *testing.T) {
 }
 
 func TestNodeService(t *testing.T) {
-	shutDown := launchServer(t)
+	grpcService := NewNodeService(cfg.NewGrpcServerPort, &networkMock, txAPI, &genTime, &SyncerMock{})
+	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
 	const message = "Hello World"
@@ -308,8 +308,31 @@ func TestNodeService(t *testing.T) {
 	require.Equal(t, message, response.Msg.Value)
 }
 
+func TestMeshService(t *testing.T) {
+	grpcService := NewMeshService(cfg.NewGrpcServerPort, &networkMock, txAPI, &genTime, &SyncerMock{})
+	shutDown := launchServer(t, grpcService)
+	defer shutDown()
+
+	// start a client
+	addr := "localhost:" + strconv.Itoa(cfg.NewGrpcServerPort)
+
+	// Set up a connection to the server.
+	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	require.NoError(t, err)
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
+	c := pb.NewMeshServiceClient(conn)
+
+	// call echo and validate result
+	response, err := c.GenesisTime(context.Background(), &pb.GenesisTimeRequest{})
+	require.NoError(t, err)
+	require.Equal(t, uint64(genTime.GetGenesisTime().Unix()), response.Unixtime.Value)
+}
+
 func TestJsonApi(t *testing.T) {
-	shutDown := launchServer(t)
+	grpcService := NewNodeService(cfg.NewGrpcServerPort, &networkMock, txAPI, &genTime, &SyncerMock{})
+	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
 	const message = "hello world!"

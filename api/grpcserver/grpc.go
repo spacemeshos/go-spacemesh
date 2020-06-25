@@ -16,7 +16,6 @@ import (
 type Server struct {
 	s    *grpc.Server
 	port int
-	//registeredServices map[*ServiceServer]bool
 }
 
 var server = Server{}
@@ -59,7 +58,7 @@ func StartService(s ServiceServer) error {
 	// If the server isn't running yet, create it
 	if server.s == nil {
 		log.Info("starting new grpc server")
-		//server.registeredServices = make(map[*ServiceServer]bool)
+		server.port = s.Port()
 		server.s = grpc.NewServer(ServerOptions...)
 		go startServiceInternal(server.s, s.Port())
 	} else if s.Port() != server.port {
@@ -69,9 +68,6 @@ func StartService(s ServiceServer) error {
 
 	// Register the service to the server
 	s.registerService(server.s)
-
-	// Store a copy for ourselves
-	//server.registeredServices[&s] = true
 
 	return nil
 }
@@ -89,7 +85,7 @@ func startServiceInternal(s *grpc.Server, port int) {
 	// SubscribeOnNewConnections reflection service on gRPC server
 	reflection.Register(s)
 
-	log.Info("grpc server listening on port %d", port)
+	log.Info("new grpc server listening on port %d", port)
 
 	// start serving - this blocks until err or server is stopped
 	if err := s.Serve(lis); err != nil {
@@ -99,9 +95,10 @@ func startServiceInternal(s *grpc.Server, port int) {
 
 // Close stops all GRPC services being served by this server.
 func (s Service) Close() error {
-	log.Info("Stopping grpc service of type %T...", s)
+	log.Info("Stopping new grpc server...")
 	// It should be harmless to stop an already-stopped server
 	server.s.Stop()
-	log.Info("grpc server stopped")
+	server.s = nil
+	log.Info("new grpc server stopped")
 	return nil
 }
