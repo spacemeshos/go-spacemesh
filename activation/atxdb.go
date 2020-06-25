@@ -33,6 +33,10 @@ func getAtxBodyKey(atxID types.ATXID) []byte {
 	return []byte(fmt.Sprintf("b_%v", atxID.Bytes()))
 }
 
+func getEpochWeightKey(epochID types.EpochID) []byte {
+	return []byte(fmt.Sprintf("w_%v", epochID.ToBytes()))
+}
+
 var errInvalidSig = fmt.Errorf("identity not found when validating signature, invalid atx")
 
 type atxChan struct {
@@ -46,34 +50,35 @@ type DB struct {
 	sync.RWMutex
 	// todo: think about whether we need one db or several(#1922)
 	idStore
-	atxs              database.Database
-	atxHeaderCache    AtxCache
-	meshDb            *mesh.DB
-	LayersPerEpoch    uint16
-	nipstValidator    nipstValidator
-	pendingActiveSet  map[types.Hash12]*sync.Mutex
-	log               log.Log
-	calcActiveSetFunc func(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error)
-	processAtxMutex   sync.Mutex
-	assLock           sync.Mutex
-	atxChannels       map[types.ATXID]*atxChan
+	atxs                database.Database
+	atxHeaderCache      AtxCache
+	meshDb              *mesh.DB
+	LayersPerEpoch      uint16
+	nipstValidator      nipstValidator
+	pendingTotalWeight  map[types.Hash12]*sync.Mutex
+	pTotalWeightLock    sync.Mutex
+	log                 log.Log
+	calcTotalWeightFunc func(targetEpoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]uint64, error)
+	processAtxMutex     sync.Mutex
+	epochWeightMutex    sync.Mutex // used only for updating total epoch weight, reading can be done lock-free
+	atxChannels         map[types.ATXID]*atxChan
 }
 
 // NewDB creates a new struct of type DB, this struct will hold the atxs received from all nodes and
 // their validity
 func NewDB(dbStore database.Database, idStore idStore, meshDb *mesh.DB, layersPerEpoch uint16, nipstValidator nipstValidator, log log.Log) *DB {
 	db := &DB{
-		idStore:          idStore,
-		atxs:             dbStore,
-		atxHeaderCache:   NewAtxCache(600),
-		meshDb:           meshDb,
-		LayersPerEpoch:   layersPerEpoch,
-		nipstValidator:   nipstValidator,
-		pendingActiveSet: make(map[types.Hash12]*sync.Mutex),
-		log:              log,
-		atxChannels:      make(map[types.ATXID]*atxChan),
+		idStore:            idStore,
+		atxs:               dbStore,
+		atxHeaderCache:     NewAtxCache(600),
+		meshDb:             meshDb,
+		LayersPerEpoch:     layersPerEpoch,
+		nipstValidator:     nipstValidator,
+		pendingTotalWeight: make(map[types.Hash12]*sync.Mutex),
+		log:                log,
+		atxChannels:        make(map[types.ATXID]*atxChan),
 	}
-	db.calcActiveSetFunc = db.CalcActiveSetSize
+	db.calcTotalWeightFunc = db.GetMinerWeightsInEpochFromView
 	return db
 }
 
@@ -173,12 +178,11 @@ func (db *DB) ProcessAtx(atx *types.ActivationTx) error {
 	return nil
 }
 
-func (db *DB) createTraversalActiveSetCounterFunc(countedAtxs map[string]types.ATXID, penalties map[string]struct{}, layersPerEpoch uint16, epoch types.EpochID) func(b *types.Block) (bool, error) {
-
-	traversalFunc := func(b *types.Block) (stop bool, err error) {
+func (db *DB) createTraversalFuncForMinerWeights(minerWeight map[string]uint64, layersPerEpoch uint16, targetEpoch types.EpochID) func(b *types.Block) (bool, error) {
+	return func(b *types.Block) (stop bool, err error) {
 
 		// don't count ATXs in blocks that are not destined to the prev epoch
-		if b.LayerIndex.GetEpoch(db.LayersPerEpoch) != epoch-1 {
+		if b.LayerIndex.GetEpoch(db.LayersPerEpoch) != targetEpoch-1 {
 			return false, nil
 		}
 
@@ -191,104 +195,80 @@ func (db *DB) createTraversalActiveSetCounterFunc(countedAtxs map[string]types.A
 			}
 
 			// make sure the target epoch is our epoch
-			if atx.TargetEpoch(layersPerEpoch) != epoch {
-				db.log.With().Debug("atx found, but targeting epoch doesn't match publication epoch",
+			if atx.TargetEpoch(layersPerEpoch) != targetEpoch {
+				db.log.With().Debug("atx found in relevant layer, but target epoch doesn't match requested epoch",
 					log.String("atx_id", atx.ShortString()),
 					log.Uint64("atx_target_epoch", uint64(atx.TargetEpoch(layersPerEpoch))),
-					log.Uint64("actual_epoch", uint64(epoch)))
+					log.Uint64("requested_epoch", uint64(targetEpoch)))
 				continue
 			}
 
-			// ignore atx from nodes in penalty
-			if _, exist := penalties[atx.NodeID.Key]; exist {
-				db.log.With().Debug("ignoring atx from node in penalty",
-					log.String("node_id", atx.NodeID.Key), log.String("atx_id", atx.ShortString()))
-				continue
-			}
-
-			if prevID, exist := countedAtxs[atx.NodeID.Key]; exist { // same miner
-
-				if prevID != id { // different atx for same epoch
-					db.log.With().Error("Encountered second atx for the same miner on the same epoch",
-						log.String("first_atx", prevID.ShortString()), log.String("second_atx", id.ShortString()))
-
-					penalties[atx.NodeID.Key] = struct{}{} // mark node in penalty
-					delete(countedAtxs, atx.NodeID.Key)    // remove the penalized node from counted
-				}
-				continue
-			}
-
-			countedAtxs[atx.NodeID.Key] = id
+			minerWeight[atx.NodeID.Key] = atx.GetWeight()
 		}
 
 		return false, nil
 	}
-
-	return traversalFunc
 }
 
-// CalcActiveSetSize - returns the active set size that matches the view of the contextually valid blocks in the provided layer
-func (db *DB) CalcActiveSetSize(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
+// GetMinerWeightsInEpochFromView returns a map of miner IDs and each one's weight targeting targetEpoch, by traversing
+// the provided view.
+func (db *DB) GetMinerWeightsInEpochFromView(targetEpoch types.EpochID, view map[types.BlockID]struct{}) (map[string]uint64, error) {
 
-	if epoch == 0 {
-		return nil, errors.New("tried to retrieve active set for epoch 0")
+	if targetEpoch == 0 {
+		return nil, errors.New("tried to retrieve miner weights for targetEpoch 0")
 	}
 
-	firstLayerOfPrevEpoch := (epoch - 1).FirstLayer(db.LayersPerEpoch)
+	firstLayerOfPrevEpoch := (targetEpoch - 1).FirstLayer(db.LayersPerEpoch)
 
-	countedAtxs := make(map[string]types.ATXID)
-	penalties := make(map[string]struct{})
+	minerWeight := make(map[string]uint64)
 
-	traversalFunc := db.createTraversalActiveSetCounterFunc(countedAtxs, penalties, db.LayersPerEpoch, epoch)
+	traversalFunc := db.createTraversalFuncForMinerWeights(minerWeight, db.LayersPerEpoch, targetEpoch)
 
 	startTime := time.Now()
-	err := db.meshDb.ForBlockInView(blocks, firstLayerOfPrevEpoch, traversalFunc)
+	err := db.meshDb.ForBlockInView(view, firstLayerOfPrevEpoch, traversalFunc)
 	if err != nil {
 		return nil, err
 	}
-	db.log.With().Info("done calculating active set size",
-		log.Int("size", len(countedAtxs)),
+	db.log.With().Info("done calculating miner weights",
+		log.Int("numMiners", len(minerWeight)),
 		log.String("duration", time.Now().Sub(startTime).String()))
 
-	result := make(map[string]struct{}, len(countedAtxs))
-	for k := range countedAtxs {
-		result[k] = struct{}{}
-	}
-
-	return result, nil
+	return minerWeight, nil
 }
 
-// CalcActiveSetFromView traverses the view found in a - the activation tx and counts number of active ids published
-// in the epoch prior to the epoch that a was published at, this number is the number of active ids in the next epoch
-// the function returns error if the view is not found
-func (db *DB) CalcActiveSetFromView(view []types.BlockID, pubEpoch types.EpochID) (uint32, error) {
-	if pubEpoch < 1 {
-		return 0, fmt.Errorf("publication epoch cannot be less than 1, found %v", pubEpoch)
+// CalcTotalWeightFromView traverses the provided view and returns the total weight of the ATXs found targeting
+// targetEpoch. The function returns error if the view is not found.
+func (db *DB) CalcTotalWeightFromView(view []types.BlockID, targetEpoch types.EpochID) (uint64, error) {
+	if targetEpoch < 1 {
+		return 0, fmt.Errorf("targetEpoch cannot be less than 1, got %v", targetEpoch)
 	}
 	viewHash := types.CalcBlocksHash12(view)
-	count, found := activesetCache.Get(viewHash)
+	totalWeight, found := totalWeightCache.Get(viewHash)
 	if found {
-		return count, nil
+		return totalWeight, nil
 	}
 	// check if we have a running calculation for this hash
-	db.assLock.Lock()
-	mu, alreadyRunning := db.pendingActiveSet[viewHash]
+	db.pTotalWeightLock.Lock()
+	mu, alreadyRunning := db.pendingTotalWeight[viewHash]
 	if alreadyRunning {
-		db.assLock.Unlock()
+		db.pTotalWeightLock.Unlock()
 		// if there is a running calculation, wait for it to end and get the result
 		mu.Lock()
-		count, found := activesetCache.Get(viewHash)
+		totalWeight, found = totalWeightCache.Get(viewHash)
 		if found {
 			mu.Unlock()
-			return count, nil
+			return totalWeight, nil
 		}
-		// if not found, keep running mutex and calculate active set size
+		// if not found, keep running mutex, ensure it's still in the pending map and calculate total weight
+		db.pTotalWeightLock.Lock()
+		db.pendingTotalWeight[viewHash] = mu
+		db.pTotalWeightLock.Unlock()
 	} else {
 		// if no running calc, insert new one
 		mu = &sync.Mutex{}
-		db.pendingActiveSet[viewHash] = mu
-		db.pendingActiveSet[viewHash].Lock()
-		db.assLock.Unlock()
+		mu.Lock()
+		db.pendingTotalWeight[viewHash] = mu
+		db.pTotalWeightLock.Unlock()
 	}
 
 	mp := map[types.BlockID]struct{}{}
@@ -296,26 +276,29 @@ func (db *DB) CalcActiveSetFromView(view []types.BlockID, pubEpoch types.EpochID
 		mp[blk] = struct{}{}
 	}
 
-	countedAtxs, err := db.calcActiveSetFunc(pubEpoch, mp)
+	atxWeights, err := db.calcTotalWeightFunc(targetEpoch, mp)
 	if err != nil {
-		mu.Unlock()
 		db.deleteLock(viewHash)
+		mu.Unlock()
 		return 0, err
 	}
-	activesetCache.Add(viewHash, uint32(len(countedAtxs)))
-	mu.Unlock()
+	totalWeight = 0
+	for _, w := range atxWeights {
+		totalWeight += w
+	}
+	totalWeightCache.Add(viewHash, totalWeight)
 	db.deleteLock(viewHash)
+	mu.Unlock()
 
-	return uint32(len(countedAtxs)), nil
-
+	return totalWeight, nil
 }
 
 func (db *DB) deleteLock(viewHash types.Hash12) {
-	db.assLock.Lock()
-	if _, exist := db.pendingActiveSet[viewHash]; exist {
-		delete(db.pendingActiveSet, viewHash)
+	db.pTotalWeightLock.Lock()
+	if _, exist := db.pendingTotalWeight[viewHash]; exist {
+		delete(db.pendingTotalWeight, viewHash)
 	}
-	db.assLock.Unlock()
+	db.pTotalWeightLock.Unlock()
 }
 
 // SyntacticallyValidateAtx ensures the following conditions apply, otherwise it returns an error.
@@ -385,7 +368,7 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 		if !bytes.Equal(atx.Commitment.MerkleRoot, atx.CommitmentMerkleRoot) {
 			return errors.New("commitment merkle root included in challenge is not equal to the merkle root included in the proof")
 		}
-		if err := db.nipstValidator.VerifyPost(*pub, atx.Commitment, atx.Nipst.Space); err != nil {
+		if err := db.nipstValidator.VerifyPost(*pub, atx.Commitment, atx.Space); err != nil {
 			return fmt.Errorf("invalid commitment proof: %v", err)
 		}
 	}
@@ -410,13 +393,13 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 		}
 	}
 
-	activeSet, err := db.CalcActiveSetFromView(atx.View, atx.PubLayerID.GetEpoch(db.LayersPerEpoch))
+	totalWeight, err := db.CalcTotalWeightFromView(atx.View, atx.PubLayerID.GetEpoch(db.LayersPerEpoch))
 	if err != nil && !atx.PubLayerID.GetEpoch(db.LayersPerEpoch).IsGenesis() {
 		return fmt.Errorf("could not calculate active set for ATX %v %s", atx.ShortString(), err)
 	}
 
-	if atx.ActiveSetSize != activeSet {
-		return fmt.Errorf("atx contains view with unequal active ids (%v) than seen (%v)", atx.ActiveSetSize, activeSet)
+	if atx.TotalWeight != totalWeight {
+		return fmt.Errorf("atx contains view with unequal weight (%v) than seen (%v)", atx.TotalWeight, totalWeight)
 	}
 
 	hash, err := atx.NIPSTChallenge.Hash()
@@ -426,7 +409,7 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 	db.log.With().Info("Validated NIPST", log.String("challenge_hash", hash.String()), log.AtxID(atx.ShortString()))
 
 	pubKey := signing.NewPublicKey(util.Hex2Bytes(atx.NodeID.Key))
-	if err = db.nipstValidator.Validate(*pubKey, atx.Nipst, *hash); err != nil {
+	if err = db.nipstValidator.Validate(*pubKey, atx.Nipst, atx.Space, *hash); err != nil {
 		return fmt.Errorf("NIPST not valid: %v", err)
 	}
 
@@ -489,8 +472,13 @@ func (db *DB) StoreAtx(ech types.EpochID, atx *types.ActivationTx) error {
 	if err != nil {
 		return err
 	}
-	db.log.Debug("finished storing atx %v, in epoch %v", atx.ShortString(), ech)
 
+	err = db.addToEpochWeight(atx.TargetEpoch(db.LayersPerEpoch), atx.GetWeight())
+	if err != nil {
+		return err
+	}
+
+	db.log.Debug("finished storing atx %v, in epoch %v", atx.ShortString(), ech)
 	return nil
 }
 
@@ -625,6 +613,37 @@ func (db *DB) GetPosAtxID() (types.ATXID, error) {
 		return *types.EmptyATXID, err
 	}
 	return idAndLayer.AtxID, nil
+}
+
+// addToEpochWeight increments the total weight of epochID by additionalWeight. It is thread-safe.
+func (db *DB) addToEpochWeight(epochID types.EpochID, additionalWeight uint64) error {
+	db.epochWeightMutex.Lock()
+	defer db.epochWeightMutex.Unlock()
+
+	weight, err := db.GetEpochWeight(epochID)
+	if err != nil && err != database.ErrNotFound {
+		return fmt.Errorf("failed to get previous weight: %v", err)
+	}
+	newWeight := weight + additionalWeight
+	if newWeight < weight {
+		newWeight -= newWeight + 1 // this under-flows newWeight so it holds the max possible value
+		db.log.Warning("newWeight for epoch %d overflows! previous weight=%d, additional weight=%d, setting newWeight=%d",
+			epochID, weight, additionalWeight, newWeight)
+	}
+	err = db.atxs.Put(getEpochWeightKey(epochID), util.Uint64ToBytes(newWeight))
+	if err != nil {
+		return fmt.Errorf("failed to write new weight: %v", err)
+	}
+	return nil
+}
+
+// GetEpochWeight returns the total epoch weight, given an epochID.
+func (db *DB) GetEpochWeight(epochID types.EpochID) (uint64, error) {
+	w, err := db.atxs.Get(getEpochWeightKey(epochID))
+	if err != nil {
+		return 0, err
+	}
+	return util.BytesToUint64(w), nil
 }
 
 // GetAtxHeader returns the ATX header by the given ID. This function is thread safe and will return an error if the ID

@@ -24,13 +24,13 @@ type signer interface {
 
 // MinerBlockOracle is the oracle that provides block eligibility proofs for the miner.
 type MinerBlockOracle struct {
-	committeeSize        uint32
-	genesisActiveSetSize uint32
-	layersPerEpoch       uint16
-	atxDB                activationDB
-	beaconProvider       *EpochBeaconProvider
-	vrfSigner            signer
-	nodeID               types.NodeID
+	committeeSize      uint32
+	genesisTotalWeight uint64
+	layersPerEpoch     uint16
+	atxDB              activationDB
+	beaconProvider     *EpochBeaconProvider
+	vrfSigner          signer
+	nodeID             types.NodeID
 
 	proofsEpoch       types.EpochID
 	eligibilityProofs map[types.LayerID][]types.BlockEligibilityProof
@@ -41,19 +41,19 @@ type MinerBlockOracle struct {
 }
 
 // NewMinerBlockOracle returns a new MinerBlockOracle.
-func NewMinerBlockOracle(committeeSize uint32, genesisActiveSetSize uint32, layersPerEpoch uint16, atxDB activationDB, beaconProvider *EpochBeaconProvider, vrfSigner signer, nodeID types.NodeID, isSynced func() bool, log log.Log) *MinerBlockOracle {
+func NewMinerBlockOracle(committeeSize uint32, genesisTotalWeight uint64, layersPerEpoch uint16, atxDB activationDB, beaconProvider *EpochBeaconProvider, vrfSigner signer, nodeID types.NodeID, isSynced func() bool, log log.Log) *MinerBlockOracle {
 
 	return &MinerBlockOracle{
-		committeeSize:        committeeSize,
-		genesisActiveSetSize: genesisActiveSetSize,
-		layersPerEpoch:       layersPerEpoch,
-		atxDB:                atxDB,
-		beaconProvider:       beaconProvider,
-		vrfSigner:            vrfSigner,
-		nodeID:               nodeID,
-		proofsEpoch:          ^types.EpochID(0),
-		isSynced:             isSynced,
-		log:                  log,
+		committeeSize:      committeeSize,
+		genesisTotalWeight: genesisTotalWeight,
+		layersPerEpoch:     layersPerEpoch,
+		atxDB:              atxDB,
+		beaconProvider:     beaconProvider,
+		vrfSigner:          vrfSigner,
+		nodeID:             nodeID,
+		proofsEpoch:        ^types.EpochID(0),
+		isSynced:           isSynced,
+		log:                log,
 	}
 }
 
@@ -87,23 +87,23 @@ func (bo *MinerBlockOracle) calcEligibilityProofs(epochNumber types.EpochID) err
 	bo.log.Info("calculating eligibility")
 	epochBeacon := bo.beaconProvider.GetBeacon(epochNumber)
 
-	var activeSetSize uint32
+	var weight, totalWeight uint64
 	atx, err := bo.getValidAtxForEpoch(epochNumber)
 	if err != nil {
 		if !epochNumber.IsGenesis() {
 			return fmt.Errorf("failed to get latest ATX: %v", err)
 		}
 	} else {
-		activeSetSize = atx.ActiveSetSize
+		weight, totalWeight = atx.GetWeight(), atx.TotalWeight
 		bo.atxID = atx.ID()
 	}
 
 	if epochNumber.IsGenesis() {
-		activeSetSize = bo.genesisActiveSetSize
-		bo.log.Info("genesis epoch detected, using GenesisActiveSetSize (%v)", activeSetSize)
+		weight, totalWeight = 131072, bo.genesisTotalWeight // TODO: replace 131072 with configured weight
+		bo.log.Info("genesis epoch detected, using genesisTotalWeight (%v)", totalWeight)
 	}
 
-	numberOfEligibleBlocks, err := getNumberOfEligibleBlocks(activeSetSize, bo.committeeSize, bo.layersPerEpoch)
+	numberOfEligibleBlocks, err := getNumberOfEligibleBlocks(weight, totalWeight, bo.committeeSize, bo.layersPerEpoch)
 	if err != nil {
 		bo.log.Error("failed to get number of eligible blocks: %v", err)
 		return err
@@ -177,15 +177,15 @@ func calcEligibleLayer(epochNumber types.EpochID, layersPerEpoch uint16, vrfHash
 	return epochNumber.FirstLayer(layersPerEpoch).Add(uint16(eligibleLayerOffset))
 }
 
-func getNumberOfEligibleBlocks(activeSetSize, committeeSize uint32, layersPerEpoch uint16) (uint32, error) {
-	if activeSetSize == 0 {
-		return 0, errors.New("empty active set not allowed")
+func getNumberOfEligibleBlocks(weight, totalWeight uint64, committeeSize uint32, layersPerEpoch uint16) (uint32, error) {
+	if totalWeight == 0 {
+		return 0, errors.New("zero total weight not allowed")
 	}
-	numberOfEligibleBlocks := committeeSize * uint32(layersPerEpoch) / activeSetSize
+	numberOfEligibleBlocks := weight * uint64(committeeSize) * uint64(layersPerEpoch) / totalWeight // TODO: ensure no overflow
 	if numberOfEligibleBlocks == 0 {
 		numberOfEligibleBlocks = 1
 	}
-	return numberOfEligibleBlocks, nil
+	return uint32(numberOfEligibleBlocks), nil
 }
 
 func (bo *MinerBlockOracle) getATXIDForEpoch(targetEpoch types.EpochID) (types.ATXID, error) {

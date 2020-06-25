@@ -269,7 +269,7 @@ func reachedEpochTester(dependancies []int) TestScenario {
 		for _, app := range suite.apps {
 			ok = ok && uint32(app.mesh.LatestLayer()) >= numberOfEpochs*uint32(app.Config.LayersPerEpoch)
 			if ok {
-				suite.validateLastATXActiveSetSize(app)
+				suite.validateLastATXTotalWeight(app)
 			}
 		}
 		if ok {
@@ -417,28 +417,17 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 	layerAvgSize := suite.apps[0].Config.LayerAvgSize
 	patient := datamap[suite.apps[0].nodeID.Key]
 
-	lastLayer := len(patient.layertoblocks)
-
-	totalBlocks := 0
-	for _, l := range patient.layertoblocks {
-		totalBlocks += len(l)
-	}
-
-	firstEpochBlocks := 0
-	for i := 0; i < layersPerEpoch; i++ {
-		if l, ok := patient.layertoblocks[types.LayerID(i)]; ok {
-			firstEpochBlocks += len(l)
-		}
+	blocksAfterFirstEpoch := 0
+	for layerID := types.LayerID(layersPerEpoch); layerID <= untilLayer; layerID++ {
+		blocksAfterFirstEpoch += len(patient.layertoblocks[layerID])
 	}
 
 	// assert number of blocks
 	totalEpochs := int(untilLayer.GetEpoch(uint16(layersPerEpoch))) + 1
-	allMiners := len(suite.apps)
-	exp := (layerAvgSize * layersPerEpoch) / allMiners * allMiners * (totalEpochs - 1)
-	act := totalBlocks - firstEpochBlocks
-	assert.Equal(suite.T(), exp, act,
-		fmt.Sprintf("not good num of blocks got: %v, want: %v. totalBlocks: %v, firstEpochBlocks: %v, lastLayer: %v, layersPerEpoch: %v layerAvgSize: %v totalEpochs: %v",
-			act, exp, totalBlocks, firstEpochBlocks, lastLayer, layersPerEpoch, layerAvgSize, totalEpochs))
+	exp := (layerAvgSize * layersPerEpoch) * (totalEpochs - 1)
+	assert.Equal(suite.T(), exp, blocksAfterFirstEpoch,
+		fmt.Sprintf("not good num of blocks got: %v, want: %v. untilLayer: %v, layersPerEpoch: %v layerAvgSize: %v totalEpochs: %v",
+			blocksAfterFirstEpoch, exp, untilLayer, layersPerEpoch, layerAvgSize, totalEpochs))
 
 	firstAp := suite.apps[0]
 	atxDb := firstAp.blockListener.AtxDB.(*activation.DB)
@@ -446,23 +435,27 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 	assert.NoError(suite.T(), err)
 	atx, err := atxDb.GetAtxHeader(atxID)
 	assert.NoError(suite.T(), err)
+	atxWeight := atx.GetWeight()
 
-	totalAtxs := uint32(0)
+	totalWeightAllEpochs := uint64(0)
 	for atx != nil {
-		totalAtxs += atx.ActiveSetSize
-		atx, err = atxDb.GetAtxHeader(atx.PrevATXID)
+		log.Info("adding atx. pub layer: %v, target epoch: %v, weight: %v, totalWeight: %v",
+			atx.PubLayerID, atx.TargetEpoch(uint16(layersPerEpoch)), atx.GetWeight(), atx.TotalWeight)
+		totalWeightAllEpochs += atx.TotalWeight
+		atx, _ = atxDb.GetAtxHeader(atx.PrevATXID)
 	}
 
 	// assert number of ATXs
-	exp = totalEpochs * allMiners
-	act = int(totalAtxs)
-	assert.Equal(suite.T(), exp, act, fmt.Sprintf("not good num of atxs got: %v, want: %v", act, exp))
+	allMiners := len(suite.apps)
+	expectedWeight := uint64(totalEpochs*allMiners) * atxWeight
+	assert.Equal(suite.T(), expectedWeight, totalWeightAllEpochs, fmt.Sprintf("not good num of atx weight got: %v, want: %v. totalEpochs: %v, allMiners: %v, atxWeight: %v", totalWeightAllEpochs, expectedWeight, totalEpochs, allMiners, atxWeight))
 }
 
-func (suite *AppTestSuite) validateLastATXActiveSetSize(app *SpacemeshApp) {
+func (suite *AppTestSuite) validateLastATXTotalWeight(app *SpacemeshApp) {
 	atx, err := app.atxBuilder.GetPrevAtx(app.nodeID)
 	suite.NoError(err)
-	suite.True(int(atx.ActiveSetSize) == len(suite.apps), "atx: %v node: %v", atx.ShortString(), app.nodeID.Key[:5])
+	suite.Equal(uint64(len(suite.apps))*atx.GetWeight(), atx.TotalWeight,
+		"atx: %v node: %v", atx.ShortString(), app.nodeID.Key[:5])
 }
 
 // travis has a 10 minutes timeout

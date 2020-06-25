@@ -30,8 +30,7 @@ func (m mockAtxDB) GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, erro
 func TestBlockEligibilityValidator_getValidAtx(t *testing.T) {
 	r := require.New(t)
 	atxdb := &mockAtxDB{err: errFoo}
-	genActiveSetSize := uint32(5)
-	v := NewBlockEligibilityValidator(10, genActiveSetSize, 5, atxdb, &EpochBeaconProvider{},
+	v := NewBlockEligibilityValidator(10, 5, 5, atxdb, &EpochBeaconProvider{},
 		validateVRF, log.NewDefault(t.Name()))
 
 	block := &types.Block{MiniBlock: types.MiniBlock{BlockHeader: types.BlockHeader{LayerIndex: 20}}} // non-genesis
@@ -44,7 +43,7 @@ func TestBlockEligibilityValidator_getValidAtx(t *testing.T) {
 	_, err = v.getValidAtx(block)
 	r.EqualError(err, "ATX target epoch (1) doesn't match block publication epoch (4)")
 
-	atxHeader := &types.ActivationTxHeader{ActiveSetSize: 7, NIPSTChallenge: types.NIPSTChallenge{
+	atxHeader := &types.ActivationTxHeader{NIPSTChallenge: types.NIPSTChallenge{
 		NodeID:     types.NodeID{Key: edSigner.PublicKey().String()},
 		PubLayerID: 18,
 	}}

@@ -18,7 +18,7 @@ services:
           "--eligibility-confidence-param",  "${SMESH_CONFIDENCE_PARAM:-25}",
           "--eligibility-epoch-offset", "0",
           "--layer-average-size", "${SMESH_LAYER_SIZE:-200}",
-          "--genesis-active-size", "${SMESH_GENESIS_ACTIVE_SIZE:-200}",
+          "--genesis-total-weight", "${SMESH_GENESIS_TOTAL_WEIGHT:-26214400}",
           "--hare-committee-size", "${SMESH_HARE_COMMITTEE_SIZE:-80}",
           "--hare-max-adversaries", "${SMESH_HARE_MAX_ADVERSARIES:-39}",
           "--sync-request-timeout", "${SMESH_SYNC_REQ_TIMEOUT:-60000}", 

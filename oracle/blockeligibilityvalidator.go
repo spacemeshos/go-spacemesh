@@ -12,34 +12,35 @@ type VRFValidationFunction func(message, signature, publicKey []byte) (bool, err
 
 // BlockEligibilityValidator holds all the dependencies for validating block eligibility.
 type BlockEligibilityValidator struct {
-	committeeSize        uint32
-	genesisActiveSetSize uint32
-	layersPerEpoch       uint16
-	activationDb         activationDB
-	beaconProvider       *EpochBeaconProvider
-	validateVRF          VRFValidationFunction
-	log                  log.Log
+	committeeSize      uint32
+	genesisTotalWeight uint64
+	layersPerEpoch     uint16
+	activationDb       activationDB
+	beaconProvider     *EpochBeaconProvider
+	validateVRF        VRFValidationFunction
+	log                log.Log
 }
 
 // NewBlockEligibilityValidator returns a new BlockEligibilityValidator.
-func NewBlockEligibilityValidator(committeeSize, genesisActiveSetSize uint32, layersPerEpoch uint16, activationDb activationDB,
+func NewBlockEligibilityValidator(
+	committeeSize uint32, genesisTotalWeight uint64, layersPerEpoch uint16, activationDb activationDB,
 	beaconProvider *EpochBeaconProvider, validateVRF VRFValidationFunction, log log.Log) *BlockEligibilityValidator {
 
 	return &BlockEligibilityValidator{
-		committeeSize:        committeeSize,
-		genesisActiveSetSize: genesisActiveSetSize,
-		layersPerEpoch:       layersPerEpoch,
-		activationDb:         activationDb,
-		beaconProvider:       beaconProvider,
-		validateVRF:          validateVRF,
-		log:                  log,
+		committeeSize:      committeeSize,
+		genesisTotalWeight: genesisTotalWeight,
+		layersPerEpoch:     layersPerEpoch,
+		activationDb:       activationDb,
+		beaconProvider:     beaconProvider,
+		validateVRF:        validateVRF,
+		log:                log,
 	}
 }
 
 // BlockSignedAndEligible checks that a given block is signed and eligible. It returns true with no error or false and
 // an error that explains why validation failed.
 func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (bool, error) {
-	var activeSetSize uint32
+	var weight, totalWeight uint64
 	var vrfPubkey []byte
 	var genesisNoAtx bool
 
@@ -59,15 +60,15 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 		if err != nil {
 			return false, err
 		}
-		activeSetSize, vrfPubkey = atx.ActiveSetSize, atx.NodeID.VRFPublicKey
+		weight, totalWeight, vrfPubkey = atx.GetWeight(), atx.TotalWeight, atx.NodeID.VRFPublicKey
 	}
 	if epochNumber.IsGenesis() {
-		v.log.With().Info("using genesisActiveSetSize",
-			log.BlockID(block.ShortString()), log.Uint32("genesisActiveSetSize", v.genesisActiveSetSize))
-		activeSetSize = v.genesisActiveSetSize
+		v.log.With().Info("using genesisTotalWeight",
+			log.BlockID(block.ShortString()), log.Uint64("genesisTotalWeight", v.genesisTotalWeight))
+		weight, totalWeight = 131072, v.genesisTotalWeight // TODO: replace 131072 with configured weight
 	}
 
-	numberOfEligibleBlocks, err := getNumberOfEligibleBlocks(activeSetSize, v.committeeSize, v.layersPerEpoch)
+	numberOfEligibleBlocks, err := getNumberOfEligibleBlocks(weight, totalWeight, v.committeeSize, v.layersPerEpoch)
 	if err != nil {
 		return false, fmt.Errorf("failed to get number of eligible blocks: %v", err)
 	}
