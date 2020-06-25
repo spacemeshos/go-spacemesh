@@ -176,7 +176,7 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		err := app.Initialize(cmd, args)
 		r.Error(err)
-		r.Equal("Unrecognized GRPC service requested: illegal", err.Error())
+		r.Equal("unrecognized GRPC service requested: illegal", err.Error())
 	}
 	str, err := testArgs(app, "--grpc-port-new", "1234", "--grpc", "illegal")
 	r.NoError(err)
@@ -239,6 +239,8 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 }
 
 func TestSpacemeshApp_JsonFlags(t *testing.T) {
+	resetFlags()
+
 	r := require.New(t)
 	app := NewSpacemeshApp()
 	r.Equal(9093, app.Config.API.NewJSONServerPort)
@@ -319,6 +321,8 @@ func callEndpoint(t *testing.T, endpoint, payload string, port int) (string, int
 }
 
 func TestSpacemeshApp_GrpcService(t *testing.T) {
+	resetFlags()
+
 	r := require.New(t)
 	app := NewSpacemeshApp()
 
@@ -375,6 +379,8 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 }
 
 func TestSpacemeshApp_JsonService(t *testing.T) {
+	resetFlags()
+
 	r := require.New(t)
 	app := NewSpacemeshApp()
 
