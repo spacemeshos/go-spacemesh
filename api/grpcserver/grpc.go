@@ -1,7 +1,8 @@
 package grpcserver
 
 import (
-	"github.com/spacemeshos/go-spacemesh/common/types"
+	"errors"
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/keepalive"
@@ -11,47 +12,31 @@ import (
 	"time"
 )
 
-// PeerCounter is an api to get amount of connected peers
-type PeerCounter interface {
-	PeerCount() uint64
+// Global singleton (not thread-safe)
+type Server struct {
+	s    *grpc.Server
+	port int
+	//registeredServices map[*ServiceServer]bool
 }
 
-// TxAPI is an api for getting transaction transaction status
-type TxAPI interface {
-	AddressExists(addr types.Address) bool
-	ValidateNonceAndBalance(transaction *types.Transaction) error
-	GetRewards(account types.Address) (rewards []types.Reward, err error)
-	GetTransactionsByDestination(l types.LayerID, account types.Address) (txs []types.TransactionID)
-	GetTransactionsByOrigin(l types.LayerID, account types.Address) (txs []types.TransactionID)
-	LatestLayer() types.LayerID
-	GetLayerApplied(txID types.TransactionID) *types.LayerID
-	GetTransaction(id types.TransactionID) (*types.Transaction, error)
-	GetProjection(addr types.Address, prevNonce, prevBalance uint64) (nonce, balance uint64, err error)
-	LatestLayerInState() types.LayerID
-	GetStateRoot() types.Hash32
-}
+var server = Server{}
 
 // ServiceServer is an interface that knits together the various grpc service servers,
 // allowing the glue code in this file to manage them all.
 type ServiceServer interface {
-	Server() *grpc.Server
-	Port() uint
-	registerService()
+	Port() int
+	registerService(*grpc.Server)
 	Close() error
 }
 
 // Service is a barebones struct that all service servers embed. It stores properties
 // used by all service servers.
 type Service struct {
-	server *grpc.Server
-	port   uint
+	port int
 }
 
-// Server is a getter for server
-func (s Service) Server() *grpc.Server { return s.server }
-
 // Port is a getter for port
-func (s Service) Port() uint { return s.port }
+func (s Service) Port() int { return s.port }
 
 // ServerOptions are shared by all grpc servers
 var ServerOptions = []grpc.ServerOption{
@@ -68,37 +53,55 @@ var ServerOptions = []grpc.ServerOption{
 }
 
 // StartService starts the grpc service.
-func StartService(s ServiceServer) {
-	go startServiceInternal(s)
+func StartService(s ServiceServer) error {
+	log.Info("attempting to start grpc server for service %T on port %d", s, s.Port())
+
+	// If the server isn't running yet, create it
+	if server.s == nil {
+		log.Info("starting new grpc server")
+		//server.registeredServices = make(map[*ServiceServer]bool)
+		server.s = grpc.NewServer(ServerOptions...)
+		go startServiceInternal(server.s, s.Port())
+	} else if s.Port() != server.port {
+		// Make sure the port matches
+		return errors.New(fmt.Sprintf("port %d does not match running server port %d", s.Port(), server.port))
+	}
+
+	// Register the service to the server
+	s.registerService(server.s)
+
+	// Store a copy for ourselves
+	//server.registeredServices[&s] = true
+
+	return nil
 }
 
 // This is a blocking method designed to be called using a go routine
-func startServiceInternal(s ServiceServer) {
-	addr := ":" + strconv.Itoa(int(s.Port()))
+func startServiceInternal(s *grpc.Server, port int) {
+	addr := ":" + strconv.Itoa(port)
 
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
-		log.Error("failed to start grpc server of type %T: %v", s, err)
+		log.Error("failed to start grpc server: %v", err)
 		return
 	}
 
-	s.registerService()
-
 	// SubscribeOnNewConnections reflection service on gRPC server
-	reflection.Register(s.Server())
+	reflection.Register(s)
 
-	log.Info("grpc server of type %T listening on port %d", s, s.Port())
+	log.Info("grpc server listening on port %d", port)
 
 	// start serving - this blocks until err or server is stopped
-	if err := s.Server().Serve(lis); err != nil {
-		log.Error("error stopping grpc server of type %T: %v", s, err)
+	if err := s.Serve(lis); err != nil {
+		log.Error("error stopping grpc server: %v", err)
 	}
 }
 
-// Close stops the service.
+// Close stops all GRPC services being served by this server.
 func (s Service) Close() error {
 	log.Info("Stopping grpc service of type %T...", s)
-	s.server.Stop()
-	log.Info("grpc service of type %T stopped", s)
+	// It should be harmless to stop an already-stopped server
+	server.s.Stop()
+	log.Info("grpc server stopped")
 	return nil
 }
