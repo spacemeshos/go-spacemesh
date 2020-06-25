@@ -365,6 +365,20 @@ func TestMultiService(t *testing.T) {
 	res2, err2 := c2.GenesisTime(context.Background(), &pb.GenesisTimeRequest{})
 	require.NoError(t, err2)
 	require.Equal(t, uint64(genTime.GetGenesisTime().Unix()), res2.Unixtime.Value)
+
+	// Make sure that shutting down one service shuts them both down
+	svc1.Close()
+
+	// Make sure NodeService is off
+	res1, err1 = c1.Echo(context.Background(), &pb.EchoRequest{
+		Msg: &pb.SimpleString{Value: message}})
+	require.Error(t, err1)
+	require.Contains(t, err1.Error(), "rpc error: code = Unavailable")
+
+	// Make sure MeshService is off
+	res2, err2 = c2.GenesisTime(context.Background(), &pb.GenesisTimeRequest{})
+	require.Error(t, err2)
+	require.Contains(t, err2.Error(), "rpc error: code = Unavailable")
 }
 
 func TestJsonApi(t *testing.T) {
