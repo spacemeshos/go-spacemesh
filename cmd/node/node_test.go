@@ -406,9 +406,9 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	url := fmt.Sprintf("http://127.0.0.1:%d/%s", app.Config.API.NewJSONServerPort, "v1/node/echo")
 	_, err = http.Post(url, "application/json", strings.NewReader(payload))
 	r.Error(err)
-	r.Equal(fmt.Sprintf(
-		"Post \"%s\": dial tcp 127.0.0.1:%d: connect: connection refused",
-		url, app.Config.API.NewJSONServerPort), err.Error())
+	r.Contains(err.Error(), fmt.Sprintf(
+		"dial tcp 127.0.0.1:%d: connect: connection refused",
+		app.Config.API.NewJSONServerPort))
 
 	resetFlags()
 
