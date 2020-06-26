@@ -692,7 +692,9 @@ func (app *SpacemeshApp) startAPIServices(postClient api.PostAPI, net api.Networ
 	startService := func(svc grpcserver.ServiceAPI) {
 		if app.newgrpcAPIService == nil {
 			app.newgrpcAPIService = grpcserver.NewServer(apiConf.NewGrpcServerPort)
-			app.newgrpcAPIService.Start()
+			if err := app.newgrpcAPIService.Start(); err != nil {
+				log.Error("error starting grpc server", err)
+			}
 		}
 		svc.RegisterService(app.newgrpcAPIService)
 	}
@@ -709,11 +711,13 @@ func (app *SpacemeshApp) startAPIServices(postClient api.PostAPI, net api.Networ
 		if app.newgrpcAPIService == nil {
 			// This panics because it should not happen.
 			// It should be caught inside apiConf.
-			log.Panic("One or more new GRPC services must be enabled with new JSON gateway server.")
+			log.Panic("one or more new GRPC services must be enabled with new JSON gateway server.")
 			return
 		}
 		app.newjsonAPIService = grpcserver.NewJSONHTTPServer(apiConf.NewJSONServerPort, apiConf.NewGrpcServerPort)
-		app.newjsonAPIService.StartService()
+		if err := app.newjsonAPIService.StartService(apiConf.StartNodeService, apiConf.StartMeshService); err != nil {
+			log.Error("error starting grpc gateway server", err)
+		}
 	}
 }
 

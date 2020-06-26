@@ -1,12 +1,12 @@
 package grpcserver
 
 import (
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/reflection"
 	"net"
-	"strconv"
 	"time"
 )
 
@@ -30,30 +30,26 @@ func NewServer(port int) *Server {
 }
 
 // Start starts the server
-func (s *Server) Start() {
+func (s *Server) Start() error {
 	log.Info("starting new grpc server")
-	go s.startServiceInternal()
-}
 
-// This is a blocking method designed to be called using a go routine
-func (s *Server) startServiceInternal() {
-	addr := ":" + strconv.Itoa(s.Port)
-
-	lis, err := net.Listen("tcp", addr)
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", s.Port))
 	if err != nil {
-		log.Error("failed to start grpc server: %v", err)
-		return
+		return err
 	}
 
 	// SubscribeOnNewConnections reflection service on gRPC server
 	reflection.Register(s.GrpcServer)
 
-	log.Info("new grpc server listening on port %d", s.Port)
-
 	// start serving - this blocks until err or server is stopped
-	if err := s.GrpcServer.Serve(lis); err != nil {
-		log.Error("error stopping grpc server: %v", err)
-	}
+	go func() {
+		log.Info("starting new grpc server on port %d", s.Port)
+		if err := s.GrpcServer.Serve(lis); err != nil {
+			log.Error("error stopping grpc server: %v", err)
+		}
+	}()
+
+	return nil
 }
 
 // Close stops the server

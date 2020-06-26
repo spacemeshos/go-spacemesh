@@ -246,15 +246,15 @@ func launchServer(t *testing.T, services ...ServiceAPI) func() {
 	networkMock.Broadcast("", []byte{0x00})
 	grpcService := NewServer(cfg.NewGrpcServerPort)
 	jsonService := NewJSONHTTPServer(cfg.NewJSONServerPort, cfg.NewGrpcServerPort)
-	// start gRPC and json servers
-	grpcService.Start()
-	jsonService.StartService()
 
 	// attach services
 	for _, svc := range services {
 		svc.RegisterService(grpcService)
 	}
 
+	// start gRPC and json servers
+	require.NoError(t, grpcService.Start())
+	jsonService.StartService(cfg.StartNodeService, cfg.StartMeshService)
 	time.Sleep(3 * time.Second) // wait for server to be ready (critical on Travis)
 
 	return func() {
@@ -266,6 +266,7 @@ func launchServer(t *testing.T, services ...ServiceAPI) func() {
 func callEndpoint(t *testing.T, endpoint, payload string) (string, int) {
 	url := fmt.Sprintf("http://127.0.0.1:%d/%s", cfg.NewJSONServerPort, endpoint)
 	resp, err := http.Post(url, "application/json", strings.NewReader(payload))
+	t.Log("got response", resp)
 	require.NoError(t, err)
 	require.Equal(t, "application/json", resp.Header.Get("Content-Type"))
 	buf, err := ioutil.ReadAll(resp.Body)
@@ -380,6 +381,7 @@ func TestMultiService(t *testing.T) {
 
 func TestJsonApi(t *testing.T) {
 	grpcService := NewNodeService(&networkMock, txAPI, &genTime, &SyncerMock{})
+	cfg.StartNodeService = true
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
