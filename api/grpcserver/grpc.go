@@ -30,26 +30,27 @@ func NewServer(port int) *Server {
 }
 
 // Start starts the server
-func (s *Server) Start() error {
+func (s *Server) Start() {
 	log.Info("starting new grpc server")
+	go s.startInternal()
+}
 
+// Blocking, should be called in a goroutine
+func (s *Server) startInternal() {
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", s.Port))
 	if err != nil {
-		return err
+		log.Error("error listening on port", err)
+		return
 	}
 
 	// SubscribeOnNewConnections reflection service on gRPC server
 	reflection.Register(s.GrpcServer)
 
 	// start serving - this blocks until err or server is stopped
-	go func() {
-		log.Info("starting new grpc server on port %d", s.Port)
-		if err := s.GrpcServer.Serve(lis); err != nil {
-			log.Error("error stopping grpc server: %v", err)
-		}
-	}()
-
-	return nil
+	log.Info("starting new grpc server on port %d", s.Port)
+	if err := s.GrpcServer.Serve(lis); err != nil {
+		log.Error("error stopping grpc server: %v", err)
+	}
 }
 
 // Close stops the server

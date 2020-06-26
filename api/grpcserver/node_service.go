@@ -9,7 +9,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/peers"
 	"golang.org/x/net/context"
 	"google.golang.org/genproto/googleapis/rpc/code"
-	"google.golang.org/genproto/googleapis/rpc/status"
+	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // NodeService is a grpc server that provides the NodeService, which exposes node-related
@@ -44,7 +46,10 @@ func NewNodeService(
 // Echo returns the response for an echo api request. It's used for E2E tests.
 func (s NodeService) Echo(ctx context.Context, in *pb.EchoRequest) (*pb.EchoResponse, error) {
 	log.Info("GRPC NodeService.Echo")
-	return &pb.EchoResponse{Msg: &pb.SimpleString{Value: in.Msg.Value}}, nil
+	if in.Msg != nil {
+		return &pb.EchoResponse{Msg: &pb.SimpleString{Value: in.Msg.Value}}, nil
+	}
+	return nil, status.Errorf(codes.InvalidArgument, "Must include `Msg`")
 }
 
 // Version returns the version of the node software as a semver string
@@ -83,7 +88,7 @@ func (s NodeService) SyncStart(ctx context.Context, request *pb.SyncStartRequest
 	log.Info("GRPC NodeService.SyncStart")
 	s.Syncer.Start()
 	return &pb.SyncStartResponse{
-		Status: &status.Status{Code: int32(code.Code_OK)},
+		Status: &rpcstatus.Status{Code: int32(code.Code_OK)},
 	}, nil
 }
 
@@ -92,7 +97,7 @@ func (s NodeService) Shutdown(ctx context.Context, request *pb.ShutdownRequest) 
 	log.Info("GRPC NodeService.Shutdown")
 	cmd.Cancel()
 	return &pb.ShutdownResponse{
-		Status: &status.Status{Code: int32(code.Code_OK)},
+		Status: &rpcstatus.Status{Code: int32(code.Code_OK)},
 	}, nil
 }
 

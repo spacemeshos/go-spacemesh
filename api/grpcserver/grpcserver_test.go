@@ -7,6 +7,8 @@ import (
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	"github.com/spacemeshos/go-spacemesh/miner"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"io/ioutil"
 	"math/big"
 	"net/http"
@@ -253,7 +255,7 @@ func launchServer(t *testing.T, services ...ServiceAPI) func() {
 	}
 
 	// start gRPC and json servers
-	require.NoError(t, grpcService.Start())
+	grpcService.Start()
 	jsonService.StartService(cfg.StartNodeService, cfg.StartMeshService)
 	time.Sleep(3 * time.Second) // wait for server to be ready (critical on Travis)
 
@@ -265,6 +267,7 @@ func launchServer(t *testing.T, services ...ServiceAPI) func() {
 
 func callEndpoint(t *testing.T, endpoint, payload string) (string, int) {
 	url := fmt.Sprintf("http://127.0.0.1:%d/%s", cfg.NewJSONServerPort, endpoint)
+	t.Log("sending POST request to", url)
 	resp, err := http.Post(url, "application/json", strings.NewReader(payload))
 	t.Log("got response", resp)
 	require.NoError(t, err)
@@ -312,6 +315,17 @@ func TestNodeService(t *testing.T) {
 		Msg: &pb.SimpleString{Value: message}})
 	require.NoError(t, err)
 	require.Equal(t, message, response.Msg.Value)
+
+	// now try sending bad payloads
+	response, err = c.Echo(context.Background(), &pb.EchoRequest{Msg: nil})
+	require.EqualError(t, err, "rpc error: code = InvalidArgument desc = Must include `Msg`")
+	code := status.Code(err)
+	require.Equal(t, codes.InvalidArgument, code)
+
+	response, err = c.Echo(context.Background(), &pb.EchoRequest{})
+	require.EqualError(t, err, "rpc error: code = InvalidArgument desc = Must include `Msg`")
+	code = status.Code(err)
+	require.Equal(t, codes.InvalidArgument, code)
 }
 
 func TestMeshService(t *testing.T) {
@@ -380,19 +394,29 @@ func TestMultiService(t *testing.T) {
 }
 
 func TestJsonApi(t *testing.T) {
-	grpcService := NewNodeService(&networkMock, txAPI, &genTime, &SyncerMock{})
+	svc1 := NewNodeService(&networkMock, txAPI, &genTime, &SyncerMock{})
+	svc2 := NewMeshService(&networkMock, txAPI, &genTime, &SyncerMock{})
 	cfg.StartNodeService = true
-	shutDown := launchServer(t, grpcService)
+	cfg.StartMeshService = true
+	shutDown := launchServer(t, svc1, svc2)
 	defer shutDown()
 
+	// Test NodeService first
 	const message = "hello world!"
 
 	// generate request payload (api input params)
 	payload := marshalProto(t, &pb.EchoRequest{Msg: &pb.SimpleString{Value: message}})
-
 	respBody, respStatus := callEndpoint(t, "v1/node/echo", payload)
 	require.Equal(t, http.StatusOK, respStatus)
 	var msg pb.EchoResponse
 	require.NoError(t, jsonpb.UnmarshalString(respBody, &msg))
 	require.Equal(t, message, msg.Msg.Value)
+
+	// Test MeshService
+	//payload2 := marshalProto(t, &pb.GenesisTimeRequest{})
+	respBody2, respStatus2 := callEndpoint(t, "v1/mesh/genesistime", "")
+	require.Equal(t, http.StatusOK, respStatus2)
+	var msg2 pb.GenesisTimeResponse
+	require.NoError(t, jsonpb.UnmarshalString(respBody2, &msg2))
+	require.Equal(t, uint64(genTime.GetGenesisTime().Unix()), msg2.Unixtime.Value)
 }
