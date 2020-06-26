@@ -1,7 +1,6 @@
 package grpcserver
 
 import (
-	"flag"
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"golang.org/x/net/context"
@@ -48,16 +47,7 @@ func (s *JSONHTTPServer) startInternal() {
 	// register the http server on the local grpc server
 	grpcPortStr := strconv.Itoa(s.GrpcPort)
 
-	const endpoint = "api_endpoint"
-	var echoEndpoint string
-
-	fl := flag.Lookup(endpoint)
-	if fl != nil {
-		flag.Set(endpoint, "localhost:"+grpcPortStr)
-		echoEndpoint = fl.Value.String()
-	} else {
-		echoEndpoint = *flag.String(endpoint, "localhost:"+grpcPortStr, "endpoint of api grpc service")
-	}
+	echoEndpoint := "localhost:" + grpcPortStr
 	if err := gw.RegisterNodeServiceHandlerFromEndpoint(context.Background(), mux, echoEndpoint, opts); err != nil {
 		log.Error("failed to register http endpoint with grpc", err)
 	}
