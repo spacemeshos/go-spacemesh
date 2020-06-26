@@ -10,17 +10,22 @@ import (
 	"time"
 )
 
+// ServiceAPI
+type ServiceAPI interface {
+	RegisterService(*Server)
+}
+
 // Server is a very basic grpc server
 type Server struct {
-	Port   int
-	server *grpc.Server
+	Port       int
+	GrpcServer *grpc.Server
 }
 
 // NewServer creates and returns a new Server
 func NewServer(port int) *Server {
 	return &Server{
-		Port:   port,
-		server: grpc.NewServer(ServerOptions...),
+		Port:       port,
+		GrpcServer: grpc.NewServer(ServerOptions...),
 	}
 }
 
@@ -41,31 +46,20 @@ func (s *Server) startServiceInternal() {
 	}
 
 	// SubscribeOnNewConnections reflection service on gRPC server
-	reflection.Register(s.server)
+	reflection.Register(s.GrpcServer)
 
 	log.Info("new grpc server listening on port %d", s.Port)
 
 	// start serving - this blocks until err or server is stopped
-	if err := s.server.Serve(lis); err != nil {
+	if err := s.GrpcServer.Serve(lis); err != nil {
 		log.Error("error stopping grpc server: %v", err)
 	}
-}
-
-// RegisterService attaches a new service to the server
-func (s *Server) RegisterService(svc ServiceServer) {
-	svc.registerService(s.server)
 }
 
 // Close stops the server
 func (s *Server) Close() {
 	log.Info("Stopping new grpc server...")
-	s.server.Stop()
-}
-
-// ServiceServer is an interface that knits together the various grpc service servers,
-// allowing the glue code in this file to manage them all.
-type ServiceServer interface {
-	registerService(*grpc.Server)
+	s.GrpcServer.Stop()
 }
 
 // ServerOptions are shared by all grpc servers

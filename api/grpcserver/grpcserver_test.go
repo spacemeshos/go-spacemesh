@@ -242,7 +242,7 @@ type SyncerMock struct{}
 func (SyncerMock) IsSynced() bool { return false }
 func (SyncerMock) Start()         {}
 
-func launchServer(t *testing.T, services ...ServiceServer) func() {
+func launchServer(t *testing.T, services ...ServiceAPI) func() {
 	networkMock.Broadcast("", []byte{0x00})
 	grpcService := NewServer(cfg.NewGrpcServerPort)
 	jsonService := NewJSONHTTPServer(cfg.NewJSONServerPort, cfg.NewGrpcServerPort)
@@ -252,7 +252,7 @@ func launchServer(t *testing.T, services ...ServiceServer) func() {
 
 	// attach services
 	for _, svc := range services {
-		grpcService.RegisterService(svc)
+		svc.RegisterService(grpcService)
 	}
 
 	time.Sleep(3 * time.Second) // wait for server to be ready (critical on Travis)
