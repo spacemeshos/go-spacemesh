@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-// ServiceAPI
+// ServiceAPI allows individual grpc services to register the grpc server
 type ServiceAPI interface {
 	RegisterService(*Server)
 }
