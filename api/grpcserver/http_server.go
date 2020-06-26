@@ -1,7 +1,9 @@
 package grpcserver
 
 import (
+	"fmt"
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
+	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -41,6 +43,8 @@ func (s *JSONHTTPServer) StartService() {
 }
 
 func (s *JSONHTTPServer) startInternal() {
+	ctx, cancel := context.WithCancel(cmdp.Ctx)
+	defer cancel()
 	mux := runtime.NewServeMux()
 	opts := []grpc.DialOption{grpc.WithInsecure()}
 
@@ -48,18 +52,14 @@ func (s *JSONHTTPServer) startInternal() {
 	grpcPortStr := strconv.Itoa(s.GrpcPort)
 
 	echoEndpoint := "localhost:" + grpcPortStr
-	if err := gw.RegisterNodeServiceHandlerFromEndpoint(context.Background(), mux, echoEndpoint, opts); err != nil {
+	if err := gw.RegisterNodeServiceHandlerFromEndpoint(ctx, mux, echoEndpoint, opts); err != nil {
 		log.Error("failed to register http endpoint with grpc", err)
+		return
 	}
-
-	addr := ":" + strconv.Itoa(s.Port)
 
 	log.Info("new json API listening on port %d", s.Port)
 
-	s.server = &http.Server{Addr: addr, Handler: mux}
-	err := s.server.ListenAndServe()
-
-	if err != nil {
-		log.Debug("listen and serve stopped with status: %v", err)
+	if err := http.ListenAndServe(fmt.Sprintf(":%d", s.Port), mux); err != nil {
+		log.Error("failed to start gateway http server", err)
 	}
 }
