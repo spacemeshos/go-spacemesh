@@ -10,7 +10,6 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/genproto/googleapis/rpc/status"
-	"google.golang.org/grpc"
 )
 
 // NodeService is a grpc server that provides the NodeService, which exposes node-related
@@ -24,8 +23,9 @@ type NodeService struct {
 	Syncer      api.Syncer
 }
 
-func (s NodeService) registerService(server *grpc.Server) {
-	pb.RegisterNodeServiceServer(server, s)
+// RegisterService registers this service with a grpc server instance
+func (s NodeService) RegisterService(server *Server) {
+	pb.RegisterNodeServiceServer(server.GrpcServer, s)
 }
 
 // NewNodeService creates a new grpc service using config data.

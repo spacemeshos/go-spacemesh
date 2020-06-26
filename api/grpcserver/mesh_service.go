@@ -6,7 +6,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/peers"
 	"golang.org/x/net/context"
-	"google.golang.org/grpc"
 )
 
 // MeshService is a grpc server providing the MeshService
@@ -18,8 +17,9 @@ type MeshService struct {
 	Syncer      api.Syncer
 }
 
-func (s MeshService) registerService(server *grpc.Server) {
-	pb.RegisterMeshServiceServer(server, s)
+// RegisterService registers this service with a grpc server instance
+func (s MeshService) RegisterService(server *Server) {
+	pb.RegisterMeshServiceServer(server.GrpcServer, s)
 }
 
 // NewMeshService creates a new grpc service using config data.

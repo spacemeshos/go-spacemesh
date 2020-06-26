@@ -689,12 +689,12 @@ func (app *SpacemeshApp) startAPIServices(postClient api.PostAPI, net api.Networ
 	// gateway server is enabled without enabling at least one GRPC service.
 
 	// Make sure we only start the server once
-	startService := func(svc grpcserver.ServiceServer) {
+	startService := func(svc grpcserver.ServiceAPI) {
 		if app.newgrpcAPIService == nil {
 			app.newgrpcAPIService = grpcserver.NewServer(apiConf.NewGrpcServerPort)
 			app.newgrpcAPIService.Start()
 		}
-		app.newgrpcAPIService.RegisterService(svc)
+		svc.RegisterService(app.newgrpcAPIService)
 	}
 
 	// Start the requested services one by one

@@ -65,13 +65,13 @@ func (app *BaseApp) Initialize(cmd *cobra.Command) {
 	}
 
 	app.Config = conf
-
-	EnsureCLIFlags(cmd, app.Config)
+	if err := EnsureCLIFlags(cmd, app.Config); err != nil {
+		log.Panic("Panic: ", err.Error())
+	}
 	setupLogging(app.Config)
 }
 
 func setupLogging(config *bc.Config) {
-
 	if config.TestMode {
 		log.JSONLog(true)
 	}
