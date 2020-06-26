@@ -3,14 +3,12 @@ package grpcserver
 import (
 	"fmt"
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
+	gw "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"net/http"
-	"strconv"
-
-	gw "github.com/spacemeshos/api/release/go/spacemesh/v1"
 )
 
 // JSONHTTPServer is a JSON http server providing the Spacemesh API.
@@ -38,28 +36,35 @@ func (s *JSONHTTPServer) Close() error {
 }
 
 // StartService starts the json api server and listens for status (started, stopped).
-func (s *JSONHTTPServer) StartService() {
-	go s.startInternal()
+func (s *JSONHTTPServer) StartService(startNodeService bool, startMeshService bool) {
+	go s.startInternal(startNodeService, startMeshService)
 }
 
-func (s *JSONHTTPServer) startInternal() {
+func (s *JSONHTTPServer) startInternal(startNodeService bool, startMeshService bool) {
 	ctx, cancel := context.WithCancel(cmdp.Ctx)
 	defer cancel()
 	mux := runtime.NewServeMux()
 	opts := []grpc.DialOption{grpc.WithInsecure()}
 
 	// register the http server on the local grpc server
-	grpcPortStr := strconv.Itoa(s.GrpcPort)
+	jsonEndpoint := fmt.Sprintf("localhost:%d", s.GrpcPort)
 
-	echoEndpoint := "localhost:" + grpcPortStr
-	if err := gw.RegisterNodeServiceHandlerFromEndpoint(ctx, mux, echoEndpoint, opts); err != nil {
-		log.Error("failed to register http endpoint with grpc", err)
-		return
+	// register each individual, enabled service
+	if startNodeService {
+		if err := gw.RegisterNodeServiceHandlerFromEndpoint(ctx, mux, jsonEndpoint, opts); err != nil {
+			log.Error("error registering NodeService with grpc gateway", err)
+		}
+		log.Info("registered NodeService with grpc gateway server")
+	}
+	if startMeshService {
+		if err := gw.RegisterMeshServiceHandlerFromEndpoint(ctx, mux, jsonEndpoint, opts); err != nil {
+			log.Error("error registering MeshService with grpc gateway", err)
+		}
+		log.Info("registered MeshService with grpc gateway server")
 	}
 
-	log.Info("new json API listening on port %d", s.Port)
+	log.Info("starting grpc gateway server on port %d connected to grpc service at %s", s.Port, jsonEndpoint)
 
-	if err := http.ListenAndServe(fmt.Sprintf(":%d", s.Port), mux); err != nil {
-		log.Error("failed to start gateway http server", err)
-	}
+	// This call is blocking
+	log.Error("error from grpc http listener", http.ListenAndServe(fmt.Sprintf(":%d", s.Port), mux))
 }
