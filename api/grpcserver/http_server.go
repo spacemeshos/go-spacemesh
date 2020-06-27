@@ -64,7 +64,11 @@ func (s *JSONHTTPServer) startInternal(startNodeService bool, startMeshService b
 	}
 
 	log.Info("starting grpc gateway server on port %d connected to grpc service at %s", s.Port, jsonEndpoint)
+	s.server = &http.Server{
+		Addr:    fmt.Sprintf(":%d", s.Port),
+		Handler: mux,
+	}
 
-	// This call is blocking
-	log.Error("error from grpc http listener", http.ListenAndServe(fmt.Sprintf(":%d", s.Port), mux))
+	// This call is blocking, and only returns an error
+	log.Error("error from grpc http listener: %v", s.server.ListenAndServe())
 }
