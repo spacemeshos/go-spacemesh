@@ -310,22 +310,42 @@ func TestNodeService(t *testing.T) {
 	}()
 	c := pb.NewNodeServiceClient(conn)
 
-	// call echo and validate result
-	response, err := c.Echo(context.Background(), &pb.EchoRequest{
-		Msg: &pb.SimpleString{Value: message}})
-	require.NoError(t, err)
-	require.Equal(t, message, response.Msg.Value)
+	testCases := []struct {
+		name  string
+		svc   func()
+		req   interface{}
+		check func(interface{})
+	}{
+		{"Echo", c.Echo, &pb.EchoRequest{}, func(pb.EchoResponse) {}},
+	}
 
-	// now try sending bad payloads
-	response, err = c.Echo(context.Background(), &pb.EchoRequest{Msg: nil})
-	require.EqualError(t, err, "rpc error: code = InvalidArgument desc = Must include `Msg`")
-	code := status.Code(err)
-	require.Equal(t, codes.InvalidArgument, code)
+	for _, tc := range testCases {
+		t.Run(tc.name)
+	}
 
-	response, err = c.Echo(context.Background(), &pb.EchoRequest{})
-	require.EqualError(t, err, "rpc error: code = InvalidArgument desc = Must include `Msg`")
-	code = status.Code(err)
-	require.Equal(t, codes.InvalidArgument, code)
+	// Echo
+	t.Run("NodeService/Echo", func(t *testing.T) {
+		// call echo and validate result
+		response, err := c.Echo(context.Background(), &pb.EchoRequest{
+			Msg: &pb.SimpleString{Value: message}})
+		require.NoError(t, err)
+		require.Equal(t, message, response.Msg.Value)
+
+		// now try sending bad payloads
+		response, err = c.Echo(context.Background(), &pb.EchoRequest{Msg: nil})
+		require.EqualError(t, err, "rpc error: code = InvalidArgument desc = Must include `Msg`")
+		code := status.Code(err)
+		require.Equal(t, codes.InvalidArgument, code)
+
+		response, err = c.Echo(context.Background(), &pb.EchoRequest{})
+		require.EqualError(t, err, "rpc error: code = InvalidArgument desc = Must include `Msg`")
+		code = status.Code(err)
+		require.Equal(t, codes.InvalidArgument, code)
+	})
+
+	// Version
+	t.Run("NodeService/Echo", func(t *testing.T) {
+	})
 }
 
 func TestMeshService(t *testing.T) {
