@@ -519,6 +519,7 @@ func TestShutdown(t *testing.T) {
 	smApp.Config.CoinbaseAccount = "0x123"
 	smApp.Config.LayerAvgSize = 5
 	smApp.Config.LayersPerEpoch = 3
+	smApp.Config.TxsPerBlock = 100
 	smApp.Config.Hdist = 5
 	smApp.Config.GenesisTime = genesisTime.Format(time.RFC3339)
 	smApp.Config.LayerDurationSec = 20

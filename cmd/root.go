@@ -42,7 +42,6 @@ func AddCommands(cmd *cobra.Command) {
 		config.Hdist, "hdist")
 	cmd.PersistentFlags().BoolVar(&config.StartMining, "start-mining",
 		config.StartMining, "start mining")
-
 	cmd.PersistentFlags().StringVar(&config.MemProfile, "mem-profile",
 		config.MemProfile, "output memory profiling stat to filename")
 	cmd.PersistentFlags().StringVar(&config.CPUProfile, "cpu-profile",
@@ -53,21 +52,18 @@ func AddCommands(cmd *cobra.Command) {
 		config.GenesisConfPath, "add genesis configuration")
 	cmd.PersistentFlags().StringVar(&config.CoinbaseAccount, "coinbase",
 		config.CoinbaseAccount, "coinbase account to accumulate rewards")
-
 	cmd.PersistentFlags().IntVar(&config.GenesisActiveSet, "genesis-active-size",
 		config.GenesisActiveSet, "The active set size for the genesis flow")
-
 	cmd.PersistentFlags().IntVar(&config.BlockCacheSize, "block-cache-size",
 		config.BlockCacheSize, "size in layers of meshdb block cache")
-
 	cmd.PersistentFlags().StringVar(&config.PublishEventsURL, "events-url",
 		config.PublishEventsURL, "publish events on this url, if no url specified event will no be published")
-
 	cmd.PersistentFlags().IntVar(&config.SyncRequestTimeout, "sync-request-timeout",
-		2000, "the timeout in ms for direct requests in the sync")
-
+		config.SyncRequestTimeout, "the timeout in ms for direct requests in the sync")
 	cmd.PersistentFlags().IntVar(&config.AtxsPerBlock, "atxs-per-block",
-		100, "the number of atxs to select per block on block creation")
+		config.AtxsPerBlock, "the number of atxs to select per block on block creation")
+	cmd.PersistentFlags().IntVar(&config.TxsPerBlock, "txs-per-block",
+		config.TxsPerBlock, "max no. of transactions per block")
 
 	/** ======================== P2P Flags ========================== **/
 
