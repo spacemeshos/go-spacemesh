@@ -350,12 +350,13 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	r := require.New(t)
 	app := NewSpacemeshApp()
 
-	// Make sure the service is not running by default
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		r.NoError(app.Initialize(cmd, args))
 		app.startAPIServices(PostMock{}, NetMock{})
 	}
 	defer app.stopServices()
+
+	// Make sure the service is not running by default
 	str, err := testArgs(app) // no args
 	r.Empty(str)
 	r.NoError(err)
