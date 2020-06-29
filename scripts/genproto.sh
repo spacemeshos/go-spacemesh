@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/usr/bin/env -S bash -e
 ./scripts/verify-protoc-gen-go.sh
 
 protoc=./devtools/bin/protoc

@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/usr/bin/env -S bash -e
 # Detect OS and architecture
 if [[ $(uname -s) == "Linux" ]]; then
     os="linux";

@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/usr/bin/env -S bash -e
 # Ensure protoc-gen-go is installed
 errcho() {
     RED='\033[0;31m'
