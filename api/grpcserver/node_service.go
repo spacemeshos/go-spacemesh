@@ -76,8 +76,8 @@ func (s NodeService) Status(ctx context.Context, request *pb.StatusRequest) (*pb
 		Status: &pb.NodeStatus{
 			ConnectedPeers: s.PeerCounter.PeerCount(),
 			IsSynced:       s.Syncer.IsSynced(),
-			SyncedLayer:    s.Tx.LatestLayer().Uint64(),
-			TopLayer:       s.GenTime.GetCurrentLayer().Uint64(),
+			TopLayer:       s.Tx.LatestLayer().Uint64(),
+			SyncedLayer:    s.GenTime.GetCurrentLayer().Uint64(),
 			VerifiedLayer:  s.Tx.LatestLayerInState().Uint64(),
 		},
 	}, nil

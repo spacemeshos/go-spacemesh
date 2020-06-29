@@ -341,6 +341,24 @@ func TestNodeService(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, version, res.VersionString.Value)
 		}},
+		{"Build", func() {
+			// must set this manually as it's set up in main() when running
+			build := "abc123"
+			cmd.Commit = build
+			res, err := c.Build(context.Background(), &empty.Empty{})
+			require.NoError(t, err)
+			require.Equal(t, build, res.BuildString.Value)
+		}},
+		{"Status", func() {
+			req := &pb.StatusRequest{}
+			res, err := c.Status(context.Background(), req)
+			require.NoError(t, err)
+			require.Equal(t, uint64(0), res.Status.ConnectedPeers)
+			require.Equal(t, false, res.Status.IsSynced)
+			require.Equal(t, uint64(1), res.Status.SyncedLayer)
+			require.Equal(t, uint64(10), res.Status.TopLayer)
+			require.Equal(t, uint64(8), res.Status.VerifiedLayer)
+		}},
 	}
 
 	for _, tc := range testCases {
