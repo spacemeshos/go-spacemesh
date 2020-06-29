@@ -10,12 +10,14 @@ import (
 
 // MeshService is a grpc server providing the MeshService
 type MeshService struct {
-	Network        api.NetworkAPI // P2P Swarm
-	Tx             api.TxAPI      // Mesh
-	GenTime        api.GenesisTimeAPI
-	PeerCounter    api.PeerCounter
-	Syncer         api.Syncer
-	LayersPerEpoch int
+	Network          api.NetworkAPI // P2P Swarm
+	Tx               api.TxAPI      // Mesh
+	GenTime          api.GenesisTimeAPI
+	PeerCounter      api.PeerCounter
+	Syncer           api.Syncer
+	LayersPerEpoch   int
+	NetworkID        int8
+	LayerDurationSec int
 }
 
 // RegisterService registers this service with a grpc server instance
@@ -26,14 +28,16 @@ func (s MeshService) RegisterService(server *Server) {
 // NewMeshService creates a new grpc service using config data.
 func NewMeshService(
 	net api.NetworkAPI, tx api.TxAPI, genTime api.GenesisTimeAPI,
-	syncer api.Syncer, layersPerEpoch int) *MeshService {
+	syncer api.Syncer, layersPerEpoch int, networkId int8, layerDurationSec int) *MeshService {
 	return &MeshService{
-		Network:        net,
-		Tx:             tx,
-		GenTime:        genTime,
-		PeerCounter:    peers.NewPeers(net, log.NewDefault("grpc_server.MeshService")),
-		Syncer:         syncer,
-		LayersPerEpoch: layersPerEpoch,
+		Network:          net,
+		Tx:               tx,
+		GenTime:          genTime,
+		PeerCounter:      peers.NewPeers(net, log.NewDefault("grpc_server.MeshService")),
+		Syncer:           syncer,
+		LayersPerEpoch:   layersPerEpoch,
+		NetworkID:        networkId,
+		LayerDurationSec: layerDurationSec,
 	}
 }
 
@@ -65,19 +69,25 @@ func (s MeshService) CurrentEpoch(ctx context.Context, in *pb.CurrentEpochReques
 // NetID returns the network ID
 func (s MeshService) NetID(ctx context.Context, in *pb.NetIDRequest) (*pb.NetIDResponse, error) {
 	log.Info("GRPC MeshService.NetId")
-	return nil, nil
+	return &pb.NetIDResponse{Netid: &pb.SimpleInt{
+		Value: uint64(s.NetworkID),
+	}}, nil
 }
 
 // EpochNumLayers returns the number of layers per epoch (a network parameter)
 func (s MeshService) EpochNumLayers(ctx context.Context, in *pb.EpochNumLayersRequest) (*pb.EpochNumLayersResponse, error) {
 	log.Info("GRPC MeshService.EpochNumLayers")
-	return nil, nil
+	return &pb.EpochNumLayersResponse{Numlayers: &pb.SimpleInt{
+		Value: uint64(s.LayersPerEpoch),
+	}}, nil
 }
 
 // LayerDuration returns the layer duration in seconds (a network parameter)
 func (s MeshService) LayerDuration(ctx context.Context, in *pb.LayerDurationRequest) (*pb.LayerDurationResponse, error) {
 	log.Info("GRPC MeshService.LayerDuration")
-	return nil, nil
+	return &pb.LayerDurationResponse{Duration: &pb.SimpleInt{
+		Value: uint64(s.LayerDurationSec),
+	}}, nil
 }
 
 // MaxTransactionsPerSecond returns the max number of tx per sec (a network parameter)

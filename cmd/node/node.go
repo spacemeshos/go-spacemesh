@@ -679,9 +679,9 @@ func (app *SpacemeshApp) startAPIServices(postClient api.PostAPI, net api.Networ
 	apiConf := &app.Config.API
 
 	// OLD API SERVICES (deprecated)
+	layerDuration := app.Config.LayerDurationSec
 	if apiConf.StartGrpcServer || apiConf.StartJSONServer {
 		// start grpc if specified or if json rpc specified
-		layerDuration := app.Config.LayerDurationSec
 		app.grpcAPIService = api.NewGrpcService(apiConf.GrpcServerPort, net, app.state, app.mesh, app.txPool,
 			app.atxBuilder, app.oracle, app.clock, postClient, layerDuration, app.syncer, app.Config, app)
 		app.grpcAPIService.StartService()
@@ -712,7 +712,7 @@ func (app *SpacemeshApp) startAPIServices(postClient api.PostAPI, net api.Networ
 		startService(grpcserver.NewNodeService(net, app.mesh, app.clock, app.syncer))
 	}
 	if apiConf.StartMeshService {
-		startService(grpcserver.NewMeshService(net, app.mesh, app.clock, app.syncer, app.Config.LayersPerEpoch))
+		startService(grpcserver.NewMeshService(net, app.mesh, app.clock, app.syncer, app.Config.LayersPerEpoch, app.Config.P2P.NetworkID, layerDuration))
 	}
 
 	if apiConf.StartNewJSONServer {
