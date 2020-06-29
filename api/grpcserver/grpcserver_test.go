@@ -199,7 +199,7 @@ type GenesisTimeMock struct {
 }
 
 func (t GenesisTimeMock) GetCurrentLayer() types.LayerID {
-	return 1
+	return 12
 }
 
 func (t GenesisTimeMock) GetGenesisTime() time.Time {
@@ -359,8 +359,8 @@ func TestNodeService(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, uint64(0), res.Status.ConnectedPeers)
 			require.Equal(t, false, res.Status.IsSynced)
-			require.Equal(t, uint64(1), res.Status.SyncedLayer)
-			require.Equal(t, uint64(10), res.Status.TopLayer)
+			require.Equal(t, uint64(10), res.Status.SyncedLayer)
+			require.Equal(t, uint64(12), res.Status.TopLayer)
 			require.Equal(t, uint64(8), res.Status.VerifiedLayer)
 		}},
 		{"SyncStart", func() {

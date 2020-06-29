@@ -74,11 +74,11 @@ func (s NodeService) Status(ctx context.Context, request *pb.StatusRequest) (*pb
 	log.Info("GRPC NodeService.Status")
 	return &pb.StatusResponse{
 		Status: &pb.NodeStatus{
-			ConnectedPeers: s.PeerCounter.PeerCount(),
-			IsSynced:       s.Syncer.IsSynced(),
-			TopLayer:       s.Tx.LatestLayer().Uint64(),
-			SyncedLayer:    s.GenTime.GetCurrentLayer().Uint64(),
-			VerifiedLayer:  s.Tx.LatestLayerInState().Uint64(),
+			ConnectedPeers: s.PeerCounter.PeerCount(),            // number of connected peers
+			IsSynced:       s.Syncer.IsSynced(),                  // whether the node is synced
+			SyncedLayer:    s.Tx.LatestLayer().Uint64(),          // latest layer we saw from the network
+			TopLayer:       s.GenTime.GetCurrentLayer().Uint64(), // current layer, based on time
+			VerifiedLayer:  s.Tx.LatestLayerInState().Uint64(),   // latest verified layer
 		},
 	}, nil
 }
