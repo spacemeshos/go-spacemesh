@@ -1,14 +1,25 @@
 #!/usr/bin/env -S bash -e
 # Detect OS and architecture
-if [[ $(uname -s) == "Linux" ]]; then
+kernel=`uname -s`
+arch=`uname -m`
+if [[ $kernel == "Linux" ]]; then
     os="linux";
-elif [[ $(uname -s) == "Darwin" ]]; then # MacOS
+elif [[ $kernel == "Darwin" ]]; then # MacOS
     os="osx";
+elif [[ $kernel == "FreeBSD" ]]; then
+	if [[ -x `which protoc` ]]; then
+		echo "protoc already installed"
+		exit 0
+	else
+		echo "protoc not found in \$PATH, install it with: sudo pkg install protbuf"
+		exit 1
+	fi
 else
     echo "unsupported OS, protoc not installed"
     exit 1;
 fi
-arch=$(uname -m)
+
+
 protoc_url=https://github.com/protocolbuffers/protobuf/releases/download/v3.6.1/protoc-3.6.1-${os}-${arch}.zip
 
 # Make sure you grab the latest version
