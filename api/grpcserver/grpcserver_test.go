@@ -319,9 +319,9 @@ func TestNodeService(t *testing.T) {
 	// Construct an array of test cases to test each endpoint in turn
 	testCases := []struct {
 		name string
-		run  func()
+		run  func(t *testing.T)
 	}{
-		{"Echo", func() {
+		{"Echo", func(t *testing.T) {
 			const message = "Hello World"
 			res, err := c.Echo(context.Background(), &pb.EchoRequest{
 				Msg: &pb.SimpleString{Value: message}})
@@ -339,7 +339,7 @@ func TestNodeService(t *testing.T) {
 			code = status.Code(err)
 			require.Equal(t, codes.InvalidArgument, code)
 		}},
-		{"Version", func() {
+		{"Version", func(t *testing.T) {
 			// must set this manually as it's set up in main() when running
 			version := "abc123"
 			cmd.Version = version
@@ -347,7 +347,7 @@ func TestNodeService(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, version, res.VersionString.Value)
 		}},
-		{"Build", func() {
+		{"Build", func(t *testing.T) {
 			// must set this manually as it's set up in main() when running
 			build := "abc123"
 			cmd.Commit = build
@@ -355,7 +355,7 @@ func TestNodeService(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, build, res.BuildString.Value)
 		}},
-		{"Status", func() {
+		{"Status", func(t *testing.T) {
 			req := &pb.StatusRequest{}
 			res, err := c.Status(context.Background(), req)
 			require.NoError(t, err)
@@ -365,7 +365,7 @@ func TestNodeService(t *testing.T) {
 			require.Equal(t, uint64(12), res.Status.TopLayer)
 			require.Equal(t, uint64(8), res.Status.VerifiedLayer)
 		}},
-		{"SyncStart", func() {
+		{"SyncStart", func(t *testing.T) {
 			require.Equal(t, false, syncer.startCalled, "Start() not yet called on syncer")
 			req := &pb.SyncStartRequest{}
 			res, err := c.SyncStart(context.Background(), req)
@@ -373,7 +373,7 @@ func TestNodeService(t *testing.T) {
 			require.Equal(t, int32(code.Code_OK), res.Status.Code)
 			require.Equal(t, true, syncer.startCalled, "Start() was called on syncer")
 		}},
-		{"Shutdown", func() {
+		{"Shutdown", func(t *testing.T) {
 			called := false
 			cmd.Cancel = func() { called = true }
 			require.Equal(t, false, called, "cmd.Shutdown() not yet called")
@@ -386,7 +386,7 @@ func TestNodeService(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) { tc.run() })
+		t.Run(tc.name, tc.run)
 	}
 }
 
@@ -409,29 +409,29 @@ func TestMeshService(t *testing.T) {
 	// Construct an array of test cases to test each endpoint in turn
 	testCases := []struct {
 		name string
-		run  func()
+		run  func(t *testing.T)
 	}{
-		{"GenesisTime", func() {
+		{"GenesisTime", func(t *testing.T) {
 			response, err := c.GenesisTime(context.Background(), &pb.GenesisTimeRequest{})
 			require.NoError(t, err)
 			require.Equal(t, uint64(genTime.GetGenesisTime().Unix()), response.Unixtime.Value)
 		}},
-		{"CurrentLayer", func() {
+		{"CurrentLayer", func(t *testing.T) {
 			response, err := c.CurrentLayer(context.Background(), &pb.CurrentLayerRequest{})
 			require.NoError(t, err)
 			require.Equal(t, uint64(12), response.Layernum.Value)
 		}},
-		{"CurrentEpoch", func() {
+		{"CurrentEpoch", func(t *testing.T) {
 			response, err := c.CurrentEpoch(context.Background(), &pb.CurrentEpochRequest{})
 			require.NoError(t, err)
 			require.Equal(t, uint64(2), response.Epochnum.Value)
 		}},
-		{"NetId", func() {
+		{"NetId", func(t *testing.T) {
 			response, err := c.NetID(context.Background(), &pb.NetIDRequest{})
 			require.NoError(t, err)
 			require.Equal(t, uint64(networkId), response.Netid.Value)
 		}},
-		{"LayerDuration", func() {
+		{"LayerDuration", func(t *testing.T) {
 			response, err := c.LayerDuration(context.Background(), &pb.LayerDurationRequest{})
 			require.NoError(t, err)
 			require.Equal(t, uint64(layerDurationSec), response.Duration.Value)
@@ -439,7 +439,7 @@ func TestMeshService(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) { tc.run() })
+		t.Run(tc.name, tc.run)
 	}
 }
 
