@@ -3,15 +3,18 @@ package grpcserver
 import (
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/go-spacemesh/api"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/peers"
 	"golang.org/x/net/context"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // MeshService is a grpc server providing the MeshService
 type MeshService struct {
 	Network          api.NetworkAPI // P2P Swarm
-	Tx               api.TxAPI      // Mesh
+	Mesh             api.TxAPI      // Mesh
 	GenTime          api.GenesisTimeAPI
 	PeerCounter      api.PeerCounter
 	Syncer           api.Syncer
@@ -34,7 +37,7 @@ func NewMeshService(
 	layerAvgSize int, txsPerBlock int) *MeshService {
 	return &MeshService{
 		Network:          net,
-		Tx:               tx,
+		Mesh:             tx,
 		GenTime:          genTime,
 		PeerCounter:      peers.NewPeers(net, log.NewDefault("grpc_server.MeshService")),
 		Syncer:           syncer,
@@ -114,7 +117,53 @@ func (s MeshService) AccountMeshDataQuery(ctx context.Context, in *pb.AccountMes
 // LayersQuery returns all mesh data, layer by layer
 func (s MeshService) LayersQuery(ctx context.Context, in *pb.LayersQueryRequest) (*pb.LayersQueryResponse, error) {
 	log.Info("GRPC MeshService.LayersQuery")
-	return nil, nil
+
+	// current layer (based on time)
+	currentLayer := s.GenTime.GetCurrentLayer().Uint64()
+
+	// last validated layer
+	// TODO: don't know if this is tortoise or hare, or how to tell
+	//lastValidLayer := s.Mesh.ProcessedLayer()
+	lastValidLayer := s.Mesh.LatestLayerInState()
+
+	// Validate inputs
+	if in.StartLayer < 0 {
+		return nil, status.Errorf(codes.InvalidArgument, "`StartLayer` must be greater than zero")
+	}
+	//if uint64(in.StartLayer) > currentLayer {
+	//	return nil, status.Errorf(codes.InvalidArgument, "`StartLayer` must be less than or equal to current layer")
+	//}
+	if in.StartLayer > in.EndLayer {
+		return nil, status.Errorf(codes.InvalidArgument, "`StartLayer` must not be greater than `EndLayer`")
+	}
+
+	layers := make([]*pb.Layer, in.EndLayer-in.StartLayer)
+	layerStatus := pb.Layer_LAYER_STATUS_UNSPECIFIED
+	for l := uint64(in.StartLayer); l <= uint64(in.EndLayer); l++ {
+		// TODO: only run this once
+		if l >= lastValidLayer.Uint64() {
+			layerStatus = pb.Layer_LAYER_STATUS_CONFIRMED
+		}
+
+		layer, err := s.Mesh.GetLayer(types.LayerID(l))
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "error retreiving layer data")
+		}
+
+		// Load all block data from layer.Blocks()
+
+		// Extract ATX data from block data
+
+		layers = append(layers, &pb.Layer{
+			Number:        l,
+			Status:        layerStatus,
+			Hash:          nil, // do we need this?
+			Blocks:        nil,
+			Activations:   nil,
+			RootStateHash: nil, // do we need this?
+		})
+	}
+	return &pb.LayersQueryResponse{Layer: layers}, nil
 }
 
 // STREAMS

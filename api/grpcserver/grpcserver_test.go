@@ -170,6 +170,10 @@ func (t *TxAPIMock) AddressExists(types.Address) bool {
 	return true
 }
 
+func (t *TxAPIMock) GetLayer(types.LayerID) types.Layer {
+	return types.Layer{}
+}
+
 // MiningAPIMock is a mock for mining API
 type MiningAPIMock struct{}
 
