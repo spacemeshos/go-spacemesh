@@ -32,9 +32,8 @@ unzip -u protoc.zip -d protoc3
 
 
 # create local devtools dir.
-mkdir devtools
-mkdir devtools/bin
-mkdir devtools/include
+mkdir -p devtools/bin
+mkdir -p devtools/include
 
 echo "moving bin/protoc to ./devtools/bin/protoc"
 mv protoc3/bin/* devtools/bin/
