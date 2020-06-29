@@ -728,7 +728,7 @@ func (app *SpacemeshApp) stopServices() {
 	}
 
 	if app.grpcAPIService != nil {
-		log.Info("Stopping GRPC service...")
+		log.Info("Stopping grpc service...")
 		app.grpcAPIService.Close()
 	}
 
@@ -738,7 +738,7 @@ func (app *SpacemeshApp) stopServices() {
 	}
 
 	if app.newgrpcAPIService != nil {
-		log.Info("Stopping new GRPC service...")
+		log.Info("Stopping new grpc service...")
 		app.newgrpcAPIService.Close()
 	}
 
