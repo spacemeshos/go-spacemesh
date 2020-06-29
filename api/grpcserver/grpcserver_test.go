@@ -371,6 +371,16 @@ func TestNodeService(t *testing.T) {
 			require.Equal(t, int32(code.Code_OK), res.Status.Code)
 			require.Equal(t, true, syncer.startCalled, "Start() was called on syncer")
 		}},
+		{"Shutdown", func() {
+			called := false
+			cmd.Cancel = func() { called = true }
+			require.Equal(t, false, called, "cmd.Shutdown() not yet called")
+			req := &pb.ShutdownRequest{}
+			res, err := c.Shutdown(context.Background(), req)
+			require.NoError(t, err)
+			require.Equal(t, int32(code.Code_OK), res.Status.Code)
+			require.Equal(t, true, called, "cmd.Shutdown() was called")
+		}},
 	}
 
 	for _, tc := range testCases {
