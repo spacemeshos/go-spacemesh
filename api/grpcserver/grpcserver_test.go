@@ -9,6 +9,7 @@ import (
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/miner"
+	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"io/ioutil"
@@ -241,10 +242,12 @@ func marshalProto(t *testing.T, msg proto.Message) string {
 
 var cfg = config.DefaultConfig()
 
-type SyncerMock struct{}
+type SyncerMock struct {
+	startCalled bool
+}
 
 func (SyncerMock) IsSynced() bool { return false }
-func (SyncerMock) Start()         {}
+func (s *SyncerMock) Start()      { s.startCalled = true }
 
 func launchServer(t *testing.T, services ...ServiceAPI) func() {
 	networkMock.Broadcast("", []byte{0x00})
@@ -295,7 +298,8 @@ func TestNewServersConfig(t *testing.T) {
 }
 
 func TestNodeService(t *testing.T) {
-	grpcService := NewNodeService(&networkMock, txAPI, &genTime, &SyncerMock{})
+	syncer := SyncerMock{}
+	grpcService := NewNodeService(&networkMock, txAPI, &genTime, &syncer)
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
@@ -358,6 +362,14 @@ func TestNodeService(t *testing.T) {
 			require.Equal(t, uint64(1), res.Status.SyncedLayer)
 			require.Equal(t, uint64(10), res.Status.TopLayer)
 			require.Equal(t, uint64(8), res.Status.VerifiedLayer)
+		}},
+		{"SyncStart", func() {
+			require.Equal(t, false, syncer.startCalled, "Start() not yet called on syncer")
+			req := &pb.SyncStartRequest{}
+			res, err := c.SyncStart(context.Background(), req)
+			require.NoError(t, err)
+			require.Equal(t, int32(code.Code_OK), res.Status.Code)
+			require.Equal(t, true, syncer.startCalled, "Start() was called on syncer")
 		}},
 	}
 
