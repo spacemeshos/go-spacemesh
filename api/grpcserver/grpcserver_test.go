@@ -218,6 +218,7 @@ const (
 	layerDuration    = 10
 	ValidatedLayerID = 8
 	TxReturnLayer    = 1
+	layersPerEpoch   = 5
 )
 
 var (
@@ -389,7 +390,7 @@ func TestNodeService(t *testing.T) {
 }
 
 func TestMeshService(t *testing.T) {
-	grpcService := NewMeshService(&networkMock, txAPI, &genTime, &SyncerMock{})
+	grpcService := NewMeshService(&networkMock, txAPI, &genTime, &SyncerMock{}, layersPerEpoch)
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
@@ -404,15 +405,36 @@ func TestMeshService(t *testing.T) {
 	}()
 	c := pb.NewMeshServiceClient(conn)
 
-	// call echo and validate result
-	response, err := c.GenesisTime(context.Background(), &pb.GenesisTimeRequest{})
-	require.NoError(t, err)
-	require.Equal(t, uint64(genTime.GetGenesisTime().Unix()), response.Unixtime.Value)
+	// Construct an array of test cases to test each endpoint in turn
+	testCases := []struct {
+		name string
+		run  func()
+	}{
+		{"GenesisTime", func() {
+			response, err := c.GenesisTime(context.Background(), &pb.GenesisTimeRequest{})
+			require.NoError(t, err)
+			require.Equal(t, uint64(genTime.GetGenesisTime().Unix()), response.Unixtime.Value)
+		}},
+		{"CurrentLayer", func() {
+			response, err := c.CurrentLayer(context.Background(), &pb.CurrentLayerRequest{})
+			require.NoError(t, err)
+			require.Equal(t, uint64(12), response.Layernum.Value)
+		}},
+		{"CurrentEpoch", func() {
+			response, err := c.CurrentEpoch(context.Background(), &pb.CurrentEpochRequest{})
+			require.NoError(t, err)
+			require.Equal(t, uint64(2), response.Epochnum.Value)
+		}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) { tc.run() })
+	}
 }
 
 func TestMultiService(t *testing.T) {
 	svc1 := NewNodeService(&networkMock, txAPI, &genTime, &SyncerMock{})
-	svc2 := NewMeshService(&networkMock, txAPI, &genTime, &SyncerMock{})
+	svc2 := NewMeshService(&networkMock, txAPI, &genTime, &SyncerMock{}, layersPerEpoch)
 	shutDown := launchServer(t, svc1, svc2)
 	defer shutDown()
 
@@ -472,7 +494,7 @@ func TestJsonApi(t *testing.T) {
 
 	// enable services and try again
 	svc1 := NewNodeService(&networkMock, txAPI, &genTime, &SyncerMock{})
-	svc2 := NewMeshService(&networkMock, txAPI, &genTime, &SyncerMock{})
+	svc2 := NewMeshService(&networkMock, txAPI, &genTime, &SyncerMock{}, layersPerEpoch)
 	cfg.StartNodeService = true
 	cfg.StartMeshService = true
 	shutDown = launchServer(t, svc1, svc2)

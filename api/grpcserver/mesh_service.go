@@ -10,11 +10,12 @@ import (
 
 // MeshService is a grpc server providing the MeshService
 type MeshService struct {
-	Network     api.NetworkAPI // P2P Swarm
-	Tx          api.TxAPI      // Mesh
-	GenTime     api.GenesisTimeAPI
-	PeerCounter api.PeerCounter
-	Syncer      api.Syncer
+	Network        api.NetworkAPI // P2P Swarm
+	Tx             api.TxAPI      // Mesh
+	GenTime        api.GenesisTimeAPI
+	PeerCounter    api.PeerCounter
+	Syncer         api.Syncer
+	LayersPerEpoch int
 }
 
 // RegisterService registers this service with a grpc server instance
@@ -25,13 +26,14 @@ func (s MeshService) RegisterService(server *Server) {
 // NewMeshService creates a new grpc service using config data.
 func NewMeshService(
 	net api.NetworkAPI, tx api.TxAPI, genTime api.GenesisTimeAPI,
-	syncer api.Syncer) *MeshService {
+	syncer api.Syncer, layersPerEpoch int) *MeshService {
 	return &MeshService{
-		Network:     net,
-		Tx:          tx,
-		GenTime:     genTime,
-		PeerCounter: peers.NewPeers(net, log.NewDefault("grpc_server.MeshService")),
-		Syncer:      syncer,
+		Network:        net,
+		Tx:             tx,
+		GenTime:        genTime,
+		PeerCounter:    peers.NewPeers(net, log.NewDefault("grpc_server.MeshService")),
+		Syncer:         syncer,
+		LayersPerEpoch: layersPerEpoch,
 	}
 }
 
@@ -46,13 +48,18 @@ func (s MeshService) GenesisTime(ctx context.Context, in *pb.GenesisTimeRequest)
 // CurrentLayer returns the current layer number
 func (s MeshService) CurrentLayer(ctx context.Context, in *pb.CurrentLayerRequest) (*pb.CurrentLayerResponse, error) {
 	log.Info("GRPC MeshService.CurrentLayer")
-	return nil, nil
+	return &pb.CurrentLayerResponse{Layernum: &pb.SimpleInt{
+		Value: s.GenTime.GetCurrentLayer().Uint64(),
+	}}, nil
 }
 
 // CurrentEpoch returns the current epoch number
 func (s MeshService) CurrentEpoch(ctx context.Context, in *pb.CurrentEpochRequest) (*pb.CurrentEpochResponse, error) {
 	log.Info("GRPC MeshService.CurrentEpoch")
-	return nil, nil
+	curLayer := s.GenTime.GetCurrentLayer()
+	return &pb.CurrentEpochResponse{Epochnum: &pb.SimpleInt{
+		Value: uint64(curLayer.GetEpoch(uint16(s.LayersPerEpoch))),
+	}}, nil
 }
 
 // NetID returns the network ID
