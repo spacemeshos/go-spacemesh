@@ -215,10 +215,11 @@ func (PostMock) Reset() error {
 
 const (
 	genTimeUnix      = 1000000
-	layerDuration    = 10
+	layerDurationSec = 10
 	ValidatedLayerID = 8
 	TxReturnLayer    = 1
 	layersPerEpoch   = 5
+	networkId        = 120
 )
 
 var (
@@ -390,7 +391,7 @@ func TestNodeService(t *testing.T) {
 }
 
 func TestMeshService(t *testing.T) {
-	grpcService := NewMeshService(&networkMock, txAPI, &genTime, &SyncerMock{}, layersPerEpoch)
+	grpcService := NewMeshService(&networkMock, txAPI, &genTime, &SyncerMock{}, layersPerEpoch, networkId, layerDurationSec)
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
@@ -425,6 +426,16 @@ func TestMeshService(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, uint64(2), response.Epochnum.Value)
 		}},
+		{"NetId", func() {
+			response, err := c.NetID(context.Background(), &pb.NetIDRequest{})
+			require.NoError(t, err)
+			require.Equal(t, uint64(networkId), response.Netid.Value)
+		}},
+		{"LayerDuration", func() {
+			response, err := c.LayerDuration(context.Background(), &pb.LayerDurationRequest{})
+			require.NoError(t, err)
+			require.Equal(t, uint64(layerDurationSec), response.Duration.Value)
+		}},
 	}
 
 	for _, tc := range testCases {
@@ -434,7 +445,7 @@ func TestMeshService(t *testing.T) {
 
 func TestMultiService(t *testing.T) {
 	svc1 := NewNodeService(&networkMock, txAPI, &genTime, &SyncerMock{})
-	svc2 := NewMeshService(&networkMock, txAPI, &genTime, &SyncerMock{}, layersPerEpoch)
+	svc2 := NewMeshService(&networkMock, txAPI, &genTime, &SyncerMock{}, layersPerEpoch, networkId, layerDurationSec)
 	shutDown := launchServer(t, svc1, svc2)
 	defer shutDown()
 
@@ -494,7 +505,7 @@ func TestJsonApi(t *testing.T) {
 
 	// enable services and try again
 	svc1 := NewNodeService(&networkMock, txAPI, &genTime, &SyncerMock{})
-	svc2 := NewMeshService(&networkMock, txAPI, &genTime, &SyncerMock{}, layersPerEpoch)
+	svc2 := NewMeshService(&networkMock, txAPI, &genTime, &SyncerMock{}, layersPerEpoch, networkId, layerDurationSec)
 	cfg.StartNodeService = true
 	cfg.StartMeshService = true
 	shutDown = launchServer(t, svc1, svc2)
