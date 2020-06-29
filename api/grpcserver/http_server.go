@@ -50,17 +50,28 @@ func (s *JSONHTTPServer) startInternal(startNodeService bool, startMeshService b
 	jsonEndpoint := fmt.Sprintf("localhost:%d", s.GrpcPort)
 
 	// register each individual, enabled service
+	serviceCount := 0
 	if startNodeService {
 		if err := gw.RegisterNodeServiceHandlerFromEndpoint(ctx, mux, jsonEndpoint, opts); err != nil {
 			log.Error("error registering NodeService with grpc gateway", err)
+		} else {
+			serviceCount++
+			log.Info("registered NodeService with grpc gateway server")
 		}
-		log.Info("registered NodeService with grpc gateway server")
 	}
 	if startMeshService {
 		if err := gw.RegisterMeshServiceHandlerFromEndpoint(ctx, mux, jsonEndpoint, opts); err != nil {
 			log.Error("error registering MeshService with grpc gateway", err)
+		} else {
+			serviceCount++
+			log.Info("registered MeshService with grpc gateway server")
 		}
-		log.Info("registered MeshService with grpc gateway server")
+	}
+
+	// At least one service must be enabled
+	if serviceCount == 0 {
+		log.Error("not starting grpc gateway service; at least one service must be enabled")
+		return
 	}
 
 	log.Info("starting grpc gateway server on port %d connected to grpc service at %s", s.Port, jsonEndpoint)

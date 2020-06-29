@@ -394,18 +394,32 @@ func TestMultiService(t *testing.T) {
 }
 
 func TestJsonApi(t *testing.T) {
+	const message = "hello world!"
+
+	// we cannot start the gateway service without enabling at least one service
+	require.Equal(t, cfg.StartNodeService, false)
+	require.Equal(t, cfg.StartMeshService, false)
+	shutDown := launchServer(t)
+	payload := marshalProto(t, &pb.EchoRequest{Msg: &pb.SimpleString{Value: message}})
+	url := fmt.Sprintf("http://127.0.0.1:%d/%s", cfg.NewJSONServerPort, "v1/node/echo")
+	t.Log("sending POST request to", url)
+	_, err := http.Post(url, "application/json", strings.NewReader(payload))
+	require.Error(t, err)
+	require.Contains(t, err.Error(), fmt.Sprintf(
+		"dial tcp 127.0.0.1:%d: connect: connection refused",
+		cfg.NewJSONServerPort))
+	shutDown()
+
+	// enable services and try again
 	svc1 := NewNodeService(&networkMock, txAPI, &genTime, &SyncerMock{})
 	svc2 := NewMeshService(&networkMock, txAPI, &genTime, &SyncerMock{})
 	cfg.StartNodeService = true
 	cfg.StartMeshService = true
-	shutDown := launchServer(t, svc1, svc2)
+	shutDown = launchServer(t, svc1, svc2)
 	defer shutDown()
 
-	// Test NodeService first
-	const message = "hello world!"
-
 	// generate request payload (api input params)
-	payload := marshalProto(t, &pb.EchoRequest{Msg: &pb.SimpleString{Value: message}})
+	payload = marshalProto(t, &pb.EchoRequest{Msg: &pb.SimpleString{Value: message}})
 	respBody, respStatus := callEndpoint(t, "v1/node/echo", payload)
 	require.Equal(t, http.StatusOK, respStatus)
 	var msg pb.EchoResponse
@@ -413,7 +427,6 @@ func TestJsonApi(t *testing.T) {
 	require.Equal(t, message, msg.Msg.Value)
 
 	// Test MeshService
-	//payload2 := marshalProto(t, &pb.GenesisTimeRequest{})
 	respBody2, respStatus2 := callEndpoint(t, "v1/mesh/genesistime", "")
 	require.Equal(t, http.StatusOK, respStatus2)
 	var msg2 pb.GenesisTimeResponse
