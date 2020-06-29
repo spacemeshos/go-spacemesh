@@ -18,6 +18,8 @@ type MeshService struct {
 	LayersPerEpoch   int
 	NetworkID        int8
 	LayerDurationSec int
+	LayerAvgSize     int
+	TxsPerBlock      int
 }
 
 // RegisterService registers this service with a grpc server instance
@@ -28,7 +30,8 @@ func (s MeshService) RegisterService(server *Server) {
 // NewMeshService creates a new grpc service using config data.
 func NewMeshService(
 	net api.NetworkAPI, tx api.TxAPI, genTime api.GenesisTimeAPI,
-	syncer api.Syncer, layersPerEpoch int, networkId int8, layerDurationSec int) *MeshService {
+	syncer api.Syncer, layersPerEpoch int, networkId int8, layerDurationSec int,
+	layerAvgSize int, txsPerBlock int) *MeshService {
 	return &MeshService{
 		Network:          net,
 		Tx:               tx,
@@ -38,6 +41,8 @@ func NewMeshService(
 		LayersPerEpoch:   layersPerEpoch,
 		NetworkID:        networkId,
 		LayerDurationSec: layerDurationSec,
+		LayerAvgSize:     layerAvgSize,
+		TxsPerBlock:      txsPerBlock,
 	}
 }
 
@@ -93,7 +98,9 @@ func (s MeshService) LayerDuration(ctx context.Context, in *pb.LayerDurationRequ
 // MaxTransactionsPerSecond returns the max number of tx per sec (a network parameter)
 func (s MeshService) MaxTransactionsPerSecond(ctx context.Context, in *pb.MaxTransactionsPerSecondRequest) (*pb.MaxTransactionsPerSecondResponse, error) {
 	log.Info("GRPC MeshService.MaxTransactionsPerSecond")
-	return nil, nil
+	return &pb.MaxTransactionsPerSecondResponse{Maxtxpersecond: &pb.SimpleInt{
+		Value: uint64(s.TxsPerBlock * s.LayerAvgSize / s.LayerDurationSec),
+	}}, nil
 }
 
 // QUERIES
