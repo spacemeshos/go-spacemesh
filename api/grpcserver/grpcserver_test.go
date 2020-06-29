@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/ptypes/empty"
+	"github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -297,8 +299,6 @@ func TestNodeService(t *testing.T) {
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
-	const message = "Hello World"
-
 	// start a client
 	addr := "localhost:" + strconv.Itoa(cfg.NewGrpcServerPort)
 
@@ -310,42 +310,42 @@ func TestNodeService(t *testing.T) {
 	}()
 	c := pb.NewNodeServiceClient(conn)
 
+	// Construct an array of test cases to test each endpoint in turn
 	testCases := []struct {
-		name  string
-		svc   func()
-		req   interface{}
-		check func(interface{})
+		name string
+		run  func()
 	}{
-		{"Echo", c.Echo, &pb.EchoRequest{}, func(pb.EchoResponse) {}},
+		{"Echo", func() {
+			const message = "Hello World"
+			res, err := c.Echo(context.Background(), &pb.EchoRequest{
+				Msg: &pb.SimpleString{Value: message}})
+			require.NoError(t, err)
+			require.Equal(t, message, res.Msg.Value)
+
+			// now try sending bad payloads
+			_, err = c.Echo(context.Background(), &pb.EchoRequest{Msg: nil})
+			require.EqualError(t, err, "rpc error: code = InvalidArgument desc = Must include `Msg`")
+			code := status.Code(err)
+			require.Equal(t, codes.InvalidArgument, code)
+
+			_, err = c.Echo(context.Background(), &pb.EchoRequest{})
+			require.EqualError(t, err, "rpc error: code = InvalidArgument desc = Must include `Msg`")
+			code = status.Code(err)
+			require.Equal(t, codes.InvalidArgument, code)
+		}},
+		{"Version", func() {
+			// must set this manually as it's set up in main() when running
+			version := "abc123"
+			cmd.Version = version
+			res, err := c.Version(context.Background(), &empty.Empty{})
+			require.NoError(t, err)
+			require.Equal(t, version, res.VersionString.Value)
+		}},
 	}
 
 	for _, tc := range testCases {
-		t.Run(tc.name)
+		t.Run(tc.name, func(t *testing.T) { tc.run() })
 	}
-
-	// Echo
-	t.Run("NodeService/Echo", func(t *testing.T) {
-		// call echo and validate result
-		response, err := c.Echo(context.Background(), &pb.EchoRequest{
-			Msg: &pb.SimpleString{Value: message}})
-		require.NoError(t, err)
-		require.Equal(t, message, response.Msg.Value)
-
-		// now try sending bad payloads
-		response, err = c.Echo(context.Background(), &pb.EchoRequest{Msg: nil})
-		require.EqualError(t, err, "rpc error: code = InvalidArgument desc = Must include `Msg`")
-		code := status.Code(err)
-		require.Equal(t, codes.InvalidArgument, code)
-
-		response, err = c.Echo(context.Background(), &pb.EchoRequest{})
-		require.EqualError(t, err, "rpc error: code = InvalidArgument desc = Must include `Msg`")
-		code = status.Code(err)
-		require.Equal(t, codes.InvalidArgument, code)
-	})
-
-	// Version
-	t.Run("NodeService/Echo", func(t *testing.T) {
-	})
 }
 
 func TestMeshService(t *testing.T) {
