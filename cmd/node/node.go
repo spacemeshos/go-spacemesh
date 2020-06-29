@@ -702,7 +702,7 @@ func (app *SpacemeshApp) startAPIServices(postClient api.PostAPI, net api.Networ
 		startService(grpcserver.NewNodeService(net, app.mesh, app.clock, app.syncer))
 	}
 	if apiConf.StartMeshService {
-		startService(grpcserver.NewMeshService(net, app.mesh, app.clock, app.syncer, app.Config.LayersPerEpoch, app.Config.P2P.NetworkID, layerDuration))
+		startService(grpcserver.NewMeshService(net, app.mesh, app.clock, app.syncer, app.Config.LayersPerEpoch, app.Config.P2P.NetworkID, layerDuration, app.Config.LayerAvgSize, app.Config.TxsPerBlock))
 	}
 
 	if apiConf.StartNewJSONServer {
