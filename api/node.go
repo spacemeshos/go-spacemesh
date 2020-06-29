@@ -65,6 +65,7 @@ type Syncer interface {
 type TxAPI interface {
 	AddressExists(addr types.Address) bool
 	ValidateNonceAndBalance(transaction *types.Transaction) error
+	GetLayer(types.LayerID) (*types.Layer, error)
 	GetRewards(account types.Address) (rewards []types.Reward, err error)
 	GetTransactionsByDestination(l types.LayerID, account types.Address) (txs []types.TransactionID)
 	GetTransactionsByOrigin(l types.LayerID, account types.Address) (txs []types.TransactionID)
