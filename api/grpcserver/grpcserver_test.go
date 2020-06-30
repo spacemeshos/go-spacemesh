@@ -7,8 +7,13 @@ import (
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes/empty"
+	"github.com/spacemeshos/ed25519"
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/cmd"
-	"github.com/spacemeshos/go-spacemesh/state"
+	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/rand"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -30,6 +35,42 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+)
+
+const (
+	miningStatus          = 123
+	remainingBytes        = 321
+	defaultGasLimit       = 10
+	defaultFee            = 1
+	genTimeUnix           = 1000000
+	layerDurationSec      = 10
+	layerAvgSize          = 10
+	txsPerBlock           = 99
+	ValidatedLayerID      = 8
+	TxReturnLayer         = 1
+	layersPerEpoch        = 5
+	networkId             = 120
+	postGenesisEpochLayer = 22
+)
+
+var (
+	networkMock = NetworkMock{}
+	genTime     = GenesisTimeMock{time.Unix(genTimeUnix, 0)}
+	txAPI       = &TxAPIMock{
+		returnTx:     make(map[types.TransactionID]*types.Transaction),
+		layerApplied: make(map[types.TransactionID]*types.LayerID),
+	}
+	coinbase    = types.HexToAddress("33333")
+	pub, _, _   = ed25519.GenerateKey(nil)
+	nodeID      = types.NodeID{Key: util.Bytes2Hex(pub), VRFPublicKey: []byte("22222")}
+	prevAtxID   = types.ATXID(types.HexToHash32("44444"))
+	block1      = types.NewExistingBlock(0, []byte("11111"))
+	block2      = types.NewExistingBlock(0, []byte("22222"))
+	block3      = types.NewExistingBlock(0, []byte("33333"))
+	defaultView = []types.BlockID{block1.ID(), block2.ID(), block3.ID()}
+	chlng       = types.HexToHash32("55555")
+	poetRef     = []byte("66666")
+	npst        = activation.NewNIPSTWithChallenge(&chlng, poetRef)
 )
 
 // Better a small code duplication than a small dependency
@@ -170,25 +211,78 @@ func (t *TxAPIMock) AddressExists(types.Address) bool {
 	return true
 }
 
+var globalBlock = types.NewExistingBlock(types.LayerID(0), []byte(rand.String(8)))
+
 func (t *TxAPIMock) GetLayer(tid types.LayerID) (*types.Layer, error) {
-	return types.NewLayer(tid), nil
+	var blk1, blk2, blk3 *types.Block
+
+	// Messy but this allows easier instrumentation
+	if tid == 0 {
+		blk1 = globalBlock
+		blk2 = globalBlock
+		blk3 = globalBlock
+	} else {
+		blk1 = types.NewExistingBlock(tid, []byte(rand.String(8)))
+		blk2 = types.NewExistingBlock(tid, []byte(rand.String(8)))
+		blk3 = types.NewExistingBlock(tid, []byte(rand.String(8)))
+	}
+	blocks := []*types.Block{blk1, blk2, blk3}
+	return types.NewExistingLayer(tid, blocks), nil
 }
+
+var (
+	challenge = newChallenge(nodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
+	globalAtx = newAtx(challenge, 5, defaultView, npst)
+)
 
 func (t *TxAPIMock) GetATXs([]types.ATXID) (map[types.ATXID]*types.ActivationTx, []types.ATXID) {
-	return nil, nil
+	atxs := map[types.ATXID]*types.ActivationTx{globalAtx.ID(): globalAtx}
+	return atxs, nil
 }
 
+var tx1 *types.Transaction
+
 func (t *TxAPIMock) GetTransactions([]types.TransactionID) ([]*types.Transaction, map[types.TransactionID]struct{}) {
-	return nil, nil
+	return []*types.Transaction{tx1}, nil
+}
+
+func NewTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) (*types.Transaction, error) {
+	tx, err := mesh.NewSignedTx(nonce, recipient, 1, defaultGasLimit, defaultFee, signer)
+	if err != nil {
+		return nil, err
+	}
+	return tx, nil
+}
+
+func newChallenge(nodeID types.NodeID, sequence uint64, prevAtxID, posAtxID types.ATXID, pubLayerID types.LayerID) types.NIPSTChallenge {
+	challenge := types.NIPSTChallenge{
+		NodeID:         nodeID,
+		Sequence:       sequence,
+		PrevATXID:      prevAtxID,
+		PubLayerID:     pubLayerID,
+		PositioningATX: posAtxID,
+	}
+	return challenge
+}
+
+func newAtx(challenge types.NIPSTChallenge, ActiveSetSize uint32, View []types.BlockID, nipst *types.NIPST) *types.ActivationTx {
+	activationTx := &types.ActivationTx{
+		InnerActivationTx: &types.InnerActivationTx{
+			ActivationTxHeader: &types.ActivationTxHeader{
+				NIPSTChallenge: challenge,
+				Coinbase:       coinbase,
+				ActiveSetSize:  ActiveSetSize,
+			},
+			Nipst: nipst,
+			View:  View,
+		},
+	}
+	activationTx.CalcAndSetID()
+	return activationTx
 }
 
 // MiningAPIMock is a mock for mining API
 type MiningAPIMock struct{}
-
-const (
-	miningStatus   = 123
-	remainingBytes = 321
-)
 
 func (*MiningAPIMock) MiningStats() (int, uint64, string, string) {
 	return miningStatus, remainingBytes, "123456", "/tmp"
@@ -224,30 +318,6 @@ type PostMock struct {
 func (PostMock) Reset() error {
 	return nil
 }
-
-const (
-	genTimeUnix      = 1000000
-	layerDurationSec = 10
-	layerAvgSize     = 10
-	txsPerBlock      = 99
-	ValidatedLayerID = 8
-	TxReturnLayer    = 1
-	layersPerEpoch   = 5
-	networkId        = 120
-)
-
-var (
-	ap          = NewNodeAPIMock()
-	networkMock = NetworkMock{}
-	mining      = MiningAPIMock{}
-	oracle      = OracleMock{}
-	genTime     = GenesisTimeMock{time.Unix(genTimeUnix, 0)}
-	txMempool   = state.NewTxMemPool()
-	txAPI       = &TxAPIMock{
-		returnTx:     make(map[types.TransactionID]*types.Transaction),
-		layerApplied: make(map[types.TransactionID]*types.LayerID),
-	}
-)
 
 func marshalProto(t *testing.T, msg proto.Message) string {
 	var buf bytes.Buffer
@@ -461,13 +531,85 @@ func TestMeshService(t *testing.T) {
 			//require.Equal(t, uint64(layerAvgSize*txsPerBlock/layerDurationSec), response.Maxtxpersecond.Value)
 		}},
 		{"LayersQuery", func(t *testing.T) {
+			// Generate some tx data that we can test
+			tx, err := NewTx(1, types.BytesToAddress([]byte{0x02}), signing.NewEdSigner())
+			require.NoError(t, err, "error generating test tx")
+			tx1 = tx
+			layerFirst := 0
+			layerLast := txAPI.LatestLayer()
+
+			// First, test bad inputs
 			req := &pb.LayersQueryRequest{
-				StartLayer: 0,
-				EndLayer:   uint32(txAPI.LatestLayer()),
+				StartLayer: uint32(layerLast),
+				EndLayer:   uint32(layerLast),
 			}
+
+			// TEST HERE
+
+			// Generate a valid request
+			req = &pb.LayersQueryRequest{
+				StartLayer: uint32(layerFirst),
+				EndLayer:   uint32(layerLast),
+			}
+
 			response, err := c.LayersQuery(context.Background(), req)
 			require.NoError(t, err)
-			require.Equal(t, uint64(0), response.Layer[0].Number, "first layer is zero")
+
+			resLayer := response.Layer[0]
+			require.Equal(t, uint64(0), resLayer.Number, "first layer is zero")
+			require.Equal(t, pb.Layer_LAYER_STATUS_CONFIRMED, resLayer.Status, "first layer is confirmed")
+
+			resLayerNine := response.Layer[9]
+			require.Equal(t, uint64(9), resLayerNine.Number, "layer nine is ninth")
+			require.Equal(t, pb.Layer_LAYER_STATUS_UNSPECIFIED, resLayerNine.Status, "later layer is unconfirmed")
+
+			// endpoint inclusive so add one
+			numLayers := int(layerLast) - layerFirst + 1
+			numTxPerBlock := 1
+			numAtxPerLayer := 1
+			numBlkPerLayer := 3
+			//numTxs := numLayers * numTxPerLayer
+			//numAtxs := numLayers * numAtxPerLayer
+			require.Equal(t, numLayers, len(response.Layer))
+
+			require.Equal(t, numAtxPerLayer, len(resLayer.Activations))
+			require.Equal(t, numBlkPerLayer, len(resLayer.Blocks))
+
+			resActivation := resLayer.Activations[0]
+			require.Equal(t, globalAtx.ID().Bytes(), resActivation.Id.Id)
+			require.Equal(t, resLayer.Number, resActivation.Layer)
+			require.Equal(t, globalAtx.NodeID.ToBytes(), resActivation.SmesherId.Id)
+			require.Equal(t, globalAtx.Coinbase.Bytes(), resActivation.Coinbase.Address)
+			require.Equal(t, globalAtx.PrevATXID.Bytes(), resActivation.PrevAtx.Id)
+			data, err := globalAtx.InnerBytes()
+			require.NoError(t, err)
+			require.Equal(t, uint64(len(data)), resActivation.CommitmentSize)
+
+			resBlock := resLayer.Blocks[0]
+
+			require.Equal(t, numTxPerBlock, len(resBlock.Transactions))
+			require.Equal(t, globalBlock.ID().Bytes(), resBlock.Id)
+
+			// Check the tx as well
+			resTx := resBlock.Transactions[0]
+			require.Equal(t, tx.ID().Bytes(), resTx.Id.Id)
+			require.Equal(t, tx.Origin().Bytes(), resTx.Sender.Address)
+			require.Equal(t, tx.GasLimit, resTx.GasOffered.GasProvided)
+			require.Equal(t, tx.Fee, resTx.GasOffered.GasPrice)
+			require.Equal(t, tx.Amount, resTx.Amount.Value)
+			require.Equal(t, tx.AccountNonce, resTx.Counter)
+			require.Equal(t, tx.Signature[:], resTx.Signature.Signature)
+			require.Equal(t, pb.Signature_SCHEME_ED25519_PLUS_PLUS, resTx.Signature.Scheme)
+			require.Equal(t, tx.Origin().Bytes(), resTx.Signature.PublicKey)
+
+			// The Data field is a bit trickier to read
+			switch x := resTx.Data.(type) {
+			case *pb.Transaction_CoinTransfer:
+				require.Equal(t, tx.Recipient.Bytes(), x.CoinTransfer.Receiver.Address,
+					"inner coin transfer tx has bad recipient")
+			default:
+				require.Fail(t, "inner tx has wrong tx data type")
+			}
 		}},
 	}
 
