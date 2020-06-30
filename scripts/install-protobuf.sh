@@ -11,7 +11,7 @@ elif [[ $kernel == "FreeBSD" ]]; then
 		echo "protoc already installed"
 		exit 0
 	else
-		echo "protoc not found in \$PATH, install it with: sudo pkg install protbuf"
+		echo "protoc not found in \$PATH, install it with: sudo pkg install protobuf"
 		exit 1
 	fi
 else
