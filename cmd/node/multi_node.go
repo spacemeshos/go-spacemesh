@@ -141,7 +141,7 @@ func getTestDefaultConfig() *config.Config {
 	cfg.HARE.SuperHare = true
 	cfg.LayerAvgSize = 5
 	cfg.LayersPerEpoch = 3
-	cfg.TxsPerBlock = 100
+	cfg.TxsPerBlock = 200
 	cfg.Hdist = 5
 
 	cfg.LayerDurationSec = 20

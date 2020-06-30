@@ -63,7 +63,7 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().IntVar(&config.AtxsPerBlock, "atxs-per-block",
 		config.AtxsPerBlock, "the number of atxs to select per block on block creation")
 	cmd.PersistentFlags().IntVar(&config.TxsPerBlock, "txs-per-block",
-		config.TxsPerBlock, "max no. of transactions per block")
+		config.TxsPerBlock, "the number of transactions to select per block on block creation")
 
 	/** ======================== P2P Flags ========================== **/
 

@@ -167,7 +167,7 @@ func defaultBaseConfig() BaseConfig {
 		SyncInterval:        10,
 		SyncValidationDelta: 30,
 		AtxsPerBlock:        100,
-		TxsPerBlock:         100,
+		TxsPerBlock:         200,
 	}
 }
 
