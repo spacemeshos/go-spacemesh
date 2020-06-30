@@ -119,7 +119,7 @@ func (s MeshService) LayersQuery(ctx context.Context, in *pb.LayersQueryRequest)
 	log.Info("GRPC MeshService.LayersQuery")
 
 	// current layer (based on time)
-	currentLayer := s.GenTime.GetCurrentLayer().Uint64()
+	//currentLayer := s.GenTime.GetCurrentLayer().Uint64()
 
 	// last validated layer
 	// TODO: don't know if this is tortoise or hare, or how to tell
@@ -138,28 +138,104 @@ func (s MeshService) LayersQuery(ctx context.Context, in *pb.LayersQueryRequest)
 	}
 
 	layers := make([]*pb.Layer, in.EndLayer-in.StartLayer)
-	layerStatus := pb.Layer_LAYER_STATUS_UNSPECIFIED
 	for l := uint64(in.StartLayer); l <= uint64(in.EndLayer); l++ {
-		// TODO: only run this once
-		if l >= lastValidLayer.Uint64() {
-			layerStatus = pb.Layer_LAYER_STATUS_CONFIRMED
+		layerStatusFn := func() pb.Layer_LayerStatus {
+			if l >= lastValidLayer.Uint64() {
+				return pb.Layer_LAYER_STATUS_CONFIRMED
+			}
+			return pb.Layer_LAYER_STATUS_UNSPECIFIED
 		}
 
 		layer, err := s.Mesh.GetLayer(types.LayerID(l))
+		// TODO: Be careful with how we handle missing layers here.
+		// A layer that's newer than the currentLayer (defined above)
+		// is clearly an input error. A missing layer that's older than
+		// lastValidLayer is clearly an internal error. A missing layer
+		// between these two is a gray area: do we define this as an
+		// internal or an input error?
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "error retreiving layer data")
 		}
 
-		// Load all block data from layer.Blocks()
+		// Load all block data
+		var blocks []*pb.Block
+
+		// Need to extract activation data from blocks as well
+		var activations []*pb.Activation
+
+		for _, b := range layer.Blocks() {
+			txs, missing := s.Mesh.GetTransactions(b.TxIDs)
+			// TODO: Do we ever expect txs to be missing here?
+			// E.g., if this node has not synced/received them yet.
+			if len(missing) != 0 {
+				log.Error("could not find transactions %v from layer %v", missing, l)
+				return nil, status.Errorf(codes.Internal, "error retrieving tx data")
+			}
+
+			// Add unique ATXIDs
+			atxs, matxs := s.Mesh.GetATXs(b.ATXIDs)
+			if len(matxs) != 0 {
+				log.Error("could not find activations %v from layer %v", matxs, l)
+				return nil, status.Errorf(codes.Internal, "error retrieving activations data")
+			}
+			for _, atx := range atxs {
+				// TODO: It's suboptimal to have to serialize every atx to get its
+				// size but size is not stored as an attribute.
+				data, err := atx.InnerBytes()
+				if err != nil {
+					return nil, status.Errorf(codes.Internal, "error serializing activation data")
+				}
+				activations = append(activations, &pb.Activation{
+					Id:             &pb.ActivationId{Id: atx.ID().Bytes()},
+					Layer:          l,
+					SmesherId:      &pb.SmesherId{Id: atx.NodeID.ToBytes()},
+					Coinbase:       &pb.AccountId{Address: atx.Coinbase.Bytes()},
+					PrevAtx:        &pb.ActivationId{Id: atx.PrevATXID.Bytes()},
+					CommitmentSize: uint64(len(data)),
+				})
+			}
+
+			var pbTxs []*pb.Transaction
+			for _, t := range txs {
+				pbTxs = append(pbTxs, &pb.Transaction{
+					Id: &pb.TransactionId{Id: t.ID().Bytes()},
+					Data: &pb.Transaction_CoinTransfer{CoinTransfer: &pb.CoinTransferTransaction{
+						Receiver: &pb.AccountId{Address: t.Recipient.Bytes()},
+					},
+					},
+					Sender: &pb.AccountId{Address: t.Origin().Bytes()},
+					GasOffered: &pb.GasOffered{
+						// TODO: Check this math! Does fee == price?
+						GasPrice:    t.Fee,
+						GasProvided: t.GasLimit,
+					},
+					Amount:  &pb.Amount{Value: t.Amount},
+					Counter: t.AccountNonce,
+					Signature: &pb.Signature{
+						Scheme:    pb.Signature_SCHEME_ED25519_PLUS_PLUS,
+						Signature: t.Signature[:],
+						PublicKey: t.Origin().Bytes(),
+					},
+				})
+			}
+			blocks = append(blocks, &pb.Block{
+				Id:           b.ID().Bytes(),
+				Transactions: pbTxs,
+			})
+		}
 
 		// Extract ATX data from block data
 
+		// TODO: We currently have no way to get state root for any
+		// layer but the latest layer applied to state (which is
+		// anyway not exposed by Mesh). The logic lives in
+		// Mesh.txProcessor.GetStateRoot().
 		layers = append(layers, &pb.Layer{
 			Number:        l,
-			Status:        layerStatus,
-			Hash:          nil, // do we need this?
-			Blocks:        nil,
-			Activations:   nil,
+			Status:        layerStatusFn(),
+			Hash:          layer.Hash().Bytes(), // do we need this?
+			Blocks:        blocks,
+			Activations:   activations,
 			RootStateHash: nil, // do we need this?
 		})
 	}
