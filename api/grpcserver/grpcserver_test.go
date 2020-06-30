@@ -49,7 +49,7 @@ const (
 	ValidatedLayerID      = 8
 	TxReturnLayer         = 1
 	layersPerEpoch        = 5
-	networkId             = 120
+	networkID             = 120
 	postGenesisEpochLayer = 22
 )
 
@@ -475,7 +475,7 @@ func TestNodeService(t *testing.T) {
 }
 
 func TestMeshService(t *testing.T) {
-	grpcService := NewMeshService(&networkMock, txAPI, &genTime, &SyncerMock{}, layersPerEpoch, networkId, layerDurationSec, layerAvgSize, txsPerBlock)
+	grpcService := NewMeshService(&networkMock, txAPI, &genTime, &SyncerMock{}, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
@@ -513,7 +513,7 @@ func TestMeshService(t *testing.T) {
 		{"NetId", func(t *testing.T) {
 			response, err := c.NetID(context.Background(), &pb.NetIDRequest{})
 			require.NoError(t, err)
-			require.Equal(t, uint64(networkId), response.Netid.Value)
+			require.Equal(t, uint64(networkID), response.Netid.Value)
 		}},
 		{"LayerDuration", func(t *testing.T) {
 			response, err := c.LayerDuration(context.Background(), &pb.LayerDurationRequest{})
@@ -620,7 +620,7 @@ func TestMeshService(t *testing.T) {
 
 func TestMultiService(t *testing.T) {
 	svc1 := NewNodeService(&networkMock, txAPI, &genTime, &SyncerMock{})
-	svc2 := NewMeshService(&networkMock, txAPI, &genTime, &SyncerMock{}, layersPerEpoch, networkId, layerDurationSec, layerAvgSize, txsPerBlock)
+	svc2 := NewMeshService(&networkMock, txAPI, &genTime, &SyncerMock{}, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
 	shutDown := launchServer(t, svc1, svc2)
 	defer shutDown()
 
@@ -680,7 +680,7 @@ func TestJsonApi(t *testing.T) {
 
 	// enable services and try again
 	svc1 := NewNodeService(&networkMock, txAPI, &genTime, &SyncerMock{})
-	svc2 := NewMeshService(&networkMock, txAPI, &genTime, &SyncerMock{}, layersPerEpoch, networkId, layerDurationSec, layerAvgSize, txsPerBlock)
+	svc2 := NewMeshService(&networkMock, txAPI, &genTime, &SyncerMock{}, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
 	cfg.StartNodeService = true
 	cfg.StartMeshService = true
 	shutDown = launchServer(t, svc1, svc2)

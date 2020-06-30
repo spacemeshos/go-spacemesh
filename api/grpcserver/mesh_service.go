@@ -33,7 +33,7 @@ func (s MeshService) RegisterService(server *Server) {
 // NewMeshService creates a new grpc service using config data.
 func NewMeshService(
 	net api.NetworkAPI, tx api.TxAPI, genTime api.GenesisTimeAPI,
-	syncer api.Syncer, layersPerEpoch int, networkId int8, layerDurationSec int,
+	syncer api.Syncer, layersPerEpoch int, networkID int8, layerDurationSec int,
 	layerAvgSize int, txsPerBlock int) *MeshService {
 	return &MeshService{
 		Network:          net,
@@ -42,7 +42,7 @@ func NewMeshService(
 		PeerCounter:      peers.NewPeers(net, log.NewDefault("grpc_server.MeshService")),
 		Syncer:           syncer,
 		LayersPerEpoch:   layersPerEpoch,
-		NetworkID:        networkId,
+		NetworkID:        networkID,
 		LayerDurationSec: layerDurationSec,
 		LayerAvgSize:     layerAvgSize,
 		TxsPerBlock:      txsPerBlock,
@@ -139,6 +139,8 @@ func (s MeshService) LayersQuery(ctx context.Context, in *pb.LayersQueryRequest)
 
 	layers := []*pb.Layer{}
 	for l := uint64(in.StartLayer); l <= uint64(in.EndLayer); l++ {
+		// TODO: properly implement this check and include third status
+		// see note above about tortoise vs. hare
 		layerStatusFn := func() pb.Layer_LayerStatus {
 			if l <= lastValidLayer.Uint64() {
 				return pb.Layer_LAYER_STATUS_CONFIRMED
@@ -196,6 +198,7 @@ func (s MeshService) LayersQuery(ctx context.Context, in *pb.LayersQueryRequest)
 					Amount:  &pb.Amount{Value: t.Amount},
 					Counter: t.AccountNonce,
 					Signature: &pb.Signature{
+						// TODO: confirm default signature scheme
 						Scheme:    pb.Signature_SCHEME_ED25519_PLUS_PLUS,
 						Signature: t.Signature[:],
 						PublicKey: t.Origin().Bytes(),
