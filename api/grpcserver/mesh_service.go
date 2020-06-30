@@ -137,10 +137,10 @@ func (s MeshService) LayersQuery(ctx context.Context, in *pb.LayersQueryRequest)
 		return nil, status.Errorf(codes.InvalidArgument, "`StartLayer` must not be greater than `EndLayer`")
 	}
 
-	layers := make([]*pb.Layer, in.EndLayer-in.StartLayer)
+	layers := []*pb.Layer{}
 	for l := uint64(in.StartLayer); l <= uint64(in.EndLayer); l++ {
 		layerStatusFn := func() pb.Layer_LayerStatus {
-			if l >= lastValidLayer.Uint64() {
+			if l <= lastValidLayer.Uint64() {
 				return pb.Layer_LAYER_STATUS_CONFIRMED
 			}
 			return pb.Layer_LAYER_STATUS_UNSPECIFIED
@@ -160,8 +160,8 @@ func (s MeshService) LayersQuery(ctx context.Context, in *pb.LayersQueryRequest)
 		// Load all block data
 		var blocks []*pb.Block
 
-		// Need to extract activation data from blocks as well
-		var activations []*pb.Activation
+		// Save activations too
+		var activations []types.ATXID
 
 		for _, b := range layer.Blocks() {
 			txs, missing := s.Mesh.GetTransactions(b.TxIDs)
@@ -172,36 +172,20 @@ func (s MeshService) LayersQuery(ctx context.Context, in *pb.LayersQueryRequest)
 				return nil, status.Errorf(codes.Internal, "error retrieving tx data")
 			}
 
-			// Add unique ATXIDs
-			atxs, matxs := s.Mesh.GetATXs(b.ATXIDs)
-			if len(matxs) != 0 {
-				log.Error("could not find activations %v from layer %v", matxs, l)
-				return nil, status.Errorf(codes.Internal, "error retrieving activations data")
-			}
-			for _, atx := range atxs {
-				// TODO: It's suboptimal to have to serialize every atx to get its
-				// size but size is not stored as an attribute.
-				data, err := atx.InnerBytes()
-				if err != nil {
-					return nil, status.Errorf(codes.Internal, "error serializing activation data")
-				}
-				activations = append(activations, &pb.Activation{
-					Id:             &pb.ActivationId{Id: atx.ID().Bytes()},
-					Layer:          l,
-					SmesherId:      &pb.SmesherId{Id: atx.NodeID.ToBytes()},
-					Coinbase:       &pb.AccountId{Address: atx.Coinbase.Bytes()},
-					PrevAtx:        &pb.ActivationId{Id: atx.PrevATXID.Bytes()},
-					CommitmentSize: uint64(len(data)),
-				})
-			}
+			activations = append(activations, b.ATXIDs...)
 
 			var pbTxs []*pb.Transaction
 			for _, t := range txs {
+				if t == nil {
+					log.Error("got empty transaction data from layer %v", l)
+					return nil, status.Errorf(codes.Internal, "error retrieving tx data")
+				}
 				pbTxs = append(pbTxs, &pb.Transaction{
 					Id: &pb.TransactionId{Id: t.ID().Bytes()},
-					Data: &pb.Transaction_CoinTransfer{CoinTransfer: &pb.CoinTransferTransaction{
-						Receiver: &pb.AccountId{Address: t.Recipient.Bytes()},
-					},
+					Data: &pb.Transaction_CoinTransfer{
+						CoinTransfer: &pb.CoinTransferTransaction{
+							Receiver: &pb.AccountId{Address: t.Recipient.Bytes()},
+						},
 					},
 					Sender: &pb.AccountId{Address: t.Origin().Bytes()},
 					GasOffered: &pb.GasOffered{
@@ -225,6 +209,30 @@ func (s MeshService) LayersQuery(ctx context.Context, in *pb.LayersQueryRequest)
 		}
 
 		// Extract ATX data from block data
+		var pbActivations []*pb.Activation
+
+		// Add unique ATXIDs
+		atxs, matxs := s.Mesh.GetATXs(activations)
+		if len(matxs) != 0 {
+			log.Error("could not find activations %v from layer %v", matxs, l)
+			return nil, status.Errorf(codes.Internal, "error retrieving activations data")
+		}
+		for _, atx := range atxs {
+			// TODO: It's suboptimal to have to serialize every atx to get its
+			// size but size is not stored as an attribute.
+			data, err := atx.InnerBytes()
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "error serializing activation data")
+			}
+			pbActivations = append(pbActivations, &pb.Activation{
+				Id:             &pb.ActivationId{Id: atx.ID().Bytes()},
+				Layer:          l,
+				SmesherId:      &pb.SmesherId{Id: atx.NodeID.ToBytes()},
+				Coinbase:       &pb.AccountId{Address: atx.Coinbase.Bytes()},
+				PrevAtx:        &pb.ActivationId{Id: atx.PrevATXID.Bytes()},
+				CommitmentSize: uint64(len(data)),
+			})
+		}
 
 		// TODO: We currently have no way to get state root for any
 		// layer but the latest layer applied to state (which is
@@ -235,7 +243,7 @@ func (s MeshService) LayersQuery(ctx context.Context, in *pb.LayersQueryRequest)
 			Status:        layerStatusFn(),
 			Hash:          layer.Hash().Bytes(), // do we need this?
 			Blocks:        blocks,
-			Activations:   activations,
+			Activations:   pbActivations,
 			RootStateHash: nil, // do we need this?
 		})
 	}
