@@ -1,4 +1,5 @@
-#!/usr/bin/env -S bash -e
+#!/usr/bin/env bash
+set -e
 # Ensure we use Go installed
 errcho() {
     RED='\033[0;31m'

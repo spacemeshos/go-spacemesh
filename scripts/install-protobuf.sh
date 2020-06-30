@@ -1,4 +1,5 @@
-#!/usr/bin/env -S bash -e
+#!/usr/bin/env bash
+set -e
 # Detect OS and architecture
 kernel=`uname -s`
 arch=`uname -m`
