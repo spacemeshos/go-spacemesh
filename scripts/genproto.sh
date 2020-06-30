@@ -27,14 +27,14 @@ if [ ! -f $protoc ] ; then
 fi
 
 echo "using protoc from $protoc"
-if [[ $protoc == "protoc" ]]; then
-	devtools_opts="-I./devtools/include/"
+if [[ `uname -s` == "FreeBSD" ]]; then
+	freebsd_opts="-I/usr/local/include/"
 fi
 
 grpc_gateway_path=$(go list -m -f '{{.Dir}}' github.com/grpc-ecosystem/grpc-gateway)
 googleapis_path="$grpc_gateway_path/third_party/googleapis"
 
 echo "Generating protobuf for api/pb"
-compile -I. -I$googleapis_path $devtools_opts --go_out=plugins=grpc:. api/pb/api.proto
-compile -I. -I$googleapis_path $devtools_opts --grpc-gateway_out=logtostderr=true:. api/pb/api.proto
-compile -I. -I$googleapis_path $devtools_opts --swagger_out=logtostderr=true:. api/pb/api.proto
+compile -I. -I$googleapis_path $freebsd_opts --go_out=plugins=grpc:. api/pb/api.proto
+compile -I. -I$googleapis_path $freebsd_opts --grpc-gateway_out=logtostderr=true:. api/pb/api.proto
+compile -I. -I$googleapis_path $freebsd_opts --swagger_out=logtostderr=true:. api/pb/api.proto
