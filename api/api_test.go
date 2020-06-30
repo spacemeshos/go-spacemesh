@@ -181,6 +181,18 @@ func (t *TxAPIMock) AddressExists(types.Address) bool {
 	return true
 }
 
+func (t *TxAPIMock) GetATXs([]types.ATXID) (map[types.ATXID]*types.ActivationTx, []types.ATXID) {
+	return nil, nil
+}
+
+func (t *TxAPIMock) GetTransactions([]types.TransactionID) ([]*types.Transaction, map[types.TransactionID]struct{}) {
+	return nil, nil
+}
+
+func (t *TxAPIMock) GetLayer(types.LayerID) (*types.Layer, error) {
+	return nil, nil
+}
+
 // MiningAPIMock is a mock for mining API
 type MiningAPIMock struct{}
 

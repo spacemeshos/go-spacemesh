@@ -170,8 +170,16 @@ func (t *TxAPIMock) AddressExists(types.Address) bool {
 	return true
 }
 
-func (t *TxAPIMock) GetLayer(types.LayerID) types.Layer {
-	return types.Layer{}
+func (t *TxAPIMock) GetLayer(tid types.LayerID) (*types.Layer, error) {
+	return types.NewLayer(tid), nil
+}
+
+func (t *TxAPIMock) GetATXs([]types.ATXID) (map[types.ATXID]*types.ActivationTx, []types.ATXID) {
+	return nil, nil
+}
+
+func (t *TxAPIMock) GetTransactions([]types.TransactionID) ([]*types.Transaction, map[types.TransactionID]struct{}) {
+	return nil, nil
 }
 
 // MiningAPIMock is a mock for mining API
@@ -446,6 +454,20 @@ func TestMeshService(t *testing.T) {
 			response, err := c.MaxTransactionsPerSecond(context.Background(), &pb.MaxTransactionsPerSecondRequest{})
 			require.NoError(t, err)
 			require.Equal(t, uint64(layerAvgSize*txsPerBlock/layerDurationSec), response.Maxtxpersecond.Value)
+		}},
+		{"AccountMeshDataQuery", func(t *testing.T) {
+			//response, err := c.MaxTransactionsPerSecond(context.Background(), &pb.MaxTransactionsPerSecondRequest{})
+			//require.NoError(t, err)
+			//require.Equal(t, uint64(layerAvgSize*txsPerBlock/layerDurationSec), response.Maxtxpersecond.Value)
+		}},
+		{"LayersQuery", func(t *testing.T) {
+			req := &pb.LayersQueryRequest{
+				StartLayer: 0,
+				EndLayer:   uint32(txAPI.LatestLayer()),
+			}
+			response, err := c.LayersQuery(context.Background(), req)
+			require.NoError(t, err)
+			require.Equal(t, uint64(0), response.Layer[0].Number, "first layer is zero")
 		}},
 	}
 
