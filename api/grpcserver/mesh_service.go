@@ -153,7 +153,7 @@ func (s MeshService) LayersQuery(ctx context.Context, in *pb.LayersQueryRequest)
 		// lastValidLayer is clearly an internal error. A missing layer
 		// between these two is a gray area: do we define this as an
 		// internal or an input error?
-		if err != nil {
+		if layer == nil || err != nil {
 			return nil, status.Errorf(codes.Internal, "error retreiving layer data")
 		}
 
