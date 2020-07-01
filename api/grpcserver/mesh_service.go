@@ -5,6 +5,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/p2p/peers"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
@@ -15,6 +16,7 @@ import (
 type MeshService struct {
 	Network          api.NetworkAPI // P2P Swarm
 	Mesh             api.TxAPI      // Mesh
+	Mempool          *miner.TxMempool
 	GenTime          api.GenesisTimeAPI
 	PeerCounter      api.PeerCounter
 	Syncer           api.Syncer
@@ -32,12 +34,13 @@ func (s MeshService) RegisterService(server *Server) {
 
 // NewMeshService creates a new grpc service using config data.
 func NewMeshService(
-	net api.NetworkAPI, tx api.TxAPI, genTime api.GenesisTimeAPI,
+	net api.NetworkAPI, tx api.TxAPI, mempool *miner.TxMempool, genTime api.GenesisTimeAPI,
 	syncer api.Syncer, layersPerEpoch int, networkID int8, layerDurationSec int,
 	layerAvgSize int, txsPerBlock int) *MeshService {
 	return &MeshService{
 		Network:          net,
 		Mesh:             tx,
+		Mempool:          mempool,
 		GenTime:          genTime,
 		PeerCounter:      peers.NewPeers(net, log.NewDefault("grpc_server.MeshService")),
 		Syncer:           syncer,
@@ -111,7 +114,140 @@ func (s MeshService) MaxTransactionsPerSecond(ctx context.Context, in *pb.MaxTra
 // AccountMeshDataQuery returns account data
 func (s MeshService) AccountMeshDataQuery(ctx context.Context, in *pb.AccountMeshDataQueryRequest) (*pb.AccountMeshDataQueryResponse, error) {
 	log.Info("GRPC MeshService.AccountMeshDataQuery")
-	return nil, nil
+
+	// This is the latest layer we're aware of
+	//latestLayer := s.Mesh.LatestLayer()
+	startLayer := types.LayerID(in.MinLayer)
+
+	if startLayer > s.Mesh.LatestLayer() {
+		return nil, status.Errorf(codes.InvalidArgument, "`LatestLayer` must be less than or equal to latest layer")
+	}
+	if in.Filter == nil {
+		return nil, status.Errorf(codes.InvalidArgument, "`Filter` must be provided")
+	}
+	if in.Filter.AccountId == nil {
+		return nil, status.Errorf(codes.InvalidArgument, "`Filter.AccountId` must be provided")
+	}
+
+	// Gather transaction data
+	//txs := &pb.AccountMeshData{DataItem: &pb.AccountMeshData_Transaction{Transaction: }
+	addr := types.BytesToAddress(in.Filter.AccountId.Address)
+	res := &pb.AccountMeshDataQueryResponse{}
+	if in.Filter.AccountMeshDataFlags&uint32(pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_TRANSACTIONS) != 0 {
+		meshTxIds := s.getTxIdsFromMesh(startLayer, addr)
+		mempoolTxIds := s.Mempool.GetTxIdsByAddress(addr)
+
+		// Look up full data for all unique txids
+		txs, missing := s.Mesh.GetTransactions(append(meshTxIds, mempoolTxIds...))
+
+		// TODO: Do we ever expect txs to be missing here?
+		// E.g., if this node has not synced/received them yet.
+		if len(missing) != 0 {
+			log.Error("could not find transactions %v", missing)
+			return nil, status.Errorf(codes.Internal, "error retrieving tx data")
+		}
+		for _, t := range txs {
+			res.Data = append(res.Data, &pb.AccountMeshData{
+				DataItem: &pb.AccountMeshData_Transaction{
+					Transaction: convertTransaction(t),
+				},
+			})
+		}
+	}
+
+	// Gather activation data
+	if in.Filter.AccountMeshDataFlags&uint32(pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_ACTIVATIONS) != 0 {
+		// TODO: we have no way to look up activations by coinbase
+		// so we have no choice but to read all of them (!!!)
+		var activations []types.ATXID
+		for l := startLayer; l <= s.Mesh.LatestLayer(); l++ {
+			layer, err := s.Mesh.GetLayer(l)
+			if layer == nil || err != nil {
+				return nil, status.Errorf(codes.Internal, "error retrieving layer data")
+			}
+
+			for _, b := range layer.Blocks() {
+				activations = append(activations, b.ATXIDs...)
+			}
+		}
+
+		// Look up full data
+		atxs, matxs := s.Mesh.GetATXs(activations)
+		if len(matxs) != 0 {
+			log.Error("could not find activations %v", matxs)
+			return nil, status.Errorf(codes.Internal, "error retrieving activations data")
+		}
+		for _, atx := range atxs {
+			// Filter here, now that we have full data
+			if atx.Coinbase == addr {
+				pbatx, err := convertActivation(atx)
+				if err != nil {
+					return nil, status.Errorf(codes.Internal, "error serializing activation data")
+				}
+				res.Data = append(res.Data, &pb.AccountMeshData{
+					DataItem: &pb.AccountMeshData_Activation{
+						Activation: pbatx,
+					},
+				})
+			}
+		}
+	}
+
+	res.TotalResults = uint32(len(res.Data))
+	return res, nil
+}
+
+func (s MeshService) getTxIdsFromMesh(minLayer types.LayerID, addr types.Address) []types.TransactionID {
+	var txIDs []types.TransactionID
+	for layerID := minLayer; layerID < s.Mesh.LatestLayer(); layerID++ {
+		destTxIDs := s.Mesh.GetTransactionsByDestination(layerID, addr)
+		txIDs = append(txIDs, destTxIDs...)
+		originTxIds := s.Mesh.GetTransactionsByOrigin(layerID, addr)
+		txIDs = append(txIDs, originTxIds...)
+	}
+	return txIDs
+}
+
+func convertTransaction(t *types.Transaction) *pb.Transaction {
+	return &pb.Transaction{
+		Id: &pb.TransactionId{Id: t.ID().Bytes()},
+		Data: &pb.Transaction_CoinTransfer{
+			CoinTransfer: &pb.CoinTransferTransaction{
+				Receiver: &pb.AccountId{Address: t.Recipient.Bytes()},
+			},
+		},
+		Sender: &pb.AccountId{Address: t.Origin().Bytes()},
+		GasOffered: &pb.GasOffered{
+			// TODO: Check this math! Does fee == price?
+			GasPrice:    t.Fee,
+			GasProvided: t.GasLimit,
+		},
+		Amount:  &pb.Amount{Value: t.Amount},
+		Counter: t.AccountNonce,
+		Signature: &pb.Signature{
+			// TODO: confirm default signature scheme
+			Scheme:    pb.Signature_SCHEME_ED25519_PLUS_PLUS,
+			Signature: t.Signature[:],
+			PublicKey: t.Origin().Bytes(),
+		},
+	}
+}
+
+func convertActivation(a *types.ActivationTx) (*pb.Activation, error) {
+	// TODO: It's suboptimal to have to serialize every atx to get its
+	// size but size is not stored as an attribute.
+	data, err := a.InnerBytes()
+	if err != nil {
+		return nil, err
+	}
+	return &pb.Activation{
+		Id:             &pb.ActivationId{Id: a.ID().Bytes()},
+		Layer:          a.PubLayerID.Uint64(),
+		SmesherId:      &pb.SmesherId{Id: a.NodeID.ToBytes()},
+		Coinbase:       &pb.AccountId{Address: a.Coinbase.Bytes()},
+		PrevAtx:        &pb.ActivationId{Id: a.PrevATXID.Bytes()},
+		CommitmentSize: uint64(len(data)),
+	}, nil
 }
 
 // LayersQuery returns all mesh data, layer by layer
@@ -172,28 +308,7 @@ func (s MeshService) LayersQuery(ctx context.Context, in *pb.LayersQueryRequest)
 					log.Error("got empty transaction data from layer %v", l)
 					return nil, status.Errorf(codes.Internal, "error retrieving tx data")
 				}
-				pbTxs = append(pbTxs, &pb.Transaction{
-					Id: &pb.TransactionId{Id: t.ID().Bytes()},
-					Data: &pb.Transaction_CoinTransfer{
-						CoinTransfer: &pb.CoinTransferTransaction{
-							Receiver: &pb.AccountId{Address: t.Recipient.Bytes()},
-						},
-					},
-					Sender: &pb.AccountId{Address: t.Origin().Bytes()},
-					GasOffered: &pb.GasOffered{
-						// TODO: Check this math! Does fee == price?
-						GasPrice:    t.Fee,
-						GasProvided: t.GasLimit,
-					},
-					Amount:  &pb.Amount{Value: t.Amount},
-					Counter: t.AccountNonce,
-					Signature: &pb.Signature{
-						// TODO: confirm default signature scheme
-						Scheme:    pb.Signature_SCHEME_ED25519_PLUS_PLUS,
-						Signature: t.Signature[:],
-						PublicKey: t.Origin().Bytes(),
-					},
-				})
+				pbTxs = append(pbTxs, convertTransaction(t))
 			}
 			blocks = append(blocks, &pb.Block{
 				Id:           b.ID().Bytes(),
@@ -211,20 +326,11 @@ func (s MeshService) LayersQuery(ctx context.Context, in *pb.LayersQueryRequest)
 			return nil, status.Errorf(codes.Internal, "error retrieving activations data")
 		}
 		for _, atx := range atxs {
-			// TODO: It's suboptimal to have to serialize every atx to get its
-			// size but size is not stored as an attribute.
-			data, err := atx.InnerBytes()
+			pbatx, err := convertActivation(atx)
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "error serializing activation data")
 			}
-			pbActivations = append(pbActivations, &pb.Activation{
-				Id:             &pb.ActivationId{Id: atx.ID().Bytes()},
-				Layer:          l,
-				SmesherId:      &pb.SmesherId{Id: atx.NodeID.ToBytes()},
-				Coinbase:       &pb.AccountId{Address: atx.Coinbase.Bytes()},
-				PrevAtx:        &pb.ActivationId{Id: atx.PrevATXID.Bytes()},
-				CommitmentSize: uint64(len(data)),
-			})
+			pbActivations = append(pbActivations, pbatx)
 		}
 
 		// TODO: We currently have no way to get state root for any
