@@ -498,6 +498,17 @@ func TestMeshService(t *testing.T) {
 	}()
 	c := pb.NewMeshServiceClient(conn)
 
+	// Some shared test data
+	layerFirst := 0
+	layerLatestReceived := txAPI.LatestLayer()
+	layerConfirmed := txAPI.LatestLayerInState()
+	layerCurrent := genTime.GetCurrentLayer()
+
+	// Generate some tx data that we can test
+	tx, err := NewTx(1, types.BytesToAddress([]byte{0x02}), signing.NewEdSigner())
+	require.NoError(t, err, "error generating test tx")
+	tx1 = tx
+
 	// Construct an array of test cases to test each endpoint in turn
 	testCases := []struct {
 		name string
@@ -534,20 +545,166 @@ func TestMeshService(t *testing.T) {
 			require.Equal(t, uint64(layerAvgSize*txsPerBlock/layerDurationSec), response.Maxtxpersecond.Value)
 		}},
 		{"AccountMeshDataQuery", func(t *testing.T) {
+			subtests := []struct {
+				name string
+				run  func(*testing.T)
+			}{
+				{
+					// all inputs default to zero, no filter
+					// query is valid but MaxResults is 0 so expect no results
+					name: "no inputs",
+					run: func(t *testing.T) {
+						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{})
+						require.NoError(t, err)
+						require.Equal(t, 0, res.TotalResults)
+						require.Equal(t, 0, len(res.Data))
+					},
+				},
+				{
+					name: "MinLayer too high",
+					run: func(t *testing.T) {
+						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
+							MinLayer: layerCurrent.Uint64() + 1,
+						})
+						require.NoError(t, err)
+						require.Equal(t, 0, res.TotalResults)
+						require.Equal(t, 0, len(res.Data))
+					},
+				},
+				{
+					name: "Offset too high",
+					run: func(t *testing.T) {
+						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
+							Offset: uint32(layerCurrent) + 1,
+						})
+						require.NoError(t, err)
+						require.Equal(t, 0, res.TotalResults)
+						require.Equal(t, 0, len(res.Data))
+					},
+				},
+				{
+					name: "no filter",
+					run: func(t *testing.T) {
+						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
+							MaxResults: uint32(10),
+						})
+						require.NoError(t, err)
+						require.Equal(t, 0, res.TotalResults)
+						require.Equal(t, 0, len(res.Data))
+					},
+				},
+				{
+					name: "empty filter",
+					run: func(t *testing.T) {
+						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
+							MaxResults: uint32(10),
+							Filter:     &pb.AccountMeshDataFilter{},
+						})
+						require.NoError(t, err)
+						require.Equal(t, 0, res.TotalResults)
+						require.Equal(t, 0, len(res.Data))
+					},
+				},
+				{
+					name: "filter with empty AccountId",
+					run: func(t *testing.T) {
+						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
+							MaxResults: uint32(10),
+							Filter: &pb.AccountMeshDataFilter{
+								AccountId: &pb.AccountId{},
+							},
+						})
+						require.NoError(t, err)
+						require.Equal(t, 0, res.TotalResults)
+						require.Equal(t, 0, len(res.Data))
+					},
+				},
+				{
+					name: "filter with valid AccountId",
+					run: func(t *testing.T) {
+						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
+							MaxResults: uint32(10),
+							Filter: &pb.AccountMeshDataFilter{
+								AccountId: &pb.AccountId{Address: tx.Origin().Bytes()},
+							},
+						})
+						require.NoError(t, err)
+						require.Equal(t, 0, res.TotalResults)
+						require.Equal(t, 0, len(res.Data))
+					},
+				},
+				{
+					name: "filter with valid AccountId and AccountMeshDataFlags zero",
+					run: func(t *testing.T) {
+						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
+							MaxResults: uint32(10),
+							Filter: &pb.AccountMeshDataFilter{
+								AccountId:            &pb.AccountId{Address: tx.Origin().Bytes()},
+								AccountMeshDataFlags: uint32(pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_UNSPECIFIED),
+							},
+						})
+						require.NoError(t, err)
+						require.Equal(t, 0, res.TotalResults)
+						require.Equal(t, 0, len(res.Data))
+					},
+				},
+				{
+					name: "filter with valid AccountId and AccountMeshDataFlags tx only",
+					run: func(t *testing.T) {
+						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
+							MaxResults: uint32(10),
+							Filter: &pb.AccountMeshDataFilter{
+								AccountId:            &pb.AccountId{Address: tx.Origin().Bytes()},
+								AccountMeshDataFlags: uint32(pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_TRANSACTIONS),
+							},
+						})
+						require.NoError(t, err)
+						require.Equal(t, 0, res.TotalResults)
+						require.Equal(t, 0, len(res.Data))
+					},
+				},
+				{
+					name: "filter with valid AccountId and AccountMeshDataFlags activations only",
+					run: func(t *testing.T) {
+						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
+							MaxResults: uint32(10),
+							Filter: &pb.AccountMeshDataFilter{
+								AccountId:            &pb.AccountId{Address: tx.Origin().Bytes()},
+								AccountMeshDataFlags: uint32(pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_ACTIVATIONS),
+							},
+						})
+						require.NoError(t, err)
+						require.Equal(t, 0, res.TotalResults)
+						require.Equal(t, 0, len(res.Data))
+					},
+				},
+				{
+					name: "filter with valid AccountId and AccountMeshDataFlags all",
+					run: func(t *testing.T) {
+						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
+							MaxResults: uint32(10),
+							Filter: &pb.AccountMeshDataFilter{
+								AccountId: &pb.AccountId{Address: tx.Origin().Bytes()},
+								AccountMeshDataFlags: uint32(
+									pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_ACTIVATIONS |
+										pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_TRANSACTIONS),
+							},
+						})
+						require.NoError(t, err)
+						require.Equal(t, 0, res.TotalResults)
+						require.Equal(t, 0, len(res.Data))
+					},
+				},
+			}
 			//response, err := c.MaxTransactionsPerSecond(context.Background(), &pb.MaxTransactionsPerSecondRequest{})
 			//require.NoError(t, err)
 			//require.Equal(t, uint64(layerAvgSize*txsPerBlock/layerDurationSec), response.Maxtxpersecond.Value)
+			// Run sub-subtests
+			for _, r := range subtests {
+				t.Run(r.name, r.run)
+			}
 		}},
 		{"LayersQuery", func(t *testing.T) {
-			// Generate some tx data that we can test
-			tx, err := NewTx(1, types.BytesToAddress([]byte{0x02}), signing.NewEdSigner())
-			require.NoError(t, err, "error generating test tx")
-			tx1 = tx
-			layerFirst := 0
-			layerLatestReceived := txAPI.LatestLayer()
-			layerConfirmed := txAPI.LatestLayerInState()
-			layerCurrent := genTime.GetCurrentLayer()
-
 			generateRunFn := func(numResults int, req *pb.LayersQueryRequest) func(*testing.T) {
 				return func(*testing.T) {
 					res, err := c.LayersQuery(context.Background(), req)
