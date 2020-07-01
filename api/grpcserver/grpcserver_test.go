@@ -607,6 +607,14 @@ func TestMeshService(t *testing.T) {
 
 				// GOOD INPUTS
 
+				// nil inputs
+				// not an error since these default to zero, see
+				// https://github.com/spacemeshos/api/issues/87
+				{
+					name: "nil inputs",
+					run:  generateRunFn(1, &pb.LayersQueryRequest{}),
+				},
+
 				// start layer after end layer: expect no error, zero results
 				{
 					name: "start layer after end layer",
