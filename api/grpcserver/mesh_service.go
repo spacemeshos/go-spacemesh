@@ -126,17 +126,6 @@ func (s MeshService) LayersQuery(ctx context.Context, in *pb.LayersQueryRequest)
 	//lastValidLayer := s.Mesh.ProcessedLayer()
 	lastValidLayer := s.Mesh.LatestLayerInState()
 
-	// Validate inputs
-	if in.StartLayer < 0 {
-		return nil, status.Errorf(codes.InvalidArgument, "`StartLayer` must be greater than zero")
-	}
-	//if uint64(in.StartLayer) > currentLayer {
-	//	return nil, status.Errorf(codes.InvalidArgument, "`StartLayer` must be less than or equal to current layer")
-	//}
-	if in.StartLayer > in.EndLayer {
-		return nil, status.Errorf(codes.InvalidArgument, "`StartLayer` must not be greater than `EndLayer`")
-	}
-
 	layers := []*pb.Layer{}
 	for l := uint64(in.StartLayer); l <= uint64(in.EndLayer); l++ {
 		// TODO: properly implement this check and include third status
@@ -154,9 +143,10 @@ func (s MeshService) LayersQuery(ctx context.Context, in *pb.LayersQueryRequest)
 		// is clearly an input error. A missing layer that's older than
 		// lastValidLayer is clearly an internal error. A missing layer
 		// between these two is a gray area: do we define this as an
-		// internal or an input error?
+		// internal or an input error? For now, all missing layers produce
+		// internal errors.
 		if layer == nil || err != nil {
-			return nil, status.Errorf(codes.Internal, "error retreiving layer data")
+			return nil, status.Errorf(codes.Internal, "error retrieving layer data")
 		}
 
 		// Load all block data

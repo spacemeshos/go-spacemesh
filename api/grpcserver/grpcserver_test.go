@@ -18,6 +18,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"io/ioutil"
+	"math"
 	"math/big"
 	"net/http"
 	"strconv"
@@ -46,7 +47,6 @@ const (
 	layerDurationSec      = 10
 	layerAvgSize          = 10
 	txsPerBlock           = 99
-	ValidatedLayerID      = 8
 	TxReturnLayer         = 1
 	layersPerEpoch        = 5
 	networkID             = 120
@@ -159,8 +159,14 @@ func (t *TxAPIMock) GetProjection(_ types.Address, prevNonce, prevBalance uint64
 	return prevNonce, prevBalance, nil
 }
 
+// latest layer received
+func (t *TxAPIMock) LatestLayer() types.LayerID {
+	return 10
+}
+
+// latest layer approved/confirmed/applied to state
 func (t *TxAPIMock) LatestLayerInState() types.LayerID {
-	return ValidatedLayerID
+	return 8
 }
 
 func (t *TxAPIMock) GetLayerApplied(txID types.TransactionID) *types.LayerID {
@@ -169,10 +175,6 @@ func (t *TxAPIMock) GetLayerApplied(txID types.TransactionID) *types.LayerID {
 
 func (t *TxAPIMock) GetTransaction(id types.TransactionID) (*types.Transaction, error) {
 	return t.returnTx[id], nil
-}
-
-func (t *TxAPIMock) LatestLayer() types.LayerID {
-	return 10
 }
 
 func (t *TxAPIMock) GetRewards(types.Address) (rewards []types.Reward, err error) {
@@ -215,6 +217,12 @@ var globalBlock = types.NewExistingBlock(types.LayerID(0), []byte(rand.String(8)
 
 func (t *TxAPIMock) GetLayer(tid types.LayerID) (*types.Layer, error) {
 	var blk1, blk2, blk3 *types.Block
+
+	if tid > genTime.GetCurrentLayer() {
+		return nil, errors.New("requested layer later than current layer")
+	} else if tid > t.LatestLayer() {
+		return nil, errors.New("haven't received that layer yet")
+	}
 
 	// Messy but this allows easier instrumentation
 	if tid == 0 {
@@ -493,7 +501,7 @@ func TestMeshService(t *testing.T) {
 	// Construct an array of test cases to test each endpoint in turn
 	testCases := []struct {
 		name string
-		run  func(t *testing.T)
+		run  func(*testing.T)
 	}{
 		{"GenesisTime", func(t *testing.T) {
 			response, err := c.GenesisTime(context.Background(), &pb.GenesisTimeRequest{})
@@ -536,83 +544,185 @@ func TestMeshService(t *testing.T) {
 			require.NoError(t, err, "error generating test tx")
 			tx1 = tx
 			layerFirst := 0
-			layerLast := txAPI.LatestLayer()
+			layerLatestReceived := txAPI.LatestLayer()
+			layerConfirmed := txAPI.LatestLayerInState()
+			layerCurrent := genTime.GetCurrentLayer()
 
-			// First, test bad inputs
-			req := &pb.LayersQueryRequest{
-				StartLayer: uint32(layerLast),
-				EndLayer:   uint32(layerLast),
+			generateRunFn := func(numResults int, req *pb.LayersQueryRequest) func(*testing.T) {
+				return func(*testing.T) {
+					res, err := c.LayersQuery(context.Background(), req)
+					require.NoError(t, err, "query returned an unexpected error")
+					require.Equal(t, numResults, len(res.Layer), "unexpected number of layer results")
+				}
+			}
+			generateRunFnError := func(msg string, req *pb.LayersQueryRequest) func(*testing.T) {
+				return func(*testing.T) {
+					_, err := c.LayersQuery(context.Background(), req)
+					require.Error(t, err, "expected query to produce an error")
+					require.Contains(t, err.Error(), msg, "expected error to contain string")
+				}
+			}
+			requests := []struct {
+				name string
+				run  func(*testing.T)
+			}{
+				// ERROR INPUTS
+				// We expect these to produce errors
+
+				// end layer after current layer
+				{
+					name: "end layer after current layer",
+					run: generateRunFnError("error retrieving layer data", &pb.LayersQueryRequest{
+						StartLayer: uint32(layerCurrent),
+						EndLayer:   uint32(layerCurrent + 2),
+					}),
+				},
+
+				// start layer after current layer
+				{
+					name: "start layer after current layer",
+					run: generateRunFnError("error retrieving layer data", &pb.LayersQueryRequest{
+						StartLayer: uint32(layerCurrent + 2),
+						EndLayer:   uint32(layerCurrent + 3),
+					}),
+				},
+
+				// layer after last received
+				{
+					name: "layer after last received",
+					run: generateRunFnError("error retrieving layer data", &pb.LayersQueryRequest{
+						StartLayer: uint32(layerLatestReceived + 1),
+						EndLayer:   uint32(layerLatestReceived + 2),
+					}),
+				},
+
+				// very very large range
+				{
+					name: "very very large range",
+					run: generateRunFnError("error retrieving layer data", &pb.LayersQueryRequest{
+						StartLayer: uint32(0),
+						EndLayer:   uint32(math.MaxUint32),
+					}),
+				},
+
+				// GOOD INPUTS
+
+				// start layer after end layer: expect no error, zero results
+				{
+					name: "start layer after end layer",
+					run: generateRunFn(0, &pb.LayersQueryRequest{
+						StartLayer: uint32(layerCurrent + 1),
+						EndLayer:   uint32(layerCurrent),
+					}),
+				},
+
+				// same start/end layer: expect no error, one result
+				{
+					name: "same start end layer",
+					run: generateRunFn(1, &pb.LayersQueryRequest{
+						StartLayer: uint32(layerLatestReceived),
+						EndLayer:   uint32(layerLatestReceived),
+					}),
+				},
+
+				// start layer after last approved/confirmed layer (but before current layer)
+				{
+					name: "start layer after last approved confirmed layer",
+					run: generateRunFn(2, &pb.LayersQueryRequest{
+						StartLayer: uint32(layerConfirmed + 1),
+						EndLayer:   uint32(layerConfirmed + 2),
+					}),
+				},
+
+				// end layer after last approved/confirmed layer (but before current layer)
+				{
+					name: "end layer after last approved confirmed layer",
+					// expect difference + 1 return layers
+					run: generateRunFn(int(layerConfirmed)+2-layerFirst+1, &pb.LayersQueryRequest{
+						StartLayer: uint32(layerFirst),
+						EndLayer:   uint32(layerConfirmed + 2),
+					}),
+				},
+
+				// comprehensive valid test
+				{
+					name: "comprehensive",
+					run: func(t *testing.T) {
+						req := &pb.LayersQueryRequest{
+							StartLayer: uint32(layerFirst),
+							EndLayer:   uint32(layerLatestReceived),
+						}
+
+						res, err := c.LayersQuery(context.Background(), req)
+						require.NoError(t, err, "query returned unexpected error")
+
+						resLayer := res.Layer[0]
+						require.Equal(t, uint64(0), resLayer.Number, "first layer is zero")
+						require.Equal(t, pb.Layer_LAYER_STATUS_CONFIRMED, resLayer.Status, "first layer is confirmed")
+
+						resLayerNine := res.Layer[9]
+						require.Equal(t, uint64(9), resLayerNine.Number, "layer nine is ninth")
+						require.Equal(t, pb.Layer_LAYER_STATUS_UNSPECIFIED, resLayerNine.Status, "later layer is unconfirmed")
+
+						// endpoint inclusive so add one
+						numLayers := int(layerLatestReceived) - layerFirst + 1
+						numTxPerBlock := 1
+						numAtxPerLayer := 1
+						numBlkPerLayer := 3
+						//numTxs := numLayers * numTxPerLayer
+						//numAtxs := numLayers * numAtxPerLayer
+						require.Equal(t, numLayers, len(res.Layer))
+
+						require.Equal(t, numAtxPerLayer, len(resLayer.Activations))
+						require.Equal(t, numBlkPerLayer, len(resLayer.Blocks))
+
+						resActivation := resLayer.Activations[0]
+						require.Equal(t, globalAtx.ID().Bytes(), resActivation.Id.Id)
+						require.Equal(t, resLayer.Number, resActivation.Layer)
+						require.Equal(t, globalAtx.NodeID.ToBytes(), resActivation.SmesherId.Id)
+						require.Equal(t, globalAtx.Coinbase.Bytes(), resActivation.Coinbase.Address)
+						require.Equal(t, globalAtx.PrevATXID.Bytes(), resActivation.PrevAtx.Id)
+						data, err := globalAtx.InnerBytes()
+						require.NoError(t, err)
+						require.Equal(t, uint64(len(data)), resActivation.CommitmentSize)
+
+						resBlock := resLayer.Blocks[0]
+
+						require.Equal(t, numTxPerBlock, len(resBlock.Transactions))
+						require.Equal(t, globalBlock.ID().Bytes(), resBlock.Id)
+
+						// Check the tx as well
+						resTx := resBlock.Transactions[0]
+						require.Equal(t, tx.ID().Bytes(), resTx.Id.Id)
+						require.Equal(t, tx.Origin().Bytes(), resTx.Sender.Address)
+						require.Equal(t, tx.GasLimit, resTx.GasOffered.GasProvided)
+						require.Equal(t, tx.Fee, resTx.GasOffered.GasPrice)
+						require.Equal(t, tx.Amount, resTx.Amount.Value)
+						require.Equal(t, tx.AccountNonce, resTx.Counter)
+						require.Equal(t, tx.Signature[:], resTx.Signature.Signature)
+						require.Equal(t, pb.Signature_SCHEME_ED25519_PLUS_PLUS, resTx.Signature.Scheme)
+						require.Equal(t, tx.Origin().Bytes(), resTx.Signature.PublicKey)
+
+						// The Data field is a bit trickier to read
+						switch x := resTx.Data.(type) {
+						case *pb.Transaction_CoinTransfer:
+							require.Equal(t, tx.Recipient.Bytes(), x.CoinTransfer.Receiver.Address,
+								"inner coin transfer tx has bad recipient")
+						default:
+							require.Fail(t, "inner tx has wrong tx data type")
+						}
+					},
+				},
 			}
 
-			// TEST HERE
-
-			// Generate a valid request
-			req = &pb.LayersQueryRequest{
-				StartLayer: uint32(layerFirst),
-				EndLayer:   uint32(layerLast),
-			}
-
-			response, err := c.LayersQuery(context.Background(), req)
-			require.NoError(t, err)
-
-			resLayer := response.Layer[0]
-			require.Equal(t, uint64(0), resLayer.Number, "first layer is zero")
-			require.Equal(t, pb.Layer_LAYER_STATUS_CONFIRMED, resLayer.Status, "first layer is confirmed")
-
-			resLayerNine := response.Layer[9]
-			require.Equal(t, uint64(9), resLayerNine.Number, "layer nine is ninth")
-			require.Equal(t, pb.Layer_LAYER_STATUS_UNSPECIFIED, resLayerNine.Status, "later layer is unconfirmed")
-
-			// endpoint inclusive so add one
-			numLayers := int(layerLast) - layerFirst + 1
-			numTxPerBlock := 1
-			numAtxPerLayer := 1
-			numBlkPerLayer := 3
-			//numTxs := numLayers * numTxPerLayer
-			//numAtxs := numLayers * numAtxPerLayer
-			require.Equal(t, numLayers, len(response.Layer))
-
-			require.Equal(t, numAtxPerLayer, len(resLayer.Activations))
-			require.Equal(t, numBlkPerLayer, len(resLayer.Blocks))
-
-			resActivation := resLayer.Activations[0]
-			require.Equal(t, globalAtx.ID().Bytes(), resActivation.Id.Id)
-			require.Equal(t, resLayer.Number, resActivation.Layer)
-			require.Equal(t, globalAtx.NodeID.ToBytes(), resActivation.SmesherId.Id)
-			require.Equal(t, globalAtx.Coinbase.Bytes(), resActivation.Coinbase.Address)
-			require.Equal(t, globalAtx.PrevATXID.Bytes(), resActivation.PrevAtx.Id)
-			data, err := globalAtx.InnerBytes()
-			require.NoError(t, err)
-			require.Equal(t, uint64(len(data)), resActivation.CommitmentSize)
-
-			resBlock := resLayer.Blocks[0]
-
-			require.Equal(t, numTxPerBlock, len(resBlock.Transactions))
-			require.Equal(t, globalBlock.ID().Bytes(), resBlock.Id)
-
-			// Check the tx as well
-			resTx := resBlock.Transactions[0]
-			require.Equal(t, tx.ID().Bytes(), resTx.Id.Id)
-			require.Equal(t, tx.Origin().Bytes(), resTx.Sender.Address)
-			require.Equal(t, tx.GasLimit, resTx.GasOffered.GasProvided)
-			require.Equal(t, tx.Fee, resTx.GasOffered.GasPrice)
-			require.Equal(t, tx.Amount, resTx.Amount.Value)
-			require.Equal(t, tx.AccountNonce, resTx.Counter)
-			require.Equal(t, tx.Signature[:], resTx.Signature.Signature)
-			require.Equal(t, pb.Signature_SCHEME_ED25519_PLUS_PLUS, resTx.Signature.Scheme)
-			require.Equal(t, tx.Origin().Bytes(), resTx.Signature.PublicKey)
-
-			// The Data field is a bit trickier to read
-			switch x := resTx.Data.(type) {
-			case *pb.Transaction_CoinTransfer:
-				require.Equal(t, tx.Recipient.Bytes(), x.CoinTransfer.Receiver.Address,
-					"inner coin transfer tx has bad recipient")
-			default:
-				require.Fail(t, "inner tx has wrong tx data type")
+			// Run sub-subtests
+			for _, r := range requests {
+				t.Run(r.name, r.run)
 			}
 		}},
 	}
 
+	// Run subtests
 	for _, tc := range testCases {
 		t.Run(tc.name, tc.run)
 	}
