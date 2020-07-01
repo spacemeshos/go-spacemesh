@@ -8,6 +8,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
+// MaxExceptionList is the maximum number of exceptions we agree to accept in a block
 const MaxExceptionList = 100
 
 //We keep a table that records, for each block, its votes about every previous block
@@ -66,6 +67,7 @@ func (t *turtle) SetLogger(log2 log.Log) {
 	t.logger = log2
 }
 
+// NewTurtle creates a new verifying tortoise algorithm instance. XXX: maybe rename?
 func NewTurtle(bdp blockDataProvider, hrp hareResultsProvider, avgLayerSize int) *turtle {
 	t := &turtle{
 		logger:              log.NewDefault("trtl"),
@@ -112,7 +114,6 @@ func (t *turtle) inputVector(l types.LayerID, b types.BlockID) vec {
 	// TODO: Pull these from db/sync if we are syncing
 	res, err := t.hrp.GetResult(l)
 	if err != nil {
-		panic("WTF")
 		return abstain
 	}
 
@@ -345,16 +346,9 @@ markingLoop:
 				continue markingLoop
 			}
 		}
-
-		vote := t.inputVector(b.LayerIndex, b.ID())
-		if vote == support {
-			t.logger.Info("marking %v of layer %v as good", b.ID(), b.LayerIndex)
-			t.goodBlocksArr = append(t.goodBlocksArr, b.ID())
-			t.goodBlocksIndex[b.ID()] = len(t.goodBlocksArr) - 1
-		} else {
-			t.logger.Warning("marking %v of layer %v as not good, input vecot said = %v", b.ID(), b.LayerIndex, vote)
-
-		}
+		t.logger.Info("marking %v of layer %v as good", b.ID(), b.LayerIndex)
+		t.goodBlocksArr = append(t.goodBlocksArr, b.ID())
+		t.goodBlocksIndex[b.ID()] = len(t.goodBlocksArr) - 1
 	}
 
 	// Count good blocks votes..

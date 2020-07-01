@@ -21,16 +21,39 @@ func (hm *hareMock) GetResult(l types.LayerID) ([]types.BlockID, error) {
 	return nil, errors.New("not implemented")
 }
 
-func TestTurtle_HandleIncomingLayer(t *testing.T) {
+func TestTurtle_HandleIncomingLayerHappyFlow(t *testing.T) {
+	layers := types.LayerID(10)
+	avgPerLayer := 10
+	voteNegative := 0
+	trtl := turtleSanity(t, layers, avgPerLayer, voteNegative)
+	require.Equal(t, int(layers-1), int(trtl.verified))
+}
 
-	//log.DebugMode(true)
-	const layers types.LayerID = 40
-	const blocksPerLayer = 100
+func TestTurtle_HandleIncomingLayer_VoteNegative(t *testing.T) {
+	layers := types.LayerID(10)
+	avgPerLayer := 10
+	voteNegative := 5
+	trtl := turtleSanity(t, layers, avgPerLayer, voteNegative)
+	require.Equal(t, int(layers-1), int(trtl.verified))
+}
+
+func turtleSanity(t testing.TB, layers types.LayerID, blocksPerLayer, voteNegative int) *turtle {
 
 	msh := getInMemMesh()
 
 	hm := &hareMock{GetResultFunc: func(l types.LayerID) (ids []types.BlockID, err error) {
-		return msh.LayerBlockIds(l)
+		if l == 0 {
+			return msh.LayerBlockIds(l)
+		}
+		if voteNegative == 0 {
+			return msh.LayerBlockIds(l)
+		}
+
+		blks, err := msh.LayerBlockIds(l)
+		if err != nil {
+			panic("db err")
+		}
+		return blks[voteNegative:], nil
 	}}
 
 	trtl := NewTurtle(msh, hm, blocksPerLayer)
@@ -39,7 +62,7 @@ func TestTurtle_HandleIncomingLayer(t *testing.T) {
 	trtl.init(gen.ID())
 
 	var l types.LayerID
-	for l = 1; l < layers; l++ {
+	for l = 1; l <= layers; l++ {
 		fmt.Println("choosing base block layer ", l)
 		b, lists, err := trtl.BaseBlock(l)
 		fmt.Println("the base block for ", l, "is ", b)
@@ -61,22 +84,9 @@ func TestTurtle_HandleIncomingLayer(t *testing.T) {
 				fmt.Println("Err inserting to db - ", err)
 			}
 		}
-		hres, err := hm.GetResult(lyr.Index())
-		require.NoError(t, err)
-		//require.Equal(t, types.SortBlockIDs(hres), types.SortBlockIDs(types.BlockIDs(lyr.Blocks())))
-		for _, blk := range hres {
-			fmt.Printf("BLOCK %v vote is %v\r\n", blk, trtl.inputVector(lyr.Index(), blk))
-		}
-
 		trtl.HandleIncomingLayer(lyr)
 		fmt.Println("Handled ", l, "========================================================================")
 	}
 
-	require.Equal(t, int(layers-2), int(trtl.verified))
-
-}
-
-func TestPlay(t *testing.T) {
-	vec := abstain.Add(support)
-	fmt.Println(vec)
+	return trtl
 }

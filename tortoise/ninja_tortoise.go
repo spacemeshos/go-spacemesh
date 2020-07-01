@@ -2,14 +2,15 @@ package tortoise
 
 import (
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/events"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
 	"hash/fnv"
 	"math"
 	"sync"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/events"
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/mesh"
 )
 
 type vec [2]int
@@ -290,17 +291,6 @@ func getIdsFromSet(bids map[types.BlockID]struct{}) patternID {
 		keys = append(keys, k)
 	}
 	return getID(keys)
-}
-
-func globalOpinion(v vec, layerSize int, delta float64) vec {
-	threshold := float64(globalThreshold*delta) * float64(layerSize)
-	if float64(v[0]) > threshold {
-		return support
-	} else if float64(v[1]) > threshold {
-		return against
-	} else {
-		return abstain
-	}
 }
 
 func (ni *ninjaTortoise) updateCorrectionVectors(p votingPattern, bottomOfWindow types.LayerID) {
