@@ -12,6 +12,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"google.golang.org/genproto/googleapis/rpc/code"
@@ -56,6 +57,7 @@ const (
 var (
 	networkMock = NetworkMock{}
 	genTime     = GenesisTimeMock{time.Unix(genTimeUnix, 0)}
+	txMempool   = miner.NewTxMemPool()
 	txAPI       = &TxAPIMock{
 		returnTx:     make(map[types.TransactionID]*types.Transaction),
 		layerApplied: make(map[types.TransactionID]*types.LayerID),
@@ -483,7 +485,7 @@ func TestNodeService(t *testing.T) {
 }
 
 func TestMeshService(t *testing.T) {
-	grpcService := NewMeshService(&networkMock, txAPI, &genTime, &SyncerMock{}, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
+	grpcService := NewMeshService(&networkMock, txAPI, txMempool, &genTime, &SyncerMock{}, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
@@ -895,7 +897,7 @@ func TestMeshService(t *testing.T) {
 
 func TestMultiService(t *testing.T) {
 	svc1 := NewNodeService(&networkMock, txAPI, &genTime, &SyncerMock{})
-	svc2 := NewMeshService(&networkMock, txAPI, &genTime, &SyncerMock{}, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
+	svc2 := NewMeshService(&networkMock, txAPI, txMempool, &genTime, &SyncerMock{}, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
 	shutDown := launchServer(t, svc1, svc2)
 	defer shutDown()
 
@@ -955,7 +957,7 @@ func TestJsonApi(t *testing.T) {
 
 	// enable services and try again
 	svc1 := NewNodeService(&networkMock, txAPI, &genTime, &SyncerMock{})
-	svc2 := NewMeshService(&networkMock, txAPI, &genTime, &SyncerMock{}, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
+	svc2 := NewMeshService(&networkMock, txAPI, txMempool, &genTime, &SyncerMock{}, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
 	cfg.StartNodeService = true
 	cfg.StartMeshService = true
 	shutDown = launchServer(t, svc1, svc2)
