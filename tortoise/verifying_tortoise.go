@@ -172,6 +172,9 @@ func (t *turtle) inputVectorForLayer(l types.LayerID) map[types.BlockID]vec {
 
 func (t *turtle) BaseBlock(current types.LayerID) (types.BlockID, [][]types.BlockID, error) {
 	for i := len(t.blocksToBlocks) - 1; i >= 0; i-- {
+		if _, ok := t.goodBlocksIndex[t.blocksToBlocks[i].id]; !ok {
+			continue
+		}
 		afn, err := t.opinionMatches(t.indexToLayerID[i], t.blocksToBlocks[i])
 		if err != nil {
 			continue
@@ -345,11 +348,11 @@ markingLoop:
 
 		vote := t.inputVector(b.LayerIndex, b.ID())
 		if vote == support {
-			t.logger.Debug("marking %v of layer %v as good", b.ID(), b.LayerIndex)
+			t.logger.Info("marking %v of layer %v as good", b.ID(), b.LayerIndex)
 			t.goodBlocksArr = append(t.goodBlocksArr, b.ID())
 			t.goodBlocksIndex[b.ID()] = len(t.goodBlocksArr) - 1
 		} else {
-			t.logger.Debug("marking %v of layer %v as not good, input vecot said = %v", b.ID(), b.LayerIndex, vote)
+			t.logger.Warning("marking %v of layer %v as not good, input vecot said = %v", b.ID(), b.LayerIndex, vote)
 
 		}
 	}
@@ -391,8 +394,11 @@ markingLoop:
 				sum = sum.Add(opinionVote.Multiply(t.BlockWeight(vopinion.id, blk)))
 			}
 
-			if globalOpinion(sum, t.avgLayerSize, float64(i-wasVerified)) != vote {
+			gop := globalOpinion(sum, t.avgLayerSize, float64(i-wasVerified))
+			t.logger.Info("Global opinion on blk %v (lyr:%v, lyfromidx:%v) is %v", blk, i, t.indexToLayerID[t.blocksToBlocksIndex[blk]], gop)
+			if gop != vote {
 				// TODO: trigger self healing after a while ?
+				t.logger.Warning("The global opinion is different from vote, global: %v, vote: %v", gop, vote)
 				complete = false
 				break
 			}
