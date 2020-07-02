@@ -14,7 +14,11 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        # no freebsd support for now =\
+        os: [macos-latest, windows-latest, ubuntu-latest]
     steps:
     - name: checkout
       uses: actions/checkout@v2
@@ -25,10 +29,12 @@ jobs:
     - run: go version
     - name: install all the things
       run: make install
-    - name: unit tests (except app test)
-      run: make test-no-app-test
-    - name: app test
-      run: make test-only-app-test
+    - name: test build
+      run: make
+    # - name: unit tests (except app test)
+    #   run: make test-no-app-test
+    # - name: app test
+    #   run: make test-only-app-test
     - name: fmt, tidy, lint
       run: |
         make genproto
