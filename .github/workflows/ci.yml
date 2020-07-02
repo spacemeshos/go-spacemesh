@@ -26,8 +26,6 @@ jobs:
       uses: actions/setup-go@v2
       with:
         go-version: '1.13.12'
-    - name: install all the things
-      run: make install
     - name: test build
       run: make
     # - name: unit tests (except app test)
@@ -35,6 +33,8 @@ jobs:
     # - name: app test
     #   run: make test-only-app-test
     - name: fmt, tidy, lint
+      # lint gets confused by windows line endings so skip it on windows
+      if: matrix.os != "windows-latest"
       run: |
         make genproto
         make test-tidy
