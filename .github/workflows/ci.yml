@@ -17,6 +17,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
+    - name: install all the things
+      run: make install
     - name: unit tests (except app test)
       run: make test-no-app-test
     - name: app test
