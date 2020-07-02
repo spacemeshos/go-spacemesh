@@ -11,6 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/miner"
@@ -18,6 +19,7 @@ import (
 	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"io"
 	"io/ioutil"
 	"math"
 	"math/big"
@@ -716,6 +718,58 @@ func TestMeshService(t *testing.T) {
 			for _, r := range subtests {
 				t.Run(r.name, r.run)
 			}
+		}},
+		{name: "AccountMeshDataStream", run: func(t *testing.T) {
+			// set up the grpc listener stream
+			req := &pb.AccountMeshDataStreamRequest{
+				Filter: &pb.AccountMeshDataFilter{
+					AccountId: &pb.AccountId{Address: addr1.Bytes()},
+					AccountMeshDataFlags: uint32(
+						pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_ACTIVATIONS |
+							pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_TRANSACTIONS),
+				},
+			}
+
+			// This will block so run it in a goroutine
+			wg := sync.WaitGroup{}
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				stream, err := c.AccountMeshDataStream(context.Background(), req)
+				require.NoError(t, err, "stream request returned unexpected error")
+
+				var res *pb.AccountMeshDataStreamResponse
+
+				log.Info("waiting for AccountMeshDataStreamResponse")
+
+				// first item should be a tx
+				res, err = stream.Recv()
+				require.NoError(t, err, "got error from stream")
+				checkAccountDataItemTx(t, res.Data.DataItem)
+
+				// second item should be an activation
+				//res, err = stream.Recv()
+				//require.NoError(t, err, "got error from stream")
+				//checkAccountDataItemActivation(t, res.Data.DataItem)
+
+				// look for EOF
+				res, err = stream.Recv()
+				require.Equal(t, err, io.EOF, "expected EOF from stream")
+			}()
+
+			// initialize the streamer
+			events.InitializeEventStream()
+
+			// publish a tx
+			events.StreamNewTx(globalTx)
+
+			// publish an activation
+
+			// close the stream
+			events.CloseEventStream()
+
+			// wait for the goroutine
+			wg.Wait()
 		}},
 		{"LayersQuery", func(t *testing.T) {
 			generateRunFn := func(numResults int, req *pb.LayersQueryRequest) func(*testing.T) {
