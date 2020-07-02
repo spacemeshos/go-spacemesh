@@ -325,6 +325,7 @@ func (s MeshService) LayersQuery(ctx context.Context, in *pb.LayersQueryRequest)
 		for _, atx := range atxs {
 			pbatx, err := convertActivation(atx)
 			if err != nil {
+				log.Error("error serializing activation data: ", err)
 				return nil, status.Errorf(codes.Internal, "error serializing activation data")
 			}
 			pbActivations = append(pbActivations, pbatx)
@@ -353,12 +354,41 @@ func (s MeshService) LayersQuery(ctx context.Context, in *pb.LayersQueryRequest)
 func (s MeshService) AccountMeshDataStream(request *pb.AccountMeshDataStreamRequest, stream pb.MeshService_AccountMeshDataStreamServer) error {
 	log.Info("GRPC MeshService.AccountMeshDataStream")
 
-	// Subscribe to the stream of transactions
+	// Subscribe to the stream of transactions and activations
 	txStream := events.GetNewTxStream()
+	activationsStream := events.GetActivationStream()
+
 	for {
 		select {
+		case activation, ok := <-activationsStream:
+			if !ok {
+				// we could handle this more gracefully, by no longer listening
+				// to this stream but continuing to listen to the other stream,
+				// but in practice one should never be closed while the other is
+				// still running, so it doesn't matter
+				log.Info("ActivationStream closed, shutting down")
+				return nil
+			}
+			pbActivation, err := convertActivation(activation)
+			if err != nil {
+				log.Error("error serializing activation data: ", err)
+				return status.Errorf(codes.Internal, "error serializing activation data")
+			}
+			if err := stream.Send(&pb.AccountMeshDataStreamResponse{
+				Data: &pb.AccountMeshData{
+					DataItem: &pb.AccountMeshData_Activation{
+						Activation: pbActivation,
+					},
+				},
+			}); err != nil {
+				return err
+			}
 		case tx, ok := <-txStream:
 			if !ok {
+				// we could handle this more gracefully, by no longer listening
+				// to this stream but continuing to listen to the other stream,
+				// but in practice one should never be closed while the other is
+				// still running, so it doesn't matter
 				log.Info("NewTxStream closed, shutting down")
 				return nil
 			}
