@@ -22,11 +22,12 @@ type Server struct {
 	GrpcServer *grpc.Server
 }
 
-// NewServer creates and returns a new Server
+// NewServer creates and returns a new Server with port only
 func NewServer(port int) *Server {
 	return NewServerWithInterface(port, "")
 }
 
+// NewServerWithInterface creates and returns a new Server with port and interface
 func NewServerWithInterface(port int, intfce string) *Server {
 	return &Server{
 		Port:       port,
