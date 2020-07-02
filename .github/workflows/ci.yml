@@ -1,0 +1,30 @@
+name: CI
+
+# Controls when the action will run. Triggers the workflow on pull requests to a set of branches.
+on:
+  pull_request:
+    branches: [
+      # This is our working branch
+      develop,
+      # This is where pull requests from "bors r+" are built.
+      staging,
+      # This is where pull requests from "bors try" are built. 
+      trying,
+    ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: unit tests (except app test)
+      run: make test-no-app-test
+    - name: app test
+      run: make test-only-app-test
+    - name: fmt, tidy, lint
+      run: |
+        make genproto
+        make test-tidy
+        make test-fmt
+        make lint
+
