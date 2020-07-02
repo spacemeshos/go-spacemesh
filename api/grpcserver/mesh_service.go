@@ -4,6 +4,7 @@ import (
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/p2p/peers"
@@ -351,7 +352,32 @@ func (s MeshService) LayersQuery(ctx context.Context, in *pb.LayersQueryRequest)
 // AccountMeshDataStream returns a stream of transactions and activations for an account
 func (s MeshService) AccountMeshDataStream(request *pb.AccountMeshDataStreamRequest, stream pb.MeshService_AccountMeshDataStreamServer) error {
 	log.Info("GRPC MeshService.AccountMeshDataStream")
-	return nil
+
+	// Subscribe to the stream of transactions
+	txStream := events.GetNewTxStream()
+	for {
+		select {
+		case tx, ok := <-txStream:
+			if !ok {
+				log.Info("NewTxStream closed, shutting down")
+				return nil
+			}
+			if err := stream.Send(&pb.AccountMeshDataStreamResponse{
+				Data: &pb.AccountMeshData{
+					DataItem: &pb.AccountMeshData_Transaction{
+						Transaction: convertTransaction(tx),
+					},
+				},
+			}); err != nil {
+				return err
+			}
+		case <-stream.Context().Done():
+			log.Info("AccountMeshDataStream closing stream, client disconnected")
+			return nil
+		}
+		// TODO: do we need an additional case here for a context to indicate
+		// that MeshService needs to shut down?
+	}
 }
 
 // LayerStream returns a stream of all mesh data per layer
