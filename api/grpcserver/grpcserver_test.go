@@ -354,7 +354,7 @@ func (s *SyncerMock) Start()      { s.startCalled = true }
 
 func launchServer(t *testing.T, services ...ServiceAPI) func() {
 	networkMock.Broadcast("", []byte{0x00})
-	grpcService := NewServer(cfg.NewGrpcServerPort)
+	grpcService := NewServerWithInterface(cfg.NewGrpcServerPort, "localhost")
 	jsonService := NewJSONHTTPServer(cfg.NewJSONServerPort, cfg.NewGrpcServerPort)
 
 	// attach services
@@ -392,7 +392,7 @@ func TestNewServersConfig(t *testing.T) {
 	port2, err := node.GetUnboundedPort()
 	require.NoError(t, err, "Should be able to establish a connection on a port")
 
-	grpcService := NewServer(port1)
+	grpcService := NewServerWithInterface(port1, "localhost")
 	jsonService := NewJSONHTTPServer(port2, port1)
 
 	require.Equal(t, port2, jsonService.Port, "Expected same port")
