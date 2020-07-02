@@ -11,9 +11,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/miner"
-	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/grpc/codes"
@@ -52,28 +52,45 @@ const (
 	layersPerEpoch        = 5
 	networkID             = 120
 	postGenesisEpochLayer = 22
+	atxPerLayer           = 2
+	blkPerLayer           = 3
 )
 
 var (
 	networkMock = NetworkMock{}
 	genTime     = GenesisTimeMock{time.Unix(genTimeUnix, 0)}
 	txMempool   = miner.NewTxMemPool()
-	txAPI       = &TxAPIMock{
-		returnTx:     make(map[types.TransactionID]*types.Transaction),
-		layerApplied: make(map[types.TransactionID]*types.LayerID),
-	}
-	coinbase    = types.HexToAddress("33333")
+	addr1       = types.HexToAddress("33333")
+	addr2       = types.HexToAddress("44444")
 	pub, _, _   = ed25519.GenerateKey(nil)
 	nodeID      = types.NodeID{Key: util.Bytes2Hex(pub), VRFPublicKey: []byte("22222")}
 	prevAtxID   = types.ATXID(types.HexToHash32("44444"))
+	chlng       = types.HexToHash32("55555")
+	poetRef     = []byte("66666")
+	npst        = activation.NewNIPSTWithChallenge(&chlng, poetRef)
+	challenge   = newChallenge(nodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
+	globalAtx   = newAtx(challenge, 5, defaultView, npst, addr1)
+	globalAtx2  = newAtx(challenge, 5, defaultView, npst, addr2)
+	globalTx    = NewTx(1, addr1, signing.NewEdSigner())
+	globalTx2   = NewTx(1, addr2, signing.NewEdSigner())
 	block1      = types.NewExistingBlock(0, []byte("11111"))
 	block2      = types.NewExistingBlock(0, []byte("22222"))
 	block3      = types.NewExistingBlock(0, []byte("33333"))
 	defaultView = []types.BlockID{block1.ID(), block2.ID(), block3.ID()}
-	chlng       = types.HexToHash32("55555")
-	poetRef     = []byte("66666")
-	npst        = activation.NewNIPSTWithChallenge(&chlng, poetRef)
+	txAPI       = &TxAPIMock{
+		returnTx:     make(map[types.TransactionID]*types.Transaction),
+		layerApplied: make(map[types.TransactionID]*types.LayerID),
+	}
 )
+
+func init() {
+	// These create circular dependencies so they have to be initialized
+	// after the global vars
+	block1.TxIDs = []types.TransactionID{globalTx.ID(), globalTx2.ID()}
+	block1.ATXIDs = []types.ATXID{globalAtx.ID(), globalAtx2.ID()}
+	txAPI.returnTx[globalTx.ID()] = globalTx
+	txAPI.returnTx[globalTx2.ID()] = globalTx2
+}
 
 // Better a small code duplication than a small dependency
 
@@ -215,53 +232,43 @@ func (t *TxAPIMock) AddressExists(types.Address) bool {
 	return true
 }
 
-var globalBlock = types.NewExistingBlock(types.LayerID(0), []byte(rand.String(8)))
-
 func (t *TxAPIMock) GetLayer(tid types.LayerID) (*types.Layer, error) {
-	var blk1, blk2, blk3 *types.Block
-
 	if tid > genTime.GetCurrentLayer() {
 		return nil, errors.New("requested layer later than current layer")
 	} else if tid > t.LatestLayer() {
 		return nil, errors.New("haven't received that layer yet")
 	}
 
-	// Messy but this allows easier instrumentation
-	if tid == 0 {
-		blk1 = globalBlock
-		blk2 = globalBlock
-		blk3 = globalBlock
-	} else {
-		blk1 = types.NewExistingBlock(tid, []byte(rand.String(8)))
-		blk2 = types.NewExistingBlock(tid, []byte(rand.String(8)))
-		blk3 = types.NewExistingBlock(tid, []byte(rand.String(8)))
-	}
-	blocks := []*types.Block{blk1, blk2, blk3}
+	blocks := []*types.Block{block1, block2, block3}
 	return types.NewExistingLayer(tid, blocks), nil
 }
 
-var (
-	challenge = newChallenge(nodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
-	globalAtx = newAtx(challenge, 5, defaultView, npst)
-)
-
 func (t *TxAPIMock) GetATXs([]types.ATXID) (map[types.ATXID]*types.ActivationTx, []types.ATXID) {
-	atxs := map[types.ATXID]*types.ActivationTx{globalAtx.ID(): globalAtx}
+	atxs := map[types.ATXID]*types.ActivationTx{
+		globalAtx.ID():  globalAtx,
+		globalAtx2.ID(): globalAtx2,
+	}
 	return atxs, nil
 }
 
-var tx1 *types.Transaction
-
-func (t *TxAPIMock) GetTransactions([]types.TransactionID) ([]*types.Transaction, map[types.TransactionID]struct{}) {
-	return []*types.Transaction{tx1}, nil
+func (t *TxAPIMock) GetTransactions(txids []types.TransactionID) (txs []*types.Transaction, missing map[types.TransactionID]struct{}) {
+	for _, txid := range txids {
+		for _, tx := range t.returnTx {
+			if tx.ID() == txid {
+				txs = append(txs, tx)
+			}
+		}
+	}
+	return
 }
 
-func NewTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) (*types.Transaction, error) {
+func NewTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *types.Transaction {
 	tx, err := mesh.NewSignedTx(nonce, recipient, 1, defaultGasLimit, defaultFee, signer)
 	if err != nil {
-		return nil, err
+		log.Error("error creating new signed tx: ", err)
+		return nil
 	}
-	return tx, nil
+	return tx
 }
 
 func newChallenge(nodeID types.NodeID, sequence uint64, prevAtxID, posAtxID types.ATXID, pubLayerID types.LayerID) types.NIPSTChallenge {
@@ -275,7 +282,7 @@ func newChallenge(nodeID types.NodeID, sequence uint64, prevAtxID, posAtxID type
 	return challenge
 }
 
-func newAtx(challenge types.NIPSTChallenge, ActiveSetSize uint32, View []types.BlockID, nipst *types.NIPST) *types.ActivationTx {
+func newAtx(challenge types.NIPSTChallenge, ActiveSetSize uint32, View []types.BlockID, nipst *types.NIPST, coinbase types.Address) *types.ActivationTx {
 	activationTx := &types.ActivationTx{
 		InnerActivationTx: &types.InnerActivationTx{
 			ActivationTxHeader: &types.ActivationTxHeader{
@@ -506,11 +513,6 @@ func TestMeshService(t *testing.T) {
 	layerConfirmed := txAPI.LatestLayerInState()
 	layerCurrent := genTime.GetCurrentLayer()
 
-	// Generate some tx data that we can test
-	tx, err := NewTx(1, types.BytesToAddress([]byte{0x02}), signing.NewEdSigner())
-	require.NoError(t, err, "error generating test tx")
-	tx1 = tx
-
 	// Construct an array of test cases to test each endpoint in turn
 	testCases := []struct {
 		name string
@@ -556,55 +558,62 @@ func TestMeshService(t *testing.T) {
 					// query is valid but MaxResults is 0 so expect no results
 					name: "no inputs",
 					run: func(t *testing.T) {
-						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{})
-						require.NoError(t, err)
-						require.Equal(t, 0, res.TotalResults)
-						require.Equal(t, 0, len(res.Data))
+						_, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{})
+						require.Error(t, err, "expected an error")
+						require.Contains(t, err.Error(), "`Filter` must be provided")
+						statusCode := status.Code(err)
+						require.Equal(t, codes.InvalidArgument, statusCode)
 					},
 				},
 				{
 					name: "MinLayer too high",
 					run: func(t *testing.T) {
-						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
+						_, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
 							MinLayer: layerCurrent.Uint64() + 1,
 						})
-						require.NoError(t, err)
-						require.Equal(t, 0, res.TotalResults)
-						require.Equal(t, 0, len(res.Data))
+						require.Error(t, err, "expected an error")
+						require.Contains(t, err.Error(), "`LatestLayer` must be less than")
+						statusCode := status.Code(err)
+						require.Equal(t, codes.InvalidArgument, statusCode)
 					},
 				},
 				{
 					name: "Offset too high",
 					run: func(t *testing.T) {
 						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
-							Offset: uint32(layerCurrent) + 1,
+							Filter: &pb.AccountMeshDataFilter{
+								AccountId: &pb.AccountId{},
+							},
+							Offset: math.MaxUint32,
 						})
 						require.NoError(t, err)
-						require.Equal(t, 0, res.TotalResults)
+						require.Equal(t, uint32(0), res.TotalResults)
 						require.Equal(t, 0, len(res.Data))
 					},
 				},
 				{
 					name: "no filter",
 					run: func(t *testing.T) {
-						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
+						_, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
 							MaxResults: uint32(10),
 						})
-						require.NoError(t, err)
-						require.Equal(t, 0, res.TotalResults)
-						require.Equal(t, 0, len(res.Data))
+						require.Error(t, err, "expected an error")
+						require.Contains(t, err.Error(), "`Filter` must be provided")
+						statusCode := status.Code(err)
+						require.Equal(t, codes.InvalidArgument, statusCode)
 					},
 				},
 				{
 					name: "empty filter",
 					run: func(t *testing.T) {
-						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
+						_, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
 							MaxResults: uint32(10),
 							Filter:     &pb.AccountMeshDataFilter{},
 						})
-						require.NoError(t, err)
-						require.Equal(t, 0, res.TotalResults)
-						require.Equal(t, 0, len(res.Data))
+						require.Error(t, err, "expected an error")
+						require.Contains(t, err.Error(), "`Filter.AccountId` must be provided")
+						statusCode := status.Code(err)
+						require.Equal(t, codes.InvalidArgument, statusCode)
 					},
 				},
 				{
@@ -617,7 +626,7 @@ func TestMeshService(t *testing.T) {
 							},
 						})
 						require.NoError(t, err)
-						require.Equal(t, 0, res.TotalResults)
+						require.Equal(t, uint32(0), res.TotalResults)
 						require.Equal(t, 0, len(res.Data))
 					},
 				},
@@ -627,11 +636,11 @@ func TestMeshService(t *testing.T) {
 						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
 							MaxResults: uint32(10),
 							Filter: &pb.AccountMeshDataFilter{
-								AccountId: &pb.AccountId{Address: tx.Origin().Bytes()},
+								AccountId: &pb.AccountId{Address: addr1.Bytes()},
 							},
 						})
 						require.NoError(t, err)
-						require.Equal(t, 0, res.TotalResults)
+						require.Equal(t, uint32(0), res.TotalResults)
 						require.Equal(t, 0, len(res.Data))
 					},
 				},
@@ -641,12 +650,12 @@ func TestMeshService(t *testing.T) {
 						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
 							MaxResults: uint32(10),
 							Filter: &pb.AccountMeshDataFilter{
-								AccountId:            &pb.AccountId{Address: tx.Origin().Bytes()},
+								AccountId:            &pb.AccountId{Address: addr1.Bytes()},
 								AccountMeshDataFlags: uint32(pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_UNSPECIFIED),
 							},
 						})
 						require.NoError(t, err)
-						require.Equal(t, 0, res.TotalResults)
+						require.Equal(t, uint32(0), res.TotalResults)
 						require.Equal(t, 0, len(res.Data))
 					},
 				},
@@ -656,13 +665,14 @@ func TestMeshService(t *testing.T) {
 						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
 							MaxResults: uint32(10),
 							Filter: &pb.AccountMeshDataFilter{
-								AccountId:            &pb.AccountId{Address: tx.Origin().Bytes()},
+								AccountId:            &pb.AccountId{Address: addr1.Bytes()},
 								AccountMeshDataFlags: uint32(pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_TRANSACTIONS),
 							},
 						})
 						require.NoError(t, err)
-						require.Equal(t, 0, res.TotalResults)
-						require.Equal(t, 0, len(res.Data))
+						require.Equal(t, uint32(1), res.TotalResults)
+						require.Equal(t, 1, len(res.Data))
+						checkAccountDataItemTx(t, res.Data[0].DataItem)
 					},
 				},
 				{
@@ -671,13 +681,14 @@ func TestMeshService(t *testing.T) {
 						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
 							MaxResults: uint32(10),
 							Filter: &pb.AccountMeshDataFilter{
-								AccountId:            &pb.AccountId{Address: tx.Origin().Bytes()},
+								AccountId:            &pb.AccountId{Address: addr1.Bytes()},
 								AccountMeshDataFlags: uint32(pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_ACTIVATIONS),
 							},
 						})
 						require.NoError(t, err)
-						require.Equal(t, 0, res.TotalResults)
-						require.Equal(t, 0, len(res.Data))
+						require.Equal(t, uint32(1), res.TotalResults)
+						require.Equal(t, 1, len(res.Data))
+						checkAccountDataItemActivation(t, res.Data[0].DataItem)
 					},
 				},
 				{
@@ -686,21 +697,21 @@ func TestMeshService(t *testing.T) {
 						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
 							MaxResults: uint32(10),
 							Filter: &pb.AccountMeshDataFilter{
-								AccountId: &pb.AccountId{Address: tx.Origin().Bytes()},
+								AccountId: &pb.AccountId{Address: addr1.Bytes()},
 								AccountMeshDataFlags: uint32(
 									pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_ACTIVATIONS |
 										pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_TRANSACTIONS),
 							},
 						})
 						require.NoError(t, err)
-						require.Equal(t, 0, res.TotalResults)
-						require.Equal(t, 0, len(res.Data))
+						require.Equal(t, uint32(2), res.TotalResults)
+						require.Equal(t, 2, len(res.Data))
+						checkAccountDataItemTx(t, res.Data[0].DataItem)
+						checkAccountDataItemActivation(t, res.Data[1].DataItem)
 					},
 				},
 			}
-			//response, err := c.MaxTransactionsPerSecond(context.Background(), &pb.MaxTransactionsPerSecondRequest{})
-			//require.NoError(t, err)
-			//require.Equal(t, uint64(layerAvgSize*txsPerBlock/layerDurationSec), response.Maxtxpersecond.Value)
+
 			// Run sub-subtests
 			for _, r := range subtests {
 				t.Run(r.name, r.run)
@@ -833,19 +844,14 @@ func TestMeshService(t *testing.T) {
 
 						// endpoint inclusive so add one
 						numLayers := int(layerLatestReceived) - layerFirst + 1
-						numTxPerBlock := 1
-						numAtxPerLayer := 1
-						numBlkPerLayer := 3
-						//numTxs := numLayers * numTxPerLayer
-						//numAtxs := numLayers * numAtxPerLayer
 						require.Equal(t, numLayers, len(res.Layer))
 
-						require.Equal(t, numAtxPerLayer, len(resLayer.Activations))
-						require.Equal(t, numBlkPerLayer, len(resLayer.Blocks))
+						require.Equal(t, atxPerLayer, len(resLayer.Activations))
+						require.Equal(t, blkPerLayer, len(resLayer.Blocks))
 
 						resActivation := resLayer.Activations[0]
 						require.Equal(t, globalAtx.ID().Bytes(), resActivation.Id.Id)
-						require.Equal(t, resLayer.Number, resActivation.Layer)
+						require.Equal(t, globalAtx.PubLayerID.Uint64(), resActivation.Layer)
 						require.Equal(t, globalAtx.NodeID.ToBytes(), resActivation.SmesherId.Id)
 						require.Equal(t, globalAtx.Coinbase.Bytes(), resActivation.Coinbase.Address)
 						require.Equal(t, globalAtx.PrevATXID.Bytes(), resActivation.PrevAtx.Id)
@@ -855,25 +861,25 @@ func TestMeshService(t *testing.T) {
 
 						resBlock := resLayer.Blocks[0]
 
-						require.Equal(t, numTxPerBlock, len(resBlock.Transactions))
-						require.Equal(t, globalBlock.ID().Bytes(), resBlock.Id)
+						require.Equal(t, len(block1.TxIDs), len(resBlock.Transactions))
+						require.Equal(t, block1.ID().Bytes(), resBlock.Id)
 
 						// Check the tx as well
 						resTx := resBlock.Transactions[0]
-						require.Equal(t, tx.ID().Bytes(), resTx.Id.Id)
-						require.Equal(t, tx.Origin().Bytes(), resTx.Sender.Address)
-						require.Equal(t, tx.GasLimit, resTx.GasOffered.GasProvided)
-						require.Equal(t, tx.Fee, resTx.GasOffered.GasPrice)
-						require.Equal(t, tx.Amount, resTx.Amount.Value)
-						require.Equal(t, tx.AccountNonce, resTx.Counter)
-						require.Equal(t, tx.Signature[:], resTx.Signature.Signature)
+						require.Equal(t, globalTx.ID().Bytes(), resTx.Id.Id)
+						require.Equal(t, globalTx.Origin().Bytes(), resTx.Sender.Address)
+						require.Equal(t, globalTx.GasLimit, resTx.GasOffered.GasProvided)
+						require.Equal(t, globalTx.Fee, resTx.GasOffered.GasPrice)
+						require.Equal(t, globalTx.Amount, resTx.Amount.Value)
+						require.Equal(t, globalTx.AccountNonce, resTx.Counter)
+						require.Equal(t, globalTx.Signature[:], resTx.Signature.Signature)
 						require.Equal(t, pb.Signature_SCHEME_ED25519_PLUS_PLUS, resTx.Signature.Scheme)
-						require.Equal(t, tx.Origin().Bytes(), resTx.Signature.PublicKey)
+						require.Equal(t, globalTx.Origin().Bytes(), resTx.Signature.PublicKey)
 
 						// The Data field is a bit trickier to read
 						switch x := resTx.Data.(type) {
 						case *pb.Transaction_CoinTransfer:
-							require.Equal(t, tx.Recipient.Bytes(), x.CoinTransfer.Receiver.Address,
+							require.Equal(t, globalTx.Recipient.Bytes(), x.CoinTransfer.Receiver.Address,
 								"inner coin transfer tx has bad recipient")
 						default:
 							require.Fail(t, "inner tx has wrong tx data type")
@@ -892,6 +898,46 @@ func TestMeshService(t *testing.T) {
 	// Run subtests
 	for _, tc := range testCases {
 		t.Run(tc.name, tc.run)
+	}
+}
+
+func checkAccountDataItemTx(t *testing.T, dataItem interface{}) {
+	switch x := dataItem.(type) {
+	case *pb.AccountMeshData_Transaction:
+		// Check the sender
+		require.Equal(t, globalTx.Origin().Bytes(), x.Transaction.Signature.PublicKey,
+			"inner coin transfer tx has bad sender")
+		require.Equal(t, globalTx.Amount, x.Transaction.Amount.Value,
+			"inner coin transfer tx has bad amount")
+		require.Equal(t, globalTx.AccountNonce, x.Transaction.Counter,
+			"inner coin transfer tx has bad counter")
+
+		// Need to further check tx type
+		switch y := x.Transaction.Data.(type) {
+		case *pb.Transaction_CoinTransfer:
+			require.Equal(t, globalTx.Recipient.Bytes(), y.CoinTransfer.Receiver.Address,
+				"inner coin transfer tx has bad recipient")
+		default:
+			require.Fail(t, "inner tx has wrong tx data type")
+		}
+	default:
+		require.Fail(t, "inner account data item has wrong tx data type")
+	}
+}
+
+func checkAccountDataItemActivation(t *testing.T, dataItem interface{}) {
+	switch x := dataItem.(type) {
+	case *pb.AccountMeshData_Activation:
+		require.Equal(t, globalAtx.ID().Bytes(), x.Activation.Id.Id)
+		require.Equal(t, globalAtx.PubLayerID.Uint64(), x.Activation.Layer)
+		require.Equal(t, globalAtx.NodeID.ToBytes(), x.Activation.SmesherId.Id)
+		require.Equal(t, globalAtx.Coinbase.Bytes(), x.Activation.Coinbase.Address)
+		require.Equal(t, globalAtx.PrevATXID.Bytes(), x.Activation.PrevAtx.Id)
+		data, err := globalAtx.InnerBytes()
+		require.NoError(t, err)
+		require.Equal(t, uint64(len(data)), x.Activation.CommitmentSize)
+	default:
+		require.Fail(t, "inner account data item has wrong tx data type")
 	}
 }
 

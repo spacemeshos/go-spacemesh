@@ -254,23 +254,19 @@ func convertActivation(a *types.ActivationTx) (*pb.Activation, error) {
 func (s MeshService) LayersQuery(ctx context.Context, in *pb.LayersQueryRequest) (*pb.LayersQueryResponse, error) {
 	log.Info("GRPC MeshService.LayersQuery")
 
-	// current layer (based on time)
-	//currentLayer := s.GenTime.GetCurrentLayer().Uint64()
-
 	// last validated layer
-	// TODO: don't know if this is tortoise or hare, or how to tell
+	// TODO: Do we need to distinguish between layers that have passed tortoise,
+	// passed hare, been applied to state, etc.? For now eveything is either
+	// unspecified, or fully confirmed.
+	// see https://github.com/spacemeshos/api/issues/89
 	//lastValidLayer := s.Mesh.ProcessedLayer()
 	lastValidLayer := s.Mesh.LatestLayerInState()
 
 	layers := []*pb.Layer{}
 	for l := uint64(in.StartLayer); l <= uint64(in.EndLayer); l++ {
-		// TODO: properly implement this check and include third status
-		// see note above about tortoise vs. hare
-		layerStatusFn := func() pb.Layer_LayerStatus {
-			if l <= lastValidLayer.Uint64() {
-				return pb.Layer_LAYER_STATUS_CONFIRMED
-			}
-			return pb.Layer_LAYER_STATUS_UNSPECIFIED
+		layerStatus := pb.Layer_LAYER_STATUS_UNSPECIFIED
+		if l <= lastValidLayer.Uint64() {
+			layerStatus = pb.Layer_LAYER_STATUS_CONFIRMED
 		}
 
 		layer, err := s.Mesh.GetLayer(types.LayerID(l))
@@ -339,7 +335,7 @@ func (s MeshService) LayersQuery(ctx context.Context, in *pb.LayersQueryRequest)
 		// Mesh.txProcessor.GetStateRoot().
 		layers = append(layers, &pb.Layer{
 			Number:        l,
-			Status:        layerStatusFn(),
+			Status:        layerStatus,
 			Hash:          layer.Hash().Bytes(), // do we need this?
 			Blocks:        blocks,
 			Activations:   pbActivations,
