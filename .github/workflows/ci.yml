@@ -32,9 +32,9 @@ jobs:
     #   run: make test-no-app-test
     # - name: app test
     #   run: make test-only-app-test
-    # lint gets confused by windows line endings so skip it on windows
     - name: fmt, tidy, lint
-      if: matrix.os != "windows-latest"
+      # lint gets confused by windows line endings so skip it on windows
+      if: matrix.os != 'windows-latest'
       run: |
         make genproto
         make test-tidy
