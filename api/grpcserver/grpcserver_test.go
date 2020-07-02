@@ -748,9 +748,9 @@ func TestMeshService(t *testing.T) {
 				checkAccountDataItemTx(t, res.Data.DataItem)
 
 				// second item should be an activation
-				//res, err = stream.Recv()
-				//require.NoError(t, err, "got error from stream")
-				//checkAccountDataItemActivation(t, res.Data.DataItem)
+				res, err = stream.Recv()
+				require.NoError(t, err, "got error from stream")
+				checkAccountDataItemActivation(t, res.Data.DataItem)
 
 				// look for EOF
 				res, err = stream.Recv()
@@ -764,6 +764,13 @@ func TestMeshService(t *testing.T) {
 			events.StreamNewTx(globalTx)
 
 			// publish an activation
+			events.StreamNewActivation(globalAtx)
+
+			// test streaming a tx and an atx that are filtered out
+
+			// test having the client close the stream instead
+
+			// test sending bad data
 
 			// close the stream
 			events.CloseEventStream()
