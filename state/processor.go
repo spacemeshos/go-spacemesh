@@ -247,6 +247,7 @@ func (tp *TransactionProcessor) Process(txs []*types.Transaction, layerID types.
 			Destination: tx.Recipient.String(),
 			Amount:      tx.Amount,
 			Fee:         tx.Fee})
+		events.StreamNewTx(tx)
 	}
 	return
 }

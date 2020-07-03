@@ -354,6 +354,8 @@ func (s MeshService) LayersQuery(ctx context.Context, in *pb.LayersQueryRequest)
 func (s MeshService) AccountMeshDataStream(request *pb.AccountMeshDataStreamRequest, stream pb.MeshService_AccountMeshDataStreamServer) error {
 	log.Info("GRPC MeshService.AccountMeshDataStream")
 
+	// TODO: read the Filter!
+
 	// Subscribe to the stream of transactions and activations
 	txStream := events.GetNewTxStream()
 	activationsStream := events.GetActivationStream()
