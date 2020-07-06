@@ -261,6 +261,7 @@ func TestHare_OutputCollectionLoop(t *testing.T) {
 
 func TestHare_onTick(t *testing.T) {
 	cfg := config.DefaultConfig()
+	types.SetLayersPerEpoch(4)
 
 	cfg.N = 2
 	cfg.F = 1
@@ -299,7 +300,7 @@ func TestHare_onTick(t *testing.T) {
 	wg.Add(2)
 	go func() {
 		wg.Done()
-		layerTicker <- 1
+		layerTicker <- types.GetEffectiveGenesis() + 1
 		<-createdChan
 		<-nmcp.CloseChannel()
 		wg.Done()
@@ -308,7 +309,7 @@ func TestHare_onTick(t *testing.T) {
 	//collect output one more time
 	wg.Wait()
 	time.Sleep(100 * time.Millisecond)
-	res2, err := h.GetResult(types.LayerID(1))
+	res2, err := h.GetResult(types.LayerID(types.GetEffectiveGenesis() + 1))
 	require.NoError(t, err)
 
 	SortBlockIDs(res2)
@@ -319,14 +320,14 @@ func TestHare_onTick(t *testing.T) {
 	wg.Add(2)
 	go func() {
 		wg.Done()
-		layerTicker <- 2
+		layerTicker <- types.GetEffectiveGenesis() + 2
 		h.Close()
 		wg.Done()
 	}()
 
 	//collect output one more time
 	wg.Wait()
-	res, err := h.GetResult(types.LayerID(2))
+	res, err := h.GetResult(types.LayerID(types.GetEffectiveGenesis() + 2))
 	require.Equal(t, errNoResult, err)
 	require.Equal(t, []types.BlockID(nil), res)
 
