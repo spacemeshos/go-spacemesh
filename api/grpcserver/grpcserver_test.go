@@ -720,74 +720,179 @@ func TestMeshService(t *testing.T) {
 			}
 		}},
 		{name: "AccountMeshDataStream", run: func(t *testing.T) {
-			// set up the grpc listener stream
-			req := &pb.AccountMeshDataStreamRequest{
-				Filter: &pb.AccountMeshDataFilter{
-					AccountId: &pb.AccountId{Address: addr1.Bytes()},
-					AccountMeshDataFlags: uint32(
-						pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_ACTIVATIONS |
-							pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_TRANSACTIONS),
+			//t.Skip()
+			// common testing framework
+			generateRunFn := func(req *pb.AccountMeshDataStreamRequest) func(*testing.T) {
+				return func(*testing.T) {
+					// Just try opening and immediately closing the stream
+					stream, err := c.AccountMeshDataStream(context.Background(), req)
+					require.NoError(t, err, "unexpected error opening stream")
+					stream.Context().Done()
+				}
+			}
+			generateRunFnError := func(msg string, req *pb.AccountMeshDataStreamRequest) func(*testing.T) {
+				return func(t *testing.T) {
+					//t.Skip()
+					// there should be no error opening the stream
+					stream, err := c.AccountMeshDataStream(context.Background(), req)
+					require.NoError(t, err, "unexpected error opening stream")
+
+					// sending a request should generate an error
+					_, err = stream.Recv()
+					require.Error(t, err, "expected an error")
+					require.Contains(t, err.Error(), msg, "received unexpected error")
+					statusCode := status.Code(err)
+					require.Equal(t, codes.InvalidArgument, statusCode, "expected InvalidArgument error")
+				}
+			}
+			subtests := []struct {
+				name string
+				run  func(*testing.T)
+			}{
+				// ERROR INPUTS
+				// We expect these to produce errors
+				{
+					name: "missing filter",
+					run:  generateRunFnError("`Filter` must be provided", &pb.AccountMeshDataStreamRequest{}),
+				},
+				{
+					name: "empty filter",
+					run: generateRunFnError("`Filter.AccountId` must be provided", &pb.AccountMeshDataStreamRequest{
+						Filter: &pb.AccountMeshDataFilter{},
+					}),
+				},
+				{
+					name: "missing address",
+					run: generateRunFnError("`Filter.AccountId` must be provided", &pb.AccountMeshDataStreamRequest{
+						Filter: &pb.AccountMeshDataFilter{
+							AccountMeshDataFlags: uint32(
+								pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_ACTIVATIONS |
+									pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_TRANSACTIONS),
+						},
+					}),
+				},
+				{
+					name: "filter with zero flags",
+					run: generateRunFnError("`Filter.AccountMeshDataFlags` must set at least one bitfield", &pb.AccountMeshDataStreamRequest{
+						Filter: &pb.AccountMeshDataFilter{
+							AccountId:            &pb.AccountId{Address: addr1.Bytes()},
+							AccountMeshDataFlags: uint32(0),
+						},
+					}),
+				},
+
+				// SUCCESS
+				{
+					name: "empty address",
+					run: generateRunFn(&pb.AccountMeshDataStreamRequest{
+						Filter: &pb.AccountMeshDataFilter{
+							AccountId: &pb.AccountId{},
+							AccountMeshDataFlags: uint32(
+								pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_ACTIVATIONS |
+									pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_TRANSACTIONS),
+						},
+					}),
+				},
+				{
+					name: "invalid address",
+					run: generateRunFn(&pb.AccountMeshDataStreamRequest{
+						Filter: &pb.AccountMeshDataFilter{
+							AccountId: &pb.AccountId{Address: []byte{'A'}},
+							AccountMeshDataFlags: uint32(
+								pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_ACTIVATIONS |
+									pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_TRANSACTIONS),
+						},
+					}),
+				},
+				{
+					name: "comprehensive",
+					run: func(t *testing.T) {
+						//t.Skip()
+
+						// set up the grpc listener stream
+						req := &pb.AccountMeshDataStreamRequest{
+							Filter: &pb.AccountMeshDataFilter{
+								AccountId: &pb.AccountId{Address: addr1.Bytes()},
+								AccountMeshDataFlags: uint32(
+									pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_ACTIVATIONS |
+										pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_TRANSACTIONS),
+							},
+						}
+
+						// Coordinate start and stop
+						wgDone := sync.WaitGroup{}
+						wgStarted := sync.WaitGroup{}
+						wgDone.Add(1)
+						wgStarted.Add(1)
+
+						// This will block so run it in a goroutine
+						go func() {
+							defer wgDone.Done()
+							stream, err := c.AccountMeshDataStream(context.Background(), req)
+							require.NoError(t, err, "stream request returned unexpected error")
+
+							var res *pb.AccountMeshDataStreamResponse
+
+							log.Info("waiting for AccountMeshDataStreamResponse")
+							wgStarted.Done()
+
+							// first item should be a tx
+							res, err = stream.Recv()
+							require.NoError(t, err, "got error from stream")
+							checkAccountDataItemTx(t, res.Data.DataItem)
+
+							// second item should be an activation
+							res, err = stream.Recv()
+							require.NoError(t, err, "got error from stream")
+							checkAccountDataItemActivation(t, res.Data.DataItem)
+
+							// look for EOF
+							res, err = stream.Recv()
+							require.Equal(t, io.EOF, err, "expected EOF from stream")
+						}()
+
+						// wait for goroutine to start
+						wgStarted.Wait()
+
+						// initialize the streamer
+						events.InitializeEventStream()
+
+						// publish a tx
+						events.StreamNewTx(globalTx)
+
+						// publish an activation
+						events.StreamNewActivation(globalAtx)
+
+						// test streaming a tx and an atx that are filtered out
+
+						// test having the client close the stream instead
+
+						// test sending bad data
+
+						// close the stream
+						events.CloseEventStream()
+
+						// wait for the goroutine
+						wgDone.Wait()
+					},
 				},
 			}
 
-			// This will block so run it in a goroutine
-			wg := sync.WaitGroup{}
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				stream, err := c.AccountMeshDataStream(context.Background(), req)
-				require.NoError(t, err, "stream request returned unexpected error")
-
-				var res *pb.AccountMeshDataStreamResponse
-
-				log.Info("waiting for AccountMeshDataStreamResponse")
-
-				// first item should be a tx
-				res, err = stream.Recv()
-				require.NoError(t, err, "got error from stream")
-				checkAccountDataItemTx(t, res.Data.DataItem)
-
-				// second item should be an activation
-				res, err = stream.Recv()
-				require.NoError(t, err, "got error from stream")
-				checkAccountDataItemActivation(t, res.Data.DataItem)
-
-				// look for EOF
-				res, err = stream.Recv()
-				require.Equal(t, err, io.EOF, "expected EOF from stream")
-			}()
-
-			// initialize the streamer
-			events.InitializeEventStream()
-
-			// publish a tx
-			events.StreamNewTx(globalTx)
-
-			// publish an activation
-			events.StreamNewActivation(globalAtx)
-
-			// test streaming a tx and an atx that are filtered out
-
-			// test having the client close the stream instead
-
-			// test sending bad data
-
-			// close the stream
-			events.CloseEventStream()
-
-			// wait for the goroutine
-			wg.Wait()
+			// Run sub-subtests
+			for _, r := range subtests {
+				t.Run(r.name, r.run)
+			}
 		}},
 		{"LayersQuery", func(t *testing.T) {
 			generateRunFn := func(numResults int, req *pb.LayersQueryRequest) func(*testing.T) {
-				return func(*testing.T) {
+				return func(t *testing.T) {
 					res, err := c.LayersQuery(context.Background(), req)
 					require.NoError(t, err, "query returned an unexpected error")
 					require.Equal(t, numResults, len(res.Layer), "unexpected number of layer results")
 				}
 			}
 			generateRunFnError := func(msg string, req *pb.LayersQueryRequest) func(*testing.T) {
-				return func(*testing.T) {
+				return func(t *testing.T) {
 					_, err := c.LayersQuery(context.Background(), req)
 					require.Error(t, err, "expected query to produce an error")
 					require.Contains(t, err.Error(), msg, "expected error to contain string")
@@ -910,15 +1015,38 @@ func TestMeshService(t *testing.T) {
 						require.Equal(t, atxPerLayer, len(resLayer.Activations))
 						require.Equal(t, blkPerLayer, len(resLayer.Blocks))
 
-						resActivation := resLayer.Activations[0]
-						require.Equal(t, globalAtx.ID().Bytes(), resActivation.Id.Id)
-						require.Equal(t, globalAtx.PubLayerID.Uint64(), resActivation.Layer)
-						require.Equal(t, globalAtx.NodeID.ToBytes(), resActivation.SmesherId.Id)
-						require.Equal(t, globalAtx.Coinbase.Bytes(), resActivation.Coinbase.Address)
-						require.Equal(t, globalAtx.PrevATXID.Bytes(), resActivation.PrevAtx.Id)
 						data, err := globalAtx.InnerBytes()
 						require.NoError(t, err)
-						require.Equal(t, uint64(len(data)), resActivation.CommitmentSize)
+
+						// The order of the activations is not deterministic since they're
+						// stored in a map, and randomized each run. Check if either matches.
+						require.Condition(t, func() bool {
+							for _, a := range resLayer.Activations {
+								// Compare the two element by element
+								if a.Layer != globalAtx.PubLayerID.Uint64() {
+									continue
+								}
+								if bytes.Compare(a.Id.Id, globalAtx.ID().Bytes()) != 0 {
+									continue
+								}
+								if bytes.Compare(a.SmesherId.Id, globalAtx.NodeID.ToBytes()) != 0 {
+									continue
+								}
+								if bytes.Compare(a.Coinbase.Address, globalAtx.Coinbase.Bytes()) != 0 {
+									continue
+								}
+								if bytes.Compare(a.PrevAtx.Id, globalAtx.PrevATXID.Bytes()) != 0 {
+									continue
+								}
+								if a.CommitmentSize != uint64(len(data)) {
+									continue
+								}
+								// found a match
+								return true
+							}
+							// no match
+							return false
+						}, "return layer does not contain expected activation data")
 
 						resBlock := resLayer.Blocks[0]
 
