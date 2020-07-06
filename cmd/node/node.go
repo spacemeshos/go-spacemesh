@@ -558,7 +558,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 		LayersPerEpoch: layersPerEpoch,
 	}
 
-	blockProducer := miner.NewBlockBuilder(cfg, sgn, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle, syncer, stateAndMeshProjector, app.txPool, atxpool, atxdb, app.addLogger(BlockBuilderLogger, lg))
+	blockProducer := miner.NewBlockBuilder(cfg, sgn, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle, syncer, stateAndMeshProjector, app.txPool, atxdb, app.addLogger(BlockBuilderLogger, lg))
 	blockListener := sync.NewBlockListener(swarm, syncer, 4, app.addLogger(BlockListenerLogger, lg))
 
 	poetListener := activation.NewPoetListener(swarm, poetDb, app.addLogger(PoetListenerLogger, lg))

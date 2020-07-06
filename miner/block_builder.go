@@ -69,7 +69,7 @@ type BlockBuilder struct {
 	beginRoundEvent chan types.LayerID
 	stopChan        chan struct{}
 	hareResult      hareResultProvider
-	AtxPool         atxPool
+	//AtxPool         atxPool
 	AtxDb           atxDb
 	TransactionPool txPool
 	mu              sync.Mutex
@@ -95,7 +95,7 @@ type Config struct {
 }
 
 // NewBlockBuilder creates a struct of block builder type.
-func NewBlockBuilder(config Config, sgn signer, net p2p.Service, beginRoundEvent chan types.LayerID, weakCoin weakCoinProvider, orph meshProvider, hare hareResultProvider, blockOracle blockOracle, syncer syncer, projector projector, txPool txPool, atxPool atxPool, atxDB atxDb, lg log.Log) *BlockBuilder {
+func NewBlockBuilder(config Config, sgn signer, net p2p.Service, beginRoundEvent chan types.LayerID, weakCoin weakCoinProvider, orph meshProvider, hare hareResultProvider, blockOracle blockOracle, syncer syncer, projector projector, txPool txPool, atxDB atxDb, lg log.Log) *BlockBuilder {
 
 	seed := binary.BigEndian.Uint64(md5.New().Sum([]byte(config.MinerID.Key)))
 
@@ -123,7 +123,7 @@ func NewBlockBuilder(config Config, sgn signer, net p2p.Service, beginRoundEvent
 		atxsPerBlock:    config.AtxsPerBlock,
 		projector:       projector,
 		AtxDb:           atxDB,
-		AtxPool:         atxPool,
+		//AtxPool:         atxPool,
 		TransactionPool: txPool,
 		db:              db,
 		layerPerEpoch:   config.LayersPerEpoch,
@@ -265,7 +265,7 @@ func (t *BlockBuilder) getRefBlock(epoch types.EpochID) (blockID types.BlockID, 
 	return
 }
 
-func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.ATXID, eligibilityProof types.BlockEligibilityProof, txids []types.TransactionID, atxids []types.ATXID) (*types.Block, error) {
+func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.ATXID, eligibilityProof types.BlockEligibilityProof, txids []types.TransactionID) (*types.Block, error) {
 
 	votes, err := t.getVotes(id)
 	if err != nil {
@@ -288,15 +288,11 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.ATXID, eligibil
 			BlockVotes:       votes,
 			ViewEdges:        viewEdges,
 		},
-		ATXIDs: atxids,
-		TxIDs:  txids,
+		TxIDs: txids,
 	}
 	epoch := id.GetEpoch()
 	refBlock, err := t.getRefBlock(epoch)
 	if err != nil {
-		if eligibilityProof.J != 0 {
-			t.Log.Error("cannot read ref block for epoch %v err %v", epoch, err)
-		}
 		atxs := t.AtxDb.GetEpochAtxs(id.GetEpoch())
 		b.ActiveSet = &atxs
 	} else {
@@ -327,7 +323,7 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.ATXID, eligibil
 		bl.LayerIndex.GetEpoch(),
 		bl.MinerID(),
 		log.Int("tx_count", len(bl.TxIDs)),
-		log.Int("atx_count", len(bl.ATXIDs)),
+		//log.Int("atx_count", len(bl.ATXIDs)),
 		log.Int("view_edges", len(bl.ViewEdges)),
 		log.Int("vote_count", len(bl.BlockVotes)),
 		bl.ATXID,
@@ -383,11 +379,11 @@ func (t *BlockBuilder) createBlockLoop() {
 			}
 			// TODO: include multiple proofs in each block and weigh blocks where applicable
 
-			var atxList []types.ATXID
+			/*var atxList []types.ATXID
 			for _, atx := range t.AtxPool.GetAllItems() {
 				atxList = append(atxList, atx.ID())
-			}
-			reducedAtxList := selectAtxs(atxList, t.atxsPerBlock)
+			}*/
+			//reducedAtxList := selectAtxs(atxList, t.atxsPerBlock)
 			for _, eligibilityProof := range proofs {
 				txList, txs, err := t.TransactionPool.GetTxsForBlock(MaxTransactionsPerBlock, t.projector.GetProjection)
 				if err != nil {
@@ -395,21 +391,21 @@ func (t *BlockBuilder) createBlockLoop() {
 					t.With().Error("failed to get txs for block", log.LayerID(uint64(layerID)), log.Err(err))
 					continue
 				}
-				blk, err := t.createBlock(layerID, atxID, eligibilityProof, txList, reducedAtxList)
+				blk, err := t.createBlock(layerID, atxID, eligibilityProof, txList)
 				if err != nil {
 					events.Publish(events.DoneCreatingBlock{Eligible: true, Layer: uint64(layerID), Error: "cannot create new block"})
 					t.Error("cannot create new block, %v ", err)
 					continue
 				}
-				var atxs []*types.ActivationTx
+				/*var atxs []*types.ActivationTx
 				for _, atxID := range atxList {
 					for _, atx := range t.AtxPool.GetAllItems() {
 						if atxID == atx.ID() {
 							atxs = append(atxs, atx)
 						}
 					}
-				}
-				err = t.meshProvider.AddBlockWithTxs(blk, txs, atxs)
+				}*/
+				err = t.meshProvider.AddBlockWithTxs(blk, txs, nil)
 				if err != nil {
 					events.Publish(events.DoneCreatingBlock{Eligible: true, Layer: uint64(layerID), Error: err.Error()})
 					t.With().Error("failed to store block", log.BlockID(blk.ID().String()), log.Err(err))

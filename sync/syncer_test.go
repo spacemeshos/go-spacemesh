@@ -24,7 +24,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
-	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	p2ppeers "github.com/spacemeshos/go-spacemesh/p2p/peers"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -167,7 +166,7 @@ func TestSyncer_Close(t *testing.T) {
 
 	block := types.NewExistingBlock(1, []byte(rand.String(8)))
 	block.TxIDs = append(block.TxIDs, txid1)
-	block.ATXIDs = append(block.ATXIDs, atx1)
+	//block.ATXIDs = append(block.ATXIDs, atx1)
 
 	sync1.AddBlockWithTxs(block, nil, nil)
 	sync1.Close()
@@ -409,17 +408,13 @@ func TestSyncProtocol_FetchBlocks(t *testing.T) {
 
 	for out := range output {
 		block := out.(fetchJob).items[0].(*types.Block)
-		txs, err := syncObj2.txQueue.HandleTxs(block.TxIDs)
+		_, err := syncObj2.txQueue.HandleTxs(block.TxIDs)
 		if err != nil {
 			t.Error("could not fetch all txs", err)
 		}
-		atxs, err := syncObj2.atxQueue.HandleAtxs(block.ATXIDs)
-		if err != nil {
-			t.Error("could not fetch all atxs", err)
-		}
 		syncObj2.Debug("add block to layer %v", block)
 
-		syncObj2.AddBlockWithTxs(block, txs, atxs)
+		//syncObj2.AddBlockWithTxs(block, txs, atxs)
 	}
 }
 
@@ -1568,17 +1563,17 @@ func Test_validateUniqueTxAtx(t *testing.T) {
 
 	// unique
 	b.TxIDs = []types.TransactionID{txid1, txid2, txid3}
-	b.ATXIDs = []types.ATXID{atx1, atx2, atx3}
+	b.ActiveSet = &[]types.ATXID{atx1, atx2, atx3}
 	r.Nil(validateUniqueTxAtx(b))
 
 	// dup txs
 	b.TxIDs = []types.TransactionID{txid1, txid2, txid1}
-	b.ATXIDs = []types.ATXID{atx1, atx2, atx3}
+	b.ActiveSet = &[]types.ATXID{atx1, atx2, atx3}
 	r.EqualError(validateUniqueTxAtx(b), errDupTx.Error())
 
 	// dup atxs
 	b.TxIDs = []types.TransactionID{txid1, txid2, txid3}
-	b.ATXIDs = []types.ATXID{atx1, atx2, atx1}
+	b.ActiveSet = &[]types.ATXID{atx1, atx2, atx1}
 	r.EqualError(validateUniqueTxAtx(b), errDupAtx.Error())
 }
 
@@ -1588,20 +1583,16 @@ func TestSyncer_BlockSyntacticValidation(t *testing.T) {
 	s := syncs[0]
 	b := &types.Block{}
 	b.TxIDs = []types.TransactionID{txid1, txid2, txid1}
-	b.ATXIDs = []types.ATXID{atx1, atx2, atx3}
 	_, _, err := s.blockSyntacticValidation(b)
+	r.EqualError(err, errNoActiveSet.Error())
+
+	b.ActiveSet = &[]types.ATXID{}
+	_, _, err = s.blockSyntacticValidation(b)
+	r.EqualError(err, errZeroActiveSet.Error())
+
+	b.ActiveSet = &[]types.ATXID{atx1, atx2, atx3}
+	_, _, err = s.blockSyntacticValidation(b)
 	r.EqualError(err, errDupTx.Error())
-
-	for i := 0; i <= miner.AtxsPerBlockLimit; i++ {
-		b.ATXIDs = append(b.ATXIDs, atx1)
-	}
-	_, _, err = s.blockSyntacticValidation(b)
-	r.EqualError(err, errTooManyAtxs.Error())
-
-	b.TxIDs = []types.TransactionID{}
-	b.ATXIDs = []types.ATXID{}
-	_, _, err = s.blockSyntacticValidation(b)
-	r.Nil(err)
 }
 
 func TestSyncer_BlockSyntacticValidation_syncRefBlock(t *testing.T) {
@@ -1610,7 +1601,6 @@ func TestSyncer_BlockSyntacticValidation_syncRefBlock(t *testing.T) {
 	s := syncs[0]
 	b := &types.Block{}
 	b.TxIDs = []types.TransactionID{}
-	b.ATXIDs = []types.ATXID{}
 	block1 := types.NewExistingBlock(1, []byte(rand.String(8)))
 	block1.Initialize()
 	block1ID := block1.ID()
@@ -1630,7 +1620,6 @@ func TestSyncer_fetchBlock(t *testing.T) {
 	s := syncs[0]
 	b := &types.Block{}
 	b.TxIDs = []types.TransactionID{}
-	b.ATXIDs = []types.ATXID{}
 	block1 := types.NewExistingBlock(1, []byte(rand.String(8)))
 	block1.Initialize()
 	block1ID := block1.ID()

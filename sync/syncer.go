@@ -86,6 +86,8 @@ var (
 	errDupAtx          = errors.New("duplicate ATXID in block")
 	errTooManyAtxs     = errors.New("too many atxs in blocks")
 	errNoBlocksInLayer = errors.New("layer has no blocks")
+	errNoActiveSet     = errors.New("block does not declare active set")
+	errZeroActiveSet   = errors.New("block declares empty active set")
 
 	emptyLayer = types.Layer{}.Hash()
 )
@@ -576,12 +578,6 @@ func (s *Syncer) syncLayer(layerID types.LayerID, blockIds []types.BlockID) ([]*
 }
 
 func (s *Syncer) fastValidation(block *types.Block) error {
-
-	if len(block.ATXIDs) > s.AtxsLimit {
-		s.Error("Too many atxs in block expected<=%v actual=%v", s.AtxsLimit, len(block.ATXIDs))
-		return errTooManyAtxs
-	}
-
 	// block eligibility
 	if eligible, err := s.BlockSignedAndEligible(block); err != nil || !eligible {
 		return fmt.Errorf("block eligibiliy check failed - err %v", err)
@@ -606,12 +602,14 @@ func validateUniqueTxAtx(b *types.Block) error {
 	}
 
 	// check for duplicate atx id
-	ma := make(map[types.ATXID]struct{}, len(b.ATXIDs))
-	for _, atx := range b.ATXIDs {
-		if _, exist := ma[atx]; exist {
-			return errDupAtx
+	if b.ActiveSet != nil {
+		ma := make(map[types.ATXID]struct{}, len(*b.ActiveSet))
+		for _, atx := range *b.ActiveSet {
+			if _, exist := ma[atx]; exist {
+				return errDupAtx
+			}
+			ma[atx] = struct{}{}
 		}
-		ma[atx] = struct{}{}
 	}
 
 	return nil
@@ -626,6 +624,13 @@ func (s *Syncer) blockSyntacticValidation(block *types.Block) ([]*types.Transact
 			if !fetched {
 				return nil, nil, fmt.Errorf("failed to fetch ref block %v", *block.RefBlock)
 			}
+		}
+	} else {
+		if block.ActiveSet == nil {
+			return nil, nil, errNoActiveSet
+		}
+		if len(*block.ActiveSet) == 0 {
+			return nil, nil, errZeroActiveSet
 		}
 	}
 
@@ -739,7 +744,7 @@ func validateVotes(blk *types.Block, forBlockfunc forBlockInView, depth int, lg 
 func (s *Syncer) dataAvailability(blk *types.Block) ([]*types.Transaction, []*types.ActivationTx, error) {
 
 	wg := sync.WaitGroup{}
-	wg.Add(2)
+	wg.Add(1)
 	var txres []*types.Transaction
 	var txerr error
 
@@ -752,12 +757,15 @@ func (s *Syncer) dataAvailability(blk *types.Block) ([]*types.Transaction, []*ty
 
 	var atxres []*types.ActivationTx
 	var atxerr error
-	go func() {
-		if len(blk.ATXIDs) > 0 {
-			atxres, atxerr = s.atxQueue.HandleAtxs(blk.ATXIDs)
-		}
-		wg.Done()
-	}()
+	if blk.ActiveSet != nil {
+		wg.Add(1)
+		go func() {
+			if len(*blk.ActiveSet) > 0 {
+				atxres, atxerr = s.atxQueue.HandleAtxs(*blk.ActiveSet)
+			}
+			wg.Done()
+		}()
+	}
 
 	wg.Wait()
 

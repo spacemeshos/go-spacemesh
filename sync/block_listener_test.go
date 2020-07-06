@@ -106,10 +106,10 @@ func TestBlockListener(t *testing.T) {
 	block1.ATXID = *types.EmptyATXID
 	block2 := types.NewExistingBlock(0, []byte(rand.String(8)))
 	block2.Signature = signer.Sign(block2.Bytes())
-	block2.ATXIDs = append(block2.ATXIDs, atx2.ID())
+	block2.ActiveSet = &[]types.ATXID{atx2.ID()}
 	block3 := types.NewExistingBlock(0, []byte(rand.String(8)))
 	block3.Signature = signer.Sign(block3.Bytes())
-	block3.ATXIDs = append(block3.ATXIDs, atx3.ID())
+	block3.ActiveSet = &[]types.ATXID{atx3.ID()}
 
 	block2.Initialize()
 	block3.Initialize()
@@ -171,7 +171,7 @@ func TestBlockListener_DataAvailability(t *testing.T) {
 	block := types.NewExistingBlock(1, []byte(rand.String(8)))
 	block.Signature = signer.Sign(block.Bytes())
 	block.TxIDs = append(block.TxIDs, tx1.ID())
-	block.ATXIDs = append(block.ATXIDs, atx1.ID())
+	block.ActiveSet = &[]types.ATXID{atx1.ID()}
 	err = bl1.AddBlockWithTxs(block, []*types.Transaction{tx1}, []*types.ActivationTx{atx1})
 	require.NoError(t, err)
 
@@ -231,10 +231,10 @@ func TestBlockListener_DataAvailabilityBadFlow(t *testing.T) {
 	block := types.NewExistingBlock(1, []byte(rand.String(8)))
 	block.Signature = signer.Sign(block.Bytes())
 	block.TxIDs = append(block.TxIDs, tx1.ID())
-	block.ATXIDs = append(block.ATXIDs, atx1.ID())
+	block.ActiveSet = &[]types.ATXID{atx1.ID()}
 
 	// adding block to peer1
-	err = bl1.AddBlockWithTxs(block, []*types.Transaction{}, []*types.ActivationTx{atx1})
+	err = bl1.AddBlockWithTxs(block, []*types.Transaction{}, nil)
 	require.NoError(t, err)
 
 	_, err = bl1.GetBlock(block.ID())
@@ -255,10 +255,10 @@ func TestBlockListener_DataAvailabilityBadFlow(t *testing.T) {
 	tBlock := types.NewExistingBlock(1, []byte(rand.String(8)))
 	tBlock.Signature = signer.Sign(tBlock.Bytes())
 	tBlock.TxIDs = append(tBlock.TxIDs, tx2.ID())
-	tBlock.ATXIDs = append(tBlock.ATXIDs, atx2.ID())
+	tBlock.ActiveSet = &[]types.ATXID{atx2.ID()}
 
 	// Push tx2 poet proof into bl1.
-	err = bl1.AddBlockWithTxs(tBlock, []*types.Transaction{tx2}, []*types.ActivationTx{})
+	err = bl1.AddBlockWithTxs(tBlock, []*types.Transaction{tx2}, nil)
 	require.NoError(t, err)
 
 	_, err = bl1.GetBlock(tBlock.ID())
@@ -642,7 +642,7 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 
 	blk := types.NewExistingBlock(1, []byte(rand.String(8)))
 	blk.TxIDs = append(blk.TxIDs, tx.ID())
-	blk.ATXIDs = append(blk.ATXIDs, atx.ID())
+	blk.ActiveSet = &[]types.ATXID{atx.ID()}
 	blk.Signature = signer.Sign(blk.Bytes())
 	blk.Initialize()
 
@@ -695,8 +695,8 @@ func TestBlockListener_AtxCache(t *testing.T) {
 	blk1 := types.NewExistingBlock(1, []byte(rand.String(8)))
 	blk1.Signature = signer.Sign(blk1.Bytes())
 	blk1.TxIDs = append(blk1.TxIDs, tx1.ID())
-	blk1.ATXIDs = append(blk1.ATXIDs, atx1.ID())
-	blk1.ATXIDs = append(blk1.ATXIDs, atx2.ID())
+	//blk1.ATXIDs = append(blk1.ATXIDs, atx1.ID())
+	//blk1.ATXIDs = append(blk1.ATXIDs, atx2.ID())
 
 	err := bl1.AddBlockWithTxs(blk1, []*types.Transaction{tx1}, []*types.ActivationTx{atx1, atx2})
 	require.NoError(t, err)
@@ -708,8 +708,8 @@ func TestBlockListener_AtxCache(t *testing.T) {
 	blk2 := types.NewExistingBlock(1, []byte(rand.String(8)))
 	blk2.Signature = signer.Sign(blk2.Bytes())
 	blk2.TxIDs = append(blk2.TxIDs, tx1.ID())
-	blk2.ATXIDs = append(blk2.ATXIDs, atx1.ID())
-	blk2.ATXIDs = append(blk2.ATXIDs, atx2.ID())
+	//blk2.ATXIDs = append(blk2.ATXIDs, atx1.ID())
+	//blk2.ATXIDs = append(blk2.ATXIDs, atx2.ID())
 
 	err = bl1.AddBlockWithTxs(blk2, []*types.Transaction{tx1}, []*types.ActivationTx{atx1, atx2})
 	require.NoError(t, err)
@@ -721,7 +721,7 @@ func TestBlockListener_AtxCache(t *testing.T) {
 	blk3 := types.NewExistingBlock(1, []byte(rand.String(8)))
 	blk3.Signature = signer.Sign(blk3.Bytes())
 	blk3.TxIDs = append(blk3.TxIDs, tx1.ID())
-	blk3.ATXIDs = append(blk3.ATXIDs, atx1.ID())
+	//blk3.ATXIDs = append(blk3.ATXIDs, atx1.ID())
 
 	err = bl1.AddBlockWithTxs(blk3, []*types.Transaction{tx1}, []*types.ActivationTx{atx1})
 	require.NoError(t, err)

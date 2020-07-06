@@ -138,6 +138,7 @@ func TestBlockOracleInGenesisReturnsNoAtx(t *testing.T) {
 }
 
 func TestBlockOracleEmptyActiveSet(t *testing.T) {
+	types.SetLayersPerEpoch(3)
 	r := require.New(t)
 
 	activeSetSize := uint32(0) // Nobody is active 😱
@@ -149,7 +150,7 @@ func TestBlockOracleEmptyActiveSet(t *testing.T) {
 	lg := log.NewDefault(nodeID.Key[:5])
 	blockOracle := NewMinerBlockOracle(committeeSize, activeSetSize, layersPerEpoch, activationDB, beaconProvider, vrfsgn, nodeID, func() bool { return true }, lg.WithName("blockOracle"))
 
-	_, proofs, err := blockOracle.BlockEligible(types.LayerID(layersPerEpoch * 2))
+	_, proofs, err := blockOracle.BlockEligible(types.LayerID(layersPerEpoch * 3))
 	r.EqualError(err, "empty active set not allowed")
 	r.Nil(proofs)
 }

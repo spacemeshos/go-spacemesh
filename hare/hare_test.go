@@ -245,12 +245,13 @@ func TestHare_collectOutput2(t *testing.T) {
 }
 
 func TestHare_OutputCollectionLoop(t *testing.T) {
+	types.SetLayersPerEpoch(4)
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 
 	h := createHare(n1, log.NewDefault(t.Name()))
 	h.Start()
-	mo := mockReport{1, NewEmptySet(0), true}
+	mo := mockReport{8, NewEmptySet(0), true}
 	h.broker.Register(mo.ID())
 	time.Sleep(1 * time.Second)
 	h.outputChan <- mo

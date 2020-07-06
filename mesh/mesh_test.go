@@ -159,7 +159,7 @@ func TestLayers_AddBlock(t *testing.T) {
 
 	assert.True(t, len(rBlock1.TxIDs) == len(block1.TxIDs), "block content was wrong")
 	assert.True(t, bytes.Compare(rBlock2.MiniBlock.Data, []byte("data2")) == 0, "block content was wrong")
-	assert.True(t, len(rBlock1.ATXIDs) == len(block1.ATXIDs))
+	//assert.True(t, len(*rBlock1.ActiveSet) == len(*block1.ActiveSet))
 }
 
 func TestLayers_AddLayer(t *testing.T) {
@@ -263,7 +263,7 @@ func TestLayers_WakeUp(t *testing.T) {
 
 	assert.True(t, len(rBlock1.TxIDs) == len(block1.TxIDs), "block content was wrong")
 	assert.True(t, bytes.Compare(rBlock2.MiniBlock.Data, []byte("data2")) == 0, "block content was wrong")
-	assert.True(t, len(rBlock1.ATXIDs) == len(block1.ATXIDs))
+	//assert.True(t, len(*rBlock1.ActiveSet) == len(*block1.ActiveSet))
 
 	recoveredMesh := NewMesh(layers.DB, NewAtxDbMock(), ConfigTst(), &MeshValidatorMock{mdb: layers.DB}, MockTxMemPool{}, MockAtxMemPool{}, &MockState{}, log.New("", "", ""))
 
@@ -275,7 +275,7 @@ func TestLayers_WakeUp(t *testing.T) {
 
 	assert.True(t, len(rBlock1.TxIDs) == len(block1.TxIDs), "block content was wrong")
 	assert.True(t, bytes.Compare(rBlock2.MiniBlock.Data, []byte("data2")) == 0, "block content was wrong")
-	assert.True(t, len(rBlock1.ATXIDs) == len(block1.ATXIDs))
+	//assert.True(t, len(rBlock1.ATXIDs) == len(block1.ATXIDs))
 
 }
 

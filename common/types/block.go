@@ -151,8 +151,8 @@ func (b *BlockHeader) AddView(id BlockID) {
 // produce the block signature.
 type MiniBlock struct {
 	BlockHeader
-	TxIDs     []TransactionID
-	ATXIDs    []ATXID
+	TxIDs []TransactionID
+	//ATXIDs    []ATXID
 	ActiveSet *[]ATXID
 	RefBlock  *BlockID
 }
@@ -185,8 +185,8 @@ func (b *Block) Fields() []log.LoggableField {
 		log.Int("vote_count", len(b.BlockVotes)),
 		log.Uint32("eligibility_counter", b.EligibilityProof.J),
 		log.Int("tx_count", len(b.TxIDs)),
-		log.Int("atx_count", len(b.ATXIDs)),
-		AtxIdsField(b.ATXIDs),
+		//log.Int("atx_count", len(b.ATXIDs)),
+		//AtxIdsField(b.ATXIDs),
 	}
 }
 

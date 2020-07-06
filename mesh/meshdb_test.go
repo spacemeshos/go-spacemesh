@@ -64,8 +64,9 @@ func TestMeshDB_AddBlock(t *testing.T) {
 			ProvenLeaves: [][]byte(nil),
 		},
 	})
-
-	block1.ATXIDs = append(block1.ATXIDs, atx.ID())
+	var atxs []types.ATXID
+	atxs = append(atxs, atx.ID())
+	block1.ActiveSet = &atxs
 	err := mdb.AddBlock(block1)
 	assert.NoError(t, err)
 
@@ -73,7 +74,7 @@ func TestMeshDB_AddBlock(t *testing.T) {
 	assert.NoError(t, err)
 
 	assert.True(t, len(rBlock1.TxIDs) == len(block1.TxIDs), "block content was wrong")
-	assert.True(t, len(rBlock1.ATXIDs) == len(block1.ATXIDs), "block content was wrong")
+	assert.True(t, len(*rBlock1.ActiveSet) == len(*block1.ActiveSet), "block content was wrong")
 	// assert.True(t, bytes.Compare(rBlock2.Data, []byte("data2")) == 0, "block content was wrong")
 }
 

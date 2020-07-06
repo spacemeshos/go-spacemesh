@@ -24,7 +24,7 @@ func createLayerWithAtx2(t require.TestingT, msh *mesh.Mesh, id types.LayerID, n
 		block1 := types.NewExistingBlock(id, []byte(rand.String(8)))
 		block1.BlockVotes = append(block1.BlockVotes, votes...)
 		for _, atx := range atxs {
-			block1.ATXIDs = append(block1.ATXIDs, atx.ID())
+			*block1.ActiveSet = append(*block1.ActiveSet, atx.ID())
 		}
 		block1.ViewEdges = append(block1.ViewEdges, views...)
 		err := msh.AddBlockWithTxs(block1, []*types.Transaction{}, atxs)
@@ -149,10 +149,12 @@ func createLayerWithAtx(t *testing.T, msh *mesh.Mesh, id types.LayerID, numOfBlo
 	for i := 0; i < numOfBlocks; i++ {
 		block1 := types.NewExistingBlock(id, []byte(rand.String(8)))
 		block1.BlockVotes = append(block1.BlockVotes, votes...)
+		activeSet := []types.ATXID{}
 		if i < len(atxs) {
-			block1.ATXIDs = append(block1.ATXIDs, atxs[i].ID())
+			activeSet = append(activeSet, atxs[i].ID())
 			fmt.Printf("adding i=%v bid=%v atxid=%v", i, block1.ID(), atxs[i].ShortString())
 		}
+		block1.ActiveSet = &activeSet
 		block1.ViewEdges = append(block1.ViewEdges, views...)
 		var actualAtxs []*types.ActivationTx
 		if i < len(atxs) {
@@ -214,6 +216,7 @@ func TestATX_ActiveSetForLayerView(t *testing.T) {
 
 	layer := types.LayerID(10)
 	layersPerEpoch := uint16(6)
+	types.SetLayersPerEpoch(6)
 	atxdb.LayersPerEpoch = layersPerEpoch
 	epoch := layer.GetEpoch()
 	actives, err := atxdb.CalcActiveSetSize(epoch, blocksMap)

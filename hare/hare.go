@@ -206,6 +206,11 @@ func (h *Hare) onTick(id types.LayerID) {
 		return
 	}
 
+	if id.GetEpoch().IsGenesis() {
+		h.With().Info("not starting hare since we are in genesis epoch", log.LayerID(uint64(id)))
+		return
+	}
+
 	// call to start the calculation of active set size beforehand
 	go h.rolacle.IsIdentityActiveOnConsensusView(h.nid.Key, id)
 

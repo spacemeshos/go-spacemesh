@@ -166,7 +166,7 @@ func TestOracle_IsEligible(t *testing.T) {
 	assert.False(t, res)
 
 	o.getActiveSet = (&mockActiveSetProvider{0}).ActiveSet
-	res, err = o.Eligible(types.LayerID(cfg.ConfidenceParam+11), 1, 0, types.NodeID{}, []byte{})
+	res, err = o.Eligible(types.LayerID(cfg.ConfidenceParam*2+11), 1, 0, types.NodeID{}, []byte{})
 	assert.NotNil(t, err)
 	assert.Equal(t, "active set size is zero", err.Error())
 	assert.False(t, res)
@@ -358,12 +358,12 @@ func TestOracle_roundedSafeLayer(t *testing.T) {
 	// examples
 	// sl is after rounded layer
 	types.SetLayersPerEpoch(5)
-	v = roundedSafeLayer(11, 5, 5, 1)
-	r.Equal(types.LayerID(6), v)
+	v = roundedSafeLayer(types.GetEffectiveGenesis()+11, 5, 5, 1)
+	r.Equal(types.LayerID(11), v)
 	// sl is before rounded layer
 	types.SetLayersPerEpoch(5)
 	v = roundedSafeLayer(11, 5, 5, 3)
-	r.Equal(types.LayerID(3), v)
+	r.Equal(types.LayerID(9), v)
 }
 
 func TestOracle_actives(t *testing.T) {
@@ -444,7 +444,7 @@ func TestOracle_activesSafeLayer(t *testing.T) {
 	rsl := roundedSafeLayer(lyr, types.LayerID(o.cfg.ConfidenceParam), o.layersPerEpoch, types.LayerID(o.cfg.EpochOffset))
 	o.getActiveSet = func(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]struct{}, error) {
 		ep := rsl.GetEpoch()
-		r.Equal(ep, epoch)
+		r.Equal(ep-1, epoch)
 		return mp, nil
 	}
 

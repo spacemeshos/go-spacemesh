@@ -2,6 +2,7 @@ package hare
 
 import (
 	"errors"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
@@ -73,7 +74,7 @@ func newBroker(networkService NetworkService, eValidator validator, stateQuerier
 		outbox:         make(map[instanceID]chan *Msg),
 		pending:        make(map[instanceID][]*Msg),
 		tasks:          make(chan func()),
-		latestLayer:    0,
+		latestLayer:    instanceID(types.GetEffectiveGenesis()),
 		minDeleted:     0,
 		limit:          limit,
 	}

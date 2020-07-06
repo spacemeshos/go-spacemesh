@@ -189,17 +189,22 @@ func (db *DB) createTraversalActiveSetCounterFunc(countedAtxs map[string]types.A
 	traversalFunc := func(b *types.Block) (stop bool, err error) {
 
 		// don't count ATXs in blocks that are not destined to the prev epoch
-		if b.LayerIndex.GetEpoch() != epoch-1 {
+		/*if b.LayerIndex.GetEpoch() != epoch-1 {
 			return false, nil
-		}
+		}*/
 
 		// count unique ATXs
-		for _, id := range b.ATXIDs {
+		if b.ActiveSet == nil {
+			return false, nil
+		}
+		for _, id := range *b.ActiveSet {
 			atx, err := db.GetAtxHeader(id)
 			if err != nil {
 				log.Panic("error fetching atx %v from database -- inconsistent state", id.ShortString()) // TODO: handle inconsistent state
 				return false, fmt.Errorf("error fetching atx %v from database -- inconsistent state", id.ShortString())
 			}
+
+			// todo: should we accept only eopch -1 atxs?
 
 			// make sure the target epoch is our epoch
 			if atx.TargetEpoch() != epoch {
@@ -258,7 +263,9 @@ func (db *DB) CalcActiveSetSize(epoch types.EpochID, blocks map[types.BlockID]st
 		return nil, err
 	}
 	db.log.With().Info("done calculating active set size",
+		log.Uint64("first_layer", uint64(firstLayerOfPrevEpoch)),
 		log.Int("size", len(countedAtxs)),
+		log.EpochID(uint64(epoch)),
 		log.String("duration", time.Now().Sub(startTime).String()))
 
 	result := make(map[string]struct{}, len(countedAtxs))
@@ -784,7 +791,7 @@ func (db *DB) HandleGossipAtx(data service.GossipMessage, syncer service.Syncer)
 		return
 	}
 
-	db.pool.Put(atx)
+	//db.pool.Put(atx)
 	err = db.ProcessAtx(atx)
 	if err != nil {
 		db.log.Warning("cannot process ATX %v: %v", atx.ShortString(), err)

@@ -106,7 +106,7 @@ func (bl *BlockListener) handleBlock(data service.GossipMessage) {
 		blk.LayerIndex.GetEpoch(),
 		log.String("sender_id", blk.MinerID().ShortString()),
 		log.Int("tx_count", len(blk.TxIDs)),
-		log.Int("atx_count", len(blk.ATXIDs)),
+		//log.Int("atx_count", len(blk.ATXIDs)),
 		log.Int("view_edges", len(blk.ViewEdges)),
 		log.Int("vote_count", len(blk.BlockVotes)),
 		blk.ATXID,
@@ -116,6 +116,7 @@ func (bl *BlockListener) handleBlock(data service.GossipMessage) {
 	)
 	//check if known
 	if _, err := bl.GetBlock(blk.ID()); err == nil {
+		data.ReportValidation(config.NewBlockProtocol)
 		bl.With().Info("we already know this block", log.BlockID(blk.ID().String()))
 		return
 	}

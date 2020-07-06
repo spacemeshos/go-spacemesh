@@ -135,10 +135,10 @@ func createLayerWithRandVoting(msh *mesh.Mesh, index types.LayerID, prev []*type
 		//add txs
 		txs, txids := txs(txPerBlock)
 		//add atxs
-		atxs, atxids := atxs(atxPerBlock)
+		atxs, _ := atxs(atxPerBlock)
 
 		bl.TxIDs = txids
-		bl.ATXIDs = atxids
+		//bl.ATXIDs = atxids
 		bl.Initialize()
 		start := time.Now()
 		msh.AddBlockWithTxs(bl, txs, atxs)

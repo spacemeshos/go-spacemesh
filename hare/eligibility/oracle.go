@@ -60,7 +60,7 @@ type Oracle struct {
 // Returns the relative layer id that w.h.p. we have agreement on its contextually valid blocks
 // safe layer is defined to be the confidence param layers prior to the provided Layer
 func safeLayer(layer types.LayerID, safetyParam types.LayerID) types.LayerID {
-	if layer <= safetyParam { // assuming genesis is zero
+	if layer <= types.GetEffectiveGenesis()+safetyParam { // assuming genesis is zero
 		return types.GetEffectiveGenesis()
 	}
 
@@ -253,8 +253,10 @@ func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
 	sl := roundedSafeLayer(layer, types.LayerID(o.cfg.ConfidenceParam), o.layersPerEpoch, types.LayerID(o.cfg.EpochOffset))
 	safeEp := sl.GetEpoch()
 
+	o.Info("safe layer %v, epoch %v", sl, safeEp)
 	// check genesis
-	if safeEp.IsGenesis() {
+	// genesis is for 3 epochs with hare since it can only count active identities found in blocks
+	if safeEp < 3 {
 		return nil, errGenesis
 	}
 
@@ -286,7 +288,7 @@ func (o *Oracle) actives(layer types.LayerID) (map[string]struct{}, error) {
 		return nil, errNoContextualBlocks
 	}
 
-	activeMap, err := o.getActiveSet(safeEp, mp)
+	activeMap, err := o.getActiveSet(safeEp-1, mp)
 	if err != nil {
 		o.With().Error("Could not retrieve active set size", log.Err(err),
 			log.Uint64("layer_id", uint64(layer)), log.Uint64("epoch_id", uint64(layer.GetEpoch())),

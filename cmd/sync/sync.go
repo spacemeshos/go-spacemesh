@@ -112,6 +112,7 @@ func (app *syncApp) start(cmd *cobra.Command, args []string) {
 		ValidationDelta: 30 * time.Second,
 		LayersPerEpoch:  uint16(app.Config.LayersPerEpoch),
 	}
+	types.SetLayersPerEpoch(int32(app.Config.LayersPerEpoch))
 
 	if remote {
 		if err := getData(app.Config.DataDir(), version, lg); err != nil {

@@ -80,6 +80,7 @@ func NewPersistentMeshDB(path string, blockCacheSize int, log log.Log) (*DB, err
 		exit:               make(chan struct{}),
 	}
 	ll.AddBlock(GenesisBlock())
+	ll.SaveContextualValidity(GenesisBlock().ID(), true)
 	return ll, nil
 }
 
@@ -109,6 +110,7 @@ func NewMemMeshDB(log log.Log) *DB {
 		exit:               make(chan struct{}),
 	}
 	ll.AddBlock(GenesisBlock())
+	ll.SaveContextualValidity(GenesisBlock().ID(), true)
 	return ll
 }
 

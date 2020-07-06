@@ -88,7 +88,7 @@ type Mesh struct {
 	AtxDB
 	txProcessor
 	Validator
-	trtl tortoise
+	trtl               tortoise
 	txInvalidator      txMemPoolInValidator
 	atxInvalidator     atxMemPoolInValidator
 	config             Config
@@ -189,7 +189,6 @@ func (msh *Mesh) CacheWarmUp(layerSize int) {
 
 	msh.Info("cache warm up done")
 }
-
 
 // LatestLayerInState returns the latest layer we applied to state
 func (msh *Mesh) LatestLayerInState() types.LayerID {
@@ -598,7 +597,10 @@ func (msh *Mesh) invalidateFromPools(blk *types.MiniBlock) {
 		msh.txInvalidator.Invalidate(id)
 	}
 	msh.atxInvalidator.Invalidate(blk.ATXID)
-	for _, id := range blk.ATXIDs {
+	if blk.ActiveSet == nil {
+		return
+	}
+	for _, id := range *blk.ActiveSet {
 		msh.atxInvalidator.Invalidate(id)
 	}
 }

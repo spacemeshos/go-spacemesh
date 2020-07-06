@@ -46,7 +46,7 @@ func (his *HareWrapper) waitForTermination() {
 	for {
 		count := 0
 		for _, p := range his.hare {
-			for i := types.LayerID(1); i <= types.LayerID(his.totalCP); i++ {
+			for i := types.LayerID(types.GetEffectiveGenesis() + 1); i <= types.GetEffectiveGenesis()+types.LayerID(his.totalCP); i++ {
 				blks, _ := p.GetResult(i)
 				if len(blks) > 0 {
 					count++
@@ -65,7 +65,7 @@ func (his *HareWrapper) waitForTermination() {
 	log.Info("Terminating. Validating outputs")
 
 	for _, p := range his.hare {
-		for i := types.LayerID(1); i <= types.LayerID(his.totalCP); i++ {
+		for i := types.LayerID(types.GetEffectiveGenesis() + 1); i <= types.GetEffectiveGenesis()+types.LayerID(his.totalCP); i++ {
 			s := NewEmptySet(10)
 			blks, _ := p.GetResult(i)
 			for _, b := range blks {
@@ -259,7 +259,7 @@ func Test_multipleCPs(t *testing.T) {
 	}
 
 	go func() {
-		for j := types.LayerID(1); j <= types.LayerID(totalCp); j++ {
+		for j := types.LayerID(types.GetEffectiveGenesis() + 1); j <= types.GetEffectiveGenesis()+types.LayerID(totalCp); j++ {
 			log.Info("sending for layer %v", j)
 			for i := 0; i < len(test.lCh); i++ {
 				log.Info("sending for instance %v", i)
@@ -294,7 +294,7 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 	}
 
 	go func() {
-		for j := types.LayerID(1); j <= types.LayerID(totalCp); j++ {
+		for j := types.LayerID(types.GetEffectiveGenesis() + 1); j <= types.GetEffectiveGenesis()+types.LayerID(totalCp); j++ {
 			log.Info("sending for layer %v", j)
 			for i := 0; i < len(test.lCh); i++ {
 				log.Info("sending for instance %v", i)
