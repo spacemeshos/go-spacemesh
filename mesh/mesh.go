@@ -579,7 +579,7 @@ func (msh *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.Transaction, atx
 	// invalidate txs and atxs from pool
 	msh.invalidateFromPools(&blk.MiniBlock)
 
-	events.Publish(events.NewBlock{ID: blk.ID().String(), Atx: blk.ATXID.ShortString(), Layer: uint64(blk.LayerIndex)})
+	events.ReportNewBlock(blk)
 	msh.With().Info("added block to database", blk.Fields()...)
 	return nil
 }

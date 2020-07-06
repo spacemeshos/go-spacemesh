@@ -338,8 +338,7 @@ func (db *DB) deleteLock(viewHash types.Hash12) {
 // - ATX LayerID is NipstLayerTime or less after the PositioningATX LayerID.
 // - The ATX view of the previous epoch contains ActiveSetSize activations.
 func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
-	events.Publish(events.NewAtx{ID: atx.ShortString(), LayerID: uint64(atx.PubLayerID.GetEpoch())})
-	events.StreamNewActivation(atx)
+	events.ReportNewActivation(atx)
 	pub, err := ExtractPublicKey(atx)
 	if err != nil {
 		return fmt.Errorf("cannot validate atx sig atx id %v err %v", atx.ShortString(), err)
