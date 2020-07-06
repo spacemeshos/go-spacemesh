@@ -6,17 +6,70 @@ import "github.com/spacemeshos/go-spacemesh/common/types"
 var streamer *EventStreamer
 
 // Stream streams an event on the streamer singleton.
-func StreamNewTx(tx *types.Transaction) {
+func ReportNewTx(tx *types.Transaction) {
 	if streamer != nil {
 		streamer.channelTransaction <- tx
 	}
+	Publish(NewTx{
+		ID:          tx.ID().String(),
+		Origin:      tx.Origin().String(),
+		Destination: tx.Recipient.String(),
+		Amount:      tx.Amount,
+		Fee:         tx.Fee})
+}
+
+func ReportValidTx(tx *types.Transaction, valid bool) {
+	Publish(ValidTx{ID: tx.ID().String(), Valid: valid})
 }
 
 // Stream streams an event on the streamer singleton.
-func StreamNewActivation(activation *types.ActivationTx) {
+func ReportNewActivation(activation *types.ActivationTx, layersPerEpoch uint16) {
 	if streamer != nil {
 		streamer.channelActivation <- activation
 	}
+	Publish(NewAtx{
+		ID:      activation.ShortString(),
+		LayerID: uint64(activation.PubLayerID.GetEpoch(layersPerEpoch)),
+	})
+}
+
+func ReportRewardReceived(account *types.Address, reward uint64) {
+	Publish(RewardReceived{
+		Coinbase: account.String(),
+		Amount:   reward,
+	})
+}
+
+func ReportNewBlock(blk *types.Block) {
+	Publish(NewBlock{
+		ID:    blk.ID().String(),
+		Atx:   blk.ATXID.ShortString(),
+		Layer: uint64(blk.LayerIndex),
+	})
+}
+
+func ReportValidBlock(blockID types.BlockID, valid bool) {
+	Publish(ValidBlock{
+		ID:    blockID.String(),
+		Valid: valid,
+	})
+}
+
+func ReportAtxCreated(created bool, layer uint64) {
+	Publish(AtxCreated{Created: created, Layer: layer})
+}
+
+func ReportValidActivation(activation *types.ActivationTx, valid bool) {
+	Publish(ValidAtx{ID: activation.ShortString(), Valid: valid})
+}
+
+func ReportDoneCreatingBlock(eligible bool, layer uint64, error string) {
+	Publish(DoneCreatingBlock{
+		Eligible: eligible,
+		Layer:    layer,
+		Error:    error,
+	})
+
 }
 
 func GetNewTxStream() chan *types.Transaction {

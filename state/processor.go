@@ -181,7 +181,7 @@ func (tp *TransactionProcessor) ApplyRewards(layer types.LayerID, miners []types
 			layer,
 		)
 		tp.AddBalance(account, reward)
-		events.Publish(events.RewardReceived{Coinbase: account.String(), Amount: reward.Uint64()})
+		events.ReportRewardReceived(&account, reward.Uint64())
 	}
 	newHash, err := tp.Commit()
 
@@ -228,14 +228,8 @@ func (tp *TransactionProcessor) Process(txs []*types.Transaction, layerID types.
 			tp.With().Warning("failed to apply transaction", tx.ID(), log.Err(err))
 			remaining = append(remaining, tx)
 		}
-		events.Publish(events.ValidTx{ID: tx.ID().String(), Valid: err == nil})
-		events.Publish(events.NewTx{
-			ID:          tx.ID().String(),
-			Origin:      tx.Origin().String(),
-			Destination: tx.Recipient.String(),
-			Amount:      tx.Amount,
-			Fee:         tx.Fee})
-		events.StreamNewTx(tx)
+		events.ReportValidTx(tx, err == nil)
+		events.ReportNewTx(tx)
 	}
 	return
 }

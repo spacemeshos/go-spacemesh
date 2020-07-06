@@ -1080,15 +1080,15 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 	events.InitializeEventStream()
 
 	// publish a tx
-	events.StreamNewTx(globalTx)
+	events.ReportNewTx(globalTx)
 
 	// publish an activation
-	events.StreamNewActivation(globalAtx)
+	events.ReportNewActivation(globalAtx, layersPerEpoch)
 
 	// test streaming a tx and an atx that are filtered out
 	// these should not be received
-	events.StreamNewTx(globalTx2)
-	events.StreamNewActivation(globalAtx2)
+	events.ReportNewTx(globalTx2)
+	events.ReportNewActivation(globalAtx2, layersPerEpoch)
 
 	// close the stream
 	log.Info("closing event stream")

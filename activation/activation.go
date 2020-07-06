@@ -191,7 +191,7 @@ func (b *Builder) loop() {
 			if _, stopRequested := err.(StopRequestedError); stopRequested {
 				return
 			}
-			events.Publish(events.AtxCreated{Created: false, Layer: uint64(b.currentEpoch())})
+			events.ReportAtxCreated(false, uint64(b.currentEpoch()))
 			<-b.layerClock.AwaitLayer(b.layerClock.GetCurrentLayer() + 1)
 		}
 	}
@@ -445,7 +445,7 @@ func (b *Builder) PublishActivationTx() error {
 	}
 
 	b.log.Event().Info("atx published!", atx.Fields(b.layersPerEpoch, size)...)
-	events.Publish(events.AtxCreated{Created: true, ID: atx.ShortString(), Layer: uint64(b.currentEpoch())})
+	events.ReportAtxCreated(true, uint64(b.currentEpoch()))
 
 	select {
 	case <-atxReceived:
