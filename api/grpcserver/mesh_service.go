@@ -351,14 +351,35 @@ func (s MeshService) LayersQuery(ctx context.Context, in *pb.LayersQueryRequest)
 // STREAMS
 
 // AccountMeshDataStream returns a stream of transactions and activations for an account
-func (s MeshService) AccountMeshDataStream(request *pb.AccountMeshDataStreamRequest, stream pb.MeshService_AccountMeshDataStreamServer) error {
+func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, stream pb.MeshService_AccountMeshDataStreamServer) error {
 	log.Info("GRPC MeshService.AccountMeshDataStream")
 
-	// TODO: read the Filter!
+	if in.Filter == nil {
+		return status.Errorf(codes.InvalidArgument, "`Filter` must be provided")
+	}
+	if in.Filter.AccountId == nil {
+		return status.Errorf(codes.InvalidArgument, "`Filter.AccountId` must be provided")
+	}
+	addr := types.BytesToAddress(in.Filter.AccountId.Address)
+
+	// Read the filter flags
+	filterTx := in.Filter.AccountMeshDataFlags&uint32(pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_TRANSACTIONS) != 0
+	filterActivations := in.Filter.AccountMeshDataFlags&uint32(pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_ACTIVATIONS) != 0
+	if !filterTx && !filterActivations {
+		return status.Errorf(codes.InvalidArgument, "`Filter.AccountMeshDataFlags` must set at least one bitfield")
+	}
 
 	// Subscribe to the stream of transactions and activations
-	txStream := events.GetNewTxStream()
-	activationsStream := events.GetActivationStream()
+	var (
+		txStream          chan *types.Transaction
+		activationsStream chan *types.ActivationTx
+	)
+	if filterTx {
+		txStream = events.GetNewTxStream()
+	}
+	if filterActivations {
+		activationsStream = events.GetActivationStream()
+	}
 
 	for {
 		select {
@@ -371,19 +392,22 @@ func (s MeshService) AccountMeshDataStream(request *pb.AccountMeshDataStreamRequ
 				log.Info("ActivationStream closed, shutting down")
 				return nil
 			}
-			pbActivation, err := convertActivation(activation)
-			if err != nil {
-				log.Error("error serializing activation data: ", err)
-				return status.Errorf(codes.Internal, "error serializing activation data")
-			}
-			if err := stream.Send(&pb.AccountMeshDataStreamResponse{
-				Data: &pb.AccountMeshData{
-					DataItem: &pb.AccountMeshData_Activation{
-						Activation: pbActivation,
+			// Apply address filter
+			if activation.Coinbase == addr {
+				pbActivation, err := convertActivation(activation)
+				if err != nil {
+					log.Error("error serializing activation data: ", err)
+					return status.Errorf(codes.Internal, "error serializing activation data")
+				}
+				if err := stream.Send(&pb.AccountMeshDataStreamResponse{
+					Data: &pb.AccountMeshData{
+						DataItem: &pb.AccountMeshData_Activation{
+							Activation: pbActivation,
+						},
 					},
-				},
-			}); err != nil {
-				return err
+				}); err != nil {
+					return err
+				}
 			}
 		case tx, ok := <-txStream:
 			if !ok {
@@ -413,7 +437,7 @@ func (s MeshService) AccountMeshDataStream(request *pb.AccountMeshDataStreamRequ
 }
 
 // LayerStream returns a stream of all mesh data per layer
-func (s MeshService) LayerStream(request *pb.LayerStreamRequest, stream pb.MeshService_LayerStreamServer) error {
+func (s MeshService) LayerStream(in *pb.LayerStreamRequest, stream pb.MeshService_LayerStreamServer) error {
 	log.Info("GRPC MeshService.LayerStream")
 	return nil
 }
