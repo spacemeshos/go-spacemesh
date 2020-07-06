@@ -418,14 +418,17 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 				log.Info("NewTxStream closed, shutting down")
 				return nil
 			}
-			if err := stream.Send(&pb.AccountMeshDataStreamResponse{
-				Data: &pb.AccountMeshData{
-					DataItem: &pb.AccountMeshData_Transaction{
-						Transaction: convertTransaction(tx),
+			// Apply address filter
+			if tx.Origin() == addr || tx.Recipient == addr {
+				if err := stream.Send(&pb.AccountMeshDataStreamResponse{
+					Data: &pb.AccountMeshData{
+						DataItem: &pb.AccountMeshData_Transaction{
+							Transaction: convertTransaction(tx),
+						},
 					},
-				},
-			}); err != nil {
-				return err
+				}); err != nil {
+					return err
+				}
 			}
 		case <-stream.Context().Done():
 			log.Info("AccountMeshDataStream closing stream, client disconnected")
