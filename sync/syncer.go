@@ -69,10 +69,10 @@ func (ms net) GetExit() chan struct{} {
 	return ms.exit
 }
 
-//Configuration represents all config params needed by syncer
+// Configuration represents all config params needed by syncer
 type Configuration struct {
 	LayersPerEpoch  uint16
-	Concurrency     int //number of workers for sync method
+	Concurrency     int // number of workers for sync method
 	LayerSize       int
 	RequestTimeout  time.Duration
 	SyncInterval    time.Duration
@@ -120,9 +120,9 @@ const (
 	validatingLayerNone types.LayerID      = 0
 )
 
-//Syncer is used to sync the node with the network
-//periodically the Syncer will check if the node is synced with the rest of the network
-//and will follow the sync protocol in order to fetch all missing data and become synced again
+// Syncer is used to sync the node with the network
+// periodically the Syncer will check if the node is synced with the rest of the network
+// and will follow the sync protocol in order to fetch all missing data and become synced again
 type Syncer struct {
 	log.Log
 	Configuration
@@ -151,7 +151,7 @@ type Syncer struct {
 	atxQueue   *atxQueue
 }
 
-//NewSync fires a sync every sm.SyncInterval or on force space from outside
+// NewSync fires a sync every sm.SyncInterval or on force space from outside
 func NewSync(srv service.Service, layers *mesh.Mesh, txpool txMemPool, atxpool atxMemPool, bv blockEligibilityValidator, poetdb poetDb, conf Configuration, clock ticker, logger log.Log) *Syncer {
 
 	exit := make(chan struct{})
@@ -196,7 +196,7 @@ func NewSync(srv service.Service, layers *mesh.Mesh, txpool txMemPool, atxpool a
 	return s
 }
 
-//ForceSync signals syncer to run the synchronise flow
+// ForceSync signals syncer to run the synchronise flow
 func (s *Syncer) ForceSync() {
 	s.forceSync <- true
 }
@@ -216,7 +216,7 @@ func (s *Syncer) Close() {
 	s.Info("sync Closed")
 }
 
-//check if syncer was closed
+// check if syncer was closed
 func (s *Syncer) shutdown() bool {
 	select {
 	case <-s.exit:
@@ -240,7 +240,7 @@ func (s *Syncer) getGossipBufferingStatus() status {
 	return b
 }
 
-//Await returns a channel that blocks until the node is synced
+// Await returns a channel that blocks until the node is synced
 func (s *Syncer) Await() chan struct{} {
 	return s.awaitCh
 }
@@ -256,7 +256,7 @@ func (s *Syncer) notifySubscribers(prevStatus, status status) {
 	}
 }
 
-//ListenToGossip enables other modules to check if they should listen to gossip
+// ListenToGossip enables other modules to check if they should listen to gossip
 func (s *Syncer) ListenToGossip() bool {
 	return s.getGossipBufferingStatus() != pending
 }
@@ -273,14 +273,14 @@ func (s *Syncer) setGossipBufferingStatus(status status) {
 
 }
 
-//IsSynced returns true if the node is synced false otherwise
+// IsSynced returns true if the node is synced false otherwise
 func (s *Syncer) IsSynced() bool {
 	s.Info("sync state w: %v, g:%v layer : %v latest: %v", s.weaklySynced(s.GetCurrentLayer()), s.getGossipBufferingStatus(), s.GetCurrentLayer(), s.LatestLayer())
 	return s.weaklySynced(s.GetCurrentLayer()) && s.getGossipBufferingStatus() == done
 }
 
-//Start starts the main pooling routine that checks the sync status every set interval
-//and calls synchronise if the node is out of sync
+// Start starts the main pooling routine that checks the sync status every set interval
+// and calls synchronise if the node is out of sync
 func (s *Syncer) Start() {
 	if s.startLock.TryLock() {
 		s.Info("start syncer")
@@ -291,7 +291,7 @@ func (s *Syncer) Start() {
 	s.Info("syncer already started")
 }
 
-//fires a sync every sm.SyncInterval or on force sync from outside
+// fires a sync every sm.SyncInterval or on force sync from outside
 func (s *Syncer) run() {
 	s.Debug("Start running")
 	for {
@@ -308,16 +308,16 @@ func (s *Syncer) run() {
 }
 
 func (s *Syncer) synchronise() {
-	//only one concurrent synchronise
+	// only one concurrent synchronise
 	if s.syncLock.TryLock() == false {
 		return
 	}
 
-	//release synchronise lock
+	// release synchronise lock
 	defer s.syncLock.Unlock()
 	curr := s.GetCurrentLayer()
 
-	//node is synced and blocks from current layer have already been validated
+	// node is synced and blocks from current layer have already been validated
 	if curr == s.ProcessedLayer() {
 		s.Debug("node is synced")
 		// fully-synced, make sure we listen to p2p
@@ -346,7 +346,7 @@ func (s *Syncer) handleWeaklySynced() {
 		return
 	}
 
-	//validate current layer if more than s.ValidationDelta has passed
+	// validate current layer if more than s.ValidationDelta has passed
 	if err := s.handleCurrentLayer(); err != nil {
 		s.With().Error("Node is out of sync", log.Err(err))
 		s.setGossipBufferingStatus(pending)
@@ -363,9 +363,9 @@ func (s *Syncer) handleWeaklySynced() {
 	return
 }
 
-//validate all layers except current one
+// validate all layers except current one
 func (s *Syncer) handleLayersTillCurrent() {
-	//dont handle current
+	// dont handle current
 	if s.ProcessedLayer()+1 >= s.GetCurrentLayer() {
 		return
 	}
@@ -386,7 +386,7 @@ func (s *Syncer) handleLayersTillCurrent() {
 	return
 }
 
-//handle the current consensus layer if its is older than s.ValidationDelta
+// handle the current consensus layer if its is older than s.ValidationDelta
 func (s *Syncer) handleCurrentLayer() error {
 	curr := s.GetCurrentLayer()
 	if s.LatestLayer() == curr && time.Now().Sub(s.LayerToTime(s.LatestLayer())) > s.ValidationDelta || curr.GetEpoch().IsGenesis() {
@@ -410,7 +410,8 @@ func (s *Syncer) handleNotSynced(currentSyncLayer types.LayerID) {
 	// first, bring all the data of the prev layers
 	// Note: lastTicked() is not constant but updates as ticks are received
 	for ; currentSyncLayer < s.GetCurrentLayer(); currentSyncLayer++ {
-		s.With().Info("syncing layer", log.Uint64("current_sync_layer", uint64(currentSyncLayer)), log.Uint64("last_ticked_layer", uint64(s.GetCurrentLayer())))
+		s.With().Info("syncing layer", log.FieldNamed("current_sync_layer", currentSyncLayer),
+			log.FieldNamed("last_ticked_layer", s.GetCurrentLayer()))
 
 		if s.shutdown() {
 			return
@@ -418,13 +419,13 @@ func (s *Syncer) handleNotSynced(currentSyncLayer types.LayerID) {
 
 		lyr, err := s.getLayerFromNeighbors(currentSyncLayer)
 		if err != nil {
-			s.With().Info("could not get layer from neighbors", log.LayerID(currentSyncLayer.Uint64()), log.Err(err))
+			s.With().Info("could not get layer from neighbors", currentSyncLayer, log.Err(err))
 			return
 		}
 
 		if len(lyr.Blocks()) == 0 {
 			if err := s.SetZeroBlockLayer(currentSyncLayer); err != nil {
-				s.With().Error("handleNotSynced failed ", log.LayerID(currentSyncLayer.Uint64()), log.Err(err))
+				s.With().Error("handleNotSynced failed ", currentSyncLayer, log.Err(err))
 				return
 			}
 		}
@@ -441,7 +442,7 @@ func (s *Syncer) handleNotSynced(currentSyncLayer types.LayerID) {
 	// wait for two ticks to ensure we are fully synced before we open gossip or validate the current layer
 	err := s.gossipSyncForOneFullLayer(currentSyncLayer)
 	if err != nil {
-		s.With().Error("Fatal: failed getting layer from db even though we listened to gossip", log.LayerID(uint64(currentSyncLayer)), log.Err(err))
+		s.With().Error("Fatal: failed getting layer from db even though we listened to gossip", currentSyncLayer, log.Err(err))
 	}
 }
 
@@ -449,7 +450,7 @@ func (s *Syncer) handleNotSynced(currentSyncLayer types.LayerID) {
 // after that we are assumed to have all the data required for validation so we can validate and open gossip
 // opening gossip in weakly-synced transition us to fully-synced
 func (s *Syncer) gossipSyncForOneFullLayer(currentSyncLayer types.LayerID) error {
-	//listen to gossip
+	// listen to gossip
 	s.setGossipBufferingStatus(inProgress)
 	// subscribe and wait for two ticks
 	s.Info("waiting for two ticks while p2p is open, epoch %v", currentSyncLayer.GetEpoch())
@@ -513,8 +514,8 @@ func (s *Syncer) getLayerFromNeighbors(currentSyncLayer types.LayerID) (*types.L
 		return nil, fmt.Errorf("no peers ")
 	}
 
-	//fetch layer hash from each peer
-	s.With().Info("fetch layer hash", log.LayerID(currentSyncLayer.Uint64()))
+	// fetch layer hash from each peer
+	s.With().Info("fetch layer hash", currentSyncLayer)
 	m, err := s.fetchLayerHashes(currentSyncLayer)
 	if err != nil {
 		if err == errNoBlocksInLayer {
@@ -527,8 +528,8 @@ func (s *Syncer) getLayerFromNeighbors(currentSyncLayer types.LayerID) (*types.L
 		return nil, fmt.Errorf("interupt")
 	}
 
-	//fetch ids for each hash
-	s.With().Info("fetch layer ids", log.LayerID(currentSyncLayer.Uint64()))
+	// fetch ids for each hash
+	s.With().Info("fetch layer ids", currentSyncLayer)
 	blockIds, err := s.fetchLayerBlockIds(m, currentSyncLayer)
 	if err != nil {
 		return nil, err
@@ -639,19 +640,19 @@ func (s *Syncer) blockSyntacticValidation(block *types.Block) ([]*types.Transact
 		return nil, nil, err
 	}
 
-	//data availability
+	// data availability
 	txs, atxs, err := s.dataAvailability(block)
 	if err != nil {
 		return nil, nil, fmt.Errorf("DataAvailabilty failed for block %v err: %v", block.ID(), err)
 	}
 
-	//validate block's view
+	// validate block's view
 	valid := s.validateBlockView(block)
 	if valid == false {
 		return nil, nil, fmt.Errorf("block %v not syntacticly valid", block.ID())
 	}
 
-	//validate block's votes
+	// validate block's votes
 	if valid, err := validateVotes(block, s.ForBlockInView, s.Hdist, s.Log); valid == false || err != nil {
 		return nil, nil, fmt.Errorf("validate votes failed for block %v, %v", block.ID(), err)
 	}
@@ -688,7 +689,7 @@ func (s *Syncer) fetchBlock(ID types.BlockID) bool {
 	defer close(ch)
 	foo := func(res bool) error {
 		s.With().Info("single block fetched",
-			log.BlockID(ID.String()),
+			ID,
 			log.Bool("result", res))
 		//log.LayerID(uint64(blk.LayerIndex)))
 		ch <- res
@@ -782,7 +783,7 @@ func (s *Syncer) dataAvailability(blk *types.Block) ([]*types.Transaction, []*ty
 }
 
 func (s *Syncer) fetchLayerBlockIds(m map[types.Hash32][]p2ppeers.Peer, lyr types.LayerID) ([]types.BlockID, error) {
-	//send request to different users according to returned hashes
+	// send request to different users according to returned hashes
 	idSet := make(map[types.BlockID]struct{}, s.LayerSize)
 	ids := make([]types.BlockID, 0, s.LayerSize)
 	for h, peers := range m {
@@ -805,7 +806,7 @@ func (s *Syncer) fetchLayerBlockIds(m map[types.Hash32][]p2ppeers.Peer, lyr type
 			case v := <-ch:
 				if v != nil {
 					s.Debug("Peer: %v responded to layer ids request", peer)
-					//peer returned set with bad hash ask next peer
+					// peer returned set with bad hash ask next peer
 					res := types.CalcBlocksHash32(v.([]types.BlockID), nil)
 
 					if h != res {
@@ -818,7 +819,7 @@ func (s *Syncer) fetchLayerBlockIds(m map[types.Hash32][]p2ppeers.Peer, lyr type
 							ids = append(ids, bid)
 						}
 					}
-					//fetch for next hash
+					// fetch for next hash
 					break NextHash
 				}
 			}
@@ -845,7 +846,7 @@ func (s *Syncer) fetchLayerHashes(lyr types.LayerID) (map[types.Hash32][]p2ppeer
 	layerHasBlocks := false
 	for out := range wrk.output {
 		pair, ok := out.(*peerHashPair)
-		if pair != nil && ok { //do nothing on close channel
+		if pair != nil && ok { // do nothing on close channel
 			if pair.hash != emptyLayer {
 				layerHasBlocks = true
 				m[pair.hash] = append(m[pair.hash], pair.peer)
@@ -875,7 +876,7 @@ func fetchWithFactory(wrk worker) chan interface{} {
 	return wrk.output
 }
 
-//FetchPoetProof fetches a poet proof from network peers
+// FetchPoetProof fetches a poet proof from network peers
 func (s *Syncer) FetchPoetProof(poetProofRef []byte) error {
 	if !s.poetDb.HasProof(poetProofRef) {
 		out := <-fetchWithFactory(newNeighborhoodWorker(s, 1, poetReqFactory(poetProofRef)))
@@ -892,7 +893,7 @@ func (s *Syncer) FetchPoetProof(poetProofRef []byte) error {
 }
 
 func (s *Syncer) atxCheckLocal(atxIds []types.Hash32) (map[types.Hash32]item, map[types.Hash32]item, []types.Hash32) {
-	//look in pool
+	// look in pool
 	unprocessedItems := make(map[types.Hash32]item, len(atxIds))
 	missingInPool := make([]types.ATXID, 0, len(atxIds))
 	for _, t := range atxIds {
@@ -906,7 +907,7 @@ func (s *Syncer) atxCheckLocal(atxIds []types.Hash32) (map[types.Hash32]item, ma
 			missingInPool = append(missingInPool, id)
 		}
 	}
-	//look in db
+	// look in db
 	dbAtxs, missing := s.GetATXs(missingInPool)
 
 	dbItems := make(map[types.Hash32]item, len(dbAtxs))
@@ -923,7 +924,7 @@ func (s *Syncer) atxCheckLocal(atxIds []types.Hash32) (map[types.Hash32]item, ma
 }
 
 func (s *Syncer) txCheckLocal(txIds []types.Hash32) (map[types.Hash32]item, map[types.Hash32]item, []types.Hash32) {
-	//look in pool
+	// look in pool
 	unprocessedItems := make(map[types.Hash32]item)
 	missingInPool := make([]types.TransactionID, 0)
 	for _, t := range txIds {
@@ -936,7 +937,7 @@ func (s *Syncer) txCheckLocal(txIds []types.Hash32) (map[types.Hash32]item, map[
 			missingInPool = append(missingInPool, id)
 		}
 	}
-	//look in db
+	// look in db
 	dbTxs, missing := s.GetTransactions(missingInPool)
 
 	dbItems := make(map[types.Hash32]item, len(dbTxs))
@@ -953,7 +954,7 @@ func (s *Syncer) txCheckLocal(txIds []types.Hash32) (map[types.Hash32]item, map[
 }
 
 func (s *Syncer) blockCheckLocal(blockIds []types.Hash32) (map[types.Hash32]item, map[types.Hash32]item, []types.Hash32) {
-	//look in pool
+	// look in pool
 	dbItems := make(map[types.Hash32]item)
 	for _, id := range blockIds {
 		res, err := s.GetBlock(types.BlockID(id.ToHash20()))

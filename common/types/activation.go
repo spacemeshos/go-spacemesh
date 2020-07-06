@@ -172,7 +172,7 @@ func (atx *ActivationTx) InnerBytes() ([]byte, error) {
 }
 
 // Fields returns an array of LoggableFields for logging
-func (atx *ActivationTx) Fields(layersPerEpoch uint16, size int) []log.LoggableField {
+func (atx *ActivationTx) Fields(size int) []log.LoggableField {
 	commitmentStr := ""
 	if atx.Commitment != nil {
 		commitmentStr = atx.Commitment.String()
@@ -186,9 +186,9 @@ func (atx *ActivationTx) Fields(layersPerEpoch uint16, size int) []log.LoggableF
 
 	return []log.LoggableField{
 		atx.ID(),
-		log.String("sender_id", atx.NodeID.ShortString()),
-		log.String("prev_atx_id", atx.PrevATXID.ShortString()),
-		log.String("pos_atx_id", atx.PositioningATX.ShortString()),
+		log.FieldNamed("sender_id", atx.NodeID),
+		log.FieldNamed("prev_atx_id", atx.PrevATXID),
+		log.FieldNamed("pos_atx_id", atx.PositioningATX),
 		atx.PubLayerID,
 		atx.PubLayerID.GetEpoch(),
 		log.Uint32("active_set", atx.ActiveSetSize),

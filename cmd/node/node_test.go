@@ -1,8 +1,10 @@
 package node
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 	"io/ioutil"
 	"os"
@@ -104,4 +106,43 @@ func TestSpacemeshApp_AddLogger(t *testing.T) {
 	l := app.addLogger(HareLogger, myLog)
 	r.Equal("warn", app.loggers["hare"].String())
 	l.Info("not supposed to be printed")
+}
+
+func testArgs(t *testing.T, app *SpacemeshApp, args ...string) (output string, err error) {
+	root := Cmd
+
+	// We need to run Initialize to read the args, but we don't
+	// want to run Start to actually boot up the node.
+	root.Run = func(*cobra.Command, []string) {
+		if err := app.Initialize(root, nil); err != nil {
+			t.Error(err)
+		}
+	}
+
+	buf := new(bytes.Buffer)
+	root.SetOut(buf)
+	root.SetErr(buf)
+	root.SetArgs(args)
+	_, err = root.ExecuteC()
+	return buf.String(), err
+}
+
+func TestSpacemeshApp_Cmd(t *testing.T) {
+	r := require.New(t)
+	app := NewSpacemeshApp()
+
+	// Test an illegal flag
+	got, err := testArgs(t, app, "illegal")
+	expected := `unknown command "illegal" for "node"`
+	expected2 := "Error: " + expected + "\nRun 'node --help' for usage.\n"
+	r.Error(err)
+	r.Equal(expected, err.Error())
+	r.Equal(expected2, got)
+	r.Equal(false, app.Config.TestMode)
+
+	// Test a legal flag
+	got2, err2 := testArgs(t, app, "--test-mode")
+	r.NoError(err2)
+	r.Empty(got2)
+	r.Equal(true, app.Config.TestMode)
 }

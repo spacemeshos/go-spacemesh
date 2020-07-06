@@ -220,7 +220,7 @@ func (t *BlockBuilder) getVotes(id types.LayerID) ([]types.BlockID, error) {
 
 	if res, err := t.hareResult.GetResult(bottom); err != nil { // no result for bottom, take the whole layer
 		t.With().Warning("Could not get result for bottom layer. Adding the whole layer instead.", log.Err(err),
-			log.Uint64("bottom", uint64(bottom)), log.Uint64("top", uint64(top)), log.Uint64("hdist", uint64(t.hdist)))
+			log.FieldNamed("bottom", bottom), log.FieldNamed("top", top), log.FieldNamed("hdist", t.hdist))
 		ids, e := t.meshProvider.LayerBlockIds(bottom)
 		if e != nil {
 			t.With().Error("could not set votes to whole layer", log.Err(e))
@@ -237,8 +237,8 @@ func (t *BlockBuilder) getVotes(id types.LayerID) ([]types.BlockID, error) {
 	for i := bottom + 1; i <= top; i++ {
 		res, err := t.hareResult.GetResult(i)
 		if err != nil {
-			t.With().Warning("could not get result for layer in range", log.LayerID(uint64(i)), log.Err(err),
-				log.Uint64("bottom", uint64(bottom)), log.Uint64("top", uint64(top)), log.Uint64("hdist", uint64(t.hdist)))
+			t.With().Warning("could not get result for layer in range", i, log.Err(err),
+				log.FieldNamed("bottom", bottom), log.FieldNamed("top", top), log.FieldNamed("hdist", t.hdist))
 			continue
 		}
 		votes = append(votes, res...)
@@ -369,26 +369,22 @@ func (t *BlockBuilder) createBlockLoop() {
 			atxID, proofs, err := t.blockOracle.BlockEligible(layerID)
 			if err != nil {
 				events.Publish(events.DoneCreatingBlock{Eligible: true, Layer: uint64(layerID), Error: "failed to check for block eligibility"})
-				t.With().Error("failed to check for block eligibility", log.LayerID(uint64(layerID)), log.Err(err))
+				t.With().Error("failed to check for block eligibility", layerID, log.Err(err))
 				continue
 			}
 			if len(proofs) == 0 {
 				events.Publish(events.DoneCreatingBlock{Eligible: false, Layer: uint64(layerID), Error: ""})
-				t.With().Info("Notice: not eligible for blocks in layer", log.LayerID(uint64(layerID)))
+				t.With().Info("Notice: not eligible for blocks in layer", layerID)
 				continue
 			}
 			// TODO: include multiple proofs in each block and weigh blocks where applicable
 
-			/*var atxList []types.ATXID
-			for _, atx := range t.AtxPool.GetAllItems() {
-				atxList = append(atxList, atx.ID())
-			}*/
 			//reducedAtxList := selectAtxs(atxList, t.atxsPerBlock)
 			for _, eligibilityProof := range proofs {
 				txList, txs, err := t.TransactionPool.GetTxsForBlock(MaxTransactionsPerBlock, t.projector.GetProjection)
 				if err != nil {
 					events.Publish(events.DoneCreatingBlock{Eligible: true, Layer: uint64(layerID), Error: "failed to get txs for block"})
-					t.With().Error("failed to get txs for block", log.LayerID(uint64(layerID)), log.Err(err))
+					t.With().Error("failed to get txs for block", layerID, log.Err(err))
 					continue
 				}
 				blk, err := t.createBlock(layerID, atxID, eligibilityProof, txList)
@@ -397,18 +393,10 @@ func (t *BlockBuilder) createBlockLoop() {
 					t.Error("cannot create new block, %v ", err)
 					continue
 				}
-				/*var atxs []*types.ActivationTx
-				for _, atxID := range atxList {
-					for _, atx := range t.AtxPool.GetAllItems() {
-						if atxID == atx.ID() {
-							atxs = append(atxs, atx)
-						}
-					}
-				}*/
 				err = t.meshProvider.AddBlockWithTxs(blk, txs, nil)
 				if err != nil {
 					events.Publish(events.DoneCreatingBlock{Eligible: true, Layer: uint64(layerID), Error: err.Error()})
-					t.With().Error("failed to store block", log.BlockID(blk.ID().String()), log.Err(err))
+					t.With().Error("failed to store block", blk.ID(), log.Err(err))
 					continue
 				}
 				go func() {

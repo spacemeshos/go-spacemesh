@@ -357,9 +357,9 @@ func (b *Builder) loadChallenge() error {
 func (b *Builder) PublishActivationTx() error {
 	b.discardChallengeIfStale()
 	if b.challenge != nil {
-		b.log.With().Info("using existing atx challenge", log.EpochID(uint64(b.currentEpoch())))
+		b.log.With().Info("using existing atx challenge", b.currentEpoch())
 	} else {
-		b.log.With().Info("building new atx challenge", log.EpochID(uint64(b.currentEpoch())))
+		b.log.With().Info("building new atx challenge", b.currentEpoch())
 		err := b.buildNipstChallenge()
 		if err != nil {
 			return err
@@ -382,9 +382,9 @@ func (b *Builder) PublishActivationTx() error {
 	}
 
 	b.log.With().Info("awaiting atx publication epoch",
-		log.Uint64("pub_epoch", uint64(pubEpoch)),
-		log.Uint64("pub_epoch_first_layer", uint64(pubEpoch.FirstLayer(b.layersPerEpoch))),
-		log.Uint64("current_layer", uint64(b.layerClock.GetCurrentLayer())),
+		log.FieldNamed("pub_epoch", pubEpoch),
+		log.FieldNamed("pub_epoch_first_layer", pubEpoch.FirstLayer(b.layersPerEpoch)),
+		log.FieldNamed("current_layer", b.layerClock.GetCurrentLayer()),
 	)
 	if err := b.waitOrStop(b.layerClock.AwaitLayer(pubEpoch.FirstLayer(b.layersPerEpoch))); err != nil {
 		return err
@@ -402,30 +402,8 @@ func (b *Builder) PublishActivationTx() error {
 	if err := b.waitOrStop(b.syncer.Await()); err != nil {
 		return err
 	}
-	/*viewLayer := pubEpoch.FirstLayer(b.layersPerEpoch)
-	var view []types.BlockID
-	if viewLayer > 0 {
-		var err error
-		view, err = b.mesh.GetOrphanBlocksBefore(viewLayer)
-		if err != nil {
-			return fmt.Errorf("failed to get current view for layer %v: %v", viewLayer, err)
-		}
-	}*/
 
 	var activeSetSize uint32
-	/*if pubEpoch > 0 {
-		var err error
-		b.log.With().Info("calculating active ids")
-		activeSetSize, err = b.db.CalcActiveSetFromView(view, pubEpoch)
-		if err != nil {
-			return fmt.Errorf("failed to calculate activeset: %v", err)
-		}
-	}
-	if activeSetSize == 0 && !(pubEpoch + 1).IsGenesis() {
-		return fmt.Errorf("empty active set size found! epochId: %v, len(view): %d, view: %v",
-			pubEpoch, len(view), view)
-	}*/
-
 	var commitment *types.PostProof
 	if b.challenge.PrevATXID == *types.EmptyATXID {
 		commitment = b.commitment
@@ -433,33 +411,18 @@ func (b *Builder) PublishActivationTx() error {
 
 	atx := types.NewActivationTx(*b.challenge, b.getCoinbaseAccount(), activeSetSize, nipst, commitment)
 
-	b.log.With().Info("active ids seen for epoch", log.Uint64("atx_pub_epoch", uint64(pubEpoch)),
+	b.log.With().Info("active ids seen for epoch", log.FieldNamed("atx_pub_epoch", pubEpoch),
 		log.Uint32("view_cnt", activeSetSize))
 
 	atxReceived := b.db.AwaitAtx(atx.ID())
 	defer b.db.UnsubscribeAtx(atx.ID())
 	size, err := b.signAndBroadcast(atx)
 	if err != nil {
-		b.log.With().Error("failed to publish atx", append(atx.Fields(b.layersPerEpoch, size), log.Err(err))...)
+		b.log.With().Error("failed to publish atx", append(atx.Fields(size), log.Err(err))...)
 		return err
 	}
 
-	commitStr := "nil"
-	if commitment != nil {
-		commitStr = commitment.String()
-	}
-	b.log.Event().Info("atx published!",
-		log.AtxID(atx.ShortString()),
-		log.String("prev_atx_id", atx.PrevATXID.ShortString()),
-		log.String("pos_atx_id", atx.PositioningATX.ShortString()),
-		log.LayerID(uint64(atx.PubLayerID)),
-		log.EpochID(uint64(atx.PubLayerID.GetEpoch())),
-		log.String("miner", b.nodeID.ShortString()),
-		log.Uint64("sequence_number", atx.Sequence),
-		log.String("NIPSTChallenge", hash.String()),
-		log.String("commitment", commitStr),
-		log.Int("atx_size", size),
-	)
+	b.log.Event().Info("atx published!", atx.Fields(size)...)
 	events.Publish(events.AtxCreated{Created: true, ID: atx.ShortString(), Layer: uint64(b.currentEpoch())})
 
 	select {
@@ -470,8 +433,7 @@ func (b *Builder) PublishActivationTx() error {
 		case <-atxReceived:
 			b.log.Info("atx received in db (in the last moment)")
 		case <-b.syncer.Await(): // ensure we've seen all blocks before concluding that the ATX was lost
-			b.log.With().Error("target epoch has passed before atx was added to database",
-				log.AtxID(atx.ShortString()))
+			b.log.With().Error("target epoch has passed before atx was added to database", atx.ID())
 			b.discardChallenge()
 			return fmt.Errorf("target epoch has passed")
 		case <-b.stop:
@@ -535,8 +497,8 @@ func (b *Builder) GetPrevAtx(node types.NodeID) (*types.ActivationTxHeader, erro
 func (b *Builder) discardChallengeIfStale() bool {
 	if b.challenge != nil && b.challenge.PubLayerID.GetEpoch()+1 < b.currentEpoch() {
 		b.log.With().Info("atx target epoch has already passed -- starting over",
-			log.Uint64("target_epoch", uint64(b.challenge.PubLayerID.GetEpoch()+1)),
-			log.Uint64("current_epoch", uint64(b.currentEpoch())),
+			log.FieldNamed("target_epoch", b.challenge.PubLayerID.GetEpoch()+1),
+			log.FieldNamed("current_epoch", b.currentEpoch()),
 		)
 		b.discardChallenge()
 		return true

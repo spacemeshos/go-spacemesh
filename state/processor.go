@@ -156,7 +156,7 @@ func (tp *TransactionProcessor) addStateToHistory(layer types.LayerID, newHash t
 	if err != nil {
 		return err
 	}
-	tp.Log.With().Info("new state root", log.LayerID(uint64(layer)), log.String("state_root", newHash.String()))
+	tp.Log.With().Info("new state root", layer, log.String("state_root", newHash.String()))
 	return nil
 }
 
@@ -190,7 +190,7 @@ func (tp *TransactionProcessor) ApplyRewards(layer types.LayerID, miners []types
 		tp.Log.With().Info("Reward applied",
 			log.String("account", account.Short()),
 			log.Uint64("reward", reward.Uint64()),
-			log.LayerID(uint64(layer)),
+			layer,
 		)
 		tp.AddBalance(account, reward)
 		events.Publish(events.RewardReceived{Coinbase: account.String(), Amount: reward.Uint64()})
@@ -237,7 +237,7 @@ func (tp *TransactionProcessor) Process(txs []*types.Transaction, layerID types.
 	for _, tx := range txs {
 		err := tp.ApplyTransaction(tx, layerID)
 		if err != nil {
-			tp.With().Warning("failed to apply transaction", log.TxID(tx.ID().ShortString()), log.Err(err))
+			tp.With().Warning("failed to apply transaction", tx.ID(), log.Err(err))
 			remaining = append(remaining, tx)
 		}
 		events.Publish(events.ValidTx{ID: tx.ID().String(), Valid: err == nil})
@@ -316,20 +316,20 @@ func (tp *TransactionProcessor) HandleTxData(data service.GossipMessage, syncer 
 		return
 	}
 	if err := tx.CalcAndSetOrigin(); err != nil {
-		tp.With().Error("failed to calc transaction origin", log.TxID(tx.ID().ShortString()), log.Err(err))
+		tp.With().Error("failed to calc transaction origin", tx.ID(), log.Err(err))
 		return
 	}
 	if !tp.AddressExists(tx.Origin()) {
 		tp.With().Error("transaction origin does not exist", log.String("transaction", tx.String()),
-			log.TxID(tx.ID().ShortString()), log.String("origin", tx.Origin().Short()), log.Err(err))
+			tx.ID(), log.String("origin", tx.Origin().Short()), log.Err(err))
 		return
 	}
 	if err := tp.ValidateNonceAndBalance(tx); err != nil {
-		tp.With().Error("nonce and balance validation failed", log.TxID(tx.ID().ShortString()), log.Err(err))
+		tp.With().Error("nonce and balance validation failed", tx.ID(), log.Err(err))
 		return
 	}
 	tp.Log.With().Info("got new tx",
-		log.TxID(tx.ID().ShortString()),
+		tx.ID(),
 		log.Uint64("nonce", tx.AccountNonce),
 		log.Uint64("amount", tx.Amount),
 		log.Uint64("fee", tx.Fee),

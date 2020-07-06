@@ -140,7 +140,7 @@ func (db *DB) ProcessAtxs(atxs []*types.ActivationTx) error {
 			// TODO: Ensure that these are two different, syntactically valid ATXs for the same epoch, otherwise the
 			//  miner did nothing wrong
 			db.log.With().Error("found miner with multiple ATXs published in same block",
-				log.String("atx_node_id", atx.NodeID.ShortString()), log.AtxID(atx.ShortString()))
+				log.FieldNamed("atx_node_id", atx.NodeID), atx.ID())
 		}*/
 		err := db.ProcessAtx(atx)
 		if err != nil {
@@ -163,14 +163,14 @@ func (db *DB) ProcessAtx(atx *types.ActivationTx) error {
 		return nil
 	}
 	epoch := atx.PubLayerID.GetEpoch()
-	db.log.With().Info("processing atx", log.AtxID(atx.ShortString()), log.EpochID(uint64(epoch)),
-		log.String("atx_node_id", atx.NodeID.Key[:5]), log.LayerID(uint64(atx.PubLayerID)))
+	db.log.With().Info("processing atx", atx.ID(), epoch, log.FieldNamed("atx_node_id", atx.NodeID),
+		atx.PubLayerID)
 	err := db.ContextuallyValidateAtx(atx.ActivationTxHeader)
 	if err != nil {
-		db.log.With().Error("ATX failed contextual validation", log.AtxID(atx.ShortString()), log.Err(err))
+		db.log.With().Error("ATX failed contextual validation", atx.ID(), log.Err(err))
 		// TODO: Blacklist this miner
 	} else {
-		db.log.With().Info("ATX is valid", log.AtxID(atx.ShortString()))
+		db.log.With().Info("ATX is valid", atx.ID())
 	}
 	err = db.StoreAtx(epoch, atx)
 	if err != nil {
@@ -179,7 +179,8 @@ func (db *DB) ProcessAtx(atx *types.ActivationTx) error {
 
 	err = db.StoreNodeIdentity(atx.NodeID)
 	if err != nil {
-		db.log.With().Error("cannot store node identity", log.String("atx_node_id", atx.NodeID.ShortString()), log.AtxID(atx.ShortString()), log.Err(err))
+		db.log.With().Error("cannot store node identity", log.FieldNamed("atx_node_id", atx.NodeID),
+			atx.ID(), log.Err(err))
 	}
 	return nil
 }
@@ -208,17 +209,15 @@ func (db *DB) createTraversalActiveSetCounterFunc(countedAtxs map[string]types.A
 
 			// make sure the target epoch is our epoch
 			if atx.TargetEpoch() != epoch {
-				db.log.With().Debug("atx found, but targeting epoch doesn't match publication epoch",
-					log.String("atx_id", atx.ShortString()),
-					log.Uint64("atx_target_epoch", uint64(atx.TargetEpoch())),
-					log.Uint64("actual_epoch", uint64(epoch)))
+				db.log.With().Debug("atx found, but targeting epoch doesn't match publication epoch", atx.ID(),
+					log.FieldNamed("atx_target_epoch", atx.TargetEpoch()),
+					log.FieldNamed("actual_epoch", epoch))
 				continue
 			}
 
 			// ignore atx from nodes in penalty
 			if _, exist := penalties[atx.NodeID.Key]; exist {
-				db.log.With().Debug("ignoring atx from node in penalty",
-					log.String("node_id", atx.NodeID.Key), log.String("atx_id", atx.ShortString()))
+				db.log.With().Debug("ignoring atx from node in penalty", atx.NodeID, atx.ID())
 				continue
 			}
 
@@ -226,7 +225,7 @@ func (db *DB) createTraversalActiveSetCounterFunc(countedAtxs map[string]types.A
 
 				if prevID != id { // different atx for same epoch
 					db.log.With().Error("Encountered second atx for the same miner on the same epoch",
-						log.String("first_atx", prevID.ShortString()), log.String("second_atx", id.ShortString()))
+						log.FieldNamed("first_atx", prevID), log.FieldNamed("second_atx", id))
 
 					penalties[atx.NodeID.Key] = struct{}{} // mark node in penalty
 					delete(countedAtxs, atx.NodeID.Key)    // remove the penalized node from counted
@@ -263,9 +262,7 @@ func (db *DB) CalcActiveSetSize(epoch types.EpochID, blocks map[types.BlockID]st
 		return nil, err
 	}
 	db.log.With().Info("done calculating active set size",
-		log.Uint64("first_layer", uint64(firstLayerOfPrevEpoch)),
 		log.Int("size", len(countedAtxs)),
-		log.EpochID(uint64(epoch)),
 		log.String("duration", time.Now().Sub(startTime).String()))
 
 	result := make(map[string]struct{}, len(countedAtxs))
@@ -432,7 +429,7 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 	if err != nil {
 		return fmt.Errorf("cannot get NIPST Challenge hash: %v", err)
 	}
-	db.log.With().Info("Validated NIPST", log.String("challenge_hash", hash.String()), log.AtxID(atx.ShortString()))
+	db.log.With().Info("Validated NIPST", log.String("challenge_hash", hash.String()), atx.ID())
 
 	pubKey := signing.NewPublicKey(util.Hex2Bytes(atx.NodeID.Key))
 	if err = db.nipstValidator.Validate(*pubKey, atx.Nipst, *hash); err != nil {
@@ -448,8 +445,8 @@ func (db *DB) ContextuallyValidateAtx(atx *types.ActivationTxHeader) error {
 	if atx.PrevATXID != *types.EmptyATXID {
 		lastAtx, err := db.GetNodeLastAtxID(atx.NodeID)
 		if err != nil {
-			db.log.With().Error("could not fetch node last ATX",
-				log.AtxID(atx.ShortString()), log.String("atx_node_id", atx.NodeID.ShortString()), log.Err(err))
+			db.log.With().Error("could not fetch node last ATX", atx.ID(),
+				log.FieldNamed("atx_node_id", atx.NodeID), log.Err(err))
 			return fmt.Errorf("could not fetch node last ATX: %v", err)
 		}
 		// last atx is not the one referenced
@@ -747,29 +744,7 @@ func (db *DB) HandleGossipAtx(data service.GossipMessage, syncer service.Syncer)
 	}
 	atx.CalcAndSetID()
 
-	commitmentStr := "nil"
-	if atx.Commitment != nil {
-		commitmentStr = atx.Commitment.String()
-	}
-
-	challenge := ""
-	h, err := atx.NIPSTChallenge.Hash()
-	if err == nil && h != nil {
-		challenge = h.String()
-
-	}
-
-	db.log.With().Info("got new ATX",
-		log.String("sender_id", atx.NodeID.ShortString()),
-		log.AtxID(atx.ShortString()),
-		log.String("prev_atx_id", atx.PrevATXID.ShortString()),
-		log.String("pos_atx_id", atx.PositioningATX.ShortString()),
-		log.LayerID(uint64(atx.PubLayerID)),
-		log.Uint64("sequence_number", atx.Sequence),
-		log.String("commitment", commitmentStr),
-		log.Int("atx_size", len(data.Bytes())),
-		log.String("NIPSTChallenge", challenge),
-	)
+	db.log.With().Info("got new ATX", atx.Fields(len(data.Bytes()))...)
 
 	//todo fetch from neighbour (#1925)
 	if atx.Nipst == nil {
@@ -799,5 +774,5 @@ func (db *DB) HandleGossipAtx(data service.GossipMessage, syncer service.Syncer)
 		return
 	}
 	data.ReportValidation(AtxProtocol)
-	db.log.With().Info("stored and propagated new syntactically valid ATX", log.AtxID(atx.ShortString()))
+	db.log.With().Info("stored and propagated new syntactically valid ATX", atx.ID())
 }
