@@ -226,7 +226,7 @@ func (t *BlockBuilder) getVotes(id types.LayerID) ([]types.BlockID, error) {
 
 	if res, err := t.hareResult.GetResult(bottom); err != nil { // no result for bottom, take the whole layer
 		t.With().Warning("Could not get result for bottom layer. Adding the whole layer instead.", log.Err(err),
-			log.Uint64("bottom", uint64(bottom)), log.Uint64("top", uint64(top)), log.Uint64("hdist", uint64(t.hdist)))
+			log.FieldNamed("bottom", bottom), log.FieldNamed("top", top), log.FieldNamed("hdist", t.hdist))
 		ids, e := t.meshProvider.LayerBlockIds(bottom)
 		if e != nil {
 			t.With().Error("Could not set votes to whole layer", log.Err(e))
@@ -243,8 +243,8 @@ func (t *BlockBuilder) getVotes(id types.LayerID) ([]types.BlockID, error) {
 	for i := bottom + 1; i <= top; i++ {
 		res, err := t.hareResult.GetResult(i)
 		if err != nil {
-			t.With().Warning("could not get result for layer in range", log.LayerID(uint64(i)), log.Err(err),
-				log.Uint64("bottom", uint64(bottom)), log.Uint64("top", uint64(top)), log.Uint64("hdist", uint64(t.hdist)))
+			t.With().Warning("could not get result for layer in range", i, log.Err(err),
+				log.FieldNamed("bottom", bottom), log.FieldNamed("top", top), log.FieldNamed("hdist", t.hdist))
 			continue
 		}
 		votes = append(votes, res...)
@@ -347,20 +347,20 @@ func (t *BlockBuilder) listenForTx() {
 				continue
 			}
 			if err := tx.CalcAndSetOrigin(); err != nil {
-				t.With().Error("failed to calc transaction origin", log.TxID(tx.ID().ShortString()), log.Err(err))
+				t.With().Error("failed to calc transaction origin", tx.ID(), log.Err(err))
 				continue
 			}
 			if !t.txValidator.AddressExists(tx.Origin()) {
 				t.With().Error("transaction origin does not exist", log.String("transaction", tx.String()),
-					log.TxID(tx.ID().ShortString()), log.String("origin", tx.Origin().Short()), log.Err(err))
+					tx.ID(), log.String("origin", tx.Origin().Short()), log.Err(err))
 				continue
 			}
 			if err := t.txValidator.ValidateNonceAndBalance(tx); err != nil {
-				t.With().Error("nonce and balance validation failed", log.TxID(tx.ID().ShortString()), log.Err(err))
+				t.With().Error("nonce and balance validation failed", tx.ID(), log.Err(err))
 				continue
 			}
 			t.Log.With().Info("got new tx",
-				log.TxID(tx.ID().ShortString()),
+				tx.ID(),
 				log.Uint64("nonce", tx.AccountNonce),
 				log.Uint64("amount", tx.Amount),
 				log.Uint64("fee", tx.Fee),
@@ -435,7 +435,7 @@ func (t *BlockBuilder) handleGossipAtx(data service.GossipMessage) {
 
 	t.AtxPool.Put(atx)
 	data.ReportValidation(activation.AtxProtocol)
-	t.With().Info("stored and propagated new syntactically valid ATX", log.AtxID(atx.ShortString()))
+	t.With().Info("stored and propagated new syntactically valid ATX", atx.ID())
 }
 
 func (t *BlockBuilder) acceptBlockData() {
@@ -455,12 +455,12 @@ func (t *BlockBuilder) acceptBlockData() {
 			atxID, proofs, err := t.blockOracle.BlockEligible(layerID)
 			if err != nil {
 				events.Publish(events.DoneCreatingBlock{Eligible: true, Layer: uint64(layerID), Error: "failed to check for block eligibility"})
-				t.With().Error("failed to check for block eligibility", log.LayerID(uint64(layerID)), log.Err(err))
+				t.With().Error("failed to check for block eligibility", layerID, log.Err(err))
 				continue
 			}
 			if len(proofs) == 0 {
 				events.Publish(events.DoneCreatingBlock{Eligible: false, Layer: uint64(layerID), Error: ""})
-				t.With().Info("Notice: not eligible for blocks in layer", log.LayerID(uint64(layerID)))
+				t.With().Info("Notice: not eligible for blocks in layer", layerID)
 				continue
 			}
 			// TODO: include multiple proofs in each block and weigh blocks where applicable
@@ -474,7 +474,7 @@ func (t *BlockBuilder) acceptBlockData() {
 				txList, err := t.TransactionPool.GetTxsForBlock(MaxTransactionsPerBlock, t.projector.GetProjection)
 				if err != nil {
 					events.Publish(events.DoneCreatingBlock{Eligible: true, Layer: uint64(layerID), Error: "failed to get txs for block"})
-					t.With().Error("failed to get txs for block", log.LayerID(uint64(layerID)), log.Err(err))
+					t.With().Error("failed to get txs for block", layerID, log.Err(err))
 					continue
 				}
 				blk, err := t.createBlock(layerID, atxID, eligibilityProof, txList, atxList)

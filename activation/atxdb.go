@@ -134,7 +134,7 @@ func (db *DB) ProcessAtxs(atxs []*types.ActivationTx) error {
 			// TODO: Ensure that these are two different, syntactically valid ATXs for the same epoch, otherwise the
 			//  miner did nothing wrong
 			db.log.With().Error("found miner with multiple ATXs published in same block",
-				log.String("atx_node_id", atx.NodeID.ShortString()), log.AtxID(atx.ShortString()))
+				log.FieldNamed("atx_node_id", atx.NodeID), atx.ID())
 		}
 		err := db.ProcessAtx(atx)
 		if err != nil {
@@ -157,14 +157,14 @@ func (db *DB) ProcessAtx(atx *types.ActivationTx) error {
 		return nil
 	}
 	epoch := atx.PubLayerID.GetEpoch(db.LayersPerEpoch)
-	db.log.With().Info("processing atx", log.AtxID(atx.ShortString()), log.EpochID(uint64(epoch)),
-		log.String("atx_node_id", atx.NodeID.Key[:5]), log.LayerID(uint64(atx.PubLayerID)))
+	db.log.With().Info("processing atx", atx.ID(), epoch, log.FieldNamed("atx_node_id", atx.NodeID),
+		atx.PubLayerID)
 	err := db.ContextuallyValidateAtx(atx.ActivationTxHeader)
 	if err != nil {
-		db.log.With().Error("ATX failed contextual validation", log.AtxID(atx.ShortString()), log.Err(err))
+		db.log.With().Error("ATX failed contextual validation", atx.ID(), log.Err(err))
 		// TODO: Blacklist this miner
 	} else {
-		db.log.With().Info("ATX is valid", log.AtxID(atx.ShortString()))
+		db.log.With().Info("ATX is valid", atx.ID())
 	}
 	err = db.StoreAtx(epoch, atx)
 	if err != nil {
@@ -173,7 +173,8 @@ func (db *DB) ProcessAtx(atx *types.ActivationTx) error {
 
 	err = db.StoreNodeIdentity(atx.NodeID)
 	if err != nil {
-		db.log.With().Error("cannot store node identity", log.String("atx_node_id", atx.NodeID.ShortString()), log.AtxID(atx.ShortString()), log.Err(err))
+		db.log.With().Error("cannot store node identity", log.FieldNamed("atx_node_id", atx.NodeID),
+			atx.ID(), log.Err(err))
 	}
 	return nil
 }
@@ -197,9 +198,9 @@ func (db *DB) createTraversalFuncForMinerWeights(minerWeight map[string]uint64, 
 			// make sure the target epoch is our epoch
 			if atx.TargetEpoch(layersPerEpoch) != targetEpoch {
 				db.log.With().Debug("atx found in relevant layer, but target epoch doesn't match requested epoch",
-					log.String("atx_id", atx.ShortString()),
-					log.Uint64("atx_target_epoch", uint64(atx.TargetEpoch(layersPerEpoch))),
-					log.Uint64("requested_epoch", uint64(targetEpoch)))
+					atx.ID(),
+					log.FieldNamed("atx_target_epoch", atx.TargetEpoch(layersPerEpoch)),
+					log.FieldNamed("requested_epoch", targetEpoch))
 				continue
 			}
 
@@ -406,7 +407,7 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 	if err != nil {
 		return fmt.Errorf("cannot get NIPST Challenge hash: %v", err)
 	}
-	db.log.With().Info("Validated NIPST", log.String("challenge_hash", hash.String()), log.AtxID(atx.ShortString()))
+	db.log.With().Info("Validated NIPST", log.String("challenge_hash", hash.String()), atx.ID())
 
 	pubKey := signing.NewPublicKey(util.Hex2Bytes(atx.NodeID.Key))
 	if err = db.nipstValidator.Validate(*pubKey, atx.Nipst, atx.Space, *hash); err != nil {
@@ -422,8 +423,8 @@ func (db *DB) ContextuallyValidateAtx(atx *types.ActivationTxHeader) error {
 	if atx.PrevATXID != *types.EmptyATXID {
 		lastAtx, err := db.GetNodeLastAtxID(atx.NodeID)
 		if err != nil {
-			db.log.With().Error("could not fetch node last ATX",
-				log.AtxID(atx.ShortString()), log.String("atx_node_id", atx.NodeID.ShortString()), log.Err(err))
+			db.log.With().Error("could not fetch node last ATX", atx.ID(),
+				log.FieldNamed("atx_node_id", atx.NodeID), log.Err(err))
 			return fmt.Errorf("could not fetch node last ATX: %v", err)
 		}
 		// last atx is not the one referenced

@@ -247,7 +247,7 @@ func StartMultiNode(numOfinstances, layerAvgSize int, runTillLayer uint32, dbPat
 	if err != nil {
 		log.Error("cannot parse genesis time %v", err)
 	}
-	pubsubAddr := "tcp://localhost:56565"
+	pubsubAddr := "tcp://localhost:55666"
 	events.InitializeEventPubsub(pubsubAddr)
 	clock := NewManualClock(gTime)
 
