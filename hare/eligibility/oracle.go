@@ -168,13 +168,13 @@ func (o *Oracle) buildVRFMessage(layer types.LayerID, round int32) ([]byte, erro
 }
 
 func (o *Oracle) totalWeight(layer types.LayerID) (uint64, error) {
-	actives, err := o.actives(layer)
+	actives, err := o.Actives(layer)
 	if err != nil {
 		if err == errGenesis { // we are in genesis
 			return o.genesisTotalWeight, nil
 		}
 
-		o.With().Error("totalWeight erred while calling actives func", log.Err(err), log.LayerID(uint64(layer)))
+		o.With().Error("totalWeight erred while calling Actives func", log.Err(err), log.LayerID(uint64(layer)))
 		return 0, err
 	}
 
@@ -254,7 +254,7 @@ func (o *Oracle) Proof(layer types.LayerID, round int32) ([]byte, error) {
 }
 
 // Returns a map of all active nodes in the specified layer id
-func (o *Oracle) actives(layer types.LayerID) (map[string]uint64, error) {
+func (o *Oracle) Actives(layer types.LayerID) (map[string]uint64, error) {
 	sl := roundedSafeLayer(layer, types.LayerID(o.cfg.ConfidenceParam), o.layersPerEpoch, types.LayerID(o.cfg.EpochOffset))
 	safeEp := sl.GetEpoch(o.layersPerEpoch)
 
@@ -310,13 +310,13 @@ func (o *Oracle) actives(layer types.LayerID) (map[string]uint64, error) {
 // IsIdentityActiveOnConsensusView returns true if the provided identity is active on the consensus view derived
 // from the specified layer, false otherwise.
 func (o *Oracle) IsIdentityActiveOnConsensusView(edID string, layer types.LayerID) (bool, error) {
-	actives, err := o.actives(layer)
+	actives, err := o.Actives(layer)
 	if err != nil {
 		if err == errGenesis { // we are in genesis
 			return true, nil // all ids are active in genesis
 		}
 
-		o.With().Error("IsIdentityActiveOnConsensusView erred while calling actives func",
+		o.With().Error("IsIdentityActiveOnConsensusView erred while calling Actives func",
 			log.LayerID(uint64(layer)), log.Err(err))
 		return false, err
 	}

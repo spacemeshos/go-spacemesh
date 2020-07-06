@@ -32,3 +32,4 @@ func (tracker *RefCountTracker) Track(id interface{}) {
 
 	tracker.table[id]++
 }
+

@@ -389,7 +389,7 @@ func TestConsensusProcess_procCommit(t *testing.T) {
 	proc := generateConsensusProcess(t)
 	proc.advanceToNextRound()
 	s := NewDefaultEmptySet()
-	proc.commitTracker = newCommitTracker(1, 1, s)
+	proc.commitTracker = newCommitTracker(s, Committee{Weight: 1, Size:1})
 	m := BuildCommitMsg(generateSigning(t), s)
 	mct := &mockCommitTracker{}
 	proc.commitTracker = mct
@@ -522,10 +522,10 @@ func TestConsensusProcess_beginRound2(t *testing.T) {
 	proc.oracle = oracle
 	oracle.isEligible = true
 
-	statusTracker := newStatusTracker(1, 1)
+	statusTracker := newStatusTracker(Committee{ Weight: 1, Size: 1 })
 	s := NewSetFromValues(value1)
 	statusTracker.RecordStatus(BuildStatusMsg(generateSigning(t), s))
-	statusTracker.analyzed = true
+	statusTracker.ready = true
 	proc.statusesTracker = statusTracker
 
 	proc.k = 1

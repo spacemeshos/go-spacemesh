@@ -46,7 +46,7 @@ func TestMessageBuilder_SetValues(t *testing.T) {
 
 func TestMessageBuilder_SetCertificate(t *testing.T) {
 	s := NewSetFromValues(value5)
-	tr := newCommitTracker(1, 1, s)
+	tr := newCommitTracker(s, Committee{Weight: 1, Size: 1})
 	tr.OnCommit(BuildCommitMsg(signing.NewEdSigner(), s))
 	cert := tr.BuildCertificate()
 	assert.NotNil(t, cert)

@@ -8,57 +8,65 @@ import (
 // Provides functions to build a proposal and validate the statuses.
 type statusTracker struct {
 	statuses  map[string]*Msg // maps PubKey->StatusMsg
-	threshold int             // threshold to indicate a set can be proved
 	maxKi     int32           // tracks max Ki in tracked status Messages
 	maxSet    *Set            // tracks the max raw set in the tracked status Messages
-	analyzed  bool            // indicates if the Messages have already been analyzed
+	ready     bool            // analyzed and meet the requirements
+	committee Committee       // nodes Committee
 	log.Log
 }
 
-func newStatusTracker(threshold int, expectedSize int) *statusTracker {
+func newStatusTracker(committee Committee) *statusTracker {
 	st := &statusTracker{}
-	st.statuses = make(map[string]*Msg, expectedSize)
-	st.threshold = threshold
+	st.statuses = make(map[string]*Msg, committee.Size)
+	st.committee = committee
 	st.maxKi = -1 // since Ki>=-1
 	st.maxSet = nil
-	st.analyzed = false
-
 	return st
 }
 
 // RecordStatus records the given status message
 func (st *statusTracker) RecordStatus(msg *Msg) {
-	pub := msg.PubKey
-	_, exist := st.statuses[pub.String()]
+	pub := msg.PubKey.String()
+	_, exist := st.statuses[pub]
 	if exist { // already handled this sender's status msg
-		st.Warning("Duplicated status message detected %v", pub.String())
+		st.Warning("Duplicated status message detected %v", pub)
 		return
 	}
 
-	st.statuses[pub.String()] = msg
+	st.statuses[pub] = msg
 }
 
 // AnalyzeStatuses analyzes the recorded status messages by the validation function.
 func (st *statusTracker) AnalyzeStatuses(isValid func(m *Msg) bool) {
-	count := 0
+	statuses := make(map[string]*Msg,len(st.statuses))
+	total := uint64(0)
+	threshold := st.committee.Threshold()
 	for key, m := range st.statuses {
-		if !isValid(m) || count == st.threshold { // only keep valid Messages
-			delete(st.statuses, key)
-		} else {
-			count++
+		if isValid(m) {
+			w := st.committee.WeightOf(key)
+			total += w
+			statuses[key] = m
 			if m.InnerMsg.Ki >= st.maxKi { // track max Ki & matching raw set
 				st.maxKi = m.InnerMsg.Ki
 				st.maxSet = NewSet(m.InnerMsg.Values)
 			}
+			/*
+			TODO: need we consider just first messages (in random order) meeting the threshold requirement? Why?
+			*/
+			if total >= threshold {
+				break
+			}
 		}
 	}
-
-	st.analyzed = true
+	st.ready = total >= threshold
+	if st.ready {
+		st.statuses = statuses
+	}
 }
 
 // IsSVPReady returns true if theere are enough statuses to build an SVP, false otherwise.
 func (st *statusTracker) IsSVPReady() bool {
-	return st.analyzed && len(st.statuses) == st.threshold
+	return st.ready
 }
 
 // ProposalSet returns the proposed set if available, nil otherwise.

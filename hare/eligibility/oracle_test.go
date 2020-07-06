@@ -361,11 +361,11 @@ func TestOracle_roundedSafeLayer(t *testing.T) {
 func TestOracle_actives(t *testing.T) {
 	r := require.New(t)
 	o := New(&mockValueProvider{1, nil}, nil, nil, nil, 5, genWeight, mockBlocksProvider{}, cfg, log.NewDefault(t.Name()))
-	_, err := o.actives(1)
+	_, err := o.Actives(1)
 	r.EqualError(err, errGenesis.Error())
 
 	o.blocksProvider = mockBlocksProvider{mp: make(map[types.BlockID]struct{})}
-	_, err = o.actives(100)
+	_, err = o.Actives(100)
 	r.EqualError(err, errNoContextualBlocks.Error())
 
 	o.blocksProvider = mockBlocksProvider{}
@@ -374,9 +374,9 @@ func TestOracle_actives(t *testing.T) {
 		return mp, nil
 	}
 	o.activesCache = newMockCacher()
-	v, err := o.actives(100)
+	v, err := o.Actives(100)
 	r.NoError(err)
-	v2, err := o.actives(100)
+	v2, err := o.Actives(100)
 	r.NoError(err)
 	r.Equal(v, v2)
 	for k := range mp {
@@ -387,7 +387,7 @@ func TestOracle_actives(t *testing.T) {
 	o.getActiveSet = func(epoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]uint64, error) {
 		return createMapWithSize(9), errFoo
 	}
-	_, err = o.actives(200)
+	_, err = o.Actives(200)
 	r.Equal(errFoo, err)
 }
 
@@ -404,12 +404,12 @@ func TestOracle_concurrentActives(t *testing.T) {
 
 	// outstanding probability for concurrent access to calc active set size
 	for i := 0; i < 100; i++ {
-		go o.actives(100)
+		go o.Actives(100)
 	}
 
 	// make sure we wait at least two calls duration
-	_, _ = o.actives(100)
-	_, _ = o.actives(100)
+	_, _ = o.Actives(100)
+	_, _ = o.Actives(100)
 
 	r.Equal(1, mc.numAdd)
 }
@@ -445,7 +445,7 @@ func TestOracle_activesSafeLayer(t *testing.T) {
 	mp2[block1.ID()] = struct{}{}
 	bmp[rsl] = mp2
 	o.blocksProvider = &bProvider{bmp}
-	mpRes, err := o.actives(lyr)
+	mpRes, err := o.Actives(lyr)
 	r.NotNil(mpRes)
 	r.NoError(err)
 }

@@ -26,7 +26,7 @@ func TestStatusTracker_RecordStatus(t *testing.T) {
 	s.Add(value1)
 	s.Add(value2)
 
-	tracker := newStatusTracker(lowThresh10, lowThresh10)
+	tracker := newStatusTracker(Committee{Weight: lowThresh10, Size: lowThresh10})
 	assert.False(t, tracker.IsSVPReady())
 
 	for i := 0; i < lowThresh10; i++ {
@@ -39,7 +39,7 @@ func TestStatusTracker_RecordStatus(t *testing.T) {
 }
 
 func TestStatusTracker_BuildUnionSet(t *testing.T) {
-	tracker := newStatusTracker(lowThresh10, lowThresh10)
+	tracker := newStatusTracker(Committee{Weight: lowThresh10, Size: lowThresh10})
 
 	s := NewEmptySet(lowDefaultSize)
 	s.Add(value1)
@@ -54,7 +54,7 @@ func TestStatusTracker_BuildUnionSet(t *testing.T) {
 }
 
 func TestStatusTracker_IsSVPReady(t *testing.T) {
-	tracker := newStatusTracker(1, 1)
+	tracker := newStatusTracker(Committee{Weight: 1, Size: 1})
 	assert.False(t, tracker.IsSVPReady())
 	s := NewSetFromValues(value1)
 	tracker.RecordStatus(BuildStatusMsg(generateSigning(t), s))
@@ -63,7 +63,7 @@ func TestStatusTracker_IsSVPReady(t *testing.T) {
 }
 
 func TestStatusTracker_BuildSVP(t *testing.T) {
-	tracker := newStatusTracker(2, 1)
+	tracker := newStatusTracker(Committee{Weight: 2, Size: 1})
 	s := NewSetFromValues(value1)
 	tracker.RecordStatus(BuildStatusMsg(generateSigning(t), s))
 	tracker.RecordStatus(BuildStatusMsg(generateSigning(t), s))
@@ -73,7 +73,7 @@ func TestStatusTracker_BuildSVP(t *testing.T) {
 }
 
 func TestStatusTracker_ProposalSetTypeA(t *testing.T) {
-	tracker := newStatusTracker(2, 1)
+	tracker := newStatusTracker(Committee{Weight: 2, Size: 1})
 	s1 := NewSetFromValues(value1)
 	s2 := NewSetFromValues(value1, value2)
 	tracker.RecordStatus(buildStatusMsg(generateSigning(t), s1, -1))
@@ -84,7 +84,7 @@ func TestStatusTracker_ProposalSetTypeA(t *testing.T) {
 }
 
 func TestStatusTracker_ProposalSetTypeB(t *testing.T) {
-	tracker := newStatusTracker(2, 1)
+	tracker := newStatusTracker(Committee{Weight: 2, Size: 1})
 	s1 := NewSetFromValues(value1, value3)
 	s2 := NewSetFromValues(value1, value2)
 	tracker.RecordStatus(buildStatusMsg(generateSigning(t), s1, 0))
@@ -96,7 +96,7 @@ func TestStatusTracker_ProposalSetTypeB(t *testing.T) {
 }
 
 func TestStatusTracker_AnalyzeStatuses(t *testing.T) {
-	tracker := newStatusTracker(2, 1)
+	tracker := newStatusTracker(Committee{Weight: 2, Size: 1})
 	s1 := NewSetFromValues(value1, value3)
 	s2 := NewSetFromValues(value1, value2)
 	tracker.RecordStatus(buildStatusMsg(generateSigning(t), s1, 2))
@@ -105,3 +105,4 @@ func TestStatusTracker_AnalyzeStatuses(t *testing.T) {
 	tracker.AnalyzeStatuses(validate)
 	assert.Equal(t, 2, len(tracker.statuses))
 }
+

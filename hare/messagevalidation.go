@@ -276,7 +276,10 @@ func (v *syntaxContextValidator) validateAggregatedMessage(aggMsg *aggregatedMes
 		return errNilMsgsSlice
 	}
 
-	if len(aggMsg.Messages) != v.threshold { // must include exactly f+1 Messages
+	/*
+	 	weighted consensus can contain different count of messages
+	*/
+	if v.threshold > 0 && len(aggMsg.Messages) != v.threshold { // must include exactly f+1 Messages
 		v.Warning("Aggregated validation failed: number of messages does not match. Expected: %v Actual: %v",
 			v.threshold, len(aggMsg.Messages))
 		return errMsgsCountMismatch

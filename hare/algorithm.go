@@ -170,6 +170,7 @@ type consensusProcess struct {
 	notifySent        bool            // flag to set in case a notification had already been sent by this instance
 	mTracker          *msgsTracker    // tracks valid messages
 	terminating       bool
+	committee         Committee
 }
 
 // newConsensusProcess creates a new consensus process instance.
@@ -185,16 +186,25 @@ func newConsensusProcess(cfg config.Config, instanceID instanceID, s *Set, oracl
 		signing:           signing,
 		nid:               nid,
 		network:           p2p,
-		preRoundTracker:   newPreRoundTracker(cfg.F+1, cfg.N),
 		notifyTracker:     newNotifyTracker(cfg.N),
 		cfg:               cfg,
 		terminationReport: terminationReport,
 		pending:           make(map[string]*Msg, cfg.N),
 		Log:               logger,
 		mTracker:          msgsTracker,
+		committee:         Committee{Weight: uint64(cfg.F + 1), Size: cfg.N},
 	}
-	proc.validator = newSyntaxContextValidator(signing, cfg.F+1, proc.statusValidator(), stateQuerier, layersPerEpoch, ev, msgsTracker, logger)
 
+	proc.preRoundTracker = newPreRoundTracker(&proc.committee)
+
+	// weighted/unweighted threshold for syntax context validator
+	// since we don't know how many messages will have the required weight
+	// for a weighted consensus threshold is 0
+	th := 0
+	if !cfg.Weighted {
+		th = cfg.F + 1
+	}
+	proc.validator = newSyntaxContextValidator(signing, th, proc.statusValidator(), stateQuerier, layersPerEpoch, ev, msgsTracker, logger)
 	return proc
 }
 
@@ -221,6 +231,13 @@ func (proc *consensusProcess) Start() error {
 	if proc.inbox == nil { // no inbox
 		proc.Error("consensusProcess cannot be started with nil inbox")
 		return startInstanceError(errors.New("instance started with nil inbox"))
+	}
+
+	if proc.cfg.Weighted {
+		err := proc.committee.Fill(proc.oracle, proc.Log, types.LayerID(proc.instanceID), proc.cfg.N)
+		if err != nil {
+			return err
+		}
 	}
 
 	proc.isStarted = true
@@ -481,7 +498,7 @@ func (proc *consensusProcess) advanceToNextRound() {
 }
 
 func (proc *consensusProcess) beginStatusRound() {
-	proc.statusesTracker = newStatusTracker(proc.cfg.F+1, proc.cfg.N)
+	proc.statusesTracker = newStatusTracker(proc.committee)
 	proc.statusesTracker.Log = proc.Log
 
 	// check participation
@@ -524,7 +541,7 @@ func (proc *consensusProcess) beginCommitRound() {
 	proposedSet := proc.proposalTracker.ProposedSet()
 
 	// proposedSet may be nil, in such case the tracker will ignore Messages
-	proc.commitTracker = newCommitTracker(proc.cfg.F+1, proc.cfg.N, proposedSet) // track commits for proposed set
+	proc.commitTracker = newCommitTracker(proposedSet, proc.committee) // track commits for proposed set
 
 	if proposedSet != nil { // has proposal to commit on
 
@@ -563,7 +580,7 @@ func (proc *consensusProcess) beginNotifyRound() {
 	}
 
 	if !proc.commitTracker.HasEnoughCommits() {
-		proc.With().Warning("Begin notify round: not enough commits", log.Int("expected", proc.cfg.F+1), log.Int("actual", proc.commitTracker.CommitCount()))
+		proc.With().Warning("Begin notify round: not enough commits", log.Uint64("expected", proc.committee.Threshold()), log.Int("actual", proc.commitTracker.CommitCount()))
 		return
 	}
 
