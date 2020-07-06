@@ -323,6 +323,7 @@ func (msh *Mesh) applyState(l *types.Layer) {
 	msh.accumulateRewards(l, msh.config)
 	msh.pushTransactions(l)
 	msh.setLatestLayerInState(l.Index())
+	events.ReportNewLayer(l)
 }
 
 // HandleValidatedLayer handles layer valid blocks as decided by hare
@@ -593,6 +594,12 @@ func (msh *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.Transaction, atx
 	msh.invalidateFromPools(&blk.MiniBlock)
 
 	events.ReportNewBlock(blk)
+	layer, err := msh.GetLayer(blk.LayerIndex)
+	if err != nil {
+		log.Error("failed to report updated layer data", err)
+	} else {
+		events.ReportNewLayer(layer)
+	}
 	msh.With().Info("added block to database", blk.Fields()...)
 	return nil
 }

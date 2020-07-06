@@ -251,6 +251,71 @@ func convertActivation(a *types.ActivationTx) (*pb.Activation, error) {
 	}, nil
 }
 
+func (s MeshService) readLayer(layer *types.Layer, layerStatus pb.Layer_LayerStatus) (*pb.Layer, error) {
+	// Load all block data
+	var blocks []*pb.Block
+
+	// Save activations too
+	var activations []types.ATXID
+
+	for _, b := range layer.Blocks() {
+		txs, missing := s.Mesh.GetTransactions(b.TxIDs)
+		// TODO: Do we ever expect txs to be missing here?
+		// E.g., if this node has not synced/received them yet.
+		if len(missing) != 0 {
+			log.Error("could not find transactions %v from layer %v", missing, layer.Index())
+			return nil, status.Errorf(codes.Internal, "error retrieving tx data")
+		}
+
+		activations = append(activations, b.ATXIDs...)
+
+		var pbTxs []*pb.Transaction
+		for _, t := range txs {
+			if t == nil {
+				log.Error("got empty transaction data from layer %v", layer.Index())
+				return nil, status.Errorf(codes.Internal, "error retrieving tx data")
+			}
+			pbTxs = append(pbTxs, convertTransaction(t))
+		}
+		blocks = append(blocks, &pb.Block{
+			Id:           b.ID().Bytes(),
+			Transactions: pbTxs,
+		})
+	}
+
+	// Extract ATX data from block data
+	var pbActivations []*pb.Activation
+
+	// Add unique ATXIDs
+	atxs, matxs := s.Mesh.GetATXs(activations)
+	if len(matxs) != 0 {
+		log.Error("could not find activations %v from layer %v", matxs, layer.Index())
+		return nil, status.Errorf(codes.Internal, "error retrieving activations data")
+	}
+	for _, atx := range atxs {
+		pbatx, err := convertActivation(atx)
+		if err != nil {
+			log.Error("error serializing activation data: ", err)
+			return nil, status.Errorf(codes.Internal, "error serializing activation data")
+		}
+		pbActivations = append(pbActivations, pbatx)
+	}
+
+	// TODO: We currently have no way to get state root for any
+	// layer but the latest layer applied to state (which is
+	// anyway not exposed by Mesh). The logic lives in
+	// Mesh.txProcessor.GetStateRoot().
+	// Tracked in https://github.com/spacemeshos/api/issues/90.
+	return &pb.Layer{
+		Number:        layer.Index().Uint64(),
+		Status:        layerStatus,
+		Hash:          layer.Hash().Bytes(), // do we need this?
+		Blocks:        blocks,
+		Activations:   pbActivations,
+		RootStateHash: nil, // do we need this?
+	}, nil
+}
+
 // LayersQuery returns all mesh data, layer by layer
 func (s MeshService) LayersQuery(ctx context.Context, in *pb.LayersQueryRequest) (*pb.LayersQueryResponse, error) {
 	log.Info("GRPC MeshService.LayersQuery")
@@ -282,68 +347,11 @@ func (s MeshService) LayersQuery(ctx context.Context, in *pb.LayersQueryRequest)
 			return nil, status.Errorf(codes.Internal, "error retrieving layer data")
 		}
 
-		// Load all block data
-		var blocks []*pb.Block
-
-		// Save activations too
-		var activations []types.ATXID
-
-		for _, b := range layer.Blocks() {
-			txs, missing := s.Mesh.GetTransactions(b.TxIDs)
-			// TODO: Do we ever expect txs to be missing here?
-			// E.g., if this node has not synced/received them yet.
-			if len(missing) != 0 {
-				log.Error("could not find transactions %v from layer %v", missing, l)
-				return nil, status.Errorf(codes.Internal, "error retrieving tx data")
-			}
-
-			activations = append(activations, b.ATXIDs...)
-
-			var pbTxs []*pb.Transaction
-			for _, t := range txs {
-				if t == nil {
-					log.Error("got empty transaction data from layer %v", l)
-					return nil, status.Errorf(codes.Internal, "error retrieving tx data")
-				}
-				pbTxs = append(pbTxs, convertTransaction(t))
-			}
-			blocks = append(blocks, &pb.Block{
-				Id:           b.ID().Bytes(),
-				Transactions: pbTxs,
-			})
+		pbLayer, err := s.readLayer(layer, layerStatus)
+		if err != nil {
+			return nil, err
 		}
-
-		// Extract ATX data from block data
-		var pbActivations []*pb.Activation
-
-		// Add unique ATXIDs
-		atxs, matxs := s.Mesh.GetATXs(activations)
-		if len(matxs) != 0 {
-			log.Error("could not find activations %v from layer %v", matxs, l)
-			return nil, status.Errorf(codes.Internal, "error retrieving activations data")
-		}
-		for _, atx := range atxs {
-			pbatx, err := convertActivation(atx)
-			if err != nil {
-				log.Error("error serializing activation data: ", err)
-				return nil, status.Errorf(codes.Internal, "error serializing activation data")
-			}
-			pbActivations = append(pbActivations, pbatx)
-		}
-
-		// TODO: We currently have no way to get state root for any
-		// layer but the latest layer applied to state (which is
-		// anyway not exposed by Mesh). The logic lives in
-		// Mesh.txProcessor.GetStateRoot().
-		// Tracked in https://github.com/spacemeshos/api/issues/90.
-		layers = append(layers, &pb.Layer{
-			Number:        l,
-			Status:        layerStatus,
-			Hash:          layer.Hash().Bytes(), // do we need this?
-			Blocks:        blocks,
-			Activations:   pbActivations,
-			RootStateHash: nil, // do we need this?
-		})
+		layers = append(layers, pbLayer)
 	}
 	return &pb.LayersQueryResponse{Layer: layers}, nil
 }
@@ -442,5 +450,30 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 // LayerStream returns a stream of all mesh data per layer
 func (s MeshService) LayerStream(in *pb.LayerStreamRequest, stream pb.MeshService_LayerStreamServer) error {
 	log.Info("GRPC MeshService.LayerStream")
-	return nil
+	layerStream := events.GetLayerStream()
+
+	for {
+		select {
+		case layer, ok := <-layerStream:
+			if !ok {
+				// we could handle this more gracefully, by no longer listening
+				// to this stream but continuing to listen to the other stream,
+				// but in practice one should never be closed while the other is
+				// still running, so it doesn't matter
+				log.Info("LayerStream closed, shutting down")
+				return nil
+			}
+			// TODO: make sure we send the right status
+			pbLayer, err := s.readLayer(layer, pb.Layer_LAYER_STATUS_CONFIRMED)
+			if err != nil {
+				return err
+			}
+			stream.Send(&pb.LayerStreamResponse{Layer: pbLayer})
+		case <-stream.Context().Done():
+			log.Info("LayerStream closing stream, client disconnected")
+			return nil
+		}
+		// TODO: do we need an additional case here for a context to indicate
+		// that MeshService needs to shut down?
+	}
 }
