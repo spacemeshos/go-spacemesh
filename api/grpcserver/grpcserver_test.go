@@ -1098,6 +1098,62 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 	wg.Wait()
 }
 
+func TestLayerStream_comprehensive(t *testing.T) {
+	grpcService := NewMeshService(&networkMock, txAPI, txMempool, &genTime, &SyncerMock{}, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
+	shutDown := launchServer(t, grpcService)
+	defer shutDown()
+
+	// start a client
+	addr := "localhost:" + strconv.Itoa(cfg.NewGrpcServerPort)
+
+	// Set up a connection to the server.
+	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	require.NoError(t, err)
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
+	c := pb.NewMeshServiceClient(conn)
+
+	// set up the grpc listener stream
+	req := &pb.LayerStreamRequest{}
+
+	// Need to wait for goroutine to end before ending the test
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+
+	// This will block so run it in a goroutine
+	go func() {
+		defer wg.Done()
+		stream, err := c.LayerStream(context.Background(), req)
+		require.NoError(t, err, "stream request returned unexpected error")
+
+		var res *pb.LayerStreamResponse
+
+		res, err = stream.Recv()
+		require.NoError(t, err, "got error from stream")
+		require.Equal(t, uint64(0), res.Layer.Number)
+
+		// look for EOF
+		_, err = stream.Recv()
+		require.Equal(t, io.EOF, err, "expected EOF from stream")
+	}()
+
+	// initialize the streamer
+	log.Info("initializing event stream")
+	events.InitializeEventStream()
+
+	layer, err := txAPI.GetLayer(0)
+	require.NoError(t, err)
+	events.ReportNewLayer(layer)
+
+	// close the stream
+	log.Info("closing event stream")
+	events.CloseEventStream()
+
+	// wait for the goroutine
+	wg.Wait()
+}
+
 func checkAccountDataItemTx(t *testing.T, dataItem interface{}) {
 	switch x := dataItem.(type) {
 	case *pb.AccountMeshData_Transaction:

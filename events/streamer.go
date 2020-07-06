@@ -15,7 +15,8 @@ func ReportNewTx(tx *types.Transaction) {
 		Origin:      tx.Origin().String(),
 		Destination: tx.Recipient.String(),
 		Amount:      tx.Amount,
-		Fee:         tx.Fee})
+		Fee:         tx.Fee,
+	})
 }
 
 func ReportValidTx(tx *types.Transaction, valid bool) {
@@ -72,6 +73,12 @@ func ReportDoneCreatingBlock(eligible bool, layer uint64, error string) {
 
 }
 
+func ReportNewLayer(layer *types.Layer) {
+	if streamer != nil {
+		streamer.channelLayer <- layer
+	}
+}
+
 func GetNewTxStream() chan *types.Transaction {
 	if streamer != nil {
 		return streamer.channelTransaction
@@ -86,6 +93,13 @@ func GetActivationStream() chan *types.ActivationTx {
 	return nil
 }
 
+func GetLayerStream() chan *types.Layer {
+	if streamer != nil {
+		return streamer.channelLayer
+	}
+	return nil
+}
+
 // InitializeEventStream initializes the event streaming interface
 func InitializeEventStream() {
 	streamer = NewEventStreamer()
@@ -95,12 +109,14 @@ func InitializeEventStream() {
 type EventStreamer struct {
 	channelTransaction chan *types.Transaction
 	channelActivation  chan *types.ActivationTx
+	channelLayer       chan *types.Layer
 }
 
 func NewEventStreamer() *EventStreamer {
 	return &EventStreamer{
 		channelTransaction: make(chan *types.Transaction),
 		channelActivation:  make(chan *types.ActivationTx),
+		channelLayer:       make(chan *types.Layer),
 	}
 }
 
@@ -108,6 +124,7 @@ func CloseEventStream() {
 	if streamer != nil {
 		close(streamer.channelTransaction)
 		close(streamer.channelActivation)
+		close(streamer.channelLayer)
 		streamer = nil
 	}
 }
