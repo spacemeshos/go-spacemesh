@@ -425,7 +425,7 @@ func (t *BlockBuilder) handleGossipAtx(data service.GossipMessage) {
 	}
 
 	err = t.atxValidator.SyntacticallyValidateAtx(atx)
-	events.Publish(events.ValidAtx{ID: atx.ShortString(), Valid: err == nil})
+	events.ReportValidActivation(atx, err == nil)
 	if err != nil {
 		t.Warning("received syntactically invalid ATX %v: %v", atx.ShortString(), err)
 		// TODO: blacklist peer
@@ -453,12 +453,12 @@ func (t *BlockBuilder) acceptBlockData() {
 			t.Debug("builder got layer %v", layerID)
 			atxID, proofs, err := t.blockOracle.BlockEligible(layerID)
 			if err != nil {
-				events.Publish(events.DoneCreatingBlock{Eligible: true, Layer: uint64(layerID), Error: "failed to check for block eligibility"})
+				events.ReportDoneCreatingBlock(true, uint64(layerID), "failed to check for block eligibility")
 				t.With().Error("failed to check for block eligibility", layerID, log.Err(err))
 				continue
 			}
 			if len(proofs) == 0 {
-				events.Publish(events.DoneCreatingBlock{Eligible: false, Layer: uint64(layerID), Error: ""})
+				events.ReportDoneCreatingBlock(false, uint64(layerID), "")
 				t.With().Info("Notice: not eligible for blocks in layer", layerID)
 				continue
 			}
@@ -472,13 +472,13 @@ func (t *BlockBuilder) acceptBlockData() {
 			for _, eligibilityProof := range proofs {
 				txList, err := t.TransactionPool.GetTxsForBlock(t.txsPerBlock, t.projector.GetProjection)
 				if err != nil {
-					events.Publish(events.DoneCreatingBlock{Eligible: true, Layer: uint64(layerID), Error: "failed to get txs for block"})
+					events.ReportDoneCreatingBlock(true, uint64(layerID), "failed to get txs for block")
 					t.With().Error("failed to get txs for block", layerID, log.Err(err))
 					continue
 				}
 				blk, err := t.createBlock(layerID, atxID, eligibilityProof, txList, atxList)
 				if err != nil {
-					events.Publish(events.DoneCreatingBlock{Eligible: true, Layer: uint64(layerID), Error: "cannot create new block"})
+					events.ReportDoneCreatingBlock(true, uint64(layerID), "cannot create new block")
 					t.Error("cannot create new block, %v ", err)
 					continue
 				}
@@ -486,14 +486,14 @@ func (t *BlockBuilder) acceptBlockData() {
 					bytes, err := types.InterfaceToBytes(blk)
 					if err != nil {
 						t.Log.Error("cannot serialize block %v", err)
-						events.Publish(events.DoneCreatingBlock{Eligible: true, Layer: uint64(layerID), Error: "cannot serialize block"})
+						events.ReportDoneCreatingBlock(true, uint64(layerID), "cannot serialize block")
 						return
 					}
 					err = t.network.Broadcast(config.NewBlockProtocol, bytes)
 					if err != nil {
 						t.Log.Error("cannot send block %v", err)
 					}
-					events.Publish(events.DoneCreatingBlock{Eligible: true, Layer: uint64(layerID), Error: ""})
+					events.ReportDoneCreatingBlock(true, uint64(layerID), "")
 				}()
 			}
 		}
