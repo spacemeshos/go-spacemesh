@@ -727,13 +727,12 @@ func TestMeshService(t *testing.T) {
 					stream, err := c.AccountMeshDataStream(context.Background(), req)
 					require.NoError(t, err, "unexpected error opening stream")
 
-					// TODO: do we need this? is it causing concurrency issues?
+					// Do we need this? It doesn't seem to cause any harm
 					stream.Context().Done()
 				}
 			}
 			generateRunFnError := func(msg string, req *pb.AccountMeshDataStreamRequest) func(*testing.T) {
 				return func(t *testing.T) {
-					//t.Skip()
 					// there should be no error opening the stream
 					stream, err := c.AccountMeshDataStream(context.Background(), req)
 					require.NoError(t, err, "unexpected error opening stream")
@@ -745,7 +744,7 @@ func TestMeshService(t *testing.T) {
 					statusCode := status.Code(err)
 					require.Equal(t, codes.InvalidArgument, statusCode, "expected InvalidArgument error")
 
-					// TODO: do we need this? is it causing concurrency issues?
+					// Do we need this? It doesn't seem to cause any harm
 					stream.Context().Done()
 				}
 			}
