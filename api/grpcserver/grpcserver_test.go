@@ -13,7 +13,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"google.golang.org/genproto/googleapis/rpc/code"
@@ -265,7 +264,7 @@ func (t *TxAPIMock) GetTransactions(txids []types.TransactionID) (txs []*types.T
 }
 
 func NewTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *types.Transaction {
-	tx, err := mesh.NewSignedTx(nonce, recipient, 1, defaultGasLimit, defaultFee, signer)
+	tx, err := types.NewSignedTx(nonce, recipient, 1, defaultGasLimit, defaultFee, signer)
 	if err != nil {
 		log.Error("error creating new signed tx: ", err)
 		return nil
@@ -1084,7 +1083,7 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 
 	// initialize the streamer
 	log.Info("initializing event stream")
-	events.InitializeEventStream()
+	events.InitializeEventReporter()
 
 	// publish a tx
 	events.ReportNewTx(globalTx)
@@ -1099,7 +1098,7 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 
 	// close the stream
 	log.Info("closing event stream")
-	events.CloseEventStream()
+	events.CloseEventReporter()
 
 	// wait for the goroutine
 	wg.Wait()
@@ -1148,7 +1147,7 @@ func TestLayerStream_comprehensive(t *testing.T) {
 
 	// initialize the streamer
 	log.Info("initializing event stream")
-	events.InitializeEventStream()
+	events.InitializeEventReporter()
 
 	layer, err := txAPI.GetLayer(0)
 	require.NoError(t, err)
@@ -1156,7 +1155,7 @@ func TestLayerStream_comprehensive(t *testing.T) {
 
 	// close the stream
 	log.Info("closing event stream")
-	events.CloseEventStream()
+	events.CloseEventReporter()
 
 	// wait for the goroutine
 	wg.Wait()
