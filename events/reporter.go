@@ -8,7 +8,7 @@ import (
 // reporter is the event reporter singleton.
 var reporter *EventReporter
 
-// Stream streams an event on the reporter singleton.
+// ReportNewTx dispatches incoming events to the reporter singleton
 func ReportNewTx(tx *types.Transaction) {
 	if reporter != nil {
 		select {
@@ -28,11 +28,12 @@ func ReportNewTx(tx *types.Transaction) {
 	})
 }
 
+// ReportValidTx reports a valid transaction
 func ReportValidTx(tx *types.Transaction, valid bool) {
 	Publish(ValidTx{ID: tx.ID().String(), Valid: valid})
 }
 
-// Stream streams an event on the reporter singleton.
+// ReportNewActivation reports a new activation
 func ReportNewActivation(activation *types.ActivationTx, layersPerEpoch uint16) {
 	if reporter != nil {
 		reporter.channelActivation <- activation
@@ -43,6 +44,7 @@ func ReportNewActivation(activation *types.ActivationTx, layersPerEpoch uint16) 
 	})
 }
 
+// ReportRewardReceived reports a new reward
 func ReportRewardReceived(account *types.Address, reward uint64) {
 	Publish(RewardReceived{
 		Coinbase: account.String(),
@@ -50,6 +52,7 @@ func ReportRewardReceived(account *types.Address, reward uint64) {
 	})
 }
 
+// ReportNewBlock reports a new block
 func ReportNewBlock(blk *types.Block) {
 	Publish(NewBlock{
 		ID:    blk.ID().String(),
@@ -58,6 +61,7 @@ func ReportNewBlock(blk *types.Block) {
 	})
 }
 
+// ReportValidBlock reports a valid block
 func ReportValidBlock(blockID types.BlockID, valid bool) {
 	Publish(ValidBlock{
 		ID:    blockID.String(),
@@ -65,14 +69,17 @@ func ReportValidBlock(blockID types.BlockID, valid bool) {
 	})
 }
 
+// ReportAtxCreated reports a created activation
 func ReportAtxCreated(created bool, layer uint64) {
 	Publish(AtxCreated{Created: created, Layer: layer})
 }
 
+// ReportValidActivation reports a valid activation
 func ReportValidActivation(activation *types.ActivationTx, valid bool) {
 	Publish(ValidAtx{ID: activation.ShortString(), Valid: valid})
 }
 
+// ReportDoneCreatingBlock reports a created block
 func ReportDoneCreatingBlock(eligible bool, layer uint64, error string) {
 	Publish(DoneCreatingBlock{
 		Eligible: eligible,
@@ -81,12 +88,14 @@ func ReportDoneCreatingBlock(eligible bool, layer uint64, error string) {
 	})
 }
 
+// ReportNewLayer reports a new layer
 func ReportNewLayer(layer *types.Layer) {
 	if reporter != nil {
 		reporter.channelLayer <- layer
 	}
 }
 
+// GetNewTxStream returns a stream of new transactions
 func GetNewTxStream() chan *types.Transaction {
 	if reporter != nil {
 		return reporter.channelTransaction
@@ -94,6 +103,7 @@ func GetNewTxStream() chan *types.Transaction {
 	return nil
 }
 
+// GetActivationStream returns a stream of activations
 func GetActivationStream() chan *types.ActivationTx {
 	if reporter != nil {
 		return reporter.channelActivation
@@ -101,6 +111,7 @@ func GetActivationStream() chan *types.ActivationTx {
 	return nil
 }
 
+// GetLayerStream returns a stream of all layer data
 func GetLayerStream() chan *types.Layer {
 	if reporter != nil {
 		return reporter.channelLayer
@@ -110,7 +121,7 @@ func GetLayerStream() chan *types.Layer {
 
 // InitializeEventReporter initializes the event reporting interface
 func InitializeEventReporter() {
-	reporter = NewEventReporter()
+	reporter = newEventReporter()
 }
 
 // EventReporter is the struct that receives incoming events and dispatches them
@@ -120,7 +131,7 @@ type EventReporter struct {
 	channelLayer       chan *types.Layer
 }
 
-func NewEventReporter() *EventReporter {
+func newEventReporter() *EventReporter {
 	return &EventReporter{
 		channelTransaction: make(chan *types.Transaction),
 		channelActivation:  make(chan *types.ActivationTx),
@@ -128,6 +139,7 @@ func NewEventReporter() *EventReporter {
 	}
 }
 
+// CloseEventReporter shuts down the event reporting service and closes open channels
 func CloseEventReporter() {
 	if reporter != nil {
 		close(reporter.channelTransaction)
