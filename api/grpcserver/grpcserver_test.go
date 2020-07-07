@@ -931,79 +931,14 @@ func TestMeshService(t *testing.T) {
 						res, err := c.LayersQuery(context.Background(), req)
 						require.NoError(t, err, "query returned unexpected error")
 
-						resLayer := res.Layer[0]
-						require.Equal(t, uint64(0), resLayer.Number, "first layer is zero")
-						require.Equal(t, pb.Layer_LAYER_STATUS_CONFIRMED, resLayer.Status, "first layer is confirmed")
+						// endpoint inclusive so add one
+						numLayers := int(layerLatestReceived) - layerFirst + 1
+						require.Equal(t, numLayers, len(res.Layer))
+						checkLayer(t, res.Layer[0])
 
 						resLayerNine := res.Layer[9]
 						require.Equal(t, uint64(9), resLayerNine.Number, "layer nine is ninth")
 						require.Equal(t, pb.Layer_LAYER_STATUS_UNSPECIFIED, resLayerNine.Status, "later layer is unconfirmed")
-
-						// endpoint inclusive so add one
-						numLayers := int(layerLatestReceived) - layerFirst + 1
-						require.Equal(t, numLayers, len(res.Layer))
-
-						require.Equal(t, atxPerLayer, len(resLayer.Activations))
-						require.Equal(t, blkPerLayer, len(resLayer.Blocks))
-
-						data, err := globalAtx.InnerBytes()
-						require.NoError(t, err)
-
-						// The order of the activations is not deterministic since they're
-						// stored in a map, and randomized each run. Check if either matches.
-						require.Condition(t, func() bool {
-							for _, a := range resLayer.Activations {
-								// Compare the two element by element
-								if a.Layer != globalAtx.PubLayerID.Uint64() {
-									continue
-								}
-								if bytes.Compare(a.Id.Id, globalAtx.ID().Bytes()) != 0 {
-									continue
-								}
-								if bytes.Compare(a.SmesherId.Id, globalAtx.NodeID.ToBytes()) != 0 {
-									continue
-								}
-								if bytes.Compare(a.Coinbase.Address, globalAtx.Coinbase.Bytes()) != 0 {
-									continue
-								}
-								if bytes.Compare(a.PrevAtx.Id, globalAtx.PrevATXID.Bytes()) != 0 {
-									continue
-								}
-								if a.CommitmentSize != uint64(len(data)) {
-									continue
-								}
-								// found a match
-								return true
-							}
-							// no match
-							return false
-						}, "return layer does not contain expected activation data")
-
-						resBlock := resLayer.Blocks[0]
-
-						require.Equal(t, len(block1.TxIDs), len(resBlock.Transactions))
-						require.Equal(t, block1.ID().Bytes(), resBlock.Id)
-
-						// Check the tx as well
-						resTx := resBlock.Transactions[0]
-						require.Equal(t, globalTx.ID().Bytes(), resTx.Id.Id)
-						require.Equal(t, globalTx.Origin().Bytes(), resTx.Sender.Address)
-						require.Equal(t, globalTx.GasLimit, resTx.GasOffered.GasProvided)
-						require.Equal(t, globalTx.Fee, resTx.GasOffered.GasPrice)
-						require.Equal(t, globalTx.Amount, resTx.Amount.Value)
-						require.Equal(t, globalTx.AccountNonce, resTx.Counter)
-						require.Equal(t, globalTx.Signature[:], resTx.Signature.Signature)
-						require.Equal(t, pb.Signature_SCHEME_ED25519_PLUS_PLUS, resTx.Signature.Scheme)
-						require.Equal(t, globalTx.Origin().Bytes(), resTx.Signature.PublicKey)
-
-						// The Data field is a bit trickier to read
-						switch x := resTx.Data.(type) {
-						case *pb.Transaction_CoinTransfer:
-							require.Equal(t, globalTx.Recipient.Bytes(), x.CoinTransfer.Receiver.Address,
-								"inner coin transfer tx has bad recipient")
-						default:
-							require.Fail(t, "inner tx has wrong tx data type")
-						}
 					},
 				},
 			}
@@ -1013,11 +948,80 @@ func TestMeshService(t *testing.T) {
 				t.Run(r.name, r.run)
 			}
 		}},
+		// NOTE: There are no simple error tests for LayerStream, as it does not take any arguments.
+		// See TestLayerStream_comprehensive test, below.
 	}
 
 	// Run subtests
 	for _, tc := range testCases {
 		t.Run(tc.name, tc.run)
+	}
+}
+
+func checkLayer(t *testing.T, l *pb.Layer) {
+	require.Equal(t, uint64(0), l.Number, "first layer is zero")
+	require.Equal(t, pb.Layer_LAYER_STATUS_CONFIRMED, l.Status, "first layer is confirmed")
+
+	require.Equal(t, atxPerLayer, len(l.Activations), "unexpected number of activations in layer")
+	require.Equal(t, blkPerLayer, len(l.Blocks), "unexpected number of blocks in layer")
+
+	data, err := globalAtx.InnerBytes()
+	require.NoError(t, err, "error getting activation data size")
+
+	// The order of the activations is not deterministic since they're
+	// stored in a map, and randomized each run. Check if either matches.
+	require.Condition(t, func() bool {
+		for _, a := range l.Activations {
+			// Compare the two element by element
+			if a.Layer != globalAtx.PubLayerID.Uint64() {
+				continue
+			}
+			if bytes.Compare(a.Id.Id, globalAtx.ID().Bytes()) != 0 {
+				continue
+			}
+			if bytes.Compare(a.SmesherId.Id, globalAtx.NodeID.ToBytes()) != 0 {
+				continue
+			}
+			if bytes.Compare(a.Coinbase.Address, globalAtx.Coinbase.Bytes()) != 0 {
+				continue
+			}
+			if bytes.Compare(a.PrevAtx.Id, globalAtx.PrevATXID.Bytes()) != 0 {
+				continue
+			}
+			if a.CommitmentSize != uint64(len(data)) {
+				continue
+			}
+			// found a match
+			return true
+		}
+		// no match
+		return false
+	}, "return layer does not contain expected activation data")
+
+	resBlock := l.Blocks[0]
+
+	require.Equal(t, len(block1.TxIDs), len(resBlock.Transactions))
+	require.Equal(t, block1.ID().Bytes(), resBlock.Id)
+
+	// Check the tx as well
+	resTx := resBlock.Transactions[0]
+	require.Equal(t, globalTx.ID().Bytes(), resTx.Id.Id)
+	require.Equal(t, globalTx.Origin().Bytes(), resTx.Sender.Address)
+	require.Equal(t, globalTx.GasLimit, resTx.GasOffered.GasProvided)
+	require.Equal(t, globalTx.Fee, resTx.GasOffered.GasPrice)
+	require.Equal(t, globalTx.Amount, resTx.Amount.Value)
+	require.Equal(t, globalTx.AccountNonce, resTx.Counter)
+	require.Equal(t, globalTx.Signature[:], resTx.Signature.Signature)
+	require.Equal(t, pb.Signature_SCHEME_ED25519_PLUS_PLUS, resTx.Signature.Scheme)
+	require.Equal(t, globalTx.Origin().Bytes(), resTx.Signature.PublicKey)
+
+	// The Data field is a bit trickier to read
+	switch x := resTx.Data.(type) {
+	case *pb.Transaction_CoinTransfer:
+		require.Equal(t, globalTx.Recipient.Bytes(), x.CoinTransfer.Receiver.Address,
+			"inner coin transfer tx has bad recipient")
+	default:
+		require.Fail(t, "inner tx has wrong tx data type")
 	}
 }
 
@@ -1135,6 +1139,7 @@ func TestLayerStream_comprehensive(t *testing.T) {
 		res, err = stream.Recv()
 		require.NoError(t, err, "got error from stream")
 		require.Equal(t, uint64(0), res.Layer.Number)
+		checkLayer(t, res.Layer)
 
 		// look for EOF
 		_, err = stream.Recv()
