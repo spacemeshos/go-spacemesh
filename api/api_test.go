@@ -19,7 +19,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	config2 "github.com/spacemeshos/go-spacemesh/config"
-	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -411,22 +410,22 @@ func TestJsonWalletApi(t *testing.T) {
 	// test get txs per account:
 
 	// add incoming tx to mempool
-	mempoolTxIn, err := mesh.NewSignedTx(1337, addr, 420, 3, 42, signing.NewEdSigner())
+	mempoolTxIn, err := types.NewSignedTx(1337, addr, 420, 3, 42, signing.NewEdSigner())
 	r.NoError(err)
 	txMempool.Put(mempoolTxIn.ID(), mempoolTxIn)
 
 	// add outgoing tx to mempool
-	mempoolTxOut, err := mesh.NewSignedTx(1337, types.BytesToAddress([]byte{1}), 420, 3, 42, signer)
+	mempoolTxOut, err := types.NewSignedTx(1337, types.BytesToAddress([]byte{1}), 420, 3, 42, signer)
 	r.NoError(err)
 	txMempool.Put(mempoolTxOut.ID(), mempoolTxOut)
 
 	// add incoming tx to mesh
-	meshTxIn, err := mesh.NewSignedTx(1337, addr, 420, 3, 42, signing.NewEdSigner())
+	meshTxIn, err := types.NewSignedTx(1337, addr, 420, 3, 42, signing.NewEdSigner())
 	r.NoError(err)
 	txAPI.returnTx[meshTxIn.ID()] = meshTxIn
 
 	// add outgoing tx to mesh
-	meshTxOut, err := mesh.NewSignedTx(1337, types.BytesToAddress([]byte{1}), 420, 3, 42, signer)
+	meshTxOut, err := types.NewSignedTx(1337, types.BytesToAddress([]byte{1}), 420, 3, 42, signer)
 	r.NoError(err)
 	txAPI.returnTx[meshTxOut.ID()] = meshTxOut
 
@@ -609,7 +608,7 @@ func genTx(t *testing.T) *types.Transaction {
 	require.NoError(t, err)
 	signer, err := signing.NewEdSignerFromBuffer(key)
 	require.NoError(t, err)
-	tx, err := mesh.NewSignedTx(1111, [20]byte{}, 1234, 11, 321, signer)
+	tx, err := types.NewSignedTx(1111, [20]byte{}, 1234, 11, 321, signer)
 	require.NoError(t, err)
 
 	return tx
