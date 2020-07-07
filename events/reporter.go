@@ -120,8 +120,11 @@ func GetLayerStream() chan *types.Layer {
 }
 
 // InitializeEventReporter initializes the event reporting interface
-func InitializeEventReporter() {
+func InitializeEventReporter(url string) {
 	reporter = newEventReporter()
+	if url != "" {
+		InitializeEventPubsub(url)
+	}
 }
 
 // EventReporter is the struct that receives incoming events and dispatches them

@@ -251,7 +251,7 @@ func StartMultiNode(numOfinstances, layerAvgSize int, runTillLayer uint32, dbPat
 		log.Error("cannot parse genesis time %v", err)
 	}
 	pubsubAddr := "tcp://localhost:55666"
-	events.InitializeEventPubsub(pubsubAddr)
+	events.InitializeEventReporter(pubsubAddr)
 	clock := NewManualClock(gTime)
 
 	apps := make([]*SpacemeshApp, 0, numOfInstances)
