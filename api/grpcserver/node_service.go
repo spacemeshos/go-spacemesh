@@ -13,7 +13,9 @@ import (
 	"google.golang.org/grpc"
 )
 
-// NodeService is a grpc server providing the NodeService
+// NodeService is a grpc server that provides the NodeService, which exposes node-related
+// data such as node status, software version, errors, etc. It can also be used to start
+// the sync process, or to shut down the node.
 type NodeService struct {
 	Service
 	Network     api.NetworkAPI // P2P Swarm
