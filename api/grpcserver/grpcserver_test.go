@@ -1083,7 +1083,7 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 
 	// initialize the streamer
 	log.Info("initializing event stream")
-	events.InitializeEventReporter()
+	events.InitializeEventReporter("")
 
 	// publish a tx
 	events.ReportNewTx(globalTx)
@@ -1147,7 +1147,7 @@ func TestLayerStream_comprehensive(t *testing.T) {
 
 	// initialize the streamer
 	log.Info("initializing event stream")
-	events.InitializeEventReporter()
+	events.InitializeEventReporter("")
 
 	layer, err := txAPI.GetLayer(0)
 	require.NoError(t, err)

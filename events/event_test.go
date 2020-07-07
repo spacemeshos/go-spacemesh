@@ -76,7 +76,7 @@ func TestEventReporter(t *testing.T) {
 	txStream := GetNewTxStream()
 	require.Nil(t, txStream, "expected tx stream not to be initialized")
 
-	InitializeEventReporter()
+	InitializeEventReporter("")
 	txStream = GetNewTxStream()
 	require.NotNil(t, txStream, "expected tx stream to be initialized")
 
