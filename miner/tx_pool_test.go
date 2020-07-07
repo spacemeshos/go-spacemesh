@@ -4,7 +4,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/require"
@@ -127,7 +126,7 @@ func TestGetRandIdxs(t *testing.T) {
 func newTx(t testing.TB, nonce, totalAmount uint64, signer *signing.EdSigner) (types.TransactionID, *types.Transaction) {
 	feeAmount := uint64(1)
 	rec := types.Address{byte(rand.Int()), byte(rand.Int()), byte(rand.Int()), byte(rand.Int())}
-	tx, err := mesh.NewSignedTx(nonce, rec, totalAmount-feeAmount, 3, feeAmount, signer)
+	tx, err := types.NewSignedTx(nonce, rec, totalAmount-feeAmount, 3, feeAmount, signer)
 	require.NoError(t, err)
 	return tx.ID(), tx
 }
