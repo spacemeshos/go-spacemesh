@@ -130,7 +130,6 @@ func (s MeshService) AccountMeshDataQuery(ctx context.Context, in *pb.AccountMes
 	}
 
 	// Gather transaction data
-	//txs := &pb.AccountMeshData{DataItem: &pb.AccountMeshData_Transaction{Transaction: }
 	addr := types.BytesToAddress(in.Filter.AccountId.Address)
 	res := &pb.AccountMeshDataQueryResponse{}
 	if in.Filter.AccountMeshDataFlags&uint32(pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_TRANSACTIONS) != 0 {
@@ -157,8 +156,9 @@ func (s MeshService) AccountMeshDataQuery(ctx context.Context, in *pb.AccountMes
 
 	// Gather activation data
 	if in.Filter.AccountMeshDataFlags&uint32(pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_ACTIVATIONS) != 0 {
-		// TODO: we have no way to look up activations by coinbase
-		// so we have no choice but to read all of them (!!!)
+		// We have no way to look up activations by coinbase so we have no choice
+		// but to read all of them.
+		// TODO: index activations by layer (and maybe by coinbase)
 		var activations []types.ATXID
 		for l := startLayer; l <= s.Mesh.LatestLayer(); l++ {
 			layer, err := s.Mesh.GetLayer(l)
@@ -333,6 +333,7 @@ func (s MeshService) LayersQuery(ctx context.Context, in *pb.LayersQueryRequest)
 		// layer but the latest layer applied to state (which is
 		// anyway not exposed by Mesh). The logic lives in
 		// Mesh.txProcessor.GetStateRoot().
+		// Tracked in https://github.com/spacemeshos/api/issues/90.
 		layers = append(layers, &pb.Layer{
 			Number:        l,
 			Status:        layerStatus,
