@@ -46,7 +46,7 @@ func (s *Server) Start() {
 func (s *Server) startInternal() {
 	lis, err := net.Listen("tcp", fmt.Sprintf("%s:%d", s.Interface, s.Port))
 	if err != nil {
-		log.Error("error listening", err)
+		log.Error("error listening: %v", err)
 		return
 	}
 
