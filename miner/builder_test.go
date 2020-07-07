@@ -13,7 +13,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/rand"
@@ -333,7 +332,7 @@ func TestBlockBuilder_CreateBlockWithRef(t *testing.T) {
 }
 
 func NewTx(t *testing.T, nonce uint64, recipient types.Address, signer *signing.EdSigner) *types.Transaction {
-	tx, err := mesh.NewSignedTx(nonce, recipient, 1, defaultGasLimit, defaultFee, signer)
+	tx, err := types.NewSignedTx(nonce, recipient, 1, defaultGasLimit, defaultFee, signer)
 	assert.NoError(t, err)
 	return tx
 }

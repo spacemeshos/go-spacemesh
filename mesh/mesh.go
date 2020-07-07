@@ -12,7 +12,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/signing"
 	"math/rand"
 
 	"math/big"
@@ -736,32 +735,4 @@ func (msh *Mesh) GetATXs(atxIds []types.ATXID) (map[types.ATXID]*types.Activatio
 		}
 	}
 	return atxs, mIds
-}
-
-// NewSignedTx is used in TESTS ONLY to generate signed txs
-func NewSignedTx(nonce uint64, rec types.Address, amount, gas, fee uint64, signer *signing.EdSigner) (*types.Transaction, error) {
-	inner := types.InnerTransaction{
-		AccountNonce: nonce,
-		Recipient:    rec,
-		Amount:       amount,
-		GasLimit:     gas,
-		Fee:          fee,
-	}
-
-	buf, err := types.InterfaceToBytes(&inner)
-	if err != nil {
-		return nil, err
-	}
-
-	sst := &types.Transaction{
-		InnerTransaction: inner,
-		Signature:        [64]byte{},
-	}
-
-	copy(sst.Signature[:], signer.Sign(buf))
-	addr := types.Address{}
-	addr.SetBytes(signer.PublicKey().Bytes())
-	sst.SetOrigin(addr)
-
-	return sst, nil
 }

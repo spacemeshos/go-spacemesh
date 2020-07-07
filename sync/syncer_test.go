@@ -900,7 +900,7 @@ end:
 func tx() *types.Transaction {
 	fee := rand.Uint64()
 	addr := rand.Int63n(1000000)
-	tx, err := mesh.NewSignedTx(1, types.HexToAddress(strconv.FormatUint(uint64(addr), 10)), 10, 100, fee, signing.NewEdSigner())
+	tx, err := types.NewSignedTx(1, types.HexToAddress(strconv.FormatUint(uint64(addr), 10)), 10, 100, fee, signing.NewEdSigner())
 	if err != nil {
 		log.Panic("failed to create transaction: %v", err)
 	}

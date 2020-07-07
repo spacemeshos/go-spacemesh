@@ -63,7 +63,7 @@ func addTransactionsWithFee(t testing.TB, mesh *DB, bl *types.Block, numOfTxs in
 	var txs []*types.Transaction
 	for i := 0; i < numOfTxs; i++ {
 		// log.Info("adding tx with fee %v nonce %v", fee, i)
-		tx, err := NewSignedTx(1, types.HexToAddress("1"), 10, 100, uint64(fee), signing.NewEdSigner())
+		tx, err := types.NewSignedTx(1, types.HexToAddress("1"), 10, 100, uint64(fee), signing.NewEdSigner())
 		assert.NoError(t, err)
 		bl.TxIDs = append(bl.TxIDs, tx.ID())
 		totalFee += fee
