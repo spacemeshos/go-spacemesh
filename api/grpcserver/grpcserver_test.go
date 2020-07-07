@@ -720,13 +720,14 @@ func TestMeshService(t *testing.T) {
 			}
 		}},
 		{name: "AccountMeshDataStream", run: func(t *testing.T) {
-			//t.Skip()
 			// common testing framework
 			generateRunFn := func(req *pb.AccountMeshDataStreamRequest) func(*testing.T) {
 				return func(*testing.T) {
 					// Just try opening and immediately closing the stream
 					stream, err := c.AccountMeshDataStream(context.Background(), req)
 					require.NoError(t, err, "unexpected error opening stream")
+
+					// TODO: do we need this? is it causing concurrency issues?
 					stream.Context().Done()
 				}
 			}
@@ -743,6 +744,9 @@ func TestMeshService(t *testing.T) {
 					require.Contains(t, err.Error(), msg, "received unexpected error")
 					statusCode := status.Code(err)
 					require.Equal(t, codes.InvalidArgument, statusCode, "expected InvalidArgument error")
+
+					// TODO: do we need this? is it causing concurrency issues?
+					stream.Context().Done()
 				}
 			}
 			subtests := []struct {
