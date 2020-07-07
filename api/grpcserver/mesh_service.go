@@ -468,7 +468,9 @@ func (s MeshService) LayerStream(in *pb.LayerStreamRequest, stream pb.MeshServic
 			if err != nil {
 				return err
 			}
-			stream.Send(&pb.LayerStreamResponse{Layer: pbLayer})
+			if err := stream.Send(&pb.LayerStreamResponse{Layer: pbLayer}); err != nil {
+				return err
+			}
 		case <-stream.Context().Done():
 			log.Info("LayerStream closing stream, client disconnected")
 			return nil
