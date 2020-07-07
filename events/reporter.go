@@ -1,15 +1,24 @@
 package events
 
-import "github.com/spacemeshos/go-spacemesh/common/types"
+import (
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log"
+)
 
-// streamer is the event streamer singleton.
-var streamer *EventStreamer
+// reporter is the event reporter singleton.
+var reporter *EventReporter
 
-// Stream streams an event on the streamer singleton.
+// Stream streams an event on the reporter singleton.
 func ReportNewTx(tx *types.Transaction) {
-	if streamer != nil {
-		streamer.channelTransaction <- tx
+	if reporter != nil {
+		select {
+		case reporter.channelTransaction <- tx:
+			log.Info("reported tx on channelTransaction")
+		default:
+			log.Info("not reporting tx as no one is listening on channelTransaction")
+		}
 	}
+
 	Publish(NewTx{
 		ID:          tx.ID().String(),
 		Origin:      tx.Origin().String(),
@@ -23,10 +32,10 @@ func ReportValidTx(tx *types.Transaction, valid bool) {
 	Publish(ValidTx{ID: tx.ID().String(), Valid: valid})
 }
 
-// Stream streams an event on the streamer singleton.
+// Stream streams an event on the reporter singleton.
 func ReportNewActivation(activation *types.ActivationTx, layersPerEpoch uint16) {
-	if streamer != nil {
-		streamer.channelActivation <- activation
+	if reporter != nil {
+		reporter.channelActivation <- activation
 	}
 	Publish(NewAtx{
 		ID:      activation.ShortString(),
@@ -70,61 +79,60 @@ func ReportDoneCreatingBlock(eligible bool, layer uint64, error string) {
 		Layer:    layer,
 		Error:    error,
 	})
-
 }
 
 func ReportNewLayer(layer *types.Layer) {
-	if streamer != nil {
-		streamer.channelLayer <- layer
+	if reporter != nil {
+		reporter.channelLayer <- layer
 	}
 }
 
 func GetNewTxStream() chan *types.Transaction {
-	if streamer != nil {
-		return streamer.channelTransaction
+	if reporter != nil {
+		return reporter.channelTransaction
 	}
 	return nil
 }
 
 func GetActivationStream() chan *types.ActivationTx {
-	if streamer != nil {
-		return streamer.channelActivation
+	if reporter != nil {
+		return reporter.channelActivation
 	}
 	return nil
 }
 
 func GetLayerStream() chan *types.Layer {
-	if streamer != nil {
-		return streamer.channelLayer
+	if reporter != nil {
+		return reporter.channelLayer
 	}
 	return nil
 }
 
-// InitializeEventStream initializes the event streaming interface
-func InitializeEventStream() {
-	streamer = NewEventStreamer()
+// InitializeEventReporter initializes the event reporting interface
+func InitializeEventReporter() {
+	reporter = NewEventReporter()
 }
 
-// EventStreamer is the struct that streams events to API listeners
-type EventStreamer struct {
+// EventReporter is the struct that receives incoming events and dispatches them
+type EventReporter struct {
 	channelTransaction chan *types.Transaction
 	channelActivation  chan *types.ActivationTx
 	channelLayer       chan *types.Layer
 }
 
-func NewEventStreamer() *EventStreamer {
-	return &EventStreamer{
+func NewEventReporter() *EventReporter {
+	return &EventReporter{
 		channelTransaction: make(chan *types.Transaction),
 		channelActivation:  make(chan *types.ActivationTx),
 		channelLayer:       make(chan *types.Layer),
 	}
 }
 
-func CloseEventStream() {
-	if streamer != nil {
-		close(streamer.channelTransaction)
-		close(streamer.channelActivation)
-		close(streamer.channelLayer)
-		streamer = nil
+func CloseEventReporter() {
+	if reporter != nil {
+		close(reporter.channelTransaction)
+		close(reporter.channelActivation)
+		close(reporter.channelLayer)
+		reporter = nil
 	}
 }
