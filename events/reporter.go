@@ -3,6 +3,7 @@ package events
 import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
 // reporter is the event reporter singleton.
@@ -160,6 +161,20 @@ func InitializeEventReporter(url string) {
 	}
 }
 
+func SubscribeToLayers(newLayerCh timesync.LayerTimer) {
+	if reporter != nil {
+		for {
+			select {
+			case layer := <-newLayerCh:
+				log.Info("reporter got new layer %s", layer)
+				ReportNodeStatus(LayerCurrent(layer))
+			case <-reporter.stopChan:
+				return
+			}
+		}
+	}
+}
+
 const (
 	NodeErrorTypeError = iota
 	NodeErrorTypePanic
@@ -178,7 +193,7 @@ type NodeError struct {
 
 // NodeStatus represents the current status of the node, to be reported
 type NodeStatus struct {
-	NumPeers      int
+	NumPeers      uint64
 	IsSynced      bool
 	LayerSynced   types.LayerID
 	LayerCurrent  types.LayerID
@@ -187,7 +202,7 @@ type NodeStatus struct {
 
 type SetStatusElem func(*NodeStatus)
 
-func NumPeers(n int) SetStatusElem {
+func NumPeers(n uint64) SetStatusElem {
 	return func(ns *NodeStatus) {
 		ns.NumPeers = n
 	}
@@ -225,6 +240,7 @@ type EventReporter struct {
 	channelError       chan NodeError
 	channelStatus      chan NodeStatus
 	lastStatus         NodeStatus
+	stopChan           chan struct{}
 }
 
 func newEventReporter() *EventReporter {
@@ -235,6 +251,7 @@ func newEventReporter() *EventReporter {
 		channelError:       make(chan NodeError),
 		channelStatus:      make(chan NodeStatus),
 		lastStatus:         NodeStatus{},
+		stopChan:           make(chan struct{}),
 	}
 }
 
@@ -246,6 +263,7 @@ func CloseEventReporter() {
 		close(reporter.channelLayer)
 		close(reporter.channelError)
 		close(reporter.channelStatus)
+		close(reporter.stopChan)
 		reporter = nil
 	}
 }

@@ -200,6 +200,7 @@ func (msh *Mesh) LatestLayer() types.LayerID {
 
 // SetLatestLayer sets the latest layer we saw from the network
 func (msh *Mesh) SetLatestLayer(idx types.LayerID) {
+	events.ReportNodeStatus(events.LayerSynced(idx))
 	defer msh.lkMutex.Unlock()
 	msh.lkMutex.Lock()
 	if idx > msh.latestLayer {
@@ -237,6 +238,7 @@ func (vl *validator) ProcessedLayer() types.LayerID {
 
 func (vl *validator) SetProcessedLayer(lyr types.LayerID) {
 	vl.Info("set processed layer to %d", lyr)
+	events.ReportNodeStatus(events.LayerVerified(lyr))
 	defer vl.lvMutex.Unlock()
 	vl.lvMutex.Lock()
 	vl.processedLayer = lyr

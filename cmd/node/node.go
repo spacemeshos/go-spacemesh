@@ -795,6 +795,8 @@ func (app *SpacemeshApp) stopServices() {
 		app.gossipListener.Stop()
 	}
 
+	events.CloseEventReporter()
+
 	// Close all databases.
 	for _, closer := range app.closers {
 		if closer != nil {
@@ -975,6 +977,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	}
 
 	app.startAPIServices(postClient, app.P2P)
+	events.SubscribeToLayers(clock.Subscribe())
 	log.Info("App started.")
 
 	// app blocks until it receives a signal to exit
