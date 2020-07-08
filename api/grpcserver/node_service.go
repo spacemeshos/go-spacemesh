@@ -107,13 +107,41 @@ func (s NodeService) Shutdown(ctx context.Context, request *pb.ShutdownRequest) 
 // StatusStream is a stub for a future server-side streaming RPC endpoint
 func (s NodeService) StatusStream(request *pb.StatusStreamRequest, stream pb.NodeService_StatusStreamServer) error {
 	log.Info("GRPC NodeService.StatusStream")
-	return nil
+	statusStream := events.GetStatusChannel()
+
+	for {
+		select {
+		case nodeStatus, ok := <-statusStream:
+			if !ok {
+				// we could handle this more gracefully, by no longer listening
+				// to this stream but continuing to listen to the other stream,
+				// but in practice one should never be closed while the other is
+				// still running, so it doesn't matter
+				log.Info("ErrorStream closed, shutting down")
+				return nil
+			}
+			if err := stream.Send(&pb.StatusStreamResponse{Status: &pb.NodeStatus{
+				ConnectedPeers: uint64(nodeStatus.NumPeers),
+				IsSynced:       nodeStatus.IsSynced,
+				SyncedLayer:    nodeStatus.LayerSynced.Uint64(),
+				TopLayer:       nodeStatus.LayerCurrent.Uint64(),
+				VerifiedLayer:  nodeStatus.LayerVerified.Uint64(),
+			}}); err != nil {
+				return err
+			}
+		case <-stream.Context().Done():
+			log.Info("StatusStream closing stream, client disconnected")
+			return nil
+		}
+		// TODO: do we need an additional case here for a context to indicate
+		// that MeshService needs to shut down?
+	}
 }
 
 // ErrorStream is a stub for a future server-side streaming RPC endpoint
 func (s NodeService) ErrorStream(request *pb.ErrorStreamRequest, stream pb.NodeService_ErrorStreamServer) error {
 	log.Info("GRPC NodeService.ErrorStream")
-	errorStream := events.GetErrorStream()
+	errorStream := events.GetErrorChannel()
 
 	for {
 		select {
@@ -144,15 +172,15 @@ func (s NodeService) ErrorStream(request *pb.ErrorStreamRequest, stream pb.NodeS
 
 func convertErrorType(errType int) pb.NodeError_NodeErrorType {
 	switch errType {
-	case events.NodeErrorType_Panic:
+	case events.NodeErrorTypePanic:
 		return pb.NodeError_NODE_ERROR_TYPE_PANIC
-	case events.NodeErrorType_PanicHare:
+	case events.NodeErrorTypePanicHare:
 		return pb.NodeError_NODE_ERROR_TYPE_PANIC_HARE
-	case events.NodeErrorType_PanicSync:
+	case events.NodeErrorTypePanicSync:
 		return pb.NodeError_NODE_ERROR_TYPE_PANIC_SYNC
-	case events.NodeErrorType_PanicP2P:
+	case events.NodeErrorTypePanicP2P:
 		return pb.NodeError_NODE_ERROR_TYPE_PANIC_P2P
-	case events.NodeErrorType_SignalShutdown:
+	case events.NodeErrorTypeSignalShutdown:
 		return pb.NodeError_NODE_ERROR_TYPE_SIGNAL_SHUT_DOWN
 	default:
 		return pb.NodeError_NODE_ERROR_TYPE_UNSPECIFIED
