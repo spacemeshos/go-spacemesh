@@ -96,6 +96,7 @@ var Cmd = &cobra.Command{
 			log.With().Error("Failed to initialize node.", log.Err(err))
 			return
 		}
+		// This blocks until the context is finished
 		app.Start(cmd, args)
 	},
 }
@@ -295,13 +296,11 @@ func (app *SpacemeshApp) getAppInfo() string {
 }
 
 // Cleanup stops all app services
-func (app *SpacemeshApp) Cleanup(cmd *cobra.Command, args []string) (err error) {
+func (app *SpacemeshApp) Cleanup(cmd *cobra.Command, args []string) {
 	log.Info("App Cleanup starting...")
 	app.stopServices()
 	// add any other Cleanup tasks here....
 	log.Info("App Cleanup completed\n\n")
-
-	return nil
 }
 
 func (app *SpacemeshApp) setupGenesis(state *state.TransactionProcessor, msh *mesh.Mesh) {
