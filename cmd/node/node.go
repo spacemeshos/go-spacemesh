@@ -29,12 +29,14 @@ import (
 	"github.com/spacemeshos/go-spacemesh/turbohare"
 	"github.com/spacemeshos/post/shared"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"runtime/debug"
 	"runtime/pprof"
 	"time"
 
@@ -282,7 +284,17 @@ func (app *SpacemeshApp) setupLogging() {
 	}
 
 	// app-level logging
-	log.InitSpacemeshLoggingSystem()
+	log.InitSpacemeshLoggingSystemWithHooks(func(entry zapcore.Entry) error {
+		// If we report anything less than this we'll end up in an infinite loop
+		if entry.Level >= zapcore.ErrorLevel {
+			events.ReportError(events.NodeError{
+				Msg:   entry.Message,
+				Trace: string(debug.Stack()),
+				Type:  int(entry.Level),
+			})
+		}
+		return nil
+	})
 
 	log.Info("%s", app.getAppInfo())
 
