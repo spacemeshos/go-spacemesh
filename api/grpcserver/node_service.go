@@ -121,7 +121,7 @@ func (s NodeService) StatusStream(request *pb.StatusStreamRequest, stream pb.Nod
 				return nil
 			}
 			if err := stream.Send(&pb.StatusStreamResponse{Status: &pb.NodeStatus{
-				ConnectedPeers: uint64(nodeStatus.NumPeers),
+				ConnectedPeers: nodeStatus.NumPeers,
 				IsSynced:       nodeStatus.IsSynced,
 				SyncedLayer:    nodeStatus.LayerSynced.Uint64(),
 				TopLayer:       nodeStatus.LayerCurrent.Uint64(),

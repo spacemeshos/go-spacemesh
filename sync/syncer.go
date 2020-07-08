@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"sync"
 	"time"
 
@@ -326,13 +327,13 @@ func (s *Syncer) synchronise() {
 	} else {
 		s.handleNotSynced(s.ProcessedLayer() + 1)
 	}
-
 }
 
 func (s *Syncer) handleWeaklySynced() {
 	s.With().Info("Node is weakly synced",
 		s.LatestLayer(),
 		s.GetCurrentLayer())
+	events.ReportNodeStatus(events.IsSynced(true))
 
 	// handle all layers from processed+1 to current -1
 	s.handleLayersTillCurrent()
@@ -395,6 +396,7 @@ func (s *Syncer) handleCurrentLayer() error {
 
 func (s *Syncer) handleNotSynced(currentSyncLayer types.LayerID) {
 	s.Info("Node is out of sync setting gossip-synced to false and starting sync")
+	events.ReportNodeStatus(events.IsSynced(false))
 	s.setGossipBufferingStatus(pending) // don't listen to gossip while not synced
 
 	// first, bring all the data of the prev layers
@@ -550,7 +552,7 @@ func (s *Syncer) syncLayer(layerID types.LayerID, blockIds []types.BlockID) ([]*
 	s.Info("layer %v wait for %d blocks", layerID, len(blockIds))
 	select {
 	case <-s.exit:
-		return nil, fmt.Errorf("recived interupt")
+		return nil, fmt.Errorf("received interupt")
 	case result := <-ch:
 		if !result {
 			return nil, fmt.Errorf("could not get all blocks for layer %v", layerID)
