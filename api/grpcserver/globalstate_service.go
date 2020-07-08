@@ -8,7 +8,7 @@ import (
 	"golang.org/x/net/context"
 )
 
-// GlobalStateService is a grpc server providing the GlobalStateService
+// GlobalStateService exposes global state data, output from the STF
 type GlobalStateService struct {
 	Network     api.NetworkAPI // P2P Swarm
 	Tx          api.TxAPI      // Mesh
