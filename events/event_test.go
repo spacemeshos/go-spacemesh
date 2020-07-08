@@ -73,11 +73,11 @@ func TestEventReporter(t *testing.T) {
 	ReportNewTx(globalTx)
 
 	// Stream is nil before we initialize it
-	txStream := GetNewTxStream()
+	txStream := GetNewTxChannel()
 	require.Nil(t, txStream, "expected tx stream not to be initialized")
 
 	InitializeEventReporter("")
-	txStream = GetNewTxStream()
+	txStream = GetNewTxChannel()
 	require.NotNil(t, txStream, "expected tx stream to be initialized")
 
 	// This will not be received as no one is listening

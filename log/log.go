@@ -148,7 +148,7 @@ func Error(msg string, args ...interface{}) {
 	events.ReportError(events.NodeError{
 		Msg:   fmt.Sprintf(msg, args),
 		Trace: string(debug.Stack()),
-		Type:  events.NodeErrorType_Error,
+		Type:  events.NodeErrorTypeError,
 	})
 	AppLog.Error(msg, args...)
 }
@@ -173,7 +173,7 @@ func Panic(msg string, args ...interface{}) {
 	events.ReportError(events.NodeError{
 		Msg:   fmt.Sprintf(msg, args),
 		Trace: string(debug.Stack()),
-		Type:  events.NodeErrorType_Panic,
+		Type:  events.NodeErrorTypePanic,
 	})
 	AppLog.Panic(msg, args...)
 }

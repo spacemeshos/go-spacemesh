@@ -102,34 +102,52 @@ func ReportError(err NodeError) {
 	}
 }
 
-// GetNewTxStream returns a stream of new transactions
-func GetNewTxStream() chan *types.Transaction {
+// ReportNodeStatus reports an update to the node status
+func ReportNodeStatus(setters ...SetStatusElem) {
+	if reporter != nil {
+		for _, setter := range setters {
+			setter(&reporter.lastStatus)
+		}
+		reporter.channelStatus <- reporter.lastStatus
+	}
+}
+
+// GetNewTxChannel returns a channel of new transactions
+func GetNewTxChannel() chan *types.Transaction {
 	if reporter != nil {
 		return reporter.channelTransaction
 	}
 	return nil
 }
 
-// GetActivationStream returns a stream of activations
-func GetActivationStream() chan *types.ActivationTx {
+// GetActivationsChannel returns a channel of activations
+func GetActivationsChannel() chan *types.ActivationTx {
 	if reporter != nil {
 		return reporter.channelActivation
 	}
 	return nil
 }
 
-// GetLayerStream returns a stream of all layer data
-func GetLayerStream() chan *types.Layer {
+// GetLayerChannel returns a channel of all layer data
+func GetLayerChannel() chan *types.Layer {
 	if reporter != nil {
 		return reporter.channelLayer
 	}
 	return nil
 }
 
-// GetErrorStream returns a stream of errors
-func GetErrorStream() chan NodeError {
+// GetErrorChannel returns a channel for node errors
+func GetErrorChannel() chan NodeError {
 	if reporter != nil {
 		return reporter.channelError
+	}
+	return nil
+}
+
+// GetStatusChannel returns a channel for node status messages
+func GetStatusChannel() chan NodeStatus {
+	if reporter != nil {
+		return reporter.channelStatus
 	}
 	return nil
 }
@@ -143,18 +161,60 @@ func InitializeEventReporter(url string) {
 }
 
 const (
-	NodeErrorType_Error = iota
-	NodeErrorType_Panic
-	NodeErrorType_PanicSync
-	NodeErrorType_PanicP2P
-	NodeErrorType_PanicHare
-	NodeErrorType_SignalShutdown
+	NodeErrorTypeError = iota
+	NodeErrorTypePanic
+	NodeErrorTypePanicSync
+	NodeErrorTypePanicP2P
+	NodeErrorTypePanicHare
+	NodeErrorTypeSignalShutdown
 )
 
+// NodeError represents an internal error to be reported
 type NodeError struct {
 	Msg   string
 	Trace string
 	Type  int
+}
+
+// NodeStatus represents the current status of the node, to be reported
+type NodeStatus struct {
+	NumPeers      int
+	IsSynced      bool
+	LayerSynced   types.LayerID
+	LayerCurrent  types.LayerID
+	LayerVerified types.LayerID
+}
+
+type SetStatusElem func(*NodeStatus)
+
+func NumPeers(n int) SetStatusElem {
+	return func(ns *NodeStatus) {
+		ns.NumPeers = n
+	}
+}
+
+func IsSynced(synced bool) SetStatusElem {
+	return func(ns *NodeStatus) {
+		ns.IsSynced = synced
+	}
+}
+
+func LayerSynced(lid types.LayerID) SetStatusElem {
+	return func(ns *NodeStatus) {
+		ns.LayerSynced = lid
+	}
+}
+
+func LayerCurrent(lid types.LayerID) SetStatusElem {
+	return func(ns *NodeStatus) {
+		ns.LayerCurrent = lid
+	}
+}
+
+func LayerVerified(lid types.LayerID) SetStatusElem {
+	return func(ns *NodeStatus) {
+		ns.LayerVerified = lid
+	}
 }
 
 // EventReporter is the struct that receives incoming events and dispatches them
@@ -163,6 +223,8 @@ type EventReporter struct {
 	channelActivation  chan *types.ActivationTx
 	channelLayer       chan *types.Layer
 	channelError       chan NodeError
+	channelStatus      chan NodeStatus
+	lastStatus         NodeStatus
 }
 
 func newEventReporter() *EventReporter {
@@ -171,6 +233,8 @@ func newEventReporter() *EventReporter {
 		channelActivation:  make(chan *types.ActivationTx),
 		channelLayer:       make(chan *types.Layer),
 		channelError:       make(chan NodeError),
+		channelStatus:      make(chan NodeStatus),
+		lastStatus:         NodeStatus{},
 	}
 }
 
@@ -181,6 +245,7 @@ func CloseEventReporter() {
 		close(reporter.channelActivation)
 		close(reporter.channelLayer)
 		close(reporter.channelError)
+		close(reporter.channelStatus)
 		reporter = nil
 	}
 }
