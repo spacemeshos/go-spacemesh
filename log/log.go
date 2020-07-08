@@ -3,15 +3,11 @@
 package log
 
 import (
-	"fmt"
-	"github.com/spacemeshos/go-spacemesh/events"
+	"go.uber.org/zap/zapcore"
+	"gopkg.in/natefinch/lumberjack.v2"
 	"io"
 	"os"
 	"path/filepath"
-	"runtime/debug"
-
-	"go.uber.org/zap/zapcore"
-	"gopkg.in/natefinch/lumberjack.v2"
 
 	"go.uber.org/zap"
 )
@@ -84,7 +80,7 @@ func JSONLog(b bool) {
 }
 
 // New creates a logger for a module. e.g. p2p instance logger.
-func New(module string, dataFolderPath string, logFileName string) Log {
+func New(module string, dataFolderPath string, logFileName string, hooks ...func(zapcore.Entry) error) Log {
 	var cores []zapcore.Core
 
 	consoleSyncer := zapcore.AddSync(os.Stdout)
@@ -98,7 +94,7 @@ func New(module string, dataFolderPath string, logFileName string) Log {
 		cores = append(cores, zapcore.NewCore(enc, fs, debugLevel))
 	}
 
-	core := zapcore.NewTee(cores...)
+	core := zapcore.RegisterHooks(zapcore.NewTee(cores...), hooks...)
 
 	log := zap.New(core)
 	log = log.Named(module)
@@ -106,7 +102,7 @@ func New(module string, dataFolderPath string, logFileName string) Log {
 	return Log{log, log.Sugar(), &lvl}
 }
 
-// NewDefault creates a Log with not file output.
+// NewDefault creates a Log without file output
 func NewDefault(module string) Log {
 	return New(module, "", "")
 }
@@ -127,8 +123,14 @@ func getFileWriter(dataFolderPath, logFileName string) io.Writer {
 }
 
 // InitSpacemeshLoggingSystem initializes app logging system.
-func InitSpacemeshLoggingSystem(dataFolderPath string, logFileName string) {
+func InitSpacemeshLoggingSystem(string, string) {
 	AppLog = NewDefault(mainLoggerName)
+}
+
+// InitSpacemeshLoggingSystemWithHooks sets up a logging system with one or more
+// registered hooks
+func InitSpacemeshLoggingSystemWithHooks(hooks ...func(zapcore.Entry) error) {
+	AppLog = New(mainLoggerName, "", "", hooks...)
 }
 
 // public wrappers abstracting away logging lib impl
@@ -145,11 +147,6 @@ func Debug(msg string, args ...interface{}) {
 
 // Error prints formatted error level log message.
 func Error(msg string, args ...interface{}) {
-	events.ReportError(events.NodeError{
-		Msg:   fmt.Sprintf(msg, args),
-		Trace: string(debug.Stack()),
-		Type:  events.NodeErrorTypeError,
-	})
 	AppLog.Error(msg, args...)
 }
 
@@ -170,10 +167,5 @@ func Event() FieldLogger {
 
 // Panic writes the log message and then panics.
 func Panic(msg string, args ...interface{}) {
-	events.ReportError(events.NodeError{
-		Msg:   fmt.Sprintf(msg, args),
-		Trace: string(debug.Stack()),
-		Type:  events.NodeErrorTypePanic,
-	})
 	AppLog.Panic(msg, args...)
 }
