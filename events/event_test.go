@@ -178,5 +178,61 @@ func TestReportError(t *testing.T) {
 }
 
 func TestReportNodeStatus(t *testing.T) {
+	// There should be no error reporting an event before initializing the reporter
+	ReportNodeStatus()
 
+	// Stream is nil before we initialize it
+	stream := GetStatusChannel()
+	require.Nil(t, stream, "expected stream not to be initialized")
+
+	InitializeEventReporter("")
+	stream = GetStatusChannel()
+	require.NotNil(t, stream, "expected stream to be initialized")
+
+	// This will not be received as no one is listening
+	// This also makes sure that this call is nonblocking.
+	ReportNodeStatus()
+
+	// listen on the channel
+	commChannel := make(chan struct{}, 1)
+	go func() {
+		// report that we're listening
+		commChannel <- struct{}{}
+
+		var status NodeStatus
+		status = <-stream
+		require.Equal(t, uint64(0), status.NumPeers)
+		require.Equal(t, false, status.IsSynced)
+
+		commChannel <- struct{}{}
+		status = <-stream
+		require.Equal(t, uint64(10), status.NumPeers)
+		require.Equal(t, false, status.IsSynced)
+
+		commChannel <- struct{}{}
+		status = <-stream
+		require.Equal(t, uint64(20), status.NumPeers)
+		require.Equal(t, true, status.IsSynced)
+
+		close(commChannel)
+	}()
+
+	// Wait until goroutine is listening
+	<-commChannel
+	ReportNodeStatus()
+
+	// Update one thing
+	<-commChannel
+	ReportNodeStatus(NumPeers(10))
+
+	// Update multiple things
+	<-commChannel
+	ReportNodeStatus(NumPeers(20), IsSynced(true))
+
+	// Wait for goroutine to finish
+	<-commChannel
+
+	// This should also not cause an error
+	CloseEventReporter()
+	ReportNodeStatus()
 }
