@@ -121,6 +121,8 @@ func ReportError(err NodeError) {
 // ReportNodeStatus reports an update to the node status
 func ReportNodeStatus(setters ...SetStatusElem) {
 	if reporter != nil {
+		// Note that we make no attempt to remove duplicate status messages
+		// from the stream, so the same status may be reported several times.
 		for _, setter := range setters {
 			setter(&reporter.lastStatus)
 		}
@@ -186,7 +188,7 @@ func SubscribeToLayers(newLayerCh timesync.LayerTimer) {
 		for {
 			select {
 			case layer := <-newLayerCh:
-				log.Info("reporter got new layer %s", layer)
+				log.With().Info("reporter got new layer", layer.Field())
 				ReportNodeStatus(LayerCurrent(layer))
 			case <-reporter.stopChan:
 				return
