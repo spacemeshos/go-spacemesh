@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -e
+
 # Detect OS and architecture
 kernel=`uname -s`
 arch=`uname -m`
@@ -37,8 +38,14 @@ rm -rf devtools
 mkdir -p devtools/bin
 mkdir -p devtools/include
 
-echo "moving bin/protoc to ./devtools/bin/protoc"
-mv protoc3/bin/* devtools/bin/
+# Don't reinstall protoc if it's already installed
+if (hash protoc 2>/dev/null) ; then
+    echo "found systemwide protoc, not installing locally"
+else
+    echo "no systemwide protoc installation found"
+    echo "moving bin/protoc to ./devtools/bin/protoc"
+    mv protoc3/bin/* devtools/bin/
+fi
 
 # Move protoc3/include to /usr/local/include/
 echo "syncing include to ./devtools/include"
