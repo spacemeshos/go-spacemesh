@@ -13,45 +13,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/mesh"
 )
 
-type vec [2]int
-type patternID uint32 // this hash does not include the layer id
-
-const ( // Threshold
-	window          = 10
-	globalThreshold = 0.6
-)
-
-var ( // correction vectors type
-	// Opinion
-	support     = vec{1, 0}
-	against     = vec{0, 1}
-	abstain     = vec{0, 0}
-	zeroPattern = votingPattern{}
-)
-
-func max(i types.LayerID, j types.LayerID) types.LayerID {
-	if i > j {
-		return i
-	}
-	return j
-}
-
-func (a vec) Add(v vec) vec {
-	return vec{a[0] + v[0], a[1] + v[1]}
-}
-
-func (a vec) Negate() vec {
-	a[0] = a[0] * -1
-	a[1] = a[1] * -1
-	return a
-}
-
-func (a vec) Multiply(x int) vec {
-	a[0] = a[0] * x
-	a[1] = a[1] * x
-	return a
-}
-
 type blockIDLayerTuple struct {
 	types.BlockID
 	types.LayerID
@@ -84,7 +45,7 @@ type database interface {
 }
 
 type ninjaTortoise struct {
-	db           database // block cache
+	db           database //block cache
 	logger       log.Log
 	mutex        sync.Mutex
 	Last         types.LayerID
@@ -451,7 +412,7 @@ func (ni *ninjaTortoise) addPatternVote(p votingPattern, view map[types.BlockID]
 				blt := blockIDLayerTuple{bl, ex.Layer()}
 				if found {
 					ni.TTally[p][blt] = ni.TTally[p][blt].Add(support)
-				} else if _, inSet := view[bl]; inSet { // in view but not in pattern
+				} else if _, inSet := view[bl]; inSet { //in view but not in pattern
 					ni.TTally[p][blt] = ni.TTally[p][blt].Add(against)
 				}
 			}

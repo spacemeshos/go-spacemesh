@@ -44,9 +44,13 @@ func blockMapToArray(m map[types.BlockID]struct{}) []types.BlockID {
 type turtle struct {
 	logger log.Log
 
-	bdp          blockDataProvider
-	hrp          hareResultsProvider
-	Last         types.LayerID
+	bdp blockDataProvider
+	hrp hareResultsProvider
+
+	Last  types.LayerID
+	Hdist types.LayerID
+	Evict types.LayerID
+
 	avgLayerSize int
 
 	goodBlocks      map[types.BlockID]struct{}
@@ -59,8 +63,6 @@ type turtle struct {
 	blocksToBlocks      []opinion
 	blocksToBlocksIndex map[types.BlockID]int
 	indexToLayerID      map[int]types.LayerID
-
-	totalVotes map[types.BlockID]vec
 }
 
 func (t *turtle) SetLogger(log2 log.Log) {
@@ -68,9 +70,10 @@ func (t *turtle) SetLogger(log2 log.Log) {
 }
 
 // NewTurtle creates a new verifying tortoise algorithm instance. XXX: maybe rename?
-func NewTurtle(bdp blockDataProvider, hrp hareResultsProvider, avgLayerSize int) *turtle {
+func NewTurtle(bdp blockDataProvider, hrp hareResultsProvider, hdist, avgLayerSize int) *turtle {
 	t := &turtle{
 		logger:              log.NewDefault("trtl"),
+		Hdist:               types.LayerID(hdist),
 		bdp:                 bdp,
 		hrp:                 hrp,
 		Last:                0,
@@ -99,6 +102,63 @@ func (t *turtle) init(genesisBlock types.BlockID) {
 	t.inputVectorMap[types.LayerID(0)][genesisBlock] = support
 }
 
+func (t *turtle) evict() {
+	if t.verified <= t.Hdist {
+		return
+	}
+	window := t.verified - t.Hdist
+
+	for lyr := t.Evict; lyr < window; lyr++ {
+		delete(t.inputVectorMap, lyr)
+		ids, err := t.bdp.LayerBlockIds(lyr)
+		if err != nil {
+			t.logger.With().Error("could not get layer ids for layer ", log.LayerID(lyr.Uint64()), log.Err(err))
+			continue
+		}
+		for _, id := range ids {
+			idx, ok := t.blocksToBlocksIndex[id]
+			if !ok {
+				continue
+			}
+			delete(t.blocksToBlocksIndex, id)
+			delete(t.indexToLayerID, idx)
+			oldidxs := make(map[types.BlockID]int, len(t.blocksToBlocks))
+			for i, op := range t.blocksToBlocks {
+				oldidxs[op.id] = i
+			}
+			t.blocksToBlocks = removeOpinion(t.blocksToBlocks, idx)
+			// FIX indexes
+			for i, op := range t.blocksToBlocks {
+				t.blocksToBlocksIndex[op.id] = i
+				itslyr := t.indexToLayerID[oldidxs[op.id]]
+				delete(t.indexToLayerID, oldidxs[op.id])
+				t.indexToLayerID[i] = itslyr
+			}
+			goodidx, ok := t.goodBlocksIndex[id]
+			if !ok {
+				continue
+			}
+			delete(t.goodBlocksIndex, id)
+			t.goodBlocksArr = removeBlockIndex(t.goodBlocksArr, goodidx)
+			for i, gb := range t.goodBlocksArr {
+				t.goodBlocksIndex[gb] = i
+			}
+			t.logger.Debug("evict block %v from maps ", id)
+		}
+	}
+	t.Evict = window
+}
+
+func removeBlockIndex(b []types.BlockID, i int) []types.BlockID {
+	b[i] = b[len(b)-1]
+	return b[:len(b)-1]
+}
+
+func removeOpinion(o []opinion, i int) []opinion {
+	o[i] = o[len(o)-1]
+	return o[:len(o)-1]
+}
+
 func (t *turtle) inputVector(l types.LayerID, b types.BlockID) vec {
 	if l == 0 {
 		return support
@@ -106,6 +166,13 @@ func (t *turtle) inputVector(l types.LayerID, b types.BlockID) vec {
 
 	if lyr, ok := t.inputVectorMap[l]; ok {
 		if vote, ok := lyr[b]; ok {
+			if vote == abstain {
+				// XXX Try getting the vote again
+				newlyr := t.inputVectorForLayer(l) // no need to save this
+				if newvote, ok := newlyr[b]; ok {
+					return newvote
+				}
+			}
 			return vote
 		}
 		return against
@@ -288,6 +355,7 @@ func (t *turtle) HandleIncomingLayer(newlyr *types.Layer) (types.LayerID, types.
 	// TODO: handle late blocks
 
 	// update tables with blocks
+	defer t.evict()
 
 	for _, b := range newlyr.Blocks() {
 		err := t.processBlock(b)
@@ -352,14 +420,19 @@ markingLoop:
 	}
 
 	// Count good blocks votes..
-
 	wasVerified := t.verified
+	t.logger.Info("Trying to advance from layer %v to %v", wasVerified, newlyr.Index())
 	i := wasVerified + 1
+loop:
 	for ; i < newlyr.Index(); i++ {
 		t.logger.Info("Verifying layer %v", i)
-		complete := true
 
-		for blk, vote := range t.inputVectorMap[i] {
+		input := t.inputVectorForLayer(i)
+		if len(input) == 0 {
+			break
+		}
+
+		for blk, vote := range input {
 			sum := abstain
 			//t.logger.Info("counting votes for block %v", blk)
 			for j, vopinion := range t.blocksToBlocks {
@@ -389,19 +462,17 @@ markingLoop:
 			}
 
 			gop := globalOpinion(sum, t.avgLayerSize, float64(i-wasVerified))
-			t.logger.Info("Global opinion on blk %v (lyr:%v, lyfromidx:%v) is %v", blk, i, t.indexToLayerID[t.blocksToBlocksIndex[blk]], gop)
-			if gop != vote {
+			t.logger.Info("Global opinion on blk %v (lyr:%v, lyfromidx:%v) is %v (from:%v)", blk, i, t.indexToLayerID[t.blocksToBlocksIndex[blk]], gop, sum)
+			if gop != vote || gop == abstain {
 				// TODO: trigger self healing after a while ?
 				t.logger.Warning("The global opinion is different from vote, global: %v, vote: %v", gop, vote)
-				complete = false
-				break
+				break loop
 			}
 		}
 
-		if complete {
-			t.logger.Info("Verified layer %v", i)
-			t.verified = i
-		}
+		t.logger.Info("Verified layer %v", i)
+		t.verified = i
+
 	}
 
 	return wasVerified, t.verified
