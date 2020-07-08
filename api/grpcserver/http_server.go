@@ -36,11 +36,8 @@ func (s *JSONHTTPServer) Close() error {
 }
 
 // StartService starts the json api server and listens for status (started, stopped).
-func (s *JSONHTTPServer) StartService(startNodeService bool, startMeshService bool) {
-	go s.startInternal(startNodeService, startMeshService)
-}
-
-func (s *JSONHTTPServer) startInternal(startNodeService bool, startMeshService bool) {
+func (s *JSONHTTPServer) StartService(startNodeService bool, startMeshService bool,
+	startGlobalStateService bool, startSmesherService bool, startTransactionService bool) {
 	ctx, cancel := context.WithCancel(cmdp.Ctx)
 	defer cancel()
 	mux := runtime.NewServeMux()

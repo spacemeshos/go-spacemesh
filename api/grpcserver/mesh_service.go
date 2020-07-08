@@ -13,7 +13,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// MeshService is a grpc server providing the MeshService
+// MeshService exposes mesh data such as accounts, blocks, and transactions
 type MeshService struct {
 	Network          api.NetworkAPI // P2P Swarm
 	Mesh             api.TxAPI      // Mesh
@@ -33,7 +33,7 @@ func (s MeshService) RegisterService(server *Server) {
 	pb.RegisterMeshServiceServer(server.GrpcServer, s)
 }
 
-// NewMeshService creates a new grpc service using config data.
+// NewMeshService creates a new service using config data
 func NewMeshService(
 	net api.NetworkAPI, tx api.TxAPI, mempool *miner.TxMempool, genTime api.GenesisTimeAPI,
 	syncer api.Syncer, layersPerEpoch int, networkID int8, layerDurationSec int,
@@ -381,7 +381,7 @@ func (s MeshService) LayersQuery(ctx context.Context, in *pb.LayersQueryRequest)
 
 // STREAMS
 
-// AccountMeshDataStream returns a stream of transactions and activations for an account
+// AccountMeshDataStream exposes a stream of transactions and activations for an account
 func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, stream pb.MeshService_AccountMeshDataStreamServer) error {
 	log.Info("GRPC MeshService.AccountMeshDataStream")
 
@@ -470,7 +470,7 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 	}
 }
 
-// LayerStream returns a stream of all mesh data per layer
+// LayerStream exposes a stream of all mesh data per layer
 func (s MeshService) LayerStream(in *pb.LayerStreamRequest, stream pb.MeshService_LayerStreamServer) error {
 	log.Info("GRPC MeshService.LayerStream")
 	layerStream := events.GetLayerChannel()

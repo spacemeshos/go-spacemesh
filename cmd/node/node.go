@@ -723,6 +723,15 @@ func (app *SpacemeshApp) startAPIServices(postClient api.PostAPI, net api.Networ
 	if app.newgrpcAPIService != nil {
 		app.newgrpcAPIService.Start()
 	}
+	if apiConf.StartGlobalStateService {
+		startService(grpcserver.NewGlobalStateService(net, app.mesh, app.clock, app.syncer))
+	}
+	if apiConf.StartSmesherService {
+
+	}
+	if apiConf.StartTransactionService {
+
+	}
 
 	if apiConf.StartNewJSONServer {
 		if app.newgrpcAPIService == nil {
@@ -732,7 +741,13 @@ func (app *SpacemeshApp) startAPIServices(postClient api.PostAPI, net api.Networ
 			return
 		}
 		app.newjsonAPIService = grpcserver.NewJSONHTTPServer(apiConf.NewJSONServerPort, apiConf.NewGrpcServerPort)
-		app.newjsonAPIService.StartService(apiConf.StartNodeService, apiConf.StartMeshService)
+		app.newjsonAPIService.StartService(
+			apiConf.StartNodeService,
+			apiConf.StartMeshService,
+			apiConf.StartGlobalStateService,
+			apiConf.StartSmesherService,
+			apiConf.StartTransactionService,
+		)
 	}
 }
 
