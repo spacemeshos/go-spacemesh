@@ -17,6 +17,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"io"
 	"io/ioutil"
 	inet "net"
 	"net/http"
@@ -467,6 +468,64 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	require.Equal(t, http.StatusOK, respStatus)
 	require.NoError(t, jsonpb.UnmarshalString(respBody, &msg))
 	require.Equal(t, message, msg.Msg.Value)
+}
+
+func TestSpacemeshApp_NodeService(t *testing.T) {
+	resetFlags()
+
+	r := require.New(t)
+	app := NewSpacemeshApp()
+
+	defer app.stopServices()
+
+	// This will block
+	go func() {
+		str, err := testArgs(app, "--grpc-port-new", "1234", "--grpc", "node")
+		r.Empty(str)
+		r.NoError(err)
+	}()
+
+	// Give the server a chance to start
+	time.Sleep(6 * time.Second)
+
+	// Set up a new connection to the server
+	conn, err := grpc.Dial("localhost:1234", grpc.WithInsecure())
+	defer func() {
+		r.NoError(conn.Close())
+	}()
+	r.NoError(err)
+	c := pb.NewNodeServiceClient(conn)
+
+	// Open an error stream and a status stream
+	streamErr, err := c.ErrorStream(context.Background(), &pb.ErrorStreamRequest{})
+	require.NoError(t, err)
+	go func() {
+		for {
+			in, err := streamErr.Recv()
+			if err == io.EOF {
+				return
+			}
+			require.NoError(t, err)
+			log.Info("Got error message: %s", in.Error.Message)
+		}
+	}()
+	streamStatus, err := c.StatusStream(context.Background(), &pb.StatusStreamRequest{})
+	require.NoError(t, err)
+	go func() {
+		for {
+			in, err := streamStatus.Recv()
+			if err == io.EOF {
+				return
+			}
+			require.NoError(t, err)
+			log.Info("Got status message: %v", in.Status)
+		}
+	}()
+	time.Sleep(1 * time.Second)
+	log.Error("this is a test")
+	time.Sleep(1 * time.Second)
+	log.Error("this is a test")
+	time.Sleep(60 * time.Second)
 }
 
 func TestSpacemeshApp_P2PInterface(t *testing.T) {

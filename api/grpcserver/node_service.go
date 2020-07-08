@@ -117,7 +117,7 @@ func (s NodeService) StatusStream(request *pb.StatusStreamRequest, stream pb.Nod
 				// to this stream but continuing to listen to the other stream,
 				// but in practice one should never be closed while the other is
 				// still running, so it doesn't matter
-				log.Info("ErrorStream closed, shutting down")
+				log.Info("StatusStream closed, shutting down")
 				return nil
 			}
 			if err := stream.Send(&pb.StatusStreamResponse{Status: &pb.NodeStatus{
