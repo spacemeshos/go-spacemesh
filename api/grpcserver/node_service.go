@@ -104,7 +104,7 @@ func (s NodeService) Shutdown(ctx context.Context, request *pb.ShutdownRequest) 
 
 // STREAMS
 
-// StatusStream is a stub for a future server-side streaming RPC endpoint
+// StatusStream exposes a stream of node status updates
 func (s NodeService) StatusStream(request *pb.StatusStreamRequest, stream pb.NodeService_StatusStreamServer) error {
 	log.Info("GRPC NodeService.StatusStream")
 	statusStream := events.GetStatusChannel()
@@ -134,7 +134,7 @@ func (s NodeService) StatusStream(request *pb.StatusStreamRequest, stream pb.Nod
 	}
 }
 
-// ErrorStream is a stub for a future server-side streaming RPC endpoint
+// ErrorStream exposes a stream of node errors
 func (s NodeService) ErrorStream(request *pb.ErrorStreamRequest, stream pb.NodeService_ErrorStreamServer) error {
 	log.Info("GRPC NodeService.ErrorStream")
 	errorStream := events.GetErrorChannel()
