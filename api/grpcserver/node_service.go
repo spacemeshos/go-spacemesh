@@ -5,6 +5,7 @@ import (
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/cmd"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/peers"
 	"golang.org/x/net/context"
@@ -112,5 +113,48 @@ func (s NodeService) StatusStream(request *pb.StatusStreamRequest, stream pb.Nod
 // ErrorStream is a stub for a future server-side streaming RPC endpoint
 func (s NodeService) ErrorStream(request *pb.ErrorStreamRequest, stream pb.NodeService_ErrorStreamServer) error {
 	log.Info("GRPC NodeService.ErrorStream")
-	return nil
+	errorStream := events.GetErrorStream()
+
+	for {
+		select {
+		case nodeError, ok := <-errorStream:
+			if !ok {
+				// we could handle this more gracefully, by no longer listening
+				// to this stream but continuing to listen to the other stream,
+				// but in practice one should never be closed while the other is
+				// still running, so it doesn't matter
+				log.Info("ErrorStream closed, shutting down")
+				return nil
+			}
+			if err := stream.Send(&pb.ErrorStreamResponse{Error: &pb.NodeError{
+				ErrorType:  convertErrorType(nodeError.Type),
+				Message:    nodeError.Msg,
+				StackTrace: nodeError.Trace,
+			}}); err != nil {
+				return err
+			}
+		case <-stream.Context().Done():
+			log.Info("ErrorStream closing stream, client disconnected")
+			return nil
+		}
+		// TODO: do we need an additional case here for a context to indicate
+		// that MeshService needs to shut down?
+	}
+}
+
+func convertErrorType(errType int) pb.NodeError_NodeErrorType {
+	switch errType {
+	case events.NodeErrorType_Panic:
+		return pb.NodeError_NODE_ERROR_TYPE_PANIC
+	case events.NodeErrorType_PanicHare:
+		return pb.NodeError_NODE_ERROR_TYPE_PANIC_HARE
+	case events.NodeErrorType_PanicSync:
+		return pb.NodeError_NODE_ERROR_TYPE_PANIC_SYNC
+	case events.NodeErrorType_PanicP2P:
+		return pb.NodeError_NODE_ERROR_TYPE_PANIC_P2P
+	case events.NodeErrorType_SignalShutdown:
+		return pb.NodeError_NODE_ERROR_TYPE_SIGNAL_SHUT_DOWN
+	default:
+		return pb.NodeError_NODE_ERROR_TYPE_UNSPECIFIED
+	}
 }

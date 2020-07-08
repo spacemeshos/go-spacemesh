@@ -95,6 +95,13 @@ func ReportNewLayer(layer *types.Layer) {
 	}
 }
 
+// ReportError reports an error
+func ReportError(err NodeError) {
+	if reporter != nil {
+		reporter.channelError <- err
+	}
+}
+
 // GetNewTxStream returns a stream of new transactions
 func GetNewTxStream() chan *types.Transaction {
 	if reporter != nil {
@@ -119,6 +126,14 @@ func GetLayerStream() chan *types.Layer {
 	return nil
 }
 
+// GetErrorStream returns a stream of errors
+func GetErrorStream() chan NodeError {
+	if reporter != nil {
+		return reporter.channelError
+	}
+	return nil
+}
+
 // InitializeEventReporter initializes the event reporting interface
 func InitializeEventReporter(url string) {
 	reporter = newEventReporter()
@@ -127,11 +142,27 @@ func InitializeEventReporter(url string) {
 	}
 }
 
+const (
+	NodeErrorType_Error = iota
+	NodeErrorType_Panic
+	NodeErrorType_PanicSync
+	NodeErrorType_PanicP2P
+	NodeErrorType_PanicHare
+	NodeErrorType_SignalShutdown
+)
+
+type NodeError struct {
+	Msg   string
+	Trace string
+	Type  int
+}
+
 // EventReporter is the struct that receives incoming events and dispatches them
 type EventReporter struct {
 	channelTransaction chan *types.Transaction
 	channelActivation  chan *types.ActivationTx
 	channelLayer       chan *types.Layer
+	channelError       chan NodeError
 }
 
 func newEventReporter() *EventReporter {
@@ -139,6 +170,7 @@ func newEventReporter() *EventReporter {
 		channelTransaction: make(chan *types.Transaction),
 		channelActivation:  make(chan *types.ActivationTx),
 		channelLayer:       make(chan *types.Layer),
+		channelError:       make(chan NodeError),
 	}
 }
 
@@ -148,6 +180,7 @@ func CloseEventReporter() {
 		close(reporter.channelTransaction)
 		close(reporter.channelActivation)
 		close(reporter.channelLayer)
+		close(reporter.channelError)
 		reporter = nil
 	}
 }

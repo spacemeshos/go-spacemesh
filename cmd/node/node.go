@@ -980,4 +980,8 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	// app blocks until it receives a signal to exit
 	// this signal may come from the node or from sig-abort (ctrl-c)
 	<-cmdp.Ctx.Done()
+	events.ReportError(events.NodeError{
+		Msg:  "node is shutting down",
+		Type: events.NodeErrorType_SignalShutdown,
+	})
 }

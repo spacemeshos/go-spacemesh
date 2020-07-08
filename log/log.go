@@ -3,9 +3,12 @@
 package log
 
 import (
+	"fmt"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"io"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/natefinch/lumberjack.v2"
@@ -142,6 +145,11 @@ func Debug(msg string, args ...interface{}) {
 
 // Error prints formatted error level log message.
 func Error(msg string, args ...interface{}) {
+	events.ReportError(events.NodeError{
+		Msg:   fmt.Sprintf(msg, args),
+		Trace: string(debug.Stack()),
+		Type:  events.NodeErrorType_Error,
+	})
 	AppLog.Error(msg, args...)
 }
 
@@ -162,5 +170,10 @@ func Event() FieldLogger {
 
 // Panic writes the log message and then panics.
 func Panic(msg string, args ...interface{}) {
+	events.ReportError(events.NodeError{
+		Msg:   fmt.Sprintf(msg, args),
+		Trace: string(debug.Stack()),
+		Type:  events.NodeErrorType_Panic,
+	})
 	AppLog.Panic(msg, args...)
 }
