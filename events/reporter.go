@@ -16,7 +16,7 @@ func ReportNewTx(tx *types.Transaction) {
 		case reporter.channelTransaction <- tx:
 			log.Info("reported tx on channelTransaction")
 		default:
-			log.Info("not reporting tx as no one is listening on channelTransaction")
+			log.Info("not reporting tx as no one is listening")
 		}
 	}
 
@@ -37,7 +37,12 @@ func ReportValidTx(tx *types.Transaction, valid bool) {
 // ReportNewActivation reports a new activation
 func ReportNewActivation(activation *types.ActivationTx, layersPerEpoch uint16) {
 	if reporter != nil {
-		reporter.channelActivation <- activation
+		select {
+		case reporter.channelActivation <- activation:
+			log.Info("reported activation")
+		default:
+			log.Info("not reporting activation as no one is listening")
+		}
 	}
 	Publish(NewAtx{
 		ID:      activation.ShortString(),
@@ -92,14 +97,24 @@ func ReportDoneCreatingBlock(eligible bool, layer uint64, error string) {
 // ReportNewLayer reports a new layer
 func ReportNewLayer(layer *types.Layer) {
 	if reporter != nil {
-		reporter.channelLayer <- layer
+		select {
+		case reporter.channelLayer <- layer:
+			log.Info("reported layer")
+		default:
+			log.Info("not reporting layer as no one is listening")
+		}
 	}
 }
 
 // ReportError reports an error
 func ReportError(err NodeError) {
 	if reporter != nil {
-		reporter.channelError <- err
+		select {
+		case reporter.channelError <- err:
+			log.Info("reported error")
+		default:
+			log.Info("not reporting error as no one is listening")
+		}
 	}
 }
 
@@ -109,7 +124,12 @@ func ReportNodeStatus(setters ...SetStatusElem) {
 		for _, setter := range setters {
 			setter(&reporter.lastStatus)
 		}
-		reporter.channelStatus <- reporter.lastStatus
+		select {
+		case reporter.channelStatus <- reporter.lastStatus:
+			log.Info("reported status")
+		default:
+			log.Info("not reporting status as no one is listening")
+		}
 	}
 }
 

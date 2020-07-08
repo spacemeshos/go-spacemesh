@@ -6,6 +6,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap/zapcore"
+	"runtime/debug"
 	"sync"
 	"testing"
 	"time"
@@ -106,4 +108,75 @@ func TestEventReporter(t *testing.T) {
 	// This should also not cause an error
 	CloseEventReporter()
 	ReportNewTx(globalTx)
+}
+
+func TestReportError(t *testing.T) {
+	nodeErr := NodeError{
+		Msg:   "hi there",
+		Trace: "<trace goes here>",
+		Type:  NodeErrorTypeError,
+	}
+
+	// There should be no error reporting an event before initializing the reporter
+	ReportError(nodeErr)
+
+	// Stream is nil before we initialize it
+	stream := GetErrorChannel()
+	require.Nil(t, stream, "expected stream not to be initialized")
+
+	InitializeEventReporter("")
+	stream = GetErrorChannel()
+	require.NotNil(t, stream, "expected stream to be initialized")
+
+	// This will not be received as no one is listening
+	// This also makes sure that this call is nonblocking.
+	ReportError(nodeErr)
+
+	// listen on the channel
+	wgListening := sync.WaitGroup{}
+	wgListening.Add(1)
+	wgDone := sync.WaitGroup{}
+	wgDone.Add(1)
+	go func() {
+		defer wgDone.Done()
+		// report that we're listening
+		wgListening.Done()
+
+		// check the error sent directly
+		require.Equal(t, nodeErr, <-stream, "expected same input and output tx")
+
+		// now check errors sent through logging
+		msg := <-stream
+		require.Equal(t, int(zapcore.ErrorLevel), msg.Type)
+		require.Equal(t, "abracadabra", msg.Msg)
+	}()
+
+	// Wait until goroutine is listening
+	wgListening.Wait()
+	ReportError(nodeErr)
+
+	// Try reporting using log
+	log.InitSpacemeshLoggingSystemWithHooks(func(entry zapcore.Entry) error {
+		// If we report anything less than this we'll end up in an infinite loop
+		if entry.Level >= zapcore.ErrorLevel {
+			ReportError(NodeError{
+				Msg:   entry.Message,
+				Trace: string(debug.Stack()),
+				Type:  int(entry.Level),
+			})
+		}
+		return nil
+	})
+	log.Error("abracadabra")
+
+	// Wait for goroutine to finish
+	wgDone.Wait()
+
+	// This should also not cause an error
+	CloseEventReporter()
+	ReportError(nodeErr)
+}
+
+func TestReportNodeStatus(t *testing.T) {
+
 }
