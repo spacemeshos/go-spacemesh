@@ -136,7 +136,7 @@ func newAtxsRequestHandler(s *Syncer, logger log.Log) func(msg []byte) []byte {
 		logger.With().Info("handle atx request", types.AtxIdsField(atxids))
 		atxs, unknownAtx := s.GetATXs(atxids)
 		for _, t := range unknownAtx {
-			if tx, err := s.atxpool.Get(t); err == nil {
+			if tx, err := s.atxpool.GetFullAtx(t); err == nil {
 				atxs[t] = tx
 			} else {
 				logger.With().Warning("unfamiliar atx requested", t)

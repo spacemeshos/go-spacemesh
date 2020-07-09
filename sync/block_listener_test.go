@@ -103,13 +103,15 @@ func TestBlockListener(t *testing.T) {
 
 	block1 := types.NewExistingBlock(0, []byte(rand.String(8)))
 	block1.Signature = signer.Sign(block1.Bytes())
-	block1.ATXID = *types.EmptyATXID
+	block1.ATXID = atx1.ID()
 	block2 := types.NewExistingBlock(0, []byte(rand.String(8)))
 	block2.Signature = signer.Sign(block2.Bytes())
 	block2.ActiveSet = &[]types.ATXID{atx2.ID()}
+	block2.ATXID = atx2.ID()
 	block3 := types.NewExistingBlock(0, []byte(rand.String(8)))
 	block3.Signature = signer.Sign(block3.Bytes())
 	block3.ActiveSet = &[]types.ATXID{atx3.ID()}
+	block3.ATXID = atx3.ID()
 
 	block2.Initialize()
 	block3.Initialize()
@@ -172,6 +174,7 @@ func TestBlockListener_DataAvailability(t *testing.T) {
 	block.Signature = signer.Sign(block.Bytes())
 	block.TxIDs = append(block.TxIDs, tx1.ID())
 	block.ActiveSet = &[]types.ATXID{atx1.ID()}
+	block.ATXID = atx1.ID()
 	err = bl1.AddBlockWithTxs(block, []*types.Transaction{tx1}, []*types.ActivationTx{atx1})
 	require.NoError(t, err)
 
@@ -182,7 +185,7 @@ func TestBlockListener_DataAvailability(t *testing.T) {
 
 	_, err = bl2.txpool.Get(tx1.ID())
 	require.EqualError(t, err, "transaction not found in mempool")
-	_, err = bl2.atxpool.Get(atx1.ID())
+	_, err = bl2.atxpool.GetFullAtx(atx1.ID())
 	require.EqualError(t, err, "cannot find ATX in mempool")
 
 	// Sync bl2.
@@ -198,7 +201,7 @@ func TestBlockListener_DataAvailability(t *testing.T) {
 
 	_, err = bl2.txpool.Get(tx1.ID())
 	require.NoError(t, err)
-	_, err = bl2.atxpool.Get(atx1.ID())
+	_, err = bl2.atxpool.GetFullAtx(atx1.ID())
 	require.NoError(t, err)
 }
 
@@ -644,6 +647,7 @@ func TestBlockListener_ListenToGossipBlocks(t *testing.T) {
 	blk.TxIDs = append(blk.TxIDs, tx.ID())
 	blk.ActiveSet = &[]types.ATXID{atx.ID()}
 	blk.Signature = signer.Sign(blk.Bytes())
+	blk.ATXID = atx.ID()
 	blk.Initialize()
 
 	bl2.AddBlockWithTxs(blk, []*types.Transaction{tx}, []*types.ActivationTx{atx})

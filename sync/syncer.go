@@ -27,9 +27,9 @@ type txMemPool interface {
 	Put(id types.TransactionID, item *types.Transaction)
 }
 
-type atxMemPool interface {
-	Get(id types.ATXID) (*types.ActivationTx, error)
-	Put(atx *types.ActivationTx)
+type atxDB interface {
+	ProcessAtx(atx *types.ActivationTx) error
+	GetFullAtx(id types.ATXID) (*types.ActivationTx, error)
 }
 
 type poetDb interface {
@@ -133,7 +133,7 @@ type Syncer struct {
 
 	poetDb  poetDb
 	txpool  txMemPool
-	atxpool atxMemPool
+	atxpool atxDB
 
 	validatingLayer      types.LayerID
 	validatingLayerMutex sync.Mutex
@@ -152,7 +152,7 @@ type Syncer struct {
 }
 
 // NewSync fires a sync every sm.SyncInterval or on force space from outside
-func NewSync(srv service.Service, layers *mesh.Mesh, txpool txMemPool, atxpool atxMemPool, bv blockEligibilityValidator, poetdb poetDb, conf Configuration, clock ticker, logger log.Log) *Syncer {
+func NewSync(srv service.Service, layers *mesh.Mesh, txpool txMemPool, atxpool atxDB, bv blockEligibilityValidator, poetdb poetDb, conf Configuration, clock ticker, logger log.Log) *Syncer {
 
 	exit := make(chan struct{})
 
@@ -761,9 +761,11 @@ func (s *Syncer) dataAvailability(blk *types.Block) ([]*types.Transaction, []*ty
 	if blk.ActiveSet != nil {
 		wg.Add(1)
 		go func() {
+			atxs := []types.ATXID{blk.ATXID}
 			if len(*blk.ActiveSet) > 0 {
-				atxres, atxerr = s.atxQueue.HandleAtxs(*blk.ActiveSet)
+				atxs = append(atxs, *blk.ActiveSet...)
 			}
+			atxres, atxerr = s.atxQueue.HandleAtxs(atxs)
 			wg.Done()
 		}()
 	}
@@ -898,9 +900,9 @@ func (s *Syncer) atxCheckLocal(atxIds []types.Hash32) (map[types.Hash32]item, ma
 	missingInPool := make([]types.ATXID, 0, len(atxIds))
 	for _, t := range atxIds {
 		id := types.ATXID(t)
-		if x, err := s.atxpool.Get(id); err == nil {
+		if x, err := s.atxpool.GetFullAtx(id); err == nil {
 			atx := x
-			s.Debug("found atx, %v in atx pool", id.ShortString())
+			s.Debug("found atx, %v in atx db", id.ShortString())
 			unprocessedItems[id.Hash32()] = atx
 		} else {
 			s.Debug("atx %v not in atx pool", id.ShortString())

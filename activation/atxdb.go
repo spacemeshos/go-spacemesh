@@ -189,11 +189,6 @@ func (db *DB) createTraversalActiveSetCounterFunc(countedAtxs map[string]types.A
 
 	traversalFunc := func(b *types.Block) (stop bool, err error) {
 
-		// don't count ATXs in blocks that are not destined to the prev epoch
-		/*if b.LayerIndex.GetEpoch() != epoch-1 {
-			return false, nil
-		}*/
-
 		// count unique ATXs
 		if b.ActiveSet == nil {
 			return false, nil

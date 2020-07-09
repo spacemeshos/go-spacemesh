@@ -13,13 +13,18 @@ type AtxMemPool struct {
 	atxMap map[types.ATXID]*types.ActivationTx
 }
 
+func (mem *AtxMemPool) ProcessAtx(atx *types.ActivationTx) error {
+	mem.Put(atx)
+	return nil
+}
+
 // NewAtxMemPool creates a struct holding atxs by id
 func NewAtxMemPool() *AtxMemPool {
 	return &AtxMemPool{atxMap: make(map[types.ATXID]*types.ActivationTx)}
 }
 
 // Get retrieves the atx by the provided id id, it returns a reference to the found atx struct or an error if not
-func (mem *AtxMemPool) Get(id types.ATXID) (*types.ActivationTx, error) {
+func (mem *AtxMemPool) GetFullAtx(id types.ATXID) (*types.ActivationTx, error) {
 	mem.mu.RLock()
 	defer mem.mu.RUnlock()
 	atx, ok := mem.atxMap[id]

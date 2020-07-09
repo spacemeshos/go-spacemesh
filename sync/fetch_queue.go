@@ -57,7 +57,7 @@ func (fq *fetchQueue) shutdownRecover() {
 	r := recover()
 	if r != nil {
 		fq.Info("%s shut down ", fq.name)
-		fq.Info("stacktrace from panic: \n" + string(debug.Stack()))
+		fq.Error("stacktrace from panic: \n" + string(debug.Stack()))
 	}
 }
 
@@ -260,7 +260,7 @@ func (atx atxQueue) HandleAtxs(atxids []types.ATXID) ([]*types.ActivationTx, err
 	return atxs, nil
 }
 
-func updateAtxDependencies(invalidate func(id types.Hash32, valid bool), sValidateAtx sValidateAtxFunc, atxpool atxMemPool, fetchProof fetchPoetProofFunc) func(fj fetchJob) {
+func updateAtxDependencies(invalidate func(id types.Hash32, valid bool), sValidateAtx sValidateAtxFunc, atxDB atxDB, fetchProof fetchPoetProofFunc) func(fj fetchJob) {
 	return func(fj fetchJob) {
 		fetchProofCalcID(fetchProof, fj)
 
@@ -273,13 +273,18 @@ func updateAtxDependencies(invalidate func(id types.Hash32, valid bool), sValida
 		for _, id := range fj.ids {
 			if atx, ok := mp[id]; ok {
 				err := sValidateAtx(atx)
-				if err == nil {
-					atxpool.Put(atx)
-					invalidate(id, true)
-					continue
-				} else {
+				if err != nil {
 					log.Info("failed to validate %s %s", id.ShortString(), err)
+					invalidate(id, false)
+					continue
 				}
+				err = atxDB.ProcessAtx(atx)
+				if err != nil {
+					log.Info("failed to add atx to db %s %s", id.ShortString(), err)
+					invalidate(id, false)
+					continue
+				}
+				invalidate(id, true)
 			}
 			invalidate(id, false)
 		}
