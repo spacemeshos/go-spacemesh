@@ -56,9 +56,7 @@ type Validator interface {
 type txProcessor interface {
 	ApplyTransactions(layer types.LayerID, txs []*types.Transaction) (int, error)
 	ApplyRewards(layer types.LayerID, miners []types.Address, reward *big.Int)
-	AddressExists(addr types.Address) bool
 	ValidateNonceAndBalance(transaction *types.Transaction) error
-	GetLayerApplied(txID types.TransactionID) *types.LayerID
 	GetLayerStateRoot(layer types.LayerID) (types.Hash32, error)
 	GetStateRoot() types.Hash32
 	LoadState(layer types.LayerID) error
