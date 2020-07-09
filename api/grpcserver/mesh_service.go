@@ -127,11 +127,18 @@ func (s MeshService) AccountMeshDataQuery(ctx context.Context, in *pb.AccountMes
 	if in.Filter.AccountId == nil {
 		return nil, status.Errorf(codes.InvalidArgument, "`Filter.AccountId` must be provided")
 	}
+	if in.Filter.AccountMeshDataFlags == uint32(pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_UNSPECIFIED) {
+		return nil, status.Errorf(codes.InvalidArgument, "`Filter.AccountMeshDataFlags` must set at least one bitfield")
+	}
+
+	// Read the filter flags
+	filterTx := in.Filter.AccountMeshDataFlags&uint32(pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_TRANSACTIONS) != 0
+	filterActivations := in.Filter.AccountMeshDataFlags&uint32(pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_ACTIVATIONS) != 0
 
 	// Gather transaction data
 	addr := types.BytesToAddress(in.Filter.AccountId.Address)
 	res := &pb.AccountMeshDataQueryResponse{}
-	if in.Filter.AccountMeshDataFlags&uint32(pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_TRANSACTIONS) != 0 {
+	if filterTx {
 		meshTxIds := s.getTxIdsFromMesh(startLayer, addr)
 		mempoolTxIds := s.Mempool.GetTxIdsByAddress(addr)
 
@@ -154,7 +161,7 @@ func (s MeshService) AccountMeshDataQuery(ctx context.Context, in *pb.AccountMes
 	}
 
 	// Gather activation data
-	if in.Filter.AccountMeshDataFlags&uint32(pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_ACTIVATIONS) != 0 {
+	if filterActivations {
 		// We have no way to look up activations by coinbase so we have no choice
 		// but to read all of them.
 		// TODO: index activations by layer (and maybe by coinbase)
@@ -391,14 +398,14 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 	if in.Filter.AccountId == nil {
 		return status.Errorf(codes.InvalidArgument, "`Filter.AccountId` must be provided")
 	}
+	if in.Filter.AccountMeshDataFlags == uint32(pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_UNSPECIFIED) {
+		return status.Errorf(codes.InvalidArgument, "`Filter.AccountMeshDataFlags` must set at least one bitfield")
+	}
 	addr := types.BytesToAddress(in.Filter.AccountId.Address)
 
 	// Read the filter flags
 	filterTx := in.Filter.AccountMeshDataFlags&uint32(pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_TRANSACTIONS) != 0
 	filterActivations := in.Filter.AccountMeshDataFlags&uint32(pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_ACTIVATIONS) != 0
-	if !filterTx && !filterActivations {
-		return status.Errorf(codes.InvalidArgument, "`Filter.AccountMeshDataFlags` must set at least one bitfield")
-	}
 
 	// Subscribe to the stream of transactions and activations
 	var (
