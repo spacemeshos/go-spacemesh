@@ -175,6 +175,7 @@ type SpacemeshApp struct {
 	txPool            *state.TxMempool
 	loggers           map[string]*zap.AtomicLevel
 	term              chan struct{} // this channel is closed when closing services, goroutines should wait on this channel in order to terminate
+	started           chan struct{} // this channel is closed once the app has finished starting
 }
 
 // LoadConfigFromFile tries to load configuration file if the config parameter was specified
@@ -216,10 +217,10 @@ func NewSpacemeshApp() *SpacemeshApp {
 		Config:  &defaultConfig,
 		loggers: make(map[string]*zap.AtomicLevel),
 		term:    make(chan struct{}),
+		started: make(chan struct{}),
 	}
 
 	return node
-
 }
 
 func (app *SpacemeshApp) introduction() {
@@ -930,7 +931,6 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 				log.Error("cannot start http server", err)
 			}
 		}()
-
 	}
 
 	/* Create or load miner identity */
@@ -986,6 +986,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	}
 
 	app.startServices()
+
 	// P2P must start last to not block when sending messages to protocols
 	err = app.P2P.Start()
 	if err != nil {
@@ -995,6 +996,10 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	app.startAPIServices(postClient, app.P2P)
 	events.SubscribeToLayers(clock.Subscribe())
 	log.Info("App started.")
+
+	// notify anyone who might be listening that the app has finished starting.
+	// this can be used by, e.g., app tests.
+	close(app.started)
 
 	// app blocks until it receives a signal to exit
 	// this signal may come from the node or from sig-abort (ctrl-c)

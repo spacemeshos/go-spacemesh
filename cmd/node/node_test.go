@@ -507,8 +507,11 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		wg.Done()
 	}()
 
-	// Give the app and services a chance to start
-	time.Sleep(10 * time.Second)
+	// Wait for the app and services to start
+	// Strictly speaking, this does not indicate that all of the services
+	// have started, we could add separate channels for that, but it seems
+	// to work well enough for testing.
+	<-app.started
 
 	// Set up a new connection to the server
 	conn, err := grpc.Dial("localhost:1234", grpc.WithInsecure())
@@ -559,7 +562,6 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	log.Error("this is a test")
 	time.Sleep(1 * time.Second)
 	log.Error("this is a test")
-	time.Sleep(10 * time.Second)
 
 	// TODO: see if we can catch a panic
 
