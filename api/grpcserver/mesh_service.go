@@ -443,7 +443,7 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 			return nil
 		}
 		// TODO: do we need an additional case here for a context to indicate
-		// that MeshService needs to shut down?
+		// that the service needs to shut down?
 	}
 }
 
@@ -456,10 +456,6 @@ func (s MeshService) LayerStream(in *pb.LayerStreamRequest, stream pb.MeshServic
 		select {
 		case layer, ok := <-layerStream:
 			if !ok {
-				// we could handle this more gracefully, by no longer listening
-				// to this stream but continuing to listen to the other stream,
-				// but in practice one should never be closed while the other is
-				// still running, so it doesn't matter
 				log.Info("LayerStream closed, shutting down")
 				return nil
 			}
@@ -476,6 +472,6 @@ func (s MeshService) LayerStream(in *pb.LayerStreamRequest, stream pb.MeshServic
 			return nil
 		}
 		// TODO: do we need an additional case here for a context to indicate
-		// that MeshService needs to shut down?
+		// that the service needs to shut down?
 	}
 }

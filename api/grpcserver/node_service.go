@@ -113,10 +113,6 @@ func (s NodeService) StatusStream(request *pb.StatusStreamRequest, stream pb.Nod
 		select {
 		case nodeStatus, ok := <-statusStream:
 			if !ok {
-				// we could handle this more gracefully, by no longer listening
-				// to this stream but continuing to listen to the other stream,
-				// but in practice one should never be closed while the other is
-				// still running, so it doesn't matter
 				log.Info("StatusStream closed, shutting down")
 				return nil
 			}
@@ -134,7 +130,7 @@ func (s NodeService) StatusStream(request *pb.StatusStreamRequest, stream pb.Nod
 			return nil
 		}
 		// TODO: do we need an additional case here for a context to indicate
-		// that MeshService needs to shut down?
+		// that the service needs to shut down?
 	}
 }
 
@@ -147,10 +143,6 @@ func (s NodeService) ErrorStream(request *pb.ErrorStreamRequest, stream pb.NodeS
 		select {
 		case nodeError, ok := <-errorStream:
 			if !ok {
-				// we could handle this more gracefully, by no longer listening
-				// to this stream but continuing to listen to the other stream,
-				// but in practice one should never be closed while the other is
-				// still running, so it doesn't matter
 				log.Info("ErrorStream closed, shutting down")
 				return nil
 			}
@@ -166,7 +158,7 @@ func (s NodeService) ErrorStream(request *pb.ErrorStreamRequest, stream pb.NodeS
 			return nil
 		}
 		// TODO: do we need an additional case here for a context to indicate
-		// that MeshService needs to shut down?
+		// that the service needs to shut down?
 	}
 }
 
