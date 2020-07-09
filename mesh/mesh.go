@@ -60,6 +60,8 @@ type txProcessor interface {
 	GetLayerStateRoot(layer types.LayerID) (types.Hash32, error)
 	GetStateRoot() types.Hash32
 	LoadState(layer types.LayerID) error
+	GetBalance(addr types.Address) uint64
+	GetNonce(addr types.Address) uint64
 }
 
 type txMemPoolInValidator interface {

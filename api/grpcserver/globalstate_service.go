@@ -3,6 +3,7 @@ package grpcserver
 import (
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/go-spacemesh/api"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/peers"
 	"golang.org/x/net/context"
@@ -47,7 +48,17 @@ func (s GlobalStateService) GlobalStateHash(ctx context.Context, in *pb.GlobalSt
 // Account returns data for one account
 func (s GlobalStateService) Account(ctx context.Context, in *pb.AccountRequest) (*pb.AccountResponse, error) {
 	log.Info("GRPC GlobalStateService.Account")
-	return nil, nil
+
+	// Load data
+	addr := types.BytesToAddress(in.AccountId.Address)
+	balance := s.Mesh.GetBalance(addr)
+	counter := s.Mesh.GetNonce(addr)
+
+	return &pb.AccountResponse{Account: &pb.Account{
+		Address: &pb.AccountId{Address: addr.Bytes()},
+		Counter: counter,
+		Balance: &pb.Amount{Value: balance},
+	}}, nil
 }
 
 // AccountDataQuery returns historical account data such as rewards and receipts
