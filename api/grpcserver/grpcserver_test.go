@@ -500,6 +500,47 @@ func TestNodeService(t *testing.T) {
 	}
 }
 
+func TestGlobalStateService(t *testing.T) {
+	svc := NewGlobalStateService(&networkMock, txAPI, &genTime, &SyncerMock{})
+	shutDown := launchServer(t, svc)
+	defer shutDown()
+
+	// start a client
+	addr := "localhost:" + strconv.Itoa(cfg.NewGrpcServerPort)
+
+	// Set up a connection to the server.
+	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	require.NoError(t, err)
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
+	c := pb.NewGlobalStateServiceClient(conn)
+
+	// Some shared test data
+	//layerFirst := 0
+	//layerLatestReceived := txAPI.LatestLayer()
+	layerConfirmed := txAPI.LatestLayerInState()
+	//layerCurrent := genTime.GetCurrentLayer()
+
+	// Construct an array of test cases to test each endpoint in turn
+	testCases := []struct {
+		name string
+		run  func(*testing.T)
+	}{
+		{"GlobalStateHash", func(t *testing.T) {
+			res, err := c.GlobalStateHash(context.Background(), &pb.GlobalStateHashRequest{})
+			require.NoError(t, err)
+			require.Equal(t, uint64(layerConfirmed), res.Response.LayerNumber)
+			require.Equal(t, stateRoot.Bytes(), res.Response.RootHash)
+		}},
+	}
+
+	// Run subtests
+	for _, tc := range testCases {
+		t.Run(tc.name, tc.run)
+	}
+}
+
 func TestMeshService(t *testing.T) {
 	grpcService := NewMeshService(&networkMock, txAPI, txMempool, &genTime, &SyncerMock{}, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
 	shutDown := launchServer(t, grpcService)

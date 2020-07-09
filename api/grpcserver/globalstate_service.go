@@ -11,7 +11,7 @@ import (
 // GlobalStateService exposes global state data, output from the STF
 type GlobalStateService struct {
 	Network     api.NetworkAPI // P2P Swarm
-	Tx          api.TxAPI      // Mesh
+	Mesh        api.TxAPI      // Mesh
 	GenTime     api.GenesisTimeAPI
 	PeerCounter api.PeerCounter
 	Syncer      api.Syncer
@@ -28,7 +28,7 @@ func NewGlobalStateService(
 	syncer api.Syncer) *GlobalStateService {
 	return &GlobalStateService{
 		Network:     net,
-		Tx:          tx,
+		Mesh:        tx,
 		GenTime:     genTime,
 		PeerCounter: peers.NewPeers(net, log.NewDefault("grpc_server.GlobalStateService")),
 		Syncer:      syncer,
@@ -38,7 +38,10 @@ func NewGlobalStateService(
 // GlobalStateHash returns the latest layer and its computed global state hash
 func (s GlobalStateService) GlobalStateHash(ctx context.Context, in *pb.GlobalStateHashRequest) (*pb.GlobalStateHashResponse, error) {
 	log.Info("GRPC GlobalStateService.GlobalStateHash")
-	return nil, nil
+	return &pb.GlobalStateHashResponse{Response: &pb.GlobalStateHash{
+		RootHash:    s.Mesh.GetStateRoot().Bytes(),
+		LayerNumber: s.Mesh.LatestLayerInState().Uint64(),
+	}}, nil
 }
 
 // Account returns data for one account
