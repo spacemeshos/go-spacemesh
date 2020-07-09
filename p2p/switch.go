@@ -903,8 +903,6 @@ func (s *Switch) hasOutgoingPeer(peer p2pcrypto.PublicKey) bool {
 	return ok
 }
 
-var listeningIP = inet.ParseIP("0.0.0.0")
-
 // network methods used to accumulate os and router ports.
 
 func (s *Switch) getListeners(
@@ -927,6 +925,7 @@ func (s *Switch) getListeners(
 	}
 
 	upnpFails := 0
+	var listeningIP = inet.ParseIP(s.config.TCPInterface)
 	for {
 		tcpAddr := &inet.TCPAddr{IP: listeningIP, Port: port}
 		tcpListener, err := getTCPListener(tcpAddr)
