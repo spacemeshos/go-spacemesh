@@ -296,7 +296,11 @@ func (app *SpacemeshApp) setupLogging() {
 
 	log.Info("%s", app.getAppInfo())
 
-	log.Info("initializing event reporter with pubsub URL %s", app.Config.PublishEventsURL)
+	msg := "initializing event reporter"
+	if app.Config.PublishEventsURL != "" {
+		msg += fmt.Sprintf(" with pubsub URL: %s", app.Config.PublishEventsURL)
+	}
+	log.Info(msg)
 	events.InitializeEventReporter(app.Config.PublishEventsURL)
 }
 
@@ -701,7 +705,7 @@ func (app *SpacemeshApp) startAPIServices(postClient api.PostAPI, net api.Networ
 	// Make sure we only start the server once
 	startService := func(svc grpcserver.ServiceAPI) {
 		if app.newgrpcAPIService == nil {
-			app.newgrpcAPIService = grpcserver.NewServer(apiConf.NewGrpcServerPort)
+			app.newgrpcAPIService = grpcserver.NewServerWithInterface(apiConf.NewGrpcServerPort, apiConf.NewGrpcServerInterface)
 			app.newgrpcAPIService.Start()
 		}
 		svc.RegisterService(app.newgrpcAPIService)

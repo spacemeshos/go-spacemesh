@@ -489,11 +489,19 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		app.Start(cmd, args)
 	}
 
-	// Run the app in a goroutine. As noted above, it blocks.
+	// Run the app in a goroutine. As noted above, it blocks if it succeeds.
+	// If there's an error in the args, it will return immediately.
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		str, err := testArgs(app, "--grpc-port-new", "1234", "--grpc", "node")
+		str, err := testArgs(app,
+			"--grpc-port-new", "1234",
+			"--grpc", "node",
+			// the following prevents obnoxious warning in macOS
+			"--acquire-port=false",
+			"--tcp-interface", "127.0.0.1",
+			"--grpc-interface-new", "localhost",
+		)
 		r.Empty(str)
 		r.NoError(err)
 		wg.Done()
@@ -529,6 +537,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 			log.Info("Got error message: %s", in.Error.Message)
 		}
 	}()
+
 	streamStatus, err := c.StatusStream(context.Background(), &pb.StatusStreamRequest{})
 	require.NoError(t, err)
 	go func() {
