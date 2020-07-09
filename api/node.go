@@ -63,22 +63,24 @@ type Syncer interface {
 
 // TxAPI is an api for getting transaction status
 type TxAPI interface {
-	AddressExists(addr types.Address) bool
-	ValidateNonceAndBalance(transaction *types.Transaction) error
+	AddressExists(types.Address) bool
+	ValidateNonceAndBalance(*types.Transaction) error
 	GetATXs([]types.ATXID) (map[types.ATXID]*types.ActivationTx, []types.ATXID)
 	GetLayer(types.LayerID) (*types.Layer, error)
-	GetRewards(account types.Address) (rewards []types.Reward, err error)
+	GetRewards(types.Address) ([]types.Reward, error)
 	GetTransactions([]types.TransactionID) ([]*types.Transaction, map[types.TransactionID]struct{})
-	GetTransactionsByDestination(l types.LayerID, account types.Address) (txs []types.TransactionID)
-	GetTransactionsByOrigin(l types.LayerID, account types.Address) (txs []types.TransactionID)
+	GetTransactionsByDestination(types.LayerID, types.Address) []types.TransactionID
+	GetTransactionsByOrigin(types.LayerID, types.Address) []types.TransactionID
 	LatestLayer() types.LayerID
-	GetLayerApplied(txID types.TransactionID) *types.LayerID
-	GetTransaction(id types.TransactionID) (*types.Transaction, error)
-	GetProjection(addr types.Address, prevNonce, prevBalance uint64) (nonce, balance uint64, err error)
+	GetLayerApplied(types.TransactionID) *types.LayerID
+	GetTransaction(types.TransactionID) (*types.Transaction, error)
+	GetProjection(types.Address, uint64, uint64) (uint64, uint64, error)
 	LatestLayerInState() types.LayerID
 	ProcessedLayer() types.LayerID
 	GetStateRoot() types.Hash32
-	GetLayerStateRoot(layer types.LayerID) (types.Hash32, error)
+	GetLayerStateRoot(types.LayerID) (types.Hash32, error)
+	GetBalance(types.Address) uint64
+	GetNonce(types.Address) uint64
 }
 
 // PeerCounter is an api to get amount of connected peers

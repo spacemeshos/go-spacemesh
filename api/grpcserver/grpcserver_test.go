@@ -55,6 +55,8 @@ const (
 	postGenesisEpochLayer = 22
 	atxPerLayer           = 2
 	blkPerLayer           = 3
+	accountBalance        = 8675301
+	accountCounter        = 42
 )
 
 var (
@@ -268,6 +270,14 @@ func (t *TxAPIMock) ProcessedLayer() types.LayerID {
 
 func (t *TxAPIMock) GetLayerStateRoot(layer types.LayerID) (types.Hash32, error) {
 	return stateRoot, nil
+}
+
+func (t *TxAPIMock) GetBalance(addr types.Address) uint64 {
+	return uint64(accountBalance)
+}
+
+func (t *TxAPIMock) GetNonce(addr types.Address) uint64 {
+	return uint64(accountCounter)
 }
 
 func NewTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *types.Transaction {
@@ -532,6 +542,15 @@ func TestGlobalStateService(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, uint64(layerConfirmed), res.Response.LayerNumber)
 			require.Equal(t, stateRoot.Bytes(), res.Response.RootHash)
+		}},
+		{"Account", func(t *testing.T) {
+			res, err := c.Account(context.Background(), &pb.AccountRequest{
+				AccountId: &pb.AccountId{Address: addr1.Bytes()},
+			})
+			require.NoError(t, err)
+			require.Equal(t, addr1.Bytes(), res.Account.Address.Address)
+			require.Equal(t, uint64(accountBalance), res.Account.Balance.Value)
+			require.Equal(t, uint64(accountCounter), res.Account.Counter)
 		}},
 	}
 

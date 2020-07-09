@@ -58,6 +58,8 @@ type txProcessor interface {
 	GetStateRoot() types.Hash32
 	LoadState(layer types.LayerID) error
 	ValidateAndAddTxToPool(tx *types.Transaction) error
+	GetBalance(addr types.Address) uint64
+	GetNonce(addr types.Address) uint64
 }
 
 type txMemPoolInValidator interface {
