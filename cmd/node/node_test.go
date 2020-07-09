@@ -16,6 +16,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -483,6 +484,11 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		defer app.Cleanup(cmd, args)
 		r.NoError(app.Initialize(cmd, args))
+
+		// Speed things up a little
+		app.Config.SyncInterval = 1
+		app.Config.LayerDurationSec = 2
+
 		// This will block. We need to run the full app here to make sure that
 		// the various services are reporting events correctly. This could probably
 		// be done more surgically, and we don't need _all_ of the services.
@@ -525,25 +531,41 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	streamErr, err := c.ErrorStream(context.Background(), &pb.ErrorStreamRequest{})
 	require.NoError(t, err)
 
+	// Use a channel to coordinate ending the test
+	end := make(chan struct{})
+
 	go func() {
-		for {
-			in, err := streamErr.Recv()
-			if err == io.EOF {
-				return
-			}
-			code := status.Code(err)
-			// We expect this to happen when the server disconnects
-			if code == codes.Unavailable {
-				return
-			}
-			require.NoError(t, err)
-			log.Info("Got error message: %s", in.Error.Message)
-		}
+		in, err := streamErr.Recv()
+		require.NoError(t, err)
+		log.Info("Got streamed error: %v", in.Error)
+
+		// First error
+		require.Equal(t, "test123", in.Error.Message)
+		require.Equal(t, int(zapcore.ErrorLevel), int(in.Error.ErrorType))
+
+		// Second error
+		in, err = streamErr.Recv()
+		log.Info("Got streamed error: %v", in.Error)
+		require.Equal(t, "test456", in.Error.Message)
+		require.Equal(t, int(zapcore.ErrorLevel), int(in.Error.ErrorType))
+
+		// Let the test end
+		close(end)
+
+		// Hangup
+		_, err = streamErr.Recv()
+
+		// We expect a nil when the stream is closed
+		require.NoError(t, err)
 	}()
 
 	streamStatus, err := c.StatusStream(context.Background(), &pb.StatusStreamRequest{})
 	require.NoError(t, err)
+
 	go func() {
+		// We don't really control the order in which these are received,
+		// unlike the errorStream. So just loop and listen here while the
+		// app is running, and make sure there are no errors.
 		for {
 			in, err := streamStatus.Recv()
 			if err == io.EOF {
@@ -555,15 +577,30 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-			log.Info("Got status message: %v", in.Status)
+
+			// Note that, for some reason, protobuf does not display fields
+			// that still have their default value, so the output here will
+			// only be partial.
+			log.Info("Got status message: %s", in.Status)
+
+			// Check if the test should end
+			select {
+			case <-end:
+				return
+			default:
+				continue
+			}
 		}
 	}()
-	time.Sleep(1 * time.Second)
-	log.Error("this is a test")
-	time.Sleep(1 * time.Second)
-	log.Error("this is a test")
+	time.Sleep(4 * time.Second)
+	log.Error("test123")
+	time.Sleep(4 * time.Second)
+	log.Error("test456")
 
 	// TODO: see if we can catch a panic
+
+	// Wait for messages to be received
+	<-end
 
 	// This stops the app
 	cmdp.Cancel()
