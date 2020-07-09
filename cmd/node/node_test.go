@@ -535,22 +535,46 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	end := make(chan struct{})
 
 	go func() {
-		in, err := streamErr.Recv()
-		require.NoError(t, err)
-		log.Info("Got streamed error: %v", in.Error)
+		// Don't close the channel twice
+		var once sync.Once
+		oncebody := func() { close(end) }
+		defer once.Do(oncebody)
 
-		// First error
-		require.Equal(t, "test123", in.Error.Message)
-		require.Equal(t, int(zapcore.ErrorLevel), int(in.Error.ErrorType))
+		nextError := func() *pb.NodeError {
+			in, err := streamErr.Recv()
+			require.NoError(t, err)
+			log.Info("Got streamed error: %v", in.Error)
+			return in.Error
+		}
 
-		// Second error
-		in, err = streamErr.Recv()
-		log.Info("Got streamed error: %v", in.Error)
-		require.Equal(t, "test456", in.Error.Message)
-		require.Equal(t, int(zapcore.ErrorLevel), int(in.Error.ErrorType))
+		// We expect a specific series of errors in a specific order!
+		// Check each one
+		var myError *pb.NodeError
+
+		myError = nextError()
+		// Not sure where this error comes from but we always get it
+		require.Equal(t, "error adding genesis block block already exist in database", myError.Message)
+		require.Equal(t, int(zapcore.ErrorLevel), int(myError.ErrorType))
+
+		myError = nextError()
+		require.Equal(t, "test123", myError.Message)
+		require.Equal(t, int(zapcore.ErrorLevel), int(myError.ErrorType))
+
+		myError = nextError()
+		require.Equal(t, "test456", myError.Message)
+		require.Equal(t, int(zapcore.ErrorLevel), int(myError.ErrorType))
+
+		// The panic gets wrapped in an ERROR, and we get both, in this order
+		myError = nextError()
+		require.Contains(t, myError.Message, "Fatal: goroutine panicked.")
+		require.Equal(t, int(zapcore.ErrorLevel), int(myError.ErrorType))
+
+		myError = nextError()
+		require.Equal(t, "testPANIC", myError.Message)
+		require.Equal(t, int(zapcore.FatalLevel), int(myError.ErrorType))
 
 		// Let the test end
-		close(end)
+		once.Do(oncebody)
 
 		// Hangup
 		_, err = streamErr.Recv()
@@ -593,11 +617,21 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		}
 	}()
 	time.Sleep(4 * time.Second)
-	log.Error("test123")
-	time.Sleep(4 * time.Second)
-	log.Error("test456")
 
-	// TODO: see if we can catch a panic
+	// Report two errors and make sure they're both received
+	log.Error("test123")
+	log.Error("test456")
+	time.Sleep(4 * time.Second)
+
+	// Trap a panic
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				fmt.Println("Recovered", r)
+			}
+		}()
+		log.Panic("testPANIC")
+	}()
 
 	// Wait for messages to be received
 	<-end
