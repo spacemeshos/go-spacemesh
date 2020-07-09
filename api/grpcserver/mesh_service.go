@@ -116,8 +116,6 @@ func (s MeshService) MaxTransactionsPerSecond(ctx context.Context, in *pb.MaxTra
 func (s MeshService) AccountMeshDataQuery(ctx context.Context, in *pb.AccountMeshDataQueryRequest) (*pb.AccountMeshDataQueryResponse, error) {
 	log.Info("GRPC MeshService.AccountMeshDataQuery")
 
-	// This is the latest layer we're aware of
-	//latestLayer := s.Mesh.LatestLayer()
 	startLayer := types.LayerID(in.MinLayer)
 
 	if startLayer > s.Mesh.LatestLayer() {
@@ -195,6 +193,26 @@ func (s MeshService) AccountMeshDataQuery(ctx context.Context, in *pb.AccountMes
 	}
 
 	res.TotalResults = uint32(len(res.Data))
+
+	// Skip to offset, don't send more than max results
+	// TODO: Optimize this. Obviously, we could do much smarter things than re-loading all
+	// of the data from scratch, then figuring out which data to return here. We could cache
+	// query results and/or figure out which data to load before loading it.
+	offset := in.Offset
+
+	// If the offset is too high there is nothing to return (this is not an error)
+	if offset > uint32(len(res.Data)) {
+		return &pb.AccountMeshDataQueryResponse{}, nil
+	}
+
+	// If the max results is too high, trim it. If MaxResults is zero, that means unlimited
+	// (since we have no way to distinguish between zero and its not being provided).
+	maxResults := in.MaxResults
+	if maxResults == 0 || offset+maxResults > uint32(len(res.Data)) {
+		maxResults = uint32(len(res.Data)) - offset
+	}
+	res.Data = res.Data[offset : offset+maxResults]
+
 	return res, nil
 }
 
