@@ -579,6 +579,7 @@ func TestMeshService(t *testing.T) {
 					},
 				},
 				{
+					// This does not produce an error but we expect no results
 					name: "Offset too high",
 					run: func(t *testing.T) {
 						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
@@ -696,7 +697,8 @@ func TestMeshService(t *testing.T) {
 					name: "filter with valid AccountId and AccountMeshDataFlags all",
 					run: func(t *testing.T) {
 						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
-							MaxResults: uint32(10),
+							// Zero means unlimited
+							MaxResults: uint32(0),
 							Filter: &pb.AccountMeshDataFilter{
 								AccountId: &pb.AccountId{Address: addr1.Bytes()},
 								AccountMeshDataFlags: uint32(
@@ -709,6 +711,43 @@ func TestMeshService(t *testing.T) {
 						require.Equal(t, 2, len(res.Data))
 						checkAccountDataItemTx(t, res.Data[0].DataItem)
 						checkAccountDataItemActivation(t, res.Data[1].DataItem)
+					},
+				},
+				{
+					name: "max results",
+					run: func(t *testing.T) {
+						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
+							MaxResults: uint32(1),
+							Filter: &pb.AccountMeshDataFilter{
+								AccountId: &pb.AccountId{Address: addr1.Bytes()},
+								AccountMeshDataFlags: uint32(
+									pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_ACTIVATIONS |
+										pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_TRANSACTIONS),
+							},
+						})
+						require.NoError(t, err)
+						require.Equal(t, uint32(2), res.TotalResults)
+						require.Equal(t, 1, len(res.Data))
+						checkAccountDataItemTx(t, res.Data[0].DataItem)
+					},
+				},
+				{
+					name: "max results page 2",
+					run: func(t *testing.T) {
+						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
+							MaxResults: uint32(1),
+							Offset:     uint32(1),
+							Filter: &pb.AccountMeshDataFilter{
+								AccountId: &pb.AccountId{Address: addr1.Bytes()},
+								AccountMeshDataFlags: uint32(
+									pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_ACTIVATIONS |
+										pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_TRANSACTIONS),
+							},
+						})
+						require.NoError(t, err)
+						require.Equal(t, uint32(2), res.TotalResults)
+						require.Equal(t, 1, len(res.Data))
+						checkAccountDataItemActivation(t, res.Data[0].DataItem)
 					},
 				},
 			}
