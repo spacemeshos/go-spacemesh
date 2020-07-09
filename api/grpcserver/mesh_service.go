@@ -322,18 +322,18 @@ func (s MeshService) readLayer(layer *types.Layer, layerStatus pb.Layer_LayerSta
 		pbActivations = append(pbActivations, pbatx)
 	}
 
-	// TODO: We currently have no way to get state root for any
-	// layer but the latest layer applied to state (which is
-	// anyway not exposed by Mesh). The logic lives in
-	// Mesh.txProcessor.GetStateRoot().
-	// Tracked in https://github.com/spacemeshos/api/issues/90.
+	stateRoot, err := s.Mesh.GetLayerStateRoot(layer.Index())
+	if err != nil {
+		log.Error("error getting state root for layer %v", layer.Index())
+		return nil, status.Errorf(codes.Internal, "error getting layer data")
+	}
 	return &pb.Layer{
 		Number:        layer.Index().Uint64(),
 		Status:        layerStatus,
-		Hash:          layer.Hash().Bytes(), // do we need this?
+		Hash:          layer.Hash().Bytes(),
 		Blocks:        blocks,
 		Activations:   pbActivations,
-		RootStateHash: nil, // do we need this?
+		RootStateHash: stateRoot.Bytes(),
 	}, nil
 }
 
