@@ -22,7 +22,7 @@ require (
 	github.com/spacemeshos/ed25519 v0.0.0-20190530014421-e235766d15a1
 	github.com/spacemeshos/merkle-tree v0.0.0-20191028110812-1908c3126c82
 	github.com/spacemeshos/poet v0.1.0
-	github.com/spacemeshos/post v0.0.0-20191225190235-dfb8a5803e6d
+	github.com/spacemeshos/post v0.0.0-20200707150818-013318bab6f4
 	github.com/spacemeshos/sha256-simd v0.0.0-20190111104731-8575aafc88c9
 	github.com/spf13/afero v1.2.0 // indirect
 	github.com/spf13/cobra v1.0.0
@@ -41,7 +41,5 @@ require (
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 	nanomsg.org/go-mangos v1.4.0
 )
-
-replace github.com/spacemeshos/post => github.com/tzdybal/post v0.0.0-20200629203636-775866cafc8f
 
 go 1.13
