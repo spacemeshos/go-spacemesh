@@ -128,9 +128,9 @@ func ReportNodeStatus(setters ...SetStatusElem) {
 		}
 		select {
 		case reporter.channelStatus <- reporter.lastStatus:
-			log.Info("reported status")
+			log.Info("reported status: %v", reporter.lastStatus)
 		default:
-			log.Info("not reporting status as no one is listening")
+			log.Info("not reporting status as no one is listening: %v", reporter.lastStatus)
 		}
 	}
 }
