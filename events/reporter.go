@@ -111,9 +111,9 @@ func ReportError(err NodeError) {
 	if reporter != nil {
 		select {
 		case reporter.channelError <- err:
-			log.Info("reported error")
+			log.Info("reported error: %v", err)
 		default:
-			log.Info("not reporting error as no one is listening")
+			log.Info("not reporting error as buffer is full: %v", err)
 		}
 	}
 }
@@ -273,10 +273,17 @@ func newEventReporter() *EventReporter {
 		channelTransaction: make(chan *types.Transaction),
 		channelActivation:  make(chan *types.ActivationTx),
 		channelLayer:       make(chan *types.Layer),
-		channelError:       make(chan NodeError),
 		channelStatus:      make(chan NodeStatus),
 		lastStatus:         NodeStatus{},
 		stopChan:           make(chan struct{}),
+
+		// In general, we use unbuffered channels, since we expect data to be consumed
+		// as fast as we produce it, and we don't expect many data items to be created
+		// and reported in rapid succession. Also, it's not such a big deal if we
+		// miss something since it can always be queried again later. But errors are a
+		// bit of a special case. Sometimes one error triggers another in rapid
+		// succession. So as not to lose these, we use a buffered channel here.
+		channelError: make(chan NodeError, 100),
 	}
 }
 
