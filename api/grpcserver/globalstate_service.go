@@ -103,7 +103,9 @@ func (s GlobalStateService) AccountDataQuery(ctx context.Context, in *pb.Account
 					// Leave this out for now as this is changing
 					//LayerComputed: 0,
 					Coinbase: &pb.AccountId{Address: addr.Bytes()},
-					Smesher:  nil,
+					// TODO: There is currently no way to get this for a reward.
+					// See https://github.com/spacemeshos/go-spacemesh/issues/2068.
+					//Smesher:  nil,
 				},
 			}})
 		}
