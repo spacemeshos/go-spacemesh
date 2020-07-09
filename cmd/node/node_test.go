@@ -17,6 +17,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"io"
 	"io/ioutil"
 	inet "net"
@@ -24,6 +26,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -470,23 +473,34 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	require.Equal(t, message, msg.Msg.Value)
 }
 
+// E2E app test of the stream endpoints in the NodeService
 func TestSpacemeshApp_NodeService(t *testing.T) {
 	resetFlags()
 
 	r := require.New(t)
 	app := NewSpacemeshApp()
 
-	defer app.stopServices()
+	Cmd.Run = func(cmd *cobra.Command, args []string) {
+		defer app.Cleanup(cmd, args)
+		r.NoError(app.Initialize(cmd, args))
+		// This will block. We need to run the full app here to make sure that
+		// the various services are reporting events correctly. This could probably
+		// be done more surgically, and we don't need _all_ of the services.
+		app.Start(cmd, args)
+	}
 
-	// This will block
+	// Run the app in a goroutine. As noted above, it blocks.
+	wg := sync.WaitGroup{}
+	wg.Add(1)
 	go func() {
 		str, err := testArgs(app, "--grpc-port-new", "1234", "--grpc", "node")
 		r.Empty(str)
 		r.NoError(err)
+		wg.Done()
 	}()
 
-	// Give the server a chance to start
-	time.Sleep(6 * time.Second)
+	// Give the app and services a chance to start
+	time.Sleep(10 * time.Second)
 
 	// Set up a new connection to the server
 	conn, err := grpc.Dial("localhost:1234", grpc.WithInsecure())
@@ -499,10 +513,16 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	// Open an error stream and a status stream
 	streamErr, err := c.ErrorStream(context.Background(), &pb.ErrorStreamRequest{})
 	require.NoError(t, err)
+
 	go func() {
 		for {
 			in, err := streamErr.Recv()
 			if err == io.EOF {
+				return
+			}
+			code := status.Code(err)
+			// We expect this to happen when the server disconnects
+			if code == codes.Unavailable {
 				return
 			}
 			require.NoError(t, err)
@@ -517,6 +537,11 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 			if err == io.EOF {
 				return
 			}
+			code := status.Code(err)
+			// We expect this to happen when the server disconnects
+			if code == codes.Unavailable {
+				return
+			}
 			require.NoError(t, err)
 			log.Info("Got status message: %v", in.Status)
 		}
@@ -525,7 +550,15 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	log.Error("this is a test")
 	time.Sleep(1 * time.Second)
 	log.Error("this is a test")
-	time.Sleep(60 * time.Second)
+	time.Sleep(10 * time.Second)
+
+	// TODO: see if we can catch a panic
+
+	// This stops the app
+	cmdp.Cancel()
+
+	// Wait for it to stop
+	wg.Wait()
 }
 
 func TestSpacemeshApp_P2PInterface(t *testing.T) {
