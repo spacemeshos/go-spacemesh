@@ -56,6 +56,7 @@ type txProcessor interface {
 	AddressExists(addr types.Address) bool
 	ValidateNonceAndBalance(transaction *types.Transaction) error
 	GetLayerApplied(txID types.TransactionID) *types.LayerID
+	GetLayerStateRoot(layer types.LayerID) (types.Hash32, error)
 	GetStateRoot() types.Hash32
 	LoadState(layer types.LayerID) error
 	ValidateAndAddTxToPool(tx *types.Transaction) error

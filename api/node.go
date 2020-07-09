@@ -78,6 +78,7 @@ type TxAPI interface {
 	LatestLayerInState() types.LayerID
 	ProcessedLayer() types.LayerID
 	GetStateRoot() types.Hash32
+	GetLayerStateRoot(layer types.LayerID) (types.Hash32, error)
 }
 
 // PeerCounter is an api to get amount of connected peers

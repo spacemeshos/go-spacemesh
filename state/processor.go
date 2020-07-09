@@ -174,7 +174,8 @@ func (tp *TransactionProcessor) addState(stateRoot types.Hash32, layer types.Lay
 	return nil
 }
 
-func (tp *TransactionProcessor) getLayerStateRoot(layer types.LayerID) (types.Hash32, error) {
+// GetLayerStateRoot returns the state root at a given layer
+func (tp *TransactionProcessor) GetLayerStateRoot(layer types.LayerID) (types.Hash32, error) {
 	bts, err := tp.processorDb.Get(getStateRootLayerKey(layer))
 	if err != nil {
 		return types.Hash32{}, err
@@ -212,7 +213,7 @@ func (tp *TransactionProcessor) ApplyRewards(layer types.LayerID, miners []types
 func (tp *TransactionProcessor) LoadState(layer types.LayerID) error {
 	tp.mu.Lock()
 	defer tp.mu.Unlock()
-	state, err := tp.getLayerStateRoot(layer)
+	state, err := tp.GetLayerStateRoot(layer)
 	if err != nil {
 		return err
 	}

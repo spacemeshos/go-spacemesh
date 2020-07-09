@@ -82,6 +82,7 @@ var (
 		returnTx:     make(map[types.TransactionID]*types.Transaction),
 		layerApplied: make(map[types.TransactionID]*types.LayerID),
 	}
+	stateRoot = types.HexToHash32("11111")
 )
 
 func init() {
@@ -166,9 +167,7 @@ type TxAPIMock struct {
 }
 
 func (t *TxAPIMock) GetStateRoot() types.Hash32 {
-	var hash types.Hash32
-	hash.SetBytes([]byte("00000"))
-	return hash
+	return stateRoot
 }
 
 func (t *TxAPIMock) ValidateNonceAndBalance(*types.Transaction) error {
@@ -265,6 +264,10 @@ func (t *TxAPIMock) GetTransactions(txids []types.TransactionID) (txs []*types.T
 
 func (t *TxAPIMock) ProcessedLayer() types.LayerID {
 	return 8
+}
+
+func (t *TxAPIMock) GetLayerStateRoot(layer types.LayerID) (types.Hash32, error) {
+	return stateRoot, nil
 }
 
 func NewTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *types.Transaction {
@@ -369,7 +372,8 @@ func launchServer(t *testing.T, services ...ServiceAPI) func() {
 
 	// start gRPC and json servers
 	grpcService.Start()
-	jsonService.StartService(cfg.StartNodeService, cfg.StartMeshService)
+	jsonService.StartService(cfg.StartNodeService, cfg.StartMeshService, cfg.StartGlobalStateService,
+		cfg.StartSmesherService, cfg.StartTransactionService)
 	time.Sleep(3 * time.Second) // wait for server to be ready (critical on Travis)
 
 	return func() {
@@ -1006,6 +1010,7 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 
 	require.Equal(t, atxPerLayer, len(l.Activations), "unexpected number of activations in layer")
 	require.Equal(t, blkPerLayer, len(l.Blocks), "unexpected number of blocks in layer")
+	require.Equal(t, stateRoot.Bytes(), l.RootStateHash, "unexpected state root")
 
 	data, err := globalAtx.InnerBytes()
 	require.NoError(t, err, "error getting activation data size")

@@ -564,7 +564,7 @@ func TestTransactionProcessor_ApplyTransactions(t *testing.T) {
 	_, err = processor.ApplyTransactions(3, []*types.Transaction{})
 	assert.NoError(t, err)
 
-	_, err = processor.getLayerStateRoot(3)
+	_, err = processor.GetLayerStateRoot(3)
 	assert.NoError(t, err)
 
 }
