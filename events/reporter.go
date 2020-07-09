@@ -185,15 +185,18 @@ func InitializeEventReporter(url string) {
 
 func SubscribeToLayers(newLayerCh timesync.LayerTimer) {
 	if reporter != nil {
-		for {
-			select {
-			case layer := <-newLayerCh:
-				log.With().Info("reporter got new layer", layer.Field())
-				ReportNodeStatus(LayerCurrent(layer))
-			case <-reporter.stopChan:
-				return
+		// This will block, so run in a goroutine
+		go func() {
+			for {
+				select {
+				case layer := <-newLayerCh:
+					log.With().Info("reporter got new layer", layer)
+					ReportNodeStatus(LayerCurrent(layer))
+				case <-reporter.stopChan:
+					return
+				}
 			}
-		}
+		}()
 	}
 }
 
