@@ -780,6 +780,7 @@ func createBlockBuilder(ID string, n *service.Node, meshBlocks []*types.Block) *
 		MinerID:        types.NodeID{Key: ID},
 		AtxsPerBlock:   selectCount,
 		LayersPerEpoch: 3,
+		TxsPerBlock:    selectCount,
 	}
 	bb := NewBlockBuilder(cfg, signing.NewEdSigner(), n, beginRound, MockCoin{}, &mockMesh{b: meshBlocks}, &mockResult{}, &mockBlockOracle{}, &mockSyncer{}, mockProjector, nil, atxDbMock{}, log.NewDefault("mock_builder_"+"a"))
 	return bb

@@ -77,7 +77,7 @@ type BlockBuilder struct {
 	syncer          syncer
 	started         bool
 	atxsPerBlock    int // number of atxs to select per block
-	txsPerBlock      int // max number of tx to select per block
+	txsPerBlock     int // max number of tx to select per block
 	layersPerEpoch  uint16
 	projector       projector
 	db              database.Database
@@ -90,6 +90,7 @@ type Config struct {
 	Hdist          int
 	AtxsPerBlock   int
 	LayersPerEpoch uint16
+	TxsPerBlock    int
 }
 
 // NewBlockBuilder creates a struct of block builder type.
@@ -119,6 +120,7 @@ func NewBlockBuilder(config Config, sgn signer, net p2p.Service, beginRoundEvent
 		syncer:          syncer,
 		started:         false,
 		atxsPerBlock:    config.AtxsPerBlock,
+		txsPerBlock:     config.TxsPerBlock,
 		projector:       projector,
 		AtxDb:           atxDB,
 		TransactionPool: txPool,

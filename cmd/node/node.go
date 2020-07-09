@@ -556,6 +556,7 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 		MinerID:        nodeID,
 		AtxsPerBlock:   app.Config.AtxsPerBlock,
 		LayersPerEpoch: layersPerEpoch,
+		TxsPerBlock:    app.Config.TxsPerBlock,
 	}
 
 	blockProducer := miner.NewBlockBuilder(cfg, sgn, swarm, clock.Subscribe(), coinToss, msh, ha, blockOracle, syncer, stateAndMeshProjector, app.txPool, atxdb, app.addLogger(BlockBuilderLogger, lg))
