@@ -181,6 +181,21 @@ func GetStatusChannel() chan NodeStatus {
 	return nil
 }
 
+// GetAccountChannel returns a channel for account data updates
+func GetAccountChannel() chan Account {
+	if reporter != nil {
+		return reporter.channelAccount
+	}
+	return nil
+}
+
+func GetRewardChannel() chan Reward {
+	if reporter != nil {
+		return reporter.channelReward
+	}
+	return nil
+}
+
 // InitializeEventReporter initializes the event reporting interface
 func InitializeEventReporter(url string) {
 	reporter = newEventReporter()
@@ -248,6 +263,24 @@ type NodeStatus struct {
 	LayerVerified types.LayerID
 }
 
+// Account represents a snapshot of an account state
+type Account struct {
+	Address types.Address
+	Balance uint64
+	Nonce   uint64
+}
+
+// Reward represents a reward object with extra data needed by the API
+type Reward struct {
+	Layer       types.LayerID
+	Total       uint64
+	LayerReward uint64
+	Coinbase    types.Address
+	// TODO: We don't currently have a way to get these two.
+	//LayerComputed
+	//Smesher
+}
+
 // SetStatusElem sets a status
 type SetStatusElem func(*NodeStatus)
 
@@ -293,6 +326,8 @@ type EventReporter struct {
 	channelLayer       chan NewLayer
 	channelError       chan NodeError
 	channelStatus      chan NodeStatus
+	channelAccount     chan Account
+	channelReward      chan Reward
 	lastStatus         NodeStatus
 	stopChan           chan struct{}
 }
@@ -303,6 +338,8 @@ func newEventReporter() *EventReporter {
 		channelActivation:  make(chan *types.ActivationTx),
 		channelLayer:       make(chan NewLayer),
 		channelStatus:      make(chan NodeStatus),
+		channelAccount:     make(chan Account),
+		channelReward:      make(chan Reward),
 		lastStatus:         NodeStatus{},
 		stopChan:           make(chan struct{}),
 
@@ -324,6 +361,8 @@ func CloseEventReporter() {
 		close(reporter.channelLayer)
 		close(reporter.channelError)
 		close(reporter.channelStatus)
+		close(reporter.channelAccount)
+		close(reporter.channelReward)
 		close(reporter.stopChan)
 		reporter = nil
 	}

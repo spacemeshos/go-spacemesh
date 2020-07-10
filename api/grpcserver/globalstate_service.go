@@ -4,6 +4,7 @@ import (
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/peers"
 	"golang.org/x/net/context"
@@ -166,19 +167,90 @@ func (s GlobalStateService) SmesherDataQuery(ctx context.Context, in *pb.Smesher
 // AccountDataStream exposes a stream of account-related data
 func (s GlobalStateService) AccountDataStream(request *pb.AccountDataStreamRequest, stream pb.GlobalStateService_AccountDataStreamServer) error {
 	log.Info("GRPC GlobalStateService.AccountDataStream")
-	return nil
+
+	addr := types.BytesToAddress(request.Filter.AccountId.Address)
+
+	channelAccount := events.GetAccountChannel()
+	channelReward := events.GetRewardChannel()
+
+	for {
+		select {
+		case acct, ok := <-channelAccount:
+			if !ok {
+				// we could handle this more gracefully, by no longer listening
+				// to this stream but continuing to listen to the other stream,
+				// but in practice one should never be closed while the other is
+				// still running, so it doesn't matter
+				log.Info("channelAccount closed, shutting down")
+				return nil
+			}
+			// Apply address filter
+			if acct.Address == addr {
+				//pbActivation, err := convertActivation(activation)
+				//if err != nil {
+				//	log.Error("error serializing activation data: ", err)
+				//	return status.Errorf(codes.Internal, "error serializing activation data")
+				//}
+				//if err := stream.Send(&pb.AccountMeshDataStreamResponse{
+				//	Data: &pb.AccountMeshData{
+				//		DataItem: &pb.AccountMeshData_Activation{
+				//			Activation: pbActivation,
+				//		},
+				//	},
+				//}); err != nil {
+				//	return err
+				//}
+			}
+		case reward, ok := <-channelReward:
+			if !ok {
+				// we could handle this more gracefully, by no longer listening
+				// to this stream but continuing to listen to the other stream,
+				// but in practice one should never be closed while the other is
+				// still running, so it doesn't matter
+				log.Info("channelReward closed, shutting down")
+				return nil
+			}
+			// Apply address filter
+			if reward.Coinbase == addr {
+
+			}
+			//if tx.Origin() == addr || tx.Recipient == addr {
+			//	if err := stream.Send(&pb.AccountMeshDataStreamResponse{
+			//		Data: &pb.AccountMeshData{
+			//			DataItem: &pb.AccountMeshData_Transaction{
+			//				Transaction: convertTransaction(tx),
+			//			},
+			//		},
+			//	}); err != nil {
+			//		return err
+			//	}
+			//}
+		case <-stream.Context().Done():
+			log.Info("AccountDataStream closing stream, client disconnected")
+			return nil
+		}
+		// TODO: do we need an additional case here for a context to indicate
+		// that the service needs to shut down?
+	}
 }
 
 // SmesherRewardStream exposes a stream of smesher rewards
 func (s GlobalStateService) SmesherRewardStream(request *pb.SmesherRewardStreamRequest, stream pb.GlobalStateService_SmesherRewardStreamServer) error {
 	log.Info("GRPC GlobalStateService.SmesherRewardStream")
-	return nil
+
+	// TODO: implement me! We don't currently have a way to read rewards per-smesher.
+	// See https://github.com/spacemeshos/go-spacemesh/issues/2068.
+
+	return status.Errorf(codes.Unimplemented, "this endpoint has not yet been implemented")
 }
 
 // AppEventStream exposes a stream of emitted app events
 func (s GlobalStateService) AppEventStream(request *pb.AppEventStreamRequest, stream pb.GlobalStateService_AppEventStreamServer) error {
 	log.Info("GRPC GlobalStateService.AppEventStream")
-	return nil
+
+	// TODO: implement me! We don't currently have any app events
+
+	return status.Errorf(codes.Unimplemented, "this endpoint has not yet been implemented")
 }
 
 // GlobalStateStream exposes a stream of global data data items: rewards, receipts, account info, global state hash
