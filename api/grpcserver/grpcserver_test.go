@@ -581,6 +581,11 @@ func TestGlobalStateService(t *testing.T) {
 			checkAccountDataQueryItemReward(t, res.AccountItem[0].Item)
 			checkAccountDataQueryItemAccount(t, res.AccountItem[1].Item)
 		}},
+		{"SmesherDataQuery", func(t *testing.T) {
+			_, err := c.SmesherDataQuery(context.Background(), &pb.SmesherDataQueryRequest{})
+			require.Error(t, err, "expected endpoint to fail")
+			require.Contains(t, err.Error(), "this endpoint has not yet been implemented")
+		}},
 	}
 
 	// Run subtests
