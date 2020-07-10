@@ -16,10 +16,10 @@ const (
 	NodesDirectoryName = "nodes"
 	// UnlimitedMsgSize is a constant used to check whether message size is set to unlimited size
 	UnlimitedMsgSize = 0
-	// defaultTcpPort is the inet port that P2P listens on by default
-	defaultTcpPort = 7513
-	// defaultTcpInterface is the inet interface that P2P listens on by default
-	defaultTcpInterface = "0.0.0.0"
+	// defaultTCPPort is the inet port that P2P listens on by default
+	defaultTCPPort = 7513
+	// defaultTCPInterface is the inet interface that P2P listens on by default
+	defaultTCPInterface = "0.0.0.0"
 )
 
 // Values specifies default values for node config params.
@@ -84,8 +84,8 @@ func DefaultConfig() Config {
 	}
 
 	return Config{
-		TCPPort:               defaultTcpPort,
-		TCPInterface:          defaultTcpInterface,
+		TCPPort:               defaultTCPPort,
+		TCPInterface:          defaultTCPInterface,
 		AcquirePort:           true,
 		NodeID:                "",
 		DialTimeout:           duration("1m"),
