@@ -154,7 +154,11 @@ func (s GlobalStateService) AccountDataQuery(ctx context.Context, in *pb.Account
 // SmesherDataQuery returns historical info on smesher rewards
 func (s GlobalStateService) SmesherDataQuery(ctx context.Context, in *pb.SmesherDataQueryRequest) (*pb.SmesherDataQueryResponse, error) {
 	log.Info("GRPC GlobalStateService.SmesherDataQuery")
-	return nil, nil
+
+	// TODO: implement me! We don't currently have a way to read rewards per-smesher.
+	// See https://github.com/spacemeshos/go-spacemesh/issues/2068.
+
+	return nil, status.Errorf(codes.Unimplemented, "this endpoint has not yet been implemented")
 }
 
 // STREAMS
