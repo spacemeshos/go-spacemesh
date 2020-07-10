@@ -68,7 +68,7 @@ func (s *Config) ParseServicesList() error {
 
 	// If JSON gateway server is enabled, make sure at least one
 	// GRPC service is also enabled
-	if s.StartNewJSONServer && !s.StartNodeService {
+	if s.StartNewJSONServer && !s.StartNodeService && !s.StartMeshService {
 		return errors.New("must enable at least one GRPC service along with JSON gateway service")
 	}
 
