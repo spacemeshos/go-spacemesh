@@ -109,16 +109,46 @@ func (s GlobalStateService) AccountDataQuery(ctx context.Context, in *pb.Account
 				},
 			}})
 		}
-
 	}
 
 	if filterAccount {
-
+		balance := s.Mesh.GetBalance(addr)
+		counter := s.Mesh.GetNonce(addr)
+		res.AccountItem = append(res.AccountItem, &pb.AccountData{Item: &pb.AccountData_Account{
+			Account: &pb.Account{
+				Address: &pb.AccountId{Address: addr.Bytes()},
+				Counter: counter,
+				Balance: &pb.Amount{Value: balance},
+			},
+		}})
 	}
 
-	// Adjust for max results, offset
+	// MAX RESULTS, OFFSET
+	// There is some code duplication here as this is implemented in other Query endpoints,
+	// but without generics, there's no clean way to do this for different types.
 
-	return nil, nil
+	// Adjust for max results, offset
+	res.TotalResults = uint32(len(res.AccountItem))
+
+	// Skip to offset, don't send more than max results
+	// TODO: Optimize this. Obviously, we could do much smarter things than re-loading all
+	// of the data from scratch, then figuring out which data to return here. We could cache
+	// query results and/or figure out which data to load before loading it.
+	offset := in.Offset
+
+	// If the offset is too high there is nothing to return (this is not an error)
+	if offset > uint32(len(res.AccountItem)) {
+		return &pb.AccountDataQueryResponse{}, nil
+	}
+
+	// If the max results is too high, trim it. If MaxResults is zero, that means unlimited
+	// (since we have no way to distinguish between zero and its not being provided).
+	maxResults := in.MaxResults
+	if maxResults == 0 || offset+maxResults > uint32(len(res.AccountItem)) {
+		maxResults = uint32(len(res.AccountItem)) - offset
+	}
+	res.AccountItem = res.AccountItem[offset : offset+maxResults]
+	return res, nil
 }
 
 // SmesherDataQuery returns historical info on smesher rewards
