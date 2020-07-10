@@ -158,6 +158,7 @@ func (s MeshService) AccountMeshDataQuery(ctx context.Context, in *pb.AccountMes
 		// We have no way to look up activations by coinbase so we have no choice
 		// but to read all of them.
 		// TODO: index activations by layer (and maybe by coinbase)
+		// See https://github.com/spacemeshos/go-spacemesh/issues/2064.
 		var activations []types.ATXID
 		for l := startLayer; l <= s.Mesh.LatestLayer(); l++ {
 			layer, err := s.Mesh.GetLayer(l)
@@ -237,14 +238,16 @@ func convertTransaction(t *types.Transaction) *pb.Transaction {
 		},
 		Sender: &pb.AccountId{Address: t.Origin().Bytes()},
 		GasOffered: &pb.GasOffered{
-			// TODO: Check this math! Does fee == price?
-			GasPrice:    t.Fee,
+			// We don't currently implement gas price. t.Fee is the gas actually paid
+			// by the tx; GasLimit is the max gas. MeshService is concerned with the
+			// pre-STF tx, which includes a gas offer but not an amount of gas actually
+			// consumed.
+			//GasPrice:    nil,
 			GasProvided: t.GasLimit,
 		},
 		Amount:  &pb.Amount{Value: t.Amount},
 		Counter: t.AccountNonce,
 		Signature: &pb.Signature{
-			// TODO: confirm default signature scheme
 			Scheme:    pb.Signature_SCHEME_ED25519_PLUS_PLUS,
 			Signature: t.Signature[:],
 			PublicKey: t.Origin().Bytes(),
@@ -338,18 +341,20 @@ func (s MeshService) readLayer(layer *types.Layer, layerStatus pb.Layer_LayerSta
 func (s MeshService) LayersQuery(ctx context.Context, in *pb.LayersQueryRequest) (*pb.LayersQueryResponse, error) {
 	log.Info("GRPC MeshService.LayersQuery")
 
-	// last validated layer
-	// TODO: Do we need to distinguish between layers that have passed tortoise,
-	// passed hare, been applied to state, etc.? For now eveything is either
-	// unspecified, or fully confirmed.
-	// see https://github.com/spacemeshos/api/issues/89
-	//lastValidLayer := s.Mesh.ProcessedLayer()
-	lastValidLayer := s.Mesh.LatestLayerInState()
+	// Get the latest layers that passed both consensus engines.
+	lastLayerPassedHare := s.Mesh.LatestLayerInState()
+	lastLayerPassedTortoise := s.Mesh.ProcessedLayer()
 
 	layers := []*pb.Layer{}
 	for l := uint64(in.StartLayer); l <= uint64(in.EndLayer); l++ {
 		layerStatus := pb.Layer_LAYER_STATUS_UNSPECIFIED
-		if l <= lastValidLayer.Uint64() {
+
+		// First check if the layer passed the Hare, then check if it passed the Tortoise.
+		// It may be either, or both, but Tortoise always takes precedence.
+		if l <= lastLayerPassedHare.Uint64() {
+			layerStatus = pb.Layer_LAYER_STATUS_APPROVED
+		}
+		if l <= lastLayerPassedTortoise.Uint64() {
 			layerStatus = pb.Layer_LAYER_STATUS_CONFIRMED
 		}
 
@@ -477,8 +482,7 @@ func (s MeshService) LayerStream(in *pb.LayerStreamRequest, stream pb.MeshServic
 				log.Info("LayerStream closed, shutting down")
 				return nil
 			}
-			// TODO: make sure we send the right status
-			pbLayer, err := s.readLayer(layer, pb.Layer_LAYER_STATUS_CONFIRMED)
+			pbLayer, err := s.readLayer(layer.Layer, convertLayerStatus(layer.Status))
 			if err != nil {
 				return err
 			}
@@ -491,5 +495,16 @@ func (s MeshService) LayerStream(in *pb.LayerStreamRequest, stream pb.MeshServic
 		}
 		// TODO: do we need an additional case here for a context to indicate
 		// that the service needs to shut down?
+	}
+}
+
+func convertLayerStatus(in int) pb.Layer_LayerStatus {
+	switch in {
+	case events.LayerStatusTypeApproved:
+		return pb.Layer_LAYER_STATUS_APPROVED
+	case events.LayerStatusTypeConfirmed:
+		return pb.Layer_LAYER_STATUS_CONFIRMED
+	default:
+		return pb.Layer_LAYER_STATUS_UNSPECIFIED
 	}
 }
