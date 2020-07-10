@@ -116,6 +116,11 @@ func (s NodeService) StatusStream(request *pb.StatusStreamRequest, stream pb.Nod
 				log.Info("StatusStream closed, shutting down")
 				return nil
 			}
+			// TODO: Do we want to re-fetch status elements other than the ones
+			// that were just reported? If so, why not just send a basic signal
+			// and let us re-fetch all of the data here? In other words, why
+			// include any of it in this stream?
+			// See https://github.com/spacemeshos/api/issues/92
 			if err := stream.Send(&pb.StatusStreamResponse{Status: &pb.NodeStatus{
 				ConnectedPeers: nodeStatus.NumPeers,
 				IsSynced:       nodeStatus.IsSynced,
