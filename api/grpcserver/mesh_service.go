@@ -200,6 +200,10 @@ func (s MeshService) AccountMeshDataQuery(ctx context.Context, in *pb.AccountMes
 		}
 	}
 
+	// MAX RESULTS, OFFSET
+	// There is some code duplication here as this is implemented in other Query endpoints,
+	// but without generics, there's no clean way to do this for different types.
+
 	res.TotalResults = uint32(len(res.Data))
 
 	// Skip to offset, don't send more than max results
@@ -220,7 +224,6 @@ func (s MeshService) AccountMeshDataQuery(ctx context.Context, in *pb.AccountMes
 		maxResults = uint32(len(res.Data)) - offset
 	}
 	res.Data = res.Data[offset : offset+maxResults]
-
 	return res, nil
 }
 
@@ -323,7 +326,7 @@ func (s MeshService) readLayer(layer *types.Layer, layerStatus pb.Layer_LayerSta
 	for _, atx := range atxs {
 		pbatx, err := convertActivation(atx)
 		if err != nil {
-			log.Error("error serializing activation data: ", err)
+			log.Error("error serializing activation data: %s", err)
 			return nil, status.Errorf(codes.Internal, "error serializing activation data")
 		}
 		pbActivations = append(pbActivations, pbatx)
@@ -374,6 +377,7 @@ func (s MeshService) LayersQuery(ctx context.Context, in *pb.LayersQueryRequest)
 		// internal or an input error? For now, all missing layers produce
 		// internal errors.
 		if layer == nil || err != nil {
+			log.Error("error retrieving layer data: %s", err)
 			return nil, status.Errorf(codes.Internal, "error retrieving layer data")
 		}
 

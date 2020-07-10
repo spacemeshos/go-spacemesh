@@ -57,6 +57,10 @@ const (
 	blkPerLayer           = 3
 	accountBalance        = 8675301
 	accountCounter        = 42
+	layerFirst            = 0
+	layerVerified         = 8
+	layerLatest           = 10
+	layerCurrent          = 12
 )
 
 var (
@@ -182,12 +186,17 @@ func (t *TxAPIMock) GetProjection(_ types.Address, prevNonce, prevBalance uint64
 
 // latest layer received
 func (t *TxAPIMock) LatestLayer() types.LayerID {
-	return 10
+	return layerLatest
 }
 
 // latest layer approved/confirmed/applied to state
+// The real logic here is a bit more complicated, as it depends whether the node
+// is syncing or not. If it's not syncing, layers are applied to state as they're
+// verified by Hare. If it's syncing, Hare is not run, and they are applied to
+// state as they're confirmed by Tortoise and it advances pbase. This is all in
+// flux right now so keep this simple for the purposes of testing.
 func (t *TxAPIMock) LatestLayerInState() types.LayerID {
-	return 8
+	return layerVerified
 }
 
 func (t *TxAPIMock) GetLayerApplied(txID types.TransactionID) *types.LayerID {
@@ -280,6 +289,10 @@ func (t *TxAPIMock) GetNonce(addr types.Address) uint64 {
 	return uint64(accountCounter)
 }
 
+func (t *TxAPIMock) ProcessedLayer() types.LayerID {
+	return types.LayerID(layerVerified)
+}
+
 func NewTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *types.Transaction {
 	tx, err := types.NewSignedTx(nonce, recipient, 1, defaultGasLimit, defaultFee, signer)
 	if err != nil {
@@ -340,7 +353,7 @@ type GenesisTimeMock struct {
 }
 
 func (t GenesisTimeMock) GetCurrentLayer() types.LayerID {
-	return 12
+	return layerCurrent
 }
 
 func (t GenesisTimeMock) GetGenesisTime() time.Time {
@@ -481,9 +494,9 @@ func TestNodeService(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, uint64(0), res.Status.ConnectedPeers)
 			require.Equal(t, false, res.Status.IsSynced)
-			require.Equal(t, uint64(10), res.Status.SyncedLayer)
-			require.Equal(t, uint64(12), res.Status.TopLayer)
-			require.Equal(t, uint64(8), res.Status.VerifiedLayer)
+			require.Equal(t, uint64(layerLatest), res.Status.SyncedLayer)
+			require.Equal(t, uint64(layerCurrent), res.Status.TopLayer)
+			require.Equal(t, uint64(layerVerified), res.Status.VerifiedLayer)
 		}},
 		{"SyncStart", func(t *testing.T) {
 			require.Equal(t, false, syncer.startCalled, "Start() not yet called on syncer")
@@ -526,12 +539,6 @@ func TestGlobalStateService(t *testing.T) {
 	}()
 	c := pb.NewGlobalStateServiceClient(conn)
 
-	// Some shared test data
-	//layerFirst := 0
-	//layerLatestReceived := txAPI.LatestLayer()
-	layerConfirmed := txAPI.LatestLayerInState()
-	//layerCurrent := genTime.GetCurrentLayer()
-
 	// Construct an array of test cases to test each endpoint in turn
 	testCases := []struct {
 		name string
@@ -540,7 +547,7 @@ func TestGlobalStateService(t *testing.T) {
 		{"GlobalStateHash", func(t *testing.T) {
 			res, err := c.GlobalStateHash(context.Background(), &pb.GlobalStateHashRequest{})
 			require.NoError(t, err)
-			require.Equal(t, uint64(layerConfirmed), res.Response.LayerNumber)
+			require.Equal(t, uint64(layerVerified), res.Response.LayerNumber)
 			require.Equal(t, stateRoot.Bytes(), res.Response.RootHash)
 		}},
 		{"Account", func(t *testing.T) {
@@ -575,12 +582,6 @@ func TestMeshService(t *testing.T) {
 		require.NoError(t, conn.Close())
 	}()
 	c := pb.NewMeshServiceClient(conn)
-
-	// Some shared test data
-	layerFirst := 0
-	layerLatestReceived := txAPI.LatestLayer()
-	layerConfirmed := txAPI.LatestLayerInState()
-	layerCurrent := genTime.GetCurrentLayer()
 
 	// Construct an array of test cases to test each endpoint in turn
 	testCases := []struct {
@@ -638,7 +639,7 @@ func TestMeshService(t *testing.T) {
 					name: "MinLayer too high",
 					run: func(t *testing.T) {
 						_, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
-							MinLayer: layerCurrent.Uint64() + 1,
+							MinLayer: layerCurrent + 1,
 						})
 						require.Error(t, err, "expected an error")
 						require.Contains(t, err.Error(), "`LatestLayer` must be less than")
@@ -652,7 +653,8 @@ func TestMeshService(t *testing.T) {
 					run: func(t *testing.T) {
 						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
 							Filter: &pb.AccountMeshDataFilter{
-								AccountId: &pb.AccountId{},
+								AccountId:            &pb.AccountId{},
+								AccountMeshDataFlags: uint32(pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_ACTIVATIONS),
 							},
 							Offset: math.MaxUint32,
 						})
@@ -692,7 +694,8 @@ func TestMeshService(t *testing.T) {
 						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
 							MaxResults: uint32(10),
 							Filter: &pb.AccountMeshDataFilter{
-								AccountId: &pb.AccountId{},
+								AccountId:            &pb.AccountId{},
+								AccountMeshDataFlags: uint32(pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_ACTIVATIONS),
 							},
 						})
 						require.NoError(t, err)
@@ -706,27 +709,29 @@ func TestMeshService(t *testing.T) {
 						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
 							MaxResults: uint32(10),
 							Filter: &pb.AccountMeshDataFilter{
-								AccountId: &pb.AccountId{Address: addr1.Bytes()},
+								AccountMeshDataFlags: uint32(pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_ACTIVATIONS),
+								AccountId:            &pb.AccountId{Address: addr1.Bytes()},
 							},
 						})
 						require.NoError(t, err)
-						require.Equal(t, uint32(0), res.TotalResults)
-						require.Equal(t, 0, len(res.Data))
+						require.Equal(t, uint32(1), res.TotalResults)
+						require.Equal(t, 1, len(res.Data))
 					},
 				},
 				{
 					name: "filter with valid AccountId and AccountMeshDataFlags zero",
 					run: func(t *testing.T) {
-						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
+						_, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
 							MaxResults: uint32(10),
 							Filter: &pb.AccountMeshDataFilter{
 								AccountId:            &pb.AccountId{Address: addr1.Bytes()},
 								AccountMeshDataFlags: uint32(pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_UNSPECIFIED),
 							},
 						})
-						require.NoError(t, err)
-						require.Equal(t, uint32(0), res.TotalResults)
-						require.Equal(t, 0, len(res.Data))
+						require.Error(t, err, "expected an error")
+						require.Contains(t, err.Error(), "`Filter.AccountMeshDataFlags` must set at least one bitfield")
+						statusCode := status.Code(err)
+						require.Equal(t, codes.InvalidArgument, statusCode)
 					},
 				},
 				{
@@ -964,8 +969,8 @@ func TestMeshService(t *testing.T) {
 				{
 					name: "layer after last received",
 					run: generateRunFnError("error retrieving layer data", &pb.LayersQueryRequest{
-						StartLayer: uint32(layerLatestReceived + 1),
-						EndLayer:   uint32(layerLatestReceived + 2),
+						StartLayer: uint32(layerLatest + 1),
+						EndLayer:   uint32(layerLatest + 2),
 					}),
 				},
 
@@ -1001,8 +1006,8 @@ func TestMeshService(t *testing.T) {
 				{
 					name: "same start end layer",
 					run: generateRunFn(1, &pb.LayersQueryRequest{
-						StartLayer: uint32(layerLatestReceived),
-						EndLayer:   uint32(layerLatestReceived),
+						StartLayer: uint32(layerVerified),
+						EndLayer:   uint32(layerVerified),
 					}),
 				},
 
@@ -1010,8 +1015,8 @@ func TestMeshService(t *testing.T) {
 				{
 					name: "start layer after last approved confirmed layer",
 					run: generateRunFn(2, &pb.LayersQueryRequest{
-						StartLayer: uint32(layerConfirmed + 1),
-						EndLayer:   uint32(layerConfirmed + 2),
+						StartLayer: uint32(layerVerified + 1),
+						EndLayer:   uint32(layerVerified + 2),
 					}),
 				},
 
@@ -1019,9 +1024,9 @@ func TestMeshService(t *testing.T) {
 				{
 					name: "end layer after last approved confirmed layer",
 					// expect difference + 1 return layers
-					run: generateRunFn(int(layerConfirmed)+2-layerFirst+1, &pb.LayersQueryRequest{
+					run: generateRunFn(int(layerVerified)+2-layerFirst+1, &pb.LayersQueryRequest{
 						StartLayer: uint32(layerFirst),
-						EndLayer:   uint32(layerConfirmed + 2),
+						EndLayer:   uint32(layerVerified + 2),
 					}),
 				},
 
@@ -1031,14 +1036,14 @@ func TestMeshService(t *testing.T) {
 					run: func(t *testing.T) {
 						req := &pb.LayersQueryRequest{
 							StartLayer: uint32(layerFirst),
-							EndLayer:   uint32(layerLatestReceived),
+							EndLayer:   uint32(layerLatest),
 						}
 
 						res, err := c.LayersQuery(context.Background(), req)
 						require.NoError(t, err, "query returned unexpected error")
 
 						// endpoint inclusive so add one
-						numLayers := int(layerLatestReceived) - layerFirst + 1
+						numLayers := layerLatest - layerFirst + 1
 						require.Equal(t, numLayers, len(res.Layer))
 						checkLayer(t, res.Layer[0])
 
@@ -1253,6 +1258,7 @@ func TestLayerStream_comprehensive(t *testing.T) {
 		res, err = stream.Recv()
 		require.NoError(t, err, "got error from stream")
 		require.Equal(t, uint64(0), res.Layer.Number)
+		require.Equal(t, events.LayerStatusTypeConfirmed, res.Layer.Status)
 		checkLayer(t, res.Layer)
 
 		// look for EOF
