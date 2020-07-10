@@ -76,6 +76,7 @@ type TxAPI interface {
 	GetTransaction(id types.TransactionID) (*types.Transaction, error)
 	GetProjection(addr types.Address, prevNonce, prevBalance uint64) (nonce, balance uint64, err error)
 	LatestLayerInState() types.LayerID
+	ProcessedLayer() types.LayerID
 	GetStateRoot() types.Hash32
 }
 

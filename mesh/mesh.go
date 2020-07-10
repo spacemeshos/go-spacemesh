@@ -200,6 +200,16 @@ func (msh *Mesh) LatestLayer() types.LayerID {
 
 // SetLatestLayer sets the latest layer we saw from the network
 func (msh *Mesh) SetLatestLayer(idx types.LayerID) {
+	// Report the status update, as well as the layer itself.
+	layer, err := msh.GetLayer(idx)
+	if err != nil {
+		msh.Error("error reading layer data for layer %v: %s", layer, err)
+	} else {
+		events.ReportNewLayer(events.NewLayer{
+			Layer:  layer,
+			Status: events.LayerStatusTypeUnknown,
+		})
+	}
 	events.ReportNodeStatus(events.LayerSynced(idx))
 	defer msh.lkMutex.Unlock()
 	msh.lkMutex.Lock()
@@ -258,11 +268,19 @@ func (vl *validator) ValidateLayer(lyr *types.Layer) {
 	if len(lyr.Blocks()) == 0 {
 		vl.Info("skip validation of layer %d with no blocks", lyr.Index())
 		vl.SetProcessedLayer(lyr.Index())
+		events.ReportNewLayer(events.NewLayer{
+			Layer:  lyr,
+			Status: events.LayerStatusTypeConfirmed,
+		})
 		return
 	}
 
 	oldPbase, newPbase := vl.trtl.HandleIncomingLayer(lyr)
 	vl.SetProcessedLayer(lyr.Index())
+	events.ReportNewLayer(events.NewLayer{
+		Layer:  lyr,
+		Status: events.LayerStatusTypeConfirmed,
+	})
 
 	if err := vl.trtl.Persist(); err != nil {
 		vl.Error("could not persist tortoise layer index %d", lyr.Index())
@@ -312,7 +330,10 @@ func (msh *Mesh) applyState(l *types.Layer) {
 	msh.accumulateRewards(l, msh.config)
 	msh.pushTransactions(l)
 	msh.setLatestLayerInState(l.Index())
-	events.ReportNewLayer(l)
+	events.ReportNewLayer(events.NewLayer{
+		Layer:  l,
+		Status: events.LayerStatusTypeApproved,
+	})
 }
 
 // HandleValidatedLayer handles layer valid blocks as decided by hare
@@ -586,7 +607,10 @@ func (msh *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.Transaction, atx
 	if err != nil {
 		log.Error("failed to report updated layer data", err)
 	} else {
-		events.ReportNewLayer(layer)
+		events.ReportNewLayer(events.NewLayer{
+			Layer:  layer,
+			Status: events.LayerStatusTypeUnknown,
+		})
 	}
 	msh.With().Info("added block to database", blk.Fields()...)
 	return nil

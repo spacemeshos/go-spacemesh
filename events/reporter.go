@@ -95,7 +95,7 @@ func ReportDoneCreatingBlock(eligible bool, layer uint64, error string) {
 }
 
 // ReportNewLayer reports a new layer
-func ReportNewLayer(layer *types.Layer) {
+func ReportNewLayer(layer NewLayer) {
 	if reporter != nil {
 		select {
 		case reporter.channelLayer <- layer:
@@ -119,6 +119,12 @@ func ReportError(err NodeError) {
 }
 
 // ReportNodeStatus reports an update to the node status
+// Note: There is some overlap with channelLayer here, as a new latest
+// or verified layer should be sent over that channel as well. However,
+// that happens inside the Mesh, at the source. It doesn't currently
+// happen here because the status update includes only a layer ID, not
+// full layer data, and the Reporter currently has no way to retrieve
+// full layer data.
 func ReportNodeStatus(setters ...SetStatusElem) {
 	if reporter != nil {
 		// Note that we make no attempt to remove duplicate status messages
@@ -152,7 +158,7 @@ func GetActivationsChannel() chan *types.ActivationTx {
 }
 
 // GetLayerChannel returns a channel of all layer data
-func GetLayerChannel() chan *types.Layer {
+func GetLayerChannel() chan NewLayer {
 	if reporter != nil {
 		return reporter.channelLayer
 	}
@@ -209,6 +215,19 @@ const (
 	NodeErrorTypeSignalShutdown
 )
 
+const (
+	LayerStatusTypeUnknown   = iota
+	LayerStatusTypeApproved  // approved by Hare
+	LayerStatusTypeConfirmed // confirmed by Tortoise
+)
+
+// NewLayer packages up a layer with its status (which a layer does not
+// ordinarily contain)
+type NewLayer struct {
+	Layer  *types.Layer
+	Status int
+}
+
 // NodeError represents an internal error to be reported
 type NodeError struct {
 	Msg   string
@@ -261,7 +280,7 @@ func LayerVerified(lid types.LayerID) SetStatusElem {
 type EventReporter struct {
 	channelTransaction chan *types.Transaction
 	channelActivation  chan *types.ActivationTx
-	channelLayer       chan *types.Layer
+	channelLayer       chan NewLayer
 	channelError       chan NodeError
 	channelStatus      chan NodeStatus
 	lastStatus         NodeStatus
