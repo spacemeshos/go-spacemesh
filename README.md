@@ -90,7 +90,7 @@ Since the project uses Go 1.11's Modules it is best to place the code **outside*
 
 ### Setting Up Local Dev Environment
 
-Building is supported on OS X, Linux and Windows.
+Building is supported on OS X, Linux, FreeBSD, and Windows.
 
 Install [Go 1.11 or later](https://golang.org/dl/) for your platform, if you haven't already.
 
@@ -111,11 +111,13 @@ To build `go-spacemesh` for your current system architecture, from the project r
 make build
 ```
 
+(On FreeBSD, you should instead use `gmake build`. You can install `gmake` with `pkg install gmake` if it isn't already installed.)
+
 This will (re-)generate protobuf files and build the `go-spacemesh` binary, saving it in the `build/` directory.
 
 To build a binary for a specific architecture directory use:
 ```
-make darwin | linux | windows
+make darwin | linux | freebsd | windows
 ```
 
 Platform-specific binaries are saved to the `/build` directory.
