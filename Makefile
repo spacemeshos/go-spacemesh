@@ -20,7 +20,7 @@ LDFLAGS = -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.
 
 PKGS = $(shell go list ./...)
 
-PLATFORMS := windows linux darwin
+PLATFORMS := windows linux darwin freebsd
 os = $(word 1, $@)
 
 ifeq ($(BRANCH),develop)
