@@ -13,6 +13,7 @@ type AtxMemPool struct {
 	atxMap map[types.ATXID]*types.ActivationTx
 }
 
+// ProcessAtx puts an atx into mem pool, this is just for testing
 func (mem *AtxMemPool) ProcessAtx(atx *types.ActivationTx) error {
 	mem.Put(atx)
 	return nil
@@ -23,7 +24,7 @@ func NewAtxMemPool() *AtxMemPool {
 	return &AtxMemPool{atxMap: make(map[types.ATXID]*types.ActivationTx)}
 }
 
-// Get retrieves the atx by the provided id id, it returns a reference to the found atx struct or an error if not
+// GetFullAtx retrieves the atx by the provided id id, it returns a reference to the found atx struct or an error if not
 func (mem *AtxMemPool) GetFullAtx(id types.ATXID) (*types.ActivationTx, error) {
 	mem.mu.RLock()
 	defer mem.mu.RUnlock()
