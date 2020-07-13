@@ -92,7 +92,7 @@ Since the project uses Go Modules it is best to place the code **outside** your 
 
 Building is supported on OS X, Linux, FreeBSD, and Windows.
 
-Install [Go 1.13 or later](https://golang.org/dl/) for your platform, if you haven't already.
+Install [Go 1.14 or later](https://golang.org/dl/) for your platform, if you haven't already.
 
 On Windows you need to install `make` via [msys2](https://www.msys2.org/), [MingGW-w64](http://mingw-w64.org/doku.php) or [mingw] (https://chocolatey.org/packages/mingw)
 
