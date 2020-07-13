@@ -181,3 +181,21 @@ func Test_TurtleAbstainsInMiddle(t *testing.T) {
 	require.Equal(t, 5, trtl.verified, "verification should'nt go further after layer couldn't be verified,"+
 		"even if future layers were successfully verified ")
 }
+
+func TestTurtle_Eviction(t *testing.T) {
+	layers := types.LayerID(defaultTestHdist * 10)
+	avgPerLayer := 10
+	voteNegative := 0
+	trtl := turtleSanity(t, layers, avgPerLayer, voteNegative, 0)
+	require.Equal(t, len(trtl.blocksToBlocks),
+		(defaultTestHdist+2)*avgPerLayer)
+}
+
+func TestTurtle_Eviction2(t *testing.T) {
+	layers := types.LayerID(defaultTestHdist * 14)
+	avgPerLayer := 30
+	voteNegative := 5
+	trtl := turtleSanity(t, layers, avgPerLayer, voteNegative, 0)
+	require.Equal(t, len(trtl.blocksToBlocks),
+		(defaultTestHdist+2)*avgPerLayer)
+}

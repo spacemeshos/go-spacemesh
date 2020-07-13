@@ -18,7 +18,7 @@ const MaxExceptionList = 100
 //We then add the vote difference vector and the explicit vote vector to our vote-totals vector.
 
 type opinion struct {
-	id            types.BlockID
+	blockIDLayerTuple
 	blocksOpinion map[types.BlockID]vec
 }
 
@@ -57,12 +57,10 @@ type turtle struct {
 	goodBlocksArr   []types.BlockID
 	goodBlocksIndex map[types.BlockID]int
 
-	inputVectorMap map[types.LayerID]map[types.BlockID]vec
-	verified       types.LayerID
+	verified types.LayerID
 
 	blocksToBlocks      []opinion
 	blocksToBlocksIndex map[types.BlockID]int
-	indexToLayerID      map[int]types.LayerID
 }
 
 func (t *turtle) SetLogger(log2 log.Log) {
@@ -81,35 +79,37 @@ func NewTurtle(bdp blockDataProvider, hrp hareResultsProvider, hdist, avgLayerSi
 		goodBlocks:          make(map[types.BlockID]struct{}),
 		goodBlocksArr:       make([]types.BlockID, 0, 10),
 		goodBlocksIndex:     make(map[types.BlockID]int),
-		inputVectorMap:      make(map[types.LayerID]map[types.BlockID]vec),
 		blocksToBlocks:      make([]opinion, 0, 1),
 		blocksToBlocksIndex: make(map[types.BlockID]int),
-		indexToLayerID:      make(map[int]types.LayerID),
 	}
 	return t
 }
 
 func (t *turtle) init(genesisBlock types.BlockID) {
 	t.blocksToBlocks = append(t.blocksToBlocks, opinion{
-		id:            genesisBlock,
+		blockIDLayerTuple: blockIDLayerTuple{
+			genesisBlock,
+			0,
+		},
 		blocksOpinion: make(map[types.BlockID]vec),
 	})
 	t.blocksToBlocksIndex[genesisBlock] = 0
-	t.indexToLayerID[0] = types.LayerID(0)
 	t.goodBlocksArr = append(t.goodBlocksArr, genesisBlock)
 	t.goodBlocksIndex[genesisBlock] = 0
-	t.inputVectorMap[types.LayerID(0)] = make(map[types.BlockID]vec)
-	t.inputVectorMap[types.LayerID(0)][genesisBlock] = support
 }
 
 func (t *turtle) evict() {
+	// Don't evict before we've verified more than hdist
+	// TODO: fix potential leak when we can't verify but keep receiving layers
 	if t.verified <= t.Hdist {
 		return
 	}
+	// The window is the last [verified - hdist] layers.
 	window := t.verified - t.Hdist
-
+	t.logger.Info("Window starts %v", window)
+	// evict from last evicted to the beginning of our window.
 	for lyr := t.Evict; lyr < window; lyr++ {
-		delete(t.inputVectorMap, lyr)
+		t.logger.Info("removing lyr %v", lyr)
 		ids, err := t.bdp.LayerBlockIds(lyr)
 		if err != nil {
 			t.logger.With().Error("could not get layer ids for layer ", log.LayerID(lyr.Uint64()), log.Err(err))
@@ -121,18 +121,10 @@ func (t *turtle) evict() {
 				continue
 			}
 			delete(t.blocksToBlocksIndex, id)
-			delete(t.indexToLayerID, idx)
-			oldidxs := make(map[types.BlockID]int, len(t.blocksToBlocks))
-			for i, op := range t.blocksToBlocks {
-				oldidxs[op.id] = i
-			}
 			t.blocksToBlocks = removeOpinion(t.blocksToBlocks, idx)
 			// FIX indexes
 			for i, op := range t.blocksToBlocks {
-				t.blocksToBlocksIndex[op.id] = i
-				itslyr := t.indexToLayerID[oldidxs[op.id]]
-				delete(t.indexToLayerID, oldidxs[op.id])
-				t.indexToLayerID[i] = itslyr
+				t.blocksToBlocksIndex[op.BlockID] = i
 			}
 			goodidx, ok := t.goodBlocksIndex[id]
 			if !ok {
@@ -150,32 +142,16 @@ func (t *turtle) evict() {
 }
 
 func removeBlockIndex(b []types.BlockID, i int) []types.BlockID {
-	b[i] = b[len(b)-1]
-	return b[:len(b)-1]
+	return append(b[:i], b[i+1:]...)
 }
 
 func removeOpinion(o []opinion, i int) []opinion {
-	o[i] = o[len(o)-1]
-	return o[:len(o)-1]
+	return append(o[:i], o[i+1:]...)
 }
 
 func (t *turtle) inputVector(l types.LayerID, b types.BlockID) vec {
 	if l == 0 {
 		return support
-	}
-
-	if lyr, ok := t.inputVectorMap[l]; ok {
-		if vote, ok := lyr[b]; ok {
-			if vote == abstain {
-				// XXX Try getting the vote again
-				newlyr := t.inputVectorForLayer(l) // no need to save this
-				if newvote, ok := newlyr[b]; ok {
-					return newvote
-				}
-			}
-			return vote
-		}
-		return against
 	}
 
 	// TODO: Pull these from db/sync if we are syncing
@@ -184,11 +160,11 @@ func (t *turtle) inputVector(l types.LayerID, b types.BlockID) vec {
 		return abstain
 	}
 
-	t.inputVectorMap[l] = make(map[types.BlockID]vec, len(res))
+	m := make(map[types.BlockID]vec, len(res))
 	wasIncluded := false
 
 	for _, bl := range res {
-		t.inputVectorMap[l][bl] = support
+		m[bl] = support
 		if bl == b {
 			wasIncluded = true
 		}
@@ -207,9 +183,7 @@ func (t *turtle) inputVectorForLayer(l types.LayerID) map[types.BlockID]vec {
 		return nil
 	}
 
-	if _, ok := t.inputVectorMap[l]; !ok {
-		t.inputVectorMap[l] = make(map[types.BlockID]vec, len(lyr))
-	}
+	lyrResult := make(map[types.BlockID]vec, len(lyr))
 
 	// TODO: Pull these from db/sync if we are syncing. \
 	res, err := t.hrp.GetResult(l)
@@ -217,38 +191,32 @@ func (t *turtle) inputVectorForLayer(l types.LayerID) map[types.BlockID]vec {
 		// hare didn't finish hence we don't have opinion
 		// TODO: get hare opinion when hare finishes
 		for _, b := range lyr {
-			t.inputVectorMap[l][b] = abstain
+			lyrResult[b] = abstain
 		}
-		return t.inputVectorMap[l]
+		return lyrResult
 	}
-
-	wasIncluded := make(map[types.BlockID]struct{})
-
 	for _, b := range res {
-		t.inputVectorMap[l][b] = support
-		wasIncluded[b] = struct{}{}
+		lyrResult[b] = support
 	}
-
 	for _, b := range lyr {
-		if _, ok := wasIncluded[b]; !ok {
-			t.inputVectorMap[l][b] = against
+		if _, ok := lyrResult[b]; !ok {
+			lyrResult[b] = against
 		}
 	}
-
-	return t.inputVectorMap[l]
+	return lyrResult
 }
 
 func (t *turtle) BaseBlock(current types.LayerID) (types.BlockID, [][]types.BlockID, error) {
 	for i := len(t.blocksToBlocks) - 1; i >= 0; i-- {
-		if _, ok := t.goodBlocksIndex[t.blocksToBlocks[i].id]; !ok {
+		if _, ok := t.goodBlocksIndex[t.blocksToBlocks[i].BlockID]; !ok {
 			continue
 		}
-		afn, err := t.opinionMatches(t.indexToLayerID[i], t.blocksToBlocks[i])
+		afn, err := t.opinionMatches(t.blocksToBlocks[i].LayerID, t.blocksToBlocks[i])
 		if err != nil {
 			continue
 		}
 		t.logger.Info("Chose baseblock %v against: %v, for: %v, neutral: %v", t.blocksToBlocks[i].id, len(afn[0]), len(afn[1]), len(afn[2]))
-		return t.blocksToBlocks[i].id, [][]types.BlockID{blockMapToArray(afn[0]), blockMapToArray(afn[1]), blockMapToArray(afn[2])}, nil
+		return t.blocksToBlocks[i].BlockID, [][]types.BlockID{blockMapToArray(afn[0]), blockMapToArray(afn[1]), blockMapToArray(afn[2])}, nil
 	}
 	// TODO: special error encoding when exceeding excpetion list size
 	return types.BlockID{0}, nil, errors.New("no base block that fits the limit")
@@ -260,10 +228,12 @@ func (t *turtle) opinionMatches(layerid types.LayerID, opinion2 opinion) ([]map[
 	n := make(map[types.BlockID]struct{})
 
 	for b, o := range opinion2.blocksOpinion {
-		idx := t.blocksToBlocksIndex[b]
-		blklyr := t.indexToLayerID[idx]
-		inputVote := t.inputVector(blklyr, b)
-		t.logger.Debug("looking on %v vote for block %v in layer %v", opinion2.id, b, layerid)
+		blk, err := t.bdp.GetBlock(b)
+		if err != nil {
+			panic("block not found")
+		}
+		inputVote := t.inputVector(blk.LayerIndex, b)
+		t.logger.Debug("looking on %v vote for block %v in layer %v", opinion2.BlockID, b, layerid)
 
 		if inputVote == against && simplifyVote(o) != against {
 			t.logger.Debug("added diff %v to against", b)
@@ -341,9 +311,11 @@ func (t *turtle) processBlock(block *types.Block) error {
 
 	//TODO: neutral ?
 
-	t.blocksToBlocks = append(t.blocksToBlocks, opinion{id: blockid, blocksOpinion: thisBlockOpinions})
+	t.blocksToBlocks = append(t.blocksToBlocks, opinion{blockIDLayerTuple: blockIDLayerTuple{
+		BlockID: blockid,
+		LayerID: block.LayerIndex,
+	}, blocksOpinion: thisBlockOpinions})
 	t.blocksToBlocksIndex[blockid] = len(t.blocksToBlocks) - 1
-	t.indexToLayerID[len(t.blocksToBlocks)-1] = block.LayerIndex
 
 	return nil
 }
@@ -435,34 +407,34 @@ loop:
 		for blk, vote := range input {
 			sum := abstain
 			//t.logger.Info("counting votes for block %v", blk)
-			for j, vopinion := range t.blocksToBlocks {
+			for _, vopinion := range t.blocksToBlocks {
 
-				t.logger.Debug("Checking %v opinion on %v", vopinion.id, blk)
+				t.logger.Debug("Checking %v opinion on %v", vopinion.BlockID, blk)
 
-				if t.indexToLayerID[j] <= i {
-					t.logger.Debug("%v is older than %v", vopinion.id, blk)
+				if vopinion.LayerID <= i {
+					t.logger.Debug("%v is older than %v", vopinion.BlockID, blk)
 					continue
 				}
 
 				opinionVote, ok := vopinion.blocksOpinion[blk]
 				if !ok {
-					t.logger.Debug("%v has no opinion on %v", vopinion.id, blk)
+					t.logger.Debug("%v has no opinion on %v", vopinion.BlockID, blk)
 					continue
 				}
 
-				_, isgood := t.goodBlocksIndex[vopinion.id]
+				_, isgood := t.goodBlocksIndex[vopinion.BlockID]
 				if !isgood {
-					t.logger.Debug("%v is not good hence not counting", vopinion.id)
+					t.logger.Debug("%v is not good hence not counting", vopinion.BlockID)
 					continue
 				}
 
 				t.logger.Debug("adding %v opinion = %v to the vote sum on %v", vopinion.id, opinionVote, blk)
 				//t.logger.Info("block %v is good and voting vote %v", vopinion.id, opinionVote)
-				sum = sum.Add(opinionVote.Multiply(t.BlockWeight(vopinion.id, blk)))
+				sum = sum.Add(opinionVote.Multiply(t.BlockWeight(vopinion.BlockID, blk)))
 			}
 
 			gop := globalOpinion(sum, t.avgLayerSize, float64(i-wasVerified))
-			t.logger.Info("Global opinion on blk %v (lyr:%v, lyfromidx:%v) is %v (from:%v)", blk, i, t.indexToLayerID[t.blocksToBlocksIndex[blk]], gop, sum)
+			t.logger.Info("Global opinion on blk %v (lyr:%v) is %v (from:%v)", blk, i, gop, sum)
 			if gop != vote || gop == abstain {
 				// TODO: trigger self healing after a while ?
 				t.logger.Warning("The global opinion is different from vote, global: %v, vote: %v", gop, vote)
