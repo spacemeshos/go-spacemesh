@@ -586,6 +586,101 @@ func TestGlobalStateService(t *testing.T) {
 			require.Error(t, err, "expected endpoint to fail")
 			require.Contains(t, err.Error(), "this endpoint has not yet been implemented")
 		}},
+		{name: "AccountDataStream", run: func(t *testing.T) {
+			// common testing framework
+			generateRunFn := func(req *pb.AccountDataStreamRequest) func(*testing.T) {
+				return func(*testing.T) {
+					// Just try opening and immediately closing the stream
+					stream, err := c.AccountDataStream(context.Background(), req)
+					require.NoError(t, err, "unexpected error opening stream")
+
+					// Do we need this? It doesn't seem to cause any harm
+					stream.Context().Done()
+				}
+			}
+			generateRunFnError := func(msg string, req *pb.AccountDataStreamRequest) func(*testing.T) {
+				return func(t *testing.T) {
+					// there should be no error opening the stream
+					stream, err := c.AccountDataStream(context.Background(), req)
+					require.NoError(t, err, "unexpected error opening stream")
+
+					// sending a request should generate an error
+					_, err = stream.Recv()
+					require.Error(t, err, "expected an error")
+					require.Contains(t, err.Error(), msg, "received unexpected error")
+					statusCode := status.Code(err)
+					require.Equal(t, codes.InvalidArgument, statusCode, "expected InvalidArgument error")
+
+					// Do we need this? It doesn't seem to cause any harm
+					stream.Context().Done()
+				}
+			}
+			subtests := []struct {
+				name string
+				run  func(*testing.T)
+			}{
+				// ERROR INPUTS
+				// We expect these to produce errors
+				{
+					name: "missing filter",
+					run:  generateRunFnError("`Filter` must be provided", &pb.AccountDataStreamRequest{}),
+				},
+				{
+					name: "empty filter",
+					run: generateRunFnError("`Filter.AccountId` must be provided", &pb.AccountDataStreamRequest{
+						Filter: &pb.AccountDataFilter{},
+					}),
+				},
+				{
+					name: "missing address",
+					run: generateRunFnError("`Filter.AccountId` must be provided", &pb.AccountDataStreamRequest{
+						Filter: &pb.AccountDataFilter{
+							AccountDataFlags: uint32(
+								pb.AccountDataFlag_ACCOUNT_DATA_FLAG_REWARD |
+									pb.AccountDataFlag_ACCOUNT_DATA_FLAG_ACCOUNT),
+						},
+					}),
+				},
+				{
+					name: "filter with zero flags",
+					run: generateRunFnError("`Filter.AccountDataFlags` must set at least one bitfield", &pb.AccountDataStreamRequest{
+						Filter: &pb.AccountDataFilter{
+							AccountId:        &pb.AccountId{Address: addr1.Bytes()},
+							AccountDataFlags: uint32(0),
+						},
+					}),
+				},
+
+				// SUCCESS
+				{
+					name: "empty address",
+					run: generateRunFn(&pb.AccountDataStreamRequest{
+						Filter: &pb.AccountDataFilter{
+							AccountId: &pb.AccountId{},
+							AccountDataFlags: uint32(
+								pb.AccountDataFlag_ACCOUNT_DATA_FLAG_REWARD |
+									pb.AccountDataFlag_ACCOUNT_DATA_FLAG_ACCOUNT),
+						},
+					}),
+				},
+				{
+					name: "invalid address",
+					run: generateRunFn(&pb.AccountDataStreamRequest{
+						Filter: &pb.AccountDataFilter{
+							AccountId: &pb.AccountId{Address: []byte{'A'}},
+							AccountDataFlags: uint32(
+								pb.AccountDataFlag_ACCOUNT_DATA_FLAG_REWARD |
+									pb.AccountDataFlag_ACCOUNT_DATA_FLAG_ACCOUNT),
+						},
+					}),
+				},
+			}
+
+			// Run sub-subtests
+			for _, r := range subtests {
+				t.Run(r.name, r.run)
+			}
+		}},
 	}
 
 	// Run subtests
@@ -790,7 +885,7 @@ func TestMeshService(t *testing.T) {
 						require.NoError(t, err)
 						require.Equal(t, uint32(1), res.TotalResults)
 						require.Equal(t, 1, len(res.Data))
-						checkAccountDataItemActivation(t, res.Data[0].DataItem)
+						checkAccountMeshDataItemActivation(t, res.Data[0].DataItem)
 					},
 				},
 				{
@@ -810,7 +905,7 @@ func TestMeshService(t *testing.T) {
 						require.Equal(t, uint32(2), res.TotalResults)
 						require.Equal(t, 2, len(res.Data))
 						checkAccountMeshDataItemTx(t, res.Data[0].DataItem)
-						checkAccountDataItemActivation(t, res.Data[1].DataItem)
+						checkAccountMeshDataItemActivation(t, res.Data[1].DataItem)
 					},
 				},
 				{
@@ -847,7 +942,7 @@ func TestMeshService(t *testing.T) {
 						require.NoError(t, err)
 						require.Equal(t, uint32(2), res.TotalResults)
 						require.Equal(t, 1, len(res.Data))
-						checkAccountDataItemActivation(t, res.Data[0].DataItem)
+						checkAccountMeshDataItemActivation(t, res.Data[0].DataItem)
 					},
 				},
 			}
@@ -1163,9 +1258,6 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 	}
 }
 
-// Running this as part of the previous block of tests seems to cause
-// concurrency errors. Something about the data structures gets polluted
-// by the other tests. It's cleaner to run this as its own test.
 func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 	// TODO: Re-enable this test in phase9 as the Reporter has been fixed.
 	// This will fail for now because the Reporter does not block.
@@ -1215,7 +1307,7 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 		// second item should be an activation
 		res, err = stream.Recv()
 		require.NoError(t, err, "got error from stream")
-		checkAccountDataItemActivation(t, res.Data.DataItem)
+		checkAccountMeshDataItemActivation(t, res.Data.DataItem)
 
 		// look for EOF
 		// third and fourth events streamed should not be received! they should be
@@ -1245,6 +1337,105 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 
 	// wait for the goroutine
 	wg.Wait()
+}
+
+func TestAccountDataStream_comprehensive(t *testing.T) {
+	svc := NewGlobalStateService(&networkMock, txAPI, &genTime, &SyncerMock{})
+	shutDown := launchServer(t, svc)
+	defer shutDown()
+
+	// start a client
+	addr := "localhost:" + strconv.Itoa(cfg.NewGrpcServerPort)
+
+	// Set up a connection to the server.
+	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	require.NoError(t, err)
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
+	c := pb.NewGlobalStateServiceClient(conn)
+
+	// set up the grpc listener stream
+	req := &pb.AccountDataStreamRequest{
+		Filter: &pb.AccountDataFilter{
+			AccountId: &pb.AccountId{Address: addr1.Bytes()},
+			AccountDataFlags: uint32(
+				pb.AccountDataFlag_ACCOUNT_DATA_FLAG_REWARD |
+					pb.AccountDataFlag_ACCOUNT_DATA_FLAG_ACCOUNT |
+					pb.AccountDataFlag_ACCOUNT_DATA_FLAG_TRANSACTION_RECEIPT),
+		},
+	}
+
+	// Use a channel to synchronize the two routines
+	waitChan := make(chan struct{})
+
+	// This will block so run it in a goroutine
+	go func() {
+		defer close(waitChan)
+		stream, err := c.AccountDataStream(context.Background(), req)
+		require.NoError(t, err, "stream request returned unexpected error")
+
+		var res *pb.AccountDataStreamResponse
+
+		waitChan <- struct{}{}
+		res, err = stream.Recv()
+		require.NoError(t, err, "got error from stream")
+		checkAccountDataItemReceipt(t, res.Data.Item)
+		waitChan <- struct{}{}
+
+		res, err = stream.Recv()
+		require.NoError(t, err, "got error from stream")
+		checkAccountDataItemReward(t, res.Data.Item)
+		waitChan <- struct{}{}
+
+		res, err = stream.Recv()
+		require.NoError(t, err, "got error from stream")
+		checkAccountDataItemAccount(t, res.Data.Item)
+
+		// look for EOF
+		// the next two events streamed should not be received! they should be
+		// filtered out
+		res, err = stream.Recv()
+		require.Equal(t, io.EOF, err, "expected EOF from stream")
+	}()
+
+	// initialize the streamer
+	log.Info("initializing event stream")
+	events.InitializeEventReporter("")
+
+	// wait until the listener is listening
+	<-waitChan
+	time.Sleep(1 * time.Second)
+
+	// publish a receipt
+	events.ReportReceipt(events.TxReceipt{
+		Address: addr1,
+	})
+	<-waitChan
+
+	// publish a reward
+	events.ReportRewardReceived(events.Reward{
+		Layer:       layerFirst,
+		Total:       rewardAmount,
+		LayerReward: rewardAmount * 2,
+		Coinbase:    addr1,
+	})
+	<-waitChan
+
+	// publish an account data update
+	events.ReportAccountUpdate(addr1)
+
+	// test streaming a reward and account update that should be filtered out
+	// these should not be received
+	events.ReportAccountUpdate(addr2)
+	events.ReportRewardReceived(events.Reward{Coinbase: addr2})
+
+	// close the stream
+	log.Info("closing event stream")
+	events.CloseEventReporter()
+
+	// wait for the goroutine to finish
+	<-waitChan
 }
 
 func TestLayerStream_comprehensive(t *testing.T) {
@@ -1363,7 +1554,7 @@ func checkAccountMeshDataItemTx(t *testing.T, dataItem interface{}) {
 	}
 }
 
-func checkAccountDataItemActivation(t *testing.T, dataItem interface{}) {
+func checkAccountMeshDataItemActivation(t *testing.T, dataItem interface{}) {
 	switch x := dataItem.(type) {
 	case *pb.AccountMeshData_Activation:
 		require.Equal(t, globalAtx.ID().Bytes(), x.Activation.Id.Id)
@@ -1376,6 +1567,41 @@ func checkAccountDataItemActivation(t *testing.T, dataItem interface{}) {
 		require.Equal(t, uint64(len(data)), x.Activation.CommitmentSize)
 	default:
 		require.Fail(t, "inner account data item has wrong tx data type")
+	}
+}
+
+func checkAccountDataItemReward(t *testing.T, dataItem interface{}) {
+	switch x := dataItem.(type) {
+	case *pb.AccountData_Reward:
+		require.Equal(t, uint64(rewardAmount), x.Reward.Total.Value)
+		require.Equal(t, uint64(layerFirst), x.Reward.Layer)
+		require.Equal(t, uint64(rewardAmount*2), x.Reward.LayerReward.Value)
+		require.Equal(t, addr1.Bytes(), x.Reward.Coinbase.Address)
+
+	default:
+		require.Fail(t, "inner account data item has wrong data type")
+	}
+}
+
+func checkAccountDataItemReceipt(t *testing.T, dataItem interface{}) {
+	switch x := dataItem.(type) {
+	case *pb.AccountData_Receipt:
+		require.Equal(t, addr1.Bytes(), x.Receipt.AppAddress.Address)
+
+	default:
+		require.Fail(t, "inner account data item has wrong data type")
+	}
+}
+
+func checkAccountDataItemAccount(t *testing.T, dataItem interface{}) {
+	switch x := dataItem.(type) {
+	case *pb.AccountData_Account:
+		require.Equal(t, addr1.Bytes(), x.Account.Address.Address)
+		require.Equal(t, uint64(accountBalance), x.Account.Balance.Value)
+		require.Equal(t, uint64(accountCounter), x.Account.Counter)
+
+	default:
+		require.Fail(t, "inner account data item has wrong data type")
 	}
 }
 

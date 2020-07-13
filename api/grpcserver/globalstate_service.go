@@ -165,41 +165,67 @@ func (s GlobalStateService) SmesherDataQuery(ctx context.Context, in *pb.Smesher
 // STREAMS
 
 // AccountDataStream exposes a stream of account-related data
-func (s GlobalStateService) AccountDataStream(request *pb.AccountDataStreamRequest, stream pb.GlobalStateService_AccountDataStreamServer) error {
+func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, stream pb.GlobalStateService_AccountDataStreamServer) error {
 	log.Info("GRPC GlobalStateService.AccountDataStream")
 
-	addr := types.BytesToAddress(request.Filter.AccountId.Address)
+	if in.Filter == nil {
+		return status.Errorf(codes.InvalidArgument, "`Filter` must be provided")
+	}
+	if in.Filter.AccountId == nil {
+		return status.Errorf(codes.InvalidArgument, "`Filter.AccountId` must be provided")
+	}
+	if in.Filter.AccountDataFlags == uint32(pb.AccountDataFlag_ACCOUNT_DATA_FLAG_UNSPECIFIED) {
+		return status.Errorf(codes.InvalidArgument, "`Filter.AccountDataFlags` must set at least one bitfield")
+	}
+	addr := types.BytesToAddress(in.Filter.AccountId.Address)
 
-	channelAccount := events.GetAccountChannel()
-	channelReward := events.GetRewardChannel()
+	filterAccount := in.Filter.AccountDataFlags&uint32(pb.AccountDataFlag_ACCOUNT_DATA_FLAG_ACCOUNT) != 0
+	filterReward := in.Filter.AccountDataFlags&uint32(pb.AccountDataFlag_ACCOUNT_DATA_FLAG_REWARD) != 0
+	filterReceipt := in.Filter.AccountDataFlags&uint32(pb.AccountDataFlag_ACCOUNT_DATA_FLAG_TRANSACTION_RECEIPT) != 0
+
+	// Subscribe to the various streams
+	var (
+		channelAccount chan types.Address
+		channelReward  chan events.Reward
+		channelReceipt chan events.TxReceipt
+	)
+	if filterAccount {
+		channelAccount = events.GetAccountChannel()
+	}
+	if filterReward {
+		channelReward = events.GetRewardChannel()
+	}
+	if filterReceipt {
+		channelReceipt = events.GetReceiptChannel()
+	}
 
 	for {
 		select {
-		case acct, ok := <-channelAccount:
+		case updatedAccount, ok := <-channelAccount:
 			if !ok {
 				// we could handle this more gracefully, by no longer listening
 				// to this stream but continuing to listen to the other stream,
 				// but in practice one should never be closed while the other is
 				// still running, so it doesn't matter
-				log.Info("channelAccount closed, shutting down")
+				log.Info("account channel closed, shutting down")
 				return nil
 			}
 			// Apply address filter
-			if acct.Address == addr {
-				//pbActivation, err := convertActivation(activation)
-				//if err != nil {
-				//	log.Error("error serializing activation data: ", err)
-				//	return status.Errorf(codes.Internal, "error serializing activation data")
-				//}
-				//if err := stream.Send(&pb.AccountMeshDataStreamResponse{
-				//	Data: &pb.AccountMeshData{
-				//		DataItem: &pb.AccountMeshData_Activation{
-				//			Activation: pbActivation,
-				//		},
-				//	},
-				//}); err != nil {
-				//	return err
-				//}
+			if updatedAccount == addr {
+				// The Reporter service just sends us the account address. We are responsible
+				// for looking up the other required data here. Get the account balance and
+				// nonce.
+				balance := s.Mesh.GetBalance(addr)
+				counter := s.Mesh.GetNonce(addr)
+				if err := stream.Send(&pb.AccountDataStreamResponse{Data: &pb.AccountData{Item: &pb.AccountData_Account{
+					Account: &pb.Account{
+						Address: &pb.AccountId{Address: addr.Bytes()},
+						Counter: counter,
+						Balance: &pb.Amount{Value: balance},
+					},
+				}}}); err != nil {
+					return err
+				}
 			}
 		case reward, ok := <-channelReward:
 			if !ok {
@@ -207,24 +233,52 @@ func (s GlobalStateService) AccountDataStream(request *pb.AccountDataStreamReque
 				// to this stream but continuing to listen to the other stream,
 				// but in practice one should never be closed while the other is
 				// still running, so it doesn't matter
-				log.Info("channelReward closed, shutting down")
+				log.Info("reward channel closed, shutting down")
 				return nil
 			}
 			// Apply address filter
 			if reward.Coinbase == addr {
-
+				if err := stream.Send(&pb.AccountDataStreamResponse{Data: &pb.AccountData{Item: &pb.AccountData_Reward{
+					Reward: &pb.Reward{
+						Layer:       reward.Layer.Uint64(),
+						Total:       &pb.Amount{Value: reward.Total},
+						LayerReward: &pb.Amount{Value: reward.LayerReward},
+						// Leave this out for now as this is changing
+						//LayerComputed: 0,
+						Coinbase: &pb.AccountId{Address: addr.Bytes()},
+						// TODO: There is currently no way to get this for a reward.
+						// See https://github.com/spacemeshos/go-spacemesh/issues/2068.
+						//Smesher:  nil,
+					},
+				}}}); err != nil {
+					return err
+				}
 			}
-			//if tx.Origin() == addr || tx.Recipient == addr {
-			//	if err := stream.Send(&pb.AccountMeshDataStreamResponse{
-			//		Data: &pb.AccountMeshData{
-			//			DataItem: &pb.AccountMeshData_Transaction{
-			//				Transaction: convertTransaction(tx),
-			//			},
-			//		},
-			//	}); err != nil {
-			//		return err
-			//	}
-			//}
+		case receipt, ok := <-channelReceipt:
+			if !ok {
+				// we could handle this more gracefully, by no longer listening
+				// to this stream but continuing to listen to the other stream,
+				// but in practice one should never be closed while the other is
+				// still running, so it doesn't matter
+				log.Info("receipt channel closed, shutting down")
+				return nil
+			}
+			// Apply address filter
+			if receipt.Address == addr {
+				if err := stream.Send(&pb.AccountDataStreamResponse{Data: &pb.AccountData{Item: &pb.AccountData_Receipt{
+					Receipt: &pb.TransactionReceipt{
+						Id: &pb.TransactionId{Id: receipt.Id.Bytes()},
+						//Result:      receipt.Result,
+						GasUsed:     receipt.GasUsed,
+						Fee:         &pb.Amount{Value: receipt.Fee},
+						LayerNumber: receipt.Layer.Uint64(),
+						Index:       receipt.Index,
+						AppAddress:  &pb.AccountId{Address: receipt.Address.Bytes()},
+					},
+				}}}); err != nil {
+					return err
+				}
+			}
 		case <-stream.Context().Done():
 			log.Info("AccountDataStream closing stream, client disconnected")
 			return nil
@@ -256,5 +310,8 @@ func (s GlobalStateService) AppEventStream(request *pb.AppEventStreamRequest, st
 // GlobalStateStream exposes a stream of global data data items: rewards, receipts, account info, global state hash
 func (s GlobalStateService) GlobalStateStream(request *pb.GlobalStateStreamRequest, stream pb.GlobalStateService_GlobalStateStreamServer) error {
 	log.Info("GRPC GlobalStateService.GlobalStateStream")
+
+	// TODO: implement me
+
 	return nil
 }

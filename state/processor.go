@@ -194,7 +194,12 @@ func (tp *TransactionProcessor) ApplyRewards(layer types.LayerID, miners []types
 			layer,
 		)
 		tp.AddBalance(account, reward)
-		events.ReportRewardReceived(&account, reward.Uint64())
+		events.ReportRewardReceived(events.Reward{
+			Layer:       layer,
+			Total:       reward.Uint64(),
+			LayerReward: reward.Uint64() * uint64(len(miners)),
+			Coinbase:    account,
+		})
 	}
 	newHash, err := tp.Commit()
 
