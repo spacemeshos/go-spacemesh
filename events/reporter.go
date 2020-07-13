@@ -51,10 +51,18 @@ func ReportNewActivation(activation *types.ActivationTx, layersPerEpoch uint16) 
 }
 
 // ReportRewardReceived reports a new reward
-func ReportRewardReceived(account *types.Address, reward uint64) {
+func ReportRewardReceived(r Reward) {
+	if reporter != nil {
+		select {
+		case reporter.channelReward <- r:
+			log.Info("reported reward: %v", r)
+		default:
+			log.Info("not reporting reward as no one is listening: %v", r)
+		}
+	}
 	Publish(RewardReceived{
-		Coinbase: account.String(),
-		Amount:   reward,
+		Coinbase: r.Coinbase.String(),
+		Amount:   r.Total,
 	})
 }
 
@@ -141,6 +149,28 @@ func ReportNodeStatus(setters ...SetStatusElem) {
 	}
 }
 
+func ReportReceipt(r TxReceipt) {
+	if reporter != nil {
+		select {
+		case reporter.channelReceipt <- r:
+			log.Info("reported receipt: %v", r)
+		default:
+			log.Info("not reporting receipt as no one is listening: %v", r)
+		}
+	}
+}
+
+func ReportAccountUpdate(a types.Address) {
+	if reporter != nil {
+		select {
+		case reporter.channelAccount <- a:
+			log.Info("reported account update: %v", a)
+		default:
+			log.Info("not reporting account update as no one is listening: %v", a)
+		}
+	}
+}
+
 // GetNewTxChannel returns a channel of new transactions
 func GetNewTxChannel() chan *types.Transaction {
 	if reporter != nil {
@@ -182,7 +212,7 @@ func GetStatusChannel() chan NodeStatus {
 }
 
 // GetAccountChannel returns a channel for account data updates
-func GetAccountChannel() chan Account {
+func GetAccountChannel() chan types.Address {
 	if reporter != nil {
 		return reporter.channelAccount
 	}
@@ -192,6 +222,13 @@ func GetAccountChannel() chan Account {
 func GetRewardChannel() chan Reward {
 	if reporter != nil {
 		return reporter.channelReward
+	}
+	return nil
+}
+
+func GetReceiptChannel() chan TxReceipt {
+	if reporter != nil {
+		return reporter.channelReceipt
 	}
 	return nil
 }
@@ -263,11 +300,15 @@ type NodeStatus struct {
 	LayerVerified types.LayerID
 }
 
-// Account represents a snapshot of an account state
-type Account struct {
+// TxRecipt represents a transaction receipt
+type TxReceipt struct {
+	Id      types.TransactionID
+	Result  int
+	GasUsed uint64
+	Fee     uint64
+	Layer   types.LayerID
+	Index   uint32
 	Address types.Address
-	Balance uint64
-	Nonce   uint64
 }
 
 // Reward represents a reward object with extra data needed by the API
@@ -326,8 +367,9 @@ type EventReporter struct {
 	channelLayer       chan NewLayer
 	channelError       chan NodeError
 	channelStatus      chan NodeStatus
-	channelAccount     chan Account
+	channelAccount     chan types.Address
 	channelReward      chan Reward
+	channelReceipt     chan TxReceipt
 	lastStatus         NodeStatus
 	stopChan           chan struct{}
 }
@@ -338,8 +380,9 @@ func newEventReporter() *EventReporter {
 		channelActivation:  make(chan *types.ActivationTx),
 		channelLayer:       make(chan NewLayer),
 		channelStatus:      make(chan NodeStatus),
-		channelAccount:     make(chan Account),
+		channelAccount:     make(chan types.Address),
 		channelReward:      make(chan Reward),
+		channelReceipt:     make(chan TxReceipt),
 		lastStatus:         NodeStatus{},
 		stopChan:           make(chan struct{}),
 
@@ -363,6 +406,7 @@ func CloseEventReporter() {
 		close(reporter.channelStatus)
 		close(reporter.channelAccount)
 		close(reporter.channelReward)
+		close(reporter.channelReceipt)
 		close(reporter.stopChan)
 		reporter = nil
 	}
