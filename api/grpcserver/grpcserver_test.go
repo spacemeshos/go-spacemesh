@@ -562,9 +562,9 @@ func TestGlobalStateService(t *testing.T) {
 				AccountId: &pb.AccountId{Address: addr1.Bytes()},
 			})
 			require.NoError(t, err)
-			require.Equal(t, addr1.Bytes(), res.Account.Address.Address)
-			require.Equal(t, uint64(accountBalance), res.Account.Balance.Value)
-			require.Equal(t, uint64(accountCounter), res.Account.Counter)
+			require.Equal(t, addr1.Bytes(), res.AccountWrapper.AccountId.Address)
+			require.Equal(t, uint64(accountBalance), res.AccountWrapper.Balance.Value)
+			require.Equal(t, uint64(accountCounter), res.AccountWrapper.Counter)
 		}},
 		{"AccountDataQuery", func(t *testing.T) {
 			// TODO: add tests for missing filter, missing flags, bad offset and max results
@@ -869,7 +869,7 @@ func TestMeshService(t *testing.T) {
 						require.NoError(t, err)
 						require.Equal(t, uint32(1), res.TotalResults)
 						require.Equal(t, 1, len(res.Data))
-						checkAccountMeshDataItemTx(t, res.Data[0].DataItem)
+						checkAccountMeshDataItemTx(t, res.Data[0].Item)
 					},
 				},
 				{
@@ -885,7 +885,7 @@ func TestMeshService(t *testing.T) {
 						require.NoError(t, err)
 						require.Equal(t, uint32(1), res.TotalResults)
 						require.Equal(t, 1, len(res.Data))
-						checkAccountMeshDataItemActivation(t, res.Data[0].DataItem)
+						checkAccountMeshDataItemActivation(t, res.Data[0].Item)
 					},
 				},
 				{
@@ -904,8 +904,8 @@ func TestMeshService(t *testing.T) {
 						require.NoError(t, err)
 						require.Equal(t, uint32(2), res.TotalResults)
 						require.Equal(t, 2, len(res.Data))
-						checkAccountMeshDataItemTx(t, res.Data[0].DataItem)
-						checkAccountMeshDataItemActivation(t, res.Data[1].DataItem)
+						checkAccountMeshDataItemTx(t, res.Data[0].Item)
+						checkAccountMeshDataItemActivation(t, res.Data[1].Item)
 					},
 				},
 				{
@@ -923,7 +923,7 @@ func TestMeshService(t *testing.T) {
 						require.NoError(t, err)
 						require.Equal(t, uint32(2), res.TotalResults)
 						require.Equal(t, 1, len(res.Data))
-						checkAccountMeshDataItemTx(t, res.Data[0].DataItem)
+						checkAccountMeshDataItemTx(t, res.Data[0].Item)
 					},
 				},
 				{
@@ -942,7 +942,7 @@ func TestMeshService(t *testing.T) {
 						require.NoError(t, err)
 						require.Equal(t, uint32(2), res.TotalResults)
 						require.Equal(t, 1, len(res.Data))
-						checkAccountMeshDataItemActivation(t, res.Data[0].DataItem)
+						checkAccountMeshDataItemActivation(t, res.Data[0].Item)
 					},
 				},
 			}
@@ -1302,12 +1302,12 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 
 		res, err = stream.Recv()
 		require.NoError(t, err, "got error from stream")
-		checkAccountMeshDataItemTx(t, res.Data.DataItem)
+		checkAccountMeshDataItemTx(t, res.Data.Item)
 
 		// second item should be an activation
 		res, err = stream.Recv()
 		require.NoError(t, err, "got error from stream")
-		checkAccountMeshDataItemActivation(t, res.Data.DataItem)
+		checkAccountMeshDataItemActivation(t, res.Data.Item)
 
 		// look for EOF
 		// third and fourth events streamed should not be received! they should be
@@ -1318,7 +1318,7 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 
 	// initialize the streamer
 	log.Info("initializing event stream")
-	events.InitializeEventReporter("")
+	events.InitializeEventReporterWithOptions("", 0, true)
 
 	// publish a tx
 	events.ReportNewTx(globalTx)
@@ -1497,13 +1497,13 @@ func TestLayerStream_comprehensive(t *testing.T) {
 
 func checkAccountDataQueryItemAccount(t *testing.T, dataItem interface{}) {
 	switch x := dataItem.(type) {
-	case *pb.AccountData_Account:
+	case *pb.AccountData_AccountWrapper:
 		// Check the account, nonce, and balance
-		require.Equal(t, addr1.Bytes(), x.Account.Address.Address,
+		require.Equal(t, addr1.Bytes(), x.AccountWrapper.AccountId.Address,
 			"inner account has bad address")
-		require.Equal(t, uint64(accountCounter), x.Account.Counter,
+		require.Equal(t, uint64(accountCounter), x.AccountWrapper.Counter,
 			"inner account has bad counter")
-		require.Equal(t, uint64(accountBalance), x.Account.Balance.Value,
+		require.Equal(t, uint64(accountBalance), x.AccountWrapper.Balance.Value,
 			"inner account has bad balance")
 	default:
 		require.Fail(t, "inner account data item has wrong data type")
@@ -1587,10 +1587,10 @@ func checkAccountDataItemReceipt(t *testing.T, dataItem interface{}) {
 
 func checkAccountDataItemAccount(t *testing.T, dataItem interface{}) {
 	switch x := dataItem.(type) {
-	case *pb.AccountData_Account:
-		require.Equal(t, addr1.Bytes(), x.Account.Address.Address)
-		require.Equal(t, uint64(accountBalance), x.Account.Balance.Value)
-		require.Equal(t, uint64(accountCounter), x.Account.Counter)
+	case *pb.AccountData_AccountWrapper:
+		require.Equal(t, addr1.Bytes(), x.AccountWrapper.AccountId.Address)
+		require.Equal(t, uint64(accountBalance), x.AccountWrapper.Balance.Value)
+		require.Equal(t, uint64(accountCounter), x.AccountWrapper.Counter)
 
 	default:
 		require.Fail(t, "inner account data item has wrong data type")
