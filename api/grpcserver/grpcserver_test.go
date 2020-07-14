@@ -681,6 +681,61 @@ func TestGlobalStateService(t *testing.T) {
 				t.Run(r.name, r.run)
 			}
 		}},
+		{name: "GlobalStateStream", run: func(t *testing.T) {
+			// common testing framework
+			generateRunFn := func(req *pb.GlobalStateStreamRequest) func(*testing.T) {
+				return func(*testing.T) {
+					// Just try opening and immediately closing the stream
+					stream, err := c.GlobalStateStream(context.Background(), req)
+					require.NoError(t, err, "unexpected error opening stream")
+
+					// Do we need this? It doesn't seem to cause any harm
+					stream.Context().Done()
+				}
+			}
+			generateRunFnError := func(msg string, req *pb.GlobalStateStreamRequest) func(*testing.T) {
+				return func(t *testing.T) {
+					// there should be no error opening the stream
+					stream, err := c.GlobalStateStream(context.Background(), req)
+					require.NoError(t, err, "unexpected error opening stream")
+
+					// sending a request should generate an error
+					_, err = stream.Recv()
+					require.Error(t, err, "expected an error")
+					require.Contains(t, err.Error(), msg, "received unexpected error")
+					statusCode := status.Code(err)
+					require.Equal(t, codes.InvalidArgument, statusCode, "expected InvalidArgument error")
+
+					// Do we need this? It doesn't seem to cause any harm
+					stream.Context().Done()
+				}
+			}
+			subtests := []struct {
+				name string
+				run  func(*testing.T)
+			}{
+				// ERROR INPUTS
+				// We expect these to produce errors
+				{
+					name: "zero flags",
+					run: generateRunFnError("`GlobalStateDataFlags` must set at least one bitfield",
+						&pb.GlobalStateStreamRequest{GlobalStateDataFlags: uint32(0)}),
+				},
+
+				// SUCCESS
+				{
+					name: "nonzero flags",
+					run: generateRunFn(&pb.GlobalStateStreamRequest{
+						GlobalStateDataFlags: uint32(pb.GlobalStateDataFlag_GLOBAL_STATE_DATA_FLAG_ACCOUNT),
+					}),
+				},
+			}
+
+			// Run sub-subtests
+			for _, r := range subtests {
+				t.Run(r.name, r.run)
+			}
+		}},
 	}
 
 	// Run subtests
