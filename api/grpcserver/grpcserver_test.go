@@ -41,8 +41,9 @@ import (
 )
 
 const (
-	miningStatus          = 123
+	miningStatus          = activation.InitDone
 	remainingBytes        = 321
+	commitmentSize        = 8826949
 	defaultGasLimit       = 10
 	defaultFee            = 1
 	genTimeUnix           = 1000000
@@ -340,7 +341,7 @@ func newAtx(challenge types.NIPSTChallenge, ActiveSetSize uint32, View []types.B
 type MiningAPIMock struct{}
 
 func (*MiningAPIMock) MiningStats() (int, uint64, string, string) {
-	return miningStatus, remainingBytes, "123456", "/tmp"
+	return miningStatus, remainingBytes, addr1.String(), "/tmp"
 }
 
 func (*MiningAPIMock) StartPost(types.Address, string, uint64) error {
@@ -348,6 +349,12 @@ func (*MiningAPIMock) StartPost(types.Address, string, uint64) error {
 }
 
 func (*MiningAPIMock) SetCoinbaseAccount(types.Address) {}
+
+func (*MiningAPIMock) GetSmesherID() types.NodeID {
+	return nodeID
+}
+
+func (*MiningAPIMock) Stop() {}
 
 type OracleMock struct{}
 
@@ -735,6 +742,115 @@ func TestGlobalStateService(t *testing.T) {
 			for _, r := range subtests {
 				t.Run(r.name, r.run)
 			}
+		}},
+	}
+
+	// Run subtests
+	for _, tc := range testCases {
+		t.Run(tc.name, tc.run)
+	}
+}
+
+func TestSmesherService(t *testing.T) {
+	svc := NewSmesherService(&MiningAPIMock{})
+	shutDown := launchServer(t, svc)
+	defer shutDown()
+
+	// start a client
+	addr := "localhost:" + strconv.Itoa(cfg.NewGrpcServerPort)
+
+	// Set up a connection to the server.
+	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	require.NoError(t, err)
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
+	c := pb.NewSmesherServiceClient(conn)
+
+	// Construct an array of test cases to test each endpoint in turn
+	testCases := []struct {
+		name string
+		run  func(*testing.T)
+	}{
+		{"IsSmeshing", func(t *testing.T) {
+			res, err := c.IsSmeshing(context.Background(), &empty.Empty{})
+			require.NoError(t, err)
+			require.True(t, res.IsSmeshing, "expected IsSmeshing to be true")
+		}},
+		{"StartSmeshing", func(t *testing.T) {
+			res, err := c.StartSmeshing(context.Background(), &pb.StartSmeshingRequest{
+				Coinbase:       &pb.AccountId{Address: addr1.Bytes()},
+				DataDir:        "",
+				CommitmentSize: &pb.SimpleInt{Value: commitmentSize},
+			})
+			require.NoError(t, err)
+			require.Equal(t, int32(code.Code_OK), res.Status.Code)
+		}},
+		{"StopSmeshing", func(t *testing.T) {
+			res, err := c.StopSmeshing(context.Background(), &pb.StopSmeshingRequest{})
+			require.NoError(t, err)
+			require.Equal(t, int32(code.Code_OK), res.Status.Code)
+		}},
+		{"SmesherId", func(t *testing.T) {
+			res, err := c.SmesherId(context.Background(), &empty.Empty{})
+			require.NoError(t, err)
+			require.Equal(t, nodeID.ToBytes(), res.AccountId.Address)
+		}},
+		{"SetCoinbase", func(t *testing.T) {
+			res, err := c.SetCoinbase(context.Background(), &pb.SetCoinbaseRequest{
+				Id: &pb.AccountId{Address: addr1.Bytes()},
+			})
+			require.NoError(t, err)
+			require.Equal(t, int32(code.Code_OK), res.Status.Code)
+		}},
+		{"Coinbase", func(t *testing.T) {
+			res, err := c.Coinbase(context.Background(), &empty.Empty{})
+			require.NoError(t, err)
+			require.Equal(t, addr1.Bytes(), res.AccountId.Address)
+		}},
+		{"MinGas", func(t *testing.T) {
+			_, err := c.MinGas(context.Background(), &empty.Empty{})
+			require.Error(t, err)
+			statusCode := status.Code(err)
+			require.Equal(t, codes.Unimplemented, statusCode)
+		}},
+		{"SetMinGas", func(t *testing.T) {
+			_, err := c.SetMinGas(context.Background(), &pb.SetMinGasRequest{})
+			require.Error(t, err)
+			statusCode := status.Code(err)
+			require.Equal(t, codes.Unimplemented, statusCode)
+		}},
+		{"PostStatus", func(t *testing.T) {
+			_, err := c.PostStatus(context.Background(), &empty.Empty{})
+			require.Error(t, err)
+			statusCode := status.Code(err)
+			require.Equal(t, codes.Unimplemented, statusCode)
+		}},
+		{"PostComputeProviders", func(t *testing.T) {
+			_, err := c.PostComputeProviders(context.Background(), &empty.Empty{})
+			require.Error(t, err)
+			statusCode := status.Code(err)
+			require.Equal(t, codes.Unimplemented, statusCode)
+		}},
+		{"CreatePostData", func(t *testing.T) {
+			_, err := c.CreatePostData(context.Background(), &pb.CreatePostDataRequest{})
+			require.Error(t, err)
+			statusCode := status.Code(err)
+			require.Equal(t, codes.Unimplemented, statusCode)
+		}},
+		{"StopPostDataCreationSession", func(t *testing.T) {
+			_, err := c.StopPostDataCreationSession(context.Background(), &pb.StopPostDataCreationSessionRequest{})
+			require.Error(t, err)
+			statusCode := status.Code(err)
+			require.Equal(t, codes.Unimplemented, statusCode)
+		}},
+		{"PostDataCreationProgressStream", func(t *testing.T) {
+			stream, err := c.PostDataCreationProgressStream(context.Background(), &empty.Empty{})
+			// We expect to be able to open the stream but for it to fail upon the first request
+			require.NoError(t, err)
+			_, err = stream.Recv()
+			statusCode := status.Code(err)
+			require.Equal(t, codes.Unimplemented, statusCode)
 		}},
 	}
 
