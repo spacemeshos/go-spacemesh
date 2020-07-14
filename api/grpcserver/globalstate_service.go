@@ -96,7 +96,7 @@ func (s GlobalStateService) AccountDataQuery(ctx context.Context, in *pb.Account
 			return nil, status.Errorf(codes.Internal, "error getting rewards data")
 		}
 		for _, r := range dbRewards {
-			res.AccountItem = append(res.AccountItem, &pb.AccountData{Item: &pb.AccountData_Reward{
+			res.AccountItem = append(res.AccountItem, &pb.AccountData{Datum: &pb.AccountData_Reward{
 				Reward: &pb.Reward{
 					Layer:       r.Layer.Uint64(),
 					Total:       &pb.Amount{Value: r.TotalReward},
@@ -115,7 +115,7 @@ func (s GlobalStateService) AccountDataQuery(ctx context.Context, in *pb.Account
 	if filterAccount {
 		balance := s.Mesh.GetBalance(addr)
 		counter := s.Mesh.GetNonce(addr)
-		res.AccountItem = append(res.AccountItem, &pb.AccountData{Item: &pb.AccountData_AccountWrapper{
+		res.AccountItem = append(res.AccountItem, &pb.AccountData{Datum: &pb.AccountData_AccountWrapper{
 			AccountWrapper: &pb.Account{
 				AccountId: &pb.AccountId{Address: addr.Bytes()},
 				Counter:   counter,
@@ -217,7 +217,7 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 				// nonce.
 				balance := s.Mesh.GetBalance(addr)
 				counter := s.Mesh.GetNonce(addr)
-				if err := stream.Send(&pb.AccountDataStreamResponse{Data: &pb.AccountData{Item: &pb.AccountData_AccountWrapper{
+				if err := stream.Send(&pb.AccountDataStreamResponse{Datum: &pb.AccountData{Datum: &pb.AccountData_AccountWrapper{
 					AccountWrapper: &pb.Account{
 						AccountId: &pb.AccountId{Address: addr.Bytes()},
 						Counter:   counter,
@@ -238,7 +238,7 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 			}
 			// Apply address filter
 			if reward.Coinbase == addr {
-				if err := stream.Send(&pb.AccountDataStreamResponse{Data: &pb.AccountData{Item: &pb.AccountData_Reward{
+				if err := stream.Send(&pb.AccountDataStreamResponse{Datum: &pb.AccountData{Datum: &pb.AccountData_Reward{
 					Reward: &pb.Reward{
 						Layer:       reward.Layer.Uint64(),
 						Total:       &pb.Amount{Value: reward.Total},
@@ -265,7 +265,7 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 			}
 			// Apply address filter
 			if receipt.Address == addr {
-				if err := stream.Send(&pb.AccountDataStreamResponse{Data: &pb.AccountData{Item: &pb.AccountData_Receipt{
+				if err := stream.Send(&pb.AccountDataStreamResponse{Datum: &pb.AccountData{Datum: &pb.AccountData_Receipt{
 					Receipt: &pb.TransactionReceipt{
 						Id: &pb.TransactionId{Id: receipt.Id.Bytes()},
 						//Result:      receipt.Result,
@@ -358,7 +358,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 			// nonce.
 			balance := s.Mesh.GetBalance(updatedAccount)
 			counter := s.Mesh.GetNonce(updatedAccount)
-			if err := stream.Send(&pb.GlobalStateStreamResponse{Item: &pb.GlobalStateData{Data: &pb.GlobalStateData_AccountWrapper{
+			if err := stream.Send(&pb.GlobalStateStreamResponse{Datum: &pb.GlobalStateData{Datum: &pb.GlobalStateData_AccountWrapper{
 				AccountWrapper: &pb.Account{
 					AccountId: &pb.AccountId{Address: updatedAccount.Bytes()},
 					Counter:   counter,
@@ -376,7 +376,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 				log.Info("reward channel closed, shutting down")
 				return nil
 			}
-			if err := stream.Send(&pb.GlobalStateStreamResponse{Item: &pb.GlobalStateData{Data: &pb.GlobalStateData_Reward{
+			if err := stream.Send(&pb.GlobalStateStreamResponse{Datum: &pb.GlobalStateData{Datum: &pb.GlobalStateData_Reward{
 				Reward: &pb.Reward{
 					Layer:       reward.Layer.Uint64(),
 					Total:       &pb.Amount{Value: reward.Total},
@@ -400,7 +400,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 				log.Info("receipt channel closed, shutting down")
 				return nil
 			}
-			if err := stream.Send(&pb.GlobalStateStreamResponse{Item: &pb.GlobalStateData{Data: &pb.GlobalStateData_Receipt{
+			if err := stream.Send(&pb.GlobalStateStreamResponse{Datum: &pb.GlobalStateData{Datum: &pb.GlobalStateData_Receipt{
 				Receipt: &pb.TransactionReceipt{
 					Id: &pb.TransactionId{Id: receipt.Id.Bytes()},
 					//Result:      receipt.Result,
@@ -430,7 +430,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 				log.Error("error retrieving layer data: %s", err)
 				return status.Errorf(codes.Internal, "error retrieving layer data")
 			}
-			if err := stream.Send(&pb.GlobalStateStreamResponse{Item: &pb.GlobalStateData{Data: &pb.GlobalStateData_GlobalState{
+			if err := stream.Send(&pb.GlobalStateStreamResponse{Datum: &pb.GlobalStateData{Datum: &pb.GlobalStateData_GlobalState{
 				GlobalState: &pb.GlobalStateHash{
 					RootHash:    root.Bytes(),
 					LayerNumber: layer.Layer.Index().Uint64(),

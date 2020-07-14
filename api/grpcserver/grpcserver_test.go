@@ -578,8 +578,8 @@ func TestGlobalStateService(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, uint32(2), res.TotalResults)
 			require.Equal(t, 2, len(res.AccountItem))
-			checkAccountDataQueryItemReward(t, res.AccountItem[0].Item)
-			checkAccountDataQueryItemAccount(t, res.AccountItem[1].Item)
+			checkAccountDataQueryItemReward(t, res.AccountItem[0].Datum)
+			checkAccountDataQueryItemAccount(t, res.AccountItem[1].Datum)
 		}},
 		{"SmesherDataQuery", func(t *testing.T) {
 			_, err := c.SmesherDataQuery(context.Background(), &pb.SmesherDataQueryRequest{})
@@ -924,7 +924,7 @@ func TestMeshService(t *testing.T) {
 						require.NoError(t, err)
 						require.Equal(t, uint32(1), res.TotalResults)
 						require.Equal(t, 1, len(res.Data))
-						checkAccountMeshDataItemTx(t, res.Data[0].Item)
+						checkAccountMeshDataItemTx(t, res.Data[0].Datum)
 					},
 				},
 				{
@@ -940,7 +940,7 @@ func TestMeshService(t *testing.T) {
 						require.NoError(t, err)
 						require.Equal(t, uint32(1), res.TotalResults)
 						require.Equal(t, 1, len(res.Data))
-						checkAccountMeshDataItemActivation(t, res.Data[0].Item)
+						checkAccountMeshDataItemActivation(t, res.Data[0].Datum)
 					},
 				},
 				{
@@ -959,8 +959,8 @@ func TestMeshService(t *testing.T) {
 						require.NoError(t, err)
 						require.Equal(t, uint32(2), res.TotalResults)
 						require.Equal(t, 2, len(res.Data))
-						checkAccountMeshDataItemTx(t, res.Data[0].Item)
-						checkAccountMeshDataItemActivation(t, res.Data[1].Item)
+						checkAccountMeshDataItemTx(t, res.Data[0].Datum)
+						checkAccountMeshDataItemActivation(t, res.Data[1].Datum)
 					},
 				},
 				{
@@ -978,7 +978,7 @@ func TestMeshService(t *testing.T) {
 						require.NoError(t, err)
 						require.Equal(t, uint32(2), res.TotalResults)
 						require.Equal(t, 1, len(res.Data))
-						checkAccountMeshDataItemTx(t, res.Data[0].Item)
+						checkAccountMeshDataItemTx(t, res.Data[0].Datum)
 					},
 				},
 				{
@@ -997,7 +997,7 @@ func TestMeshService(t *testing.T) {
 						require.NoError(t, err)
 						require.Equal(t, uint32(2), res.TotalResults)
 						require.Equal(t, 1, len(res.Data))
-						checkAccountMeshDataItemActivation(t, res.Data[0].Item)
+						checkAccountMeshDataItemActivation(t, res.Data[0].Datum)
 					},
 				},
 			}
@@ -1304,7 +1304,7 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 	require.Equal(t, globalTx.Origin().Bytes(), resTx.Signature.PublicKey)
 
 	// The Data field is a bit trickier to read
-	switch x := resTx.Data.(type) {
+	switch x := resTx.Datum.(type) {
 	case *pb.Transaction_CoinTransfer:
 		require.Equal(t, globalTx.Recipient.Bytes(), x.CoinTransfer.Receiver.Address,
 			"inner coin transfer tx has bad recipient")
@@ -1357,12 +1357,12 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 
 		res, err = stream.Recv()
 		require.NoError(t, err, "got error from stream")
-		checkAccountMeshDataItemTx(t, res.Data.Item)
+		checkAccountMeshDataItemTx(t, res.Datum.Datum)
 
 		// second item should be an activation
 		res, err = stream.Recv()
 		require.NoError(t, err, "got error from stream")
-		checkAccountMeshDataItemActivation(t, res.Data.Item)
+		checkAccountMeshDataItemActivation(t, res.Datum.Datum)
 
 		// look for EOF
 		// third and fourth events streamed should not be received! they should be
@@ -1435,15 +1435,15 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 
 		res, err = stream.Recv()
 		require.NoError(t, err, "got error from stream")
-		checkAccountDataItemReceipt(t, res.Data.Item)
+		checkAccountDataItemReceipt(t, res.Datum.Datum)
 
 		res, err = stream.Recv()
 		require.NoError(t, err, "got error from stream")
-		checkAccountDataItemReward(t, res.Data.Item)
+		checkAccountDataItemReward(t, res.Datum.Datum)
 
 		res, err = stream.Recv()
 		require.NoError(t, err, "got error from stream")
-		checkAccountDataItemAccount(t, res.Data.Item)
+		checkAccountDataItemAccount(t, res.Datum.Datum)
 
 		// look for EOF
 		// the next two events streamed should not be received! they should be
@@ -1524,19 +1524,19 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 
 		res, err = stream.Recv()
 		require.NoError(t, err, "got error from stream")
-		checkGlobalStateDataReceipt(t, res.Item.Data)
+		checkGlobalStateDataReceipt(t, res.Datum.Datum)
 
 		res, err = stream.Recv()
 		require.NoError(t, err, "got error from stream")
-		checkGlobalStateDataReward(t, res.Item.Data)
+		checkGlobalStateDataReward(t, res.Datum.Datum)
 
 		res, err = stream.Recv()
 		require.NoError(t, err, "got error from stream")
-		checkGlobalStateDataAccountWrapper(t, res.Item.Data)
+		checkGlobalStateDataAccountWrapper(t, res.Datum.Datum)
 
 		res, err = stream.Recv()
 		require.NoError(t, err, "got error from stream")
-		checkGlobalStateDataGlobalState(t, res.Item.Data)
+		checkGlobalStateDataGlobalState(t, res.Datum.Datum)
 
 		// look for EOF
 		// the next two events streamed should not be received! they should be
@@ -1685,7 +1685,7 @@ func checkAccountMeshDataItemTx(t *testing.T, dataItem interface{}) {
 			"inner coin transfer tx has bad counter")
 
 		// Need to further check tx type
-		switch y := x.Transaction.Data.(type) {
+		switch y := x.Transaction.Datum.(type) {
 		case *pb.Transaction_CoinTransfer:
 			require.Equal(t, globalTx.Recipient.Bytes(), y.CoinTransfer.Receiver.Address,
 				"inner coin transfer tx has bad recipient")

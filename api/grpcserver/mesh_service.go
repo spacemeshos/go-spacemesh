@@ -153,7 +153,7 @@ func (s MeshService) AccountMeshDataQuery(ctx context.Context, in *pb.AccountMes
 		}
 		for _, t := range txs {
 			res.Data = append(res.Data, &pb.AccountMeshData{
-				Item: &pb.AccountMeshData_Transaction{
+				Datum: &pb.AccountMeshData_Transaction{
 					Transaction: convertTransaction(t),
 				},
 			})
@@ -192,7 +192,7 @@ func (s MeshService) AccountMeshDataQuery(ctx context.Context, in *pb.AccountMes
 					return nil, status.Errorf(codes.Internal, "error serializing activation data")
 				}
 				res.Data = append(res.Data, &pb.AccountMeshData{
-					Item: &pb.AccountMeshData_Activation{
+					Datum: &pb.AccountMeshData_Activation{
 						Activation: pbatx,
 					},
 				})
@@ -241,7 +241,7 @@ func (s MeshService) getTxIdsFromMesh(minLayer types.LayerID, addr types.Address
 func convertTransaction(t *types.Transaction) *pb.Transaction {
 	return &pb.Transaction{
 		Id: &pb.TransactionId{Id: t.ID().Bytes()},
-		Data: &pb.Transaction_CoinTransfer{
+		Datum: &pb.Transaction_CoinTransfer{
 			CoinTransfer: &pb.CoinTransferTransaction{
 				Receiver: &pb.AccountId{Address: t.Recipient.Bytes()},
 			},
@@ -442,8 +442,8 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 					return status.Errorf(codes.Internal, "error serializing activation data")
 				}
 				if err := stream.Send(&pb.AccountMeshDataStreamResponse{
-					Data: &pb.AccountMeshData{
-						Item: &pb.AccountMeshData_Activation{
+					Datum: &pb.AccountMeshData{
+						Datum: &pb.AccountMeshData_Activation{
 							Activation: pbActivation,
 						},
 					},
@@ -463,8 +463,8 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 			// Apply address filter
 			if tx.Origin() == addr || tx.Recipient == addr {
 				if err := stream.Send(&pb.AccountMeshDataStreamResponse{
-					Data: &pb.AccountMeshData{
-						Item: &pb.AccountMeshData_Transaction{
+					Datum: &pb.AccountMeshData{
+						Datum: &pb.AccountMeshData_Transaction{
 							Transaction: convertTransaction(tx),
 						},
 					},
