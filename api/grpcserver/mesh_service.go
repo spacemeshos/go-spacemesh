@@ -153,7 +153,7 @@ func (s MeshService) AccountMeshDataQuery(ctx context.Context, in *pb.AccountMes
 		}
 		for _, t := range txs {
 			res.Data = append(res.Data, &pb.AccountMeshData{
-				DataItem: &pb.AccountMeshData_Transaction{
+				Item: &pb.AccountMeshData_Transaction{
 					Transaction: convertTransaction(t),
 				},
 			})
@@ -192,7 +192,7 @@ func (s MeshService) AccountMeshDataQuery(ctx context.Context, in *pb.AccountMes
 					return nil, status.Errorf(codes.Internal, "error serializing activation data")
 				}
 				res.Data = append(res.Data, &pb.AccountMeshData{
-					DataItem: &pb.AccountMeshData_Activation{
+					Item: &pb.AccountMeshData_Activation{
 						Activation: pbatx,
 					},
 				})
@@ -443,7 +443,7 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 				}
 				if err := stream.Send(&pb.AccountMeshDataStreamResponse{
 					Data: &pb.AccountMeshData{
-						DataItem: &pb.AccountMeshData_Activation{
+						Item: &pb.AccountMeshData_Activation{
 							Activation: pbActivation,
 						},
 					},
@@ -464,7 +464,7 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 			if tx.Origin() == addr || tx.Recipient == addr {
 				if err := stream.Send(&pb.AccountMeshDataStreamResponse{
 					Data: &pb.AccountMeshData{
-						DataItem: &pb.AccountMeshData_Transaction{
+						Item: &pb.AccountMeshData_Transaction{
 							Transaction: convertTransaction(tx),
 						},
 					},
