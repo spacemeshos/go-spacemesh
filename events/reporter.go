@@ -11,15 +11,6 @@ var reporter *EventReporter
 
 // ReportNewTx dispatches incoming events to the reporter singleton
 func ReportNewTx(tx *types.Transaction) {
-	if reporter != nil {
-		select {
-		case reporter.channelTransaction <- tx:
-			log.Info("reported tx on channelTransaction")
-		default:
-			log.Info("not reporting tx as no one is listening")
-		}
-	}
-
 	Publish(NewTx{
 		ID:          tx.ID().String(),
 		Origin:      tx.Origin().String(),
@@ -27,6 +18,20 @@ func ReportNewTx(tx *types.Transaction) {
 		Amount:      tx.Amount,
 		Fee:         tx.Fee,
 	})
+
+	if reporter != nil {
+		if reporter.blocking {
+			reporter.channelTransaction <- tx
+			log.Info("reported tx on channelTransaction")
+		} else {
+			select {
+			case reporter.channelTransaction <- tx:
+				log.Info("reported tx on channelTransaction")
+			default:
+				log.Info("not reporting tx as no one is listening")
+			}
+		}
+	}
 }
 
 // ReportValidTx reports a valid transaction
@@ -36,34 +41,46 @@ func ReportValidTx(tx *types.Transaction, valid bool) {
 
 // ReportNewActivation reports a new activation
 func ReportNewActivation(activation *types.ActivationTx) {
-	if reporter != nil {
-		select {
-		case reporter.channelActivation <- activation:
-			log.Info("reported activation")
-		default:
-			log.Info("not reporting activation as no one is listening")
-		}
-	}
 	Publish(NewAtx{
 		ID:      activation.ShortString(),
 		LayerID: uint64(activation.PubLayerID.GetEpoch()),
 	})
+
+	if reporter != nil {
+		if reporter.blocking {
+			reporter.channelActivation <- activation
+			log.Info("reported activation")
+		} else {
+			select {
+			case reporter.channelActivation <- activation:
+				log.Info("reported activation")
+			default:
+				log.Info("not reporting activation as no one is listening")
+			}
+		}
+	}
 }
 
 // ReportRewardReceived reports a new reward
 func ReportRewardReceived(r Reward) {
-	if reporter != nil {
-		select {
-		case reporter.channelReward <- r:
-			log.Info("reported reward: %v", r)
-		default:
-			log.Info("not reporting reward as no one is listening: %v", r)
-		}
-	}
 	Publish(RewardReceived{
 		Coinbase: r.Coinbase.String(),
 		Amount:   r.Total,
 	})
+
+	if reporter != nil {
+		if reporter.blocking {
+			reporter.channelReward <- r
+			log.Info("reported reward: %v", r)
+		} else {
+			select {
+			case reporter.channelReward <- r:
+				log.Info("reported reward: %v", r)
+			default:
+				log.Info("not reporting reward as no one is listening: %v", r)
+			}
+		}
+	}
 }
 
 // ReportNewBlock reports a new block
@@ -105,11 +122,16 @@ func ReportDoneCreatingBlock(eligible bool, layer uint64, error string) {
 // ReportNewLayer reports a new layer
 func ReportNewLayer(layer NewLayer) {
 	if reporter != nil {
-		select {
-		case reporter.channelLayer <- layer:
-			log.Info("reported layer")
-		default:
-			log.Info("not reporting layer as no one is listening")
+		if reporter.blocking {
+			reporter.channelLayer <- layer
+			log.Info("reported new layer: %v", layer)
+		} else {
+			select {
+			case reporter.channelLayer <- layer:
+				log.Info("reported new layer: %v", layer)
+			default:
+				log.Info("not reporting new layer as no one is listening: %v", layer)
+			}
 		}
 	}
 }
@@ -117,11 +139,16 @@ func ReportNewLayer(layer NewLayer) {
 // ReportError reports an error
 func ReportError(err NodeError) {
 	if reporter != nil {
-		select {
-		case reporter.channelError <- err:
+		if reporter.blocking {
+			reporter.channelError <- err
 			log.Info("reported error: %v", err)
-		default:
-			log.Info("not reporting error as buffer is full: %v", err)
+		} else {
+			select {
+			case reporter.channelError <- err:
+				log.Info("reported error: %v", err)
+			default:
+				log.Info("not reporting error as buffer is full: %v", err)
+			}
 		}
 	}
 }
@@ -140,33 +167,48 @@ func ReportNodeStatus(setters ...SetStatusElem) {
 		for _, setter := range setters {
 			setter(&reporter.lastStatus)
 		}
-		select {
-		case reporter.channelStatus <- reporter.lastStatus:
+		if reporter.blocking {
+			reporter.channelStatus <- reporter.lastStatus
 			log.Info("reported status: %v", reporter.lastStatus)
-		default:
-			log.Info("not reporting status as no one is listening: %v", reporter.lastStatus)
+		} else {
+			select {
+			case reporter.channelStatus <- reporter.lastStatus:
+				log.Info("reported status: %v", reporter.lastStatus)
+			default:
+				log.Info("not reporting status as no one is listening: %v", reporter.lastStatus)
+			}
 		}
 	}
 }
 
 func ReportReceipt(r TxReceipt) {
 	if reporter != nil {
-		select {
-		case reporter.channelReceipt <- r:
+		if reporter.blocking {
+			reporter.channelReceipt <- r
 			log.Info("reported receipt: %v", r)
-		default:
-			log.Info("not reporting receipt as no one is listening: %v", r)
+		} else {
+			select {
+			case reporter.channelReceipt <- r:
+				log.Info("reported receipt: %v", r)
+			default:
+				log.Info("not reporting receipt as no one is listening: %v", r)
+			}
 		}
 	}
 }
 
 func ReportAccountUpdate(a types.Address) {
 	if reporter != nil {
-		select {
-		case reporter.channelAccount <- a:
+		if reporter.blocking {
+			reporter.channelAccount <- a
 			log.Info("reported account update: %v", a)
-		default:
-			log.Info("not reporting account update as no one is listening: %v", a)
+		} else {
+			select {
+			case reporter.channelAccount <- a:
+				log.Info("reported account update: %v", a)
+			default:
+				log.Info("not reporting account update as no one is listening: %v", a)
+			}
 		}
 	}
 }
@@ -235,7 +277,15 @@ func GetReceiptChannel() chan TxReceipt {
 
 // InitializeEventReporter initializes the event reporting interface
 func InitializeEventReporter(url string) {
-	reporter = newEventReporter()
+	// By default use zero-buffer channels and non-blocking.
+	InitializeEventReporterWithOptions(url, 0, false)
+}
+
+// InitializeEventReporterWithOptions initializes the event reporting interface with
+// a nonzero channel buffer. This is useful for testing, where we want reporting to
+// block.
+func InitializeEventReporterWithOptions(url string, bufsize int, blocking bool) {
+	reporter = newEventReporter(bufsize, blocking)
 	if url != "" {
 		InitializeEventPubsub(url)
 	}
@@ -372,27 +422,22 @@ type EventReporter struct {
 	channelReceipt     chan TxReceipt
 	lastStatus         NodeStatus
 	stopChan           chan struct{}
+	blocking           bool
 }
 
-func newEventReporter() *EventReporter {
+func newEventReporter(bufsize int, blocking bool) *EventReporter {
 	return &EventReporter{
-		channelTransaction: make(chan *types.Transaction),
-		channelActivation:  make(chan *types.ActivationTx),
-		channelLayer:       make(chan NewLayer),
-		channelStatus:      make(chan NodeStatus),
-		channelAccount:     make(chan types.Address),
-		channelReward:      make(chan Reward),
-		channelReceipt:     make(chan TxReceipt),
+		channelTransaction: make(chan *types.Transaction, bufsize),
+		channelActivation:  make(chan *types.ActivationTx, bufsize),
+		channelLayer:       make(chan NewLayer, bufsize),
+		channelStatus:      make(chan NodeStatus, bufsize),
+		channelAccount:     make(chan types.Address, bufsize),
+		channelReward:      make(chan Reward, bufsize),
+		channelReceipt:     make(chan TxReceipt, bufsize),
+		channelError:       make(chan NodeError, bufsize),
 		lastStatus:         NodeStatus{},
 		stopChan:           make(chan struct{}),
-
-		// In general, we use unbuffered channels, since we expect data to be consumed
-		// as fast as we produce it, and we don't expect many data items to be created
-		// and reported in rapid succession. Also, it's not such a big deal if we
-		// miss something since it can always be queried again later. But errors are a
-		// bit of a special case. Sometimes one error triggers another in rapid
-		// succession. So as not to lose these, we use a buffered channel here.
-		channelError: make(chan NodeError, 100),
+		blocking:           blocking,
 	}
 }
 
