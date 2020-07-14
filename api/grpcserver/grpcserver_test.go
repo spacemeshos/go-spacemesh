@@ -1366,27 +1366,25 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 		},
 	}
 
-	// Use a channel to synchronize the two routines
-	waitChan := make(chan struct{})
+	// Synchronize the two routines
+	wg := sync.WaitGroup{}
+	wg.Add(1)
 
 	// This will block so run it in a goroutine
 	go func() {
-		defer close(waitChan)
+		defer wg.Done()
 		stream, err := c.AccountDataStream(context.Background(), req)
 		require.NoError(t, err, "stream request returned unexpected error")
 
 		var res *pb.AccountDataStreamResponse
 
-		waitChan <- struct{}{}
 		res, err = stream.Recv()
 		require.NoError(t, err, "got error from stream")
 		checkAccountDataItemReceipt(t, res.Data.Item)
-		waitChan <- struct{}{}
 
 		res, err = stream.Recv()
 		require.NoError(t, err, "got error from stream")
 		checkAccountDataItemReward(t, res.Data.Item)
-		waitChan <- struct{}{}
 
 		res, err = stream.Recv()
 		require.NoError(t, err, "got error from stream")
@@ -1401,17 +1399,12 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 
 	// initialize the streamer
 	log.Info("initializing event stream")
-	events.InitializeEventReporter("")
-
-	// wait until the listener is listening
-	<-waitChan
-	time.Sleep(1 * time.Second)
+	events.InitializeEventReporterWithOptions("", 0, true)
 
 	// publish a receipt
 	events.ReportReceipt(events.TxReceipt{
 		Address: addr1,
 	})
-	<-waitChan
 
 	// publish a reward
 	events.ReportRewardReceived(events.Reward{
@@ -1420,7 +1413,6 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 		LayerReward: rewardAmount * 2,
 		Coinbase:    addr1,
 	})
-	<-waitChan
 
 	// publish an account data update
 	events.ReportAccountUpdate(addr1)
@@ -1435,7 +1427,7 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 	events.CloseEventReporter()
 
 	// wait for the goroutine to finish
-	<-waitChan
+	wg.Wait()
 }
 
 func TestLayerStream_comprehensive(t *testing.T) {
