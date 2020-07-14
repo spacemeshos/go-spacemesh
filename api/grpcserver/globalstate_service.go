@@ -57,10 +57,10 @@ func (s GlobalStateService) Account(ctx context.Context, in *pb.AccountRequest) 
 	balance := s.Mesh.GetBalance(addr)
 	counter := s.Mesh.GetNonce(addr)
 
-	return &pb.AccountResponse{Account: &pb.Account{
-		Address: &pb.AccountId{Address: addr.Bytes()},
-		Counter: counter,
-		Balance: &pb.Amount{Value: balance},
+	return &pb.AccountResponse{AccountWrapper: &pb.Account{
+		AccountId: &pb.AccountId{Address: addr.Bytes()},
+		Counter:   counter,
+		Balance:   &pb.Amount{Value: balance},
 	}}, nil
 }
 
@@ -115,11 +115,11 @@ func (s GlobalStateService) AccountDataQuery(ctx context.Context, in *pb.Account
 	if filterAccount {
 		balance := s.Mesh.GetBalance(addr)
 		counter := s.Mesh.GetNonce(addr)
-		res.AccountItem = append(res.AccountItem, &pb.AccountData{Item: &pb.AccountData_Account{
-			Account: &pb.Account{
-				Address: &pb.AccountId{Address: addr.Bytes()},
-				Counter: counter,
-				Balance: &pb.Amount{Value: balance},
+		res.AccountItem = append(res.AccountItem, &pb.AccountData{Item: &pb.AccountData_AccountWrapper{
+			AccountWrapper: &pb.Account{
+				AccountId: &pb.AccountId{Address: addr.Bytes()},
+				Counter:   counter,
+				Balance:   &pb.Amount{Value: balance},
 			},
 		}})
 	}
@@ -217,11 +217,11 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 				// nonce.
 				balance := s.Mesh.GetBalance(addr)
 				counter := s.Mesh.GetNonce(addr)
-				if err := stream.Send(&pb.AccountDataStreamResponse{Data: &pb.AccountData{Item: &pb.AccountData_Account{
-					Account: &pb.Account{
-						Address: &pb.AccountId{Address: addr.Bytes()},
-						Counter: counter,
-						Balance: &pb.Amount{Value: balance},
+				if err := stream.Send(&pb.AccountDataStreamResponse{Data: &pb.AccountData{Item: &pb.AccountData_AccountWrapper{
+					AccountWrapper: &pb.Account{
+						AccountId: &pb.AccountId{Address: addr.Bytes()},
+						Counter:   counter,
+						Balance:   &pb.Amount{Value: balance},
 					},
 				}}}); err != nil {
 					return err
@@ -308,10 +308,141 @@ func (s GlobalStateService) AppEventStream(request *pb.AppEventStreamRequest, st
 }
 
 // GlobalStateStream exposes a stream of global data data items: rewards, receipts, account info, global state hash
-func (s GlobalStateService) GlobalStateStream(request *pb.GlobalStateStreamRequest, stream pb.GlobalStateService_GlobalStateStreamServer) error {
+func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, stream pb.GlobalStateService_GlobalStateStreamServer) error {
 	log.Info("GRPC GlobalStateService.GlobalStateStream")
 
-	// TODO: implement me
+	if in.GlobalStateDataFlags == uint32(pb.GlobalStateDataFlag_GLOBAL_STATE_DATA_FLAG_UNSPECIFIED) {
+		return status.Errorf(codes.InvalidArgument, "`GlobalStateDataFlags` must set at least one bitfield")
+	}
 
-	return nil
+	filterAccount := in.GlobalStateDataFlags&uint32(pb.GlobalStateDataFlag_GLOBAL_STATE_DATA_FLAG_ACCOUNT) != 0
+	filterReward := in.GlobalStateDataFlags&uint32(pb.GlobalStateDataFlag_GLOBAL_STATE_DATA_FLAG_REWARD) != 0
+	filterReceipt := in.GlobalStateDataFlags&uint32(pb.GlobalStateDataFlag_GLOBAL_STATE_DATA_FLAG_TRANSACTION_RECEIPT) != 0
+	filterState := in.GlobalStateDataFlags&uint32(pb.GlobalStateDataFlag_GLOBAL_STATE_DATA_FLAG_GLOBAL_STATE_HASH) != 0
+
+	// Subscribe to the various streams
+	var (
+		channelAccount chan types.Address
+		channelReward  chan events.Reward
+		channelReceipt chan events.TxReceipt
+		channelLayer   chan events.NewLayer
+	)
+	if filterAccount {
+		channelAccount = events.GetAccountChannel()
+	}
+	if filterReward {
+		channelReward = events.GetRewardChannel()
+	}
+	if filterReceipt {
+		channelReceipt = events.GetReceiptChannel()
+	}
+	if filterState {
+		// Whenever new state is applied to the mesh, a new layer is reported.
+		// There is no separate reporting specifically for new state.
+		channelLayer = events.GetLayerChannel()
+	}
+
+	for {
+		select {
+		case updatedAccount, ok := <-channelAccount:
+			if !ok {
+				// we could handle this more gracefully, by no longer listening
+				// to this stream but continuing to listen to the other stream,
+				// but in practice one should never be closed while the other is
+				// still running, so it doesn't matter
+				log.Info("account channel closed, shutting down")
+				return nil
+			}
+			// The Reporter service just sends us the account address. We are responsible
+			// for looking up the other required data here. Get the account balance and
+			// nonce.
+			balance := s.Mesh.GetBalance(updatedAccount)
+			counter := s.Mesh.GetNonce(updatedAccount)
+			if err := stream.Send(&pb.GlobalStateStreamResponse{Item: &pb.GlobalStateData{Data: &pb.GlobalStateData_AccountWrapper{
+				AccountWrapper: &pb.Account{
+					AccountId: &pb.AccountId{Address: updatedAccount.Bytes()},
+					Counter:   counter,
+					Balance:   &pb.Amount{Value: balance},
+				},
+			}}}); err != nil {
+				return err
+			}
+		case reward, ok := <-channelReward:
+			if !ok {
+				// we could handle this more gracefully, by no longer listening
+				// to this stream but continuing to listen to the other stream,
+				// but in practice one should never be closed while the other is
+				// still running, so it doesn't matter
+				log.Info("reward channel closed, shutting down")
+				return nil
+			}
+			if err := stream.Send(&pb.GlobalStateStreamResponse{Item: &pb.GlobalStateData{Data: &pb.GlobalStateData_Reward{
+				Reward: &pb.Reward{
+					Layer:       reward.Layer.Uint64(),
+					Total:       &pb.Amount{Value: reward.Total},
+					LayerReward: &pb.Amount{Value: reward.LayerReward},
+					// Leave this out for now as this is changing
+					//LayerComputed: 0,
+					Coinbase: &pb.AccountId{Address: reward.Coinbase.Bytes()},
+					// TODO: There is currently no way to get this for a reward.
+					// See https://github.com/spacemeshos/go-spacemesh/issues/2068.
+					//Smesher:  nil,
+				},
+			}}}); err != nil {
+				return err
+			}
+		case receipt, ok := <-channelReceipt:
+			if !ok {
+				// we could handle this more gracefully, by no longer listening
+				// to this stream but continuing to listen to the other stream,
+				// but in practice one should never be closed while the other is
+				// still running, so it doesn't matter
+				log.Info("receipt channel closed, shutting down")
+				return nil
+			}
+			if err := stream.Send(&pb.GlobalStateStreamResponse{Item: &pb.GlobalStateData{Data: &pb.GlobalStateData_Receipt{
+				Receipt: &pb.TransactionReceipt{
+					Id: &pb.TransactionId{Id: receipt.Id.Bytes()},
+					//Result:      receipt.Result,
+					GasUsed:     receipt.GasUsed,
+					Fee:         &pb.Amount{Value: receipt.Fee},
+					LayerNumber: receipt.Layer.Uint64(),
+					Index:       receipt.Index,
+					AppAddress:  &pb.AccountId{Address: receipt.Address.Bytes()},
+				},
+			}}}); err != nil {
+				return err
+			}
+		case layer, ok := <-channelLayer:
+			if !ok {
+				// we could handle this more gracefully, by no longer listening
+				// to this stream but continuing to listen to the other stream,
+				// but in practice one should never be closed while the other is
+				// still running, so it doesn't matter
+				log.Info("layer channel closed, shutting down")
+				return nil
+			}
+			// The Reporter service just sends us the account address. We are responsible
+			// for looking up the other required data here. Get the account balance and
+			// nonce.
+			root, err := s.Mesh.GetLayerStateRoot(layer.Layer.Index())
+			if err != nil {
+				log.Error("error retrieving layer data: %s", err)
+				return status.Errorf(codes.Internal, "error retrieving layer data")
+			}
+			if err := stream.Send(&pb.GlobalStateStreamResponse{Item: &pb.GlobalStateData{Data: &pb.GlobalStateData_GlobalState{
+				GlobalState: &pb.GlobalStateHash{
+					RootHash:    root.Bytes(),
+					LayerNumber: layer.Layer.Index().Uint64(),
+				},
+			}}}); err != nil {
+				return err
+			}
+		case <-stream.Context().Done():
+			log.Info("AccountDataStream closing stream, client disconnected")
+			return nil
+		}
+		// TODO: do we need an additional case here for a context to indicate
+		// that the service needs to shut down?
+	}
 }
