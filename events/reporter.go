@@ -291,7 +291,7 @@ func newEventReporter() *EventReporter {
 	return &EventReporter{
 		channelTransaction: make(chan *types.Transaction),
 		channelActivation:  make(chan *types.ActivationTx),
-		channelLayer:       make(chan *types.Layer),
+		channelLayer:       make(chan NewLayer),
 		channelStatus:      make(chan NodeStatus),
 		lastStatus:         NodeStatus{},
 		stopChan:           make(chan struct{}),
