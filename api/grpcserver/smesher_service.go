@@ -44,6 +44,16 @@ func (s SmesherService) IsSmeshing(ctx context.Context, in *empty.Empty) (*pb.Is
 func (s SmesherService) StartSmeshing(ctx context.Context, in *pb.StartSmeshingRequest) (*pb.StartSmeshingResponse, error) {
 	log.Info("GRPC SmesherService.StartSmeshing")
 
+	if in.Coinbase == nil {
+		return nil, status.Errorf(codes.InvalidArgument, "`Coinbase` must be provided")
+	}
+	if in.DataDir == "" {
+		return nil, status.Errorf(codes.InvalidArgument, "`DataDir` must be provided")
+	}
+	if in.CommitmentSize == nil {
+		return nil, status.Errorf(codes.InvalidArgument, "`CommitmentSize` must be provided")
+	}
+
 	addr := types.BytesToAddress(in.Coinbase.Address)
 	if err := s.Mining.StartPost(addr, in.DataDir, in.CommitmentSize.Value); err != nil {
 		log.Error("error starting post: %s", err)
@@ -89,7 +99,9 @@ func (s SmesherService) Coinbase(ctx context.Context, in *empty.Empty) (*pb.Coin
 func (s SmesherService) SetCoinbase(ctx context.Context, in *pb.SetCoinbaseRequest) (*pb.SetCoinbaseResponse, error) {
 	log.Info("GRPC SmesherService.SetCoinbase")
 
-	// TODO: make sure address provided
+	if in.Id == nil {
+		return nil, status.Errorf(codes.InvalidArgument, "`Id` must be provided")
+	}
 
 	addr := types.BytesToAddress(in.Id.Address)
 	s.Mining.SetCoinbaseAccount(addr)
