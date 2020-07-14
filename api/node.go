@@ -32,6 +32,8 @@ type MiningAPI interface {
 	SetCoinbaseAccount(rewardAddress types.Address)
 	// MiningStats returns state of post init, coinbase reward account and data directory path for post commitment
 	MiningStats() (postStatus int, remainingBytes uint64, coinbaseAccount string, postDatadir string)
+	GetSmesherID() types.NodeID
+	Stop()
 }
 
 // OracleAPI gets eligible layers from oracle

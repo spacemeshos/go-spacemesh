@@ -148,6 +148,10 @@ func (b *Builder) Stop() {
 	close(b.stop)
 }
 
+func (b *Builder) GetSmesherID() types.NodeID {
+	return b.nodeID
+}
+
 // SignAtx signs the atx and assigns the signature into atx.Sig
 // this function returns an error if atx could not be converted to bytes
 func (b *Builder) SignAtx(atx *types.ActivationTx) error {
