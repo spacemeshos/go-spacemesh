@@ -89,6 +89,8 @@ func (s SmesherService) Coinbase(ctx context.Context, in *empty.Empty) (*pb.Coin
 func (s SmesherService) SetCoinbase(ctx context.Context, in *pb.SetCoinbaseRequest) (*pb.SetCoinbaseResponse, error) {
 	log.Info("GRPC SmesherService.SetCoinbase")
 
+	// TODO: make sure address provided
+
 	addr := types.BytesToAddress(in.Id.Address)
 	s.Mining.SetCoinbaseAccount(addr)
 	return &pb.SetCoinbaseResponse{
