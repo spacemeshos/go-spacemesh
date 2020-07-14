@@ -349,7 +349,7 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	response, err := c.Echo(context.Background(), &pb.EchoRequest{
 		Msg: &pb.SimpleString{Value: message}})
 	r.Error(err)
-	r.Equal("rpc error: code = Unavailable desc = connection error: desc = \"transport: Error while dialing dial tcp 127.0.0.1:1234: connect: connection refused\"", err.Error())
+	r.Contains(err.Error(), "rpc error: code = Unavailable desc = connection error: desc = \"transport: Error while dialing dial tcp")
 	r.NoError(conn.Close())
 
 	resetFlags()
