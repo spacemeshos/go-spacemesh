@@ -1485,6 +1485,102 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 	wg.Wait()
 }
 
+func TestGlobalStateStream_comprehensive(t *testing.T) {
+	svc := NewGlobalStateService(&networkMock, txAPI, &genTime, &SyncerMock{})
+	shutDown := launchServer(t, svc)
+	defer shutDown()
+
+	// start a client
+	addr := "localhost:" + strconv.Itoa(cfg.NewGrpcServerPort)
+
+	// Set up a connection to the server.
+	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	require.NoError(t, err)
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
+	c := pb.NewGlobalStateServiceClient(conn)
+
+	// set up the grpc listener stream
+	req := &pb.GlobalStateStreamRequest{
+		GlobalStateDataFlags: uint32(
+			pb.GlobalStateDataFlag_GLOBAL_STATE_DATA_FLAG_ACCOUNT |
+				pb.GlobalStateDataFlag_GLOBAL_STATE_DATA_FLAG_GLOBAL_STATE_HASH |
+				pb.GlobalStateDataFlag_GLOBAL_STATE_DATA_FLAG_REWARD |
+				pb.GlobalStateDataFlag_GLOBAL_STATE_DATA_FLAG_TRANSACTION_RECEIPT),
+	}
+
+	// Synchronize the two routines
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+
+	// This will block so run it in a goroutine
+	go func() {
+		defer wg.Done()
+		stream, err := c.GlobalStateStream(context.Background(), req)
+		require.NoError(t, err, "stream request returned unexpected error")
+
+		var res *pb.GlobalStateStreamResponse
+
+		res, err = stream.Recv()
+		require.NoError(t, err, "got error from stream")
+		checkGlobalStateDataReceipt(t, res.Item.Data)
+
+		res, err = stream.Recv()
+		require.NoError(t, err, "got error from stream")
+		checkGlobalStateDataReward(t, res.Item.Data)
+
+		res, err = stream.Recv()
+		require.NoError(t, err, "got error from stream")
+		checkGlobalStateDataAccountWrapper(t, res.Item.Data)
+
+		res, err = stream.Recv()
+		require.NoError(t, err, "got error from stream")
+		checkGlobalStateDataGlobalState(t, res.Item.Data)
+
+		// look for EOF
+		// the next two events streamed should not be received! they should be
+		// filtered out
+		res, err = stream.Recv()
+		require.Equal(t, io.EOF, err, "expected EOF from stream")
+	}()
+
+	// initialize the streamer
+	log.Info("initializing event stream")
+	events.InitializeEventReporterWithOptions("", 0, true)
+
+	// publish a receipt
+	events.ReportReceipt(events.TxReceipt{
+		Address: addr1,
+	})
+
+	// publish a reward
+	events.ReportRewardReceived(events.Reward{
+		Layer:       layerFirst,
+		Total:       rewardAmount,
+		LayerReward: rewardAmount * 2,
+		Coinbase:    addr1,
+	})
+
+	// publish an account data update
+	events.ReportAccountUpdate(addr1)
+
+	// publish a new layer
+	layer, err := txAPI.GetLayer(layerFirst)
+	require.NoError(t, err)
+	events.ReportNewLayer(events.NewLayer{
+		Layer:  layer,
+		Status: events.LayerStatusTypeConfirmed,
+	})
+
+	// close the stream
+	log.Info("closing event stream")
+	events.CloseEventReporter()
+
+	// wait for the goroutine to finish
+	wg.Wait()
+}
+
 func TestLayerStream_comprehensive(t *testing.T) {
 	// TODO: Re-enable this test in phase9 as the Reporter has been fixed.
 	// This will fail for now because the Reporter does not block.
@@ -1535,7 +1631,7 @@ func TestLayerStream_comprehensive(t *testing.T) {
 	log.Info("initializing event stream")
 	events.InitializeEventReporter("")
 
-	layer, err := txAPI.GetLayer(0)
+	layer, err := txAPI.GetLayer(layerFirst)
 	require.NoError(t, err)
 	events.ReportNewLayer(events.NewLayer{
 		Layer:  layer,
@@ -1646,6 +1742,52 @@ func checkAccountDataItemAccount(t *testing.T, dataItem interface{}) {
 		require.Equal(t, addr1.Bytes(), x.AccountWrapper.AccountId.Address)
 		require.Equal(t, uint64(accountBalance), x.AccountWrapper.Balance.Value)
 		require.Equal(t, uint64(accountCounter), x.AccountWrapper.Counter)
+
+	default:
+		require.Fail(t, "inner account data item has wrong data type")
+	}
+}
+
+func checkGlobalStateDataReward(t *testing.T, dataItem interface{}) {
+	switch x := dataItem.(type) {
+	case *pb.GlobalStateData_Reward:
+		require.Equal(t, uint64(rewardAmount), x.Reward.Total.Value)
+		require.Equal(t, uint64(layerFirst), x.Reward.Layer)
+		require.Equal(t, uint64(rewardAmount*2), x.Reward.LayerReward.Value)
+		require.Equal(t, addr1.Bytes(), x.Reward.Coinbase.Address)
+
+	default:
+		require.Fail(t, "inner account data item has wrong data type")
+	}
+}
+
+func checkGlobalStateDataReceipt(t *testing.T, dataItem interface{}) {
+	switch x := dataItem.(type) {
+	case *pb.GlobalStateData_Receipt:
+		require.Equal(t, addr1.Bytes(), x.Receipt.AppAddress.Address)
+
+	default:
+		require.Fail(t, "inner account data item has wrong data type")
+	}
+}
+
+func checkGlobalStateDataAccountWrapper(t *testing.T, dataItem interface{}) {
+	switch x := dataItem.(type) {
+	case *pb.GlobalStateData_AccountWrapper:
+		require.Equal(t, addr1.Bytes(), x.AccountWrapper.AccountId.Address)
+		require.Equal(t, uint64(accountBalance), x.AccountWrapper.Balance.Value)
+		require.Equal(t, uint64(accountCounter), x.AccountWrapper.Counter)
+
+	default:
+		require.Fail(t, "inner account data item has wrong data type")
+	}
+}
+
+func checkGlobalStateDataGlobalState(t *testing.T, dataItem interface{}) {
+	switch x := dataItem.(type) {
+	case *pb.GlobalStateData_GlobalState:
+		require.Equal(t, uint64(layerFirst), x.GlobalState.LayerNumber)
+		require.Equal(t, stateRoot.Bytes(), x.GlobalState.RootHash)
 
 	default:
 		require.Fail(t, "inner account data item has wrong data type")
