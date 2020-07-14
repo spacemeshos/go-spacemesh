@@ -44,6 +44,7 @@ const (
 	miningStatus          = activation.InitDone
 	remainingBytes        = 321
 	commitmentSize        = 8826949
+	dataDir               = "/tmp"
 	defaultGasLimit       = 10
 	defaultFee            = 1
 	genTimeUnix           = 1000000
@@ -341,7 +342,7 @@ func newAtx(challenge types.NIPSTChallenge, ActiveSetSize uint32, View []types.B
 type MiningAPIMock struct{}
 
 func (*MiningAPIMock) MiningStats() (int, uint64, string, string) {
-	return miningStatus, remainingBytes, addr1.String(), "/tmp"
+	return miningStatus, remainingBytes, addr1.String(), dataDir
 }
 
 func (*MiningAPIMock) StartPost(types.Address, string, uint64) error {
@@ -777,10 +778,16 @@ func TestSmesherService(t *testing.T) {
 			require.NoError(t, err)
 			require.True(t, res.IsSmeshing, "expected IsSmeshing to be true")
 		}},
+		{"StartSmeshingMissingArgs", func(t *testing.T) {
+			_, err := c.StartSmeshing(context.Background(), &pb.StartSmeshingRequest{})
+			require.Error(t, err)
+			statusCode := status.Code(err)
+			require.Equal(t, codes.InvalidArgument, statusCode)
+		}},
 		{"StartSmeshing", func(t *testing.T) {
 			res, err := c.StartSmeshing(context.Background(), &pb.StartSmeshingRequest{
 				Coinbase:       &pb.AccountId{Address: addr1.Bytes()},
-				DataDir:        "",
+				DataDir:        dataDir,
 				CommitmentSize: &pb.SimpleInt{Value: commitmentSize},
 			})
 			require.NoError(t, err)
@@ -795,6 +802,12 @@ func TestSmesherService(t *testing.T) {
 			res, err := c.SmesherId(context.Background(), &empty.Empty{})
 			require.NoError(t, err)
 			require.Equal(t, nodeID.ToBytes(), res.AccountId.Address)
+		}},
+		{"SetCoinbaseMissingArgs", func(t *testing.T) {
+			_, err := c.SetCoinbase(context.Background(), &pb.SetCoinbaseRequest{})
+			require.Error(t, err)
+			statusCode := status.Code(err)
+			require.Equal(t, codes.InvalidArgument, statusCode)
 		}},
 		{"SetCoinbase", func(t *testing.T) {
 			res, err := c.SetCoinbase(context.Background(), &pb.SetCoinbaseRequest{
