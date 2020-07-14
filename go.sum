@@ -231,8 +231,8 @@ github.com/smartystreets/goconvey v0.0.0-20190731233626-505e41936337/go.mod h1:s
 github.com/soheilhy/cmux v0.1.4/go.mod h1:IM3LyeVVIOuxMH7sFAkER9+bJ4dT7Ms6E4xg4kGIyLM=
 github.com/spacemeshos/amcl v0.0.2 h1:YyYF1irv4GkArTe8hzb5/e2B6ReicL2SHeUUsvO3N0c=
 github.com/spacemeshos/amcl v0.0.2/go.mod h1:6/boG2CTNCJ3HBfuyU29Eg1fJxMrXUctpvBiJj1Q69o=
-github.com/spacemeshos/api/release/go v0.0.0-20200714173226-28c94002d307 h1:Nd92tDNRQuGqzFJDlRKTg1SDcjYZmh64LuQ0IFCkpcM=
-github.com/spacemeshos/api/release/go v0.0.0-20200714173226-28c94002d307/go.mod h1:vLEf1k/H7fz3c3Yi8luMuxANss0afBkSxs7ZJ5pIXj4=
+github.com/spacemeshos/api/release/go v0.0.0-20200714180656-71ad13e612b0 h1:imMdjv7dVQltJ6sYaAwvf2xvFwki+7n3vR7LFoTOGv4=
+github.com/spacemeshos/api/release/go v0.0.0-20200714180656-71ad13e612b0/go.mod h1:vLEf1k/H7fz3c3Yi8luMuxANss0afBkSxs7ZJ5pIXj4=
 github.com/spacemeshos/ed25519 v0.0.0-20190530014421-e235766d15a1 h1:INBIhbR/39yXEN8WVNfiGZehiKvkML+yrJfFuIwrmbU=
 github.com/spacemeshos/ed25519 v0.0.0-20190530014421-e235766d15a1/go.mod h1:lyZLUyZXvd7gp6KHwGS5ZgtS2ZvV++lBjdE4MLqmLnU=
 github.com/spacemeshos/merkle-tree v0.0.0-20190612125135-48574fd5f419 h1:h01wKBJ33d4/4yRTyCZv/LKcLMokl6mLcZCfitQk7xw=
