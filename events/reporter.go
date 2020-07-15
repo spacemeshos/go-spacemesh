@@ -18,17 +18,25 @@ func ReportNewTx(tx *types.Transaction) {
 		Amount:      tx.Amount,
 		Fee:         tx.Fee,
 	})
+	ReportTxWithValidity(tx, true)
+}
 
+// ReportTxWithValidity reports a tx along with whether it was just invalidated
+func ReportTxWithValidity(tx *types.Transaction, valid bool) {
+	txWithValidity := TransactionWithValidity{
+		Transaction: tx,
+		Valid:       valid,
+	}
 	if reporter != nil {
 		if reporter.blocking {
-			reporter.channelTransaction <- tx
-			log.Info("reported tx on channelTransaction")
+			reporter.channelTransaction <- txWithValidity
+			log.Info("reported tx on channelTransaction: %v", txWithValidity)
 		} else {
 			select {
-			case reporter.channelTransaction <- tx:
-				log.Info("reported tx on channelTransaction")
+			case reporter.channelTransaction <- txWithValidity:
+				log.Info("reported tx on channelTransaction: %v", txWithValidity)
 			default:
-				log.Info("not reporting tx as no one is listening")
+				log.Info("not reporting tx as no one is listening: %v", txWithValidity)
 			}
 		}
 	}
@@ -214,7 +222,7 @@ func ReportAccountUpdate(a types.Address) {
 }
 
 // GetNewTxChannel returns a channel of new transactions
-func GetNewTxChannel() chan *types.Transaction {
+func GetNewTxChannel() chan TransactionWithValidity {
 	if reporter != nil {
 		return reporter.channelTransaction
 	}
@@ -350,7 +358,7 @@ type NodeStatus struct {
 	LayerVerified types.LayerID
 }
 
-// TxRecipt represents a transaction receipt
+// TxReceipt represents a transaction receipt
 type TxReceipt struct {
 	Id      types.TransactionID
 	Result  int
@@ -370,6 +378,12 @@ type Reward struct {
 	// TODO: We don't currently have a way to get these two.
 	//LayerComputed
 	//Smesher
+}
+
+// TransactionWithValidity wraps a tx with its validity info
+type TransactionWithValidity struct {
+	Transaction *types.Transaction
+	Valid       bool
 }
 
 // SetStatusElem sets a status
@@ -412,7 +426,7 @@ func LayerVerified(lid types.LayerID) SetStatusElem {
 
 // EventReporter is the struct that receives incoming events and dispatches them
 type EventReporter struct {
-	channelTransaction chan *types.Transaction
+	channelTransaction chan TransactionWithValidity
 	channelActivation  chan *types.ActivationTx
 	channelLayer       chan NewLayer
 	channelError       chan NodeError
@@ -427,7 +441,7 @@ type EventReporter struct {
 
 func newEventReporter(bufsize int, blocking bool) *EventReporter {
 	return &EventReporter{
-		channelTransaction: make(chan *types.Transaction, bufsize),
+		channelTransaction: make(chan TransactionWithValidity, bufsize),
 		channelActivation:  make(chan *types.ActivationTx, bufsize),
 		channelLayer:       make(chan NewLayer, bufsize),
 		channelStatus:      make(chan NodeStatus, bufsize),
