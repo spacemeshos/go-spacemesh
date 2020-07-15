@@ -1397,9 +1397,9 @@ func TestTransactionService(t *testing.T) {
 			statusCode := status.Code(err)
 			require.Equal(t, codes.InvalidArgument, statusCode)
 			require.Contains(t, err.Error(), "`Transaction` incorrect counter or")
+			txAPI.balances[globalTx.Origin()] = big.NewInt(int64(accountBalance))
 		}},
 		{"SubmitTransaction_BadCounter", func(t *testing.T) {
-			txAPI.balances[globalTx.Origin()] = big.NewInt(int64(accountBalance))
 			txAPI.nonces[globalTx.Origin()] = uint64(accountCounter + 1)
 			serializedTx, err := types.InterfaceToBytes(globalTx)
 			require.NoError(t, err, "error serializing tx")
@@ -1409,6 +1409,7 @@ func TestTransactionService(t *testing.T) {
 			statusCode := status.Code(err)
 			require.Equal(t, codes.InvalidArgument, statusCode)
 			require.Contains(t, err.Error(), "`Transaction` incorrect counter or")
+			txAPI.nonces[globalTx.Origin()] = uint64(accountCounter)
 		}},
 		{"SubmitTransaction_InvalidTx", func(t *testing.T) {
 			// Try sending invalid tx data
@@ -1431,6 +1432,60 @@ func TestTransactionService(t *testing.T) {
 			statusCode := status.Code(err)
 			require.Equal(t, codes.InvalidArgument, statusCode)
 			require.Contains(t, err.Error(), "`Transaction` origin account not found")
+		}},
+		{"TransactionsState_MissingTransactionId", func(t *testing.T) {
+			_, err = c.TransactionsState(context.Background(), &pb.TransactionsStateRequest{})
+			statusCode := status.Code(err)
+			require.Equal(t, codes.InvalidArgument, statusCode)
+			require.Contains(t, err.Error(), "`TransactionId` must include")
+		}},
+		{"TransactionsState_TransactionIdZeroLen", func(t *testing.T) {
+			_, err = c.TransactionsState(context.Background(), &pb.TransactionsStateRequest{
+				TransactionId: []*pb.TransactionId{},
+			})
+			statusCode := status.Code(err)
+			require.Equal(t, codes.InvalidArgument, statusCode)
+			require.Contains(t, err.Error(), "`TransactionId` must include")
+		}},
+		{"TransactionsState_StateOnly", func(t *testing.T) {
+			req := &pb.TransactionsStateRequest{}
+			req.TransactionId = append(req.TransactionId, &pb.TransactionId{
+				Id: globalTx.ID().Bytes(),
+			})
+			res, err := c.TransactionsState(context.Background(), req)
+			require.NoError(t, err)
+			require.Equal(t, 1, len(res.TransactionsState))
+			require.Equal(t, 0, len(res.Transactions))
+			require.Equal(t, globalTx.ID().Bytes(), res.TransactionsState[0].Id.Id)
+			require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MESH, res.TransactionsState[0].State)
+		}},
+		{"TransactionsState_All", func(t *testing.T) {
+			req := &pb.TransactionsStateRequest{}
+			req.IncludeTransactions = true
+			req.TransactionId = append(req.TransactionId, &pb.TransactionId{
+				Id: globalTx.ID().Bytes(),
+			})
+			res, err := c.TransactionsState(context.Background(), req)
+			require.NoError(t, err)
+			require.Equal(t, 1, len(res.TransactionsState))
+			require.Equal(t, 1, len(res.Transactions))
+			require.Equal(t, globalTx.ID().Bytes(), res.TransactionsState[0].Id.Id)
+			require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MESH, res.TransactionsState[0].State)
+
+			tx := res.Transactions[0]
+			require.Equal(t, globalTx.ID().Bytes(), tx.Id.Id)
+			require.Equal(t, globalTx.Origin().Bytes(), tx.Sender.Address)
+			require.Equal(t, globalTx.GasLimit, tx.GasOffered.GasProvided)
+			require.Equal(t, globalTx.Amount, tx.Amount.Value)
+			require.Equal(t, globalTx.AccountNonce, tx.Counter)
+			require.Equal(t, globalTx.Origin().Bytes(), tx.Signature.PublicKey)
+			switch x := tx.Datum.(type) {
+			case *pb.Transaction_CoinTransfer:
+				require.Equal(t, globalTx.Recipient.Bytes(), x.CoinTransfer.Receiver.Address,
+					"inner coin transfer tx has bad recipient")
+			default:
+				require.Fail(t, "inner tx has wrong tx data type")
+			}
 		}},
 	}
 
