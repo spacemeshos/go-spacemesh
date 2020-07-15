@@ -591,8 +591,25 @@ func TestGlobalStateService(t *testing.T) {
 		}},
 		{"SmesherDataQuery", func(t *testing.T) {
 			_, err := c.SmesherDataQuery(context.Background(), &pb.SmesherDataQueryRequest{})
-			require.Error(t, err, "expected endpoint to fail")
-			require.Contains(t, err.Error(), "this endpoint has not yet been implemented")
+			require.Error(t, err)
+			statusCode := status.Code(err)
+			require.Equal(t, codes.Unimplemented, statusCode)
+		}},
+		{"SmesherRewardStream", func(t *testing.T) {
+			stream, err := c.SmesherRewardStream(context.Background(), &pb.SmesherRewardStreamRequest{})
+			// We expect to be able to open the stream but for it to fail upon the first request
+			require.NoError(t, err)
+			_, err = stream.Recv()
+			statusCode := status.Code(err)
+			require.Equal(t, codes.Unimplemented, statusCode)
+		}},
+		{"AppEventStream", func(t *testing.T) {
+			stream, err := c.AppEventStream(context.Background(), &pb.AppEventStreamRequest{})
+			// We expect to be able to open the stream but for it to fail upon the first request
+			require.NoError(t, err)
+			_, err = stream.Recv()
+			statusCode := status.Code(err)
+			require.Equal(t, codes.Unimplemented, statusCode)
 		}},
 		{name: "AccountDataStream", run: func(t *testing.T) {
 			// common testing framework
