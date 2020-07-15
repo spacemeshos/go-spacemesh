@@ -226,7 +226,7 @@ func (tp *TransactionProcessor) LoadState(layer types.LayerID) error {
 	return nil
 }
 
-// Process applies transaction vector to  current state, it returns the remaining transactions that failed
+// Process applies transaction vector to current state, it returns the remaining transactions that failed
 func (tp *TransactionProcessor) Process(txs []*types.Transaction, layerID types.LayerID) (remaining []*types.Transaction) {
 	for _, tx := range txs {
 		err := tp.ApplyTransaction(tx, layerID)
