@@ -58,7 +58,7 @@ const (
 	atxPerLayer           = 2
 	blkPerLayer           = 3
 	accountBalance        = 8675301
-	accountCounter        = 42
+	accountCounter        = 0
 	layerFirst            = 0
 	layerVerified         = 8
 	layerLatest           = 10
@@ -81,7 +81,7 @@ var (
 	challenge   = newChallenge(nodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
 	globalAtx   = newAtx(challenge, 5, defaultView, npst, addr1)
 	globalAtx2  = newAtx(challenge, 5, defaultView, npst, addr2)
-	globalTx    = NewTx(1, addr1, signing.NewEdSigner())
+	globalTx    = NewTx(0, addr1, signing.NewEdSigner())
 	globalTx2   = NewTx(1, addr2, signing.NewEdSigner())
 	block1      = types.NewExistingBlock(0, []byte("11111"))
 	block2      = types.NewExistingBlock(0, []byte("22222"))
@@ -90,6 +90,8 @@ var (
 	txAPI       = &TxAPIMock{
 		returnTx:     make(map[types.TransactionID]*types.Transaction),
 		layerApplied: make(map[types.TransactionID]*types.LayerID),
+		balances:     map[types.Address]*big.Int{globalTx.Origin(): big.NewInt(int64(accountBalance))},
+		nonces:       map[types.Address]uint64{globalTx.Origin(): uint64(accountCounter)},
 	}
 	stateRoot = types.HexToHash32("11111")
 )
@@ -101,13 +103,6 @@ func init() {
 	block1.ATXIDs = []types.ATXID{globalAtx.ID(), globalAtx2.ID()}
 	txAPI.returnTx[globalTx.ID()] = globalTx
 	txAPI.returnTx[globalTx2.ID()] = globalTx2
-}
-
-// Better a small code duplication than a small dependency
-
-type NodeAPIMock struct {
-	balances map[types.Address]*big.Int
-	nonces   map[types.Address]uint64
 }
 
 type NetworkMock struct {
@@ -148,30 +143,11 @@ func (s *NetworkMock) GetErr() bool {
 	return s.broadCastErr
 }
 
-func NewNodeAPIMock() NodeAPIMock {
-	return NodeAPIMock{
-		balances: make(map[types.Address]*big.Int),
-		nonces:   make(map[types.Address]uint64),
-	}
-}
-
-func (n NodeAPIMock) GetBalance(address types.Address) uint64 {
-	return n.balances[address].Uint64()
-}
-
-func (n NodeAPIMock) GetNonce(address types.Address) uint64 {
-	return n.nonces[address]
-}
-
-func (n NodeAPIMock) Exist(address types.Address) bool {
-	_, ok := n.nonces[address]
-	return ok
-}
-
 type TxAPIMock struct {
-	mockOrigin   types.Address
 	returnTx     map[types.TransactionID]*types.Transaction
 	layerApplied map[types.TransactionID]*types.LayerID
+	balances     map[types.Address]*big.Int
+	nonces       map[types.Address]uint64
 	err          error
 }
 
@@ -179,8 +155,11 @@ func (t *TxAPIMock) GetStateRoot() types.Hash32 {
 	return stateRoot
 }
 
-func (t *TxAPIMock) ValidateNonceAndBalance(*types.Transaction) error {
-	return t.err
+func (t *TxAPIMock) ValidateNonceAndBalance(tx *types.Transaction) error {
+	if !t.AddressExists(tx.Origin()) || t.GetBalance(tx.Origin()) < tx.GasLimit || t.GetNonce(tx.Origin()) != tx.AccountNonce {
+		return errors.New("not gonna happen")
+	}
+	return nil
 }
 
 func (t *TxAPIMock) GetProjection(_ types.Address, prevNonce, prevBalance uint64) (nonce, balance uint64, err error) {
@@ -244,14 +223,6 @@ func (t *TxAPIMock) GetTransactionsByOrigin(l types.LayerID, account types.Addre
 	return
 }
 
-func (t *TxAPIMock) setMockOrigin(orig types.Address) {
-	t.mockOrigin = orig
-}
-
-func (t *TxAPIMock) AddressExists(types.Address) bool {
-	return true
-}
-
 func (t *TxAPIMock) GetLayer(tid types.LayerID) (*types.Layer, error) {
 	if tid > genTime.GetCurrentLayer() {
 		return nil, errors.New("requested layer later than current layer")
@@ -291,11 +262,16 @@ func (t *TxAPIMock) GetLayerStateRoot(layer types.LayerID) (types.Hash32, error)
 }
 
 func (t *TxAPIMock) GetBalance(addr types.Address) uint64 {
-	return uint64(accountBalance)
+	return t.balances[addr].Uint64()
 }
 
 func (t *TxAPIMock) GetNonce(addr types.Address) uint64 {
-	return uint64(accountCounter)
+	return t.nonces[addr]
+}
+
+func (t *TxAPIMock) AddressExists(addr types.Address) bool {
+	_, ok := t.nonces[addr]
+	return ok
 }
 
 func (t *TxAPIMock) ProcessedLayer() types.LayerID {
@@ -357,12 +333,6 @@ func (*MiningAPIMock) GetSmesherID() types.NodeID {
 
 func (*MiningAPIMock) Stop() {}
 
-type OracleMock struct{}
-
-func (*OracleMock) GetEligibleLayers() []types.LayerID {
-	return []types.LayerID{1, 2, 3, 4}
-}
-
 type GenesisTimeMock struct {
 	t time.Time
 }
@@ -373,13 +343,6 @@ func (t GenesisTimeMock) GetCurrentLayer() types.LayerID {
 
 func (t GenesisTimeMock) GetGenesisTime() time.Time {
 	return t.t
-}
-
-type PostMock struct {
-}
-
-func (PostMock) Reset() error {
-	return nil
 }
 
 func marshalProto(t *testing.T, msg proto.Message) string {
@@ -1384,6 +1347,91 @@ func TestMeshService(t *testing.T) {
 		}},
 		// NOTE: There are no simple error tests for LayerStream, as it does not take any arguments.
 		// See TestLayerStream_comprehensive test, below.
+	}
+
+	// Run subtests
+	for _, tc := range testCases {
+		t.Run(tc.name, tc.run)
+	}
+}
+
+func TestTransactionService(t *testing.T) {
+	grpcService := NewTransactionService(&networkMock, txAPI, txMempool, &genTime, &SyncerMock{})
+	shutDown := launchServer(t, grpcService)
+	defer shutDown()
+
+	// start a client
+	addr := "localhost:" + strconv.Itoa(cfg.NewGrpcServerPort)
+
+	// Set up a connection to the server.
+	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	require.NoError(t, err)
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
+	c := pb.NewTransactionServiceClient(conn)
+
+	// Construct an array of test cases to test each endpoint in turn
+	testCases := []struct {
+		name string
+		run  func(*testing.T)
+	}{
+		{"SubmitTransaction", func(t *testing.T) {
+			serializedTx, err := types.InterfaceToBytes(globalTx)
+			require.NoError(t, err, "error serializing tx")
+			res, err := c.SubmitTransaction(context.Background(), &pb.SubmitTransactionRequest{
+				Transaction: serializedTx,
+			})
+			require.NoError(t, err)
+			require.Equal(t, int32(code.Code_OK), res.Status.Code)
+			require.Equal(t, globalTx.ID().Bytes(), res.Txstate.Id.Id)
+			require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MEMPOOL, res.Txstate.State)
+		}},
+		{"SubmitTransaction_ZeroBalance", func(t *testing.T) {
+			txAPI.balances[globalTx.Origin()] = big.NewInt(0)
+			serializedTx, err := types.InterfaceToBytes(globalTx)
+			require.NoError(t, err, "error serializing tx")
+			_, err = c.SubmitTransaction(context.Background(), &pb.SubmitTransactionRequest{
+				Transaction: serializedTx,
+			})
+			statusCode := status.Code(err)
+			require.Equal(t, codes.InvalidArgument, statusCode)
+			require.Contains(t, err.Error(), "`Transaction` incorrect counter or")
+		}},
+		{"SubmitTransaction_BadCounter", func(t *testing.T) {
+			txAPI.balances[globalTx.Origin()] = big.NewInt(int64(accountBalance))
+			txAPI.nonces[globalTx.Origin()] = uint64(accountCounter + 1)
+			serializedTx, err := types.InterfaceToBytes(globalTx)
+			require.NoError(t, err, "error serializing tx")
+			_, err = c.SubmitTransaction(context.Background(), &pb.SubmitTransactionRequest{
+				Transaction: serializedTx,
+			})
+			statusCode := status.Code(err)
+			require.Equal(t, codes.InvalidArgument, statusCode)
+			require.Contains(t, err.Error(), "`Transaction` incorrect counter or")
+		}},
+		{"SubmitTransaction_InvalidTx", func(t *testing.T) {
+			// Try sending invalid tx data
+			serializedTx, err := types.InterfaceToBytes("this is not the transaction you're looking for")
+			require.NoError(t, err, "error serializing tx")
+			_, err = c.SubmitTransaction(context.Background(), &pb.SubmitTransactionRequest{
+				Transaction: serializedTx,
+			})
+			statusCode := status.Code(err)
+			require.Equal(t, codes.InvalidArgument, statusCode)
+			require.Contains(t, err.Error(), "`Transaction` must contain")
+		}},
+		{"SubmitTransaction_InvalidAddr", func(t *testing.T) {
+			// this tx origin does not exist in state
+			serializedTx, err := types.InterfaceToBytes(globalTx2)
+			require.NoError(t, err, "error serializing tx")
+			_, err = c.SubmitTransaction(context.Background(), &pb.SubmitTransactionRequest{
+				Transaction: serializedTx,
+			})
+			statusCode := status.Code(err)
+			require.Equal(t, codes.InvalidArgument, statusCode)
+			require.Contains(t, err.Error(), "`Transaction` origin account not found")
+		}},
 	}
 
 	// Run subtests
