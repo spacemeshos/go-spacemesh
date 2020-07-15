@@ -422,9 +422,6 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 				log.Info("layer channel closed, shutting down")
 				return nil
 			}
-			// The Reporter service just sends us the account address. We are responsible
-			// for looking up the other required data here. Get the account balance and
-			// nonce.
 			root, err := s.Mesh.GetLayerStateRoot(layer.Layer.Index())
 			if err != nil {
 				log.Error("error retrieving layer data: %s", err)

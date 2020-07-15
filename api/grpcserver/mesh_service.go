@@ -7,7 +7,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/miner"
-	"github.com/spacemeshos/go-spacemesh/p2p/peers"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -15,12 +14,9 @@ import (
 
 // MeshService exposes mesh data such as accounts, blocks, and transactions
 type MeshService struct {
-	Network          api.NetworkAPI // P2P Swarm
-	Mesh             api.TxAPI      // Mesh
+	Mesh             api.TxAPI // Mesh
 	Mempool          *miner.TxMempool
 	GenTime          api.GenesisTimeAPI
-	PeerCounter      api.PeerCounter
-	Syncer           api.Syncer
 	LayersPerEpoch   int
 	NetworkID        int8
 	LayerDurationSec int
@@ -35,16 +31,13 @@ func (s MeshService) RegisterService(server *Server) {
 
 // NewMeshService creates a new service using config data
 func NewMeshService(
-	net api.NetworkAPI, tx api.TxAPI, mempool *miner.TxMempool, genTime api.GenesisTimeAPI,
-	syncer api.Syncer, layersPerEpoch int, networkID int8, layerDurationSec int,
+	tx api.TxAPI, mempool *miner.TxMempool, genTime api.GenesisTimeAPI,
+	layersPerEpoch int, networkID int8, layerDurationSec int,
 	layerAvgSize int, txsPerBlock int) *MeshService {
 	return &MeshService{
-		Network:          net,
 		Mesh:             tx,
 		Mempool:          mempool,
 		GenTime:          genTime,
-		PeerCounter:      peers.NewPeers(net, log.NewDefault("grpc_server.MeshService")),
-		Syncer:           syncer,
 		LayersPerEpoch:   layersPerEpoch,
 		NetworkID:        networkID,
 		LayerDurationSec: layerDurationSec,
@@ -413,7 +406,7 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 
 	// Subscribe to the stream of transactions and activations
 	var (
-		txStream          chan *types.Transaction
+		txStream          chan events.TransactionWithValidity
 		activationsStream chan *types.ActivationTx
 	)
 	if filterTx {
@@ -461,11 +454,11 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 				return nil
 			}
 			// Apply address filter
-			if tx.Origin() == addr || tx.Recipient == addr {
+			if tx.Valid && (tx.Transaction.Origin() == addr || tx.Transaction.Recipient == addr) {
 				if err := stream.Send(&pb.AccountMeshDataStreamResponse{
 					Datum: &pb.AccountMeshData{
 						Datum: &pb.AccountMeshData_Transaction{
-							Transaction: convertTransaction(tx),
+							Transaction: convertTransaction(tx.Transaction),
 						},
 					},
 				}); err != nil {
