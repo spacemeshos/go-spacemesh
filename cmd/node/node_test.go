@@ -9,14 +9,19 @@ import (
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/go-spacemesh/api/config"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zapcore"
+	"google.golang.org/genproto/googleapis/rpc/code"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -488,6 +493,10 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		defer app.Cleanup(cmd, args)
 		require.NoError(t, app.Initialize(cmd, args))
 
+		// Give the error channel a buffer
+		events.CloseEventReporter()
+		require.NoError(t, events.InitializeEventReporterWithOptions("", 10, true))
+
 		// Speed things up a little
 		app.Config.SyncInterval = 1
 		app.Config.LayerDurationSec = 2
@@ -635,6 +644,151 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 
 	// Wait for messages to be received
 	<-end
+
+	// This stops the app
+	cmdp.Cancel()
+
+	// Wait for it to stop
+	wg.Wait()
+}
+
+// E2E app test of the transaction service
+func TestSpacemeshApp_TransactionService(t *testing.T) {
+	resetFlags()
+
+	old := log.Level() <= zapcore.DebugLevel
+	log.DebugMode(true)
+	defer log.DebugMode(old)
+
+	r := require.New(t)
+	app := NewSpacemeshApp()
+
+	Cmd.Run = func(cmd *cobra.Command, args []string) {
+		defer app.Cleanup(cmd, args)
+		r.NoError(app.Initialize(cmd, args))
+
+		// GRPC configuration
+		app.Config.API.NewGrpcServerPort = 1234
+		app.Config.API.NewGrpcServerInterface = "localhost"
+		app.Config.API.StartTransactionService = true
+
+		// Prevent obnoxious warning in macOS
+		app.Config.P2P.AcquirePort = false
+		app.Config.P2P.TCPInterface = "127.0.0.1"
+
+		// Speed things up a little
+		app.Config.SyncInterval = 1
+		app.Config.LayerDurationSec = 2
+
+		// Force gossip to always listen, even when not synced
+		app.Config.AlwaysListen = true
+
+		// This will block. We need to run the full app here to make sure that
+		// the various services are reporting events correctly. This could probably
+		// be done more surgically, and we don't need _all_ of the services.
+		app.Start(cmd, args)
+	}
+
+	// Run the app in a goroutine. As noted above, it blocks if it succeeds.
+	// If there's an error in the args, it will return immediately.
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		str, err := testArgs(app)
+		r.Empty(str)
+		r.NoError(err)
+		wg.Done()
+	}()
+
+	// Wait for the app and services to start
+	// Strictly speaking, this does not indicate that all of the services
+	// have started, we could add separate channels for that, but it seems
+	// to work well enough for testing.
+	<-app.started
+
+	// Set up a new connection to the server
+	conn, err := grpc.Dial("localhost:1234", grpc.WithInsecure())
+	defer func() {
+		r.NoError(conn.Close())
+	}()
+	r.NoError(err)
+	c := pb.NewTransactionServiceClient(conn)
+
+	// Construct some mock tx data
+	// The tx origin must be the hardcoded test account or else it will have no balance.
+	signer, err := signing.NewEdSignerFromBuffer(util.FromHex(config.Account1Private))
+	require.NoError(t, err)
+	txorigin := types.Address{}
+	txorigin.SetBytes(signer.PublicKey().Bytes())
+	dst := types.BytesToAddress([]byte{0x02})
+	tx, err := types.NewSignedTx(0, dst, 10, 1, 1, signer)
+	require.NoError(t, err, "unable to create signed mock tx")
+	txbytes, _ := types.InterfaceToBytes(tx)
+
+	// Coordinate ending the test
+	wg2 := sync.WaitGroup{}
+	wg2.Add(1)
+	go func() {
+		//defer wg2.Done()
+		// Make sure the channel is closed if we encounter an unexpected
+		// error, but don't close the channel twice if we don't!
+		var once sync.Once
+		//oncebody := func() { close(end) }
+		oncebody := func() { wg2.Done() }
+		defer once.Do(oncebody)
+
+		// Open a transaction stream
+		stream, err := c.TransactionsStateStream(context.Background(), &pb.TransactionsStateStreamRequest{
+			TransactionId:       []*pb.TransactionId{{Id: tx.ID().Bytes()}},
+			IncludeTransactions: true,
+		})
+		require.NoError(t, err)
+
+		// Now listen on the stream
+		res, err := stream.Recv()
+		require.NoError(t, err)
+		require.Equal(t, tx.ID().Bytes(), res.TransactionsState.Id.Id)
+
+		// We expect the tx to go to the mempool
+		inTx := res.Transactions
+		require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MEMPOOL, res.TransactionsState.State)
+		require.Equal(t, tx.ID().Bytes(), inTx.Id.Id)
+		require.Equal(t, tx.Origin().Bytes(), inTx.Sender.Address)
+		require.Equal(t, tx.GasLimit, inTx.GasOffered.GasProvided)
+		require.Equal(t, tx.Amount, inTx.Amount.Value)
+		require.Equal(t, tx.AccountNonce, inTx.Counter)
+		require.Equal(t, tx.Origin().Bytes(), inTx.Signature.PublicKey)
+		switch x := inTx.Datum.(type) {
+		case *pb.Transaction_CoinTransfer:
+			require.Equal(t, tx.Recipient.Bytes(), x.CoinTransfer.Receiver.Address,
+				"inner coin transfer tx has bad recipient")
+		default:
+			require.Fail(t, "inner tx has wrong tx data type")
+		}
+
+		// Let the test end
+		once.Do(oncebody)
+
+		// We expect an error when the app closes
+		_, err = stream.Recv()
+		statusCode := status.Code(err)
+		require.Equal(t, codes.Unavailable, statusCode)
+		require.Contains(t, err.Error(), "transport is closing")
+	}()
+
+	time.Sleep(4 * time.Second)
+
+	// Submit the tx
+	res, err := c.SubmitTransaction(context.Background(), &pb.SubmitTransactionRequest{
+		Transaction: txbytes,
+	})
+	require.NoError(t, err)
+	require.Equal(t, int32(code.Code_OK), res.Status.Code)
+	require.Equal(t, tx.ID().Bytes(), res.Txstate.Id.Id)
+	require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MEMPOOL, res.Txstate.State)
+
+	// Wait for messages to be received
+	wg2.Wait()
 
 	// This stops the app
 	cmdp.Cancel()

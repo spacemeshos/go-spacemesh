@@ -14,6 +14,8 @@ type Service interface {
 }
 
 // StateAPI is an API to global state
+// TODO: Remove me once the old API is removed. These are not used by the new
+// API implementation as this interface has been completed folded into the TxAPI.
 type StateAPI interface {
 	GetBalance(address types.Address) uint64
 	GetNonce(address types.Address) uint64
