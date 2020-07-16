@@ -263,6 +263,10 @@ func (t *TxAPIMock) GetTransactions(txids []types.TransactionID) (txs []*types.T
 	return
 }
 
+func (t *TxAPIMock) ProcessedLayer() types.LayerID {
+	panic("implement me")
+}
+
 func NewTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *types.Transaction {
 	tx, err := types.NewSignedTx(nonce, recipient, 1, defaultGasLimit, defaultFee, signer)
 	if err != nil {
@@ -1190,7 +1194,10 @@ func TestLayerStream_comprehensive(t *testing.T) {
 
 	layer, err := txAPI.GetLayer(0)
 	require.NoError(t, err)
-	events.ReportNewLayer(layer)
+	events.ReportNewLayer(events.NewLayer{
+		Layer:  layer,
+		Status: events.LayerStatusTypeConfirmed,
+	})
 
 	// close the stream
 	log.Info("closing event stream")
