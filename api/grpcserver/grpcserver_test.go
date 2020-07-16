@@ -2015,7 +2015,7 @@ func TestLayerStream_comprehensive(t *testing.T) {
 
 	// initialize the streamer
 	log.Info("initializing event stream")
-	events.InitializeEventReporter("")
+	require.NoError(t, events.InitializeEventReporter(""))
 
 	layer, err := txAPI.GetLayer(layerFirst)
 	require.NoError(t, err)

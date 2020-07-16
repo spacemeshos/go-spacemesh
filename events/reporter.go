@@ -1,6 +1,7 @@
 package events
 
 import (
+	"errors"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/timesync"
@@ -284,19 +285,23 @@ func GetReceiptChannel() chan TxReceipt {
 }
 
 // InitializeEventReporter initializes the event reporting interface
-func InitializeEventReporter(url string) {
+func InitializeEventReporter(url string) error {
 	// By default use zero-buffer channels and non-blocking.
-	InitializeEventReporterWithOptions(url, 0, false)
+	return InitializeEventReporterWithOptions(url, 0, false)
 }
 
 // InitializeEventReporterWithOptions initializes the event reporting interface with
 // a nonzero channel buffer. This is useful for testing, where we want reporting to
 // block.
-func InitializeEventReporterWithOptions(url string, bufsize int, blocking bool) {
+func InitializeEventReporterWithOptions(url string, bufsize int, blocking bool) error {
+	if reporter != nil {
+		return errors.New("reporter is already initialized, call CloseEventReporter before reinitializing")
+	}
 	reporter = newEventReporter(bufsize, blocking)
 	if url != "" {
 		InitializeEventPubsub(url)
 	}
+	return nil
 }
 
 // SubscribeToLayers is used to track and report automatically every time a

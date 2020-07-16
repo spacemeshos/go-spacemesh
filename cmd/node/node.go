@@ -302,7 +302,9 @@ func (app *SpacemeshApp) setupLogging() {
 		msg += fmt.Sprintf(" with pubsub URL: %s", app.Config.PublishEventsURL)
 	}
 	log.Info(msg)
-	events.InitializeEventReporter(app.Config.PublishEventsURL)
+	if err := events.InitializeEventReporter(app.Config.PublishEventsURL); err != nil {
+		log.Error("unable to initialize event reporter: %s", err)
+	}
 }
 
 func (app *SpacemeshApp) getAppInfo() string {
