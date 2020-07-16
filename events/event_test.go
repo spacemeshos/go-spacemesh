@@ -128,7 +128,7 @@ func TestReportError(t *testing.T) {
 	stream = GetErrorChannel()
 	require.NotNil(t, stream, "expected stream to be initialized")
 
-	// This will not be received as no one is listening
+	// This one will be buffered
 	// This also makes sure that this call is nonblocking.
 	ReportError(nodeErr)
 
@@ -143,6 +143,7 @@ func TestReportError(t *testing.T) {
 		wgListening.Done()
 
 		// check the error sent directly
+		require.Equal(t, nodeErr, <-stream, "expected same input and output tx")
 		require.Equal(t, nodeErr, <-stream, "expected same input and output tx")
 
 		// now check errors sent through logging
