@@ -186,7 +186,11 @@ func (t *TxAPIMock) GetLayerApplied(txID types.TransactionID) *types.LayerID {
 }
 
 func (t *TxAPIMock) GetTransaction(id types.TransactionID) (*types.Transaction, error) {
-	return t.returnTx[id], nil
+	tx, ok := t.returnTx[id]
+	if !ok {
+		return nil, errors.New("it ain't there")
+	}
+	return tx, nil
 }
 
 func (t *TxAPIMock) GetRewards(types.Address) (rewards []types.Reward, err error) {
@@ -1540,6 +1544,68 @@ func TestTransactionService(t *testing.T) {
 
 			events.InitializeEventReporterWithOptions("", 1, true)
 			events.ReportNewTx(globalTx)
+			wg.Wait()
+		}},
+		// Submit a tx, then receive it over the stream
+		{"TransactionsState_SubmitThenStream", func(t *testing.T) {
+			// Remove the tx from the mesh so it only appears in the mempool
+			delete(txAPI.returnTx, globalTx.ID())
+			defer func() { txAPI.returnTx[globalTx.ID()] = globalTx }()
+
+			// STREAM
+			// Open the stream first and listen for new transactions
+			req := &pb.TransactionsStateStreamRequest{}
+			req.TransactionId = append(req.TransactionId, &pb.TransactionId{
+				Id: globalTx.ID().Bytes(),
+			})
+			req.IncludeTransactions = true
+
+			// Simulate the process by which a newly-broadcast tx lands in the mempool
+			wgBroadcast := sync.WaitGroup{}
+			wgBroadcast.Add(1)
+			go func() {
+				// Wait until the data is available
+				wgBroadcast.Wait()
+
+				// Read it
+				data := networkMock.GetBroadcast()
+
+				// Deserialize
+				tx, err := types.BytesToTransaction(data)
+				require.NoError(t, tx.CalcAndSetOrigin())
+				require.NoError(t, err, "error deserializing broadcast tx")
+
+				// We assume the data is valid here, and put it directly into the txpool
+				txMempool.Put(tx.ID(), tx)
+			}()
+
+			wg := sync.WaitGroup{}
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				stream, err := c.TransactionsStateStream(context.Background(), req)
+				require.NoError(t, err)
+				res, err := stream.Recv()
+				require.NoError(t, err)
+				require.Equal(t, globalTx.ID().Bytes(), res.TransactionsState.Id.Id)
+				// We expect the tx to go to the mempool
+				require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MEMPOOL, res.TransactionsState.State)
+				checkTransaction(t, res.Transactions)
+			}()
+
+			// SUBMIT
+			events.InitializeEventReporterWithOptions("", 1, true)
+			serializedTx, err := types.InterfaceToBytes(globalTx)
+			require.NoError(t, err, "error serializing tx")
+			res, err := c.SubmitTransaction(context.Background(), &pb.SubmitTransactionRequest{
+				Transaction: serializedTx,
+			})
+			require.NoError(t, err)
+			require.Equal(t, int32(code.Code_OK), res.Status.Code)
+			require.Equal(t, globalTx.ID().Bytes(), res.Txstate.Id.Id)
+			require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MEMPOOL, res.Txstate.State)
+			wgBroadcast.Done()
+
 			wg.Wait()
 		}},
 	}
