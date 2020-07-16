@@ -1472,26 +1472,97 @@ func TestTransactionService(t *testing.T) {
 			require.Equal(t, globalTx.ID().Bytes(), res.TransactionsState[0].Id.Id)
 			require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MESH, res.TransactionsState[0].State)
 
-			tx := res.Transactions[0]
-			require.Equal(t, globalTx.ID().Bytes(), tx.Id.Id)
-			require.Equal(t, globalTx.Origin().Bytes(), tx.Sender.Address)
-			require.Equal(t, globalTx.GasLimit, tx.GasOffered.GasProvided)
-			require.Equal(t, globalTx.Amount, tx.Amount.Value)
-			require.Equal(t, globalTx.AccountNonce, tx.Counter)
-			require.Equal(t, globalTx.Origin().Bytes(), tx.Signature.PublicKey)
-			switch x := tx.Datum.(type) {
-			case *pb.Transaction_CoinTransfer:
-				require.Equal(t, globalTx.Recipient.Bytes(), x.CoinTransfer.Receiver.Address,
-					"inner coin transfer tx has bad recipient")
-			default:
-				require.Fail(t, "inner tx has wrong tx data type")
+			checkTransaction(t, res.Transactions[0])
+		}},
+		{"TransactionsStateStream_MissingTransactionId", func(t *testing.T) {
+			req := &pb.TransactionsStateStreamRequest{}
+			stream, err := c.TransactionsStateStream(context.Background(), req)
+			require.NoError(t, err)
+			_, err = stream.Recv()
+			statusCode := status.Code(err)
+			require.Equal(t, codes.InvalidArgument, statusCode)
+			require.Contains(t, err.Error(), "`TransactionId` must include")
+		}},
+		{"TransactionsStateStream_TransactionIdZeroLen", func(t *testing.T) {
+			req := &pb.TransactionsStateStreamRequest{
+				TransactionId: []*pb.TransactionId{},
 			}
+			stream, err := c.TransactionsStateStream(context.Background(), req)
+			require.NoError(t, err)
+			_, err = stream.Recv()
+			statusCode := status.Code(err)
+			require.Equal(t, codes.InvalidArgument, statusCode)
+			require.Contains(t, err.Error(), "`TransactionId` must include")
+		}},
+		{"TransactionsStateStream_StateOnly", func(t *testing.T) {
+			// Set up the reporter
+			req := &pb.TransactionsStateStreamRequest{}
+			req.TransactionId = append(req.TransactionId, &pb.TransactionId{
+				Id: globalTx.ID().Bytes(),
+			})
+
+			wg := sync.WaitGroup{}
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				stream, err := c.TransactionsStateStream(context.Background(), req)
+				require.NoError(t, err)
+				res, err := stream.Recv()
+				require.NoError(t, err)
+				require.Nil(t, res.Transactions)
+				require.Equal(t, globalTx.ID().Bytes(), res.TransactionsState.Id.Id)
+				require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MESH, res.TransactionsState.State)
+			}()
+
+			events.InitializeEventReporterWithOptions("", 1, true)
+			events.ReportNewTx(globalTx)
+			wg.Wait()
+		}},
+		{"TransactionsStateStream_All", func(t *testing.T) {
+			req := &pb.TransactionsStateStreamRequest{}
+			req.TransactionId = append(req.TransactionId, &pb.TransactionId{
+				Id: globalTx.ID().Bytes(),
+			})
+			req.IncludeTransactions = true
+
+			wg := sync.WaitGroup{}
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				stream, err := c.TransactionsStateStream(context.Background(), req)
+				require.NoError(t, err)
+				res, err := stream.Recv()
+				require.NoError(t, err)
+				require.Equal(t, globalTx.ID().Bytes(), res.TransactionsState.Id.Id)
+				require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MESH, res.TransactionsState.State)
+				checkTransaction(t, res.Transactions)
+			}()
+
+			events.InitializeEventReporterWithOptions("", 1, true)
+			events.ReportNewTx(globalTx)
+			wg.Wait()
 		}},
 	}
 
 	// Run subtests
 	for _, tc := range testCases {
 		t.Run(tc.name, tc.run)
+	}
+}
+
+func checkTransaction(t *testing.T, tx *pb.Transaction) {
+	require.Equal(t, globalTx.ID().Bytes(), tx.Id.Id)
+	require.Equal(t, globalTx.Origin().Bytes(), tx.Sender.Address)
+	require.Equal(t, globalTx.GasLimit, tx.GasOffered.GasProvided)
+	require.Equal(t, globalTx.Amount, tx.Amount.Value)
+	require.Equal(t, globalTx.AccountNonce, tx.Counter)
+	require.Equal(t, globalTx.Origin().Bytes(), tx.Signature.PublicKey)
+	switch x := tx.Datum.(type) {
+	case *pb.Transaction_CoinTransfer:
+		require.Equal(t, globalTx.Recipient.Bytes(), x.CoinTransfer.Receiver.Address,
+			"inner coin transfer tx has bad recipient")
+	default:
+		require.Fail(t, "inner tx has wrong tx data type")
 	}
 }
 
