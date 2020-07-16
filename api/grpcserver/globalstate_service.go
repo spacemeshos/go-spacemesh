@@ -88,6 +88,7 @@ func (s GlobalStateService) AccountDataQuery(ctx context.Context, in *pb.Account
 
 	if filterTxReceipt {
 		// TODO: Implement this. The node does not implement tx receipts yet.
+		// See https://github.com/spacemeshos/go-spacemesh/issues/2072
 	}
 
 	if filterReward {
@@ -105,7 +106,7 @@ func (s GlobalStateService) AccountDataQuery(ctx context.Context, in *pb.Account
 					//LayerComputed: 0,
 					Coinbase: &pb.AccountId{Address: addr.Bytes()},
 					// TODO: There is currently no way to get this for a reward.
-					// See https://github.com/spacemeshos/go-spacemesh/issues/2068.
+					// See https://github.com/spacemeshos/go-spacemesh/issues/2068
 					//Smesher:  nil,
 				},
 			}})
@@ -135,6 +136,7 @@ func (s GlobalStateService) AccountDataQuery(ctx context.Context, in *pb.Account
 	// TODO: Optimize this. Obviously, we could do much smarter things than re-loading all
 	// of the data from scratch, then figuring out which data to return here. We could cache
 	// query results and/or figure out which data to load before loading it.
+	// See https://github.com/spacemeshos/go-spacemesh/issues/2073
 	offset := in.Offset
 
 	// If the offset is too high there is nothing to return (this is not an error)
@@ -157,7 +159,7 @@ func (s GlobalStateService) SmesherDataQuery(ctx context.Context, in *pb.Smesher
 	log.Info("GRPC GlobalStateService.SmesherDataQuery")
 
 	// TODO: implement me! We don't currently have a way to read rewards per-smesher.
-	// See https://github.com/spacemeshos/go-spacemesh/issues/2068.
+	// See https://github.com/spacemeshos/go-spacemesh/issues/2068
 
 	return nil, status.Errorf(codes.Unimplemented, "this endpoint has not yet been implemented")
 }
@@ -247,7 +249,7 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 						//LayerComputed: 0,
 						Coinbase: &pb.AccountId{Address: addr.Bytes()},
 						// TODO: There is currently no way to get this for a reward.
-						// See https://github.com/spacemeshos/go-spacemesh/issues/2068.
+						// See https://github.com/spacemeshos/go-spacemesh/issues/2068
 						//Smesher:  nil,
 					},
 				}}}); err != nil {
@@ -285,6 +287,7 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 		}
 		// TODO: do we need an additional case here for a context to indicate
 		// that the service needs to shut down?
+		// See https://github.com/spacemeshos/go-spacemesh/issues/2075
 	}
 }
 
@@ -293,7 +296,7 @@ func (s GlobalStateService) SmesherRewardStream(request *pb.SmesherRewardStreamR
 	log.Info("GRPC GlobalStateService.SmesherRewardStream")
 
 	// TODO: implement me! We don't currently have a way to read rewards per-smesher.
-	// See https://github.com/spacemeshos/go-spacemesh/issues/2068.
+	// See https://github.com/spacemeshos/go-spacemesh/issues/2068
 
 	return status.Errorf(codes.Unimplemented, "this endpoint has not yet been implemented")
 }
@@ -303,6 +306,7 @@ func (s GlobalStateService) AppEventStream(request *pb.AppEventStreamRequest, st
 	log.Info("GRPC GlobalStateService.AppEventStream")
 
 	// TODO: implement me! We don't currently have any app events
+	// See https://github.com/spacemeshos/go-spacemesh/issues/2074
 
 	return status.Errorf(codes.Unimplemented, "this endpoint has not yet been implemented")
 }
@@ -385,7 +389,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 					//LayerComputed: 0,
 					Coinbase: &pb.AccountId{Address: reward.Coinbase.Bytes()},
 					// TODO: There is currently no way to get this for a reward.
-					// See https://github.com/spacemeshos/go-spacemesh/issues/2068.
+					// See https://github.com/spacemeshos/go-spacemesh/issues/2068
 					//Smesher:  nil,
 				},
 			}}}); err != nil {
@@ -441,5 +445,6 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 		}
 		// TODO: do we need an additional case here for a context to indicate
 		// that the service needs to shut down?
+		// See https://github.com/spacemeshos/go-spacemesh/issues/2075
 	}
 }
