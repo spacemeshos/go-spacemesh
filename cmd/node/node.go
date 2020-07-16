@@ -544,7 +544,9 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 		SyncInterval:    time.Duration(app.Config.SyncInterval) * time.Second,
 		ValidationDelta: time.Duration(app.Config.SyncValidationDelta) * time.Second,
 		Hdist:           app.Config.Hdist,
-		AtxsLimit:       app.Config.AtxsPerBlock}
+		AtxsLimit:       app.Config.AtxsPerBlock,
+		AlwaysListen:    app.Config.AlwaysListen,
+	}
 
 	if app.Config.AtxsPerBlock > miner.AtxsPerBlockLimit { // validate limit
 		app.log.Panic("Number of atxs per block required is bigger than the limit atxsPerBlock=%v limit=%v", app.Config.AtxsPerBlock, miner.AtxsPerBlockLimit)

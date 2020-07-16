@@ -78,6 +78,7 @@ type Configuration struct {
 	ValidationDelta time.Duration
 	AtxsLimit       int
 	Hdist           int
+	AlwaysListen    bool
 }
 
 var (
@@ -255,7 +256,7 @@ func (s *Syncer) notifySubscribers(prevStatus, status status) {
 
 // ListenToGossip enables other modules to check if they should listen to gossip
 func (s *Syncer) ListenToGossip() bool {
-	return s.getGossipBufferingStatus() != pending
+	return s.AlwaysListen || s.getGossipBufferingStatus() != pending
 }
 
 func (s *Syncer) setGossipBufferingStatus(status status) {
