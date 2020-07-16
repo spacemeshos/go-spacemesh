@@ -90,8 +90,11 @@ var (
 	txAPI       = &TxAPIMock{
 		returnTx:     make(map[types.TransactionID]*types.Transaction),
 		layerApplied: make(map[types.TransactionID]*types.LayerID),
-		balances:     map[types.Address]*big.Int{globalTx.Origin(): big.NewInt(int64(accountBalance))},
-		nonces:       map[types.Address]uint64{globalTx.Origin(): uint64(accountCounter)},
+		balances: map[types.Address]*big.Int{
+			globalTx.Origin(): big.NewInt(int64(accountBalance)),
+			addr1:             big.NewInt(int64(accountBalance)),
+		},
+		nonces: map[types.Address]uint64{globalTx.Origin(): uint64(accountCounter)},
 	}
 	stateRoot = types.HexToHash32("11111")
 )
@@ -541,8 +544,64 @@ func TestGlobalStateService(t *testing.T) {
 			require.Equal(t, uint64(accountBalance), res.AccountWrapper.Balance.Value)
 			require.Equal(t, uint64(accountCounter), res.AccountWrapper.Counter)
 		}},
+		{"AccountDataQuery_MissingFilter", func(t *testing.T) {
+			_, err := c.AccountDataQuery(context.Background(), &pb.AccountDataQueryRequest{})
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "`Filter` must be provided")
+		}},
+		{"AccountDataQuery_MissingFlags", func(t *testing.T) {
+			_, err := c.AccountDataQuery(context.Background(), &pb.AccountDataQueryRequest{
+				Filter: &pb.AccountDataFilter{
+					AccountId: &pb.AccountId{Address: addr1.Bytes()},
+				},
+			})
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "`Filter.AccountMeshDataFlags` must set at least one")
+		}},
+		{"AccountDataQuery_BadOffset", func(t *testing.T) {
+			res, err := c.AccountDataQuery(context.Background(), &pb.AccountDataQueryRequest{
+				MaxResults: uint32(1),
+				Offset:     math.MaxUint32,
+				Filter: &pb.AccountDataFilter{
+					AccountId: &pb.AccountId{Address: addr1.Bytes()},
+					AccountDataFlags: uint32(pb.AccountDataFlag_ACCOUNT_DATA_FLAG_ACCOUNT |
+						pb.AccountDataFlag_ACCOUNT_DATA_FLAG_REWARD),
+				},
+			})
+			// huge offset is not an error, we just expect no results
+			require.NoError(t, err)
+			require.Equal(t, uint32(0), res.TotalResults)
+			require.Equal(t, 0, len(res.AccountItem))
+		}},
+		{"AccountDataQuery_ZeroMaxResults", func(t *testing.T) {
+			res, err := c.AccountDataQuery(context.Background(), &pb.AccountDataQueryRequest{
+				MaxResults: uint32(0),
+				Filter: &pb.AccountDataFilter{
+					AccountId: &pb.AccountId{Address: addr1.Bytes()},
+					AccountDataFlags: uint32(pb.AccountDataFlag_ACCOUNT_DATA_FLAG_ACCOUNT |
+						pb.AccountDataFlag_ACCOUNT_DATA_FLAG_REWARD),
+				},
+			})
+			// zero maxresults means return everything
+			require.NoError(t, err)
+			require.Equal(t, uint32(2), res.TotalResults)
+			require.Equal(t, 2, len(res.AccountItem))
+		}},
+		{"AccountDataQuery_OneResult", func(t *testing.T) {
+			res, err := c.AccountDataQuery(context.Background(), &pb.AccountDataQueryRequest{
+				MaxResults: uint32(1),
+				Filter: &pb.AccountDataFilter{
+					AccountId: &pb.AccountId{Address: addr1.Bytes()},
+					AccountDataFlags: uint32(pb.AccountDataFlag_ACCOUNT_DATA_FLAG_ACCOUNT |
+						pb.AccountDataFlag_ACCOUNT_DATA_FLAG_REWARD),
+				},
+			})
+			require.NoError(t, err)
+			require.Equal(t, uint32(2), res.TotalResults)
+			require.Equal(t, 1, len(res.AccountItem))
+			checkAccountDataQueryItemReward(t, res.AccountItem[0].Datum)
+		}},
 		{"AccountDataQuery", func(t *testing.T) {
-			// TODO: add tests for missing filter, missing flags, bad offset and max results
 			res, err := c.AccountDataQuery(context.Background(), &pb.AccountDataQueryRequest{
 				Filter: &pb.AccountDataFilter{
 					AccountId: &pb.AccountId{Address: addr1.Bytes()},
