@@ -83,6 +83,10 @@ func (mockState) ValidateNonceAndBalance(*types.Transaction) error {
 	panic("implement me")
 }
 
+func (mockState) GetLayerStateRoot(id types.LayerID) (types.Hash32, error) {
+	panic("implement me")
+}
+
 func (mockState) GetLayerApplied(types.TransactionID) *types.LayerID {
 	panic("implement me")
 }
@@ -92,6 +96,14 @@ func (mockState) ApplyTransactions(types.LayerID, []*types.Transaction) (int, er
 }
 
 func (mockState) ApplyRewards(types.LayerID, []types.Address, *big.Int) {}
+
+func (mockState) GetBalance(types.Address) uint64 {
+	panic("implement me")
+}
+
+func (mockState) GetNonce(types.Address) uint64 {
+	panic("implement me")
+}
 
 func (mockState) AddressExists(types.Address) bool {
 	return true
