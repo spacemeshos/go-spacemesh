@@ -192,6 +192,10 @@ func (t *TxAPIMock) GetLayer(types.LayerID) (*types.Layer, error) {
 	return nil, nil
 }
 
+func (t *TxAPIMock) ProcessedLayer() types.LayerID {
+	panic("implement me")
+}
+
 // MiningAPIMock is a mock for mining API
 type MiningAPIMock struct{}
 
