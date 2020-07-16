@@ -218,6 +218,7 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 			}
 			// Filter for any matching transactions in the reported layer
 			// TODO: this is inefficient and could be optimized!
+			// See https://github.com/spacemeshos/go-spacemesh/issues/2076
 			for _, b := range layer.Layer.Blocks() {
 				for _, layerTxid := range b.TxIDs {
 					for _, txid := range in.TransactionId {

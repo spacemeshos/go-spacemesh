@@ -373,6 +373,7 @@ type Reward struct {
 	LayerReward uint64
 	Coinbase    types.Address
 	// TODO: We don't currently have a way to get these two.
+	// See https://github.com/spacemeshos/go-spacemesh/issues/2068
 	//LayerComputed
 	//Smesher
 }
