@@ -189,6 +189,8 @@ func InitializeEventReporter(url string) {
 	}
 }
 
+// SubscribeToLayers is used to track and report automatically every time a
+// new layer is reached.
 func SubscribeToLayers(newLayerCh timesync.LayerTimer) {
 	if reporter != nil {
 		// This will block, so run in a goroutine
@@ -206,6 +208,7 @@ func SubscribeToLayers(newLayerCh timesync.LayerTimer) {
 	}
 }
 
+// The type and severity of a reported error
 const (
 	NodeErrorTypeError = iota
 	NodeErrorTypePanic
@@ -215,6 +218,7 @@ const (
 	NodeErrorTypeSignalShutdown
 )
 
+// The status of a layer
 const (
 	LayerStatusTypeUnknown   = iota
 	LayerStatusTypeApproved  // approved by Hare
@@ -244,32 +248,38 @@ type NodeStatus struct {
 	LayerVerified types.LayerID
 }
 
+// SetStatusElem sets a status
 type SetStatusElem func(*NodeStatus)
 
+// NumPeers sets peers
 func NumPeers(n uint64) SetStatusElem {
 	return func(ns *NodeStatus) {
 		ns.NumPeers = n
 	}
 }
 
+// IsSynced sets if synced
 func IsSynced(synced bool) SetStatusElem {
 	return func(ns *NodeStatus) {
 		ns.IsSynced = synced
 	}
 }
 
+// LayerSynced sets whether a layer is synced
 func LayerSynced(lid types.LayerID) SetStatusElem {
 	return func(ns *NodeStatus) {
 		ns.LayerSynced = lid
 	}
 }
 
+// LayerCurrent sets current layer
 func LayerCurrent(lid types.LayerID) SetStatusElem {
 	return func(ns *NodeStatus) {
 		ns.LayerCurrent = lid
 	}
 }
 
+// LayerVerified sets verified layer
 func LayerVerified(lid types.LayerID) SetStatusElem {
 	return func(ns *NodeStatus) {
 		ns.LayerVerified = lid
