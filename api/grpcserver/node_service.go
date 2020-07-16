@@ -108,23 +108,22 @@ func (s NodeService) StatusStream(request *pb.StatusStreamRequest, stream pb.Nod
 
 	for {
 		select {
-		case nodeStatus, ok := <-statusStream:
+		case _, ok := <-statusStream:
+			// statusStream works a bit differently than the other streams. It doesn't actually
+			// send us data. Instead, it just notifies us that there's new data to be read.
 			if !ok {
 				log.Info("StatusStream closed, shutting down")
 				return nil
 			}
-			// TODO: Do we want to re-fetch status elements other than the ones
-			// that were just reported? If so, why not just send a basic signal
-			// and let us re-fetch all of the data here? In other words, why
-			// include any of it in this stream?
-			// See https://github.com/spacemeshos/api/issues/92
-			if err := stream.Send(&pb.StatusStreamResponse{Status: &pb.NodeStatus{
-				ConnectedPeers: nodeStatus.NumPeers,
-				IsSynced:       nodeStatus.IsSynced,
-				SyncedLayer:    nodeStatus.LayerSynced.Uint64(),
-				TopLayer:       nodeStatus.LayerCurrent.Uint64(),
-				VerifiedLayer:  nodeStatus.LayerVerified.Uint64(),
-			}}); err != nil {
+			if err := stream.Send(&pb.StatusStreamResponse{
+				Status: &pb.NodeStatus{
+					ConnectedPeers: s.PeerCounter.PeerCount(),            // number of connected peers
+					IsSynced:       s.Syncer.IsSynced(),                  // whether the node is synced
+					SyncedLayer:    s.Mesh.LatestLayer().Uint64(),        // latest layer we saw from the network
+					TopLayer:       s.GenTime.GetCurrentLayer().Uint64(), // current layer, based on time
+					VerifiedLayer:  s.Mesh.LatestLayerInState().Uint64(), // latest verified layer
+				},
+			}); err != nil {
 				return err
 			}
 		case <-stream.Context().Done():

@@ -501,6 +501,7 @@ func TestNodeService(t *testing.T) {
 			require.Equal(t, int32(code.Code_OK), res.Status.Code)
 			require.Equal(t, true, called, "cmd.Shutdown() was called")
 		}},
+		// NOTE: ErrorStream and StatusStream have comprehensive, E2E tests in cmd/node/node_test.go.
 	}
 
 	for _, tc := range testCases {

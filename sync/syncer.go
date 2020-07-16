@@ -347,7 +347,7 @@ func (s *Syncer) handleWeaklySynced() {
 	s.With().Info("Node is weakly synced",
 		s.LatestLayer(),
 		s.GetCurrentLayer())
-	events.ReportNodeStatus(events.IsSynced(true))
+	events.ReportNodeStatusUpdate()
 
 	// handle all layers from processed+1 to current -1
 	s.handleLayersTillCurrent()
@@ -422,7 +422,7 @@ func (s *Syncer) handleCurrentLayer() error {
 
 func (s *Syncer) handleNotSynced(currentSyncLayer types.LayerID) {
 	s.Info("Node is out of sync setting gossip-synced to false and starting sync")
-	events.ReportNodeStatus(events.IsSynced(false))
+	events.ReportNodeStatusUpdate()
 	s.setGossipBufferingStatus(pending) // don't listen to gossip while not synced
 
 	// first, bring all the data of the prev layers

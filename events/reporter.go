@@ -162,29 +162,30 @@ func ReportError(err NodeError) {
 	}
 }
 
-// ReportNodeStatus reports an update to the node status
+// ReportNodeStatusUpdate reports an update to the node status. It just
+// pings the listener to notify them that there is an update; the listener
+// is responsible for fetching the new status details. This is because
+// status contains disparate information coming from different services,
+// and the listener already knows how to gather that information so there
+// is no point in duplicating that logic here.
+
 // Note: There is some overlap with channelLayer here, as a new latest
 // or verified layer should be sent over that channel as well. However,
 // that happens inside the Mesh, at the source. It doesn't currently
 // happen here because the status update includes only a layer ID, not
 // full layer data, and the Reporter currently has no way to retrieve
 // full layer data.
-func ReportNodeStatus(setters ...SetStatusElem) {
+func ReportNodeStatusUpdate() {
 	if reporter != nil {
-		// Note that we make no attempt to remove duplicate status messages
-		// from the stream, so the same status may be reported several times.
-		for _, setter := range setters {
-			setter(&reporter.lastStatus)
-		}
 		if reporter.blocking {
-			reporter.channelStatus <- reporter.lastStatus
-			log.Info("reported status: %v", reporter.lastStatus)
+			reporter.channelStatus <- struct{}{}
+			log.Info("reported status update")
 		} else {
 			select {
-			case reporter.channelStatus <- reporter.lastStatus:
-				log.Info("reported status: %v", reporter.lastStatus)
+			case reporter.channelStatus <- struct{}{}:
+				log.Info("reported status update")
 			default:
-				log.Info("not reporting status as no one is listening: %v", reporter.lastStatus)
+				log.Info("not reporting status update as no one is listening")
 			}
 		}
 	}
@@ -255,7 +256,7 @@ func GetErrorChannel() chan NodeError {
 }
 
 // GetStatusChannel returns a channel for node status messages
-func GetStatusChannel() chan NodeStatus {
+func GetStatusChannel() chan struct{} {
 	if reporter != nil {
 		return reporter.channelStatus
 	}
@@ -314,7 +315,7 @@ func SubscribeToLayers(newLayerCh timesync.LayerTimer) {
 				select {
 				case layer := <-newLayerCh:
 					log.With().Info("reporter got new layer", layer)
-					ReportNodeStatus(LayerCurrent(layer))
+					ReportNodeStatusUpdate()
 				case <-reporter.stopChan:
 					return
 				}
@@ -354,15 +355,6 @@ type NodeError struct {
 	Type  int
 }
 
-// NodeStatus represents the current status of the node, to be reported
-type NodeStatus struct {
-	NumPeers      uint64
-	IsSynced      bool
-	LayerSynced   types.LayerID
-	LayerCurrent  types.LayerID
-	LayerVerified types.LayerID
-}
-
 // TxReceipt represents a transaction receipt
 type TxReceipt struct {
 	Id      types.TransactionID
@@ -391,55 +383,16 @@ type TransactionWithValidity struct {
 	Valid       bool
 }
 
-// SetStatusElem sets a status
-type SetStatusElem func(*NodeStatus)
-
-// NumPeers sets peers
-func NumPeers(n uint64) SetStatusElem {
-	return func(ns *NodeStatus) {
-		ns.NumPeers = n
-	}
-}
-
-// IsSynced sets if synced
-func IsSynced(synced bool) SetStatusElem {
-	return func(ns *NodeStatus) {
-		ns.IsSynced = synced
-	}
-}
-
-// LayerSynced sets whether a layer is synced
-func LayerSynced(lid types.LayerID) SetStatusElem {
-	return func(ns *NodeStatus) {
-		ns.LayerSynced = lid
-	}
-}
-
-// LayerCurrent sets current layer
-func LayerCurrent(lid types.LayerID) SetStatusElem {
-	return func(ns *NodeStatus) {
-		ns.LayerCurrent = lid
-	}
-}
-
-// LayerVerified sets verified layer
-func LayerVerified(lid types.LayerID) SetStatusElem {
-	return func(ns *NodeStatus) {
-		ns.LayerVerified = lid
-	}
-}
-
 // EventReporter is the struct that receives incoming events and dispatches them
 type EventReporter struct {
 	channelTransaction chan TransactionWithValidity
 	channelActivation  chan *types.ActivationTx
 	channelLayer       chan NewLayer
 	channelError       chan NodeError
-	channelStatus      chan NodeStatus
+	channelStatus      chan struct{}
 	channelAccount     chan types.Address
 	channelReward      chan Reward
 	channelReceipt     chan TxReceipt
-	lastStatus         NodeStatus
 	stopChan           chan struct{}
 	blocking           bool
 }
@@ -449,12 +402,11 @@ func newEventReporter(bufsize int, blocking bool) *EventReporter {
 		channelTransaction: make(chan TransactionWithValidity, bufsize),
 		channelActivation:  make(chan *types.ActivationTx, bufsize),
 		channelLayer:       make(chan NewLayer, bufsize),
-		channelStatus:      make(chan NodeStatus, bufsize),
+		channelStatus:      make(chan struct{}, bufsize),
 		channelAccount:     make(chan types.Address, bufsize),
 		channelReward:      make(chan Reward, bufsize),
 		channelReceipt:     make(chan TxReceipt, bufsize),
 		channelError:       make(chan NodeError, bufsize),
-		lastStatus:         NodeStatus{},
 		stopChan:           make(chan struct{}),
 		blocking:           blocking,
 	}
