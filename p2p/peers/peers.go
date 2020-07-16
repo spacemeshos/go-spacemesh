@@ -34,7 +34,7 @@ func NewPeers(s PeerSubscriptionProvider, lg log.Log) *Peers {
 	pi := NewPeersImpl(&value, make(chan struct{}), lg)
 	newPeerC, expiredPeerC := s.SubscribePeerEvents()
 	go pi.listenToPeers(newPeerC, expiredPeerC)
-	events.ReportNodeStatus(events.NumPeers(pi.PeerCount()))
+	events.ReportNodeStatusUpdate()
 	return pi
 }
 
@@ -95,6 +95,6 @@ func (p *Peers) listenToPeers(newPeerC, expiredPeerC chan p2pcrypto.PublicKey) {
 			keys = append(keys, k)
 		}
 		p.snapshot.Store(keys) //swap snapshot
-		events.ReportNodeStatus(events.NumPeers(uint64(len(peerSet))))
+		events.ReportNodeStatusUpdate()
 	}
 }

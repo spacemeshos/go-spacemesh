@@ -180,7 +180,7 @@ func TestReportError(t *testing.T) {
 
 func TestReportNodeStatus(t *testing.T) {
 	// There should be no error reporting an event before initializing the reporter
-	ReportNodeStatus()
+	ReportNodeStatusUpdate()
 
 	// Stream is nil before we initialize it
 	stream := GetStatusChannel()
@@ -192,7 +192,7 @@ func TestReportNodeStatus(t *testing.T) {
 
 	// This will not be received as no one is listening
 	// This also makes sure that this call is nonblocking.
-	ReportNodeStatus()
+	ReportNodeStatusUpdate()
 
 	// listen on the channel
 	commChannel := make(chan struct{}, 1)
@@ -220,20 +220,20 @@ func TestReportNodeStatus(t *testing.T) {
 
 	// Wait until goroutine is listening
 	<-commChannel
-	ReportNodeStatus()
+	ReportNodeStatusUpdate()
 
 	// Update one thing
 	<-commChannel
-	ReportNodeStatus(NumPeers(10))
+	ReportNodeStatusUpdate(NumPeers(10))
 
 	// Update multiple things
 	<-commChannel
-	ReportNodeStatus(NumPeers(20), IsSynced(true))
+	ReportNodeStatusUpdate(NumPeers(20), IsSynced(true))
 
 	// Wait for goroutine to finish
 	<-commChannel
 
 	// This should also not cause an error
 	CloseEventReporter()
-	ReportNodeStatus()
+	ReportNodeStatusUpdate()
 }
