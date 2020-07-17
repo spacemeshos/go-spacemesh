@@ -264,7 +264,7 @@ func (t *TxAPIMock) GetTransactions(txids []types.TransactionID) (txs []*types.T
 }
 
 func (t *TxAPIMock) ProcessedLayer() types.LayerID {
-	panic("implement me")
+	return 8
 }
 
 func NewTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *types.Transaction {
@@ -1050,7 +1050,6 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 	require.Equal(t, globalTx.ID().Bytes(), resTx.Id.Id)
 	require.Equal(t, globalTx.Origin().Bytes(), resTx.Sender.Address)
 	require.Equal(t, globalTx.GasLimit, resTx.GasOffered.GasProvided)
-	require.Equal(t, globalTx.Fee, resTx.GasOffered.GasPrice)
 	require.Equal(t, globalTx.Amount, resTx.Amount.Value)
 	require.Equal(t, globalTx.AccountNonce, resTx.Counter)
 	require.Equal(t, globalTx.Signature[:], resTx.Signature.Signature)
