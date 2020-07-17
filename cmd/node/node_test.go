@@ -552,11 +552,12 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		var myError *pb.NodeError
 
 		myError = nextError()
-		// Not sure where this error comes from but we always get it
-		require.Equal(t, "error adding genesis block block already exist in database", myError.Message)
-		require.Equal(t, int(zapcore.ErrorLevel), int(myError.ErrorType))
 
-		myError = nextError()
+		// Ignore this error which happens if you have a local database file
+		if strings.Contains(myError.Message, "error adding genesis block block already exist in database") {
+			myError = nextError()
+		}
+
 		require.Equal(t, "test123", myError.Message)
 		require.Equal(t, int(zapcore.ErrorLevel), int(myError.ErrorType))
 
