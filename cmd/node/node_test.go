@@ -337,6 +337,9 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	r.NoError(err)
 	r.Equal(false, app.Config.API.StartNodeService)
 
+	// Give the services a few seconds to start running - this is important on travis.
+	time.Sleep(2 * time.Second)
+
 	// Try talking to the server
 	const message = "Hello World"
 
@@ -361,6 +364,9 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	r.NoError(err)
 	r.Equal(1234, app.Config.API.NewGrpcServerPort)
 	r.Equal(true, app.Config.API.StartNodeService)
+
+	// Give the services a few seconds to start running - this is important on travis.
+	time.Sleep(2 * time.Second)
 
 	// Set up a new connection to the server
 	conn, err = grpc.Dial("localhost:1234", grpc.WithInsecure())
