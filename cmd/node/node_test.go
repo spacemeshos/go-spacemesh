@@ -9,7 +9,6 @@ import (
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/go-spacemesh/api/config"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
-	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
@@ -477,11 +476,11 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 
 // E2E app test of the stream endpoints in the NodeService
 func TestSpacemeshApp_NodeService(t *testing.T) {
-	resetFlags()
+	// Give the previous test a chance to finish, otherwise errors from that
+	// test may leak into this test
+	time.Sleep(3 * time.Second)
 
-	// Make sure globals are reset between tests: errors leaking from other
-	// tests can cause this test to fail since we read them here.
-	events.CloseEventReporter()
+	resetFlags()
 
 	app := NewSpacemeshApp()
 
