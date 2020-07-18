@@ -64,6 +64,30 @@ func (s *JSONHTTPServer) StartService(startNodeService bool, startMeshService bo
 			log.Info("registered MeshService with grpc gateway server")
 		}
 	}
+	if startGlobalStateService {
+		if err := gw.RegisterGlobalStateServiceHandlerFromEndpoint(ctx, mux, jsonEndpoint, opts); err != nil {
+			log.Error("error registering GlobalStateService with grpc gateway", err)
+		} else {
+			serviceCount++
+			log.Info("registered GlobalStateService with grpc gateway server")
+		}
+	}
+	if startSmesherService {
+		if err := gw.RegisterSmesherServiceHandlerFromEndpoint(ctx, mux, jsonEndpoint, opts); err != nil {
+			log.Error("error registering SmesherService with grpc gateway", err)
+		} else {
+			serviceCount++
+			log.Info("registered SmesherService with grpc gateway server")
+		}
+	}
+	if startTransactionService {
+		if err := gw.RegisterTransactionServiceHandlerFromEndpoint(ctx, mux, jsonEndpoint, opts); err != nil {
+			log.Error("error registering TransactionService with grpc gateway", err)
+		} else {
+			serviceCount++
+			log.Info("registered TransactionService with grpc gateway server")
+		}
+	}
 
 	// At least one service must be enabled
 	if serviceCount == 0 {
