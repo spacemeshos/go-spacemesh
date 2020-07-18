@@ -9,6 +9,7 @@ import (
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/go-spacemesh/api/config"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
@@ -478,12 +479,15 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 func TestSpacemeshApp_NodeService(t *testing.T) {
 	resetFlags()
 
-	r := require.New(t)
+	// Make sure globals are reset between tests: errors leaking from other
+	// tests can cause this test to fail since we read them here.
+	events.CloseEventReporter()
+
 	app := NewSpacemeshApp()
 
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		defer app.Cleanup(cmd, args)
-		r.NoError(app.Initialize(cmd, args))
+		require.NoError(t, app.Initialize(cmd, args))
 
 		// Speed things up a little
 		app.Config.SyncInterval = 1
@@ -508,23 +512,25 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 			"--tcp-interface", "127.0.0.1",
 			"--grpc-interface-new", "localhost",
 		)
-		r.Empty(str)
-		r.NoError(err)
+		require.Empty(t, str)
+		require.NoError(t, err)
 		wg.Done()
 	}()
 
 	// Wait for the app and services to start
 	// Strictly speaking, this does not indicate that all of the services
-	// have started, we could add separate channels for that, but it seems
-	// to work well enough for testing.
+	// have started, we could add separate channels for that.
 	<-app.started
+
+	// Unfortunately sometimes we need to wait even longer
+	time.Sleep(3 * time.Second)
 
 	// Set up a new connection to the server
 	conn, err := grpc.Dial("localhost:1234", grpc.WithInsecure())
 	defer func() {
-		r.NoError(conn.Close())
+		require.NoError(t, conn.Close())
 	}()
-	r.NoError(err)
+	require.NoError(t, err)
 	c := pb.NewNodeServiceClient(conn)
 
 	// Open an error stream and a status stream
@@ -576,12 +582,6 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 
 		// Let the test end
 		once.Do(oncebody)
-
-		// Hangup
-		_, err = streamErr.Recv()
-
-		// We expect a nil when the stream is closed
-		require.NoError(t, err)
 	}()
 
 	streamStatus, err := c.StatusStream(context.Background(), &pb.StatusStreamRequest{})
