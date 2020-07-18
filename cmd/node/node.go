@@ -712,21 +712,25 @@ func (app *SpacemeshApp) startAPIServices(postClient api.PostAPI, net api.Networ
 	// enabled (since we don't know which ones to enable), so it's an error if the
 	// gateway server is enabled without enabling at least one GRPC service.
 
-	// Make sure we only start the server once
-	startService := func(svc grpcserver.ServiceAPI) {
+	// Make sure we only create the server once.
+	registerService := func(svc grpcserver.ServiceAPI) {
 		if app.newgrpcAPIService == nil {
 			app.newgrpcAPIService = grpcserver.NewServerWithInterface(apiConf.NewGrpcServerPort, apiConf.NewGrpcServerInterface)
-			app.newgrpcAPIService.Start()
 		}
 		svc.RegisterService(app.newgrpcAPIService)
 	}
 
-	// Start the requested services one by one
+	// Register the requested services one by one
 	if apiConf.StartNodeService {
-		startService(grpcserver.NewNodeService(net, app.mesh, app.clock, app.syncer))
+		registerService(grpcserver.NewNodeService(net, app.mesh, app.clock, app.syncer))
 	}
 	if apiConf.StartMeshService {
-		startService(grpcserver.NewMeshService(net, app.mesh, app.txPool, app.clock, app.syncer, app.Config.LayersPerEpoch, app.Config.P2P.NetworkID, layerDuration, app.Config.LayerAvgSize, app.Config.TxsPerBlock))
+		registerService(grpcserver.NewMeshService(net, app.mesh, app.txPool, app.clock, app.syncer, app.Config.LayersPerEpoch, app.Config.P2P.NetworkID, layerDuration, app.Config.LayerAvgSize, app.Config.TxsPerBlock))
+	}
+
+	// Now that the services are registered, start the server.
+	if app.newgrpcAPIService != nil {
+		app.newgrpcAPIService.Start()
 	}
 
 	if apiConf.StartNewJSONServer {
