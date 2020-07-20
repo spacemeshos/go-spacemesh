@@ -280,6 +280,12 @@ func (m *DB) SaveContextualValidity(id types.BlockID, valid bool) error {
 	return m.contextualValidity.Put(id.Bytes(), v)
 }
 
+// SaveContextualValidity persists opinion on block to the database
+func (m *DB) SaveBlockVote(id types.BlockID, vote []byte) error {
+	m.Debug("save contextual validity %v %v", id, vote)
+	return m.contextualValidity.Put(id.Bytes(), vote)
+}
+
 func (m *DB) writeBlock(bl *types.Block) error {
 	bytes, err := types.InterfaceToBytes(bl)
 	if err != nil {

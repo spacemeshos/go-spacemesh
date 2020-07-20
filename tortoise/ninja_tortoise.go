@@ -122,7 +122,7 @@ func (ni *ninjaTortoise) persist() error {
 }
 
 // RecoverTortoise retrieve latest saved tortoise from the database
-func RecoverTortoise(mdb database) (interface{}, error) {
+func RecoverTortoise(mdb retriever) (interface{}, error) {
 	return mdb.Retrieve(mesh.TORTOISE, &ninjaTortoise{})
 }
 
