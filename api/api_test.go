@@ -196,6 +196,17 @@ func (t *TxAPIMock) ProcessedLayer() types.LayerID {
 	panic("implement me")
 }
 
+func (t *TxAPIMock) GetLayerStateRoot(layer types.LayerID) (types.Hash32, error) {
+	panic("implement me")
+}
+
+func (t *TxAPIMock) GetBalance(addr types.Address) uint64 {
+	panic("implement me")
+}
+func (t *TxAPIMock) GetNonce(addr types.Address) uint64 {
+	panic("implement me")
+}
+
 // MiningAPIMock is a mock for mining API
 type MiningAPIMock struct{}
 
@@ -213,6 +224,14 @@ func (*MiningAPIMock) StartPost(types.Address, string, uint64) error {
 }
 
 func (*MiningAPIMock) SetCoinbaseAccount(types.Address) {}
+
+func (*MiningAPIMock) GetSmesherID() types.NodeID {
+	panic("implement me")
+}
+
+func (*MiningAPIMock) Stop() {
+	panic("implement me")
+}
 
 type OracleMock struct{}
 

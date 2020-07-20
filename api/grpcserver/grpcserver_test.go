@@ -260,10 +260,6 @@ func (t *TxAPIMock) GetTransactions(txids []types.TransactionID) (txs []*types.T
 	return
 }
 
-func (t *TxAPIMock) ProcessedLayer() types.LayerID {
-	return 8
-}
-
 func (t *TxAPIMock) GetLayerStateRoot(layer types.LayerID) (types.Hash32, error) {
 	return stateRoot, nil
 }
@@ -842,7 +838,7 @@ func TestSmesherService(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, int32(code.Code_OK), res.Status.Code)
 		}},
-		{"SmesherId", func(t *testing.T) {
+		{"SmesherID", func(t *testing.T) {
 			res, err := c.SmesherId(context.Background(), &empty.Empty{})
 			require.NoError(t, err)
 			require.Equal(t, nodeID.ToBytes(), res.AccountId.Address)
