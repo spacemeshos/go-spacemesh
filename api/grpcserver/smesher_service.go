@@ -75,11 +75,11 @@ func (s SmesherService) StopSmeshing(ctx context.Context, in *pb.StopSmeshingReq
 }
 
 // SmesherID returns the smesher ID of this node
-func (s SmesherService) SmesherID(ctx context.Context, in *empty.Empty) (*pb.SmesherIdResponse, error) {
+func (s SmesherService) SmesherID(ctx context.Context, in *empty.Empty) (*pb.SmesherIDResponse, error) {
 	log.Info("GRPC SmesherService.SmesherID")
 
 	smesherID := s.Mining.GetSmesherID()
-	return &pb.SmesherIdResponse{AccountId: &pb.AccountId{Address: smesherID.ToBytes()}}, nil
+	return &pb.SmesherIDResponse{AccountId: &pb.AccountId{Address: smesherID.ToBytes()}}, nil
 }
 
 // Coinbase returns the current coinbase setting of this node
