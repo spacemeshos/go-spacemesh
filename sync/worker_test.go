@@ -61,7 +61,7 @@ func TestNewNeighborhoodWorker(t *testing.T) {
 	r.NoError(err)
 }
 
-var longConf = Configuration{1000, 1, 300, 5 * time.Minute, 1 * time.Second, 10 * time.Hour, 100, 5}
+var longConf = Configuration{1000, 1, 300, 5 * time.Minute, 1 * time.Second, 10 * time.Hour, 100, 5, false}
 
 func TestNeighborhoodWorkerClose(t *testing.T) {
 	r := require.New(t)

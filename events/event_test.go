@@ -78,7 +78,8 @@ func TestEventReporter(t *testing.T) {
 	txStream := GetNewTxChannel()
 	require.Nil(t, txStream, "expected tx stream not to be initialized")
 
-	InitializeEventReporter("")
+	err := InitializeEventReporter("")
+	require.NoError(t, err)
 	txStream = GetNewTxChannel()
 	require.NotNil(t, txStream, "expected tx stream to be initialized")
 
@@ -124,7 +125,8 @@ func TestReportError(t *testing.T) {
 	stream := GetErrorChannel()
 	require.Nil(t, stream, "expected stream not to be initialized")
 
-	InitializeEventReporter("")
+	err := InitializeEventReporter("")
+	require.NoError(t, err)
 	stream = GetErrorChannel()
 	require.NotNil(t, stream, "expected stream to be initialized")
 
@@ -186,7 +188,8 @@ func TestReportNodeStatus(t *testing.T) {
 	stream := GetStatusChannel()
 	require.Nil(t, stream, "expected stream not to be initialized")
 
-	InitializeEventReporter("")
+	err := InitializeEventReporter("")
+	require.NoError(t, err)
 	stream = GetStatusChannel()
 	require.NotNil(t, stream, "expected stream to be initialized")
 
@@ -200,20 +203,8 @@ func TestReportNodeStatus(t *testing.T) {
 		// report that we're listening
 		commChannel <- struct{}{}
 
-		var status NodeStatus
-		status = <-stream
-		require.Equal(t, uint64(0), status.NumPeers)
-		require.Equal(t, false, status.IsSynced)
-
-		commChannel <- struct{}{}
-		status = <-stream
-		require.Equal(t, uint64(10), status.NumPeers)
-		require.Equal(t, false, status.IsSynced)
-
-		commChannel <- struct{}{}
-		status = <-stream
-		require.Equal(t, uint64(20), status.NumPeers)
-		require.Equal(t, true, status.IsSynced)
+		status := <-stream
+		require.Equal(t, struct{}{}, status)
 
 		close(commChannel)
 	}()
@@ -221,14 +212,6 @@ func TestReportNodeStatus(t *testing.T) {
 	// Wait until goroutine is listening
 	<-commChannel
 	ReportNodeStatusUpdate()
-
-	// Update one thing
-	<-commChannel
-	ReportNodeStatusUpdate(NumPeers(10))
-
-	// Update multiple things
-	<-commChannel
-	ReportNodeStatusUpdate(NumPeers(20), IsSynced(true))
 
 	// Wait for goroutine to finish
 	<-commChannel

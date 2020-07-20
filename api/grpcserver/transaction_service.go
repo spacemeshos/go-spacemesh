@@ -31,7 +31,7 @@ func (s TransactionService) RegisterService(server *Server) {
 	pb.RegisterTransactionServiceServer(server.GrpcServer, s)
 }
 
-// NewGlobalStateService creates a new grpc service using config data.
+// NewTransactionService creates a new grpc service using config data.
 func NewTransactionService(
 	net api.NetworkAPI, tx api.TxAPI, mempool *miner.TxMempool, genTime api.GenesisTimeAPI,
 	syncer api.Syncer) *TransactionService {

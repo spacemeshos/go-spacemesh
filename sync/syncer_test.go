@@ -33,7 +33,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
-var conf = Configuration{1000, 1, 300, 500 * time.Millisecond, 200 * time.Millisecond, 10 * time.Hour, 100, 5}
+var conf = Configuration{1000, 1, 300, 500 * time.Millisecond, 200 * time.Millisecond, 10 * time.Hour, 100, 5, false}
 
 func init() {
 	rand.Seed(time.Now().UnixNano())

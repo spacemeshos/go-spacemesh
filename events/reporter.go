@@ -168,7 +168,6 @@ func ReportError(err NodeError) {
 // status contains disparate information coming from different services,
 // and the listener already knows how to gather that information so there
 // is no point in duplicating that logic here.
-
 // Note: There is some overlap with channelLayer here, as a new latest
 // or verified layer should be sent over that channel as well. However,
 // that happens inside the Mesh, at the source. It doesn't currently
@@ -191,6 +190,7 @@ func ReportNodeStatusUpdate() {
 	}
 }
 
+// ReportReceipt reports creation or receipt of a new tx receipt
 func ReportReceipt(r TxReceipt) {
 	if reporter != nil {
 		if reporter.blocking {
@@ -207,6 +207,7 @@ func ReportReceipt(r TxReceipt) {
 	}
 }
 
+// ReportAccountUpdate reports an account whose data has been updated
 func ReportAccountUpdate(a types.Address) {
 	if reporter != nil {
 		if reporter.blocking {
@@ -271,6 +272,7 @@ func GetAccountChannel() chan types.Address {
 	return nil
 }
 
+// GetRewardChannel returns a channel for rewards
 func GetRewardChannel() chan Reward {
 	if reporter != nil {
 		return reporter.channelReward
@@ -278,6 +280,7 @@ func GetRewardChannel() chan Reward {
 	return nil
 }
 
+// GetReceiptChannel returns a channel for tx receipts
 func GetReceiptChannel() chan TxReceipt {
 	if reporter != nil {
 		return reporter.channelReceipt
@@ -357,7 +360,7 @@ type NodeError struct {
 
 // TxReceipt represents a transaction receipt
 type TxReceipt struct {
-	Id      types.TransactionID
+	ID      types.TransactionID
 	Result  int
 	GasUsed uint64
 	Fee     uint64

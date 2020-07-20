@@ -74,9 +74,9 @@ func (s SmesherService) StopSmeshing(ctx context.Context, in *pb.StopSmeshingReq
 	}, nil
 }
 
-// SmesherId returns the smesher ID of this node
-func (s SmesherService) SmesherId(ctx context.Context, in *empty.Empty) (*pb.SmesherIdResponse, error) {
-	log.Info("GRPC SmesherService.SmesherId")
+// SmesherID returns the smesher ID of this node
+func (s SmesherService) SmesherID(ctx context.Context, in *empty.Empty) (*pb.SmesherIdResponse, error) {
+	log.Info("GRPC SmesherService.SmesherID")
 
 	smesherID := s.Mining.GetSmesherID()
 	return &pb.SmesherIdResponse{AccountId: &pb.AccountId{Address: smesherID.ToBytes()}}, nil

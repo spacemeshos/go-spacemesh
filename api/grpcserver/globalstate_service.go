@@ -269,7 +269,7 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 			if receipt.Address == addr {
 				if err := stream.Send(&pb.AccountDataStreamResponse{Datum: &pb.AccountData{Datum: &pb.AccountData_Receipt{
 					Receipt: &pb.TransactionReceipt{
-						Id: &pb.TransactionId{Id: receipt.Id.Bytes()},
+						Id: &pb.TransactionId{Id: receipt.ID.Bytes()},
 						//Result:      receipt.Result,
 						GasUsed:     receipt.GasUsed,
 						Fee:         &pb.Amount{Value: receipt.Fee},
@@ -406,7 +406,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 			}
 			if err := stream.Send(&pb.GlobalStateStreamResponse{Datum: &pb.GlobalStateData{Datum: &pb.GlobalStateData_Receipt{
 				Receipt: &pb.TransactionReceipt{
-					Id: &pb.TransactionId{Id: receipt.Id.Bytes()},
+					Id: &pb.TransactionId{Id: receipt.ID.Bytes()},
 					//Result:      receipt.Result,
 					GasUsed:     receipt.GasUsed,
 					Fee:         &pb.Amount{Value: receipt.Fee},

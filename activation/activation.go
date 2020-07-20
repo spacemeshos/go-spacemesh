@@ -148,6 +148,7 @@ func (b *Builder) Stop() {
 	close(b.stop)
 }
 
+// GetSmesherID returns the ID of the smesher that created this activation
 func (b *Builder) GetSmesherID() types.NodeID {
 	return b.nodeID
 }
