@@ -1574,6 +1574,7 @@ func TestTransactionService(t *testing.T) {
 				require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MESH, res.TransactionState.State)
 			}()
 
+			events.CloseEventReporter()
 			err := events.InitializeEventReporterWithOptions("", 1, true)
 			require.NoError(t, err)
 			events.ReportNewTx(globalTx)
@@ -1599,6 +1600,7 @@ func TestTransactionService(t *testing.T) {
 				checkTransaction(t, res.Transaction)
 			}()
 
+			events.CloseEventReporter()
 			err := events.InitializeEventReporterWithOptions("", 1, true)
 			require.NoError(t, err)
 			events.ReportNewTx(globalTx)
@@ -1652,6 +1654,7 @@ func TestTransactionService(t *testing.T) {
 			}()
 
 			// SUBMIT
+			events.CloseEventReporter()
 			err := events.InitializeEventReporterWithOptions("", 1, true)
 			require.NoError(t, err)
 			serializedTx, err := types.InterfaceToBytes(globalTx)
@@ -1818,6 +1821,7 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 
 	// initialize the streamer
 	log.Info("initializing event stream")
+	events.CloseEventReporter()
 	err = events.InitializeEventReporterWithOptions("", 0, true)
 	require.NoError(t, err)
 
@@ -1900,6 +1904,7 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 
 	// initialize the streamer
 	log.Info("initializing event stream")
+	events.CloseEventReporter()
 	err = events.InitializeEventReporterWithOptions("", 0, true)
 	require.NoError(t, err)
 
@@ -1994,6 +1999,7 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 
 	// initialize the streamer
 	log.Info("initializing event stream")
+	events.CloseEventReporter()
 	err = events.InitializeEventReporterWithOptions("", 0, true)
 	require.NoError(t, err)
 
