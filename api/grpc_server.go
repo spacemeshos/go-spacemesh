@@ -1,3 +1,6 @@
+// NOTE: the contents of this file will soon be deprecated. See
+// grpcserver/grpc.go for the new implementation.
+
 // Package api provides the local go-spacemesh API endpoints. e.g. json-http and grpc-http2
 package api
 
@@ -228,11 +231,6 @@ func (s SpacemeshGrpcService) Close() error {
 	s.Server.Stop()
 	log.Debug("grpc service stopped...")
 	return nil
-}
-
-// Syncer is the API to get sync status
-type Syncer interface {
-	IsSynced() bool
 }
 
 // TxAPI is an api for getting transaction transaction status

@@ -109,7 +109,7 @@ func parseConfig() (*bc.Config, error) {
 }
 
 // EnsureCLIFlags checks flag types and converts them
-func EnsureCLIFlags(cmd *cobra.Command, appCFG *bc.Config) {
+func EnsureCLIFlags(cmd *cobra.Command, appCFG *bc.Config) error {
 	assignFields := func(p reflect.Type, elem reflect.Value, name string) {
 		for i := 0; i < p.NumField(); i++ {
 			if p.Field(i).Tag.Get("mapstructure") == name {
@@ -133,6 +133,8 @@ func EnsureCLIFlags(cmd *cobra.Command, appCFG *bc.Config) {
 					val = viper.GetUint64(name)
 				case "float64":
 					val = viper.GetFloat64(name)
+				case "[]string":
+					val = viper.GetStringSlice(name)
 				default:
 					val = viper.Get(name)
 				}
@@ -189,4 +191,6 @@ func EnsureCLIFlags(cmd *cobra.Command, appCFG *bc.Config) {
 			assignFields(ff, elem, name)
 		}
 	})
+	// check list of requested GRPC services (if any)
+	return appCFG.API.ParseServicesList()
 }

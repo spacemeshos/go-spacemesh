@@ -39,6 +39,7 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/api"
+	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	cfg "github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -144,28 +145,30 @@ type TickProvider interface {
 // SpacemeshApp is the cli app singleton
 type SpacemeshApp struct {
 	*cobra.Command
-	nodeID         types.NodeID
-	P2P            p2p.Service
-	Config         *cfg.Config
-	grpcAPIService *api.SpacemeshGrpcService
-	jsonAPIService *api.JSONHTTPServer
-	syncer         *sync.Syncer
-	blockListener  *sync.BlockListener
-	state          *state.TransactionProcessor
-	blockProducer  *miner.BlockBuilder
-	oracle         *oracle.MinerBlockOracle
-	txProcessor    *state.TransactionProcessor
-	mesh           *mesh.Mesh
-	clock          TickProvider
-	hare           HareService
-	atxBuilder     *activation.Builder
-	poetListener   *activation.PoetListener
-	edSgn          *signing.EdSigner
-	closers        []interface{ Close() }
-	log            log.Log
-	txPool         *miner.TxMempool
-	loggers        map[string]*zap.AtomicLevel
-	term           chan struct{} // this channel is closed when closing services, goroutines should wait on this channel in order to terminate
+	nodeID            types.NodeID
+	P2P               p2p.Service
+	Config            *cfg.Config
+	grpcAPIService    *api.SpacemeshGrpcService
+	jsonAPIService    *api.JSONHTTPServer
+	grpcNodeService   *grpcserver.NodeService
+	newjsonAPIService *grpcserver.JSONHTTPServer
+	syncer            *sync.Syncer
+	blockListener     *sync.BlockListener
+	state             *state.TransactionProcessor
+	blockProducer     *miner.BlockBuilder
+	oracle            *oracle.MinerBlockOracle
+	txProcessor       *state.TransactionProcessor
+	mesh              *mesh.Mesh
+	clock             TickProvider
+	hare              HareService
+	atxBuilder        *activation.Builder
+	poetListener      *activation.PoetListener
+	edSgn             *signing.EdSigner
+	closers           []interface{ Close() }
+	log               log.Log
+	txPool            *miner.TxMempool
+	loggers           map[string]*zap.AtomicLevel
+	term              chan struct{} // this channel is closed when closing services, goroutines should wait on this channel in order to terminate
 }
 
 // LoadConfigFromFile tries to load configuration file if the config parameter was specified
@@ -241,7 +244,9 @@ func (app *SpacemeshApp) Initialize(cmd *cobra.Command, args []string) (err erro
 	}
 
 	// ensure cli flags are higher priority than config file
-	cmdp.EnsureCLIFlags(cmd, app.Config)
+	if err := cmdp.EnsureCLIFlags(cmd, app.Config); err != nil {
+		return err
+	}
 
 	// override default config in timesync since timesync is using TimeCongigValues
 	timeCfg.TimeConfigValues = app.Config.TIME
@@ -660,6 +665,43 @@ func (app *SpacemeshApp) startServices() {
 	go app.checkTimeDrifts()
 }
 
+func (app *SpacemeshApp) startAPIServices(postClient api.PostAPI, net api.NetworkAPI) {
+	apiConf := &app.Config.API
+
+	// OLD API SERVICES (deprecated)
+	if apiConf.StartGrpcServer || apiConf.StartJSONServer {
+		// start grpc if specified or if json rpc specified
+		layerDuration := app.Config.LayerDurationSec
+		app.grpcAPIService = api.NewGrpcService(apiConf.GrpcServerPort, net, app.state, app.mesh, app.txPool,
+			app.atxBuilder, app.oracle, app.clock, postClient, layerDuration, app.syncer, app.Config, app)
+		app.grpcAPIService.StartService()
+	}
+
+	if apiConf.StartJSONServer {
+		app.jsonAPIService = api.NewJSONHTTPServer(apiConf.JSONServerPort, apiConf.GrpcServerPort)
+		app.jsonAPIService.StartService()
+	}
+
+	// NEW API SERVICES
+	// These work a little differently than the old services. Since we have multiple
+	// GRPC services, we cannot automatically enable them if the gateway server is
+	// enabled (since we don't know which ones to enable), so it's an error if the
+	// gateway server is enabled without enabling at least one GRPC service.
+	if apiConf.StartNodeService {
+		app.grpcNodeService = grpcserver.NewNodeService(apiConf.NewGrpcServerPort, net, app.mesh,
+			app.clock, app.syncer)
+		grpcserver.StartService(app.grpcNodeService)
+
+		if apiConf.StartNewJSONServer {
+			app.newjsonAPIService = grpcserver.NewJSONHTTPServer(apiConf.NewJSONServerPort, apiConf.NewGrpcServerPort)
+			app.newjsonAPIService.StartService()
+		}
+	} else if apiConf.StartNewJSONServer {
+		// This should not happen
+		log.Panic("One or more new GRPC services must be enabled with new JSON gateway server.")
+	}
+}
+
 func (app *SpacemeshApp) stopServices() {
 	// all go-routines that listen to app.term will close
 	// note: there is no guarantee that a listening go-routine will close before stopServices exits
@@ -671,8 +713,18 @@ func (app *SpacemeshApp) stopServices() {
 	}
 
 	if app.grpcAPIService != nil {
-		log.Info("Stopping GRPC service ...")
+		log.Info("Stopping GRPC service...")
 		app.grpcAPIService.Close()
+	}
+
+	if app.newjsonAPIService != nil {
+		log.Info("Stopping new JSON gateway service...")
+		app.newjsonAPIService.Close()
+	}
+
+	if app.grpcNodeService != nil {
+		log.Info("Stopping GRPC NodeService...")
+		app.grpcNodeService.Close()
 	}
 
 	if app.blockProducer != nil {
@@ -861,7 +913,6 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	/* Initialize all protocol services */
 	lg := log.NewDefault(nodeID.ShortString())
 
-	apiConf := &app.Config.API
 	dbStorepath := app.Config.DataDir()
 	gTime, err := time.Parse(time.RFC3339, app.Config.GenesisTime)
 	if err != nil {
@@ -897,22 +948,7 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 		log.Panic("Error starting p2p services: %v", err)
 	}
 
-	/* Expose API */
-
-	// start api servers
-	if apiConf.StartGrpcServer || apiConf.StartJSONServer {
-		// start grpc if specified or if json rpc specified
-		layerDuration := app.Config.LayerDurationSec
-		app.grpcAPIService = api.NewGrpcService(apiConf.GrpcServerPort, app.P2P, app.state, app.mesh, app.txPool,
-			app.atxBuilder, app.oracle, app.clock, postClient, layerDuration, app.syncer, app.Config, app)
-		app.grpcAPIService.StartService()
-	}
-
-	if apiConf.StartJSONServer {
-		app.jsonAPIService = api.NewJSONHTTPServer(apiConf.JSONServerPort, apiConf.GrpcServerPort)
-		app.jsonAPIService.StartService()
-	}
-
+	app.startAPIServices(postClient, app.P2P)
 	log.Info("App started.")
 
 	// app blocks until it receives a signal to exit
