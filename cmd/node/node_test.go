@@ -750,11 +750,11 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		// Now listen on the stream
 		res, err := stream.Recv()
 		require.NoError(t, err)
-		require.Equal(t, tx.ID().Bytes(), res.TransactionsState.Id.Id)
+		require.Equal(t, tx.ID().Bytes(), res.TransactionState.Id.Id)
 
 		// We expect the tx to go to the mempool
-		inTx := res.Transactions
-		require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MEMPOOL, res.TransactionsState.State)
+		inTx := res.Transaction
+		require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MEMPOOL, res.TransactionState.State)
 		require.Equal(t, tx.ID().Bytes(), inTx.Id.Id)
 		require.Equal(t, tx.Origin().Bytes(), inTx.Sender.Address)
 		require.Equal(t, tx.GasLimit, inTx.GasOffered.GasProvided)

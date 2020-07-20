@@ -839,7 +839,7 @@ func TestSmesherService(t *testing.T) {
 			require.Equal(t, int32(code.Code_OK), res.Status.Code)
 		}},
 		{"SmesherID", func(t *testing.T) {
-			res, err := c.SmesherId(context.Background(), &empty.Empty{})
+			res, err := c.SmesherID(context.Background(), &empty.Empty{})
 			require.NoError(t, err)
 			require.Equal(t, nodeID.ToBytes(), res.AccountId.Address)
 		}},
@@ -1569,12 +1569,13 @@ func TestTransactionService(t *testing.T) {
 				require.NoError(t, err)
 				res, err := stream.Recv()
 				require.NoError(t, err)
-				require.Nil(t, res.Transactions)
-				require.Equal(t, globalTx.ID().Bytes(), res.TransactionsState.Id.Id)
-				require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MESH, res.TransactionsState.State)
+				require.Nil(t, res.Transaction)
+				require.Equal(t, globalTx.ID().Bytes(), res.TransactionState.Id.Id)
+				require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MESH, res.TransactionState.State)
 			}()
 
-			events.InitializeEventReporterWithOptions("", 1, true)
+			err := events.InitializeEventReporterWithOptions("", 1, true)
+			require.NoError(t, err)
 			events.ReportNewTx(globalTx)
 			wg.Wait()
 		}},
@@ -1593,12 +1594,13 @@ func TestTransactionService(t *testing.T) {
 				require.NoError(t, err)
 				res, err := stream.Recv()
 				require.NoError(t, err)
-				require.Equal(t, globalTx.ID().Bytes(), res.TransactionsState.Id.Id)
-				require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MESH, res.TransactionsState.State)
-				checkTransaction(t, res.Transactions)
+				require.Equal(t, globalTx.ID().Bytes(), res.TransactionState.Id.Id)
+				require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MESH, res.TransactionState.State)
+				checkTransaction(t, res.Transaction)
 			}()
 
-			events.InitializeEventReporterWithOptions("", 1, true)
+			err := events.InitializeEventReporterWithOptions("", 1, true)
+			require.NoError(t, err)
 			events.ReportNewTx(globalTx)
 			wg.Wait()
 		}},
@@ -1643,14 +1645,15 @@ func TestTransactionService(t *testing.T) {
 				require.NoError(t, err)
 				res, err := stream.Recv()
 				require.NoError(t, err)
-				require.Equal(t, globalTx.ID().Bytes(), res.TransactionsState.Id.Id)
+				require.Equal(t, globalTx.ID().Bytes(), res.TransactionState.Id.Id)
 				// We expect the tx to go to the mempool
-				require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MEMPOOL, res.TransactionsState.State)
-				checkTransaction(t, res.Transactions)
+				require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MEMPOOL, res.TransactionState.State)
+				checkTransaction(t, res.Transaction)
 			}()
 
 			// SUBMIT
-			events.InitializeEventReporterWithOptions("", 1, true)
+			err := events.InitializeEventReporterWithOptions("", 1, true)
+			require.NoError(t, err)
 			serializedTx, err := types.InterfaceToBytes(globalTx)
 			require.NoError(t, err, "error serializing tx")
 			res, err := c.SubmitTransaction(context.Background(), &pb.SubmitTransactionRequest{
@@ -1815,7 +1818,8 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 
 	// initialize the streamer
 	log.Info("initializing event stream")
-	events.InitializeEventReporterWithOptions("", 0, true)
+	err = events.InitializeEventReporterWithOptions("", 0, true)
+	require.NoError(t, err)
 
 	// publish a tx
 	events.ReportNewTx(globalTx)
@@ -1896,7 +1900,8 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 
 	// initialize the streamer
 	log.Info("initializing event stream")
-	events.InitializeEventReporterWithOptions("", 0, true)
+	err = events.InitializeEventReporterWithOptions("", 0, true)
+	require.NoError(t, err)
 
 	// publish a receipt
 	events.ReportReceipt(events.TxReceipt{
@@ -1989,7 +1994,8 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 
 	// initialize the streamer
 	log.Info("initializing event stream")
-	events.InitializeEventReporterWithOptions("", 0, true)
+	err = events.InitializeEventReporterWithOptions("", 0, true)
+	require.NoError(t, err)
 
 	// publish a receipt
 	events.ReportReceipt(events.TxReceipt{

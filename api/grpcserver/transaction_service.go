@@ -191,13 +191,13 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 					}
 
 					res := &pb.TransactionsStateStreamResponse{
-						TransactionsState: &pb.TransactionState{
+						TransactionState: &pb.TransactionState{
 							Id:    txid,
 							State: state,
 						},
 					}
 					if in.IncludeTransactions {
-						res.Transactions = convertTransaction(tx.Transaction)
+						res.Transaction = convertTransaction(tx.Transaction)
 					}
 					if err := stream.Send(res); err != nil {
 						return err
@@ -233,7 +233,7 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 								state = pb.TransactionState_TRANSACTION_STATE_UNSPECIFIED
 							}
 							res := &pb.TransactionsStateStreamResponse{
-								TransactionsState: &pb.TransactionState{
+								TransactionState: &pb.TransactionState{
 									Id:    txid,
 									State: state,
 								},
@@ -245,7 +245,7 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 									return status.Errorf(codes.Internal, "error retrieving tx data")
 								}
 
-								res.Transactions = convertTransaction(tx)
+								res.Transaction = convertTransaction(tx)
 							}
 							if err := stream.Send(res); err != nil {
 								return err
