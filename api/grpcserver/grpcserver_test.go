@@ -1762,10 +1762,6 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 }
 
 func TestAccountMeshDataStream_comprehensive(t *testing.T) {
-	// TODO: Re-enable this test in phase9 as the Reporter has been fixed.
-	// This will fail for now because the Reporter does not block.
-	t.Skip()
-
 	grpcService := NewMeshService(txAPI, txMempool, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
@@ -2036,10 +2032,6 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 }
 
 func TestLayerStream_comprehensive(t *testing.T) {
-	// TODO: Re-enable this test in phase9 as the Reporter has been fixed.
-	// This will fail for now because the Reporter does not block.
-	t.Skip()
-
 	grpcService := NewMeshService(txAPI, txMempool, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
@@ -2048,15 +2040,12 @@ func TestLayerStream_comprehensive(t *testing.T) {
 	addr := "localhost:" + strconv.Itoa(cfg.NewGrpcServerPort)
 
 	// Set up a connection to the server.
+	log.Info("dialing %s", addr)
 	conn, err := grpc.Dial(addr, grpc.WithInsecure())
 	require.NoError(t, err)
 	defer func() {
 		require.NoError(t, conn.Close())
 	}()
-	c := pb.NewMeshServiceClient(conn)
-
-	// set up the grpc listener stream
-	req := &pb.LayerStreamRequest{}
 
 	// Need to wait for goroutine to end before ending the test
 	wg := sync.WaitGroup{}
@@ -2065,6 +2054,10 @@ func TestLayerStream_comprehensive(t *testing.T) {
 	// This will block so run it in a goroutine
 	go func() {
 		defer wg.Done()
+
+		// set up the grpc listener stream
+		req := &pb.LayerStreamRequest{}
+		c := pb.NewMeshServiceClient(conn)
 		stream, err := c.LayerStream(context.Background(), req)
 		require.NoError(t, err, "stream request returned unexpected error")
 
@@ -2073,7 +2066,7 @@ func TestLayerStream_comprehensive(t *testing.T) {
 		res, err = stream.Recv()
 		require.NoError(t, err, "got error from stream")
 		require.Equal(t, uint64(0), res.Layer.Number)
-		require.Equal(t, events.LayerStatusTypeConfirmed, res.Layer.Status)
+		require.Equal(t, events.LayerStatusTypeConfirmed, int(res.Layer.Status))
 		checkLayer(t, res.Layer)
 
 		// look for EOF
@@ -2083,7 +2076,7 @@ func TestLayerStream_comprehensive(t *testing.T) {
 
 	// initialize the streamer
 	log.Info("initializing event stream")
-	require.NoError(t, events.InitializeEventReporter(""))
+	require.NoError(t, events.InitializeEventReporterWithOptions("", 0, true))
 
 	layer, err := txAPI.GetLayer(layerFirst)
 	require.NoError(t, err)

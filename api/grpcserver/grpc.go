@@ -33,7 +33,8 @@ func NewServerWithInterface(port int, intfce string) *Server {
 
 // Start starts the server
 func (s *Server) Start() {
-	log.Info("starting new grpc server")
+	numServices := len(s.GrpcServer.GetServiceInfo())
+	log.Info("starting new grpc server with %d registered service(s)", numServices)
 	go s.startInternal()
 }
 
