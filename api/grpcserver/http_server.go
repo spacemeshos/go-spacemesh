@@ -102,5 +102,7 @@ func (s *JSONHTTPServer) StartService(startNodeService bool, startMeshService bo
 	}
 
 	// This call is blocking, and only returns an error
-	log.Error("error from grpc http listener: %v", s.server.ListenAndServe())
+	go func() {
+		log.Error("error from grpc http listener: %v", s.server.ListenAndServe())
+	}()
 }
