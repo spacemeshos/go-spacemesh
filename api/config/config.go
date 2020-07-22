@@ -14,6 +14,7 @@ const (
 	defaultJSONServerPort     = 9090
 	defaultNewJSONServerPort  = 9093
 	defaultStartNodeService   = false
+	defaultStartMeshService   = false
 )
 
 // Config defines the api config params
@@ -26,7 +27,9 @@ type Config struct {
 	StartNewJSONServer bool     `mapstructure:"json-server-new"`
 	JSONServerPort     int      `mapstructure:"json-port"`
 	NewJSONServerPort  int      `mapstructure:"json-port-new"`
-	StartNodeService   bool     // no direct commandline flag
+	// no direct command line flags for these
+	StartNodeService bool
+	StartMeshService bool
 }
 
 func init() {
@@ -45,6 +48,7 @@ func DefaultConfig() Config {
 		JSONServerPort:     defaultJSONServerPort,
 		NewJSONServerPort:  defaultNewJSONServerPort,
 		StartNodeService:   defaultStartNodeService,
+		StartMeshService:   defaultStartMeshService,
 	}
 }
 
@@ -53,6 +57,8 @@ func (s *Config) ParseServicesList() error {
 	// Make sure all enabled GRPC services are known
 	for _, svc := range s.StartGrpcServices {
 		switch svc {
+		case "mesh":
+			s.StartMeshService = true
 		case "node":
 			s.StartNodeService = true
 		default:

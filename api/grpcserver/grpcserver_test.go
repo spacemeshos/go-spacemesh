@@ -6,7 +6,12 @@ import (
 	"fmt"
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/ptypes/empty"
+	"github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/miner"
+	"google.golang.org/genproto/googleapis/rpc/code"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"io/ioutil"
 	"math/big"
 	"net/http"
@@ -194,7 +199,7 @@ type GenesisTimeMock struct {
 }
 
 func (t GenesisTimeMock) GetCurrentLayer() types.LayerID {
-	return 1
+	return 12
 }
 
 func (t GenesisTimeMock) GetGenesisTime() time.Time {
@@ -237,30 +242,39 @@ func marshalProto(t *testing.T, msg proto.Message) string {
 
 var cfg = config.DefaultConfig()
 
-type SyncerMock struct{}
+type SyncerMock struct {
+	startCalled bool
+}
 
 func (SyncerMock) IsSynced() bool { return false }
-func (SyncerMock) Start()         {}
+func (s *SyncerMock) Start()      { s.startCalled = true }
 
-func launchServer(t *testing.T) func() {
+func launchServer(t *testing.T, services ...ServiceAPI) func() {
 	networkMock.Broadcast("", []byte{0x00})
-	grpcService := NewNodeService(cfg.NewGrpcServerPort, &networkMock, txAPI, &genTime, &SyncerMock{})
+	grpcService := NewServer(cfg.NewGrpcServerPort)
 	jsonService := NewJSONHTTPServer(cfg.NewJSONServerPort, cfg.NewGrpcServerPort)
-	// start gRPC and json server
-	StartService(grpcService)
-	jsonService.StartService()
 
+	// attach services
+	for _, svc := range services {
+		svc.RegisterService(grpcService)
+	}
+
+	// start gRPC and json servers
+	grpcService.Start()
+	jsonService.StartService(cfg.StartNodeService, cfg.StartMeshService)
 	time.Sleep(3 * time.Second) // wait for server to be ready (critical on Travis)
 
 	return func() {
 		require.NoError(t, jsonService.Close())
-		require.NoError(t, grpcService.Close())
+		grpcService.Close()
 	}
 }
 
 func callEndpoint(t *testing.T, endpoint, payload string) (string, int) {
 	url := fmt.Sprintf("http://127.0.0.1:%d/%s", cfg.NewJSONServerPort, endpoint)
+	t.Log("sending POST request to", url)
 	resp, err := http.Post(url, "application/json", strings.NewReader(payload))
+	t.Log("got response", resp)
 	require.NoError(t, err)
 	require.Equal(t, "application/json", resp.Header.Get("Content-Type"))
 	buf, err := ioutil.ReadAll(resp.Body)
@@ -275,20 +289,19 @@ func TestNewServersConfig(t *testing.T) {
 	port2, err := node.GetUnboundedPort()
 	require.NoError(t, err, "Should be able to establish a connection on a port")
 
-	grpcService := NewNodeService(
-		port1, &networkMock, txAPI, nil, nil)
-
+	grpcService := NewServer(port1)
 	jsonService := NewJSONHTTPServer(port2, port1)
-	require.Equal(t, uint(port2), jsonService.Port, "Expected same port")
-	require.Equal(t, uint(port1), jsonService.GrpcPort, "Expected same port")
-	require.Equal(t, uint(port1), grpcService.Port(), "Expected same port")
+
+	require.Equal(t, port2, jsonService.Port, "Expected same port")
+	require.Equal(t, port1, jsonService.GrpcPort, "Expected same port")
+	require.Equal(t, port1, grpcService.Port, "Expected same port")
 }
 
 func TestNodeService(t *testing.T) {
-	shutDown := launchServer(t)
+	syncer := SyncerMock{}
+	grpcService := NewNodeService(&networkMock, txAPI, &genTime, &syncer)
+	shutDown := launchServer(t, grpcService)
 	defer shutDown()
-
-	const message = "Hello World"
 
 	// start a client
 	addr := "localhost:" + strconv.Itoa(cfg.NewGrpcServerPort)
@@ -301,25 +314,182 @@ func TestNodeService(t *testing.T) {
 	}()
 	c := pb.NewNodeServiceClient(conn)
 
-	// call echo and validate result
-	response, err := c.Echo(context.Background(), &pb.EchoRequest{
-		Msg: &pb.SimpleString{Value: message}})
+	// Construct an array of test cases to test each endpoint in turn
+	testCases := []struct {
+		name string
+		run  func()
+	}{
+		{"Echo", func() {
+			const message = "Hello World"
+			res, err := c.Echo(context.Background(), &pb.EchoRequest{
+				Msg: &pb.SimpleString{Value: message}})
+			require.NoError(t, err)
+			require.Equal(t, message, res.Msg.Value)
+
+			// now try sending bad payloads
+			_, err = c.Echo(context.Background(), &pb.EchoRequest{Msg: nil})
+			require.EqualError(t, err, "rpc error: code = InvalidArgument desc = Must include `Msg`")
+			code := status.Code(err)
+			require.Equal(t, codes.InvalidArgument, code)
+
+			_, err = c.Echo(context.Background(), &pb.EchoRequest{})
+			require.EqualError(t, err, "rpc error: code = InvalidArgument desc = Must include `Msg`")
+			code = status.Code(err)
+			require.Equal(t, codes.InvalidArgument, code)
+		}},
+		{"Version", func() {
+			// must set this manually as it's set up in main() when running
+			version := "abc123"
+			cmd.Version = version
+			res, err := c.Version(context.Background(), &empty.Empty{})
+			require.NoError(t, err)
+			require.Equal(t, version, res.VersionString.Value)
+		}},
+		{"Build", func() {
+			// must set this manually as it's set up in main() when running
+			build := "abc123"
+			cmd.Commit = build
+			res, err := c.Build(context.Background(), &empty.Empty{})
+			require.NoError(t, err)
+			require.Equal(t, build, res.BuildString.Value)
+		}},
+		{"Status", func() {
+			req := &pb.StatusRequest{}
+			res, err := c.Status(context.Background(), req)
+			require.NoError(t, err)
+			require.Equal(t, uint64(0), res.Status.ConnectedPeers)
+			require.Equal(t, false, res.Status.IsSynced)
+			require.Equal(t, uint64(10), res.Status.SyncedLayer)
+			require.Equal(t, uint64(12), res.Status.TopLayer)
+			require.Equal(t, uint64(8), res.Status.VerifiedLayer)
+		}},
+		{"SyncStart", func() {
+			require.Equal(t, false, syncer.startCalled, "Start() not yet called on syncer")
+			req := &pb.SyncStartRequest{}
+			res, err := c.SyncStart(context.Background(), req)
+			require.NoError(t, err)
+			require.Equal(t, int32(code.Code_OK), res.Status.Code)
+			require.Equal(t, true, syncer.startCalled, "Start() was called on syncer")
+		}},
+		{"Shutdown", func() {
+			called := false
+			cmd.Cancel = func() { called = true }
+			require.Equal(t, false, called, "cmd.Shutdown() not yet called")
+			req := &pb.ShutdownRequest{}
+			res, err := c.Shutdown(context.Background(), req)
+			require.NoError(t, err)
+			require.Equal(t, int32(code.Code_OK), res.Status.Code)
+			require.Equal(t, true, called, "cmd.Shutdown() was called")
+		}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) { tc.run() })
+	}
+}
+
+func TestMeshService(t *testing.T) {
+	grpcService := NewMeshService(&networkMock, txAPI, &genTime, &SyncerMock{})
+	shutDown := launchServer(t, grpcService)
+	defer shutDown()
+
+	// start a client
+	addr := "localhost:" + strconv.Itoa(cfg.NewGrpcServerPort)
+
+	// Set up a connection to the server.
+	conn, err := grpc.Dial(addr, grpc.WithInsecure())
 	require.NoError(t, err)
-	require.Equal(t, message, response.Msg.Value)
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
+	c := pb.NewMeshServiceClient(conn)
+
+	// call echo and validate result
+	response, err := c.GenesisTime(context.Background(), &pb.GenesisTimeRequest{})
+	require.NoError(t, err)
+	require.Equal(t, uint64(genTime.GetGenesisTime().Unix()), response.Unixtime.Value)
+}
+
+func TestMultiService(t *testing.T) {
+	svc1 := NewNodeService(&networkMock, txAPI, &genTime, &SyncerMock{})
+	svc2 := NewMeshService(&networkMock, txAPI, &genTime, &SyncerMock{})
+	shutDown := launchServer(t, svc1, svc2)
+	defer shutDown()
+
+	// start a client
+	addr := "localhost:" + strconv.Itoa(cfg.NewGrpcServerPort)
+
+	// Set up a connection to the server.
+	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	require.NoError(t, err)
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
+	c1 := pb.NewNodeServiceClient(conn)
+	c2 := pb.NewMeshServiceClient(conn)
+
+	// call endpoints and validate results
+	const message = "Hello World"
+	res1, err1 := c1.Echo(context.Background(), &pb.EchoRequest{
+		Msg: &pb.SimpleString{Value: message}})
+	require.NoError(t, err1)
+	require.Equal(t, message, res1.Msg.Value)
+	res2, err2 := c2.GenesisTime(context.Background(), &pb.GenesisTimeRequest{})
+	require.NoError(t, err2)
+	require.Equal(t, uint64(genTime.GetGenesisTime().Unix()), res2.Unixtime.Value)
+
+	// Make sure that shutting down the grpc service shuts them both down
+	shutDown()
+
+	// Make sure NodeService is off
+	res1, err1 = c1.Echo(context.Background(), &pb.EchoRequest{
+		Msg: &pb.SimpleString{Value: message}})
+	require.Error(t, err1)
+	require.Contains(t, err1.Error(), "rpc error: code = Unavailable")
+
+	// Make sure MeshService is off
+	res2, err2 = c2.GenesisTime(context.Background(), &pb.GenesisTimeRequest{})
+	require.Error(t, err2)
+	require.Contains(t, err2.Error(), "rpc error: code = Unavailable")
 }
 
 func TestJsonApi(t *testing.T) {
-	shutDown := launchServer(t)
-	defer shutDown()
-
 	const message = "hello world!"
 
-	// generate request payload (api input params)
+	// we cannot start the gateway service without enabling at least one service
+	require.Equal(t, cfg.StartNodeService, false)
+	require.Equal(t, cfg.StartMeshService, false)
+	shutDown := launchServer(t)
 	payload := marshalProto(t, &pb.EchoRequest{Msg: &pb.SimpleString{Value: message}})
+	url := fmt.Sprintf("http://127.0.0.1:%d/%s", cfg.NewJSONServerPort, "v1/node/echo")
+	t.Log("sending POST request to", url)
+	_, err := http.Post(url, "application/json", strings.NewReader(payload))
+	require.Error(t, err)
+	require.Contains(t, err.Error(), fmt.Sprintf(
+		"dial tcp 127.0.0.1:%d: connect: connection refused",
+		cfg.NewJSONServerPort))
+	shutDown()
 
+	// enable services and try again
+	svc1 := NewNodeService(&networkMock, txAPI, &genTime, &SyncerMock{})
+	svc2 := NewMeshService(&networkMock, txAPI, &genTime, &SyncerMock{})
+	cfg.StartNodeService = true
+	cfg.StartMeshService = true
+	shutDown = launchServer(t, svc1, svc2)
+	defer shutDown()
+
+	// generate request payload (api input params)
+	payload = marshalProto(t, &pb.EchoRequest{Msg: &pb.SimpleString{Value: message}})
 	respBody, respStatus := callEndpoint(t, "v1/node/echo", payload)
 	require.Equal(t, http.StatusOK, respStatus)
 	var msg pb.EchoResponse
 	require.NoError(t, jsonpb.UnmarshalString(respBody, &msg))
 	require.Equal(t, message, msg.Msg.Value)
+
+	// Test MeshService
+	respBody2, respStatus2 := callEndpoint(t, "v1/mesh/genesistime", "")
+	require.Equal(t, http.StatusOK, respStatus2)
+	var msg2 pb.GenesisTimeResponse
+	require.NoError(t, jsonpb.UnmarshalString(respBody2, &msg2))
+	require.Equal(t, uint64(genTime.GetGenesisTime().Unix()), msg2.Unixtime.Value)
 }

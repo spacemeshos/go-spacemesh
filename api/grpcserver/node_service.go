@@ -9,36 +9,32 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/peers"
 	"golang.org/x/net/context"
 	"google.golang.org/genproto/googleapis/rpc/code"
-	"google.golang.org/genproto/googleapis/rpc/status"
-	"google.golang.org/grpc"
+	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // NodeService is a grpc server that provides the NodeService, which exposes node-related
 // data such as node status, software version, errors, etc. It can also be used to start
 // the sync process, or to shut down the node.
 type NodeService struct {
-	Service
 	Network     api.NetworkAPI // P2P Swarm
-	Tx          TxAPI          // Mesh
+	Tx          api.TxAPI      // Mesh
 	GenTime     api.GenesisTimeAPI
-	PeerCounter PeerCounter
+	PeerCounter api.PeerCounter
 	Syncer      api.Syncer
 }
 
-func (s NodeService) registerService() {
-	pb.RegisterNodeServiceServer(s.server, s)
+// RegisterService registers this service with a grpc server instance
+func (s NodeService) RegisterService(server *Server) {
+	pb.RegisterNodeServiceServer(server.GrpcServer, s)
 }
 
 // NewNodeService creates a new grpc service using config data.
 func NewNodeService(
-	port int, net api.NetworkAPI, tx TxAPI, genTime api.GenesisTimeAPI,
+	net api.NetworkAPI, tx api.TxAPI, genTime api.GenesisTimeAPI,
 	syncer api.Syncer) *NodeService {
-	server := grpc.NewServer(ServerOptions...)
 	return &NodeService{
-		Service: Service{
-			server: server,
-			port:   uint(port),
-		},
 		Network:     net,
 		Tx:          tx,
 		GenTime:     genTime,
@@ -50,7 +46,10 @@ func NewNodeService(
 // Echo returns the response for an echo api request. It's used for E2E tests.
 func (s NodeService) Echo(ctx context.Context, in *pb.EchoRequest) (*pb.EchoResponse, error) {
 	log.Info("GRPC NodeService.Echo")
-	return &pb.EchoResponse{Msg: &pb.SimpleString{Value: in.Msg.Value}}, nil
+	if in.Msg != nil {
+		return &pb.EchoResponse{Msg: &pb.SimpleString{Value: in.Msg.Value}}, nil
+	}
+	return nil, status.Errorf(codes.InvalidArgument, "Must include `Msg`")
 }
 
 // Version returns the version of the node software as a semver string
@@ -75,11 +74,11 @@ func (s NodeService) Status(ctx context.Context, request *pb.StatusRequest) (*pb
 	log.Info("GRPC NodeService.Status")
 	return &pb.StatusResponse{
 		Status: &pb.NodeStatus{
-			ConnectedPeers: s.PeerCounter.PeerCount(),
-			IsSynced:       s.Syncer.IsSynced(),
-			SyncedLayer:    s.Tx.LatestLayer().Uint64(),
-			TopLayer:       s.GenTime.GetCurrentLayer().Uint64(),
-			VerifiedLayer:  s.Tx.LatestLayerInState().Uint64(),
+			ConnectedPeers: s.PeerCounter.PeerCount(),            // number of connected peers
+			IsSynced:       s.Syncer.IsSynced(),                  // whether the node is synced
+			SyncedLayer:    s.Tx.LatestLayer().Uint64(),          // latest layer we saw from the network
+			TopLayer:       s.GenTime.GetCurrentLayer().Uint64(), // current layer, based on time
+			VerifiedLayer:  s.Tx.LatestLayerInState().Uint64(),   // latest verified layer
 		},
 	}, nil
 }
@@ -89,7 +88,7 @@ func (s NodeService) SyncStart(ctx context.Context, request *pb.SyncStartRequest
 	log.Info("GRPC NodeService.SyncStart")
 	s.Syncer.Start()
 	return &pb.SyncStartResponse{
-		Status: &status.Status{Code: int32(code.Code_OK)},
+		Status: &rpcstatus.Status{Code: int32(code.Code_OK)},
 	}, nil
 }
 
@@ -98,7 +97,7 @@ func (s NodeService) Shutdown(ctx context.Context, request *pb.ShutdownRequest) 
 	log.Info("GRPC NodeService.Shutdown")
 	cmd.Cancel()
 	return &pb.ShutdownResponse{
-		Status: &status.Status{Code: int32(code.Code_OK)},
+		Status: &rpcstatus.Status{Code: int32(code.Code_OK)},
 	}, nil
 }
 

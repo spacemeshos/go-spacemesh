@@ -7,6 +7,7 @@ import (
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	"github.com/spacemeshos/go-spacemesh/api/config"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
@@ -229,13 +230,36 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 	resetFlags()
 
 	// This should work too
-	Cmd.Run = func(cmd *cobra.Command, args []string) {
-		r.NoError(app.Initialize(cmd, args))
-	}
 	str, err = testArgs(app, "--grpc", "node,node")
 	r.Empty(str)
 	r.NoError(err)
 	r.Equal(true, app.Config.API.StartNodeService)
+
+	// Test enabling two services both ways
+
+	// Reset flags and config
+	resetFlags()
+	app.Config.API = config.DefaultConfig()
+
+	r.Equal(false, app.Config.API.StartNodeService)
+	r.Equal(false, app.Config.API.StartMeshService)
+	str, err = testArgs(app, "--grpc", "node,mesh")
+	r.Empty(str)
+	r.NoError(err)
+	r.Equal(true, app.Config.API.StartNodeService)
+	r.Equal(true, app.Config.API.StartMeshService)
+
+	// Reset flags and config
+	resetFlags()
+	app.Config.API = config.DefaultConfig()
+
+	r.Equal(false, app.Config.API.StartNodeService)
+	r.Equal(false, app.Config.API.StartMeshService)
+	str, err = testArgs(app, "--grpc", "node", "--grpc", "mesh")
+	r.Empty(str)
+	r.NoError(err)
+	r.Equal(true, app.Config.API.StartNodeService)
+	r.Equal(true, app.Config.API.StartMeshService)
 }
 
 func TestSpacemeshApp_JsonFlags(t *testing.T) {
@@ -326,12 +350,13 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	r := require.New(t)
 	app := NewSpacemeshApp()
 
-	// Make sure the service is not running by default
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		r.NoError(app.Initialize(cmd, args))
 		app.startAPIServices(PostMock{}, NetMock{})
 	}
 	defer app.stopServices()
+
+	// Make sure the service is not running by default
 	str, err := testArgs(app) // no args
 	r.Empty(str)
 	r.NoError(err)
