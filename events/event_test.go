@@ -125,7 +125,7 @@ func TestReportError(t *testing.T) {
 	stream := GetErrorChannel()
 	require.Nil(t, stream, "expected stream not to be initialized")
 
-	err := InitializeEventReporter("")
+	err := InitializeEventReporterWithOptions("", 1, false)
 	require.NoError(t, err)
 	stream = GetErrorChannel()
 	require.NotNil(t, stream, "expected stream to be initialized")
