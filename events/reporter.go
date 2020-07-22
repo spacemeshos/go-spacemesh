@@ -5,10 +5,18 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/timesync"
+	"sync"
 )
 
 // reporter is the event reporter singleton.
 var reporter *EventReporter
+
+// we use a mutex to ensure thread safety
+var mu sync.RWMutex
+
+func init() {
+	mu = sync.RWMutex{}
+}
 
 // ReportNewTx dispatches incoming events to the reporter singleton
 func ReportNewTx(tx *types.Transaction) {
@@ -24,6 +32,8 @@ func ReportNewTx(tx *types.Transaction) {
 
 // ReportTxWithValidity reports a tx along with whether it was just invalidated
 func ReportTxWithValidity(tx *types.Transaction, valid bool) {
+	mu.RLock()
+	defer mu.RUnlock()
 	txWithValidity := TransactionWithValidity{
 		Transaction: tx,
 		Valid:       valid,
@@ -50,6 +60,9 @@ func ReportValidTx(tx *types.Transaction, valid bool) {
 
 // ReportNewActivation reports a new activation
 func ReportNewActivation(activation *types.ActivationTx) {
+	mu.RLock()
+	defer mu.RUnlock()
+
 	Publish(NewAtx{
 		ID:      activation.ShortString(),
 		LayerID: uint64(activation.PubLayerID.GetEpoch()),
@@ -72,6 +85,9 @@ func ReportNewActivation(activation *types.ActivationTx) {
 
 // ReportRewardReceived reports a new reward
 func ReportRewardReceived(r Reward) {
+	mu.RLock()
+	defer mu.RUnlock()
+
 	Publish(RewardReceived{
 		Coinbase: r.Coinbase.String(),
 		Amount:   r.Total,
@@ -130,6 +146,9 @@ func ReportDoneCreatingBlock(eligible bool, layer uint64, error string) {
 
 // ReportNewLayer reports a new layer
 func ReportNewLayer(layer NewLayer) {
+	mu.RLock()
+	defer mu.RUnlock()
+
 	if reporter != nil {
 		if reporter.blocking {
 			reporter.channelLayer <- layer
@@ -147,6 +166,9 @@ func ReportNewLayer(layer NewLayer) {
 
 // ReportError reports an error
 func ReportError(err NodeError) {
+	mu.RLock()
+	defer mu.RUnlock()
+
 	if reporter != nil {
 		if reporter.blocking {
 			reporter.channelError <- err
@@ -175,6 +197,9 @@ func ReportError(err NodeError) {
 // full layer data, and the Reporter currently has no way to retrieve
 // full layer data.
 func ReportNodeStatusUpdate() {
+	mu.RLock()
+	defer mu.RUnlock()
+
 	if reporter != nil {
 		if reporter.blocking {
 			reporter.channelStatus <- struct{}{}
@@ -192,6 +217,9 @@ func ReportNodeStatusUpdate() {
 
 // ReportReceipt reports creation or receipt of a new tx receipt
 func ReportReceipt(r TxReceipt) {
+	mu.RLock()
+	defer mu.RUnlock()
+
 	if reporter != nil {
 		if reporter.blocking {
 			reporter.channelReceipt <- r
@@ -209,6 +237,9 @@ func ReportReceipt(r TxReceipt) {
 
 // ReportAccountUpdate reports an account whose data has been updated
 func ReportAccountUpdate(a types.Address) {
+	mu.RLock()
+	defer mu.RUnlock()
+
 	if reporter != nil {
 		if reporter.blocking {
 			reporter.channelAccount <- a
@@ -226,6 +257,9 @@ func ReportAccountUpdate(a types.Address) {
 
 // GetNewTxChannel returns a channel of new transactions
 func GetNewTxChannel() chan TransactionWithValidity {
+	mu.RLock()
+	defer mu.RUnlock()
+
 	if reporter != nil {
 		return reporter.channelTransaction
 	}
@@ -234,6 +268,9 @@ func GetNewTxChannel() chan TransactionWithValidity {
 
 // GetActivationsChannel returns a channel of activations
 func GetActivationsChannel() chan *types.ActivationTx {
+	mu.RLock()
+	defer mu.RUnlock()
+
 	if reporter != nil {
 		return reporter.channelActivation
 	}
@@ -242,6 +279,9 @@ func GetActivationsChannel() chan *types.ActivationTx {
 
 // GetLayerChannel returns a channel of all layer data
 func GetLayerChannel() chan NewLayer {
+	mu.RLock()
+	defer mu.RUnlock()
+
 	if reporter != nil {
 		return reporter.channelLayer
 	}
@@ -250,6 +290,9 @@ func GetLayerChannel() chan NewLayer {
 
 // GetErrorChannel returns a channel for node errors
 func GetErrorChannel() chan NodeError {
+	mu.RLock()
+	defer mu.RUnlock()
+
 	if reporter != nil {
 		return reporter.channelError
 	}
@@ -258,6 +301,9 @@ func GetErrorChannel() chan NodeError {
 
 // GetStatusChannel returns a channel for node status messages
 func GetStatusChannel() chan struct{} {
+	mu.RLock()
+	defer mu.RUnlock()
+
 	if reporter != nil {
 		return reporter.channelStatus
 	}
@@ -266,6 +312,9 @@ func GetStatusChannel() chan struct{} {
 
 // GetAccountChannel returns a channel for account data updates
 func GetAccountChannel() chan types.Address {
+	mu.RLock()
+	defer mu.RUnlock()
+
 	if reporter != nil {
 		return reporter.channelAccount
 	}
@@ -274,6 +323,9 @@ func GetAccountChannel() chan types.Address {
 
 // GetRewardChannel returns a channel for rewards
 func GetRewardChannel() chan Reward {
+	mu.RLock()
+	defer mu.RUnlock()
+
 	if reporter != nil {
 		return reporter.channelReward
 	}
@@ -282,6 +334,9 @@ func GetRewardChannel() chan Reward {
 
 // GetReceiptChannel returns a channel for tx receipts
 func GetReceiptChannel() chan TxReceipt {
+	mu.RLock()
+	defer mu.RUnlock()
+
 	if reporter != nil {
 		return reporter.channelReceipt
 	}
@@ -298,6 +353,8 @@ func InitializeEventReporter(url string) error {
 // a nonzero channel buffer. This is useful for testing, where we want reporting to
 // block.
 func InitializeEventReporterWithOptions(url string, bufsize int, blocking bool) error {
+	mu.Lock()
+	defer mu.Unlock()
 	if reporter != nil {
 		return errors.New("reporter is already initialized, call CloseEventReporter before reinitializing")
 	}
@@ -311,6 +368,9 @@ func InitializeEventReporterWithOptions(url string, bufsize int, blocking bool) 
 // SubscribeToLayers is used to track and report automatically every time a
 // new layer is reached.
 func SubscribeToLayers(newLayerCh timesync.LayerTimer) {
+	mu.RLock()
+	defer mu.RUnlock()
+
 	if reporter != nil {
 		// This will block, so run in a goroutine
 		go func() {
@@ -418,6 +478,8 @@ func newEventReporter(bufsize int, blocking bool) *EventReporter {
 
 // CloseEventReporter shuts down the event reporting service and closes open channels
 func CloseEventReporter() {
+	mu.Lock()
+	defer mu.Unlock()
 	if reporter != nil {
 		close(reporter.channelTransaction)
 		close(reporter.channelActivation)
