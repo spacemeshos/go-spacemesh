@@ -58,7 +58,7 @@ type Net struct {
 	logger    log.Log
 
 	listener      net.Listener
-	listenAddress *net.TCPAddr // Address to open connection: localhost:9999\
+	listenAddress *net.TCPAddr // Address to open connection: localhost:9999
 
 	isShuttingDown bool
 
@@ -252,6 +252,10 @@ func createSession(privkey p2pcrypto.PrivateKey, remotePubkey p2pcrypto.PublicKe
 // Returns established connection that local clients can send messages to or error if failed
 // to establish a connection, currently only secured connections are supported
 func (n *Net) Dial(ctx context.Context, address net.Addr, remotePubkey p2pcrypto.PublicKey) (Connection, error) {
+	if n.listenAddress == nil {
+		return nil, errors.New("net listenAddress must be set")
+	}
+
 	conn, err := n.createSecuredConnection(ctx, address, remotePubkey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to Dial. err: %v", err)

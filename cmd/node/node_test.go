@@ -10,11 +10,15 @@ import (
 	"github.com/spacemeshos/go-spacemesh/api/config"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/net"
+	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"io/ioutil"
+	inet "net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -463,4 +467,42 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	require.Equal(t, http.StatusOK, respStatus)
 	require.NoError(t, jsonpb.UnmarshalString(respBody, &msg))
 	require.Equal(t, message, msg.Msg.Value)
+}
+
+func TestSpacemeshApp_P2PInterface(t *testing.T) {
+	r := require.New(t)
+	app := NewSpacemeshApp()
+
+	addr := "127.0.0.1"
+	tcpAddr := inet.TCPAddr{IP: inet.ParseIP(addr), Port: app.Config.P2P.TCPPort}
+
+	// Initialize the network: we don't want to listen but this lets us dial out
+	l, err := node.NewNodeIdentity()
+	r.NoError(err)
+	p2pnet, err := net.NewNet(app.Config.P2P, l, log.AppLog)
+	r.NoError(err)
+	// We need to listen on a different port
+	listener, err := inet.Listen("tcp", fmt.Sprintf("%s:%d", addr, 9270))
+	r.NoError(err)
+	p2pnet.Start(listener)
+	defer p2pnet.Shutdown()
+
+	// Try to connect before we start the P2P service: this should fail
+	_, err = p2pnet.Dial(cmdp.Ctx, &tcpAddr, l.PublicKey())
+	r.Error(err)
+
+	// Start P2P services
+	app.Config.P2P.TCPInterface = addr
+	app.Config.P2P.AcquirePort = false
+	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P, log.AppLog, app.Config.DataDir())
+	r.NoError(err)
+	r.NoError(swarm.Start())
+	defer swarm.Shutdown()
+
+	// Try to connect again: this should succeed
+	conn, err := p2pnet.Dial(cmdp.Ctx, &tcpAddr, l.PublicKey())
+	r.NoError(err)
+	defer conn.Close()
+	r.Equal(fmt.Sprintf("%s:%d", addr, app.Config.P2P.TCPPort), conn.RemoteAddr().String())
+	r.Equal(l.PublicKey(), conn.RemotePublicKey())
 }

@@ -350,14 +350,14 @@ func (s *Switch) sendMessageImpl(peerPubKey p2pcrypto.PublicKey, protocol string
 	var conn net.Connection
 
 	if s.discover.IsLocalAddress(&node.Info{ID: peerPubKey.Array()}) {
-		return errors.New("can't sent message to self")
+		return errors.New("can't send message to self")
 		//TODO: if this is our neighbor it should be removed right now.
 	}
 
 	conn, err = s.cPool.GetConnectionIfExists(peerPubKey)
 
 	if err != nil {
-		return errors.New("this peers isn't a neighbor or lost connection")
+		return errors.New("this peer isn't a neighbor or connection lost")
 	}
 
 	session := conn.Session()
@@ -903,8 +903,6 @@ func (s *Switch) hasOutgoingPeer(peer p2pcrypto.PublicKey) bool {
 	return ok
 }
 
-var listeningIP = inet.ParseIP("0.0.0.0")
-
 // network methods used to accumulate os and router ports.
 
 func (s *Switch) getListeners(
@@ -927,6 +925,7 @@ func (s *Switch) getListeners(
 	}
 
 	upnpFails := 0
+	var listeningIP = inet.ParseIP(s.config.TCPInterface)
 	for {
 		tcpAddr := &inet.TCPAddr{IP: listeningIP, Port: port}
 		tcpListener, err := getTCPListener(tcpAddr)

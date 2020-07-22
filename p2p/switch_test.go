@@ -1127,7 +1127,7 @@ func TestSwarm_SendMessage(t *testing.T) {
 	//payload := service.DataBytes{Payload:[]byte("LOL")}
 
 	err := p.SendMessage(someky, proto, []byte("LOL"))
-	require.Equal(t, err, errors.New("can't sent message to self"))
+	require.Equal(t, err, errors.New("can't send message to self"))
 
 	ps.IsLocalAddressFunc = func(info *node.Info) bool {
 		return false
@@ -1138,7 +1138,7 @@ func TestSwarm_SendMessage(t *testing.T) {
 	}
 
 	err = p.SendMessage(someky, proto, []byte("LOL"))
-	require.Equal(t, err, errors.New("this peers isn't a neighbor or lost connection"))
+	require.Equal(t, err, errors.New("this peer isn't a neighbor or connection lost"))
 
 	cp.fExists = func(pk p2pcrypto.PublicKey) (connection net.Connection, err error) {
 		return net.NewConnectionMock(pk), nil
