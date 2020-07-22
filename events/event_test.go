@@ -96,7 +96,8 @@ func TestEventReporter(t *testing.T) {
 		defer wgDone.Done()
 		// report that we're listening
 		wgListening.Done()
-		require.Equal(t, globalTx, <-txStream, "expected same input and output tx")
+		txWithValidity := <-txStream
+		require.Equal(t, globalTx, txWithValidity.Transaction, "expected same input and output tx")
 	}()
 
 	// Wait until goroutine is listening
