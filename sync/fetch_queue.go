@@ -12,6 +12,7 @@ import (
 
 type fetchPoetProofFunc func(poetProofRef []byte) error
 type sValidateAtxFunc func(atx *types.ActivationTx) error
+type sFetchAtxFunc func(atx *types.ActivationTx) error
 type checkLocalFunc func(ids []types.Hash32) (map[types.Hash32]item, map[types.Hash32]item, []types.Hash32)
 
 type item interface {
@@ -235,7 +236,7 @@ func newAtxQueue(s *Syncer, fetchPoetProof fetchPoetProofFunc) *atxQueue {
 		},
 	}
 
-	q.handleFetch = updateAtxDependencies(q.invalidate, s.SyntacticallyValidateAtx, s.atxpool, fetchPoetProof)
+	q.handleFetch = updateAtxDependencies(q.invalidate, s.SyntacticallyValidateAtx, s.FetchAtxReferences, s.atxpool, fetchPoetProof, q.Log)
 	go q.work()
 	return q
 }
@@ -260,7 +261,7 @@ func (atx atxQueue) HandleAtxs(atxids []types.ATXID) ([]*types.ActivationTx, err
 	return atxs, nil
 }
 
-func updateAtxDependencies(invalidate func(id types.Hash32, valid bool), sValidateAtx sValidateAtxFunc, atxDB atxDB, fetchProof fetchPoetProofFunc) func(fj fetchJob) {
+func updateAtxDependencies(invalidate func(id types.Hash32, valid bool), sValidateAtx sValidateAtxFunc, fetchAtxRefs sFetchAtxFunc, atxDB atxDB, fetchProof fetchPoetProofFunc, logger log.Log) func(fj fetchJob) {
 	return func(fj fetchJob) {
 		fetchProofCalcID(fetchProof, fj)
 
@@ -272,15 +273,22 @@ func updateAtxDependencies(invalidate func(id types.Hash32, valid bool), sValida
 
 		for _, id := range fj.ids {
 			if atx, ok := mp[id]; ok {
-				err := sValidateAtx(atx)
+				logger.Info("atx queue work item %v atx %v", id, atx)
+				err := fetchAtxRefs(atx)
 				if err != nil {
-					log.Info("failed to validate %s %s", id.ShortString(), err)
+					log.Info("failed to fetch referenced atxs of %s %s", id.ShortString(), err)
+					invalidate(id, false)
+					continue
+				}
+				err = sValidateAtx(atx)
+				if err != nil {
+					logger.Info("failed to validate %s %s", id.ShortString(), err)
 					invalidate(id, false)
 					continue
 				}
 				err = atxDB.ProcessAtx(atx)
 				if err != nil {
-					log.Info("failed to add atx to db %s %s", id.ShortString(), err)
+					logger.Info("failed to add atx to db %s %s", id.ShortString(), err)
 					invalidate(id, false)
 					continue
 				}

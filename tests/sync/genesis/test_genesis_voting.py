@@ -20,11 +20,12 @@ from tests.utils import get_conf
 # validate no errors occurred
 # validate new node didn't receive any new blocks before being synced
 def test_unsync_while_genesis(init_session, setup_bootstrap, start_poet, add_curl):
-    time_to_create_block_since_startup = 10
+    layer_duration = int(testconfig['client']['args']['layer-duration-sec'])
+
+    time_to_create_block_since_startup = testconfig['client']['args']['layers-per-epoch'] * 2 * layer_duration
     time_before_first_block = testconfig["genesis_delta"] + time_to_create_block_since_startup
     layers_to_wait = 4
 
-    layer_duration = int(testconfig['client']['args']['layer-duration-sec'])
     bs_info = setup_bootstrap.pods[0]
     cspec = get_conf(bs_info, testconfig['client'], testconfig['genesis_delta'], setup_oracle=None,
                      setup_poet=setup_bootstrap.pods[0]['pod_ip'])

@@ -197,7 +197,7 @@ func (b *Builder) loop() {
 	}
 }
 
-func (b *Builder) buildNipstChallenge() error {
+func (b *Builder) buildNipstChallenge(currentLayer types.LayerID) error {
 	<-b.syncer.Await()
 	challenge := &types.NIPSTChallenge{NodeID: b.nodeID}
 	if posAtx, err := b.GetPositioningAtx(); err != nil {
@@ -205,6 +205,7 @@ func (b *Builder) buildNipstChallenge() error {
 			return fmt.Errorf("failed to get positioning ATX: %v", err)
 		}
 		challenge.EndTick = b.tickProvider.NumOfTicks()
+		challenge.PubLayerID = currentLayer.Add(b.layersPerEpoch)
 	} else {
 		challenge.PositioningATX = posAtx.ID()
 		challenge.PubLayerID = posAtx.PubLayerID.Add(b.layersPerEpoch)
@@ -360,7 +361,7 @@ func (b *Builder) PublishActivationTx() error {
 		b.log.With().Info("using existing atx challenge", b.currentEpoch())
 	} else {
 		b.log.With().Info("building new atx challenge", b.currentEpoch())
-		err := b.buildNipstChallenge()
+		err := b.buildNipstChallenge(b.layerClock.GetCurrentLayer())
 		if err != nil {
 			return err
 		}

@@ -389,15 +389,22 @@ func (s *Syncer) handleLayersTillCurrent() {
 // handle the current consensus layer if its is older than s.ValidationDelta
 func (s *Syncer) handleCurrentLayer() error {
 	curr := s.GetCurrentLayer()
-	if s.LatestLayer() == curr && time.Now().Sub(s.LayerToTime(s.LatestLayer())) > s.ValidationDelta || curr.GetEpoch().IsGenesis() {
+	if s.LatestLayer() == curr && time.Now().Sub(s.LayerToTime(s.LatestLayer())) > s.ValidationDelta {
 		if err := s.getAndValidateLayer(s.LatestLayer()); err != nil {
 			if err != database.ErrNotFound {
 				s.Panic("failed handling current layer  currentLayer=%v lastTicked=%v err=%v ", s.LatestLayer(), s.GetCurrentLayer(), err)
 			}
-			s.Info("setting zero layer %v", curr)
 			if err := s.SetZeroBlockLayer(curr); err != nil {
 				return err
 			}
+		}
+	}
+
+	if s.LatestLayer() + 1 == curr && curr.GetEpoch().IsGenesis() {
+		_, err := s.GetLayer(s.LatestLayer())
+		if err == database.ErrNotFound {
+			err := s.SetZeroBlockLayer(s.LatestLayer())
+			return err
 		}
 	}
 	return nil
@@ -616,26 +623,54 @@ func validateUniqueTxAtx(b *types.Block) error {
 	return nil
 }
 
-func (s *Syncer) blockSyntacticValidation(block *types.Block) ([]*types.Transaction, []*types.ActivationTx, error) {
-	if block.RefBlock != nil {
-		_, err := s.GetBlock(*block.RefBlock)
-		if err != nil {
-			s.Log.Info("fetching block %v", *block.RefBlock)
-			fetched := s.fetchBlock(*block.RefBlock)
-			if !fetched {
-				return nil, nil, fmt.Errorf("failed to fetch ref block %v", *block.RefBlock)
-			}
-		}
-	} else {
-		if block.ActiveSet == nil {
-			return nil, nil, errNoActiveSet
-		}
-		if len(*block.ActiveSet) == 0 {
-			return nil, nil, errZeroActiveSet
+func (s *Syncer) fetchRefBlock(block *types.Block) error {
+	if block.RefBlock == nil {
+		return fmt.Errorf("called fetch ref block with nil ref block %v", block.ID())
+	}
+	_, err := s.GetBlock(*block.RefBlock)
+	if err != nil {
+		s.Log.Info("fetching block %v", *block.RefBlock)
+		fetched := s.fetchBlock(*block.RefBlock)
+		if !fetched {
+			return fmt.Errorf("failed to fetch ref block %v", *block.RefBlock)
 		}
 	}
+	return nil
+}
 
+func (s *Syncer) fetchAllReferencedAtxs(blk *types.Block) error {
+	atxs := []types.ATXID{blk.ATXID}
+	if blk.ActiveSet != nil {
+		if len(*blk.ActiveSet) > 0 {
+			atxs = append(atxs, *blk.ActiveSet...)
+		} else {
+			return errZeroActiveSet
+		}
+	} else {
+		if blk.RefBlock == nil {
+			return errNoActiveSet
+		}
+	}
+	_, err := s.atxQueue.HandleAtxs(atxs)
+	return err
+}
+
+func (s *Syncer) fetchBlockDataForValidation(blk *types.Block) error {
+	if blk.RefBlock != nil {
+		err := s.fetchRefBlock(blk)
+		if err != nil {
+			return err
+		}
+	}
+	return s.fetchAllReferencedAtxs(blk)
+}
+
+func (s *Syncer) blockSyntacticValidation(block *types.Block) ([]*types.Transaction, []*types.ActivationTx, error) {
 	// validate unique tx atx
+	if err := s.fetchBlockDataForValidation(block); err != nil {
+		return nil, nil, err
+	}
+
 	if err := s.fastValidation(block); err != nil {
 		return nil, nil, err
 	}
@@ -682,6 +717,38 @@ func (s *Syncer) validateBlockView(blk *types.Block) bool {
 	}
 
 	return <-ch
+}
+
+func (s *Syncer) fetchAtx(ID types.ATXID) (*types.ActivationTx, error) {
+	atxs, err := s.atxQueue.HandleAtxs([]types.ATXID{ID})
+	if err != nil {
+		return nil, err
+	}
+	if len(atxs) == 0 {
+		return nil, fmt.Errorf("ATX %v not fetched", ID.ShortString())
+	}
+	return atxs[0], nil
+}
+
+func (s *Syncer) FetchAtxReferences(atx *types.ActivationTx) error {
+	if atx.PositioningATX != *types.EmptyATXID {
+		s.Log.Info("going to fetch pos atx %v of atx %v", atx.PositioningATX.ShortString(), atx.ID().ShortString())
+		_, err := s.fetchAtx(atx.PositioningATX)
+		if err != nil {
+			return err
+		}
+	}
+
+	if atx.PrevATXID != *types.EmptyATXID {
+		s.Log.Info("going to fetch prev atx %v of atx %v", atx.PrevATXID.ShortString(), atx.ID().ShortString())
+		_, err := s.fetchAtx(atx.PrevATXID)
+		if err != nil {
+			return err
+		}
+	}
+	s.Log.Info("done fetching references for atx %v", atx.ID().ShortString())
+
+	return nil
 }
 
 func (s *Syncer) fetchBlock(ID types.BlockID) bool {
@@ -758,7 +825,7 @@ func (s *Syncer) dataAvailability(blk *types.Block) ([]*types.Transaction, []*ty
 
 	var atxres []*types.ActivationTx
 	var atxerr error
-	if blk.ActiveSet != nil {
+	/*if blk.ActiveSet != nil {
 		wg.Add(1)
 		go func() {
 			atxs := []types.ATXID{blk.ATXID}
@@ -770,7 +837,7 @@ func (s *Syncer) dataAvailability(blk *types.Block) ([]*types.Transaction, []*ty
 		}()
 	}
 
-	wg.Wait()
+	wg.Wait()*/
 
 	if txerr != nil {
 		return nil, nil, fmt.Errorf("failed fetching block %v transactions %v", blk.ID(), txerr)
@@ -834,6 +901,8 @@ func (s *Syncer) fetchLayerBlockIds(m map[types.Hash32][]p2ppeers.Peer, lyr type
 
 	return ids, nil
 }
+
+
 
 type peerHashPair struct {
 	peer p2ppeers.Peer

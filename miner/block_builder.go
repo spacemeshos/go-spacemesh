@@ -292,7 +292,7 @@ func (t *BlockBuilder) createBlock(id types.LayerID, atxID types.ATXID, eligibil
 	epoch := id.GetEpoch()
 	refBlock, err := t.getRefBlock(epoch)
 	if err != nil {
-		atxs := t.AtxDb.GetEpochAtxs(id.GetEpoch())
+		atxs := t.AtxDb.GetEpochAtxs(id.GetEpoch() - 1)
 		b.ActiveSet = &atxs
 	} else {
 		b.RefBlock = &refBlock

@@ -681,7 +681,7 @@ func TestBuilder_NipstPublishRecovery(t *testing.T) {
 	assert.Equal(t, bts, net.lastTransmission)
 
 	b = NewBuilder(id, coinbase, &MockSigning{}, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipstBuilder, postProver, layerClockMock, &mockSyncer{}, db, lg.WithName("atxBuilder"))
-	err = b.buildNipstChallenge()
+	err = b.buildNipstChallenge(0)
 	assert.NoError(t, err)
 	db.hadNone = false
 	// test load challenge in later epoch - Nipst should be truncated

@@ -753,6 +753,12 @@ func (db *DB) HandleGossipAtx(data service.GossipMessage, syncer service.Syncer)
 		return
 	}
 
+	if err := syncer.FetchAtxReferences(atx); err != nil {
+		db.log.With().Warning("received ATX with missing references of prev or pos id",
+			atx.ID(), atx.PrevATXID, atx.PositioningATX, log.Err(err))
+		return
+	}
+
 	err = db.SyntacticallyValidateAtx(atx)
 	events.Publish(events.ValidAtx{ID: atx.ShortString(), Valid: err == nil})
 	if err != nil {

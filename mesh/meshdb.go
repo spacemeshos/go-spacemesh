@@ -238,7 +238,9 @@ func (m *DB) LayerBlockIds(index types.LayerID) ([]types.BlockID, error) {
 	}
 
 	if len(idsBytes) == 0 {
-		return nil, fmt.Errorf("no ids for layer %v in database ", index)
+		//zero block layer
+		return []types.BlockID{}, nil
+		//return nil, fmt.Errorf("no ids for layer %v in database ", index)
 	}
 
 	blockIds, err := types.BytesToBlockIds(idsBytes)

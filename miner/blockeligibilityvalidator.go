@@ -95,15 +95,10 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 		return false, fmt.Errorf("failed to get number of eligible blocks: %v", err)
 	}
 
-	numberOfEligibleBlocks, err = getNumberOfEligibleBlocks(activeSetSize, v.committeeSize, v.layersPerEpoch)
-	if err != nil {
-		return false, fmt.Errorf("failed to get number of eligible blocks: %v", err)
-	}
-
 	counter := block.EligibilityProof.J
 	if counter >= numberOfEligibleBlocks {
-		return false, fmt.Errorf("proof counter (%d) must be less than number of eligible blocks (%d)", counter,
-			numberOfEligibleBlocks)
+		return false, fmt.Errorf("proof counter (%d) must be less than number of eligible blocks (%d), activeset %v", counter,
+			numberOfEligibleBlocks, activeSetSize, v.committeeSize)
 	}
 
 	epochBeacon := v.beaconProvider.GetBeacon(epochNumber)

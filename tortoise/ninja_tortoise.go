@@ -443,7 +443,11 @@ func (ni *ninjaTortoise) addPatternVote(p votingPattern, view map[types.BlockID]
 		for _, ex := range vp {
 			blocks, err := ni.db.LayerBlockIds(ex.Layer())
 			if err != nil {
-				ni.logger.Panic("could not retrieve layer block ids %v", ex.Layer())
+				if ex.Layer() == 0 {
+					log.Warning("block %v int layer %v voted on zero layer", blk.ID().String(), blk.Layer())
+					continue
+				}
+				ni.logger.Panic("could not retrieve layer block ids %v error %v", ex.Layer(), err)
 			}
 
 			// explicitly abstain

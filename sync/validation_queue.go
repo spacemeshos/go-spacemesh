@@ -19,6 +19,7 @@ type syncer interface {
 	getValidatingLayer() types.LayerID
 	fastValidation(block *types.Block) error
 	blockCheckLocal(blockIds []types.Hash32) (map[types.Hash32]item, map[types.Hash32]item, []types.Hash32)
+	fetchBlockDataForValidation(blk *types.Block) error
 }
 
 type blockQueue struct {
@@ -86,6 +87,11 @@ func (vq *blockQueue) handleBlocks(bjb fetchJob) {
 
 func (vq *blockQueue) handleBlock(id types.Hash32, block *types.Block) {
 	vq.With().Info("start handling", block.ID(), block.MinerID())
+	if err := vq.fetchBlockDataForValidation(block); err != nil {
+		vq.Error("block fetching data failed", block.ID(), log.Err(err))
+		vq.updateDependencies(id, false)
+		return
+	}
 	if err := vq.fastValidation(block); err != nil {
 		vq.Error("block validation failed", block.ID(), log.Err(err))
 		vq.updateDependencies(id, false)
