@@ -528,6 +528,8 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
+		// This makes sure the test doesn't end until this goroutine closes
+		defer wg.Done()
 		str, err := testArgs(app,
 			"--grpc-port-new", "1234",
 			"--grpc", "node",
@@ -538,7 +540,6 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 		)
 		require.Empty(t, str)
 		require.NoError(t, err)
-		wg.Done()
 	}()
 
 	// Wait for the app and services to start
@@ -606,15 +607,16 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 
 		// Let the test end
 		once.Do(oncebody)
-
-		// Wait for the app to close
-		wg.Wait()
 	}()
 
 	streamStatus, err := c.StatusStream(context.Background(), &pb.StatusStreamRequest{})
 	require.NoError(t, err)
 
+	wg.Add(1)
 	go func() {
+		// This makes sure the test doesn't end until this goroutine closes
+		defer wg.Done()
+
 		// We don't really control the order in which these are received,
 		// unlike the errorStream. So just loop and listen here while the
 		// app is running, and make sure there are no errors.
@@ -667,7 +669,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	// This stops the app
 	cmdp.Cancel()
 
-	// Wait for it to stop
+	// Wait for everything to stop cleanly before ending test
 	wg.Wait()
 }
 
