@@ -725,6 +725,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	// have started, we could add separate channels for that, but it seems
 	// to work well enough for testing.
 	<-app.started
+	time.Sleep(2 * time.Second)
 
 	// Set up a new connection to the server
 	conn, err := grpc.Dial("localhost:1234", grpc.WithInsecure())
@@ -749,11 +750,9 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	wg2 := sync.WaitGroup{}
 	wg2.Add(1)
 	go func() {
-		//defer wg2.Done()
 		// Make sure the channel is closed if we encounter an unexpected
 		// error, but don't close the channel twice if we don't!
 		var once sync.Once
-		//oncebody := func() { close(end) }
 		oncebody := func() { wg2.Done() }
 		defer once.Do(oncebody)
 
