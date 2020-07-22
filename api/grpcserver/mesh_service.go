@@ -295,10 +295,6 @@ func (s MeshService) readLayer(layer *types.Layer, layerStatus pb.Layer_LayerSta
 
 		var pbTxs []*pb.Transaction
 		for _, t := range txs {
-			if t == nil {
-				log.Error("got empty transaction data from layer %v", layer.Index())
-				return nil, status.Errorf(codes.Internal, "error retrieving tx data")
-			}
 			pbTxs = append(pbTxs, convertTransaction(t))
 		}
 		blocks = append(blocks, &pb.Block{
