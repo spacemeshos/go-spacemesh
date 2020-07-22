@@ -71,8 +71,7 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().IntVar(&config.P2P.TCPPort, "tcp-port",
 		config.P2P.TCPPort, "inet port for P2P listener")
 	cmd.PersistentFlags().StringVar(&config.P2P.TCPInterface, "tcp-interface",
-		config.P2P.TCPInterface, "inet interface for P2P listener, "+
-			"specify as IP address, default is to listen on all interfaces")
+		config.P2P.TCPInterface, "inet interface for P2P listener, specify as IP address")
 	cmd.PersistentFlags().BoolVar(&config.P2P.AcquirePort, "acquire-port",
 		config.P2P.AcquirePort, "Should the node attempt to forward the port to this machine on a NAT?")
 	cmd.PersistentFlags().DurationVar(&config.P2P.DialTimeout, "dial-timeout",
