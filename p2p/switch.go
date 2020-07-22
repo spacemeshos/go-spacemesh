@@ -350,14 +350,14 @@ func (s *Switch) sendMessageImpl(peerPubKey p2pcrypto.PublicKey, protocol string
 	var conn net.Connection
 
 	if s.discover.IsLocalAddress(&node.Info{ID: peerPubKey.Array()}) {
-		return errors.New("can't sent message to self")
+		return errors.New("can't send message to self")
 		//TODO: if this is our neighbor it should be removed right now.
 	}
 
 	conn, err = s.cPool.GetConnectionIfExists(peerPubKey)
 
 	if err != nil {
-		return errors.New("this peers isn't a neighbor or lost connection")
+		return errors.New("this peer isn't a neighbor or connection lost")
 	}
 
 	session := conn.Session()
