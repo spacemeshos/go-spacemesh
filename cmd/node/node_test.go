@@ -182,6 +182,7 @@ func resetFlags() {
 }
 
 func TestSpacemeshApp_GrpcFlags(t *testing.T) {
+	events.CloseEventReporter()
 	r := require.New(t)
 	app := NewSpacemeshApp()
 	r.Equal(9092, app.Config.API.NewGrpcServerPort)
@@ -277,6 +278,7 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 }
 
 func TestSpacemeshApp_JsonFlags(t *testing.T) {
+	events.CloseEventReporter()
 	resetFlags()
 
 	r := require.New(t)
@@ -359,6 +361,7 @@ func callEndpoint(t *testing.T, endpoint, payload string, port int) (string, int
 }
 
 func TestSpacemeshApp_GrpcService(t *testing.T) {
+	events.CloseEventReporter()
 	resetFlags()
 
 	r := require.New(t)
@@ -424,6 +427,7 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 }
 
 func TestSpacemeshApp_JsonService(t *testing.T) {
+	events.CloseEventReporter()
 	resetFlags()
 
 	r := require.New(t)
@@ -440,6 +444,10 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	r.NoError(err)
 	r.Equal(false, app.Config.API.StartNewJSONServer)
 	r.Equal(false, app.Config.API.StartNodeService)
+	r.Equal(false, app.Config.API.StartMeshService)
+	r.Equal(false, app.Config.API.StartGlobalStateService)
+	r.Equal(false, app.Config.API.StartSmesherService)
+	r.Equal(false, app.Config.API.StartTransactionService)
 
 	// Try talking to the server
 	const message = "nihao shijie"
@@ -456,10 +464,16 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 		app.Config.API.NewJSONServerPort))
 
 	resetFlags()
+	events.CloseEventReporter()
 
 	// Test starting the JSON server from the commandline
 	// uses Cmd.Run from above
-	str, err = testArgs(app, "--json-server-new", "--grpc", "node", "--json-port-new", "1234")
+	str, err = testArgs(app,
+		"--json-server-new",
+		"--grpc", "node",
+		"--json-port-new", "1234",
+		//"--grpc-interface-new", "127.0.0.1",
+	)
 	r.Empty(str)
 	r.NoError(err)
 	r.Equal(1234, app.Config.API.NewJSONServerPort)
@@ -470,7 +484,8 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	time.Sleep(2 * time.Second)
 
 	// We expect this one to succeed
-	respBody, respStatus := callEndpoint(t, "v1/node/echo", payload, 1234)
+	respBody, respStatus := callEndpoint(t, "v1/node/echo", payload, app.Config.API.NewJSONServerPort)
+	log.Info("Got echo response: %v", respBody)
 	var msg pb.EchoResponse
 	r.NoError(jsonpb.UnmarshalString(respBody, &msg))
 	r.Equal(message, msg.Msg.Value)
@@ -485,6 +500,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	// test may leak into this test
 	time.Sleep(3 * time.Second)
 
+	events.CloseEventReporter()
 	resetFlags()
 
 	app := NewSpacemeshApp()
@@ -657,6 +673,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 
 // E2E app test of the transaction service
 func TestSpacemeshApp_TransactionService(t *testing.T) {
+	events.CloseEventReporter()
 	resetFlags()
 
 	old := log.Level() <= zapcore.DebugLevel
