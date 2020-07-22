@@ -38,8 +38,20 @@ func (s *JSONHTTPServer) Close() error {
 // StartService starts the json api server and listens for status (started, stopped).
 func (s *JSONHTTPServer) StartService(startNodeService bool, startMeshService bool,
 	startGlobalStateService bool, startSmesherService bool, startTransactionService bool) {
+
+	// This will block, so run it in a goroutine
+	go s.startInternal(
+		startNodeService, startMeshService, startGlobalStateService, startSmesherService,
+		startTransactionService)
+}
+
+func (s *JSONHTTPServer) startInternal(startNodeService bool, startMeshService bool,
+	startGlobalStateService bool, startSmesherService bool, startTransactionService bool) {
 	ctx, cancel := context.WithCancel(cmdp.Ctx)
+
+	// This will close all downstream connections when the server closes
 	defer cancel()
+
 	mux := runtime.NewServeMux()
 	opts := []grpc.DialOption{grpc.WithInsecure()}
 
@@ -101,8 +113,6 @@ func (s *JSONHTTPServer) StartService(startNodeService bool, startMeshService bo
 		Handler: mux,
 	}
 
-	// This call is blocking, and only returns an error
-	go func() {
-		log.Error("error from grpc http listener: %v", s.server.ListenAndServe())
-	}()
+	// This will block
+	log.Error("error from grpc http listener: %v", s.server.ListenAndServe())
 }
