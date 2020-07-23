@@ -34,7 +34,7 @@ func NewGlobalStateService(
 		Network:     net,
 		Mesh:        tx,
 		GenTime:     genTime,
-		PeerCounter: peers.NewPeers(net, log.NewDefault("grpc_server.GlobalStateService")),
+		PeerCounter: peers.NewPeers(net, log.NewDefault("grpcserver.GlobalStateService")),
 		Syncer:      syncer,
 	}
 }
