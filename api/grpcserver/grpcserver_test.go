@@ -1416,7 +1416,7 @@ func TestMeshService(t *testing.T) {
 }
 
 func TestTransactionService(t *testing.T) {
-	grpcService := NewTransactionService(&networkMock, txAPI, txMempool, &genTime, &SyncerMock{})
+	grpcService := NewTransactionService(&networkMock, txAPI, txMempool)
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 

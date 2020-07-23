@@ -8,7 +8,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/miner"
-	"github.com/spacemeshos/go-spacemesh/p2p/peers"
 	"golang.org/x/net/context"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
@@ -18,12 +17,9 @@ import (
 
 // TransactionService exposes transaction data, and a submit tx endpoint
 type TransactionService struct {
-	Network     api.NetworkAPI // P2P Swarm
-	Mesh        api.TxAPI      // Mesh
-	Mempool     *miner.TxMempool
-	GenTime     api.GenesisTimeAPI
-	PeerCounter api.PeerCounter
-	Syncer      api.Syncer
+	Network api.NetworkAPI // P2P Swarm
+	Mesh    api.TxAPI      // Mesh
+	Mempool *miner.TxMempool
 }
 
 // RegisterService registers this service with a grpc server instance
@@ -33,15 +29,11 @@ func (s TransactionService) RegisterService(server *Server) {
 
 // NewTransactionService creates a new grpc service using config data.
 func NewTransactionService(
-	net api.NetworkAPI, tx api.TxAPI, mempool *miner.TxMempool, genTime api.GenesisTimeAPI,
-	syncer api.Syncer) *TransactionService {
+	net api.NetworkAPI, tx api.TxAPI, mempool *miner.TxMempool) *TransactionService {
 	return &TransactionService{
-		Network:     net,
-		Mesh:        tx,
-		Mempool:     mempool,
-		GenTime:     genTime,
-		PeerCounter: peers.NewPeers(net, log.NewDefault("grpc_server.TransactionService")),
-		Syncer:      syncer,
+		Network: net,
+		Mesh:    tx,
+		Mempool: mempool,
 	}
 }
 

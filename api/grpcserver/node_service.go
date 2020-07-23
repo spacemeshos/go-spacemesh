@@ -36,7 +36,7 @@ func NewNodeService(
 	return &NodeService{
 		Mesh:        tx,
 		GenTime:     genTime,
-		PeerCounter: peers.NewPeers(net, log.NewDefault("grpc_server.NodeService")),
+		PeerCounter: peers.NewPeers(net, log.NewDefault("grpcserver.NodeService")),
 		Syncer:      syncer,
 	}
 }

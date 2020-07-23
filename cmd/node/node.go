@@ -729,7 +729,7 @@ func (app *SpacemeshApp) startAPIServices(postClient api.PostAPI, net api.Networ
 		registerService(grpcserver.NewSmesherService(app.atxBuilder))
 	}
 	if apiConf.StartTransactionService {
-		registerService(grpcserver.NewTransactionService(net, app.mesh, app.txPool, app.clock, app.syncer))
+		registerService(grpcserver.NewTransactionService(net, app.mesh, app.txPool))
 	}
 
 	// Now that the services are registered, start the server.
