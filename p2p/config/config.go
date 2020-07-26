@@ -16,6 +16,10 @@ const (
 	NodesDirectoryName = "nodes"
 	// UnlimitedMsgSize is a constant used to check whether message size is set to unlimited size
 	UnlimitedMsgSize = 0
+	// defaultTCPPort is the inet port that P2P listens on by default
+	defaultTCPPort = 7513
+	// defaultTCPInterface is the inet interface that P2P listens on by default
+	defaultTCPInterface = "0.0.0.0"
 )
 
 // Values specifies default values for node config params.
@@ -38,6 +42,7 @@ func duration(duration string) (dur time.Duration) {
 // Config defines the configuration options for the Spacemesh peer-to-peer networking layer
 type Config struct {
 	TCPPort               int           `mapstructure:"tcp-port"`
+	TCPInterface          string        `mapstructure:"tcp-interface"`
 	AcquirePort           bool          `mapstructure:"acquire-port"`
 	NodeID                string        `mapstructure:"node-id"`
 	DialTimeout           time.Duration `mapstructure:"dial-timeout"`
@@ -79,7 +84,8 @@ func DefaultConfig() Config {
 	}
 
 	return Config{
-		TCPPort:               7513,
+		TCPPort:               defaultTCPPort,
+		TCPInterface:          defaultTCPInterface,
 		AcquirePort:           true,
 		NodeID:                "",
 		DialTimeout:           duration("1m"),

@@ -96,6 +96,8 @@ type BaseConfig struct {
 
 	AtxsPerBlock int `mapstructure:"atxs-per-block"`
 
+	TxsPerBlock int `mapstructure:"txs-per-block"`
+
 	BlockCacheSize int `mapstructure:"block-cache-size"`
 }
 
@@ -162,6 +164,7 @@ func defaultBaseConfig() BaseConfig {
 		SyncInterval:        10,
 		SyncValidationDelta: 30,
 		AtxsPerBlock:        100,
+		TxsPerBlock:         200,
 	}
 }
 

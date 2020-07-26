@@ -1,3 +1,6 @@
+// NOTE: the contents of this file will soon be deprecated. See
+// grpcserver/grpc.go for the new implementation.
+
 // Package api provides the local go-spacemesh API endpoints. e.g. json-http and grpc-http2
 package api
 
@@ -23,11 +26,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/p2p/peers"
 )
-
-// PeerCounter is an api to get amount of connected peers
-type PeerCounter interface {
-	PeerCount() uint64
-}
 
 // SpacemeshGrpcService is a grpc server providing the Spacemesh api
 type SpacemeshGrpcService struct {
@@ -228,26 +226,6 @@ func (s SpacemeshGrpcService) Close() error {
 	s.Server.Stop()
 	log.Debug("grpc service stopped...")
 	return nil
-}
-
-// Syncer is the API to get sync status
-type Syncer interface {
-	IsSynced() bool
-}
-
-// TxAPI is an api for getting transaction transaction status
-type TxAPI interface {
-	AddressExists(addr types.Address) bool
-	ValidateNonceAndBalance(transaction *types.Transaction) error
-	GetRewards(account types.Address) (rewards []types.Reward, err error)
-	GetTransactionsByDestination(l types.LayerID, account types.Address) (txs []types.TransactionID)
-	GetTransactionsByOrigin(l types.LayerID, account types.Address) (txs []types.TransactionID)
-	LatestLayer() types.LayerID
-	GetLayerApplied(txID types.TransactionID) *types.LayerID
-	GetTransaction(id types.TransactionID) (*types.Transaction, error)
-	GetProjection(addr types.Address, prevNonce, prevBalance uint64) (nonce, balance uint64, err error)
-	LatestLayerInState() types.LayerID
-	GetStateRoot() types.Hash32
 }
 
 // NewGrpcService create a new grpc service using config data.

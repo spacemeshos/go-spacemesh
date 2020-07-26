@@ -20,9 +20,6 @@ import (
 	"time"
 )
 
-// MaxTransactionsPerBlock indicates the maximum transactions a block can reference
-const MaxTransactionsPerBlock = 200 //todo: move to config (#1924)
-
 const defaultGasLimit = 10
 const defaultFee = 1
 
@@ -91,6 +88,7 @@ type BlockBuilder struct {
 	syncer           syncer
 	started          bool
 	atxsPerBlock     int // number of atxs to select per block
+	txsPerBlock      int // max number of tx to select per block
 	layersPerEpoch   uint16
 	projector        projector
 }
@@ -98,8 +96,8 @@ type BlockBuilder struct {
 // NewBlockBuilder creates a struct of block builder type.
 func NewBlockBuilder(minerID types.NodeID, sgn signer, net p2p.Service, beginRoundEvent chan types.LayerID, hdist int,
 	txPool txPool, atxPool *AtxMemPool, weakCoin weakCoinProvider, orph meshProvider, hare hareResultProvider,
-	blockOracle blockOracle, txValidator txValidator, atxValidator atxValidator, syncer syncer, atxsPerBlock int,
-	layersPerEpoch uint16, projector projector, lg log.Log) *BlockBuilder {
+	blockOracle blockOracle, txValidator txValidator, atxValidator atxValidator, syncer syncer, txsPerBlock int,
+	atxsPerBlock int, layersPerEpoch uint16, projector projector, lg log.Log) *BlockBuilder {
 
 	seed := binary.BigEndian.Uint64(md5.New().Sum([]byte(minerID.Key)))
 
@@ -126,6 +124,7 @@ func NewBlockBuilder(minerID types.NodeID, sgn signer, net p2p.Service, beginRou
 		syncer:           syncer,
 		started:          false,
 		atxsPerBlock:     atxsPerBlock,
+		txsPerBlock:      txsPerBlock,
 		layersPerEpoch:   layersPerEpoch,
 		projector:        projector,
 	}
@@ -471,7 +470,7 @@ func (t *BlockBuilder) acceptBlockData() {
 			}
 
 			for _, eligibilityProof := range proofs {
-				txList, err := t.TransactionPool.GetTxsForBlock(MaxTransactionsPerBlock, t.projector.GetProjection)
+				txList, err := t.TransactionPool.GetTxsForBlock(t.txsPerBlock, t.projector.GetProjection)
 				if err != nil {
 					events.Publish(events.DoneCreatingBlock{Eligible: true, Layer: uint64(layerID), Error: "failed to get txs for block"})
 					t.With().Error("failed to get txs for block", layerID, log.Err(err))

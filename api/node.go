@@ -16,9 +16,7 @@ type Service interface {
 // StateAPI is an API to global state
 type StateAPI interface {
 	GetBalance(address types.Address) uint64
-
 	GetNonce(address types.Address) uint64
-
 	Exist(address types.Address) bool
 }
 
@@ -55,4 +53,30 @@ type LoggingAPI interface {
 // PostAPI is an API for post init module
 type PostAPI interface {
 	Reset() error
+}
+
+// Syncer is the API to get sync status and to start sync
+type Syncer interface {
+	IsSynced() bool
+	Start()
+}
+
+// TxAPI is an api for getting transaction status
+type TxAPI interface {
+	AddressExists(addr types.Address) bool
+	ValidateNonceAndBalance(transaction *types.Transaction) error
+	GetRewards(account types.Address) (rewards []types.Reward, err error)
+	GetTransactionsByDestination(l types.LayerID, account types.Address) (txs []types.TransactionID)
+	GetTransactionsByOrigin(l types.LayerID, account types.Address) (txs []types.TransactionID)
+	LatestLayer() types.LayerID
+	GetLayerApplied(txID types.TransactionID) *types.LayerID
+	GetTransaction(id types.TransactionID) (*types.Transaction, error)
+	GetProjection(addr types.Address, prevNonce, prevBalance uint64) (nonce, balance uint64, err error)
+	LatestLayerInState() types.LayerID
+	GetStateRoot() types.Hash32
+}
+
+// PeerCounter is an api to get amount of connected peers
+type PeerCounter interface {
+	PeerCount() uint64
 }

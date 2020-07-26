@@ -20,7 +20,7 @@ LDFLAGS = -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.
 
 PKGS = $(shell go list ./...)
 
-PLATFORMS := windows linux darwin
+PLATFORMS := windows linux darwin freebsd
 os = $(word 1, $@)
 
 ifeq ($(BRANCH),develop)
@@ -180,6 +180,8 @@ list-versions:
 
 
 dockerbuild-go:
+	# Must remove binaries or they will be copied into the container
+	rm -rf devtools/
 	docker build -t $(DOCKER_IMAGE_REPO):$(BRANCH) .
 .PHONY: dockerbuild-go
 
