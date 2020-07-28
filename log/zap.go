@@ -9,9 +9,6 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-// NilLogger is a not initialized logger it will panic if you'll call methods on it.
-var NilLogger Log
-
 // Log is an exported type that embeds our logger.
 type Log struct {
 	logger *zap.Logger

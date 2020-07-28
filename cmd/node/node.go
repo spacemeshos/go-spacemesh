@@ -272,14 +272,12 @@ func (app *SpacemeshApp) Initialize(cmd *cobra.Command, args []string) (err erro
 
 // setupLogging configured the app logging system.
 func (app *SpacemeshApp) setupLogging() {
-
 	if app.Config.TestMode {
 		log.JSONLog(true)
 	}
 
 	// app-level logging
 	log.InitSpacemeshLoggingSystem()
-
 	log.Info("%s", app.getAppInfo())
 
 	if app.Config.PublishEventsURL != "" {
@@ -352,8 +350,9 @@ func (weakCoinStub) GetResult() bool {
 	return true
 }
 
+// Wrap the top-level logger to add context info and set the level for a
+// specific module.
 func (app *SpacemeshApp) addLogger(name string, logger log.Log) log.Log {
-	log.Level()
 	lvl := zap.NewAtomicLevel()
 	var err error
 
@@ -414,6 +413,7 @@ func (app *SpacemeshApp) addLogger(name string, logger log.Log) log.Log {
 		log.Error("cannot parse logging for %v error %v", name, err)
 		lvl.SetLevel(log.Level())
 	}
+
 	app.loggers[name] = &lvl
 	return logger.SetLevel(&lvl).WithName(name)
 }
