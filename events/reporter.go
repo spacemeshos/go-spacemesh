@@ -2,6 +2,7 @@ package events
 
 import (
 	"errors"
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/timesync"
@@ -152,13 +153,13 @@ func ReportNewLayer(layer NewLayer) {
 	if reporter != nil {
 		if reporter.blocking {
 			reporter.channelLayer <- layer
-			log.Info("reported new layer: %v", layer)
+			log.With().Info("reported new layer", layer)
 		} else {
 			select {
 			case reporter.channelLayer <- layer:
-				log.Info("reported new layer: %v", layer)
+				log.With().Info("reported new layer", layer)
 			default:
-				log.Info("not reporting new layer as no one is listening: %v", layer)
+				log.With().Info("not reporting new layer as no one is listening", layer)
 			}
 		}
 	}
@@ -409,6 +410,12 @@ const (
 type NewLayer struct {
 	Layer  *types.Layer
 	Status int
+}
+
+func (nl NewLayer) Field() log.Field {
+	return log.String("layer",
+		fmt.Sprintf("status: %d, number: %d, numblocks: %d",
+			nl.Status, nl.Layer.Index(), len(nl.Layer.Blocks())))
 }
 
 // NodeError represents an internal error to be reported

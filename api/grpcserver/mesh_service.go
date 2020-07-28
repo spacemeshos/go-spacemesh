@@ -323,7 +323,7 @@ func (s MeshService) readLayer(layer *types.Layer, layerStatus pb.Layer_LayerSta
 
 	stateRoot, err := s.Mesh.GetLayerStateRoot(layer.Index())
 	if err != nil {
-		log.Error("error getting state root for layer %v", layer.Index())
+		log.Error("error getting state root for layer %v: %s", layer.Index(), err)
 		return nil, status.Errorf(codes.Internal, "error getting layer data")
 	}
 	return &pb.Layer{
