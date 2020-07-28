@@ -606,15 +606,6 @@ func (msh *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.Transaction, atx
 	msh.invalidateFromPools(&blk.MiniBlock)
 
 	events.ReportNewBlock(blk)
-	layer, err := msh.GetLayer(blk.LayerIndex)
-	if err != nil {
-		log.Error("failed to report updated layer data", err)
-	} else {
-		events.ReportNewLayer(events.NewLayer{
-			Layer:  layer,
-			Status: events.LayerStatusTypeUnknown,
-		})
-	}
 	msh.With().Info("added block to database", blk.Fields()...)
 	return nil
 }
