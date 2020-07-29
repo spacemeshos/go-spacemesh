@@ -323,8 +323,10 @@ func (s MeshService) readLayer(layer *types.Layer, layerStatus pb.Layer_LayerSta
 
 	stateRoot, err := s.Mesh.GetLayerStateRoot(layer.Index())
 	if err != nil {
-		// This could happen with, e.g., a zero-block layer. It's not a fatal error.
-		log.With().Error("error getting state root for layer", layer, log.Err(err))
+		// This is expected. We can only retrieve state root for a layer that was applied to state,
+		// which only happens after it's approved/confirmed.
+		log.With().Debug("error getting state root for layer",
+			layer, log.String("status", layerStatus.String()), log.Err(err))
 	}
 	return &pb.Layer{
 		Number:        layer.Index().Uint64(),

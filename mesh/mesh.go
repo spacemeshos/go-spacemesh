@@ -213,10 +213,10 @@ func (msh *Mesh) SetLatestLayer(idx types.LayerID) {
 			Status: events.LayerStatusTypeUnknown,
 		})
 	}
-	events.ReportNodeStatusUpdate()
 	defer msh.lkMutex.Unlock()
 	msh.lkMutex.Lock()
 	if idx > msh.latestLayer {
+		events.ReportNodeStatusUpdate()
 		msh.Info("set latest known layer to %v", idx)
 		msh.latestLayer = idx
 		if err := msh.general.Put(constLATEST, idx.Bytes()); err != nil {
@@ -354,6 +354,8 @@ func (msh *Mesh) HandleValidatedLayer(validatedLayer types.LayerID, layer []type
 	}
 	lyr := types.NewExistingLayer(validatedLayer, blocks)
 	invalidBlocks := msh.getInvalidBlocksByHare(lyr)
+	// Reporting of the validated layer happens deep inside this call stack, below
+	// updateStateWithLayer, inside applyState. No need to report here.
 	msh.updateStateWithLayer(validatedLayer, lyr)
 	msh.reInsertTxsToPool(blocks, invalidBlocks, lyr.Index())
 }
@@ -628,7 +630,7 @@ func (msh *Mesh) handleOrphanBlocks(blk *types.Block) {
 	for _, b := range blk.ViewEdges {
 		for layerID, layermap := range msh.orphanBlocks {
 			if _, has := layermap[b]; has {
-				msh.Log.Debug("delete block ", b, "from orphans")
+				msh.Log.With().Debug("delete block from orphans", b)
 				delete(layermap, b)
 				if len(layermap) == 0 {
 					delete(msh.orphanBlocks, layerID)
