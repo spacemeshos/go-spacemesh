@@ -12,35 +12,34 @@ import (
 // Log is an exported type that embeds our logger.
 type Log struct {
 	logger *zap.Logger
-	sugar  *zap.SugaredLogger
 }
 
 // Exported from Log basic logging options.
 
 // Info prints formatted info level log message.
 func (l Log) Info(format string, args ...interface{}) {
-	l.sugar.Infof(format, args...)
+	l.logger.Sugar().Infof(format, args...)
 }
 
 // Debug prints formatted debug level log message.
 func (l Log) Debug(format string, args ...interface{}) {
-	l.sugar.Debugf(format, args...)
+	l.logger.Sugar().Debugf(format, args...)
 }
 
 // Error prints formatted error level log message.
 func (l Log) Error(format string, args ...interface{}) {
-	l.sugar.Errorf(format, args...)
+	l.logger.Sugar().Errorf(format, args...)
 }
 
 // Warning prints formatted warning level log message.
 func (l Log) Warning(format string, args ...interface{}) {
-	l.sugar.Warnf(format, args...)
+	l.logger.Sugar().Warnf(format, args...)
 }
 
 // Panic prints the log message and then panics.
 func (l Log) Panic(format string, args ...interface{}) {
-	l.sugar.Error("Fatal: goroutine panicked. Stacktrace: ", string(debug.Stack()))
-	l.sugar.Panicf(format, args...)
+	l.logger.Sugar().Error("Fatal: goroutine panicked. Stacktrace: ", string(debug.Stack()))
+	l.logger.Sugar().Panicf(format, args...)
 }
 
 // Wrap and export field logic
@@ -129,19 +128,13 @@ func (l Log) With() FieldLogger {
 // WithName returns a logger the given fields
 func (l Log) WithName(prefix string) Log {
 	lgr := l.logger.Named(fmt.Sprintf("%-13s", prefix))
-	return Log{
-		lgr,
-		lgr.Sugar(),
-	}
+	return Log{lgr}
 }
 
 // WithFields returns a logger with fields permanently appended to it.
 func (l Log) WithFields(fields ...LoggableField) Log {
 	lgr := l.logger.With(unpack(fields)...)
-	return Log{
-		logger: lgr,
-		sugar:  lgr.Sugar(),
-	}
+	return Log{logger: lgr}
 }
 
 const eventKey = "event"
@@ -160,10 +153,7 @@ var Nop = zap.WrapCore(func(zapcore.Core) zapcore.Core {
 // returns the resulting Logger. It's safe to use concurrently.
 func (l Log) WithOptions(opts ...zap.Option) Log {
 	lgr := l.logger.WithOptions(opts...)
-	return Log{
-		logger: lgr,
-		sugar:  lgr.Sugar(),
-	}
+	return Log{logger: lgr}
 }
 
 // Info prints message with fields

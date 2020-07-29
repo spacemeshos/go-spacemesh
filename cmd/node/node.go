@@ -29,6 +29,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/turbohare"
 	"github.com/spacemeshos/post/shared"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -168,7 +169,7 @@ type SpacemeshApp struct {
 	closers           []interface{ Close() }
 	log               log.Log
 	txPool            *miner.TxMempool
-	rootLoggers       map[zap.AtomicLevel]log.Log
+	rootLoggers       map[zapcore.Level]log.Log
 	loggers           map[string]*zap.AtomicLevel
 	term              chan struct{} // this channel is closed when closing services, goroutines should wait on this channel in order to terminate
 }
@@ -210,7 +211,7 @@ func NewSpacemeshApp() *SpacemeshApp {
 	defaultConfig := cfg.DefaultConfig()
 	node := &SpacemeshApp{
 		Config:      &defaultConfig,
-		rootLoggers: make(map[zap.AtomicLevel]log.Log),
+		rootLoggers: make(map[zapcore.Level]log.Log),
 		loggers:     make(map[string]*zap.AtomicLevel),
 		term:        make(chan struct{}),
 	}
@@ -421,10 +422,10 @@ func (app *SpacemeshApp) addLogger(nodeID types.NodeID, name string) log.Log {
 	app.loggers[name] = &lvl
 
 	// Check if we already have a root logger configured at this log level
-	var rootLogger log.Log
-	if rootLogger, ok := app.rootLoggers[lvl]; !ok {
+	rootLogger, ok := app.rootLoggers[lvl.Level()]
+	if !ok {
 		rootLogger = log.NewWithLevel(nodeID.ShortString(), lvl)
-		app.rootLoggers[lvl] = rootLogger
+		app.rootLoggers[lvl.Level()] = rootLogger
 	}
 	return rootLogger.WithName(name)
 }
