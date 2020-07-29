@@ -325,7 +325,7 @@ func (s MeshService) readLayer(layer *types.Layer, layerStatus pb.Layer_LayerSta
 	if err != nil {
 		// This is expected. We can only retrieve state root for a layer that was applied to state,
 		// which only happens after it's approved/confirmed.
-		log.With().Debug("error getting state root for layer",
+		log.With().Debug("no state root for layer",
 			layer, log.String("status", layerStatus.String()), log.Err(err))
 	}
 	return &pb.Layer{
