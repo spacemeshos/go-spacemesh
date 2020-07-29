@@ -292,10 +292,6 @@ func (vl *validator) ValidateLayer(lyr *types.Layer) {
 
 	oldPbase, newPbase := vl.trtl.HandleIncomingLayer(lyr)
 	vl.SetProcessedLayer(lyr.Index())
-	events.ReportNewLayer(events.NewLayer{
-		Layer:  lyr,
-		Status: events.LayerStatusTypeConfirmed,
-	})
 
 	if err := vl.trtl.Persist(); err != nil {
 		vl.Error("could not persist tortoise layer index %d", lyr.Index())
@@ -304,6 +300,10 @@ func (vl *validator) ValidateLayer(lyr *types.Layer) {
 		vl.Error("could not persist validated layer index %d", lyr.Index())
 	}
 	vl.pushLayersToState(oldPbase, newPbase)
+	events.ReportNewLayer(events.NewLayer{
+		Layer:  lyr,
+		Status: events.LayerStatusTypeConfirmed,
+	})
 	vl.Info("done validating layer %v", lyr.Index())
 }
 
