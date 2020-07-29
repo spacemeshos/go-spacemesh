@@ -132,18 +132,18 @@ func (l Log) With() FieldLogger {
 }
 
 // SetLevel returns a logger with level as the log level derived from l.
-func (l Log) SetLevel(level *zap.AtomicLevel) Log {
-	lgr := l.logger.WithOptions(addDynamicLevel(level))
-	return Log{
-		lgr,
-		lgr.Sugar(),
-		level,
-	}
-}
+//func (l Log) SetLevel(level *zap.AtomicLevel) Log {
+//	lgr := l.logger.WithOptions(addDynamicLevel(level))
+//	return Log{
+//		lgr,
+//		lgr.Sugar(),
+//		level,
+//	}
+//}
 
 // WithName returns a logger the given fields
 func (l Log) WithName(prefix string) Log {
-	lgr := l.logger.Named(fmt.Sprintf("%-13s", prefix)).WithOptions(addDynamicLevel(l.lvl))
+	lgr := l.logger.Named(fmt.Sprintf("%-13s", prefix))
 	return Log{
 		lgr,
 		lgr.Sugar(),
@@ -151,34 +151,34 @@ func (l Log) WithName(prefix string) Log {
 	}
 }
 
-func addDynamicLevel(level *zap.AtomicLevel) zap.Option {
-	return zap.WrapCore(func(core zapcore.Core) zapcore.Core {
-		return &coreWithLevel{
-			Core: core,
-			lvl:  level,
-		}
-	})
-}
+//func addDynamicLevel(level *zap.AtomicLevel) zap.Option {
+//	return zap.WrapCore(func(core zapcore.Core) zapcore.Core {
+//		return &coreWithLevel{
+//			Core: core,
+//			lvl:  level,
+//		}
+//	})
+//}
 
-type coreWithLevel struct {
-	zapcore.Core
-	lvl *zap.AtomicLevel
-}
+//type coreWithLevel struct {
+//	zapcore.Core
+//	lvl *zap.AtomicLevel
+//}
 
-func (c *coreWithLevel) Enabled(level zapcore.Level) bool {
-	return c.lvl.Enabled(level)
-}
-
-func (c *coreWithLevel) Check(e zapcore.Entry, ce *zapcore.CheckedEntry) *zapcore.CheckedEntry {
-	if !c.lvl.Enabled(e.Level) {
-		return ce
-	}
-	return ce.AddCore(e, c.Core)
-}
+//func (c *coreWithLevel) Enabled(level zapcore.Level) bool {
+//	return c.lvl.Enabled(level)
+//}
+//
+//func (c *coreWithLevel) Check(e zapcore.Entry, ce *zapcore.CheckedEntry) *zapcore.CheckedEntry {
+//	if !c.lvl.Enabled(e.Level) {
+//		return ce
+//	}
+//	return ce.AddCore(e, c.Core)
+//}
 
 // WithFields returns a logger with fields permanently appended to it.
 func (l Log) WithFields(fields ...LoggableField) Log {
-	lgr := l.logger.With(unpack(fields)...).WithOptions(addDynamicLevel(l.lvl))
+	lgr := l.logger.With(unpack(fields)...)
 	return Log{
 		logger: lgr,
 		sugar:  lgr.Sugar(),
