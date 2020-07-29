@@ -84,7 +84,7 @@ func setupLogging(config *bc.Config) {
 	}
 
 	// app-level logging
-	log.InitSpacemeshLoggingSystem(config.DataDir(), "spacemesh.log")
+	log.InitSpacemeshLoggingSystem()
 }
 
 func parseConfig() (*bc.Config, error) {

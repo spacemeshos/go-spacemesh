@@ -278,7 +278,7 @@ func (app *SpacemeshApp) setupLogging() {
 	}
 
 	// app-level logging
-	log.InitSpacemeshLoggingSystem(app.Config.DataDir(), "spacemesh.log")
+	log.InitSpacemeshLoggingSystem()
 
 	log.Info("%s", app.getAppInfo())
 
