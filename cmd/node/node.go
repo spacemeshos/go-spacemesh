@@ -456,11 +456,6 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 	layersPerEpoch uint16, clock TickProvider) error {
 
 	app.nodeID = nodeID
-
-	//name := nodeID.ShortString()
-	//lg := log.NewDefault(name).WithFields(nodeID)
-	//lgDebug := log.NewWithLevel(name, zap.NewAtomicLevelAt(zapcore.DebugLevel)).WithFields(nodeID)
-
 	app.log = app.addLogger(nodeID, AppLogger)
 
 	postClient.SetLogger(app.addLogger(nodeID, PostLogger))
@@ -938,8 +933,6 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 	}
 
 	/* Initialize all protocol services */
-	//lg := log.NewDefault(nodeID.ShortString())
-
 	dbStorepath := app.Config.DataDir()
 	gTime, err := time.Parse(time.RFC3339, app.Config.GenesisTime)
 	if err != nil {

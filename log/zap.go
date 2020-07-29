@@ -115,7 +115,7 @@ func unpack(fields []LoggableField) []zap.Field {
 	return flds
 }
 
-// FieldLogger is a logger that only logs messages with fields. it does not support formatting.g
+// FieldLogger is a logger that only logs messages with fields. It does not support formatting.
 type FieldLogger struct {
 	l *zap.Logger
 }
