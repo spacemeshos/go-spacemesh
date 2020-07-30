@@ -7,9 +7,10 @@
 
 <a href="https://github.com/spacemeshos/go-spacemesh/blob/master/LICENSE"><img src="https://img.shields.io/packagist/l/doctrine/orm.svg"/></a>
 <a href="https://github.com/avive"><img src="https://img.shields.io/badge/maintainer-%40avive-green.svg"/></a>
-<a href="https://github.com/spacemeshos/go-spacemesh/releases"><img src="https://img.shields.io/github/v/release/spacemeshos/go-spacemesh?include_prereleases"></a>
-<img src="https://img.shields.io/github/go-mod/go-version/spacemeshos/go-spacemesh?logo=go"/>
-<a href="https://github.com/spacemeshos/go-spacemesh/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22"><img src="https://img.shields.io/github/issues-raw/spacemeshos/go-spacemesh/help%20wanted?logo=github"></a>
+<a href="https://github.com/spacemeshos/go-spacemesh/releases"><img src="https://img.shields.io/github/v/release/spacemeshos/go-spacemesh?include_prereleases"/></a>
+<img src="https://img.shields.io/badge/platform-macos--64 | linux--64 | freebsd-lightgrey.svg"/>
+<a href="https://golang.org/"><img src="https://img.shields.io/github/go-mod/go-version/spacemeshos/go-spacemesh?logo=go"/></a>
+<a href="https://github.com/spacemeshos/go-spacemesh/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22"><img src="https://img.shields.io/github/issues-raw/spacemeshos/go-spacemesh/help%20wanted?logo=github"/></a>
 <a href="http://chat.spacemesh.io/"><img src="https://img.shields.io/discord/623195163510046732?label=discord&logo=discord"/></a>
 <a href="https://spacemesh.io"><img src="https://img.shields.io/badge/madeby-spacemeshos-blue.svg"/></a>
 [![Go Report Card](https://goreportcard.com/badge/github.com/spacemeshos/go-spacemesh)](https://goreportcard.com/report/github.com/spacemeshos/go-spacemesh)
