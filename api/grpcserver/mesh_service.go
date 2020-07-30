@@ -261,6 +261,7 @@ func convertTransaction(t *types.Transaction) *pb.Transaction {
 func convertActivation(a *types.ActivationTx) (*pb.Activation, error) {
 	// TODO: It's suboptimal to have to serialize every atx to get its
 	// size but size is not stored as an attribute.
+	// See https://github.com/spacemeshos/go-spacemesh/issues/2095
 	data, err := a.InnerBytes()
 	if err != nil {
 		return nil, err
@@ -323,8 +324,10 @@ func (s MeshService) readLayer(layer *types.Layer, layerStatus pb.Layer_LayerSta
 
 	stateRoot, err := s.Mesh.GetLayerStateRoot(layer.Index())
 	if err != nil {
-		log.Error("error getting state root for layer %v: %s", layer.Index(), err)
-		return nil, status.Errorf(codes.Internal, "error getting layer data")
+		// This is expected. We can only retrieve state root for a layer that was applied to state,
+		// which only happens after it's approved/confirmed.
+		log.With().Debug("no state root for layer",
+			layer, log.String("status", layerStatus.String()), log.Err(err))
 	}
 	return &pb.Layer{
 		Number:        layer.Index().Uint64(),

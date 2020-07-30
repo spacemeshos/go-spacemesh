@@ -225,10 +225,10 @@ func (msh *Mesh) SetLatestLayer(idx types.LayerID) {
 			Status: events.LayerStatusTypeUnknown,
 		})
 	}
-	events.ReportNodeStatusUpdate()
 	defer msh.lkMutex.Unlock()
 	msh.lkMutex.Lock()
 	if idx > msh.latestLayer {
+		events.ReportNodeStatusUpdate()
 		msh.Info("set latest known layer to %v", idx)
 		msh.latestLayer = idx
 		if err := msh.general.Put(constLATEST, idx.Bytes()); err != nil {
@@ -292,10 +292,6 @@ func (vl *validator) ValidateLayer(lyr *types.Layer) {
 
 	oldPbase, newPbase := vl.trtl.HandleIncomingLayer(lyr)
 	vl.SetProcessedLayer(lyr.Index())
-	events.ReportNewLayer(events.NewLayer{
-		Layer:  lyr,
-		Status: events.LayerStatusTypeConfirmed,
-	})
 
 	if err := vl.trtl.Persist(); err != nil {
 		vl.Error("could not persist tortoise layer index %d", lyr.Index())
@@ -304,6 +300,10 @@ func (vl *validator) ValidateLayer(lyr *types.Layer) {
 		vl.Error("could not persist validated layer index %d", lyr.Index())
 	}
 	vl.pushLayersToState(oldPbase, newPbase)
+	events.ReportNewLayer(events.NewLayer{
+		Layer:  lyr,
+		Status: events.LayerStatusTypeConfirmed,
+	})
 	vl.Info("done validating layer %v", lyr.Index())
 }
 
@@ -366,6 +366,8 @@ func (msh *Mesh) HandleValidatedLayer(validatedLayer types.LayerID, layer []type
 	}
 	lyr := types.NewExistingLayer(validatedLayer, blocks)
 	invalidBlocks := msh.getInvalidBlocksByHare(lyr)
+	// Reporting of the validated layer happens deep inside this call stack, below
+	// updateStateWithLayer, inside applyState. No need to report here.
 	msh.updateStateWithLayer(validatedLayer, lyr)
 	msh.reInsertTxsToPool(blocks, invalidBlocks, lyr.Index())
 }
@@ -619,15 +621,6 @@ func (msh *Mesh) AddBlockWithTxs(blk *types.Block, txs []*types.Transaction, atx
 	msh.invalidateFromPools(&blk.MiniBlock)
 
 	events.ReportNewBlock(blk)
-	layer, err := msh.GetLayer(blk.LayerIndex)
-	if err != nil {
-		log.Error("failed to report updated layer data", err)
-	} else {
-		events.ReportNewLayer(events.NewLayer{
-			Layer:  layer,
-			Status: events.LayerStatusTypeUnknown,
-		})
-	}
 	msh.With().Info("added block to database", blk.Fields()...)
 	return nil
 }
@@ -654,7 +647,7 @@ func (msh *Mesh) handleOrphanBlocks(blk *types.Block) {
 	for _, b := range blk.ViewEdges {
 		for layerID, layermap := range msh.orphanBlocks {
 			if _, has := layermap[b]; has {
-				msh.Log.Debug("delete block ", b, "from orphans")
+				msh.Log.With().Debug("delete block from orphans", b)
 				delete(layermap, b)
 				if len(layermap) == 0 {
 					delete(msh.orphanBlocks, layerID)
