@@ -86,7 +86,7 @@ func NewWithLevel(module string, level zap.AtomicLevel, hooks ...func(zapcore.En
 	consoleCore := zapcore.NewCore(enc, consoleSyncer, zap.LevelEnablerFunc(level.Enabled))
 	core := zapcore.RegisterHooks(consoleCore, hooks...)
 	log := zap.New(core).Named(module)
-	return Log{log, log.Sugar(), &level}
+	return Log{log}
 }
 
 // New creates a logger for a module. e.g. p2p instance logger.
@@ -108,8 +108,7 @@ func New(module string, dataFolderPath string, logFileName string) Log {
 
 	log := zap.New(core)
 	log = log.Named(module)
-	lvl := zap.NewAtomicLevelAt(Level())
-	return Log{log, log.Sugar(), &lvl}
+	return Log{log}
 }
 
 // NewDefault creates a Log with not file output.

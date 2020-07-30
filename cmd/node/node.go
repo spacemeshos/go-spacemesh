@@ -29,6 +29,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/turbohare"
 	"github.com/spacemeshos/post/shared"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -445,10 +446,8 @@ func (app *SpacemeshApp) initServices(nodeID types.NodeID,
 
 	app.nodeID = nodeID
 
-	name := nodeID.ShortString()
-
-	lg := log.NewDefault(name).WithFields(nodeID)
-
+	// This base logger must be debug level so that other, derived loggers are not a lower level.
+	lg := log.NewWithLevel(nodeID.ShortString(), zap.NewAtomicLevelAt(zapcore.DebugLevel)).WithFields(nodeID)
 	app.log = app.addLogger(AppLogger, lg)
 
 	postClient.SetLogger(app.addLogger(PostLogger, lg))
@@ -925,8 +924,10 @@ func (app *SpacemeshApp) Start(cmd *cobra.Command, args []string) {
 		log.Error("failed to create post client: %v", err)
 	}
 
+	// This base logger must be debug level so that other, derived loggers are not a lower level.
+	lg := log.NewWithLevel(nodeID.ShortString(), zap.NewAtomicLevelAt(zapcore.DebugLevel)).WithFields(nodeID)
+
 	/* Initialize all protocol services */
-	lg := log.NewDefault(nodeID.ShortString())
 
 	dbStorepath := app.Config.DataDir()
 	gTime, err := time.Parse(time.RFC3339, app.Config.GenesisTime)
