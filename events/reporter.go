@@ -412,6 +412,7 @@ type NewLayer struct {
 	Status int
 }
 
+// Field returns a log field. Implements the LoggableField interface.
 func (nl NewLayer) Field() log.Field {
 	return log.String("layer",
 		fmt.Sprintf("status: %d, number: %d, numblocks: %d",

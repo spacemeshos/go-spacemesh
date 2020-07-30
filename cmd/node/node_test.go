@@ -806,12 +806,6 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 
 		// Wait for the app to exit
 		wg.Wait()
-
-		// We expect an error when the app closes
-		_, err = stream.Recv()
-		statusCode := status.Code(err)
-		require.Equal(t, codes.Unavailable, statusCode)
-		require.Contains(t, err.Error(), "transport is closing")
 	}()
 
 	time.Sleep(4 * time.Second)
