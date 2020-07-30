@@ -124,7 +124,7 @@ func getFileWriter(dataFolderPath, logFileName string) io.Writer {
 }
 
 // InitSpacemeshLoggingSystem initializes app logging system.
-func InitSpacemeshLoggingSystem(dataFolderPath string, logFileName string) {
+func InitSpacemeshLoggingSystem() {
 	AppLog = NewDefault(mainLoggerName)
 }
 
