@@ -261,6 +261,7 @@ func convertTransaction(t *types.Transaction) *pb.Transaction {
 func convertActivation(a *types.ActivationTx) (*pb.Activation, error) {
 	// TODO: It's suboptimal to have to serialize every atx to get its
 	// size but size is not stored as an attribute.
+	// See https://github.com/spacemeshos/go-spacemesh/issues/2095
 	data, err := a.InnerBytes()
 	if err != nil {
 		return nil, err
