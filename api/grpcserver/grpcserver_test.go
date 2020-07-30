@@ -77,7 +77,7 @@ var (
 	prevAtxID   = types.ATXID(types.HexToHash32("44444"))
 	chlng       = types.HexToHash32("55555")
 	poetRef     = []byte("66666")
-	npst        = activation.NewNIPSTWithChallenge(&chlng, poetRef)
+	npst        = NewNIPSTWithChallenge(&chlng, poetRef)
 	challenge   = newChallenge(nodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
 	globalAtx   = newAtx(challenge, 5, defaultView, npst, addr1)
 	globalAtx2  = newAtx(challenge, 5, defaultView, npst, addr2)
@@ -106,6 +106,19 @@ func init() {
 	block1.ATXIDs = []types.ATXID{globalAtx.ID(), globalAtx2.ID()}
 	txAPI.returnTx[globalTx.ID()] = globalTx
 	txAPI.returnTx[globalTx2.ID()] = globalTx2
+}
+
+func NewNIPSTWithChallenge(challenge *types.Hash32, poetRef []byte) *types.NIPST {
+	return &types.NIPST{
+		Space:          commitmentSize,
+		NipstChallenge: challenge,
+		PostProof: &types.PostProof{
+			Challenge:    poetRef,
+			MerkleRoot:   []byte(nil),
+			ProofNodes:   [][]byte(nil),
+			ProvenLeaves: [][]byte(nil),
+		},
+	}
 }
 
 type NetworkMock struct {
@@ -1702,9 +1715,6 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 	require.Equal(t, blkPerLayer, len(l.Blocks), "unexpected number of blocks in layer")
 	require.Equal(t, stateRoot.Bytes(), l.RootStateHash, "unexpected state root")
 
-	data, err := globalAtx.InnerBytes()
-	require.NoError(t, err, "error getting activation data size")
-
 	// The order of the activations is not deterministic since they're
 	// stored in a map, and randomized each run. Check if either matches.
 	require.Condition(t, func() bool {
@@ -1725,7 +1735,7 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 			if bytes.Compare(a.PrevAtx.Id, globalAtx.PrevATXID.Bytes()) != 0 {
 				continue
 			}
-			if a.CommitmentSize != uint64(len(data)) {
+			if a.CommitmentSize != globalAtx.Nipst.Space {
 				continue
 			}
 			// found a match

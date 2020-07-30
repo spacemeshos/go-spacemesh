@@ -259,20 +259,13 @@ func convertTransaction(t *types.Transaction) *pb.Transaction {
 }
 
 func convertActivation(a *types.ActivationTx) (*pb.Activation, error) {
-	// TODO: It's suboptimal to have to serialize every atx to get its
-	// size but size is not stored as an attribute.
-	// See https://github.com/spacemeshos/go-spacemesh/issues/2095
-	data, err := a.InnerBytes()
-	if err != nil {
-		return nil, err
-	}
 	return &pb.Activation{
 		Id:             &pb.ActivationId{Id: a.ID().Bytes()},
 		Layer:          a.PubLayerID.Uint64(),
 		SmesherId:      &pb.SmesherId{Id: a.NodeID.ToBytes()},
 		Coinbase:       &pb.AccountId{Address: a.Coinbase.Bytes()},
 		PrevAtx:        &pb.ActivationId{Id: a.PrevATXID.Bytes()},
-		CommitmentSize: uint64(len(data)),
+		CommitmentSize: a.Nipst.Space,
 	}, nil
 }
 
