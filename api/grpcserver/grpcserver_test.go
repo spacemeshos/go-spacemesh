@@ -2162,7 +2162,7 @@ func checkAccountMeshDataItemActivation(t *testing.T, dataItem interface{}) {
 		require.Equal(t, globalAtx.NodeID.ToBytes(), x.Activation.SmesherId.Id)
 		require.Equal(t, globalAtx.Coinbase.Bytes(), x.Activation.Coinbase.Address)
 		require.Equal(t, globalAtx.PrevATXID.Bytes(), x.Activation.PrevAtx.Id)
-		require.Equal(t, commitmentSize, x.Activation.CommitmentSize)
+		require.Equal(t, uint64(commitmentSize), x.Activation.CommitmentSize)
 	default:
 		require.Fail(t, "inner account data item has wrong tx data type")
 	}
