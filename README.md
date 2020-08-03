@@ -86,13 +86,13 @@ _-- or --_
 
 Fork the project from https://github.com/spacemeshos/go-spacemesh
 
-Since the project uses Go 1.11's Modules it is best to place the code **outside** your `$GOPATH`. Read [this](https://github.com/golang/go/wiki/Modules#how-to-install-and-activate-module-support) for alternatives.
+Since the project uses Go Modules it is best to place the code **outside** your `$GOPATH`. Read [this](https://github.com/golang/go/wiki/Modules#how-to-install-and-activate-module-support) for alternatives.
 
 ### Setting Up Local Dev Environment
 
 Building is supported on OS X, Linux, FreeBSD, and Windows.
 
-Install [Go 1.11 or later](https://golang.org/dl/) for your platform, if you haven't already.
+Install [Go 1.14 or later](https://golang.org/dl/) for your platform, if you haven't already.
 
 On Windows you need to install `make` via [msys2](https://www.msys2.org/), [MingGW-w64](http://mingw-w64.org/doku.php) or [mingw] (https://chocolatey.org/packages/mingw)
 

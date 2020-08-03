@@ -10,8 +10,8 @@ $minor = $Matches[2]
 $patch = $Matches[3]
 $loc = (gcm go).Path
 
-if($major -ne 1 -or $minor -lt 11)
+if($major -ne 1 -or $minor -lt 13)
 {
-    $host.ui.WriteErrorLine("Go 1.11+ is required (v$major.$minor.$patch is installed at $loc)")
+    $host.ui.WriteErrorLine("Go 1.13+ is required (v$major.$minor.$patch is installed at $loc)")
     exit 1
 }

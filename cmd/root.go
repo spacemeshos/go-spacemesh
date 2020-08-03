@@ -57,7 +57,8 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().IntVar(&config.BlockCacheSize, "block-cache-size",
 		config.BlockCacheSize, "size in layers of meshdb block cache")
 	cmd.PersistentFlags().StringVar(&config.PublishEventsURL, "events-url",
-		config.PublishEventsURL, "publish events on this url, if no url specified event will no be published")
+		config.PublishEventsURL, "publish events to this url; if no url specified no events will be published")
+
 	cmd.PersistentFlags().IntVar(&config.SyncRequestTimeout, "sync-request-timeout",
 		config.SyncRequestTimeout, "the timeout in ms for direct requests in the sync")
 	cmd.PersistentFlags().IntVar(&config.AtxsPerBlock, "atxs-per-block",
@@ -68,7 +69,9 @@ func AddCommands(cmd *cobra.Command) {
 	/** ======================== P2P Flags ========================== **/
 
 	cmd.PersistentFlags().IntVar(&config.P2P.TCPPort, "tcp-port",
-		config.P2P.TCPPort, "TCP Port to listen on")
+		config.P2P.TCPPort, "inet port for P2P listener")
+	cmd.PersistentFlags().StringVar(&config.P2P.TCPInterface, "tcp-interface",
+		config.P2P.TCPInterface, "inet interface for P2P listener, specify as IP address")
 	cmd.PersistentFlags().BoolVar(&config.P2P.AcquirePort, "acquire-port",
 		config.P2P.AcquirePort, "Should the node attempt to forward the port to this machine on a NAT?")
 	cmd.PersistentFlags().DurationVar(&config.P2P.DialTimeout, "dial-timeout",
@@ -121,17 +124,31 @@ func AddCommands(cmd *cobra.Command) {
 	// StartJSONApiServerFlag determines if json api server should be started
 	cmd.PersistentFlags().BoolVar(&config.API.StartJSONServer, "json-server",
 		config.API.StartJSONServer, "StartService the json http server. "+
-			"Note that starting the Json server also starts the grpc server.",
+			"Note that starting the Json server also starts the grpc server. ",
+	)
+	// StartJSONApiServerFlag determines if json api server should be started
+	cmd.PersistentFlags().BoolVar(&config.API.StartNewJSONServer, "json-server-new",
+		config.API.StartNewJSONServer, "Start the new grpc-gateway (json http) server. "+
+			"The gateway server will be enabled for all corresponding, enabled GRPC services.",
 	)
 	// JSONServerPortFlag determines the json api server local listening port
 	cmd.PersistentFlags().IntVar(&config.API.JSONServerPort, "json-port",
 		config.API.JSONServerPort, "JSON api server port")
+	// NewJSONServerPortFlag determines the json api server local listening port (for new server)
+	cmd.PersistentFlags().IntVar(&config.API.NewJSONServerPort, "json-port-new",
+		config.API.NewJSONServerPort, "New JSON api server port")
 	// StartGrpcAPIServerFlag determines if the grpc server should be started
 	cmd.PersistentFlags().BoolVar(&config.API.StartGrpcServer, "grpc-server",
-		config.API.StartGrpcServer, "StartService the grpc server")
+		config.API.StartGrpcServer, "StartService the grpc server. "+
+			"Note: This service will soon be deprecated. Use --grpc instead.")
+	cmd.PersistentFlags().StringSliceVar(&config.API.StartGrpcServices, "grpc",
+		config.API.StartGrpcServices, "Comma-separated list of individual grpc services to enable")
 	// GrpcServerPortFlag determines the grpc server local listening port
 	cmd.PersistentFlags().IntVar(&config.API.GrpcServerPort, "grpc-port",
 		config.API.GrpcServerPort, "GRPC api server port")
+	// NewGrpcServerFlag determines the grpc server local listening port (for new server)
+	cmd.PersistentFlags().IntVar(&config.API.NewGrpcServerPort, "grpc-port-new",
+		config.API.NewGrpcServerPort, "New GRPC api server port")
 
 	/**======================== Hare Flags ========================== **/
 

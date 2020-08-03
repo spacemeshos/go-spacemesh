@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -47,6 +48,12 @@ type NetworkMock struct {
 	lock         sync.Mutex
 	broadCastErr bool
 	broadcasted  []byte
+}
+
+type res struct {
+	Error   string `json:"error"`
+	Message string `json:"message"`
+	Code    int    `json:"code"`
 }
 
 func (s *NetworkMock) SubscribePeerEvents() (conn, disc chan p2pcrypto.PublicKey) {
@@ -331,11 +338,16 @@ func TestJsonWalletApi(t *testing.T) {
 
 	txToSend := pb.SignedTransaction{Tx: asBytes(t, genTx(t))}
 	msg := "nonce or balance validation failed"
+	expectedResponse := "{\"error\":\"" + msg + "\",\"message\":\"" + msg + "\",\"code\":2}"
+	expected := res{}
+	res1 := res{}
+	json.Unmarshal([]byte(expectedResponse), &expected)
 	txAPI.err = fmt.Errorf(msg)
 	respBody, respStatus = callEndpoint(t, "v1/submittransaction", marshalProto(t, &txToSend))
+	json.Unmarshal([]byte(respBody), &res1)
 	txAPI.err = nil
 	r.Equal(http.StatusInternalServerError, respStatus, http.StatusText(respStatus))
-	r.Equal("{\"error\":\""+msg+"\",\"message\":\""+msg+"\",\"code\":2}", respBody)
+	r.Equal(expected, res1)
 
 	// test start mining
 	initPostRequest := pb.InitPost{Coinbase: "0x1234", LogicalDrive: "/tmp/aaa", CommitmentSize: 2048}
@@ -438,7 +450,11 @@ func TestJsonWalletApi(t *testing.T) {
 	respBody, respStatus = callEndpoint(t, "v1/accounttxs", payload)
 	r.Equal(http.StatusInternalServerError, respStatus)
 	const ErrInvalidStartLayer = "{\"error\":\"invalid start layer\",\"message\":\"invalid start layer\",\"code\":2}"
-	r.Equal(ErrInvalidStartLayer, respBody)
+	expected2 := res{}
+	res2 := res{}
+	json.Unmarshal([]byte(ErrInvalidStartLayer), &expected2)
+	json.Unmarshal([]byte(respBody), &res2)
+	r.Equal(expected2, res2)
 
 	// test call reset post
 	respBody, respStatus = callEndpoint(t, "v1/resetpost", "")
@@ -495,7 +511,7 @@ func TestSpacemeshGrpcService_GetTransaction(t *testing.T) {
 	shutDown()
 }
 
-func getTx(t *testing.T, tx *types.Transaction) pb.Transaction {
+func getTx(t *testing.T, tx *types.Transaction) *pb.Transaction {
 	r := require.New(t)
 	idToSend := pb.TransactionId{Id: tx.ID().Bytes()}
 	respBody, respStatus := callEndpoint(t, "v1/gettransaction", marshalProto(t, &idToSend))
@@ -503,10 +519,10 @@ func getTx(t *testing.T, tx *types.Transaction) pb.Transaction {
 	var respTx pb.Transaction
 	err := jsonpb.UnmarshalString(respBody, &respTx)
 	r.NoError(err)
-	return respTx
+	return &respTx
 }
 
-func assertTx(t *testing.T, respTx pb.Transaction, tx *types.Transaction, status string, layerID, timestamp uint64) {
+func assertTx(t *testing.T, respTx *pb.Transaction, tx *types.Transaction, status string, layerID, timestamp uint64) {
 	r := require.New(t)
 	r.Equal(tx.ID().Bytes(), respTx.TxId.Id)
 	r.Equal(tx.Fee, respTx.Fee)
@@ -545,6 +561,7 @@ var cfg = config.DefaultConfig()
 type SyncerMock struct{}
 
 func (SyncerMock) IsSynced() bool { return false }
+func (SyncerMock) Start()         {}
 
 func launchServer(t *testing.T) func() {
 	networkMock.Broadcast("", []byte{0x00})
@@ -593,14 +610,20 @@ func TestJsonWalletApi_Errors(t *testing.T) {
 	addrBytes := []byte{0x02} // address that does not exist
 	payload := marshalProto(t, &pb.AccountId{Address: util.Bytes2Hex(addrBytes)})
 	const expectedResponse = "{\"error\":\"account does not exist\",\"message\":\"account does not exist\",\"code\":2}"
+	expected := res{}
+	res1 := res{}
+	res2 := res{}
+	json.Unmarshal([]byte(expectedResponse), &expected)
 
 	respBody, respStatus := callEndpoint(t, "v1/nonce", payload)
 	require.Equal(t, http.StatusInternalServerError, respStatus) // TODO: Should we change it to err 400 somehow?
-	require.Equal(t, expectedResponse, respBody)
+	json.Unmarshal([]byte(respBody), &res1)
+	require.Equal(t, expected, res1)
 
 	respBody, respStatus = callEndpoint(t, "v1/balance", payload)
 	require.Equal(t, http.StatusInternalServerError, respStatus) // TODO: Should we change it to err 400 somehow?
-	require.Equal(t, expectedResponse, respBody)
+	json.Unmarshal([]byte(respBody), &res2)
+	require.Equal(t, expected, res2)
 
 	// stop the services
 	shutDown()
@@ -626,12 +649,16 @@ func TestSpaceMeshGrpcService_BroadcastErrors(t *testing.T) {
 	shutDown := launchServer(t)
 	networkMock.SetErr(true)
 	const expectedResponse = "{\"error\":\"error during broadcast\",\"message\":\"error during broadcast\",\"code\":2}"
+	expected := res{}
+	json.Unmarshal([]byte(expectedResponse), &expected)
 
 	Data := "l337"
 
 	respBody, respStatus := callEndpoint(t, "v1/broadcast", marshalProto(t, &pb.BroadcastMessage{Data: Data}))
 	require.Equal(t, http.StatusInternalServerError, respStatus) // TODO: Should we change it to err 400 somehow?
-	require.Equal(t, expectedResponse, respBody)
+	res1 := res{}
+	json.Unmarshal([]byte(respBody), &res1)
+	require.Equal(t, expected, res1)
 
 	require.NotEqual(t, Data, string(networkMock.GetBroadcast()))
 
