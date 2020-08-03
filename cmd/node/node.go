@@ -160,11 +160,11 @@ type SpacemeshApp struct {
 	oracle            *miner.BlockOracle
 	txProcessor       *state.TransactionProcessor
 	mesh              *mesh.Mesh
-	gossipListener *service.Listener
+	gossipListener    *service.Listener
 	clock             TickProvider
 	hare              HareService
 	atxBuilder        *activation.Builder
-	atxDb          *activation.DB
+	atxDb             *activation.DB
 	poetListener      *activation.PoetListener
 	edSgn             *signing.EdSigner
 	closers           []interface{ Close() }
@@ -795,7 +795,9 @@ func (app *SpacemeshApp) stopServices() {
 		app.mesh.Close()
 	}
 
-	app.gossipListener.Stop()
+	if app.gossipListener != nil {
+		app.gossipListener.Stop()
+	}
 
 	// Close all databases.
 	for _, closer := range app.closers {
