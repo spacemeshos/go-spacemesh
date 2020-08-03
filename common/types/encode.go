@@ -84,7 +84,7 @@ func InterfaceToBytes(i interface{}) ([]byte, error) {
 	return w.Bytes(), nil
 }
 
-// BlockIdsToBytes serializes a slice of BlockIDs.
+// ATXIdsToBytes serializes a slice of atx ids.
 func ATXIdsToBytes(ids []ATXID) ([]byte, error) {
 	var w bytes.Buffer
 	SortAtxIDs(ids)

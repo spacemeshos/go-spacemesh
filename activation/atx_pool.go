@@ -13,6 +13,7 @@ type AtxMemPool struct {
 	atxMap map[types.ATXID]*types.ActivationTx
 }
 
+// GetEpochAtxs returns mock atx list
 func (mem *AtxMemPool) GetEpochAtxs(epochID types.EpochID) (atxs []types.ATXID) {
 	return nil
 }

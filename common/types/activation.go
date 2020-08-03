@@ -54,8 +54,8 @@ func (t ATXID) Bytes() []byte {
 func (t ATXID) Field() log.Field { return t.Hash32().Field("atx_id") }
 
 // Compare returns true if other (the given ATXID) is less than this ATXID, by lexicographic comparison.
-func (id ATXID) Compare(other ATXID) bool {
-	return bytes.Compare(id.Bytes(), other.Bytes()) < 0
+func (t ATXID) Compare(other ATXID) bool {
+	return bytes.Compare(t.Bytes(), other.Bytes()) < 0
 }
 
 // CalcAtxHash32Presorted returns the 32-byte sha256 sum of the Atx IDs, in the order given. The pre-image is
@@ -329,13 +329,13 @@ func IsProcessingError(err error) bool {
 	return ok
 }
 
-// SortBlockIDs sorts a list of BlockIDs in lexicographic order, in-place.
+// SortAtxIDs sorts a list of atx IDs in lexicographic order, in-place.
 func SortAtxIDs(ids []ATXID) []ATXID {
 	sort.Slice(ids, func(i, j int) bool { return ids[i].Compare(ids[j]) })
 	return ids
 }
 
-// CalcBlocksHash32 returns the 32-byte sha256 sum of the block IDs, sorted in lexicographic order. The pre-image is
+// CalcATXIdsHash32 returns the 32-byte sha256 sum of the atx IDs, sorted in lexicographic order. The pre-image is
 // prefixed with additionalBytes.
 func CalcATXIdsHash32(view []ATXID, additionalBytes []byte) Hash32 {
 	sortedView := make([]ATXID, len(view))
